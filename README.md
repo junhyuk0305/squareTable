@@ -1,56 +1,57 @@
-# Welcome to your Expo app 👋
+# 스퀘어테이블 (SquareTable)
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+현장 매장 운영 AI — 사장님의 노하우를 구조화해 알바·직원이 즉시 꺼내 쓰게 하는 B2B SaaS 데모.
 
-## Get started
+- **알바(junior)** : 클린 AI 어시스턴트. 매장 노하우를 바로 검색, 없으면 사장님께 자동 라우팅.
+- **사장(owner)** : 미답변 질문 인박스 → 음성 답변 → 노하우(플레이북) 자동 생성 → 직원·근태·급여 관리.
 
-1. Install dependencies
+## 기술 스택
 
-   ```bash
-   npm install
-   ```
+- Expo SDK 56 + Expo Router (file-based routing, typed routes)
+- React Native 0.85 / React 19 / react-native-web
+- Zustand (상태) · 로컬 RAG 모킹(`src/lib/rag.ts`) · mock AI 어댑터(`src/lib/ai`)
+- 디자인 토큰: 웜 뉴트럴 모노크롬 + Pretendard
 
-2. Start the app
-
-   ```bash
-   npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
+## 실행
 
 ```bash
-npm run reset-project
+npm install
+npm run web      # 웹 우선 데모 (expo start --web)
+# npm start      # iOS/Android 포함 dev 서버
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+웹이 기본 시연 타깃입니다. 좁은 화면에서는 풀폭, 넓은 화면에서는 모바일 폭으로 중앙 정렬됩니다(`ResponsiveShell`).
 
-### Other setup steps
+## 디렉터리 구조
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
+```
+src/
+  app/                 # 화면 (expo-router)
+    index.tsx          # 로그인
+    signup.tsx         # 회원가입
+    junior/            # 알바: chat · attendance · work
+    owner/             # 사장: dashboard · inbox · answer · knowledge · staff · payroll · ...
+  components/          # 재사용 UI (SquareCard, RoleTabBar, wizard/ 등)
+  lib/
+    ai/                # AI 어댑터 (mock / 실제 엔드포인트 분기)
+    rag/ rag.ts        # 한국어 RAG 모킹 (키워드 + n-gram + 태그 가중 합산)
+    store/             # Zustand 스토어
+    theme/colors.ts    # 디자인 토큰 (단일 진실 공급원)
+    utils/             # attendance · category · buildEntry · pickImage ...
+  data/                # 시드 JSON (users, context-pack, playbook-entries, ...)
+  types/               # 전 타입 단일 진입점
+```
 
-## Learn more
+## AI 설정
 
-To learn more about developing your project with Expo, look at the following resources:
+기본은 mock 모드입니다(비용 0). 실제 엔드포인트를 쓰려면 `.env.example`를 복사해 `.env`로 두고 값을 채우세요.
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+```bash
+cp .env.example .env
+```
 
-## Join the community
+`src/lib/ai/config.ts`가 `AI_ENDPOINT` 유무로 mock/real을 자동 분기합니다.
 
-Join our community of developers creating universal apps.
+---
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+팀 스퀘어테이블 · contact@team-roundtable.com

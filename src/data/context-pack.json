@@ -1,0 +1,54 @@
+{
+  "id": "ctx_001",
+  "unit_id": "store_001",
+  "store_name": "스퀘어 카페 신촌점",
+  "industry": "fnb",
+  "subcategory": "카페·디저트",
+  "owner_id": "u_owner_001",
+  "address": "서울 서대문구 신촌로 OO길 12, 1층",
+  "opened_at": "2014-03-15",
+  "hours": {
+    "weekday": "07:30 ~ 22:00",
+    "weekend": "09:00 ~ 22:00",
+    "last_order": "마감 30분 전",
+    "break_time": "없음"
+  },
+  "brand_rules": [
+    "손님께는 '~님' 호칭만 사용. '고객님'은 쓰지 않는다.",
+    "음료 컴플레인은 일단 '죄송합니다'부터. 이유는 그 다음에.",
+    "현금 결제는 정중히 사절. 카드/페이만 받는다.",
+    "포장컵은 무조건 뚜껑 닫아서 드린다. 흘림 사고 책임 100%."
+  ],
+  "menu_quick": [
+    { "name": "아메리카노 (HOT/ICE)", "price": 4500, "category": "에스프레소" },
+    { "name": "카페라떼 (HOT/ICE)", "price": 5000, "category": "에스프레소" },
+    { "name": "카푸치노", "price": 5500, "category": "에스프레소" },
+    { "name": "콜드브루", "price": 5500, "category": "에스프레소" },
+    { "name": "디카페인 라떼", "price": 5500, "category": "에스프레소" },
+    { "name": "바닐라라떼", "price": 5500, "category": "에스프레소" },
+    { "name": "녹차라떼", "price": 5500, "category": "논커피" },
+    { "name": "딸기스무디", "price": 6000, "category": "논커피" },
+    { "name": "크로플", "price": 5500, "category": "디저트" },
+    { "name": "치즈케이크", "price": 6500, "category": "디저트" }
+  ],
+  "equipment": [
+    { "name": "에스프레소 머신", "model": "라심발리 M27", "note": "08시 예열 필수" },
+    { "name": "POS", "model": "KIS-3000", "note": "카드 단말기 연동" },
+    { "name": "키오스크", "model": "포스원 V2", "note": "1대 (입구 우측)" },
+    { "name": "냉장 쇼케이스", "model": "—", "note": "디저트 보관" }
+  ],
+  "emergency_contacts": [
+    { "label": "사장님 (김영자)", "phone_last4": "8821" },
+    { "label": "본사 CS", "phone_last4": "2200" },
+    { "label": "기기 AS (라심발리)", "phone_last4": "5500" }
+  ],
+  "stakeholders_today": [
+    { "label": "오늘 매니저", "name": "김영자 (사장)", "available": false, "note": "발주 처리 중 (3시~4시 자리 비움)" }
+  ],
+  "settings": {
+    "auto_unknown_alert": true,
+    "alert_max_per_day": 10,
+    "default_tone": "단호하되 공감",
+    "language": "ko"
+  }
+}

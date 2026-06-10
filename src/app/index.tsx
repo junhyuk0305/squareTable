@@ -1,98 +1,165 @@
-import * as Device from 'expo-device';
-import { Platform, StyleSheet } from 'react-native';
+import { useState } from 'react';
+import { View, Text, Pressable, StyleSheet, TextInput, ScrollView, ActivityIndicator } from 'react-native';
+import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSessionStore } from '@/lib/store/useSessionStore';
+import { HAS_SUPABASE } from '@/lib/supabase';
+import { BrandColors, InkColors } from '@/lib/theme/colors';
+import type { Role } from '@/types';
 
-import { AnimatedIcon } from '@/components/animated-icon';
-import { HintRow } from '@/components/hint-row';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { WebBadge } from '@/components/web-badge';
-import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
+export default function LoginScreen() {
+  const router = useRouter();
+  const switchTo = useSessionStore((s) => s.switchTo);
+  const signInWithPassword = useSessionStore((s) => s.signInWithPassword);
+  const sendMagicLink = useSessionStore((s) => s.sendMagicLink);
 
-function getDevMenuHint() {
-  if (Platform.OS === 'web') {
-    return <ThemedText type="small">use browser devtools</ThemedText>;
-  }
-  if (Device.isDevice) {
-    return (
-      <ThemedText type="small">
-        shake device or press <ThemedText type="code">m</ThemedText> in terminal
-      </ThemedText>
-    );
-  }
-  const shortcut = Platform.OS === 'android' ? 'cmd+m (or ctrl+m)' : 'cmd+d';
+  const [role, setRole] = useState<Role>('owner'); // 데모 폴백 전용
+  const [email, setEmail] = useState('');
+  const [pw, setPw] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+
+  // Supabase 미설정이면 기존 데모 동작(입력 무시, 역할 토글로 바로 입장)
+  const demoEnter = () => {
+    switchTo(role);
+    router.replace(role === 'owner' ? '/owner/dashboard' : '/junior/chat');
+  };
+
+  const login = async () => {
+    if (!HAS_SUPABASE) return demoEnter();
+    if (!email || !pw) {
+      setMsg('이메일과 비밀번호를 입력해주세요.');
+      return;
+    }
+    setBusy(true);
+    setMsg(null);
+    const { error, role: r } = await signInWithPassword(email.trim(), pw);
+    setBusy(false);
+    if (error) {
+      setMsg('로그인 실패 — 이메일/비밀번호를 확인해주세요.');
+      return;
+    }
+    router.replace(r === 'owner' ? '/owner/dashboard' : '/junior/chat');
+  };
+
+  const magicLink = async () => {
+    if (!HAS_SUPABASE) return demoEnter();
+    if (!email) {
+      setMsg('이메일을 먼저 입력해주세요.');
+      return;
+    }
+    setBusy(true);
+    setMsg(null);
+    const { error } = await sendMagicLink(email.trim());
+    setBusy(false);
+    setMsg(error ? '메일 발송 실패. 잠시 후 다시 시도해주세요.' : '로그인 링크를 메일로 보냈어요. 메일함을 확인해주세요.');
+  };
+
   return (
-    <ThemedText type="small">
-      press <ThemedText type="code">{shortcut}</ThemedText>
-    </ThemedText>
-  );
-}
+    <SafeAreaView style={styles.safe}>
+      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+        <View style={styles.header}>
+          <Text style={styles.brand}>SQUARE TABLE</Text>
+          <Text style={styles.tagline}>현장 운영 AI</Text>
+        </View>
 
-export default function HomeScreen() {
-  return (
-    <ThemedView style={styles.container}>
-      <SafeAreaView style={styles.safeArea}>
-        <ThemedView style={styles.heroSection}>
-          <AnimatedIcon />
-          <ThemedText type="title" style={styles.title}>
-            Welcome to&nbsp;Expo
-          </ThemedText>
-        </ThemedView>
+        <View style={styles.card}>
+          {!HAS_SUPABASE && (
+            <View style={styles.seg}>
+              {(['owner', 'junior'] as Role[]).map((r) => (
+                <Pressable key={r} onPress={() => setRole(r)} style={[styles.segBtn, role === r && styles.segBtnOn]}>
+                  <Text style={[styles.segText, role === r && styles.segTextOn]}>{r === 'owner' ? '사장님' : '직원·알바'}</Text>
+                </Pressable>
+              ))}
+            </View>
+          )}
 
-        <ThemedText type="code" style={styles.code}>
-          get started
-        </ThemedText>
-
-        <ThemedView type="backgroundElement" style={styles.stepContainer}>
-          <HintRow
-            title="Try editing"
-            hint={<ThemedText type="code">src/app/index.tsx</ThemedText>}
+          <Text style={styles.label}>이메일</Text>
+          <TextInput
+            value={email}
+            onChangeText={setEmail}
+            placeholder="you@example.com"
+            placeholderTextColor={InkColors.ink3}
+            keyboardType="email-address"
+            autoCapitalize="none"
+            style={styles.input}
           />
-          <HintRow title="Dev tools" hint={getDevMenuHint()} />
-          <HintRow
-            title="Fresh start"
-            hint={<ThemedText type="code">npm run reset-project</ThemedText>}
-          />
-        </ThemedView>
 
-        {Platform.OS === 'web' && <WebBadge />}
-      </SafeAreaView>
-    </ThemedView>
+          <Text style={styles.label}>비밀번호</Text>
+          <TextInput
+            value={pw}
+            onChangeText={setPw}
+            placeholder="비밀번호"
+            placeholderTextColor={InkColors.ink3}
+            secureTextEntry
+            style={styles.input}
+            onSubmitEditing={login}
+          />
+
+          <Pressable disabled={busy} onPress={login} style={({ pressed }) => [styles.primary, pressed && { opacity: 0.88 }, busy && { opacity: 0.6 }]}>
+            {busy ? <ActivityIndicator color="#FFF" /> : <Text style={styles.primaryText}>로그인</Text>}
+          </Pressable>
+
+          {HAS_SUPABASE && (
+            <Pressable disabled={busy} onPress={magicLink} style={styles.linkBtn}>
+              <Text style={styles.linkText}>비밀번호 없이 <Text style={styles.linkStrong}>메일로 로그인</Text></Text>
+            </Pressable>
+          )}
+
+          {msg && <Text style={styles.msg}>{msg}</Text>}
+        </View>
+
+        <Text style={styles.demoNote}>
+          {HAS_SUPABASE ? '파일럿 계정으로 로그인하세요' : '* 데모: 입력 없이 로그인됩니다'}
+        </Text>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: 'center',
-    flexDirection: 'row',
+  safe: { flex: 1, backgroundColor: InkColors.cream },
+  scroll: { flexGrow: 1, padding: 24, justifyContent: 'center', gap: 28 },
+  header: { alignItems: 'center', gap: 6 },
+  brand: { fontSize: 30, fontWeight: '900', letterSpacing: 2, color: BrandColors.brand },
+  tagline: { fontSize: 14, color: InkColors.ink3 },
+
+  card: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: InkColors.line,
+    padding: 20,
+    gap: 10,
   },
-  safeArea: {
-    flex: 1,
-    paddingHorizontal: Spacing.four,
+  seg: { flexDirection: 'row', backgroundColor: InkColors.bgSoft, borderRadius: 12, padding: 4, marginBottom: 6 },
+  segBtn: { flex: 1, paddingVertical: 10, borderRadius: 9, alignItems: 'center' },
+  segBtnOn: { backgroundColor: '#FFFFFF', shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 6, shadowOffset: { width: 0, height: 2 } },
+  segText: { fontSize: 14, fontWeight: '700', color: InkColors.ink3 },
+  segTextOn: { color: InkColors.ink },
+
+  label: { fontSize: 13, fontWeight: '700', color: InkColors.ink2, marginTop: 4 },
+  input: {
+    borderWidth: 1,
+    borderColor: InkColors.line,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 13,
+    fontSize: 15,
+    color: InkColors.ink,
+    backgroundColor: '#FFFFFF',
+  },
+  primary: {
+    marginTop: 12,
+    backgroundColor: BrandColors.brand,
+    paddingVertical: 16,
+    borderRadius: 12,
     alignItems: 'center',
-    gap: Spacing.three,
-    paddingBottom: BottomTabInset + Spacing.three,
-    maxWidth: MaxContentWidth,
   },
-  heroSection: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    flex: 1,
-    paddingHorizontal: Spacing.four,
-    gap: Spacing.four,
-  },
-  title: {
-    textAlign: 'center',
-  },
-  code: {
-    textTransform: 'uppercase',
-  },
-  stepContainer: {
-    gap: Spacing.three,
-    alignSelf: 'stretch',
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.four,
-    borderRadius: Spacing.four,
-  },
+  primaryText: { color: '#FFFFFF', fontSize: 16, fontWeight: '800' },
+  linkBtn: { alignItems: 'center', paddingVertical: 10 },
+  linkText: { fontSize: 14, color: InkColors.ink3 },
+  linkStrong: { color: BrandColors.brand, fontWeight: '800' },
+  msg: { fontSize: 13, color: InkColors.ink2, textAlign: 'center', marginTop: 2 },
+  demoNote: { fontSize: 12, color: InkColors.ink3, textAlign: 'center' },
 });

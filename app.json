@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "__expo_init",
-    "slug": "__expo_init",
+    "name": "스퀘어테이블",
+    "slug": "squaretable",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "expoinit",
+    "scheme": "squaretable",
     "userInterfaceStyle": "automatic",
     "ios": {
       "icon": "./assets/expo.icon"
@@ -20,7 +20,7 @@
       "predictiveBackGestureEnabled": false
     },
     "web": {
-      "output": "static",
+      "output": "single",
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
