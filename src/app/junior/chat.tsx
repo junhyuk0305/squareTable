@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 
 import { SquareCard } from '@/components/SquareCard';
 import { VoiceButton } from '@/components/VoiceButton';
@@ -19,7 +20,6 @@ import { DeflectCard } from '@/components/DeflectCard';
 import { UserBubble } from '@/components/UserBubble';
 import { RoleTabBar } from '@/components/RoleTabBar';
 
-import { logout } from '@/lib/auth';
 import { useChatStore } from '@/lib/store/useChatStore';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
@@ -29,10 +29,17 @@ import { SEED_QUERIES } from '@/lib/demo/seedQueries';
 import { inferCategoryFromQuery } from '@/lib/utils/inferCategory';
 import { BrandColors, InkColors } from '@/lib/theme/colors';
 
-import usersData from '@/data/users.json';
-import contextPack from '@/data/context-pack.json';
+// 빈 채팅 추천 질문 — 업종(요식업) 일반. 데모 매장(노하우 보유)은 데모 시드 칩을 쓴다.
+const GENERIC_SUGGESTIONS = [
+  '마감 청소 어디까지 해요?',
+  '포스기 에러 났어요',
+  '재료 떨어지면 어떻게 해요?',
+  '진상 손님은 어떻게 응대해요?',
+];
 
-import type { Category, ChatQuery, UsersData } from '@/types';
+import { useStaffStore } from '@/lib/store/useStaffStore';
+
+import type { Category, ChatQuery } from '@/types';
 
 /**
  * 알바 챗봇 화면 — D안 AI 어시스턴트 클린형.
@@ -52,15 +59,19 @@ export default function JuniorChatScreen() {
   const userId = useSessionStore((s) => s.userId);
   const userName = useSessionStore((s) => s.userName);
   const sessionStore = useSessionStore((s) => s.storeName);
+  const getStaff = useStaffStore((s) => s.getStaff);
   const getEntryById = usePlaybookStore((s) => s.getById);
+  const entryCount = usePlaybookStore((s) => s.entries.length);
+  // 노하우가 있는 매장(데모 포함)은 데모 시드 질문, 신규 빈 매장은 업종 일반 추천.
+  const suggestions = entryCount > 0 ? SEED_QUERIES.slice(0, 4).map((s) => s.text) : GENERIC_SUGGESTIONS;
 
   const identity = useMemo(() => {
-    // 실매장 이름은 세션에서. 입사일차는 시드에 있을 때만 표시(실사용자엔 없음).
-    const me = (usersData as unknown as UsersData).staff.find((s) => s.id === userId);
-    const store = sessionStore || (contextPack as { store_name: string }).store_name;
-    const career = me ? ` · 입사 ${me.career_days}일차` : '';
-    return `${userName}${career} · ${store}`;
-  }, [userId, userName, sessionStore]);
+    // 매장 이름은 세션에서. 입사일차는 명부에 있을 때만 표시(신규 사용자엔 없음).
+    const me = getStaff(userId);
+    const career = me?.career_days ? ` · 입사 ${me.career_days}일차` : '';
+    const store = sessionStore ? ` · ${sessionStore}` : '';
+    return `${userName}${career}${store}`;
+  }, [userId, userName, sessionStore, getStaff]);
   const unknownQueue = useUnknownQueueStore((s) => s.queue);
 
   const [input, setInput] = useState('');
@@ -90,8 +101,8 @@ export default function JuniorChatScreen() {
     }, 300);
   }
 
-  function handleExit() {
-    void logout();
+  function handleSettings() {
+    router.push('/junior/settings');
   }
 
   return (
@@ -101,10 +112,13 @@ export default function JuniorChatScreen() {
           title: '스퀘어 어시스턴트',
           headerRight: () => (
             <Pressable
-              onPress={handleExit}
-              style={({ pressed }) => [styles.switchBtn, pressed && { opacity: 0.7 }]}
+              onPress={handleSettings}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="설정"
+              style={({ pressed }) => [{ paddingHorizontal: 8 }, pressed && { opacity: 0.6 }]}
             >
-              <Text style={styles.switchBtnText}>로그아웃</Text>
+              <Ionicons name="settings-outline" size={22} color={InkColors.ink2} />
             </Pressable>
           ),
         }}
@@ -134,13 +148,13 @@ export default function JuniorChatScreen() {
                 매장 노하우를 바로 찾아드려요. 없으면 사장님께 대신 여쭤볼게요.
               </Text>
               <View style={styles.suggestList}>
-                {SEED_QUERIES.slice(0, 4).map((seed) => (
+                {suggestions.map((text, i) => (
                   <Pressable
-                    key={seed.id}
-                    onPress={() => handleSeedTap(seed.text)}
+                    key={`${i}-${text}`}
+                    onPress={() => handleSeedTap(text)}
                     style={({ pressed }) => [styles.suggest, pressed && { opacity: 0.7 }]}
                   >
-                    <Text style={styles.suggestText}>{seed.text}</Text>
+                    <Text style={styles.suggestText}>{text}</Text>
                     <Text style={styles.suggestArrow}>↗</Text>
                   </Pressable>
                 ))}

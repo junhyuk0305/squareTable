@@ -6,13 +6,11 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { useAttendanceStore, type AttendanceRecord } from '@/lib/store/useAttendanceStore';
 import { usePayrollStore } from '@/lib/store/usePayrollStore';
+import { useStaffStore } from '@/lib/store/useStaffStore';
 import { RoleTabBar } from '@/components/RoleTabBar';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { fmtDuration, won, hhmm, todayStr } from '@/lib/utils/attendance';
-import usersData from '@/data/users.json';
-import type { UsersData } from '@/types';
 
-const users = usersData as unknown as UsersData;
 const WD = ['일', '월', '화', '수', '목', '금', '토'];
 
 /** "1200" / "12:5" / "12:00" → "HH:MM" (24시 클램프). 비면 null. */
@@ -50,8 +48,9 @@ export default function TimesheetScreen() {
   const upsertManual = useAttendanceStore((s) => s.upsertManual);
   const removeRecord = useAttendanceStore((s) => s.removeRecord);
   const wages = usePayrollStore((s) => s.wages);
+  const getStaff = useStaffStore((s) => s.getStaff);
 
-  const staff = users.staff.find((s) => s.id === staffId);
+  const staff = getStaff(staffId ?? '');
   const wage = wages[staffId ?? ''] ?? 10030;
 
   const [ym, setYm] = useState(() => todayStr().slice(0, 7));

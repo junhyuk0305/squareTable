@@ -6,14 +6,10 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { useAttendanceStore, type AttendanceRecord } from '@/lib/store/useAttendanceStore';
 import { usePayrollStore } from '@/lib/store/usePayrollStore';
+import { useStaffStore } from '@/lib/store/useStaffStore';
 import { RoleTabBar } from '@/components/RoleTabBar';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { fmtDuration, won, todayStr, minutesBetween } from '@/lib/utils/attendance';
-
-import usersData from '@/data/users.json';
-import type { UsersData } from '@/types';
-
-const users = usersData as unknown as UsersData;
 
 function liveMinutes(r: AttendanceRecord): number {
   if (r.check_out) return r.work_minutes;
@@ -24,6 +20,7 @@ function liveMinutes(r: AttendanceRecord): number {
 export default function OwnerAttendanceScreen() {
   const records = useAttendanceStore((s) => s.records);
   const wages = usePayrollStore((s) => s.wages);
+  const staff = useStaffStore((s) => s.staff);
   const router = useRouter();
 
   const [, setTick] = useState(0);
@@ -36,7 +33,7 @@ export default function OwnerAttendanceScreen() {
   const ym = today.slice(0, 7);
 
   const rows = useMemo(() => {
-    return users.staff.map((s) => {
+    return staff.map((s) => {
       const monthRecs = records.filter((r) => r.staff_id === s.id && r.date.startsWith(ym));
       const min = monthRecs.reduce((sum, r) => sum + liveMinutes(r), 0);
       const wage = wages[s.id] ?? 10030;
@@ -49,7 +46,7 @@ export default function OwnerAttendanceScreen() {
           : 'done';
       return { s, min, pay, status };
     });
-  }, [records, wages, ym, today]);
+  }, [records, wages, ym, today, staff]);
 
   const totalPay = rows.reduce((a, r) => a + r.pay, 0);
   const month = Number(ym.slice(5));
@@ -59,7 +56,7 @@ export default function OwnerAttendanceScreen() {
       <Stack.Screen options={{ title: '근무·급여' }} />
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <Text style={styles.subline}>
-          {month}월 · 직원 {users.staff.length}명
+          {month}월 · 직원 {staff.length}명
         </Text>
 
         {/* 총 인건비 */}

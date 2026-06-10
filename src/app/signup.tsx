@@ -3,6 +3,7 @@ import { View, Text, Pressable, StyleSheet, TextInput, ScrollView, ActivityIndic
 import { useRouter, Stack } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSessionStore } from '@/lib/store/useSessionStore';
+import { applyMockSeed } from '@/lib/demo/mockSeed';
 import { HAS_SUPABASE } from '@/lib/supabase';
 import { formatBizNo, isValidBizNo } from '@/lib/utils/bizno';
 import { BrandColors, InkColors } from '@/lib/theme/colors';
@@ -10,7 +11,7 @@ import type { Role } from '@/types';
 
 export default function SignupScreen() {
   const router = useRouter();
-  const switchTo = useSessionStore((s) => s.switchTo);
+  const enterMockStore = useSessionStore((s) => s.enterMockStore);
   const signUp = useSessionStore((s) => s.signUp);
   const createStore = useSessionStore((s) => s.createStore);
   const joinByInvite = useSessionStore((s) => s.joinByInvite);
@@ -33,9 +34,10 @@ export default function SignupScreen() {
     setErr(null);
     if (!agreed) return setErr('개인정보 수집·이용 동의가 필요해요.');
 
-    // Supabase 미설정(로컬 데모): 입력 없이 바로 입장
+    // Supabase 미설정(로컬 데모): 새 계정 = 빈 매장에서 시작(데모 데이터 없음)
     if (!HAS_SUPABASE) {
-      switchTo(role);
+      enterMockStore(name.trim(), role, storeName.trim());
+      applyMockSeed(false);
       router.replace(role === 'owner' ? '/owner/dashboard' : '/junior/chat');
       return;
     }

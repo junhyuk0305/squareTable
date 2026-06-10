@@ -3,6 +3,7 @@ import { View, Text, Pressable, StyleSheet, TextInput, ScrollView, ActivityIndic
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSessionStore } from '@/lib/store/useSessionStore';
+import { applyMockSeed } from '@/lib/demo/mockSeed';
 import { HAS_SUPABASE } from '@/lib/supabase';
 import { BrandColors, InkColors } from '@/lib/theme/colors';
 import type { Role } from '@/types';
@@ -22,6 +23,7 @@ export default function LoginScreen() {
   // Supabase 미설정이면 기존 데모 동작(입력 무시, 역할 토글로 바로 입장)
   const demoEnter = () => {
     switchTo(role);
+    applyMockSeed(true); // 데모 계정 = 데모 데이터로 입장
     router.replace(role === 'owner' ? '/owner/dashboard' : '/junior/chat');
   };
 

@@ -91,7 +91,7 @@ export function KnowhowFlow({ uq, onComplete, onStepChange }: FlowProps) {
               <VoiceButton
                 size="lg"
                 label="음성으로 답변하기"
-                mockText="우유 거품 결이 곱고 단맛이 살아납니다. 그냥 데우면 비린맛이 나요."
+                mockText="재료를 제대로 손질하면 맛이 균일하게 살아나요. 대충 하면 바로 티가 나요."
                 onResult={(t) => {
                   dispatch({ type: 'set', key: 'voiceDifference', value: t });
                 }}
@@ -114,7 +114,7 @@ export function KnowhowFlow({ uq, onComplete, onStepChange }: FlowProps) {
               <VoiceButton
                 size="lg"
                 label="한 줄 격언 녹음"
-                mockText="우유는 65도, 사람 손등에 닿아 따끈할 때가 딱 좋다."
+                mockText="급할수록 기본 순서대로. 손이 기억하게 한다."
                 onResult={(t) => {
                   dispatch({ type: 'set', key: 'voiceMaxim', value: t });
                 }}

@@ -16,7 +16,7 @@ import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { uploadPhoto } from '@/lib/db';
 import { getCategoryMeta } from '@/lib/utils/category';
 import { InkColors } from '@/lib/theme/colors';
-import { buildPlaybookEntry, type WizardAnswers } from '@/lib/utils/buildEntry';
+import { buildPlaybookEntry, isAnswersPublishable, type WizardAnswers } from '@/lib/utils/buildEntry';
 import { VoiceButton } from '@/components/VoiceButton';
 
 import { RoutineFlow } from '@/components/wizard/RoutineFlow';
@@ -86,8 +86,15 @@ export default function AddKnowhowScreen() {
   const onComplete = useCallback(
     (answers: WizardAnswers) => {
       if (submittedRef.current) return;
+      const merged = { ...answers, title, photos };
+      // 품질 게이트 — 할 행동/멘트가 하나도 없으면 저장하지 않고 보완을 요구한다.
+      if (!isAnswersPublishable(syntheticUq, merged)) {
+        setToast('내용이 비어 있어요 — 할 일이나 멘트를 한 가지라도 채워주세요');
+        setTimeout(() => setToast(null), 2200);
+        return;
+      }
       submittedRef.current = true;
-      const entry = buildPlaybookEntry(syntheticUq, { ...answers, title, photos });
+      const entry = buildPlaybookEntry(syntheticUq, merged);
       addEntry(entry);
       setToast('새 노하우가 저장됐어요');
       setTimeout(() => {
@@ -111,7 +118,7 @@ export default function AddKnowhowScreen() {
           </View>
 
           <Text style={styles.q}>어떤 상황·주제인가요?</Text>
-          <Text style={styles.hint}>한 줄로 적어주세요. (예: 마감 청소 / 우유 떨어짐 / 진상 손님)</Text>
+          <Text style={styles.hint}>한 줄로 적어주세요. (예: 마감 청소 / 재료 떨어짐 / 진상 손님)</Text>
 
           <TextInput
             value={title}

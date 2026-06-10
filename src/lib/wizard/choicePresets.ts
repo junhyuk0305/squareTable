@@ -99,7 +99,7 @@ const PRESETS: Record<WizardStepKey, StepPresets> = {
     fnb: [
       { v: '카운터 하단', icon: '🗄', hint: '계산대 아래' },
       { v: '주방 안쪽', icon: '🍳', hint: '주방 캐비닛/선반' },
-      { v: '머신 옆', icon: '☕', hint: '에스프레소 머신 주변' },
+      { v: '홀·창고', icon: '📦', hint: '홀 수납·창고/냉장고' },
       { v: '직접 사진 첨부', icon: '📷', hint: '사진으로 보여드릴게요' },
     ],
   },

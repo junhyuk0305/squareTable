@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Stack, Redirect } from 'expo-router';
+import { Stack, Redirect, usePathname } from 'expo-router';
 import { InkColors } from '@/lib/theme/colors';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
@@ -7,10 +7,13 @@ import { useChatStore } from '@/lib/store/useChatStore';
 import { useWorkStore } from '@/lib/store/useWorkStore';
 import { useAttendanceStore } from '@/lib/store/useAttendanceStore';
 import { usePayrollStore } from '@/lib/store/usePayrollStore';
+import { useStaffStore } from '@/lib/store/useStaffStore';
 import { HAS_SUPABASE } from '@/lib/supabase';
 
 export default function JuniorLayout() {
   const status = useSessionStore((s) => s.status);
+  const unitId = useSessionStore((s) => s.unitId);
+  const pathname = usePathname();
 
   // 로그인되면 매장 데이터를 DB에서 당겨오고 실시간 구독(다른 기기 변경 즉시 반영).
   useEffect(() => {
@@ -20,6 +23,7 @@ export default function JuniorLayout() {
     useWorkStore.getState().hydrate();
     useAttendanceStore.getState().hydrate();
     usePayrollStore.getState().hydrate();
+    useStaffStore.getState().hydrate();
     const offP = usePlaybookStore.getState().subscribe();
     const offW = useWorkStore.getState().subscribe();
     const offA = useAttendanceStore.getState().subscribe();
@@ -32,6 +36,10 @@ export default function JuniorLayout() {
 
   if (HAS_SUPABASE && status === 'loading') return null;
   if (HAS_SUPABASE && status === 'signed_out') return <Redirect href="/" />;
+  // 가입은 됐지만 매장 미연결 → 빈 챗으로 떨어뜨리지 않고 합류(온보딩)로 유도.
+  if (HAS_SUPABASE && status === 'signed_in' && !unitId && pathname !== '/junior/onboarding') {
+    return <Redirect href="/junior/onboarding" />;
+  }
   return (
     <Stack
       screenOptions={{
@@ -43,6 +51,8 @@ export default function JuniorLayout() {
       <Stack.Screen name="chat" options={{ title: '스퀘어 어시스턴트' }} />
       <Stack.Screen name="attendance" options={{ title: '출퇴근' }} />
       <Stack.Screen name="work" options={{ title: '업무' }} />
+      <Stack.Screen name="settings" options={{ title: '설정' }} />
+      <Stack.Screen name="onboarding" options={{ headerShown: false }} />
     </Stack>
   );
 }

@@ -5,18 +5,16 @@ import { Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 import { usePayrollStore } from '@/lib/store/usePayrollStore';
+import { useStaffStore } from '@/lib/store/useStaffStore';
+import { useSessionStore } from '@/lib/store/useSessionStore';
 import { RoleTabBar } from '@/components/RoleTabBar';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
-import { won } from '@/lib/utils/attendance';
-import usersData from '@/data/users.json';
-import type { UsersData } from '@/types';
-
-const users = usersData as unknown as UsersData;
-const INVITE_CODE = 'SQ-4F2K';
 
 export default function OwnerStaffScreen() {
   const wages = usePayrollStore((s) => s.wages);
   const setWage = usePayrollStore((s) => s.setWage);
+  const staff = useStaffStore((s) => s.staff);
+  const INVITE_CODE = useSessionStore((s) => s.inviteCode) || '------';
 
   const [copied, setCopied] = useState(false);
   const [phone, setPhone] = useState('');
@@ -82,9 +80,15 @@ export default function OwnerStaffScreen() {
         ))}
 
         {/* 직원 목록 */}
-        <Text style={styles.sectionTitle}>직원 ({users.staff.length}명)</Text>
+        <Text style={styles.sectionTitle}>직원 ({staff.length}명)</Text>
+        {staff.length === 0 ? (
+          <View style={styles.emptyBox}>
+            <Ionicons name="people-outline" size={22} color={InkColors.ink3} />
+            <Text style={styles.emptyText}>아직 합류한 직원이 없어요.{'\n'}위 초대코드를 직원에게 알려주세요.</Text>
+          </View>
+        ) : (
         <View style={styles.list}>
-          {users.staff.map((s) => (
+          {staff.map((s) => (
             <View key={s.id} style={styles.staffRow}>
               <View style={styles.avatar}>
                 <Text style={styles.avatarText}>{s.name.slice(0, 1)}</Text>
@@ -108,6 +112,7 @@ export default function OwnerStaffScreen() {
             </View>
           ))}
         </View>
+        )}
         <Text style={styles.demoNote}>* 시급은 즉시 반영됩니다(근무·급여 화면). 승인/권한은 데이터 연결 단계에서.</Text>
         <View style={{ height: 12 }} />
       </ScrollView>
@@ -149,4 +154,6 @@ const styles = StyleSheet.create({
   wageWon: { fontSize: 13, color: InkColors.ink3 },
 
   demoNote: { fontSize: 12, color: InkColors.ink3, marginTop: 6 },
+  emptyBox: { alignItems: 'center', gap: 8, paddingVertical: 28, backgroundColor: '#FFFFFF', borderRadius: 14, borderWidth: 1, borderColor: InkColors.line },
+  emptyText: { fontSize: 13, color: InkColors.ink3, textAlign: 'center', lineHeight: 19 },
 });

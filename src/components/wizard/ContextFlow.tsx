@@ -43,7 +43,7 @@ function reducer(state: State, action: Action): State {
 const DUMMY_PHOTOS = [
   { id: 'p1', label: '카운터 서랍', emoji: '🗄', desc: '카운터 아래 두 번째 서랍' },
   { id: 'p2', label: '주방 캐비닛', emoji: '🍳', desc: '주방 입구 좌측 캐비닛' },
-  { id: 'p3', label: '머신 옆 선반', emoji: '☕', desc: '에스프레소 머신 우측 선반' },
+  { id: 'p3', label: '홀·창고', emoji: '📦', desc: '홀 수납장 또는 창고/냉장고' },
 ];
 
 export function ContextFlow({ uq, onComplete, onStepChange }: FlowProps) {

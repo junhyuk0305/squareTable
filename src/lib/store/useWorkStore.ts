@@ -110,6 +110,7 @@ type State = {
   postMessage: (date: string, text: string, authorId: string, authorName: string, role: 'owner' | 'junior') => void;
   toggleReaction: (feedId: string, userId: string, emoji: string) => void;
   togglePin: (feedId: string) => void;
+  applyMock: (demo: boolean) => void;
 };
 
 export const useWorkStore = create<State>((set, get) => ({
@@ -232,4 +233,12 @@ export const useWorkStore = create<State>((set, get) => ({
     }));
     if (updated) void upsertFeed(updated);
   },
+
+  // 데모 매장이면 시드 체크리스트·피드, 신규 매장이면 빈 보드(가짜 "이수민 완료" 노출 방지).
+  applyMock: (demo) =>
+    set(
+      demo
+        ? { templates: seedTemplates, done: seedDone, feed: seedFeed, loaded: true }
+        : { templates: [], done: {}, feed: [], loaded: true },
+    ),
 }));

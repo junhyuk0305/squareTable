@@ -55,6 +55,7 @@ type State = {
   upsertManual: (staffId: string, date: string, cin: string, cout: string | null) => void;
   /** 출근 기록 삭제(잘못 찍힌 기록 정리) */
   removeRecord: (id: string) => void;
+  applyMock: (demo: boolean) => void;
 };
 
 export const useAttendanceStore = create<State>((set, get) => ({
@@ -114,4 +115,5 @@ export const useAttendanceStore = create<State>((set, get) => ({
     set((s) => ({ records: s.records.filter((r) => r.id !== id) }));
     void deleteAttendance(id);
   },
+  applyMock: (demo) => set({ records: demo ? seed : [], loaded: true }),
 }));

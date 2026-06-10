@@ -26,6 +26,7 @@ type ChatState = {
   submit: (text: string) => Promise<void>;
   rate: (id: string, vote: 'up' | 'down') => void;
   reset: () => void;
+  applyMock: (demo: boolean) => void;
 };
 
 export const useChatStore = create<ChatState>((set, get) => ({
@@ -91,7 +92,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     // ── 중간 밴드: 부분 매칭 → 그라운딩 생성 (이 구간만 LLM) ──
     if (result.confidence >= GENERATE_THRESHOLD && result.candidates.length > 0) {
       const sops = toSopSlices(result.candidates.map((c) => c.entry));
-      const ai = await generateAnswer({ storeId: STORE_ID, query: text, sops });
+      const ai = await generateAnswer({ storeId: session.unitId || STORE_ID, query: text, sops });
       if (ai.block) {
         const cq: ChatQuery = {
           id,
@@ -166,4 +167,5 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   reset: () => set({ history: [...seed], isLoading: false, lastSubmittedId: null }),
+  applyMock: (demo) => set({ history: demo ? [...seed] : [], isLoading: false, lastSubmittedId: null, loaded: true }),
 }));

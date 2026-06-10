@@ -27,6 +27,9 @@ export default function RootLayout() {
           <Stack.Screen name="index" />
           <Stack.Screen name="signup" />
           <Stack.Screen name="privacy" />
+          <Stack.Screen name="terms" />
+          <Stack.Screen name="business-info" />
+          <Stack.Screen name="account-edit" />
           <Stack.Screen name="junior" />
           <Stack.Screen name="owner" />
         </Stack>

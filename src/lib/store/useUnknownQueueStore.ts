@@ -16,6 +16,7 @@ type UnknownQueueState = {
   getPending: () => UnknownQuery[];
   getById: (id: string) => UnknownQuery | undefined;
   reset: () => void;
+  applyMock: (demo: boolean) => void;
 };
 
 export const useUnknownQueueStore = create<UnknownQueueState>((set, get) => ({
@@ -60,4 +61,5 @@ export const useUnknownQueueStore = create<UnknownQueueState>((set, get) => ({
   getPending: () => get().queue.filter((u) => u.status === 'pending_owner_answer'),
   getById: (id) => get().queue.find((u) => u.id === id),
   reset: () => set({ queue: HAS_SUPABASE ? [] : [...seed] }),
+  applyMock: (demo) => set({ queue: demo ? [...seed] : [], loaded: true }),
 }));
