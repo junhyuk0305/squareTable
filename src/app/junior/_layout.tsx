@@ -4,19 +4,30 @@ import { InkColors } from '@/lib/theme/colors';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { useChatStore } from '@/lib/store/useChatStore';
+import { useWorkStore } from '@/lib/store/useWorkStore';
+import { useAttendanceStore } from '@/lib/store/useAttendanceStore';
+import { usePayrollStore } from '@/lib/store/usePayrollStore';
 import { HAS_SUPABASE } from '@/lib/supabase';
 
 export default function JuniorLayout() {
   const status = useSessionStore((s) => s.status);
 
-  // 로그인되면 매장 노하우를 당겨오고 구독(사장님 새 답변이 채팅 RAG에 즉시 반영).
-  // + 내 채팅 기록도 DB에서 복원(새로고침해도 대화 유지).
+  // 로그인되면 매장 데이터를 DB에서 당겨오고 실시간 구독(다른 기기 변경 즉시 반영).
   useEffect(() => {
     if (status !== 'signed_in') return;
     usePlaybookStore.getState().hydrate();
     useChatStore.getState().hydrate(useSessionStore.getState().userId);
+    useWorkStore.getState().hydrate();
+    useAttendanceStore.getState().hydrate();
+    usePayrollStore.getState().hydrate();
     const offP = usePlaybookStore.getState().subscribe();
-    return () => offP();
+    const offW = useWorkStore.getState().subscribe();
+    const offA = useAttendanceStore.getState().subscribe();
+    return () => {
+      offP();
+      offW();
+      offA();
+    };
   }, [status]);
 
   if (HAS_SUPABASE && status === 'loading') return null;

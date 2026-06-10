@@ -1,5 +1,7 @@
 import { create } from 'zustand';
 import { todayStr, minutesBetween } from '@/lib/utils/attendance';
+import { HAS_SUPABASE } from '@/lib/supabase';
+import { fetchAttendance, upsertAttendance, deleteAttendance, subscribeAttendance } from '@/lib/db';
 
 export type AttendanceRecord = {
   id: string;
@@ -44,6 +46,9 @@ const seed: AttendanceRecord[] = [
 
 type State = {
   records: AttendanceRecord[];
+  loaded: boolean;
+  hydrate: () => Promise<void>;
+  subscribe: () => () => void;
   checkIn: (staffId: string) => void;
   checkOut: (staffId: string) => void;
   /** 사장 수동 보정: 직원·날짜의 출퇴근 시간을 직접 설정(없으면 생성, 있으면 갱신). 시간은 "HH:MM". */
@@ -53,7 +58,14 @@ type State = {
 };
 
 export const useAttendanceStore = create<State>((set, get) => ({
-  records: seed,
+  records: HAS_SUPABASE ? [] : seed,
+  loaded: !HAS_SUPABASE,
+  hydrate: async () => {
+    if (!HAS_SUPABASE) return;
+    set({ records: await fetchAttendance(), loaded: true });
+  },
+  subscribe: () => subscribeAttendance(() => get().hydrate()),
+
   checkIn: (staffId) => {
     const date = todayStr();
     // 다회 출퇴근: 열린(미퇴근) 기록이 없을 때만 새 출근 생성
@@ -62,47 +74,44 @@ export const useAttendanceStore = create<State>((set, get) => ({
     );
     if (hasOpen) return;
     const now = new Date().toISOString();
-    set((s) => ({
-      records: [
-        { id: `att_${staffId}_${Date.now()}`, staff_id: staffId, date, check_in: now, check_out: null, work_minutes: 0 },
-        ...s.records,
-      ],
-    }));
+    const rec: AttendanceRecord = { id: `att_${staffId}_${Date.now()}`, staff_id: staffId, date, check_in: now, check_out: null, work_minutes: 0 };
+    set((s) => ({ records: [rec, ...s.records] }));
+    void upsertAttendance(rec);
   },
   checkOut: (staffId) => {
     const date = todayStr();
+    let updated: AttendanceRecord | undefined;
     set((s) => ({
       records: s.records.map((r) => {
         if (r.staff_id === staffId && r.date === date && r.check_in && !r.check_out) {
           const out = new Date().toISOString();
-          return { ...r, check_out: out, work_minutes: minutesBetween(r.check_in, out) };
+          updated = { ...r, check_out: out, work_minutes: minutesBetween(r.check_in, out) };
+          return updated;
         }
         return r;
       }),
     }));
+    if (updated) void upsertAttendance(updated);
   },
   upsertManual: (staffId, date, cin, cout) => {
     const check_in = iso(date, cin);
     const check_out = cout ? iso(date, cout) : null;
     const work_minutes = check_out ? minutesBetween(check_in, check_out) : 0;
+    let saved: AttendanceRecord | undefined;
     set((s) => {
-      const exists = s.records.some((r) => r.staff_id === staffId && r.date === date);
-      if (exists) {
-        return {
-          records: s.records.map((r) =>
-            r.staff_id === staffId && r.date === date
-              ? { ...r, check_in, check_out, work_minutes }
-              : r,
-          ),
-        };
+      const existing = s.records.find((r) => r.staff_id === staffId && r.date === date);
+      if (existing) {
+        saved = { ...existing, check_in, check_out, work_minutes };
+        const next = saved;
+        return { records: s.records.map((r) => (r.staff_id === staffId && r.date === date ? next : r)) };
       }
-      return {
-        records: [
-          { id: `att_${staffId}_${date}_manual`, staff_id: staffId, date, check_in, check_out, work_minutes },
-          ...s.records,
-        ],
-      };
+      saved = { id: `att_${staffId}_${date}_manual`, staff_id: staffId, date, check_in, check_out, work_minutes };
+      return { records: [saved, ...s.records] };
     });
+    if (saved) void upsertAttendance(saved);
   },
-  removeRecord: (id) => set((s) => ({ records: s.records.filter((r) => r.id !== id) })),
+  removeRecord: (id) => {
+    set((s) => ({ records: s.records.filter((r) => r.id !== id) }));
+    void deleteAttendance(id);
+  },
 }));

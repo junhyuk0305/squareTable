@@ -4,21 +4,31 @@ import { InkColors } from '@/lib/theme/colors';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { useUnknownQueueStore } from '@/lib/store/useUnknownQueueStore';
+import { useWorkStore } from '@/lib/store/useWorkStore';
+import { useAttendanceStore } from '@/lib/store/useAttendanceStore';
+import { usePayrollStore } from '@/lib/store/usePayrollStore';
 import { HAS_SUPABASE } from '@/lib/supabase';
 
 export default function OwnerLayout() {
   const status = useSessionStore((s) => s.status);
 
-  // 로그인되면 DB에서 당겨오고 실시간 구독(인박스가 알바 질문에 즉시 반응).
+  // 로그인되면 DB에서 당겨오고 실시간 구독(인박스·업무보드·출퇴근이 다른 기기 변경에 즉시 반응).
   useEffect(() => {
     if (status !== 'signed_in') return;
     usePlaybookStore.getState().hydrate();
     useUnknownQueueStore.getState().hydrate();
+    useWorkStore.getState().hydrate();
+    useAttendanceStore.getState().hydrate();
+    usePayrollStore.getState().hydrate();
     const offQ = useUnknownQueueStore.getState().subscribe();
     const offP = usePlaybookStore.getState().subscribe();
+    const offW = useWorkStore.getState().subscribe();
+    const offA = useAttendanceStore.getState().subscribe();
     return () => {
       offQ();
       offP();
+      offW();
+      offA();
     };
   }, [status]);
 
