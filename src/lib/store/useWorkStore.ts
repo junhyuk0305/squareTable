@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { todayStr } from '@/lib/utils/attendance';
 
-export type TaskSection = 'open' | 'close' | 'etc';
+export type TaskSection = 'open' | 'mid' | 'close' | 'etc';
 export type TaskTemplate = { id: string; section: TaskSection; text: string };
 export type DoneMark = { by: string; byName: string; at: string };
 export type FeedKind = 'notice' | 'message' | 'task_done';
@@ -15,12 +15,17 @@ export type FeedItem = {
   authorRole: 'owner' | 'junior';
   createdAt: string;
   refId?: string; // task_done → templateId
-  acks?: string[]; // notice 확인자
+  reactions?: Record<string, string[]>; // 이모지 → 누른 사람 id[] (확인/👍/🔥 등)
   important?: boolean; // notice 긴급
+  pinned?: boolean; // notice 상단 고정(카톡식)
 };
+
+// 피드에서 토글 가능한 이모지 셋 (확인 = ✅)
+export const REACTIONS = ['✅', '👍', '🔥', '🙏', '👀'] as const;
 
 export const SECTION_LABEL: Record<TaskSection, string> = {
   open: '오픈',
+  mid: '미들',
   close: '마감',
   etc: '기타',
 };
@@ -32,6 +37,8 @@ const seedTemplates: TaskTemplate[] = [
   { id: 'o2', section: 'open', text: '쇼케이스 디저트 채우기' },
   { id: 'o3', section: 'open', text: '포스·키오스크 전원 켜기' },
   { id: 'o4', section: 'open', text: '매장 바닥·테이블 청소' },
+  { id: 'm1', section: 'mid', text: '피크 전 원두·우유 잔량 점검' },
+  { id: 'm2', section: 'mid', text: '화장실·홀 중간 청소' },
   { id: 'c1', section: 'close', text: '원두·우유 재고 확인' },
   { id: 'c2', section: 'close', text: '제빙기 비우고 청소' },
   { id: 'c3', section: 'close', text: '쓰레기 분리수거' },
@@ -56,8 +63,9 @@ const seedFeed: FeedItem[] = [
     authorName: '김영자',
     authorRole: 'owner',
     createdAt: `${T}T08:00:00+09:00`,
-    acks: [],
+    reactions: { '✅': ['u_staff_002'] },
     important: false,
+    pinned: true, // 카톡식 상단 고정 데모
   },
   {
     id: 'f2',
@@ -69,16 +77,6 @@ const seedFeed: FeedItem[] = [
     authorRole: 'junior',
     createdAt: `${T}T08:25:00+09:00`,
     refId: 'o3',
-  },
-  {
-    id: 'f3',
-    date: T,
-    kind: 'message',
-    text: '사장님 우유 거의 다 떨어졌어요',
-    authorId: 'u_staff_001',
-    authorName: '박지원',
-    authorRole: 'junior',
-    createdAt: `${T}T13:40:00+09:00`,
   },
 ];
 
@@ -94,7 +92,8 @@ type State = {
   toggleTask: (date: string, templateId: string, staffId: string, staffName: string, role: 'owner' | 'junior') => void;
   postNotice: (date: string, text: string, authorId: string, authorName: string, important: boolean) => void;
   postMessage: (date: string, text: string, authorId: string, authorName: string, role: 'owner' | 'junior') => void;
-  ackNotice: (feedId: string, staffId: string) => void;
+  toggleReaction: (feedId: string, userId: string, emoji: string) => void;
+  togglePin: (feedId: string) => void;
 };
 
 export const useWorkStore = create<State>((set) => ({
@@ -145,8 +144,9 @@ export const useWorkStore = create<State>((set) => ({
           authorName,
           authorRole: 'owner',
           createdAt: new Date().toISOString(),
-          acks: [],
+          reactions: {},
           important,
+          pinned: false,
         },
       ],
     })),
@@ -168,12 +168,20 @@ export const useWorkStore = create<State>((set) => ({
       ],
     })),
 
-  ackNotice: (feedId, staffId) =>
+  toggleReaction: (feedId, userId, emoji) =>
     set((s) => ({
-      feed: s.feed.map((f) =>
-        f.id === feedId
-          ? { ...f, acks: f.acks?.includes(staffId) ? f.acks : [...(f.acks ?? []), staffId] }
-          : f,
-      ),
+      feed: s.feed.map((f) => {
+        if (f.id !== feedId) return f;
+        const map = { ...(f.reactions ?? {}) };
+        const arr = map[emoji] ?? [];
+        map[emoji] = arr.includes(userId) ? arr.filter((u) => u !== userId) : [...arr, userId];
+        if (map[emoji].length === 0) delete map[emoji]; // 0개면 칩 제거
+        return { ...f, reactions: map };
+      }),
+    })),
+
+  togglePin: (feedId) =>
+    set((s) => ({
+      feed: s.feed.map((f) => (f.id === feedId ? { ...f, pinned: !f.pinned } : f)),
     })),
 }));

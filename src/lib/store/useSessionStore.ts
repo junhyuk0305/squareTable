@@ -22,7 +22,7 @@ type SessionState = {
     pw: string,
     meta: { name: string; role: Role; phone_last4?: string },
   ) => Promise<{ error: string | null; needsConfirm: boolean }>;
-  createStore: (storeName: string) => Promise<{ error: string | null; inviteCode: string | null }>;
+  createStore: (storeName: string, bizNo?: string) => Promise<{ error: string | null; inviteCode: string | null }>;
   joinByInvite: (code: string) => Promise<{ error: string | null; storeName: string | null }>;
   sendMagicLink: (email: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
@@ -114,9 +114,17 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     return { error: null, needsConfirm };
   },
 
-  createStore: async (storeName) => {
-    const { data, error } = await supabase.rpc('create_store', { p_store_name: storeName });
-    if (error) return { error: error.message, inviteCode: null };
+  createStore: async (storeName, bizNo) => {
+    const { data, error } = await supabase.rpc('create_store', {
+      p_store_name: storeName,
+      p_biz_no: bizNo ?? null,
+    });
+    if (error) {
+      const msg = /duplicate_biz_no/.test(error.message)
+        ? '이미 등록된 사업자등록번호예요.'
+        : error.message;
+      return { error: msg, inviteCode: null };
+    }
     const row = Array.isArray(data) ? data[0] : data;
     // 프로필 unit_id가 바뀌었으니 세션 상태 갱신
     const uid = get().userId;
