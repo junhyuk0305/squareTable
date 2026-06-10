@@ -1,15 +1,14 @@
 import { type ReactNode } from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, StyleSheet, Platform } from 'react-native';
 import { InkColors } from '@/lib/theme/colors';
 
 /**
- * 웹에서 가로가 넓어도 모바일 폭을 유지하고 중앙 정렬 + 좌우 거터.
- * 좁은 화면(실제 모바일)에서는 그대로 풀폭.
+ * 웹에서 가로가 넓어도 모바일 폭(460px)을 유지하고 중앙 정렬 + 좌우 거터.
+ * 좁은 화면(실제 모바일/좁은 창)에서는 maxWidth가 자연히 풀폭으로 떨어진다.
  *
- * ⚠️ 중앙 정렬은 JS(useWindowDimensions)로 측정하지 않고 CSS 미디어쿼리(+html.tsx)로
- * 처리한다. JS 측정은 SSR 첫 페인트에서 폭을 몰라 풀폭으로 그렸다가 하이드레이션 후
- * 가운데로 점프하는 깜빡임을 만든다. CSS는 첫 바이트부터 적용돼 깜빡임이 없다.
- * nativeID는 웹에서 DOM id로 매핑되고(네이티브에선 무해), 미디어쿼리가 이 id를 타깃한다.
+ * ⚠️ 중앙 정렬을 컴포넌트 스타일에서 직접 처리한다(외부 CSS/미디어쿼리·nativeID 의존 X).
+ * RN Web 0.21에선 nativeID→DOM id 매핑이 보장되지 않아 +html.tsx 미디어쿼리가 안 먹었다.
+ * 여기선 maxWidth(고정값)만 쓰므로 윈도 측정이 없어 깜빡임도 없다.
  */
 export function ResponsiveShell({ children }: { children: ReactNode }) {
   return (
@@ -21,7 +20,25 @@ export function ResponsiveShell({ children }: { children: ReactNode }) {
   );
 }
 
+const isWeb = Platform.OS === 'web';
+
 const styles = StyleSheet.create({
-  outer: { flex: 1, backgroundColor: InkColors.cream },
-  frame: { flex: 1, width: '100%', backgroundColor: InkColors.cream },
+  outer: {
+    flex: 1,
+    backgroundColor: isWeb ? '#E9E7E0' : InkColors.cream, // 웹은 거터를 살짝 어둡게
+    ...(isWeb ? { alignItems: 'center' } : null),
+  },
+  frame: {
+    flex: 1,
+    width: '100%',
+    backgroundColor: InkColors.cream,
+    ...(isWeb
+      ? {
+          maxWidth: 460,
+          borderLeftWidth: 1,
+          borderRightWidth: 1,
+          borderColor: '#E8E6DF',
+        }
+      : null),
+  },
 });
