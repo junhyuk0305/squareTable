@@ -4,8 +4,17 @@ import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
+import { logout } from '@/lib/auth';
 import { getCategoryMeta } from '@/lib/utils/category';
-import { InkColors } from '@/lib/theme/colors';
+import { InkColors, BrandColors } from '@/lib/theme/colors';
+
+function LogoutHeaderBtn() {
+  return (
+    <Pressable onPress={() => void logout()} hitSlop={8} style={({ pressed }) => [{ paddingHorizontal: 8 }, pressed && { opacity: 0.6 }]}>
+      <Text style={{ fontSize: 13, fontWeight: '700', color: BrandColors.brand }}>로그아웃</Text>
+    </Pressable>
+  );
+}
 
 export default function OwnerKnowledgeScreen() {
   const router = useRouter();
@@ -15,7 +24,7 @@ export default function OwnerKnowledgeScreen() {
   if (!loaded) {
     return (
       <SafeAreaView style={[styles.safe, styles.center]} edges={['bottom']}>
-        <Stack.Screen options={{ title: '내 노하우' }} />
+        <Stack.Screen options={{ title: '내 노하우', headerRight: () => <LogoutHeaderBtn /> }} />
         <ActivityIndicator color={InkColors.ink3} />
         <Text style={styles.loadingText}>노하우를 불러오는 중...</Text>
       </SafeAreaView>

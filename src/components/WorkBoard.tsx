@@ -112,7 +112,7 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
             ? undefined
             : () => (
                 <Pressable onPress={() => void logout()} hitSlop={8} style={({ pressed }) => [{ paddingHorizontal: 8 }, pressed && { opacity: 0.6 }]}>
-                  <Text style={{ fontSize: 13, fontWeight: '700', color: BrandColors.brand }}>나가기</Text>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: BrandColors.brand }}>로그아웃</Text>
                 </Pressable>
               ),
         }}

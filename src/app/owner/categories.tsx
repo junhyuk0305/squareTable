@@ -71,9 +71,9 @@ export default function OwnerCategoriesScreen() {
               onPress={goHome}
               style={({ pressed }) => [styles.switchBtn, pressed && styles.switchBtnPressed]}
               accessibilityRole="button"
-              accessibilityLabel="나가기"
+              accessibilityLabel="로그아웃"
             >
-              <Text style={styles.switchText}>나가기</Text>
+              <Text style={styles.switchText}>로그아웃</Text>
             </Pressable>
           ),
         }}

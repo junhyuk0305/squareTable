@@ -104,7 +104,7 @@ export default function JuniorChatScreen() {
               onPress={handleExit}
               style={({ pressed }) => [styles.switchBtn, pressed && { opacity: 0.7 }]}
             >
-              <Text style={styles.switchBtnText}>나가기</Text>
+              <Text style={styles.switchBtnText}>로그아웃</Text>
             </Pressable>
           ),
         }}
