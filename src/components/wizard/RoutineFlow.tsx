@@ -108,7 +108,7 @@ export function RoutineFlow({ uq, onComplete, onStepChange }: FlowProps) {
               <VoiceButton
                 size="lg"
                 label="음성으로 답변하기"
-                mockText="오픈 직후 머신 워밍업 켜고, 우유 스팀 노즐 닦고, 카운터 청소까지 한 번에 합니다."
+                mockText="오픈하면 기기 전원부터 켜고, 재료 채워두고, 홀이랑 카운터 청소까지 한 번에 합니다."
                 onResult={(t) => {
                   dispatch({ type: 'set', key: 'voiceAction', value: t });
                   setTimeout(() => dispatch({ type: 'next' }), 600);

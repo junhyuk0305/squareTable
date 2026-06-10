@@ -10,17 +10,11 @@ import { useAttendanceStore, type AttendanceRecord } from '@/lib/store/useAttend
 import { usePayrollStore } from '@/lib/store/usePayrollStore';
 import { useWorkStore } from '@/lib/store/useWorkStore';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
+import { useStaffStore } from '@/lib/store/useStaffStore';
 import { RoleTabBar } from '@/components/RoleTabBar';
-import { logout } from '@/lib/auth';
 import { getCategoryMeta } from '@/lib/utils/category';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { won, todayStr, minutesBetween } from '@/lib/utils/attendance';
-
-import contextPack from '@/data/context-pack.json';
-import usersData from '@/data/users.json';
-import type { UsersData } from '@/types';
-
-const users = usersData as unknown as UsersData;
 
 function liveMin(r: AttendanceRecord): number {
   if (r.check_out) return r.work_minutes;
@@ -31,9 +25,8 @@ function liveMin(r: AttendanceRecord): number {
 export default function OwnerDashboardScreen() {
   const router = useRouter();
   const userName = useSessionStore((s) => s.userName);
-  // 실매장 이름은 세션(프로필→unit)에서. 비어 있으면 로컬 시드로 폴백.
-  const sessionStore = useSessionStore((s) => s.storeName);
-  const storeName = sessionStore || (contextPack as { store_name: string }).store_name;
+  // 실매장 이름은 세션(프로필→unit)에서.
+  const storeName = useSessionStore((s) => s.storeName) || '내 매장';
 
   const queue = useUnknownQueueStore((s) => s.queue);
   const records = useAttendanceStore((s) => s.records);
@@ -41,20 +34,21 @@ export default function OwnerDashboardScreen() {
   const templates = useWorkStore((s) => s.templates);
   const doneMap = useWorkStore((s) => s.done);
   const entries = usePlaybookStore((s) => s.entries);
+  const staff = useStaffStore((s) => s.staff);
 
   const today = todayStr();
   const ym = today.slice(0, 7);
 
   const { working, monthPay } = useMemo(() => {
     const working = records.filter((r) => r.date === today && r.check_in && !r.check_out).length;
-    const monthPay = users.staff.reduce((sum, s) => {
+    const monthPay = staff.reduce((sum, s) => {
       const min = records
         .filter((r) => r.staff_id === s.id && r.date.startsWith(ym))
         .reduce((a, r) => a + liveMin(r), 0);
       return sum + Math.round((min * (wages[s.id] ?? 10030)) / 60);
     }, 0);
     return { working, monthPay };
-  }, [records, wages, today, ym]);
+  }, [records, wages, today, ym, staff]);
   const taskTotal = templates.length;
   const taskDoneCount = Object.keys(doneMap[today] ?? {}).length;
 
@@ -79,16 +73,14 @@ export default function OwnerDashboardScreen() {
       : '급한 미답변은 없어요. 오늘도 매장 잘 굴러가고 있어요 👍';
   const briefingSub = `지금 근무 ${working}명 · 오늘 할일 ${taskDoneCount}/${taskTotal} 완료 · 이번 달 인건비 ${won(monthPay)}`;
 
-  const goHome = () => void logout();
-
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
       <Stack.Screen
         options={{
           title: storeName,
           headerRight: () => (
-            <Pressable onPress={goHome} hitSlop={8} style={({ pressed }) => [{ paddingHorizontal: 8 }, pressed && { opacity: 0.6 }]}>
-              <Text style={styles.headerBtn}>로그아웃</Text>
+            <Pressable onPress={() => router.push('/owner/settings')} hitSlop={8} accessibilityRole="button" accessibilityLabel="설정" style={({ pressed }) => [{ paddingHorizontal: 8 }, pressed && { opacity: 0.6 }]}>
+              <Ionicons name="settings-outline" size={22} color={InkColors.ink2} />
             </Pressable>
           ),
         }}
@@ -171,7 +163,7 @@ export default function OwnerDashboardScreen() {
           </Pressable>
           <Text style={styles.miniDot}>·</Text>
           <Pressable onPress={() => router.push('/owner/staff')}>
-            <Text style={styles.miniLink}>직원 {users.staff.length}명 ›</Text>
+            <Text style={styles.miniLink}>직원 {staff.length}명 ›</Text>
           </Pressable>
         </View>
 

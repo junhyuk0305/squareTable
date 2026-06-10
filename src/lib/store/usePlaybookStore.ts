@@ -16,6 +16,7 @@ type PlaybookState = {
   update: (id: string, patch: Partial<PlaybookEntry>) => void;
   remove: (id: string) => void;
   reset: () => void;
+  applyMock: (demo: boolean) => void;
 };
 
 export const usePlaybookStore = create<PlaybookState>((set, get) => ({
@@ -45,4 +46,6 @@ export const usePlaybookStore = create<PlaybookState>((set, get) => ({
     void deleteEntry(id);
   },
   reset: () => set({ entries: HAS_SUPABASE ? [] : seed }),
+  // 데모 매장이면 시드, 신규 계정이면 빈 채로(가짜 노하우 노출 방지).
+  applyMock: (demo) => set({ entries: demo ? seed : [], loaded: true }),
 }));

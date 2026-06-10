@@ -14,10 +14,9 @@ import { useSessionStore } from '@/lib/store/useSessionStore';
 import { ALL_CATEGORIES, getCategoryMeta } from '@/lib/utils/category';
 import { BrandColors, InkColors } from '@/lib/theme/colors';
 
-import usersData from '@/data/users.json';
-import type { Category, PlaybookEntry, UnknownQuery, UsersData } from '@/types';
+import { useStaffStore } from '@/lib/store/useStaffStore';
+import type { Category, PlaybookEntry, UnknownQuery } from '@/types';
 
-const users = usersData as unknown as UsersData;
 const MAX_LIST_ROWS = 6;
 const TOP_RESOLVED = 5;
 
@@ -35,6 +34,7 @@ export default function OwnerInboxScreen() {
   const loaded = useUnknownQueueStore((s) => s.loaded);
   const entries = usePlaybookStore((s) => s.entries);
   const userName = useSessionStore((s) => s.userName);
+  const getStaff = useStaffStore((s) => s.getStaff);
 
   // 'all' = 필터 해제. 그 외엔 해당 Category만.
   const [filter, setFilter] = useState<Category | 'all'>('all');
@@ -66,9 +66,8 @@ export default function OwnerInboxScreen() {
   // 박지원 career_days lookup (hero 메타에 노출)
   const careerDays = useMemo(() => {
     if (!hero) return undefined;
-    const j = users.staff.find((s) => s.id === hero.junior_id);
-    return j?.career_days;
-  }, [hero]);
+    return getStaff(hero.junior_id)?.career_days;
+  }, [hero, getStaff]);
 
   const goAnswer = (uqId: string) => router.push({ pathname: '/owner/answer/[uqId]', params: { uqId } });
 

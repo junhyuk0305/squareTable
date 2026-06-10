@@ -4,14 +4,9 @@
  */
 
 import type { Category, PlaybookEntry, UnknownQuery } from '@/types';
-import contextPack from '@/data/context-pack.json';
+import { useSessionStore } from '@/lib/store/useSessionStore';
 
 export type WizardAnswers = Record<string, any>;
-
-const OWNER_ID = (contextPack as { owner_id: string }).owner_id;
-const OWNER_NAME = '김영자';
-// 매장 식별자는 컨텍스트팩(데이터)이 단일 진실 — 시드 엔트리와 같은 매장에 묶인다.
-const DEFAULT_UNIT_ID = (contextPack as { unit_id: string }).unit_id;
 
 /** subcategory 추정: presumed → 답변에서 보강 */
 function deriveSubcategory(uq: UnknownQuery, answers: WizardAnswers): string {
@@ -121,8 +116,37 @@ function buildTags(uq: UnknownQuery, answers: WizardAnswers): string[] {
   return Array.from(new Set(tags)).slice(0, 6);
 }
 
+/** square 6칸 중 실제로 채워진 비율(0~1). 품질 점수의 근거. */
+function computeQuality(sq: PlaybookEntry['square']): number {
+  const checks = [
+    !!sq.situation,
+    !!sq.quagmire,
+    !!sq.uncover,
+    sq.action.steps.length >= 1,
+    sq.action.scripts.length >= 1,
+    !!(sq.result.before || sq.result.after || sq.result.metric),
+    !!sq.extract.do,
+    !!sq.extract.dont,
+  ];
+  const filled = checks.filter(Boolean).length;
+  return Math.round((filled / checks.length) * 100) / 100;
+}
+
+/**
+ * 발행 가능 여부 — "텅 빈 노하우" 차단용.
+ * 알바에게 실제로 도움이 되려면 최소한 '할 행동(steps)'이나 '멘트(scripts)'가 하나는 있어야 한다.
+ * 호출부(위저드 완료)는 이게 false면 저장하지 말고 보완을 요구한다.
+ */
+export function isAnswersPublishable(uq: UnknownQuery, answers: WizardAnswers): boolean {
+  const sq = buildSquare(uq, answers);
+  const hasTitle = deriveTitle(uq, answers).trim().length > 0;
+  const hasContent = sq.action.steps.length >= 1 || sq.action.scripts.length >= 1;
+  return hasTitle && hasContent;
+}
+
 /**
  * Wizard 완료 후 PlaybookEntry 생성.
+ * 작성자·매장은 현재 로그인 세션에서 가져온다(데모 하드코딩 제거).
  */
 export function buildPlaybookEntry(uq: UnknownQuery, answers: WizardAnswers): PlaybookEntry {
   const now = new Date().toISOString();
@@ -130,20 +154,25 @@ export function buildPlaybookEntry(uq: UnknownQuery, answers: WizardAnswers): Pl
   const idSlug = category.toLowerCase().replace(/[^a-z]/g, '');
   const id = `pb_${idSlug}_${Date.now()}`;
 
+  const s = useSessionStore.getState();
+  const square = buildSquare(uq, answers);
+  const quality = computeQuality(square);
+  const publishable = square.action.steps.length >= 1 || square.action.scripts.length >= 1;
+
   return {
     id,
-    unit_id: DEFAULT_UNIT_ID,
-    creator_id: OWNER_ID,
-    creator_name: OWNER_NAME,
+    unit_id: s.unitId || 'store_001',
+    creator_id: s.userId || 'u_owner_001',
+    creator_name: s.userName || '사장님',
     category,
     subcategory: deriveSubcategory(uq, answers),
     title: deriveTitle(uq, answers),
     tags: buildTags(uq, answers),
-    square: buildSquare(uq, answers),
+    square,
     execution: buildExecution(category, answers),
     stats: {
       query_hits_30d: 0,
-      resolution_rate: 1.0,
+      resolution_rate: 0, // 실제 사용 전엔 0 (가짜 100% 금지)
       thumbs_up: 0,
       thumbs_down: 0,
       last_used_at: now,
@@ -151,8 +180,9 @@ export function buildPlaybookEntry(uq: UnknownQuery, answers: WizardAnswers): Pl
     search_keywords: extractKeywords(uq.query_text),
     photos: Array.isArray(answers.photos) && answers.photos.length ? answers.photos : undefined,
     version: 1,
-    status: 'published',
-    quality_score: 0.75,
+    // 내용이 비면 발행하지 않고 초안으로 — 호출부가 미리 막지만 이중 안전장치.
+    status: publishable ? 'published' : 'draft',
+    quality_score: quality,
     created_at: now,
     updated_at: now,
   };

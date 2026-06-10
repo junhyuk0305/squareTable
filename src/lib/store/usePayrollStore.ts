@@ -19,6 +19,7 @@ type State = {
   hydrate: () => Promise<void>;
   setSetting: <K extends keyof PayrollSettings>(k: K, v: PayrollSettings[K]) => void;
   setWage: (staffId: string, wage: number) => void;
+  applyMock: (demo: boolean) => void;
 };
 
 export const usePayrollStore = create<State>((set) => ({
@@ -42,4 +43,5 @@ export const usePayrollStore = create<State>((set) => ({
     set((s) => ({ wages: { ...s.wages, [staffId]: wage } }));
     void setWageDb(staffId, wage);
   },
+  applyMock: (demo) => set({ wages: demo ? { ...HOURLY_WAGE } : {} }),
 }));

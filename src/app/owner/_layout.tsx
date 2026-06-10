@@ -7,6 +7,7 @@ import { useUnknownQueueStore } from '@/lib/store/useUnknownQueueStore';
 import { useWorkStore } from '@/lib/store/useWorkStore';
 import { useAttendanceStore } from '@/lib/store/useAttendanceStore';
 import { usePayrollStore } from '@/lib/store/usePayrollStore';
+import { useStaffStore } from '@/lib/store/useStaffStore';
 import { HAS_SUPABASE } from '@/lib/supabase';
 
 export default function OwnerLayout() {
@@ -20,6 +21,7 @@ export default function OwnerLayout() {
     useWorkStore.getState().hydrate();
     useAttendanceStore.getState().hydrate();
     usePayrollStore.getState().hydrate();
+    useStaffStore.getState().hydrate();
     const offQ = useUnknownQueueStore.getState().subscribe();
     const offP = usePlaybookStore.getState().subscribe();
     const offW = useWorkStore.getState().subscribe();
@@ -43,7 +45,8 @@ export default function OwnerLayout() {
       }}
     >
       <Stack.Screen name="dashboard" options={{ title: '홈' }} />
-      <Stack.Screen name="inbox" options={{ title: '김영자 사장님' }} />
+      <Stack.Screen name="settings" options={{ title: '설정' }} />
+      <Stack.Screen name="inbox" options={{ title: '받은 질문' }} />
       <Stack.Screen name="attendance" options={{ title: '근무·급여' }} />
       <Stack.Screen name="staff" options={{ title: '직원 관리' }} />
       <Stack.Screen name="timesheet/[staffId]" options={{ title: '출근 기록' }} />

@@ -7,7 +7,7 @@ import { useUnknownQueueStore } from '@/lib/store/useUnknownQueueStore';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { getCategoryMeta } from '@/lib/utils/category';
 import { BrandColors, InkColors } from '@/lib/theme/colors';
-import { buildPlaybookEntry, type WizardAnswers } from '@/lib/utils/buildEntry';
+import { buildPlaybookEntry, isAnswersPublishable, type WizardAnswers } from '@/lib/utils/buildEntry';
 
 import { RoutineFlow } from '@/components/wizard/RoutineFlow';
 import { EventFlow } from '@/components/wizard/EventFlow';
@@ -71,6 +71,13 @@ export default function AnswerWizardScreen() {
   const onComplete = useCallback(
     (answers: WizardAnswers) => {
       if (!uq || submittedRef.current) return;
+      // 품질 게이트 — 내용이 비면 발행하지 않고 보완을 요구한다.
+      if (!isAnswersPublishable(uq, answers)) {
+        const m = '답변 내용이 비어 있어요 — 할 일이나 멘트를 한 가지라도 채워주세요';
+        showToast(m);
+        setToast(m);
+        return;
+      }
       submittedRef.current = true;
       const entry = buildPlaybookEntry(uq, answers);
       addEntry(entry);

@@ -5,7 +5,7 @@
 // 행(row) ↔ TS 타입 매핑: 중첩 필드는 JSONB라 거의 그대로. snake_case 컬럼만 살짝 정리.
 
 import { supabase, HAS_SUPABASE } from './supabase';
-import type { PlaybookEntry, UnknownQuery, ChatQuery } from '@/types';
+import type { PlaybookEntry, UnknownQuery, ChatQuery, Owner, Junior } from '@/types';
 import type { TaskTemplate, FeedItem, DoneMark } from '@/lib/store/useWorkStore';
 import type { AttendanceRecord } from '@/lib/store/useAttendanceStore';
 
@@ -16,6 +16,53 @@ export function setUnitId(id: string | null) {
 }
 export function getUnitId() {
   return _unitId;
+}
+
+// ── 직원/사장 프로필 (같은 매장) ───────────────────────────
+// 실서비스: profiles에서 내 매장 동료를 읽어 직원/근태/급여 화면을 채운다.
+export async function fetchStaffProfiles(): Promise<{ owner: Owner | null; staff: Junior[] }> {
+  if (!HAS_SUPABASE) return { owner: null, staff: [] };
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('id, name, role, phone_last4, avatar, bio, meta, created_at')
+    .order('created_at', { ascending: true });
+  if (error) {
+    console.warn('[db] fetchStaffProfiles:', error.message);
+    return { owner: null, staff: [] };
+  }
+  const rows = (data ?? []) as any[];
+  const unit = _unitId ?? '';
+  const ownerRow = rows.find((r) => r.role === 'owner');
+  const owner: Owner | null = ownerRow
+    ? {
+        id: ownerRow.id,
+        name: ownerRow.name ?? '',
+        role: 'owner',
+        age: 0,
+        phone_last4: ownerRow.phone_last4 ?? '',
+        unit_id: unit,
+        avatar: ownerRow.avatar ?? undefined,
+        bio: ownerRow.bio ?? undefined,
+        joined_at: ownerRow.created_at ?? '',
+        career_years: ownerRow.meta?.career_years ?? 0,
+      }
+    : null;
+  const staff: Junior[] = rows
+    .filter((r) => r.role === 'junior')
+    .map((r) => ({
+      id: r.id,
+      name: r.name ?? '',
+      role: 'junior',
+      age: 0,
+      phone_last4: r.phone_last4 ?? '',
+      unit_id: unit,
+      avatar: r.avatar ?? undefined,
+      bio: r.bio ?? undefined,
+      joined_at: r.created_at ?? '',
+      career_days: r.meta?.career_days ?? 0,
+      shift: r.meta?.shift ?? undefined,
+    }));
+  return { owner, staff };
 }
 
 // ── 플레이북 ───────────────────────────────────────────────
