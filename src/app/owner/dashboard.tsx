@@ -88,7 +88,7 @@ export default function OwnerDashboardScreen() {
           title: storeName,
           headerRight: () => (
             <Pressable onPress={goHome} hitSlop={8} style={({ pressed }) => [{ paddingHorizontal: 8 }, pressed && { opacity: 0.6 }]}>
-              <Text style={styles.headerBtn}>나가기</Text>
+              <Text style={styles.headerBtn}>로그아웃</Text>
             </Pressable>
           ),
         }}

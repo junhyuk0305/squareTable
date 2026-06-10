@@ -15,7 +15,14 @@ export default function EditKnowledgeScreen() {
   const remove = usePlaybookStore((s) => s.remove);
 
   const [title, setTitle] = useState(entry?.title ?? '');
+  const [situation, setSituation] = useState(entry?.square.situation ?? '');
+  const [quagmire, setQuagmire] = useState(entry?.square.quagmire ?? '');
+  const [uncover, setUncover] = useState(entry?.square.uncover ?? '');
   const [steps, setSteps] = useState((entry?.square.action.steps ?? []).join('\n'));
+  const [scripts, setScripts] = useState((entry?.square.action.scripts ?? []).join('\n'));
+  const [before, setBefore] = useState(entry?.square.result?.before ?? '');
+  const [after, setAfter] = useState(entry?.square.result?.after ?? '');
+  const [metric, setMetric] = useState(entry?.square.result?.metric ?? '');
   const [doText, setDoText] = useState(entry?.square.extract.do ?? '');
   const [dontText, setDontText] = useState(entry?.square.extract.dont ?? '');
   const [toast, setToast] = useState<string | null>(null);
@@ -41,7 +48,14 @@ export default function EditKnowledgeScreen() {
       title: title.trim() || entry.title,
       square: {
         ...entry.square,
-        action: { ...entry.square.action, steps: steps.split('\n').map((s) => s.trim()).filter(Boolean) },
+        situation: situation.trim(),
+        quagmire: quagmire.trim(),
+        uncover: uncover.trim(),
+        action: {
+          steps: steps.split('\n').map((s) => s.trim()).filter(Boolean),
+          scripts: scripts.split('\n').map((s) => s.trim()).filter(Boolean),
+        },
+        result: { before: before.trim(), after: after.trim(), metric: metric.trim() },
         extract: { ...entry.square.extract, do: doText.trim(), dont: dontText.trim() },
       },
       version: entry.version + 1,
@@ -79,7 +93,22 @@ export default function EditKnowledgeScreen() {
         )}
 
         <Field label="제목" value={title} onChange={setTitle} />
+
+        <Text style={styles.group}>상황 이해</Text>
+        <Field label="상황" value={situation} onChange={setSituation} multiline />
+        <Field label="딜레마 (뭐가 어려운지)" value={quagmire} onChange={setQuagmire} multiline />
+        <Field label="핵심 통찰 (진짜 이유)" value={uncover} onChange={setUncover} multiline />
+
+        <Text style={styles.group}>행동</Text>
         <Field label="행동 순서 (한 줄에 하나씩)" value={steps} onChange={setSteps} multiline />
+        <Field label="고객 멘트 (한 줄에 하나씩)" value={scripts} onChange={setScripts} multiline />
+
+        <Text style={styles.group}>결과</Text>
+        <Field label="이전엔 (Before)" value={before} onChange={setBefore} multiline />
+        <Field label="이후엔 (After)" value={after} onChange={setAfter} multiline />
+        <Field label="수치·효과" value={metric} onChange={setMetric} />
+
+        <Text style={styles.group}>핵심</Text>
         <Field label="꼭 할 것 (Do)" value={doText} onChange={setDoText} multiline />
         <Field label="하지 말 것 (Don't)" value={dontText} onChange={setDontText} multiline />
 
@@ -122,6 +151,7 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: InkColors.cream },
   scroll: { padding: 20, gap: 14 },
   cat: { fontSize: 13, fontWeight: '800' },
+  group: { fontSize: 12, fontWeight: '800', color: InkColors.ink3, letterSpacing: 1, marginTop: 8, textTransform: 'uppercase' },
   label: { fontSize: 13, fontWeight: '700', color: InkColors.ink2 },
   input: {
     borderWidth: 1,
