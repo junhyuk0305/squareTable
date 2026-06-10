@@ -22,7 +22,7 @@ const ANSWER_SCHEMA = {
   type: 'object',
   properties: {
     summary: { type: 'string' },
-    actions: { type: 'array', items: { type: 'string' }, maxItems: 3 },
+    actions: { type: 'array', items: { type: 'string' }, maxItems: 4 },
     donts: { type: 'array', items: { type: 'string' }, maxItems: 2 },
     used_sop_ids: { type: 'array', items: { type: 'string' } },
     grounded: { type: 'boolean' },
@@ -82,7 +82,10 @@ async function handleAnswer(payload: any) {
   const prompt = `너는 매장 운영 어시스턴트다. 아래 "등록된 SOP"에 적힌 내용만 사용해 직원 질문에 답하라.
 규칙:
 - SOP에 없는 절차/정보는 절대 지어내지 말 것. 근거가 없으면 grounded=false, summary는 빈 문자열로.
-- actions 최대 3개, donts 최대 2개. 각 항목은 한 문장.
+- actions = SOP의 "단계"(해야 할 행동)에서만. donts = SOP의 "금지"(하지 말아야 할 것)에서만.
+  ⚠️ "단계"를 donts에 넣지 마라. "금지"가 없으면 donts는 빈 배열([])로 둬라.
+  ⚠️ 칸이 모자라도 행동을 donts로 옮기지 마라 — actions에 다 넣거나 덜 중요한 건 버려라.
+- actions 최대 4개, donts 최대 2개. 각 항목은 한 문장.
 - 사용한 SOP의 id를 used_sop_ids에 넣을 것(출처).
 - 한국어로 간결하게.
 

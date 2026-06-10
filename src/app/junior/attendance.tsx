@@ -7,6 +7,7 @@ import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useAttendanceStore, type AttendanceRecord } from '@/lib/store/useAttendanceStore';
 import { usePayrollStore } from '@/lib/store/usePayrollStore';
 import { RoleTabBar } from '@/components/RoleTabBar';
+import { logout } from '@/lib/auth';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { fmtDuration, won, hhmm, todayStr, minutesBetween } from '@/lib/utils/attendance';
 
@@ -64,7 +65,7 @@ export default function JuniorAttendanceScreen() {
         options={{
           title: '출퇴근',
           headerRight: () => (
-            <Pressable onPress={() => router.replace('/')} hitSlop={8} style={({ pressed }) => [{ paddingHorizontal: 8 }, pressed && { opacity: 0.6 }]}>
+            <Pressable onPress={() => void logout()} hitSlop={8} style={({ pressed }) => [{ paddingHorizontal: 8 }, pressed && { opacity: 0.6 }]}>
               <Text style={{ fontSize: 13, fontWeight: '700', color: BrandColors.brand }}>나가기</Text>
             </Pressable>
           ),

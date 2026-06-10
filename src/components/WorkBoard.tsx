@@ -13,6 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
+import { logout } from '@/lib/auth';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import {
   useWorkStore,
@@ -98,7 +99,7 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
           headerRight: isOwner
             ? undefined
             : () => (
-                <Pressable onPress={() => router.replace('/')} hitSlop={8} style={({ pressed }) => [{ paddingHorizontal: 8 }, pressed && { opacity: 0.6 }]}>
+                <Pressable onPress={() => void logout()} hitSlop={8} style={({ pressed }) => [{ paddingHorizontal: 8 }, pressed && { opacity: 0.6 }]}>
                   <Text style={{ fontSize: 13, fontWeight: '700', color: BrandColors.brand }}>나가기</Text>
                 </Pressable>
               ),

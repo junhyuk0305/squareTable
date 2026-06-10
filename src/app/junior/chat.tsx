@@ -19,6 +19,7 @@ import { DeflectCard } from '@/components/DeflectCard';
 import { UserBubble } from '@/components/UserBubble';
 import { RoleTabBar } from '@/components/RoleTabBar';
 
+import { logout } from '@/lib/auth';
 import { useChatStore } from '@/lib/store/useChatStore';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
@@ -90,7 +91,7 @@ export default function JuniorChatScreen() {
   }
 
   function handleExit() {
-    router.replace('/');
+    void logout();
   }
 
   return (

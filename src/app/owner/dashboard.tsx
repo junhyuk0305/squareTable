@@ -11,6 +11,7 @@ import { usePayrollStore } from '@/lib/store/usePayrollStore';
 import { useWorkStore } from '@/lib/store/useWorkStore';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { RoleTabBar } from '@/components/RoleTabBar';
+import { logout } from '@/lib/auth';
 import { getCategoryMeta } from '@/lib/utils/category';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { won, todayStr, minutesBetween } from '@/lib/utils/attendance';
@@ -78,7 +79,7 @@ export default function OwnerDashboardScreen() {
       : '급한 미답변은 없어요. 오늘도 매장 잘 굴러가고 있어요 👍';
   const briefingSub = `지금 근무 ${working}명 · 오늘 할일 ${taskDoneCount}/${taskTotal} 완료 · 이번 달 인건비 ${won(monthPay)}`;
 
-  const goHome = () => router.replace('/');
+  const goHome = () => void logout();
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
