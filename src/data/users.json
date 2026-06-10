@@ -1,0 +1,43 @@
+{
+  "owner": {
+    "id": "u_owner_001",
+    "name": "김영자",
+    "role": "owner",
+    "age": 58,
+    "career_years": 12,
+    "phone_last4": "8821",
+    "unit_id": "store_001",
+    "avatar": "owner",
+    "bio": "12년차 신촌 카페 사장. 카톡·인터넷 약하지만 손님 응대는 베테랑.",
+    "joined_at": "2014-03-01",
+    "voice_recordings_count": 47
+  },
+  "staff": [
+    {
+      "id": "u_staff_001",
+      "name": "박지원",
+      "role": "junior",
+      "age": 21,
+      "career_days": 4,
+      "phone_last4": "4412",
+      "unit_id": "store_001",
+      "avatar": "junior_female",
+      "bio": "대학생 1학년. 카페 첫 알바. 입사 4일차 — 데모의 주인공.",
+      "shift": "오후 (12시~18시)",
+      "joined_at": "2026-05-25"
+    },
+    {
+      "id": "u_staff_002",
+      "name": "이수민",
+      "role": "junior",
+      "age": 24,
+      "career_days": 92,
+      "phone_last4": "7790",
+      "unit_id": "store_001",
+      "avatar": "junior_male",
+      "bio": "취준생. 입사 3개월차. 오픈 시프트 담당.",
+      "shift": "오전 (7시~13시)",
+      "joined_at": "2026-02-26"
+    }
+  ]
+}
