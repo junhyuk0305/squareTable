@@ -6,6 +6,8 @@
 
 import { supabase, HAS_SUPABASE } from './supabase';
 import type { PlaybookEntry, UnknownQuery, ChatQuery } from '@/types';
+import type { TaskTemplate, FeedItem, DoneMark } from '@/lib/store/useWorkStore';
+import type { AttendanceRecord } from '@/lib/store/useAttendanceStore';
 
 // 현재 로그인 사용자의 unit_id (RLS가 어차피 막지만, INSERT 시 채워야 함)
 let _unitId: string | null = null;
@@ -157,6 +159,148 @@ export function subscribePlaybook(onChange: () => void): () => void {
   const ch = supabase
     .channel('playbook')
     .on('postgres_changes', { event: '*', schema: 'public', table: 'playbook_entries' }, onChange)
+    .subscribe();
+  return () => {
+    supabase.removeChannel(ch);
+  };
+}
+
+// ── 업무보드: 할일 템플릿 ──────────────────────────────────
+export async function fetchTemplates(): Promise<TaskTemplate[]> {
+  if (!HAS_SUPABASE) return [];
+  const { data, error } = await supabase.from('work_templates').select('id, section, text').order('created_at');
+  if (error) {
+    console.warn('[db] fetchTemplates:', error.message);
+    return [];
+  }
+  return (data ?? []) as TaskTemplate[];
+}
+export async function insertTemplate(t: TaskTemplate): Promise<void> {
+  if (!HAS_SUPABASE) return;
+  const { error } = await supabase.from('work_templates').insert({ ...t, unit_id: _unitId });
+  if (error) console.warn('[db] insertTemplate:', error.message);
+}
+export async function deleteTemplate(id: string): Promise<void> {
+  if (!HAS_SUPABASE) return;
+  const { error } = await supabase.from('work_templates').delete().eq('id', id);
+  if (error) console.warn('[db] deleteTemplate:', error.message);
+}
+
+// ── 업무보드: 완료 체크 ────────────────────────────────────
+export async function fetchDone(): Promise<Record<string, Record<string, DoneMark>>> {
+  if (!HAS_SUPABASE) return {};
+  const { data, error } = await supabase.from('work_done').select('work_date, template_id, data');
+  if (error) {
+    console.warn('[db] fetchDone:', error.message);
+    return {};
+  }
+  const out: Record<string, Record<string, DoneMark>> = {};
+  for (const r of (data ?? []) as any[]) {
+    (out[r.work_date] ??= {})[r.template_id] = r.data as DoneMark;
+  }
+  return out;
+}
+export async function setDone(date: string, templateId: string, mark: DoneMark): Promise<void> {
+  if (!HAS_SUPABASE) return;
+  const { error } = await supabase
+    .from('work_done')
+    .upsert({ unit_id: _unitId, work_date: date, template_id: templateId, data: mark });
+  if (error) console.warn('[db] setDone:', error.message);
+}
+export async function clearDone(date: string, templateId: string): Promise<void> {
+  if (!HAS_SUPABASE) return;
+  const { error } = await supabase
+    .from('work_done')
+    .delete()
+    .eq('unit_id', _unitId)
+    .eq('work_date', date)
+    .eq('template_id', templateId);
+  if (error) console.warn('[db] clearDone:', error.message);
+}
+
+// ── 업무보드: 피드(공지/메시지/완료) ──────────────────────
+export async function fetchFeed(): Promise<FeedItem[]> {
+  if (!HAS_SUPABASE) return [];
+  const { data, error } = await supabase.from('work_feed').select('data').order('created_at');
+  if (error) {
+    console.warn('[db] fetchFeed:', error.message);
+    return [];
+  }
+  return (data ?? []).map((r: any) => r.data as FeedItem);
+}
+export async function upsertFeed(item: FeedItem): Promise<void> {
+  if (!HAS_SUPABASE) return;
+  const { error } = await supabase
+    .from('work_feed')
+    .upsert({ id: item.id, unit_id: _unitId, feed_date: item.date, data: item });
+  if (error) console.warn('[db] upsertFeed:', error.message);
+}
+export async function deleteFeed(id: string): Promise<void> {
+  if (!HAS_SUPABASE) return;
+  const { error } = await supabase.from('work_feed').delete().eq('id', id);
+  if (error) console.warn('[db] deleteFeed:', error.message);
+}
+
+// ── 출퇴근 ─────────────────────────────────────────────────
+export async function fetchAttendance(): Promise<AttendanceRecord[]> {
+  if (!HAS_SUPABASE) return [];
+  const { data, error } = await supabase
+    .from('attendance')
+    .select('id, staff_id, date, check_in, check_out, work_minutes')
+    .order('date', { ascending: false });
+  if (error) {
+    console.warn('[db] fetchAttendance:', error.message);
+    return [];
+  }
+  return (data ?? []) as AttendanceRecord[];
+}
+export async function upsertAttendance(rec: AttendanceRecord): Promise<void> {
+  if (!HAS_SUPABASE) return;
+  const { error } = await supabase.from('attendance').upsert({ ...rec, unit_id: _unitId });
+  if (error) console.warn('[db] upsertAttendance:', error.message);
+}
+export async function deleteAttendance(id: string): Promise<void> {
+  if (!HAS_SUPABASE) return;
+  const { error } = await supabase.from('attendance').delete().eq('id', id);
+  if (error) console.warn('[db] deleteAttendance:', error.message);
+}
+
+// ── 시급 ───────────────────────────────────────────────────
+export async function fetchWages(): Promise<Record<string, number>> {
+  if (!HAS_SUPABASE) return {};
+  const { data, error } = await supabase.from('wages').select('staff_id, hourly_wage');
+  if (error) {
+    console.warn('[db] fetchWages:', error.message);
+    return {};
+  }
+  const out: Record<string, number> = {};
+  for (const r of (data ?? []) as any[]) out[r.staff_id] = r.hourly_wage;
+  return out;
+}
+export async function setWageDb(staffId: string, wage: number): Promise<void> {
+  if (!HAS_SUPABASE) return;
+  const { error } = await supabase.from('wages').upsert({ unit_id: _unitId, staff_id: staffId, hourly_wage: wage });
+  if (error) console.warn('[db] setWageDb:', error.message);
+}
+
+// ── 업무보드/출퇴근 Realtime 구독 ─────────────────────────
+export function subscribeWork(onChange: () => void): () => void {
+  if (!HAS_SUPABASE) return () => {};
+  const ch = supabase
+    .channel('work')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'work_feed' }, onChange)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'work_done' }, onChange)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'work_templates' }, onChange)
+    .subscribe();
+  return () => {
+    supabase.removeChannel(ch);
+  };
+}
+export function subscribeAttendance(onChange: () => void): () => void {
+  if (!HAS_SUPABASE) return () => {};
+  const ch = supabase
+    .channel('attendance')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'attendance' }, onChange)
     .subscribe();
   return () => {
     supabase.removeChannel(ch);

@@ -1,5 +1,18 @@
 import { create } from 'zustand';
 import { todayStr } from '@/lib/utils/attendance';
+import { HAS_SUPABASE } from '@/lib/supabase';
+import {
+  fetchTemplates,
+  insertTemplate,
+  deleteTemplate,
+  fetchDone,
+  setDone,
+  clearDone,
+  fetchFeed,
+  upsertFeed,
+  deleteFeed,
+  subscribeWork,
+} from '@/lib/db';
 
 export type TaskSection = 'open' | 'mid' | 'close' | 'etc';
 export type TaskTemplate = { id: string; section: TaskSection; text: string };
@@ -87,6 +100,9 @@ type State = {
   templates: TaskTemplate[];
   done: Record<string, Record<string, DoneMark>>;
   feed: FeedItem[];
+  loaded: boolean;
+  hydrate: () => Promise<void>;
+  subscribe: () => () => void;
   addTemplate: (section: TaskSection, text: string) => void;
   removeTemplate: (id: string) => void;
   toggleTask: (date: string, templateId: string, staffId: string, staffName: string, role: 'owner' | 'junior') => void;
@@ -96,79 +112,101 @@ type State = {
   togglePin: (feedId: string) => void;
 };
 
-export const useWorkStore = create<State>((set) => ({
-  templates: seedTemplates,
-  done: seedDone,
-  feed: seedFeed,
+export const useWorkStore = create<State>((set, get) => ({
+  // Supabase면 빈 채로 시작 → hydrate가 DB로 채움. 아니면 로컬 시드.
+  templates: HAS_SUPABASE ? [] : seedTemplates,
+  done: HAS_SUPABASE ? {} : seedDone,
+  feed: HAS_SUPABASE ? [] : seedFeed,
+  loaded: !HAS_SUPABASE,
 
-  addTemplate: (section, text) => set((s) => ({ templates: [...s.templates, { id: uid('t'), section, text }] })),
-  removeTemplate: (id) => set((s) => ({ templates: s.templates.filter((t) => t.id !== id) })),
+  hydrate: async () => {
+    if (!HAS_SUPABASE) return;
+    const [templates, done, feed] = await Promise.all([fetchTemplates(), fetchDone(), fetchFeed()]);
+    set({ templates, done, feed, loaded: true });
+  },
+  // 다른 기기(사장↔알바) 변경을 실시간 반영.
+  subscribe: () => subscribeWork(() => get().hydrate()),
 
-  toggleTask: (date, templateId, staffId, staffName, role) =>
-    set((s) => {
-      const dayMap = { ...(s.done[date] ?? {}) };
-      const tpl = s.templates.find((t) => t.id === templateId);
-      if (dayMap[templateId]) {
-        delete dayMap[templateId];
-        return {
-          done: { ...s.done, [date]: dayMap },
-          feed: s.feed.filter((f) => !(f.kind === 'task_done' && f.date === date && f.refId === templateId)),
-        };
-      }
-      const now = new Date().toISOString();
-      dayMap[templateId] = { by: staffId, byName: staffName, at: now };
-      const doneItem: FeedItem = {
-        id: uid('f'),
-        date,
-        kind: 'task_done',
-        text: `${staffName} · ${tpl ? tpl.text : '할일'} 완료`,
-        authorId: staffId,
-        authorName: staffName,
-        authorRole: role,
-        createdAt: now,
-        refId: templateId,
-      };
-      return { done: { ...s.done, [date]: dayMap }, feed: [...s.feed, doneItem] };
-    }),
+  addTemplate: (section, text) => {
+    const t = { id: uid('t'), section, text };
+    set((s) => ({ templates: [...s.templates, t] }));
+    void insertTemplate(t);
+  },
+  removeTemplate: (id) => {
+    set((s) => ({ templates: s.templates.filter((t) => t.id !== id) }));
+    void deleteTemplate(id);
+  },
 
-  postNotice: (date, text, authorId, authorName, important) =>
-    set((s) => ({
-      feed: [
-        ...s.feed,
-        {
-          id: uid('f'),
-          date,
-          kind: 'notice',
-          text,
-          authorId,
-          authorName,
-          authorRole: 'owner',
-          createdAt: new Date().toISOString(),
-          reactions: {},
-          important,
-          pinned: false,
-        },
-      ],
-    })),
+  toggleTask: (date, templateId, staffId, staffName, role) => {
+    const s = get();
+    const dayMap = { ...(s.done[date] ?? {}) };
+    const tpl = s.templates.find((t) => t.id === templateId);
+    if (dayMap[templateId]) {
+      // 해제 — 완료 표시 + 관련 task_done 피드 제거
+      delete dayMap[templateId];
+      const removed = s.feed.find((f) => f.kind === 'task_done' && f.date === date && f.refId === templateId);
+      set({
+        done: { ...s.done, [date]: dayMap },
+        feed: s.feed.filter((f) => !(f.kind === 'task_done' && f.date === date && f.refId === templateId)),
+      });
+      void clearDone(date, templateId);
+      if (removed) void deleteFeed(removed.id);
+      return;
+    }
+    const now = new Date().toISOString();
+    const mark: DoneMark = { by: staffId, byName: staffName, at: now };
+    dayMap[templateId] = mark;
+    const doneItem: FeedItem = {
+      id: uid('f'),
+      date,
+      kind: 'task_done',
+      text: `${staffName} · ${tpl ? tpl.text : '할일'} 완료`,
+      authorId: staffId,
+      authorName: staffName,
+      authorRole: role,
+      createdAt: now,
+      refId: templateId,
+    };
+    set({ done: { ...s.done, [date]: dayMap }, feed: [...s.feed, doneItem] });
+    void setDone(date, templateId, mark);
+    void upsertFeed(doneItem);
+  },
 
-  postMessage: (date, text, authorId, authorName, role) =>
-    set((s) => ({
-      feed: [
-        ...s.feed,
-        {
-          id: uid('f'),
-          date,
-          kind: 'message',
-          text,
-          authorId,
-          authorName,
-          authorRole: role,
-          createdAt: new Date().toISOString(),
-        },
-      ],
-    })),
+  postNotice: (date, text, authorId, authorName, important) => {
+    const item: FeedItem = {
+      id: uid('f'),
+      date,
+      kind: 'notice',
+      text,
+      authorId,
+      authorName,
+      authorRole: 'owner',
+      createdAt: new Date().toISOString(),
+      reactions: {},
+      important,
+      pinned: false,
+    };
+    set((s) => ({ feed: [...s.feed, item] }));
+    void upsertFeed(item);
+  },
 
-  toggleReaction: (feedId, userId, emoji) =>
+  postMessage: (date, text, authorId, authorName, role) => {
+    const item: FeedItem = {
+      id: uid('f'),
+      date,
+      kind: 'message',
+      text,
+      authorId,
+      authorName,
+      authorRole: role,
+      createdAt: new Date().toISOString(),
+    };
+    set((s) => ({ feed: [...s.feed, item] }));
+    void upsertFeed(item);
+  },
+
+  toggleReaction: (feedId, userId, emoji) => {
+    let updated: FeedItem | undefined;
     set((s) => ({
       feed: s.feed.map((f) => {
         if (f.id !== feedId) return f;
@@ -176,12 +214,22 @@ export const useWorkStore = create<State>((set) => ({
         const arr = map[emoji] ?? [];
         map[emoji] = arr.includes(userId) ? arr.filter((u) => u !== userId) : [...arr, userId];
         if (map[emoji].length === 0) delete map[emoji]; // 0개면 칩 제거
-        return { ...f, reactions: map };
+        updated = { ...f, reactions: map };
+        return updated;
       }),
-    })),
+    }));
+    if (updated) void upsertFeed(updated);
+  },
 
-  togglePin: (feedId) =>
+  togglePin: (feedId) => {
+    let updated: FeedItem | undefined;
     set((s) => ({
-      feed: s.feed.map((f) => (f.id === feedId ? { ...f, pinned: !f.pinned } : f)),
-    })),
+      feed: s.feed.map((f) => {
+        if (f.id !== feedId) return f;
+        updated = { ...f, pinned: !f.pinned };
+        return updated;
+      }),
+    }));
+    if (updated) void upsertFeed(updated);
+  },
 }));
