@@ -38,6 +38,12 @@ function shiftMonth(ym: string, delta: number): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 }
 
+// 해당 월의 실제 일수(2월 28/29 등)
+function daysInMonth(ym: string): number {
+  const [y, m] = ym.split('-').map(Number);
+  return new Date(y, m, 0).getDate();
+}
+
 export default function TimesheetScreen() {
   const { staffId } = useLocalSearchParams<{ staffId: string }>();
   const records = useAttendanceStore((s) => s.records);
@@ -53,6 +59,7 @@ export default function TimesheetScreen() {
   const [cin, setCin] = useState('');
   const [cout, setCout] = useState('');
   const [newDay, setNewDay] = useState('');
+  const [err, setErr] = useState<string | null>(null);
 
   const monthRecs = useMemo(
     () =>
@@ -68,33 +75,57 @@ export default function TimesheetScreen() {
 
   function openEdit(r: AttendanceRecord) {
     setEditing(r.id);
+    setErr(null);
     setCin(r.check_in ? hhmm(r.check_in) : '');
     setCout(r.check_out ? hhmm(r.check_out) : '');
   }
   function openNew() {
     setEditing('new');
+    setErr(null);
     setCin('');
     setCout('');
     setNewDay(String(new Date().getDate()));
   }
   function cancel() {
     setEditing(null);
+    setErr(null);
     setCin('');
     setCout('');
     setNewDay('');
   }
+
+  // 공통 검증: 출근 필수 + (퇴근 있으면) 퇴근 > 출근. 통과 시 {ci, co} 반환, 실패 시 null.
+  function validateTimes(): { ci: string; co: string | null } | null {
+    const ci = normalizeTime(cin);
+    if (!ci) {
+      setErr('출근 시간을 입력해주세요. (예: 09:00)');
+      return null;
+    }
+    const co = normalizeTime(cout);
+    if (co && co <= ci) {
+      setErr('퇴근 시간이 출근 시간보다 빠르거나 같아요.');
+      return null;
+    }
+    return { ci, co };
+  }
+
   function saveEdit(date: string) {
-    const ni = normalizeTime(cin);
-    if (!ni) return;
-    upsertManual(staffId!, date, ni, normalizeTime(cout));
+    const t = validateTimes();
+    if (!t) return;
+    upsertManual(staffId!, date, t.ci, t.co);
     cancel();
   }
   function saveNew() {
-    const day = Math.min(31, Math.max(1, Number(newDay.replace(/[^0-9]/g, '')) || 0));
-    const ni = normalizeTime(cin);
-    if (!day || !ni) return;
-    const date = `${ym}-${String(day).padStart(2, '0')}`;
-    upsertManual(staffId!, date, ni, normalizeTime(cout));
+    const rawDay = Number(newDay.replace(/[^0-9]/g, '')) || 0;
+    const maxDay = daysInMonth(ym);
+    if (rawDay < 1 || rawDay > maxDay) {
+      setErr(`일자는 1~${maxDay} 사이여야 해요.`);
+      return;
+    }
+    const t = validateTimes();
+    if (!t) return;
+    const date = `${ym}-${String(rawDay).padStart(2, '0')}`;
+    upsertManual(staffId!, date, t.ci, t.co);
     cancel();
   }
 
@@ -159,6 +190,7 @@ export default function TimesheetScreen() {
               <Text style={styles.editSuffix}>일</Text>
             </View>
             <TimeEditRow cin={cin} cout={cout} onCin={setCin} onCout={setCout} />
+            {err && <Text style={styles.errText}>{err}</Text>}
             <View style={styles.editActions}>
               <Pressable onPress={cancel} style={styles.cancelBtn}>
                 <Text style={styles.cancelText}>취소</Text>
@@ -203,6 +235,7 @@ export default function TimesheetScreen() {
                 {editing === r.id && (
                   <View style={styles.editInline}>
                     <TimeEditRow cin={cin} cout={cout} onCin={setCin} onCout={setCout} />
+                    {err && <Text style={styles.errText}>{err}</Text>}
                     <View style={styles.editActions}>
                       <Pressable
                         onPress={() => {
@@ -338,6 +371,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   editTitle: { fontSize: 14, fontWeight: '800', color: InkColors.ink },
+  errText: { fontSize: 13, color: BrandColors.accent, fontWeight: '600' },
   editRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   editFieldLabel: { fontSize: 13, color: InkColors.ink2, fontWeight: '700' },
   editTilde: { fontSize: 14, color: InkColors.ink3, marginHorizontal: 2 },

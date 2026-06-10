@@ -18,6 +18,7 @@ import { useSessionStore } from '@/lib/store/useSessionStore';
 import {
   useWorkStore,
   SECTION_LABEL,
+  REACTIONS,
   type TaskSection,
   type FeedItem,
 } from '@/lib/store/useWorkStore';
@@ -37,7 +38,7 @@ function dateLabel(date: string, today: string): string {
   return `${d.getMonth() + 1}월 ${d.getDate()}일 (${WD[d.getDay()]})`;
 }
 
-const SECTIONS: TaskSection[] = ['open', 'close', 'etc'];
+const SECTIONS: TaskSection[] = ['open', 'mid', 'close', 'etc'];
 
 export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
   const userId = useSessionStore((s) => s.userId);
@@ -53,7 +54,8 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
   const removeTemplate = useWorkStore((s) => s.removeTemplate);
   const postNotice = useWorkStore((s) => s.postNotice);
   const postMessage = useWorkStore((s) => s.postMessage);
-  const ackNotice = useWorkStore((s) => s.ackNotice);
+  const toggleReaction = useWorkStore((s) => s.toggleReaction);
+  const togglePin = useWorkStore((s) => s.togglePin);
 
   const today = todayStr();
   const [offset, setOffset] = useState(0);
@@ -63,6 +65,7 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
   const dayDone = done[date] ?? {};
   const [draft, setDraft] = useState('');
   const [asNotice, setAsNotice] = useState(false);
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({}); // 섹션 접기/펼치기
 
   // 할일 섹션 (사장은 빈 섹션도 추가용으로 노출, 알바는 항목 있는 것만)
   const sections = useMemo(
@@ -70,8 +73,17 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
     [isOwner, templates],
   );
 
+  // 고정 공지를 맨 위로, 나머지는 시간순(카톡식 상단 고정).
   const dayFeed = useMemo(
-    () => feed.filter((f) => f.date === date).sort((a, b) => a.createdAt.localeCompare(b.createdAt)),
+    () =>
+      feed
+        .filter((f) => f.date === date)
+        .sort((a, b) => {
+          const ap = a.pinned ? 1 : 0;
+          const bp = b.pinned ? 1 : 0;
+          if (ap !== bp) return bp - ap; // pinned 먼저
+          return a.createdAt.localeCompare(b.createdAt);
+        }),
     [feed, date],
   );
 
@@ -134,7 +146,12 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
             if (!isOwner && list.length === 0) return null;
             return (
               <View key={sec} style={styles.section}>
-                <Text style={styles.sectionTitle}>{SECTION_LABEL[sec]}</Text>
+                <Pressable onPress={() => setCollapsed((c) => ({ ...c, [sec]: !c[sec] }))} style={styles.sectionHead}>
+                  <Ionicons name={collapsed[sec] ? 'chevron-forward' : 'chevron-down'} size={16} color={InkColors.ink3} />
+                  <Text style={styles.sectionTitle}>{SECTION_LABEL[sec]}</Text>
+                  <Text style={styles.sectionCount}>{list.filter((t) => dayDone[t.id]).length}/{list.length}</Text>
+                </Pressable>
+                {!collapsed[sec] && (
                 <View style={styles.card}>
                   {list.length === 0 && <Text style={styles.sectionEmpty}>항목 없음</Text>}
                   {list.map((t) => {
@@ -168,6 +185,7 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
                   })}
                   {isOwner && <AddTask section={sec} onAdd={(text) => addTemplate(sec, text)} />}
                 </View>
+                )}
               </View>
             );
           })}
@@ -182,7 +200,8 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
                 item={f}
                 me={userId}
                 isOwner={isOwner}
-                onAck={() => ackNotice(f.id, userId)}
+                onReact={(emoji) => toggleReaction(f.id, userId, emoji)}
+                onTogglePin={() => togglePin(f.id)}
               />
             ))}
           </View>
@@ -251,7 +270,55 @@ function AddTask({ section, onAdd }: { section: TaskSection; onAdd: (text: strin
   );
 }
 
-function FeedRow({ item, me, isOwner, onAck }: { item: FeedItem; me: string; isOwner: boolean; onAck: () => void }) {
+/** 이모지 리액션 바 — 누른 칩(개수) + ＋로 5종 토글. 확인✅도 여기 포함. */
+function ReactionBar({ reactions, me, onReact }: { reactions?: Record<string, string[]>; me: string; onReact: (e: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const active = reactions ?? {};
+  const chips = Object.entries(active).filter(([, who]) => who.length > 0);
+  return (
+    <View style={styles.reactWrap}>
+      {chips.map(([emoji, who]) => {
+        const mine = who.includes(me);
+        return (
+          <Pressable key={emoji} onPress={() => onReact(emoji)} style={[styles.reactChip, mine && styles.reactChipMine]}>
+            <Text style={styles.reactEmoji}>{emoji}</Text>
+            <Text style={[styles.reactCount, mine && { color: BrandColors.brand }]}>{who.length}</Text>
+          </Pressable>
+        );
+      })}
+      <Pressable onPress={() => setOpen((v) => !v)} style={styles.reactAdd}>
+        <Ionicons name={open ? 'close' : 'happy-outline'} size={15} color={InkColors.ink3} />
+      </Pressable>
+      {open &&
+        REACTIONS.map((e) => (
+          <Pressable
+            key={e}
+            onPress={() => {
+              onReact(e);
+              setOpen(false);
+            }}
+            style={styles.reactPick}
+          >
+            <Text style={styles.reactEmoji}>{e}</Text>
+          </Pressable>
+        ))}
+    </View>
+  );
+}
+
+function FeedRow({
+  item,
+  me,
+  isOwner,
+  onReact,
+  onTogglePin,
+}: {
+  item: FeedItem;
+  me: string;
+  isOwner: boolean;
+  onReact: (emoji: string) => void;
+  onTogglePin: () => void;
+}) {
   if (item.kind === 'task_done') {
     return (
       <View style={styles.doneRow}>
@@ -263,23 +330,20 @@ function FeedRow({ item, me, isOwner, onAck }: { item: FeedItem; me: string; isO
     );
   }
   if (item.kind === 'notice') {
-    const acked = item.acks?.includes(me);
     return (
-      <View style={styles.notice}>
+      <View style={[styles.notice, item.pinned && styles.noticePinned]}>
         <View style={styles.noticeHead}>
-          <Ionicons name="megaphone" size={14} color={BrandColors.accent} />
-          <Text style={styles.noticeAuthor}>공지 · {item.authorName}</Text>
+          <Ionicons name={item.pinned ? 'pin' : 'megaphone'} size={14} color={BrandColors.accent} />
+          <Text style={styles.noticeAuthor}>{item.pinned ? '고정 공지' : '공지'} · {item.authorName}</Text>
           <Text style={styles.noticeTime}>{hhmm(item.createdAt)}</Text>
-        </View>
-        <Text style={styles.noticeText}>{item.text}</Text>
-        <View style={styles.noticeFoot}>
-          <Text style={styles.ackCount}>확인 {item.acks?.length ?? 0}</Text>
-          {!isOwner && (
-            <Pressable onPress={onAck} disabled={acked} style={[styles.ackBtn, acked && styles.ackBtnDone]}>
-              <Text style={[styles.ackBtnText, acked && { color: InkColors.ink3 }]}>{acked ? '확인함' : '확인'}</Text>
+          {isOwner && (
+            <Pressable onPress={onTogglePin} hitSlop={8} style={({ pressed }) => [{ marginLeft: 6 }, pressed && { opacity: 0.5 }]}>
+              <Ionicons name={item.pinned ? 'pin' : 'pin-outline'} size={16} color={item.pinned ? BrandColors.accent : InkColors.ink3} />
             </Pressable>
           )}
         </View>
+        <Text style={styles.noticeText}>{item.text}</Text>
+        <ReactionBar reactions={item.reactions} me={me} onReact={onReact} />
       </View>
     );
   }
@@ -290,6 +354,9 @@ function FeedRow({ item, me, isOwner, onAck }: { item: FeedItem; me: string; isO
       <Text style={styles.msgAuthor}>{item.authorName}</Text>
       <View style={[styles.msgBubble, mine && styles.msgBubbleMine]}>
         <Text style={[styles.msgText, mine && { color: '#FFFFFF' }]}>{item.text}</Text>
+      </View>
+      <View style={[mine && { alignItems: 'flex-end' }]}>
+        <ReactionBar reactions={item.reactions} me={me} onReact={onReact} />
       </View>
       <Text style={styles.msgTime}>{hhmm(item.createdAt)}</Text>
     </View>
@@ -325,7 +392,9 @@ const styles = StyleSheet.create({
   scroll: { padding: 16, gap: 16 },
 
   section: { gap: 8 },
+  sectionHead: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   sectionTitle: { fontSize: 15, fontWeight: '800', color: InkColors.ink2 },
+  sectionCount: { fontSize: 12, fontWeight: '700', color: InkColors.ink3, marginLeft: 'auto' },
   card: {
     backgroundColor: '#FFFFFF',
     borderRadius: 14,
@@ -379,11 +448,41 @@ const styles = StyleSheet.create({
   noticeAuthor: { fontSize: 12, fontWeight: '800', color: BrandColors.accent },
   noticeTime: { fontSize: 11, color: InkColors.ink3, marginLeft: 'auto' },
   noticeText: { fontSize: 15, color: InkColors.ink, lineHeight: 21 },
-  noticeFoot: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  ackCount: { fontSize: 12, color: InkColors.ink3, fontWeight: '600' },
-  ackBtn: { backgroundColor: BrandColors.accent, paddingVertical: 6, paddingHorizontal: 14, borderRadius: 999 },
-  ackBtnDone: { backgroundColor: InkColors.bgSoft },
-  ackBtnText: { fontSize: 12, fontWeight: '800', color: '#FFFFFF' },
+  noticePinned: { borderColor: BrandColors.accent, borderWidth: 1.5 },
+
+  reactWrap: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6, marginTop: 2 },
+  reactChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingVertical: 3,
+    paddingHorizontal: 8,
+    borderRadius: 999,
+    backgroundColor: InkColors.bgSoft,
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  reactChipMine: { borderColor: BrandColors.brand, backgroundColor: '#FFFFFF' },
+  reactEmoji: { fontSize: 14 },
+  reactCount: { fontSize: 12, fontWeight: '700', color: InkColors.ink3 },
+  reactAdd: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: InkColors.bgSoft,
+  },
+  reactPick: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: InkColors.line,
+  },
 
   msgRow: { gap: 3, alignItems: 'flex-start' },
   msgAuthor: { fontSize: 11, color: InkColors.ink3, fontWeight: '600', marginLeft: 2 },

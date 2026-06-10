@@ -4,6 +4,7 @@ import { useRouter, Stack } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { HAS_SUPABASE } from '@/lib/supabase';
+import { formatBizNo, isValidBizNo } from '@/lib/utils/bizno';
 import { BrandColors, InkColors } from '@/lib/theme/colors';
 import type { Role } from '@/types';
 
@@ -20,6 +21,7 @@ export default function SignupScreen() {
   const [phone, setPhone] = useState('');
   const [pw, setPw] = useState('');
   const [storeName, setStoreName] = useState('');
+  const [bizNo, setBizNo] = useState('');
   const [inviteCode, setInviteCode] = useState('');
   const [agreed, setAgreed] = useState(false);
 
@@ -40,6 +42,7 @@ export default function SignupScreen() {
 
     if (!name.trim() || !email.trim() || !pw) return setErr('이름·이메일·비밀번호를 입력해주세요.');
     if (role === 'owner' && !storeName.trim()) return setErr('가게 이름을 입력해주세요.');
+    if (role === 'owner' && !isValidBizNo(bizNo)) return setErr('사업자등록번호 10자리를 정확히 입력해주세요.');
     if (role === 'junior' && !inviteCode.trim()) return setErr('가게 초대코드를 입력해주세요.');
 
     setBusy(true);
@@ -55,7 +58,7 @@ export default function SignupScreen() {
     }
 
     if (role === 'owner') {
-      const cs = await createStore(storeName.trim());
+      const cs = await createStore(storeName.trim(), bizNo);
       setBusy(false);
       if (cs.error) return setErr(`가게 생성 실패: ${cs.error}`);
       setCreatedCode(cs.inviteCode ?? '------'); // 코드 보여주고 입장
@@ -107,7 +110,25 @@ export default function SignupScreen() {
         <Field label="전화번호 (선택)" value={phone} onChange={setPhone} placeholder="010-0000-0000" keyboard="phone-pad" />
 
         {role === 'owner' ? (
-          <Field label="가게 이름" value={storeName} onChange={setStoreName} placeholder="예: 스퀘어 카페 신촌점" />
+          <>
+            <Field label="가게 이름" value={storeName} onChange={setStoreName} placeholder="예: 스퀘어 카페 신촌점" />
+            <View style={styles.field}>
+              <Text style={styles.label}>사업자등록번호</Text>
+              <TextInput
+                value={bizNo}
+                onChangeText={(v) => setBizNo(formatBizNo(v))}
+                placeholder="123-45-67890"
+                placeholderTextColor={InkColors.ink3}
+                keyboardType="number-pad"
+                style={styles.input}
+              />
+              {bizNo.length > 0 && (
+                <Text style={[styles.bizHint, isValidBizNo(bizNo) ? styles.bizOk : styles.bizBad]}>
+                  {isValidBizNo(bizNo) ? '✓ 형식이 올바른 번호예요' : '번호 10자리를 확인해주세요'}
+                </Text>
+              )}
+            </View>
+          </>
         ) : (
           <>
             <Field label="가게 초대코드" value={inviteCode} onChange={setInviteCode} placeholder="사장님께 받은 6자리 코드" keyboard="number-pad" />
@@ -203,6 +224,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
   },
   hint: { fontSize: 12, color: InkColors.ink3, marginTop: -4 },
+  bizHint: { fontSize: 12, fontWeight: '600', marginTop: -2 },
+  bizOk: { color: BrandColors.good },
+  bizBad: { color: InkColors.ink3 },
   consentRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 8 },
   checkbox: {
     width: 22,
