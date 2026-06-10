@@ -95,11 +95,24 @@ export default function SignupScreen() {
     <SafeAreaView style={styles.safe}>
       <Stack.Screen options={{ headerShown: true, title: '회원가입', headerStyle: { backgroundColor: '#FFFFFF' }, headerTintColor: InkColors.ink }} />
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-        {/* 역할 */}
-        <View style={styles.seg}>
-          {(['owner', 'junior'] as Role[]).map((r) => (
-            <Pressable key={r} onPress={() => setRole(r)} style={[styles.segBtn, role === r && styles.segBtnOn]}>
-              <Text style={[styles.segText, role === r && styles.segTextOn]}>{r === 'owner' ? '사장님' : '직원·알바'}</Text>
+        {/* 역할 — 가입 첫 단계에서 어떤 사용자인지 분명히 고른다 */}
+        <Text style={styles.roleQ}>어떤 분이세요?</Text>
+        <View style={styles.roleRow}>
+          {(
+            [
+              { r: 'owner', emoji: '🏪', label: '사장님', desc: '가게를 운영하고\n노하우를 등록해요' },
+              { r: 'junior', emoji: '🧑‍🍳', label: '직원·알바', desc: '초대코드로\n가게에 합류해요' },
+            ] as const
+          ).map((o) => (
+            <Pressable key={o.r} onPress={() => setRole(o.r)} style={[styles.roleCard, role === o.r && styles.roleCardOn]}>
+              <Text style={styles.roleEmoji}>{o.emoji}</Text>
+              <Text style={[styles.roleLabel, role === o.r && styles.roleLabelOn]}>{o.label}</Text>
+              <Text style={styles.roleDesc}>{o.desc}</Text>
+              {role === o.r && (
+                <View style={styles.roleCheck}>
+                  <Text style={styles.roleCheckMark}>✓</Text>
+                </View>
+              )}
             </Pressable>
           ))}
         </View>
@@ -206,11 +219,34 @@ function Field({
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: InkColors.cream },
   scroll: { padding: 24, gap: 14 },
-  seg: { flexDirection: 'row', backgroundColor: InkColors.bgSoft, borderRadius: 12, padding: 4, marginBottom: 4 },
-  segBtn: { flex: 1, paddingVertical: 11, borderRadius: 9, alignItems: 'center' },
-  segBtnOn: { backgroundColor: '#FFFFFF', shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 6, shadowOffset: { width: 0, height: 2 } },
-  segText: { fontSize: 14, fontWeight: '700', color: InkColors.ink3 },
-  segTextOn: { color: InkColors.ink },
+  roleQ: { fontSize: 16, fontWeight: '800', color: InkColors.ink, marginBottom: 2 },
+  roleRow: { flexDirection: 'row', gap: 12, marginBottom: 4 },
+  roleCard: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: InkColors.line,
+    borderRadius: 16,
+    padding: 16,
+    gap: 4,
+  },
+  roleCardOn: { borderColor: BrandColors.brand, backgroundColor: '#FFFDFB' },
+  roleEmoji: { fontSize: 28 },
+  roleLabel: { fontSize: 16, fontWeight: '800', color: InkColors.ink2, marginTop: 4 },
+  roleLabelOn: { color: BrandColors.brand },
+  roleDesc: { fontSize: 12, color: InkColors.ink3, lineHeight: 17 },
+  roleCheck: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: BrandColors.brand,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  roleCheckMark: { color: '#FFFFFF', fontSize: 12, fontWeight: '900' },
   field: { gap: 6 },
   label: { fontSize: 13, fontWeight: '700', color: InkColors.ink2 },
   input: {
