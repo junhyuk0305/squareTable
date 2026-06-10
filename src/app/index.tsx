@@ -109,6 +109,12 @@ export default function LoginScreen() {
           {msg && <Text style={styles.msg}>{msg}</Text>}
         </View>
 
+        <Pressable onPress={() => router.push('/signup')} style={styles.signupRow}>
+          <Text style={styles.signupText}>
+            처음이신가요? <Text style={styles.signupStrong}>회원가입</Text>
+          </Text>
+        </Pressable>
+
         <Text style={styles.demoNote}>
           {HAS_SUPABASE ? '파일럿 계정으로 로그인하세요' : '* 데모: 입력 없이 로그인됩니다'}
         </Text>
@@ -162,4 +168,7 @@ const styles = StyleSheet.create({
   linkStrong: { color: BrandColors.brand, fontWeight: '800' },
   msg: { fontSize: 13, color: InkColors.ink2, textAlign: 'center', marginTop: 2 },
   demoNote: { fontSize: 12, color: InkColors.ink3, textAlign: 'center' },
+  signupRow: { alignItems: 'center', paddingVertical: 4 },
+  signupText: { fontSize: 14, color: InkColors.ink3 },
+  signupStrong: { color: BrandColors.brand, fontWeight: '800' },
 });

@@ -7,6 +7,7 @@ import { RoleTabBar } from '@/components/RoleTabBar';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { useUnknownQueueStore } from '@/lib/store/useUnknownQueueStore';
 import { useSessionStore } from '@/lib/store/useSessionStore';
+import { logout } from '@/lib/auth';
 import { InkColors } from '@/lib/theme/colors';
 import contextPack from '@/data/context-pack.json';
 import type { Category } from '@/types';
@@ -49,7 +50,7 @@ export default function OwnerCategoriesScreen() {
     router.push({ pathname: '/owner/add/[category]', params: { category } });
   };
 
-  const goHome = () => router.replace('/');
+  const goHome = () => void logout();
 
   const handleOpenInbox = () => {
     // 데모: 인박스로 돌아가기

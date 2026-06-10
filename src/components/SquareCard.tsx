@@ -35,22 +35,33 @@ export function SquareCard({ summary, actions, donts, source, category, confiden
         )}
       </View>
 
-      {/* Summary */}
-      <View style={[styles.block, { borderLeftColor: BrandColors.brand }]}>
-        <Text style={styles.blockLabel}>상황</Text>
-        <Text style={styles.body}>{summary}</Text>
-      </View>
+      {/* Summary — 내용 있을 때만 (날조 제거로 빈 값 가능) */}
+      {summary?.trim() ? (
+        <View style={[styles.block, { borderLeftColor: BrandColors.brand }]}>
+          <Text style={styles.blockLabel}>상황</Text>
+          <Text style={styles.body}>{summary}</Text>
+        </View>
+      ) : null}
 
-      {/* Actions */}
-      <View style={[styles.block, { borderLeftColor: BrandColors.good }]}>
-        <Text style={[styles.blockLabel, { color: BrandColors.good }]}>지금 할 일</Text>
-        {actions.map((a, i) => (
-          <View key={i} style={styles.actionRow}>
-            <Text style={styles.actionNum}>{i + 1}</Text>
-            <Text style={styles.actionText}>{a}</Text>
-          </View>
-        ))}
-      </View>
+      {/* Actions — 항목 있을 때만 (빈 '지금 할 일' 헤더 방지) */}
+      {actions.length > 0 ? (
+        <View style={[styles.block, { borderLeftColor: BrandColors.good }]}>
+          <Text style={[styles.blockLabel, { color: BrandColors.good }]}>지금 할 일</Text>
+          {actions.map((a, i) => (
+            <View key={i} style={styles.actionRow}>
+              <Text style={styles.actionNum}>{i + 1}</Text>
+              <Text style={styles.actionText}>{a}</Text>
+            </View>
+          ))}
+        </View>
+      ) : null}
+
+      {/* 셋 다 비면 빈 카드 대신 정직한 안내 */}
+      {!summary?.trim() && actions.length === 0 && donts.length === 0 ? (
+        <Text style={styles.sparse}>
+          등록된 가이드에 이 질문에 대한 구체적 내용이 부족해요. 사장님께 확인해 볼게요.
+        </Text>
+      ) : null}
 
       {/* Don'ts */}
       {donts.length > 0 && (
@@ -136,6 +147,7 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   body: { fontSize: 15, color: InkColors.ink, lineHeight: 22 },
+  sparse: { fontSize: 14, color: InkColors.ink3, lineHeight: 21, paddingVertical: 4 },
   actionRow: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' },
   actionNum: {
     width: 22,

@@ -17,6 +17,13 @@ type SessionState = {
   // 부팅 시 1회: 기존 세션 복원 + 프로필 로드 + auth 변화 구독
   init: () => Promise<void>;
   signInWithPassword: (email: string, pw: string) => Promise<{ error: string | null; role: Role }>;
+  signUp: (
+    email: string,
+    pw: string,
+    meta: { name: string; role: Role; phone_last4?: string },
+  ) => Promise<{ error: string | null; needsConfirm: boolean }>;
+  createStore: (storeName: string) => Promise<{ error: string | null; inviteCode: string | null }>;
+  joinByInvite: (code: string) => Promise<{ error: string | null; storeName: string | null }>;
   sendMagicLink: (email: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
 
@@ -90,6 +97,43 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     if (error || !data.user) return { error: error?.message ?? '로그인 실패', role: get().role };
     await loadProfile(set, data.user.id, data.user.email ?? ''); // 결정적: role 확정 후 반환
     return { error: null, role: get().role };
+  },
+
+  signUp: async (email, pw, meta) => {
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password: pw,
+      options: { data: meta }, // 트리거가 user_metadata로 프로필 생성
+    });
+    if (error) return { error: error.message, needsConfirm: false };
+    // 이메일 확인이 켜져 있으면 세션이 없음 → 가게생성/합류 RPC를 못 부름.
+    const needsConfirm = !data.session;
+    if (data.session?.user) {
+      await loadProfile(set, data.session.user.id, data.session.user.email ?? '');
+    }
+    return { error: null, needsConfirm };
+  },
+
+  createStore: async (storeName) => {
+    const { data, error } = await supabase.rpc('create_store', { p_store_name: storeName });
+    if (error) return { error: error.message, inviteCode: null };
+    const row = Array.isArray(data) ? data[0] : data;
+    // 프로필 unit_id가 바뀌었으니 세션 상태 갱신
+    const uid = get().userId;
+    if (uid) await loadProfile(set, uid, get().email);
+    return { error: null, inviteCode: row?.invite_code ?? null };
+  },
+
+  joinByInvite: async (code) => {
+    const { data, error } = await supabase.rpc('join_by_invite', { p_code: code });
+    if (error) {
+      const msg = /invalid_code/.test(error.message) ? '초대코드가 올바르지 않아요.' : error.message;
+      return { error: msg, storeName: null };
+    }
+    const row = Array.isArray(data) ? data[0] : data;
+    const uid = get().userId;
+    if (uid) await loadProfile(set, uid, get().email);
+    return { error: null, storeName: row?.store_name ?? null };
   },
 
   sendMagicLink: async (email) => {
