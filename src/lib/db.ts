@@ -88,11 +88,31 @@ export async function resolveUnknown(id: string, newEntryId: string): Promise<vo
 }
 
 // ── 채팅 기록 ──────────────────────────────────────────────
+export async function fetchChatQueries(juniorId: string): Promise<ChatQuery[]> {
+  if (!HAS_SUPABASE) return [];
+  const { data, error } = await supabase
+    .from('chat_queries')
+    .select('*')
+    .eq('junior_id', juniorId)
+    .order('asked_at', { ascending: true });
+  if (error) {
+    console.warn('[db] fetchChatQueries:', error.message);
+    return [];
+  }
+  return (data ?? []) as ChatQuery[];
+}
+
 export async function insertChatQuery(cq: ChatQuery): Promise<void> {
   if (!HAS_SUPABASE) return;
   const row = { ...cq, unit_id: (cq as any).unit_id || _unitId };
   const { error } = await supabase.from('chat_queries').insert(row);
   if (error) console.warn('[db] insertChatQuery:', error.message);
+}
+
+export async function updateChatSatisfaction(id: string, vote: 'up' | 'down'): Promise<void> {
+  if (!HAS_SUPABASE) return;
+  const { error } = await supabase.from('chat_queries').update({ satisfaction: vote }).eq('id', id);
+  if (error) console.warn('[db] updateChatSatisfaction:', error.message);
 }
 
 // ── 사진 업로드(Storage) ───────────────────────────────────

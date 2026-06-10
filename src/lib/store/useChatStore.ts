@@ -7,6 +7,8 @@ import { MAX_ACTIONS, MAX_DONTS } from '@/lib/ai/config';
 import { usePlaybookStore } from './usePlaybookStore';
 import { useUnknownQueueStore } from './useUnknownQueueStore';
 import { useSessionStore } from './useSessionStore';
+import { HAS_SUPABASE } from '@/lib/supabase';
+import { fetchChatQueries, insertChatQuery, updateChatSatisfaction } from '@/lib/db';
 import seedData from '@/data/chat-queries.json';
 import contextPack from '@/data/context-pack.json';
 
@@ -18,16 +20,25 @@ const STORE_ID = (contextPack as { unit_id: string }).unit_id;
 type ChatState = {
   history: ChatQuery[];
   isLoading: boolean;
+  loaded: boolean;
   lastSubmittedId: string | null;
+  hydrate: (juniorId: string) => Promise<void>;
   submit: (text: string) => Promise<void>;
   rate: (id: string, vote: 'up' | 'down') => void;
   reset: () => void;
 };
 
 export const useChatStore = create<ChatState>((set, get) => ({
-  history: [...seed],
+  // Supabase면 빈 채로 시작 → hydrate가 내 채팅 기록을 DB에서 당겨옴. 아니면 로컬 시드.
+  history: HAS_SUPABASE ? [] : [...seed],
   isLoading: false,
+  loaded: !HAS_SUPABASE,
   lastSubmittedId: null,
+
+  hydrate: async (juniorId) => {
+    if (!HAS_SUPABASE) return;
+    set({ history: await fetchChatQueries(juniorId), loaded: true });
+  },
 
   submit: async (text) => {
     if (!text.trim()) return;
@@ -73,6 +84,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         resolved_at: now,
       };
       set((s) => ({ history: [...s.history, cq], isLoading: false, lastSubmittedId: id }));
+      void insertChatQuery(cq);
       return;
     }
 
@@ -95,6 +107,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
           resolved_at: now,
         };
         set((s) => ({ history: [...s.history, cq], isLoading: false, lastSubmittedId: id }));
+        void insertChatQuery(cq);
         return;
       }
       // 생성도 근거 못 찾음 → 사장님 라우팅으로 낙하
@@ -117,6 +130,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         resolved_at: null,
       };
       set((s) => ({ history: [...s.history, cq], isLoading: false, lastSubmittedId: id }));
+      void insertChatQuery(cq);
 
       const uq: UnknownQuery = {
         id: `uq_${Date.now()}`,
@@ -144,10 +158,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }
   },
 
-  rate: (id, vote) =>
+  rate: (id, vote) => {
     set((s) => ({
       history: s.history.map((q) => (q.id === id ? { ...q, satisfaction: vote } : q)),
-    })),
+    }));
+    void updateChatSatisfaction(id, vote);
+  },
 
   reset: () => set({ history: [...seed], isLoading: false, lastSubmittedId: null }),
 }));
