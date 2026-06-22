@@ -65,7 +65,7 @@ export default function JuniorOnboarding() {
         <View style={styles.helpBox}>
           <Text style={styles.helpTitle}>코드가 없으신가요?</Text>
           <Text style={styles.helpBody}>
-            초대코드는 매장 사장님이 발급해요. 사장님께 “스퀘어테이블 초대코드 알려주세요”라고 요청해보세요.
+            초대코드는 매장 사장님이 발급해요. 사장님께 “착착 초대코드 알려주세요”라고 요청해보세요.
           </Text>
         </View>
 

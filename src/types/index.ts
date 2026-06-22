@@ -142,6 +142,7 @@ export type ChatQuery = {
   response_block: ResponseBlock | null;
   satisfaction: 'up' | 'down' | null;
   resolved_at: string | null;
+  anonymous?: boolean;
 };
 
 // ── UnknownQuery (사장님 인박스) ──────────────────────
@@ -163,6 +164,8 @@ export type UnknownQuery = {
   similar_queries_count: number;
   ai_general_answer: string;
   resolved_with_entry_id?: string;
+  // 알바가 익명으로 물은 질문 — 사장 인박스에서 이름·입사일차를 가린다(심리적 진입장벽 ↓).
+  anonymous?: boolean;
 };
 
 // ── RAG 결과 (lib/rag.ts 출력과 호환) ───────────────

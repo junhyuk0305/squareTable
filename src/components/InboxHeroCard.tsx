@@ -12,7 +12,7 @@ type Props = {
 
 /**
  * 우선 답변 hero 카드 — pending 중 best_match_confidence 가장 낮은 1건.
- * 디자인: 큰 카드 + 시급도 텍스트 + 큰 음성 CTA.
+ * 디자인: 큰 카드 + 시급도 텍스트 + 큰 답변 CTA.
  */
 export function InboxHeroCard({ uq, careerDays, onPress }: Props) {
   const ago = formatAsked(uq.asked_at);
@@ -28,9 +28,9 @@ export function InboxHeroCard({ uq, careerDays, onPress }: Props) {
       {/* 질문 본문 */}
       <Text style={styles.query} numberOfLines={4}>"{uq.query_text}"</Text>
 
-      {/* 메타: 누가, 입사 N일차 */}
+      {/* 메타: 누가, 입사 N일차 (익명이면 신원 숨김) */}
       <Text style={styles.meta}>
-        {uq.junior_name}
+        {uq.anonymous ? '🔒 익명 질문' : uq.junior_name}
         {typeof careerDays === 'number' ? ` · 입사 ${careerDays}일차` : ''}
       </Text>
 
@@ -44,11 +44,11 @@ export function InboxHeroCard({ uq, careerDays, onPress }: Props) {
       {/* CTA 버튼 */}
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel="음성으로 답하기"
+        accessibilityLabel="답변하기"
         onPress={onPress}
         style={({ pressed }) => [styles.cta, pressed && styles.ctaPressed]}
       >
-        <Text style={styles.ctaText}>🎤 음성으로 답하기  →</Text>
+        <Text style={styles.ctaText}>답변하기  →</Text>
       </Pressable>
     </View>
   );

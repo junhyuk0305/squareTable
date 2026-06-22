@@ -15,6 +15,7 @@ export default function SignupScreen() {
   const signUp = useSessionStore((s) => s.signUp);
   const createStore = useSessionStore((s) => s.createStore);
   const joinByInvite = useSessionStore((s) => s.joinByInvite);
+  const verifyEmail = useSessionStore((s) => s.verifyEmail);
 
   const [role, setRole] = useState<Role>('owner');
   const [name, setName] = useState('');
@@ -24,15 +25,96 @@ export default function SignupScreen() {
   const [storeName, setStoreName] = useState('');
   const [bizNo, setBizNo] = useState('');
   const [inviteCode, setInviteCode] = useState('');
-  const [agreed, setAgreed] = useState(false);
+
+  // 동의 항목 — 역할별로 필수/선택 구성이 달라진다(직원은 근로·급여정보 추가).
+  type ConsentKey = 'age14' | 'terms' | 'collect' | 'labor' | 'marketing';
+  const [consent, setConsent] = useState<Record<ConsentKey, boolean>>({
+    age14: false,
+    terms: false,
+    collect: false,
+    labor: false,
+    marketing: false,
+  });
 
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [createdCode, setCreatedCode] = useState<string | null>(null); // 사장 가입 성공 → 발급된 초대코드
+  // signUp 성공(세션 확보) 이후 가게 생성/합류만 실패한 경우 → 재시도 시 signUp을 다시 부르지 않게
+  // (다시 부르면 'already registered'로 막혀 영구 데드엔드). 매장 연결만 재시도한다.
+  const [accountReady, setAccountReady] = useState(false);
+
+  // 이메일 인증 — '인증' 버튼 상태 + 입력창 아래 초록 안내
+  const [emailMsg, setEmailMsg] = useState<string | null>(null);
+  const [emailSent, setEmailSent] = useState(false);
+  const [verifyingEmail, setVerifyingEmail] = useState(false);
+
+  const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+  const onVerifyEmail = async () => {
+    setErr(null);
+    setEmailMsg(null);
+    const e = email.trim();
+    if (!e) return setErr('이메일을 먼저 입력해주세요.');
+    if (!EMAIL_RE.test(e)) return setErr('이메일 형식을 확인해주세요.');
+    setVerifyingEmail(true);
+    const r = await verifyEmail(e);
+    setVerifyingEmail(false);
+    if (r.status === 'demo') {
+      setEmailMsg('데모 모드에선 이메일 인증이 필요 없어요');
+      setEmailSent(true);
+      return;
+    }
+    if (r.status === 'rate') return setEmailMsg('잠깐 후에 다시 시도해 주세요');
+    if (r.status === 'error') return setErr(`인증 메일 발송 실패: ${r.message}`);
+    // sent
+    setEmailMsg(emailSent ? '인증 메일을 다시 보냈어요 (재인증)' : '인증 메일을 보냈어요. 메일함을 확인하세요');
+    setEmailSent(true);
+  };
+
+  // 역할별 동의 항목 정의. doc은 '보기' 클릭 시 열 문서 라우트.
+  type DocRoute = '/terms' | '/legal/collect' | '/legal/marketing' | '/legal/labor';
+  const consentRows: { key: ConsentKey; label: string; required: boolean; doc?: DocRoute }[] =
+    role === 'owner'
+      ? [
+          { key: 'age14', label: '만 14세 이상입니다', required: true },
+          { key: 'terms', label: '서비스 이용약관', required: true, doc: '/terms' },
+          { key: 'collect', label: '개인정보 수집·이용', required: true, doc: '/legal/collect' },
+          { key: 'marketing', label: '마케팅 정보 수신', required: false, doc: '/legal/marketing' },
+        ]
+      : [
+          { key: 'terms', label: '서비스 이용약관', required: true, doc: '/terms' },
+          { key: 'collect', label: '개인정보 수집·이용', required: true, doc: '/legal/collect' },
+          { key: 'labor', label: '근로·급여정보 처리', required: true, doc: '/legal/labor' },
+          { key: 'marketing', label: '마케팅 정보 수신', required: false, doc: '/legal/marketing' },
+        ];
+
+  const requiredKeys = consentRows.filter((r) => r.required).map((r) => r.key);
+  const allRequired = requiredKeys.every((k) => consent[k]);
+  const allChecked = consentRows.every((r) => consent[r.key]);
+  const toggleAll = () => {
+    const next = !allChecked;
+    setConsent((prev) => {
+      const copy = { ...prev };
+      consentRows.forEach((r) => (copy[r.key] = next));
+      return copy;
+    });
+  };
+  const toggleOne = (k: ConsentKey) => setConsent((prev) => ({ ...prev, [k]: !prev[k] }));
+
+  // 필수 입력값이 모두 채워졌는지 — 제출 버튼 활성화 게이트(사장은 가게이름 포함)
+  const requiredFilled =
+    !!name.trim() && !!email.trim() && !!pw && (role === 'junior' || !!storeName.trim());
 
   const start = async () => {
     setErr(null);
-    if (!agreed) return setErr('개인정보 수집·이용 동의가 필요해요.');
+    if (!allRequired) return setErr('필수 약관에 모두 동의해주세요.');
+
+    // 필수 입력 항목 — 데모/실서버 공통으로 강제(이름·이메일·비밀번호 + 사장은 가게이름)
+    if (!name.trim()) return setErr('이름을 입력해주세요.');
+    if (!email.trim()) return setErr('이메일을 입력해주세요.');
+    if (!EMAIL_RE.test(email.trim())) return setErr('이메일 형식을 확인해주세요.');
+    if (!pw) return setErr('비밀번호를 입력해주세요.');
+    if (pw.length < 6) return setErr('비밀번호는 6자 이상이어야 해요.');
+    if (role === 'owner' && !storeName.trim()) return setErr('가게 이름을 입력해주세요.');
 
     // Supabase 미설정(로컬 데모): 새 계정 = 빈 매장에서 시작(데모 데이터 없음)
     if (!HAS_SUPABASE) {
@@ -42,30 +124,48 @@ export default function SignupScreen() {
       return;
     }
 
-    if (!name.trim() || !email.trim() || !pw) return setErr('이름·이메일·비밀번호를 입력해주세요.');
-    if (role === 'owner' && !storeName.trim()) return setErr('가게 이름을 입력해주세요.');
-    if (role === 'owner' && !isValidBizNo(bizNo)) return setErr('사업자등록번호 10자리를 정확히 입력해주세요.');
-    if (role === 'junior' && !inviteCode.trim()) return setErr('가게 초대코드를 입력해주세요.');
+    // 사업자등록번호는 선택 — 비우면 통과, 입력했으면 형식만 검증
+    if (role === 'owner' && bizNo.trim() && !isValidBizNo(bizNo)) return setErr('사업자등록번호 형식(10자리)을 확인해주세요. 비워두면 나중에 등록할 수 있어요.');
+    // 직원 초대코드는 선택 — 비우면 가입 후 '가게 연결' 화면으로 유도
 
     setBusy(true);
-    const phone_last4 = phone.replace(/\D/g, '').slice(-4) || undefined;
-    const up = await signUp(email.trim(), pw, { name: name.trim(), role, phone_last4 });
-    if (up.error) {
-      setBusy(false);
-      return setErr(/already|registered|exists/i.test(up.error) ? '이미 가입된 이메일이에요. 로그인해주세요.' : `가입 실패: ${up.error}`);
-    }
-    if (up.needsConfirm) {
-      setBusy(false);
-      return setErr('이메일 확인이 필요합니다. 메일함을 확인해주세요. (관리자: Supabase에서 이메일 확인을 끄면 바로 시작됩니다)');
+    // 1) 계정 생성 — 이미 생성됐으면(가게 연결만 실패했던 경우) 건너뛴다.
+    if (!accountReady) {
+      const phone_last4 = phone.replace(/\D/g, '').slice(-4) || undefined;
+      const up = await signUp(email.trim(), pw, { name: name.trim(), role, phone_last4 });
+      if (up.error) {
+        setBusy(false);
+        if (/already|registered|exists/i.test(up.error)) {
+          // 중복 — 이메일 입력창 아래 초록 안내로 표시
+          setEmailMsg('이미 가입된 이메일이에요. 로그인해 주세요.');
+          return;
+        }
+        return setErr(`가입 실패: ${up.error}`);
+      }
+      if (up.needsConfirm) {
+        setBusy(false);
+        setEmailSent(true);
+        setEmailMsg('인증 메일을 보냈어요. 메일에서 인증한 뒤 다시 시작해 주세요.');
+        return;
+      }
+      setAccountReady(true); // 세션 확보 — 이후 실패는 매장 연결만 재시도
     }
 
+    // 2) 매장 연결
     if (role === 'owner') {
-      const cs = await createStore(storeName.trim(), bizNo);
+      const cs = await createStore(storeName.trim(), bizNo.trim() || undefined);
       setBusy(false);
-      if (cs.error) return setErr(`가게 생성 실패: ${cs.error}`);
+      if (cs.error) return setErr(`가게 생성 실패: ${cs.error} — '다시 시도'를 누르면 가게 생성만 다시 시도해요.`);
       setCreatedCode(cs.inviteCode ?? '------'); // 코드 보여주고 입장
     } else {
-      const j = await joinByInvite(inviteCode.trim());
+      const code = inviteCode.trim();
+      if (!code) {
+        // 코드 없이 가입 — 매장 미연결 상태로 입장(레이아웃 가드가 /junior/join으로 유도)
+        setBusy(false);
+        router.replace('/junior/chat');
+        return;
+      }
+      const j = await joinByInvite(code);
       setBusy(false);
       if (j.error) return setErr(j.error);
       router.replace('/junior/chat');
@@ -119,16 +219,44 @@ export default function SignupScreen() {
           ))}
         </View>
 
-        <Field label="이름" value={name} onChange={setName} placeholder="홍길동" />
-        <Field label="이메일" value={email} onChange={setEmail} placeholder="you@example.com" keyboard="email-address" />
-        <Field label="비밀번호" value={pw} onChange={setPw} placeholder="6자 이상" secure />
+        <Field label="이름" value={name} onChange={setName} placeholder="홍길동" required />
+
+        {/* 이메일 + 인증 버튼 */}
+        <View style={styles.field}>
+          <Text style={styles.label}>이메일<Text style={styles.req}> *</Text></Text>
+          <View style={styles.emailRow}>
+            <TextInput
+              value={email}
+              onChangeText={(v) => {
+                setEmail(v);
+                setEmailMsg(null);
+                setEmailSent(false);
+              }}
+              placeholder="you@example.com"
+              placeholderTextColor={InkColors.ink3}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              style={[styles.input, { flex: 1 }]}
+            />
+            <Pressable
+              onPress={onVerifyEmail}
+              disabled={verifyingEmail || !email.trim()}
+              style={({ pressed }) => [styles.verifyBtn, (verifyingEmail || !email.trim()) && { opacity: 0.5 }, pressed && { opacity: 0.85 }]}
+            >
+              {verifyingEmail ? <ActivityIndicator color="#FFFFFF" size="small" /> : <Text style={styles.verifyBtnText}>{emailSent ? '재전송' : '인증'}</Text>}
+            </Pressable>
+          </View>
+          {emailMsg && <Text style={styles.emailOk}>{emailMsg}</Text>}
+        </View>
+
+        <Field label="비밀번호" value={pw} onChange={setPw} placeholder="6자 이상" secure required />
         <Field label="전화번호 (선택)" value={phone} onChange={setPhone} placeholder="010-0000-0000" keyboard="phone-pad" />
 
         {role === 'owner' ? (
           <>
-            <Field label="가게 이름" value={storeName} onChange={setStoreName} placeholder="예: 스퀘어 카페 신촌점" />
+            <Field label="가게 이름" value={storeName} onChange={setStoreName} placeholder="예: 착착 카페 신촌점" required />
             <View style={styles.field}>
-              <Text style={styles.label}>사업자등록번호</Text>
+              <Text style={styles.label}>사업자등록번호 (선택)</Text>
               <TextInput
                 value={bizNo}
                 onChangeText={(v) => setBizNo(formatBizNo(v))}
@@ -146,30 +274,44 @@ export default function SignupScreen() {
           </>
         ) : (
           <>
-            <Field label="가게 초대코드" value={inviteCode} onChange={setInviteCode} placeholder="사장님께 받은 6자리 코드" keyboard="number-pad" />
-            <Text style={styles.hint}>코드를 입력하면 가게에 바로 합류됩니다.</Text>
+            <Field label="가게 초대코드 (선택)" value={inviteCode} onChange={setInviteCode} placeholder="사장님께 받은 6자리 코드" keyboard="number-pad" />
+            <Text style={styles.hint}>지금 없으면 비워두세요. 가입 후 ‘가게 연결’에서 입력할 수 있어요.</Text>
           </>
         )}
 
-        {/* 개인정보 수집·이용 동의 (필수) */}
-        <Pressable onPress={() => setAgreed((v) => !v)} style={styles.consentRow}>
-          <View style={[styles.checkbox, agreed && styles.checkboxOn]}>
-            {agreed && <Text style={styles.checkmark}>✓</Text>}
-          </View>
-          <Text style={styles.consentText}>
-            <Text style={styles.consentStrong}>[필수]</Text> 개인정보 수집·이용에 동의합니다.{' '}
-            <Text style={styles.consentLink} onPress={() => router.push('/privacy')}>
-              자세히 보기
-            </Text>
-          </Text>
-        </Pressable>
+        {/* 동의 — 전체동의 + 항목별 토글, 필수/선택 분리 */}
+        <View style={styles.consentBox}>
+          <Pressable onPress={toggleAll} style={styles.consentAll}>
+            <View style={[styles.checkbox, allChecked && styles.checkboxOn]}>
+              {allChecked && <Text style={styles.checkmark}>✓</Text>}
+            </View>
+            <Text style={styles.consentAllText}>약관에 모두 동의합니다</Text>
+          </Pressable>
+          <View style={styles.consentDivider} />
+          {consentRows.map((r) => (
+            <Pressable key={r.key} onPress={() => toggleOne(r.key)} style={styles.consentRow}>
+              <View style={[styles.checkboxSm, consent[r.key] && styles.checkboxOn]}>
+                {consent[r.key] && <Text style={styles.checkmarkSm}>✓</Text>}
+              </View>
+              <Text style={styles.consentText}>
+                <Text style={r.required ? styles.consentReq : styles.consentOpt}>{r.required ? '[필수] ' : '[선택] '}</Text>
+                {r.label}
+              </Text>
+              {r.doc && (
+                <Text style={styles.consentLink} onPress={() => router.push(r.doc!)}>
+                  보기
+                </Text>
+              )}
+            </Pressable>
+          ))}
+        </View>
 
         {err && <Text style={styles.err}>{err}</Text>}
 
         <Pressable
           onPress={start}
-          disabled={!agreed || busy}
-          style={({ pressed }) => [styles.primary, (!agreed || busy) && styles.primaryDisabled, pressed && agreed && !busy && { opacity: 0.88 }]}
+          disabled={!allRequired || !requiredFilled || busy}
+          style={({ pressed }) => [styles.primary, (!allRequired || !requiredFilled || busy) && styles.primaryDisabled, pressed && allRequired && requiredFilled && !busy && { opacity: 0.88 }]}
         >
           {busy ? (
             <ActivityIndicator color="#FFFFFF" />
@@ -193,6 +335,7 @@ function Field({
   placeholder,
   secure,
   keyboard,
+  required,
 }: {
   label: string;
   value: string;
@@ -200,10 +343,14 @@ function Field({
   placeholder: string;
   secure?: boolean;
   keyboard?: 'phone-pad' | 'email-address' | 'number-pad';
+  required?: boolean;
 }) {
   return (
     <View style={styles.field}>
-      <Text style={styles.label}>{label}</Text>
+      <Text style={styles.label}>
+        {label}
+        {required && <Text style={styles.req}> *</Text>}
+      </Text>
       <TextInput
         value={value}
         onChangeText={onChange}
@@ -251,6 +398,7 @@ const styles = StyleSheet.create({
   roleCheckMark: { color: '#FFFFFF', fontSize: 12, fontWeight: '900' },
   field: { gap: 6 },
   label: { fontSize: 13, fontWeight: '700', color: InkColors.ink2 },
+  req: { color: BrandColors.accent, fontWeight: '900' },
   input: {
     borderWidth: 1,
     borderColor: InkColors.line,
@@ -262,10 +410,26 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
   },
   hint: { fontSize: 12, color: InkColors.ink3, marginTop: -4 },
+  emailRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  verifyBtn: {
+    paddingHorizontal: 18,
+    paddingVertical: 13,
+    borderRadius: 12,
+    backgroundColor: BrandColors.brand,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 64,
+  },
+  verifyBtnText: { color: '#FFFFFF', fontSize: 14, fontWeight: '800' },
+  emailOk: { fontSize: 12, color: BrandColors.good, fontWeight: '700', marginTop: 1 },
   bizHint: { fontSize: 12, fontWeight: '600', marginTop: -2 },
   bizOk: { color: BrandColors.good },
   bizBad: { color: InkColors.ink3 },
-  consentRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 8 },
+  consentBox: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: InkColors.line, borderRadius: 14, padding: 14, marginTop: 8, gap: 4 },
+  consentAll: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 2 },
+  consentAllText: { flex: 1, fontSize: 14, fontWeight: '800', color: InkColors.ink },
+  consentDivider: { height: 1, backgroundColor: InkColors.line, marginVertical: 6 },
+  consentRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 5 },
   checkbox: {
     width: 22,
     height: 22,
@@ -276,11 +440,23 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: '#FFFFFF',
   },
+  checkboxSm: {
+    width: 19,
+    height: 19,
+    borderRadius: 5,
+    borderWidth: 1.5,
+    borderColor: InkColors.line,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+  },
   checkboxOn: { backgroundColor: BrandColors.brand, borderColor: BrandColors.brand },
   checkmark: { color: '#FFFFFF', fontSize: 13, fontWeight: '900' },
+  checkmarkSm: { color: '#FFFFFF', fontSize: 11, fontWeight: '900' },
   consentText: { flex: 1, fontSize: 13, color: InkColors.ink2, lineHeight: 19 },
-  consentStrong: { fontWeight: '800', color: InkColors.ink },
-  consentLink: { color: BrandColors.brand, fontWeight: '800', textDecorationLine: 'underline' },
+  consentReq: { fontWeight: '800', color: InkColors.ink },
+  consentOpt: { fontWeight: '800', color: InkColors.ink3 },
+  consentLink: { color: BrandColors.brand, fontWeight: '800', textDecorationLine: 'underline', fontSize: 12 },
   err: { fontSize: 13, color: BrandColors.accent, fontWeight: '600', lineHeight: 19 },
   primary: { marginTop: 6, backgroundColor: BrandColors.brand, paddingVertical: 16, borderRadius: 12, alignItems: 'center' },
   primaryDisabled: { backgroundColor: InkColors.line },

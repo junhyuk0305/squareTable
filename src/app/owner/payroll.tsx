@@ -95,8 +95,9 @@ function NumberRow({
       <Text style={[styles.rowLabel, { flex: 1 }]}>{label}</Text>
       <TextInput
         value={String(value)}
-        onChangeText={(t) => onChange(Number(t.replace(/[^0-9]/g, '')) || 0)}
+        onChangeText={(t) => onChange(Number(t.replace(/[^0-9]/g, '').slice(0, 9)) || 0)}
         keyboardType="number-pad"
+        maxLength={11}
         style={styles.numInput}
       />
       <Text style={styles.suffix}>{suffix}</Text>

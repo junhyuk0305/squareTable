@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { HOURLY_WAGE } from '@/lib/store/useAttendanceStore';
 import { HAS_SUPABASE } from '@/lib/supabase';
 import { fetchWages, setWageDb } from '@/lib/db';
+import { guardWrite } from '@/lib/store/useSyncStore';
 
 export type PayrollSettings = {
   breakDeduction: boolean; // 휴게시간 공제 (4h당 30분 무급)
@@ -22,7 +23,7 @@ type State = {
   applyMock: (demo: boolean) => void;
 };
 
-export const usePayrollStore = create<State>((set) => ({
+export const usePayrollStore = create<State>((set, get) => ({
   settings: {
     breakDeduction: true,
     nightAllowance: true,
@@ -40,8 +41,20 @@ export const usePayrollStore = create<State>((set) => ({
   },
   setSetting: (k, v) => set((s) => ({ settings: { ...s.settings, [k]: v } })),
   setWage: (staffId, wage) => {
+    const had = Object.prototype.hasOwnProperty.call(get().wages, staffId);
+    const prev = get().wages[staffId];
     set((s) => ({ wages: { ...s.wages, [staffId]: wage } }));
-    void setWageDb(staffId, wage);
+    void guardWrite(
+      setWageDb(staffId, wage),
+      () =>
+        set((s) => {
+          const next = { ...s.wages };
+          if (had) next[staffId] = prev;
+          else delete next[staffId];
+          return { wages: next };
+        }),
+      '시급 저장에 실패했어요.',
+    );
   },
   applyMock: (demo) => set({ wages: demo ? { ...HOURLY_WAGE } : {} }),
 }));

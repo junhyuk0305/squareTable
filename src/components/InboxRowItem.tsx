@@ -28,7 +28,7 @@ export function InboxRowItem({ uq, onPress }: Props) {
         </Text>
       </View>
       <Text style={styles.meta} numberOfLines={1}>
-        {uq.junior_name} · {formatAsked(uq.asked_at, '방금')}
+        {uq.anonymous ? '🔒 익명' : uq.junior_name} · {formatAsked(uq.asked_at, '방금')}
       </Text>
     </Pressable>
   );

@@ -50,6 +50,10 @@ export default function OwnerCategoriesScreen() {
     router.push({ pathname: '/owner/add/[category]', params: { category } });
   };
 
+  const handleVoiceFirst = () => {
+    router.push('/owner/capture' as never);
+  };
+
   const goHome = () => void logout();
 
   const handleOpenInbox = () => {
@@ -91,7 +95,7 @@ export default function OwnerCategoriesScreen() {
         <Text style={styles.question}>오늘 어떤 노하우를{'\n'}알려주실래요?</Text>
 
         {/* 보조 설명 */}
-        <Text style={styles.subhint}>매장 운영 가이드 4 카테고리 중 골라주세요</Text>
+        <Text style={styles.subhint}>한 가지씩 골라서 알려주세요</Text>
 
         {/* 2x2 그리드 */}
         <View style={styles.grid}>
@@ -120,6 +124,21 @@ export default function OwnerCategoriesScreen() {
             />
           </View>
         </View>
+
+        {/* 보조 진입 — 개업 준비·한가할 때 여러 개를 말로 몰아서 (콜드스타트 선입력) */}
+        <Pressable
+          onPress={handleVoiceFirst}
+          accessibilityRole="button"
+          accessibilityLabel="여러 노하우 한 번에 정리하기"
+          style={({ pressed }) => [styles.voiceCard, pressed && styles.voiceCardPressed]}
+        >
+          <Text style={styles.voiceEmoji}>📝</Text>
+          <View style={styles.voiceMiddle}>
+            <Text style={styles.voiceTitle}>여러 개 한 번에</Text>
+            <Text style={styles.voiceSub}>개업 준비·한가할 때 몰아서 — AI가 정리·분류</Text>
+          </View>
+          <Text style={styles.voiceArrow}>→</Text>
+        </Pressable>
 
         {/* 구분선: ─ 또는 ─ */}
         <View style={styles.divider}>
@@ -174,6 +193,23 @@ const styles = StyleSheet.create({
     lineHeight: 29, // 24 * 1.2
     marginBottom: 6,
   },
+  voiceCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    backgroundColor: InkColors.bgSoft,
+    borderWidth: 1,
+    borderColor: InkColors.line,
+    padding: 16,
+    borderRadius: 14,
+    marginTop: 20,
+  },
+  voiceCardPressed: { opacity: 0.85 },
+  voiceEmoji: { fontSize: 26, lineHeight: 32 },
+  voiceMiddle: { flex: 1, gap: 2 },
+  voiceTitle: { fontSize: 15, fontWeight: '700', color: InkColors.ink },
+  voiceSub: { fontSize: 12, color: InkColors.ink3, fontWeight: '500' },
+  voiceArrow: { fontSize: 20, color: InkColors.ink2, fontWeight: '700' },
   subhint: {
     fontSize: 14,
     color: InkColors.ink3,

@@ -9,19 +9,22 @@ type Tab = { label: string; path: Href; icon: IconName; iconActive: IconName };
 
 /**
  * 각 탭 의미에 맞춘 아이콘. 선택된 탭은 채워진(filled) 아이콘, 나머지는 outline.
- *  - 챗봇=대화, 출퇴근=시계, 업무=체크리스트, 홈=집, 노하우=전구, 근무·급여=지갑
+ *  - 챗봇=대화, 출퇴근=시계, 업무=체크리스트, 홈=집, 노하우=전구, 근무·급여=지갑, 설정=톱니
+ *
+ * 두 역할 모두 항상 4개 탭으로 통일하고, 맨 오른쪽은 '설정'(내 정보 관리)으로 고정한다.
  */
 const TABS: Record<'junior' | 'owner', Tab[]> = {
   junior: [
     { label: '챗봇', path: '/junior/chat', icon: 'chatbubble-ellipses-outline', iconActive: 'chatbubble-ellipses' },
     { label: '출퇴근', path: '/junior/attendance', icon: 'time-outline', iconActive: 'time' },
     { label: '업무', path: '/junior/work', icon: 'checkbox-outline', iconActive: 'checkbox' },
+    { label: '설정', path: '/junior/settings', icon: 'settings-outline', iconActive: 'settings' },
   ],
   owner: [
     { label: '홈', path: '/owner/dashboard', icon: 'home-outline', iconActive: 'home' },
     { label: '노하우', path: '/owner/categories', icon: 'bulb-outline', iconActive: 'bulb' },
     { label: '근무', path: '/owner/attendance', icon: 'wallet-outline', iconActive: 'wallet' },
-    { label: '업무', path: '/owner/work', icon: 'checkbox-outline', iconActive: 'checkbox' },
+    { label: '설정', path: '/owner/settings', icon: 'settings-outline', iconActive: 'settings' },
   ],
 };
 

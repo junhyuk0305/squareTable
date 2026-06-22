@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, StyleSheet, Pressable, Platform, ToastAndroid } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter, useNavigation } from 'expo-router';
 
 import { useUnknownQueueStore } from '@/lib/store/useUnknownQueueStore';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { getCategoryMeta } from '@/lib/utils/category';
+import { confirmAction } from '@/lib/utils/confirm';
 import { BrandColors, InkColors } from '@/lib/theme/colors';
 import { buildPlaybookEntry, isAnswersPublishable, type WizardAnswers } from '@/lib/utils/buildEntry';
 
@@ -45,9 +46,11 @@ export default function AnswerWizardScreen() {
   const { uqId } = useLocalSearchParams<{ uqId: string }>();
   const router = useRouter();
 
+  const navigation = useNavigation();
   const uq = useUnknownQueueStore((s) => (uqId ? s.getById(uqId) : undefined));
   const resolve = useUnknownQueueStore((s) => s.resolve);
   const addEntry = usePlaybookStore((s) => s.add);
+  const allowLeave = useRef(false); // 발행/확인된 이탈은 확인창 생략
 
   // 진행률 (flow 내부 step을 받아오기 위한 callback)
   const [progress, setProgress] = useState<{ step: number; total: number }>({ step: 1, total: 4 });
@@ -67,6 +70,21 @@ export default function AnswerWizardScreen() {
     const t = setTimeout(() => setToast(null), 1800);
     return () => clearTimeout(t);
   }, [toast]);
+
+  // 작성 중(2단계 이상 진입) 답변이 있으면 뒤로가기 시 확인 — 입력 소실 방지.
+  useEffect(() => {
+    const unsub = (navigation as any).addListener('beforeRemove', (e: any) => {
+      if (progress.step <= 1 || submittedRef.current || allowLeave.current) return;
+      e.preventDefault();
+      confirmAction('나가기', '작성 중인 답변이 있어요. 저장 없이 나갈까요?', '나가기').then((ok) => {
+        if (ok) {
+          allowLeave.current = true;
+          navigation.dispatch(e.data.action);
+        }
+      });
+    });
+    return unsub;
+  }, [navigation, progress.step]);
 
   const onComplete = useCallback(
     (answers: WizardAnswers) => {

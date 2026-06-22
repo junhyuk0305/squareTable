@@ -3,7 +3,7 @@
  * 위저드는 카테고리별로 다른 필드 조합을 채우지만, 결과는 동일한 Square 6칸 구조로 정규화한다.
  */
 
-import type { Category, PlaybookEntry, UnknownQuery } from '@/types';
+import type { Category, PlaybookEntry, SquareBlock, UnknownQuery } from '@/types';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 
 export type WizardAnswers = Record<string, any>;
@@ -142,6 +142,66 @@ export function isAnswersPublishable(uq: UnknownQuery, answers: WizardAnswers): 
   const hasTitle = deriveTitle(uq, answers).trim().length > 0;
   const hasContent = sq.action.steps.length >= 1 || sq.action.scripts.length >= 1;
   return hasTitle && hasContent;
+}
+
+/**
+ * 음성-우선 경로 발행 게이트 — AI가 정리한 SQUARE에 '할 행동'이나 '멘트'가 하나는 있어야 한다.
+ * (S만 채워진 "텅 빈 노하우" 차단)
+ */
+export function isSquarePublishable(square: SquareBlock): boolean {
+  return square.action.steps.length >= 1 || square.action.scripts.length >= 1;
+}
+
+/**
+ * 음성-우선 경로: AI(structureSquare)가 사장 발화 → 이미 6칸으로 매핑한 SQUARE를 받아
+ * PlaybookEntry로 조립한다. buildPlaybookEntry와 달리 고정 위저드 필드를 거치지 않는다.
+ * 핵심 원칙: "사장은 말만, AI가 말→SQUARE 매핑" — 빈 칸은 빈 채로 둔다(날조 금지).
+ */
+export function buildPlaybookEntryFromSquare(
+  uq: UnknownQuery,
+  square: SquareBlock,
+  extras: { title?: string; keywords?: string[]; photos?: string[] } = {},
+): PlaybookEntry {
+  const now = new Date().toISOString();
+  const category = uq.presumed_category;
+  const idSlug = category.toLowerCase().replace(/[^a-z]/g, '');
+  const id = `pb_${idSlug}_${Date.now()}`;
+
+  const s = useSessionStore.getState();
+  const quality = computeQuality(square);
+  const publishable = isSquarePublishable(square);
+  const title = (extras.title || deriveTitle(uq, {})).trim() || deriveTitle(uq, {});
+  const keywords = extras.keywords?.length ? extras.keywords.slice(0, 8) : extractKeywords(uq.query_text);
+
+  // 태그: 카테고리 + AI 키워드 일부 (위저드 고정필드 없음)
+  const tags = Array.from(new Set([`#${category}`, ...keywords.slice(0, 4).map((k) => `#${k}`)])).slice(0, 6);
+
+  return {
+    id,
+    unit_id: s.unitId || 'store_001',
+    creator_id: s.userId || 'u_owner_001',
+    creator_name: s.userName || '사장님',
+    category,
+    subcategory: uq.presumed_subcategory || '일반',
+    title,
+    tags,
+    square,
+    execution: buildExecution(category, {}),
+    stats: {
+      query_hits_30d: 0,
+      resolution_rate: 0,
+      thumbs_up: 0,
+      thumbs_down: 0,
+      last_used_at: now,
+    },
+    search_keywords: keywords,
+    photos: extras.photos?.length ? extras.photos : undefined,
+    version: 1,
+    status: publishable ? 'published' : 'draft',
+    quality_score: quality,
+    created_at: now,
+    updated_at: now,
+  };
 }
 
 /**

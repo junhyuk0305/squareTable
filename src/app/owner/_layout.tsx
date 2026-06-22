@@ -55,7 +55,7 @@ export default function OwnerLayout() {
       <Stack.Screen name="edit/[id]" options={{ title: '노하우 수정' }} />
       <Stack.Screen name="work" options={{ title: '업무' }} />
       <Stack.Screen name="categories" options={{ title: '노하우 추가' }} />
-      <Stack.Screen name="answer/[uqId]" options={{ title: '음성 답변' }} />
+      <Stack.Screen name="answer/[uqId]" options={{ title: '질문 답변' }} />
       <Stack.Screen name="add/[category]" options={{ title: '노하우 추가' }} />
     </Stack>
   );

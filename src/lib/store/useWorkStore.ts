@@ -13,6 +13,7 @@ import {
   deleteFeed,
   subscribeWork,
 } from '@/lib/db';
+import { guardWrite } from '@/lib/store/useSyncStore';
 
 export type TaskSection = 'open' | 'mid' | 'close' | 'etc';
 export type TaskTemplate = { id: string; section: TaskSection; text: string };
@@ -131,15 +132,34 @@ export const useWorkStore = create<State>((set, get) => ({
   addTemplate: (section, text) => {
     const t = { id: uid('t'), section, text };
     set((s) => ({ templates: [...s.templates, t] }));
-    void insertTemplate(t);
+    void guardWrite(
+      insertTemplate(t),
+      () => set((s) => ({ templates: s.templates.filter((x) => x.id !== t.id) })),
+      '할일 추가 저장에 실패했어요.',
+    );
   },
   removeTemplate: (id) => {
+    const idx = get().templates.findIndex((t) => t.id === id);
+    const removed = idx >= 0 ? get().templates[idx] : undefined;
     set((s) => ({ templates: s.templates.filter((t) => t.id !== id) }));
-    void deleteTemplate(id);
+    void guardWrite(
+      deleteTemplate(id),
+      () =>
+        removed &&
+        set((s) => {
+          const next = s.templates.slice();
+          next.splice(Math.min(idx, next.length), 0, removed);
+          return { templates: next };
+        }),
+      '할일 삭제에 실패했어요.',
+    );
   },
 
   toggleTask: (date, templateId, staffId, staffName, role) => {
     const s = get();
+    // 실패 시 done·feed를 통째로 되돌리기 위한 스냅샷(체크 토글은 단일 사용자 동작이라 안전).
+    const prevDone = s.done;
+    const prevFeed = s.feed;
     const dayMap = { ...(s.done[date] ?? {}) };
     const tpl = s.templates.find((t) => t.id === templateId);
     if (dayMap[templateId]) {
@@ -150,8 +170,10 @@ export const useWorkStore = create<State>((set, get) => ({
         done: { ...s.done, [date]: dayMap },
         feed: s.feed.filter((f) => !(f.kind === 'task_done' && f.date === date && f.refId === templateId)),
       });
-      void clearDone(date, templateId);
-      if (removed) void deleteFeed(removed.id);
+      const ok = Promise.all([clearDone(date, templateId), removed ? deleteFeed(removed.id) : Promise.resolve(true)]).then(
+        ([a, b]) => a && b,
+      );
+      void guardWrite(ok, () => set({ done: prevDone, feed: prevFeed }), '완료 해제 저장에 실패했어요.');
       return;
     }
     const now = new Date().toISOString();
@@ -169,8 +191,8 @@ export const useWorkStore = create<State>((set, get) => ({
       refId: templateId,
     };
     set({ done: { ...s.done, [date]: dayMap }, feed: [...s.feed, doneItem] });
-    void setDone(date, templateId, mark);
-    void upsertFeed(doneItem);
+    const ok = Promise.all([setDone(date, templateId, mark), upsertFeed(doneItem)]).then(([a, b]) => a && b);
+    void guardWrite(ok, () => set({ done: prevDone, feed: prevFeed }), '완료 체크 저장에 실패했어요.');
   },
 
   postNotice: (date, text, authorId, authorName, important) => {
@@ -188,7 +210,11 @@ export const useWorkStore = create<State>((set, get) => ({
       pinned: false,
     };
     set((s) => ({ feed: [...s.feed, item] }));
-    void upsertFeed(item);
+    void guardWrite(
+      upsertFeed(item),
+      () => set((s) => ({ feed: s.feed.filter((f) => f.id !== item.id) })),
+      '공지 등록에 실패했어요.',
+    );
   },
 
   postMessage: (date, text, authorId, authorName, role) => {
@@ -203,10 +229,15 @@ export const useWorkStore = create<State>((set, get) => ({
       createdAt: new Date().toISOString(),
     };
     set((s) => ({ feed: [...s.feed, item] }));
-    void upsertFeed(item);
+    void guardWrite(
+      upsertFeed(item),
+      () => set((s) => ({ feed: s.feed.filter((f) => f.id !== item.id) })),
+      '메시지 전송에 실패했어요.',
+    );
   },
 
   toggleReaction: (feedId, userId, emoji) => {
+    const before = get().feed.find((f) => f.id === feedId);
     let updated: FeedItem | undefined;
     set((s) => ({
       feed: s.feed.map((f) => {
@@ -219,10 +250,16 @@ export const useWorkStore = create<State>((set, get) => ({
         return updated;
       }),
     }));
-    if (updated) void upsertFeed(updated);
+    if (updated)
+      void guardWrite(
+        upsertFeed(updated),
+        () => before && set((s) => ({ feed: s.feed.map((f) => (f.id === feedId ? before : f)) })),
+        '반응 저장에 실패했어요.',
+      );
   },
 
   togglePin: (feedId) => {
+    const before = get().feed.find((f) => f.id === feedId);
     let updated: FeedItem | undefined;
     set((s) => ({
       feed: s.feed.map((f) => {
@@ -231,7 +268,12 @@ export const useWorkStore = create<State>((set, get) => ({
         return updated;
       }),
     }));
-    if (updated) void upsertFeed(updated);
+    if (updated)
+      void guardWrite(
+        upsertFeed(updated),
+        () => before && set((s) => ({ feed: s.feed.map((f) => (f.id === feedId ? before : f)) })),
+        '고정 저장에 실패했어요.',
+      );
   },
 
   // 데모 매장이면 시드 체크리스트·피드, 신규 매장이면 빈 보드(가짜 "이수민 완료" 노출 방지).

@@ -13,8 +13,22 @@ export default function Root({ children }: PropsWithChildren) {
         <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
         <meta
           name="viewport"
-          content="width=device-width, initial-scale=1, shrink-to-fit=no"
+          content="width=device-width, initial-scale=1, shrink-to-fit=no, viewport-fit=cover"
         />
+
+        {/* ── PWA: "홈 화면에 추가" 설치 + 전체화면 + 푸시 토대 ───────────── */}
+        {/* 안드로이드/크롬: manifest 로 설치 배너·아이콘·standalone 모드 활성화 */}
+        <link rel="manifest" href="/manifest.json" />
+        <meta name="theme-color" content="#F7F5F0" />
+        <meta name="mobile-web-app-capable" content="yes" />
+        {/* iOS Safari: manifest 를 거의 안 보므로 아래 메타로 전체화면·아이콘 지정 */}
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+        <meta name="apple-mobile-web-app-title" content="착착" />
+        <link rel="apple-touch-icon" href="/icon.png" />
+        <link rel="icon" type="image/png" href="/favicon.png" />
+        {/* ──────────────────────────────────────────────────────────────── */}
+
         <link
           rel="stylesheet"
           href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css"
@@ -37,6 +51,10 @@ html, body, #root, #__next {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
+
+/* 스크롤바 숨김(웹 전역) — 스크롤은 유지, 오른쪽/하단 바만 제거 */
+* { scrollbar-width: none; -ms-overflow-style: none; }
+*::-webkit-scrollbar { display: none; width: 0; height: 0; }
 
 /*
  * 모바일 프레임 중앙 정렬 — CSS로 첫 페인트부터 적용해 새로고침 깜빡임을 제거.

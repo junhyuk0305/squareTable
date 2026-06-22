@@ -18,6 +18,17 @@ export function getUnitId() {
   return _unitId;
 }
 
+// 쓰기 결과를 호출부(스토어)가 알 수 있게 boolean으로 반환 — 실패 시 낙관적 업데이트를 롤백한다.
+// (예전엔 에러를 console.warn으로 삼켜, UI엔 저장된 듯 보이나 서버엔 없는 데이터 유실이 있었음)
+async function write(label: string, q: PromiseLike<{ error: { message: string } | null }>): Promise<boolean> {
+  const { error } = await q;
+  if (error) {
+    console.warn(`[db] ${label}:`, error.message);
+    return false;
+  }
+  return true;
+}
+
 // ── 직원/사장 프로필 (같은 매장) ───────────────────────────
 // 실서비스: profiles에서 내 매장 동료를 읽어 직원/근태/급여 화면을 채운다.
 export async function fetchStaffProfiles(): Promise<{ owner: Owner | null; staff: Junior[] }> {
@@ -79,26 +90,26 @@ export async function fetchEntries(): Promise<PlaybookEntry[]> {
   return (data ?? []) as PlaybookEntry[];
 }
 
-export async function insertEntry(entry: PlaybookEntry): Promise<void> {
-  if (!HAS_SUPABASE) return;
+export async function insertEntry(entry: PlaybookEntry): Promise<boolean> {
+  if (!HAS_SUPABASE) return true;
   const row = { ...entry, unit_id: entry.unit_id || _unitId };
-  const { error } = await supabase.from('playbook_entries').insert(row);
-  if (error) console.warn('[db] insertEntry:', error.message);
+  return write('insertEntry', supabase.from('playbook_entries').insert(row));
 }
 
-export async function updateEntry(id: string, patch: Partial<PlaybookEntry>): Promise<void> {
-  if (!HAS_SUPABASE) return;
-  const { error } = await supabase
-    .from('playbook_entries')
-    .update({ ...patch, updated_at: new Date().toISOString() })
-    .eq('id', id);
-  if (error) console.warn('[db] updateEntry:', error.message);
+export async function updateEntry(id: string, patch: Partial<PlaybookEntry>): Promise<boolean> {
+  if (!HAS_SUPABASE) return true;
+  return write(
+    'updateEntry',
+    supabase
+      .from('playbook_entries')
+      .update({ ...patch, updated_at: new Date().toISOString() })
+      .eq('id', id),
+  );
 }
 
-export async function deleteEntry(id: string): Promise<void> {
-  if (!HAS_SUPABASE) return;
-  const { error } = await supabase.from('playbook_entries').delete().eq('id', id);
-  if (error) console.warn('[db] deleteEntry:', error.message);
+export async function deleteEntry(id: string): Promise<boolean> {
+  if (!HAS_SUPABASE) return true;
+  return write('deleteEntry', supabase.from('playbook_entries').delete().eq('id', id));
 }
 
 // ── 미답변 큐(사장님 인박스) ───────────────────────────────
@@ -115,25 +126,26 @@ export async function fetchUnknownQueue(): Promise<UnknownQuery[]> {
   return (data ?? []) as UnknownQuery[];
 }
 
-export async function insertUnknown(uq: UnknownQuery): Promise<void> {
-  if (!HAS_SUPABASE) return;
+export async function insertUnknown(uq: UnknownQuery): Promise<boolean> {
+  if (!HAS_SUPABASE) return true;
   const row = { ...uq, unit_id: (uq as any).unit_id || _unitId };
-  const { error } = await supabase.from('unknown_queries').insert(row);
-  if (error) console.warn('[db] insertUnknown:', error.message);
+  return write('insertUnknown', supabase.from('unknown_queries').insert(row));
 }
 
-export async function bumpUnknownSimilar(id: string, count: number): Promise<void> {
-  if (!HAS_SUPABASE) return;
-  await supabase.from('unknown_queries').update({ similar_queries_count: count }).eq('id', id);
+export async function bumpUnknownSimilar(id: string, count: number): Promise<boolean> {
+  if (!HAS_SUPABASE) return true;
+  return write('bumpUnknownSimilar', supabase.from('unknown_queries').update({ similar_queries_count: count }).eq('id', id));
 }
 
-export async function resolveUnknown(id: string, newEntryId: string): Promise<void> {
-  if (!HAS_SUPABASE) return;
-  const { error } = await supabase
-    .from('unknown_queries')
-    .update({ status: 'resolved_with_entry', resolved_with_entry_id: newEntryId })
-    .eq('id', id);
-  if (error) console.warn('[db] resolveUnknown:', error.message);
+export async function resolveUnknown(id: string, newEntryId: string): Promise<boolean> {
+  if (!HAS_SUPABASE) return true;
+  return write(
+    'resolveUnknown',
+    supabase
+      .from('unknown_queries')
+      .update({ status: 'resolved_with_entry', resolved_with_entry_id: newEntryId })
+      .eq('id', id),
+  );
 }
 
 // ── 채팅 기록 ──────────────────────────────────────────────
@@ -151,17 +163,15 @@ export async function fetchChatQueries(juniorId: string): Promise<ChatQuery[]> {
   return (data ?? []) as ChatQuery[];
 }
 
-export async function insertChatQuery(cq: ChatQuery): Promise<void> {
-  if (!HAS_SUPABASE) return;
+export async function insertChatQuery(cq: ChatQuery): Promise<boolean> {
+  if (!HAS_SUPABASE) return true;
   const row = { ...cq, unit_id: (cq as any).unit_id || _unitId };
-  const { error } = await supabase.from('chat_queries').insert(row);
-  if (error) console.warn('[db] insertChatQuery:', error.message);
+  return write('insertChatQuery', supabase.from('chat_queries').insert(row));
 }
 
-export async function updateChatSatisfaction(id: string, vote: 'up' | 'down'): Promise<void> {
-  if (!HAS_SUPABASE) return;
-  const { error } = await supabase.from('chat_queries').update({ satisfaction: vote }).eq('id', id);
-  if (error) console.warn('[db] updateChatSatisfaction:', error.message);
+export async function updateChatSatisfaction(id: string, vote: 'up' | 'down'): Promise<boolean> {
+  if (!HAS_SUPABASE) return true;
+  return write('updateChatSatisfaction', supabase.from('chat_queries').update({ satisfaction: vote }).eq('id', id));
 }
 
 // ── 사진 업로드(Storage) ───────────────────────────────────
@@ -222,15 +232,13 @@ export async function fetchTemplates(): Promise<TaskTemplate[]> {
   }
   return (data ?? []) as TaskTemplate[];
 }
-export async function insertTemplate(t: TaskTemplate): Promise<void> {
-  if (!HAS_SUPABASE) return;
-  const { error } = await supabase.from('work_templates').insert({ ...t, unit_id: _unitId });
-  if (error) console.warn('[db] insertTemplate:', error.message);
+export async function insertTemplate(t: TaskTemplate): Promise<boolean> {
+  if (!HAS_SUPABASE) return true;
+  return write('insertTemplate', supabase.from('work_templates').insert({ ...t, unit_id: _unitId }));
 }
-export async function deleteTemplate(id: string): Promise<void> {
-  if (!HAS_SUPABASE) return;
-  const { error } = await supabase.from('work_templates').delete().eq('id', id);
-  if (error) console.warn('[db] deleteTemplate:', error.message);
+export async function deleteTemplate(id: string): Promise<boolean> {
+  if (!HAS_SUPABASE) return true;
+  return write('deleteTemplate', supabase.from('work_templates').delete().eq('id', id));
 }
 
 // ── 업무보드: 완료 체크 ────────────────────────────────────
@@ -247,22 +255,19 @@ export async function fetchDone(): Promise<Record<string, Record<string, DoneMar
   }
   return out;
 }
-export async function setDone(date: string, templateId: string, mark: DoneMark): Promise<void> {
-  if (!HAS_SUPABASE) return;
-  const { error } = await supabase
-    .from('work_done')
-    .upsert({ unit_id: _unitId, work_date: date, template_id: templateId, data: mark });
-  if (error) console.warn('[db] setDone:', error.message);
+export async function setDone(date: string, templateId: string, mark: DoneMark): Promise<boolean> {
+  if (!HAS_SUPABASE) return true;
+  return write(
+    'setDone',
+    supabase.from('work_done').upsert({ unit_id: _unitId, work_date: date, template_id: templateId, data: mark }),
+  );
 }
-export async function clearDone(date: string, templateId: string): Promise<void> {
-  if (!HAS_SUPABASE) return;
-  const { error } = await supabase
-    .from('work_done')
-    .delete()
-    .eq('unit_id', _unitId)
-    .eq('work_date', date)
-    .eq('template_id', templateId);
-  if (error) console.warn('[db] clearDone:', error.message);
+export async function clearDone(date: string, templateId: string): Promise<boolean> {
+  if (!HAS_SUPABASE) return true;
+  return write(
+    'clearDone',
+    supabase.from('work_done').delete().eq('unit_id', _unitId).eq('work_date', date).eq('template_id', templateId),
+  );
 }
 
 // ── 업무보드: 피드(공지/메시지/완료) ──────────────────────
@@ -275,17 +280,16 @@ export async function fetchFeed(): Promise<FeedItem[]> {
   }
   return (data ?? []).map((r: any) => r.data as FeedItem);
 }
-export async function upsertFeed(item: FeedItem): Promise<void> {
-  if (!HAS_SUPABASE) return;
-  const { error } = await supabase
-    .from('work_feed')
-    .upsert({ id: item.id, unit_id: _unitId, feed_date: item.date, data: item });
-  if (error) console.warn('[db] upsertFeed:', error.message);
+export async function upsertFeed(item: FeedItem): Promise<boolean> {
+  if (!HAS_SUPABASE) return true;
+  return write(
+    'upsertFeed',
+    supabase.from('work_feed').upsert({ id: item.id, unit_id: _unitId, feed_date: item.date, data: item }),
+  );
 }
-export async function deleteFeed(id: string): Promise<void> {
-  if (!HAS_SUPABASE) return;
-  const { error } = await supabase.from('work_feed').delete().eq('id', id);
-  if (error) console.warn('[db] deleteFeed:', error.message);
+export async function deleteFeed(id: string): Promise<boolean> {
+  if (!HAS_SUPABASE) return true;
+  return write('deleteFeed', supabase.from('work_feed').delete().eq('id', id));
 }
 
 // ── 출퇴근 ─────────────────────────────────────────────────
@@ -293,7 +297,7 @@ export async function fetchAttendance(): Promise<AttendanceRecord[]> {
   if (!HAS_SUPABASE) return [];
   const { data, error } = await supabase
     .from('attendance')
-    .select('id, staff_id, date, check_in, check_out, work_minutes')
+    .select('id, staff_id, date, check_in, check_out, work_minutes, edited_by')
     .order('date', { ascending: false });
   if (error) {
     console.warn('[db] fetchAttendance:', error.message);
@@ -301,15 +305,13 @@ export async function fetchAttendance(): Promise<AttendanceRecord[]> {
   }
   return (data ?? []) as AttendanceRecord[];
 }
-export async function upsertAttendance(rec: AttendanceRecord): Promise<void> {
-  if (!HAS_SUPABASE) return;
-  const { error } = await supabase.from('attendance').upsert({ ...rec, unit_id: _unitId });
-  if (error) console.warn('[db] upsertAttendance:', error.message);
+export async function upsertAttendance(rec: AttendanceRecord): Promise<boolean> {
+  if (!HAS_SUPABASE) return true;
+  return write('upsertAttendance', supabase.from('attendance').upsert({ ...rec, unit_id: _unitId }));
 }
-export async function deleteAttendance(id: string): Promise<void> {
-  if (!HAS_SUPABASE) return;
-  const { error } = await supabase.from('attendance').delete().eq('id', id);
-  if (error) console.warn('[db] deleteAttendance:', error.message);
+export async function deleteAttendance(id: string): Promise<boolean> {
+  if (!HAS_SUPABASE) return true;
+  return write('deleteAttendance', supabase.from('attendance').delete().eq('id', id));
 }
 
 // ── 시급 ───────────────────────────────────────────────────
@@ -324,10 +326,9 @@ export async function fetchWages(): Promise<Record<string, number>> {
   for (const r of (data ?? []) as any[]) out[r.staff_id] = r.hourly_wage;
   return out;
 }
-export async function setWageDb(staffId: string, wage: number): Promise<void> {
-  if (!HAS_SUPABASE) return;
-  const { error } = await supabase.from('wages').upsert({ unit_id: _unitId, staff_id: staffId, hourly_wage: wage });
-  if (error) console.warn('[db] setWageDb:', error.message);
+export async function setWageDb(staffId: string, wage: number): Promise<boolean> {
+  if (!HAS_SUPABASE) return true;
+  return write('setWageDb', supabase.from('wages').upsert({ unit_id: _unitId, staff_id: staffId, hourly_wage: wage }));
 }
 
 // ── 업무보드/출퇴근 Realtime 구독 ─────────────────────────

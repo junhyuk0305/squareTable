@@ -9,6 +9,8 @@ import { logout } from '@/lib/auth';
 import { confirmAction } from '@/lib/utils/confirm';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { SettingsSection, SettingsRow, SettingsToggle } from '@/components/settings/SettingsKit';
+import { QuietHoursModal } from '@/components/settings/QuietHoursModal';
+import { RoleTabBar } from '@/components/RoleTabBar';
 
 const SUPPORT_EMAIL = 'contact@team-roundtable.com';
 const SCALE_LABEL: Record<TextScale, string> = { small: '작게', normal: '보통', large: '크게' };
@@ -20,6 +22,7 @@ export default function JuniorSettings() {
   const leaveStore = useSessionStore((s) => s.leaveStore);
   const prefs = usePreferencesStore();
   const [busy, setBusy] = useState(false);
+  const [quietModal, setQuietModal] = useState(false);
 
   const version = Constants.expoConfig?.version ?? '1.0.0';
 
@@ -61,7 +64,7 @@ export default function JuniorSettings() {
     router.replace('/');
   };
 
-  const contact = () => Linking.openURL(`mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent('[스퀘어테이블] 문의')}`);
+  const contact = () => Linking.openURL(`mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent('[착착] 문의')}`);
   const myShift = () => confirmAction('내 근무', '시프트·시급은 사장님이 설정해요. 변경이 필요하면 사장님께 문의해주세요.', '확인');
 
   return (
@@ -100,10 +103,18 @@ export default function JuniorSettings() {
           <SettingsToggle
             icon="moon-outline"
             label="방해 금지 시간"
-            hint="밤 10시~아침 8시에는 알림을 보내지 않아요"
+            hint={`${prefs.quietStart}~${prefs.quietEnd}에는 알림을 보내지 않아요`}
             value={prefs.quietHours}
             onValueChange={() => prefs.toggle('quietHours')}
           />
+          {prefs.quietHours ? (
+            <SettingsRow
+              icon="time-outline"
+              label="시간대 설정"
+              value={`${prefs.quietStart} ~ ${prefs.quietEnd}`}
+              onPress={() => setQuietModal(true)}
+            />
+          ) : null}
         </SettingsSection>
 
         <SettingsSection title="화면">
@@ -126,9 +137,20 @@ export default function JuniorSettings() {
           <SettingsRow icon="trash-outline" label="회원탈퇴" danger onPress={busy ? undefined : onDelete} />
         </SettingsSection>
 
-        <Text style={styles.foot}>스퀘어테이블 · 팀 스퀘어테이블</Text>
+        <Text style={styles.foot}>착착 · 팀 스퀘어테이블</Text>
         <View style={{ height: 16 }} />
       </ScrollView>
+      <QuietHoursModal
+        visible={quietModal}
+        start={prefs.quietStart}
+        end={prefs.quietEnd}
+        onClose={() => setQuietModal(false)}
+        onSave={(s, e) => {
+          prefs.set('quietStart', s);
+          prefs.set('quietEnd', e);
+        }}
+      />
+      <RoleTabBar role="junior" />
     </SafeAreaView>
   );
 }

@@ -5,16 +5,29 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFonts } from 'expo-font';
 import { ResponsiveShell } from '@/components/ResponsiveShell';
+import { SyncBanner } from '@/components/SyncBanner';
 import { useSessionStore } from '@/lib/store/useSessionStore';
+import { usePreferencesStore, TEXT_SCALE_FACTOR } from '@/lib/store/usePreferencesStore';
+import { patchTextScaling, setTextScaleFactor } from '@/lib/theme/textScale';
+import { injectPwaHead } from '@/lib/pwa/head';
+
+// 전역 글자 크기 패치는 앱 모듈 로드 시 1회만.
+patchTextScaling();
 
 export default function RootLayout() {
   // 아이콘 폰트를 앱 렌더 전에 로드. 빠지면 웹에서 모든 글리프가 깨진 글자로 보임.
   const [fontsLoaded, fontError] = useFonts({ ...Ionicons.font });
 
+  // 글자 크기 설정 → 전역 배율에 반영. 렌더 중 동기로 적용해 자식이 새 배율로 그려진다.
+  const textScale = usePreferencesStore((s) => s.textScale);
+  setTextScaleFactor(TEXT_SCALE_FACTOR[textScale]);
+
   // 부팅 1회: 저장된 세션 복원 + 프로필 로드 + auth 변화 구독.
   const init = useSessionStore((s) => s.init);
   useEffect(() => {
     init();
+    // 웹: '홈 화면에 추가'/푸시용 PWA 헤드 태그 주입 (output=single 이라 +html 미반영)
+    injectPwaHead();
   }, [init]);
 
   if (!fontsLoaded && !fontError) return null;
@@ -23,11 +36,13 @@ export default function RootLayout() {
     <SafeAreaProvider>
       <StatusBar style="dark" />
       <ResponsiveShell>
-        <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
+        <SyncBanner />
+        <Stack key={textScale} screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
           <Stack.Screen name="index" />
           <Stack.Screen name="signup" />
           <Stack.Screen name="privacy" />
           <Stack.Screen name="terms" />
+          <Stack.Screen name="legal/[doc]" />
           <Stack.Screen name="business-info" />
           <Stack.Screen name="account-edit" />
           <Stack.Screen name="junior" />

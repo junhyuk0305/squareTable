@@ -17,7 +17,6 @@ import { uploadPhoto } from '@/lib/db';
 import { getCategoryMeta } from '@/lib/utils/category';
 import { InkColors } from '@/lib/theme/colors';
 import { buildPlaybookEntry, isAnswersPublishable, type WizardAnswers } from '@/lib/utils/buildEntry';
-import { VoiceButton } from '@/components/VoiceButton';
 
 import { RoutineFlow } from '@/components/wizard/RoutineFlow';
 import { EventFlow } from '@/components/wizard/EventFlow';
@@ -129,14 +128,6 @@ export default function AddKnowhowScreen() {
             multiline
           />
 
-          <View style={styles.voiceRow}>
-            <VoiceButton
-              size="lg"
-              label="음성으로 말하기"
-              mockText="포장 주문은 무조건 뚜껑 닫고, 영수증에 포장 표시해서 픽업대에 올려두기"
-              onResult={(t) => setTitle((prev) => (prev ? prev : t))}
-            />
-          </View>
 
           {/* 사진 첨부 — 저장·표시만 (AI 해석 X) */}
           <View style={styles.photoSection}>

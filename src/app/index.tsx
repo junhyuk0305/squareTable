@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { View, Text, Pressable, StyleSheet, TextInput, ScrollView, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { applyMockSeed } from '@/lib/demo/mockSeed';
 import { HAS_SUPABASE } from '@/lib/supabase';
@@ -20,6 +21,8 @@ export default function LoginScreen() {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
+  const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+
   // Supabase 미설정이면 기존 데모 동작(입력 무시, 역할 토글로 바로 입장)
   const demoEnter = () => {
     switchTo(role);
@@ -31,6 +34,10 @@ export default function LoginScreen() {
     if (!HAS_SUPABASE) return demoEnter();
     if (!email || !pw) {
       setMsg('이메일과 비밀번호를 입력해주세요.');
+      return;
+    }
+    if (!EMAIL_RE.test(email.trim())) {
+      setMsg('이메일 형식을 확인해주세요.');
       return;
     }
     setBusy(true);
@@ -50,6 +57,10 @@ export default function LoginScreen() {
       setMsg('이메일을 먼저 입력해주세요.');
       return;
     }
+    if (!EMAIL_RE.test(email.trim())) {
+      setMsg('이메일 형식을 확인해주세요.');
+      return;
+    }
     setBusy(true);
     setMsg(null);
     const { error } = await sendMagicLink(email.trim());
@@ -61,8 +72,16 @@ export default function LoginScreen() {
     <SafeAreaView style={styles.safe}>
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
         <View style={styles.header}>
-          <Text style={styles.brand}>SQUARE TABLE</Text>
-          <Text style={styles.tagline}>현장 운영 AI</Text>
+          <View style={styles.markRow}>
+            <View style={styles.mark}>
+              <Ionicons name="checkmark-sharp" size={18} color="#FFFFFF" />
+            </View>
+            <View style={[styles.mark, styles.markGold]}>
+              <Ionicons name="checkmark-sharp" size={18} color="#FFFFFF" />
+            </View>
+          </View>
+          <Text style={styles.brand}>착착</Text>
+          <Text style={styles.tagline}>할 일이 착착 끝나는 가게 · 현장 운영 AI</Text>
         </View>
 
         <View style={styles.card}>
@@ -111,11 +130,13 @@ export default function LoginScreen() {
           {msg && <Text style={styles.msg}>{msg}</Text>}
         </View>
 
-        <Pressable onPress={() => router.push('/signup')} style={styles.signupRow}>
-          <Text style={styles.signupText}>
-            처음이신가요? <Text style={styles.signupStrong}>회원가입</Text>
-          </Text>
-        </Pressable>
+        <View style={styles.signupBlock}>
+          <Text style={styles.signupLead}>아직 계정이 없으신가요?</Text>
+          <Pressable onPress={() => router.push('/signup')} style={({ pressed }) => [styles.signupBtn, pressed && { opacity: 0.85 }]}>
+            <Text style={styles.signupBtnText}>회원가입하고 시작하기</Text>
+            <Ionicons name="arrow-forward" size={16} color={BrandColors.brand} />
+          </Pressable>
+        </View>
 
         <Text style={styles.demoNote}>
           {HAS_SUPABASE ? '파일럿 계정으로 로그인하세요' : '* 데모: 입력 없이 로그인됩니다'}
@@ -128,9 +149,12 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: InkColors.cream },
   scroll: { flexGrow: 1, padding: 24, justifyContent: 'center', gap: 28 },
-  header: { alignItems: 'center', gap: 6 },
-  brand: { fontSize: 30, fontWeight: '900', letterSpacing: 2, color: BrandColors.brand },
-  tagline: { fontSize: 14, color: InkColors.ink3 },
+  header: { alignItems: 'center', gap: 8 },
+  markRow: { flexDirection: 'row', gap: 6, marginBottom: 2 },
+  mark: { width: 30, height: 30, borderRadius: 9, backgroundColor: BrandColors.brand, alignItems: 'center', justifyContent: 'center' },
+  markGold: { backgroundColor: BrandColors.gold },
+  brand: { fontSize: 38, fontWeight: '900', letterSpacing: -1, color: BrandColors.brand },
+  tagline: { fontSize: 13, color: InkColors.ink3, textAlign: 'center' },
 
   card: {
     backgroundColor: '#FFFFFF',
@@ -170,7 +194,19 @@ const styles = StyleSheet.create({
   linkStrong: { color: BrandColors.brand, fontWeight: '800' },
   msg: { fontSize: 13, color: InkColors.ink2, textAlign: 'center', marginTop: 2 },
   demoNote: { fontSize: 12, color: InkColors.ink3, textAlign: 'center' },
-  signupRow: { alignItems: 'center', paddingVertical: 4 },
-  signupText: { fontSize: 14, color: InkColors.ink3 },
-  signupStrong: { color: BrandColors.brand, fontWeight: '800' },
+  signupBlock: { alignItems: 'center', gap: 10 },
+  signupLead: { fontSize: 13, color: InkColors.ink3 },
+  signupBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    alignSelf: 'stretch',
+    paddingVertical: 15,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: BrandColors.brand,
+    backgroundColor: '#FFFFFF',
+  },
+  signupBtnText: { fontSize: 15, fontWeight: '800', color: BrandColors.brand },
 });

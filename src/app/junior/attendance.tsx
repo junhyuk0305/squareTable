@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { View, Text, Pressable, StyleSheet, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useAttendanceStore, type AttendanceRecord } from '@/lib/store/useAttendanceStore';
@@ -117,18 +118,28 @@ export default function JuniorAttendanceScreen() {
         <Text style={styles.wageNote}>시급 {won(wage)} 기준 · 세전 예상액</Text>
 
         {/* 최근 기록 */}
-        <Text style={styles.sectionTitle}>최근 기록</Text>
+        <View style={styles.recHeader}>
+          <Text style={styles.sectionTitle}>최근 기록</Text>
+          <Pressable onPress={() => router.push('/junior/timesheet')} hitSlop={6} style={({ pressed }) => [styles.viewAllBtn, pressed && { opacity: 0.6 }]}>
+            <Text style={styles.viewAllText}>내역 전체보기</Text>
+            <Ionicons name="chevron-forward" size={14} color={BrandColors.brand} />
+          </Pressable>
+        </View>
         <View style={styles.list}>
           {recentRecs.length === 0 && <Text style={styles.empty}>아직 기록이 없어요</Text>}
-          {recentRecs.map((r) => (
-            <View key={r.id} style={styles.recRow}>
+          {recentRecs.slice(0, 5).map((r) => (
+            <Pressable key={r.id} onPress={() => router.push('/junior/timesheet')} style={({ pressed }) => [styles.recRow, pressed && { opacity: 0.6 }]}>
               <Text style={styles.recDate}>{r.date.slice(5).replace('-', '/')}</Text>
               <Text style={styles.recTime}>
                 {r.check_in ? hhmm(r.check_in) : '—'} ~ {r.check_out ? hhmm(r.check_out) : '근무 중'}
               </Text>
               <Text style={styles.recMin}>{fmtDuration(liveMinutes(r))}</Text>
-            </View>
+              <Ionicons name="create-outline" size={15} color={InkColors.ink3} style={{ marginLeft: 6 }} />
+            </Pressable>
           ))}
+        </View>
+        <View style={styles.editNote}>
+          <Text style={styles.editNoteText}>✎ 시간이 틀리면 본인이 직접 보정할 수 있어요. 수정 시 사장님에게 ‘수정됨’으로 표시됩니다.</Text>
         </View>
         <View style={{ height: 8 }} />
       </ScrollView>
@@ -173,7 +184,12 @@ const styles = StyleSheet.create({
   statValue: { fontSize: 22, fontWeight: '800', color: InkColors.ink },
   wageNote: { fontSize: 12, color: InkColors.ink3, marginTop: -6 },
 
-  sectionTitle: { fontSize: 16, fontWeight: '700', color: InkColors.ink2, marginTop: 4 },
+  sectionTitle: { fontSize: 16, fontWeight: '700', color: InkColors.ink2 },
+  recHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 },
+  viewAllBtn: { flexDirection: 'row', alignItems: 'center', gap: 2 },
+  viewAllText: { fontSize: 13, fontWeight: '700', color: BrandColors.brand },
+  editNote: { backgroundColor: InkColors.bgSoft, borderRadius: 10, padding: 12, marginTop: -8 },
+  editNoteText: { fontSize: 12, color: InkColors.ink3, lineHeight: 18 },
   list: {
     backgroundColor: '#FFFFFF',
     borderRadius: 12,

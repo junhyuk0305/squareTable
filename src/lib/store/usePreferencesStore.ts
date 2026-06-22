@@ -7,12 +7,21 @@ export type TextScale = 'small' | 'normal' | 'large';
 type Prefs = {
   pushEnabled: boolean;
   emailEnabled: boolean;
-  quietHours: boolean; // 방해 금지 시간(22~08) 사용 여부
+  quietHours: boolean; // 방해 금지 시간 사용 여부
+  quietStart: string; // "HH:MM" — 방해 금지 시작 (사용자 직접 입력)
+  quietEnd: string; // "HH:MM" — 방해 금지 종료
   textScale: TextScale;
 };
 
 const KEY = 'sqt.prefs.v1';
-const DEFAULTS: Prefs = { pushEnabled: true, emailEnabled: false, quietHours: false, textScale: 'normal' };
+const DEFAULTS: Prefs = {
+  pushEnabled: true,
+  emailEnabled: false,
+  quietHours: false,
+  quietStart: '22:00',
+  quietEnd: '08:00',
+  textScale: 'normal',
+};
 
 const storage =
   typeof window !== 'undefined' && window.localStorage ? window.localStorage : undefined;
@@ -47,8 +56,11 @@ export const usePreferencesStore = create<PrefsState>((set, get) => ({
 
 function persist(state: PrefsState) {
   try {
-    const { pushEnabled, emailEnabled, quietHours, textScale } = state;
-    storage?.setItem(KEY, JSON.stringify({ pushEnabled, emailEnabled, quietHours, textScale }));
+    const { pushEnabled, emailEnabled, quietHours, quietStart, quietEnd, textScale } = state;
+    storage?.setItem(
+      KEY,
+      JSON.stringify({ pushEnabled, emailEnabled, quietHours, quietStart, quietEnd, textScale }),
+    );
   } catch {
     /* noop */
   }

@@ -1,10 +1,11 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, Pressable, StyleSheet, ScrollView, TextInput, Alert, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { Stack, useLocalSearchParams, useRouter, useNavigation } from 'expo-router';
 
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { getCategoryMeta } from '@/lib/utils/category';
+import { confirmAction } from '@/lib/utils/confirm';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 
 export default function EditKnowledgeScreen() {
@@ -26,8 +27,42 @@ export default function EditKnowledgeScreen() {
   const [doText, setDoText] = useState(entry?.square.extract.do ?? '');
   const [dontText, setDontText] = useState(entry?.square.extract.dont ?? '');
   const [toast, setToast] = useState<string | null>(null);
+  const navigation = useNavigation();
+  const allowLeave = useRef(false); // 저장/삭제로 인한 의도적 이탈은 확인창 생략
 
   const meta = useMemo(() => (entry ? getCategoryMeta(entry.category) : null), [entry]);
+
+  // 입력이 초기값과 달라졌는지 — 저장 안 한 변경이 있으면 뒤로가기 시 확인.
+  const dirty = useMemo(
+    () =>
+      title !== (entry?.title ?? '') ||
+      situation !== (entry?.square.situation ?? '') ||
+      quagmire !== (entry?.square.quagmire ?? '') ||
+      uncover !== (entry?.square.uncover ?? '') ||
+      steps !== (entry?.square.action.steps ?? []).join('\n') ||
+      scripts !== (entry?.square.action.scripts ?? []).join('\n') ||
+      before !== (entry?.square.result?.before ?? '') ||
+      after !== (entry?.square.result?.after ?? '') ||
+      metric !== (entry?.square.result?.metric ?? '') ||
+      doText !== (entry?.square.extract.do ?? '') ||
+      dontText !== (entry?.square.extract.dont ?? ''),
+    [title, situation, quagmire, uncover, steps, scripts, before, after, metric, doText, dontText, entry],
+  );
+
+  // 저장하지 않은 변경이 있을 때 뒤로가기(헤더·제스처·하드웨어)를 가로채 확인.
+  useEffect(() => {
+    const unsub = (navigation as any).addListener('beforeRemove', (e: any) => {
+      if (!dirty || allowLeave.current) return;
+      e.preventDefault();
+      confirmAction('나가기', '저장하지 않은 변경이 있어요. 저장 없이 나갈까요?', '나가기').then((ok) => {
+        if (ok) {
+          allowLeave.current = true;
+          navigation.dispatch(e.data.action);
+        }
+      });
+    });
+    return unsub;
+  }, [navigation, dirty]);
 
   if (!entry) {
     return (
@@ -62,10 +97,12 @@ export default function EditKnowledgeScreen() {
       updated_at: new Date().toISOString(),
     });
     setToast('수정 저장됨 (v' + (entry.version + 1) + ')');
+    allowLeave.current = true; // 저장 완료 → 이탈 확인 생략
     setTimeout(() => router.back(), 900);
   };
 
   const doDelete = () => {
+    allowLeave.current = true; // 삭제 → 이탈 확인 생략
     remove(entry.id);
     router.back();
   };

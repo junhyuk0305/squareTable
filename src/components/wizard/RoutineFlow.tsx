@@ -102,13 +102,12 @@ export function RoutineFlow({ uq, onComplete, onStepChange }: FlowProps) {
 
         {state.step === 3 && (
           <>
-            <Text style={styles.q}>핵심 행동을 말씀해주세요</Text>
-            <Text style={styles.hint}>마이크를 누르고 평소 하시던 대로 말씀하시면 됩니다.</Text>
+            <Text style={styles.q}>핵심 행동을 적어주세요</Text>
+            <Text style={styles.hint}>평소 하시던 대로 적어주시면 됩니다.</Text>
             <View style={styles.voiceWrap}>
               <VoiceButton
                 size="lg"
-                label="음성으로 답변하기"
-                mockText="오픈하면 기기 전원부터 켜고, 재료 채워두고, 홀이랑 카운터 청소까지 한 번에 합니다."
+                label="직접 입력"
                 onResult={(t) => {
                   dispatch({ type: 'set', key: 'voiceAction', value: t });
                   setTimeout(() => dispatch({ type: 'next' }), 600);
@@ -116,7 +115,7 @@ export function RoutineFlow({ uq, onComplete, onStepChange }: FlowProps) {
               />
               {state.voiceAction && (
                 <View style={[styles.voiceResult, { borderColor: meta.color }]}>
-                  <Text style={styles.voiceLabel}>인식된 답변</Text>
+                  <Text style={styles.voiceLabel}>입력한 답변</Text>
                   <Text style={styles.voiceText}>“{state.voiceAction}”</Text>
                 </View>
               )}
@@ -138,6 +137,14 @@ export function RoutineFlow({ uq, onComplete, onStepChange }: FlowProps) {
       </ScrollView>
 
       <View style={styles.footer}>
+        {state.step > 1 && (
+          <Pressable
+            onPress={() => dispatch({ type: 'prev' })}
+            style={({ pressed }) => [styles.skipBtn, pressed && { opacity: 0.7 }]}
+          >
+            <Text style={styles.skipText}>← 이전</Text>
+          </Pressable>
+        )}
         <Pressable
           onPress={() => dispatch({ type: 'skip' })}
           style={({ pressed }) => [styles.skipBtn, pressed && { opacity: 0.7 }]}

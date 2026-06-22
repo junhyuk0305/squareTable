@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { View, Text, Pressable, StyleSheet, ScrollView, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Stack } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 import { usePayrollStore } from '@/lib/store/usePayrollStore';
@@ -11,6 +11,7 @@ import { RoleTabBar } from '@/components/RoleTabBar';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 
 export default function OwnerStaffScreen() {
+  const router = useRouter();
   const wages = usePayrollStore((s) => s.wages);
   const setWage = usePayrollStore((s) => s.setWage);
   const staff = useStaffStore((s) => s.staff);
@@ -18,7 +19,8 @@ export default function OwnerStaffScreen() {
 
   const [copied, setCopied] = useState(false);
   const [phone, setPhone] = useState('');
-  const [invites, setInvites] = useState<string[]>([]);
+  // 대기 중인 초대(아직 합류 전) — 재전송/취소 가능. 합류 완료 시 목록에서 제거.
+  const [invites, setInvites] = useState<{ phone: string; status: '초대 보냄' | '재전송됨' }[]>([]);
 
   const copy = async () => {
     const nav = (globalThis as any).navigator;
@@ -36,9 +38,12 @@ export default function OwnerStaffScreen() {
   const sendInvite = () => {
     const v = phone.trim();
     if (!v) return;
-    setInvites((p) => [v, ...p]);
+    setInvites((p) => (p.some((x) => x.phone === v) ? p : [{ phone: v, status: '초대 보냄' }, ...p]));
     setPhone('');
   };
+  const resendInvite = (target: string) =>
+    setInvites((p) => p.map((x) => (x.phone === target ? { ...x, status: '재전송됨' } : x)));
+  const cancelInvite = (target: string) => setInvites((p) => p.filter((x) => x.phone !== target));
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
@@ -68,19 +73,34 @@ export default function OwnerStaffScreen() {
             onSubmitEditing={sendInvite}
           />
           <Pressable onPress={sendInvite} disabled={!phone.trim()} style={({ pressed }) => [styles.inviteBtn, { opacity: !phone.trim() ? 0.4 : pressed ? 0.85 : 1 }]}>
-            <Text style={styles.inviteBtnText}>초대</Text>
+            <Text style={styles.inviteBtnText}>초대 보내기</Text>
           </Pressable>
         </View>
-        {invites.map((p, i) => (
-          <View key={`${p}-${i}`} style={styles.pendingRow}>
-            <Ionicons name="time-outline" size={16} color={InkColors.ink3} />
-            <Text style={styles.pendingText}>{p}</Text>
-            <Text style={styles.pendingTag}>초대 보냄</Text>
-          </View>
-        ))}
+        <Text style={styles.inviteHelp}>번호로 초대코드+앱 링크를 보냅니다. 상대가 직원 회원가입을 마치면 아래 ‘직원’으로 이동해요.</Text>
+
+        {invites.length > 0 && (
+          <>
+            <Text style={styles.sectionTitle}>대기 중인 초대 <Text style={styles.sectionSub}>(아직 합류 전)</Text></Text>
+            <View style={styles.list}>
+              {invites.map((inv) => (
+                <View key={inv.phone} style={styles.pendingRow}>
+                  <Ionicons name="time-outline" size={16} color={InkColors.ink3} />
+                  <Text style={styles.pendingText}>{inv.phone}</Text>
+                  <Text style={styles.pendingTag}>{inv.status}</Text>
+                  <Pressable onPress={() => resendInvite(inv.phone)} hitSlop={6} style={({ pressed }) => [styles.pendingAction, pressed && { opacity: 0.6 }]}>
+                    <Text style={styles.pendingActionText}>재전송</Text>
+                  </Pressable>
+                  <Pressable onPress={() => cancelInvite(inv.phone)} hitSlop={6} style={({ pressed }) => [styles.pendingCancel, pressed && { opacity: 0.6 }]}>
+                    <Ionicons name="close" size={16} color={InkColors.ink3} />
+                  </Pressable>
+                </View>
+              ))}
+            </View>
+          </>
+        )}
 
         {/* 직원 목록 */}
-        <Text style={styles.sectionTitle}>직원 ({staff.length}명)</Text>
+        <Text style={styles.sectionTitle}>합류한 직원 ({staff.length}명) <Text style={styles.sectionSub}>· 탭 → 출근기록</Text></Text>
         {staff.length === 0 ? (
           <View style={styles.emptyBox}>
             <Ionicons name="people-outline" size={22} color={InkColors.ink3} />
@@ -90,20 +110,23 @@ export default function OwnerStaffScreen() {
         <View style={styles.list}>
           {staff.map((s) => (
             <View key={s.id} style={styles.staffRow}>
-              <View style={styles.avatar}>
-                <Text style={styles.avatarText}>{s.name.slice(0, 1)}</Text>
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.staffName}>{s.name}</Text>
-                <Text style={styles.staffMeta}>{s.shift ?? '시프트 미지정'}</Text>
-              </View>
+              <Pressable onPress={() => router.push(`/owner/timesheet/${s.id}`)} style={({ pressed }) => [styles.staffTap, pressed && { opacity: 0.6 }]}>
+                <View style={styles.avatar}>
+                  <Text style={styles.avatarText}>{s.name.slice(0, 1)}</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.staffName}>{s.name}</Text>
+                  <Text style={styles.staffMeta}>{s.shift ?? '시프트 미지정'}</Text>
+                </View>
+              </Pressable>
               <View style={styles.wageBox}>
                 <Text style={styles.wageLabel}>시급</Text>
                 <View style={styles.wageInputRow}>
                   <TextInput
                     value={String(wages[s.id] ?? 10030)}
-                    onChangeText={(t) => setWage(s.id, Number(t.replace(/[^0-9]/g, '')) || 0)}
+                    onChangeText={(t) => setWage(s.id, Math.min(Number(t.replace(/[^0-9]/g, '').slice(0, 7)) || 0, 1000000))}
                     keyboardType="number-pad"
+                    maxLength={7}
                     style={styles.wageInput}
                   />
                   <Text style={styles.wageWon}>원</Text>
@@ -133,16 +156,22 @@ const styles = StyleSheet.create({
   copyText: { color: '#FFFFFF', fontWeight: '700', fontSize: 13 },
 
   sectionTitle: { fontSize: 14, fontWeight: '800', color: InkColors.ink2, marginTop: 6 },
+  sectionSub: { fontSize: 12, fontWeight: '600', color: InkColors.ink3 },
+  inviteHelp: { fontSize: 12, color: InkColors.ink3, lineHeight: 17, marginTop: -4 },
   addRow: { flexDirection: 'row', gap: 10 },
   addInput: { flex: 1, borderWidth: 1, borderColor: InkColors.line, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, color: InkColors.ink, backgroundColor: '#FFFFFF' },
   inviteBtn: { paddingHorizontal: 20, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: BrandColors.brand },
   inviteBtnText: { fontSize: 15, fontWeight: '800', color: '#FFFFFF' },
-  pendingRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4 },
+  pendingRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: InkColors.line },
   pendingText: { flex: 1, fontSize: 14, color: InkColors.ink2 },
-  pendingTag: { fontSize: 12, color: InkColors.ink3, fontWeight: '700' },
+  pendingTag: { fontSize: 11, color: InkColors.ink3, fontWeight: '700', backgroundColor: InkColors.bgSoft, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999 },
+  pendingAction: { paddingHorizontal: 8, paddingVertical: 4 },
+  pendingActionText: { fontSize: 12, fontWeight: '800', color: BrandColors.brand },
+  pendingCancel: { paddingHorizontal: 2, paddingVertical: 4 },
 
   list: { backgroundColor: '#FFFFFF', borderRadius: 14, borderWidth: 1, borderColor: InkColors.line, paddingHorizontal: 14 },
   staffRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: InkColors.line },
+  staffTap: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12 },
   avatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: InkColors.bgSoft, borderWidth: 1, borderColor: InkColors.line, alignItems: 'center', justifyContent: 'center' },
   avatarText: { fontSize: 15, fontWeight: '800', color: InkColors.ink },
   staffName: { fontSize: 15, fontWeight: '700', color: InkColors.ink },

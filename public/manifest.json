@@ -1,0 +1,21 @@
+{
+  "name": "착착",
+  "short_name": "착착",
+  "description": "할 일이 착착 끝나는 가게 · 현장 운영 AI",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "lang": "ko",
+  "dir": "ltr",
+  "background_color": "#F7F5F0",
+  "theme_color": "#F7F5F0",
+  "icons": [
+    {
+      "src": "/icon.png",
+      "sizes": "192x192 512x512 1024x1024",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

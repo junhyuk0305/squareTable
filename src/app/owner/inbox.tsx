@@ -63,9 +63,9 @@ export default function OwnerInboxScreen() {
   // 처리됨 - 인용 top 5
   const topCited = useMemo(() => topCitedEntries(entries, TOP_RESOLVED), [entries]);
 
-  // 박지원 career_days lookup (hero 메타에 노출)
+  // 박지원 career_days lookup (hero 메타에 노출). 익명 질문이면 신원 단서를 숨긴다.
   const careerDays = useMemo(() => {
-    if (!hero) return undefined;
+    if (!hero || hero.anonymous) return undefined;
     return getStaff(hero.junior_id)?.career_days;
   }, [hero, getStaff]);
 

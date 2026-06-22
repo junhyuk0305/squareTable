@@ -12,10 +12,8 @@ import {
 } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
 
 import { SquareCard } from '@/components/SquareCard';
-import { VoiceButton } from '@/components/VoiceButton';
 import { DeflectCard } from '@/components/DeflectCard';
 import { UserBubble } from '@/components/UserBubble';
 import { RoleTabBar } from '@/components/RoleTabBar';
@@ -24,6 +22,7 @@ import { useChatStore } from '@/lib/store/useChatStore';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { useUnknownQueueStore } from '@/lib/store/useUnknownQueueStore';
+import { HAS_SUPABASE } from '@/lib/supabase';
 
 import { SEED_QUERIES } from '@/lib/demo/seedQueries';
 import { inferCategoryFromQuery } from '@/lib/utils/inferCategory';
@@ -45,7 +44,7 @@ import type { Category, ChatQuery } from '@/types';
  * 알바 챗봇 화면 — D안 AI 어시스턴트 클린형.
  * 좌측: assistant (SquareCard | DeflectCard)
  * 우측: user bubble
- * 하단: 시드 쿼리 칩(6개) + 입력바 + 음성 버튼
+ * 하단: 시드 쿼리 칩(6개) + 입력바
  */
 export default function JuniorChatScreen() {
   const router = useRouter();
@@ -55,6 +54,9 @@ export default function JuniorChatScreen() {
   const lastSubmittedId = useChatStore((s) => s.lastSubmittedId);
   const submit = useChatStore((s) => s.submit);
   const rate = useChatStore((s) => s.rate);
+  const error = useChatStore((s) => s.error);
+  const dismissError = useChatStore((s) => s.dismissError);
+  const retryLast = useChatStore((s) => s.retryLast);
 
   const userId = useSessionStore((s) => s.userId);
   const userName = useSessionStore((s) => s.userName);
@@ -62,8 +64,9 @@ export default function JuniorChatScreen() {
   const getStaff = useStaffStore((s) => s.getStaff);
   const getEntryById = usePlaybookStore((s) => s.getById);
   const entryCount = usePlaybookStore((s) => s.entries.length);
-  // 노하우가 있는 매장(데모 포함)은 데모 시드 질문, 신규 빈 매장은 업종 일반 추천.
-  const suggestions = entryCount > 0 ? SEED_QUERIES.slice(0, 4).map((s) => s.text) : GENERIC_SUGGESTIONS;
+  // 데모(mock) 매장에서만 시연용 시드 질문을 노출한다. 실서비스 계정은 항상 업종 일반 추천
+  // → 실계정 알바가 남의 매장 데모 질문('수저통 빨대…')을 보는 목업 데이터 누출 방지.
+  const suggestions = !HAS_SUPABASE && entryCount > 0 ? SEED_QUERIES.slice(0, 4).map((s) => s.text) : GENERIC_SUGGESTIONS;
 
   const identity = useMemo(() => {
     // 매장 이름은 세션에서. 입사일차는 명부에 있을 때만 표시(신규 사용자엔 없음).
@@ -75,6 +78,7 @@ export default function JuniorChatScreen() {
   const unknownQueue = useUnknownQueueStore((s) => s.queue);
 
   const [input, setInput] = useState('');
+  const [anon, setAnon] = useState(false);
   const scrollRef = useRef<ScrollView | null>(null);
 
   // 신규 메시지가 들어오면 자동으로 바닥까지 스크롤
@@ -89,7 +93,7 @@ export default function JuniorChatScreen() {
     const value = (text ?? input).trim();
     if (!value) return;
     setInput('');
-    void submit(value);
+    void submit(value, { anonymous: anon });
   }
 
   // 시드 칩 1탭 — 발표자 시연 흐름
@@ -97,12 +101,8 @@ export default function JuniorChatScreen() {
     setInput(text);
     setTimeout(() => {
       setInput('');
-      void submit(text);
+      void submit(text, { anonymous: anon });
     }, 300);
-  }
-
-  function handleSettings() {
-    router.push('/junior/settings');
   }
 
   return (
@@ -110,17 +110,6 @@ export default function JuniorChatScreen() {
       <Stack.Screen
         options={{
           title: '스퀘어 어시스턴트',
-          headerRight: () => (
-            <Pressable
-              onPress={handleSettings}
-              hitSlop={8}
-              accessibilityRole="button"
-              accessibilityLabel="설정"
-              style={({ pressed }) => [{ paddingHorizontal: 8 }, pressed && { opacity: 0.6 }]}
-            >
-              <Ionicons name="settings-outline" size={22} color={InkColors.ink2} />
-            </Pressable>
-          ),
         }}
       />
 
@@ -147,6 +136,7 @@ export default function JuniorChatScreen() {
               <Text style={styles.emptySub}>
                 매장 노하우를 바로 찾아드려요. 없으면 사장님께 대신 여쭤볼게요.
               </Text>
+              <Text style={styles.suggestLabel}>이런 걸 물어볼 수 있어요</Text>
               <View style={styles.suggestList}>
                 {suggestions.map((text, i) => (
                   <Pressable
@@ -190,6 +180,38 @@ export default function JuniorChatScreen() {
           <View style={{ height: 8 }} />
         </ScrollView>
 
+        {/* 전송 실패 알림 — 조용히 사라지지 않게, 다시 시도 경로 제공 */}
+        {error && (
+          <View style={styles.errorBar}>
+            <Text style={styles.errorText}>{error}</Text>
+            <Pressable onPress={() => void retryLast()} hitSlop={6} style={({ pressed }) => [styles.retryBtn, pressed && { opacity: 0.7 }]}>
+              <Text style={styles.retryText}>다시 시도</Text>
+            </Pressable>
+            <Pressable onPress={dismissError} hitSlop={8} style={({ pressed }) => [pressed && { opacity: 0.6 }]}>
+              <Text style={styles.errorClose}>✕</Text>
+            </Pressable>
+          </View>
+        )}
+
+        {/* 익명 토글 — 묻기 어려운 질문(권리·인간관계·실수)을 부담 없이 */}
+        <View style={styles.anonRow}>
+          <Pressable
+            onPress={() => setAnon((v) => !v)}
+            accessibilityRole="switch"
+            accessibilityState={{ checked: anon }}
+            style={({ pressed }) => [
+              styles.anonChip,
+              anon && styles.anonChipOn,
+              pressed && { opacity: 0.8 },
+            ]}
+          >
+            <Text style={[styles.anonChipText, anon && styles.anonChipTextOn]}>
+              {anon ? '🔒 익명으로 묻는 중' : '🔓 익명으로 묻기'}
+            </Text>
+          </Pressable>
+          {anon && <Text style={styles.anonHint}>사장님께 이름이 안 보여요</Text>}
+        </View>
+
         {/* 입력바 */}
         <View style={styles.inputBar}>
           <View style={styles.inputWrap}>
@@ -200,20 +222,11 @@ export default function JuniorChatScreen() {
               placeholderTextColor={InkColors.ink3}
               style={styles.input}
               editable={!isLoading}
+              maxLength={500}
               returnKeyType="send"
               onSubmitEditing={() => handleSend()}
               blurOnSubmit={false}
             />
-            <View style={styles.micWrap}>
-              <VoiceButton
-                size="sm"
-                mockText="포스기 에러 떴어요 결제가 안 돼요"
-                onResult={(text) => {
-                  setInput(text);
-                  setTimeout(() => handleSend(text), 250);
-                }}
-              />
-            </View>
           </View>
           <Pressable
             onPress={() => handleSend()}
@@ -380,6 +393,7 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     marginBottom: 8,
   },
+  suggestLabel: { fontSize: 12, fontWeight: '800', color: InkColors.ink3, letterSpacing: 0.3, marginBottom: 2 },
   suggestList: { gap: 10 },
   suggest: {
     flexDirection: 'row',
@@ -423,6 +437,52 @@ const styles = StyleSheet.create({
     color: InkColors.ink2,
     fontWeight: '600',
   },
+
+  // 전송 실패 배너
+  errorBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginHorizontal: 12,
+    marginBottom: 4,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    backgroundColor: BrandColors.accentSoft,
+    borderWidth: 1,
+    borderColor: BrandColors.accent,
+  },
+  errorText: { flex: 1, fontSize: 13, color: BrandColors.accent, fontWeight: '600' },
+  retryBtn: { paddingVertical: 4, paddingHorizontal: 10, borderRadius: 999, backgroundColor: BrandColors.accent },
+  retryText: { fontSize: 12, fontWeight: '800', color: '#FFFFFF' },
+  errorClose: { fontSize: 14, fontWeight: '800', color: BrandColors.accent },
+
+  // 익명 토글
+  anonRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 14,
+    paddingTop: 8,
+    backgroundColor: '#FFFFFF',
+  },
+  anonChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: InkColors.line,
+    backgroundColor: '#FFFFFF',
+  },
+  anonChipOn: {
+    backgroundColor: InkColors.ink,
+    borderColor: InkColors.ink,
+  },
+  anonChipText: { fontSize: 12, fontWeight: '700', color: InkColors.ink3 },
+  anonChipTextOn: { color: '#FFFFFF' },
+  anonHint: { fontSize: 12, color: InkColors.ink3, fontWeight: '500' },
 
   // 입력바
   inputBar: {

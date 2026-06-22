@@ -23,6 +23,7 @@ type State = {
 type Action =
   | { type: 'set'; key: keyof State; value: any }
   | { type: 'next' }
+  | { type: 'prev' }
   | { type: 'skip' };
 
 const TOTAL = 3;
@@ -33,6 +34,8 @@ function reducer(state: State, action: Action): State {
       return { ...state, [action.key]: action.value };
     case 'next':
       return { ...state, step: Math.min(TOTAL, state.step + 1) };
+    case 'prev':
+      return { ...state, step: Math.max(1, state.step - 1) };
     case 'skip':
       return { ...state, step: Math.min(TOTAL, state.step + 1) };
     default:
@@ -134,15 +137,14 @@ export function ContextFlow({ uq, onComplete, onStepChange }: FlowProps) {
             <View style={styles.voiceWrap}>
               <VoiceButton
                 size="lg"
-                label="음성으로 답변하기"
-                mockText="카운터 들어가서 우측 끝 서랍, 두 번째 칸이에요. 열쇠는 안 잠궈요."
+                label="직접 입력"
                 onResult={(t) => {
                   dispatch({ type: 'set', key: 'voiceRoute', value: t });
                 }}
               />
               {state.voiceRoute && (
                 <View style={[styles.voiceResult, { borderColor: meta.color }]}>
-                  <Text style={styles.voiceLabel}>인식된 답변</Text>
+                  <Text style={styles.voiceLabel}>입력한 답변</Text>
                   <Text style={styles.voiceText}>“{state.voiceRoute}”</Text>
                 </View>
               )}
@@ -152,6 +154,14 @@ export function ContextFlow({ uq, onComplete, onStepChange }: FlowProps) {
       </ScrollView>
 
       <View style={styles.footer}>
+        {state.step > 1 && (
+          <Pressable
+            onPress={() => dispatch({ type: 'prev' })}
+            style={({ pressed }) => [styles.skipBtn, pressed && { opacity: 0.7 }]}
+          >
+            <Text style={styles.skipText}>← 이전</Text>
+          </Pressable>
+        )}
         <Pressable
           onPress={() => dispatch({ type: 'skip' })}
           style={({ pressed }) => [styles.skipBtn, pressed && { opacity: 0.7 }]}

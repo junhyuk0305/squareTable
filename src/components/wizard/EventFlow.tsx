@@ -24,6 +24,7 @@ type State = {
 type Action =
   | { type: 'set'; key: keyof State; value: any }
   | { type: 'next' }
+  | { type: 'prev' }
   | { type: 'skip' };
 
 const TOTAL = 4;
@@ -34,6 +35,8 @@ function reducer(state: State, action: Action): State {
       return { ...state, [action.key]: action.value };
     case 'next':
       return { ...state, step: Math.min(TOTAL, state.step + 1) };
+    case 'prev':
+      return { ...state, step: Math.max(1, state.step - 1) };
     case 'skip':
       return { ...state, step: Math.min(TOTAL, state.step + 1) };
     default:
@@ -111,20 +114,19 @@ export function EventFlow({ uq, onComplete, onStepChange }: FlowProps) {
 
         {state.step === 4 && (
           <>
-            <Text style={styles.q}>구체적인 상황을 더 말씀해주실래요?</Text>
+            <Text style={styles.q}>구체적인 상황을 더 적어주실래요?</Text>
             <Text style={styles.hint}>(선택) 자주 일어나는 케이스나 디테일이 있다면.</Text>
             <View style={styles.voiceWrap}>
               <VoiceButton
                 size="lg"
-                label="음성으로 답변하기"
-                mockText="손님 인원 많으면 일단 양해 구하고, 결제만 카드 단말기 따로 챙겨두세요. 안전 먼저예요."
+                label="직접 입력"
                 onResult={(t) => {
                   dispatch({ type: 'set', key: 'voiceContext', value: t });
                 }}
               />
               {state.voiceContext && (
                 <View style={[styles.voiceResult, { borderColor: meta.color }]}>
-                  <Text style={styles.voiceLabel}>인식된 답변</Text>
+                  <Text style={styles.voiceLabel}>입력한 답변</Text>
                   <Text style={styles.voiceText}>“{state.voiceContext}”</Text>
                 </View>
               )}
@@ -134,6 +136,14 @@ export function EventFlow({ uq, onComplete, onStepChange }: FlowProps) {
       </ScrollView>
 
       <View style={styles.footer}>
+        {state.step > 1 && (
+          <Pressable
+            onPress={() => dispatch({ type: 'prev' })}
+            style={({ pressed }) => [styles.skipBtn, pressed && { opacity: 0.7 }]}
+          >
+            <Text style={styles.skipText}>← 이전</Text>
+          </Pressable>
+        )}
         <Pressable
           onPress={() => dispatch({ type: 'skip' })}
           style={({ pressed }) => [styles.skipBtn, pressed && { opacity: 0.7 }]}

@@ -36,9 +36,15 @@ export default function JuniorLayout() {
 
   if (HAS_SUPABASE && status === 'loading') return null;
   if (HAS_SUPABASE && status === 'signed_out') return <Redirect href="/" />;
-  // 가입은 됐지만 매장 미연결 → 빈 챗으로 떨어뜨리지 않고 합류(온보딩)로 유도.
-  if (HAS_SUPABASE && status === 'signed_in' && !unitId && pathname !== '/junior/onboarding') {
-    return <Redirect href="/junior/onboarding" />;
+  // 가입은 됐지만 매장 미연결 → 빈 챗으로 떨어뜨리지 않고 가게 연결(join)로 강제 유도.
+  if (
+    HAS_SUPABASE &&
+    status === 'signed_in' &&
+    !unitId &&
+    pathname !== '/junior/join' &&
+    pathname !== '/junior/onboarding'
+  ) {
+    return <Redirect href="/junior/join" />;
   }
   return (
     <Stack
@@ -52,6 +58,8 @@ export default function JuniorLayout() {
       <Stack.Screen name="attendance" options={{ title: '출퇴근' }} />
       <Stack.Screen name="work" options={{ title: '업무' }} />
       <Stack.Screen name="settings" options={{ title: '설정' }} />
+      <Stack.Screen name="timesheet" options={{ title: '내 출퇴근 내역' }} />
+      <Stack.Screen name="join" options={{ title: '가게 연결' }} />
       <Stack.Screen name="onboarding" options={{ headerShown: false }} />
     </Stack>
   );

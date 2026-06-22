@@ -9,6 +9,7 @@ import { useUnknownQueueStore } from './useUnknownQueueStore';
 import { useSessionStore } from './useSessionStore';
 import { HAS_SUPABASE } from '@/lib/supabase';
 import { fetchChatQueries, insertChatQuery, updateChatSatisfaction } from '@/lib/db';
+import { guardWrite } from '@/lib/store/useSyncStore';
 import seedData from '@/data/chat-queries.json';
 import contextPack from '@/data/context-pack.json';
 
@@ -22,9 +23,13 @@ type ChatState = {
   isLoading: boolean;
   loaded: boolean;
   lastSubmittedId: string | null;
+  error: string | null; // 전송 실패 시 사용자에게 보일 메시지
+  lastFailed: { text: string; anonymous: boolean } | null; // '다시 시도'용 마지막 실패 입력
   hydrate: (juniorId: string) => Promise<void>;
-  submit: (text: string) => Promise<void>;
+  submit: (text: string, opts?: { anonymous?: boolean }) => Promise<void>;
   rate: (id: string, vote: 'up' | 'down') => void;
+  dismissError: () => void;
+  retryLast: () => Promise<void>;
   reset: () => void;
   applyMock: (demo: boolean) => void;
 };
@@ -35,15 +40,20 @@ export const useChatStore = create<ChatState>((set, get) => ({
   isLoading: false,
   loaded: !HAS_SUPABASE,
   lastSubmittedId: null,
+  error: null,
+  lastFailed: null,
 
   hydrate: async (juniorId) => {
     if (!HAS_SUPABASE) return;
     set({ history: await fetchChatQueries(juniorId), loaded: true });
   },
 
-  submit: async (text) => {
+  submit: async (text, opts) => {
     if (!text.trim()) return;
-    set({ isLoading: true });
+    set({ isLoading: true, error: null });
+
+    // 익명이면 사장 인박스에 노출될 이름을 '익명'으로 가린다. junior_id는 라우팅용으로만 유지.
+    const anon = !!opts?.anonymous;
 
     try {
     const session = useSessionStore.getState();
@@ -85,7 +95,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
         resolved_at: now,
       };
       set((s) => ({ history: [...s.history, cq], isLoading: false, lastSubmittedId: id }));
-      void insertChatQuery(cq);
+      // 답변은 이미 보여줬으니 화면에선 유지하고, 영속 실패만 배너로 알린다(롤백 없음).
+      void guardWrite(insertChatQuery(cq), () => {}, '대화 기록 저장에 실패했어요. (답변은 그대로 보여요)');
       return;
     }
 
@@ -108,7 +119,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
           resolved_at: now,
         };
         set((s) => ({ history: [...s.history, cq], isLoading: false, lastSubmittedId: id }));
-        void insertChatQuery(cq);
+        // 답변은 이미 보여줬으니 화면에선 유지하고, 영속 실패만 배너로 알린다(롤백 없음).
+      void guardWrite(insertChatQuery(cq), () => {}, '대화 기록 저장에 실패했어요. (답변은 그대로 보여요)');
         return;
       }
       // 생성도 근거 못 찾음 → 사장님 라우팅으로 낙하
@@ -131,12 +143,14 @@ export const useChatStore = create<ChatState>((set, get) => ({
         resolved_at: null,
       };
       set((s) => ({ history: [...s.history, cq], isLoading: false, lastSubmittedId: id }));
-      void insertChatQuery(cq);
+      // 답변은 이미 보여줬으니 화면에선 유지하고, 영속 실패만 배너로 알린다(롤백 없음).
+      void guardWrite(insertChatQuery(cq), () => {}, '대화 기록 저장에 실패했어요. (답변은 그대로 보여요)');
 
       const uq: UnknownQuery = {
         id: `uq_${Date.now()}`,
         junior_id: session.userId,
-        junior_name: session.userName,
+        junior_name: anon ? '익명' : session.userName,
+        anonymous: anon,
         query_text: text,
         asked_at: now,
         presumed_category: presumed,
@@ -154,18 +168,39 @@ export const useChatStore = create<ChatState>((set, get) => ({
       useUnknownQueueStore.getState().enqueue(uq);
     }
     } catch (e) {
+      // 조용히 삼키지 않는다 — 질문이 흔적 없이 사라지는 데드엔드 방지.
+      // 입력을 보관해 '다시 시도'로 복구할 수 있게 한다.
       console.warn('[chat] submit failed:', e);
-      set({ isLoading: false });
+      set({
+        isLoading: false,
+        error: '질문을 보내지 못했어요. 잠시 후 다시 시도해 주세요.',
+        lastFailed: { text, anonymous: anon },
+      });
     }
   },
 
   rate: (id, vote) => {
+    const before = get().history.find((q) => q.id === id)?.satisfaction ?? null;
     set((s) => ({
       history: s.history.map((q) => (q.id === id ? { ...q, satisfaction: vote } : q)),
     }));
-    void updateChatSatisfaction(id, vote);
+    void guardWrite(
+      updateChatSatisfaction(id, vote),
+      () => set((s) => ({ history: s.history.map((q) => (q.id === id ? { ...q, satisfaction: before } : q)) })),
+      '평가 저장에 실패했어요.',
+    );
   },
 
-  reset: () => set({ history: [...seed], isLoading: false, lastSubmittedId: null }),
-  applyMock: (demo) => set({ history: demo ? [...seed] : [], isLoading: false, lastSubmittedId: null, loaded: true }),
+  dismissError: () => set({ error: null }),
+
+  retryLast: async () => {
+    const failed = get().lastFailed;
+    if (!failed) return;
+    set({ lastFailed: null });
+    await get().submit(failed.text, { anonymous: failed.anonymous });
+  },
+
+  reset: () => set({ history: [...seed], isLoading: false, lastSubmittedId: null, error: null, lastFailed: null }),
+  applyMock: (demo) =>
+    set({ history: demo ? [...seed] : [], isLoading: false, lastSubmittedId: null, loaded: true, error: null, lastFailed: null }),
 }));

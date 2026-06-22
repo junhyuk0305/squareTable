@@ -10,16 +10,24 @@ import type {
 } from './types';
 import { AI_ENDPOINT, ANON, USE_MOCK } from './config';
 import { mockGenerateAnswer, mockStructureSquare } from './mock';
+import { supabase } from '@/lib/supabase';
 
 type Task = 'answer' | 'square';
 
 async function callEdge<T>(task: Task, payload: unknown): Promise<T> {
+  // Edge Function 은 "실제 로그인 유저"만 허용(anon 키 호출 거부 → 열린 프록시 방지).
+  // apikey 는 게이트웨이용 anon, Authorization 은 로그인 세션의 access_token.
+  const { data } = await supabase.auth.getSession();
+  const accessToken = data.session?.access_token;
+  if (!accessToken) {
+    throw new Error('AI edge: no auth session');  // → 호출부에서 mock 폴백
+  }
   const res = await fetch(AI_ENDPOINT as string, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       apikey: ANON,
-      Authorization: `Bearer ${ANON}`,
+      Authorization: `Bearer ${accessToken}`,
     },
     body: JSON.stringify({ task, payload }),
   });

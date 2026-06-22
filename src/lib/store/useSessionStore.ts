@@ -26,10 +26,15 @@ type SessionState = {
   createStore: (storeName: string, bizNo?: string) => Promise<{ error: string | null; inviteCode: string | null }>;
   joinByInvite: (code: string) => Promise<{ error: string | null; storeName: string | null }>;
   sendMagicLink: (email: string) => Promise<{ error: string | null }>;
+  // 이메일 인증 메일 발송(회원가입 화면의 '인증' 버튼). 데모는 발송 생략.
+  verifyEmail: (email: string) => Promise<{ status: 'demo' | 'sent' | 'rate' | 'error'; message?: string }>;
   updateProfile: (patch: { name?: string; phone_last4?: string }) => Promise<{ error: string | null }>;
   changePassword: (newPw: string) => Promise<{ error: string | null }>;
   deleteAccount: () => Promise<{ error: string | null }>;
   leaveStore: () => Promise<{ error: string | null }>;
+  // 가게 이름 변경(사장 전용) — 14일 이내 2회 제한. 변경 이력은 기기 로컬에 보관(파일럿).
+  renameStore: (name: string) => Promise<{ error: string | null; remaining: number }>;
+  storeRenameInfo: () => { remaining: number; nextAvailableAt: number | null };
   signOut: () => Promise<void>;
 
   // 개발/단일기기 역할 토글 (Supabase 없을 때의 데모 폴백)
@@ -45,10 +50,34 @@ const DEMO = {
   userId: 'u_staff_001',
   userName: '박지원',
   unitId: 'store_001',
-  storeName: '스퀘어 카페 신촌점',
+  storeName: '착착 카페 신촌점',
   inviteCode: '482913',
   email: '',
 };
+
+// 가게 이름 변경 제한 — 14일 이내 2회. 이력(타임스탬프)은 기기 로컬에 unit별로 보관.
+const RENAME_LIMIT = 2;
+const RENAME_WINDOW_MS = 14 * 24 * 60 * 60 * 1000;
+const renameStorage =
+  typeof window !== 'undefined' && window.localStorage ? window.localStorage : undefined;
+const renameKey = (unitId: string) => `sqt.storeRename.${unitId}`;
+function recentRenameTimes(unitId: string): number[] {
+  try {
+    const raw = renameStorage?.getItem(renameKey(unitId));
+    const arr: unknown = raw ? JSON.parse(raw) : [];
+    const cutoff = Date.now() - RENAME_WINDOW_MS;
+    return (Array.isArray(arr) ? arr : []).filter((n): n is number => typeof n === 'number' && n >= cutoff);
+  } catch {
+    return [];
+  }
+}
+function pushRenameTime(unitId: string) {
+  try {
+    renameStorage?.setItem(renameKey(unitId), JSON.stringify([...recentRenameTimes(unitId), Date.now()]));
+  } catch {
+    /* noop */
+  }
+}
 
 async function loadProfile(set: (p: Partial<SessionState>) => void, userId: string, email: string) {
   const { data: profile } = await supabase
@@ -160,6 +189,17 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     return { error: error?.message ?? null };
   },
 
+  // 회원가입 '인증' 버튼 — 입력한 이메일로 인증(매직링크/OTP) 메일을 보낸다.
+  verifyEmail: async (email) => {
+    if (!HAS_SUPABASE) return { status: 'demo' };
+    const { error } = await supabase.auth.signInWithOtp({ email, options: { shouldCreateUser: true } });
+    if (error) {
+      if (/rate|after|second/i.test(error.message)) return { status: 'rate' };
+      return { status: 'error', message: error.message };
+    }
+    return { status: 'sent' };
+  },
+
   updateProfile: async (patch) => {
     if (!HAS_SUPABASE) {
       if (patch.name) set({ userName: patch.name });
@@ -192,7 +232,13 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     }
     const { error } = await supabase.rpc('delete_my_account');
     if (error) return { error: error.message };
-    await supabase.auth.signOut();
+    // 계정은 이미 서버에서 파기됨 → signOut이 실패(네트워크 등)해도 로컬 세션은 반드시 종료.
+    // (가드 안 하면 예외가 호출부로 튀어 busy가 영구 정지되고, '탈퇴됐는데 로그인 상태'가 됨)
+    try {
+      await supabase.auth.signOut();
+    } catch (e) {
+      console.warn('[session] signOut after delete failed:', e);
+    }
     set({ status: 'signed_out', unitId: '', userId: '', userName: '' });
     return { error: null };
   },
@@ -211,8 +257,43 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     return { error: null };
   },
 
+  storeRenameInfo: () => {
+    const unitId = get().unitId;
+    if (!unitId) return { remaining: RENAME_LIMIT, nextAvailableAt: null };
+    const times = recentRenameTimes(unitId);
+    const remaining = Math.max(0, RENAME_LIMIT - times.length);
+    const nextAvailableAt = remaining > 0 || times.length === 0 ? null : Math.min(...times) + RENAME_WINDOW_MS;
+    return { remaining, nextAvailableAt };
+  },
+
+  renameStore: async (name) => {
+    const trimmed = name.trim();
+    if (get().role !== 'owner') return { error: '사장님만 변경할 수 있어요.', remaining: 0 };
+    if (!trimmed) return { error: '가게 이름을 입력해주세요.', remaining: get().storeRenameInfo().remaining };
+    if (trimmed === get().storeName) return { error: '기존과 같은 이름이에요.', remaining: get().storeRenameInfo().remaining };
+    const info = get().storeRenameInfo();
+    if (info.remaining <= 0) return { error: '가게 이름은 14일 이내 2회까지만 변경할 수 있어요.', remaining: 0 };
+
+    const unitId = get().unitId;
+    if (HAS_SUPABASE) {
+      if (!unitId) return { error: '매장 정보가 없어요.', remaining: info.remaining };
+      const { error } = await supabase.from('units').update({ store_name: trimmed }).eq('id', unitId);
+      if (error) return { error: error.message, remaining: info.remaining };
+    }
+    if (unitId) pushRenameTime(unitId);
+    set({ storeName: trimmed });
+    return { error: null, remaining: get().storeRenameInfo().remaining };
+  },
+
   signOut: async () => {
-    if (HAS_SUPABASE) await supabase.auth.signOut();
+    // signOut 실패가 화면 핸들러로 튀지 않게 가드 — 어떤 경우든 로컬 세션은 종료한다.
+    if (HAS_SUPABASE) {
+      try {
+        await supabase.auth.signOut();
+      } catch (e) {
+        console.warn('[session] signOut failed:', e);
+      }
+    }
     set({ status: 'signed_out', unitId: '', userId: '', userName: '' });
   },
 

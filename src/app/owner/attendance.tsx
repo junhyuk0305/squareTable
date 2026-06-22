@@ -8,6 +8,7 @@ import { useAttendanceStore, type AttendanceRecord } from '@/lib/store/useAttend
 import { usePayrollStore } from '@/lib/store/usePayrollStore';
 import { useStaffStore } from '@/lib/store/useStaffStore';
 import { RoleTabBar } from '@/components/RoleTabBar';
+import { FEATURES } from '@/lib/config/features';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { fmtDuration, won, todayStr, minutesBetween } from '@/lib/utils/attendance';
 
@@ -71,10 +72,13 @@ export default function OwnerAttendanceScreen() {
             <Ionicons name="people-outline" size={18} color={InkColors.ink} />
             <Text style={styles.menuText}>직원 관리</Text>
           </Pressable>
-          <Pressable onPress={() => router.push('/owner/payroll')} style={({ pressed }) => [styles.menuBtn, pressed && { opacity: 0.85 }]}>
-            <Ionicons name="options-outline" size={18} color={InkColors.ink} />
-            <Text style={styles.menuText}>급여 설정</Text>
-          </Pressable>
+          {/* 급여 설정 — 파일럿에서는 숨김(FEATURES.payrollSettings). 결제 도입 시 복구. */}
+          {FEATURES.payrollSettings && (
+            <Pressable onPress={() => router.push('/owner/payroll')} style={({ pressed }) => [styles.menuBtn, pressed && { opacity: 0.85 }]}>
+              <Ionicons name="options-outline" size={18} color={InkColors.ink} />
+              <Text style={styles.menuText}>급여 설정</Text>
+            </Pressable>
+          )}
         </View>
 
         {/* 직원별 */}

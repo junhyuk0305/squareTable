@@ -23,6 +23,7 @@ type State = {
 type Action =
   | { type: 'set'; key: keyof State; value: any }
   | { type: 'next' }
+  | { type: 'prev' }
   | { type: 'skip' };
 
 const TOTAL = 3;
@@ -33,6 +34,8 @@ function reducer(state: State, action: Action): State {
       return { ...state, [action.key]: action.value };
     case 'next':
       return { ...state, step: Math.min(TOTAL, state.step + 1) };
+    case 'prev':
+      return { ...state, step: Math.max(1, state.step - 1) };
     case 'skip':
       return { ...state, step: Math.min(TOTAL, state.step + 1) };
     default:
@@ -90,15 +93,14 @@ export function KnowhowFlow({ uq, onComplete, onStepChange }: FlowProps) {
             <View style={styles.voiceWrap}>
               <VoiceButton
                 size="lg"
-                label="음성으로 답변하기"
-                mockText="재료를 제대로 손질하면 맛이 균일하게 살아나요. 대충 하면 바로 티가 나요."
+                label="직접 입력"
                 onResult={(t) => {
                   dispatch({ type: 'set', key: 'voiceDifference', value: t });
                 }}
               />
               {state.voiceDifference && (
                 <View style={[styles.voiceResult, { borderColor: meta.color }]}>
-                  <Text style={styles.voiceLabel}>인식된 답변</Text>
+                  <Text style={styles.voiceLabel}>입력한 답변</Text>
                   <Text style={styles.voiceText}>“{state.voiceDifference}”</Text>
                 </View>
               )}
@@ -109,12 +111,11 @@ export function KnowhowFlow({ uq, onComplete, onStepChange }: FlowProps) {
         {state.step === 3 && (
           <>
             <Text style={styles.q}>한 줄 격언으로 정리해주세요</Text>
-            <Text style={styles.hint}>느낌 그대로 말씀하세요. 짧을수록 좋아요.</Text>
+            <Text style={styles.hint}>느낌 그대로 적어주세요. 짧을수록 좋아요.</Text>
             <View style={styles.voiceWrap}>
               <VoiceButton
                 size="lg"
-                label="한 줄 격언 녹음"
-                mockText="급할수록 기본 순서대로. 손이 기억하게 한다."
+                label="한 줄 격언 입력"
                 onResult={(t) => {
                   dispatch({ type: 'set', key: 'voiceMaxim', value: t });
                 }}
@@ -131,6 +132,14 @@ export function KnowhowFlow({ uq, onComplete, onStepChange }: FlowProps) {
       </ScrollView>
 
       <View style={styles.footer}>
+        {state.step > 1 && (
+          <Pressable
+            onPress={() => dispatch({ type: 'prev' })}
+            style={({ pressed }) => [styles.skipBtn, pressed && { opacity: 0.7 }]}
+          >
+            <Text style={styles.skipText}>← 이전</Text>
+          </Pressable>
+        )}
         <Pressable
           onPress={() => dispatch({ type: 'skip' })}
           style={({ pressed }) => [styles.skipBtn, pressed && { opacity: 0.7 }]}
