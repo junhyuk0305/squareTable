@@ -6,6 +6,7 @@ import { useRouter, Stack } from 'expo-router';
 import { CategoryChip } from '@/components/CategoryChip';
 import { InboxHeroCard } from '@/components/InboxHeroCard';
 import { InboxRowItem } from '@/components/InboxRowItem';
+import { RoleTabBar } from '@/components/RoleTabBar';
 
 import { useUnknownQueueStore } from '@/lib/store/useUnknownQueueStore';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
@@ -158,6 +159,7 @@ export default function OwnerInboxScreen() {
       </ScrollView>
       )}
 
+      <RoleTabBar role="owner" />
     </SafeAreaView>
   );
 }

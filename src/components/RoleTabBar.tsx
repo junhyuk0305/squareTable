@@ -10,21 +10,26 @@ type Tab = { label: string; path: Href; icon: IconName; iconActive: IconName };
 
 /**
  * 각 탭 의미에 맞춘 아이콘. 선택된 탭은 채워진(filled) 아이콘, 나머지는 outline.
- *  - 챗봇=대화, 출퇴근=시계, 업무=체크리스트, 홈=집, 노하우=전구, 근무·급여=지갑, 설정=톱니
+ *  - 홈=집, 노하우=전구, 받은질문=수신함, 업무=서류가방, 출퇴근=시계, 설정=톱니
  *
- * 두 역할 모두 항상 4개 탭으로 통일하고, 맨 오른쪽은 '설정'(내 정보 관리)으로 고정한다.
+ * 역할별 비대칭 5탭: 공통 spine(홈·노하우·업무·설정) + 역할 본업 1탭.
+ *  - 시니어: 가운데 '받은질문'(음성 1터치 답변 = 지식 자산화 플라이휠)
+ *  - 주니어: 4번째 '출퇴근'(현장 실행). 질문하기는 노하우 탭 안 세그먼트로.
+ * 맨 오른쪽은 두 역할 모두 '설정'(내 정보 관리)으로 고정한다.
  */
 const TABS: Record<'junior' | 'owner', Tab[]> = {
   junior: [
     { label: '홈', path: '/junior/home', icon: 'home-outline', iconActive: 'home' },
     { label: '노하우', path: '/junior/chat', icon: 'bulb-outline', iconActive: 'bulb' },
-    { label: '업무', path: '/junior/work', icon: 'checkbox-outline', iconActive: 'checkbox' },
+    { label: '업무', path: '/junior/work', icon: 'briefcase-outline', iconActive: 'briefcase' },
+    { label: '출퇴근', path: '/junior/attendance', icon: 'time-outline', iconActive: 'time' },
     { label: '설정', path: '/junior/settings', icon: 'settings-outline', iconActive: 'settings' },
   ],
   owner: [
     { label: '홈', path: '/owner/dashboard', icon: 'home-outline', iconActive: 'home' },
     { label: '노하우', path: '/owner/categories', icon: 'bulb-outline', iconActive: 'bulb' },
-    { label: '업무', path: '/owner/work', icon: 'chatbubbles-outline', iconActive: 'chatbubbles' },
+    { label: '받은질문', path: '/owner/inbox', icon: 'file-tray-outline', iconActive: 'file-tray' },
+    { label: '업무', path: '/owner/work', icon: 'briefcase-outline', iconActive: 'briefcase' },
     { label: '설정', path: '/owner/settings', icon: 'settings-outline', iconActive: 'settings' },
   ],
 };
@@ -81,7 +86,7 @@ function TabButton({ tab, active, onPress }: { tab: Tab; active: boolean; onPres
       <Animated.View style={{ transform: [{ scale: Animated.multiply(press, iconScale) }] }}>
         <Ionicons name={active ? tab.iconActive : tab.icon} size={23} color={color} />
       </Animated.View>
-      <Text style={[styles.label, { color, fontWeight: active ? '800' : '600' }]}>{tab.label}</Text>
+      <Text numberOfLines={1} style={[styles.label, { color, fontWeight: active ? '800' : '600' }]}>{tab.label}</Text>
     </Pressable>
   );
 }

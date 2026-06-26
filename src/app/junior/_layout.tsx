@@ -60,7 +60,7 @@ export default function JuniorLayout() {
       <Stack.Screen name="attendance" options={{ title: '출퇴근' }} />
       <Stack.Screen name="work" options={{ title: '업무' }} />
       <Stack.Screen name="settings" options={{ title: '설정' }} />
-      <Stack.Screen name="timesheet" options={{ title: '내 출퇴근 내역', headerLeft: () => <HeaderBackButton fallback="/junior/work" /> }} />
+      <Stack.Screen name="timesheet" options={{ title: '내 출퇴근 내역', headerLeft: () => <HeaderBackButton fallback="/junior/attendance" /> }} />
       <Stack.Screen name="join" options={{ title: '가게 연결' }} />
       <Stack.Screen name="onboarding" options={{ headerShown: false }} />
     </Stack>

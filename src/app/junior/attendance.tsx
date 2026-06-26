@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { View, Text, Pressable, StyleSheet, ScrollView } from 'react-native';
-import { Redirect, useRouter } from 'expo-router';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
+import { RoleTabBar } from '@/components/RoleTabBar';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useAttendanceStore, type AttendanceRecord } from '@/lib/store/useAttendanceStore';
 import { usePayrollStore } from '@/lib/store/usePayrollStore';
@@ -136,12 +138,18 @@ export function AttendancePanel() {
   );
 }
 
-/** 구(舊) 라우트 — 출퇴근은 이제 '업무' 탭 안으로 통합. 직접 진입 시 그쪽으로 보낸다. */
+/** 출퇴근 탭 — IA 개편으로 '업무' 탭에서 분리된 독립 탭. 콘텐츠(AttendancePanel) + 탭바 크롬을 입힌다. */
 export default function JuniorAttendanceRoute() {
-  return <Redirect href="/junior/work" />;
+  return (
+    <SafeAreaView edges={['bottom']} style={styles.routeSafe}>
+      <AttendancePanel />
+      <RoleTabBar role="junior" />
+    </SafeAreaView>
+  );
 }
 
 const styles = StyleSheet.create({
+  routeSafe: { flex: 1, backgroundColor: InkColors.cream },
   scroll: { padding: 20, gap: 16 },
   hello: { fontSize: 15, color: InkColors.ink2, fontWeight: '600' },
 

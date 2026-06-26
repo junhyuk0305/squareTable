@@ -47,13 +47,13 @@ export default function OwnerLayout() {
         headerLeft: () => <HeaderBackButton />,
       }}
     >
-      {/* 탭 루트 4개는 뒤로가기 없이 기본(탭바로 이동) */}
+      {/* 탭 루트 5개는 뒤로가기 없이 기본(탭바로 이동) — 받은질문이 탭으로 승격됨 */}
       <Stack.Screen name="dashboard" options={{ title: '홈', headerLeft: undefined }} />
       <Stack.Screen name="categories" options={{ title: '노하우 추가', headerLeft: undefined }} />
+      <Stack.Screen name="inbox" options={{ title: '받은 질문', headerLeft: undefined }} />
       <Stack.Screen name="work" options={{ title: '업무', headerLeft: undefined }} />
       <Stack.Screen name="settings" options={{ title: '설정', headerLeft: undefined }} />
       {/* 서브화면 — 전역 headerLeft(HeaderBackButton) 사용 */}
-      <Stack.Screen name="inbox" options={{ title: '받은 질문' }} />
       <Stack.Screen name="staff" options={{ title: '직원 관리' }} />
       <Stack.Screen name="attendance" options={{ title: '근무·급여' }} />
       <Stack.Screen name="timesheet/[staffId]" options={{ title: '출근 기록' }} />
