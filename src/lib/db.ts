@@ -137,6 +137,12 @@ export async function bumpUnknownSimilar(id: string, count: number): Promise<boo
   return write('bumpUnknownSimilar', supabase.from('unknown_queries').update({ similar_queries_count: count }).eq('id', id));
 }
 
+// 받은질문 상태 전이(보관/자동응답/대기로 되돌리기). status 컬럼만 갱신.
+export async function updateUnknownStatus(id: string, status: UnknownQuery['status']): Promise<boolean> {
+  if (!HAS_SUPABASE) return true;
+  return write('updateUnknownStatus', supabase.from('unknown_queries').update({ status }).eq('id', id));
+}
+
 export async function resolveUnknown(id: string, newEntryId: string): Promise<boolean> {
   if (!HAS_SUPABASE) return true;
   return write(

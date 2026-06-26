@@ -36,6 +36,8 @@ export type FeedItem = {
   reactions?: Record<string, string[]>; // 이모지 → 누른 사람 id[] (확인/👍/🔥 등)
   important?: boolean; // notice 긴급
   pinned?: boolean; // notice 상단 고정(카톡식)
+  read_by?: string[]; // notice 읽음추적 — 읽은 사람 userId[]
+  photoUrl?: string; // task_done 사진인증 — 완료 증빙 사진 URL
 };
 
 // 피드에서 토글 가능한 이모지 셋 (확인 = ✅)
@@ -119,11 +121,12 @@ type State = {
   subscribe: () => () => void;
   addTemplate: (section: TaskSection, text: string, dueDate?: string) => void;
   removeTemplate: (id: string) => void;
-  toggleTask: (date: string, templateId: string, staffId: string, staffName: string, role: 'owner' | 'junior') => void;
+  toggleTask: (date: string, templateId: string, staffId: string, staffName: string, role: 'owner' | 'junior', photoUrl?: string) => void;
   postNotice: (date: string, text: string, authorId: string, authorName: string, important: boolean) => void;
   postMessage: (date: string, text: string, authorId: string, authorName: string, role: 'owner' | 'junior') => void;
   toggleReaction: (feedId: string, userId: string, emoji: string) => void;
   togglePin: (feedId: string) => void;
+  markNoticeRead: (feedId: string, userId: string) => void;
   applyMock: (demo: boolean) => void;
 };
 
@@ -168,7 +171,7 @@ export const useWorkStore = create<State>((set, get) => ({
     );
   },
 
-  toggleTask: (date, templateId, staffId, staffName, role) => {
+  toggleTask: (date, templateId, staffId, staffName, role, photoUrl) => {
     const s = get();
     // 실패 시 done·feed를 통째로 되돌리기 위한 스냅샷(체크 토글은 단일 사용자 동작이라 안전).
     const prevDone = s.done;
@@ -202,6 +205,7 @@ export const useWorkStore = create<State>((set, get) => ({
       authorRole: role,
       createdAt: now,
       refId: templateId,
+      ...(photoUrl ? { photoUrl } : null),
     };
     set({ done: { ...s.done, [date]: dayMap }, feed: [...s.feed, doneItem] });
     const ok = Promise.all([setDone(date, templateId, mark), upsertFeed(doneItem)]).then(([a, b]) => a && b);
@@ -286,6 +290,26 @@ export const useWorkStore = create<State>((set, get) => ({
         upsertFeed(updated),
         () => before && set((s) => ({ feed: s.feed.map((f) => (f.id === feedId ? before : f)) })),
         '고정 저장에 실패했어요.',
+      );
+  },
+
+  // 공지 읽음추적 — 읽은 사람을 read_by에 누적(중복·재저장 방지).
+  markNoticeRead: (feedId, userId) => {
+    const before = get().feed.find((f) => f.id === feedId);
+    if (!before || (before.read_by ?? []).includes(userId)) return;
+    let updated: FeedItem | undefined;
+    set((s) => ({
+      feed: s.feed.map((f) => {
+        if (f.id !== feedId) return f;
+        updated = { ...f, read_by: [...(f.read_by ?? []), userId] };
+        return updated;
+      }),
+    }));
+    if (updated)
+      void guardWrite(
+        upsertFeed(updated),
+        () => before && set((s) => ({ feed: s.feed.map((f) => (f.id === feedId ? before : f)) })),
+        '읽음 표시 저장에 실패했어요.',
       );
   },
 

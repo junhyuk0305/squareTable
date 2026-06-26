@@ -114,6 +114,19 @@ export type PlaybookEntry = {
   quality_score: number;
   created_at: string;
   updated_at: string;
+  // 노하우 카드 메타(노하우 세그먼트 카드 노출용) — 선택 필드
+  verification?: {
+    // 사장 검증/현장 검증 배지. 없으면 미검증으로 표시.
+    state: 'owner_verified' | 'field_tested' | 'unverified';
+    verified_by?: string;
+    verified_at?: string;
+  };
+  source?: {
+    // 출처: 사장님 직접 입력 / 받은질문 답변 / 매뉴얼 등
+    kind: 'owner' | 'inbox_answer' | 'manual' | 'import';
+    label?: string;
+    ref_id?: string;
+  };
 };
 
 // ── ChatQuery (주니어 측) ──────────────────────────────
@@ -157,7 +170,7 @@ export type UnknownQuery = {
   match_attempted: boolean;
   best_match_confidence: number;
   best_match_entry_id: string | null;
-  status: 'pending_owner_answer' | 'resolved_with_entry' | 'dismissed';
+  status: 'pending_owner_answer' | 'resolved_with_entry' | 'dismissed' | 'auto_answered' | 'archived';
   fallback_action: string;
   owner_notified_at: string;
   owner_will_answer: boolean;
