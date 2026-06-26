@@ -21,7 +21,7 @@ export type TaskSection = 'open' | 'mid' | 'close' | 'etc';
  * dueDate('YYYY-MM-DD') 있음 → 그 날짜에만 뜨는 일회성 '예정 할일'(미래에 미리 적기).
  */
 export type TaskTemplate = { id: string; section: TaskSection; text: string; dueDate?: string };
-export type DoneMark = { by: string; byName: string; at: string };
+export type DoneMark = { by: string; byName: string; at: string; photoUrl?: string };
 export type FeedKind = 'notice' | 'message' | 'task_done';
 export type FeedItem = {
   id: string;
@@ -193,7 +193,7 @@ export const useWorkStore = create<State>((set, get) => ({
       return;
     }
     const now = new Date().toISOString();
-    const mark: DoneMark = { by: staffId, byName: staffName, at: now };
+    const mark: DoneMark = { by: staffId, byName: staffName, at: now, ...(photoUrl ? { photoUrl } : null) };
     dayMap[templateId] = mark;
     const doneItem: FeedItem = {
       id: uid('f'),
