@@ -46,7 +46,7 @@ const styles = StyleSheet.create({
   col: { alignItems: 'center' },
   wrap: {
     position: 'relative',
-    alignSelf: 'flex-start',
+    alignSelf: 'center', // col(alignItems:center)과 동일 정렬 — CHACHAK과 좌우 대칭 맞춤
     isolation: 'isolate', // 음수 z-index 밑줄이 부모 배경 뒤로 숨지 않게 격리(웹)
   },
   underline: {

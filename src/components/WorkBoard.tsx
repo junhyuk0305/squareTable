@@ -290,7 +290,7 @@ export function WorkBoard({ role, embedded = false }: { role: 'owner' | 'junior'
                                 style={({ pressed }) => [styles.taskMain, pressed && isToday && { opacity: 0.7 }]}
                               >
                                 <View style={[styles.box, on && styles.boxOn, !isToday && !on && styles.boxMuted]}>
-                                  {on && <Ionicons name="checkmark" size={15} color="#FFFFFF" />}
+                                  {on && <Ionicons name="checkmark" size={15} color={InkColors.ink} />}
                                 </View>
                                 <View style={{ flex: 1 }}>
                                   <Text style={[styles.taskText, on && styles.taskTextOn]}>{t.text}</Text>
@@ -838,7 +838,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: '#FFFFFF',
   },
-  boxOn: { backgroundColor: InkColors.ink, borderColor: InkColors.ink },
+  boxOn: { backgroundColor: BrandColors.yellow, borderColor: BrandColors.yellowDeep },
   taskText: { fontSize: 15, color: InkColors.ink, fontWeight: '500' },
   taskTextOn: { color: InkColors.ink3, textDecorationLine: 'line-through' },
   taskBy: { fontSize: 11, color: InkColors.ink3, marginTop: 2 },

@@ -1,8 +1,9 @@
-import { View, Text, Pressable, StyleSheet, ScrollView, TextInput } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack } from 'expo-router';
 import { usePayrollStore, type PayrollSettings } from '@/lib/store/usePayrollStore';
 import { RoleTabBar } from '@/components/RoleTabBar';
+import { ChachakSwitch } from '@/components/ChachakSwitch';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 
 export default function OwnerPayrollScreen() {
@@ -70,9 +71,7 @@ function ToggleRow({
         <Text style={styles.rowLabel}>{label}</Text>
         <Text style={styles.rowHint}>{hint}</Text>
       </View>
-      <Pressable onPress={() => onToggle(!value)} style={[styles.toggle, value && styles.toggleOn]}>
-        <View style={[styles.knob, value && styles.knobOn]} />
-      </Pressable>
+      <ChachakSwitch value={value} onValueChange={onToggle} accessibilityLabel={label} />
     </View>
   );
 }

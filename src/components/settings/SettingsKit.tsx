@@ -1,8 +1,9 @@
 // 설정 화면 공용 UI 키트 — 섹션 / 이동 행 / 토글 행 / 위험(파괴적) 행.
 // 오너·주니어 설정 화면이 같은 룩앤필을 공유하도록 한 곳에 모은다.
-import { View, Text, Pressable, StyleSheet, Switch } from 'react-native';
+import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
+import { ChachakSwitch } from '@/components/ChachakSwitch';
 
 type IconName = keyof typeof Ionicons.glyphMap;
 
@@ -69,13 +70,7 @@ export function SettingsToggle({
         <Text style={styles.rowLabel}>{label}</Text>
         {hint ? <Text style={styles.rowHint}>{hint}</Text> : null}
       </View>
-      <Switch
-        value={value}
-        onValueChange={onValueChange}
-        trackColor={{ false: InkColors.line, true: BrandColors.brand }}
-        thumbColor="#FFFFFF"
-        accessibilityLabel={label}
-      />
+      <ChachakSwitch value={value} onValueChange={onValueChange} accessibilityLabel={label} />
     </View>
   );
 }
