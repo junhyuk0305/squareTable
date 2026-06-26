@@ -1,84 +1,97 @@
-import { useMemo, useState } from 'react';
-import { View, Text, Pressable, ScrollView, StyleSheet, ActivityIndicator } from 'react-native';
+import { useCallback, useMemo, useState } from 'react';
+import { View, Text, ScrollView, StyleSheet, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, Stack } from 'expo-router';
 
 import { CategoryChip } from '@/components/CategoryChip';
 import { InboxHeroCard } from '@/components/InboxHeroCard';
-import { InboxRowItem } from '@/components/InboxRowItem';
+import { InboxSubtabs } from '@/components/InboxSubtabs';
+import { SimilarGroupRow } from '@/components/SimilarGroupRow';
+import { VoiceAnswerSheet } from '@/components/VoiceAnswerSheet';
 import { RoleTabBar } from '@/components/RoleTabBar';
 
 import { useUnknownQueueStore } from '@/lib/store/useUnknownQueueStore';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 
-import { ALL_CATEGORIES, getCategoryMeta } from '@/lib/utils/category';
+import { buildPlaybookEntry } from '@/lib/utils/buildEntry';
 import { BrandColors, InkColors } from '@/lib/theme/colors';
 
 import { useStaffStore } from '@/lib/store/useStaffStore';
-import type { Category, PlaybookEntry, UnknownQuery } from '@/types';
+import type { PlaybookEntry, UnknownQuery } from '@/types';
 
-const MAX_LIST_ROWS = 6;
 const TOP_RESOLVED = 5;
 
 /**
- * Owner Inbox — C안 응답형 + 카테고리 다양성.
- * 1) 헤더 메타(매장·이번 주 처리 수)
- * 2) 카테고리 chip strip (전체 + 4종)
- * 3) Hero 우선 답변 1건 (가장 낮은 confidence)
- * 4) 나머지 pending 리스트 (최대 6, 카테고리 필터 적용)
- * 5) 처리됨 · 알바 인용 top 5 (resolution_rate desc → 최근 갱신 순)
+ * Owner Inbox — 받은질문 시니어(사장님) 인박스.
+ * 1) 상단 보조 메타(지금까지 처리 수)
+ * 2) Hero 우선 답변 1건 (가장 시급 = confidence 최저)
+ * 3) <InboxSubtabs> [대기 | 자동응답 | 보관] — 상태별 파생 필터·카운트는 컴포넌트가 처리.
+ *    각 행은 <SimilarGroupRow> (유사 질문 N건 묶음 + 보관/자동응답 인라인 액션).
+ *    행 탭 → 음성 1터치 답변(VoiceAnswerSheet). 등록 시 노하우 생성 + resolve.
+ * 4) 처리됨 · 알바 인용 top 5
  */
 export default function OwnerInboxScreen() {
   const router = useRouter();
   const queue = useUnknownQueueStore((s) => s.queue);
   const loaded = useUnknownQueueStore((s) => s.loaded);
+  const archive = useUnknownQueueStore((s) => s.archive);
+  const enableAutoAnswer = useUnknownQueueStore((s) => s.enableAutoAnswer);
+  const resolve = useUnknownQueueStore((s) => s.resolve);
+
   const entries = usePlaybookStore((s) => s.entries);
+  const addEntry = usePlaybookStore((s) => s.add);
   const userName = useSessionStore((s) => s.userName);
   const getStaff = useStaffStore((s) => s.getStaff);
 
-  // 'all' = 필터 해제. 그 외엔 해당 Category만.
-  const [filter, setFilter] = useState<Category | 'all'>('all');
+  // 음성 빠른 답변 시트 — 행 탭으로 열림.
+  const [voiceTarget, setVoiceTarget] = useState<UnknownQuery | null>(null);
 
   // pending 정렬: 시급한 순(confidence asc) → 최근 순(asked_at desc)
-  const pending = useMemo(() => sortByUrgency(queue.filter((u) => u.status === 'pending_owner_answer')), [queue]);
+  const pending = useMemo(
+    () => sortByUrgency(queue.filter((u) => u.status === 'pending_owner_answer')),
+    [queue],
+  );
   const resolved = useMemo(() => queue.filter((u) => u.status === 'resolved_with_entry'), [queue]);
-
-  // 카테고리별 pending 카운트 (chip 위 배지)
-  const pendingCounts = useMemo(() => {
-    const c: Record<Category, number> = { Routine: 0, Event: 0, Context: 0, 'Know-how': 0 };
-    for (const u of pending) c[u.presumed_category] += 1;
-    return c;
-  }, [pending]);
 
   // 이번 주 처리 카운트
   const weeklyResolved = resolved.length;
 
-  // hero: 카테고리 필터 무관, 전체 pending 중 가장 시급.
+  // hero: 전체 pending 중 가장 시급. 깊은 답변 → 기존 answer 위저드.
   const hero = pending[0];
-  // 리스트: filter 적용. hero 제외하고 최대 6.
-  const restAll = pending.slice(1);
-  const restFiltered = filter === 'all' ? restAll : restAll.filter((u) => u.presumed_category === filter);
-  const restRows = restFiltered.slice(0, MAX_LIST_ROWS);
 
   // 처리됨 - 인용 top 5
   const topCited = useMemo(() => topCitedEntries(entries, TOP_RESOLVED), [entries]);
 
-  // 박지원 career_days lookup (hero 메타에 노출). 익명 질문이면 신원 단서를 숨긴다.
+  // hero 작성자 경력(익명이면 숨김).
   const careerDays = useMemo(() => {
     if (!hero || hero.anonymous) return undefined;
     return getStaff(hero.junior_id)?.career_days;
   }, [hero, getStaff]);
 
-  const goAnswer = (uqId: string) => router.push({ pathname: '/owner/answer/[uqId]', params: { uqId } });
+  const goAnswer = (uqId: string) =>
+    router.push({ pathname: '/owner/answer/[uqId]', params: { uqId } });
+
+  // 행 탭 → 음성 빠른 답변 시트.
+  const openVoice = useCallback((uq: UnknownQuery) => setVoiceTarget(uq), []);
+  const closeVoice = useCallback(() => setVoiceTarget(null), []);
+
+  // 음성 답변 등록 → 답변 텍스트를 노하우로 발행하고 질문을 해결 처리.
+  // 빠른 경로라 위저드를 거치지 않고, 발화 한 줄을 '할 행동' step으로 정규화한다(기존 buildPlaybookEntry 재사용).
+  const submitVoice = useCallback(
+    (answerText: string) => {
+      const uq = voiceTarget;
+      if (!uq) return;
+      const entry = buildPlaybookEntry(uq, { actions: [answerText.trim()] });
+      addEntry(entry);
+      resolve(uq.id, entry.id);
+    },
+    [voiceTarget, addEntry, resolve],
+  );
 
   return (
     <SafeAreaView edges={['bottom']} style={styles.safe}>
-      <Stack.Screen
-        options={{
-          title: `${userName} 사장님`,
-        }}
-      />
+      <Stack.Screen options={{ title: `${userName} 사장님` }} />
 
       {!loaded ? (
         <View style={styles.loadingWrap}>
@@ -86,78 +99,68 @@ export default function OwnerInboxScreen() {
           <Text style={styles.loadingText}>질문을 불러오는 중...</Text>
         </View>
       ) : (
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        {/* 1) 상단 보조 메타 */}
-        <Text style={styles.subline}>지금까지 {weeklyResolved}건 처리됨</Text>
+        <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+          {/* 1) 상단 보조 메타 */}
+          <Text style={styles.subline}>지금까지 {weeklyResolved}건 처리됨</Text>
 
-        {/* 2) 카테고리 chip strip */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.chipStrip}
-        >
-          <AllChip selected={filter === 'all'} count={pending.length} onPress={() => setFilter('all')} />
-          {ALL_CATEGORIES.map((cat) => (
-            <CategoryChip
-              key={cat}
-              category={cat}
-              size="md"
-              count={pendingCounts[cat]}
-              selected={filter === cat}
-              onPress={() => setFilter(filter === cat ? 'all' : cat)}
+          {/* 2) Hero — 우선 답변 (가장 시급한 미답변) */}
+          {hero ? (
+            <View style={styles.heroWrap}>
+              <Text style={styles.sectionTag}>우선 답변</Text>
+              <InboxHeroCard uq={hero} careerDays={careerDays} onPress={() => goAnswer(hero.id)} />
+            </View>
+          ) : (
+            <View style={styles.emptyHero}>
+              <Text style={styles.emptyTitle}>아직 새 질문이 없어요</Text>
+              <Text style={styles.emptySub}>알바가 모르는 걸 물으면 여기로 와요.</Text>
+            </View>
+          )}
+
+          {/* 3) 서브탭 [대기 | 자동응답 | 보관] — 상태별 필터·카운트는 InboxSubtabs가 처리 */}
+          <View style={styles.subtabsWrap}>
+            <InboxSubtabs
+              queue={queue}
+              initial="pending"
+              renderRow={(uq) => (
+                <SimilarGroupRow
+                  uq={uq}
+                  onPress={openVoice}
+                  onArchive={uq.status === 'archived' ? undefined : (u) => archive(u.id)}
+                  onAutoAnswer={
+                    uq.status === 'pending_owner_answer' ? (u) => enableAutoAnswer(u.id) : undefined
+                  }
+                />
+              )}
             />
-          ))}
-        </ScrollView>
-
-        {/* 3) Hero — 우선 답변 */}
-        {hero ? (
-          <View style={styles.heroWrap}>
-            <Text style={styles.sectionTag}>우선 답변</Text>
-            <InboxHeroCard uq={hero} careerDays={careerDays} onPress={() => goAnswer(hero.id)} />
           </View>
-        ) : (
-          <View style={styles.emptyHero}>
-            <Text style={styles.emptyTitle}>아직 새 질문이 없어요</Text>
-            <Text style={styles.emptySub}>알바가 모르는 걸 물으면 여기로 와요.</Text>
-          </View>
-        )}
 
-        {/* 4) 나머지 pending 리스트 */}
-        {restRows.length > 0 && (
-          <View style={styles.listWrap}>
-            <Text style={styles.sectionTitle}>
-              나머지 {filter === 'all' ? '질문' : `${getCategoryMeta(filter).label} 질문`}
-            </Text>
-            <View style={styles.list}>
-              {restRows.map((uq) => (
-                <InboxRowItem key={uq.id} uq={uq} onPress={() => goAnswer(uq.id)} />
+          {/* 4) 구분선 */}
+          <View style={styles.divider} />
+
+          {/* 5) 처리됨 · 인용 카운트 */}
+          <View style={styles.resolvedWrap}>
+            <Text style={styles.resolvedHeader}>처리됨 · 알바가 잘 쓰고 있어요</Text>
+            <Text style={styles.resolvedSub}>당신의 노하우가 매장을 굴리는 중</Text>
+
+            <View style={styles.resolvedList}>
+              {topCited.map((e) => (
+                <ResolvedRow key={e.id} entry={e} />
               ))}
             </View>
-            {restFiltered.length > MAX_LIST_ROWS && (
-              <Text style={styles.moreHint}>+ {restFiltered.length - MAX_LIST_ROWS}건 더 있음</Text>
-            )}
           </View>
-        )}
 
-        {/* 5) 구분선 */}
-        <View style={styles.divider} />
-
-        {/* 6) 처리됨 · 인용 카운트 */}
-        <View style={styles.resolvedWrap}>
-          <Text style={styles.resolvedHeader}>처리됨 · 알바가 잘 쓰고 있어요</Text>
-          <Text style={styles.resolvedSub}>당신의 노하우가 매장을 굴리는 중</Text>
-
-          <View style={styles.resolvedList}>
-            {topCited.map((e) => (
-              <ResolvedRow key={e.id} entry={e} />
-            ))}
-          </View>
-        </View>
-
-        {/* 푸터 여백 */}
-        <View style={{ height: 16 }} />
-      </ScrollView>
+          {/* 푸터 여백 */}
+          <View style={{ height: 16 }} />
+        </ScrollView>
       )}
+
+      {/* 음성 1터치 답변 시트 (프레임캡은 시트 내부에서 처리) */}
+      <VoiceAnswerSheet
+        visible={voiceTarget !== null}
+        uq={voiceTarget}
+        onClose={closeVoice}
+        onSubmit={submitVoice}
+      />
 
       <RoleTabBar role="owner" />
     </SafeAreaView>
@@ -165,27 +168,6 @@ export default function OwnerInboxScreen() {
 }
 
 // ─── 보조 컴포넌트 ─────────────────────────────────────────
-
-function AllChip({ selected, count, onPress }: { selected: boolean; count: number; onPress: () => void }) {
-  return (
-    <Pressable onPress={onPress} accessibilityRole="button" style={({ pressed }) => [pressed && { opacity: 0.7 }]}>
-      <View
-        style={[
-          allChipStyles.chip,
-          {
-            backgroundColor: selected ? InkColors.ink : '#FFFFFF',
-            borderColor: selected ? InkColors.ink : InkColors.line,
-          },
-        ]}
-      >
-        <Text style={[allChipStyles.label, { color: selected ? '#FFFFFF' : InkColors.ink }]}>전체</Text>
-        <View style={[allChipStyles.count, { backgroundColor: selected ? 'rgba(255,255,255,0.25)' : InkColors.ink }]}>
-          <Text style={allChipStyles.countText}>{count}</Text>
-        </View>
-      </View>
-    </Pressable>
-  );
-}
 
 function ResolvedRow({ entry }: { entry: PlaybookEntry }) {
   return (
@@ -243,12 +225,6 @@ const styles = StyleSheet.create({
     color: InkColors.ink3,
     fontWeight: '600',
   },
-  chipStrip: {
-    flexDirection: 'row',
-    gap: 8,
-    paddingVertical: 4,
-    paddingRight: 8,
-  },
   heroWrap: { gap: 8 },
   sectionTag: {
     fontSize: 12,
@@ -267,25 +243,8 @@ const styles = StyleSheet.create({
   },
   emptyTitle: { fontSize: 16, fontWeight: '700', color: InkColors.ink },
   emptySub: { fontSize: 14, color: InkColors.ink3 },
-  listWrap: { gap: 8 },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: InkColors.ink2,
-  },
-  list: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: InkColors.line,
-    paddingHorizontal: 14,
-  },
-  moreHint: {
-    fontSize: 13,
-    color: InkColors.ink3,
-    fontWeight: '600',
-    marginTop: 4,
-  },
+  // InboxSubtabs는 자체 좌우 패딩(16)을 가지므로 화면 패딩(20)을 상쇄해 카드 폭을 맞춘다.
+  subtabsWrap: { marginHorizontal: -4 },
   divider: {
     height: 1,
     backgroundColor: InkColors.line,
@@ -300,35 +259,6 @@ const styles = StyleSheet.create({
   resolvedHeader: { fontSize: 16, fontWeight: '700', color: InkColors.ink },
   resolvedSub: { fontSize: 13, color: InkColors.ink3, marginBottom: 8 },
   resolvedList: { gap: 0 },
-});
-
-const allChipStyles = StyleSheet.create({
-  chip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 999,
-    borderWidth: 1,
-  },
-  label: {
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  count: {
-    minWidth: 18,
-    paddingHorizontal: 6,
-    paddingVertical: 1,
-    borderRadius: 999,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  countText: {
-    color: '#FFFFFF',
-    fontWeight: '800',
-    fontSize: 11,
-  },
 });
 
 const resolvedStyles = StyleSheet.create({

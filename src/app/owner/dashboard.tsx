@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef } from 'react';
-import { View, Text, Pressable, StyleSheet, ScrollView, Animated } from 'react-native';
+import { useEffect, useMemo } from 'react';
+import { View, Text, Pressable, StyleSheet, Animated } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -15,11 +15,13 @@ import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { useStaffStore } from '@/lib/store/useStaffStore';
 import { RoleTabBar } from '@/components/RoleTabBar';
 import { BrainScoreCard } from '@/components/BrainScoreCard';
+import { OwnerHomeHubCards } from '@/components/OwnerHomeHubCards';
 import { Wordmark } from '@/components/Wordmark';
 import { getCategoryMeta } from '@/lib/utils/category';
 import { computeBrainScore } from '@/lib/utils/brainScore';
 import { SEED_TEMPLATES } from '@/data/seed-templates';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
+import { Elevation, Radius } from '@/lib/theme/elevation';
 import { won, todayStr, minutesBetween } from '@/lib/utils/attendance';
 import type { Category } from '@/types';
 
@@ -27,6 +29,10 @@ function liveMin(r: AttendanceRecord): number {
   if (r.check_out) return r.work_minutes;
   if (r.check_in) return minutesBetween(r.check_in, new Date().toISOString());
   return 0;
+}
+
+function capCount(n: number): string {
+  return n > 99 ? '99+' : String(n);
 }
 
 export default function OwnerDashboardScreen() {
@@ -82,22 +88,15 @@ export default function OwnerDashboardScreen() {
     [pendingList],
   );
 
-  // 오늘의 브리핑 — mock 요약(저비용). 가장 먼저 할 한 가지를 짚어준다.
-  const briefingLead =
-    pending > 0
-      ? `알바가 자주 물은 질문 ${pending}건이 답변을 기다려요. 답해두면 다음부터 AI가 대신 알려줘요.`
-      : '급한 미답변은 없어요. 오늘도 매장 잘 굴러가고 있어요 👍';
-  const briefingSub = `지금 근무 ${working}명 · 오늘 할일 ${taskDoneCount}/${taskTotal} 완료 · 이번 달 인건비 ${won(monthPay)}`;
-
   // 진입 시 본문이 살짝 떠오르며 페이드인.
-  const enterOpacity = useRef(new Animated.Value(0)).current;
-  const enterY = useRef(new Animated.Value(12)).current;
+  // Animated.Value는 ref가 아니라 안정 객체로 메모이즈 — render 중 ref.current 접근(react-hooks/refs) 회피.
+  const enter = useMemo(() => ({ opacity: new Animated.Value(0), y: new Animated.Value(12) }), []);
   useEffect(() => {
     Animated.parallel([
-      Animated.timing(enterOpacity, { toValue: 1, duration: 320, useNativeDriver: true }),
-      Animated.spring(enterY, { toValue: 0, useNativeDriver: true, speed: 14, bounciness: 6 }),
+      Animated.timing(enter.opacity, { toValue: 1, duration: 320, useNativeDriver: true }),
+      Animated.spring(enter.y, { toValue: 0, useNativeDriver: true, speed: 14, bounciness: 6 }),
     ]).start();
-  }, [enterOpacity, enterY]);
+  }, [enter]);
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
@@ -119,7 +118,7 @@ export default function OwnerDashboardScreen() {
       <Animated.ScrollView
         contentContainerStyle={styles.scroll}
         showsVerticalScrollIndicator={false}
-        style={{ opacity: enterOpacity, transform: [{ translateY: enterY }] }}
+        style={{ opacity: enter.opacity, transform: [{ translateY: enter.y }] }}
       >
         <Text style={styles.greet}>오늘도 고생 많으세요</Text>
 
@@ -155,34 +154,71 @@ export default function OwnerDashboardScreen() {
           </View>
         )}
 
-        {/* 오늘의 AI 브리핑 — 노하우가 하나라도 있을 때만 */}
+        {/* ① 받은질문 히어로 — 사령탑의 단일 주인공. 미답변 수 + 받은질문 탭 진입.
+            미답변이 있으면 답변 유도(alert), 없으면 긍정 톤으로 회고 유도. */}
         {entries.length > 0 && (
-        <View style={styles.briefing}>
-          <View style={styles.briefingHead}>
-            <Ionicons name="sparkles" size={15} color="#FFFFFF" />
-            <Text style={styles.briefingTitle}>오늘의 브리핑</Text>
-          </View>
-          <Text style={styles.briefingLead}>{briefingLead}</Text>
-          <Text style={styles.briefingSub}>{briefingSub}</Text>
-          {/* HERO = 화면당 단 하나의 주인공 액션. 미답변이 있으면 답변, 없으면 회고로 자동 전환 */}
           <PressableScale
             onPress={() => router.push(pending > 0 ? '/owner/inbox' : '/owner/capture')}
-            scaleTo={0.96}
-            style={styles.briefingCta}
+            scaleTo={0.97}
+            style={styles.hero}
+            accessibilityRole="button"
+            accessibilityLabel={
+              pending > 0 ? `받은 질문 ${capCount(pending)}건, 답변하러 가기` : '받은 질문 0건, 한 줄 회고 남기기'
+            }
           >
-            <Text style={styles.briefingCtaText}>
-              {pending > 0 ? '질문 답변하러 가기' : '오늘 한 줄 회고 남기기'}
+            <View style={styles.heroHead}>
+              <Ionicons name="chatbubbles" size={15} color="#FFFFFF" />
+              <Text style={styles.heroKicker}>받은 질문</Text>
+              {pending > 0 && (
+                <View style={styles.heroBadge}>
+                  <Text style={styles.heroBadgeText}>{capCount(pending)}</Text>
+                </View>
+              )}
+            </View>
+            <Text style={styles.heroLead}>
+              {pending > 0
+                ? `알바가 자주 물은 질문 ${capCount(pending)}건이 답변을 기다려요.`
+                : '깔끔하네요! 답할 질문이 하나도 없어요.'}
             </Text>
-            <Ionicons name="arrow-forward" size={14} color={InkColors.ink} />
+            <Text style={styles.heroSub}>
+              {pending > 0
+                ? '답해두면 다음부터 AI가 대신 알려줘요.'
+                : '오늘 새로 안 것 한 줄이면 AI가 노하우로 정리해요.'}
+            </Text>
+            <View style={styles.heroCta}>
+              <Text style={styles.heroCtaText}>{pending > 0 ? '질문 답변하러 가기' : '오늘 한 줄 회고 남기기'}</Text>
+              <Ionicons name="arrow-forward" size={14} color={InkColors.ink} />
+            </View>
           </PressableScale>
-        </View>
         )}
 
-        {/* 매장 두뇌 완성도 게이지 (F3) — 노하우가 하나라도 있을 때만 */}
-        {entries.length > 0 && <BrainScoreCard score={brain} onFill={fillWeak} />}
+        {/* ② 오늘 업무 요약 — 완료/전체·근무·인건비를 스캔용 한 줄 카드로. 업무 화면으로 진입. */}
+        {entries.length > 0 && (
+          <Pressable
+            onPress={() => router.push('/owner/work')}
+            style={({ pressed }) => [styles.todayCard, pressed && { opacity: 0.85 }]}
+            accessibilityRole="button"
+            accessibilityLabel={`오늘 업무 ${taskDoneCount}/${taskTotal} 완료`}
+          >
+            <View style={styles.todayHead}>
+              <Ionicons name="checkbox-outline" size={18} color={InkColors.ink2} />
+              <Text style={styles.todayTitle}>오늘 업무</Text>
+              <Text style={styles.todayPill}>
+                {taskDoneCount}/{taskTotal}
+              </Text>
+              <Ionicons name="chevron-forward" size={16} color={InkColors.ink3} />
+            </View>
+            <View style={styles.bar}>
+              <View style={[styles.barFill, { width: `${taskTotal ? (taskDoneCount / taskTotal) * 100 : 0}%` }]} />
+            </View>
+            <Text style={styles.todaySub}>
+              지금 근무 {working}명 · 이번 달 인건비 {won(monthPay)}
+            </Text>
+          </Pressable>
+        )}
 
-        {/* ③ 그 아래는 스캔용 리스트만 — 큰 숫자 카드는 화면당 1개(위 브리핑/두뇌)로 제한.
-            4칸 메트릭 그리드는 해체해 위 브리핑 한 줄(근무·할일·인건비)로 흡수했다. */}
+        {/* ③ 매장운영 허브 — 그동안 미니링크로 숨어 있던 근무·급여/직원/급여설정을 카드로 surface. */}
+        {entries.length > 0 && <OwnerHomeHubCards />}
 
         {/* 알바 FAQ Top → 노하우화 */}
         {topFaq.length > 0 && (
@@ -217,19 +253,13 @@ export default function OwnerDashboardScreen() {
           </View>
         )}
 
-        {/* 스캔용 미니 링크 — 노하우·직원·근태 진입. 메트릭(근무·인건비)은 위 브리핑 한 줄로 흡수했고
-            여기선 큰 카드 없이 행으로만. 근태 화면은 탭바에 없으므로 이 링크로 진입을 보존한다. */}
+        {/* ④ 임팩트 — 매장 두뇌 완성도 게이지 (F3). 노하우가 하나라도 있을 때만 */}
+        {entries.length > 0 && <BrainScoreCard score={brain} onFill={fillWeak} />}
+
+        {/* 노하우 진입 미니 링크 — 매장운영(근무·직원)은 위 허브카드로 이관했고, 여기선 노하우 라이브러리만. */}
         <View style={styles.miniRow}>
           <Pressable onPress={() => router.push('/owner/knowledge')}>
             <Text style={styles.miniLink}>노하우 {entries.length}개 ›</Text>
-          </Pressable>
-          <Text style={styles.miniDot}>·</Text>
-          <Pressable onPress={() => router.push('/owner/staff')}>
-            <Text style={styles.miniLink}>직원 {staff.length}명 ›</Text>
-          </Pressable>
-          <Text style={styles.miniDot}>·</Text>
-          <Pressable onPress={() => router.push('/owner/attendance')}>
-            <Text style={styles.miniLink}>근태·인건비 ›</Text>
           </Pressable>
         </View>
 
@@ -310,7 +340,7 @@ const styles = StyleSheet.create({
 
   onboard: {
     backgroundColor: BrandColors.accentSoft,
-    borderRadius: 18,
+    borderRadius: Radius.lg,
     borderWidth: 1,
     borderColor: '#E8C9C2',
     padding: 20,
@@ -328,27 +358,39 @@ const styles = StyleSheet.create({
     backgroundColor: BrandColors.brand,
     paddingVertical: 12,
     paddingHorizontal: 18,
-    borderRadius: 999,
+    borderRadius: Radius.pill,
   },
   onboardCtaText: { color: '#FFFFFF', fontSize: 14, fontWeight: '800' },
   seedLabel: { fontSize: 12, color: InkColors.ink2, fontWeight: '700', marginTop: 12 },
   seedChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 },
   seedChip: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: InkColors.bg,
     borderWidth: 1,
     borderColor: InkColors.line,
-    borderRadius: 999,
+    borderRadius: Radius.pill,
     paddingVertical: 7,
     paddingHorizontal: 12,
   },
   seedChipText: { fontSize: 12.5, fontWeight: '700', color: InkColors.ink },
 
-  briefing: { backgroundColor: InkColors.ink, borderRadius: 18, padding: 18, gap: 8 },
-  briefingHead: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  briefingTitle: { fontSize: 13, fontWeight: '800', color: '#FFFFFF', letterSpacing: 0.3 },
-  briefingLead: { fontSize: 16, fontWeight: '700', color: '#FFFFFF', lineHeight: 23 },
-  briefingSub: { fontSize: 12, color: 'rgba(255,255,255,0.6)', lineHeight: 18 },
-  briefingCta: {
+  // ① 받은질문 히어로 (사령탑 주인공)
+  hero: { backgroundColor: InkColors.ink, borderRadius: Radius.lg, padding: 18, gap: 7, ...Elevation.e2 },
+  heroHead: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  heroKicker: { fontSize: 13, fontWeight: '800', color: '#FFFFFF', letterSpacing: 0.3 },
+  heroBadge: {
+    marginLeft: 'auto',
+    minWidth: 24,
+    height: 24,
+    paddingHorizontal: 7,
+    borderRadius: Radius.pill,
+    backgroundColor: BrandColors.accent,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  heroBadgeText: { fontSize: 13, fontWeight: '900', color: '#FFFFFF' },
+  heroLead: { fontSize: 16, fontWeight: '700', color: '#FFFFFF', lineHeight: 23 },
+  heroSub: { fontSize: 12, color: 'rgba(255,255,255,0.6)', lineHeight: 18 },
+  heroCta: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
@@ -357,9 +399,36 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     paddingVertical: 9,
     paddingHorizontal: 14,
-    borderRadius: 999,
+    borderRadius: Radius.pill,
   },
-  briefingCtaText: { fontSize: 13, fontWeight: '800', color: InkColors.ink },
+  heroCtaText: { fontSize: 13, fontWeight: '800', color: InkColors.ink },
+
+  // ② 오늘 업무 요약
+  todayCard: {
+    backgroundColor: InkColors.bg,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: InkColors.line,
+    padding: 18,
+    gap: 10,
+    ...Elevation.e1,
+  },
+  todayHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  todayTitle: { fontSize: 15, fontWeight: '800', color: InkColors.ink },
+  todayPill: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: InkColors.ink2,
+    backgroundColor: InkColors.bgSoft,
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderRadius: Radius.pill,
+    overflow: 'hidden',
+    marginLeft: 'auto',
+  },
+  bar: { height: 8, borderRadius: Radius.pill, backgroundColor: InkColors.bgSoft, overflow: 'hidden' },
+  barFill: { height: 8, borderRadius: Radius.pill, backgroundColor: BrandColors.yellow },
+  todaySub: { fontSize: 13, color: InkColors.ink3, fontWeight: '600' },
 
   miniRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8 },
   miniLink: { fontSize: 13, color: InkColors.ink2, fontWeight: '700' },
@@ -370,8 +439,8 @@ const styles = StyleSheet.create({
   faqTitle: { fontSize: 15, fontWeight: '800', color: InkColors.ink2 },
   faqHint: { fontSize: 12, color: InkColors.ink3, fontWeight: '600' },
   faqList: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
+    backgroundColor: InkColors.bg,
+    borderRadius: Radius.md,
     borderWidth: 1,
     borderColor: InkColors.line,
     paddingHorizontal: 14,
@@ -395,7 +464,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
     backgroundColor: InkColors.bgSoft,
-    borderRadius: 14,
+    borderRadius: Radius.md,
     borderWidth: 1,
     borderColor: InkColors.line,
     padding: 14,
@@ -404,7 +473,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: InkColors.bg,
     borderWidth: 1,
     borderColor: InkColors.line,
     alignItems: 'center',

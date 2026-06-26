@@ -3,6 +3,8 @@ import { View, Text, StyleSheet, Pressable, Platform, ToastAndroid } from 'react
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter, useNavigation } from 'expo-router';
 
+import { Ionicons } from '@expo/vector-icons';
+
 import { useUnknownQueueStore } from '@/lib/store/useUnknownQueueStore';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { getCategoryMeta } from '@/lib/utils/category';
@@ -14,6 +16,7 @@ import { RoutineFlow } from '@/components/wizard/RoutineFlow';
 import { EventFlow } from '@/components/wizard/EventFlow';
 import { ContextFlow } from '@/components/wizard/ContextFlow';
 import { KnowhowFlow } from '@/components/wizard/KnowhowFlow';
+import { VoiceAnswerSheet } from '@/components/VoiceAnswerSheet';
 
 import type { Category } from '@/types';
 
@@ -55,6 +58,7 @@ export default function AnswerWizardScreen() {
   // 진행률 (flow 내부 step을 받아오기 위한 callback)
   const [progress, setProgress] = useState<{ step: number; total: number }>({ step: 1, total: 4 });
   const [toast, setToast] = useState<string | null>(null);
+  const [voiceOpen, setVoiceOpen] = useState(false); // 음성 1터치 답변 시트
   const submittedRef = useRef(false); // 더블탭/중복 완료 → 엔트리 중복 생성 방지
 
   const onStepChange = useCallback((step: number, total: number) => {
@@ -86,7 +90,9 @@ export default function AnswerWizardScreen() {
     return unsub;
   }, [navigation, progress.step]);
 
-  const onComplete = useCallback(
+  // 발행 공통 경로 — 위저드 완료/음성 답변이 모두 거친다.
+  // answers를 buildPlaybookEntry로 정규화 → 노하우 발행 + resolve + 토스트 + 복귀.
+  const publishAnswers = useCallback(
     (answers: WizardAnswers) => {
       if (!uq || submittedRef.current) return;
       // 품질 게이트 — 내용이 비면 발행하지 않고 보완을 요구한다.
@@ -115,6 +121,16 @@ export default function AnswerWizardScreen() {
       }, 1200);
     },
     [uq, addEntry, resolve, router],
+  );
+
+  const onComplete = publishAnswers;
+
+  // 음성 1터치 답변 — 발화 한 줄을 '할 행동' step으로 정규화해 같은 발행 경로를 탄다.
+  const onVoiceSubmit = useCallback(
+    (answerText: string) => {
+      publishAnswers({ actions: [answerText.trim()] });
+    },
+    [publishAnswers],
   );
 
   // UQ 없음 / 이미 처리됨
@@ -182,6 +198,17 @@ export default function AnswerWizardScreen() {
         <Text style={styles.askedBy}>
           {uq.junior_name} 알바가 {relTime}에 물어봤어요
         </Text>
+
+        {/* 음성 1터치 빠른 답변 진입 — 위저드 대신 말로 한 줄 답하고 바로 발행 */}
+        <Pressable
+          onPress={() => setVoiceOpen(true)}
+          accessibilityRole="button"
+          accessibilityLabel="음성으로 빠르게 답하기"
+          style={({ pressed }) => [styles.voiceCta, pressed && { opacity: 0.85 }]}
+        >
+          <Ionicons name="mic-outline" size={16} color={InkColors.ink} />
+          <Text style={styles.voiceCtaText}>음성으로 빠르게 답하기</Text>
+        </Pressable>
       </View>
 
       {/* 본문: 카테고리별 Flow 분기 */}
@@ -193,6 +220,14 @@ export default function AnswerWizardScreen() {
           onStepChange={onStepChange}
         />
       </View>
+
+      {/* 음성 1터치 답변 시트 (프레임캡은 시트 내부에서 처리) */}
+      <VoiceAnswerSheet
+        visible={voiceOpen}
+        uq={uq}
+        onClose={() => setVoiceOpen(false)}
+        onSubmit={onVoiceSubmit}
+      />
 
       {/* Toast (iOS/web 호환) */}
       {toast && (
@@ -270,6 +305,21 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   askedBy: { fontSize: 12, color: InkColors.ink3 },
+
+  voiceCta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 6,
+    marginTop: 4,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 999,
+    backgroundColor: BrandColors.yellowSoft,
+    borderWidth: 1,
+    borderColor: BrandColors.yellowDeep,
+  },
+  voiceCtaText: { fontSize: 13, fontWeight: '800', color: InkColors.ink },
 
   flowWrap: { flex: 1, backgroundColor: '#FFFFFF' },
 

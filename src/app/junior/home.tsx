@@ -11,6 +11,7 @@ import { useWorkStore } from '@/lib/store/useWorkStore';
 import { RoleTabBar } from '@/components/RoleTabBar';
 import { Wordmark } from '@/components/Wordmark';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
+import { Elevation, Radius } from '@/lib/theme/elevation';
 import { fmtDuration, won, hhmm, todayStr, minutesBetween } from '@/lib/utils/attendance';
 
 // 빈 상태에서도 '뭘 물어볼 수 있는지' 보여주는 추천(업종 일반).
@@ -23,9 +24,9 @@ function liveMin(r: AttendanceRecord): number {
 }
 
 /**
- * 직원 홈 — 하루의 앵커.
- * 1) 출퇴근 퀵액션(가장 자주 누름) 2) 오늘 할일 진행 3) 모르면 바로 노하우 묻기.
- * 출근 → 할일 → 질문, 하루 흐름이 한 화면에서 끝난다.
+ * 직원 홈 — 사령탑(하루의 앵커).
+ * 1) 출근 버튼(가장 자주 누름) 2) 안 읽은 공지 3) 오늘 할일 요약 4) 물어보기 박스.
+ * 출근 → 공지 → 할일 → 질문, 하루 흐름이 한 화면에서 끝난다.
  */
 export default function JuniorHomeScreen() {
   const router = useRouter();
@@ -41,6 +42,7 @@ export default function JuniorHomeScreen() {
 
   const templates = useWorkStore((s) => s.templates);
   const doneMap = useWorkStore((s) => s.done);
+  const feed = useWorkStore((s) => s.feed);
 
   const [, setTick] = useState(0);
   const today = todayStr();
@@ -65,6 +67,21 @@ export default function JuniorHomeScreen() {
   const dayDone = doneMap[today] ?? {};
   const taskTotal = templates.length;
   const taskDone = templates.filter((t) => dayDone[t.id]).length;
+  const taskRemain = taskTotal - taskDone;
+
+  // 안 읽은 공지 — feed의 notice 중 read_by에 본인이 없는 것. 핀 공지·최신 우선.
+  const unreadNotices = useMemo(
+    () =>
+      feed
+        .filter((f) => f.kind === 'notice' && !(f.read_by ?? []).includes(userId))
+        .sort((a, b) => {
+          if (!!a.pinned !== !!b.pinned) return a.pinned ? -1 : 1;
+          return b.createdAt.localeCompare(a.createdAt);
+        }),
+    [feed, userId],
+  );
+  const unreadCount = unreadNotices.length;
+  const latestNotice = unreadNotices[0];
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
@@ -136,7 +153,35 @@ export default function JuniorHomeScreen() {
           </Pressable>
         </View>
 
-        {/* 2) 오늘 할일 진행 */}
+        {/* 2) 안 읽은 공지 — 있을 때만. 업무 탭(공지)로 진입해 읽음 처리. */}
+        {unreadCount > 0 && (
+          <Pressable
+            onPress={() => router.push('/junior/work')}
+            style={({ pressed }) => [styles.noticeCard, pressed && { opacity: 0.85 }]}
+            accessibilityRole="button"
+            accessibilityLabel={`안 읽은 공지 ${unreadCount}건. 확인하러 가기`}
+          >
+            <View style={styles.noticeHead}>
+              <Ionicons name="megaphone" size={16} color={InkColors.ink} />
+              <Text style={styles.noticeTitle}>안 읽은 공지</Text>
+              <View style={styles.noticeBadge}>
+                <Text style={styles.noticeBadgeText}>{unreadCount > 99 ? '99+' : unreadCount}</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color={InkColors.ink3} />
+            </View>
+            {latestNotice && (
+              <Text style={styles.noticeBody} numberOfLines={2}>
+                {latestNotice.pinned ? '📌 ' : ''}
+                {latestNotice.text}
+              </Text>
+            )}
+            <Text style={styles.noticeSub}>
+              {unreadCount > 1 ? `외 ${unreadCount - 1}건 더 · 확인하면 읽음으로 표시돼요` : '확인하면 읽음으로 표시돼요'}
+            </Text>
+          </Pressable>
+        )}
+
+        {/* 3) 오늘 할일 진행 */}
         <Pressable onPress={() => router.push('/junior/work')} style={({ pressed }) => [styles.taskCard, pressed && { opacity: 0.85 }]}>
           <View style={styles.taskHead}>
             <Ionicons name="checkbox-outline" size={18} color={InkColors.ink2} />
@@ -154,11 +199,11 @@ export default function JuniorHomeScreen() {
               ? '아직 등록된 할일이 없어요'
               : taskDone >= taskTotal
                 ? '오늘 할일을 다 끝냈어요 👏'
-                : `${taskTotal - taskDone}개 남았어요`}
+                : `${taskRemain}개 남았어요`}
           </Text>
         </Pressable>
 
-        {/* 3) 모르면 바로 노하우 묻기 */}
+        {/* 4) 물어보기 박스 — 노하우 탭(물어보기)로 진입하는 큰 입력 유도 카드 */}
         <View style={styles.askCard}>
           <Text style={styles.askTitle}>모르는 게 있나요?</Text>
           <Text style={styles.askSub}>매장 노하우를 바로 찾아드려요. 없으면 사장님께 대신 여쭤볼게요.</Text>
@@ -205,13 +250,14 @@ const styles = StyleSheet.create({
 
   // 출퇴근
   clockCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 18,
+    backgroundColor: InkColors.bg,
+    borderRadius: Radius.lg,
     borderWidth: 1,
     borderColor: InkColors.line,
     padding: 22,
     alignItems: 'center',
     gap: 6,
+    ...Elevation.e1,
   },
   workingTag: { fontSize: 13, fontWeight: '800', color: BrandColors.accent },
   clockTime: { fontSize: 38, fontWeight: '900', color: InkColors.ink, letterSpacing: -1 },
@@ -221,8 +267,8 @@ const styles = StyleSheet.create({
   payRow: { flexDirection: 'row', alignItems: 'baseline', gap: 8, marginBottom: 12 },
   payLabel: { fontSize: 13, color: InkColors.ink3, fontWeight: '700' },
   payValue: { fontSize: 24, fontWeight: '900', color: InkColors.ink, letterSpacing: -0.5 },
-  clockBtn: { width: '100%', paddingVertical: 16, borderRadius: 14, alignItems: 'center' },
-  clockBtnBig: { paddingVertical: 20, borderRadius: 16 },
+  clockBtn: { width: '100%', paddingVertical: 16, borderRadius: Radius.md, alignItems: 'center' },
+  clockBtnBig: { paddingVertical: 20, borderRadius: Radius.lg },
   clockBtnIn: { backgroundColor: BrandColors.brand },
   clockBtnOut: { backgroundColor: BrandColors.accent },
   clockBtnText: { fontSize: 16, fontWeight: '800', color: '#FFFFFF' },
@@ -230,14 +276,41 @@ const styles = StyleSheet.create({
   clockMore: { flexDirection: 'row', alignItems: 'center', gap: 2, marginTop: 8 },
   clockMoreText: { fontSize: 13, fontWeight: '700', color: InkColors.ink3 },
 
+  // 안 읽은 공지
+  noticeCard: {
+    backgroundColor: InkColors.bg,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: BrandColors.yellowDeep,
+    padding: 18,
+    gap: 8,
+    ...Elevation.e1,
+  },
+  noticeHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  noticeTitle: { fontSize: 15, fontWeight: '800', color: InkColors.ink },
+  noticeBadge: {
+    marginLeft: 'auto',
+    minWidth: 22,
+    height: 22,
+    paddingHorizontal: 7,
+    borderRadius: Radius.pill,
+    backgroundColor: BrandColors.accent,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  noticeBadgeText: { fontSize: 12, fontWeight: '900', color: '#FFFFFF' },
+  noticeBody: { fontSize: 14, color: InkColors.ink, fontWeight: '600', lineHeight: 21 },
+  noticeSub: { fontSize: 12, color: InkColors.ink3, fontWeight: '600' },
+
   // 오늘 할일
   taskCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
+    backgroundColor: InkColors.bg,
+    borderRadius: Radius.md,
     borderWidth: 1,
     borderColor: InkColors.line,
     padding: 18,
     gap: 10,
+    ...Elevation.e1,
   },
   taskHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   taskTitle: { fontSize: 15, fontWeight: '800', color: InkColors.ink },
@@ -248,22 +321,23 @@ const styles = StyleSheet.create({
     backgroundColor: InkColors.bgSoft,
     paddingVertical: 4,
     paddingHorizontal: 10,
-    borderRadius: 999,
+    borderRadius: Radius.pill,
     overflow: 'hidden',
     marginLeft: 'auto',
   },
-  bar: { height: 8, borderRadius: 999, backgroundColor: InkColors.bgSoft, overflow: 'hidden' },
-  barFill: { height: 8, borderRadius: 999, backgroundColor: BrandColors.brand },
+  bar: { height: 8, borderRadius: Radius.pill, backgroundColor: InkColors.bgSoft, overflow: 'hidden' },
+  barFill: { height: 8, borderRadius: Radius.pill, backgroundColor: BrandColors.yellow },
   taskSub: { fontSize: 13, color: InkColors.ink3, fontWeight: '600' },
 
   // 노하우 묻기
   askCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
+    backgroundColor: InkColors.bg,
+    borderRadius: Radius.md,
     borderWidth: 1,
     borderColor: InkColors.line,
     padding: 18,
     gap: 10,
+    ...Elevation.e1,
   },
   askTitle: { fontSize: 16, fontWeight: '800', color: InkColors.ink },
   askSub: { fontSize: 13, color: InkColors.ink3, lineHeight: 19 },
@@ -272,17 +346,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
     backgroundColor: InkColors.bgSoft,
-    borderRadius: 999,
+    borderRadius: Radius.pill,
     paddingHorizontal: 16,
     paddingVertical: 13,
   },
   askBarText: { fontSize: 14, color: InkColors.ink3, fontWeight: '600' },
   askChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   askChip: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: InkColors.bg,
     borderWidth: 1,
     borderColor: InkColors.line,
-    borderRadius: 999,
+    borderRadius: Radius.pill,
     paddingVertical: 8,
     paddingHorizontal: 13,
   },

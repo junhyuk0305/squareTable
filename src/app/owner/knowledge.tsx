@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { View, Text, Pressable, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
@@ -7,6 +8,8 @@ import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { logout } from '@/lib/auth';
 import { getCategoryMeta } from '@/lib/utils/category';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
+import { Radius } from '@/lib/theme/elevation';
+import type { PlaybookEntry } from '@/types';
 
 function LogoutHeaderBtn() {
   return (
@@ -16,10 +19,32 @@ function LogoutHeaderBtn() {
   );
 }
 
+// 검증 3-state 배지 — BrowseList/SquareCard와 동일 매핑.
+type VerifyMeta = { label: string; fg: string; bg: string };
+function verifyMeta(state: PlaybookEntry['verification']): VerifyMeta | null {
+  switch (state?.state) {
+    case 'owner_verified':
+      return { label: '사장님 검증', fg: InkColors.ink, bg: BrandColors.yellowSoft };
+    case 'field_tested':
+      return { label: '현장 검증', fg: BrandColors.good, bg: '#E6F1EA' };
+    case 'unverified':
+      return { label: '미검증', fg: InkColors.ink3, bg: InkColors.bgSoft };
+    default:
+      return null;
+  }
+}
+
+/**
+ * 내 노하우 — 사장님이 등록한 노하우 전체 목록(노하우 탭 '내 노하우'의 전체 보기).
+ * 각 행: 카테고리 점·제목·검증배지·해결률·버전. 탭하면 수정.
+ */
 export default function OwnerKnowledgeScreen() {
   const router = useRouter();
   const entries = usePlaybookStore((s) => s.entries);
   const loaded = usePlaybookStore((s) => s.loaded);
+
+  // 카테고리 → 발행/검증 우선 노출은 그대로 두고, 정렬은 기존 입력순 유지.
+  const list = useMemo(() => entries, [entries]);
 
   if (!loaded) {
     return (
@@ -37,7 +62,7 @@ export default function OwnerKnowledgeScreen() {
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <View style={styles.headRow}>
           <Text style={styles.subline}>
-            총 {entries.length}개{entries.length > 0 ? ' · 탭하면 수정할 수 있어요' : ''}
+            총 {list.length}개{list.length > 0 ? ' · 탭하면 수정할 수 있어요' : ''}
           </Text>
           <Pressable
             onPress={() => router.push('/owner/categories')}
@@ -48,7 +73,7 @@ export default function OwnerKnowledgeScreen() {
           </Pressable>
         </View>
 
-        {entries.length === 0 ? (
+        {list.length === 0 ? (
           <View style={styles.empty}>
             <Text style={styles.emptyEmoji}>📒</Text>
             <Text style={styles.emptyTitle}>아직 등록된 노하우가 없어요</Text>
@@ -64,8 +89,10 @@ export default function OwnerKnowledgeScreen() {
           </View>
         ) : (
           <View style={styles.list}>
-            {entries.map((e) => {
+            {list.map((e) => {
               const meta = getCategoryMeta(e.category);
+              const v = verifyMeta(e.verification);
+              const ratePct = Math.round((e.stats?.resolution_rate ?? 0) * 100);
               return (
                 <Pressable
                   key={e.id}
@@ -77,9 +104,19 @@ export default function OwnerKnowledgeScreen() {
                     <Text style={styles.title} numberOfLines={1}>
                       {e.title}
                     </Text>
-                    <Text style={styles.meta}>
-                      {meta.label} · v{e.version}
-                    </Text>
+                    <View style={styles.metaRow}>
+                      <Text style={styles.meta}>
+                        {meta.label} · v{e.version}
+                      </Text>
+                      {e.stats?.resolution_rate ? (
+                        <Text style={styles.metaRate}>· 해결률 {ratePct}%</Text>
+                      ) : null}
+                      {v ? (
+                        <View style={[styles.badge, { backgroundColor: v.bg }]}>
+                          <Text style={[styles.badgeText, { color: v.fg }]}>{v.label}</Text>
+                        </View>
+                      ) : null}
+                    </View>
                   </View>
                   <Ionicons name="chevron-forward" size={18} color={InkColors.ink3} />
                 </Pressable>
@@ -131,5 +168,9 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: InkColors.line },
   dot: { width: 10, height: 10, borderRadius: 5 },
   title: { fontSize: 15, fontWeight: '600', color: InkColors.ink },
-  meta: { fontSize: 12, color: InkColors.ink3, marginTop: 2, fontWeight: '600' },
+  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3, flexWrap: 'wrap' },
+  meta: { fontSize: 12, color: InkColors.ink3, fontWeight: '600' },
+  metaRate: { fontSize: 12, color: InkColors.ink2, fontWeight: '700' },
+  badge: { paddingVertical: 2, paddingHorizontal: 7, borderRadius: Radius.pill },
+  badgeText: { fontSize: 10, fontWeight: '800' },
 });

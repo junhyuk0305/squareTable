@@ -73,7 +73,7 @@ function BrowseCard({ entry, onSelect }: { entry: PlaybookEntry; onSelect: (e: P
       ) : null}
       {dontText ? (
         <View style={[styles.preview, { borderLeftColor: BrandColors.warn }]}>
-          <Text style={[styles.previewTag, { color: BrandColors.warn }]}>DON'T</Text>
+          <Text style={[styles.previewTag, { color: BrandColors.warn }]}>{"DON'T"}</Text>
           <Text style={styles.previewText} numberOfLines={1}>
             {dontText}
           </Text>

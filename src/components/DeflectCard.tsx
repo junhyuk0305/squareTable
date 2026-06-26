@@ -1,11 +1,14 @@
 import { View, Text, StyleSheet } from 'react-native';
 import { CategoryChip } from './CategoryChip';
 import { BrandColors, InkColors } from '@/lib/theme/colors';
+import { Radius } from '@/lib/theme/elevation';
 import type { Category } from '@/types';
 
 type Props = {
   presumedCategory: Category;
   aiGeneralAnswer?: string;
+  /** 비슷한 질문 누적 수(있으면 '같은 질문 N명' 메타 노출). */
+  similarCount?: number;
 };
 
 /**
@@ -13,7 +16,7 @@ type Props = {
  * "사장님께 물어볼게요" 위계 + 추정 카테고리 + AI general answer 보조.
  * 사장님 답변이 들어오면 추후 SquareCard로 자동 전환되는 슬롯.
  */
-export function DeflectCard({ presumedCategory, aiGeneralAnswer }: Props) {
+export function DeflectCard({ presumedCategory, aiGeneralAnswer, similarCount }: Props) {
   return (
     <View style={styles.card}>
       <View style={styles.headerRow}>
@@ -27,6 +30,11 @@ export function DeflectCard({ presumedCategory, aiGeneralAnswer }: Props) {
       <View style={styles.row}>
         <Text style={styles.metaLabel}>추정 카테고리</Text>
         <CategoryChip category={presumedCategory} size="sm" />
+        {typeof similarCount === 'number' && similarCount > 1 ? (
+          <View style={styles.similarBadge}>
+            <Text style={styles.similarText}>같은 질문 {similarCount}명</Text>
+          </View>
+        ) : null}
       </View>
 
       <View style={styles.divider} />
@@ -51,7 +59,7 @@ export function DeflectCard({ presumedCategory, aiGeneralAnswer }: Props) {
 const styles = StyleSheet.create({
   card: {
     backgroundColor: InkColors.bgSoft,
-    borderRadius: 14,
+    borderRadius: Radius.md,
     padding: 18,
     borderWidth: 1,
     borderColor: InkColors.line,
@@ -87,6 +95,13 @@ const styles = StyleSheet.create({
     color: InkColors.ink3,
     textTransform: 'uppercase',
   },
+  similarBadge: {
+    paddingVertical: 3,
+    paddingHorizontal: 8,
+    borderRadius: Radius.pill,
+    backgroundColor: BrandColors.yellowSoft,
+  },
+  similarText: { fontSize: 11, fontWeight: '800', color: InkColors.ink2 },
   divider: {
     height: 1,
     backgroundColor: InkColors.line,
@@ -109,7 +124,7 @@ const styles = StyleSheet.create({
   },
   general: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 10,
+    borderRadius: Radius.sm,
     padding: 12,
     borderWidth: 1,
     borderColor: InkColors.line,

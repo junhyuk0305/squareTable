@@ -10,13 +10,15 @@ import {
   Platform,
   Animated,
 } from 'react-native';
-import { Stack, useRouter } from 'expo-router';
+import { Stack } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { SquareCard } from '@/components/SquareCard';
 import { DeflectCard } from '@/components/DeflectCard';
 import { UserBubble } from '@/components/UserBubble';
 import { RoleTabBar } from '@/components/RoleTabBar';
+import { KnowhowSegment } from '@/components/KnowhowSegment';
+import { BrowseList } from '@/components/BrowseList';
 
 import { useChatStore } from '@/lib/store/useChatStore';
 import { useSessionStore } from '@/lib/store/useSessionStore';
@@ -24,9 +26,13 @@ import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { useUnknownQueueStore } from '@/lib/store/useUnknownQueueStore';
 import { HAS_SUPABASE } from '@/lib/supabase';
 
+import { useStaffStore } from '@/lib/store/useStaffStore';
+
 import { SEED_QUERIES } from '@/lib/demo/seedQueries';
 import { inferCategoryFromQuery } from '@/lib/utils/inferCategory';
 import { BrandColors, InkColors } from '@/lib/theme/colors';
+
+import type { Category, ChatQuery, PlaybookEntry } from '@/types';
 
 // 빈 채팅 추천 질문 — 업종(요식업) 일반. 데모 매장(노하우 보유)은 데모 시드 칩을 쓴다.
 const GENERIC_SUGGESTIONS = [
@@ -36,19 +42,55 @@ const GENERIC_SUGGESTIONS = [
   '진상 손님은 어떻게 응대해요?',
 ];
 
-import { useStaffStore } from '@/lib/store/useStaffStore';
-
-import type { Category, ChatQuery } from '@/types';
-
 /**
- * 알바 챗봇 화면 — D안 AI 어시스턴트 클린형.
- * 좌측: assistant (SquareCard | DeflectCard)
- * 우측: user bubble
- * 하단: 시드 쿼리 칩(6개) + 입력바
+ * 노하우 탭(주니어) — KnowhowSegment 컨테이너.
+ *  · 둘러보기: 발행된 노하우를 BrowseList로 (주니어·시니어 공용)
+ *  · 물어보기: 기존 AI 어시스턴트 챗(RAG·useChatStore·만족도 100% 보존)
+ *
+ * 크롬(SafeArea·헤더·탭바) 소유권은 이 컨테이너가 가진다 — 임베드된 챗(JuniorAsk)은
+ * 자체 SafeAreaView/RoleTabBar를 갖지 않는다(중복 방지).
  */
 export default function JuniorChatScreen() {
-  const router = useRouter();
+  const entries = usePlaybookStore((s) => s.entries);
+  const submit = useChatStore((s) => s.submit);
 
+  // 둘러보기에 노출할 발행 노하우. status 없는 시드도 안전하게 통과(published 우선, 미정이면 노출).
+  const publishedEntries = useMemo(
+    () => entries.filter((e) => e.status === 'published' || !e.status),
+    [entries],
+  );
+
+  // 주니어가 카드를 탭하면 그 노하우를 질문으로 띄워 RAG가 같은 카드를 채팅에 보여준다.
+  const handleBrowseSelect = (entry: PlaybookEntry) => {
+    void submit(entry.title, { anonymous: false });
+  };
+
+  return (
+    <SafeAreaView style={styles.safe} edges={['bottom']}>
+      <Stack.Screen options={{ title: '노하우' }} />
+      <KnowhowSegment
+        role="junior"
+        initial="ask"
+        browse={
+          <BrowseList
+            entries={publishedEntries}
+            onSelect={handleBrowseSelect}
+            emptyHint="아직 등록된 노하우가 없어요. 물어보기로 질문하면 사장님이 채워줘요."
+          />
+        }
+        ask={<JuniorAsk />}
+      />
+      <RoleTabBar role="junior" />
+    </SafeAreaView>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────
+ * JuniorAsk — '물어보기' 슬롯. 기존 챗 UI를 그대로 임베드.
+ * 크롬(SafeArea/탭바/헤더)은 컨테이너가 소유하므로 여기선 KeyboardAvoidingView부터.
+ * RAG·useChatStore·만족도·익명·시드칩 동작은 기존과 100% 동일.
+ * ───────────────────────────────────────────────────────── */
+function JuniorAsk() {
   const history = useChatStore((s) => s.history);
   const isLoading = useChatStore((s) => s.isLoading);
   const lastSubmittedId = useChatStore((s) => s.lastSubmittedId);
@@ -106,165 +148,157 @@ export default function JuniorChatScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.safe} edges={['bottom']}>
-      <Stack.Screen
-        options={{
-          title: '노하우',
-        }}
-      />
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 0}
+    >
+      {/* 상단 안내 */}
+      <View style={styles.identityBar}>
+        <Text style={styles.identityText}>{identity}</Text>
+      </View>
 
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 0}
+      {/* 대화 히스토리 */}
+      <ScrollView
+        ref={scrollRef}
+        style={styles.scroll}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
-        {/* 상단 안내 */}
-        <View style={styles.identityBar}>
-          <Text style={styles.identityText}>{identity}</Text>
-        </View>
-
-        {/* 대화 히스토리 */}
-        <ScrollView
-          ref={scrollRef}
-          style={styles.scroll}
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-        >
-          {history.length === 0 && !isLoading && (
-            <View style={styles.empty}>
-              <Text style={styles.emptyTitle}>무엇이든 물어보세요</Text>
-              <Text style={styles.emptySub}>
-                매장 노하우를 바로 찾아드려요. 없으면 사장님께 대신 여쭤볼게요.
-              </Text>
-              <Text style={styles.suggestLabel}>이런 걸 물어볼 수 있어요</Text>
-              <View style={styles.suggestList}>
-                {suggestions.map((text, i) => (
-                  <Pressable
-                    key={`${i}-${text}`}
-                    onPress={() => handleSeedTap(text)}
-                    style={({ pressed }) => [styles.suggest, pressed && { opacity: 0.7 }]}
-                  >
-                    <Text style={styles.suggestText}>{text}</Text>
-                    <Text style={styles.suggestArrow}>↗</Text>
-                  </Pressable>
-                ))}
-              </View>
-            </View>
-          )}
-
-          {history.map((q, idx) => (
-            <ChatTurn
-              key={q.id}
-              query={q}
-              isLatest={idx === history.length - 1 && q.id === lastSubmittedId}
-              onThumbsUp={() => rate(q.id, 'up')}
-              onThumbsDown={() => rate(q.id, 'down')}
-              resolveCategory={(entryId) =>
-                (getEntryById(entryId)?.category as Category) ?? 'Event'
-              }
-              findUQ={(queryText) =>
-                unknownQueue.find((u) => u.query_text === queryText)
-              }
-            />
-          ))}
-
-          {isLoading && (
-            <View style={styles.loading}>
-              <Text style={styles.loadingDot}>✦</Text>
-              <Text style={styles.loadingText}>
-                스퀘어 어시스턴트가 매장 가이드를 보고 있어요...
-              </Text>
-            </View>
-          )}
-
-          <View style={{ height: 8 }} />
-        </ScrollView>
-
-        {/* 전송 실패 알림 — 조용히 사라지지 않게, 다시 시도 경로 제공 */}
-        {error && (
-          <View style={styles.errorBar}>
-            <Text style={styles.errorText}>{error}</Text>
-            <Pressable onPress={() => void retryLast()} hitSlop={6} style={({ pressed }) => [styles.retryBtn, pressed && { opacity: 0.7 }]}>
-              <Text style={styles.retryText}>다시 시도</Text>
-            </Pressable>
-            <Pressable onPress={dismissError} hitSlop={8} style={({ pressed }) => [pressed && { opacity: 0.6 }]}>
-              <Text style={styles.errorClose}>✕</Text>
-            </Pressable>
-          </View>
-        )}
-
-        {/* 추천 질문 상시 노출 — 대화가 시작된 뒤에도 다음 질문을 한 탭으로(빈 상태 안내와 중복 방지) */}
-        {history.length > 0 && (
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            style={styles.chipStrip}
-            contentContainerStyle={styles.chipStripContent}
-            keyboardShouldPersistTaps="handled"
-          >
-            {suggestions.map((text, i) => (
-              <Pressable
-                key={`chip-${i}`}
-                onPress={() => handleSeedTap(text)}
-                disabled={isLoading}
-                style={({ pressed }) => [styles.chip, pressed && { opacity: 0.7 }, isLoading && { opacity: 0.5 }]}
-              >
-                <Text style={styles.chipText} numberOfLines={1}>{text}</Text>
-              </Pressable>
-            ))}
-          </ScrollView>
-        )}
-
-        {/* 익명 토글 — 묻기 어려운 질문(권리·인간관계·실수)을 부담 없이 */}
-        <View style={styles.anonRow}>
-          <Pressable
-            onPress={() => setAnon((v) => !v)}
-            accessibilityRole="switch"
-            accessibilityState={{ checked: anon }}
-            style={({ pressed }) => [
-              styles.anonChip,
-              anon && styles.anonChipOn,
-              pressed && { opacity: 0.8 },
-            ]}
-          >
-            <Text style={[styles.anonChipText, anon && styles.anonChipTextOn]}>
-              {anon ? '🔒 익명으로 묻는 중' : '🔓 익명으로 묻기'}
+        {history.length === 0 && !isLoading && (
+          <View style={styles.empty}>
+            <Text style={styles.emptyTitle}>무엇이든 물어보세요</Text>
+            <Text style={styles.emptySub}>
+              매장 노하우를 바로 찾아드려요. 없으면 사장님께 대신 여쭤볼게요.
             </Text>
-          </Pressable>
-          {anon && <Text style={styles.anonHint}>사장님께 이름이 안 보여요</Text>}
-        </View>
-
-        {/* 입력바 */}
-        <View style={styles.inputBar}>
-          <View style={styles.inputWrap}>
-            <TextInput
-              value={input}
-              onChangeText={setInput}
-              placeholder="궁금한 걸 물어보세요"
-              placeholderTextColor={InkColors.ink3}
-              style={styles.input}
-              editable={!isLoading}
-              maxLength={500}
-              returnKeyType="send"
-              onSubmitEditing={() => handleSend()}
-              blurOnSubmit={false}
-            />
+            <Text style={styles.suggestLabel}>이런 걸 물어볼 수 있어요</Text>
+            <View style={styles.suggestList}>
+              {suggestions.map((text, i) => (
+                <Pressable
+                  key={`${i}-${text}`}
+                  onPress={() => handleSeedTap(text)}
+                  style={({ pressed }) => [styles.suggest, pressed && { opacity: 0.7 }]}
+                >
+                  <Text style={styles.suggestText}>{text}</Text>
+                  <Text style={styles.suggestArrow}>↗</Text>
+                </Pressable>
+              ))}
+            </View>
           </View>
-          <Pressable
-            onPress={() => handleSend()}
-            disabled={!input.trim() || isLoading}
-            style={({ pressed }) => [
-              styles.sendBtn,
-              (!input.trim() || isLoading) && styles.sendBtnDisabled,
-              pressed && { opacity: 0.85 },
-            ]}
-          >
-            <Text style={styles.sendBtnIcon}>↑</Text>
+        )}
+
+        {history.map((q, idx) => (
+          <ChatTurn
+            key={q.id}
+            query={q}
+            isLatest={idx === history.length - 1 && q.id === lastSubmittedId}
+            onThumbsUp={() => rate(q.id, 'up')}
+            onThumbsDown={() => rate(q.id, 'down')}
+            resolveCategory={(entryId) =>
+              (getEntryById(entryId)?.category as Category) ?? 'Event'
+            }
+            findUQ={(queryText) =>
+              unknownQueue.find((u) => u.query_text === queryText)
+            }
+          />
+        ))}
+
+        {isLoading && (
+          <View style={styles.loading}>
+            <Text style={styles.loadingDot}>✦</Text>
+            <Text style={styles.loadingText}>
+              스퀘어 어시스턴트가 매장 가이드를 보고 있어요...
+            </Text>
+          </View>
+        )}
+
+        <View style={{ height: 8 }} />
+      </ScrollView>
+
+      {/* 전송 실패 알림 — 조용히 사라지지 않게, 다시 시도 경로 제공 */}
+      {error && (
+        <View style={styles.errorBar}>
+          <Text style={styles.errorText}>{error}</Text>
+          <Pressable onPress={() => void retryLast()} hitSlop={6} style={({ pressed }) => [styles.retryBtn, pressed && { opacity: 0.7 }]}>
+            <Text style={styles.retryText}>다시 시도</Text>
+          </Pressable>
+          <Pressable onPress={dismissError} hitSlop={8} style={({ pressed }) => [pressed && { opacity: 0.6 }]}>
+            <Text style={styles.errorClose}>✕</Text>
           </Pressable>
         </View>
-      </KeyboardAvoidingView>
-      <RoleTabBar role="junior" />
-    </SafeAreaView>
+      )}
+
+      {/* 추천 질문 상시 노출 — 대화가 시작된 뒤에도 다음 질문을 한 탭으로(빈 상태 안내와 중복 방지) */}
+      {history.length > 0 && (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.chipStrip}
+          contentContainerStyle={styles.chipStripContent}
+          keyboardShouldPersistTaps="handled"
+        >
+          {suggestions.map((text, i) => (
+            <Pressable
+              key={`chip-${i}`}
+              onPress={() => handleSeedTap(text)}
+              disabled={isLoading}
+              style={({ pressed }) => [styles.chip, pressed && { opacity: 0.7 }, isLoading && { opacity: 0.5 }]}
+            >
+              <Text style={styles.chipText} numberOfLines={1}>{text}</Text>
+            </Pressable>
+          ))}
+        </ScrollView>
+      )}
+
+      {/* 익명 토글 — 묻기 어려운 질문(권리·인간관계·실수)을 부담 없이 */}
+      <View style={styles.anonRow}>
+        <Pressable
+          onPress={() => setAnon((v) => !v)}
+          accessibilityRole="switch"
+          accessibilityState={{ checked: anon }}
+          style={({ pressed }) => [
+            styles.anonChip,
+            anon && styles.anonChipOn,
+            pressed && { opacity: 0.8 },
+          ]}
+        >
+          <Text style={[styles.anonChipText, anon && styles.anonChipTextOn]}>
+            {anon ? '🔒 익명으로 묻는 중' : '🔓 익명으로 묻기'}
+          </Text>
+        </Pressable>
+        {anon && <Text style={styles.anonHint}>사장님께 이름이 안 보여요</Text>}
+      </View>
+
+      {/* 입력바 */}
+      <View style={styles.inputBar}>
+        <View style={styles.inputWrap}>
+          <TextInput
+            value={input}
+            onChangeText={setInput}
+            placeholder="궁금한 걸 물어보세요"
+            placeholderTextColor={InkColors.ink3}
+            style={styles.input}
+            editable={!isLoading}
+            maxLength={500}
+            returnKeyType="send"
+            onSubmitEditing={() => handleSend()}
+            blurOnSubmit={false}
+          />
+        </View>
+        <Pressable
+          onPress={() => handleSend()}
+          disabled={!input.trim() || isLoading}
+          style={({ pressed }) => [
+            styles.sendBtn,
+            (!input.trim() || isLoading) && styles.sendBtnDisabled,
+            pressed && { opacity: 0.85 },
+          ]}
+        >
+          <Text style={styles.sendBtnIcon}>↑</Text>
+        </Pressable>
+      </View>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -277,7 +311,7 @@ type ChatTurnProps = {
   onThumbsUp: () => void;
   onThumbsDown: () => void;
   resolveCategory: (entryId: string) => Category;
-  findUQ: (queryText: string) => { presumed_category: Category; ai_general_answer: string } | undefined;
+  findUQ: (queryText: string) => { presumed_category: Category; ai_general_answer: string; similar_queries_count?: number } | undefined;
 };
 
 function ChatTurn({
@@ -288,8 +322,8 @@ function ChatTurn({
   resolveCategory,
   findUQ,
 }: ChatTurnProps) {
-  // 마지막 신규 응답에만 살짝 fade-in
-  const opacity = useRef(new Animated.Value(isLatest ? 0 : 1)).current;
+  // 마지막 신규 응답에만 살짝 fade-in. useMemo로 1회 생성(refs 룰 회피).
+  const opacity = useMemo(() => new Animated.Value(isLatest ? 0 : 1), []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (isLatest) {
@@ -302,6 +336,9 @@ function ChatTurn({
   }, [isLatest, opacity]);
 
   const block = query.response_block;
+  const matchedEntry = usePlaybookStore((s) =>
+    query.matched_entry_ids[0] ? s.getById(query.matched_entry_ids[0]) : undefined,
+  );
 
   // DeflectCard 라우팅용 카테고리/일반 답변
   const deflectMeta = useMemo(() => {
@@ -309,7 +346,8 @@ function ChatTurn({
     const uq = findUQ(query.query_text);
     const presumed: Category = uq?.presumed_category ?? inferCategoryFromQuery(query.query_text);
     const general = uq?.ai_general_answer;
-    return { presumed, general };
+    const similar = uq?.similar_queries_count;
+    return { presumed, general, similar };
   }, [block, findUQ, query.query_text]);
 
   return (
@@ -328,6 +366,7 @@ function ChatTurn({
               title: block.source.title,
               version: block.source.version,
               updatedAt: block.source.updated_at,
+              label: matchedEntry?.source?.label,
             }}
             category={
               query.matched_entry_ids[0]
@@ -335,6 +374,10 @@ function ChatTurn({
                 : 'Event'
             }
             confidence={query.match_confidence}
+            verification={matchedEntry?.verification?.state}
+            resolutionRate={matchedEntry?.stats?.resolution_rate}
+            doText={matchedEntry?.square?.extract?.do}
+            dontText={matchedEntry?.square?.extract?.dont}
             feedback={query.satisfaction}
             onThumbsUp={onThumbsUp}
             onThumbsDown={onThumbsDown}
@@ -344,6 +387,7 @@ function ChatTurn({
             <DeflectCard
               presumedCategory={deflectMeta.presumed}
               aiGeneralAnswer={deflectMeta.general}
+              similarCount={deflectMeta.similar}
             />
           )
         )}
@@ -357,25 +401,6 @@ function ChatTurn({
  * ───────────────────────────────────────────────────────── */
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: InkColors.cream },
-
-  // 헤더 우측 '사장으로 전환'
-  switchBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 999,
-    backgroundColor: InkColors.bgSoft,
-    borderWidth: 1,
-    borderColor: InkColors.line,
-    marginRight: 4,
-  },
-  switchBtnText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: InkColors.ink2,
-  },
 
   // 상단 신원 바
   identityBar: {
@@ -547,9 +572,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: InkColors.ink,
     paddingVertical: Platform.OS === 'ios' ? 10 : 6,
-  },
-  micWrap: {
-    marginLeft: 6,
   },
   sendBtn: {
     width: 44,
