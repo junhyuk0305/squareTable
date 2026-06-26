@@ -200,7 +200,7 @@ const styles = StyleSheet.create({
   pName: { fontSize: 17, fontWeight: '800', color: InkColors.ink },
   pMeta: { fontSize: 13, color: InkColors.ink3, marginTop: 1 },
   codeCard: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, backgroundColor: '#FFFFFF', borderRadius: 14, borderWidth: 1, borderColor: BrandColors.gold },
-  codeLabel: { fontSize: 12, fontWeight: '700', color: BrandColors.gold },
+  codeLabel: { fontSize: 12, fontWeight: '700', color: InkColors.ink2 },
   codeValue: { fontSize: 26, fontWeight: '900', color: InkColors.ink, letterSpacing: 4, marginTop: 2 },
   codeBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: InkColors.bgSoft, borderRadius: 999, paddingVertical: 9, paddingHorizontal: 14, borderWidth: 1, borderColor: InkColors.line },
   codeBtnText: { fontSize: 13, fontWeight: '800', color: InkColors.ink },

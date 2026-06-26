@@ -1,6 +1,7 @@
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { CategoryChip } from '@/components/CategoryChip';
 import { BrandColors, InkColors } from '@/lib/theme/colors';
+import { Elevation, Radius } from '@/lib/theme/elevation';
 import { formatAsked } from '@/lib/utils/time';
 import type { UnknownQuery } from '@/types';
 
@@ -57,11 +58,12 @@ export function InboxHeroCard({ uq, careerDays, onPress }: Props) {
 const styles = StyleSheet.create({
   card: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 14,
+    borderRadius: Radius.lg,
     borderWidth: 1,
     borderColor: InkColors.line,
     padding: 24,
     gap: 14,
+    ...Elevation.e2,
   },
   head: {
     flexDirection: 'row',

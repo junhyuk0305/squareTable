@@ -562,6 +562,6 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     maxWidth: '90%',
   },
-  toastCheck: { color: '#5E7357', fontWeight: '800', fontSize: 16 },
+  toastCheck: { color: BrandColors.yellow, fontWeight: '800', fontSize: 16 },
   toastText: { color: '#FFFFFF', fontWeight: '700', fontSize: 14 },
 });

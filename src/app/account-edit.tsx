@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
+import { HeaderBackButton } from '@/components/HeaderBackButton';
 
 // 프로필 편집 + 비밀번호 변경 (오너·주니어 공용).
 export default function AccountEdit() {
@@ -60,7 +61,7 @@ export default function AccountEdit() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
-      <Stack.Screen options={{ headerShown: true, title: '프로필 편집' }} />
+      <Stack.Screen options={{ headerShown: true, title: '프로필 편집', headerLeft: () => <HeaderBackButton /> }} />
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
         <Text style={styles.group}>기본 정보</Text>
         <View style={styles.card}>
@@ -128,7 +129,7 @@ const styles = StyleSheet.create({
   storeCard: { borderColor: BrandColors.gold },
   storeMetaRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 2 },
   storeChip: { backgroundColor: BrandColors.brandSoft, borderRadius: 999, paddingVertical: 5, paddingHorizontal: 10 },
-  storeChipText: { fontSize: 11, fontWeight: '700', color: BrandColors.gold },
+  storeChipText: { fontSize: 11, fontWeight: '700', color: InkColors.ink2 },
   storeRemain: { fontSize: 12, color: InkColors.ink3, fontWeight: '600' },
   readonly: { backgroundColor: InkColors.bgSoft, justifyContent: 'center' },
   readonlyText: { fontSize: 15, color: InkColors.ink3 },

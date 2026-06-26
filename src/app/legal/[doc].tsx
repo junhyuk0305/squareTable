@@ -2,6 +2,7 @@ import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { InkColors } from '@/lib/theme/colors';
+import { HeaderBackButton } from '@/components/HeaderBackButton';
 
 // 회원가입 동의의 '보기' 링크가 여는 문서들. 파일럿 1차 최소 고지(법무 검토 전 초안).
 // 기존 /terms(이용약관)·/privacy(처리방침)와 별도로, 동의 항목별 세부 문서를 제공.
@@ -51,7 +52,7 @@ export default function LegalDocScreen() {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <Stack.Screen options={{ headerShown: true, title: data.title, headerStyle: { backgroundColor: '#FFFFFF' }, headerTintColor: InkColors.ink }} />
+      <Stack.Screen options={{ headerShown: true, title: data.title, headerStyle: { backgroundColor: '#FFFFFF' }, headerTintColor: InkColors.ink, headerLeft: () => <HeaderBackButton /> }} />
       <ScrollView contentContainerStyle={styles.scroll}>
         <Text style={styles.h1}>{data.h1}</Text>
         <Text style={styles.updated}>시행일: 2026-06-10 · 운영: 팀 스퀘어테이블</Text>

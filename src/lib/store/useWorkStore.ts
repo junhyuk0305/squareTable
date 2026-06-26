@@ -16,7 +16,11 @@ import {
 import { guardWrite } from '@/lib/store/useSyncStore';
 
 export type TaskSection = 'open' | 'mid' | 'close' | 'etc';
-export type TaskTemplate = { id: string; section: TaskSection; text: string };
+/**
+ * dueDate 없음 → 매일 반복되는 루틴 체크리스트(기존 동작).
+ * dueDate('YYYY-MM-DD') 있음 → 그 날짜에만 뜨는 일회성 '예정 할일'(미래에 미리 적기).
+ */
+export type TaskTemplate = { id: string; section: TaskSection; text: string; dueDate?: string };
 export type DoneMark = { by: string; byName: string; at: string };
 export type FeedKind = 'notice' | 'message' | 'task_done';
 export type FeedItem = {
@@ -45,6 +49,12 @@ export const SECTION_LABEL: Record<TaskSection, string> = {
 };
 
 const T = todayStr();
+/** 데모용 미래 날짜(오늘+N일, YYYY-MM-DD) */
+function plusDays(n: number): string {
+  const d = new Date(`${T}T00:00:00`);
+  d.setDate(d.getDate() + n);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
 
 const seedTemplates: TaskTemplate[] = [
   { id: 'o1', section: 'open', text: '에스프레소 머신 예열 (08시)' },
@@ -57,6 +67,9 @@ const seedTemplates: TaskTemplate[] = [
   { id: 'c2', section: 'close', text: '제빙기 비우고 청소' },
   { id: 'c3', section: 'close', text: '쓰레기 분리수거' },
   { id: 'c4', section: 'close', text: '포스 마감 정산' },
+  // 예정 할일(미래) 데모 — 캘린더에 미리 적어둔 일회성 할일
+  { id: 'p1', section: 'etc', text: '신메뉴 크로플 레시피 교육', dueDate: plusDays(2) },
+  { id: 'p2', section: 'etc', text: '월말 재고 실사', dueDate: plusDays(3) },
 ];
 
 const seedDone: Record<string, Record<string, DoneMark>> = {
@@ -104,7 +117,7 @@ type State = {
   loaded: boolean;
   hydrate: () => Promise<void>;
   subscribe: () => () => void;
-  addTemplate: (section: TaskSection, text: string) => void;
+  addTemplate: (section: TaskSection, text: string, dueDate?: string) => void;
   removeTemplate: (id: string) => void;
   toggleTask: (date: string, templateId: string, staffId: string, staffName: string, role: 'owner' | 'junior') => void;
   postNotice: (date: string, text: string, authorId: string, authorName: string, important: boolean) => void;
@@ -129,8 +142,8 @@ export const useWorkStore = create<State>((set, get) => ({
   // 다른 기기(사장↔알바) 변경을 실시간 반영.
   subscribe: () => subscribeWork(() => get().hydrate()),
 
-  addTemplate: (section, text) => {
-    const t = { id: uid('t'), section, text };
+  addTemplate: (section, text, dueDate) => {
+    const t: TaskTemplate = { id: uid('t'), section, text, ...(dueDate ? { dueDate } : null) };
     set((s) => ({ templates: [...s.templates, t] }));
     void guardWrite(
       insertTemplate(t),

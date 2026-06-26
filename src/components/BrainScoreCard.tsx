@@ -2,6 +2,7 @@ import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { InkColors, BrandColors } from '@/lib/theme/colors';
+import { Elevation, Radius } from '@/lib/theme/elevation';
 import { ALL_CATEGORIES, getCategoryMeta } from '@/lib/utils/category';
 import { TARGET_PER_CATEGORY, type BrainScore } from '@/lib/utils/brainScore';
 import type { Category } from '@/types';
@@ -72,18 +73,20 @@ export function BrainScoreCard({
 const styles = StyleSheet.create({
   card: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 16,
+    borderRadius: Radius.lg,
     borderWidth: 1,
     borderColor: InkColors.line,
     padding: 16,
     gap: 12,
+    ...Elevation.e2,
   },
   head: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   title: { fontSize: 14, fontWeight: '800', color: InkColors.ink2 },
   pct: { marginLeft: 'auto', fontSize: 18, fontWeight: '900', color: InkColors.ink, letterSpacing: -0.5 },
 
-  track: { height: 8, borderRadius: 999, backgroundColor: InkColors.bgSoft, overflow: 'hidden' },
-  fill: { height: '100%', borderRadius: 999, backgroundColor: InkColors.ink },
+  track: { height: 9, borderRadius: 999, backgroundColor: InkColors.bgSoft, overflow: 'hidden' },
+  // 게이지 = 노랑 바 (디자인시스템: 검정바+노랑끝 미채택)
+  fill: { height: '100%', borderRadius: 999, backgroundColor: BrandColors.yellow },
 
   cats: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   cat: { flexDirection: 'row', alignItems: 'center', gap: 5, minWidth: '44%' },

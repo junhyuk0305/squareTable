@@ -1,6 +1,7 @@
 import { type ReactNode } from 'react';
 import { View, StyleSheet, Platform } from 'react-native';
 import { InkColors } from '@/lib/theme/colors';
+import { FRAME_MAX_WIDTH } from '@/lib/theme/layout';
 
 /**
  * 웹에서 가로가 넓어도 모바일 폭(460px)을 유지하고 중앙 정렬 + 좌우 거터.
@@ -34,7 +35,7 @@ const styles = StyleSheet.create({
     backgroundColor: InkColors.cream,
     ...(isWeb
       ? {
-          maxWidth: 460,
+          maxWidth: FRAME_MAX_WIDTH,
           borderLeftWidth: 1,
           borderRightWidth: 1,
           borderColor: '#E8E6DF',

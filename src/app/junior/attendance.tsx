@@ -1,14 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { View, Text, Pressable, StyleSheet, ScrollView } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Stack, useRouter } from 'expo-router';
+import { Redirect, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useAttendanceStore, type AttendanceRecord } from '@/lib/store/useAttendanceStore';
 import { usePayrollStore } from '@/lib/store/usePayrollStore';
-import { RoleTabBar } from '@/components/RoleTabBar';
-import { logout } from '@/lib/auth';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { fmtDuration, won, hhmm, todayStr, minutesBetween } from '@/lib/utils/attendance';
 
@@ -18,7 +15,11 @@ function liveMinutes(r: AttendanceRecord): number {
   return 0;
 }
 
-export default function JuniorAttendanceScreen() {
+/**
+ * 출퇴근 패널 — 화면 크롬(SafeAreaView·탭바·헤더) 없이 콘텐츠만.
+ * 직원 '업무' 탭의 세그먼트(업무 | 출퇴근) 안에 임베드되어 쓰인다.
+ */
+export function AttendancePanel() {
   const userId = useSessionStore((s) => s.userId);
   const userName = useSessionStore((s) => s.userName);
   const records = useAttendanceStore((s) => s.records);
@@ -61,95 +62,86 @@ export default function JuniorAttendanceScreen() {
   }, [working]);
 
   return (
-    <SafeAreaView style={styles.safe} edges={['bottom']}>
-      <Stack.Screen
-        options={{
-          title: '출퇴근',
-          headerRight: () => (
-            <Pressable onPress={() => void logout()} hitSlop={8} style={({ pressed }) => [{ paddingHorizontal: 8 }, pressed && { opacity: 0.6 }]}>
-              <Text style={{ fontSize: 13, fontWeight: '700', color: BrandColors.brand }}>로그아웃</Text>
-            </Pressable>
-          ),
-        }}
-      />
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        <Text style={styles.hello}>{userName}님, 오늘도 화이팅이에요</Text>
+    <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      <Text style={styles.hello}>{userName}님, 오늘도 화이팅이에요</Text>
 
-        {/* 메인 액션 카드 */}
-        <View style={styles.mainCard}>
-          {working && <Text style={styles.workingTag}>● 근무 중</Text>}
-          <Text style={styles.bigTime}>{fmtDuration(todayMin)}</Text>
-          <Text style={styles.bigSub}>
-            {working
-              ? `${hhmm(openRec!.check_in!)} 출근 · 오늘 ${won(todayPay)}`
-              : todayRecs.length > 0
-                ? `오늘 ${todayRecs.length}회 근무 · ${won(todayPay)}`
-                : '아직 출근 전이에요'}
-          </Text>
+      {/* 메인 액션 카드 */}
+      <View style={styles.mainCard}>
+        {working && <Text style={styles.workingTag}>● 근무 중</Text>}
+        <Text style={styles.bigTime}>{fmtDuration(todayMin)}</Text>
+        <Text style={styles.bigSub}>
+          {working
+            ? `${hhmm(openRec!.check_in!)} 출근 · 오늘 ${won(todayPay)}`
+            : todayRecs.length > 0
+              ? `오늘 ${todayRecs.length}회 근무 · ${won(todayPay)}`
+              : '아직 출근 전이에요'}
+        </Text>
 
-          {working ? (
-            <Pressable
-              onPress={() => checkOut(userId)}
-              style={({ pressed }) => [styles.btn, styles.btnOut, pressed && { opacity: 0.85 }]}
-            >
-              <Text style={styles.btnText}>퇴근하기</Text>
-            </Pressable>
-          ) : (
-            <Pressable
-              onPress={() => checkIn(userId)}
-              style={({ pressed }) => [styles.btn, styles.btnIn, pressed && { opacity: 0.85 }]}
-            >
-              <Text style={styles.btnText}>{todayRecs.length > 0 ? '다시 출근하기' : '출근하기'}</Text>
-            </Pressable>
-          )}
-        </View>
-
-        {/* 이번 달 합계 */}
-        <View style={styles.statRow}>
-          <View style={styles.statCard}>
-            <Text style={styles.statLabel}>이번 달 근무</Text>
-            <Text style={styles.statValue}>{fmtDuration(monthMin)}</Text>
-          </View>
-          <View style={styles.statCard}>
-            <Text style={styles.statLabel}>예상 급여</Text>
-            <Text style={styles.statValue}>{won(monthPay)}</Text>
-          </View>
-        </View>
-        <Text style={styles.wageNote}>시급 {won(wage)} 기준 · 세전 예상액</Text>
-
-        {/* 최근 기록 */}
-        <View style={styles.recHeader}>
-          <Text style={styles.sectionTitle}>최근 기록</Text>
-          <Pressable onPress={() => router.push('/junior/timesheet')} hitSlop={6} style={({ pressed }) => [styles.viewAllBtn, pressed && { opacity: 0.6 }]}>
-            <Text style={styles.viewAllText}>내역 전체보기</Text>
-            <Ionicons name="chevron-forward" size={14} color={BrandColors.brand} />
+        {working ? (
+          <Pressable
+            onPress={() => checkOut(userId)}
+            style={({ pressed }) => [styles.btn, styles.btnOut, pressed && { opacity: 0.85 }]}
+          >
+            <Text style={styles.btnText}>퇴근하기</Text>
           </Pressable>
+        ) : (
+          <Pressable
+            onPress={() => checkIn(userId)}
+            style={({ pressed }) => [styles.btn, styles.btnIn, pressed && { opacity: 0.85 }]}
+          >
+            <Text style={styles.btnText}>{todayRecs.length > 0 ? '다시 출근하기' : '출근하기'}</Text>
+          </Pressable>
+        )}
+      </View>
+
+      {/* 이번 달 합계 */}
+      <View style={styles.statRow}>
+        <View style={styles.statCard}>
+          <Text style={styles.statLabel}>이번 달 근무</Text>
+          <Text style={styles.statValue}>{fmtDuration(monthMin)}</Text>
         </View>
-        <View style={styles.list}>
-          {recentRecs.length === 0 && <Text style={styles.empty}>아직 기록이 없어요</Text>}
-          {recentRecs.slice(0, 5).map((r) => (
-            <Pressable key={r.id} onPress={() => router.push('/junior/timesheet')} style={({ pressed }) => [styles.recRow, pressed && { opacity: 0.6 }]}>
-              <Text style={styles.recDate}>{r.date.slice(5).replace('-', '/')}</Text>
-              <Text style={styles.recTime}>
-                {r.check_in ? hhmm(r.check_in) : '—'} ~ {r.check_out ? hhmm(r.check_out) : '근무 중'}
-              </Text>
-              <Text style={styles.recMin}>{fmtDuration(liveMinutes(r))}</Text>
-              <Ionicons name="create-outline" size={15} color={InkColors.ink3} style={{ marginLeft: 6 }} />
-            </Pressable>
-          ))}
+        <View style={styles.statCard}>
+          <Text style={styles.statLabel}>예상 급여</Text>
+          <Text style={styles.statValue}>{won(monthPay)}</Text>
         </View>
-        <View style={styles.editNote}>
-          <Text style={styles.editNoteText}>✎ 시간이 틀리면 본인이 직접 보정할 수 있어요. 수정 시 사장님에게 ‘수정됨’으로 표시됩니다.</Text>
-        </View>
-        <View style={{ height: 8 }} />
-      </ScrollView>
-      <RoleTabBar role="junior" />
-    </SafeAreaView>
+      </View>
+      <Text style={styles.wageNote}>시급 {won(wage)} 기준 · 세전 예상액</Text>
+
+      {/* 최근 기록 */}
+      <View style={styles.recHeader}>
+        <Text style={styles.sectionTitle}>최근 기록</Text>
+        <Pressable onPress={() => router.push('/junior/timesheet')} hitSlop={6} style={({ pressed }) => [styles.viewAllBtn, pressed && { opacity: 0.6 }]}>
+          <Text style={styles.viewAllText}>내역 전체보기</Text>
+          <Ionicons name="chevron-forward" size={14} color={BrandColors.brand} />
+        </Pressable>
+      </View>
+      <View style={styles.list}>
+        {recentRecs.length === 0 && <Text style={styles.empty}>아직 기록이 없어요</Text>}
+        {recentRecs.slice(0, 5).map((r) => (
+          <Pressable key={r.id} onPress={() => router.push('/junior/timesheet')} style={({ pressed }) => [styles.recRow, pressed && { opacity: 0.6 }]}>
+            <Text style={styles.recDate}>{r.date.slice(5).replace('-', '/')}</Text>
+            <Text style={styles.recTime}>
+              {r.check_in ? hhmm(r.check_in) : '—'} ~ {r.check_out ? hhmm(r.check_out) : '근무 중'}
+            </Text>
+            <Text style={styles.recMin}>{fmtDuration(liveMinutes(r))}</Text>
+            <Ionicons name="create-outline" size={15} color={InkColors.ink3} style={{ marginLeft: 6 }} />
+          </Pressable>
+        ))}
+      </View>
+      <View style={styles.editNote}>
+        <Text style={styles.editNoteText}>✎ 시간이 틀리면 본인이 직접 보정할 수 있어요. 수정 시 사장님에게 ‘수정됨’으로 표시됩니다.</Text>
+      </View>
+      <View style={{ height: 8 }} />
+    </ScrollView>
   );
 }
 
+/** 구(舊) 라우트 — 출퇴근은 이제 '업무' 탭 안으로 통합. 직접 진입 시 그쪽으로 보낸다. */
+export default function JuniorAttendanceRoute() {
+  return <Redirect href="/junior/work" />;
+}
+
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: InkColors.cream },
   scroll: { padding: 20, gap: 16 },
   hello: { fontSize: 15, color: InkColors.ink2, fontWeight: '600' },
 

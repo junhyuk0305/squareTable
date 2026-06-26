@@ -109,7 +109,7 @@ export default function JuniorChatScreen() {
     <SafeAreaView style={styles.safe} edges={['bottom']}>
       <Stack.Screen
         options={{
-          title: '스퀘어 어시스턴트',
+          title: '노하우',
         }}
       />
 
@@ -191,6 +191,28 @@ export default function JuniorChatScreen() {
               <Text style={styles.errorClose}>✕</Text>
             </Pressable>
           </View>
+        )}
+
+        {/* 추천 질문 상시 노출 — 대화가 시작된 뒤에도 다음 질문을 한 탭으로(빈 상태 안내와 중복 방지) */}
+        {history.length > 0 && (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.chipStrip}
+            contentContainerStyle={styles.chipStripContent}
+            keyboardShouldPersistTaps="handled"
+          >
+            {suggestions.map((text, i) => (
+              <Pressable
+                key={`chip-${i}`}
+                onPress={() => handleSeedTap(text)}
+                disabled={isLoading}
+                style={({ pressed }) => [styles.chip, pressed && { opacity: 0.7 }, isLoading && { opacity: 0.5 }]}
+              >
+                <Text style={styles.chipText} numberOfLines={1}>{text}</Text>
+              </Pressable>
+            ))}
+          </ScrollView>
         )}
 
         {/* 익명 토글 — 묻기 어려운 질문(권리·인간관계·실수)을 부담 없이 */}
@@ -456,6 +478,19 @@ const styles = StyleSheet.create({
   retryBtn: { paddingVertical: 4, paddingHorizontal: 10, borderRadius: 999, backgroundColor: BrandColors.accent },
   retryText: { fontSize: 12, fontWeight: '800', color: '#FFFFFF' },
   errorClose: { fontSize: 14, fontWeight: '800', color: BrandColors.accent },
+
+  // 추천 질문 상시 스트립 (대화 시작 후)
+  chipStrip: { maxHeight: 44, backgroundColor: '#FFFFFF' },
+  chipStripContent: { paddingHorizontal: 12, paddingTop: 8, gap: 8, alignItems: 'center' },
+  chip: {
+    backgroundColor: InkColors.bgSoft,
+    borderWidth: 1,
+    borderColor: InkColors.line,
+    borderRadius: 999,
+    paddingVertical: 7,
+    paddingHorizontal: 13,
+  },
+  chipText: { fontSize: 12.5, fontWeight: '700', color: InkColors.ink2 },
 
   // 익명 토글
   anonRow: {

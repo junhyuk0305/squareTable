@@ -36,7 +36,7 @@ export default function JuniorJoin() {
     const { error } = await joinByInvite(code.trim());
     setBusy(false);
     if (error) return setErr(error);
-    router.replace('/junior/chat');
+    router.replace('/junior/home');
   };
 
   return (

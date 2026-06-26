@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { Stack, Redirect, usePathname } from 'expo-router';
 import { InkColors } from '@/lib/theme/colors';
+import { HeaderBackButton } from '@/components/HeaderBackButton';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { useChatStore } from '@/lib/store/useChatStore';
@@ -54,11 +55,12 @@ export default function JuniorLayout() {
         headerTintColor: InkColors.ink,
       }}
     >
-      <Stack.Screen name="chat" options={{ title: '스퀘어 어시스턴트' }} />
+      <Stack.Screen name="home" options={{ headerShown: false }} />
+      <Stack.Screen name="chat" options={{ title: '노하우' }} />
       <Stack.Screen name="attendance" options={{ title: '출퇴근' }} />
       <Stack.Screen name="work" options={{ title: '업무' }} />
       <Stack.Screen name="settings" options={{ title: '설정' }} />
-      <Stack.Screen name="timesheet" options={{ title: '내 출퇴근 내역' }} />
+      <Stack.Screen name="timesheet" options={{ title: '내 출퇴근 내역', headerLeft: () => <HeaderBackButton fallback="/junior/work" /> }} />
       <Stack.Screen name="join" options={{ title: '가게 연결' }} />
       <Stack.Screen name="onboarding" options={{ headerShown: false }} />
     </Stack>

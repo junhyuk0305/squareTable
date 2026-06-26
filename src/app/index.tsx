@@ -7,6 +7,7 @@ import { useSessionStore } from '@/lib/store/useSessionStore';
 import { applyMockSeed } from '@/lib/demo/mockSeed';
 import { HAS_SUPABASE } from '@/lib/supabase';
 import { BrandColors, InkColors } from '@/lib/theme/colors';
+import { Wordmark } from '@/components/Wordmark';
 import type { Role } from '@/types';
 
 export default function LoginScreen() {
@@ -27,7 +28,7 @@ export default function LoginScreen() {
   const demoEnter = () => {
     switchTo(role);
     applyMockSeed(true); // 데모 계정 = 데모 데이터로 입장
-    router.replace(role === 'owner' ? '/owner/dashboard' : '/junior/chat');
+    router.replace(role === 'owner' ? '/owner/dashboard' : '/junior/home');
   };
 
   const login = async () => {
@@ -48,7 +49,7 @@ export default function LoginScreen() {
       setMsg('로그인 실패 — 이메일/비밀번호를 확인해주세요.');
       return;
     }
-    router.replace(r === 'owner' ? '/owner/dashboard' : '/junior/chat');
+    router.replace(r === 'owner' ? '/owner/dashboard' : '/junior/home');
   };
 
   const magicLink = async () => {
@@ -72,15 +73,7 @@ export default function LoginScreen() {
     <SafeAreaView style={styles.safe}>
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
         <View style={styles.header}>
-          <View style={styles.markRow}>
-            <View style={styles.mark}>
-              <Ionicons name="checkmark-sharp" size={18} color="#FFFFFF" />
-            </View>
-            <View style={[styles.mark, styles.markGold]}>
-              <Ionicons name="checkmark-sharp" size={18} color="#FFFFFF" />
-            </View>
-          </View>
-          <Text style={styles.brand}>착착</Text>
+          <Wordmark size="lg" showEng />
           <Text style={styles.tagline}>할 일이 착착 끝나는 가게 · 현장 운영 AI</Text>
         </View>
 
@@ -149,11 +142,7 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: InkColors.cream },
   scroll: { flexGrow: 1, padding: 24, justifyContent: 'center', gap: 28 },
-  header: { alignItems: 'center', gap: 8 },
-  markRow: { flexDirection: 'row', gap: 6, marginBottom: 2 },
-  mark: { width: 30, height: 30, borderRadius: 9, backgroundColor: BrandColors.brand, alignItems: 'center', justifyContent: 'center' },
-  markGold: { backgroundColor: BrandColors.gold },
-  brand: { fontSize: 38, fontWeight: '900', letterSpacing: -1, color: BrandColors.brand },
+  header: { alignItems: 'center', gap: 12 },
   tagline: { fontSize: 13, color: InkColors.ink3, textAlign: 'center' },
 
   card: {

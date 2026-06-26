@@ -246,14 +246,21 @@ export function TimesheetView({ staffId, wage, editedBy, badgeLabel, badgeTone =
   );
 }
 
+/** 숫자만 받아 HH:MM(숫자숫자:숫자숫자) 형식으로 자동 포맷. 4자리 초과 입력 차단. */
+function formatTimeInput(v: string): string {
+  const d = v.replace(/\D/g, '').slice(0, 4);
+  if (d.length <= 2) return d;
+  return `${d.slice(0, 2)}:${d.slice(2)}`;
+}
+
 function TimeEditRow({ cin, cout, onCin, onCout }: { cin: string; cout: string; onCin: (v: string) => void; onCout: (v: string) => void }) {
   return (
     <View style={styles.editRow}>
       <Text style={styles.editFieldLabel}>출근</Text>
-      <TextInput value={cin} onChangeText={onCin} placeholder="09:00" placeholderTextColor={InkColors.ink3} maxLength={5} style={styles.timeInput} />
+      <TextInput value={cin} onChangeText={(v) => onCin(formatTimeInput(v))} keyboardType="number-pad" placeholder="09:00" placeholderTextColor={InkColors.ink3} maxLength={5} style={styles.timeInput} />
       <Text style={styles.editTilde}>~</Text>
       <Text style={styles.editFieldLabel}>퇴근</Text>
-      <TextInput value={cout} onChangeText={onCout} placeholder="18:00" placeholderTextColor={InkColors.ink3} maxLength={5} style={styles.timeInput} />
+      <TextInput value={cout} onChangeText={(v) => onCout(formatTimeInput(v))} keyboardType="number-pad" placeholder="18:00" placeholderTextColor={InkColors.ink3} maxLength={5} style={styles.timeInput} />
     </View>
   );
 }

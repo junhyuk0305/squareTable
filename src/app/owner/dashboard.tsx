@@ -1,8 +1,10 @@
-import { useMemo } from 'react';
-import { View, Text, Pressable, StyleSheet, ScrollView } from 'react-native';
+import { useEffect, useMemo, useRef } from 'react';
+import { View, Text, Pressable, StyleSheet, ScrollView, Animated } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+
+import { PressableScale } from '@/components/PressableScale';
 
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useUnknownQueueStore } from '@/lib/store/useUnknownQueueStore';
@@ -13,6 +15,7 @@ import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { useStaffStore } from '@/lib/store/useStaffStore';
 import { RoleTabBar } from '@/components/RoleTabBar';
 import { BrainScoreCard } from '@/components/BrainScoreCard';
+import { Wordmark } from '@/components/Wordmark';
 import { getCategoryMeta } from '@/lib/utils/category';
 import { computeBrainScore } from '@/lib/utils/brainScore';
 import { SEED_TEMPLATES } from '@/data/seed-templates';
@@ -86,15 +89,39 @@ export default function OwnerDashboardScreen() {
       : '급한 미답변은 없어요. 오늘도 매장 잘 굴러가고 있어요 👍';
   const briefingSub = `지금 근무 ${working}명 · 오늘 할일 ${taskDoneCount}/${taskTotal} 완료 · 이번 달 인건비 ${won(monthPay)}`;
 
+  // 진입 시 본문이 살짝 떠오르며 페이드인.
+  const enterOpacity = useRef(new Animated.Value(0)).current;
+  const enterY = useRef(new Animated.Value(12)).current;
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(enterOpacity, { toValue: 1, duration: 320, useNativeDriver: true }),
+      Animated.spring(enterY, { toValue: 0, useNativeDriver: true, speed: 14, bounciness: 6 }),
+    ]).start();
+  }, [enterOpacity, enterY]);
+
   return (
-    <SafeAreaView style={styles.safe} edges={['bottom']}>
-      <Stack.Screen
-        options={{
-          title: storeName,
-        }}
-      />
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        <Text style={styles.greet}>{userName} 사장님, 오늘도 고생 많으세요</Text>
+    <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
+      <Stack.Screen options={{ headerShown: false }} />
+
+      {/* 좌: 워드마크 로고 / 우: 매장명·사용자명(우측 정렬, 줄바꿈) */}
+      <View style={styles.appHeader}>
+        <Wordmark size="sm" />
+        <View style={styles.appHeaderRight}>
+          <Text style={styles.appHeaderStore} numberOfLines={1}>
+            {storeName}
+          </Text>
+          <Text style={styles.appHeaderUser} numberOfLines={1}>
+            {userName} 사장님
+          </Text>
+        </View>
+      </View>
+
+      <Animated.ScrollView
+        contentContainerStyle={styles.scroll}
+        showsVerticalScrollIndicator={false}
+        style={{ opacity: enterOpacity, transform: [{ translateY: enterY }] }}
+      >
+        <Text style={styles.greet}>오늘도 고생 많으세요</Text>
 
         {/* 신규 매장 온보딩 — 노하우 0건이면 가장 먼저 첫 입력을 유도(빈 매장 = 알바 답변 0 → 이탈 방지) */}
         {entries.length === 0 && (
@@ -105,13 +132,10 @@ export default function OwnerDashboardScreen() {
               아직 등록된 노하우가 없어요. 사장님이 알려주신 내용이 있어야 알바가 물었을 때 AI가 대신 답할 수 있어요.
               {'\n'}자주 생기는 일 <Text style={{ fontWeight: '800' }}>3가지만</Text> 알려주고 시작해보세요.
             </Text>
-            <Pressable
-              onPress={() => router.push('/owner/categories')}
-              style={({ pressed }) => [styles.onboardCta, pressed && { opacity: 0.88 }]}
-            >
+            <PressableScale onPress={() => router.push('/owner/categories')} scaleTo={0.96} style={styles.onboardCta}>
               <Ionicons name="create-outline" size={16} color="#FFFFFF" />
               <Text style={styles.onboardCtaText}>첫 노하우 알려주기</Text>
-            </Pressable>
+            </PressableScale>
 
             {/* 씨앗 템플릿 — 빈 챗봇으로 시작하지 않도록 업종 초안을 한 탭으로 적립 */}
             <Text style={styles.seedLabel}>또는 추천으로 빠르게 시작 — 탭하면 AI가 정리해줘요</Text>
@@ -140,59 +164,25 @@ export default function OwnerDashboardScreen() {
           </View>
           <Text style={styles.briefingLead}>{briefingLead}</Text>
           <Text style={styles.briefingSub}>{briefingSub}</Text>
-          {pending > 0 && (
-            <Pressable
-              onPress={() => router.push('/owner/inbox')}
-              style={({ pressed }) => [styles.briefingCta, pressed && { opacity: 0.85 }]}
-            >
-              <Text style={styles.briefingCtaText}>질문 답변하러 가기</Text>
-              <Ionicons name="arrow-forward" size={14} color={InkColors.ink} />
-            </Pressable>
-          )}
+          {/* HERO = 화면당 단 하나의 주인공 액션. 미답변이 있으면 답변, 없으면 회고로 자동 전환 */}
+          <PressableScale
+            onPress={() => router.push(pending > 0 ? '/owner/inbox' : '/owner/capture')}
+            scaleTo={0.96}
+            style={styles.briefingCta}
+          >
+            <Text style={styles.briefingCtaText}>
+              {pending > 0 ? '질문 답변하러 가기' : '오늘 한 줄 회고 남기기'}
+            </Text>
+            <Ionicons name="arrow-forward" size={14} color={InkColors.ink} />
+          </PressableScale>
         </View>
         )}
 
         {/* 매장 두뇌 완성도 게이지 (F3) — 노하우가 하나라도 있을 때만 */}
         {entries.length > 0 && <BrainScoreCard score={brain} onFill={fillWeak} />}
 
-        <View style={styles.grid}>
-          <MetricCard
-            icon="chatbox-ellipses-outline"
-            label="미답변 질문"
-            value={`${pending}건`}
-            accent={pending > 0}
-            onPress={() => router.push('/owner/inbox')}
-          />
-          <MetricCard
-            icon="checkmark-done-outline"
-            label="오늘 할일"
-            value={`${taskDoneCount}/${taskTotal}`}
-            onPress={() => router.push('/owner/work')}
-          />
-          <MetricCard
-            icon="people-outline"
-            label="근무 중"
-            value={`${working}명`}
-            onPress={() => router.push('/owner/attendance')}
-          />
-          <MetricCard
-            icon="cash-outline"
-            label="이번 달 인건비"
-            value={won(monthPay)}
-            small
-            onPress={() => router.push('/owner/attendance')}
-          />
-        </View>
-
-        <View style={styles.miniRow}>
-          <Pressable onPress={() => router.push('/owner/knowledge')}>
-            <Text style={styles.miniLink}>등록된 노하우 {entries.length}개 ›</Text>
-          </Pressable>
-          <Text style={styles.miniDot}>·</Text>
-          <Pressable onPress={() => router.push('/owner/staff')}>
-            <Text style={styles.miniLink}>직원 {staff.length}명 ›</Text>
-          </Pressable>
-        </View>
+        {/* ③ 그 아래는 스캔용 리스트만 — 큰 숫자 카드는 화면당 1개(위 브리핑/두뇌)로 제한.
+            4칸 메트릭 그리드는 해체해 위 브리핑 한 줄(근무·할일·인건비)로 흡수했다. */}
 
         {/* 알바 FAQ Top → 노하우화 */}
         {topFaq.length > 0 && (
@@ -227,16 +217,34 @@ export default function OwnerDashboardScreen() {
           </View>
         )}
 
+        {/* 스캔용 미니 링크 — 노하우·직원·근태 진입. 메트릭(근무·인건비)은 위 브리핑 한 줄로 흡수했고
+            여기선 큰 카드 없이 행으로만. 근태 화면은 탭바에 없으므로 이 링크로 진입을 보존한다. */}
+        <View style={styles.miniRow}>
+          <Pressable onPress={() => router.push('/owner/knowledge')}>
+            <Text style={styles.miniLink}>노하우 {entries.length}개 ›</Text>
+          </Pressable>
+          <Text style={styles.miniDot}>·</Text>
+          <Pressable onPress={() => router.push('/owner/staff')}>
+            <Text style={styles.miniLink}>직원 {staff.length}명 ›</Text>
+          </Pressable>
+          <Text style={styles.miniDot}>·</Text>
+          <Pressable onPress={() => router.push('/owner/attendance')}>
+            <Text style={styles.miniLink}>근태·인건비 ›</Text>
+          </Pressable>
+        </View>
+
         {/* 혼자 모드 넛지 — 입력을 강요하지 않고 '돌려받는 것'·미래가치로 끌어들인다 */}
         {entries.length > 0 && (
           <View style={styles.nudges}>
-            {/* F4 하루 한 줄 회고 */}
-            <NudgeCard
-              icon="moon-outline"
-              title="하루 한 줄 회고"
-              sub="오늘 새로 안 것·실수, 한 줄이면 AI가 노하우로 정리해요"
-              onPress={() => router.push('/owner/capture')}
-            />
+            {/* F4 하루 한 줄 회고 — 미답변이 없을 땐 위 HERO가 이미 회고로 보내므로 중복 숨김 */}
+            {pending > 0 && (
+              <NudgeCard
+                icon="moon-outline"
+                title="하루 한 줄 회고"
+                sub="오늘 새로 안 것·실수, 한 줄이면 AI가 노하우로 정리해요"
+                onPress={() => router.push('/owner/capture')}
+              />
+            )}
             {/* F6 핸드오프 넛지 — 혼자 모드(직원 0명)에서만 */}
             {isSolo && (
               <NudgeCard
@@ -248,39 +256,9 @@ export default function OwnerDashboardScreen() {
             )}
           </View>
         )}
-      </ScrollView>
+      </Animated.ScrollView>
       <RoleTabBar role="owner" />
     </SafeAreaView>
-  );
-}
-
-function MetricCard({
-  icon,
-  label,
-  value,
-  accent,
-  small,
-  onPress,
-}: {
-  icon: string;
-  label: string;
-  value: string;
-  accent?: boolean;
-  small?: boolean;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => [styles.card, accent && styles.cardAccent, pressed && { opacity: 0.85 }]}
-    >
-      <Ionicons name={icon as any} size={20} color={accent ? BrandColors.accent : InkColors.ink3} />
-      <Text style={[styles.value, small && styles.valueSmall, accent && { color: BrandColors.accent }]}>{value}</Text>
-      <View style={styles.cardBottom}>
-        <Text style={styles.label}>{label}</Text>
-        <Ionicons name="chevron-forward" size={14} color={InkColors.ink3} />
-      </View>
-    </Pressable>
   );
 }
 
@@ -296,7 +274,7 @@ function NudgeCard({
   onPress: () => void;
 }) {
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => [styles.nudge, pressed && { opacity: 0.85 }]}>
+    <PressableScale onPress={onPress} scaleTo={0.98} style={styles.nudge}>
       <View style={styles.nudgeIcon}>
         <Ionicons name={icon as any} size={18} color={InkColors.ink2} />
       </View>
@@ -305,7 +283,7 @@ function NudgeCard({
         <Text style={styles.nudgeSub}>{sub}</Text>
       </View>
       <Ionicons name="chevron-forward" size={16} color={InkColors.ink3} />
-    </Pressable>
+    </PressableScale>
   );
 }
 
@@ -314,6 +292,21 @@ const styles = StyleSheet.create({
   headerBtn: { fontSize: 13, fontWeight: '700', color: BrandColors.brand },
   scroll: { padding: 20, gap: 18 },
   greet: { fontSize: 16, fontWeight: '700', color: InkColors.ink2 },
+
+  // 상단 커스텀 헤더 — 좌측 로고 / 우측 매장명·사용자명
+  appHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingTop: 6,
+    paddingBottom: 10,
+    backgroundColor: InkColors.cream,
+  },
+  logo: { width: 36, height: 36, borderRadius: 9 },
+  appHeaderRight: { flex: 1, alignItems: 'flex-end', paddingLeft: 12 },
+  appHeaderStore: { fontSize: 16, fontWeight: '900', color: InkColors.ink, textAlign: 'right' },
+  appHeaderUser: { fontSize: 12, fontWeight: '600', color: InkColors.ink3, textAlign: 'right', marginTop: 2 },
 
   onboard: {
     backgroundColor: BrandColors.accentSoft,
@@ -368,26 +361,7 @@ const styles = StyleSheet.create({
   },
   briefingCtaText: { fontSize: 13, fontWeight: '800', color: InkColors.ink },
 
-  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
-  card: {
-    flexBasis: '47%',
-    flexGrow: 1,
-    minWidth: 140,
-    minHeight: 112,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: InkColors.line,
-    padding: 16,
-    justifyContent: 'space-between',
-  },
-  cardAccent: { borderColor: '#E8C9C2', backgroundColor: BrandColors.accentSoft },
-  value: { fontSize: 26, fontWeight: '900', color: InkColors.ink, letterSpacing: -0.5, marginTop: 8 },
-  valueSmall: { fontSize: 20 },
-  cardBottom: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 },
-  label: { fontSize: 13, color: InkColors.ink3, fontWeight: '600' },
-
-  miniRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  miniRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8 },
   miniLink: { fontSize: 13, color: InkColors.ink2, fontWeight: '700' },
   miniDot: { fontSize: 13, color: InkColors.ink3 },
 

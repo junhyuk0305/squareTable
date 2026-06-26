@@ -27,7 +27,7 @@ export default function JuniorOnboarding() {
     if (error) return setErr(error);
     // 합류 성공 → 챗으로. storeName은 세션이 이미 갱신함.
     void storeName;
-    router.replace('/junior/chat');
+    router.replace('/junior/home');
   };
 
   return (

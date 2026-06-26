@@ -2,6 +2,7 @@ import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack } from 'expo-router';
 import { InkColors } from '@/lib/theme/colors';
+import { HeaderBackButton } from '@/components/HeaderBackButton';
 
 // 판매자(사업자) 정보 — 전자상거래법상 유료 판매 시 고지 의무. 실제 사업자등록 후 값 채울 것.
 const ROWS: Array<[string, string]> = [
@@ -17,7 +18,7 @@ const ROWS: Array<[string, string]> = [
 export default function BusinessInfoScreen() {
   return (
     <SafeAreaView style={styles.safe}>
-      <Stack.Screen options={{ headerShown: true, title: '사업자 정보', headerStyle: { backgroundColor: '#FFFFFF' }, headerTintColor: InkColors.ink }} />
+      <Stack.Screen options={{ headerShown: true, title: '사업자 정보', headerStyle: { backgroundColor: '#FFFFFF' }, headerTintColor: InkColors.ink, headerLeft: () => <HeaderBackButton /> }} />
       <ScrollView contentContainerStyle={styles.scroll}>
         <Text style={styles.h1}>판매자 정보</Text>
         <View style={styles.card}>

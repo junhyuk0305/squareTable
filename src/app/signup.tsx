@@ -120,7 +120,7 @@ export default function SignupScreen() {
     if (!HAS_SUPABASE) {
       enterMockStore(name.trim(), role, storeName.trim());
       applyMockSeed(false);
-      router.replace(role === 'owner' ? '/owner/dashboard' : '/junior/chat');
+      router.replace(role === 'owner' ? '/owner/dashboard' : '/junior/home');
       return;
     }
 
@@ -162,13 +162,13 @@ export default function SignupScreen() {
       if (!code) {
         // 코드 없이 가입 — 매장 미연결 상태로 입장(레이아웃 가드가 /junior/join으로 유도)
         setBusy(false);
-        router.replace('/junior/chat');
+        router.replace('/junior/home');
         return;
       }
       const j = await joinByInvite(code);
       setBusy(false);
       if (j.error) return setErr(j.error);
-      router.replace('/junior/chat');
+      router.replace('/junior/home');
     }
   };
 

@@ -2,6 +2,7 @@ import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { CategoryChip } from './CategoryChip';
 import { SourceFooter } from './SourceFooter';
 import { BrandColors, InkColors } from '@/lib/theme/colors';
+import { Elevation, Radius } from '@/lib/theme/elevation';
 import type { Category } from '@/types';
 
 type Props = {
@@ -116,11 +117,12 @@ export function SquareCard({ summary, actions, donts, source, category, confiden
 const styles = StyleSheet.create({
   card: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 14,
+    borderRadius: Radius.md,
     padding: 18,
     borderWidth: 1,
     borderColor: InkColors.line,
     gap: 12,
+    ...Elevation.e2,
   },
   header: {
     flexDirection: 'row',

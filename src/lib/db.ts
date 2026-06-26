@@ -225,16 +225,27 @@ export function subscribePlaybook(onChange: () => void): () => void {
 // ── 업무보드: 할일 템플릿 ──────────────────────────────────
 export async function fetchTemplates(): Promise<TaskTemplate[]> {
   if (!HAS_SUPABASE) return [];
-  const { data, error } = await supabase.from('work_templates').select('id, section, text').order('created_at');
+  const { data, error } = await supabase.from('work_templates').select('id, section, text, due_date').order('created_at');
   if (error) {
     console.warn('[db] fetchTemplates:', error.message);
     return [];
   }
-  return (data ?? []) as TaskTemplate[];
+  // due_date(snake) → dueDate(camel). NULL이면 매일 반복 루틴.
+  return (data ?? []).map((r: any) => ({
+    id: r.id,
+    section: r.section,
+    text: r.text,
+    ...(r.due_date ? { dueDate: r.due_date as string } : null),
+  })) as TaskTemplate[];
 }
 export async function insertTemplate(t: TaskTemplate): Promise<boolean> {
   if (!HAS_SUPABASE) return true;
-  return write('insertTemplate', supabase.from('work_templates').insert({ ...t, unit_id: _unitId }));
+  return write(
+    'insertTemplate',
+    supabase
+      .from('work_templates')
+      .insert({ id: t.id, section: t.section, text: t.text, due_date: t.dueDate ?? null, unit_id: _unitId }),
+  );
 }
 export async function deleteTemplate(id: string): Promise<boolean> {
   if (!HAS_SUPABASE) return true;

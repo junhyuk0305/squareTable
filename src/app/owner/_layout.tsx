@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { Stack, Redirect } from 'expo-router';
 import { InkColors } from '@/lib/theme/colors';
+import { HeaderBackButton } from '@/components/HeaderBackButton';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { useUnknownQueueStore } from '@/lib/store/useUnknownQueueStore';
@@ -42,19 +43,23 @@ export default function OwnerLayout() {
         headerStyle: { backgroundColor: '#FFFFFF' },
         headerTitleStyle: { fontWeight: '800', color: InkColors.ink, fontSize: 16 },
         headerTintColor: InkColors.ink,
+        // 기본: 모든 서브화면에 항상 뒤로가기 보장(웹 새로고침/딥링크 포함).
+        headerLeft: () => <HeaderBackButton />,
       }}
     >
-      <Stack.Screen name="dashboard" options={{ title: '홈' }} />
-      <Stack.Screen name="settings" options={{ title: '설정' }} />
+      {/* 탭 루트 4개는 뒤로가기 없이 기본(탭바로 이동) */}
+      <Stack.Screen name="dashboard" options={{ title: '홈', headerLeft: undefined }} />
+      <Stack.Screen name="categories" options={{ title: '노하우 추가', headerLeft: undefined }} />
+      <Stack.Screen name="work" options={{ title: '업무', headerLeft: undefined }} />
+      <Stack.Screen name="settings" options={{ title: '설정', headerLeft: undefined }} />
+      {/* 서브화면 — 전역 headerLeft(HeaderBackButton) 사용 */}
       <Stack.Screen name="inbox" options={{ title: '받은 질문' }} />
-      <Stack.Screen name="attendance" options={{ title: '근무·급여' }} />
       <Stack.Screen name="staff" options={{ title: '직원 관리' }} />
+      <Stack.Screen name="attendance" options={{ title: '근무·급여' }} />
       <Stack.Screen name="timesheet/[staffId]" options={{ title: '출근 기록' }} />
       <Stack.Screen name="payroll" options={{ title: '급여 설정' }} />
       <Stack.Screen name="knowledge" options={{ title: '내 노하우' }} />
       <Stack.Screen name="edit/[id]" options={{ title: '노하우 수정' }} />
-      <Stack.Screen name="work" options={{ title: '업무' }} />
-      <Stack.Screen name="categories" options={{ title: '노하우 추가' }} />
       <Stack.Screen name="answer/[uqId]" options={{ title: '질문 답변' }} />
       <Stack.Screen name="add/[category]" options={{ title: '노하우 추가' }} />
     </Stack>
