@@ -36,6 +36,7 @@ export type StructureSquareInput = {
   storeId: string;
   rawText: string;               // 사장 음성 전사 또는 직접 입력 원문
   category?: Category;
+  categoryGuide?: string;  // 카테고리별 추출 지침(프롬프트 주입용). 클라가 src/data/category-guides.ts의 extractionGuide를 실어 보냄.
 };
 
 export type StructureSquareOutput = {
