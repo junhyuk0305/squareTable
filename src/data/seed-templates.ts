@@ -6,13 +6,13 @@ import type { Category } from '@/types';
  * 시작하지 않도록, 사장 발화체 초안을 미리 제공한다. 사장은 탭 → AI 정리 → 수정·발행.
  * (멘토 가설 "못하는 사장이 씨앗을 수정은 할 수 있는가" 검증용)
  *
- * draft 는 capture 화면에 그대로 프리필되어 AI 가 SQUARE 로 정형화한다.
+ * draft 는 대화형 입력(owner/coach)에 그대로 프리필되어 AI 가 SQUARE 로 정형화한다.
  */
 export type SeedTemplate = {
   id: string;
   category: Category;
   title: string; // 칩에 보일 짧은 제목
-  draft: string; // capture 에 프리필될 사장 발화체 초안
+  draft: string; // owner/coach 에 프리필될 사장 발화체 초안
 };
 
 export const SEED_TEMPLATES: SeedTemplate[] = [

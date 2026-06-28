@@ -5,6 +5,7 @@ import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 import { PressableScale } from '@/components/PressableScale';
+import { Appear } from '@/components/Appear';
 
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useUnknownQueueStore } from '@/lib/store/useUnknownQueueStore';
@@ -76,7 +77,7 @@ export default function OwnerDashboardScreen() {
   const brain = useMemo(() => computeBrainScore(entries), [entries]);
   const isSolo = staff.length === 0; // 직원 미합류 = 혼자 모드
   const fillWeak = (category: Category | null) => {
-    if (category) router.push({ pathname: '/owner/add/[category]', params: { category } });
+    if (category) router.push({ pathname: '/owner/coach', params: { category } });
     else router.push('/owner/categories');
   };
 
@@ -124,7 +125,7 @@ export default function OwnerDashboardScreen() {
 
         {/* 신규 매장 온보딩 — 노하우 0건이면 가장 먼저 첫 입력을 유도(빈 매장 = 알바 답변 0 → 이탈 방지) */}
         {entries.length === 0 && (
-          <View style={styles.onboard}>
+          <Appear delay={0} style={styles.onboard}>
             <Text style={styles.onboardEmoji}>👋</Text>
             <Text style={styles.onboardTitle}>매장을 막 시작하셨네요</Text>
             <Text style={styles.onboardBody}>
@@ -142,7 +143,7 @@ export default function OwnerDashboardScreen() {
               {SEED_TEMPLATES.map((t) => (
                 <Pressable
                   key={t.id}
-                  onPress={() => router.push({ pathname: '/owner/capture', params: { seed: t.draft } })}
+                  onPress={() => router.push({ pathname: '/owner/coach', params: { seed: t.draft } })}
                   style={({ pressed }) => [styles.seedChip, pressed && { opacity: 0.7 }]}
                 >
                   <Text style={styles.seedChipText}>
@@ -151,14 +152,15 @@ export default function OwnerDashboardScreen() {
                 </Pressable>
               ))}
             </View>
-          </View>
+          </Appear>
         )}
 
         {/* ① 받은질문 히어로 — 사령탑의 단일 주인공. 미답변 수 + 받은질문 탭 진입.
             미답변이 있으면 답변 유도(alert), 없으면 긍정 톤으로 회고 유도. */}
         {entries.length > 0 && (
+          <Appear delay={0}>
           <PressableScale
-            onPress={() => router.push(pending > 0 ? '/owner/inbox' : '/owner/capture')}
+            onPress={() => router.push(pending > 0 ? '/owner/inbox' : '/owner/coach')}
             scaleTo={0.97}
             style={styles.hero}
             accessibilityRole="button"
@@ -190,10 +192,12 @@ export default function OwnerDashboardScreen() {
               <Ionicons name="arrow-forward" size={14} color={InkColors.ink} />
             </View>
           </PressableScale>
+          </Appear>
         )}
 
         {/* ② 오늘 업무 요약 — 완료/전체·근무·인건비를 스캔용 한 줄 카드로. 업무 화면으로 진입. */}
         {entries.length > 0 && (
+          <Appear delay={60}>
           <Pressable
             onPress={() => router.push('/owner/work')}
             style={({ pressed }) => [styles.todayCard, pressed && { opacity: 0.85 }]}
@@ -215,14 +219,19 @@ export default function OwnerDashboardScreen() {
               지금 근무 {working}명 · 이번 달 인건비 {won(monthPay)}
             </Text>
           </Pressable>
+          </Appear>
         )}
 
         {/* ③ 매장운영 허브 — 그동안 미니링크로 숨어 있던 근무·급여/직원/급여설정을 카드로 surface. */}
-        {entries.length > 0 && <OwnerHomeHubCards />}
+        {entries.length > 0 && (
+          <Appear delay={120}>
+            <OwnerHomeHubCards />
+          </Appear>
+        )}
 
         {/* 알바 FAQ Top → 노하우화 */}
         {topFaq.length > 0 && (
-          <View style={styles.faqSection}>
+          <Appear delay={180} style={styles.faqSection}>
             <View style={styles.faqHead}>
               <Text style={styles.faqTitle}>알바가 자주 묻는 질문</Text>
               <Text style={styles.faqHint}>답하면 노하우로 쌓여요</Text>
@@ -233,7 +242,7 @@ export default function OwnerDashboardScreen() {
                 return (
                   <Pressable
                     key={q.id}
-                    onPress={() => router.push({ pathname: '/owner/answer/[uqId]', params: { uqId: q.id } })}
+                    onPress={() => router.push({ pathname: '/owner/coach', params: { uqId: q.id } })}
                     style={({ pressed }) => [styles.faqRow, pressed && { opacity: 0.7 }]}
                   >
                     <View style={[styles.faqDot, { backgroundColor: cm.color }]} />
@@ -250,11 +259,15 @@ export default function OwnerDashboardScreen() {
                 );
               })}
             </View>
-          </View>
+          </Appear>
         )}
 
         {/* ④ 임팩트 — 매장 두뇌 완성도 게이지 (F3). 노하우가 하나라도 있을 때만 */}
-        {entries.length > 0 && <BrainScoreCard score={brain} onFill={fillWeak} />}
+        {entries.length > 0 && (
+          <Appear delay={240}>
+            <BrainScoreCard score={brain} onFill={fillWeak} />
+          </Appear>
+        )}
 
         {/* 노하우 진입 미니 링크 — 매장운영(근무·직원)은 위 허브카드로 이관했고, 여기선 노하우 라이브러리만. */}
         <View style={styles.miniRow}>
@@ -265,14 +278,14 @@ export default function OwnerDashboardScreen() {
 
         {/* 혼자 모드 넛지 — 입력을 강요하지 않고 '돌려받는 것'·미래가치로 끌어들인다 */}
         {entries.length > 0 && (
-          <View style={styles.nudges}>
+          <Appear delay={300} style={styles.nudges}>
             {/* F4 하루 한 줄 회고 — 미답변이 없을 땐 위 HERO가 이미 회고로 보내므로 중복 숨김 */}
             {pending > 0 && (
               <NudgeCard
                 icon="moon-outline"
                 title="하루 한 줄 회고"
                 sub="오늘 새로 안 것·실수, 한 줄이면 AI가 노하우로 정리해요"
-                onPress={() => router.push('/owner/capture')}
+                onPress={() => router.push('/owner/coach')}
               />
             )}
             {/* F6 핸드오프 넛지 — 혼자 모드(직원 0명)에서만 */}
@@ -284,7 +297,7 @@ export default function OwnerDashboardScreen() {
                 onPress={() => router.push('/owner/staff')}
               />
             )}
-          </View>
+          </Appear>
         )}
       </Animated.ScrollView>
       <RoleTabBar role="owner" />

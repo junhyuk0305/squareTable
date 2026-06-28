@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo } from 'react';
 import { View, Text, ScrollView, StyleSheet, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, Stack } from 'expo-router';
@@ -7,14 +7,13 @@ import { CategoryChip } from '@/components/CategoryChip';
 import { InboxHeroCard } from '@/components/InboxHeroCard';
 import { InboxSubtabs } from '@/components/InboxSubtabs';
 import { SimilarGroupRow } from '@/components/SimilarGroupRow';
-import { VoiceAnswerSheet } from '@/components/VoiceAnswerSheet';
 import { RoleTabBar } from '@/components/RoleTabBar';
+import { Appear } from '@/components/Appear';
 
 import { useUnknownQueueStore } from '@/lib/store/useUnknownQueueStore';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 
-import { buildPlaybookEntry } from '@/lib/utils/buildEntry';
 import { BrandColors, InkColors } from '@/lib/theme/colors';
 
 import { useStaffStore } from '@/lib/store/useStaffStore';
@@ -28,7 +27,7 @@ const TOP_RESOLVED = 5;
  * 2) Hero 우선 답변 1건 (가장 시급 = confidence 최저)
  * 3) <InboxSubtabs> [대기 | 자동응답 | 보관] — 상태별 파생 필터·카운트는 컴포넌트가 처리.
  *    각 행은 <SimilarGroupRow> (유사 질문 N건 묶음 + 보관/자동응답 인라인 액션).
- *    행 탭 → 음성 1터치 답변(VoiceAnswerSheet). 등록 시 노하우 생성 + resolve.
+ *    행 탭 → 대화형 답변(owner/coach). 등록 시 노하우 생성 + resolve.
  * 4) 처리됨 · 알바 인용 top 5
  */
 export default function OwnerInboxScreen() {
@@ -37,15 +36,10 @@ export default function OwnerInboxScreen() {
   const loaded = useUnknownQueueStore((s) => s.loaded);
   const archive = useUnknownQueueStore((s) => s.archive);
   const enableAutoAnswer = useUnknownQueueStore((s) => s.enableAutoAnswer);
-  const resolve = useUnknownQueueStore((s) => s.resolve);
 
   const entries = usePlaybookStore((s) => s.entries);
-  const addEntry = usePlaybookStore((s) => s.add);
   const userName = useSessionStore((s) => s.userName);
   const getStaff = useStaffStore((s) => s.getStaff);
-
-  // 음성 빠른 답변 시트 — 행 탭으로 열림.
-  const [voiceTarget, setVoiceTarget] = useState<UnknownQuery | null>(null);
 
   // pending 정렬: 시급한 순(confidence asc) → 최근 순(asked_at desc)
   const pending = useMemo(
@@ -69,25 +63,12 @@ export default function OwnerInboxScreen() {
     return getStaff(hero.junior_id)?.career_days;
   }, [hero, getStaff]);
 
-  const goAnswer = (uqId: string) =>
-    router.push({ pathname: '/owner/answer/[uqId]', params: { uqId } });
-
-  // 행 탭 → 음성 빠른 답변 시트.
-  const openVoice = useCallback((uq: UnknownQuery) => setVoiceTarget(uq), []);
-  const closeVoice = useCallback(() => setVoiceTarget(null), []);
-
-  // 음성 답변 등록 → 답변 텍스트를 노하우로 발행하고 질문을 해결 처리.
-  // 빠른 경로라 위저드를 거치지 않고, 발화 한 줄을 '할 행동' step으로 정규화한다(기존 buildPlaybookEntry 재사용).
-  const submitVoice = useCallback(
-    (answerText: string) => {
-      const uq = voiceTarget;
-      if (!uq) return;
-      const entry = buildPlaybookEntry(uq, { actions: [answerText.trim()] });
-      addEntry(entry);
-      resolve(uq.id, entry.id);
-    },
-    [voiceTarget, addEntry, resolve],
+  // 행/Hero 탭 → 대화형 답변(coach). 질문 컨텍스트가 첫 말풍선으로 열린다.
+  const goAnswer = useCallback(
+    (uqId: string) => router.push({ pathname: '/owner/coach', params: { uqId } }),
+    [router],
   );
+  const openAnswer = useCallback((uq: UnknownQuery) => goAnswer(uq.id), [goAnswer]);
 
   return (
     <SafeAreaView edges={['bottom']} style={styles.safe}>
@@ -105,10 +86,10 @@ export default function OwnerInboxScreen() {
 
           {/* 2) Hero — 우선 답변 (가장 시급한 미답변) */}
           {hero ? (
-            <View style={styles.heroWrap}>
+            <Appear style={styles.heroWrap} offsetY={12}>
               <Text style={styles.sectionTag}>우선 답변</Text>
               <InboxHeroCard uq={hero} careerDays={careerDays} onPress={() => goAnswer(hero.id)} />
-            </View>
+            </Appear>
           ) : (
             <View style={styles.emptyHero}>
               <Text style={styles.emptyTitle}>아직 새 질문이 없어요</Text>
@@ -124,7 +105,7 @@ export default function OwnerInboxScreen() {
               renderRow={(uq) => (
                 <SimilarGroupRow
                   uq={uq}
-                  onPress={openVoice}
+                  onPress={openAnswer}
                   onArchive={uq.status === 'archived' ? undefined : (u) => archive(u.id)}
                   onAutoAnswer={
                     uq.status === 'pending_owner_answer' ? (u) => enableAutoAnswer(u.id) : undefined
@@ -153,14 +134,6 @@ export default function OwnerInboxScreen() {
           <View style={{ height: 16 }} />
         </ScrollView>
       )}
-
-      {/* 음성 1터치 답변 시트 (프레임캡은 시트 내부에서 처리) */}
-      <VoiceAnswerSheet
-        visible={voiceTarget !== null}
-        uq={voiceTarget}
-        onClose={closeVoice}
-        onSubmit={submitVoice}
-      />
 
       <RoleTabBar role="owner" />
     </SafeAreaView>

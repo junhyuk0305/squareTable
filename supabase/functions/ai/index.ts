@@ -209,16 +209,18 @@ ${rawText}
 """`;
 
   const r = await callGemini(prompt, SQUARE_SCHEMA, 700);
+  // schema required = title/situation/steps/keywords 뿐 → 나머지 칸은 모델이 누락 가능.
+  // 클라이언트는 string을 기대하므로 빈 문자열로 보정(undefined로 내려보내면 .trim() 크래시).
   return {
-    title: r.title,
+    title: r.title ?? '',
     keywords: r.keywords ?? [],
     square: {
-      situation: r.situation,
-      quagmire: r.quagmire,
-      uncover: r.uncover,
+      situation: r.situation ?? '',
+      quagmire: r.quagmire ?? '',
+      uncover: r.uncover ?? '',
       action: { steps: r.steps ?? [], scripts: r.scripts ?? [] },
-      result: { before: r.before, after: r.after, metric: r.metric },
-      extract: { do: r.do, dont: r.dont },
+      result: { before: r.before ?? '', after: r.after ?? '', metric: r.metric ?? '' },
+      extract: { do: r.do ?? '', dont: r.dont ?? '' },
     },
   };
 }

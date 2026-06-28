@@ -86,7 +86,8 @@ export function mockStructureSquare(input: StructureSquareInput): StructureSquar
       uncover,
       action: { steps, scripts: [] },
       result: { before: '', after: '', metric: '' },
-      extract: { do: steps[0] ?? '', dont },
+      // do는 비워둔다 — steps[0] 복제는 카드에 'O 꼭 이것'으로 중복 노출돼 노이즈.
+      extract: { do: '', dont },
     },
     title,
     keywords: dedupe(input.rawText.split(/\s+/).filter((t) => t.length >= 2)).slice(0, 8),

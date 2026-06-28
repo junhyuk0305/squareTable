@@ -33,12 +33,13 @@ export function isCellEmpty(square: SquareBlock, cell: CellPath): boolean {
       return !square.extract.do;
     case 'extract.dont':
       return !square.extract.dont;
+    // ?? '' — 실 LLM(Edge)이 optional 칸을 아예 누락(undefined)해도 안전.
     case 'situation':
-      return !square.situation.trim();
+      return !(square.situation ?? '').trim();
     case 'quagmire':
-      return !square.quagmire.trim();
+      return !(square.quagmire ?? '').trim();
     case 'uncover':
-      return !square.uncover.trim();
+      return !(square.uncover ?? '').trim();
     default:
       return true;
   }

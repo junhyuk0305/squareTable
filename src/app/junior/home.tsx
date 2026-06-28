@@ -10,6 +10,7 @@ import { usePayrollStore } from '@/lib/store/usePayrollStore';
 import { useWorkStore } from '@/lib/store/useWorkStore';
 import { RoleTabBar } from '@/components/RoleTabBar';
 import { Wordmark } from '@/components/Wordmark';
+import { Appear } from '@/components/Appear';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Elevation, Radius } from '@/lib/theme/elevation';
 import { fmtDuration, won, hhmm, todayStr, minutesBetween } from '@/lib/utils/attendance';
@@ -103,7 +104,7 @@ export default function JuniorHomeScreen() {
         <Text style={styles.greet}>오늘도 화이팅이에요</Text>
 
         {/* 1) 출퇴근 퀵액션 */}
-        <View style={styles.clockCard}>
+        <Appear delay={0} style={styles.clockCard}>
           {working && <Text style={styles.workingTag}>● 근무 중</Text>}
           {/* 출근 전엔 '0분' 큰 숫자 대신 가벼운 인사 — 군더더기 제거 후 버튼에 집중 */}
           {todayRecs.length > 0 ? (
@@ -151,10 +152,11 @@ export default function JuniorHomeScreen() {
             <Text style={styles.clockMoreText}>출퇴근 내역</Text>
             <Ionicons name="chevron-forward" size={13} color={InkColors.ink3} />
           </Pressable>
-        </View>
+        </Appear>
 
         {/* 2) 안 읽은 공지 — 있을 때만. 업무 탭(공지)로 진입해 읽음 처리. */}
         {unreadCount > 0 && (
+          <Appear delay={60}>
           <Pressable
             onPress={() => router.push('/junior/work')}
             style={({ pressed }) => [styles.noticeCard, pressed && { opacity: 0.85 }]}
@@ -179,9 +181,11 @@ export default function JuniorHomeScreen() {
               {unreadCount > 1 ? `외 ${unreadCount - 1}건 더 · 확인하면 읽음으로 표시돼요` : '확인하면 읽음으로 표시돼요'}
             </Text>
           </Pressable>
+          </Appear>
         )}
 
         {/* 3) 오늘 할일 진행 */}
+        <Appear delay={120}>
         <Pressable onPress={() => router.push('/junior/work')} style={({ pressed }) => [styles.taskCard, pressed && { opacity: 0.85 }]}>
           <View style={styles.taskHead}>
             <Ionicons name="checkbox-outline" size={18} color={InkColors.ink2} />
@@ -202,9 +206,10 @@ export default function JuniorHomeScreen() {
                 : `${taskRemain}개 남았어요`}
           </Text>
         </Pressable>
+        </Appear>
 
         {/* 4) 물어보기 박스 — 노하우 탭(물어보기)로 진입하는 큰 입력 유도 카드 */}
-        <View style={styles.askCard}>
+        <Appear delay={180} style={styles.askCard}>
           <Text style={styles.askTitle}>모르는 게 있나요?</Text>
           <Text style={styles.askSub}>매장 노하우를 바로 찾아드려요. 없으면 사장님께 대신 여쭤볼게요.</Text>
           <Pressable onPress={() => router.push('/junior/chat')} style={({ pressed }) => [styles.askBar, pressed && { opacity: 0.8 }]}>
@@ -218,7 +223,7 @@ export default function JuniorHomeScreen() {
               </Pressable>
             ))}
           </View>
-        </View>
+        </Appear>
 
         <View style={{ height: 8 }} />
       </ScrollView>

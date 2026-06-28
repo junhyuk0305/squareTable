@@ -134,11 +134,11 @@ function OwnerMine() {
   const pendingCount = getPending().length;
 
   const handleCategoryPress = (category: Category) => {
-    router.push({ pathname: '/owner/add/[category]', params: { category } });
+    router.push({ pathname: '/owner/coach', params: { category } });
   };
 
   const handleVoiceFirst = () => {
-    router.push('/owner/capture' as never);
+    router.push('/owner/coach' as never);
   };
 
   const handleOpenInbox = () => {

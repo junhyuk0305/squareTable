@@ -60,8 +60,8 @@ export default function OwnerLayout() {
       <Stack.Screen name="payroll" options={{ title: '급여 설정' }} />
       <Stack.Screen name="knowledge" options={{ title: '내 노하우' }} />
       <Stack.Screen name="edit/[id]" options={{ title: '노하우 수정' }} />
-      <Stack.Screen name="answer/[uqId]" options={{ title: '질문 답변' }} />
-      <Stack.Screen name="add/[category]" options={{ title: '노하우 추가' }} />
+      {/* 대화형 입력 단일 화면 — 기존 answer/[uqId]·add/[category]·capture 위저드를 대체 */}
+      <Stack.Screen name="coach" options={{ title: '노하우 알려주기' }} />
     </Stack>
   );
 }
