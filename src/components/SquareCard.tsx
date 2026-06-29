@@ -3,7 +3,7 @@ import { SourceFooter } from './SourceFooter';
 import { BrandColors, InkColors } from '@/lib/theme/colors';
 import { Elevation, Radius } from '@/lib/theme/elevation';
 import { verifyMeta, type VerifyState } from '@/lib/utils/verification';
-import type { Category, PlaybookEntry } from '@/types';
+import type { Category } from '@/types';
 
 type Props = {
   summary: string;

@@ -1,5 +1,6 @@
 import { View, Text, Pressable, ScrollView, StyleSheet } from 'react-native';
 import { CategoryChip } from './CategoryChip';
+import { EmptyState } from './EmptyState';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Elevation, Radius } from '@/lib/theme/elevation';
 import { verifyMeta } from '@/lib/utils/verification';
@@ -87,12 +88,7 @@ export function BrowseList({ entries, onSelect, emptyHint, showCategory = true }
   if (!entries || entries.length === 0) {
     // 03 카탈로그 search.empty.senior / knowhow.empty 톤(해요체).
     const hint = emptyHint ?? '찾는 노하우가 없어요. 검색어를 바꾸거나, 새 노하우로 만들어 둘 수 있어요.';
-    return (
-      <View style={styles.empty} accessibilityRole="summary">
-        <Text style={styles.emptyTitle}>아직 보여줄 노하우가 없어요</Text>
-        <Text style={styles.emptyBody}>{hint}</Text>
-      </View>
-    );
+    return <EmptyState title="아직 보여줄 노하우가 없어요" body={hint} />;
   }
 
   return (
@@ -145,14 +141,4 @@ const styles = StyleSheet.create({
   previewTag: { fontSize: 10, fontWeight: '800', letterSpacing: 0.5, width: 36 },
   previewText: { flex: 1, fontSize: 13, color: InkColors.ink2, lineHeight: 18 },
   source: { fontSize: 11, color: InkColors.ink3, marginTop: 2 },
-  empty: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 32,
-    paddingVertical: 48,
-    gap: 8,
-  },
-  emptyTitle: { fontSize: 16, fontWeight: '800', color: InkColors.ink, textAlign: 'center' },
-  emptyBody: { fontSize: 14, color: InkColors.ink2, lineHeight: 21, textAlign: 'center' },
 });
