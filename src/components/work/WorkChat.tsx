@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, Pressable, ScrollView, KeyboardAvoidingView, Platform, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -17,8 +17,10 @@ function dateLabel(date: string, today: string): string {
   return `${d.getMonth() + 1}월 ${d.getDate()}일 (${WD[d.getDay()]})`;
 }
 
-/** @멘션 토큰을 강조 렌더. mine이면 검정 말풍선이라 노랑으로. */
-function MentionText({ text, members, mine }: { text: string; members: Member[]; mine: boolean }) {
+/** @멘션 토큰을 강조 렌더. mine이면 검정 말풍선이라 노랑으로.
+ *  memo — 부모(FeedRow/스트림)가 무관한 이유로 재렌더돼도, props(text·members·mine) 불변이면
+ *  멤버 수에 비례하는 정규식 재계산을 건너뛴다(채팅 길어질수록 효과). */
+const MentionText = memo(function MentionText({ text, members, mine }: { text: string; members: Member[]; mine: boolean }) {
   const names = useMemo(() => [...members.map((m) => m.name), '전체'].sort((a, b) => b.length - a.length), [members]);
   const parts = useMemo(() => {
     if (names.length === 0) return [{ t: text, m: false }];
@@ -49,7 +51,7 @@ function MentionText({ text, members, mine }: { text: string; members: Member[];
       )}
     </Text>
   );
-}
+});
 
 /**
  * WorkChat — 업무 탭 단일 스트림(슬랙식). 대화(message)+완료알림(task_done)만 흐른다.

@@ -18,7 +18,10 @@ const SCALE_LABEL: Record<TextScale, string> = { small: '작게', normal: '보�
 
 export default function JuniorSettings() {
   const router = useRouter();
-  const { userName, email, bio, storeName } = useSessionStore();
+  const userName = useSessionStore((s) => s.userName);
+  const email = useSessionStore((s) => s.email);
+  const bio = useSessionStore((s) => s.bio);
+  const storeName = useSessionStore((s) => s.storeName);
   const deleteAccount = useSessionStore((s) => s.deleteAccount);
   const leaveStore = useSessionStore((s) => s.leaveStore);
   const prefs = usePreferencesStore();

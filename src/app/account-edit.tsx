@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack } from 'expo-router';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
+import { isValidPhone, normalizePhone } from '@/lib/utils/validation';
 import { HeaderBackButton } from '@/components/HeaderBackButton';
 
 // 프로필 편집 + 비밀번호 변경 (오너·주니어 공용).
@@ -26,7 +27,11 @@ export default function AccountEdit() {
 }
 
 function AccountEditForm() {
-  const { userName, email, bio, role, storeName } = useSessionStore();
+  const userName = useSessionStore((s) => s.userName);
+  const email = useSessionStore((s) => s.email);
+  const bio = useSessionStore((s) => s.bio);
+  const role = useSessionStore((s) => s.role);
+  const storeName = useSessionStore((s) => s.storeName);
   const updateProfile = useSessionStore((s) => s.updateProfile);
   const changePassword = useSessionStore((s) => s.changePassword);
   const renameStore = useSessionStore((s) => s.renameStore);
@@ -62,14 +67,15 @@ function AccountEditForm() {
   const saveProfile = async () => {
     if (!name.trim()) return setMsg({ ok: false, text: '이름을 입력해주세요.' });
     if (!emailValid) return setMsg({ ok: false, text: '이메일을 올바르게 입력해주세요.' });
+    const phoneInput = phone.trim();
+    if (phoneInput && !isValidPhone(phoneInput)) return setMsg({ ok: false, text: '전화번호 형식을 확인해주세요. (예: 010-1234-5678)' });
     setBusy(true);
     setMsg(null);
-    const phone_last4 = phone.replace(/\D/g, '').slice(-4) || undefined;
     const { error } = await updateProfile({
       name: name.trim(),
       email: emailInput.trim(),
       bio: intro.trim(),
-      phone_last4,
+      ...(phoneInput ? { phone: normalizePhone(phoneInput) } : {}),
     });
     setBusy(false);
     setMsg(error ? { ok: false, text: error } : { ok: true, text: '프로필을 저장했어요.' });

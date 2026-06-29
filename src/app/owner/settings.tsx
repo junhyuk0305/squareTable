@@ -21,7 +21,9 @@ const SCALE_LABEL: Record<TextScale, string> = { small: '작게', normal: '보�
 
 export default function OwnerSettings() {
   const router = useRouter();
-  const { userName, email, storeName } = useSessionStore();
+  const userName = useSessionStore((s) => s.userName);
+  const email = useSessionStore((s) => s.email);
+  const storeName = useSessionStore((s) => s.storeName);
   const inviteCode = useSessionStore((s) => s.inviteCode) || '------';
   const deleteAccount = useSessionStore((s) => s.deleteAccount);
   const prefs = usePreferencesStore();
