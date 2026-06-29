@@ -30,10 +30,13 @@ function stem(s: string): string {
   return cur;
 }
 
+// 토큰화·타이틀 정규화 공용 구두점 패턴. (.replace는 매 호출 lastIndex를 리셋하므로 /g 공유 안전)
+const PUNCT = /[?!.,~\-—_/()\[\]{}'"·…:;]/g;
+
 // 공백·구두점 기준 토큰화 (한국어 어절 단위)
 function tokenize(s: string): string[] {
   return s
-    .replace(/[?!.,~\-—_/()\[\]{}'"·…:;]/g, " ")
+    .replace(PUNCT, " ")
     .split(/\s+/)
     .map(t => t.trim())
     .filter(t => t.length > 0);
@@ -79,7 +82,7 @@ function scoreKeywords(query: string, keywords: string[]): number {
 
 // ── 2. 타이틀 n-gram 매칭 (가중치 0.6) ───────────────────────────────────────
 function scoreTitle(query: string, title: string): number {
-  const cleanTitle = title.replace(/[?!.,~\-—_/()\[\]{}'"·…:;]/g, " ");
+  const cleanTitle = title.replace(PUNCT, " ");
   const q2 = ngrams(query, 2);
   const q3 = ngrams(query, 3);
   const t2 = ngrams(cleanTitle, 2);

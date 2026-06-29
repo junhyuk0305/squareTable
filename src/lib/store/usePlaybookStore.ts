@@ -4,6 +4,7 @@ import seedData from '@/data/playbook-entries.json';
 import { HAS_SUPABASE } from '@/lib/supabase';
 import { fetchEntries, insertEntry, updateEntry, deleteEntry, subscribePlaybook } from '@/lib/db';
 import { guardWrite } from '@/lib/store/useSyncStore';
+import { embedEntry } from '@/lib/ai/searchClient';
 
 const seed = seedData as unknown as PlaybookEntry[];
 
@@ -40,6 +41,7 @@ export const usePlaybookStore = create<PlaybookState>((set, get) => ({
       () => set((s) => ({ entries: s.entries.filter((e) => e.id !== entry.id) })),
       '노하우 저장에 실패했어요. 다시 시도해 주세요.',
     );
+    void embedEntry(entry); // 임베딩 색인(파이어앤포겟, 실패해도 발행 성공)
   },
   getById: (id) => get().entries.find((e) => e.id === id),
   update: (id, patch) => {
@@ -50,6 +52,8 @@ export const usePlaybookStore = create<PlaybookState>((set, get) => ({
       () => before && set((s) => ({ entries: s.entries.map((e) => (e.id === id ? before : e)) })),
       '수정 저장에 실패했어요.',
     );
+    const merged = get().entries.find((e) => e.id === id);
+    if (merged) void embedEntry(merged); // 내용 변경 → 재색인
   },
   remove: (id) => {
     const idx = get().entries.findIndex((e) => e.id === id);

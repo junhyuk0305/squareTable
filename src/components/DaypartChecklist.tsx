@@ -135,7 +135,7 @@ export function DaypartChecklist({
                       </View>
                       <View style={styles.rowBody}>
                         <Text style={[styles.taskText, on && styles.taskTextOn]}>{t.text}</Text>
-                        {on && mark ? (
+                        {mark ? (
                           <Text style={styles.taskMeta}>
                             {mark.byName} 완료 · {hhmm(mark.at)}
                           </Text>

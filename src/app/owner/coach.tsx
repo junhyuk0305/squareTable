@@ -68,18 +68,36 @@ export default function OwnerCoachScreen() {
   // 성공 토스트를 보여준 뒤 네비게이션하도록 표시(인박스 답변 토스트 유실 방지).
   const [justPublished, setJustPublished] = useState(false);
 
+  const navAfter = useCallback(() => {
+    // 발행 후 도착지를 진입 경로와 무관하게 고정 — 인박스 답변은 인박스로,
+    // 직접 등록은 '쌓였다'는 피드백 루프를 닫기 위해 노하우 보관함으로 보낸다.
+    navTimer.current = setTimeout(() => {
+      router.replace(isInboxAnswer ? '/owner/inbox' : '/owner/knowledge');
+    }, 1100);
+  }, [router, isInboxAnswer]);
+
   const onPublished = useCallback(
     (entry: PlaybookEntry) => {
       setJustPublished(true);
       addEntry(entry);
       if (answerable && realUq) resolve(realUq.id, entry.id);
       setToast(isInboxAnswer ? '답변이 알바 챗봇에 반영됐어요' : '새 노하우가 저장됐어요');
-      navTimer.current = setTimeout(() => {
-        if (router.canGoBack()) router.back();
-        else router.replace(isInboxAnswer ? '/owner/inbox' : '/owner/categories');
-      }, 1100);
+      navAfter();
     },
-    [addEntry, resolve, isInboxAnswer, answerable, realUq, router],
+    [addEntry, resolve, isInboxAnswer, answerable, realUq, navAfter],
+  );
+
+  // 다중 분리 발행 — 각 노하우를 저장하고, 인박스면 첫 건으로 resolve. 네비/토스트는 1회.
+  const onPublishedMany = useCallback(
+    (entries: PlaybookEntry[]) => {
+      if (entries.length === 0) return;
+      setJustPublished(true);
+      entries.forEach((e) => addEntry(e));
+      if (answerable && realUq) resolve(realUq.id, entries[0].id);
+      setToast(`${entries.length}개의 노하우가 저장됐어요`);
+      navAfter();
+    },
+    [addEntry, resolve, answerable, realUq, navAfter],
   );
 
   // 인박스 모드인데 질문이 이미 처리/삭제/보관됨 → 빈 상태(데드엔드·중복 답변 방지).
@@ -115,6 +133,7 @@ export default function OwnerCoachScreen() {
         initialCategory={initialCategory}
         seedText={typeof seed === 'string' ? seed : undefined}
         onPublished={onPublished}
+        onPublishedMany={onPublishedMany}
       />
 
       {toast && (

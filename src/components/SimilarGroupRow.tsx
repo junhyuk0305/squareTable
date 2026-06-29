@@ -26,7 +26,8 @@ export type SimilarGroupRowProps = {
  */
 export function SimilarGroupRow({ uq, onPress, onArchive, onAutoAnswer }: SimilarGroupRowProps) {
   const n = uq.similar_queries_count;
-  const groupLabel = n > 0 ? `외 ${n}명도 물어봤어요` : null;
+  // 표기는 전 화면 '{총 인원}명이 물었어요'로 통일 (n = 본인 외 인원).
+  const groupLabel = n > 0 ? `${n + 1}명이 물었어요` : null;
   const hasActions = !!onArchive || !!onAutoAnswer;
 
   const a11yParts = [

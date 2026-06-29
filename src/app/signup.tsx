@@ -5,7 +5,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { applyMockSeed } from '@/lib/demo/mockSeed';
 import { HAS_SUPABASE } from '@/lib/supabase';
-import { formatBizNo, isValidBizNo } from '@/lib/utils/bizno';
+import { formatBizNo, isValidBizNo, bizDigits } from '@/lib/utils/bizno';
+import { isValidEmail } from '@/lib/utils/validation';
 import { BrandColors, InkColors } from '@/lib/theme/colors';
 import type { Role } from '@/types';
 
@@ -48,13 +49,12 @@ export default function SignupScreen() {
   const [emailSent, setEmailSent] = useState(false);
   const [verifyingEmail, setVerifyingEmail] = useState(false);
 
-  const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
   const onVerifyEmail = async () => {
     setErr(null);
     setEmailMsg(null);
     const e = email.trim();
     if (!e) return setErr('이메일을 먼저 입력해주세요.');
-    if (!EMAIL_RE.test(e)) return setErr('이메일 형식을 확인해주세요.');
+    if (!isValidEmail(e)) return setErr('이메일 형식을 확인해주세요.');
     setVerifyingEmail(true);
     const r = await verifyEmail(e);
     setVerifyingEmail(false);
@@ -111,7 +111,7 @@ export default function SignupScreen() {
     // 필수 입력 항목 — 데모/실서버 공통으로 강제(이름·이메일·비밀번호 + 사장은 가게이름)
     if (!name.trim()) return setErr('이름을 입력해주세요.');
     if (!email.trim()) return setErr('이메일을 입력해주세요.');
-    if (!EMAIL_RE.test(email.trim())) return setErr('이메일 형식을 확인해주세요.');
+    if (!isValidEmail(email)) return setErr('이메일 형식을 확인해주세요.');
     if (!pw) return setErr('비밀번호를 입력해주세요.');
     if (pw.length < 6) return setErr('비밀번호는 6자 이상이어야 해요.');
     if (role === 'owner' && !storeName.trim()) return setErr('가게 이름을 입력해주세요.');
@@ -153,16 +153,17 @@ export default function SignupScreen() {
 
     // 2) 매장 연결
     if (role === 'owner') {
-      const cs = await createStore(storeName.trim(), bizNo.trim() || undefined);
+      const cs = await createStore(storeName.trim(), bizDigits(bizNo) || undefined);
       setBusy(false);
       if (cs.error) return setErr(`가게 생성 실패: ${cs.error} — '다시 시도'를 누르면 가게 생성만 다시 시도해요.`);
       setCreatedCode(cs.inviteCode ?? '------'); // 코드 보여주고 입장
     } else {
       const code = inviteCode.trim();
       if (!code) {
-        // 코드 없이 가입 — 매장 미연결 상태로 입장(레이아웃 가드가 /junior/join으로 유도)
+        // 코드 없이 가입 — 매장 연결 화면으로 바로 보낸다(home으로 보냈다가 가드가 join으로
+        // 튕기던 이중 바운스 깜빡임 제거). 가드의 미연결 리다이렉트 목적지와 동일.
         setBusy(false);
-        router.replace('/junior/home');
+        router.replace('/junior/join');
         return;
       }
       const j = await joinByInvite(code);

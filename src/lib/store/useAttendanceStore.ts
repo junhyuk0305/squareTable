@@ -60,8 +60,11 @@ type State = {
   subscribe: () => () => void;
   checkIn: (staffId: string) => void;
   checkOut: (staffId: string) => void;
-  /** 수동 보정: 직원·날짜의 출퇴근 시간을 직접 설정(없으면 생성, 있으면 갱신). 시간은 "HH:MM". editedBy로 보정 주체 표시. */
-  upsertManual: (staffId: string, date: string, cin: string, cout: string | null, editedBy?: 'staff' | 'owner') => void;
+  /**
+   * 수동 보정: 출퇴근 시간을 직접 설정. 시간은 "HH:MM". editedBy로 보정 주체 표시.
+   * recordId를 주면 그 기록 한 건만 정확히 갱신(다회근무 같은 날 오인 방지), 없으면 새 기록 생성.
+   */
+  upsertManual: (staffId: string, date: string, cin: string, cout: string | null, editedBy?: 'staff' | 'owner', recordId?: string) => void;
   /** 출근 기록 삭제(잘못 찍힌 기록 정리) */
   removeRecord: (id: string) => void;
   applyMock: (demo: boolean) => void;
@@ -114,7 +117,7 @@ export const useAttendanceStore = create<State>((set, get) => ({
         '퇴근 기록 저장에 실패했어요. 다시 시도해 주세요.',
       );
   },
-  upsertManual: (staffId, date, cin, cout, editedBy = 'owner') => {
+  upsertManual: (staffId, date, cin, cout, editedBy = 'owner', recordId) => {
     const check_in = iso(date, cin);
     const check_out = cout ? iso(date, cout) : null;
     const work_minutes = check_out ? minutesBetween(check_in, check_out) : 0;
@@ -122,15 +125,17 @@ export const useAttendanceStore = create<State>((set, get) => ({
     let before: AttendanceRecord | undefined;
     let wasNew = false;
     set((s) => {
-      const existing = s.records.find((r) => r.staff_id === staffId && r.date === date);
+      // 기존 기록 보정은 recordId로 그 한 건만 타깃 — 같은 날 기록이 여러 개(다회근무)여도 오인하지 않는다.
+      const existing = recordId ? s.records.find((r) => r.id === recordId) : undefined;
       if (existing) {
         before = existing;
         saved = { ...existing, check_in, check_out, work_minutes, edited_by: editedBy };
         const next = saved;
-        return { records: s.records.map((r) => (r.staff_id === staffId && r.date === date ? next : r)) };
+        return { records: s.records.map((r) => (r.id === recordId ? next : r)) };
       }
       wasNew = true;
-      saved = { id: `att_${staffId}_${date}_manual`, staff_id: staffId, date, check_in, check_out, work_minutes, edited_by: editedBy };
+      // 새 기록은 uid()로 유일 id 부여(같은 날 여러 기록 공존 허용 + 자동 펀치 id와 충돌 방지).
+      saved = { id: `att_${staffId}_${uid()}`, staff_id: staffId, date, check_in, check_out, work_minutes, edited_by: editedBy };
       return { records: [saved, ...s.records] };
     });
     // edited_by 포함해 영속(0006 마이그레이션 컬럼). 자동 펀치는 edited_by 없음 → null.

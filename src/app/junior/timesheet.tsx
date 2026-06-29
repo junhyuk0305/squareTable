@@ -5,14 +5,14 @@ import { useSessionStore } from '@/lib/store/useSessionStore';
 import { usePayrollStore } from '@/lib/store/usePayrollStore';
 import { TimesheetView } from '@/components/TimesheetView';
 import { InkColors } from '@/lib/theme/colors';
-import { won } from '@/lib/utils/attendance';
+import { won, DEFAULT_HOURLY_WAGE } from '@/lib/utils/attendance';
 
 // 직원 본인 출퇴근 내역 전체. 점주 timesheet/[staffId]와 동일 UX, 본인 데이터만.
 // 본인이 보정하면 '수정됨' 표시(사장 화면엔 '직원 수정' 배지로 노출).
 export default function JuniorTimesheetScreen() {
   const userId = useSessionStore((s) => s.userId);
   const wages = usePayrollStore((s) => s.wages);
-  const wage = wages[userId] ?? 10030;
+  const wage = wages[userId] ?? DEFAULT_HOURLY_WAGE;
 
   return (
     <>

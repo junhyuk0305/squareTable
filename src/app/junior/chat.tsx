@@ -12,9 +12,11 @@ import {
 } from 'react-native';
 import { Stack } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 
 import { SquareCard } from '@/components/SquareCard';
 import { DeflectCard } from '@/components/DeflectCard';
+import { EntryDetailModal } from '@/components/EntryDetailModal';
 import { UserBubble } from '@/components/UserBubble';
 import { RoleTabBar } from '@/components/RoleTabBar';
 import { KnowhowSegment } from '@/components/KnowhowSegment';
@@ -29,17 +31,17 @@ import { HAS_SUPABASE } from '@/lib/supabase';
 import { useStaffStore } from '@/lib/store/useStaffStore';
 
 import { SEED_QUERIES } from '@/lib/demo/seedQueries';
-import { inferCategoryFromQuery } from '@/lib/utils/inferCategory';
 import { BrandColors, InkColors } from '@/lib/theme/colors';
 
 import type { Category, ChatQuery, PlaybookEntry } from '@/types';
 
 // 빈 채팅 추천 질문 — 업종(요식업) 일반. 데모 매장(노하우 보유)은 데모 시드 칩을 쓴다.
+// 첫인상은 '사소한 것도 편하게'가 되도록 저부담 질문부터 — 위기 시나리오를 앞세우지 않는다.
 const GENERIC_SUGGESTIONS = [
+  '앞치마는 어디 있어요?',
+  '마감 몇 시예요?',
   '마감 청소 어디까지 해요?',
-  '포스기 에러 났어요',
   '재료 떨어지면 어떻게 해요?',
-  '진상 손님은 어떻게 응대해요?',
 ];
 
 /**
@@ -67,7 +69,7 @@ export default function JuniorChatScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
-      <Stack.Screen options={{ title: '노하우' }} />
+      <Stack.Screen options={{ title: '물어보기' }} />
       <KnowhowSegment
         role="junior"
         initial="ask"
@@ -76,6 +78,7 @@ export default function JuniorChatScreen() {
             entries={publishedEntries}
             onSelect={handleBrowseSelect}
             emptyHint="아직 등록된 노하우가 없어요. 물어보기로 질문하면 사장님이 채워줘요."
+            showCategory={false}
           />
         }
         ask={<JuniorAsk />}
@@ -138,13 +141,9 @@ function JuniorAsk() {
     void submit(value, { anonymous: anon });
   }
 
-  // 시드 칩 1탭 — 발표자 시연 흐름
+  // 추천 칩 1탭 → 바로 전송 (입력칸을 잠깐 채웠다 지우는 깜빡임 없이 질문 버블로 즉시 노출)
   function handleSeedTap(text: string) {
-    setInput(text);
-    setTimeout(() => {
-      setInput('');
-      void submit(text, { anonymous: anon });
-    }, 300);
+    handleSend(text);
   }
 
   return (
@@ -208,7 +207,7 @@ function JuniorAsk() {
           <View style={styles.loading}>
             <Text style={styles.loadingDot}>✦</Text>
             <Text style={styles.loadingText}>
-              스퀘어 어시스턴트가 매장 가이드를 보고 있어요...
+              매장 가이드를 찾아보는 중…
             </Text>
           </View>
         )}
@@ -322,6 +321,8 @@ function ChatTurn({
   resolveCategory,
   findUQ,
 }: ChatTurnProps) {
+  const [detailOpen, setDetailOpen] = useState(false);
+
   // 마지막 신규 응답에만 살짝 fade-in. useMemo로 1회 생성(refs 룰 회피).
   const opacity = useMemo(() => new Animated.Value(isLatest ? 0 : 1), []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -340,14 +341,13 @@ function ChatTurn({
     query.matched_entry_ids[0] ? s.getById(query.matched_entry_ids[0]) : undefined,
   );
 
-  // DeflectCard 라우팅용 카테고리/일반 답변
+  // DeflectCard 보조 데이터(일반 답변·중복수). 카테고리는 노출 안 함(프레임 v2).
   const deflectMeta = useMemo(() => {
     if (block) return null;
     const uq = findUQ(query.query_text);
-    const presumed: Category = uq?.presumed_category ?? inferCategoryFromQuery(query.query_text);
     const general = uq?.ai_general_answer;
     const similar = uq?.similar_queries_count;
-    return { presumed, general, similar };
+    return { general, similar };
   }, [block, findUQ, query.query_text]);
 
   return (
@@ -355,6 +355,14 @@ function ChatTurn({
       <UserBubble text={query.query_text} />
 
       <Animated.View style={[turnStyles.assistant, { opacity }]}>
+        {block?.degraded && (
+          <View style={turnStyles.degradedNote}>
+            <Ionicons name="cloud-offline-outline" size={13} color={InkColors.ink3} />
+            <Text style={turnStyles.degradedText}>
+              지금은 기본 안내로 답했어요. 잠시 후 다시 물으면 매장에 맞춰 더 정확히 알려드려요.
+            </Text>
+          </View>
+        )}
         {block ? (
           <SquareCard
             summary={block.summary}
@@ -378,20 +386,34 @@ function ChatTurn({
             resolutionRate={matchedEntry?.stats?.resolution_rate}
             doText={matchedEntry?.square?.extract?.do}
             dontText={matchedEntry?.square?.extract?.dont}
+            standard={matchedEntry?.square?.standard}
             feedback={query.satisfaction}
             onThumbsUp={onThumbsUp}
             onThumbsDown={onThumbsDown}
+            onSourcePress={matchedEntry ? () => setDetailOpen(true) : undefined}
           />
         ) : (
           deflectMeta && (
             <DeflectCard
-              presumedCategory={deflectMeta.presumed}
               aiGeneralAnswer={deflectMeta.general}
               similarCount={deflectMeta.similar}
             />
           )
         )}
+
+        {/* 👎 직후 데드엔드 방지 — 다음 행동(재질문·직접 문의)을 안내 */}
+        {block && query.satisfaction === 'down' && (
+          <View style={turnStyles.downHelp}>
+            <Ionicons name="bulb-outline" size={14} color={InkColors.ink3} />
+            <Text style={turnStyles.downHelpText}>
+              알려줘서 고마워요. 답이 안 맞으면 다르게 한 번 더 물어보거나, 사장님께 직접 여쭤보면 정확해요.
+            </Text>
+          </View>
+        )}
       </Animated.View>
+
+      {/* 출처 → 원본 노하우 상세(읽기 전용) */}
+      <EntryDetailModal entry={matchedEntry} visible={detailOpen} onClose={() => setDetailOpen(false)} />
     </View>
   );
 }
@@ -598,4 +620,30 @@ const turnStyles = StyleSheet.create({
     width: '100%',
     alignItems: 'stretch',
   },
+  degradedNote: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 11,
+    borderRadius: 10,
+    backgroundColor: InkColors.bgSoft,
+    borderWidth: 1,
+    borderColor: InkColors.line,
+  },
+  degradedText: { flex: 1, fontSize: 12, color: InkColors.ink2, fontWeight: '600', lineHeight: 17 },
+  downHelp: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 6,
+    marginTop: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 11,
+    borderRadius: 10,
+    backgroundColor: InkColors.bgSoft,
+    borderWidth: 1,
+    borderColor: InkColors.line,
+  },
+  downHelpText: { flex: 1, fontSize: 12, color: InkColors.ink2, fontWeight: '600', lineHeight: 17 },
 });

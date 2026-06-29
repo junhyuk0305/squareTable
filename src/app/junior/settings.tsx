@@ -47,7 +47,8 @@ export default function JuniorSettings() {
     const { error } = await leaveStore();
     setBusy(false);
     if (error) return void confirmAction('실패', error, '확인');
-    router.replace('/junior/onboarding');
+    // 가드 리다이렉트 목적지(/junior/join)와 동일하게 통일 — 코드입력 화면 일원화(onboarding 중복 동선 제거)
+    router.replace('/junior/join');
   };
 
   const onDelete = async () => {
@@ -65,7 +66,6 @@ export default function JuniorSettings() {
   };
 
   const contact = () => Linking.openURL(`mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent('[착착] 문의')}`);
-  const myShift = () => confirmAction('내 근무', '시프트·시급은 사장님이 설정해요. 변경이 필요하면 사장님께 문의해주세요.', '확인');
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
@@ -88,7 +88,7 @@ export default function JuniorSettings() {
         </SettingsSection>
 
         <SettingsSection title="내 근무">
-          <SettingsRow first icon="time-outline" label="내 시프트 · 시급" onPress={myShift} />
+          <SettingsRow first icon="time-outline" label="내 시프트 · 시급" onPress={() => router.push('/junior/schedule')} />
         </SettingsSection>
 
         <SettingsSection title="알림">
@@ -132,8 +132,9 @@ export default function JuniorSettings() {
         </SettingsSection>
 
         <SettingsSection>
-          <SettingsRow first icon="exit-outline" label={busy ? '처리 중…' : '매장 나가기'} onPress={busy ? undefined : onLeave} />
-          <SettingsRow icon="log-out-outline" label="로그아웃" onPress={onLogout} />
+          {/* 무해한 액션(로그아웃) 먼저, 되돌리기 어려운 액션은 아래로 — 오탭 방지. owner 설정과 동일 순서 */}
+          <SettingsRow first icon="log-out-outline" label="로그아웃" onPress={onLogout} />
+          <SettingsRow icon="exit-outline" label={busy ? '처리 중…' : '매장 나가기'} onPress={busy ? undefined : onLeave} />
           <SettingsRow icon="trash-outline" label="회원탈퇴" danger onPress={busy ? undefined : onDelete} />
         </SettingsSection>
 

@@ -48,7 +48,7 @@ export default function OwnerInboxScreen() {
   );
   const resolved = useMemo(() => queue.filter((u) => u.status === 'resolved_with_entry'), [queue]);
 
-  // 이번 주 처리 카운트
+  // 누적 처리 카운트(전체 기간) — 상단 보조 메타 '지금까지 답한 질문 N건'
   const weeklyResolved = resolved.length;
 
   // hero: 전체 pending 중 가장 시급. 깊은 답변 → 기존 answer 위저드.
@@ -82,7 +82,7 @@ export default function OwnerInboxScreen() {
       ) : (
         <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
           {/* 1) 상단 보조 메타 */}
-          <Text style={styles.subline}>지금까지 {weeklyResolved}건 처리됨</Text>
+          <Text style={styles.subline}>지금까지 답한 질문 {weeklyResolved}건</Text>
 
           {/* 2) Hero — 우선 답변 (가장 시급한 미답변) */}
           {hero ? (
@@ -121,7 +121,7 @@ export default function OwnerInboxScreen() {
           {/* 5) 처리됨 · 인용 카운트 */}
           <View style={styles.resolvedWrap}>
             <Text style={styles.resolvedHeader}>처리됨 · 알바가 잘 쓰고 있어요</Text>
-            <Text style={styles.resolvedSub}>당신의 노하우가 매장을 굴리는 중</Text>
+            <Text style={styles.resolvedSub}>사장님 노하우가 매장을 돌리고 있어요</Text>
 
             <View style={styles.resolvedList}>
               {topCited.map((e) => (

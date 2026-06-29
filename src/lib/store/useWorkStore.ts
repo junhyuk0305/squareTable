@@ -16,13 +16,32 @@ import {
 import { guardWrite } from '@/lib/store/useSyncStore';
 
 export type TaskSection = 'open' | 'mid' | 'close' | 'etc';
+export type TaskScope = 'shared' | 'private';
 /**
- * dueDate 없음 → 매일 반복되는 루틴 체크리스트(기존 동작).
- * dueDate('YYYY-MM-DD') 있음 → 그 날짜에만 뜨는 일회성 '예정 할일'(미래에 미리 적기).
+ * 반복 규칙(2026-06-28 결정):
+ *  - { weekly: number[] } → 선택 요일(0=일~6=토)마다 반복되는 루틴. '매일'은 7요일 전체 선택으로 표현.
+ *  - 'once' → date('YYYY-MM-DD')에만 뜨는 일회성 예정.
+ * recurrence/date가 모두 없는 레거시 항목은 dueDate(있으면 일회성) / 없으면 매일 루틴으로 본다.
  */
-export type TaskTemplate = { id: string; section: TaskSection; text: string; dueDate?: string };
+export type Recurrence = { weekly: number[] } | 'once';
+export type TaskTemplate = {
+  id: string;
+  section: TaskSection;
+  text: string;
+  /** section==='etc'일 때 직접 입력 라벨(예: "14시 브레이크"). */
+  sectionNote?: string;
+  /** 'shared'=가게 전체(사장) / 'private'=나만 보기(주니어 강제). 미지정=shared(레거시). */
+  scope?: TaskScope;
+  /** private 작성자(본인+사장만 조회). */
+  ownerId?: string;
+  recurrence?: Recurrence;
+  /** 'once' 예정일. */
+  date?: string;
+  /** @deprecated 레거시 일회성 예정일. date로 매핑. */
+  dueDate?: string;
+};
 export type DoneMark = { by: string; byName: string; at: string; photoUrl?: string };
-export type FeedKind = 'notice' | 'message' | 'task_done';
+export type FeedKind = 'notice' | 'message' | 'task_done' | 'comment';
 export type FeedItem = {
   id: string;
   date: string;
@@ -32,12 +51,13 @@ export type FeedItem = {
   authorName: string;
   authorRole: 'owner' | 'junior';
   createdAt: string;
-  refId?: string; // task_done → templateId
-  reactions?: Record<string, string[]>; // 이모지 → 누른 사람 id[] (확인/👍/🔥 등)
+  refId?: string; // task_done → templateId · comment → noticeId
+  reactions?: Record<string, string[]>; // 이모지 → 누른 사람 id[]
   important?: boolean; // notice 긴급
-  pinned?: boolean; // notice 상단 고정(카톡식)
-  read_by?: string[]; // notice 읽음추적 — 읽은 사람 userId[]
-  photoUrl?: string; // task_done 사진인증 — 완료 증빙 사진 URL
+  pinned?: boolean; // notice 상단 고정
+  read_by?: string[]; // notice 읽음추적
+  photoUrl?: string; // task_done 사진인증
+  mentions?: string[]; // @멘션된 사람 userId[] (알림 대상)
 };
 
 // 피드에서 토글 가능한 이모지 셋 (확인 = ✅)
@@ -50,28 +70,41 @@ export const SECTION_LABEL: Record<TaskSection, string> = {
   etc: '기타',
 };
 
+/** 그 날짜(YYYY-MM-DD)에 이 할일이 떠야 하는가? (루틴=요일 매칭, 예정=날짜 일치) */
+export function occursOn(t: TaskTemplate, dateStr: string): boolean {
+  if (t.recurrence && t.recurrence !== 'once') {
+    const dow = new Date(`${dateStr}T00:00:00`).getDay();
+    return t.recurrence.weekly.includes(dow);
+  }
+  const d = t.date ?? t.dueDate;
+  if (d) return d === dateStr;
+  // 'once'인데 날짜가 없으면 잘못된 항목 → 어느 날에도 띄우지 않는다(매일 스팸 방지).
+  if (t.recurrence === 'once') return false;
+  return true; // 레거시(recurrence/date 모두 없음): 매일 루틴
+}
+
 const T = todayStr();
-/** 데모용 미래 날짜(오늘+N일, YYYY-MM-DD) */
 function plusDays(n: number): string {
   const d = new Date(`${T}T00:00:00`);
   d.setDate(d.getDate() + n);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
+const EVERYDAY: Recurrence = { weekly: [0, 1, 2, 3, 4, 5, 6] };
 
 const seedTemplates: TaskTemplate[] = [
-  { id: 'o1', section: 'open', text: '에스프레소 머신 예열 (08시)' },
-  { id: 'o2', section: 'open', text: '쇼케이스 디저트 채우기' },
-  { id: 'o3', section: 'open', text: '포스·키오스크 전원 켜기' },
-  { id: 'o4', section: 'open', text: '매장 바닥·테이블 청소' },
-  { id: 'm1', section: 'mid', text: '피크 전 원두·우유 잔량 점검' },
-  { id: 'm2', section: 'mid', text: '화장실·홀 중간 청소' },
-  { id: 'c1', section: 'close', text: '원두·우유 재고 확인' },
-  { id: 'c2', section: 'close', text: '제빙기 비우고 청소' },
-  { id: 'c3', section: 'close', text: '쓰레기 분리수거' },
-  { id: 'c4', section: 'close', text: '포스 마감 정산' },
-  // 예정 할일(미래) 데모 — 캘린더에 미리 적어둔 일회성 할일
-  { id: 'p1', section: 'etc', text: '신메뉴 크로플 레시피 교육', dueDate: plusDays(2) },
-  { id: 'p2', section: 'etc', text: '월말 재고 실사', dueDate: plusDays(3) },
+  { id: 'o1', section: 'open', text: '에스프레소 머신 예열 (08시)', scope: 'shared', recurrence: EVERYDAY },
+  { id: 'o2', section: 'open', text: '쇼케이스 디저트 채우기', scope: 'shared', recurrence: EVERYDAY },
+  { id: 'o3', section: 'open', text: '포스·키오스크 전원 켜기', scope: 'shared', recurrence: EVERYDAY },
+  { id: 'o4', section: 'open', text: '매장 바닥·테이블 청소', scope: 'shared', recurrence: EVERYDAY },
+  { id: 'm1', section: 'mid', text: '피크 전 원두·우유 잔량 점검', scope: 'shared', recurrence: EVERYDAY },
+  { id: 'm2', section: 'mid', text: '화장실·홀 중간 청소', scope: 'shared', recurrence: EVERYDAY },
+  { id: 'c1', section: 'close', text: '원두·우유 재고 확인', scope: 'shared', recurrence: EVERYDAY },
+  { id: 'c2', section: 'close', text: '제빙기 비우고 청소', scope: 'shared', recurrence: EVERYDAY },
+  { id: 'c3', section: 'close', text: '쓰레기 분리수거', scope: 'shared', recurrence: EVERYDAY },
+  { id: 'c4', section: 'close', text: '포스 마감 정산', scope: 'shared', recurrence: EVERYDAY },
+  // 예정(일회성) 데모 — 캘린더에 미리 적어둔 할일
+  { id: 'p1', section: 'etc', text: '신메뉴 크로플 레시피 교육', scope: 'shared', recurrence: 'once', date: plusDays(2) },
+  { id: 'p2', section: 'etc', text: '월말 재고 실사', scope: 'shared', recurrence: 'once', date: plusDays(3) },
 ];
 
 const seedDone: Record<string, Record<string, DoneMark>> = {
@@ -94,7 +127,18 @@ const seedFeed: FeedItem[] = [
     createdAt: `${T}T08:00:00+09:00`,
     reactions: { '✅': ['u_staff_002'] },
     important: false,
-    pinned: true, // 카톡식 상단 고정 데모
+    pinned: true,
+  },
+  {
+    id: 'fc1',
+    date: T,
+    kind: 'comment',
+    refId: 'f1',
+    text: '넵! 크림 추가 추천 멘트 할게요 👍',
+    authorId: 'u_staff_002',
+    authorName: '이수민',
+    authorRole: 'junior',
+    createdAt: `${T}T08:05:00+09:00`,
   },
   {
     id: 'f2',
@@ -112,6 +156,17 @@ const seedFeed: FeedItem[] = [
 let _n = 0;
 const uid = (p: string) => `${p}_${Date.now()}_${_n++}`;
 
+/** addTask 입력 — id/생성시각은 스토어가 채운다. */
+export type NewTask = {
+  section: TaskSection;
+  text: string;
+  scope: TaskScope;
+  ownerId?: string;
+  sectionNote?: string;
+  recurrence?: Recurrence;
+  date?: string;
+};
+
 type State = {
   templates: TaskTemplate[];
   done: Record<string, Record<string, DoneMark>>;
@@ -119,11 +174,14 @@ type State = {
   loaded: boolean;
   hydrate: () => Promise<void>;
   subscribe: () => () => void;
-  addTemplate: (section: TaskSection, text: string, dueDate?: string) => void;
+  addTask: (input: NewTask) => void;
   removeTemplate: (id: string) => void;
   toggleTask: (date: string, templateId: string, staffId: string, staffName: string, role: 'owner' | 'junior', photoUrl?: string) => void;
   postNotice: (date: string, text: string, authorId: string, authorName: string, important: boolean) => void;
-  postMessage: (date: string, text: string, authorId: string, authorName: string, role: 'owner' | 'junior') => void;
+  postMessage: (date: string, text: string, authorId: string, authorName: string, role: 'owner' | 'junior', mentions?: string[]) => void;
+  postComment: (noticeId: string, date: string, text: string, authorId: string, authorName: string, role: 'owner' | 'junior', mentions?: string[]) => void;
+  editFeedText: (id: string, text: string) => void;
+  deleteFeedItem: (id: string) => void;
   toggleReaction: (feedId: string, userId: string, emoji: string) => void;
   togglePin: (feedId: string) => void;
   markNoticeRead: (feedId: string, userId: string) => void;
@@ -131,7 +189,6 @@ type State = {
 };
 
 export const useWorkStore = create<State>((set, get) => ({
-  // Supabase면 빈 채로 시작 → hydrate가 DB로 채움. 아니면 로컬 시드.
   templates: HAS_SUPABASE ? [] : seedTemplates,
   done: HAS_SUPABASE ? {} : seedDone,
   feed: HAS_SUPABASE ? [] : seedFeed,
@@ -142,11 +199,19 @@ export const useWorkStore = create<State>((set, get) => ({
     const [templates, done, feed] = await Promise.all([fetchTemplates(), fetchDone(), fetchFeed()]);
     set({ templates, done, feed, loaded: true });
   },
-  // 다른 기기(사장↔알바) 변경을 실시간 반영.
   subscribe: () => subscribeWork(() => get().hydrate()),
 
-  addTemplate: (section, text, dueDate) => {
-    const t: TaskTemplate = { id: uid('t'), section, text, ...(dueDate ? { dueDate } : null) };
+  addTask: (input) => {
+    const t: TaskTemplate = {
+      id: uid('t'),
+      section: input.section,
+      text: input.text,
+      scope: input.scope,
+      ...(input.ownerId ? { ownerId: input.ownerId } : null),
+      ...(input.sectionNote ? { sectionNote: input.sectionNote } : null),
+      ...(input.recurrence ? { recurrence: input.recurrence } : null),
+      ...(input.date ? { date: input.date } : null),
+    };
     set((s) => ({ templates: [...s.templates, t] }));
     void guardWrite(
       insertTemplate(t),
@@ -173,13 +238,11 @@ export const useWorkStore = create<State>((set, get) => ({
 
   toggleTask: (date, templateId, staffId, staffName, role, photoUrl) => {
     const s = get();
-    // 실패 시 done·feed를 통째로 되돌리기 위한 스냅샷(체크 토글은 단일 사용자 동작이라 안전).
     const prevDone = s.done;
     const prevFeed = s.feed;
     const dayMap = { ...(s.done[date] ?? {}) };
     const tpl = s.templates.find((t) => t.id === templateId);
     if (dayMap[templateId]) {
-      // 해제 — 완료 표시 + 관련 task_done 피드 제거
       delete dayMap[templateId];
       const removed = s.feed.find((f) => f.kind === 'task_done' && f.date === date && f.refId === templateId);
       set({
@@ -234,7 +297,7 @@ export const useWorkStore = create<State>((set, get) => ({
     );
   },
 
-  postMessage: (date, text, authorId, authorName, role) => {
+  postMessage: (date, text, authorId, authorName, role, mentions) => {
     const item: FeedItem = {
       id: uid('f'),
       date,
@@ -244,6 +307,7 @@ export const useWorkStore = create<State>((set, get) => ({
       authorName,
       authorRole: role,
       createdAt: new Date().toISOString(),
+      ...(mentions && mentions.length ? { mentions } : null),
     };
     set((s) => ({ feed: [...s.feed, item] }));
     void guardWrite(
@@ -251,6 +315,56 @@ export const useWorkStore = create<State>((set, get) => ({
       () => set((s) => ({ feed: s.feed.filter((f) => f.id !== item.id) })),
       '메시지 전송에 실패했어요.',
     );
+  },
+
+  postComment: (noticeId, date, text, authorId, authorName, role, mentions) => {
+    const item: FeedItem = {
+      id: uid('f'),
+      date,
+      kind: 'comment',
+      refId: noticeId,
+      text,
+      authorId,
+      authorName,
+      authorRole: role,
+      createdAt: new Date().toISOString(),
+      ...(mentions && mentions.length ? { mentions } : null),
+    };
+    set((s) => ({ feed: [...s.feed, item] }));
+    void guardWrite(
+      upsertFeed(item),
+      () => set((s) => ({ feed: s.feed.filter((f) => f.id !== item.id) })),
+      '댓글 등록에 실패했어요.',
+    );
+  },
+
+  editFeedText: (id, text) => {
+    const before = get().feed.find((f) => f.id === id);
+    if (!before) return;
+    let updated: FeedItem | undefined;
+    set((s) => ({
+      feed: s.feed.map((f) => {
+        if (f.id !== id) return f;
+        updated = { ...f, text };
+        return updated;
+      }),
+    }));
+    if (updated)
+      void guardWrite(
+        upsertFeed(updated),
+        () => set((s) => ({ feed: s.feed.map((f) => (f.id === id ? before : f)) })),
+        '수정 저장에 실패했어요.',
+      );
+  },
+
+  // notice 삭제 시 딸린 댓글(refId===id)도 함께 제거.
+  deleteFeedItem: (id) => {
+    const s = get();
+    const removed = s.feed.filter((f) => f.id === id || f.refId === id);
+    if (removed.length === 0) return;
+    set({ feed: s.feed.filter((f) => f.id !== id && f.refId !== id) });
+    const ok = Promise.all(removed.map((r) => deleteFeed(r.id))).then((rs) => rs.every(Boolean));
+    void guardWrite(ok, () => set({ feed: s.feed }), '삭제에 실패했어요.');
   },
 
   toggleReaction: (feedId, userId, emoji) => {
@@ -262,7 +376,7 @@ export const useWorkStore = create<State>((set, get) => ({
         const map = { ...(f.reactions ?? {}) };
         const arr = map[emoji] ?? [];
         map[emoji] = arr.includes(userId) ? arr.filter((u) => u !== userId) : [...arr, userId];
-        if (map[emoji].length === 0) delete map[emoji]; // 0개면 칩 제거
+        if (map[emoji].length === 0) delete map[emoji];
         updated = { ...f, reactions: map };
         return updated;
       }),
@@ -293,7 +407,6 @@ export const useWorkStore = create<State>((set, get) => ({
       );
   },
 
-  // 공지 읽음추적 — 읽은 사람을 read_by에 누적(중복·재저장 방지).
   markNoticeRead: (feedId, userId) => {
     const before = get().feed.find((f) => f.id === feedId);
     if (!before || (before.read_by ?? []).includes(userId)) return;
@@ -313,7 +426,6 @@ export const useWorkStore = create<State>((set, get) => ({
       );
   },
 
-  // 데모 매장이면 시드 체크리스트·피드, 신규 매장이면 빈 보드(가짜 "이수민 완료" 노출 방지).
   applyMock: (demo) =>
     set(
       demo

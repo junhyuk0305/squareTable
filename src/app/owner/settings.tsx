@@ -1,14 +1,14 @@
 import { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Linking, Platform } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Linking, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
-import { Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Constants from 'expo-constants';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { usePreferencesStore, type TextScale } from '@/lib/store/usePreferencesStore';
 import { logout } from '@/lib/auth';
 import { confirmAction } from '@/lib/utils/confirm';
+import { useCopyToClipboard } from '@/lib/utils/useCopyToClipboard';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { SettingsSection, SettingsRow, SettingsToggle } from '@/components/settings/SettingsKit';
 import { QuietHoursModal } from '@/components/settings/QuietHoursModal';
@@ -24,21 +24,8 @@ export default function OwnerSettings() {
   const deleteAccount = useSessionStore((s) => s.deleteAccount);
   const prefs = usePreferencesStore();
   const [busy, setBusy] = useState(false);
-  const [copied, setCopied] = useState(false);
   const [quietModal, setQuietModal] = useState(false);
-
-  const copyCode = async () => {
-    const nav = (globalThis as any).navigator;
-    const writeText = nav?.clipboard?.writeText;
-    if (typeof writeText !== 'function') return;
-    try {
-      await writeText.call(nav.clipboard, inviteCode);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    } catch {
-      /* 복사 실패 시 상태 변화 없음 */
-    }
-  };
+  const { copied, copy } = useCopyToClipboard();
 
   const version = Constants.expoConfig?.version ?? '1.0.0';
 
@@ -95,7 +82,7 @@ export default function OwnerSettings() {
             <Text style={styles.codeLabel}>직원 합류용 초대코드</Text>
             <Text style={styles.codeValue}>{inviteCode}</Text>
           </View>
-          <Pressable onPress={copyCode} style={({ pressed }) => [styles.codeBtn, pressed && { opacity: 0.85 }]}>
+          <Pressable onPress={() => copy(inviteCode)} style={({ pressed }) => [styles.codeBtn, pressed && { opacity: 0.85 }]}>
             <Ionicons name={copied ? 'checkmark' : 'copy-outline'} size={15} color={InkColors.ink} />
             <Text style={styles.codeBtnText}>{copied ? '복사됨' : '복사'}</Text>
           </Pressable>

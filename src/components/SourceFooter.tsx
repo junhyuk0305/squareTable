@@ -18,7 +18,10 @@ export function SourceFooter({ creatorName, title, version, updatedAt, onPress }
       </View>
       <Text style={styles.creator}>{creatorName} 사장님 가이드</Text>
       <Text style={styles.title} numberOfLines={2}>{title}</Text>
-      <Text style={styles.meta}>v{version} · {updatedAt} 갱신</Text>
+      <View style={styles.metaRow}>
+        <Text style={styles.meta}>v{version} · {updatedAt} 갱신</Text>
+        {onPress ? <Text style={styles.openHint}>원문 보기 ›</Text> : null}
+      </View>
     </View>
   );
   if (onPress) {
@@ -50,5 +53,7 @@ const styles = StyleSheet.create({
   ribbon: { flex: 1, height: 1, backgroundColor: BrandColors.yellowDeep, opacity: 0.4 },
   creator: { fontSize: 13, fontWeight: '700', color: InkColors.ink, marginTop: 4 },
   title: { fontSize: 14, color: InkColors.ink2, fontWeight: '600' },
-  meta: { fontSize: 11, color: InkColors.ink3, marginTop: 2 },
+  metaRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 2 },
+  meta: { fontSize: 11, color: InkColors.ink3 },
+  openHint: { fontSize: 11, fontWeight: '800', color: BrandColors.gold },
 });

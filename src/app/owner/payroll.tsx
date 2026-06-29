@@ -1,10 +1,10 @@
 import { View, Text, StyleSheet, ScrollView, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack } from 'expo-router';
-import { usePayrollStore, type PayrollSettings } from '@/lib/store/usePayrollStore';
+import { usePayrollStore } from '@/lib/store/usePayrollStore';
 import { RoleTabBar } from '@/components/RoleTabBar';
 import { ChachakSwitch } from '@/components/ChachakSwitch';
-import { InkColors, BrandColors } from '@/lib/theme/colors';
+import { InkColors } from '@/lib/theme/colors';
 
 export default function OwnerPayrollScreen() {
   const settings = usePayrollStore((s) => s.settings);
@@ -40,7 +40,7 @@ export default function OwnerPayrollScreen() {
         </View>
         <Text style={styles.note}>예: 정산 시작일 1 · 급여일 10 → 매월 1~말일 근무분을 다음 달 10일 지급</Text>
 
-        <Text style={styles.demoNote}>* 설정값은 저장됩니다. 야간·주휴 등 자동 반영 계산은 데이터 연결 단계에서 적용됩니다.</Text>
+        <Text style={styles.demoNote}>* 지금은 기본 시급으로 급여를 계산해요. 야간·주휴 등 추가 수당 자동 반영은 준비 중이에요.</Text>
         <View style={{ height: 12 }} />
       </ScrollView>
       <RoleTabBar role="owner" />
@@ -113,10 +113,6 @@ const styles = StyleSheet.create({
   rowLast: { borderBottomWidth: 0 },
   rowLabel: { fontSize: 15, fontWeight: '600', color: InkColors.ink },
   rowHint: { fontSize: 12, color: InkColors.ink3, marginTop: 2 },
-  toggle: { width: 46, height: 28, borderRadius: 14, backgroundColor: InkColors.line, padding: 3, justifyContent: 'center' },
-  toggleOn: { backgroundColor: BrandColors.brand },
-  knob: { width: 22, height: 22, borderRadius: 11, backgroundColor: '#FFFFFF' },
-  knobOn: { alignSelf: 'flex-end' },
   numInput: {
     minWidth: 64,
     textAlign: 'right',

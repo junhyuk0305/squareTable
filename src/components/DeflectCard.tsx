@@ -1,11 +1,8 @@
 import { View, Text, StyleSheet } from 'react-native';
-import { CategoryChip } from './CategoryChip';
 import { BrandColors, InkColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
-import type { Category } from '@/types';
 
 type Props = {
-  presumedCategory: Category;
   aiGeneralAnswer?: string;
   /** 비슷한 질문 누적 수(있으면 '같은 질문 N명' 메타 노출). */
   similarCount?: number;
@@ -13,36 +10,35 @@ type Props = {
 
 /**
  * 매칭 실패 시 표시되는 카드.
- * "사장님께 물어볼게요" 위계 + 추정 카테고리 + AI general answer 보조.
+ * "사장님께 물어볼게요" 위계 + AI general answer 보조.
+ * 카테고리는 AI 내부 비계(프레임 v2) — 사용자에게 노출하지 않는다.
  * 사장님 답변이 들어오면 추후 SquareCard로 자동 전환되는 슬롯.
  */
-export function DeflectCard({ presumedCategory, aiGeneralAnswer, similarCount }: Props) {
+export function DeflectCard({ aiGeneralAnswer, similarCount }: Props) {
   return (
     <View style={styles.card}>
       <View style={styles.headerRow}>
         <Text style={styles.icon}>🙋</Text>
         <View style={{ flex: 1, gap: 2 }}>
           <Text style={styles.title}>사장님께 물어볼게요</Text>
-          <Text style={styles.subtitle}>이 질문은 매장 가이드에 아직 없어요</Text>
+          <Text style={styles.subtitle}>아직 사장님이 정해두지 않은 거예요 — 모르는 게 당연해요</Text>
         </View>
       </View>
 
-      <View style={styles.row}>
-        <Text style={styles.metaLabel}>추정 카테고리</Text>
-        <CategoryChip category={presumedCategory} size="sm" />
-        {typeof similarCount === 'number' && similarCount > 1 ? (
+      {typeof similarCount === 'number' && similarCount > 0 ? (
+        <View style={styles.row}>
           <View style={styles.similarBadge}>
-            <Text style={styles.similarText}>같은 질문 {similarCount}명</Text>
+            <Text style={styles.similarText}>같은 질문 {similarCount + 1}명</Text>
           </View>
-        ) : null}
-      </View>
+        </View>
+      ) : null}
 
       <View style={styles.divider} />
 
       <View style={styles.notifyRow}>
         <Text style={styles.notifyDot}>✦</Text>
         <Text style={styles.notifyText}>
-          사장님이 답하시면 자동으로 알려드릴게요
+          사장님이 답을 등록하면 ‘노하우’에서 확인할 수 있어요. 급하면 사장님께 직접 여쭤보세요.
         </Text>
       </View>
 
@@ -87,13 +83,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
     flexWrap: 'wrap',
-  },
-  metaLabel: {
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 1,
-    color: InkColors.ink3,
-    textTransform: 'uppercase',
   },
   similarBadge: {
     paddingVertical: 3,

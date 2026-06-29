@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -6,7 +6,6 @@ import {
   Pressable,
   TextInput,
   ScrollView,
-  Image,
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
@@ -14,11 +13,12 @@ import {
 
 import { UserBubble } from '@/components/UserBubble';
 import { Appear } from '@/components/Appear';
-import { structureSquare } from '@/lib/ai';
-import { getCategoryGuide, type CellPath } from '@/lib/ai/categoryGuide';
+import { structureSquare, type ScalePrompt, type StructuredSegment } from '@/lib/ai';
+import { type CellPath } from '@/lib/ai/categoryGuide';
+import { EXTRACTION_MASTER } from '@/data/extraction-master';
 import { computeFollowups, applyFollowupAnswer } from '@/lib/utils/followups';
 import { buildPlaybookEntryFromSquare, isSquarePublishable } from '@/lib/utils/buildEntry';
-import { getCategoryMeta, ALL_CATEGORIES } from '@/lib/utils/category';
+import { getCategoryMeta } from '@/lib/utils/category';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { uploadPhoto } from '@/lib/db';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
@@ -40,13 +40,16 @@ export type OwnerCoachChatProps = {
   initialCategory: Category;
   seedText?: string;            // 프리필(콜드스타트 제목·회고 초안)
   onPublished: (entry: PlaybookEntry) => void;
+  onPublishedMany?: (entries: PlaybookEntry[]) => void; // 다중 분리 발행(없으면 첫 건만)
 };
 
 type MsgInput =
   | { kind: 'alba'; text: string; meta?: string }   // 알바 질문(인박스)
   | { kind: 'owner'; text: string }                  // 사장 발화
   | { kind: 'ai'; text: string }                     // 점장AI 안내/꼬리질문
-  | { kind: 'card' };                                // 미니 SQUARE 카드(라이브 square 렌더)
+  | { kind: 'card' }                                 // 미니 SQUARE 카드(라이브 square 렌더)
+  | { kind: 'scale' }                                // 정도 척도 입력(라이브 square.standard)
+  | { kind: 'split' };                               // 다중 노하우 분리 제안
 type Msg = MsgInput & { id: string };
 
 function formatRelative(iso: string): string {
@@ -87,9 +90,8 @@ export function OwnerCoachChat({
   initialCategory,
   seedText,
   onPublished,
+  onPublishedMany,
 }: OwnerCoachChatProps) {
-  const userName = useSessionStore((s) => s.userName);
-
   const [messages, setMessages] = useState<Msg[]>(() => {
     const init: Msg[] = [];
     if (isInboxAnswer) {
@@ -114,6 +116,8 @@ export function OwnerCoachChat({
   const [keywords, setKeywords] = useState<string[]>([]);
   const [photos, setPhotos] = useState<string[]>([]);
   const [pending, setPending] = useState<{ cell: CellPath; ask: string; hint: string }[]>([]);
+  const [scalePrompt, setScalePrompt] = useState<ScalePrompt | null>(null); // 정도 척도질문(AI 감지)
+  const [segments, setSegments] = useState<StructuredSegment[] | null>(null); // 다중 분리 제안(≥2)
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
@@ -126,7 +130,10 @@ export function OwnerCoachChat({
   const unitId = useSessionStore.getState().unitId;
   const storeId = unitId || 'store_001';
 
-  const inReview = square !== null && pending.length === 0;
+  // 척도질문이 있고 아직 답 안 했으면(=square.standard 미설정) 리뷰 진입을 미룬다.
+  const awaitingScale = scalePrompt !== null && !square?.standard;
+  const awaitingSplit = segments !== null; // 분리 제안 결정 전엔 단일 리뷰 진입 막음
+  const inReview = square !== null && pending.length === 0 && !awaitingScale && !awaitingSplit;
 
   useEffect(() => {
     const t = setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 60);
@@ -137,7 +144,19 @@ export function OwnerCoachChat({
     setMessages((prev) => [...prev, { ...m, id: nextId() }]);
   }, []);
 
-  // ── AI 1콜: 원문 → SQUARE 6칸. 실패해도 mock 폴백(client.ts) → error는 드묾. ──
+  // 정리 결과(단일) 제시: 카드 → 빈칸이면 꼬리질문 → 정도성이면 척도 → 준비.
+  const presentSingle = useCallback((sq: SquareBlock, scaleP: ScalePrompt | null, cat: Category) => {
+    const followups = computeFollowups(sq, cat);
+    setPending(followups);
+    setMessages((prev) => {
+      const withCard: Msg[] = [...prev, { id: nextId(), kind: 'card' }];
+      if (followups.length > 0) return [...withCard, { id: nextId(), kind: 'ai', text: followups[0].ask }];
+      if (scaleP) return [...withCard, { id: nextId(), kind: 'ai', text: scaleP.ask }, { id: nextId(), kind: 'scale' }];
+      return [...withCard, { id: nextId(), kind: 'ai', text: '이대로 등록할까요? 맞으면 ✅, 고칠 게 있으면 ✏️ 눌러주세요.' }];
+    });
+  }, []);
+
+  // ── AI 1콜: 원문 → SQUARE. 다중이면 분리 제안, 단일이면 바로 제시. ──
   const runStructure = useCallback(
     async (rawText: string, cat: Category) => {
       setBusy(true);
@@ -147,23 +166,58 @@ export function OwnerCoachChat({
           storeId,
           rawText,
           category: cat,
-          categoryGuide: getCategoryGuide(cat).extractionGuide,
+          categoryGuide: EXTRACTION_MASTER, // 단일 마스터 지침 주입(카테고리 무관). 분류는 AI가 내부 판단.
         });
         lastRawRef.current = rawText;
-        setSquare(out.square);
+        setSegments(null);
+
+        // 빈 응답 가드 — Gemini가 가끔 빈/깨진 결과를 반환(원두분쇄 등 간헐). 빈 카드 대신 재시도 유도.
+        const sq0 = out.square;
+        const isEmpty = !out.title && !sq0?.situation && !(sq0?.action?.steps?.length);
+        if (isEmpty) {
+          setError('정리가 잘 안 됐어요 — 한 번 더 또박또박 적어주세요.');
+          return;
+        }
+
+        // AI 서버 실패로 기본(mock) 정리로 폴백된 경우 — 점주가 '자동 정리본'임을 알고 검토하도록 고지.
+        if (out.degraded) {
+          setMessages((prev) => [
+            ...prev,
+            { id: nextId(), kind: 'ai', text: '지금은 AI 정리가 어려워 기본 형태로 정리했어요. 내용을 확인하고 고쳐서 저장해 주세요.' },
+          ]);
+        }
+
+        // 기준 폴백 — AI가 scale_prompt를 빠뜨리면 규칙으로 보강(결정적). 양(개수) 우선, 아니면 정도(스펙트럼).
+        const countM = rawText.match(/펌프|샷|스쿱|바퀴|장|번/);
+        const degreeRe = /적당|곱게|노릇|깨끗|진하|연하|바삭|은은|되직|묽|알맞/;
+        const scaleP: ScalePrompt | null = out.scalePrompt ?? (countM
+          ? { kind: 'count', label: '양', ask: `몇 ${countM[0]}가 기준이에요?`, unit: countM[0] }
+          : degreeRe.test(rawText)
+            ? { kind: 'spectrum', label: '완성 기준', ask: '어느 정도가 기준이에요?', ends: ['약함', '강함'] }
+            : null);
+
+        // top-level = segments[0] — 단일 흐름은 이걸 그대로 씀.
+        setSquare(out.square); // 재정리면 standard도 초기화됨(새 square엔 없음)
         setTitle(out.title || rawText.slice(0, 30));
         setKeywords(out.keywords || []);
+        setScalePrompt(scaleP);
 
-        const followups = computeFollowups(out.square, cat);
-        // 카드 먼저 보여주고, 빈 칸이 있으면 꼬리질문 1개씩 띄운다.
-        setMessages((prev) => {
-          const withCard: Msg[] = [...prev, { id: nextId(), kind: 'card' }];
-          if (followups.length > 0) {
-            return [...withCard, { id: nextId(), kind: 'ai', text: followups[0].ask }];
-          }
-          return [...withCard, { id: nextId(), kind: 'ai', text: '이대로 등록할까요? 맞으면 ✅, 고칠 게 있으면 ✏️ 눌러주세요.' }];
-        });
-        setPending(followups);
+        // 다중 노하우 감지(직접 등록에서만; 인박스 답변은 단일 유지) → 분리 제안.
+        if (!isInboxAnswer && out.segments && out.segments.length >= 2) {
+          setSegments(out.segments);
+          setPending([]);
+          setMessages((prev) => [
+            ...prev,
+            { id: nextId(), kind: 'ai', text: `노하우 ${out.segments!.length}개가 보여요. 나눠서 등록할까요?` },
+            { id: nextId(), kind: 'split' },
+          ]);
+          return;
+        }
+
+        // AI가 분류한 카테고리를 채택(진입점에서 잘못 고른 분류 자동 교정).
+        const aiCat = out.segments?.[0]?.category ?? cat;
+        if (aiCat !== cat) setCategory(aiCat);
+        presentSingle(out.square, scaleP, aiCat);
       } catch (e) {
         console.warn('[coach] structure failed', e);
         setError('정리 중 문제가 생겼어요 — 다시 한 번 보내주세요.');
@@ -171,7 +225,7 @@ export function OwnerCoachChat({
         setBusy(false);
       }
     },
-    [storeId],
+    [storeId, isInboxAnswer, presentSingle],
   );
 
   // ── 입력 전송: 상태에 따라 (1)첫 정리 (2)꼬리질문 답 (3)재정리 ──
@@ -189,6 +243,11 @@ export function OwnerCoachChat({
         setPending(rest);
         if (rest.length > 0) {
           pushMsg({ kind: 'ai', text: rest[0].ask });
+        } else if (scalePrompt) {
+          // 텍스트 꼬리질문 끝 → 정도 척도질문으로
+          pushMsg({ kind: 'card' });
+          pushMsg({ kind: 'ai', text: scalePrompt.ask });
+          pushMsg({ kind: 'scale' });
         } else {
           pushMsg({ kind: 'card' });
           pushMsg({ kind: 'ai', text: '채웠어요! 이대로 등록할까요? ✅ / ✏️' });
@@ -200,22 +259,96 @@ export function OwnerCoachChat({
       setReStructure(false);
       void runStructure(value, category);
     },
-    [input, busy, editing, square, pending, reStructure, category, runStructure, pushMsg],
+    [input, busy, editing, square, pending, scalePrompt, reStructure, category, runStructure, pushMsg],
   );
 
-  // ── 카테고리 변경 → 같은 원문을 새 가이드로 재정리(AI 1콜). (설계 D8) ──
-  const changeCategory = useCallback(
-    (cat: Category) => {
-      if (cat === category) return;
-      setCategory(cat);
-      setEditing(false);
-      if (lastRawRef.current) {
-        pushMsg({ kind: 'ai', text: `'${getCategoryMeta(cat).label}'(으)로 다시 정리할게요.` });
-        void runStructure(lastRawRef.current, cat);
-      }
+  // ── 기준 답변 → square.standard 에 반영(AI 재호출 0). kind별(스펙트럼 위치 / 개수) ──
+  const confirmScale = useCallback(
+    (value: number) => {
+      const sp = scalePrompt;
+      const kind = sp?.kind === 'count' ? 'count' : 'spectrum';
+      setSquare((sq) =>
+        sq
+          ? {
+              ...sq,
+              standard: {
+                kind,
+                label: sp?.label ?? '기준',
+                value,
+                ...(kind === 'count'
+                  ? { unit: sp?.unit ?? '개' }
+                  : { ends: sp?.ends ?? ['약함', '강함'], max: 100 }),
+              },
+            }
+          : sq,
+      );
+      pushMsg({ kind: 'card' });
+      pushMsg({ kind: 'ai', text: '기준을 정했어요! 이대로 등록할까요? ✅ / ✏️' });
     },
-    [category, runStructure, pushMsg],
+    [scalePrompt, pushMsg],
   );
+
+  const skipScale = useCallback(() => {
+    setScalePrompt(null); // 기준 없음 — 척도 없이 진행
+    pushMsg({ kind: 'card' });
+    pushMsg({ kind: 'ai', text: '이대로 등록할까요? ✅ / ✏️' });
+  }, [pushMsg]);
+
+  // ── 분리 제안: 각각 등록 ──
+  const publishEach = useCallback(() => {
+    if (publishedRef.current || !segments) return;
+    const entries = segments
+      .filter((s) => isSquarePublishable(s.square))
+      .map((s) => buildPlaybookEntryFromSquare({ ...uq, presumed_category: s.category }, s.square, { title: s.title, keywords: s.keywords }));
+    if (entries.length === 0) {
+      setError('등록할 내용이 부족해요. 🔁 다시 말하기로 보완해 주세요.');
+      return;
+    }
+    publishedRef.current = true;
+    if (onPublishedMany) onPublishedMany(entries);
+    else entries.forEach((e) => onPublished(e));
+  }, [segments, uq, onPublishedMany, onPublished]);
+
+  // ── 분리 제안: 하나로 합치기(steps·멘트 결합 후 단일 흐름으로) ──
+  const mergeOne = useCallback(() => {
+    if (!segments) return;
+    const steps: string[] = [];
+    const scripts: string[] = [];
+    const sits: string[] = [];
+    const kw = new Set<string>();
+    let dnt = '';
+    let dOk = '';
+    let unc = '';
+    for (const s of segments) {
+      steps.push(...s.square.action.steps);
+      scripts.push(...s.square.action.scripts);
+      if (s.square.situation) sits.push(s.square.situation);
+      if (!dnt && s.square.extract.dont) dnt = s.square.extract.dont;
+      if (!dOk && s.square.extract.do) dOk = s.square.extract.do;
+      if (!unc && s.square.uncover) unc = s.square.uncover;
+      s.keywords.forEach((k) => kw.add(k));
+    }
+    const merged: SquareBlock = {
+      situation: sits.join(' / '),
+      quagmire: '',
+      uncover: unc,
+      action: { steps: steps.slice(0, 5), scripts: scripts.slice(0, 3) },
+      result: { before: '', after: '', metric: '' },
+      extract: { do: dOk, dont: dnt },
+    };
+    const cat = segments[0].category;
+    const sp = segments.find((s) => s.scalePrompt)?.scalePrompt ?? null;
+    setSegments(null);
+    setCategory(cat);
+    setSquare(merged);
+    setTitle(segments[0].title);
+    setKeywords([...kw].slice(0, 8));
+    setScalePrompt(sp);
+    pushMsg({ kind: 'ai', text: '하나로 합쳐서 정리했어요.' });
+    presentSingle(merged, sp, cat);
+  }, [segments, presentSingle, pushMsg]);
+
+  // 카테고리는 AI가 내부 판단(사용자 비노출). 사용자가 직접 바꾸는 UI 없음.
 
   // ── 발행 ──
   const handlePublish = useCallback(() => {
@@ -255,10 +388,9 @@ export function OwnerCoachChat({
     });
   }, [pushMsg]);
 
-  const meta = getCategoryMeta(category);
   // 입력바: 리뷰 상태(꼬리질문 없음)에서는 숨기고 카드 액션으로 진행.
   // 편집 중엔 카드 인라인 입력만 쓰므로 하단 입력바도 숨긴다(정리 덮어쓰기 footgun 차단).
-  const showInput = (!inReview || reStructure) && !editing;
+  const showInput = (!inReview || reStructure) && !editing && !awaitingScale && !awaitingSplit;
 
   return (
     <KeyboardAvoidingView
@@ -308,24 +440,54 @@ export function OwnerCoachChat({
               </Appear>
             );
           }
+          // split — 다중 노하우 분리 제안(결정하면 사라짐)
+          if (m.kind === 'split') {
+            if (!segments) return null;
+            return (
+              <Appear key={m.id} offsetY={14} duration={340}>
+                <SplitProposal segments={segments} onEach={publishEach} onMerge={mergeOne} />
+              </Appear>
+            );
+          }
+          // scale — 기준 입력(답하면 정적 요약으로 굳음)
+          if (m.kind === 'scale') {
+            if (square?.standard) {
+              const st = square.standard;
+              const summary = st.kind === 'count'
+                ? `${st.value}${st.unit ?? ''}`
+                : st.ends
+                  ? `${st.ends[0]}↔${st.ends[1]} 중 ${Math.round((st.value / (st.max || 100)) * 100)}%`
+                  : `${st.value}/${st.max ?? 100}`;
+              return (
+                <Appear key={m.id} style={styles.aiBubble}>
+                  <Text style={styles.aiText}>✅ {st.label}: {summary}</Text>
+                </Appear>
+              );
+            }
+            if (!scalePrompt) return null;
+            return (
+              <Appear key={m.id} offsetY={14} duration={340}>
+                <ScaleBubble prompt={scalePrompt} onConfirm={confirmScale} onSkip={skipScale} />
+              </Appear>
+            );
+          }
           // card — 항상 라이브 square를 렌더(최신 1장만 인터랙티브; 과거 카드는 동일 참조)
           if (!square) return null;
           return (
             <Appear key={m.id} offsetY={14} duration={340}>
               <MiniSquareCard
                 square={square}
-              title={title}
-              category={category}
-              editable={inReview && editing}
-              showActions={inReview && !editing}
-              categoryLocked={!inReview || editing}
-              onChangeCategory={changeCategory}
-              onEdit={() => setEditing(true)}
-              onDoneEditing={() => setEditing(false)}
-              onRetalk={startRetalk}
-              onPublish={handlePublish}
+                title={title}
+                category={category}
+                editable={inReview && editing}
+                showActions={inReview && !editing}
+                onEdit={() => setEditing(true)}
+                onDoneEditing={() => setEditing(false)}
+                onRetalk={startRetalk}
+                onPublish={handlePublish}
                 onPatch={(sq) => setSquare(sq)}
                 onTitle={setTitle}
+                publishLabel={isInboxAnswer ? '이 답변 보내기' : '노하우로 저장'}
               />
             </Appear>
           );
@@ -334,7 +496,7 @@ export function OwnerCoachChat({
         {busy && (
           <View style={styles.loading}>
             <ActivityIndicator color={BrandColors.brand} />
-            <Text style={styles.loadingText}>점장 AI가 정리하고 있어요...</Text>
+            <Text style={styles.loadingText}>AI가 정리하고 있어요...</Text>
           </View>
         )}
 
@@ -385,10 +547,9 @@ export function OwnerCoachChat({
           </Pressable>
         </View>
       )}
-      {/* 리뷰 상태에서 입력바를 숨겼을 때, 카테고리 라벨을 하단에 슬쩍 노출(맥락 유지) */}
-      {!showInput && !editing && (
+      {/* 리뷰 상태에서 입력바를 숨겼을 때 하단 안내(카테고리 비노출) */}
+      {!showInput && !editing && !awaitingScale && !awaitingSplit && (
         <View style={styles.reviewFootHint}>
-          <Text style={[styles.reviewFootText, { color: meta.color }]}>{meta.emoji} {meta.label}</Text>
           <Text style={styles.reviewFootSub}>카드에서 맞으면 ✅ · 고칠 건 ✏️</Text>
         </View>
       )}
@@ -400,37 +561,34 @@ export function OwnerCoachChat({
 type MiniProps = {
   square: SquareBlock;
   title: string;
-  category: Category;
+  category: Category;          // 내부 비계(카드 액센트 색만 사용, 라벨 비노출)
   editable: boolean;
   showActions: boolean;
-  categoryLocked: boolean;
-  onChangeCategory: (c: Category) => void;
   onEdit: () => void;
   onDoneEditing: () => void;
   onRetalk: () => void;
   onPublish: () => void;
   onPatch: (sq: SquareBlock) => void;
   onTitle: (t: string) => void;
+  publishLabel: string;        // 발행 결과를 명시 — 인박스='이 답변 보내기' / 직접='노하우로 저장'
 };
 
+// 사용자 표면 = 상황 / 할 일 / 금지 3핵심 (+ 멘트·기준 옵션). SQUARE 글자·카테고리 칩 비노출.
 function MiniSquareCard({
   square,
   title,
   category,
   editable,
   showActions,
-  categoryLocked,
-  onChangeCategory,
   onEdit,
   onDoneEditing,
   onRetalk,
   onPublish,
   onPatch,
   onTitle,
+  publishLabel,
 }: MiniProps) {
-  const meta = getCategoryMeta(category);
-  const hasResult = !!(square.result.before || square.result.after || square.result.metric);
-  const hasExtract = !!(square.extract.do || square.extract.dont || square.extract.template);
+  const meta = getCategoryMeta(category); // 액센트 색 전용(라벨 노출 안 함)
   const publishable = isSquarePublishable(square);
 
   const setStep = (i: number, v: string) =>
@@ -439,53 +597,23 @@ function MiniSquareCard({
 
   return (
     <View style={[cardStyles.card, { borderTopColor: meta.color }]}>
-      {/* 카테고리 칩 행 — 오분류 1탭 변경(D8). 정리 완료(리뷰) 상태에서만 변경 허용. */}
-      <View style={cardStyles.chipRow}>
-        {ALL_CATEGORIES.map((c) => {
-          const m = getCategoryMeta(c);
-          const on = c === category;
-          const dim = categoryLocked && !on;
-          return (
-            <Pressable
-              key={c}
-              disabled={categoryLocked}
-              onPress={() => onChangeCategory(c)}
-              style={[cardStyles.chip, on && { backgroundColor: m.color, borderColor: m.color }, dim && { opacity: 0.45 }]}
-            >
-              <Text style={[cardStyles.chipText, on && { color: '#FFFFFF' }]}>{m.emoji} {m.label}</Text>
-            </Pressable>
-          );
-        })}
-      </View>
-
       {editable ? (
         <TextInput value={title} onChangeText={onTitle} style={cardStyles.titleEdit} placeholder="제목" placeholderTextColor={InkColors.ink3} />
       ) : (
         <Text style={cardStyles.title}>{title}</Text>
       )}
 
-      {/* S 상황 */}
-      <Cell letter="S" name="상황" color={meta.color} text={square.situation}
-        editable={editable} onChange={(v) => setField({ situation: v })} />
-
-      {/* Q 곤란(있을 때만 / 편집 중엔 항상) */}
-      {(editable || !!square.quagmire) && (
-        <Cell letter="Q" name="이런 게 어려워요" color={meta.color} text={square.quagmire}
-          editable={editable} onChange={(v) => setField({ quagmire: v })} />
+      {/* 상황 */}
+      {(editable || !!square.situation) && (
+        <Cell name="상황" color={meta.color} text={square.situation}
+          editable={editable} onChange={(v) => setField({ situation: v })} />
       )}
 
-      {/* U 진짜 이유 */}
-      {(editable || !!square.uncover) && (
-        <Cell letter="U" name="진짜 이유" color={meta.color} text={square.uncover}
-          editable={editable} onChange={(v) => setField({ uncover: v })} />
-      )}
-
-      {/* A 행동 + 멘트 */}
+      {/* 할 일 (+ 멘트) */}
       {(square.action.steps.length > 0 || square.action.scripts.length > 0 || editable) && (
         <View style={[cardStyles.cell, { borderLeftColor: meta.color }]}>
           <View style={cardStyles.cellHead}>
-            <Text style={[cardStyles.cellLetter, { color: meta.color }]}>A</Text>
-            <Text style={cardStyles.cellName}>이렇게 하세요</Text>
+            <Text style={cardStyles.cellName}>할 일</Text>
           </View>
           {square.action.steps.map((s, i) => (
             <View key={`st-${i}`} style={cardStyles.stepRow}>
@@ -506,33 +634,53 @@ function MiniSquareCard({
         </View>
       )}
 
-      {/* R 결과 */}
-      {hasResult && !editable && (
-        <Cell letter="R" name="결과" color={meta.color}
-          text={[square.result.before && `전: ${square.result.before}`, square.result.after && `후: ${square.result.after}`, square.result.metric].filter(Boolean).join(' · ')} />
-      )}
-
-      {/* E 핵심 */}
-      {(hasExtract || editable) && (
-        <View style={[cardStyles.cell, { borderLeftColor: meta.color }]}>
+      {/* 금지 (있을 때만 / 편집 중엔 항상) */}
+      {(editable || !!square.extract.dont) && (
+        <View style={[cardStyles.cell, { borderLeftColor: BrandColors.bad }]}>
           <View style={cardStyles.cellHead}>
-            <Text style={[cardStyles.cellLetter, { color: meta.color }]}>E</Text>
-            <Text style={cardStyles.cellName}>핵심 O / X</Text>
+            <Text style={[cardStyles.cellName, { color: BrandColors.bad }]}>금지</Text>
           </View>
           {editable ? (
-            <>
-              <TextInput value={square.extract.do} onChangeText={(v) => setField({ extract: { ...square.extract, do: v } })}
-                style={cardStyles.stepEdit} placeholder="O 꼭 이것 (선택)" placeholderTextColor={InkColors.ink3} />
-              <TextInput value={square.extract.dont} onChangeText={(v) => setField({ extract: { ...square.extract, dont: v } })}
-                style={cardStyles.stepEdit} placeholder="X 하지 말 것 (선택)" placeholderTextColor={InkColors.ink3} />
-            </>
+            <TextInput value={square.extract.dont} onChangeText={(v) => setField({ extract: { ...square.extract, dont: v } })}
+              style={cardStyles.stepEdit} placeholder="절대 하면 안 되는 것 (선택)" placeholderTextColor={InkColors.ink3} />
           ) : (
-            <Text style={cardStyles.cellText}>
-              {[square.extract.do && `O ${square.extract.do}`, square.extract.dont && `X ${square.extract.dont}`, square.extract.template].filter(Boolean).join('\n')}
-            </Text>
+            <Text style={cardStyles.cellText}>{square.extract.dont}</Text>
           )}
         </View>
       )}
+
+      {/* 기준 — square.standard 있을 때만. count=개수칩 / spectrum=위치바 / 구형=게이지 */}
+      {square.standard && (() => {
+        const st = square.standard;
+        if (st.kind === 'count') {
+          return (
+            <View style={cardStyles.gaugeBox}>
+              <View style={cardStyles.gaugeHead}>
+                <Text style={cardStyles.gaugeLabel}>{st.label}</Text>
+                <Text style={cardStyles.gaugeVal}>{st.value}{st.unit ?? ''}</Text>
+              </View>
+            </View>
+          );
+        }
+        const pct = Math.max(0, Math.min(100, Math.round((st.value / (st.max || 100)) * 100)));
+        return (
+          <View style={cardStyles.gaugeBox}>
+            <Text style={cardStyles.gaugeLabel}>{st.label}</Text>
+            <View style={cardStyles.gaugeTrack}>
+              <View style={[cardStyles.gaugeFill, { width: `${pct}%` }]} />
+              {st.ends ? <View style={[cardStyles.gaugeKnob, { left: `${pct}%` }]} /> : null}
+            </View>
+            {st.ends ? (
+              <View style={cardStyles.gaugeEnds}>
+                <Text style={cardStyles.gaugeEndTxt}>{st.ends[0]}</Text>
+                <Text style={cardStyles.gaugeEndTxt}>{st.ends[1]}</Text>
+              </View>
+            ) : (
+              <Text style={cardStyles.gaugeVal}>{st.value}/{st.max ?? 100}</Text>
+            )}
+          </View>
+        );
+      })()}
 
       {/* 액션 행 */}
       {showActions && (
@@ -548,7 +696,7 @@ function MiniSquareCard({
             disabled={!publishable}
             style={({ pressed }) => [cardStyles.okBtn, { backgroundColor: meta.color, opacity: !publishable ? 0.4 : pressed ? 0.85 : 1 }]}
           >
-            <Text style={cardStyles.okText}>✅ 맞아요</Text>
+            <Text style={cardStyles.okText}>✅ {publishLabel}</Text>
           </Pressable>
         </View>
       )}
@@ -562,14 +710,13 @@ function MiniSquareCard({
   );
 }
 
-function Cell({ letter, name, color, text, editable, onChange }: {
-  letter: string; name: string; color: string; text: string;
+function Cell({ name, color, text, editable, onChange }: {
+  name: string; color: string; text: string;
   editable?: boolean; onChange?: (v: string) => void;
 }) {
   return (
     <View style={[cardStyles.cell, { borderLeftColor: color }]}>
       <View style={cardStyles.cellHead}>
-        <Text style={[cardStyles.cellLetter, { color }]}>{letter}</Text>
         <Text style={cardStyles.cellName}>{name}</Text>
       </View>
       {editable ? (
@@ -577,6 +724,96 @@ function Cell({ letter, name, color, text, editable, onChange }: {
       ) : (
         <Text style={cardStyles.cellText}>{text}</Text>
       )}
+    </View>
+  );
+}
+
+/* ───────────────────────── 다중 노하우 분리 제안 ───────────────────────── */
+function SplitProposal({ segments, onEach, onMerge }: { segments: StructuredSegment[]; onEach: () => void; onMerge: () => void }) {
+  return (
+    <View style={splitStyles.box}>
+      <Text style={splitStyles.head}>이렇게 {segments.length}개로 나눌 수 있어요</Text>
+      <View style={{ gap: 8 }}>
+        {segments.map((s, i) => {
+          const m = getCategoryMeta(s.category);
+          return (
+            <View key={i} style={[splitStyles.item, { borderLeftColor: m.color }]}>
+              <View style={[splitStyles.itemChip, { backgroundColor: m.color }]}>
+                <Text style={splitStyles.itemChipText}>{m.emoji} {m.label}</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={splitStyles.itemTitle} numberOfLines={1}>{s.title || `노하우 ${i + 1}`}</Text>
+                <Text style={splitStyles.itemSub} numberOfLines={1}>
+                  {s.square.action.steps.length > 0 ? `${s.square.action.steps.length}단계` : s.square.situation || '내용'}
+                </Text>
+              </View>
+            </View>
+          );
+        })}
+      </View>
+      <View style={splitStyles.actions}>
+        <Pressable onPress={onMerge} style={({ pressed }) => [splitStyles.mergeBtn, pressed && { opacity: 0.7 }]}>
+          <Text style={splitStyles.mergeTxt}>하나로 합치기</Text>
+        </Pressable>
+        <Pressable onPress={onEach} style={({ pressed }) => [splitStyles.eachBtn, pressed && { opacity: 0.85 }]}>
+          <Text style={splitStyles.eachTxt}>각각 등록 ({segments.length}개)</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
+/* ───────────────────────── 기준 입력 (스펙트럼 / 개수) ───────────────────────── */
+// kind=count: 단위(unit) 개수 스테퍼. kind=spectrum(기본): 양끝(ends) 사이 위치 슬라이더(0~100).
+function ScaleBubble({ prompt, onConfirm, onSkip }: { prompt: ScalePrompt; onConfirm: (v: number) => void; onSkip: () => void }) {
+  const isCount = prompt.kind === 'count';
+  const ends = prompt.ends ?? ['약함', '강함'];
+  const unit = prompt.unit ?? '개';
+  const [val, setVal] = useState<number>(isCount ? 1 : 50);
+  const pct = Math.max(0, Math.min(100, val));
+
+  return (
+    <View style={scaleStyles.box}>
+      {isCount ? (
+        <>
+          <View style={scaleStyles.stepRow}>
+            <Pressable onPress={() => setVal((v) => Math.max(0, v - 1))} style={({ pressed }) => [scaleStyles.stepBtnLg, pressed && { opacity: 0.6 }]}>
+              <Text style={scaleStyles.stepTxtLg}>−</Text>
+            </Pressable>
+            <Text style={scaleStyles.countVal}>{val}<Text style={scaleStyles.countUnit}> {unit}</Text></Text>
+            <Pressable onPress={() => setVal((v) => Math.min(99, v + 1))} style={({ pressed }) => [scaleStyles.stepBtnLg, pressed && { opacity: 0.6 }]}>
+              <Text style={scaleStyles.stepTxtLg}>＋</Text>
+            </Pressable>
+          </View>
+        </>
+      ) : (
+        <>
+          <View style={scaleStyles.track}>
+            <View style={[scaleStyles.fill, { width: `${pct}%` }]} />
+            <View style={[scaleStyles.knob, { left: `${pct}%` }]} />
+          </View>
+          <View style={scaleStyles.endsRow}>
+            <Text style={scaleStyles.endTxt}>{ends[0]}</Text>
+            <Text style={scaleStyles.endTxt}>{ends[1]}</Text>
+          </View>
+          <View style={scaleStyles.stepRow}>
+            <Pressable onPress={() => setVal((v) => Math.max(0, v - 10))} style={({ pressed }) => [scaleStyles.stepBtn, pressed && { opacity: 0.6 }]}>
+              <Text style={scaleStyles.stepTxt}>◀ {ends[0]} 쪽</Text>
+            </Pressable>
+            <Pressable onPress={() => setVal((v) => Math.min(100, v + 10))} style={({ pressed }) => [scaleStyles.stepBtn, pressed && { opacity: 0.6 }]}>
+              <Text style={scaleStyles.stepTxt}>{ends[1]} 쪽 ▶</Text>
+            </Pressable>
+          </View>
+        </>
+      )}
+      <View style={scaleStyles.actions}>
+        <Pressable onPress={onSkip} style={({ pressed }) => [scaleStyles.skipBtn, pressed && { opacity: 0.7 }]}>
+          <Text style={scaleStyles.skipTxt}>기준 없음</Text>
+        </Pressable>
+        <Pressable onPress={() => onConfirm(val)} style={({ pressed }) => [scaleStyles.okBtn, pressed && { opacity: 0.85 }]}>
+          <Text style={scaleStyles.okTxt}>이 기준으로 ✅</Text>
+        </Pressable>
+      </View>
     </View>
   );
 }
@@ -750,4 +987,82 @@ const cardStyles = StyleSheet.create({
   okBtn: { flex: 1, minWidth: 96, paddingVertical: 12, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   okText: { fontSize: 14, fontWeight: '800', color: '#FFFFFF' },
   doneBtn: { paddingVertical: 12, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+
+  // 정도 기준 게이지(노란 바)
+  gaugeBox: { gap: 6, paddingVertical: 2 },
+  gaugeHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' },
+  gaugeLabel: { fontSize: 12.5, fontWeight: '800', color: InkColors.ink2 },
+  gaugeVal: { fontSize: 14, fontWeight: '900', color: InkColors.ink },
+  gaugeTrack: { height: 10, borderRadius: 999, backgroundColor: InkColors.bgSoft, position: 'relative', justifyContent: 'center' },
+  gaugeFill: { height: '100%', borderRadius: 999, backgroundColor: BrandColors.yellow },
+  gaugeKnob: { position: 'absolute', top: -4, width: 18, height: 18, borderRadius: 9, backgroundColor: InkColors.ink, borderWidth: 3, borderColor: BrandColors.yellow, marginLeft: -9 },
+  gaugeEnds: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 2 },
+  gaugeEndTxt: { fontSize: 11.5, fontWeight: '700', color: InkColors.ink3 },
+});
+
+const splitStyles = StyleSheet.create({
+  box: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: InkColors.line,
+    borderTopWidth: 4,
+    borderTopColor: BrandColors.yellowDeep,
+    padding: 16,
+    gap: 12,
+  },
+  head: { fontSize: 15, fontWeight: '800', color: InkColors.ink },
+  item: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    borderWidth: 1,
+    borderColor: InkColors.line,
+    borderLeftWidth: 4,
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    backgroundColor: '#FFFFFF',
+  },
+  itemChip: { paddingVertical: 3, paddingHorizontal: 8, borderRadius: 999 },
+  itemChipText: { fontSize: 10.5, fontWeight: '800', color: '#FFFFFF' },
+  itemTitle: { fontSize: 14, fontWeight: '700', color: InkColors.ink },
+  itemSub: { fontSize: 12, color: InkColors.ink3, fontWeight: '600', marginTop: 1 },
+  actions: { flexDirection: 'row', gap: 8 },
+  mergeBtn: { paddingVertical: 12, paddingHorizontal: 14, borderRadius: 10, borderWidth: 1, borderColor: InkColors.line, backgroundColor: '#FFFFFF' },
+  mergeTxt: { fontSize: 13, fontWeight: '700', color: InkColors.ink3 },
+  eachBtn: { flex: 1, paddingVertical: 12, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: InkColors.ink },
+  eachTxt: { fontSize: 14, fontWeight: '800', color: '#FFFFFF' },
+});
+
+const scaleStyles = StyleSheet.create({
+  box: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: InkColors.line,
+    borderTopWidth: 4,
+    borderTopColor: BrandColors.yellowDeep,
+    padding: 16,
+    gap: 12,
+  },
+  // 스펙트럼
+  track: { height: 14, borderRadius: 999, backgroundColor: InkColors.bgSoft, position: 'relative', justifyContent: 'center' },
+  fill: { height: '100%', borderRadius: 999, backgroundColor: BrandColors.yellow },
+  knob: { position: 'absolute', top: -5, width: 24, height: 24, borderRadius: 12, backgroundColor: InkColors.ink, borderWidth: 3, borderColor: BrandColors.yellow, marginLeft: -12 },
+  endsRow: { flexDirection: 'row', justifyContent: 'space-between' },
+  endTxt: { fontSize: 12.5, fontWeight: '800', color: InkColors.ink2 },
+  stepRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  stepBtn: { flex: 1, paddingVertical: 9, borderRadius: 10, borderWidth: 1, borderColor: InkColors.line, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFFFFF' },
+  stepTxt: { fontSize: 12.5, fontWeight: '800', color: InkColors.ink2 },
+  // 개수
+  stepBtnLg: { width: 48, height: 48, borderRadius: 13, borderWidth: 1, borderColor: InkColors.line, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFFFFF' },
+  stepTxtLg: { fontSize: 24, fontWeight: '900', color: InkColors.ink },
+  countVal: { fontSize: 34, fontWeight: '900', color: InkColors.ink, minWidth: 96, textAlign: 'center' },
+  countUnit: { fontSize: 15, fontWeight: '700', color: InkColors.ink3 },
+  actions: { flexDirection: 'row', gap: 8 },
+  skipBtn: { paddingVertical: 12, paddingHorizontal: 14, borderRadius: 10, borderWidth: 1, borderColor: InkColors.line, backgroundColor: '#FFFFFF' },
+  skipTxt: { fontSize: 13, fontWeight: '700', color: InkColors.ink3 },
+  okBtn: { flex: 1, paddingVertical: 12, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: InkColors.ink },
+  okTxt: { fontSize: 14, fontWeight: '800', color: '#FFFFFF' },
 });

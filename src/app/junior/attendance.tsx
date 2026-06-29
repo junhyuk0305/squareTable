@@ -6,20 +6,14 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { RoleTabBar } from '@/components/RoleTabBar';
 import { useSessionStore } from '@/lib/store/useSessionStore';
-import { useAttendanceStore, type AttendanceRecord } from '@/lib/store/useAttendanceStore';
+import { useAttendanceStore } from '@/lib/store/useAttendanceStore';
 import { usePayrollStore } from '@/lib/store/usePayrollStore';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
-import { fmtDuration, won, hhmm, todayStr, minutesBetween } from '@/lib/utils/attendance';
-
-function liveMinutes(r: AttendanceRecord): number {
-  if (r.check_out) return r.work_minutes;
-  if (r.check_in) return minutesBetween(r.check_in, new Date().toISOString());
-  return 0;
-}
+import { fmtDuration, won, hhmm, todayStr, liveMinutes, DEFAULT_HOURLY_WAGE } from '@/lib/utils/attendance';
 
 /**
  * 출퇴근 패널 — 화면 크롬(SafeAreaView·탭바·헤더) 없이 콘텐츠만.
- * 직원 '업무' 탭의 세그먼트(업무 | 출퇴근) 안에 임베드되어 쓰인다.
+ * IA 개편으로 독립 '출퇴근' 탭(JuniorAttendanceRoute)에서 콘텐츠만 담당한다.
  */
 export function AttendancePanel() {
   const userId = useSessionStore((s) => s.userId);
@@ -28,7 +22,7 @@ export function AttendancePanel() {
   const checkIn = useAttendanceStore((s) => s.checkIn);
   const checkOut = useAttendanceStore((s) => s.checkOut);
   const wages = usePayrollStore((s) => s.wages);
-  const wage = wages[userId] ?? 10030;
+  const wage = wages[userId] ?? DEFAULT_HOURLY_WAGE;
   const router = useRouter();
 
   const [, setTick] = useState(0);
@@ -109,6 +103,16 @@ export function AttendancePanel() {
       </View>
       <Text style={styles.wageNote}>시급 {won(wage)} 기준 · 세전 예상액</Text>
 
+      {/* 근무표 진입 — 내 시프트 확인 + 대타/맞교환 요청 */}
+      <Pressable onPress={() => router.push('/junior/schedule')} style={({ pressed }) => [styles.schedLink, pressed && { opacity: 0.85 }]}>
+        <Ionicons name="calendar-outline" size={18} color={InkColors.ink} />
+        <View style={{ flex: 1 }}>
+          <Text style={styles.schedLinkTitle}>근무표 · 교대 요청</Text>
+          <Text style={styles.schedLinkSub}>내 근무를 확인하고 대타·맞교환을 신청해요</Text>
+        </View>
+        <Ionicons name="chevron-forward" size={16} color={InkColors.ink3} />
+      </Pressable>
+
       {/* 최근 기록 */}
       <View style={styles.recHeader}>
         <Text style={styles.sectionTitle}>최근 기록</Text>
@@ -118,7 +122,9 @@ export function AttendancePanel() {
         </Pressable>
       </View>
       <View style={styles.list}>
-        {recentRecs.length === 0 && <Text style={styles.empty}>아직 기록이 없어요</Text>}
+        {recentRecs.length === 0 && (
+          <Text style={styles.empty}>아직 출근 기록이 없어요.{'\n'}위 출근하기 버튼을 누르면 첫 기록이 남아요.</Text>
+        )}
         {recentRecs.slice(0, 5).map((r) => (
           <Pressable key={r.id} onPress={() => router.push('/junior/timesheet')} style={({ pressed }) => [styles.recRow, pressed && { opacity: 0.6 }]}>
             <Text style={styles.recDate}>{r.date.slice(5).replace('-', '/')}</Text>
@@ -183,6 +189,10 @@ const styles = StyleSheet.create({
   statLabel: { fontSize: 13, color: InkColors.ink3, fontWeight: '600' },
   statValue: { fontSize: 22, fontWeight: '800', color: InkColors.ink },
   wageNote: { fontSize: 12, color: InkColors.ink3, marginTop: -6 },
+
+  schedLink: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#FFFFFF', borderRadius: 14, borderWidth: 1, borderColor: InkColors.line, paddingVertical: 14, paddingHorizontal: 16 },
+  schedLinkTitle: { fontSize: 15, fontWeight: '800', color: InkColors.ink },
+  schedLinkSub: { fontSize: 12, color: InkColors.ink3, marginTop: 2 },
 
   sectionTitle: { fontSize: 16, fontWeight: '700', color: InkColors.ink2 },
   recHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 },

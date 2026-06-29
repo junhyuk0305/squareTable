@@ -111,6 +111,10 @@ async function loadProfile(set: (p: Partial<SessionState>) => void, userId: stri
   });
 }
 
+// onAuthStateChange는 앱 생애 1회만 등록한다. init()이 재마운트/핫리로드로 여러 번 불려도
+// 리스너가 중복 등록돼 매 인증 이벤트마다 loadProfile이 N번 도는 걸 막는다.
+let _authSubscribed = false;
+
 export const useSessionStore = create<SessionState>((set, get) => ({
   ...(HAS_SUPABASE ? { ...DEMO, status: 'loading' } : DEMO),
 
@@ -125,11 +129,14 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     if (user) await loadProfile(set, user.id, user.email ?? '');
     else set({ status: 'signed_out' });
 
-    supabase.auth.onAuthStateChange((_evt, session) => {
-      const u = session?.user;
-      if (u) loadProfile(set, u.id, u.email ?? '');
-      else set({ status: 'signed_out', unitId: '', userId: '', userName: '' });
-    });
+    if (!_authSubscribed) {
+      _authSubscribed = true;
+      supabase.auth.onAuthStateChange((_evt, session) => {
+        const u = session?.user;
+        if (u) loadProfile(set, u.id, u.email ?? '');
+        else set({ status: 'signed_out', unitId: '', userId: '', userName: '' });
+      });
+    }
   },
 
   signInWithPassword: async (email, pw) => {

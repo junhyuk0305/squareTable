@@ -5,8 +5,14 @@
 //   confidence ≥ SERVE        → 저장된 답 그대로 (LLM 0콜)
 //   GENERATE ≤ c < SERVE      → 그라운딩 생성 (이 구간만 LLM)
 //   c < GENERATE              → 사장님께 라우팅 (LLM 안 씀)
-export const SERVE_THRESHOLD = 0.6;
-export const GENERATE_THRESHOLD = 0.35;
+// SERVE 0.6→0.7 상향(2026-06-28): 실측상 진짜 매칭 0.68~0.77, 애매한 오답(예: 우유노하우 없을 때
+// "라떼 거품"→에스프레소 0.648)이 0.6컷을 통과해 자신있게 오답 서빙. 0.7로 올려 애매구간을
+// GENERATE(LLM 합성)로 흘려 안전 확보. 파일럿 점수 분포로 재보정(설계 D8).
+export const SERVE_THRESHOLD = 0.7;
+// GENERATE 0.35→0.45 상향(2026-06-28): 벡터 cosine은 같은 업종이면 0.5~0.6대가 흔해, 0.35는
+// 무관한 질문도 GENERATE로 끌어들였다. 0.45로 약한 노이즈를 먼저 쳐내고, 0.45~0.7 애매구간은
+// generateAnswer의 그라운딩(SOP에 근거 없으면 grounded=false→사장 라우팅)이 최종으로 거른다.
+export const GENERATE_THRESHOLD = 0.45;
 
 // 출력 분량 상한 — API 레벨에서 강제(max_output_tokens) + 스키마 항목 수 제한
 export const MAX_OUTPUT_TOKENS_ANSWER = 300;

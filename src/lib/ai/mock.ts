@@ -7,7 +7,9 @@ import type {
   GenerateAnswerOutput,
   StructureSquareInput,
   StructureSquareOutput,
+  StructuredSegment,
 } from './types';
+import type { Category } from '@/types';
 import { MAX_ACTIONS, MAX_DONTS } from './config';
 
 function dedupe(arr: string[]): string[] {
@@ -45,51 +47,79 @@ export function mockGenerateAnswer(input: GenerateAnswerInput): GenerateAnswerOu
   };
 }
 
-// 원문 → SQUARE 6칸. mock은 문장 분할 + 카테고리 핵심칸 강조(키 없이 휴리스틱).
-// input.categoryGuide는 실 LLM 프롬프트 주입용 — mock에서는 의도적으로 미사용.
-export function mockStructureSquare(input: StructureSquareInput): StructureSquareOutput {
-  const sentences = input.rawText
+// 텍스트 1조각 → SQUARE 1개(휴리스틱). 다중 분리 시 조각마다 호출.
+function structureOne(raw: string, category?: Category): StructuredSegment {
+  const sentences = raw
     .split(/[.!?\n。]/)
     .map((s) => s.trim())
     .filter((s) => s.length > 1);
-  const steps = sentences.length ? sentences.slice(0, MAX_ACTIONS) : [input.rawText.trim()];
-  const title = (sentences[0] ?? input.rawText).slice(0, 30);
-  const raw = input.rawText;
+  const steps = sentences.length ? sentences.slice(0, MAX_ACTIONS) : [raw.trim()];
+  const title = (sentences[0] ?? raw).slice(0, 30);
   const first = sentences[0] ?? raw.trim();
   const joined = sentences.length ? sentences.join(' ') : raw.trim();
 
   // ⚠️ 날조 금지: 원문에서 뽑히는 것만 채우고 나머지는 빈 칸.
-  // 카테고리별로 핵심 칸만 휴리스틱하게 강조 — 없는 내용은 절대 만들지 않는다.
   let situation = first;
   let uncover = '';
   let dont = '';
 
-  if (input.category === 'Event') {
-    // 부정 신호가 있을 때만 첫 문장을 dont로도 강조. 그 외엔 비움.
+  if (category === 'Event') {
     const negCues = ['안', '하지마', '하지 마', '금지', '절대', '말 것', '말것'];
     if (negCues.some((c) => raw.includes(c))) dont = first;
-  } else if (input.category === 'Know-how') {
-    // 판단 기준 신호가 있는 문장을 uncover로.
+  } else if (category === 'Know-how') {
     const judgeCues = ['보면', '판단', '기준', '될 때', '됐', '익으면', '느낌', '정도'];
     const judged = sentences.find((s) => judgeCues.some((c) => s.includes(c)));
     if (judged) uncover = judged;
-  } else if (input.category === 'Context') {
-    // what/where 포착: situation에 전체 원문(문장 결합)을 담는다.
+  } else if (category === 'Context') {
     situation = joined;
   }
-  // Routine(및 그 외): 현재 동작 유지(situation=first + steps).
+
+  // 양(개수) 우선 감지 → count, 아니면 정도 → spectrum. (mock은 일반 라벨, 실 LLM이 품목별로 생성)
+  const countCue = raw.match(/펌프|샷|스쿱|바퀴|장|번/);
+  const degreeCues = ['정도', '깨끗', '노릇', '적당', '익', '굽', '농도', '진하', '연하', '바삭', '알맞'];
+  const hasDegree = category === 'Know-how' || degreeCues.some((c) => raw.includes(c));
+  const scalePrompt = countCue
+    ? { kind: 'count' as const, label: '양', ask: `몇 ${countCue[0]}가 기준이에요?`, unit: countCue[0] }
+    : hasDegree
+      ? { kind: 'spectrum' as const, label: '완성 기준', ask: '어느 정도가 기준이에요?', ends: ['약함', '강함'] as [string, string] }
+      : undefined;
 
   return {
+    category: (category ?? 'Routine') as Category,
+    title,
+    keywords: dedupe(raw.split(/\s+/).filter((t) => t.length >= 2)).slice(0, 8),
     square: {
       situation,
       quagmire: '',
       uncover,
       action: { steps, scripts: [] },
       result: { before: '', after: '', metric: '' },
-      // do는 비워둔다 — steps[0] 복제는 카드에 'O 꼭 이것'으로 중복 노출돼 노이즈.
       extract: { do: '', dont },
     },
-    title,
-    keywords: dedupe(input.rawText.split(/\s+/).filter((t) => t.length >= 2)).slice(0, 8),
+    ...(scalePrompt ? { scalePrompt } : {}),
+  };
+}
+
+// 강한 구분 신호(줄바꿈 / "그리고" 등)일 때만 2~3조각으로 나눈다(명백할 때만 — 거짓 분리 방지).
+function splitChunks(raw: string): string[] {
+  const byLine = raw.split(/\n+/).map((s) => s.trim()).filter((s) => s.length > 2);
+  if (byLine.length >= 2) return byLine.slice(0, 3);
+  const byConj = raw.split(/\s*(?:그리고나서|그리고|그담에|그 다음|또한|또,|또 )\s*/).map((s) => s.trim()).filter((s) => s.length > 5);
+  if (byConj.length >= 2) return byConj.slice(0, 3);
+  return [raw.trim()];
+}
+
+// 원문 → SQUARE. 다중 노하우면 segments[]로 나눠 반환(top-level = segments[0], 단일 흐름 호환).
+// input.categoryGuide는 실 LLM 프롬프트 주입용 — mock에서는 의도적으로 미사용.
+export function mockStructureSquare(input: StructureSquareInput): StructureSquareOutput {
+  const chunks = splitChunks(input.rawText);
+  const segments = chunks.map((c) => structureOne(c, input.category));
+  const head = segments[0];
+  return {
+    square: head.square,
+    title: head.title,
+    keywords: head.keywords,
+    ...(head.scalePrompt ? { scalePrompt: head.scalePrompt } : {}),
+    segments,
   };
 }

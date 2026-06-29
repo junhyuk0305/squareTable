@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, Pressable, StyleSheet, ScrollView, TextInput, Alert, Platform } from 'react-native';
+import { View, Text, Pressable, StyleSheet, ScrollView, TextInput, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useLocalSearchParams, useRouter, useNavigation } from 'expo-router';
 
@@ -7,25 +7,61 @@ import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { getCategoryMeta } from '@/lib/utils/category';
 import { confirmAction } from '@/lib/utils/confirm';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
+import type { PlaybookEntry } from '@/types';
 
 export default function EditKnowledgeScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const loaded = usePlaybookStore((s) => s.loaded);
   const entry = usePlaybookStore((s) => (id ? s.getById(id) : undefined));
+
+  // 스토어 hydrate 전(콜드 진입/새로고침)엔 '삭제됨' 대신 로딩 표시 — 데이터 도착 후에 판단한다.
+  if (!loaded) {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <Stack.Screen options={{ title: '노하우 수정' }} />
+        <View style={styles.empty}>
+          <ActivityIndicator color={InkColors.ink3} />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (!entry) {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <Stack.Screen options={{ title: '노하우 수정' }} />
+        <View style={styles.empty}>
+          <Text style={styles.emptyText}>이미 삭제된 노하우예요.</Text>
+          <Pressable onPress={() => router.back()} style={styles.emptyBtn}>
+            <Text style={styles.emptyBtnText}>돌아가기</Text>
+          </Pressable>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // entry 확정 후에만 폼을 마운트 → useState가 항상 올바른 초기값으로 시드된다(빈 폼 방지).
+  // key=id로 다른 노하우로 파라미터가 바뀌면 폼이 재마운트돼 새 값으로 시드된다.
+  return <EditForm key={entry.id} entry={entry} />;
+}
+
+function EditForm({ entry }: { entry: PlaybookEntry }) {
+  const router = useRouter();
   const update = usePlaybookStore((s) => s.update);
   const remove = usePlaybookStore((s) => s.remove);
 
-  const [title, setTitle] = useState(entry?.title ?? '');
-  const [situation, setSituation] = useState(entry?.square.situation ?? '');
-  const [quagmire, setQuagmire] = useState(entry?.square.quagmire ?? '');
-  const [uncover, setUncover] = useState(entry?.square.uncover ?? '');
-  const [steps, setSteps] = useState((entry?.square.action.steps ?? []).join('\n'));
-  const [scripts, setScripts] = useState((entry?.square.action.scripts ?? []).join('\n'));
-  const [before, setBefore] = useState(entry?.square.result?.before ?? '');
-  const [after, setAfter] = useState(entry?.square.result?.after ?? '');
-  const [metric, setMetric] = useState(entry?.square.result?.metric ?? '');
-  const [doText, setDoText] = useState(entry?.square.extract.do ?? '');
-  const [dontText, setDontText] = useState(entry?.square.extract.dont ?? '');
+  const [title, setTitle] = useState(entry.title ?? '');
+  const [situation, setSituation] = useState(entry.square.situation ?? '');
+  const [quagmire, setQuagmire] = useState(entry.square.quagmire ?? '');
+  const [uncover, setUncover] = useState(entry.square.uncover ?? '');
+  const [steps, setSteps] = useState((entry.square.action.steps ?? []).join('\n'));
+  const [scripts, setScripts] = useState((entry.square.action.scripts ?? []).join('\n'));
+  const [before, setBefore] = useState(entry.square.result?.before ?? '');
+  const [after, setAfter] = useState(entry.square.result?.after ?? '');
+  const [metric, setMetric] = useState(entry.square.result?.metric ?? '');
+  const [doText, setDoText] = useState(entry.square.extract.do ?? '');
+  const [dontText, setDontText] = useState(entry.square.extract.dont ?? '');
   const [toast, setToast] = useState<string | null>(null);
   const navigation = useNavigation();
   const allowLeave = useRef(false); // 저장/삭제로 인한 의도적 이탈은 확인창 생략
@@ -64,20 +100,6 @@ export default function EditKnowledgeScreen() {
     return unsub;
   }, [navigation, dirty]);
 
-  if (!entry) {
-    return (
-      <SafeAreaView style={styles.safe}>
-        <Stack.Screen options={{ title: '노하우 수정' }} />
-        <View style={styles.empty}>
-          <Text style={styles.emptyText}>이미 삭제된 노하우예요.</Text>
-          <Pressable onPress={() => router.back()} style={styles.emptyBtn}>
-            <Text style={styles.emptyBtnText}>돌아가기</Text>
-          </Pressable>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
   const save = () => {
     update(entry.id, {
       title: title.trim() || entry.title,
@@ -106,17 +128,9 @@ export default function EditKnowledgeScreen() {
     remove(entry.id);
     router.back();
   };
-  const del = () => {
-    // 되돌릴 수 없는 작업 → 삭제 전 확인. 웹은 confirm, 네이티브는 Alert.
-    if (Platform.OS === 'web') {
-      const ok = (globalThis as any).confirm?.('이 노하우를 삭제할까요? 되돌릴 수 없어요.');
-      if (ok) doDelete();
-      return;
-    }
-    Alert.alert('노하우 삭제', '이 노하우를 삭제할까요? 되돌릴 수 없어요.', [
-      { text: '취소', style: 'cancel' },
-      { text: '삭제', style: 'destructive', onPress: doDelete },
-    ]);
+  const del = async () => {
+    // 되돌릴 수 없는 작업 → 삭제 전 확인(웹 confirm / 네이티브 Alert 공용 헬퍼).
+    if (await confirmAction('노하우 삭제', '이 노하우를 삭제할까요? 되돌릴 수 없어요.', '삭제')) doDelete();
   };
 
   return (

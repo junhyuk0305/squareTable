@@ -1,14 +1,31 @@
 import { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TextInput, Pressable, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Stack, useRouter } from 'expo-router';
+import { Stack } from 'expo-router';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { HeaderBackButton } from '@/components/HeaderBackButton';
 
 // 프로필 편집 + 비밀번호 변경 (오너·주니어 공용).
 export default function AccountEdit() {
-  const router = useRouter();
+  const status = useSessionStore((s) => s.status);
+
+  // 세션 복원(새로고침/콜드 진입) 중엔 폼이 데모/빈값으로 시드되지 않도록 로딩을 먼저 보여준다.
+  if (status === 'loading') {
+    return (
+      <SafeAreaView style={styles.safe} edges={['bottom']}>
+        <Stack.Screen options={{ headerShown: true, title: '프로필 편집', headerLeft: () => <HeaderBackButton /> }} />
+        <View style={styles.loading}>
+          <ActivityIndicator color={InkColors.ink3} />
+        </View>
+      </SafeAreaView>
+    );
+  }
+  // status 확정 후에만 폼을 마운트 → useState가 실제 프로필 값으로 시드된다(데모/빈값 시드 방지).
+  return <AccountEditForm />;
+}
+
+function AccountEditForm() {
   const { userName, email, role, storeName } = useSessionStore();
   const updateProfile = useSessionStore((s) => s.updateProfile);
   const changePassword = useSessionStore((s) => s.changePassword);
@@ -120,6 +137,7 @@ export default function AccountEdit() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: InkColors.cream },
+  loading: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   scroll: { padding: 20, gap: 8 },
   group: { fontSize: 13, fontWeight: '800', color: InkColors.ink3, marginLeft: 4, marginTop: 8 },
   card: { backgroundColor: '#FFFFFF', borderRadius: 14, borderWidth: 1, borderColor: InkColors.line, padding: 16, gap: 8, marginBottom: 8 },

@@ -76,7 +76,8 @@ export function buildPlaybookEntryFromSquare(
   const s = useSessionStore.getState();
   const quality = computeQuality(square);
   const publishable = isSquarePublishable(square);
-  const title = (extras.title || deriveTitle(uq)).trim() || deriveTitle(uq);
+  const derivedTitle = deriveTitle(uq);
+  const title = (extras.title || derivedTitle).trim() || derivedTitle;
   const keywords = extras.keywords?.length ? extras.keywords.slice(0, 8) : extractKeywords(uq.query_text);
 
   // 태그: 카테고리 + AI 키워드 일부

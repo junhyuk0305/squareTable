@@ -9,6 +9,7 @@ import { useWorkStore } from '@/lib/store/useWorkStore';
 import { useAttendanceStore } from '@/lib/store/useAttendanceStore';
 import { usePayrollStore } from '@/lib/store/usePayrollStore';
 import { useStaffStore } from '@/lib/store/useStaffStore';
+import { useScheduleStore } from '@/lib/store/useScheduleStore';
 import { HAS_SUPABASE } from '@/lib/supabase';
 
 export default function JuniorLayout() {
@@ -25,6 +26,7 @@ export default function JuniorLayout() {
     useAttendanceStore.getState().hydrate();
     usePayrollStore.getState().hydrate();
     useStaffStore.getState().hydrate();
+    useScheduleStore.getState().hydrateLocal();
     const offP = usePlaybookStore.getState().subscribe();
     const offW = useWorkStore.getState().subscribe();
     const offA = useAttendanceStore.getState().subscribe();
@@ -61,6 +63,7 @@ export default function JuniorLayout() {
       <Stack.Screen name="work" options={{ title: '업무' }} />
       <Stack.Screen name="settings" options={{ title: '설정' }} />
       <Stack.Screen name="timesheet" options={{ title: '내 출퇴근 내역', headerLeft: () => <HeaderBackButton fallback="/junior/attendance" /> }} />
+      <Stack.Screen name="schedule" options={{ title: '근무표', headerLeft: () => <HeaderBackButton fallback="/junior/home" /> }} />
       <Stack.Screen name="join" options={{ title: '가게 연결' }} />
       <Stack.Screen name="onboarding" options={{ headerShown: false }} />
     </Stack>

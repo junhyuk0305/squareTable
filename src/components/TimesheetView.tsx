@@ -6,7 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAttendanceStore, type AttendanceRecord } from '@/lib/store/useAttendanceStore';
 import { RoleTabBar } from '@/components/RoleTabBar';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
-import { fmtDuration, won, hhmm, todayStr, normalizeTime, shiftMonth, daysInMonth } from '@/lib/utils/attendance';
+import { fmtDuration, won, hhmm, todayStr, normalizeTime, shiftMonth, daysInMonth, maskHHMM } from '@/lib/utils/attendance';
 
 const WD = ['일', '월', '화', '수', '목', '금', '토'];
 
@@ -87,7 +87,8 @@ export function TimesheetView({ staffId, wage, editedBy, badgeLabel, badgeTone =
   function saveEdit(date: string) {
     const t = validateTimes();
     if (!t) return;
-    upsertManual(staffId, date, t.ci, t.co, editedBy);
+    // editing은 보정 중인 기록 id — 그 기록만 정확히 갱신(같은 날 다회근무여도 오인 방지).
+    upsertManual(staffId, date, t.ci, t.co, editedBy, editing ?? undefined);
     cancel();
   }
   function saveNew() {
@@ -246,21 +247,14 @@ export function TimesheetView({ staffId, wage, editedBy, badgeLabel, badgeTone =
   );
 }
 
-/** 숫자만 받아 HH:MM(숫자숫자:숫자숫자) 형식으로 자동 포맷. 4자리 초과 입력 차단. */
-function formatTimeInput(v: string): string {
-  const d = v.replace(/\D/g, '').slice(0, 4);
-  if (d.length <= 2) return d;
-  return `${d.slice(0, 2)}:${d.slice(2)}`;
-}
-
 function TimeEditRow({ cin, cout, onCin, onCout }: { cin: string; cout: string; onCin: (v: string) => void; onCout: (v: string) => void }) {
   return (
     <View style={styles.editRow}>
       <Text style={styles.editFieldLabel}>출근</Text>
-      <TextInput value={cin} onChangeText={(v) => onCin(formatTimeInput(v))} keyboardType="number-pad" placeholder="09:00" placeholderTextColor={InkColors.ink3} maxLength={5} style={styles.timeInput} />
+      <TextInput value={cin} onChangeText={(v) => onCin(maskHHMM(v))} keyboardType="number-pad" placeholder="09:00" placeholderTextColor={InkColors.ink3} maxLength={5} style={styles.timeInput} />
       <Text style={styles.editTilde}>~</Text>
       <Text style={styles.editFieldLabel}>퇴근</Text>
-      <TextInput value={cout} onChangeText={(v) => onCout(formatTimeInput(v))} keyboardType="number-pad" placeholder="18:00" placeholderTextColor={InkColors.ink3} maxLength={5} style={styles.timeInput} />
+      <TextInput value={cout} onChangeText={(v) => onCout(maskHHMM(v))} keyboardType="number-pad" placeholder="18:00" placeholderTextColor={InkColors.ink3} maxLength={5} style={styles.timeInput} />
     </View>
   );
 }

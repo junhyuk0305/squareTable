@@ -35,10 +35,10 @@ export function InboxHeroCard({ uq, careerDays, onPress }: Props) {
         {typeof careerDays === 'number' ? ` · 입사 ${careerDays}일차` : ''}
       </Text>
 
-      {/* 유사 질문 누적 */}
-      {uq.similar_queries_count > 1 && (
+      {/* 유사 질문 누적 — 표기는 전 화면 '{총 인원}명이 물었어요'로 통일 */}
+      {uq.similar_queries_count > 0 && (
         <View style={styles.similarWrap}>
-          <Text style={styles.similarText}>비슷한 질문 {uq.similar_queries_count}건 누적</Text>
+          <Text style={styles.similarText}>{uq.similar_queries_count + 1}명이 물었어요</Text>
         </View>
       )}
 

@@ -1,8 +1,7 @@
 import { create } from 'zustand';
 import type { ChatQuery, ResponseBlock, UnknownQuery } from '@/types';
-import { searchPlaybook } from '@/lib/rag';
 import { inferCategoryFromQuery } from '@/lib/utils/inferCategory';
-import { generateAnswer, toSopSlices, GENERATE_THRESHOLD } from '@/lib/ai';
+import { generateAnswer, hybridSearch, toSopSlices, GENERATE_THRESHOLD } from '@/lib/ai';
 import { MAX_ACTIONS, MAX_DONTS } from '@/lib/ai/config';
 import { usePlaybookStore } from './usePlaybookStore';
 import { useUnknownQueueStore } from './useUnknownQueueStore';
@@ -59,10 +58,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const session = useSessionStore.getState();
     const playbookEntries = usePlaybookStore.getState().entries;
 
-    // 시연 시 RAG 검색 느낌을 살리는 인위적 딜레이
-    await new Promise((r) => setTimeout(r, 900));
-
-    const result = searchPlaybook(text, playbookEntries);
+    // 하이브리드 검색(렉시컬+벡터). mock이면 내부에서 렉시컬+데모 딜레이로 폴백.
+    const result = await hybridSearch(text, playbookEntries);
     const now = new Date().toISOString();
     const id = `cq_${Date.now()}`;
 
@@ -114,7 +111,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
           matched_entry_ids: ai.usedSopIds,
           match_confidence: result.confidence,
           was_deflected: true,
-          response_block: ai.block,
+          response_block: ai.degraded ? { ...ai.block, degraded: true } : ai.block,
           satisfaction: null,
           resolved_at: now,
         };

@@ -5,24 +5,20 @@ import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 import { useSessionStore } from '@/lib/store/useSessionStore';
-import { useAttendanceStore, type AttendanceRecord } from '@/lib/store/useAttendanceStore';
+import { useAttendanceStore } from '@/lib/store/useAttendanceStore';
 import { usePayrollStore } from '@/lib/store/usePayrollStore';
-import { useWorkStore } from '@/lib/store/useWorkStore';
+import { useWorkStore, occursOn } from '@/lib/store/useWorkStore';
+import { useScheduleStore } from '@/lib/store/useScheduleStore';
 import { RoleTabBar } from '@/components/RoleTabBar';
 import { Wordmark } from '@/components/Wordmark';
 import { Appear } from '@/components/Appear';
+import { InfoDot } from '@/components/InfoDot';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Elevation, Radius } from '@/lib/theme/elevation';
-import { fmtDuration, won, hhmm, todayStr, minutesBetween } from '@/lib/utils/attendance';
+import { fmtDuration, won, hhmm, todayStr, liveMinutes, DEFAULT_HOURLY_WAGE } from '@/lib/utils/attendance';
 
 // 빈 상태에서도 '뭘 물어볼 수 있는지' 보여주는 추천(업종 일반).
 const QUICK_ASKS = ['마감 청소 어디까지 해요?', '포스기 에러 났어요', '진상 손님 응대법'];
-
-function liveMin(r: AttendanceRecord): number {
-  if (r.check_out) return r.work_minutes;
-  if (r.check_in) return minutesBetween(r.check_in, new Date().toISOString());
-  return 0;
-}
 
 /**
  * 직원 홈 — 사령탑(하루의 앵커).
@@ -39,14 +35,34 @@ export default function JuniorHomeScreen() {
   const checkIn = useAttendanceStore((s) => s.checkIn);
   const checkOut = useAttendanceStore((s) => s.checkOut);
   const wages = usePayrollStore((s) => s.wages);
-  const wage = wages[userId] ?? 10030;
+  const wage = wages[userId] ?? DEFAULT_HOURLY_WAGE;
 
   const templates = useWorkStore((s) => s.templates);
   const doneMap = useWorkStore((s) => s.done);
   const feed = useWorkStore((s) => s.feed);
 
+  // 근무표 — 이번 주 내 근무 횟수 + 내가 대응할 교대 요청 수.
+  const shiftTemplates = useScheduleStore((s) => s.templates);
+  const swaps = useScheduleStore((s) => s.swaps);
+
   const [, setTick] = useState(0);
   const today = todayStr();
+
+  const myShiftCount = useMemo(
+    () => shiftTemplates.filter((t) => t.staff_id === userId).length,
+    [shiftTemplates, userId],
+  );
+  const incomingSwaps = useMemo(
+    () =>
+      swaps.filter(
+        (r) =>
+          r.status === 'open' &&
+          r.requester_id !== userId &&
+          r.date >= today &&
+          (r.kind === 'cover' || r.target_staff_id === userId),
+      ).length,
+    [swaps, userId, today],
+  );
 
   const todayRecs = useMemo(
     () => records.filter((r) => r.staff_id === userId && r.date === today),
@@ -54,7 +70,7 @@ export default function JuniorHomeScreen() {
   );
   const openRec = todayRecs.find((r) => r.check_in && !r.check_out);
   const working = !!openRec;
-  const todayMin = todayRecs.reduce((sum, r) => sum + liveMin(r), 0);
+  const todayMin = todayRecs.reduce((sum, r) => sum + liveMinutes(r), 0);
   const todayPay = Math.round((todayMin * wage) / 60);
 
   // 근무 중이면 경과시간 30초마다 갱신.
@@ -64,10 +80,14 @@ export default function JuniorHomeScreen() {
     return () => clearInterval(t);
   }, [working]);
 
-  // 오늘 할일 진행 (항목 있는 것만 집계).
+  // 오늘 할일 진행 — 오늘 떠야 하는 것(occursOn) + 본인이 볼 수 있는 것(shared/내 private)만.
   const dayDone = doneMap[today] ?? {};
-  const taskTotal = templates.length;
-  const taskDone = templates.filter((t) => dayDone[t.id]).length;
+  const myTodaysTasks = useMemo(
+    () => templates.filter((t) => occursOn(t, today) && (t.scope !== 'private' || t.ownerId === userId)),
+    [templates, today, userId],
+  );
+  const taskTotal = myTodaysTasks.length;
+  const taskDone = myTodaysTasks.filter((t) => dayDone[t.id]).length;
   const taskRemain = taskTotal - taskDone;
 
   // 안 읽은 공지 — feed의 notice 중 read_by에 본인이 없는 것. 핀 공지·최신 우선.
@@ -124,6 +144,12 @@ export default function JuniorHomeScreen() {
           {todayPay > 0 && (
             <View style={styles.payRow}>
               <Text style={styles.payLabel}>오늘 번 돈</Text>
+              <InfoDot
+                title="오늘 번 돈은 어떻게 계산돼요?"
+                body={
+                  '오늘 일한 시간 × 시급으로 실시간 계산한 금액이에요.\n근무 중에는 1분마다 올라가고, 사장님이 정한 시급을 기준으로 해요.'
+                }
+              />
               <Text style={styles.payValue}>{won(todayPay)}</Text>
             </View>
           )}
@@ -200,12 +226,32 @@ export default function JuniorHomeScreen() {
           </View>
           <Text style={styles.taskSub}>
             {taskTotal === 0
-              ? '아직 등록된 할일이 없어요'
+              ? '오늘 할일이 없어요 · 사장님이 지시하면 여기에 떠요'
               : taskDone >= taskTotal
                 ? '오늘 할일을 다 끝냈어요 👏'
                 : `${taskRemain}개 남았어요`}
           </Text>
         </Pressable>
+        </Appear>
+
+        {/* 3.5) 이번 주 근무표 — 내 근무 + 교대 요청 진입 */}
+        <Appear delay={150}>
+          <Pressable onPress={() => router.push('/junior/schedule')} style={({ pressed }) => [styles.schedCard, pressed && { opacity: 0.85 }]}>
+            <View style={styles.schedHead}>
+              <Ionicons name="calendar-outline" size={18} color={InkColors.ink2} />
+              <Text style={styles.schedTitle}>이번 주 근무표</Text>
+              {incomingSwaps > 0 && (
+                <View style={styles.schedBadge}>
+                  <Text style={styles.schedBadgeText}>교대 요청 {incomingSwaps}</Text>
+                </View>
+              )}
+              <Ionicons name="chevron-forward" size={16} color={InkColors.ink3} style={{ marginLeft: incomingSwaps > 0 ? 0 : 'auto' }} />
+            </View>
+            <Text style={styles.schedSub}>
+              {myShiftCount > 0 ? `이번 주 ${myShiftCount}회 근무 예정` : '아직 근무가 없어요 · 사장님이 근무표를 정하면 떠요'}
+              {incomingSwaps > 0 ? ' · 동료가 대타를 찾고 있어요' : ' · 대타·맞교환을 신청할 수 있어요'}
+            </Text>
+          </Pressable>
         </Appear>
 
         {/* 4) 물어보기 박스 — 노하우 탭(물어보기)로 진입하는 큰 입력 유도 카드 */}
@@ -245,7 +291,6 @@ const styles = StyleSheet.create({
     paddingBottom: 10,
     backgroundColor: InkColors.cream,
   },
-  logo: { width: 36, height: 36, borderRadius: 9 },
   appHeaderRight: { flex: 1, alignItems: 'flex-end', paddingLeft: 12 },
   appHeaderStore: { fontSize: 16, fontWeight: '900', color: InkColors.ink, textAlign: 'right' },
   appHeaderUser: { fontSize: 12, fontWeight: '600', color: InkColors.ink3, textAlign: 'right', marginTop: 2 },
@@ -333,6 +378,22 @@ const styles = StyleSheet.create({
   bar: { height: 8, borderRadius: Radius.pill, backgroundColor: InkColors.bgSoft, overflow: 'hidden' },
   barFill: { height: 8, borderRadius: Radius.pill, backgroundColor: BrandColors.yellow },
   taskSub: { fontSize: 13, color: InkColors.ink3, fontWeight: '600' },
+
+  // 이번 주 근무표
+  schedCard: {
+    backgroundColor: InkColors.bg,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: InkColors.line,
+    padding: 18,
+    gap: 8,
+    ...Elevation.e1,
+  },
+  schedHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  schedTitle: { fontSize: 15, fontWeight: '800', color: InkColors.ink },
+  schedBadge: { marginLeft: 'auto', backgroundColor: BrandColors.accent, paddingHorizontal: 9, paddingVertical: 3, borderRadius: Radius.pill },
+  schedBadgeText: { fontSize: 11, fontWeight: '800', color: '#FFFFFF' },
+  schedSub: { fontSize: 13, color: InkColors.ink3, fontWeight: '600', lineHeight: 19 },
 
   // 노하우 묻기
   askCard: {

@@ -20,7 +20,9 @@ type Tab = { label: string; path: Href; icon: IconName; iconActive: IconName };
 const TABS: Record<'junior' | 'owner', Tab[]> = {
   junior: [
     { label: '홈', path: '/junior/home', icon: 'home-outline', iconActive: 'home' },
-    { label: '노하우', path: '/junior/chat', icon: 'bulb-outline', iconActive: 'bulb' },
+    // 알바의 본업은 '묻기' — 이 탭은 KnowhowSegment(둘러보기+물어보기, 기본=물어보기)로 연결된다.
+    // 사장 '노하우' 탭은 자산 관리라 명사 유지(역할 비대칭은 의도된 설계).
+    { label: '물어보기', path: '/junior/chat', icon: 'chatbubble-ellipses-outline', iconActive: 'chatbubble-ellipses' },
     { label: '업무', path: '/junior/work', icon: 'briefcase-outline', iconActive: 'briefcase' },
     { label: '출퇴근', path: '/junior/attendance', icon: 'time-outline', iconActive: 'time' },
     { label: '설정', path: '/junior/settings', icon: 'settings-outline', iconActive: 'settings' },
@@ -41,15 +43,22 @@ export function RoleTabBar({ role }: { role: 'junior' | 'owner' }) {
   const insets = useSafeAreaInsets();
   const tabs = TABS[role];
 
+  // pathname은 쿼리/해시가 제거된 문자열. t.path는 Href(미래에 쿼리·세그먼트가 붙을 수 있음)이므로
+  // 정확 일치 + 하위 경로(`/base/...`)까지 활성으로 본다 → 경로가 바뀌어도 하이라이트가 깨지지 않는다.
+  const isActive = (path: Href) => {
+    const base = String(path);
+    return pathname === base || pathname.startsWith(`${base}/`);
+  };
+
   return (
     <View style={[styles.bar, { paddingBottom: Math.max(insets.bottom, 8) }]}>
       {tabs.map((t) => (
         <TabButton
           key={String(t.path)}
           tab={t}
-          active={pathname === t.path}
+          active={isActive(t.path)}
           onPress={() => {
-            if (pathname !== t.path) router.replace(t.path);
+            if (!isActive(t.path)) router.replace(t.path);
           }}
         />
       ))}

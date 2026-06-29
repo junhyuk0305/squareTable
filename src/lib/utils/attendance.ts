@@ -1,5 +1,22 @@
 /** 출퇴근/급여 공용 포맷·계산 헬퍼 */
 
+/** 최저시급 기본값 — 시급 미설정 직원의 폴백(법정 최저, 2025 기준). */
+export const DEFAULT_HOURLY_WAGE = 10030;
+
+/**
+ * 근무 분 — 퇴근했으면 확정 work_minutes, 근무 중이면 출근시각부터 지금까지의 실시간 경과분.
+ * AttendanceRecord(구조적 타입)를 받아 store 순환 의존 없이 화면 어디서나 재사용.
+ */
+export function liveMinutes(r: {
+  check_in: string | null;
+  check_out: string | null;
+  work_minutes: number;
+}): number {
+  if (r.check_out) return r.work_minutes;
+  if (r.check_in) return minutesBetween(r.check_in, new Date().toISOString());
+  return 0;
+}
+
 export function todayStr(d: Date = new Date()): string {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, '0');
@@ -26,6 +43,13 @@ export function won(n: number): string {
 export function hhmm(iso: string): string {
   const d = new Date(iso);
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
+/** 입력 마스크 — 숫자만 받아 "1230"→"12:30"으로 자동 정리(4자리까지). 유효성 검사는 별도. */
+export function maskHHMM(text: string): string {
+  const d = text.replace(/[^0-9]/g, '').slice(0, 4);
+  if (d.length <= 2) return d;
+  return `${d.slice(0, 2)}:${d.slice(2)}`;
 }
 
 /** "1200" / "12:5" / "12:00" → "HH:MM" (24시 클램프). 비면 null. 출퇴근 수기 보정 입력 정규화. */

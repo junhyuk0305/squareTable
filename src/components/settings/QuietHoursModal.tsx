@@ -4,15 +4,9 @@ import { useEffect, useState } from 'react';
 import { Modal, View, Text, TextInput, Pressable, StyleSheet, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
+import { maskHHMM } from '@/lib/utils/attendance';
 
 const TIME_RE = /^([01]?\d|2[0-3]):[0-5]\d$/;
-
-/** "1230" 같은 입력을 "12:30"으로 정리. 4자리까지만. */
-function maskTime(text: string): string {
-  const d = text.replace(/[^0-9]/g, '').slice(0, 4);
-  if (d.length <= 2) return d;
-  return `${d.slice(0, 2)}:${d.slice(2)}`;
-}
 
 function isValid(t: string): boolean {
   return TIME_RE.test(t);
@@ -99,7 +93,7 @@ function TimeField({ label, value, onChange }: { label: string; value: string; o
       <Text style={styles.fieldLabel}>{label}</Text>
       <TextInput
         value={value}
-        onChangeText={(t) => onChange(maskTime(t))}
+        onChangeText={(t) => onChange(maskHHMM(t))}
         keyboardType="number-pad"
         inputMode="numeric"
         maxLength={5}

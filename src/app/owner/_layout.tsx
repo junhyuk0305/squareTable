@@ -9,6 +9,7 @@ import { useWorkStore } from '@/lib/store/useWorkStore';
 import { useAttendanceStore } from '@/lib/store/useAttendanceStore';
 import { usePayrollStore } from '@/lib/store/usePayrollStore';
 import { useStaffStore } from '@/lib/store/useStaffStore';
+import { useScheduleStore } from '@/lib/store/useScheduleStore';
 import { HAS_SUPABASE } from '@/lib/supabase';
 
 export default function OwnerLayout() {
@@ -23,6 +24,7 @@ export default function OwnerLayout() {
     useAttendanceStore.getState().hydrate();
     usePayrollStore.getState().hydrate();
     useStaffStore.getState().hydrate();
+    useScheduleStore.getState().hydrateLocal();
     const offQ = useUnknownQueueStore.getState().subscribe();
     const offP = usePlaybookStore.getState().subscribe();
     const offW = useWorkStore.getState().subscribe();
@@ -55,6 +57,8 @@ export default function OwnerLayout() {
       <Stack.Screen name="settings" options={{ title: '설정', headerLeft: undefined }} />
       {/* 서브화면 — 전역 headerLeft(HeaderBackButton) 사용 */}
       <Stack.Screen name="staff" options={{ title: '직원 관리' }} />
+      <Stack.Screen name="schedule" options={{ title: '근무표' }} />
+      <Stack.Screen name="store-config" options={{ title: '가게 기본 정보' }} />
       <Stack.Screen name="attendance" options={{ title: '근무·급여' }} />
       <Stack.Screen name="timesheet/[staffId]" options={{ title: '출근 기록' }} />
       <Stack.Screen name="payroll" options={{ title: '급여 설정' }} />

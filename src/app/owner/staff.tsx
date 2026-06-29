@@ -9,6 +9,8 @@ import { useStaffStore } from '@/lib/store/useStaffStore';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { RoleTabBar } from '@/components/RoleTabBar';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
+import { DEFAULT_HOURLY_WAGE } from '@/lib/utils/attendance';
+import { useCopyToClipboard } from '@/lib/utils/useCopyToClipboard';
 
 export default function OwnerStaffScreen() {
   const router = useRouter();
@@ -17,24 +19,11 @@ export default function OwnerStaffScreen() {
   const staff = useStaffStore((s) => s.staff);
   const INVITE_CODE = useSessionStore((s) => s.inviteCode) || '------';
 
-  const [copied, setCopied] = useState(false);
   const [phone, setPhone] = useState('');
   // 대기 중인 초대(아직 합류 전) — 재전송/취소 가능. 합류 완료 시 목록에서 제거.
   const [invites, setInvites] = useState<{ phone: string; status: '초대 보냄' | '재전송됨' }[]>([]);
+  const { copied, copy } = useCopyToClipboard();
 
-  const copy = async () => {
-    const nav = (globalThis as any).navigator;
-    const writeText = nav?.clipboard?.writeText;
-    // 실제 복사가 가능한 환경(주로 웹)에서만 '복사됨'을 표시한다(네이티브 거짓 성공 방지).
-    if (typeof writeText !== 'function') return;
-    try {
-      await writeText.call(nav.clipboard, INVITE_CODE);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    } catch {
-      /* 복사 실패 시 상태 변화 없음 */
-    }
-  };
   const sendInvite = () => {
     const v = phone.trim();
     if (!v) return;
@@ -53,8 +42,8 @@ export default function OwnerStaffScreen() {
         <View style={styles.inviteCard}>
           <Text style={styles.inviteLabel}>가게 초대코드</Text>
           <Text style={styles.inviteCode}>{INVITE_CODE}</Text>
-          <Text style={styles.inviteHint}>직원이 회원가입 시 이 코드를 입력하면 합류 신청이 됩니다.</Text>
-          <Pressable onPress={copy} style={({ pressed }) => [styles.copyBtn, pressed && { opacity: 0.85 }]}>
+          <Text style={styles.inviteHint}>직원이 회원가입 때 이 코드를 입력하면 바로 우리 가게에 합류돼요.</Text>
+          <Pressable onPress={() => copy(INVITE_CODE)} style={({ pressed }) => [styles.copyBtn, pressed && { opacity: 0.85 }]}>
             <Ionicons name={copied ? 'checkmark' : 'copy-outline'} size={16} color="#FFFFFF" />
             <Text style={styles.copyText}>{copied ? '복사됨' : '코드 복사'}</Text>
           </Pressable>
@@ -123,7 +112,7 @@ export default function OwnerStaffScreen() {
                 <Text style={styles.wageLabel}>시급</Text>
                 <View style={styles.wageInputRow}>
                   <TextInput
-                    value={String(wages[s.id] ?? 10030)}
+                    value={String(wages[s.id] ?? DEFAULT_HOURLY_WAGE)}
                     onChangeText={(t) => setWage(s.id, Math.min(Number(t.replace(/[^0-9]/g, '').slice(0, 7)) || 0, 1000000))}
                     keyboardType="number-pad"
                     maxLength={7}
@@ -136,7 +125,7 @@ export default function OwnerStaffScreen() {
           ))}
         </View>
         )}
-        <Text style={styles.demoNote}>* 시급은 즉시 반영됩니다(근무·급여 화면). 승인/권한은 데이터 연결 단계에서.</Text>
+        <Text style={styles.demoNote}>* 시급을 바꾸면 근무·급여 화면에 바로 반영돼요.</Text>
         <View style={{ height: 12 }} />
       </ScrollView>
       <RoleTabBar role="owner" />

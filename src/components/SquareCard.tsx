@@ -1,5 +1,4 @@
 import { View, Text, Pressable, StyleSheet } from 'react-native';
-import { CategoryChip } from './CategoryChip';
 import { SourceFooter } from './SourceFooter';
 import { BrandColors, InkColors } from '@/lib/theme/colors';
 import { Elevation, Radius } from '@/lib/theme/elevation';
@@ -43,12 +42,14 @@ type Props = {
   verification?: VerifyState;
   /** 해결률(0~1). 정의되면 NN%로 표시. */
   resolutionRate?: number;
-  /** S.Q.U.A.R.E. 한 줄 요약(extract.do 등). */
-  squareSummary?: string;
   /** 핵심 DO 한 줄(긍정색). actions와 별개의 요약용. */
   doText?: string;
   /** 핵심 DON'T 한 줄(경고색). donts와 별개의 요약용. */
   dontText?: string;
+  /** 주관적 정도 기준(있을 때만) — 노란 게이지로 "기준 80/100" 표시. max 없으면 0~100. */
+  standard?: { kind?: 'spectrum' | 'count'; label: string; value: number; max?: number; ends?: [string, string]; unit?: string };
+  /** 출처 푸터 탭 → 원본 노하우 상세 열기(있을 때만 누를 수 있게). */
+  onSourcePress?: () => void;
 };
 
 export function SquareCard({
@@ -63,23 +64,27 @@ export function SquareCard({
   feedback,
   verification,
   resolutionRate,
-  squareSummary,
   doText,
   dontText,
+  standard,
+  onSourcePress,
 }: Props) {
+  const stdMax = standard?.max && standard.max > 0 ? standard.max : 100;
+  const stdPct = standard
+    ? Math.max(0, Math.min(100, Math.round((standard.value / stdMax) * 100)))
+    : null;
   const hasVerification = typeof verification !== 'undefined';
   const hasRate = typeof resolutionRate === 'number';
   const v = hasVerification ? verifyMeta(verification) : null;
   const ratePct = hasRate ? Math.round((resolutionRate as number) * 100) : null;
   const doLine = doText?.trim();
   const dontLine = dontText?.trim();
-  const squareLine = squareSummary?.trim();
 
   return (
     <View style={styles.card}>
-      {/* Header */}
+      {/* Header — 카테고리 칩 비노출(내부 비계). 신뢰 배지/매칭률만 우측에. */}
       <View style={styles.header}>
-        <CategoryChip category={category} size="sm" />
+        <View style={{ flex: 1 }} />
         <View style={styles.headerMeta}>
           {hasRate ? (
             <View style={styles.rateBadge}>
@@ -111,7 +116,7 @@ export function SquareCard({
       {/* Actions — 항목 있을 때만 (빈 '지금 할 일' 헤더 방지) */}
       {actions.length > 0 ? (
         <View style={[styles.block, { borderLeftColor: BrandColors.good }]}>
-          <Text style={[styles.blockLabel, { color: BrandColors.good }]}>지금 할 일</Text>
+          <Text style={[styles.blockLabel, { color: BrandColors.good }]}>할 일</Text>
           {actions.map((a, i) => (
             <View key={i} style={styles.actionRow}>
               <Text style={styles.actionNum}>{i + 1}</Text>
@@ -131,12 +136,38 @@ export function SquareCard({
       {/* Don'ts */}
       {donts.length > 0 && (
         <View style={[styles.block, { borderLeftColor: BrandColors.warn }]}>
-          <Text style={[styles.blockLabel, { color: BrandColors.warn }]}>절대 금지</Text>
+          <Text style={[styles.blockLabel, { color: BrandColors.warn }]}>금지</Text>
           {donts.map((d, i) => (
             <Text key={i} style={styles.dontText}>· {d}</Text>
           ))}
         </View>
       )}
+
+      {/* 기준(보강 메타) — count=개수칩 / spectrum=양끝 사이 위치 / 구형=게이지 */}
+      {standard && standard.kind === 'count' ? (
+        <View style={styles.gaugeBox}>
+          <View style={styles.gaugeHead}>
+            <Text style={styles.gaugeLabel}>{standard.label}</Text>
+            <Text style={styles.gaugeVal}>{standard.value}{standard.unit ?? ''}</Text>
+          </View>
+        </View>
+      ) : standard && stdPct !== null ? (
+        <View style={styles.gaugeBox}>
+          <Text style={styles.gaugeLabel}>{standard.label}</Text>
+          <View style={styles.gaugeTrack}>
+            <View style={[styles.gaugeFill, { width: `${stdPct}%` }]} />
+            {standard.ends ? <View style={[styles.gaugeKnob, { left: `${stdPct}%` }]} /> : null}
+          </View>
+          {standard.ends ? (
+            <View style={styles.gaugeEnds}>
+              <Text style={styles.gaugeEndTxt}>{standard.ends[0]}</Text>
+              <Text style={styles.gaugeEndTxt}>{standard.ends[1]}</Text>
+            </View>
+          ) : (
+            <Text style={styles.gaugeVal}>{standard.value}/{stdMax}</Text>
+          )}
+        </View>
+      ) : null}
 
       {/* DO / DON'T 2색 한 줄 요약(보강 메타) — 있을 때만 */}
       {doLine ? (
@@ -152,21 +183,14 @@ export function SquareCard({
         </View>
       ) : null}
 
-      {/* S.Q.U.A.R.E. 요약(보강 메타) — 있을 때만 */}
-      {squareLine ? (
-        <View style={styles.squareRow}>
-          <Text style={styles.squareLabel}>S.Q.U.A.R.E.</Text>
-          <Text style={styles.squareText}>{squareLine}</Text>
-        </View>
-      ) : null}
-
-      {/* Source */}
+      {/* Source — 누르면 원본 노하우 상세(EntryDetailModal)로. */}
       <View style={{ marginTop: 12 }}>
         <SourceFooter
           creatorName={source.label ?? source.creatorName}
           title={source.title}
           version={source.version}
           updatedAt={source.updatedAt}
+          onPress={onSourcePress}
         />
       </View>
 
@@ -193,6 +217,7 @@ export function SquareCard({
             style={[styles.fbBtn, feedback === 'down' && styles.fbBtnActive]}
           >
             <Text style={[styles.fbEmoji, feedback === 'down' && { color: '#fff' }]}>👎</Text>
+            <Text style={[styles.fbLabel, feedback === 'down' && { color: '#fff' }]}>아쉬워요</Text>
           </Pressable>
         </View>
       )}
@@ -282,15 +307,16 @@ const styles = StyleSheet.create({
   },
   tagLabel: { fontSize: 11, fontWeight: '800', letterSpacing: 0.5, width: 40, lineHeight: 19 },
   tagText: { flex: 1, fontSize: 13, color: InkColors.ink2, lineHeight: 19 },
-  // S.Q.U.A.R.E. 요약
-  squareRow: {
-    backgroundColor: InkColors.bgSoft,
-    borderRadius: Radius.sm,
-    padding: 10,
-    gap: 3,
-  },
-  squareLabel: { fontSize: 10, fontWeight: '800', letterSpacing: 1.2, color: InkColors.ink3 },
-  squareText: { fontSize: 13, color: InkColors.ink2, lineHeight: 19 },
+  // 정도 기준 게이지 (노란 바)
+  gaugeBox: { gap: 6, paddingVertical: 2 },
+  gaugeHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' },
+  gaugeLabel: { fontSize: 12, fontWeight: '800', color: InkColors.ink2 },
+  gaugeVal: { fontSize: 13, fontWeight: '900', color: InkColors.ink },
+  gaugeTrack: { height: 10, borderRadius: 999, backgroundColor: InkColors.bgSoft, position: 'relative', justifyContent: 'center' },
+  gaugeFill: { height: '100%', borderRadius: 999, backgroundColor: BrandColors.yellow },
+  gaugeKnob: { position: 'absolute', top: -4, width: 18, height: 18, borderRadius: 9, backgroundColor: InkColors.ink, borderWidth: 3, borderColor: BrandColors.yellow, marginLeft: -9 },
+  gaugeEnds: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 2 },
+  gaugeEndTxt: { fontSize: 11, fontWeight: '700', color: InkColors.ink3 },
   feedback: {
     flexDirection: 'row',
     gap: 8,

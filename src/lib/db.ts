@@ -90,9 +90,17 @@ export async function fetchEntries(): Promise<PlaybookEntry[]> {
   return (data ?? []) as PlaybookEntry[];
 }
 
+// source/verification 은 현재 스키마에 컬럼이 없다(타입엔 있으나 0001 테이블 미포함).
+// 그대로 보내면 PostgREST가 "column does not exist"로 insert 전체를 거부 → 발행 실패.
+// 스키마에 없는 키는 떼고 보낸다(컬럼 추가 시 이 strip만 풀면 됨).
+function stripNonColumns<T extends Record<string, unknown>>(obj: T): Omit<T, 'source' | 'verification'> {
+  const { source: _s, verification: _v, ...rest } = obj as any;
+  return rest;
+}
+
 export async function insertEntry(entry: PlaybookEntry): Promise<boolean> {
   if (!HAS_SUPABASE) return true;
-  const row = { ...entry, unit_id: entry.unit_id || _unitId };
+  const row = { ...stripNonColumns(entry), unit_id: entry.unit_id || _unitId };
   return write('insertEntry', supabase.from('playbook_entries').insert(row));
 }
 
@@ -102,7 +110,7 @@ export async function updateEntry(id: string, patch: Partial<PlaybookEntry>): Pr
     'updateEntry',
     supabase
       .from('playbook_entries')
-      .update({ ...patch, updated_at: new Date().toISOString() })
+      .update({ ...stripNonColumns(patch), updated_at: new Date().toISOString() })
       .eq('id', id),
   );
 }
@@ -231,26 +239,40 @@ export function subscribePlaybook(onChange: () => void): () => void {
 // ── 업무보드: 할일 템플릿 ──────────────────────────────────
 export async function fetchTemplates(): Promise<TaskTemplate[]> {
   if (!HAS_SUPABASE) return [];
-  const { data, error } = await supabase.from('work_templates').select('id, section, text, due_date').order('created_at');
+  // select('*') — 0013 마이그레이션 적용 전후 모두 안전(없는 컬럼은 undefined).
+  const { data, error } = await supabase.from('work_templates').select('*').order('created_at');
   if (error) {
     console.warn('[db] fetchTemplates:', error.message);
     return [];
   }
-  // due_date(snake) → dueDate(camel). NULL이면 매일 반복 루틴.
   return (data ?? []).map((r: any) => ({
     id: r.id,
     section: r.section,
     text: r.text,
-    ...(r.due_date ? { dueDate: r.due_date as string } : null),
+    ...(r.section_note ? { sectionNote: r.section_note as string } : null),
+    scope: (r.scope as 'shared' | 'private') ?? 'shared',
+    ...(r.owner_id ? { ownerId: r.owner_id as string } : null),
+    ...(r.recurrence ? { recurrence: r.recurrence } : null),
+    // date(신규) 우선, 없으면 due_date(레거시) → date로 흡수.
+    ...(r.date ? { date: r.date as string } : r.due_date ? { date: r.due_date as string } : null),
   })) as TaskTemplate[];
 }
 export async function insertTemplate(t: TaskTemplate): Promise<boolean> {
   if (!HAS_SUPABASE) return true;
   return write(
     'insertTemplate',
-    supabase
-      .from('work_templates')
-      .insert({ id: t.id, section: t.section, text: t.text, due_date: t.dueDate ?? null, unit_id: _unitId }),
+    supabase.from('work_templates').insert({
+      id: t.id,
+      section: t.section,
+      text: t.text,
+      section_note: t.sectionNote ?? null,
+      scope: t.scope ?? 'shared',
+      owner_id: t.ownerId ?? null,
+      recurrence: t.recurrence ?? null,
+      date: t.date ?? t.dueDate ?? null,
+      // due_date 컬럼은 NOT NULL 제약이 없으니 신규 경로에선 사용 안 함(date로 통일).
+      unit_id: _unitId,
+    }),
   );
 }
 export async function deleteTemplate(id: string): Promise<boolean> {

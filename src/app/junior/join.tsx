@@ -26,7 +26,7 @@ export default function JuniorJoin() {
 
   const onChange = (v: string) => {
     setErr(null);
-    setCode(v.replace(/[^0-9A-Za-z]/g, '').toUpperCase().slice(0, CODE_LEN));
+    setCode(v.replace(/[^0-9]/g, '').slice(0, CODE_LEN));
   };
 
   const join = async () => {
@@ -67,7 +67,6 @@ export default function JuniorJoin() {
               value={code}
               onChangeText={onChange}
               keyboardType="number-pad"
-              autoCapitalize="characters"
               maxLength={CODE_LEN}
               style={styles.hiddenInput}
               caretHidden

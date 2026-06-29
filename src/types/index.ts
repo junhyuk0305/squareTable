@@ -82,6 +82,17 @@ export type SquareBlock = {
     dont: string;
     template?: string;
   };
+  // 주관적 기준(굽기·농도·간·양 등). AI가 정도성/개수성을 감지하면 사장이 전용 컨트롤로 답함.
+  // kind=spectrum: 양끝 라벨(ends) 사이 위치(value 0~max) / kind=count: 개수(value) + 단위(unit).
+  // 구버전 호환: kind 없으면 0~100 게이지로 표시.
+  standard?: {
+    kind?: 'spectrum' | 'count';
+    label: string;            // "닭 익힘 기준", "시럽 양" 등
+    value: number;            // spectrum: 0~max 위치 / count: 개수
+    max?: number;             // spectrum 분모(기본 100)
+    ends?: [string, string];  // spectrum 양끝 라벨 (AI 생성) 예: ["덜 익음","바싹"]
+    unit?: string;            // count 단위 (AI 생성) 예: "펌프","샷","번"
+  };
 };
 
 export type PlaybookEntry = {
@@ -134,6 +145,7 @@ export type ResponseBlock = {
   summary: string;
   actions: string[];
   donts: string[];
+  degraded?: boolean;   // AI 서버 실패로 기본 답으로 폴백했는가 → 답변 위에 고지 표시
   source: {
     entry_id: string;
     creator_name: string;

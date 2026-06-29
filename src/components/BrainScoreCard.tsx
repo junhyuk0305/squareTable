@@ -3,6 +3,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Elevation, Radius } from '@/lib/theme/elevation';
+import { InfoDot } from '@/components/InfoDot';
 import { ALL_CATEGORIES, getCategoryMeta } from '@/lib/utils/category';
 import { TARGET_PER_CATEGORY, type BrainScore } from '@/lib/utils/brainScore';
 import type { Category } from '@/types';
@@ -26,6 +27,12 @@ export function BrainScoreCard({
       <View style={styles.head}>
         <Ionicons name="library-outline" size={15} color={InkColors.ink2} />
         <Text style={styles.title}>매장 두뇌 완성도</Text>
+        <InfoDot
+          title="매장 두뇌 완성도란?"
+          body={
+            '직원이 자주 묻는 질문을 미리 채워두면 점수가 올라가요.\n100%에 가까울수록 웬만한 질문은 AI가 사장님 대신 알아서 답해줘요.'
+          }
+        />
         <Text style={styles.pct}>{pct}%</Text>
       </View>
 

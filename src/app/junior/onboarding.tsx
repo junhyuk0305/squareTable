@@ -22,11 +22,10 @@ export default function JuniorOnboarding() {
     if (!code.trim()) return setErr('사장님께 받은 초대코드를 입력해주세요.');
     setBusy(true);
     setErr(null);
-    const { error, storeName } = await joinByInvite(code.trim());
+    const { error } = await joinByInvite(code.trim());
     setBusy(false);
     if (error) return setErr(error);
     // 합류 성공 → 챗으로. storeName은 세션이 이미 갱신함.
-    void storeName;
     router.replace('/junior/home');
   };
 
@@ -48,11 +47,10 @@ export default function JuniorOnboarding() {
           <Text style={styles.label}>가게 초대코드</Text>
           <TextInput
             value={code}
-            onChangeText={(v) => setCode(v.replace(/[^0-9A-Za-z]/g, '').toUpperCase().slice(0, 6))}
+            onChangeText={(v) => setCode(v.replace(/[^0-9]/g, '').slice(0, 6))}
             placeholder="예: 482913"
             placeholderTextColor={InkColors.ink3}
             keyboardType="number-pad"
-            autoCapitalize="characters"
             style={styles.input}
             onSubmitEditing={join}
           />

@@ -9,13 +9,14 @@ import { Appear } from '@/components/Appear';
 
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useUnknownQueueStore } from '@/lib/store/useUnknownQueueStore';
-import { useAttendanceStore, type AttendanceRecord } from '@/lib/store/useAttendanceStore';
+import { useAttendanceStore } from '@/lib/store/useAttendanceStore';
 import { usePayrollStore } from '@/lib/store/usePayrollStore';
-import { useWorkStore } from '@/lib/store/useWorkStore';
+import { useWorkStore, occursOn } from '@/lib/store/useWorkStore';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { useStaffStore } from '@/lib/store/useStaffStore';
 import { RoleTabBar } from '@/components/RoleTabBar';
 import { BrainScoreCard } from '@/components/BrainScoreCard';
+import { InfoDot } from '@/components/InfoDot';
 import { OwnerHomeHubCards } from '@/components/OwnerHomeHubCards';
 import { Wordmark } from '@/components/Wordmark';
 import { getCategoryMeta } from '@/lib/utils/category';
@@ -23,14 +24,8 @@ import { computeBrainScore } from '@/lib/utils/brainScore';
 import { SEED_TEMPLATES } from '@/data/seed-templates';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Elevation, Radius } from '@/lib/theme/elevation';
-import { won, todayStr, minutesBetween } from '@/lib/utils/attendance';
+import { won, todayStr, liveMinutes, DEFAULT_HOURLY_WAGE } from '@/lib/utils/attendance';
 import type { Category } from '@/types';
-
-function liveMin(r: AttendanceRecord): number {
-  if (r.check_out) return r.work_minutes;
-  if (r.check_in) return minutesBetween(r.check_in, new Date().toISOString());
-  return 0;
-}
 
 function capCount(n: number): string {
   return n > 99 ? '99+' : String(n);
@@ -38,6 +33,7 @@ function capCount(n: number): string {
 
 export default function OwnerDashboardScreen() {
   const router = useRouter();
+  const userId = useSessionStore((s) => s.userId);
   const userName = useSessionStore((s) => s.userName);
   // 실매장 이름은 세션(프로필→unit)에서.
   const storeName = useSessionStore((s) => s.storeName) || '내 매장';
@@ -58,13 +54,18 @@ export default function OwnerDashboardScreen() {
     const monthPay = staff.reduce((sum, s) => {
       const min = records
         .filter((r) => r.staff_id === s.id && r.date.startsWith(ym))
-        .reduce((a, r) => a + liveMin(r), 0);
-      return sum + Math.round((min * (wages[s.id] ?? 10030)) / 60);
+        .reduce((a, r) => a + liveMinutes(r), 0);
+      return sum + Math.round((min * (wages[s.id] ?? DEFAULT_HOURLY_WAGE)) / 60);
     }, 0);
     return { working, monthPay };
   }, [records, wages, today, ym, staff]);
-  const taskTotal = templates.length;
-  const taskDoneCount = Object.keys(doneMap[today] ?? {}).length;
+  // 매장 진행률: 오늘 떠야 하는 것 중 가게 전체(shared) + 본인 private 만. (타인 개인 할일은 제외)
+  const todaysTasks = useMemo(
+    () => templates.filter((t) => occursOn(t, today) && (t.scope !== 'private' || t.ownerId === userId)),
+    [templates, today, userId],
+  );
+  const taskTotal = todaysTasks.length;
+  const taskDoneCount = todaysTasks.filter((t) => (doneMap[today] ?? {})[t.id]).length;
 
   // 알바 FAQ Top — 미답변 질문을 '많이 물은 순'으로. 답변 시 노하우로 전환됨.
   const pendingList = useMemo(
@@ -165,12 +166,21 @@ export default function OwnerDashboardScreen() {
             style={styles.hero}
             accessibilityRole="button"
             accessibilityLabel={
-              pending > 0 ? `받은 질문 ${capCount(pending)}건, 답변하러 가기` : '받은 질문 0건, 한 줄 회고 남기기'
+              pending > 0 ? `받은 질문 ${capCount(pending)}건, 답변하러 가기` : '받은 질문 0건, 한 줄 노하우 남기기'
             }
           >
             <View style={styles.heroHead}>
-              <Ionicons name="chatbubbles" size={15} color="#FFFFFF" />
-              <Text style={styles.heroKicker}>받은 질문</Text>
+              <Ionicons name={pending > 0 ? 'chatbubbles' : 'moon-outline'} size={15} color="#FFFFFF" />
+              <Text style={styles.heroKicker}>{pending > 0 ? '받은 질문' : '오늘 노하우'}</Text>
+              <InfoDot
+                color="rgba(255,255,255,0.85)"
+                title={pending > 0 ? '받은 질문이 뭐예요?' : '노하우가 뭐예요?'}
+                body={
+                  pending > 0
+                    ? '직원이 AI에게 물었는데 매장에 답이 없던 질문이에요.\n한 번 답해두면 다음부터는 AI가 사장님 대신 알려줘요.'
+                    : '오늘 새로 알게 된 것·실수 한 줄을 적으면 AI가 노하우로 정리해요.\n쌓일수록 AI가 사장님 대신 더 많이 답해줘요.'
+                }
+              />
               {pending > 0 && (
                 <View style={styles.heroBadge}>
                   <Text style={styles.heroBadgeText}>{capCount(pending)}</Text>
@@ -188,7 +198,7 @@ export default function OwnerDashboardScreen() {
                 : '오늘 새로 안 것 한 줄이면 AI가 노하우로 정리해요.'}
             </Text>
             <View style={styles.heroCta}>
-              <Text style={styles.heroCtaText}>{pending > 0 ? '질문 답변하러 가기' : '오늘 한 줄 회고 남기기'}</Text>
+              <Text style={styles.heroCtaText}>{pending > 0 ? '질문 답변하러 가기' : '오늘 한 줄 노하우 남기기'}</Text>
               <Ionicons name="arrow-forward" size={14} color={InkColors.ink} />
             </View>
           </PressableScale>
@@ -251,7 +261,7 @@ export default function OwnerDashboardScreen() {
                         {q.query_text}
                       </Text>
                       <Text style={styles.faqMeta}>
-                        {cm.label} · {q.similar_queries_count + 1}번 물음
+                        {cm.label} · {q.similar_queries_count + 1}명이 물었어요
                       </Text>
                     </View>
                     <Text style={styles.faqAction}>답변 →</Text>
@@ -279,11 +289,11 @@ export default function OwnerDashboardScreen() {
         {/* 혼자 모드 넛지 — 입력을 강요하지 않고 '돌려받는 것'·미래가치로 끌어들인다 */}
         {entries.length > 0 && (
           <Appear delay={300} style={styles.nudges}>
-            {/* F4 하루 한 줄 회고 — 미답변이 없을 땐 위 HERO가 이미 회고로 보내므로 중복 숨김 */}
+            {/* F4 하루 한 줄 노하우 — 미답변이 없을 땐 위 HERO가 이미 노하우로 보내므로 중복 숨김 */}
             {pending > 0 && (
               <NudgeCard
                 icon="moon-outline"
-                title="하루 한 줄 회고"
+                title="하루 한 줄 노하우"
                 sub="오늘 새로 안 것·실수, 한 줄이면 AI가 노하우로 정리해요"
                 onPress={() => router.push('/owner/coach')}
               />
@@ -332,7 +342,6 @@ function NudgeCard({
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: InkColors.cream },
-  headerBtn: { fontSize: 13, fontWeight: '700', color: BrandColors.brand },
   scroll: { padding: 20, gap: 18 },
   greet: { fontSize: 16, fontWeight: '700', color: InkColors.ink2 },
 
@@ -346,7 +355,6 @@ const styles = StyleSheet.create({
     paddingBottom: 10,
     backgroundColor: InkColors.cream,
   },
-  logo: { width: 36, height: 36, borderRadius: 9 },
   appHeaderRight: { flex: 1, alignItems: 'flex-end', paddingLeft: 12 },
   appHeaderStore: { fontSize: 16, fontWeight: '900', color: InkColors.ink, textAlign: 'right' },
   appHeaderUser: { fontSize: 12, fontWeight: '600', color: InkColors.ink3, textAlign: 'right', marginTop: 2 },
@@ -445,7 +453,6 @@ const styles = StyleSheet.create({
 
   miniRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8 },
   miniLink: { fontSize: 13, color: InkColors.ink2, fontWeight: '700' },
-  miniDot: { fontSize: 13, color: InkColors.ink3 },
 
   faqSection: { gap: 10 },
   faqHead: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between' },

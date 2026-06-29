@@ -66,10 +66,13 @@ export const useUnknownQueueStore = create<UnknownQueueState>((set, get) => ({
       set((st) => ({
         queue: st.queue.map((u) => (u.id === target.id ? { ...u, similar_queries_count: bumped } : u)),
       }));
-      void guardWrite(bumpUnknownSimilar(target.id, bumped), () =>
-        set((st) => ({
-          queue: st.queue.map((u) => (u.id === target.id ? { ...u, similar_queries_count: bumped - 1 } : u)),
-        })),
+      void guardWrite(
+        bumpUnknownSimilar(target.id, bumped),
+        () =>
+          set((st) => ({
+            queue: st.queue.map((u) => (u.id === target.id ? { ...u, similar_queries_count: bumped - 1 } : u)),
+          })),
+        '유사 질문 반영에 실패했어요.',
       );
       return;
     }

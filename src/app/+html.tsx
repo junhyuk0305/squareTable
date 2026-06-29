@@ -29,10 +29,29 @@ export default function Root({ children }: PropsWithChildren) {
         <link rel="icon" type="image/png" href="/favicon.png" />
         {/* ──────────────────────────────────────────────────────────────── */}
 
-        <link
-          rel="stylesheet"
-          href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css"
+        {/* Pretendard 가변폰트(약 1MB)를 렌더 블로킹으로 받지 않는다.
+            ① preconnect 로 CDN(TLS/DNS) 연결을 첫 페인트 전에 미리 연다.
+            ② 스타일시트는 인라인 스크립트로 비동기 주입 → 첫 페인트는 아래
+               FONT_CSS 의 시스템 한글폰트(Apple SD Gothic / Noto Sans KR / 맑은고딕)로
+               즉시 그리고, 폰트 로드가 끝나면 Pretendard 로 자연 swap 된다.
+            JSX 의 onLoad="..." 문자열 핸들러는 정적 HTML 로 직렬화되지 않으므로
+            media=print/onload 트릭 대신 스크립트 주입을 쓴다. */}
+        <link rel="preconnect" href="https://cdn.jsdelivr.net" crossOrigin="" />
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              "(function(){var l=document.createElement('link');" +
+              "l.rel='stylesheet';" +
+              "l.href='https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css';" +
+              'document.head.appendChild(l);})();',
+          }}
         />
+        <noscript>
+          <link
+            rel="stylesheet"
+            href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css"
+          />
+        </noscript>
         <ScrollViewStyleReset />
         <style dangerouslySetInnerHTML={{ __html: FONT_CSS }} />
       </head>

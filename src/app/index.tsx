@@ -8,6 +8,7 @@ import { applyMockSeed } from '@/lib/demo/mockSeed';
 import { HAS_SUPABASE } from '@/lib/supabase';
 import { BrandColors, InkColors } from '@/lib/theme/colors';
 import { Wordmark } from '@/components/Wordmark';
+import { isValidEmail } from '@/lib/utils/validation';
 import type { Role } from '@/types';
 
 export default function LoginScreen() {
@@ -22,8 +23,6 @@ export default function LoginScreen() {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
-  const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
-
   // Supabase 미설정이면 기존 데모 동작(입력 무시, 역할 토글로 바로 입장)
   const demoEnter = () => {
     switchTo(role);
@@ -37,7 +36,7 @@ export default function LoginScreen() {
       setMsg('이메일과 비밀번호를 입력해주세요.');
       return;
     }
-    if (!EMAIL_RE.test(email.trim())) {
+    if (!isValidEmail(email)) {
       setMsg('이메일 형식을 확인해주세요.');
       return;
     }
@@ -58,7 +57,7 @@ export default function LoginScreen() {
       setMsg('이메일을 먼저 입력해주세요.');
       return;
     }
-    if (!EMAIL_RE.test(email.trim())) {
+    if (!isValidEmail(email)) {
       setMsg('이메일 형식을 확인해주세요.');
       return;
     }
@@ -75,6 +74,7 @@ export default function LoginScreen() {
         <View style={styles.header}>
           <Wordmark size="lg" showEng />
           <Text style={styles.tagline}>할 일이 착착 끝나는 가게 · 현장 운영 AI</Text>
+          <Text style={styles.taglineSub}>사장님은 가게 노하우를 남기고, 직원·알바는 모르는 걸 AI에게 바로 물어봐요.</Text>
         </View>
 
         <View style={styles.card}>
@@ -144,6 +144,7 @@ const styles = StyleSheet.create({
   scroll: { flexGrow: 1, padding: 24, justifyContent: 'center', gap: 28 },
   header: { alignItems: 'center', gap: 12 },
   tagline: { fontSize: 13, color: InkColors.ink3, textAlign: 'center' },
+  taglineSub: { fontSize: 13, color: InkColors.ink2, textAlign: 'center', lineHeight: 19, fontWeight: '600', maxWidth: 320 },
 
   card: {
     backgroundColor: '#FFFFFF',

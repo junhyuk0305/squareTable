@@ -11,6 +11,11 @@ export type BrowseListProps = {
   onSelect: (entry: PlaybookEntry) => void;
   /** 빈 상태 안내 문구(미지정 시 카탈로그 기본 문구 사용) */
   emptyHint?: string;
+  /**
+   * 카테고리 칩 라벨 노출 여부(기본 true). 프레임 v2에서 카테고리는 AI 내부 비계라
+   * 직원(end-user)에겐 라벨을 숨긴다(false → 색만). 사장 관리화면은 true 유지.
+   */
+  showCategory?: boolean;
 };
 
 // 검증 3-state 배지 메타 — 03 카피카탈로그 H 라벨 + 02 검증배지 토큰(임시 매핑).
@@ -31,7 +36,7 @@ function verifyMeta(state: PlaybookEntry['verification']): VerifyMeta {
 }
 
 // 카드 한 장(축약). DO/DON'T 미리보기 1줄씩, 해결률, 검증배지, 출처.
-function BrowseCard({ entry, onSelect }: { entry: PlaybookEntry; onSelect: (e: PlaybookEntry) => void }) {
+function BrowseCard({ entry, onSelect, showCategory }: { entry: PlaybookEntry; onSelect: (e: PlaybookEntry) => void; showCategory: boolean }) {
   const v = verifyMeta(entry.verification);
   const ratePct = Math.round((entry.stats?.resolution_rate ?? 0) * 100);
   const doText = entry.square?.extract?.do?.trim();
@@ -45,9 +50,9 @@ function BrowseCard({ entry, onSelect }: { entry: PlaybookEntry; onSelect: (e: P
       accessibilityLabel={`${entry.title}, ${v.label}, 해결률 ${ratePct}%`}
       style={({ pressed }) => [styles.card, pressed && styles.pressed]}
     >
-      {/* 헤더: 카테고리칩 + 검증배지 */}
-      <View style={styles.header}>
-        <CategoryChip category={entry.category} size="sm" />
+      {/* 헤더: 카테고리(색 액센트) + 검증배지. 라벨 노출은 showCategory로 제어(프레임 v2). */}
+      <View style={[styles.header, !showCategory && { justifyContent: 'flex-end' }]}>
+        {showCategory && <CategoryChip category={entry.category} size="sm" />}
         <View style={[styles.badge, { backgroundColor: v.bg }]}>
           <Text style={[styles.badgeText, { color: v.fg }]}>
             {v.icon} {v.label}
@@ -93,7 +98,7 @@ function BrowseCard({ entry, onSelect }: { entry: PlaybookEntry; onSelect: (e: P
  * 각 카드: 카테고리칩 · 검증배지 · 해결률 · DO/DON'T 1줄 · 출처.
  * 데이터/필터/로딩은 부모(KnowhowSegment 슬롯) 책임. 여기선 받은 entries만 그린다.
  */
-export function BrowseList({ entries, onSelect, emptyHint }: BrowseListProps) {
+export function BrowseList({ entries, onSelect, emptyHint, showCategory = true }: BrowseListProps) {
   if (!entries || entries.length === 0) {
     // 03 카탈로그 search.empty.senior / knowhow.empty 톤(해요체).
     const hint = emptyHint ?? '찾는 노하우가 없어요. 검색어를 바꾸거나, 새 노하우로 만들어 둘 수 있어요.';
@@ -112,7 +117,7 @@ export function BrowseList({ entries, onSelect, emptyHint }: BrowseListProps) {
       showsVerticalScrollIndicator={false}
     >
       {entries.map((entry) => (
-        <BrowseCard key={entry.id} entry={entry} onSelect={onSelect} />
+        <BrowseCard key={entry.id} entry={entry} onSelect={onSelect} showCategory={showCategory} />
       ))}
     </ScrollView>
   );

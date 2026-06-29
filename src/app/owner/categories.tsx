@@ -2,7 +2,6 @@ import { useMemo } from 'react';
 import { View, Text, Pressable, ScrollView, StyleSheet } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 
-import { CategoryBigButton } from '@/components/CategoryBigButton';
 import { RoleTabBar } from '@/components/RoleTabBar';
 import { KnowhowSegment } from '@/components/KnowhowSegment';
 import { BrowseList } from '@/components/BrowseList';
@@ -13,7 +12,7 @@ import { logout } from '@/lib/auth';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import contextPack from '@/data/context-pack.json';
-import type { Category, PlaybookEntry } from '@/types';
+import type { PlaybookEntry } from '@/types';
 
 /**
  * 노하우 탭(사장님) — KnowhowSegment 컨테이너.
@@ -80,8 +79,10 @@ export default function OwnerCategoriesScreen() {
  * ───────────────────────────────────────────────────────── */
 function OwnerAsk() {
   const router = useRouter();
-  const getPending = useUnknownQueueStore((s) => s.getPending);
-  const pendingCount = getPending().length;
+  // queue를 직접 구독해야 질문 추가/답변 시 카운트가 갱신된다(getPending 함수참조는 불변 → 미반응).
+  const pendingCount = useUnknownQueueStore(
+    (s) => s.queue.filter((u) => u.status === 'pending_owner_answer').length,
+  );
 
   return (
     <ScrollView contentContainerStyle={styles.askScroll} showsVerticalScrollIndicator={false}>
@@ -113,31 +114,14 @@ function OwnerAsk() {
 function OwnerMine() {
   const router = useRouter();
   const entries = usePlaybookStore((s) => s.entries);
-  const getPending = useUnknownQueueStore((s) => s.getPending);
+  const pendingCount = useUnknownQueueStore(
+    (s) => s.queue.filter((u) => u.status === 'pending_owner_answer').length,
+  );
   const userName = useSessionStore((s) => s.userName);
   const storeName = (contextPack as { store_name: string }).store_name;
 
-  // 카테고리별 누적 카운트 — entries에서 published/draft 가리지 않고 전부 집계
-  const countsByCategory = useMemo(() => {
-    const acc: Record<Category, number> = {
-      Routine: 0,
-      Event: 0,
-      Context: 0,
-      'Know-how': 0,
-    };
-    for (const e of entries) {
-      acc[e.category] = (acc[e.category] ?? 0) + 1;
-    }
-    return acc;
-  }, [entries]);
-
-  const pendingCount = getPending().length;
-
-  const handleCategoryPress = (category: Category) => {
-    router.push({ pathname: '/owner/coach', params: { category } });
-  };
-
-  const handleVoiceFirst = () => {
+  // 카테고리 선택 없이 바로 대화형 입력으로 — 분류는 AI가 내부 판단(프레임 v2).
+  const handleStart = () => {
     router.push('/owner/coach' as never);
   };
 
@@ -157,8 +141,8 @@ function OwnerMine() {
       {/* 큰 질문 */}
       <Text style={styles.question}>오늘 어떤 노하우를{'\n'}알려주실래요?</Text>
 
-      {/* 보조 설명 */}
-      <Text style={styles.subhint}>한 가지씩 골라서 알려주세요</Text>
+      {/* 보조 설명 — 카테고리 선택 없이 말하듯. 분류·정리는 AI가. */}
+      <Text style={styles.subhint}>말하듯 적으면 AI가 정리·분류해요. 여러 개를 한 번에 말해도 돼요.</Text>
 
       {/* 등록된 노하우 전체 보기 */}
       <Pressable
@@ -171,47 +155,19 @@ function OwnerMine() {
         <Text style={styles.listLinkArrow}>→</Text>
       </Pressable>
 
-      {/* 2x2 그리드 */}
-      <View style={styles.grid}>
-        <View style={styles.row}>
-          <CategoryBigButton
-            category="Routine"
-            count={countsByCategory.Routine}
-            onPress={() => handleCategoryPress('Routine')}
-          />
-          <CategoryBigButton
-            category="Event"
-            count={countsByCategory.Event}
-            onPress={() => handleCategoryPress('Event')}
-          />
-        </View>
-        <View style={styles.row}>
-          <CategoryBigButton
-            category="Context"
-            count={countsByCategory.Context}
-            onPress={() => handleCategoryPress('Context')}
-          />
-          <CategoryBigButton
-            category="Know-how"
-            count={countsByCategory['Know-how']}
-            onPress={() => handleCategoryPress('Know-how')}
-          />
-        </View>
-      </View>
-
-      {/* 보조 진입 — 개업 준비·한가할 때 여러 개를 말로 몰아서 (콜드스타트 선입력) */}
+      {/* 단일 진입 — 대화형 노하우 입력(카테고리 선택 없음) */}
       <Pressable
-        onPress={handleVoiceFirst}
+        onPress={handleStart}
         accessibilityRole="button"
-        accessibilityLabel="여러 노하우 한 번에 정리하기"
-        style={({ pressed }) => [styles.voiceCard, pressed && styles.voiceCardPressed]}
+        accessibilityLabel="노하우 알려주기"
+        style={({ pressed }) => [styles.startBtn, pressed && { opacity: 0.9 }]}
       >
-        <Text style={styles.voiceEmoji}>📝</Text>
-        <View style={styles.voiceMiddle}>
-          <Text style={styles.voiceTitle}>여러 개 한 번에</Text>
-          <Text style={styles.voiceSub}>개업 준비·한가할 때 몰아서 — AI가 정리·분류</Text>
+        <Text style={styles.startEmoji}>📝</Text>
+        <View style={styles.startMiddle}>
+          <Text style={styles.startTitle}>노하우 알려주기</Text>
+          <Text style={styles.startSub}>그냥 말하듯 적으면 돼요 — 정리·분류는 AI가</Text>
         </View>
-        <Text style={styles.voiceArrow}>→</Text>
+        <Text style={styles.startArrow}>→</Text>
       </Pressable>
 
       {/* 구분선: ─ 또는 ─ */}
@@ -298,6 +254,21 @@ const styles = StyleSheet.create({
   voiceTitle: { fontSize: 15, fontWeight: '700', color: InkColors.ink },
   voiceSub: { fontSize: 12, color: InkColors.ink3, fontWeight: '500' },
   voiceArrow: { fontSize: 20, color: InkColors.ink2, fontWeight: '700' },
+  // 단일 진입 CTA (검정 프라이머리)
+  startBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    backgroundColor: InkColors.ink,
+    padding: 18,
+    borderRadius: 16,
+    marginTop: 4,
+  },
+  startEmoji: { fontSize: 26, lineHeight: 32 },
+  startMiddle: { flex: 1, gap: 3 },
+  startTitle: { fontSize: 17, fontWeight: '800', color: '#FFFFFF' },
+  startSub: { fontSize: 12.5, color: 'rgba(255,255,255,0.7)', fontWeight: '500' },
+  startArrow: { fontSize: 22, color: BrandColors.yellow, fontWeight: '800' },
   subhint: {
     fontSize: 14,
     color: InkColors.ink3,

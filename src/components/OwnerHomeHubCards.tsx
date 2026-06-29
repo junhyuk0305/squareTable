@@ -47,6 +47,13 @@ const ITEMS: HubItem[] = [
     path: '/owner/staff',
   },
   {
+    key: 'schedule',
+    icon: 'calendar-outline',
+    label: '근무표',
+    subtitle: '근무를 짜고 교대 요청을 컨펌해요',
+    path: '/owner/schedule',
+  },
+  {
     key: 'payroll',
     icon: 'card-outline',
     label: '급여 설정',

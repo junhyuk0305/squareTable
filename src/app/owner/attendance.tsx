@@ -4,19 +4,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
-import { useAttendanceStore, type AttendanceRecord } from '@/lib/store/useAttendanceStore';
+import { useAttendanceStore } from '@/lib/store/useAttendanceStore';
 import { usePayrollStore } from '@/lib/store/usePayrollStore';
 import { useStaffStore } from '@/lib/store/useStaffStore';
 import { RoleTabBar } from '@/components/RoleTabBar';
 import { FEATURES } from '@/lib/config/features';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
-import { fmtDuration, won, todayStr, minutesBetween } from '@/lib/utils/attendance';
-
-function liveMinutes(r: AttendanceRecord): number {
-  if (r.check_out) return r.work_minutes;
-  if (r.check_in) return minutesBetween(r.check_in, new Date().toISOString());
-  return 0;
-}
+import { fmtDuration, won, todayStr, liveMinutes, DEFAULT_HOURLY_WAGE } from '@/lib/utils/attendance';
 
 export default function OwnerAttendanceScreen() {
   const records = useAttendanceStore((s) => s.records);
@@ -37,7 +31,7 @@ export default function OwnerAttendanceScreen() {
     return staff.map((s) => {
       const monthRecs = records.filter((r) => r.staff_id === s.id && r.date.startsWith(ym));
       const min = monthRecs.reduce((sum, r) => sum + liveMinutes(r), 0);
-      const wage = wages[s.id] ?? 10030;
+      const wage = wages[s.id] ?? DEFAULT_HOURLY_WAGE;
       const pay = Math.round((min * wage) / 60);
       const todayRec = records.find((r) => r.staff_id === s.id && r.date === today);
       const status: 'out' | 'working' | 'done' = !todayRec

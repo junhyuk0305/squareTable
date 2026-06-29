@@ -13,6 +13,9 @@ export function injectPwaHead(): void {
   if (typeof document === 'undefined') return;
 
   document.documentElement.lang = 'ko';
+  // 브라우저 탭 제목 = 브랜드명. (output=single 빌드의 index.html 은 app.json name 을
+  // 쓰므로 app.json 도 '착착' 으로 맞췄고, 여기서 런타임에도 한 번 더 보장한다.)
+  document.title = '착착';
 
   const ensure = (
     tag: 'meta' | 'link',
