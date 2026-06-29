@@ -1,16 +1,16 @@
 // 교대(주고받기) 요청 모달 — 직원이 자기 시프트를 대타로 넘기거나, 동료와 맞교환을 신청한다.
 // 시트 높이 고정 + 내부 스크롤(펼침은 아래로). 제출 시 useScheduleStore.requestSwap 호출.
 import { useMemo, useState } from 'react';
-import { View, Text, Pressable, TextInput, ScrollView, Modal, StyleSheet, Platform } from 'react-native';
+import { View, Text, Pressable, TextInput, ScrollView, StyleSheet, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
+import { BottomSheet } from '@/components/BottomSheet';
 import { useScheduleStore, shiftsOn, type ShiftTemplate, type SwapKind } from '@/lib/store/useScheduleStore';
 import type { Junior } from '@/types';
 import { todayStr } from '@/lib/utils/attendance';
 import { addDays, fmtDateKo } from '@/lib/utils/schedule';
 import { InkColors } from '@/lib/theme/colors';
-import { Elevation, Radius } from '@/lib/theme/elevation';
-import { modalFrameStyle } from '@/lib/theme/layout';
+import { Radius } from '@/lib/theme/elevation';
 
 type Candidate = { date: string; template: ShiftTemplate };
 
@@ -82,11 +82,7 @@ export function SwapRequestModal({
   const nameOf = (id: string) => (id === me ? '나' : staff.find((s) => s.id === id)?.name ?? '직원');
 
   return (
-    <Modal visible transparent animationType="slide" onRequestClose={onClose}>
-      <View style={modalFrameStyle}>
-        <Pressable style={s.backdrop} onPress={onClose} />
-        <View style={s.sheet}>
-          <View style={s.grip} />
+    <BottomSheet visible={true} onClose={onClose} sheetStyle={{ height: '80%' }}>
           <Text style={s.title}>교대 요청</Text>
 
           {/* 내가 내보내는 시프트 요약 */}
@@ -191,9 +187,7 @@ export function SwapRequestModal({
               <Text style={s.ctaText}>{kind === 'cover' ? '대타 요청 올리기' : '맞교환 요청 보내기'}</Text>
             </Pressable>
           </View>
-        </View>
-      </View>
-    </Modal>
+    </BottomSheet>
   );
 }
 
@@ -207,9 +201,6 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 const s = StyleSheet.create({
-  backdrop: { flex: 1 },
-  sheet: { backgroundColor: InkColors.bg, borderTopLeftRadius: Radius.sheet, borderTopRightRadius: Radius.sheet, height: '80%', ...Elevation.e3 },
-  grip: { width: 40, height: 4, borderRadius: 99, backgroundColor: InkColors.line, alignSelf: 'center', marginTop: 12, marginBottom: 6 },
   title: { fontSize: 16, fontWeight: '800', color: InkColors.ink, paddingHorizontal: 16, paddingBottom: 10 },
 
   myShift: { flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: 16, marginBottom: 6, paddingVertical: 12, paddingHorizontal: 14, backgroundColor: InkColors.cream, borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line },

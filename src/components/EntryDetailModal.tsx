@@ -1,9 +1,9 @@
-import { View, Text, Pressable, ScrollView, Image, Modal, StyleSheet } from 'react-native';
+import { View, Text, Pressable, ScrollView, Image, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
+import { BottomSheet } from '@/components/BottomSheet';
 import { BrandColors, InkColors } from '@/lib/theme/colors';
-import { Elevation, Radius } from '@/lib/theme/elevation';
-import { modalFrameStyle } from '@/lib/theme/layout';
+import { Radius } from '@/lib/theme/elevation';
 import type { PlaybookEntry } from '@/types';
 
 /**
@@ -40,11 +40,7 @@ export function EntryDetailModal({
   const stdPct = std ? Math.max(0, Math.min(100, Math.round((std.value / stdMax) * 100))) : null;
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View style={modalFrameStyle}>
-        <Pressable style={s.backdrop} onPress={onClose} />
-        <View style={s.sheet}>
-          <View style={s.grip} />
+    <BottomSheet visible={visible} onClose={onClose} sheetStyle={{ maxHeight: '88%' }}>
           <View style={s.head}>
             <Text style={s.kicker}>노하우 원문</Text>
             <Pressable onPress={onClose} hitSlop={8} style={({ pressed }) => [pressed && { opacity: 0.6 }]}>
@@ -135,16 +131,11 @@ export function EntryDetailModal({
 
             <View style={{ height: 8 }} />
           </ScrollView>
-        </View>
-      </View>
-    </Modal>
+    </BottomSheet>
   );
 }
 
 const s = StyleSheet.create({
-  backdrop: { flex: 1 },
-  sheet: { backgroundColor: InkColors.bg, borderTopLeftRadius: Radius.sheet, borderTopRightRadius: Radius.sheet, maxHeight: '88%', ...Elevation.e3 },
-  grip: { width: 40, height: 4, borderRadius: 99, backgroundColor: InkColors.line, alignSelf: 'center', marginTop: 12, marginBottom: 4 },
   head: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 8 },
   kicker: { fontSize: 11, fontWeight: '800', letterSpacing: 1, color: InkColors.ink3 },
 

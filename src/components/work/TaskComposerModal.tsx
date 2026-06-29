@@ -1,12 +1,12 @@
 import { useMemo, useRef, useState } from 'react';
-import { View, Text, Pressable, TextInput, ScrollView, Modal, StyleSheet } from 'react-native';
+import { View, Text, Pressable, TextInput, ScrollView, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
+import { BottomSheet } from '@/components/BottomSheet';
 import { SECTION_LABEL, type NewTask, type TaskSection, type Recurrence } from '@/lib/store/useWorkStore';
 import { type Member } from '@/components/work/MentionInput';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
-import { Elevation, Radius } from '@/lib/theme/elevation';
-import { modalFrameStyle } from '@/lib/theme/layout';
+import { Radius } from '@/lib/theme/elevation';
 
 type When = 'today' | 'date' | 'weekly';
 const DOW = ['일', '월', '화', '수', '목', '금', '토'];
@@ -125,11 +125,7 @@ export function TaskComposerModal({
   }
 
   return (
-    <Modal visible transparent animationType="slide" onRequestClose={onClose}>
-      <View style={modalFrameStyle}>
-        <Pressable style={s.backdrop} onPress={onClose} />
-        <View style={s.sheet}>
-          <View style={s.grip} />
+    <BottomSheet visible={true} onClose={onClose} sheetStyle={{ height: '86%' }}>
           <Text style={s.title}>할일 추가</Text>
 
           <ScrollView ref={scrollRef} style={s.scroll} contentContainerStyle={{ paddingBottom: 8 }} showsVerticalScrollIndicator={false}>
@@ -221,9 +217,7 @@ export function TaskComposerModal({
               <Text style={s.ctaText}>{isDup ? '이미 등록됨' : '할일 등록'}</Text>
             </Pressable>
           </View>
-        </View>
-      </View>
-    </Modal>
+    </BottomSheet>
   );
 }
 
@@ -308,9 +302,6 @@ function fmtDate(d: string): string {
 }
 
 const s = StyleSheet.create({
-  backdrop: { flex: 1 },
-  sheet: { backgroundColor: InkColors.bg, borderTopLeftRadius: Radius.sheet, borderTopRightRadius: Radius.sheet, height: '86%', ...Elevation.e3 },
-  grip: { width: 40, height: 4, borderRadius: 99, backgroundColor: InkColors.line, alignSelf: 'center', marginTop: 12, marginBottom: 6 },
   title: { fontSize: 16, fontWeight: '800', color: InkColors.ink, paddingHorizontal: 16, paddingBottom: 12 },
   scroll: { flex: 1, paddingHorizontal: 16 },
   fld: { marginBottom: 13 },

@@ -1,16 +1,16 @@
 // 직원 주간 근무표 편집 모달(사장 전용) — 요일별 on/off + 시작·종료 시각.
 // 저장 시 해당 직원의 시프트를 통째로 교체(replaceStaffTemplates).
 import { useState } from 'react';
-import { View, Text, Pressable, TextInput, ScrollView, Modal, StyleSheet, Platform } from 'react-native';
+import { View, Text, Pressable, TextInput, ScrollView, StyleSheet, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
+import { BottomSheet } from '@/components/BottomSheet';
 import { useScheduleStore } from '@/lib/store/useScheduleStore';
 import type { Junior } from '@/types';
 import { maskHHMM } from '@/lib/utils/attendance';
 import { WEEKDAY_LABELS, WEEKDAY_ORDER } from '@/lib/utils/schedule';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
-import { Elevation, Radius } from '@/lib/theme/elevation';
-import { modalFrameStyle } from '@/lib/theme/layout';
+import { Radius } from '@/lib/theme/elevation';
 
 const TIME_RE = /^([01]?\d|2[0-3]):[0-5]\d$/;
 type Row = { on: boolean; start: string; end: string };
@@ -53,11 +53,7 @@ export function ShiftEditorModal({ staff, onClose }: { staff: Junior; onClose: (
   }
 
   return (
-    <Modal visible transparent animationType="slide" onRequestClose={onClose}>
-      <View style={modalFrameStyle}>
-        <Pressable style={s.backdrop} onPress={onClose} />
-        <View style={s.sheet}>
-          <View style={s.grip} />
+    <BottomSheet visible={true} onClose={onClose} sheetStyle={{ height: '78%' }}>
           <Text style={s.title}>{staff.name}님 근무표</Text>
           <Text style={s.sub}>요일을 켜고 근무 시간을 정해주세요. 매주 반복돼요.</Text>
 
@@ -133,16 +129,11 @@ export function ShiftEditorModal({ staff, onClose }: { staff: Junior; onClose: (
               <Text style={s.btnSolidText}>저장</Text>
             </Pressable>
           </View>
-        </View>
-      </View>
-    </Modal>
+    </BottomSheet>
   );
 }
 
 const s = StyleSheet.create({
-  backdrop: { flex: 1 },
-  sheet: { backgroundColor: InkColors.bg, borderTopLeftRadius: Radius.sheet, borderTopRightRadius: Radius.sheet, height: '78%', ...Elevation.e3 },
-  grip: { width: 40, height: 4, borderRadius: 99, backgroundColor: InkColors.line, alignSelf: 'center', marginTop: 12, marginBottom: 6 },
   title: { fontSize: 16, fontWeight: '800', color: InkColors.ink, paddingHorizontal: 16 },
   sub: { fontSize: 12.5, color: InkColors.ink3, paddingHorizontal: 16, paddingTop: 4, paddingBottom: 8 },
   scroll: { flex: 1, paddingHorizontal: 16, paddingTop: 4 },
