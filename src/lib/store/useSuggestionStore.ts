@@ -4,7 +4,7 @@ import { create } from 'zustand';
 import type { PlaybookSuggestion } from '@/types';
 import { HAS_SUPABASE } from '@/lib/supabase';
 import { fetchSuggestions, insertSuggestion, reviewSuggestion, subscribeSuggestions } from '@/lib/db';
-import { guardWrite } from '@/lib/store/useSyncStore';
+import { optimisticAdd, optimisticPatch } from '@/lib/store/crudHelpers';
 import { genId } from '@/lib/utils/id';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 
@@ -83,17 +83,10 @@ export const useSuggestionStore = create<State>((set, get) => ({
       status: 'pending',
       created_at: new Date().toISOString(),
     };
-    set((st) => ({ suggestions: [item, ...st.suggestions] }));
-    void guardWrite(
-      insertSuggestion(item),
-      () => set((st) => ({ suggestions: st.suggestions.filter((x) => x.id !== item.id) })),
-      '제안 등록에 실패했어요. 다시 시도해 주세요.',
-    );
+    optimisticAdd(set, 'suggestions', item, () => insertSuggestion(item), '제안 등록에 실패했어요. 다시 시도해 주세요.', 'start');
   },
 
   approve: (id, resultingEntryId) => {
-    const before = get().suggestions.find((x) => x.id === id);
-    if (!before) return;
     const s = useSessionStore.getState();
     const patch = {
       status: 'approved' as const,
@@ -101,17 +94,10 @@ export const useSuggestionStore = create<State>((set, get) => ({
       reviewed_by: s.userId,
       ...(resultingEntryId ? { resulting_entry_id: resultingEntryId } : null),
     };
-    set((st) => ({ suggestions: st.suggestions.map((x) => (x.id === id ? { ...x, ...patch } : x)) }));
-    void guardWrite(
-      reviewSuggestion(id, patch),
-      () => set((st) => ({ suggestions: st.suggestions.map((x) => (x.id === id ? before : x)) })),
-      '승인 처리에 실패했어요.',
-    );
+    optimisticPatch(set, get, 'suggestions', id, patch, () => reviewSuggestion(id, patch), '승인 처리에 실패했어요.');
   },
 
   reject: (id, note) => {
-    const before = get().suggestions.find((x) => x.id === id);
-    if (!before) return;
     const s = useSessionStore.getState();
     const patch = {
       status: 'rejected' as const,
@@ -119,12 +105,7 @@ export const useSuggestionStore = create<State>((set, get) => ({
       reviewed_by: s.userId,
       ...(note ? { owner_note: note } : null),
     };
-    set((st) => ({ suggestions: st.suggestions.map((x) => (x.id === id ? { ...x, ...patch } : x)) }));
-    void guardWrite(
-      reviewSuggestion(id, patch),
-      () => set((st) => ({ suggestions: st.suggestions.map((x) => (x.id === id ? before : x)) })),
-      '반려 처리에 실패했어요.',
-    );
+    optimisticPatch(set, get, 'suggestions', id, patch, () => reviewSuggestion(id, patch), '반려 처리에 실패했어요.');
   },
 
   getPending: () => get().suggestions.filter((x) => x.status === 'pending'),

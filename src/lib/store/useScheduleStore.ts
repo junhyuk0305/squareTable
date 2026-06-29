@@ -20,6 +20,7 @@ import {
   subscribeSchedule,
 } from '@/lib/db';
 import { guardWrite } from '@/lib/store/useSyncStore';
+import { optimisticAdd, optimisticPatch, optimisticRemove } from '@/lib/store/crudHelpers';
 import { genId } from '@/lib/utils/id';
 import { todayStr } from '@/lib/utils/attendance';
 import { weekdayOf, nextDateForWeekday } from '@/lib/utils/schedule';
@@ -175,37 +176,13 @@ export const useScheduleStore = create<ScheduleState>((set, get) => ({
 
   addTemplate: (t) => {
     const rec: ShiftTemplate = { ...t, id: genId('tpl') };
-    set((s) => ({ templates: [...s.templates, rec] }));
-    void guardWrite(
-      insertShiftTemplate(rec),
-      () => set((s) => ({ templates: s.templates.filter((x) => x.id !== rec.id) })),
-      '근무 추가 저장에 실패했어요.',
-    );
+    optimisticAdd(set, 'templates', rec, () => insertShiftTemplate(rec), '근무 추가 저장에 실패했어요.');
   },
   updateTemplate: (id, patch) => {
-    const before = get().templates.find((t) => t.id === id);
-    set((s) => ({ templates: s.templates.map((t) => (t.id === id ? { ...t, ...patch } : t)) }));
-    void guardWrite(
-      updateShiftTemplate(id, patch),
-      () => before && set((s) => ({ templates: s.templates.map((t) => (t.id === id ? before : t)) })),
-      '근무 수정 저장에 실패했어요.',
-    );
+    optimisticPatch(set, get, 'templates', id, patch, () => updateShiftTemplate(id, patch), '근무 수정 저장에 실패했어요.');
   },
   removeTemplate: (id) => {
-    const idx = get().templates.findIndex((t) => t.id === id);
-    const removed = idx >= 0 ? get().templates[idx] : undefined;
-    set((s) => ({ templates: s.templates.filter((t) => t.id !== id) }));
-    void guardWrite(
-      deleteShiftTemplate(id),
-      () =>
-        removed &&
-        set((s) => {
-          const next = s.templates.slice();
-          next.splice(Math.min(idx, next.length), 0, removed);
-          return { templates: next };
-        }),
-      '근무 삭제에 실패했어요.',
-    );
+    optimisticRemove(set, get, 'templates', id, () => deleteShiftTemplate(id), '근무 삭제에 실패했어요.');
   },
   replaceStaffTemplates: (staffId, shifts) => {
     const prevAll = get().templates;
