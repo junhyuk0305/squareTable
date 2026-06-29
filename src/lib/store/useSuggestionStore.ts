@@ -5,6 +5,7 @@ import type { PlaybookSuggestion } from '@/types';
 import { HAS_SUPABASE } from '@/lib/supabase';
 import { fetchSuggestions, insertSuggestion, reviewSuggestion, subscribeSuggestions } from '@/lib/db';
 import { guardWrite } from '@/lib/store/useSyncStore';
+import { genId } from '@/lib/utils/id';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 
 // 데모 매장 id(= mockSeed.DEMO_UNIT_ID). 순환 import 방지를 위해 여기선 리터럴로 둔다.
@@ -17,9 +18,6 @@ export type SuggestionInput = {
   targetTitle?: string;
   photos?: string[];
 };
-
-let _n = 0;
-const sid = () => `sug_${Date.now()}_${_n++}`;
 
 // 데모 시드 — 사장이 검토 화면에서 바로 흐름을 볼 수 있게 1건씩(개선/신규).
 const seed: PlaybookSuggestion[] = [
@@ -73,7 +71,7 @@ export const useSuggestionStore = create<State>((set, get) => ({
   submit: (input) => {
     const s = useSessionStore.getState();
     const item: PlaybookSuggestion = {
-      id: sid(),
+      id: genId('sug'),
       unit_id: s.unitId || DEMO_UNIT_ID,
       kind: input.kind,
       ...(input.targetEntryId ? { target_entry_id: input.targetEntryId } : null),

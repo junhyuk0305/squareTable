@@ -7,6 +7,7 @@
 
 import type { Category, PlaybookEntry, SquareBlock, UnknownQuery } from '@/types';
 import { useSessionStore } from '@/lib/store/useSessionStore';
+import { genId } from '@/lib/utils/id';
 
 /** title: uq.query_text 첫 30자(물음표·구두점 정리). */
 function deriveTitle(uq: UnknownQuery): string {
@@ -71,7 +72,7 @@ export function buildPlaybookEntryFromSquare(
   const now = new Date().toISOString();
   const category = uq.presumed_category;
   const idSlug = category.toLowerCase().replace(/[^a-z]/g, '');
-  const id = `pb_${idSlug}_${Date.now()}`;
+  const id = genId(`pb_${idSlug}`);
 
   const s = useSessionStore.getState();
   const quality = computeQuality(square);

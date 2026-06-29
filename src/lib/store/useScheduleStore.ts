@@ -20,6 +20,7 @@ import {
   subscribeSchedule,
 } from '@/lib/db';
 import { guardWrite } from '@/lib/store/useSyncStore';
+import { genId } from '@/lib/utils/id';
 import { todayStr } from '@/lib/utils/attendance';
 import { weekdayOf, nextDateForWeekday } from '@/lib/utils/schedule';
 
@@ -92,10 +93,6 @@ type ScheduleState = {
 };
 
 // ── 유일 id ─────────────────────────────────────────────
-let _seq = 0;
-function uid(prefix: string): string {
-  return `${prefix}_${Date.now()}_${_seq++}`;
-}
 const nowIso = () => new Date().toISOString();
 
 // ── 기본/시드 ───────────────────────────────────────────
@@ -177,7 +174,7 @@ export const useScheduleStore = create<ScheduleState>((set, get) => ({
   },
 
   addTemplate: (t) => {
-    const rec: ShiftTemplate = { ...t, id: uid('tpl') };
+    const rec: ShiftTemplate = { ...t, id: genId('tpl') };
     set((s) => ({ templates: [...s.templates, rec] }));
     void guardWrite(
       insertShiftTemplate(rec),
@@ -216,7 +213,7 @@ export const useScheduleStore = create<ScheduleState>((set, get) => ({
     // 같은 요일이 유지되면 기존 id 재사용 → 그 시프트를 참조하던 교대 요청이 깨지지 않는다.
     const nextForStaff: ShiftTemplate[] = shifts.map((sh) => {
       const keep = prevForStaff.find((p) => p.weekday === sh.weekday);
-      return { ...sh, staff_id: staffId, id: keep?.id ?? uid('tpl') };
+      return { ...sh, staff_id: staffId, id: keep?.id ?? genId('tpl') };
     });
     const nextAll = [...prevAll.filter((t) => t.staff_id !== staffId), ...nextForStaff];
     // 실제로 없어진 시프트만 삭제 대상(나머지는 id 재사용 upsert → 참조 중인 교대 요청 보존).
@@ -240,7 +237,7 @@ export const useScheduleStore = create<ScheduleState>((set, get) => ({
     if (dup) return;
     const now = nowIso();
     const req: SwapRequest = {
-      id: uid('swap'),
+      id: genId('swap'),
       kind: input.kind,
       requester_id: input.requester_id,
       date: input.date,

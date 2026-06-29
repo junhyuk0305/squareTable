@@ -14,6 +14,7 @@ import {
   subscribeRooms,
 } from '@/lib/db';
 import { guardWrite } from '@/lib/store/useSyncStore';
+import { genId } from '@/lib/utils/id';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 
 const DEMO_UNIT_ID = 'store_001'; // = mockSeed.DEMO_UNIT_ID (순환 import 방지로 리터럴)
@@ -35,9 +36,6 @@ const seedRooms: Room[] = [
   { id: 'room_kitchen', unitId: DEMO_UNIT_ID, name: '주방', isDefault: false },
 ];
 const seedMembers: RoomMember[] = [{ roomId: 'room_kitchen', userId: 'u_staff_002' }];
-
-let _n = 0;
-const rid = () => `room_${Date.now()}_${_n++}`;
 
 type State = {
   rooms: Room[];
@@ -98,7 +96,7 @@ export const useRoomStore = create<State>((set, get) => ({
   createRoom: (name, memberIds = []) => {
     const session = useSessionStore.getState();
     const room: Room = {
-      id: rid(),
+      id: genId('room'),
       unitId: session.unitId || DEMO_UNIT_ID,
       name: name.trim() || '새 채팅방',
       isDefault: false,

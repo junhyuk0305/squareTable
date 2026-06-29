@@ -14,6 +14,7 @@ import {
   subscribeWork,
 } from '@/lib/db';
 import { guardWrite } from '@/lib/store/useSyncStore';
+import { genId } from '@/lib/utils/id';
 import { useRoomStore } from '@/lib/store/useRoomStore';
 
 /** 지금 활성화된 채팅방 id — 모든 업무 쓰기(메시지·공지·할일·완료)에 스탬프된다('전부 방 단위'). */
@@ -191,9 +192,6 @@ const seedFeed: FeedItem[] = [
   },
 ];
 
-let _n = 0;
-const uid = (p: string) => `${p}_${Date.now()}_${_n++}`;
-
 /** addTask 입력 — id/생성시각은 스토어가 채운다. */
 export type NewTask = {
   section: TaskSection;
@@ -244,7 +242,7 @@ export const useWorkStore = create<State>((set, get) => ({
   addTask: (input) => {
     const room = curRoom();
     const t: TaskTemplate = {
-      id: uid('t'),
+      id: genId('t'),
       section: input.section,
       text: input.text,
       scope: input.scope,
@@ -303,7 +301,7 @@ export const useWorkStore = create<State>((set, get) => ({
     const mark: DoneMark = { by: staffId, byName: staffName, at: now, ...(photoUrl ? { photoUrl } : null) };
     dayMap[templateId] = mark;
     const doneItem: FeedItem = {
-      id: uid('f'),
+      id: genId('f'),
       date,
       kind: 'task_done',
       text: `${staffName} · ${tpl ? tpl.text : '할일'} 완료`,
@@ -323,7 +321,7 @@ export const useWorkStore = create<State>((set, get) => ({
   postNotice: (date, text, authorId, authorName, important) => {
     const room = curRoom();
     const item: FeedItem = {
-      id: uid('f'),
+      id: genId('f'),
       date,
       kind: 'notice',
       text,
@@ -347,7 +345,7 @@ export const useWorkStore = create<State>((set, get) => ({
   postMessage: (date, text, authorId, authorName, role, mentions) => {
     const room = curRoom();
     const item: FeedItem = {
-      id: uid('f'),
+      id: genId('f'),
       date,
       kind: 'message',
       text,
@@ -369,7 +367,7 @@ export const useWorkStore = create<State>((set, get) => ({
   postComment: (noticeId, date, text, authorId, authorName, role, mentions) => {
     const room = curRoom();
     const item: FeedItem = {
-      id: uid('f'),
+      id: genId('f'),
       date,
       kind: 'comment',
       refId: noticeId,

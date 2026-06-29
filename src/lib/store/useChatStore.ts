@@ -9,6 +9,7 @@ import { useSessionStore } from './useSessionStore';
 import { HAS_SUPABASE } from '@/lib/supabase';
 import { fetchChatQueries, insertChatQuery, updateChatSatisfaction } from '@/lib/db';
 import { guardWrite } from '@/lib/store/useSyncStore';
+import { genId } from '@/lib/utils/id';
 import seedData from '@/data/chat-queries.json';
 import contextPack from '@/data/context-pack.json';
 
@@ -69,7 +70,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     // 하이브리드 검색(렉시컬+벡터). mock이면 내부에서 렉시컬+데모 딜레이로 폴백.
     const result = await hybridSearch(text, playbookEntries);
     const now = new Date().toISOString();
-    const id = `cq_${Date.now()}`;
+    const id = genId('cq');
 
     if (result.matched) {
       const entry = result.matched;
@@ -152,7 +153,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       void guardWrite(insertChatQuery(cq), () => {}, '대화 기록 저장에 실패했어요. (답변은 그대로 보여요)');
 
       const uq: UnknownQuery = {
-        id: `uq_${Date.now()}`,
+        id: genId('uq'),
         junior_id: session.userId,
         junior_name: anon ? '익명' : session.userName,
         anonymous: anon,
