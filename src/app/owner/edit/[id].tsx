@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useLocalSearchParams, useRouter, useNavigation } from 'expo-router';
 
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
+import { EmptyState } from '@/components/EmptyState';
 import { getCategoryMeta } from '@/lib/utils/category';
 import { confirmAction } from '@/lib/utils/confirm';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
@@ -31,12 +32,10 @@ export default function EditKnowledgeScreen() {
     return (
       <SafeAreaView style={styles.safe}>
         <Stack.Screen options={{ title: '노하우 수정' }} />
-        <View style={styles.empty}>
-          <Text style={styles.emptyText}>이미 삭제된 노하우예요.</Text>
-          <Pressable onPress={() => router.back()} style={styles.emptyBtn}>
-            <Text style={styles.emptyBtnText}>돌아가기</Text>
-          </Pressable>
-        </View>
+        <EmptyState
+          title="이미 삭제된 노하우예요."
+          cta={{ label: '돌아가기', onPress: () => router.back() }}
+        />
       </SafeAreaView>
     );
   }
@@ -221,9 +220,6 @@ const styles = StyleSheet.create({
   delText: { color: BrandColors.warn, fontSize: 14, fontWeight: '700' },
 
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
-  emptyText: { fontSize: 15, color: InkColors.ink3 },
-  emptyBtn: { paddingVertical: 12, paddingHorizontal: 22, backgroundColor: InkColors.ink, borderRadius: 12 },
-  emptyBtnText: { color: '#FFFFFF', fontWeight: '800' },
 
   toastWrap: { position: 'absolute', left: 0, right: 0, bottom: 36, alignItems: 'center' },
   toast: { backgroundColor: InkColors.ink, paddingVertical: 12, paddingHorizontal: 20, borderRadius: 14 },

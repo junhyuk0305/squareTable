@@ -5,6 +5,7 @@ import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
+import { EmptyState } from '@/components/EmptyState';
 import { InfoDot } from '@/components/InfoDot';
 import { SectionLabel } from '@/components/SectionLabel';
 import { BrowseCard } from '@/components/BrowseList';
@@ -216,17 +217,12 @@ export default function OwnerKnowledgeScreen() {
         </View>
 
         {!hasEntries ? (
-          <View style={styles.empty}>
-            <Text style={styles.emptyEmoji}>📒</Text>
-            <Text style={styles.emptyTitle}>아직 등록된 노하우가 없어요</Text>
-            <Text style={styles.emptyHint}>알바 질문에 답하거나, 직접 추가하면 여기에 쌓여요.</Text>
-            <Pressable
-              onPress={() => router.push('/owner/categories')}
-              style={({ pressed }) => [styles.emptyBtn, pressed && { opacity: 0.85 }]}
-            >
-              <Text style={styles.emptyBtnText}>첫 노하우 추가하기</Text>
-            </Pressable>
-          </View>
+          <EmptyState
+            emoji="📒"
+            title="아직 등록된 노하우가 없어요"
+            body="알바 질문에 답하거나, 직접 추가하면 여기에 쌓여요."
+            cta={{ label: '첫 노하우 추가하기', onPress: () => router.push('/owner/categories') }}
+          />
         ) : (
           <>
             {/* 대시보드(3렌즈) ↔ 목록(정렬) 토글 — 기존 정렬 목록은 '목록'에 그대로 보존 */}
@@ -437,12 +433,6 @@ const styles = StyleSheet.create({
   badgeText: { fontSize: 10, fontWeight: '800' },
 
   // 빈 상태
-  empty: { alignItems: 'center', gap: 8, paddingVertical: 48, paddingHorizontal: 16 },
-  emptyEmoji: { fontSize: 52 },
-  emptyTitle: { fontSize: 16, fontWeight: '800', color: InkColors.ink },
-  emptyHint: { fontSize: 13, color: InkColors.ink3, textAlign: 'center', lineHeight: 19 },
-  emptyBtn: { marginTop: 8, backgroundColor: InkColors.ink, paddingVertical: 12, paddingHorizontal: 22, borderRadius: Radius.md },
-  emptyBtnText: { color: InkColors.bubbleText, fontSize: 14, fontWeight: '800' },
   emptyResult: { alignItems: 'center', gap: 6, paddingVertical: 36 },
   emptyResultEmoji: { fontSize: 34 },
   emptyResultText: { fontSize: 14, fontWeight: '700', color: InkColors.ink2 },
