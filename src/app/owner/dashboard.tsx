@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from 'react';
-import { View, Text, Pressable, StyleSheet, Animated } from 'react-native';
+import { View, Text, Pressable, Animated } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -7,13 +7,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { PressableScale } from '@/components/PressableScale';
 import { Appear } from '@/components/Appear';
 
-import { useSessionStore } from '@/lib/store/useSessionStore';
-import { useUnknownQueueStore } from '@/lib/store/useUnknownQueueStore';
-import { useAttendanceStore } from '@/lib/store/useAttendanceStore';
-import { usePayrollStore } from '@/lib/store/usePayrollStore';
-import { useWorkStore, occursOn } from '@/lib/store/useWorkStore';
-import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
-import { useStaffStore } from '@/lib/store/useStaffStore';
 import { RoleTabBar } from '@/components/RoleTabBar';
 import { BrainScoreCard } from '@/components/BrainScoreCard';
 import { InfoDot } from '@/components/InfoDot';
@@ -21,76 +14,36 @@ import { OwnerHomeHubCards } from '@/components/OwnerHomeHubCards';
 import { SectionLabel } from '@/components/SectionLabel';
 import { FeatureCarousel, OWNER_FEATURES } from '@/components/FeatureCarousel';
 import { Wordmark } from '@/components/Wordmark';
+import { NudgeCard } from '@/components/owner/NudgeCard';
 import { getCategoryMeta } from '@/lib/utils/category';
-import { computeBrainScore } from '@/lib/utils/brainScore';
 import { SEED_TEMPLATES } from '@/data/seed-templates';
-import { InkColors, BrandColors } from '@/lib/theme/colors';
-import { Elevation, Radius } from '@/lib/theme/elevation';
-import { won, todayStr, liveMinutes, DEFAULT_HOURLY_WAGE } from '@/lib/utils/attendance';
+import { InkColors } from '@/lib/theme/colors';
+import { won } from '@/lib/utils/attendance';
+import { capCount } from '@/lib/utils/format';
+import { useOwnerDashboardData } from '@/lib/hooks/useOwnerDashboardData';
+import { styles } from './dashboardStyles';
 import type { Category } from '@/types';
-
-function capCount(n: number): string {
-  return n > 99 ? '99+' : String(n);
-}
 
 export default function OwnerDashboardScreen() {
   const router = useRouter();
-  const userId = useSessionStore((s) => s.userId);
-  const userName = useSessionStore((s) => s.userName);
-  // 실매장 이름은 세션(프로필→unit)에서.
-  const storeName = useSessionStore((s) => s.storeName) || '내 매장';
+  const {
+    userName,
+    storeName,
+    entriesCount,
+    working,
+    monthPay,
+    taskTotal,
+    taskDoneCount,
+    pending,
+    topFaq,
+    brain,
+    isSolo,
+  } = useOwnerDashboardData();
 
-  const queue = useUnknownQueueStore((s) => s.queue);
-  const records = useAttendanceStore((s) => s.records);
-  const wages = usePayrollStore((s) => s.wages);
-  const templates = useWorkStore((s) => s.templates);
-  const doneMap = useWorkStore((s) => s.done);
-  const entries = usePlaybookStore((s) => s.entries);
-  const staff = useStaffStore((s) => s.staff);
-
-  const today = todayStr();
-  const ym = today.slice(0, 7);
-
-  const { working, monthPay } = useMemo(() => {
-    const working = records.filter((r) => r.date === today && r.check_in && !r.check_out).length;
-    const monthPay = staff.reduce((sum, s) => {
-      const min = records
-        .filter((r) => r.staff_id === s.id && r.date.startsWith(ym))
-        .reduce((a, r) => a + liveMinutes(r), 0);
-      return sum + Math.round((min * (wages[s.id] ?? DEFAULT_HOURLY_WAGE)) / 60);
-    }, 0);
-    return { working, monthPay };
-  }, [records, wages, today, ym, staff]);
-  // 매장 진행률: 오늘 떠야 하는 것 중 가게 전체(shared) + 내 private(대상=나 or 내가 배정). (직원 자가등록은 제외)
-  const todaysTasks = useMemo(
-    () => templates.filter((t) => occursOn(t, today) && (t.scope !== 'private' || t.ownerId === userId || t.createdBy === userId)),
-    [templates, today, userId],
-  );
-  const taskTotal = todaysTasks.length;
-  const taskDoneCount = todaysTasks.filter((t) => (doneMap[today] ?? {})[t.id]).length;
-
-  // 알바 FAQ Top — 미답변 질문을 '많이 물은 순'으로. 답변 시 노하우로 전환됨.
-  const pendingList = useMemo(
-    () => queue.filter((u) => u.status === 'pending_owner_answer'),
-    [queue],
-  );
-  const pending = pendingList.length;
-
-  // 혼자 모드 후킹 F3 — 매장 두뇌 완성도. 가장 빈 카테고리를 한 탭으로 채우러 보냄.
-  const brain = useMemo(() => computeBrainScore(entries), [entries]);
-  const isSolo = staff.length === 0; // 직원 미합류 = 혼자 모드
   const fillWeak = (category: Category | null) => {
     if (category) router.push({ pathname: '/owner/coach', params: { category } });
     else router.push('/owner/categories');
   };
-
-  const topFaq = useMemo(
-    () =>
-      [...pendingList]
-        .sort((a, b) => b.similar_queries_count - a.similar_queries_count)
-        .slice(0, 3),
-    [pendingList],
-  );
 
   // 진입 시 본문이 살짝 떠오르며 페이드인.
   // Animated.Value는 ref가 아니라 안정 객체로 메모이즈 — render 중 ref.current 접근(react-hooks/refs) 회피.
@@ -127,7 +80,7 @@ export default function OwnerDashboardScreen() {
         <Text style={styles.greet}>오늘도 고생 많으세요</Text>
 
         {/* 신규 매장 온보딩 — 노하우 0건이면 가장 먼저 첫 입력을 유도(빈 매장 = 알바 답변 0 → 이탈 방지) */}
-        {entries.length === 0 && (
+        {entriesCount === 0 && (
           <Appear delay={0} style={styles.onboard}>
             <Text style={styles.onboardEmoji}>👋</Text>
             <Text style={styles.onboardTitle}>매장을 막 시작하셨네요</Text>
@@ -160,7 +113,7 @@ export default function OwnerDashboardScreen() {
 
         {/* ① 받은질문 히어로 — 사령탑의 단일 주인공. 미답변 수 + 받은질문 탭 진입.
             미답변이 있으면 답변 유도(alert), 없으면 긍정 톤으로 회고 유도. */}
-        {entries.length > 0 && (
+        {entriesCount > 0 && (
           <Appear delay={0}>
           <PressableScale
             onPress={() => router.push(pending > 0 ? '/owner/inbox' : '/owner/coach')}
@@ -208,7 +161,7 @@ export default function OwnerDashboardScreen() {
         )}
 
         {/* ② 오늘 업무 요약 — 완료/전체·근무·인건비를 스캔용 한 줄 카드로. 제목은 카드 밖. */}
-        {entries.length > 0 && (
+        {entriesCount > 0 && (
           <Appear delay={60} style={styles.section}>
           <SectionLabel
             icon="checkbox-outline"
@@ -236,7 +189,7 @@ export default function OwnerDashboardScreen() {
         )}
 
         {/* ③ 매장운영 허브 — 그동안 미니링크로 숨어 있던 근무·급여/직원/급여설정을 카드로 surface. */}
-        {entries.length > 0 && (
+        {entriesCount > 0 && (
           <Appear delay={120}>
             <OwnerHomeHubCards />
           </Appear>
@@ -274,7 +227,7 @@ export default function OwnerDashboardScreen() {
         )}
 
         {/* ④ 임팩트 — 매장 두뇌 완성도 게이지 (F3). 노하우가 하나라도 있을 때만 */}
-        {entries.length > 0 && (
+        {entriesCount > 0 && (
           <Appear delay={240}>
             <BrainScoreCard score={brain} onFill={fillWeak} />
           </Appear>
@@ -283,12 +236,12 @@ export default function OwnerDashboardScreen() {
         {/* 노하우 진입 미니 링크 — 매장운영(근무·직원)은 위 허브카드로 이관했고, 여기선 노하우 라이브러리만. */}
         <View style={styles.miniRow}>
           <Pressable onPress={() => router.push('/owner/knowledge')}>
-            <Text style={styles.miniLink}>노하우 {entries.length}개 ›</Text>
+            <Text style={styles.miniLink}>노하우 {entriesCount}개 ›</Text>
           </Pressable>
         </View>
 
         {/* 혼자 모드 넛지 — 입력을 강요하지 않고 '돌려받는 것'·미래가치로 끌어들인다 */}
-        {entries.length > 0 && (
+        {entriesCount > 0 && (
           <Appear delay={300} style={styles.nudges}>
             {/* F4 하루 한 줄 노하우 — 미답변이 없을 땐 위 HERO가 이미 노하우로 보내므로 중복 숨김 */}
             {pending > 0 && (
@@ -321,200 +274,3 @@ export default function OwnerDashboardScreen() {
     </SafeAreaView>
   );
 }
-
-function NudgeCard({
-  icon,
-  title,
-  sub,
-  onPress,
-}: {
-  icon: string;
-  title: string;
-  sub: string;
-  onPress: () => void;
-}) {
-  return (
-    <PressableScale onPress={onPress} scaleTo={0.98} style={styles.nudge}>
-      <View style={styles.nudgeIcon}>
-        <Ionicons name={icon as any} size={18} color={InkColors.ink2} />
-      </View>
-      <View style={{ flex: 1 }}>
-        <Text style={styles.nudgeTitle}>{title}</Text>
-        <Text style={styles.nudgeSub}>{sub}</Text>
-      </View>
-      <Ionicons name="chevron-forward" size={16} color={InkColors.ink3} />
-    </PressableScale>
-  );
-}
-
-const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: InkColors.cream },
-  scroll: { padding: 20, gap: 18 },
-  greet: { fontSize: 16, fontWeight: '700', color: InkColors.ink2 },
-  // 섹션: [밖 라벨] + [안 카드] 묶음
-  section: { gap: 8 },
-
-  // 상단 커스텀 헤더 — 좌측 로고 / 우측 매장명·사용자명
-  appHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingTop: 6,
-    paddingBottom: 10,
-    backgroundColor: InkColors.cream,
-  },
-  appHeaderRight: { flex: 1, alignItems: 'flex-end', paddingLeft: 12 },
-  appHeaderStore: { fontSize: 16, fontWeight: '900', color: InkColors.ink, textAlign: 'right' },
-  appHeaderUser: { fontSize: 12, fontWeight: '600', color: InkColors.ink3, textAlign: 'right', marginTop: 2 },
-
-  onboard: {
-    backgroundColor: BrandColors.accentSoft,
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    borderColor: '#E8C9C2',
-    padding: 20,
-    gap: 8,
-    alignItems: 'flex-start',
-  },
-  onboardEmoji: { fontSize: 34 },
-  onboardTitle: { fontSize: 18, fontWeight: '900', color: InkColors.ink },
-  onboardBody: { fontSize: 14, color: InkColors.ink2, lineHeight: 21 },
-  onboardCta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: 6,
-    backgroundColor: BrandColors.brand,
-    paddingVertical: 12,
-    paddingHorizontal: 18,
-    borderRadius: Radius.pill,
-  },
-  onboardCtaText: { color: InkColors.bubbleText, fontSize: 14, fontWeight: '800' },
-  seedLabel: { fontSize: 12, color: InkColors.ink2, fontWeight: '700', marginTop: 12 },
-  seedChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 },
-  seedChip: {
-    backgroundColor: InkColors.bg,
-    borderWidth: 1,
-    borderColor: InkColors.line,
-    borderRadius: Radius.pill,
-    paddingVertical: 7,
-    paddingHorizontal: 12,
-  },
-  seedChipText: { fontSize: 12.5, fontWeight: '700', color: InkColors.ink },
-
-  // ① 받은질문 히어로 (사령탑 주인공)
-  hero: { backgroundColor: InkColors.ink, borderRadius: Radius.lg, padding: 18, gap: 7, ...Elevation.e2 },
-  heroHead: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  heroKicker: { fontSize: 13, fontWeight: '800', color: InkColors.bubbleText, letterSpacing: 0.3 },
-  heroBadge: {
-    marginLeft: 'auto',
-    minWidth: 24,
-    height: 24,
-    paddingHorizontal: 7,
-    borderRadius: Radius.pill,
-    backgroundColor: BrandColors.accent,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  heroBadgeText: { fontSize: 13, fontWeight: '900', color: InkColors.bubbleText },
-  heroLead: { fontSize: 16, fontWeight: '700', color: InkColors.bubbleText, lineHeight: 23 },
-  heroSub: { fontSize: 12, color: 'rgba(255,255,255,0.6)', lineHeight: 18 },
-  heroCta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    alignSelf: 'flex-start',
-    marginTop: 4,
-    backgroundColor: InkColors.bg,
-    paddingVertical: 9,
-    paddingHorizontal: 14,
-    borderRadius: Radius.pill,
-  },
-  heroCtaText: { fontSize: 13, fontWeight: '800', color: InkColors.ink },
-
-  // ② 오늘 업무 요약
-  todayCard: {
-    backgroundColor: InkColors.bg,
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: InkColors.line,
-    padding: 18,
-    gap: 10,
-    ...Elevation.e1,
-  },
-  todayPill: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: InkColors.ink2,
-    backgroundColor: InkColors.bgSoft,
-    paddingVertical: 4,
-    paddingHorizontal: 10,
-    borderRadius: Radius.pill,
-    overflow: 'hidden',
-    marginLeft: 'auto',
-  },
-  bar: { height: 8, borderRadius: Radius.pill, backgroundColor: InkColors.bgSoft, overflow: 'hidden' },
-  barFill: { height: 8, borderRadius: Radius.pill, backgroundColor: BrandColors.yellow },
-  todaySub: { fontSize: 13, color: InkColors.ink3, fontWeight: '600' },
-
-  miniRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8 },
-  miniLink: { fontSize: 13, color: InkColors.ink2, fontWeight: '700' },
-
-  faqSection: { gap: 8 },
-  faqList: {
-    backgroundColor: InkColors.bg,
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: InkColors.line,
-    paddingHorizontal: 14,
-  },
-  faqRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: InkColors.line,
-  },
-  faqDot: { width: 8, height: 8, borderRadius: Radius.pill },
-  faqQ: { fontSize: 14, fontWeight: '600', color: InkColors.ink },
-  faqMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3 },
-  faqMeta: { fontSize: 12, color: InkColors.ink3 },
-  // 많이 물어본 신호 — 직원 홈 popularHits와 동일(노랑 소프트 틴트 + 검정).
-  faqHits: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: InkColors.ink,
-    backgroundColor: BrandColors.yellowSoft,
-    paddingVertical: 2,
-    paddingHorizontal: 7,
-    borderRadius: Radius.pill,
-    overflow: 'hidden',
-  },
-  faqAction: { fontSize: 13, fontWeight: '800', color: BrandColors.brand },
-
-  nudges: { gap: 10 },
-  nudge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    backgroundColor: InkColors.bgSoft,
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: InkColors.line,
-    padding: 14,
-  },
-  nudgeIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: Radius.pill,
-    backgroundColor: InkColors.bg,
-    borderWidth: 1,
-    borderColor: InkColors.line,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  nudgeTitle: { fontSize: 14, fontWeight: '700', color: InkColors.ink },
-  nudgeSub: { fontSize: 12, color: InkColors.ink3, fontWeight: '500', marginTop: 2, lineHeight: 17 },
-});
