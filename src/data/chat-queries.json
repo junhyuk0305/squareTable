@@ -1,0 +1,157 @@
+[
+  {
+    "id": "cq_001",
+    "junior_id": "u_staff_001",
+    "junior_name": "박지원",
+    "query_text": "머리카락 나왔다고 환불해달래요",
+    "asked_at": "2026-05-27T14:32:00",
+    "matched_entry_ids": ["pb_event_001"],
+    "match_confidence": 0.94,
+    "was_deflected": true,
+    "response_block": {
+      "summary": "음료에 이물질이 발견된 클레임 상황입니다. 사장 부재 시 알바 1차 응대 기준이 잡혀 있어요.",
+      "actions": [
+        "음료를 두 손으로 받고 '정말 죄송합니다'를 먼저 말합니다.",
+        "5분만 자리에 앉아 계시도록 안내합니다.",
+        "같은 음료 새로 만들고 +1샷 또는 사이즈업 무상 제공.",
+        "영수증 뒷면에 'CS-처리완료' + 본인 이름 기재 → 마감 때 사장님께 일괄 보고."
+      ],
+      "donts": [
+        "'머리카락이 어디서 들어갔는지 모릅니다' 같은 책임 회피 멘트는 금지."
+      ],
+      "source": {
+        "entry_id": "pb_event_001",
+        "creator_name": "김영자",
+        "title": "이물질 클레임 - 머리카락",
+        "version": 2,
+        "updated_at": "2026-05-22"
+      }
+    },
+    "satisfaction": "up",
+    "resolved_at": "2026-05-27T14:35:00"
+  },
+  {
+    "id": "cq_002",
+    "junior_id": "u_staff_002",
+    "junior_name": "이수민",
+    "query_text": "마감 청소 어디까지 해요?",
+    "asked_at": "2026-05-27T21:55:00",
+    "matched_entry_ids": ["pb_routine_003"],
+    "match_confidence": 0.96,
+    "was_deflected": true,
+    "response_block": {
+      "summary": "마감 청소는 위생 점검에 대비해 3군데를 꼭 챙기는 게 핵심이에요.",
+      "actions": [
+        "22:05 매트 4장 전부 들춰서 뒷면 닦기 (락스 + 키친타올).",
+        "22:15 제빙기 안쪽 — 부드러운 솔로.",
+        "22:25 싱크대 배수구 거름망 분리 → 칫솔로.",
+        "22:30 일반 청소 후 사장님께 마감 카톡."
+      ],
+      "donts": [
+        "겉만 닦지 말 것 — 점검관은 무조건 매트 들춤."
+      ],
+      "source": {
+        "entry_id": "pb_routine_003",
+        "creator_name": "김영자",
+        "title": "마감 청소 — 매트 뒷면 포함",
+        "version": 2,
+        "updated_at": "2026-05-20"
+      }
+    },
+    "satisfaction": "up",
+    "resolved_at": "2026-05-27T22:00:00"
+  },
+  {
+    "id": "cq_003",
+    "junior_id": "u_staff_001",
+    "junior_name": "박지원",
+    "query_text": "우유 떨어졌어요 어떻게 해요",
+    "asked_at": "2026-05-27T15:10:00",
+    "matched_entry_ids": ["pb_event_003"],
+    "match_confidence": 0.92,
+    "was_deflected": true,
+    "response_block": {
+      "summary": "우유 잔량이 1L 미만일 때 절차가 정해져 있어요.",
+      "actions": [
+        "냉장 쇼케이스 안쪽 + 사장님 보조 냉장고(주방 안쪽) 둘 다 먼저 확인.",
+        "그래도 부족하면 사장님께 카톡 ('우유 1L 미만, 발주 부탁드립니다').",
+        "POS 키오스크에서 라떼류 '품절 처리'.",
+        "들어오는 손님께 '우유 들어간 메뉴 잠시 어려워요' 선제 안내 + 대체 메뉴 추천."
+      ],
+      "donts": [
+        "사장 보고 없이 손님께 '우유 없어요'만 말하지 말 것 — 대체 메뉴 안내 필수."
+      ],
+      "source": {
+        "entry_id": "pb_event_003",
+        "creator_name": "김영자",
+        "title": "우유 떨어졌을 때 (1L 미만)",
+        "version": 2,
+        "updated_at": "2026-05-23"
+      }
+    },
+    "satisfaction": "up",
+    "resolved_at": "2026-05-27T15:12:00"
+  },
+  {
+    "id": "cq_004",
+    "junior_id": "u_staff_002",
+    "junior_name": "이수민",
+    "query_text": "포스기 에러 떴어요 결제가 안 돼요",
+    "asked_at": "2026-05-26T11:20:00",
+    "matched_entry_ids": ["pb_event_005"],
+    "match_confidence": 0.89,
+    "was_deflected": true,
+    "response_block": {
+      "summary": "POS 결제 오류는 케이블 재연결로 90%가 해결됩니다.",
+      "actions": [
+        "손님께 '1분만 시간 주실 수 있을까요?' 안내.",
+        "카드 단말기 뒷면 케이블 2개(전원·통신) 모두 한 번씩 빼고 다시 꽂기.",
+        "10초 대기 후 단말기 자동 재인식.",
+        "안 되면 POS 와이파이 확인 → 그래도 안 되면 사장님께 전화."
+      ],
+      "donts": [
+        "POS 본체 강제 종료 절대 금지 — 마감 시 정산 꼬임."
+      ],
+      "source": {
+        "entry_id": "pb_event_005",
+        "creator_name": "김영자",
+        "title": "POS 결제 오류 (카드 단말기)",
+        "version": 1,
+        "updated_at": "2026-05-18"
+      }
+    },
+    "satisfaction": "up",
+    "resolved_at": "2026-05-26T11:24:00"
+  },
+  {
+    "id": "cq_005",
+    "junior_id": "u_staff_001",
+    "junior_name": "박지원",
+    "query_text": "컵 어디 있어요?",
+    "asked_at": "2026-05-25T09:05:00",
+    "matched_entry_ids": ["pb_context_001"],
+    "match_confidence": 0.76,
+    "was_deflected": true,
+    "response_block": {
+      "summary": "첫날 5분 가이드에 따르면 컵·뚜껑·시럽·빨대 위치는 첫 30분에 직접 만져보기로 잡혀 있어요.",
+      "actions": [
+        "카운터 하단 첫 번째 서랍 — 종이컵 (HOT용).",
+        "카운터 하단 두 번째 서랍 — 플라스틱 컵 (ICE용).",
+        "에스프레소 머신 아래 칸 — 도자기 잔.",
+        "(첫 30분 동안 직접 만져보세요 — 위치는 손이 외워야 빠릅니다.)"
+      ],
+      "donts": [
+        "'어디 있어요?' 물어보기 전 30초는 본인이 찾아볼 것 — 손이 외워야 함."
+      ],
+      "source": {
+        "entry_id": "pb_context_001",
+        "creator_name": "김영자",
+        "title": "첫날 5분 — 알바가 꼭 알아야 할 것",
+        "version": 1,
+        "updated_at": "2026-05-15"
+      }
+    },
+    "satisfaction": "up",
+    "resolved_at": "2026-05-25T09:06:00"
+  }
+]

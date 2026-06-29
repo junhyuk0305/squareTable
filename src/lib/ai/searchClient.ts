@@ -1,0 +1,118 @@
+// lib/ai/searchClient.ts
+// 하이브리드 검색: 렉시컬(로컬 rag.ts) + 벡터(서버 pgvector via Edge)를 RRF로 융합.
+// 설계: 노하우검색_고도화_v1.md
+//
+//  - USE_MOCK(키 없음/오프라인) → 기존 렉시컬 searchPlaybook 그대로 (데모 보존).
+//  - 실호출 → 렉시컬은 클라에서, 벡터는 Edge(task:'search')에서 받아 RRF 순위 융합.
+//  - 서버 실패 시 렉시컬로 graceful 폴백(검색이 멈추지 않게).
+//  - 신뢰도 = max(렉시컬 정규화, 벡터 cosine) — 둘 다 0~1. 강한 신호 채택.
+//    (벡터 cosine 임계값은 파일럿 점수 분포로 재보정: 설계 D8)
+
+import type { PlaybookEntry, SearchResult } from '@/types';
+import { searchPlaybook } from '@/lib/rag';
+import { getCategoryMeta } from '@/lib/utils/category';
+import { SERVE_THRESHOLD, USE_MOCK, AI_ENDPOINT, ANON } from './config';
+import { supabase } from '@/lib/supabase';
+
+const RRF_K = 60; // RRF 상수(표준값). 순위만 쓰므로 점수 스케일 불일치에 견고.
+const TOPK = 8;
+
+type VecHit = { id: string; similarity: number };
+type VecResponse = { candidates: VecHit[]; topSimilarity: number };
+
+// Edge 호출 공통 헤더(실 로그인 세션 토큰 필요 — anon 단독 거부됨).
+async function edgePost<T>(task: 'search' | 'embed', payload: unknown): Promise<T | null> {
+  if (!AI_ENDPOINT) return null;
+  const { data } = await supabase.auth.getSession();
+  const token = data.session?.access_token;
+  if (!token) return null;
+  const res = await fetch(AI_ENDPOINT, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', apikey: ANON, Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ task, payload }),
+  });
+  if (!res.ok) return null;
+  return (await res.json()) as T;
+}
+
+/**
+ * 하이브리드 검색. 반환 타입은 기존 SearchResult 와 동형 → useChatStore 밴드 로직 무변경.
+ */
+export async function hybridSearch(query: string, entries: PlaybookEntry[]): Promise<SearchResult> {
+  // mock/오프라인 — 기존 렉시컬. 데모 '검색 중' 느낌만 약간(실호출 경로엔 인위 지연 없음).
+  if (USE_MOCK) {
+    await new Promise((r) => setTimeout(r, 550));
+    return searchPlaybook(query, entries);
+  }
+
+  const lexical = searchPlaybook(query, entries, { topK: TOPK });
+
+  let vec: VecResponse | null = null;
+  try {
+    vec = await edgePost<VecResponse>('search', { query });
+  } catch (e) {
+    console.warn('[search] vector path failed, lexical fallback:', e);
+  }
+  if (!vec || !Array.isArray(vec.candidates)) return lexical; // 서버 실패 → 렉시컬 폴백
+
+  // ── RRF 융합 (순위 기반) ──
+  const byId = new Map(entries.map((e) => [e.id, e]));
+  const lexRank = new Map<string, number>();
+  lexical.candidates.forEach((c, i) => lexRank.set(c.entry.id, i));
+  const vecRank = new Map<string, number>();
+  vec.candidates.forEach((c, i) => vecRank.set(c.id, i));
+
+  const ids = new Set<string>([...lexRank.keys(), ...vecRank.keys()]);
+  const fused = [...ids]
+    .map((id) => {
+      let s = 0;
+      const lr = lexRank.get(id);
+      const vr = vecRank.get(id);
+      if (lr !== undefined) s += 1 / (RRF_K + lr);
+      if (vr !== undefined) s += 1 / (RRF_K + vr);
+      return { id, s };
+    })
+    .sort((a, b) => b.s - a.s);
+
+  const candidates = fused
+    .map((f) => {
+      const e = byId.get(f.id);
+      return e ? { entry: e, score: Number(f.s.toFixed(4)) } : null;
+    })
+    .filter((x): x is { entry: PlaybookEntry; score: number } => x !== null)
+    .slice(0, TOPK);
+
+  // 신뢰도 = 렉시컬 정규화 vs 벡터 cosine 중 강한 신호.
+  const confidence = Number(Math.max(lexical.confidence, vec.topSimilarity ?? 0).toFixed(3));
+  const matched = confidence >= SERVE_THRESHOLD ? candidates[0]?.entry ?? null : null;
+  return { matched, confidence, candidates, fallbackToUnknown: !matched };
+}
+
+// ── 색인(임베딩) ────────────────────────────────────────────
+/** 임베딩 대상 텍스트 — 제목·카테고리·상황·단계·금지·키워드를 합친다(한국어 일관). */
+export function buildEmbedText(e: PlaybookEntry): string {
+  const sq = e.square;
+  return [
+    e.title,
+    getCategoryMeta(e.category).label,
+    sq.situation,
+    sq.action?.steps?.join(' '),
+    sq.extract?.dont,
+    (e.search_keywords ?? []).join(' '),
+  ]
+    .filter(Boolean)
+    .join('\n')
+    .slice(0, 4000);
+}
+
+/** 노하우 발행/수정 후 임베딩 색인(파이어앤포겟). 실패해도 발행은 성공·렉시컬로 검색됨. */
+export async function embedEntry(e: PlaybookEntry): Promise<void> {
+  if (USE_MOCK) return;
+  // 발행 상태만 색인(초안은 검색에서 제외되므로 불필요).
+  if (e.status !== 'published') return;
+  try {
+    await edgePost('embed', { entryId: e.id, text: buildEmbedText(e) });
+  } catch (err) {
+    console.warn('[search] embed failed (non-fatal):', err);
+  }
+}
