@@ -2,22 +2,8 @@ import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { SourceFooter } from './SourceFooter';
 import { BrandColors, InkColors } from '@/lib/theme/colors';
 import { Elevation, Radius } from '@/lib/theme/elevation';
+import { verifyMeta, type VerifyState } from '@/lib/utils/verification';
 import type { Category, PlaybookEntry } from '@/types';
-
-// 검증 3-state 배지 메타 — BrowseList와 동일 매핑(노랑=사장 검증, good=현장, 회색=미검증).
-type VerifyState = NonNullable<PlaybookEntry['verification']>['state'];
-type VerifyMeta = { label: string; fg: string; bg: string; icon: string };
-
-function verifyMeta(state?: VerifyState): VerifyMeta {
-  switch (state) {
-    case 'owner_verified':
-      return { label: '사장님 검증', fg: InkColors.ink, bg: BrandColors.yellowSoft, icon: '✓' };
-    case 'field_tested':
-      return { label: '현장 검증', fg: BrandColors.good, bg: '#E6F1EA', icon: '✓' };
-    default:
-      return { label: '미검증', fg: InkColors.ink3, bg: InkColors.bgSoft, icon: '·' };
-  }
-}
 
 type Props = {
   summary: string;

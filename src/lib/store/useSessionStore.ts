@@ -82,36 +82,47 @@ function pushRenameTime(unitId: string) {
 }
 
 async function loadProfile(set: (p: Partial<SessionState>) => void, userId: string, email: string) {
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('id, name, role, unit_id, bio')
-    .eq('id', userId)
-    .maybeSingle();
-
-  const unitId = profile?.unit_id ?? '';
-  let storeName = '';
-  let inviteCode = '';
-  if (unitId) {
-    const { data: unit } = await supabase
-      .from('units')
-      .select('store_name, invite_code')
-      .eq('id', unitId)
+  try {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('id, name, role, unit_id, bio')
+      .eq('id', userId)
       .maybeSingle();
-    storeName = unit?.store_name ?? '';
-    inviteCode = unit?.invite_code ?? '';
+
+    const unitId = profile?.unit_id ?? '';
+    let storeName = '';
+    let inviteCode = '';
+    if (unitId) {
+      const { data: unit } = await supabase
+        .from('units')
+        .select('store_name, invite_code')
+        .eq('id', unitId)
+        .maybeSingle();
+      storeName = unit?.store_name ?? '';
+      inviteCode = unit?.invite_code ?? '';
+    }
+    setUnitId(unitId || null);
+    set({
+      status: 'signed_in',
+      userId,
+      email,
+      inviteCode,
+      userName: profile?.name ?? '',
+      role: (profile?.role as Role) ?? 'junior',
+      unitId,
+      storeName,
+      bio: profile?.bio ?? '',
+    });
+  } catch (e) {
+    // 네트워크 단절(fetch reject)로 프로필 조회가 던지면 앱이 'loading'에 영구히 멈추는 걸 막는다.
+    // (supabase-js는 쿼리 에러를 throw하지 않고 {error}로 반환 → 그 경로는 위 try가 빈 unitId로 정상 처리.
+    //  여기 catch는 오직 오프라인 등 throw 케이스.) 초기 state가 DEMO 시드(role/unitId='store_001')라
+    // 부분 set으로 signed_in 처리하면 가짜 테넌트로 오인되므로, 반드시 깨끗한 signed_out으로 떨군다
+    // (테넌트 격리가 최우선). 재접속 시 로그인/재시도로 정상 복구된다.
+    console.warn('[session] loadProfile 실패, 로그아웃 처리:', (e as Error)?.message ?? e);
+    setUnitId(null);
+    set({ status: 'signed_out', unitId: '', userId: '', userName: '', storeName: '', inviteCode: '', bio: '' });
   }
-  setUnitId(unitId || null);
-  set({
-    status: 'signed_in',
-    userId,
-    email,
-    inviteCode,
-    userName: profile?.name ?? '',
-    role: (profile?.role as Role) ?? 'junior',
-    unitId,
-    storeName,
-    bio: profile?.bio ?? '',
-  });
 }
 
 // onAuthStateChange는 앱 생애 1회만 등록한다. init()이 재마운트/핫리로드로 여러 번 불려도

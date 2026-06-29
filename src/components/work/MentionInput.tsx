@@ -88,7 +88,8 @@ export function MentionInput({
   function handleKeyPress(e: { nativeEvent: { key: string }; preventDefault?: () => void }) {
     if (!open) return;
     const k = e.nativeEvent?.key;
-    if (k === 'Tab' || (k === 'Enter' && query)) {
+    // suggestions 가 비어 있을 때(필터 결과 0 + 같은 프레임 Enter 레이스) [0] 인덱싱 크래시 방지.
+    if ((k === 'Tab' || (k === 'Enter' && query)) && suggestions.length > 0) {
       e.preventDefault?.();
       pick(suggestions[0].name);
     }

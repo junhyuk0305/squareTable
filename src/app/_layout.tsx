@@ -5,6 +5,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFonts } from 'expo-font';
 import { ResponsiveShell } from '@/components/ResponsiveShell';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { SplashAnimation } from '@/components/SplashAnimation';
 import { SyncBanner } from '@/components/SyncBanner';
 import { Toast } from '@/components/Toast';
@@ -44,17 +45,19 @@ export default function RootLayout() {
         {!splashDone && <SplashAnimation onDone={() => setSplashDone(true)} />}
         <SyncBanner />
         <Toast />
-        <Stack key={textScale} screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
-          <Stack.Screen name="index" />
-          <Stack.Screen name="signup" />
-          <Stack.Screen name="privacy" />
-          <Stack.Screen name="terms" />
-          <Stack.Screen name="legal/[doc]" />
-          <Stack.Screen name="business-info" />
-          <Stack.Screen name="account-edit" />
-          <Stack.Screen name="junior" />
-          <Stack.Screen name="owner" />
-        </Stack>
+        <ErrorBoundary>
+          <Stack key={textScale} screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
+            <Stack.Screen name="index" />
+            <Stack.Screen name="signup" />
+            <Stack.Screen name="privacy" />
+            <Stack.Screen name="terms" />
+            <Stack.Screen name="legal/[doc]" />
+            <Stack.Screen name="business-info" />
+            <Stack.Screen name="account-edit" />
+            <Stack.Screen name="junior" />
+            <Stack.Screen name="owner" />
+          </Stack>
+        </ErrorBoundary>
       </ResponsiveShell>
     </SafeAreaProvider>
   );

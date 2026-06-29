@@ -10,6 +10,7 @@ import { SectionLabel } from '@/components/SectionLabel';
 import { BrowseCard } from '@/components/BrowseList';
 import { logout } from '@/lib/auth';
 import { getCategoryMeta, ALL_CATEGORIES } from '@/lib/utils/category';
+import { verifyMeta } from '@/lib/utils/verification';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
 import { HEADER_EDGE_GUTTER, Space } from '@/lib/theme/layout';
@@ -22,21 +23,6 @@ function LogoutHeaderBtn() {
       <Text style={{ fontSize: 13, fontWeight: '700', color: BrandColors.brand }}>로그아웃</Text>
     </Pressable>
   );
-}
-
-// 검증 3-state 배지 — BrowseList/SquareCard와 동일 매핑.
-type VerifyMeta = { label: string; fg: string; bg: string };
-function verifyMeta(state: PlaybookEntry['verification']): VerifyMeta | null {
-  switch (state?.state) {
-    case 'owner_verified':
-      return { label: '사장님 검증', fg: InkColors.ink, bg: BrandColors.yellowSoft };
-    case 'field_tested':
-      return { label: '현장 검증', fg: BrandColors.good, bg: '#E6F1EA' };
-    case 'unverified':
-      return { label: '미검증', fg: InkColors.ink3, bg: InkColors.bgSoft };
-    default:
-      return null;
-  }
 }
 
 // ── 정렬 옵션 ────────────────────────────────────────────────
@@ -60,7 +46,8 @@ function matchesQuery(e: PlaybookEntry, q: string): boolean {
 /** 한 노하우 행 — 평면/그룹 양쪽에서 재사용. 탭하면 수정. */
 function EntryRow({ e, onPress }: { e: PlaybookEntry; onPress: () => void }) {
   const meta = getCategoryMeta(e.category);
-  const v = verifyMeta(e.verification);
+  // 검증 정보가 없으면(undefined) 배지 자체를 숨긴다(기존 동작 유지). 'unverified'면 회색 배지 노출.
+  const v = e.verification ? verifyMeta(e.verification.state) : null;
   const ratePct = Math.round((e.stats?.resolution_rate ?? 0) * 100);
   return (
     <Pressable onPress={onPress} style={({ pressed }) => [styles.row, pressed && { opacity: 0.7 }]}>

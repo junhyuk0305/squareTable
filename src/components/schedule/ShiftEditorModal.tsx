@@ -68,7 +68,13 @@ export function ShiftEditorModal({ staff, onClose }: { staff: Junior; onClose: (
               // 소프트 경고(저장은 가능): 정기휴무일 / 운영시간 밖.
               const notes: string[] = [];
               if (r.on && config.closedDays.includes(wd)) notes.push('정기휴무일');
-              if (r.on && !bad && (r.start < config.open || r.end > config.close)) notes.push('운영시간 밖');
+              // 운영시간 밖 판정 — 심야영업(close<open, 자정 넘김)이면 닫힌 구간은 (close, open) 사이다.
+              const outsideHours =
+                config.close < config.open
+                  ? (r.start > config.close && r.start < config.open) ||
+                    (r.end > config.close && r.end < config.open)
+                  : r.start < config.open || r.end > config.close;
+              if (r.on && !bad && outsideHours) notes.push('운영시간 밖');
               return (
                 <View key={wd} style={[s.row, r.on && s.rowOn]}>
                   <View style={s.rowMain}>

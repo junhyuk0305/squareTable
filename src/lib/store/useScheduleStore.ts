@@ -347,8 +347,3 @@ export function shiftsOn(
     })
     .sort((a, b) => a.template.start.localeCompare(b.template.start));
 }
-
-/** 사장 컨펌 대기(직원이 수락 완료) 요청 수. */
-export function pendingApprovalCount(swaps: SwapRequest[]): number {
-  return swaps.filter((s) => s.status === 'accepted').length;
-}

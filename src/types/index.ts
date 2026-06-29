@@ -29,40 +29,6 @@ export type Junior = User & {
   shift?: string;
 };
 
-export type UsersData = {
-  owner: Owner;
-  staff: Junior[];
-};
-
-// ── ContextPack ───────────────────────────────────────
-export type ContextPack = {
-  id: string;
-  unit_id: string;
-  store_name: string;
-  industry: string;
-  subcategory: string;
-  owner_id: string;
-  address: string;
-  opened_at: string;
-  hours: {
-    weekday: string;
-    weekend: string;
-    last_order: string;
-    break_time: string;
-  };
-  brand_rules: string[];
-  menu_quick: Array<{ name: string; price: number; category: string }>;
-  equipment: Array<{ name: string; model: string; note: string }>;
-  emergency_contacts: Array<{ label: string; phone_last4: string }>;
-  stakeholders_today: Array<{ label: string; name: string; available: boolean; note?: string }>;
-  settings: {
-    auto_unknown_alert: boolean;
-    alert_max_per_day: number;
-    default_tone: string;
-    language: string;
-  };
-};
-
 // ── PlaybookEntry ─────────────────────────────────────
 export type SquareBlock = {
   situation: string;
@@ -225,13 +191,6 @@ export type SearchResult = {
   confidence: number;
   candidates: { entry: PlaybookEntry; score: number }[];
   fallbackToUnknown: boolean;
-};
-
-// 위저드 분기용 — 매칭 실패 시 top1 candidate 또는 키워드로 카테고리 추정
-export type CategoryInference = {
-  presumedCategory: Category;
-  presumedSubcategory: string;
-  bestGuessEntryId: string | null;
 };
 
 // ── Demo (발표 시연용) ────────────────────────────────

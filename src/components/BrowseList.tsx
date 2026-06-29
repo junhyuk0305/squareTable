@@ -2,6 +2,7 @@ import { View, Text, Pressable, ScrollView, StyleSheet } from 'react-native';
 import { CategoryChip } from './CategoryChip';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Elevation, Radius } from '@/lib/theme/elevation';
+import { verifyMeta } from '@/lib/utils/verification';
 import type { PlaybookEntry } from '@/types';
 
 export type BrowseListProps = {
@@ -18,27 +19,10 @@ export type BrowseListProps = {
   showCategory?: boolean;
 };
 
-// 검증 3-state 배지 메타 — 03 카피카탈로그 H 라벨 + 02 검증배지 토큰(임시 매핑).
-type VerifyMeta = { label: string; fg: string; bg: string; icon: string };
-
-function verifyMeta(state: PlaybookEntry['verification']): VerifyMeta {
-  switch (state?.state) {
-    case 'owner_verified':
-      // 사장 검증 = 노란 배지(권위 강조). 카탈로그 label.verified="검증됨".
-      return { label: '사장님 검증', fg: InkColors.ink, bg: BrandColors.yellowSoft, icon: '✓' };
-    case 'field_tested':
-      // 현장 검증 = good 톤.
-      return { label: '현장 검증', fg: BrandColors.good, bg: '#E6F1EA', icon: '✓' };
-    default:
-      // 미검증 = 회색.
-      return { label: '미검증', fg: InkColors.ink3, bg: InkColors.bgSoft, icon: '·' };
-  }
-}
-
 // 카드 한 장(축약). DO/DON'T 미리보기 1줄씩, 해결률, 검증배지, 출처.
 // export — JuniorBrowseDashboard가 3블록(인기·최근·해결률)에서 같은 카드를 재사용한다.
 export function BrowseCard({ entry, onSelect, showCategory }: { entry: PlaybookEntry; onSelect: (e: PlaybookEntry) => void; showCategory: boolean }) {
-  const v = verifyMeta(entry.verification);
+  const v = verifyMeta(entry.verification?.state);
   const ratePct = Math.round((entry.stats?.resolution_rate ?? 0) * 100);
   const doText = entry.square?.extract?.do?.trim();
   const dontText = entry.square?.extract?.dont?.trim();

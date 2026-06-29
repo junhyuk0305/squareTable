@@ -24,7 +24,9 @@ export default function OwnerStoreConfigScreen() {
   const [note, setNote] = useState(config.note);
   const [saved, setSaved] = useState(false);
 
-  const valid = TIME_RE.test(open) && TIME_RE.test(close) && open < close;
+  // 심야 영업(예: 22:00→02:00) 허용 — close < open 은 자정을 넘는 정상 케이스다.
+  // open===close(영업시간 0)만 무효로 막는다.
+  const valid = TIME_RE.test(open) && TIME_RE.test(close) && open !== close;
 
   const toggleDay = (wd: number) =>
     setClosedDays((p) => (p.includes(wd) ? p.filter((x) => x !== wd) : [...p, wd]));

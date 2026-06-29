@@ -6,7 +6,7 @@ import { usePayrollStore } from '@/lib/store/usePayrollStore';
 import { useStaffStore } from '@/lib/store/useStaffStore';
 import { TimesheetView } from '@/components/TimesheetView';
 import { RoleTabBar } from '@/components/RoleTabBar';
-import { InkColors, BrandColors } from '@/lib/theme/colors';
+import { InkColors } from '@/lib/theme/colors';
 import { won, DEFAULT_HOURLY_WAGE } from '@/lib/utils/attendance';
 
 // 근무·급여(또는 직원관리)에서 직원 행 탭 시 진입. 사장이 직원 출근기록을 보정.
