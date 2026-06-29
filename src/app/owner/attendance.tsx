@@ -9,6 +9,7 @@ import { usePayrollStore } from '@/lib/store/usePayrollStore';
 import { useStaffStore } from '@/lib/store/useStaffStore';
 import { RoleTabBar } from '@/components/RoleTabBar';
 import { Appear } from '@/components/Appear';
+import { Avatar } from '@/components/Avatar';
 import { FEATURES } from '@/lib/config/features';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { fmtDuration, won, todayStr, liveMinutes, DEFAULT_HOURLY_WAGE } from '@/lib/utils/attendance';
@@ -92,9 +93,7 @@ export default function OwnerAttendanceScreen() {
               onPress={() => router.push({ pathname: '/owner/timesheet/[staffId]', params: { staffId: s.id } })}
               style={({ pressed }) => [styles.row, pressed && { opacity: 0.6 }]}
             >
-              <View style={styles.avatar}>
-                <Text style={styles.avatarText}>{s.name.slice(0, 1)}</Text>
-              </View>
+              <Avatar name={s.name} size={40} fontSize={15} />
               <View style={styles.rowBody}>
                 <View style={styles.rowTop}>
                   <Text style={styles.name}>{s.name}</Text>
@@ -177,17 +176,6 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: InkColors.line,
   },
-  avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: InkColors.bgSoft,
-    borderWidth: 1,
-    borderColor: InkColors.line,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarText: { fontSize: 15, fontWeight: '800', color: InkColors.ink },
   rowBody: { flex: 1, gap: 3 },
   rowTop: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   name: { fontSize: 16, fontWeight: '700', color: InkColors.ink },

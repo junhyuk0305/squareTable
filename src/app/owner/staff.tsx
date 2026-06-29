@@ -8,6 +8,7 @@ import { usePayrollStore } from '@/lib/store/usePayrollStore';
 import { useStaffStore } from '@/lib/store/useStaffStore';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { RoleTabBar } from '@/components/RoleTabBar';
+import { Avatar } from '@/components/Avatar';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { DEFAULT_HOURLY_WAGE } from '@/lib/utils/attendance';
 import { useCopyToClipboard } from '@/lib/utils/useCopyToClipboard';
@@ -100,9 +101,7 @@ export default function OwnerStaffScreen() {
           {staff.map((s) => (
             <View key={s.id} style={styles.staffRow}>
               <Pressable onPress={() => router.push(`/owner/timesheet/${s.id}`)} style={({ pressed }) => [styles.staffTap, pressed && { opacity: 0.6 }]}>
-                <View style={styles.avatar}>
-                  <Text style={styles.avatarText}>{s.name.slice(0, 1)}</Text>
-                </View>
+                <Avatar name={s.name} size={40} fontSize={15} />
                 <View style={{ flex: 1 }}>
                   <Text style={styles.staffName}>{s.name}</Text>
                   <Text style={styles.staffMeta}>{s.shift ?? '시프트 미지정'}</Text>
@@ -161,8 +160,6 @@ const styles = StyleSheet.create({
   list: { backgroundColor: '#FFFFFF', borderRadius: 14, borderWidth: 1, borderColor: InkColors.line, paddingHorizontal: 14 },
   staffRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: InkColors.line },
   staffTap: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12 },
-  avatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: InkColors.bgSoft, borderWidth: 1, borderColor: InkColors.line, alignItems: 'center', justifyContent: 'center' },
-  avatarText: { fontSize: 15, fontWeight: '800', color: InkColors.ink },
   staffName: { fontSize: 15, fontWeight: '700', color: InkColors.ink },
   staffMeta: { fontSize: 12, color: InkColors.ink3, marginTop: 2 },
   wageBox: { alignItems: 'flex-end', gap: 3 },

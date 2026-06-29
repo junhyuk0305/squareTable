@@ -14,6 +14,7 @@ import { Radius } from '@/lib/theme/elevation';
 import { SettingsSection, SettingsRow, SettingsToggle } from '@/components/settings/SettingsKit';
 import { QuietHoursModal } from '@/components/settings/QuietHoursModal';
 import { RoleTabBar } from '@/components/RoleTabBar';
+import { Avatar } from '@/components/Avatar';
 
 const SUPPORT_EMAIL = 'cristianojun@naver.com';
 const SCALE_LABEL: Record<TextScale, string> = { small: '작게', normal: '보통', large: '크게' };
@@ -69,9 +70,7 @@ export default function OwnerSettings() {
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         {/* 프로필 요약 */}
         <View style={styles.profile}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{(userName || '사')[0]}</Text>
-          </View>
+          <Avatar name={userName || '사'} size={52} fontSize={22} tone="brand" />
           <View style={{ flex: 1 }}>
             <Text style={styles.pName}>{userName || '사장님'} 사장님</Text>
             <Text style={styles.pMeta}>{email || '데모 계정'}</Text>
@@ -185,8 +184,6 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: InkColors.cream },
   scroll: { padding: 20, paddingTop: 16 },
   profile: { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 16, backgroundColor: InkColors.bg, borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, marginBottom: 20 },
-  avatar: { width: 52, height: 52, borderRadius: Radius.pill, backgroundColor: BrandColors.brandSoft, alignItems: 'center', justifyContent: 'center' },
-  avatarText: { fontSize: 22, fontWeight: '900', color: BrandColors.brand },
   pName: { fontSize: 17, fontWeight: '800', color: InkColors.ink },
   pMeta: { fontSize: 13, color: InkColors.ink3, marginTop: 1 },
   codeCard: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, backgroundColor: InkColors.bg, borderRadius: Radius.md, borderWidth: 1, borderColor: BrandColors.gold },
