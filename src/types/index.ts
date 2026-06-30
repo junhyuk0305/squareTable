@@ -168,6 +168,8 @@ export type ChatQuery = {
   satisfaction: 'up' | 'down' | null;
   resolved_at: string | null;
   anonymous?: boolean;
+  // 매칭 애매 시 제시할 후보 노하우 id들(클라 UI 전용·비영속). 사장 라우팅 전에 "혹시 이거?"로 보여준다.
+  candidate_entry_ids?: string[];
 };
 
 // ── UnknownQuery (사장님 인박스) ──────────────────────

@@ -7,12 +7,24 @@ import type {
   GenerateAnswerOutput,
   StructureSquareInput,
   StructureSquareOutput,
+  PatchSquareInput,
+  IntentInput,
+  IntentOutput,
 } from './types';
 import { AI_ENDPOINT, ANON, USE_MOCK } from './config';
-import { mockGenerateAnswer, mockStructureSquare } from './mock';
+import { mockGenerateAnswer, mockStructureSquare, mockPatchSquare, mockExtractIntent } from './mock';
+import { isEnglishDominant } from '@/lib/utils/knowhowInput';
 import { supabase } from '@/lib/supabase';
 
-type Task = 'answer' | 'square';
+type Task = 'answer' | 'square' | 'patch' | 'intent';
+
+// 한글 입력인데 결과가 통째로 영어로 나왔는지(언어 드리프트). 혼용은 통과(한글 1자라도 있으면 false).
+function squareWentEnglish(input: { rawText?: string; instruction?: string }, out: StructureSquareOutput): boolean {
+  const src = `${input.rawText ?? ''}${input.instruction ?? ''}`;
+  if (!/[가-힣]/.test(src)) return false; // 원문이 한글이 아니면 강제 안 함
+  const hay = [out.title, out.square?.situation, ...(out.square?.action?.steps ?? [])].join(' ');
+  return isEnglishDominant(hay);
+}
 
 // 무한 대기 방지 — 이 시간을 넘기면 중단하고 mock으로 폴백한다.
 const EDGE_TIMEOUT_MS = 12_000;
@@ -67,9 +79,42 @@ export async function structureSquare(
 ): Promise<StructureSquareOutput> {
   if (USE_MOCK) return mockStructureSquare(input);
   try {
-    return await callEdge<StructureSquareOutput>('square', input);
+    let out = await callEdge<StructureSquareOutput>('square', input);
+    // 한글 입력인데 영어로 나오면 1회 재시도(언어 일관성 보장). 비용보다 품질 우선.
+    if (out.usable !== false && squareWentEnglish(input, out)) {
+      out = await callEdge<StructureSquareOutput>('square', input);
+    }
+    return out;
   } catch (e) {
     console.warn('[ai] structureSquare fallback to mock:', e);
     return { ...(await mockStructureSquare(input)), degraded: true };
+  }
+}
+
+// 대화형 수정 — 현재 SQUARE + 자연어 수정요청 → 부분 패치된 새 SQUARE(단일).
+export async function patchSquare(
+  input: PatchSquareInput,
+): Promise<StructureSquareOutput> {
+  if (USE_MOCK) return mockPatchSquare(input);
+  try {
+    let out = await callEdge<StructureSquareOutput>('patch', input);
+    if (out.usable !== false && squareWentEnglish(input, out)) {
+      out = await callEdge<StructureSquareOutput>('patch', input);
+    }
+    return out;
+  } catch (e) {
+    console.warn('[ai] patchSquare fallback to mock:', e);
+    return { ...(await mockPatchSquare(input)), degraded: true };
+  }
+}
+
+// 의도추출 — 장황한 질문에서 검색용 핵심 의도/키워드 추출. 실패 시 빈 결과(호출부가 원쿼리 유지).
+export async function extractIntent(input: IntentInput): Promise<IntentOutput> {
+  if (USE_MOCK) return mockExtractIntent(input);
+  try {
+    return await callEdge<IntentOutput>('intent', input);
+  } catch (e) {
+    console.warn('[ai] extractIntent failed (non-fatal):', e);
+    return { rewritten: '', keywords: [] };
   }
 }

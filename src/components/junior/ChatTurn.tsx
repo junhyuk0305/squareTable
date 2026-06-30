@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { SquareCard } from '@/components/SquareCard';
 import { DeflectCard } from '@/components/DeflectCard';
+import { CandidateCard } from '@/components/junior/CandidateCard';
 import { EntryDetailModal } from '@/components/EntryDetailModal';
 import { UserBubble } from '@/components/UserBubble';
 import { Appear } from '@/components/Appear';
@@ -13,7 +14,7 @@ import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { InkColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 
-import type { Category, ChatQuery } from '@/types';
+import type { Category, ChatQuery, PlaybookEntry } from '@/types';
 
 /* ─────────────────────────────────────────────────────────
  * 한 턴: 사용자 질문 + AI 응답(SquareCard | DeflectCard)
@@ -40,11 +41,21 @@ export function ChatTurn({
   findUQ,
 }: ChatTurnProps) {
   const router = useRouter();
-  const [detailOpen, setDetailOpen] = useState(false);
+  // 상세 모달은 출처(matched) 또는 후보(candidate) 어느 쪽이든 띄운다 — 단일 상태로 통일.
+  const [detailEntry, setDetailEntry] = useState<PlaybookEntry | undefined>(undefined);
 
   const block = query.response_block;
   const matchedEntry = usePlaybookStore((s) =>
     query.matched_entry_ids[0] ? s.getById(query.matched_entry_ids[0]) : undefined,
+  );
+  // 후보 노하우(매칭 애매 시 "혹시 이거?") — id → 엔트리. 발행/삭제로 entries 바뀌면 재계산.
+  const allEntries = usePlaybookStore((s) => s.entries);
+  const candidateEntries = useMemo(
+    () =>
+      (query.candidate_entry_ids ?? [])
+        .map((cid) => allEntries.find((e) => e.id === cid))
+        .filter((e): e is PlaybookEntry => !!e),
+    [query.candidate_entry_ids, allEntries],
   );
 
   // DeflectCard 보조 데이터(일반 답변·중복수). 카테고리는 노출 안 함(프레임 v2).
@@ -96,7 +107,14 @@ export function ChatTurn({
             feedback={query.satisfaction}
             onThumbsUp={onThumbsUp}
             onThumbsDown={onThumbsDown}
-            onSourcePress={matchedEntry ? () => setDetailOpen(true) : undefined}
+            onSourcePress={matchedEntry ? () => setDetailEntry(matchedEntry) : undefined}
+          />
+        ) : candidateEntries.length > 0 && deflectState === 'asking' ? (
+          // 매칭 애매 → 후보 노하우 먼저 제시. '사장님께 물어보기'를 누르면 등록(deflectState=registered)으로 전환.
+          <CandidateCard
+            entries={candidateEntries}
+            onPick={(e) => setDetailEntry(e)}
+            onRegister={onRegister}
           />
         ) : (
           deflectMeta && (
@@ -134,8 +152,8 @@ export function ChatTurn({
         )}
       </Appear>
 
-      {/* 출처 → 원본 노하우 상세(읽기 전용) */}
-      <EntryDetailModal entry={matchedEntry} visible={detailOpen} onClose={() => setDetailOpen(false)} />
+      {/* 출처·후보 → 원본 노하우 상세(읽기 전용) */}
+      <EntryDetailModal entry={detailEntry} visible={!!detailEntry} onClose={() => setDetailEntry(undefined)} />
     </View>
   );
 }

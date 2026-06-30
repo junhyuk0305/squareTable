@@ -262,7 +262,9 @@ export async function fetchChatQueries(juniorId: string): Promise<ChatQuery[]> {
 
 export async function insertChatQuery(cq: ChatQuery): Promise<boolean> {
   if (!HAS_SUPABASE) return true;
-  const row = { ...cq, unit_id: (cq as any).unit_id || _unitId };
+  // candidate_entry_ids는 클라 UI 전용(비영속) — DB 컬럼이 없으므로 insert에서 제외.
+  const { candidate_entry_ids: _drop, ...persisted } = cq;
+  const row = { ...persisted, unit_id: (cq as any).unit_id || _unitId };
   return write('insertChatQuery', supabase.from('chat_queries').insert(row));
 }
 

@@ -13,11 +13,10 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { UserBubble } from '@/components/UserBubble';
 import { Appear } from '@/components/Appear';
-import { structureSquare, type ScalePrompt, type StructuredSegment } from '@/lib/ai';
-import { type CellPath } from '@/lib/ai/categoryGuide';
+import { structureSquare, patchSquare, type ScalePrompt, type StructuredSegment, type AiFollowup } from '@/lib/ai';
 import { EXTRACTION_MASTER } from '@/data/extraction-master';
-import { computeFollowups, applyFollowupAnswer } from '@/lib/utils/followups';
 import { buildPlaybookEntryFromSquare, isSquarePublishable } from '@/lib/utils/buildEntry';
+import { isJunkInput, looksLikePromptLeak, knowhowGuidanceMessage } from '@/lib/utils/knowhowInput';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { uploadPhoto } from '@/lib/db';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
@@ -46,6 +45,11 @@ export type OwnerCoachChatProps = {
   seedText?: string;            // 프리필(콜드스타트 제목·회고 초안)
   onPublished: (entry: PlaybookEntry) => void;
   onPublishedMany?: (entries: PlaybookEntry[]) => void; // 다중 분리 발행(없으면 첫 건만)
+  // ── 대화형 수정 모드 ──────────────────────────────────────
+  // editEntry가 있으면 '등록'이 아니라 '수정'. 기존 노하우 카드를 먼저 띄우고,
+  // 사장이 말로 고치면 patchSquare로 부분 패치. 저장은 onUpdated로(새 add 아님).
+  editEntry?: PlaybookEntry;
+  onUpdated?: (square: SquareBlock, extras: { title: string; keywords: string[] }) => void;
 };
 
 type MsgInput =
@@ -67,10 +71,16 @@ export function OwnerCoachChat({
   seedText,
   onPublished,
   onPublishedMany,
+  editEntry,
+  onUpdated,
 }: OwnerCoachChatProps) {
+  const isEdit = !!editEntry;
   const [messages, setMessages] = useState<Msg[]>(() => {
     const init: Msg[] = [];
-    if (isInboxAnswer) {
+    if (isEdit) {
+      init.push({ id: nextId(), kind: 'ai', text: '지금 이렇게 정리돼 있어요. 고칠 부분을 편하게 말씀해 주세요.\n예) “할 일에 행주 삶기 추가”, “금지는 빼줘”, “제목 바꿔줘”' });
+      init.push({ id: nextId(), kind: 'card' });
+    } else if (isInboxAnswer) {
       const who = uq.anonymous ? '익명' : uq.junior_name;
       init.push({
         id: nextId(),
@@ -86,12 +96,14 @@ export function OwnerCoachChat({
   });
 
   const [input, setInput] = useState(typeof seedText === 'string' ? seedText : '');
-  const [category, setCategory] = useState<Category>(initialCategory);
-  const [square, setSquare] = useState<SquareBlock | null>(null);
-  const [title, setTitle] = useState('');
-  const [keywords, setKeywords] = useState<string[]>([]);
+  const [category, setCategory] = useState<Category>(editEntry?.category ?? initialCategory);
+  const [square, setSquare] = useState<SquareBlock | null>(editEntry?.square ?? null);
+  const [title, setTitle] = useState(editEntry?.title ?? '');
+  const [keywords, setKeywords] = useState<string[]>(editEntry?.search_keywords ?? []);
   const [photos, setPhotos] = useState<string[]>([]);
-  const [pending, setPending] = useState<{ cell: CellPath; ask: string; hint: string }[]>([]);
+  // 등록 꼬리질문 큐(AI 생성). 수정 모드에선 사용 안 함.
+  const [pending, setPending] = useState<AiFollowup[]>([]);
+  const followupQA = useRef<{ q: string; a: string }[]>([]); // 꼬리질문 답 누적 → 최종 재정리에 합침
   const [scalePrompt, setScalePrompt] = useState<ScalePrompt | null>(null); // 정도 척도질문(AI 감지)
   const [segments, setSegments] = useState<StructuredSegment[] | null>(null); // 다중 분리 제안(≥2)
   const [busy, setBusy] = useState(false);
@@ -107,7 +119,8 @@ export function OwnerCoachChat({
   const storeId = unitId || 'store_001';
 
   // 척도질문이 있고 아직 답 안 했으면(=square.standard 미설정) 리뷰 진입을 미룬다.
-  const awaitingScale = scalePrompt !== null && !square?.standard;
+  // 단, 꼬리질문(pending)이 남아있는 동안엔 척도 입력을 띄우지 않는다(꼬리질문 먼저 → 재정리 → 척도).
+  const awaitingScale = scalePrompt !== null && !square?.standard && pending.length === 0;
   const awaitingSplit = segments !== null; // 분리 제안 결정 전엔 단일 리뷰 진입 막음
   const inReview = square !== null && pending.length === 0 && !awaitingScale && !awaitingSplit;
 
@@ -120,17 +133,30 @@ export function OwnerCoachChat({
     setMessages((prev) => [...prev, { ...m, id: nextId() }]);
   }, []);
 
-  // 정리 결과(단일) 제시: 카드 → 빈칸이면 꼬리질문 → 정도성이면 척도 → 준비.
-  const presentSingle = useCallback((sq: SquareBlock, scaleP: ScalePrompt | null, cat: Category) => {
-    const followups = computeFollowups(sq, cat);
-    setPending(followups);
+  // 카드 + (정도성이면 척도 / 아니면 확인) 메시지를 붙인다. 꼬리질문이 끝난 뒤 공통으로 쓴다.
+  const presentScaleOrConfirm = useCallback((scaleP: ScalePrompt | null) => {
     setMessages((prev) => {
       const withCard: Msg[] = [...prev, { id: nextId(), kind: 'card' }];
-      if (followups.length > 0) return [...withCard, { id: nextId(), kind: 'ai', text: followups[0].ask }];
       if (scaleP) return [...withCard, { id: nextId(), kind: 'ai', text: scaleP.ask }, { id: nextId(), kind: 'scale' }];
       return [...withCard, { id: nextId(), kind: 'ai', text: '이대로 등록할까요? 맞으면 ✅, 고칠 게 있으면 ✏️ 눌러주세요.' }];
     });
   }, []);
+
+  // 정리 결과(단일) 제시: 카드 → AI 꼬리질문 있으면 먼저 되묻기 → 없으면 척도/확인.
+  // (꼬리질문 답이 모이면 runRefine이 한 번 더 재정리해 깔끔히 통합한다.)
+  const presentSingle = useCallback((scaleP: ScalePrompt | null, followups: AiFollowup[]) => {
+    setPending(followups);
+    followupQA.current = [];
+    if (followups.length > 0) {
+      setMessages((prev) => [
+        ...prev,
+        { id: nextId(), kind: 'card' },
+        { id: nextId(), kind: 'ai', text: followups[0].ask },
+      ]);
+    } else {
+      presentScaleOrConfirm(scaleP);
+    }
+  }, [presentScaleOrConfirm]);
 
   // ── AI 1콜: 원문 → SQUARE. 다중이면 분리 제안, 단일이면 바로 제시. ──
   const runStructure = useCallback(
@@ -146,6 +172,17 @@ export function OwnerCoachChat({
         });
         lastRawRef.current = rawText;
         setSegments(null);
+
+        // 노하우가 아닌 입력(잡담·테스트·욕설) 또는 프롬프트 누출 → 가짜 카드 대신 되묻기.
+        // (명백한 잡음은 handleSend의 isJunkInput가 AI 호출 전에 이미 차단. 여기는 의미상 비노하우·누출 방어선.)
+        const steps0 = out.square?.action?.steps ?? [];
+        if (out.usable === false || looksLikePromptLeak(out.title, steps0)) {
+          setMessages((prev) => [
+            ...prev,
+            { id: nextId(), kind: 'ai', text: knowhowGuidanceMessage(rawText) },
+          ]);
+          return;
+        }
 
         // 빈 응답 가드 — Gemini가 가끔 빈/깨진 결과를 반환(원두분쇄 등 간헐). 빈 카드 대신 재시도 유도.
         const sq0 = out.square;
@@ -193,7 +230,17 @@ export function OwnerCoachChat({
         // AI가 분류한 카테고리를 채택(진입점에서 잘못 고른 분류 자동 교정).
         const aiCat = out.segments?.[0]?.category ?? cat;
         if (aiCat !== cat) setCategory(aiCat);
-        presentSingle(out.square, scaleP, aiCat);
+
+        // 안전망: 극단 단답(예: "마감")인데 AI가 followups·척도를 둘 다 빠뜨리면
+        // 빈약한(또는 지어낸) 노하우가 그대로 등록되는 걸 막는다. AI 생성이 우선, 이건 최후 보강.
+        // Context(위치·사실)는 단계가 없는 게 정상이라 제외, 척도가 있으면 이미 사장에게 되묻는 중이라 제외.
+        let followups = out.followups ?? [];
+        const tokens = rawText.trim().split(/\s+/).filter(Boolean).length;
+        const tooThin = tokens <= 3 && aiCat !== 'Context' && !scaleP && (out.square?.action?.steps?.length ?? 0) <= 1;
+        if (followups.length === 0 && tooThin) {
+          followups = [{ cell: 'steps', ask: '조금만 더 구체적으로 알려주세요 — 어떤 상황에서, 순서대로 무엇을 하나요?' }];
+        }
+        presentSingle(scaleP, followups);
       } catch (e) {
         console.warn('[coach] structure failed', e);
         setError('정리 중 문제가 생겼어요 — 다시 한 번 보내주세요.');
@@ -204,6 +251,88 @@ export function OwnerCoachChat({
     [storeId, isInboxAnswer, presentSingle],
   );
 
+  // ── 최종 재정리(2차 AI 콜): 원문 + 꼬리질문 답변을 합쳐 깔끔히 통합 ──
+  // skipFollowups=true 라 더 되묻지 않는다(무한 루프 방지). 실패해도 기존 square로 진행.
+  const runRefine = useCallback(async () => {
+    setBusy(true);
+    setError(null);
+    pushMsg({ kind: 'ai', text: '말씀해주신 내용까지 합쳐서 다시 정리하고 있어요…' });
+    try {
+      const qa = followupQA.current.map((x) => `- ${x.q}\n  → ${x.a}`).join('\n');
+      const merged = `${lastRawRef.current}\n\n[추가 설명]\n${qa}`;
+      const out = await structureSquare({
+        storeId,
+        rawText: merged,
+        category,
+        categoryGuide: EXTRACTION_MASTER,
+        skipFollowups: true,
+      });
+      const sq0 = out.square;
+      const ok = out.title || sq0?.situation || sq0?.action?.steps?.length;
+      if (ok) {
+        setSquare(out.square);
+        setTitle(out.title || title);
+        setKeywords(out.keywords || keywords);
+      }
+      // 척도는 1차에서 정한 것을 유지(없었으면 재정리가 새로 감지한 것 채택).
+      const scaleP = scalePrompt ?? out.scalePrompt ?? null;
+      setScalePrompt(scaleP);
+      setPending([]);
+      presentScaleOrConfirm(scaleP);
+    } catch (e) {
+      console.warn('[coach] refine failed', e);
+      // 재정리 실패 → 사장이 답한 내용을 잃지 않도록 기존 square의 할 일에 덧붙여 보존(데드엔드 방지).
+      setSquare((sq) => {
+        if (!sq) return sq;
+        const extra = followupQA.current.map((x) => x.a.trim()).filter(Boolean);
+        return extra.length ? { ...sq, action: { ...sq.action, steps: [...sq.action.steps, ...extra].slice(0, 6) } } : sq;
+      });
+      setPending([]);
+      presentScaleOrConfirm(scalePrompt);
+    } finally {
+      setBusy(false);
+    }
+  }, [storeId, category, title, keywords, scalePrompt, presentScaleOrConfirm, pushMsg]);
+
+  // ── 대화형 수정(patch): 현재 square + 자연어 수정요청 → 부분 패치 ──
+  const runPatch = useCallback(
+    async (instruction: string) => {
+      if (!square) return;
+      setBusy(true);
+      setError(null);
+      try {
+        const out = await patchSquare({
+          storeId,
+          instruction,
+          current: {
+            title,
+            category,
+            situation: square.situation,
+            steps: square.action.steps,
+            scripts: square.action.scripts,
+            dont: square.extract.dont,
+          },
+          categoryGuide: EXTRACTION_MASTER,
+        });
+        // 척도(standard)는 patch가 다루지 않으므로 기존 값을 보존한다.
+        setSquare((prev) => ({ ...out.square, ...(prev?.standard ? { standard: prev.standard } : {}) }));
+        setTitle(out.title || title);
+        setKeywords(out.keywords || keywords);
+        if (out.degraded) {
+          pushMsg({ kind: 'ai', text: '지금은 AI 수정이 어려워 간단히 반영했어요. 내용을 확인해 주세요.' });
+        }
+        pushMsg({ kind: 'card' });
+        pushMsg({ kind: 'ai', text: '고쳤어요! 더 고칠 게 있으면 말씀하시고, 괜찮으면 저장하세요.' });
+      } catch (e) {
+        console.warn('[coach] patch failed', e);
+        setError('수정 중 문제가 생겼어요 — 다시 한 번 말씀해 주세요.');
+      } finally {
+        setBusy(false);
+      }
+    },
+    [storeId, square, title, category, keywords, pushMsg],
+  );
+
   // ── 입력 전송: 상태에 따라 (1)첫 정리 (2)꼬리질문 답 (3)재정리 ──
   const handleSend = useCallback(
     (override?: string) => {
@@ -212,30 +341,35 @@ export function OwnerCoachChat({
       setInput('');
       pushMsg({ kind: 'owner', text: value });
 
-      // (2) 꼬리질문 답변 — AI 재호출 없이 해당 칸에 그대로 반영
+      // (수정 모드) 모든 발화 = 부분 패치 요청. patchSquare로 처리.
+      if (isEdit) {
+        void runPatch(value);
+        return;
+      }
+
+      // (2) 꼬리질문 답변 — Q&A로 모아두고, 다 모이면 최종 재정리(runRefine)로 통합
       if (square && pending.length > 0 && !reStructure) {
         const [cur, ...rest] = pending;
-        setSquare((sq) => (sq ? applyFollowupAnswer(sq, cur.cell, value) : sq));
+        followupQA.current.push({ q: cur.ask, a: value });
         setPending(rest);
         if (rest.length > 0) {
           pushMsg({ kind: 'ai', text: rest[0].ask });
-        } else if (scalePrompt) {
-          // 텍스트 꼬리질문 끝 → 정도 척도질문으로
-          pushMsg({ kind: 'card' });
-          pushMsg({ kind: 'ai', text: scalePrompt.ask });
-          pushMsg({ kind: 'scale' });
         } else {
-          pushMsg({ kind: 'card' });
-          pushMsg({ kind: 'ai', text: '채웠어요! 이대로 등록할까요? ✅ / ✏️' });
+          void runRefine();
         }
         return;
       }
 
       // (1) 첫 정리  또는  (3) "다시 말하기" 후 재정리
+      // 명백한 잡음(자모·반복·기호·초단문)은 AI 호출 없이 즉시 되묻기 — 종류별 안내(가짜 카드·비용 방지).
+      if (isJunkInput(value)) {
+        pushMsg({ kind: 'ai', text: knowhowGuidanceMessage(value) });
+        return;
+      }
       setReStructure(false);
       void runStructure(value, category);
     },
-    [input, busy, editing, square, pending, scalePrompt, reStructure, category, runStructure, pushMsg],
+    [input, busy, editing, isEdit, square, pending, reStructure, category, runStructure, runRefine, runPatch, pushMsg],
   );
 
   // ── 기준 답변 → square.standard 에 반영(AI 재호출 0). kind별(스펙트럼 위치 / 개수) ──
@@ -321,16 +455,22 @@ export function OwnerCoachChat({
     setKeywords([...kw].slice(0, 8));
     setScalePrompt(sp);
     pushMsg({ kind: 'ai', text: '하나로 합쳐서 정리했어요.' });
-    presentSingle(merged, sp, cat);
+    presentSingle(sp, []);
   }, [segments, presentSingle, pushMsg]);
 
   // 카테고리는 AI가 내부 판단(사용자 비노출). 사용자가 직접 바꾸는 UI 없음.
 
-  // ── 발행 ──
+  // ── 발행 / 수정 저장 ──
   const handlePublish = useCallback(() => {
     if (publishedRef.current || !square) return;
     if (!isSquarePublishable(square)) {
       setError('할 행동이나 멘트가 하나는 있어야 등록돼요. ✏️로 한 줄만 더 채워주세요.');
+      return;
+    }
+    // 수정 모드: 기존 노하우 갱신(새로 add 아님).
+    if (isEdit && onUpdated) {
+      publishedRef.current = true;
+      onUpdated(square, { title, keywords });
       return;
     }
     publishedRef.current = true;
@@ -342,7 +482,7 @@ export function OwnerCoachChat({
       { title, keywords, photos },
     );
     onPublished(entry);
-  }, [square, uq, category, title, keywords, photos, onPublished]);
+  }, [square, uq, category, title, keywords, photos, onPublished, isEdit, onUpdated]);
 
   const startRetalk = useCallback(() => {
     setReStructure(true);
@@ -464,7 +604,7 @@ export function OwnerCoachChat({
                 onPublish={handlePublish}
                 onPatch={(sq) => setSquare(sq)}
                 onTitle={setTitle}
-                publishLabel={isInboxAnswer ? '이 답변 보내기' : '노하우로 저장'}
+                publishLabel={isEdit ? '수정 저장' : isInboxAnswer ? '이 답변 보내기' : '노하우로 저장'}
               />
             </Appear>
           );
@@ -509,7 +649,7 @@ export function OwnerCoachChat({
             <TextInput
               value={input}
               onChangeText={setInput}
-              placeholder={pending.length > 0 ? pending[0].hint || '답을 적어주세요' : '편하게 적어주세요'}
+              placeholder={pending.length > 0 ? '답을 적어주세요' : isEdit ? '고칠 내용을 말씀해 주세요' : '편하게 적어주세요'}
               placeholderTextColor={InkColors.ink3}
               style={styles.input}
               editable={!busy}

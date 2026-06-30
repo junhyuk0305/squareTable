@@ -8,6 +8,10 @@ import type {
   StructureSquareInput,
   StructureSquareOutput,
   StructuredSegment,
+  PatchSquareInput,
+  IntentInput,
+  IntentOutput,
+  AiFollowup,
 } from './types';
 import type { Category } from '@/types';
 import { MAX_ACTIONS, MAX_DONTS } from './config';
@@ -84,6 +88,13 @@ function structureOne(raw: string, category?: Category): StructuredSegment {
       ? { kind: 'spectrum' as const, label: '완성 기준', ask: '어느 정도가 기준이에요?', ends: ['약함', '강함'] as [string, string] }
       : undefined;
 
+  // 단답 보강용 꼬리질문(휴리스틱) — 입력이 매우 짧고 단계가 빈약하면 한 개만.
+  // (실 LLM은 그 노하우에 맞춰 더 정교하게 생성. mock은 데모 안전망.)
+  const followups: AiFollowup[] = [];
+  if (raw.trim().length < 12 && steps.length <= 1) {
+    followups.push({ cell: 'steps', ask: '조금 더 구체적으로 알려주실 수 있어요? 어떤 상황에서 무엇을 하는 건가요?' });
+  }
+
   return {
     category: (category ?? 'Routine') as Category,
     title,
@@ -97,6 +108,7 @@ function structureOne(raw: string, category?: Category): StructuredSegment {
       extract: { do: '', dont },
     },
     ...(scalePrompt ? { scalePrompt } : {}),
+    ...(followups.length > 0 ? { followups } : {}),
   };
 }
 
@@ -112,14 +124,74 @@ function splitChunks(raw: string): string[] {
 // 원문 → SQUARE. 다중 노하우면 segments[]로 나눠 반환(top-level = segments[0], 단일 흐름 호환).
 // input.categoryGuide는 실 LLM 프롬프트 주입용 — mock에서는 의도적으로 미사용.
 export function mockStructureSquare(input: StructureSquareInput): StructureSquareOutput {
+  // 명백한 잡음(자모·반복·기호·초단문)은 mock에서도 usable=false (클라 잡음필터와 일관).
+  const t = (input.rawText ?? '').trim();
+  const meaningful = (t.match(/[가-힣a-zA-Z]/g) || []).length;
+  if (meaningful < 2 || (new Set(t.replace(/\s+/g, '')).size <= 2 && t.length >= 3)) {
+    return { usable: false, title: '', keywords: [], square: structureOne('', input.category).square, segments: [] };
+  }
   const chunks = splitChunks(input.rawText);
-  const segments = chunks.map((c) => structureOne(c, input.category));
+  const segments = chunks.map((c) => {
+    const seg = structureOne(c, input.category);
+    // 재정리 패스(skipFollowups)에서는 꼬리질문을 떼어 무한 되묻기를 막는다.
+    if (input.skipFollowups && seg.followups) delete seg.followups;
+    return seg;
+  });
   const head = segments[0];
   return {
+    usable: true,
     square: head.square,
     title: head.title,
     keywords: head.keywords,
     ...(head.scalePrompt ? { scalePrompt: head.scalePrompt } : {}),
+    ...(head.followups ? { followups: head.followups } : {}),
     segments,
   };
+}
+
+// 대화형 수정(mock) — 자연어 수정요청을 휴리스틱으로 현재 SQUARE에 반영.
+// 실 LLM은 부분 패치를 정교히. mock은 "추가/삭제"만 어림 처리(데모 안전망).
+export function mockPatchSquare(input: PatchSquareInput): StructureSquareOutput {
+  const { current, instruction } = input;
+  const ins = instruction.trim();
+  const isRemove = /빼|삭제|제거|없애|지워/.test(ins);
+  const mentionsDont = /금지|하지\s*말|하면\s*안/.test(ins);
+  const mentionsScript = /멘트|말|대사|스크립트/.test(ins);
+
+  let steps = [...current.steps];
+  let scripts = [...current.scripts];
+  let dont = current.dont;
+
+  if (isRemove && mentionsDont) {
+    dont = '';
+  } else if (mentionsScript) {
+    scripts = [...scripts, ins].slice(0, 3);
+  } else {
+    // 기본: 할 일에 한 줄 추가(가장 흔한 수정).
+    steps = [...steps, ins].slice(0, MAX_ACTIONS + 2);
+  }
+
+  const square = {
+    situation: current.situation,
+    quagmire: '',
+    uncover: '',
+    action: { steps, scripts },
+    result: { before: '', after: '', metric: '' },
+    extract: { do: '', dont },
+  };
+  const seg: StructuredSegment = {
+    category: current.category,
+    title: current.title,
+    keywords: dedupe([current.title, ...steps].join(' ').split(/\s+/).filter((t) => t.length >= 2)).slice(0, 8),
+    square,
+  };
+  return { square, title: seg.title, keywords: seg.keywords, segments: [seg] };
+}
+
+// 의도추출(mock) — 첫 문장 + 2글자 이상 토큰을 키워드로(실 LLM이 군더더기 제거를 정교히).
+export function mockExtractIntent(input: IntentInput): IntentOutput {
+  const q = input.query.trim();
+  const first = q.split(/[.!?\n。]/).map((s) => s.trim()).filter(Boolean)[0] ?? q;
+  const keywords = dedupe(q.replace(/[?!.,~]/g, ' ').split(/\s+/).filter((t) => t.length >= 2)).slice(0, 6);
+  return { rewritten: first.slice(0, 60), keywords };
 }

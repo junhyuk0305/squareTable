@@ -38,7 +38,28 @@ export type StructureSquareInput = {
   rawText: string;               // 사장 음성 전사 또는 직접 입력 원문
   category?: Category;
   categoryGuide?: string;  // 카테고리별 추출 지침(프롬프트 주입용). 클라가 src/data/category-guides.ts의 extractionGuide를 실어 보냄.
+  skipFollowups?: boolean; // 재정리(2차) 패스 — followups 재생성 안 함(무한 되묻기 방지).
 };
+
+// ── 노하우 수정(대화형 patch) ────────────────────────────────
+// 현재 SQUARE를 사장 수정요청대로 부분 패치. 출력은 StructureSquareOutput과 동형(단일).
+export type PatchSquareInput = {
+  storeId: string;
+  instruction: string;           // 사장의 자연어 수정 요청 ("청소 단계에 행주 삶기 추가")
+  current: {                     // 현재 노하우 스냅샷(보존 기준)
+    title: string;
+    category: Category;
+    situation: string;
+    steps: string[];
+    scripts: string[];
+    dont: string;
+  };
+  categoryGuide?: string;
+};
+
+// ── 의도추출(답변 경로 재검색용) ─────────────────────────────
+export type IntentInput = { query: string };
+export type IntentOutput = { rewritten: string; keywords: string[] };
 
 // 주관적 기준 입력 요청. AI가 노하우에서 감지 시 채우고, 클라가 종류(kind)에 맞는 컨트롤을 띄운다.
 //  - spectrum: 양끝(ends) 사이 위치(굽기·농도·간·온도·완성도 등 1차원 정도)
@@ -54,6 +75,12 @@ export type ScalePrompt = {
   max?: number;
 };
 
+// AI가 생성한 맞춤 꼬리질문(단답·모호 보강용). cell은 답이 들어갈 칸 힌트(클라 표시·placeholder용).
+export type AiFollowup = {
+  ask: string;
+  cell?: 'situation' | 'steps' | 'scripts' | 'dont';
+};
+
 // 분리된 노하우 1조각. 한 발화에 성격 다른 노하우가 여럿이면 AI가 여러 segment로 나눈다.
 export type StructuredSegment = {
   category: Category;
@@ -61,13 +88,16 @@ export type StructuredSegment = {
   keywords: string[];
   square: SquareBlock;
   scalePrompt?: ScalePrompt;
+  followups?: AiFollowup[];
 };
 
 export type StructureSquareOutput = {
   square: SquareBlock;
   title: string;
   keywords: string[];
+  usable?: boolean;           // false면 원문이 노하우가 아님(잡음·잡담·테스트) → 클라가 카드 대신 되묻기
   scalePrompt?: ScalePrompt;  // 있으면 클라가 슬라이더로 필수 되물어 square.standard에 저장
+  followups?: AiFollowup[];   // AI 맞춤 꼬리질문(단답·모호 보강). 클라가 순서대로 되물음.
   // 다중 노하우 감지 결과. 단일이면 length 1(또는 생략). length≥2면 클라가 분리 제안.
   // 호환: square/title/keywords/scalePrompt 는 항상 segments[0] 와 동일(단일 흐름 무변경).
   segments?: StructuredSegment[];
