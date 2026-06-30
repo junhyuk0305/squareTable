@@ -33,6 +33,24 @@ async function write(label: string, q: PromiseLike<{ error: { message: string } 
   return true;
 }
 
+// ── 시계열 fetch 상한 (무한 fetch 방지) ────────────────────────
+// 누적되는 운영 데이터는 전체가 아니라 최근 구간만 당긴다(오래된 건 retention으로 정리됨).
+// feed/chat 은 날짜창(휘발성), attendance/unknown 은 카운트 상한만(자산·pending 보존).
+const FEED_WINDOW_DAYS = 90;
+const CHAT_WINDOW_DAYS = 90;
+const PAGE_LIMIT = 1000; // 단일 fetch 행 상한 — 현 규모 대비 넉넉, 폭주만 차단.
+// date 컬럼(YYYY-MM-DD) / timestamptz 컬럼(ISO) 각각용 'N일 전' 경계값.
+function sinceDate(days: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() - days);
+  return d.toISOString().slice(0, 10);
+}
+function sinceTs(days: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() - days);
+  return d.toISOString();
+}
+
 // ── 직원/사장 프로필 (같은 매장) ───────────────────────────
 // 실서비스: profiles에서 내 매장 동료를 읽어 직원/근태/급여 화면을 채운다.
 export async function fetchStaffProfiles(): Promise<{ owner: Owner | null; staff: Junior[] }> {
@@ -188,7 +206,8 @@ export async function fetchUnknownQueue(): Promise<UnknownQuery[]> {
   const { data, error } = await supabase
     .from('unknown_queries')
     .select('*')
-    .order('asked_at', { ascending: false });
+    .order('asked_at', { ascending: false })
+    .limit(PAGE_LIMIT);
   if (error) {
     console.warn('[db] fetchUnknownQueue:', error.message);
     return [];
@@ -231,7 +250,9 @@ export async function fetchChatQueries(juniorId: string): Promise<ChatQuery[]> {
     .from('chat_queries')
     .select('*')
     .eq('junior_id', juniorId)
-    .order('asked_at', { ascending: true });
+    .gte('asked_at', sinceTs(CHAT_WINDOW_DAYS))
+    .order('asked_at', { ascending: true })
+    .limit(PAGE_LIMIT);
   if (error) {
     console.warn('[db] fetchChatQueries:', error.message);
     return [];
@@ -446,7 +467,12 @@ export async function clearDone(date: string, templateId: string): Promise<boole
 // ── 업무보드: 피드(공지/메시지/완료) ──────────────────────
 export async function fetchFeed(): Promise<FeedItem[]> {
   if (!HAS_SUPABASE) return [];
-  const { data, error } = await supabase.from('work_feed').select('data').order('created_at');
+  const { data, error } = await supabase
+    .from('work_feed')
+    .select('data')
+    .gte('feed_date', sinceDate(FEED_WINDOW_DAYS))
+    .order('created_at')
+    .limit(PAGE_LIMIT);
   if (error) {
     console.warn('[db] fetchFeed:', error.message);
     return [];
@@ -471,7 +497,8 @@ export async function fetchAttendance(): Promise<AttendanceRecord[]> {
   const { data, error } = await supabase
     .from('attendance')
     .select('id, staff_id, date, check_in, check_out, work_minutes, edited_by')
-    .order('date', { ascending: false });
+    .order('date', { ascending: false })
+    .limit(PAGE_LIMIT);
   if (error) {
     console.warn('[db] fetchAttendance:', error.message);
     return [];
