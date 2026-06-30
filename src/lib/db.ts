@@ -324,7 +324,7 @@ export async function uploadPhoto(file: File): Promise<string | null> {
 export function subscribeUnknownQueue(onChange: () => void): () => void {
   if (!HAS_SUPABASE) return () => {};
   const ch = supabase
-    .channel('unknown_queue')
+    .channel(uniqueChannel('unknown_queue'))
     .on('postgres_changes', { event: '*', schema: 'public', table: 'unknown_queries' }, onChange)
     .subscribe();
   return () => {
@@ -336,7 +336,7 @@ export function subscribeUnknownQueue(onChange: () => void): () => void {
 export function subscribePlaybook(onChange: () => void): () => void {
   if (!HAS_SUPABASE) return () => {};
   const ch = supabase
-    .channel('playbook')
+    .channel(uniqueChannel('playbook'))
     .on('postgres_changes', { event: '*', schema: 'public', table: 'playbook_entries' }, onChange)
     .subscribe();
   return () => {
@@ -560,7 +560,7 @@ export async function setWageDb(staffId: string, wage: number): Promise<boolean>
 export function subscribeWork(onChange: () => void): () => void {
   if (!HAS_SUPABASE) return () => {};
   const ch = supabase
-    .channel('work')
+    .channel(uniqueChannel('work'))
     .on('postgres_changes', { event: '*', schema: 'public', table: 'work_feed' }, onChange)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'work_done' }, onChange)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'work_templates' }, onChange)
@@ -572,7 +572,7 @@ export function subscribeWork(onChange: () => void): () => void {
 export function subscribeAttendance(onChange: () => void): () => void {
   if (!HAS_SUPABASE) return () => {};
   const ch = supabase
-    .channel('attendance')
+    .channel(uniqueChannel('attendance'))
     .on('postgres_changes', { event: '*', schema: 'public', table: 'attendance' }, onChange)
     .subscribe();
   return () => {
