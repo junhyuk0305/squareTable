@@ -14,6 +14,7 @@ import { QuietHoursModal } from '@/components/settings/QuietHoursModal';
 import { ConfirmModal } from '@/components/ConfirmModal';
 import { ContactModal } from '@/components/ContactModal';
 import { RoleTabBar } from '@/components/RoleTabBar';
+import { HeaderLogoutButton } from '@/components/HeaderLogoutButton';
 
 const SCALE_LABEL: Record<TextScale, string> = { small: '작게', normal: '보통', large: '크게' };
 
@@ -71,7 +72,7 @@ export default function JuniorSettings() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
-      <Stack.Screen options={{ headerShown: true, title: '설정' }} />
+      <Stack.Screen options={{ headerShown: true, title: '설정', headerRight: () => <HeaderLogoutButton /> }} />
       {/* 설정탭은 의도적으로 등장 애니메이션을 쓰지 않는다 — 자주 드나드는 관리 화면이라
           매번 카드가 떠오르면 번잡함. 카드 등장 모션은 홈·물어보기·출퇴근·업무 등 콘텐츠 탭에만(Appear). */}
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>

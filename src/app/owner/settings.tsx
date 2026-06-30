@@ -7,7 +7,7 @@ import Constants from 'expo-constants';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { usePreferencesStore, type TextScale } from '@/lib/store/usePreferencesStore';
 import { logout } from '@/lib/auth';
-import { confirmAction } from '@/lib/utils/confirm';
+import { confirmAction, notifyAction } from '@/lib/utils/confirm';
 import { useCopyToClipboard } from '@/lib/utils/useCopyToClipboard';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
@@ -16,6 +16,7 @@ import { QuietHoursModal } from '@/components/settings/QuietHoursModal';
 import { ContactModal } from '@/components/ContactModal';
 import { RoleTabBar } from '@/components/RoleTabBar';
 import { Avatar } from '@/components/Avatar';
+import { HeaderLogoutButton } from '@/components/HeaderLogoutButton';
 
 const SCALE_LABEL: Record<TextScale, string> = { small: '작게', normal: '보통', large: '크게' };
 
@@ -41,7 +42,7 @@ export default function OwnerSettings() {
   };
 
   const onLogout = async () => {
-    if (await confirmAction('로그아웃', '로그아웃하시겠어요?', '로그아웃')) await logout();
+    if (await confirmAction('로그아웃', '로그아웃하시겠어요?', '로그아웃', { icon: 'log-out-outline' })) await logout();
   };
 
   const onDelete = async () => {
@@ -49,24 +50,27 @@ export default function OwnerSettings() {
       '회원탈퇴',
       '계정과 매장 데이터(노하우·직원·근무 기록)가 모두 삭제되며 복구할 수 없어요. 정말 탈퇴하시겠어요?',
       '탈퇴하기',
+      { destructive: true, icon: 'trash-outline' },
     );
     if (!ok) return;
     setBusy(true);
     const { error } = await deleteAccount();
     setBusy(false);
     if (error) {
-      await confirmAction('탈퇴 실패', error, '확인');
+      await notifyAction('탈퇴 실패', error, '확인', { icon: 'alert-circle-outline' });
       return;
     }
     router.replace('/');
   };
 
   const billing = () =>
-    confirmAction('구독 및 결제', '지금은 파일럿 기간으로 무료 이용 중이에요. 정기결제(월 구독)는 곧 열릴 예정이에요.', '확인');
+    notifyAction('구독 및 결제', '지금은 파일럿 기간으로 무료 이용 중이에요. 정기결제(월 구독)는 곧 열릴 예정이에요.', '확인', {
+      icon: 'card-outline',
+    });
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
-      <Stack.Screen options={{ headerShown: true, title: '설정' }} />
+      <Stack.Screen options={{ headerShown: true, title: '설정', headerRight: () => <HeaderLogoutButton /> }} />
       {/* 설정탭은 의도적으로 등장 애니메이션을 쓰지 않는다 — 자주 드나드는 관리 화면이라
           매번 카드가 떠오르면 번잡함. 카드 등장 모션은 홈·물어보기·출퇴근·업무 등 콘텐츠 탭에만(Appear). */}
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>

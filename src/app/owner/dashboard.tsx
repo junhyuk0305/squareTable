@@ -14,6 +14,7 @@ import { OwnerHomeHubCards } from '@/components/OwnerHomeHubCards';
 import { SectionLabel } from '@/components/SectionLabel';
 import { FeatureCarousel, OWNER_FEATURES } from '@/components/FeatureCarousel';
 import { Wordmark } from '@/components/Wordmark';
+import { OwnerNotificationBell } from '@/components/NotificationBell';
 import { NudgeCard } from '@/components/owner/NudgeCard';
 import { getCategoryMeta } from '@/lib/utils/category';
 import { SEED_TEMPLATES } from '@/data/seed-templates';
@@ -59,7 +60,7 @@ export default function OwnerDashboardScreen() {
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
       <Stack.Screen options={{ headerShown: false }} />
 
-      {/* 좌: 워드마크 로고 / 우: 매장명·사용자명(우측 정렬, 줄바꿈) */}
+      {/* 좌: 워드마크 / 우: 매장명·사용자명 + 알림 벨(직원 홈과 동일 패턴) */}
       <View style={styles.appHeader}>
         <Wordmark size="sm" />
         <View style={styles.appHeaderRight}>
@@ -70,6 +71,7 @@ export default function OwnerDashboardScreen() {
             {userName} 사장님
           </Text>
         </View>
+        <OwnerNotificationBell edge={false} />
       </View>
 
       <Animated.ScrollView

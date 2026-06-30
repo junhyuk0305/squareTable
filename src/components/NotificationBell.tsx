@@ -8,13 +8,36 @@ import { useRouter } from 'expo-router';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useWorkStore } from '@/lib/store/useWorkStore';
 import { useScheduleStore } from '@/lib/store/useScheduleStore';
+import { useUnknownQueueStore } from '@/lib/store/useUnknownQueueStore';
+import { useSuggestionStore } from '@/lib/store/useSuggestionStore';
 import { todayStr } from '@/lib/utils/attendance';
-import { juniorUnreadCount } from '@/lib/utils/notifications';
+import { juniorUnreadCount, ownerUnreadCount } from '@/lib/utils/notifications';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { HEADER_EDGE_GUTTER } from '@/lib/theme/layout';
 
-/** 직원 알림 벨 — 헤더 우측(headerRight)에 둔다. 배지 = 안 읽은 공지 + 받은 교대 요청. */
+/** 알림 벨(프레젠테이셔널) — 헤더 우측 공용. 배지 카운트·탭 동작은 호출부가 주입(사장·직원 공유).
+ *  edge=true(기본): 네이티브 헤더용 우측 끝 여백(HEADER_EDGE_GUTTER). false: 자체 패딩 가진 커스텀 헤더용. */
+export function BellButton({ count, onPress, edge = true }: { count: number; onPress: () => void; edge?: boolean }) {
+  return (
+    <Pressable
+      onPress={onPress}
+      hitSlop={8}
+      accessibilityRole="button"
+      accessibilityLabel={count > 0 ? `알림 ${count}건` : '알림'}
+      style={({ pressed }) => [styles.btn, !edge && { paddingLeft: 0, paddingRight: 0 }, pressed && { opacity: 0.6 }]}
+    >
+      <Ionicons name={count > 0 ? 'notifications' : 'notifications-outline'} size={23} color={InkColors.ink} />
+      {count > 0 && (
+        <View style={styles.badge}>
+          <Text style={styles.badgeText}>{count > 99 ? '99+' : count}</Text>
+        </View>
+      )}
+    </Pressable>
+  );
+}
+
+/** 직원 알림 벨 — 배지 = 안 읽은 공지 + 받은 교대 요청 → /junior/notifications. */
 export function NotificationBell() {
   const router = useRouter();
   const userId = useSessionStore((s) => s.userId);
@@ -27,22 +50,22 @@ export function NotificationBell() {
     [feed, swaps, userId, today],
   );
 
-  return (
-    <Pressable
-      onPress={() => router.push('/junior/notifications')}
-      hitSlop={8}
-      accessibilityRole="button"
-      accessibilityLabel={count > 0 ? `알림 ${count}건` : '알림'}
-      style={({ pressed }) => [styles.btn, pressed && { opacity: 0.6 }]}
-    >
-      <Ionicons name={count > 0 ? 'notifications' : 'notifications-outline'} size={23} color={InkColors.ink} />
-      {count > 0 && (
-        <View style={styles.badge}>
-          <Text style={styles.badgeText}>{count > 99 ? '99+' : count}</Text>
-        </View>
-      )}
-    </Pressable>
+  return <BellButton count={count} onPress={() => router.push('/junior/notifications')} />;
+}
+
+/** 사장 알림 벨 — 배지 = 답변대기 질문 + 검토대기 제안 + 승인대기 교대 → /owner/notifications. */
+export function OwnerNotificationBell({ edge = true }: { edge?: boolean } = {}) {
+  const router = useRouter();
+  const queue = useUnknownQueueStore((s) => s.queue);
+  const suggestions = useSuggestionStore((s) => s.suggestions);
+  const swaps = useScheduleStore((s) => s.swaps);
+
+  const count = useMemo(
+    () => ownerUnreadCount(queue, suggestions, swaps),
+    [queue, suggestions, swaps],
   );
+
+  return <BellButton count={count} onPress={() => router.push('/owner/notifications')} edge={edge} />;
 }
 
 const styles = StyleSheet.create({

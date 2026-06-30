@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
-import { View, Text, Pressable, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Stack, useRouter } from 'expo-router';
+import { Stack, useRouter, type Href } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 import { useSessionStore } from '@/lib/store/useSessionStore';
@@ -9,8 +9,8 @@ import { useWorkStore } from '@/lib/store/useWorkStore';
 import { useScheduleStore } from '@/lib/store/useScheduleStore';
 import { useStaffStore } from '@/lib/store/useStaffStore';
 import { HeaderBackButton } from '@/components/HeaderBackButton';
+import { NotificationList } from '@/components/NotificationList';
 import { todayStr } from '@/lib/utils/attendance';
-import { formatAsked } from '@/lib/utils/time';
 import { buildJuniorNotifications, type JuniorNotifKind } from '@/lib/utils/notifications';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Elevation, Radius } from '@/lib/theme/elevation';
@@ -82,47 +82,20 @@ export default function JuniorNotificationsScreen() {
           </View>
         </View>
 
-        {/* 알림 목록 */}
-        {rows.length === 0 ? (
-          <View style={styles.empty}>
-            <Ionicons name="notifications-off-outline" size={30} color={InkColors.ink3} />
-            <Text style={styles.emptyText}>아직 새 알림이 없어요.</Text>
-            <Text style={styles.emptySub}>공지·교대 요청이 오면 여기에 모아서 보여드려요.</Text>
-          </View>
-        ) : (
-          <View style={styles.list}>
-            {rows.map((r) => {
-              const ui = KIND_UI[r.kind];
-              const onPress = () => {
-                if (r.noticeId) markNoticeRead(r.noticeId, me); // 공지는 탭하면 읽음 처리
-                router.push(r.route);
-              };
-              return (
-              <Pressable
-                key={r.id}
-                onPress={onPress}
-                style={({ pressed }) => [styles.row, r.unread && styles.rowUnread, pressed && { opacity: 0.7 }]}
-              >
-                <View style={[styles.iconWrap, { backgroundColor: ui.tint }]}>
-                  <Ionicons name={ui.icon} size={17} color={InkColors.ink} />
-                </View>
-                <View style={{ flex: 1, gap: 2 }}>
-                  <Text style={styles.rowTitle} numberOfLines={1}>
-                    {r.title}
-                  </Text>
-                  {!!r.body && (
-                    <Text style={styles.rowBody} numberOfLines={2}>
-                      {r.body}
-                    </Text>
-                  )}
-                  <Text style={styles.rowTime}>{formatAsked(r.at)}</Text>
-                </View>
-                {r.unread && <View style={styles.unreadDot} />}
-              </Pressable>
-              );
-            })}
-          </View>
-        )}
+        {/* 알림 목록 — 직원·사장 공유 NotificationList */}
+        <NotificationList
+          rows={rows}
+          kindUI={KIND_UI}
+          onPress={(r) => {
+            if (r.noticeId) markNoticeRead(r.noticeId, me); // 공지는 탭하면 읽음 처리
+            router.push(r.route as Href);
+          }}
+          empty={{
+            icon: 'notifications-off-outline',
+            text: '아직 새 알림이 없어요.',
+            sub: '공지·교대 요청이 오면 여기에 모아서 보여드려요.',
+          }}
+        />
 
         <View style={{ height: 12 }} />
       </ScrollView>
@@ -159,33 +132,4 @@ const styles = StyleSheet.create({
   idStore: { fontSize: 16, fontWeight: '900', color: InkColors.ink },
   idUser: { fontSize: 13, fontWeight: '600', color: InkColors.ink3, marginTop: 2 },
 
-  // 목록
-  list: {
-    backgroundColor: InkColors.bg,
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: InkColors.line,
-    overflow: 'hidden',
-    ...Elevation.e1,
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingVertical: 14,
-    paddingHorizontal: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: InkColors.line,
-  },
-  rowUnread: { backgroundColor: BrandColors.yellowSoft + '55' },
-  iconWrap: { width: 36, height: 36, borderRadius: Radius.sm, alignItems: 'center', justifyContent: 'center' },
-  rowTitle: { fontSize: 14, fontWeight: '800', color: InkColors.ink },
-  rowBody: { fontSize: 13, color: InkColors.ink2, lineHeight: 19 },
-  rowTime: { fontSize: 11.5, color: InkColors.ink3, fontWeight: '600', marginTop: 1 },
-  unreadDot: { width: 8, height: 8, borderRadius: Radius.pill, backgroundColor: BrandColors.accent },
-
-  // 빈 상태
-  empty: { alignItems: 'center', gap: 8, paddingVertical: 48 },
-  emptyText: { fontSize: 15, fontWeight: '800', color: InkColors.ink2 },
-  emptySub: { fontSize: 13, color: InkColors.ink3, textAlign: 'center', lineHeight: 19 },
 });
