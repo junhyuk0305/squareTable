@@ -179,6 +179,14 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     // 이메일 확인이 켜져 있으면 세션이 없음 → 가게생성/합류 RPC를 못 부름.
     const needsConfirm = !data.session;
     if (data.session?.user) {
+      // PKCE 플로우 함정: signUp 응답엔 session이 담겨 오지만 클라이언트의 '활성 세션'으로
+      // attach 되지 않는다(원래 이메일 링크 코드교환 시점에 세션 생성). autoconfirm(이메일 인증 OFF)이라
+      // 교환할 링크가 없어, 명시적으로 setSession 하지 않으면 직후 create_store/join_by_invite RPC가
+      // JWT 없이 나가 auth.uid()=null → not_authenticated 로 막힌다. → 여기서 세션을 강제 활성화.
+      await supabase.auth.setSession({
+        access_token: data.session.access_token,
+        refresh_token: data.session.refresh_token,
+      });
       await loadProfile(set, data.session.user.id, data.session.user.email ?? '');
     }
     return { error: null, needsConfirm };
