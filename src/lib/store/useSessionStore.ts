@@ -272,6 +272,13 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       p_biz_no: bizNo ?? null,
     });
     if (error) {
+      // 이미 매장이 있음(이전 시도로 생성됐거나 중복 제출) → 데드엔드 대신 기존 매장으로 진입.
+      // (가입 직후 createStore가 한 번 성공했는데 네트워크 등으로 재시도되면 여기로 떨어진다.)
+      if (/already_in_store/.test(error.message)) {
+        const uid0 = get().userId;
+        if (uid0) await loadProfile(set, uid0, get().email);
+        return { error: null, inviteCode: get().inviteCode || null };
+      }
       const msg = /duplicate_biz_no/.test(error.message)
         ? '이미 등록된 사업자등록번호예요.'
         : friendlyError(error.message, '가게를 만들지 못했어요. 잠시 후 다시 시도해 주세요.');
@@ -287,8 +294,16 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   joinByInvite: async (code) => {
     const { data, error } = await supabase.rpc('join_by_invite', { p_code: code });
     if (error) {
+      // 이미 어느 매장에 소속됨(중복 제출/이전 합류 성공) → 데드엔드 대신 그대로 진입.
+      if (/already_in_store/.test(error.message)) {
+        const uid0 = get().userId;
+        if (uid0) await loadProfile(set, uid0, get().email);
+        return { error: null, storeName: get().storeName || null };
+      }
       const msg = /invalid_code/.test(error.message)
         ? '초대코드가 올바르지 않아요.'
+        : /too_many_attempts/.test(error.message)
+        ? '시도가 많아 잠시 잠겼어요. 10분 후 다시 시도해 주세요.'
         : friendlyError(error.message, '매장에 합류하지 못했어요. 코드를 확인하고 다시 시도해 주세요.');
       return { error: msg, storeName: null };
     }
