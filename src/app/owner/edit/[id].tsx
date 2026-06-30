@@ -4,7 +4,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useLocalSearchParams, useRouter, useNavigation } from 'expo-router';
 
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
+import { useSessionStore } from '@/lib/store/useSessionStore';
 import { EmptyState } from '@/components/EmptyState';
+import { RoleTabBar } from '@/components/RoleTabBar';
 import { getCategoryMeta } from '@/lib/utils/category';
 import { confirmAction } from '@/lib/utils/confirm';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
@@ -25,6 +27,7 @@ export default function EditKnowledgeScreen() {
         <View style={styles.empty}>
           <ActivityIndicator color={InkColors.ink3} />
         </View>
+        <RoleTabBar role="owner" />
       </SafeAreaView>
     );
   }
@@ -37,6 +40,7 @@ export default function EditKnowledgeScreen() {
           title="이미 삭제된 노하우예요."
           cta={{ label: '돌아가기', onPress: () => router.back() }}
         />
+        <RoleTabBar role="owner" />
       </SafeAreaView>
     );
   }
@@ -50,6 +54,7 @@ function EditForm({ entry }: { entry: PlaybookEntry }) {
   const router = useRouter();
   const update = usePlaybookStore((s) => s.update);
   const remove = usePlaybookStore((s) => s.remove);
+  const userName = useSessionStore((s) => s.userName);
 
   const [title, setTitle] = useState(entry.title ?? '');
   const [situation, setSituation] = useState(entry.square.situation ?? '');
@@ -90,7 +95,7 @@ function EditForm({ entry }: { entry: PlaybookEntry }) {
     const unsub = (navigation as any).addListener('beforeRemove', (e: any) => {
       if (!dirty || allowLeave.current) return;
       e.preventDefault();
-      confirmAction('나가기', '저장하지 않은 변경이 있어요. 저장 없이 나갈까요?', '나가기').then((ok) => {
+      confirmAction('나가기', '저장하지 않은 변경이 있어요. 저장 없이 나갈까요?', '나가기', { icon: 'exit-outline' }).then((ok) => {
         if (ok) {
           allowLeave.current = true;
           navigation.dispatch(e.data.action);
@@ -117,6 +122,9 @@ function EditForm({ entry }: { entry: PlaybookEntry }) {
       },
       version: entry.version + 1,
       updated_at: new Date().toISOString(),
+      // 사장이 직접 다듬어 저장 = 우리 매장 기준 검증 완료. 미검증(업종 표준값) 꼬리표를 뗀다.
+      needs_review: false,
+      verification: { state: 'owner_verified', verified_by: userName, verified_at: new Date().toISOString() },
     });
     setToast('수정 저장됨 (v' + (entry.version + 1) + ')');
     allowLeave.current = true; // 저장 완료 → 이탈 확인 생략
@@ -129,8 +137,9 @@ function EditForm({ entry }: { entry: PlaybookEntry }) {
     router.back();
   };
   const del = async () => {
-    // 되돌릴 수 없는 작업 → 삭제 전 확인(웹 confirm / 네이티브 Alert 공용 헬퍼).
-    if (await confirmAction('노하우 삭제', '이 노하우를 삭제할까요? 되돌릴 수 없어요.', '삭제')) doDelete();
+    // 되돌릴 수 없는 작업 → 삭제 전 확인(앱 내 빨강 모달).
+    if (await confirmAction('노하우 삭제', '이 노하우를 삭제할까요? 되돌릴 수 없어요.', '삭제', { destructive: true, icon: 'trash-outline' }))
+      doDelete();
   };
 
   return (
@@ -179,6 +188,7 @@ function EditForm({ entry }: { entry: PlaybookEntry }) {
           </View>
         </View>
       )}
+      <RoleTabBar role="owner" />
     </SafeAreaView>
   );
 }
@@ -222,7 +232,8 @@ const styles = StyleSheet.create({
 
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
 
-  toastWrap: { position: 'absolute', left: 0, right: 0, bottom: 36, alignItems: 'center' },
+  // 하단 탭바(약 60px) 위로 띄운다 — 저장 토스트가 탭바에 가리지 않도록.
+  toastWrap: { position: 'absolute', left: 0, right: 0, bottom: 80, alignItems: 'center' },
   toast: { backgroundColor: InkColors.ink, paddingVertical: 12, paddingHorizontal: 20, borderRadius: Radius.md },
   toastText: { color: '#FFFFFF', fontWeight: '700', fontSize: 14 },
 });

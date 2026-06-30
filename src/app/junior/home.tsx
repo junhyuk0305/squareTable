@@ -8,6 +8,7 @@ import { Wordmark } from '@/components/Wordmark';
 import { NotificationBell } from '@/components/NotificationBell';
 import { Appear } from '@/components/Appear';
 import { FeatureCarousel, JUNIOR_FEATURES } from '@/components/FeatureCarousel';
+import { JuniorWelcomeCoach } from '@/components/junior/JuniorWelcomeCoach';
 import { InfoDot } from '@/components/InfoDot';
 import { InkColors, CategoryColors } from '@/lib/theme/colors';
 import type { Category } from '@/types';
@@ -298,6 +299,8 @@ export default function JuniorHomeScreen() {
       </ScrollView>
 
       <RoleTabBar role="junior" />
+      {/* 합류 직후 1회 — 물어보기/노하우 등록 인지 코치마크 */}
+      <JuniorWelcomeCoach />
     </SafeAreaView>
   );
 }

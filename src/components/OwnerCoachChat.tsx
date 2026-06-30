@@ -9,6 +9,7 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 
 import { UserBubble } from '@/components/UserBubble';
 import { Appear } from '@/components/Appear';
@@ -363,9 +364,10 @@ export function OwnerCoachChat({
     });
   }, [pushMsg]);
 
-  // 입력바: 리뷰 상태(꼬리질문 없음)에서는 숨기고 카드 액션으로 진행.
-  // 편집 중엔 카드 인라인 입력만 쓰므로 하단 입력바도 숨긴다(정리 덮어쓰기 footgun 차단).
-  const showInput = (!inReview || reStructure) && !editing && !awaitingScale && !awaitingSplit;
+  // 입력바는 하단에 상시 유지한다 — 리뷰 상태에서도 사장이 바로 덧붙여 말할 수 있게.
+  // (리뷰 중 전송 = '다시 말하기'와 동일하게 재정리된다 → handleSend 참고.)
+  // 단, 전용 입력 UI를 띄우는 동안엔 숨긴다: 카드 인라인 편집·정도 척도·분리 제안.
+  const showInput = !editing && !awaitingScale && !awaitingSplit;
 
   return (
     <KeyboardAvoidingView
@@ -494,8 +496,14 @@ export function OwnerCoachChat({
 
       {showInput && (
         <View style={styles.inputBar}>
-          <Pressable onPress={attachPhoto} hitSlop={8} style={({ pressed }) => [styles.attachBtn, pressed && { opacity: 0.6 }]}>
-            <Text style={styles.attachIcon}>📎</Text>
+          <Pressable
+            onPress={attachPhoto}
+            hitSlop={8}
+            style={({ pressed }) => [styles.attachBtn, pressed && { opacity: 0.6 }]}
+            accessibilityRole="button"
+            accessibilityLabel="사진 첨부"
+          >
+            <Ionicons name="add" size={26} color={InkColors.ink2} />
           </Pressable>
           <View style={styles.inputWrap}>
             <TextInput
@@ -520,12 +528,6 @@ export function OwnerCoachChat({
           >
             <Text style={styles.sendIcon}>↑</Text>
           </Pressable>
-        </View>
-      )}
-      {/* 리뷰 상태에서 입력바를 숨겼을 때 하단 안내(카테고리 비노출) */}
-      {!showInput && !editing && !awaitingScale && !awaitingSplit && (
-        <View style={styles.reviewFootHint}>
-          <Text style={styles.reviewFootSub}>카드에서 맞으면 ✅ · 고칠 건 ✏️</Text>
         </View>
       )}
     </KeyboardAvoidingView>

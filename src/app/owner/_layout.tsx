@@ -10,6 +10,7 @@ import { useAttendanceStore } from '@/lib/store/useAttendanceStore';
 import { usePayrollStore } from '@/lib/store/usePayrollStore';
 import { useStaffStore } from '@/lib/store/useStaffStore';
 import { useScheduleStore } from '@/lib/store/useScheduleStore';
+import { purgeExpiredFormerStaff } from '@/lib/db';
 import { HAS_SUPABASE } from '@/lib/supabase';
 
 export default function OwnerLayout() {
@@ -25,6 +26,8 @@ export default function OwnerLayout() {
     usePayrollStore.getState().hydrate();
     useStaffStore.getState().hydrate();
     useScheduleStore.getState().hydrate();
+    // 퇴사 6개월 경과분 개인 기록 자동 정리(기회적 1회, 실패 무해).
+    void purgeExpiredFormerStaff();
     const offQ = useUnknownQueueStore.getState().subscribe();
     const offP = usePlaybookStore.getState().subscribe();
     const offW = useWorkStore.getState().subscribe();

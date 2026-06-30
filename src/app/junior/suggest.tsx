@@ -6,9 +6,11 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { useSuggestionStore } from '@/lib/store/useSuggestionStore';
 import { useSessionStore } from '@/lib/store/useSessionStore';
+import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { showToast } from '@/lib/store/useToastStore';
-import { InkColors, BrandColors } from '@/lib/theme/colors';
+import { InkColors, BrandColors, CategoryColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
+import { RoleTabBar } from '@/components/RoleTabBar';
 
 /**
  * 알바 노하우 제안 — ① 새 노하우 등록 신청 / ② 기존 노하우 개선 제안.
@@ -27,9 +29,13 @@ export default function JuniorSuggestScreen() {
   const mineFor = useSuggestionStore((s) => s.mineFor);
   const suggestions = useSuggestionStore((s) => s.suggestions);
   const userId = useSessionStore((s) => s.userId);
+  const entries = usePlaybookStore((s) => s.entries);
 
   const [kind, setKind] = useState<'new' | 'improve'>(presetImprove ? 'improve' : 'new');
   const [text, setText] = useState('');
+  // 개선 모드에서 프리셋이 없으면 사용자가 대상 노하우를 직접 고른다.
+  const [pickedId, setPickedId] = useState<string | null>(null);
+  const [pickQuery, setPickQuery] = useState('');
 
   useEffect(() => {
     hydrate();
@@ -37,14 +43,29 @@ export default function JuniorSuggestScreen() {
   }, [hydrate, subscribe]);
 
   const mine = useMemo(() => mineFor(userId), [suggestions, userId]); // eslint-disable-line react-hooks/exhaustive-deps
-  const canSubmit = text.trim().length >= 5;
+
+  // 개선 대상 = 프리셋(다른 화면에서 넘어옴) 우선, 없으면 목록에서 고른 것.
+  const picked = useMemo(() => entries.find((e) => e.id === pickedId), [entries, pickedId]);
+  const targetEntryId = presetImprove ? entryId : pickedId ?? undefined;
+  const targetTitle = presetImprove ? (typeof title === 'string' ? title : undefined) : picked?.title;
+
+  // 검색어로 거른 노하우 목록(개선 대상 선택용).
+  const filtered = useMemo(() => {
+    const q = pickQuery.trim().toLowerCase();
+    const list = q ? entries.filter((e) => e.title.toLowerCase().includes(q)) : entries;
+    return list.slice(0, 30);
+  }, [entries, pickQuery]);
+
+  // 개선 모드인데 대상이 아직 안 정해졌으면 본문 입력 전에 노하우부터 골라야 한다.
+  const needsPick = kind === 'improve' && !targetEntryId;
+  const canSubmit = text.trim().length >= 5 && !needsPick;
 
   function send() {
     if (!canSubmit) return;
     submit({
       kind,
       text,
-      ...(kind === 'improve' && presetImprove ? { targetEntryId: entryId, targetTitle: typeof title === 'string' ? title : undefined } : null),
+      ...(kind === 'improve' && targetEntryId ? { targetEntryId, targetTitle } : null),
     });
     showToast('제안을 보냈어요 · 사장님이 확인할게요', 'good');
     setText('');
@@ -72,34 +93,81 @@ export default function JuniorSuggestScreen() {
             </View>
           )}
 
-          {presetImprove && title && (
+          {/* 개선 대상 — 프리셋이거나 목록에서 고른 노하우. 골랐으면 카드로, 아니면 아래 목록에서 선택. */}
+          {kind === 'improve' && targetEntryId && (targetTitle || picked) && (
             <View style={styles.targetCard}>
               <Ionicons name="sparkles-outline" size={15} color={'#8A5A12'} />
               <View style={{ flex: 1 }}>
                 <Text style={styles.targetLabel}>이 노하우를 개선해요</Text>
-                <Text style={styles.targetTitle} numberOfLines={2}>{title}</Text>
+                <Text style={styles.targetTitle} numberOfLines={2}>{targetTitle}</Text>
               </View>
+              {/* 프리셋이 아니면 다시 고를 수 있게 */}
+              {!presetImprove && (
+                <Pressable onPress={() => setPickedId(null)} hitSlop={8} style={({ pressed }) => [styles.changeBtn, pressed && { opacity: 0.6 }]}>
+                  <Text style={styles.changeText}>변경</Text>
+                </Pressable>
+              )}
             </View>
           )}
 
-          <Text style={styles.fieldLabel}>
-            {kind === 'improve' ? '어떻게 바꾸면 더 좋을까요?' : '어떤 노하우인가요?'}
-          </Text>
-          <TextInput
-            value={text}
-            onChangeText={setText}
-            placeholder={
-              kind === 'improve'
-                ? '예) 이 단계에서 ~하면 더 빨라요 / 실제로는 ~가 맞아요'
-                : '예) 아이스 음료 픽업대는 30분마다 닦으면 컴플레인이 줄어요'
-            }
-            placeholderTextColor={InkColors.ink3}
-            style={styles.input}
-            multiline
-            autoFocus
-            textAlignVertical="top"
-          />
-          <Text style={styles.hint}>구체적으로 적을수록 사장님이 반영하기 쉬워요. (최소 5자)</Text>
+          {/* 개선할 노하우 고르기 — 개선 모드인데 대상이 아직 없을 때만 */}
+          {needsPick && (
+            <View style={styles.pickWrap}>
+              <Text style={styles.fieldLabel}>어떤 노하우를 개선할까요?</Text>
+              <View style={styles.searchBox}>
+                <Ionicons name="search" size={16} color={InkColors.ink3} />
+                <TextInput
+                  value={pickQuery}
+                  onChangeText={setPickQuery}
+                  placeholder="노하우 제목 검색"
+                  placeholderTextColor={InkColors.ink3}
+                  style={styles.searchInput}
+                />
+              </View>
+              {filtered.length === 0 ? (
+                <Text style={styles.pickEmpty}>
+                  {entries.length === 0 ? '아직 등록된 노하우가 없어요. 위에서 "새 노하우 등록"으로 제안해 주세요.' : '검색 결과가 없어요.'}
+                </Text>
+              ) : (
+                <View style={styles.pickList}>
+                  {filtered.map((e) => (
+                    <Pressable
+                      key={e.id}
+                      onPress={() => setPickedId(e.id)}
+                      style={({ pressed }) => [styles.pickRow, pressed && { backgroundColor: InkColors.bgSoft }]}
+                    >
+                      <View style={[styles.catDot, { backgroundColor: CategoryColors[e.category] ?? InkColors.ink3 }]} />
+                      <Text style={styles.pickTitle} numberOfLines={1}>{e.title}</Text>
+                      <Ionicons name="chevron-forward" size={16} color={InkColors.ink3} />
+                    </Pressable>
+                  ))}
+                </View>
+              )}
+            </View>
+          )}
+
+          {/* 본문 입력 — 신규이거나, 개선 대상을 정한 뒤에만 노출 */}
+          {!needsPick && (
+            <>
+              <Text style={styles.fieldLabel}>
+                {kind === 'improve' ? '어떻게 바꾸면 더 좋을까요?' : '어떤 노하우인가요?'}
+              </Text>
+              <TextInput
+                value={text}
+                onChangeText={setText}
+                placeholder={
+                  kind === 'improve'
+                    ? '예) 이 단계에서 ~하면 더 빨라요 / 실제로는 ~가 맞아요'
+                    : '예) 아이스 음료 픽업대는 30분마다 닦으면 컴플레인이 줄어요'
+                }
+                placeholderTextColor={InkColors.ink3}
+                style={styles.input}
+                multiline
+                textAlignVertical="top"
+              />
+              <Text style={styles.hint}>구체적으로 적을수록 사장님이 반영하기 쉬워요. (최소 5자)</Text>
+            </>
+          )}
 
           <Pressable onPress={send} disabled={!canSubmit} style={({ pressed }) => [styles.cta, !canSubmit && { opacity: 0.4 }, pressed && { opacity: 0.85 }]}>
             <Ionicons name="paper-plane-outline" size={16} color="#FFFFFF" />
@@ -139,6 +207,7 @@ export default function JuniorSuggestScreen() {
           <View style={{ height: 16 }} />
         </ScrollView>
       </KeyboardAvoidingView>
+      <RoleTabBar role="junior" />
     </SafeAreaView>
   );
 }
@@ -157,6 +226,17 @@ const styles = StyleSheet.create({
   targetCard: { flexDirection: 'row', alignItems: 'center', gap: 9, backgroundColor: '#FBF3E3', borderWidth: 1, borderColor: '#EAD9B5', borderRadius: 12, padding: 13 },
   targetLabel: { fontSize: 11.5, fontWeight: '800', color: '#8A5A12' },
   targetTitle: { fontSize: 14, fontWeight: '700', color: InkColors.ink, marginTop: 2 },
+  changeBtn: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: Radius.pill, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#EAD9B5' },
+  changeText: { fontSize: 12, fontWeight: '800', color: '#8A5A12' },
+
+  pickWrap: { gap: 10 },
+  searchBox: { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderColor: InkColors.line, borderRadius: 12, paddingHorizontal: 12, height: 44, backgroundColor: InkColors.bg },
+  searchInput: { flex: 1, fontSize: 14.5, color: InkColors.ink },
+  pickEmpty: { fontSize: 13, color: InkColors.ink3, lineHeight: 20, paddingVertical: 8 },
+  pickList: { borderWidth: 1, borderColor: InkColors.line, borderRadius: 13, backgroundColor: InkColors.bg, overflow: 'hidden' },
+  pickRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 13, paddingVertical: 13, borderBottomWidth: 1, borderBottomColor: InkColors.line },
+  catDot: { width: 9, height: 9, borderRadius: 5 },
+  pickTitle: { flex: 1, fontSize: 14, fontWeight: '600', color: InkColors.ink },
 
   fieldLabel: { fontSize: 13, fontWeight: '800', color: InkColors.ink2, marginTop: 2 },
   input: { minHeight: 130, borderWidth: 1, borderColor: InkColors.line, borderRadius: 13, padding: 14, fontSize: 15, color: InkColors.ink, backgroundColor: InkColors.bg, lineHeight: 22 },

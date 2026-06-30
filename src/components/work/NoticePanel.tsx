@@ -5,7 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { type FeedItem } from '@/lib/store/useWorkStore';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Elevation, Radius } from '@/lib/theme/elevation';
-import { hhmm } from '@/lib/utils/attendance';
+import { mdHHmm } from '@/lib/utils/attendance';
 import { ReactionBar } from './ReactionBar';
 import { MentionInput, extractMentions, type Member } from './MentionInput';
 import { Appear } from '@/components/Appear';
@@ -171,7 +171,7 @@ function NoticeCard({
         <Text style={s.tag}>공지</Text>
         {n.pinned && <Text style={s.pinlab}>📌 고정됨</Text>}
         <Text style={s.who}>{n.authorName}</Text>
-        <Text style={s.time}>{hhmm(n.createdAt)}</Text>
+        <Text style={s.time}>{mdHHmm(n.createdAt)}</Text>
       </View>
 
       {editing ? (

@@ -8,6 +8,7 @@ import { usePayrollStore } from '@/lib/store/usePayrollStore';
 import { useStaffStore } from '@/lib/store/useStaffStore';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { RoleTabBar } from '@/components/RoleTabBar';
+import { ConfirmModal } from '@/components/ConfirmModal';
 import { Avatar } from '@/components/Avatar';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
@@ -19,8 +20,11 @@ export default function OwnerStaffScreen() {
   const wages = usePayrollStore((s) => s.wages);
   const setWage = usePayrollStore((s) => s.setWage);
   const staff = useStaffStore((s) => s.staff);
+  const removeStaff = useStaffStore((s) => s.removeStaff);
   const INVITE_CODE = useSessionStore((s) => s.inviteCode) || '------';
 
+  // 내보낼 직원 — 확인 모달용. 실수 방지 위해 빨강 모달로 한 번 더 확인한다.
+  const [removeTarget, setRemoveTarget] = useState<{ id: string; name: string } | null>(null);
   const [phone, setPhone] = useState('');
   // 대기 중인 초대(아직 합류 전) — 재전송/취소 가능. 합류 완료 시 목록에서 제거.
   const [invites, setInvites] = useState<{ phone: string; status: '초대 보냄' | '재전송됨' }[]>([]);
@@ -35,6 +39,12 @@ export default function OwnerStaffScreen() {
   const resendInvite = (target: string) =>
     setInvites((p) => p.map((x) => (x.phone === target ? { ...x, status: '재전송됨' } : x)));
   const cancelInvite = (target: string) => setInvites((p) => p.filter((x) => x.phone !== target));
+
+  const confirmRemove = () => {
+    if (!removeTarget) return;
+    removeStaff(removeTarget.id); // 낙관적 제거(실패 시 자동 복원·배너)
+    setRemoveTarget(null);
+  };
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
@@ -121,6 +131,15 @@ export default function OwnerStaffScreen() {
                   <Text style={styles.wageWon}>원</Text>
                 </View>
               </View>
+              {/* 내보내기 — 오탭 방지로 빨강 모달 확인 후 실행 */}
+              <Pressable
+                onPress={() => setRemoveTarget({ id: s.id, name: s.name })}
+                hitSlop={8}
+                accessibilityLabel={`${s.name} 내보내기`}
+                style={({ pressed }) => [styles.removeBtn, pressed && { opacity: 0.6 }]}
+              >
+                <Ionicons name="person-remove-outline" size={19} color={BrandColors.bad} />
+              </Pressable>
             </View>
           ))}
         </View>
@@ -128,6 +147,16 @@ export default function OwnerStaffScreen() {
         <Text style={styles.demoNote}>* 시급을 바꾸면 근무·급여 화면에 바로 반영돼요.</Text>
         <View style={{ height: 12 }} />
       </ScrollView>
+      <ConfirmModal
+        visible={!!removeTarget}
+        icon="person-remove-outline"
+        destructive
+        title="직원 내보내기"
+        message={`'${removeTarget?.name ?? ''}' 님을 매장에서 내보내요.\n내보내면 이 직원은 더 이상 매장 노하우·근무에 접근할 수 없어요. 다시 함께하려면 초대코드로 재합류해야 해요.`}
+        confirmLabel="내보내기"
+        onConfirm={confirmRemove}
+        onCancel={() => setRemoveTarget(null)}
+      />
       <RoleTabBar role="owner" />
     </SafeAreaView>
   );
@@ -168,6 +197,7 @@ const styles = StyleSheet.create({
   wageInputRow: { flexDirection: 'row', alignItems: 'center', gap: 3 },
   wageInput: { minWidth: 64, textAlign: 'right', borderWidth: 1, borderColor: InkColors.line, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 5, fontSize: 14, color: InkColors.ink },
   wageWon: { fontSize: 13, color: InkColors.ink3 },
+  removeBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center', borderRadius: Radius.sm, backgroundColor: BrandColors.accentSoft },
 
   demoNote: { fontSize: 12, color: InkColors.ink3, marginTop: 6 },
   emptyBox: { alignItems: 'center', gap: 8, paddingVertical: 28, backgroundColor: '#FFFFFF', borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line },

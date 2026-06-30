@@ -9,6 +9,7 @@ import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { SplashAnimation } from '@/components/SplashAnimation';
 import { SyncBanner } from '@/components/SyncBanner';
 import { Toast } from '@/components/Toast';
+import { DialogHost } from '@/components/DialogHost';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { usePreferencesStore, TEXT_SCALE_FACTOR } from '@/lib/store/usePreferencesStore';
 import { patchTextScaling, setTextScaleFactor } from '@/lib/theme/textScale';
@@ -45,6 +46,7 @@ export default function RootLayout() {
         {!splashDone && <SplashAnimation onDone={() => setSplashDone(true)} />}
         <SyncBanner />
         <Toast />
+        <DialogHost />
         <ErrorBoundary>
           <Stack key={textScale} screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
             <Stack.Screen name="index" />

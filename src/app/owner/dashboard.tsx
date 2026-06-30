@@ -86,15 +86,15 @@ export default function OwnerDashboardScreen() {
             <Text style={styles.onboardTitle}>매장을 막 시작하셨네요</Text>
             <Text style={styles.onboardBody}>
               아직 등록된 노하우가 없어요. 사장님이 알려주신 내용이 있어야 알바가 물었을 때 AI가 대신 답할 수 있어요.
-              {'\n'}자주 생기는 일 <Text style={{ fontWeight: '800' }}>3가지만</Text> 알려주고 시작해보세요.
+              {'\n'}업종 <Text style={{ fontWeight: '800' }}>추천 노하우</Text>를 한 번에 깔고 시작해보세요.
             </Text>
-            <PressableScale onPress={() => router.push('/owner/categories')} scaleTo={0.96} style={styles.onboardCta}>
-              <Ionicons name="create-outline" size={16} color={InkColors.bubbleText} />
-              <Text style={styles.onboardCtaText}>첫 노하우 알려주기</Text>
+            <PressableScale onPress={() => router.push('/owner/onboarding')} scaleTo={0.96} style={styles.onboardCta}>
+              <Ionicons name="sparkles-outline" size={16} color={InkColors.bubbleText} />
+              <Text style={styles.onboardCtaText}>추천 노하우 깔기</Text>
             </PressableScale>
 
-            {/* 씨앗 템플릿 — 빈 챗봇으로 시작하지 않도록 업종 초안을 한 탭으로 적립 */}
-            <Text style={styles.seedLabel}>또는 추천으로 빠르게 시작 — 탭하면 AI가 정리해줘요</Text>
+            {/* 씨앗 템플릿 — 직접 한 줄 입력으로 시작하고 싶을 때(AI가 정리) */}
+            <Text style={styles.seedLabel}>또는 직접 한 줄 입력 — 탭하면 AI가 정리해줘요</Text>
             <View style={styles.seedChips}>
               {SEED_TEMPLATES.map((t) => (
                 <Pressable

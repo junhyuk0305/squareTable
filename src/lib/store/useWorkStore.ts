@@ -232,12 +232,43 @@ export const useWorkStore = create<State>((set, get) => ({
   feed: HAS_SUPABASE ? [] : seedFeed,
   loaded: !HAS_SUPABASE,
 
+  // 전체 재조회(templates·done·feed 3쿼리)로 스토어를 통째로 교체한다.
+  // 동시 호출 합치기: 이미 한 번 돌고 있으면 새 fetch를 또 띄우지 않고 '한 번 더' 플래그만 세워
+  // 끝나고 1회만 더 돈다 → 빠른 연속 체크로 realtime 이벤트가 몰려도 풀리페치가 쌓이지 않는다.
   hydrate: async () => {
     if (!HAS_SUPABASE) return;
-    const [templates, done, feed] = await Promise.all([fetchTemplates(), fetchDone(), fetchFeed()]);
-    set({ templates, done, feed, loaded: true });
+    if (hydrateInFlight) {
+      hydrateAgain = true;
+      return hydrateInFlight;
+    }
+    hydrateInFlight = (async () => {
+      do {
+        hydrateAgain = false;
+        const [templates, done, feed] = await Promise.all([fetchTemplates(), fetchDone(), fetchFeed()]);
+        set({ templates, done, feed, loaded: true });
+      } while (hydrateAgain);
+    })().finally(() => {
+      hydrateInFlight = null;
+    });
+    return hydrateInFlight;
   },
-  subscribe: () => subscribeWork(() => get().hydrate()),
+  // realtime 변경마다 즉시 풀리페치하면, 체크 한 번이 (work_done+work_feed) 2쓰기 → 2이벤트 →
+  // 매번 3쿼리 재조회 + 전체 리렌더가 된다. 반복 탭에선 이게 폭주해 UI가 밀린다.
+  // → 마지막 이벤트 후 한 박자(300ms) 모았다가 1회만 재조회(트레일링 디바운스).
+  subscribe: () => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const unsub = subscribeWork(() => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => {
+        timer = null;
+        void get().hydrate();
+      }, 300);
+    });
+    return () => {
+      if (timer) clearTimeout(timer);
+      unsub();
+    };
+  },
 
   addTask: (input) => {
     const room = curRoom();

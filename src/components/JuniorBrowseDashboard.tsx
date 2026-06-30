@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { ScrollView, StyleSheet } from 'react-native';
 
 import { SectionLabel } from './SectionLabel';
-import { BrowseCard } from './BrowseList';
+import { KnowhowCarousel } from './KnowhowCarousel';
 import { EmptyState } from './EmptyState';
 import { Appear } from './Appear';
 import { Space } from '@/lib/theme/layout';
@@ -69,27 +69,21 @@ export function JuniorBrowseDashboard({ entries, onSelect, emptyHint }: JuniorBr
       {popular.length > 0 && (
         <Appear delay={0} style={styles.block}>
           <SectionLabel icon="flame-outline" title="인기 노하우" hint="많이 물어본 순" />
-          {popular.map((e) => (
-            <BrowseCard key={`pop-${e.id}`} entry={e} onSelect={onSelect} showCategory={false} />
-          ))}
+          <KnowhowCarousel entries={popular} onSelect={onSelect} showCategory={false} />
         </Appear>
       )}
 
       {recent.length > 0 && (
         <Appear delay={80} style={styles.block}>
           <SectionLabel icon="sparkles-outline" title="최근 추가됨" hint="새로 올라온 순" />
-          {recent.map((e) => (
-            <BrowseCard key={`new-${e.id}`} entry={e} onSelect={onSelect} showCategory={false} />
-          ))}
+          <KnowhowCarousel entries={recent} onSelect={onSelect} showCategory={false} />
         </Appear>
       )}
 
       {resolved.length > 0 && (
         <Appear delay={160} style={styles.block}>
           <SectionLabel icon="checkmark-circle-outline" title="잘 통하는 노하우" hint="해결률 순" />
-          {resolved.map((e) => (
-            <BrowseCard key={`res-${e.id}`} entry={e} onSelect={onSelect} showCategory={false} />
-          ))}
+          <KnowhowCarousel entries={resolved} onSelect={onSelect} showCategory={false} />
         </Appear>
       )}
     </ScrollView>

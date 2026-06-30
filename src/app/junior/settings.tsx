@@ -1,5 +1,5 @@
 ﻿import { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Linking, Pressable } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
@@ -7,13 +7,14 @@ import Constants from 'expo-constants';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { usePreferencesStore, type TextScale } from '@/lib/store/usePreferencesStore';
 import { logout } from '@/lib/auth';
-import { confirmAction } from '@/lib/utils/confirm';
+import { confirmAction, notifyAction } from '@/lib/utils/confirm';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { SettingsSection, SettingsRow, SettingsToggle } from '@/components/settings/SettingsKit';
 import { QuietHoursModal } from '@/components/settings/QuietHoursModal';
+import { ConfirmModal } from '@/components/ConfirmModal';
+import { ContactModal } from '@/components/ContactModal';
 import { RoleTabBar } from '@/components/RoleTabBar';
 
-const SUPPORT_EMAIL = 'cristianojun@naver.com';
 const SCALE_LABEL: Record<TextScale, string> = { small: '작게', normal: '보통', large: '크게' };
 
 export default function JuniorSettings() {
@@ -27,6 +28,8 @@ export default function JuniorSettings() {
   const prefs = usePreferencesStore();
   const [busy, setBusy] = useState(false);
   const [quietModal, setQuietModal] = useState(false);
+  const [leaveModal, setLeaveModal] = useState(false);
+  const [contactModal, setContactModal] = useState(false);
 
   const version = Constants.expoConfig?.version ?? '1.0.0';
 
@@ -37,20 +40,16 @@ export default function JuniorSettings() {
   };
 
   const onLogout = async () => {
-    if (await confirmAction('로그아웃', '로그아웃하시겠어요?', '로그아웃')) await logout();
+    if (await confirmAction('로그아웃', '로그아웃하시겠어요?', '로그아웃', { icon: 'log-out-outline' })) await logout();
   };
 
-  const onLeave = async () => {
-    const ok = await confirmAction(
-      '매장 나가기',
-      `'${storeName || '현재 매장'}'에서 나가시겠어요? 다시 합류하려면 사장님의 초대코드가 필요해요.`,
-      '나가기',
-    );
-    if (!ok) return;
+  // 매장 나가기는 시스템 '알람'(window.confirm/Alert)이 아니라 앱 내 빨강 모달로 확인받는다.
+  const onLeaveConfirm = async () => {
     setBusy(true);
     const { error } = await leaveStore();
     setBusy(false);
-    if (error) return void confirmAction('실패', error, '확인');
+    setLeaveModal(false);
+    if (error) return void notifyAction('실패', error, '확인', { icon: 'alert-circle-outline' });
     // 가드 리다이렉트 목적지(/junior/join)와 동일하게 통일 — 코드입력 화면 일원화(onboarding 중복 동선 제거)
     router.replace('/junior/join');
   };
@@ -60,16 +59,15 @@ export default function JuniorSettings() {
       '회원탈퇴',
       '계정과 내 기록(질문·출퇴근)이 삭제되며 복구할 수 없어요. 정말 탈퇴하시겠어요?',
       '탈퇴하기',
+      { destructive: true, icon: 'trash-outline' },
     );
     if (!ok) return;
     setBusy(true);
     const { error } = await deleteAccount();
     setBusy(false);
-    if (error) return void confirmAction('탈퇴 실패', error, '확인');
+    if (error) return void notifyAction('탈퇴 실패', error, '확인', { icon: 'alert-circle-outline' });
     router.replace('/');
   };
-
-  const contact = () => Linking.openURL(`mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent('[착착] 문의')}`);
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
@@ -135,14 +133,14 @@ export default function JuniorSettings() {
         </SettingsSection>
 
         <SettingsSection icon="help-buoy-outline" title="고객센터">
-          <SettingsRow first icon="chatbubble-ellipses-outline" label="문의하기" onPress={contact} />
+          <SettingsRow first icon="chatbubble-ellipses-outline" label="문의하기" onPress={() => setContactModal(true)} />
           <SettingsRow icon="information-circle-outline" label="버전 정보" value={`v${version}`} />
         </SettingsSection>
 
         <SettingsSection>
           {/* 무해한 액션(로그아웃) 먼저, 되돌리기 어려운 액션은 아래로 — 오탭 방지. owner 설정과 동일 순서 */}
           <SettingsRow first icon="log-out-outline" label="로그아웃" onPress={onLogout} />
-          <SettingsRow icon="exit-outline" label={busy ? '처리 중…' : '매장 나가기'} onPress={busy ? undefined : onLeave} />
+          <SettingsRow icon="exit-outline" label="매장 나가기" onPress={busy ? undefined : () => setLeaveModal(true)} />
           <SettingsRow icon="trash-outline" label="회원탈퇴" danger onPress={busy ? undefined : onDelete} />
         </SettingsSection>
 
@@ -159,6 +157,18 @@ export default function JuniorSettings() {
           prefs.set('quietEnd', e);
         }}
       />
+      <ConfirmModal
+        visible={leaveModal}
+        icon="exit-outline"
+        destructive
+        title="매장 나가기"
+        message={`'${storeName || '현재 매장'}'에서 나가시겠어요? 다시 합류하려면 사장님의 초대코드가 필요해요.`}
+        confirmLabel="나가기"
+        busy={busy}
+        onConfirm={onLeaveConfirm}
+        onCancel={() => setLeaveModal(false)}
+      />
+      <ContactModal visible={contactModal} onClose={() => setContactModal(false)} />
       <RoleTabBar role="junior" />
     </SafeAreaView>
   );

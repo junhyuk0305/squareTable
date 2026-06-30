@@ -104,6 +104,14 @@ export type PlaybookEntry = {
     label?: string;
     ref_id?: string;
   };
+  // ── 업종 표준 노하우 팩(온보딩 자동등록) 메타 — 0024 마이그레이션 컬럼 ──
+  // is_template: 아직 매장에 바인딩 안 된 순수 템플릿(번들 JSON에서만 true). fork되면 false.
+  // needs_review: 사장이 교정 안 한 '매장 기본값(미확인)'. 알바/관리화면에 배지로 표시.
+  // pack_id: 출처 팩(common|cafe…). correction_points: 사장이 바꿀 확률 높은 변수(추후 pull 루프).
+  is_template?: boolean;
+  pack_id?: string;
+  needs_review?: boolean;
+  correction_points?: string[];
 };
 
 // ── PlaybookSuggestion (알바 → 사장 노하우 제안/신청) ──

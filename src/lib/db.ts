@@ -80,6 +80,24 @@ export async function fetchStaffProfiles(): Promise<{ owner: Owner | null; staff
   return { owner, staff };
 }
 
+// 사장이 직원을 매장에서 내보낸다(소속 해제 + 퇴사자 스냅샷 보관). RPC = 사장만·같은 매장 junior만.
+export async function removeStaffMember(staffId: string): Promise<boolean> {
+  if (!HAS_SUPABASE) return true;
+  const { error } = await supabase.rpc('remove_staff', { p_staff_id: staffId });
+  if (error) {
+    console.warn('[db] removeStaffMember:', error.message);
+    return false;
+  }
+  return true;
+}
+
+// 퇴사 6개월 경과분 개인 기록 자동 정리(내 매장 범위). 사장 진입 시 기회적으로 1회 호출 — 실패해도 무해.
+export async function purgeExpiredFormerStaff(): Promise<void> {
+  if (!HAS_SUPABASE) return;
+  const { error } = await supabase.rpc('purge_expired_former_staff');
+  if (error) console.warn('[db] purgeExpiredFormerStaff:', error.message);
+}
+
 // ── 플레이북 ───────────────────────────────────────────────
 export async function fetchEntries(): Promise<PlaybookEntry[]> {
   if (!HAS_SUPABASE) return [];

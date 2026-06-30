@@ -5,7 +5,9 @@ import { Stack } from 'expo-router';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
+import { Space } from '@/lib/theme/layout';
 import { isValidPhone, normalizePhone } from '@/lib/utils/validation';
+import { INDUSTRIES } from '@/lib/config/industry';
 import { HeaderBackButton } from '@/components/HeaderBackButton';
 
 // 프로필 편집 + 비밀번호 변경 (오너·주니어 공용).
@@ -33,10 +35,12 @@ function AccountEditForm() {
   const bio = useSessionStore((s) => s.bio);
   const role = useSessionStore((s) => s.role);
   const storeName = useSessionStore((s) => s.storeName);
+  const industry = useSessionStore((s) => s.industry);
   const updateProfile = useSessionStore((s) => s.updateProfile);
   const changePassword = useSessionStore((s) => s.changePassword);
   const renameStore = useSessionStore((s) => s.renameStore);
   const storeRenameInfo = useSessionStore((s) => s.storeRenameInfo);
+  const updateIndustry = useSessionStore((s) => s.updateIndustry);
 
   const [name, setName] = useState(userName);
   const [emailInput, setEmailInput] = useState(email);
@@ -50,6 +54,17 @@ function AccountEditForm() {
   // 가게 이름 편집(사장 전용)
   const [store, setStore] = useState(storeName);
   const [remaining, setRemaining] = useState(() => storeRenameInfo().remaining);
+
+  // 업종 편집(사장 전용) — 가게 이름과 같은 unit 속성. 노하우팩 매칭 키.
+  const [biz, setBiz] = useState(industry);
+  const saveIndustry = async () => {
+    if (!biz) return setMsg({ ok: false, text: '업종을 선택해주세요.' });
+    setBusy(true);
+    setMsg(null);
+    const { error } = await updateIndustry(biz);
+    setBusy(false);
+    setMsg(error ? { ok: false, text: error } : { ok: true, text: '업종을 변경했어요.' });
+  };
 
   const saveStore = async () => {
     if (!store.trim()) return setMsg({ ok: false, text: '가게 이름을 입력해주세요.' });
@@ -152,6 +167,24 @@ function AccountEditForm() {
                 {busy ? <ActivityIndicator color="#FFF" /> : <Text style={styles.primaryText}>{remaining <= 0 ? '변경 횟수 소진' : '가게 이름 저장'}</Text>}
               </Pressable>
             </View>
+
+            <Text style={[styles.group, { color: BrandColors.brand }]}>업종<Text style={styles.req}> *</Text> · 사장님만</Text>
+            <View style={[styles.card, styles.storeCard]}>
+              <View style={styles.chipWrap}>
+                {INDUSTRIES.map((it) => (
+                  <Pressable key={it} onPress={() => setBiz(it)} style={[styles.chip, biz === it && styles.chipOn]}>
+                    <Text style={[styles.chipText, biz === it && styles.chipTextOn]}>{it}</Text>
+                  </Pressable>
+                ))}
+              </View>
+              <Pressable
+                disabled={busy || !biz || biz === industry}
+                onPress={saveIndustry}
+                style={({ pressed }) => [styles.primary, { marginTop: 4 }, pressed && { opacity: 0.88 }, (busy || !biz || biz === industry) && { opacity: 0.5 }]}
+              >
+                {busy ? <ActivityIndicator color="#FFF" /> : <Text style={styles.primaryText}>업종 저장</Text>}
+              </Pressable>
+            </View>
           </>
         )}
 
@@ -208,6 +241,11 @@ const styles = StyleSheet.create({
   input: { borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md, paddingHorizontal: 14, paddingVertical: 13, fontSize: 16, color: InkColors.ink, backgroundColor: '#FFFFFF' },
   inputError: { borderColor: BrandColors.accent },
   storeCard: { borderColor: BrandColors.gold },
+  chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.sm },
+  chip: { paddingHorizontal: Space.md, paddingVertical: Space.sm, borderRadius: Radius.pill, borderWidth: 1, borderColor: InkColors.line, backgroundColor: '#FFFFFF' },
+  chipOn: { borderColor: BrandColors.brand, backgroundColor: '#FFFDFB' },
+  chipText: { fontSize: 13, fontWeight: '700', color: InkColors.ink2 },
+  chipTextOn: { color: BrandColors.brand },
   storeMetaRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 2 },
   storeChip: { backgroundColor: BrandColors.brandSoft, borderRadius: Radius.pill, paddingVertical: 5, paddingHorizontal: 10 },
   storeChipText: { fontSize: 11, fontWeight: '700', color: InkColors.ink2 },

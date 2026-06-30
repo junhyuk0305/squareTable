@@ -77,7 +77,6 @@ export const styles = StyleSheet.create({
     borderTopColor: InkColors.line,
   },
   attachBtn: { width: 40, height: 44, alignItems: 'center', justifyContent: 'center' },
-  attachIcon: { fontSize: 20 },
   inputWrap: {
     flex: 1,
     borderWidth: 1,
@@ -93,17 +92,4 @@ export const styles = StyleSheet.create({
   sendBtn: { width: 44, height: 44, borderRadius: Radius.pill, backgroundColor: BrandColors.brand, alignItems: 'center', justifyContent: 'center' },
   sendBtnDisabled: { backgroundColor: InkColors.line },
   sendIcon: { fontSize: 22, color: InkColors.bubbleText, fontWeight: '900', lineHeight: 24 },
-
-  reviewFootHint: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: InkColors.bg,
-    borderTopWidth: 1,
-    borderTopColor: InkColors.line,
-  },
-  reviewFootText: { fontSize: 14, fontWeight: '800' },
-  reviewFootSub: { fontSize: 12, color: InkColors.ink3, fontWeight: '600' },
 });
