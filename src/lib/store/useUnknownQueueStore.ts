@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { coalesce, subscribeDebounced } from '@/lib/store/realtimeSync';
 import type { UnknownQuery } from '@/types';
 import seedData from '@/data/unknown-queries.json';
 import { HAS_SUPABASE } from '@/lib/supabase';
@@ -45,13 +46,13 @@ export const useUnknownQueueStore = create<UnknownQueueState>((set, get) => ({
   queue: HAS_SUPABASE ? [] : [...seed],
   loaded: !HAS_SUPABASE,
 
-  hydrate: async () => {
+  hydrate: coalesce(async () => {
     if (!HAS_SUPABASE) return;
     set({ queue: await fetchUnknownQueue(), loaded: true });
-  },
+  }),
 
   // 알바 폰에서 질문이 들어오면 사장님 인박스가 실시간으로 갱신된다(학습순환의 핵심).
-  subscribe: () => subscribeUnknownQueue(() => get().hydrate()),
+  subscribe: () => subscribeDebounced(subscribeUnknownQueue, () => get().hydrate()),
 
   // 같은 질문이 이미 대기 중이면 새로 쌓지 않고 유사 질문 수만 올린다(중복 방지).
   enqueue: (uq) => {

@@ -17,6 +17,7 @@ export function ConfirmModal({
   cancelLabel = '취소',
   destructive = false,
   icon,
+  accent,
   busy = false,
   hideCancel = false,
   onConfirm,
@@ -29,6 +30,8 @@ export function ConfirmModal({
   cancelLabel?: string;
   destructive?: boolean;
   icon?: IconName;
+  /** 본문 아래 빨강 강조 줄 — 주의/검증 필요 등 경고성 문구. */
+  accent?: string;
   busy?: boolean;
   /** 정보 고지용 — 취소 버튼을 숨기고 확인 버튼만 풀폭으로 보여준다. */
   hideCancel?: boolean;
@@ -48,6 +51,7 @@ export function ConfirmModal({
             ) : null}
             <Text style={[styles.title, destructive && styles.titleDanger]}>{title}</Text>
             <Text style={styles.message}>{message}</Text>
+            {accent ? <Text style={styles.accent}>{accent}</Text> : null}
 
             <View style={styles.actions}>
               {hideCancel ? null : (
@@ -110,6 +114,7 @@ const styles = StyleSheet.create({
   title: { fontSize: 18, fontWeight: '800', color: InkColors.ink, textAlign: 'center' },
   titleDanger: { color: BrandColors.bad },
   message: { fontSize: 14, color: InkColors.ink2, marginTop: 8, lineHeight: 21, textAlign: 'center' },
+  accent: { fontSize: 13, color: BrandColors.bad, fontWeight: '700', marginTop: 8, lineHeight: 20, textAlign: 'center' },
   actions: { flexDirection: 'row', gap: 10, marginTop: 22, alignSelf: 'stretch' },
   btn: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 13, borderRadius: 12 },
   btnGhost: { backgroundColor: InkColors.bgSoft, borderWidth: 1, borderColor: InkColors.line },

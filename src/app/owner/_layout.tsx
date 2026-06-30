@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Stack, Redirect } from 'expo-router';
+import { Stack, Redirect, usePathname } from 'expo-router';
 import { InkColors } from '@/lib/theme/colors';
 import { HeaderBackButton } from '@/components/HeaderBackButton';
 import { useSessionStore } from '@/lib/store/useSessionStore';
@@ -15,6 +15,8 @@ import { HAS_SUPABASE } from '@/lib/supabase';
 
 export default function OwnerLayout() {
   const status = useSessionStore((s) => s.status);
+  const unitId = useSessionStore((s) => s.unitId);
+  const pathname = usePathname();
 
   // 로그인되면 DB에서 당겨오고 실시간 구독(인박스·업무보드·출퇴근이 다른 기기 변경에 즉시 반응).
   useEffect(() => {
@@ -44,6 +46,17 @@ export default function OwnerLayout() {
 
   if (HAS_SUPABASE && status === 'loading') return null;
   if (HAS_SUPABASE && status === 'signed_out') return <Redirect href="/" />;
+  // 가입은 됐지만 매장 미연결(가게 생성 미완료/연결 해제) → 빈 대시보드로 떨어뜨리지 않고
+  // 가게 만들기로 강제 유도(junior/join 의 사장 버전). create-store/onboarding 자체는 통과시킨다.
+  if (
+    HAS_SUPABASE &&
+    status === 'signed_in' &&
+    !unitId &&
+    pathname !== '/owner/create-store' &&
+    pathname !== '/owner/onboarding'
+  ) {
+    return <Redirect href="/owner/create-store" />;
+  }
   return (
     <Stack
       screenOptions={{
@@ -70,6 +83,7 @@ export default function OwnerLayout() {
       <Stack.Screen name="timesheet/[staffId]" options={{ title: '출근 기록' }} />
       <Stack.Screen name="payroll" options={{ title: '급여 설정' }} />
       <Stack.Screen name="knowledge" options={{ title: '내 노하우' }} />
+      <Stack.Screen name="templates" options={{ title: '노하우 템플릿' }} />
       <Stack.Screen name="notifications" options={{ title: '알림' }} />
       <Stack.Screen name="edit/[id]" options={{ title: '노하우 수정' }} />
       {/* 대화형 입력 단일 화면 — 기존 answer/[uqId]·add/[category]·capture 위저드를 대체 */}

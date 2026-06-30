@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { View, StyleSheet, Animated, Easing } from 'react-native';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
+import { USE_NATIVE_DRIVER } from '@/lib/anim';
 
 /**
  * 진입 스플래시 모션 (착착 디자인시스템.md 5장).
@@ -18,15 +19,15 @@ export function SplashAnimation({ onDone }: { onDone: () => void }) {
 
   useEffect(() => {
     const reveal = (v: Animated.Value, delay: number) =>
-      Animated.timing(v, { toValue: 1, duration: 320, delay, easing: Easing.out(Easing.cubic), useNativeDriver: true });
+      Animated.timing(v, { toValue: 1, duration: 320, delay, easing: Easing.out(Easing.cubic), useNativeDriver: USE_NATIVE_DRIVER });
 
     Animated.parallel([
       reveal(c1, 140),
       reveal(c2, 380),
-      Animated.timing(under, { toValue: 1, duration: 420, delay: 700, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+      Animated.timing(under, { toValue: 1, duration: 420, delay: 700, easing: Easing.out(Easing.cubic), useNativeDriver: USE_NATIVE_DRIVER }),
       reveal(copy, 1040),
     ]).start(() => {
-      Animated.timing(fade, { toValue: 0, duration: 340, delay: 360, useNativeDriver: true }).start(() => onDone());
+      Animated.timing(fade, { toValue: 0, duration: 340, delay: 360, useNativeDriver: USE_NATIVE_DRIVER }).start(() => onDone());
     });
   }, [c1, c2, under, copy, fade, onDone]);
 

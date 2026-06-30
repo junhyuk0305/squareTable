@@ -44,58 +44,62 @@ export function BrowseCard({
   const sourceLabel = entry.source?.label ?? `${entry.creator_name} 사장님`;
 
   return (
-    <Pressable
-      onPress={() => onSelect(entry)}
-      accessibilityRole="button"
-      accessibilityLabel={`${entry.title}, ${v.label}, 해결률 ${ratePct}%${hits > 0 ? `, ${hits}명이 물어봄` : ''}`}
-      style={({ pressed }) => [styles.card, style, pressed && styles.pressed]}
-    >
-      {/* 헤더: 카테고리(색 액센트) + 검증배지. 라벨 노출은 showCategory로 제어(프레임 v2). */}
-      <View style={[styles.header, !showCategory && { justifyContent: 'flex-end' }]}>
-        {showCategory && <CategoryChip category={entry.category} size="sm" />}
-        <View style={[styles.badge, { backgroundColor: v.bg }]}>
-          <Text style={[styles.badgeText, { color: v.fg }]}>
-            {v.icon} {v.label}
-          </Text>
+    // 카드 시각(테두리·배경)은 바깥 View가 소유. 탭 영역은 안쪽 Pressable 하나로 좁혀,
+    // renderExtra(예: 1탭 검증 버튼)가 카드 버튼 '안'에 중첩되지 않게(웹: <button> 안 <button> 금지) 형제로 뺀다.
+    <View style={[styles.card, style]}>
+      <Pressable
+        onPress={() => onSelect(entry)}
+        accessibilityRole="button"
+        accessibilityLabel={`${entry.title}, ${v.label}, 해결률 ${ratePct}%${hits > 0 ? `, ${hits}명이 물어봄` : ''}`}
+        style={({ pressed }) => [styles.cardBody, pressed && styles.pressed]}
+      >
+        {/* 헤더: 카테고리(색 액센트) + 검증배지. 라벨 노출은 showCategory로 제어(프레임 v2). */}
+        <View style={[styles.header, !showCategory && { justifyContent: 'flex-end' }]}>
+          {showCategory && <CategoryChip category={entry.category} size="sm" />}
+          <View style={[styles.badge, { backgroundColor: v.bg }]}>
+            <Text style={[styles.badgeText, { color: v.fg }]}>
+              {v.icon} {v.label}
+            </Text>
+          </View>
         </View>
-      </View>
 
-      <Text style={styles.title} numberOfLines={2}>
-        {entry.title}
-      </Text>
+        <Text style={styles.title} numberOfLines={2}>
+          {entry.title}
+        </Text>
 
-      {/* 해결률 · 물어본 수 — 있는 것만 */}
-      <View style={styles.statRow}>
-        <Text style={styles.rate}>해결률 {ratePct}%</Text>
-        {hits > 0 ? <Text style={styles.hits}>🔥 {hits}명이 물어봤어요</Text> : null}
-      </View>
-
-      {/* DO / DON'T 1줄 미리보기 — 있는 것만 */}
-      {doText ? (
-        <View style={[styles.preview, { borderLeftColor: BrandColors.good }]}>
-          <Text style={[styles.previewTag, { color: BrandColors.good }]}>DO</Text>
-          <Text style={styles.previewText} numberOfLines={1}>
-            {doText}
-          </Text>
+        {/* 해결률 · 물어본 수 — 있는 것만 */}
+        <View style={styles.statRow}>
+          <Text style={styles.rate}>해결률 {ratePct}%</Text>
+          {hits > 0 ? <Text style={styles.hits}>🔥 {hits}명이 물어봤어요</Text> : null}
         </View>
-      ) : null}
-      {dontText ? (
-        <View style={[styles.preview, { borderLeftColor: BrandColors.warn }]}>
-          <Text style={[styles.previewTag, { color: BrandColors.warn }]}>{"DON'T"}</Text>
-          <Text style={styles.previewText} numberOfLines={1}>
-            {dontText}
-          </Text>
-        </View>
-      ) : null}
 
-      {/* 출처 */}
-      <Text style={styles.source} numberOfLines={1}>
-        출처 · {sourceLabel}
-      </Text>
+        {/* DO / DON'T 1줄 미리보기 — 있는 것만 */}
+        {doText ? (
+          <View style={[styles.preview, { borderLeftColor: BrandColors.good }]}>
+            <Text style={[styles.previewTag, { color: BrandColors.good }]}>DO</Text>
+            <Text style={styles.previewText} numberOfLines={1}>
+              {doText}
+            </Text>
+          </View>
+        ) : null}
+        {dontText ? (
+          <View style={[styles.preview, { borderLeftColor: BrandColors.warn }]}>
+            <Text style={[styles.previewTag, { color: BrandColors.warn }]}>{"DON'T"}</Text>
+            <Text style={styles.previewText} numberOfLines={1}>
+              {dontText}
+            </Text>
+          </View>
+        ) : null}
 
-      {/* 추가 액션 슬롯(예: 미검증 섹션의 1탭 검증 버튼) */}
+        {/* 출처 */}
+        <Text style={styles.source} numberOfLines={1}>
+          출처 · {sourceLabel}
+        </Text>
+      </Pressable>
+
+      {/* 추가 액션 슬롯(예: 미검증 섹션의 1탭 검증 버튼) — 카드 버튼의 형제(중첩 금지) */}
       {renderExtra ? renderExtra(entry) : null}
-    </Pressable>
+    </View>
   );
 }
 
@@ -133,9 +137,10 @@ const styles = StyleSheet.create({
     padding: 14,
     borderWidth: 1,
     borderColor: InkColors.line,
-    gap: 8,
+    gap: 8, // 카드 본문(Pressable) ↔ 추가 액션(renderExtra) 간격
     ...Elevation.e1,
   },
+  cardBody: { gap: 8 }, // 카드 본문 내부 행 간격(헤더·제목·통계·미리보기·출처)
   pressed: { opacity: 0.7 },
   header: {
     flexDirection: 'row',

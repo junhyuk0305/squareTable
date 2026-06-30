@@ -1,11 +1,13 @@
-import { useEffect, useMemo } from 'react';
-import { View, Text, Pressable, Animated } from 'react-native';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { View, Text, Pressable, Animated, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 import { PressableScale } from '@/components/PressableScale';
 import { Appear } from '@/components/Appear';
+import { CoachmarkTour, type TourStep } from '@/components/CoachmarkTour';
+import { useTourStore } from '@/lib/store/useTourStore';
 
 import { RoleTabBar } from '@/components/RoleTabBar';
 import { BrainScoreCard } from '@/components/BrainScoreCard';
@@ -18,19 +20,20 @@ import { OwnerNotificationBell } from '@/components/NotificationBell';
 import { NudgeCard } from '@/components/owner/NudgeCard';
 import { getCategoryMeta } from '@/lib/utils/category';
 import { SEED_TEMPLATES } from '@/data/seed-templates';
-import { InkColors } from '@/lib/theme/colors';
+import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { won } from '@/lib/utils/attendance';
+import { USE_NATIVE_DRIVER } from '@/lib/anim';
 import { capCount } from '@/lib/utils/format';
 import { useOwnerDashboardData } from '@/lib/hooks/useOwnerDashboardData';
-import { styles } from './dashboardStyles';
+import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
+import { styles } from '@/styles/ownerDashboardStyles';
 import type { Category } from '@/types';
 
 export default function OwnerDashboardScreen() {
   const router = useRouter();
   const {
-    userName,
-    storeName,
     entriesCount,
+    needsReviewCount,
     working,
     monthPay,
     taskTotal,
@@ -51,35 +54,101 @@ export default function OwnerDashboardScreen() {
   const enter = useMemo(() => ({ opacity: new Animated.Value(0), y: new Animated.Value(12) }), []);
   useEffect(() => {
     Animated.parallel([
-      Animated.timing(enter.opacity, { toValue: 1, duration: 320, useNativeDriver: true }),
-      Animated.spring(enter.y, { toValue: 0, useNativeDriver: true, speed: 14, bounciness: 6 }),
+      Animated.timing(enter.opacity, { toValue: 1, duration: 320, useNativeDriver: USE_NATIVE_DRIVER }),
+      Animated.spring(enter.y, { toValue: 0, useNativeDriver: USE_NATIVE_DRIVER, speed: 14, bounciness: 6 }),
     ]).start();
   }, [enter]);
+
+  // ── 신규 사장 코치마크 투어 ──
+  // 노하우 0건 신규 매장에서, 매장 운영 허브 → 첫 노하우 깔기까지 실제 버튼을 비춰가며 안내한다.
+  const TOUR_ID = 'owner_home_v1';
+  const containerRef = useRef<View>(null);
+  const scrollRef = useRef<ScrollView>(null);
+  const scrollContentRef = useRef<View>(null);
+  const hubRef = useRef<View>(null);
+  const ctaRef = useRef<View>(null);
+  const markSeen = useTourStore((s) => s.markSeen);
+  const [tourOn, setTourOn] = useState(false);
+
+  const tourSteps: TourStep[] = useMemo(
+    () => [
+      {
+        targetRef: hubRef,
+        title: '매장 운영부터 둘러보세요',
+        body: '근무표·직원·급여처럼 매장을 굴리는 기본이 여기 다 있어요. 노하우가 없어도 지금 바로 쓸 수 있어요.',
+      },
+      {
+        targetRef: ctaRef,
+        title: '마지막으로, 알바 답을 깔아요',
+        body: '사장님이 한 번 알려주면 알바가 물었을 때 AI가 대신 답해요. 업종 추천 노하우로 빠르게 시작해보세요.',
+        ctaLabel: '추천 노하우 깔기',
+      },
+    ],
+    [],
+  );
+
+  // 진입 애니메이션이 자리 잡은 뒤 자동 시작 — 0건 + 아직 안 본 사장만.
+  // ⚠️ playbookLoaded 게이트: Supabase에서 entries는 비동기 하이드레이션이라, 로딩 전엔
+  //    entriesCount가 0으로 보인다. loaded 전에 시작하면 노하우 있는 기존 사장에게도 잠깐 떴다 닫힌다.
+  const seenTour = useTourStore((s) => !!s.seen[TOUR_ID]);
+  const playbookLoaded = usePlaybookStore((s) => s.loaded);
+  useEffect(() => {
+    if (!playbookLoaded || entriesCount !== 0 || seenTour) return;
+    const t = setTimeout(() => setTourOn(true), 520);
+    return () => clearTimeout(t);
+  }, [playbookLoaded, entriesCount, seenTour]);
+
+  const endTour = () => {
+    setTourOn(false);
+    markSeen(TOUR_ID);
+  };
+  const completeTour = () => {
+    endTour();
+    router.push('/owner/onboarding');
+  };
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
       <Stack.Screen options={{ headerShown: false }} />
 
-      {/* 좌: 워드마크 / 우: 매장명·사용자명 + 알림 벨(직원 홈과 동일 패턴) */}
+      {/* 코치마크 오버레이가 덮을 영역(헤더·스크롤·탭바를 함께 감싼다) */}
+      <View ref={containerRef} style={{ flex: 1 }}>
+      {/* 좌: 워드마크 / 우: 알림 벨 */}
       <View style={styles.appHeader}>
         <Wordmark size="sm" />
-        <View style={styles.appHeaderRight}>
-          <Text style={styles.appHeaderStore} numberOfLines={1}>
-            {storeName}
-          </Text>
-          <Text style={styles.appHeaderUser} numberOfLines={1}>
-            {userName} 사장님
-          </Text>
-        </View>
         <OwnerNotificationBell edge={false} />
       </View>
 
-      <Animated.ScrollView
-        contentContainerStyle={styles.scroll}
-        showsVerticalScrollIndicator={false}
-        style={{ opacity: enter.opacity, transform: [{ translateY: enter.y }] }}
-      >
+      <ScrollView ref={scrollRef} contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+        {/* 진입 페이드/슬라이드는 콘텐츠 래퍼에 — 동시에 코치마크 위치 측정 기준(scrollContentRef) */}
+        <Animated.View
+          ref={scrollContentRef}
+          style={[styles.scrollInner, { opacity: enter.opacity, transform: [{ translateY: enter.y }] }]}
+        >
         <Text style={styles.greet}>오늘도 고생 많으세요</Text>
+
+        {/* 미검증 노하우 우선 배너 — needs_review(템플릿/업종팩 fork 등 미검증)가 있으면 홈 최상단에서
+            먼저 검증을 유도한다. 탭하면 노하우 화면의 '미검증만' 목록으로 바로 진입. */}
+        {needsReviewCount > 0 && (
+          <Appear delay={0}>
+            <PressableScale
+              onPress={() => router.push({ pathname: '/owner/knowledge', params: { review: '1' } })}
+              scaleTo={0.98}
+              style={styles.reviewBanner}
+              accessibilityRole="button"
+              accessibilityLabel={`미검증 노하우 ${needsReviewCount}개 검증하기`}
+            >
+              <View style={styles.reviewIcon}>
+                <Ionicons name="alert-circle" size={20} color={BrandColors.bad} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.reviewTitle}>검증이 필요한 노하우 {needsReviewCount}개</Text>
+                <Text style={styles.reviewSub}>업종 표준값이에요. 우리 매장 기준이 맞는지 검토해 주세요.</Text>
+              </View>
+              <Text style={styles.reviewCta}>검증 ›</Text>
+            </PressableScale>
+          </Appear>
+        )}
 
         {/* 신규 매장 온보딩 — 노하우 0건이면 가장 먼저 첫 입력을 유도(빈 매장 = 알바 답변 0 → 이탈 방지) */}
         {entriesCount === 0 && (
@@ -90,10 +159,12 @@ export default function OwnerDashboardScreen() {
               아직 등록된 노하우가 없어요. 사장님이 알려주신 내용이 있어야 알바가 물었을 때 AI가 대신 답할 수 있어요.
               {'\n'}업종 <Text style={{ fontWeight: '800' }}>추천 노하우</Text>를 한 번에 깔고 시작해보세요.
             </Text>
-            <PressableScale onPress={() => router.push('/owner/onboarding')} scaleTo={0.96} style={styles.onboardCta}>
-              <Ionicons name="sparkles-outline" size={16} color={InkColors.bubbleText} />
-              <Text style={styles.onboardCtaText}>추천 노하우 깔기</Text>
-            </PressableScale>
+            <View ref={ctaRef} style={{ alignSelf: 'flex-start' }}>
+              <PressableScale onPress={() => router.push('/owner/onboarding')} scaleTo={0.96} style={styles.onboardCta}>
+                <Ionicons name="sparkles-outline" size={16} color={InkColors.bubbleText} />
+                <Text style={styles.onboardCtaText}>추천 노하우 깔기</Text>
+              </PressableScale>
+            </View>
 
             {/* 씨앗 템플릿 — 직접 한 줄 입력으로 시작하고 싶을 때(AI가 정리) */}
             <Text style={styles.seedLabel}>또는 직접 한 줄 입력 — 탭하면 AI가 정리해줘요</Text>
@@ -190,12 +261,12 @@ export default function OwnerDashboardScreen() {
           </Appear>
         )}
 
-        {/* ③ 매장운영 허브 — 그동안 미니링크로 숨어 있던 근무·급여/직원/급여설정을 카드로 surface. */}
-        {entriesCount > 0 && (
-          <Appear delay={120}>
+        {/* ③ 매장운영 허브 — 근무·급여/직원/급여설정. 노하우 0건이어도 항상 노출(첫날부터 매장 운영이 필요). */}
+        <Appear delay={120}>
+          <View ref={hubRef}>
             <OwnerHomeHubCards />
-          </Appear>
-        )}
+          </View>
+        </Appear>
 
         {/* 알바 FAQ Top → 노하우화 */}
         {topFaq.length > 0 && (
@@ -242,6 +313,16 @@ export default function OwnerDashboardScreen() {
           </Pressable>
         </View>
 
+        {/* 업종 표준 템플릿 둘러보기 — 신규/기존 매장 모두에 노출(검색해 내 노하우로 바로 가져오기) */}
+        <Appear delay={entriesCount > 0 ? 300 : 60} style={styles.section}>
+          <NudgeCard
+            icon="albums-outline"
+            title="노하우 템플릿 둘러보기"
+            sub="업종에서 자주 쓰는 노하우를 검색해 내 노하우로 바로 가져와요"
+            onPress={() => router.push('/owner/templates')}
+          />
+        </Appear>
+
         {/* 혼자 모드 넛지 — 입력을 강요하지 않고 '돌려받는 것'·미래가치로 끌어들인다 */}
         {entriesCount > 0 && (
           <Appear delay={300} style={styles.nudges}>
@@ -271,8 +352,24 @@ export default function OwnerDashboardScreen() {
           <SectionLabel icon="sparkles-outline" title="이런 것도 할 수 있어요" />
           <FeatureCarousel cards={OWNER_FEATURES} />
         </Appear>
-      </Animated.ScrollView>
+        </Animated.View>
+      </ScrollView>
       <RoleTabBar role="owner" />
+
+      {/* 신규 사장 코치마크 투어 — 매장 운영 허브 → 첫 노하우 깔기까지 순차 안내.
+          entriesCount===0 가드: 스토어 지연 로딩으로 기존 사장에게 잘못 뜨거나, 도중에 노하우가
+          생기면(ctaRef 타깃 소멸) 즉시 닫는다. */}
+      {tourOn && entriesCount === 0 && (
+        <CoachmarkTour
+          steps={tourSteps}
+          containerRef={containerRef}
+          scrollRef={scrollRef}
+          scrollContentRef={scrollContentRef}
+          onComplete={completeTour}
+          onDismiss={endTour}
+        />
+      )}
+      </View>
     </SafeAreaView>
   );
 }

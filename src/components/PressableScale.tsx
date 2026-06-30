@@ -1,5 +1,6 @@
 import { useRef, type ReactNode } from 'react';
 import { Animated, Pressable, type PressableProps, type StyleProp, type ViewStyle } from 'react-native';
+import { USE_NATIVE_DRIVER } from '@/lib/anim';
 
 type Props = Omit<PressableProps, 'style' | 'children'> & {
   /** 눌렀을 때 줄어드는 비율 (기본 0.96). 카드처럼 큰 요소는 0.97, 작은 버튼은 0.93 권장. */
@@ -21,8 +22,8 @@ export function PressableScale({ scaleTo = 0.96, dimTo = 0.9, style, children, o
 
   const to = (s: number, o: number) =>
     Animated.parallel([
-      Animated.spring(scale, { toValue: s, useNativeDriver: true, speed: 50, bounciness: 7 }),
-      Animated.timing(opacity, { toValue: o, duration: 90, useNativeDriver: true }),
+      Animated.spring(scale, { toValue: s, useNativeDriver: USE_NATIVE_DRIVER, speed: 50, bounciness: 7 }),
+      Animated.timing(opacity, { toValue: o, duration: 90, useNativeDriver: USE_NATIVE_DRIVER }),
     ]).start();
 
   return (

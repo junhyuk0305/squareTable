@@ -45,8 +45,9 @@ const today = new Date();
 const addDays = (n) => { const x = new Date(today); x.setDate(x.getDate() + n); return x; };
 const dateStr = (n) => iso(addDays(n));
 const TODAY = dateStr(0);
-// KST timestamptz 문자열: "YYYY-MM-DDTHH:MM:00+09:00"
-const ts = (dStr, hh, mm) => `${dStr}T${pad(hh)}:${pad(mm)}:00+09:00`;
+// KST 벽시계 → 표준 UTC ISO("…Z"). 앱이 저장하는 타임스탬프(new Date().toISOString())와
+// 같은 표기로 통일한다 — 표기가 섞이면(KST 오프셋 vs UTC) 문자열 정렬이 어긋난다.
+const ts = (dStr, hh, mm) => new Date(`${dStr}T${pad(hh)}:${pad(mm)}:00+09:00`).toISOString();
 const minutesBetween = (a, b) => Math.round((new Date(b) - new Date(a)) / 60000);
 
 async function step(label, p) {
@@ -195,7 +196,7 @@ async function main() {
     feed('demo_f_notice_1', TODAY, {
       kind: 'notice', text: '이번 주 토요일 14시 단체예약 20명! 오후타임 인원 미리 준비 부탁해요.',
       authorId: OWNER, authorName: '김영자', authorRole: 'owner', createdAt: ts(TODAY, 9, 10),
-      pinned: true, important: true, read_by: [], reactions: {},
+      pinned: false, important: true, read_by: [], reactions: {},
     }),
     feed('demo_f_notice_2', dateStr(-1), {
       kind: 'notice', text: '신메뉴 “흑임자 라떼” 7/1 출시. 레시피 공유함에 올려뒀으니 오픈조 확인해주세요.',

@@ -14,7 +14,7 @@ import { InkColors, CategoryColors } from '@/lib/theme/colors';
 import type { Category } from '@/types';
 import { fmtDuration, won, hhmm } from '@/lib/utils/attendance';
 import { useJuniorHomeData } from '@/lib/hooks/useJuniorHomeData';
-import { styles } from './homeStyles';
+import { styles } from '@/styles/juniorHomeStyles';
 
 // 빈 상태에서도 '뭘 물어볼 수 있는지' 보여주는 추천(업종 일반).
 const QUICK_ASKS = ['마감 청소 어디까지 해요?', '포스기 에러 났어요', '진상 손님 응대법'];

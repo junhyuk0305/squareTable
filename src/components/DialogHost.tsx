@@ -16,6 +16,7 @@ export function DialogHost() {
       cancelLabel={current?.cancelLabel}
       destructive={current?.destructive}
       icon={current?.icon}
+      accent={current?.accent}
       hideCancel={current?.hideCancel}
       onConfirm={() => close(true)}
       onCancel={() => close(false)}

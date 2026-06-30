@@ -92,7 +92,9 @@ export function JuniorBrowseDashboard({ entries, onSelect, emptyHint }: JuniorBr
 
 const styles = StyleSheet.create({
   scroll: { flex: 1 },
-  content: { padding: Space.lg, gap: Space.xl },
+  // 가로 패딩은 Space.gutter(20)로 — KnowhowCarousel이 -Space.gutter로 가장자리까지 흘리므로
+  // 같은 값이어야 상쇄돼 460 프레임을 벗어나지 않는다(Space.lg=16이면 4px 오버플로).
+  content: { paddingHorizontal: Space.gutter, paddingVertical: Space.lg, gap: Space.xl },
   // 한 블록 = [밖 라벨] + [카드들]. block 내부 gap이 라벨↔카드·카드 사이를 붙이고,
   // content의 gap(xl)이 블록 사이를 벌린다.
   block: { gap: Space.md },

@@ -4,6 +4,7 @@ import { useRouter, usePathname, type Href } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { InkColors } from '@/lib/theme/colors';
+import { USE_NATIVE_DRIVER } from '@/lib/anim';
 
 type IconName = keyof typeof Ionicons.glyphMap;
 type Tab = { label: string; path: Href; icon: IconName; iconActive: IconName };
@@ -75,12 +76,12 @@ function TabButton({ tab, active, onPress }: { tab: Tab; active: boolean; onPres
   useEffect(() => {
     if (!active) return;
     pop.setValue(0);
-    Animated.spring(pop, { toValue: 1, useNativeDriver: true, speed: 18, bounciness: 16 }).start();
+    Animated.spring(pop, { toValue: 1, useNativeDriver: USE_NATIVE_DRIVER, speed: 18, bounciness: 16 }).start();
   }, [active, pop]);
 
   const iconScale = pop.interpolate({ inputRange: [0, 1], outputRange: [0.8, 1] });
   const animatePress = (to: number) =>
-    Animated.spring(press, { toValue: to, useNativeDriver: true, speed: 50, bounciness: 8 }).start();
+    Animated.spring(press, { toValue: to, useNativeDriver: USE_NATIVE_DRIVER, speed: 50, bounciness: 8 }).start();
 
   return (
     <Pressable

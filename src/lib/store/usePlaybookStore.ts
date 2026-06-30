@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { coalesce, subscribeDebounced } from '@/lib/store/realtimeSync';
 import type { PlaybookEntry } from '@/types';
 import seedData from '@/data/playbook-entries.json';
 import { HAS_SUPABASE } from '@/lib/supabase';
@@ -26,13 +27,13 @@ export const usePlaybookStore = create<PlaybookState>((set, get) => ({
   entries: HAS_SUPABASE ? [] : seed,
   loaded: !HAS_SUPABASE,
 
-  hydrate: async () => {
+  hydrate: coalesce(async () => {
     if (!HAS_SUPABASE) return;
     set({ entries: await fetchEntries(), loaded: true });
-  },
+  }),
 
   // 다른 기기(사장님)가 노하우를 발행하면 실시간으로 다시 당겨온다.
-  subscribe: () => subscribePlaybook(() => get().hydrate()),
+  subscribe: () => subscribeDebounced(subscribePlaybook, () => get().hydrate()),
 
   add: (entry) => {
     // 맨 앞에 추가(최신 우선). 실패 시 제거 롤백.

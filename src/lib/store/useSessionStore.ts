@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { supabase, HAS_SUPABASE } from '@/lib/supabase';
 import { setUnitId } from '@/lib/db';
+import { friendlyError } from '@/lib/utils/userError';
 
 type Role = 'owner' | 'junior';
 type Status = 'loading' | 'signed_in' | 'signed_out';
@@ -23,8 +24,11 @@ type SessionState = {
   signUp: (
     email: string,
     pw: string,
-    meta: { name: string; role: Role; phone?: string; phone_last4?: string },
-  ) => Promise<{ error: string | null; needsConfirm: boolean }>;
+    // store_name/industry/biz_no 는 사장 가입 시 user_metadata 에 실어둔다 — 이메일 인증으로
+    // 세션 확보가 지연돼 가입 시점에 create_store 를 못 불러도, 인증 후 첫 로그인에서 자동 복원하기 위함.
+    meta: { name: string; role: Role; phone?: string; phone_last4?: string; store_name?: string; industry?: string; biz_no?: string },
+    // emailTaken: 이미 가입된 이메일이면 true — 화면이 "로그인 유도" 안내로 분기(원문 파싱 대신 플래그로).
+  ) => Promise<{ error: string | null; needsConfirm: boolean; emailTaken?: boolean }>;
   // 전화번호 중복 사전검사(주키). 비로그인 호출 가능. 실패 시 false(막지 않음 — unique가 최종 방어).
   isPhoneTaken: (phone: string) => Promise<boolean>;
   createStore: (storeName: string, industry: string, bizNo?: string) => Promise<{ error: string | null; inviteCode: string | null }>;
@@ -87,7 +91,28 @@ function pushRenameTime(unitId: string) {
   }
 }
 
-async function loadProfile(set: (p: Partial<SessionState>) => void, userId: string, email: string) {
+// 사장 가입 시 user_metadata 에 실어둔 매장 생성 의도. 이메일 인증 후 첫 로드에서 매장 자동 복원에 사용.
+type PendingOwnerMeta = { role?: string; store_name?: string; industry?: string; biz_no?: string };
+function pendingOwnerMeta(user: { user_metadata?: Record<string, unknown> } | null | undefined): PendingOwnerMeta | undefined {
+  const m = user?.user_metadata;
+  if (!m) return undefined;
+  return {
+    role: typeof m.role === 'string' ? m.role : undefined,
+    store_name: typeof m.store_name === 'string' ? m.store_name : undefined,
+    industry: typeof m.industry === 'string' ? m.industry : undefined,
+    biz_no: typeof m.biz_no === 'string' ? m.biz_no : undefined,
+  };
+}
+
+// 동시 호출(init + onAuthStateChange 가 거의 동시에 발화) 시 매장이 2개 생성되는 레이스를 막는 가드.
+let _resumingOwnerStore = false;
+
+async function loadProfile(
+  set: (p: Partial<SessionState>) => void,
+  userId: string,
+  email: string,
+  meta?: PendingOwnerMeta,
+) {
   try {
     const { data: profile } = await supabase
       .from('profiles')
@@ -95,7 +120,34 @@ async function loadProfile(set: (p: Partial<SessionState>) => void, userId: stri
       .eq('id', userId)
       .maybeSingle();
 
-    const unitId = profile?.unit_id ?? '';
+    let unitId = profile?.unit_id ?? '';
+    let role: Role = (profile?.role as Role) ?? 'junior';
+
+    // 이메일 인증 경로 복원: 세션 확보 전이라 가입 시점에 create_store 를 못 부른 사장 →
+    // unit_id 없음 + metadata 가 사장 가게 생성 의도를 담고 있으면, 인증 후 첫 로드에서 자동 생성.
+    // (create_store 는 auth.uid() 기준 '자기 매장' 생성이라 테넌트 주입 위험 없음 — 0010 하드닝과 무관.)
+    if (!unitId && !_resumingOwnerStore && meta?.role === 'owner' && (meta.store_name ?? '').trim()) {
+      _resumingOwnerStore = true;
+      try {
+        const { data: created, error: createErr } = await supabase.rpc('create_store', {
+          p_store_name: meta.store_name,
+          p_industry: meta.industry ?? null,
+          p_biz_no: meta.biz_no ?? null,
+        });
+        if (!createErr) {
+          const row = Array.isArray(created) ? created[0] : created;
+          unitId = row?.unit_id ?? unitId;
+          role = 'owner';
+        } else {
+          // 실패(중복 사업자번호 등)는 치명적이지 않다 — unit_id 없는 채로 진행하면
+          // owner/_layout 가드가 '가게 만들기' 화면으로 유도해 수동 복구된다.
+          console.warn('[session] 매장 자동 복원 실패:', createErr.message);
+        }
+      } finally {
+        _resumingOwnerStore = false;
+      }
+    }
+
     let storeName = '';
     let inviteCode = '';
     let industry = '';
@@ -116,7 +168,7 @@ async function loadProfile(set: (p: Partial<SessionState>) => void, userId: stri
       email,
       inviteCode,
       userName: profile?.name ?? '',
-      role: (profile?.role as Role) ?? 'junior',
+      role,
       unitId,
       storeName,
       industry,
@@ -149,14 +201,14 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     }
     const { data } = await supabase.auth.getSession();
     const user = data.session?.user;
-    if (user) await loadProfile(set, user.id, user.email ?? '');
+    if (user) await loadProfile(set, user.id, user.email ?? '', pendingOwnerMeta(user));
     else set({ status: 'signed_out' });
 
     if (!_authSubscribed) {
       _authSubscribed = true;
       supabase.auth.onAuthStateChange((_evt, session) => {
         const u = session?.user;
-        if (u) loadProfile(set, u.id, u.email ?? '');
+        if (u) loadProfile(set, u.id, u.email ?? '', pendingOwnerMeta(u));
         else set({ status: 'signed_out', unitId: '', userId: '', userName: '' });
       });
     }
@@ -164,8 +216,13 @@ export const useSessionStore = create<SessionState>((set, get) => ({
 
   signInWithPassword: async (email, pw) => {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password: pw });
-    if (error || !data.user) return { error: error?.message ?? '로그인 실패', role: get().role };
-    await loadProfile(set, data.user.id, data.user.email ?? ''); // 결정적: role 확정 후 반환
+    if (error || !data.user)
+      return {
+        error: friendlyError(error?.message, '이메일 또는 비밀번호를 다시 확인해 주세요.'),
+        role: get().role,
+      };
+    // 이메일 인증으로 가입 시 가게 생성이 지연된 사장은 여기서 metadata 기반으로 매장이 자동 복원된다.
+    await loadProfile(set, data.user.id, data.user.email ?? '', pendingOwnerMeta(data.user)); // 결정적: role 확정 후 반환
     return { error: null, role: get().role };
   },
 
@@ -175,7 +232,16 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       password: pw,
       options: { data: meta }, // 트리거가 user_metadata로 프로필 생성
     });
-    if (error) return { error: error.message, needsConfirm: false };
+    if (error) {
+      // 중복 이메일은 원문(already/registered/exists)으로만 식별 가능 → 데이터 계층에서 플래그로 변환.
+      if (/already|registered|exists/i.test(error.message)) {
+        return { error: null, needsConfirm: false, emailTaken: true };
+      }
+      return {
+        error: friendlyError(error.message, '가입 중 문제가 생겼어요. 잠시 후 다시 시도해 주세요.'),
+        needsConfirm: false,
+      };
+    }
     // 이메일 확인이 켜져 있으면 세션이 없음 → 가게생성/합류 RPC를 못 부름.
     const needsConfirm = !data.session;
     if (data.session?.user) {
@@ -208,7 +274,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     if (error) {
       const msg = /duplicate_biz_no/.test(error.message)
         ? '이미 등록된 사업자등록번호예요.'
-        : error.message;
+        : friendlyError(error.message, '가게를 만들지 못했어요. 잠시 후 다시 시도해 주세요.');
       return { error: msg, inviteCode: null };
     }
     const row = Array.isArray(data) ? data[0] : data;
@@ -221,7 +287,9 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   joinByInvite: async (code) => {
     const { data, error } = await supabase.rpc('join_by_invite', { p_code: code });
     if (error) {
-      const msg = /invalid_code/.test(error.message) ? '초대코드가 올바르지 않아요.' : error.message;
+      const msg = /invalid_code/.test(error.message)
+        ? '초대코드가 올바르지 않아요.'
+        : friendlyError(error.message, '매장에 합류하지 못했어요. 코드를 확인하고 다시 시도해 주세요.');
       return { error: msg, storeName: null };
     }
     const row = Array.isArray(data) ? data[0] : data;
@@ -232,7 +300,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
 
   sendMagicLink: async (email) => {
     const { error } = await supabase.auth.signInWithOtp({ email });
-    return { error: error?.message ?? null };
+    return { error: error ? friendlyError(error.message, '인증 메일을 보내지 못했어요. 잠시 후 다시 시도해 주세요.') : null };
   },
 
   // 회원가입 '인증' 버튼 — 입력한 이메일로 인증(매직링크/OTP) 메일을 보낸다.
@@ -241,7 +309,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     const { error } = await supabase.auth.signInWithOtp({ email, options: { shouldCreateUser: true } });
     if (error) {
       if (/rate|after|second/i.test(error.message)) return { status: 'rate' };
-      return { status: 'error', message: error.message };
+      return { status: 'error', message: friendlyError(error.message, '인증 메일을 보내지 못했어요. 잠시 후 다시 시도해 주세요.') };
     }
     return { status: 'sent' };
   },
@@ -271,13 +339,13 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       const { error } = await supabase.from('profiles').update(fields).eq('id', uid);
       if (error) {
         if (/duplicate|unique|phone_norm/i.test(error.message)) return { error: '이미 가입된 번호예요.' };
-        return { error: error.message };
+        return { error: friendlyError(error.message, '정보를 저장하지 못했어요. 잠시 후 다시 시도해 주세요.') };
       }
     }
     // 이메일 변경은 auth 레벨 — 실제로 바뀐 경우에만 호출(확인 메일이 발송될 수 있음).
     if (patch.email != null && patch.email !== get().email) {
       const { error } = await supabase.auth.updateUser({ email: patch.email });
-      if (error) return { error: error.message };
+      if (error) return { error: friendlyError(error.message, '이메일을 변경하지 못했어요. 잠시 후 다시 시도해 주세요.') };
     }
     const next: Partial<SessionState> = {};
     if (patch.name != null) next.userName = patch.name;
@@ -290,7 +358,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   changePassword: async (newPw) => {
     if (!HAS_SUPABASE) return { error: null }; // 데모: 실제 변경 없음
     const { error } = await supabase.auth.updateUser({ password: newPw });
-    return { error: error?.message ?? null };
+    return { error: error ? friendlyError(error.message, '비밀번호를 변경하지 못했어요. 잠시 후 다시 시도해 주세요.') : null };
   },
 
   // 회원탈퇴 — 앱스토어/개인정보보호법 필수. 서버에서 auth user + 연관 데이터(cascade) 파기.
@@ -302,7 +370,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       return { error: null };
     }
     const { error } = await supabase.rpc('delete_my_account');
-    if (error) return { error: error.message };
+    if (error) return { error: friendlyError(error.message, '탈퇴 처리에 실패했어요. 잠시 후 다시 시도해 주세요.') };
     // 계정은 이미 서버에서 파기됨 → signOut이 실패(네트워크 등)해도 로컬 세션은 반드시 종료.
     // (가드 안 하면 예외가 호출부로 튀어 busy가 영구 정지되고, '탈퇴됐는데 로그인 상태'가 됨)
     try {
@@ -322,7 +390,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       return { error: null };
     }
     const { error } = await supabase.rpc('leave_store');
-    if (error) return { error: error.message };
+    if (error) return { error: friendlyError(error.message, '매장에서 나가지 못했어요. 잠시 후 다시 시도해 주세요.') };
     const uid = get().userId;
     if (uid) await loadProfile(set, uid, get().email);
     return { error: null };
@@ -349,7 +417,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     if (HAS_SUPABASE) {
       if (!unitId) return { error: '매장 정보가 없어요.', remaining: info.remaining };
       const { error } = await supabase.from('units').update({ store_name: trimmed }).eq('id', unitId);
-      if (error) return { error: error.message, remaining: info.remaining };
+      if (error) return { error: friendlyError(error.message, '가게 이름을 변경하지 못했어요. 잠시 후 다시 시도해 주세요.'), remaining: info.remaining };
     }
     if (unitId) pushRenameTime(unitId);
     set({ storeName: trimmed });
@@ -366,7 +434,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     if (HAS_SUPABASE) {
       if (!unitId) return { error: '매장 정보가 없어요.' };
       const { error } = await supabase.from('units').update({ industry: trimmed }).eq('id', unitId);
-      if (error) return { error: error.message };
+      if (error) return { error: friendlyError(error.message, '업종을 변경하지 못했어요. 잠시 후 다시 시도해 주세요.') };
     }
     set({ industry: trimmed });
     return { error: null };

@@ -139,7 +139,7 @@ export function MiniSquareCard({
             <Text style={cardStyles.editText}>✏️ 고칠래요</Text>
           </Pressable>
           <Pressable onPress={onRetalk} style={({ pressed }) => [cardStyles.editBtn, pressed && { opacity: 0.7 }]}>
-            <Text style={cardStyles.editText}>🔁 다시 말하기</Text>
+            <Text style={cardStyles.editText}>➕ 내용 추가하기</Text>
           </Pressable>
           <Pressable
             onPress={onPublish}

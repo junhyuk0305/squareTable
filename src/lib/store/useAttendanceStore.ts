@@ -1,5 +1,6 @@
 import { create } from 'zustand';
-import { todayStr, minutesBetween } from '@/lib/utils/attendance';
+import { coalesce, subscribeDebounced } from '@/lib/store/realtimeSync';
+import { todayStr, minutesBetween, nowISO } from '@/lib/utils/attendance';
 import { HAS_SUPABASE } from '@/lib/supabase';
 import { fetchAttendance, upsertAttendance, deleteAttendance, subscribeAttendance } from '@/lib/db';
 import { guardWrite } from '@/lib/store/useSyncStore';
@@ -23,7 +24,7 @@ export const HOURLY_WAGE: Record<string, number> = {
 };
 
 function iso(date: string, time: string): string {
-  return `${date}T${time}:00+09:00`;
+  return nowISO(date, time); // KST 벽시계 → 표준 UTC ISO (직접 "+09:00" 조립 금지)
 }
 
 function rec(staff: string, date: string, cin: string, cout: string): AttendanceRecord {
@@ -68,11 +69,11 @@ type State = {
 export const useAttendanceStore = create<State>((set, get) => ({
   records: HAS_SUPABASE ? [] : seed,
   loaded: !HAS_SUPABASE,
-  hydrate: async () => {
+  hydrate: coalesce(async () => {
     if (!HAS_SUPABASE) return;
     set({ records: await fetchAttendance(), loaded: true });
-  },
-  subscribe: () => subscribeAttendance(() => get().hydrate()),
+  }),
+  subscribe: () => subscribeDebounced(subscribeAttendance, () => get().hydrate()),
 
   checkIn: (staffId) => {
     const date = todayStr();

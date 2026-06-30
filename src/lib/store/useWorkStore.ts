@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { todayStr } from '@/lib/utils/attendance';
+import { todayStr, nowISO } from '@/lib/utils/attendance';
 import { HAS_SUPABASE } from '@/lib/supabase';
 import {
   fetchTemplates,
@@ -14,6 +14,7 @@ import {
   subscribeWork,
 } from '@/lib/db';
 import { guardWrite } from '@/lib/store/useSyncStore';
+import { coalesce, subscribeDebounced } from '@/lib/store/realtimeSync';
 import { genId } from '@/lib/utils/id';
 import { useRoomStore } from '@/lib/store/useRoomStore';
 
@@ -148,9 +149,9 @@ const seedTemplates: TaskTemplate[] = [
 
 const seedDone: Record<string, Record<string, DoneMark>> = {
   [T]: {
-    o1: { by: 'u_staff_002', byName: '이수민', at: `${T}T08:10:00+09:00` },
-    o2: { by: 'u_staff_002', byName: '이수민', at: `${T}T08:20:00+09:00` },
-    o3: { by: 'u_staff_002', byName: '이수민', at: `${T}T08:25:00+09:00` },
+    o1: { by: 'u_staff_002', byName: '이수민', at: nowISO(T, '08:10:00') },
+    o2: { by: 'u_staff_002', byName: '이수민', at: nowISO(T, '08:20:00') },
+    o3: { by: 'u_staff_002', byName: '이수민', at: nowISO(T, '08:25:00') },
   },
 };
 
@@ -163,7 +164,7 @@ const seedFeed: FeedItem[] = [
     authorId: 'u_owner_001',
     authorName: '김영자',
     authorRole: 'owner',
-    createdAt: `${T}T08:00:00+09:00`,
+    createdAt: nowISO(T, '08:00:00'),
     reactions: { '✅': ['u_staff_002'] },
     important: false,
     pinned: true,
@@ -177,7 +178,7 @@ const seedFeed: FeedItem[] = [
     authorId: 'u_staff_002',
     authorName: '이수민',
     authorRole: 'junior',
-    createdAt: `${T}T08:05:00+09:00`,
+    createdAt: nowISO(T, '08:05:00'),
   },
   {
     id: 'f2',
@@ -187,7 +188,7 @@ const seedFeed: FeedItem[] = [
     authorId: 'u_staff_002',
     authorName: '이수민',
     authorRole: 'junior',
-    createdAt: `${T}T08:25:00+09:00`,
+    createdAt: nowISO(T, '08:25:00'),
     refId: 'o3',
   },
 ];
@@ -233,42 +234,15 @@ export const useWorkStore = create<State>((set, get) => ({
   loaded: !HAS_SUPABASE,
 
   // 전체 재조회(templates·done·feed 3쿼리)로 스토어를 통째로 교체한다.
-  // 동시 호출 합치기: 이미 한 번 돌고 있으면 새 fetch를 또 띄우지 않고 '한 번 더' 플래그만 세워
-  // 끝나고 1회만 더 돈다 → 빠른 연속 체크로 realtime 이벤트가 몰려도 풀리페치가 쌓이지 않는다.
-  hydrate: async () => {
+  // coalesce: 빠른 연속 체크로 realtime 이벤트가 몰려도 풀리페치가 병렬로 쌓이지 않게 합친다.
+  hydrate: coalesce(async () => {
     if (!HAS_SUPABASE) return;
-    if (hydrateInFlight) {
-      hydrateAgain = true;
-      return hydrateInFlight;
-    }
-    hydrateInFlight = (async () => {
-      do {
-        hydrateAgain = false;
-        const [templates, done, feed] = await Promise.all([fetchTemplates(), fetchDone(), fetchFeed()]);
-        set({ templates, done, feed, loaded: true });
-      } while (hydrateAgain);
-    })().finally(() => {
-      hydrateInFlight = null;
-    });
-    return hydrateInFlight;
-  },
-  // realtime 변경마다 즉시 풀리페치하면, 체크 한 번이 (work_done+work_feed) 2쓰기 → 2이벤트 →
-  // 매번 3쿼리 재조회 + 전체 리렌더가 된다. 반복 탭에선 이게 폭주해 UI가 밀린다.
-  // → 마지막 이벤트 후 한 박자(300ms) 모았다가 1회만 재조회(트레일링 디바운스).
-  subscribe: () => {
-    let timer: ReturnType<typeof setTimeout> | null = null;
-    const unsub = subscribeWork(() => {
-      if (timer) clearTimeout(timer);
-      timer = setTimeout(() => {
-        timer = null;
-        void get().hydrate();
-      }, 300);
-    });
-    return () => {
-      if (timer) clearTimeout(timer);
-      unsub();
-    };
-  },
+    const [templates, done, feed] = await Promise.all([fetchTemplates(), fetchDone(), fetchFeed()]);
+    set({ templates, done, feed, loaded: true });
+  }),
+  // realtime 변경마다 즉시 풀리페치하면 체크 한 번(work_done+work_feed 2쓰기)이 매번 3쿼리+전체
+  // 리렌더가 된다 → 트레일링 디바운스로 이벤트 버스트를 1회 재조회에 합친다.
+  subscribe: () => subscribeDebounced(subscribeWork, () => get().hydrate()),
 
   addTask: (input) => {
     const room = curRoom();

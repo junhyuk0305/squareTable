@@ -22,3 +22,16 @@ export function normalizePhone(phone: string): string {
 export function isValidPhone(phone: string): boolean {
   return /^01[016789]\d{7,8}$/.test(normalizePhone(phone));
 }
+
+/** 비밀번호 최소 길이(영문·숫자 조합). 규칙 변경 시 여기 한 곳만. */
+export const PASSWORD_MIN = 9;
+
+/**
+ * 비밀번호 규칙: 9자 이상 + 영문·숫자를 모두 포함.
+ * 통과면 null, 실패면 그대로 보여줄 안내 문구를 반환한다.
+ */
+export function passwordError(pw: string): string | null {
+  if (pw.length < PASSWORD_MIN) return `비밀번호는 ${PASSWORD_MIN}자 이상이어야 해요.`;
+  if (!/[a-zA-Z]/.test(pw) || !/\d/.test(pw)) return '영문과 숫자를 모두 포함해 주세요.';
+  return null;
+}
