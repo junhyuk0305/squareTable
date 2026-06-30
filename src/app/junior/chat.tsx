@@ -12,7 +12,7 @@ import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 
 import type { PlaybookEntry } from '@/types';
 
-import { styles } from './chatStyles';
+import { styles } from '@/styles/juniorChatStyles';
 
 /**
  * 노하우 탭(주니어) — KnowhowSegment 컨테이너.

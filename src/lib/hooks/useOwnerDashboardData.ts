@@ -15,6 +15,7 @@ export type OwnerDashboardData = {
   userName: string;
   storeName: string;
   entriesCount: number;
+  needsReviewCount: number;
   working: number;
   monthPay: number;
   taskTotal: number;
@@ -72,6 +73,10 @@ export function useOwnerDashboardData(): OwnerDashboardData {
   const brain = useMemo(() => computeBrainScore(entries), [entries]);
   const isSolo = staff.length === 0; // 직원 미합류 = 혼자 모드
 
+  // 미검증(needs_review) 노하우 — 템플릿/업종팩 fork 등 사장이 아직 우리 매장 기준으로 안 다듬은 것.
+  // 0보다 크면 대시보드 최상단 배너로 먼저 노출(검증 유도).
+  const needsReviewCount = useMemo(() => entries.filter((e) => e.needs_review === true).length, [entries]);
+
   const topFaq = useMemo(
     () =>
       [...pendingList]
@@ -84,6 +89,7 @@ export function useOwnerDashboardData(): OwnerDashboardData {
     userName,
     storeName,
     entriesCount: entries.length,
+    needsReviewCount,
     working,
     monthPay,
     taskTotal,

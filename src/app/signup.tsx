@@ -6,7 +6,7 @@ import { useSessionStore } from '@/lib/store/useSessionStore';
 import { applyMockSeed } from '@/lib/demo/mockSeed';
 import { HAS_SUPABASE } from '@/lib/supabase';
 import { formatBizNo, isValidBizNo, bizDigits } from '@/lib/utils/bizno';
-import { isValidEmail, isValidPhone, normalizePhone } from '@/lib/utils/validation';
+import { isValidEmail, isValidPhone, normalizePhone, passwordError } from '@/lib/utils/validation';
 import { BrandColors, InkColors } from '@/lib/theme/colors';
 import { Space } from '@/lib/theme/layout';
 import { Radius } from '@/lib/theme/elevation';
@@ -19,7 +19,6 @@ export default function SignupScreen() {
   const signUp = useSessionStore((s) => s.signUp);
   const createStore = useSessionStore((s) => s.createStore);
   const joinByInvite = useSessionStore((s) => s.joinByInvite);
-  const verifyEmail = useSessionStore((s) => s.verifyEmail);
   const isPhoneTaken = useSessionStore((s) => s.isPhoneTaken);
 
   const [role, setRole] = useState<Role>('owner');
@@ -48,31 +47,8 @@ export default function SignupScreen() {
   // (다시 부르면 'already registered'로 막혀 영구 데드엔드). 매장 연결만 재시도한다.
   const [accountReady, setAccountReady] = useState(false);
 
-  // 이메일 인증 — '인증' 버튼 상태 + 입력창 아래 초록 안내
+  // 이메일 입력창 아래 안내(중복가입 등). 이메일 인증은 추후 도입 예정 — 지금은 단계 없음.
   const [emailMsg, setEmailMsg] = useState<string | null>(null);
-  const [emailSent, setEmailSent] = useState(false);
-  const [verifyingEmail, setVerifyingEmail] = useState(false);
-
-  const onVerifyEmail = async () => {
-    setErr(null);
-    setEmailMsg(null);
-    const e = email.trim();
-    if (!e) return setErr('이메일을 먼저 입력해주세요.');
-    if (!isValidEmail(e)) return setErr('이메일 형식을 확인해주세요.');
-    setVerifyingEmail(true);
-    const r = await verifyEmail(e);
-    setVerifyingEmail(false);
-    if (r.status === 'demo') {
-      setEmailMsg('데모 모드에선 이메일 인증이 필요 없어요');
-      setEmailSent(true);
-      return;
-    }
-    if (r.status === 'rate') return setEmailMsg('잠깐 후에 다시 시도해 주세요');
-    if (r.status === 'error') return setErr(`인증 메일 발송 실패: ${r.message}`);
-    // sent
-    setEmailMsg(emailSent ? '인증 메일을 다시 보냈어요 (재인증)' : '인증 메일을 보냈어요. 메일함을 확인하세요');
-    setEmailSent(true);
-  };
 
   // 역할별 동의 항목 정의. doc은 '보기' 클릭 시 열 문서 라우트.
   type DocRoute = '/terms' | '/legal/collect' | '/legal/marketing' | '/legal/labor';
@@ -119,7 +95,8 @@ export default function SignupScreen() {
     if (!email.trim()) return setErr('이메일을 입력해주세요.');
     if (!isValidEmail(email)) return setErr('이메일 형식을 확인해주세요.');
     if (!pw) return setErr('비밀번호를 입력해주세요.');
-    if (pw.length < 6) return setErr('비밀번호는 6자 이상이어야 해요.');
+    const pwErr = passwordError(pw);
+    if (pwErr) return setErr(pwErr);
     if (!phone.trim()) return setErr('전화번호를 입력해주세요.');
     if (!isValidPhone(phone)) return setErr('전화번호 형식을 확인해주세요. (예: 010-1234-5678)');
     if (role === 'owner' && !storeName.trim()) return setErr('가게 이름을 입력해주세요.');
@@ -149,20 +126,34 @@ export default function SignupScreen() {
         setEmailMsg(null);
         return setErr('이미 가입된 번호예요. 아래 ‘로그인’으로 들어와 주세요.');
       }
-      const up = await signUp(email.trim(), pw, { name: name.trim(), role, phone: normalizePhone(phone) });
+      const up = await signUp(email.trim(), pw, {
+        name: name.trim(),
+        role,
+        phone: normalizePhone(phone),
+        // 사장: 이메일 인증으로 세션이 지연돼도 인증 후 첫 로그인에서 매장이 자동 생성되도록 매장 정보를 함께 싣는다.
+        ...(role === 'owner'
+          ? { store_name: storeName.trim(), industry, ...(bizDigits(bizNo) ? { biz_no: bizDigits(bizNo) } : {}) }
+          : {}),
+      });
+      if (up.emailTaken) {
+        // 중복 — 이메일 입력창 아래 초록 안내로 표시
+        setBusy(false);
+        setEmailMsg('이미 가입된 이메일이에요. 로그인해 주세요.');
+        return;
+      }
       if (up.error) {
         setBusy(false);
-        if (/already|registered|exists/i.test(up.error)) {
-          // 중복 — 이메일 입력창 아래 초록 안내로 표시
-          setEmailMsg('이미 가입된 이메일이에요. 로그인해 주세요.');
-          return;
-        }
-        return setErr(`가입 실패: ${up.error}`);
+        return setErr(up.error);
       }
       if (up.needsConfirm) {
+        // 이메일 인증이 켜져 있어 세션이 아직 없는 경우. 사장은 매장 정보를 user_metadata 에 실어뒀으므로
+        // 인증 후 로그인하면 loadProfile 이 매장을 자동 생성한다(데드엔드 없음).
         setBusy(false);
-        setEmailSent(true);
-        setEmailMsg('인증 메일을 보냈어요. 메일에서 인증한 뒤 다시 시작해 주세요.');
+        setEmailMsg(
+          role === 'owner'
+            ? '인증 메일을 보냈어요. 메일에서 인증하고 로그인하면 가게가 자동으로 만들어져요.'
+            : '인증 메일을 보냈어요. 메일에서 인증한 뒤 로그인해 주세요.',
+        );
         return;
       }
       setAccountReady(true); // 세션 확보 — 이후 실패는 매장 연결만 재시도
@@ -172,7 +163,7 @@ export default function SignupScreen() {
     if (role === 'owner') {
       const cs = await createStore(storeName.trim(), industry, bizDigits(bizNo) || undefined);
       setBusy(false);
-      if (cs.error) return setErr(`가게 생성 실패: ${cs.error} — '다시 시도'를 누르면 가게 생성만 다시 시도해요.`);
+      if (cs.error) return setErr(`${cs.error} ‘다시 시도’를 누르면 가게 생성만 다시 시도해요.`);
       // 노하우 온보딩으로 — 초대코드는 온보딩 완료 화면에서 안내(빈 매장 0건 방지).
       router.replace({ pathname: '/owner/onboarding', params: { code: cs.inviteCode ?? '------', industry } });
     } else {
@@ -214,35 +205,43 @@ export default function SignupScreen() {
 
         <Field label="이름" value={name} onChange={setName} placeholder="홍길동" required />
 
-        {/* 이메일 + 인증 버튼 */}
+        {/* 이메일 — 로그인 ID로 사용. 이메일 인증(확인 메일)은 추후 도입 예정. */}
         <View style={styles.field}>
           <Text style={styles.label}>이메일<Text style={styles.req}> *</Text></Text>
-          <View style={styles.emailRow}>
-            <TextInput
-              value={email}
-              onChangeText={(v) => {
-                setEmail(v);
-                setEmailMsg(null);
-                setEmailSent(false);
-              }}
-              placeholder="you@example.com"
-              placeholderTextColor={InkColors.ink3}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              style={[styles.input, { flex: 1 }]}
-            />
-            <Pressable
-              onPress={onVerifyEmail}
-              disabled={verifyingEmail || !email.trim()}
-              style={({ pressed }) => [styles.verifyBtn, (verifyingEmail || !email.trim()) && { opacity: 0.5 }, pressed && { opacity: 0.85 }]}
-            >
-              {verifyingEmail ? <ActivityIndicator color="#FFFFFF" size="small" /> : <Text style={styles.verifyBtnText}>{emailSent ? '재전송' : '인증'}</Text>}
-            </Pressable>
-          </View>
+          <TextInput
+            value={email}
+            onChangeText={(v) => {
+              setEmail(v);
+              setEmailMsg(null);
+            }}
+            placeholder="you@example.com"
+            placeholderTextColor={InkColors.ink3}
+            keyboardType="email-address"
+            autoCapitalize="none"
+            style={styles.input}
+          />
           {emailMsg && <Text style={styles.emailOk}>{emailMsg}</Text>}
         </View>
 
-        <Field label="비밀번호" value={pw} onChange={setPw} placeholder="6자 이상" secure required />
+        {/* 비밀번호 — 영문·숫자 조합 9자 이상. 입력 중 즉시 통과/안내 표시 */}
+        <View style={styles.field}>
+          <Text style={styles.label}>비밀번호<Text style={styles.req}> *</Text></Text>
+          <TextInput
+            value={pw}
+            onChangeText={setPw}
+            placeholder="영문·숫자 조합 9자 이상"
+            placeholderTextColor={InkColors.ink3}
+            secureTextEntry
+            autoCapitalize="none"
+            style={styles.input}
+          />
+          {pw.length > 0 && (
+            <Text style={[styles.bizHint, passwordError(pw) ? styles.bizBad : styles.bizOk]}>
+              {passwordError(pw) ?? '✓ 사용할 수 있는 비밀번호예요'}
+            </Text>
+          )}
+        </View>
+
         <Field label="전화번호" value={phone} onChange={setPhone} placeholder="010-1234-5678" keyboard="phone-pad" required />
 
         {role === 'owner' ? (
@@ -413,17 +412,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
   },
   hint: { fontSize: 12, color: InkColors.ink3, marginTop: -4 },
-  emailRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  verifyBtn: {
-    paddingHorizontal: 18,
-    paddingVertical: 13,
-    borderRadius: 12,
-    backgroundColor: BrandColors.brand,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minWidth: 64,
-  },
-  verifyBtnText: { color: '#FFFFFF', fontSize: 14, fontWeight: '800' },
   emailOk: { fontSize: 12, color: BrandColors.good, fontWeight: '700', marginTop: 1 },
   bizHint: { fontSize: 12, fontWeight: '600', marginTop: -2 },
   bizOk: { color: BrandColors.good },

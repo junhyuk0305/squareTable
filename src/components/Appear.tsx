@@ -1,5 +1,6 @@
 import { useEffect, useMemo, type ReactNode } from 'react';
 import { Animated, Easing, type ViewStyle, type StyleProp } from 'react-native';
+import { USE_NATIVE_DRIVER } from '@/lib/anim';
 
 /**
  * 공통 등장 애니메이션 — 마운트 시 fade-in + 살짝 위로 슬라이드.
@@ -29,7 +30,7 @@ export function Appear({
       duration,
       delay,
       easing: Easing.out(Easing.cubic),
-      useNativeDriver: true,
+      useNativeDriver: USE_NATIVE_DRIVER,
     });
     anim.start();
     return () => anim.stop();

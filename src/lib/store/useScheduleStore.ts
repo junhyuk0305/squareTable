@@ -5,6 +5,7 @@
 // 다른 스토어와 동일 패턴 — 낙관적 업데이트 후 guardWrite로 DB 반영, 실패 시 롤백, Realtime로 재수화.
 // HAS_SUPABASE=false면 데모 시드(store_001)로 폴백해 프론트가 끊기지 않는다.
 import { create } from 'zustand';
+import { coalesce, subscribeDebounced } from '@/lib/store/realtimeSync';
 import { HAS_SUPABASE } from '@/lib/supabase';
 import {
   fetchScheduleConfig,
@@ -152,7 +153,7 @@ export const useScheduleStore = create<ScheduleState>((set, get) => ({
   swaps: SEED?.swaps ?? [],
   loaded: !HAS_SUPABASE,
 
-  hydrate: async () => {
+  hydrate: coalesce(async () => {
     if (!HAS_SUPABASE) return;
     const [config, templates, swaps] = await Promise.all([
       fetchScheduleConfig(),
@@ -160,8 +161,8 @@ export const useScheduleStore = create<ScheduleState>((set, get) => ({
       fetchSwaps(),
     ]);
     set({ config: config ?? DEFAULT_CONFIG, templates, swaps, loaded: true });
-  },
-  subscribe: () => subscribeSchedule(() => get().hydrate()),
+  }),
+  subscribe: () => subscribeDebounced(subscribeSchedule, () => get().hydrate()),
 
   setConfig: (patch) => {
     const before = get().config;

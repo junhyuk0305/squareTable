@@ -3,10 +3,11 @@ import { View, Text, StyleSheet, ScrollView, TextInput, Pressable, ActivityIndic
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack } from 'expo-router';
 import { useSessionStore } from '@/lib/store/useSessionStore';
+import { showToast } from '@/lib/store/useToastStore';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
-import { isValidPhone, normalizePhone } from '@/lib/utils/validation';
+import { isValidPhone, normalizePhone, passwordError } from '@/lib/utils/validation';
 import { INDUSTRIES } from '@/lib/config/industry';
 import { HeaderBackButton } from '@/components/HeaderBackButton';
 
@@ -49,7 +50,6 @@ function AccountEditForm() {
   const [pw, setPw] = useState('');
   const [pw2, setPw2] = useState('');
   const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   // 가게 이름 편집(사장 전용)
   const [store, setStore] = useState(storeName);
@@ -58,22 +58,20 @@ function AccountEditForm() {
   // 업종 편집(사장 전용) — 가게 이름과 같은 unit 속성. 노하우팩 매칭 키.
   const [biz, setBiz] = useState(industry);
   const saveIndustry = async () => {
-    if (!biz) return setMsg({ ok: false, text: '업종을 선택해주세요.' });
+    if (!biz) return showToast('업종을 선택해주세요.', 'warn');
     setBusy(true);
-    setMsg(null);
     const { error } = await updateIndustry(biz);
     setBusy(false);
-    setMsg(error ? { ok: false, text: error } : { ok: true, text: '업종을 변경했어요.' });
+    showToast(error ?? '업종을 변경했어요.', error ? 'warn' : 'good');
   };
 
   const saveStore = async () => {
-    if (!store.trim()) return setMsg({ ok: false, text: '가게 이름을 입력해주세요.' });
+    if (!store.trim()) return showToast('가게 이름을 입력해주세요.', 'warn');
     setBusy(true);
-    setMsg(null);
     const { error, remaining: left } = await renameStore(store.trim());
     setBusy(false);
     setRemaining(left);
-    setMsg(error ? { ok: false, text: error } : { ok: true, text: '가게 이름을 변경했어요.' });
+    showToast(error ?? '가게 이름을 변경했어요.', error ? 'warn' : 'good');
   };
 
   const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -81,12 +79,11 @@ function AccountEditForm() {
   const canSaveProfile = !!name.trim() && emailValid;
 
   const saveProfile = async () => {
-    if (!name.trim()) return setMsg({ ok: false, text: '이름을 입력해주세요.' });
-    if (!emailValid) return setMsg({ ok: false, text: '이메일을 올바르게 입력해주세요.' });
+    if (!name.trim()) return showToast('이름을 입력해주세요.', 'warn');
+    if (!emailValid) return showToast('이메일을 올바르게 입력해주세요.', 'warn');
     const phoneInput = phone.trim();
-    if (phoneInput && !isValidPhone(phoneInput)) return setMsg({ ok: false, text: '전화번호 형식을 확인해주세요. (예: 010-1234-5678)' });
+    if (phoneInput && !isValidPhone(phoneInput)) return showToast('전화번호 형식을 확인해주세요. (예: 010-1234-5678)', 'warn');
     setBusy(true);
-    setMsg(null);
     const { error } = await updateProfile({
       name: name.trim(),
       email: emailInput.trim(),
@@ -94,20 +91,20 @@ function AccountEditForm() {
       ...(phoneInput ? { phone: normalizePhone(phoneInput) } : {}),
     });
     setBusy(false);
-    setMsg(error ? { ok: false, text: error } : { ok: true, text: '프로필을 저장했어요.' });
+    showToast(error ?? '프로필을 저장했어요.', error ? 'warn' : 'good');
   };
 
   const savePw = async () => {
-    if (pw.length < 6) return setMsg({ ok: false, text: '비밀번호는 6자 이상이에요.' });
-    if (pw !== pw2) return setMsg({ ok: false, text: '비밀번호가 서로 달라요.' });
+    const pwErr = passwordError(pw);
+    if (pwErr) return showToast(pwErr, 'warn');
+    if (pw !== pw2) return showToast('비밀번호가 서로 달라요.', 'warn');
     setBusy(true);
-    setMsg(null);
     const { error } = await changePassword(pw);
     setBusy(false);
-    if (error) return setMsg({ ok: false, text: error });
+    if (error) return showToast(error, 'warn');
     setPw('');
     setPw2('');
-    setMsg({ ok: true, text: '비밀번호를 변경했어요.' });
+    showToast('비밀번호를 변경했어요.', 'good');
   };
 
   return (
@@ -196,7 +193,7 @@ function AccountEditForm() {
           <TextInput
             value={pw}
             onChangeText={setPw}
-            placeholder="6자 이상"
+            placeholder="영문·숫자 조합 9자 이상"
             placeholderTextColor={InkColors.ink3}
             secureTextEntry
             autoComplete="new-password"
@@ -205,6 +202,11 @@ function AccountEditForm() {
             autoCorrect={false}
             style={styles.input}
           />
+          {pw.length > 0 && (
+            <Text style={[styles.pwHint, passwordError(pw) ? styles.pwBad : styles.pwOk]}>
+              {passwordError(pw) ?? '✓ 사용할 수 있는 비밀번호예요'}
+            </Text>
+          )}
           <Text style={styles.label}>새 비밀번호 확인<Text style={styles.req}> *</Text></Text>
           <TextInput
             value={pw2}
@@ -223,7 +225,6 @@ function AccountEditForm() {
           </Pressable>
         </View>
 
-        {msg && <Text style={[styles.msg, { color: msg.ok ? BrandColors.good : BrandColors.accent }]}>{msg.text}</Text>}
         <View style={{ height: 24 }} />
       </ScrollView>
     </SafeAreaView>
@@ -240,6 +241,9 @@ const styles = StyleSheet.create({
   req: { color: BrandColors.accent, fontWeight: '900' },
   input: { borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md, paddingHorizontal: 14, paddingVertical: 13, fontSize: 16, color: InkColors.ink, backgroundColor: '#FFFFFF' },
   inputError: { borderColor: BrandColors.accent },
+  pwHint: { fontSize: 12, fontWeight: '600', marginTop: -2 },
+  pwOk: { color: BrandColors.good },
+  pwBad: { color: InkColors.ink3 },
   storeCard: { borderColor: BrandColors.gold },
   chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.sm },
   chip: { paddingHorizontal: Space.md, paddingVertical: Space.sm, borderRadius: Radius.pill, borderWidth: 1, borderColor: InkColors.line, backgroundColor: '#FFFFFF' },
@@ -254,5 +258,4 @@ const styles = StyleSheet.create({
   primaryText: { color: '#FFFFFF', fontSize: 15, fontWeight: '800' },
   secondary: { marginTop: 12, backgroundColor: InkColors.bgSoft, paddingVertical: 15, borderRadius: Radius.md, alignItems: 'center', borderWidth: 1, borderColor: InkColors.line },
   secondaryText: { color: InkColors.ink, fontSize: 15, fontWeight: '800' },
-  msg: { fontSize: 14, fontWeight: '600', textAlign: 'center', marginTop: 4 },
 });

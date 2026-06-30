@@ -4,10 +4,36 @@ import { Elevation, Radius } from '@/lib/theme/elevation';
 
 export const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: InkColors.cream },
-  scroll: { padding: 20, gap: 18 },
+  // 스크롤 컨테이너는 패딩만 — 섹션 간격(gap)은 단일 자식인 콘텐츠 래퍼(scrollInner)가 갖는다.
+  // (contentContainer는 자식이 하나라 gap이 무효 → 래퍼로 일원화해 중복/혼동 제거)
+  scroll: { padding: 20 },
+  scrollInner: { gap: 18 },
   greet: { fontSize: 16, fontWeight: '700', color: InkColors.ink2 },
   // 섹션: [밖 라벨] + [안 카드] 묶음
   section: { gap: 8 },
+
+  // 미검증 우선 배너(홈 최상단) — 검증 필요 강도를 레드 액센트로
+  reviewBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: BrandColors.accentSoft,
+    borderWidth: 1,
+    borderColor: BrandColors.bad,
+    borderRadius: Radius.md,
+    padding: 14,
+  },
+  reviewIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: Radius.pill,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  reviewTitle: { fontSize: 14, fontWeight: '800', color: InkColors.ink },
+  reviewSub: { fontSize: 12, color: InkColors.ink2, marginTop: 2, lineHeight: 17 },
+  reviewCta: { fontSize: 13, fontWeight: '800', color: BrandColors.bad },
 
   // 상단 커스텀 헤더 — 좌측 로고 / 우측 매장명·사용자명
   appHeader: {
@@ -19,9 +45,6 @@ export const styles = StyleSheet.create({
     paddingBottom: 10,
     backgroundColor: InkColors.cream,
   },
-  appHeaderRight: { flex: 1, alignItems: 'flex-end', paddingLeft: 12 },
-  appHeaderStore: { fontSize: 16, fontWeight: '900', color: InkColors.ink, textAlign: 'right' },
-  appHeaderUser: { fontSize: 12, fontWeight: '600', color: InkColors.ink3, textAlign: 'right', marginTop: 2 },
 
   onboard: {
     backgroundColor: BrandColors.accentSoft,

@@ -110,6 +110,7 @@ export default function OwnerSettings() {
           <SettingsRow first icon="people-outline" label="직원·초대코드 관리" onPress={() => router.push('/owner/staff')} />
           <SettingsRow icon="cash-outline" label="급여 설정" onPress={() => router.push('/owner/payroll')} />
           <SettingsRow icon="bulb-outline" label="내 노하우" onPress={() => router.push('/owner/knowledge')} />
+          <SettingsRow icon="albums-outline" label="노하우 템플릿 둘러보기" onPress={() => router.push('/owner/templates')} />
         </SettingsSection>
 
         <SettingsSection icon="card-outline" title="구독 및 결제">

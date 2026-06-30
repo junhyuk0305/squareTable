@@ -41,6 +41,32 @@ export function minutesBetween(aISO: string, bISO: string): number {
   return Math.max(0, Math.round((new Date(bISO).getTime() - new Date(aISO).getTime()) / 60000));
 }
 
+/**
+ * 앱에서 저장하는 모든 타임스탬프의 **단일 생성 지점**.
+ * 손으로 "+09:00"을 붙이거나 직접 ISO를 조립하지 말 것 — 표기가 섞이면(KST 오프셋 vs UTC 'Z')
+ * 정렬·비교가 깨진다(예: 데모가 최신 메시지 아래로 밀림). 시드/고정시각은 반드시 이걸로 만든다.
+ *  - 인자 없음 → 지금(현재 시각). `new Date().toISOString()`과 동일.
+ *  - (dateStr, time) → KST 벽시계("YYYY-MM-DD", "HH:MM" 또는 "HH:MM:SS")를 표준 UTC ISO로 변환.
+ * 반환은 항상 UTC ISO("…Z") 한 가지 표기뿐이라, 어디서 만들든 타임존이 달라질 수 없다.
+ */
+export function nowISO(): string;
+export function nowISO(dateStr: string, time: string): string;
+export function nowISO(dateStr?: string, time?: string): string {
+  if (dateStr === undefined || time === undefined) return new Date().toISOString();
+  const t = time.length === 5 ? `${time}:00` : time; // "HH:MM" → "HH:MM:SS"
+  return new Date(`${dateStr}T${t}+09:00`).toISOString();
+}
+
+/**
+ * ISO 타임스탬프 → epoch ms. 정렬/비교는 반드시 이걸로 한다(문자열 localeCompare 금지).
+ * 생성은 nowISO()로 단일화돼 표기가 섞이지 않지만, 외부/레거시 데이터가 섞여 들어와도
+ * 안전하도록 비교는 항상 epoch로 정규화한다(방어선). 파싱 실패 시 0(맨 앞).
+ */
+export function tsMs(iso: string): number {
+  const t = new Date(iso).getTime();
+  return Number.isNaN(t) ? 0 : t;
+}
+
 export function fmtDuration(min: number): string {
   const h = Math.floor(min / 60);
   const m = min % 60;

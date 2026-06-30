@@ -25,7 +25,7 @@ import { MiniSquareCard } from './coach/MiniSquareCard';
 import { SplitProposal } from './coach/SplitProposal';
 import { ScaleBubble } from './coach/ScaleBubble';
 import { styles } from './coach/coachStyles';
-import { formatRelative, pickImageWeb } from './coach/coachUtils';
+import { formatRelative } from './coach/coachUtils';
 
 import type { Category, PlaybookEntry, SquareBlock, UnknownQuery } from '@/types';
 
@@ -411,7 +411,7 @@ export function OwnerCoachChat({
       .filter((s) => isSquarePublishable(s.square))
       .map((s) => buildPlaybookEntryFromSquare({ ...uq, presumed_category: s.category }, s.square, { title: s.title, keywords: s.keywords }));
     if (entries.length === 0) {
-      setError('등록할 내용이 부족해요. 🔁 다시 말하기로 보완해 주세요.');
+      setError('등록할 내용이 부족해요. ➕ 내용 추가하기로 보완해 주세요.');
       return;
     }
     publishedRef.current = true;
@@ -487,21 +487,12 @@ export function OwnerCoachChat({
   const startRetalk = useCallback(() => {
     setReStructure(true);
     setEditing(false);
-    pushMsg({ kind: 'ai', text: '다시 말씀해 주세요. 방금 내용에 덧붙이거나 새로 적어도 돼요.' });
+    pushMsg({ kind: 'ai', text: '내용을 더 적어 주세요. 방금 내용에 덧붙이거나 새로 적어도 돼요.' });
   }, [pushMsg]);
 
   const attachPhoto = useCallback(() => {
-    pickImageWeb(async (file) => {
-      setBusy(true);
-      const url = await uploadPhoto(file);
-      setBusy(false);
-      if (url) {
-        setPhotos((p) => [...p, url]);
-        pushMsg({ kind: 'ai', text: '사진을 첨부했어요. 📎' });
-      } else {
-        setError('사진 업로드에 실패했어요 — 다시 시도해 주세요.');
-      }
-    });
+    // 사진 첨부는 아직 준비 중 — 곧 지원 예정. 지금은 안내만 하고 글 입력을 유도한다.
+    pushMsg({ kind: 'ai', text: '사진 첨부는 준비 중이에요 — 곧 지원할게요. 지금은 글로 적어 주시면 정리해 드릴게요. 📷' });
   }, [pushMsg]);
 
   // 입력바는 하단에 상시 유지한다 — 리뷰 상태에서도 사장이 바로 덧붙여 말할 수 있게.

@@ -13,6 +13,8 @@ export type DialogRequest = {
   cancelLabel?: string;
   destructive?: boolean;
   icon?: IconName;
+  /** 본문 아래 빨강 강조 줄 — 주의/검증 필요 등 경고성 문구. */
+  accent?: string;
   /** 정보 고지(단일 '확인' 버튼) — 취소 버튼을 숨긴다. */
   hideCancel?: boolean;
 };

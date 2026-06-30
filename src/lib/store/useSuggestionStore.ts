@@ -1,6 +1,7 @@
 // 노하우 제안/신청 큐 — 알바가 올린 개선 제안 / 신규 등록 신청을 사장이 검토(승인·반려).
 // mock 모드: 데모 시드. Supabase 모드: playbook_suggestions 테이블 + 실시간 구독.
 import { create } from 'zustand';
+import { coalesce, subscribeDebounced } from '@/lib/store/realtimeSync';
 import type { PlaybookSuggestion } from '@/types';
 import { HAS_SUPABASE } from '@/lib/supabase';
 import { fetchSuggestions, insertSuggestion, reviewSuggestion, subscribeSuggestions } from '@/lib/db';
@@ -62,11 +63,11 @@ export const useSuggestionStore = create<State>((set, get) => ({
   suggestions: HAS_SUPABASE ? [] : [...seed],
   loaded: !HAS_SUPABASE,
 
-  hydrate: async () => {
+  hydrate: coalesce(async () => {
     if (!HAS_SUPABASE) return;
     set({ suggestions: await fetchSuggestions(), loaded: true });
-  },
-  subscribe: () => subscribeSuggestions(() => get().hydrate()),
+  }),
+  subscribe: () => subscribeDebounced(subscribeSuggestions, () => get().hydrate()),
 
   submit: (input) => {
     const s = useSessionStore.getState();

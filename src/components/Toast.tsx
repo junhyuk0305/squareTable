@@ -7,6 +7,7 @@ import { useToastStore, type ToastTone } from '@/lib/store/useToastStore';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { frameCapStyle, CONTENT_MAX_WIDTH, SCREEN_GUTTER, Space } from '@/lib/theme/layout';
 import { Radius } from '@/lib/theme/elevation';
+import { USE_NATIVE_DRIVER } from '@/lib/anim';
 
 const TONE: Record<ToastTone, { bg: string; icon: keyof typeof Ionicons.glyphMap }> = {
   good: { bg: InkColors.ink, icon: 'checkmark-circle' },
@@ -22,9 +23,9 @@ export function Toast() {
 
   useEffect(() => {
     if (message) {
-      Animated.timing(anim, { toValue: 1, duration: 180, useNativeDriver: true }).start();
+      Animated.timing(anim, { toValue: 1, duration: 180, useNativeDriver: USE_NATIVE_DRIVER }).start();
     } else {
-      Animated.timing(anim, { toValue: 0, duration: 160, useNativeDriver: true }).start();
+      Animated.timing(anim, { toValue: 0, duration: 160, useNativeDriver: USE_NATIVE_DRIVER }).start();
     }
   }, [message, anim]);
 

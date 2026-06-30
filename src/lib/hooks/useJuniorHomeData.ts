@@ -7,7 +7,7 @@ import { useWorkStore, occursOn, type FeedItem } from '@/lib/store/useWorkStore'
 import { useScheduleStore } from '@/lib/store/useScheduleStore';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { useChatStore } from '@/lib/store/useChatStore';
-import { todayStr, liveMinutes, payFor, DEFAULT_HOURLY_WAGE } from '@/lib/utils/attendance';
+import { todayStr, liveMinutes, payFor, DEFAULT_HOURLY_WAGE, tsMs } from '@/lib/utils/attendance';
 import type { PlaybookEntry } from '@/types';
 
 export type JuniorHomeData = {
@@ -109,7 +109,7 @@ export function useJuniorHomeData(): JuniorHomeData {
         .filter((f) => f.kind === 'notice' && !(f.read_by ?? []).includes(userId))
         .sort((a, b) => {
           if (!!a.pinned !== !!b.pinned) return a.pinned ? -1 : 1;
-          return b.createdAt.localeCompare(a.createdAt);
+          return tsMs(b.createdAt) - tsMs(a.createdAt);
         }),
     [feed, userId],
   );

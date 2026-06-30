@@ -1,8 +1,9 @@
 import { useMemo } from 'react';
-import { View, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, type Href } from 'expo-router';
 
+import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useUnknownQueueStore } from '@/lib/store/useUnknownQueueStore';
 import { useSuggestionStore } from '@/lib/store/useSuggestionStore';
 import { useScheduleStore } from '@/lib/store/useScheduleStore';
@@ -10,6 +11,7 @@ import { useStaffStore } from '@/lib/store/useStaffStore';
 import { NotificationList } from '@/components/NotificationList';
 import { buildOwnerNotifications, type OwnerNotifKind } from '@/lib/utils/notifications';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
+import { Elevation, Radius } from '@/lib/theme/elevation';
 import { Ionicons } from '@expo/vector-icons';
 
 type IconName = React.ComponentProps<typeof Ionicons>['name'];
@@ -28,10 +30,14 @@ const KIND_UI: Record<OwnerNotifKind, { icon: IconName; tint: string }> = {
  */
 export default function OwnerNotificationsScreen() {
   const router = useRouter();
+  const userName = useSessionStore((s) => s.userName);
+  const storeName = useSessionStore((s) => s.storeName) || '우리 가게';
   const queue = useUnknownQueueStore((s) => s.queue);
   const suggestions = useSuggestionStore((s) => s.suggestions);
   const swaps = useScheduleStore((s) => s.swaps);
   const staff = useStaffStore((s) => s.staff);
+
+  const initial = (userName ?? '나').trim().slice(0, 1) || '나';
 
   const rows = useMemo(
     () =>
@@ -47,6 +53,21 @@ export default function OwnerNotificationsScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+        {/* 맨 위 — 매장명 · 사장님 이름(정체성). 직원 알림 화면과 동일 구조 */}
+        <View style={styles.idCard}>
+          <View style={styles.avatar}>
+            <Text style={styles.avatarText}>{initial}</Text>
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.idStore} numberOfLines={1}>
+              {storeName}
+            </Text>
+            <Text style={styles.idUser} numberOfLines={1}>
+              {userName} 사장님
+            </Text>
+          </View>
+        </View>
+
         <NotificationList
           rows={rows}
           kindUI={KIND_UI}
@@ -65,4 +86,29 @@ export default function OwnerNotificationsScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: InkColors.cream },
   scroll: { padding: 20, gap: 16 },
+
+  // 정체성 카드 — 직원 알림 화면(junior/notifications)과 동일 규격
+  idCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: InkColors.bg,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: InkColors.line,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    ...Elevation.e1,
+  },
+  avatar: {
+    width: 42,
+    height: 42,
+    borderRadius: Radius.pill,
+    backgroundColor: InkColors.ink,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarText: { fontSize: 17, fontWeight: '900', color: '#FFFFFF' },
+  idStore: { fontSize: 16, fontWeight: '900', color: InkColors.ink },
+  idUser: { fontSize: 13, fontWeight: '600', color: InkColors.ink3, marginTop: 2 },
 });

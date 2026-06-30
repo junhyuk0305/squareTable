@@ -84,7 +84,14 @@ function EntryRow({ e, onPress }: { e: PlaybookEntry; onPress: () => void }) {
  * 구성: 상단행(개수+추가) → 미검증 배너 → 검색/필터/뷰토글
  *      → 대시보드(가로 캐러셀: 검증필요·인기·최근·잘통하는) ↔ 목록(세로 정렬 리스트).
  */
-export function OwnerKnowhowBrowse({ onSelect }: { onSelect: (id: string) => void }) {
+export function OwnerKnowhowBrowse({
+  onSelect,
+  initialNeedsReview = false,
+}: {
+  onSelect: (id: string) => void;
+  /** 진입 즉시 '미검증만' 목록으로 시작(대시보드 미검증 배너에서 들어올 때). */
+  initialNeedsReview?: boolean;
+}) {
   const router = useRouter();
   const entries = usePlaybookStore((s) => s.entries);
   const loaded = usePlaybookStore((s) => s.loaded);
@@ -94,8 +101,8 @@ export function OwnerKnowhowBrowse({ onSelect }: { onSelect: (id: string) => voi
   const [query, setQuery] = useState('');
   const [activeCats, setActiveCats] = useState<Category[]>([]); // 빈 배열 = 전체
   const [sort, setSort] = useState<SortKey>('recent');
-  const [view, setView] = useState<'dashboard' | 'list'>('dashboard');
-  const [onlyNeedsReview, setOnlyNeedsReview] = useState(false); // 미검증 배너에서 진입
+  const [view, setView] = useState<'dashboard' | 'list'>(initialNeedsReview ? 'list' : 'dashboard');
+  const [onlyNeedsReview, setOnlyNeedsReview] = useState(initialNeedsReview); // 미검증 배너에서 진입
 
   const goAdd = () => router.push('/owner/coach' as never);
   const toggleCat = (c: Category) =>
@@ -194,7 +201,7 @@ export function OwnerKnowhowBrowse({ onSelect }: { onSelect: (id: string) => voi
   );
 
   return (
-    <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+    <ScrollView style={styles.flex} contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
       {/* 상단행 */}
       <View style={styles.headRow}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, flexShrink: 1, minWidth: 0 }}>
@@ -389,6 +396,7 @@ function EmptyResult({ onReset, label }: { onReset: () => void; label?: string }
 }
 
 const styles = StyleSheet.create({
+  flex: { flex: 1 },
   scroll: { padding: Space.gutter, gap: Space.md },
   center: { alignItems: 'center', justifyContent: 'center', gap: 10, paddingVertical: 48 },
   loadingText: { fontSize: 13, color: InkColors.ink3, fontWeight: '600' },

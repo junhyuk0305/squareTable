@@ -2,6 +2,7 @@
 // 메시지/공지/할일 자체는 useWorkStore가 보관하고 roomId로 묶인다. 이 스토어는 '어떤 방들이 있고
 // 누가 속하며 지금 어느 방을 보는가'만 관리한다.
 import { create } from 'zustand';
+import { coalesce, subscribeDebounced } from '@/lib/store/realtimeSync';
 import { HAS_SUPABASE } from '@/lib/supabase';
 import {
   fetchRooms,
@@ -64,7 +65,7 @@ export const useRoomStore = create<State>((set, get) => ({
   currentRoomId: HAS_SUPABASE ? null : defaultRoomId(DEMO_UNIT_ID),
   loaded: !HAS_SUPABASE,
 
-  hydrate: async () => {
+  hydrate: coalesce(async () => {
     if (!HAS_SUPABASE) return;
     const session = useSessionStore.getState();
     let [rooms, members] = await Promise.all([fetchRooms(), fetchRoomMembers()]);
@@ -77,9 +78,9 @@ export const useRoomStore = create<State>((set, get) => ({
     const cur = get().currentRoomId;
     const fallback = rooms.find((r) => r.isDefault)?.id ?? rooms[0]?.id ?? null;
     set({ rooms, members, loaded: true, currentRoomId: cur && rooms.some((r) => r.id === cur) ? cur : fallback });
-  },
+  }),
 
-  subscribe: () => subscribeRooms(() => get().hydrate()),
+  subscribe: () => subscribeDebounced(subscribeRooms, () => get().hydrate()),
 
   setCurrentRoom: (id) => set({ currentRoomId: id }),
 

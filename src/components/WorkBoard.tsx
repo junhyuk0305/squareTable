@@ -22,7 +22,7 @@ import { type Member } from '@/components/work/MentionInput';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { HEADER_EDGE_GUTTER } from '@/lib/theme/layout';
-import { todayStr } from '@/lib/utils/attendance';
+import { todayStr, tsMs } from '@/lib/utils/attendance';
 
 type ViewKey = 'chat' | 'notice' | 'todo';
 
@@ -120,7 +120,7 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
   const memberCount = Math.max(1, (owner ? 1 : 0) + staff.length);
 
   const stream = useMemo(
-    () => feed.filter((f) => (f.kind === 'message' || f.kind === 'task_done') && inRoom(f.roomId)).sort((a, b) => a.createdAt.localeCompare(b.createdAt)),
+    () => feed.filter((f) => (f.kind === 'message' || f.kind === 'task_done') && inRoom(f.roomId)).sort((a, b) => tsMs(a.createdAt) - tsMs(b.createdAt)),
     [feed, inRoom],
   );
   const notices = useMemo(
@@ -129,7 +129,7 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
         .filter((f) => f.kind === 'notice' && inRoom(f.roomId))
         .sort((a, b) => {
           if (!!b.pinned !== !!a.pinned) return b.pinned ? 1 : -1;
-          return b.createdAt.localeCompare(a.createdAt);
+          return tsMs(b.createdAt) - tsMs(a.createdAt);
         }),
     [feed, inRoom],
   );
