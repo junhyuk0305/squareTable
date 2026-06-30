@@ -276,14 +276,39 @@ export async function updateChatSatisfaction(id: string, vote: 'up' | 'down'): P
 // Supabase 없으면 로컬 object URL을 그대로 반환(데모 폴백).
 const PHOTO_BUCKET = 'playbook-photos';
 
+// 업로드 전 이미지 압축(웹) — 폰 사진 수 MB를 긴 변 1600px·JPEG q0.8로 다운스케일해 스토리지·대역폭 절감.
+// 비웹(document 없음)·비이미지·이미 작은 파일·실패 시 원본 그대로(업로드가 절대 안 깨지게).
+async function compressImage(file: File): Promise<File> {
+  if (typeof document === 'undefined' || !file.type.startsWith('image/')) return file;
+  if (file.size < 600_000) return file; // 이미 작으면 스킵
+  try {
+    const bitmap = await createImageBitmap(file);
+    const scale = Math.min(1, 1600 / Math.max(bitmap.width, bitmap.height));
+    const w = Math.round(bitmap.width * scale);
+    const h = Math.round(bitmap.height * scale);
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return file;
+    ctx.drawImage(bitmap, 0, 0, w, h);
+    const blob = await new Promise<Blob | null>((res) => canvas.toBlob(res, 'image/jpeg', 0.8));
+    if (!blob || blob.size >= file.size) return file; // 압축 이득 없으면 원본
+    return new File([blob], file.name.replace(/\.\w+$/, '') + '.jpg', { type: 'image/jpeg' });
+  } catch {
+    return file;
+  }
+}
+
 export async function uploadPhoto(file: File): Promise<string | null> {
   if (!HAS_SUPABASE) {
     return typeof URL !== 'undefined' && URL.createObjectURL ? URL.createObjectURL(file) : null;
   }
-  const ext = file.name.split('.').pop() || 'jpg';
+  const compressed = await compressImage(file);
+  const ext = compressed.name.split('.').pop() || 'jpg';
   const path = `${_unitId ?? 'unknown'}/${Date.now()}-${Math.round(Math.random() * 1e6)}.${ext}`;
-  const { error } = await supabase.storage.from(PHOTO_BUCKET).upload(path, file, {
-    contentType: file.type || 'image/jpeg',
+  const { error } = await supabase.storage.from(PHOTO_BUCKET).upload(path, compressed, {
+    contentType: compressed.type || 'image/jpeg',
     upsert: false,
   });
   if (error) {
