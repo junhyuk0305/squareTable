@@ -4,7 +4,8 @@ import { create } from 'zustand';
 import type { Owner, Junior } from '@/types';
 import usersData from '@/data/users.json';
 import { HAS_SUPABASE } from '@/lib/supabase';
-import { fetchStaffProfiles, removeStaffMember } from '@/lib/db';
+import { fetchStaffProfiles, removeStaffMember, subscribeStaff } from '@/lib/db';
+import { subscribeDebounced } from '@/lib/store/realtimeSync';
 import { optimisticRemove } from '@/lib/store/crudHelpers';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 
@@ -20,6 +21,8 @@ type StaffState = {
   getStaff: (id: string) => Junior | undefined;
   // 사장이 직원을 매장에서 내보낸다(소속 해제). 낙관적 제거 + 실패 시 복원.
   removeStaff: (id: string) => void;
+  // profiles 실시간 구독 — 신규 합류/탈퇴가 사장 화면에 즉시 반영. 해제 함수 반환.
+  subscribe: () => () => void;
 };
 
 // 신규(비데모) 매장: 사장 본인만 세션에서 구성, 직원은 아직 없음.
@@ -58,4 +61,6 @@ export const useStaffStore = create<StaffState>((set, get) => ({
   removeStaff: (id) => {
     optimisticRemove(set, get, 'staff', id, () => removeStaffMember(id), '직원 내보내기에 실패했어요. 다시 시도해 주세요.');
   },
+
+  subscribe: () => subscribeDebounced(subscribeStaff, () => get().hydrate()),
 }));

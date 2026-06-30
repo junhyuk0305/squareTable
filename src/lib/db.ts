@@ -760,3 +760,17 @@ export function subscribeSchedule(onChange: () => void): () => void {
     supabase.removeChannel(ch);
   };
 }
+
+// 직원 명부(profiles) 실시간 — 직원이 초대코드로 합류(profiles.unit_id 갱신)하면 사장 화면에
+// 즉시 반영되게. 이게 없으면 사장이 앱을 켜둔 채로는 신규 합류가 재진입 전까지 안 보여
+// "초대했는데 안 들어왔네?" 오해가 난다. (RLS가 같은 매장 행만 흘려보낸다.)
+export function subscribeStaff(onChange: () => void): () => void {
+  if (!HAS_SUPABASE) return () => {};
+  const ch = supabase
+    .channel(uniqueChannel('staff'))
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, onChange)
+    .subscribe();
+  return () => {
+    supabase.removeChannel(ch);
+  };
+}

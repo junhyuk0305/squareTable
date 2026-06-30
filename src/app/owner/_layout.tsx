@@ -35,12 +35,14 @@ export default function OwnerLayout() {
     const offW = useWorkStore.getState().subscribe();
     const offA = useAttendanceStore.getState().subscribe();
     const offS = useScheduleStore.getState().subscribe();
+    const offSt = useStaffStore.getState().subscribe(); // 신규 직원 합류가 즉시 직원 목록에 반영
     return () => {
       offQ();
       offP();
       offW();
       offA();
       offS();
+      offSt();
     };
   }, [status]);
 
