@@ -16,9 +16,6 @@ let _unitId: string | null = null;
 export function setUnitId(id: string | null) {
   _unitId = id;
 }
-export function getUnitId() {
-  return _unitId;
-}
 
 // 같은 토픽 채널을 두 화면이 동시에 구독하면 Realtime 서버가 두 번째 join을 거부해
 // 한쪽 실시간이 죽는다. 화면 레벨에서 구독하는 채널은 호출마다 토픽을 유니크하게 만든다.
