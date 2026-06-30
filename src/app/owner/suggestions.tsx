@@ -168,7 +168,7 @@ const styles = StyleSheet.create({
   scroll: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 24, gap: 14 },
   subline: { fontSize: 13, color: InkColors.ink3, fontWeight: '600' },
 
-  empty: { backgroundColor: InkColors.bg, borderRadius: 14, borderWidth: 1, borderColor: InkColors.line, padding: 28, gap: 6, alignItems: 'center' },
+  empty: { backgroundColor: InkColors.bg, borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, padding: 28, gap: 6, alignItems: 'center' },
   emptyEmoji: { fontSize: 34 },
   emptyTitle: { fontSize: 16, fontWeight: '800', color: InkColors.ink },
   emptySub: { fontSize: 13, color: InkColors.ink3, textAlign: 'center' },
@@ -182,13 +182,13 @@ const styles = StyleSheet.create({
   kindText: { fontSize: 12, fontWeight: '800' },
   proposer: { marginLeft: 'auto', fontSize: 13, fontWeight: '700', color: InkColors.ink2 },
 
-  targetRow: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: InkColors.bgSoft, borderRadius: 9, paddingHorizontal: 10, paddingVertical: 7 },
+  targetRow: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: InkColors.bgSoft, borderRadius: Radius.sm, paddingHorizontal: 10, paddingVertical: 7 },
   targetText: { flex: 1, fontSize: 12.5, fontWeight: '700', color: InkColors.ink2 },
 
   body: { fontSize: 14.5, color: InkColors.ink, lineHeight: 21 },
 
   actions: { flexDirection: 'row', gap: 8, marginTop: 2 },
-  btn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: 11, borderRadius: 12 },
+  btn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: 11, borderRadius: Radius.md },
   btnGhost: { paddingHorizontal: 18, borderWidth: 1, borderColor: InkColors.line, backgroundColor: InkColors.bg },
   btnGhostText: { fontSize: 13.5, fontWeight: '700', color: InkColors.ink2 },
   btnPrimary: { flex: 1, backgroundColor: InkColors.ink },

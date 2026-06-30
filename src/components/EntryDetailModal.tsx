@@ -1,9 +1,9 @@
-import { View, Text, Pressable, ScrollView, Image, Modal, StyleSheet } from 'react-native';
+import { View, Text, Pressable, ScrollView, Image, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
+import { BottomSheet } from '@/components/BottomSheet';
 import { BrandColors, InkColors } from '@/lib/theme/colors';
-import { Elevation, Radius } from '@/lib/theme/elevation';
-import { modalFrameStyle } from '@/lib/theme/layout';
+import { Radius } from '@/lib/theme/elevation';
 import type { PlaybookEntry } from '@/types';
 
 /**
@@ -40,11 +40,7 @@ export function EntryDetailModal({
   const stdPct = std ? Math.max(0, Math.min(100, Math.round((std.value / stdMax) * 100))) : null;
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View style={modalFrameStyle}>
-        <Pressable style={s.backdrop} onPress={onClose} />
-        <View style={s.sheet}>
-          <View style={s.grip} />
+    <BottomSheet visible={visible} onClose={onClose} sheetStyle={{ maxHeight: '88%' }}>
           <View style={s.head}>
             <Text style={s.kicker}>노하우 원문</Text>
             <Pressable onPress={onClose} hitSlop={8} style={({ pressed }) => [pressed && { opacity: 0.6 }]}>
@@ -135,16 +131,11 @@ export function EntryDetailModal({
 
             <View style={{ height: 8 }} />
           </ScrollView>
-        </View>
-      </View>
-    </Modal>
+    </BottomSheet>
   );
 }
 
 const s = StyleSheet.create({
-  backdrop: { flex: 1 },
-  sheet: { backgroundColor: InkColors.bg, borderTopLeftRadius: Radius.sheet, borderTopRightRadius: Radius.sheet, maxHeight: '88%', ...Elevation.e3 },
-  grip: { width: 40, height: 4, borderRadius: 99, backgroundColor: InkColors.line, alignSelf: 'center', marginTop: 12, marginBottom: 4 },
   head: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 8 },
   kicker: { fontSize: 11, fontWeight: '800', letterSpacing: 1, color: InkColors.ink3 },
 
@@ -161,9 +152,9 @@ const s = StyleSheet.create({
   body: { fontSize: 15, color: InkColors.ink, lineHeight: 22 },
 
   stepRow: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' },
-  stepNum: { width: 22, height: 22, borderRadius: 11, backgroundColor: BrandColors.good, color: '#FFFFFF', fontSize: 12, fontWeight: '800', textAlign: 'center', lineHeight: 22 },
+  stepNum: { width: 22, height: 22, borderRadius: Radius.sm, backgroundColor: BrandColors.good, color: '#FFFFFF', fontSize: 12, fontWeight: '800', textAlign: 'center', lineHeight: 22 },
   stepText: { flex: 1, fontSize: 15, color: InkColors.ink, lineHeight: 22 },
-  scriptBox: { flexDirection: 'row', gap: 8, borderWidth: 1, borderColor: BrandColors.good, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, marginTop: 2, backgroundColor: '#FFFFFF' },
+  scriptBox: { flexDirection: 'row', gap: 8, borderWidth: 1, borderColor: BrandColors.good, borderRadius: Radius.sm, paddingHorizontal: 12, paddingVertical: 10, marginTop: 2, backgroundColor: '#FFFFFF' },
   scriptMark: { fontSize: 14 },
   scriptText: { flex: 1, fontSize: 14, color: InkColors.ink, fontStyle: 'italic', lineHeight: 20 },
 
@@ -171,8 +162,8 @@ const s = StyleSheet.create({
   gaugeHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' },
   gaugeLabel: { fontSize: 12, fontWeight: '800', color: InkColors.ink2 },
   gaugeVal: { fontSize: 13, fontWeight: '900', color: InkColors.ink },
-  gaugeTrack: { height: 10, borderRadius: 999, backgroundColor: InkColors.bgSoft, overflow: 'hidden' },
-  gaugeFill: { height: '100%', borderRadius: 999, backgroundColor: BrandColors.yellow },
+  gaugeTrack: { height: 10, borderRadius: Radius.pill, backgroundColor: InkColors.bgSoft, overflow: 'hidden' },
+  gaugeFill: { height: '100%', borderRadius: Radius.pill, backgroundColor: BrandColors.yellow },
 
   photoRow: { gap: 8, paddingVertical: 2 },
   photo: { width: 120, height: 120, borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, backgroundColor: InkColors.bgSoft },

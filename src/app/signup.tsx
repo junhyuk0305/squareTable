@@ -6,9 +6,12 @@ import { useSessionStore } from '@/lib/store/useSessionStore';
 import { applyMockSeed } from '@/lib/demo/mockSeed';
 import { HAS_SUPABASE } from '@/lib/supabase';
 import { formatBizNo, isValidBizNo, bizDigits } from '@/lib/utils/bizno';
-import { isValidEmail } from '@/lib/utils/validation';
+import { isValidEmail, isValidPhone, normalizePhone } from '@/lib/utils/validation';
 import { BrandColors, InkColors } from '@/lib/theme/colors';
+import { Space } from '@/lib/theme/layout';
+import { Radius } from '@/lib/theme/elevation';
 import type { Role } from '@/types';
+import { INDUSTRIES } from '@/lib/config/industry';
 
 export default function SignupScreen() {
   const router = useRouter();
@@ -17,6 +20,7 @@ export default function SignupScreen() {
   const createStore = useSessionStore((s) => s.createStore);
   const joinByInvite = useSessionStore((s) => s.joinByInvite);
   const verifyEmail = useSessionStore((s) => s.verifyEmail);
+  const isPhoneTaken = useSessionStore((s) => s.isPhoneTaken);
 
   const [role, setRole] = useState<Role>('owner');
   const [name, setName] = useState('');
@@ -25,6 +29,7 @@ export default function SignupScreen() {
   const [pw, setPw] = useState('');
   const [storeName, setStoreName] = useState('');
   const [bizNo, setBizNo] = useState('');
+  const [industry, setIndustry] = useState('');
   const [inviteCode, setInviteCode] = useState('');
 
   // 동의 항목 — 역할별로 필수/선택 구성이 달라진다(직원은 근로·급여정보 추가).
@@ -39,7 +44,6 @@ export default function SignupScreen() {
 
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const [createdCode, setCreatedCode] = useState<string | null>(null); // 사장 가입 성공 → 발급된 초대코드
   // signUp 성공(세션 확보) 이후 가게 생성/합류만 실패한 경우 → 재시도 시 signUp을 다시 부르지 않게
   // (다시 부르면 'already registered'로 막혀 영구 데드엔드). 매장 연결만 재시도한다.
   const [accountReady, setAccountReady] = useState(false);
@@ -78,13 +82,14 @@ export default function SignupScreen() {
           { key: 'age14', label: '만 14세 이상입니다', required: true },
           { key: 'terms', label: '서비스 이용약관', required: true, doc: '/terms' },
           { key: 'collect', label: '개인정보 수집·이용', required: true, doc: '/legal/collect' },
-          { key: 'marketing', label: '마케팅 정보 수신', required: false, doc: '/legal/marketing' },
+          { key: 'marketing', label: '마케팅·광고성 정보 수신(문자·이메일)', required: false, doc: '/legal/marketing' },
         ]
       : [
+          { key: 'age14', label: '만 14세 이상입니다 (미성년자는 법정대리인 동의 필요)', required: true },
           { key: 'terms', label: '서비스 이용약관', required: true, doc: '/terms' },
           { key: 'collect', label: '개인정보 수집·이용', required: true, doc: '/legal/collect' },
           { key: 'labor', label: '근로·급여정보 처리', required: true, doc: '/legal/labor' },
-          { key: 'marketing', label: '마케팅 정보 수신', required: false, doc: '/legal/marketing' },
+          { key: 'marketing', label: '마케팅·광고성 정보 수신(문자·이메일)', required: false, doc: '/legal/marketing' },
         ];
 
   const requiredKeys = consentRows.filter((r) => r.required).map((r) => r.key);
@@ -102,7 +107,8 @@ export default function SignupScreen() {
 
   // 필수 입력값이 모두 채워졌는지 — 제출 버튼 활성화 게이트(사장은 가게이름 포함)
   const requiredFilled =
-    !!name.trim() && !!email.trim() && !!pw && (role === 'junior' || !!storeName.trim());
+    !!name.trim() && !!email.trim() && !!pw && !!phone.trim() &&
+    (role === 'owner' ? (!!storeName.trim() && !!industry) : !!inviteCode.trim());
 
   const start = async () => {
     setErr(null);
@@ -114,13 +120,19 @@ export default function SignupScreen() {
     if (!isValidEmail(email)) return setErr('이메일 형식을 확인해주세요.');
     if (!pw) return setErr('비밀번호를 입력해주세요.');
     if (pw.length < 6) return setErr('비밀번호는 6자 이상이어야 해요.');
+    if (!phone.trim()) return setErr('전화번호를 입력해주세요.');
+    if (!isValidPhone(phone)) return setErr('전화번호 형식을 확인해주세요. (예: 010-1234-5678)');
     if (role === 'owner' && !storeName.trim()) return setErr('가게 이름을 입력해주세요.');
+    if (role === 'owner' && !industry) return setErr('업종을 선택해주세요.');
+    if (role === 'junior' && !inviteCode.trim()) return setErr('가게 초대코드를 입력해주세요.');
 
     // Supabase 미설정(로컬 데모): 새 계정 = 빈 매장에서 시작(데모 데이터 없음)
     if (!HAS_SUPABASE) {
-      enterMockStore(name.trim(), role, storeName.trim());
+      enterMockStore(name.trim(), role, storeName.trim(), industry);
       applyMockSeed(false);
-      router.replace(role === 'owner' ? '/owner/dashboard' : '/junior/home');
+      // 사장은 노하우 온보딩(추천 템플릿 자동등록)으로, 직원은 홈으로.
+      if (role === 'owner') router.replace({ pathname: '/owner/onboarding', params: { industry } });
+      else router.replace('/junior/home');
       return;
     }
 
@@ -131,8 +143,13 @@ export default function SignupScreen() {
     setBusy(true);
     // 1) 계정 생성 — 이미 생성됐으면(가게 연결만 실패했던 경우) 건너뛴다.
     if (!accountReady) {
-      const phone_last4 = phone.replace(/\D/g, '').slice(-4) || undefined;
-      const up = await signUp(email.trim(), pw, { name: name.trim(), role, phone_last4 });
+      // 전화번호 중복 사전검사(주키) — 충돌 시 로그인 유도
+      if (await isPhoneTaken(normalizePhone(phone))) {
+        setBusy(false);
+        setEmailMsg(null);
+        return setErr('이미 가입된 번호예요. 아래 ‘로그인’으로 들어와 주세요.');
+      }
+      const up = await signUp(email.trim(), pw, { name: name.trim(), role, phone: normalizePhone(phone) });
       if (up.error) {
         setBusy(false);
         if (/already|registered|exists/i.test(up.error)) {
@@ -153,46 +170,21 @@ export default function SignupScreen() {
 
     // 2) 매장 연결
     if (role === 'owner') {
-      const cs = await createStore(storeName.trim(), bizDigits(bizNo) || undefined);
+      const cs = await createStore(storeName.trim(), industry, bizDigits(bizNo) || undefined);
       setBusy(false);
       if (cs.error) return setErr(`가게 생성 실패: ${cs.error} — '다시 시도'를 누르면 가게 생성만 다시 시도해요.`);
-      setCreatedCode(cs.inviteCode ?? '------'); // 코드 보여주고 입장
+      // 노하우 온보딩으로 — 초대코드는 온보딩 완료 화면에서 안내(빈 매장 0건 방지).
+      router.replace({ pathname: '/owner/onboarding', params: { code: cs.inviteCode ?? '------', industry } });
     } else {
-      const code = inviteCode.trim();
-      if (!code) {
-        // 코드 없이 가입 — 매장 연결 화면으로 바로 보낸다(home으로 보냈다가 가드가 join으로
-        // 튕기던 이중 바운스 깜빡임 제거). 가드의 미연결 리다이렉트 목적지와 동일.
-        setBusy(false);
-        router.replace('/junior/join');
-        return;
-      }
-      const j = await joinByInvite(code);
+      // 초대코드 필수 — 코드로 매장 합류(가입 시점 강제). 코드가 틀리면 계정은 유지되고
+      // 매장 연결만 재시도(accountReady=true). 데이터 손실 없음.
+      const j = await joinByInvite(inviteCode.trim());
       setBusy(false);
       if (j.error) return setErr(j.error);
       router.replace('/junior/home');
     }
   };
 
-  // 사장 가입 성공 화면 — 발급된 초대코드 안내 후 입장
-  if (createdCode) {
-    return (
-      <SafeAreaView style={styles.safe}>
-        <Stack.Screen options={{ headerShown: true, title: '가게 생성 완료', headerStyle: { backgroundColor: '#FFFFFF' }, headerTintColor: InkColors.ink }} />
-        <View style={styles.successWrap}>
-          <Text style={styles.successEmoji}>🎉</Text>
-          <Text style={styles.successTitle}>가게가 만들어졌어요</Text>
-          <Text style={styles.successSub}>직원·알바에게 아래 초대코드를 알려주세요</Text>
-          <View style={styles.codeBox}>
-            <Text style={styles.codeText}>{createdCode}</Text>
-          </View>
-          <Text style={styles.codeHint}>알바가 회원가입에서 이 코드를 입력하면 바로 합류됩니다.</Text>
-          <Pressable onPress={() => router.replace('/owner/dashboard')} style={({ pressed }) => [styles.primary, pressed && { opacity: 0.88 }]}>
-            <Text style={styles.primaryText}>대시보드로 들어가기</Text>
-          </Pressable>
-        </View>
-      </SafeAreaView>
-    );
-  }
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -251,11 +243,21 @@ export default function SignupScreen() {
         </View>
 
         <Field label="비밀번호" value={pw} onChange={setPw} placeholder="6자 이상" secure required />
-        <Field label="전화번호 (선택)" value={phone} onChange={setPhone} placeholder="010-0000-0000" keyboard="phone-pad" />
+        <Field label="전화번호" value={phone} onChange={setPhone} placeholder="010-1234-5678" keyboard="phone-pad" required />
 
         {role === 'owner' ? (
           <>
             <Field label="가게 이름" value={storeName} onChange={setStoreName} placeholder="예: 착착 카페 신촌점" required />
+            <View style={styles.field}>
+              <Text style={styles.label}>업종<Text style={styles.req}> *</Text></Text>
+              <View style={styles.chipWrap}>
+                {INDUSTRIES.map((it) => (
+                  <Pressable key={it} onPress={() => setIndustry(it)} style={[styles.chip, industry === it && styles.chipOn]}>
+                    <Text style={[styles.chipText, industry === it && styles.chipTextOn]}>{it}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            </View>
             <View style={styles.field}>
               <Text style={styles.label}>사업자등록번호 (선택)</Text>
               <TextInput
@@ -275,8 +277,8 @@ export default function SignupScreen() {
           </>
         ) : (
           <>
-            <Field label="가게 초대코드 (선택)" value={inviteCode} onChange={setInviteCode} placeholder="사장님께 받은 6자리 코드" keyboard="number-pad" />
-            <Text style={styles.hint}>지금 없으면 비워두세요. 가입 후 ‘가게 연결’에서 입력할 수 있어요.</Text>
+            <Field label="가게 초대코드" value={inviteCode} onChange={setInviteCode} placeholder="사장님께 받은 6자리 코드" keyboard="number-pad" required />
+            <Text style={styles.hint}>사장님께 받은 6자리 코드가 있어야 가입할 수 있어요.</Text>
           </>
         )}
 
@@ -426,6 +428,11 @@ const styles = StyleSheet.create({
   bizHint: { fontSize: 12, fontWeight: '600', marginTop: -2 },
   bizOk: { color: BrandColors.good },
   bizBad: { color: InkColors.ink3 },
+  chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.sm },
+  chip: { paddingHorizontal: Space.md, paddingVertical: Space.sm, borderRadius: Radius.pill, borderWidth: 1, borderColor: InkColors.line, backgroundColor: '#FFFFFF' },
+  chipOn: { borderColor: BrandColors.brand, backgroundColor: '#FFFDFB' },
+  chipText: { fontSize: 13, fontWeight: '700', color: InkColors.ink2 },
+  chipTextOn: { color: BrandColors.brand },
   consentBox: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: InkColors.line, borderRadius: 14, padding: 14, marginTop: 8, gap: 4 },
   consentAll: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 2 },
   consentAllText: { flex: 1, fontSize: 14, fontWeight: '800', color: InkColors.ink },
@@ -465,13 +472,4 @@ const styles = StyleSheet.create({
   loginRow: { alignItems: 'center', paddingVertical: 6 },
   loginText: { fontSize: 14, color: InkColors.ink3 },
   loginStrong: { color: BrandColors.brand, fontWeight: '800' },
-
-  // 사장 가입 성공
-  successWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32, gap: 12 },
-  successEmoji: { fontSize: 48 },
-  successTitle: { fontSize: 22, fontWeight: '900', color: InkColors.ink },
-  successSub: { fontSize: 14, color: InkColors.ink3, textAlign: 'center' },
-  codeBox: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: InkColors.line, borderRadius: 14, paddingVertical: 18, paddingHorizontal: 36, marginTop: 8 },
-  codeText: { fontSize: 34, fontWeight: '900', letterSpacing: 8, color: BrandColors.brand },
-  codeHint: { fontSize: 13, color: InkColors.ink3, textAlign: 'center', marginBottom: 12 },
 });

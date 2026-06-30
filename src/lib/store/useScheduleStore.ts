@@ -20,6 +20,8 @@ import {
   subscribeSchedule,
 } from '@/lib/db';
 import { guardWrite } from '@/lib/store/useSyncStore';
+import { optimisticAdd, optimisticPatch, optimisticRemove } from '@/lib/store/crudHelpers';
+import { genId } from '@/lib/utils/id';
 import { todayStr } from '@/lib/utils/attendance';
 import { weekdayOf, nextDateForWeekday } from '@/lib/utils/schedule';
 
@@ -92,10 +94,6 @@ type ScheduleState = {
 };
 
 // ── 유일 id ─────────────────────────────────────────────
-let _seq = 0;
-function uid(prefix: string): string {
-  return `${prefix}_${Date.now()}_${_seq++}`;
-}
 const nowIso = () => new Date().toISOString();
 
 // ── 기본/시드 ───────────────────────────────────────────
@@ -177,38 +175,14 @@ export const useScheduleStore = create<ScheduleState>((set, get) => ({
   },
 
   addTemplate: (t) => {
-    const rec: ShiftTemplate = { ...t, id: uid('tpl') };
-    set((s) => ({ templates: [...s.templates, rec] }));
-    void guardWrite(
-      insertShiftTemplate(rec),
-      () => set((s) => ({ templates: s.templates.filter((x) => x.id !== rec.id) })),
-      '근무 추가 저장에 실패했어요.',
-    );
+    const rec: ShiftTemplate = { ...t, id: genId('tpl') };
+    optimisticAdd(set, 'templates', rec, () => insertShiftTemplate(rec), '근무 추가 저장에 실패했어요.');
   },
   updateTemplate: (id, patch) => {
-    const before = get().templates.find((t) => t.id === id);
-    set((s) => ({ templates: s.templates.map((t) => (t.id === id ? { ...t, ...patch } : t)) }));
-    void guardWrite(
-      updateShiftTemplate(id, patch),
-      () => before && set((s) => ({ templates: s.templates.map((t) => (t.id === id ? before : t)) })),
-      '근무 수정 저장에 실패했어요.',
-    );
+    optimisticPatch(set, get, 'templates', id, patch, () => updateShiftTemplate(id, patch), '근무 수정 저장에 실패했어요.');
   },
   removeTemplate: (id) => {
-    const idx = get().templates.findIndex((t) => t.id === id);
-    const removed = idx >= 0 ? get().templates[idx] : undefined;
-    set((s) => ({ templates: s.templates.filter((t) => t.id !== id) }));
-    void guardWrite(
-      deleteShiftTemplate(id),
-      () =>
-        removed &&
-        set((s) => {
-          const next = s.templates.slice();
-          next.splice(Math.min(idx, next.length), 0, removed);
-          return { templates: next };
-        }),
-      '근무 삭제에 실패했어요.',
-    );
+    optimisticRemove(set, get, 'templates', id, () => deleteShiftTemplate(id), '근무 삭제에 실패했어요.');
   },
   replaceStaffTemplates: (staffId, shifts) => {
     const prevAll = get().templates;
@@ -216,7 +190,7 @@ export const useScheduleStore = create<ScheduleState>((set, get) => ({
     // 같은 요일이 유지되면 기존 id 재사용 → 그 시프트를 참조하던 교대 요청이 깨지지 않는다.
     const nextForStaff: ShiftTemplate[] = shifts.map((sh) => {
       const keep = prevForStaff.find((p) => p.weekday === sh.weekday);
-      return { ...sh, staff_id: staffId, id: keep?.id ?? uid('tpl') };
+      return { ...sh, staff_id: staffId, id: keep?.id ?? genId('tpl') };
     });
     const nextAll = [...prevAll.filter((t) => t.staff_id !== staffId), ...nextForStaff];
     // 실제로 없어진 시프트만 삭제 대상(나머지는 id 재사용 upsert → 참조 중인 교대 요청 보존).
@@ -240,7 +214,7 @@ export const useScheduleStore = create<ScheduleState>((set, get) => ({
     if (dup) return;
     const now = nowIso();
     const req: SwapRequest = {
-      id: uid('swap'),
+      id: genId('swap'),
       kind: input.kind,
       requester_id: input.requester_id,
       date: input.date,
@@ -346,9 +320,4 @@ export function shiftsOn(
       return { template: t, baseStaffId: t.staff_id, workerStaffId: worker, pending };
     })
     .sort((a, b) => a.template.start.localeCompare(b.template.start));
-}
-
-/** 사장 컨펌 대기(직원이 수락 완료) 요청 수. */
-export function pendingApprovalCount(swaps: SwapRequest[]): number {
-  return swaps.filter((s) => s.status === 'accepted').length;
 }

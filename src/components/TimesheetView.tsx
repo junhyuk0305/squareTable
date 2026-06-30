@@ -6,6 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAttendanceStore, type AttendanceRecord } from '@/lib/store/useAttendanceStore';
 import { RoleTabBar } from '@/components/RoleTabBar';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
+import { Radius } from '@/lib/theme/elevation';
 import { fmtDuration, won, hhmm, todayStr, normalizeTime, shiftMonth, daysInMonth, maskHHMM } from '@/lib/utils/attendance';
 
 const WD = ['일', '월', '화', '수', '목', '금', '토'];
@@ -267,7 +268,7 @@ const styles = StyleSheet.create({
   monthArrow: { padding: 4 },
   monthLabel: { fontSize: 17, fontWeight: '800', color: InkColors.ink, minWidth: 48, textAlign: 'center' },
 
-  summary: { flexDirection: 'row', backgroundColor: '#FFFFFF', borderRadius: 16, borderWidth: 1, borderColor: InkColors.line, paddingVertical: 16 },
+  summary: { flexDirection: 'row', backgroundColor: '#FFFFFF', borderRadius: Radius.lg, borderWidth: 1, borderColor: InkColors.line, paddingVertical: 16 },
   sumCol: { flex: 1, alignItems: 'center', gap: 4 },
   sumDivider: { width: 1, backgroundColor: InkColors.line, marginVertical: 4 },
   sumLabel: { fontSize: 12, color: InkColors.ink3, fontWeight: '600' },
@@ -282,19 +283,19 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: InkColors.line,
     borderStyle: 'dashed',
-    borderRadius: 12,
+    borderRadius: Radius.md,
     paddingVertical: 14,
   },
   addText: { fontSize: 14, fontWeight: '700', color: InkColors.ink },
 
   sectionTitle: { fontSize: 15, fontWeight: '800', color: InkColors.ink2, marginTop: 2 },
   sectionHint: { fontSize: 12, fontWeight: '600', color: InkColors.ink3 },
-  list: { backgroundColor: '#FFFFFF', borderRadius: 14, borderWidth: 1, borderColor: InkColors.line, paddingHorizontal: 14 },
+  list: { backgroundColor: '#FFFFFF', borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, paddingHorizontal: 14 },
   empty: { fontSize: 13, color: InkColors.ink3, paddingVertical: 16, textAlign: 'center' },
 
   recWrap: { borderBottomWidth: 1, borderBottomColor: InkColors.line },
   recRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12 },
-  dateBadge: { width: 42, height: 42, borderRadius: 10, backgroundColor: InkColors.bgSoft, alignItems: 'center', justifyContent: 'center' },
+  dateBadge: { width: 42, height: 42, borderRadius: Radius.sm, backgroundColor: InkColors.bgSoft, alignItems: 'center', justifyContent: 'center' },
   dateNum: { fontSize: 16, fontWeight: '800', color: InkColors.ink, lineHeight: 18 },
   dateWd: { fontSize: 10, color: InkColors.ink3, fontWeight: '700' },
   recTimeRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
@@ -306,7 +307,7 @@ const styles = StyleSheet.create({
   badgeAccentText: { fontSize: 10, fontWeight: '800', color: BrandColors.accent },
 
   editInline: { paddingBottom: 14, gap: 12 },
-  editCard: { backgroundColor: '#FFFFFF', borderRadius: 14, borderWidth: 1, borderColor: BrandColors.brand, padding: 16, gap: 12 },
+  editCard: { backgroundColor: '#FFFFFF', borderRadius: Radius.md, borderWidth: 1, borderColor: BrandColors.brand, padding: 16, gap: 12 },
   editTitle: { fontSize: 14, fontWeight: '800', color: InkColors.ink },
   errText: { fontSize: 13, color: BrandColors.accent, fontWeight: '600' },
   editRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
@@ -328,9 +329,9 @@ const styles = StyleSheet.create({
   editActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   delBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 8, paddingHorizontal: 10 },
   delText: { fontSize: 13, fontWeight: '700', color: BrandColors.accent },
-  cancelBtn: { paddingVertical: 10, paddingHorizontal: 16, borderRadius: 10, borderWidth: 1, borderColor: InkColors.line },
+  cancelBtn: { paddingVertical: 10, paddingHorizontal: 16, borderRadius: Radius.sm, borderWidth: 1, borderColor: InkColors.line },
   cancelText: { fontSize: 14, fontWeight: '700', color: InkColors.ink3 },
-  saveBtn: { paddingVertical: 10, paddingHorizontal: 18, borderRadius: 10, backgroundColor: BrandColors.brand },
+  saveBtn: { paddingVertical: 10, paddingHorizontal: 18, borderRadius: Radius.sm, backgroundColor: BrandColors.brand },
   saveText: { fontSize: 14, fontWeight: '800', color: '#FFFFFF' },
 
   demoNote: { fontSize: 12, color: InkColors.ink3, marginTop: 4 },

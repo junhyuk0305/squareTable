@@ -2,15 +2,15 @@
 // 앞으로 2주간 내가 실제로 일하는 근무를 나열하고, 고르면 교대 요청 모달로 넘어간다.
 // (근무표 칩을 직접 누르는 보조 경로와 동일하게 {date, template}을 넘긴다.)
 import { useMemo } from 'react';
-import { View, Text, Pressable, ScrollView, Modal, StyleSheet } from 'react-native';
+import { View, Text, Pressable, ScrollView, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
+import { BottomSheet } from '@/components/BottomSheet';
 import { shiftsOn, type ShiftTemplate, type SwapRequest } from '@/lib/store/useScheduleStore';
 import { todayStr } from '@/lib/utils/attendance';
 import { addDays, fmtDateKo } from '@/lib/utils/schedule';
 import { InkColors } from '@/lib/theme/colors';
-import { Elevation, Radius } from '@/lib/theme/elevation';
-import { modalFrameStyle } from '@/lib/theme/layout';
+import { Radius } from '@/lib/theme/elevation';
 
 export function MyShiftPicker({
   me,
@@ -39,11 +39,7 @@ export function MyShiftPicker({
   }, [me, templates, swaps]);
 
   return (
-    <Modal visible transparent animationType="slide" onRequestClose={onClose}>
-      <View style={modalFrameStyle}>
-        <Pressable style={s.backdrop} onPress={onClose} />
-        <View style={s.sheet}>
-          <View style={s.grip} />
+    <BottomSheet visible={true} onClose={onClose} sheetStyle={{ maxHeight: '75%', paddingBottom: 8 }}>
           <Text style={s.title}>어떤 근무를 바꿀까요?</Text>
           <Text style={s.sub}>앞으로 2달간 내 근무예요. 바꿀 근무를 고르면 대타·맞교환을 정할 수 있어요.</Text>
 
@@ -69,16 +65,11 @@ export function MyShiftPicker({
               ))
             )}
           </ScrollView>
-        </View>
-      </View>
-    </Modal>
+    </BottomSheet>
   );
 }
 
 const s = StyleSheet.create({
-  backdrop: { flex: 1 },
-  sheet: { backgroundColor: InkColors.bg, borderTopLeftRadius: Radius.sheet, borderTopRightRadius: Radius.sheet, maxHeight: '75%', paddingBottom: 8, ...Elevation.e3 },
-  grip: { width: 40, height: 4, borderRadius: Radius.pill, backgroundColor: InkColors.line, alignSelf: 'center', marginTop: 12, marginBottom: 6 },
   title: { fontSize: 16, fontWeight: '800', color: InkColors.ink, paddingHorizontal: 16, paddingTop: 4 },
   sub: { fontSize: 12.5, color: InkColors.ink3, lineHeight: 18, paddingHorizontal: 16, paddingTop: 4, paddingBottom: 8 },
 

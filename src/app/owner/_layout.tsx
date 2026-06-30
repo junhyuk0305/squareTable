@@ -10,6 +10,7 @@ import { useAttendanceStore } from '@/lib/store/useAttendanceStore';
 import { usePayrollStore } from '@/lib/store/usePayrollStore';
 import { useStaffStore } from '@/lib/store/useStaffStore';
 import { useScheduleStore } from '@/lib/store/useScheduleStore';
+import { purgeExpiredFormerStaff } from '@/lib/db';
 import { HAS_SUPABASE } from '@/lib/supabase';
 
 export default function OwnerLayout() {
@@ -25,6 +26,8 @@ export default function OwnerLayout() {
     usePayrollStore.getState().hydrate();
     useStaffStore.getState().hydrate();
     useScheduleStore.getState().hydrate();
+    // 퇴사 6개월 경과분 개인 기록 자동 정리(기회적 1회, 실패 무해).
+    void purgeExpiredFormerStaff();
     const offQ = useUnknownQueueStore.getState().subscribe();
     const offP = usePlaybookStore.getState().subscribe();
     const offW = useWorkStore.getState().subscribe();
@@ -67,6 +70,7 @@ export default function OwnerLayout() {
       <Stack.Screen name="timesheet/[staffId]" options={{ title: '출근 기록' }} />
       <Stack.Screen name="payroll" options={{ title: '급여 설정' }} />
       <Stack.Screen name="knowledge" options={{ title: '내 노하우' }} />
+      <Stack.Screen name="notifications" options={{ title: '알림' }} />
       <Stack.Screen name="edit/[id]" options={{ title: '노하우 수정' }} />
       {/* 대화형 입력 단일 화면 — 기존 answer/[uqId]·add/[category]·capture 위저드를 대체 */}
       <Stack.Screen name="coach" options={{ title: '노하우 알려주기' }} />

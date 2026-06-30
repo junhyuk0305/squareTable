@@ -1,7 +1,9 @@
-import { View, Text, Pressable, ScrollView, StyleSheet } from 'react-native';
+import { View, Text, Pressable, ScrollView, StyleSheet, type ViewStyle } from 'react-native';
 import { CategoryChip } from './CategoryChip';
+import { EmptyState } from './EmptyState';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Elevation, Radius } from '@/lib/theme/elevation';
+import { verifyMeta } from '@/lib/utils/verification';
 import type { PlaybookEntry } from '@/types';
 
 export type BrowseListProps = {
@@ -18,28 +20,25 @@ export type BrowseListProps = {
   showCategory?: boolean;
 };
 
-// 검증 3-state 배지 메타 — 03 카피카탈로그 H 라벨 + 02 검증배지 토큰(임시 매핑).
-type VerifyMeta = { label: string; fg: string; bg: string; icon: string };
-
-function verifyMeta(state: PlaybookEntry['verification']): VerifyMeta {
-  switch (state?.state) {
-    case 'owner_verified':
-      // 사장 검증 = 노란 배지(권위 강조). 카탈로그 label.verified="검증됨".
-      return { label: '사장님 검증', fg: InkColors.ink, bg: BrandColors.yellowSoft, icon: '✓' };
-    case 'field_tested':
-      // 현장 검증 = good 톤.
-      return { label: '현장 검증', fg: BrandColors.good, bg: '#E6F1EA', icon: '✓' };
-    default:
-      // 미검증 = 회색.
-      return { label: '미검증', fg: InkColors.ink3, bg: InkColors.bgSoft, icon: '·' };
-  }
-}
-
-// 카드 한 장(축약). DO/DON'T 미리보기 1줄씩, 해결률, 검증배지, 출처.
-// export — JuniorBrowseDashboard가 3블록(인기·최근·해결률)에서 같은 카드를 재사용한다.
-export function BrowseCard({ entry, onSelect, showCategory }: { entry: PlaybookEntry; onSelect: (e: PlaybookEntry) => void; showCategory: boolean }) {
-  const v = verifyMeta(entry.verification);
+// 카드 한 장(축약). DO/DON'T 미리보기 1줄씩, 해결률, 물어본 수, 검증배지, 출처.
+// export — JuniorBrowseDashboard·OwnerKnowhowBrowse가 3블록(인기·최근·해결률)에서 같은 카드를 재사용한다.
+// style: 가로 캐러셀(KnowhowCarousel)에서 고정폭을 주입하기 위한 선택 prop. renderExtra: 카드 하단 추가 액션(예: 1탭 검증).
+export function BrowseCard({
+  entry,
+  onSelect,
+  showCategory,
+  style,
+  renderExtra,
+}: {
+  entry: PlaybookEntry;
+  onSelect: (e: PlaybookEntry) => void;
+  showCategory: boolean;
+  style?: ViewStyle;
+  renderExtra?: (entry: PlaybookEntry) => React.ReactNode;
+}) {
+  const v = verifyMeta(entry.verification?.state);
   const ratePct = Math.round((entry.stats?.resolution_rate ?? 0) * 100);
+  const hits = entry.stats?.query_hits_30d ?? 0;
   const doText = entry.square?.extract?.do?.trim();
   const dontText = entry.square?.extract?.dont?.trim();
   const sourceLabel = entry.source?.label ?? `${entry.creator_name} 사장님`;
@@ -48,8 +47,8 @@ export function BrowseCard({ entry, onSelect, showCategory }: { entry: PlaybookE
     <Pressable
       onPress={() => onSelect(entry)}
       accessibilityRole="button"
-      accessibilityLabel={`${entry.title}, ${v.label}, 해결률 ${ratePct}%`}
-      style={({ pressed }) => [styles.card, pressed && styles.pressed]}
+      accessibilityLabel={`${entry.title}, ${v.label}, 해결률 ${ratePct}%${hits > 0 ? `, ${hits}명이 물어봄` : ''}`}
+      style={({ pressed }) => [styles.card, style, pressed && styles.pressed]}
     >
       {/* 헤더: 카테고리(색 액센트) + 검증배지. 라벨 노출은 showCategory로 제어(프레임 v2). */}
       <View style={[styles.header, !showCategory && { justifyContent: 'flex-end' }]}>
@@ -65,8 +64,11 @@ export function BrowseCard({ entry, onSelect, showCategory }: { entry: PlaybookE
         {entry.title}
       </Text>
 
-      {/* 해결률 */}
-      <Text style={styles.rate}>해결률 {ratePct}%</Text>
+      {/* 해결률 · 물어본 수 — 있는 것만 */}
+      <View style={styles.statRow}>
+        <Text style={styles.rate}>해결률 {ratePct}%</Text>
+        {hits > 0 ? <Text style={styles.hits}>🔥 {hits}명이 물어봤어요</Text> : null}
+      </View>
 
       {/* DO / DON'T 1줄 미리보기 — 있는 것만 */}
       {doText ? (
@@ -90,6 +92,9 @@ export function BrowseCard({ entry, onSelect, showCategory }: { entry: PlaybookE
       <Text style={styles.source} numberOfLines={1}>
         출처 · {sourceLabel}
       </Text>
+
+      {/* 추가 액션 슬롯(예: 미검증 섹션의 1탭 검증 버튼) */}
+      {renderExtra ? renderExtra(entry) : null}
     </Pressable>
   );
 }
@@ -103,12 +108,7 @@ export function BrowseList({ entries, onSelect, emptyHint, showCategory = true }
   if (!entries || entries.length === 0) {
     // 03 카탈로그 search.empty.senior / knowhow.empty 톤(해요체).
     const hint = emptyHint ?? '찾는 노하우가 없어요. 검색어를 바꾸거나, 새 노하우로 만들어 둘 수 있어요.';
-    return (
-      <View style={styles.empty} accessibilityRole="summary">
-        <Text style={styles.emptyTitle}>아직 보여줄 노하우가 없어요</Text>
-        <Text style={styles.emptyBody}>{hint}</Text>
-      </View>
-    );
+    return <EmptyState title="아직 보여줄 노하우가 없어요" body={hint} />;
   }
 
   return (
@@ -150,7 +150,9 @@ const styles = StyleSheet.create({
   },
   badgeText: { fontSize: 11, fontWeight: '800' },
   title: { fontSize: 15, fontWeight: '700', color: InkColors.ink, lineHeight: 21 },
+  statRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8 },
   rate: { fontSize: 12, fontWeight: '700', color: InkColors.ink2 },
+  hits: { fontSize: 12, fontWeight: '700', color: BrandColors.warn },
   preview: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -161,14 +163,4 @@ const styles = StyleSheet.create({
   previewTag: { fontSize: 10, fontWeight: '800', letterSpacing: 0.5, width: 36 },
   previewText: { flex: 1, fontSize: 13, color: InkColors.ink2, lineHeight: 18 },
   source: { fontSize: 11, color: InkColors.ink3, marginTop: 2 },
-  empty: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 32,
-    paddingVertical: 48,
-    gap: 8,
-  },
-  emptyTitle: { fontSize: 16, fontWeight: '800', color: InkColors.ink, textAlign: 'center' },
-  emptyBody: { fontSize: 14, color: InkColors.ink2, lineHeight: 21, textAlign: 'center' },
 });

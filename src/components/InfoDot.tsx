@@ -85,7 +85,7 @@ const styles = StyleSheet.create({
   handle: {
     width: 40,
     height: 4,
-    borderRadius: 999,
+    borderRadius: Radius.pill,
     backgroundColor: InkColors.line,
     alignSelf: 'center',
     marginBottom: 4,

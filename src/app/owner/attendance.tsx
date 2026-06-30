@@ -9,8 +9,10 @@ import { usePayrollStore } from '@/lib/store/usePayrollStore';
 import { useStaffStore } from '@/lib/store/useStaffStore';
 import { RoleTabBar } from '@/components/RoleTabBar';
 import { Appear } from '@/components/Appear';
+import { Avatar } from '@/components/Avatar';
 import { FEATURES } from '@/lib/config/features';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
+import { Radius } from '@/lib/theme/elevation';
 import { fmtDuration, won, todayStr, liveMinutes, DEFAULT_HOURLY_WAGE } from '@/lib/utils/attendance';
 
 export default function OwnerAttendanceScreen() {
@@ -92,9 +94,7 @@ export default function OwnerAttendanceScreen() {
               onPress={() => router.push({ pathname: '/owner/timesheet/[staffId]', params: { staffId: s.id } })}
               style={({ pressed }) => [styles.row, pressed && { opacity: 0.6 }]}
             >
-              <View style={styles.avatar}>
-                <Text style={styles.avatarText}>{s.name.slice(0, 1)}</Text>
-              </View>
+              <Avatar name={s.name} size={40} fontSize={15} />
               <View style={styles.rowBody}>
                 <View style={styles.rowTop}>
                   <Text style={styles.name}>{s.name}</Text>
@@ -138,7 +138,7 @@ const styles = StyleSheet.create({
 
   totalCard: {
     backgroundColor: InkColors.ink,
-    borderRadius: 18,
+    borderRadius: Radius.lg,
     padding: 22,
     gap: 4,
   },
@@ -156,7 +156,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: InkColors.line,
-    borderRadius: 12,
+    borderRadius: Radius.md,
     paddingVertical: 14,
   },
   menuText: { fontSize: 14, fontWeight: '700', color: InkColors.ink },
@@ -164,7 +164,7 @@ const styles = StyleSheet.create({
   listHint: { fontSize: 12, color: InkColors.ink3, marginTop: -8 },
   list: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 14,
+    borderRadius: Radius.md,
     borderWidth: 1,
     borderColor: InkColors.line,
     paddingHorizontal: 14,
@@ -177,17 +177,6 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: InkColors.line,
   },
-  avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: InkColors.bgSoft,
-    borderWidth: 1,
-    borderColor: InkColors.line,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarText: { fontSize: 15, fontWeight: '800', color: InkColors.ink },
   rowBody: { flex: 1, gap: 3 },
   rowTop: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   name: { fontSize: 16, fontWeight: '700', color: InkColors.ink },
@@ -196,6 +185,6 @@ const styles = StyleSheet.create({
 });
 
 const chip = StyleSheet.create({
-  wrap: { paddingVertical: 3, paddingHorizontal: 9, borderRadius: 999 },
+  wrap: { paddingVertical: 3, paddingHorizontal: 9, borderRadius: Radius.pill },
   text: { fontSize: 11, fontWeight: '800' },
 });

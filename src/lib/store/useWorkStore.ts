@@ -14,6 +14,7 @@ import {
   subscribeWork,
 } from '@/lib/db';
 import { guardWrite } from '@/lib/store/useSyncStore';
+import { genId } from '@/lib/utils/id';
 import { useRoomStore } from '@/lib/store/useRoomStore';
 
 /** 지금 활성화된 채팅방 id — 모든 업무 쓰기(메시지·공지·할일·완료)에 스탬프된다('전부 방 단위'). */
@@ -191,9 +192,6 @@ const seedFeed: FeedItem[] = [
   },
 ];
 
-let _n = 0;
-const uid = (p: string) => `${p}_${Date.now()}_${_n++}`;
-
 /** addTask 입력 — id/생성시각은 스토어가 채운다. */
 export type NewTask = {
   section: TaskSection;
@@ -234,17 +232,48 @@ export const useWorkStore = create<State>((set, get) => ({
   feed: HAS_SUPABASE ? [] : seedFeed,
   loaded: !HAS_SUPABASE,
 
+  // 전체 재조회(templates·done·feed 3쿼리)로 스토어를 통째로 교체한다.
+  // 동시 호출 합치기: 이미 한 번 돌고 있으면 새 fetch를 또 띄우지 않고 '한 번 더' 플래그만 세워
+  // 끝나고 1회만 더 돈다 → 빠른 연속 체크로 realtime 이벤트가 몰려도 풀리페치가 쌓이지 않는다.
   hydrate: async () => {
     if (!HAS_SUPABASE) return;
-    const [templates, done, feed] = await Promise.all([fetchTemplates(), fetchDone(), fetchFeed()]);
-    set({ templates, done, feed, loaded: true });
+    if (hydrateInFlight) {
+      hydrateAgain = true;
+      return hydrateInFlight;
+    }
+    hydrateInFlight = (async () => {
+      do {
+        hydrateAgain = false;
+        const [templates, done, feed] = await Promise.all([fetchTemplates(), fetchDone(), fetchFeed()]);
+        set({ templates, done, feed, loaded: true });
+      } while (hydrateAgain);
+    })().finally(() => {
+      hydrateInFlight = null;
+    });
+    return hydrateInFlight;
   },
-  subscribe: () => subscribeWork(() => get().hydrate()),
+  // realtime 변경마다 즉시 풀리페치하면, 체크 한 번이 (work_done+work_feed) 2쓰기 → 2이벤트 →
+  // 매번 3쿼리 재조회 + 전체 리렌더가 된다. 반복 탭에선 이게 폭주해 UI가 밀린다.
+  // → 마지막 이벤트 후 한 박자(300ms) 모았다가 1회만 재조회(트레일링 디바운스).
+  subscribe: () => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const unsub = subscribeWork(() => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => {
+        timer = null;
+        void get().hydrate();
+      }, 300);
+    });
+    return () => {
+      if (timer) clearTimeout(timer);
+      unsub();
+    };
+  },
 
   addTask: (input) => {
     const room = curRoom();
     const t: TaskTemplate = {
-      id: uid('t'),
+      id: genId('t'),
       section: input.section,
       text: input.text,
       scope: input.scope,
@@ -303,7 +332,7 @@ export const useWorkStore = create<State>((set, get) => ({
     const mark: DoneMark = { by: staffId, byName: staffName, at: now, ...(photoUrl ? { photoUrl } : null) };
     dayMap[templateId] = mark;
     const doneItem: FeedItem = {
-      id: uid('f'),
+      id: genId('f'),
       date,
       kind: 'task_done',
       text: `${staffName} · ${tpl ? tpl.text : '할일'} 완료`,
@@ -323,7 +352,7 @@ export const useWorkStore = create<State>((set, get) => ({
   postNotice: (date, text, authorId, authorName, important) => {
     const room = curRoom();
     const item: FeedItem = {
-      id: uid('f'),
+      id: genId('f'),
       date,
       kind: 'notice',
       text,
@@ -347,7 +376,7 @@ export const useWorkStore = create<State>((set, get) => ({
   postMessage: (date, text, authorId, authorName, role, mentions) => {
     const room = curRoom();
     const item: FeedItem = {
-      id: uid('f'),
+      id: genId('f'),
       date,
       kind: 'message',
       text,
@@ -369,7 +398,7 @@ export const useWorkStore = create<State>((set, get) => ({
   postComment: (noticeId, date, text, authorId, authorName, role, mentions) => {
     const room = curRoom();
     const item: FeedItem = {
-      id: uid('f'),
+      id: genId('f'),
       date,
       kind: 'comment',
       refId: noticeId,

@@ -105,14 +105,25 @@ export function buildEmbedText(e: PlaybookEntry): string {
     .slice(0, 4000);
 }
 
-/** 노하우 발행/수정 후 임베딩 색인(파이어앤포겟). 실패해도 발행은 성공·렉시컬로 검색됨. */
+/** 노하우 발행/수정 후 임베딩 색인(파이어앤포겟). 실패해도 발행은 성공·렉시컬로 검색됨.
+ *  색인은 의미검색 품질에 직결 → 일시적 실패(Edge 콜드스타트·네트워크 순단)면 짧게 백오프 후 재시도.
+ *  3회 모두 실패해도 조용히 포기(발행 성공·렉시컬 폴백 유지). */
 export async function embedEntry(e: PlaybookEntry): Promise<void> {
   if (USE_MOCK) return;
   // 발행 상태만 색인(초안은 검색에서 제외되므로 불필요).
   if (e.status !== 'published') return;
-  try {
-    await edgePost('embed', { entryId: e.id, text: buildEmbedText(e) });
-  } catch (err) {
-    console.warn('[search] embed failed (non-fatal):', err);
+  const payload = { entryId: e.id, text: buildEmbedText(e) };
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const res = await edgePost('embed', payload);
+      if (res !== null) return; // 색인 성공
+    } catch (err) {
+      if (attempt === 3) {
+        console.warn('[search] embed failed after 3 tries (non-fatal):', err);
+        return;
+      }
+    }
+    // 마지막 시도가 아니면 백오프(0.6s → 1.2s) 후 재시도.
+    if (attempt < 3) await new Promise((r) => setTimeout(r, 600 * attempt));
   }
 }

@@ -105,7 +105,7 @@ const styles = StyleSheet.create({
     backgroundColor: BrandColors.accent,
     paddingVertical: 14,
     paddingHorizontal: 16,
-    borderRadius: 12,
+    borderRadius: Radius.md,
     alignItems: 'center',
   },
   ctaPressed: { opacity: 0.85 },

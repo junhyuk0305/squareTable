@@ -2,22 +2,8 @@ import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { SourceFooter } from './SourceFooter';
 import { BrandColors, InkColors } from '@/lib/theme/colors';
 import { Elevation, Radius } from '@/lib/theme/elevation';
-import type { Category, PlaybookEntry } from '@/types';
-
-// 검증 3-state 배지 메타 — BrowseList와 동일 매핑(노랑=사장 검증, good=현장, 회색=미검증).
-type VerifyState = NonNullable<PlaybookEntry['verification']>['state'];
-type VerifyMeta = { label: string; fg: string; bg: string; icon: string };
-
-function verifyMeta(state?: VerifyState): VerifyMeta {
-  switch (state) {
-    case 'owner_verified':
-      return { label: '사장님 검증', fg: InkColors.ink, bg: BrandColors.yellowSoft, icon: '✓' };
-    case 'field_tested':
-      return { label: '현장 검증', fg: BrandColors.good, bg: '#E6F1EA', icon: '✓' };
-    default:
-      return { label: '미검증', fg: InkColors.ink3, bg: InkColors.bgSoft, icon: '·' };
-  }
-}
+import { verifyMeta, type VerifyState } from '@/lib/utils/verification';
+import type { Category } from '@/types';
 
 type Props = {
   summary: string;
@@ -287,7 +273,7 @@ const styles = StyleSheet.create({
   actionNum: {
     width: 22,
     height: 22,
-    borderRadius: 11,
+    borderRadius: Radius.sm,
     backgroundColor: BrandColors.good,
     color: InkColors.bubbleText,
     fontSize: 12,
@@ -314,7 +300,7 @@ const styles = StyleSheet.create({
   gaugeVal: { fontSize: 13, fontWeight: '900', color: InkColors.ink },
   gaugeTrack: { height: 10, borderRadius: Radius.pill, backgroundColor: InkColors.bgSoft, position: 'relative', justifyContent: 'center' },
   gaugeFill: { height: '100%', borderRadius: Radius.pill, backgroundColor: BrandColors.yellow },
-  gaugeKnob: { position: 'absolute', top: -4, width: 18, height: 18, borderRadius: 9, backgroundColor: InkColors.ink, borderWidth: 3, borderColor: BrandColors.yellow, marginLeft: -9 },
+  gaugeKnob: { position: 'absolute', top: -4, width: 18, height: 18, borderRadius: Radius.sm, backgroundColor: InkColors.ink, borderWidth: 3, borderColor: BrandColors.yellow, marginLeft: -9 },
   gaugeEnds: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 2 },
   gaugeEndTxt: { fontSize: 11, fontWeight: '700', color: InkColors.ink3 },
   feedback: {

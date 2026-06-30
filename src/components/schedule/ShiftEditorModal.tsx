@@ -1,16 +1,16 @@
 // 직원 주간 근무표 편집 모달(사장 전용) — 요일별 on/off + 시작·종료 시각.
 // 저장 시 해당 직원의 시프트를 통째로 교체(replaceStaffTemplates).
 import { useState } from 'react';
-import { View, Text, Pressable, TextInput, ScrollView, Modal, StyleSheet, Platform } from 'react-native';
+import { View, Text, Pressable, TextInput, ScrollView, StyleSheet, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
+import { BottomSheet } from '@/components/BottomSheet';
 import { useScheduleStore } from '@/lib/store/useScheduleStore';
 import type { Junior } from '@/types';
 import { maskHHMM } from '@/lib/utils/attendance';
 import { WEEKDAY_LABELS, WEEKDAY_ORDER } from '@/lib/utils/schedule';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
-import { Elevation, Radius } from '@/lib/theme/elevation';
-import { modalFrameStyle } from '@/lib/theme/layout';
+import { Radius } from '@/lib/theme/elevation';
 
 const TIME_RE = /^([01]?\d|2[0-3]):[0-5]\d$/;
 type Row = { on: boolean; start: string; end: string };
@@ -53,11 +53,7 @@ export function ShiftEditorModal({ staff, onClose }: { staff: Junior; onClose: (
   }
 
   return (
-    <Modal visible transparent animationType="slide" onRequestClose={onClose}>
-      <View style={modalFrameStyle}>
-        <Pressable style={s.backdrop} onPress={onClose} />
-        <View style={s.sheet}>
-          <View style={s.grip} />
+    <BottomSheet visible={true} onClose={onClose} sheetStyle={{ height: '78%' }}>
           <Text style={s.title}>{staff.name}님 근무표</Text>
           <Text style={s.sub}>요일을 켜고 근무 시간을 정해주세요. 매주 반복돼요.</Text>
 
@@ -68,7 +64,13 @@ export function ShiftEditorModal({ staff, onClose }: { staff: Junior; onClose: (
               // 소프트 경고(저장은 가능): 정기휴무일 / 운영시간 밖.
               const notes: string[] = [];
               if (r.on && config.closedDays.includes(wd)) notes.push('정기휴무일');
-              if (r.on && !bad && (r.start < config.open || r.end > config.close)) notes.push('운영시간 밖');
+              // 운영시간 밖 판정 — 심야영업(close<open, 자정 넘김)이면 닫힌 구간은 (close, open) 사이다.
+              const outsideHours =
+                config.close < config.open
+                  ? (r.start > config.close && r.start < config.open) ||
+                    (r.end > config.close && r.end < config.open)
+                  : r.start < config.open || r.end > config.close;
+              if (r.on && !bad && outsideHours) notes.push('운영시간 밖');
               return (
                 <View key={wd} style={[s.row, r.on && s.rowOn]}>
                   <View style={s.rowMain}>
@@ -127,16 +129,11 @@ export function ShiftEditorModal({ staff, onClose }: { staff: Junior; onClose: (
               <Text style={s.btnSolidText}>저장</Text>
             </Pressable>
           </View>
-        </View>
-      </View>
-    </Modal>
+    </BottomSheet>
   );
 }
 
 const s = StyleSheet.create({
-  backdrop: { flex: 1 },
-  sheet: { backgroundColor: InkColors.bg, borderTopLeftRadius: Radius.sheet, borderTopRightRadius: Radius.sheet, height: '78%', ...Elevation.e3 },
-  grip: { width: 40, height: 4, borderRadius: 99, backgroundColor: InkColors.line, alignSelf: 'center', marginTop: 12, marginBottom: 6 },
   title: { fontSize: 16, fontWeight: '800', color: InkColors.ink, paddingHorizontal: 16 },
   sub: { fontSize: 12.5, color: InkColors.ink3, paddingHorizontal: 16, paddingTop: 4, paddingBottom: 8 },
   scroll: { flex: 1, paddingHorizontal: 16, paddingTop: 4 },
@@ -153,7 +150,7 @@ const s = StyleSheet.create({
   dayLabel: { fontSize: 15, fontWeight: '800', color: InkColors.ink },
 
   timeRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  timeInp: { width: 64, textAlign: 'center', borderWidth: 1, borderColor: InkColors.line, borderRadius: 9, paddingVertical: 7, fontSize: 14, fontWeight: '700', color: InkColors.ink, backgroundColor: InkColors.bg, ...(Platform.OS === 'web' ? ({ outlineStyle: 'none' } as object) : null) },
+  timeInp: { width: 64, textAlign: 'center', borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.sm, paddingVertical: 7, fontSize: 14, fontWeight: '700', color: InkColors.ink, backgroundColor: InkColors.bg, ...(Platform.OS === 'web' ? ({ outlineStyle: 'none' } as object) : null) },
   timeInpBad: { borderColor: BrandColors.bad },
   tilde: { fontSize: 13, color: InkColors.ink3, fontWeight: '700' },
   off: { fontSize: 13, color: InkColors.ink3, fontWeight: '600' },
@@ -161,7 +158,7 @@ const s = StyleSheet.create({
   warn: { fontSize: 12, color: BrandColors.bad, fontWeight: '700', marginTop: 2, lineHeight: 18 },
 
   foot: { flexDirection: 'row', gap: 10, paddingHorizontal: 16, paddingTop: 10, paddingBottom: 18, borderTopWidth: 1, borderTopColor: InkColors.line },
-  btn: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 14, borderRadius: 13 },
+  btn: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 14, borderRadius: Radius.md },
   btnGhost: { backgroundColor: InkColors.bgSoft, borderWidth: 1, borderColor: InkColors.line },
   btnGhostText: { fontSize: 15, fontWeight: '700', color: InkColors.ink2 },
   btnSolid: { backgroundColor: InkColors.ink },

@@ -3,11 +3,15 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack } from 'expo-router';
 import { InkColors } from '@/lib/theme/colors';
 import { HeaderBackButton } from '@/components/HeaderBackButton';
+import { RoleTabBar } from '@/components/RoleTabBar';
+import { useSessionStore } from '@/lib/store/useSessionStore';
 
 // 개인정보 수집·이용 안내 (1차 출시 최소선). 정식 약관은 법무 검토 후 교체.
 export default function PrivacyScreen() {
+  // 설정에서 진입하는 공용 화면 — 사장/알바 어느 쪽에서 왔는지에 맞춰 하단 탭바를 그대로 유지한다.
+  const role = useSessionStore((s) => s.role);
   return (
-    <SafeAreaView style={styles.safe}>
+    <SafeAreaView style={styles.safe} edges={['bottom']}>
       <Stack.Screen options={{ headerShown: true, title: '개인정보 처리방침', headerStyle: { backgroundColor: '#FFFFFF' }, headerTintColor: InkColors.ink, headerLeft: () => <HeaderBackButton /> }} />
       <ScrollView contentContainerStyle={styles.scroll}>
         <Text style={styles.h1}>개인정보 수집·이용 안내</Text>
@@ -37,6 +41,7 @@ export default function PrivacyScreen() {
         </Text>
         <View style={{ height: 24 }} />
       </ScrollView>
+      <RoleTabBar role={role} />
     </SafeAreaView>
   );
 }

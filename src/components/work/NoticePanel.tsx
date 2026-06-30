@@ -5,7 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { type FeedItem } from '@/lib/store/useWorkStore';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Elevation, Radius } from '@/lib/theme/elevation';
-import { hhmm } from '@/lib/utils/attendance';
+import { mdHHmm } from '@/lib/utils/attendance';
 import { ReactionBar } from './ReactionBar';
 import { MentionInput, extractMentions, type Member } from './MentionInput';
 import { Appear } from '@/components/Appear';
@@ -171,7 +171,7 @@ function NoticeCard({
         <Text style={s.tag}>공지</Text>
         {n.pinned && <Text style={s.pinlab}>📌 고정됨</Text>}
         <Text style={s.who}>{n.authorName}</Text>
-        <Text style={s.time}>{hhmm(n.createdAt)}</Text>
+        <Text style={s.time}>{mdHHmm(n.createdAt)}</Text>
       </View>
 
       {editing ? (
@@ -280,15 +280,15 @@ const s = StyleSheet.create({
   comments: { marginTop: 10, paddingTop: 9, borderTopWidth: 1, borderTopColor: InkColors.line, gap: 8 },
   cLabel: { fontSize: 10.5, fontWeight: '800', color: InkColors.ink3 },
   cmt: { flexDirection: 'row', alignItems: 'flex-start', gap: 7 },
-  cAv: { width: 23, height: 23, borderRadius: 99, backgroundColor: InkColors.bgSoft, alignItems: 'center', justifyContent: 'center', marginTop: 1 },
+  cAv: { width: 23, height: 23, borderRadius: Radius.pill, backgroundColor: InkColors.bgSoft, alignItems: 'center', justifyContent: 'center', marginTop: 1 },
   cAvTx: { fontSize: 9, fontWeight: '800', color: InkColors.ink2 },
-  cBubble: { flex: 1, backgroundColor: InkColors.paper, borderRadius: 11, paddingHorizontal: 10, paddingVertical: 7 },
+  cBubble: { flex: 1, backgroundColor: InkColors.paper, borderRadius: Radius.sm, paddingHorizontal: 10, paddingVertical: 7 },
   cName: { fontSize: 10.5, fontWeight: '800', color: InkColors.ink2, marginBottom: 2 },
   cText: { fontSize: 12.5, color: InkColors.ink },
   cDel: { fontSize: 11, color: BrandColors.bad, fontWeight: '700', padding: 3 },
   cInputRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 },
   cInput: { paddingVertical: 8, fontSize: 12 },
-  cPost: { backgroundColor: InkColors.ink, borderRadius: 99, paddingHorizontal: 14, paddingVertical: 8 },
+  cPost: { backgroundColor: InkColors.ink, borderRadius: Radius.pill, paddingHorizontal: 14, paddingVertical: 8 },
   cPostText: { color: '#fff', fontSize: 12, fontWeight: '800' },
 
   foot: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 10, backgroundColor: InkColors.cream, borderTopWidth: 1, borderTopColor: InkColors.line },

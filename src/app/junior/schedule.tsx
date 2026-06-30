@@ -340,8 +340,8 @@ const styles = StyleSheet.create({
 
   conflict: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: BrandColors.accentSoft, borderRadius: Radius.sm, paddingHorizontal: 10, paddingVertical: 8, marginTop: 2 },
   conflictText: { flex: 1, fontSize: 12, color: BrandColors.bad, fontWeight: '700', lineHeight: 17 },
-  acceptBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: InkColors.ink, borderRadius: 12, paddingVertical: 12, marginTop: 4 },
+  acceptBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: InkColors.ink, borderRadius: Radius.md, paddingVertical: 12, marginTop: 4 },
   acceptText: { fontSize: 14, fontWeight: '800', color: '#fff' },
-  cancelBtn: { alignItems: 'center', justifyContent: 'center', borderRadius: 12, paddingVertical: 11, marginTop: 4, backgroundColor: InkColors.bgSoft, borderWidth: 1, borderColor: InkColors.line },
+  cancelBtn: { alignItems: 'center', justifyContent: 'center', borderRadius: Radius.md, paddingVertical: 11, marginTop: 4, backgroundColor: InkColors.bgSoft, borderWidth: 1, borderColor: InkColors.line },
   cancelText: { fontSize: 13.5, fontWeight: '700', color: InkColors.ink2 },
 });

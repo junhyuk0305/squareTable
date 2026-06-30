@@ -91,9 +91,9 @@ const styles = StyleSheet.create({
   title: { fontSize: 14, fontWeight: '800', color: InkColors.ink2 },
   pct: { marginLeft: 'auto', fontSize: 18, fontWeight: '900', color: InkColors.ink, letterSpacing: -0.5 },
 
-  track: { height: 9, borderRadius: 999, backgroundColor: InkColors.bgSoft, overflow: 'hidden' },
+  track: { height: 9, borderRadius: Radius.pill, backgroundColor: InkColors.bgSoft, overflow: 'hidden' },
   // 게이지 = 노랑 바 (디자인시스템: 검정바+노랑끝 미채택)
-  fill: { height: '100%', borderRadius: 999, backgroundColor: BrandColors.yellow },
+  fill: { height: '100%', borderRadius: Radius.pill, backgroundColor: BrandColors.yellow },
 
   cats: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   cat: { flexDirection: 'row', alignItems: 'center', gap: 5, minWidth: '44%' },
@@ -109,7 +109,7 @@ const styles = StyleSheet.create({
     backgroundColor: BrandColors.brand,
     paddingVertical: 7,
     paddingHorizontal: 12,
-    borderRadius: 999,
+    borderRadius: Radius.pill,
   },
   ctaBtnText: { fontSize: 12, fontWeight: '800', color: '#FFFFFF' },
 });

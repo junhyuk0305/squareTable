@@ -5,6 +5,7 @@ import { usePayrollStore } from '@/lib/store/usePayrollStore';
 import { RoleTabBar } from '@/components/RoleTabBar';
 import { ChachakSwitch } from '@/components/ChachakSwitch';
 import { InkColors } from '@/lib/theme/colors';
+import { Radius } from '@/lib/theme/elevation';
 
 export default function OwnerPayrollScreen() {
   const settings = usePayrollStore((s) => s.settings);
@@ -108,7 +109,7 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: InkColors.cream },
   scroll: { padding: 20, gap: 10 },
   sectionTitle: { fontSize: 14, fontWeight: '800', color: InkColors.ink2, marginTop: 8 },
-  card: { backgroundColor: '#FFFFFF', borderRadius: 14, borderWidth: 1, borderColor: InkColors.line, paddingHorizontal: 16 },
+  card: { backgroundColor: '#FFFFFF', borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, paddingHorizontal: 16 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: InkColors.line },
   rowLast: { borderBottomWidth: 0 },
   rowLabel: { fontSize: 15, fontWeight: '600', color: InkColors.ink },

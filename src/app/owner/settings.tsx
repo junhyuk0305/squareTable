@@ -1,5 +1,5 @@
 ﻿import { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Linking, Pressable } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -7,25 +7,30 @@ import Constants from 'expo-constants';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { usePreferencesStore, type TextScale } from '@/lib/store/usePreferencesStore';
 import { logout } from '@/lib/auth';
-import { confirmAction } from '@/lib/utils/confirm';
+import { confirmAction, notifyAction } from '@/lib/utils/confirm';
 import { useCopyToClipboard } from '@/lib/utils/useCopyToClipboard';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { SettingsSection, SettingsRow, SettingsToggle } from '@/components/settings/SettingsKit';
 import { QuietHoursModal } from '@/components/settings/QuietHoursModal';
+import { ContactModal } from '@/components/ContactModal';
 import { RoleTabBar } from '@/components/RoleTabBar';
+import { Avatar } from '@/components/Avatar';
+import { HeaderLogoutButton } from '@/components/HeaderLogoutButton';
 
-const SUPPORT_EMAIL = 'cristianojun@naver.com';
 const SCALE_LABEL: Record<TextScale, string> = { small: '작게', normal: '보통', large: '크게' };
 
 export default function OwnerSettings() {
   const router = useRouter();
-  const { userName, email, storeName } = useSessionStore();
+  const userName = useSessionStore((s) => s.userName);
+  const email = useSessionStore((s) => s.email);
+  const storeName = useSessionStore((s) => s.storeName);
   const inviteCode = useSessionStore((s) => s.inviteCode) || '------';
   const deleteAccount = useSessionStore((s) => s.deleteAccount);
   const prefs = usePreferencesStore();
   const [busy, setBusy] = useState(false);
   const [quietModal, setQuietModal] = useState(false);
+  const [contactModal, setContactModal] = useState(false);
   const { copied, copy } = useCopyToClipboard();
 
   const version = Constants.expoConfig?.version ?? '1.0.0';
@@ -37,7 +42,7 @@ export default function OwnerSettings() {
   };
 
   const onLogout = async () => {
-    if (await confirmAction('로그아웃', '로그아웃하시겠어요?', '로그아웃')) await logout();
+    if (await confirmAction('로그아웃', '로그아웃하시겠어요?', '로그아웃', { icon: 'log-out-outline' })) await logout();
   };
 
   const onDelete = async () => {
@@ -45,39 +50,45 @@ export default function OwnerSettings() {
       '회원탈퇴',
       '계정과 매장 데이터(노하우·직원·근무 기록)가 모두 삭제되며 복구할 수 없어요. 정말 탈퇴하시겠어요?',
       '탈퇴하기',
+      { destructive: true, icon: 'trash-outline' },
     );
     if (!ok) return;
     setBusy(true);
     const { error } = await deleteAccount();
     setBusy(false);
     if (error) {
-      await confirmAction('탈퇴 실패', error, '확인');
+      await notifyAction('탈퇴 실패', error, '확인', { icon: 'alert-circle-outline' });
       return;
     }
     router.replace('/');
   };
 
-  const contact = () => Linking.openURL(`mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent('[착착] 문의')}`);
   const billing = () =>
-    confirmAction('구독 및 결제', '지금은 파일럿 기간으로 무료 이용 중이에요. 정기결제(월 구독)는 곧 열릴 예정이에요.', '확인');
+    notifyAction('구독 및 결제', '지금은 파일럿 기간으로 무료 이용 중이에요. 정기결제(월 구독)는 곧 열릴 예정이에요.', '확인', {
+      icon: 'card-outline',
+    });
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
-      <Stack.Screen options={{ headerShown: true, title: '설정' }} />
+      <Stack.Screen options={{ headerShown: true, title: '설정', headerRight: () => <HeaderLogoutButton /> }} />
       {/* 설정탭은 의도적으로 등장 애니메이션을 쓰지 않는다 — 자주 드나드는 관리 화면이라
           매번 카드가 떠오르면 번잡함. 카드 등장 모션은 홈·물어보기·출퇴근·업무 등 콘텐츠 탭에만(Appear). */}
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        {/* 프로필 요약 */}
-        <View style={styles.profile}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{(userName || '사')[0]}</Text>
-          </View>
+        {/* 프로필 카드 자체가 '내 계정' 진입점 — 누르면 프로필 편집·비밀번호 변경 화면으로. (직원 설정과 동일) */}
+        <Pressable
+          onPress={() => router.push('/account-edit')}
+          style={({ pressed }) => [styles.profile, pressed && { opacity: 0.7 }]}
+          accessibilityRole="button"
+          accessibilityLabel="내 계정 — 프로필 편집·비밀번호 변경"
+        >
+          <Avatar name={userName || '사'} size={52} fontSize={22} tone="brand" />
           <View style={{ flex: 1 }}>
             <Text style={styles.pName}>{userName || '사장님'} 사장님</Text>
             <Text style={styles.pMeta}>{email || '데모 계정'}</Text>
             <Text style={styles.pMeta}>{storeName || '매장 미연결'}</Text>
           </View>
-        </View>
+          <Ionicons name="chevron-forward" size={20} color={InkColors.ink3} />
+        </Pressable>
 
         {/* 가게 초대코드 — 직원 합류용. 상시 확인·복사 */}
         <View style={styles.codeCard}>
@@ -94,11 +105,6 @@ export default function OwnerSettings() {
           <Text style={styles.codeManageText}>직원 관리 · 초대 보내기</Text>
           <Ionicons name="chevron-forward" size={15} color={InkColors.ink3} />
         </Pressable>
-
-        <SettingsSection icon="person-outline" title="내 계정">
-          <SettingsRow first icon="person-outline" label="프로필 편집" onPress={() => router.push('/account-edit')} />
-          <SettingsRow icon="lock-closed-outline" label="비밀번호 변경" onPress={() => router.push('/account-edit')} />
-        </SettingsSection>
 
         <SettingsSection icon="storefront-outline" title="매장 관리">
           <SettingsRow first icon="people-outline" label="직원·초대코드 관리" onPress={() => router.push('/owner/staff')} />
@@ -154,7 +160,7 @@ export default function OwnerSettings() {
         </SettingsSection>
 
         <SettingsSection icon="help-buoy-outline" title="고객센터">
-          <SettingsRow first icon="chatbubble-ellipses-outline" label="문의하기" onPress={contact} />
+          <SettingsRow first icon="chatbubble-ellipses-outline" label="문의하기" onPress={() => setContactModal(true)} />
           <SettingsRow icon="information-circle-outline" label="버전 정보" value={`v${version}`} />
         </SettingsSection>
 
@@ -176,6 +182,7 @@ export default function OwnerSettings() {
           prefs.set('quietEnd', e);
         }}
       />
+      <ContactModal visible={contactModal} onClose={() => setContactModal(false)} />
       <RoleTabBar role="owner" />
     </SafeAreaView>
   );
@@ -185,8 +192,6 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: InkColors.cream },
   scroll: { padding: 20, paddingTop: 16 },
   profile: { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 16, backgroundColor: InkColors.bg, borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, marginBottom: 20 },
-  avatar: { width: 52, height: 52, borderRadius: Radius.pill, backgroundColor: BrandColors.brandSoft, alignItems: 'center', justifyContent: 'center' },
-  avatarText: { fontSize: 22, fontWeight: '900', color: BrandColors.brand },
   pName: { fontSize: 17, fontWeight: '800', color: InkColors.ink },
   pMeta: { fontSize: 13, color: InkColors.ink3, marginTop: 1 },
   codeCard: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, backgroundColor: InkColors.bg, borderRadius: Radius.md, borderWidth: 1, borderColor: BrandColors.gold },

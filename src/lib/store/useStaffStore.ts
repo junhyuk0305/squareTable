@@ -4,7 +4,8 @@ import { create } from 'zustand';
 import type { Owner, Junior } from '@/types';
 import usersData from '@/data/users.json';
 import { HAS_SUPABASE } from '@/lib/supabase';
-import { fetchStaffProfiles } from '@/lib/db';
+import { fetchStaffProfiles, removeStaffMember } from '@/lib/db';
+import { optimisticRemove } from '@/lib/store/crudHelpers';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 
 const demoOwner = (usersData as any).owner as Owner;
@@ -17,6 +18,8 @@ type StaffState = {
   hydrate: () => Promise<void>;
   applyMock: (demo: boolean) => void;
   getStaff: (id: string) => Junior | undefined;
+  // 사장이 직원을 매장에서 내보낸다(소속 해제). 낙관적 제거 + 실패 시 복원.
+  removeStaff: (id: string) => void;
 };
 
 // 신규(비데모) 매장: 사장 본인만 세션에서 구성, 직원은 아직 없음.
@@ -51,4 +54,8 @@ export const useStaffStore = create<StaffState>((set, get) => ({
     set(demo ? { owner: demoOwner, staff: demoStaff, loaded: true } : { owner: sessionOwner(), staff: [], loaded: true }),
 
   getStaff: (id) => get().staff.find((s) => s.id === id),
+
+  removeStaff: (id) => {
+    optimisticRemove(set, get, 'staff', id, () => removeStaffMember(id), '직원 내보내기에 실패했어요. 다시 시도해 주세요.');
+  },
 }));

@@ -1,12 +1,12 @@
 import { useMemo, useRef, useState } from 'react';
-import { View, Text, Pressable, TextInput, ScrollView, Modal, StyleSheet } from 'react-native';
+import { View, Text, Pressable, TextInput, ScrollView, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
+import { BottomSheet } from '@/components/BottomSheet';
 import { SECTION_LABEL, type NewTask, type TaskSection, type Recurrence } from '@/lib/store/useWorkStore';
 import { type Member } from '@/components/work/MentionInput';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
-import { Elevation, Radius } from '@/lib/theme/elevation';
-import { modalFrameStyle } from '@/lib/theme/layout';
+import { Radius } from '@/lib/theme/elevation';
 
 type When = 'today' | 'date' | 'weekly';
 const DOW = ['일', '월', '화', '수', '목', '금', '토'];
@@ -125,11 +125,7 @@ export function TaskComposerModal({
   }
 
   return (
-    <Modal visible transparent animationType="slide" onRequestClose={onClose}>
-      <View style={modalFrameStyle}>
-        <Pressable style={s.backdrop} onPress={onClose} />
-        <View style={s.sheet}>
-          <View style={s.grip} />
+    <BottomSheet visible={true} onClose={onClose} sheetStyle={{ height: '86%' }}>
           <Text style={s.title}>할일 추가</Text>
 
           <ScrollView ref={scrollRef} style={s.scroll} contentContainerStyle={{ paddingBottom: 8 }} showsVerticalScrollIndicator={false}>
@@ -221,9 +217,7 @@ export function TaskComposerModal({
               <Text style={s.ctaText}>{isDup ? '이미 등록됨' : '할일 등록'}</Text>
             </Pressable>
           </View>
-        </View>
-      </View>
-    </Modal>
+    </BottomSheet>
   );
 }
 
@@ -308,21 +302,18 @@ function fmtDate(d: string): string {
 }
 
 const s = StyleSheet.create({
-  backdrop: { flex: 1 },
-  sheet: { backgroundColor: InkColors.bg, borderTopLeftRadius: Radius.sheet, borderTopRightRadius: Radius.sheet, height: '86%', ...Elevation.e3 },
-  grip: { width: 40, height: 4, borderRadius: 99, backgroundColor: InkColors.line, alignSelf: 'center', marginTop: 12, marginBottom: 6 },
   title: { fontSize: 16, fontWeight: '800', color: InkColors.ink, paddingHorizontal: 16, paddingBottom: 12 },
   scroll: { flex: 1, paddingHorizontal: 16 },
   fld: { marginBottom: 13 },
   fldLabel: { fontSize: 11.5, fontWeight: '800', color: InkColors.ink2, marginBottom: 6 },
-  inp: { borderWidth: 1, borderColor: InkColors.line, borderRadius: 11, paddingHorizontal: 13, paddingVertical: 11, fontSize: 14, color: InkColors.ink, backgroundColor: InkColors.cream },
+  inp: { borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.sm, paddingHorizontal: 13, paddingVertical: 11, fontSize: 14, color: InkColors.ink, backgroundColor: InkColors.cream },
 
   seg: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  segO: { borderWidth: 1, borderColor: InkColors.line, borderRadius: 99, paddingHorizontal: 13, paddingVertical: 8, backgroundColor: InkColors.bg },
+  segO: { borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.pill, paddingHorizontal: 13, paddingVertical: 8, backgroundColor: InkColors.bg },
   segOn: { backgroundColor: InkColors.ink, borderColor: InkColors.ink },
   segText: { fontSize: 12.5, fontWeight: '700', color: InkColors.ink2 },
 
-  reveal: { marginTop: 9, padding: 11, backgroundColor: InkColors.cream, borderWidth: 1, borderColor: InkColors.line, borderRadius: 12 },
+  reveal: { marginTop: 9, padding: 11, backgroundColor: InkColors.cream, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md },
   revealLabel: { fontSize: 11, fontWeight: '800', color: InkColors.ink2, marginBottom: 8 },
   dateText: { fontSize: 14, fontWeight: '700', color: InkColors.ink, marginTop: 8, textAlign: 'center' },
 
@@ -333,19 +324,19 @@ const s = StyleSheet.create({
   weekRow: { flexDirection: 'row' },
   weekCell: { flex: 1, textAlign: 'center', fontSize: 10.5, fontWeight: '800', color: InkColors.ink3, paddingVertical: 3 },
   daysWrap: { flexDirection: 'row', flexWrap: 'wrap' },
-  cell: { width: `${100 / 7}%`, height: 36, alignItems: 'center', justifyContent: 'center', borderRadius: 9 },
+  cell: { width: `${100 / 7}%`, height: 36, alignItems: 'center', justifyContent: 'center', borderRadius: Radius.sm },
   cellToday: { backgroundColor: InkColors.cream, borderWidth: 1, borderColor: InkColors.line },
   cellSel: { backgroundColor: InkColors.ink },
   cellNum: { fontSize: 13, fontWeight: '600', color: InkColors.ink },
   cellMute: { color: InkColors.ink3, opacity: 0.45 },
   dowRow: { flexDirection: 'row', gap: 5 },
-  dow: { width: 34, height: 34, borderRadius: 99, borderWidth: 1, borderColor: InkColors.line, backgroundColor: InkColors.bg, alignItems: 'center', justifyContent: 'center' },
+  dow: { width: 34, height: 34, borderRadius: Radius.pill, borderWidth: 1, borderColor: InkColors.line, backgroundColor: InkColors.bg, alignItems: 'center', justifyContent: 'center' },
   dowOn: { backgroundColor: InkColors.ink, borderColor: InkColors.ink },
   dowSun: { backgroundColor: BrandColors.bad, borderColor: BrandColors.bad },
   dowText: { fontSize: 12.5, fontWeight: '700', color: InkColors.ink2 },
   dowWarn: { fontSize: 11, color: BrandColors.bad, fontWeight: '700', marginTop: 8 },
 
-  lockedScope: { backgroundColor: InkColors.cream, borderWidth: 1, borderColor: InkColors.line, borderRadius: 11, paddingHorizontal: 13, paddingVertical: 10 },
+  lockedScope: { backgroundColor: InkColors.cream, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.sm, paddingHorizontal: 13, paddingVertical: 10 },
   lockedScopeText: { fontSize: 14, fontWeight: '700', color: InkColors.ink },
   lockedScopeHint: { fontSize: 11, color: InkColors.ink3, marginTop: 2 },
   assignHint: { fontSize: 11.5, color: InkColors.ink2, fontWeight: '600', marginTop: 8, paddingHorizontal: 2 },
@@ -356,8 +347,8 @@ const s = StyleSheet.create({
   destBar: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10 },
   destText: { flex: 1, fontSize: 12, color: InkColors.ink3, fontWeight: '600' },
   destStrong: { color: InkColors.ink, fontWeight: '800' },
-  dupBar: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10, paddingVertical: 9, paddingHorizontal: 11, backgroundColor: '#FBF3E3', borderWidth: 1, borderColor: BrandColors.warn, borderRadius: 11 },
+  dupBar: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10, paddingVertical: 9, paddingHorizontal: 11, backgroundColor: '#FBF3E3', borderWidth: 1, borderColor: BrandColors.warn, borderRadius: Radius.sm },
   dupText: { flex: 1, fontSize: 12, color: '#8A5A12', fontWeight: '700', lineHeight: 16 },
-  cta: { backgroundColor: InkColors.ink, borderRadius: 14, paddingVertical: 14, alignItems: 'center' },
+  cta: { backgroundColor: InkColors.ink, borderRadius: Radius.md, paddingVertical: 14, alignItems: 'center' },
   ctaText: { color: '#fff', fontSize: 15, fontWeight: '800' },
 });

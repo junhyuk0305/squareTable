@@ -6,6 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { logout } from '@/lib/auth';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
+import { Radius } from '@/lib/theme/elevation';
 
 const CODE_LEN = 6;
 
@@ -106,7 +107,7 @@ const styles = StyleSheet.create({
   sub: { fontSize: 14, color: InkColors.ink2, textAlign: 'center', lineHeight: 21 },
   strong: { fontWeight: '800', color: InkColors.ink },
 
-  card: { backgroundColor: '#FFFFFF', borderRadius: 16, borderWidth: 1, borderColor: InkColors.line, padding: 20, gap: 12 },
+  card: { backgroundColor: '#FFFFFF', borderRadius: Radius.lg, borderWidth: 1, borderColor: InkColors.line, padding: 20, gap: 12 },
   label: { fontSize: 13, fontWeight: '700', color: InkColors.ink2 },
   cells: { flexDirection: 'row', gap: CELL_GAP, position: 'relative' },
   cell: {
@@ -115,7 +116,7 @@ const styles = StyleSheet.create({
     maxHeight: 56,
     borderWidth: 1.5,
     borderColor: InkColors.line,
-    borderRadius: 12,
+    borderRadius: Radius.md,
     backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
@@ -125,10 +126,10 @@ const styles = StyleSheet.create({
   hiddenInput: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, opacity: 0, color: 'transparent' },
 
   err: { fontSize: 13, color: BrandColors.accent, fontWeight: '600' },
-  primary: { backgroundColor: BrandColors.brand, paddingVertical: 16, borderRadius: 12, alignItems: 'center' },
+  primary: { backgroundColor: BrandColors.brand, paddingVertical: 16, borderRadius: Radius.md, alignItems: 'center' },
   primaryText: { color: '#FFFFFF', fontSize: 16, fontWeight: '800' },
 
-  helpBox: { backgroundColor: InkColors.bgSoft, borderRadius: 12, padding: 16 },
+  helpBox: { backgroundColor: InkColors.bgSoft, borderRadius: Radius.md, padding: 16 },
   helpBody: { fontSize: 13, color: InkColors.ink3, lineHeight: 20 },
   helpStrong: { fontWeight: '800', color: InkColors.ink2 },
   logoutRow: { alignItems: 'center', paddingVertical: 4 },

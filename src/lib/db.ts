@@ -16,9 +16,6 @@ let _unitId: string | null = null;
 export function setUnitId(id: string | null) {
   _unitId = id;
 }
-export function getUnitId() {
-  return _unitId;
-}
 
 // 같은 토픽 채널을 두 화면이 동시에 구독하면 Realtime 서버가 두 번째 join을 거부해
 // 한쪽 실시간이 죽는다. 화면 레벨에서 구독하는 채널은 호출마다 토픽을 유니크하게 만든다.
@@ -34,6 +31,24 @@ async function write(label: string, q: PromiseLike<{ error: { message: string } 
     return false;
   }
   return true;
+}
+
+// ── 시계열 fetch 상한 (무한 fetch 방지) ────────────────────────
+// 누적되는 운영 데이터는 전체가 아니라 최근 구간만 당긴다(오래된 건 retention으로 정리됨).
+// feed/chat 은 날짜창(휘발성), attendance/unknown 은 카운트 상한만(자산·pending 보존).
+const FEED_WINDOW_DAYS = 90;
+const CHAT_WINDOW_DAYS = 90;
+const PAGE_LIMIT = 1000; // 단일 fetch 행 상한 — 현 규모 대비 넉넉, 폭주만 차단.
+// date 컬럼(YYYY-MM-DD) / timestamptz 컬럼(ISO) 각각용 'N일 전' 경계값.
+function sinceDate(days: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() - days);
+  return d.toISOString().slice(0, 10);
+}
+function sinceTs(days: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() - days);
+  return d.toISOString();
 }
 
 // ── 직원/사장 프로필 (같은 매장) ───────────────────────────
@@ -81,6 +96,24 @@ export async function fetchStaffProfiles(): Promise<{ owner: Owner | null; staff
       shift: r.meta?.shift ?? undefined,
     }));
   return { owner, staff };
+}
+
+// 사장이 직원을 매장에서 내보낸다(소속 해제 + 퇴사자 스냅샷 보관). RPC = 사장만·같은 매장 junior만.
+export async function removeStaffMember(staffId: string): Promise<boolean> {
+  if (!HAS_SUPABASE) return true;
+  const { error } = await supabase.rpc('remove_staff', { p_staff_id: staffId });
+  if (error) {
+    console.warn('[db] removeStaffMember:', error.message);
+    return false;
+  }
+  return true;
+}
+
+// 퇴사 6개월 경과분 개인 기록 자동 정리(내 매장 범위). 사장 진입 시 기회적으로 1회 호출 — 실패해도 무해.
+export async function purgeExpiredFormerStaff(): Promise<void> {
+  if (!HAS_SUPABASE) return;
+  const { error } = await supabase.rpc('purge_expired_former_staff');
+  if (error) console.warn('[db] purgeExpiredFormerStaff:', error.message);
 }
 
 // ── 플레이북 ───────────────────────────────────────────────
@@ -173,7 +206,8 @@ export async function fetchUnknownQueue(): Promise<UnknownQuery[]> {
   const { data, error } = await supabase
     .from('unknown_queries')
     .select('*')
-    .order('asked_at', { ascending: false });
+    .order('asked_at', { ascending: false })
+    .limit(PAGE_LIMIT);
   if (error) {
     console.warn('[db] fetchUnknownQueue:', error.message);
     return [];
@@ -216,7 +250,9 @@ export async function fetchChatQueries(juniorId: string): Promise<ChatQuery[]> {
     .from('chat_queries')
     .select('*')
     .eq('junior_id', juniorId)
-    .order('asked_at', { ascending: true });
+    .gte('asked_at', sinceTs(CHAT_WINDOW_DAYS))
+    .order('asked_at', { ascending: true })
+    .limit(PAGE_LIMIT);
   if (error) {
     console.warn('[db] fetchChatQueries:', error.message);
     return [];
@@ -226,7 +262,9 @@ export async function fetchChatQueries(juniorId: string): Promise<ChatQuery[]> {
 
 export async function insertChatQuery(cq: ChatQuery): Promise<boolean> {
   if (!HAS_SUPABASE) return true;
-  const row = { ...cq, unit_id: (cq as any).unit_id || _unitId };
+  // candidate_entry_ids는 클라 UI 전용(비영속) — DB 컬럼이 없으므로 insert에서 제외.
+  const { candidate_entry_ids: _drop, ...persisted } = cq;
+  const row = { ...persisted, unit_id: (cq as any).unit_id || _unitId };
   return write('insertChatQuery', supabase.from('chat_queries').insert(row));
 }
 
@@ -240,14 +278,39 @@ export async function updateChatSatisfaction(id: string, vote: 'up' | 'down'): P
 // Supabase 없으면 로컬 object URL을 그대로 반환(데모 폴백).
 const PHOTO_BUCKET = 'playbook-photos';
 
+// 업로드 전 이미지 압축(웹) — 폰 사진 수 MB를 긴 변 1600px·JPEG q0.8로 다운스케일해 스토리지·대역폭 절감.
+// 비웹(document 없음)·비이미지·이미 작은 파일·실패 시 원본 그대로(업로드가 절대 안 깨지게).
+async function compressImage(file: File): Promise<File> {
+  if (typeof document === 'undefined' || !file.type.startsWith('image/')) return file;
+  if (file.size < 600_000) return file; // 이미 작으면 스킵
+  try {
+    const bitmap = await createImageBitmap(file);
+    const scale = Math.min(1, 1600 / Math.max(bitmap.width, bitmap.height));
+    const w = Math.round(bitmap.width * scale);
+    const h = Math.round(bitmap.height * scale);
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return file;
+    ctx.drawImage(bitmap, 0, 0, w, h);
+    const blob = await new Promise<Blob | null>((res) => canvas.toBlob(res, 'image/jpeg', 0.8));
+    if (!blob || blob.size >= file.size) return file; // 압축 이득 없으면 원본
+    return new File([blob], file.name.replace(/\.\w+$/, '') + '.jpg', { type: 'image/jpeg' });
+  } catch {
+    return file;
+  }
+}
+
 export async function uploadPhoto(file: File): Promise<string | null> {
   if (!HAS_SUPABASE) {
     return typeof URL !== 'undefined' && URL.createObjectURL ? URL.createObjectURL(file) : null;
   }
-  const ext = file.name.split('.').pop() || 'jpg';
+  const compressed = await compressImage(file);
+  const ext = compressed.name.split('.').pop() || 'jpg';
   const path = `${_unitId ?? 'unknown'}/${Date.now()}-${Math.round(Math.random() * 1e6)}.${ext}`;
-  const { error } = await supabase.storage.from(PHOTO_BUCKET).upload(path, file, {
-    contentType: file.type || 'image/jpeg',
+  const { error } = await supabase.storage.from(PHOTO_BUCKET).upload(path, compressed, {
+    contentType: compressed.type || 'image/jpeg',
     upsert: false,
   });
   if (error) {
@@ -263,7 +326,7 @@ export async function uploadPhoto(file: File): Promise<string | null> {
 export function subscribeUnknownQueue(onChange: () => void): () => void {
   if (!HAS_SUPABASE) return () => {};
   const ch = supabase
-    .channel('unknown_queue')
+    .channel(uniqueChannel('unknown_queue'))
     .on('postgres_changes', { event: '*', schema: 'public', table: 'unknown_queries' }, onChange)
     .subscribe();
   return () => {
@@ -275,7 +338,7 @@ export function subscribeUnknownQueue(onChange: () => void): () => void {
 export function subscribePlaybook(onChange: () => void): () => void {
   if (!HAS_SUPABASE) return () => {};
   const ch = supabase
-    .channel('playbook')
+    .channel(uniqueChannel('playbook'))
     .on('postgres_changes', { event: '*', schema: 'public', table: 'playbook_entries' }, onChange)
     .subscribe();
   return () => {
@@ -431,7 +494,12 @@ export async function clearDone(date: string, templateId: string): Promise<boole
 // ── 업무보드: 피드(공지/메시지/완료) ──────────────────────
 export async function fetchFeed(): Promise<FeedItem[]> {
   if (!HAS_SUPABASE) return [];
-  const { data, error } = await supabase.from('work_feed').select('data').order('created_at');
+  const { data, error } = await supabase
+    .from('work_feed')
+    .select('data')
+    .gte('feed_date', sinceDate(FEED_WINDOW_DAYS))
+    .order('created_at')
+    .limit(PAGE_LIMIT);
   if (error) {
     console.warn('[db] fetchFeed:', error.message);
     return [];
@@ -456,7 +524,8 @@ export async function fetchAttendance(): Promise<AttendanceRecord[]> {
   const { data, error } = await supabase
     .from('attendance')
     .select('id, staff_id, date, check_in, check_out, work_minutes, edited_by')
-    .order('date', { ascending: false });
+    .order('date', { ascending: false })
+    .limit(PAGE_LIMIT);
   if (error) {
     console.warn('[db] fetchAttendance:', error.message);
     return [];
@@ -493,7 +562,7 @@ export async function setWageDb(staffId: string, wage: number): Promise<boolean>
 export function subscribeWork(onChange: () => void): () => void {
   if (!HAS_SUPABASE) return () => {};
   const ch = supabase
-    .channel('work')
+    .channel(uniqueChannel('work'))
     .on('postgres_changes', { event: '*', schema: 'public', table: 'work_feed' }, onChange)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'work_done' }, onChange)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'work_templates' }, onChange)
@@ -505,7 +574,7 @@ export function subscribeWork(onChange: () => void): () => void {
 export function subscribeAttendance(onChange: () => void): () => void {
   if (!HAS_SUPABASE) return () => {};
   const ch = supabase
-    .channel('attendance')
+    .channel(uniqueChannel('attendance'))
     .on('postgres_changes', { event: '*', schema: 'public', table: 'attendance' }, onChange)
     .subscribe();
   return () => {

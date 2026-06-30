@@ -5,6 +5,7 @@ import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 import { RoleTabBar } from '@/components/RoleTabBar';
+import { Avatar } from '@/components/Avatar';
 import { SectionLabel } from '@/components/SectionLabel';
 import { ScheduleWeek } from '@/components/schedule/ScheduleWeek';
 import { ShiftEditorModal } from '@/components/schedule/ShiftEditorModal';
@@ -108,9 +109,7 @@ export default function OwnerScheduleScreen() {
                 const count = templates.filter((t) => t.staff_id === st.id).length;
                 return (
                   <View key={st.id} style={styles.staffRow}>
-                    <View style={styles.avatar}>
-                      <Text style={styles.avatarText}>{st.name.slice(0, 1)}</Text>
-                    </View>
+                    <Avatar name={st.name} size={38} fontSize={15} />
                     <View style={{ flex: 1 }}>
                       <Text style={styles.staffName}>{st.name}</Text>
                       <Text style={styles.staffMeta}>{count > 0 ? `주 ${count}일 근무` : '근무표 미설정'}</Text>
@@ -254,8 +253,6 @@ const styles = StyleSheet.create({
   // 직원 리스트
   staffList: { backgroundColor: InkColors.bg, borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, paddingHorizontal: 14 },
   staffRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: InkColors.line },
-  avatar: { width: 38, height: 38, borderRadius: Radius.pill, backgroundColor: InkColors.bgSoft, borderWidth: 1, borderColor: InkColors.line, alignItems: 'center', justifyContent: 'center' },
-  avatarText: { fontSize: 15, fontWeight: '800', color: InkColors.ink },
   staffName: { fontSize: 15, fontWeight: '700', color: InkColors.ink },
   staffMeta: { fontSize: 12, color: InkColors.ink3, marginTop: 2 },
   editBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: InkColors.ink, paddingHorizontal: 12, paddingVertical: 8, borderRadius: Radius.pill },

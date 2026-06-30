@@ -3,6 +3,7 @@ import { todayStr, minutesBetween } from '@/lib/utils/attendance';
 import { HAS_SUPABASE } from '@/lib/supabase';
 import { fetchAttendance, upsertAttendance, deleteAttendance, subscribeAttendance } from '@/lib/db';
 import { guardWrite } from '@/lib/store/useSyncStore';
+import { genId } from '@/lib/utils/id';
 
 export type AttendanceRecord = {
   id: string;
@@ -20,12 +21,6 @@ export const HOURLY_WAGE: Record<string, number> = {
   u_staff_001: 10030, // 박지원
   u_staff_002: 10500, // 이수민
 };
-
-// 충돌 방지 id — 같은 ms에 두 번 호출돼도 카운터로 유일성 보장(Date.now() 단독은 충돌 가능).
-let _seq = 0;
-function uid(): string {
-  return `${Date.now()}_${_seq++}`;
-}
 
 function iso(date: string, time: string): string {
   return `${date}T${time}:00+09:00`;
@@ -87,7 +82,7 @@ export const useAttendanceStore = create<State>((set, get) => ({
     );
     if (hasOpen) return;
     const now = new Date().toISOString();
-    const rec: AttendanceRecord = { id: `att_${staffId}_${uid()}`, staff_id: staffId, date, check_in: now, check_out: null, work_minutes: 0 };
+    const rec: AttendanceRecord = { id: genId(`att_${staffId}`), staff_id: staffId, date, check_in: now, check_out: null, work_minutes: 0 };
     set((s) => ({ records: [rec, ...s.records] }));
     void guardWrite(
       upsertAttendance(rec),
@@ -134,8 +129,8 @@ export const useAttendanceStore = create<State>((set, get) => ({
         return { records: s.records.map((r) => (r.id === recordId ? next : r)) };
       }
       wasNew = true;
-      // 새 기록은 uid()로 유일 id 부여(같은 날 여러 기록 공존 허용 + 자동 펀치 id와 충돌 방지).
-      saved = { id: `att_${staffId}_${uid()}`, staff_id: staffId, date, check_in, check_out, work_minutes, edited_by: editedBy };
+      // 새 기록은 genId()로 유일 id 부여(같은 날 여러 기록 공존 허용 + 자동 펀치 id와 충돌 방지).
+      saved = { id: genId(`att_${staffId}`), staff_id: staffId, date, check_in, check_out, work_minutes, edited_by: editedBy };
       return { records: [saved, ...s.records] };
     });
     // edited_by 포함해 영속(0006 마이그레이션 컬럼). 자동 펀치는 edited_by 없음 → null.

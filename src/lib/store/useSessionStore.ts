@@ -12,6 +12,7 @@ type SessionState = {
   userName: string;
   unitId: string;
   storeName: string;
+  industry: string; // 매장 업종(노하우 팩 매칭 키) — 온보딩 자동등록에 사용
   inviteCode: string; // 내 매장 초대코드(사장 화면에서 직원에게 공유)
   email: string;
   bio: string; // 한줄 소개
@@ -22,26 +23,30 @@ type SessionState = {
   signUp: (
     email: string,
     pw: string,
-    meta: { name: string; role: Role; phone_last4?: string },
+    meta: { name: string; role: Role; phone?: string; phone_last4?: string },
   ) => Promise<{ error: string | null; needsConfirm: boolean }>;
-  createStore: (storeName: string, bizNo?: string) => Promise<{ error: string | null; inviteCode: string | null }>;
+  // 전화번호 중복 사전검사(주키). 비로그인 호출 가능. 실패 시 false(막지 않음 — unique가 최종 방어).
+  isPhoneTaken: (phone: string) => Promise<boolean>;
+  createStore: (storeName: string, industry: string, bizNo?: string) => Promise<{ error: string | null; inviteCode: string | null }>;
   joinByInvite: (code: string) => Promise<{ error: string | null; storeName: string | null }>;
   sendMagicLink: (email: string) => Promise<{ error: string | null }>;
   // 이메일 인증 메일 발송(회원가입 화면의 '인증' 버튼). 데모는 발송 생략.
   verifyEmail: (email: string) => Promise<{ status: 'demo' | 'sent' | 'rate' | 'error'; message?: string }>;
-  updateProfile: (patch: { name?: string; phone_last4?: string; bio?: string; email?: string }) => Promise<{ error: string | null }>;
+  updateProfile: (patch: { name?: string; phone?: string; phone_last4?: string; bio?: string; email?: string }) => Promise<{ error: string | null }>;
   changePassword: (newPw: string) => Promise<{ error: string | null }>;
   deleteAccount: () => Promise<{ error: string | null }>;
   leaveStore: () => Promise<{ error: string | null }>;
   // 가게 이름 변경(사장 전용) — 14일 이내 2회 제한. 변경 이력은 기기 로컬에 보관(파일럿).
   renameStore: (name: string) => Promise<{ error: string | null; remaining: number }>;
   storeRenameInfo: () => { remaining: number; nextAvailableAt: number | null };
+  // 업종 변경(사장 전용) — 노하우팩 매칭 키. 가게 이름과 같은 unit 속성.
+  updateIndustry: (industry: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
 
   // 개발/단일기기 역할 토글 (Supabase 없을 때의 데모 폴백)
   switchTo: (role: Role) => void;
   // mock 모드에서 "새 계정/새 사업장"으로 입장 (데모 데이터 없이 빈 매장에서 시작)
-  enterMockStore: (name: string, role: Role, storeName: string) => void;
+  enterMockStore: (name: string, role: Role, storeName: string, industry?: string) => void;
 };
 
 // Supabase 미설정(로컬 데모) 기본 신원 — 기존 동작 그대로 유지.
@@ -52,6 +57,7 @@ const DEMO = {
   userName: '박지원',
   unitId: 'store_001',
   storeName: '착착 카페 신촌점',
+  industry: '카페·디저트',
   inviteCode: '482913',
   email: '',
   bio: '',
@@ -82,36 +88,50 @@ function pushRenameTime(unitId: string) {
 }
 
 async function loadProfile(set: (p: Partial<SessionState>) => void, userId: string, email: string) {
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('id, name, role, unit_id, bio')
-    .eq('id', userId)
-    .maybeSingle();
-
-  const unitId = profile?.unit_id ?? '';
-  let storeName = '';
-  let inviteCode = '';
-  if (unitId) {
-    const { data: unit } = await supabase
-      .from('units')
-      .select('store_name, invite_code')
-      .eq('id', unitId)
+  try {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('id, name, role, unit_id, bio')
+      .eq('id', userId)
       .maybeSingle();
-    storeName = unit?.store_name ?? '';
-    inviteCode = unit?.invite_code ?? '';
+
+    const unitId = profile?.unit_id ?? '';
+    let storeName = '';
+    let inviteCode = '';
+    let industry = '';
+    if (unitId) {
+      const { data: unit } = await supabase
+        .from('units')
+        .select('store_name, invite_code, industry')
+        .eq('id', unitId)
+        .maybeSingle();
+      storeName = unit?.store_name ?? '';
+      inviteCode = unit?.invite_code ?? '';
+      industry = unit?.industry ?? '';
+    }
+    setUnitId(unitId || null);
+    set({
+      status: 'signed_in',
+      userId,
+      email,
+      inviteCode,
+      userName: profile?.name ?? '',
+      role: (profile?.role as Role) ?? 'junior',
+      unitId,
+      storeName,
+      industry,
+      bio: profile?.bio ?? '',
+    });
+  } catch (e) {
+    // 네트워크 단절(fetch reject)로 프로필 조회가 던지면 앱이 'loading'에 영구히 멈추는 걸 막는다.
+    // (supabase-js는 쿼리 에러를 throw하지 않고 {error}로 반환 → 그 경로는 위 try가 빈 unitId로 정상 처리.
+    //  여기 catch는 오직 오프라인 등 throw 케이스.) 초기 state가 DEMO 시드(role/unitId='store_001')라
+    // 부분 set으로 signed_in 처리하면 가짜 테넌트로 오인되므로, 반드시 깨끗한 signed_out으로 떨군다
+    // (테넌트 격리가 최우선). 재접속 시 로그인/재시도로 정상 복구된다.
+    console.warn('[session] loadProfile 실패, 로그아웃 처리:', (e as Error)?.message ?? e);
+    setUnitId(null);
+    set({ status: 'signed_out', unitId: '', userId: '', userName: '', storeName: '', industry: '', inviteCode: '', bio: '' });
   }
-  setUnitId(unitId || null);
-  set({
-    status: 'signed_in',
-    userId,
-    email,
-    inviteCode,
-    userName: profile?.name ?? '',
-    role: (profile?.role as Role) ?? 'junior',
-    unitId,
-    storeName,
-    bio: profile?.bio ?? '',
-  });
 }
 
 // onAuthStateChange는 앱 생애 1회만 등록한다. init()이 재마운트/핫리로드로 여러 번 불려도
@@ -164,9 +184,17 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     return { error: null, needsConfirm };
   },
 
-  createStore: async (storeName, bizNo) => {
+  isPhoneTaken: async (phone) => {
+    if (!HAS_SUPABASE) return false;
+    const { data, error } = await supabase.rpc('phone_in_use', { p_phone: phone });
+    if (error) return false; // 사전검사 실패 시 막지 않음 — unique 제약이 최종 방어선
+    return Boolean(data);
+  },
+
+  createStore: async (storeName, industry, bizNo) => {
     const { data, error } = await supabase.rpc('create_store', {
       p_store_name: storeName,
+      p_industry: industry,
       p_biz_no: bizNo ?? null,
     });
     if (error) {
@@ -223,11 +251,20 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     if (!uid) return { error: '로그인이 필요해요.' };
     const fields: Record<string, string> = {};
     if (patch.name != null) fields.name = patch.name;
-    if (patch.phone_last4 != null) fields.phone_last4 = patch.phone_last4;
+    if (patch.phone != null) {
+      // 주키(전화번호) 갱신 — 전체 phone 저장(생성컬럼 phone_norm이 unique 강제) + 표시용 last4 파생.
+      fields.phone = patch.phone;
+      fields.phone_last4 = patch.phone.slice(-4);
+    } else if (patch.phone_last4 != null) {
+      fields.phone_last4 = patch.phone_last4;
+    }
     if (patch.bio != null) fields.bio = patch.bio;
     if (Object.keys(fields).length) {
       const { error } = await supabase.from('profiles').update(fields).eq('id', uid);
-      if (error) return { error: error.message };
+      if (error) {
+        if (/duplicate|unique|phone_norm/i.test(error.message)) return { error: '이미 가입된 번호예요.' };
+        return { error: error.message };
+      }
     }
     // 이메일 변경은 auth 레벨 — 실제로 바뀐 경우에만 호출(확인 메일이 발송될 수 있음).
     if (patch.email != null && patch.email !== get().email) {
@@ -253,7 +290,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   deleteAccount: async () => {
     if (!HAS_SUPABASE) {
       // 데모 모드: 실제 삭제 대상 없음 → 세션만 종료.
-      set({ status: 'signed_out', unitId: '', userId: '', userName: '' });
+      set({ status: 'signed_out', unitId: '', userId: '', userName: '', industry: '' });
       return { error: null };
     }
     const { error } = await supabase.rpc('delete_my_account');
@@ -265,14 +302,14 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     } catch (e) {
       console.warn('[session] signOut after delete failed:', e);
     }
-    set({ status: 'signed_out', unitId: '', userId: '', userName: '' });
+    set({ status: 'signed_out', unitId: '', userId: '', userName: '', industry: '' });
     return { error: null };
   },
 
   // 매장 나가기 — 알바가 현재 매장 소속을 해제(로그아웃과 구분). unit_id만 null로.
   leaveStore: async () => {
     if (!HAS_SUPABASE) {
-      set({ unitId: '', storeName: '' });
+      set({ unitId: '', storeName: '', industry: '' });
       setUnitId(null);
       return { error: null };
     }
@@ -311,6 +348,22 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     return { error: null, remaining: get().storeRenameInfo().remaining };
   },
 
+  updateIndustry: async (industry) => {
+    const trimmed = industry.trim();
+    if (get().role !== 'owner') return { error: '사장님만 변경할 수 있어요.' };
+    if (!trimmed) return { error: '업종을 선택해주세요.' };
+    if (trimmed === get().industry) return { error: null };
+
+    const unitId = get().unitId;
+    if (HAS_SUPABASE) {
+      if (!unitId) return { error: '매장 정보가 없어요.' };
+      const { error } = await supabase.from('units').update({ industry: trimmed }).eq('id', unitId);
+      if (error) return { error: error.message };
+    }
+    set({ industry: trimmed });
+    return { error: null };
+  },
+
   signOut: async () => {
     // signOut 실패가 화면 핸들러로 튀지 않게 가드 — 어떤 경우든 로컬 세션은 종료한다.
     if (HAS_SUPABASE) {
@@ -320,7 +373,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
         console.warn('[session] signOut failed:', e);
       }
     }
-    set({ status: 'signed_out', unitId: '', userId: '', userName: '' });
+    set({ status: 'signed_out', unitId: '', userId: '', userName: '', industry: '' });
   },
 
   switchTo: (role) => {
@@ -328,12 +381,12 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     setUnitId(DEMO.unitId);
     set(
       role === 'owner'
-        ? { role: 'owner', userId: 'u_owner_001', userName: '김영자', unitId: DEMO.unitId, storeName: DEMO.storeName, inviteCode: DEMO.inviteCode, email: '', bio: '' }
-        : { role: 'junior', userId: 'u_staff_001', userName: '박지원', unitId: DEMO.unitId, storeName: DEMO.storeName, inviteCode: DEMO.inviteCode, email: '', bio: '' }
+        ? { role: 'owner', userId: 'u_owner_001', userName: '김영자', unitId: DEMO.unitId, storeName: DEMO.storeName, industry: DEMO.industry, inviteCode: DEMO.inviteCode, email: '', bio: '' }
+        : { role: 'junior', userId: 'u_staff_001', userName: '박지원', unitId: DEMO.unitId, storeName: DEMO.storeName, industry: DEMO.industry, inviteCode: DEMO.inviteCode, email: '', bio: '' }
     );
   },
 
-  enterMockStore: (name, role, storeName) => {
+  enterMockStore: (name, role, storeName, industry) => {
     // 데모와 구분되는 새 매장 id → 스토어들이 빈 상태로 시작(가짜 데이터 없음).
     const unitId = 'store_new';
     const inviteCode = String(Math.floor(100000 + (Date.now() % 900000)));
@@ -345,6 +398,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       userName: name || (role === 'owner' ? '사장님' : '직원'),
       unitId,
       storeName: storeName || (role === 'owner' ? '내 매장' : ''),
+      industry: industry ?? '',
       inviteCode: role === 'owner' ? inviteCode : '',
       email: '',
       bio: '',

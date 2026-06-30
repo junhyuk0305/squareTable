@@ -58,6 +58,12 @@ export function hhmm(iso: string): string {
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
+/** "6/30 14:00" — 짧은 날짜+시각. 공지·로그 카드 타임스탬프(시간만으론 언제 건지 모호한 곳)에. */
+export function mdHHmm(iso: string): string {
+  const d = new Date(iso);
+  return `${d.getMonth() + 1}/${d.getDate()} ${hhmm(iso)}`;
+}
+
 /** 입력 마스크 — 숫자만 받아 "1230"→"12:30"으로 자동 정리(4자리까지). 유효성 검사는 별도. */
 export function maskHHMM(text: string): string {
   const d = text.replace(/[^0-9]/g, '').slice(0, 4);

@@ -1,14 +1,16 @@
 import { useCallback, useId, useMemo, useRef, useState } from 'react';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 
 import { OwnerCoachChat } from '@/components/OwnerCoachChat';
 import { Appear } from '@/components/Appear';
+import { EmptyState } from '@/components/EmptyState';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { useUnknownQueueStore } from '@/lib/store/useUnknownQueueStore';
 import { useSuggestionStore } from '@/lib/store/useSuggestionStore';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
+import { Radius } from '@/lib/theme/elevation';
 
 import type { Category, PlaybookEntry, UnknownQuery } from '@/types';
 
@@ -111,17 +113,15 @@ export default function OwnerCoachScreen() {
     return (
       <SafeAreaView style={styles.container} edges={['bottom']}>
         <Stack.Screen options={{ title: '질문 답변' }} />
-        <View style={styles.empty}>
-          <Text style={styles.emptyEmoji}>📭</Text>
-          <Text style={styles.emptyTitle}>이미 처리된 질문이에요</Text>
-          <Text style={styles.emptyHint}>다른 답변으로 해결되었거나 보관됐어요.</Text>
-          <Pressable
-            onPress={() => (router.canGoBack() ? router.back() : router.replace('/owner/inbox'))}
-            style={({ pressed }) => [styles.emptyBtn, pressed && { opacity: 0.85 }]}
-          >
-            <Text style={styles.emptyBtnText}>받은 질문으로 돌아가기</Text>
-          </Pressable>
-        </View>
+        <EmptyState
+          emoji="📭"
+          title="이미 처리된 질문이에요"
+          body="다른 답변으로 해결되었거나 보관됐어요."
+          cta={{
+            label: '받은 질문으로 돌아가기',
+            onPress: () => (router.canGoBack() ? router.back() : router.replace('/owner/inbox')),
+          }}
+        />
       </SafeAreaView>
     );
   }
@@ -158,17 +158,10 @@ export default function OwnerCoachScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: InkColors.cream },
 
-  empty: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, gap: 12 },
-  emptyEmoji: { fontSize: 56 },
-  emptyTitle: { fontSize: 18, fontWeight: '800', color: InkColors.ink },
-  emptyHint: { fontSize: 14, color: InkColors.ink3, textAlign: 'center', maxWidth: 280 },
-  emptyBtn: { marginTop: 12, paddingVertical: 12, paddingHorizontal: 22, backgroundColor: InkColors.ink, borderRadius: 12 },
-  emptyBtnText: { color: '#FFFFFF', fontWeight: '800', fontSize: 14 },
-
   toastWrap: { position: 'absolute', left: 0, right: 0, bottom: 36, alignItems: 'center' },
   toast: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
-    backgroundColor: InkColors.ink, paddingVertical: 12, paddingHorizontal: 18, borderRadius: 14, maxWidth: '90%',
+    backgroundColor: InkColors.ink, paddingVertical: 12, paddingHorizontal: 18, borderRadius: Radius.md, maxWidth: '90%',
   },
   toastCheck: { color: BrandColors.yellow, fontWeight: '800', fontSize: 16 },
   toastText: { color: '#FFFFFF', fontWeight: '700', fontSize: 14 },

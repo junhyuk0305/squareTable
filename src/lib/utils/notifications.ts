@@ -3,6 +3,7 @@
 // UI(아이콘·틴트·onPress)는 화면이 kind로 매핑 — 여기선 순수 데이터만 만든다.
 import type { FeedItem } from '@/lib/store/useWorkStore';
 import type { SwapRequest, ShiftTemplate } from '@/lib/store/useScheduleStore';
+import type { UnknownQuery, PlaybookSuggestion } from '@/types';
 import { fmtDateKo } from '@/lib/utils/schedule';
 
 /** 알림 목록 최대 개수 — 무한 누적 방지(최신 우선). */
@@ -117,6 +118,94 @@ export function buildJuniorNotifications(args: {
       at: r.updated_at,
       unread: false,
       route: '/junior/schedule',
+    });
+  }
+
+  return out.sort((a, b) => b.at.localeCompare(a.at)).slice(0, MAX_NOTIFS);
+}
+
+// ── 사장 알림 (직원 모델과 동일 SSOT 구조) ───────────────────────────
+// 사장이 대응해야 할 것: 답변 대기 질문 · 알바가 올린 제안 · 승인 대기 교대.
+export type OwnerNotifKind = 'question' | 'suggestion' | 'swap_approval';
+export type OwnerNotifRoute = '/owner/inbox' | '/owner/suggestions' | '/owner/schedule';
+
+export type OwnerNotif = {
+  id: string;
+  kind: OwnerNotifKind;
+  title: string;
+  body?: string;
+  at: string;
+  unread: boolean;
+  route: OwnerNotifRoute;
+};
+
+// ── 공유 술어(뱃지·목록 동일 규칙) ──
+/** 아직 사장이 답 안 한 받은질문. */
+export const isPendingQuestion = (u: UnknownQuery): boolean => u.status === 'pending_owner_answer';
+/** 검토 대기 중인 알바 제안. */
+export const isPendingSuggestion = (s: PlaybookSuggestion): boolean => s.status === 'pending';
+/** 직원이 수락해 사장 승인만 남은 교대. */
+export const isSwapAwaitingApproval = (r: SwapRequest): boolean => r.status === 'accepted';
+
+/** 벨 뱃지 개수 = 답변대기 질문 + 검토대기 제안 + 승인대기 교대. */
+export function ownerUnreadCount(
+  queue: UnknownQuery[],
+  suggestions: PlaybookSuggestion[],
+  swaps: SwapRequest[],
+): number {
+  return (
+    queue.filter(isPendingQuestion).length +
+    suggestions.filter(isPendingSuggestion).length +
+    swaps.filter(isSwapAwaitingApproval).length
+  );
+}
+
+/** 사장 알림 목록(시간 역순, MAX_NOTIFS 상한). */
+export function buildOwnerNotifications(args: {
+  queue: UnknownQuery[];
+  suggestions: PlaybookSuggestion[];
+  swaps: SwapRequest[];
+  nameOf: (id: string) => string;
+}): OwnerNotif[] {
+  const { queue, suggestions, swaps, nameOf } = args;
+  const out: OwnerNotif[] = [];
+
+  for (const u of queue) {
+    if (!isPendingQuestion(u)) continue;
+    out.push({
+      id: `q_${u.id}`,
+      kind: 'question',
+      title: '답변을 기다리는 질문이 있어요',
+      body: u.query_text,
+      at: u.asked_at,
+      unread: true,
+      route: '/owner/inbox',
+    });
+  }
+
+  for (const s of suggestions) {
+    if (!isPendingSuggestion(s)) continue;
+    out.push({
+      id: `s_${s.id}`,
+      kind: 'suggestion',
+      title: `${s.proposer_name}님의 ${s.kind === 'improve' ? '노하우 개선' : '새 노하우'} 제안`,
+      body: s.text,
+      at: s.created_at,
+      unread: true,
+      route: '/owner/suggestions',
+    });
+  }
+
+  for (const r of swaps) {
+    if (!isSwapAwaitingApproval(r)) continue;
+    out.push({
+      id: `swap_${r.id}`,
+      kind: 'swap_approval',
+      title: `${nameOf(r.requester_id)}님 교대가 승인을 기다려요`,
+      body: fmtDateKo(r.date),
+      at: r.updated_at,
+      unread: true,
+      route: '/owner/schedule',
     });
   }
 

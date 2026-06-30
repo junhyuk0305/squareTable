@@ -29,40 +29,6 @@ export type Junior = User & {
   shift?: string;
 };
 
-export type UsersData = {
-  owner: Owner;
-  staff: Junior[];
-};
-
-// ── ContextPack ───────────────────────────────────────
-export type ContextPack = {
-  id: string;
-  unit_id: string;
-  store_name: string;
-  industry: string;
-  subcategory: string;
-  owner_id: string;
-  address: string;
-  opened_at: string;
-  hours: {
-    weekday: string;
-    weekend: string;
-    last_order: string;
-    break_time: string;
-  };
-  brand_rules: string[];
-  menu_quick: Array<{ name: string; price: number; category: string }>;
-  equipment: Array<{ name: string; model: string; note: string }>;
-  emergency_contacts: Array<{ label: string; phone_last4: string }>;
-  stakeholders_today: Array<{ label: string; name: string; available: boolean; note?: string }>;
-  settings: {
-    auto_unknown_alert: boolean;
-    alert_max_per_day: number;
-    default_tone: string;
-    language: string;
-  };
-};
-
 // ── PlaybookEntry ─────────────────────────────────────
 export type SquareBlock = {
   situation: string;
@@ -138,6 +104,14 @@ export type PlaybookEntry = {
     label?: string;
     ref_id?: string;
   };
+  // ── 업종 표준 노하우 팩(온보딩 자동등록) 메타 — 0024 마이그레이션 컬럼 ──
+  // is_template: 아직 매장에 바인딩 안 된 순수 템플릿(번들 JSON에서만 true). fork되면 false.
+  // needs_review: 사장이 교정 안 한 '매장 기본값(미확인)'. 알바/관리화면에 배지로 표시.
+  // pack_id: 출처 팩(common|cafe…). correction_points: 사장이 바꿀 확률 높은 변수(추후 pull 루프).
+  is_template?: boolean;
+  pack_id?: string;
+  needs_review?: boolean;
+  correction_points?: string[];
 };
 
 // ── PlaybookSuggestion (알바 → 사장 노하우 제안/신청) ──
@@ -194,6 +168,8 @@ export type ChatQuery = {
   satisfaction: 'up' | 'down' | null;
   resolved_at: string | null;
   anonymous?: boolean;
+  // 매칭 애매 시 제시할 후보 노하우 id들(클라 UI 전용·비영속). 사장 라우팅 전에 "혹시 이거?"로 보여준다.
+  candidate_entry_ids?: string[];
 };
 
 // ── UnknownQuery (사장님 인박스) ──────────────────────
@@ -225,13 +201,6 @@ export type SearchResult = {
   confidence: number;
   candidates: { entry: PlaybookEntry; score: number }[];
   fallbackToUnknown: boolean;
-};
-
-// 위저드 분기용 — 매칭 실패 시 top1 candidate 또는 키워드로 카테고리 추정
-export type CategoryInference = {
-  presumedCategory: Category;
-  presumedSubcategory: string;
-  bestGuessEntryId: string | null;
 };
 
 // ── Demo (발표 시연용) ────────────────────────────────

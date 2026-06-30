@@ -11,6 +11,7 @@ import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useAttendanceStore } from '@/lib/store/useAttendanceStore';
 import { usePayrollStore } from '@/lib/store/usePayrollStore';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
+import { Radius } from '@/lib/theme/elevation';
 import { fmtDuration, won, hhmm, todayStr, liveMinutes, payFor, DEFAULT_HOURLY_WAGE } from '@/lib/utils/attendance';
 
 /**
@@ -178,7 +179,7 @@ const styles = StyleSheet.create({
 
   mainCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 18,
+    borderRadius: Radius.lg,
     borderWidth: 1,
     borderColor: InkColors.line,
     padding: 24,
@@ -188,7 +189,7 @@ const styles = StyleSheet.create({
   workingTag: { fontSize: 13, fontWeight: '800', color: BrandColors.accent },
   bigTime: { fontSize: 40, fontWeight: '900', color: InkColors.ink, letterSpacing: -1 },
   bigSub: { fontSize: 14, color: InkColors.ink3, fontWeight: '600', marginBottom: 14 },
-  btn: { width: '100%', paddingVertical: 17, borderRadius: 14, alignItems: 'center' },
+  btn: { width: '100%', paddingVertical: 17, borderRadius: Radius.md, alignItems: 'center' },
   btnIn: { backgroundColor: BrandColors.brand },
   btnOut: { backgroundColor: BrandColors.accent },
   btnText: { fontSize: 17, fontWeight: '800', color: '#FFFFFF' },
@@ -197,7 +198,7 @@ const styles = StyleSheet.create({
   statCard: {
     flex: 1,
     backgroundColor: '#FFFFFF',
-    borderRadius: 14,
+    borderRadius: Radius.md,
     borderWidth: 1,
     borderColor: InkColors.line,
     padding: 16,
@@ -207,7 +208,7 @@ const styles = StyleSheet.create({
   statValue: { fontSize: 22, fontWeight: '800', color: InkColors.ink },
   wageNote: { fontSize: 12, color: InkColors.ink3, marginTop: -6 },
 
-  schedLink: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#FFFFFF', borderRadius: 14, borderWidth: 1, borderColor: InkColors.line, paddingVertical: 14, paddingHorizontal: 16 },
+  schedLink: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#FFFFFF', borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, paddingVertical: 14, paddingHorizontal: 16 },
   schedLinkTitle: { fontSize: 15, fontWeight: '800', color: InkColors.ink },
   schedLinkSub: { fontSize: 12, color: InkColors.ink3, marginTop: 2 },
 
@@ -218,7 +219,7 @@ const styles = StyleSheet.create({
   viewAllText: { fontSize: 13, fontWeight: '700', color: BrandColors.brand },
   list: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 12,
+    borderRadius: Radius.md,
     borderWidth: 1,
     borderColor: InkColors.line,
     paddingHorizontal: 14,

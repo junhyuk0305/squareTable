@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import type { ChatQuery, ResponseBlock, UnknownQuery } from '@/types';
 import { inferCategoryFromQuery } from '@/lib/utils/inferCategory';
-import { generateAnswer, hybridSearch, toSopSlices, GENERATE_THRESHOLD } from '@/lib/ai';
+import { generateAnswer, hybridSearch, extractIntent, toSopSlices, GENERATE_THRESHOLD } from '@/lib/ai';
 import { MAX_ACTIONS, MAX_DONTS } from '@/lib/ai/config';
 import { usePlaybookStore } from './usePlaybookStore';
 import { useUnknownQueueStore } from './useUnknownQueueStore';
@@ -9,6 +9,7 @@ import { useSessionStore } from './useSessionStore';
 import { HAS_SUPABASE } from '@/lib/supabase';
 import { fetchChatQueries, insertChatQuery, updateChatSatisfaction } from '@/lib/db';
 import { guardWrite } from '@/lib/store/useSyncStore';
+import { genId } from '@/lib/utils/id';
 import seedData from '@/data/chat-queries.json';
 import contextPack from '@/data/context-pack.json';
 
@@ -16,6 +17,11 @@ const seed = seedData as unknown as ChatQuery[];
 
 // 매장 식별자는 컨텍스트팩(데이터)이 단일 진실. mock 단일 매장.
 const STORE_ID = (contextPack as { unit_id: string }).unit_id;
+
+// 후보 노하우 카드("혹시 이거?")를 띄울 최소 신뢰도. 이보다 낮으면 노이즈 → 바로 사장 라우팅.
+const CANDIDATE_FLOOR = 0.3;
+// 후보 카드 최대 개수.
+const MAX_CANDIDATES = 3;
 
 type ChatState = {
   history: ChatQuery[];
@@ -66,13 +72,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const session = useSessionStore.getState();
     const playbookEntries = usePlaybookStore.getState().entries;
 
-    // 하이브리드 검색(렉시컬+벡터). mock이면 내부에서 렉시컬+데모 딜레이로 폴백.
-    const result = await hybridSearch(text, playbookEntries);
-    const now = new Date().toISOString();
-    const id = `cq_${Date.now()}`;
-
-    if (result.matched) {
-      const entry = result.matched;
+    // 저장된 답 그대로 서빙(매칭 확정) — LLM 0콜.
+    const serveStored = (entry: typeof playbookEntries[number], confidence: number) => {
+      const id = genId('cq');
+      const now = new Date().toISOString();
       const block: ResponseBlock = {
         summary: entry.square.situation,
         // 생성 경로와 동일하게 출력 상한을 강제(저장된 답도 같은 분량 규칙).
@@ -87,53 +90,63 @@ export const useChatStore = create<ChatState>((set, get) => ({
         },
       };
       const cq: ChatQuery = {
-        id,
-        junior_id: session.userId,
-        junior_name: session.userName,
-        query_text: text,
-        asked_at: now,
-        matched_entry_ids: [entry.id],
-        match_confidence: result.confidence,
-        was_deflected: true,
-        response_block: block,
-        satisfaction: null,
-        resolved_at: now,
+        id, junior_id: session.userId, junior_name: session.userName, query_text: text, asked_at: now,
+        matched_entry_ids: [entry.id], match_confidence: confidence, was_deflected: true,
+        response_block: block, satisfaction: null, resolved_at: now,
       };
       set((s) => ({ history: [...s.history, cq], isLoading: false, lastSubmittedId: id }));
-      // 답변은 이미 보여줬으니 화면에선 유지하고, 영속 실패만 배너로 알린다(롤백 없음).
       void guardWrite(insertChatQuery(cq), () => {}, '대화 기록 저장에 실패했어요. (답변은 그대로 보여요)');
-      return;
-    }
+    };
 
-    // ── 중간 밴드: 부분 매칭 → 그라운딩 생성 (이 구간만 LLM) ──
-    if (result.confidence >= GENERATE_THRESHOLD && result.candidates.length > 0) {
-      const sops = toSopSlices(result.candidates.map((c) => c.entry));
+    // 그라운딩 생성 시도(중간 밴드) — 근거 찾으면 서빙하고 true, 아니면 false.
+    const tryGenerate = async (r: typeof result): Promise<boolean> => {
+      if (!(r.confidence >= GENERATE_THRESHOLD && r.candidates.length > 0)) return false;
+      const sops = toSopSlices(r.candidates.map((c) => c.entry));
       const ai = await generateAnswer({ storeId: session.unitId || STORE_ID, query: text, sops });
-      if (ai.block) {
-        const cq: ChatQuery = {
-          id,
-          junior_id: session.userId,
-          junior_name: session.userName,
-          query_text: text,
-          asked_at: now,
-          matched_entry_ids: ai.usedSopIds,
-          match_confidence: result.confidence,
-          was_deflected: true,
-          response_block: ai.degraded ? { ...ai.block, degraded: true } : ai.block,
-          satisfaction: null,
-          resolved_at: now,
-        };
-        set((s) => ({ history: [...s.history, cq], isLoading: false, lastSubmittedId: id }));
-        // 답변은 이미 보여줬으니 화면에선 유지하고, 영속 실패만 배너로 알린다(롤백 없음).
+      if (!ai.block) return false;
+      const id = genId('cq');
+      const now = new Date().toISOString();
+      const cq: ChatQuery = {
+        id, junior_id: session.userId, junior_name: session.userName, query_text: text, asked_at: now,
+        matched_entry_ids: ai.usedSopIds, match_confidence: r.confidence, was_deflected: true,
+        response_block: ai.degraded ? { ...ai.block, degraded: true } : ai.block, satisfaction: null, resolved_at: now,
+      };
+      set((s) => ({ history: [...s.history, cq], isLoading: false, lastSubmittedId: id }));
       void guardWrite(insertChatQuery(cq), () => {}, '대화 기록 저장에 실패했어요. (답변은 그대로 보여요)');
-        return;
+      return true;
+    };
+
+    // 1) 하이브리드 검색(렉시컬+벡터). mock이면 내부에서 렉시컬+데모 딜레이로 폴백.
+    let result = await hybridSearch(text, playbookEntries);
+    if (result.matched) { serveStored(result.matched, result.confidence); return; }
+    if (await tryGenerate(result)) return;
+
+    // 2) 장황(상황 섞인) 질문인데 매칭 실패 → 의도추출로 핵심만 뽑아 재검색.
+    //    이 케이스에만 추가 비용 1콜 — 잘 맞는 질문엔 추가 비용 0.
+    const wordCount = text.trim().split(/\s+/).filter(Boolean).length;
+    const verbose = text.trim().length >= 18 || wordCount >= 6;
+    if (verbose) {
+      const intent = await extractIntent({ query: text });
+      const q2 = intent.rewritten?.trim();
+      if (q2 && q2 !== text.trim()) {
+        const r2 = await hybridSearch(q2, playbookEntries);
+        if (r2.matched) { serveStored(r2.matched, r2.confidence); return; }
+        if (await tryGenerate(r2)) return;
+        // 재검색이 더 강한 후보를 찾았으면 후보 카드용으로 채택.
+        if (r2.confidence > result.confidence) result = r2;
       }
-      // 생성도 근거 못 찾음 → 사장님 라우팅으로 낙하
     }
 
-    // ── 근거 부족 → 사장님께 라우팅 (LLM 안 씀) ──
+    // 3) 확정 답 없음 → 후보 노하우("혹시 이거?") 제시 + 사장 라우팅 준비 (LLM 안 씀)
     {
+      const id = genId('cq');
+      const now = new Date().toISOString();
       const presumed = inferCategoryFromQuery(text, result.candidates);
+      // 어느 정도 관련 있는 후보가 있으면 카드로 먼저 보여준다(즉시 도움 + 인박스 잡음 ↓).
+      const candidateIds =
+        result.confidence >= CANDIDATE_FLOOR
+          ? result.candidates.slice(0, MAX_CANDIDATES).map((c) => c.entry.id)
+          : [];
       const cq: ChatQuery = {
         id,
         junior_id: session.userId,
@@ -146,13 +159,14 @@ export const useChatStore = create<ChatState>((set, get) => ({
         response_block: null,
         satisfaction: null,
         resolved_at: null,
+        ...(candidateIds.length > 0 ? { candidate_entry_ids: candidateIds } : {}),
       };
       set((s) => ({ history: [...s.history, cq], isLoading: false, lastSubmittedId: id }));
       // 답변은 이미 보여줬으니 화면에선 유지하고, 영속 실패만 배너로 알린다(롤백 없음).
       void guardWrite(insertChatQuery(cq), () => {}, '대화 기록 저장에 실패했어요. (답변은 그대로 보여요)');
 
       const uq: UnknownQuery = {
-        id: `uq_${Date.now()}`,
+        id: genId('uq'),
         junior_id: session.userId,
         junior_name: anon ? '익명' : session.userName,
         anonymous: anon,

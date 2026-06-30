@@ -1,10 +1,10 @@
 import { useMemo } from 'react';
-import { View, Text, ScrollView, StyleSheet } from 'react-native';
+import { ScrollView, StyleSheet } from 'react-native';
 
 import { SectionLabel } from './SectionLabel';
-import { BrowseCard } from './BrowseList';
+import { KnowhowCarousel } from './KnowhowCarousel';
+import { EmptyState } from './EmptyState';
 import { Appear } from './Appear';
-import { InkColors } from '@/lib/theme/colors';
 import { Space } from '@/lib/theme/layout';
 import type { PlaybookEntry } from '@/types';
 
@@ -57,12 +57,7 @@ export function JuniorBrowseDashboard({ entries, onSelect, emptyHint }: JuniorBr
 
   if (!entries || entries.length === 0) {
     const hint = emptyHint ?? '아직 등록된 노하우가 없어요. 물어보기로 질문하면 사장님이 채워줘요.';
-    return (
-      <View style={styles.empty} accessibilityRole="summary">
-        <Text style={styles.emptyTitle}>아직 보여줄 노하우가 없어요</Text>
-        <Text style={styles.emptyBody}>{hint}</Text>
-      </View>
-    );
+    return <EmptyState title="아직 보여줄 노하우가 없어요" body={hint} />;
   }
 
   return (
@@ -74,27 +69,21 @@ export function JuniorBrowseDashboard({ entries, onSelect, emptyHint }: JuniorBr
       {popular.length > 0 && (
         <Appear delay={0} style={styles.block}>
           <SectionLabel icon="flame-outline" title="인기 노하우" hint="많이 물어본 순" />
-          {popular.map((e) => (
-            <BrowseCard key={`pop-${e.id}`} entry={e} onSelect={onSelect} showCategory={false} />
-          ))}
+          <KnowhowCarousel entries={popular} onSelect={onSelect} showCategory={false} />
         </Appear>
       )}
 
       {recent.length > 0 && (
         <Appear delay={80} style={styles.block}>
           <SectionLabel icon="sparkles-outline" title="최근 추가됨" hint="새로 올라온 순" />
-          {recent.map((e) => (
-            <BrowseCard key={`new-${e.id}`} entry={e} onSelect={onSelect} showCategory={false} />
-          ))}
+          <KnowhowCarousel entries={recent} onSelect={onSelect} showCategory={false} />
         </Appear>
       )}
 
       {resolved.length > 0 && (
         <Appear delay={160} style={styles.block}>
           <SectionLabel icon="checkmark-circle-outline" title="잘 통하는 노하우" hint="해결률 순" />
-          {resolved.map((e) => (
-            <BrowseCard key={`res-${e.id}`} entry={e} onSelect={onSelect} showCategory={false} />
-          ))}
+          <KnowhowCarousel entries={resolved} onSelect={onSelect} showCategory={false} />
         </Appear>
       )}
     </ScrollView>
@@ -107,14 +96,4 @@ const styles = StyleSheet.create({
   // 한 블록 = [밖 라벨] + [카드들]. block 내부 gap이 라벨↔카드·카드 사이를 붙이고,
   // content의 gap(xl)이 블록 사이를 벌린다.
   block: { gap: Space.md },
-  empty: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: Space.xl,
-    paddingVertical: 48,
-    gap: Space.sm,
-  },
-  emptyTitle: { fontSize: 16, fontWeight: '800', color: InkColors.ink, textAlign: 'center' },
-  emptyBody: { fontSize: 14, color: InkColors.ink2, lineHeight: 21, textAlign: 'center' },
 });
