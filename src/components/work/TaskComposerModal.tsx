@@ -302,10 +302,10 @@ function fmtDate(d: string): string {
 }
 
 const s = StyleSheet.create({
-  title: { fontSize: 16, fontWeight: '800', color: InkColors.ink, paddingHorizontal: 16, paddingBottom: 12 },
+  title: { fontSize: 16, lineHeight: 23, fontWeight: '800', color: InkColors.ink, paddingHorizontal: 16, paddingBottom: 12 },
   scroll: { flex: 1, paddingHorizontal: 16 },
   fld: { marginBottom: 13 },
-  fldLabel: { fontSize: 11.5, fontWeight: '800', color: InkColors.ink2, marginBottom: 6 },
+  fldLabel: { fontSize: 11.5, lineHeight: 17, fontWeight: '800', color: InkColors.ink2, marginBottom: 6 },
   inp: { borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.sm, paddingHorizontal: 13, paddingVertical: 11, fontSize: 14, color: InkColors.ink, backgroundColor: InkColors.cream },
 
   seg: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },

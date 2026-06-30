@@ -137,6 +137,7 @@ const styles = StyleSheet.create({
   },
   cardLabel: {
     fontSize: 15,
+    lineHeight: 21,
     fontWeight: '800',
     color: InkColors.ink,
   },

@@ -35,7 +35,7 @@ export function SectionLabel({
 
 const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 4 },
-  title: { fontSize: 15, fontWeight: '800', color: InkColors.ink2, letterSpacing: -0.2 },
+  title: { fontSize: 15, lineHeight: 21, fontWeight: '800', color: InkColors.ink2, letterSpacing: -0.2 },
   hint: { marginLeft: 'auto', fontSize: 12, color: InkColors.ink3, fontWeight: '600' },
   trailing: { marginLeft: 'auto' },
 });
