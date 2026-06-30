@@ -25,20 +25,7 @@ export default function OwnerStaffScreen() {
 
   // 내보낼 직원 — 확인 모달용. 실수 방지 위해 빨강 모달로 한 번 더 확인한다.
   const [removeTarget, setRemoveTarget] = useState<{ id: string; name: string } | null>(null);
-  const [phone, setPhone] = useState('');
-  // 대기 중인 초대(아직 합류 전) — 재전송/취소 가능. 합류 완료 시 목록에서 제거.
-  const [invites, setInvites] = useState<{ phone: string; status: '초대 보냄' | '재전송됨' }[]>([]);
   const { copied, copy } = useCopyToClipboard();
-
-  const sendInvite = () => {
-    const v = phone.trim();
-    if (!v) return;
-    setInvites((p) => (p.some((x) => x.phone === v) ? p : [{ phone: v, status: '초대 보냄' }, ...p]));
-    setPhone('');
-  };
-  const resendInvite = (target: string) =>
-    setInvites((p) => p.map((x) => (x.phone === target ? { ...x, status: '재전송됨' } : x)));
-  const cancelInvite = (target: string) => setInvites((p) => p.filter((x) => x.phone !== target));
 
   const confirmRemove = () => {
     if (!removeTarget) return;
@@ -60,45 +47,6 @@ export default function OwnerStaffScreen() {
             <Text style={styles.copyText}>{copied ? '복사됨' : '코드 복사'}</Text>
           </Pressable>
         </View>
-
-        {/* 전화번호로 초대 */}
-        <Text style={styles.sectionTitle}>전화번호로 초대</Text>
-        <View style={styles.addRow}>
-          <TextInput
-            value={phone}
-            onChangeText={setPhone}
-            placeholder="010-0000-0000"
-            placeholderTextColor={InkColors.ink3}
-            keyboardType="phone-pad"
-            style={styles.addInput}
-            onSubmitEditing={sendInvite}
-          />
-          <Pressable onPress={sendInvite} disabled={!phone.trim()} style={({ pressed }) => [styles.inviteBtn, { opacity: !phone.trim() ? 0.4 : pressed ? 0.85 : 1 }]}>
-            <Text style={styles.inviteBtnText}>초대 보내기</Text>
-          </Pressable>
-        </View>
-        <Text style={styles.inviteHelp}>번호로 초대코드+앱 링크를 보냅니다. 상대가 직원 회원가입을 마치면 아래 ‘직원’으로 이동해요.</Text>
-
-        {invites.length > 0 && (
-          <>
-            <Text style={styles.sectionTitle}>대기 중인 초대 <Text style={styles.sectionSub}>(아직 합류 전)</Text></Text>
-            <View style={styles.list}>
-              {invites.map((inv) => (
-                <View key={inv.phone} style={styles.pendingRow}>
-                  <Ionicons name="time-outline" size={16} color={InkColors.ink3} />
-                  <Text style={styles.pendingText}>{inv.phone}</Text>
-                  <Text style={styles.pendingTag}>{inv.status}</Text>
-                  <Pressable onPress={() => resendInvite(inv.phone)} hitSlop={6} style={({ pressed }) => [styles.pendingAction, pressed && { opacity: 0.6 }]}>
-                    <Text style={styles.pendingActionText}>재전송</Text>
-                  </Pressable>
-                  <Pressable onPress={() => cancelInvite(inv.phone)} hitSlop={6} style={({ pressed }) => [styles.pendingCancel, pressed && { opacity: 0.6 }]}>
-                    <Ionicons name="close" size={16} color={InkColors.ink3} />
-                  </Pressable>
-                </View>
-              ))}
-            </View>
-          </>
-        )}
 
         {/* 직원 목록 */}
         <Text style={styles.sectionTitle}>합류한 직원 ({staff.length}명) <Text style={styles.sectionSub}>· 탭 → 출근기록</Text></Text>
@@ -175,17 +123,6 @@ const styles = StyleSheet.create({
 
   sectionTitle: { fontSize: 14, fontWeight: '800', color: InkColors.ink2, marginTop: 6 },
   sectionSub: { fontSize: 12, fontWeight: '600', color: InkColors.ink3 },
-  inviteHelp: { fontSize: 12, color: InkColors.ink3, lineHeight: 17, marginTop: -4 },
-  addRow: { flexDirection: 'row', gap: 10 },
-  addInput: { flex: 1, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, color: InkColors.ink, backgroundColor: '#FFFFFF' },
-  inviteBtn: { paddingHorizontal: 20, borderRadius: Radius.md, alignItems: 'center', justifyContent: 'center', backgroundColor: BrandColors.brand },
-  inviteBtnText: { fontSize: 15, fontWeight: '800', color: '#FFFFFF' },
-  pendingRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: InkColors.line },
-  pendingText: { flex: 1, fontSize: 14, color: InkColors.ink2 },
-  pendingTag: { fontSize: 11, color: InkColors.ink3, fontWeight: '700', backgroundColor: InkColors.bgSoft, paddingHorizontal: 8, paddingVertical: 3, borderRadius: Radius.pill },
-  pendingAction: { paddingHorizontal: 8, paddingVertical: 4 },
-  pendingActionText: { fontSize: 12, fontWeight: '800', color: BrandColors.brand },
-  pendingCancel: { paddingHorizontal: 2, paddingVertical: 4 },
 
   list: { backgroundColor: '#FFFFFF', borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, paddingHorizontal: 14 },
   staffRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: InkColors.line },
