@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Modal, View, Text, Pressable, StyleSheet, ScrollView, type NativeSyntheticEvent, type NativeScrollEvent } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
+import { Radius } from '@/lib/theme/elevation';
 import { frameCapStyle } from '@/lib/theme/layout';
 
 const HOURS = Array.from({ length: 24 }, (_, i) => i); // 0~23
@@ -169,7 +170,7 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 360,
     backgroundColor: '#FFFFFF',
-    borderRadius: 18,
+    borderRadius: Radius.lg,
     padding: 22,
     borderWidth: 1,
     borderColor: InkColors.line,
@@ -179,7 +180,7 @@ const styles = StyleSheet.create({
   sub: { fontSize: 13, color: InkColors.ink2, marginTop: 6 },
 
   seg: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, marginTop: 18 },
-  segBtn: { flex: 1, alignItems: 'center', paddingVertical: 8, borderRadius: 12, backgroundColor: InkColors.bgSoft, borderWidth: 1, borderColor: InkColors.line },
+  segBtn: { flex: 1, alignItems: 'center', paddingVertical: 8, borderRadius: Radius.md, backgroundColor: InkColors.bgSoft, borderWidth: 1, borderColor: InkColors.line },
   segBtnOn: { backgroundColor: BrandColors.brandSoft, borderColor: BrandColors.brand },
   segLabel: { fontSize: 11, fontWeight: '700', color: InkColors.ink3 },
   segLabelOn: { color: BrandColors.brand },
@@ -207,7 +208,7 @@ const styles = StyleSheet.create({
 
   hint: { fontSize: 12.5, color: InkColors.ink2, textAlign: 'center', marginTop: 14, minHeight: 18 },
   actions: { flexDirection: 'row', gap: 10, marginTop: 18 },
-  btn: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 13, borderRadius: 12 },
+  btn: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 13, borderRadius: Radius.md },
   btnGhost: { backgroundColor: InkColors.bgSoft, borderWidth: 1, borderColor: InkColors.line },
   btnGhostText: { fontSize: 15, fontWeight: '700', color: InkColors.ink2 },
   btnSolid: { backgroundColor: BrandColors.brand },

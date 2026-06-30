@@ -1,5 +1,6 @@
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { getCategoryMeta } from '@/lib/utils/category';
+import { Radius } from '@/lib/theme/elevation';
 import type { Category } from '@/types';
 
 type Props = {
@@ -73,7 +74,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    borderRadius: 999,
+    borderRadius: Radius.pill,
     alignSelf: 'flex-start',
   },
   label: { fontWeight: '700' },
@@ -81,7 +82,7 @@ const styles = StyleSheet.create({
     minWidth: 18,
     paddingHorizontal: 6,
     paddingVertical: 1,
-    borderRadius: 999,
+    borderRadius: Radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
     marginLeft: 2,

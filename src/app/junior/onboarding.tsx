@@ -6,6 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { logout } from '@/lib/auth';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
+import { Radius } from '@/lib/theme/elevation';
 
 // 가입했지만 아직 매장에 합류하지 않은 알바를 위한 화면.
 // (매직링크 로그인·초대 전 가입·매장 종료로 unit_id가 비는 경우) — 빈 챗으로 떨어뜨리지 않고 여기로 유도.
@@ -79,17 +80,17 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: InkColors.cream },
   scroll: { flexGrow: 1, padding: 24, justifyContent: 'center', gap: 22 },
   hero: { alignItems: 'center', gap: 10 },
-  iconWrap: { width: 64, height: 64, borderRadius: 20, backgroundColor: BrandColors.brandSoft, alignItems: 'center', justifyContent: 'center' },
+  iconWrap: { width: 64, height: 64, borderRadius: Radius.sheet, backgroundColor: BrandColors.brandSoft, alignItems: 'center', justifyContent: 'center' },
   title: { fontSize: 22, fontWeight: '900', color: InkColors.ink, textAlign: 'center' },
   sub: { fontSize: 14, color: InkColors.ink2, textAlign: 'center', lineHeight: 21 },
   strong: { fontWeight: '800', color: InkColors.ink },
-  card: { backgroundColor: '#FFFFFF', borderRadius: 16, borderWidth: 1, borderColor: InkColors.line, padding: 20, gap: 10 },
+  card: { backgroundColor: '#FFFFFF', borderRadius: Radius.lg, borderWidth: 1, borderColor: InkColors.line, padding: 20, gap: 10 },
   label: { fontSize: 13, fontWeight: '700', color: InkColors.ink2 },
-  input: { borderWidth: 1, borderColor: InkColors.line, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 14, fontSize: 20, fontWeight: '800', letterSpacing: 4, textAlign: 'center', color: InkColors.ink, backgroundColor: '#FFFFFF' },
+  input: { borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md, paddingHorizontal: 14, paddingVertical: 14, fontSize: 20, fontWeight: '800', letterSpacing: 4, textAlign: 'center', color: InkColors.ink, backgroundColor: '#FFFFFF' },
   err: { fontSize: 13, color: BrandColors.accent, fontWeight: '600' },
-  primary: { marginTop: 6, backgroundColor: BrandColors.brand, paddingVertical: 16, borderRadius: 12, alignItems: 'center' },
+  primary: { marginTop: 6, backgroundColor: BrandColors.brand, paddingVertical: 16, borderRadius: Radius.md, alignItems: 'center' },
   primaryText: { color: '#FFFFFF', fontSize: 16, fontWeight: '800' },
-  helpBox: { backgroundColor: InkColors.bgSoft, borderRadius: 12, padding: 16, gap: 4 },
+  helpBox: { backgroundColor: InkColors.bgSoft, borderRadius: Radius.md, padding: 16, gap: 4 },
   helpTitle: { fontSize: 13, fontWeight: '800', color: InkColors.ink2 },
   helpBody: { fontSize: 13, color: InkColors.ink3, lineHeight: 19 },
   logoutRow: { alignItems: 'center', paddingVertical: 4 },

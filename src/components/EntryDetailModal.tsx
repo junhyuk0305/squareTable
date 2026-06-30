@@ -152,9 +152,9 @@ const s = StyleSheet.create({
   body: { fontSize: 15, color: InkColors.ink, lineHeight: 22 },
 
   stepRow: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' },
-  stepNum: { width: 22, height: 22, borderRadius: 11, backgroundColor: BrandColors.good, color: '#FFFFFF', fontSize: 12, fontWeight: '800', textAlign: 'center', lineHeight: 22 },
+  stepNum: { width: 22, height: 22, borderRadius: Radius.sm, backgroundColor: BrandColors.good, color: '#FFFFFF', fontSize: 12, fontWeight: '800', textAlign: 'center', lineHeight: 22 },
   stepText: { flex: 1, fontSize: 15, color: InkColors.ink, lineHeight: 22 },
-  scriptBox: { flexDirection: 'row', gap: 8, borderWidth: 1, borderColor: BrandColors.good, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, marginTop: 2, backgroundColor: '#FFFFFF' },
+  scriptBox: { flexDirection: 'row', gap: 8, borderWidth: 1, borderColor: BrandColors.good, borderRadius: Radius.sm, paddingHorizontal: 12, paddingVertical: 10, marginTop: 2, backgroundColor: '#FFFFFF' },
   scriptMark: { fontSize: 14 },
   scriptText: { flex: 1, fontSize: 14, color: InkColors.ink, fontStyle: 'italic', lineHeight: 20 },
 
@@ -162,8 +162,8 @@ const s = StyleSheet.create({
   gaugeHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' },
   gaugeLabel: { fontSize: 12, fontWeight: '800', color: InkColors.ink2 },
   gaugeVal: { fontSize: 13, fontWeight: '900', color: InkColors.ink },
-  gaugeTrack: { height: 10, borderRadius: 999, backgroundColor: InkColors.bgSoft, overflow: 'hidden' },
-  gaugeFill: { height: '100%', borderRadius: 999, backgroundColor: BrandColors.yellow },
+  gaugeTrack: { height: 10, borderRadius: Radius.pill, backgroundColor: InkColors.bgSoft, overflow: 'hidden' },
+  gaugeFill: { height: '100%', borderRadius: Radius.pill, backgroundColor: BrandColors.yellow },
 
   photoRow: { gap: 8, paddingVertical: 2 },
   photo: { width: 120, height: 120, borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, backgroundColor: InkColors.bgSoft },

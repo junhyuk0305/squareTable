@@ -209,16 +209,16 @@ const s = StyleSheet.create({
   scroll: { flex: 1, paddingHorizontal: 16, paddingTop: 6 },
   fld: { marginBottom: 14 },
   fldLabel: { fontSize: 11.5, fontWeight: '800', color: InkColors.ink2, marginBottom: 7 },
-  inp: { borderWidth: 1, borderColor: InkColors.line, borderRadius: 11, paddingHorizontal: 13, paddingVertical: 11, fontSize: 14, color: InkColors.ink, backgroundColor: InkColors.cream, minHeight: 44, ...(Platform.OS === 'web' ? ({ outlineStyle: 'none' } as object) : null) },
+  inp: { borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.sm, paddingHorizontal: 13, paddingVertical: 11, fontSize: 14, color: InkColors.ink, backgroundColor: InkColors.cream, minHeight: 44, ...(Platform.OS === 'web' ? ({ outlineStyle: 'none' } as object) : null) },
 
   seg: { flexDirection: 'row', gap: 6 },
-  segO: { flex: 1, borderWidth: 1, borderColor: InkColors.line, borderRadius: 99, paddingVertical: 10, alignItems: 'center', backgroundColor: InkColors.bg },
+  segO: { flex: 1, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.pill, paddingVertical: 10, alignItems: 'center', backgroundColor: InkColors.bg },
   segOn: { backgroundColor: InkColors.ink, borderColor: InkColors.ink },
   segText: { fontSize: 13, fontWeight: '800', color: InkColors.ink2 },
   hint: { fontSize: 12, color: InkColors.ink3, lineHeight: 18, marginTop: 8 },
 
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  chip: { borderWidth: 1, borderColor: InkColors.line, borderRadius: 99, paddingHorizontal: 15, paddingVertical: 9, backgroundColor: InkColors.bg },
+  chip: { borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.pill, paddingHorizontal: 15, paddingVertical: 9, backgroundColor: InkColors.bg },
   chipOn: { backgroundColor: InkColors.ink, borderColor: InkColors.ink },
   chipText: { fontSize: 13, fontWeight: '700', color: InkColors.ink2 },
 
@@ -230,6 +230,6 @@ const s = StyleSheet.create({
   empty: { fontSize: 13, color: InkColors.ink3, lineHeight: 19, paddingVertical: 4 },
 
   foot: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 18, borderTopWidth: 1, borderTopColor: InkColors.line },
-  cta: { backgroundColor: InkColors.ink, borderRadius: 14, paddingVertical: 14, alignItems: 'center' },
+  cta: { backgroundColor: InkColors.ink, borderRadius: Radius.md, paddingVertical: 14, alignItems: 'center' },
   ctaText: { color: '#fff', fontSize: 15, fontWeight: '800' },
 });

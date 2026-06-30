@@ -11,6 +11,7 @@ import { useScheduleStore } from '@/lib/store/useScheduleStore';
 import { todayStr } from '@/lib/utils/attendance';
 import { juniorUnreadCount } from '@/lib/utils/notifications';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
+import { Radius } from '@/lib/theme/elevation';
 import { HEADER_EDGE_GUTTER } from '@/lib/theme/layout';
 
 /** 직원 알림 벨 — 헤더 우측(headerRight)에 둔다. 배지 = 안 읽은 공지 + 받은 교대 요청. */
@@ -54,7 +55,7 @@ const styles = StyleSheet.create({
     minWidth: 16,
     height: 16,
     paddingHorizontal: 4,
-    borderRadius: 99,
+    borderRadius: Radius.pill,
     backgroundColor: BrandColors.accent,
     alignItems: 'center',
     justifyContent: 'center',

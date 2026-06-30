@@ -150,7 +150,7 @@ const styles = StyleSheet.create({
   avatar: {
     width: 42,
     height: 42,
-    borderRadius: 99,
+    borderRadius: Radius.pill,
     backgroundColor: InkColors.ink,
     alignItems: 'center',
     justifyContent: 'center',
@@ -178,11 +178,11 @@ const styles = StyleSheet.create({
     borderBottomColor: InkColors.line,
   },
   rowUnread: { backgroundColor: BrandColors.yellowSoft + '55' },
-  iconWrap: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  iconWrap: { width: 36, height: 36, borderRadius: Radius.sm, alignItems: 'center', justifyContent: 'center' },
   rowTitle: { fontSize: 14, fontWeight: '800', color: InkColors.ink },
   rowBody: { fontSize: 13, color: InkColors.ink2, lineHeight: 19 },
   rowTime: { fontSize: 11.5, color: InkColors.ink3, fontWeight: '600', marginTop: 1 },
-  unreadDot: { width: 8, height: 8, borderRadius: 99, backgroundColor: BrandColors.accent },
+  unreadDot: { width: 8, height: 8, borderRadius: Radius.pill, backgroundColor: BrandColors.accent },
 
   // 빈 상태
   empty: { alignItems: 'center', gap: 8, paddingVertical: 48 },

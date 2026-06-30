@@ -291,5 +291,5 @@ const st = StyleSheet.create({
   // 헤더 액션 칩 — 클린 헤더(벨·뒤로가기)와 같은 계열로 가볍게(무거운 보더 제거, 서브틀 필).
   navBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, height: 32, paddingHorizontal: 11, borderRadius: Radius.pill, backgroundColor: InkColors.bgSoft },
   navText: { fontSize: 12.5, fontWeight: '800', color: InkColors.ink },
-  dot: { position: 'absolute', top: -3, right: -3, width: 9, height: 9, borderRadius: 99, backgroundColor: BrandColors.bad },
+  dot: { position: 'absolute', top: -3, right: -3, width: 9, height: 9, borderRadius: Radius.pill, backgroundColor: BrandColors.bad },
 });

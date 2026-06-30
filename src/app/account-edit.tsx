@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack } from 'expo-router';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
+import { Radius } from '@/lib/theme/elevation';
 import { isValidPhone, normalizePhone } from '@/lib/utils/validation';
 import { HeaderBackButton } from '@/components/HeaderBackButton';
 
@@ -201,19 +202,19 @@ const styles = StyleSheet.create({
   loading: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   scroll: { padding: 20, gap: 8 },
   group: { fontSize: 13, fontWeight: '800', color: InkColors.ink3, marginLeft: 4, marginTop: 8 },
-  card: { backgroundColor: '#FFFFFF', borderRadius: 14, borderWidth: 1, borderColor: InkColors.line, padding: 16, gap: 8, marginBottom: 8 },
+  card: { backgroundColor: '#FFFFFF', borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, padding: 16, gap: 8, marginBottom: 8 },
   label: { fontSize: 13, fontWeight: '700', color: InkColors.ink2, marginTop: 4 },
   req: { color: BrandColors.accent, fontWeight: '900' },
-  input: { borderWidth: 1, borderColor: InkColors.line, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 13, fontSize: 16, color: InkColors.ink, backgroundColor: '#FFFFFF' },
+  input: { borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md, paddingHorizontal: 14, paddingVertical: 13, fontSize: 16, color: InkColors.ink, backgroundColor: '#FFFFFF' },
   inputError: { borderColor: BrandColors.accent },
   storeCard: { borderColor: BrandColors.gold },
   storeMetaRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 2 },
-  storeChip: { backgroundColor: BrandColors.brandSoft, borderRadius: 999, paddingVertical: 5, paddingHorizontal: 10 },
+  storeChip: { backgroundColor: BrandColors.brandSoft, borderRadius: Radius.pill, paddingVertical: 5, paddingHorizontal: 10 },
   storeChipText: { fontSize: 11, fontWeight: '700', color: InkColors.ink2 },
   storeRemain: { fontSize: 12, color: InkColors.ink3, fontWeight: '600' },
-  primary: { marginTop: 12, backgroundColor: BrandColors.brand, paddingVertical: 15, borderRadius: 12, alignItems: 'center' },
+  primary: { marginTop: 12, backgroundColor: BrandColors.brand, paddingVertical: 15, borderRadius: Radius.md, alignItems: 'center' },
   primaryText: { color: '#FFFFFF', fontSize: 15, fontWeight: '800' },
-  secondary: { marginTop: 12, backgroundColor: InkColors.bgSoft, paddingVertical: 15, borderRadius: 12, alignItems: 'center', borderWidth: 1, borderColor: InkColors.line },
+  secondary: { marginTop: 12, backgroundColor: InkColors.bgSoft, paddingVertical: 15, borderRadius: Radius.md, alignItems: 'center', borderWidth: 1, borderColor: InkColors.line },
   secondaryText: { color: InkColors.ink, fontSize: 15, fontWeight: '800' },
   msg: { fontSize: 14, fontWeight: '600', textAlign: 'center', marginTop: 4 },
 });

@@ -10,6 +10,7 @@ import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { useUnknownQueueStore } from '@/lib/store/useUnknownQueueStore';
 import { useSuggestionStore } from '@/lib/store/useSuggestionStore';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
+import { Radius } from '@/lib/theme/elevation';
 
 import type { Category, PlaybookEntry, UnknownQuery } from '@/types';
 
@@ -160,7 +161,7 @@ const styles = StyleSheet.create({
   toastWrap: { position: 'absolute', left: 0, right: 0, bottom: 36, alignItems: 'center' },
   toast: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
-    backgroundColor: InkColors.ink, paddingVertical: 12, paddingHorizontal: 18, borderRadius: 14, maxWidth: '90%',
+    backgroundColor: InkColors.ink, paddingVertical: 12, paddingHorizontal: 18, borderRadius: Radius.md, maxWidth: '90%',
   },
   toastCheck: { color: BrandColors.yellow, fontWeight: '800', fontSize: 16 },
   toastText: { color: '#FFFFFF', fontWeight: '700', fontSize: 14 },

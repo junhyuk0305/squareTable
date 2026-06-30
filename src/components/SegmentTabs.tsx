@@ -1,5 +1,6 @@
 import { View, Text, Pressable, StyleSheet, type ViewStyle } from 'react-native';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
+import { Radius } from '@/lib/theme/elevation';
 
 export type SegmentItem = {
   key: string;
@@ -70,9 +71,9 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     padding: 4,
     backgroundColor: InkColors.bgSoft,
-    borderRadius: 12,
+    borderRadius: Radius.md,
   },
-  seg: { flex: 1, paddingVertical: 9, borderRadius: 9, alignItems: 'center' },
+  seg: { flex: 1, paddingVertical: 9, borderRadius: Radius.sm, alignItems: 'center' },
   segOn: {
     backgroundColor: '#FFFFFF',
     shadowColor: '#000',
@@ -88,7 +89,7 @@ const styles = StyleSheet.create({
     minWidth: 16,
     paddingHorizontal: 5,
     paddingVertical: 1,
-    borderRadius: 999,
+    borderRadius: Radius.pill,
     backgroundColor: InkColors.ink3,
     alignItems: 'center',
     justifyContent: 'center',

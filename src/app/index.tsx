@@ -7,6 +7,7 @@ import { useSessionStore } from '@/lib/store/useSessionStore';
 import { applyMockSeed } from '@/lib/demo/mockSeed';
 import { HAS_SUPABASE } from '@/lib/supabase';
 import { BrandColors, InkColors } from '@/lib/theme/colors';
+import { Radius } from '@/lib/theme/elevation';
 import { Wordmark } from '@/components/Wordmark';
 import { isValidEmail } from '@/lib/utils/validation';
 import type { Role } from '@/types';
@@ -148,14 +149,14 @@ const styles = StyleSheet.create({
 
   card: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 18,
+    borderRadius: Radius.lg,
     borderWidth: 1,
     borderColor: InkColors.line,
     padding: 20,
     gap: 10,
   },
-  seg: { flexDirection: 'row', backgroundColor: InkColors.bgSoft, borderRadius: 12, padding: 4, marginBottom: 6 },
-  segBtn: { flex: 1, paddingVertical: 10, borderRadius: 9, alignItems: 'center' },
+  seg: { flexDirection: 'row', backgroundColor: InkColors.bgSoft, borderRadius: Radius.md, padding: 4, marginBottom: 6 },
+  segBtn: { flex: 1, paddingVertical: 10, borderRadius: Radius.sm, alignItems: 'center' },
   segBtnOn: { backgroundColor: '#FFFFFF', shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 6, shadowOffset: { width: 0, height: 2 } },
   segText: { fontSize: 14, fontWeight: '700', color: InkColors.ink3 },
   segTextOn: { color: InkColors.ink },
@@ -164,7 +165,7 @@ const styles = StyleSheet.create({
   input: {
     borderWidth: 1,
     borderColor: InkColors.line,
-    borderRadius: 12,
+    borderRadius: Radius.md,
     paddingHorizontal: 14,
     paddingVertical: 13,
     fontSize: 15,
@@ -175,7 +176,7 @@ const styles = StyleSheet.create({
     marginTop: 12,
     backgroundColor: BrandColors.brand,
     paddingVertical: 16,
-    borderRadius: 12,
+    borderRadius: Radius.md,
     alignItems: 'center',
   },
   primaryText: { color: '#FFFFFF', fontSize: 16, fontWeight: '800' },
@@ -193,7 +194,7 @@ const styles = StyleSheet.create({
     gap: 6,
     alignSelf: 'stretch',
     paddingVertical: 15,
-    borderRadius: 12,
+    borderRadius: Radius.md,
     borderWidth: 1.5,
     borderColor: BrandColors.brand,
     backgroundColor: '#FFFFFF',

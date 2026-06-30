@@ -3,6 +3,7 @@
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
+import { Radius } from '@/lib/theme/elevation';
 import { ChachakSwitch } from '@/components/ChachakSwitch';
 import { SectionLabel } from '@/components/SectionLabel';
 
@@ -89,7 +90,7 @@ const styles = StyleSheet.create({
   section: { gap: 8, marginBottom: 18 },
   card: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 14,
+    borderRadius: Radius.md,
     borderWidth: 1,
     borderColor: InkColors.line,
     overflow: 'hidden',

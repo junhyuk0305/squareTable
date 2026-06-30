@@ -8,6 +8,7 @@ import { TimesheetView } from '@/components/TimesheetView';
 import { RoleTabBar } from '@/components/RoleTabBar';
 import { Avatar } from '@/components/Avatar';
 import { InkColors } from '@/lib/theme/colors';
+import { Radius } from '@/lib/theme/elevation';
 import { won, DEFAULT_HOURLY_WAGE } from '@/lib/utils/attendance';
 
 // 근무·급여(또는 직원관리)에서 직원 행 탭 시 진입. 사장이 직원 출근기록을 보정.
@@ -59,7 +60,7 @@ export default function OwnerTimesheetScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: InkColors.cream },
   empty: { fontSize: 13, color: InkColors.ink3, padding: 24, textAlign: 'center' },
-  staffCard: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#FFFFFF', borderRadius: 14, borderWidth: 1, borderColor: InkColors.line, padding: 14 },
+  staffCard: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#FFFFFF', borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, padding: 14 },
   staffName: { fontSize: 16, fontWeight: '800', color: InkColors.ink },
   staffMeta: { fontSize: 12, color: InkColors.ink3, marginTop: 2 },
 });

@@ -150,7 +150,7 @@ const s = StyleSheet.create({
   dayLabel: { fontSize: 15, fontWeight: '800', color: InkColors.ink },
 
   timeRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  timeInp: { width: 64, textAlign: 'center', borderWidth: 1, borderColor: InkColors.line, borderRadius: 9, paddingVertical: 7, fontSize: 14, fontWeight: '700', color: InkColors.ink, backgroundColor: InkColors.bg, ...(Platform.OS === 'web' ? ({ outlineStyle: 'none' } as object) : null) },
+  timeInp: { width: 64, textAlign: 'center', borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.sm, paddingVertical: 7, fontSize: 14, fontWeight: '700', color: InkColors.ink, backgroundColor: InkColors.bg, ...(Platform.OS === 'web' ? ({ outlineStyle: 'none' } as object) : null) },
   timeInpBad: { borderColor: BrandColors.bad },
   tilde: { fontSize: 13, color: InkColors.ink3, fontWeight: '700' },
   off: { fontSize: 13, color: InkColors.ink3, fontWeight: '600' },
@@ -158,7 +158,7 @@ const s = StyleSheet.create({
   warn: { fontSize: 12, color: BrandColors.bad, fontWeight: '700', marginTop: 2, lineHeight: 18 },
 
   foot: { flexDirection: 'row', gap: 10, paddingHorizontal: 16, paddingTop: 10, paddingBottom: 18, borderTopWidth: 1, borderTopColor: InkColors.line },
-  btn: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 14, borderRadius: 13 },
+  btn: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 14, borderRadius: Radius.md },
   btnGhost: { backgroundColor: InkColors.bgSoft, borderWidth: 1, borderColor: InkColors.line },
   btnGhostText: { fontSize: 15, fontWeight: '700', color: InkColors.ink2 },
   btnSolid: { backgroundColor: InkColors.ink },

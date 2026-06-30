@@ -8,6 +8,7 @@ import { EmptyState } from '@/components/EmptyState';
 import { getCategoryMeta } from '@/lib/utils/category';
 import { confirmAction } from '@/lib/utils/confirm';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
+import { Radius } from '@/lib/theme/elevation';
 import type { PlaybookEntry } from '@/types';
 
 export default function EditKnowledgeScreen() {
@@ -206,7 +207,7 @@ const styles = StyleSheet.create({
   input: {
     borderWidth: 1,
     borderColor: InkColors.line,
-    borderRadius: 12,
+    borderRadius: Radius.md,
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 15,
@@ -214,7 +215,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
   },
   inputMulti: { minHeight: 84, textAlignVertical: 'top' },
-  save: { marginTop: 8, backgroundColor: BrandColors.brand, paddingVertical: 16, borderRadius: 12, alignItems: 'center' },
+  save: { marginTop: 8, backgroundColor: BrandColors.brand, paddingVertical: 16, borderRadius: Radius.md, alignItems: 'center' },
   saveText: { color: '#FFFFFF', fontSize: 16, fontWeight: '800' },
   del: { alignItems: 'center', paddingVertical: 12 },
   delText: { color: BrandColors.warn, fontSize: 14, fontWeight: '700' },
@@ -222,6 +223,6 @@ const styles = StyleSheet.create({
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
 
   toastWrap: { position: 'absolute', left: 0, right: 0, bottom: 36, alignItems: 'center' },
-  toast: { backgroundColor: InkColors.ink, paddingVertical: 12, paddingHorizontal: 20, borderRadius: 14 },
+  toast: { backgroundColor: InkColors.ink, paddingVertical: 12, paddingHorizontal: 20, borderRadius: Radius.md },
   toastText: { color: '#FFFFFF', fontWeight: '700', fontSize: 14 },
 });

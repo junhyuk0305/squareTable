@@ -273,7 +273,7 @@ const styles = StyleSheet.create({
   actionNum: {
     width: 22,
     height: 22,
-    borderRadius: 11,
+    borderRadius: Radius.sm,
     backgroundColor: BrandColors.good,
     color: InkColors.bubbleText,
     fontSize: 12,
@@ -300,7 +300,7 @@ const styles = StyleSheet.create({
   gaugeVal: { fontSize: 13, fontWeight: '900', color: InkColors.ink },
   gaugeTrack: { height: 10, borderRadius: Radius.pill, backgroundColor: InkColors.bgSoft, position: 'relative', justifyContent: 'center' },
   gaugeFill: { height: '100%', borderRadius: Radius.pill, backgroundColor: BrandColors.yellow },
-  gaugeKnob: { position: 'absolute', top: -4, width: 18, height: 18, borderRadius: 9, backgroundColor: InkColors.ink, borderWidth: 3, borderColor: BrandColors.yellow, marginLeft: -9 },
+  gaugeKnob: { position: 'absolute', top: -4, width: 18, height: 18, borderRadius: Radius.sm, backgroundColor: InkColors.ink, borderWidth: 3, borderColor: BrandColors.yellow, marginLeft: -9 },
   gaugeEnds: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 2 },
   gaugeEndTxt: { fontSize: 11, fontWeight: '700', color: InkColors.ink3 },
   feedback: {

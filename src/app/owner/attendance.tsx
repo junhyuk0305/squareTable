@@ -12,6 +12,7 @@ import { Appear } from '@/components/Appear';
 import { Avatar } from '@/components/Avatar';
 import { FEATURES } from '@/lib/config/features';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
+import { Radius } from '@/lib/theme/elevation';
 import { fmtDuration, won, todayStr, liveMinutes, DEFAULT_HOURLY_WAGE } from '@/lib/utils/attendance';
 
 export default function OwnerAttendanceScreen() {
@@ -137,7 +138,7 @@ const styles = StyleSheet.create({
 
   totalCard: {
     backgroundColor: InkColors.ink,
-    borderRadius: 18,
+    borderRadius: Radius.lg,
     padding: 22,
     gap: 4,
   },
@@ -155,7 +156,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: InkColors.line,
-    borderRadius: 12,
+    borderRadius: Radius.md,
     paddingVertical: 14,
   },
   menuText: { fontSize: 14, fontWeight: '700', color: InkColors.ink },
@@ -163,7 +164,7 @@ const styles = StyleSheet.create({
   listHint: { fontSize: 12, color: InkColors.ink3, marginTop: -8 },
   list: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 14,
+    borderRadius: Radius.md,
     borderWidth: 1,
     borderColor: InkColors.line,
     paddingHorizontal: 14,
@@ -184,6 +185,6 @@ const styles = StyleSheet.create({
 });
 
 const chip = StyleSheet.create({
-  wrap: { paddingVertical: 3, paddingHorizontal: 9, borderRadius: 999 },
+  wrap: { paddingVertical: 3, paddingHorizontal: 9, borderRadius: Radius.pill },
   text: { fontSize: 11, fontWeight: '800' },
 });

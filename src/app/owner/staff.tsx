@@ -10,6 +10,7 @@ import { useSessionStore } from '@/lib/store/useSessionStore';
 import { RoleTabBar } from '@/components/RoleTabBar';
 import { Avatar } from '@/components/Avatar';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
+import { Radius } from '@/lib/theme/elevation';
 import { DEFAULT_HOURLY_WAGE } from '@/lib/utils/attendance';
 import { useCopyToClipboard } from '@/lib/utils/useCopyToClipboard';
 
@@ -136,28 +137,28 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: InkColors.cream },
   scroll: { padding: 20, gap: 12 },
 
-  inviteCard: { backgroundColor: InkColors.ink, borderRadius: 16, padding: 20, gap: 6, alignItems: 'flex-start' },
+  inviteCard: { backgroundColor: InkColors.ink, borderRadius: Radius.lg, padding: 20, gap: 6, alignItems: 'flex-start' },
   inviteLabel: { fontSize: 13, color: 'rgba(255,255,255,0.7)', fontWeight: '600' },
   inviteCode: { fontSize: 30, fontWeight: '900', color: '#FFFFFF', letterSpacing: 3 },
   inviteHint: { fontSize: 12, color: 'rgba(255,255,255,0.6)', lineHeight: 17 },
-  copyBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8, backgroundColor: 'rgba(255,255,255,0.16)', paddingVertical: 9, paddingHorizontal: 14, borderRadius: 999 },
+  copyBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8, backgroundColor: 'rgba(255,255,255,0.16)', paddingVertical: 9, paddingHorizontal: 14, borderRadius: Radius.pill },
   copyText: { color: '#FFFFFF', fontWeight: '700', fontSize: 13 },
 
   sectionTitle: { fontSize: 14, fontWeight: '800', color: InkColors.ink2, marginTop: 6 },
   sectionSub: { fontSize: 12, fontWeight: '600', color: InkColors.ink3 },
   inviteHelp: { fontSize: 12, color: InkColors.ink3, lineHeight: 17, marginTop: -4 },
   addRow: { flexDirection: 'row', gap: 10 },
-  addInput: { flex: 1, borderWidth: 1, borderColor: InkColors.line, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, color: InkColors.ink, backgroundColor: '#FFFFFF' },
-  inviteBtn: { paddingHorizontal: 20, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: BrandColors.brand },
+  addInput: { flex: 1, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, color: InkColors.ink, backgroundColor: '#FFFFFF' },
+  inviteBtn: { paddingHorizontal: 20, borderRadius: Radius.md, alignItems: 'center', justifyContent: 'center', backgroundColor: BrandColors.brand },
   inviteBtnText: { fontSize: 15, fontWeight: '800', color: '#FFFFFF' },
   pendingRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: InkColors.line },
   pendingText: { flex: 1, fontSize: 14, color: InkColors.ink2 },
-  pendingTag: { fontSize: 11, color: InkColors.ink3, fontWeight: '700', backgroundColor: InkColors.bgSoft, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999 },
+  pendingTag: { fontSize: 11, color: InkColors.ink3, fontWeight: '700', backgroundColor: InkColors.bgSoft, paddingHorizontal: 8, paddingVertical: 3, borderRadius: Radius.pill },
   pendingAction: { paddingHorizontal: 8, paddingVertical: 4 },
   pendingActionText: { fontSize: 12, fontWeight: '800', color: BrandColors.brand },
   pendingCancel: { paddingHorizontal: 2, paddingVertical: 4 },
 
-  list: { backgroundColor: '#FFFFFF', borderRadius: 14, borderWidth: 1, borderColor: InkColors.line, paddingHorizontal: 14 },
+  list: { backgroundColor: '#FFFFFF', borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, paddingHorizontal: 14 },
   staffRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: InkColors.line },
   staffTap: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12 },
   staffName: { fontSize: 15, fontWeight: '700', color: InkColors.ink },
@@ -169,6 +170,6 @@ const styles = StyleSheet.create({
   wageWon: { fontSize: 13, color: InkColors.ink3 },
 
   demoNote: { fontSize: 12, color: InkColors.ink3, marginTop: 6 },
-  emptyBox: { alignItems: 'center', gap: 8, paddingVertical: 28, backgroundColor: '#FFFFFF', borderRadius: 14, borderWidth: 1, borderColor: InkColors.line },
+  emptyBox: { alignItems: 'center', gap: 8, paddingVertical: 28, backgroundColor: '#FFFFFF', borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line },
   emptyText: { fontSize: 13, color: InkColors.ink3, textAlign: 'center', lineHeight: 19 },
 });

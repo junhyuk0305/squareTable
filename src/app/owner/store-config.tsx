@@ -132,12 +132,12 @@ const styles = StyleSheet.create({
   timeRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 14 },
   timeField: { alignItems: 'center', gap: 6 },
   timeLabel: { fontSize: 12, fontWeight: '700', color: InkColors.ink3 },
-  timeInp: { width: 110, textAlign: 'center', fontSize: 24, fontWeight: '800', color: InkColors.ink, letterSpacing: 1, paddingVertical: 10, backgroundColor: InkColors.cream, borderRadius: 12, borderWidth: 1, borderColor: InkColors.line, ...(Platform.OS === 'web' ? ({ outlineStyle: 'none' } as object) : null) },
+  timeInp: { width: 110, textAlign: 'center', fontSize: 24, fontWeight: '800', color: InkColors.ink, letterSpacing: 1, paddingVertical: 10, backgroundColor: InkColors.cream, borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, ...(Platform.OS === 'web' ? ({ outlineStyle: 'none' } as object) : null) },
   bad: { borderColor: BrandColors.bad },
   warn: { fontSize: 12, color: BrandColors.bad, fontWeight: '700', textAlign: 'center' },
 
   dows: { flexDirection: 'row', justifyContent: 'space-between' },
-  dow: { width: 38, height: 38, borderRadius: 99, borderWidth: 1, borderColor: InkColors.line, backgroundColor: InkColors.bg, alignItems: 'center', justifyContent: 'center' },
+  dow: { width: 38, height: 38, borderRadius: Radius.pill, borderWidth: 1, borderColor: InkColors.line, backgroundColor: InkColors.bg, alignItems: 'center', justifyContent: 'center' },
   dowOn: { backgroundColor: InkColors.ink, borderColor: InkColors.ink },
   dowSun: { backgroundColor: BrandColors.bad, borderColor: BrandColors.bad },
   dowText: { fontSize: 14, fontWeight: '800', color: InkColors.ink2 },
@@ -145,6 +145,6 @@ const styles = StyleSheet.create({
 
   noteInp: { fontSize: 14, color: InkColors.ink, minHeight: 56, lineHeight: 20, ...(Platform.OS === 'web' ? ({ outlineStyle: 'none' } as object) : null) },
 
-  saveBtn: { backgroundColor: InkColors.ink, borderRadius: 14, paddingVertical: 15, alignItems: 'center', marginTop: 14 },
+  saveBtn: { backgroundColor: InkColors.ink, borderRadius: Radius.md, paddingVertical: 15, alignItems: 'center', marginTop: 14 },
   saveText: { fontSize: 15, fontWeight: '800', color: '#fff' },
 });

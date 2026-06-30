@@ -6,6 +6,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useRoomStore } from '@/lib/store/useRoomStore';
 import { InkColors } from '@/lib/theme/colors';
+import { Radius } from '@/lib/theme/elevation';
 
 export function RoomBar({ role, me }: { role: 'owner' | 'junior'; me: string }) {
   const router = useRouter();
@@ -50,10 +51,10 @@ export function RoomBar({ role, me }: { role: 'owner' | 'junior'; me: string }) 
 const s = StyleSheet.create({
   bar: { backgroundColor: InkColors.bg, borderBottomWidth: 1, borderBottomColor: InkColors.line },
   row: { flexDirection: 'row', alignItems: 'center', gap: 7, paddingHorizontal: 12, paddingVertical: 8 },
-  chip: { paddingHorizontal: 13, paddingVertical: 7, borderRadius: 999, borderWidth: 1, borderColor: InkColors.line, backgroundColor: InkColors.bg, maxWidth: 140 },
+  chip: { paddingHorizontal: 13, paddingVertical: 7, borderRadius: Radius.pill, borderWidth: 1, borderColor: InkColors.line, backgroundColor: InkColors.bg, maxWidth: 140 },
   chipOn: { backgroundColor: InkColors.ink, borderColor: InkColors.ink },
   chipText: { fontSize: 13, fontWeight: '700', color: InkColors.ink2 },
   chipTextOn: { color: '#FFFFFF' },
-  manage: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 11, paddingVertical: 7, borderRadius: 999, borderWidth: 1, borderColor: InkColors.line, borderStyle: 'dashed', backgroundColor: InkColors.bg },
+  manage: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 11, paddingVertical: 7, borderRadius: Radius.pill, borderWidth: 1, borderColor: InkColors.line, borderStyle: 'dashed', backgroundColor: InkColors.bg },
   manageText: { fontSize: 12.5, fontWeight: '700', color: InkColors.ink2 },
 });

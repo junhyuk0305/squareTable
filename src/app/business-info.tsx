@@ -2,6 +2,7 @@
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack } from 'expo-router';
 import { InkColors } from '@/lib/theme/colors';
+import { Radius } from '@/lib/theme/elevation';
 import { HeaderBackButton } from '@/components/HeaderBackButton';
 
 // 판매자(사업자) 정보 — 전자상거래법상 유료 판매 시 고지 의무. 실제 사업자등록 후 값 채울 것.
@@ -42,7 +43,7 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: InkColors.cream },
   scroll: { padding: 24, gap: 16 },
   h1: { fontSize: 22, fontWeight: '900', color: InkColors.ink },
-  card: { backgroundColor: '#FFFFFF', borderRadius: 14, borderWidth: 1, borderColor: InkColors.line, overflow: 'hidden' },
+  card: { backgroundColor: '#FFFFFF', borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, overflow: 'hidden' },
   row: { flexDirection: 'row', paddingHorizontal: 16, paddingVertical: 14, gap: 12 },
   rowBorder: { borderTopWidth: 1, borderTopColor: InkColors.line },
   k: { width: 120, fontSize: 13, fontWeight: '700', color: InkColors.ink3 },
