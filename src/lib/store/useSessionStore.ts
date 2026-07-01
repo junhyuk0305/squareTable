@@ -25,6 +25,7 @@ type SessionState = {
   inviteCode: string; // 내 매장 초대코드(사장 화면에서 직원에게 공유)
   email: string;
   bio: string; // 한줄 소개
+  phone: string; // 전화번호(전체) — 프로필 편집에서 표시·수정(뒷4자리만 아님)
 
   // 부팅 시 1회: 기존 세션 복원 + 프로필 로드 + auth 변화 구독
   init: () => Promise<void>;
@@ -85,6 +86,7 @@ const DEMO = {
   inviteCode: '482913',
   email: '',
   bio: '',
+  phone: '',
 };
 
 // 가게 이름 변경 제한 — 14일 이내 2회. 이력(타임스탬프)은 기기 로컬에 unit별로 보관.
@@ -136,7 +138,7 @@ async function loadProfile(
   try {
     const { data: profile } = await supabase
       .from('profiles')
-      .select('id, name, role, unit_id, pending_unit_id, bio, deleted_at')
+      .select('id, name, role, unit_id, pending_unit_id, bio, phone, deleted_at')
       .eq('id', userId)
       .maybeSingle();
 
@@ -144,7 +146,7 @@ async function loadProfile(
     // 사용자는 로그인 불가. 세션 토큰도 정리한다(fire-and-forget: signOut→onAuthStateChange는 재귀 안 함).
     if (profile?.deleted_at) {
       setUnitId(null);
-      set({ status: 'signed_out', unitId: '', userId: '', userName: '', storeName: '', pendingUnitId: '', pendingStoreName: '', industry: '', inviteCode: '', bio: '' });
+      set({ status: 'signed_out', unitId: '', userId: '', userName: '', storeName: '', pendingUnitId: '', pendingStoreName: '', industry: '', inviteCode: '', bio: '', phone: '' });
       void supabase.auth.signOut().catch(() => {});
       return;
     }
@@ -221,6 +223,7 @@ async function loadProfile(
       trialEndsAt,
       paidUntil,
       bio: profile?.bio ?? '',
+      phone: profile?.phone ?? '',
     });
   } catch (e) {
     // 네트워크 단절(fetch reject)로 프로필 조회가 던지면 앱이 'loading'에 영구히 멈추는 걸 막는다.
@@ -422,6 +425,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       if (patch.name != null) next.userName = patch.name;
       if (patch.bio != null) next.bio = patch.bio;
       if (patch.email != null) next.email = patch.email;
+      if (patch.phone != null) next.phone = patch.phone;
       set(next);
       return { error: null };
     }
@@ -453,6 +457,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     if (patch.name != null) next.userName = patch.name;
     if (patch.bio != null) next.bio = patch.bio;
     if (patch.email != null) next.email = patch.email;
+    if (patch.phone != null) next.phone = patch.phone;
     set(next);
     return { error: null };
   },
@@ -575,8 +580,8 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     setUnitId(DEMO.unitId);
     set(
       role === 'owner'
-        ? { role: 'owner', userId: 'u_owner_001', userName: '김영자', unitId: DEMO.unitId, storeName: DEMO.storeName, pendingUnitId: '', pendingStoreName: '', industry: DEMO.industry, inviteCode: DEMO.inviteCode, email: '', bio: '' }
-        : { role: 'junior', userId: 'u_staff_001', userName: '박지원', unitId: DEMO.unitId, storeName: DEMO.storeName, pendingUnitId: '', pendingStoreName: '', industry: DEMO.industry, inviteCode: DEMO.inviteCode, email: '', bio: '' }
+        ? { role: 'owner', userId: 'u_owner_001', userName: '김영자', unitId: DEMO.unitId, storeName: DEMO.storeName, pendingUnitId: '', pendingStoreName: '', industry: DEMO.industry, inviteCode: DEMO.inviteCode, email: '', bio: '', phone: '' }
+        : { role: 'junior', userId: 'u_staff_001', userName: '박지원', unitId: DEMO.unitId, storeName: DEMO.storeName, pendingUnitId: '', pendingStoreName: '', industry: DEMO.industry, inviteCode: DEMO.inviteCode, email: '', bio: '', phone: '' }
     );
   },
 
@@ -598,6 +603,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       inviteCode: role === 'owner' ? inviteCode : '',
       email: '',
       bio: '',
+      phone: '',
     });
   },
 }));

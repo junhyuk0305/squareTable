@@ -23,6 +23,19 @@ export function isValidPhone(phone: string): boolean {
   return /^01[016789]\d{7,8}$/.test(normalizePhone(phone));
 }
 
+/**
+ * 한국 휴대폰 표시 형식(010-1234-5678)으로 실시간 포맷팅.
+ * 숫자만 추출해 **최대 11자리로 자르고**(무제한 입력 방지) 하이픈을 끼운다.
+ * 입력창 onChange 에서 감싸 쓴다: onChange={(v) => setPhone(formatPhone(v))}.
+ * (normalizePhone 은 저장·검증용 순수 숫자, formatPhone 은 화면 표시용 — 역할 구분.)
+ */
+export function formatPhone(input: string): string {
+  const d = (input ?? '').replace(/\D/g, '').slice(0, 11); // 11자리 초과 입력 차단
+  if (d.length <= 3) return d;
+  if (d.length <= 7) return `${d.slice(0, 3)}-${d.slice(3)}`;
+  return `${d.slice(0, 3)}-${d.slice(3, 7)}-${d.slice(7)}`;
+}
+
 /** 비밀번호 최소 길이(영문·숫자 조합). 규칙 변경 시 여기 한 곳만. */
 export const PASSWORD_MIN = 9;
 

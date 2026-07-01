@@ -36,7 +36,8 @@
     "web": "expo start --web",
     "lint": "expo lint",
     "typecheck": "tsc --noEmit",
-    "compile:packs": "node scripts/compile-pack.mjs"
+    "compile:packs": "node scripts/compile-pack.mjs",
+    "qa:onboarding": "node scripts/qa-onboarding.mjs"
   },
   "private": true
 }
