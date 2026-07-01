@@ -10,6 +10,7 @@ import { useWorkStore } from '@/lib/store/useWorkStore';
 import { useScheduleStore } from '@/lib/store/useScheduleStore';
 import { useUnknownQueueStore } from '@/lib/store/useUnknownQueueStore';
 import { useSuggestionStore } from '@/lib/store/useSuggestionStore';
+import { useStaffStore } from '@/lib/store/useStaffStore';
 import { todayStr } from '@/lib/utils/attendance';
 import { juniorUnreadCount, ownerUnreadCount } from '@/lib/utils/notifications';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
@@ -53,16 +54,17 @@ export function NotificationBell() {
   return <BellButton count={count} onPress={() => router.push('/junior/notifications')} />;
 }
 
-/** 사장 알림 벨 — 배지 = 답변대기 질문 + 검토대기 제안 + 승인대기 교대 → /owner/notifications. */
+/** 사장 알림 벨 — 배지 = 합류 승인대기 + 답변대기 질문 + 검토대기 제안 + 승인대기 교대 → /owner/notifications. */
 export function OwnerNotificationBell({ edge = true }: { edge?: boolean } = {}) {
   const router = useRouter();
   const queue = useUnknownQueueStore((s) => s.queue);
   const suggestions = useSuggestionStore((s) => s.suggestions);
   const swaps = useScheduleStore((s) => s.swaps);
+  const pending = useStaffStore((s) => s.pending);
 
   const count = useMemo(
-    () => ownerUnreadCount(queue, suggestions, swaps),
-    [queue, suggestions, swaps],
+    () => ownerUnreadCount(queue, suggestions, swaps, pending),
+    [queue, suggestions, swaps, pending],
   );
 
   return <BellButton count={count} onPress={() => router.push('/owner/notifications')} edge={edge} />;

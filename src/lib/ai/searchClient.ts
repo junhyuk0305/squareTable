@@ -11,28 +11,44 @@
 import type { PlaybookEntry, SearchResult } from '@/types';
 import { searchPlaybook } from '@/lib/rag';
 import { getCategoryMeta } from '@/lib/utils/category';
-import { SERVE_THRESHOLD, USE_MOCK, AI_ENDPOINT, ANON } from './config';
+import {
+  SERVE_THRESHOLD, USE_MOCK, AI_ENDPOINT, ANON,
+  SERVE_REQUIRE_LEXICAL_AGREEMENT, SERVE_LEX_MIN, SERVE_LEX_MARGIN, SERVE_VEC_OVERRIDE,
+} from './config';
 import { supabase } from '@/lib/supabase';
 
 const RRF_K = 60; // RRF 상수(표준값). 순위만 쓰므로 점수 스케일 불일치에 견고.
 const TOPK = 8;
 
+// 무한 대기 방지 — Edge/Gemini가 응답 없이 멈춰도 이 시간을 넘기면 abort → 렉시컬 폴백/재시도로
+// 넘어간다(client.ts callEdge와 동일 정책). 이게 없으면 검색 스피너가 영영 안 풀린다.
+const EDGE_TIMEOUT_MS = 12_000;
+
 type VecHit = { id: string; similarity: number };
 type VecResponse = { candidates: VecHit[]; topSimilarity: number };
 
 // Edge 호출 공통 헤더(실 로그인 세션 토큰 필요 — anon 단독 거부됨).
+// 계약: 소프트 no-go(엔드포인트/토큰 없음·!res.ok)면 null, 네트워크/타임아웃(abort)이면 throw
+// → 호출부(hybridSearch·embedEntry)가 각각 렉시컬 폴백/재시도로 처리한다.
 async function edgePost<T>(task: 'search' | 'embed', payload: unknown): Promise<T | null> {
   if (!AI_ENDPOINT) return null;
   const { data } = await supabase.auth.getSession();
   const token = data.session?.access_token;
   if (!token) return null;
-  const res = await fetch(AI_ENDPOINT, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', apikey: ANON, Authorization: `Bearer ${token}` },
-    body: JSON.stringify({ task, payload }),
-  });
-  if (!res.ok) return null;
-  return (await res.json()) as T;
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), EDGE_TIMEOUT_MS);
+  try {
+    const res = await fetch(AI_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', apikey: ANON, Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ task, payload }),
+      signal: ctrl.signal,
+    });
+    if (!res.ok) return null;
+    return (await res.json()) as T;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 /**
@@ -84,7 +100,22 @@ export async function hybridSearch(query: string, entries: PlaybookEntry[]): Pro
 
   // 신뢰도 = 렉시컬 정규화 vs 벡터 cosine 중 강한 신호.
   const confidence = Number(Math.max(lexical.confidence, vec.topSimilarity ?? 0).toFixed(3));
-  const matched = confidence >= SERVE_THRESHOLD ? candidates[0]?.entry ?? null : null;
+
+  // ── SERVE 그라운딩 게이트 ──
+  // 자동 확정 답(matched)은 융합 1등이 렉시컬 1등과 일치 + 근거·마진 충분할 때만.
+  // 그렇지 않으면(근거0/동점 애매) matched=null → useChatStore가 confidence≥GENERATE면
+  // tryGenerate로 넘겨 여러 노하우 종합("AI가 정리한 답")으로 응답한다. (config.ts 설계)
+  const topId = candidates[0]?.entry.id;
+  const lexTopEntryId = lexical.candidates[0]?.entry.id;
+  const lexScoreOfTop = topId ? (lexical.candidates.find((c) => c.entry.id === topId)?.score ?? 0) : 0;
+  const lexMargin = (lexical.candidates[0]?.score ?? 0) - (lexical.candidates[1]?.score ?? 0);
+  const vecMargin = (vec.candidates[0]?.similarity ?? 0) - (vec.candidates[1]?.similarity ?? 0);
+  const grounded =
+    !SERVE_REQUIRE_LEXICAL_AGREEMENT ||
+    (topId != null && topId === lexTopEntryId && lexScoreOfTop >= SERVE_LEX_MIN && lexMargin >= SERVE_LEX_MARGIN) ||
+    vecMargin >= SERVE_VEC_OVERRIDE;
+
+  const matched = confidence >= SERVE_THRESHOLD && grounded ? candidates[0]?.entry ?? null : null;
   return { matched, confidence, candidates, fallbackToUnknown: !matched };
 }
 

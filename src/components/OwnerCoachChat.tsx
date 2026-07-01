@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -18,10 +18,12 @@ import { EXTRACTION_MASTER } from '@/data/extraction-master';
 import { buildPlaybookEntryFromSquare, isSquarePublishable } from '@/lib/utils/buildEntry';
 import { isJunkInput, looksLikePromptLeak, knowhowGuidanceMessage } from '@/lib/utils/knowhowInput';
 import { useSessionStore } from '@/lib/store/useSessionStore';
+import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { uploadPhoto } from '@/lib/db';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 
 import { MiniSquareCard } from './coach/MiniSquareCard';
+import { CoachStarter } from './coach/CoachStarter';
 import { SplitProposal } from './coach/SplitProposal';
 import { ScaleBubble } from './coach/ScaleBubble';
 import { styles } from './coach/coachStyles';
@@ -52,17 +54,22 @@ export type OwnerCoachChatProps = {
   onUpdated?: (square: SquareBlock, extras: { title: string; keywords: string[] }) => void;
 };
 
+// 카드 말풍선이 "그 대화 시점에 어떻게 정리됐는지"를 고정하는 스냅샷.
+// (과거 카드가 최신 square로 다 바뀌던 버그 방지 — 마지막 카드만 라이브로 렌더한다.)
+type CardSnap = { square: SquareBlock; title: string; category: Category };
+
 type MsgInput =
   | { kind: 'alba'; text: string; meta?: string }   // 알바 질문(인박스)
   | { kind: 'owner'; text: string }                  // 사장 발화
   | { kind: 'ai'; text: string }                     // 점장AI 안내/꼬리질문
-  | { kind: 'card' }                                 // 미니 SQUARE 카드(라이브 square 렌더)
+  | { kind: 'card'; snap: CardSnap }                 // 미니 SQUARE 카드(그 시점 스냅샷 고정)
   | { kind: 'scale' }                                // 정도 척도 입력(라이브 square.standard)
   | { kind: 'split' };                               // 다중 노하우 분리 제안
 type Msg = MsgInput & { id: string };
 
 let _mid = 0;
 const nextId = () => `m${++_mid}`;
+const cardMsg = (snap: CardSnap): Msg => ({ id: nextId(), kind: 'card', snap });
 
 export function OwnerCoachChat({
   uq,
@@ -79,7 +86,7 @@ export function OwnerCoachChat({
     const init: Msg[] = [];
     if (isEdit) {
       init.push({ id: nextId(), kind: 'ai', text: '지금 이렇게 정리돼 있어요. 고칠 부분을 편하게 말씀해 주세요.\n예) “할 일에 행주 삶기 추가”, “금지는 빼줘”, “제목 바꿔줘”' });
-      init.push({ id: nextId(), kind: 'card' });
+      init.push(cardMsg({ square: editEntry!.square, title: editEntry!.title, category: editEntry!.category }));
     } else if (isInboxAnswer) {
       const who = uq.anonymous ? '익명' : uq.junior_name;
       init.push({
@@ -118,6 +125,24 @@ export function OwnerCoachChat({
   const unitId = useSessionStore.getState().unitId;
   const storeId = unitId || 'store_001';
 
+  // 빈 상태 스타터용 — 사장이 "실제로 알려준" 노하우 3개만.
+  // 시드/데모 픽스처(source 없음)와 온보딩 팩 템플릿(is_template·needs_review)은 제외 —
+  // 안 그러면 남이 만든/기본 제공 노하우를 "알려주셨어요"로 잘못 표기하게 된다.
+  const allEntries = usePlaybookStore((s) => s.entries);
+  const recentEntries = useMemo(
+    () =>
+      allEntries
+        .filter(
+          (e) =>
+            (e.source?.kind === 'owner' || e.source?.kind === 'inbox_answer') &&
+            !e.is_template &&
+            !e.needs_review,
+        )
+        .sort((a, b) => (b.created_at ?? '').localeCompare(a.created_at ?? ''))
+        .slice(0, 3),
+    [allEntries],
+  );
+
   // 척도질문이 있고 아직 답 안 했으면(=square.standard 미설정) 리뷰 진입을 미룬다.
   // 단, 꼬리질문(pending)이 남아있는 동안엔 척도 입력을 띄우지 않는다(꼬리질문 먼저 → 재정리 → 척도).
   const awaitingScale = scalePrompt !== null && !square?.standard && pending.length === 0;
@@ -134,9 +159,10 @@ export function OwnerCoachChat({
   }, []);
 
   // 카드 + (정도성이면 척도 / 아니면 확인) 메시지를 붙인다. 꼬리질문이 끝난 뒤 공통으로 쓴다.
-  const presentScaleOrConfirm = useCallback((scaleP: ScalePrompt | null) => {
+  // snap = 이 카드에 고정할 정리 스냅샷(라이브 state는 아직 flush 전일 수 있어 명시적으로 넘긴다).
+  const presentScaleOrConfirm = useCallback((scaleP: ScalePrompt | null, snap: CardSnap) => {
     setMessages((prev) => {
-      const withCard: Msg[] = [...prev, { id: nextId(), kind: 'card' }];
+      const withCard: Msg[] = [...prev, cardMsg(snap)];
       if (scaleP) return [...withCard, { id: nextId(), kind: 'ai', text: scaleP.ask }, { id: nextId(), kind: 'scale' }];
       return [...withCard, { id: nextId(), kind: 'ai', text: '이대로 등록할까요? 맞으면 ✅, 고칠 게 있으면 ✏️ 눌러주세요.' }];
     });
@@ -144,17 +170,17 @@ export function OwnerCoachChat({
 
   // 정리 결과(단일) 제시: 카드 → AI 꼬리질문 있으면 먼저 되묻기 → 없으면 척도/확인.
   // (꼬리질문 답이 모이면 runRefine이 한 번 더 재정리해 깔끔히 통합한다.)
-  const presentSingle = useCallback((scaleP: ScalePrompt | null, followups: AiFollowup[]) => {
+  const presentSingle = useCallback((scaleP: ScalePrompt | null, followups: AiFollowup[], snap: CardSnap) => {
     setPending(followups);
     followupQA.current = [];
     if (followups.length > 0) {
       setMessages((prev) => [
         ...prev,
-        { id: nextId(), kind: 'card' },
+        cardMsg(snap),
         { id: nextId(), kind: 'ai', text: followups[0].ask },
       ]);
     } else {
-      presentScaleOrConfirm(scaleP);
+      presentScaleOrConfirm(scaleP, snap);
     }
   }, [presentScaleOrConfirm]);
 
@@ -240,7 +266,14 @@ export function OwnerCoachChat({
         if (followups.length === 0 && tooThin) {
           followups = [{ cell: 'steps', ask: '조금만 더 구체적으로 알려주세요 — 어떤 상황에서, 순서대로 무엇을 하나요?' }];
         }
-        presentSingle(scaleP, followups);
+        // 완결도 게이트: 상황 + 할일/멘트 2개 이상 + 원문이 구체적(20자+)이고 척도가 없으면
+        // 이미 완결된 입력이므로 AI 꼬리질문을 생략하고 바로 확인 단계로 간다(완결 입력을 붙잡는 마찰 제거).
+        // (edge 프롬프트가 "항상 followups" 성향이라 클라에서 완결이면 끊는다.)
+        const stepsN = (out.square?.action?.steps ?? []).filter((s) => s?.trim()).length;
+        const scriptsN = (out.square?.action?.scripts ?? []).filter((s) => s?.trim()).length;
+        const complete = !!out.square?.situation?.trim() && stepsN + scriptsN >= 2 && rawText.trim().length >= 20 && !scaleP;
+        if (complete) followups = [];
+        presentSingle(scaleP, followups, { square: out.square, title: out.title || rawText.slice(0, 30), category: aiCat });
       } catch (e) {
         console.warn('[coach] structure failed', e);
         setError('정리 중 문제가 생겼어요 — 다시 한 번 보내주세요.');
@@ -254,11 +287,20 @@ export function OwnerCoachChat({
   // ── 최종 재정리(2차 AI 콜): 원문 + 꼬리질문 답변을 합쳐 깔끔히 통합 ──
   // skipFollowups=true 라 더 되묻지 않는다(무한 루프 방지). 실패해도 기존 square로 진행.
   const runRefine = useCallback(async () => {
+    // "없음/몰라/-" 같은 무의미 답은 재정리에서 제외(노하우 오염 방지).
+    const JUNK_ANSWER = /^(없(음|어요?|다|슴)?|몰라요?|모름|모르겠(어요|다)?|글쎄요?|아니(요|오)?|해당\s*없(음|어요)?|x|\-|\.)$/i;
+    const meaningful = followupQA.current.filter((x) => x.a.trim() && !JUNK_ANSWER.test(x.a.trim()));
+    // 유의미한 답이 하나도 없으면 재정리(AI 콜) 없이 현재 정리 그대로 확인 단계로.
+    if (meaningful.length === 0) {
+      setPending([]);
+      if (square) presentScaleOrConfirm(scalePrompt, { square, title, category });
+      return;
+    }
     setBusy(true);
     setError(null);
     pushMsg({ kind: 'ai', text: '말씀해주신 내용까지 합쳐서 다시 정리하고 있어요…' });
     try {
-      const qa = followupQA.current.map((x) => `- ${x.q}\n  → ${x.a}`).join('\n');
+      const qa = meaningful.map((x) => `- ${x.q}\n  → ${x.a}`).join('\n');
       const merged = `${lastRawRef.current}\n\n[추가 설명]\n${qa}`;
       const out = await structureSquare({
         storeId,
@@ -269,6 +311,8 @@ export function OwnerCoachChat({
       });
       const sq0 = out.square;
       const ok = out.title || sq0?.situation || sq0?.action?.steps?.length;
+      const nextSq = ok ? out.square : square;
+      const nextTitle = ok ? (out.title || title) : title;
       if (ok) {
         setSquare(out.square);
         setTitle(out.title || title);
@@ -278,21 +322,21 @@ export function OwnerCoachChat({
       const scaleP = scalePrompt ?? out.scalePrompt ?? null;
       setScalePrompt(scaleP);
       setPending([]);
-      presentScaleOrConfirm(scaleP);
+      if (nextSq) presentScaleOrConfirm(scaleP, { square: nextSq, title: nextTitle, category });
     } catch (e) {
       console.warn('[coach] refine failed', e);
       // 재정리 실패 → 사장이 답한 내용을 잃지 않도록 기존 square의 할 일에 덧붙여 보존(데드엔드 방지).
-      setSquare((sq) => {
-        if (!sq) return sq;
-        const extra = followupQA.current.map((x) => x.a.trim()).filter(Boolean);
-        return extra.length ? { ...sq, action: { ...sq.action, steps: [...sq.action.steps, ...extra].slice(0, 6) } } : sq;
-      });
+      const extra = meaningful.map((x) => x.a.trim());
+      const preserved = square
+        ? (extra.length ? { ...square, action: { ...square.action, steps: [...square.action.steps, ...extra].slice(0, 6) } } : square)
+        : null;
+      if (preserved) setSquare(preserved);
       setPending([]);
-      presentScaleOrConfirm(scalePrompt);
+      if (preserved) presentScaleOrConfirm(scalePrompt, { square: preserved, title, category });
     } finally {
       setBusy(false);
     }
-  }, [storeId, category, title, keywords, scalePrompt, presentScaleOrConfirm, pushMsg]);
+  }, [storeId, category, title, keywords, scalePrompt, square, presentScaleOrConfirm, pushMsg]);
 
   // ── 대화형 수정(patch): 현재 square + 자연어 수정요청 → 부분 패치 ──
   const runPatch = useCallback(
@@ -315,13 +359,15 @@ export function OwnerCoachChat({
           categoryGuide: EXTRACTION_MASTER,
         });
         // 척도(standard)는 patch가 다루지 않으므로 기존 값을 보존한다.
-        setSquare((prev) => ({ ...out.square, ...(prev?.standard ? { standard: prev.standard } : {}) }));
-        setTitle(out.title || title);
+        const nextSq: SquareBlock = { ...out.square, ...(square.standard ? { standard: square.standard } : {}) };
+        const nextTitle = out.title || title;
+        setSquare(nextSq);
+        setTitle(nextTitle);
         setKeywords(out.keywords || keywords);
         if (out.degraded) {
           pushMsg({ kind: 'ai', text: '지금은 AI 수정이 어려워 간단히 반영했어요. 내용을 확인해 주세요.' });
         }
-        pushMsg({ kind: 'card' });
+        setMessages((prev) => [...prev, cardMsg({ square: nextSq, title: nextTitle, category })]);
         pushMsg({ kind: 'ai', text: '고쳤어요! 더 고칠 게 있으면 말씀하시고, 괜찮으면 저장하세요.' });
       } catch (e) {
         console.warn('[coach] patch failed', e);
@@ -375,34 +421,32 @@ export function OwnerCoachChat({
   // ── 기준 답변 → square.standard 에 반영(AI 재호출 0). kind별(스펙트럼 위치 / 개수) ──
   const confirmScale = useCallback(
     (value: number) => {
+      if (!square) return;
       const sp = scalePrompt;
       const kind = sp?.kind === 'count' ? 'count' : 'spectrum';
-      setSquare((sq) =>
-        sq
-          ? {
-              ...sq,
-              standard: {
-                kind,
-                label: sp?.label ?? '기준',
-                value,
-                ...(kind === 'count'
-                  ? { unit: sp?.unit ?? '개' }
-                  : { ends: sp?.ends ?? ['약함', '강함'], max: 100 }),
-              },
-            }
-          : sq,
-      );
-      pushMsg({ kind: 'card' });
+      const nextSq: SquareBlock = {
+        ...square,
+        standard: {
+          kind,
+          label: sp?.label ?? '기준',
+          value,
+          ...(kind === 'count'
+            ? { unit: sp?.unit ?? '개' }
+            : { ends: sp?.ends ?? ['약함', '강함'], max: 100 }),
+        },
+      };
+      setSquare(nextSq);
+      setMessages((prev) => [...prev, cardMsg({ square: nextSq, title, category })]);
       pushMsg({ kind: 'ai', text: '기준을 정했어요! 이대로 등록할까요? ✅ / ✏️' });
     },
-    [scalePrompt, pushMsg],
+    [scalePrompt, square, title, category, pushMsg],
   );
 
   const skipScale = useCallback(() => {
     setScalePrompt(null); // 기준 없음 — 척도 없이 진행
-    pushMsg({ kind: 'card' });
+    if (square) setMessages((prev) => [...prev, cardMsg({ square, title, category })]);
     pushMsg({ kind: 'ai', text: '이대로 등록할까요? ✅ / ✏️' });
-  }, [pushMsg]);
+  }, [square, title, category, pushMsg]);
 
   // ── 분리 제안: 각각 등록 ──
   const publishEach = useCallback(() => {
@@ -455,7 +499,7 @@ export function OwnerCoachChat({
     setKeywords([...kw].slice(0, 8));
     setScalePrompt(sp);
     pushMsg({ kind: 'ai', text: '하나로 합쳐서 정리했어요.' });
-    presentSingle(sp, []);
+    presentSingle(sp, [], { square: merged, title: segments[0].title, category: cat });
   }, [segments, presentSingle, pushMsg]);
 
   // 카테고리는 AI가 내부 판단(사용자 비노출). 사용자가 직접 바꾸는 UI 없음.
@@ -499,6 +543,12 @@ export function OwnerCoachChat({
   // (리뷰 중 전송 = '다시 말하기'와 동일하게 재정리된다 → handleSend 참고.)
   // 단, 전용 입력 UI를 띄우는 동안엔 숨긴다: 카드 인라인 편집·정도 척도·분리 제안.
   const showInput = !editing && !awaitingScale && !awaitingSplit;
+
+  // 마지막 카드만 라이브 square로 렌더(인라인 편집·척도 반영), 과거 카드는 각자의 스냅샷으로 고정.
+  let lastCardId: string | null = null;
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i].kind === 'card') { lastCardId = messages[i].id; break; }
+  }
 
   return (
     <KeyboardAvoidingView
@@ -579,16 +629,19 @@ export function OwnerCoachChat({
               </Appear>
             );
           }
-          // card — 항상 라이브 square를 렌더(최신 1장만 인터랙티브; 과거 카드는 동일 참조)
-          if (!square) return null;
+          // card — 마지막(활성) 카드만 라이브 상태로, 과거 카드는 스냅샷 고정(모든 카드가 최신으로 바뀌던 버그 수정).
+          const isLastCard = m.id === lastCardId;
+          const cSquare = isLastCard ? (square ?? m.snap.square) : m.snap.square;
+          const cTitle = isLastCard ? title : m.snap.title;
+          const cCategory = isLastCard ? category : m.snap.category;
           return (
             <Appear key={m.id} offsetY={14} duration={340}>
               <MiniSquareCard
-                square={square}
-                title={title}
-                category={category}
-                editable={inReview && editing}
-                showActions={inReview && !editing}
+                square={cSquare}
+                title={cTitle}
+                category={cCategory}
+                editable={isLastCard && inReview && editing}
+                showActions={isLastCard && inReview && !editing}
                 onEdit={() => setEditing(true)}
                 onDoneEditing={() => setEditing(false)}
                 onRetalk={startRetalk}
@@ -600,6 +653,13 @@ export function OwnerCoachChat({
             </Appear>
           );
         })}
+
+        {/* 빈 상태 스타터 — 직접 등록이고 아직 첫 발화 전일 때만(초기 AI 안내 1개). */}
+        {!isEdit && !isInboxAnswer && !square && !busy && messages.length <= 1 && (
+          <Appear offsetY={14} duration={340}>
+            <CoachStarter recent={recentEntries} onPickExample={setInput} />
+          </Appear>
+        )}
 
         {busy && (
           <View style={styles.loading}>

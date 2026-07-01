@@ -4,10 +4,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
-import { CategoryChip } from '@/components/CategoryChip';
 import { InboxHeroCard } from '@/components/InboxHeroCard';
 import { InboxSubtabs } from '@/components/InboxSubtabs';
 import { SimilarGroupRow } from '@/components/SimilarGroupRow';
+import { SectionLabel } from '@/components/SectionLabel';
 import { RoleTabBar } from '@/components/RoleTabBar';
 import { Appear } from '@/components/Appear';
 
@@ -18,26 +18,27 @@ import { useSessionStore } from '@/lib/store/useSessionStore';
 
 import { BrandColors, InkColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
+import { Space } from '@/lib/theme/layout';
 
 import { useStaffStore } from '@/lib/store/useStaffStore';
 import type { PlaybookEntry, UnknownQuery } from '@/types';
 
-const TOP_RESOLVED = 5;
+// 안 쓰임 = 게시됐는데 최근 30일 인용 0회. (OwnerKnowhowBrowse의 isUnused와 동일 기준)
+const isUnused = (e: PlaybookEntry) =>
+  e.status === 'published' && (e.stats?.query_hits_30d ?? 0) === 0;
 
 /**
- * Owner Inbox — 받은질문 시니어(사장님) 인박스.
- * 1) 상단 보조 메타(지금까지 처리 수)
- * 2) Hero 우선 답변 1건 (가장 시급 = confidence 최저)
- * 3) <InboxSubtabs> [대기 | 자동응답 | 보관] — 상태별 파생 필터·카운트는 컴포넌트가 처리.
- *    각 행은 <SimilarGroupRow> (유사 질문 N건 묶음 + 보관/자동응답 인라인 액션).
- *    행 탭 → 대화형 답변(owner/coach). 등록 시 노하우 생성 + resolve.
- * 4) 처리됨 · 알바 인용 top 5
+ * Owner Inbox — 받은질문 시니어(사장님) 인박스 = 질문 처리 대시보드.
+ * 1) 한눈에 보기 — 요약 스트립(답할 질문·AI가 답함·내 노하우) + AI 자동응답률(누적)
+ * 2) 노하우 제안 진입 (알바→사장)
+ * 3) Hero 우선 답변 1건 (가장 시급 = confidence 최저)
+ * 4) <InboxSubtabs> [답할 질문 | AI가 답함] — 상태별 파생 필터·카운트는 컴포넌트가 처리.
+ * 5) '그동안 쌓은 노하우' 진입 카드 → /owner/knowledge (안 쓰임 있으면 바로 그 필터로)
  */
 export default function OwnerInboxScreen() {
   const router = useRouter();
   const queue = useUnknownQueueStore((s) => s.queue);
   const loaded = useUnknownQueueStore((s) => s.loaded);
-  const archive = useUnknownQueueStore((s) => s.archive);
   const enableAutoAnswer = useUnknownQueueStore((s) => s.enableAutoAnswer);
 
   const entries = usePlaybookStore((s) => s.entries);
@@ -58,16 +59,21 @@ export default function OwnerInboxScreen() {
     () => sortByUrgency(queue.filter((u) => u.status === 'pending_owner_answer')),
     [queue],
   );
-  const resolved = useMemo(() => queue.filter((u) => u.status === 'resolved_with_entry'), [queue]);
 
-  // 누적 처리 카운트(전체 기간) — 상단 보조 메타 '지금까지 답한 질문 N건'
-  const weeklyResolved = resolved.length;
+  // 상태별 카운트(누적).
+  const autoCount = useMemo(() => queue.filter((u) => u.status === 'auto_answered').length, [queue]);
+  const resolvedCount = useMemo(() => queue.filter((u) => u.status === 'resolved_with_entry').length, [queue]);
+
+  // AI 자동응답률(누적) = AI가 답함 / 답변된 질문(= AI가 답함 + 사장이 답함).
+  const answered = autoCount + resolvedCount;
+  const ratePct = answered > 0 ? Math.round((autoCount / answered) * 100) : 0;
+
+  // 내 노하우 · 안 쓰임 카운트(진입 카드).
+  const knowhowCount = entries.length;
+  const unusedCount = useMemo(() => entries.filter(isUnused).length, [entries]);
 
   // hero: 전체 pending 중 가장 시급. 깊은 답변 → 기존 answer 위저드.
   const hero = pending[0];
-
-  // 처리됨 - 인용 top 5
-  const topCited = useMemo(() => topCitedEntries(entries, TOP_RESOLVED), [entries]);
 
   // hero 작성자 경력(익명이면 숨김).
   const careerDays = useMemo(() => {
@@ -82,6 +88,12 @@ export default function OwnerInboxScreen() {
   );
   const openAnswer = useCallback((uq: UnknownQuery) => goAnswer(uq.id), [goAnswer]);
 
+  // '그동안 쌓은 노하우' → 노하우 화면. 안 쓰임이 있으면 바로 그 필터로 진입.
+  const goKnowledge = useCallback(() => {
+    if (unusedCount > 0) router.push({ pathname: '/owner/knowledge', params: { unused: '1' } });
+    else router.push('/owner/knowledge');
+  }, [router, unusedCount]);
+
   return (
     <SafeAreaView edges={['bottom']} style={styles.safe}>
       <Stack.Screen options={{ title: `${userName} 사장님` }} />
@@ -93,10 +105,32 @@ export default function OwnerInboxScreen() {
         </View>
       ) : (
         <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-          {/* 1) 상단 보조 메타 */}
-          <Text style={styles.subline}>지금까지 답한 질문 {weeklyResolved}건</Text>
+          {/* 1) 한눈에 보기 — 요약 스트립 + 자동응답률 */}
+          <View style={styles.block}>
+            <SectionLabel title="한눈에 보기" />
+            <View style={styles.summary}>
+              <StatCard n={pending.length} label="답할 질문" hot={pending.length > 0} />
+              <StatCard n={autoCount} label="AI가 답함" />
+              <StatCard n={knowhowCount} label="내 노하우" />
+            </View>
 
-          {/* 노하우 제안 진입 — 알바가 올린 개선·등록 신청(받은질문과 같은 '직원 인풋' 허브) */}
+            {answered > 0 && (
+              <View style={styles.rateCard}>
+                <View style={styles.rateTop}>
+                  <Text style={styles.rateTitle}>AI 자동응답률</Text>
+                  <Text style={styles.ratePct}>{ratePct}%</Text>
+                </View>
+                <View style={styles.bar}>
+                  <View style={[styles.barFill, { width: `${ratePct}%` }]} />
+                </View>
+                <Text style={styles.rateCap}>
+                  지금까지 답한 질문 {answered}건 중 {autoCount}건을 AI가 바로 답했어요
+                </Text>
+              </View>
+            )}
+          </View>
+
+          {/* 2) 노하우 제안 진입 — 알바가 올린 개선·등록 신청(받은질문과 같은 '직원 인풋' 허브) */}
           <Pressable
             onPress={() => router.push('/owner/suggestions')}
             style={({ pressed }) => [styles.sugEntry, pressed && { opacity: 0.85 }]}
@@ -120,7 +154,7 @@ export default function OwnerInboxScreen() {
             <Ionicons name="chevron-forward" size={16} color={InkColors.ink3} />
           </Pressable>
 
-          {/* 2) Hero — 우선 답변 (가장 시급한 미답변) */}
+          {/* 3) Hero — 우선 답변 (가장 시급한 미답변) */}
           {hero ? (
             <Appear style={styles.heroWrap} offsetY={12}>
               <Text style={styles.sectionTag}>우선 답변</Text>
@@ -133,37 +167,47 @@ export default function OwnerInboxScreen() {
             </View>
           )}
 
-          {/* 3) 서브탭 [대기 | 자동응답 | 보관] — 상태별 필터·카운트는 InboxSubtabs가 처리 */}
-          <View style={styles.subtabsWrap}>
-            <InboxSubtabs
-              queue={queue}
-              initial="pending"
-              renderRow={(uq) => (
-                <SimilarGroupRow
-                  uq={uq}
-                  onPress={openAnswer}
-                  onArchive={uq.status === 'archived' ? undefined : (u) => archive(u.id)}
-                  onAutoAnswer={
-                    uq.status === 'pending_owner_answer' ? (u) => enableAutoAnswer(u.id) : undefined
-                  }
-                />
-              )}
-            />
-          </View>
+          {/* 4) 서브탭 [답할 질문 | AI가 답함] — 상태별 필터·카운트는 InboxSubtabs가 처리. */}
+          <InboxSubtabs
+            queue={queue}
+            initial="pending"
+            renderRow={(uq) => (
+              <SimilarGroupRow
+                uq={uq}
+                onPress={openAnswer}
+                onAutoAnswer={
+                  uq.status === 'pending_owner_answer' ? (u) => enableAutoAnswer(u.id) : undefined
+                }
+              />
+            )}
+          />
 
-          {/* 4) 구분선 */}
-          <View style={styles.divider} />
-
-          {/* 5) 처리됨 · 인용 카운트 */}
-          <View style={styles.resolvedWrap}>
-            <Text style={styles.resolvedHeader}>처리됨 · 알바가 잘 쓰고 있어요</Text>
-            <Text style={styles.resolvedSub}>사장님 노하우가 매장을 돌리고 있어요</Text>
-
-            <View style={styles.resolvedList}>
-              {topCited.map((e) => (
-                <ResolvedRow key={e.id} entry={e} />
-              ))}
-            </View>
+          {/* 5) 그동안 쌓은 노하우 — 진입 카드(목록은 상세 화면에서). 안 쓰임 있으면 정리 유도. */}
+          <View style={styles.block}>
+            <SectionLabel title="그동안 쌓은 노하우" />
+            <Pressable
+              onPress={goKnowledge}
+              style={({ pressed }) => [styles.sugEntry, pressed && { opacity: 0.85 }]}
+              accessibilityRole="button"
+              accessibilityLabel={`내 노하우 ${knowhowCount}개${unusedCount > 0 ? `, 안 쓰임 ${unusedCount}개` : ''}, 관리하기`}
+            >
+              <View style={[styles.sugIcon, styles.sugIconKnow]}>
+                <Ionicons name="library-outline" size={17} color={InkColors.ink} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.sugTitle}>내 노하우 {knowhowCount}개</Text>
+                <Text style={styles.sugSub}>
+                  {unusedCount > 0 ? (
+                    <>
+                      <Text style={styles.sugSubBad}>{unusedCount}개는 최근 안 쓰였어요</Text> · 확인해볼까요?
+                    </>
+                  ) : (
+                    '잘 쌓이고 있어요. 탭해서 관리하기'
+                  )}
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color={InkColors.ink3} />
+            </Pressable>
           </View>
 
           {/* 푸터 여백 */}
@@ -178,18 +222,15 @@ export default function OwnerInboxScreen() {
 
 // ─── 보조 컴포넌트 ─────────────────────────────────────────
 
-function ResolvedRow({ entry }: { entry: PlaybookEntry }) {
+/** 요약 스트립 카드 1칸. hot(=답할 질문 있음)이면 노랑 강조 + 빨간 점. */
+function StatCard({ n, label, hot }: { n: number; label: string; hot?: boolean }) {
   return (
-    <View style={resolvedStyles.row}>
-      <CategoryChip category={entry.category} size="sm" showLabel={false} />
-      <View style={resolvedStyles.body}>
-        <Text style={resolvedStyles.title} numberOfLines={1}>
-          {entry.title}
-        </Text>
-        <Text style={resolvedStyles.meta}>
-          v{entry.version} · 최근 30일 +{entry.stats.query_hits_30d}회 인용 ✨
-        </Text>
+    <View style={[styles.stat, hot && styles.statHot]}>
+      <View style={styles.statNumRow}>
+        {hot ? <View style={styles.statDot} /> : null}
+        <Text style={styles.statNum}>{n}</Text>
       </View>
+      <Text style={styles.statLabel}>{label}</Text>
     </View>
   );
 }
@@ -205,18 +246,6 @@ function sortByUrgency(list: UnknownQuery[]): UnknownQuery[] {
   });
 }
 
-function topCitedEntries(entries: PlaybookEntry[], n: number): PlaybookEntry[] {
-  return [...entries]
-    .filter((e) => e.status === 'published')
-    .sort((a, b) => {
-      const rr = b.stats.resolution_rate - a.stats.resolution_rate;
-      if (rr !== 0) return rr;
-      // 동률이면 최근 갱신 순 — 방금 답한 노하우가 '처리됨' 상단에 바로 보이게.
-      return new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime();
-    })
-    .slice(0, n);
-}
-
 // ─── 스타일 ──────────────────────────────────────────────
 
 const styles = StyleSheet.create({
@@ -224,16 +253,52 @@ const styles = StyleSheet.create({
   loadingWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 10 },
   loadingText: { fontSize: 13, color: InkColors.ink3, fontWeight: '600' },
   scroll: {
-    paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: 24,
-    gap: 18,
+    paddingHorizontal: Space.gutter,
+    paddingTop: Space.md,
+    paddingBottom: Space.xl,
+    gap: Space.lg,
   },
-  subline: {
-    fontSize: 13,
-    color: InkColors.ink3,
-    fontWeight: '600',
+
+  // 섹션 블록 = [밖 라벨] + [내용]
+  block: { gap: Space.sm },
+
+  // 요약 스트립
+  summary: { flexDirection: 'row', gap: Space.sm },
+  stat: {
+    flex: 1,
+    backgroundColor: InkColors.bg,
+    borderWidth: 1,
+    borderColor: InkColors.line,
+    borderRadius: Radius.md,
+    paddingVertical: 14,
+    paddingHorizontal: 12,
+    gap: 3,
+    ...Elevation.e1,
   },
+  statHot: { borderColor: BrandColors.yellowDeep, backgroundColor: '#FFFBEA' },
+  statNumRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  statDot: { width: 7, height: 7, borderRadius: Radius.pill, backgroundColor: BrandColors.bad },
+  statNum: { fontSize: 26, fontWeight: '800', letterSpacing: -1, color: InkColors.ink, lineHeight: 28 },
+  statLabel: { fontSize: 12, fontWeight: '600', color: InkColors.ink3 },
+
+  // 자동응답률 게이지
+  rateCard: {
+    backgroundColor: InkColors.bg,
+    borderWidth: 1,
+    borderColor: InkColors.line,
+    borderRadius: Radius.md,
+    padding: 16,
+    gap: 9,
+    ...Elevation.e1,
+  },
+  rateTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' },
+  rateTitle: { fontSize: 13, fontWeight: '700', color: InkColors.ink },
+  ratePct: { fontSize: 16, fontWeight: '800', color: BrandColors.yellowDeep },
+  bar: { height: 9, borderRadius: Radius.pill, backgroundColor: InkColors.bgSoft, overflow: 'hidden' },
+  barFill: { height: '100%', borderRadius: Radius.pill, backgroundColor: BrandColors.yellow },
+  rateCap: { fontSize: 12, color: InkColors.ink3, fontWeight: '600' },
+
+  // 진입 카드(노하우 제안 · 내 노하우 공용)
   sugEntry: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -253,8 +318,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  sugIconKnow: { backgroundColor: InkColors.bgSoft },
   sugTitle: { fontSize: 15, fontWeight: '800', color: InkColors.ink },
   sugSub: { fontSize: 12.5, color: InkColors.ink3, fontWeight: '600', marginTop: 2 },
+  sugSubBad: { color: BrandColors.bad, fontWeight: '800' },
   sugBadge: {
     minWidth: 22,
     height: 22,
@@ -265,6 +332,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   sugBadgeText: { fontSize: 12, fontWeight: '900', color: InkColors.bubbleText },
+
   heroWrap: { gap: 8 },
   sectionTag: {
     fontSize: 12,
@@ -283,42 +351,4 @@ const styles = StyleSheet.create({
   },
   emptyTitle: { fontSize: 16, fontWeight: '700', color: InkColors.ink },
   emptySub: { fontSize: 14, color: InkColors.ink3 },
-  // InboxSubtabs는 자체 좌우 패딩(16)을 가지므로 화면 패딩(20)을 상쇄해 카드 폭을 맞춘다.
-  subtabsWrap: { marginHorizontal: -4 },
-  divider: {
-    height: 1,
-    backgroundColor: InkColors.line,
-    marginVertical: 4,
-  },
-  resolvedWrap: {
-    backgroundColor: InkColors.bgSoft,
-    borderRadius: Radius.md,
-    padding: 18,
-    gap: 4,
-  },
-  resolvedHeader: { fontSize: 16, fontWeight: '700', color: InkColors.ink },
-  resolvedSub: { fontSize: 13, color: InkColors.ink3, marginBottom: 8 },
-  resolvedList: { gap: 0 },
-});
-
-const resolvedStyles = StyleSheet.create({
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: InkColors.line,
-  },
-  body: { flex: 1, minWidth: 0, gap: 2 },
-  title: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: InkColors.ink,
-  },
-  meta: {
-    fontSize: 12,
-    color: InkColors.ink3,
-    fontWeight: '600',
-  },
 });

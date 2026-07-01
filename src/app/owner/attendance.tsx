@@ -97,10 +97,10 @@ export default function OwnerAttendanceScreen() {
               <Avatar name={s.name} size={40} fontSize={15} />
               <View style={styles.rowBody}>
                 <View style={styles.rowTop}>
-                  <Text style={styles.name}>{s.name}</Text>
+                  <Text style={styles.name} numberOfLines={1}>{s.name}</Text>
                   <StatusChip status={status} />
                 </View>
-                <Text style={styles.rowMeta}>
+                <Text style={styles.rowMeta} numberOfLines={1}>
                   {s.shift ?? '시프트 미지정'} · 이번 달 {fmtDuration(min)}
                 </Text>
               </View>
@@ -177,9 +177,9 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: InkColors.line,
   },
-  rowBody: { flex: 1, gap: 3 },
-  rowTop: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  name: { fontSize: 16, fontWeight: '700', color: InkColors.ink },
+  rowBody: { flex: 1, gap: 3, minWidth: 0 },
+  rowTop: { flexDirection: 'row', alignItems: 'center', gap: 8, minWidth: 0 },
+  name: { fontSize: 16, fontWeight: '700', color: InkColors.ink, flexShrink: 1 },
   rowMeta: { fontSize: 13, color: InkColors.ink3 },
   pay: { fontSize: 15, fontWeight: '800', color: InkColors.ink },
 });

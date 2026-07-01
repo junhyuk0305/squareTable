@@ -1,0 +1,39 @@
+{
+  "_format": {
+    "_comment": "운영 평가 라벨셋 포맷 명세 — 이 _format 블록은 문서용이며 하니스는 무시한다(cases만 읽음). 실제 라벨셋은 이 파일을 복사해 scripts/eval-labelset.json 으로 저장하고 _format 블록은 지워도 됨.",
+    "version": "정수. 라벨셋 스키마 버전(현재 1).",
+    "notes": "사람용 설명. 이 라벨셋이 어느 매장/시드를 가정하는지·확장 이력 등.",
+    "unitBinding": "라벨셋에 unit_id를 하드코딩하지 않는다. 하니스가 로그인 계정의 매장(entries[0].unit_id)에 동적 바인딩한다. expected_entry_id는 '그 매장 시드'를 가정하므로, 실행 매장이 시드와 다르면 prelude 검증이 즉시 FAIL로 막는다(라벨↔매장 불일치 오판 방지).",
+    "cases": "평가 케이스 배열. 각 케이스 필드는 아래 _caseSchema 참조.",
+    "_caseSchema": {
+      "id": "필수. 케이스 식별자(L01, N01 등). 출력·디버깅용.",
+      "query": "필수. 알바가 실제로 던질 법한 자연어 질문(라이브 입력과 동형).",
+      "expected_entry_id": "정답 노하우 엔트리 id(예: pb_event_005). 정답이 '없음'인 음성(negative) 케이스는 반드시 null. null인데 SERVE되면 그것이 곧 '거짓 SERVE'(가장 위험한 환각 서빙)로 집계된다.",
+      "expected_entry_ids": "선택. 동의 노하우가 복수면 정답 id 배열로 허용(top1이 이 중 하나면 정답). expected_entry_id 와 둘 중 하나만 쓰면 됨(둘 다 있으면 합집합).",
+      "expected_keywords": "선택. 보조 판정용. expected_entry_id 매칭이 1차 기준이고, 정답 엔트리의 제목/키워드 부분일치는 보조 진단 출력으로만 쓴다(게이트 판정에는 entry_id가 SSOT).",
+      "should_serve": "선택(boolean). 명시하면 '이 케이스가 SERVE되어야 하는가'의 기대를 고정한다. 생략 시 expected_entry_id!=null → true, null → false 로 자동 추론. 음성 케이스는 false.",
+      "note": "선택. 사람용 메모(왜 음성 케이스인지 등)."
+    }
+  },
+
+  "version": 1,
+  "notes": "실쿼리→정답 entry id 라벨. expected_entry_id=null(또는 should_serve=false)은 '정답 없음 → SERVE 금지' 음성 케이스. SSOT 엔트리=src/data/playbook-entries.json(store_001 시드 12건). 파일럿 chat_queries 회고로 점진 확장하되 음성 케이스 비율 20%+ 유지 권장. 매장 노하우가 늘어 음성 케이스에 진짜 정답이 생기면 해당 케이스를 재라벨(positive로 승격)해야 함.",
+  "cases": [
+    { "id": "L01", "query": "영업 끝나면 정리 어디까지 해요?", "expected_entry_id": "pb_routine_003", "expected_keywords": ["마감", "청소"], "should_serve": true },
+    { "id": "L02", "query": "카드가 안 긁혀요", "expected_entry_id": "pb_event_005", "expected_keywords": ["POS", "카드", "결제"], "should_serve": true },
+    { "id": "L03", "query": "샷이 안 예쁘게 나와요", "expected_entry_id": "pb_knowhow_001", "expected_keywords": ["에스프레소", "추출"], "should_serve": true },
+    { "id": "L04", "query": "음료에 머리카락 떠 있다고 손님이 뭐라 해요", "expected_entry_id": "pb_event_001", "expected_keywords": ["이물질", "머리카락"], "should_serve": true },
+    { "id": "L05", "query": "사장님 없을 때 환불해줘도 돼요?", "expected_entry_id": "pb_context_002", "expected_keywords": ["권한", "환불"], "should_serve": true },
+    { "id": "L06", "query": "우유 다 떨어졌는데 어떡해요", "expected_entry_id": "pb_event_003", "expected_keywords": ["우유"], "should_serve": true },
+    { "id": "L07", "query": "손님이 소리지르면서 화내요", "expected_entry_id": "pb_event_004", "expected_keywords": ["항의", "손님"], "should_serve": true },
+    { "id": "L08", "query": "아침에 문 열면 뭐부터 해요", "expected_entry_id": "pb_routine_001", "expected_keywords": ["오픈", "루틴"], "should_serve": true },
+    { "id": "L09", "query": "맛이 이상하다고 환불해달래요", "expected_entry_id": "pb_event_002", "expected_keywords": ["환불", "이상"], "should_serve": true },
+    { "id": "L10", "query": "첫 출근인데 뭘 먼저 알아야 돼요?", "expected_entry_id": "pb_context_001", "expected_keywords": ["첫날"], "should_serve": true },
+    { "id": "L11", "query": "혼자 일할 때 바쁘면 어떻게 해요", "expected_entry_id": "pb_routine_002", "expected_keywords": ["피크", "1인"], "should_serve": true },
+    { "id": "L12", "query": "손님 보고 뭐 추천할지 어떻게 정해요", "expected_entry_id": "pb_knowhow_002", "expected_keywords": ["추천", "표정"], "should_serve": true },
+
+    { "id": "N01", "query": "화장실 청소 세제 뭐 써요?", "expected_entry_id": null, "should_serve": false, "note": "시드 12건에 등록된 노하우 없음 → SERVE되면 거짓SERVE. 매장에 화장실 청소 노하우가 추가되면 재라벨 필요." },
+    { "id": "N02", "query": "주차장 어디에 대요?", "expected_entry_id": null, "should_serve": false, "note": "노하우 없음(음성 케이스)." },
+    { "id": "N03", "query": "배달앱 정산 언제 들어와요?", "expected_entry_id": null, "should_serve": false, "note": "노하우 없음(음성 케이스)." }
+  ]
+}

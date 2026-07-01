@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { coalesce, subscribeDebounced } from '@/lib/store/realtimeSync';
-import { todayStr, minutesBetween, nowISO } from '@/lib/utils/attendance';
+import { todayStr, minutesBetween, nowISO, MAX_SHIFT_MIN } from '@/lib/utils/attendance';
 import { HAS_SUPABASE } from '@/lib/supabase';
 import { fetchAttendance, upsertAttendance, deleteAttendance, subscribeAttendance } from '@/lib/db';
 import { guardWrite } from '@/lib/store/useSyncStore';
@@ -100,7 +100,8 @@ export const useAttendanceStore = create<State>((set, get) => ({
         if (r.staff_id === staffId && r.date === date && r.check_in && !r.check_out) {
           before = r;
           const out = new Date().toISOString();
-          updated = { ...r, check_out: out, work_minutes: minutesBetween(r.check_in, out) };
+          // 퇴근 깜빡으로 24h 초과 시 절상(남용 #12) — 자동 펀치가 비현실적 급여를 만들지 않게.
+          updated = { ...r, check_out: out, work_minutes: Math.min(MAX_SHIFT_MIN, minutesBetween(r.check_in, out)) };
           return updated;
         }
         return r;

@@ -4,7 +4,7 @@ import { SegmentTabs, type SegmentItem } from '@/components/SegmentTabs';
 import { InkColors } from '@/lib/theme/colors';
 import type { UnknownQuery } from '@/types';
 
-type SubtabKey = 'pending' | 'auto' | 'archived';
+type SubtabKey = 'pending' | 'auto';
 
 export type InboxSubtabsProps = {
   /** 전체 받은 질문 큐. 내부에서 상태별로 파생 필터링한다. */
@@ -19,7 +19,6 @@ export type InboxSubtabsProps = {
 const STATUS_OF: Record<SubtabKey, UnknownQuery['status']> = {
   pending: 'pending_owner_answer',
   auto: 'auto_answered',
-  archived: 'archived',
 };
 
 // 세그먼트별 빈 상태 문구 — 03 카피 카탈로그(해요체 · 시니어=사장님).
@@ -29,17 +28,13 @@ const EMPTY_TEXT: Record<SubtabKey, { title: string; body: string }> = {
     body: '답할 질문이 하나도 없어요. 새 질문이 오면 여기로 알려드릴게요.',
   },
   auto: {
-    title: '자동응답한 질문이 아직 없어요',
-    body: '노하우가 쌓이면 챗봇이 알아서 답한 질문이 여기 모여요.',
-  },
-  archived: {
-    title: '보관한 질문이 없어요',
-    body: '지금 답하지 않을 질문은 보관해 두면 여기로 와요.',
+    title: 'AI가 답한 질문이 아직 없어요',
+    body: '노하우가 쌓이면 AI가 알아서 답한 질문이 여기 모여요.',
   },
 };
 
 /**
- * 받은 질문 세그먼트 컨테이너 — [대기 | 자동응답 | 보관].
+ * 받은 질문 세그먼트 컨테이너 — [답할 질문 | AI가 답함].
  * - queue에서 status로 파생 필터링하고, 각 세그먼트 카운트를 SegmentTabs 배지로 노출.
  * - 활성 세그먼트는 내부 state로 관리(controlled 아님), 필터된 행을 renderRow로 그린다.
  * - 빈 세그먼트는 03 카탈로그 문구로 안내(해요체).
@@ -49,19 +44,17 @@ export function InboxSubtabs({ queue, renderRow, initial = 'pending' }: InboxSub
   const [active, setActive] = useState<SubtabKey>(initial);
 
   const buckets = useMemo(() => {
-    const b: Record<SubtabKey, UnknownQuery[]> = { pending: [], auto: [], archived: [] };
+    const b: Record<SubtabKey, UnknownQuery[]> = { pending: [], auto: [] };
     for (const u of queue) {
       if (u.status === STATUS_OF.pending) b.pending.push(u);
       else if (u.status === STATUS_OF.auto) b.auto.push(u);
-      else if (u.status === STATUS_OF.archived) b.archived.push(u);
     }
     return b;
   }, [queue]);
 
   const items: SegmentItem[] = [
-    { key: 'pending', label: '대기', count: buckets.pending.length },
-    { key: 'auto', label: '자동응답', count: buckets.auto.length },
-    { key: 'archived', label: '보관', count: buckets.archived.length },
+    { key: 'pending', label: '답할 질문', count: buckets.pending.length },
+    { key: 'auto', label: 'AI가 답함', count: buckets.auto.length },
   ];
 
   const rows = buckets[active];
@@ -89,8 +82,9 @@ export function InboxSubtabs({ queue, renderRow, initial = 'pending' }: InboxSub
 
 const styles = StyleSheet.create({
   wrap: { width: '100%' },
+  // 리스트는 부모(화면 gutter 20)에 직접 정렬 — 행 자체 좌우 패딩으로 내부 인셋을 준다.
   list: {
-    paddingHorizontal: 16,
+    paddingHorizontal: 0,
   },
   empty: {
     alignItems: 'center',

@@ -3,6 +3,7 @@
 // UI(아이콘·틴트·onPress)는 화면이 kind로 매핑 — 여기선 순수 데이터만 만든다.
 import type { FeedItem } from '@/lib/store/useWorkStore';
 import type { SwapRequest, ShiftTemplate } from '@/lib/store/useScheduleStore';
+import type { PendingMember } from '@/lib/store/useStaffStore';
 import type { UnknownQuery, PlaybookSuggestion } from '@/types';
 import { fmtDateKo } from '@/lib/utils/schedule';
 
@@ -125,9 +126,9 @@ export function buildJuniorNotifications(args: {
 }
 
 // ── 사장 알림 (직원 모델과 동일 SSOT 구조) ───────────────────────────
-// 사장이 대응해야 할 것: 답변 대기 질문 · 알바가 올린 제안 · 승인 대기 교대.
-export type OwnerNotifKind = 'question' | 'suggestion' | 'swap_approval';
-export type OwnerNotifRoute = '/owner/inbox' | '/owner/suggestions' | '/owner/schedule';
+// 사장이 대응해야 할 것: 합류 승인 대기 · 답변 대기 질문 · 알바가 올린 제안 · 승인 대기 교대.
+export type OwnerNotifKind = 'join_request' | 'question' | 'suggestion' | 'swap_approval';
+export type OwnerNotifRoute = '/owner/inbox' | '/owner/suggestions' | '/owner/schedule' | '/owner/staff';
 
 export type OwnerNotif = {
   id: string;
@@ -147,13 +148,16 @@ export const isPendingSuggestion = (s: PlaybookSuggestion): boolean => s.status 
 /** 직원이 수락해 사장 승인만 남은 교대. */
 export const isSwapAwaitingApproval = (r: SwapRequest): boolean => r.status === 'accepted';
 
-/** 벨 뱃지 개수 = 답변대기 질문 + 검토대기 제안 + 승인대기 교대. */
+/** 벨 뱃지 개수 = 합류 승인대기 + 답변대기 질문 + 검토대기 제안 + 승인대기 교대.
+ *  pending은 이미 "승인 대기"만 담긴 목록(fetchPendingMembers)이라 그대로 센다. */
 export function ownerUnreadCount(
   queue: UnknownQuery[],
   suggestions: PlaybookSuggestion[],
   swaps: SwapRequest[],
+  pending: PendingMember[],
 ): number {
   return (
+    pending.length +
     queue.filter(isPendingQuestion).length +
     suggestions.filter(isPendingSuggestion).length +
     swaps.filter(isSwapAwaitingApproval).length
@@ -165,10 +169,24 @@ export function buildOwnerNotifications(args: {
   queue: UnknownQuery[];
   suggestions: PlaybookSuggestion[];
   swaps: SwapRequest[];
+  pending: PendingMember[];
   nameOf: (id: string) => string;
 }): OwnerNotif[] {
-  const { queue, suggestions, swaps, nameOf } = args;
+  const { queue, suggestions, swaps, pending, nameOf } = args;
   const out: OwnerNotif[] = [];
+
+  // 합류 승인 대기 — 사람이 기다리는 시간민감 항목. 탭하면 직원 관리(승인/거절)로.
+  for (const p of pending) {
+    out.push({
+      id: `join_${p.id}`,
+      kind: 'join_request',
+      title: `${p.name}님이 합류를 신청했어요`,
+      body: '승인하면 우리 매장 직원으로 합류해요',
+      at: p.created_at,
+      unread: true,
+      route: '/owner/staff',
+    });
+  }
 
   for (const u of queue) {
     if (!isPendingQuestion(u)) continue;

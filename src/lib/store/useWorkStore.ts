@@ -13,10 +13,15 @@ import {
   deleteFeed,
   subscribeWork,
 } from '@/lib/db';
-import { guardWrite } from '@/lib/store/useSyncStore';
+import { guardWrite, useSyncStore } from '@/lib/store/useSyncStore';
 import { coalesce, subscribeDebounced } from '@/lib/store/realtimeSync';
 import { genId } from '@/lib/utils/id';
 import { useRoomStore } from '@/lib/store/useRoomStore';
+
+/** 방마다 동시에 둘 수 있는 활성 반복(주간) 할일 상한(남용 #26) — 캘린더/피드 폭주 방지. */
+const MAX_ACTIVE_RECURRING = 40;
+/** 방마다 상단 고정 공지 최대 개수(남용 #27) — 고정 영역 점유로 UI 무력화 방지. */
+const MAX_PINNED_NOTICES = 3;
 
 /** 지금 활성화된 채팅방 id — 모든 업무 쓰기(메시지·공지·할일·완료)에 스탬프된다('전부 방 단위'). */
 const curRoom = (): string | undefined => useRoomStore.getState().currentRoomId ?? undefined;
@@ -246,6 +251,19 @@ export const useWorkStore = create<State>((set, get) => ({
 
   addTask: (input) => {
     const room = curRoom();
+    // 반복(주간) 할일 상한(남용 #26): 활성 반복 템플릿이 과도하면 occursOn 전개로 캘린더·피드가 폭주.
+    // 'once'(일회성)는 그 날만 떠 폭주 위험이 없으므로 제외 — 반복만 센다(방 단위).
+    if (input.recurrence && input.recurrence !== 'once') {
+      const activeRecurring = get().templates.filter(
+        (t) => t.recurrence && t.recurrence !== 'once' && (t.roomId ?? '') === (room ?? ''),
+      ).length;
+      if (activeRecurring >= MAX_ACTIVE_RECURRING) {
+        useSyncStore.getState().noteError(
+          `반복 할일은 채팅방마다 최대 ${MAX_ACTIVE_RECURRING}개까지예요. 기존 반복 할일을 정리한 뒤 추가해 주세요.`,
+        );
+        return;
+      }
+    }
     const t: TaskTemplate = {
       id: genId('t'),
       section: input.section,
@@ -325,6 +343,24 @@ export const useWorkStore = create<State>((set, get) => ({
 
   postNotice: (date, text, authorId, authorName, important) => {
     const room = curRoom();
+    // 동일 공지 묶음(남용 #8): 같은 날·같은 방에 같은 문구 공지가 이미 있으면 중복 카드로 쌓지 않고
+    // 기존 공지를 끌어올려(createdAt 갱신) 재알림(읽음 초기화)한다 → 도배 방지 + '재공지' 자연스러움.
+    const norm = (s: string) => s.trim().toLowerCase().replace(/\s+/g, ' ');
+    const key = norm(text);
+    const dup = get().feed.find(
+      (f) => f.kind === 'notice' && f.date === date && (f.roomId ?? '') === (room ?? '') && norm(f.text) === key,
+    );
+    if (dup) {
+      const before = dup;
+      const bumped: FeedItem = { ...dup, createdAt: new Date().toISOString(), read_by: [], important };
+      set((s) => ({ feed: s.feed.map((f) => (f.id === dup.id ? bumped : f)) }));
+      void guardWrite(
+        upsertFeed(bumped),
+        () => set((s) => ({ feed: s.feed.map((f) => (f.id === before.id ? before : f)) })),
+        '공지 재게시에 실패했어요.',
+      );
+      return;
+    }
     const item: FeedItem = {
       id: genId('f'),
       date,
@@ -450,6 +486,20 @@ export const useWorkStore = create<State>((set, get) => ({
 
   togglePin: (feedId) => {
     const before = get().feed.find((f) => f.id === feedId);
+    if (!before) return;
+    // 고정 개수 상한(남용 #27): 켜는 방향일 때만 검사. 같은 방의 고정 공지가 한도면 막고 교체 유도.
+    if (!before.pinned) {
+      const room = before.roomId ?? '';
+      const pinnedCount = get().feed.filter(
+        (f) => f.kind === 'notice' && f.pinned && (f.roomId ?? '') === room,
+      ).length;
+      if (pinnedCount >= MAX_PINNED_NOTICES) {
+        useSyncStore.getState().noteError(
+          `공지 고정은 최대 ${MAX_PINNED_NOTICES}개까지예요. 다른 공지의 고정을 먼저 해제해 주세요.`,
+        );
+        return;
+      }
+    }
     let updated: FeedItem | undefined;
     set((s) => ({
       feed: s.feed.map((f) => {

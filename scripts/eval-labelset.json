@@ -1,0 +1,146 @@
+{
+  "version": 1,
+  "notes": "store_eval(격리 평가매장) 바인딩. expected_entry_id는 eval_* (seed-eval.mjs 생성). 운영 store_001 과 무관.",
+  "cases": [
+    {
+      "id": "L01",
+      "query": "영업 끝나면 정리 어디까지 해요?",
+      "expected_entry_id": "eval_pb_routine_003",
+      "expected_keywords": [
+        "마감",
+        "청소"
+      ],
+      "should_serve": true
+    },
+    {
+      "id": "L02",
+      "query": "카드가 안 긁혀요",
+      "expected_entry_id": "eval_pb_event_005",
+      "expected_keywords": [
+        "POS",
+        "카드",
+        "결제"
+      ],
+      "should_serve": true
+    },
+    {
+      "id": "L03",
+      "query": "샷이 안 예쁘게 나와요",
+      "expected_entry_id": "eval_pb_knowhow_001",
+      "expected_keywords": [
+        "에스프레소",
+        "추출"
+      ],
+      "should_serve": true
+    },
+    {
+      "id": "L04",
+      "query": "음료에 머리카락 떠 있다고 손님이 뭐라 해요",
+      "expected_entry_id": "eval_pb_event_001",
+      "expected_keywords": [
+        "이물질",
+        "머리카락"
+      ],
+      "should_serve": true
+    },
+    {
+      "id": "L05",
+      "query": "사장님 없을 때 환불해줘도 돼요?",
+      "expected_entry_id": "eval_pb_context_002",
+      "expected_keywords": [
+        "권한",
+        "환불"
+      ],
+      "should_serve": true
+    },
+    {
+      "id": "L06",
+      "query": "우유 다 떨어졌는데 어떡해요",
+      "expected_entry_id": "eval_pb_event_003",
+      "expected_keywords": [
+        "우유"
+      ],
+      "should_serve": true
+    },
+    {
+      "id": "L07",
+      "query": "손님이 소리지르면서 화내요",
+      "expected_entry_id": "eval_pb_event_004",
+      "expected_keywords": [
+        "항의",
+        "손님"
+      ],
+      "should_serve": true
+    },
+    {
+      "id": "L08",
+      "query": "아침에 문 열면 뭐부터 해요",
+      "expected_entry_id": "eval_pb_routine_001",
+      "expected_keywords": [
+        "오픈",
+        "루틴"
+      ],
+      "should_serve": true
+    },
+    {
+      "id": "L09",
+      "query": "맛이 이상하다고 환불해달래요",
+      "expected_entry_id": "eval_pb_event_002",
+      "expected_keywords": [
+        "환불",
+        "이상"
+      ],
+      "should_serve": true
+    },
+    {
+      "id": "L10",
+      "query": "첫 출근인데 뭘 먼저 알아야 돼요?",
+      "expected_entry_id": "eval_pb_context_001",
+      "expected_keywords": [
+        "첫날"
+      ],
+      "should_serve": true
+    },
+    {
+      "id": "L11",
+      "query": "혼자 일할 때 바쁘면 어떻게 해요",
+      "expected_entry_id": "eval_pb_routine_002",
+      "expected_keywords": [
+        "피크",
+        "1인"
+      ],
+      "should_serve": true
+    },
+    {
+      "id": "L12",
+      "query": "손님 보고 뭐 추천할지 어떻게 정해요",
+      "expected_entry_id": "eval_pb_knowhow_002",
+      "expected_keywords": [
+        "추천",
+        "표정"
+      ],
+      "should_serve": true
+    },
+    {
+      "id": "N01",
+      "query": "화장실 청소 세제 뭐 써요?",
+      "expected_entry_id": null,
+      "should_serve": false,
+      "note": "시드 12건에 등록된 노하우 없음 → SERVE되면 거짓SERVE. 매장에 화장실 청소 노하우가 추가되면 재라벨 필요."
+    },
+    {
+      "id": "N02",
+      "query": "주차장 어디에 대요?",
+      "expected_entry_id": null,
+      "should_serve": false,
+      "note": "노하우 없음(음성 케이스)."
+    },
+    {
+      "id": "N03",
+      "query": "배달앱 정산 언제 들어와요?",
+      "expected_entry_id": null,
+      "should_serve": false,
+      "note": "노하우 없음(음성 케이스)."
+    }
+  ]
+}

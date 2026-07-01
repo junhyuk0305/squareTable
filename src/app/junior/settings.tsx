@@ -51,8 +51,8 @@ export default function JuniorSettings() {
     setBusy(false);
     setLeaveModal(false);
     if (error) return void notifyAction('실패', error, '확인', { icon: 'alert-circle-outline' });
-    // 가드 리다이렉트 목적지(/junior/join)와 동일하게 통일 — 코드입력 화면 일원화(onboarding 중복 동선 제거)
-    router.replace('/junior/join');
+    // 가드 리다이렉트 목적지(/junior/hub)와 동일하게 통일 — 매장 나가면 개인 허브로 복귀.
+    router.replace('/junior/hub');
   };
 
   const onDelete = async () => {

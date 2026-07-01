@@ -80,6 +80,16 @@ export function ChatTurn({
             </Text>
           </View>
         )}
+        {/* AI 합성 답(generated): 저장된 매장 노하우 "그대로"가 아니라 여러 노하우를 모아 정리한 것.
+            검증 배지를 달지 않고(아래 SquareCard verification 비노출) 정직하게 고지 → 신뢰 오인 방지. */}
+        {block?.mode === 'generated' && !block?.degraded && (
+          <View style={turnStyles.composedNote}>
+            <Ionicons name="sparkles-outline" size={13} color={InkColors.ink3} />
+            <Text style={turnStyles.composedText}>
+              매장 노하우들을 모아 AI가 정리한 답이에요. 확실하지 않으면 사장님께 확인하세요.
+            </Text>
+          </View>
+        )}
         {block ? (
           <SquareCard
             summary={block.summary}
@@ -99,7 +109,8 @@ export function ChatTurn({
                 : 'Event'
             }
             confidence={query.match_confidence}
-            verification={matchedEntry?.verification?.state}
+            // AI 합성 답은 검증 배지를 달지 않는다(저장된 답이 아니므로) → 대신 '매칭 NN%'로 표시되고 위에 'AI 정리' 고지가 뜬다.
+            verification={block?.mode === 'generated' ? undefined : matchedEntry?.verification?.state}
             resolutionRate={matchedEntry?.stats?.resolution_rate}
             doText={matchedEntry?.square?.extract?.do}
             dontText={matchedEntry?.square?.extract?.dont}
@@ -177,6 +188,19 @@ const turnStyles = StyleSheet.create({
     borderColor: InkColors.line,
   },
   degradedText: { flex: 1, fontSize: 12, color: InkColors.ink2, fontWeight: '600', lineHeight: 17 },
+  composedNote: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 11,
+    borderRadius: Radius.sm,
+    backgroundColor: InkColors.bgSoft,
+    borderWidth: 1,
+    borderColor: InkColors.line,
+  },
+  composedText: { flex: 1, fontSize: 12, color: InkColors.ink2, fontWeight: '600', lineHeight: 17 },
   downHelp: {
     flexDirection: 'row',
     alignItems: 'flex-start',

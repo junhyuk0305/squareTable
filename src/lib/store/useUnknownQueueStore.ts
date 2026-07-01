@@ -15,8 +15,6 @@ type UnknownQueueState = {
   subscribe: () => () => void;
   enqueue: (uq: UnknownQuery) => void;
   resolve: (uqId: string, newEntryId: string) => void;
-  archive: (uqId: string) => void;
-  unarchive: (uqId: string) => void;
   enableAutoAnswer: (uqId: string) => void;
   getPending: () => UnknownQuery[];
   getById: (id: string) => UnknownQuery | undefined;
@@ -81,7 +79,9 @@ export const useUnknownQueueStore = create<UnknownQueueState>((set, get) => ({
     void guardWrite(
       insertUnknown(uq),
       () => set((st) => ({ queue: st.queue.filter((u) => u.id !== uq.id) })),
-      '질문 등록에 실패했어요. 다시 시도해 주세요.',
+      // 일반 저장 실패 + 미해결 질문 상한(남용 #18, 0033 트리거 too_many_pending)을 한 메시지로 포괄.
+      // (insertUnknown이 boolean만 반환해 사유 구분 불가 → 양쪽에 자연스러운 안내로 통합.)
+      '질문을 등록하지 못했어요. 대기 중인 질문이 많으면 사장님 답변을 받은 뒤 다시 등록해 주세요.',
     );
   },
   resolve: (uqId, newEntryId) => {
@@ -99,10 +99,6 @@ export const useUnknownQueueStore = create<UnknownQueueState>((set, get) => ({
       '답변 반영에 실패했어요.',
     );
   },
-  // 보관: 답변하지 않고 묻어둠. 대기/자동응답 목록에서 빠지고 보관함으로.
-  archive: (uqId) => transition(set, get, uqId, 'archived', '보관 처리에 실패했어요.'),
-  // 보관 해제 → 다시 대기로.
-  unarchive: (uqId) => transition(set, get, uqId, 'pending_owner_answer', '보관 해제에 실패했어요.'),
   // 자동응답 사용 — AI 일반답변(ai_general_answer)으로 자동 응답하도록 표시.
   enableAutoAnswer: (uqId) => transition(set, get, uqId, 'auto_answered', '자동응답 설정에 실패했어요.'),
   getPending: () => get().queue.filter((u) => u.status === 'pending_owner_answer'),

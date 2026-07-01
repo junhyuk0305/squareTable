@@ -18,6 +18,7 @@ type IconName = React.ComponentProps<typeof Ionicons>['name'];
 
 /** kind → 아이콘·틴트(데이터는 util SSOT, 표현만 여기서). */
 const KIND_UI: Record<OwnerNotifKind, { icon: IconName; tint: string }> = {
+  join_request: { icon: 'person-add', tint: BrandColors.yellowSoft },
   question: { icon: 'chatbubble-ellipses', tint: BrandColors.yellowSoft },
   suggestion: { icon: 'bulb', tint: BrandColors.brandSoft },
   swap_approval: { icon: 'swap-horizontal', tint: BrandColors.accentSoft },
@@ -36,6 +37,7 @@ export default function OwnerNotificationsScreen() {
   const suggestions = useSuggestionStore((s) => s.suggestions);
   const swaps = useScheduleStore((s) => s.swaps);
   const staff = useStaffStore((s) => s.staff);
+  const pending = useStaffStore((s) => s.pending);
 
   const initial = (userName ?? '나').trim().slice(0, 1) || '나';
 
@@ -45,9 +47,10 @@ export default function OwnerNotificationsScreen() {
         queue,
         suggestions,
         swaps,
+        pending,
         nameOf: (id) => staff.find((x) => x.id === id)?.name ?? '직원',
       }),
-    [queue, suggestions, swaps, staff],
+    [queue, suggestions, swaps, pending, staff],
   );
 
   return (
@@ -74,7 +77,7 @@ export default function OwnerNotificationsScreen() {
           onPress={(r) => r.route && router.push(r.route as Href)}
           empty={{
             text: '지금 처리할 알림이 없어요.',
-            sub: '받은 질문 · 제안 · 승인 대기 교대가 생기면 여기에 모아서 보여드려요.',
+            sub: '합류 신청 · 받은 질문 · 제안 · 승인 대기 교대가 생기면 여기에 모아서 보여드려요.',
           }}
         />
         <View style={{ height: 12 }} />

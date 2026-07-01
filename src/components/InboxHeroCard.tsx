@@ -27,7 +27,7 @@ export function InboxHeroCard({ uq, careerDays, onPress }: Props) {
       </View>
 
       {/* 질문 본문 */}
-      <Text style={styles.query} numberOfLines={4}>"{uq.query_text}"</Text>
+      <Text style={styles.query} numberOfLines={4}>“{uq.query_text}”</Text>
 
       {/* 메타: 누가, 입사 N일차 (익명이면 신원 숨김) */}
       <Text style={styles.meta}>
@@ -93,7 +93,7 @@ const styles = StyleSheet.create({
     backgroundColor: InkColors.bgSoft,
     paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: 6,
+    borderRadius: Radius.sm,
   },
   similarText: {
     fontSize: 12,

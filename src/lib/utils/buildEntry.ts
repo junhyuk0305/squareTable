@@ -8,6 +8,7 @@
 import type { Category, PlaybookEntry, SquareBlock, UnknownQuery } from '@/types';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { genId } from '@/lib/utils/id';
+import { sanitizeKeywords } from '@/lib/utils/knowhowQuality';
 
 /** title: uq.query_text 첫 30자(물음표·구두점 정리). */
 function deriveTitle(uq: UnknownQuery): string {
@@ -79,7 +80,12 @@ export function buildPlaybookEntryFromSquare(
   const publishable = isSquarePublishable(square);
   const derivedTitle = deriveTitle(uq);
   const title = (extras.title || derivedTitle).trim() || derivedTitle;
-  const keywords = extras.keywords?.length ? extras.keywords.slice(0, 8) : extractKeywords(uq.query_text);
+  const rawKeywords = extras.keywords?.length ? extras.keywords.slice(0, 8) : extractKeywords(uq.query_text);
+  // 등록 품질 게이트: 과광범위 단독 키워드(손님·매장·정리 등)를 검색에서 제외 → 관련 없는 질문 오매칭 차단
+  // (격리매장 실험 Round B에서 브로드 키워드가 SERVE 게이트를 뚫은 것을 등록 시점에 봉쇄). knowhowQuality SSOT.
+  // 전부 광범위해 비면 원본 유지(제로 키워드 엔트리 방지 — 그런 입력은 edge usable=false/코치 UI가 별도 차단).
+  const sanitizedKw = sanitizeKeywords(rawKeywords).kept;
+  const keywords = sanitizedKw.length ? sanitizedKw : rawKeywords;
 
   // 태그: 카테고리 + AI 키워드 일부
   const tags = Array.from(new Set([`#${category}`, ...keywords.slice(0, 4).map((k) => `#${k}`)])).slice(0, 6);
