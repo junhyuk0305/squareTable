@@ -10,7 +10,6 @@ import { CoachmarkTour, type TourStep } from '@/components/CoachmarkTour';
 import { useTourStore } from '@/lib/store/useTourStore';
 
 import { RoleTabBar } from '@/components/RoleTabBar';
-import { BrainScoreCard } from '@/components/BrainScoreCard';
 import { InfoDot } from '@/components/InfoDot';
 import { OwnerHomeHubCards } from '@/components/OwnerHomeHubCards';
 import { SectionLabel } from '@/components/SectionLabel';
@@ -27,7 +26,6 @@ import { capCount } from '@/lib/utils/format';
 import { useOwnerDashboardData } from '@/lib/hooks/useOwnerDashboardData';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { styles } from '@/styles/ownerDashboardStyles';
-import type { Category } from '@/types';
 
 /** KPI 칸용 인건비 압축 표기 — 만원 이상은 "142만", 그 미만은 원 단위. */
 function manwon(n: number): string {
@@ -44,14 +42,8 @@ export default function OwnerDashboardScreen() {
     taskTotal,
     taskDoneCount,
     pending,
-    brain,
     isSolo,
   } = useOwnerDashboardData();
-
-  const fillWeak = (category: Category | null) => {
-    if (category) router.push({ pathname: '/owner/coach', params: { category } });
-    else router.push('/owner/categories');
-  };
 
   // 진입 시 본문이 살짝 떠오르며 페이드인.
   // Animated.Value는 ref가 아니라 안정 객체로 메모이즈 — render 중 ref.current 접근(react-hooks/refs) 회피.
@@ -285,14 +277,6 @@ export default function OwnerDashboardScreen() {
             <OwnerHomeHubCards />
           </View>
         </Appear>
-
-        {/* ③ 임팩트 — 매장 두뇌 완성도 게이지 (F3). 노하우가 하나라도 있을 때만.
-            (알바 FAQ Top은 '받은 질문' 히어로 → 인박스와 역할이 겹쳐 제거 — 미답변 목록은 인박스가 단일 소스) */}
-        {entriesCount > 0 && (
-          <Appear delay={240}>
-            <BrainScoreCard score={brain} onFill={fillWeak} />
-          </Appear>
-        )}
 
         {/* 노하우 진입 미니 링크 — 매장운영(근무·직원)은 위 허브카드로 이관했고, 여기선 노하우 라이브러리만. */}
         <View style={styles.miniRow}>

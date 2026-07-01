@@ -54,6 +54,7 @@ export default function RootLayout() {
         <ErrorBoundary>
           <Stack key={textScale} screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
             <Stack.Screen name="index" />
+            <Stack.Screen name="login" />
             <Stack.Screen name="signup" />
             <Stack.Screen name="privacy" />
             <Stack.Screen name="terms" />

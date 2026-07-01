@@ -33,7 +33,7 @@ const isUnused = (e: PlaybookEntry) =>
  * 2) 노하우 제안 진입 (알바→사장)
  * 3) Hero 우선 답변 1건 (가장 시급 = confidence 최저)
  * 4) <InboxSubtabs> [답할 질문 | AI가 답함] — 상태별 파생 필터·카운트는 컴포넌트가 처리.
- * 5) '그동안 쌓은 노하우' 진입 카드 → /owner/knowledge (안 쓰임 있으면 바로 그 필터로)
+ * 5) '그동안 쌓은 노하우' 진입 카드 → /owner/knowledge
  */
 export default function OwnerInboxScreen() {
   const router = useRouter();
@@ -88,11 +88,10 @@ export default function OwnerInboxScreen() {
   );
   const openAnswer = useCallback((uq: UnknownQuery) => goAnswer(uq.id), [goAnswer]);
 
-  // '그동안 쌓은 노하우' → 노하우 화면. 안 쓰임이 있으면 바로 그 필터로 진입.
+  // '그동안 쌓은 노하우' → 노하우 화면.
   const goKnowledge = useCallback(() => {
-    if (unusedCount > 0) router.push({ pathname: '/owner/knowledge', params: { unused: '1' } });
-    else router.push('/owner/knowledge');
-  }, [router, unusedCount]);
+    router.push('/owner/knowledge');
+  }, [router]);
 
   return (
     <SafeAreaView edges={['bottom']} style={styles.safe}>
