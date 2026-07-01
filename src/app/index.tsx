@@ -1,203 +1,311 @@
-import { useState } from 'react';
-import { View, Text, Pressable, StyleSheet, TextInput, ScrollView, ActivityIndicator } from 'react-native';
-import { useRouter } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { View, Text, Pressable, StyleSheet, ScrollView } from 'react-native';
+import { useRouter, Redirect } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useSessionStore } from '@/lib/store/useSessionStore';
-import { applyMockSeed } from '@/lib/demo/mockSeed';
 import { HAS_SUPABASE } from '@/lib/supabase';
 import { BrandColors, InkColors } from '@/lib/theme/colors';
-import { Radius } from '@/lib/theme/elevation';
+import { Radius, Elevation } from '@/lib/theme/elevation';
+import { Space, SCREEN_GUTTER } from '@/lib/theme/layout';
+import { Appear } from '@/components/Appear';
 import { Wordmark } from '@/components/Wordmark';
-import { isValidEmail } from '@/lib/utils/validation';
-import type { Role } from '@/types';
 
-export default function LoginScreen() {
+/**
+ * 랜딩(홈) — 기존 로그인 화면을 대체한다.
+ * QR로 들어온 사장님이 스크롤만으로 [공감(문제) → 해결(기능) → 무료(파일럿)]를 읽고
+ * 우하단 고정 FAB로 자연스럽게 가입(/signup)에 도달하는 1단 세로 스토리.
+ * 로그인 폼은 /login 으로 분리 — 재방문·로그아웃 복귀는 상단/오퍼의 '로그인' 링크로.
+ */
+
+type Pain = { icon: keyof typeof Ionicons.glyphMap; title: string; body: string };
+const PAINS: Pain[] = [
+  { icon: 'repeat-outline', title: '또 처음부터 교육', body: '알바가 바뀔 때마다 같은 걸 몇 번씩 다시 설명하고 계신가요?' },
+  { icon: 'call-outline', title: '쉬는 날에도 울리는 전화', body: '"사장님, 이건 어떻게 해요?" 쉬는 날에도 마음 편할 틈이 없어요.' },
+  { icon: 'bulb-outline', title: '노하우가 머릿속에만', body: '내가 없으면 멈추는 가게. 그렇다고 하나하나 적어둘 시간도 없죠.' },
+  { icon: 'chatbubbles-outline', title: '지시가 여기저기 흩어져요', body: '카톡 공지·메모지·말로 전한 지시… 결국 아무도 제대로 안 봐요.' },
+];
+
+type Feature = { icon: keyof typeof Ionicons.glyphMap; title: string; body: string };
+const FEATURES: Feature[] = [
+  { icon: 'sparkles', title: '우리 가게 노하우, AI가 즉답', body: '사장님이 한 번만 답을 남기면, 직원이 물을 때 AI가 우리 가게 방식 그대로 대신 답해요.' },
+  { icon: 'checkmark-done', title: '오픈·마감 체크리스트 한눈에', body: '오늘 할 일과 마감 점검을 채팅에서 착착. 누가 뭘 끝냈는지 사장님이 바로 확인해요.' },
+  { icon: 'chatbubble-ellipses', title: '매장 관리가 채팅 하나로', body: '공지·지시·질문이 흩어지지 않고 한곳에. 알바가 바뀌어도 노하우는 그대로 쌓여요.' },
+];
+
+const OFFERS = ['설치 없이 QR로 바로 시작', '사장님이 답을 남기면 AI 두뇌 완성', '부담되면 언제든 그만두기'];
+
+export default function LandingScreen() {
   const router = useRouter();
-  const switchTo = useSessionStore((s) => s.switchTo);
-  const signInWithPassword = useSessionStore((s) => s.signInWithPassword);
-  const sendMagicLink = useSessionStore((s) => s.sendMagicLink);
+  const insets = useSafeAreaInsets();
+  const status = useSessionStore((s) => s.status);
+  const role = useSessionStore((s) => s.role);
 
-  const [role, setRole] = useState<Role>('owner'); // 데모 폴백 전용
-  const [email, setEmail] = useState('');
-  const [pw, setPw] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
+  // 이미 로그인된 재방문자는 마케팅을 건너뛰고 각자 홈으로. (데모 빌드는 항상 랜딩을 보여준다)
+  if (HAS_SUPABASE && status === 'signed_in') {
+    return <Redirect href={role === 'owner' ? '/owner/dashboard' : '/junior/home'} />;
+  }
+  if (HAS_SUPABASE && status === 'loading') return null; // 스플래시가 덮는 구간 — 깜빡임 방지
 
-  // Supabase 미설정이면 기존 데모 동작(입력 무시, 역할 토글로 바로 입장)
-  const demoEnter = () => {
-    switchTo(role);
-    applyMockSeed(true); // 데모 계정 = 데모 데이터로 입장
-    router.replace(role === 'owner' ? '/owner/dashboard' : '/junior/home');
-  };
-
-  const login = async () => {
-    if (!HAS_SUPABASE) return demoEnter();
-    if (!email || !pw) {
-      setMsg('이메일과 비밀번호를 입력해주세요.');
-      return;
-    }
-    if (!isValidEmail(email)) {
-      setMsg('이메일 형식을 확인해주세요.');
-      return;
-    }
-    setBusy(true);
-    setMsg(null);
-    const { error, role: r } = await signInWithPassword(email.trim(), pw);
-    setBusy(false);
-    if (error) {
-      setMsg('로그인 실패 — 이메일/비밀번호를 확인해주세요.');
-      return;
-    }
-    router.replace(r === 'owner' ? '/owner/dashboard' : '/junior/home');
-  };
-
-  const magicLink = async () => {
-    if (!HAS_SUPABASE) return demoEnter();
-    if (!email) {
-      setMsg('이메일을 먼저 입력해주세요.');
-      return;
-    }
-    if (!isValidEmail(email)) {
-      setMsg('이메일 형식을 확인해주세요.');
-      return;
-    }
-    setBusy(true);
-    setMsg(null);
-    const { error } = await sendMagicLink(email.trim());
-    setBusy(false);
-    setMsg(error ? '메일 발송 실패. 잠시 후 다시 시도해주세요.' : '로그인 링크를 메일로 보냈어요. 메일함을 확인해주세요.');
-  };
+  const goSignup = () => router.push('/signup');
+  const goLogin = () => router.push('/login');
 
   return (
-    <SafeAreaView style={styles.safe}>
-      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-        <View style={styles.header}>
-          <Wordmark size="lg" showEng />
-          <Text style={styles.tagline}>할 일이 착착 끝나는 가게 · 현장 운영 AI</Text>
-          <Text style={styles.taglineSub}>사장님은 가게 노하우를 남기고, 직원·알바는 모르는 걸 AI에게 바로 물어봐요.</Text>
+    <View style={styles.root}>
+      {/* 상단 바 — 재방문자용 로그인 링크 (스크롤 없이 탈출) */}
+      <View style={[styles.topbar, { paddingTop: insets.top + Space.sm }]}>
+        <Pressable onPress={goLogin} hitSlop={10} style={({ pressed }) => pressed && { opacity: 0.5 }}>
+          <Text style={styles.topLogin}>로그인</Text>
+        </Pressable>
+      </View>
+
+      <ScrollView
+        contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 132 }]}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* ── HERO ── */}
+        <Appear style={styles.hero}>
+          <View style={styles.badge}>
+            <View style={styles.badgeDot} />
+            <Text style={styles.badgeText}>파일럿 매장 무료 모집 중</Text>
+          </View>
+
+          <Wordmark size="lg" showEng style={styles.wordmark} />
+
+          <Text style={styles.h1}>
+            사장님이 자리를 비워도,{'\n'}
+            <Text style={styles.h1Strong}>가게는 사장님처럼</Text> 답합니다.
+          </Text>
+          <Text style={styles.heroSub}>
+            한 번만 답해두면, AI가 평생 대신 답해요.{'\n'}
+            카톡·메모지 대신 채팅 하나로 매장이 굴러갑니다.
+          </Text>
+
+          <View style={styles.scrollCue}>
+            <Text style={styles.scrollCueText}>내려서 살펴보기</Text>
+            <Ionicons name="chevron-down" size={16} color={InkColors.ink3} />
+          </View>
+        </Appear>
+
+        {/* ── PROBLEM ── */}
+        <View style={styles.section}>
+          <Appear>
+            <Text style={styles.kicker}>혹시, 이런 하루 아니세요?</Text>
+            <Text style={styles.h2}>매일 반복되는 매장 스트레스</Text>
+          </Appear>
+          <View style={styles.stack}>
+            {PAINS.map((p, i) => (
+              <Appear key={p.title} delay={80 + i * 70}>
+                <View style={styles.painCard}>
+                  <View style={styles.painChip}>
+                    <Ionicons name={p.icon} size={20} color={InkColors.ink2} />
+                  </View>
+                  <View style={styles.painText}>
+                    <Text style={styles.painTitle}>{p.title}</Text>
+                    <Text style={styles.painBody}>{p.body}</Text>
+                  </View>
+                </View>
+              </Appear>
+            ))}
+          </View>
         </View>
 
-        <View style={styles.card}>
-          {!HAS_SUPABASE && (
-            <View style={styles.seg}>
-              {(['owner', 'junior'] as Role[]).map((r) => (
-                <Pressable key={r} onPress={() => setRole(r)} style={[styles.segBtn, role === r && styles.segBtnOn]}>
-                  <Text style={[styles.segText, role === r && styles.segTextOn]}>{r === 'owner' ? '사장님' : '직원·알바'}</Text>
-                </Pressable>
-              ))}
+        {/* ── SOLUTION ── */}
+        <View style={styles.section}>
+          <Appear>
+            <Text style={[styles.kicker, styles.kickerInk]}>그래서, 착착이 대신합니다</Text>
+            <Text style={styles.h2}>사장님 대신 답하고, 대신 챙겨요</Text>
+          </Appear>
+          <View style={styles.stack}>
+            {FEATURES.map((f, i) => (
+              <Appear key={f.title} delay={80 + i * 80}>
+                <View style={styles.featCard}>
+                  <View style={styles.featChip}>
+                    <Ionicons name={f.icon} size={22} color={BrandColors.yellow} />
+                  </View>
+                  <View style={styles.painText}>
+                    <Text style={styles.featTitle}>{f.title}</Text>
+                    <Text style={styles.featBody}>{f.body}</Text>
+                  </View>
+                </View>
+              </Appear>
+            ))}
+          </View>
+        </View>
+
+        {/* ── OFFER ── */}
+        <View style={styles.section}>
+          <Appear delay={60}>
+            <View style={styles.offerCard}>
+              <View style={styles.badge}>
+                <View style={styles.badgeDot} />
+                <Text style={styles.badgeText}>지금은 파일럿 기간</Text>
+              </View>
+              <Text style={styles.offerTitle}>모든 기능, 지금은 전액 무료</Text>
+              <Text style={styles.offerBody}>
+                함께 만들어갈 매장을 모집하고 있어요.{'\n'}
+                파일럿 매장은 카드 등록 없이 무료로 씁니다.
+              </Text>
+
+              <View style={styles.offerList}>
+                {OFFERS.map((t) => (
+                  <View key={t} style={styles.offerRow}>
+                    <Ionicons name="checkmark-circle" size={18} color={InkColors.ink} />
+                    <Text style={styles.offerRowText}>{t}</Text>
+                  </View>
+                ))}
+              </View>
+
+              <Pressable onPress={goSignup} style={({ pressed }) => [styles.offerCta, pressed && { opacity: 0.88 }]}>
+                <Text style={styles.offerCtaText}>무료로 시작하기</Text>
+                <Ionicons name="arrow-forward" size={17} color="#FFFFFF" />
+              </Pressable>
+
+              <Pressable onPress={goLogin} hitSlop={8} style={styles.offerLogin}>
+                <Text style={styles.offerLoginText}>이미 착착을 쓰고 계신가요? <Text style={styles.offerLoginStrong}>로그인</Text></Text>
+              </Pressable>
             </View>
-          )}
-
-          <Text style={styles.label}>이메일</Text>
-          <TextInput
-            value={email}
-            onChangeText={setEmail}
-            placeholder="you@example.com"
-            placeholderTextColor={InkColors.ink3}
-            keyboardType="email-address"
-            autoCapitalize="none"
-            style={styles.input}
-          />
-
-          <Text style={styles.label}>비밀번호</Text>
-          <TextInput
-            value={pw}
-            onChangeText={setPw}
-            placeholder="비밀번호"
-            placeholderTextColor={InkColors.ink3}
-            secureTextEntry
-            style={styles.input}
-            onSubmitEditing={login}
-          />
-
-          <Pressable disabled={busy} onPress={login} style={({ pressed }) => [styles.primary, pressed && { opacity: 0.88 }, busy && { opacity: 0.6 }]}>
-            {busy ? <ActivityIndicator color="#FFF" /> : <Text style={styles.primaryText}>로그인</Text>}
-          </Pressable>
-
-          {HAS_SUPABASE && (
-            <Pressable disabled={busy} onPress={magicLink} style={styles.linkBtn}>
-              <Text style={styles.linkText}>비밀번호 없이 <Text style={styles.linkStrong}>메일로 로그인</Text></Text>
-            </Pressable>
-          )}
-
-          {msg && <Text style={styles.msg}>{msg}</Text>}
+          </Appear>
         </View>
-
-        <View style={styles.signupBlock}>
-          <Text style={styles.signupLead}>아직 계정이 없으신가요?</Text>
-          <Pressable onPress={() => router.push('/signup')} style={({ pressed }) => [styles.signupBtn, pressed && { opacity: 0.85 }]}>
-            <Text style={styles.signupBtnText}>회원가입하고 시작하기</Text>
-            <Ionicons name="arrow-forward" size={16} color={BrandColors.brand} />
-          </Pressable>
-        </View>
-
-        <Text style={styles.demoNote}>
-          {HAS_SUPABASE ? '파일럿 계정으로 로그인하세요' : '* 데모: 입력 없이 로그인됩니다'}
-        </Text>
       </ScrollView>
-    </SafeAreaView>
+
+      {/* ── 우하단 고정 CTA (FAB) — 스크롤 위치와 무관하게 항상 노출 ── */}
+      <Appear delay={280} offsetY={16} style={[styles.fabWrap, { bottom: insets.bottom + 24 }]}>
+        <Pressable onPress={goSignup} style={({ pressed }) => [styles.fab, pressed && { transform: [{ scale: 0.97 }] }]}>
+          <Text style={styles.fabText}>무료로 시작하기</Text>
+          <Ionicons name="arrow-forward" size={18} color={InkColors.ink} />
+        </Pressable>
+      </Appear>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: InkColors.cream },
-  scroll: { flexGrow: 1, padding: 24, justifyContent: 'center', gap: 28 },
-  header: { alignItems: 'center', gap: 12 },
-  tagline: { fontSize: 13, color: InkColors.ink3, textAlign: 'center' },
-  taglineSub: { fontSize: 13, color: InkColors.ink2, textAlign: 'center', lineHeight: 19, fontWeight: '600', maxWidth: 320 },
+  root: { flex: 1, backgroundColor: InkColors.cream },
 
-  card: {
+  topbar: { flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: SCREEN_GUTTER, paddingBottom: Space.sm },
+  topLogin: { fontSize: 14, lineHeight: 20, fontWeight: '700', color: InkColors.ink2 },
+
+  scroll: { paddingHorizontal: SCREEN_GUTTER, gap: 40 },
+
+  // ── HERO ──
+  hero: { alignItems: 'center', paddingTop: Space.md, gap: Space.lg },
+  badge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    alignSelf: 'flex-start',
+    backgroundColor: BrandColors.yellowSoft,
+    borderColor: BrandColors.yellowDeep,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: Radius.pill,
+  },
+  badgeDot: { width: 7, height: 7, borderRadius: Radius.pill, backgroundColor: BrandColors.yellowDeep },
+  badgeText: { fontSize: 12, lineHeight: 17, fontWeight: '800', color: InkColors.ink },
+  wordmark: { marginTop: Space.xs },
+  h1: { fontSize: 27, lineHeight: 38, fontWeight: '900', color: InkColors.ink, textAlign: 'center', letterSpacing: -0.6 },
+  h1Strong: { color: InkColors.ink },
+  heroSub: { fontSize: 15, lineHeight: 24, color: InkColors.ink2, textAlign: 'center', fontWeight: '600' },
+  scrollCue: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: Space.xs },
+  scrollCueText: { fontSize: 12, lineHeight: 17, color: InkColors.ink3, fontWeight: '600' },
+
+  // ── SECTION 공통 ──
+  section: { gap: Space.lg },
+  kicker: { fontSize: 13, lineHeight: 19, fontWeight: '800', color: InkColors.ink3, letterSpacing: -0.2 },
+  kickerInk: { color: BrandColors.yellowDeep },
+  h2: { fontSize: 21, lineHeight: 30, fontWeight: '900', color: InkColors.ink, letterSpacing: -0.4, marginTop: 2 },
+  stack: { gap: Space.md },
+
+  // ── PROBLEM ──
+  painCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.md,
     backgroundColor: '#FFFFFF',
     borderRadius: Radius.lg,
     borderWidth: 1,
     borderColor: InkColors.line,
-    padding: 20,
-    gap: 10,
+    padding: Space.lg,
+    ...Elevation.e1,
   },
-  seg: { flexDirection: 'row', backgroundColor: InkColors.bgSoft, borderRadius: Radius.md, padding: 4, marginBottom: 6 },
-  segBtn: { flex: 1, paddingVertical: 10, borderRadius: Radius.sm, alignItems: 'center' },
-  segBtnOn: { backgroundColor: '#FFFFFF', shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 6, shadowOffset: { width: 0, height: 2 } },
-  segText: { fontSize: 14, fontWeight: '700', color: InkColors.ink3 },
-  segTextOn: { color: InkColors.ink },
+  painChip: {
+    width: 44,
+    height: 44,
+    borderRadius: Radius.md,
+    backgroundColor: InkColors.bgSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  painText: { flex: 1, gap: 3 },
+  painTitle: { fontSize: 16, lineHeight: 23, fontWeight: '800', color: InkColors.ink },
+  painBody: { fontSize: 13, lineHeight: 20, color: InkColors.ink2 },
 
-  label: { fontSize: 13, fontWeight: '700', color: InkColors.ink2, marginTop: 4 },
-  input: {
+  // ── SOLUTION ──
+  featCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.md,
+    backgroundColor: '#FFFFFF',
+    borderRadius: Radius.lg,
     borderWidth: 1,
     borderColor: InkColors.line,
-    borderRadius: Radius.md,
-    paddingHorizontal: 14,
-    paddingVertical: 13,
-    fontSize: 15,
-    color: InkColors.ink,
-    backgroundColor: '#FFFFFF',
+    padding: Space.lg,
+    ...Elevation.e2,
   },
-  primary: {
-    marginTop: 12,
-    backgroundColor: BrandColors.brand,
-    paddingVertical: 16,
+  featChip: {
+    width: 46,
+    height: 46,
     borderRadius: Radius.md,
+    backgroundColor: InkColors.ink,
     alignItems: 'center',
+    justifyContent: 'center',
   },
-  primaryText: { color: '#FFFFFF', fontSize: 16, fontWeight: '800' },
-  linkBtn: { alignItems: 'center', paddingVertical: 10 },
-  linkText: { fontSize: 14, color: InkColors.ink3 },
-  linkStrong: { color: BrandColors.brand, fontWeight: '800' },
-  msg: { fontSize: 13, color: InkColors.ink2, textAlign: 'center', marginTop: 2 },
-  demoNote: { fontSize: 12, color: InkColors.ink3, textAlign: 'center' },
-  signupBlock: { alignItems: 'center', gap: 10 },
-  signupLead: { fontSize: 13, color: InkColors.ink3 },
-  signupBtn: {
+  featTitle: { fontSize: 16, lineHeight: 23, fontWeight: '800', color: InkColors.ink },
+  featBody: { fontSize: 13, lineHeight: 20, color: InkColors.ink2 },
+
+  // ── OFFER ──
+  offerCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: Radius.sheet,
+    borderWidth: 1,
+    borderColor: InkColors.line,
+    padding: Space.xl,
+    gap: Space.md,
+    ...Elevation.e2,
+  },
+  offerTitle: { fontSize: 22, lineHeight: 31, fontWeight: '900', color: InkColors.ink, letterSpacing: -0.4, marginTop: 2 },
+  offerBody: { fontSize: 14, lineHeight: 22, color: InkColors.ink2, fontWeight: '600' },
+  offerList: { gap: Space.sm, marginTop: Space.xs },
+  offerRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
+  offerRowText: { fontSize: 14, lineHeight: 21, color: InkColors.ink, fontWeight: '700' },
+  offerCta: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    alignSelf: 'stretch',
-    paddingVertical: 15,
+    backgroundColor: BrandColors.brand,
+    paddingVertical: 16,
     borderRadius: Radius.md,
-    borderWidth: 1.5,
-    borderColor: BrandColors.brand,
-    backgroundColor: '#FFFFFF',
+    marginTop: Space.sm,
   },
-  signupBtnText: { fontSize: 15, fontWeight: '800', color: BrandColors.brand },
+  offerCtaText: { color: '#FFFFFF', fontSize: 16, lineHeight: 22, fontWeight: '800' },
+  offerLogin: { alignItems: 'center', paddingVertical: Space.xs },
+  offerLoginText: { fontSize: 13, lineHeight: 19, color: InkColors.ink3 },
+  offerLoginStrong: { color: InkColors.ink, fontWeight: '800' },
+
+  // ── FAB ──
+  fabWrap: { position: 'absolute', right: SCREEN_GUTTER },
+  fab: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    backgroundColor: BrandColors.yellow,
+    paddingLeft: 22,
+    paddingRight: 18,
+    paddingVertical: 16,
+    borderRadius: Radius.pill,
+    ...Elevation.ey,
+  },
+  fabText: { fontSize: 16, lineHeight: 22, fontWeight: '900', color: InkColors.ink, letterSpacing: -0.2 },
 });

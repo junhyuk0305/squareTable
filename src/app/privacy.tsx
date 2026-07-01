@@ -18,7 +18,7 @@ export default function PrivacyScreen() {
         <Text style={styles.updated}>시행일: 2026-06-10 · 운영: 팀 스퀘어테이블</Text>
 
         <Section title="1. 수집 항목">
-          이름, 이메일, 휴대전화번호(끝 4자리), 매장 정보, 사용자가 입력한 매장 운영 노하우·질문 내용.
+          이름, 이메일, 휴대전화번호, 매장 정보, 사용자가 입력한 매장 운영 노하우·질문 내용.
         </Section>
         <Section title="2. 수집·이용 목적">
           매장 단위 계정 식별, 노하우 저장·검색·답변 제공, 알바-사장님 간 질문 전달 등 서비스 핵심 기능 제공.
