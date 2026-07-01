@@ -116,6 +116,53 @@ export async function purgeExpiredFormerStaff(): Promise<void> {
   if (error) console.warn('[db] purgeExpiredFormerStaff:', error.message);
 }
 
+// ── 합류 승인(남용 #2) ─────────────────────────────────────
+// 우리 매장에 합류 '신청'한(pending_unit_id = 내 매장) 프로필 목록. RLS가 신청자만 통과시킨다.
+export async function fetchPendingMembers(): Promise<{ id: string; name: string; phone_last4: string; created_at: string }[]> {
+  if (!HAS_SUPABASE || !_unitId) return [];
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('id, name, phone_last4, created_at')
+    .eq('pending_unit_id', _unitId)
+    .order('created_at', { ascending: true });
+  if (error) {
+    console.warn('[db] fetchPendingMembers:', error.message);
+    return [];
+  }
+  return (data ?? []).map((r: any) => ({
+    id: r.id,
+    name: r.name ?? '',
+    phone_last4: r.phone_last4 ?? '',
+    created_at: r.created_at ?? '',
+  }));
+}
+
+// 사장이 신청자를 승인 → unit_id 부여(소속 확정). RPC가 '내 매장 신청자'만 통과시킨다.
+export async function approveMember(uid: string): Promise<boolean> {
+  if (!HAS_SUPABASE) return true;
+  return write('approveMember', supabase.rpc('approve_member', { p_uid: uid }));
+}
+
+// 사장이 신청 거절 → pending만 비운다(계정은 유지).
+export async function rejectMember(uid: string): Promise<boolean> {
+  if (!HAS_SUPABASE) return true;
+  return write('rejectMember', supabase.rpc('reject_member', { p_uid: uid }));
+}
+
+// ── 초대코드 재발급(남용 #31) ──────────────────────────────
+// 새 6자리 코드 + 7일 만료. 유출/교체용. 성공 시 새 코드 반환(세션·화면 갱신용).
+export async function rotateInviteCode(): Promise<{ inviteCode: string; expiresAt: string } | null> {
+  if (!HAS_SUPABASE) return null;
+  const { data, error } = await supabase.rpc('rotate_invite_code');
+  if (error) {
+    console.warn('[db] rotateInviteCode:', error.message);
+    return null;
+  }
+  const row = Array.isArray(data) ? data[0] : data;
+  if (!row?.invite_code) return null;
+  return { inviteCode: String(row.invite_code), expiresAt: String(row.invite_expires_at ?? '') };
+}
+
 // ── 플레이북 ───────────────────────────────────────────────
 export async function fetchEntries(): Promise<PlaybookEntry[]> {
   if (!HAS_SUPABASE) return [];
@@ -271,6 +318,17 @@ export async function insertChatQuery(cq: ChatQuery): Promise<boolean> {
 export async function updateChatSatisfaction(id: string, vote: 'up' | 'down'): Promise<boolean> {
   if (!HAS_SUPABASE) return true;
   return write('updateChatSatisfaction', supabase.from('chat_queries').update({ satisfaction: vote }).eq('id', id));
+}
+
+// 노하우 사용 통계 재계산 — 답변 서빙/평가가 "영속된 뒤" 영향받은 entry id들로 호출(fire-and-forget·비치명).
+// 진실원천 chat_queries에서 30일 윈도우를 서버가 재평가해 playbook_entries.stats(query_hits_30d/
+// resolution_rate/thumbs/last_used_at)를 통째 갱신한다 → 클라 카운터 경쟁·권한경계 훼손 없음.
+// 0037_knowhow_usage_stats.sql 의 recompute_playbook_stats RPC. 미적용 환경이면 함수 부재로
+// 에러가 나지만 답변 흐름과 무관하므로 조용히 경고만 남긴다(stats가 0으로 남을 뿐, 서빙은 정상).
+export async function recomputePlaybookStats(entryIds: string[]): Promise<void> {
+  if (!HAS_SUPABASE || !entryIds.length) return;
+  const { error } = await supabase.rpc('recompute_playbook_stats', { p_entry_ids: entryIds });
+  if (error) console.warn('[db] recomputePlaybookStats:', error.message);
 }
 
 // ── 사진 업로드(Storage) ───────────────────────────────────

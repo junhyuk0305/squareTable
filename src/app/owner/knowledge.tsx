@@ -14,12 +14,12 @@ import { InkColors } from '@/lib/theme/colors';
  */
 export default function OwnerKnowledgeScreen() {
   const router = useRouter();
-  const { review } = useLocalSearchParams<{ review?: string }>();
+  const { review, unused } = useLocalSearchParams<{ review?: string; unused?: string }>();
   const openEntry = (id: string) => router.push({ pathname: '/owner/edit/[id]', params: { id } });
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
-      <OwnerKnowhowBrowse onSelect={openEntry} initialNeedsReview={review === '1'} />
+      <OwnerKnowhowBrowse onSelect={openEntry} initialNeedsReview={review === '1'} initialUnused={unused === '1'} />
       <RoleTabBar role="owner" />
     </SafeAreaView>
   );

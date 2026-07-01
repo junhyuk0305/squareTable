@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { supabase, HAS_SUPABASE } from '@/lib/supabase';
 import { setUnitId } from '@/lib/db';
 import { friendlyError } from '@/lib/utils/userError';
+import type { SubStatusRaw } from '@/lib/utils/subscription';
 
 type Role = 'owner' | 'junior';
 type Status = 'loading' | 'signed_in' | 'signed_out';
@@ -13,7 +14,14 @@ type SessionState = {
   userName: string;
   unitId: string;
   storeName: string;
+  // 합류 승인 대기(남용 #2) — 코드는 입력했으나 사장 승인 전. unitId는 아직 비어 데이터가 격리된다.
+  pendingUnitId: string; // 신청한 매장 id(승인 전). 있으면 '승인 대기' 상태.
+  pendingStoreName: string; // 신청한 매장 이름(대기 화면 표시용 — join 응답에서 채움, 재로드 시 유실 가능).
   industry: string; // 매장 업종(노하우 팩 매칭 키) — 온보딩 자동등록에 사용
+  // 매장 단위 구독상태(유료 게이팅). 원시값만 저장하고 화면은 deriveSubscription 으로 '지금' 기준 계산.
+  subStatus: SubStatusRaw; // '' | 'trialing' | 'active' | 'expired'
+  trialEndsAt: string; // ISO — 무료체험 만료
+  paidUntil: string; // ISO — 유료 활성 만료(빈값=무기한)
   inviteCode: string; // 내 매장 초대코드(사장 화면에서 직원에게 공유)
   email: string;
   bio: string; // 한줄 소개
@@ -29,10 +37,17 @@ type SessionState = {
     meta: { name: string; role: Role; phone?: string; phone_last4?: string; store_name?: string; industry?: string; biz_no?: string },
     // emailTaken: 이미 가입된 이메일이면 true — 화면이 "로그인 유도" 안내로 분기(원문 파싱 대신 플래그로).
   ) => Promise<{ error: string | null; needsConfirm: boolean; emailTaken?: boolean }>;
-  // 전화번호 중복 사전검사(주키). 비로그인 호출 가능. 실패 시 false(막지 않음 — unique가 최종 방어).
-  isPhoneTaken: (phone: string) => Promise<boolean>;
+  // 전화번호 중복 사전검사(주키). 비로그인 호출 가능.
+  //   'taken'=이미 사용 / 'free'=사용 가능 / 'unknown'=검사 실패(네트워크/권한).
+  //   ⚠️ 'unknown'을 'free'로 뭉뚱그리면 사전검사가 뚫려 트리거로 떨어진다 → 호출부가 'unknown'을 차단해야 함.
+  isPhoneTaken: (phone: string) => Promise<'taken' | 'free' | 'unknown'>;
   createStore: (storeName: string, industry: string, bizNo?: string) => Promise<{ error: string | null; inviteCode: string | null }>;
-  joinByInvite: (code: string) => Promise<{ error: string | null; storeName: string | null }>;
+  // 합류는 이제 '신청'(pending) — 성공 시 pending=true. 사장 승인 후에야 unitId가 붙는다(남용 #2).
+  joinByInvite: (code: string) => Promise<{ error: string | null; storeName: string | null; pending?: boolean }>;
+  // 승인 대기 중 본인 신청 철회. 다른 매장에 다시 신청 가능.
+  cancelJoinRequest: () => Promise<{ error: string | null }>;
+  // 현재 로그인 사용자의 소속을 서버에서 재확인(승인 반영·강제 소속해제 감지). 대기화면 폴링/직원홈 가드에 사용.
+  refreshMembership: () => Promise<void>;
   sendMagicLink: (email: string) => Promise<{ error: string | null }>;
   // 이메일 인증 메일 발송(회원가입 화면의 '인증' 버튼). 데모는 발송 생략.
   verifyEmail: (email: string) => Promise<{ status: 'demo' | 'sent' | 'rate' | 'error'; message?: string }>;
@@ -61,7 +76,12 @@ const DEMO = {
   userName: '박지원',
   unitId: 'store_001',
   storeName: '착착 카페 신촌점',
+  pendingUnitId: '',
+  pendingStoreName: '',
   industry: '카페·디저트',
+  subStatus: 'active' as SubStatusRaw, // 데모는 항상 사용 가능(무기한 active)
+  trialEndsAt: '',
+  paidUntil: '',
   inviteCode: '482913',
   email: '',
   bio: '',
@@ -116,9 +136,18 @@ async function loadProfile(
   try {
     const { data: profile } = await supabase
       .from('profiles')
-      .select('id, name, role, unit_id, bio')
+      .select('id, name, role, unit_id, pending_unit_id, bio, deleted_at')
       .eq('id', userId)
       .maybeSingle();
+
+    // 소프트삭제(탈퇴) 계정은 재로그인 차단(남용 #29) — 유예 기간 동안 데이터는 서버에 남아있되
+    // 사용자는 로그인 불가. 세션 토큰도 정리한다(fire-and-forget: signOut→onAuthStateChange는 재귀 안 함).
+    if (profile?.deleted_at) {
+      setUnitId(null);
+      set({ status: 'signed_out', unitId: '', userId: '', userName: '', storeName: '', pendingUnitId: '', pendingStoreName: '', industry: '', inviteCode: '', bio: '' });
+      void supabase.auth.signOut().catch(() => {});
+      return;
+    }
 
     let unitId = profile?.unit_id ?? '';
     let role: Role = (profile?.role as Role) ?? 'junior';
@@ -151,6 +180,9 @@ async function loadProfile(
     let storeName = '';
     let inviteCode = '';
     let industry = '';
+    let subStatus: SubStatusRaw = '';
+    let trialEndsAt = '';
+    let paidUntil = '';
     if (unitId) {
       const { data: unit } = await supabase
         .from('units')
@@ -160,6 +192,16 @@ async function loadProfile(
       storeName = unit?.store_name ?? '';
       inviteCode = unit?.invite_code ?? '';
       industry = unit?.industry ?? '';
+
+      // 구독상태(별도 테이블, 읽기 전용). 없으면 빈값 → deriveSubscription 이 fail-open('none')으로 처리.
+      const { data: sub } = await supabase
+        .from('unit_subscriptions')
+        .select('status, trial_ends_at, paid_until')
+        .eq('unit_id', unitId)
+        .maybeSingle();
+      subStatus = (sub?.status as SubStatusRaw) ?? '';
+      trialEndsAt = sub?.trial_ends_at ?? '';
+      paidUntil = sub?.paid_until ?? '';
     }
     setUnitId(unitId || null);
     set({
@@ -171,7 +213,13 @@ async function loadProfile(
       role,
       unitId,
       storeName,
+      // 승인 대기 상태 반영(남용 #2). 승인돼 unitId가 붙으면 pending은 비운다(pendingStoreName도 정리).
+      pendingUnitId: unitId ? '' : (profile?.pending_unit_id ?? ''),
+      ...(unitId ? { pendingStoreName: '' } : {}),
       industry,
+      subStatus,
+      trialEndsAt,
+      paidUntil,
       bio: profile?.bio ?? '',
     });
   } catch (e) {
@@ -182,7 +230,7 @@ async function loadProfile(
     // (테넌트 격리가 최우선). 재접속 시 로그인/재시도로 정상 복구된다.
     console.warn('[session] loadProfile 실패, 로그아웃 처리:', (e as Error)?.message ?? e);
     setUnitId(null);
-    set({ status: 'signed_out', unitId: '', userId: '', userName: '', storeName: '', industry: '', inviteCode: '', bio: '' });
+    set({ status: 'signed_out', unitId: '', userId: '', userName: '', storeName: '', pendingUnitId: '', pendingStoreName: '', industry: '', inviteCode: '', bio: '' });
   }
 }
 
@@ -242,6 +290,13 @@ export const useSessionStore = create<SessionState>((set, get) => ({
         needsConfirm: false,
       };
     }
+    // 이메일 열거 방지(enumeration protection)가 켜진 프로젝트는 이미 가입된 이메일도 error 없이
+    // "가짜 성공"으로 돌려준다 — 이때 user.identities가 빈 배열인 게 유일한 신호다.
+    // 문자열 매칭(already/registered/exists)만 의존하면 이 환경에서 emailTaken을 놓쳐
+    // '인증 메일 보냈어요'로 안내돼 사용자가 영영 갇힌다 → identities 신호로 보강.
+    if (data.user && (data.user.identities?.length ?? 0) === 0) {
+      return { error: null, needsConfirm: false, emailTaken: true };
+    }
     // 이메일 확인이 켜져 있으면 세션이 없음 → 가게생성/합류 RPC를 못 부름.
     const needsConfirm = !data.session;
     if (data.session?.user) {
@@ -259,10 +314,10 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   },
 
   isPhoneTaken: async (phone) => {
-    if (!HAS_SUPABASE) return false;
+    if (!HAS_SUPABASE) return 'free';
     const { data, error } = await supabase.rpc('phone_in_use', { p_phone: phone });
-    if (error) return false; // 사전검사 실패 시 막지 않음 — unique 제약이 최종 방어선
-    return Boolean(data);
+    if (error) return 'unknown'; // 검사 실패 — 우회 금지(호출부가 차단). unique 제약이 최종 방어선
+    return data ? 'taken' : 'free';
   },
 
   createStore: async (storeName, industry, bizNo) => {
@@ -300,6 +355,12 @@ export const useSessionStore = create<SessionState>((set, get) => ({
         if (uid0) await loadProfile(set, uid0, get().email);
         return { error: null, storeName: get().storeName || null };
       }
+      // 이미 신청해 승인 대기 중(0032) → 대기 상태로 안내.
+      if (/already_pending/.test(error.message)) {
+        const uid0 = get().userId;
+        if (uid0) await loadProfile(set, uid0, get().email);
+        return { error: null, storeName: get().pendingStoreName || null, pending: true };
+      }
       const msg = /invalid_code/.test(error.message)
         ? '초대코드가 올바르지 않아요.'
         : /too_many_attempts/.test(error.message)
@@ -308,9 +369,35 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       return { error: msg, storeName: null };
     }
     const row = Array.isArray(data) ? data[0] : data;
+    // 0행 반환 = invalid_code 신호(0031: 감사기록 보존을 위해 raise 대신 빈 반환).
+    if (!row?.unit_id) {
+      return { error: '초대코드가 올바르지 않아요.', storeName: null };
+    }
+    // 0032: 즉시 합류가 아니라 '승인 대기' 신청. row.unit_id=신청 대상, unit_id는 아직 안 붙는다.
+    // 대기 화면에 보여줄 매장 이름을 세션에 심고, 프로필 재로드로 pendingUnitId를 반영한다.
+    set({ pendingStoreName: row?.store_name ?? '' });
     const uid = get().userId;
     if (uid) await loadProfile(set, uid, get().email);
-    return { error: null, storeName: row?.store_name ?? null };
+    return { error: null, storeName: row?.store_name ?? null, pending: true };
+  },
+
+  cancelJoinRequest: async () => {
+    if (!HAS_SUPABASE) {
+      set({ pendingUnitId: '', pendingStoreName: '' });
+      return { error: null };
+    }
+    const { error } = await supabase.rpc('cancel_join_request');
+    if (error) return { error: friendlyError(error.message, '신청을 취소하지 못했어요. 잠시 후 다시 시도해 주세요.') };
+    set({ pendingUnitId: '', pendingStoreName: '' });
+    const uid = get().userId;
+    if (uid) await loadProfile(set, uid, get().email);
+    return { error: null };
+  },
+
+  refreshMembership: async () => {
+    if (!HAS_SUPABASE) return;
+    const uid = get().userId;
+    if (uid) await loadProfile(set, uid, get().email);
   },
 
   sendMagicLink: async (email) => {
@@ -376,12 +463,13 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     return { error: error ? friendlyError(error.message, '비밀번호를 변경하지 못했어요. 잠시 후 다시 시도해 주세요.') : null };
   },
 
-  // 회원탈퇴 — 앱스토어/개인정보보호법 필수. 서버에서 auth user + 연관 데이터(cascade) 파기.
-  // 0005 마이그레이션의 delete_my_account() RPC가 호출자(auth.uid()) 기준으로만 동작한다.
+  // 회원탈퇴 — 앱스토어/개인정보보호법 필수. 0035부터 '소프트삭제'(deleted_at 표시 + 소속해제).
+  // 즉시 cascade 파기 대신 30일 유예 후 purge_deleted_accounts가 실제 파기 → 홧김 탈퇴로 직원 기록까지
+  // 순삭되는 비가역 손실 방지(남용 #29). 유예 동안 재로그인은 loadProfile의 deleted_at 가드가 차단.
   deleteAccount: async () => {
     if (!HAS_SUPABASE) {
       // 데모 모드: 실제 삭제 대상 없음 → 세션만 종료.
-      set({ status: 'signed_out', unitId: '', userId: '', userName: '', industry: '' });
+      set({ status: 'signed_out', unitId: '', userId: '', userName: '', pendingUnitId: '', pendingStoreName: '', industry: '' });
       return { error: null };
     }
     const { error } = await supabase.rpc('delete_my_account');
@@ -393,7 +481,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     } catch (e) {
       console.warn('[session] signOut after delete failed:', e);
     }
-    set({ status: 'signed_out', unitId: '', userId: '', userName: '', industry: '' });
+    set({ status: 'signed_out', unitId: '', userId: '', userName: '', pendingUnitId: '', pendingStoreName: '', industry: '' });
     return { error: null };
   },
 
@@ -426,14 +514,29 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     if (!trimmed) return { error: '가게 이름을 입력해주세요.', remaining: get().storeRenameInfo().remaining };
     if (trimmed === get().storeName) return { error: '기존과 같은 이름이에요.', remaining: get().storeRenameInfo().remaining };
     const info = get().storeRenameInfo();
-    if (info.remaining <= 0) return { error: '가게 이름은 14일 이내 2회까지만 변경할 수 있어요.', remaining: 0 };
 
     const unitId = get().unitId;
     if (HAS_SUPABASE) {
       if (!unitId) return { error: '매장 정보가 없어요.', remaining: info.remaining };
-      const { error } = await supabase.from('units').update({ store_name: trimmed }).eq('id', unitId);
-      if (error) return { error: friendlyError(error.message, '가게 이름을 변경하지 못했어요. 잠시 후 다시 시도해 주세요.'), remaining: info.remaining };
+      // 제한은 서버가 강제(남용 #28) — localStorage 카운터는 표시용 힌트일 뿐, 진짜 게이트는 rename_store RPC.
+      // (재설치/다른 기기/데브툴로 로컬 힌트를 지워도 서버가 14일 2회를 막는다.)
+      const { data, error } = await supabase.rpc('rename_store', { p_name: trimmed });
+      if (error) {
+        const msg = /rename_limit/.test(error.message)
+          ? '가게 이름은 14일 이내 2회까지만 변경할 수 있어요.'
+          : /store_name_required/.test(error.message)
+          ? '가게 이름을 입력해주세요.'
+          : friendlyError(error.message, '가게 이름을 변경하지 못했어요. 잠시 후 다시 시도해 주세요.');
+        return { error: msg, remaining: /rename_limit/.test(error.message) ? 0 : info.remaining };
+      }
+      pushRenameTime(unitId); // 로컬 힌트 동기화
+      set({ storeName: trimmed });
+      // 서버가 반환한 남은 횟수를 신뢰(로컬 힌트보다 정확).
+      const remaining = typeof data === 'number' ? data : get().storeRenameInfo().remaining;
+      return { error: null, remaining };
     }
+    // 데모(Supabase 없음): 기존 로컬 제한 유지.
+    if (info.remaining <= 0) return { error: '가게 이름은 14일 이내 2회까지만 변경할 수 있어요.', remaining: 0 };
     if (unitId) pushRenameTime(unitId);
     set({ storeName: trimmed });
     return { error: null, remaining: get().storeRenameInfo().remaining };
@@ -464,7 +567,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
         console.warn('[session] signOut failed:', e);
       }
     }
-    set({ status: 'signed_out', unitId: '', userId: '', userName: '', industry: '' });
+    set({ status: 'signed_out', unitId: '', userId: '', userName: '', pendingUnitId: '', pendingStoreName: '', industry: '' });
   },
 
   switchTo: (role) => {
@@ -472,8 +575,8 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     setUnitId(DEMO.unitId);
     set(
       role === 'owner'
-        ? { role: 'owner', userId: 'u_owner_001', userName: '김영자', unitId: DEMO.unitId, storeName: DEMO.storeName, industry: DEMO.industry, inviteCode: DEMO.inviteCode, email: '', bio: '' }
-        : { role: 'junior', userId: 'u_staff_001', userName: '박지원', unitId: DEMO.unitId, storeName: DEMO.storeName, industry: DEMO.industry, inviteCode: DEMO.inviteCode, email: '', bio: '' }
+        ? { role: 'owner', userId: 'u_owner_001', userName: '김영자', unitId: DEMO.unitId, storeName: DEMO.storeName, pendingUnitId: '', pendingStoreName: '', industry: DEMO.industry, inviteCode: DEMO.inviteCode, email: '', bio: '' }
+        : { role: 'junior', userId: 'u_staff_001', userName: '박지원', unitId: DEMO.unitId, storeName: DEMO.storeName, pendingUnitId: '', pendingStoreName: '', industry: DEMO.industry, inviteCode: DEMO.inviteCode, email: '', bio: '' }
     );
   },
 
@@ -489,6 +592,8 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       userName: name || (role === 'owner' ? '사장님' : '직원'),
       unitId,
       storeName: storeName || (role === 'owner' ? '내 매장' : ''),
+      pendingUnitId: '',
+      pendingStoreName: '',
       industry: industry ?? '',
       inviteCode: role === 'owner' ? inviteCode : '',
       email: '',

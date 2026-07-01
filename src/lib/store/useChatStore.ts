@@ -7,7 +7,7 @@ import { usePlaybookStore } from './usePlaybookStore';
 import { useUnknownQueueStore } from './useUnknownQueueStore';
 import { useSessionStore } from './useSessionStore';
 import { HAS_SUPABASE } from '@/lib/supabase';
-import { fetchChatQueries, insertChatQuery, updateChatSatisfaction } from '@/lib/db';
+import { fetchChatQueries, insertChatQuery, updateChatSatisfaction, recomputePlaybookStats } from '@/lib/db';
 import { guardWrite } from '@/lib/store/useSyncStore';
 import { genId } from '@/lib/utils/id';
 import seedData from '@/data/chat-queries.json';
@@ -72,6 +72,15 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const session = useSessionStore.getState();
     const playbookEntries = usePlaybookStore.getState().entries;
 
+    // 영속(insert) + 영속 성공 후에만 사용통계 재계산(fire-and-forget).
+    // 순서 보장(리뷰 fix-1): recompute는 chat_queries를 읽으므로 행이 커밋된 뒤 돌아야 이번 질의가 집계된다.
+    // insert 프로미스를 공유해 guardWrite(에러 배너)와 recompute가 같은 1회 insert에 붙는다(이중 insert 방지).
+    const persistAndCount = (cq: ChatQuery, entryIds: string[]) => {
+      const writeP = insertChatQuery(cq);
+      void guardWrite(writeP, () => {}, '대화 기록 저장에 실패했어요. (답변은 그대로 보여요)');
+      void writeP.then((ok) => { if (ok && entryIds.length) void recomputePlaybookStats(entryIds); });
+    };
+
     // 저장된 답 그대로 서빙(매칭 확정) — LLM 0콜.
     const serveStored = (entry: typeof playbookEntries[number], confidence: number) => {
       const id = genId('cq');
@@ -81,6 +90,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         // 생성 경로와 동일하게 출력 상한을 강제(저장된 답도 같은 분량 규칙).
         actions: entry.square.action.steps.slice(0, MAX_ACTIONS),
         donts: entry.square.extract.dont ? [entry.square.extract.dont].slice(0, MAX_DONTS) : [],
+        mode: 'served', // 저장된 매장 노하우 그대로 → 검증 배지로 신뢰 표시.
         source: {
           entry_id: entry.id,
           creator_name: entry.creator_name,
@@ -95,7 +105,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         response_block: block, satisfaction: null, resolved_at: now,
       };
       set((s) => ({ history: [...s.history, cq], isLoading: false, lastSubmittedId: id }));
-      void guardWrite(insertChatQuery(cq), () => {}, '대화 기록 저장에 실패했어요. (답변은 그대로 보여요)');
+      persistAndCount(cq, [entry.id]);
     };
 
     // 그라운딩 생성 시도(중간 밴드) — 근거 찾으면 서빙하고 true, 아니면 false.
@@ -109,10 +119,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
       const cq: ChatQuery = {
         id, junior_id: session.userId, junior_name: session.userName, query_text: text, asked_at: now,
         matched_entry_ids: ai.usedSopIds, match_confidence: r.confidence, was_deflected: true,
-        response_block: ai.degraded ? { ...ai.block, degraded: true } : ai.block, satisfaction: null, resolved_at: now,
+        // 여러 노하우를 AI가 모아 정리 → mode:'generated'(검증 배지 비노출 + "AI 정리" 고지).
+        response_block: { ...ai.block, mode: 'generated', ...(ai.degraded ? { degraded: true } : {}) },
+        satisfaction: null, resolved_at: now,
       };
       set((s) => ({ history: [...s.history, cq], isLoading: false, lastSubmittedId: id }));
-      void guardWrite(insertChatQuery(cq), () => {}, '대화 기록 저장에 실패했어요. (답변은 그대로 보여요)');
+      persistAndCount(cq, ai.usedSopIds);
       return true;
     };
 
@@ -196,6 +208,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
         error: '질문을 보내지 못했어요. 잠시 후 다시 시도해 주세요.',
         lastFailed: { text, anonymous: anon },
       });
+    } finally {
+      // 안전망: 성공/실패 모든 경로에서 이미 isLoading=false로 두지만, 예기치 못한 조기 return이나
+      // 미래 코드 변경으로 스피너가 남는 걸 원천 차단(무한 로딩 데드엔드 방지).
+      if (get().isLoading) set({ isLoading: false });
     }
   },
 
@@ -212,15 +228,20 @@ export const useChatStore = create<ChatState>((set, get) => ({
     set((s) => ({ deflectStatus: { ...s.deflectStatus, [queryId]: 'declined' } })),
 
   rate: (id, vote) => {
-    const before = get().history.find((q) => q.id === id)?.satisfaction ?? null;
+    const q = get().history.find((q) => q.id === id);
+    const before = q?.satisfaction ?? null;
+    const ratedEntryIds = q?.matched_entry_ids ?? []; // 평가가 영향 주는 노하우(thumbs/해결률 재계산 대상)
     set((s) => ({
       history: s.history.map((q) => (q.id === id ? { ...q, satisfaction: vote } : q)),
     }));
+    const writeP = updateChatSatisfaction(id, vote);
     void guardWrite(
-      updateChatSatisfaction(id, vote),
+      writeP,
       () => set((s) => ({ history: s.history.map((q) => (q.id === id ? { ...q, satisfaction: before } : q)) })),
       '평가 저장에 실패했어요.',
     );
+    // 평가 영속 후에만 재계산 → 서버가 thumbs_up/down·resolution_rate 갱신, 실시간 구독으로 카드에 반영.
+    void writeP.then((ok) => { if (ok && ratedEntryIds.length) void recomputePlaybookStats(ratedEntryIds); });
   },
 
   dismissError: () => set({ error: null }),

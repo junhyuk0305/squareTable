@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { PressableScale } from '@/components/PressableScale';
 import { SectionLabel } from '@/components/SectionLabel';
+import { useStaffStore } from '@/lib/store/useStaffStore';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Elevation, Radius } from '@/lib/theme/elevation';
 import { frameCapStyle } from '@/lib/theme/layout';
@@ -65,6 +66,8 @@ const ITEMS: HubItem[] = [
 
 export function OwnerHomeHubCards({ onNavigate }: OwnerHomeHubCardsProps) {
   const router = useRouter();
+  // 합류 승인 대기 인원 — '직원' 카드에 배지로 노출(사장이 승인을 놓쳐 직원이 갇히는 걸 방지).
+  const pendingCount = useStaffStore((s) => s.pending.length);
   const go = (path: string) => {
     if (onNavigate) onNavigate(path);
     else router.push(path as never);
@@ -75,7 +78,11 @@ export function OwnerHomeHubCards({ onNavigate }: OwnerHomeHubCardsProps) {
       {/* 제목은 카드 밖 · 진입 카드는 2열 그리드(내용 적은 바로가기라 2열이 효율적) */}
       <SectionLabel icon="grid-outline" title="매장 운영" />
       <View style={styles.grid}>
-        {ITEMS.map((item) => (
+        {ITEMS.map((item) => {
+          // '직원' 카드만 승인 대기 배지·안내를 얹는다(다른 카드는 그대로).
+          const badge = item.key === 'staff' ? pendingCount : 0;
+          const subtitle = badge > 0 ? `합류 승인 대기 ${badge}명 · 확인해요` : item.subtitle;
+          return (
           // 셀 래퍼가 2열 폭을 잡는다. (PressableScale은 style을 내부 뷰에 적용해
           //  % 폭이 이중 적용되므로, 폭은 셀에 두고 카드는 셀을 꽉 채운다)
           <View key={item.key} style={styles.cell}>
@@ -84,20 +91,26 @@ export function OwnerHomeHubCards({ onNavigate }: OwnerHomeHubCardsProps) {
               scaleTo={0.97}
               style={styles.card}
               accessibilityRole="button"
-              accessibilityLabel={`${item.label}. ${item.subtitle}`}
+              accessibilityLabel={badge > 0 ? `${item.label}. 합류 승인 대기 ${badge}명` : `${item.label}. ${subtitle}`}
             >
               <View style={styles.iconWrap}>
                 <Ionicons name={item.icon} size={20} color={InkColors.ink} />
               </View>
+              {badge > 0 && (
+                <View style={styles.badge}>
+                  <Text style={styles.badgeText}>{badge > 99 ? '99+' : badge}</Text>
+                </View>
+              )}
               <Text style={styles.cardLabel} numberOfLines={1}>
                 {item.label}
               </Text>
-              <Text style={styles.cardSubtitle} numberOfLines={2}>
-                {item.subtitle}
+              <Text style={[styles.cardSubtitle, badge > 0 && styles.cardSubtitleAlert]} numberOfLines={2}>
+                {subtitle}
               </Text>
             </PressableScale>
           </View>
-        ))}
+          );
+        })}
       </View>
     </View>
   );
@@ -147,4 +160,23 @@ const styles = StyleSheet.create({
     color: InkColors.ink3,
     lineHeight: 17,
   },
+  // 승인 대기 있을 때 서브타이틀 강조(잉크색·볼드) — 배지와 함께 시선 유도.
+  cardSubtitleAlert: {
+    color: InkColors.ink,
+    fontWeight: '700',
+  },
+  // 카드 우상단 배지 — 벨 배지와 동일 규격(액센트 원형).
+  badge: {
+    position: 'absolute',
+    top: 10,
+    right: 12,
+    minWidth: 18,
+    height: 18,
+    paddingHorizontal: 5,
+    borderRadius: Radius.pill,
+    backgroundColor: BrandColors.accent,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  badgeText: { fontSize: 11, fontWeight: '900', color: '#FFFFFF' },
 });

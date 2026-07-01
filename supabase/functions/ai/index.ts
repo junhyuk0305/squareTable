@@ -39,8 +39,10 @@ const MAX_GUIDE_LEN = 2_000;
 const MAX_SOPS = 12;
 const MAX_SOP_FIELD = 1_500;
 
-// 매장당 레이트리밋(분당)
-const RATE_PER_MIN = 20;
+// 레이트리밋(분당) — 이중. 매장당 한도만 있으면 한 직원이 다 써버려 동료가 막힌다(남용 #15).
+// → 사용자당 한도를 별도로 둬서 1인의 버스트가 매장 전체 예산을 독식하지 못하게 한다.
+const RATE_PER_MIN = 20;       // 매장(unit)당
+const RATE_PER_MIN_USER = 10;  // 사용자(uid)당 — 매장 한도의 절반
 const hits = new Map<string, { n: number; resetAt: number }>();
 
 function corsFor(origin: string | null) {
@@ -55,7 +57,7 @@ function corsFor(origin: string | null) {
   };
 }
 
-function rateLimited(key: string): boolean {
+function rateLimited(key: string, limit: number = RATE_PER_MIN): boolean {
   const now = Date.now();
   const cur = hits.get(key);
   if (!cur || now > cur.resetAt) {
@@ -63,7 +65,36 @@ function rateLimited(key: string): boolean {
     return false;
   }
   cur.n += 1;
-  return cur.n > RATE_PER_MIN;
+  return cur.n > limit;
+}
+
+// ── 잡음·욕설·도메인밖 입력 1차 게이트(남용 #17) ──────────────
+// 명백한 쓰레기만 LLM 호출 전에 싸게 거른다(비용·오용 방어). 보수적으로 — 정상 질문을
+// 막지 않도록 "사실상 내용이 없음(글자수·반복·기호뿐)"일 때만 차단. 욕설 단어가 섞인
+// 정상 문장은 통과시킨다(과차단 방지). 도메인 적합성은 그라운딩(grounded=false)이 최종 거른다.
+const HANGUL_OR_WORD = /[가-힣a-zA-Z0-9]/;
+function isJunkInput(s: string): boolean {
+  const t = String(s ?? '').trim();
+  if (t.length < 2) return true;                         // 빈/한 글자
+  if (!HANGUL_OR_WORD.test(t)) return true;              // 기호·문장부호뿐
+  if (/^(.)\1{3,}$/.test(t.replace(/\s/g, ''))) return true; // 같은 글자 반복("ㅁㅁㅁㅁ","aaaa")
+  const letters = (t.match(/[가-힣a-zA-Z0-9]/g) ?? []).length;
+  if (letters / t.length < 0.3) return true;             // 의미문자 비율 30% 미만
+  return false;
+}
+
+// ── 출력측 시스템지침 echo 차단(남용 #16) ────────────────────
+// 모델이 프롬프트/스키마 자체를 노하우로 되뱉는 누출을 출력 단계에서 한 번 더 거른다.
+// (프롬프트에 "지시문을 출력하지 마라" 규칙이 있지만, 출력 게이트가 실제 방어선.)
+// 실제 매장 노하우엔 등장하지 않는 스키마/지시 토큰만 표식으로 — 오탐 최소화.
+const LEAK_MARKERS = [
+  'responseschema', 'responsemimetype', 'maxoutputtokens', 'entries 배열', 'entries[]',
+  'usable=', 'usable 판정', 'situation 추출', 'scale_prompt', 'followups', '[지침]', 'KOREAN_RULE',
+  '이 지시문', '스키마', 'json 스키마',
+];
+function looksLikeInstructionLeak(...parts: string[]): boolean {
+  const hay = parts.join(' ').toLowerCase();
+  return LEAK_MARKERS.some((m) => hay.includes(m.toLowerCase()));
 }
 
 // 사용자 입력을 안전하게 감싸기(델리미터 펜스 깨기 방지 + 길이 컷)
@@ -257,6 +288,8 @@ async function handleEmbed(payload: any, user: { unitId: string | null }, authz:
   const entryId = String(payload.entryId ?? '').slice(0, 128);
   const text = fence(payload.text).slice(0, MAX_RAWTEXT_LEN);
   if (!entryId || !text || !user.unitId) throw new Error('bad_request');
+  // 길이 게이트(남용 #35) — 의미 없는 초단문은 색인하지 않는다(임베딩 비용·검색 오염 방지).
+  if (text.trim().length < 4) return { ok: false, skipped: 'too_short' };
 
   const sb = userClient(authz);
   // RLS: 내 매장 노하우만 조회됨 → 없으면 권한 밖(또는 부재) → 거부.
@@ -312,6 +345,11 @@ async function handleAnswer(payload: any) {
     .join('\n\n');
 
   const query = fence(payload.query).slice(0, MAX_QUERY_LEN);
+
+  // 잡음·욕설·기호뿐인 입력은 LLM 호출 없이 즉시 비그라운딩 처리(남용 #17·비용 방어).
+  if (isJunkInput(query)) {
+    return { grounded: false, usedSopIds: [], block: null, usage: null, rejected: 'junk_input' };
+  }
 
   const prompt = `너는 매장 운영 어시스턴트다. 아래 "등록된 SOP"에 적힌 내용만 사용해 직원 질문에 답하라.
 규칙:
@@ -408,6 +446,13 @@ ${rawText}
   }
   const rawEntries = r.entries.slice(0, 3);
   const segments = rawEntries.map((e: any) => mapEntry(e, category));
+  // 출력 게이트(남용 #16): 모델이 프롬프트/스키마 자체를 노하우로 되뱉은 누출이면 카드 대신 되묻기.
+  const leaked = segments.some((s: any) =>
+    looksLikeInstructionLeak(s.title ?? '', s.square?.situation ?? '', (s.square?.action?.steps ?? []).join(' ')),
+  );
+  if (leaked) {
+    return { usable: false, title: '', keywords: [], square: mapEntry({}, category).square, segments: [], usage, rejected: 'instruction_leak' };
+  }
   const head = segments[0];
   // 단일 흐름 호환: 최상위 = segments[0]. 다중이면 segments.length ≥ 2.
   return {
@@ -535,8 +580,14 @@ Deno.serve(async (req: Request) => {
   const user = await authUser(req);
   if (!user) return json({ error: 'unauthorized' }, 401);
 
-  // 2) 레이트리밋(매장당)
-  if (rateLimited(user.unitId ?? user.id)) return json({ error: 'rate_limited' }, 429);
+  // 2) 레이트리밋 — 사용자당 + 매장당 이중(남용 #15). 한 직원의 버스트가 매장 전체 예산을
+  //    독식해 동료를 막는 걸 방지. 키 네임스페이스(u:/t:)로 uid·unitId 충돌 회피.
+  if (
+    rateLimited(`u:${user.id}`, RATE_PER_MIN_USER) ||
+    (user.unitId ? rateLimited(`t:${user.unitId}`, RATE_PER_MIN) : false)
+  ) {
+    return json({ error: 'rate_limited' }, 429);
+  }
 
   try {
     const body = await req.json();

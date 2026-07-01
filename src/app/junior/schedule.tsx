@@ -14,11 +14,13 @@ import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useStaffStore } from '@/lib/store/useStaffStore';
 import {
   useScheduleStore,
+  shiftsOn,
   type ShiftTemplate,
   type SwapRequest,
 } from '@/lib/store/useScheduleStore';
+import type { Junior } from '@/types';
 import { todayStr } from '@/lib/utils/attendance';
-import { mondayOf, fmtDateKo, closedDaysLabel, weekdayOf } from '@/lib/utils/schedule';
+import { mondayOf, fmtDateKo, closedDaysLabel, weekdayOf, addDays } from '@/lib/utils/schedule';
 import { formatAsked } from '@/lib/utils/time';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Elevation, Radius } from '@/lib/theme/elevation';
@@ -90,6 +92,12 @@ export default function JuniorScheduleScreen() {
     [swaps],
   );
 
+  // 현재 시각 "HH:MM"(오늘 이미 끝난 근무 제외용). 순수 헬퍼로 분리 — useMemo 안에서 new Date()를
+  // 부르면 비순수라 React Compiler가 메모이즈를 못 한다(컴파일러가 헬퍼 호출 결과를 자동 메모이즈).
+  const now = new Date();
+  const nowHM = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+  const myNext = nextShiftOf(templates, swaps, me, today, staff, nowHM);
+
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
       <Stack.Screen options={{ title: '근무표' }} />
@@ -104,17 +112,35 @@ export default function JuniorScheduleScreen() {
       />
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        {/* 가게 기본 정보 요약 */}
-        <View style={styles.infoCard}>
-          <Ionicons name="storefront-outline" size={16} color={InkColors.ink2} />
-          <Text style={styles.infoText}>
-            운영 {config.open}~{config.close} · 휴무 {closedDaysLabel(config.closedDays)}
-          </Text>
-        </View>
-        {!!config.note && <Text style={styles.infoNote}>{config.note}</Text>}
-
         {tab === 'week' ? (
           <>
+            {/* 내 다음 근무 — 직원이 가장 알고싶은 ‘언제·누구와’를 격자보다 먼저 */}
+            {myNext ? (
+              <View style={styles.hero}>
+                <Text style={styles.heroTitle}>{myNext.ongoing ? '지금 근무 중' : '내 다음 근무'}</Text>
+                <Text style={styles.heroBig}>
+                  {myNext.dayWord} {myNext.sh.template.start}–{myNext.sh.template.end}
+                  {durLabel(myNext.sh.template.start, myNext.sh.template.end)
+                    ? ` (${durLabel(myNext.sh.template.start, myNext.sh.template.end)})`
+                    : ''}
+                </Text>
+                <Text style={styles.heroSub}>{myNext.sub}</Text>
+                <Pressable
+                  onPress={() => setPicking(true)}
+                  accessibilityRole="button"
+                  accessibilityLabel="교대 요청하기"
+                  style={({ pressed }) => [styles.heroCta, pressed && { opacity: 0.85 }]}
+                >
+                  <Ionicons name="swap-horizontal-outline" size={16} color="#fff" />
+                  <Text style={styles.heroCtaText}>교대 요청하기</Text>
+                </Pressable>
+              </View>
+            ) : (
+              <View style={styles.heroEmpty}>
+                <Ionicons name="calendar-clear-outline" size={16} color={InkColors.ink3} />
+                <Text style={styles.heroEmptyText}>앞으로 2주간 예정된 내 근무가 없어요.</Text>
+              </View>
+            )}
             <ScheduleWeek
               monday={monday}
               setMonday={setMonday}
@@ -204,6 +230,15 @@ export default function JuniorScheduleScreen() {
           </View>
         )}
 
+        {/* 가게 기본 정보 — 보조로 강등(하단 한 줄 칩) */}
+        <View style={styles.storeChip}>
+          <Ionicons name="storefront-outline" size={15} color={InkColors.ink3} />
+          <Text style={styles.storeChipText}>
+            운영 {config.open}~{config.close} · 휴무 {closedDaysLabel(config.closedDays)}
+          </Text>
+        </View>
+        {!!config.note && <Text style={styles.infoNote}>{config.note}</Text>}
+
         <View style={{ height: 12 }} />
       </ScrollView>
 
@@ -257,6 +292,57 @@ function Section({
 
 function Empty({ text }: { text: string }) {
   return <Text style={styles.empty}>{text}</Text>;
+}
+
+/**
+ * 오늘부터 2주 내 '나'의 가장 가까운(또는 진행 중) 근무. 없으면 null.
+ * 순수 함수 — render에서 호출하면 React Compiler가 자동 메모이즈한다.
+ */
+function nextShiftOf(
+  templates: ShiftTemplate[],
+  swaps: SwapRequest[],
+  me: string,
+  today: string,
+  staff: Junior[],
+  nowHM: string,
+) {
+  for (let i = 0; i < 14; i++) {
+    const date = addDays(today, i);
+    const all = shiftsOn(templates, swaps, date);
+    const mineShifts = all
+      .filter((sh) => sh.workerStaffId === me)
+      .sort((a, b) => a.template.start.localeCompare(b.template.start));
+    for (const sh of mineShifts) {
+      if (i === 0 && sh.template.end <= nowHM) continue; // 오늘 이미 끝난 근무는 건너뜀
+      const coworkers = all
+        .filter(
+          (o) =>
+            o.workerStaffId !== me &&
+            o.template.start < sh.template.end &&
+            sh.template.start < o.template.end,
+        )
+        .map((o) => staff.find((x) => x.id === o.workerStaffId)?.name ?? '동료');
+      const ongoing = i === 0 && sh.template.start <= nowHM && nowHM < sh.template.end;
+      const dayWord = i === 0 ? '오늘' : i === 1 ? '내일' : fmtDateKo(date);
+      const subParts = [coworkers.length ? `${coworkers.join('·')}님과 함께` : '혼자 근무'];
+      if (ongoing) subParts.push('근무 중');
+      return { date, sh, ongoing, dayWord, sub: subParts.join(' · ') };
+    }
+  }
+  return null;
+}
+
+/** "13:00"~"18:00" → "5시간" / "4시간 30분". 음수(자정 넘김)면 빈 문자열. */
+function durLabel(start: string, end: string): string {
+  const toMin = (t: string) => {
+    const [h, m] = t.split(':').map(Number);
+    return h * 60 + m;
+  };
+  const d = toMin(end) - toMin(start);
+  if (d <= 0) return '';
+  const h = Math.floor(d / 60);
+  const m = d % 60;
+  return m ? `${h}시간 ${m}분` : `${h}시간`;
 }
 
 function SwapCard({
@@ -313,9 +399,19 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: InkColors.cream },
   scroll: { paddingHorizontal: 20, paddingBottom: 8, gap: 14 },
 
-  infoCard: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: InkColors.bg, borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, paddingVertical: 12, paddingHorizontal: 14, ...Elevation.e1 },
-  infoText: { fontSize: 13, fontWeight: '700', color: InkColors.ink },
-  infoNote: { fontSize: 12, color: InkColors.ink3, marginTop: -8, paddingHorizontal: 2 },
+  // 내 다음 근무 히어로(노랑) — 격자 위 단일 강조.
+  hero: { backgroundColor: BrandColors.yellow, borderRadius: Radius.lg, paddingVertical: 16, paddingHorizontal: 16, ...Elevation.e2 },
+  heroTitle: { fontSize: 12.5, fontWeight: '800', color: '#7a6712' },
+  heroBig: { fontSize: 17, fontWeight: '900', color: InkColors.ink, marginTop: 6, letterSpacing: -0.2 },
+  heroSub: { fontSize: 12.5, fontWeight: '600', color: '#6f5f2a', marginTop: 3 },
+  heroCta: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: InkColors.ink, borderRadius: Radius.md, paddingVertical: 11, marginTop: 13 },
+  heroCtaText: { fontSize: 13.5, fontWeight: '800', color: '#fff' },
+  heroEmpty: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: InkColors.bg, borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, paddingVertical: 14, paddingHorizontal: 14, ...Elevation.e1 },
+  heroEmptyText: { flex: 1, fontSize: 13, fontWeight: '700', color: InkColors.ink2 },
+
+  infoNote: { fontSize: 12, color: InkColors.ink3, paddingHorizontal: 2 },
+  storeChip: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: InkColors.cream, borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, paddingVertical: 10, paddingHorizontal: 12 },
+  storeChipText: { flex: 1, fontSize: 12.5, fontWeight: '700', color: InkColors.ink2 },
 
   tip: { fontSize: 12, color: InkColors.ink3, marginTop: 10, textAlign: 'center' },
 

@@ -14,24 +14,28 @@ export const styles = StyleSheet.create({
   sectionLabel: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 4 },
   sectionLabelText: { fontSize: 13.5, fontWeight: '800', color: InkColors.ink2, letterSpacing: -0.2 },
   sectionLabelTrailing: { marginLeft: 'auto' },
-  // 2열 행
-  row: { flexDirection: 'row', gap: 12 },
-  col: { flex: 1, gap: 8 },
-  cardFill: { flex: 1 },
-  // 카드 하단 보조행(설명 + chevron)
-  cardFootRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
-  countPill: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: InkColors.ink2,
-    backgroundColor: InkColors.bgSoft,
-    paddingVertical: 3,
-    paddingHorizontal: 9,
-    borderRadius: Radius.pill,
-    overflow: 'hidden',
+
+  // 오늘 한눈에 — 3칸 KPI(할일·공지·근무). 각 칸 동일 크기로 스캔.
+  kpiRow: { flexDirection: 'row', gap: 8 },
+  kpi: {
+    flex: 1,
+    backgroundColor: InkColors.bg,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: InkColors.line,
+    paddingVertical: 14,
+    paddingHorizontal: 8,
+    alignItems: 'center',
+    gap: 5,
+    ...Elevation.e1,
   },
-  // 오늘 할일 전부 완료 → 노란 틴트로 '착착 끝남' 작은 보상(액센트).
-  countPillDone: { backgroundColor: BrandColors.yellowSoft, color: InkColors.ink },
+  // 할일이 남았을 때만 노란 틴트로 '아직 할 게 있음'을 약하게 강조(액센트).
+  kpiHi: { backgroundColor: BrandColors.yellowSoft, borderColor: BrandColors.yellowDeep },
+  kpiValue: { fontSize: 22, fontWeight: '900', color: InkColors.ink, letterSpacing: -0.5, lineHeight: 24 },
+  kpiUnit: { fontSize: 13, fontWeight: '800', color: InkColors.ink2 },
+  kpiLabel: { fontSize: 11, fontWeight: '700', color: InkColors.ink3 },
+  // 교대 요청이 들어와 있으면 근무 칸 우상단에 빨간 점.
+  kpiDot: { position: 'absolute', top: 8, right: 8, width: 7, height: 7, borderRadius: 4, backgroundColor: BrandColors.accent },
 
   // 출퇴근
   clockCard: {
@@ -64,60 +68,23 @@ export const styles = StyleSheet.create({
   clockMore: { flexDirection: 'row', alignItems: 'center', gap: 2, marginTop: 8 },
   clockMoreText: { fontSize: 13, fontWeight: '700', color: InkColors.ink3 },
 
-  // 안 읽은 공지
-  noticeCard: {
-    backgroundColor: InkColors.bg,
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: BrandColors.yellowDeep,
-    padding: 18,
-    gap: 8,
-    ...Elevation.e1,
-  },
-  noticeBadge: {
-    marginLeft: 'auto',
-    minWidth: 22,
-    height: 22,
-    paddingHorizontal: 7,
-    borderRadius: Radius.pill,
-    backgroundColor: BrandColors.accent,
+  // 안 읽은 공지 — 한 줄 미리보기 strip(면적 최소·내용 보존). 노란 좌측바로 공지임을 표시.
+  noticeStrip: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-  },
-  noticeBadgeText: { fontSize: 12, fontWeight: '900', color: InkColors.bubbleText },
-  noticeBody: { fontSize: 14, color: InkColors.ink, fontWeight: '600', lineHeight: 21 },
-  noticeSub: { fontSize: 12, color: InkColors.ink3, fontWeight: '600' },
-
-  // 오늘 할일 (2열 컴팩트)
-  taskCard: {
+    gap: 8,
     backgroundColor: InkColors.bg,
     borderRadius: Radius.md,
     borderWidth: 1,
     borderColor: InkColors.line,
-    padding: 16,
-    gap: 10,
-    justifyContent: 'center',
+    borderLeftWidth: 3,
+    borderLeftColor: BrandColors.yellowDeep,
+    paddingVertical: 11,
+    paddingHorizontal: 13,
     ...Elevation.e1,
   },
-  bar: { height: 8, borderRadius: Radius.pill, backgroundColor: InkColors.bgSoft, overflow: 'hidden' },
-  barFill: { height: 8, borderRadius: Radius.pill, backgroundColor: BrandColors.yellow },
-  taskSub: { fontSize: 13, color: InkColors.ink3, fontWeight: '600' },
-
-  // 이번 주 근무표 (2열 컴팩트)
-  schedCard: {
-    backgroundColor: InkColors.bg,
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: InkColors.line,
-    padding: 16,
-    gap: 4,
-    justifyContent: 'center',
-    ...Elevation.e1,
-  },
-  schedBadge: { backgroundColor: BrandColors.accent, paddingHorizontal: 9, paddingVertical: 3, borderRadius: Radius.pill },
-  schedBadgeText: { fontSize: 11, fontWeight: '800', color: InkColors.bubbleText },
-  schedSub: { fontSize: 14, color: InkColors.ink, fontWeight: '700', lineHeight: 20 },
-  schedHint: { fontSize: 12, color: InkColors.ink3, fontWeight: '600', lineHeight: 17 },
+  noticeStripText: { flex: 1, fontSize: 13, fontWeight: '700', color: InkColors.ink },
+  noticeStripMore: { fontSize: 12, fontWeight: '700', color: InkColors.ink3 },
 
   // 노하우 묻기
   askCard: {
@@ -130,26 +97,31 @@ export const styles = StyleSheet.create({
     ...Elevation.e1,
   },
   askSub: { fontSize: 13, color: InkColors.ink3, lineHeight: 19 },
+  // 진짜 입력처럼 보이는 흰 바 + 우측 노란 전송 버튼(탭하면 물어보기 탭으로 진입).
   askBar: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: InkColors.bgSoft,
+    backgroundColor: InkColors.bg,
+    borderWidth: 1,
+    borderColor: InkColors.line,
     borderRadius: Radius.pill,
-    paddingLeft: 8,
-    paddingRight: 16,
-    paddingVertical: 8,
+    paddingLeft: 16,
+    paddingRight: 6,
+    paddingVertical: 6,
+    ...Elevation.e1,
   },
-  // 검색 진입 아이콘 = 노란 배지 위 검정 아이콘(옐로+다크 모티프) — 탭을 부르는 작은 액센트.
-  askIconBadge: {
-    width: 30,
-    height: 30,
-    borderRadius: Radius.sm,
-    backgroundColor: BrandColors.yellowSoft,
+  askBarText: { flex: 1, fontSize: 14, color: InkColors.ink3, fontWeight: '600' },
+  // 전송 버튼 = 노랑 원형 + 검정 화살표(옐로 글로우). 입력창의 주인공 액션 자리.
+  askSend: {
+    width: 32,
+    height: 32,
+    borderRadius: Radius.pill,
+    backgroundColor: BrandColors.yellow,
     alignItems: 'center',
     justifyContent: 'center',
+    ...Elevation.ey,
   },
-  askBarText: { fontSize: 14, color: InkColors.ink3, fontWeight: '600' },
   askChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   askChip: {
     backgroundColor: InkColors.bg,
@@ -160,30 +132,4 @@ export const styles = StyleSheet.create({
     paddingHorizontal: 13,
   },
   askChipText: { fontSize: 12.5, fontWeight: '700', color: InkColors.ink2 },
-
-  // 많이 물어본 노하우 (랭킹 리스트) — 순위 + 카테고리색 점 + 제목 + 노랑 인용수 칩
-  popularCard: {
-    backgroundColor: InkColors.bg,
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: InkColors.line,
-    paddingHorizontal: 16,
-    ...Elevation.e1,
-  },
-  popularRow: { flexDirection: 'row', alignItems: 'center', gap: 11, paddingVertical: 13 },
-  popularRowBorder: { borderTopWidth: 1, borderTopColor: InkColors.line },
-  popularRank: { fontSize: 15, fontWeight: '900', color: InkColors.ink, width: 14, textAlign: 'center' },
-  popularDot: { width: 8, height: 8, borderRadius: Radius.pill },
-  popularTitle: { flex: 1, fontSize: 14, fontWeight: '700', color: InkColors.ink },
-  // 인용수 칩 = 노랑 소프트 틴트 + 검정(완료/달성 톤) — 화면 액센트 보강.
-  popularHits: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: InkColors.ink,
-    backgroundColor: BrandColors.yellowSoft,
-    paddingVertical: 3,
-    paddingHorizontal: 8,
-    borderRadius: Radius.pill,
-    overflow: 'hidden',
-  },
 });

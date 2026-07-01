@@ -14,6 +14,18 @@ export const SERVE_THRESHOLD = 0.7;
 // generateAnswer의 그라운딩(SOP에 근거 없으면 grounded=false→사장 라우팅)이 최종으로 거른다.
 export const GENERATE_THRESHOLD = 0.45;
 
+// ── SERVE 그라운딩 게이트 (2026-07-01, 격리매장 하니스 튜닝) ───────────────────
+// confidence≥SERVE 여도, 자동 확정 답으로 내보낼 노하우(융합 1등)가 "렉시컬(키워드) 1등과
+// 일치"하고 근거·마진이 충분할 때만 SERVE 한다. 벡터만 높고 키워드 근거가 0이거나(예:
+// "영업 끝나면 정리"→POS) 렉시컬 동점으로 애매하면(예: "혼자 바쁘면"→피크타임 vs 사장부재)
+// 자동 확정 대신 GENERATE(여러 노하우 종합 + "AI가 정리한 답" 헤지)로 흘린다.
+// 실측(store_eval 15케이스): 거짓SERVE 13.3%→0%, SERVE정밀도 81.8%→100%, 잃은 정답 0.
+// ⚠️ 표본이 작다 → 라벨셋을 실쿼리로 키우며 재보정(scripts/eval-knowhow-ops.mjs).
+export const SERVE_REQUIRE_LEXICAL_AGREEMENT = true;
+export const SERVE_LEX_MIN = 0.05;      // 서빙 엔트리의 최소 렉시컬 근거(키워드 겹침)
+export const SERVE_LEX_MARGIN = 0.02;   // 렉시컬 1등−2등 최소 마진(동점 애매 차단)
+export const SERVE_VEC_OVERRIDE = 0.2;  // 벡터 1등−2등 마진이 이 이상이면 렉시컬 불일치여도 SERVE(압도적 의미매치 구제밸브)
+
 // 출력 분량 상한 — API 레벨에서 강제(max_output_tokens) + 스키마 항목 수 제한
 export const MAX_OUTPUT_TOKENS_ANSWER = 300;
 export const MAX_OUTPUT_TOKENS_SQUARE = 700;

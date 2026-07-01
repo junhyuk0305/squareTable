@@ -12,10 +12,14 @@ import { useStaffStore } from '@/lib/store/useStaffStore';
 import { useScheduleStore } from '@/lib/store/useScheduleStore';
 import { purgeExpiredFormerStaff } from '@/lib/db';
 import { HAS_SUPABASE } from '@/lib/supabase';
+import { deriveSubscription } from '@/lib/utils/subscription';
 
 export default function OwnerLayout() {
   const status = useSessionStore((s) => s.status);
   const unitId = useSessionStore((s) => s.unitId);
+  const subStatus = useSessionStore((s) => s.subStatus);
+  const trialEndsAt = useSessionStore((s) => s.trialEndsAt);
+  const paidUntil = useSessionStore((s) => s.paidUntil);
   const pathname = usePathname();
 
   // 로그인되면 DB에서 당겨오고 실시간 구독(인박스·업무보드·출퇴근이 다른 기기 변경에 즉시 반응).
@@ -58,6 +62,17 @@ export default function OwnerLayout() {
     pathname !== '/owner/onboarding'
   ) {
     return <Redirect href="/owner/create-store" />;
+  }
+  // 매장은 있으나 구독 만료 → 계좌이체 안내(/billing)로 강제. 소프트 페이월(수동과금).
+  // fail-open: 구독 정보 없음('none')이면 막지 않는다(deriveSubscription).
+  if (
+    HAS_SUPABASE &&
+    status === 'signed_in' &&
+    unitId &&
+    !deriveSubscription({ subStatus, trialEndsAt, paidUntil }).entitled &&
+    pathname !== '/billing'
+  ) {
+    return <Redirect href="/billing" />;
   }
   return (
     <Stack

@@ -29,6 +29,11 @@ import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { styles } from '@/styles/ownerDashboardStyles';
 import type { Category } from '@/types';
 
+/** KPI 칸용 인건비 압축 표기 — 만원 이상은 "142만", 그 미만은 원 단위. */
+function manwon(n: number): string {
+  return n >= 10000 ? `${Math.round(n / 10000)}만` : won(n);
+}
+
 export default function OwnerDashboardScreen() {
   const router = useRouter();
   const {
@@ -39,7 +44,6 @@ export default function OwnerDashboardScreen() {
     taskTotal,
     taskDoneCount,
     pending,
-    topFaq,
     brain,
     isSolo,
   } = useOwnerDashboardData();
@@ -233,31 +237,45 @@ export default function OwnerDashboardScreen() {
           </Appear>
         )}
 
-        {/* ② 오늘 업무 요약 — 완료/전체·근무·인건비를 스캔용 한 줄 카드로. 제목은 카드 밖. */}
+        {/* ② 오늘 한눈에 — 업무·근무·인건비를 동일 크기 3칸 KPI로 압축(스캔). 각 칸이 해당 화면으로. */}
         {entriesCount > 0 && (
           <Appear delay={60} style={styles.section}>
-          <SectionLabel
-            icon="checkbox-outline"
-            title="오늘 업무"
-            trailing={
-              <Text style={styles.todayPill}>
-                {taskDoneCount}/{taskTotal}
+          <SectionLabel icon="today-outline" title="오늘 한눈에" />
+          <View style={styles.kpiRow}>
+            <Pressable
+              onPress={() => router.push('/owner/work')}
+              style={({ pressed }) => [styles.kpi, pressed && { opacity: 0.85 }]}
+              accessibilityRole="button"
+              accessibilityLabel={`오늘 업무 ${taskDoneCount}/${taskTotal} 완료`}
+            >
+              <Text style={styles.kpiValue}>
+                {taskDoneCount}
+                <Text style={styles.kpiUnit}>/{taskTotal}</Text>
               </Text>
-            }
-          />
-          <Pressable
-            onPress={() => router.push('/owner/work')}
-            style={({ pressed }) => [styles.todayCard, pressed && { opacity: 0.85 }]}
-            accessibilityRole="button"
-            accessibilityLabel={`오늘 업무 ${taskDoneCount}/${taskTotal} 완료`}
-          >
-            <View style={styles.bar}>
-              <View style={[styles.barFill, { width: `${taskTotal ? (taskDoneCount / taskTotal) * 100 : 0}%` }]} />
-            </View>
-            <Text style={styles.todaySub}>
-              지금 근무 {working}명 · 이번 달 인건비 {won(monthPay)}
-            </Text>
-          </Pressable>
+              <Text style={styles.kpiLabel}>업무 완료</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => router.push('/owner/attendance')}
+              style={({ pressed }) => [styles.kpi, pressed && { opacity: 0.85 }]}
+              accessibilityRole="button"
+              accessibilityLabel={`지금 근무 ${working}명`}
+            >
+              <Text style={styles.kpiValue}>
+                {working}
+                <Text style={styles.kpiUnit}>명</Text>
+              </Text>
+              <Text style={styles.kpiLabel}>근무 중</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => router.push('/owner/attendance')}
+              style={({ pressed }) => [styles.kpi, styles.kpiHi, pressed && { opacity: 0.85 }]}
+              accessibilityRole="button"
+              accessibilityLabel={`이번 달 인건비 ${won(monthPay)}`}
+            >
+              <Text style={styles.kpiValue}>{manwon(monthPay)}</Text>
+              <Text style={styles.kpiLabel}>이번 달 인건비</Text>
+            </Pressable>
+          </View>
           </Appear>
         )}
 
@@ -268,38 +286,8 @@ export default function OwnerDashboardScreen() {
           </View>
         </Appear>
 
-        {/* 알바 FAQ Top → 노하우화 */}
-        {topFaq.length > 0 && (
-          <Appear delay={180} style={styles.faqSection}>
-            <SectionLabel icon="help-circle-outline" title="알바가 자주 묻는 질문" hint="답하면 노하우로 쌓여요" />
-            <View style={styles.faqList}>
-              {topFaq.map((q) => {
-                const cm = getCategoryMeta(q.presumed_category);
-                return (
-                  <Pressable
-                    key={q.id}
-                    onPress={() => router.push({ pathname: '/owner/coach', params: { uqId: q.id } })}
-                    style={({ pressed }) => [styles.faqRow, pressed && { opacity: 0.7 }]}
-                  >
-                    <View style={[styles.faqDot, { backgroundColor: cm.color }]} />
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.faqQ} numberOfLines={1}>
-                        {q.query_text}
-                      </Text>
-                      <View style={styles.faqMetaRow}>
-                        <Text style={styles.faqMeta}>{cm.label}</Text>
-                        <Text style={styles.faqHits}>🔥 {q.similar_queries_count + 1}명</Text>
-                      </View>
-                    </View>
-                    <Text style={styles.faqAction}>답변 →</Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-          </Appear>
-        )}
-
-        {/* ④ 임팩트 — 매장 두뇌 완성도 게이지 (F3). 노하우가 하나라도 있을 때만 */}
+        {/* ③ 임팩트 — 매장 두뇌 완성도 게이지 (F3). 노하우가 하나라도 있을 때만.
+            (알바 FAQ Top은 '받은 질문' 히어로 → 인박스와 역할이 겹쳐 제거 — 미답변 목록은 인박스가 단일 소스) */}
         {entriesCount > 0 && (
           <Appear delay={240}>
             <BrainScoreCard score={brain} onFill={fillWeak} />
@@ -313,39 +301,36 @@ export default function OwnerDashboardScreen() {
           </Pressable>
         </View>
 
-        {/* 업종 표준 템플릿 둘러보기 — 신규/기존 매장 모두에 노출(검색해 내 노하우로 바로 가져오기) */}
+        {/* ④ 오늘의 제안 — 하루한줄/핸드오프/템플릿이 동시에 경쟁하던 3개 넛지를
+            우선순위 1개로만 노출(결정 피로 제거). 모든 진입점은 우선순위로 도달 가능. */}
         <Appear delay={entriesCount > 0 ? 300 : 60} style={styles.section}>
-          <NudgeCard
-            icon="albums-outline"
-            title="노하우 템플릿 둘러보기"
-            sub="업종에서 자주 쓰는 노하우를 검색해 내 노하우로 바로 가져와요"
-            onPress={() => router.push('/owner/templates')}
-          />
+          <SectionLabel icon="bulb-outline" title="오늘의 제안" />
+          {entriesCount > 0 && pending > 0 ? (
+            // F4 하루 한 줄 — 미답변이 쌓여 있을 때 최우선
+            <NudgeCard
+              icon="moon-outline"
+              title="하루 한 줄 노하우"
+              sub="오늘 새로 안 것·실수, 한 줄이면 AI가 노하우로 정리해요"
+              onPress={() => router.push('/owner/coach')}
+            />
+          ) : entriesCount > 0 && isSolo ? (
+            // F6 핸드오프 — 혼자 모드(직원 0명)
+            <NudgeCard
+              icon="people-outline"
+              title="지금 쌓으면, 직원 뽑을 때 그대로 교육 AI"
+              sub="혼자 일하는 지금 정리해두면 첫 직원이 와도 다시 설명 안 해도 돼요"
+              onPress={() => router.push('/owner/staff')}
+            />
+          ) : (
+            // 기본 — 업종 표준 템플릿 둘러보기(신규·기존 모두)
+            <NudgeCard
+              icon="albums-outline"
+              title="노하우 템플릿 둘러보기"
+              sub="업종에서 자주 쓰는 노하우를 검색해 내 노하우로 바로 가져와요"
+              onPress={() => router.push('/owner/templates')}
+            />
+          )}
         </Appear>
-
-        {/* 혼자 모드 넛지 — 입력을 강요하지 않고 '돌려받는 것'·미래가치로 끌어들인다 */}
-        {entriesCount > 0 && (
-          <Appear delay={300} style={styles.nudges}>
-            {/* F4 하루 한 줄 노하우 — 미답변이 없을 땐 위 HERO가 이미 노하우로 보내므로 중복 숨김 */}
-            {pending > 0 && (
-              <NudgeCard
-                icon="moon-outline"
-                title="하루 한 줄 노하우"
-                sub="오늘 새로 안 것·실수, 한 줄이면 AI가 노하우로 정리해요"
-                onPress={() => router.push('/owner/coach')}
-              />
-            )}
-            {/* F6 핸드오프 넛지 — 혼자 모드(직원 0명)에서만 */}
-            {isSolo && (
-              <NudgeCard
-                icon="people-outline"
-                title="지금 쌓으면, 직원 뽑을 때 그대로 교육 AI"
-                sub="혼자 일하는 지금 정리해두면 첫 직원이 와도 다시 설명 안 해도 돼요"
-                onPress={() => router.push('/owner/staff')}
-              />
-            )}
-          </Appear>
-        )}
 
         {/* 핵심 기능 안내 배너 — 최하단. 스와이프로 핵심 기능을 소개하고 탭하면 바로 그 화면으로 */}
         <Appear delay={360} style={styles.section}>

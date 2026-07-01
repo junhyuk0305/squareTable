@@ -146,6 +146,10 @@ export type ResponseBlock = {
   actions: string[];
   donts: string[];
   degraded?: boolean;   // AI 서버 실패로 기본 답으로 폴백했는가 → 답변 위에 고지 표시
+  // 신뢰 신호: 'served'=저장된 매장 노하우를 그대로 서빙(검증 배지 신뢰) /
+  //           'generated'=여러 노하우를 AI가 모아 정리(검증 배지 비노출 + "AI 정리" 고지).
+  //           미설정(기존 행)은 served 취급(하위호환).
+  mode?: 'served' | 'generated';
   source: {
     entry_id: string;
     creator_name: string;

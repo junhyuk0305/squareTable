@@ -10,8 +10,6 @@ export type SimilarGroupRowProps = {
   uq: UnknownQuery;
   /** 행 탭 → 답변 화면 등으로 이동. */
   onPress: (uq: UnknownQuery) => void;
-  /** 보관하기(인라인 버튼). 미지정 시 버튼 숨김. */
-  onArchive?: (uq: UnknownQuery) => void;
   /** 자동응답 켜기(인라인 버튼). 미지정 시 버튼 숨김. */
   onAutoAnswer?: (uq: UnknownQuery) => void;
 };
@@ -21,14 +19,14 @@ export type SimilarGroupRowProps = {
  * - 질문 텍스트(2줄 truncate) · 카테고리 칩(presumed_category) · 메타(이름·시각).
  * - similar_queries_count > 0 이면 "비슷한 질문 N건" 묶음 배지(노랑 액센트).
  * - anonymous면 이름 대신 🔒 익명.
- * - onArchive/onAutoAnswer가 오면 작은 인라인 액션 버튼(보관/자동응답)을 보여준다.
+ * - onAutoAnswer가 오면 작은 인라인 '자동응답' 버튼을 보여준다.
  * 모두 프레임 내부 일반 흐름 — 별도 캡 불필요.
  */
-export function SimilarGroupRow({ uq, onPress, onArchive, onAutoAnswer }: SimilarGroupRowProps) {
+export function SimilarGroupRow({ uq, onPress, onAutoAnswer }: SimilarGroupRowProps) {
   const n = uq.similar_queries_count;
   // 표기는 전 화면 '{총 인원}명이 물었어요'로 통일 (n = 본인 외 인원).
   const groupLabel = n > 0 ? `${n + 1}명이 물었어요` : null;
-  const hasActions = !!onArchive || !!onAutoAnswer;
+  const hasActions = !!onAutoAnswer;
 
   const a11yParts = [
     uq.query_text,
@@ -79,17 +77,6 @@ export function SimilarGroupRow({ uq, onPress, onArchive, onAutoAnswer }: Simila
               <Text style={styles.actionText}>자동응답</Text>
             </Pressable>
           )}
-          {onArchive && (
-            <Pressable
-              onPress={() => onArchive(uq)}
-              accessibilityRole="button"
-              accessibilityLabel="보관하기"
-              hitSlop={6}
-              style={({ pressed }) => [styles.actionBtn, styles.actionBtnGhost, pressed && styles.actionBtnPressed]}
-            >
-              <Text style={[styles.actionText, styles.actionTextGhost]}>보관</Text>
-            </Pressable>
-          )}
         </View>
       )}
     </View>
@@ -105,12 +92,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 12,
-    paddingVertical: 14,
-    paddingHorizontal: 4,
+    paddingVertical: 16,
+    paddingHorizontal: 16,
   },
   rowPressed: { backgroundColor: InkColors.bgSoft },
   chipCol: { flexShrink: 0, paddingTop: 2 },
-  bodyCol: { flex: 1, minWidth: 0, gap: 6 },
+  bodyCol: { flex: 1, minWidth: 0, gap: 8 },
   query: {
     fontSize: 16,
     color: InkColors.ink,
@@ -145,21 +132,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'flex-end',
     gap: 8,
-    paddingBottom: 12,
-    paddingHorizontal: 4,
+    paddingBottom: 16,
+    paddingHorizontal: 16,
   },
   actionBtn: {
-    minHeight: 32,
-    paddingHorizontal: 12,
+    minHeight: 44,
+    paddingHorizontal: 16,
     borderRadius: Radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: InkColors.ink,
-  },
-  actionBtnGhost: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: InkColors.line,
   },
   actionBtnPressed: { opacity: 0.7 },
   actionText: {
@@ -167,5 +149,4 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#FFFFFF',
   },
-  actionTextGhost: { color: InkColors.ink2 },
 });

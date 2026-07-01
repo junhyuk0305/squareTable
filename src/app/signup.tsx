@@ -81,10 +81,11 @@ export default function SignupScreen() {
   };
   const toggleOne = (k: ConsentKey) => setConsent((prev) => ({ ...prev, [k]: !prev[k] }));
 
-  // 필수 입력값이 모두 채워졌는지 — 제출 버튼 활성화 게이트(사장은 가게이름 포함)
+  // 필수 입력값이 모두 채워졌는지 — 제출 버튼 활성화 게이트(사장은 가게이름·업종 포함).
+  // 직원 초대코드는 선택 — 비우면 가입 후 junior/join(가게 연결) 화면에서 붙인다(데드엔드 없음).
   const requiredFilled =
     !!name.trim() && !!email.trim() && !!pw && !!phone.trim() &&
-    (role === 'owner' ? (!!storeName.trim() && !!industry) : !!inviteCode.trim());
+    (role === 'owner' ? (!!storeName.trim() && !!industry) : true);
 
   const start = async () => {
     setErr(null);
@@ -101,7 +102,7 @@ export default function SignupScreen() {
     if (!isValidPhone(phone)) return setErr('전화번호 형식을 확인해주세요. (예: 010-1234-5678)');
     if (role === 'owner' && !storeName.trim()) return setErr('가게 이름을 입력해주세요.');
     if (role === 'owner' && !industry) return setErr('업종을 선택해주세요.');
-    if (role === 'junior' && !inviteCode.trim()) return setErr('가게 초대코드를 입력해주세요.');
+    // 직원 초대코드는 선택 — 비우면 가입 후 '가게 연결'(junior/join)로 유도하므로 여기서 막지 않는다.
 
     // Supabase 미설정(로컬 데모): 새 계정 = 빈 매장에서 시작(데모 데이터 없음)
     if (!HAS_SUPABASE) {
@@ -120,11 +121,18 @@ export default function SignupScreen() {
     setBusy(true);
     // 1) 계정 생성 — 이미 생성됐으면(가게 연결만 실패했던 경우) 건너뛴다.
     if (!accountReady) {
-      // 전화번호 중복 사전검사(주키) — 충돌 시 로그인 유도
-      if (await isPhoneTaken(normalizePhone(phone))) {
+      // 전화번호 중복 사전검사(주키). 'taken'=차단, 'unknown'=검사실패도 진행하지 않고 차단
+      // (우회시키면 트리거로 떨어진다 — 트리거는 이제 500 대신 phone=null로 살리지만, 사용자가
+      //  모르게 ‘번호 없는 반쪽 가입’이 되므로 여기서 막고 재시도를 유도하는 게 맞다).
+      const phoneCheck = await isPhoneTaken(normalizePhone(phone));
+      if (phoneCheck === 'taken') {
         setBusy(false);
         setEmailMsg(null);
         return setErr('이미 가입된 번호예요. 아래 ‘로그인’으로 들어와 주세요.');
+      }
+      if (phoneCheck === 'unknown') {
+        setBusy(false);
+        return setErr('번호 확인 중 문제가 생겼어요. 잠시 후 다시 시도해 주세요.');
       }
       const up = await signUp(email.trim(), pw, {
         name: name.trim(),
@@ -167,11 +175,17 @@ export default function SignupScreen() {
       // 노하우 온보딩으로 — 초대코드는 온보딩 완료 화면에서 안내(빈 매장 0건 방지).
       router.replace({ pathname: '/owner/onboarding', params: { code: cs.inviteCode ?? '------', industry } });
     } else {
-      // 초대코드 필수 — 코드로 매장 합류(가입 시점 강제). 코드가 틀리면 계정은 유지되고
-      // 매장 연결만 재시도(accountReady=true). 데이터 손실 없음.
+      // 초대코드는 선택. 비웠으면 계정만 만들고 개인 허브(junior/hub)로 — 거기서 가게 코드 입력.
+      if (!inviteCode.trim()) {
+        setBusy(false);
+        return router.replace('/junior/hub');
+      }
+      // 코드가 있으면 즉시 합류 시도. 틀리거나(invalid_code) 잠겼으면(too_many_attempts) 계정은
+      // 유지된 채(accountReady=true) 개인 허브(junior/hub)로 보내 거기서 재시도하게
+      // 한다(6칸 입력 + 실시간 에러). 가입화면에 인라인 에러로 가두지 않는다 — 데드엔드 방지.
       const j = await joinByInvite(inviteCode.trim());
       setBusy(false);
-      if (j.error) return setErr(j.error);
+      if (j.error) return router.replace('/junior/hub');
       router.replace('/junior/home');
     }
   };
@@ -276,8 +290,8 @@ export default function SignupScreen() {
           </>
         ) : (
           <>
-            <Field label="가게 초대코드" value={inviteCode} onChange={setInviteCode} placeholder="사장님께 받은 6자리 코드" keyboard="number-pad" required />
-            <Text style={styles.hint}>사장님께 받은 6자리 코드가 있어야 가입할 수 있어요.</Text>
+            <Field label="가게 초대코드 (선택)" value={inviteCode} onChange={setInviteCode} placeholder="사장님께 받은 6자리 코드" keyboard="number-pad" />
+            <Text style={styles.hint}>지금 코드가 없어도 가입할 수 있어요. 가입 후 ‘가게 연결’ 화면에서 붙이면 돼요.</Text>
           </>
         )}
 
@@ -318,7 +332,7 @@ export default function SignupScreen() {
           {busy ? (
             <ActivityIndicator color="#FFFFFF" />
           ) : (
-            <Text style={styles.primaryText}>{role === 'owner' ? '가게 만들고 시작하기' : '합류하고 시작하기'}</Text>
+            <Text style={styles.primaryText}>{role === 'owner' ? '가게 만들고 시작하기' : '가입하고 시작하기'}</Text>
           )}
         </Pressable>
 

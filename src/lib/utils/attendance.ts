@@ -6,6 +6,13 @@ export const DEFAULT_HOURLY_WAGE = 10030;
 /** 급여 산정 단위(분). 근무시간은 이 단위로 절삭해 정산한다(실무 관행). */
 export const PAY_UNIT_MIN = 30;
 
+/**
+ * 한 번의 근무로 인정하는 최대 분(=24시간). 퇴근을 안 찍어 타이머가 방치되면
+ * 경과시간/급여추정이 무한히 불어나 말도 안 되는 금액이 잡힌다(남용 #12) → 24h에서 절상.
+ * 24h를 넘긴 미퇴근 기록은 사실상 '퇴근 깜빡'이므로, 사장이 수기 보정하기 전까지 24h로 고정한다.
+ */
+export const MAX_SHIFT_MIN = 24 * 60;
+
 /** 급여 산정 분 — 30분 단위로 내림(미만은 버림). "1분마다 오르는" 체감 대신 30분 단위로 정산. */
 export function payableMinutes(min: number): number {
   return Math.floor(min / PAY_UNIT_MIN) * PAY_UNIT_MIN;
@@ -25,8 +32,8 @@ export function liveMinutes(r: {
   check_out: string | null;
   work_minutes: number;
 }): number {
-  if (r.check_out) return r.work_minutes;
-  if (r.check_in) return minutesBetween(r.check_in, new Date().toISOString());
+  if (r.check_out) return Math.min(MAX_SHIFT_MIN, r.work_minutes);
+  if (r.check_in) return Math.min(MAX_SHIFT_MIN, minutesBetween(r.check_in, new Date().toISOString()));
   return 0;
 }
 

@@ -111,66 +111,25 @@ export const styles = StyleSheet.create({
   },
   heroCtaText: { fontSize: 13, fontWeight: '800', color: InkColors.ink },
 
-  // ② 오늘 업무 요약
-  todayCard: {
+  // ② 오늘 한눈에 — 3칸 KPI(업무·근무·인건비). 동일 크기로 스캔. 인건비 칸만 노란 틴트로 강조.
+  kpiRow: { flexDirection: 'row', gap: 8 },
+  kpi: {
+    flex: 1,
     backgroundColor: InkColors.bg,
     borderRadius: Radius.md,
     borderWidth: 1,
     borderColor: InkColors.line,
-    padding: 18,
-    gap: 10,
+    paddingVertical: 14,
+    paddingHorizontal: 8,
+    alignItems: 'center',
+    gap: 5,
     ...Elevation.e1,
   },
-  todayPill: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: InkColors.ink2,
-    backgroundColor: InkColors.bgSoft,
-    paddingVertical: 4,
-    paddingHorizontal: 10,
-    borderRadius: Radius.pill,
-    overflow: 'hidden',
-    marginLeft: 'auto',
-  },
-  bar: { height: 8, borderRadius: Radius.pill, backgroundColor: InkColors.bgSoft, overflow: 'hidden' },
-  barFill: { height: 8, borderRadius: Radius.pill, backgroundColor: BrandColors.yellow },
-  todaySub: { fontSize: 13, color: InkColors.ink3, fontWeight: '600' },
+  kpiHi: { backgroundColor: BrandColors.yellowSoft, borderColor: BrandColors.yellowDeep },
+  kpiValue: { fontSize: 21, fontWeight: '900', color: InkColors.ink, letterSpacing: -0.5, lineHeight: 24 },
+  kpiUnit: { fontSize: 13, fontWeight: '800', color: InkColors.ink2 },
+  kpiLabel: { fontSize: 11, fontWeight: '700', color: InkColors.ink3, textAlign: 'center' },
 
   miniRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8 },
   miniLink: { fontSize: 13, color: InkColors.ink2, fontWeight: '700' },
-
-  faqSection: { gap: 8 },
-  faqList: {
-    backgroundColor: InkColors.bg,
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: InkColors.line,
-    paddingHorizontal: 14,
-  },
-  faqRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: InkColors.line,
-  },
-  faqDot: { width: 8, height: 8, borderRadius: Radius.pill },
-  faqQ: { fontSize: 14, fontWeight: '600', color: InkColors.ink },
-  faqMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3 },
-  faqMeta: { fontSize: 12, color: InkColors.ink3 },
-  // 많이 물어본 신호 — 직원 홈 popularHits와 동일(노랑 소프트 틴트 + 검정).
-  faqHits: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: InkColors.ink,
-    backgroundColor: BrandColors.yellowSoft,
-    paddingVertical: 2,
-    paddingHorizontal: 7,
-    borderRadius: Radius.pill,
-    overflow: 'hidden',
-  },
-  faqAction: { fontSize: 13, fontWeight: '800', color: BrandColors.brand },
-
-  nudges: { gap: 10 },
 });

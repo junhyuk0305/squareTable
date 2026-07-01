@@ -10,8 +10,7 @@ import { Appear } from '@/components/Appear';
 import { FeatureCarousel, JUNIOR_FEATURES } from '@/components/FeatureCarousel';
 import { JuniorWelcomeCoach } from '@/components/junior/JuniorWelcomeCoach';
 import { InfoDot } from '@/components/InfoDot';
-import { InkColors, CategoryColors } from '@/lib/theme/colors';
-import type { Category } from '@/types';
+import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { fmtDuration, won, hhmm } from '@/lib/utils/attendance';
 import { useJuniorHomeData } from '@/lib/hooks/useJuniorHomeData';
 import { styles } from '@/styles/juniorHomeStyles';
@@ -42,9 +41,9 @@ function SectionLabel({
 }
 
 /**
- * 직원 홈 — 사령탑(하루의 앵커).
- * 1) 출근 버튼(가장 자주 누름) 2) 안 읽은 공지 3) 오늘 할일 4) 노하우 검색 5) 이번 주 근무표.
- * 출근 → 할일 → 노하우 검색 → 근무표, 하루 흐름이 한 화면에서 끝난다.
+ * 직원 홈 — 사령탑(하루의 앵커). 정보 피라미드로 재배치.
+ * 1) 출퇴근 히어로(가장 자주 누름) 2) 오늘 한눈에(할일·공지·근무 KPI 한 줄)
+ * 3) 노하우 물어보기(전송버튼 달린 큰 유도) 4) 안 읽은 공지 한 줄 미리보기 5) 기능 안내.
  */
 export default function JuniorHomeScreen() {
   const router = useRouter();
@@ -59,22 +58,12 @@ export default function JuniorHomeScreen() {
     todayMin,
     todayPay,
     taskTotal,
-    taskDone,
     taskRemain,
-    tasksAllDone,
     unreadCount,
     latestNotice,
     myShiftCount,
     incomingSwaps,
-    popularKnowhow,
-    submitChat,
   } = useJuniorHomeData();
-
-  // 탭하면 그 노하우를 질문으로 띄워 물어보기 탭에서 바로 답을 본다(전역 챗 스토어 → 화면 이동).
-  function openKnowhow(title: string) {
-    void submitChat(title, { anonymous: false });
-    router.push('/junior/chat');
-  }
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
@@ -124,7 +113,7 @@ export default function JuniorHomeScreen() {
               <InfoDot
                 title="오늘 번 돈은 어떻게 계산돼요?"
                 body={
-                  '오늘 일한 시간 × 시급으로 계산한 금액이에요.\n근무시간은 30분 단위로 정산하고, 사장님이 정한 시급을 기준으로 해요.'
+                  '오늘 일한 시간 × 시급으로 계산한 ‘세전 예상액’이에요.\n근무시간은 30분 단위로 정산하고, 사장님이 정한 시급을 기준으로 해요.\n세금·4대보험·수당에 따라 실제 받는 금액과 다를 수 있어요.'
                 }
               />
               <Text style={styles.payValue}>{won(todayPay)}</Text>
@@ -158,105 +147,54 @@ export default function JuniorHomeScreen() {
         </View>
         </Appear>
 
-        {/* 2) 안 읽은 공지 — 있을 때만. 업무 탭(공지)로 진입해 읽음 처리. */}
-        {unreadCount > 0 && (
-          <Appear delay={60} style={styles.section}>
-          <SectionLabel
-            icon="megaphone"
-            title="안 읽은 공지"
-            trailing={
-              <View style={styles.noticeBadge}>
-                <Text style={styles.noticeBadgeText}>{unreadCount > 99 ? '99+' : unreadCount}</Text>
-              </View>
-            }
-          />
-          <Pressable
-            onPress={() => router.push('/junior/work?view=notice')}
-            style={({ pressed }) => [styles.noticeCard, pressed && { opacity: 0.85 }]}
-            accessibilityRole="button"
-            accessibilityLabel={`안 읽은 공지 ${unreadCount}건. 확인하러 가기`}
-          >
-            {latestNotice && (
-              <Text style={styles.noticeBody} numberOfLines={2}>
-                {latestNotice.pinned ? '📌 ' : ''}
-                {latestNotice.text}
-              </Text>
-            )}
-            <View style={styles.cardFootRow}>
-              <Text style={styles.noticeSub}>
-                {unreadCount > 1 ? `외 ${unreadCount - 1}건 더 · 확인하면 읽음 처리` : '확인하면 읽음으로 표시돼요'}
-              </Text>
-              <Ionicons name="chevron-forward" size={16} color={InkColors.ink3} />
-            </View>
-          </Pressable>
-          </Appear>
-        )}
-
-        {/* 3) 오늘 할일 · 이번 주 근무표 — 요약형이라 2열로 묶음 */}
-        <Appear delay={120} style={styles.row}>
-          <View style={styles.col}>
-            <SectionLabel
-              icon="checkbox-outline"
-              title="오늘 할일"
-              trailing={
-                <Text style={[styles.countPill, tasksAllDone && styles.countPillDone]}>
-                  {taskDone}/{taskTotal}
-                </Text>
-              }
-            />
+        {/* 2) 오늘 한눈에 — 할일·공지·근무를 한 줄 KPI로 압축(스캔). 각 칸이 해당 화면으로 진입. */}
+        <Appear delay={60} style={styles.section}>
+          <SectionLabel icon="today-outline" title="오늘 한눈에" />
+          <View style={styles.kpiRow}>
             <Pressable
               onPress={() => router.push('/junior/work?view=todo')}
-              style={({ pressed }) => [styles.taskCard, styles.cardFill, pressed && { opacity: 0.85 }]}
+              style={({ pressed }) => [styles.kpi, taskRemain > 0 && styles.kpiHi, pressed && { opacity: 0.8 }]}
+              accessibilityRole="button"
+              accessibilityLabel={taskTotal === 0 ? '오늘 할일 없음' : `오늘 할일 ${taskRemain}개 남음`}
             >
-              <View style={styles.bar}>
-                <View style={[styles.barFill, { width: `${taskTotal ? (taskDone / taskTotal) * 100 : 0}%` }]} />
-              </View>
-              <Text style={styles.taskSub}>
-                {taskTotal === 0
-                  ? '오늘 할일이 없어요'
-                  : taskDone >= taskTotal
-                    ? '오늘 할일을 다 끝냈어요 👏'
-                    : `${taskRemain}개 남았어요`}
-              </Text>
+              <Text style={styles.kpiValue}>{taskTotal === 0 ? '0' : taskRemain}</Text>
+              <Text style={styles.kpiLabel}>할일 남음</Text>
             </Pressable>
-          </View>
-
-          <View style={styles.col}>
-            <SectionLabel
-              icon="calendar-outline"
-              title="이번 주 근무표"
-              trailing={
-                incomingSwaps > 0 ? (
-                  <View style={styles.schedBadge}>
-                    <Text style={styles.schedBadgeText}>교대 {incomingSwaps}</Text>
-                  </View>
-                ) : undefined
-              }
-            />
+            <Pressable
+              onPress={() => router.push('/junior/work?view=notice')}
+              style={({ pressed }) => [styles.kpi, pressed && { opacity: 0.8 }]}
+              accessibilityRole="button"
+              accessibilityLabel={`안 읽은 공지 ${unreadCount}건`}
+            >
+              <Text style={styles.kpiValue}>{unreadCount > 99 ? '99+' : unreadCount}</Text>
+              <Text style={styles.kpiLabel}>안 읽은 공지</Text>
+            </Pressable>
             <Pressable
               onPress={() => router.push('/junior/schedule')}
-              style={({ pressed }) => [styles.schedCard, styles.cardFill, pressed && { opacity: 0.85 }]}
+              style={({ pressed }) => [styles.kpi, pressed && { opacity: 0.8 }]}
+              accessibilityRole="button"
+              accessibilityLabel={`이번 주 근무 ${myShiftCount}회${incomingSwaps > 0 ? `, 교대 요청 ${incomingSwaps}건` : ''}`}
             >
-              <Text style={styles.schedSub}>
-                {myShiftCount > 0 ? `이번 주 ${myShiftCount}회 근무 예정` : '아직 근무가 없어요'}
+              <Text style={styles.kpiValue}>
+                {myShiftCount}
+                <Text style={styles.kpiUnit}>회</Text>
               </Text>
-              <Text style={styles.schedHint}>
-                {incomingSwaps > 0 ? '동료가 대타를 찾고 있어요' : '대타·맞교환을 신청할 수 있어요'}
-              </Text>
+              <Text style={styles.kpiLabel}>이번 주 근무</Text>
+              {incomingSwaps > 0 && <View style={styles.kpiDot} />}
             </Pressable>
           </View>
         </Appear>
 
-        {/* 4) 노하우 검색 — 노하우 탭(물어보기)로 진입하는 큰 입력 유도 카드 */}
-        <Appear delay={150} style={styles.section}>
-          <SectionLabel icon="search-outline" title="노하우 검색" />
+        {/* 3) 노하우 물어보기 — 진짜 입력처럼 보이는 큰 유도(전송 버튼 포함). 탭하면 물어보기 탭으로. */}
+        <Appear delay={120} style={styles.section}>
+          <SectionLabel icon="search-outline" title="노하우 물어보기" />
           <View style={styles.askCard}>
             <Text style={styles.askSub}>매장 노하우를 바로 찾아드려요. 없으면 사장님께 대신 여쭤볼게요.</Text>
-            <Pressable onPress={() => router.push('/junior/chat')} style={({ pressed }) => [styles.askBar, pressed && { opacity: 0.8 }]}>
-              <View style={styles.askIconBadge}>
-                <Ionicons name="search" size={15} color={InkColors.ink} />
-              </View>
+            <Pressable onPress={() => router.push('/junior/chat')} style={({ pressed }) => [styles.askBar, pressed && { opacity: 0.85 }]}>
               <Text style={styles.askBarText}>궁금한 걸 물어보세요</Text>
+              <View style={styles.askSend}>
+                <Ionicons name="arrow-up" size={16} color={InkColors.ink} />
+              </View>
             </Pressable>
             <View style={styles.askChips}>
               {QUICK_ASKS.map((q) => (
@@ -268,30 +206,26 @@ export default function JuniorHomeScreen() {
           </View>
         </Appear>
 
-        {/* 5) 많이 물어본 노하우 — 동료들이 자주 묻는 것 미리보기(발견성). 있을 때만. */}
-        {popularKnowhow.length > 0 && (
-          <Appear delay={165} style={styles.section}>
-            <SectionLabel icon="trending-up" title="많이 물어본 노하우" />
-            <View style={styles.popularCard}>
-              {popularKnowhow.map((e, i) => (
-                <Pressable
-                  key={e.id}
-                  onPress={() => openKnowhow(e.title)}
-                  style={({ pressed }) => [styles.popularRow, i > 0 && styles.popularRowBorder, pressed && { opacity: 0.6 }]}
-                  accessibilityRole="button"
-                  accessibilityLabel={`${e.title}, ${e.stats?.query_hits_30d}번 물어봄`}
-                >
-                  <Text style={styles.popularRank}>{i + 1}</Text>
-                  <View style={[styles.popularDot, { backgroundColor: CategoryColors[e.category as Category] }]} />
-                  <Text style={styles.popularTitle} numberOfLines={1}>{e.title}</Text>
-                  <Text style={styles.popularHits}>{e.stats?.query_hits_30d}번</Text>
-                </Pressable>
-              ))}
-            </View>
+        {/* 4) 안 읽은 공지 — 있을 때만, 한 줄 미리보기로 강등(내용은 보존, 면적은 최소). */}
+        {unreadCount > 0 && latestNotice && (
+          <Appear delay={150} style={styles.section}>
+            <Pressable
+              onPress={() => router.push('/junior/work?view=notice')}
+              style={({ pressed }) => [styles.noticeStrip, pressed && { opacity: 0.85 }]}
+              accessibilityRole="button"
+              accessibilityLabel={`안 읽은 공지 ${unreadCount}건. 확인하러 가기`}
+            >
+              <Ionicons name="megaphone" size={15} color={BrandColors.yellowDeep} />
+              <Text style={styles.noticeStripText} numberOfLines={1}>
+                {latestNotice.pinned ? '📌 ' : ''}
+                {latestNotice.text}
+              </Text>
+              <Text style={styles.noticeStripMore}>{unreadCount > 1 ? `+${unreadCount - 1} ` : ''}›</Text>
+            </Pressable>
           </Appear>
         )}
 
-        {/* 6) 핵심 기능 안내 배너 — 최하단. 스와이프로 핵심 기능을 소개하고 탭하면 바로 그 화면으로 */}
+        {/* 5) 핵심 기능 안내 배너 — 최하단. 스와이프로 핵심 기능을 소개하고 탭하면 바로 그 화면으로 */}
         <Appear delay={180} style={styles.section}>
           <SectionLabel icon="sparkles-outline" title="이런 것도 할 수 있어요" />
           <FeatureCarousel cards={JUNIOR_FEATURES} />

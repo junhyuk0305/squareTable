@@ -10,6 +10,7 @@ import { SplashAnimation } from '@/components/SplashAnimation';
 import { SyncBanner } from '@/components/SyncBanner';
 import { Toast } from '@/components/Toast';
 import { DialogHost } from '@/components/DialogHost';
+import { FreeUntilNotice } from '@/components/FreeUntilNotice';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { usePreferencesStore, TEXT_SCALE_FACTOR } from '@/lib/store/usePreferencesStore';
 import { patchTextScaling, setTextScaleFactor } from '@/lib/theme/textScale';
@@ -28,6 +29,8 @@ export default function RootLayout() {
 
   // 부팅 1회: 저장된 세션 복원 + 프로필 로드 + auth 변화 구독.
   const init = useSessionStore((s) => s.init);
+  // 무료 공지 팝업은 로그인 화면이 아니라 로그인 후(홈 진입)에만 띄운다.
+  const signedIn = useSessionStore((s) => s.status === 'signed_in');
   useEffect(() => {
     init();
     // 웹: '홈 화면에 추가'/푸시용 PWA 헤드 태그 주입 (output=single 이라 +html 미반영)
@@ -47,6 +50,7 @@ export default function RootLayout() {
         <SyncBanner />
         <Toast />
         <DialogHost />
+        {splashDone && signedIn && <FreeUntilNotice />}
         <ErrorBoundary>
           <Stack key={textScale} screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
             <Stack.Screen name="index" />
@@ -58,6 +62,7 @@ export default function RootLayout() {
             <Stack.Screen name="account-edit" />
             <Stack.Screen name="junior" />
             <Stack.Screen name="owner" />
+            <Stack.Screen name="billing" />
           </Stack>
         </ErrorBoundary>
       </ResponsiveShell>
