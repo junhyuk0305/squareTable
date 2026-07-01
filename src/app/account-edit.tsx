@@ -7,7 +7,7 @@ import { showToast } from '@/lib/store/useToastStore';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
-import { isValidPhone, normalizePhone, passwordError } from '@/lib/utils/validation';
+import { isValidPhone, normalizePhone, formatPhone, passwordError } from '@/lib/utils/validation';
 import { INDUSTRIES } from '@/lib/config/industry';
 import { HeaderBackButton } from '@/components/HeaderBackButton';
 
@@ -34,6 +34,7 @@ function AccountEditForm() {
   const userName = useSessionStore((s) => s.userName);
   const email = useSessionStore((s) => s.email);
   const bio = useSessionStore((s) => s.bio);
+  const savedPhone = useSessionStore((s) => s.phone);
   const role = useSessionStore((s) => s.role);
   const storeName = useSessionStore((s) => s.storeName);
   const industry = useSessionStore((s) => s.industry);
@@ -46,7 +47,8 @@ function AccountEditForm() {
   const [name, setName] = useState(userName);
   const [emailInput, setEmailInput] = useState(email);
   const [intro, setIntro] = useState(bio);
-  const [phone, setPhone] = useState('');
+  // 저장된 전화번호(전체)를 표시 형식으로 시드 → 편집창을 열면 기존 번호가 바로 채워진다.
+  const [phone, setPhone] = useState(() => formatPhone(savedPhone));
   const [pw, setPw] = useState('');
   const [pw2, setPw2] = useState('');
   const [busy, setBusy] = useState(false);
@@ -139,7 +141,7 @@ function AccountEditForm() {
             style={styles.input}
           />
           <Text style={styles.label}>전화번호</Text>
-          <TextInput value={phone} onChangeText={setPhone} placeholder="010-0000-0000" placeholderTextColor={InkColors.ink3} keyboardType="phone-pad" autoComplete="tel" textContentType="telephoneNumber" style={styles.input} />
+          <TextInput value={phone} onChangeText={(v) => setPhone(formatPhone(v))} placeholder="010-0000-0000" placeholderTextColor={InkColors.ink3} keyboardType="phone-pad" maxLength={13} autoComplete="tel" textContentType="telephoneNumber" style={styles.input} />
           <Pressable disabled={busy || !canSaveProfile} onPress={saveProfile} style={({ pressed }) => [styles.primary, pressed && { opacity: 0.88 }, (busy || !canSaveProfile) && { opacity: 0.5 }]}>
             {busy ? <ActivityIndicator color="#FFF" /> : <Text style={styles.primaryText}>프로필 저장</Text>}
           </Pressable>

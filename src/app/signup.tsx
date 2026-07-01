@@ -6,7 +6,7 @@ import { useSessionStore } from '@/lib/store/useSessionStore';
 import { applyMockSeed } from '@/lib/demo/mockSeed';
 import { HAS_SUPABASE } from '@/lib/supabase';
 import { formatBizNo, isValidBizNo, bizDigits } from '@/lib/utils/bizno';
-import { isValidEmail, isValidPhone, normalizePhone, passwordError } from '@/lib/utils/validation';
+import { isValidEmail, isValidPhone, normalizePhone, formatPhone, passwordError } from '@/lib/utils/validation';
 import { BrandColors, InkColors } from '@/lib/theme/colors';
 import { Space } from '@/lib/theme/layout';
 import { Radius } from '@/lib/theme/elevation';
@@ -256,7 +256,7 @@ export default function SignupScreen() {
           )}
         </View>
 
-        <Field label="전화번호" value={phone} onChange={setPhone} placeholder="010-1234-5678" keyboard="phone-pad" required />
+        <Field label="전화번호" value={phone} onChange={(v) => setPhone(formatPhone(v))} placeholder="010-1234-5678" keyboard="phone-pad" maxLength={13} required />
 
         {role === 'owner' ? (
           <>
@@ -336,7 +336,7 @@ export default function SignupScreen() {
           )}
         </Pressable>
 
-        <Pressable onPress={() => router.replace('/')} style={styles.loginRow}>
+        <Pressable onPress={() => router.replace('/login')} style={styles.loginRow}>
           <Text style={styles.loginText}>이미 계정이 있나요? <Text style={styles.loginStrong}>로그인</Text></Text>
         </Pressable>
       </ScrollView>
@@ -352,6 +352,7 @@ function Field({
   secure,
   keyboard,
   required,
+  maxLength,
 }: {
   label: string;
   value: string;
@@ -360,6 +361,7 @@ function Field({
   secure?: boolean;
   keyboard?: 'phone-pad' | 'email-address' | 'number-pad';
   required?: boolean;
+  maxLength?: number;
 }) {
   return (
     <View style={styles.field}>
@@ -374,6 +376,7 @@ function Field({
         placeholderTextColor={InkColors.ink3}
         secureTextEntry={secure}
         keyboardType={keyboard}
+        maxLength={maxLength}
         autoCapitalize={keyboard === 'email-address' ? 'none' : 'sentences'}
         style={styles.input}
       />
