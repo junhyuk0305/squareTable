@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { supabase, HAS_SUPABASE } from '@/lib/supabase';
 import { setUnitId } from '@/lib/db';
 import { friendlyError } from '@/lib/utils/userError';
+import { setAnalyticsContext, track, reportError } from '@/lib/analytics/track';
 import type { SubStatusRaw } from '@/lib/utils/subscription';
 
 type Role = 'owner' | 'junior';
@@ -146,6 +147,7 @@ async function loadProfile(
     // 사용자는 로그인 불가. 세션 토큰도 정리한다(fire-and-forget: signOut→onAuthStateChange는 재귀 안 함).
     if (profile?.deleted_at) {
       setUnitId(null);
+      setAnalyticsContext({ userId: null, unitId: null, role: null });
       set({ status: 'signed_out', unitId: '', userId: '', userName: '', storeName: '', pendingUnitId: '', pendingStoreName: '', industry: '', inviteCode: '', bio: '', phone: '' });
       void supabase.auth.signOut().catch(() => {});
       return;
@@ -206,6 +208,7 @@ async function loadProfile(
       paidUntil = sub?.paid_until ?? '';
     }
     setUnitId(unitId || null);
+    setAnalyticsContext({ userId, unitId: unitId || null, role }); // 관측 이벤트에 매장/유저/역할 태깅
     set({
       status: 'signed_in',
       userId,
@@ -232,7 +235,9 @@ async function loadProfile(
     // 부분 set으로 signed_in 처리하면 가짜 테넌트로 오인되므로, 반드시 깨끗한 signed_out으로 떨군다
     // (테넌트 격리가 최우선). 재접속 시 로그인/재시도로 정상 복구된다.
     console.warn('[session] loadProfile 실패, 로그아웃 처리:', (e as Error)?.message ?? e);
+    reportError('session.loadProfile', e); // 오프라인 등으로 세션 로드가 던져 로그아웃되는 경로를 관측
     setUnitId(null);
+    setAnalyticsContext({ userId: null, unitId: null, role: null });
     set({ status: 'signed_out', unitId: '', userId: '', userName: '', storeName: '', pendingUnitId: '', pendingStoreName: '', industry: '', inviteCode: '', bio: '' });
   }
 }
@@ -260,7 +265,10 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       supabase.auth.onAuthStateChange((_evt, session) => {
         const u = session?.user;
         if (u) loadProfile(set, u.id, u.email ?? '', pendingOwnerMeta(u));
-        else set({ status: 'signed_out', unitId: '', userId: '', userName: '' });
+        else {
+          setAnalyticsContext({ userId: null, unitId: null, role: null });
+          set({ status: 'signed_out', unitId: '', userId: '', userName: '' });
+        }
       });
     }
   },
@@ -274,6 +282,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       };
     // 이메일 인증으로 가입 시 가게 생성이 지연된 사장은 여기서 metadata 기반으로 매장이 자동 복원된다.
     await loadProfile(set, data.user.id, data.user.email ?? '', pendingOwnerMeta(data.user)); // 결정적: role 확정 후 반환
+    track('login_succeeded', { role: get().role });
     return { error: null, role: get().role };
   },
 
@@ -313,6 +322,9 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       });
       await loadProfile(set, data.session.user.id, data.session.user.email ?? '');
     }
+    // 가입 퍼널 계측 — account_created 대비 이후 store_created/join_requested 전환율로 이탈지점을 본다.
+    if (needsConfirm) track('verify_email_sent', { flow: 'signup', role: (meta as any)?.role ?? null });
+    else track('account_created', { role: (meta as any)?.role ?? null });
     return { error: null, needsConfirm };
   },
 
@@ -337,6 +349,9 @@ export const useSessionStore = create<SessionState>((set, get) => ({
         if (uid0) await loadProfile(set, uid0, get().email);
         return { error: null, inviteCode: get().inviteCode || null };
       }
+      // ★ 무음 사망 자동감지의 핵심 — store_created 시도 대비 실패율이 급등하면(예: 42702 재발) 알람.
+      //   reason 에 원문 첫 토큰(named 에러/코드)을 담아 어떤 실패인지 서버에서 즉시 분류한다.
+      track('store_created_failed', { reason: (error.message || '').slice(0, 60), code: (error as any).code ?? null });
       const msg = /duplicate_biz_no/.test(error.message)
         ? '이미 등록된 사업자등록번호예요.'
         : friendlyError(error.message, '가게를 만들지 못했어요. 잠시 후 다시 시도해 주세요.');
@@ -346,6 +361,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     // 프로필 unit_id가 바뀌었으니 세션 상태 갱신
     const uid = get().userId;
     if (uid) await loadProfile(set, uid, get().email);
+    track('store_created', { has_biz: !!bizNo });
     return { error: null, inviteCode: row?.invite_code ?? null };
   },
 
@@ -356,17 +372,25 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       if (/already_in_store/.test(error.message)) {
         const uid0 = get().userId;
         if (uid0) await loadProfile(set, uid0, get().email);
+        track('join_requested', { result: 'already_in_store' });
         return { error: null, storeName: get().storeName || null };
       }
       // 이미 신청해 승인 대기 중(0032) → 대기 상태로 안내.
       if (/already_pending/.test(error.message)) {
         const uid0 = get().userId;
         if (uid0) await loadProfile(set, uid0, get().email);
+        track('join_requested', { result: 'already_pending' });
         return { error: null, storeName: get().pendingStoreName || null, pending: true };
       }
-      const msg = /invalid_code/.test(error.message)
-        ? '초대코드가 올바르지 않아요.'
+      const reason = /invalid_code/.test(error.message)
+        ? 'invalid_code'
         : /too_many_attempts/.test(error.message)
+        ? 'too_many_attempts'
+        : 'error';
+      track('join_requested', { result: reason, code: (error as any).code ?? null });
+      const msg = reason === 'invalid_code'
+        ? '초대코드가 올바르지 않아요.'
+        : reason === 'too_many_attempts'
         ? '시도가 많아 잠시 잠겼어요. 10분 후 다시 시도해 주세요.'
         : friendlyError(error.message, '매장에 합류하지 못했어요. 코드를 확인하고 다시 시도해 주세요.');
       return { error: msg, storeName: null };
@@ -374,6 +398,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     const row = Array.isArray(data) ? data[0] : data;
     // 0행 반환 = invalid_code 신호(0031: 감사기록 보존을 위해 raise 대신 빈 반환).
     if (!row?.unit_id) {
+      track('join_requested', { result: 'invalid_code' });
       return { error: '초대코드가 올바르지 않아요.', storeName: null };
     }
     // 0032: 즉시 합류가 아니라 '승인 대기' 신청. row.unit_id=신청 대상, unit_id는 아직 안 붙는다.
@@ -381,6 +406,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     set({ pendingStoreName: row?.store_name ?? '' });
     const uid = get().userId;
     if (uid) await loadProfile(set, uid, get().email);
+    track('join_requested', { result: 'pending' });
     return { error: null, storeName: row?.store_name ?? null, pending: true };
   },
 
@@ -404,8 +430,17 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   },
 
   sendMagicLink: async (email) => {
-    const { error } = await supabase.auth.signInWithOtp({ email });
-    return { error: error ? friendlyError(error.message, '인증 메일을 보내지 못했어요. 잠시 후 다시 시도해 주세요.') : null };
+    // '메일로 로그인'은 로그인 전용 — 미가입 이메일로 새 계정이 조용히 생기면 안 된다(리포트 P1-1).
+    // shouldCreateUser:false 로 미가입은 에러가 되고, 이를 "먼저 가입" 안내로 매핑한다.
+    // (가입용 매직링크는 verifyEmail 이 shouldCreateUser:true 로 별도 담당한다.)
+    const { error } = await supabase.auth.signInWithOtp({ email, options: { shouldCreateUser: false } });
+    if (!error) return { error: null };
+    const notRegistered = /not allowed|otp_disabled|user not found|not found|no user|signups?/i.test(error.message);
+    return {
+      error: notRegistered
+        ? '가입된 이메일이 아니에요. 먼저 가입해 주세요.'
+        : friendlyError(error.message, '인증 메일을 보내지 못했어요. 잠시 후 다시 시도해 주세요.'),
+    };
   },
 
   // 회원가입 '인증' 버튼 — 입력한 이메일로 인증(매직링크/OTP) 메일을 보낸다.

@@ -1,5 +1,6 @@
 import { Component, type ReactNode } from 'react';
 import { View, Text, Pressable, StyleSheet, Platform } from 'react-native';
+import { reportError } from '@/lib/analytics/track';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
 import { Space, frameCapStyle } from '@/lib/theme/layout';
@@ -24,8 +25,9 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error) {
-    // 운영 관측용. 추후 원격 로깅(Sentry 등) 연결 지점.
+    // 운영 관측용 — 렌더 예외를 원격에 남겨(리포트 P0-2) 화이트아웃을 팀이 감지한다.
     console.error('[ErrorBoundary]', error?.message ?? error);
+    reportError('react.render', error);
   }
 
   private handleRetry = () => {
