@@ -33,34 +33,22 @@ type HubItem = {
 };
 
 // 해요체 · 시니어(사장님) 톤. 라벨/서브타이틀은 카피 카탈로그 도메인 톤에 맞춰 정리.
+// 매장 운영을 2축으로 압축: 사람·돈(직원·시급·급여설정·인건비) / 시간(근무표·교대).
+// 기존 4카드(근무·급여/직원/근무표/급여설정)에서 근무·급여·급여설정을 '직원·급여'로 흡수했다.
 const ITEMS: HubItem[] = [
-  {
-    key: 'attendance',
-    icon: 'time-outline',
-    label: '근무·급여',
-    subtitle: '출퇴근과 이번 달 인건비를 한눈에 봐요',
-    path: '/owner/attendance',
-  },
   {
     key: 'staff',
     icon: 'people-outline',
-    label: '직원',
-    subtitle: '직원을 초대하고 관리해요',
+    label: '직원·급여',
+    subtitle: '직원·시급·급여 설정과 인건비를 한 곳에서',
     path: '/owner/staff',
   },
   {
     key: 'schedule',
     icon: 'calendar-outline',
-    label: '근무표',
-    subtitle: '근무를 짜고 교대 요청을 컨펌해요',
+    label: '근무',
+    subtitle: '근무표를 짜고 교대 요청을 승인해요',
     path: '/owner/schedule',
-  },
-  {
-    key: 'payroll',
-    icon: 'card-outline',
-    label: '급여 설정',
-    subtitle: '시급과 정산 방식을 정해둬요',
-    path: '/owner/payroll',
   },
 ];
 
