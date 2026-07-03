@@ -17,12 +17,16 @@ export const useSyncStore = create<SyncState>((set) => ({
   clear: () => set({ error: null }),
 }));
 
-/** 스토어 액션에서 쓰기 결과(boolean Promise)를 받아, 실패면 롤백 콜백 실행 + 배너 표시. */
+/**
+ * 스토어 액션에서 쓰기 결과(boolean Promise)를 받아, 실패면 롤백 콜백 실행 + 배너 표시.
+ * 성공/실패(ok)를 반환한다 — 호출부가 "저장이 실제로 됐을 때만" 성공 UI(토스트·네비)를 띄우도록.
+ * (기존 `void guardWrite(...)` 호출부는 반환값을 무시하므로 하위호환.)
+ */
 export async function guardWrite(
   result: Promise<boolean>,
   onFail: () => void,
   msg?: string,
-): Promise<void> {
+): Promise<boolean> {
   let ok = false;
   try {
     ok = await result;
@@ -33,4 +37,5 @@ export async function guardWrite(
     onFail();
     useSyncStore.getState().noteError(msg);
   }
+  return ok;
 }

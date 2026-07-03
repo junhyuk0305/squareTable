@@ -38,6 +38,7 @@ export default function OwnerCoachScreen() {
   const answerable = isInboxAnswer && !!realUq && realUq.status === 'pending_owner_answer';
 
   const [toast, setToast] = useState<string | null>(null);
+  const [toastErr, setToastErr] = useState(false); // 실패 토스트(성공과 시각 구분·네비 안 함)
 
   // 직접 등록용 합성 uq (capture/add와 동일 패턴). 인박스 모드면 실제 uq 사용.
   const initialCategory: Category = useMemo(() => {
@@ -81,30 +82,52 @@ export default function OwnerCoachScreen() {
     }, 1100);
   }, [router, isInboxAnswer]);
 
-  const onPublished = useCallback(
-    (entry: PlaybookEntry) => {
+  // 발행 후처리 공통 — 노하우 저장이 서버에 실제로 반영된 뒤에만 성공 토스트+네비.
+  // (예전엔 DB 실패와 무관하게 항상 "반영됐어요"를 띄우고 이탈해, 질문이 pending으로 남아
+  //  알바 챗봇 학습 루프가 조용히 끊겼다 — 리포트 P1-7.)
+  // 저장이 서버에 실제 반영된 뒤에만 성공 토스트+네비. 성공 여부(boolean)를 반환해
+  // 호출 컴포넌트(OwnerCoachChat)가 실패 시 발행 잠금(publishedRef)을 풀어 재시도를 허용한다.
+  const finishPublish = useCallback(
+    async (entryIds: string[], addOk: boolean, okMsg: string): Promise<boolean> => {
+      if (!addOk) {
+        setToastErr(true);
+        setToast('저장에 실패했어요. 연결을 확인하고 다시 시도해 주세요.');
+        return false;
+      }
+      // 저장은 성공 — 이제 인박스 질문 상태(resolve)까지 확인. justPublished 로 데드엔드 가드 우회.
       setJustPublished(true);
-      addEntry(entry);
-      if (answerable && realUq) resolve(realUq.id, entry.id);
-      if (sugId) approveSuggestion(sugId, entry.id);
-      setToast(isInboxAnswer ? '답변이 알바 챗봇에 반영됐어요' : '새 노하우가 저장됐어요');
+      let resolveOk = true;
+      if (answerable && realUq) resolveOk = await resolve(realUq.id, entryIds[0]);
+      if (sugId) approveSuggestion(sugId, entryIds[0]);
+      if (!resolveOk) {
+        setToastErr(true);
+        setToast('노하우는 저장됐어요. 다만 질문 반영에 실패했어요 — 받은 질문에서 다시 시도해 주세요.');
+        return false;
+      }
+      setToastErr(false);
+      setToast(okMsg);
       navAfter();
+      return true;
     },
-    [addEntry, resolve, isInboxAnswer, answerable, realUq, navAfter, sugId, approveSuggestion],
+    [answerable, realUq, resolve, sugId, approveSuggestion, navAfter],
   );
 
-  // 다중 분리 발행 — 각 노하우를 저장하고, 인박스면 첫 건으로 resolve. 네비/토스트는 1회.
-  const onPublishedMany = useCallback(
-    (entries: PlaybookEntry[]) => {
-      if (entries.length === 0) return;
-      setJustPublished(true);
-      entries.forEach((e) => addEntry(e));
-      if (answerable && realUq) resolve(realUq.id, entries[0].id);
-      if (sugId) approveSuggestion(sugId, entries[0].id);
-      setToast(`${entries.length}개의 노하우가 저장됐어요`);
-      navAfter();
+  const onPublished = useCallback(
+    async (entry: PlaybookEntry): Promise<boolean> => {
+      const ok = await addEntry(entry);
+      return finishPublish([entry.id], ok, isInboxAnswer ? '답변이 알바 챗봇에 반영됐어요' : '새 노하우가 저장됐어요');
     },
-    [addEntry, resolve, answerable, realUq, navAfter, sugId, approveSuggestion],
+    [addEntry, finishPublish, isInboxAnswer],
+  );
+
+  // 다중 분리 발행 — 각 노하우를 저장하고(모두 성공해야 성공 처리), 인박스면 첫 건으로 resolve.
+  const onPublishedMany = useCallback(
+    async (entries: PlaybookEntry[]): Promise<boolean> => {
+      if (entries.length === 0) return false;
+      const results = await Promise.all(entries.map((e) => addEntry(e)));
+      return finishPublish(entries.map((e) => e.id), results.every(Boolean), `${entries.length}개의 노하우가 저장됐어요`);
+    },
+    [addEntry, finishPublish],
   );
 
   // 인박스 모드인데 질문이 이미 처리/삭제/보관됨 → 빈 상태(데드엔드·중복 답변 방지).
@@ -145,7 +168,7 @@ export default function OwnerCoachScreen() {
         <View pointerEvents="none" style={styles.toastWrap}>
           <Appear offsetY={20} duration={240}>
             <View style={styles.toast}>
-              <Text style={styles.toastCheck}>✓</Text>
+              <Text style={[styles.toastCheck, toastErr && styles.toastCheckErr]}>{toastErr ? '!' : '✓'}</Text>
               <Text style={styles.toastText}>{toast}</Text>
             </View>
           </Appear>
@@ -164,5 +187,6 @@ const styles = StyleSheet.create({
     backgroundColor: InkColors.ink, paddingVertical: 12, paddingHorizontal: 18, borderRadius: Radius.md, maxWidth: '90%',
   },
   toastCheck: { color: BrandColors.yellow, fontWeight: '800', fontSize: 16 },
+  toastCheckErr: { color: BrandColors.accent },
   toastText: { color: '#FFFFFF', fontWeight: '700', fontSize: 14 },
 });

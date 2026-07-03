@@ -14,7 +14,7 @@ type UnknownQueueState = {
   hydrate: () => Promise<void>;
   subscribe: () => () => void;
   enqueue: (uq: UnknownQuery) => void;
-  resolve: (uqId: string, newEntryId: string) => void;
+  resolve: (uqId: string, newEntryId: string) => Promise<boolean>;
   enableAutoAnswer: (uqId: string) => void;
   getPending: () => UnknownQuery[];
   getById: (id: string) => UnknownQuery | undefined;
@@ -93,7 +93,8 @@ export const useUnknownQueueStore = create<UnknownQueueState>((set, get) => ({
           : u,
       ),
     }));
-    void guardWrite(
+    // ok 반환 — 호출부(coach)가 질문 상태 반영이 실제로 됐을 때만 성공 처리하도록.
+    return guardWrite(
       resolveUnknown(uqId, newEntryId),
       () => before && set((s) => ({ queue: s.queue.map((u) => (u.id === uqId ? before : u)) })),
       '답변 반영에 실패했어요.',

@@ -45,8 +45,9 @@ export type OwnerCoachChatProps = {
   isInboxAnswer: boolean;       // true면 발행 시 화면이 resolve(uq) 처리
   initialCategory: Category;
   seedText?: string;            // 프리필(콜드스타트 제목·회고 초안)
-  onPublished: (entry: PlaybookEntry) => void;
-  onPublishedMany?: (entries: PlaybookEntry[]) => void; // 다중 분리 발행(없으면 첫 건만)
+  // 발행 성공 여부(boolean) 반환 — 실패면 이 컴포넌트가 발행 잠금(publishedRef)을 풀어 재시도 허용.
+  onPublished: (entry: PlaybookEntry) => void | Promise<boolean>;
+  onPublishedMany?: (entries: PlaybookEntry[]) => void | Promise<boolean>; // 다중 분리 발행(없으면 첫 건만)
   // ── 대화형 수정 모드 ──────────────────────────────────────
   // editEntry가 있으면 '등록'이 아니라 '수정'. 기존 노하우 카드를 먼저 띄우고,
   // 사장이 말로 고치면 patchSquare로 부분 패치. 저장은 onUpdated로(새 add 아님).
@@ -459,8 +460,12 @@ export function OwnerCoachChat({
       return;
     }
     publishedRef.current = true;
-    if (onPublishedMany) onPublishedMany(entries);
-    else entries.forEach((e) => onPublished(e));
+    // 저장 실패 시 잠금을 풀어 재시도 허용(성공 시 화면이 네비게이션하므로 잠금 유지).
+    void Promise.resolve(
+      onPublishedMany ? onPublishedMany(entries) : Promise.all(entries.map((e) => onPublished(e))).then((r) => r.every((x) => x !== false)),
+    ).then((ok) => {
+      if (ok === false) publishedRef.current = false;
+    });
   }, [segments, uq, onPublishedMany, onPublished]);
 
   // ── 분리 제안: 하나로 합치기(steps·멘트 결합 후 단일 흐름으로) ──
@@ -525,7 +530,10 @@ export function OwnerCoachChat({
       square,
       { title, keywords, photos },
     );
-    onPublished(entry);
+    // 저장 실패 시 잠금을 풀어 재시도 허용(성공 시 화면이 네비게이션하므로 잠금 유지).
+    void Promise.resolve(onPublished(entry)).then((ok) => {
+      if (ok === false) publishedRef.current = false;
+    });
   }, [square, uq, category, title, keywords, photos, onPublished, isEdit, onUpdated]);
 
   const startRetalk = useCallback(() => {
