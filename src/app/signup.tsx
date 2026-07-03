@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { View, Text, Pressable, StyleSheet, TextInput, ScrollView, ActivityIndicator } from 'react-native';
 import { useRouter, Stack } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { applyMockSeed } from '@/lib/demo/mockSeed';
 import { HAS_SUPABASE } from '@/lib/supabase';
@@ -18,7 +19,6 @@ export default function SignupScreen() {
   const enterMockStore = useSessionStore((s) => s.enterMockStore);
   const signUp = useSessionStore((s) => s.signUp);
   const createStore = useSessionStore((s) => s.createStore);
-  const joinByInvite = useSessionStore((s) => s.joinByInvite);
   const isPhoneTaken = useSessionStore((s) => s.isPhoneTaken);
 
   const [role, setRole] = useState<Role>('owner');
@@ -29,7 +29,6 @@ export default function SignupScreen() {
   const [storeName, setStoreName] = useState('');
   const [bizNo, setBizNo] = useState('');
   const [industry, setIndustry] = useState('');
-  const [inviteCode, setInviteCode] = useState('');
 
   // 동의 항목 — 역할별로 필수/선택 구성이 달라진다(직원은 근로·급여정보 추가).
   type ConsentKey = 'age14' | 'terms' | 'collect' | 'labor' | 'marketing';
@@ -80,12 +79,6 @@ export default function SignupScreen() {
     });
   };
   const toggleOne = (k: ConsentKey) => setConsent((prev) => ({ ...prev, [k]: !prev[k] }));
-
-  // 필수 입력값이 모두 채워졌는지 — 제출 버튼 활성화 게이트(사장은 가게이름·업종 포함).
-  // 직원 초대코드는 선택 — 비우면 가입 후 junior/join(가게 연결) 화면에서 붙인다(데드엔드 없음).
-  const requiredFilled =
-    !!name.trim() && !!email.trim() && !!pw && !!phone.trim() &&
-    (role === 'owner' ? (!!storeName.trim() && !!industry) : true);
 
   const start = async () => {
     setErr(null);
@@ -175,18 +168,10 @@ export default function SignupScreen() {
       // 노하우 온보딩으로 — 초대코드는 온보딩 완료 화면에서 안내(빈 매장 0건 방지).
       router.replace({ pathname: '/owner/onboarding', params: { code: cs.inviteCode ?? '------', industry } });
     } else {
-      // 초대코드는 선택. 비웠으면 계정만 만들고 개인 허브(junior/hub)로 — 거기서 가게 코드 입력.
-      if (!inviteCode.trim()) {
-        setBusy(false);
-        return router.replace('/junior/hub');
-      }
-      // 코드가 있으면 즉시 합류 시도. 틀리거나(invalid_code) 잠겼으면(too_many_attempts) 계정은
-      // 유지된 채(accountReady=true) 개인 허브(junior/hub)로 보내 거기서 재시도하게
-      // 한다(6칸 입력 + 실시간 에러). 가입화면에 인라인 에러로 가두지 않는다 — 데드엔드 방지.
-      const j = await joinByInvite(inviteCode.trim());
+      // 직원은 계정만 만들고 개인 허브(junior/hub)로 — 초대코드 입력은 hub 한 곳에서만 한다
+      // (6칸 입력 + 실시간 에러 + 승인 대기 카드). 가입화면엔 코드칸을 두지 않아 '두 번 입력' 혼선을 없앤다.
       setBusy(false);
-      if (j.error) return router.replace('/junior/hub');
-      router.replace('/junior/home');
+      router.replace('/junior/hub');
     }
   };
 
@@ -289,10 +274,12 @@ export default function SignupScreen() {
             </View>
           </>
         ) : (
-          <>
-            <Field label="가게 초대코드 (선택)" value={inviteCode} onChange={setInviteCode} placeholder="사장님께 받은 6자리 코드" keyboard="number-pad" />
-            <Text style={styles.hint}>지금 코드가 없어도 가입할 수 있어요. 가입 후 ‘가게 연결’ 화면에서 붙이면 돼요.</Text>
-          </>
+          <View style={styles.joinNote}>
+            <Ionicons name="information-circle-outline" size={18} color={InkColors.ink2} />
+            <Text style={styles.joinNoteText}>
+              가입하면 개인 홈으로 이동해요. 거기서 사장님께 받은 <Text style={styles.joinNoteStrong}>6자리 초대코드</Text>를 넣으면 가게에 합류 신청이 돼요.
+            </Text>
+          </View>
         )}
 
         {/* 동의 — 전체동의 + 항목별 토글, 필수/선택 분리 */}
@@ -324,10 +311,12 @@ export default function SignupScreen() {
 
         {err && <Text style={styles.err}>{err}</Text>}
 
+        {/* 버튼은 항상 누를 수 있게 둔다 — 미충족 항목은 start()의 순차 검증이 '무엇이 왜 안 되는지'
+            정확한 문구로 알려준다(비활성 버튼이 무반응이라 이유를 못 알려주던 문제 해소). */}
         <Pressable
           onPress={start}
-          disabled={!allRequired || !requiredFilled || busy}
-          style={({ pressed }) => [styles.primary, (!allRequired || !requiredFilled || busy) && styles.primaryDisabled, pressed && allRequired && requiredFilled && !busy && { opacity: 0.88 }]}
+          disabled={busy}
+          style={({ pressed }) => [styles.primary, busy && styles.primaryDisabled, pressed && !busy && { opacity: 0.88 }]}
         >
           {busy ? (
             <ActivityIndicator color="#FFFFFF" />
@@ -428,8 +417,11 @@ const styles = StyleSheet.create({
     color: InkColors.ink,
     backgroundColor: '#FFFFFF',
   },
-  hint: { fontSize: 12, color: InkColors.ink3, marginTop: -4 },
-  emailOk: { fontSize: 12, color: BrandColors.good, fontWeight: '700', marginTop: 1 },
+  joinNote: { flexDirection: 'row', alignItems: 'flex-start', gap: Space.sm, backgroundColor: BrandColors.brandSoft, borderRadius: Radius.md, padding: 14 },
+  joinNoteText: { flex: 1, fontSize: 13, color: InkColors.ink2, lineHeight: 19 },
+  joinNoteStrong: { fontWeight: '800', color: InkColors.ink },
+  // 안내 문구(이미 가입된 이메일 등) — 성공 초록이 아닌 중립 톤으로 오해 방지.
+  emailOk: { fontSize: 12, color: InkColors.ink2, fontWeight: '700', marginTop: 1 },
   bizHint: { fontSize: 12, fontWeight: '600', marginTop: -2 },
   bizOk: { color: BrandColors.good },
   bizBad: { color: InkColors.ink3 },
