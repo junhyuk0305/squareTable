@@ -14,6 +14,7 @@ import { FreeUntilNotice } from '@/components/FreeUntilNotice';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { usePreferencesStore, TEXT_SCALE_FACTOR } from '@/lib/store/usePreferencesStore';
 import { patchTextScaling, setTextScaleFactor } from '@/lib/theme/textScale';
+import { InkColors } from '@/lib/theme/colors';
 import { injectPwaHead } from '@/lib/pwa/head';
 import { installGlobalErrorHandlers, track } from '@/lib/analytics/track';
 
@@ -64,7 +65,16 @@ export default function RootLayout() {
         <DialogHost />
         {splashDone && signedIn && <FreeUntilNotice />}
         <ErrorBoundary>
-          <Stack key={textScale} screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
+          <Stack
+            key={textScale}
+            screenOptions={{
+              headerShown: false,
+              animation: 'slide_from_right',
+              // 화면 컨테이너 기본 배경 — 미지정 시 RN/네비게이션 기본 흰색이 화면 전환(slide)
+              // 중·SafeArea 인셋에서 새어 나온다. 디자인시스템 페이퍼톤으로 깔아 통일.
+              contentStyle: { backgroundColor: InkColors.cream },
+            }}
+          >
             <Stack.Screen name="index" />
             <Stack.Screen name="login" />
             <Stack.Screen name="signup" />
