@@ -1,0 +1,45 @@
+# 가입/초대 회귀 자동 감시 (리포트 P1-14)
+#
+# 왜: qa-onboarding.mjs 는 강력하지만 지금은 누군가 기억해서 `npm run qa:onboarding` 을 손으로
+#   돌려야만 작동한다. 안 돌리는 기간엔 라이브 가입이 42702 등으로 죽어도 무음이다.
+#   → (1) main 에 push/PR 될 때마다, (2) 매일 1회 크론으로 라이브 백엔드에 대고 회귀 매트릭스를
+#   자동 실행한다. 실패하면 GitHub 가 알림을 보낸다(합성 감시). 자가정리라 테스트 계정은 끝에 삭제됨.
+#
+# 필요 시크릿(Settings → Secrets and variables → Actions):
+#   EXPO_PUBLIC_SUPABASE_URL, EXPO_PUBLIC_SUPABASE_ANON_KEY  (qa-onboarding.mjs 가 읽는 이름과 동일)
+
+name: qa-onboarding
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'supabase/migrations/**'
+      - 'scripts/qa-onboarding.mjs'
+      - 'src/lib/store/useSessionStore.ts'
+      - 'src/app/signup.tsx'
+  pull_request:
+    paths:
+      - 'supabase/migrations/**'
+      - 'scripts/qa-onboarding.mjs'
+  schedule:
+    - cron: '0 21 * * *' # 매일 06:00 KST (UTC 21:00) 라이브 백엔드 감시
+  workflow_dispatch: {}
+
+jobs:
+  qa-onboarding:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      - name: 타입체크
+        run: npm run typecheck
+      - name: 온보딩 회귀 매트릭스(라이브 백엔드·자가정리)
+        env:
+          EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
+          EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
+        run: npm run qa:onboarding
