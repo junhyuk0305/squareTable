@@ -16,6 +16,6 @@ export function verifyMeta(state?: VerifyState): VerifyMeta {
     case 'field_tested':
       return { label: '현장 검증', fg: BrandColors.good, bg: '#E6F1EA', icon: '✓' };
     default:
-      return { label: '미검증', fg: InkColors.ink3, bg: InkColors.bgSoft, icon: '·' };
+      return { label: '확인 필요', fg: InkColors.ink3, bg: InkColors.bgSoft, icon: '·' };
   }
 }

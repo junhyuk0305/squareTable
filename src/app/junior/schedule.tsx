@@ -30,7 +30,7 @@ const STATUS_META: Record<
   { label: string; color: string; bg: string }
 > = {
   open: { label: '수락 대기', color: BrandColors.warn, bg: '#FBF1DC' },
-  accepted: { label: '사장님 컨펌 대기', color: BrandColors.warn, bg: '#FBF1DC' },
+  accepted: { label: '사장님 승인 대기', color: BrandColors.warn, bg: '#FBF1DC' },
   approved: { label: '확정', color: BrandColors.good, bg: '#E4F2E8' },
   rejected: { label: '사장님 반려', color: BrandColors.bad, bg: BrandColors.accentSoft },
   cancelled: { label: '취소됨', color: InkColors.ink3, bg: InkColors.bgSoft },
@@ -168,7 +168,7 @@ export default function JuniorScheduleScreen() {
             </Pressable>
 
             {/* 내가 대응할 수 있는 요청 */}
-            <Section icon="people-outline" title="동료가 올린 요청" hint="수락하면 사장님 컨펌으로 넘어가요">
+            <Section icon="people-outline" title="동료가 올린 요청" hint="수락하면 사장님 승인으로 넘어가요">
               {incoming.length === 0 ? (
                 <Empty text="지금 대응할 교대 요청이 없어요." />
               ) : (

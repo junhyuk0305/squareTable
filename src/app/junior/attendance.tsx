@@ -133,7 +133,7 @@ export function AttendancePanel() {
           <Text style={styles.sectionTitle}>최근 기록</Text>
           <InfoDot
             title="기록이 틀렸을 때"
-            body={'시간이 틀리면 본인이 직접 보정할 수 있어요.\n기록을 눌러 출근·퇴근 시각을 고치면 돼요.\n수정하면 사장님에게 ‘수정됨’으로 표시됩니다.'}
+            body={'시간이 틀리면 본인이 직접 수정할 수 있어요.\n기록을 눌러 출근·퇴근 시각을 고치면 돼요.\n수정하면 사장님에게 ‘수정됨’으로 표시돼요.'}
           />
         </View>
         <Pressable onPress={() => router.push('/junior/timesheet')} hitSlop={6} style={({ pressed }) => [styles.viewAllBtn, pressed && { opacity: 0.6 }]}>

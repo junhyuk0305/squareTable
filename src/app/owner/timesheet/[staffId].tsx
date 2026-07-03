@@ -51,7 +51,7 @@ export default function OwnerTimesheetScreen() {
             </View>
           </View>
         }
-        footerNote="* 보정한 시간은 근무·급여 화면 인건비에 바로 반영됩니다."
+        footerNote="* 수정한 시간은 근무·급여 화면 인건비에 바로 반영돼요."
       />
     </>
   );
