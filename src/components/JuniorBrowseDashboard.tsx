@@ -1,9 +1,10 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { ScrollView, StyleSheet } from 'react-native';
 
 import { SectionLabel } from './SectionLabel';
 import { KnowhowCarousel } from './KnowhowCarousel';
 import { EmptyState } from './EmptyState';
+import { EntryDetailModal } from './EntryDetailModal';
 import { Appear } from './Appear';
 import { Space } from '@/lib/theme/layout';
 import type { PlaybookEntry } from '@/types';
@@ -11,8 +12,6 @@ import type { PlaybookEntry } from '@/types';
 export type JuniorBrowseDashboardProps = {
   /** 둘러보기에 노출할 발행 노하우 목록 */
   entries: PlaybookEntry[];
-  /** 카드 탭 시(질문으로 띄우기) */
-  onSelect: (entry: PlaybookEntry) => void;
   /** 빈 상태 안내 문구 */
   emptyHint?: string;
 };
@@ -27,8 +26,13 @@ const SECTION_LIMIT = 4;
  *
  * 카드는 공용 BrowseCard를 그대로 재사용(검증배지·DO/DON'T·해결률·출처 동일).
  * 주니어 화면이라 카테고리 라벨은 숨기고 색 점만 노출(showCategory=false, 프레임 v2).
+ *
+ * 카드를 탭하면 원본 노하우(단계·멘트·기준·사진·출처 전체)를 읽기 전용 시트(EntryDetailModal)로 연다.
+ * — '물어보기' 답변의 [출처] 탭과 같은 뷰라 일관되고, 둘러보기=읽기/물어보기=질문으로 역할이 갈린다.
  */
-export function JuniorBrowseDashboard({ entries, onSelect, emptyHint }: JuniorBrowseDashboardProps) {
+export function JuniorBrowseDashboard({ entries, emptyHint }: JuniorBrowseDashboardProps) {
+  const [detailEntry, setDetailEntry] = useState<PlaybookEntry | null>(null);
+
   const popular = useMemo(
     () =>
       entries
@@ -61,32 +65,41 @@ export function JuniorBrowseDashboard({ entries, onSelect, emptyHint }: JuniorBr
   }
 
   return (
-    <ScrollView
-      style={styles.scroll}
-      contentContainerStyle={styles.content}
-      showsVerticalScrollIndicator={false}
-    >
-      {popular.length > 0 && (
-        <Appear delay={0} style={styles.block}>
-          <SectionLabel icon="flame-outline" title="인기 노하우" hint="많이 물어본 순" />
-          <KnowhowCarousel entries={popular} onSelect={onSelect} showCategory={false} />
-        </Appear>
-      )}
+    <>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+      >
+        {popular.length > 0 && (
+          <Appear delay={0} style={styles.block}>
+            <SectionLabel icon="flame-outline" title="인기 노하우" hint="많이 물어본 순" />
+            <KnowhowCarousel entries={popular} onSelect={setDetailEntry} showCategory={false} />
+          </Appear>
+        )}
 
-      {recent.length > 0 && (
-        <Appear delay={80} style={styles.block}>
-          <SectionLabel icon="sparkles-outline" title="최근 추가됨" hint="새로 올라온 순" />
-          <KnowhowCarousel entries={recent} onSelect={onSelect} showCategory={false} />
-        </Appear>
-      )}
+        {recent.length > 0 && (
+          <Appear delay={80} style={styles.block}>
+            <SectionLabel icon="sparkles-outline" title="최근 추가됨" hint="새로 올라온 순" />
+            <KnowhowCarousel entries={recent} onSelect={setDetailEntry} showCategory={false} />
+          </Appear>
+        )}
 
-      {resolved.length > 0 && (
-        <Appear delay={160} style={styles.block}>
-          <SectionLabel icon="checkmark-circle-outline" title="잘 통하는 노하우" hint="해결률 순" />
-          <KnowhowCarousel entries={resolved} onSelect={onSelect} showCategory={false} />
-        </Appear>
-      )}
-    </ScrollView>
+        {resolved.length > 0 && (
+          <Appear delay={160} style={styles.block}>
+            <SectionLabel icon="checkmark-circle-outline" title="잘 통하는 노하우" hint="해결률 순" />
+            <KnowhowCarousel entries={resolved} onSelect={setDetailEntry} showCategory={false} />
+          </Appear>
+        )}
+      </ScrollView>
+
+      {/* 카드 탭 → 원본 노하우 전체(읽기 전용) */}
+      <EntryDetailModal
+        entry={detailEntry}
+        visible={!!detailEntry}
+        onClose={() => setDetailEntry(null)}
+      />
+    </>
   );
 }
 
