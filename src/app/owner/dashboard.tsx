@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, Pressable, Animated, ScrollView } from 'react-native';
+import { View, Text, Pressable, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -21,7 +21,6 @@ import { getCategoryMeta } from '@/lib/utils/category';
 import { SEED_TEMPLATES } from '@/data/seed-templates';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { won } from '@/lib/utils/attendance';
-import { USE_NATIVE_DRIVER } from '@/lib/anim';
 import { capCount } from '@/lib/utils/format';
 import { useOwnerDashboardData } from '@/lib/hooks/useOwnerDashboardData';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
@@ -45,15 +44,9 @@ export default function OwnerDashboardScreen() {
     isSolo,
   } = useOwnerDashboardData();
 
-  // 진입 시 본문이 살짝 떠오르며 페이드인.
-  // Animated.Value는 ref가 아니라 안정 객체로 메모이즈 — render 중 ref.current 접근(react-hooks/refs) 회피.
-  const enter = useMemo(() => ({ opacity: new Animated.Value(0), y: new Animated.Value(12) }), []);
-  useEffect(() => {
-    Animated.parallel([
-      Animated.timing(enter.opacity, { toValue: 1, duration: 320, useNativeDriver: USE_NATIVE_DRIVER }),
-      Animated.spring(enter.y, { toValue: 0, useNativeDriver: USE_NATIVE_DRIVER, speed: 14, bounciness: 6 }),
-    ]).start();
-  }, [enter]);
+  // 진입 애니는 각 섹션의 <Appear>가 단독으로 담당한다(디자인시스템 SSOT: Appear 단일 프리미티브).
+  // 예전에는 콘텐츠 래퍼에도 translateY 스프링을 걸어 이중 수직 애니가 서로 다른 이징으로 충돌 →
+  // 가장 큰 글자(히어로)에서 잔상/깨짐으로 보였다. 래퍼는 정적 컨테이너로 두고 자식만 애니.
 
   // ── 신규 사장 코치마크 투어 ──
   // 노하우 0건 신규 매장에서, 매장 운영 허브 → 첫 노하우 깔기까지 실제 버튼을 비춰가며 안내한다.
@@ -116,11 +109,8 @@ export default function OwnerDashboardScreen() {
       </View>
 
       <ScrollView ref={scrollRef} contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        {/* 진입 페이드/슬라이드는 콘텐츠 래퍼에 — 동시에 코치마크 위치 측정 기준(scrollContentRef) */}
-        <Animated.View
-          ref={scrollContentRef}
-          style={[styles.scrollInner, { opacity: enter.opacity, transform: [{ translateY: enter.y }] }]}
-        >
+        {/* 정적 콘텐츠 래퍼 — 진입 애니는 각 <Appear>가 담당. 코치마크 위치 측정 기준(scrollContentRef). */}
+        <View ref={scrollContentRef} style={styles.scrollInner}>
         <Text style={styles.greet}>오늘도 고생 많으세요</Text>
 
         {/* 미검증 노하우 우선 배너 — needs_review(템플릿/업종팩 fork 등 미검증)가 있으면 홈 최상단에서
@@ -321,7 +311,7 @@ export default function OwnerDashboardScreen() {
           <SectionLabel icon="sparkles-outline" title="이런 것도 할 수 있어요" />
           <FeatureCarousel cards={OWNER_FEATURES} />
         </Appear>
-        </Animated.View>
+        </View>
       </ScrollView>
       <RoleTabBar role="owner" />
 

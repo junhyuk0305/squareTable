@@ -71,6 +71,10 @@ html, body, #root, #__next {
     system-ui, 'Apple SD Gothic Neo', 'Noto Sans KR', 'Malgun Gothic', sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  /* 굵은 글자 가짜-볼드 잔상(고스팅) 차단 — Pretendard 로드 전/실패 시나 일부 안드로이드
+     WebView에서 폰트에 진짜 볼드 페이스가 없으면 브라우저가 글자를 겹쳐 찍어 볼드를
+     흉내낸다(=이중 잔상). none 이면 흉내 대신 폴백 폰트의 실제 굵기를 써 항상 또렷하다. */
+  font-synthesis: none;
 }
 
 /* 전역 기본 배경 — 미지정 시 브라우저 흰색이 로딩 순간·오버스크롤 바운스·프레임 밖에서

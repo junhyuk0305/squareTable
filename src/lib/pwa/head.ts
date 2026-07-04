@@ -107,4 +107,28 @@ export function injectPwaHead(): void {
       '@media(min-width:501px){html,body{background-color:#E9E7E0;}}';
     document.head.appendChild(bg);
   }
+
+  // 전역 폰트 — Pretendard + 폴백 스택. output=single 빌드엔 +html 의 FONT_CSS 가 안 실려
+  // 프로덕션이 브라우저 기본 세리프(Times New Roman)로 렌더됐고, 굵은 한글은 브라우저가
+  // 가짜볼드(글자를 살짝 겹쳐 찍어 굵기 흉내)로 합성해 잔상/깨짐이 생겼다.
+  // font-synthesis:none 으로 흉내를 끄고 폴백 폰트의 실제 굵기를 쓰게 해 어떤 기기든 또렷하게.
+  if (!document.head.querySelector('#st-font')) {
+    const font = document.createElement('style');
+    font.id = 'st-font';
+    font.textContent =
+      "html,body,#root{font-family:'Pretendard Variable',Pretendard,-apple-system,BlinkMacSystemFont," +
+      "system-ui,'Apple SD Gothic Neo','Noto Sans KR','Malgun Gothic',sans-serif;" +
+      '-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;font-synthesis:none;}';
+    document.head.appendChild(font);
+  }
+  // Pretendard 가변폰트(CDN). 이미 링크가 있으면(+html/static 모드) 중복 주입을 건너뛴다.
+  if (!document.head.querySelector('link[href*="pretendard"]')) {
+    const pre = document.createElement('link');
+    pre.setAttribute('rel', 'stylesheet');
+    pre.setAttribute(
+      'href',
+      'https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css',
+    );
+    document.head.appendChild(pre);
+  }
 }
