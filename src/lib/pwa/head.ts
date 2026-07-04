@@ -95,4 +95,16 @@ export function injectPwaHead(): void {
       '*::-webkit-scrollbar{display:none !important;width:0 !important;height:0 !important;}';
     document.head.appendChild(style);
   }
+
+  // 전역 기본 배경 — 미지정 시 브라우저 흰색이 로딩·오버스크롤·프레임 밖에서 새어 나온다.
+  // (output=single 빌드는 +html 의 <style> 이 안 들어가므로 런타임에 주입한다.)
+  // 모바일: 페이퍼(#F1EFE9 = 앱 메인 배경·스플래시와 동일). 넓은 화면: 프레임 밖 거터색.
+  if (!document.head.querySelector('#st-base-bg')) {
+    const bg = document.createElement('style');
+    bg.id = 'st-base-bg';
+    bg.textContent =
+      'html,body{background-color:#F1EFE9;}' +
+      '@media(min-width:501px){html,body{background-color:#E9E7E0;}}';
+    document.head.appendChild(bg);
+  }
 }

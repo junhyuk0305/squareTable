@@ -25,7 +25,7 @@ export default function JuniorTimesheetScreen() {
         addLabel="빠진 날 출근 기록 추가"
         role="junior"
         belowSummary={<Text style={styles.note}>시급 {won(wage)} · 세전 예상</Text>}
-        footerNote="* 시간이 틀리면 직접 보정하세요. 보정한 기록은 사장님에게 ‘직원 수정’으로 표시됩니다."
+        footerNote="* 시간이 틀리면 직접 수정하세요. 수정한 기록은 사장님에게 ‘직원 수정’으로 표시돼요."
       />
     </>
   );

@@ -145,7 +145,7 @@ export const useAttendanceStore = create<State>((set, get) => ({
               ? { records: s.records.filter((r) => r.id !== saved!.id) }
               : { records: s.records.map((r) => (r.id === before!.id ? before! : r)) },
           ),
-        '근무 시간 보정 저장에 실패했어요.',
+        '근무 시간 수정 저장에 실패했어요.',
       );
   },
   removeRecord: (id) => {

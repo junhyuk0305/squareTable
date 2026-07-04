@@ -93,10 +93,9 @@ export default function OwnerLayout() {
       <Stack.Screen name="work" options={{ title: '업무', headerLeft: () => null, headerBackVisible: false }} />
       <Stack.Screen name="settings" options={{ title: '설정', headerLeft: () => null, headerBackVisible: false }} />
       {/* 서브화면 — 전역 headerLeft(HeaderBackButton) 사용 */}
-      <Stack.Screen name="staff" options={{ title: '직원 관리' }} />
+      <Stack.Screen name="staff" options={{ title: '직원·급여' }} />
       <Stack.Screen name="schedule" options={{ title: '근무표' }} />
       <Stack.Screen name="store-config" options={{ title: '가게 기본 정보' }} />
-      <Stack.Screen name="attendance" options={{ title: '근무·급여' }} />
       <Stack.Screen name="timesheet/[staffId]" options={{ title: '출근 기록' }} />
       <Stack.Screen name="payroll" options={{ title: '급여 설정' }} />
       <Stack.Screen name="knowledge" options={{ title: '내 노하우' }} />

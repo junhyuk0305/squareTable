@@ -5,6 +5,8 @@
 // 행(row) ↔ TS 타입 매핑: 중첩 필드는 JSONB라 거의 그대로. snake_case 컬럼만 살짝 정리.
 
 import { supabase, HAS_SUPABASE } from './supabase';
+import { reportError } from '@/lib/analytics/track';
+import { useSyncStore } from '@/lib/store/useSyncStore';
 import type { PlaybookEntry, PlaybookSuggestion, UnknownQuery, ChatQuery, Owner, Junior } from '@/types';
 import type { TaskTemplate, FeedItem, DoneMark } from '@/lib/store/useWorkStore';
 import type { Room, RoomMember } from '@/lib/store/useRoomStore';
@@ -28,9 +30,42 @@ async function write(label: string, q: PromiseLike<{ error: { message: string } 
   const { error } = await q;
   if (error) {
     console.warn(`[db] ${label}:`, error.message);
+    reportError(`db.write:${label}`, error); // 원격 관측 — 쓰기 실패를 팀이 볼 수 있게(무음 장애 방지)
     return false;
   }
   return true;
+}
+
+// 0행 유령 성공 방지(리포트 P1-6): RLS 차단·id 드리프트·동시 삭제로 대상 행이 0개면 PostgREST 는
+// error=null 을 준다 → 일반 write() 는 성공(true)으로 오판해 롤백·배너 없이 데이터가 조용히 유실된다.
+// writeStrict 는 쓰기 뒤 .select() 로 "실제 영향받은 행"을 받아, 0행이면 false(호출부가 롤백·배너).
+// ⚠️ 쓰기 후 그 행을 SELECT 할 수 있는 경로에만 쓴다(RLS SELECT 허용). 아니면 저장됐는데도
+//    0행으로 보여 오탐이 난다 → 무결성이 중요하고 재조회가 확실한 경로부터 선별 적용한다.
+async function writeStrict(
+  label: string,
+  q: PromiseLike<{ data: unknown[] | null; error: { message: string } | null }>,
+): Promise<boolean> {
+  const { data, error } = await q;
+  if (error) {
+    console.warn(`[db] ${label}:`, error.message);
+    reportError(`db.write:${label}`, error);
+    return false;
+  }
+  if (Array.isArray(data) && data.length === 0) {
+    console.warn(`[db] ${label}: 0 rows affected (RLS/id/concurrency)`);
+    reportError(`db.write.zero:${label}`, { message: '0 rows affected' });
+    return false;
+  }
+  return true;
+}
+
+// 읽기 실패를 한 곳에서 처리(리포트 P0-1): 개발자 콘솔 + 원격 관측 + 사용자에게 "불러오지 못했어요" 배너.
+// 예전엔 fetch 실패가 조용히 빈배열로 반환돼, 광범위 백엔드 장애가 '내용 없음' 정상화면으로 위장됐다.
+// 호출부는 여전히 빈값을 반환하되(프론트 안 끊김), 이 헬퍼가 실패를 사용자·팀 양쪽에 표면화한다.
+function readFail(label: string, error: unknown): void {
+  console.warn(`[db] ${label}:`, (error as any)?.message ?? String(error));
+  reportError(`db.read:${label}`, error);
+  useSyncStore.getState().noteError('일부 정보를 불러오지 못했어요. 연결을 확인하고 새로고침해 주세요.');
 }
 
 // ── 시계열 fetch 상한 (무한 fetch 방지) ────────────────────────
@@ -60,7 +95,7 @@ export async function fetchStaffProfiles(): Promise<{ owner: Owner | null; staff
     .select('id, name, role, phone_last4, avatar, bio, meta, created_at')
     .order('created_at', { ascending: true });
   if (error) {
-    console.warn('[db] fetchStaffProfiles:', error.message);
+    readFail('fetchStaffProfiles', error);
     return { owner: null, staff: [] };
   }
   const rows = (data ?? []) as any[];
@@ -113,7 +148,7 @@ export async function removeStaffMember(staffId: string): Promise<boolean> {
 export async function purgeExpiredFormerStaff(): Promise<void> {
   if (!HAS_SUPABASE) return;
   const { error } = await supabase.rpc('purge_expired_former_staff');
-  if (error) console.warn('[db] purgeExpiredFormerStaff:', error.message);
+  if (error) { console.warn('[db] purgeExpiredFormerStaff:', error.message); reportError('db:purgeExpiredFormerStaff', error); }
 }
 
 // ── 합류 승인(남용 #2) ─────────────────────────────────────
@@ -126,7 +161,7 @@ export async function fetchPendingMembers(): Promise<{ id: string; name: string;
     .eq('pending_unit_id', _unitId)
     .order('created_at', { ascending: true });
   if (error) {
-    console.warn('[db] fetchPendingMembers:', error.message);
+    readFail('fetchPendingMembers', error);
     return [];
   }
   return (data ?? []).map((r: any) => ({
@@ -155,7 +190,7 @@ export async function rotateInviteCode(): Promise<{ inviteCode: string; expiresA
   if (!HAS_SUPABASE) return null;
   const { data, error } = await supabase.rpc('rotate_invite_code');
   if (error) {
-    console.warn('[db] rotateInviteCode:', error.message);
+    console.warn('[db] rotateInviteCode:', error.message); reportError('db:rotateInviteCode', error);
     return null;
   }
   const row = Array.isArray(data) ? data[0] : data;
@@ -171,7 +206,7 @@ export async function fetchEntries(): Promise<PlaybookEntry[]> {
     .select('*')
     .order('created_at', { ascending: false });
   if (error) {
-    console.warn('[db] fetchEntries:', error.message);
+    readFail('fetchEntries', error);
     return [];
   }
   return (data ?? []) as PlaybookEntry[];
@@ -215,7 +250,7 @@ export async function fetchSuggestions(): Promise<PlaybookSuggestion[]> {
     .select('*')
     .order('created_at', { ascending: false });
   if (error) {
-    console.warn('[db] fetchSuggestions:', error.message);
+    readFail('fetchSuggestions', error);
     return [];
   }
   return (data ?? []) as PlaybookSuggestion[];
@@ -256,7 +291,7 @@ export async function fetchUnknownQueue(): Promise<UnknownQuery[]> {
     .order('asked_at', { ascending: false })
     .limit(PAGE_LIMIT);
   if (error) {
-    console.warn('[db] fetchUnknownQueue:', error.message);
+    readFail('fetchUnknownQueue', error);
     return [];
   }
   return (data ?? []) as UnknownQuery[];
@@ -276,17 +311,20 @@ export async function bumpUnknownSimilar(id: string, count: number): Promise<boo
 // 받은질문 상태 전이(보관/자동응답/대기로 되돌리기). status 컬럼만 갱신.
 export async function updateUnknownStatus(id: string, status: UnknownQuery['status']): Promise<boolean> {
   if (!HAS_SUPABASE) return true;
-  return write('updateUnknownStatus', supabase.from('unknown_queries').update({ status }).eq('id', id));
+  // 상태 전이는 무결성 핵심(pending↔resolved) — 0행이면 유령 성공 대신 실패로(P1-6).
+  return writeStrict('updateUnknownStatus', supabase.from('unknown_queries').update({ status }).eq('id', id).select('id'));
 }
 
 export async function resolveUnknown(id: string, newEntryId: string): Promise<boolean> {
   if (!HAS_SUPABASE) return true;
-  return write(
+  // 질문 해결 표시가 0행이면 알바 챗봇 학습 루프가 조용히 끊긴다 → 반드시 실제 갱신 확인(P1-6).
+  return writeStrict(
     'resolveUnknown',
     supabase
       .from('unknown_queries')
       .update({ status: 'resolved_with_entry', resolved_with_entry_id: newEntryId })
-      .eq('id', id),
+      .eq('id', id)
+      .select('id'),
   );
 }
 
@@ -301,7 +339,7 @@ export async function fetchChatQueries(juniorId: string): Promise<ChatQuery[]> {
     .order('asked_at', { ascending: true })
     .limit(PAGE_LIMIT);
   if (error) {
-    console.warn('[db] fetchChatQueries:', error.message);
+    readFail('fetchChatQueries', error);
     return [];
   }
   return (data ?? []) as ChatQuery[];
@@ -328,7 +366,7 @@ export async function updateChatSatisfaction(id: string, vote: 'up' | 'down'): P
 export async function recomputePlaybookStats(entryIds: string[]): Promise<void> {
   if (!HAS_SUPABASE || !entryIds.length) return;
   const { error } = await supabase.rpc('recompute_playbook_stats', { p_entry_ids: entryIds });
-  if (error) console.warn('[db] recomputePlaybookStats:', error.message);
+  if (error) { console.warn('[db] recomputePlaybookStats:', error.message); reportError('db:recomputePlaybookStats', error); }
 }
 
 // ── 사진 업로드(Storage) ───────────────────────────────────
@@ -372,7 +410,7 @@ export async function uploadPhoto(file: File): Promise<string | null> {
     upsert: false,
   });
   if (error) {
-    console.warn('[db] uploadPhoto:', error.message);
+    console.warn('[db] uploadPhoto:', error.message); reportError('db:uploadPhoto', error);
     return null;
   }
   const { data } = supabase.storage.from(PHOTO_BUCKET).getPublicUrl(path);
@@ -409,7 +447,7 @@ export async function fetchRooms(): Promise<Room[]> {
   if (!HAS_SUPABASE) return [];
   const { data, error } = await supabase.from('work_rooms').select('*').order('created_at');
   if (error) {
-    console.warn('[db] fetchRooms:', error.message);
+    readFail('fetchRooms', error);
     return [];
   }
   return (data ?? []).map((r: any) => ({
@@ -425,7 +463,7 @@ export async function fetchRoomMembers(): Promise<RoomMember[]> {
   if (!HAS_SUPABASE) return [];
   const { data, error } = await supabase.from('work_room_members').select('room_id, user_id');
   if (error) {
-    console.warn('[db] fetchRoomMembers:', error.message);
+    readFail('fetchRoomMembers', error);
     return [];
   }
   return (data ?? []).map((r: any) => ({ roomId: r.room_id, userId: r.user_id })) as RoomMember[];
@@ -477,7 +515,7 @@ export async function fetchTemplates(): Promise<TaskTemplate[]> {
   // select('*') — 0013 마이그레이션 적용 전후 모두 안전(없는 컬럼은 undefined).
   const { data, error } = await supabase.from('work_templates').select('*').order('created_at');
   if (error) {
-    console.warn('[db] fetchTemplates:', error.message);
+    readFail('fetchTemplates', error);
     return [];
   }
   return (data ?? []).map((r: any) => ({
@@ -525,7 +563,7 @@ export async function fetchDone(): Promise<Record<string, Record<string, DoneMar
   if (!HAS_SUPABASE) return {};
   const { data, error } = await supabase.from('work_done').select('work_date, template_id, data');
   if (error) {
-    console.warn('[db] fetchDone:', error.message);
+    readFail('fetchDone', error);
     return {};
   }
   const out: Record<string, Record<string, DoneMark>> = {};
@@ -559,7 +597,7 @@ export async function fetchFeed(): Promise<FeedItem[]> {
     .order('created_at')
     .limit(PAGE_LIMIT);
   if (error) {
-    console.warn('[db] fetchFeed:', error.message);
+    readFail('fetchFeed', error);
     return [];
   }
   return (data ?? []).map((r: any) => r.data as FeedItem);
@@ -585,14 +623,15 @@ export async function fetchAttendance(): Promise<AttendanceRecord[]> {
     .order('date', { ascending: false })
     .limit(PAGE_LIMIT);
   if (error) {
-    console.warn('[db] fetchAttendance:', error.message);
+    readFail('fetchAttendance', error);
     return [];
   }
   return (data ?? []) as AttendanceRecord[];
 }
 export async function upsertAttendance(rec: AttendanceRecord): Promise<boolean> {
   if (!HAS_SUPABASE) return true;
-  return write('upsertAttendance', supabase.from('attendance').upsert({ ...rec, unit_id: _unitId }));
+  // 출퇴근=급여 직결 무결성 경로 — 0행(RLS/경합)이면 유령 성공 대신 실패로 롤백·배너(P1-6).
+  return writeStrict('upsertAttendance', supabase.from('attendance').upsert({ ...rec, unit_id: _unitId }).select('id'));
 }
 export async function deleteAttendance(id: string): Promise<boolean> {
   if (!HAS_SUPABASE) return true;
@@ -604,7 +643,7 @@ export async function fetchWages(): Promise<Record<string, number>> {
   if (!HAS_SUPABASE) return {};
   const { data, error } = await supabase.from('wages').select('staff_id, hourly_wage');
   if (error) {
-    console.warn('[db] fetchWages:', error.message);
+    readFail('fetchWages', error);
     return {};
   }
   const out: Record<string, number> = {};
@@ -649,7 +688,7 @@ export async function fetchScheduleConfig(): Promise<StoreConfig | null> {
     .select('open, close, closed_days, note')
     .maybeSingle();
   if (error) {
-    console.warn('[db] fetchScheduleConfig:', error.message);
+    readFail('fetchScheduleConfig', error);
     return null;
   }
   if (!data) return null;
@@ -693,7 +732,7 @@ export async function fetchShiftTemplates(): Promise<ShiftTemplate[]> {
     .from('shift_templates')
     .select('id, staff_id, weekday, start_time, end_time');
   if (error) {
-    console.warn('[db] fetchShiftTemplates:', error.message);
+    readFail('fetchShiftTemplates', error);
     return [];
   }
   return (data ?? []).map((r: any) => ({
@@ -754,7 +793,7 @@ export async function fetchSwaps(): Promise<SwapRequest[]> {
     .select('*')
     .order('created_at', { ascending: false });
   if (error) {
-    console.warn('[db] fetchSwaps:', error.message);
+    readFail('fetchSwaps', error);
     return [];
   }
   return (data ?? []).map((r: any) => ({

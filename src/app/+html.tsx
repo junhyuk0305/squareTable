@@ -73,6 +73,10 @@ html, body, #root, #__next {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* 전역 기본 배경 — 미지정 시 브라우저 흰색이 로딩 순간·오버스크롤 바운스·프레임 밖에서
+   새어 나온다. 디자인시스템 페이퍼(#F1EFE9 = 앱 메인 배경, 스플래시와 동일)로 통일. */
+html, body { background-color: #F1EFE9; }
+
 /* 스크롤바 숨김(웹 전역) — 스크롤은 유지, 오른쪽/하단 바만 제거 */
 * { scrollbar-width: none; -ms-overflow-style: none; }
 *::-webkit-scrollbar { display: none; width: 0; height: 0; }
@@ -83,6 +87,8 @@ html, body, #root, #__next {
  * 임계폭 500px = ResponsiveShell의 MAX_W(460) + 거터(40). id는 nativeID로 주입됨.
  */
 @media (min-width: 501px) {
+  /* 넓은 화면: 프레임 밖 거터색으로 body 오버스크롤·여백까지 통일 */
+  html, body { background-color: #E9E7E0; }
   #st-outer {
     align-items: center;
     background-color: #E9E7E0;

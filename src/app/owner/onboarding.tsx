@@ -115,7 +115,7 @@ export default function OwnerOnboardingScreen() {
               <Text style={styles.doneTitle}>노하우 {registeredCount}개로 시작해요</Text>
               <Text style={styles.doneSub}>
                 이제 알바가 물어보면 AI가 이 노하우로 대신 답해줘요.{'\n'}
-                <Text style={styles.doneStrong}>‘미확인’ 표시</Text>가 붙은 건 나중에 우리 매장에 맞게 다듬어 주세요.
+                <Text style={styles.doneStrong}>‘확인 필요’ 표시</Text>가 붙은 건 나중에 우리 매장에 맞게 다듬어 주세요.
               </Text>
             </>
           ) : (
@@ -131,7 +131,7 @@ export default function OwnerOnboardingScreen() {
           <View style={styles.codeCard}>
             <Text style={styles.codeLabel}>직원 초대코드</Text>
             <Text style={styles.codeText}>{inviteCode}</Text>
-            <Text style={styles.codeHint}>직원이 회원가입에서 이 코드를 넣으면 바로 합류돼요.</Text>
+            <Text style={styles.codeHint}>직원이 개인 홈에서 이 코드로 신청하면, 사장님이 승인해야 합류돼요.</Text>
           </View>
 
           <PressableScale onPress={goDashboard} scaleTo={0.97} style={styles.primary}>

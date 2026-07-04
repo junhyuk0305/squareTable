@@ -208,7 +208,7 @@ export function TemplateLibrary() {
       '확인',
       {
         icon: 'checkmark-circle-outline',
-        accent: '아직 미검증 상태예요. 우리 매장 기준이 맞는지 꼭 검토해 주세요.',
+        accent: '아직 확인 전이에요. 우리 매장 기준이 맞는지 꼭 확인해 주세요.',
       },
     );
   };

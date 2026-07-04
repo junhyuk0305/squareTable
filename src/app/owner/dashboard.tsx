@@ -132,16 +132,16 @@ export default function OwnerDashboardScreen() {
               scaleTo={0.98}
               style={styles.reviewBanner}
               accessibilityRole="button"
-              accessibilityLabel={`미검증 노하우 ${needsReviewCount}개 검증하기`}
+              accessibilityLabel={`확인 필요한 노하우 ${needsReviewCount}개 확인하기`}
             >
               <View style={styles.reviewIcon}>
                 <Ionicons name="alert-circle" size={20} color={BrandColors.bad} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.reviewTitle}>검증이 필요한 노하우 {needsReviewCount}개</Text>
-                <Text style={styles.reviewSub}>업종 표준값이에요. 우리 매장 기준이 맞는지 검토해 주세요.</Text>
+                <Text style={styles.reviewTitle}>확인이 필요한 노하우 {needsReviewCount}개</Text>
+                <Text style={styles.reviewSub}>업종 표준값이에요. 우리 매장 기준이 맞는지 확인해 주세요.</Text>
               </View>
-              <Text style={styles.reviewCta}>검증 ›</Text>
+              <Text style={styles.reviewCta}>확인 ›</Text>
             </PressableScale>
           </Appear>
         )}
@@ -247,7 +247,7 @@ export default function OwnerDashboardScreen() {
               <Text style={styles.kpiLabel}>업무 완료</Text>
             </Pressable>
             <Pressable
-              onPress={() => router.push('/owner/attendance')}
+              onPress={() => router.push('/owner/staff')}
               style={({ pressed }) => [styles.kpi, pressed && { opacity: 0.85 }]}
               accessibilityRole="button"
               accessibilityLabel={`지금 근무 ${working}명`}
@@ -259,7 +259,7 @@ export default function OwnerDashboardScreen() {
               <Text style={styles.kpiLabel}>근무 중</Text>
             </Pressable>
             <Pressable
-              onPress={() => router.push('/owner/attendance')}
+              onPress={() => router.push('/owner/staff')}
               style={({ pressed }) => [styles.kpi, styles.kpiHi, pressed && { opacity: 0.85 }]}
               accessibilityRole="button"
               accessibilityLabel={`이번 달 인건비 ${won(monthPay)}`}
@@ -271,7 +271,7 @@ export default function OwnerDashboardScreen() {
           </Appear>
         )}
 
-        {/* ③ 매장운영 허브 — 근무·급여/직원/급여설정. 노하우 0건이어도 항상 노출(첫날부터 매장 운영이 필요). */}
+        {/* ③ 매장운영 허브 — 직원·급여/근무 2카드. 노하우 0건이어도 항상 노출(첫날부터 매장 운영이 필요). */}
         <Appear delay={120}>
           <View ref={hubRef}>
             <OwnerHomeHubCards />
@@ -301,7 +301,7 @@ export default function OwnerDashboardScreen() {
             // F6 핸드오프 — 혼자 모드(직원 0명)
             <NudgeCard
               icon="people-outline"
-              title="지금 쌓으면, 직원 뽑을 때 그대로 교육 AI"
+              title="지금 쌓아두면, 직원 뽑을 때 그대로 교육 자료가 돼요"
               sub="혼자 일하는 지금 정리해두면 첫 직원이 와도 다시 설명 안 해도 돼요"
               onPress={() => router.push('/owner/staff')}
             />

@@ -67,7 +67,7 @@ function EntryRow({ e, onPress }: { e: PlaybookEntry; onPress: () => void }) {
           {e.stats?.query_hits_30d ? <Text style={styles.meta}>· 🔥 {e.stats.query_hits_30d}</Text> : null}
           {e.needs_review ? (
             <View style={styles.badgeReview}>
-              <Text style={styles.badgeReviewText}>미검증</Text>
+              <Text style={styles.badgeReviewText}>확인 필요</Text>
             </View>
           ) : isUnused(e) ? (
             <View style={styles.badgeUnused}>
@@ -208,11 +208,11 @@ export function OwnerKnowhowBrowse({
         verify(e);
       }}
       accessibilityRole="button"
-      accessibilityLabel={`${e.title} 검증 완료로 표시`}
+      accessibilityLabel={`${e.title} 확인 완료로 표시`}
       style={({ pressed }) => [styles.verifyBtn, pressed && { opacity: 0.85 }]}
     >
       <Ionicons name="checkmark-circle" size={15} color={InkColors.ink} />
-      <Text style={styles.verifyBtnText}>검증 완료 (우리 매장 기준 맞아요)</Text>
+      <Text style={styles.verifyBtnText}>확인 완료 (우리 매장 기준 맞아요)</Text>
     </Pressable>
   );
 
@@ -253,14 +253,14 @@ export function OwnerKnowhowBrowse({
               }}
               style={({ pressed }) => [styles.banner, pressed && { opacity: 0.9 }]}
               accessibilityRole="button"
-              accessibilityLabel={`미검증 노하우 ${needsReview.length}개 검증하기`}
+              accessibilityLabel={`확인 필요한 노하우 ${needsReview.length}개 확인하기`}
             >
               <Ionicons name="alert-circle" size={18} color={BrandColors.warn} />
               <View style={{ flex: 1 }}>
-                <Text style={styles.bannerTitle}>미검증 노하우 {needsReview.length}개</Text>
-                <Text style={styles.bannerBody}>업종 표준값이에요. 우리 매장 기준으로 검증해 주세요.</Text>
+                <Text style={styles.bannerTitle}>확인 필요한 노하우 {needsReview.length}개</Text>
+                <Text style={styles.bannerBody}>업종 표준값이에요. 우리 매장 기준이 맞는지 확인해 주세요.</Text>
               </View>
-              <Text style={styles.bannerCta}>검증하기 ›</Text>
+              <Text style={styles.bannerCta}>확인하기 ›</Text>
             </Pressable>
           )}
 
@@ -319,10 +319,10 @@ export function OwnerKnowhowBrowse({
                 style={[styles.statusChip, onlyNeedsReview && styles.statusReviewOn]}
                 accessibilityRole="button"
                 accessibilityState={{ selected: onlyNeedsReview }}
-                accessibilityLabel={`미검증 ${needsReview.length}개만 보기`}
+                accessibilityLabel={`확인 필요 ${needsReview.length}개만 보기`}
               >
                 <Ionicons name="alert-circle" size={13} color={onlyNeedsReview ? InkColors.ink : BrandColors.warn} />
-                <Text style={[styles.statusChipText, onlyNeedsReview && styles.statusChipTextInk]}>미검증 {needsReview.length}</Text>
+                <Text style={[styles.statusChipText, onlyNeedsReview && styles.statusChipTextInk]}>확인 필요 {needsReview.length}</Text>
               </Pressable>
             </ScrollView>
           )}
@@ -349,7 +349,7 @@ export function OwnerKnowhowBrowse({
               <View style={{ gap: Space.xl }}>
                 {needsReview.length > 0 && (
                   <Appear delay={0} style={styles.block}>
-                    <SectionLabel icon="alert-circle-outline" title="검증이 필요해요" hint={`${needsReview.length}개`} />
+                    <SectionLabel icon="alert-circle-outline" title="확인이 필요해요" hint={`${needsReview.length}개`} />
                     <KnowhowCarousel entries={needsReview} onSelect={(e) => onSelect(e.id)} showCategory renderExtra={verifyButton} />
                   </Appear>
                 )}
@@ -376,7 +376,7 @@ export function OwnerKnowhowBrowse({
           ) : listFiltered.length === 0 ? (
             <EmptyResult
               onReset={() => { setQuery(''); setActiveCats([]); setOnlyNeedsReview(false); }}
-              label={onlyNeedsReview ? '미검증 노하우가 없어요 🎉' : undefined}
+              label={onlyNeedsReview ? '확인할 노하우가 없어요 🎉' : undefined}
             />
           ) : groups ? (
             groups.map((g) => {

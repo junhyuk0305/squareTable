@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { View, Text, Pressable, StyleSheet, ScrollView, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
@@ -6,13 +6,14 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { usePayrollStore } from '@/lib/store/usePayrollStore';
 import { useStaffStore } from '@/lib/store/useStaffStore';
+import { useAttendanceStore } from '@/lib/store/useAttendanceStore';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { RoleTabBar } from '@/components/RoleTabBar';
 import { ConfirmModal } from '@/components/ConfirmModal';
 import { Avatar } from '@/components/Avatar';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
-import { DEFAULT_HOURLY_WAGE } from '@/lib/utils/attendance';
+import { DEFAULT_HOURLY_WAGE, fmtDuration, won, todayStr, liveMinutes } from '@/lib/utils/attendance';
 import { useCopyToClipboard } from '@/lib/utils/useCopyToClipboard';
 import { rotateInviteCode } from '@/lib/db';
 
@@ -20,6 +21,7 @@ export default function OwnerStaffScreen() {
   const router = useRouter();
   const wages = usePayrollStore((s) => s.wages);
   const setWage = usePayrollStore((s) => s.setWage);
+  const records = useAttendanceStore((s) => s.records);
   const staff = useStaffStore((s) => s.staff);
   const removeStaff = useStaffStore((s) => s.removeStaff);
   const pending = useStaffStore((s) => s.pending);
@@ -34,6 +36,33 @@ export default function OwnerStaffScreen() {
   const [rotateOpen, setRotateOpen] = useState(false);
   const [rotating, setRotating] = useState(false);
   const { copied, copy } = useCopyToClipboard();
+
+  // 근무 중 직원의 누적시간을 30초마다 갱신(구 근무·급여 화면에서 흡수).
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setTick((x) => x + 1), 30000);
+    return () => clearInterval(t);
+  }, []);
+
+  // 직원별 이번 달 시간·급여·근무상태 — 구 attendance 화면의 집계를 직원 목록에 합친다.
+  const today = todayStr();
+  const ym = today.slice(0, 7);
+  const perStaff = useMemo(() => {
+    const map: Record<string, { min: number; pay: number; status: 'out' | 'working' | 'done' }> = {};
+    for (const s of staff) {
+      const monthRecs = records.filter((r) => r.staff_id === s.id && r.date.startsWith(ym));
+      const min = monthRecs.reduce((sum, r) => sum + liveMinutes(r), 0);
+      const wage = wages[s.id] ?? DEFAULT_HOURLY_WAGE;
+      const todayRec = records.find((r) => r.staff_id === s.id && r.date === today);
+      const status: 'out' | 'working' | 'done' = !todayRec ? 'out' : !todayRec.check_out ? 'working' : 'done';
+      map[s.id] = { min, pay: Math.round((min * wage) / 60), status };
+    }
+    return map;
+  }, [records, wages, staff, ym, today]);
+
+  const totalPay = staff.reduce((a, s) => a + (perStaff[s.id]?.pay ?? 0), 0);
+  const workingCount = staff.filter((s) => perStaff[s.id]?.status === 'working').length;
+  const month = Number(ym.slice(5));
 
   const confirmRemove = () => {
     if (!removeTarget) return;
@@ -58,9 +87,28 @@ export default function OwnerStaffScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
-      <Stack.Screen options={{ title: '직원 관리' }} />
+      <Stack.Screen options={{ title: '직원·급여' }} />
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        {/* 초대코드 */}
+        {/* ① 급여 — 이번 달 인건비 총액 + 급여 설정 진입(상단). 구 '근무·급여'·'급여 설정' 카드를 흡수. */}
+        <View style={styles.payCard}>
+          <Text style={styles.payLabel}>이번 달 예상 인건비</Text>
+          <Text style={styles.payValue}>{won(totalPay)}</Text>
+          <Text style={styles.payNote}>
+            {month}월 · 세전 · 시급 기준 · 직원 {staff.length}명{workingCount > 0 ? ` · 근무 중 ${workingCount}명` : ''}
+          </Text>
+          <Pressable
+            onPress={() => router.push('/owner/payroll')}
+            style={({ pressed }) => [styles.payrollBtn, pressed && { opacity: 0.85 }]}
+            accessibilityRole="button"
+            accessibilityLabel="급여 설정 열기"
+          >
+            <Ionicons name="options-outline" size={16} color="#FFFFFF" />
+            <Text style={styles.payrollBtnText}>급여 설정 (수당·정산 기준)</Text>
+            <Ionicons name="chevron-forward" size={15} color="rgba(255,255,255,0.7)" />
+          </Pressable>
+        </View>
+
+        {/* ② 초대코드 */}
         <View style={styles.inviteCard}>
           <Text style={styles.inviteLabel}>가게 초대코드</Text>
           <Text style={styles.inviteCode}>{INVITE_CODE}</Text>
@@ -101,7 +149,7 @@ export default function OwnerStaffScreen() {
           </View>
         )}
 
-        {/* 직원 목록 */}
+        {/* 직원 목록 — 시급 편집 + 이번 달 시간·급여·근무상태(구 근무·급여 화면 흡수) */}
         <Text style={styles.sectionTitle}>합류한 직원 ({staff.length}명) <Text style={styles.sectionSub}>· 탭 → 출근기록</Text></Text>
         {staff.length === 0 ? (
           <View style={styles.emptyBox}>
@@ -110,13 +158,20 @@ export default function OwnerStaffScreen() {
           </View>
         ) : (
         <View style={styles.list}>
-          {staff.map((s) => (
+          {staff.map((s) => {
+            const agg = perStaff[s.id];
+            return (
             <View key={s.id} style={styles.staffRow}>
               <Pressable onPress={() => router.push(`/owner/timesheet/${s.id}`)} style={({ pressed }) => [styles.staffTap, pressed && { opacity: 0.6 }]}>
                 <Avatar name={s.name} size={40} fontSize={15} />
                 <View style={styles.nameCol}>
-                  <Text style={styles.staffName} numberOfLines={1}>{s.name}</Text>
-                  <Text style={styles.staffMeta} numberOfLines={1}>{s.shift ?? '시프트 미지정'}</Text>
+                  <View style={styles.nameRow}>
+                    <Text style={styles.staffName} numberOfLines={1}>{s.name}</Text>
+                    <StatusChip status={agg?.status ?? 'out'} />
+                  </View>
+                  <Text style={styles.staffMeta} numberOfLines={1}>
+                    이번 달 {fmtDuration(agg?.min ?? 0)} · {won(agg?.pay ?? 0)}
+                  </Text>
                 </View>
               </Pressable>
               <View style={styles.wageBox}>
@@ -142,10 +197,11 @@ export default function OwnerStaffScreen() {
                 <Ionicons name="person-remove-outline" size={19} color={BrandColors.bad} />
               </Pressable>
             </View>
-          ))}
+            );
+          })}
         </View>
         )}
-        <Text style={styles.demoNote}>* 시급을 바꾸면 근무·급여 화면에 바로 반영돼요.</Text>
+        <Text style={styles.demoNote}>* 직원을 누르면 출근 기록을 보고 시간을 수정할 수 있어요. 시급을 바꾸면 인건비에 바로 반영돼요.</Text>
         <View style={{ height: 12 }} />
       </ScrollView>
       <ConfirmModal
@@ -183,9 +239,31 @@ export default function OwnerStaffScreen() {
   );
 }
 
+function StatusChip({ status }: { status: 'out' | 'working' | 'done' }) {
+  const map = {
+    working: { label: '근무 중', color: BrandColors.accent, bg: BrandColors.accentSoft },
+    done: { label: '퇴근', color: InkColors.ink3, bg: InkColors.bgSoft },
+    out: { label: '미출근', color: InkColors.ink3, bg: InkColors.bgSoft },
+  } as const;
+  const m = map[status];
+  return (
+    <View style={[chip.wrap, { backgroundColor: m.bg }]}>
+      <Text style={[chip.text, { color: m.color }]}>{m.label}</Text>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: InkColors.cream },
   scroll: { padding: 20, gap: 12 },
+
+  // 급여 요약 카드(구 근무·급여 totalCard + 급여 설정 진입)
+  payCard: { backgroundColor: InkColors.ink, borderRadius: Radius.lg, padding: 20, gap: 4 },
+  payLabel: { fontSize: 13, color: 'rgba(255,255,255,0.7)', fontWeight: '600' },
+  payValue: { fontSize: 30, fontWeight: '900', color: '#FFFFFF', letterSpacing: -0.5 },
+  payNote: { fontSize: 12, color: 'rgba(255,255,255,0.55)' },
+  payrollBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12, backgroundColor: 'rgba(255,255,255,0.12)', paddingVertical: 11, paddingHorizontal: 14, borderRadius: Radius.md },
+  payrollBtnText: { flex: 1, color: '#FFFFFF', fontWeight: '700', fontSize: 14 },
 
   inviteCard: { backgroundColor: InkColors.ink, borderRadius: Radius.lg, padding: 20, gap: 6, alignItems: 'flex-start' },
   inviteLabel: { fontSize: 13, color: 'rgba(255,255,255,0.7)', fontWeight: '600' },
@@ -209,7 +287,8 @@ const styles = StyleSheet.create({
   staffRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: InkColors.line },
   staffTap: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12, minWidth: 0 },
   nameCol: { flex: 1, minWidth: 0 },
-  staffName: { fontSize: 15, fontWeight: '700', color: InkColors.ink },
+  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6, minWidth: 0 },
+  staffName: { fontSize: 15, fontWeight: '700', color: InkColors.ink, flexShrink: 1 },
   staffMeta: { fontSize: 12, color: InkColors.ink3, marginTop: 2 },
   wageBox: { alignItems: 'flex-end', gap: 3 },
   wageLabel: { fontSize: 11, color: InkColors.ink3, fontWeight: '600' },
@@ -221,4 +300,9 @@ const styles = StyleSheet.create({
   demoNote: { fontSize: 12, color: InkColors.ink3, marginTop: 6 },
   emptyBox: { alignItems: 'center', gap: 8, paddingVertical: 28, backgroundColor: '#FFFFFF', borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line },
   emptyText: { fontSize: 13, color: InkColors.ink3, textAlign: 'center', lineHeight: 19 },
+});
+
+const chip = StyleSheet.create({
+  wrap: { paddingVertical: 3, paddingHorizontal: 9, borderRadius: Radius.pill },
+  text: { fontSize: 11, fontWeight: '800' },
 });

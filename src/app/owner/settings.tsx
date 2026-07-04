@@ -64,7 +64,7 @@ export default function OwnerSettings() {
   };
 
   const billing = () =>
-    notifyAction('구독 및 결제', '지금은 파일럿 기간으로 무료 이용 중이에요. 정기결제(월 구독)는 곧 열릴 예정이에요.', '확인', {
+    notifyAction('구독 및 결제', '지금은 파일럿 기간이라 무료로 쓰실 수 있어요. 월 구독 결제는 준비 중이에요.', '확인', {
       icon: 'card-outline',
     });
 
@@ -114,7 +114,7 @@ export default function OwnerSettings() {
         </SettingsSection>
 
         <SettingsSection icon="card-outline" title="구독 및 결제">
-          <SettingsRow first icon="card-outline" label="구독 / 결제 내역" value="파일럿 무료" onPress={billing} />
+          <SettingsRow first icon="card-outline" label="구독 / 결제 내역" value="파일럿 기간 무료" onPress={billing} />
         </SettingsSection>
 
         <SettingsSection icon="notifications-outline" title="알림">

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -14,7 +14,9 @@ import { FreeUntilNotice } from '@/components/FreeUntilNotice';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { usePreferencesStore, TEXT_SCALE_FACTOR } from '@/lib/store/usePreferencesStore';
 import { patchTextScaling, setTextScaleFactor } from '@/lib/theme/textScale';
+import { InkColors } from '@/lib/theme/colors';
 import { injectPwaHead } from '@/lib/pwa/head';
+import { installGlobalErrorHandlers, track } from '@/lib/analytics/track';
 
 // 전역 글자 크기 패치는 앱 모듈 로드 시 1회만.
 patchTextScaling();
@@ -35,7 +37,18 @@ export default function RootLayout() {
     init();
     // 웹: '홈 화면에 추가'/푸시용 PWA 헤드 태그 주입 (output=single 이라 +html 미반영)
     injectPwaHead();
+    // 안 잡힌 예외/Promise reject 를 원격 관측으로 흘려보낸다(리포트 P0-2).
+    installGlobalErrorHandlers();
   }, [init]);
+
+  // 리텐션/DAU 측정 — 로그인 세션이 열릴 때 1회 기록(계측 컨텍스트가 채워진 뒤).
+  const sessionLogged = useRef(false);
+  useEffect(() => {
+    if (signedIn && !sessionLogged.current) {
+      sessionLogged.current = true;
+      track('session_open');
+    }
+  }, [signedIn]);
 
   // 진입 스플래시 모션(~1.9s). 이 구간에 폰트/세션 체크 시간을 숨긴다.
   const [splashDone, setSplashDone] = useState(false);
@@ -52,7 +65,16 @@ export default function RootLayout() {
         <DialogHost />
         {splashDone && signedIn && <FreeUntilNotice />}
         <ErrorBoundary>
-          <Stack key={textScale} screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
+          <Stack
+            key={textScale}
+            screenOptions={{
+              headerShown: false,
+              animation: 'slide_from_right',
+              // 화면 컨테이너 기본 배경 — 미지정 시 RN/네비게이션 기본 흰색이 화면 전환(slide)
+              // 중·SafeArea 인셋에서 새어 나온다. 디자인시스템 페이퍼톤으로 깔아 통일.
+              contentStyle: { backgroundColor: InkColors.cream },
+            }}
+          >
             <Stack.Screen name="index" />
             <Stack.Screen name="login" />
             <Stack.Screen name="signup" />

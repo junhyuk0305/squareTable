@@ -14,7 +14,7 @@ type PlaybookState = {
   loaded: boolean;
   hydrate: () => Promise<void>;
   subscribe: () => () => void;
-  add: (entry: PlaybookEntry) => void;
+  add: (entry: PlaybookEntry) => Promise<boolean>;
   getById: (id: string) => PlaybookEntry | undefined;
   update: (id: string, patch: Partial<PlaybookEntry>) => void;
   remove: (id: string) => void;
@@ -35,10 +35,11 @@ export const usePlaybookStore = create<PlaybookState>((set, get) => ({
   // 다른 기기(사장님)가 노하우를 발행하면 실시간으로 다시 당겨온다.
   subscribe: () => subscribeDebounced(subscribePlaybook, () => get().hydrate()),
 
-  add: (entry) => {
-    // 맨 앞에 추가(최신 우선). 실패 시 제거 롤백.
-    optimisticAdd(set, 'entries', entry, () => insertEntry(entry), '노하우 저장에 실패했어요. 다시 시도해 주세요.', 'start');
+  add: async (entry) => {
+    // 맨 앞에 추가(최신 우선). 실패 시 제거 롤백. ok 를 반환해 호출부가 성공 UI를 조건부로 띄운다.
+    const ok = await optimisticAdd(set, 'entries', entry, () => insertEntry(entry), '노하우 저장에 실패했어요. 다시 시도해 주세요.', 'start');
     void embedEntry(entry); // 임베딩 색인(파이어앤포겟, 실패해도 발행 성공)
+    return ok;
   },
   getById: (id) => get().entries.find((e) => e.id === id),
   update: (id, patch) => {

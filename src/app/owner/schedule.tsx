@@ -48,7 +48,7 @@ export default function OwnerScheduleScreen() {
         <View style={styles.section}>
           <SectionLabel
             icon="swap-horizontal-outline"
-            title="교대 컨펌"
+            title="교대 승인"
             trailing={
               pending.length > 0 ? (
                 <View style={styles.badge}>
@@ -60,7 +60,7 @@ export default function OwnerScheduleScreen() {
           {pending.length === 0 ? (
             <View style={styles.emptyBox}>
               <Ionicons name="checkmark-done-outline" size={20} color={InkColors.ink3} />
-              <Text style={styles.emptyText}>컨펌할 교대 요청이 없어요.{'\n'}직원이 서로 합의하면 여기로 올라와요.</Text>
+              <Text style={styles.emptyText}>승인할 교대 요청이 없어요.{'\n'}직원이 서로 합의하면 여기로 올라와요.</Text>
             </View>
           ) : (
             <View style={{ gap: 10 }}>
@@ -171,7 +171,7 @@ function PendingCard({
             {r.kind === 'cover' ? '대타' : '맞교환'}
           </Text>
         </View>
-        <Text style={styles.cardWait}>컨펌 대기</Text>
+        <Text style={styles.cardWait}>승인 대기</Text>
       </View>
 
       {/* 누가 빠지고 누가 들어오는지 */}

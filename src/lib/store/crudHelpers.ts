@@ -12,7 +12,11 @@ type WithId = { id: string };
 type Setter<S> = (fn: (s: S) => Partial<S>) => void;
 type Getter<S> = () => S;
 
-/** 낙관적 추가 + 실패 시 제거 롤백. at='end'(기본) | 'start'(맨 앞). */
+/**
+ * 낙관적 추가 + 실패 시 제거 롤백. at='end'(기본) | 'start'(맨 앞).
+ * 서버 반영 성공 여부(ok)를 반환한다 — 호출부가 "저장이 실제로 됐을 때만" 성공 UI를 띄우도록.
+ * (반환값을 무시하는 기존 호출부는 하위호환.)
+ */
 export function optimisticAdd<S, T extends WithId>(
   set: Setter<S>,
   key: keyof S,
@@ -20,12 +24,12 @@ export function optimisticAdd<S, T extends WithId>(
   db: () => Promise<boolean>,
   failMsg: string,
   at: 'start' | 'end' = 'end',
-): void {
+): Promise<boolean> {
   set((s) => {
     const arr = s[key] as unknown as T[];
     return { [key]: at === 'start' ? [item, ...arr] : [...arr, item] } as unknown as Partial<S>;
   });
-  void guardWrite(
+  return guardWrite(
     db(),
     () => set((s) => ({ [key]: (s[key] as unknown as T[]).filter((x) => x.id !== item.id) } as unknown as Partial<S>)),
     failMsg,

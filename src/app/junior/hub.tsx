@@ -105,7 +105,7 @@ export default function JuniorHub() {
           <Pressable onPress={focusCode} style={({ pressed }) => [styles.heroBanner, pressed && { opacity: 0.92 }]}>
             <View style={styles.heroText}>
               <Text style={styles.heroTitle}>사장님께 코드를 받으셨나요?</Text>
-              <Text style={styles.heroSub}>6자리 초대코드를 입력하면 가게에 연결돼요.</Text>
+              <Text style={styles.heroSub}>6자리 초대코드를 넣으면 합류 신청이 되고, 사장님이 승인하면 연결돼요.</Text>
             </View>
             <View style={styles.heroCta}>
               <Text style={styles.heroCtaText}>코드 입력</Text>
