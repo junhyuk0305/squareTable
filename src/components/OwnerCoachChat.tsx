@@ -246,12 +246,15 @@ export function OwnerCoachChat({
         setScalePrompt(scaleP);
 
         // 다중 노하우 감지(직접 등록에서만; 인박스 답변은 단일 유지) → 분리 제안.
-        if (!isInboxAnswer && out.segments && out.segments.length >= 2) {
-          setSegments(out.segments);
+        // 발행 가능한(할 일·멘트가 있는) 세그먼트만 센다 — "각각 등록 (N개)"의 N과 실제 저장 수가
+        // 어긋나 빈 세그가 조용히 누락되는 걸 막는다(publishEach 도 같은 필터로 이중 방어).
+        const pubSegs = (out.segments ?? []).filter((s) => isSquarePublishable(s.square));
+        if (!isInboxAnswer && pubSegs.length >= 2) {
+          setSegments(pubSegs);
           setPending([]);
           setMessages((prev) => [
             ...prev,
-            { id: nextId(), kind: 'ai', text: `노하우 ${out.segments!.length}개가 보여요. 나눠서 등록할까요?` },
+            { id: nextId(), kind: 'ai', text: `노하우 ${pubSegs.length}개가 보여요. 나눠서 등록할까요?` },
             { id: nextId(), kind: 'split' },
           ]);
           return;

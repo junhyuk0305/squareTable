@@ -38,7 +38,8 @@
     "typecheck": "tsc --noEmit",
     "compile:packs": "node scripts/compile-pack.mjs",
     "qa:onboarding": "node scripts/qa-onboarding.mjs",
-    "qa:push": "node scripts/qa-push.mjs"
+    "qa:push": "node scripts/qa-push.mjs",
+    "qa:split": "node scripts/qa-knowhow-split.mjs"
   },
   "private": true
 }

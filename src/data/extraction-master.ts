@@ -40,12 +40,14 @@ export const EXTRACTION_MASTER = `너는 매장 사장의 말을 알바가 바�
 - label(기준 이름)·ask(짧은 질문)도 그 노하우에 맞게 생성. '적당히/곱게/노릇/진하게/너무~않게/두세 번' 같은 표현이 보이면 빠뜨리지 마라. 정도·양이 없으면 생략.
 
 [분리 규칙 — 다중 노하우]
-성격이 명백히 다른 노하우가 둘 이상이면 각각 별 entry로 나눠라(최대 3). 애매하면 하나로.
-⚠️ 나눌 때 각 entry의 category를 따로 판단하라. 반복업무와 돌발대응이 섞이면 서로 다른 category가 나와야 정상이다. 두 entry를 같은 category로 뭉뚱그리지 마라.
+서로 독립적으로 실행되는 노하우가 둘 이상이면 각각 별 entry로 나눠라(최대 6). 한 노하우의 연속된 단계는 나누지 말고 한 entry의 steps로 묶어라.
+⚠️ 줄바꿈·번호(1. 2. 3.)·불릿(- ·)·"그리고/또/다음으로"로 나열됐으면 항목마다 별 entry가 기본이다 — 같은 category여도 나눈다(하나로 뭉뚱그리지 마라).
+⚠️ 나눌 때 각 entry의 category를 따로 판단하라. 반복업무와 돌발대응이 섞이면 서로 다른 category가 나와야 정상이다.
 
 [예시]
 입력:"여분 시럽은 창고 맨 위 칸에 있어" → category=Context, situation="여분 시럽 위치: 창고 맨 위 칸", steps=[] (가짜 단계 없음)
 입력:"우유 거품 적당히 곱게 올려야 라떼아트 잘 돼" → category=Know-how, steps=["우유 거품을 곱게 올린다"], scale_prompt={kind:"spectrum",label:"거품 곱기",ask:"어느 정도로 곱게가 기준이에요?",ends:["거침","곱게"]}
 입력:"아이스티 시럽은 적당히 넣어" → category=Routine, steps=["시럽을 넣는다"], scale_prompt={kind:"count",label:"시럽 양",ask:"몇 펌프가 기준이에요?",unit:"펌프"}
 입력:"손님이 음료 식었다 하면 군말 말고 새로 만들어드려" → category=Event, steps=["바로 새로 만들어 드린다"], dont="군말하지 않기"
-입력:"아침엔 그라인더 청소하고 원두 채워. 그리고 진상 손님 오면 매니저 불러" → entries 2개: [1] category=Routine, steps=["그라인더 청소","원두 채우기"] / [2] category=Event, steps=["매니저를 부른다"] (서로 다른 category)`;
+입력:"아침엔 그라인더 청소하고 원두 채워. 그리고 진상 손님 오면 매니저 불러" → entries 2개: [1] category=Routine, steps=["그라인더 청소","원두 채우기"] / [2] category=Event, steps=["매니저를 부른다"] (서로 다른 category)
+입력(번호 나열):"1. 오픈 때 화장실 청소  2. 마감 때 정산  3. 재고 확인" → entries 3개(모두 Routine이어도 각각): [1] steps=["화장실 청소"] / [2] steps=["정산"] / [3] steps=["재고 확인"]`;
