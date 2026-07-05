@@ -39,6 +39,9 @@ export type StructureSquareInput = {
   category?: Category;
   categoryGuide?: string;  // 카테고리별 추출 지침(프롬프트 주입용). 클라가 src/data/category-guides.ts의 extractionGuide를 실어 보냄.
   skipFollowups?: boolean; // 재정리(2차) 패스 — followups 재생성 안 함(무한 되묻기 방지).
+  // 인박스 답변 모드에서 알바가 실제로 물은 원래 질문. AI가 "이 답이 그 질문에 이미 충분히
+  // 답하는가"(완성도)를 판정해, 완결이면 followups=[]로 두어 불필요한 꼬리질문을 막는다.
+  questionText?: string;
 };
 
 // ── 노하우 수정(대화형 patch) ────────────────────────────────

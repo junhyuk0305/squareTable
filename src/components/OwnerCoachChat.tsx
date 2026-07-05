@@ -196,6 +196,8 @@ export function OwnerCoachChat({
           rawText,
           category: cat,
           categoryGuide: EXTRACTION_MASTER, // 단일 마스터 지침 주입(카테고리 무관). 분류는 AI가 내부 판단.
+          // 인박스 답변이면 원래 질문을 넘겨 AI가 "이 답이 질문에 이미 충분한가"(완성도)를 판정.
+          questionText: isInboxAnswer ? uq.query_text : undefined,
         });
         lastRawRef.current = rawText;
         setSegments(null);
@@ -228,7 +230,8 @@ export function OwnerCoachChat({
         }
 
         // 기준 폴백 — AI가 scale_prompt를 빠뜨리면 규칙으로 보강(결정적). 양(개수) 우선, 아니면 정도(스펙트럼).
-        const countM = rawText.match(/펌프|샷|스쿱|바퀴|장|번/);
+        // "번"은 서수 "N번째"(2번째칸 등)와 구분 — 째가 뒤따르면 양이 아니라 순서/위치이므로 제외(엉뚱한 "몇 번가?" 방지).
+        const countM = rawText.match(/펌프|샷|스쿱|바퀴|장|번(?!째)/);
         const degreeRe = /적당|곱게|노릇|깨끗|진하|연하|바삭|은은|되직|묽|알맞/;
         const scaleP: ScalePrompt | null = out.scalePrompt ?? (countM
           ? { kind: 'count', label: '양', ask: `몇 ${countM[0]}가 기준이에요?`, unit: countM[0] }
@@ -267,12 +270,18 @@ export function OwnerCoachChat({
         if (followups.length === 0 && tooThin) {
           followups = [{ cell: 'steps', ask: '조금만 더 구체적으로 알려주세요 — 어떤 상황에서, 순서대로 무엇을 하나요?' }];
         }
-        // 완결도 게이트: 상황 + 할일/멘트 2개 이상 + 원문이 구체적(20자+)이고 척도가 없으면
-        // 이미 완결된 입력이므로 AI 꼬리질문을 생략하고 바로 확인 단계로 간다(완결 입력을 붙잡는 마찰 제거).
-        // (edge 프롬프트가 "항상 followups" 성향이라 클라에서 완결이면 끊는다.)
+        // 완결도 게이트(완성도 판정): 이미 원래 질문에 충분히 답한 입력은 AI 꼬리질문을 생략하고
+        // 바로 확인 단계로 보낸다(완결 입력을 붙잡는 마찰 제거). edge가 "항상 followups" 성향이라 클라에서 끊는다.
+        // 두 갈래로 완결을 인정한다:
+        //  (1) 절차형: 상황 + 할일/멘트 2개 이상 + 원문이 구체적(20자+)
+        //  (2) 사실·위치형: 인박스 답변이면서 상황이 채워졌고 단계가 없는 답(예: "앞치마 어디?"→"포스기 아래 서랍 2번째칸")
+        //      — 답 한 줄이 곧 완결이라 되물을 게 없다. 단, 위에서 tooThin(초단답)으로 판정된 건 제외.
         const stepsN = (out.square?.action?.steps ?? []).filter((s) => s?.trim()).length;
         const scriptsN = (out.square?.action?.scripts ?? []).filter((s) => s?.trim()).length;
-        const complete = !!out.square?.situation?.trim() && stepsN + scriptsN >= 2 && rawText.trim().length >= 20 && !scaleP;
+        const hasSituation = !!out.square?.situation?.trim();
+        const proceduralComplete = hasSituation && stepsN + scriptsN >= 2 && rawText.trim().length >= 20;
+        const factComplete = !tooThin && isInboxAnswer && hasSituation && stepsN === 0 && scriptsN === 0;
+        const complete = (proceduralComplete || factComplete) && !scaleP;
         if (complete) followups = [];
         presentSingle(scaleP, followups, { square: out.square, title: out.title || rawText.slice(0, 30), category: aiCat });
       } catch (e) {
@@ -282,7 +291,7 @@ export function OwnerCoachChat({
         setBusy(false);
       }
     },
-    [storeId, isInboxAnswer, presentSingle],
+    [storeId, isInboxAnswer, uq.query_text, presentSingle],
   );
 
   // ── 최종 재정리(2차 AI 콜): 원문 + 꼬리질문 답변을 합쳐 깔끔히 통합 ──
@@ -448,6 +457,15 @@ export function OwnerCoachChat({
     if (square) setMessages((prev) => [...prev, cardMsg({ square, title, category })]);
     pushMsg({ kind: 'ai', text: '이대로 등록할까요? ✅ / ✏️' });
   }, [square, title, category, pushMsg]);
+
+  // ── 꼬리질문 조기 종료(탈출구): 사장이 "이대로 충분해요"를 누르면 남은 꼬리질문을 버리고
+  //    바로 확인(척도/등록) 단계로 간다. 꼬리질문이 떠 있는 동안 항상 동등하게 노출된다.
+  const finishFollowupsEarly = useCallback(() => {
+    if (!square || pending.length === 0 || busy) return;
+    setPending([]);
+    pushMsg({ kind: 'owner', text: '이대로 충분해요' });
+    presentScaleOrConfirm(scalePrompt, { square, title, category });
+  }, [square, pending.length, busy, scalePrompt, title, category, presentScaleOrConfirm, pushMsg]);
 
   // ── 분리 제안: 각각 등록 ──
   const publishEach = useCallback(() => {
@@ -682,6 +700,22 @@ export function OwnerCoachChat({
 
         <View style={{ height: 8 }} />
       </ScrollView>
+
+      {/* 탈출구 — 꼬리질문이 떠 있는 동안, 답하지 않고도 바로 등록할 수 있게 항상 노출.
+          (완결된 답을 계속 붙잡는 무한 꼬리질문 마찰 제거. 답하기 vs 이대로 등록이 동등.) */}
+      {pending.length > 0 && !busy && !editing && (
+        <View style={styles.escapeBar}>
+          <Pressable
+            style={styles.escapeChip}
+            onPress={finishFollowupsEarly}
+            accessibilityRole="button"
+            hitSlop={6}
+          >
+            <Ionicons name="checkmark-circle-outline" size={17} color={InkColors.ink2} />
+            <Text style={styles.escapeText}>이대로 충분해요 · 바로 등록</Text>
+          </Pressable>
+        </View>
+      )}
 
       {/* 오류 배너 — 조용히 사라지지 않게, 재시도 경로 제공 */}
       {error && (

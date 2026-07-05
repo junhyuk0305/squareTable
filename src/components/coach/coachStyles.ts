@@ -66,6 +66,21 @@ export const styles = StyleSheet.create({
   errorText: { flex: 1, fontSize: 13, color: BrandColors.accent, fontWeight: '600' },
   errorClose: { fontSize: 14, fontWeight: '800', color: BrandColors.accent },
 
+  // 꼬리질문 탈출구 — 입력창 바로 위, 답 안 해도 바로 등록할 수 있는 동등 액션.
+  escapeBar: { alignItems: 'center', paddingHorizontal: 12, paddingBottom: 6 },
+  escapeChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: Radius.pill,
+    backgroundColor: InkColors.bgSoft,
+    borderWidth: 1,
+    borderColor: InkColors.line,
+  },
+  escapeText: { fontSize: 13.5, fontWeight: '700', color: InkColors.ink2 },
+
   inputBar: {
     flexDirection: 'row',
     alignItems: 'flex-end',
