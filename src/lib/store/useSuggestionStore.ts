@@ -8,6 +8,7 @@ import { fetchSuggestions, insertSuggestion, reviewSuggestion, subscribeSuggesti
 import { optimisticAdd, optimisticPatch } from '@/lib/store/crudHelpers';
 import { genId } from '@/lib/utils/id';
 import { useSessionStore } from '@/lib/store/useSessionStore';
+import { notifyOwnersSuggestion } from '@/lib/push/notify';
 
 // 데모 매장 id(= mockSeed.DEMO_UNIT_ID). 순환 import 방지를 위해 여기선 리터럴로 둔다.
 const DEMO_UNIT_ID = 'store_001';
@@ -85,6 +86,8 @@ export const useSuggestionStore = create<State>((set, get) => ({
       created_at: new Date().toISOString(),
     };
     optimisticAdd(set, 'suggestions', item, () => insertSuggestion(item), '제안 등록에 실패했어요. 다시 시도해 주세요.', 'start');
+    // 사장에게 웹푸시(검토 대기 제안이 생겼음).
+    notifyOwnersSuggestion(item.proposer_name, item.text);
   },
 
   approve: (id, resultingEntryId) => {

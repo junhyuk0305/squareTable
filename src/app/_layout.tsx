@@ -16,6 +16,7 @@ import { usePreferencesStore, TEXT_SCALE_FACTOR } from '@/lib/store/usePreferenc
 import { patchTextScaling, setTextScaleFactor } from '@/lib/theme/textScale';
 import { InkColors } from '@/lib/theme/colors';
 import { injectPwaHead } from '@/lib/pwa/head';
+import { usePushBootstrap } from '@/lib/push/usePushBootstrap';
 import { installGlobalErrorHandlers, track } from '@/lib/analytics/track';
 
 // 전역 글자 크기 패치는 앱 모듈 로드 시 1회만.
@@ -49,6 +50,9 @@ export default function RootLayout() {
       track('session_open');
     }
   }, [signedIn]);
+
+  // 웹푸시: 서비스워커 등록 + 로그인 시 자동 구독 보장 + 알림 클릭 라우팅.
+  usePushBootstrap();
 
   // 진입 스플래시 모션(~1.9s). 이 구간에 폰트/세션 체크 시간을 숨긴다.
   const [splashDone, setSplashDone] = useState(false);

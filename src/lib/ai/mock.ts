@@ -112,12 +112,15 @@ function structureOne(raw: string, category?: Category): StructuredSegment {
   };
 }
 
-// 강한 구분 신호(줄바꿈 / "그리고" 등)일 때만 2~3조각으로 나눈다(명백할 때만 — 거짓 분리 방지).
+// 강한 구분 신호(줄바꿈 / 번호 / "그리고" 등)일 때만 여러 조각으로 나눈다(명백할 때만 — 거짓 분리 방지).
+// 상한은 edge SQUARE_SCHEMA maxItems(MAX_ENTRIES=6)와 맞춘다.
+const MOCK_MAX_CHUNKS = 6;
 function splitChunks(raw: string): string[] {
-  const byLine = raw.split(/\n+/).map((s) => s.trim()).filter((s) => s.length > 2);
-  if (byLine.length >= 2) return byLine.slice(0, 3);
-  const byConj = raw.split(/\s*(?:그리고나서|그리고|그담에|그 다음|또한|또,|또 )\s*/).map((s) => s.trim()).filter((s) => s.length > 5);
-  if (byConj.length >= 2) return byConj.slice(0, 3);
+  // 번호(1. 2. / 1) 2)) · 불릿(- ·) 접두를 제거하고 줄 단위로.
+  const byLine = raw.split(/\n+/).map((s) => s.replace(/^\s*(?:\d+[.)]|[-·•])\s*/, '').trim()).filter((s) => s.length > 2);
+  if (byLine.length >= 2) return byLine.slice(0, MOCK_MAX_CHUNKS);
+  const byConj = raw.split(/\s*(?:그리고나서|그리고|그담에|그 다음|다음으로|또한|또,|또 )\s*/).map((s) => s.trim()).filter((s) => s.length > 5);
+  if (byConj.length >= 2) return byConj.slice(0, MOCK_MAX_CHUNKS);
   return [raw.trim()];
 }
 

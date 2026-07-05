@@ -5,6 +5,7 @@ import seedData from '@/data/unknown-queries.json';
 import { HAS_SUPABASE } from '@/lib/supabase';
 import { fetchUnknownQueue, insertUnknown, bumpUnknownSimilar, resolveUnknown, updateUnknownStatus, subscribeUnknownQueue } from '@/lib/db';
 import { guardWrite } from '@/lib/store/useSyncStore';
+import { notifyOwnersQuestion } from '@/lib/push/notify';
 
 const seed = seedData as unknown as UnknownQuery[];
 
@@ -83,6 +84,8 @@ export const useUnknownQueueStore = create<UnknownQueueState>((set, get) => ({
       // (insertUnknown이 boolean만 반환해 사유 구분 불가 → 양쪽에 자연스러운 안내로 통합.)
       '질문을 등록하지 못했어요. 대기 중인 질문이 많으면 사장님 답변을 받은 뒤 다시 등록해 주세요.',
     );
+    // 사장에게 웹푸시(답변 대기 질문이 새로 들어옴). 중복 유사질문(위 bump 경로)은 알리지 않는다.
+    if (uq.status === 'pending_owner_answer') notifyOwnersQuestion(uq.query_text);
   },
   resolve: (uqId, newEntryId) => {
     const before = get().queue.find((u) => u.id === uqId);
