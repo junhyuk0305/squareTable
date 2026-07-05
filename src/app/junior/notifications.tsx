@@ -10,6 +10,7 @@ import { useScheduleStore } from '@/lib/store/useScheduleStore';
 import { useStaffStore } from '@/lib/store/useStaffStore';
 import { HeaderBackButton } from '@/components/HeaderBackButton';
 import { NotificationList } from '@/components/NotificationList';
+import { NotificationEnableCard } from '@/components/NotificationEnableCard';
 import { todayStr } from '@/lib/utils/attendance';
 import { buildJuniorNotifications, type JuniorNotifKind } from '@/lib/utils/notifications';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
@@ -81,6 +82,8 @@ export default function JuniorNotificationsScreen() {
             </Text>
           </View>
         </View>
+
+        <NotificationEnableCard />
 
         {/* 알림 목록 — 직원·사장 공유 NotificationList */}
         <NotificationList

@@ -4,6 +4,7 @@ import { setUnitId } from '@/lib/db';
 import { friendlyError } from '@/lib/utils/userError';
 import { setAnalyticsContext, track, reportError } from '@/lib/analytics/track';
 import type { SubStatusRaw } from '@/lib/utils/subscription';
+import { notifyOwnersJoinRequest } from '@/lib/push/notify';
 
 type Role = 'owner' | 'junior';
 type Status = 'loading' | 'signed_in' | 'signed_out';
@@ -407,6 +408,8 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     const uid = get().userId;
     if (uid) await loadProfile(set, uid, get().email);
     track('join_requested', { result: 'pending' });
+    // 신청 매장 사장에게 웹푸시(승인 대기 신청이 들어옴). loadProfile 이후라 pending_unit_id 반영됨.
+    notifyOwnersJoinRequest(get().userName || '새 직원');
     return { error: null, storeName: row?.store_name ?? null, pending: true };
   },
 

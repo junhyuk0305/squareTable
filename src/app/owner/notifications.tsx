@@ -9,6 +9,7 @@ import { useSuggestionStore } from '@/lib/store/useSuggestionStore';
 import { useScheduleStore } from '@/lib/store/useScheduleStore';
 import { useStaffStore } from '@/lib/store/useStaffStore';
 import { NotificationList } from '@/components/NotificationList';
+import { NotificationEnableCard } from '@/components/NotificationEnableCard';
 import { buildOwnerNotifications, type OwnerNotifKind } from '@/lib/utils/notifications';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Elevation, Radius } from '@/lib/theme/elevation';
@@ -70,6 +71,8 @@ export default function OwnerNotificationsScreen() {
             </Text>
           </View>
         </View>
+
+        <NotificationEnableCard />
 
         <NotificationList
           rows={rows}

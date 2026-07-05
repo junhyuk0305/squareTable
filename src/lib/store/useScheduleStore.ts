@@ -24,7 +24,13 @@ import { guardWrite } from '@/lib/store/useSyncStore';
 import { optimisticAdd, optimisticPatch, optimisticRemove } from '@/lib/store/crudHelpers';
 import { genId } from '@/lib/utils/id';
 import { todayStr } from '@/lib/utils/attendance';
-import { weekdayOf, nextDateForWeekday } from '@/lib/utils/schedule';
+import { weekdayOf, nextDateForWeekday, fmtDateKo } from '@/lib/utils/schedule';
+import {
+  notifyStaffSwapRequest,
+  notifyUserSwapRequest,
+  notifyOwnersSwapApproval,
+  notifyUserSwapResult,
+} from '@/lib/push/notify';
 
 // ── 타입 ────────────────────────────────────────────────
 export type StoreConfig = {
@@ -235,6 +241,12 @@ export const useScheduleStore = create<ScheduleState>((set, get) => ({
       () => set((s) => ({ swaps: s.swaps.filter((r) => r.id !== req.id) })),
       '교대 요청 등록에 실패했어요. 다시 시도해 주세요.',
     );
+    // 웹푸시: 맞교환(swap)은 지정 상대에게만, 대타(cover)는 매장 직원 전체에게(발송자 제외는 서버가 처리).
+    if (input.kind === 'swap' && input.target_staff_id) {
+      notifyUserSwapRequest(input.target_staff_id, fmtDateKo(input.date));
+    } else {
+      notifyStaffSwapRequest(fmtDateKo(input.date));
+    }
   },
   acceptSwap: (id, byStaffId) => {
     const before = get().swaps.find((r) => r.id === id);
@@ -247,6 +259,8 @@ export const useScheduleStore = create<ScheduleState>((set, get) => ({
       () => set((s) => ({ swaps: s.swaps.map((r) => (r.id === id ? before : r)) })),
       '교대 수락 저장에 실패했어요.',
     );
+    // 수락되면 사장 최종 승인이 필요 → 사장에게 웹푸시.
+    notifyOwnersSwapApproval(fmtDateKo(before.date));
   },
   cancelSwap: (id) => {
     const before = get().swaps.find((r) => r.id === id);
@@ -269,6 +283,8 @@ export const useScheduleStore = create<ScheduleState>((set, get) => ({
       () => set((s) => ({ swaps: s.swaps.map((r) => (r.id === id ? before : r)) })),
       '교대 승인 저장에 실패했어요.',
     );
+    // 요청한 직원에게 결과 웹푸시.
+    notifyUserSwapResult(before.requester_id, true, fmtDateKo(before.date));
   },
   rejectSwap: (id) => {
     const before = get().swaps.find((r) => r.id === id);
@@ -280,6 +296,8 @@ export const useScheduleStore = create<ScheduleState>((set, get) => ({
       () => set((s) => ({ swaps: s.swaps.map((r) => (r.id === id ? before : r)) })),
       '교대 반려 저장에 실패했어요.',
     );
+    // 요청한 직원에게 결과 웹푸시.
+    notifyUserSwapResult(before.requester_id, false, fmtDateKo(before.date));
   },
 }));
 

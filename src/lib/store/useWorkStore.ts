@@ -17,6 +17,7 @@ import { guardWrite, useSyncStore } from '@/lib/store/useSyncStore';
 import { coalesce, subscribeDebounced } from '@/lib/store/realtimeSync';
 import { genId } from '@/lib/utils/id';
 import { useRoomStore } from '@/lib/store/useRoomStore';
+import { notifyStaffNotice, notifyUserMention } from '@/lib/push/notify';
 
 /** 방마다 동시에 둘 수 있는 활성 반복(주간) 할일 상한(남용 #26) — 캘린더/피드 폭주 방지. */
 const MAX_ACTIVE_RECURRING = 40;
@@ -359,6 +360,7 @@ export const useWorkStore = create<State>((set, get) => ({
         () => set((s) => ({ feed: s.feed.map((f) => (f.id === before.id ? before : f)) })),
         '공지 재게시에 실패했어요.',
       );
+      notifyStaffNotice(authorName, text); // 재공지도 직원에게 다시 웹푸시(재알림 의도).
       return;
     }
     const item: FeedItem = {
@@ -381,6 +383,7 @@ export const useWorkStore = create<State>((set, get) => ({
       () => set((s) => ({ feed: s.feed.filter((f) => f.id !== item.id) })),
       '공지 등록에 실패했어요.',
     );
+    notifyStaffNotice(authorName, text); // 매장 직원 전체에게 웹푸시(발송자 제외는 서버가 처리).
   },
 
   postMessage: (date, text, authorId, authorName, role, mentions) => {
@@ -398,6 +401,10 @@ export const useWorkStore = create<State>((set, get) => ({
       ...(room ? { roomId: room } : null),
     };
     set((s) => ({ feed: [...s.feed, item] }));
+    // 멘션된 동료에게 웹푸시(본인 멘션 제외). 서버가 같은 매장인지 검증.
+    for (const uid of mentions ?? []) {
+      if (uid !== authorId) notifyUserMention(uid, authorName, text);
+    }
     void guardWrite(
       upsertFeed(item),
       () => set((s) => ({ feed: s.feed.filter((f) => f.id !== item.id) })),
@@ -421,6 +428,10 @@ export const useWorkStore = create<State>((set, get) => ({
       ...(room ? { roomId: room } : null),
     };
     set((s) => ({ feed: [...s.feed, item] }));
+    // 멘션된 동료에게 웹푸시(본인 멘션 제외). 서버가 같은 매장인지 검증.
+    for (const uid of mentions ?? []) {
+      if (uid !== authorId) notifyUserMention(uid, authorName, text);
+    }
     void guardWrite(
       upsertFeed(item),
       () => set((s) => ({ feed: s.feed.filter((f) => f.id !== item.id) })),
