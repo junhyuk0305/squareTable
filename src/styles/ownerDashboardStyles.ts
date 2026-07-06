@@ -45,6 +45,22 @@ export const styles = StyleSheet.create({
     paddingBottom: 10,
     backgroundColor: InkColors.cream,
   },
+  // 다점포 헤더: [매장 스위처 칩][알림 벨]
+  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  storeSwitch: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    maxWidth: 150,
+    height: 32,
+    paddingHorizontal: 11,
+    borderRadius: Radius.pill,
+    borderWidth: 1,
+    borderColor: InkColors.line,
+    backgroundColor: InkColors.bg,
+    ...Elevation.e1,
+  },
+  storeSwitchText: { fontSize: 12.5, fontWeight: '900', color: InkColors.ink, flexShrink: 1 },
 
   onboard: {
     backgroundColor: BrandColors.accentSoft,
