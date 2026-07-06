@@ -73,6 +73,11 @@ let _mid = 0;
 const nextId = () => `m${++_mid}`;
 const cardMsg = (snap: CardSnap): Msg => ({ id: nextId(), kind: 'card', snap });
 
+// 한 번에 등록되는 노하우 상한(발행 UX 규칙 · SSOT). edge MAX_ENTRIES(6)이 항상 이보다 커야
+// "5개 초과"를 감지해 경고할 수 있다(6개가 오면 = 5 초과 신호). 상한 자체는 발행 시점 규칙이라
+// 데이터 계층(edge)이 아니라 여기(클라)에 둔다 — edge는 감지만, 발행 cap은 클라.
+export const MAX_SPLIT_PUBLISH = 5;
+
 export function OwnerCoachChat({
   uq,
   isInboxAnswer,
@@ -237,11 +242,21 @@ export function OwnerCoachChat({
         // 어긋나 빈 세그가 조용히 누락되는 걸 막는다(publishEach 도 같은 필터로 이중 방어).
         const pubSegs = (out.segments ?? []).filter((s) => isSquarePublishable(s.square));
         if (!isInboxAnswer && pubSegs.length >= 2) {
-          setSegments(pubSegs);
+          // 한 번에 최대 MAX_SPLIT_PUBLISH개까지만 등록. 초과분은 조용히 자르지 않고(과거 6 하드컷의
+          // silent truncation 방지) 경고로 고지하고, 최우선(원문 앞 순서) 5개만 보여준다.
+          const overflow = pubSegs.length > MAX_SPLIT_PUBLISH;
+          const shown = pubSegs.slice(0, MAX_SPLIT_PUBLISH);
+          setSegments(shown);
           setPending([]);
           setMessages((prev) => [
             ...prev,
-            { id: nextId(), kind: 'ai', text: `노하우 ${pubSegs.length}개가 보여요. 나눠서 등록할까요?` },
+            {
+              id: nextId(),
+              kind: 'ai',
+              text: overflow
+                ? `노하우가 ${MAX_SPLIT_PUBLISH}개보다 많이 보여요. 한 번에 최대 ${MAX_SPLIT_PUBLISH}개까지 등록돼요 — 우선 앞선 ${MAX_SPLIT_PUBLISH}개를 정리했어요. 제목을 눌러 고칠 수 있고, 나머지는 등록 후 한 번 더 올려주세요.`
+                : `노하우 ${shown.length}개가 보여요. 제목을 눌러 고친 뒤, 나눠서 등록할까요?`,
+            },
             { id: nextId(), kind: 'split' },
           ]);
           return;
@@ -424,11 +439,19 @@ export function OwnerCoachChat({
     presentConfirm({ square, title, category });
   }, [square, pending.length, busy, title, category, presentConfirm, pushMsg]);
 
+  // ── 분리 제안: 각 항목 제목 인라인 수정(발행 전 즉석 교정) ──
+  // segments는 이미 상한(MAX_SPLIT_PUBLISH)만큼만 담겨 있다. 깊은 수정(단계·금지 등)은
+  // 발행 후 노하우 카드의 기존 편집 흐름을 쓴다 — 여기선 가장 흔한 교정(제목)만.
+  const renameSegment = useCallback((i: number, text: string) => {
+    setSegments((prev) => (prev ? prev.map((s, idx) => (idx === i ? { ...s, title: text } : s)) : prev));
+  }, []);
+
   // ── 분리 제안: 각각 등록 ──
   const publishEach = useCallback(() => {
     if (publishedRef.current || !segments) return;
     const entries = segments
       .filter((s) => isSquarePublishable(s.square))
+      .slice(0, MAX_SPLIT_PUBLISH) // 이중 방어: 표시 단계에서 이미 잘렸지만 발행 시점에도 상한 강제.
       .map((s) => buildPlaybookEntryFromSquare({ ...uq, presumed_category: s.category }, s.square, { title: s.title, keywords: s.keywords }));
     if (entries.length === 0) {
       setError('등록할 내용이 부족해요. ➕ 내용 추가하기로 보완해 주세요.');
@@ -610,7 +633,7 @@ export function OwnerCoachChat({
             if (!segments) return null;
             return (
               <Appear key={m.id} offsetY={14} duration={340}>
-                <SplitProposal segments={segments} onEach={publishEach} onMerge={mergeOne} />
+                <SplitProposal segments={segments} onEach={publishEach} onMerge={mergeOne} onRename={renameSegment} />
               </Appear>
             );
           }
@@ -737,7 +760,10 @@ export function OwnerCoachChat({
               style={styles.input}
               editable={!busy}
               multiline
-              maxLength={1000}
+              // 긴 텍스트(인수인계서·메모)를 한 번에 붙여넣을 수 있게. edge MAX_RAWTEXT_LEN(8000) 아래
+              // 여유값 — 재정리 패스가 [추가 설명]을 덧붙여도 상한을 넘지 않는다. 입력창은 maxHeight(120)로
+              // 커지다 내부 스크롤(프레임 불변식 유지). 등록 상한(5개)은 그대로라 초과분은 경고로 안내.
+              maxLength={4000}
             />
           </View>
           <Pressable

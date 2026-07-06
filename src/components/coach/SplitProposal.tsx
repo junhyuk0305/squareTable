@@ -1,4 +1,6 @@
-import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { useState } from 'react';
+import { View, Text, StyleSheet, Pressable, TextInput } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 
 import { getCategoryMeta } from '@/lib/utils/category';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
@@ -7,20 +9,79 @@ import { Radius, Elevation } from '@/lib/theme/elevation';
 import type { StructuredSegment } from '@/lib/ai';
 
 /* ───────────────────────── 다중 노하우 분리 제안 ───────────────────────── */
-export function SplitProposal({ segments, onEach, onMerge }: { segments: StructuredSegment[]; onEach: () => void; onMerge: () => void }) {
+// 각 항목 제목을 눌러 발행 전 즉석 수정할 수 있다(onRename). 깊은 수정(단계·금지)은 발행 후 카드에서.
+export function SplitProposal({
+  segments,
+  onEach,
+  onMerge,
+  onRename,
+}: {
+  segments: StructuredSegment[];
+  onEach: () => void;
+  onMerge: () => void;
+  onRename?: (i: number, text: string) => void;
+}) {
+  const [editIdx, setEditIdx] = useState<number | null>(null);
+  const [draft, setDraft] = useState('');
+
+  const startEdit = (i: number, cur: string) => {
+    if (!onRename) return;
+    setEditIdx(i);
+    setDraft(cur);
+  };
+  // 타이핑마다 부모 segments에 즉시 반영(라이브 커밋). blur 시점에 커밋하면 "제목 수정 →
+  // 바로 [각각 등록] 탭"에서 setSegments가 아직 반영 전이라 publishEach가 옛 제목으로 발행될 수 있다
+  // (상태 업데이트 경쟁). 라이브 커밋이면 부모가 항상 최신 → 경쟁 제거. 빈 제목은 buildEntry가 보정.
+  const changeTitle = (i: number, text: string) => {
+    setDraft(text);
+    onRename?.(i, text);
+  };
+  const closeEdit = () => {
+    setEditIdx(null);
+    setDraft('');
+  };
+
   return (
     <View style={splitStyles.box}>
       <Text style={splitStyles.head}>이렇게 {segments.length}개로 나눌 수 있어요</Text>
+      {!!onRename && <Text style={splitStyles.hint}>제목을 눌러 고칠 수 있어요</Text>}
       <View style={{ gap: 8 }}>
         {segments.map((s, i) => {
           const m = getCategoryMeta(s.category);
+          const editing = editIdx === i;
+          const shownTitle = s.title || `노하우 ${i + 1}`;
           return (
             <View key={i} style={[splitStyles.item, { borderLeftColor: m.color }]}>
               <View style={[splitStyles.itemChip, { backgroundColor: m.color }]}>
                 <Text style={splitStyles.itemChipText}>{m.emoji} {m.label}</Text>
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={splitStyles.itemTitle} numberOfLines={1}>{s.title || `노하우 ${i + 1}`}</Text>
+                {editing ? (
+                  <TextInput
+                    value={draft}
+                    onChangeText={(t) => changeTitle(i, t)}
+                    onBlur={closeEdit}
+                    onSubmitEditing={closeEdit}
+                    autoFocus
+                    maxLength={40}
+                    returnKeyType="done"
+                    style={splitStyles.titleInput}
+                    placeholder="제목"
+                    placeholderTextColor={InkColors.ink3}
+                  />
+                ) : (
+                  <Pressable
+                    onPress={() => startEdit(i, shownTitle)}
+                    disabled={!onRename}
+                    hitSlop={6}
+                    style={splitStyles.titleRow}
+                    accessibilityRole={onRename ? 'button' : undefined}
+                    accessibilityLabel={onRename ? `제목 수정: ${shownTitle}` : undefined}
+                  >
+                    <Text style={splitStyles.itemTitle} numberOfLines={1}>{shownTitle}</Text>
+                    {!!onRename && <Ionicons name="pencil" size={12} color={InkColors.ink3} style={{ marginLeft: 5 }} />}
+                  </Pressable>
+                )}
                 <Text style={splitStyles.itemSub} numberOfLines={1}>
                   {s.square.action.steps.length > 0 ? `${s.square.action.steps.length}단계` : s.square.situation || '내용'}
                 </Text>
@@ -54,6 +115,7 @@ const splitStyles = StyleSheet.create({
     ...Elevation.e1,
   },
   head: { fontSize: 15, fontWeight: '800', color: InkColors.ink },
+  hint: { fontSize: 12, color: InkColors.ink3, fontWeight: '600', marginTop: -6 },
   item: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -68,7 +130,19 @@ const splitStyles = StyleSheet.create({
   },
   itemChip: { paddingVertical: 3, paddingHorizontal: 8, borderRadius: Radius.pill },
   itemChipText: { fontSize: 10.5, fontWeight: '800', color: InkColors.bubbleText },
-  itemTitle: { fontSize: 14, fontWeight: '700', color: InkColors.ink },
+  titleRow: { flexDirection: 'row', alignItems: 'center' },
+  itemTitle: { flexShrink: 1, fontSize: 14, fontWeight: '700', color: InkColors.ink },
+  titleInput: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: InkColors.ink,
+    paddingVertical: 2,
+    paddingHorizontal: 6,
+    borderRadius: Radius.sm,
+    borderWidth: 1,
+    borderColor: BrandColors.yellowDeep,
+    backgroundColor: BrandColors.yellowSoft,
+  },
   itemSub: { fontSize: 12, color: InkColors.ink3, fontWeight: '600', marginTop: 1 },
   actions: { flexDirection: 'row', gap: 8 },
   mergeBtn: { paddingVertical: 12, paddingHorizontal: 14, borderRadius: Radius.sm, borderWidth: 1, borderColor: InkColors.line, backgroundColor: InkColors.bg },

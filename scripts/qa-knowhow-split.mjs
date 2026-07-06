@@ -42,6 +42,7 @@ assert(
 );
 assert(/분리 규칙/.test(guideBody), '가이드에 [분리 규칙] 존재', '분리 규칙 섹션 없음');
 assert(/최대 6/.test(guideBody), '가이드 분리 상한 = 6', '"최대 6" 문구 없음(3에서 안 올림?)');
+assert(/순서대로|앞에 나온|앞 순서/.test(guideBody), '가이드가 문서 순서 우선을 지시', '순서 지시 없음(초과 시 "앞 5개"가 비결정적)');
 assert(/줄바꿈|번호/.test(guideBody), '가이드가 나열(줄바꿈/번호) 분리를 지시', '나열 분리 지시 없음');
 assert(/화장실 청소/.test(guideBody), '같은 category 나열 분리 few-shot 존재', '동일 category 분리 예시 없음(잘렸거나 미추가)');
 
@@ -85,5 +86,22 @@ for (const c of cases) {
 const stripped = splitChunks('1. 화장실 청소\n2. 정산 하기');
 assert(stripped[0] === '화장실 청소', '번호 접두 "1. " 제거', `실제 "${stripped[0]}"`);
 
-console.log(`\n${failed === 0 ? '✅ PASS' : `❌ FAIL (${failed})`} — 다중 노하우 분리 회귀 가드\n`);
+console.log('\n[5] 발행 상한 5개 + 초과 경고 + 긴 텍스트 (클라 정책 · 2026-07-06)');
+const coach = read('src/components/OwnerCoachChat.tsx');
+const MAX_SPLIT_PUBLISH = numConst(coach, 'MAX_SPLIT_PUBLISH');
+assert(MAX_SPLIT_PUBLISH === 5, `MAX_SPLIT_PUBLISH(${MAX_SPLIT_PUBLISH}) == 5`, '한 번에 등록 상한이 5가 아님');
+assert(
+  Number.isFinite(MAX_ENTRIES) && MAX_ENTRIES > MAX_SPLIT_PUBLISH,
+  `edge MAX_ENTRIES(${MAX_ENTRIES}) > MAX_SPLIT_PUBLISH(${MAX_SPLIT_PUBLISH})`,
+  '감지 상한(edge)이 발행 상한(클라)보다 크지 않으면 "5개 초과"를 감지·경고할 수 없다',
+);
+assert(/slice\(0,\s*MAX_SPLIT_PUBLISH\)/.test(coach), '표시·발행에 slice(0, MAX_SPLIT_PUBLISH) cap', 'cap slice 없음');
+assert(/pubSegs\.length\s*>\s*MAX_SPLIT_PUBLISH/.test(coach), '초과 감지(overflow) 분기 존재', 'overflow 분기 없음(조용히 잘림 위험)');
+assert(/보다 많이 보여요|최대 .{0,6}개까지 등록/.test(coach), '초과 시 경고 문구 존재', '경고 문구 없음');
+// 긴 텍스트: 등록 입력창 maxLength가 1000 제한을 벗어났는가(Q2).
+const mlMatches = coach.match(/maxLength=\{(\d+)\}/g) || [];
+const inputMaxLen = mlMatches.length ? Math.max(...mlMatches.map((x) => Number(x.match(/\d+/)[0]))) : NaN;
+assert(inputMaxLen > 1000, `등록 입력창 maxLength(${inputMaxLen}) > 1000 (긴 텍스트 허용)`, 'maxLength가 여전히 1000 이하');
+
+console.log(`\n${failed === 0 ? '✅ PASS' : `❌ FAIL (${failed})`} — 다중 노하우 분리·상한 회귀 가드\n`);
 process.exit(failed === 0 ? 0 : 1);
