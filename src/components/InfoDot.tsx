@@ -71,7 +71,8 @@ export function InfoDot({
 
 const styles = StyleSheet.create({
   dot: { padding: 2 },
-  backdrop: { flex: 1, backgroundColor: 'rgba(31,29,26,0.45)' },
+  // 딤 없이 올라오기만(공용 BottomSheet와 동일 규칙: backdrop은 투명 flex:1).
+  backdrop: { flex: 1 },
   sheet: {
     backgroundColor: '#FFFFFF',
     borderTopLeftRadius: Radius.sheet,
