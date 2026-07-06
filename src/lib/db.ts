@@ -381,11 +381,31 @@ export async function recomputePlaybookStats(entryIds: string[]): Promise<void> 
 // Supabase 없으면 로컬 object URL을 그대로 반환(데모 폴백).
 const PHOTO_BUCKET = 'playbook-photos';
 
-// 업로드 전 이미지 압축(웹) — 폰 사진 수 MB를 긴 변 1600px·JPEG q0.8로 다운스케일해 스토리지·대역폭 절감.
-// 비웹(document 없음)·비이미지·이미 작은 파일·실패 시 원본 그대로(업로드가 절대 안 깨지게).
+// canvas.toBlob이 WebP를 실제로 뱉는지 1회 확인(런타임 캐시). 사파리 구버전 등 미지원이면 JPEG로 폴백.
+// toDataURL이 'data:image/webp'로 시작하면 인코더 있음 — toBlob도 같은 인코더를 쓴다.
+let _webpOk: boolean | null = null;
+function supportsWebp(): boolean {
+  if (_webpOk !== null) return _webpOk;
+  try {
+    const c = document.createElement('canvas');
+    c.width = c.height = 1;
+    _webpOk = c.toDataURL('image/webp').startsWith('data:image/webp');
+  } catch {
+    _webpOk = false;
+  }
+  return _webpOk;
+}
+
+// 업로드 전 이미지 압축(웹) — 폰 사진 수 MB를 긴 변 1600px로 다운스케일 + 재인코딩.
+// 현업 표준 용량 절감:
+//   · WebP(q0.82) 우선 — 동일 화질에서 JPEG 대비 ~25~35% 작음. 미지원 브라우저는 JPEG(q0.8) 폴백.
+//   · canvas 재인코딩이 EXIF 등 메타데이터를 통째로 떨궈 용량↓ + 위치정보 프라이버시.
+// 비웹(document 없음)·비이미지·이미 충분히 작은 파일·실패 시 원본 그대로(업로드가 절대 안 깨지게).
 async function compressImage(file: File): Promise<File> {
   if (typeof document === 'undefined' || !file.type.startsWith('image/')) return file;
-  if (file.size < 600_000) return file; // 이미 작으면 스킵
+  // GIF는 재인코딩하면 애니메이션이 죽으므로 손대지 않는다.
+  if (file.type === 'image/gif') return file;
+  if (file.size < 300_000) return file; // 이미 충분히 작으면 재인코딩 이득<CPU비용 → 스킵
   try {
     const bitmap = await createImageBitmap(file);
     const scale = Math.min(1, 1600 / Math.max(bitmap.width, bitmap.height));
@@ -397,9 +417,13 @@ async function compressImage(file: File): Promise<File> {
     const ctx = canvas.getContext('2d');
     if (!ctx) return file;
     ctx.drawImage(bitmap, 0, 0, w, h);
-    const blob = await new Promise<Blob | null>((res) => canvas.toBlob(res, 'image/jpeg', 0.8));
+    const webp = supportsWebp();
+    const mime = webp ? 'image/webp' : 'image/jpeg';
+    const ext = webp ? 'webp' : 'jpg';
+    const quality = webp ? 0.82 : 0.8;
+    const blob = await new Promise<Blob | null>((res) => canvas.toBlob(res, mime, quality));
     if (!blob || blob.size >= file.size) return file; // 압축 이득 없으면 원본
-    return new File([blob], file.name.replace(/\.\w+$/, '') + '.jpg', { type: 'image/jpeg' });
+    return new File([blob], file.name.replace(/\.\w+$/, '') + '.' + ext, { type: mime });
   } catch {
     return file;
   }
@@ -414,6 +438,9 @@ export async function uploadPhoto(file: File): Promise<string | null> {
   const path = `${_unitId ?? 'unknown'}/${Date.now()}-${Math.round(Math.random() * 1e6)}.${ext}`;
   const { error } = await supabase.storage.from(PHOTO_BUCKET).upload(path, compressed, {
     contentType: compressed.type || 'image/jpeg',
+    // 경로가 매번 유니크(타임스탬프+난수)라 내용이 바뀔 일이 없다 → 1년 immutable 캐싱으로
+    // CDN이 재조회를 흡수해 Storage egress(Pro 대역폭)를 아낀다.
+    cacheControl: '31536000',
     upsert: false,
   });
   if (error) {
@@ -560,6 +587,24 @@ export async function insertTemplate(t: TaskTemplate): Promise<boolean> {
     }),
   );
 }
+export async function updateTemplate(t: TaskTemplate): Promise<boolean> {
+  if (!HAS_SUPABASE) return true;
+  return write(
+    'updateTemplate',
+    supabase
+      .from('work_templates')
+      .update({
+        section: t.section,
+        text: t.text,
+        section_note: t.sectionNote ?? null,
+        scope: t.scope ?? 'shared',
+        owner_id: t.ownerId ?? null,
+        recurrence: t.recurrence ?? null,
+        date: t.date ?? t.dueDate ?? null,
+      })
+      .eq('id', t.id),
+  );
+}
 export async function deleteTemplate(id: string): Promise<boolean> {
   if (!HAS_SUPABASE) return true;
   return write('deleteTemplate', supabase.from('work_templates').delete().eq('id', id));
@@ -615,6 +660,15 @@ export async function upsertFeed(item: FeedItem): Promise<boolean> {
     'upsertFeed',
     supabase.from('work_feed').upsert({ id: item.id, unit_id: _unitId, feed_date: item.date, room_id: item.roomId ?? null, data: item }),
   );
+}
+// 이미 존재하는 피드 행의 data 를 "제자리 수정(UPDATE)". insert 판정을 타지 않는 게 핵심.
+// ⚠️ 직원이 공지를 읽음표시(read_by 추가)할 때 upsertFeed(=upsert)를 쓰면, upsert 의 INSERT 경로가
+//    wf_insert 정책(`notice 는 사장만 insert`)에 걸려 42501(RLS 위반)로 저장이 조용히 실패했다
+//    → 읽음이 영구 반영 안 되고 안읽음 배지도 안 지워졌다. UPDATE 는 wf_update(같은 매장 허용)만
+//    평가하므로 남이 만든 공지 행이라도 같은 매장이면 정상 저장된다. (테넌트 격리는 USING 절이 유지.)
+export async function updateFeed(item: FeedItem): Promise<boolean> {
+  if (!HAS_SUPABASE) return true;
+  return write('updateFeed', supabase.from('work_feed').update({ data: item }).eq('id', item.id));
 }
 export async function deleteFeed(id: string): Promise<boolean> {
   if (!HAS_SUPABASE) return true;
@@ -698,7 +752,7 @@ export async function fetchScheduleConfig(): Promise<StoreConfig | null> {
   if (!HAS_SUPABASE) return null;
   const { data, error } = await supabase
     .from('schedule_config')
-    .select('open, close, closed_days, note')
+    .select('open, close, closed_days, note, dayparts')
     .maybeSingle();
   if (error) {
     readFail('fetchScheduleConfig', error);
@@ -710,6 +764,7 @@ export async function fetchScheduleConfig(): Promise<StoreConfig | null> {
     close: data.close ?? '22:00',
     closedDays: Array.isArray(data.closed_days) ? (data.closed_days as number[]) : [],
     note: data.note ?? '',
+    ...(data.dayparts && typeof data.dayparts === 'object' ? { dayparts: data.dayparts as StoreConfig['dayparts'] } : null),
   };
 }
 
@@ -723,6 +778,7 @@ export async function upsertScheduleConfig(c: StoreConfig): Promise<boolean> {
       close: c.close,
       closed_days: c.closedDays,
       note: c.note,
+      dayparts: c.dayparts ?? null,
       updated_at: new Date().toISOString(),
     }),
   );

@@ -1,13 +1,14 @@
-import { useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter, type Href } from 'expo-router';
+import { useFocusEffect, useRouter, type Href } from 'expo-router';
 
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useUnknownQueueStore } from '@/lib/store/useUnknownQueueStore';
 import { useSuggestionStore } from '@/lib/store/useSuggestionStore';
 import { useScheduleStore } from '@/lib/store/useScheduleStore';
 import { useStaffStore } from '@/lib/store/useStaffStore';
+import { useWorkStore } from '@/lib/store/useWorkStore';
 import { NotificationList } from '@/components/NotificationList';
 import { NotificationEnableCard } from '@/components/NotificationEnableCard';
 import { buildOwnerNotifications, type OwnerNotifKind } from '@/lib/utils/notifications';
@@ -23,6 +24,7 @@ const KIND_UI: Record<OwnerNotifKind, { icon: IconName; tint: string }> = {
   question: { icon: 'chatbubble-ellipses', tint: BrandColors.yellowSoft },
   suggestion: { icon: 'bulb', tint: BrandColors.brandSoft },
   swap_approval: { icon: 'swap-horizontal', tint: BrandColors.accentSoft },
+  mention: { icon: 'at', tint: BrandColors.brandSoft },
 };
 
 /**
@@ -32,6 +34,7 @@ const KIND_UI: Record<OwnerNotifKind, { icon: IconName; tint: string }> = {
  */
 export default function OwnerNotificationsScreen() {
   const router = useRouter();
+  const me = useSessionStore((s) => s.userId);
   const userName = useSessionStore((s) => s.userName);
   const storeName = useSessionStore((s) => s.storeName) || '우리 가게';
   const queue = useUnknownQueueStore((s) => s.queue);
@@ -39,6 +42,11 @@ export default function OwnerNotificationsScreen() {
   const swaps = useScheduleStore((s) => s.swaps);
   const staff = useStaffStore((s) => s.staff);
   const pending = useStaffStore((s) => s.pending);
+  const feed = useWorkStore((s) => s.feed);
+
+  // 화면에 들어올 때마다 명부·합류신청을 다시 당겨온다. profiles 실시간이 없어도(또는 앱을 켜둔 채로
+  // 신청이 들어와도) 사장이 이 화면을 열면 최신 합류 신청이 반드시 보이게 하는 안전장치.
+  useFocusEffect(useCallback(() => { useStaffStore.getState().hydrate(); }, []));
 
   const initial = (userName ?? '나').trim().slice(0, 1) || '나';
 
@@ -50,8 +58,10 @@ export default function OwnerNotificationsScreen() {
         swaps,
         pending,
         nameOf: (id) => staff.find((x) => x.id === id)?.name ?? '직원',
+        feed,
+        userId: me,
       }),
-    [queue, suggestions, swaps, pending, staff],
+    [queue, suggestions, swaps, pending, staff, feed, me],
   );
 
   return (

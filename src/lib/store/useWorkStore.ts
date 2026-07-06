@@ -4,12 +4,14 @@ import { HAS_SUPABASE } from '@/lib/supabase';
 import {
   fetchTemplates,
   insertTemplate,
+  updateTemplate,
   deleteTemplate,
   fetchDone,
   setDone,
   clearDone,
   fetchFeed,
   upsertFeed,
+  updateFeed,
   deleteFeed,
   subscribeWork,
 } from '@/lib/db';
@@ -17,6 +19,7 @@ import { guardWrite, useSyncStore } from '@/lib/store/useSyncStore';
 import { coalesce, subscribeDebounced } from '@/lib/store/realtimeSync';
 import { genId } from '@/lib/utils/id';
 import { useRoomStore } from '@/lib/store/useRoomStore';
+import { useScheduleStore } from '@/lib/store/useScheduleStore';
 import { notifyStaffNotice, notifyUserMention } from '@/lib/push/notify';
 
 /** 방마다 동시에 둘 수 있는 활성 반복(주간) 할일 상한(남용 #26) — 캘린더/피드 폭주 방지. */
@@ -86,6 +89,20 @@ export const SECTION_LABEL: Record<TaskSection, string> = {
   close: '마감',
   etc: '기타',
 };
+
+/**
+ * 데이파트 라벨(매장 커스텀 반영) — schedule_config.dayparts가 있으면 그 이름을, 없으면 기본 라벨.
+ * 컴포넌트에서 훅으로 구독(사장이 이름을 바꾸면 즉시 반영). '기타'는 커스텀해도 직접입력 라벨과 병행.
+ */
+export function useDaypartLabels(): Record<TaskSection, string> {
+  const dp = useScheduleStore((s) => s.config.dayparts);
+  return {
+    open: dp?.open?.trim() || SECTION_LABEL.open,
+    mid: dp?.mid?.trim() || SECTION_LABEL.mid,
+    close: dp?.close?.trim() || SECTION_LABEL.close,
+    etc: dp?.etc?.trim() || SECTION_LABEL.etc,
+  };
+}
 
 /** 그 날짜(YYYY-MM-DD)에 이 할일이 떠야 하는가? (루틴=요일 매칭, 예정=날짜 일치) */
 export function occursOn(t: TaskTemplate, dateStr: string): boolean {
@@ -220,10 +237,11 @@ type State = {
   hydrate: () => Promise<void>;
   subscribe: () => () => void;
   addTask: (input: NewTask) => void;
+  editTask: (id: string, patch: NewTask) => void;
   removeTemplate: (id: string) => void;
   toggleTask: (date: string, templateId: string, staffId: string, staffName: string, role: 'owner' | 'junior', photoUrl?: string) => void;
   postNotice: (date: string, text: string, authorId: string, authorName: string, important: boolean) => void;
-  postMessage: (date: string, text: string, authorId: string, authorName: string, role: 'owner' | 'junior', mentions?: string[]) => void;
+  postMessage: (date: string, text: string, authorId: string, authorName: string, role: 'owner' | 'junior', mentions?: string[], photoUrl?: string) => void;
   postComment: (noticeId: string, date: string, text: string, authorId: string, authorName: string, role: 'owner' | 'junior', mentions?: string[]) => void;
   editFeedText: (id: string, text: string) => void;
   deleteFeedItem: (id: string) => void;
@@ -282,6 +300,28 @@ export const useWorkStore = create<State>((set, get) => ({
       insertTemplate(t),
       () => set((s) => ({ templates: s.templates.filter((x) => x.id !== t.id) })),
       '할일 추가 저장에 실패했어요.',
+    );
+  },
+  // 할일 수정 — 회의 반영(X 즉시삭제 → 연필 수정). 본문·시간대·담당·스케줄을 통째로 갱신.
+  editTask: (id, patch) => {
+    const before = get().templates.find((t) => t.id === id);
+    if (!before) return;
+    const updated: TaskTemplate = {
+      ...before,
+      section: patch.section,
+      text: patch.text,
+      scope: patch.scope,
+      // ownerId/date/sectionNote는 조건부 필드 — patch에 없으면 명시적으로 제거(가게전체로 바꾸면 담당 해제).
+      ...(patch.ownerId ? { ownerId: patch.ownerId } : { ownerId: undefined }),
+      ...(patch.section === 'etc' && patch.sectionNote ? { sectionNote: patch.sectionNote } : { sectionNote: undefined }),
+      ...(patch.recurrence ? { recurrence: patch.recurrence } : { recurrence: undefined }),
+      ...(patch.date ? { date: patch.date } : { date: undefined }),
+    };
+    set((s) => ({ templates: s.templates.map((t) => (t.id === id ? updated : t)) }));
+    void guardWrite(
+      updateTemplate(updated),
+      () => set((s) => ({ templates: s.templates.map((t) => (t.id === id ? before : t)) })),
+      '할일 수정 저장에 실패했어요.',
     );
   },
   removeTemplate: (id) => {
@@ -386,7 +426,7 @@ export const useWorkStore = create<State>((set, get) => ({
     notifyStaffNotice(authorName, text); // 매장 직원 전체에게 웹푸시(발송자 제외는 서버가 처리).
   },
 
-  postMessage: (date, text, authorId, authorName, role, mentions) => {
+  postMessage: (date, text, authorId, authorName, role, mentions, photoUrl) => {
     const room = curRoom();
     const item: FeedItem = {
       id: genId('f'),
@@ -398,6 +438,7 @@ export const useWorkStore = create<State>((set, get) => ({
       authorRole: role,
       createdAt: new Date().toISOString(),
       ...(mentions && mentions.length ? { mentions } : null),
+      ...(photoUrl ? { photoUrl } : null),
       ...(room ? { roomId: room } : null),
     };
     set((s) => ({ feed: [...s.feed, item] }));
@@ -540,7 +581,9 @@ export const useWorkStore = create<State>((set, get) => ({
     }));
     if (updated)
       void guardWrite(
-        upsertFeed(updated),
+        // ⚠️ upsert 금지 — 직원이 남(사장)의 공지 행을 upsert 하면 wf_insert(notice=사장전용)에 걸려
+        //    42501 로 실패한다. 이미 존재하는 행의 제자리 UPDATE 라 updateFeed 를 쓴다.
+        updateFeed(updated),
         () => before && set((s) => ({ feed: s.feed.map((f) => (f.id === feedId ? before : f)) })),
         '읽음 표시 저장에 실패했어요.',
       );

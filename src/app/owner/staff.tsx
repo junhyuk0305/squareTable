@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Text, Pressable, StyleSheet, ScrollView, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Stack, useRouter } from 'expo-router';
+import { Stack, useFocusEffect, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 import { usePayrollStore } from '@/lib/store/usePayrollStore';
@@ -38,6 +38,10 @@ export default function OwnerStaffScreen() {
   const [rotateOpen, setRotateOpen] = useState(false);
   const [rotating, setRotating] = useState(false);
   const { copied, copy } = useCopyToClipboard();
+
+  // 화면 진입/복귀 시마다 명부·합류신청을 다시 당겨온다. owner 레이아웃 hydrate는 로그인 시 1회뿐이라,
+  // 앱을 켜둔 채로 새 합류 신청이 들어와도(profiles 실시간 미구독) 이 화면을 열면 반드시 최신으로 보인다.
+  useFocusEffect(useCallback(() => { useStaffStore.getState().hydrate(); }, []));
 
   // 근무 중 직원의 누적시간을 30초마다 갱신(구 근무·급여 화면에서 흡수).
   const [, setTick] = useState(0);
