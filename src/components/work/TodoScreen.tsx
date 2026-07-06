@@ -5,14 +5,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { Appear } from '@/components/Appear';
 import { StoredImage } from '@/components/StoredImage';
 import { DaypartSettingsSheet } from '@/components/work/DaypartSettingsSheet';
-import { useDaypartLabels, occursOn, taskVisibleTo, type TaskSection, type TaskTemplate, type DoneMark } from '@/lib/store/useWorkStore';
+import { useDayparts, isRoutineTaskId, occursOn, taskVisibleTo, type TaskTemplate, type DoneMark } from '@/lib/store/useWorkStore';
 import { InkColors, BrandColors, CategoryColors } from '@/lib/theme/colors';
 import { Elevation, Radius } from '@/lib/theme/elevation';
 import { hhmm } from '@/lib/utils/attendance';
 
 const SHARED = CategoryColors.Routine; // 슬레이트 = 가게 전체
 const MINE = CategoryColors.Event; // 테라코타 = 내가 등록(나만)
-const DAYPARTS: TaskSection[] = ['open', 'mid', 'close', 'etc'];
 const WD = ['일', '월', '화', '수', '목', '금', '토'];
 
 function ymd(d: Date): string {
@@ -49,7 +48,7 @@ export function TodoScreen({
   /** 연필 → 수정/삭제 시트. (X 즉시삭제를 대체 — 회의 반영) */
   onEditTask: (t: TaskTemplate) => void;
 }) {
-  const DL = useDaypartLabels();
+  const dayparts = useDayparts();
   const [selected, setSelected] = useState(today);
   const [folded, setFolded] = useState(false);
   const [cursor, setCursor] = useState(() => new Date(`${today}T00:00:00`)); // 보고 있는 월
@@ -95,15 +94,20 @@ export function TodoScreen({
     return { shared, mine };
   }
 
-  // 선택일 그룹
+  // 선택일 그룹 — 매장 카테고리(데이파트) 순서대로 + 삭제된 카테고리 할일 흡수용 말미 '기타' 그룹.
   const dayTasks = useMemo(() => visible.filter((t) => occursOn(t, selected)), [visible, selected]);
   const dayDone = done[selected] ?? {};
-  const groups = DAYPARTS.map((sec) => {
-    const tasks = dayTasks.filter((t) => t.section === sec && (!hideDone || !dayDone[t.id]));
-    const total = dayTasks.filter((t) => t.section === sec).length;
-    const doneN = dayTasks.filter((t) => t.section === sec && dayDone[t.id]).length;
-    return { sec, tasks, total, doneN };
-  }).filter((g) => g.total > 0);
+  const knownIds = new Set(dayparts.map((d) => d.id));
+  const mkGroup = (key: string, label: string, secTasks: TaskTemplate[]) => {
+    const tasks = secTasks.filter((t) => !hideDone || !dayDone[t.id]);
+    const doneN = secTasks.filter((t) => dayDone[t.id]).length;
+    return { key, label, tasks, total: secTasks.length, doneN };
+  };
+  const groups = [
+    ...dayparts.map((d) => mkGroup(d.id, d.label, dayTasks.filter((t) => t.section === d.id))),
+    // 알 수 없는 section(삭제된 카테고리)의 할일이 사라지지 않게 흡수.
+    mkGroup('__orphan__', '기타', dayTasks.filter((t) => !knownIds.has(t.section))),
+  ].filter((g) => g.total > 0);
 
   const monthLabel = `${cursor.getFullYear()}년 ${cursor.getMonth() + 1}월`;
   const selDate = new Date(`${selected}T00:00:00`);
@@ -172,7 +176,7 @@ export function TodoScreen({
             {isOwner && (
               <Pressable onPress={() => { setSetMenu(false); setDaypartEditor(true); }} style={({ pressed }) => [s.setMi, pressed && { backgroundColor: InkColors.paper }]}>
                 <Ionicons name="pricetags-outline" size={16} color={InkColors.ink2} />
-                <Text style={s.setMiText}>시간대 이름 설정</Text>
+                <Text style={s.setMiText}>업무 카테고리 설정</Text>
                 <Ionicons name="chevron-forward" size={14} color={InkColors.ink3} style={{ marginLeft: 'auto' }} />
               </Pressable>
             )}
@@ -205,11 +209,11 @@ export function TodoScreen({
       <ScrollView contentContainerStyle={s.listScroll} showsVerticalScrollIndicator={false}>
         {groups.length === 0 && <Text style={s.empty}>이 날 할일이 없어요.</Text>}
         {groups.map((g, gi) => {
-          const isCol = collapsed[`${selected}:${g.sec}`];
+          const isCol = collapsed[`${selected}:${g.key}`];
           return (
-            <Appear key={g.sec} delay={gi * 70} style={s.group}>
-              <Pressable onPress={() => setCollapsed((c) => ({ ...c, [`${selected}:${g.sec}`]: !isCol }))} style={s.groupHead}>
-                <Text style={s.groupName}>{DL[g.sec]}</Text>
+            <Appear key={g.key} delay={gi * 70} style={s.group}>
+              <Pressable onPress={() => setCollapsed((c) => ({ ...c, [`${selected}:${g.key}`]: !isCol }))} style={s.groupHead}>
+                <Text style={s.groupName}>{g.label}</Text>
                 <Text style={s.groupCnt}>{g.doneN}/{g.total}</Text>
                 <Ionicons name={isCol ? 'chevron-down' : 'chevron-up'} size={14} color={InkColors.ink3} style={{ marginLeft: 'auto' }} />
               </Pressable>
@@ -219,11 +223,13 @@ export function TodoScreen({
                     const mark = dayDone[t.id];
                     const on = !!mark;
                     const isMine = (t.scope ?? 'shared') === 'private';
+                    // 매장 전체 공용 루틴(dpr_) — 수정/삭제는 '업무 카테고리 설정'에서(합성 항목이라 여기선 연필 숨김).
+                    const isRoutine = isRoutineTaskId(t.id);
                     // 배정된 할일(개인인데 주인이 내가 아님) → 사장 시점에서 "담당 ○○"로 표시.
                     const assignedName = isMine && t.ownerId && t.ownerId !== me ? nameOf?.(t.ownerId) : undefined;
                     const photoUrl = (mark as (DoneMark & { photoUrl?: string }) | undefined)?.photoUrl;
                     // 수정/삭제 권한 = 사장 or 본인이 등록/배정받은 개인 할일. (X 즉시삭제 → 연필로 수정·삭제)
-                    const canManage = isOwner || (isMine && (t.ownerId === me || t.createdBy === me));
+                    const canManage = (isOwner || (isMine && (t.ownerId === me || t.createdBy === me))) && !isRoutine;
                     return (
                       <View key={t.id} style={[s.item, isMine && s.itemMine, i === g.tasks.length - 1 && { borderBottomWidth: 0 }]}>
                         <View style={[s.scopeBar, { backgroundColor: isMine ? MINE : SHARED }]} />
@@ -235,7 +241,7 @@ export function TodoScreen({
                           {mark && <Text style={s.itemMeta}>{mark.byName} 완료 · {hhmm(mark.at)}</Text>}
                         </View>
                         {photoUrl ? <StoredImage stored={photoUrl} style={s.thumb} /> : null}
-                        {assignedName ? <Text style={s.assignTag}>담당 {assignedName}</Text> : isMine ? <Text style={s.mineTag}>내 할일</Text> : null}
+                        {isRoutine ? <Text style={s.routineTag}>루틴</Text> : assignedName ? <Text style={s.assignTag}>담당 {assignedName}</Text> : isMine ? <Text style={s.mineTag}>내 할일</Text> : null}
                         {onAttachPhoto && !on && (
                           <Pressable onPress={() => onAttachPhoto(t.id, selected)} hitSlop={6} disabled={!!uploadingId}>
                             <Ionicons name={uploadingId === t.id ? 'cloud-upload-outline' : 'camera-outline'} size={16} color={InkColors.ink3} />
@@ -323,6 +329,7 @@ const s = StyleSheet.create({
   thumb: { width: 32, height: 32, borderRadius: Radius.sm, borderWidth: 1, borderColor: InkColors.line, backgroundColor: InkColors.bgSoft },
   mineTag: { fontSize: 10, fontWeight: '800', color: MINE, backgroundColor: CategoryColors.Event + '1f', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 5 },
   assignTag: { fontSize: 10, fontWeight: '800', color: SHARED, backgroundColor: CategoryColors.Routine + '1f', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 5 },
+  routineTag: { fontSize: 10, fontWeight: '800', color: InkColors.ink2, backgroundColor: InkColors.bgSoft, paddingHorizontal: 6, paddingVertical: 1, borderRadius: 5 },
 
   addBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, borderWidth: 1.5, borderStyle: 'dashed', borderColor: InkColors.ink3, borderRadius: Radius.md, paddingVertical: 13 },
   addText: { fontSize: 13, fontWeight: '700', color: InkColors.ink },

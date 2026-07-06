@@ -5,6 +5,7 @@
 // 다른 스토어와 동일 패턴 — 낙관적 업데이트 후 guardWrite로 DB 반영, 실패 시 롤백, Realtime로 재수화.
 // HAS_SUPABASE=false면 데모 시드(store_001)로 폴백해 프론트가 끊기지 않는다.
 import { create } from 'zustand';
+import { type Daypart } from '@/lib/store/daypartLabels';
 import { coalesce, subscribeDebounced } from '@/lib/store/realtimeSync';
 import { HAS_SUPABASE } from '@/lib/supabase';
 import {
@@ -38,8 +39,8 @@ export type StoreConfig = {
   close: string; // "22:00"
   closedDays: number[]; // 정기휴무 요일 0(일)~6(토)
   note: string; // 비고(임시휴무·브레이크타임 등)
-  /** 업무 데이파트 커스텀 라벨(매장별). 없으면 기본(오픈/미들/마감/기타). */
-  dayparts?: { open: string; mid: string; close: string; etc: string };
+  /** 업무 시간대 카테고리(매장별) + 카테고리별 기본 루틴 업무. 없으면 기본 4개(오픈/미들/마감/기타). */
+  dayparts?: Daypart[];
 };
 
 export type ShiftTemplate = {
