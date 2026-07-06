@@ -123,3 +123,14 @@ export const notifyUserMention = (userId: string, author: string, text: string) 
     url: '/junior/work',
     tag: 'mention',
   });
+
+/** 할일 배정 — 사장/동료가 나에게 할일을 배정했을 때 그 담당자에게만. */
+export const notifyUserAssign = (userId: string, author: string, text: string) =>
+  pushNotify({
+    audience: 'user',
+    userId,
+    title: `${author}님이 할 일을 배정했어요`,
+    body: text,
+    url: '/junior/work',
+    tag: 'assign',
+  });

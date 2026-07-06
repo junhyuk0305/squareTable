@@ -21,7 +21,8 @@ import { genId } from '@/lib/utils/id';
 import { useRoomStore } from '@/lib/store/useRoomStore';
 import { useScheduleStore } from '@/lib/store/useScheduleStore';
 import { DEFAULT_DAYPART_LABELS, resolveDaypartLabels } from '@/lib/store/daypartLabels';
-import { notifyStaffNotice, notifyUserMention } from '@/lib/push/notify';
+import { notifyStaffNotice, notifyUserMention, notifyUserAssign } from '@/lib/push/notify';
+import { useSessionStore } from '@/lib/store/useSessionStore';
 
 /** 방마다 동시에 둘 수 있는 활성 반복(주간) 할일 상한(남용 #26) — 캘린더/피드 폭주 방지. */
 const MAX_ACTIVE_RECURRING = 40;
@@ -301,6 +302,10 @@ export const useWorkStore = create<State>((set, get) => ({
       () => set((s) => ({ templates: s.templates.filter((x) => x.id !== t.id) })),
       '할일 추가 저장에 실패했어요.',
     );
+    // 배정 알림 — 남에게 배정한 경우만(본인 '내 할일' 자가등록 제외). 인앱 알림은 파생(SSOT), 여기선 OS 푸시만.
+    if (t.ownerId && t.ownerId !== t.createdBy) {
+      notifyUserAssign(t.ownerId, useSessionStore.getState().userName || '담당자', t.text);
+    }
   },
   // 할일 수정 — 회의 반영(X 즉시삭제 → 연필 수정). 본문·시간대·담당·스케줄을 통째로 갱신.
   editTask: (id, patch) => {
@@ -323,6 +328,10 @@ export const useWorkStore = create<State>((set, get) => ({
       () => set((s) => ({ templates: s.templates.map((t) => (t.id === id ? before : t)) })),
       '할일 수정 저장에 실패했어요.',
     );
+    // 재배정 알림 — 담당자가 새로 바뀐 경우에만(같은 사람 반복 수정은 스팸 안 냄). 작성자 본인 배정 제외.
+    if (updated.ownerId && updated.ownerId !== before.ownerId && updated.ownerId !== updated.createdBy) {
+      notifyUserAssign(updated.ownerId, useSessionStore.getState().userName || '담당자', updated.text);
+    }
   },
   removeTemplate: (id) => {
     const idx = get().templates.findIndex((t) => t.id === id);

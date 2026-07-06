@@ -1,7 +1,8 @@
 // 직원 알림 — 단일 진실원천(SSOT).
 // 벨 뱃지(개수)와 알림 화면(목록)이 같은 술어/집계를 공유한다.
 // UI(아이콘·틴트·onPress)는 화면이 kind로 매핑 — 여기선 순수 데이터만 만든다.
-import type { FeedItem } from '@/lib/store/useWorkStore';
+import type { FeedItem, TaskTemplate, DoneMark } from '@/lib/store/useWorkStore';
+import { occursOn } from '@/lib/store/useWorkStore';
 import type { SwapRequest, ShiftTemplate } from '@/lib/store/useScheduleStore';
 import type { PendingMember } from '@/lib/store/useStaffStore';
 import type { UnknownQuery, PlaybookSuggestion } from '@/types';
@@ -10,7 +11,7 @@ import { fmtDateKo } from '@/lib/utils/schedule';
 /** 알림 목록 최대 개수 — 무한 누적 방지(최신 우선). */
 export const MAX_NOTIFS = 50;
 
-export type JuniorNotifKind = 'notice' | 'mention' | 'swap' | 'swap_approved' | 'swap_rejected';
+export type JuniorNotifKind = 'notice' | 'mention' | 'assign' | 'swap' | 'swap_approved' | 'swap_rejected';
 export type JuniorNotifRoute = '/junior/work' | '/junior/schedule';
 
 export type JuniorNotif = {
@@ -21,7 +22,9 @@ export type JuniorNotif = {
   at: string; // ISO — 정렬·상대시간 표기용
   unread: boolean;
   route: JuniorNotifRoute;
-  /** notice일 때 탭 시 읽음처리용 feed id. */
+  /** 탭 시 읽음처리(read_by)할 feed id. 공지·멘션에 설정. */
+  readFeedId?: string;
+  /** @deprecated readFeedId로 대체. 하위호환용. */
   noticeId?: string;
 };
 
@@ -30,6 +33,22 @@ export type JuniorNotif = {
 export const isUnreadNotice = (f: FeedItem, me: string): boolean =>
   f.kind === 'notice' && !(f.read_by ?? []).includes(me);
 
+/** 나를 @언급한 글/댓글(내 글 제외). 공지와 동일하게 read_by로 읽음추적 → 안 읽으면 강조·카운트. */
+export const isMentionOf = (f: FeedItem, me: string): boolean =>
+  (f.mentions ?? []).includes(me) && f.authorId !== me;
+export const isUnreadMention = (f: FeedItem, me: string): boolean =>
+  isMentionOf(f, me) && !(f.read_by ?? []).includes(me);
+
+/** 남이 나에게 배정한 할일(내가 작성한 건 제외). date에 뜨고, 아직 완료 안 했으면 '해야 할 배정'. */
+export const isAssignedToMe = (t: TaskTemplate, me: string): boolean =>
+  t.ownerId === me && !!t.createdBy && t.createdBy !== me;
+export const isPendingAssignment = (
+  t: TaskTemplate,
+  me: string,
+  today: string,
+  done: Record<string, Record<string, DoneMark>>,
+): boolean => isAssignedToMe(t, me) && occursOn(t, today) && !done[today]?.[t.id];
+
 /** 내가 대응할 수 있는 열린 교대 요청(대타 전체 + 나에게 온 맞교환). 지난 날짜 제외. */
 export const isIncomingSwap = (r: SwapRequest, me: string, today: string): boolean =>
   r.status === 'open' &&
@@ -37,15 +56,19 @@ export const isIncomingSwap = (r: SwapRequest, me: string, today: string): boole
   r.date >= today &&
   (r.kind === 'cover' || r.target_staff_id === me);
 
-/** 벨 뱃지 개수 = 안 읽은 공지 + 받은 교대 요청. (staff/templates 불필요 — 가벼움) */
+/** 벨 뱃지 개수 = 안 읽은 공지 + 안 읽은 멘션 + 나에게 배정된(미완료) 할일 + 받은 교대 요청. */
 export function juniorUnreadCount(
   feed: FeedItem[],
   swaps: SwapRequest[],
   me: string,
   today: string,
+  taskTemplates: TaskTemplate[] = [],
+  done: Record<string, Record<string, DoneMark>> = {},
 ): number {
   return (
     feed.filter((f) => isUnreadNotice(f, me)).length +
+    feed.filter((f) => isUnreadMention(f, me)).length +
+    taskTemplates.filter((t) => isPendingAssignment(t, me, today, done)).length +
     swaps.filter((r) => isIncomingSwap(r, me, today)).length
   );
 }
@@ -58,8 +81,12 @@ export function buildJuniorNotifications(args: {
   nameOf: (id: string) => string;
   userId: string;
   today: string;
+  /** 업무 할일 템플릿(배정 알림용). 없으면 배정 알림 없음. */
+  taskTemplates?: TaskTemplate[];
+  /** 완료 상태(date → templateId → 마크). 배정 미완료 판정용. */
+  done?: Record<string, Record<string, DoneMark>>;
 }): JuniorNotif[] {
-  const { feed, swaps, templates, nameOf, userId: me, today } = args;
+  const { feed, swaps, templates, nameOf, userId: me, today, taskTemplates = [], done = {} } = args;
   const tplById = (id: string) => templates.find((t) => t.id === id);
   const out: JuniorNotif[] = [];
 
@@ -74,20 +101,36 @@ export function buildJuniorNotifications(args: {
       at: f.createdAt,
       unread: isUnreadNotice(f, me),
       route: '/junior/work',
+      readFeedId: f.id,
       noticeId: f.id,
     });
   }
 
-  // 멘션 — 누군가 글/댓글에서 나를 @언급(내 글 제외)
+  // 멘션 — 누군가 글/댓글에서 나를 @언급(내 글 제외). 공지처럼 read_by로 읽음추적 → 안 읽으면 강조.
   for (const f of feed) {
-    if (!(f.mentions ?? []).includes(me) || f.authorId === me) continue;
+    if (!isMentionOf(f, me)) continue;
     out.push({
       id: `mention_${f.id}`,
       kind: 'mention',
       title: `${f.authorName}님이 나를 언급했어요`,
       body: f.text,
       at: f.createdAt,
-      unread: false,
+      unread: isUnreadMention(f, me),
+      route: '/junior/work',
+      readFeedId: f.id,
+    });
+  }
+
+  // 배정 — 남이 나에게 배정한 할일. 오늘 떠야 하고 아직 완료 안 했으면 '해야 할 배정'(강조).
+  for (const t of taskTemplates) {
+    if (!isAssignedToMe(t, me) || !occursOn(t, today)) continue;
+    out.push({
+      id: `assign_${t.id}`,
+      kind: 'assign',
+      title: `${nameOf(t.createdBy ?? '')}님이 할 일을 배정했어요`,
+      body: t.text,
+      at: `${today}T08:00:00`, // 템플릿엔 생성시각이 없어 오늘 기준으로 정렬(배정 발생시각은 푸시가 정확).
+      unread: !done[today]?.[t.id],
       route: '/junior/work',
     });
   }
@@ -138,6 +181,8 @@ export type OwnerNotif = {
   at: string;
   unread: boolean;
   route: OwnerNotifRoute;
+  /** 탭 시 읽음처리(read_by)할 feed id. 멘션에 설정. */
+  readFeedId?: string;
 };
 
 // ── 공유 술어(뱃지·목록 동일 규칙) ──
@@ -155,12 +200,15 @@ export function ownerUnreadCount(
   suggestions: PlaybookSuggestion[],
   swaps: SwapRequest[],
   pending: PendingMember[],
+  feed: FeedItem[] = [],
+  me?: string,
 ): number {
   return (
     pending.length +
     queue.filter(isPendingQuestion).length +
     suggestions.filter(isPendingSuggestion).length +
-    swaps.filter(isSwapAwaitingApproval).length
+    swaps.filter(isSwapAwaitingApproval).length +
+    (me ? feed.filter((f) => isUnreadMention(f, me)).length : 0)
   );
 }
 
@@ -181,15 +229,16 @@ export function buildOwnerNotifications(args: {
   // 멘션 — 직원/동료가 채팅·댓글에서 사장(나)을 @언급(내 글 제외). 탭하면 업무 채팅으로.
   if (me) {
     for (const f of feed) {
-      if (!(f.mentions ?? []).includes(me) || f.authorId === me) continue;
+      if (!isMentionOf(f, me)) continue;
       out.push({
         id: `mention_${f.id}`,
         kind: 'mention',
         title: `${f.authorName}님이 나를 언급했어요`,
         body: f.text,
         at: f.createdAt,
-        unread: false,
+        unread: isUnreadMention(f, me),
         route: '/owner/work',
+        readFeedId: f.id,
       });
     }
   }

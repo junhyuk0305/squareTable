@@ -43,12 +43,14 @@ export function NotificationBell() {
   const router = useRouter();
   const userId = useSessionStore((s) => s.userId);
   const feed = useWorkStore((s) => s.feed);
+  const templates = useWorkStore((s) => s.templates);
+  const done = useWorkStore((s) => s.done);
   const swaps = useScheduleStore((s) => s.swaps);
   const today = todayStr();
 
   const count = useMemo(
-    () => juniorUnreadCount(feed, swaps, userId, today),
-    [feed, swaps, userId, today],
+    () => juniorUnreadCount(feed, swaps, userId, today, templates, done),
+    [feed, swaps, userId, today, templates, done],
   );
 
   return <BellButton count={count} onPress={() => router.push('/junior/notifications')} />;
@@ -57,14 +59,16 @@ export function NotificationBell() {
 /** 사장 알림 벨 — 배지 = 합류 승인대기 + 답변대기 질문 + 검토대기 제안 + 승인대기 교대 → /owner/notifications. */
 export function OwnerNotificationBell({ edge = true }: { edge?: boolean } = {}) {
   const router = useRouter();
+  const userId = useSessionStore((s) => s.userId);
   const queue = useUnknownQueueStore((s) => s.queue);
   const suggestions = useSuggestionStore((s) => s.suggestions);
   const swaps = useScheduleStore((s) => s.swaps);
   const pending = useStaffStore((s) => s.pending);
+  const feed = useWorkStore((s) => s.feed);
 
   const count = useMemo(
-    () => ownerUnreadCount(queue, suggestions, swaps, pending),
-    [queue, suggestions, swaps, pending],
+    () => ownerUnreadCount(queue, suggestions, swaps, pending, feed, userId),
+    [queue, suggestions, swaps, pending, feed, userId],
   );
 
   return <BellButton count={count} onPress={() => router.push('/owner/notifications')} edge={edge} />;

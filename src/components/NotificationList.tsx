@@ -17,6 +17,8 @@ export type NotifRow = {
   at: string;
   unread: boolean;
   route?: string;
+  /** 탭 시 읽음처리(read_by)할 feed id — 공지·멘션. */
+  readFeedId?: string;
   noticeId?: string;
 };
 

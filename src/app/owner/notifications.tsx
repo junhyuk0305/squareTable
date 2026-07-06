@@ -44,6 +44,7 @@ export default function OwnerNotificationsScreen() {
   const staff = useStaffStore((s) => s.staff);
   const pending = useStaffStore((s) => s.pending);
   const feed = useWorkStore((s) => s.feed);
+  const markNoticeRead = useWorkStore((s) => s.markNoticeRead);
 
   // 화면에 들어올 때마다 명부·합류신청을 다시 당겨온다. profiles 실시간이 없어도(또는 앱을 켜둔 채로
   // 신청이 들어와도) 사장이 이 화면을 열면 최신 합류 신청이 반드시 보이게 하는 안전장치.
@@ -91,7 +92,10 @@ export default function OwnerNotificationsScreen() {
         <NotificationList
           rows={rows}
           kindUI={KIND_UI}
-          onPress={(r) => r.route && router.push(r.route as Href)}
+          onPress={(r) => {
+            if (r.readFeedId) markNoticeRead(r.readFeedId, me); // 멘션은 탭하면 읽음 처리
+            if (r.route) router.push(r.route as Href);
+          }}
           empty={{
             text: '지금 처리할 알림이 없어요.',
             sub: '합류 신청 · 받은 질문 · 제안 · 승인 대기 교대가 생기면 여기에 모아서 보여드려요.',
