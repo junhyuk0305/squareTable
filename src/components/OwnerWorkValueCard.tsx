@@ -31,7 +31,7 @@ export function OwnerWorkValueCard({ assign }: OwnerWorkValueCardProps) {
         title="오늘 일 배분"
         trailing={
           <PressableScale
-            onPress={() => router.push('/owner/work')}
+            onPress={() => router.push({ pathname: '/owner/work', params: { view: 'assign' } })}
             scaleTo={0.96}
             accessibilityRole="button"
             accessibilityLabel="업무 배정하러 가기"

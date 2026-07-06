@@ -95,6 +95,15 @@ export function useDaypartLabels(): Record<TaskSection, string> {
   return resolveDaypartLabels(dp);
 }
 
+/**
+ * 이 할일을 `me`가 볼 수 있는가 — 공유(가게 전체) or 내 개인(대상=나) or 내가 작성/배정.
+ * 클라이언트 가시성 필터의 SSOT. 0017 RLS `wt_select_scope`(owner_id/created_by 본인) 술어와 정합.
+ * (사장이라도 직원이 자가등록한 '내 할일'은 안 보인다 — created_by/owner_id 본인만.)
+ */
+export function taskVisibleTo(t: TaskTemplate, me: string): boolean {
+  return (t.scope ?? 'shared') !== 'private' || t.ownerId === me || t.createdBy === me;
+}
+
 /** 그 날짜(YYYY-MM-DD)에 이 할일이 떠야 하는가? (루틴=요일 매칭, 예정=날짜 일치) */
 export function occursOn(t: TaskTemplate, dateStr: string): boolean {
   if (t.recurrence && t.recurrence !== 'once') {

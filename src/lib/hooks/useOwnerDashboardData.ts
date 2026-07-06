@@ -4,7 +4,7 @@ import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useUnknownQueueStore } from '@/lib/store/useUnknownQueueStore';
 import { useAttendanceStore } from '@/lib/store/useAttendanceStore';
 import { usePayrollStore } from '@/lib/store/usePayrollStore';
-import { useWorkStore, occursOn } from '@/lib/store/useWorkStore';
+import { useWorkStore, occursOn, taskVisibleTo } from '@/lib/store/useWorkStore';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { useStaffStore } from '@/lib/store/useStaffStore';
 import { todayStr, DEFAULT_HOURLY_WAGE } from '@/lib/utils/attendance';
@@ -62,7 +62,7 @@ export function useOwnerDashboardData(): OwnerDashboardData {
   }, [records, wages, today, ym, staff, settings]);
   // 매장 진행률: 오늘 떠야 하는 것 중 가게 전체(shared) + 내 private(대상=나 or 내가 배정). (직원 자가등록은 제외)
   const todaysTasks = useMemo(
-    () => templates.filter((t) => occursOn(t, today) && (t.scope !== 'private' || t.ownerId === userId || t.createdBy === userId)),
+    () => templates.filter((t) => occursOn(t, today) && taskVisibleTo(t, userId)),
     [templates, today, userId],
   );
   const taskTotal = todaysTasks.length;

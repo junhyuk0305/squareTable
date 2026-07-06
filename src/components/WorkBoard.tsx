@@ -17,6 +17,7 @@ import { WorkChat } from '@/components/work/WorkChat';
 import { RoomBar } from '@/components/work/RoomBar';
 import { NoticePanel } from '@/components/work/NoticePanel';
 import { TodoScreen } from '@/components/work/TodoScreen';
+import { AssignBoard } from '@/components/work/AssignBoard';
 import { TaskComposerModal } from '@/components/work/TaskComposerModal';
 import { type Member } from '@/components/work/MentionInput';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
@@ -24,7 +25,7 @@ import { Radius } from '@/lib/theme/elevation';
 import { HEADER_EDGE_GUTTER } from '@/lib/theme/layout';
 import { todayStr, tsMs } from '@/lib/utils/attendance';
 
-type ViewKey = 'chat' | 'notice' | 'todo';
+type ViewKey = 'chat' | 'notice' | 'todo' | 'assign';
 
 /** 웹 파일 선택 → File 반환(네이티브는 추후 image-picker). */
 function pickImageFile(onPick: (file: File) => void) {
@@ -91,9 +92,12 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
     [currentRoomId, isDefaultRoom],
   );
 
-  // 다른 화면(홈 '오늘 할일'·'안 읽은 공지' 등)에서 ?view=todo|notice 로 들어오면 해당 패널을 연다.
+  // 다른 화면(홈 '오늘 할일'·'안 읽은 공지'·'오늘 일 배분' 등)에서 ?view=todo|notice|assign 로 들어오면 해당 패널을 연다.
+  // 배정(assign)은 사장 전용 — 직원 딥링크는 채팅으로 무시.
   const { view: viewParam } = useLocalSearchParams<{ view?: string }>();
-  const initialView: ViewKey = viewParam === 'todo' || viewParam === 'notice' ? viewParam : 'chat';
+  const paramView: ViewKey | null =
+    viewParam === 'todo' || viewParam === 'notice' ? viewParam : viewParam === 'assign' && isOwner ? 'assign' : null;
+  const initialView: ViewKey = paramView ?? 'chat';
 
   const today = todayStr();
   const [view, setView] = useState<ViewKey>(initialView);
@@ -101,11 +105,11 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
   // true면 뒤로가기는 진입 화면(홈)으로 복귀(router.back), false(업무 내부 진입)면 채팅으로 복귀.
   const [openedExternally, setOpenedExternally] = useState<boolean>(initialView !== 'chat');
   useEffect(() => {
-    if (viewParam === 'todo' || viewParam === 'notice') {
-      setView(viewParam);
+    if (viewParam === 'todo' || viewParam === 'notice' || (viewParam === 'assign' && isOwner)) {
+      setView(viewParam as ViewKey);
       setOpenedExternally(true);
     }
-  }, [viewParam]);
+  }, [viewParam, isOwner]);
   // 업무 채팅 내부에서 패널 열기 — 뒤로가기는 채팅으로 돌아가야 하므로 external 플래그 해제.
   const openPanel = useCallback((v: ViewKey) => {
     setOpenedExternally(false);
@@ -213,6 +217,13 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
           headerTitle: () => <Text style={st.headerTitle}>업무</Text>,
           headerRight: () => (
             <View style={st.nav}>
+              {/* 배정 — 사장 전용. "누가 무슨 일"을 담당자별로 모아 보는 세그먼트. */}
+              {isOwner && (
+                <Pressable onPress={() => openPanel('assign')} style={({ pressed }) => [st.navBtn, pressed && { opacity: 0.7 }]}>
+                  <Ionicons name="people-outline" size={15} color={InkColors.ink} />
+                  <Text style={st.navText}>배정</Text>
+                </Pressable>
+              )}
               <Pressable onPress={() => openPanel('notice')} style={({ pressed }) => [st.navBtn, pressed && { opacity: 0.7 }]}>
                 <Ionicons name="megaphone-outline" size={15} color={InkColors.ink} />
                 <Text style={st.navText}>공지</Text>
@@ -226,7 +237,7 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
           ),
         }
       : {
-          title: view === 'notice' ? '공지' : '할일',
+          title: view === 'notice' ? '공지' : view === 'assign' ? '배정' : '할일',
           headerLeft: () => (
             <Pressable onPress={closePanel} hitSlop={8} style={({ pressed }) => [{ paddingLeft: HEADER_EDGE_GUTTER, paddingRight: 14, paddingVertical: 4 }, pressed && { opacity: 0.6 }]}>
               <Ionicons name="arrow-back" size={24} color={InkColors.ink} />
@@ -238,7 +249,7 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
     <SafeAreaView style={st.safe} edges={['bottom']}>
       <Stack.Screen options={headerOptions} />
 
-      {view === 'chat' && <RoomBar role={role} me={userId} />}
+      {(view === 'chat' || view === 'assign') && <RoomBar role={role} me={userId} />}
 
       {view === 'chat' && (
         <WorkChat
@@ -280,6 +291,21 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
           onRead={(id) => markNoticeRead(id, userId)}
           onComment={(noticeId, text, mentions) => postComment(noticeId, today, text, userId, userName, role, mentions)}
           onDeleteComment={deleteFeedItem}
+        />
+      )}
+
+      {view === 'assign' && isOwner && (
+        <AssignBoard
+          templates={roomTemplates}
+          done={done}
+          today={today}
+          me={userId}
+          nameOf={nameOf}
+          uploadingId={uploadingId}
+          onToggle={(templateId, date) => toggleTask(date, templateId, userId, userName, role)}
+          onAttachPhoto={(templateId, date) => attachPhoto(templateId, date)}
+          onAssign={(assigneeId) => setComposer({ open: true, date: today, assigneeId })}
+          onEditTask={(t) => setComposer({ open: true, editTemplate: t })}
         />
       )}
 
