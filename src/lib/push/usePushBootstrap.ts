@@ -9,6 +9,17 @@ import { router } from 'expo-router';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { registerServiceWorker, ensurePushSubscribed } from '@/lib/push/webpush';
 
+// 알림 클릭 목적지 경로를 "받는 사람의 역할"에 맞게 교정한다.
+// 발송 측(notify.ts)은 수신자가 사장인지 직원인지 모르므로 멘션 등 공용 이벤트를 '/junior/*' 로만 넣는다.
+// 사장이 그 알림을 누르면 직원 화면으로 튀므로, 클릭 시점의 세션 역할로 접두사를 뒤집어 준다
+// (예: 사장이 언급 알림 클릭 → '/junior/work' → '/owner/work'). 대응 화면이 없으면 원본 유지.
+function routeForRole(url: string): string {
+  const role = useSessionStore.getState().role;
+  if (role === 'owner' && url.startsWith('/junior/')) return '/owner/' + url.slice('/junior/'.length);
+  if (role === 'junior' && url.startsWith('/owner/')) return '/junior/' + url.slice('/owner/'.length);
+  return url;
+}
+
 export function usePushBootstrap(): void {
   // 부팅 1회: SW 등록 + 알림 클릭 시 목적지 경로로 네비게이트.
   useEffect(() => {
@@ -19,7 +30,7 @@ export function usePushBootstrap(): void {
       const data = e.data as { type?: string; url?: string } | undefined;
       if (data?.type === 'push-navigate' && data.url) {
         try {
-          router.push(data.url as never);
+          router.push(routeForRole(data.url) as never);
         } catch {
           /* 알 수 없는 경로면 무시 — 앱은 열려 있는 상태 유지 */
         }

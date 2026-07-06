@@ -38,6 +38,8 @@ export type StoreConfig = {
   close: string; // "22:00"
   closedDays: number[]; // 정기휴무 요일 0(일)~6(토)
   note: string; // 비고(임시휴무·브레이크타임 등)
+  /** 업무 데이파트 커스텀 라벨(매장별). 없으면 기본(오픈/미들/마감/기타). */
+  dayparts?: { open: string; mid: string; close: string; etc: string };
 };
 
 export type ShiftTemplate = {

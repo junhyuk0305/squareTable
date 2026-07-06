@@ -48,7 +48,14 @@ export const styles = StyleSheet.create({
   loading: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 6, paddingHorizontal: 4 },
   loadingText: { fontSize: 13, color: InkColors.ink2, fontWeight: '600' },
 
-  photoTag: { fontSize: 12, color: InkColors.ink3, fontWeight: '600', paddingHorizontal: 4 },
+  photoStrip: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingHorizontal: 4 },
+  photoThumbWrap: { width: 72, height: 72, borderRadius: Radius.sm, overflow: 'hidden', position: 'relative' },
+  photoThumb: { width: 72, height: 72, borderRadius: Radius.sm },
+  photoUploading: { alignItems: 'center', justifyContent: 'center', backgroundColor: InkColors.paper, overflow: 'visible' },
+  photoRemove: {
+    position: 'absolute', top: 3, right: 3, width: 20, height: 20, borderRadius: 10,
+    backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center',
+  },
 
   errorBar: {
     flexDirection: 'row',

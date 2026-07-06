@@ -70,27 +70,27 @@ function urlBase64ToUint8Array(base64String: string): BufferSource {
   return out;
 }
 
-/** 구독 객체를 DB(push_subscriptions)에 upsert. endpoint unique 라 재구독 시 갱신된다. */
+/**
+ * 구독 객체를 DB(push_subscriptions)에 저장. RLS 안전한 RPC(save_push_subscription, 0049)로만 저장한다.
+ * endpoint 는 브라우저(기기)별 고유 = 전 사용자에 걸쳐 유일 → 같은 브라우저 재로그인 시 클라의 직접
+ * upsert 는 '남의 행 UPDATE' 로 빠져 RLS(USING) 위반이 났다(§4.1). RPC 가 endpoint 소유권을 현재
+ * 로그인 사용자(auth.uid())로 이전(reassign)한다. (userId 인자는 호출부 호환용 — 신원은 서버가 잡는다.)
+ */
 async function saveSubscription(
   sub: PushSubscription,
-  userId: string,
+  _userId: string,
   unitId: string | null,
 ): Promise<boolean> {
   const json = sub.toJSON();
   const keys = json.keys ?? {};
   if (!json.endpoint || !keys.p256dh || !keys.auth) return false;
-  const { error } = await supabase.from('push_subscriptions').upsert(
-    {
-      user_id: userId,
-      unit_id: unitId,
-      endpoint: json.endpoint,
-      p256dh: keys.p256dh,
-      auth: keys.auth,
-      ua: typeof navigator !== 'undefined' ? navigator.userAgent.slice(0, 300) : null,
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: 'endpoint' },
-  );
+  const { error } = await supabase.rpc('save_push_subscription', {
+    p_endpoint: json.endpoint,
+    p_p256dh: keys.p256dh,
+    p_auth: keys.auth,
+    p_unit_id: unitId,
+    p_ua: typeof navigator !== 'undefined' ? navigator.userAgent.slice(0, 300) : null,
+  });
   if (error) {
     console.warn('[push] 구독 저장 실패:', error.message);
     reportError('push.saveSubscription', error);

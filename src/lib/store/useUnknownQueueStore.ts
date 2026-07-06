@@ -12,6 +12,7 @@ const seed = seedData as unknown as UnknownQuery[];
 type UnknownQueueState = {
   queue: UnknownQuery[];
   loaded: boolean;
+  loadError: boolean; // 마지막 hydrate 실패 여부 — 인박스가 "질문 없음"과 "못 불러옴"을 구분한다.
   hydrate: () => Promise<void>;
   subscribe: () => () => void;
   enqueue: (uq: UnknownQuery) => void;
@@ -44,10 +45,12 @@ function transition(
 export const useUnknownQueueStore = create<UnknownQueueState>((set, get) => ({
   queue: HAS_SUPABASE ? [] : [...seed],
   loaded: !HAS_SUPABASE,
+  loadError: false,
 
   hydrate: coalesce(async () => {
     if (!HAS_SUPABASE) return;
-    set({ queue: await fetchUnknownQueue(), loaded: true });
+    const { data, error } = await fetchUnknownQueue();
+    set({ queue: data, loaded: true, loadError: error });
   }),
 
   // 알바 폰에서 질문이 들어오면 사장님 인박스가 실시간으로 갱신된다(학습순환의 핵심).
@@ -107,6 +110,6 @@ export const useUnknownQueueStore = create<UnknownQueueState>((set, get) => ({
   enableAutoAnswer: (uqId) => transition(set, get, uqId, 'auto_answered', '자동응답 설정에 실패했어요.'),
   getPending: () => get().queue.filter((u) => u.status === 'pending_owner_answer'),
   getById: (id) => get().queue.find((u) => u.id === id),
-  reset: () => set({ queue: HAS_SUPABASE ? [] : [...seed] }),
-  applyMock: (demo) => set({ queue: demo ? [...seed] : [], loaded: true }),
+  reset: () => set({ queue: HAS_SUPABASE ? [] : [...seed], loadError: false }),
+  applyMock: (demo) => set({ queue: demo ? [...seed] : [], loaded: true, loadError: false }),
 }));

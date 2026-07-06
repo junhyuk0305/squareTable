@@ -52,7 +52,7 @@ type State = {
   loaded: boolean;
   hydrate: () => Promise<void>;
   subscribe: () => () => void;
-  submit: (input: SuggestionInput) => void;
+  submit: (input: SuggestionInput) => Promise<boolean>;
   approve: (id: string, resultingEntryId?: string) => void;
   reject: (id: string, note?: string) => void;
   getPending: () => PlaybookSuggestion[];
@@ -85,9 +85,11 @@ export const useSuggestionStore = create<State>((set, get) => ({
       status: 'pending',
       created_at: new Date().toISOString(),
     };
-    optimisticAdd(set, 'suggestions', item, () => insertSuggestion(item), '제안 등록에 실패했어요. 다시 시도해 주세요.', 'start');
+    // ok를 반환해 호출부(제안 화면)가 "서버에 실제로 저장됐을 때만" 성공 토스트/뒤로가기를 하게 한다.
+    const result = optimisticAdd(set, 'suggestions', item, () => insertSuggestion(item), '제안 등록에 실패했어요. 다시 시도해 주세요.', 'start');
     // 사장에게 웹푸시(검토 대기 제안이 생겼음).
     notifyOwnersSuggestion(item.proposer_name, item.text);
+    return result;
   },
 
   approve: (id, resultingEntryId) => {

@@ -8,7 +8,7 @@ import { uploadPhoto } from '@/lib/db';
 import { HAS_SUPABASE } from '@/lib/supabase';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useStaffStore } from '@/lib/store/useStaffStore';
-import { useWorkStore, findDuplicateTask, type NewTask } from '@/lib/store/useWorkStore';
+import { useWorkStore, findDuplicateTask, type NewTask, type TaskTemplate } from '@/lib/store/useWorkStore';
 import { useSyncStore } from '@/lib/store/useSyncStore';
 import { showToast } from '@/lib/store/useToastStore';
 import { RoleTabBar } from '@/components/RoleTabBar';
@@ -62,6 +62,7 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
   const feed = useWorkStore((s) => s.feed);
   const toggleTask = useWorkStore((s) => s.toggleTask);
   const addTask = useWorkStore((s) => s.addTask);
+  const editTask = useWorkStore((s) => s.editTask);
   const removeTemplate = useWorkStore((s) => s.removeTemplate);
   const postNotice = useWorkStore((s) => s.postNotice);
   const postMessage = useWorkStore((s) => s.postMessage);
@@ -99,8 +100,9 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
   useEffect(() => {
     if (viewParam === 'todo' || viewParam === 'notice') setView(viewParam);
   }, [viewParam]);
-  const [composer, setComposer] = useState<{ open: boolean; date?: string; text?: string; assigneeId?: string }>({ open: false });
+  const [composer, setComposer] = useState<{ open: boolean; date?: string; text?: string; assigneeId?: string; editTemplate?: TaskTemplate }>({ open: false });
   const [uploadingId, setUploadingId] = useState<string | null>(null);
+  const [sendingPhoto, setSendingPhoto] = useState(false);
 
   // 멤버(멘션·이름) — 사장 + 직원 + 본인.
   const members: Member[] = useMemo(() => {
@@ -169,6 +171,23 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
     });
   }
 
+  // 업무 채팅에 사진 보내기 — 픽 → 압축·업로드(db) → 사진만 담긴 메시지로 발행.
+  function sendPhotoMessage() {
+    if (sendingPhoto) return;
+    pickImageFile(async (file) => {
+      setSendingPhoto(true);
+      try {
+        const url = await uploadPhoto(file);
+        if (url) postMessage(today, '', userId, userName, role, undefined, url);
+        else noteError('사진을 보내지 못했어요. 인터넷 연결을 확인하고 다시 시도해 주세요.');
+      } catch {
+        noteError('사진을 보내지 못했어요. 인터넷 연결을 확인하고 다시 시도해 주세요.');
+      } finally {
+        setSendingPhoto(false);
+      }
+    });
+  }
+
   const headerOptions =
     view === 'chat'
       ? {
@@ -216,8 +235,11 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
           pinnedNotice={pinnedNotice}
           onOpenNotice={() => setView('notice')}
           onSend={(text, mentions) => postMessage(today, text, userId, userName, role, mentions)}
+          onSendPhoto={sendPhotoMessage}
+          sendingPhoto={sendingPhoto}
           onReact={(id, emoji) => toggleReaction(id, userId, emoji)}
           onMessageToTask={messageToTask}
+          onDelete={deleteFeedItem}
           onAddTask={() => setComposer({ open: true, date: today })}
           onAssignTask={(id) => setComposer({ open: true, date: today, assigneeId: id })}
           onWriteNotice={() => setView('notice')}
@@ -257,17 +279,23 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
           onToggle={(templateId, date) => toggleTask(date, templateId, userId, userName, role)}
           onAttachPhoto={(templateId, date) => attachPhoto(templateId, date)}
           onAddForDate={(date) => setComposer({ open: true, date })}
-          onRemove={removeTemplate}
+          onEditTask={(t) => setComposer({ open: true, editTemplate: t })}
         />
       )}
 
       {composer.open && (
         <TaskComposerModal
           onClose={() => setComposer({ open: false })}
-          onSubmit={(input: NewTask) => {
-            addTask(input);
-            showToast('할일에 추가했어요', 'good');
+          onSubmit={(inputs: NewTask[]) => {
+            inputs.forEach((input) => addTask(input));
+            showToast(inputs.length > 1 ? `할일 ${inputs.length}개를 추가했어요` : '할일에 추가했어요', 'good');
           }}
+          onEdit={(id, patch) => {
+            editTask(id, patch);
+            showToast('할일을 수정했어요', 'good');
+          }}
+          onDelete={removeTemplate}
+          editTemplate={composer.editTemplate}
           isDuplicate={(input: NewTask) => !!findDuplicateTask(roomTemplates, input)}
           isOwner={isOwner}
           me={userId}

@@ -21,6 +21,7 @@ type StaffState = {
   staff: Junior[];
   pending: PendingMember[];
   loaded: boolean;
+  loadError: boolean; // 마지막 hydrate 실패 여부 — 명부가 "직원 0명"과 "못 불러옴"을 구분한다.
   hydrate: () => Promise<void>;
   applyMock: (demo: boolean) => void;
   getStaff: (id: string) => Junior | undefined;
@@ -55,15 +56,26 @@ export const useStaffStore = create<StaffState>((set, get) => ({
   staff: HAS_SUPABASE ? [] : demoStaff,
   pending: [],
   loaded: !HAS_SUPABASE,
+  loadError: false,
 
   hydrate: async () => {
     if (!HAS_SUPABASE) return;
-    const [{ owner, staff }, pending] = await Promise.all([fetchStaffProfiles(), fetchPendingMembers()]);
-    set({ owner, staff, pending, loaded: true });
+    const [staffRes, pendingRes] = await Promise.all([fetchStaffProfiles(), fetchPendingMembers()]);
+    set({
+      owner: staffRes.owner,
+      staff: staffRes.staff,
+      pending: pendingRes.data,
+      loaded: true,
+      loadError: staffRes.error || pendingRes.error,
+    });
   },
 
   applyMock: (demo) =>
-    set(demo ? { owner: demoOwner, staff: demoStaff, pending: [], loaded: true } : { owner: sessionOwner(), staff: [], pending: [], loaded: true }),
+    set(
+      demo
+        ? { owner: demoOwner, staff: demoStaff, pending: [], loaded: true, loadError: false }
+        : { owner: sessionOwner(), staff: [], pending: [], loaded: true, loadError: false },
+    ),
 
   getStaff: (id) => get().staff.find((s) => s.id === id),
 

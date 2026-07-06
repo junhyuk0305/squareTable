@@ -37,8 +37,10 @@
     "lint": "expo lint",
     "typecheck": "tsc --noEmit",
     "compile:packs": "node scripts/compile-pack.mjs",
+    "qa:daypart": "node scripts/qa-daypart-labels.mjs",
     "qa:onboarding": "node scripts/qa-onboarding.mjs",
     "qa:push": "node scripts/qa-push.mjs",
+    "qa:session": "node scripts/qa-session-readfail.mjs",
     "qa:split": "node scripts/qa-knowhow-split.mjs"
   },
   "private": true

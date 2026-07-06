@@ -3,7 +3,8 @@ import { View, Text, Pressable, ScrollView, Image, StyleSheet } from 'react-nati
 import { Ionicons } from '@expo/vector-icons';
 
 import { Appear } from '@/components/Appear';
-import { SECTION_LABEL, occursOn, type TaskSection, type TaskTemplate, type DoneMark } from '@/lib/store/useWorkStore';
+import { DaypartSettingsSheet } from '@/components/work/DaypartSettingsSheet';
+import { useDaypartLabels, occursOn, type TaskSection, type TaskTemplate, type DoneMark } from '@/lib/store/useWorkStore';
 import { InkColors, BrandColors, CategoryColors } from '@/lib/theme/colors';
 import { Elevation, Radius } from '@/lib/theme/elevation';
 import { hhmm } from '@/lib/utils/attendance';
@@ -32,7 +33,7 @@ export function TodoScreen({
   onToggle,
   onAttachPhoto,
   onAddForDate,
-  onRemove,
+  onEditTask,
 }: {
   templates: TaskTemplate[];
   done: Record<string, Record<string, DoneMark>>;
@@ -44,14 +45,17 @@ export function TodoScreen({
   onToggle: (templateId: string, date: string) => void;
   onAttachPhoto?: (templateId: string, date: string) => void;
   onAddForDate: (date: string) => void;
-  onRemove: (templateId: string) => void;
+  /** 연필 → 수정/삭제 시트. (X 즉시삭제를 대체 — 회의 반영) */
+  onEditTask: (t: TaskTemplate) => void;
 }) {
+  const DL = useDaypartLabels();
   const [selected, setSelected] = useState(today);
   const [folded, setFolded] = useState(false);
   const [cursor, setCursor] = useState(() => new Date(`${today}T00:00:00`)); // 보고 있는 월
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [hideDone, setHideDone] = useState(false);
   const [setMenu, setSetMenu] = useState(false);
+  const [daypartEditor, setDaypartEditor] = useState(false);
 
   // 내가 볼 수 있는 할일: 공유 or 내 개인(대상=나) or 내가 작성(배정).
   // 사장이라도 직원이 자가등록한 '내 할일'은 보지 않는다(0017: owner_id/created_by 본인만).
@@ -171,6 +175,13 @@ export function TodoScreen({
               <Text style={s.setMiText}>완료 항목 숨기기</Text>
               <Text style={s.setMiTag}>{hideDone ? '켬' : '끔'}</Text>
             </Pressable>
+            {isOwner && (
+              <Pressable onPress={() => { setSetMenu(false); setDaypartEditor(true); }} style={({ pressed }) => [s.setMi, pressed && { backgroundColor: InkColors.paper }]}>
+                <Ionicons name="pricetags-outline" size={16} color={InkColors.ink2} />
+                <Text style={s.setMiText}>시간대 이름 설정</Text>
+                <Ionicons name="chevron-forward" size={14} color={InkColors.ink3} style={{ marginLeft: 'auto' }} />
+              </Pressable>
+            )}
             <View style={s.setSep} />
             <View style={s.legendRow}>
               <View style={s.legendItem}><View style={[s.legendDot, { backgroundColor: SHARED }]} /><Text style={s.legendText}>가게 전체</Text></View>
@@ -204,7 +215,7 @@ export function TodoScreen({
           return (
             <Appear key={g.sec} delay={gi * 70} style={s.group}>
               <Pressable onPress={() => setCollapsed((c) => ({ ...c, [`${selected}:${g.sec}`]: !isCol }))} style={s.groupHead}>
-                <Text style={s.groupName}>{SECTION_LABEL[g.sec]}</Text>
+                <Text style={s.groupName}>{DL[g.sec]}</Text>
                 <Text style={s.groupCnt}>{g.doneN}/{g.total}</Text>
                 <Ionicons name={isCol ? 'chevron-down' : 'chevron-up'} size={14} color={InkColors.ink3} style={{ marginLeft: 'auto' }} />
               </Pressable>
@@ -217,7 +228,8 @@ export function TodoScreen({
                     // 배정된 할일(개인인데 주인이 내가 아님) → 사장 시점에서 "담당 ○○"로 표시.
                     const assignedName = isMine && t.ownerId && t.ownerId !== me ? nameOf?.(t.ownerId) : undefined;
                     const photoUrl = (mark as (DoneMark & { photoUrl?: string }) | undefined)?.photoUrl;
-                    const canRemove = isOwner || (isMine && t.ownerId === me);
+                    // 수정/삭제 권한 = 사장 or 본인이 등록/배정받은 개인 할일. (X 즉시삭제 → 연필로 수정·삭제)
+                    const canManage = isOwner || (isMine && (t.ownerId === me || t.createdBy === me));
                     return (
                       <View key={t.id} style={[s.item, isMine && s.itemMine, i === g.tasks.length - 1 && { borderBottomWidth: 0 }]}>
                         <View style={[s.scopeBar, { backgroundColor: isMine ? MINE : SHARED }]} />
@@ -235,9 +247,9 @@ export function TodoScreen({
                             <Ionicons name={uploadingId === t.id ? 'cloud-upload-outline' : 'camera-outline'} size={16} color={InkColors.ink3} />
                           </Pressable>
                         )}
-                        {canRemove && (
-                          <Pressable onPress={() => onRemove(t.id)} hitSlop={6}>
-                            <Ionicons name="close" size={16} color={InkColors.ink3} />
+                        {canManage && (
+                          <Pressable onPress={() => onEditTask(t)} hitSlop={6} accessibilityRole="button" accessibilityLabel={`${t.text} 수정`}>
+                            <Ionicons name="create-outline" size={17} color={InkColors.ink3} />
                           </Pressable>
                         )}
                       </View>
@@ -254,6 +266,8 @@ export function TodoScreen({
         </Pressable>
         <View style={{ height: 20 }} />
       </ScrollView>
+
+      {daypartEditor && <DaypartSettingsSheet onClose={() => setDaypartEditor(false)} />}
     </View>
   );
 }

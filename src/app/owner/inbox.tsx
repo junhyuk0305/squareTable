@@ -10,6 +10,7 @@ import { SimilarGroupRow } from '@/components/SimilarGroupRow';
 import { SectionLabel } from '@/components/SectionLabel';
 import { RoleTabBar } from '@/components/RoleTabBar';
 import { Appear } from '@/components/Appear';
+import { EmptyState } from '@/components/EmptyState';
 
 import { useUnknownQueueStore } from '@/lib/store/useUnknownQueueStore';
 import { useSuggestionStore } from '@/lib/store/useSuggestionStore';
@@ -39,6 +40,8 @@ export default function OwnerInboxScreen() {
   const router = useRouter();
   const queue = useUnknownQueueStore((s) => s.queue);
   const loaded = useUnknownQueueStore((s) => s.loaded);
+  const loadError = useUnknownQueueStore((s) => s.loadError);
+  const hydrate = useUnknownQueueStore((s) => s.hydrate);
   const enableAutoAnswer = useUnknownQueueStore((s) => s.enableAutoAnswer);
 
   const entries = usePlaybookStore((s) => s.entries);
@@ -102,6 +105,14 @@ export default function OwnerInboxScreen() {
           <ActivityIndicator color={InkColors.ink3} />
           <Text style={styles.loadingText}>질문을 불러오는 중...</Text>
         </View>
+      ) : loadError && queue.length === 0 ? (
+        // 로드 실패 + 빈 큐 → "질문 없음"으로 위장하지 않고 재시도를 띄운다(무음 실패 방지).
+        <EmptyState
+          emoji="📡"
+          title="질문을 불러오지 못했어요"
+          body="연결을 확인하고 다시 시도해 주세요."
+          cta={{ label: '다시 시도', onPress: () => hydrate() }}
+        />
       ) : (
         <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
           {/* 1) 한눈에 보기 — 요약 스트립 + 자동응답률 */}

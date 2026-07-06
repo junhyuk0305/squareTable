@@ -153,7 +153,7 @@ export default function OwnerCoachScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
-      <Stack.Screen options={{ title: isInboxAnswer ? '질문 답변' : '노하우 알려주기' }} />
+      <Stack.Screen options={{ title: isInboxAnswer ? '질문 답변' : '노하우 추가' }} />
 
       <OwnerCoachChat
         uq={uq}

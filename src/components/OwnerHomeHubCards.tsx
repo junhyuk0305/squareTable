@@ -118,7 +118,11 @@ const styles = StyleSheet.create({
   cell: { width: '48.5%' },
   card: {
     width: '100%',
-    height: 132,
+    // 고정 height 금지 — 내용(아이콘40 + 라벨 + 2줄 서브타이틀 + gap/padding ≈ 137)이 이미 132에
+    // 육박해, '글자 크게'(접근성 배율)·좁은 화면 줄바꿈·브라우저 최소폰트에서 서브타이틀이 카드
+    // 밖으로 흘러넘쳤다(RN View 기본 overflow:visible). minHeight로 두면 내용에 맞춰 자란다.
+    // 두 카드는 구조가 동일(1줄 라벨 + 2줄 서브타이틀 캡)이라 minHeight로도 높이가 서로 일치한다.
+    minHeight: 132,
     gap: 7,
     backgroundColor: InkColors.bg,
     borderRadius: Radius.md,

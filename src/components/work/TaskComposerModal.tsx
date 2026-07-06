@@ -3,7 +3,7 @@ import { View, Text, Pressable, TextInput, ScrollView, StyleSheet } from 'react-
 import { Ionicons } from '@expo/vector-icons';
 
 import { BottomSheet } from '@/components/BottomSheet';
-import { SECTION_LABEL, type NewTask, type TaskSection, type Recurrence } from '@/lib/store/useWorkStore';
+import { useDaypartLabels, type NewTask, type TaskSection, type TaskTemplate, type Recurrence } from '@/lib/store/useWorkStore';
 import { type Member } from '@/components/work/MentionInput';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
@@ -27,6 +27,9 @@ function ymd(d: Date): string {
 export function TaskComposerModal({
   onClose,
   onSubmit,
+  onEdit,
+  onDelete,
+  editTemplate,
   isDuplicate,
   isOwner,
   me,
@@ -37,7 +40,14 @@ export function TaskComposerModal({
   members = [],
 }: {
   onClose: () => void;
-  onSubmit: (input: NewTask) => void;
+  /** 신규 등록 — 다중 배정이면 담당자 수만큼 NewTask 배열로 넘어온다. */
+  onSubmit: (inputs: NewTask[]) => void;
+  /** 수정 저장(editTemplate 있을 때). */
+  onEdit?: (id: string, patch: NewTask) => void;
+  /** 삭제(수정 모드에서 노출). */
+  onDelete?: (id: string) => void;
+  /** 있으면 '수정' 모드 — 기존 할일을 프리필하고 저장 시 onEdit 호출. */
+  editTemplate?: TaskTemplate;
   /** 같은 할일이 이미 등록돼 있는지 검사(있으면 등록을 막고 경고를 띄운다). */
   isDuplicate?: (input: NewTask) => boolean;
   isOwner: boolean;
@@ -50,73 +60,130 @@ export function TaskComposerModal({
   initialAssigneeId?: string;
   members?: Member[];
 }) {
-  // 담당 대상: 'shared'(가게 전체) | 'me'(나만) | memberId(특정 직원에게 배정).
-  // 배정 = scope 'private' + ownerId=그 직원 → 그 직원과 사장만 보인다(기존 RLS 재사용).
-  type Target = 'shared' | 'me' | (string & {});
+  const isEdit = !!editTemplate;
+  const DL = useDaypartLabels();
+  // 배정 후보 = 나 + 다른 멤버(사장 기준). scope 'private' + ownerId → 그 사람과 사장만 보인다(기존 RLS 재사용).
   const others = useMemo(() => members.filter((m) => m.id !== me), [members, me]);
-  const validInitial = initialAssigneeId && others.some((o) => o.id === initialAssigneeId);
-  const [text, setText] = useState(initialText ?? '');
-  const [when, setWhen] = useState<When>(initialDate && initialDate !== today ? 'date' : 'today');
-  // 날짜 지정 시 실제 고를 수 있는 날(이전엔 initialDate에 고정돼 변경 불가 버그). 미니 캘린더로 선택.
-  const [pickedDate, setPickedDate] = useState(initialDate ?? today);
-  const [dows, setDows] = useState<number[]>([1, 2, 3, 4, 5]);
-  const [section, setSection] = useState<TaskSection>('open');
-  const [sectionNote, setSectionNote] = useState('');
-  const [target, setTarget] = useState<Target>(
-    isOwner ? (validInitial ? (initialAssigneeId as string) : 'shared') : 'me',
+  const nameById = useMemo(() => {
+    const map: Record<string, string> = { [me]: '나' };
+    others.forEach((o) => (map[o.id] = o.name));
+    return map;
+  }, [others, me]);
+
+  const [text, setText] = useState(initialText ?? editTemplate?.text ?? '');
+  const initWhen: When = editTemplate
+    ? (editTemplate.recurrence && editTemplate.recurrence !== 'once' ? 'weekly' : editTemplate.date && editTemplate.date !== today ? 'date' : 'today')
+    : (initialDate && initialDate !== today ? 'date' : 'today');
+  const [when, setWhen] = useState<When>(initWhen);
+  const [pickedDate, setPickedDate] = useState(editTemplate?.date ?? initialDate ?? today);
+  const [dows, setDows] = useState<number[]>(
+    editTemplate?.recurrence && editTemplate.recurrence !== 'once' ? editTemplate.recurrence.weekly : [1, 2, 3, 4, 5],
   );
+  const [section, setSection] = useState<TaskSection>(editTemplate?.section ?? 'open');
+  const [sectionNote, setSectionNote] = useState(editTemplate?.sectionNote ?? '');
+
+  // 담당: sharedMode(가게 전체) 또는 picked(개인 담당자 여러 명). 신규=다중 토글, 수정=단일 교체.
+  const deriveShared = isOwner && (editTemplate ? (editTemplate.scope ?? 'shared') === 'shared' : !(initialAssigneeId && others.some((o) => o.id === initialAssigneeId)));
+  const [sharedMode, setSharedMode] = useState(deriveShared);
+  const [picked, setPicked] = useState<string[]>(() => {
+    if (!isOwner) return [me];
+    if (editTemplate) return (editTemplate.scope ?? 'shared') === 'shared' ? [] : editTemplate.ownerId ? [editTemplate.ownerId] : [me];
+    if (initialAssigneeId && others.some((o) => o.id === initialAssigneeId)) return [initialAssigneeId];
+    return [];
+  });
   const scrollRef = useRef<ScrollView>(null);
-  const assigneeName = others.find((o) => o.id === target)?.name;
 
-  // 매주 반복인데 요일 0개면 어느 날에도 안 뜨는 유령 할일 → 등록 막는다.
-  const canSubmit = text.trim().length > 0 && !(when === 'weekly' && dows.length === 0);
+  // 담당자 칩 토글 — 신규는 여러 명(토글), 수정은 한 명(교체). '가게 전체'와는 상호배타.
+  const pickAssignee = (id: string) => {
+    setSharedMode(false);
+    setPicked((prev) => {
+      if (isEdit) return [id];
+      return prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id];
+    });
+  };
+  const pickShared = () => { setSharedMode(true); setPicked([]); };
 
-  // 등록 대상 한 줄 요약 — "어디(언제·데이파트·범위) 할일로 들어가는지" 항상 보이게.
-  const destLabel = useMemo(() => {
-    const secL = section === 'etc' ? (sectionNote.trim() || '기타') : SECTION_LABEL[section];
-    const scopeL = !isOwner ? '나만 보기' : target === 'shared' ? '가게 전체' : target === 'me' ? '나만 보기' : `담당: ${assigneeName ?? '직원'}`;
-    let whenL: string;
-    if (when === 'weekly') whenL = dows.length ? `매주 ${dows.slice().sort().map((d) => DOW[d]).join('·')}` : '매주(요일 미선택)';
-    else if (when === 'date') whenL = fmtDate(pickedDate);
-    else whenL = `오늘 (${fmtDate(today)})`;
-    return `${whenL} · ${secL} · ${scopeL}`;
-  }, [when, pickedDate, dows, section, sectionNote, target, assigneeName, isOwner, today]);
+  // 매주 반복인데 요일 0개면 유령 할일 → 막는다. 사장은 담당(전체/개인 1명 이상)도 정해야 한다.
+  const assigneeChosen = !isOwner || sharedMode || picked.length > 0;
+  const canSubmit = text.trim().length > 0 && !(when === 'weekly' && dows.length === 0) && assigneeChosen;
 
-  function buildInput(): NewTask | null {
-    const v = text.trim();
-    if (!v || (when === 'weekly' && dows.length === 0)) return null;
+  const scheduleParts = () => {
     let recurrence: Recurrence | undefined;
     let date: string | undefined;
     if (when === 'weekly') recurrence = { weekly: dows.slice().sort() };
     else if (when === 'date') { recurrence = 'once'; date = pickedDate; }
     else { recurrence = 'once'; date = today; }
-    // 담당 대상 → scope/ownerId 결정. 'shared'=가게 전체 / 'me'=내 개인 / memberId=그 직원에게 배정.
-    const scope: 'shared' | 'private' = !isOwner ? 'private' : target === 'shared' ? 'shared' : 'private';
-    const ownerId = !isOwner ? me : target === 'shared' ? undefined : target === 'me' ? me : target;
+    return { recurrence, date };
+  };
+
+  const baseInput = (v: string): Omit<NewTask, 'scope' | 'ownerId'> => {
+    const { recurrence, date } = scheduleParts();
     return {
       section,
       text: v,
-      scope,
-      ...(ownerId ? { ownerId } : null),
-      // 작성자=등록하는 본인. private 가시성(owner_id OR created_by = 본인) 판정에 쓴다.
       createdBy: me,
       ...(section === 'etc' && sectionNote.trim() ? { sectionNote: sectionNote.trim() } : null),
       recurrence,
       ...(date ? { date } : null),
     };
+  };
+
+  // 신규 등록 입력(다중 배정이면 담당자 수만큼).
+  function buildInputs(): NewTask[] {
+    const v = text.trim();
+    if (!v || (when === 'weekly' && dows.length === 0) || !assigneeChosen) return [];
+    const base = baseInput(v);
+    if (!isOwner) return [{ ...base, scope: 'private', ownerId: me }];
+    if (sharedMode) return [{ ...base, scope: 'shared' }];
+    return picked.map((id) => ({ ...base, scope: 'private', ownerId: id }));
   }
 
-  // 같은 할일이 이미 있는지 실시간 검사 — 조건을 바꾸면 경고가 자동으로 사라진다.
+  // 수정 입력(단일).
+  function buildEditInput(): NewTask | null {
+    const v = text.trim();
+    if (!v || (when === 'weekly' && dows.length === 0) || !assigneeChosen) return null;
+    const base = baseInput(v);
+    if (!isOwner) return { ...base, scope: 'private', ownerId: me };
+    if (sharedMode) return { ...base, scope: 'shared' };
+    return { ...base, scope: 'private', ownerId: picked[0] };
+  }
+
+  // 등록 대상 한 줄 요약 — "어디(언제·데이파트·범위) 할일로 들어가는지" 항상 보이게.
+  const destLabel = useMemo(() => {
+    const secL = section === 'etc' ? (sectionNote.trim() || DL.etc) : DL[section];
+    const scopeL = !isOwner
+      ? '나만 보기'
+      : sharedMode
+        ? '가게 전체'
+        : picked.length === 0
+          ? '담당자 선택'
+          : `담당: ${picked.map((id) => nameById[id] ?? '직원').join('·')}`;
+    let whenL: string;
+    if (when === 'weekly') whenL = dows.length ? `매주 ${dows.slice().sort().map((d) => DOW[d]).join('·')}` : '매주(요일 미선택)';
+    else if (when === 'date') whenL = fmtDate(pickedDate);
+    else whenL = `오늘 (${fmtDate(today)})`;
+    return `${whenL} · ${secL} · ${scopeL}`;
+  }, [when, pickedDate, dows, section, sectionNote, sharedMode, picked, nameById, isOwner, today, DL]);
+
+  // 중복 검사 — 신규 등록에서만(수정은 자기 자신과 겹칠 수 있어 제외). 배정 대상 중 하나라도 중복이면 경고.
   const isDup = useMemo(() => {
-    const input = buildInput();
-    return !!input && !!isDuplicate?.(input);
+    if (isEdit) return false;
+    return buildInputs().some((input) => !!isDuplicate?.(input));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [text, when, pickedDate, dows, section, sectionNote, target, isOwner, me, today, isDuplicate]);
+  }, [text, when, pickedDate, dows, section, sectionNote, sharedMode, picked, isOwner, me, today, isDuplicate, isEdit]);
 
   function submit() {
-    const input = buildInput();
-    if (!input || isDup) return; // 중복이면 등록 막음(경고는 화면에 이미 떠 있다)
-    onSubmit(input);
+    if (!canSubmit) return;
+    if (isEdit && editTemplate && onEdit) {
+      const input = buildEditInput();
+      if (!input) return;
+      onEdit(editTemplate.id, input);
+      onClose();
+      return;
+    }
+    const inputs = buildInputs();
+    if (inputs.length === 0 || isDup) return; // 중복이면 등록 막음(경고는 화면에 이미 떠 있다)
+    onSubmit(inputs);
     onClose();
   }
 
@@ -126,7 +193,7 @@ export function TaskComposerModal({
 
   return (
     <BottomSheet visible={true} onClose={onClose} sheetStyle={{ height: '86%' }}>
-          <Text style={s.title}>할일 추가</Text>
+          <Text style={s.title}>{isEdit ? '할일 수정' : '할일 추가'}</Text>
 
           <ScrollView ref={scrollRef} style={s.scroll} contentContainerStyle={{ paddingBottom: 8 }} showsVerticalScrollIndicator={false}>
             <Field label="할 일">
@@ -166,7 +233,7 @@ export function TaskComposerModal({
 
             <Field label="시간대 (데이파트)">
               <Seg
-                options={DAYPARTS.map((d) => ({ k: d, l: d === 'etc' ? '기타 ✎' : SECTION_LABEL[d] }))}
+                options={DAYPARTS.map((d) => ({ k: d, l: d === 'etc' ? `${DL.etc} ✎` : DL[d] }))}
                 value={section}
                 onChange={(k) => { setSection(k as TaskSection); if (k === 'etc') revealScroll(); }}
               />
@@ -178,17 +245,29 @@ export function TaskComposerModal({
               )}
             </Field>
 
-            <Field label="누구 할 일인가요?">
+            <Field label={isOwner && !isEdit ? '누구 할 일인가요? (여러 명 선택 가능)' : '누구 할 일인가요?'}>
               {isOwner ? (
                 <>
-                  <Seg
-                    options={[{ k: 'shared', l: '가게 전체' }, { k: 'me', l: '나만' }, ...others.map((o) => ({ k: o.id, l: o.name }))]}
-                    value={target}
-                    onChange={(k) => setTarget(k as Target)}
-                  />
-                  {target !== 'shared' && target !== 'me' && (
-                    <Text style={s.assignHint}>‘{assigneeName ?? '직원'}’에게 배정 — 그 직원과 사장님만 볼 수 있어요</Text>
+                  <View style={s.seg}>
+                    <Pressable onPress={pickShared} style={[s.segO, sharedMode && s.segOn]}>
+                      <Text style={[s.segText, sharedMode && { color: '#fff' }]}>가게 전체</Text>
+                    </Pressable>
+                    {[{ id: me, name: '나' }, ...others].map((m) => {
+                      const on = !sharedMode && picked.includes(m.id);
+                      return (
+                        <Pressable key={m.id} onPress={() => pickAssignee(m.id)} style={[s.segO, on && s.segOn]}>
+                          {on && !isEdit && <Ionicons name="checkmark" size={13} color="#fff" style={{ marginRight: 3 }} />}
+                          <Text style={[s.segText, on && { color: '#fff' }]}>{m.name}</Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                  {!sharedMode && picked.length > 0 && (
+                    <Text style={s.assignHint}>
+                      ‘{picked.map((id) => nameById[id] ?? '직원').join('·')}’{picked.length > 1 ? ' 각자에게 배정' : '에게 배정'} — 그 직원과 사장님만 볼 수 있어요
+                    </Text>
                   )}
+                  {!assigneeChosen && <Text style={s.dowWarn}>담당을 하나 이상 골라 주세요.</Text>}
                 </>
               ) : (
                 <View style={s.lockedScope}>
@@ -210,12 +289,25 @@ export function TaskComposerModal({
             ) : (
               <View style={s.destBar}>
                 <Ionicons name="arrow-forward-circle" size={15} color={InkColors.ink2} />
-                <Text style={s.destText} numberOfLines={1}>여기에 등록돼요 · <Text style={s.destStrong}>{destLabel}</Text></Text>
+                <Text style={s.destText} numberOfLines={1}>{isEdit ? '이렇게 바뀌어요' : '여기에 등록돼요'} · <Text style={s.destStrong}>{destLabel}</Text></Text>
               </View>
             )}
-            <Pressable onPress={submit} disabled={!canSubmit || isDup} style={({ pressed }) => [s.cta, (!canSubmit || isDup) && { opacity: 0.4 }, pressed && { opacity: 0.85 }]}>
-              <Text style={s.ctaText}>{isDup ? '이미 등록됨' : '할일 등록'}</Text>
-            </Pressable>
+            <View style={s.footBtns}>
+              {isEdit && onDelete && editTemplate && (
+                <Pressable
+                  onPress={() => { onDelete(editTemplate.id); onClose(); }}
+                  style={({ pressed }) => [s.delBtn, pressed && { opacity: 0.85 }]}
+                  accessibilityRole="button"
+                  accessibilityLabel="이 할일 삭제"
+                >
+                  <Ionicons name="trash-outline" size={16} color={BrandColors.bad} />
+                  <Text style={s.delText}>삭제</Text>
+                </Pressable>
+              )}
+              <Pressable onPress={submit} disabled={!canSubmit || isDup} style={({ pressed }) => [s.cta, { flex: 1 }, (!canSubmit || isDup) && { opacity: 0.4 }, pressed && { opacity: 0.85 }]}>
+                <Text style={s.ctaText}>{isEdit ? '수정 저장' : isDup ? '이미 등록됨' : '할일 등록'}</Text>
+              </Pressable>
+            </View>
           </View>
     </BottomSheet>
   );
@@ -349,6 +441,9 @@ const s = StyleSheet.create({
   destStrong: { color: InkColors.ink, fontWeight: '800' },
   dupBar: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10, paddingVertical: 9, paddingHorizontal: 11, backgroundColor: '#FBF3E3', borderWidth: 1, borderColor: BrandColors.warn, borderRadius: Radius.sm },
   dupText: { flex: 1, fontSize: 12, color: '#8A5A12', fontWeight: '700', lineHeight: 16 },
-  cta: { backgroundColor: InkColors.ink, borderRadius: Radius.md, paddingVertical: 14, alignItems: 'center' },
+  footBtns: { flexDirection: 'row', alignItems: 'stretch', gap: 8 },
+  cta: { backgroundColor: InkColors.ink, borderRadius: Radius.md, paddingVertical: 14, alignItems: 'center', justifyContent: 'center' },
   ctaText: { color: '#fff', fontSize: 15, fontWeight: '800' },
+  delBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingHorizontal: 16, borderRadius: Radius.md, borderWidth: 1, borderColor: BrandColors.bad, backgroundColor: InkColors.bg },
+  delText: { color: BrandColors.bad, fontSize: 14, fontWeight: '800' },
 });

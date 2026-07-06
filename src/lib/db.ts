@@ -68,6 +68,11 @@ function readFail(label: string, error: unknown): void {
   useSyncStore.getState().noteError('일부 정보를 불러오지 못했어요. 연결을 확인하고 새로고침해 주세요.');
 }
 
+// 읽기 실패를 "빈 결과"와 구분하기 위한 반환형(리포트 P0-1의 핵심 수정): 예전엔 fetch가 실패해도
+// 빈배열만 돌려줘 스토어가 loaded=true로만 세팅 → "장애"가 "데이터 없음"과 화면상 동일했다.
+// error 플래그를 함께 돌려 스토어가 loadError를 세팅하고, 화면이 EmptyState 대신 "다시 시도"를 띄운다.
+export type ReadResult<T> = { data: T; error: boolean };
+
 // ── 시계열 fetch 상한 (무한 fetch 방지) ────────────────────────
 // 누적되는 운영 데이터는 전체가 아니라 최근 구간만 당긴다(오래된 건 retention으로 정리됨).
 // feed/chat 은 날짜창(휘발성), attendance/unknown 은 카운트 상한만(자산·pending 보존).
@@ -86,17 +91,109 @@ function sinceTs(days: number): string {
   return d.toISOString();
 }
 
+// ── 가입/합류·계정 데이터 접근 (세션 스토어 오케스트레이션 전용) ───────────────
+// 계층 경계(§3): 스토어/화면은 supabase.from/.rpc 를 직접 부르지 않는다 — 여기로만.
+//   단 반환은 boolean(write)이 아니라 {data,error} 원형을 유지한다. 이유 두 가지:
+//   ① 가입/합류 RPC 는 named 에러(already_in_store·invalid_code·too_many_attempts·
+//      duplicate_biz_no·rename_limit …)로 분기해야 하고, 그 "코드→의미" 판정 SSOT 는 RPC 본문이다.
+//      write()는 error.message 를 삼켜 이 분기를 파괴하므로 쓸 수 없다.
+//   ② 세션 read 는 error 를 표면화해야(§4.8) 스토어가 일시적 읽기실패에 신원을 무음 강등하지 않는다.
+//   (auth.* 세션관리는 '데이터 접근'이 아니므로 스토어가 계속 소유한다 — signIn/signUp/OTP/updateUser 등.)
+export type DbErr = { message: string; code?: string } | null;
+export type DbResult<T> = { data: T | null; error: DbErr };
+
+export type SessionProfileRow = {
+  id: string; name: string | null; role: string | null;
+  unit_id: string | null; pending_unit_id: string | null;
+  bio: string | null; phone: string | null; deleted_at: string | null;
+};
+export async function fetchSessionProfile(userId: string): Promise<DbResult<SessionProfileRow>> {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('id, name, role, unit_id, pending_unit_id, bio, phone, deleted_at')
+    .eq('id', userId)
+    .maybeSingle();
+  return { data: (data as SessionProfileRow) ?? null, error: error as DbErr };
+}
+
+export type UnitInfoRow = { store_name: string | null; invite_code: string | null; industry: string | null };
+export async function fetchUnitInfo(unitId: string): Promise<DbResult<UnitInfoRow>> {
+  const { data, error } = await supabase
+    .from('units').select('store_name, invite_code, industry').eq('id', unitId).maybeSingle();
+  return { data: (data as UnitInfoRow) ?? null, error: error as DbErr };
+}
+
+export type UnitSubscriptionRow = { status: string | null; trial_ends_at: string | null; paid_until: string | null };
+export async function fetchUnitSubscription(unitId: string): Promise<DbResult<UnitSubscriptionRow>> {
+  const { data, error } = await supabase
+    .from('unit_subscriptions').select('status, trial_ends_at, paid_until').eq('unit_id', unitId).maybeSingle();
+  return { data: (data as UnitSubscriptionRow) ?? null, error: error as DbErr };
+}
+
+// 전화번호 중복 사전검사(주키). 비로그인 호출 가능. data=true/false, error=검사 실패.
+export async function checkPhoneInUse(phone: string): Promise<DbResult<boolean>> {
+  const { data, error } = await supabase.rpc('phone_in_use', { p_phone: phone });
+  return { data: (data as boolean) ?? null, error: error as DbErr };
+}
+
+export type CreateStoreRow = { unit_id: string; invite_code: string };
+export async function rpcCreateStore(storeName: string, industry: string | null, bizNo: string | null): Promise<DbResult<CreateStoreRow>> {
+  const { data, error } = await supabase.rpc('create_store', { p_store_name: storeName, p_industry: industry, p_biz_no: bizNo });
+  const row = Array.isArray(data) ? data[0] : data;
+  return { data: (row as CreateStoreRow) ?? null, error: error as DbErr };
+}
+
+export type JoinRow = { unit_id: string; store_name: string };
+export async function rpcJoinByInvite(code: string): Promise<DbResult<JoinRow>> {
+  const { data, error } = await supabase.rpc('join_by_invite', { p_code: code });
+  const row = Array.isArray(data) ? data[0] : data;
+  return { data: (row as JoinRow) ?? null, error: error as DbErr };
+}
+
+export async function rpcCancelJoinRequest(): Promise<{ error: DbErr }> {
+  const { error } = await supabase.rpc('cancel_join_request');
+  return { error: error as DbErr };
+}
+
+export async function rpcLeaveStore(): Promise<{ error: DbErr }> {
+  const { error } = await supabase.rpc('leave_store');
+  return { error: error as DbErr };
+}
+
+export async function rpcDeleteMyAccount(): Promise<{ error: DbErr }> {
+  const { error } = await supabase.rpc('delete_my_account');
+  return { error: error as DbErr };
+}
+
+// rename_store 는 남은 변경 횟수(number)를 반환한다(서버가 14일 2회 강제).
+export async function rpcRenameStore(name: string): Promise<DbResult<number>> {
+  const { data, error } = await supabase.rpc('rename_store', { p_name: name });
+  return { data: (typeof data === 'number' ? data : null), error: error as DbErr };
+}
+
+// 본인 프로필 필드 갱신(name/phone/bio 등). RLS: 본인 행만.
+export async function updateProfileFields(userId: string, fields: Record<string, string | null>): Promise<{ error: DbErr }> {
+  const { error } = await supabase.from('profiles').update(fields).eq('id', userId);
+  return { error: error as DbErr };
+}
+
+// 매장 업종 갱신(사장 전용). RLS: 소유 매장만.
+export async function updateUnitIndustry(unitId: string, industry: string): Promise<{ error: DbErr }> {
+  const { error } = await supabase.from('units').update({ industry }).eq('id', unitId);
+  return { error: error as DbErr };
+}
+
 // ── 직원/사장 프로필 (같은 매장) ───────────────────────────
 // 실서비스: profiles에서 내 매장 동료를 읽어 직원/근태/급여 화면을 채운다.
-export async function fetchStaffProfiles(): Promise<{ owner: Owner | null; staff: Junior[] }> {
-  if (!HAS_SUPABASE) return { owner: null, staff: [] };
+export async function fetchStaffProfiles(): Promise<{ owner: Owner | null; staff: Junior[]; error: boolean }> {
+  if (!HAS_SUPABASE) return { owner: null, staff: [], error: false };
   const { data, error } = await supabase
     .from('profiles')
     .select('id, name, role, phone_last4, avatar, bio, meta, created_at')
     .order('created_at', { ascending: true });
   if (error) {
     readFail('fetchStaffProfiles', error);
-    return { owner: null, staff: [] };
+    return { owner: null, staff: [], error: true };
   }
   const rows = (data ?? []) as any[];
   const unit = _unitId ?? '';
@@ -130,18 +227,14 @@ export async function fetchStaffProfiles(): Promise<{ owner: Owner | null; staff
       career_days: r.meta?.career_days ?? 0,
       shift: r.meta?.shift ?? undefined,
     }));
-  return { owner, staff };
+  return { owner, staff, error: false };
 }
 
 // 사장이 직원을 매장에서 내보낸다(소속 해제 + 퇴사자 스냅샷 보관). RPC = 사장만·같은 매장 junior만.
 export async function removeStaffMember(staffId: string): Promise<boolean> {
   if (!HAS_SUPABASE) return true;
-  const { error } = await supabase.rpc('remove_staff', { p_staff_id: staffId });
-  if (error) {
-    console.warn('[db] removeStaffMember:', error.message);
-    return false;
-  }
-  return true;
+  // write() 헬퍼 경유 — 실패 시 reportError로 원격관측까지 남긴다(예전엔 console.warn만 남아 팀이 못 봄).
+  return write('removeStaffMember', supabase.rpc('remove_staff', { p_staff_id: staffId }));
 }
 
 // 퇴사 6개월 경과분 개인 기록 자동 정리(내 매장 범위). 사장 진입 시 기회적으로 1회 호출 — 실패해도 무해.
@@ -153,8 +246,8 @@ export async function purgeExpiredFormerStaff(): Promise<void> {
 
 // ── 합류 승인(남용 #2) ─────────────────────────────────────
 // 우리 매장에 합류 '신청'한(pending_unit_id = 내 매장) 프로필 목록. RLS가 신청자만 통과시킨다.
-export async function fetchPendingMembers(): Promise<{ id: string; name: string; phone_last4: string; created_at: string }[]> {
-  if (!HAS_SUPABASE || !_unitId) return [];
+export async function fetchPendingMembers(): Promise<ReadResult<{ id: string; name: string; phone_last4: string; created_at: string }[]>> {
+  if (!HAS_SUPABASE || !_unitId) return { data: [], error: false };
   const { data, error } = await supabase
     .from('profiles')
     .select('id, name, phone_last4, created_at')
@@ -162,14 +255,17 @@ export async function fetchPendingMembers(): Promise<{ id: string; name: string;
     .order('created_at', { ascending: true });
   if (error) {
     readFail('fetchPendingMembers', error);
-    return [];
+    return { data: [], error: true };
   }
-  return (data ?? []).map((r: any) => ({
-    id: r.id,
-    name: r.name ?? '',
-    phone_last4: r.phone_last4 ?? '',
-    created_at: r.created_at ?? '',
-  }));
+  return {
+    data: (data ?? []).map((r: any) => ({
+      id: r.id,
+      name: r.name ?? '',
+      phone_last4: r.phone_last4 ?? '',
+      created_at: r.created_at ?? '',
+    })),
+    error: false,
+  };
 }
 
 // 사장이 신청자를 승인 → unit_id 부여(소속 확정). RPC가 '내 매장 신청자'만 통과시킨다.
@@ -199,17 +295,17 @@ export async function rotateInviteCode(): Promise<{ inviteCode: string; expiresA
 }
 
 // ── 플레이북 ───────────────────────────────────────────────
-export async function fetchEntries(): Promise<PlaybookEntry[]> {
-  if (!HAS_SUPABASE) return [];
+export async function fetchEntries(): Promise<ReadResult<PlaybookEntry[]>> {
+  if (!HAS_SUPABASE) return { data: [], error: false };
   const { data, error } = await supabase
     .from('playbook_entries')
     .select('*')
     .order('created_at', { ascending: false });
   if (error) {
     readFail('fetchEntries', error);
-    return [];
+    return { data: [], error: true };
   }
-  return (data ?? []) as PlaybookEntry[];
+  return { data: (data ?? []) as PlaybookEntry[], error: false };
 }
 
 // source/verification 은 현재 스키마에 컬럼이 없다(타입엔 있으나 0001 테이블 미포함).
@@ -228,18 +324,20 @@ export async function insertEntry(entry: PlaybookEntry): Promise<boolean> {
 
 export async function updateEntry(id: string, patch: Partial<PlaybookEntry>): Promise<boolean> {
   if (!HAS_SUPABASE) return true;
-  return write(
+  // 노하우 수정이 0행(RLS/id드리프트)이면 사장이 고친 내용이 조용히 원복된다 → 실제 갱신 확인(P1-6).
+  return writeStrict(
     'updateEntry',
     supabase
       .from('playbook_entries')
       .update({ ...stripNonColumns(patch), updated_at: new Date().toISOString() })
-      .eq('id', id),
+      .eq('id', id)
+      .select('id'),
   );
 }
 
 export async function deleteEntry(id: string): Promise<boolean> {
   if (!HAS_SUPABASE) return true;
-  return write('deleteEntry', supabase.from('playbook_entries').delete().eq('id', id));
+  return writeStrict('deleteEntry', supabase.from('playbook_entries').delete().eq('id', id).select('id'));
 }
 
 // ── 노하우 제안/신청(알바 → 사장) ─────────────────────────
@@ -268,7 +366,8 @@ export async function reviewSuggestion(
   patch: Partial<Pick<PlaybookSuggestion, 'status' | 'owner_note' | 'resulting_entry_id' | 'reviewed_by' | 'reviewed_at'>>,
 ): Promise<boolean> {
   if (!HAS_SUPABASE) return true;
-  return write('reviewSuggestion', supabase.from('playbook_suggestions').update(patch).eq('id', id));
+  // 제안 승인/반려는 상태 전이(무결성) — 0행이면 유령 승인/반려 대신 실패로(P1-6).
+  return writeStrict('reviewSuggestion', supabase.from('playbook_suggestions').update(patch).eq('id', id).select('id'));
 }
 
 export function subscribeSuggestions(onChange: () => void): () => void {
@@ -283,8 +382,8 @@ export function subscribeSuggestions(onChange: () => void): () => void {
 }
 
 // ── 미답변 큐(사장님 인박스) ───────────────────────────────
-export async function fetchUnknownQueue(): Promise<UnknownQuery[]> {
-  if (!HAS_SUPABASE) return [];
+export async function fetchUnknownQueue(): Promise<ReadResult<UnknownQuery[]>> {
+  if (!HAS_SUPABASE) return { data: [], error: false };
   const { data, error } = await supabase
     .from('unknown_queries')
     .select('*')
@@ -292,9 +391,9 @@ export async function fetchUnknownQueue(): Promise<UnknownQuery[]> {
     .limit(PAGE_LIMIT);
   if (error) {
     readFail('fetchUnknownQueue', error);
-    return [];
+    return { data: [], error: true };
   }
-  return (data ?? []) as UnknownQuery[];
+  return { data: (data ?? []) as UnknownQuery[], error: false };
 }
 
 export async function insertUnknown(uq: UnknownQuery): Promise<boolean> {
@@ -374,11 +473,31 @@ export async function recomputePlaybookStats(entryIds: string[]): Promise<void> 
 // Supabase 없으면 로컬 object URL을 그대로 반환(데모 폴백).
 const PHOTO_BUCKET = 'playbook-photos';
 
-// 업로드 전 이미지 압축(웹) — 폰 사진 수 MB를 긴 변 1600px·JPEG q0.8로 다운스케일해 스토리지·대역폭 절감.
-// 비웹(document 없음)·비이미지·이미 작은 파일·실패 시 원본 그대로(업로드가 절대 안 깨지게).
+// canvas.toBlob이 WebP를 실제로 뱉는지 1회 확인(런타임 캐시). 사파리 구버전 등 미지원이면 JPEG로 폴백.
+// toDataURL이 'data:image/webp'로 시작하면 인코더 있음 — toBlob도 같은 인코더를 쓴다.
+let _webpOk: boolean | null = null;
+function supportsWebp(): boolean {
+  if (_webpOk !== null) return _webpOk;
+  try {
+    const c = document.createElement('canvas');
+    c.width = c.height = 1;
+    _webpOk = c.toDataURL('image/webp').startsWith('data:image/webp');
+  } catch {
+    _webpOk = false;
+  }
+  return _webpOk;
+}
+
+// 업로드 전 이미지 압축(웹) — 폰 사진 수 MB를 긴 변 1600px로 다운스케일 + 재인코딩.
+// 현업 표준 용량 절감:
+//   · WebP(q0.82) 우선 — 동일 화질에서 JPEG 대비 ~25~35% 작음. 미지원 브라우저는 JPEG(q0.8) 폴백.
+//   · canvas 재인코딩이 EXIF 등 메타데이터를 통째로 떨궈 용량↓ + 위치정보 프라이버시.
+// 비웹(document 없음)·비이미지·이미 충분히 작은 파일·실패 시 원본 그대로(업로드가 절대 안 깨지게).
 async function compressImage(file: File): Promise<File> {
   if (typeof document === 'undefined' || !file.type.startsWith('image/')) return file;
-  if (file.size < 600_000) return file; // 이미 작으면 스킵
+  // GIF는 재인코딩하면 애니메이션이 죽으므로 손대지 않는다.
+  if (file.type === 'image/gif') return file;
+  if (file.size < 300_000) return file; // 이미 충분히 작으면 재인코딩 이득<CPU비용 → 스킵
   try {
     const bitmap = await createImageBitmap(file);
     const scale = Math.min(1, 1600 / Math.max(bitmap.width, bitmap.height));
@@ -390,9 +509,13 @@ async function compressImage(file: File): Promise<File> {
     const ctx = canvas.getContext('2d');
     if (!ctx) return file;
     ctx.drawImage(bitmap, 0, 0, w, h);
-    const blob = await new Promise<Blob | null>((res) => canvas.toBlob(res, 'image/jpeg', 0.8));
+    const webp = supportsWebp();
+    const mime = webp ? 'image/webp' : 'image/jpeg';
+    const ext = webp ? 'webp' : 'jpg';
+    const quality = webp ? 0.82 : 0.8;
+    const blob = await new Promise<Blob | null>((res) => canvas.toBlob(res, mime, quality));
     if (!blob || blob.size >= file.size) return file; // 압축 이득 없으면 원본
-    return new File([blob], file.name.replace(/\.\w+$/, '') + '.jpg', { type: 'image/jpeg' });
+    return new File([blob], file.name.replace(/\.\w+$/, '') + '.' + ext, { type: mime });
   } catch {
     return file;
   }
@@ -407,6 +530,9 @@ export async function uploadPhoto(file: File): Promise<string | null> {
   const path = `${_unitId ?? 'unknown'}/${Date.now()}-${Math.round(Math.random() * 1e6)}.${ext}`;
   const { error } = await supabase.storage.from(PHOTO_BUCKET).upload(path, compressed, {
     contentType: compressed.type || 'image/jpeg',
+    // 경로가 매번 유니크(타임스탬프+난수)라 내용이 바뀔 일이 없다 → 1년 immutable 캐싱으로
+    // CDN이 재조회를 흡수해 Storage egress(Pro 대역폭)를 아낀다.
+    cacheControl: '31536000',
     upsert: false,
   });
   if (error) {
@@ -553,6 +679,24 @@ export async function insertTemplate(t: TaskTemplate): Promise<boolean> {
     }),
   );
 }
+export async function updateTemplate(t: TaskTemplate): Promise<boolean> {
+  if (!HAS_SUPABASE) return true;
+  return write(
+    'updateTemplate',
+    supabase
+      .from('work_templates')
+      .update({
+        section: t.section,
+        text: t.text,
+        section_note: t.sectionNote ?? null,
+        scope: t.scope ?? 'shared',
+        owner_id: t.ownerId ?? null,
+        recurrence: t.recurrence ?? null,
+        date: t.date ?? t.dueDate ?? null,
+      })
+      .eq('id', t.id),
+  );
+}
 export async function deleteTemplate(id: string): Promise<boolean> {
   if (!HAS_SUPABASE) return true;
   return write('deleteTemplate', supabase.from('work_templates').delete().eq('id', id));
@@ -609,6 +753,15 @@ export async function upsertFeed(item: FeedItem): Promise<boolean> {
     supabase.from('work_feed').upsert({ id: item.id, unit_id: _unitId, feed_date: item.date, room_id: item.roomId ?? null, data: item }),
   );
 }
+// 이미 존재하는 피드 행의 data 를 "제자리 수정(UPDATE)". insert 판정을 타지 않는 게 핵심.
+// ⚠️ 직원이 공지를 읽음표시(read_by 추가)할 때 upsertFeed(=upsert)를 쓰면, upsert 의 INSERT 경로가
+//    wf_insert 정책(`notice 는 사장만 insert`)에 걸려 42501(RLS 위반)로 저장이 조용히 실패했다
+//    → 읽음이 영구 반영 안 되고 안읽음 배지도 안 지워졌다. UPDATE 는 wf_update(같은 매장 허용)만
+//    평가하므로 남이 만든 공지 행이라도 같은 매장이면 정상 저장된다. (테넌트 격리는 USING 절이 유지.)
+export async function updateFeed(item: FeedItem): Promise<boolean> {
+  if (!HAS_SUPABASE) return true;
+  return write('updateFeed', supabase.from('work_feed').update({ data: item }).eq('id', item.id));
+}
 export async function deleteFeed(id: string): Promise<boolean> {
   if (!HAS_SUPABASE) return true;
   return write('deleteFeed', supabase.from('work_feed').delete().eq('id', id));
@@ -635,7 +788,9 @@ export async function upsertAttendance(rec: AttendanceRecord): Promise<boolean> 
 }
 export async function deleteAttendance(id: string): Promise<boolean> {
   if (!HAS_SUPABASE) return true;
-  return write('deleteAttendance', supabase.from('attendance').delete().eq('id', id));
+  // 출퇴근=급여 직결 — upsert만 writeStrict였고 delete가 빠져 있었다. 0행 삭제가 "지워짐"으로 보이나
+  // 서버 잔존하면 급여 총액이 어긋난다 → delete도 실제 영향행 확인(P1-6).
+  return writeStrict('deleteAttendance', supabase.from('attendance').delete().eq('id', id).select('id'));
 }
 
 // ── 시급 ───────────────────────────────────────────────────
@@ -652,7 +807,11 @@ export async function fetchWages(): Promise<Record<string, number>> {
 }
 export async function setWageDb(staffId: string, wage: number): Promise<boolean> {
   if (!HAS_SUPABASE) return true;
-  return write('setWageDb', supabase.from('wages').upsert({ unit_id: _unitId, staff_id: staffId, hourly_wage: wage }));
+  // 시급=돈 직결 — 0행(RLS/경합)이면 새 시급이 화면엔 보이나 급여는 옛 값으로 계산된다 → 실제 반영 확인(P1-6).
+  return writeStrict(
+    'setWageDb',
+    supabase.from('wages').upsert({ unit_id: _unitId, staff_id: staffId, hourly_wage: wage }).select('staff_id'),
+  );
 }
 
 // ── 업무보드/출퇴근 Realtime 구독 ─────────────────────────
@@ -685,7 +844,7 @@ export async function fetchScheduleConfig(): Promise<StoreConfig | null> {
   if (!HAS_SUPABASE) return null;
   const { data, error } = await supabase
     .from('schedule_config')
-    .select('open, close, closed_days, note')
+    .select('open, close, closed_days, note, dayparts')
     .maybeSingle();
   if (error) {
     readFail('fetchScheduleConfig', error);
@@ -697,6 +856,7 @@ export async function fetchScheduleConfig(): Promise<StoreConfig | null> {
     close: data.close ?? '22:00',
     closedDays: Array.isArray(data.closed_days) ? (data.closed_days as number[]) : [],
     note: data.note ?? '',
+    ...(data.dayparts && typeof data.dayparts === 'object' ? { dayparts: data.dayparts as StoreConfig['dayparts'] } : null),
   };
 }
 
@@ -710,6 +870,7 @@ export async function upsertScheduleConfig(c: StoreConfig): Promise<boolean> {
       close: c.close,
       closed_days: c.closedDays,
       note: c.note,
+      dayparts: c.dayparts ?? null,
       updated_at: new Date().toISOString(),
     }),
   );
@@ -842,7 +1003,9 @@ export async function updateSwap(id: string, patch: Partial<SwapRequest>): Promi
   if (patch.status !== undefined) row.status = patch.status;
   if (patch.accepted_by !== undefined) row.accepted_by = patch.accepted_by ?? null;
   if (patch.updated_at !== undefined) row.updated_at = patch.updated_at;
-  return write('updateSwap', supabase.from('swap_requests').update(row).eq('id', id));
+  // 교대 승인/수락/취소는 "누가 그 근무를 서는가"를 정하는 무결성 핵심 상태 전이 — 0행(RLS/경합)이면
+  // 유령 성공 대신 실패로(P1-6). 안 그러면 UI는 "승인됨" + 거짓 푸시가 나가는데 DB는 그대로 남는다.
+  return writeStrict('updateSwap', supabase.from('swap_requests').update(row).eq('id', id).select('id'));
 }
 
 export function subscribeSchedule(onChange: () => void): () => void {

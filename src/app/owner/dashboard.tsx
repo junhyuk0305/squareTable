@@ -13,10 +13,8 @@ import { RoleTabBar } from '@/components/RoleTabBar';
 import { InfoDot } from '@/components/InfoDot';
 import { OwnerHomeHubCards } from '@/components/OwnerHomeHubCards';
 import { SectionLabel } from '@/components/SectionLabel';
-import { FeatureCarousel, OWNER_FEATURES } from '@/components/FeatureCarousel';
 import { Wordmark } from '@/components/Wordmark';
 import { OwnerNotificationBell } from '@/components/NotificationBell';
-import { NudgeCard } from '@/components/owner/NudgeCard';
 import { getCategoryMeta } from '@/lib/utils/category';
 import { SEED_TEMPLATES } from '@/data/seed-templates';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
@@ -41,7 +39,6 @@ export default function OwnerDashboardScreen() {
     taskTotal,
     taskDoneCount,
     pending,
-    isSolo,
   } = useOwnerDashboardData();
 
   // 진입 애니는 각 섹션의 <Appear>가 단독으로 담당한다(디자인시스템 SSOT: Appear 단일 프리미티브).
@@ -268,49 +265,8 @@ export default function OwnerDashboardScreen() {
           </View>
         </Appear>
 
-        {/* 노하우 진입 미니 링크 — 매장운영(근무·직원)은 위 허브카드로 이관했고, 여기선 노하우 라이브러리만. */}
-        <View style={styles.miniRow}>
-          <Pressable onPress={() => router.push('/owner/knowledge')}>
-            <Text style={styles.miniLink}>노하우 {entriesCount}개 ›</Text>
-          </Pressable>
-        </View>
-
-        {/* ④ 오늘의 제안 — 하루한줄/핸드오프/템플릿이 동시에 경쟁하던 3개 넛지를
-            우선순위 1개로만 노출(결정 피로 제거). 모든 진입점은 우선순위로 도달 가능. */}
-        <Appear delay={entriesCount > 0 ? 300 : 60} style={styles.section}>
-          <SectionLabel icon="bulb-outline" title="오늘의 제안" />
-          {entriesCount > 0 && pending > 0 ? (
-            // F4 하루 한 줄 — 미답변이 쌓여 있을 때 최우선
-            <NudgeCard
-              icon="moon-outline"
-              title="하루 한 줄 노하우"
-              sub="오늘 새로 안 것·실수, 한 줄이면 AI가 노하우로 정리해요"
-              onPress={() => router.push('/owner/coach')}
-            />
-          ) : entriesCount > 0 && isSolo ? (
-            // F6 핸드오프 — 혼자 모드(직원 0명)
-            <NudgeCard
-              icon="people-outline"
-              title="지금 쌓아두면, 직원 뽑을 때 그대로 교육 자료가 돼요"
-              sub="혼자 일하는 지금 정리해두면 첫 직원이 와도 다시 설명 안 해도 돼요"
-              onPress={() => router.push('/owner/staff')}
-            />
-          ) : (
-            // 기본 — 업종 표준 템플릿 둘러보기(신규·기존 모두)
-            <NudgeCard
-              icon="albums-outline"
-              title="노하우 템플릿 둘러보기"
-              sub="업종에서 자주 쓰는 노하우를 검색해 내 노하우로 바로 가져와요"
-              onPress={() => router.push('/owner/templates')}
-            />
-          )}
-        </Appear>
-
-        {/* 핵심 기능 안내 배너 — 최하단. 스와이프로 핵심 기능을 소개하고 탭하면 바로 그 화면으로 */}
-        <Appear delay={360} style={styles.section}>
-          <SectionLabel icon="sparkles-outline" title="이런 것도 할 수 있어요" />
-          <FeatureCarousel cards={OWNER_FEATURES} />
-        </Appear>
+        {/* 오늘의 제안·핵심 기능 캐러셀은 홈에서 제거(회의 반영):
+            기능을 이미 아는 사장에겐 중복 노출 → 템플릿 둘러보기는 노하우 탭으로 이관했다. */}
         </View>
       </ScrollView>
       <RoleTabBar role="owner" />

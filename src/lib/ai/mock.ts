@@ -78,16 +78,6 @@ function structureOne(raw: string, category?: Category): StructuredSegment {
     situation = joined;
   }
 
-  // 양(개수) 우선 감지 → count, 아니면 정도 → spectrum. (mock은 일반 라벨, 실 LLM이 품목별로 생성)
-  const countCue = raw.match(/펌프|샷|스쿱|바퀴|장|번/);
-  const degreeCues = ['정도', '깨끗', '노릇', '적당', '익', '굽', '농도', '진하', '연하', '바삭', '알맞'];
-  const hasDegree = category === 'Know-how' || degreeCues.some((c) => raw.includes(c));
-  const scalePrompt = countCue
-    ? { kind: 'count' as const, label: '양', ask: `몇 ${countCue[0]}가 기준이에요?`, unit: countCue[0] }
-    : hasDegree
-      ? { kind: 'spectrum' as const, label: '완성 기준', ask: '어느 정도가 기준이에요?', ends: ['약함', '강함'] as [string, string] }
-      : undefined;
-
   // 단답 보강용 꼬리질문(휴리스틱) — 입력이 매우 짧고 단계가 빈약하면 한 개만.
   // (실 LLM은 그 노하우에 맞춰 더 정교하게 생성. mock은 데모 안전망.)
   const followups: AiFollowup[] = [];
@@ -107,7 +97,6 @@ function structureOne(raw: string, category?: Category): StructuredSegment {
       result: { before: '', after: '', metric: '' },
       extract: { do: '', dont },
     },
-    ...(scalePrompt ? { scalePrompt } : {}),
     ...(followups.length > 0 ? { followups } : {}),
   };
 }
@@ -146,7 +135,6 @@ export function mockStructureSquare(input: StructureSquareInput): StructureSquar
     square: head.square,
     title: head.title,
     keywords: head.keywords,
-    ...(head.scalePrompt ? { scalePrompt: head.scalePrompt } : {}),
     ...(head.followups ? { followups: head.followups } : {}),
     segments,
   };

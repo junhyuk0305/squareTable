@@ -127,8 +127,8 @@ export function buildJuniorNotifications(args: {
 
 // ── 사장 알림 (직원 모델과 동일 SSOT 구조) ───────────────────────────
 // 사장이 대응해야 할 것: 합류 승인 대기 · 답변 대기 질문 · 알바가 올린 제안 · 승인 대기 교대.
-export type OwnerNotifKind = 'join_request' | 'question' | 'suggestion' | 'swap_approval';
-export type OwnerNotifRoute = '/owner/inbox' | '/owner/suggestions' | '/owner/schedule' | '/owner/staff';
+export type OwnerNotifKind = 'join_request' | 'question' | 'suggestion' | 'swap_approval' | 'mention';
+export type OwnerNotifRoute = '/owner/inbox' | '/owner/suggestions' | '/owner/schedule' | '/owner/staff' | '/owner/work';
 
 export type OwnerNotif = {
   id: string;
@@ -171,9 +171,28 @@ export function buildOwnerNotifications(args: {
   swaps: SwapRequest[];
   pending: PendingMember[];
   nameOf: (id: string) => string;
+  /** 사장이 채팅에서 @언급됐는지 판정용(직원 모델과 동일). 없으면 멘션 없음으로 동작. */
+  feed?: FeedItem[];
+  userId?: string;
 }): OwnerNotif[] {
-  const { queue, suggestions, swaps, pending, nameOf } = args;
+  const { queue, suggestions, swaps, pending, nameOf, feed = [], userId: me } = args;
   const out: OwnerNotif[] = [];
+
+  // 멘션 — 직원/동료가 채팅·댓글에서 사장(나)을 @언급(내 글 제외). 탭하면 업무 채팅으로.
+  if (me) {
+    for (const f of feed) {
+      if (!(f.mentions ?? []).includes(me) || f.authorId === me) continue;
+      out.push({
+        id: `mention_${f.id}`,
+        kind: 'mention',
+        title: `${f.authorName}님이 나를 언급했어요`,
+        body: f.text,
+        at: f.createdAt,
+        unread: false,
+        route: '/owner/work',
+      });
+    }
+  }
 
   // 합류 승인 대기 — 사람이 기다리는 시간민감 항목. 탭하면 직원 관리(승인/거절)로.
   for (const p of pending) {

@@ -1,7 +1,22 @@
 import { create } from 'zustand';
 import { supabase, HAS_SUPABASE } from '@/lib/supabase';
-import { setUnitId } from '@/lib/db';
+import {
+  setUnitId,
+  fetchSessionProfile,
+  fetchUnitInfo,
+  fetchUnitSubscription,
+  checkPhoneInUse,
+  rpcCreateStore,
+  rpcJoinByInvite,
+  rpcCancelJoinRequest,
+  rpcLeaveStore,
+  rpcDeleteMyAccount,
+  rpcRenameStore,
+  updateProfileFields,
+  updateUnitIndustry,
+} from '@/lib/db';
 import { friendlyError } from '@/lib/utils/userError';
+import { sessionReadFailAction } from './sessionReadFail';
 import { setAnalyticsContext, track, reportError } from '@/lib/analytics/track';
 import type { SubStatusRaw } from '@/lib/utils/subscription';
 import { notifyOwnersJoinRequest } from '@/lib/push/notify';
@@ -138,11 +153,27 @@ async function loadProfile(
   meta?: PendingOwnerMeta,
 ) {
   try {
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('id, name, role, unit_id, pending_unit_id, bio, phone, deleted_at')
-      .eq('id', userId)
-      .maybeSingle();
+    const { data: profile, error: profileErr } = await fetchSessionProfile(userId);
+
+    // 읽기 실패 위장 금지(§4.8) — supabase-js 는 쿼리 에러를 throw 하지 않고 {error} 로 준다.
+    // 이 error 를 무시하면 profile=null 로 흘러 role='junior'·unit_id='' 인 "빈 신원"이 signed_in
+    // 으로 세팅된다 → 일시적 401(토큰만료)/5xx/429 에 ① 사장이 직원으로 강등돼 '가게 만들기'로
+    // 튕기고(§4.10), ② 승인 대기 직원은 20초 폴링 중 1회 실패에 pendingUnitId 가 사라져 대기화면이
+    // join 화면으로 되돌아간다. → 읽기 실패는 절대 "빈 상태=정상"으로 위장하지 않는다.
+    // ('no row'(정상 신규/트리거 레이스)는 error 없이 profile=null 로 아래 경로가 그대로 처리.)
+    if (profileErr) {
+      reportError('session.loadProfile.read', profileErr);
+      // 이미 확립된 같은 사용자 세션이면(폴링/새로고침 중 일시 실패) 기존 상태를 보존한다 —
+      // 다음 폴링/재시도에서 자연 복구. 무음 강등보다 '변화 없음'이 안전하다.
+      const prior = useSessionStore.getState();
+      // 보존/리셋 판정은 순수함수(SSOT)로 분리 — 회귀 테스트 qa:session 이 진리표를 고정한다.
+      if (sessionReadFailAction(prior, userId) === 'keep') return;
+      // 콜드 로드라 신원을 확정할 수 없다 → 가짜 테넌트 대신 깨끗한 signed_out(재로그인으로 복구).
+      setUnitId(null);
+      setAnalyticsContext({ userId: null, unitId: null, role: null });
+      set({ status: 'signed_out', unitId: '', userId: '', userName: '', storeName: '', pendingUnitId: '', pendingStoreName: '', industry: '', inviteCode: '', bio: '', phone: '' });
+      return;
+    }
 
     // 소프트삭제(탈퇴) 계정은 재로그인 차단(남용 #29) — 유예 기간 동안 데이터는 서버에 남아있되
     // 사용자는 로그인 불가. 세션 토큰도 정리한다(fire-and-forget: signOut→onAuthStateChange는 재귀 안 함).
@@ -163,13 +194,8 @@ async function loadProfile(
     if (!unitId && !_resumingOwnerStore && meta?.role === 'owner' && (meta.store_name ?? '').trim()) {
       _resumingOwnerStore = true;
       try {
-        const { data: created, error: createErr } = await supabase.rpc('create_store', {
-          p_store_name: meta.store_name,
-          p_industry: meta.industry ?? null,
-          p_biz_no: meta.biz_no ?? null,
-        });
+        const { data: row, error: createErr } = await rpcCreateStore(meta.store_name ?? '', meta.industry ?? null, meta.biz_no ?? null);
         if (!createErr) {
-          const row = Array.isArray(created) ? created[0] : created;
           unitId = row?.unit_id ?? unitId;
           role = 'owner';
         } else {
@@ -189,21 +215,13 @@ async function loadProfile(
     let trialEndsAt = '';
     let paidUntil = '';
     if (unitId) {
-      const { data: unit } = await supabase
-        .from('units')
-        .select('store_name, invite_code, industry')
-        .eq('id', unitId)
-        .maybeSingle();
+      const { data: unit } = await fetchUnitInfo(unitId);
       storeName = unit?.store_name ?? '';
       inviteCode = unit?.invite_code ?? '';
       industry = unit?.industry ?? '';
 
       // 구독상태(별도 테이블, 읽기 전용). 없으면 빈값 → deriveSubscription 이 fail-open('none')으로 처리.
-      const { data: sub } = await supabase
-        .from('unit_subscriptions')
-        .select('status, trial_ends_at, paid_until')
-        .eq('unit_id', unitId)
-        .maybeSingle();
+      const { data: sub } = await fetchUnitSubscription(unitId);
       subStatus = (sub?.status as SubStatusRaw) ?? '';
       trialEndsAt = sub?.trial_ends_at ?? '';
       paidUntil = sub?.paid_until ?? '';
@@ -331,17 +349,13 @@ export const useSessionStore = create<SessionState>((set, get) => ({
 
   isPhoneTaken: async (phone) => {
     if (!HAS_SUPABASE) return 'free';
-    const { data, error } = await supabase.rpc('phone_in_use', { p_phone: phone });
+    const { data, error } = await checkPhoneInUse(phone);
     if (error) return 'unknown'; // 검사 실패 — 우회 금지(호출부가 차단). unique 제약이 최종 방어선
     return data ? 'taken' : 'free';
   },
 
   createStore: async (storeName, industry, bizNo) => {
-    const { data, error } = await supabase.rpc('create_store', {
-      p_store_name: storeName,
-      p_industry: industry,
-      p_biz_no: bizNo ?? null,
-    });
+    const { data: row, error } = await rpcCreateStore(storeName, industry, bizNo ?? null);
     if (error) {
       // 이미 매장이 있음(이전 시도로 생성됐거나 중복 제출) → 데드엔드 대신 기존 매장으로 진입.
       // (가입 직후 createStore가 한 번 성공했는데 네트워크 등으로 재시도되면 여기로 떨어진다.)
@@ -358,7 +372,6 @@ export const useSessionStore = create<SessionState>((set, get) => ({
         : friendlyError(error.message, '가게를 만들지 못했어요. 잠시 후 다시 시도해 주세요.');
       return { error: msg, inviteCode: null };
     }
-    const row = Array.isArray(data) ? data[0] : data;
     // 프로필 unit_id가 바뀌었으니 세션 상태 갱신
     const uid = get().userId;
     if (uid) await loadProfile(set, uid, get().email);
@@ -367,7 +380,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   },
 
   joinByInvite: async (code) => {
-    const { data, error } = await supabase.rpc('join_by_invite', { p_code: code });
+    const { data: row, error } = await rpcJoinByInvite(code);
     if (error) {
       // 이미 어느 매장에 소속됨(중복 제출/이전 합류 성공) → 데드엔드 대신 그대로 진입.
       if (/already_in_store/.test(error.message)) {
@@ -396,7 +409,6 @@ export const useSessionStore = create<SessionState>((set, get) => ({
         : friendlyError(error.message, '매장에 합류하지 못했어요. 코드를 확인하고 다시 시도해 주세요.');
       return { error: msg, storeName: null };
     }
-    const row = Array.isArray(data) ? data[0] : data;
     // 0행 반환 = invalid_code 신호(0031: 감사기록 보존을 위해 raise 대신 빈 반환).
     if (!row?.unit_id) {
       track('join_requested', { result: 'invalid_code' });
@@ -418,7 +430,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       set({ pendingUnitId: '', pendingStoreName: '' });
       return { error: null };
     }
-    const { error } = await supabase.rpc('cancel_join_request');
+    const { error } = await rpcCancelJoinRequest();
     if (error) return { error: friendlyError(error.message, '신청을 취소하지 못했어요. 잠시 후 다시 시도해 주세요.') };
     set({ pendingUnitId: '', pendingStoreName: '' });
     const uid = get().userId;
@@ -480,7 +492,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     }
     if (patch.bio != null) fields.bio = patch.bio;
     if (Object.keys(fields).length) {
-      const { error } = await supabase.from('profiles').update(fields).eq('id', uid);
+      const { error } = await updateProfileFields(uid, fields);
       if (error) {
         if (/duplicate|unique|phone_norm/i.test(error.message)) return { error: '이미 가입된 번호예요.' };
         return { error: friendlyError(error.message, '정보를 저장하지 못했어요. 잠시 후 다시 시도해 주세요.') };
@@ -515,7 +527,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       set({ status: 'signed_out', unitId: '', userId: '', userName: '', pendingUnitId: '', pendingStoreName: '', industry: '' });
       return { error: null };
     }
-    const { error } = await supabase.rpc('delete_my_account');
+    const { error } = await rpcDeleteMyAccount();
     if (error) return { error: friendlyError(error.message, '탈퇴 처리에 실패했어요. 잠시 후 다시 시도해 주세요.') };
     // 계정은 이미 서버에서 파기됨 → signOut이 실패(네트워크 등)해도 로컬 세션은 반드시 종료.
     // (가드 안 하면 예외가 호출부로 튀어 busy가 영구 정지되고, '탈퇴됐는데 로그인 상태'가 됨)
@@ -535,7 +547,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       setUnitId(null);
       return { error: null };
     }
-    const { error } = await supabase.rpc('leave_store');
+    const { error } = await rpcLeaveStore();
     if (error) return { error: friendlyError(error.message, '매장에서 나가지 못했어요. 잠시 후 다시 시도해 주세요.') };
     const uid = get().userId;
     if (uid) await loadProfile(set, uid, get().email);
@@ -563,7 +575,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       if (!unitId) return { error: '매장 정보가 없어요.', remaining: info.remaining };
       // 제한은 서버가 강제(남용 #28) — localStorage 카운터는 표시용 힌트일 뿐, 진짜 게이트는 rename_store RPC.
       // (재설치/다른 기기/데브툴로 로컬 힌트를 지워도 서버가 14일 2회를 막는다.)
-      const { data, error } = await supabase.rpc('rename_store', { p_name: trimmed });
+      const { data, error } = await rpcRenameStore(trimmed);
       if (error) {
         const msg = /rename_limit/.test(error.message)
           ? '가게 이름은 14일 이내 2회까지만 변경할 수 있어요.'
@@ -594,7 +606,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     const unitId = get().unitId;
     if (HAS_SUPABASE) {
       if (!unitId) return { error: '매장 정보가 없어요.' };
-      const { error } = await supabase.from('units').update({ industry: trimmed }).eq('id', unitId);
+      const { error } = await updateUnitIndustry(unitId, trimmed);
       if (error) return { error: friendlyError(error.message, '업종을 변경하지 못했어요. 잠시 후 다시 시도해 주세요.') };
     }
     set({ industry: trimmed });

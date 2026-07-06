@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Text, Pressable, StyleSheet, ScrollView, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Stack, useRouter } from 'expo-router';
+import { Stack, useFocusEffect, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 import { usePayrollStore } from '@/lib/store/usePayrollStore';
@@ -15,6 +15,7 @@ import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { DEFAULT_HOURLY_WAGE, fmtDuration, won, todayStr, liveMinutes } from '@/lib/utils/attendance';
 import { useCopyToClipboard } from '@/lib/utils/useCopyToClipboard';
+import { showToast } from '@/lib/store/useToastStore';
 import { rotateInviteCode } from '@/lib/db';
 
 export default function OwnerStaffScreen() {
@@ -25,6 +26,7 @@ export default function OwnerStaffScreen() {
   const staff = useStaffStore((s) => s.staff);
   const removeStaff = useStaffStore((s) => s.removeStaff);
   const pending = useStaffStore((s) => s.pending);
+  const loadError = useStaffStore((s) => s.loadError);
   const approve = useStaffStore((s) => s.approve);
   const reject = useStaffStore((s) => s.reject);
   const INVITE_CODE = useSessionStore((s) => s.inviteCode) || '------';
@@ -36,6 +38,10 @@ export default function OwnerStaffScreen() {
   const [rotateOpen, setRotateOpen] = useState(false);
   const [rotating, setRotating] = useState(false);
   const { copied, copy } = useCopyToClipboard();
+
+  // 화면 진입/복귀 시마다 명부·합류신청을 다시 당겨온다. owner 레이아웃 hydrate는 로그인 시 1회뿐이라,
+  // 앱을 켜둔 채로 새 합류 신청이 들어와도(profiles 실시간 미구독) 이 화면을 열면 반드시 최신으로 보인다.
+  useFocusEffect(useCallback(() => { useStaffStore.getState().hydrate(); }, []));
 
   // 근무 중 직원의 누적시간을 30초마다 갱신(구 근무·급여 화면에서 흡수).
   const [, setTick] = useState(0);
@@ -82,7 +88,13 @@ export default function OwnerStaffScreen() {
     const res = await rotateInviteCode();
     setRotating(false);
     setRotateOpen(false);
-    if (res) useSessionStore.setState({ inviteCode: res.inviteCode });
+    // 실패(null) 시 예전엔 모달만 닫고 아무 신호가 없어, 사장이 코드가 바뀐 줄 착각했다(무음 실패).
+    if (res) {
+      useSessionStore.setState({ inviteCode: res.inviteCode });
+      showToast('초대코드를 변경했어요', 'good');
+    } else {
+      showToast('코드 변경에 실패했어요. 잠시 후 다시 시도해 주세요.', 'warn');
+    }
   };
 
   return (
@@ -152,10 +164,25 @@ export default function OwnerStaffScreen() {
         {/* 직원 목록 — 시급 편집 + 이번 달 시간·급여·근무상태(구 근무·급여 화면 흡수) */}
         <Text style={styles.sectionTitle}>합류한 직원 ({staff.length}명) <Text style={styles.sectionSub}>· 탭 → 출근기록</Text></Text>
         {staff.length === 0 ? (
-          <View style={styles.emptyBox}>
-            <Ionicons name="people-outline" size={22} color={InkColors.ink3} />
-            <Text style={styles.emptyText}>아직 합류한 직원이 없어요.{'\n'}위 초대코드를 직원에게 알려주세요.</Text>
-          </View>
+          loadError ? (
+            // 로드 실패를 "직원 0명"으로 위장하지 않고 재시도를 띄운다(무음 실패 방지).
+            <View style={styles.emptyBox}>
+              <Ionicons name="cloud-offline-outline" size={22} color={InkColors.ink3} />
+              <Text style={styles.emptyText}>직원 목록을 불러오지 못했어요.{'\n'}연결을 확인해 주세요.</Text>
+              <Pressable
+                onPress={() => useStaffStore.getState().hydrate()}
+                style={({ pressed }) => [styles.retryBtn, pressed && { opacity: 0.85 }]}
+              >
+                <Ionicons name="refresh" size={15} color="#FFFFFF" />
+                <Text style={styles.retryText}>다시 시도</Text>
+              </Pressable>
+            </View>
+          ) : (
+            <View style={styles.emptyBox}>
+              <Ionicons name="people-outline" size={22} color={InkColors.ink3} />
+              <Text style={styles.emptyText}>아직 합류한 직원이 없어요.{'\n'}위 초대코드를 직원에게 알려주세요.</Text>
+            </View>
+          )
         ) : (
         <View style={styles.list}>
           {staff.map((s) => {
@@ -300,6 +327,8 @@ const styles = StyleSheet.create({
   demoNote: { fontSize: 12, color: InkColors.ink3, marginTop: 6 },
   emptyBox: { alignItems: 'center', gap: 8, paddingVertical: 28, backgroundColor: '#FFFFFF', borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line },
   emptyText: { fontSize: 13, color: InkColors.ink3, textAlign: 'center', lineHeight: 19 },
+  retryBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: InkColors.ink, paddingVertical: 9, paddingHorizontal: 16, borderRadius: Radius.pill, marginTop: 2 },
+  retryText: { color: '#FFFFFF', fontSize: 13, fontWeight: '800' },
 });
 
 const chip = StyleSheet.create({

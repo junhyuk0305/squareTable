@@ -201,7 +201,15 @@ export function TemplateLibrary() {
   const doImport = async (t: PlaybookTemplate) => {
     if (isImported(t)) return;
     const entry = forkTemplate(t, { unitId, creatorId: userId, creatorName: userName });
-    add({ ...entry, source: { kind: 'import', label: '업종 표준 템플릿' } });
+    // 서버에 실제로 저장됐을 때만 "추가했어요"를 띄운다 — 실패 시 낙관적 추가가 롤백되므로
+    // 성공 다이얼로그를 그대로 띄우면 "추가됨" 배지가 사라지며 무음 유실이 된다.
+    const ok = await add({ ...entry, source: { kind: 'import', label: '업종 표준 템플릿' } });
+    if (!ok) {
+      await notifyAction('추가하지 못했어요', '연결을 확인하고 다시 시도해 주세요.', '확인', {
+        icon: 'alert-circle-outline',
+      });
+      return;
+    }
     await notifyAction(
       '내 노하우에 추가했어요',
       `“${t.title}”을(를) 가져왔어요.`,
