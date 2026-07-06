@@ -7,6 +7,7 @@
 import { useEffect } from 'react';
 import { router } from 'expo-router';
 import { useSessionStore } from '@/lib/store/useSessionStore';
+import { usePreferencesStore } from '@/lib/store/usePreferencesStore';
 import { registerServiceWorker, ensurePushSubscribed } from '@/lib/push/webpush';
 
 // 알림 클릭 목적지 경로를 "받는 사람의 역할"에 맞게 교정한다.
@@ -45,6 +46,9 @@ export function usePushBootstrap(): void {
   const unitId = useSessionStore((s) => s.unitId);
   const signedIn = useSessionStore((s) => s.status === 'signed_in');
   useEffect(() => {
-    if (signedIn && userId) void ensurePushSubscribed(userId, unitId || null);
+    if (signedIn && userId) {
+      void ensurePushSubscribed(userId, unitId || null); // 웹 전용(네이티브 no-op)
+      void usePreferencesStore.getState().hydrateNotify(); // DB 알림 선호를 로컬 캐시로(전 플랫폼)
+    }
   }, [signedIn, userId, unitId]);
 }

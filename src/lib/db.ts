@@ -130,6 +130,34 @@ export async function fetchUnitSubscription(unitId: string): Promise<DbResult<Un
   return { data: (data as UnitSubscriptionRow) ?? null, error: error as DbErr };
 }
 
+// ── 알림 수신 선호(notification_prefs) — 서버(엣지 push 함수)가 발송 직전에 읽는 SSOT ─────────
+// 화면/스토어는 여기로만 접근한다(§계층 경계 ③). 저장은 원자적 upsert RPC 한 곳(save_notification_prefs).
+// 읽기는 RLS 로 본인 행만 반환(where 없이도 user_id=auth.uid() 로 좁혀짐). 행이 없으면 null → 스토어가 기본값.
+export type NotificationPrefsRow = {
+  push_enabled: boolean;
+  quiet_enabled: boolean;
+  quiet_start: string; // "HH:MM"
+  quiet_end: string; // "HH:MM"
+};
+export async function fetchNotificationPrefs(): Promise<DbResult<NotificationPrefsRow>> {
+  if (!HAS_SUPABASE) return { data: null, error: null };
+  const { data, error } = await supabase
+    .from('notification_prefs')
+    .select('push_enabled, quiet_enabled, quiet_start, quiet_end')
+    .maybeSingle();
+  return { data: (data as NotificationPrefsRow) ?? null, error: error as DbErr };
+}
+export async function saveNotificationPrefs(p: NotificationPrefsRow): Promise<{ error: DbErr }> {
+  if (!HAS_SUPABASE) return { error: null };
+  const { error } = await supabase.rpc('save_notification_prefs', {
+    p_push_enabled: p.push_enabled,
+    p_quiet_enabled: p.quiet_enabled,
+    p_quiet_start: p.quiet_start,
+    p_quiet_end: p.quiet_end,
+  });
+  return { error: error as DbErr };
+}
+
 // 전화번호 중복 사전검사(주키). 비로그인 호출 가능. data=true/false, error=검사 실패.
 export async function checkPhoneInUse(phone: string): Promise<DbResult<boolean>> {
   const { data, error } = await supabase.rpc('phone_in_use', { p_phone: phone });

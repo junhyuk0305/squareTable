@@ -66,6 +66,16 @@ export default function JuniorSettings() {
     router.replace('/');
   };
 
+  // 알림 선호는 DB(SSOT)에 원자적으로 저장 — 실패 시 스토어가 롤백해 토글이 원위치되고 여기서 고지한다.
+  const saveNotify = async (patch: Parameters<typeof prefs.saveNotify>[0]) => {
+    const { error } = await prefs.saveNotify(patch);
+    if (error) {
+      await notifyAction('저장 실패', '알림 설정을 저장하지 못했어요. 연결을 확인하고 다시 시도해 주세요.', '확인', {
+        icon: 'alert-circle-outline',
+      });
+    }
+  };
+
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
       <Stack.Screen options={{ headerShown: true, title: '설정', headerRight: () => <HeaderLogoutButton /> }} />
@@ -101,14 +111,14 @@ export default function JuniorSettings() {
             label="푸시 알림"
             hint="사장님이 답하거나 새 공지가 오면 알려드려요"
             value={prefs.pushEnabled}
-            onValueChange={() => prefs.toggle('pushEnabled')}
+            onValueChange={(v) => saveNotify({ pushEnabled: v })}
           />
           <SettingsToggle
             icon="moon-outline"
             label="방해 금지 시간"
-            hint={`${prefs.quietStart}~${prefs.quietEnd}에는 알림을 보내지 않아요`}
+            hint={`${prefs.quietStart}~${prefs.quietEnd}에는 핸드폰 알림만 꺼요 (알림함엔 그대로 쌓여요)`}
             value={prefs.quietHours}
-            onValueChange={() => prefs.toggle('quietHours')}
+            onValueChange={(v) => saveNotify({ quietHours: v })}
           />
           {prefs.quietHours ? (
             <SettingsRow
@@ -149,10 +159,7 @@ export default function JuniorSettings() {
         start={prefs.quietStart}
         end={prefs.quietEnd}
         onClose={() => setQuietModal(false)}
-        onSave={(s, e) => {
-          prefs.set('quietStart', s);
-          prefs.set('quietEnd', e);
-        }}
+        onSave={(s, e) => saveNotify({ quietStart: s, quietEnd: e })}
       />
       <ConfirmModal
         visible={leaveModal}

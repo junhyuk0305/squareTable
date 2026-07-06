@@ -67,6 +67,21 @@ function clip(s: unknown, max: number): string {
   return String(s ?? '').slice(0, max);
 }
 
+// ── 방해 금지(quiet hours) 판정 — KST 고정(단일시장) ──────────────────────────────
+// 클라 설정은 "HH:MM"(KST)로 저장된다. 현재 KST 시각도 "HH:MM"으로 만들어 고정폭 문자열
+// 사전순 비교로 판정한다(zero-padded 라 사전순 = 시간순).
+function kstNowHHMM(): string {
+  // en-GB + hour12:false → "HH:MM:SS". 앞 5글자가 "HH:MM".
+  return new Date().toLocaleTimeString('en-GB', { timeZone: 'Asia/Seoul', hour12: false }).slice(0, 5);
+}
+// now 가 [start, end) 방해금지 구간 안인가. start>end 면 자정 넘김(예: 22:00~08:00).
+function inQuietWindow(now: string, start?: string | null, end?: string | null): boolean {
+  const s = String(start ?? '').slice(0, 5);
+  const e = String(end ?? '').slice(0, 5);
+  if (!/^\d\d:\d\d$/.test(s) || !/^\d\d:\d\d$/.test(e) || s === e) return false; // 형식 이상·빈 구간 = 억제 안 함(안전측)
+  return s < e ? (now >= s && now < e) : (now >= s || now < e);
+}
+
 Deno.serve(async (req) => {
   const origin = req.headers.get('origin');
   const cors = corsFor(origin);
@@ -153,6 +168,28 @@ Deno.serve(async (req) => {
   // 발송자 본인에게는 알림을 보내지 않는다(자기 행동의 메아리 방지).
   recipientIds = recipientIds.filter((id) => id !== caller.id);
   if (recipientIds.length === 0) return json(200, { sent: 0, recipients: 0 });
+
+  // ── 수신자 선호 적용(notification_prefs = SSOT) — 'OS 푸시'만 억제 ─────────────────
+  // 인앱 알림함(벨/목록)은 클라가 도메인 데이터에서 파생하는 별개 경로라 여기서 아무리 걸러도 그대로 뜬다.
+  //   → 방해금지 = "핸드폰 알림만 안 가고 알림함엔 표시" 가 구조적으로 성립.
+  // 행이 없는 수신자는 기본값(켜짐·방해금지 꺼짐)으로 발송 대상 유지(신규 사용자 무음화 방지).
+  const { data: prefRows } = await admin
+    .from('notification_prefs')
+    .select('user_id, push_enabled, quiet_enabled, quiet_start, quiet_end')
+    .in('user_id', recipientIds);
+  const prefByUser = new Map(
+    (prefRows ?? []).map((p: { user_id: string; push_enabled: boolean; quiet_enabled: boolean; quiet_start: string; quiet_end: string }) => [p.user_id, p]),
+  );
+  const nowKst = kstNowHHMM();
+  const suppressed: string[] = [];
+  recipientIds = recipientIds.filter((id) => {
+    const p = prefByUser.get(id);
+    if (!p) return true; // 선호 미설정 = 기본 켜짐
+    if (p.push_enabled === false) { suppressed.push(id); return false; } // 알림 끔 → 발송 안 함
+    if (p.quiet_enabled && inQuietWindow(nowKst, p.quiet_start, p.quiet_end)) { suppressed.push(id); return false; } // 방해금지 시간 → 이번 발송만 스킵
+    return true;
+  });
+  if (recipientIds.length === 0) return json(200, { sent: 0, recipients: 0, suppressed: suppressed.length });
 
   const { data: subs } = await admin
     .from('push_subscriptions')
