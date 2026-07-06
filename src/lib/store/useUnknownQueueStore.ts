@@ -80,15 +80,15 @@ export const useUnknownQueueStore = create<UnknownQueueState>((set, get) => ({
       return;
     }
     set((st) => ({ queue: [uq, ...st.queue] }));
+    // 저장 성공 후에만 사장에게 웹푸시(답변 대기 질문 유입). 실패(롤백)·상한 초과 시 유령 알림 방지.
+    //   중복 유사질문(위 bump 경로)은 알리지 않는다.
     void guardWrite(
       insertUnknown(uq),
       () => set((st) => ({ queue: st.queue.filter((u) => u.id !== uq.id) })),
       // 일반 저장 실패 + 미해결 질문 상한(남용 #18, 0033 트리거 too_many_pending)을 한 메시지로 포괄.
       // (insertUnknown이 boolean만 반환해 사유 구분 불가 → 양쪽에 자연스러운 안내로 통합.)
       '질문을 등록하지 못했어요. 대기 중인 질문이 많으면 사장님 답변을 받은 뒤 다시 등록해 주세요.',
-    );
-    // 사장에게 웹푸시(답변 대기 질문이 새로 들어옴). 중복 유사질문(위 bump 경로)은 알리지 않는다.
-    if (uq.status === 'pending_owner_answer') notifyOwnersQuestion(uq.query_text);
+    ).then((ok) => { if (ok && uq.status === 'pending_owner_answer') notifyOwnersQuestion(uq.query_text); });
   },
   resolve: (uqId, newEntryId) => {
     const before = get().queue.find((u) => u.id === uqId);

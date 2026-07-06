@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { coalesce, subscribeDebounced } from '@/lib/store/realtimeSync';
-import { todayStr, minutesBetween, nowISO, MAX_SHIFT_MIN } from '@/lib/utils/attendance';
+import { todayStr, minutesBetween, nowISO, MAX_SHIFT_MIN, tsMs } from '@/lib/utils/attendance';
 import { HAS_SUPABASE } from '@/lib/supabase';
 import { fetchAttendance, upsertAttendance, deleteAttendance, subscribeAttendance } from '@/lib/db';
 import { guardWrite } from '@/lib/store/useSyncStore';
@@ -77,9 +77,11 @@ export const useAttendanceStore = create<State>((set, get) => ({
 
   checkIn: (staffId) => {
     const date = todayStr();
-    // 다회 출퇴근: 열린(미퇴근) 기록이 없을 때만 새 출근 생성
+    // 다회 출퇴근: 열린(미퇴근) 기록이 없을 때만 새 출근 생성.
+    // ⚠️ 날짜 무관하게 검사한다 — 어제 퇴근을 깜빡한 열린 기록이 있는데 오늘 또 출근을 찍으면
+    //    이중 오픈(둘 다 미퇴근)이 되어 어제 기록이 24h로 부풀고 급여가 왜곡된다(F7). 먼저 퇴근시켜야.
     const hasOpen = get().records.some(
-      (r) => r.staff_id === staffId && r.date === date && r.check_in && !r.check_out,
+      (r) => r.staff_id === staffId && r.check_in && !r.check_out,
     );
     if (hasOpen) return;
     const now = new Date().toISOString();
@@ -92,27 +94,22 @@ export const useAttendanceStore = create<State>((set, get) => ({
     );
   },
   checkOut: (staffId) => {
-    const date = todayStr();
-    let before: AttendanceRecord | undefined;
-    let updated: AttendanceRecord | undefined;
-    set((s) => ({
-      records: s.records.map((r) => {
-        if (r.staff_id === staffId && r.date === date && r.check_in && !r.check_out) {
-          before = r;
-          const out = new Date().toISOString();
-          // 퇴근 깜빡으로 24h 초과 시 절상(남용 #12) — 자동 펀치가 비현실적 급여를 만들지 않게.
-          updated = { ...r, check_out: out, work_minutes: Math.min(MAX_SHIFT_MIN, minutesBetween(r.check_in, out)) };
-          return updated;
-        }
-        return r;
-      }),
-    }));
-    if (updated)
-      void guardWrite(
-        upsertAttendance(updated),
-        () => before && set((s) => ({ records: s.records.map((r) => (r.id === before!.id ? before! : r)) })),
-        '퇴근 기록 저장에 실패했어요. 다시 시도해 주세요.',
-      );
+    // ⚠️ 열린 기록을 '오늘' 로 찾지 않는다 — 야간근무(예: 23:00 출근)가 자정을 넘기면 기록 date 는
+    //    어제라, today 로 찾으면 퇴근이 조용히 무효화되고 기록이 영영 열린 채 24h 로 부푼다(F2).
+    //    staff 의 '열린 기록'을 날짜 무관하게(가장 최근 출근 1건) 찾아 닫는다.
+    const open = get()
+      .records.filter((r) => r.staff_id === staffId && r.check_in && !r.check_out)
+      .sort((a, b) => tsMs(b.check_in!) - tsMs(a.check_in!))[0];
+    if (!open) return;
+    const out = new Date().toISOString();
+    // 퇴근 깜빡으로 24h 초과 시 절상(남용 #12) — 자동 펀치가 비현실적 급여를 만들지 않게.
+    const updated: AttendanceRecord = { ...open, check_out: out, work_minutes: Math.min(MAX_SHIFT_MIN, minutesBetween(open.check_in!, out)) };
+    set((s) => ({ records: s.records.map((r) => (r.id === open.id ? updated : r)) }));
+    void guardWrite(
+      upsertAttendance(updated),
+      () => set((s) => ({ records: s.records.map((r) => (r.id === open.id ? open : r)) })),
+      '퇴근 기록 저장에 실패했어요. 다시 시도해 주세요.',
+    );
   },
   upsertManual: (staffId, date, cin, cout, editedBy = 'owner', recordId) => {
     const check_in = iso(date, cin);

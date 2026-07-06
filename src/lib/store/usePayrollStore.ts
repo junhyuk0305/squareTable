@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { HOURLY_WAGE } from '@/lib/store/useAttendanceStore';
 import { HAS_SUPABASE } from '@/lib/supabase';
-import { fetchWages, setWageDb } from '@/lib/db';
+import { fetchWages, setWageDb, fetchPayrollSettings, savePayrollSettings } from '@/lib/db';
 import { guardWrite } from '@/lib/store/useSyncStore';
 
 export type PayrollSettings = {
@@ -14,9 +14,10 @@ export type PayrollSettings = {
   payday: number; // 급여일
 };
 
-// 급여 설정 로컬 영속(무음 실패 수정): 예전엔 setSetting이 메모리만 갱신 → 새로고침하면 조용히
-// 기본값으로 되돌아가는데 토글은 바뀐 것처럼 보여 "저장된 줄" 착각했다. usePreferencesStore와 동일
-// 패턴으로 localStorage에 저장한다(웹). 설정이 급여 계산에 실제 반영되는 단계에서 DB(매장 단위)로 승격 예정.
+// 급여 설정 영속: 매장 단위 DB(units.payroll_settings, 0054)가 진실원천 —
+//   다른 기기/공동 사장에게도 동일하게 보이고, 급여 계산이 옛 규칙으로 어긋나지 않는다.
+//   localStorage는 오프라인/부팅 시 즉시 복원용 빠른 캐시(하이드레이트가 DB로 덮어씀).
+//   (예전엔 localStorage에만 저장 → 기기별 상이·무음 불일치. setWage와 달리 setSetting만 DB 미승격이었음.)
 const SETTINGS_KEY = 'sqt.payroll_settings.v1';
 const DEFAULT_SETTINGS: PayrollSettings = {
   breakDeduction: true,
@@ -60,14 +61,28 @@ export const usePayrollStore = create<State>((set, get) => ({
   wages: HAS_SUPABASE ? {} : { ...HOURLY_WAGE },
   hydrate: async () => {
     if (!HAS_SUPABASE) return;
-    set({ wages: await fetchWages() });
-  },
-  setSetting: (k, v) =>
+    const [wages, dbSettings] = await Promise.all([fetchWages(), fetchPayrollSettings()]);
+    // DB에 저장된 규칙이 있으면 그것이 진실원천(기본값 위에 병합). 없으면(초기 매장) 로컬 캐시 유지.
     set((s) => {
-      const settings = { ...s.settings, [k]: v };
-      persistSettings(settings); // 즉시 로컬 저장 → 새로고침 후에도 유지(무음 손실 방지)
-      return { settings };
-    }),
+      const settings = dbSettings ? { ...DEFAULT_SETTINGS, ...(dbSettings as Partial<PayrollSettings>) } : s.settings;
+      persistSettings(settings);
+      return { wages, settings };
+    });
+  },
+  setSetting: (k, v) => {
+    const before = get().settings;
+    const settings = { ...before, [k]: v };
+    set({ settings });
+    persistSettings(settings); // 로컬 캐시 즉시 갱신(빠른 복원)
+    if (!HAS_SUPABASE) return;
+    // 매장 단위 DB(units.payroll_settings)에 승격 저장 — 실패 시 이전 값으로 롤백 + 배너(무음 불일치 방지).
+    //   0행(사장 아님/RLS/경합)도 실패로 처리(savePayrollSettings=writeStrict).
+    void guardWrite(
+      savePayrollSettings(settings),
+      () => { set({ settings: before }); persistSettings(before); },
+      '급여 설정 저장에 실패했어요.',
+    );
+  },
   setWage: (staffId, wage) => {
     const had = Object.prototype.hasOwnProperty.call(get().wages, staffId);
     const prev = get().wages[staffId];

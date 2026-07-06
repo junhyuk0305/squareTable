@@ -14,6 +14,7 @@ import { Avatar } from '@/components/Avatar';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { DEFAULT_HOURLY_WAGE, fmtDuration, won, todayStr, liveMinutes } from '@/lib/utils/attendance';
+import { computePay } from '@/lib/utils/payroll';
 import { useCopyToClipboard } from '@/lib/utils/useCopyToClipboard';
 import { showToast } from '@/lib/store/useToastStore';
 import { rotateInviteCode } from '@/lib/db';
@@ -21,6 +22,7 @@ import { rotateInviteCode } from '@/lib/db';
 export default function OwnerStaffScreen() {
   const router = useRouter();
   const wages = usePayrollStore((s) => s.wages);
+  const settings = usePayrollStore((s) => s.settings);
   const setWage = usePayrollStore((s) => s.setWage);
   const records = useAttendanceStore((s) => s.records);
   const staff = useStaffStore((s) => s.staff);
@@ -61,10 +63,10 @@ export default function OwnerStaffScreen() {
       const wage = wages[s.id] ?? DEFAULT_HOURLY_WAGE;
       const todayRec = records.find((r) => r.staff_id === s.id && r.date === today);
       const status: 'out' | 'working' | 'done' = !todayRec ? 'out' : !todayRec.check_out ? 'working' : 'done';
-      map[s.id] = { min, pay: Math.round((min * wage) / 60), status };
+      map[s.id] = { min, pay: computePay(monthRecs, wage, settings).total, status };
     }
     return map;
-  }, [records, wages, staff, ym, today]);
+  }, [records, wages, settings, staff, ym, today]);
 
   const totalPay = staff.reduce((a, s) => a + (perStaff[s.id]?.pay ?? 0), 0);
   const workingCount = staff.filter((s) => perStaff[s.id]?.status === 'working').length;

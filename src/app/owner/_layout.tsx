@@ -10,6 +10,7 @@ import { useAttendanceStore } from '@/lib/store/useAttendanceStore';
 import { usePayrollStore } from '@/lib/store/usePayrollStore';
 import { useStaffStore } from '@/lib/store/useStaffStore';
 import { useScheduleStore } from '@/lib/store/useScheduleStore';
+import { useSuggestionStore } from '@/lib/store/useSuggestionStore';
 import { purgeExpiredFormerStaff } from '@/lib/db';
 import { HAS_SUPABASE } from '@/lib/supabase';
 import { deriveSubscription } from '@/lib/utils/subscription';
@@ -32,6 +33,9 @@ export default function OwnerLayout() {
     usePayrollStore.getState().hydrate();
     useStaffStore.getState().hydrate();
     useScheduleStore.getState().hydrate();
+    // 알림벨 배지가 '검토대기 제안'을 홈/어느 탭에서든 실시간 반영하도록 레이아웃에서 하이드레이트+구독.
+    //  (기존엔 inbox·suggestions 화면 안에서만 구독 → 홈에 있으면 새 제안이 배지에 안 잡혔음.)
+    useSuggestionStore.getState().hydrate();
     // 퇴사 6개월 경과분 개인 기록 자동 정리(기회적 1회, 실패 무해).
     void purgeExpiredFormerStaff();
     const offQ = useUnknownQueueStore.getState().subscribe();
@@ -40,6 +44,7 @@ export default function OwnerLayout() {
     const offA = useAttendanceStore.getState().subscribe();
     const offS = useScheduleStore.getState().subscribe();
     const offSt = useStaffStore.getState().subscribe(); // 신규 직원 합류가 즉시 직원 목록에 반영
+    const offSg = useSuggestionStore.getState().subscribe(); // 새 노하우 제안이 알림벨에 즉시 반영
     return () => {
       offQ();
       offP();
@@ -47,7 +52,17 @@ export default function OwnerLayout() {
       offA();
       offS();
       offSt();
+      offSg();
     };
+  }, [status]);
+
+  // 구독/소속 상태를 주기적으로 서버와 재동기화(subscriptions·profiles.unit_id는 owner realtime 미구독).
+  //  - 계좌이체 수동과금이 반영되면(subscriptions.status=active) 페이월(/billing)이 앱 재시작 없이 자동 해제.
+  //  - 매장 연결 해제 등 소속 변화도 감지. (junior/_layout 과 동일 패턴.)
+  useEffect(() => {
+    if (status !== 'signed_in') return;
+    const id = setInterval(() => void useSessionStore.getState().refreshMembership(), 30000);
+    return () => clearInterval(id);
   }, [status]);
 
   if (HAS_SUPABASE && status === 'loading') return null;

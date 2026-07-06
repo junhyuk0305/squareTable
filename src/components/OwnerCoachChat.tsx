@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
-  Image,
   Pressable,
   TextInput,
   ScrollView,
@@ -24,6 +23,7 @@ import { uploadPhoto } from '@/lib/db';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 
 import { InfoDot } from '@/components/InfoDot';
+import { StoredImage } from '@/components/StoredImage';
 import { PHOTO_UPLOAD_INFO } from '@/lib/copy/photoUploadInfo';
 import { MiniSquareCard } from './coach/MiniSquareCard';
 import { CoachStarter } from './coach/CoachStarter';
@@ -658,7 +658,7 @@ export function OwnerCoachChat({
           <View style={styles.photoStrip}>
             {photos.map((url) => (
               <View key={url} style={styles.photoThumbWrap}>
-                <Image source={{ uri: url }} style={styles.photoThumb} />
+                <StoredImage stored={url} style={styles.photoThumb} />
                 <Pressable
                   onPress={() => removePhoto(url)}
                   hitSlop={6}

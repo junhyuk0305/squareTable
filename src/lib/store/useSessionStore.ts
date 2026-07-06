@@ -194,14 +194,22 @@ async function loadProfile(
     if (!unitId && !_resumingOwnerStore && meta?.role === 'owner' && (meta.store_name ?? '').trim()) {
       _resumingOwnerStore = true;
       try {
-        const { data: row, error: createErr } = await rpcCreateStore(meta.store_name ?? '', meta.industry ?? null, meta.biz_no ?? null);
+        let { data: row, error: createErr } = await rpcCreateStore(meta.store_name ?? '', meta.industry ?? null, meta.biz_no ?? null);
+        // ★탈출로(데드엔드 해소): 사업자번호 중복 등으로 create_store 가 '영구' 실패하면 role 이 junior 로 남아
+        //   사장이 직원 앱(hub)에 갇힌다(hub 엔 매장 생성 경로가 없음). biz_no 는 선택·unique 라 중복이면
+        //   어차피 못 쓰므로, 이를 빼고 1회 재시도해 매장을 만들고 owner 로 승격시켜 트랩에서 빼낸다
+        //   (정확한 사업자번호는 이후 가게 설정에서 입력). 매 로그인마다 복원이 도니 다음 로그인에 자동 회복.
+        if (createErr && (meta.biz_no ?? '').trim()) {
+          reportError('session.resumeOwnerStore.retryNoBiz', createErr);
+          ({ data: row, error: createErr } = await rpcCreateStore(meta.store_name ?? '', meta.industry ?? null, null));
+        }
         if (!createErr) {
           unitId = row?.unit_id ?? unitId;
           role = 'owner';
         } else {
-          // 실패(중복 사업자번호 등)는 치명적이지 않다 — unit_id 없는 채로 진행하면
-          // owner/_layout 가드가 '가게 만들기' 화면으로 유도해 수동 복구된다.
+          // biz_no 제거 후에도 실패 → 여기서 그치지 않고 관측(무음 트랩 방지). owner/_layout 가드가 유도.
           console.warn('[session] 매장 자동 복원 실패:', createErr.message);
+          reportError('session.resumeOwnerStore.failed', createErr);
         }
       } finally {
         _resumingOwnerStore = false;
@@ -220,11 +228,22 @@ async function loadProfile(
       inviteCode = unit?.invite_code ?? '';
       industry = unit?.industry ?? '';
 
-      // 구독상태(별도 테이블, 읽기 전용). 없으면 빈값 → deriveSubscription 이 fail-open('none')으로 처리.
-      const { data: sub } = await fetchUnitSubscription(unitId);
-      subStatus = (sub?.status as SubStatusRaw) ?? '';
-      trialEndsAt = sub?.trial_ends_at ?? '';
-      paidUntil = sub?.paid_until ?? '';
+      // 구독상태(별도 테이블, 읽기 전용). '행 없음'은 fail-open('none', 유예) — 의도된 동작.
+      // 단 읽기 '오류'는 fail-open 금지: 만료 매장이 일시적 읽기 실패로 재활성화되면 안 되고(수익 누수),
+      //   결제 매장이 잘못 잠기지도 않아야 한다 → 오류 시 이전에 알던 구독값을 그대로 유지(양방향 오분류 방지) + 관측.
+      //   (profile 읽기의 "실패 위장 금지" 철학과 동일하게 error 를 삼키지 않는다.)
+      const { data: sub, error: subErr } = await fetchUnitSubscription(unitId);
+      if (subErr) {
+        reportError('session.fetchUnitSubscription', subErr);
+        const prev = useSessionStore.getState();
+        subStatus = prev.subStatus;
+        trialEndsAt = prev.trialEndsAt;
+        paidUntil = prev.paidUntil;
+      } else {
+        subStatus = (sub?.status as SubStatusRaw) ?? '';
+        trialEndsAt = sub?.trial_ends_at ?? '';
+        paidUntil = sub?.paid_until ?? '';
+      }
     }
     setUnitId(unitId || null);
     setAnalyticsContext({ userId, unitId: unitId || null, role }); // 관측 이벤트에 매장/유저/역할 태깅

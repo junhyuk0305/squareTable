@@ -1,5 +1,6 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, Image, Pressable, ScrollView, KeyboardAvoidingView, Modal, Platform, StyleSheet } from 'react-native';
+import { View, Text, Pressable, ScrollView, KeyboardAvoidingView, Modal, Platform, StyleSheet } from 'react-native';
+import { StoredImage } from '@/components/StoredImage';
 import { Ionicons } from '@expo/vector-icons';
 
 import { type FeedItem } from '@/lib/store/useWorkStore';
@@ -268,13 +269,13 @@ function FeedRow({ item, me, nameOf, members, onReact, onToTask, onLongPress }: 
         style={[s.bubble, mine && s.bubbleMine, photo && s.bubblePhoto]}
       >
         {photo && (
-          <Pressable
-            onPress={() => { if (Platform.OS === 'web' && typeof window !== 'undefined') window.open(photo, '_blank'); }}
-            accessibilityRole="imagebutton"
+          <StoredImage
+            stored={photo}
+            style={[s.msgImage, hasText && s.msgImageWithText]}
+            resizeMode="cover"
+            openOnPress
             accessibilityLabel="사진 크게 보기"
-          >
-            <Image source={{ uri: photo }} style={[s.msgImage, hasText && s.msgImageWithText]} resizeMode="cover" />
-          </Pressable>
+          />
         )}
         {hasText && (
           <View style={photo ? s.msgCaption : undefined}>

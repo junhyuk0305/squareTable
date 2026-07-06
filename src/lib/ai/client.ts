@@ -15,6 +15,7 @@ import { AI_ENDPOINT, ANON, USE_MOCK } from './config';
 import { mockGenerateAnswer, mockStructureSquare, mockPatchSquare, mockExtractIntent } from './mock';
 import { isEnglishDominant } from '@/lib/utils/knowhowInput';
 import { supabase } from '@/lib/supabase';
+import { reportError } from '@/lib/analytics/track';
 
 type Task = 'answer' | 'square' | 'patch' | 'intent';
 
@@ -28,6 +29,13 @@ function squareWentEnglish(input: { rawText?: string; instruction?: string }, ou
 
 // 무한 대기 방지 — 이 시간을 넘기면 중단하고 mock으로 폴백한다.
 const EDGE_TIMEOUT_MS = 12_000;
+// 간헐 5xx 재시도 — flash-lite upstream이 무거운 입력(다중 노하우 등)에서 간헐 500을 뱉는데,
+// 그때마다 mock으로 폴백하면 사용자는 덜 정제된 '기본 정리'(degraded)를 받는다. 5xx/네트워크
+// 오류만 1회 재시도해 진짜 결과 회복률을 높인다(실측 다중입력 500율 ~1/3 → 재시도로 ~1/9).
+// ⚠️ 4xx(401 인증·429 레이트리밋)는 재시도해도 소용없거나 악화 → 즉시 실패시켜 mock 폴백.
+const EDGE_MAX_ATTEMPTS = 2;      // 최초 1 + 재시도 1
+const EDGE_RETRY_DELAY_MS = 400;
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 async function callEdge<T>(task: Task, payload: unknown): Promise<T> {
   // Edge Function 은 "실제 로그인 유저"만 허용(anon 키 호출 거부 → 열린 프록시 방지).
@@ -37,27 +45,38 @@ async function callEdge<T>(task: Task, payload: unknown): Promise<T> {
   if (!accessToken) {
     throw new Error('AI edge: no auth session');  // → 호출부에서 mock 폴백
   }
-  // 응답이 너무 오래 걸리면 끊는다 → catch에서 mock 폴백(사용자엔 '기본 안내'로 고지).
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), EDGE_TIMEOUT_MS);
-  try {
-    const res = await fetch(AI_ENDPOINT as string, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        apikey: ANON,
-        Authorization: `Bearer ${accessToken}`,
-      },
-      body: JSON.stringify({ task, payload }),
-      signal: ctrl.signal,
-    });
-    if (!res.ok) {
-      throw new Error(`AI edge ${task} failed: ${res.status}`);
+
+  let lastErr: unknown;
+  for (let attempt = 1; attempt <= EDGE_MAX_ATTEMPTS; attempt++) {
+    // 응답이 너무 오래 걸리면 끊는다 → 재시도 소진 시 catch에서 mock 폴백(사용자엔 '기본 안내' 고지).
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), EDGE_TIMEOUT_MS);
+    try {
+      const res = await fetch(AI_ENDPOINT as string, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          apikey: ANON,
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({ task, payload }),
+        signal: ctrl.signal,
+      });
+      if (res.ok) return (await res.json()) as T;
+      // 4xx는 재시도 무의미 → 즉시 실패(catch에서 4xx로 재-throw됨).
+      if (res.status < 500) throw new Error(`AI edge ${task} failed: ${res.status}`);
+      // 5xx → 재시도 여지(마지막 시도면 아래서 throw).
+      lastErr = new Error(`AI edge ${task} failed: ${res.status}`);
+    } catch (e) {
+      // 4xx로 명시 throw된 건 재시도하지 않는다. 그 외(네트워크/타임아웃 AbortError/5xx)는 재시도.
+      if (e instanceof Error && /failed: 4\d\d/.test(e.message)) throw e;
+      lastErr = e;
+    } finally {
+      clearTimeout(timer);
     }
-    return (await res.json()) as T;
-  } finally {
-    clearTimeout(timer);
+    if (attempt < EDGE_MAX_ATTEMPTS) await sleep(EDGE_RETRY_DELAY_MS);
   }
+  throw lastErr;  // 재시도 소진 → 호출부에서 mock 폴백(degraded)
 }
 
 export async function generateAnswer(
@@ -69,7 +88,9 @@ export async function generateAnswer(
   } catch (e) {
     // 실호출 실패 시에도 프론트가 죽지 않게 mock으로 폴백(데모 안전망).
     // degraded=true 로 표시해 '진짜 매장 답'이 아니라는 걸 사용자에게 알린다.
+    // 원격 관측 — AI 엣지 다운이면 사용자는 mock(가짜 매장답)을 받는데 팀엔 안 보였다(무음 열화). degraded 발생을 계측.
     console.warn('[ai] generateAnswer fallback to mock:', e);
+    reportError('ai.generateAnswer.degraded', e);
     return { ...(await mockGenerateAnswer(input)), degraded: true };
   }
 }
@@ -87,6 +108,7 @@ export async function structureSquare(
     return out;
   } catch (e) {
     console.warn('[ai] structureSquare fallback to mock:', e);
+    reportError('ai.structureSquare.degraded', e);
     return { ...(await mockStructureSquare(input)), degraded: true };
   }
 }
@@ -104,6 +126,7 @@ export async function patchSquare(
     return out;
   } catch (e) {
     console.warn('[ai] patchSquare fallback to mock:', e);
+    reportError('ai.patchSquare.degraded', e);
     return { ...(await mockPatchSquare(input)), degraded: true };
   }
 }
