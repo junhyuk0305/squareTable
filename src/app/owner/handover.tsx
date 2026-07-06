@@ -136,16 +136,30 @@ export default function OwnerHandoverScreen() {
   const save = useCallback(async () => {
     if (chosenCount === 0 || saving) return;
     setSaving(true);
-    const entries = segs
-      .filter((_, i) => selected.has(i))
-      .map((s) => buildPlaybookEntryFromSquare(buildDirectUq(s.category, s.title), s.square, { title: s.title, keywords: s.keywords }));
+    // 선택된 seg 인덱스를 유지해 결과를 되매핑 → 부분 실패 시 성공분만 선택 해제(F4 중복 방지).
+    const chosenIdx = segs.map((_, i) => i).filter((i) => selected.has(i));
+    const entries = chosenIdx.map((i) =>
+      buildPlaybookEntryFromSquare(buildDirectUq(segs[i].category, segs[i].title), segs[i].square, { title: segs[i].title, keywords: segs[i].keywords }),
+    );
     const results = await Promise.all(entries.map((e) => addEntry(e)));
     setSaving(false);
+    const okCount = results.filter(Boolean).length;
     if (results.every(Boolean)) {
-      showToast(`노하우 ${entries.length}개가 저장됐어요`);
+      showToast(`노하우 ${okCount}개가 저장됐어요`);
       router.replace('/owner/knowledge');
     } else {
-      showToast('일부 저장에 실패했어요. 연결을 확인하고 다시 시도해 주세요.', 'warn');
+      // 이미 저장된 것은 선택 해제 → 재탭하면 실패분만 재삽입(성공분을 새 id로 중복 저장하는 무음실패 차단).
+      setSelected((prev) => {
+        const next = new Set(prev);
+        chosenIdx.forEach((segIdx, k) => { if (results[k]) next.delete(segIdx); });
+        return next;
+      });
+      showToast(
+        okCount > 0
+          ? `${okCount}개는 저장됐어요. 남은 항목만 다시 시도해 주세요.`
+          : '저장에 실패했어요. 연결을 확인하고 다시 시도해 주세요.',
+        'warn',
+      );
     }
   }, [segs, selected, chosenCount, saving, addEntry, router]);
 

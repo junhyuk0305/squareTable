@@ -237,8 +237,9 @@ type State = {
   loaded: boolean;
   hydrate: () => Promise<void>;
   subscribe: () => () => void;
-  addTask: (input: NewTask) => void;
-  editTask: (id: string, patch: NewTask) => void;
+  // 저장 성공 여부를 반환(false=상한초과/미존재/쓰기실패) — 호출부가 성공 토스트·배정 푸시를 게이팅.
+  addTask: (input: NewTask) => Promise<boolean>;
+  editTask: (id: string, patch: NewTask) => Promise<boolean>;
   removeTemplate: (id: string) => void;
   toggleTask: (date: string, templateId: string, staffId: string, staffName: string, role: 'owner' | 'junior', photoUrl?: string) => void;
   postNotice: (date: string, text: string, authorId: string, authorName: string, important: boolean) => void;
@@ -269,7 +270,7 @@ export const useWorkStore = create<State>((set, get) => ({
   // 리렌더가 된다 → 트레일링 디바운스로 이벤트 버스트를 1회 재조회에 합친다.
   subscribe: () => subscribeDebounced(subscribeWork, () => get().hydrate()),
 
-  addTask: (input) => {
+  addTask: async (input) => {
     const room = curRoom();
     // 반복(주간) 할일 상한(남용 #26): 활성 반복 템플릿이 과도하면 occursOn 전개로 캘린더·피드가 폭주.
     // 'once'(일회성)는 그 날만 떠 폭주 위험이 없으므로 제외 — 반복만 센다(방 단위).
@@ -281,7 +282,7 @@ export const useWorkStore = create<State>((set, get) => ({
         useSyncStore.getState().noteError(
           `반복 할일은 채팅방마다 최대 ${MAX_ACTIVE_RECURRING}개까지예요. 기존 반복 할일을 정리한 뒤 추가해 주세요.`,
         );
-        return;
+        return false; // 상한 초과 = 저장 안 됨 → 호출부가 성공 토스트를 띄우지 않게(팬텀 '추가했어요' 방지).
       }
     }
     const t: TaskTemplate = {
@@ -297,20 +298,21 @@ export const useWorkStore = create<State>((set, get) => ({
       ...(input.date ? { date: input.date } : null),
     };
     set((s) => ({ templates: [...s.templates, t] }));
-    void guardWrite(
+    const ok = await guardWrite(
       insertTemplate(t),
       () => set((s) => ({ templates: s.templates.filter((x) => x.id !== t.id) })),
       '할일 추가 저장에 실패했어요.',
     );
-    // 배정 알림 — 남에게 배정한 경우만(본인 '내 할일' 자가등록 제외). 인앱 알림은 파생(SSOT), 여기선 OS 푸시만.
-    if (t.ownerId && t.ownerId !== t.createdBy) {
+    // 배정 알림 — 저장 성공 후에만(실패·롤백 시 유령 배정 푸시 방지 — F2). 남에게 배정한 경우만, OS 푸시만.
+    if (ok && t.ownerId && t.ownerId !== t.createdBy) {
       notifyUserAssign(t.ownerId, useSessionStore.getState().userName || '담당자', t.text);
     }
+    return ok;
   },
   // 할일 수정 — 회의 반영(X 즉시삭제 → 연필 수정). 본문·시간대·담당·스케줄을 통째로 갱신.
-  editTask: (id, patch) => {
+  editTask: async (id, patch) => {
     const before = get().templates.find((t) => t.id === id);
-    if (!before) return;
+    if (!before) return false;
     const updated: TaskTemplate = {
       ...before,
       section: patch.section,
@@ -323,15 +325,16 @@ export const useWorkStore = create<State>((set, get) => ({
       ...(patch.date ? { date: patch.date } : { date: undefined }),
     };
     set((s) => ({ templates: s.templates.map((t) => (t.id === id ? updated : t)) }));
-    void guardWrite(
+    const ok = await guardWrite(
       updateTemplate(updated),
       () => set((s) => ({ templates: s.templates.map((t) => (t.id === id ? before : t)) })),
       '할일 수정 저장에 실패했어요.',
     );
-    // 재배정 알림 — 담당자가 새로 바뀐 경우에만(같은 사람 반복 수정은 스팸 안 냄). 작성자 본인 배정 제외.
-    if (updated.ownerId && updated.ownerId !== before.ownerId && updated.ownerId !== updated.createdBy) {
+    // 재배정 알림 — 저장 성공 후에만(F2). 담당자가 새로 바뀐 경우에만, 작성자 본인 배정 제외.
+    if (ok && updated.ownerId && updated.ownerId !== before.ownerId && updated.ownerId !== updated.createdBy) {
       notifyUserAssign(updated.ownerId, useSessionStore.getState().userName || '담당자', updated.text);
     }
+    return ok;
   },
   removeTemplate: (id) => {
     const idx = get().templates.findIndex((t) => t.id === id);

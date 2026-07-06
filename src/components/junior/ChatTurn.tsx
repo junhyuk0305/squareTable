@@ -131,10 +131,19 @@ export function ChatTurn({
               <View style={turnStyles.srcChipsRow}>
                 {multiSources.map((s) => {
                   const e = allEntries.find((x) => x.id === s.entry_id);
+                  // 원본이 삭제/미가시면 버튼처럼 보이는 무반응 dead-end 방지(F5) → 정적 칩 + '(삭제됨)'.
+                  if (!e) {
+                    return (
+                      <View key={s.entry_id} style={[turnStyles.srcChip, turnStyles.srcChipGone]}>
+                        <Ionicons name="document-text-outline" size={12} color={InkColors.ink3} />
+                        <Text style={[turnStyles.srcChipText, { color: InkColors.ink3 }]} numberOfLines={1}>{s.title} (삭제됨)</Text>
+                      </View>
+                    );
+                  }
                   return (
                     <Pressable
                       key={s.entry_id}
-                      onPress={e ? () => setDetailEntry(e) : undefined}
+                      onPress={() => setDetailEntry(e)}
                       style={({ pressed }) => [turnStyles.srcChip, pressed && { opacity: 0.7 }]}
                       accessibilityRole="button"
                       accessibilityLabel={`${s.title} 원본 보기`}
@@ -246,6 +255,7 @@ const turnStyles = StyleSheet.create({
     paddingHorizontal: 10,
   },
   srcChipText: { fontSize: 11.5, fontWeight: '700', color: InkColors.ink2, flexShrink: 1 },
+  srcChipGone: { opacity: 0.6, backgroundColor: InkColors.paper },
   downHelp: {
     flexDirection: 'row',
     alignItems: 'flex-start',

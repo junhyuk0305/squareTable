@@ -332,13 +332,15 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
       {composer.open && (
         <TaskComposerModal
           onClose={() => setComposer({ open: false })}
-          onSubmit={(inputs: NewTask[]) => {
-            inputs.forEach((input) => addTask(input));
-            showToast(inputs.length > 1 ? `할일 ${inputs.length}개를 추가했어요` : '할일에 추가했어요', 'good');
+          onSubmit={async (inputs: NewTask[]) => {
+            // 성공 토스트를 실제 저장 성공에 게이팅(F3) — 상한초과·저장실패면 토스트 억제(배너/noteError가 알림).
+            const results = await Promise.all(inputs.map((input) => addTask(input)));
+            const okCount = results.filter(Boolean).length;
+            if (okCount > 0) showToast(okCount > 1 ? `할일 ${okCount}개를 추가했어요` : '할일에 추가했어요', 'good');
           }}
-          onEdit={(id, patch) => {
-            editTask(id, patch);
-            showToast('할일을 수정했어요', 'good');
+          onEdit={async (id, patch) => {
+            const ok = await editTask(id, patch);
+            if (ok) showToast('할일을 수정했어요', 'good');
           }}
           onDelete={removeTemplate}
           editTemplate={composer.editTemplate}
