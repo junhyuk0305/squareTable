@@ -11,12 +11,13 @@ import { confirmAction, notifyAction } from '@/lib/utils/confirm';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { SettingsSection, SettingsRow, SettingsToggle } from '@/components/settings/SettingsKit';
 import { QuietHoursModal } from '@/components/settings/QuietHoursModal';
+import { TextScaleModal } from '@/components/settings/TextScaleModal';
 import { ConfirmModal } from '@/components/ConfirmModal';
 import { ContactModal } from '@/components/ContactModal';
 import { RoleTabBar } from '@/components/RoleTabBar';
 import { HeaderLogoutButton } from '@/components/HeaderLogoutButton';
 
-const SCALE_LABEL: Record<TextScale, string> = { small: '작게', normal: '보통', large: '크게' };
+const SCALE_LABEL: Record<TextScale, string> = { small: '작게', normal: '보통', large: '크게', xlarge: '아주 크게' };
 
 export default function JuniorSettings() {
   const router = useRouter();
@@ -29,16 +30,11 @@ export default function JuniorSettings() {
   const prefs = usePreferencesStore();
   const [busy, setBusy] = useState(false);
   const [quietModal, setQuietModal] = useState(false);
+  const [scaleModal, setScaleModal] = useState(false);
   const [leaveModal, setLeaveModal] = useState(false);
   const [contactModal, setContactModal] = useState(false);
 
   const version = Constants.expoConfig?.version ?? '1.0.0';
-
-  const cycleScale = () => {
-    const order: TextScale[] = ['small', 'normal', 'large'];
-    const next = order[(order.indexOf(prefs.textScale) + 1) % order.length];
-    prefs.set('textScale', next);
-  };
 
   const onLogout = async () => {
     if (await confirmAction('로그아웃', '로그아웃하시겠어요?', '로그아웃', { icon: 'log-out-outline' })) await logout();
@@ -125,7 +121,7 @@ export default function JuniorSettings() {
         </SettingsSection>
 
         <SettingsSection icon="phone-portrait-outline" title="화면">
-          <SettingsRow first icon="text-outline" label="글자 크기" value={SCALE_LABEL[prefs.textScale]} onPress={cycleScale} />
+          <SettingsRow first icon="text-outline" label="글자 크기" value={SCALE_LABEL[prefs.textScale]} onPress={() => setScaleModal(true)} />
         </SettingsSection>
 
         <SettingsSection icon="document-text-outline" title="약관 및 정책">
@@ -169,6 +165,7 @@ export default function JuniorSettings() {
         onConfirm={onLeaveConfirm}
         onCancel={() => setLeaveModal(false)}
       />
+      <TextScaleModal visible={scaleModal} onClose={() => setScaleModal(false)} />
       <ContactModal visible={contactModal} onClose={() => setContactModal(false)} />
       <RoleTabBar role="junior" />
     </SafeAreaView>

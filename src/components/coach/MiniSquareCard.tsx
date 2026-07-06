@@ -1,7 +1,7 @@
 import { View, Text, StyleSheet, Pressable, TextInput } from 'react-native';
 
 import { isSquarePublishable } from '@/lib/utils/buildEntry';
-import { getCategoryMeta } from '@/lib/utils/category';
+import { getCategoryMeta, ALL_CATEGORIES } from '@/lib/utils/category';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
 
@@ -11,7 +11,7 @@ import type { Category, SquareBlock } from '@/types';
 type MiniProps = {
   square: SquareBlock;
   title: string;
-  category: Category;          // 내부 비계(카드 액센트 색만 사용, 라벨 비노출)
+  category: Category;          // 카드 액센트 색 + (onCategory 있으면) 사장이 고르는 종류
   editable: boolean;
   showActions: boolean;
   onEdit: () => void;
@@ -20,6 +20,7 @@ type MiniProps = {
   onPublish: () => void;
   onPatch: (sq: SquareBlock) => void;
   onTitle: (t: string) => void;
+  onCategory?: (c: Category) => void; // 있으면 리뷰 카드에 종류 선택칩 노출(발행 전 재분류)
   publishLabel: string;        // 발행 결과를 명시 — 인박스='이 답변 보내기' / 직접='노하우로 저장'
 };
 
@@ -36,6 +37,7 @@ export function MiniSquareCard({
   onPublish,
   onPatch,
   onTitle,
+  onCategory,
   publishLabel,
 }: MiniProps) {
   const meta = getCategoryMeta(category); // 액센트 색 전용(라벨 노출 안 함)
@@ -132,6 +134,32 @@ export function MiniSquareCard({
         );
       })()}
 
+      {/* 종류 선택 — 리뷰 카드에서만. AI가 1차 분류하되 사장이 직접 바꿀 수 있다(오분류 복구). */}
+      {showActions && onCategory && (
+        <View style={cardStyles.catPick}>
+          <Text style={cardStyles.catPickLabel}>종류</Text>
+          <View style={cardStyles.chipRow}>
+            {ALL_CATEGORIES.map((c) => {
+              const cm = getCategoryMeta(c);
+              const on = c === category;
+              return (
+                <Pressable
+                  key={c}
+                  onPress={() => onCategory(c)}
+                  style={[cardStyles.catChip, on && { borderColor: cm.color, backgroundColor: cm.soft }]}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: on }}
+                  accessibilityLabel={`종류 ${cm.label}`}
+                >
+                  <View style={[cardStyles.catDot, { backgroundColor: cm.color }]} />
+                  <Text style={[cardStyles.catChipText, on && cardStyles.catChipTextOn]}>{cm.label}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+      )}
+
       {/* 액션 행 */}
       {showActions && (
         <View style={cardStyles.actionRow}>
@@ -189,16 +217,18 @@ const cardStyles = StyleSheet.create({
     gap: 10,
     ...Elevation.e1,
   },
+  // 종류 선택칩(리뷰 카드)
+  catPick: { gap: 6 },
+  catPickLabel: { fontSize: 12.5, fontWeight: '700', color: InkColors.ink3 },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  chip: {
-    paddingVertical: 5,
-    paddingHorizontal: 10,
-    borderRadius: Radius.pill,
-    borderWidth: 1,
-    borderColor: InkColors.line,
-    backgroundColor: InkColors.bg,
+  catChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingVertical: 6, paddingHorizontal: 11,
+    borderRadius: Radius.pill, borderWidth: 1, borderColor: InkColors.line, backgroundColor: InkColors.bg,
   },
-  chipText: { fontSize: 11.5, fontWeight: '700', color: InkColors.ink2 },
+  catDot: { width: 7, height: 7, borderRadius: Radius.pill },
+  catChipText: { fontSize: 12.5, fontWeight: '700', color: InkColors.ink2 },
+  catChipTextOn: { color: InkColors.ink, fontWeight: '800' },
 
   title: { fontSize: 18, fontWeight: '800', color: InkColors.ink, letterSpacing: -0.3 },
   titleEdit: {

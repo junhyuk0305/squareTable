@@ -46,6 +46,14 @@ export function CoachStarter({
 }) {
   return (
     <View style={styles.wrap}>
+      {/* 0) 작성 tip — 무엇을 적어야 할지 막막함을 줄이는 넛지(언제·무엇을·어떻게) */}
+      <View style={styles.tip}>
+        <Text style={styles.tipTitle}>💡 이렇게 적으면 쉬워요</Text>
+        <Text style={styles.tipBody}>
+          <Text style={styles.tipStrong}>언제</Text>(상황) · <Text style={styles.tipStrong}>무엇을</Text> · <Text style={styles.tipStrong}>어떻게</Text> — 한 문장이면 충분해요. 정리는 제가 할게요.
+        </Text>
+      </View>
+
       {/* 1) 예시 칩 — 탭하면 입력창에 꽂힌다 */}
       <View style={styles.block}>
         <Text style={styles.hint}>이런 걸 적으면 돼요 — 탭해서 시작</Text>
@@ -117,6 +125,20 @@ const styles = StyleSheet.create({
   wrap: { gap: 18, paddingTop: 2 },
   block: { gap: 8 },
   hint: { fontSize: 12, fontWeight: '800', color: InkColors.ink3, letterSpacing: 0.2, paddingHorizontal: 2 },
+
+  // 작성 tip 넛지
+  tip: {
+    gap: 4,
+    backgroundColor: BrandColors.yellowSoft,
+    borderWidth: 1,
+    borderColor: BrandColors.gold,
+    borderRadius: Radius.md,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+  },
+  tipTitle: { fontSize: 13, fontWeight: '800', color: InkColors.ink },
+  tipBody: { fontSize: 13, fontWeight: '600', color: InkColors.ink2, lineHeight: 19 },
+  tipStrong: { fontWeight: '800', color: InkColors.ink },
 
   chips: { gap: 8 },
   chip: {

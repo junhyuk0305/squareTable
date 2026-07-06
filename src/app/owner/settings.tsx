@@ -13,12 +13,13 @@ import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { SettingsSection, SettingsRow, SettingsToggle } from '@/components/settings/SettingsKit';
 import { QuietHoursModal } from '@/components/settings/QuietHoursModal';
+import { TextScaleModal } from '@/components/settings/TextScaleModal';
 import { ContactModal } from '@/components/ContactModal';
 import { RoleTabBar } from '@/components/RoleTabBar';
 import { Avatar } from '@/components/Avatar';
 import { HeaderLogoutButton } from '@/components/HeaderLogoutButton';
 
-const SCALE_LABEL: Record<TextScale, string> = { small: '작게', normal: '보통', large: '크게' };
+const SCALE_LABEL: Record<TextScale, string> = { small: '작게', normal: '보통', large: '크게', xlarge: '아주 크게' };
 
 export default function OwnerSettings() {
   const router = useRouter();
@@ -30,16 +31,11 @@ export default function OwnerSettings() {
   const prefs = usePreferencesStore();
   const [busy, setBusy] = useState(false);
   const [quietModal, setQuietModal] = useState(false);
+  const [scaleModal, setScaleModal] = useState(false);
   const [contactModal, setContactModal] = useState(false);
   const { copied, copy } = useCopyToClipboard();
 
   const version = Constants.expoConfig?.version ?? '1.0.0';
-
-  const cycleScale = () => {
-    const order: TextScale[] = ['small', 'normal', 'large'];
-    const next = order[(order.indexOf(prefs.textScale) + 1) % order.length];
-    prefs.set('textScale', next);
-  };
 
   const onLogout = async () => {
     if (await confirmAction('로그아웃', '로그아웃하시겠어요?', '로그아웃', { icon: 'log-out-outline' })) await logout();
@@ -106,11 +102,10 @@ export default function OwnerSettings() {
           <Ionicons name="chevron-forward" size={15} color={InkColors.ink3} />
         </Pressable>
 
+        {/* 회의 반영: '내 노하우'·'노하우 템플릿 둘러보기'는 노하우 탭과 중복 → 설정에서 제거(노하우 탭에서 진입). */}
         <SettingsSection icon="storefront-outline" title="매장 관리">
           <SettingsRow first icon="people-outline" label="직원·초대코드 관리" onPress={() => router.push('/owner/staff')} />
           <SettingsRow icon="cash-outline" label="급여 설정" onPress={() => router.push('/owner/payroll')} />
-          <SettingsRow icon="bulb-outline" label="내 노하우" onPress={() => router.push('/owner/knowledge')} />
-          <SettingsRow icon="albums-outline" label="노하우 템플릿 둘러보기" onPress={() => router.push('/owner/templates')} />
         </SettingsSection>
 
         <SettingsSection icon="card-outline" title="구독 및 결제">
@@ -150,7 +145,7 @@ export default function OwnerSettings() {
         </SettingsSection>
 
         <SettingsSection icon="phone-portrait-outline" title="화면">
-          <SettingsRow first icon="text-outline" label="글자 크기" value={SCALE_LABEL[prefs.textScale]} onPress={cycleScale} />
+          <SettingsRow first icon="text-outline" label="글자 크기" value={SCALE_LABEL[prefs.textScale]} onPress={() => setScaleModal(true)} />
         </SettingsSection>
 
         <SettingsSection icon="document-text-outline" title="약관 및 정책">
@@ -183,6 +178,7 @@ export default function OwnerSettings() {
           prefs.set('quietEnd', e);
         }}
       />
+      <TextScaleModal visible={scaleModal} onClose={() => setScaleModal(false)} />
       <ContactModal visible={contactModal} onClose={() => setContactModal(false)} />
       <RoleTabBar role="owner" />
     </SafeAreaView>

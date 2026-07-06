@@ -9,7 +9,6 @@ import { EmptyState } from '@/components/EmptyState';
 import { InfoDot } from '@/components/InfoDot';
 import { SectionLabel } from '@/components/SectionLabel';
 import { Appear } from '@/components/Appear';
-import { BrowseCard } from '@/components/BrowseList';
 import { KnowhowCarousel } from '@/components/KnowhowCarousel';
 import { getCategoryMeta, ALL_CATEGORIES } from '@/lib/utils/category';
 import { verifyMeta } from '@/lib/utils/verification';
@@ -104,6 +103,8 @@ export function OwnerKnowhowBrowse({
   const router = useRouter();
   const entries = usePlaybookStore((s) => s.entries);
   const loaded = usePlaybookStore((s) => s.loaded);
+  const loadError = usePlaybookStore((s) => s.loadError);
+  const hydrate = usePlaybookStore((s) => s.hydrate);
   const update = usePlaybookStore((s) => s.update);
   const userName = useSessionStore((s) => s.userName);
 
@@ -114,6 +115,7 @@ export function OwnerKnowhowBrowse({
   const [onlyNeedsReview, setOnlyNeedsReview] = useState(initialNeedsReview); // 미검증 배너에서 진입
 
   const goAdd = () => router.push('/owner/coach' as never);
+  const goTemplates = () => router.push('/owner/templates' as never);
   const toggleCat = (c: Category) =>
     setActiveCats((prev) => (prev.includes(c) ? prev.filter((x) => x !== c) : [...prev, c]));
 
@@ -141,25 +143,11 @@ export function OwnerKnowhowBrowse({
   // 미검증(needs_review) — 전체 기준 카운트(배너·섹션 노출 판단). 0이 되면 배너/섹션 자동 소멸.
   const needsReview = useMemo(() => baseFiltered.filter(needsVerify), [baseFiltered]);
 
-  // 대시보드 렌즈
-  const popular = useMemo(
-    () =>
-      baseFiltered
-        .filter((e) => (e.stats?.query_hits_30d ?? 0) > 0)
-        .sort((a, b) => (b.stats?.query_hits_30d ?? 0) - (a.stats?.query_hits_30d ?? 0))
-        .slice(0, SECTION_LIMIT),
-    [baseFiltered],
-  );
+  // 대시보드 렌즈 — 회의 반영: '인기 노하우'·'잘 통하는 노하우'처럼 사용 통계(query_hits/resolution)에
+  // 기대는 섹션은 제거했다. 초기 세팅 유저에겐 시드/템플릿의 조작된 수치가 마치 실적처럼 보여
+  // (본인이 안 쓴 노하우가 인기·해결률로 노출) 신뢰를 깬다. 정직한 '최근 추가됨'만 남긴다.
   const recent = useMemo(
     () => [...baseFiltered].sort((a, b) => (b.created_at ?? '').localeCompare(a.created_at ?? '')).slice(0, SECTION_LIMIT),
-    [baseFiltered],
-  );
-  const resolved = useMemo(
-    () =>
-      baseFiltered
-        .filter((e) => typeof e.stats?.resolution_rate === 'number' && (e.stats?.resolution_rate ?? 0) > 0)
-        .sort((a, b) => (b.stats?.resolution_rate ?? 0) - (a.stats?.resolution_rate ?? 0))
-        .slice(0, SECTION_LIMIT),
     [baseFiltered],
   );
 
@@ -235,13 +223,38 @@ export function OwnerKnowhowBrowse({
         </Pressable>
       </View>
 
+      {/* 템플릿 둘러보기 — 홈에서 이관(회의 반영). 업종 표준 노하우를 검색해 내 노하우로 가져온다. */}
+      <Pressable
+        onPress={goTemplates}
+        style={({ pressed }) => [styles.templateLink, pressed && { opacity: 0.85 }]}
+        accessibilityRole="button"
+        accessibilityLabel="노하우 템플릿 둘러보기"
+      >
+        <Ionicons name="albums-outline" size={16} color={InkColors.ink2} />
+        <View style={{ flex: 1 }}>
+          <Text style={styles.templateLinkTitle}>노하우 템플릿 둘러보기</Text>
+          <Text style={styles.templateLinkSub}>업종에서 자주 쓰는 노하우를 내 노하우로 바로 가져와요</Text>
+        </View>
+        <Ionicons name="chevron-forward" size={16} color={InkColors.ink3} />
+      </Pressable>
+
       {!hasEntries ? (
-        <EmptyState
-          emoji="📒"
-          title="아직 등록된 노하우가 없어요"
-          body="알바 질문에 답하거나, 직접 추가하면 여기에 쌓여요."
-          cta={{ label: '첫 노하우 추가하기', onPress: goAdd }}
-        />
+        loadError ? (
+          // 로드 실패를 "노하우 없음"으로 위장하지 않고 재시도를 띄운다(무음 실패 방지).
+          <EmptyState
+            emoji="📡"
+            title="노하우를 불러오지 못했어요"
+            body="연결을 확인하고 다시 시도해 주세요."
+            cta={{ label: '다시 시도', onPress: () => hydrate() }}
+          />
+        ) : (
+          <EmptyState
+            emoji="📒"
+            title="아직 등록된 노하우가 없어요"
+            body="알바 질문에 답하거나, 직접 추가하면 여기에 쌓여요."
+            cta={{ label: '첫 노하우 추가하기', onPress: goAdd }}
+          />
+        )
       ) : (
         <>
           {/* 미검증 배너 — needs_review가 남아있는 동안만. 탭하면 미검증만 모아 보여준다. */}
@@ -353,22 +366,10 @@ export function OwnerKnowhowBrowse({
                     <KnowhowCarousel entries={needsReview} onSelect={(e) => onSelect(e.id)} showCategory renderExtra={verifyButton} />
                   </Appear>
                 )}
-                {popular.length > 0 && (
-                  <Appear delay={60} style={styles.block}>
-                    <SectionLabel icon="flame-outline" title="인기 노하우" hint="많이 물어본 순" />
-                    <KnowhowCarousel entries={popular} onSelect={(e) => onSelect(e.id)} showCategory />
-                  </Appear>
-                )}
                 {recent.length > 0 && (
-                  <Appear delay={120} style={styles.block}>
+                  <Appear delay={60} style={styles.block}>
                     <SectionLabel icon="sparkles-outline" title="최근 추가됨" hint="새로 올라온 순" />
                     <KnowhowCarousel entries={recent} onSelect={(e) => onSelect(e.id)} showCategory />
-                  </Appear>
-                )}
-                {resolved.length > 0 && (
-                  <Appear delay={180} style={styles.block}>
-                    <SectionLabel icon="checkmark-circle-outline" title="잘 통하는 노하우" hint="해결률 순" />
-                    <KnowhowCarousel entries={resolved} onSelect={(e) => onSelect(e.id)} showCategory />
                   </Appear>
                 )}
               </View>
@@ -432,6 +433,15 @@ const styles = StyleSheet.create({
   subline: { flexShrink: 1, fontSize: 13, color: InkColors.ink3, fontWeight: '600' },
   addBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: InkColors.ink, paddingVertical: 8, paddingHorizontal: 12, borderRadius: Radius.pill },
   addBtnText: { color: InkColors.bubbleText, fontSize: 13, fontWeight: '800' },
+
+  // 템플릿 둘러보기 진입 링크(홈에서 이관)
+  templateLink: {
+    flexDirection: 'row', alignItems: 'center', gap: Space.sm,
+    backgroundColor: InkColors.bg, borderWidth: 1, borderColor: InkColors.line,
+    borderRadius: Radius.md, paddingVertical: Space.md, paddingHorizontal: Space.md, ...Elevation.e1,
+  },
+  templateLinkTitle: { fontSize: 14, fontWeight: '800', color: InkColors.ink },
+  templateLinkSub: { fontSize: 12, color: InkColors.ink3, fontWeight: '600', marginTop: 1 },
 
   // 미검증 배너
   banner: {

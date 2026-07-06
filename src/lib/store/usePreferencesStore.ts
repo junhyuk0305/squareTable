@@ -2,7 +2,7 @@
 // (계정이 아니라 "이 기기에서의 보기 설정"이라 localStorage가 맞다. 네이티브는 메모리 폴백.)
 import { create } from 'zustand';
 
-export type TextScale = 'small' | 'normal' | 'large';
+export type TextScale = 'small' | 'normal' | 'large' | 'xlarge';
 
 type Prefs = {
   pushEnabled: boolean;
@@ -40,7 +40,9 @@ type PrefsState = Prefs & {
   toggle: (key: 'pushEnabled' | 'emailEnabled' | 'quietHours') => void;
 };
 
-export const TEXT_SCALE_FACTOR: Record<TextScale, number> = { small: 0.92, normal: 1, large: 1.12 };
+// 체감되는 간격으로 벌린다(예전 0.92/1/1.12는 8% 차이라 "눌러도 안 변한다"는 인상). 매장 사장은
+// 나이대가 다양해 접근성용 '아주 크게'까지 둔다.
+export const TEXT_SCALE_FACTOR: Record<TextScale, number> = { small: 0.9, normal: 1, large: 1.18, xlarge: 1.34 };
 
 export const usePreferencesStore = create<PrefsState>((set, get) => ({
   ...load(),
