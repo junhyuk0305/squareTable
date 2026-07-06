@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
+  Image,
   Pressable,
   TextInput,
   ScrollView,
@@ -22,12 +23,14 @@ import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { uploadPhoto } from '@/lib/db';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 
+import { InfoDot } from '@/components/InfoDot';
+import { PHOTO_UPLOAD_INFO } from '@/lib/copy/photoUploadInfo';
 import { MiniSquareCard } from './coach/MiniSquareCard';
 import { CoachStarter } from './coach/CoachStarter';
 import { SplitProposal } from './coach/SplitProposal';
 import { ScaleBubble } from './coach/ScaleBubble';
 import { styles } from './coach/coachStyles';
-import { formatRelative } from './coach/coachUtils';
+import { formatRelative, pickImageWeb } from './coach/coachUtils';
 
 import type { Category, PlaybookEntry, SquareBlock, UnknownQuery } from '@/types';
 
@@ -109,6 +112,7 @@ export function OwnerCoachChat({
   const [title, setTitle] = useState(editEntry?.title ?? '');
   const [keywords, setKeywords] = useState<string[]>(editEntry?.search_keywords ?? []);
   const [photos, setPhotos] = useState<string[]>([]);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
   // 등록 꼬리질문 큐(AI 생성). 수정 모드에선 사용 안 함.
   const [pending, setPending] = useState<AiFollowup[]>([]);
   const followupQA = useRef<{ q: string; a: string }[]>([]); // 꼬리질문 답 누적 → 최종 재정리에 합침
@@ -563,10 +567,35 @@ export function OwnerCoachChat({
     pushMsg({ kind: 'ai', text: '내용을 더 적어 주세요. 방금 내용에 덧붙이거나 새로 적어도 돼요.' });
   }, [pushMsg]);
 
+  const MAX_PHOTOS = 4;
   const attachPhoto = useCallback(() => {
-    // 사진 첨부는 아직 준비 중 — 곧 지원 예정. 지금은 안내만 하고 글 입력을 유도한다.
-    pushMsg({ kind: 'ai', text: '사진 첨부는 준비 중이에요 — 곧 지원할게요. 지금은 글로 적어 주시면 정리해 드릴게요. 📷' });
-  }, [pushMsg]);
+    if (uploadingPhoto) return;
+    if (Platform.OS !== 'web') {
+      pushMsg({ kind: 'ai', text: '사진 첨부는 앱을 홈 화면에 추가해 웹으로 열면 바로 쓸 수 있어요. 지금은 글로 적어 주셔도 돼요. 📷' });
+      return;
+    }
+    if (photos.length >= MAX_PHOTOS) {
+      setError(`사진은 최대 ${MAX_PHOTOS}장까지 첨부할 수 있어요.`);
+      return;
+    }
+    pickImageWeb(async (file) => {
+      setUploadingPhoto(true);
+      setError(null);
+      try {
+        const url = await uploadPhoto(file);
+        if (url) setPhotos((prev) => (prev.length >= MAX_PHOTOS ? prev : [...prev, url]));
+        else setError('사진을 올리지 못했어요. 인터넷 연결을 확인하고 다시 시도해 주세요.');
+      } catch {
+        setError('사진을 올리지 못했어요. 인터넷 연결을 확인하고 다시 시도해 주세요.');
+      } finally {
+        setUploadingPhoto(false);
+      }
+    });
+  }, [uploadingPhoto, photos.length, pushMsg]);
+
+  const removePhoto = useCallback((url: string) => {
+    setPhotos((prev) => prev.filter((p) => p !== url));
+  }, []);
 
   // 입력바는 하단에 상시 유지한다 — 리뷰 상태에서도 사장이 바로 덧붙여 말할 수 있게.
   // (리뷰 중 전송 = '다시 말하기'와 동일하게 재정리된다 → handleSend 참고.)
@@ -697,8 +726,28 @@ export function OwnerCoachChat({
           </View>
         )}
 
-        {photos.length > 0 && (
-          <Text style={styles.photoTag}>📎 사진 {photos.length}장 첨부됨</Text>
+        {(photos.length > 0 || uploadingPhoto) && (
+          <View style={styles.photoStrip}>
+            {photos.map((url) => (
+              <View key={url} style={styles.photoThumbWrap}>
+                <Image source={{ uri: url }} style={styles.photoThumb} />
+                <Pressable
+                  onPress={() => removePhoto(url)}
+                  hitSlop={6}
+                  style={styles.photoRemove}
+                  accessibilityRole="button"
+                  accessibilityLabel="사진 삭제"
+                >
+                  <Ionicons name="close" size={13} color={InkColors.bg} />
+                </Pressable>
+              </View>
+            ))}
+            {uploadingPhoto && (
+              <View style={[styles.photoThumbWrap, styles.photoUploading]}>
+                <ActivityIndicator color={InkColors.ink3} />
+              </View>
+            )}
+          </View>
         )}
 
         <View style={{ height: 8 }} />
@@ -734,13 +783,23 @@ export function OwnerCoachChat({
         <View style={styles.inputBar}>
           <Pressable
             onPress={attachPhoto}
+            disabled={uploadingPhoto}
             hitSlop={8}
             style={({ pressed }) => [styles.attachBtn, pressed && { opacity: 0.6 }]}
             accessibilityRole="button"
             accessibilityLabel="사진 첨부"
           >
-            <Ionicons name="add" size={26} color={InkColors.ink2} />
+            {uploadingPhoto ? (
+              <ActivityIndicator size="small" color={InkColors.ink3} />
+            ) : (
+              <Ionicons name="image-outline" size={22} color={InkColors.ink2} />
+            )}
           </Pressable>
+          <InfoDot
+            title={PHOTO_UPLOAD_INFO.title}
+            body={PHOTO_UPLOAD_INFO.body}
+            accessibilityLabel="사진 업로드 규격 안내"
+          />
           <View style={styles.inputWrap}>
             <TextInput
               value={input}

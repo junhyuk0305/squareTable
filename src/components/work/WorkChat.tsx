@@ -1,14 +1,17 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, Pressable, ScrollView, KeyboardAvoidingView, Platform, StyleSheet } from 'react-native';
+import { View, Text, Image, Pressable, ScrollView, KeyboardAvoidingView, Modal, Platform, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { type FeedItem } from '@/lib/store/useWorkStore';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Elevation, Radius } from '@/lib/theme/elevation';
+import { modalFrameStyle } from '@/lib/theme/layout';
 import { hhmm } from '@/lib/utils/attendance';
 import { ReactionBar } from './ReactionBar';
 import { MentionInput, extractMentions, type Member } from './MentionInput';
 import { Appear } from '@/components/Appear';
+import { InfoDot } from '@/components/InfoDot';
+import { PHOTO_UPLOAD_INFO } from '@/lib/copy/photoUploadInfo';
 
 const WD = ['일', '월', '화', '수', '목', '금', '토'];
 function dateLabel(date: string, today: string): string {
@@ -67,8 +70,11 @@ export function WorkChat({
   pinnedNotice,
   onOpenNotice,
   onSend,
+  onSendPhoto,
+  sendingPhoto,
   onReact,
   onMessageToTask,
+  onDelete,
   onAddTask,
   onAssignTask,
   onWriteNotice,
@@ -82,8 +88,13 @@ export function WorkChat({
   pinnedNotice?: FeedItem;
   onOpenNotice: () => void;
   onSend: (text: string, mentions: string[]) => void;
+  /** ＋메뉴 '사진 보내기' — 픽·업로드·발행은 부모(WorkBoard)가 처리. */
+  onSendPhoto: () => void;
+  sendingPhoto?: boolean;
   onReact: (id: string, emoji: string) => void;
   onMessageToTask: (text: string, mentions?: string[]) => void;
+  /** 메시지 삭제 — 권한(본인 or 사장)은 여기서 게이팅, 백엔드 RLS(wf_delete)도 같은 매장·방만 허용. */
+  onDelete: (id: string) => void;
   onAddTask: () => void;
   /** 사장: @리스트에서 직원에게 바로 할일 배정(그 직원 담당 모달 오픈). */
   onAssignTask?: (memberId: string) => void;
@@ -91,7 +102,12 @@ export function WorkChat({
 }) {
   const [draft, setDraft] = useState('');
   const [menu, setMenu] = useState(false);
+  // 롱프레스로 연 메시지 액션 시트(할일로/삭제). null이면 닫힘.
+  const [actionItem, setActionItem] = useState<FeedItem | null>(null);
   const scrollRef = useRef<ScrollView>(null);
+
+  const canDeleteActive = !!actionItem && (actionItem.authorId === me || isOwner);
+  const canTaskActive = !!actionItem && !!actionItem.text.trim();
 
   useEffect(() => {
     const t = setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 30);
@@ -132,7 +148,15 @@ export function WorkChat({
                 </View>
               )}
               <Appear>
-                <FeedRow item={f} me={me} nameOf={nameOf} members={members} onReact={(e) => onReact(f.id, e)} onToTask={f.kind === 'message' ? () => onMessageToTask(f.text, f.mentions) : undefined} />
+                <FeedRow
+                  item={f}
+                  me={me}
+                  nameOf={nameOf}
+                  members={members}
+                  onReact={(e) => onReact(f.id, e)}
+                  onToTask={f.kind === 'message' && f.text.trim() ? () => onMessageToTask(f.text, f.mentions) : undefined}
+                  onLongPress={f.kind === 'message' ? () => setActionItem(f) : undefined}
+                />
               </Appear>
             </View>
           );
@@ -146,21 +170,63 @@ export function WorkChat({
           <Pressable style={s.menuBackdrop} onPress={() => setMenu(false)} />
           <View style={s.menu}>
             <MenuItem icon="checkmark-circle-outline" label="할일 추가" sub={isOwner ? '가게 전체 / 나만 보기' : '나만 보기'} onPress={() => { setMenu(false); onAddTask(); }} />
-            <MenuItem icon="image-outline" label="사진 보내기" sub="곧 추가돼요" onPress={() => setMenu(false)} />
+            <MenuItem icon="image-outline" label="사진 보내기" sub={sendingPhoto ? '올리는 중…' : '이미지 첨부'} onPress={() => { setMenu(false); onSendPhoto(); }} />
             {isOwner && <MenuItem icon="megaphone-outline" label="공지 작성" sub="사장만" onPress={() => { setMenu(false); onWriteNotice(); }} top />}
+            <View style={s.menuInfoRow}>
+              <Text style={s.menuInfoText}>사진은 자동 압축·EXIF 제거돼요</Text>
+              <InfoDot title={PHOTO_UPLOAD_INFO.title} body={PHOTO_UPLOAD_INFO.body} size={14} accessibilityLabel="사진 업로드 규격 안내" />
+            </View>
           </View>
         </>
       )}
 
       <View style={s.composer}>
-        <Pressable onPress={() => setMenu((v) => !v)} style={({ pressed }) => [s.plus, pressed && { opacity: 0.85 }]}>
+        <Pressable
+          onPress={() => setMenu((v) => !v)}
+          accessibilityRole="button"
+          accessibilityLabel={menu ? '추가 메뉴 닫기' : '추가 메뉴 열기'}
+          style={({ pressed }) => [s.plus, pressed && { opacity: 0.85 }]}
+        >
           <Ionicons name={menu ? 'close' : 'add'} size={24} color={InkColors.bubbleText} />
         </Pressable>
         <MentionInput value={draft} onChangeText={setDraft} onSubmit={send} members={members} me={me} onAssignTask={isOwner ? onAssignTask : undefined} />
-        <Pressable onPress={send} disabled={!draft.trim()} style={({ pressed }) => [s.send, !draft.trim() && { opacity: 0.4 }, pressed && { opacity: 0.85 }]}>
+        <Pressable onPress={send} disabled={!draft.trim()} accessibilityRole="button" accessibilityLabel="메시지 전송" style={({ pressed }) => [s.send, !draft.trim() && { opacity: 0.4 }, pressed && { opacity: 0.85 }]}>
           <Ionicons name="arrow-up" size={20} color={InkColors.ink} />
         </Pressable>
       </View>
+
+      {/* 메시지 롱프레스 액션 시트 — 프레임(460) 안에 가둔다(modalFrameStyle). */}
+      <Modal visible={!!actionItem} transparent animationType="slide" onRequestClose={() => setActionItem(null)}>
+        <View style={modalFrameStyle}>
+          <Pressable style={s.sheetBackdrop} onPress={() => setActionItem(null)} />
+          <View style={s.sheet}>
+            <View style={s.sheetHandle} />
+            {canTaskActive && (
+              <Pressable
+                onPress={() => { const it = actionItem!; setActionItem(null); onMessageToTask(it.text, it.mentions); }}
+                style={({ pressed }) => [s.sheetItem, pressed && { backgroundColor: InkColors.paper }]}
+              >
+                <Ionicons name="add-circle-outline" size={19} color={InkColors.ink} />
+                <Text style={s.sheetItemText}>할일로 만들기</Text>
+              </Pressable>
+            )}
+            {canDeleteActive && (
+              <Pressable
+                onPress={() => { const id = actionItem!.id; setActionItem(null); onDelete(id); }}
+                style={({ pressed }) => [s.sheetItem, pressed && { backgroundColor: InkColors.paper }]}
+                accessibilityRole="button"
+                accessibilityLabel="이 메시지 삭제"
+              >
+                <Ionicons name="trash-outline" size={19} color={BrandColors.bad} />
+                <Text style={[s.sheetItemText, { color: BrandColors.bad }]}>삭제</Text>
+              </Pressable>
+            )}
+            <Pressable onPress={() => setActionItem(null)} style={({ pressed }) => [s.sheetCancel, pressed && { opacity: 0.85 }]}>
+              <Text style={s.sheetCancelText}>취소</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -179,7 +245,7 @@ function MenuItem({ icon, label, sub, onPress, top }: { icon: any; label: string
   );
 }
 
-function FeedRow({ item, me, nameOf, members, onReact, onToTask }: { item: FeedItem; me: string; nameOf: (id: string) => string; members: Member[]; onReact: (e: string) => void; onToTask?: () => void }) {
+function FeedRow({ item, me, nameOf, members, onReact, onToTask, onLongPress }: { item: FeedItem; me: string; nameOf: (id: string) => string; members: Member[]; onReact: (e: string) => void; onToTask?: () => void; onLongPress?: () => void }) {
   if (item.kind === 'task_done') {
     return (
       <View style={s.doneRow}>
@@ -191,11 +257,30 @@ function FeedRow({ item, me, nameOf, members, onReact, onToTask }: { item: FeedI
     );
   }
   const mine = item.authorId === me;
+  const photo = item.photoUrl;
+  const hasText = !!item.text.trim();
   return (
     <View style={[s.msgRow, mine ? s.msgRowMine : s.msgRowOther]}>
       {!mine && <Text style={s.msgAuthor}>{item.authorName}</Text>}
-      <Pressable onLongPress={onToTask} delayLongPress={350} style={[s.bubble, mine && s.bubbleMine]}>
-        <MentionText text={item.text} members={members} mine={mine} />
+      <Pressable
+        onLongPress={onLongPress}
+        delayLongPress={350}
+        style={[s.bubble, mine && s.bubbleMine, photo && s.bubblePhoto]}
+      >
+        {photo && (
+          <Pressable
+            onPress={() => { if (Platform.OS === 'web' && typeof window !== 'undefined') window.open(photo, '_blank'); }}
+            accessibilityRole="imagebutton"
+            accessibilityLabel="사진 크게 보기"
+          >
+            <Image source={{ uri: photo }} style={[s.msgImage, hasText && s.msgImageWithText]} resizeMode="cover" />
+          </Pressable>
+        )}
+        {hasText && (
+          <View style={photo ? s.msgCaption : undefined}>
+            <MentionText text={item.text} members={members} mine={mine} />
+          </View>
+        )}
       </Pressable>
       {onToTask && (
         <Pressable onPress={onToTask} hitSlop={6} style={({ pressed }) => [s.toTask, pressed && { opacity: 0.6 }]}>
@@ -232,6 +317,10 @@ const s = StyleSheet.create({
   msgAuthor: { fontSize: 11, color: InkColors.ink2, fontWeight: '700', paddingLeft: 4 },
   bubble: { backgroundColor: InkColors.bg, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md, borderTopLeftRadius: Radius.tail, paddingHorizontal: 12, paddingVertical: 9, ...Elevation.e1 },
   bubbleMine: { backgroundColor: InkColors.ink, borderColor: InkColors.ink, borderTopLeftRadius: Radius.md, borderTopRightRadius: Radius.tail, alignSelf: 'flex-end' },
+  bubblePhoto: { padding: 4, overflow: 'hidden' },
+  msgImage: { width: 200, height: 200, borderRadius: Radius.sm },
+  msgImageWithText: { marginBottom: 6 },
+  msgCaption: { paddingHorizontal: 8, paddingBottom: 5, paddingTop: 1 },
   msgText: { fontSize: 14, color: InkColors.ink, lineHeight: 21 },
   mention: { color: BrandColors.mention, fontWeight: '800' },
   mentionMine: { color: BrandColors.yellow },
@@ -250,4 +339,15 @@ const s = StyleSheet.create({
   miIc: { width: 30, height: 30, borderRadius: Radius.sm, backgroundColor: BrandColors.yellowSoft, alignItems: 'center', justifyContent: 'center' },
   miLabel: { fontSize: 14, fontWeight: '700', color: InkColors.ink },
   miSub: { fontSize: 10.5, color: InkColors.ink3 },
+  menuInfoRow: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 11, paddingTop: 8, paddingBottom: 2, borderTopWidth: 1, borderTopColor: InkColors.line, marginTop: 4 },
+  menuInfoText: { flex: 1, fontSize: 10.5, color: InkColors.ink3, fontWeight: '600' },
+
+  // 롱프레스 액션 시트
+  sheetBackdrop: { flex: 1, backgroundColor: 'rgba(31,29,26,0.45)' },
+  sheet: { backgroundColor: '#FFFFFF', borderTopLeftRadius: Radius.sheet, borderTopRightRadius: Radius.sheet, paddingHorizontal: 12, paddingTop: 10, paddingBottom: 24, gap: 4, ...Elevation.e3 },
+  sheetHandle: { width: 40, height: 4, borderRadius: Radius.pill, backgroundColor: InkColors.line, alignSelf: 'center', marginBottom: 8 },
+  sheetItem: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14, paddingHorizontal: 12, borderRadius: Radius.md },
+  sheetItemText: { fontSize: 15, fontWeight: '700', color: InkColors.ink },
+  sheetCancel: { marginTop: 4, alignItems: 'center', paddingVertical: 13, borderRadius: Radius.md, backgroundColor: InkColors.bgSoft, borderWidth: 1, borderColor: InkColors.line },
+  sheetCancelText: { fontSize: 15, fontWeight: '800', color: InkColors.ink },
 });

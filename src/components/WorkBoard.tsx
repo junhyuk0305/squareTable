@@ -101,6 +101,7 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
   }, [viewParam]);
   const [composer, setComposer] = useState<{ open: boolean; date?: string; text?: string; assigneeId?: string }>({ open: false });
   const [uploadingId, setUploadingId] = useState<string | null>(null);
+  const [sendingPhoto, setSendingPhoto] = useState(false);
 
   // 멤버(멘션·이름) — 사장 + 직원 + 본인.
   const members: Member[] = useMemo(() => {
@@ -169,6 +170,23 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
     });
   }
 
+  // 업무 채팅에 사진 보내기 — 픽 → 압축·업로드(db) → 사진만 담긴 메시지로 발행.
+  function sendPhotoMessage() {
+    if (sendingPhoto) return;
+    pickImageFile(async (file) => {
+      setSendingPhoto(true);
+      try {
+        const url = await uploadPhoto(file);
+        if (url) postMessage(today, '', userId, userName, role, undefined, url);
+        else noteError('사진을 보내지 못했어요. 인터넷 연결을 확인하고 다시 시도해 주세요.');
+      } catch {
+        noteError('사진을 보내지 못했어요. 인터넷 연결을 확인하고 다시 시도해 주세요.');
+      } finally {
+        setSendingPhoto(false);
+      }
+    });
+  }
+
   const headerOptions =
     view === 'chat'
       ? {
@@ -216,8 +234,11 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
           pinnedNotice={pinnedNotice}
           onOpenNotice={() => setView('notice')}
           onSend={(text, mentions) => postMessage(today, text, userId, userName, role, mentions)}
+          onSendPhoto={sendPhotoMessage}
+          sendingPhoto={sendingPhoto}
           onReact={(id, emoji) => toggleReaction(id, userId, emoji)}
           onMessageToTask={messageToTask}
+          onDelete={deleteFeedItem}
           onAddTask={() => setComposer({ open: true, date: today })}
           onAssignTask={(id) => setComposer({ open: true, date: today, assigneeId: id })}
           onWriteNotice={() => setView('notice')}
