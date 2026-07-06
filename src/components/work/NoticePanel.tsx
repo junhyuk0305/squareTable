@@ -9,6 +9,7 @@ import { mdHHmm } from '@/lib/utils/attendance';
 import { ReactionBar } from './ReactionBar';
 import { MentionInput, extractMentions, type Member } from './MentionInput';
 import { Appear } from '@/components/Appear';
+import { confirmAction } from '@/lib/utils/confirm';
 
 /**
  * NoticePanel — 우상단 [공지]로 진입하는 전용 화면.
@@ -164,6 +165,12 @@ function NoticeCard({
     onComment(n.id, v, extractMentions(v, members));
     setCDraft('');
   }
+  // 공지 삭제는 되돌릴 수 없으므로 앱 내 확인 모달로 한 번 막는다(노하우 삭제와 동일 패턴).
+  async function confirmDelete() {
+    if (await confirmAction('공지 삭제', '이 공지를 삭제할까요? 되돌릴 수 없어요.', '삭제', { destructive: true, icon: 'trash-outline' })) {
+      onDelete(n.id);
+    }
+  }
 
   return (
     <View style={[s.card, n.pinned && s.cardPinned]}>
@@ -209,7 +216,7 @@ function NoticeCard({
             <Pressable onPress={() => { setEditText(n.text); setEditing(true); }} style={({ pressed }) => [s.act, pressed && { opacity: 0.6 }]}>
               <Text style={s.actText}>수정</Text>
             </Pressable>
-            <Pressable onPress={() => onDelete(n.id)} style={({ pressed }) => [s.act, pressed && { opacity: 0.6 }]}>
+            <Pressable onPress={confirmDelete} style={({ pressed }) => [s.act, pressed && { opacity: 0.6 }]}>
               <Text style={[s.actText, { color: BrandColors.bad }]}>삭제</Text>
             </Pressable>
           </View>
