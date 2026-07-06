@@ -20,6 +20,7 @@ import { coalesce, subscribeDebounced } from '@/lib/store/realtimeSync';
 import { genId } from '@/lib/utils/id';
 import { useRoomStore } from '@/lib/store/useRoomStore';
 import { useScheduleStore } from '@/lib/store/useScheduleStore';
+import { DEFAULT_DAYPART_LABELS, resolveDaypartLabels } from '@/lib/store/daypartLabels';
 import { notifyStaffNotice, notifyUserMention } from '@/lib/push/notify';
 
 /** 방마다 동시에 둘 수 있는 활성 반복(주간) 할일 상한(남용 #26) — 캘린더/피드 폭주 방지. */
@@ -83,25 +84,15 @@ export type FeedItem = {
 // 피드에서 토글 가능한 이모지 셋 (확인 = ✅)
 export const REACTIONS = ['✅', '👍', '🔥', '🙏', '👀'] as const;
 
-export const SECTION_LABEL: Record<TaskSection, string> = {
-  open: '오픈',
-  mid: '미들',
-  close: '마감',
-  etc: '기타',
-};
+export const SECTION_LABEL: Record<TaskSection, string> = DEFAULT_DAYPART_LABELS;
 
 /**
  * 데이파트 라벨(매장 커스텀 반영) — schedule_config.dayparts가 있으면 그 이름을, 없으면 기본 라벨.
- * 컴포넌트에서 훅으로 구독(사장이 이름을 바꾸면 즉시 반영). '기타'는 커스텀해도 직접입력 라벨과 병행.
+ * 컴포넌트에서 훅으로 구독(사장이 이름을 바꾸면 즉시 반영). 폴백 규칙은 resolveDaypartLabels(SSOT).
  */
 export function useDaypartLabels(): Record<TaskSection, string> {
   const dp = useScheduleStore((s) => s.config.dayparts);
-  return {
-    open: dp?.open?.trim() || SECTION_LABEL.open,
-    mid: dp?.mid?.trim() || SECTION_LABEL.mid,
-    close: dp?.close?.trim() || SECTION_LABEL.close,
-    etc: dp?.etc?.trim() || SECTION_LABEL.etc,
-  };
+  return resolveDaypartLabels(dp);
 }
 
 /** 그 날짜(YYYY-MM-DD)에 이 할일이 떠야 하는가? (루틴=요일 매칭, 예정=날짜 일치) */

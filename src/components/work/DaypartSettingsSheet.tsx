@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { View, Text, TextInput, Pressable, StyleSheet } from 'react-native';
 
 import { BottomSheet } from '@/components/BottomSheet';
+import { resolveDaypartLabels } from '@/lib/store/daypartLabels';
 import { useScheduleStore } from '@/lib/store/useScheduleStore';
 import { SECTION_LABEL, type TaskSection } from '@/lib/store/useWorkStore';
 import { InkColors } from '@/lib/theme/colors';
@@ -32,14 +33,8 @@ export function DaypartSettingsSheet({ onClose }: { onClose: () => void }) {
   });
 
   const save = () => {
-    setConfig({
-      dayparts: {
-        open: vals.open.trim() || SECTION_LABEL.open,
-        mid: vals.mid.trim() || SECTION_LABEL.mid,
-        close: vals.close.trim() || SECTION_LABEL.close,
-        etc: vals.etc.trim() || SECTION_LABEL.etc,
-      },
-    });
+    // 빈값·공백은 기본 이름으로 폴백(resolveDaypartLabels = 읽기 훅과 동일 SSOT 규칙).
+    setConfig({ dayparts: resolveDaypartLabels(vals) });
     onClose();
   };
 
