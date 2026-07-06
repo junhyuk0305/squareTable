@@ -150,13 +150,20 @@ export type ResponseBlock = {
   //           'generated'=여러 노하우를 AI가 모아 정리(검증 배지 비노출 + "AI 정리" 고지).
   //           미설정(기존 행)은 served 취급(하위호환).
   mode?: 'served' | 'generated';
-  source: {
-    entry_id: string;
-    creator_name: string;
-    title: string;
-    version: number;
-    updated_at: string;
-  };
+  source: SourceRef;
+  /**
+   * generated 모드에서 답을 만드는 데 실제 참고한 노하우 출처들(복수). 2개 이상일 때만 채운다.
+   * served(저장된 답 그대로)는 미설정 — 단일 source만. UI는 이게 있으면 "참고한 노하우 N개" 칩으로 노출.
+   */
+  sources?: SourceRef[];
+};
+
+export type SourceRef = {
+  entry_id: string;
+  creator_name: string;
+  title: string;
+  version: number;
+  updated_at: string;
 };
 
 export type ChatQuery = {

@@ -45,6 +45,8 @@ export function ChatTurn({
   const [detailEntry, setDetailEntry] = useState<PlaybookEntry | undefined>(undefined);
 
   const block = query.response_block;
+  // generated 모드에서 실제 종합에 참고한 노하우 출처들(2개 이상일 때만 채워짐).
+  const multiSources = block?.mode === 'generated' ? (block.sources ?? []) : [];
   const matchedEntry = usePlaybookStore((s) =>
     query.matched_entry_ids[0] ? s.getById(query.matched_entry_ids[0]) : undefined,
   );
@@ -91,6 +93,7 @@ export function ChatTurn({
           </View>
         )}
         {block ? (
+          <>
           <SquareCard
             summary={block.summary}
             actions={block.actions}
@@ -119,7 +122,32 @@ export function ChatTurn({
             onThumbsUp={onThumbsUp}
             onThumbsDown={onThumbsDown}
             onSourcePress={matchedEntry ? () => setDetailEntry(matchedEntry) : undefined}
+            hideSource={multiSources.length > 1}
           />
+          {/* generated 다중 참고 → 실제 종합에 쓴 노하우 출처를 전부 칩으로. 각 칩 탭 → 원본 상세. */}
+          {multiSources.length > 1 && (
+            <View style={turnStyles.srcChips}>
+              <Text style={turnStyles.srcChipsLabel}>참고한 노하우 {multiSources.length}개</Text>
+              <View style={turnStyles.srcChipsRow}>
+                {multiSources.map((s) => {
+                  const e = allEntries.find((x) => x.id === s.entry_id);
+                  return (
+                    <Pressable
+                      key={s.entry_id}
+                      onPress={e ? () => setDetailEntry(e) : undefined}
+                      style={({ pressed }) => [turnStyles.srcChip, pressed && { opacity: 0.7 }]}
+                      accessibilityRole="button"
+                      accessibilityLabel={`${s.title} 원본 보기`}
+                    >
+                      <Ionicons name="document-text-outline" size={12} color={InkColors.ink2} />
+                      <Text style={turnStyles.srcChipText} numberOfLines={1}>{s.title}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+          )}
+          </>
         ) : candidateEntries.length > 0 && deflectState === 'asking' ? (
           // 매칭 애매 → 후보 노하우 먼저 제시. '사장님께 물어보기'를 누르면 등록(deflectState=registered)으로 전환.
           <CandidateCard
@@ -201,6 +229,23 @@ const turnStyles = StyleSheet.create({
     borderColor: InkColors.line,
   },
   composedText: { flex: 1, fontSize: 12, color: InkColors.ink2, fontWeight: '600', lineHeight: 17 },
+  // generated 다중 참고 출처 — SquareCard 아래 "참고한 노하우 N개: 칩 칩 칩".
+  srcChips: { marginTop: 8, gap: 6 },
+  srcChipsLabel: { fontSize: 11, fontWeight: '800', color: InkColors.ink3, paddingLeft: 2 },
+  srcChipsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  srcChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    maxWidth: '100%',
+    backgroundColor: InkColors.bg,
+    borderWidth: 1,
+    borderColor: InkColors.line,
+    borderRadius: Radius.pill,
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+  },
+  srcChipText: { fontSize: 11.5, fontWeight: '700', color: InkColors.ink2, flexShrink: 1 },
   downHelp: {
     flexDirection: 'row',
     alignItems: 'flex-start',
