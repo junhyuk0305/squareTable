@@ -170,6 +170,23 @@ try {
   const t10 = await invokePush(nobody, { audience: 'join_owners', title: 'x' });
   check('T10 방어: pending 없는 유저 join_owners → 403 no_unit', t10.status === 403 && t10.json?.error === 'no_unit', `status=${t10.status} ${JSON.stringify(t10.json)}`);
 
+  // ── T11 ★push_subscriptions 크로스유저 endpoint 재사용(RLS): 재로그인 소유권 이전 ──
+  //  같은 브라우저 endpoint 를 다른 계정(staffA2)이 재구독하면, 옛 클라 upsert 경로는 '남의 행 UPDATE'
+  //  로 빠져 RLS(USING) 위반이 났다(라이브 사고: "violates RLS policy (USING expression)").
+  //  save_push_subscription(0049) 이 endpoint 소유권을 현재 로그인 사용자로 이전(reassign)해 근본 차단.
+  //  이 케이스가 회귀하면 '같은 기기에서 재로그인한 유저'의 알림 구독이 조용히 죽는다.
+  const pep = `https://qa-push.example/sub/${s}`;
+  const sub1 = await staffA1.rpc('save_push_subscription', { p_endpoint: pep, p_p256dh: 'p1', p_auth: 'a1', p_unit_id: unitA, p_ua: 'qa1' });
+  check('T11a save_push_subscription: 최초 등록 성공', !sub1.error, sub1.error?.message ?? '');
+  // 다른 유저가 같은 endpoint 로 저장 → RLS 위반 없이 성공(소유권 이전)해야 한다. 옛 upsert면 여기서 FAIL.
+  const sub2 = await staffA2.rpc('save_push_subscription', { p_endpoint: pep, p_p256dh: 'p2', p_auth: 'a2', p_unit_id: unitA, p_ua: 'qa2' });
+  check('T11b ★크로스유저 재구독: RLS 위반 없이 성공(소유권 이전)', !sub2.error, sub2.error?.message ?? '');
+  const { data: owned } = await staffA2.from('push_subscriptions').select('user_id').eq('endpoint', pep).maybeSingle();
+  check('T11c 소유권이 재구독 유저(staffA2)로 이전됨', owned?.user_id === staffA2Id, `owner=${owned?.user_id?.slice(0, 8)}`);
+  const { data: notOwned } = await staffA1.from('push_subscriptions').select('user_id').eq('endpoint', pep).maybeSingle();
+  check('T11d 이전 유저(staffA1)는 그 구독을 더 못 봄(RLS 격리)', !notOwned, `seen=${notOwned?.user_id ?? 'none'}`);
+  await staffA2.from('push_subscriptions').delete().eq('endpoint', pep); // 정리(소프트삭제는 이 행을 안 지움)
+
 } catch (e) {
   fail++; console.log('  FAIL exception:', e.message);
 } finally {
