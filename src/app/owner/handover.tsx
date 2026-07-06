@@ -9,7 +9,7 @@ import { Appear } from '@/components/Appear';
 import { MAX_SPLIT_PUBLISH } from '@/components/OwnerCoachChat';
 import { structureSquare } from '@/lib/ai';
 import type { StructuredSegment } from '@/lib/ai/types';
-import { isSquarePublishable, buildPlaybookEntryFromSquare } from '@/lib/utils/buildEntry';
+import { isSquarePublishable, buildPlaybookEntryFromSquare, buildDirectUq } from '@/lib/utils/buildEntry';
 import { getCategoryMeta } from '@/lib/utils/category';
 import { EXTRACTION_MASTER } from '@/data/extraction-master';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
@@ -18,43 +18,12 @@ import { showToast } from '@/lib/store/useToastStore';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Elevation, Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
-import type { Category, UnknownQuery } from '@/types';
 
 // edge 원문 입력 상한(ai/index.ts MAX_RAWTEXT_LEN)과 정렬. 초과분은 잘리므로 경고 후 앞부분만 처리.
 const MAX_RAWTEXT = 8000;
 const MIN_RAWTEXT = 12;
 
 type Phase = 'input' | 'processing' | 'review';
-
-/** 분리 결과 각 항목을 PlaybookEntry로 조립하기 위한 합성 uq(coach 직접등록과 동일 패턴). */
-function synthUq(category: Category, queryText: string): UnknownQuery {
-  const now = new Date().toISOString();
-  return {
-    id: `handover_${Math.abs(hashStr(queryText))}`,
-    junior_id: '',
-    junior_name: '사장님',
-    query_text: queryText || '매장 노하우',
-    asked_at: now,
-    presumed_category: category,
-    presumed_subcategory: '일반',
-    match_attempted: false,
-    best_match_confidence: 0,
-    best_match_entry_id: null,
-    status: 'pending_owner_answer',
-    fallback_action: '',
-    owner_notified_at: now,
-    owner_will_answer: true,
-    similar_queries_count: 0,
-    ai_general_answer: '',
-  };
-}
-
-// id 안정화용 경량 해시(랜덤 금지 — 같은 항목이면 같은 슬러그). buildEntry가 genId로 최종 id를 다시 매기므로 충돌 무해.
-function hashStr(s: string): number {
-  let h = 0;
-  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
-  return h;
-}
 
 /**
  * owner/handover — 인수인계서·매뉴얼을 통째로 올리면 AI가 노하우 여러 개로 분리해 저장.
@@ -169,7 +138,7 @@ export default function OwnerHandoverScreen() {
     setSaving(true);
     const entries = segs
       .filter((_, i) => selected.has(i))
-      .map((s) => buildPlaybookEntryFromSquare(synthUq(s.category, s.title), s.square, { title: s.title, keywords: s.keywords }));
+      .map((s) => buildPlaybookEntryFromSquare(buildDirectUq(s.category, s.title), s.square, { title: s.title, keywords: s.keywords }));
     const results = await Promise.all(entries.map((e) => addEntry(e)));
     setSaving(false);
     if (results.every(Boolean)) {

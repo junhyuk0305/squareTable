@@ -10,6 +10,33 @@ import { useSessionStore } from '@/lib/store/useSessionStore';
 import { genId } from '@/lib/utils/id';
 import { sanitizeKeywords } from '@/lib/utils/knowhowQuality';
 
+/**
+ * 직접 등록용 합성 UnknownQuery — 인박스 질문이 아닌 사장 직접 입력(coach 직접등록·인수인계서 분리)에서
+ * buildPlaybookEntryFromSquare에 넘길 uq 스캐폴드. 한 곳(SSOT)에 두어 UnknownQuery 스키마 변경 시
+ * 경로마다 드리프트되는 걸 막는다. junior_id='' 이므로 source.kind='owner'로 저장된다.
+ */
+export function buildDirectUq(category: Category, queryText: string, id?: string): UnknownQuery {
+  const now = new Date().toISOString();
+  return {
+    id: id ?? genId('direct'),
+    junior_id: '',
+    junior_name: '사장님',
+    query_text: queryText || '매장 노하우',
+    asked_at: now,
+    presumed_category: category,
+    presumed_subcategory: '일반',
+    match_attempted: false,
+    best_match_confidence: 0,
+    best_match_entry_id: null,
+    status: 'pending_owner_answer',
+    fallback_action: '',
+    owner_notified_at: now,
+    owner_will_answer: true,
+    similar_queries_count: 0,
+    ai_general_answer: '',
+  };
+}
+
 /** title: uq.query_text 첫 30자(물음표·구두점 정리). */
 function deriveTitle(uq: UnknownQuery): string {
   const raw = uq.query_text.replace(/[?？.!]+$/g, '').trim();
