@@ -199,11 +199,16 @@ export const styles = StyleSheet.create({
     backgroundColor: InkColors.bg,
     minHeight: 46,
   },
+  // 포커스(선택) 상태 — 브라우저 기본 아웃라인 대신 잉크 테두리로 일관 강조.
+  inputWrapFocused: {
+    borderColor: InkColors.ink,
+  },
   input: {
     flex: 1,
     fontSize: 15,
     color: InkColors.ink,
     paddingVertical: Platform.OS === 'ios' ? 10 : 6,
+    ...(Platform.OS === 'web' ? ({ outlineStyle: 'none' } as object) : null),
   },
   sendBtn: {
     width: 44,

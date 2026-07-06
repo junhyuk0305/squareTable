@@ -110,7 +110,9 @@ export const styles = StyleSheet.create({
     maxHeight: 120,
     justifyContent: 'center',
   },
-  input: { fontSize: 15, color: InkColors.ink, paddingVertical: Platform.OS === 'ios' ? 10 : 6 },
+  // 포커스(선택) 상태 — 브라우저 기본 아웃라인 대신 잉크 테두리로 일관 강조(직원 물어보기와 동일 규칙).
+  inputWrapFocused: { borderColor: InkColors.ink },
+  input: { fontSize: 15, color: InkColors.ink, paddingVertical: Platform.OS === 'ios' ? 10 : 6, ...(Platform.OS === 'web' ? ({ outlineStyle: 'none' } as object) : null) },
   sendBtn: { width: 44, height: 44, borderRadius: Radius.pill, backgroundColor: BrandColors.brand, alignItems: 'center', justifyContent: 'center' },
   sendBtnDisabled: { backgroundColor: InkColors.line },
   sendIcon: { fontSize: 22, color: InkColors.bubbleText, fontWeight: '900', lineHeight: 24 },

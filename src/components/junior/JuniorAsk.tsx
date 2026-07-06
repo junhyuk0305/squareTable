@@ -78,6 +78,7 @@ export function JuniorAsk() {
   const router = useRouter();
   const [input, setInput] = useState('');
   const [anon, setAnon] = useState(false);
+  const [focused, setFocused] = useState(false);
   const scrollRef = useRef<ScrollView | null>(null);
   // 보낼 수 있는 상태 = 입력값 있음 + 로딩 아님 → 전송 버튼이 노랑으로 '켜짐'(active 액센트).
   const canSend = !!input.trim() && !isLoading;
@@ -248,7 +249,7 @@ export function JuniorAsk() {
 
       {/* 입력바 */}
       <View style={styles.inputBar}>
-        <View style={styles.inputWrap}>
+        <View style={[styles.inputWrap, focused && styles.inputWrapFocused]}>
           <TextInput
             value={input}
             onChangeText={setInput}
@@ -259,6 +260,8 @@ export function JuniorAsk() {
             maxLength={500}
             returnKeyType="send"
             onSubmitEditing={() => handleSend()}
+            onFocus={() => setFocused(true)}
+            onBlur={() => setFocused(false)}
             blurOnSubmit={false}
           />
         </View>
