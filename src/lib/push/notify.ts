@@ -9,6 +9,7 @@
 // 이 파일은 그 위에 "앱이 꺼져 있어도 오는 OS 알림" 만 얹는다 — 두 경로가 같은 이벤트를 가리킨다.
 
 import { supabase, HAS_SUPABASE } from '@/lib/supabase';
+import { track, reportError } from '@/lib/analytics/track';
 
 export type PushAudience = 'owners' | 'staff' | 'user' | 'join_owners';
 
@@ -24,13 +25,42 @@ type NotifyArgs = {
   tag?: string;
 };
 
-/** 웹푸시 발송(비차단). 서버가 호출자 매장 안으로만 발송하도록 강제한다. */
+/** 웹푸시 발송(비차단). 서버가 호출자 매장 안으로만 발송하도록 강제한다.
+ *
+ * 계측(2026-07-07): 예전엔 결과를 `.catch(console.warn)` 로만 삼켜서 "앱이 실제로 발송을 쐈는지·
+ * 누구에게 갔는지·왜 0건인지"를 서버에서 전혀 볼 수 없었다(무음 실패 + 관측 0건). 이제 매 발송의
+ * 결과를 app_events('push_sent')·client_errors 로 남긴다 → "안 왔다"를 추측 대신 데이터로 진단한다.
+ *   - 정상: app_events push_sent {sent, recipients, pruned}
+ *   - recipients>0·sent=0: 구독이 전부 죽음(죽은 endpoint) → push.no_delivery (무음 실패의 핵심 신호)
+ *   - invoke 에러(401/403/네트워크): client_errors push.notify.* → 앱이 발송 자체를 못 함
+ * fire-and-forget 원칙은 유지(await 안 함, throw 안 함) — 계측만 배경에서 얹는다. */
 export function pushNotify(args: NotifyArgs): void {
   if (!HAS_SUPABASE) return;
-  // await 하지 않는다 — 발송은 배경에서. 실패는 조용히 삼킨다(인앱 알림이 폴백).
   void supabase.functions
     .invoke('push', { body: args })
-    .catch((e) => console.warn('[push] notify 실패:', e?.message ?? e));
+    .then(({ data, error }) => {
+      if (error) {
+        // 엣지 비정상 응답(401 unauthorized·403 no_unit·rate_limited) 또는 네트워크 → 앱이 발송 실패.
+        reportError('push.notify.invoke', error, { audience: args.audience, tag: args.tag });
+        return;
+      }
+      const r = (data ?? {}) as { sent?: number; recipients?: number; pruned?: number };
+      track('push_sent', {
+        audience: args.audience,
+        tag: args.tag ?? null,
+        sent: r.sent ?? 0,
+        recipients: r.recipients ?? 0,
+        pruned: r.pruned ?? 0,
+      });
+      // 대상은 있는데 실제 전송 0 = 살아있는 구독이 하나도 없음(죽은 endpoint 뿐). "안 온다"의 핵심 원인.
+      if ((r.recipients ?? 0) > 0 && (r.sent ?? 0) === 0) {
+        reportError('push.notify.no_delivery', 'recipients>0 but sent=0 (구독 전부 사망 추정)', {
+          audience: args.audience,
+          recipients: r.recipients,
+        });
+      }
+    })
+    .catch((e) => reportError('push.notify.throw', e, { audience: args.audience }));
 }
 
 // ── 이벤트별 헬퍼 (호출부가 문자열을 안 틀리게 얇게 감싼다) ────────────────
