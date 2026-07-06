@@ -1,4 +1,5 @@
-import { ScrollView, StyleSheet, type ViewStyle } from 'react-native';
+import { useEffect, useRef } from 'react';
+import { Platform, ScrollView, StyleSheet, type ViewStyle } from 'react-native';
 import { BrowseCard } from './BrowseList';
 import { Space } from '@/lib/theme/layout';
 import type { PlaybookEntry } from '@/types';
@@ -18,8 +19,32 @@ export type KnowhowCarouselProps = {
 };
 
 export function KnowhowCarousel({ entries, onSelect, showCategory, renderExtra }: KnowhowCarouselProps) {
+  const ref = useRef<ScrollView>(null);
+
+  // PC(웹·마우스)에서는 세로 휠로 가로 캐러셀을 넘길 수 없어(터치패드 가로 스와이프만 동작)
+  // 사실상 스크롤이 막힌다. 세로 휠을 가로 스크롤로 변환하되, 캐러셀 양 끝에 닿으면
+  // 페이지 세로 스크롤에 양보해 사용자가 갇히지 않게 한다.
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    const node = (ref.current as unknown as { getScrollableNode?: () => HTMLElement } | null)?.getScrollableNode?.();
+    if (!node) return;
+    const onWheel = (e: WheelEvent) => {
+      if (!e.deltaY) return;
+      const max = node.scrollWidth - node.clientWidth;
+      if (max <= 0) return; // 넘길 게 없으면 그대로 세로 스크롤
+      const atStart = node.scrollLeft <= 0;
+      const atEnd = node.scrollLeft >= max - 1;
+      if ((atStart && e.deltaY < 0) || (atEnd && e.deltaY > 0)) return; // 끝이면 양보
+      node.scrollLeft += e.deltaY;
+      e.preventDefault();
+    };
+    node.addEventListener('wheel', onWheel, { passive: false });
+    return () => node.removeEventListener('wheel', onWheel);
+  }, []);
+
   return (
     <ScrollView
+      ref={ref}
       horizontal
       showsHorizontalScrollIndicator={false}
       contentContainerStyle={styles.content}
