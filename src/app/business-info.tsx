@@ -1,4 +1,4 @@
-﻿import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack } from 'expo-router';
 import { InkColors } from '@/lib/theme/colors';
@@ -6,7 +6,7 @@ import { Radius } from '@/lib/theme/elevation';
 import { HeaderBackButton } from '@/components/HeaderBackButton';
 
 // 판매자(사업자) 정보 — 전자상거래법상 유료 판매 시 고지 의무. 실제 사업자등록 후 값 채울 것.
-const ROWS: Array<[string, string]> = [
+const ROWS: [string, string][] = [
   ['상호', '팀 스퀘어테이블'],
   ['대표자', '장준혁'],
   ['사업자등록번호', '등록 예정 (출시 전 기재)'],

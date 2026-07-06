@@ -1,4 +1,4 @@
-﻿import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack } from 'expo-router';
 import { InkColors } from '@/lib/theme/colors';
@@ -18,7 +18,7 @@ export default function TermsScreen() {
         <Text style={styles.updated}>시행일: 2026-06-10 · 운영: 팀 스퀘어테이블</Text>
 
         <Section title="제1조 (목적)">
-          본 약관은 팀 스퀘어테이블(이하 "회사")이 제공하는 매장 운영 지원 서비스 "착착"(이하 "서비스")의 이용 조건 및 절차, 회사와 이용자의 권리·의무를 규정합니다.
+          본 약관은 팀 스퀘어테이블(이하 “회사”)이 제공하는 매장 운영 지원 서비스 “착착”(이하 “서비스”)의 이용 조건 및 절차, 회사와 이용자의 권리·의무를 규정합니다.
         </Section>
         <Section title="제2조 (이용 계약)">
           이용자는 회원가입 시 본 약관에 동의함으로써 서비스를 이용할 수 있습니다. 매장 단위로 계정이 생성되며, 사장님은 초대코드로 직원을 합류시킬 수 있습니다.

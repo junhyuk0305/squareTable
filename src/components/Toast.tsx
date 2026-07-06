@@ -1,6 +1,6 @@
 // 전역 토스트 — 화면 상단 중앙에 잠깐 떴다 사라지는 안내(성공/경고/안내).
 // _layout 최상단(프레임 안)에 1회 마운트. SyncBanner(저장 실패=빨강)와 별개.
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo } from 'react';
 import { Animated, Text, StyleSheet, Platform, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useToastStore, type ToastTone } from '@/lib/store/useToastStore';
@@ -19,7 +19,7 @@ export function Toast() {
   const message = useToastStore((s) => s.message);
   const tone = useToastStore((s) => s.tone);
   const clear = useToastStore((s) => s.clear);
-  const anim = useRef(new Animated.Value(0)).current;
+  const anim = useMemo(() => new Animated.Value(0), []);
 
   useEffect(() => {
     if (message) {

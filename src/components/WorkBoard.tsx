@@ -104,12 +104,16 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
   // 패널(공지/할일)이 홈 등 다른 화면의 딥링크(?view=)로 열렸는지 추적.
   // true면 뒤로가기는 진입 화면(홈)으로 복귀(router.back), false(업무 내부 진입)면 채팅으로 복귀.
   const [openedExternally, setOpenedExternally] = useState<boolean>(initialView !== 'chat');
-  useEffect(() => {
+  // 딥링크(?view=)가 마운트 후 바뀌면(홈 등에서 진입) 해당 패널로 동기화.
+  // setState-in-effect(캐스케이드 렌더) 대신 "이전 param과 비교해 렌더 중 조정" — React 권장 패턴.
+  const [prevViewParam, setPrevViewParam] = useState(viewParam);
+  if (viewParam !== prevViewParam) {
+    setPrevViewParam(viewParam);
     if (viewParam === 'todo' || viewParam === 'notice' || (viewParam === 'assign' && isOwner)) {
       setView(viewParam as ViewKey);
       setOpenedExternally(true);
     }
-  }, [viewParam, isOwner]);
+  }
   // 업무 채팅 내부에서 패널 열기 — 뒤로가기는 채팅으로 돌아가야 하므로 external 플래그 해제.
   const openPanel = useCallback((v: ViewKey) => {
     setOpenedExternally(false);

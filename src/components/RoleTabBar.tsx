@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo } from 'react';
 import { View, Text, Pressable, StyleSheet, Animated } from 'react-native';
 import { useRouter, usePathname, type Href } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -70,8 +70,8 @@ export function RoleTabBar({ role }: { role: 'junior' | 'owner' }) {
 /** 개별 탭 — 누르면 살짝 줄고, 활성화되는 순간 아이콘이 톡 튀어오른다. */
 function TabButton({ tab, active, onPress }: { tab: Tab; active: boolean; onPress: () => void }) {
   const color = active ? InkColors.ink : InkColors.ink3;
-  const press = useRef(new Animated.Value(1)).current; // 눌림 스케일
-  const pop = useRef(new Animated.Value(1)).current; // 활성화 순간 팝(0.8→1)
+  const press = useMemo(() => new Animated.Value(1), []); // 눌림 스케일
+  const pop = useMemo(() => new Animated.Value(1), []); // 활성화 순간 팝(0.8→1)
 
   useEffect(() => {
     if (!active) return;
