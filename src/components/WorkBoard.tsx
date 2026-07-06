@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Text, Pressable, Platform, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Stack, useLocalSearchParams } from 'expo-router';
+import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 import { uploadPhoto } from '@/lib/db';
@@ -97,9 +97,25 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
 
   const today = todayStr();
   const [view, setView] = useState<ViewKey>(initialView);
+  // 패널(공지/할일)이 홈 등 다른 화면의 딥링크(?view=)로 열렸는지 추적.
+  // true면 뒤로가기는 진입 화면(홈)으로 복귀(router.back), false(업무 내부 진입)면 채팅으로 복귀.
+  const [openedExternally, setOpenedExternally] = useState<boolean>(initialView !== 'chat');
   useEffect(() => {
-    if (viewParam === 'todo' || viewParam === 'notice') setView(viewParam);
+    if (viewParam === 'todo' || viewParam === 'notice') {
+      setView(viewParam);
+      setOpenedExternally(true);
+    }
   }, [viewParam]);
+  // 업무 채팅 내부에서 패널 열기 — 뒤로가기는 채팅으로 돌아가야 하므로 external 플래그 해제.
+  const openPanel = useCallback((v: ViewKey) => {
+    setOpenedExternally(false);
+    setView(v);
+  }, []);
+  // 패널 닫기 — 딥링크로 들어왔으면 진입 화면으로, 아니면 채팅으로.
+  const closePanel = useCallback(() => {
+    if (openedExternally && router.canGoBack()) router.back();
+    else setView('chat');
+  }, [openedExternally]);
   const [composer, setComposer] = useState<{ open: boolean; date?: string; text?: string; assigneeId?: string; editTemplate?: TaskTemplate }>({ open: false });
   const [uploadingId, setUploadingId] = useState<string | null>(null);
   const [sendingPhoto, setSendingPhoto] = useState(false);
@@ -197,12 +213,12 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
           headerTitle: () => <Text style={st.headerTitle}>업무</Text>,
           headerRight: () => (
             <View style={st.nav}>
-              <Pressable onPress={() => setView('notice')} style={({ pressed }) => [st.navBtn, pressed && { opacity: 0.7 }]}>
+              <Pressable onPress={() => openPanel('notice')} style={({ pressed }) => [st.navBtn, pressed && { opacity: 0.7 }]}>
                 <Ionicons name="megaphone-outline" size={15} color={InkColors.ink} />
                 <Text style={st.navText}>공지</Text>
                 {unreadNotices > 0 && <View style={st.dot} />}
               </Pressable>
-              <Pressable onPress={() => setView('todo')} style={({ pressed }) => [st.navBtn, pressed && { opacity: 0.7 }]}>
+              <Pressable onPress={() => openPanel('todo')} style={({ pressed }) => [st.navBtn, pressed && { opacity: 0.7 }]}>
                 <Ionicons name="checkbox-outline" size={15} color={InkColors.ink} />
                 <Text style={st.navText}>할일</Text>
               </Pressable>
@@ -212,7 +228,7 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
       : {
           title: view === 'notice' ? '공지' : '할일',
           headerLeft: () => (
-            <Pressable onPress={() => setView('chat')} hitSlop={8} style={({ pressed }) => [{ paddingLeft: HEADER_EDGE_GUTTER, paddingRight: 14, paddingVertical: 4 }, pressed && { opacity: 0.6 }]}>
+            <Pressable onPress={closePanel} hitSlop={8} style={({ pressed }) => [{ paddingLeft: HEADER_EDGE_GUTTER, paddingRight: 14, paddingVertical: 4 }, pressed && { opacity: 0.6 }]}>
               <Ionicons name="arrow-back" size={24} color={InkColors.ink} />
             </Pressable>
           ),
@@ -233,7 +249,7 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
           members={members}
           isOwner={isOwner}
           pinnedNotice={pinnedNotice}
-          onOpenNotice={() => setView('notice')}
+          onOpenNotice={() => openPanel('notice')}
           onSend={(text, mentions) => postMessage(today, text, userId, userName, role, mentions)}
           onSendPhoto={sendPhotoMessage}
           sendingPhoto={sendingPhoto}
@@ -242,7 +258,7 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
           onDelete={deleteFeedItem}
           onAddTask={() => setComposer({ open: true, date: today })}
           onAssignTask={(id) => setComposer({ open: true, date: today, assigneeId: id })}
-          onWriteNotice={() => setView('notice')}
+          onWriteNotice={() => openPanel('notice')}
         />
       )}
 
@@ -255,7 +271,7 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
           memberCount={memberCount}
           nameOf={nameOf}
           members={members}
-          onBack={() => setView('chat')}
+          onBack={closePanel}
           onPost={(text) => postNotice(today, text, userId, userName, false)}
           onTogglePin={togglePin}
           onEdit={editFeedText}
