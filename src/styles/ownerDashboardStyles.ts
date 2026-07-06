@@ -110,6 +110,10 @@ export const styles = StyleSheet.create({
     borderRadius: Radius.pill,
   },
   heroCtaText: { fontSize: 13, fontWeight: '800', color: InkColors.ink },
+  // 가치 히어로 — 반복을 대신 답한 실카운트를 큰 숫자로. (자기계발형 게이지 폐기 → 부담 경감 서사)
+  heroValue: { fontSize: 33, fontWeight: '900', letterSpacing: -1, color: InkColors.bubbleText, lineHeight: 36, marginTop: 2 },
+  heroValueUnit: { fontSize: 19, fontWeight: '800', color: InkColors.bubbleText },
+  heroCtaY: { backgroundColor: BrandColors.yellow, ...Elevation.ey },
 
   // ② 오늘 한눈에 — 3칸 KPI(업무·근무·인건비). 동일 크기로 스캔. 인건비 칸만 노란 틴트로 강조.
   kpiRow: { flexDirection: 'row', gap: 8 },

@@ -12,6 +12,8 @@ import { useTourStore } from '@/lib/store/useTourStore';
 import { RoleTabBar } from '@/components/RoleTabBar';
 import { InfoDot } from '@/components/InfoDot';
 import { OwnerHomeHubCards } from '@/components/OwnerHomeHubCards';
+import { OwnerKnowhowValueCard } from '@/components/OwnerKnowhowValueCard';
+import { OwnerWorkValueCard } from '@/components/OwnerWorkValueCard';
 import { SectionLabel } from '@/components/SectionLabel';
 import { Wordmark } from '@/components/Wordmark';
 import { OwnerNotificationBell } from '@/components/NotificationBell';
@@ -36,9 +38,9 @@ export default function OwnerDashboardScreen() {
     needsReviewCount,
     working,
     monthPay,
-    taskTotal,
-    taskDoneCount,
     pending,
+    answeredHits30d,
+    assign,
   } = useOwnerDashboardData();
 
   // 진입 애니는 각 섹션의 <Appear>가 단독으로 담당한다(디자인시스템 SSOT: Appear 단일 프리미티브).
@@ -167,8 +169,9 @@ export default function OwnerDashboardScreen() {
           </Appear>
         )}
 
-        {/* ① 받은질문 히어로 — 사령탑의 단일 주인공. 미답변 수 + 받은질문 탭 진입.
-            미답변이 있으면 답변 유도(alert), 없으면 긍정 톤으로 회고 유도. */}
+        {/* ① 가치 히어로 — "반복을 AI가 대신 답했다"를 실카운트(최근 30일 노하우 자동응답)로.
+            자기계발형 두뇌 게이지 폐기(2026-07-06) → 성취가 아니라 '반복 노동 경감' 서사.
+            숫자는 answeredHits30d(Σ query_hits_30d) 실데이터 — 0이면 안내형으로 저하. */}
         {entriesCount > 0 && (
           <Appear delay={0}>
           <PressableScale
@@ -177,20 +180,16 @@ export default function OwnerDashboardScreen() {
             style={styles.hero}
             accessibilityRole="button"
             accessibilityLabel={
-              pending > 0 ? `받은 질문 ${capCount(pending)}건, 답변하러 가기` : '받은 질문 0건, 한 줄 노하우 남기기'
+              pending > 0 ? `답 기다리는 질문 ${capCount(pending)}건, 답변하러 가기` : '오늘 한 줄 노하우 남기기'
             }
           >
             <View style={styles.heroHead}>
-              <Ionicons name={pending > 0 ? 'chatbubbles' : 'moon-outline'} size={15} color={InkColors.bubbleText} />
-              <Text style={styles.heroKicker}>{pending > 0 ? '받은 질문' : '오늘 노하우'}</Text>
+              <Ionicons name="sparkles" size={15} color={InkColors.bubbleText} />
+              <Text style={styles.heroKicker}>최근 30일</Text>
               <InfoDot
                 color="rgba(255,255,255,0.85)"
-                title={pending > 0 ? '받은 질문이 뭐예요?' : '노하우가 뭐예요?'}
-                body={
-                  pending > 0
-                    ? '직원이 AI에게 물었는데 매장에 답이 없던 질문이에요.\n한 번 답해두면 다음부터는 AI가 사장님 대신 알려줘요.'
-                    : '오늘 새로 알게 된 것·실수 한 줄을 적으면 AI가 노하우로 정리해요.\n쌓일수록 AI가 사장님 대신 더 많이 답해줘요.'
-                }
+                title="'대신 답함'이 뭐예요?"
+                body={'직원이 AI에게 물었을 때, 우리 매장 노하우로 답이 나간 횟수예요.\n노하우가 쌓일수록 사장님이 직접 답하는 일이 줄어요.'}
               />
               {pending > 0 && (
                 <View style={styles.heroBadge}>
@@ -198,41 +197,49 @@ export default function OwnerDashboardScreen() {
                 </View>
               )}
             </View>
+            {answeredHits30d > 0 && (
+              <Text style={styles.heroValue}>
+                {capCount(answeredHits30d)}
+                <Text style={styles.heroValueUnit}>번</Text>
+              </Text>
+            )}
             <Text style={styles.heroLead}>
-              {pending > 0
-                ? `알바가 자주 물은 질문 ${capCount(pending)}건이 답변을 기다려요.`
-                : '깔끔하네요! 답할 질문이 하나도 없어요.'}
+              {answeredHits30d > 0
+                ? '반복 질문을 AI가 대신 받았어요'
+                : '노하우가 쌓이면 AI가 대신 답해요'}
             </Text>
             <Text style={styles.heroSub}>
-              {pending > 0
-                ? '답해두면 다음부터 AI가 대신 알려줘요.'
-                : '오늘 새로 안 것 한 줄이면 AI가 노하우로 정리해요.'}
+              {answeredHits30d > 0
+                ? '혼자 답하던 반복 질문, 이제 AI가 먼저 받아요.'
+                : "노하우를 더 알려주면 여기 '대신 답한 횟수'가 늘어요."}
             </Text>
-            <View style={styles.heroCta}>
-              <Text style={styles.heroCtaText}>{pending > 0 ? '질문 답변하러 가기' : '오늘 한 줄 노하우 남기기'}</Text>
+            <View style={[styles.heroCta, pending > 0 && styles.heroCtaY]}>
+              <Text style={styles.heroCtaText}>
+                {pending > 0 ? `답 기다리는 질문 ${capCount(pending)}건` : '오늘 한 줄 노하우 남기기'}
+              </Text>
               <Ionicons name="arrow-forward" size={14} color={InkColors.ink} />
             </View>
           </PressableScale>
           </Appear>
         )}
 
-        {/* ② 오늘 한눈에 — 업무·근무·인건비를 동일 크기 3칸 KPI로 압축(스캔). 각 칸이 해당 화면으로. */}
+        {/* ②③ 가치 카드 — 노하우/업무배정을 대칭으로. 표시전용(실데이터 주입), 새 DB 0. */}
         {entriesCount > 0 && (
-          <Appear delay={60} style={styles.section}>
+          <Appear delay={60}>
+            <OwnerKnowhowValueCard answeredHits30d={answeredHits30d} pending={pending} entriesCount={entriesCount} />
+          </Appear>
+        )}
+        {entriesCount > 0 && (
+          <Appear delay={100}>
+            <OwnerWorkValueCard assign={assign} />
+          </Appear>
+        )}
+
+        {/* ④ 오늘 한눈에 — 근무·인건비 2칸(업무 완료는 위 배정 카드로 이관). 각 칸이 해당 화면으로. */}
+        {entriesCount > 0 && (
+          <Appear delay={140} style={styles.section}>
           <SectionLabel icon="today-outline" title="오늘 한눈에" />
           <View style={styles.kpiRow}>
-            <Pressable
-              onPress={() => router.push('/owner/work')}
-              style={({ pressed }) => [styles.kpi, pressed && { opacity: 0.85 }]}
-              accessibilityRole="button"
-              accessibilityLabel={`오늘 업무 ${taskDoneCount}/${taskTotal} 완료`}
-            >
-              <Text style={styles.kpiValue}>
-                {taskDoneCount}
-                <Text style={styles.kpiUnit}>/{taskTotal}</Text>
-              </Text>
-              <Text style={styles.kpiLabel}>업무 완료</Text>
-            </Pressable>
             <Pressable
               onPress={() => router.push('/owner/staff')}
               style={({ pressed }) => [styles.kpi, pressed && { opacity: 0.85 }]}
@@ -258,8 +265,8 @@ export default function OwnerDashboardScreen() {
           </Appear>
         )}
 
-        {/* ③ 매장운영 허브 — 직원·급여/근무 2카드. 노하우 0건이어도 항상 노출(첫날부터 매장 운영이 필요). */}
-        <Appear delay={120}>
+        {/* ⑤ 매장운영 허브 — 직원·급여/근무 2카드. 노하우 0건이어도 항상 노출(첫날부터 매장 운영이 필요). */}
+        <Appear delay={180}>
           <View ref={hubRef}>
             <OwnerHomeHubCards />
           </View>
