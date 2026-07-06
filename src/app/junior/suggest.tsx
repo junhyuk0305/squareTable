@@ -60,13 +60,22 @@ export default function JuniorSuggestScreen() {
   const needsPick = kind === 'improve' && !targetEntryId;
   const canSubmit = text.trim().length >= 5 && !needsPick;
 
-  function send() {
-    if (!canSubmit) return;
-    submit({
+  const [sending, setSending] = useState(false);
+
+  async function send() {
+    if (!canSubmit || sending) return;
+    setSending(true);
+    // 서버에 실제로 저장됐을 때만 성공 처리 — 실패 시 화면·입력을 유지해 재시도 가능하게(무음 실패 방지).
+    const ok = await submit({
       kind,
       text,
       ...(kind === 'improve' && targetEntryId ? { targetEntryId, targetTitle } : null),
     });
+    setSending(false);
+    if (!ok) {
+      showToast('제안 전송에 실패했어요. 다시 시도해 주세요.', 'warn');
+      return;
+    }
     showToast('제안을 보냈어요 · 사장님이 확인할게요', 'good');
     setText('');
     if (router.canGoBack()) router.back();
@@ -169,9 +178,9 @@ export default function JuniorSuggestScreen() {
             </>
           )}
 
-          <Pressable onPress={send} disabled={!canSubmit} style={({ pressed }) => [styles.cta, !canSubmit && { opacity: 0.4 }, pressed && { opacity: 0.85 }]}>
+          <Pressable onPress={send} disabled={!canSubmit || sending} style={({ pressed }) => [styles.cta, (!canSubmit || sending) && { opacity: 0.4 }, pressed && { opacity: 0.85 }]}>
             <Ionicons name="paper-plane-outline" size={16} color="#FFFFFF" />
-            <Text style={styles.ctaText}>사장님께 제안 보내기</Text>
+            <Text style={styles.ctaText}>{sending ? '보내는 중…' : '사장님께 제안 보내기'}</Text>
           </Pressable>
 
           {/* 내 제안 — 데드엔드 방지(보낸 제안의 상태를 본인이 추적) */}

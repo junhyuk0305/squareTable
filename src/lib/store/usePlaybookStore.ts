@@ -12,6 +12,7 @@ const seed = seedData as unknown as PlaybookEntry[];
 type PlaybookState = {
   entries: PlaybookEntry[];
   loaded: boolean;
+  loadError: boolean; // 마지막 hydrate가 실패했는가 — 화면이 "없음"과 "못 불러옴"을 구분해 재시도 UI를 띄운다.
   hydrate: () => Promise<void>;
   subscribe: () => () => void;
   add: (entry: PlaybookEntry) => Promise<boolean>;
@@ -26,10 +27,12 @@ export const usePlaybookStore = create<PlaybookState>((set, get) => ({
   // Supabase면 빈 채로 시작 → hydrate가 DB로 채움. 아니면 기존 로컬 시드.
   entries: HAS_SUPABASE ? [] : seed,
   loaded: !HAS_SUPABASE,
+  loadError: false,
 
   hydrate: coalesce(async () => {
     if (!HAS_SUPABASE) return;
-    set({ entries: await fetchEntries(), loaded: true });
+    const { data, error } = await fetchEntries();
+    set({ entries: data, loaded: true, loadError: error });
   }),
 
   // 다른 기기(사장님)가 노하우를 발행하면 실시간으로 다시 당겨온다.
@@ -50,7 +53,7 @@ export const usePlaybookStore = create<PlaybookState>((set, get) => ({
   remove: (id) => {
     optimisticRemove(set, get, 'entries', id, () => deleteEntry(id), '삭제에 실패했어요.');
   },
-  reset: () => set({ entries: HAS_SUPABASE ? [] : seed }),
+  reset: () => set({ entries: HAS_SUPABASE ? [] : seed, loadError: false }),
   // 데모 매장이면 시드, 신규 계정이면 빈 채로(가짜 노하우 노출 방지).
-  applyMock: (demo) => set({ entries: demo ? seed : [], loaded: true }),
+  applyMock: (demo) => set({ entries: demo ? seed : [], loaded: true, loadError: false }),
 }));

@@ -60,6 +60,7 @@ export default function OwnerOnboardingScreen() {
   const [expanded, setExpanded] = useState(false); // '직접 고르기' 펼침
   const [step, setStep] = useState<'pick' | 'done'>('pick');
   const [registeredCount, setRegisteredCount] = useState(0);
+  const [registering, setRegistering] = useState(false);
   // 더블탭으로 onRegister가 두 번 돌아 중복 적재되는 걸 막는다(setStep 반영 전 재호출 가드).
   const committed = useRef(false);
 
@@ -88,14 +89,31 @@ export default function OwnerOnboardingScreen() {
       return next;
     });
 
-  const onRegister = () => {
+  const onRegister = async () => {
     if (committed.current) return;
     const picks = templates.filter((t) => checked[t.id]);
     if (picks.length === 0) return;
     committed.current = true;
-    picks.forEach((t) => addEntry(forkTemplate(t, { unitId, creatorId: userId, creatorName: userName })));
-    setRegisteredCount(picks.length);
-    showToast(`노하우 ${picks.length}개를 등록했어요`, 'good');
+    setRegistering(true);
+    // 각 노하우가 서버에 실제로 저장됐는지 확인 — 저장 안 된 개수를 정직하게 반영(예전엔 실패해도
+    // "N개 등록했어요"를 띄우고 완료 화면으로 넘어가 무음 유실됐음).
+    const results = await Promise.all(
+      picks.map((t) => addEntry(forkTemplate(t, { unitId, creatorId: userId, creatorName: userName }))),
+    );
+    const okCount = results.filter(Boolean).length;
+    setRegistering(false);
+    if (okCount === 0) {
+      // 하나도 저장 안 됨 → 완료 화면으로 넘기지 않고 재시도 허용.
+      showToast('노하우 저장에 실패했어요. 연결을 확인하고 다시 시도해 주세요.', 'warn');
+      committed.current = false;
+      return;
+    }
+    if (okCount < picks.length) {
+      showToast(`${okCount}/${picks.length}개만 저장됐어요. 나머지는 대시보드에서 다시 담아 주세요.`, 'warn');
+    } else {
+      showToast(`노하우 ${okCount}개를 등록했어요`, 'good');
+    }
+    setRegisteredCount(okCount);
     setStep('done');
   };
 
@@ -257,13 +275,13 @@ export default function OwnerOnboardingScreen() {
           <PressableScale
             onPress={onRegister}
             scaleTo={0.98}
-            disabled={selectedCount === 0}
-            style={[styles.cta, selectedCount === 0 && styles.ctaOff]}
+            disabled={selectedCount === 0 || registering}
+            style={[styles.cta, (selectedCount === 0 || registering) && styles.ctaOff]}
             accessibilityRole="button"
             accessibilityLabel={selectedCount > 0 ? `${selectedCount}개 우리 매장에 담기` : '노하우를 골라주세요'}
           >
-            <Text style={[styles.ctaText, selectedCount === 0 && styles.ctaTextOff]}>
-              {selectedCount > 0 ? `우리 매장에 담기 · ${selectedCount}개` : '노하우를 골라주세요'}
+            <Text style={[styles.ctaText, (selectedCount === 0 || registering) && styles.ctaTextOff]}>
+              {registering ? '담는 중…' : selectedCount > 0 ? `우리 매장에 담기 · ${selectedCount}개` : '노하우를 골라주세요'}
             </Text>
           </PressableScale>
           <Pressable onPress={onSkip} hitSlop={8} style={styles.skip}>

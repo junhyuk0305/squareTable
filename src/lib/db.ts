@@ -68,6 +68,11 @@ function readFail(label: string, error: unknown): void {
   useSyncStore.getState().noteError('일부 정보를 불러오지 못했어요. 연결을 확인하고 새로고침해 주세요.');
 }
 
+// 읽기 실패를 "빈 결과"와 구분하기 위한 반환형(리포트 P0-1의 핵심 수정): 예전엔 fetch가 실패해도
+// 빈배열만 돌려줘 스토어가 loaded=true로만 세팅 → "장애"가 "데이터 없음"과 화면상 동일했다.
+// error 플래그를 함께 돌려 스토어가 loadError를 세팅하고, 화면이 EmptyState 대신 "다시 시도"를 띄운다.
+export type ReadResult<T> = { data: T; error: boolean };
+
 // ── 시계열 fetch 상한 (무한 fetch 방지) ────────────────────────
 // 누적되는 운영 데이터는 전체가 아니라 최근 구간만 당긴다(오래된 건 retention으로 정리됨).
 // feed/chat 은 날짜창(휘발성), attendance/unknown 은 카운트 상한만(자산·pending 보존).
@@ -88,15 +93,15 @@ function sinceTs(days: number): string {
 
 // ── 직원/사장 프로필 (같은 매장) ───────────────────────────
 // 실서비스: profiles에서 내 매장 동료를 읽어 직원/근태/급여 화면을 채운다.
-export async function fetchStaffProfiles(): Promise<{ owner: Owner | null; staff: Junior[] }> {
-  if (!HAS_SUPABASE) return { owner: null, staff: [] };
+export async function fetchStaffProfiles(): Promise<{ owner: Owner | null; staff: Junior[]; error: boolean }> {
+  if (!HAS_SUPABASE) return { owner: null, staff: [], error: false };
   const { data, error } = await supabase
     .from('profiles')
     .select('id, name, role, phone_last4, avatar, bio, meta, created_at')
     .order('created_at', { ascending: true });
   if (error) {
     readFail('fetchStaffProfiles', error);
-    return { owner: null, staff: [] };
+    return { owner: null, staff: [], error: true };
   }
   const rows = (data ?? []) as any[];
   const unit = _unitId ?? '';
@@ -130,18 +135,14 @@ export async function fetchStaffProfiles(): Promise<{ owner: Owner | null; staff
       career_days: r.meta?.career_days ?? 0,
       shift: r.meta?.shift ?? undefined,
     }));
-  return { owner, staff };
+  return { owner, staff, error: false };
 }
 
 // 사장이 직원을 매장에서 내보낸다(소속 해제 + 퇴사자 스냅샷 보관). RPC = 사장만·같은 매장 junior만.
 export async function removeStaffMember(staffId: string): Promise<boolean> {
   if (!HAS_SUPABASE) return true;
-  const { error } = await supabase.rpc('remove_staff', { p_staff_id: staffId });
-  if (error) {
-    console.warn('[db] removeStaffMember:', error.message);
-    return false;
-  }
-  return true;
+  // write() 헬퍼 경유 — 실패 시 reportError로 원격관측까지 남긴다(예전엔 console.warn만 남아 팀이 못 봄).
+  return write('removeStaffMember', supabase.rpc('remove_staff', { p_staff_id: staffId }));
 }
 
 // 퇴사 6개월 경과분 개인 기록 자동 정리(내 매장 범위). 사장 진입 시 기회적으로 1회 호출 — 실패해도 무해.
@@ -153,8 +154,8 @@ export async function purgeExpiredFormerStaff(): Promise<void> {
 
 // ── 합류 승인(남용 #2) ─────────────────────────────────────
 // 우리 매장에 합류 '신청'한(pending_unit_id = 내 매장) 프로필 목록. RLS가 신청자만 통과시킨다.
-export async function fetchPendingMembers(): Promise<{ id: string; name: string; phone_last4: string; created_at: string }[]> {
-  if (!HAS_SUPABASE || !_unitId) return [];
+export async function fetchPendingMembers(): Promise<ReadResult<{ id: string; name: string; phone_last4: string; created_at: string }[]>> {
+  if (!HAS_SUPABASE || !_unitId) return { data: [], error: false };
   const { data, error } = await supabase
     .from('profiles')
     .select('id, name, phone_last4, created_at')
@@ -162,14 +163,17 @@ export async function fetchPendingMembers(): Promise<{ id: string; name: string;
     .order('created_at', { ascending: true });
   if (error) {
     readFail('fetchPendingMembers', error);
-    return [];
+    return { data: [], error: true };
   }
-  return (data ?? []).map((r: any) => ({
-    id: r.id,
-    name: r.name ?? '',
-    phone_last4: r.phone_last4 ?? '',
-    created_at: r.created_at ?? '',
-  }));
+  return {
+    data: (data ?? []).map((r: any) => ({
+      id: r.id,
+      name: r.name ?? '',
+      phone_last4: r.phone_last4 ?? '',
+      created_at: r.created_at ?? '',
+    })),
+    error: false,
+  };
 }
 
 // 사장이 신청자를 승인 → unit_id 부여(소속 확정). RPC가 '내 매장 신청자'만 통과시킨다.
@@ -199,17 +203,17 @@ export async function rotateInviteCode(): Promise<{ inviteCode: string; expiresA
 }
 
 // ── 플레이북 ───────────────────────────────────────────────
-export async function fetchEntries(): Promise<PlaybookEntry[]> {
-  if (!HAS_SUPABASE) return [];
+export async function fetchEntries(): Promise<ReadResult<PlaybookEntry[]>> {
+  if (!HAS_SUPABASE) return { data: [], error: false };
   const { data, error } = await supabase
     .from('playbook_entries')
     .select('*')
     .order('created_at', { ascending: false });
   if (error) {
     readFail('fetchEntries', error);
-    return [];
+    return { data: [], error: true };
   }
-  return (data ?? []) as PlaybookEntry[];
+  return { data: (data ?? []) as PlaybookEntry[], error: false };
 }
 
 // source/verification 은 현재 스키마에 컬럼이 없다(타입엔 있으나 0001 테이블 미포함).
@@ -228,18 +232,20 @@ export async function insertEntry(entry: PlaybookEntry): Promise<boolean> {
 
 export async function updateEntry(id: string, patch: Partial<PlaybookEntry>): Promise<boolean> {
   if (!HAS_SUPABASE) return true;
-  return write(
+  // 노하우 수정이 0행(RLS/id드리프트)이면 사장이 고친 내용이 조용히 원복된다 → 실제 갱신 확인(P1-6).
+  return writeStrict(
     'updateEntry',
     supabase
       .from('playbook_entries')
       .update({ ...stripNonColumns(patch), updated_at: new Date().toISOString() })
-      .eq('id', id),
+      .eq('id', id)
+      .select('id'),
   );
 }
 
 export async function deleteEntry(id: string): Promise<boolean> {
   if (!HAS_SUPABASE) return true;
-  return write('deleteEntry', supabase.from('playbook_entries').delete().eq('id', id));
+  return writeStrict('deleteEntry', supabase.from('playbook_entries').delete().eq('id', id).select('id'));
 }
 
 // ── 노하우 제안/신청(알바 → 사장) ─────────────────────────
@@ -268,7 +274,8 @@ export async function reviewSuggestion(
   patch: Partial<Pick<PlaybookSuggestion, 'status' | 'owner_note' | 'resulting_entry_id' | 'reviewed_by' | 'reviewed_at'>>,
 ): Promise<boolean> {
   if (!HAS_SUPABASE) return true;
-  return write('reviewSuggestion', supabase.from('playbook_suggestions').update(patch).eq('id', id));
+  // 제안 승인/반려는 상태 전이(무결성) — 0행이면 유령 승인/반려 대신 실패로(P1-6).
+  return writeStrict('reviewSuggestion', supabase.from('playbook_suggestions').update(patch).eq('id', id).select('id'));
 }
 
 export function subscribeSuggestions(onChange: () => void): () => void {
@@ -283,8 +290,8 @@ export function subscribeSuggestions(onChange: () => void): () => void {
 }
 
 // ── 미답변 큐(사장님 인박스) ───────────────────────────────
-export async function fetchUnknownQueue(): Promise<UnknownQuery[]> {
-  if (!HAS_SUPABASE) return [];
+export async function fetchUnknownQueue(): Promise<ReadResult<UnknownQuery[]>> {
+  if (!HAS_SUPABASE) return { data: [], error: false };
   const { data, error } = await supabase
     .from('unknown_queries')
     .select('*')
@@ -292,9 +299,9 @@ export async function fetchUnknownQueue(): Promise<UnknownQuery[]> {
     .limit(PAGE_LIMIT);
   if (error) {
     readFail('fetchUnknownQueue', error);
-    return [];
+    return { data: [], error: true };
   }
-  return (data ?? []) as UnknownQuery[];
+  return { data: (data ?? []) as UnknownQuery[], error: false };
 }
 
 export async function insertUnknown(uq: UnknownQuery): Promise<boolean> {
@@ -635,7 +642,9 @@ export async function upsertAttendance(rec: AttendanceRecord): Promise<boolean> 
 }
 export async function deleteAttendance(id: string): Promise<boolean> {
   if (!HAS_SUPABASE) return true;
-  return write('deleteAttendance', supabase.from('attendance').delete().eq('id', id));
+  // 출퇴근=급여 직결 — upsert만 writeStrict였고 delete가 빠져 있었다. 0행 삭제가 "지워짐"으로 보이나
+  // 서버 잔존하면 급여 총액이 어긋난다 → delete도 실제 영향행 확인(P1-6).
+  return writeStrict('deleteAttendance', supabase.from('attendance').delete().eq('id', id).select('id'));
 }
 
 // ── 시급 ───────────────────────────────────────────────────
@@ -652,7 +661,11 @@ export async function fetchWages(): Promise<Record<string, number>> {
 }
 export async function setWageDb(staffId: string, wage: number): Promise<boolean> {
   if (!HAS_SUPABASE) return true;
-  return write('setWageDb', supabase.from('wages').upsert({ unit_id: _unitId, staff_id: staffId, hourly_wage: wage }));
+  // 시급=돈 직결 — 0행(RLS/경합)이면 새 시급이 화면엔 보이나 급여는 옛 값으로 계산된다 → 실제 반영 확인(P1-6).
+  return writeStrict(
+    'setWageDb',
+    supabase.from('wages').upsert({ unit_id: _unitId, staff_id: staffId, hourly_wage: wage }).select('staff_id'),
+  );
 }
 
 // ── 업무보드/출퇴근 Realtime 구독 ─────────────────────────
@@ -842,7 +855,9 @@ export async function updateSwap(id: string, patch: Partial<SwapRequest>): Promi
   if (patch.status !== undefined) row.status = patch.status;
   if (patch.accepted_by !== undefined) row.accepted_by = patch.accepted_by ?? null;
   if (patch.updated_at !== undefined) row.updated_at = patch.updated_at;
-  return write('updateSwap', supabase.from('swap_requests').update(row).eq('id', id));
+  // 교대 승인/수락/취소는 "누가 그 근무를 서는가"를 정하는 무결성 핵심 상태 전이 — 0행(RLS/경합)이면
+  // 유령 성공 대신 실패로(P1-6). 안 그러면 UI는 "승인됨" + 거짓 푸시가 나가는데 DB는 그대로 남는다.
+  return writeStrict('updateSwap', supabase.from('swap_requests').update(row).eq('id', id).select('id'));
 }
 
 export function subscribeSchedule(onChange: () => void): () => void {
