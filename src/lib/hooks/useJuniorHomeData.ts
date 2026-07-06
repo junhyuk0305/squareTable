@@ -7,7 +7,8 @@ import { useWorkStore, occursOn, type FeedItem } from '@/lib/store/useWorkStore'
 import { useScheduleStore } from '@/lib/store/useScheduleStore';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { useChatStore } from '@/lib/store/useChatStore';
-import { todayStr, liveMinutes, payFor, DEFAULT_HOURLY_WAGE, tsMs } from '@/lib/utils/attendance';
+import { todayStr, liveMinutes, DEFAULT_HOURLY_WAGE, tsMs } from '@/lib/utils/attendance';
+import { computePay } from '@/lib/utils/payroll';
 import type { PlaybookEntry } from '@/types';
 
 export type JuniorHomeData = {
@@ -46,6 +47,7 @@ export function useJuniorHomeData(): JuniorHomeData {
   const checkIn = useAttendanceStore((s) => s.checkIn);
   const checkOut = useAttendanceStore((s) => s.checkOut);
   const wages = usePayrollStore((s) => s.wages);
+  const settings = usePayrollStore((s) => s.settings);
   const wage = wages[userId] ?? DEFAULT_HOURLY_WAGE;
 
   const templates = useWorkStore((s) => s.templates);
@@ -82,7 +84,8 @@ export function useJuniorHomeData(): JuniorHomeData {
   const openRec = todayRecs.find((r) => r.check_in && !r.check_out);
   const working = !!openRec;
   const todayMin = todayRecs.reduce((sum, r) => sum + liveMinutes(r), 0);
-  const todayPay = payFor(todayMin, wage);
+  // 오늘 예상급여 — 하루 단위라 주휴수당·월 정액수당은 제외(휴게·야간·연장만). 급여규칙 SSOT=computePay(F1).
+  const todayPay = computePay(todayRecs, wage, { ...settings, weeklyHolidayPay: false, extraAllowance: 0 }).total;
 
   // 근무 중이면 경과시간 30초마다 갱신.
   useEffect(() => {

@@ -386,12 +386,12 @@ export const useWorkStore = create<State>((set, get) => ({
       const before = dup;
       const bumped: FeedItem = { ...dup, createdAt: new Date().toISOString(), read_by: [], important };
       set((s) => ({ feed: s.feed.map((f) => (f.id === dup.id ? bumped : f)) }));
+      // 저장 성공 후에만 재알림 — 실패(롤백)했는데 직원에게 유령 재공지 푸시가 가는 것 방지.
       void guardWrite(
         upsertFeed(bumped),
         () => set((s) => ({ feed: s.feed.map((f) => (f.id === before.id ? before : f)) })),
         '공지 재게시에 실패했어요.',
-      );
-      notifyStaffNotice(authorName, text); // 재공지도 직원에게 다시 웹푸시(재알림 의도).
+      ).then((ok) => { if (ok) notifyStaffNotice(authorName, text); });
       return;
     }
     const item: FeedItem = {
@@ -409,12 +409,12 @@ export const useWorkStore = create<State>((set, get) => ({
       ...(room ? { roomId: room } : null),
     };
     set((s) => ({ feed: [...s.feed, item] }));
+    // 저장 성공 후에만 웹푸시 — 실패 시 직원에게 저장 안 된 공지 알림이 가는 것 방지.
     void guardWrite(
       upsertFeed(item),
       () => set((s) => ({ feed: s.feed.filter((f) => f.id !== item.id) })),
       '공지 등록에 실패했어요.',
-    );
-    notifyStaffNotice(authorName, text); // 매장 직원 전체에게 웹푸시(발송자 제외는 서버가 처리).
+    ).then((ok) => { if (ok) notifyStaffNotice(authorName, text); }); // 매장 직원 전체(발송자 제외는 서버)
   },
 
   postMessage: (date, text, authorId, authorName, role, mentions, photoUrl) => {
@@ -433,15 +433,15 @@ export const useWorkStore = create<State>((set, get) => ({
       ...(room ? { roomId: room } : null),
     };
     set((s) => ({ feed: [...s.feed, item] }));
-    // 멘션된 동료에게 웹푸시(본인 멘션 제외). 서버가 같은 매장인지 검증.
-    for (const uid of mentions ?? []) {
-      if (uid !== authorId) notifyUserMention(uid, authorName, text);
-    }
+    // 저장 성공 후에만 멘션 웹푸시(본인 제외, 서버가 같은 매장 검증) — 실패 시 유령 멘션 알림 방지.
     void guardWrite(
       upsertFeed(item),
       () => set((s) => ({ feed: s.feed.filter((f) => f.id !== item.id) })),
       '메시지 전송에 실패했어요.',
-    );
+    ).then((ok) => {
+      if (!ok) return;
+      for (const uid of mentions ?? []) if (uid !== authorId) notifyUserMention(uid, authorName, text);
+    });
   },
 
   postComment: (noticeId, date, text, authorId, authorName, role, mentions) => {
@@ -460,15 +460,15 @@ export const useWorkStore = create<State>((set, get) => ({
       ...(room ? { roomId: room } : null),
     };
     set((s) => ({ feed: [...s.feed, item] }));
-    // 멘션된 동료에게 웹푸시(본인 멘션 제외). 서버가 같은 매장인지 검증.
-    for (const uid of mentions ?? []) {
-      if (uid !== authorId) notifyUserMention(uid, authorName, text);
-    }
+    // 저장 성공 후에만 멘션 웹푸시(본인 제외, 서버가 같은 매장 검증) — 실패 시 유령 멘션 알림 방지.
     void guardWrite(
       upsertFeed(item),
       () => set((s) => ({ feed: s.feed.filter((f) => f.id !== item.id) })),
       '댓글 등록에 실패했어요.',
-    );
+    ).then((ok) => {
+      if (!ok) return;
+      for (const uid of mentions ?? []) if (uid !== authorId) notifyUserMention(uid, authorName, text);
+    });
   },
 
   editFeedText: (id, text) => {
@@ -521,7 +521,10 @@ export const useWorkStore = create<State>((set, get) => ({
     }));
     if (updated)
       void guardWrite(
-        upsertFeed(updated),
+        // ⚠️ upsert 금지 — 직원이 남(사장)의 공지 행에 반응하면 wf_insert(notice=사장전용)에 걸려
+        //    42501 로 실패·롤백된다(직원의 공지 '확인' 반응이 통째로 죽음). 이미 존재하는 행의
+        //    제자리 UPDATE 라 updateFeed 를 쓴다(wf_update 는 같은 매장이면 허용). markNoticeRead 와 동일.
+        updateFeed(updated),
         () => before && set((s) => ({ feed: s.feed.map((f) => (f.id === feedId ? before : f)) })),
         '반응 저장에 실패했어요.',
       );

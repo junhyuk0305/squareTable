@@ -66,7 +66,7 @@ export function QuietHoursModal({
               <Ionicons name="moon-outline" size={20} color={InkColors.ink} />
               <Text style={styles.title}>방해 금지 시간</Text>
             </View>
-            <Text style={styles.sub}>이 시간대에는 푸시 알림을 보내지 않아요.</Text>
+            <Text style={styles.sub}>이 시간대에는 핸드폰 알림만 꺼요. 알림함에는 그대로 쌓여요.</Text>
 
             {/* 대상 토글 — 시작/종료 중 무엇을 고를지 */}
             <View style={styles.seg}>

@@ -19,7 +19,7 @@ import { RoleTabBar } from '@/components/RoleTabBar';
 import { Avatar } from '@/components/Avatar';
 import { HeaderLogoutButton } from '@/components/HeaderLogoutButton';
 
-const SCALE_LABEL: Record<TextScale, string> = { small: '작게', normal: '보통', large: '크게', xlarge: '아주 크게' };
+const SCALE_LABEL: Record<TextScale, string> = { small: '작게', normal: '보통', large: '크게' };
 
 export default function OwnerSettings() {
   const router = useRouter();
@@ -63,6 +63,17 @@ export default function OwnerSettings() {
     notifyAction('구독 및 결제', '지금은 파일럿 기간이라 무료로 쓰실 수 있어요. 월 구독 결제는 준비 중이에요.', '확인', {
       icon: 'card-outline',
     });
+
+  // 알림 선호는 DB(SSOT)에 원자적으로 저장한다. 저장 실패 시 스토어가 이전 값으로 롤백하므로
+  // 토글이 원위치로 되돌아오고, 여기서 실패를 고지한다(설정된 듯 보이나 서버엔 없는 무음 유실 방지).
+  const saveNotify = async (patch: Parameters<typeof prefs.saveNotify>[0]) => {
+    const { error } = await prefs.saveNotify(patch);
+    if (error) {
+      await notifyAction('저장 실패', '알림 설정을 저장하지 못했어요. 연결을 확인하고 다시 시도해 주세요.', '확인', {
+        icon: 'alert-circle-outline',
+      });
+    }
+  };
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
@@ -119,7 +130,7 @@ export default function OwnerSettings() {
             label="푸시 알림"
             hint="알바가 모르는 질문을 남기면 바로 알려드려요"
             value={prefs.pushEnabled}
-            onValueChange={() => prefs.toggle('pushEnabled')}
+            onValueChange={(v) => saveNotify({ pushEnabled: v })}
           />
           <SettingsToggle
             icon="mail-outline"
@@ -130,9 +141,9 @@ export default function OwnerSettings() {
           <SettingsToggle
             icon="moon-outline"
             label="방해 금지 시간"
-            hint={`${prefs.quietStart}~${prefs.quietEnd}에는 알림을 보내지 않아요`}
+            hint={`${prefs.quietStart}~${prefs.quietEnd}에는 핸드폰 알림만 꺼요 (알림함엔 그대로 쌓여요)`}
             value={prefs.quietHours}
-            onValueChange={() => prefs.toggle('quietHours')}
+            onValueChange={(v) => saveNotify({ quietHours: v })}
           />
           {prefs.quietHours ? (
             <SettingsRow
@@ -173,10 +184,7 @@ export default function OwnerSettings() {
         start={prefs.quietStart}
         end={prefs.quietEnd}
         onClose={() => setQuietModal(false)}
-        onSave={(s, e) => {
-          prefs.set('quietStart', s);
-          prefs.set('quietEnd', e);
-        }}
+        onSave={(s, e) => saveNotify({ quietStart: s, quietEnd: e })}
       />
       <TextScaleModal visible={scaleModal} onClose={() => setScaleModal(false)} />
       <ContactModal visible={contactModal} onClose={() => setContactModal(false)} />

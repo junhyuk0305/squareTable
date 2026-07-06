@@ -130,6 +130,34 @@ export async function fetchUnitSubscription(unitId: string): Promise<DbResult<Un
   return { data: (data as UnitSubscriptionRow) ?? null, error: error as DbErr };
 }
 
+// ── 알림 수신 선호(notification_prefs) — 서버(엣지 push 함수)가 발송 직전에 읽는 SSOT ─────────
+// 화면/스토어는 여기로만 접근한다(§계층 경계 ③). 저장은 원자적 upsert RPC 한 곳(save_notification_prefs).
+// 읽기는 RLS 로 본인 행만 반환(where 없이도 user_id=auth.uid() 로 좁혀짐). 행이 없으면 null → 스토어가 기본값.
+export type NotificationPrefsRow = {
+  push_enabled: boolean;
+  quiet_enabled: boolean;
+  quiet_start: string; // "HH:MM"
+  quiet_end: string; // "HH:MM"
+};
+export async function fetchNotificationPrefs(): Promise<DbResult<NotificationPrefsRow>> {
+  if (!HAS_SUPABASE) return { data: null, error: null };
+  const { data, error } = await supabase
+    .from('notification_prefs')
+    .select('push_enabled, quiet_enabled, quiet_start, quiet_end')
+    .maybeSingle();
+  return { data: (data as NotificationPrefsRow) ?? null, error: error as DbErr };
+}
+export async function saveNotificationPrefs(p: NotificationPrefsRow): Promise<{ error: DbErr }> {
+  if (!HAS_SUPABASE) return { error: null };
+  const { error } = await supabase.rpc('save_notification_prefs', {
+    p_push_enabled: p.push_enabled,
+    p_quiet_enabled: p.quiet_enabled,
+    p_quiet_start: p.quiet_start,
+    p_quiet_end: p.quiet_end,
+  });
+  return { error: error as DbErr };
+}
+
 // 전화번호 중복 사전검사(주키). 비로그인 호출 가능. data=true/false, error=검사 실패.
 export async function checkPhoneInUse(phone: string): Promise<DbResult<boolean>> {
   const { data, error } = await supabase.rpc('phone_in_use', { p_phone: phone });
@@ -404,7 +432,7 @@ export async function insertUnknown(uq: UnknownQuery): Promise<boolean> {
 
 export async function bumpUnknownSimilar(id: string, count: number): Promise<boolean> {
   if (!HAS_SUPABASE) return true;
-  return write('bumpUnknownSimilar', supabase.from('unknown_queries').update({ similar_queries_count: count }).eq('id', id));
+  return writeStrict('bumpUnknownSimilar', supabase.from('unknown_queries').update({ similar_queries_count: count }).eq('id', id).select('id'));
 }
 
 // 받은질문 상태 전이(보관/자동응답/대기로 되돌리기). status 컬럼만 갱신.
@@ -454,7 +482,7 @@ export async function insertChatQuery(cq: ChatQuery): Promise<boolean> {
 
 export async function updateChatSatisfaction(id: string, vote: 'up' | 'down'): Promise<boolean> {
   if (!HAS_SUPABASE) return true;
-  return write('updateChatSatisfaction', supabase.from('chat_queries').update({ satisfaction: vote }).eq('id', id));
+  return writeStrict('updateChatSatisfaction', supabase.from('chat_queries').update({ satisfaction: vote }).eq('id', id).select('id'));
 }
 
 // 노하우 사용 통계 재계산 — 답변 서빙/평가가 "영속된 뒤" 영향받은 entry id들로 호출(fire-and-forget·비치명).
@@ -539,8 +567,31 @@ export async function uploadPhoto(file: File): Promise<string | null> {
     console.warn('[db] uploadPhoto:', error.message); reportError('db:uploadPhoto', error);
     return null;
   }
-  const { data } = supabase.storage.from(PHOTO_BUCKET).getPublicUrl(path);
-  return data.publicUrl;
+  // 비공개 버킷 — 영구 공개URL(getPublicUrl) 대신 '오브젝트 경로'만 저장한다.
+  // 표시 시 resolvePhotoUri 가 본인 매장 권한으로 단기 서명URL을 발급(타 매장 URL 열람 차단).
+  return path;
+}
+
+// 저장된 사진 참조를 표시용 단기 서명URL로 변환.
+//  - 신규 저장값 = 오브젝트 경로('<unit_id>/<ts>-<rand>.ext')
+//  - 레거시 저장값 = 공개URL('.../playbook-photos/<path>') → path 추출해 동일하게 서명(버킷 비공개 후에도 표시됨)
+//  - mock/로컬 프리뷰(blob:/data:/file:) 및 외부 http URL 은 그대로 반환
+const _signCache = new Map<string, { url: string; exp: number }>();
+export async function resolvePhotoUri(stored?: string | null): Promise<string | null> {
+  if (!stored) return null;
+  if (/^(blob:|data:|file:)/.test(stored)) return stored;
+  if (!HAS_SUPABASE) return stored;
+  const marker = `/${PHOTO_BUCKET}/`;
+  const mi = stored.indexOf(marker);
+  if (mi < 0 && /^https?:\/\//.test(stored)) return stored; // 스토리지 밖 URL — 방어적으로 그대로
+  const path = (mi >= 0 ? stored.slice(mi + marker.length) : stored).split('?')[0];
+  const now = Date.now();
+  const cached = _signCache.get(path);
+  if (cached && cached.exp > now) return cached.url;
+  const { data, error } = await supabase.storage.from(PHOTO_BUCKET).createSignedUrl(path, 3600);
+  if (error || !data) { reportError('db:resolvePhotoUri', error ?? new Error('sign failed')); return null; }
+  _signCache.set(path, { url: data.signedUrl, exp: now + 50 * 60 * 1000 }); // 서명 1h · 캐시 50m
+  return data.signedUrl;
 }
 
 // ── Realtime 구독 ──────────────────────────────────────────
@@ -609,11 +660,11 @@ export async function insertRoom(room: Room): Promise<boolean> {
 }
 export async function updateRoomName(id: string, name: string): Promise<boolean> {
   if (!HAS_SUPABASE) return true;
-  return write('updateRoomName', supabase.from('work_rooms').update({ name }).eq('id', id));
+  return writeStrict('updateRoomName', supabase.from('work_rooms').update({ name }).eq('id', id).select('id'));
 }
 export async function deleteRoom(id: string): Promise<boolean> {
   if (!HAS_SUPABASE) return true;
-  return write('deleteRoom', supabase.from('work_rooms').delete().eq('id', id));
+  return writeStrict('deleteRoom', supabase.from('work_rooms').delete().eq('id', id).select('id'));
 }
 export async function addRoomMember(roomId: string, userId: string): Promise<boolean> {
   if (!HAS_SUPABASE) return true;
@@ -681,7 +732,7 @@ export async function insertTemplate(t: TaskTemplate): Promise<boolean> {
 }
 export async function updateTemplate(t: TaskTemplate): Promise<boolean> {
   if (!HAS_SUPABASE) return true;
-  return write(
+  return writeStrict(
     'updateTemplate',
     supabase
       .from('work_templates')
@@ -694,12 +745,13 @@ export async function updateTemplate(t: TaskTemplate): Promise<boolean> {
         recurrence: t.recurrence ?? null,
         date: t.date ?? t.dueDate ?? null,
       })
-      .eq('id', t.id),
+      .eq('id', t.id)
+      .select('id'),
   );
 }
 export async function deleteTemplate(id: string): Promise<boolean> {
   if (!HAS_SUPABASE) return true;
-  return write('deleteTemplate', supabase.from('work_templates').delete().eq('id', id));
+  return writeStrict('deleteTemplate', supabase.from('work_templates').delete().eq('id', id).select('id'));
 }
 
 // ── 업무보드: 완료 체크 ────────────────────────────────────
@@ -725,9 +777,9 @@ export async function setDone(date: string, templateId: string, mark: DoneMark, 
 }
 export async function clearDone(date: string, templateId: string): Promise<boolean> {
   if (!HAS_SUPABASE) return true;
-  return write(
+  return writeStrict(
     'clearDone',
-    supabase.from('work_done').delete().eq('unit_id', _unitId).eq('work_date', date).eq('template_id', templateId),
+    supabase.from('work_done').delete().eq('unit_id', _unitId).eq('work_date', date).eq('template_id', templateId).select('template_id'),
   );
 }
 
@@ -760,11 +812,11 @@ export async function upsertFeed(item: FeedItem): Promise<boolean> {
 //    평가하므로 남이 만든 공지 행이라도 같은 매장이면 정상 저장된다. (테넌트 격리는 USING 절이 유지.)
 export async function updateFeed(item: FeedItem): Promise<boolean> {
   if (!HAS_SUPABASE) return true;
-  return write('updateFeed', supabase.from('work_feed').update({ data: item }).eq('id', item.id));
+  return writeStrict('updateFeed', supabase.from('work_feed').update({ data: item }).eq('id', item.id).select('id'));
 }
 export async function deleteFeed(id: string): Promise<boolean> {
   if (!HAS_SUPABASE) return true;
-  return write('deleteFeed', supabase.from('work_feed').delete().eq('id', id));
+  return writeStrict('deleteFeed', supabase.from('work_feed').delete().eq('id', id).select('id'));
 }
 
 // ── 출퇴근 ─────────────────────────────────────────────────
@@ -812,6 +864,23 @@ export async function setWageDb(staffId: string, wage: number): Promise<boolean>
     'setWageDb',
     supabase.from('wages').upsert({ unit_id: _unitId, staff_id: staffId, hourly_wage: wage }).select('staff_id'),
   );
+}
+
+// ── 급여 규칙(매장 단위, units.payroll_settings jsonb) ──────
+// 직원은 읽기(급여계산), 사장만 쓰기 — units RLS(units_read/units_write)가 그대로 강제.
+export async function fetchPayrollSettings(): Promise<Record<string, unknown> | null> {
+  if (!HAS_SUPABASE) return null;
+  const { data, error } = await supabase.from('units').select('payroll_settings').eq('id', _unitId).maybeSingle();
+  if (error) {
+    readFail('fetchPayrollSettings', error);
+    return null;
+  }
+  return (data?.payroll_settings as Record<string, unknown> | null) ?? null;
+}
+export async function savePayrollSettings(settings: Record<string, unknown>): Promise<boolean> {
+  if (!HAS_SUPABASE) return true;
+  // 급여 규칙=돈 직결 — 0행(사장 아님·RLS·경합)이면 화면엔 바뀐 듯 보이나 계산은 옛 규칙 → 실제 반영 확인.
+  return writeStrict('savePayrollSettings', supabase.from('units').update({ payroll_settings: settings }).eq('id', _unitId).select('id'));
 }
 
 // ── 업무보드/출퇴근 Realtime 구독 ─────────────────────────
@@ -917,12 +986,12 @@ export async function updateShiftTemplate(id: string, patch: Partial<ShiftTempla
   if (patch.weekday !== undefined) row.weekday = patch.weekday;
   if (patch.start !== undefined) row.start_time = patch.start;
   if (patch.end !== undefined) row.end_time = patch.end;
-  return write('updateShiftTemplate', supabase.from('shift_templates').update(row).eq('id', id));
+  return writeStrict('updateShiftTemplate', supabase.from('shift_templates').update(row).eq('id', id).select('id'));
 }
 
 export async function deleteShiftTemplate(id: string): Promise<boolean> {
   if (!HAS_SUPABASE) return true;
-  return write('deleteShiftTemplate', supabase.from('shift_templates').delete().eq('id', id));
+  return writeStrict('deleteShiftTemplate', supabase.from('shift_templates').delete().eq('id', id).select('id'));
 }
 
 /**
@@ -936,15 +1005,20 @@ export async function saveStaffShifts(
   removeIds: string[],
 ): Promise<boolean> {
   if (!HAS_SUPABASE) return true;
-  if (removeIds.length > 0) {
-    const del = await write(
-      'saveStaffShifts.delete',
-      supabase.from('shift_templates').delete().in('id', removeIds),
-    );
-    if (!del) return false;
+  // 원자성 개선(비트랜잭션): upsert(유지·신규)를 먼저 커밋하고 그다음 remove 삭제한다.
+  //   - upsert 실패 시 삭제 전에 중단 → 편집 손실 없음(최악=변화 없음 + 배너로 재시도).
+  //   - 삭제가 뒤에서 실패해도 없어질 시프트가 잠깐 남을 뿐(과다)이라 편집이 사라지진 않는다(과소 방지).
+  //   - 둘 다 writeStrict — 0행(RLS 차단·동시성)을 성공으로 오판하지 않는다.
+  //   ※ 완전 원자성은 단일 트랜잭션 RPC 가 정답(후속). 지금은 실패 '방향'을 안전한 쪽으로 뒤집는다.
+  //   (rows 는 유지 id 재사용 + 신규, removeIds 는 사라진 id — 서로 겹치지 않아 순서 교체가 안전.)
+  if (rows.length > 0) {
+    const up = await writeStrict('saveStaffShifts.upsert', supabase.from('shift_templates').upsert(rows.map(shiftRow)).select('id'));
+    if (!up) return false;
   }
-  if (rows.length === 0) return true;
-  return write('saveStaffShifts.upsert', supabase.from('shift_templates').upsert(rows.map(shiftRow)));
+  if (removeIds.length > 0) {
+    return writeStrict('saveStaffShifts.delete', supabase.from('shift_templates').delete().in('id', removeIds).select('id'));
+  }
+  return true;
 }
 
 export async function fetchSwaps(): Promise<SwapRequest[]> {

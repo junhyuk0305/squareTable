@@ -4,6 +4,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
 import { useAttendanceStore, type AttendanceRecord } from '@/lib/store/useAttendanceStore';
+import { usePayrollStore } from '@/lib/store/usePayrollStore';
+import { computePay } from '@/lib/utils/payroll';
 import { RoleTabBar } from '@/components/RoleTabBar';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
@@ -33,6 +35,7 @@ export function TimesheetView({ staffId, wage, editedBy, badgeLabel, badgeTone =
   const records = useAttendanceStore((s) => s.records);
   const upsertManual = useAttendanceStore((s) => s.upsertManual);
   const removeRecord = useAttendanceStore((s) => s.removeRecord);
+  const settings = usePayrollStore((s) => s.settings);
 
   const [ym, setYm] = useState(() => todayStr().slice(0, 7));
   const [editing, setEditing] = useState<string | null>(null); // record id 또는 'new'
@@ -47,7 +50,7 @@ export function TimesheetView({ staffId, wage, editedBy, badgeLabel, badgeTone =
   );
 
   const totalMin = monthRecs.reduce((a, r) => a + r.work_minutes, 0);
-  const monthPay = Math.round((totalMin * wage) / 60);
+  const monthPay = computePay(monthRecs, wage, settings).total;
   const month = Number(ym.slice(5));
 
   function openEdit(r: AttendanceRecord) {

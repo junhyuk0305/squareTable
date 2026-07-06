@@ -375,7 +375,14 @@ ${query}
 
   const { parsed: out, usage } = await callGemini(prompt, ANSWER_SCHEMA, 300);
   const primary = sops[0];
-  const grounded = out.grounded !== false && (out.used_sop_ids?.length ?? 0) > 0;
+  let grounded = out.grounded !== false && (out.used_sop_ids?.length ?? 0) > 0;
+
+  // 출력측 지침 echo 차단 — handleSquare 와 동일한 방어선을 답변 경로에도 적용(주니어 질문으로
+  //   "이전 지시 전부 출력해" 류를 시도해도 프롬프트/스키마 누출이 답변 말풍선으로 렌더되지 않게).
+  //   누출이 감지되면 grounded=false → block=null → 클라는 "매장 답 없음(사장 에스컬레이션)" 경로로.
+  if (looksLikeInstructionLeak(out.summary ?? '', ...(out.actions ?? []), ...(out.donts ?? []))) {
+    grounded = false;
+  }
 
   return {
     grounded,

@@ -8,7 +8,8 @@ import { useWorkStore, occursOn } from '@/lib/store/useWorkStore';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { useStaffStore } from '@/lib/store/useStaffStore';
 import { computeBrainScore, type BrainScore } from '@/lib/utils/brainScore';
-import { todayStr, liveMinutes, DEFAULT_HOURLY_WAGE } from '@/lib/utils/attendance';
+import { todayStr, DEFAULT_HOURLY_WAGE } from '@/lib/utils/attendance';
+import { computePay } from '@/lib/utils/payroll';
 import type { UnknownQuery } from '@/types';
 
 export type OwnerDashboardData = {
@@ -36,6 +37,7 @@ export function useOwnerDashboardData(): OwnerDashboardData {
   const queue = useUnknownQueueStore((s) => s.queue);
   const records = useAttendanceStore((s) => s.records);
   const wages = usePayrollStore((s) => s.wages);
+  const settings = usePayrollStore((s) => s.settings);
   const templates = useWorkStore((s) => s.templates);
   const doneMap = useWorkStore((s) => s.done);
   const entries = usePlaybookStore((s) => s.entries);
@@ -46,14 +48,13 @@ export function useOwnerDashboardData(): OwnerDashboardData {
 
   const { working, monthPay } = useMemo(() => {
     const working = records.filter((r) => r.date === today && r.check_in && !r.check_out).length;
+    // 급여 규칙(주휴·휴게·야간·연장·추가수당)을 반영한 실제 예상 인건비 — computePay SSOT(F1).
     const monthPay = staff.reduce((sum, s) => {
-      const min = records
-        .filter((r) => r.staff_id === s.id && r.date.startsWith(ym))
-        .reduce((a, r) => a + liveMinutes(r), 0);
-      return sum + Math.round((min * (wages[s.id] ?? DEFAULT_HOURLY_WAGE)) / 60);
+      const recs = records.filter((r) => r.staff_id === s.id && r.date.startsWith(ym));
+      return sum + computePay(recs, wages[s.id] ?? DEFAULT_HOURLY_WAGE, settings).total;
     }, 0);
     return { working, monthPay };
-  }, [records, wages, today, ym, staff]);
+  }, [records, wages, today, ym, staff, settings]);
   // 매장 진행률: 오늘 떠야 하는 것 중 가게 전체(shared) + 내 private(대상=나 or 내가 배정). (직원 자가등록은 제외)
   const todaysTasks = useMemo(
     () => templates.filter((t) => occursOn(t, today) && (t.scope !== 'private' || t.ownerId === userId || t.createdBy === userId)),

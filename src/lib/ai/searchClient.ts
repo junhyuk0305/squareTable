@@ -16,6 +16,7 @@ import {
   SERVE_REQUIRE_LEXICAL_AGREEMENT, SERVE_LEX_MIN, SERVE_LEX_MARGIN, SERVE_VEC_OVERRIDE,
 } from './config';
 import { supabase } from '@/lib/supabase';
+import { reportError } from '@/lib/analytics/track';
 
 const RRF_K = 60; // RRF 상수(표준값). 순위만 쓰므로 점수 스케일 불일치에 견고.
 const TOPK = 8;
@@ -67,7 +68,9 @@ export async function hybridSearch(query: string, entries: PlaybookEntry[]): Pro
   try {
     vec = await edgePost<VecResponse>('search', { query });
   } catch (e) {
+    // 의미검색(pgvector) 다운 → 렉시컬로 조용히 열화되던 걸 계측(팀이 의미검색 장애를 볼 수 있게).
     console.warn('[search] vector path failed, lexical fallback:', e);
+    reportError('search.vector.degraded', e);
   }
   if (!vec || !Array.isArray(vec.candidates)) return lexical; // 서버 실패 → 렉시컬 폴백
 
@@ -150,7 +153,10 @@ export async function embedEntry(e: PlaybookEntry): Promise<void> {
       if (res !== null) return; // 색인 성공
     } catch (err) {
       if (attempt === 3) {
+        // ★S1: 색인 실패 시 이 노하우는 의미검색에서 영영 빠진다(렉시컬만 커버) — 사장은 검색되는 줄 안다.
+        //   조용히 사라지던 걸 원격 계측(어느 노하우가 미색인인지 팀이 추적 가능).
         console.warn('[search] embed failed after 3 tries (non-fatal):', err);
+        reportError('search.embed.failed', err, { entryId: e.id });
         return;
       }
     }

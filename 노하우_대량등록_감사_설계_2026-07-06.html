@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>노하우 다중·대량 등록 — 현황 감사 & 설계안</title>
+<style>
+  :root{
+    --ink:#111111; --ink2:#6b6b6b; --ink3:#a4a29b; --line:#EAECEF;
+    --bg:#FFFFFF; --soft:#F4F5F7; --source:#FEF9EC;
+    --yellow:#FFE14D; --yellowDeep:#F5C518; --yellowSoft:#FFF3B8;
+    --good:#1c7d3f; --warn:#c98a2e; --bad:#c44b4b;
+    --goodSoft:#E7F1EA; --warnSoft:#F7EEDD; --badSoft:#F6E6E6;
+    --routine:#5E6B78; --event:#B0635A; --context:#637A5E; --knowhow:#9A8550;
+    --shadow:0 6px 24px rgba(17,17,17,.07), 0 2px 6px rgba(17,17,17,.05);
+    --shadowSm:0 2px 10px rgba(17,17,17,.06);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    font-family:"Pretendard","Pretendard Variable",-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Segoe UI",Roboto,sans-serif;
+    background:var(--soft); color:var(--ink); line-height:1.62;
+    letter-spacing:-.01em; padding:0 0 80px;
+  }
+  .wrap{max-width:1080px;margin:0 auto;padding:0 22px}
+
+  /* ── 헤더 ── */
+  header.top{
+    background:var(--ink); color:#fff; padding:52px 0 46px; margin-bottom:38px;
+    border-bottom:5px solid var(--yellow);
+  }
+  header.top .wrap{max-width:1080px}
+  .eyebrow{display:inline-block;font-size:13px;font-weight:700;letter-spacing:.06em;
+    color:var(--ink);background:var(--yellow);padding:5px 12px;border-radius:999px;margin-bottom:18px}
+  header.top h1{font-size:32px;font-weight:800;letter-spacing:-.03em;line-height:1.22}
+  header.top h1 u{text-decoration:none;box-shadow:inset 0 -.42em 0 rgba(255,225,77,.55)}
+  header.top p{margin-top:14px;color:#c9c9c9;font-size:15px;max-width:640px}
+  header.top .meta{margin-top:22px;font-size:12.5px;color:#8f8f8f;display:flex;gap:18px;flex-wrap:wrap}
+  header.top .meta b{color:#e6e6e6;font-weight:600}
+
+  /* ── 섹션 ── */
+  section{margin:0 0 46px}
+  .kicker{font-size:12.5px;font-weight:700;letter-spacing:.05em;color:var(--ink3);text-transform:uppercase;margin-bottom:8px}
+  h2{font-size:23px;font-weight:800;letter-spacing:-.02em;margin-bottom:6px;display:flex;align-items:center;gap:10px}
+  h2 .n{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:9px;
+    background:var(--yellow);color:var(--ink);font-size:15px;font-weight:800}
+  .lead{color:var(--ink2);font-size:15px;margin-bottom:22px;max-width:760px}
+
+  /* ── 카드 ── */
+  .card{background:var(--bg);border-radius:18px;box-shadow:var(--shadow);padding:24px 26px;margin-bottom:18px}
+  .card h3{font-size:17px;font-weight:750;margin-bottom:6px;letter-spacing:-.02em}
+  .card p{color:var(--ink2);font-size:14.5px}
+
+  /* ── 판정 배지 ── */
+  .verdict{display:inline-flex;align-items:center;gap:7px;font-weight:750;font-size:13.5px;
+    padding:5px 12px 5px 10px;border-radius:999px;white-space:nowrap}
+  .v-ok{background:var(--goodSoft);color:var(--good)}
+  .v-warn{background:var(--warnSoft);color:var(--warn)}
+  .v-no{background:var(--badSoft);color:var(--bad)}
+  .dot{width:8px;height:8px;border-radius:50%;display:inline-block}
+  .v-ok .dot{background:var(--good)} .v-warn .dot{background:var(--warn)} .v-no .dot{background:var(--bad)}
+
+  /* ── 표 ── */
+  .tablewrap{overflow-x:auto;border-radius:16px;box-shadow:var(--shadow);background:var(--bg)}
+  table{border-collapse:collapse;width:100%;min-width:640px;font-size:14px}
+  th,td{text-align:left;padding:14px 18px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{background:var(--soft);font-weight:750;font-size:12.5px;color:var(--ink2);letter-spacing:.02em}
+  tr:last-child td{border-bottom:none}
+  td code,.mono{font-family:"SF Mono",ui-monospace,Menlo,Consolas,monospace;font-size:12.5px;
+    background:var(--soft);padding:2px 6px;border-radius:6px;color:#333}
+  td b{font-weight:700}
+  .cell-reason{color:var(--ink2);font-size:13px}
+
+  /* ── 흐름 파이프라인 ── */
+  .flow{display:flex;flex-wrap:wrap;align-items:stretch;gap:0;margin-top:10px}
+  .step{flex:1 1 150px;min-width:150px;background:var(--bg);border-radius:14px;box-shadow:var(--shadowSm);
+    padding:16px 15px;position:relative;margin:6px}
+  .step .si{font-size:11px;font-weight:800;color:var(--yellowDeep);letter-spacing:.04em}
+  .step h4{font-size:14px;font-weight:750;margin:5px 0 5px}
+  .step p{font-size:12.5px;color:var(--ink2);line-height:1.5}
+  .step .tag{display:inline-block;margin-top:8px;font-size:11px;font-weight:700;color:var(--ink);
+    background:var(--yellowSoft);padding:3px 8px;border-radius:7px}
+  .arrow{align-self:center;color:var(--ink3);font-size:20px;font-weight:800;padding:0 2px}
+  @media(max-width:760px){.arrow{display:none}.step{flex:1 1 100%}}
+
+  /* ── 폰(목업) ── */
+  .phones{display:flex;gap:26px;flex-wrap:wrap;justify-content:center;margin-top:8px}
+  .phone{width:300px;background:var(--bg);border-radius:30px;box-shadow:var(--shadow);
+    padding:12px 12px 16px;flex:0 0 auto}
+  .phone .notch{width:96px;height:5px;border-radius:99px;background:#e2e2e2;margin:4px auto 12px}
+  .screen{background:var(--bg);border-radius:20px;overflow:hidden;border:1px solid var(--line)}
+  .sbar{background:var(--ink);color:#fff;padding:12px 16px;display:flex;align-items:center;gap:9px;font-weight:750;font-size:14px}
+  .sbar .back{font-size:16px;color:#bbb}
+  .sbar .wm u{box-shadow:inset 0 -.32em 0 var(--yellow)}
+  .sbody{padding:15px 15px 12px;min-height:430px;display:flex;flex-direction:column}
+  .caption{text-align:center;font-size:13px;color:var(--ink2);margin-top:12px;font-weight:600}
+  .caption b{color:var(--ink)}
+
+  /* 목업 조각 */
+  .ai-b{background:var(--soft);border-radius:14px;border-top-left-radius:5px;padding:11px 13px;font-size:13px;color:#333;margin-bottom:12px}
+  .srcpick{display:flex;flex-direction:column;gap:9px;margin-bottom:12px}
+  .src{display:flex;align-items:center;gap:11px;padding:12px 13px;border:1.5px solid var(--line);border-radius:13px;font-size:13.5px;font-weight:650}
+  .src.sel{border-color:var(--ink);background:#fff;box-shadow:var(--shadowSm)}
+  .src .ic{width:34px;height:34px;border-radius:10px;background:var(--yellowSoft);display:flex;align-items:center;justify-content:center;font-size:17px}
+  .src small{display:block;font-weight:500;color:var(--ink3);font-size:11.5px;margin-top:1px}
+  .ta{border:1.5px solid var(--line);border-radius:13px;padding:11px 12px;font-size:12px;color:#444;
+    background:#fff;min-height:118px;line-height:1.55}
+  .ta .ph{color:var(--ink3)}
+  .counter{text-align:right;font-size:11px;color:var(--ink3);margin:6px 2px 0}
+  .cta{margin-top:auto;background:var(--yellow);color:var(--ink);text-align:center;font-weight:800;
+    padding:13px;border-radius:14px;font-size:14.5px;box-shadow:0 3px 10px rgba(245,197,24,.35)}
+  .cta.dark{background:var(--ink);color:#fff;box-shadow:var(--shadowSm)}
+
+  .revrow{display:flex;gap:10px;align-items:flex-start;padding:11px 0;border-bottom:1px solid var(--line)}
+  .chk{width:20px;height:20px;border-radius:6px;border:2px solid var(--ink);flex:0 0 auto;margin-top:2px;
+    display:flex;align-items:center;justify-content:center;color:#fff;font-size:12px;font-weight:800}
+  .chk.on{background:var(--ink)}
+  .chk.off{border-color:var(--line)}
+  .rev-main{flex:1;min-width:0}
+  .rev-title{font-size:13px;font-weight:750;letter-spacing:-.01em}
+  .rev-sub{font-size:11.5px;color:var(--ink2);margin-top:2px;line-height:1.45}
+  .catchip{display:inline-block;font-size:10px;font-weight:800;padding:2px 7px;border-radius:6px;color:#fff;margin-bottom:3px}
+  .c-routine{background:var(--routine)}.c-event{background:var(--event)}.c-context{background:var(--context)}.c-knowhow{background:var(--knowhow)}
+  .pencil{color:var(--ink3);font-size:14px;flex:0 0 auto;margin-top:1px}
+  .infoline{font-size:11px;color:var(--warn);background:var(--warnSoft);padding:2px 7px;border-radius:6px;display:inline-block;margin-top:3px;font-weight:700}
+
+  .done-ic{width:66px;height:66px;border-radius:50%;background:var(--yellow);display:flex;align-items:center;
+    justify-content:center;font-size:32px;margin:38px auto 18px;box-shadow:0 5px 16px rgba(245,197,24,.4)}
+  .done-t{text-align:center;font-size:17px;font-weight:800;margin-bottom:6px}
+  .done-p{text-align:center;font-size:13px;color:var(--ink2);margin-bottom:20px}
+  .attach{display:flex;align-items:center;gap:9px;background:var(--source);border:1px solid #f0e4c0;border-radius:12px;padding:11px 12px;font-size:12.5px;color:#7a6a3a;font-weight:650}
+
+  /* ── 구현 계획 리스트 ── */
+  .impl{display:grid;grid-template-columns:1fr;gap:12px}
+  .impl .row{background:var(--bg);border-radius:14px;box-shadow:var(--shadowSm);padding:16px 18px;
+    display:grid;grid-template-columns:210px 1fr;gap:16px;align-items:start}
+  .impl .row .f{font-weight:700;font-size:13px}
+  .impl .row .f .mono{display:inline-block;margin-top:4px}
+  .impl .row .d{font-size:13.5px;color:var(--ink2)}
+  .impl .row .d b{color:var(--ink)}
+  @media(max-width:640px){.impl .row{grid-template-columns:1fr;gap:6px}}
+
+  .tag2{display:inline-block;font-size:11px;font-weight:750;padding:3px 9px;border-radius:7px;margin:0 5px 5px 0}
+  .t-new{background:var(--goodSoft);color:var(--good)}
+  .t-edit{background:var(--yellowSoft);color:#8a6d00}
+  .t-cost{background:var(--badSoft);color:var(--bad)}
+
+  .note{background:var(--source);border-left:4px solid var(--yellowDeep);border-radius:0 12px 12px 0;
+    padding:15px 18px;font-size:13.5px;color:#5f5330;margin-top:10px}
+  .note b{color:var(--ink)}
+
+  ul.clean{list-style:none;margin-top:8px}
+  ul.clean li{position:relative;padding-left:22px;font-size:14px;color:var(--ink2);margin-bottom:8px;line-height:1.55}
+  ul.clean li::before{content:"";position:absolute;left:4px;top:9px;width:7px;height:7px;border-radius:50%;background:var(--yellowDeep)}
+  ul.clean li b{color:var(--ink)}
+  .mono2{font-family:"SF Mono",ui-monospace,Menlo,Consolas,monospace;font-size:12.5px;color:#b0635a}
+
+  footer{color:var(--ink3);font-size:12.5px;text-align:center;padding:30px 0 10px;border-top:1px solid var(--line);margin-top:20px}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <span class="eyebrow">노하우 등록 · 기능 감사 & 설계</span>
+    <h1>노하우 <u>다중·대량 등록</u>은 지금 어디까지 되나?<br>그리고 인수인계서를 한 번에 넣으려면?</h1>
+    <p>UI → 클라이언트 → Edge Function → 데이터까지 실제 코드 경로를 따라 확인한 현황과, 없는 기능(문서·이미지 일괄 등록)을 어떻게 붙일지에 대한 설계안입니다.</p>
+    <div class="meta">
+      <span><b>대상</b> 사장 노하우 등록(OwnerCoachChat / edge <code style="color:#ddd;background:#333">ai · square</code>)</span>
+      <span><b>기준 커밋</b> 2ff542c · feat/10</span>
+      <span><b>작성</b> 2026-07-06</span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <div class="note" style="margin:26px 0 6px;background:var(--goodSoft);border-left-color:var(--good)">
+    <b>✅ 구현 반영 (2026-07-06).</b> 아래 감사 이후 다음이 적용됐습니다(클라·앱 재빌드 대상, tsc/lint/qa:split 통과):
+    <b>Q1</b> — 한 번에 <b>최대 5개</b>만 등록(SSOT <code>MAX_SPLIT_PUBLISH</code>), 5개 초과 시 <b>경고 문구 + 앞 5개만</b> 표시(조용히 안 자름), 분리카드 <b>제목 인라인 수정</b>.
+    <b>Q2</b> — 등록 입력창 <b>긴 텍스트 허용</b>(maxLength 1000→4000). PDF·사진 OCR은 추후.
+    아래 "불가" 판정은 <b>변경 전 스냅샷</b>입니다.
+  </div>
+
+  <!-- ============ Q1 ============ -->
+  <section>
+    <div class="kicker">Question 1</div>
+    <h2><span class="n">1</span>여러 노하우를 한 번에 적으면 나눠서 등록되나?</h2>
+    <p class="lead">한 번의 발화에 노하우가 여러 개 섞여 있으면 AI가 항목별로 나눠 각각의 카드로 만들고, 사장이 "각각 등록"을 누르면 배치로 저장합니다. <b>코드상으로는 최대 6개까지 동작</b>합니다.</p>
+
+    <div class="card" style="display:flex;justify-content:space-between;align-items:center;gap:20px;flex-wrap:wrap">
+      <div style="flex:1;min-width:260px">
+        <h3>결론: 됩니다 (최대 6개) — 단, 라이브 배포는 별도 확인 필요</h3>
+        <p>분리 로직·배치 저장·카운트 정합까지 커밋 완료. 다만 배포된 웹 번들과 Edge 재배포 여부는 아래 주의 참고.</p>
+      </div>
+      <span class="verdict v-ok"><span class="dot"></span>코드 기준 가능</span>
+    </div>
+
+    <div class="flow">
+      <div class="step">
+        <div class="si">STEP 1 · UI</div>
+        <h4>자유 발화 입력</h4>
+        <p>사장이 채팅에 한 번에 적음. "아침엔 그라인더 청소하고, 진상 손님 오면 매니저 불러"</p>
+        <span class="tag">OwnerCoachChat</span>
+      </div>
+      <div class="arrow">→</div>
+      <div class="step">
+        <div class="si">STEP 2 · EDGE</div>
+        <h4>AI가 항목 분해</h4>
+        <p>줄바꿈·번호·불릿·"그리고"로 나열되면 항목마다 별 entry로. 마스터 지침 few-shot이 시연.</p>
+        <span class="tag">square → segments[]</span>
+      </div>
+      <div class="arrow">→</div>
+      <div class="step">
+        <div class="si">STEP 3 · 클라</div>
+        <h4>분리 제안 카드</h4>
+        <p>발행 가능한 세그 2개+면 "각각 등록 (N개) / 하나로 합치기" 선택지 노출.</p>
+        <span class="tag">SplitProposal</span>
+      </div>
+      <div class="arrow">→</div>
+      <div class="step">
+        <div class="si">STEP 4 · 데이터</div>
+        <h4>배치 저장</h4>
+        <p>각 세그 → PlaybookEntry → onPublishedMany로 한꺼번에 add. 저장 수 = 표시 N.</p>
+        <span class="tag">publishEach</span>
+      </div>
+    </div>
+
+    <h3 style="margin:26px 0 10px;font-size:16px">⚠️ 지금 구조가 갖는 한계 3가지</h3>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th style="width:30%">한계</th><th style="width:30%">근거(코드)</th><th>실제 영향</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><b>① 6개 상한</b><br>7개 이상은 잘림</td>
+            <td><code>MAX_ENTRIES = 6</code><br>스키마 <code>maxItems</code> + <code>slice(0,6)</code></td>
+            <td class="cell-reason">인수인계서처럼 10~20개 항목이면 <b>6개만</b> 남고 나머지는 조용히 사라짐. 사용자에게 "잘렸다"는 고지 없음.</td>
+          </tr>
+          <tr>
+            <td><b>② 사실·위치 항목 탈락</b></td>
+            <td><code>isSquarePublishable</code><br>= steps≥1 또는 scripts≥1</td>
+            <td class="cell-reason">"락커 비번 1234", "여분 시럽은 창고 맨 위" 같은 <b>할 일 없는 Context 항목</b>은 발행 대상에서 제외 → 분리 카운트·저장 모두 누락.</td>
+          </tr>
+          <tr>
+            <td><b>③ 답변 모드는 미분리</b></td>
+            <td><code>!isInboxAnswer && pubSegs≥2</code></td>
+            <td class="cell-reason">받은 질문에 답하는 흐름에선 분리 제안이 뜨지 않음(직접 등록 경로만). 의도된 동작이나 참고.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="note">
+      <b>배포 주의(중요).</b> <code>USE_MOCK=false</code>·실 Edge(pilot) 사용 설정이지만,
+      배포된 웹 번들 <code>dist</code>는 <b>2026-07-04 빌드</b>로 클라 분리 정확도 수정(커밋 <code>11b28e3</code>, 7/5)보다 <b>앞섭니다</b> → 현재 라이브 웹앱에는 이 수정이 아직 없음.
+      Edge <code>ai</code> 함수의 <code>MAX_ENTRIES=6·MAX_GUIDE_LEN=2600</code>도 소스엔 있으나 <b><code>supabase functions deploy ai</code> 재배포 여부는 미확인</b>.
+      → "실서비스에서 진짜 나뉘는가"는 <b>앱 재빌드 + Edge 재배포 후, 실 LLM으로 4~6개 동시입력 재현</b>으로 확정해야 합니다.
+    </div>
+  </section>
+
+  <!-- ============ Q2 ============ -->
+  <section>
+    <div class="kicker">Question 2</div>
+    <h2><span class="n">2</span>긴 인수인계서(텍스트·PDF·사진)를 한 번에 노하우로?</h2>
+    <p class="lead">긴 텍스트를 붙여넣거나, PDF·사진(PNG/JPG)을 올려 한 번에 여러 노하우로 만드는 경로는 <b>현재 전부 없습니다.</b> 사진은 "첨부"만 되고 내용은 읽히지 않습니다.</p>
+
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th style="width:18%">입력 방식</th><th style="width:16%">현황</th><th>왜 안 되는가 (코드 근거)</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><b>긴 텍스트</b><br>N자 붙여넣기</td>
+            <td><span class="verdict v-no"><span class="dot"></span>불가</span></td>
+            <td class="cell-reason">입력창 <code>maxLength={1000}</code> — 1,000자 초과는 입력 자체가 잘림. Edge도 <code>MAX_RAWTEXT_LEN=8000</code>으로 컷. 게다가 위 6개 상한. 실제 인수인계서(보통 수천 자·10+개 항목)를 한 번에 담을 수 없음.</td>
+          </tr>
+          <tr>
+            <td><b>PDF</b></td>
+            <td><span class="verdict v-no"><span class="dot"></span>불가</span></td>
+            <td class="cell-reason">파일 선택기가 <code>accept='image/*'</code>로 <b>PDF 선택 불가</b>. PDF 텍스트 추출·파싱 코드가 프로젝트 어디에도 없음.</td>
+          </tr>
+          <tr>
+            <td><b>PNG / JPG</b><br>(문서 사진)</td>
+            <td><span class="verdict v-warn"><span class="dot"></span>첨부만</span></td>
+            <td class="cell-reason">사진은 <code>photos[]</code>로 카드에 <b>첨부</b>됨. 하지만 Edge <code>callGemini</code>는 <code>parts:[{text}]</code>만 전송(멀티모달 아님) → <b>이미지 속 글자를 노하우로 추출하지 않음</b>. 사진 붙은 빈 노하우가 됨. + 웹 전용.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="margin-top:14px;color:var(--ink2);font-size:14px">즉 <b>"문서 통째로 던지면 알아서 여러 노하우로 정리"</b> 기능은 미구현입니다. 아래는 이를 붙이는 설계안입니다.</p>
+  </section>
+
+  <!-- ============ 설계안 UI ============ -->
+  <section>
+    <div class="kicker">Proposal · UI</div>
+    <h2><span class="n">＋</span>신규 기능 "인수인계서 한 번에 등록"</h2>
+    <p class="lead">노하우 등록 화면에 <b>📄 문서로 한 번에</b> 진입점을 추가. 긴 텍스트·PDF·사진을 받아 → 항목별로 뽑아 → 사장이 체크리스트로 골라 → 배치 저장. 기존 채팅 등록(1건씩)은 그대로 두고 옆에 얹는 별도 모드.</p>
+
+    <div class="phones">
+      <!-- 화면 1 -->
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="screen">
+          <div class="sbar"><span class="back">←</span><span>문서로 한 번에</span></div>
+          <div class="sbody">
+            <div class="ai-b">인수인계서·메모·사진을 올려주세요. 제가 항목별 노하우로 나눠 정리해 드릴게요. 📄</div>
+            <div class="srcpick">
+              <div class="src sel"><span class="ic">📋</span><div>텍스트 붙여넣기<small>긴 글 그대로 (제한 없음)</small></div></div>
+              <div class="src"><span class="ic">📄</span><div>PDF 올리기<small>인수인계서·매뉴얼 파일</small></div></div>
+              <div class="src"><span class="ic">🖼️</span><div>사진으로<small>손글씨 메모·게시판 (여러 장)</small></div></div>
+            </div>
+            <div class="ta"><span class="ph">여기에 인수인계서를 붙여넣으세요…<br><br>1. 오픈 때 화장실 청소<br>2. 마감 정산은 포스기 → 금고<br>3. 진상 손님 오면 매니저 호출<br>4. 락커 비번 1234 …</span></div>
+            <div class="counter">3,240 자</div>
+            <div class="cta" style="margin-top:14px">노하우로 뽑아내기</div>
+          </div>
+        </div>
+        <div class="caption">① 소스 선택 · <b>제한 없는 입력</b></div>
+      </div>
+
+      <!-- 화면 2 -->
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="screen">
+          <div class="sbar"><span class="back">←</span><span>골라서 등록</span></div>
+          <div class="sbody" style="padding-top:12px">
+            <div class="ai-b" style="margin-bottom:8px"><b>12개</b> 노하우를 찾았어요. 등록할 것만 골라주세요.</div>
+            <div style="overflow:hidden">
+              <div class="revrow">
+                <div class="chk on">✓</div>
+                <div class="rev-main"><span class="catchip c-routine">반복업무</span>
+                  <div class="rev-title">오픈 화장실 청소</div>
+                  <div class="rev-sub">상황: 오픈 시 · 할 일: 화장실 청소</div></div>
+                <span class="pencil">✏️</span>
+              </div>
+              <div class="revrow">
+                <div class="chk on">✓</div>
+                <div class="rev-main"><span class="catchip c-routine">반복업무</span>
+                  <div class="rev-title">마감 정산 절차</div>
+                  <div class="rev-sub">할 일: 포스기 정산 → 금고 보관</div></div>
+                <span class="pencil">✏️</span>
+              </div>
+              <div class="revrow">
+                <div class="chk on">✓</div>
+                <div class="rev-main"><span class="catchip c-event">돌발대응</span>
+                  <div class="rev-title">진상 손님 응대</div>
+                  <div class="rev-sub">할 일: 매니저 호출 · 금지: 직접 언쟁</div></div>
+                <span class="pencil">✏️</span>
+              </div>
+              <div class="revrow">
+                <div class="chk on">✓</div>
+                <div class="rev-main"><span class="catchip c-context">매장맥락</span>
+                  <div class="rev-title">락커 비밀번호</div>
+                  <div class="rev-sub">상황: 락커 비번 1234</div>
+                  <span class="infoline">사실 정보 · 지금 구조라면 누락됨</span></div>
+                <span class="pencil">✏️</span>
+              </div>
+              <div class="revrow">
+                <div class="chk off"></div>
+                <div class="rev-main" style="opacity:.55"><span class="catchip c-knowhow">숙련요령</span>
+                  <div class="rev-title">원두 볶음 정도</div>
+                  <div class="rev-sub">제외됨 (중복으로 판단)</div></div>
+                <span class="pencil">✏️</span>
+              </div>
+            </div>
+            <div class="cta">선택한 9개 등록</div>
+          </div>
+        </div>
+        <div class="caption">② 추출 검토 · <b>켜고/끄고 편집</b></div>
+      </div>
+
+      <!-- 화면 3 -->
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="screen">
+          <div class="sbar"><span class="wm"><u>SquareTable</u></span></div>
+          <div class="sbody">
+            <div class="done-ic">✓</div>
+            <div class="done-t">노하우 9개가 등록됐어요</div>
+            <div class="done-p">알바가 바로 검색해서 볼 수 있어요.<br>원본 문서는 참고용으로 함께 보관됩니다.</div>
+            <div class="attach">📎 원본 인수인계서.pdf · 첨부 보관됨</div>
+            <div style="height:14px"></div>
+            <div class="attach" style="background:var(--soft);border-color:var(--line);color:var(--ink2)">🔍 방금 등록한 9개 노하우 보기</div>
+            <div class="cta dark" style="margin-top:auto">완료</div>
+          </div>
+        </div>
+        <div class="caption">③ 완료 · <b>원본 첨부 보관</b></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 설계안 데이터/아키텍처 ============ -->
+  <section>
+    <div class="kicker">Proposal · Architecture</div>
+    <h2><span class="n">＊</span>데이터 흐름 — 소스가 뭐든 "텍스트 → 청크 → SQUARE" 한 파이프</h2>
+    <p class="lead">핵심 아이디어: <b>어떤 소스든 먼저 텍스트로 정규화</b>한 뒤, 문서를 항목 단위로 잘라 <b>청크마다 기존 <code>square</code> task를 반복 호출</b>합니다. 6개 상한은 "청크당"으로 유지하되, 문서 전체 합산 상한(예: 30)을 따로 둬 인수인계서 규모를 감당합니다.</p>
+
+    <div class="flow">
+      <div class="step">
+        <div class="si">IN</div>
+        <h4>소스 3종</h4>
+        <p>긴 텍스트 / PDF / 이미지(여러 장)</p>
+      </div>
+      <div class="arrow">→</div>
+      <div class="step">
+        <div class="si">NORMALIZE</div>
+        <h4>텍스트화</h4>
+        <p>텍스트=그대로. PDF=<span class="mono2">pdf.js</span> 텍스트레이어. 스캔 PDF·이미지=Gemini 멀티모달 OCR.</p>
+        <span class="tag">새 task: ocr</span>
+      </div>
+      <div class="arrow">→</div>
+      <div class="step">
+        <div class="si">CHUNK</div>
+        <h4>항목 분해</h4>
+        <p>번호·불릿·빈줄·소제목 기준으로 문서를 청크로. 청크당 ~6항목이 넘지 않게.</p>
+        <span class="tag">문서 상한 30</span>
+      </div>
+      <div class="arrow">→</div>
+      <div class="step">
+        <div class="si">STRUCTURE</div>
+        <h4>청크별 square 반복</h4>
+        <p>각 청크 → 기존 <code>square</code> task → segments 합산. 진행바로 N/M 표시.</p>
+        <span class="tag">재사용</span>
+      </div>
+      <div class="arrow">→</div>
+      <div class="step">
+        <div class="si">REVIEW</div>
+        <h4>체크리스트</h4>
+        <p>사실·위치 항목도 <b>제외하지 말고 노출</b>(끄기 가능). 사장이 최종 선택.</p>
+      </div>
+      <div class="arrow">→</div>
+      <div class="step">
+        <div class="si">SAVE</div>
+        <h4>배치 저장</h4>
+        <p>선택분 → buildEntry → <code>onPublishedMany</code>. 원본은 storage에 첨부 링크.</p>
+        <span class="tag">기존 배선 재사용</span>
+      </div>
+    </div>
+
+    <div class="note" style="margin-top:22px">
+      <b>왜 "클라이언트가 청크 오케스트레이션"인가.</b> 한 Edge 호출 안에서 Gemini를 여러 번 부르면 12초 타임아웃·비용 폭주 위험이 큽니다.
+      대신 클라가 청크를 순차/소량 병렬로 <code>square</code>에 보내면 진행률을 보여줄 수 있고, 실패한 청크만 재시도되며, 기존 레이트리밋(<code>RATE_PER_MIN</code>)과도 자연스럽게 맞물립니다.
+      이미지 OCR만 새 <code>ocr</code> task로 분리하고, 그 뒤 파이프는 기존 것을 그대로 씁니다.
+    </div>
+  </section>
+
+  <!-- ============ 구현 계획 ============ -->
+  <section>
+    <div class="kicker">Proposal · Implementation</div>
+    <h2><span class="n">✓</span>무엇을 건드리면 되나 (변경 지점)</h2>
+    <p class="lead">기존 등록 파이프(<code>structureSquare</code> → <code>buildEntry</code> → <code>onPublishedMany</code>)를 최대한 재사용합니다. 새로 만드는 건 진입 화면·OCR task·청킹 유틸 정도.</p>
+
+    <div class="impl">
+      <div class="row">
+        <div class="f">진입/화면<br><span class="mono">src/app/owner/bulk-import.tsx</span></div>
+        <div class="d"><span class="tag2 t-new">신규</span> 소스 선택 → 진행바 → 검토 체크리스트 → 완료. 등록 화면 상단에 "📄 문서로 한 번에" 버튼으로 진입.</div>
+      </div>
+      <div class="row">
+        <div class="f">파일 선택<br><span class="mono">coach/coachUtils.ts</span></div>
+        <div class="d"><span class="tag2 t-edit">수정</span> <code>pickImageWeb</code>는 그대로 두고 <code>pickDocWeb()</code> 추가 — <code>accept='application/pdf,image/*'</code> + 다중 선택. 텍스트는 큰 textarea(<code>maxLength</code> 상향/제거).</div>
+      </div>
+      <div class="row">
+        <div class="f">PDF 텍스트 추출<br><span class="mono">lib/import/pdfText.ts</span></div>
+        <div class="d"><span class="tag2 t-new">신규</span> 브라우저에서 <code>pdfjs-dist</code>로 텍스트 레이어 추출. 텍스트가 거의 없으면(스캔본) 페이지를 이미지로 렌더 → OCR 경로로 폴백.</div>
+      </div>
+      <div class="row">
+        <div class="f">이미지 OCR<br><span class="mono">supabase/functions/ai · ocr</span></div>
+        <div class="d"><span class="tag2 t-new">신규 task</span> Gemini 멀티모달 호출(<code>parts:[{inline_data:{mime_type,data}},{text}]</code>)로 이미지→텍스트. <b>기존 <code>callGemini</code>가 텍스트 전용</b>이라 이미지 파트 지원 분기 추가 필요.</div>
+      </div>
+      <div class="row">
+        <div class="f">문서 청킹<br><span class="mono">lib/import/chunk.ts</span></div>
+        <div class="d"><span class="tag2 t-new">신규</span> 번호·불릿·빈줄·소제목으로 항목 분해. 청크당 ≤6항목 유지. 문서 전체 합산 상한(예 <code>MAX_DOC_ENTRIES=30</code>)과 "잘림 고지" 반환.</div>
+      </div>
+      <div class="row">
+        <div class="f">추출 오케스트레이션<br><span class="mono">lib/ai/client.ts</span></div>
+        <div class="d"><span class="tag2 t-edit">확장</span> <code>structureDoc(text)</code> — 청크별 <code>square</code> 순차 호출 + 진행 콜백 + segments 합산. 실패 청크 개별 재시도.</div>
+      </div>
+      <div class="row">
+        <div class="f">사실·위치 항목 살리기<br><span class="mono">utils/buildEntry.ts</span></div>
+        <div class="d"><span class="tag2 t-edit">수정</span> 대량 검토 화면에서는 <code>isSquarePublishable=false</code>(Context·사실)도 <b>제외하지 말고 노출</b>. 사장이 끄지 않으면 <code>status:'draft'</code>로라도 저장(누락 방지 — Q1 한계 ②).</div>
+      </div>
+      <div class="row">
+        <div class="f">배치 저장<br><span class="mono">app/owner/coach.tsx onPublishedMany</span></div>
+        <div class="d"><span class="tag2 t-new">재사용</span> 이미 있음. 선택된 entries 배열을 그대로 넘김. 원본 PDF/이미지는 <code>uploadPhoto</code>/storage에 올려 각 엔트리에 참조 첨부.</div>
+      </div>
+      <div class="row">
+        <div class="f">회귀 가드<br><span class="mono">scripts/qa-knowhow-bulk.mjs</span></div>
+        <div class="d"><span class="tag2 t-new">신규</span> 긴 문서(30항목)·PDF 텍스트·이미지 샘플로 "잘림 고지·청크 수·사실항목 보존·배치 저장 수" 검증. <code>npm run qa:bulk</code>.</div>
+      </div>
+    </div>
+
+    <h3 style="margin:28px 0 10px;font-size:16px">함께 결정할 것 · 리스크</h3>
+    <ul class="clean">
+      <li><b>비용.</b> <span class="tag2 t-cost">비용</span>청크 수 × Gemini 콜. 30항목 문서면 최대 ~5콜(청크당 6). flash-lite 유지 시 문서당 수 원 수준이나, 이미지 OCR은 토큰이 큼 → 페이지 수 상한·해상도 다운스케일 필요.</li>
+      <li><b>레이트리밋.</b> 순차 배치가 사용자당 <code>RATE_PER_MIN_USER=10</code>에 걸릴 수 있음 → 대량 모드는 카운팅 완화 or 청크 묶음 전송 검토.</li>
+      <li><b>스캔 품질.</b> 손글씨·흐린 사진 OCR은 오류율이 높음 → 검토 체크리스트가 <b>필수 안전장치</b>(자동 저장 금지, 사장 확인 후에만).</li>
+      <li><b>개인정보.</b> 인수인계서에 직원 연락처·급여가 섞일 수 있음 → OCR/저장 전 민감정보 안내 + 원본 첨부는 매장 격리(RLS) 확인.</li>
+      <li><b>범위 결정.</b> 1차는 <b>텍스트 붙여넣기(제한 해제) + 청킹</b>만으로도 인수인계서의 80%를 커버 → PDF/이미지 OCR은 2차로 나눠도 됨.</li>
+    </ul>
+  </section>
+
+  <!-- ============ 한 장 요약 ============ -->
+  <section>
+    <div class="kicker">TL;DR</div>
+    <h2><span class="n">≡</span>한 장 요약</h2>
+    <div class="card">
+      <ul class="clean" style="margin-top:2px">
+        <li><b>다중 노하우 분리 등록</b> — 코드상 <b>됨(최대 6개)</b>. 배치 저장·카운트 정합까지 커밋 완료. <span style="color:var(--warn);font-weight:700">단 배포 웹번들은 7/4·Edge 재배포 미확인 → 재빌드+재배포 후 실LLM 재현으로 확정</span>.</li>
+        <li><b>긴 텍스트</b> — 입력창 1,000자 제한으로 <b>불가</b>.</li>
+        <li><b>PDF</b> — 선택 자체가 안 됨, 파싱 없음 → <b>불가</b>.</li>
+        <li><b>사진(PNG/JPG)</b> — <b>첨부만</b> 되고 내용은 안 읽힘(멀티모달 아님) → 노하우로 등록 <b>불가</b>.</li>
+        <li><b>해결안</b> — "문서로 한 번에" 모드 신설: 소스→텍스트화→청킹→청크별 square 반복→체크리스트 검토→배치 저장. 기존 파이프 대부분 재사용, 신규는 진입화면·OCR task·청킹 유틸.</li>
+        <li><b>추천 1차 범위</b> — 텍스트 붙여넣기 제한 해제 + 청킹(6개 상한 → 문서 30개)만 먼저. PDF·이미지 OCR은 2차.</li>
+      </ul>
+    </div>
+  </section>
+
+</div>
+
+<footer>
+  SquareTable · 노하우 다중·대량 등록 감사 & 설계안 · 2026-07-06 · 실제 코드 경로(OwnerCoachChat · lib/ai · supabase/functions/ai) 기준
+</footer>
+
+</body>
+</html>

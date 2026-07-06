@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react';
-import { View, Text, Pressable, ScrollView, Image, StyleSheet } from 'react-native';
+import { View, Text, Pressable, ScrollView, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { Appear } from '@/components/Appear';
+import { StoredImage } from '@/components/StoredImage';
 import { DaypartSettingsSheet } from '@/components/work/DaypartSettingsSheet';
 import { useDaypartLabels, occursOn, type TaskSection, type TaskTemplate, type DoneMark } from '@/lib/store/useWorkStore';
 import { InkColors, BrandColors, CategoryColors } from '@/lib/theme/colors';
@@ -240,7 +241,7 @@ export function TodoScreen({
                           <Text style={[s.itemText, on && s.itemTextOn]}>{t.sectionNote ? `${t.sectionNote} · ${t.text}` : t.text}</Text>
                           {mark && <Text style={s.itemMeta}>{mark.byName} 완료 · {hhmm(mark.at)}</Text>}
                         </View>
-                        {photoUrl ? <Image source={{ uri: photoUrl }} style={s.thumb} /> : null}
+                        {photoUrl ? <StoredImage stored={photoUrl} style={s.thumb} /> : null}
                         {assignedName ? <Text style={s.assignTag}>담당 {assignedName}</Text> : isMine ? <Text style={s.mineTag}>내 할일</Text> : null}
                         {onAttachPhoto && !on && (
                           <Pressable onPress={() => onAttachPhoto(t.id, selected)} hitSlop={6} disabled={!!uploadingId}>

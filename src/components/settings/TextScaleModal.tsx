@@ -10,22 +10,22 @@ const OPTIONS: { key: TextScale; label: string; sub: string }[] = [
   { key: 'small', label: '작게', sub: '한 화면에 더 많이' },
   { key: 'normal', label: '보통', sub: '기본' },
   { key: 'large', label: '크게', sub: '읽기 편하게' },
-  { key: 'xlarge', label: '아주 크게', sub: '눈이 편하게' },
 ];
 
 /**
- * 글자 크기 선택 시트 — 예전엔 행을 누르면 값이 제자리 순환(작게→보통→크게)만 해서
- * "눌러도 아무 일도 안 일어난다"는 인상(회의: 영자 사장 영원히 작게). 명시적 선택지 + 미리보기로 바꾼다.
- * 고르면 즉시 적용(_layout이 textScale 키로 리마운트)되고 시트는 열어둬 여러 번 비교할 수 있다.
+ * 글자 크기 선택 시트 — 3단계(작게/보통/크게) 명시적 선택지 + 미리보기.
+ * 고르면 즉시 리마운트하지 않고 beginTextScale로 로딩 오버레이(TextScaleTransition)를 띄운 뒤
+ * 그 뒤에서 배율을 반영(트리 리마운트) → 오버레이가 내려가며 새 크기의 원래 화면으로 돌아온다.
+ * (즉시 적용은 열린 시트가 리마운트로 사라지며 화면이 깜빡이던 "UI 깨짐"의 원인이었다.)
  */
 export function TextScaleModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   const textScale = usePreferencesStore((s) => s.textScale);
-  const setPref = usePreferencesStore((s) => s.set);
+  const beginTextScale = usePreferencesStore((s) => s.beginTextScale);
 
   return (
-    <BottomSheet visible={visible} onClose={onClose} sheetStyle={{ height: '58%' }}>
+    <BottomSheet visible={visible} onClose={onClose} sheetStyle={{ height: '52%' }}>
       <Text style={s.title}>글자 크기</Text>
-      <Text style={s.lead}>보기 편한 크기를 고르세요. 고르면 앱 전체 글자 크기가 바로 바뀌어요.</Text>
+      <Text style={s.lead}>보기 편한 크기를 고르세요. 고르면 잠깐 뒤 앱 전체 글자 크기가 바뀌어요.</Text>
 
       <View style={s.list}>
         {OPTIONS.map((o) => {
@@ -34,7 +34,11 @@ export function TextScaleModal({ visible, onClose }: { visible: boolean; onClose
           return (
             <Pressable
               key={o.key}
-              onPress={() => setPref('textScale', o.key)}
+              onPress={() => {
+                // 이미 그 크기면 전환 없이 시트만 닫는다. 다른 크기면 로딩 오버레이 뒤에서 반영.
+                if (o.key === textScale) onClose();
+                else beginTextScale(o.key);
+              }}
               style={({ pressed }) => [s.row, on && s.rowOn, pressed && { opacity: 0.9 }]}
               accessibilityRole="button"
               accessibilityState={{ selected: on }}

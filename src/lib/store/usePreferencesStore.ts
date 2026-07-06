@@ -1,8 +1,12 @@
-// 사용자 환경설정 — 알림/글자크기 등 기기 단위 선호. DB가 아니라 로컬에 영속한다.
-// (계정이 아니라 "이 기기에서의 보기 설정"이라 localStorage가 맞다. 네이티브는 메모리 폴백.)
+// 사용자 환경설정.
+// - textScale/emailEnabled 는 "이 기기에서의 보기 설정" → localStorage 로컬 영속(네이티브=메모리 폴백).
+// - 알림 수신 선호(pushEnabled·quietHours·quietStart·quietEnd)는 **서버(엣지 push 함수)가 발송 직전에
+//   읽어야** 하므로 DB(notification_prefs)가 SSOT다. localStorage 는 즉시 렌더용 캐시일 뿐이고, 진실은 DB다.
+//   (예전엔 이 값들이 localStorage 에만 있어 서버가 못 읽었고 → 토글/방해금지가 발송을 전혀 못 막았다.)
 import { create } from 'zustand';
+import { fetchNotificationPrefs, saveNotificationPrefs } from '@/lib/db';
 
-export type TextScale = 'small' | 'normal' | 'large' | 'xlarge';
+export type TextScale = 'small' | 'normal' | 'large';
 
 type Prefs = {
   pushEnabled: boolean;
@@ -26,26 +30,50 @@ const DEFAULTS: Prefs = {
 const storage =
   typeof window !== 'undefined' && window.localStorage ? window.localStorage : undefined;
 
+// 예전엔 4단계('아주 크게'=xlarge)였다 → 3단계(작게/보통/크게)로 축소. 기기에 xlarge가 저장돼
+// 있으면 없는 배율을 참조해 NaN이 되므로, 폐기 값은 안전하게 'large'로 접어 마이그레이션한다.
+function normalizeScale(v: unknown): TextScale {
+  if (v === 'small' || v === 'normal' || v === 'large') return v;
+  return v === 'xlarge' ? 'large' : 'normal';
+}
+
 function load(): Prefs {
   try {
     const raw = storage?.getItem(KEY);
-    return raw ? { ...DEFAULTS, ...JSON.parse(raw) } : DEFAULTS;
+    const merged = raw ? { ...DEFAULTS, ...JSON.parse(raw) } : DEFAULTS;
+    return { ...merged, textScale: normalizeScale(merged.textScale) };
   } catch {
     return DEFAULTS;
   }
 }
 
 type PrefsState = Prefs & {
+  // 글자 크기 전환 중 상태(영속 X) — 로딩 오버레이 표시/커밋 타이밍 제어.
+  applyingScale: boolean;
+  pendingScale: TextScale | null;
   set: <K extends keyof Prefs>(key: K, value: Prefs[K]) => void;
-  toggle: (key: 'pushEnabled' | 'emailEnabled' | 'quietHours') => void;
+  // 로컬 전용 토글은 emailEnabled 뿐. push/quiet 는 DB SSOT 라 반드시 saveNotify 로만 바꾼다(무단 로컬변경 차단).
+  toggle: (key: 'emailEnabled') => void;
+  // 알림 선호(push/quiet) — 로그인 시 DB에서 하이드레이트. 저장은 원자적 upsert RPC 한 번(부분 저장 없음)이며
+  //   낙관적 반영 후 실패 시 롤백하고 error 를 돌려준다(설정된 듯 보이나 서버엔 없는 무음 유실 방지).
+  hydrateNotify: () => Promise<void>;
+  saveNotify: (
+    patch: Partial<Pick<Prefs, 'pushEnabled' | 'quietHours' | 'quietStart' | 'quietEnd'>>,
+  ) => Promise<{ error: string | null }>;
+  // 3단계 전환: begin(오버레이 표시) → commit(배율 반영=트리 리마운트) → end(오버레이 내림).
+  beginTextScale: (key: TextScale) => void;
+  commitPendingScale: () => void;
+  endTextScale: () => void;
 };
 
-// 체감되는 간격으로 벌린다(예전 0.92/1/1.12는 8% 차이라 "눌러도 안 변한다"는 인상). 매장 사장은
-// 나이대가 다양해 접근성용 '아주 크게'까지 둔다.
-export const TEXT_SCALE_FACTOR: Record<TextScale, number> = { small: 0.9, normal: 1, large: 1.18, xlarge: 1.34 };
+// 체감되는 간격으로 벌린다(예전 0.92/1/1.12는 8% 차이라 "눌러도 안 변한다"는 인상).
+// '아주 크게'(1.34)는 고정폭 카드 오버플로 위험이 커 폐기 → 3단계만 유지(회의 요청).
+export const TEXT_SCALE_FACTOR: Record<TextScale, number> = { small: 0.9, normal: 1, large: 1.18 };
 
 export const usePreferencesStore = create<PrefsState>((set, get) => ({
   ...load(),
+  applyingScale: false,
+  pendingScale: null,
   set: (key, value) => {
     set({ [key]: value } as Partial<Prefs>);
     persist(get());
@@ -53,6 +81,64 @@ export const usePreferencesStore = create<PrefsState>((set, get) => ({
   toggle: (key) => {
     set({ [key]: !get()[key] } as Partial<Prefs>);
     persist(get());
+  },
+  // 글자 크기는 즉시 반영하면 _layout의 Stack(key=textScale)이 통째로 리마운트되며 열린 시트가
+  // 사라지고 화면이 깜빡인다. 그 리마운트를 로딩 오버레이 뒤로 숨기려 3단계로 나눈다.
+  beginTextScale: (key) => {
+    if (key === get().textScale) return; // 같은 값이면 전환 없이 무시
+    set({ applyingScale: true, pendingScale: key });
+  },
+  commitPendingScale: () => {
+    const p = get().pendingScale;
+    if (!p) return;
+    set({ textScale: p, pendingScale: null });
+    persist(get());
+  },
+  endTextScale: () => set({ applyingScale: false, pendingScale: null }),
+
+  // 로그인 후 1회: DB의 알림 선호를 캐시로 당긴다. 읽기 실패/미설정이면 로컬(기본값) 유지 —
+  // 일시적 읽기실패에 설정을 무음 강등하지 않는다(§4.8). 미설정 유저는 엣지도 기본=켜짐으로 취급.
+  hydrateNotify: async () => {
+    const { data, error } = await fetchNotificationPrefs();
+    if (error || !data) return;
+    set({
+      pushEnabled: data.push_enabled,
+      quietHours: data.quiet_enabled,
+      quietStart: data.quiet_start,
+      quietEnd: data.quiet_end,
+    });
+    persist(get());
+  },
+
+  // 알림 선호 저장 — 항상 현재 전체 선호를 한 번의 upsert RPC(=한 트랜잭션)로 확정한다.
+  // 낙관적 반영으로 UI 즉시 갱신 후, 서버 저장 실패 시 이전 값으로 롤백하고 error 메시지를 반환한다.
+  saveNotify: async (patch) => {
+    const prev = get();
+    const next = {
+      pushEnabled: patch.pushEnabled ?? prev.pushEnabled,
+      quietHours: patch.quietHours ?? prev.quietHours,
+      quietStart: patch.quietStart ?? prev.quietStart,
+      quietEnd: patch.quietEnd ?? prev.quietEnd,
+    };
+    set(next);
+    persist(get());
+    const { error } = await saveNotificationPrefs({
+      push_enabled: next.pushEnabled,
+      quiet_enabled: next.quietHours,
+      quiet_start: next.quietStart,
+      quiet_end: next.quietEnd,
+    });
+    if (error) {
+      set({
+        pushEnabled: prev.pushEnabled,
+        quietHours: prev.quietHours,
+        quietStart: prev.quietStart,
+        quietEnd: prev.quietEnd,
+      });
+      persist(get());
+      return { error: error.message };
+    }
+    return { error: null };
   },
 }));
 

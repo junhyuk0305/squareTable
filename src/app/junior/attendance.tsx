@@ -12,7 +12,8 @@ import { useAttendanceStore } from '@/lib/store/useAttendanceStore';
 import { usePayrollStore } from '@/lib/store/usePayrollStore';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
-import { fmtDuration, won, hhmm, todayStr, liveMinutes, payFor, DEFAULT_HOURLY_WAGE } from '@/lib/utils/attendance';
+import { fmtDuration, won, hhmm, todayStr, liveMinutes, DEFAULT_HOURLY_WAGE } from '@/lib/utils/attendance';
+import { computePay } from '@/lib/utils/payroll';
 
 /**
  * 출퇴근 패널 — 화면 크롬(SafeAreaView·탭바·헤더) 없이 콘텐츠만.
@@ -25,6 +26,7 @@ export function AttendancePanel() {
   const checkIn = useAttendanceStore((s) => s.checkIn);
   const checkOut = useAttendanceStore((s) => s.checkOut);
   const wages = usePayrollStore((s) => s.wages);
+  const settings = usePayrollStore((s) => s.settings);
   const wage = wages[userId] ?? DEFAULT_HOURLY_WAGE;
   const router = useRouter();
 
@@ -47,9 +49,10 @@ export function AttendancePanel() {
   );
 
   const todayMin = todayRecs.reduce((sum, r) => sum + liveMinutes(r), 0);
-  const todayPay = payFor(todayMin, wage);
+  // 예상급여 — 급여규칙(주휴·휴게·야간·연장·추가수당) 반영 SSOT=computePay(F1). 하루치는 주휴·월정액 제외.
+  const todayPay = computePay(todayRecs, wage, { ...settings, weeklyHolidayPay: false, extraAllowance: 0 }).total;
   const monthMin = monthRecs.reduce((sum, r) => sum + liveMinutes(r), 0);
-  const monthPay = payFor(monthMin, wage);
+  const monthPay = computePay(monthRecs, wage, settings).total;
 
   const working = !!openRec;
 

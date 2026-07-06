@@ -238,17 +238,17 @@ export const useScheduleStore = create<ScheduleState>((set, get) => ({
       updated_at: now,
     };
     set((s) => ({ swaps: [req, ...s.swaps] }));
+    // 저장 성공 후에만 웹푸시(실패·롤백 시 유령 교대요청 알림 방지).
+    //   맞교환(swap)은 지정 상대에게만, 대타(cover)는 매장 직원 전체(발송자 제외는 서버).
     void guardWrite(
       insertSwap(req),
       () => set((s) => ({ swaps: s.swaps.filter((r) => r.id !== req.id) })),
       '교대 요청 등록에 실패했어요. 다시 시도해 주세요.',
-    );
-    // 웹푸시: 맞교환(swap)은 지정 상대에게만, 대타(cover)는 매장 직원 전체에게(발송자 제외는 서버가 처리).
-    if (input.kind === 'swap' && input.target_staff_id) {
-      notifyUserSwapRequest(input.target_staff_id, fmtDateKo(input.date));
-    } else {
-      notifyStaffSwapRequest(fmtDateKo(input.date));
-    }
+    ).then((ok) => {
+      if (!ok) return;
+      if (input.kind === 'swap' && input.target_staff_id) notifyUserSwapRequest(input.target_staff_id, fmtDateKo(input.date));
+      else notifyStaffSwapRequest(fmtDateKo(input.date));
+    });
   },
   acceptSwap: (id, byStaffId) => {
     const before = get().swaps.find((r) => r.id === id);
@@ -256,13 +256,12 @@ export const useScheduleStore = create<ScheduleState>((set, get) => ({
     if (!before || before.status !== 'open' || before.requester_id === byStaffId) return;
     const updated: SwapRequest = { ...before, status: 'accepted', accepted_by: byStaffId, updated_at: nowIso() };
     set((s) => ({ swaps: s.swaps.map((r) => (r.id === id ? updated : r)) }));
+    // 저장 성공 후에만 사장에게 웹푸시(수락→최종 승인 필요). 실패·롤백 시 유령 알림 방지.
     void guardWrite(
       updateSwap(id, { status: 'accepted', accepted_by: byStaffId, updated_at: updated.updated_at }),
       () => set((s) => ({ swaps: s.swaps.map((r) => (r.id === id ? before : r)) })),
       '교대 수락 저장에 실패했어요.',
-    );
-    // 수락되면 사장 최종 승인이 필요 → 사장에게 웹푸시.
-    notifyOwnersSwapApproval(fmtDateKo(before.date));
+    ).then((ok) => { if (ok) notifyOwnersSwapApproval(fmtDateKo(before.date)); });
   },
   cancelSwap: (id) => {
     const before = get().swaps.find((r) => r.id === id);
@@ -280,26 +279,24 @@ export const useScheduleStore = create<ScheduleState>((set, get) => ({
     if (!before || before.status !== 'accepted') return;
     const at = nowIso();
     set((s) => ({ swaps: s.swaps.map((r) => (r.id === id ? { ...r, status: 'approved', updated_at: at } : r)) }));
+    // 저장 성공 후에만 요청 직원에게 결과 웹푸시(실패·롤백 시 유령 승인 알림 방지).
     void guardWrite(
       updateSwap(id, { status: 'approved', updated_at: at }),
       () => set((s) => ({ swaps: s.swaps.map((r) => (r.id === id ? before : r)) })),
       '교대 승인 저장에 실패했어요.',
-    );
-    // 요청한 직원에게 결과 웹푸시.
-    notifyUserSwapResult(before.requester_id, true, fmtDateKo(before.date));
+    ).then((ok) => { if (ok) notifyUserSwapResult(before.requester_id, true, fmtDateKo(before.date)); });
   },
   rejectSwap: (id) => {
     const before = get().swaps.find((r) => r.id === id);
     if (!before || before.status !== 'accepted') return;
     const at = nowIso();
     set((s) => ({ swaps: s.swaps.map((r) => (r.id === id ? { ...r, status: 'rejected', updated_at: at } : r)) }));
+    // 저장 성공 후에만 요청 직원에게 결과 웹푸시(실패·롤백 시 유령 반려 알림 방지).
     void guardWrite(
       updateSwap(id, { status: 'rejected', updated_at: at }),
       () => set((s) => ({ swaps: s.swaps.map((r) => (r.id === id ? before : r)) })),
       '교대 반려 저장에 실패했어요.',
-    );
-    // 요청한 직원에게 결과 웹푸시.
-    notifyUserSwapResult(before.requester_id, false, fmtDateKo(before.date));
+    ).then((ok) => { if (ok) notifyUserSwapResult(before.requester_id, false, fmtDateKo(before.date)); });
   },
 }));
 

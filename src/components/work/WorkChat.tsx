@@ -1,5 +1,6 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, Image, Pressable, ScrollView, KeyboardAvoidingView, Modal, Platform, StyleSheet } from 'react-native';
+import { View, Text, Pressable, ScrollView, KeyboardAvoidingView, Modal, Platform, StyleSheet } from 'react-native';
+import { StoredImage } from '@/components/StoredImage';
 import { Ionicons } from '@expo/vector-icons';
 
 import { type FeedItem } from '@/lib/store/useWorkStore';
@@ -268,13 +269,13 @@ function FeedRow({ item, me, nameOf, members, onReact, onToTask, onLongPress }: 
         style={[s.bubble, mine && s.bubbleMine, photo && s.bubblePhoto]}
       >
         {photo && (
-          <Pressable
-            onPress={() => { if (Platform.OS === 'web' && typeof window !== 'undefined') window.open(photo, '_blank'); }}
-            accessibilityRole="imagebutton"
+          <StoredImage
+            stored={photo}
+            style={[s.msgImage, hasText && s.msgImageWithText]}
+            resizeMode="cover"
+            openOnPress
             accessibilityLabel="사진 크게 보기"
-          >
-            <Image source={{ uri: photo }} style={[s.msgImage, hasText && s.msgImageWithText]} resizeMode="cover" />
-          </Pressable>
+          />
         )}
         {hasText && (
           <View style={photo ? s.msgCaption : undefined}>
@@ -301,7 +302,9 @@ const s = StyleSheet.create({
   pinTag: { backgroundColor: InkColors.paper, color: InkColors.ink2, fontSize: 10, fontWeight: '800', paddingHorizontal: 6, paddingVertical: 1, borderRadius: Radius.tail },
   pinTxt: { flex: 1, fontSize: 12, fontWeight: '600', color: InkColors.ink },
 
-  scroll: { padding: 12, gap: 11 },
+  // 웹: 말풍선 롱프레스로 액션시트를 여는데, 브라우저가 대신 드래그-선택을 시작해 화면 전체가
+  // 선택되는 걸 막는다(스트림 전역 user-select:none). 단, 말풍선 '텍스트'(msgText)만 다시 선택 허용.
+  scroll: { padding: 12, gap: 11, ...(Platform.OS === 'web' ? ({ userSelect: 'none' } as object) : null) },
   empty: { textAlign: 'center', color: InkColors.ink3, fontSize: 13, marginTop: 40 },
   divider: { alignItems: 'center', marginVertical: 2 },
   dividerText: { fontSize: 11, color: InkColors.ink3, fontWeight: '700', backgroundColor: InkColors.scrim, paddingHorizontal: 12, paddingVertical: 3, borderRadius: Radius.pill },
@@ -321,7 +324,8 @@ const s = StyleSheet.create({
   msgImage: { width: 200, height: 200, borderRadius: Radius.sm },
   msgImageWithText: { marginBottom: 6 },
   msgCaption: { paddingHorizontal: 8, paddingBottom: 5, paddingTop: 1 },
-  msgText: { fontSize: 14, color: InkColors.ink, lineHeight: 21 },
+  // 스트림 전역 user-select:none 위에서, 말풍선 본문 텍스트만 선택/복사 가능하게 복원(웹).
+  msgText: { fontSize: 14, color: InkColors.ink, lineHeight: 21, ...(Platform.OS === 'web' ? ({ userSelect: 'text' } as object) : null) },
   mention: { color: BrandColors.mention, fontWeight: '800' },
   mentionMine: { color: BrandColors.yellow },
   toTask: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingVertical: 2, paddingHorizontal: 4 },
@@ -342,8 +346,8 @@ const s = StyleSheet.create({
   menuInfoRow: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 11, paddingTop: 8, paddingBottom: 2, borderTopWidth: 1, borderTopColor: InkColors.line, marginTop: 4 },
   menuInfoText: { flex: 1, fontSize: 10.5, color: InkColors.ink3, fontWeight: '600' },
 
-  // 롱프레스 액션 시트
-  sheetBackdrop: { flex: 1, backgroundColor: 'rgba(31,29,26,0.45)' },
+  // 롱프레스 액션 시트 — 딤 없이 올라오기만(공용 BottomSheet와 동일 규칙: backdrop은 투명 flex:1).
+  sheetBackdrop: { flex: 1 },
   sheet: { backgroundColor: '#FFFFFF', borderTopLeftRadius: Radius.sheet, borderTopRightRadius: Radius.sheet, paddingHorizontal: 12, paddingTop: 10, paddingBottom: 24, gap: 4, ...Elevation.e3 },
   sheetHandle: { width: 40, height: 4, borderRadius: Radius.pill, backgroundColor: InkColors.line, alignSelf: 'center', marginBottom: 8 },
   sheetItem: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14, paddingHorizontal: 12, borderRadius: Radius.md },

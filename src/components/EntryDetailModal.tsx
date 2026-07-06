@@ -1,4 +1,5 @@
-import { View, Text, Pressable, ScrollView, Image, StyleSheet } from 'react-native';
+import { View, Text, Pressable, ScrollView, StyleSheet } from 'react-native';
+import { StoredImage } from '@/components/StoredImage';
 import { Ionicons } from '@expo/vector-icons';
 
 import { BottomSheet } from '@/components/BottomSheet';
@@ -117,7 +118,7 @@ export function EntryDetailModal({
             {entry.photos && entry.photos.length > 0 ? (
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.photoRow}>
                 {entry.photos.map((p, i) => (
-                  <Image key={i} source={{ uri: p }} style={s.photo} />
+                  <StoredImage key={i} stored={p} style={s.photo} />
                 ))}
               </ScrollView>
             ) : null}

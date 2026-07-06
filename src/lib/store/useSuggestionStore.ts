@@ -87,8 +87,8 @@ export const useSuggestionStore = create<State>((set, get) => ({
     };
     // ok를 반환해 호출부(제안 화면)가 "서버에 실제로 저장됐을 때만" 성공 토스트/뒤로가기를 하게 한다.
     const result = optimisticAdd(set, 'suggestions', item, () => insertSuggestion(item), '제안 등록에 실패했어요. 다시 시도해 주세요.', 'start');
-    // 사장에게 웹푸시(검토 대기 제안이 생겼음).
-    notifyOwnersSuggestion(item.proposer_name, item.text);
+    // 저장 성공 후에만 사장에게 웹푸시 — 실패(롤백) 시 유령 '검토 대기 제안' 알림 방지.
+    void result.then((ok) => { if (ok) notifyOwnersSuggestion(item.proposer_name, item.text); });
     return result;
   },
 

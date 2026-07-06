@@ -37,10 +37,20 @@ export function liveMinutes(r: {
   return 0;
 }
 
+/**
+ * 기기 타임존과 무관하게 KST(UTC+9) 벽시계를 얻는다. 반환 Date는 **getUTC*** 로 읽어야 KST 값이 나온다.
+ * nowISO 가 저장을 "+09:00" 로 고정하는 것과 짝 — 날짜분류(todayStr)·시각표시(hhmm)도 KST 로 고정해
+ * 기기 시계/타임존 오설정(해외·VPN·잘못된 TZ)에 근무일이 전날로 밀리거나 시각이 어긋나는 걸 막는다.
+ */
+function kstShift(d: Date): Date {
+  return new Date(d.getTime() + 9 * 3600 * 1000);
+}
+
 export function todayStr(d: Date = new Date()): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
+  const k = kstShift(d);
+  const y = k.getUTCFullYear();
+  const m = String(k.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(k.getUTCDate()).padStart(2, '0');
   return `${y}-${m}-${day}`;
 }
 
@@ -87,14 +97,14 @@ export function won(n: number): string {
 }
 
 export function hhmm(iso: string): string {
-  const d = new Date(iso);
-  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  const k = kstShift(new Date(iso)); // KST 벽시계로 표시(기기 타임존 무관)
+  return `${String(k.getUTCHours()).padStart(2, '0')}:${String(k.getUTCMinutes()).padStart(2, '0')}`;
 }
 
 /** "6/30 14:00" — 짧은 날짜+시각. 공지·로그 카드 타임스탬프(시간만으론 언제 건지 모호한 곳)에. */
 export function mdHHmm(iso: string): string {
-  const d = new Date(iso);
-  return `${d.getMonth() + 1}/${d.getDate()} ${hhmm(iso)}`;
+  const k = kstShift(new Date(iso)); // KST 벽시계
+  return `${k.getUTCMonth() + 1}/${k.getUTCDate()} ${hhmm(iso)}`;
 }
 
 /** 입력 마스크 — 숫자만 받아 "1230"→"12:30"으로 자동 정리(4자리까지). 유효성 검사는 별도. */

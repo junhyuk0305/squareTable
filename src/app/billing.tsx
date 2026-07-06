@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
@@ -28,6 +28,21 @@ export default function BillingScreen() {
   const view = deriveSubscription({ subStatus, trialEndsAt, paidUntil });
   const isOwner = role === 'owner';
   const [busy, setBusy] = useState(false);
+
+  // 자동 재확인: /billing 은 top-level 라우트라 owner/junior 레이아웃의 refreshMembership 폴이 여기선 안 돈다.
+  //   → 이 화면 자체에서 30초마다 상태를 당겨, 계좌이체 활성화가 반영되면 새로고침 탭 없이 자동으로 앱에 진입.
+  //   ("입금했는데 아무 반응 없다"는 전환화면 이탈 방지.)
+  useEffect(() => {
+    const id = setInterval(async () => {
+      await refreshMembership();
+      const s = useSessionStore.getState();
+      if (!s.unitId) return;
+      if (deriveSubscription({ subStatus: s.subStatus, trialEndsAt: s.trialEndsAt, paidUntil: s.paidUntil }).entitled) {
+        router.replace(isOwner ? '/owner/dashboard' : '/junior/home');
+      }
+    }, 30000);
+    return () => clearInterval(id);
+  }, [refreshMembership, router, isOwner]);
 
   const recheck = async () => {
     setBusy(true);
