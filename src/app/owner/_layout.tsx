@@ -54,7 +54,8 @@ export default function OwnerLayout() {
       offSt();
       offSg();
     };
-  }, [status]);
+    // unitId 의존: 다점포 전환(switchUnit) 시 활성 매장이 바뀌면 전 스토어를 새 매장으로 재hydrate·재subscribe.
+  }, [status, unitId]);
 
   // 구독/소속 상태를 주기적으로 서버와 재동기화(subscriptions·profiles.unit_id는 owner realtime 미구독).
   //  - 계좌이체 수동과금이 반영되면(subscriptions.status=active) 페이월(/billing)이 앱 재시작 없이 자동 해제.
