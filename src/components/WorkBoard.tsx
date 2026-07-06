@@ -218,7 +218,7 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
           // 탭 루트(뒤로가기 없음) — 네이티브 타이틀 앵커(~17px)를 콘텐츠 거터(20)로 맞춰
           // 우측 액션(공지/할일, 20)과 좌우 대칭. paddingLeft 3 = 20-17.
           headerTitleAlign: 'left' as const,
-          headerTitle: () => <Text style={st.headerTitle}>업무</Text>,
+          headerTitle: () => <Text style={st.headerTitle}>업무 채팅</Text>,
           headerRight: () => (
             <View style={st.nav}>
               {/* 배정 — 사장 전용. "누가 무슨 일"을 담당자별로 모아 보는 세그먼트. */}

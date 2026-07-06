@@ -94,7 +94,7 @@ export default function JuniorLayout() {
           (headerLeft 미지정 시 react-navigation 기본 back 화살표가 history에 따라 노출됨 → 막다른 컨트롤). */}
       <Stack.Screen name="chat" options={{ title: '노하우', headerLeft: () => null, headerBackVisible: false }} />
       <Stack.Screen name="attendance" options={{ title: '출퇴근', headerLeft: () => null, headerBackVisible: false }} />
-      <Stack.Screen name="work" options={{ title: '업무', headerLeft: () => null, headerBackVisible: false }} />
+      <Stack.Screen name="work" options={{ title: '업무 채팅', headerLeft: () => null, headerBackVisible: false }} />
       <Stack.Screen name="settings" options={{ title: '설정', headerLeft: () => null, headerBackVisible: false }} />
       <Stack.Screen name="timesheet" options={{ title: '내 출퇴근 내역', headerLeft: () => <HeaderBackButton fallback="/junior/attendance" /> }} />
       <Stack.Screen name="schedule" options={{ title: '근무표', headerLeft: () => <HeaderBackButton fallback="/junior/home" /> }} />

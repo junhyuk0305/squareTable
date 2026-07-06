@@ -106,7 +106,7 @@ export default function OwnerLayout() {
       <Stack.Screen name="dashboard" options={{ title: '홈', headerLeft: () => null, headerBackVisible: false }} />
       <Stack.Screen name="categories" options={{ title: '노하우 추가', headerLeft: () => null, headerBackVisible: false }} />
       <Stack.Screen name="inbox" options={{ title: '받은 질문', headerLeft: () => null, headerBackVisible: false }} />
-      <Stack.Screen name="work" options={{ title: '업무', headerLeft: () => null, headerBackVisible: false }} />
+      <Stack.Screen name="work" options={{ title: '업무 채팅', headerLeft: () => null, headerBackVisible: false }} />
       <Stack.Screen name="settings" options={{ title: '설정', headerLeft: () => null, headerBackVisible: false }} />
       {/* 서브화면 — 전역 headerLeft(HeaderBackButton) 사용 */}
       <Stack.Screen name="staff" options={{ title: '직원·급여' }} />
