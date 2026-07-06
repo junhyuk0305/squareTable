@@ -5,6 +5,7 @@ import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 import { RoleTabBar } from '@/components/RoleTabBar';
+import { Appear } from '@/components/Appear';
 import { Avatar } from '@/components/Avatar';
 import { SectionLabel } from '@/components/SectionLabel';
 import { ScheduleWeek } from '@/components/schedule/ScheduleWeek';
@@ -45,6 +46,7 @@ export default function OwnerScheduleScreen() {
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         {/* ① 컨펌 대기 — 사장의 핵심 액션. 제목은 카드 밖, 대기 건수는 우측 뱃지 */}
+        <Appear delay={0}>
         <View style={styles.section}>
           <SectionLabel
             icon="swap-horizontal-outline"
@@ -77,8 +79,10 @@ export default function OwnerScheduleScreen() {
             </View>
           )}
         </View>
+        </Appear>
 
         {/* ② 가게 기본 정보 */}
+        <Appear delay={60}>
         <Pressable
           onPress={() => router.push('/owner/store-config')}
           style={({ pressed }) => [styles.infoCard, pressed && { opacity: 0.85 }]}
@@ -94,8 +98,10 @@ export default function OwnerScheduleScreen() {
           </View>
           <Ionicons name="chevron-forward" size={16} color={InkColors.ink3} />
         </Pressable>
+        </Appear>
 
         {/* ③ 직원 근무표 편집 */}
+        <Appear delay={120}>
         <View style={styles.section}>
           <SectionLabel icon="people-outline" title="직원 근무표" />
           {staff.length === 0 ? (
@@ -124,8 +130,10 @@ export default function OwnerScheduleScreen() {
             </View>
           )}
         </View>
+        </Appear>
 
         {/* ④ 주간 전체 근무표 */}
+        <Appear delay={160}>
         <View style={styles.section}>
           <SectionLabel icon="calendar-outline" title="전체 근무표" />
           <ScheduleWeek
@@ -137,6 +145,7 @@ export default function OwnerScheduleScreen() {
             config={config}
           />
         </View>
+        </Appear>
 
         <View style={{ height: 12 }} />
       </ScrollView>

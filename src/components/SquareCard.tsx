@@ -36,6 +36,8 @@ type Props = {
   standard?: { kind?: 'spectrum' | 'count'; label: string; value: number; max?: number; ends?: [string, string]; unit?: string };
   /** 출처 푸터 탭 → 원본 노하우 상세 열기(있을 때만 누를 수 있게). */
   onSourcePress?: () => void;
+  /** 단일 출처 푸터 숨김 — 호출부(ChatTurn)가 복수 출처를 별도로 그릴 때(generated 다중 참고). */
+  hideSource?: boolean;
 };
 
 export function SquareCard({
@@ -54,6 +56,7 @@ export function SquareCard({
   dontText,
   standard,
   onSourcePress,
+  hideSource,
 }: Props) {
   const stdMax = standard?.max && standard.max > 0 ? standard.max : 100;
   const stdPct = standard
@@ -169,16 +172,18 @@ export function SquareCard({
         </View>
       ) : null}
 
-      {/* Source — 누르면 원본 노하우 상세(EntryDetailModal)로. */}
-      <View style={{ marginTop: 12 }}>
-        <SourceFooter
-          creatorName={source.label ?? source.creatorName}
-          title={source.title}
-          version={source.version}
-          updatedAt={source.updatedAt}
-          onPress={onSourcePress}
-        />
-      </View>
+      {/* Source — 누르면 원본 노하우 상세(EntryDetailModal)로. 복수 출처는 호출부가 별도 렌더(hideSource). */}
+      {!hideSource && (
+        <View style={{ marginTop: 12 }}>
+          <SourceFooter
+            creatorName={source.label ?? source.creatorName}
+            title={source.title}
+            version={source.version}
+            updatedAt={source.updatedAt}
+            onPress={onSourcePress}
+          />
+        </View>
+      )}
 
       {/* Feedback */}
       {(onThumbsUp || onThumbsDown) && (

@@ -9,6 +9,7 @@ import { useWorkStore } from '@/lib/store/useWorkStore';
 import { useScheduleStore } from '@/lib/store/useScheduleStore';
 import { useStaffStore } from '@/lib/store/useStaffStore';
 import { HeaderBackButton } from '@/components/HeaderBackButton';
+import { Appear } from '@/components/Appear';
 import { NotificationList } from '@/components/NotificationList';
 import { NotificationEnableCard } from '@/components/NotificationEnableCard';
 import { todayStr } from '@/lib/utils/attendance';
@@ -22,6 +23,7 @@ type IconName = React.ComponentProps<typeof Ionicons>['name'];
 const KIND_UI: Record<JuniorNotifKind, { icon: IconName; tint: string }> = {
   notice: { icon: 'megaphone', tint: BrandColors.yellowSoft },
   mention: { icon: 'at', tint: BrandColors.brandSoft },
+  assign: { icon: 'clipboard', tint: BrandColors.yellowSoft },
   swap: { icon: 'swap-horizontal', tint: BrandColors.accentSoft },
   swap_approved: { icon: 'checkmark-circle', tint: '#E4F2E8' },
   swap_rejected: { icon: 'close-circle', tint: BrandColors.accentSoft },
@@ -40,6 +42,8 @@ export default function JuniorNotificationsScreen() {
   const storeName = useSessionStore((s) => s.storeName) || '우리 가게';
 
   const feed = useWorkStore((s) => s.feed);
+  const taskTemplates = useWorkStore((s) => s.templates);
+  const done = useWorkStore((s) => s.done);
   const markNoticeRead = useWorkStore((s) => s.markNoticeRead);
   const swaps = useScheduleStore((s) => s.swaps);
   const templates = useScheduleStore((s) => s.templates);
@@ -55,8 +59,10 @@ export default function JuniorNotificationsScreen() {
         nameOf: (id) => (id === me ? '나' : staff.find((x) => x.id === id)?.name ?? '동료'),
         userId: me,
         today,
+        taskTemplates,
+        done,
       }),
-    [feed, swaps, templates, staff, me, today],
+    [feed, swaps, templates, staff, me, today, taskTemplates, done],
   );
 
   const initial = (userName ?? '나').trim().slice(0, 1) || '나';
@@ -69,6 +75,7 @@ export default function JuniorNotificationsScreen() {
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         {/* 맨 위 — 매장명 · 내 이름(정체성). 홈 헤더에서 옮겨온 정보 */}
+        <Appear delay={0}>
         <View style={styles.idCard}>
           <View style={styles.avatar}>
             <Text style={styles.avatarText}>{initial}</Text>
@@ -82,15 +89,17 @@ export default function JuniorNotificationsScreen() {
             </Text>
           </View>
         </View>
+        </Appear>
 
         <NotificationEnableCard />
 
         {/* 알림 목록 — 직원·사장 공유 NotificationList */}
+        <Appear delay={80}>
         <NotificationList
           rows={rows}
           kindUI={KIND_UI}
           onPress={(r) => {
-            if (r.noticeId) markNoticeRead(r.noticeId, me); // 공지는 탭하면 읽음 처리
+            if (r.readFeedId) markNoticeRead(r.readFeedId, me); // 공지·멘션은 탭하면 읽음 처리
             router.push(r.route as Href);
           }}
           empty={{
@@ -99,6 +108,7 @@ export default function JuniorNotificationsScreen() {
             sub: '공지·교대 요청이 오면 여기에 모아서 보여드려요.',
           }}
         />
+        </Appear>
 
         <View style={{ height: 12 }} />
       </ScrollView>

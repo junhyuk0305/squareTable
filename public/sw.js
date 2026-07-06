@@ -29,8 +29,26 @@ self.addEventListener('push', (event) => {
     data: { url: data.url || '/' },
   };
 
-  event.waitUntil(self.registration.showNotification(title, options));
+  event.waitUntil(
+    (async () => {
+      await self.registration.showNotification(title, options);
+      await syncAppBadge(); // 앱 아이콘 숫자 = 지금 알림창에 떠 있는 알림 수(앱이 닫혀 있어도 갱신)
+    })(),
+  );
 });
+
+// 앱 아이콘 배지(숫자)를 현재 표시 중인 알림 수로 맞춘다.
+// Android PWA/데스크톱만 지원 — iOS/미지원은 조용히 무시. 앱을 열면 앱쪽(useAppBadgeSync)이 실수치로 재동기화.
+async function syncAppBadge() {
+  try {
+    if (!self.navigator || typeof self.navigator.setAppBadge !== 'function') return;
+    const list = await self.registration.getNotifications();
+    if (list.length > 0) await self.navigator.setAppBadge(list.length);
+    else if (typeof self.navigator.clearAppBadge === 'function') await self.navigator.clearAppBadge();
+  } catch (_e) {
+    /* 미지원 — 무시 */
+  }
+}
 
 // 알림 클릭: 이미 열린 앱 탭이 있으면 포커스 + 해당 경로로 이동, 없으면 새로 연다.
 self.addEventListener('notificationclick', (event) => {
@@ -39,6 +57,7 @@ self.addEventListener('notificationclick', (event) => {
 
   event.waitUntil(
     (async () => {
+      await syncAppBadge(); // 이 알림을 닫았으니 배지 수를 남은 알림 수로 갱신
       const all = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
       for (const client of all) {
         if ('focus' in client) {

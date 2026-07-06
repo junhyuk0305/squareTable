@@ -9,6 +9,7 @@ import { useStaffStore } from '@/lib/store/useStaffStore';
 import { useAttendanceStore } from '@/lib/store/useAttendanceStore';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { RoleTabBar } from '@/components/RoleTabBar';
+import { Appear } from '@/components/Appear';
 import { ConfirmModal } from '@/components/ConfirmModal';
 import { Avatar } from '@/components/Avatar';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
@@ -63,6 +64,7 @@ export default function OwnerStaffScreen() {
       const wage = wages[s.id] ?? DEFAULT_HOURLY_WAGE;
       const todayRec = records.find((r) => r.staff_id === s.id && r.date === today);
       const status: 'out' | 'working' | 'done' = !todayRec ? 'out' : !todayRec.check_out ? 'working' : 'done';
+      // 급여 규칙(주휴·휴게·야간·연장·추가수당) 반영 예상 인건비 — computePay SSOT(F1). min 은 근무시간 표시용.
       map[s.id] = { min, pay: computePay(monthRecs, wage, settings).total, status };
     }
     return map;
@@ -104,6 +106,7 @@ export default function OwnerStaffScreen() {
       <Stack.Screen options={{ title: '직원·급여' }} />
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         {/* ① 급여 — 이번 달 인건비 총액 + 급여 설정 진입(상단). 구 '근무·급여'·'급여 설정' 카드를 흡수. */}
+        <Appear delay={0}>
         <View style={styles.payCard}>
           <Text style={styles.payLabel}>이번 달 예상 인건비</Text>
           <Text style={styles.payValue}>{won(totalPay)}</Text>
@@ -121,8 +124,10 @@ export default function OwnerStaffScreen() {
             <Ionicons name="chevron-forward" size={15} color="rgba(255,255,255,0.7)" />
           </Pressable>
         </View>
+        </Appear>
 
         {/* ② 초대코드 */}
+        <Appear delay={60}>
         <View style={styles.inviteCard}>
           <Text style={styles.inviteLabel}>가게 초대코드</Text>
           <Text style={styles.inviteCode}>{INVITE_CODE}</Text>
@@ -138,9 +143,11 @@ export default function OwnerStaffScreen() {
             </Pressable>
           </View>
         </View>
+        </Appear>
 
         {/* 합류 신청(승인 대기) — 남용 #2. 코드로 신청한 사람을 사장이 승인해야 소속된다. */}
         {pending.length > 0 && (
+          <Appear delay={100}>
           <View style={styles.pendingWrap}>
             <Text style={styles.sectionTitle}>합류 신청 ({pending.length}명) <Text style={styles.sectionSub}>· 승인해야 합류돼요</Text></Text>
             <View style={styles.list}>
@@ -161,10 +168,14 @@ export default function OwnerStaffScreen() {
               ))}
             </View>
           </View>
+          </Appear>
         )}
 
         {/* 직원 목록 — 시급 편집 + 이번 달 시간·급여·근무상태(구 근무·급여 화면 흡수) */}
+        <Appear delay={140}>
         <Text style={styles.sectionTitle}>합류한 직원 ({staff.length}명) <Text style={styles.sectionSub}>· 탭 → 출근기록</Text></Text>
+        </Appear>
+        <Appear delay={160}>
         {staff.length === 0 ? (
           loadError ? (
             // 로드 실패를 "직원 0명"으로 위장하지 않고 재시도를 띄운다(무음 실패 방지).
@@ -230,7 +241,10 @@ export default function OwnerStaffScreen() {
           })}
         </View>
         )}
+        </Appear>
+        <Appear delay={200}>
         <Text style={styles.demoNote}>* 직원을 누르면 출근 기록을 보고 시간을 수정할 수 있어요. 시급을 바꾸면 인건비에 바로 반영돼요.</Text>
+        </Appear>
         <View style={{ height: 12 }} />
       </ScrollView>
       <ConfirmModal

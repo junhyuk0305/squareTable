@@ -110,6 +110,7 @@ export function OwnerCoachChat({
   });
 
   const [input, setInput] = useState(typeof seedText === 'string' ? seedText : '');
+  const [inputFocused, setInputFocused] = useState(false);
   const [category, setCategory] = useState<Category>(editEntry?.category ?? initialCategory);
   const [square, setSquare] = useState<SquareBlock | null>(editEntry?.square ?? null);
   const [title, setTitle] = useState(editEntry?.title ?? '');
@@ -751,7 +752,7 @@ export function OwnerCoachChat({
             body={PHOTO_UPLOAD_INFO.body}
             accessibilityLabel="사진 업로드 규격 안내"
           />
-          <View style={styles.inputWrap}>
+          <View style={[styles.inputWrap, inputFocused && styles.inputWrapFocused]}>
             <TextInput
               value={input}
               onChangeText={setInput}
@@ -759,6 +760,8 @@ export function OwnerCoachChat({
               placeholderTextColor={InkColors.ink3}
               style={styles.input}
               editable={!busy}
+              onFocus={() => setInputFocused(true)}
+              onBlur={() => setInputFocused(false)}
               multiline
               // 긴 텍스트(인수인계서·메모)를 한 번에 붙여넣을 수 있게. edge MAX_RAWTEXT_LEN(8000) 아래
               // 여유값 — 재정리 패스가 [추가 설명]을 덧붙여도 상한을 넘지 않는다. 입력창은 maxHeight(120)로

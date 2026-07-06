@@ -107,11 +107,20 @@ export function mdHHmm(iso: string): string {
   return `${k.getUTCMonth() + 1}/${k.getUTCDate()} ${hhmm(iso)}`;
 }
 
-/** 입력 마스크 — 숫자만 받아 "1230"→"12:30"으로 자동 정리(4자리까지). 유효성 검사는 별도. */
+/**
+ * 입력 마스크 — 숫자만 받아 "1230"→"12:30"으로 자동 정리(4자리까지).
+ * 항상 유효한 시각으로 클램프한다: 앞 2자리=시(0~23), 뒤 2자리=분(0~59).
+ * 이 마스크 계약상 시는 항상 2자리(3시=0300)이므로 "33"·"18:90" 같은
+ * 무효 상태를 애초에 만들지 않는다 → 편집 중 값이 튀거나 33:00이 입력되는 문제 방지.
+ */
 export function maskHHMM(text: string): string {
   const d = text.replace(/[^0-9]/g, '').slice(0, 4);
-  if (d.length <= 2) return d;
-  return `${d.slice(0, 2)}:${d.slice(2)}`;
+  if (d.length === 0) return '';
+  if (d.length === 1) return d;
+  const h = Math.min(23, Number(d.slice(0, 2)));
+  if (d.length === 2) return String(h).padStart(2, '0');
+  const m = Math.min(59, Number(d.slice(2)));
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
 }
 
 /** "1200" / "12:5" / "12:00" → "HH:MM" (24시 클램프). 비면 null. 출퇴근 수기 보정 입력 정규화. */

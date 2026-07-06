@@ -1,0 +1,128 @@
+import { View, Text, StyleSheet } from 'react-native';
+import { useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+
+import { PressableScale } from '@/components/PressableScale';
+import { SectionLabel } from '@/components/SectionLabel';
+import { InkColors, BrandColors } from '@/lib/theme/colors';
+import { Elevation, Radius } from '@/lib/theme/elevation';
+import { Space, frameCapStyle } from '@/lib/theme/layout';
+import { capCount } from '@/lib/utils/format';
+
+/**
+ * 홈 '우리 매장 노하우' 가치 카드 — 노하우가 사장 대신 답하고 있음을 값으로 보여준다.
+ * 3칸 요약(최근30일 대신 답함 · 답 기다리는 질문 · 정리된 노하우) + 추가 CTA.
+ * 지표는 전부 실데이터(props). "매장 두뇌 완성도" 같은 자기계발형 게이지는 쓰지 않는다.
+ * 표시전용 — 데이터는 useOwnerDashboardData에서 파생해 주입.
+ */
+export interface OwnerKnowhowValueCardProps {
+  answeredHits30d: number;
+  pending: number;
+  entriesCount: number;
+}
+
+export function OwnerKnowhowValueCard({ answeredHits30d, pending, entriesCount }: OwnerKnowhowValueCardProps) {
+  const router = useRouter();
+
+  return (
+    <View style={[styles.section, frameCapStyle]}>
+      <SectionLabel
+        icon="bulb-outline"
+        title="우리 매장 노하우"
+        trailing={
+          <PressableScale
+            onPress={() => router.push('/owner/knowledge')}
+            scaleTo={0.96}
+            accessibilityRole="button"
+            accessibilityLabel="노하우 전체 보기"
+          >
+            <Text style={styles.headLink}>전체 ›</Text>
+          </PressableScale>
+        }
+      />
+
+      <View style={styles.card}>
+        <View style={styles.valRow}>
+          <View style={styles.valCell}>
+            <Text style={styles.valNum}>{capCount(answeredHits30d)}</Text>
+            <Text style={styles.valLabel}>최근 30일{'\n'}대신 답함</Text>
+          </View>
+          <View style={styles.valCell}>
+            {pending > 0 && <View style={styles.rdot} />}
+            <Text style={[styles.valNum, pending > 0 && styles.valNumAlert]}>{capCount(pending)}</Text>
+            <Text style={styles.valLabel}>답 기다리는{'\n'}질문</Text>
+          </View>
+          <View style={styles.valCell}>
+            <Text style={styles.valNum}>{capCount(entriesCount)}</Text>
+            <Text style={styles.valLabel}>정리된{'\n'}노하우</Text>
+          </View>
+        </View>
+
+        {/* 노하우 주 입구 — 인수인계서를 통째로 올리면 AI가 항목별로 정리(coach 파이프라인 재사용). */}
+        <PressableScale
+          onPress={() => router.push('/owner/handover' as never)}
+          scaleTo={0.98}
+          style={styles.ctaRow}
+          accessibilityRole="button"
+          accessibilityLabel="인수인계서로 노하우 채우기"
+        >
+          <Ionicons name="cloud-upload-outline" size={16} color={BrandColors.warn} />
+          <Text style={styles.ctaText}>
+            <Text style={styles.ctaStrong}>인수인계서를 올리면</Text> AI가 노하우로 정리해요
+          </Text>
+          <Ionicons name="chevron-forward" size={15} color={InkColors.ink3} />
+        </PressableScale>
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  section: { gap: Space.sm },
+  headLink: { fontSize: 12.5, fontWeight: '800', color: InkColors.ink },
+  card: {
+    backgroundColor: InkColors.bg,
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    borderColor: InkColors.line,
+    padding: Space.lg,
+    gap: Space.md,
+    ...Elevation.e2,
+  },
+  valRow: { flexDirection: 'row', gap: Space.sm },
+  valCell: {
+    flex: 1,
+    backgroundColor: InkColors.paper,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: InkColors.line,
+    paddingVertical: 11,
+    paddingHorizontal: 10,
+    alignItems: 'center',
+  },
+  valNum: { fontSize: 20, fontWeight: '900', letterSpacing: -0.4, color: InkColors.ink, lineHeight: 22 },
+  valNumAlert: { color: BrandColors.bad },
+  valLabel: { fontSize: 11, fontWeight: '600', color: InkColors.ink2, marginTop: 5, textAlign: 'center', lineHeight: 14 },
+  rdot: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 7,
+    height: 7,
+    borderRadius: Radius.pill,
+    backgroundColor: BrandColors.bad,
+  },
+  ctaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    backgroundColor: InkColors.paper,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: InkColors.line,
+    paddingVertical: 9,
+    paddingHorizontal: 11,
+  },
+  ctaText: { flex: 1, fontSize: 12, fontWeight: '600', color: InkColors.ink2, lineHeight: 16 },
+  ctaStrong: { color: InkColors.ink, fontWeight: '900' },
+});

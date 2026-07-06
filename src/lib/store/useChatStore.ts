@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { ChatQuery, ResponseBlock, UnknownQuery } from '@/types';
+import type { ChatQuery, ResponseBlock, UnknownQuery, PlaybookEntry, SourceRef } from '@/types';
 import { inferCategoryFromQuery } from '@/lib/utils/inferCategory';
 import { generateAnswer, hybridSearch, extractIntent, toSopSlices, GENERATE_THRESHOLD } from '@/lib/ai';
 import { MAX_ACTIONS, MAX_DONTS } from '@/lib/ai/config';
@@ -116,11 +116,19 @@ export const useChatStore = create<ChatState>((set, get) => ({
       if (!ai.block) return false;
       const id = genId('cq');
       const now = new Date().toISOString();
+      // 실제 종합에 참고한 노하우 출처들(복수) — usedSopIds를 후보 엔트리에 매핑해 클라에서 구성.
+      // (edge는 top1 source만 반환하므로 여기서 복수 출처를 붙인다. edge 무변경.)
+      const byId = new Map<string, PlaybookEntry>(r.candidates.map((c) => [c.entry.id, c.entry]));
+      const sources: SourceRef[] = ai.usedSopIds
+        .map((sid) => byId.get(sid))
+        .filter((e): e is PlaybookEntry => !!e)
+        .map((e) => ({ entry_id: e.id, creator_name: e.creator_name, title: e.title, version: e.version, updated_at: e.updated_at }));
       const cq: ChatQuery = {
         id, junior_id: session.userId, junior_name: session.userName, query_text: text, asked_at: now,
         matched_entry_ids: ai.usedSopIds, match_confidence: r.confidence, was_deflected: true,
         // 여러 노하우를 AI가 모아 정리 → mode:'generated'(검증 배지 비노출 + "AI 정리" 고지).
-        response_block: { ...ai.block, mode: 'generated', ...(ai.degraded ? { degraded: true } : {}) },
+        // 2개 이상 참고했으면 sources로 복수 출처 노출(단일이면 기존 source 푸터만).
+        response_block: { ...ai.block, mode: 'generated', ...(sources.length > 1 ? { sources } : {}), ...(ai.degraded ? { degraded: true } : {}) },
         satisfaction: null, resolved_at: now,
       };
       set((s) => ({ history: [...s.history, cq], isLoading: false, lastSubmittedId: id }));

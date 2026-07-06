@@ -9,6 +9,7 @@ import { useSuggestionStore } from '@/lib/store/useSuggestionStore';
 import { useScheduleStore } from '@/lib/store/useScheduleStore';
 import { useStaffStore } from '@/lib/store/useStaffStore';
 import { useWorkStore } from '@/lib/store/useWorkStore';
+import { Appear } from '@/components/Appear';
 import { NotificationList } from '@/components/NotificationList';
 import { NotificationEnableCard } from '@/components/NotificationEnableCard';
 import { buildOwnerNotifications, type OwnerNotifKind } from '@/lib/utils/notifications';
@@ -43,6 +44,7 @@ export default function OwnerNotificationsScreen() {
   const staff = useStaffStore((s) => s.staff);
   const pending = useStaffStore((s) => s.pending);
   const feed = useWorkStore((s) => s.feed);
+  const markNoticeRead = useWorkStore((s) => s.markNoticeRead);
 
   // 화면에 들어올 때마다 명부·합류신청을 다시 당겨온다. profiles 실시간이 없어도(또는 앱을 켜둔 채로
   // 신청이 들어와도) 사장이 이 화면을 열면 최신 합류 신청이 반드시 보이게 하는 안전장치.
@@ -68,6 +70,7 @@ export default function OwnerNotificationsScreen() {
     <SafeAreaView style={styles.safe} edges={['bottom']}>
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         {/* 맨 위 — 매장명 · 사장님 이름(정체성). 직원 알림 화면과 동일 구조 */}
+        <Appear delay={0}>
         <View style={styles.idCard}>
           <View style={styles.avatar}>
             <Text style={styles.avatarText}>{initial}</Text>
@@ -81,18 +84,24 @@ export default function OwnerNotificationsScreen() {
             </Text>
           </View>
         </View>
+        </Appear>
 
         <NotificationEnableCard />
 
+        <Appear delay={80}>
         <NotificationList
           rows={rows}
           kindUI={KIND_UI}
-          onPress={(r) => r.route && router.push(r.route as Href)}
+          onPress={(r) => {
+            if (r.readFeedId) markNoticeRead(r.readFeedId, me); // 멘션은 탭하면 읽음 처리
+            if (r.route) router.push(r.route as Href);
+          }}
           empty={{
             text: '지금 처리할 알림이 없어요.',
             sub: '합류 신청 · 받은 질문 · 제안 · 승인 대기 교대가 생기면 여기에 모아서 보여드려요.',
           }}
         />
+        </Appear>
         <View style={{ height: 12 }} />
       </ScrollView>
     </SafeAreaView>

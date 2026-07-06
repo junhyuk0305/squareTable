@@ -1,4 +1,4 @@
-import { useRef, type ReactNode } from 'react';
+import { useMemo, type ReactNode } from 'react';
 import { Animated, Pressable, type PressableProps, type StyleProp, type ViewStyle } from 'react-native';
 import { USE_NATIVE_DRIVER } from '@/lib/anim';
 
@@ -17,8 +17,9 @@ type Props = Omit<PressableProps, 'style' | 'children'> & {
  * 기존 Pressable을 대체해 앱 전반의 '눌리는 느낌'을 통일한다.
  */
 export function PressableScale({ scaleTo = 0.96, dimTo = 0.9, style, children, onPressIn, onPressOut, ...rest }: Props) {
-  const scale = useRef(new Animated.Value(1)).current;
-  const opacity = useRef(new Animated.Value(1)).current;
+  // Animated.Value는 안정 객체로 메모이즈 — 렌더 중 ref.current 접근(react-hooks/refs) 회피. (Appear와 동일 패턴)
+  const scale = useMemo(() => new Animated.Value(1), []);
+  const opacity = useMemo(() => new Animated.Value(1), []);
 
   const to = (s: number, o: number) =>
     Animated.parallel([

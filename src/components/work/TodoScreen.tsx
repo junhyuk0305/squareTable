@@ -5,7 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Appear } from '@/components/Appear';
 import { StoredImage } from '@/components/StoredImage';
 import { DaypartSettingsSheet } from '@/components/work/DaypartSettingsSheet';
-import { useDaypartLabels, occursOn, type TaskSection, type TaskTemplate, type DoneMark } from '@/lib/store/useWorkStore';
+import { useDaypartLabels, occursOn, taskVisibleTo, type TaskSection, type TaskTemplate, type DoneMark } from '@/lib/store/useWorkStore';
 import { InkColors, BrandColors, CategoryColors } from '@/lib/theme/colors';
 import { Elevation, Radius } from '@/lib/theme/elevation';
 import { hhmm } from '@/lib/utils/attendance';
@@ -58,15 +58,8 @@ export function TodoScreen({
   const [setMenu, setSetMenu] = useState(false);
   const [daypartEditor, setDaypartEditor] = useState(false);
 
-  // 내가 볼 수 있는 할일: 공유 or 내 개인(대상=나) or 내가 작성(배정).
-  // 사장이라도 직원이 자가등록한 '내 할일'은 보지 않는다(0017: owner_id/created_by 본인만).
-  const visible = useMemo(
-    () =>
-      templates.filter(
-        (t) => (t.scope ?? 'shared') !== 'private' || t.ownerId === me || t.createdBy === me,
-      ),
-    [templates, me],
-  );
+  // 내가 볼 수 있는 할일 — taskVisibleTo SSOT(0017 RLS 정합).
+  const visible = useMemo(() => templates.filter((t) => taskVisibleTo(t, me)), [templates, me]);
 
   // 월 그리드
   const grid = useMemo(() => {

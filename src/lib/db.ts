@@ -105,12 +105,15 @@ export type DbResult<T> = { data: T | null; error: DbErr };
 export type SessionProfileRow = {
   id: string; name: string | null; role: string | null;
   unit_id: string | null; pending_unit_id: string | null;
+  // 다점포(0055): active_unit_id = 현재 활성 매장(auth_unit_id()가 반환). unit_id는 주매장(첫 매장).
+  // 클라 세션·db._unitId는 active를 우선 사용해 RLS(auth_unit_id=active)와 일치시킨다(split-brain 방지).
+  active_unit_id: string | null;
   bio: string | null; phone: string | null; deleted_at: string | null;
 };
 export async function fetchSessionProfile(userId: string): Promise<DbResult<SessionProfileRow>> {
   const { data, error } = await supabase
     .from('profiles')
-    .select('id, name, role, unit_id, pending_unit_id, bio, phone, deleted_at')
+    .select('id, name, role, unit_id, active_unit_id, pending_unit_id, bio, phone, deleted_at')
     .eq('id', userId)
     .maybeSingle();
   return { data: (data as SessionProfileRow) ?? null, error: error as DbErr };
@@ -121,6 +124,19 @@ export async function fetchUnitInfo(unitId: string): Promise<DbResult<UnitInfoRo
   const { data, error } = await supabase
     .from('units').select('store_name, invite_code, industry').eq('id', unitId).maybeSingle();
   return { data: (data as UnitInfoRow) ?? null, error: error as DbErr };
+}
+
+// ── 다점포(0055) — 매장 목록·활성 전환 (definer RPC). db.ts만 supabase 접근(AGENTS ③) ──
+export type MyUnitRow = { unit_id: string; store_name: string; role: string; industry: string | null; is_active: boolean };
+/** 내가 속한(소유/직원) 매장 목록 — 매장 선택 홈/헤더 스위처용. units RLS는 활성 매장만 보이므로 definer RPC 필요. */
+export async function fetchMyUnits(): Promise<DbResult<MyUnitRow[]>> {
+  const { data, error } = await supabase.rpc('my_units');
+  return { data: (data as MyUnitRow[]) ?? null, error: error as DbErr };
+}
+/** 활성 매장 전환(멤버십 검증은 RPC 내부). 성공 시 호출부가 loadProfile+재hydrate로 컨텍스트를 맞춘다. */
+export async function switchActiveUnit(unitId: string): Promise<{ error: DbErr }> {
+  const { error } = await supabase.rpc('switch_active_unit', { p_unit_id: unitId });
+  return { error: error as DbErr };
 }
 
 export type UnitSubscriptionRow = { status: string | null; trial_ends_at: string | null; paid_until: string | null };

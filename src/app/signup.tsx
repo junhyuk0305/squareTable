@@ -10,7 +10,7 @@ import { formatBizNo, isValidBizNo, bizDigits } from '@/lib/utils/bizno';
 import { isValidEmail, isValidPhone, normalizePhone, formatPhone, passwordError } from '@/lib/utils/validation';
 import { BrandColors, InkColors } from '@/lib/theme/colors';
 import { Space } from '@/lib/theme/layout';
-import { Radius } from '@/lib/theme/elevation';
+import { Radius, Elevation } from '@/lib/theme/elevation';
 import type { Role } from '@/types';
 import { INDUSTRIES } from '@/lib/config/industry';
 
@@ -381,13 +381,14 @@ const styles = StyleSheet.create({
   roleCard: {
     flex: 1,
     backgroundColor: '#FFFFFF',
-    borderWidth: 1.5,
+    borderWidth: 2,
     borderColor: InkColors.line,
     borderRadius: 16,
     padding: 16,
     gap: 4,
   },
-  roleCardOn: { borderColor: BrandColors.brand, backgroundColor: '#FFFDFB' },
+  // 선택 = 잉크 테두리 + 소프트 섀도로 '선택된 border'를 굵게(bold) 강조(입력칸 선택 효과와 통일).
+  roleCardOn: { borderColor: BrandColors.brand, backgroundColor: '#FFFDFB', ...Elevation.e1 },
   roleEmoji: { fontSize: 28 },
   roleLabel: { fontSize: 16, fontWeight: '800', color: InkColors.ink2, marginTop: 4 },
   roleLabelOn: { color: BrandColors.brand },

@@ -9,10 +9,11 @@ import { EmptyState } from '@/components/EmptyState';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { useUnknownQueueStore } from '@/lib/store/useUnknownQueueStore';
 import { useSuggestionStore } from '@/lib/store/useSuggestionStore';
+import { buildDirectUq } from '@/lib/utils/buildEntry';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 
-import type { Category, PlaybookEntry, UnknownQuery } from '@/types';
+import type { Category, PlaybookEntry } from '@/types';
 
 const VALID: Category[] = ['Routine', 'Event', 'Context', 'Know-how'];
 
@@ -47,25 +48,9 @@ export default function OwnerCoachScreen() {
   }, [isInboxAnswer, realUq, catParam]);
 
   const rid = useId();
-  const syntheticUq = useMemo<UnknownQuery>(
-    () => ({
-      id: `direct_${rid}`,
-      junior_id: '',
-      junior_name: '사장님',
-      query_text: (typeof seed === 'string' && seed) || '매장 노하우',
-      asked_at: new Date().toISOString(),
-      presumed_category: initialCategory,
-      presumed_subcategory: '일반',
-      match_attempted: false,
-      best_match_confidence: 0,
-      best_match_entry_id: null,
-      status: 'pending_owner_answer',
-      fallback_action: '',
-      owner_notified_at: new Date().toISOString(),
-      owner_will_answer: true,
-      similar_queries_count: 0,
-      ai_general_answer: '',
-    }),
+  // 직접 등록용 합성 uq — 스캐폴드는 buildDirectUq(SSOT). 인수인계서 화면과 공유해 드리프트 방지.
+  const syntheticUq = useMemo(
+    () => buildDirectUq(initialCategory, typeof seed === 'string' ? seed : '', `direct_${rid}`),
     [seed, initialCategory, rid],
   );
 

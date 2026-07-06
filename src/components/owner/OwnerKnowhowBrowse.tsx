@@ -109,15 +109,16 @@ export function OwnerKnowhowBrowse({
   const userName = useSessionStore((s) => s.userName);
 
   const [query, setQuery] = useState('');
-  const [activeCats, setActiveCats] = useState<Category[]>([]); // 빈 배열 = 전체
+  const [activeCat, setActiveCat] = useState<Category | null>(null); // null = 전체(단일 선택)
   const [sort, setSort] = useState<SortKey>('recent');
   const [view, setView] = useState<'dashboard' | 'list'>(initialNeedsReview ? 'list' : 'dashboard');
   const [onlyNeedsReview, setOnlyNeedsReview] = useState(initialNeedsReview); // 미검증 배너에서 진입
 
   const goAdd = () => router.push('/owner/coach' as never);
   const goTemplates = () => router.push('/owner/templates' as never);
-  const toggleCat = (c: Category) =>
-    setActiveCats((prev) => (prev.includes(c) ? prev.filter((x) => x !== c) : [...prev, c]));
+  const goHandover = () => router.push('/owner/handover' as never);
+  // 카테고리 필터는 단일 선택(라디오) — '전체' + 한 카테고리만. 같은 칩 재탭 시 전체로 해제.
+  const selectCat = (c: Category) => setActiveCat((prev) => (prev === c ? null : c));
 
   // 미검증 상태 필터 — 켜면 미검증만 목록으로 전환.
   const toggleReview = () => {
@@ -136,9 +137,9 @@ export function OwnerKnowhowBrowse({
   const baseFiltered = useMemo(() => {
     const q = query.trim().toLowerCase();
     let list = entries.filter((e) => matchesQuery(e, q));
-    if (activeCats.length > 0) list = list.filter((e) => activeCats.includes(e.category));
+    if (activeCat) list = list.filter((e) => e.category === activeCat);
     return list;
-  }, [entries, query, activeCats]);
+  }, [entries, query, activeCat]);
 
   // 미검증(needs_review) — 전체 기준 카운트(배너·섹션 노출 판단). 0이 되면 배너/섹션 자동 소멸.
   const needsReview = useMemo(() => baseFiltered.filter(needsVerify), [baseFiltered]);
@@ -222,6 +223,21 @@ export function OwnerKnowhowBrowse({
           <Text style={styles.addBtnText}>노하우 추가</Text>
         </Pressable>
       </View>
+
+      {/* 인수인계서 올리기 — 노하우 주 입구. 사장이 이미 가진 매뉴얼·메모를 통째로 올리면 AI가 항목별로 분리. */}
+      <Pressable
+        onPress={goHandover}
+        style={({ pressed }) => [styles.templateLink, pressed && { opacity: 0.85 }]}
+        accessibilityRole="button"
+        accessibilityLabel="인수인계서 올리기"
+      >
+        <Ionicons name="cloud-upload-outline" size={16} color={InkColors.ink2} />
+        <View style={{ flex: 1 }}>
+          <Text style={styles.templateLinkTitle}>인수인계서 올리기</Text>
+          <Text style={styles.templateLinkSub}>오픈·마감·규칙 메모를 올리면 AI가 노하우로 정리해요</Text>
+        </View>
+        <Ionicons name="chevron-forward" size={16} color={InkColors.ink3} />
+      </Pressable>
 
       {/* 템플릿 둘러보기 — 홈에서 이관(회의 반영). 업종 표준 노하우를 검색해 내 노하우로 가져온다. */}
       <Pressable
@@ -309,14 +325,14 @@ export function OwnerKnowhowBrowse({
 
           {/* 카테고리 칩 */}
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
-            <Pressable onPress={() => setActiveCats([])} style={[styles.chip, activeCats.length === 0 && styles.chipOn]}>
-              <Text style={[styles.chipText, activeCats.length === 0 && styles.chipTextOn]}>전체</Text>
+            <Pressable onPress={() => setActiveCat(null)} style={[styles.chip, activeCat === null && styles.chipOn]}>
+              <Text style={[styles.chipText, activeCat === null && styles.chipTextOn]}>전체</Text>
             </Pressable>
             {ALL_CATEGORIES.map((c) => {
-              const on = activeCats.includes(c);
+              const on = activeCat === c;
               const m = getCategoryMeta(c);
               return (
-                <Pressable key={c} onPress={() => toggleCat(c)} style={[styles.chip, on && styles.chipOn]}>
+                <Pressable key={c} onPress={() => selectCat(c)} style={[styles.chip, on && styles.chipOn]}>
                   <View style={[styles.chipDot, { backgroundColor: m.color }]} />
                   <Text style={[styles.chipText, on && styles.chipTextOn]}>{m.label}</Text>
                 </Pressable>
@@ -357,7 +373,7 @@ export function OwnerKnowhowBrowse({
           {/* 결과 */}
           {view === 'dashboard' ? (
             baseFiltered.length === 0 ? (
-              <EmptyResult onReset={() => { setQuery(''); setActiveCats([]); }} />
+              <EmptyResult onReset={() => { setQuery(''); setActiveCat(null); }} />
             ) : (
               <View style={{ gap: Space.xl }}>
                 {needsReview.length > 0 && (
@@ -376,7 +392,7 @@ export function OwnerKnowhowBrowse({
             )
           ) : listFiltered.length === 0 ? (
             <EmptyResult
-              onReset={() => { setQuery(''); setActiveCats([]); setOnlyNeedsReview(false); }}
+              onReset={() => { setQuery(''); setActiveCat(null); setOnlyNeedsReview(false); }}
               label={onlyNeedsReview ? '확인할 노하우가 없어요 🎉' : undefined}
             />
           ) : groups ? (

@@ -9,6 +9,7 @@ import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
 import { Wordmark } from '@/components/Wordmark';
+import { Appear } from '@/components/Appear';
 
 const CODE_LEN = 6;
 
@@ -91,6 +92,7 @@ export default function JuniorHub() {
         </View>
 
         {/* 인사 */}
+        <Appear delay={0}>
         <View style={styles.greet}>
           <Text style={styles.hello}>
             안녕하세요{userName ? `, ${userName}님` : ''} 👋
@@ -99,9 +101,11 @@ export default function JuniorHub() {
             {hasStore ? '오늘도 착착 시작해볼까요?' : '가게에 연결하면 착착을 시작할 수 있어요.'}
           </Text>
         </View>
+        </Appear>
 
         {/* 후킹 배너 ① — 가게 연결 유도 (매장 없을 때만) */}
         {!hasStore && !pendingUnitId && (
+          <Appear delay={60}>
           <Pressable onPress={focusCode} style={({ pressed }) => [styles.heroBanner, pressed && { opacity: 0.92 }]}>
             <View style={styles.heroText}>
               <Text style={styles.heroTitle}>사장님께 코드를 받으셨나요?</Text>
@@ -112,9 +116,11 @@ export default function JuniorHub() {
               <Ionicons name="arrow-forward" size={15} color={InkColors.ink} />
             </View>
           </Pressable>
+          </Appear>
         )}
 
         {/* 내 가게 */}
+        <Appear delay={120}>
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>내 가게</Text>
 
@@ -163,9 +169,11 @@ export default function JuniorHub() {
             </View>
           )}
         </View>
+        </Appear>
 
         {/* 가게 코드 입력 (대기 중이 아닐 때만) */}
         {!pendingUnitId && (
+          <Appear delay={160}>
           <View style={styles.section}>
             <Text style={styles.sectionLabel}>가게 코드 입력</Text>
             <View style={styles.codeCard}>
@@ -193,9 +201,11 @@ export default function JuniorHub() {
               <Text style={styles.codeHint}>코드가 없으신가요? 사장님께 요청하세요 (사장님: 설정 › 가게 관리).</Text>
             </View>
           </View>
+          </Appear>
         )}
 
         {/* 후킹 배너 ② — 기능 소개/온보딩 */}
+        <Appear delay={200}>
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>착착으로 이런 걸 할 수 있어요</Text>
           <ScrollView
@@ -214,8 +224,10 @@ export default function JuniorHub() {
             ))}
           </ScrollView>
         </View>
+        </Appear>
 
         {/* 마이페이지 */}
+        <Appear delay={240}>
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>마이페이지</Text>
           <View style={styles.myCard}>
@@ -240,6 +252,7 @@ export default function JuniorHub() {
             </Pressable>
           </View>
         </View>
+        </Appear>
       </ScrollView>
     </SafeAreaView>
   );

@@ -14,6 +14,9 @@ import {
   rpcRenameStore,
   updateProfileFields,
   updateUnitIndustry,
+  fetchMyUnits,
+  switchActiveUnit,
+  type MyUnitRow,
 } from '@/lib/db';
 import { friendlyError } from '@/lib/utils/userError';
 import { sessionReadFailAction } from './sessionReadFail';
@@ -31,6 +34,8 @@ type SessionState = {
   userName: string;
   unitId: string;
   storeName: string;
+  // 다점포(0055): 내가 속한 매장 목록(오너). 1개면 매장선택홈/스위처 자동 숨김. is_active=현재 활성.
+  stores: MyUnitRow[];
   // 합류 승인 대기(남용 #2) — 코드는 입력했으나 사장 승인 전. unitId는 아직 비어 데이터가 격리된다.
   pendingUnitId: string; // 신청한 매장 id(승인 전). 있으면 '승인 대기' 상태.
   pendingStoreName: string; // 신청한 매장 이름(대기 화면 표시용 — join 응답에서 채움, 재로드 시 유실 가능).
@@ -78,6 +83,8 @@ type SessionState = {
   storeRenameInfo: () => { remaining: number; nextAvailableAt: number | null };
   // 업종 변경(사장 전용) — 노하우팩 매칭 키. 가게 이름과 같은 unit 속성.
   updateIndustry: (industry: string) => Promise<{ error: string | null }>;
+  // 다점포(0055): 활성 매장 전환. switch_active_unit RPC → loadProfile(활성 반영) → _layout이 전 스토어 재hydrate.
+  switchUnit: (unitId: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
 
   // 개발/단일기기 역할 토글 (Supabase 없을 때의 데모 폴백)
@@ -94,6 +101,7 @@ const DEMO = {
   userName: '박지원',
   unitId: 'store_001',
   storeName: '착착 카페 신촌점',
+  stores: [] as MyUnitRow[],
   pendingUnitId: '',
   pendingStoreName: '',
   industry: '카페·디저트',
@@ -185,7 +193,9 @@ async function loadProfile(
       return;
     }
 
-    let unitId = profile?.unit_id ?? '';
+    // 다점포(0055): 활성 매장(active_unit_id) 우선 — RLS auth_unit_id()=active와 클라 컨텍스트를 일치시켜
+    // split-brain(화면 신원=주매장인데 데이터=활성매장) 방지. active 없으면 주매장(unit_id) 폴백.
+    let unitId = profile?.active_unit_id || profile?.unit_id || '';
     let role: Role = (profile?.role as Role) ?? 'junior';
 
     // 이메일 인증 경로 복원: 세션 확보 전이라 가입 시점에 create_store 를 못 부른 사장 →
@@ -245,9 +255,16 @@ async function loadProfile(
         paidUntil = sub?.paid_until ?? '';
       }
     }
+    // 다점포(0055): 소유 매장 목록 — 매장 선택 홈/헤더 스위처용. 오너만 다점포이므로 owner일 때만 로드.
+    let stores: MyUnitRow[] = [];
+    if (unitId && role === 'owner') {
+      const { data: us } = await fetchMyUnits();
+      stores = us ?? [];
+    }
     setUnitId(unitId || null);
     setAnalyticsContext({ userId, unitId: unitId || null, role }); // 관측 이벤트에 매장/유저/역할 태깅
     set({
+      stores,
       status: 'signed_in',
       userId,
       email,
@@ -276,7 +293,7 @@ async function loadProfile(
     reportError('session.loadProfile', e); // 오프라인 등으로 세션 로드가 던져 로그아웃되는 경로를 관측
     setUnitId(null);
     setAnalyticsContext({ userId: null, unitId: null, role: null });
-    set({ status: 'signed_out', unitId: '', userId: '', userName: '', storeName: '', pendingUnitId: '', pendingStoreName: '', industry: '', inviteCode: '', bio: '' });
+    set({ status: 'signed_out', unitId: '', userId: '', userName: '', storeName: '', stores: [], pendingUnitId: '', pendingStoreName: '', industry: '', inviteCode: '', bio: '' });
   }
 }
 
@@ -629,6 +646,20 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       if (error) return { error: friendlyError(error.message, '업종을 변경하지 못했어요. 잠시 후 다시 시도해 주세요.') };
     }
     set({ industry: trimmed });
+    return { error: null };
+  },
+
+  // 다점포(0055): 활성 매장 전환. switch_active_unit(멤버십 검증) → loadProfile(활성 반영: unitId·storeName·
+  // db._unitId·stores 갱신) → owner/_layout의 hydrate effect가 unitId 변경을 보고 전 스토어를 재hydrate·재subscribe.
+  // (setUnitId는 loadProfile 안에서 동기 반영되므로 전환 직후 쓰기도 새 매장으로 태깅 — split-brain 없음.)
+  switchUnit: async (targetUnitId) => {
+    if (!HAS_SUPABASE) return { error: null };
+    if (get().role !== 'owner') return { error: '사장님만 매장을 전환할 수 있어요.' };
+    if (!targetUnitId || targetUnitId === get().unitId) return { error: null };
+    const { error } = await switchActiveUnit(targetUnitId);
+    if (error) return { error: friendlyError(error.message, '매장을 전환하지 못했어요. 잠시 후 다시 시도해 주세요.') };
+    const uid = get().userId;
+    if (uid) await loadProfile(set, uid, get().email);
     return { error: null };
   },
 

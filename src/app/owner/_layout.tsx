@@ -54,7 +54,8 @@ export default function OwnerLayout() {
       offSt();
       offSg();
     };
-  }, [status]);
+    // unitId 의존: 다점포 전환(switchUnit) 시 활성 매장이 바뀌면 전 스토어를 새 매장으로 재hydrate·재subscribe.
+  }, [status, unitId]);
 
   // 구독/소속 상태를 주기적으로 서버와 재동기화(subscriptions·profiles.unit_id는 owner realtime 미구독).
   //  - 계좌이체 수동과금이 반영되면(subscriptions.status=active) 페이월(/billing)이 앱 재시작 없이 자동 해제.
@@ -119,6 +120,8 @@ export default function OwnerLayout() {
       <Stack.Screen name="edit/[id]" options={{ title: '노하우 수정' }} />
       {/* 대화형 입력 단일 화면 — 기존 answer/[uqId]·add/[category]·capture 위저드를 대체 */}
       <Stack.Screen name="coach" options={{ title: '노하우 추가' }} />
+      {/* 인수인계서 일괄 업로드 — 긴 원문을 AI가 노하우 여러 개로 분리(coach 파이프라인 재사용) */}
+      <Stack.Screen name="handover" options={{ title: '인수인계서 올리기' }} />
     </Stack>
   );
 }
