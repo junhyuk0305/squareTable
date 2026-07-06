@@ -91,6 +91,98 @@ function sinceTs(days: number): string {
   return d.toISOString();
 }
 
+// ── 가입/합류·계정 데이터 접근 (세션 스토어 오케스트레이션 전용) ───────────────
+// 계층 경계(§3): 스토어/화면은 supabase.from/.rpc 를 직접 부르지 않는다 — 여기로만.
+//   단 반환은 boolean(write)이 아니라 {data,error} 원형을 유지한다. 이유 두 가지:
+//   ① 가입/합류 RPC 는 named 에러(already_in_store·invalid_code·too_many_attempts·
+//      duplicate_biz_no·rename_limit …)로 분기해야 하고, 그 "코드→의미" 판정 SSOT 는 RPC 본문이다.
+//      write()는 error.message 를 삼켜 이 분기를 파괴하므로 쓸 수 없다.
+//   ② 세션 read 는 error 를 표면화해야(§4.8) 스토어가 일시적 읽기실패에 신원을 무음 강등하지 않는다.
+//   (auth.* 세션관리는 '데이터 접근'이 아니므로 스토어가 계속 소유한다 — signIn/signUp/OTP/updateUser 등.)
+export type DbErr = { message: string; code?: string } | null;
+export type DbResult<T> = { data: T | null; error: DbErr };
+
+export type SessionProfileRow = {
+  id: string; name: string | null; role: string | null;
+  unit_id: string | null; pending_unit_id: string | null;
+  bio: string | null; phone: string | null; deleted_at: string | null;
+};
+export async function fetchSessionProfile(userId: string): Promise<DbResult<SessionProfileRow>> {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('id, name, role, unit_id, pending_unit_id, bio, phone, deleted_at')
+    .eq('id', userId)
+    .maybeSingle();
+  return { data: (data as SessionProfileRow) ?? null, error: error as DbErr };
+}
+
+export type UnitInfoRow = { store_name: string | null; invite_code: string | null; industry: string | null };
+export async function fetchUnitInfo(unitId: string): Promise<DbResult<UnitInfoRow>> {
+  const { data, error } = await supabase
+    .from('units').select('store_name, invite_code, industry').eq('id', unitId).maybeSingle();
+  return { data: (data as UnitInfoRow) ?? null, error: error as DbErr };
+}
+
+export type UnitSubscriptionRow = { status: string | null; trial_ends_at: string | null; paid_until: string | null };
+export async function fetchUnitSubscription(unitId: string): Promise<DbResult<UnitSubscriptionRow>> {
+  const { data, error } = await supabase
+    .from('unit_subscriptions').select('status, trial_ends_at, paid_until').eq('unit_id', unitId).maybeSingle();
+  return { data: (data as UnitSubscriptionRow) ?? null, error: error as DbErr };
+}
+
+// 전화번호 중복 사전검사(주키). 비로그인 호출 가능. data=true/false, error=검사 실패.
+export async function checkPhoneInUse(phone: string): Promise<DbResult<boolean>> {
+  const { data, error } = await supabase.rpc('phone_in_use', { p_phone: phone });
+  return { data: (data as boolean) ?? null, error: error as DbErr };
+}
+
+export type CreateStoreRow = { unit_id: string; invite_code: string };
+export async function rpcCreateStore(storeName: string, industry: string | null, bizNo: string | null): Promise<DbResult<CreateStoreRow>> {
+  const { data, error } = await supabase.rpc('create_store', { p_store_name: storeName, p_industry: industry, p_biz_no: bizNo });
+  const row = Array.isArray(data) ? data[0] : data;
+  return { data: (row as CreateStoreRow) ?? null, error: error as DbErr };
+}
+
+export type JoinRow = { unit_id: string; store_name: string };
+export async function rpcJoinByInvite(code: string): Promise<DbResult<JoinRow>> {
+  const { data, error } = await supabase.rpc('join_by_invite', { p_code: code });
+  const row = Array.isArray(data) ? data[0] : data;
+  return { data: (row as JoinRow) ?? null, error: error as DbErr };
+}
+
+export async function rpcCancelJoinRequest(): Promise<{ error: DbErr }> {
+  const { error } = await supabase.rpc('cancel_join_request');
+  return { error: error as DbErr };
+}
+
+export async function rpcLeaveStore(): Promise<{ error: DbErr }> {
+  const { error } = await supabase.rpc('leave_store');
+  return { error: error as DbErr };
+}
+
+export async function rpcDeleteMyAccount(): Promise<{ error: DbErr }> {
+  const { error } = await supabase.rpc('delete_my_account');
+  return { error: error as DbErr };
+}
+
+// rename_store 는 남은 변경 횟수(number)를 반환한다(서버가 14일 2회 강제).
+export async function rpcRenameStore(name: string): Promise<DbResult<number>> {
+  const { data, error } = await supabase.rpc('rename_store', { p_name: name });
+  return { data: (typeof data === 'number' ? data : null), error: error as DbErr };
+}
+
+// 본인 프로필 필드 갱신(name/phone/bio 등). RLS: 본인 행만.
+export async function updateProfileFields(userId: string, fields: Record<string, string | null>): Promise<{ error: DbErr }> {
+  const { error } = await supabase.from('profiles').update(fields).eq('id', userId);
+  return { error: error as DbErr };
+}
+
+// 매장 업종 갱신(사장 전용). RLS: 소유 매장만.
+export async function updateUnitIndustry(unitId: string, industry: string): Promise<{ error: DbErr }> {
+  const { error } = await supabase.from('units').update({ industry }).eq('id', unitId);
+  return { error: error as DbErr };
+}
+
 // ── 직원/사장 프로필 (같은 매장) ───────────────────────────
 // 실서비스: profiles에서 내 매장 동료를 읽어 직원/근태/급여 화면을 채운다.
 export async function fetchStaffProfiles(): Promise<{ owner: Owner | null; staff: Junior[]; error: boolean }> {

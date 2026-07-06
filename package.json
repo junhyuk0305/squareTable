@@ -39,6 +39,7 @@
     "compile:packs": "node scripts/compile-pack.mjs",
     "qa:onboarding": "node scripts/qa-onboarding.mjs",
     "qa:push": "node scripts/qa-push.mjs",
+    "qa:session": "node scripts/qa-session-readfail.mjs",
     "qa:split": "node scripts/qa-knowhow-split.mjs"
   },
   "private": true
