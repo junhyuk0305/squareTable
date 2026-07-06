@@ -9,6 +9,7 @@ import { useWorkStore } from '@/lib/store/useWorkStore';
 import { useScheduleStore } from '@/lib/store/useScheduleStore';
 import { useStaffStore } from '@/lib/store/useStaffStore';
 import { HeaderBackButton } from '@/components/HeaderBackButton';
+import { Appear } from '@/components/Appear';
 import { NotificationList } from '@/components/NotificationList';
 import { NotificationEnableCard } from '@/components/NotificationEnableCard';
 import { todayStr } from '@/lib/utils/attendance';
@@ -69,6 +70,7 @@ export default function JuniorNotificationsScreen() {
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         {/* 맨 위 — 매장명 · 내 이름(정체성). 홈 헤더에서 옮겨온 정보 */}
+        <Appear delay={0}>
         <View style={styles.idCard}>
           <View style={styles.avatar}>
             <Text style={styles.avatarText}>{initial}</Text>
@@ -82,10 +84,12 @@ export default function JuniorNotificationsScreen() {
             </Text>
           </View>
         </View>
+        </Appear>
 
         <NotificationEnableCard />
 
         {/* 알림 목록 — 직원·사장 공유 NotificationList */}
+        <Appear delay={80}>
         <NotificationList
           rows={rows}
           kindUI={KIND_UI}
@@ -99,6 +103,7 @@ export default function JuniorNotificationsScreen() {
             sub: '공지·교대 요청이 오면 여기에 모아서 보여드려요.',
           }}
         />
+        </Appear>
 
         <View style={{ height: 12 }} />
       </ScrollView>

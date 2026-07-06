@@ -5,6 +5,7 @@ import { Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 import { RoleTabBar } from '@/components/RoleTabBar';
+import { Appear } from '@/components/Appear';
 import { SectionLabel } from '@/components/SectionLabel';
 import { SegmentTabs } from '@/components/SegmentTabs';
 import { ScheduleWeek } from '@/components/schedule/ScheduleWeek';
@@ -115,6 +116,7 @@ export default function JuniorScheduleScreen() {
         {tab === 'week' ? (
           <>
             {/* 내 다음 근무 — 직원이 가장 알고싶은 ‘언제·누구와’를 격자보다 먼저 */}
+            <Appear delay={0}>
             {myNext ? (
               <View style={styles.hero}>
                 <Text style={styles.heroTitle}>{myNext.ongoing ? '지금 근무 중' : '내 다음 근무'}</Text>
@@ -141,6 +143,8 @@ export default function JuniorScheduleScreen() {
                 <Text style={styles.heroEmptyText}>앞으로 2주간 예정된 내 근무가 없어요.</Text>
               </View>
             )}
+            </Appear>
+            <Appear delay={60}>
             <ScheduleWeek
               monday={monday}
               setMonday={setMonday}
@@ -152,11 +156,15 @@ export default function JuniorScheduleScreen() {
               onShiftPress={(date, sh) => setComposer({ date, template: sh.template })}
               canPress={(date, sh) => sh.workerStaffId === me && date >= today && !sh.pending}
             />
+            </Appear>
+            <Appear delay={100}>
             <Text style={styles.tip}>내 근무(노랑)를 누르거나 ‘교대 요청’ 탭에서 대타·맞교환을 올릴 수 있어요.</Text>
+            </Appear>
           </>
         ) : (
           <View style={{ gap: 18 }}>
             {/* 교대 요청 올리기 — 교대 탭의 주 진입점 */}
+            <Appear delay={0}>
             <Pressable
               onPress={() => setPicking(true)}
               accessibilityRole="button"
@@ -166,8 +174,10 @@ export default function JuniorScheduleScreen() {
               <Ionicons name="add-circle-outline" size={18} color="#fff" />
               <Text style={styles.reqText}>교대 요청하기</Text>
             </Pressable>
+            </Appear>
 
             {/* 내가 대응할 수 있는 요청 */}
+            <Appear delay={60}>
             <Section icon="people-outline" title="동료가 올린 요청" hint="수락하면 사장님 승인으로 넘어가요">
               {incoming.length === 0 ? (
                 <Empty text="지금 대응할 교대 요청이 없어요." />
@@ -198,8 +208,10 @@ export default function JuniorScheduleScreen() {
                 })
               )}
             </Section>
+            </Appear>
 
             {/* 내가 올린 요청 */}
+            <Appear delay={120}>
             <Section icon="paper-plane-outline" title="내가 올린 요청">
               {mine.filter((r) => (r.status === 'open' || r.status === 'accepted') && r.date >= today).length === 0 ? (
                 <Empty text="진행 중인 요청이 없어요. 위 ‘교대 요청하기’로 올려보세요." />
@@ -218,14 +230,17 @@ export default function JuniorScheduleScreen() {
                   ))
               )}
             </Section>
+            </Appear>
 
             {/* 처리 결과 */}
             {history.length > 0 && (
+              <Appear delay={180}>
               <Section icon="time-outline" title="지난 요청">
                 {history.slice(0, 8).map((r) => (
                   <SwapCard key={r.id} r={r} nameOf={nameOf} tplById={tplById} />
                 ))}
               </Section>
+              </Appear>
             )}
           </View>
         )}

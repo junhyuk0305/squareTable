@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
+import { Appear } from '@/components/Appear';
 import { useRoomStore } from '@/lib/store/useRoomStore';
 import { useStaffStore } from '@/lib/store/useStaffStore';
 import { showToast } from '@/lib/store/useToastStore';
@@ -48,6 +49,7 @@ export default function OwnerRoomsScreen() {
       <Stack.Screen options={{ title: '채팅방 관리' }} />
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
         {/* 새 방 만들기 */}
+        <Appear delay={0}>
         <View style={styles.createCard}>
           <Text style={styles.createTitle}>새 채팅방 만들기</Text>
           <TextInput
@@ -81,14 +83,17 @@ export default function OwnerRoomsScreen() {
             <Text style={styles.createBtnText}>채팅방 만들기</Text>
           </Pressable>
         </View>
+        </Appear>
 
         {/* 기존 방 목록 */}
+        <Appear delay={60}>
         <Text style={styles.sectionLabel}>채팅방 {rooms.length}개</Text>
-        <View style={styles.list}>
+        </Appear>
+        <Appear delay={100} style={styles.list}>
           {rooms.map((r) => (
             <RoomRow key={r.id} roomId={r.id} />
           ))}
-        </View>
+        </Appear>
         <View style={{ height: 16 }} />
       </ScrollView>
     </SafeAreaView>

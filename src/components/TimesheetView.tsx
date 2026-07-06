@@ -7,6 +7,7 @@ import { useAttendanceStore, type AttendanceRecord } from '@/lib/store/useAttend
 import { usePayrollStore } from '@/lib/store/usePayrollStore';
 import { computePay } from '@/lib/utils/payroll';
 import { RoleTabBar } from '@/components/RoleTabBar';
+import { Appear } from '@/components/Appear';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { fmtDuration, won, hhmm, todayStr, normalizeTime, shiftMonth, daysInMonth, maskHHMM } from '@/lib/utils/attendance';
@@ -50,6 +51,7 @@ export function TimesheetView({ staffId, wage, editedBy, badgeLabel, badgeTone =
   );
 
   const totalMin = monthRecs.reduce((a, r) => a + r.work_minutes, 0);
+  // 예상급여 — 급여규칙(주휴·휴게·야간·연장·추가수당) 반영 SSOT=computePay(F1). totalMin 은 근무시간 표시용.
   const monthPay = computePay(monthRecs, wage, settings).total;
   const month = Number(ym.slice(5));
 
@@ -115,9 +117,10 @@ export function TimesheetView({ staffId, wage, editedBy, badgeLabel, badgeTone =
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        {topHeader}
+        {topHeader && <Appear delay={0}>{topHeader}</Appear>}
 
         {/* 월 네비 */}
+        <Appear delay={40}>
         <View style={styles.monthBar}>
           <Pressable onPress={() => setYm((v) => shiftMonth(v, -1))} hitSlop={8} style={styles.monthArrow}>
             <Ionicons name="chevron-back" size={20} color={InkColors.ink2} />
@@ -127,8 +130,10 @@ export function TimesheetView({ staffId, wage, editedBy, badgeLabel, badgeTone =
             <Ionicons name="chevron-forward" size={20} color={InkColors.ink2} />
           </Pressable>
         </View>
+        </Appear>
 
         {/* 요약 */}
+        <Appear delay={80}>
         <View style={styles.summary}>
           <View style={styles.sumCol}>
             <Text style={styles.sumLabel}>근무일</Text>
@@ -145,9 +150,11 @@ export function TimesheetView({ staffId, wage, editedBy, badgeLabel, badgeTone =
             <Text style={styles.sumValue}>{won(monthPay)}</Text>
           </View>
         </View>
-        {belowSummary}
+        </Appear>
+        {belowSummary && <Appear delay={100}>{belowSummary}</Appear>}
 
         {/* 기록 추가 */}
+        <Appear delay={120}>
         {editing === 'new' ? (
           <View style={styles.editCard}>
             <Text style={styles.editTitle}>출근 기록 추가</Text>
@@ -180,11 +187,15 @@ export function TimesheetView({ staffId, wage, editedBy, badgeLabel, badgeTone =
             <Text style={styles.addText}>{addLabel}</Text>
           </Pressable>
         )}
+        </Appear>
 
         {/* 날짜별 기록 */}
+        <Appear delay={160}>
         <Text style={styles.sectionTitle}>
           날짜별 기록 <Text style={styles.sectionHint}>· 탭하면 수정</Text>
         </Text>
+        </Appear>
+        <Appear delay={180}>
         <View style={styles.list}>
           {monthRecs.length === 0 && <Text style={styles.empty}>이 달 출퇴근 기록이 없어요.</Text>}
           {monthRecs.map((r) => {
@@ -242,8 +253,11 @@ export function TimesheetView({ staffId, wage, editedBy, badgeLabel, badgeTone =
             );
           })}
         </View>
+        </Appear>
 
+        <Appear delay={200}>
         <Text style={styles.demoNote}>{footerNote}</Text>
+        </Appear>
         <View style={{ height: 8 }} />
       </ScrollView>
       <RoleTabBar role={role} />
