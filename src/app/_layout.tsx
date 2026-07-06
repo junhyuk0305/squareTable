@@ -10,6 +10,7 @@ import { SplashAnimation } from '@/components/SplashAnimation';
 import { SyncBanner } from '@/components/SyncBanner';
 import { Toast } from '@/components/Toast';
 import { DialogHost } from '@/components/DialogHost';
+import { TextScaleTransition } from '@/components/settings/TextScaleTransition';
 import { FreeUntilNotice } from '@/components/FreeUntilNotice';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { usePreferencesStore, TEXT_SCALE_FACTOR } from '@/lib/store/usePreferencesStore';
@@ -67,6 +68,8 @@ export default function RootLayout() {
         <SyncBanner />
         <Toast />
         <DialogHost />
+        {/* 글자 크기 전환 로딩 오버레이 — Stack 바깥이라 key 리마운트에도 살아남아 깜빡임을 가린다. */}
+        <TextScaleTransition />
         {splashDone && signedIn && <FreeUntilNotice />}
         <ErrorBoundary>
           <Stack

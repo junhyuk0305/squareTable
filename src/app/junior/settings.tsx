@@ -17,7 +17,7 @@ import { ContactModal } from '@/components/ContactModal';
 import { RoleTabBar } from '@/components/RoleTabBar';
 import { HeaderLogoutButton } from '@/components/HeaderLogoutButton';
 
-const SCALE_LABEL: Record<TextScale, string> = { small: '작게', normal: '보통', large: '크게', xlarge: '아주 크게' };
+const SCALE_LABEL: Record<TextScale, string> = { small: '작게', normal: '보통', large: '크게' };
 
 export default function JuniorSettings() {
   const router = useRouter();
