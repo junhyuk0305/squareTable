@@ -116,6 +116,7 @@ export function OwnerKnowhowBrowse({
 
   const goAdd = () => router.push('/owner/coach' as never);
   const goTemplates = () => router.push('/owner/templates' as never);
+  const goHandover = () => router.push('/owner/handover' as never);
   // 카테고리 필터는 단일 선택(라디오) — '전체' + 한 카테고리만. 같은 칩 재탭 시 전체로 해제.
   const selectCat = (c: Category) => setActiveCat((prev) => (prev === c ? null : c));
 
@@ -222,6 +223,21 @@ export function OwnerKnowhowBrowse({
           <Text style={styles.addBtnText}>노하우 추가</Text>
         </Pressable>
       </View>
+
+      {/* 인수인계서 올리기 — 노하우 주 입구. 사장이 이미 가진 매뉴얼·메모를 통째로 올리면 AI가 항목별로 분리. */}
+      <Pressable
+        onPress={goHandover}
+        style={({ pressed }) => [styles.templateLink, pressed && { opacity: 0.85 }]}
+        accessibilityRole="button"
+        accessibilityLabel="인수인계서 올리기"
+      >
+        <Ionicons name="cloud-upload-outline" size={16} color={InkColors.ink2} />
+        <View style={{ flex: 1 }}>
+          <Text style={styles.templateLinkTitle}>인수인계서 올리기</Text>
+          <Text style={styles.templateLinkSub}>오픈·마감·규칙 메모를 올리면 AI가 노하우로 정리해요</Text>
+        </View>
+        <Ionicons name="chevron-forward" size={16} color={InkColors.ink3} />
+      </Pressable>
 
       {/* 템플릿 둘러보기 — 홈에서 이관(회의 반영). 업종 표준 노하우를 검색해 내 노하우로 가져온다. */}
       <Pressable

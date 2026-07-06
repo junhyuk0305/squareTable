@@ -58,17 +58,17 @@ export function OwnerKnowhowValueCard({ answeredHits30d, pending, entriesCount }
           </View>
         </View>
 
-        {/* 노하우를 더 채우는 진입 — 알바가 물어도 대신 답할 범위가 넓어진다. */}
+        {/* 노하우 주 입구 — 인수인계서를 통째로 올리면 AI가 항목별로 정리(coach 파이프라인 재사용). */}
         <PressableScale
-          onPress={() => router.push('/owner/coach')}
+          onPress={() => router.push('/owner/handover' as never)}
           scaleTo={0.98}
           style={styles.ctaRow}
           accessibilityRole="button"
-          accessibilityLabel="노하우 추가하기"
+          accessibilityLabel="인수인계서로 노하우 채우기"
         >
-          <Ionicons name="add-circle-outline" size={16} color={BrandColors.warn} />
+          <Ionicons name="cloud-upload-outline" size={16} color={BrandColors.warn} />
           <Text style={styles.ctaText}>
-            노하우를 더 알려주면 <Text style={styles.ctaStrong}>대신 답하는 범위</Text>가 넓어져요
+            <Text style={styles.ctaStrong}>인수인계서를 올리면</Text> AI가 노하우로 정리해요
           </Text>
           <Ionicons name="chevron-forward" size={15} color={InkColors.ink3} />
         </PressableScale>

@@ -119,6 +119,8 @@ export default function OwnerLayout() {
       <Stack.Screen name="edit/[id]" options={{ title: '노하우 수정' }} />
       {/* 대화형 입력 단일 화면 — 기존 answer/[uqId]·add/[category]·capture 위저드를 대체 */}
       <Stack.Screen name="coach" options={{ title: '노하우 추가' }} />
+      {/* 인수인계서 일괄 업로드 — 긴 원문을 AI가 노하우 여러 개로 분리(coach 파이프라인 재사용) */}
+      <Stack.Screen name="handover" options={{ title: '인수인계서 올리기' }} />
     </Stack>
   );
 }
