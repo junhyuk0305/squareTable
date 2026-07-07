@@ -62,6 +62,9 @@ export type TaskTemplate = {
   date?: string;
   /** @deprecated 레거시 일회성 예정일. date로 매핑. */
   dueDate?: string;
+  /** 생성(배정) 시각 ISO. work_templates.created_at 에서 채움. 배정 알림의 정렬 기준
+   *  — 없으면 알림이 매일 "오늘"로 취급돼 최신이 아닌데도 상단 고정되는 버그가 났다(2026-07-07 수정). */
+  createdAt?: string;
 };
 export type DoneMark = { by: string; byName: string; at: string; photoUrl?: string };
 export type FeedKind = 'notice' | 'message' | 'task_done' | 'comment';
@@ -332,6 +335,7 @@ export const useWorkStore = create<State>((set, get) => ({
       ...(input.sectionNote ? { sectionNote: input.sectionNote } : null),
       ...(input.recurrence ? { recurrence: input.recurrence } : null),
       ...(input.date ? { date: input.date } : null),
+      createdAt: new Date().toISOString(), // 재조회 전에도 배정 알림 정렬 정확(DB default now()와 일치).
     };
     set((s) => ({ templates: [...s.templates, t] }));
     const ok = await guardWrite(

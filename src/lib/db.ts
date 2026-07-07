@@ -760,6 +760,8 @@ export async function fetchTemplates(): Promise<TaskTemplate[]> {
     ...(r.recurrence ? { recurrence: r.recurrence } : null),
     // date(신규) 우선, 없으면 due_date(레거시) → date로 흡수.
     ...(r.date ? { date: r.date as string } : r.due_date ? { date: r.due_date as string } : null),
+    // 배정 시각 — 배정 알림 정렬 기준(없으면 매일 상단 고정 버그). DB default now() 라 항상 존재.
+    ...(r.created_at ? { createdAt: r.created_at as string } : null),
   })) as TaskTemplate[];
 }
 export async function insertTemplate(t: TaskTemplate): Promise<boolean> {
