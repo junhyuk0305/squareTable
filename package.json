@@ -46,6 +46,8 @@
     "qa:notify": "node scripts/qa-notify-prefs.mjs",
     "qa:session": "node scripts/qa-session-readfail.mjs",
     "qa:split": "node scripts/qa-knowhow-split.mjs",
+    "qa:knowhow-accuracy": "node scripts/qa-knowhow-accuracy.mjs",
+    "qa:ai-core": "node scripts/qa-ai-core.mjs",
     "qa:multistore": "node scripts/qa-multistore.mjs"
   },
   "private": true

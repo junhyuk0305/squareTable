@@ -29,7 +29,7 @@ const main = async () => {
     const seg0 = b.segments?.[0];
     const steps = b.square?.action?.steps || [];
     const scripts = b.square?.action?.scripts || [];
-    const publishable = steps.length >= 1 || scripts.length >= 1;
+    const publishable = steps.length >= 1 || scripts.length >= 1 || (b.square?.situation || '').trim().length >= 4;
     console.log(`[${JSON.stringify(raw)}] cat=${seg0?.category} title="${b.title}" situ="${b.square?.situation}" steps=${JSON.stringify(steps)} usable=${b.usable} fu=${JSON.stringify(b.followups)} → ${publishable ? '⚠️저장가능' : '저장불가'}`);
   }
 };

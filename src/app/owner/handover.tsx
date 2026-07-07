@@ -1,5 +1,5 @@
-import { useCallback, useRef, useState } from 'react';
-import { View, Text, TextInput, ScrollView, StyleSheet, Platform, ActivityIndicator } from 'react-native';
+import { useCallback, useState } from 'react';
+import { View, Text, TextInput, ScrollView, StyleSheet, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -29,7 +29,7 @@ type Phase = 'input' | 'processing' | 'review';
  * owner/handover — 인수인계서·매뉴얼을 통째로 올리면 AI가 노하우 여러 개로 분리해 저장.
  * 노하우의 '주 입구'(한 줄씩 입력 부담 제거). coach의 분리 파이프라인을
  * (structureSquare → segments → buildPlaybookEntryFromSquare → playbook.add) 그대로 재사용한다.
- * 1차 범위: 붙여넣기 + 텍스트 파일(웹). 문서파싱(pdf/hwp)·사진 OCR은 후속.
+ * 1차 범위: 붙여넣기. 문서파싱(pdf/hwp)·사진 OCR은 후속.
  */
 export default function OwnerHandoverScreen() {
   const router = useRouter();
@@ -43,36 +43,9 @@ export default function OwnerHandoverScreen() {
   const [overflow, setOverflow] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const trimmed = rawText.trim();
   const tooShort = trimmed.length < MIN_RAWTEXT;
-
-  // 웹: 텍스트 파일 선택 → 내용을 입력창에 이어붙인다(붙여넣기와 동일 취급).
-  const pickTextFile = useCallback(() => {
-    if (Platform.OS !== 'web') {
-      setError('파일 올리기는 웹에서만 돼요. 내용을 복사해 붙여넣어 주세요.');
-      return;
-    }
-    if (!fileInputRef.current) {
-      const input = document.createElement('input');
-      input.type = 'file';
-      input.accept = '.txt,.md,.csv,text/plain';
-      input.onchange = () => {
-        const file = input.files?.[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = () => {
-          const text = String(reader.result ?? '');
-          setRawText((prev) => (prev ? `${prev}\n${text}` : text));
-        };
-        reader.readAsText(file);
-      };
-      fileInputRef.current = input;
-    }
-    fileInputRef.current.value = '';
-    fileInputRef.current.click();
-  }, []);
 
   const runStructure = useCallback(async () => {
     if (tooShort) {
@@ -131,6 +104,20 @@ export default function OwnerHandoverScreen() {
     });
   }, []);
 
+  // 리뷰 단계에서 사장이 노하우 내용을 즉석 수정 → segs에 라이브 반영(발행이 항상 최신본으로 나가게).
+  // 편집 결과 '할 일·멘트 0개'(발행 불가)가 되면 저장 대상에서 자동 제외해 빈 노하우 저장을 막는다.
+  const editSeg = useCallback((i: number, next: StructuredSegment) => {
+    setSegs((prev) => prev.map((s, idx) => (idx === i ? next : s)));
+    if (!isSquarePublishable(next.square)) {
+      setSelected((prev) => {
+        if (!prev.has(i)) return prev;
+        const n = new Set(prev);
+        n.delete(i);
+        return n;
+      });
+    }
+  }, []);
+
   const chosenCount = selected.size;
 
   const save = useCallback(async () => {
@@ -179,6 +166,7 @@ export default function OwnerHandoverScreen() {
             selected={selected}
             overflow={overflow}
             onToggle={toggle}
+            onEditSeg={editSeg}
             onBack={reset}
           />
         ) : (
@@ -187,7 +175,7 @@ export default function OwnerHandoverScreen() {
               <Text style={styles.uploadEmoji}>📄</Text>
               <Text style={styles.uploadTitle}>인수인계서·매뉴얼을 올리세요</Text>
               <Text style={styles.uploadSub}>
-                오픈·마감 순서, 레시피, 매장 규칙이 적힌 메모를 붙여넣거나 텍스트 파일로 올리면 AI가 노하우 항목으로 정리해요.
+                오픈·마감 순서, 레시피, 매장 규칙이 적힌 메모를 붙여넣으면 AI가 노하우 항목으로 정리해요.
               </Text>
             </View>
 
@@ -203,10 +191,6 @@ export default function OwnerHandoverScreen() {
               textAlignVertical="top"
             />
             <View style={styles.metaRow}>
-              <PressableScale onPress={pickTextFile} scaleTo={0.97} style={styles.fileBtn} accessibilityRole="button" accessibilityLabel="텍스트 파일 올리기">
-                <Ionicons name="document-text-outline" size={16} color={InkColors.ink} />
-                <Text style={styles.fileBtnText}>텍스트 파일</Text>
-              </PressableScale>
               <Text style={styles.counter}>{trimmed.length.toLocaleString()} / {MAX_RAWTEXT.toLocaleString()}</Text>
             </View>
 
@@ -237,7 +221,7 @@ export default function OwnerHandoverScreen() {
                 </>
               )}
             </PressableScale>
-            <Text style={styles.hint}>* 한 번에 최대 {MAX_SPLIT_PUBLISH}개까지 정리돼요. 길면 나눠서 올려주세요.</Text>
+            <Text style={styles.hint}>* 최대 {MAX_SPLIT_PUBLISH}개의 노하우까지 정리할 수 있어요.</Text>
           </Appear>
         )}
       </ScrollView>
@@ -269,20 +253,28 @@ function ReviewList({
   selected,
   overflow,
   onToggle,
+  onEditSeg,
   onBack,
 }: {
   segs: StructuredSegment[];
   selected: Set<number>;
   overflow: boolean;
   onToggle: (i: number) => void;
+  onEditSeg: (i: number, next: StructuredSegment) => void;
   onBack: () => void;
 }) {
+  // 한 번에 하나만 펼쳐 편집(카드가 과하게 길어지는 것 방지). null=전부 접힘.
+  const [expandedIdx, setExpandedIdx] = useState<number | null>(null);
+  const toggleExpand = useCallback((i: number) => {
+    setExpandedIdx((cur) => (cur === i ? null : i));
+  }, []);
+
   return (
     <Appear delay={0}>
       <View style={styles.reviewBanner}>
         <Ionicons name="sparkles" size={16} color={BrandColors.warn} />
         <Text style={styles.reviewBannerText}>
-          인수인계서에서 <Text style={{ fontWeight: '900' }}>노하우 {segs.length}개</Text>를 찾았어요. 저장할 것만 골라주세요.
+          인수인계서에서 <Text style={{ fontWeight: '900' }}>노하우 {segs.length}개</Text>를 찾았어요. 저장할 것만 고르고, 카드를 눌러 내용을 다듬어 주세요.
         </Text>
       </View>
       {overflow && (
@@ -291,40 +283,194 @@ function ReviewList({
         </Text>
       )}
       <View style={styles.list}>
-        {segs.map((s, i) => {
-          const meta = getCategoryMeta(s.category);
-          const on = selected.has(i);
-          const stepCount = s.square.action.steps.length;
-          return (
-            <PressableScale
-              key={`${s.title}_${i}`}
-              onPress={() => onToggle(i)}
-              scaleTo={0.99}
-              style={[styles.row, on && styles.rowOn]}
-              accessibilityRole="checkbox"
-              accessibilityState={{ checked: on }}
-              accessibilityLabel={s.title}
-            >
-              <View style={[styles.cbox, on && styles.cboxOn]}>
-                {on && <Ionicons name="checkmark" size={14} color={InkColors.bubbleText} />}
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.rowTitle} numberOfLines={2}>{s.title}</Text>
-                <View style={styles.rowMeta}>
-                  <View style={[styles.catDot, { backgroundColor: meta.color }]} />
-                  <Text style={styles.catLabel}>{meta.label}</Text>
-                  {stepCount > 0 && <Text style={styles.stepCount}>· 할 일 {stepCount}단계</Text>}
-                </View>
-              </View>
-            </PressableScale>
-          );
-        })}
+        {segs.map((s, i) => (
+          <SegmentCard
+            key={i}
+            seg={s}
+            selected={selected.has(i)}
+            expanded={expandedIdx === i}
+            onToggleSelect={() => onToggle(i)}
+            onToggleExpand={() => toggleExpand(i)}
+            onEdit={(next) => onEditSeg(i, next)}
+          />
+        ))}
       </View>
       <PressableScale onPress={onBack} scaleTo={0.98} style={styles.backLink} accessibilityRole="button" accessibilityLabel="다시 붙여넣기">
         <Ionicons name="arrow-back" size={15} color={InkColors.ink2} />
         <Text style={styles.backLinkText}>내용 고쳐서 다시 정리</Text>
       </PressableScale>
     </Appear>
+  );
+}
+
+// 편집 패치를 seg에 불변 적용. 사용자에게 보이는 칸(상황·할 일·멘트·금지)만 손대고 나머지 SQUARE는 보존.
+type SegPatch = Partial<{ title: string; situation: string; dont: string; steps: string[]; scripts: string[] }>;
+function applyPatch(seg: StructuredSegment, patch: SegPatch): StructuredSegment {
+  return {
+    ...seg,
+    title: patch.title ?? seg.title,
+    square: {
+      ...seg.square,
+      situation: patch.situation ?? seg.square.situation,
+      action: {
+        ...seg.square.action,
+        steps: patch.steps ?? seg.square.action.steps,
+        scripts: patch.scripts ?? seg.square.action.scripts,
+      },
+      extract: { ...seg.square.extract, dont: patch.dont ?? seg.square.extract.dont },
+    },
+  };
+}
+
+function FieldLabel({ text }: { text: string }) {
+  return <Text style={styles.fieldLabel}>{text}</Text>;
+}
+
+/**
+ * 분리된 노하우 1개 카드 — 접힘(선택+요약)/펼침(내용 수정).
+ * 체크박스(저장 선택)와 카드 본문(펼쳐 수정)은 형제 Pressable로 분리한다
+ * (RNW <button> 중첩 금지 — 착착 규칙).
+ * 편집은 타이핑마다 부모 segs로 라이브 커밋 → '수정 직후 저장'이 옛 값으로 나가는 경쟁 제거.
+ */
+function SegmentCard({
+  seg,
+  selected,
+  expanded,
+  onToggleSelect,
+  onToggleExpand,
+  onEdit,
+}: {
+  seg: StructuredSegment;
+  selected: boolean;
+  expanded: boolean;
+  onToggleSelect: () => void;
+  onToggleExpand: () => void;
+  onEdit: (next: StructuredSegment) => void;
+}) {
+  const meta = getCategoryMeta(seg.category);
+  const steps = seg.square.action.steps;
+  const scripts = seg.square.action.scripts;
+  const publishable = isSquarePublishable(seg.square);
+  const patch = (p: SegPatch) => onEdit(applyPatch(seg, p));
+
+  return (
+    <View style={[styles.row, selected && styles.rowOn]}>
+      <View style={styles.cardHeader}>
+        <PressableScale
+          onPress={onToggleSelect}
+          scaleTo={0.9}
+          hitSlop={8}
+          style={[styles.cbox, selected && styles.cboxOn]}
+          accessibilityRole="checkbox"
+          accessibilityState={{ checked: selected }}
+          accessibilityLabel={`저장 선택: ${seg.title || '제목 없음'}`}
+        >
+          {selected && <Ionicons name="checkmark" size={14} color={InkColors.bubbleText} />}
+        </PressableScale>
+        <PressableScale
+          onPress={onToggleExpand}
+          scaleTo={0.99}
+          style={styles.headerBody}
+          accessibilityRole="button"
+          accessibilityLabel={`${seg.title || '제목 없음'} ${expanded ? '접기' : '내용 펼쳐 수정'}`}
+        >
+          <View style={{ flex: 1 }}>
+            <Text style={styles.rowTitle} numberOfLines={expanded ? undefined : 2}>{seg.title || '제목 없음'}</Text>
+            <View style={styles.rowMeta}>
+              <View style={[styles.catDot, { backgroundColor: meta.color }]} />
+              <Text style={styles.catLabel}>{meta.label}</Text>
+              {steps.length > 0 && <Text style={styles.stepCount}>· 할 일 {steps.length}단계</Text>}
+              {!publishable && <Text style={styles.needContent}>· 내용 없음</Text>}
+            </View>
+          </View>
+          <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={18} color={InkColors.ink3} style={styles.chevron} />
+        </PressableScale>
+      </View>
+
+      {expanded && (
+        <View style={styles.editor}>
+          <FieldLabel text="제목" />
+          <TextInput
+            style={styles.fieldInput}
+            value={seg.title}
+            onChangeText={(t) => patch({ title: t })}
+            placeholder="노하우 제목"
+            placeholderTextColor={InkColors.ink3}
+            maxLength={40}
+          />
+
+          <FieldLabel text="상황 (언제·어디서)" />
+          <TextInput
+            style={[styles.fieldInput, styles.fieldMultiline]}
+            value={seg.square.situation}
+            onChangeText={(t) => patch({ situation: t })}
+            placeholder="예) 오픈 직후, 마감 때"
+            placeholderTextColor={InkColors.ink3}
+            multiline
+            maxLength={300}
+            textAlignVertical="top"
+          />
+
+          <FieldLabel text="할 일" />
+          {steps.map((step, j) => (
+            <View key={`step-${j}`} style={styles.listRow}>
+              <Text style={styles.listBullet}>{j + 1}</Text>
+              <TextInput
+                style={[styles.fieldInput, styles.listInput]}
+                value={step}
+                onChangeText={(t) => patch({ steps: steps.map((v, k) => (k === j ? t : v)) })}
+                placeholder="할 일을 적어주세요"
+                placeholderTextColor={InkColors.ink3}
+                maxLength={200}
+              />
+              <PressableScale onPress={() => patch({ steps: steps.filter((_, k) => k !== j) })} scaleTo={0.9} hitSlop={8} style={styles.removeBtn} accessibilityRole="button" accessibilityLabel={`할 일 ${j + 1} 삭제`}>
+                <Ionicons name="close" size={16} color={InkColors.ink3} />
+              </PressableScale>
+            </View>
+          ))}
+          <PressableScale onPress={() => patch({ steps: [...steps, ''] })} scaleTo={0.98} style={styles.addBtn} accessibilityRole="button" accessibilityLabel="할 일 추가">
+            <Ionicons name="add" size={16} color={InkColors.ink2} />
+            <Text style={styles.addBtnText}>할 일 추가</Text>
+          </PressableScale>
+
+          <FieldLabel text="멘트 (손님에게 할 말)" />
+          {scripts.map((sc, j) => (
+            <View key={`script-${j}`} style={styles.listRow}>
+              <Ionicons name="chatbubble-ellipses-outline" size={14} color={InkColors.ink3} style={styles.listBulletIcon} />
+              <TextInput
+                style={[styles.fieldInput, styles.listInput]}
+                value={sc}
+                onChangeText={(t) => patch({ scripts: scripts.map((v, k) => (k === j ? t : v)) })}
+                placeholder="예) 맛있게 드세요"
+                placeholderTextColor={InkColors.ink3}
+                maxLength={200}
+              />
+              <PressableScale onPress={() => patch({ scripts: scripts.filter((_, k) => k !== j) })} scaleTo={0.9} hitSlop={8} style={styles.removeBtn} accessibilityRole="button" accessibilityLabel={`멘트 ${j + 1} 삭제`}>
+                <Ionicons name="close" size={16} color={InkColors.ink3} />
+              </PressableScale>
+            </View>
+          ))}
+          <PressableScale onPress={() => patch({ scripts: [...scripts, ''] })} scaleTo={0.98} style={styles.addBtn} accessibilityRole="button" accessibilityLabel="멘트 추가">
+            <Ionicons name="add" size={16} color={InkColors.ink2} />
+            <Text style={styles.addBtnText}>멘트 추가</Text>
+          </PressableScale>
+
+          <FieldLabel text="금지 (하면 안 되는 것)" />
+          <TextInput
+            style={styles.fieldInput}
+            value={seg.square.extract.dont}
+            onChangeText={(t) => patch({ dont: t })}
+            placeholder="없으면 비워두세요"
+            placeholderTextColor={InkColors.ink3}
+            maxLength={200}
+          />
+
+          {!publishable && (
+            <Text style={styles.editorWarn}>상황·할 일·멘트 중 하나는 채워야 저장할 수 있어요.</Text>
+          )}
+        </View>
+      )}
+    </View>
   );
 }
 
@@ -356,20 +502,7 @@ const styles = StyleSheet.create({
     lineHeight: 21,
     color: InkColors.ink,
   },
-  metaRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  fileBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: InkColors.bg,
-    borderWidth: 1,
-    borderColor: InkColors.line,
-    borderRadius: Radius.pill,
-    paddingVertical: 8,
-    paddingHorizontal: 13,
-    ...Elevation.e1,
-  },
-  fileBtnText: { fontSize: 12.5, fontWeight: '800', color: InkColors.ink },
+  metaRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end' },
   counter: { fontSize: 12, fontWeight: '700', color: InkColors.ink3 },
 
   errorBox: {
@@ -413,17 +546,18 @@ const styles = StyleSheet.create({
   overflowNote: { fontSize: 12, fontWeight: '600', color: BrandColors.warn, lineHeight: 17 },
   list: { gap: Space.sm },
   row: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 11,
     backgroundColor: InkColors.bg,
     borderWidth: 1,
     borderColor: InkColors.line,
     borderRadius: Radius.md,
-    padding: 13,
+    overflow: 'hidden',
     ...Elevation.e1,
   },
   rowOn: { borderColor: InkColors.ink },
+  cardHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 11, padding: 13 },
+  // 토글 chevron을 제목 첫 줄에 상단 고정 → 제목 1줄/2줄과 무관하게 모든 카드에서 우측 같은 위치.
+  headerBody: { flex: 1, flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
+  chevron: { marginTop: 1 },
   cbox: {
     width: 22,
     height: 22,
@@ -440,6 +574,51 @@ const styles = StyleSheet.create({
   catDot: { width: 7, height: 7, borderRadius: Radius.pill },
   catLabel: { fontSize: 11, fontWeight: '800', color: InkColors.ink2 },
   stepCount: { fontSize: 11, fontWeight: '600', color: InkColors.ink3 },
+  needContent: { fontSize: 11, fontWeight: '700', color: BrandColors.warn },
+
+  // ── 카드 펼침 편집기 ──
+  editor: {
+    borderTopWidth: 1,
+    borderTopColor: InkColors.line,
+    backgroundColor: InkColors.cream,
+    paddingHorizontal: 13,
+    paddingBottom: 14,
+  },
+  fieldLabel: { fontSize: 11.5, fontWeight: '800', color: InkColors.ink2, marginTop: 12, marginBottom: 5 },
+  fieldInput: {
+    backgroundColor: InkColors.bg,
+    borderWidth: 1,
+    borderColor: InkColors.line,
+    borderRadius: Radius.sm,
+    paddingVertical: 9,
+    paddingHorizontal: 11,
+    fontSize: 13.5,
+    lineHeight: 19,
+    color: InkColors.ink,
+  },
+  fieldMultiline: { minHeight: 46 },
+  listRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginBottom: 6 },
+  listInput: { flex: 1 },
+  listBullet: { width: 18, textAlign: 'center', marginTop: 10, fontSize: 12, fontWeight: '800', color: InkColors.ink3 },
+  listBulletIcon: { width: 18, marginTop: 11 },
+  removeBtn: { padding: 6, marginTop: 3 },
+  addBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    alignSelf: 'flex-start',
+    paddingVertical: 7,
+    paddingHorizontal: 12,
+    borderRadius: Radius.pill,
+    borderWidth: 1,
+    borderColor: InkColors.line,
+    backgroundColor: InkColors.bg,
+    marginTop: 2,
+  },
+  addBtnText: { fontSize: 12.5, fontWeight: '800', color: InkColors.ink2 },
+  editorWarn: { fontSize: 12, fontWeight: '700', color: BrandColors.warn, marginTop: 12 },
+
   backLink: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12 },
   backLinkText: { fontSize: 13, fontWeight: '800', color: InkColors.ink2 },
 

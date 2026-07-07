@@ -23,7 +23,8 @@ if (!EMAIL || !PASSWORD) { console.error('QA_EMAIL / QA_PASSWORD 환경변수 �
 
 // ── 클라 정책 미러(OwnerCoachChat / buildEntry와 동일 규칙) ──
 const MAX_SPLIT_PUBLISH = 5;
-const isPub = (s) => ((s?.square?.action?.steps?.length || 0) >= 1) || ((s?.square?.action?.scripts?.length || 0) >= 1);
+// SSOT 미러(buildEntry.isSquarePublishable): 할 일·멘트, 또는 사실형 상황(≥4자)이면 발행 가능.
+const isPub = (s) => ((s?.square?.action?.steps?.length || 0) >= 1) || ((s?.square?.action?.scripts?.length || 0) >= 1) || ((s?.square?.situation || '').trim().length >= 4);
 
 async function signIn() {
   const res = await fetch(`${URL_}/auth/v1/token?grant_type=password`, {

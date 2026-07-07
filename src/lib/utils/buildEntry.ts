@@ -79,13 +79,23 @@ function computeQuality(sq: SquareBlock): number {
   return Math.round((filled / checks.length) * 100) / 100;
 }
 
+// 사실형 노하우(위치·비번·규칙 등)의 최소 상황 길이. 인수인계서엔 "여분 컵=창고 맨 위 칸",
+// "락커 비번 1234" 같은 순수 사실이 많은데 할 일이 없다고 조용히 탈락하면 검색에서 못 찾는다.
+const MIN_FACT_SITUATION_LEN = 4;
+
 /**
  * 발행 가능 여부 — "텅 빈 노하우" 차단용.
- * 알바에게 실제로 도움이 되려면 최소한 '할 행동(steps)'이나 '멘트(scripts)'가 하나는 있어야 한다.
- * 호출부(coach 발행)는 이게 false면 저장하지 말고 보완을 요구한다.
+ * 알바에게 실제로 도움이 되려면 '할 행동(steps)'·'멘트(scripts)' 중 하나가 있거나,
+ * 또는 실질적인 '상황(situation)'(위치·규칙·사실 등)이 채워져 있어야 한다.
+ * 사실형은 할 일이 없는 게 정상(Context) — 상황만 있어도 알바가 답을 찾을 수 있으므로 발행 대상이다.
+ * 호출부(coach 발행·인수인계서 정리)는 이게 false면 저장하지 말고 보완을 요구한다.
  */
 export function isSquarePublishable(square: SquareBlock): boolean {
-  return square.action.steps.length >= 1 || square.action.scripts.length >= 1;
+  return (
+    square.action.steps.length >= 1 ||
+    square.action.scripts.length >= 1 ||
+    square.situation.trim().length >= MIN_FACT_SITUATION_LEN
+  );
 }
 
 /**
