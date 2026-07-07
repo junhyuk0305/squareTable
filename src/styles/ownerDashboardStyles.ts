@@ -17,9 +17,9 @@ export const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    backgroundColor: BrandColors.accentSoft,
+    backgroundColor: BrandColors.warnSoft,
     borderWidth: 1,
-    borderColor: BrandColors.bad,
+    borderColor: BrandColors.warnBorder,
     borderRadius: Radius.md,
     padding: 14,
   },
@@ -33,7 +33,7 @@ export const styles = StyleSheet.create({
   },
   reviewTitle: { fontSize: 14, fontWeight: '800', color: InkColors.ink },
   reviewSub: { fontSize: 12, color: InkColors.ink2, marginTop: 2, lineHeight: 17 },
-  reviewCta: { fontSize: 13, fontWeight: '800', color: BrandColors.bad },
+  reviewCta: { fontSize: 13, fontWeight: '800', color: BrandColors.warn },
 
   // 상단 커스텀 헤더 — 좌측 로고 / 우측 매장명·사용자명
   appHeader: {
