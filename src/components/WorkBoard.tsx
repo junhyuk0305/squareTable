@@ -8,7 +8,7 @@ import { uploadPhoto } from '@/lib/db';
 import { HAS_SUPABASE } from '@/lib/supabase';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useStaffStore } from '@/lib/store/useStaffStore';
-import { useWorkStore, findDuplicateTask, type NewTask, type TaskTemplate } from '@/lib/store/useWorkStore';
+import { useWorkStore, useDayparts, daypartRoutineTemplates, findDuplicateTask, type NewTask, type TaskTemplate } from '@/lib/store/useWorkStore';
 import { useSyncStore } from '@/lib/store/useSyncStore';
 import { showToast } from '@/lib/store/useToastStore';
 import { RoleTabBar } from '@/components/RoleTabBar';
@@ -160,8 +160,21 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
     [feed, inRoom],
   );
   const comments = useMemo(() => feed.filter((f) => f.kind === 'comment'), [feed]);
-  // 현재 방의 할일 — TodoScreen·중복검사 모두 방 단위로.
+  // 현재 방의 할일 — 중복검사·컴포저는 방 단위(사용자 작성분).
   const roomTemplates = useMemo(() => templates.filter((t) => inRoom(t.roomId)), [templates, inRoom]);
+  // 매장 전체 공용 "기본 루틴 업무"(schedule_config.dayparts) → 매일 반복 할일로 파생. 방 구분 없이 항상 노출.
+  const dayparts = useDayparts();
+  const routineTemplates = useMemo(() => daypartRoutineTemplates(dayparts), [dayparts]);
+  // 보드(할일·배정) 렌더용 = 루틴(매장 전체) + 현재 방 할일. 컴포저 중복검사엔 roomTemplates 만 쓴다.
+  const boardTemplates = useMemo(() => [...routineTemplates, ...roomTemplates], [routineTemplates, roomTemplates]);
+  // 완료 토글 — 합성 루틴(dpr_)은 store.templates 에 없으므로 보드 목록에서 문구/방을 찾아 넘긴다(무음 '할일' 폴백 방지).
+  const toggleBoardTask = useCallback(
+    (templateId: string, date: string) => {
+      const t = boardTemplates.find((x) => x.id === templateId);
+      toggleTask(date, templateId, userId, userName, role, undefined, t ? { text: t.text, roomId: t.roomId } : undefined);
+    },
+    [boardTemplates, toggleTask, userId, userName, role],
+  );
   const pinnedNotice = useMemo(() => notices.find((n) => n.pinned), [notices]);
   const unreadNotices = isOwner ? 0 : notices.filter((n) => !(n.read_by ?? []).includes(userId)).length;
 
@@ -183,7 +196,10 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
       try {
         const url = await uploadPhoto(file);
         if (url) {
-          if (!(done[date] ?? {})[templateId]) toggleTask(date, templateId, userId, userName, role, url);
+          if (!(done[date] ?? {})[templateId]) {
+            const t = boardTemplates.find((x) => x.id === templateId);
+            toggleTask(date, templateId, userId, userName, role, url, t ? { text: t.text, roomId: t.roomId } : undefined);
+          }
         } else {
           noteError('사진을 올리지 못했어요. 인터넷 연결을 확인하고 다시 시도해 주세요.');
         }
@@ -219,6 +235,11 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
           // 우측 액션(공지/할일, 20)과 좌우 대칭. paddingLeft 3 = 20-17.
           headerTitleAlign: 'left' as const,
           headerTitle: () => <Text style={st.headerTitle}>업무 채팅</Text>,
+          // 뒤로가기 명시적 제거 — 패널 뷰가 설정한 headerLeft(arrow-back)가 navigation.setOptions
+          // 얕은 병합으로 남는다(키 생략=이전 값 유지). 채팅 루트로 돌아오면 뒤로가기가 새어나오므로
+          // 여기서 매번 () => null + headerBackVisible:false 로 초기화한다(owner/_layout 주석의 그 함정).
+          headerLeft: () => null,
+          headerBackVisible: false,
           headerRight: () => (
             <View style={st.nav}>
               {/* 배정 — 사장 전용. "누가 무슨 일"을 담당자별로 모아 보는 세그먼트. */}
@@ -300,13 +321,13 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
 
       {view === 'assign' && isOwner && (
         <AssignBoard
-          templates={roomTemplates}
+          templates={boardTemplates}
           done={done}
           today={today}
           me={userId}
           nameOf={nameOf}
           uploadingId={uploadingId}
-          onToggle={(templateId, date) => toggleTask(date, templateId, userId, userName, role)}
+          onToggle={toggleBoardTask}
           onAttachPhoto={(templateId, date) => attachPhoto(templateId, date)}
           onAssign={(assigneeId) => setComposer({ open: true, date: today, assigneeId })}
           onEditTask={(t) => setComposer({ open: true, editTemplate: t })}
@@ -315,14 +336,14 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
 
       {view === 'todo' && (
         <TodoScreen
-          templates={roomTemplates}
+          templates={boardTemplates}
           done={done}
           today={today}
           isOwner={isOwner}
           me={userId}
           nameOf={nameOf}
           uploadingId={uploadingId}
-          onToggle={(templateId, date) => toggleTask(date, templateId, userId, userName, role)}
+          onToggle={toggleBoardTask}
           onAttachPhoto={(templateId, date) => attachPhoto(templateId, date)}
           onAddForDate={(date) => setComposer({ open: true, date })}
           onEditTask={(t) => setComposer({ open: true, editTemplate: t })}

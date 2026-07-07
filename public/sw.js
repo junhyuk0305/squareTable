@@ -7,6 +7,19 @@
  * 캐싱/오프라인은 하지 않는다(순수 푸시 목적). Expo가 만든 SPA 캐시 정책과 충돌 방지.
  */
 
+// install/activate: 새 SW 를 '기다리지 말고' 즉시 활성화하고 열린 페이지를 곧장 control 한다.
+//   - skipWaiting 없으면: 새 SW 가 waiting 상태로 멈춰, 배포해도 사용자가 앱을 완전히 껐다 켜기 전엔
+//     옛 SW 가 계속 알림/배지를 처리한다("껐다 켜야 반영되는" 증상의 원인).
+//   - clients.claim 없으면: 첫 설치 직후 navigator.serviceWorker.controller === null 이라 클라의 구독
+//     로직이 스킵돼 DB에 구독이 안 생기는데 UI는 '알림 켜짐'으로 뜨는 무음 실패가 난다(iOS 다발).
+//   근거: WebKit/Apple 웹푸시 가이드 · iOS PWA 구독 조용한 실패(SW not controlling) 사례.
+self.addEventListener('install', () => {
+  self.skipWaiting();
+});
+self.addEventListener('activate', (event) => {
+  event.waitUntil(self.clients.claim());
+});
+
 // push: 서버(엣지함수)가 web-push 로 보낸 페이로드를 받아 OS 알림으로 표시.
 self.addEventListener('push', (event) => {
   let data = {};

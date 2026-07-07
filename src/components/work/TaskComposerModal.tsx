@@ -3,14 +3,13 @@ import { View, Text, Pressable, TextInput, ScrollView, StyleSheet } from 'react-
 import { Ionicons } from '@expo/vector-icons';
 
 import { BottomSheet } from '@/components/BottomSheet';
-import { useDaypartLabels, type NewTask, type TaskSection, type TaskTemplate, type Recurrence } from '@/lib/store/useWorkStore';
+import { useDayparts, useDaypartLabels, type NewTask, type TaskSection, type TaskTemplate, type Recurrence } from '@/lib/store/useWorkStore';
 import { type Member } from '@/components/work/MentionInput';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 
 type When = 'today' | 'date' | 'weekly';
 const DOW = ['일', '월', '화', '수', '목', '금', '토'];
-const DAYPARTS: TaskSection[] = ['open', 'mid', 'close', 'etc'];
 
 function ymd(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -61,6 +60,7 @@ export function TaskComposerModal({
   members?: Member[];
 }) {
   const isEdit = !!editTemplate;
+  const dayparts = useDayparts();
   const DL = useDaypartLabels();
   // 배정 후보 = 나 + 다른 멤버(사장 기준). scope 'private' + ownerId → 그 사람과 사장만 보인다(기존 RLS 재사용).
   const others = useMemo(() => members.filter((m) => m.id !== me), [members, me]);
@@ -79,8 +79,7 @@ export function TaskComposerModal({
   const [dows, setDows] = useState<number[]>(
     editTemplate?.recurrence && editTemplate.recurrence !== 'once' ? editTemplate.recurrence.weekly : [1, 2, 3, 4, 5],
   );
-  const [section, setSection] = useState<TaskSection>(editTemplate?.section ?? 'open');
-  const [sectionNote, setSectionNote] = useState(editTemplate?.sectionNote ?? '');
+  const [section, setSection] = useState<TaskSection>(editTemplate?.section ?? dayparts[0]?.id ?? 'open');
 
   // 담당: sharedMode(가게 전체) 또는 picked(개인 담당자 여러 명). 신규=다중 토글, 수정=단일 교체.
   const deriveShared = isOwner && (editTemplate ? (editTemplate.scope ?? 'shared') === 'shared' : !(initialAssigneeId && others.some((o) => o.id === initialAssigneeId)));
@@ -122,7 +121,6 @@ export function TaskComposerModal({
       section,
       text: v,
       createdBy: me,
-      ...(section === 'etc' && sectionNote.trim() ? { sectionNote: sectionNote.trim() } : null),
       recurrence,
       ...(date ? { date } : null),
     };
@@ -150,7 +148,7 @@ export function TaskComposerModal({
 
   // 등록 대상 한 줄 요약 — "어디(언제·데이파트·범위) 할일로 들어가는지" 항상 보이게.
   const destLabel = useMemo(() => {
-    const secL = section === 'etc' ? (sectionNote.trim() || DL.etc) : DL[section];
+    const secL = DL[section] ?? '카테고리';
     const scopeL = !isOwner
       ? '나만 보기'
       : sharedMode
@@ -163,14 +161,14 @@ export function TaskComposerModal({
     else if (when === 'date') whenL = fmtDate(pickedDate);
     else whenL = `오늘 (${fmtDate(today)})`;
     return `${whenL} · ${secL} · ${scopeL}`;
-  }, [when, pickedDate, dows, section, sectionNote, sharedMode, picked, nameById, isOwner, today, DL]);
+  }, [when, pickedDate, dows, section, sharedMode, picked, nameById, isOwner, today, DL]);
 
   // 중복 검사 — 신규 등록에서만(수정은 자기 자신과 겹칠 수 있어 제외). 배정 대상 중 하나라도 중복이면 경고.
   const isDup = useMemo(() => {
     if (isEdit) return false;
     return buildInputs().some((input) => !!isDuplicate?.(input));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [text, when, pickedDate, dows, section, sectionNote, sharedMode, picked, isOwner, me, today, isDuplicate, isEdit]);
+  }, [text, when, pickedDate, dows, section, sharedMode, picked, isOwner, me, today, isDuplicate, isEdit]);
 
   function submit() {
     if (!canSubmit) return;
@@ -231,18 +229,12 @@ export function TaskComposerModal({
               )}
             </Field>
 
-            <Field label="시간대 (데이파트)">
+            <Field label="업무 카테고리">
               <Seg
-                options={DAYPARTS.map((d) => ({ k: d, l: d === 'etc' ? `${DL.etc} ✎` : DL[d] }))}
+                options={dayparts.map((d) => ({ k: d.id, l: d.label }))}
                 value={section}
-                onChange={(k) => { setSection(k as TaskSection); if (k === 'etc') revealScroll(); }}
+                onChange={(k) => setSection(k as TaskSection)}
               />
-              {section === 'etc' && (
-                <View style={s.reveal}>
-                  <Text style={s.revealLabel}>기타 — 직접 입력</Text>
-                  <TextInput value={sectionNote} onChangeText={setSectionNote} placeholder="예) 14시 브레이크 / 마감 후" placeholderTextColor={InkColors.ink3} style={[s.inp, { backgroundColor: '#fff' }]} />
-                </View>
-              )}
             </Field>
 
             <Field label={isOwner && !isEdit ? '누구 할 일인가요? (여러 명 선택 가능)' : '누구 할 일인가요?'}>
@@ -277,7 +269,7 @@ export function TaskComposerModal({
               )}
             </Field>
 
-            <Text style={s.note}>‘매주 반복’=선택 요일마다 자동 노출 · ‘기타 ✎’=직접 입력</Text>
+            <Text style={s.note}>‘매주 반복’=선택 요일마다 자동 노출 · 업무 카테고리는 할일 화면의 ‘업무 카테고리 설정’에서 추가·편집</Text>
           </ScrollView>
 
           <View style={s.foot}>

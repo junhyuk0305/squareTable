@@ -5,7 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Appear } from '@/components/Appear';
 import { Avatar } from '@/components/Avatar';
 import { StoredImage } from '@/components/StoredImage';
-import { occursOn, taskVisibleTo, useDaypartLabels, type TaskTemplate, type DoneMark } from '@/lib/store/useWorkStore';
+import { occursOn, taskVisibleTo, useDaypartLabels, isRoutineTaskId, type TaskTemplate, type DoneMark } from '@/lib/store/useWorkStore';
 import { InkColors, BrandColors, CategoryColors } from '@/lib/theme/colors';
 import { Elevation, Radius } from '@/lib/theme/elevation';
 import { hhmm } from '@/lib/utils/attendance';
@@ -130,9 +130,12 @@ export function AssignBoard({
                         <Ionicons name={uploadingId === t.id ? 'cloud-upload-outline' : 'camera-outline'} size={16} color={InkColors.ink3} />
                       </Pressable>
                     )}
-                    <Pressable onPress={() => onEditTask(t)} hitSlop={6} accessibilityRole="button" accessibilityLabel={`${t.text} 수정`}>
-                      <Ionicons name="create-outline" size={17} color={InkColors.ink3} />
-                    </Pressable>
+                    {/* 매장 전체 공용 루틴(dpr_)은 '업무 카테고리 설정'에서 수정 — 여기선 연필 숨김. */}
+                    {!isRoutineTaskId(t.id) && (
+                      <Pressable onPress={() => onEditTask(t)} hitSlop={6} accessibilityRole="button" accessibilityLabel={`${t.text} 수정`}>
+                        <Ionicons name="create-outline" size={17} color={InkColors.ink3} />
+                      </Pressable>
+                    )}
                   </View>
                 );
               })}

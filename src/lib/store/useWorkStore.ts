@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { create } from 'zustand';
 import { todayStr, nowISO } from '@/lib/utils/attendance';
 import { HAS_SUPABASE } from '@/lib/supabase';
@@ -20,7 +21,7 @@ import { coalesce, subscribeDebounced } from '@/lib/store/realtimeSync';
 import { genId } from '@/lib/utils/id';
 import { useRoomStore } from '@/lib/store/useRoomStore';
 import { useScheduleStore } from '@/lib/store/useScheduleStore';
-import { DEFAULT_DAYPART_LABELS, resolveDaypartLabels } from '@/lib/store/daypartLabels';
+import { DEFAULT_DAYPARTS, resolveDayparts, daypartLabelMap, type Daypart } from '@/lib/store/daypartLabels';
 import { notifyStaffNotice, notifyUserMention, notifyUserAssign } from '@/lib/push/notify';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 
@@ -32,7 +33,8 @@ const MAX_PINNED_NOTICES = 3;
 /** 지금 활성화된 채팅방 id — 모든 업무 쓰기(메시지·공지·할일·완료)에 스탬프된다('전부 방 단위'). */
 const curRoom = (): string | undefined => useRoomStore.getState().currentRoomId ?? undefined;
 
-export type TaskSection = 'open' | 'mid' | 'close' | 'etc';
+/** 데이파트(시간대) 카테고리 id. 기본은 open/mid/close/etc 지만 매장이 자유롭게 추가·삭제하므로 문자열. */
+export type TaskSection = string;
 export type TaskScope = 'shared' | 'private';
 /**
  * 반복 규칙(2026-06-28 결정):
@@ -85,15 +87,48 @@ export type FeedItem = {
 // 피드에서 토글 가능한 이모지 셋 (확인 = ✅)
 export const REACTIONS = ['✅', '👍', '🔥', '🙏', '👀'] as const;
 
-export const SECTION_LABEL: Record<TaskSection, string> = DEFAULT_DAYPART_LABELS;
+export const SECTION_LABEL: Record<TaskSection, string> = daypartLabelMap(DEFAULT_DAYPARTS);
 
 /**
- * 데이파트 라벨(매장 커스텀 반영) — schedule_config.dayparts가 있으면 그 이름을, 없으면 기본 라벨.
- * 컴포넌트에서 훅으로 구독(사장이 이름을 바꾸면 즉시 반영). 폴백 규칙은 resolveDaypartLabels(SSOT).
+ * 매장 시간대 카테고리(커스텀 반영) — schedule_config.dayparts를 해석한 정렬 목록.
+ * 사장이 카테고리/이름을 바꾸면 즉시 반영. 해석 규칙은 resolveDayparts(SSOT).
+ * raw 를 memo 의존으로 두어 config 가 안 바뀌면 같은 배열 참조를 유지(하위 memo churn 방지).
  */
+export function useDayparts(): Daypart[] {
+  const raw = useScheduleStore((s) => s.config.dayparts);
+  return useMemo(() => resolveDayparts(raw), [raw]);
+}
+
+/** id→label 조회맵(매장 커스텀 반영) — `DL[section]` 형태로 라벨을 쓰던 소비부 하위호환용. */
 export function useDaypartLabels(): Record<TaskSection, string> {
-  const dp = useScheduleStore((s) => s.config.dayparts);
-  return resolveDaypartLabels(dp);
+  const dayparts = useDayparts();
+  return useMemo(() => daypartLabelMap(dayparts), [dayparts]);
+}
+
+/**
+ * 매장 전체 공용 "기본 루틴 업무" → 보드에 뜨는 매일 반복 할일로 합성(파생).
+ * DB(work_templates)에 복제하지 않고 config 에서 파생 렌더한다(SSOT는 schedule_config.dayparts 한 곳).
+ * id 는 `dpr_` prefix + 루틴 id 로 안정 → 완료 마크(work_done)가 렌더마다 흔들리지 않는다.
+ * 방(roomId) 없음 = 매장 전체(채팅방 구분 없이 항상 노출).
+ */
+export const ROUTINE_ID_PREFIX = 'dpr_';
+export function isRoutineTaskId(id: string): boolean {
+  return id.startsWith(ROUTINE_ID_PREFIX);
+}
+export function daypartRoutineTemplates(dayparts: Daypart[]): TaskTemplate[] {
+  const out: TaskTemplate[] = [];
+  for (const dp of dayparts) {
+    for (const r of dp.routines) {
+      out.push({
+        id: `${ROUTINE_ID_PREFIX}${r.id}`,
+        section: dp.id,
+        text: r.text,
+        scope: 'shared',
+        recurrence: { weekly: [0, 1, 2, 3, 4, 5, 6] },
+      });
+    }
+  }
+  return out;
 }
 
 /**
@@ -241,7 +276,8 @@ type State = {
   addTask: (input: NewTask) => Promise<boolean>;
   editTask: (id: string, patch: NewTask) => Promise<boolean>;
   removeTemplate: (id: string) => void;
-  toggleTask: (date: string, templateId: string, staffId: string, staffName: string, role: 'owner' | 'junior', photoUrl?: string) => void;
+  // task: 합성 루틴 할일(dpr_)은 s.templates 에 없으므로 완료 피드 문구/방을 호출부가 넘긴다(없으면 lookup).
+  toggleTask: (date: string, templateId: string, staffId: string, staffName: string, role: 'owner' | 'junior', photoUrl?: string, task?: { text: string; roomId?: string }) => void;
   postNotice: (date: string, text: string, authorId: string, authorName: string, important: boolean) => void;
   postMessage: (date: string, text: string, authorId: string, authorName: string, role: 'owner' | 'junior', mentions?: string[], photoUrl?: string) => void;
   postComment: (noticeId: string, date: string, text: string, authorId: string, authorName: string, role: 'owner' | 'junior', mentions?: string[]) => void;
@@ -353,12 +389,14 @@ export const useWorkStore = create<State>((set, get) => ({
     );
   },
 
-  toggleTask: (date, templateId, staffId, staffName, role, photoUrl) => {
+  toggleTask: (date, templateId, staffId, staffName, role, photoUrl, task) => {
     const s = get();
     const prevDone = s.done;
     const prevFeed = s.feed;
     const dayMap = { ...(s.done[date] ?? {}) };
     const tpl = s.templates.find((t) => t.id === templateId);
+    // 합성 루틴(dpr_)은 tpl 조회가 안 되므로 호출부가 넘긴 task 로 문구/방을 채운다('할일' 폴백 회피).
+    const taskText = task?.text ?? (tpl ? tpl.text : '할일');
     if (dayMap[templateId]) {
       delete dayMap[templateId];
       const removed = s.feed.find((f) => f.kind === 'task_done' && f.date === date && f.refId === templateId);
@@ -373,14 +411,14 @@ export const useWorkStore = create<State>((set, get) => ({
       return;
     }
     const now = new Date().toISOString();
-    const room = tpl?.roomId ?? curRoom(); // 완료마크·완료알림은 그 할일의 방(없으면 활성 방)에 묶인다.
+    const room = task?.roomId ?? tpl?.roomId ?? curRoom(); // 완료마크·완료알림은 그 할일의 방(없으면 활성 방)에 묶인다.
     const mark: DoneMark = { by: staffId, byName: staffName, at: now, ...(photoUrl ? { photoUrl } : null) };
     dayMap[templateId] = mark;
     const doneItem: FeedItem = {
       id: genId('f'),
       date,
       kind: 'task_done',
-      text: `${staffName} · ${tpl ? tpl.text : '할일'} 완료`,
+      text: `${staffName} · ${taskText} 완료`,
       authorId: staffId,
       authorName: staffName,
       authorRole: role,
