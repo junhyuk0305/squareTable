@@ -170,6 +170,12 @@ export async function fetchOwnerOverview(): Promise<DbResult<OwnerOverviewRow[]>
   return { data: (data as OwnerOverviewRow[]) ?? null, error: error as DbErr };
 }
 
+/** 매장 하나 삭제(오너 전용, 안전장치는 RPC 내부: 마지막매장·직원존재 차단·포인터 재지정·cascade). */
+export async function rpcDeleteStore(unitId: string): Promise<{ error: DbErr }> {
+  const { error } = await supabase.rpc('delete_store', { p_unit_id: unitId });
+  return { error: error as DbErr };
+}
+
 export type UnitSubscriptionRow = { status: string | null; trial_ends_at: string | null; paid_until: string | null };
 export async function fetchUnitSubscription(unitId: string): Promise<DbResult<UnitSubscriptionRow>> {
   const { data, error } = await supabase

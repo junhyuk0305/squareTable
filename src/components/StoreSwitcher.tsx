@@ -33,7 +33,7 @@ export function StoreSwitcher({ visible, onClose }: { visible: boolean; onClose:
   };
 
   return (
-    <BottomSheet visible={visible} onClose={onClose}>
+    <BottomSheet visible={visible} onClose={onClose} sheetStyle={styles.sheetPad}>
       <Text style={styles.title}>매장 전환</Text>
       <Text style={styles.sub}>보고 관리할 매장을 선택하세요.</Text>
       <View style={styles.list}>
@@ -92,8 +92,10 @@ export function StoreSwitcher({ visible, onClose }: { visible: boolean; onClose:
 }
 
 const styles = StyleSheet.create({
-  title: { fontSize: 17, fontWeight: '900', color: InkColors.ink, paddingHorizontal: Space.xs },
-  sub: { fontSize: 12.5, fontWeight: '600', color: InkColors.ink3, paddingHorizontal: Space.xs, marginTop: 3, marginBottom: Space.md },
+  // 시트 내부 좌우 여백 — BottomSheet 자체는 패딩이 없어(각 모달이 담당) 스위처가 직접 준다.
+  sheetPad: { paddingHorizontal: Space.gutter, paddingBottom: Space.xl },
+  title: { fontSize: 17, fontWeight: '900', color: InkColors.ink },
+  sub: { fontSize: 12.5, fontWeight: '600', color: InkColors.ink3, marginTop: 3, marginBottom: Space.md },
   list: { gap: Space.sm },
   row: {
     flexDirection: 'row',
