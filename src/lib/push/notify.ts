@@ -35,30 +35,61 @@ type NotifyArgs = {
  *   - invoke 에러(401/403/네트워크): client_errors push.notify.* → 앱이 발송 자체를 못 함
  * fire-and-forget 원칙은 유지(await 안 함, throw 안 함) — 계측만 배경에서 얹는다. */
 export function pushNotify(args: NotifyArgs): void {
-  if (!HAS_SUPABASE) return;
+  if (!HAS_SUPABASE || !PUSH_ENDPOINT) return;
   void attemptNotify(args, 0);
 }
 
-// 엣지함수 콜드스타트/일시 네트워크 실패는 "Failed to send a request to the Edge Function"(FunctionsFetchError)로
-// 나타난다. 재시도가 없으면 그 알림은 조용히 유실된다(라이브 계측에서 실제 확인: push_sent 0건·invoke 실패).
-// → 네트워크/부팅(5xx)류만 짧은 백오프로 재시도한다. 4xx(인증·검증·cross_tenant·no_unit·rate_limited)는
-//   재시도해도 결과가 같으므로 즉시 포기(무의미한 재발사·비용 방지). 여전히 fire-and-forget(throw 안 함).
+// ★ 발송은 raw fetch 로 한다(= AI 클라이언트 lib/ai/client.ts 와 동일 패턴). 이전엔 supabase.functions.invoke
+//   를 썼는데, 브라우저에서 invoke 는 'x-client-info' 헤더를 자동으로 붙인다. 그런데 엣지 push 함수의
+//   Access-Control-Allow-Headers 가 그 헤더를 허용하지 않아 **브라우저 CORS 프리플라이트가 항상 실패**
+//   → "Failed to send a request to the Edge Function"(FunctionsFetchError) 로 발송이 결정적으로 죽었다
+//   (라이브 계측으로 확정, 2026-07-07: attempts=3 전부 실패, push_sent 성공 0건). Node/서버 호출은 CORS 를
+//   안 타서 늘 성공했기에 "직접 테스트는 오는데 앱 액션은 안 감" 이 나타난 것. AI 는 처음부터 raw fetch 라
+//   멀쩡했다. raw fetch 는 헤더를 우리가 통제 → x-client-info 미포함 → 프리플라이트 통과. (엣지 재배포 불필요.)
+// 재시도: 네트워크/타임아웃/5xx 만 짧은 백오프로. 4xx(인증·검증·cross_tenant·no_unit·rate_limited)는 즉시 포기.
+// 여전히 fire-and-forget(throw 안 함).
+const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL ?? '';
+const ANON = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '';
+const PUSH_ENDPOINT = SUPABASE_URL ? `${SUPABASE_URL}/functions/v1/push` : null;
 const MAX_ATTEMPTS = 3;
 const BACKOFF_MS = [400, 1500]; // 1차 재시도 0.4s, 2차 1.5s 뒤
+const TIMEOUT_MS = 12_000;
 
 async function attemptNotify(args: NotifyArgs, attempt: number): Promise<void> {
+  // 엣지는 "실제 로그인 유저"만 허용(anon 단독 거부). apikey=게이트웨이 anon, Authorization=세션 토큰.
+  const { data: sess } = await supabase.auth.getSession();
+  const token = sess.session?.access_token;
+  if (!token) {
+    reportError('push.notify.no_session', 'no auth session', { audience: args.audience, tag: args.tag });
+    return; // 로그인 전이면 발송 불가 — 재시도 무의미.
+  }
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
   try {
-    const { data, error } = await supabase.functions.invoke('push', { body: args });
-    if (error) {
-      if (isRetryable(error) && attempt < MAX_ATTEMPTS - 1) {
+    const res = await fetch(PUSH_ENDPOINT as string, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        apikey: ANON,
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(args),
+      signal: ctrl.signal,
+    });
+    if (!res.ok) {
+      // 4xx(인증·검증·cross_tenant·no_unit·rate_limited)는 재시도해도 결과 동일 → 즉시 포기.
+      if (res.status < 500) {
+        reportError('push.notify.invoke', `status ${res.status}`, { audience: args.audience, tag: args.tag, attempts: attempt + 1 });
+        return;
+      }
+      if (attempt < MAX_ATTEMPTS - 1) {
         await delay(BACKOFF_MS[attempt] ?? 1500);
         return attemptNotify(args, attempt + 1);
       }
-      // 재시도 불가(4xx) 또는 재시도 소진 → 발송 실패로 기록.
-      reportError('push.notify.invoke', error, { audience: args.audience, tag: args.tag, attempts: attempt + 1 });
+      reportError('push.notify.invoke', `status ${res.status}`, { audience: args.audience, tag: args.tag, attempts: attempt + 1 });
       return;
     }
-    const r = (data ?? {}) as { sent?: number; recipients?: number; pruned?: number };
+    const r = (await res.json().catch(() => ({}))) as { sent?: number; recipients?: number; pruned?: number };
     track('push_sent', {
       audience: args.audience,
       tag: args.tag ?? null,
@@ -67,7 +98,7 @@ async function attemptNotify(args: NotifyArgs, attempt: number): Promise<void> {
       pruned: r.pruned ?? 0,
       attempts: attempt + 1,
     });
-    // 대상은 있는데 실제 전송 0 = 살아있는 구독이 하나도 없음(죽은 endpoint 뿐). "안 온다"의 핵심 원인.
+    // 대상은 있는데 실제 전송 0 = 살아있는 구독이 하나도 없음(죽은 endpoint 뿐). "안 온다"의 다른 원인.
     if ((r.recipients ?? 0) > 0 && (r.sent ?? 0) === 0) {
       reportError('push.notify.no_delivery', 'recipients>0 but sent=0 (구독 전부 사망 추정)', {
         audience: args.audience,
@@ -75,29 +106,18 @@ async function attemptNotify(args: NotifyArgs, attempt: number): Promise<void> {
       });
     }
   } catch (e) {
+    // 네트워크/타임아웃(AbortError) → 재시도.
     if (attempt < MAX_ATTEMPTS - 1) {
       await delay(BACKOFF_MS[attempt] ?? 1500);
       return attemptNotify(args, attempt + 1);
     }
     reportError('push.notify.throw', e, { audience: args.audience, attempts: attempt + 1 });
+  } finally {
+    clearTimeout(timer);
   }
 }
 
 const delay = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
-
-// 재시도할 가치가 있는 실패인가 — 네트워크(FunctionsFetchError)·릴레이·엣지 부팅(5xx)만.
-// 4xx(인증·검증·격리·레이트리밋)는 상태가 바뀌지 않는 한 결과 동일 → 재시도 안 함.
-function isRetryable(error: unknown): boolean {
-  const name = (error as { name?: string })?.name ?? '';
-  if (name === 'FunctionsFetchError' || name === 'FunctionsRelayError') return true;
-  const status =
-    (error as { status?: number; statusCode?: number; context?: { status?: number } })?.status ??
-    (error as { statusCode?: number })?.statusCode ??
-    (error as { context?: { status?: number } })?.context?.status;
-  if (typeof status === 'number') return status >= 500 || status === 0;
-  // status 를 못 읽는 순수 네트워크 예외도 재시도 대상(콜드스타트 fetch 실패).
-  return name === '' || name === 'TypeError';
-}
 
 // ── 이벤트별 헬퍼 (호출부가 문자열을 안 틀리게 얇게 감싼다) ────────────────
 // 사장이 받는 것들 (직원 행동 → 사장)
