@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { PressableScale } from '@/components/PressableScale';
 import { SectionLabel } from '@/components/SectionLabel';
+import { useSessionStore } from '@/lib/store/useSessionStore';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Elevation, Radius } from '@/lib/theme/elevation';
 import { Space, frameCapStyle } from '@/lib/theme/layout';
@@ -23,6 +24,8 @@ export interface OwnerKnowhowValueCardProps {
 
 export function OwnerKnowhowValueCard({ answeredHits30d, pending, entriesCount }: OwnerKnowhowValueCardProps) {
   const router = useRouter();
+  // 다점포(매장 2+개) 사장에게만 '다른 매장에서 가져오기' 입구를 노출한다.
+  const multiStore = useSessionStore((s) => s.stores.length > 1);
 
   return (
     <View style={[styles.section, frameCapStyle]}>
@@ -72,6 +75,23 @@ export function OwnerKnowhowValueCard({ answeredHits30d, pending, entriesCount }
           </Text>
           <Ionicons name="chevron-forward" size={15} color={InkColors.ink3} />
         </PressableScale>
+
+        {/* 다점포 전용 — 다른 내 매장의 노하우를 현재 매장으로 가져오기(복제) */}
+        {multiStore ? (
+          <PressableScale
+            onPress={() => router.push('/owner/import-knowhow' as never)}
+            scaleTo={0.98}
+            style={styles.ctaRow}
+            accessibilityRole="button"
+            accessibilityLabel="다른 매장에서 노하우 가져오기"
+          >
+            <Ionicons name="git-branch-outline" size={16} color={InkColors.ink2} />
+            <Text style={styles.ctaText}>
+              <Text style={styles.ctaStrong}>다른 매장</Text>의 노하우를 여기로 가져와요
+            </Text>
+            <Ionicons name="chevron-forward" size={15} color={InkColors.ink3} />
+          </PressableScale>
+        ) : null}
       </View>
     </View>
   );

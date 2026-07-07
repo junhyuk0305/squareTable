@@ -139,6 +139,37 @@ export async function switchActiveUnit(unitId: string): Promise<{ error: DbErr }
   return { error: error as DbErr };
 }
 
+// ── 다점포 노하우 가져오기(0059) — 다른 내 매장 노하우를 활성매장으로 복제 ──────────
+// RLS는 활성 매장만 노출하므로 "다른 내 매장" 목록/복제는 definer RPC로만 가능(소유검증은 RPC 내부).
+export type UnitKnowhowRow = {
+  id: string; category: string; subcategory: string | null; title: string;
+  tags: string[]; square: Record<string, unknown>; needs_review: boolean; updated_at: string;
+};
+/** 다른 내 소유 매장(fromUnit)의 발행 노하우 목록 — 가져오기 선택 UI용. 소유 아니면 RPC가 not_owner. */
+export async function fetchUnitKnowhow(fromUnit: string): Promise<DbResult<UnitKnowhowRow[]>> {
+  if (!HAS_SUPABASE) return { data: [], error: null };
+  const { data, error } = await supabase.rpc('list_unit_knowhow', { p_from_unit: fromUnit });
+  return { data: (data as UnitKnowhowRow[]) ?? null, error: error as DbErr };
+}
+/** 선택 노하우를 활성매장으로 복제. 반환=복제된 개수. 소스+대상 이중 소유검증은 RPC 내부(크로스테넌트 방어선). */
+export async function copyKnowhow(fromUnit: string, entryIds: string[]): Promise<DbResult<number>> {
+  if (!HAS_SUPABASE) return { data: entryIds.length, error: null };
+  const { data, error } = await supabase.rpc('copy_knowhow', { p_from_unit: fromUnit, p_entry_ids: entryIds });
+  return { data: (data as number) ?? null, error: error as DbErr };
+}
+
+// ── 다점포 통합뷰(0060) — 내 전 매장 핵심 지표 집계(소유 매장만, definer). 합계는 클라 파생 ──────
+export type OwnerOverviewRow = {
+  unit_id: string; store_name: string; is_active: boolean;
+  pending_q: number; knowhow: number; staff: number; labor_month: number;
+};
+/** 내가 소유한 모든 매장의 미답질문·노하우·직원·이번달 인건비를 한 번에. RLS는 활성만 보이므로 definer RPC. */
+export async function fetchOwnerOverview(): Promise<DbResult<OwnerOverviewRow[]>> {
+  if (!HAS_SUPABASE) return { data: [], error: null };
+  const { data, error } = await supabase.rpc('owner_overview');
+  return { data: (data as OwnerOverviewRow[]) ?? null, error: error as DbErr };
+}
+
 export type UnitSubscriptionRow = { status: string | null; trial_ends_at: string | null; paid_until: string | null };
 export async function fetchUnitSubscription(unitId: string): Promise<DbResult<UnitSubscriptionRow>> {
   const { data, error } = await supabase

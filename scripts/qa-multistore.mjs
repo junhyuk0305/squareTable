@@ -69,6 +69,15 @@ async function main() {
   const { error: tamperErr } = await owner.from('profiles').update({ active_unit_id: 'store_notamember1' }).eq('id', (await owner.auth.getUser()).data.user.id);
   check('active_unit_id 직접 위조 차단(정책 동결)', !!tamperErr, tamperErr ? `거부 ${tamperErr.code ?? ''}` : '(차단 안됨!)');
 
+  // 9) ★0056 활성-단위 시맨틱: 활성(2호점)에서 rename_store → 주매장(1호점) 아닌 '활성'이 바뀐다.
+  //    (0056 미적용이면 주매장에 적용돼 2호점 이름이 안 바뀜 → 이 프로브가 회귀를 잡는다.)
+  await owner.rpc('switch_active_unit', { p_unit_id: store2 });
+  await owner.rpc('rename_store', { p_name: 'QA_2호점_개명' });
+  const { data: units2 } = await owner.rpc('my_units');
+  const r1 = units2?.find((u) => u.unit_id === store1);
+  const r2 = units2?.find((u) => u.unit_id === store2);
+  check('0056: rename_store가 활성(2호점)에 적용', r2?.store_name === 'QA_2호점_개명' && r1?.store_name !== 'QA_2호점_개명', `s1="${r1?.store_name}" s2="${r2?.store_name}"`);
+
   // 정리
   try { await owner.rpc('delete_my_account'); } catch { /* best-effort */ }
 
