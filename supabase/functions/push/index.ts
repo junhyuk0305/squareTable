@@ -207,7 +207,13 @@ Deno.serve(async (req) => {
         await webpush.sendNotification(
           { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
           notif,
-          { TTL: 60 * 60 * 24 }, // 24h — 오래된 알림은 무의미
+          {
+            TTL: 60 * 60 * 24, // 24h — 오래된 알림은 무의미(기기 오프라인이어도 재접속 시 배달)
+            // Urgency:high → 푸시서비스가 '지금 즉시' 배달(APNs priority 10). 기본 'normal'은 배터리
+            //   절약을 위해 묶어서 지연 배달될 수 있어, 업무 알림엔 즉시성이 중요하므로 high 로 지정.
+            //   (앱이 닫혀 SW가 잠든 경우의 iOS 지연은 OS 소관이라 이걸로도 완전 제거는 불가.)
+            urgency: 'high',
+          },
         );
         sent += 1;
       } catch (e) {
