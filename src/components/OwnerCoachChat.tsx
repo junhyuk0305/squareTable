@@ -49,7 +49,9 @@ export type OwnerCoachChatProps = {
   seedText?: string;            // 프리필(콜드스타트 제목·회고 초안)
   // 발행 성공 여부(boolean) 반환 — 실패면 이 컴포넌트가 발행 잠금(publishedRef)을 풀어 재시도 허용.
   onPublished: (entry: PlaybookEntry) => void | Promise<boolean>;
-  onPublishedMany?: (entries: PlaybookEntry[]) => void | Promise<boolean>; // 다중 분리 발행(없으면 첫 건만)
+  // 다중 분리 발행(없으면 첫 건만). 반환=엔트리별 성공여부(boolean[]) — 부분 실패 시 성공분만 잠금해
+  // 재시도가 성공분을 중복 저장하지 않게 한다(F4). 레거시 boolean/void 반환도 허용(전체 동일 처리).
+  onPublishedMany?: (entries: PlaybookEntry[]) => void | Promise<boolean | boolean[]>;
   // ── 대화형 수정 모드 ──────────────────────────────────────
   // editEntry가 있으면 '등록'이 아니라 '수정'. 기존 노하우 카드를 먼저 띄우고,
   // 사장이 말로 고치면 patchSquare로 부분 패치. 저장은 onUpdated로(새 add 아님).
@@ -128,6 +130,8 @@ export function OwnerCoachChat({
 
   const lastRawRef = useRef('');     // 카테고리 변경 시 재정리에 쓸 원문
   const publishedRef = useRef(false);
+  // 다중 분리 발행에서 이미 저장 성공한 세그 인덱스 — 부분 실패 후 재시도 시 성공분 중복 저장 방지(F4, handover와 동일).
+  const publishedSegRef = useRef<Set<number>>(new Set());
   const scrollRef = useRef<ScrollView | null>(null);
 
   const unitId = useSessionStore.getState().unitId;
@@ -248,6 +252,8 @@ export function OwnerCoachChat({
           const overflow = pubSegs.length > MAX_SPLIT_PUBLISH;
           const shown = pubSegs.slice(0, MAX_SPLIT_PUBLISH);
           setSegments(shown);
+          publishedRef.current = false;       // 새 분리 제안 → 발행 잠금·성공추적 초기화(세그 인덱스 재정의됨)
+          publishedSegRef.current = new Set();
           setPending([]);
           setMessages((prev) => [
             ...prev,
@@ -450,20 +456,27 @@ export function OwnerCoachChat({
   // ── 분리 제안: 각각 등록 ──
   const publishEach = useCallback(() => {
     if (publishedRef.current || !segments) return;
-    const entries = segments
-      .filter((s) => isSquarePublishable(s.square))
-      .slice(0, MAX_SPLIT_PUBLISH) // 이중 방어: 표시 단계에서 이미 잘렸지만 발행 시점에도 상한 강제.
-      .map((s) => buildPlaybookEntryFromSquare({ ...uq, presumed_category: s.category }, s.square, { title: s.title, keywords: s.keywords }));
-    if (entries.length === 0) {
+    // 이미 저장 성공한 세그는 제외 → 부분 실패 후 재시도가 성공분을 새 id로 중복 저장하는 무음실패 차단(F4).
+    const pending = segments
+      .map((s, i) => ({ s, i }))
+      .filter(({ s, i }) => !publishedSegRef.current.has(i) && isSquarePublishable(s.square))
+      .slice(0, MAX_SPLIT_PUBLISH); // 이중 방어: 표시 단계에서 이미 잘렸지만 발행 시점에도 상한 강제.
+    if (pending.length === 0) {
       setError('등록할 내용이 부족해요. ➕ 내용 추가하기로 보완해 주세요.');
       return;
     }
+    const entries = pending.map(({ s }) =>
+      buildPlaybookEntryFromSquare({ ...uq, presumed_category: s.category }, s.square, { title: s.title, keywords: s.keywords }),
+    );
     publishedRef.current = true;
-    // 저장 실패 시 잠금을 풀어 재시도 허용(성공 시 화면이 네비게이션하므로 잠금 유지).
+    // onPublishedMany는 엔트리별 성공여부(boolean[])를 준다(레거시 boolean/void도 허용). 성공한 세그만 기록하고,
+    // 하나라도 실패면 잠금을 풀어 재시도 허용 — 다음 시도는 위 필터가 성공분을 빼므로 중복이 없다.
     void Promise.resolve(
-      onPublishedMany ? onPublishedMany(entries) : Promise.all(entries.map((e) => onPublished(e))).then((r) => r.every((x) => x !== false)),
-    ).then((ok) => {
-      if (ok === false) publishedRef.current = false;
+      onPublishedMany ? onPublishedMany(entries) : Promise.all(entries.map((e) => onPublished(e))),
+    ).then((res) => {
+      const results = Array.isArray(res) ? res : entries.map(() => res !== false);
+      results.forEach((ok, k) => { if (ok) publishedSegRef.current.add(pending[k].i); });
+      if (!results.every(Boolean)) publishedRef.current = false;
     });
   }, [segments, uq, onPublishedMany, onPublished]);
 

@@ -116,6 +116,10 @@ export default function OwnerLayout() {
       <Stack.Screen name="payroll" options={{ title: '급여 설정' }} />
       <Stack.Screen name="knowledge" options={{ title: '내 노하우' }} />
       <Stack.Screen name="templates" options={{ title: '노하우 템플릿' }} />
+      {/* 다점포 — 다른 내 매장 노하우를 현재 매장으로 가져오기(복제) */}
+      <Stack.Screen name="import-knowhow" options={{ title: '다른 매장에서 가져오기' }} />
+      {/* 다점포 — 전 매장 지표 통합뷰(매장 카드 탭 → 전환) */}
+      <Stack.Screen name="overview" options={{ title: '전체 매장 보기' }} />
       <Stack.Screen name="notifications" options={{ title: '알림' }} />
       <Stack.Screen name="edit/[id]" options={{ title: '노하우 수정' }} />
       {/* 대화형 입력 단일 화면 — 기존 answer/[uqId]·add/[category]·capture 위저드를 대체 */}

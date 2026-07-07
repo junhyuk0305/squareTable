@@ -105,12 +105,25 @@ export default function OwnerCoachScreen() {
     [addEntry, finishPublish, isInboxAnswer],
   );
 
-  // 다중 분리 발행 — 각 노하우를 저장하고(모두 성공해야 성공 처리), 인박스면 첫 건으로 resolve.
+  // 다중 분리 발행 — 각 노하우를 저장. 엔트리별 성공여부(boolean[])를 반환해 호출부(publishEach)가
+  // 성공분만 잠그고 재시도가 성공분을 중복 저장하지 않게 한다(F4, handover save()와 동일 방식).
   const onPublishedMany = useCallback(
-    async (entries: PlaybookEntry[]): Promise<boolean> => {
-      if (entries.length === 0) return false;
+    async (entries: PlaybookEntry[]): Promise<boolean[]> => {
+      if (entries.length === 0) return [];
       const results = await Promise.all(entries.map((e) => addEntry(e)));
-      return finishPublish(entries.map((e) => e.id), results.every(Boolean), `${entries.length}개의 노하우가 저장됐어요`);
+      const okCount = results.filter(Boolean).length;
+      if (results.every(Boolean)) {
+        // 전체 성공 — 성공 토스트 + (인박스면) resolve + 네비.
+        await finishPublish(entries.map((e) => e.id), true, `${entries.length}개의 노하우가 저장됐어요`);
+      } else if (okCount > 0) {
+        // 부분 성공 — 성공분은 저장됨(재시도가 중복 안 하도록 publishEach가 제외). 남은 실패분만 안내(네비 안 함).
+        setJustPublished(true);
+        setToastErr(false);
+        setToast(`${okCount}개는 저장됐어요. 남은 항목만 다시 시도해 주세요.`);
+      } else {
+        await finishPublish([], false, ''); // 전부 실패 — 실패 토스트.
+      }
+      return results;
     },
     [addEntry, finishPublish],
   );

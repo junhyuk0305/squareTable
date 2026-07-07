@@ -36,31 +36,67 @@ type NotifyArgs = {
  * fire-and-forget 원칙은 유지(await 안 함, throw 안 함) — 계측만 배경에서 얹는다. */
 export function pushNotify(args: NotifyArgs): void {
   if (!HAS_SUPABASE) return;
-  void supabase.functions
-    .invoke('push', { body: args })
-    .then(({ data, error }) => {
-      if (error) {
-        // 엣지 비정상 응답(401 unauthorized·403 no_unit·rate_limited) 또는 네트워크 → 앱이 발송 실패.
-        reportError('push.notify.invoke', error, { audience: args.audience, tag: args.tag });
-        return;
+  void attemptNotify(args, 0);
+}
+
+// 엣지함수 콜드스타트/일시 네트워크 실패는 "Failed to send a request to the Edge Function"(FunctionsFetchError)로
+// 나타난다. 재시도가 없으면 그 알림은 조용히 유실된다(라이브 계측에서 실제 확인: push_sent 0건·invoke 실패).
+// → 네트워크/부팅(5xx)류만 짧은 백오프로 재시도한다. 4xx(인증·검증·cross_tenant·no_unit·rate_limited)는
+//   재시도해도 결과가 같으므로 즉시 포기(무의미한 재발사·비용 방지). 여전히 fire-and-forget(throw 안 함).
+const MAX_ATTEMPTS = 3;
+const BACKOFF_MS = [400, 1500]; // 1차 재시도 0.4s, 2차 1.5s 뒤
+
+async function attemptNotify(args: NotifyArgs, attempt: number): Promise<void> {
+  try {
+    const { data, error } = await supabase.functions.invoke('push', { body: args });
+    if (error) {
+      if (isRetryable(error) && attempt < MAX_ATTEMPTS - 1) {
+        await delay(BACKOFF_MS[attempt] ?? 1500);
+        return attemptNotify(args, attempt + 1);
       }
-      const r = (data ?? {}) as { sent?: number; recipients?: number; pruned?: number };
-      track('push_sent', {
+      // 재시도 불가(4xx) 또는 재시도 소진 → 발송 실패로 기록.
+      reportError('push.notify.invoke', error, { audience: args.audience, tag: args.tag, attempts: attempt + 1 });
+      return;
+    }
+    const r = (data ?? {}) as { sent?: number; recipients?: number; pruned?: number };
+    track('push_sent', {
+      audience: args.audience,
+      tag: args.tag ?? null,
+      sent: r.sent ?? 0,
+      recipients: r.recipients ?? 0,
+      pruned: r.pruned ?? 0,
+      attempts: attempt + 1,
+    });
+    // 대상은 있는데 실제 전송 0 = 살아있는 구독이 하나도 없음(죽은 endpoint 뿐). "안 온다"의 핵심 원인.
+    if ((r.recipients ?? 0) > 0 && (r.sent ?? 0) === 0) {
+      reportError('push.notify.no_delivery', 'recipients>0 but sent=0 (구독 전부 사망 추정)', {
         audience: args.audience,
-        tag: args.tag ?? null,
-        sent: r.sent ?? 0,
-        recipients: r.recipients ?? 0,
-        pruned: r.pruned ?? 0,
+        recipients: r.recipients,
       });
-      // 대상은 있는데 실제 전송 0 = 살아있는 구독이 하나도 없음(죽은 endpoint 뿐). "안 온다"의 핵심 원인.
-      if ((r.recipients ?? 0) > 0 && (r.sent ?? 0) === 0) {
-        reportError('push.notify.no_delivery', 'recipients>0 but sent=0 (구독 전부 사망 추정)', {
-          audience: args.audience,
-          recipients: r.recipients,
-        });
-      }
-    })
-    .catch((e) => reportError('push.notify.throw', e, { audience: args.audience }));
+    }
+  } catch (e) {
+    if (attempt < MAX_ATTEMPTS - 1) {
+      await delay(BACKOFF_MS[attempt] ?? 1500);
+      return attemptNotify(args, attempt + 1);
+    }
+    reportError('push.notify.throw', e, { audience: args.audience, attempts: attempt + 1 });
+  }
+}
+
+const delay = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+// 재시도할 가치가 있는 실패인가 — 네트워크(FunctionsFetchError)·릴레이·엣지 부팅(5xx)만.
+// 4xx(인증·검증·격리·레이트리밋)는 상태가 바뀌지 않는 한 결과 동일 → 재시도 안 함.
+function isRetryable(error: unknown): boolean {
+  const name = (error as { name?: string })?.name ?? '';
+  if (name === 'FunctionsFetchError' || name === 'FunctionsRelayError') return true;
+  const status =
+    (error as { status?: number; statusCode?: number; context?: { status?: number } })?.status ??
+    (error as { statusCode?: number })?.statusCode ??
+    (error as { context?: { status?: number } })?.context?.status;
+  if (typeof status === 'number') return status >= 500 || status === 0;
+  // status 를 못 읽는 순수 네트워크 예외도 재시도 대상(콜드스타트 fetch 실패).
+  return name === '' || name === 'TypeError';
 }
 
 // ── 이벤트별 헬퍼 (호출부가 문자열을 안 틀리게 얇게 감싼다) ────────────────

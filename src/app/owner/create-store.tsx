@@ -18,6 +18,9 @@ export default function OwnerCreateStore() {
   const router = useRouter();
   const userName = useSessionStore((s) => s.userName);
   const createStore = useSessionStore((s) => s.createStore);
+  // 이미 매장이 있는 사장이 스위처 '매장 추가'로 온 경우 = 추가 흐름 → 뒤로가기(취소) 허용 + 문구 교체.
+  // 매장 0개(강제 온보딩)면 돌아갈 곳이 없어 뒤로가기를 막는다(기존 동작 유지).
+  const isAddingStore = useSessionStore((s) => s.stores.length > 0);
 
   const [storeName, setStoreName] = useState('');
   const [industry, setIndustry] = useState('');
@@ -41,15 +44,24 @@ export default function OwnerCreateStore() {
 
   return (
     <SafeAreaView style={styles.safe}>
-      <Stack.Screen options={{ headerShown: true, title: '가게 만들기', headerLeft: () => null, headerBackVisible: false }} />
+      {/* 추가 흐름이면 뒤로가기 노출(headerLeft 미지정=owner/_layout의 HeaderBackButton 상속), 온보딩이면 차단. */}
+      <Stack.Screen
+        options={{
+          headerShown: true,
+          title: isAddingStore ? '매장 추가' : '가게 만들기',
+          ...(isAddingStore ? {} : { headerLeft: () => null, headerBackVisible: false }),
+        }}
+      />
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
         <View style={styles.hero}>
           <View style={styles.iconWrap}>
             <Ionicons name="storefront-outline" size={28} color={BrandColors.brand} />
           </View>
-          <Text style={styles.title}>아직 만들어진 가게가 없어요</Text>
+          <Text style={styles.title}>{isAddingStore ? '새 매장을 추가해요' : '아직 만들어진 가게가 없어요'}</Text>
           <Text style={styles.sub}>
-            {userName ? `${userName} 사장님, ` : ''}가게를 만들면 <Text style={styles.strong}>직원 초대코드</Text>가{'\n'}바로 발급돼요.
+            {isAddingStore
+              ? <>매장을 만들면 <Text style={styles.strong}>직원 초대코드</Text>가{'\n'}바로 발급돼요. 지금 매장은 그대로 있어요.</>
+              : <>{userName ? `${userName} 사장님, ` : ''}가게를 만들면 <Text style={styles.strong}>직원 초대코드</Text>가{'\n'}바로 발급돼요.</>}
           </Text>
         </View>
 

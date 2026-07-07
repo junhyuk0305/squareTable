@@ -7,6 +7,7 @@ import {
   fetchUnitSubscription,
   checkPhoneInUse,
   rpcCreateStore,
+  rpcDeleteStore,
   rpcJoinByInvite,
   rpcCancelJoinRequest,
   rpcLeaveStore,
@@ -85,6 +86,8 @@ type SessionState = {
   updateIndustry: (industry: string) => Promise<{ error: string | null }>;
   // 다점포(0055): 활성 매장 전환. switch_active_unit RPC → loadProfile(활성 반영) → _layout이 전 스토어 재hydrate.
   switchUnit: (unitId: string) => Promise<{ error: string | null }>;
+  // 매장 하나 삭제(다점포 오너). 안전장치는 RPC(마지막매장·직원존재 차단). 성공 시 활성/목록 재로드.
+  deleteStore: (unitId: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
 
   // 개발/단일기기 역할 토글 (Supabase 없을 때의 데모 폴백)
@@ -391,28 +394,42 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   },
 
   createStore: async (storeName, industry, bizNo) => {
-    const { data: row, error } = await rpcCreateStore(storeName, industry, bizNo ?? null);
-    if (error) {
-      // 이미 매장이 있음(이전 시도로 생성됐거나 중복 제출) → 데드엔드 대신 기존 매장으로 진입.
-      // (가입 직후 createStore가 한 번 성공했는데 네트워크 등으로 재시도되면 여기로 떨어진다.)
-      if (/already_in_store/.test(error.message)) {
-        const uid0 = get().userId;
-        if (uid0) await loadProfile(set, uid0, get().email);
-        return { error: null, inviteCode: get().inviteCode || null };
-      }
-      // ★ 무음 사망 자동감지의 핵심 — store_created 시도 대비 실패율이 급등하면(예: 42702 재발) 알람.
-      //   reason 에 원문 첫 토큰(named 에러/코드)을 담아 어떤 실패인지 서버에서 즉시 분류한다.
-      track('store_created_failed', { reason: (error.message || '').slice(0, 60), code: (error as any).code ?? null });
-      const msg = /duplicate_biz_no/.test(error.message)
-        ? '이미 등록된 사업자등록번호예요.'
-        : friendlyError(error.message, '가게를 만들지 못했어요. 잠시 후 다시 시도해 주세요.');
-      return { error: msg, inviteCode: null };
+    // ── 첫 매장 온보딩 중복 방지 ──────────────────────────────────────────────
+    // 0055 다점포 완화로 create_store의 already_in_store 가드가 오너에게 풀리면서, signup의 직접호출과
+    // loadProfile의 메타데이터 자동복원(Path1)이 레이스로 둘 다 성공 → 첫 매장이 2개 만들어지던 회귀.
+    // JS 단일스레드 → 같은 플래그(_resumingOwnerStore)를 동기 검사+선점하면 두 경로가 상호배제돼 정확히
+    // 1회만 생성된다. 이미 진행 중이면 그 결과를 기다려 재사용(승자가 만들고 나머지는 그 매장으로 진입).
+    // 의도적 '매장 추가'는 이미 unitId가 있어 Path1이 애초에 안 돌아 이 가드에 걸리지 않는다.
+    if (_resumingOwnerStore) {
+      for (let i = 0; i < 100 && _resumingOwnerStore; i++) await new Promise((r) => setTimeout(r, 50));
+      if (get().unitId) return { error: null, inviteCode: get().inviteCode || null };
+      // Path1이 끝났는데도 매장이 없다(자동복원 실패) → 아래로 폴백해 직접 생성한다.
     }
-    // 프로필 unit_id가 바뀌었으니 세션 상태 갱신
-    const uid = get().userId;
-    if (uid) await loadProfile(set, uid, get().email);
-    track('store_created', { has_biz: !!bizNo });
-    return { error: null, inviteCode: row?.invite_code ?? null };
+    _resumingOwnerStore = true;
+    try {
+      const { data: row, error } = await rpcCreateStore(storeName, industry, bizNo ?? null);
+      if (error) {
+        // 이미 매장이 있음(이전 시도로 생성됐거나 중복 제출) → 데드엔드 대신 기존 매장으로 진입.
+        if (/already_in_store/.test(error.message)) {
+          const uid0 = get().userId;
+          if (uid0) await loadProfile(set, uid0, get().email);
+          return { error: null, inviteCode: get().inviteCode || null };
+        }
+        // ★ 무음 사망 자동감지의 핵심 — store_created 시도 대비 실패율이 급등하면(예: 42702 재발) 알람.
+        track('store_created_failed', { reason: (error.message || '').slice(0, 60), code: (error as any).code ?? null });
+        const msg = /duplicate_biz_no/.test(error.message)
+          ? '이미 등록된 사업자등록번호예요.'
+          : friendlyError(error.message, '가게를 만들지 못했어요. 잠시 후 다시 시도해 주세요.');
+        return { error: msg, inviteCode: null };
+      }
+      // 프로필 unit_id가 바뀌었으니 세션 상태 갱신
+      const uid = get().userId;
+      if (uid) await loadProfile(set, uid, get().email);
+      track('store_created', { has_biz: !!bizNo });
+      return { error: null, inviteCode: row?.invite_code ?? null };
+    } finally {
+      _resumingOwnerStore = false;
+    }
   },
 
   joinByInvite: async (code) => {
@@ -658,6 +675,26 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     if (!targetUnitId || targetUnitId === get().unitId) return { error: null };
     const { error } = await switchActiveUnit(targetUnitId);
     if (error) return { error: friendlyError(error.message, '매장을 전환하지 못했어요. 잠시 후 다시 시도해 주세요.') };
+    const uid = get().userId;
+    if (uid) await loadProfile(set, uid, get().email);
+    return { error: null };
+  },
+
+  deleteStore: async (unitId) => {
+    if (!HAS_SUPABASE) return { error: null };
+    if (get().role !== 'owner') return { error: '사장님만 매장을 삭제할 수 있어요.' };
+    const { error } = await rpcDeleteStore(unitId);
+    if (error) {
+      const msg = /last_store/.test(error.message)
+        ? '마지막 매장은 삭제할 수 없어요. 계정 삭제를 이용해 주세요.'
+        : /store_has_staff/.test(error.message)
+          ? '직원이 있는 매장은 삭제할 수 없어요. 먼저 직원을 모두 내보내 주세요.'
+          : /not_owner/.test(error.message)
+            ? '내 매장만 삭제할 수 있어요.'
+            : friendlyError(error.message, '매장을 삭제하지 못했어요. 잠시 후 다시 시도해 주세요.');
+      return { error: msg };
+    }
+    // 활성/주매장 재지정·매장 목록 갱신 반영
     const uid = get().userId;
     if (uid) await loadProfile(set, uid, get().email);
     return { error: null };

@@ -6,6 +6,9 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { RoleTabBar } from '@/components/RoleTabBar';
 import { useScheduleStore } from '@/lib/store/useScheduleStore';
+import { useSessionStore } from '@/lib/store/useSessionStore';
+import { showToast } from '@/lib/store/useToastStore';
+import { confirmAction } from '@/lib/utils/confirm';
 import { maskHHMM } from '@/lib/utils/attendance';
 import { WEEKDAY_LABELS, WEEKDAY_ORDER, closedDaysLabel } from '@/lib/utils/schedule';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
@@ -36,6 +39,28 @@ export default function OwnerStoreConfigScreen() {
     setConfig({ open, close, closedDays, note: note.trim() });
     setSaved(true);
     setTimeout(() => router.back(), 450);
+  };
+
+  // 다점포 매장 삭제 — 매장이 2개 이상일 때만. 파괴적이라 빨강 확인 → 성공 시 활성 재지정·목록 갱신.
+  const stores = useSessionStore((s) => s.stores);
+  const storeName = useSessionStore((s) => s.storeName);
+  const deleteStore = useSessionStore((s) => s.deleteStore);
+  const [deleting, setDeleting] = useState(false);
+
+  const onDelete = async () => {
+    const ok = await confirmAction(
+      '이 매장을 삭제할까요?',
+      `“${storeName}”의 노하우·근무·급여 등 모든 데이터가 영구 삭제돼요. 되돌릴 수 없어요.`,
+      '삭제',
+      { destructive: true, icon: 'trash-outline' },
+    );
+    if (!ok) return;
+    setDeleting(true);
+    const { error } = await deleteStore(useSessionStore.getState().unitId);
+    setDeleting(false);
+    if (error) return showToast(error, 'warn');
+    showToast('매장을 삭제했어요.');
+    router.replace('/owner/dashboard');
   };
 
   return (
@@ -113,6 +138,25 @@ export default function OwnerStoreConfigScreen() {
         <Pressable onPress={save} disabled={!valid} style={({ pressed }) => [styles.saveBtn, !valid && { opacity: 0.4 }, pressed && valid && { opacity: 0.85 }]}>
           <Text style={styles.saveText}>{saved ? '저장됐어요 ✓' : '저장'}</Text>
         </Pressable>
+
+        {/* 다점포 전용 위험 구역 — 이 매장 삭제(매장 2개 이상일 때만) */}
+        {stores.length > 1 ? (
+          <View style={styles.dangerBox}>
+            <Text style={styles.dangerLabel}>위험 구역</Text>
+            <Text style={styles.dangerDesc}>이 매장(“{storeName}”)을 완전히 삭제해요. 노하우·근무·급여 등 모든 데이터가 사라지고 되돌릴 수 없어요. (직원이 있으면 먼저 내보내야 해요.)</Text>
+            <Pressable
+              onPress={onDelete}
+              disabled={deleting}
+              style={({ pressed }) => [styles.dangerBtn, (pressed || deleting) && { opacity: 0.65 }]}
+              accessibilityRole="button"
+              accessibilityLabel="이 매장 삭제"
+            >
+              <Ionicons name="trash-outline" size={16} color={BrandColors.bad} />
+              <Text style={styles.dangerBtnText}>{deleting ? '삭제 중…' : '이 매장 삭제'}</Text>
+            </Pressable>
+          </View>
+        ) : null}
+
         <View style={{ height: 12 }} />
       </ScrollView>
       <RoleTabBar role="owner" />
@@ -147,4 +191,10 @@ const styles = StyleSheet.create({
 
   saveBtn: { backgroundColor: InkColors.ink, borderRadius: Radius.md, paddingVertical: 15, alignItems: 'center', marginTop: 14 },
   saveText: { fontSize: 15, fontWeight: '800', color: '#fff' },
+
+  dangerBox: { marginTop: 28, borderWidth: 1, borderColor: BrandColors.bad, borderRadius: Radius.md, padding: 16, gap: 8, backgroundColor: InkColors.bg },
+  dangerLabel: { fontSize: 12, fontWeight: '800', color: BrandColors.bad, letterSpacing: 0.3 },
+  dangerDesc: { fontSize: 12.5, color: InkColors.ink3, lineHeight: 18 },
+  dangerBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 4, paddingVertical: 12, borderRadius: Radius.sm, borderWidth: 1, borderColor: BrandColors.bad, backgroundColor: InkColors.bg },
+  dangerBtnText: { fontSize: 14, fontWeight: '800', color: BrandColors.bad },
 });

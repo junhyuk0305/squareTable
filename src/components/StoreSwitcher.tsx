@@ -33,7 +33,7 @@ export function StoreSwitcher({ visible, onClose }: { visible: boolean; onClose:
   };
 
   return (
-    <BottomSheet visible={visible} onClose={onClose}>
+    <BottomSheet visible={visible} onClose={onClose} sheetStyle={styles.sheetPad}>
       <Text style={styles.title}>매장 전환</Text>
       <Text style={styles.sub}>보고 관리할 매장을 선택하세요.</Text>
       <View style={styles.list}>
@@ -66,6 +66,18 @@ export function StoreSwitcher({ visible, onClose }: { visible: boolean; onClose:
           );
         })}
       </View>
+      {/* 전 매장 지표를 한눈에(통합뷰) — 전환 없이 합계·매장별 비교 */}
+      <Pressable
+        onPress={() => { onClose(); router.push('/owner/overview' as never); }}
+        style={({ pressed }) => [styles.overviewRow, pressed && { opacity: 0.85 }]}
+        accessibilityRole="button"
+        accessibilityLabel="전체 매장 한눈에 보기"
+      >
+        <Ionicons name="albums-outline" size={17} color={InkColors.ink2} />
+        <Text style={styles.overviewText}>전체 매장 한눈에 보기</Text>
+        <Ionicons name="chevron-forward" size={16} color={InkColors.ink3} />
+      </Pressable>
+
       <Pressable
         onPress={() => { onClose(); router.push('/owner/create-store' as never); }}
         style={({ pressed }) => [styles.addRow, pressed && { opacity: 0.85 }]}
@@ -80,8 +92,10 @@ export function StoreSwitcher({ visible, onClose }: { visible: boolean; onClose:
 }
 
 const styles = StyleSheet.create({
-  title: { fontSize: 17, fontWeight: '900', color: InkColors.ink, paddingHorizontal: Space.xs },
-  sub: { fontSize: 12.5, fontWeight: '600', color: InkColors.ink3, paddingHorizontal: Space.xs, marginTop: 3, marginBottom: Space.md },
+  // 시트 내부 좌우 여백 — BottomSheet 자체는 패딩이 없어(각 모달이 담당) 스위처가 직접 준다.
+  sheetPad: { paddingHorizontal: Space.gutter, paddingBottom: Space.xl },
+  title: { fontSize: 17, fontWeight: '900', color: InkColors.ink },
+  sub: { fontSize: 12.5, fontWeight: '600', color: InkColors.ink3, marginTop: 3, marginBottom: Space.md },
   list: { gap: Space.sm },
   row: {
     flexDirection: 'row',
@@ -102,9 +116,16 @@ const styles = StyleSheet.create({
   tileActive: { backgroundColor: InkColors.ink },
   name: { fontSize: 14.5, fontWeight: '800', color: InkColors.ink },
   ind: { fontSize: 11.5, fontWeight: '600', color: InkColors.ink3, marginTop: 2 },
+  overviewRow: {
+    flexDirection: 'row', alignItems: 'center', gap: Space.sm,
+    marginTop: Space.md,
+    backgroundColor: InkColors.bg, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md,
+    paddingVertical: 12, paddingHorizontal: 13,
+  },
+  overviewText: { flex: 1, fontSize: 13.5, fontWeight: '800', color: InkColors.ink2 },
   addRow: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7,
-    marginTop: Space.md,
+    marginTop: Space.sm,
     borderWidth: 1.5, borderStyle: 'dashed', borderColor: InkColors.ink3, borderRadius: Radius.md,
     paddingVertical: 13,
   },

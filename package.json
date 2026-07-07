@@ -40,6 +40,7 @@
     "qa:daypart": "node scripts/qa-daypart-labels.mjs",
     "qa:onboarding": "node scripts/qa-onboarding.mjs",
     "qa:profile": "node scripts/qa-profile-update.mjs",
+    "qa:knowhow-copy": "node scripts/qa-knowhow-copy.mjs",
     "qa:photo-private": "node scripts/qa-photo-private.mjs",
     "qa:payroll": "node scripts/qa-payroll.mjs",
     "qa:push": "node scripts/qa-push.mjs",
@@ -48,7 +49,9 @@
     "qa:split": "node scripts/qa-knowhow-split.mjs",
     "qa:knowhow-accuracy": "node scripts/qa-knowhow-accuracy.mjs",
     "qa:ai-core": "node scripts/qa-ai-core.mjs",
-    "qa:multistore": "node scripts/qa-multistore.mjs"
+    "qa:ai-adversarial": "node scripts/qa-ai-adversarial.mjs",
+    "qa:multistore": "node scripts/qa-multistore.mjs",
+    "qa:delete-store": "node scripts/qa-delete-store.mjs"
   },
   "private": true
 }

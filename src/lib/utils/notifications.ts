@@ -129,7 +129,9 @@ export function buildJuniorNotifications(args: {
       kind: 'assign',
       title: `${nameOf(t.createdBy ?? '')}님이 할 일을 배정했어요`,
       body: t.text,
-      at: `${today}T08:00:00`, // 템플릿엔 생성시각이 없어 오늘 기준으로 정렬(배정 발생시각은 푸시가 정확).
+      // 실제 배정(생성) 시각으로 정렬 → 오래된 배정은 자연히 아래로. createdAt 없는 레거시/목업만
+      // today 로 폴백(과거 전량-today 고정이 "최신 아닌데 상단 고정" 버그의 원인이었다).
+      at: t.createdAt ?? `${today}T08:00:00`,
       unread: !done[today]?.[t.id],
       route: '/junior/work',
     });
