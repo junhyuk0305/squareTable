@@ -146,7 +146,7 @@ export default function OwnerDashboardScreen() {
               accessibilityLabel={`확인 필요한 노하우 ${needsReviewCount}개 확인하기`}
             >
               <View style={styles.reviewIcon}>
-                <Ionicons name="alert-circle" size={20} color={BrandColors.bad} />
+                <Ionicons name="alert-circle" size={20} color={BrandColors.warn} />
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.reviewTitle}>확인이 필요한 노하우 {needsReviewCount}개</Text>

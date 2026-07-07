@@ -33,8 +33,10 @@ self.addEventListener('push', (event) => {
   const title = data.title || '착착';
   const options = {
     body: data.body || '',
-    icon: '/icon.png',
-    badge: '/icon.png',
+    icon: '/icon-192.png',
+    // badge = 안드로이드 상태바의 작은 단색 아이콘. 풀컬러(/icon.png)를 주면 안드로이드가
+    // 흰 사각형으로 뭉갠다 → 투명배경 흰 실루엣 전용 배지(/badge-96.png)를 쓴다.
+    badge: '/badge-96.png',
     // 같은 tag 는 덮어써 알림함이 중복으로 쌓이지 않게 한다(예: 같은 질문 재알림).
     tag: data.tag || undefined,
     renotify: Boolean(data.tag),

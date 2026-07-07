@@ -11,6 +11,7 @@ import { SectionLabel } from '@/components/SectionLabel';
 import { Appear } from '@/components/Appear';
 import { KnowhowCarousel } from '@/components/KnowhowCarousel';
 import { getCategoryMeta, ALL_CATEGORIES } from '@/lib/utils/category';
+import { matchesKnowhowQuery } from '@/lib/utils/knowhowSearch';
 import { verifyMeta } from '@/lib/utils/verification';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
@@ -36,15 +37,6 @@ const needsVerify = (e: PlaybookEntry) => e.needs_review === true;
 // (미검증과 다른 개념: 미검증=아직 확인 안 함 / 안 쓰임=확인은 됐는데 아무도 안 물어봄)
 const isUnused = (e: PlaybookEntry) =>
   e.status === 'published' && (e.stats?.query_hits_30d ?? 0) === 0;
-
-// 검색 매칭 — 제목·키워드·태그 부분일치(대소문자·# 무시).
-function matchesQuery(e: PlaybookEntry, q: string): boolean {
-  if (!q) return true;
-  if (e.title?.toLowerCase().includes(q)) return true;
-  if ((e.search_keywords ?? []).some((k) => k.toLowerCase().includes(q))) return true;
-  if ((e.tags ?? []).some((t) => t.replace(/^#/, '').toLowerCase().includes(q))) return true;
-  return false;
-}
 
 /** 한 노하우 행(목록 뷰) — 탭하면 수정. */
 function EntryRow({ e, onPress }: { e: PlaybookEntry; onPress: () => void }) {
@@ -136,7 +128,7 @@ export function OwnerKnowhowBrowse({
   // 검색 + 카테고리 필터(대시보드/목록 공통 베이스).
   const baseFiltered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    let list = entries.filter((e) => matchesQuery(e, q));
+    let list = entries.filter((e) => matchesKnowhowQuery(e, q));
     if (activeCat) list = list.filter((e) => e.category === activeCat);
     return list;
   }, [entries, query, activeCat]);
@@ -273,12 +265,15 @@ export function OwnerKnowhowBrowse({
         )
       ) : (
         <>
-          {/* 미검증 배너 — needs_review가 남아있는 동안만. 탭하면 미검증만 모아 보여준다. */}
+          {/* 미검증 배너 — needs_review가 남아있는 동안만. 탭하면 확인할 노하우로 바로 데려간다. */}
           {needsReview.length > 0 && (
             <Pressable
               onPress={() => {
-                setOnlyNeedsReview(true);
-                setView('list');
+                // '확인하기'는 확인할 노하우를 곧장 연다(수정 저장 = 우리 매장 기준 확인 완료).
+                // 필터만 바꾸면 진입 상태(홈 '확인 필요'로 들어오면 이미 목록+미검증)가 그대로라
+                // 아무 반응이 없어 '안 눌린다'처럼 보인다. 목록 필터는 아래 '확인 필요 N' 칩이 담당.
+                const first = needsReview[0];
+                if (first) onSelect(first.id);
               }}
               style={({ pressed }) => [styles.banner, pressed && { opacity: 0.9 }]}
               accessibilityRole="button"
@@ -464,9 +459,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.sm,
-    backgroundColor: BrandColors.yellowSoft,
+    backgroundColor: BrandColors.warnSoft,
     borderWidth: 1,
-    borderColor: BrandColors.gold,
+    borderColor: BrandColors.warnBorder,
     borderRadius: Radius.md,
     paddingVertical: Space.md,
     paddingHorizontal: Space.md,
@@ -507,7 +502,7 @@ const styles = StyleSheet.create({
     backgroundColor: InkColors.bg, borderWidth: 1, borderColor: InkColors.line,
     paddingVertical: 6, paddingHorizontal: 12, borderRadius: Radius.pill,
   },
-  statusReviewOn: { backgroundColor: BrandColors.yellowSoft, borderColor: BrandColors.gold },
+  statusReviewOn: { backgroundColor: BrandColors.warnSoft, borderColor: BrandColors.warnBorder },
   statusChipText: { fontSize: 12.5, fontWeight: '700', color: InkColors.ink2 },
   statusChipTextInk: { color: InkColors.ink },
 
@@ -522,7 +517,7 @@ const styles = StyleSheet.create({
   verifyBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5,
     marginTop: 4, paddingVertical: 9, borderRadius: Radius.sm,
-    backgroundColor: BrandColors.yellowSoft, borderWidth: 1, borderColor: BrandColors.gold,
+    backgroundColor: BrandColors.warnSoft, borderWidth: 1, borderColor: BrandColors.warnBorder,
   },
   verifyBtnText: { fontSize: 12, fontWeight: '800', color: InkColors.ink },
 
@@ -541,7 +536,7 @@ const styles = StyleSheet.create({
   metaRate: { fontSize: 12, color: InkColors.ink2, fontWeight: '700' },
   badge: { paddingVertical: 2, paddingHorizontal: 7, borderRadius: Radius.pill },
   badgeText: { fontSize: 10, fontWeight: '800' },
-  badgeReview: { paddingVertical: 2, paddingHorizontal: 7, borderRadius: Radius.pill, backgroundColor: BrandColors.yellowSoft },
+  badgeReview: { paddingVertical: 2, paddingHorizontal: 7, borderRadius: Radius.pill, backgroundColor: BrandColors.warnSoft },
   badgeReviewText: { fontSize: 10, fontWeight: '800', color: BrandColors.warn },
   badgeUnused: { paddingVertical: 2, paddingHorizontal: 7, borderRadius: Radius.pill, backgroundColor: BrandColors.accentSoft },
   badgeUnusedText: { fontSize: 10, fontWeight: '800', color: BrandColors.bad },
