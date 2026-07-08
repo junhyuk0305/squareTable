@@ -22,7 +22,15 @@ export type SubscriptionView = {
 const DAY = 24 * 60 * 60 * 1000;
 const ceilDays = (ms: number) => Math.max(0, Math.ceil(ms / DAY));
 
+// 전체 무료 모드 — 지시가 있기 전까지 페이월/이용기간 만료 게이트를 전부 끈다.
+// true 인 동안엔 원시 구독값과 무관하게 항상 '이용 중(active·무기한)'으로 계산되어
+// owner/junior 레이아웃의 만료 리다이렉트도, billing 화면의 '만료' 표시도 나타나지 않는다.
+// 유료화를 다시 켜려면 이 상수만 false 로 되돌리면 됨(다른 곳 수정 불필요).
+export const FREE_MODE = true;
+
 export function deriveSubscription(s: SubscriptionFields, now: number = Date.now()): SubscriptionView {
+  if (FREE_MODE) return { state: 'active', entitled: true, daysLeft: -1 };
+
   const trialEnd = s.trialEndsAt ? Date.parse(s.trialEndsAt) : NaN;
   const paidUntil = s.paidUntil ? Date.parse(s.paidUntil) : NaN;
 
