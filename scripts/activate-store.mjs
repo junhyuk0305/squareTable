@@ -11,6 +11,10 @@
 //
 // 강제 만료:
 //   node scripts/activate-store.mjs --expire <unit_id>
+//
+// AI 월 카운터 초기화(유료→무료 다운그레이드 시 필수 — 유료 기간 누적 사용량이 무료 캡 300을
+// 넘어 있으면 즉시 402로 잠기므로, free 로 전환할 땐 함께 실행):
+//   node scripts/activate-store.mjs --reset-ai <unit_id>
 
 import { createClient } from '@supabase/supabase-js';
 
@@ -71,8 +75,24 @@ async function expire(unitId) {
   console.log(`✓ 만료 처리 완료 — ${unitId}`);
 }
 
+async function resetAi(unitId) {
+  // 해당 매장의 ai_usage_monthly 전체 삭제(service_role, RLS 우회). consume_ai_quota 가 다음 답변에서 새로 시작.
+  const { error } = await db.from('ai_usage_monthly').delete().eq('unit_id', unitId);
+  if (error) {
+    console.error('✗ AI 카운터 초기화 실패:', error.message);
+    process.exit(1);
+  }
+  console.log(`✓ AI 월 카운터 초기화 완료 — ${unitId}`);
+}
+
 const args = process.argv.slice(2);
-if (args[0] === '--expire') {
+if (args[0] === '--reset-ai') {
+  if (!args[1]) {
+    console.error('✗ 사용법: node scripts/activate-store.mjs --reset-ai <unit_id>');
+    process.exit(1);
+  }
+  await resetAi(args[1]);
+} else if (args[0] === '--expire') {
   if (!args[1]) {
     console.error('✗ 사용법: node scripts/activate-store.mjs --expire <unit_id>');
     process.exit(1);

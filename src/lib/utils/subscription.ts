@@ -4,6 +4,8 @@
 // 안전 기본값(fail-open): 구독 정보가 없으면('none') 막지 않는다. 소프트 페이월(수동 계좌이체)이라
 // 과금 로직 버그로 앱을 벽돌로 만드는 게 더 큰 사고 — 접근 차단은 명시적 만료일 때만.
 
+import type { PlanId } from '@/lib/config/tiers'; // type-only — 런타임 순환 없음(tiers가 FREE_MODE를 역참조)
+
 export type SubStatusRaw = '' | 'trialing' | 'active' | 'expired';
 export type SubState = 'none' | 'trialing' | 'active' | 'expired';
 
@@ -11,6 +13,8 @@ export type SubscriptionFields = {
   subStatus: SubStatusRaw;
   trialEndsAt: string; // ISO
   paidUntil: string; // ISO
+  // 과금 티어(0062). 'free'=영구 무료(만료 개념 없음 — 캡으로만 제한). 미전달(구 호출부)=만료 로직 그대로.
+  plan?: PlanId;
 };
 
 export type SubscriptionView = {
@@ -30,6 +34,11 @@ export const FREE_MODE = true;
 
 export function deriveSubscription(s: SubscriptionFields, now: number = Date.now()): SubscriptionView {
   if (FREE_MODE) return { state: 'active', entitled: true, daysLeft: -1 };
+
+  // ★무료 티어 = 영구 무료(3티어 freemium, 0062). 무료 매장은 체험 만료·admin_expire 와 무관하게
+  // 항상 이용 가능하고, 제한은 캡(직원 3·AI 300/월·1매장)으로만 건다. 만료 페이월은 유료 플랜
+  // (single/multi)의 paid_until 에만 적용된다. (악성 무료 매장 차단은 구독이 아니라 별도 수단으로.)
+  if (s.plan === 'free') return { state: 'active', entitled: true, daysLeft: -1 };
 
   const trialEnd = s.trialEndsAt ? Date.parse(s.trialEndsAt) : NaN;
   const paidUntil = s.paidUntil ? Date.parse(s.paidUntil) : NaN;

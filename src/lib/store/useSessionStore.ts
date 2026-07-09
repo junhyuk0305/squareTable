@@ -185,7 +185,7 @@ async function loadProfile(
       // 콜드 로드라 신원을 확정할 수 없다 → 가짜 테넌트 대신 깨끗한 signed_out(재로그인으로 복구).
       setUnitId(null);
       setAnalyticsContext({ userId: null, unitId: null, role: null });
-      set({ status: 'signed_out', unitId: '', userId: '', userName: '', storeName: '', pendingUnitId: '', pendingStoreName: '', industry: '', inviteCode: '', bio: '', phone: '' });
+      set({ status: 'signed_out', unitId: '', userId: '', userName: '', storeName: '', pendingUnitId: '', pendingStoreName: '', industry: '', inviteCode: '', bio: '', phone: '', plan: 'free', subStatus: '', trialEndsAt: '', paidUntil: '' });
       return;
     }
 
@@ -194,7 +194,7 @@ async function loadProfile(
     if (profile?.deleted_at) {
       setUnitId(null);
       setAnalyticsContext({ userId: null, unitId: null, role: null });
-      set({ status: 'signed_out', unitId: '', userId: '', userName: '', storeName: '', pendingUnitId: '', pendingStoreName: '', industry: '', inviteCode: '', bio: '', phone: '' });
+      set({ status: 'signed_out', unitId: '', userId: '', userName: '', storeName: '', pendingUnitId: '', pendingStoreName: '', industry: '', inviteCode: '', bio: '', phone: '', plan: 'free', subStatus: '', trialEndsAt: '', paidUntil: '' });
       void supabase.auth.signOut().catch(() => {});
       return;
     }
@@ -252,11 +252,16 @@ async function loadProfile(
       const { data: sub, error: subErr } = await fetchUnitSubscription(unitId);
       if (subErr) {
         reportError('session.fetchUnitSubscription', subErr);
+        // 이전 구독값 유지는 '같은 사용자'일 때만 — 로그아웃 직후 다른 계정 로그인 중 일시 오류면
+        // 이전 계정의 plan/구독이 새 계정으로 승계돼 entitlement 가 샌다(크로스 계정 누수 방지 가드).
         const prev = useSessionStore.getState();
-        subStatus = prev.subStatus;
-        trialEndsAt = prev.trialEndsAt;
-        paidUntil = prev.paidUntil;
-        plan = prev.plan;
+        if (prev.userId === userId) {
+          subStatus = prev.subStatus;
+          trialEndsAt = prev.trialEndsAt;
+          paidUntil = prev.paidUntil;
+          plan = prev.plan;
+        }
+        // 다른 사용자면 기본값(''·'free') 유지 → fail-open('none')으로 잠기지 않고, 권한도 안 샌다.
       } else {
         subStatus = (sub?.status as SubStatusRaw) ?? '';
         trialEndsAt = sub?.trial_ends_at ?? '';
@@ -303,7 +308,7 @@ async function loadProfile(
     reportError('session.loadProfile', e); // 오프라인 등으로 세션 로드가 던져 로그아웃되는 경로를 관측
     setUnitId(null);
     setAnalyticsContext({ userId: null, unitId: null, role: null });
-    set({ status: 'signed_out', unitId: '', userId: '', userName: '', storeName: '', stores: [], pendingUnitId: '', pendingStoreName: '', industry: '', inviteCode: '', bio: '' });
+    set({ status: 'signed_out', unitId: '', userId: '', userName: '', storeName: '', stores: [], pendingUnitId: '', pendingStoreName: '', industry: '', inviteCode: '', bio: '', plan: 'free', subStatus: '', trialEndsAt: '', paidUntil: '' });
   }
 }
 
@@ -332,7 +337,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
         if (u) loadProfile(set, u.id, u.email ?? '', pendingOwnerMeta(u));
         else {
           setAnalyticsContext({ userId: null, unitId: null, role: null });
-          set({ status: 'signed_out', unitId: '', userId: '', userName: '' });
+          set({ status: 'signed_out', unitId: '', userId: '', userName: '', plan: 'free', subStatus: '', trialEndsAt: '', paidUntil: '' });
         }
       });
     }
@@ -588,7 +593,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   deleteAccount: async () => {
     if (!HAS_SUPABASE) {
       // 데모 모드: 실제 삭제 대상 없음 → 세션만 종료.
-      set({ status: 'signed_out', unitId: '', userId: '', userName: '', pendingUnitId: '', pendingStoreName: '', industry: '' });
+      set({ status: 'signed_out', unitId: '', userId: '', userName: '', pendingUnitId: '', pendingStoreName: '', industry: '', plan: 'free', subStatus: '', trialEndsAt: '', paidUntil: '' });
       return { error: null };
     }
     const { error } = await rpcDeleteMyAccount();
@@ -600,7 +605,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     } catch (e) {
       console.warn('[session] signOut after delete failed:', e);
     }
-    set({ status: 'signed_out', unitId: '', userId: '', userName: '', pendingUnitId: '', pendingStoreName: '', industry: '' });
+    set({ status: 'signed_out', unitId: '', userId: '', userName: '', pendingUnitId: '', pendingStoreName: '', industry: '', plan: 'free', subStatus: '', trialEndsAt: '', paidUntil: '' });
     return { error: null };
   },
 
@@ -720,7 +725,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
         console.warn('[session] signOut failed:', e);
       }
     }
-    set({ status: 'signed_out', unitId: '', userId: '', userName: '', pendingUnitId: '', pendingStoreName: '', industry: '' });
+    set({ status: 'signed_out', unitId: '', userId: '', userName: '', pendingUnitId: '', pendingStoreName: '', industry: '', plan: 'free', subStatus: '', trialEndsAt: '', paidUntil: '' });
   },
 
   switchTo: (role) => {

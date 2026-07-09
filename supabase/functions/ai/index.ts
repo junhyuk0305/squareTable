@@ -285,6 +285,26 @@ function userClient(authz: string) {
   });
 }
 
+// 무료 티어 월 AI답변 한도 — tiers.ts PLANS.free.aiMonthly · 0062 consume_ai_quota v_cap 와 동일해야 함.
+const AI_MONTHLY_FREE_CAP = 300;
+
+// 쿼터 사전판정(비차감). 카운트는 답변이 "성공 서빙된 뒤" consume_ai_quota 로만 올린다 —
+// LLM 5xx/타임아웃에 대한 클라 재시도가 같은 질문을 이중차감하는 것을 막는다(실패는 공짜).
+// 판정 규칙은 0062 consume_ai_quota 와 동일(free_mode 우회·유료 무제한·free 월 300건).
+// 읽기는 호출자 JWT + RLS(자기 매장 행만)라 추가 격리 게이트 불요. 오류는 전부 fail-open.
+async function aiQuotaBlocked(authz: string): Promise<{ blocked: boolean; used: number }> {
+  const sb = userClient(authz);
+  const { data: freeMode, error: fmErr } = await sb.rpc('billing_free_mode');
+  if (fmErr || freeMode !== false) return { blocked: false, used: 0 }; // 무료 모드/판정 불가 → 통과
+  const { data: sub } = await sb.from('unit_subscriptions').select('plan').maybeSingle();
+  if ((sub?.plan ?? 'free') !== 'free') return { blocked: false, used: 0 }; // 유료 플랜 무제한
+  const month = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit' })
+    .format(new Date()).slice(0, 7); // KST 'YYYY-MM' — 0062 의 월 경계와 동일
+  const { data: usage } = await sb.from('ai_usage_monthly').select('used').eq('month', month).maybeSingle();
+  const used = usage?.used ?? 0;
+  return { blocked: used >= AI_MONTHLY_FREE_CAP, used };
+}
+
 // 노하우 1건 색인 — 텍스트를 임베딩해 playbook_embeddings 에 upsert.
 // 보안: entryId 가 내 매장 노하우인지 RLS select 로 먼저 검증(타 매장 id 스푸핑 차단).
 async function handleEmbed(payload: any, user: { unitId: string | null }, authz: string) {
@@ -617,25 +637,21 @@ Deno.serve(async (req: Request) => {
     const payload = body?.payload ?? {};
     const authz = req.headers.get('Authorization') ?? '';
 
-    // 3) AI답변 월 쿼터(과금층 0062) — answer 태스크만. LLM 호출 "전"에 서버 카운터를 원자
-    //    증가시키고, 무료 플랜이 월 300건을 넘으면 402로 거부(클라가 업그레이드 안내로 매핑).
-    //    FREE_MODE(billing_free_mode)·유료 플랜 판정은 RPC 내부 — 여기는 결과만 따른다.
-    //    ⚠️ 쿼터 인프라 장애(RPC 부재/일시 오류)는 fail-open: 과금 로직이 파일럿 답변을 막는 게
-    //    더 큰 사고(subscription.ts 의 fail-open 철학과 동일). 로그만 남기고 통과시킨다.
+    // 3) AI답변 월 쿼터(과금층 0062) — answer 태스크만. 진입 시엔 "비차감 사전판정"으로 무료
+    //    플랜 300건 초과를 402로 거부하고, 카운트 증가는 답변 성공 후(아래)로 미룬다.
+    //    ⚠️ 쿼터 인프라 장애는 fail-open: 과금 로직이 파일럿 답변을 막는 게 더 큰 사고
+    //    (subscription.ts 의 fail-open 철학과 동일). 로그만 남기고 통과시킨다.
+    //    (denylist = 아래 라우팅 삼항식의 非answer 분기와 동일 목록 — 새 태스크를 라우팅에
+    //     추가하면 여기도 함께. 미지 태스크는 기본 라우팅과 같이 answer 로 취급해 과금 우회를 막는다.)
     const isAnswer = !['square', 'patch', 'intent', 'embed', 'search'].includes(task);
     if (isAnswer) {
       try {
-        const { data: quota, error: quotaErr } = await userClient(authz).rpc('consume_ai_quota');
-        if (quotaErr) {
-          console.error('consume_ai_quota error (fail-open):', quotaErr.message ?? quotaErr);
-        } else {
-          const q = Array.isArray(quota) ? quota[0] : quota;
-          if (q && q.allowed === false) {
-            return json({ error: 'ai_quota_exceeded', used: q.used_count ?? 0, cap: q.cap_count ?? 0 }, 402);
-          }
+        const q = await aiQuotaBlocked(authz);
+        if (q.blocked) {
+          return json({ error: 'ai_quota_exceeded', used: q.used, cap: AI_MONTHLY_FREE_CAP }, 402);
         }
       } catch (e) {
-        console.error('consume_ai_quota failed (fail-open):', e);
+        console.error('aiQuotaBlocked failed (fail-open):', e);
       }
     }
 
@@ -650,6 +666,18 @@ Deno.serve(async (req: Request) => {
             : task === 'search'
               ? await handleSearch(payload, user, authz)
               : await handleAnswer(payload);
+
+    // 답변이 실제로 서빙된 경우에만 월 카운터 증가(consume_ai_quota, 0062 — 여기선 카운터로만 쓰고
+    // allowed 판정은 위 사전판정이 담당). 실패(throw)·정크 거절은 미차감 → 재시도 이중차감 없음.
+    // 응답 전에 await(엣지 런타임이 응답 후 백그라운드 작업을 보장하지 않음). 실패는 관대(undercount 허용).
+    if (isAnswer && (result as { rejected?: string })?.rejected !== 'junk_input') {
+      try {
+        const { error: cErr } = await userClient(authz).rpc('consume_ai_quota');
+        if (cErr) console.error('consume_ai_quota (post-serve) error:', cErr.message ?? cErr);
+      } catch (e) {
+        console.error('consume_ai_quota (post-serve) failed:', e);
+      }
+    }
     return json(result);
   } catch (e) {
     console.error('ai handler error:', e);          // 상세는 로그만

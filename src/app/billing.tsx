@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
@@ -30,11 +30,17 @@ export default function BillingScreen() {
   const stores = useSessionStore((s) => s.stores);
   const refreshMembership = useSessionStore((s) => s.refreshMembership);
 
-  const view = deriveSubscription({ subStatus, trialEndsAt, paidUntil });
+  const view = deriveSubscription({ subStatus, trialEndsAt, paidUntil, plan });
   const isOwner = role === 'owner';
   const [busy, setBusy] = useState(false);
   // 선택 요금제 — 초기값은 현재 요금제. 다점포 금액 = 소유 매장수 × 매장당 가격(tiers.ts).
   const [selectedPlan, setSelectedPlan] = useState<PlanId>(plan);
+  // 세션 plan이 마운트 뒤에 로드/변경되면(웹 새로고침 직진입, 30초 폴링 중 활성화 반영) 선택을
+  // 재동기화한다. 단 사용자가 직접 고른 뒤에는 덮어쓰지 않는다(선택 유지).
+  const planTouched = useRef(false);
+  useEffect(() => {
+    if (!planTouched.current) setSelectedPlan(plan);
+  }, [plan]);
   const ownedCount = Math.max(1, stores.filter((st) => st.role === 'owner').length);
   const monthlyTotal = planMonthlyPrice(selectedPlan, ownedCount);
 
@@ -46,7 +52,7 @@ export default function BillingScreen() {
       await refreshMembership();
       const s = useSessionStore.getState();
       if (!s.unitId) return;
-      if (deriveSubscription({ subStatus: s.subStatus, trialEndsAt: s.trialEndsAt, paidUntil: s.paidUntil }).entitled) {
+      if (deriveSubscription({ subStatus: s.subStatus, trialEndsAt: s.trialEndsAt, paidUntil: s.paidUntil, plan: s.plan }).entitled) {
         router.replace(isOwner ? '/owner/dashboard' : '/junior/home');
       }
     }, 30000);
@@ -63,6 +69,7 @@ export default function BillingScreen() {
       subStatus: useSessionStore.getState().subStatus,
       trialEndsAt: useSessionStore.getState().trialEndsAt,
       paidUntil: useSessionStore.getState().paidUntil,
+      plan: useSessionStore.getState().plan,
     });
     if (v.entitled) router.replace(isOwner ? '/owner/dashboard' : '/junior/home');
     else showToast('아직 활성화 전이에요. 입금 확인 후 반영돼요.');
@@ -131,7 +138,7 @@ export default function BillingScreen() {
                   return (
                     <Pressable
                       key={pid}
-                      onPress={() => setSelectedPlan(pid)}
+                      onPress={() => { planTouched.current = true; setSelectedPlan(pid); }}
                       style={[styles.planCard, selected && styles.planCardSelected]}
                       accessibilityRole="button"
                       accessibilityState={{ selected }}
