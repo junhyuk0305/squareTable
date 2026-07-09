@@ -18,10 +18,14 @@ const check = (n, ok, x = '') => { ok ? (pass++, console.log('  PASS', n, x)) : 
 const phone = () => '010' + String(Math.floor(1e7 + Math.random() * 8e7));
 async function mkOwner(tag) { const c = mk(); const { data, error } = await c.auth.signUp({ email: `ds_${tag}_${rid}@example.com`, password: pw, options: { data: { name: `DS_${tag}`, role: 'owner', phone: phone(), birth_date: '1990-01-15' } } }); if (error || !data.session) throw new Error(`${tag} signUp ${error?.message}`); return { c, uid: data.user.id }; }
 async function store(c, n) { const { data, error } = await c.rpc('create_store', { p_store_name: n, p_industry: '카페·디저트', p_biz_no: null }); if (error) throw new Error(error.message); return (Array.isArray(data) ? data[0] : data).unit_id; }
+// 유료화(0062) 후 2호점+ 생성은 기존 소유 매장 전부 multi 여야 한다 — 전역 스위치 토글 대신
+// 실제 유료 경로(admin_activate_store)로 테스트 매장만 승격한다(프로덕션 페이월 무접촉).
+async function promoteMulti(unit) { const { error } = await admin.rpc('admin_activate_store', { p_unit_id: unit, p_days: 1, p_plan: 'multi' }); if (error) throw new Error(`multi 승격(${unit}): ${error.message}`); }
 
 async function main() {
   const O = await mkOwner('O');
   const A = await store(O.c, `DS_A_${rid}`);
+  await promoteMulti(A);
   const B = await store(O.c, `DS_B_${rid}`); // 활성=B
   // A에 노하우 1건(cascade 검증용)
   const eid = `pb_${rid}_ds`;
@@ -53,6 +57,7 @@ async function main() {
   check('마지막 매장 삭제 거부(last_store)', /last_store/.test(lastErr?.message ?? ''), lastErr?.message ?? '(삭제됨!)');
 
   // 4) 직원 있는 매장 삭제 금지
+  await promoteMulti(B); // A 삭제 후 O 소유=B뿐 — D 생성 전 B도 multi 필요
   const D = await store(O.c, `DS_D_${rid}`); // O: B, D
   const J = await mkOwner('J'); // 실유저(주니어로 멤버십만 부여)
   await admin.from('unit_members').insert({ user_id: J.uid, unit_id: D, role: 'junior' });
