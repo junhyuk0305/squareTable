@@ -18,6 +18,8 @@ type PlaybookState = {
   add: (entry: PlaybookEntry) => Promise<boolean>;
   getById: (id: string) => PlaybookEntry | undefined;
   update: (id: string, patch: Partial<PlaybookEntry>) => void;
+  /** draft → published 확정(인수인계서 검수). 성공 여부를 돌려줘 발행 수·부분 실패를 정확히 센다. */
+  publish: (id: string, patch?: Partial<PlaybookEntry>) => Promise<boolean>;
   remove: (id: string) => void;
   reset: () => void;
   applyMock: (demo: boolean) => void;
@@ -45,6 +47,17 @@ export const usePlaybookStore = create<PlaybookState>((set, get) => ({
     return ok;
   },
   getById: (id) => get().entries.find((e) => e.id === id),
+  // 검수 확정 — 낙관적 패치(update, void)와 달리 서버 반영을 기다려 ok를 반환한다.
+  // 실패 시 로컬 상태를 건드리지 않으므로(draft 유지) 재시도가 안전(F4 중복 방지 패턴).
+  publish: async (id, patch = {}) => {
+    const ok = await updateEntry(id, { ...patch, status: 'published' });
+    if (ok) {
+      set((s) => ({ entries: s.entries.map((e) => (e.id === id ? { ...e, ...patch, status: 'published' as const } : e)) }));
+      const merged = get().entries.find((e) => e.id === id);
+      if (merged) void embedEntry(merged); // published 전환 → 이제 색인 대상(맥락주입 텍스트)
+    }
+    return ok;
+  },
   update: (id, patch) => {
     optimisticPatch(set, get, 'entries', id, patch, () => updateEntry(id, patch), '수정 저장에 실패했어요.');
     const merged = get().entries.find((e) => e.id === id);

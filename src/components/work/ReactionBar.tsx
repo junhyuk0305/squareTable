@@ -13,6 +13,7 @@ export function ReactionBar({
   nameOf,
   onReact,
   side,
+  hideAdd,
 }: {
   reactions?: Record<string, string[]>;
   me: string;
@@ -20,6 +21,8 @@ export function ReactionBar({
   onReact: (e: string) => void;
   /** 'left'/'right' = 칩 안에서 이모지 옆(수평)에 누른 사람 이름 표시(공간 있는 쪽). 미지정=칩 아래(레거시). */
   side?: 'left' | 'right';
+  /** 추가(＋happy) 버튼·피커를 숨기고 '있는 칩만' 표시. 리액션 추가 진입은 호출부(롱프레스 시트 등)가 담당. */
+  hideAdd?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const active = reactions ?? {};
@@ -48,6 +51,8 @@ export function ReactionBar({
 
   // 칩 옆 표시(채팅): 이모지 바로 옆(수평)에 누른 사람 이름. mine=이모지 왼쪽, other=오른쪽.
   if (side) {
+    // hideAdd: 있는 칩만 표시. 칩도 없으면 렌더 자체를 없애 세로 공간을 먹지 않게 한다.
+    if (hideAdd && chips.length === 0) return null;
     return (
       <View style={styles.reactWrap}>
         {chips.map(([emoji, ids]) => {
@@ -74,8 +79,8 @@ export function ReactionBar({
             </Pressable>
           );
         })}
-        {addBtn}
-        {picker}
+        {!hideAdd && addBtn}
+        {!hideAdd && picker}
       </View>
     );
   }

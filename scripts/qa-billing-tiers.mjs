@@ -81,7 +81,7 @@ async function signUp(role, name) {
   seq += 1;
   const phone = `0107${String((Number(s) + seq * 13) % 10000000).padStart(7, '0')}`;
   const email = `qa_bt_${s}_${seq}@example.com`;
-  const { data, error } = await c.auth.signUp({ email, password: pw, options: { data: { name, role, phone } } });
+  const { data, error } = await c.auth.signUp({ email, password: pw, options: { data: { name, role, phone, birth_date: '1990-01-15' } } });
   if (error || !data.session) throw new Error(`signUp(${name}) 실패: ${error?.message}`);
   return { c, uid: data.user.id, email };
 }

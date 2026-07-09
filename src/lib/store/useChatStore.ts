@@ -11,6 +11,7 @@ import { fetchChatQueries, insertChatQuery, updateChatSatisfaction, recomputePla
 import { guardWrite } from '@/lib/store/useSyncStore';
 import { showToast } from '@/lib/store/useToastStore';
 import { PLANS } from '@/lib/config/tiers';
+import { isServable } from '@/lib/utils/entryStatus';
 import { genId } from '@/lib/utils/id';
 import seedData from '@/data/chat-queries.json';
 import contextPack from '@/data/context-pack.json';
@@ -72,7 +73,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
     try {
     const session = useSessionStore.getState();
-    const playbookEntries = usePlaybookStore.getState().entries;
+    // 답변 corpus는 발행본만(SSOT: entryStatus.isServable) — 인수인계서 draft(검토 전)가
+    // 렉시컬 검색·SERVE·SOP 근거로 새는 것을 차단(3중 방어의 2선. 1선=RLS 0064, 3선=색인).
+    const playbookEntries = usePlaybookStore.getState().entries.filter(isServable);
 
     // 영속(insert) + 영속 성공 후에만 사용통계 재계산(fire-and-forget).
     // 순서 보장(리뷰 fix-1): recompute는 chat_queries를 읽으므로 행이 커밋된 뒤 돌아야 이번 질의가 집계된다.

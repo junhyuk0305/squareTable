@@ -47,3 +47,10 @@ export const ANON = ANON_KEY;
 // USE_MOCK=true 이거나 엔드포인트 미설정이면 로컬 mock으로 동작(프론트 안 끊김).
 export const USE_MOCK =
   process.env.EXPO_PUBLIC_USE_MOCK === 'true' || !AI_ENDPOINT || !ANON_KEY;
+
+// ── 인수인계서 대량 파이프라인 킬스위치 (0063/0064) ─────────────
+// true  = 청킹 → 청크별 구조화 → draft 증분저장 → 검수 → 발행 (신규 파이프)
+// false = 기존 단일 호출(최대 MAX_SPLIT_PUBLISH개) 즉시발행 흐름으로 즉시 복귀(롤백 스위치).
+// ⚠️ 켜기 전 전제: 0063(섹션 컬럼)·0064(draft RLS 격리)가 원격 적용 + qa:draft green.
+//    (0063 미적용이면 draft insert가 PGRST204로 실패 — 파이프가 감지해 중단·안내한다.)
+export const BULK_IMPORT_PIPELINE = true;

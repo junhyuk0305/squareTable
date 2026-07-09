@@ -36,20 +36,22 @@ const rid = Math.random().toString(36).slice(2, 8) + Date.now().toString(36).sli
 (async () => {
   const c = createClient(URL, ANON, { auth: { persistSession: false, autoRefreshToken: false } });
   const ph = '010' + String(Math.floor(1e7 + Math.random() * 8e7));
-  const { data: su, error: se } = await c.auth.signUp({ email: `pu_${rid}@example.com`, password: 'Test!2345', options: { data: { name: '원래이름', role: 'owner', phone: ph, phone_last4: ph.slice(-4) } } });
+  const { data: su, error: se } = await c.auth.signUp({ email: `pu_${rid}@example.com`, password: 'Test!2345', options: { data: { name: '원래이름', role: 'owner', phone: ph, phone_last4: ph.slice(-4), birth_date: '1990-01-15' } } });
   if (se || !su.session) { console.error('FAIL signUp:', se?.message); process.exit(2); }
   await c.rpc('create_store', { p_store_name: `PU_${rid}`, p_industry: '카페·디저트', p_biz_no: null });
   const uid = su.user.id;
 
   // 1) 본인 name/bio 저장 → 성공해야
-  const r1 = await c.from('profiles').update({ name: '수정된이름', bio: '소개글' }).eq('id', uid).select();
+  // ⚠️ returning 은 명시 컬럼만 — 0065부터 birth_date 는 컬럼 권한에서 제외라 select('*')는 의도적으로 42501.
+  //    (앱 실경로 db.ts 도 전부 명시 컬럼 — select('*') 금지가 규약이다.)
+  const r1 = await c.from('profiles').update({ name: '수정된이름', bio: '소개글' }).eq('id', uid).select('id,name,bio');
   ok(!r1.error && (r1.data?.length || 0) === 1, '본인 name/bio 저장 성공', r1.error ? `(❌ ${r1.error.code} ${r1.error.message.slice(0, 40)})` : `rows=${r1.data.length}`);
   const { data: after } = await c.from('profiles').select('name,bio,role,unit_id').eq('id', uid).single();
   ok(after?.name === '수정된이름' && after?.bio === '소개글', '저장값 반영 확인', `name=${after?.name}`);
 
   // 2) 본인 전화 갱신 → 성공해야
   const ph2 = '010' + String(Math.floor(1e7 + Math.random() * 8e7));
-  const r2 = await c.from('profiles').update({ phone: ph2, phone_last4: ph2.slice(-4) }).eq('id', uid).select();
+  const r2 = await c.from('profiles').update({ phone: ph2, phone_last4: ph2.slice(-4) }).eq('id', uid).select('id,phone');
   ok(!r2.error && (r2.data?.length || 0) === 1, '본인 전화번호 갱신 성공', r2.error ? `(❌ ${r2.error.code})` : `rows=${r2.data.length}`);
 
   // 3) role 자기변경(owner→junior 아무거나) → 동결로 막혀야 (0행 또는 에러), role 유지

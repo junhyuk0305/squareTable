@@ -105,7 +105,18 @@ export function isSquarePublishable(square: SquareBlock): boolean {
 export function buildPlaybookEntryFromSquare(
   uq: UnknownQuery,
   square: SquareBlock,
-  extras: { title?: string; keywords?: string[]; photos?: string[] } = {},
+  extras: {
+    title?: string;
+    keywords?: string[];
+    photos?: string[];
+    // ── 인수인계서 파이프라인(0063) 전용 ──
+    // status:'draft' = 검토 전 증분 저장(체크포인트). 직원 비노출(RLS 0064)·색인 제외.
+    // section/orderIndex = 매뉴얼 파생 뷰 메타(문서 소제목·순서). sourceId = import 배치 꼬리표.
+    status?: PlaybookEntry['status'];
+    section?: string | null;
+    orderIndex?: number;
+    sourceId?: string;
+  } = {},
 ): PlaybookEntry {
   const now = new Date().toISOString();
   const category = uq.presumed_category;
@@ -148,10 +159,15 @@ export function buildPlaybookEntryFromSquare(
     search_keywords: keywords,
     photos: extras.photos?.length ? extras.photos : undefined,
     version: 1,
-    status: publishable ? 'published' : 'draft',
+    // 기본 정책(발행 가능하면 published) 유지 — 파이프라인만 명시적으로 'draft'를 지정한다.
+    status: extras.status ?? (publishable ? 'published' : 'draft'),
     quality_score: quality,
     created_at: now,
     updated_at: now,
-    source: { kind: uq.junior_id ? 'inbox_answer' : 'owner' },
+    // 섹션·순서·출처(0063): 값이 있을 때만 실어 기존 경로(coach·inbox)의 row 형태를 안 바꾼다.
+    ...(extras.section !== undefined ? { section: extras.section } : {}),
+    ...(extras.orderIndex !== undefined ? { order_index: extras.orderIndex } : {}),
+    ...(extras.sourceId !== undefined ? { source_id: extras.sourceId } : {}),
+    source: { kind: extras.sourceId ? 'import' : uq.junior_id ? 'inbox_answer' : 'owner' },
   };
 }

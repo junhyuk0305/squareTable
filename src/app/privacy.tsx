@@ -15,13 +15,13 @@ export default function PrivacyScreen() {
       <Stack.Screen options={{ headerShown: true, title: '개인정보 처리방침', headerStyle: { backgroundColor: '#FFFFFF' }, headerTintColor: InkColors.ink, headerLeft: () => <HeaderBackButton /> }} />
       <ScrollView contentContainerStyle={styles.scroll}>
         <Text style={styles.h1}>개인정보 수집·이용 안내</Text>
-        <Text style={styles.updated}>시행일: 2026-06-10 · 운영: 팀 스퀘어테이블</Text>
+        <Text style={styles.updated}>시행일: 2026-07-10 · 운영: 팀 스퀘어테이블</Text>
 
         <Section title="1. 수집 항목">
-          이름, 이메일, 휴대전화번호, 매장 정보, 사용자가 입력한 매장 운영 노하우·질문 내용.
+          이름, 이메일, 휴대전화번호, 생년월일, 매장 정보, 사용자가 입력한 매장 운영 노하우·질문 내용.
         </Section>
         <Section title="2. 수집·이용 목적">
-          매장 단위 계정 식별, 노하우 저장·검색·답변 제공, 알바-사장님 간 질문 전달 등 서비스 핵심 기능 제공.
+          매장 단위 계정 식별, 노하우 저장·검색·답변 제공, 알바-사장님 간 질문 전달 등 서비스 핵심 기능 제공, 서비스 이용 통계 및 세대 간 지식 교류 분석.
         </Section>
         <Section title="3. 보유·이용 기간">
           회원 탈퇴 또는 매장 계약 종료 시까지. 이후 지체 없이 파기합니다. 관계 법령에 따라 보존이 필요한 경우 해당 기간 동안 보관합니다.

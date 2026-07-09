@@ -19,6 +19,7 @@ import { Space } from '@/lib/theme/layout';
 import type { Category, PlaybookEntry } from '@/types';
 
 // ── 정렬 옵션(목록 뷰) ───────────────────────────────────────
+const UNSECTIONED = '기타'; // 섹션 미분류 노하우의 매뉴얼 뷰 표시 이름
 type SortKey = 'recent' | 'resolution' | 'cited' | 'category';
 const SORTS: { key: SortKey; label: string }[] = [
   { key: 'recent', label: '최신순' },
@@ -103,8 +104,13 @@ export function OwnerKnowhowBrowse({
   const [query, setQuery] = useState('');
   const [activeCat, setActiveCat] = useState<Category | null>(null); // null = 전체(단일 선택)
   const [sort, setSort] = useState<SortKey>('recent');
-  const [view, setView] = useState<'dashboard' | 'list'>(initialNeedsReview ? 'list' : 'dashboard');
+  const [view, setView] = useState<'dashboard' | 'list' | 'manual'>(initialNeedsReview ? 'list' : 'dashboard');
   const [onlyNeedsReview, setOnlyNeedsReview] = useState(initialNeedsReview); // 미검증 배너에서 진입
+
+  // 검토 대기(draft·인수인계서 파이프라인 증분저장분)는 둘러보기에서 제외 — 검수는 handover 화면이 담당.
+  // (직원은 RLS 0064로 애초에 draft를 못 받지만, 사장 화면도 발행본과 섞이면 자산 목록이 오염된다.)
+  const visible = useMemo(() => entries.filter((e) => e.status !== 'draft'), [entries]);
+  const draftCount = entries.length - visible.length;
 
   const goAdd = () => router.push('/owner/coach' as never);
   const goTemplates = () => router.push('/owner/templates' as never);
@@ -125,13 +131,13 @@ export function OwnerKnowhowBrowse({
       verification: { state: 'owner_verified', verified_by: userName, verified_at: new Date().toISOString() },
     });
 
-  // 검색 + 카테고리 필터(대시보드/목록 공통 베이스).
+  // 검색 + 카테고리 필터(대시보드/목록/매뉴얼 공통 베이스).
   const baseFiltered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    let list = entries.filter((e) => matchesKnowhowQuery(e, q));
+    let list = visible.filter((e) => matchesKnowhowQuery(e, q));
     if (activeCat) list = list.filter((e) => e.category === activeCat);
     return list;
-  }, [entries, query, activeCat]);
+  }, [visible, query, activeCat]);
 
   // 미검증(needs_review) — 전체 기준 카운트(배너·섹션 노출 판단). 0이 되면 배너/섹션 자동 소멸.
   const needsReview = useMemo(() => baseFiltered.filter(needsVerify), [baseFiltered]);
@@ -169,6 +175,25 @@ export function OwnerKnowhowBrowse({
     })).filter((g) => g.items.length > 0);
   }, [listFiltered, sort]);
 
+  // ── 매뉴얼 뷰(파생 뷰) — 발행본을 [섹션 → order_index] 순으로 렌더. 별도 저장물 없음(설계 §4·5c).
+  // 섹션 순서 = 문서 등장 순서(섹션 내 최소 order_index), 미분류(기타)는 맨 뒤.
+  const manualGroups = useMemo(() => {
+    if (view !== 'manual') return [];
+    const pub = [...baseFiltered.filter((e) => e.status === 'published')].sort(
+      (a, b) => (a.order_index ?? 0) - (b.order_index ?? 0) || (a.created_at ?? '').localeCompare(b.created_at ?? ''),
+    );
+    const order: string[] = [];
+    const byName = new Map<string, PlaybookEntry[]>();
+    for (const e of pub) {
+      const name = e.section?.trim() || UNSECTIONED;
+      if (!byName.has(name)) { byName.set(name, []); order.push(name); }
+      byName.get(name)!.push(e);
+    }
+    const names = order.filter((n) => n !== UNSECTIONED);
+    if (byName.has(UNSECTIONED)) names.push(UNSECTIONED);
+    return names.map((name) => ({ name, items: byName.get(name)! }));
+  }, [view, baseFiltered]);
+
   if (!loaded) {
     return (
       <View style={styles.center}>
@@ -178,7 +203,7 @@ export function OwnerKnowhowBrowse({
     );
   }
 
-  const hasEntries = entries.length > 0;
+  const hasEntries = visible.length > 0;
 
   // 미검증 섹션/목록 카드에 붙는 1탭 검증 버튼.
   const verifyButton = (e: PlaybookEntry) => (
@@ -203,7 +228,7 @@ export function OwnerKnowhowBrowse({
       <View style={styles.headRow}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, flexShrink: 1, minWidth: 0 }}>
           <Text style={styles.subline}>
-            총 {entries.length}개{hasEntries ? ' · 탭하면 수정' : ''}
+            총 {visible.length}개{hasEntries ? ' · 탭하면 수정' : ''}
           </Text>
           <InfoDot
             title="노하우가 뭐예요?"
@@ -215,6 +240,23 @@ export function OwnerKnowhowBrowse({
           <Text style={styles.addBtnText}>노하우 추가</Text>
         </Pressable>
       </View>
+
+      {/* 검토 대기(draft) — 인수인계서 파이프라인이 증분 저장한 항목. 발행 전이라 직원·AI에 안 보임. */}
+      {draftCount > 0 && (
+        <Pressable
+          onPress={goHandover}
+          style={({ pressed }) => [styles.draftBanner, pressed && { opacity: 0.9 }]}
+          accessibilityRole="button"
+          accessibilityLabel={`검토 대기 노하우 ${draftCount}개 검수하기`}
+        >
+          <Ionicons name="file-tray-full" size={18} color={InkColors.ink} />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.bannerTitle}>검토 대기 노하우 {draftCount}개</Text>
+            <Text style={styles.bannerBody}>인수인계서에서 정리한 항목이에요. 확인 후 등록해 주세요.</Text>
+          </View>
+          <Text style={styles.draftBannerCta}>검수하기 ›</Text>
+        </Pressable>
+      )}
 
       {/* 인수인계서 올리기 — 노하우 주 입구. 사장이 이미 가진 매뉴얼·메모를 통째로 올리면 AI가 항목별로 분리. */}
       <Pressable
@@ -298,6 +340,11 @@ export function OwnerKnowhowBrowse({
               <Ionicons name="list-outline" size={14} color={view === 'list' ? InkColors.bubbleText : InkColors.ink3} />
               <Text style={[styles.viewToggleText, view === 'list' && styles.viewToggleTextOn]}>목록</Text>
             </Pressable>
+            {/* 매뉴얼 = 파생 뷰(섹션→순서로 발행본을 문서처럼) — 저장물이 아니라 같은 원자의 다른 투영. */}
+            <Pressable onPress={() => { setView('manual'); setOnlyNeedsReview(false); }} style={[styles.viewToggleBtn, view === 'manual' && styles.viewToggleBtnOn]}>
+              <Ionicons name="book-outline" size={13} color={view === 'manual' ? InkColors.bubbleText : InkColors.ink3} />
+              <Text style={[styles.viewToggleText, view === 'manual' && styles.viewToggleTextOn]}>매뉴얼</Text>
+            </Pressable>
           </View>
 
           {/* 검색창 */}
@@ -366,7 +413,26 @@ export function OwnerKnowhowBrowse({
           )}
 
           {/* 결과 */}
-          {view === 'dashboard' ? (
+          {view === 'manual' ? (
+            manualGroups.length === 0 ? (
+              <EmptyResult onReset={() => { setQuery(''); setActiveCat(null); }} />
+            ) : (
+              manualGroups.map((g) => (
+                <View key={g.name} style={{ gap: 8 }}>
+                  <View style={styles.groupHead}>
+                    <Ionicons name="bookmark" size={13} color={InkColors.ink2} />
+                    <Text style={styles.groupTitle}>{g.name}</Text>
+                    <Text style={styles.groupCount}>{g.items.length}</Text>
+                  </View>
+                  <View style={styles.list}>
+                    {g.items.map((e) => (
+                      <EntryRow key={e.id} e={e} onPress={() => onSelect(e.id)} />
+                    ))}
+                  </View>
+                </View>
+              ))
+            )
+          ) : view === 'dashboard' ? (
             baseFiltered.length === 0 ? (
               <EmptyResult onReset={() => { setQuery(''); setActiveCat(null); }} />
             ) : (
@@ -469,6 +535,20 @@ const styles = StyleSheet.create({
   bannerTitle: { fontSize: 14, fontWeight: '800', color: InkColors.ink },
   bannerBody: { fontSize: 12, color: InkColors.ink2, marginTop: 1 },
   bannerCta: { fontSize: 13, fontWeight: '800', color: BrandColors.warn },
+
+  // 검토 대기(draft) 배너 — 인수인계서 검수 재진입점
+  draftBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    backgroundColor: BrandColors.yellowSoft,
+    borderWidth: 1,
+    borderColor: BrandColors.yellowDeep,
+    borderRadius: Radius.md,
+    paddingVertical: Space.md,
+    paddingHorizontal: Space.md,
+  },
+  draftBannerCta: { fontSize: 13, fontWeight: '800', color: InkColors.ink },
 
   // 뷰 토글
   viewToggle: { flexDirection: 'row', gap: Space.xs, backgroundColor: InkColors.bgSoft, borderRadius: Radius.pill, padding: 3, alignSelf: 'flex-start' },

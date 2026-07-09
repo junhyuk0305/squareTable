@@ -60,14 +60,14 @@ type SessionState = {
     pw: string,
     // store_name/industry/biz_no 는 사장 가입 시 user_metadata 에 실어둔다 — 이메일 인증으로
     // 세션 확보가 지연돼 가입 시점에 create_store 를 못 불러도, 인증 후 첫 로그인에서 자동 복원하기 위함.
-    meta: { name: string; role: Role; phone?: string; phone_last4?: string; store_name?: string; industry?: string; biz_no?: string },
+    meta: { name: string; role: Role; phone?: string; phone_last4?: string; birth_date?: string; store_name?: string; industry?: string; biz_no?: string },
     // emailTaken: 이미 가입된 이메일이면 true — 화면이 "로그인 유도" 안내로 분기(원문 파싱 대신 플래그로).
   ) => Promise<{ error: string | null; needsConfirm: boolean; emailTaken?: boolean }>;
   // 전화번호 중복 사전검사(주키). 비로그인 호출 가능.
   //   'taken'=이미 사용 / 'free'=사용 가능 / 'unknown'=검사 실패(네트워크/권한).
   //   ⚠️ 'unknown'을 'free'로 뭉뚱그리면 사전검사가 뚫려 트리거로 떨어진다 → 호출부가 'unknown'을 차단해야 함.
   isPhoneTaken: (phone: string) => Promise<'taken' | 'free' | 'unknown'>;
-  createStore: (storeName: string, industry: string, bizNo?: string) => Promise<{ error: string | null; inviteCode: string | null }>;
+  createStore: (storeName: string, industry: string, bizNo?: string, birthDate?: string) => Promise<{ error: string | null; inviteCode: string | null }>;
   // 합류는 이제 '신청'(pending) — 성공 시 pending=true. 사장 승인 후에야 unitId가 붙는다(남용 #2).
   joinByInvite: (code: string) => Promise<{ error: string | null; storeName: string | null; pending?: boolean }>;
   // 승인 대기 중 본인 신청 철회. 다른 매장에 다시 신청 가능.
@@ -145,7 +145,7 @@ function pushRenameTime(unitId: string) {
 }
 
 // 사장 가입 시 user_metadata 에 실어둔 매장 생성 의도. 이메일 인증 후 첫 로드에서 매장 자동 복원에 사용.
-type PendingOwnerMeta = { role?: string; store_name?: string; industry?: string; biz_no?: string };
+type PendingOwnerMeta = { role?: string; store_name?: string; industry?: string; biz_no?: string; birth_date?: string };
 function pendingOwnerMeta(user: { user_metadata?: Record<string, unknown> } | null | undefined): PendingOwnerMeta | undefined {
   const m = user?.user_metadata;
   if (!m) return undefined;
@@ -154,6 +154,7 @@ function pendingOwnerMeta(user: { user_metadata?: Record<string, unknown> } | nu
     store_name: typeof m.store_name === 'string' ? m.store_name : undefined,
     industry: typeof m.industry === 'string' ? m.industry : undefined,
     biz_no: typeof m.biz_no === 'string' ? m.biz_no : undefined,
+    birth_date: typeof m.birth_date === 'string' ? m.birth_date : undefined,
   };
 }
 
@@ -210,14 +211,14 @@ async function loadProfile(
     if (!unitId && !_resumingOwnerStore && meta?.role === 'owner' && (meta.store_name ?? '').trim()) {
       _resumingOwnerStore = true;
       try {
-        let { data: row, error: createErr } = await rpcCreateStore(meta.store_name ?? '', meta.industry ?? null, meta.biz_no ?? null);
+        let { data: row, error: createErr } = await rpcCreateStore(meta.store_name ?? '', meta.industry ?? null, meta.biz_no ?? null, meta.birth_date ?? null);
         // ★탈출로(데드엔드 해소): 사업자번호 중복 등으로 create_store 가 '영구' 실패하면 role 이 junior 로 남아
         //   사장이 직원 앱(hub)에 갇힌다(hub 엔 매장 생성 경로가 없음). biz_no 는 선택·unique 라 중복이면
         //   어차피 못 쓰므로, 이를 빼고 1회 재시도해 매장을 만들고 owner 로 승격시켜 트랩에서 빼낸다
         //   (정확한 사업자번호는 이후 가게 설정에서 입력). 매 로그인마다 복원이 도니 다음 로그인에 자동 회복.
         if (createErr && (meta.biz_no ?? '').trim()) {
           reportError('session.resumeOwnerStore.retryNoBiz', createErr);
-          ({ data: row, error: createErr } = await rpcCreateStore(meta.store_name ?? '', meta.industry ?? null, null));
+          ({ data: row, error: createErr } = await rpcCreateStore(meta.store_name ?? '', meta.industry ?? null, null, meta.birth_date ?? null));
         }
         if (!createErr) {
           unitId = row?.unit_id ?? unitId;
@@ -405,7 +406,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     return data ? 'taken' : 'free';
   },
 
-  createStore: async (storeName, industry, bizNo) => {
+  createStore: async (storeName, industry, bizNo, birthDate) => {
     // ── 첫 매장 온보딩 중복 방지 ──────────────────────────────────────────────
     // 0055 다점포 완화로 create_store의 already_in_store 가드가 오너에게 풀리면서, signup의 직접호출과
     // loadProfile의 메타데이터 자동복원(Path1)이 레이스로 둘 다 성공 → 첫 매장이 2개 만들어지던 회귀.
@@ -419,7 +420,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     }
     _resumingOwnerStore = true;
     try {
-      const { data: row, error } = await rpcCreateStore(storeName, industry, bizNo ?? null);
+      const { data: row, error } = await rpcCreateStore(storeName, industry, bizNo ?? null, birthDate ?? null);
       if (error) {
         // 이미 매장이 있음(이전 시도로 생성됐거나 중복 제출) → 데드엔드 대신 기존 매장으로 진입.
         if (/already_in_store/.test(error.message)) {
@@ -435,6 +436,8 @@ export const useSessionStore = create<SessionState>((set, get) => ({
           ? '2번째 매장부터는 다점포 요금제가 필요해요. 요금제 화면에서 변경할 수 있어요.'
           : /store_limit_reached/.test(error.message)
           ? '매장은 최대 15개까지 만들 수 있어요.'
+          : /birth_date_required|birth_date_invalid/.test(error.message)
+          ? '생년월일을 확인할 수 없어요. 생년월일 8자리를 다시 확인해주세요.'
           : friendlyError(error.message, '가게를 만들지 못했어요. 잠시 후 다시 시도해 주세요.');
         return { error: msg, inviteCode: null };
       }
@@ -475,6 +478,8 @@ export const useSessionStore = create<SessionState>((set, get) => ({
         ? '초대코드가 올바르지 않아요.'
         : reason === 'too_many_attempts'
         ? '시도가 많아 잠시 잠겼어요. 10분 후 다시 시도해 주세요.'
+        : /birth_date_required|birth_date_invalid/.test(error.message)
+        ? '생년월일 정보가 없어요. 로그아웃 후 다시 가입하거나 문의해 주세요.'
         : friendlyError(error.message, '매장에 합류하지 못했어요. 코드를 확인하고 다시 시도해 주세요.');
       return { error: msg, storeName: null };
     }

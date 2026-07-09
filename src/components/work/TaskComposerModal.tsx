@@ -393,7 +393,9 @@ const s = StyleSheet.create({
   inp: { borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.sm, paddingHorizontal: 13, paddingVertical: 11, fontSize: 14, color: InkColors.ink, backgroundColor: InkColors.cream },
 
   seg: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  segO: { borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.pill, paddingHorizontal: 13, paddingVertical: 8, backgroundColor: InkColors.bg },
+  // 칩 내부는 반드시 가로 정렬 — 담당자 칩은 선택 시 체크마크 아이콘+이름을 나란히 둔다.
+  // (RN 기본 flexDirection=column이라 이 줄이 없으면 체크마크가 이름 위로 쌓여 칩이 깨진다.)
+  segO: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.pill, paddingHorizontal: 13, paddingVertical: 8, backgroundColor: InkColors.bg },
   segOn: { backgroundColor: InkColors.ink, borderColor: InkColors.ink },
   segText: { fontSize: 12.5, fontWeight: '700', color: InkColors.ink2 },
 

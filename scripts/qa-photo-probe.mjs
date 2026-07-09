@@ -27,7 +27,7 @@ const owner = createClient(URL, ANON, { auth: { persistSession: false, autoRefre
 try {
   const { data: up, error: upErr } = await owner.auth.signUp({
     email: `qa_photo_${s}@example.com`, password: pw,
-    options: { data: { name: 'QA사진사장', role: 'owner', phone: `0108${s.slice(0,7)}`, store_name: 'QA사진매장', industry: '카페·디저트' } },
+    options: { data: { name: 'QA사진사장', role: 'owner', phone: `0108${s.slice(0,7)}`, store_name: 'QA사진매장', industry: '카페·디저트', birth_date: '1990-01-15' } },
   });
   if (upErr || !up?.session) throw new Error('signUp 실패: ' + (upErr?.message ?? 'no session'));
   await owner.auth.setSession({ access_token: up.session.access_token, refresh_token: up.session.refresh_token });
