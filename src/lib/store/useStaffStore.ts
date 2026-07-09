@@ -5,6 +5,7 @@ import type { Owner, Junior } from '@/types';
 import usersData from '@/data/users.json';
 import { HAS_SUPABASE } from '@/lib/supabase';
 import { fetchStaffProfiles, removeStaffMember, subscribeStaff, fetchPendingMembers, approveMember, rejectMember } from '@/lib/db';
+import { PLANS } from '@/lib/config/tiers';
 import { subscribeDebounced } from '@/lib/store/realtimeSync';
 import { optimisticRemove } from '@/lib/store/crudHelpers';
 import { useSyncStore } from '@/lib/store/useSyncStore';
@@ -90,11 +91,15 @@ export const useStaffStore = create<StaffState>((set, get) => ({
     const target = before.find((p) => p.id === id);
     if (!target) return;
     set({ pending: before.filter((p) => p.id !== id) });
-    void approveMember(id).then((ok) => {
+    void approveMember(id).then(({ ok, code }) => {
       if (ok) get().hydrate();
       else {
         set({ pending: before });
-        useSyncStore.getState().noteError('승인에 실패했어요. 다시 시도해 주세요.');
+        useSyncStore.getState().noteError(
+          code === 'staff_limit'
+            ? `무료 요금제는 직원 ${PLANS.free.maxStaff}명까지 승인할 수 있어요. 요금제를 올리면 더 승인할 수 있어요.`
+            : '승인에 실패했어요. 다시 시도해 주세요.',
+        );
       }
     });
   },

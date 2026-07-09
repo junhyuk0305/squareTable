@@ -19,6 +19,7 @@ export default function JuniorLayout() {
   const subStatus = useSessionStore((s) => s.subStatus);
   const trialEndsAt = useSessionStore((s) => s.trialEndsAt);
   const paidUntil = useSessionStore((s) => s.paidUntil);
+  const plan = useSessionStore((s) => s.plan);
   const pathname = usePathname();
 
   // 로그인 + 매장 소속이 확정된 뒤에만 데이터를 당겨오고 실시간 구독한다.
@@ -69,12 +70,12 @@ export default function JuniorLayout() {
     return <Redirect href="/junior/hub" />;
   }
   // 매장 구독 만료 → 직원은 계좌 정보 없이 '사장님 결제 대기' 고지(/billing 이 역할별로 렌더).
-  // fail-open: 구독 정보 없음이면 막지 않는다.
+  // fail-open: 구독 정보 없음이면 막지 않는다. 무료 티어(plan='free') 매장은 영구 무료라 만료 없음(0062).
   if (
     HAS_SUPABASE &&
     status === 'signed_in' &&
     unitId &&
-    !deriveSubscription({ subStatus, trialEndsAt, paidUntil }).entitled &&
+    !deriveSubscription({ subStatus, trialEndsAt, paidUntil, plan }).entitled &&
     pathname !== '/billing'
   ) {
     return <Redirect href="/billing" />;

@@ -6,6 +6,8 @@ import { Ionicons } from '@expo/vector-icons';
 import Constants from 'expo-constants';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { usePreferencesStore, type TextScale } from '@/lib/store/usePreferencesStore';
+import { FREE_MODE } from '@/lib/utils/subscription';
+import { PLANS } from '@/lib/config/tiers';
 import { logout } from '@/lib/auth';
 import { confirmAction, notifyAction } from '@/lib/utils/confirm';
 import { useCopyToClipboard } from '@/lib/utils/useCopyToClipboard';
@@ -27,6 +29,7 @@ export default function OwnerSettings() {
   const email = useSessionStore((s) => s.email);
   const storeName = useSessionStore((s) => s.storeName);
   const inviteCode = useSessionStore((s) => s.inviteCode) || '------';
+  const plan = useSessionStore((s) => s.plan);
   const deleteAccount = useSessionStore((s) => s.deleteAccount);
   const prefs = usePreferencesStore();
   const [busy, setBusy] = useState(false);
@@ -59,10 +62,14 @@ export default function OwnerSettings() {
     router.replace('/');
   };
 
+  // 요금제 화면(3티어 선택 + 계좌이체 안내, 0062)으로 이동 — 캡 안내문("요금제 화면에서 변경")의 실제 진입점.
+  // FREE_MODE(파일럿) 동안엔 플랜/계좌(placeholder) 노출 대신 기존 무료 안내를 유지(출시 전 flag 숨김 정책).
   const billing = () =>
-    notifyAction('구독 및 결제', '지금은 파일럿 기간이라 무료로 쓰실 수 있어요. 월 구독 결제는 준비 중이에요.', '확인', {
-      icon: 'card-outline',
-    });
+    FREE_MODE
+      ? notifyAction('구독 및 결제', '지금은 파일럿 기간이라 무료로 쓰실 수 있어요. 월 구독 결제는 준비 중이에요.', '확인', {
+          icon: 'card-outline',
+        })
+      : router.push('/billing' as never);
 
   // 알림 선호는 DB(SSOT)에 원자적으로 저장한다. 저장 실패 시 스토어가 이전 값으로 롤백하므로
   // 토글이 원위치로 되돌아오고, 여기서 실패를 고지한다(설정된 듯 보이나 서버엔 없는 무음 유실 방지).
@@ -120,7 +127,13 @@ export default function OwnerSettings() {
         </SettingsSection>
 
         <SettingsSection icon="card-outline" title="구독 및 결제">
-          <SettingsRow first icon="card-outline" label="구독 / 결제 내역" value="파일럿 기간 무료" onPress={billing} />
+          <SettingsRow
+            first
+            icon="card-outline"
+            label="요금제"
+            value={FREE_MODE ? '파일럿 기간 무료' : PLANS[plan].name}
+            onPress={billing}
+          />
         </SettingsSection>
 
         <SettingsSection icon="notifications-outline" title="알림">

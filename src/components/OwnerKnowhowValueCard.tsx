@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { PressableScale } from '@/components/PressableScale';
 import { SectionLabel } from '@/components/SectionLabel';
 import { useSessionStore } from '@/lib/store/useSessionStore';
+import { canUseMultistore } from '@/lib/config/tiers';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Elevation, Radius } from '@/lib/theme/elevation';
 import { Space, frameCapStyle } from '@/lib/theme/layout';
@@ -26,6 +27,9 @@ export function OwnerKnowhowValueCard({ answeredHits30d, pending, entriesCount }
   const router = useRouter();
   // 다점포(매장 2+개) 사장에게만 '다른 매장에서 가져오기' 입구를 노출한다.
   const multiStore = useSessionStore((s) => s.stores.length > 1);
+  // 다점포 요금제 게이트(0062) — 잠기면 입구는 남기되 요금제 화면으로 유도(FREE_MODE 땐 열림).
+  const plan = useSessionStore((s) => s.plan);
+  const multiUnlocked = canUseMultistore(plan);
 
   return (
     <View style={[styles.section, frameCapStyle]}>
@@ -76,18 +80,26 @@ export function OwnerKnowhowValueCard({ answeredHits30d, pending, entriesCount }
           <Ionicons name="chevron-forward" size={15} color={InkColors.ink3} />
         </PressableScale>
 
-        {/* 다점포 전용 — 다른 내 매장의 노하우를 현재 매장으로 가져오기(복제) */}
+        {/* 다점포 전용 — 다른 내 매장의 노하우를 현재 매장으로 가져오기(복제). 요금제 잠금 시 업그레이드 유도 */}
         {multiStore ? (
           <PressableScale
-            onPress={() => router.push('/owner/import-knowhow' as never)}
+            onPress={() => router.push((multiUnlocked ? '/owner/import-knowhow' : '/billing') as never)}
             scaleTo={0.98}
             style={styles.ctaRow}
             accessibilityRole="button"
-            accessibilityLabel="다른 매장에서 노하우 가져오기"
+            accessibilityLabel={multiUnlocked ? '다른 매장에서 노하우 가져오기' : '다른 매장 노하우 가져오기 — 다점포 요금제에서 열려요'}
           >
-            <Ionicons name="git-branch-outline" size={16} color={InkColors.ink2} />
+            <Ionicons name={multiUnlocked ? 'git-branch-outline' : 'lock-closed-outline'} size={16} color={InkColors.ink2} />
             <Text style={styles.ctaText}>
-              <Text style={styles.ctaStrong}>다른 매장</Text>의 노하우를 여기로 가져와요
+              {multiUnlocked ? (
+                <>
+                  <Text style={styles.ctaStrong}>다른 매장</Text>의 노하우를 여기로 가져와요
+                </>
+              ) : (
+                <>
+                  <Text style={styles.ctaStrong}>다점포 요금제</Text>에서 다른 매장 노하우를 가져와요
+                </>
+              )}
             </Text>
             <Ionicons name="chevron-forward" size={15} color={InkColors.ink3} />
           </PressableScale>

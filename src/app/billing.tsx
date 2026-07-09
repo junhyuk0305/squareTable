@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
@@ -8,13 +8,16 @@ import { logout } from '@/lib/auth';
 import { showToast } from '@/lib/store/useToastStore';
 import { deriveSubscription } from '@/lib/utils/subscription';
 import { BILLING_INFO, formatKrw } from '@/lib/config/billing';
+import { PLANS, PLAN_ORDER, planMonthlyPrice, type PlanId } from '@/lib/config/tiers';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
 
-// 구독 만료/계좌이체 안내 화면. 만료된 매장은 각 역할 레이아웃이 여기로 강제 라우팅한다.
-// 사장 = 계좌이체 안내 + 입금 알림. 직원 = "사장님이 결제하면 다시 열려요" 고지.
-// 결제는 수동(계좌이체) — 입금 확인 후 운영자가 admin_activate_store 로 active 전환하면
+// 구독 만료/계좌이체 안내 + 요금제 선택 화면(과금층 0062).
+// 만료된 매장은 각 역할 레이아웃이 여기로 강제 라우팅한다.
+// 사장 = 3티어(무료/단일/다점포) 선택 → 금액 계산(SSOT=tiers.ts) → 계좌이체 안내 + 입금 알림.
+// 직원 = "사장님이 결제하면 다시 열려요" 고지.
+// 결제는 수동(계좌이체) — 입금 확인 후 운영자가 admin_activate_store(plan 포함) 로 전환하면
 // 새로고침(refreshMembership) 시 게이트가 풀린다.
 export default function BillingScreen() {
   const router = useRouter();
@@ -23,11 +26,23 @@ export default function BillingScreen() {
   const subStatus = useSessionStore((s) => s.subStatus);
   const trialEndsAt = useSessionStore((s) => s.trialEndsAt);
   const paidUntil = useSessionStore((s) => s.paidUntil);
+  const plan = useSessionStore((s) => s.plan);
+  const stores = useSessionStore((s) => s.stores);
   const refreshMembership = useSessionStore((s) => s.refreshMembership);
 
-  const view = deriveSubscription({ subStatus, trialEndsAt, paidUntil });
+  const view = deriveSubscription({ subStatus, trialEndsAt, paidUntil, plan });
   const isOwner = role === 'owner';
   const [busy, setBusy] = useState(false);
+  // 선택 요금제 — 초기값은 현재 요금제. 다점포 금액 = 소유 매장수 × 매장당 가격(tiers.ts).
+  const [selectedPlan, setSelectedPlan] = useState<PlanId>(plan);
+  // 세션 plan이 마운트 뒤에 로드/변경되면(웹 새로고침 직진입, 30초 폴링 중 활성화 반영) 선택을
+  // 재동기화한다. 단 사용자가 직접 고른 뒤에는 덮어쓰지 않는다(선택 유지).
+  const planTouched = useRef(false);
+  useEffect(() => {
+    if (!planTouched.current) setSelectedPlan(plan);
+  }, [plan]);
+  const ownedCount = Math.max(1, stores.filter((st) => st.role === 'owner').length);
+  const monthlyTotal = planMonthlyPrice(selectedPlan, ownedCount);
 
   // 자동 재확인: /billing 은 top-level 라우트라 owner/junior 레이아웃의 refreshMembership 폴이 여기선 안 돈다.
   //   → 이 화면 자체에서 30초마다 상태를 당겨, 계좌이체 활성화가 반영되면 새로고침 탭 없이 자동으로 앱에 진입.
@@ -37,7 +52,7 @@ export default function BillingScreen() {
       await refreshMembership();
       const s = useSessionStore.getState();
       if (!s.unitId) return;
-      if (deriveSubscription({ subStatus: s.subStatus, trialEndsAt: s.trialEndsAt, paidUntil: s.paidUntil }).entitled) {
+      if (deriveSubscription({ subStatus: s.subStatus, trialEndsAt: s.trialEndsAt, paidUntil: s.paidUntil, plan: s.plan }).entitled) {
         router.replace(isOwner ? '/owner/dashboard' : '/junior/home');
       }
     }, 30000);
@@ -54,6 +69,7 @@ export default function BillingScreen() {
       subStatus: useSessionStore.getState().subStatus,
       trialEndsAt: useSessionStore.getState().trialEndsAt,
       paidUntil: useSessionStore.getState().paidUntil,
+      plan: useSessionStore.getState().plan,
     });
     if (v.entitled) router.replace(isOwner ? '/owner/dashboard' : '/junior/home');
     else showToast('아직 활성화 전이에요. 입금 확인 후 반영돼요.');
@@ -111,42 +127,100 @@ export default function BillingScreen() {
           </View>
         ) : (
           <>
-            {/* 안내 문구 */}
-            <View style={styles.card}>
-              <Text style={styles.body}>
-                {view.state === 'expired'
-                  ? '아래 계좌로 이용료를 입금하시면, 확인 후 이용이 다시 열려요.'
-                  : '계속 이용하려면 아래 계좌로 이용료를 입금해 주세요. 확인 후 반영돼요.'}
-              </Text>
-            </View>
-
-            {/* 계좌 정보 */}
+            {/* 요금제 선택(3티어, SSOT=tiers.ts). 선택에 따라 아래 금액이 계산된다. */}
             <View style={styles.section}>
-              <Text style={styles.sectionLabel}>입금 계좌</Text>
-              <View style={styles.card}>
-                <Row label="은행" value={BILLING_INFO.bankName} />
-                <Row
-                  label="계좌번호"
-                  value={BILLING_INFO.account}
-                  onCopy={() => copy('계좌번호', BILLING_INFO.account)}
-                />
-                <Row label="예금주" value={BILLING_INFO.holder} />
-                <Row label="금액" value={`${formatKrw(BILLING_INFO.monthlyPriceKrw)} / 월`} strong />
+              <Text style={styles.sectionLabel}>요금제</Text>
+              <View style={styles.planList}>
+                {PLAN_ORDER.map((pid) => {
+                  const def = PLANS[pid];
+                  const selected = pid === selectedPlan;
+                  const current = pid === plan;
+                  return (
+                    <Pressable
+                      key={pid}
+                      onPress={() => { planTouched.current = true; setSelectedPlan(pid); }}
+                      style={[styles.planCard, selected && styles.planCardSelected]}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected }}
+                      accessibilityLabel={`${def.name} 요금제${current ? ' (현재 요금제)' : ''} 선택`}
+                    >
+                      <View style={styles.planHead}>
+                        <Ionicons
+                          name={selected ? 'radio-button-on' : 'radio-button-off'}
+                          size={18}
+                          color={selected ? InkColors.ink : InkColors.ink3}
+                        />
+                        <Text style={styles.planName}>{def.name}</Text>
+                        {current && (
+                          <View style={styles.planBadge}>
+                            <Text style={styles.planBadgeText}>현재</Text>
+                          </View>
+                        )}
+                        <View style={{ flex: 1 }} />
+                        <Text style={styles.planPrice}>
+                          {def.monthlyKrw === 0
+                            ? '0원'
+                            : `${def.perStore ? '매장당 ' : ''}월 ${formatKrw(def.monthlyKrw)}`}
+                        </Text>
+                      </View>
+                      <Text style={styles.planTagline}>{def.tagline}</Text>
+                      <Text style={styles.planFeatures}>{def.features.join(' · ')}</Text>
+                    </Pressable>
+                  );
+                })}
               </View>
             </View>
 
-            {/* 입금 알림 연락처 */}
-            <View style={styles.section}>
-              <Text style={styles.sectionLabel}>입금 후 알려주세요</Text>
+            {selectedPlan === 'free' ? (
+              /* 무료 선택 — 입금 절차 없음 */
               <View style={styles.card}>
-                <Row label={BILLING_INFO.contactLabel} value={BILLING_INFO.contactValue} />
-                <Text style={styles.hint}>입금 사실을 알려주시면 더 빠르게 활성화해 드려요.</Text>
+                <Text style={styles.body}>무료 요금제는 입금 없이 쓸 수 있어요. 직원 {PLANS.free.maxStaff}명, AI 답변 월 {PLANS.free.aiMonthly}건까지 제공돼요.</Text>
               </View>
-            </View>
+            ) : (
+              <>
+                {/* 안내 문구 */}
+                <View style={styles.card}>
+                  <Text style={styles.body}>
+                    {view.state === 'expired'
+                      ? '아래 계좌로 이용료를 입금하시면, 확인 후 이용이 다시 열려요.'
+                      : '계속 이용하려면 아래 계좌로 이용료를 입금해 주세요. 확인 후 반영돼요.'}
+                  </Text>
+                </View>
 
-            <Pressable onPress={notifyPaid} style={({ pressed }) => [styles.primary, pressed && { opacity: 0.88 }]}>
-              <Text style={styles.primaryText}>입금 완료했어요</Text>
-            </Pressable>
+                {/* 계좌 정보 */}
+                <View style={styles.section}>
+                  <Text style={styles.sectionLabel}>입금 계좌</Text>
+                  <View style={styles.card}>
+                    <Row label="은행" value={BILLING_INFO.bankName} />
+                    <Row
+                      label="계좌번호"
+                      value={BILLING_INFO.account}
+                      onCopy={() => copy('계좌번호', BILLING_INFO.account)}
+                    />
+                    <Row label="예금주" value={BILLING_INFO.holder} />
+                    <Row label="금액" value={`${formatKrw(monthlyTotal)} / 월`} strong />
+                    {selectedPlan === 'multi' && (
+                      <Text style={styles.hint}>
+                        매장 {ownedCount}개 × {formatKrw(PLANS.multi.monthlyKrw)} 기준이에요. 매장을 추가하면 매장수만큼 계산돼요.
+                      </Text>
+                    )}
+                  </View>
+                </View>
+
+                {/* 입금 알림 연락처 */}
+                <View style={styles.section}>
+                  <Text style={styles.sectionLabel}>입금 후 알려주세요</Text>
+                  <View style={styles.card}>
+                    <Row label={BILLING_INFO.contactLabel} value={BILLING_INFO.contactValue} />
+                    <Text style={styles.hint}>입금 사실을 알려주시면 더 빠르게 활성화해 드려요.</Text>
+                  </View>
+                </View>
+
+                <Pressable onPress={notifyPaid} style={({ pressed }) => [styles.primary, pressed && { opacity: 0.88 }]}>
+                  <Text style={styles.primaryText}>입금 완료했어요</Text>
+                </Pressable>
+              </>
+            )}
           </>
         )}
 
@@ -208,6 +282,26 @@ const styles = StyleSheet.create({
   rowValue: { fontSize: 14, color: InkColors.ink, fontWeight: '700' },
   rowValueStrong: { fontSize: 15, fontWeight: '900' },
   copyBtn: { padding: 2 },
+
+  // 요금제 선택 카드(라디오 리스트) — 선택 시 잉크 보더 강조(StoreSwitcher rowActive 와 동일 톤).
+  planList: { gap: Space.sm },
+  planCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    borderColor: InkColors.line,
+    padding: Space.lg,
+    gap: Space.xs,
+    ...Elevation.e1,
+  },
+  planCardSelected: { borderColor: InkColors.ink, borderWidth: 1.5 },
+  planHead: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
+  planName: { fontSize: 15, fontWeight: '900', color: InkColors.ink },
+  planBadge: { backgroundColor: InkColors.bgSoft, borderRadius: Radius.pill, paddingHorizontal: 8, paddingVertical: 2, borderWidth: 1, borderColor: InkColors.line },
+  planBadgeText: { fontSize: 10.5, fontWeight: '800', color: InkColors.ink2 },
+  planPrice: { fontSize: 13.5, fontWeight: '800', color: InkColors.ink },
+  planTagline: { fontSize: 12.5, fontWeight: '600', color: InkColors.ink2, marginTop: 2 },
+  planFeatures: { fontSize: 11.5, fontWeight: '600', color: InkColors.ink3, lineHeight: 17 },
 
   primary: { backgroundColor: BrandColors.brand, paddingVertical: 15, borderRadius: Radius.md, alignItems: 'center' },
   primaryText: { color: '#FFFFFF', fontSize: 15, fontWeight: '800' },
