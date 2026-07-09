@@ -19,7 +19,7 @@ import { InkColors } from '@/lib/theme/colors';
 import { injectPwaHead } from '@/lib/pwa/head';
 import { usePushBootstrap } from '@/lib/push/usePushBootstrap';
 import { useAppBadgeSync } from '@/lib/push/appBadge';
-import { installGlobalErrorHandlers, track } from '@/lib/analytics/track';
+import { initAnalytics, installGlobalErrorHandlers, track } from '@/lib/analytics/track';
 
 // 전역 글자 크기 패치는 앱 모듈 로드 시 1회만.
 patchTextScaling();
@@ -42,6 +42,8 @@ export default function RootLayout() {
     injectPwaHead();
     // 안 잡힌 예외/Promise reject 를 원격 관측으로 흘려보낸다(리포트 P0-2).
     installGlobalErrorHandlers();
+    // PostHog(웹 전용, 키 없으면 no-op) — autocapture/pageview 를 위해 부팅 시 초기화.
+    initAnalytics();
   }, [init]);
 
   // 리텐션/DAU 측정 — 로그인 세션이 열릴 때 1회 기록(계측 컨텍스트가 채워진 뒤).

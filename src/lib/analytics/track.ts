@@ -10,14 +10,22 @@
 //      마이그레이션 적용 시점부터 자동으로 데이터가 쌓인다.
 
 import { supabase, HAS_SUPABASE } from '@/lib/supabase';
+import { initPostHog, phSetContext, phCapture } from '@/lib/analytics/posthog';
 
 type AuthCtx = { userId: string | null; unitId: string | null; role: string | null };
 let _ctx: AuthCtx = { userId: null, unitId: null, role: null };
 
+// 앱 부팅 1회(RootLayout) — PostHog 등 외부 분석 SDK 초기화. 키 없으면 no-op.
+export function initAnalytics(): void {
+  initPostHog();
+}
+
 // 세션 로드 시(useSessionStore.loadProfile) 호출 — 이벤트에 매장/유저/역할을 태깅해
 // "어느 매장에서 무엇이 실패하는지"를 서버에서 매장 단위로 집계할 수 있게 한다.
 export function setAnalyticsContext(ctx: Partial<AuthCtx>) {
+  const prevUserId = _ctx.userId;
   _ctx = { ..._ctx, ...ctx };
+  phSetContext(_ctx, prevUserId); // PostHog 신원/매장 태깅 동기화(로그아웃 전이 시 reset)
 }
 
 // 폭주 방지 — 동일 (context+code+message) 를 짧은 창 안에서 반복 전송하지 않는다.
@@ -132,6 +140,8 @@ export function track(event: string, props?: Record<string, unknown>): void {
   try {
     if (!HAS_SUPABASE) return;
     if (overRateCap()) return;
+    // PostHog 병행 전송 — unit_id/role 은 register(super property)로 이미 붙는다.
+    phCapture(event, props);
     void (supabase
       .from('app_events')
       .insert({
