@@ -43,7 +43,7 @@ const vec768 = '[' + Array.from({ length: 768 }, (_, i) => (i === 0 ? 0.1 : 0.00
 
 async function makeOwner(tag) {
   const c = mk();
-  const { data: su, error: se } = await c.auth.signUp({ email: `kc_${tag}_${rid}@example.com`, password: pw, options: { data: { name: `KC_${tag}`, role: 'owner', phone: phone() } } });
+  const { data: su, error: se } = await c.auth.signUp({ email: `kc_${tag}_${rid}@example.com`, password: pw, options: { data: { name: `KC_${tag}`, role: 'owner', phone: phone(), birth_date: '1990-01-15' } } });
   if (se) throw new Error(`${tag} signUp: ${se.message}`);
   if (!su.session) throw new Error(`${tag} no session`);
   return { c, uid: su.user.id };

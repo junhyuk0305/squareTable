@@ -7,7 +7,7 @@ import { useSessionStore } from '@/lib/store/useSessionStore';
 import { applyMockSeed } from '@/lib/demo/mockSeed';
 import { HAS_SUPABASE } from '@/lib/supabase';
 import { formatBizNo, isValidBizNo, bizDigits } from '@/lib/utils/bizno';
-import { isValidEmail, isValidPhone, normalizePhone, formatPhone, passwordError } from '@/lib/utils/validation';
+import { isValidEmail, isValidPhone, normalizePhone, formatPhone, passwordError, formatBirthDate8, birthDateISO } from '@/lib/utils/validation';
 import { BrandColors, InkColors } from '@/lib/theme/colors';
 import { Space } from '@/lib/theme/layout';
 import { Radius, Elevation } from '@/lib/theme/elevation';
@@ -25,6 +25,7 @@ export default function SignupScreen() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
+  const [birth, setBirth] = useState(''); // YYYYMMDD 8자리(숫자만) — 서버 SSOT는 profiles.birth_date(0065)
   const [pw, setPw] = useState('');
   const [storeName, setStoreName] = useState('');
   const [bizNo, setBizNo] = useState('');
@@ -93,6 +94,8 @@ export default function SignupScreen() {
     if (pwErr) return setErr(pwErr);
     if (!phone.trim()) return setErr('전화번호를 입력해주세요.');
     if (!isValidPhone(phone)) return setErr('전화번호 형식을 확인해주세요. (예: 010-1234-5678)');
+    if (!birth) return setErr('생년월일을 입력해주세요.');
+    if (!birthDateISO(birth)) return setErr('생년월일 8자리를 확인해주세요. (예: 19900131)');
     if (role === 'owner' && !storeName.trim()) return setErr('가게 이름을 입력해주세요.');
     if (role === 'owner' && !industry) return setErr('업종을 선택해주세요.');
     // 직원 초대코드는 선택 — 비우면 가입 후 '가게 연결'(junior/join)로 유도하므로 여기서 막지 않는다.
@@ -131,6 +134,9 @@ export default function SignupScreen() {
         name: name.trim(),
         role,
         phone: normalizePhone(phone),
+        // 생년월일(필수) — 트리거(handle_new_user)가 프로필 SSOT 에 기록하고,
+        // create_store/join_by_invite 가 누락을 서버에서 최종 거부한다(0065).
+        birth_date: birthDateISO(birth) ?? undefined,
         // 사장: 이메일 인증으로 세션이 지연돼도 인증 후 첫 로그인에서 매장이 자동 생성되도록 매장 정보를 함께 싣는다.
         ...(role === 'owner'
           ? { store_name: storeName.trim(), industry, ...(bizDigits(bizNo) ? { biz_no: bizDigits(bizNo) } : {}) }
@@ -162,7 +168,7 @@ export default function SignupScreen() {
 
     // 2) 매장 연결
     if (role === 'owner') {
-      const cs = await createStore(storeName.trim(), industry, bizDigits(bizNo) || undefined);
+      const cs = await createStore(storeName.trim(), industry, bizDigits(bizNo) || undefined, birthDateISO(birth) ?? undefined);
       setBusy(false);
       if (cs.error) return setErr(`${cs.error} ‘다시 시도’를 누르면 가게 생성만 다시 시도해요.`);
       // 노하우 온보딩으로 — 초대코드는 온보딩 완료 화면에서 안내(빈 매장 0건 방지).
@@ -242,6 +248,27 @@ export default function SignupScreen() {
         </View>
 
         <Field label="전화번호" value={phone} onChange={(v) => setPhone(formatPhone(v))} placeholder="010-1234-5678" keyboard="phone-pad" maxLength={13} required />
+
+        {/* 생년월일 — 숫자 8자리 단일 필드(토스류 금융 서비스 표준 패턴). 입력 중 즉시 통과/안내 표시. */}
+        <View style={styles.field}>
+          <Text style={styles.label}>생년월일<Text style={styles.req}> *</Text></Text>
+          <TextInput
+            value={birth}
+            onChangeText={(v) => setBirth(formatBirthDate8(v))}
+            placeholder="8자리 숫자 (예: 19900131)"
+            placeholderTextColor={InkColors.ink3}
+            keyboardType="number-pad"
+            maxLength={8}
+            style={styles.input}
+          />
+          {birth.length > 0 && (
+            <Text style={[styles.bizHint, birthDateISO(birth) ? styles.bizOk : styles.bizBad]}>
+              {birthDateISO(birth)
+                ? `✓ ${Number(birth.slice(0, 4))}년 ${Number(birth.slice(4, 6))}월 ${Number(birth.slice(6, 8))}일`
+                : '생년월일 8자리를 입력해주세요'}
+            </Text>
+          )}
+        </View>
 
         {role === 'owner' ? (
           <>

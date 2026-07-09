@@ -16,7 +16,7 @@ const pw = 'Test1234!qa';
 let pass = 0, fail = 0;
 const check = (n, ok, x = '') => { ok ? (pass++, console.log('  PASS', n, x)) : (fail++, console.log('  FAIL', n, x)); };
 const phone = () => '010' + String(Math.floor(1e7 + Math.random() * 8e7));
-async function mkOwner(tag) { const c = mk(); const { data, error } = await c.auth.signUp({ email: `ds_${tag}_${rid}@example.com`, password: pw, options: { data: { name: `DS_${tag}`, role: 'owner', phone: phone() } } }); if (error || !data.session) throw new Error(`${tag} signUp ${error?.message}`); return { c, uid: data.user.id }; }
+async function mkOwner(tag) { const c = mk(); const { data, error } = await c.auth.signUp({ email: `ds_${tag}_${rid}@example.com`, password: pw, options: { data: { name: `DS_${tag}`, role: 'owner', phone: phone(), birth_date: '1990-01-15' } } }); if (error || !data.session) throw new Error(`${tag} signUp ${error?.message}`); return { c, uid: data.user.id }; }
 async function store(c, n) { const { data, error } = await c.rpc('create_store', { p_store_name: n, p_industry: '카페·디저트', p_biz_no: null }); if (error) throw new Error(error.message); return (Array.isArray(data) ? data[0] : data).unit_id; }
 
 async function main() {

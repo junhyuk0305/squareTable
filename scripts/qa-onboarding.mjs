@@ -51,7 +51,7 @@ const is500 = (e) => e?.status === 500 || /Database error saving new user/i.test
 const normalizePhone = (p) => { const d = (p ?? '').replace(/\D/g, ''); return !d ? '' : (d.startsWith('82') ? '0' + d.slice(2) : d); };
 
 async function signUp(client, email, meta) {
-  const { data, error } = await client.auth.signUp({ email, password: pw, options: { data: meta } });
+  const { data, error } = await client.auth.signUp({ email, password: pw, options: { data: { birth_date: '1990-01-15', ...meta } } });
   return { data, error };
 }
 async function signUpAndSession(client, email, meta) {

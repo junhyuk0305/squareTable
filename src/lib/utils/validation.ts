@@ -36,6 +36,36 @@ export function formatPhone(input: string): string {
   return `${d.slice(0, 3)}-${d.slice(3, 7)}-${d.slice(7)}`;
 }
 
+/** 생년월일 최소 연도 — DB CHECK(profiles_birth_date_range, 0065)와 규칙 동일 유지. */
+export const BIRTH_MIN_YEAR = 1920;
+
+/**
+ * 생년월일 입력 실시간 정리: 숫자만 추출 + 8자리 초과 차단(YYYYMMDD 단일 필드 — 토스류
+ * 금융 서비스의 표준 패턴). 입력창 onChange 에서 감싸 쓴다: onChange={(v) => setBirth(formatBirthDate8(v))}.
+ */
+export function formatBirthDate8(input: string): string {
+  return (input ?? '').replace(/\D/g, '').slice(0, 8);
+}
+
+/**
+ * 생년월일 8자리 → ISO(YYYY-MM-DD). 실존 날짜 + 범위(1920-01-01 이상 · 오늘(KST) 이전)까지
+ * 검증하고, 실패하면 null. 서버(0065 ensure_birth_date)와 규칙을 동일하게 유지해야 한다.
+ */
+export function birthDateISO(input: string): string | null {
+  const d = (input ?? '').replace(/\D/g, '');
+  if (d.length !== 8) return null;
+  const y = Number(d.slice(0, 4));
+  const m = Number(d.slice(4, 6));
+  const day = Number(d.slice(6, 8));
+  const dt = new Date(Date.UTC(y, m - 1, day));
+  if (dt.getUTCFullYear() !== y || dt.getUTCMonth() !== m - 1 || dt.getUTCDate() !== day) return null; // 실존하지 않는 날짜(예: 0231)
+  if (y < BIRTH_MIN_YEAR) return null;
+  const iso = `${d.slice(0, 4)}-${d.slice(4, 6)}-${d.slice(6, 8)}`;
+  const todayKST = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Seoul' }).format(new Date());
+  if (iso >= todayKST) return null;
+  return iso;
+}
+
 /** 비밀번호 최소 길이(영문·숫자 조합). 규칙 변경 시 여기 한 곳만. */
 export const PASSWORD_MIN = 9;
 

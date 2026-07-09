@@ -22,7 +22,7 @@ const PNG = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAA
 async function owner(tag) {
   const c = createClient(URL, ANON, { auth: { persistSession: false, autoRefreshToken: false } });
   const ph = '010' + String(Math.floor(1e7 + Math.random() * 8e7));
-  const { data: su, error: se } = await c.auth.signUp({ email: `ph_${tag}_${rid}@example.com`, password: 'Test!2345', options: { data: { name: `PH_${tag}`, role: 'owner', phone: ph, phone_last4: ph.slice(-4) } } });
+  const { data: su, error: se } = await c.auth.signUp({ email: `ph_${tag}_${rid}@example.com`, password: 'Test!2345', options: { data: { name: `PH_${tag}`, role: 'owner', phone: ph, phone_last4: ph.slice(-4), birth_date: '1990-01-15' } } });
   if (se || !su.session) throw new Error(`${tag} signUp ${se?.message}`);
   const { data: cs, error: ce } = await c.rpc('create_store', { p_store_name: `PH_${tag}_${rid}`, p_industry: '카페·디저트', p_biz_no: null });
   if (ce) throw new Error(`${tag} create_store ${ce.message}`);

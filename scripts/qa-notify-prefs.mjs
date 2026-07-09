@@ -49,7 +49,7 @@ let pass = 0, fail = 0;
 const check = (name, ok, extra = '') => { ok ? (pass++, console.log('  PASS', name, extra)) : (fail++, console.log('  FAIL', name, extra)); };
 
 async function signUpSession(client, email, meta) {
-  const { data, error } = await client.auth.signUp({ email, password: pw, options: { data: meta } });
+  const { data, error } = await client.auth.signUp({ email, password: pw, options: { data: { birth_date: '1990-01-15', ...meta } } });
   if (error || !data.session) throw new Error(`signUp failed (${email}): ${error?.message ?? 'no session'}`);
   await client.auth.setSession({ access_token: data.session.access_token, refresh_token: data.session.refresh_token });
   return data.user.id;

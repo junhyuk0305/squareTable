@@ -34,7 +34,7 @@ async function makeOwner(tag, phone) {
   const email = `xt_${tag}_${rid}@example.com`;
   const { data: su, error: se } = await c.auth.signUp({
     email, password: 'Test!2345',
-    options: { data: { name: `XT_${tag}`, role: 'owner', phone, phone_last4: phone.slice(-4) } },
+    options: { data: { name: `XT_${tag}`, role: 'owner', phone, phone_last4: phone.slice(-4), birth_date: '1990-01-15' } },
   });
   if (se) throw new Error(`${tag} signUp: ${se.message}`);
   if (!su.session) throw new Error(`${tag} no session (email confirm ON?)`);

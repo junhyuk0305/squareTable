@@ -219,8 +219,10 @@ export async function checkPhoneInUse(phone: string): Promise<DbResult<boolean>>
 }
 
 export type CreateStoreRow = { unit_id: string; invite_code: string };
-export async function rpcCreateStore(storeName: string, industry: string | null, bizNo: string | null): Promise<DbResult<CreateStoreRow>> {
-  const { data, error } = await supabase.rpc('create_store', { p_store_name: storeName, p_industry: industry, p_biz_no: bizNo });
+// birthDate(YYYY-MM-DD)는 신규 가입 경로 필수(0065) — 서버가 누락·범위 밖을 named 에러로 거부.
+// 기존 계정(컷오프 이전 생성)은 서버가 면제하므로 null 허용.
+export async function rpcCreateStore(storeName: string, industry: string | null, bizNo: string | null, birthDate: string | null = null): Promise<DbResult<CreateStoreRow>> {
+  const { data, error } = await supabase.rpc('create_store', { p_store_name: storeName, p_industry: industry, p_biz_no: bizNo, p_birth_date: birthDate });
   const row = Array.isArray(data) ? data[0] : data;
   return { data: (row as CreateStoreRow) ?? null, error: error as DbErr };
 }

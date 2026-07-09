@@ -30,7 +30,7 @@ const check = (n, ok, extra = '') => { ok ? (pass++, console.log('  PASS', n, ex
 
 async function main() {
   const owner = mk();
-  const { error: upErr } = await owner.auth.signUp({ email: `qa_ms_${s}@example.com`, password: pw, options: { data: { name: 'QA다점포', role: 'owner', phone: `0106${s.slice(0, 7)}` } } });
+  const { error: upErr } = await owner.auth.signUp({ email: `qa_ms_${s}@example.com`, password: pw, options: { data: { name: 'QA다점포', role: 'owner', phone: `0106${s.slice(0, 7)}`, birth_date: '1990-01-15' } } });
   if (upErr) { console.error('signUp 실패', upErr.message); process.exit(2); }
 
   // 1) 1호점 생성
