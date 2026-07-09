@@ -92,6 +92,8 @@ function kstDateStr(iso) {
 
 (async () => {
   console.log('· Supabase 연결:', SUPABASE_URL);
+  const now = new Date();
+  const since30 = new Date(now.getTime() - 30 * 86400000).toISOString();
   const [units, profiles, entries, chats, unknowns] = await Promise.all([
     fetchAll('units', 'select=id,store_name,industry,subcategory,created_at&order=created_at.asc'),
     fetchAll('profiles', 'select=id,unit_id,role,name,phone,phone_last4,created_at,deleted_at&order=created_at.asc'),
@@ -99,11 +101,73 @@ function kstDateStr(iso) {
     fetchAll('chat_queries', 'select=unit_id,junior_id,asked_at,matched_entry_ids,satisfaction'),
     fetchAll('unknown_queries', 'select=unit_id,query_text,presumed_category,presumed_subcategory,junior_name,similar_queries_count,status,asked_at'),
   ]);
-  console.log(`· 수신: units ${units.length} · profiles ${profiles.length} · entries ${entries.length} · chat_queries ${chats.length} · unknown_queries ${unknowns.length}`);
+  // 접속 활동(app_events, 0041) — 테이블이 없거나 실패해도 대시보드 나머지는 살아야 하므로 격리.
+  let events = [];
+  try {
+    events = await fetchAll('app_events', `select=unit_id,user_id,created_at&created_at=gte.${since30}`);
+  } catch (e) {
+    console.warn('· app_events 조회 실패(무시하고 진행):', e.message.slice(0, 120));
+  }
+  console.log(`· 수신: units ${units.length} · profiles ${profiles.length} · entries ${entries.length} · chat_queries ${chats.length} · unknown_queries ${unknowns.length} · app_events(30일) ${events.length}`);
 
-  const now = new Date();
   const weekDefs = lastNWeekKeys(now, N_WEEKS);
   const keyIndex = new Map(weekDefs.map((w, i) => [w.key, i]));
+
+  // ── 접속 활동 집계: 일별 고유 접속자(최근 14일, KST) + 7일 WAU + 매장별 최근 활동 ──
+  const DAY_N = 14;
+  const kstDayKey = (iso) => {
+    const d = new Date(new Date(iso).getTime() + 9 * 3600 * 1000);
+    return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
+  };
+  const dayDefs = [];
+  for (let i = DAY_N - 1; i >= 0; i--) {
+    const d = new Date(new Date(now.getTime() + 9 * 3600 * 1000 - i * 86400000));
+    dayDefs.push({
+      key: `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`,
+      label: `${d.getUTCMonth() + 1}/${String(d.getUTCDate()).padStart(2, '0')}`,
+    });
+  }
+  const dayIdx = new Map(dayDefs.map((d, i) => [d.key, i]));
+  const since7 = now.getTime() - 7 * 86400000;
+  const gDaily = dayDefs.map(() => new Set());       // 전체 일별 고유 유저
+  const gWau = new Set();                             // 전체 7일 고유 유저
+  const gUnits7 = new Set();                          // 7일 내 활동 매장
+  const byUnit = new Map();                           // unit_id → {daily:Set[], wau:Set, lastAt}
+  for (const ev of events) {
+    const t = new Date(ev.created_at).getTime();
+    const di = dayIdx.get(kstDayKey(ev.created_at));
+    if (ev.user_id != null) {
+      if (di !== undefined) gDaily[di].add(ev.user_id);
+      if (t >= since7) gWau.add(ev.user_id);
+    }
+    if (ev.unit_id) {
+      if (t >= since7) gUnits7.add(ev.unit_id);
+      let a = byUnit.get(ev.unit_id);
+      if (!a) { a = { daily: dayDefs.map(() => new Set()), wau: new Set(), lastAt: 0 }; byUnit.set(ev.unit_id, a); }
+      if (ev.user_id != null) {
+        if (di !== undefined) a.daily[di].add(ev.user_id);
+        if (t >= since7) a.wau.add(ev.user_id);
+      }
+      if (t > a.lastAt) a.lastAt = t;
+    }
+  }
+  const actOf = (unitId) => {
+    const a = byUnit.get(unitId);
+    if (!a) return null;
+    const lastIso = new Date(a.lastAt).toISOString();
+    return {
+      days: dayDefs.map((d, i) => ({ d: d.label, users: a.daily[i].size })),
+      wau: a.wau.size,
+      lastAgo: agoKo(lastIso, now),
+      lastDaysAgo: Math.floor((now - a.lastAt) / 86400000),
+    };
+  };
+  const activity = events.length ? {
+    days: dayDefs.map((d, i) => ({ d: d.label, users: gDaily[i].size })),
+    wau: gWau.size,
+    activeUnits7d: gUnits7.size,
+    total30d: events.length,
+  } : null;
 
   const stores = units.map((u, idx) => {
     const juniors = profiles.filter((p) => p.unit_id === u.id && p.role === 'junior').length;
@@ -166,6 +230,7 @@ function kstDateStr(iso) {
       weeks,
       entries: myEntries,
       gap,
+      act: actOf(u.id),
     };
   });
 
@@ -200,11 +265,12 @@ function kstDateStr(iso) {
       connected: true,
       source: SUPABASE_URL.replace('https://', '').replace('.supabase.co', ''),
       generatedAt: now.toISOString(),
-      counts: { units: units.length, profiles: profiles.length, entries: entries.length, chats: chats.length, unknowns: unknowns.length },
+      counts: { units: units.length, profiles: profiles.length, entries: entries.length, chats: chats.length, unknowns: unknowns.length, events: events.length },
     },
     stores,
     accounts,
     kpis,
+    activity,
   };
 
   const banner = '// 자동 생성 파일 (fetch-dashboard-data.mjs) — 직접 편집 금지. 로컬 전용.\n';
