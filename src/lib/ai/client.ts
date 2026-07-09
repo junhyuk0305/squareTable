@@ -37,6 +37,12 @@ const EDGE_MAX_ATTEMPTS = 2;      // 최초 1 + 재시도 1
 const EDGE_RETRY_DELAY_MS = 400;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+// 무료 플랜 월 AI답변 한도 초과(엣지 402 ai_quota_exceeded) — 일반 실패와 구분해 던진다.
+// 일반 실패는 mock 폴백(degraded)이지만, 쿼터 초과를 mock 으로 위장하면 캡이 무의미해진다.
+class AiQuotaError extends Error {
+  constructor() { super('ai_quota_exceeded'); }
+}
+
 async function callEdge<T>(task: Task, payload: unknown): Promise<T> {
   // Edge Function 은 "실제 로그인 유저"만 허용(anon 키 호출 거부 → 열린 프록시 방지).
   // apikey 는 게이트웨이용 anon, Authorization 은 로그인 세션의 access_token.
@@ -63,12 +69,20 @@ async function callEdge<T>(task: Task, payload: unknown): Promise<T> {
         signal: ctrl.signal,
       });
       if (res.ok) return (await res.json()) as T;
+      // 402 = AI답변 월 쿼터 초과(과금층) — 재시도·mock 폴백 대상이 아닌 별도 신호.
+      // 상태코드만 믿지 않고 body 판별자까지 확인 — 인프라 계층의 무관한 402가 가짜 페이월로 둔갑하는 것 방지.
+      if (res.status === 402) {
+        const body = await res.json().catch(() => null);
+        if (body?.error === 'ai_quota_exceeded') throw new AiQuotaError();
+        throw new Error(`AI edge ${task} failed: 402`); // 쿼터 외 402 → 일반 4xx(mock 폴백 경로)
+      }
       // 4xx는 재시도 무의미 → 즉시 실패(catch에서 4xx로 재-throw됨).
       if (res.status < 500) throw new Error(`AI edge ${task} failed: ${res.status}`);
       // 5xx → 재시도 여지(마지막 시도면 아래서 throw).
       lastErr = new Error(`AI edge ${task} failed: ${res.status}`);
     } catch (e) {
-      // 4xx로 명시 throw된 건 재시도하지 않는다. 그 외(네트워크/타임아웃 AbortError/5xx)는 재시도.
+      // 쿼터 초과·4xx로 명시 throw된 건 재시도하지 않는다. 그 외(네트워크/타임아웃/5xx)는 재시도.
+      if (e instanceof AiQuotaError) throw e;
       if (e instanceof Error && /failed: 4\d\d/.test(e.message)) throw e;
       lastErr = e;
     } finally {
@@ -86,6 +100,11 @@ export async function generateAnswer(
   try {
     return await callEdge<GenerateAnswerOutput>('answer', input);
   } catch (e) {
+    // 쿼터 초과는 mock 폴백 금지 — 가짜 답으로 캡을 위장하면 과금층이 무의미해진다.
+    // block=null → 호출부(tryGenerate)가 업그레이드 안내 후 후보/사장 라우팅으로 자연 강등.
+    if (e instanceof AiQuotaError) {
+      return { block: null, grounded: false, usedSopIds: [], quotaExceeded: true };
+    }
     // 실호출 실패 시에도 프론트가 죽지 않게 mock으로 폴백(데모 안전망).
     // degraded=true 로 표시해 '진짜 매장 답'이 아니라는 걸 사용자에게 알린다.
     // 원격 관측 — AI 엣지 다운이면 사용자는 mock(가짜 매장답)을 받는데 팀엔 안 보였다(무음 열화). degraded 발생을 계측.

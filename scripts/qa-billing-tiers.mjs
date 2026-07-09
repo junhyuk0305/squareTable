@@ -102,12 +102,17 @@ async function cleanupAll() {
   }
 }
 
+// ★스위치 복구는 "테스트 시작 시점의 원래 값"으로 — 유료화 전환(2026-07-10) 후 프로덕션 기본값은
+//   false 다. true 하드코딩 복구는 실서비스 페이월을 꺼버리는 사고가 된다.
+let originalFreeMode = null;
+
 async function main() {
-  // ── 0) 현재 서버 스위치 = 무료 모드(파일럿) 확인 ──────────────────────────
+  // ── 0) 현재 서버 스위치 값 기록(원복 기준) ─────────────────────────────────
   const probe = await signUp('owner', 'QA과금프로브');
   cleanup.push(probe.c);
   const { data: fm0 } = await probe.c.rpc('billing_free_mode');
-  check('사전: billing_free_mode() = true(파일럿)', fm0 === true, `got=${fm0}`);
+  originalFreeMode = fm0 === true;
+  console.log(`  … 시작 시 billing_free_mode=${fm0} (테스트 후 이 값으로 원복)`);
 
   // ── 1) 무료 사장 F + 1호점 (스위치 켜기 전 준비) ──────────────────────────
   const F = await signUp('owner', 'QA과금사장');
@@ -171,17 +176,22 @@ async function main() {
     const { data: c2, error: e2c } = await F.c.rpc('create_store', { p_store_name: 'QA 과금 2호점', p_industry: '헬스·피트니스', p_biz_no: null });
     check('multi: 2호점 생성 OK', !e2c && !!c2?.[0]?.unit_id, c2?.[0]?.unit_id ?? e2c?.message);
   } finally {
-    // ── 3) 스위치 원복(무조건) — 파일럿 Phase 0 복원 ─────────────────────────
-    const restored = await setFreeMode(true);
+    // ── 3) 스위치 원복(무조건) — 테스트 시작 시점 값으로 ─────────────────────
+    const restored = await setFreeMode(originalFreeMode === true);
     console.log(`  … 서버 스위치 원복: billing_free_mode=${restored}`);
   }
 
-  // ── 4) 원복 실증: 새 무료 사장 G 가 2매장 생성 가능(우회 복원) ─────────────
-  const G = await signUp('owner', 'QA과금사장2');
-  cleanup.push(G.c);
-  const { data: g1, error: ge1 } = await G.c.rpc('create_store', { p_store_name: 'QA 원복 1호점', p_industry: '카페·디저트', p_biz_no: null });
-  const { data: g2, error: ge2 } = await G.c.rpc('create_store', { p_store_name: 'QA 원복 2호점', p_industry: '카페·디저트', p_biz_no: null });
-  check('원복 후: 무료 사장 2매장 생성 OK(파일럿 우회 복원)', !ge1 && !ge2 && !!g1?.[0]?.unit_id && !!g2?.[0]?.unit_id, ge1?.message ?? ge2?.message ?? '');
+  // ── 4) 원복 실증 — 원래 무료 모드였을 때만(유료화 후엔 2매장 생성이 정상 차단) ──
+  if (originalFreeMode === true) {
+    const G = await signUp('owner', 'QA과금사장2');
+    cleanup.push(G.c);
+    const { data: g1, error: ge1 } = await G.c.rpc('create_store', { p_store_name: 'QA 원복 1호점', p_industry: '카페·디저트', p_biz_no: null });
+    const { data: g2, error: ge2 } = await G.c.rpc('create_store', { p_store_name: 'QA 원복 2호점', p_industry: '카페·디저트', p_biz_no: null });
+    check('원복 후: 무료 사장 2매장 생성 OK(파일럿 우회 복원)', !ge1 && !ge2 && !!g1?.[0]?.unit_id && !!g2?.[0]?.unit_id, ge1?.message ?? ge2?.message ?? '');
+  } else {
+    const { error: ge } = await probe.c.rpc('create_store', { p_store_name: 'QA 원복확인점', p_industry: '카페·디저트', p_biz_no: null });
+    check('원복 후: 캡 유지 확인(프로브 사장 1호점 생성 OK)', !ge, ge?.message ?? '');
+  }
 
   console.log(`\nRESULT: ${pass} passed, ${fail} failed`);
   process.exit(fail === 0 ? 0 : 1);
@@ -190,8 +200,13 @@ async function main() {
 main()
   .catch(async (e) => {
     console.error('FATAL:', e?.message ?? e);
-    // 어떤 실패에서도 스위치는 원복 시도(이중 안전망).
-    try { await setFreeMode(true); console.error('  … 서버 스위치 원복(true) 완료'); } catch { console.error('  !! 스위치 원복 실패 — 수동 확인 필요'); }
+    // 어떤 실패에서도 스위치는 "시작 시점 값"으로 원복 시도(이중 안전망). 기록 전 실패면 건드리지 않음.
+    try {
+      if (originalFreeMode !== null) {
+        await setFreeMode(originalFreeMode === true);
+        console.error(`  … 서버 스위치 원복(${originalFreeMode}) 완료`);
+      }
+    } catch { console.error('  !! 스위치 원복 실패 — 수동 확인 필요'); }
     process.exitCode = 1;
   })
   .finally(cleanupAll);
