@@ -16,6 +16,7 @@ export type PlanDef = {
   name: string; // 화면 표시명
   tagline: string; // 카드 한 줄 설명
   monthlyKrw: number; // 월 가격(원). multi 는 "매장당" 가격
+  regularKrw?: number; // 정가(할인 중일 때만). 화면이 취소선으로 표시 — 파일럿 종료 시 monthlyKrw 로 복귀
   perStore: boolean; // true 면 청구액 = 매장수 × monthlyKrw
   maxStores: number | null; // null = 무제한(안전 하드상한 15는 서버 별도)
   maxStaff: number | null; // 매장당 직원(알바) 좌석. null = 무제한
@@ -39,7 +40,9 @@ export const PLANS: Record<PlanId, PlanDef> = {
     id: 'single',
     name: '단일 매장',
     tagline: '직원과 함께 운영하는 매장',
-    monthlyKrw: 19000,
+    // ★파일럿 할인가(정가 19,000 — 만원 할인, 2026-07-10 확정). 파일럿 종료 시 정가 복귀.
+    monthlyKrw: 9000,
+    regularKrw: 19000,
     perStore: false,
     maxStores: 1,
     maxStaff: null,
@@ -50,7 +53,9 @@ export const PLANS: Record<PlanId, PlanDef> = {
     id: 'multi',
     name: '다점포',
     tagline: '매장 2개부터, 매장당 요금',
-    monthlyKrw: 29000,
+    // ★파일럿 할인가(정가 29,000 — 만원 할인, 2026-07-10 확정). 파일럿 종료 시 정가 복귀.
+    monthlyKrw: 19000,
+    regularKrw: 29000,
     perStore: true,
     maxStores: null,
     maxStaff: null,

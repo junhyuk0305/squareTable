@@ -9,6 +9,8 @@ import { useSessionStore } from './useSessionStore';
 import { HAS_SUPABASE } from '@/lib/supabase';
 import { fetchChatQueries, insertChatQuery, updateChatSatisfaction, recomputePlaybookStats } from '@/lib/db';
 import { guardWrite } from '@/lib/store/useSyncStore';
+import { showToast } from '@/lib/store/useToastStore';
+import { PLANS } from '@/lib/config/tiers';
 import { genId } from '@/lib/utils/id';
 import seedData from '@/data/chat-queries.json';
 import contextPack from '@/data/context-pack.json';
@@ -109,10 +111,20 @@ export const useChatStore = create<ChatState>((set, get) => ({
     };
 
     // 그라운딩 생성 시도(중간 밴드) — 근거 찾으면 서빙하고 true, 아니면 false.
+    // 쿼터 초과(무료 플랜 월 한도) 안내는 제출 1회당 1번만(재검색 경로에서 중복 토스트 방지).
+    let quotaNotified = false;
     const tryGenerate = async (r: typeof result): Promise<boolean> => {
       if (!(r.confidence >= GENERATE_THRESHOLD && r.candidates.length > 0)) return false;
       const sops = toSopSlices(r.candidates.map((c) => c.entry));
       const ai = await generateAnswer({ storeId: session.unitId || STORE_ID, query: text, sops });
+      // 무료 플랜 월 AI답변 한도 초과 — mock 위장 없이 후보/사장 라우팅으로 강등 + 업그레이드 안내.
+      if (ai.quotaExceeded) {
+        if (!quotaNotified) {
+          quotaNotified = true;
+          showToast(`이번 달 AI 답변 ${PLANS.free.aiMonthly}건을 모두 썼어요. 사장님께 요금제 변경을 요청해 주세요.`, 'warn');
+        }
+        return false;
+      }
       if (!ai.block) return false;
       const id = genId('cq');
       const now = new Date().toISOString();

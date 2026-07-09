@@ -157,6 +157,10 @@ export default function BillingScreen() {
                           </View>
                         )}
                         <View style={{ flex: 1 }} />
+                        {/* 파일럿 할인 중이면 정가를 취소선으로 병기(tiers.regularKrw SSOT) */}
+                        {def.regularKrw ? (
+                          <Text style={styles.planPriceRegular}>{formatKrw(def.regularKrw)}</Text>
+                        ) : null}
                         <Text style={styles.planPrice}>
                           {def.monthlyKrw === 0
                             ? '0원'
@@ -300,6 +304,7 @@ const styles = StyleSheet.create({
   planBadge: { backgroundColor: InkColors.bgSoft, borderRadius: Radius.pill, paddingHorizontal: 8, paddingVertical: 2, borderWidth: 1, borderColor: InkColors.line },
   planBadgeText: { fontSize: 10.5, fontWeight: '800', color: InkColors.ink2 },
   planPrice: { fontSize: 13.5, fontWeight: '800', color: InkColors.ink },
+  planPriceRegular: { fontSize: 12, fontWeight: '600', color: InkColors.ink3, textDecorationLine: 'line-through', marginRight: Space.xs },
   planTagline: { fontSize: 12.5, fontWeight: '600', color: InkColors.ink2, marginTop: 2 },
   planFeatures: { fontSize: 11.5, fontWeight: '600', color: InkColors.ink3, lineHeight: 17 },
 
