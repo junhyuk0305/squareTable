@@ -21,9 +21,12 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY') ?? '';
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
-const MODEL = 'gemini-2.5-flash-lite';
-// square(노하우 구조화): 비용 절감 위해 flash-lite 유지. 단일 입력은 마스터지침+클라가드로 충분.
-// (다중 분리 케이스만 lite가 약함 → 클라 mock 폴백+degraded 고지로 처리. 깔끔히 하려면 'gemini-2.5-flash'로 한 줄 상향.)
+// ⚠️ 2026-07-10: gemini-2.5-flash-lite 퇴역(404 "no longer available")으로 생성 전 경로가 죽었었다
+//   — 클라 mock 폴백(degraded)이 장애를 가려 조용히 열화됨. 후속 안정판으로 교체.
+//   교체 시 점검: ① ListModels 로 가용 확인 ② qa:split(다중 분리)·프로브 3태스크 green ③ 이 주석 갱신.
+//   'gemini-flash-lite-latest' 별칭은 퇴역엔 안전하지만 무단 품질 변동 위험 → 고정 버전 유지.
+const MODEL = 'gemini-3.1-flash-lite';
+// square(노하우 구조화): 비용 절감 위해 flash-lite 라인 유지. 단일 입력은 마스터지침+클라가드로 충분.
 const SQUARE_MODEL = MODEL;
 const EMBED_MODEL = 'gemini-embedding-001';
 const EMBED_DIM = 768;
