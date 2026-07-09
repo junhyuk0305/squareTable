@@ -30,6 +30,9 @@ export type GenerateAnswerOutput = {
   grounded: boolean;             // 제공된 SOP에만 근거했는가
   usedSopIds: string[];          // 실제 인용한 SOP id (출처 바인딩)
   degraded?: boolean;            // AI 서버 실패로 기본(mock) 답으로 폴백했는가 → 사용자에 고지
+  // 무료 플랜 월 AI답변 한도 초과(엣지 402). mock 폴백으로 위장하지 않고 호출부가
+  // 업그레이드 안내 + 후보/사장 라우팅 경로로 자연 강등한다(과금층 0062).
+  quotaExceeded?: boolean;
 };
 
 // ── 사장님 SQUARE 정리 (원문 → 6칸 구조화) ───────────────────

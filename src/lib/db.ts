@@ -176,10 +176,11 @@ export async function rpcDeleteStore(unitId: string): Promise<{ error: DbErr }> 
   return { error: error as DbErr };
 }
 
-export type UnitSubscriptionRow = { status: string | null; trial_ends_at: string | null; paid_until: string | null };
+// plan = 과금 티어(free|single|multi, 0062). 원시값 그대로 반환 — 해석은 tiers.ts normalizePlan.
+export type UnitSubscriptionRow = { status: string | null; trial_ends_at: string | null; paid_until: string | null; plan: string | null };
 export async function fetchUnitSubscription(unitId: string): Promise<DbResult<UnitSubscriptionRow>> {
   const { data, error } = await supabase
-    .from('unit_subscriptions').select('status, trial_ends_at, paid_until').eq('unit_id', unitId).maybeSingle();
+    .from('unit_subscriptions').select('status, trial_ends_at, paid_until, plan').eq('unit_id', unitId).maybeSingle();
   return { data: (data as UnitSubscriptionRow) ?? null, error: error as DbErr };
 }
 
@@ -350,9 +351,16 @@ export async function fetchPendingMembers(): Promise<ReadResult<{ id: string; na
 }
 
 // 사장이 신청자를 승인 → unit_id 부여(소속 확정). RPC가 '내 매장 신청자'만 통과시킨다.
-export async function approveMember(uid: string): Promise<boolean> {
-  if (!HAS_SUPABASE) return true;
-  return write('approveMember', supabase.rpc('approve_member', { p_uid: uid }));
+// staff_limit(무료 플랜 좌석 캡, 0062)은 일반 실패와 구분해 반환 — 호출부가 업그레이드 안내로 매핑.
+export async function approveMember(uid: string): Promise<{ ok: boolean; code: 'staff_limit' | null }> {
+  if (!HAS_SUPABASE) return { ok: true, code: null };
+  const { error } = await supabase.rpc('approve_member', { p_uid: uid });
+  if (error) {
+    console.warn('[db] approveMember:', error.message);
+    reportError('db.write:approveMember', error);
+    return { ok: false, code: /staff_limit/.test(error.message) ? 'staff_limit' : null };
+  }
+  return { ok: true, code: null };
 }
 
 // 사장이 신청 거절 → pending만 비운다(계정은 유지).

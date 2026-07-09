@@ -616,6 +616,29 @@ Deno.serve(async (req: Request) => {
     const task = body?.task;
     const payload = body?.payload ?? {};
     const authz = req.headers.get('Authorization') ?? '';
+
+    // 3) AI답변 월 쿼터(과금층 0062) — answer 태스크만. LLM 호출 "전"에 서버 카운터를 원자
+    //    증가시키고, 무료 플랜이 월 300건을 넘으면 402로 거부(클라가 업그레이드 안내로 매핑).
+    //    FREE_MODE(billing_free_mode)·유료 플랜 판정은 RPC 내부 — 여기는 결과만 따른다.
+    //    ⚠️ 쿼터 인프라 장애(RPC 부재/일시 오류)는 fail-open: 과금 로직이 파일럿 답변을 막는 게
+    //    더 큰 사고(subscription.ts 의 fail-open 철학과 동일). 로그만 남기고 통과시킨다.
+    const isAnswer = !['square', 'patch', 'intent', 'embed', 'search'].includes(task);
+    if (isAnswer) {
+      try {
+        const { data: quota, error: quotaErr } = await userClient(authz).rpc('consume_ai_quota');
+        if (quotaErr) {
+          console.error('consume_ai_quota error (fail-open):', quotaErr.message ?? quotaErr);
+        } else {
+          const q = Array.isArray(quota) ? quota[0] : quota;
+          if (q && q.allowed === false) {
+            return json({ error: 'ai_quota_exceeded', used: q.used_count ?? 0, cap: q.cap_count ?? 0 }, 402);
+          }
+        }
+      } catch (e) {
+        console.error('consume_ai_quota failed (fail-open):', e);
+      }
+    }
+
     const result = task === 'square'
       ? await handleSquare(payload)
       : task === 'patch'

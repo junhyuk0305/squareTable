@@ -23,6 +23,7 @@ import { friendlyError } from '@/lib/utils/userError';
 import { sessionReadFailAction } from './sessionReadFail';
 import { setAnalyticsContext, track, reportError } from '@/lib/analytics/track';
 import type { SubStatusRaw } from '@/lib/utils/subscription';
+import { normalizePlan, type PlanId } from '@/lib/config/tiers';
 import { notifyOwnersJoinRequest } from '@/lib/push/notify';
 
 type Role = 'owner' | 'junior';
@@ -45,6 +46,7 @@ type SessionState = {
   subStatus: SubStatusRaw; // '' | 'trialing' | 'active' | 'expired'
   trialEndsAt: string; // ISO — 무료체험 만료
   paidUntil: string; // ISO — 유료 활성 만료(빈값=무기한)
+  plan: PlanId; // 과금 티어(0062). 다점포 기능 노출·업그레이드 안내의 기준(canUseMultistore)
   inviteCode: string; // 내 매장 초대코드(사장 화면에서 직원에게 공유)
   email: string;
   bio: string; // 한줄 소개
@@ -111,6 +113,7 @@ const DEMO = {
   subStatus: 'active' as SubStatusRaw, // 데모는 항상 사용 가능(무기한 active)
   trialEndsAt: '',
   paidUntil: '',
+  plan: 'free' as PlanId,
   inviteCode: '482913',
   email: '',
   bio: '',
@@ -235,6 +238,7 @@ async function loadProfile(
     let subStatus: SubStatusRaw = '';
     let trialEndsAt = '';
     let paidUntil = '';
+    let plan: PlanId = 'free';
     if (unitId) {
       const { data: unit } = await fetchUnitInfo(unitId);
       storeName = unit?.store_name ?? '';
@@ -252,10 +256,12 @@ async function loadProfile(
         subStatus = prev.subStatus;
         trialEndsAt = prev.trialEndsAt;
         paidUntil = prev.paidUntil;
+        plan = prev.plan;
       } else {
         subStatus = (sub?.status as SubStatusRaw) ?? '';
         trialEndsAt = sub?.trial_ends_at ?? '';
         paidUntil = sub?.paid_until ?? '';
+        plan = normalizePlan(sub?.plan);
       }
     }
     // 다점포(0055): 소유 매장 목록 — 매장 선택 홈/헤더 스위처용. 오너만 다점포이므로 owner일 때만 로드.
@@ -283,6 +289,7 @@ async function loadProfile(
       subStatus,
       trialEndsAt,
       paidUntil,
+      plan,
       bio: profile?.bio ?? '',
       phone: profile?.phone ?? '',
     });
@@ -419,6 +426,10 @@ export const useSessionStore = create<SessionState>((set, get) => ({
         track('store_created_failed', { reason: (error.message || '').slice(0, 60), code: (error as any).code ?? null });
         const msg = /duplicate_biz_no/.test(error.message)
           ? '이미 등록된 사업자등록번호예요.'
+          : /plan_limit_store/.test(error.message)
+          ? '2번째 매장부터는 다점포 요금제가 필요해요. 요금제 화면에서 변경할 수 있어요.'
+          : /store_limit_reached/.test(error.message)
+          ? '매장은 최대 15개까지 만들 수 있어요.'
           : friendlyError(error.message, '가게를 만들지 못했어요. 잠시 후 다시 시도해 주세요.');
         return { error: msg, inviteCode: null };
       }

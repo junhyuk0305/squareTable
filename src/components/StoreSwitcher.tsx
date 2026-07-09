@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { BottomSheet } from '@/components/BottomSheet';
 import { useSessionStore } from '@/lib/store/useSessionStore';
+import { canUseMultistore } from '@/lib/config/tiers';
 import { showToast } from '@/lib/store/useToastStore';
 import { InkColors } from '@/lib/theme/colors';
 import { Elevation, Radius } from '@/lib/theme/elevation';
@@ -20,7 +21,11 @@ export function StoreSwitcher({ visible, onClose }: { visible: boolean; onClose:
   const stores = useSessionStore((s) => s.stores);
   const activeUnit = useSessionStore((s) => s.unitId);
   const switchUnit = useSessionStore((s) => s.switchUnit);
+  const plan = useSessionStore((s) => s.plan);
   const [busyId, setBusyId] = useState<string | null>(null);
+  // 다점포 요금제 게이트(0062) — 매장 간 "전환"은 소유 데이터 접근이라 항상 허용하고,
+  // 통합뷰·매장 추가만 잠근다(잠기면 탭 시 요금제 화면으로 유도). FREE_MODE 땐 전부 열림.
+  const multiUnlocked = canUseMultistore(plan);
 
   const pick = async (unitId: string) => {
     if (busyId) return;
@@ -66,25 +71,25 @@ export function StoreSwitcher({ visible, onClose }: { visible: boolean; onClose:
           );
         })}
       </View>
-      {/* 전 매장 지표를 한눈에(통합뷰) — 전환 없이 합계·매장별 비교 */}
+      {/* 전 매장 지표를 한눈에(통합뷰) — 전환 없이 합계·매장별 비교. 다점포 요금제 전용 */}
       <Pressable
-        onPress={() => { onClose(); router.push('/owner/overview' as never); }}
+        onPress={() => { onClose(); router.push((multiUnlocked ? '/owner/overview' : '/billing') as never); }}
         style={({ pressed }) => [styles.overviewRow, pressed && { opacity: 0.85 }]}
         accessibilityRole="button"
-        accessibilityLabel="전체 매장 한눈에 보기"
+        accessibilityLabel={multiUnlocked ? '전체 매장 한눈에 보기' : '전체 매장 한눈에 보기 — 다점포 요금제에서 열려요'}
       >
         <Ionicons name="albums-outline" size={17} color={InkColors.ink2} />
         <Text style={styles.overviewText}>전체 매장 한눈에 보기</Text>
-        <Ionicons name="chevron-forward" size={16} color={InkColors.ink3} />
+        <Ionicons name={multiUnlocked ? 'chevron-forward' : 'lock-closed-outline'} size={16} color={InkColors.ink3} />
       </Pressable>
 
       <Pressable
-        onPress={() => { onClose(); router.push('/owner/create-store' as never); }}
+        onPress={() => { onClose(); router.push((multiUnlocked ? '/owner/create-store' : '/billing') as never); }}
         style={({ pressed }) => [styles.addRow, pressed && { opacity: 0.85 }]}
         accessibilityRole="button"
-        accessibilityLabel="매장 추가"
+        accessibilityLabel={multiUnlocked ? '매장 추가' : '매장 추가 — 다점포 요금제에서 열려요'}
       >
-        <Ionicons name="add-circle-outline" size={18} color={InkColors.ink} />
+        <Ionicons name={multiUnlocked ? 'add-circle-outline' : 'lock-closed-outline'} size={18} color={InkColors.ink} />
         <Text style={styles.addText}>매장 추가</Text>
       </Pressable>
     </BottomSheet>
