@@ -125,7 +125,9 @@ export function useOwnerDashboardData(): OwnerDashboardData {
   return {
     userName,
     storeName,
-    entriesCount: entries.length,
+    // 검토 대기(draft·인수인계서 파이프라인 초안)는 자산 카운트에서 제외 —
+    // 발행 전 초안이 "노하우 N개"를 부풀리면 지표가 정직하지 않다(검수는 handover 배너가 담당).
+    entriesCount: entries.filter((e) => e.status !== 'draft').length,
     needsReviewCount,
     working,
     monthPay,

@@ -1,9 +1,9 @@
-import { memo, useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, Pressable, ScrollView, KeyboardAvoidingView, Modal, Platform, StyleSheet } from 'react-native';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { View, Text, Pressable, ScrollView, KeyboardAvoidingView, Modal, Platform, StyleSheet, type NativeSyntheticEvent, type NativeScrollEvent } from 'react-native';
 import { StoredImage } from '@/components/StoredImage';
 import { Ionicons } from '@expo/vector-icons';
 
-import { type FeedItem } from '@/lib/store/useWorkStore';
+import { type FeedItem, REACTIONS } from '@/lib/store/useWorkStore';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Elevation, Radius } from '@/lib/theme/elevation';
 import { modalFrameStyle } from '@/lib/theme/layout';
@@ -13,6 +13,11 @@ import { MentionInput, extractMentions, type Member } from './MentionInput';
 import { Appear } from '@/components/Appear';
 import { InfoDot } from '@/components/InfoDot';
 import { PHOTO_UPLOAD_INFO } from '@/lib/copy/photoUploadInfo';
+
+// 채팅 윈도잉 — 스트림이 수백~수천 개여도 최근 것만 렌더하고, 위로 스크롤하면 이전 대화를
+// 한 페이지씩 붙인다(비가상 ScrollView라 전부 마운트하면 느려지고 @멘션 입력까지 버벅인다).
+const CHAT_WINDOW = 40; // 처음 렌더할 최근 말풍선 수
+const CHAT_PAGE = 40; // '이전 대화 더보기' 한 번에 늘리는 수
 
 const WD = ['일', '월', '화', '수', '목', '금', '토'];
 function dateLabel(date: string, today: string): string {
@@ -110,7 +115,52 @@ export function WorkChat({
   const canDeleteActive = !!actionItem && (actionItem.authorId === me || isOwner);
   const canTaskActive = !!actionItem && !!actionItem.text.trim();
 
+  // ── 윈도잉 페이지네이션 ──────────────────────────────────────────────
+  // 최근 visible개만 렌더. 위로 스크롤해 상단에 닿으면 이전 페이지를 붙인다.
+  const [visible, setVisible] = useState(CHAT_WINDOW);
+  const shown = useMemo(
+    () => (stream.length > visible ? stream.slice(stream.length - visible) : stream),
+    [stream, visible],
+  );
+  const hasMore = stream.length > shown.length;
+
+  // 이전 대화를 위로 붙일 때 '보고 있던 말풍선'이 튀지 않게 스크롤 위치를 앵커로 보존한다.
+  const anchorRef = useRef<{ y: number; h: number } | null>(null);
+  const lastY = useRef(0);
+  const contentH = useRef(0);
+  const nearBottom = useRef(true); // 하단 근처면 새 메시지에 자동으로 붙어 내려간다.
+
+  const loadMore = useCallback(() => {
+    if (stream.length <= visible) return;
+    anchorRef.current = { y: lastY.current, h: contentH.current };
+    setVisible((v) => Math.min(stream.length, v + CHAT_PAGE));
+  }, [stream.length, visible]);
+
+  const onContentSizeChange = useCallback((_w: number, h: number) => {
+    const a = anchorRef.current;
+    if (a) {
+      // 위로 붙은 만큼(delta)을 더해 스크롤을 내려 시야를 그대로 유지.
+      scrollRef.current?.scrollTo({ y: a.y + (h - a.h), animated: false });
+      anchorRef.current = null;
+    }
+    contentH.current = h;
+  }, []);
+
+  const onScroll = useCallback(
+    (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+      const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
+      lastY.current = contentOffset.y;
+      contentH.current = contentSize.height;
+      nearBottom.current = contentOffset.y + layoutMeasurement.height >= contentSize.height - 80;
+      if (contentOffset.y <= 40 && hasMore && !anchorRef.current) loadMore();
+    },
+    [hasMore, loadMore],
+  );
+
+  // 새 메시지/최초 로드 시 하단으로. 단, 위로 올려 과거를 읽는 중이면 끌어내리지 않는다.
+  // (visible만 늘어나는 '더보기'는 stream.length가 안 변해 여기서 안 걸린다.)
   useEffect(() => {
+    if (!nearBottom.current) return;
     const t = setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 30);
     return () => clearTimeout(t);
   }, [stream.length]);
@@ -118,6 +168,7 @@ export function WorkChat({
   function send() {
     const v = draft.trim();
     if (!v) return;
+    nearBottom.current = true; // 내가 보낸 메시지는 항상 하단으로 따라간다.
     onSend(v, extractMentions(v, members));
     setDraft('');
   }
@@ -136,10 +187,23 @@ export function WorkChat({
         </Pressable>
       )}
 
-      <ScrollView ref={scrollRef} contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        ref={scrollRef}
+        contentContainerStyle={s.scroll}
+        showsVerticalScrollIndicator={false}
+        scrollEventThrottle={16}
+        onScroll={onScroll}
+        onContentSizeChange={onContentSizeChange}
+      >
         {stream.length === 0 && <Text style={s.empty}>아직 대화가 없어요. 첫 메시지를 남겨보세요.</Text>}
-        {stream.map((f, i) => {
-          const prev = stream[i - 1];
+        {hasMore && (
+          <Pressable onPress={loadMore} style={({ pressed }) => [s.loadMore, pressed && { opacity: 0.6 }]} accessibilityRole="button" accessibilityLabel="이전 대화 더보기">
+            <Ionicons name="arrow-up" size={13} color={InkColors.ink3} />
+            <Text style={s.loadMoreText}>이전 대화 더보기</Text>
+          </Pressable>
+        )}
+        {shown.map((f, i) => {
+          const prev = shown[i - 1];
           const showDivider = !prev || prev.date !== f.date;
           return (
             <View key={f.id}>
@@ -155,7 +219,6 @@ export function WorkChat({
                   nameOf={nameOf}
                   members={members}
                   onReact={(e) => onReact(f.id, e)}
-                  onToTask={f.kind === 'message' && f.text.trim() ? () => onMessageToTask(f.text, f.mentions) : undefined}
                   onLongPress={f.kind === 'message' ? () => setActionItem(f) : undefined}
                 />
               </Appear>
@@ -202,6 +265,20 @@ export function WorkChat({
           <Pressable style={s.sheetBackdrop} onPress={() => setActionItem(null)} />
           <View style={s.sheet}>
             <View style={s.sheetHandle} />
+            {/* 리액션 빠른 선택 — 카톡식으로 시트 상단에 이모지 행. 누르면 반영하고 닫힌다. */}
+            <View style={s.sheetReactRow}>
+              {REACTIONS.map((e) => (
+                <Pressable
+                  key={e}
+                  onPress={() => { const id = actionItem!.id; setActionItem(null); onReact(id, e); }}
+                  style={({ pressed }) => [s.sheetReact, pressed && { backgroundColor: InkColors.paper }]}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${e} 리액션`}
+                >
+                  <Text style={s.sheetReactEmoji}>{e}</Text>
+                </Pressable>
+              ))}
+            </View>
             {canTaskActive && (
               <Pressable
                 onPress={() => { const it = actionItem!; setActionItem(null); onMessageToTask(it.text, it.mentions); }}
@@ -246,7 +323,7 @@ function MenuItem({ icon, label, sub, onPress, top }: { icon: any; label: string
   );
 }
 
-function FeedRow({ item, me, nameOf, members, onReact, onToTask, onLongPress }: { item: FeedItem; me: string; nameOf: (id: string) => string; members: Member[]; onReact: (e: string) => void; onToTask?: () => void; onLongPress?: () => void }) {
+function FeedRow({ item, me, nameOf, members, onReact, onLongPress }: { item: FeedItem; me: string; nameOf: (id: string) => string; members: Member[]; onReact: (e: string) => void; onLongPress?: () => void }) {
   if (item.kind === 'task_done') {
     return (
       <View style={s.doneRow}>
@@ -263,36 +340,35 @@ function FeedRow({ item, me, nameOf, members, onReact, onToTask, onLongPress }: 
   return (
     <View style={[s.msgRow, mine ? s.msgRowMine : s.msgRowOther]}>
       {!mine && <Text style={s.msgAuthor}>{item.authorName}</Text>}
-      <Pressable
-        onLongPress={onLongPress}
-        delayLongPress={350}
-        style={[s.bubble, mine && s.bubbleMine, photo && s.bubblePhoto]}
-      >
-        {photo && (
-          <StoredImage
-            stored={photo}
-            style={[s.msgImage, hasText && s.msgImageWithText]}
-            resizeMode="cover"
-            openOnPress
-            accessibilityLabel="사진 크게 보기"
-          />
-        )}
-        {hasText && (
-          <View style={photo ? s.msgCaption : undefined}>
-            <MentionText text={item.text} members={members} mine={mine} />
-          </View>
-        )}
-      </Pressable>
-      {onToTask && (
-        <Pressable onPress={onToTask} hitSlop={6} style={({ pressed }) => [s.toTask, pressed && { opacity: 0.6 }]}>
-          <Ionicons name="add-circle-outline" size={13} color={InkColors.ink3} />
-          <Text style={s.toTaskText}>할일로</Text>
+      {/* 말풍선 + 시간: 시간을 말풍선 옆(하단 baseline)에 인라인으로 붙여 세로 한 줄을 없앤다(카톡식). */}
+      <View style={[s.bubbleLine, mine && s.bubbleLineMine]}>
+        {mine && <Text style={s.msgTime}>{hhmm(item.createdAt)}</Text>}
+        <Pressable
+          onLongPress={onLongPress}
+          delayLongPress={350}
+          style={[s.bubble, mine && s.bubbleMine, photo && s.bubblePhoto]}
+        >
+          {photo && (
+            <StoredImage
+              stored={photo}
+              style={[s.msgImage, hasText && s.msgImageWithText]}
+              resizeMode="cover"
+              openOnPress
+              accessibilityLabel="사진 크게 보기"
+            />
+          )}
+          {hasText && (
+            <View style={photo ? s.msgCaption : undefined}>
+              <MentionText text={item.text} members={members} mine={mine} />
+            </View>
+          )}
         </Pressable>
-      )}
-      <View style={mine ? { alignItems: 'flex-end' } : undefined}>
-        <ReactionBar reactions={item.reactions} me={me} nameOf={nameOf} onReact={onReact} side={mine ? 'left' : 'right'} />
+        {!mine && <Text style={s.msgTime}>{hhmm(item.createdAt)}</Text>}
       </View>
-      <Text style={s.msgTime}>{hhmm(item.createdAt)}{mine ? ` · ${item.authorName}` : ''}</Text>
+      {/* 리액션은 '있을 때만' 칩으로 표시(추가 버튼은 롱프레스 시트로 이동). 없으면 줄 자체가 사라진다. */}
+      <View style={mine ? { alignItems: 'flex-end' } : undefined}>
+        <ReactionBar reactions={item.reactions} me={me} nameOf={nameOf} onReact={onReact} side={mine ? 'left' : 'right'} hideAdd />
+      </View>
     </View>
   );
 }
@@ -306,6 +382,8 @@ const s = StyleSheet.create({
   // 선택되는 걸 막는다(스트림 전역 user-select:none). 단, 말풍선 '텍스트'(msgText)만 다시 선택 허용.
   scroll: { padding: 12, gap: 11, ...(Platform.OS === 'web' ? ({ userSelect: 'none' } as object) : null) },
   empty: { textAlign: 'center', color: InkColors.ink3, fontSize: 13, marginTop: 40 },
+  loadMore: { alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: InkColors.scrim, borderRadius: Radius.pill, paddingHorizontal: 13, paddingVertical: 6, marginBottom: 2 },
+  loadMoreText: { fontSize: 11.5, color: InkColors.ink3, fontWeight: '700' },
   divider: { alignItems: 'center', marginVertical: 2 },
   dividerText: { fontSize: 11, color: InkColors.ink3, fontWeight: '700', backgroundColor: InkColors.scrim, paddingHorizontal: 12, paddingVertical: 3, borderRadius: Radius.pill },
 
@@ -314,11 +392,14 @@ const s = StyleSheet.create({
 
   // maxWidth 만 주고 alignSelf 를 안 주면 부모(스트림)가 stretch 로 행을 왼쪽에 고정해
   // 내 메시지가 프레임 오른쪽 끝까지 못 가고 가운데로 밀린다. 행 자체를 좌/우로 붙인다.
-  msgRow: { maxWidth: '82%', gap: 3 },
+  msgRow: { maxWidth: '82%', gap: 2 },
   msgRowMine: { alignSelf: 'flex-end', alignItems: 'flex-end' },
   msgRowOther: { alignSelf: 'flex-start' },
   msgAuthor: { fontSize: 11, color: InkColors.ink2, fontWeight: '700', paddingLeft: 4 },
-  bubble: { backgroundColor: InkColors.bg, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md, borderTopLeftRadius: Radius.tail, paddingHorizontal: 12, paddingVertical: 9, ...Elevation.e1 },
+  // 말풍선+시간 한 줄. 시간은 말풍선 하단 baseline에 붙는다(flex-end). 말풍선이 길면 flexShrink로 양보.
+  bubbleLine: { flexDirection: 'row', alignItems: 'flex-end', gap: 5 },
+  bubbleLineMine: { justifyContent: 'flex-end' },
+  bubble: { flexShrink: 1, backgroundColor: InkColors.bg, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md, borderTopLeftRadius: Radius.tail, paddingHorizontal: 12, paddingVertical: 7, ...Elevation.e1 },
   bubbleMine: { backgroundColor: InkColors.ink, borderColor: InkColors.ink, borderTopLeftRadius: Radius.md, borderTopRightRadius: Radius.tail, alignSelf: 'flex-end' },
   bubblePhoto: { padding: 4, overflow: 'hidden' },
   msgImage: { width: 200, height: 200, borderRadius: Radius.sm },
@@ -328,9 +409,8 @@ const s = StyleSheet.create({
   msgText: { fontSize: 14, color: InkColors.ink, lineHeight: 21, ...(Platform.OS === 'web' ? ({ userSelect: 'text' } as object) : null) },
   mention: { color: BrandColors.mention, fontWeight: '800' },
   mentionMine: { color: BrandColors.yellow },
-  toTask: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingVertical: 2, paddingHorizontal: 4 },
-  toTaskText: { fontSize: 11, color: InkColors.ink3, fontWeight: '700' },
-  msgTime: { fontSize: 10, color: InkColors.ink3, paddingHorizontal: 4 },
+  // 인라인 시간: 말풍선 옆에 붙어 하단 baseline에 앉는다. 줄바꿈 방지로 flexShrink 0.
+  msgTime: { flexShrink: 0, fontSize: 10, color: InkColors.ink3, paddingBottom: 1 },
 
   composer: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 10, backgroundColor: InkColors.cream, borderTopWidth: 1, borderTopColor: InkColors.line },
   plus: { width: 38, height: 38, borderRadius: Radius.md, backgroundColor: InkColors.ink, alignItems: 'center', justifyContent: 'center' },
@@ -350,6 +430,9 @@ const s = StyleSheet.create({
   sheetBackdrop: { flex: 1 },
   sheet: { backgroundColor: '#FFFFFF', borderTopLeftRadius: Radius.sheet, borderTopRightRadius: Radius.sheet, paddingHorizontal: 12, paddingTop: 10, paddingBottom: 24, gap: 4, ...Elevation.e3 },
   sheetHandle: { width: 40, height: 4, borderRadius: Radius.pill, backgroundColor: InkColors.line, alignSelf: 'center', marginBottom: 8 },
+  sheetReactRow: { flexDirection: 'row', justifyContent: 'space-around', paddingVertical: 6, paddingHorizontal: 4, marginBottom: 4, borderBottomWidth: 1, borderBottomColor: InkColors.line },
+  sheetReact: { width: 48, height: 48, borderRadius: Radius.pill, alignItems: 'center', justifyContent: 'center' },
+  sheetReactEmoji: { fontSize: 26 },
   sheetItem: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14, paddingHorizontal: 12, borderRadius: Radius.md },
   sheetItemText: { fontSize: 15, fontWeight: '700', color: InkColors.ink },
   sheetCancel: { marginTop: 4, alignItems: 'center', paddingVertical: 13, borderRadius: Radius.md, backgroundColor: InkColors.bgSoft, borderWidth: 1, borderColor: InkColors.line },

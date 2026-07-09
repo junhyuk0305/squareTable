@@ -7,7 +7,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { PressableScale } from '@/components/PressableScale';
 import { Appear } from '@/components/Appear';
 import { MAX_SPLIT_PUBLISH } from '@/components/OwnerCoachChat';
-import { structureSquare } from '@/lib/ai';
+import { HandoverImport } from '@/components/owner/HandoverImport';
+import { structureSquare, BULK_IMPORT_PIPELINE } from '@/lib/ai';
 import type { StructuredSegment } from '@/lib/ai/types';
 import { isSquarePublishable, buildPlaybookEntryFromSquare, buildDirectUq } from '@/lib/utils/buildEntry';
 import { getCategoryMeta } from '@/lib/utils/category';
@@ -32,6 +33,22 @@ type Phase = 'input' | 'processing' | 'review';
  * 1차 범위: 붙여넣기. 문서파싱(pdf/hwp)·사진 OCR은 후속.
  */
 export default function OwnerHandoverScreen() {
+  // 킬스위치(ai/config.ts BULK_IMPORT_PIPELINE):
+  //  true  = 대량 파이프(청킹 → draft 증분저장 → 섹션 검수 → 발행) — HandoverImport
+  //  false = 아래 레거시(단일 AI 호출·최대 MAX_SPLIT_PUBLISH개 즉시 발행)로 즉시 롤백
+  if (BULK_IMPORT_PIPELINE) {
+    return (
+      <>
+        <Stack.Screen options={{ title: '인수인계서 올리기' }} />
+        <HandoverImport />
+      </>
+    );
+  }
+  return <LegacyHandover />;
+}
+
+/** 레거시 경로(플래그 off 롤백용) — 기존 동작 그대로 보존. */
+function LegacyHandover() {
   const router = useRouter();
   const addEntry = usePlaybookStore((s) => s.add);
   const storeId = useSessionStore((s) => s.unitId) || 'store_001';
@@ -485,6 +502,7 @@ const styles = StyleSheet.create({
     borderColor: BrandColors.yellowDeep,
     padding: 18,
     alignItems: 'center',
+    marginBottom: Space.md,
   },
   uploadEmoji: { fontSize: 28 },
   uploadTitle: { fontSize: 16, fontWeight: '900', color: InkColors.ink, marginTop: 8, marginBottom: 3 },

@@ -123,11 +123,13 @@ export async function hybridSearch(query: string, entries: PlaybookEntry[]): Pro
 }
 
 // ── 색인(임베딩) ────────────────────────────────────────────
-/** 임베딩 대상 텍스트 — 제목·카테고리·상황·단계·금지·키워드를 합친다(한국어 일관). */
+/** 임베딩 대상 텍스트 — 제목·카테고리·상황·단계·금지·키워드를 합친다(한국어 일관).
+ *  섹션이 있으면 맨 앞에 "[오픈]"처럼 프리펜드(Contextual Retrieval, 설계 §5d) —
+ *  원자 노하우의 유일한 약점(문서 맥락 상실)을 색인 텍스트에 되살려 검색 실패를 줄인다. */
 export function buildEmbedText(e: PlaybookEntry): string {
   const sq = e.square;
   return [
-    e.title,
+    e.section ? `[${e.section}] ${e.title}` : e.title,
     getCategoryMeta(e.category).label,
     sq.situation,
     sq.action?.steps?.join(' '),

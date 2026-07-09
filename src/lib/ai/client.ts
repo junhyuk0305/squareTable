@@ -132,6 +132,21 @@ export async function structureSquare(
   }
 }
 
+// 인수인계서 대량 파이프(structureDoc) 전용 — 실패 시 mock 폴백 "금지" 버전.
+// 채팅(coach)은 폴백이 UX 안전망이지만, 파이프라인이 mock 결과를 받으면 가짜 노하우가
+// draft로 조용히 저장된다(무음 오염). 여기선 그대로 throw해 호출부가 청크 단위로
+// 재시도/실패 처리하게 한다(429 레이트리밋도 메시지로 구분 가능: "failed: 429").
+export async function structureSquareStrict(
+  input: StructureSquareInput,
+): Promise<StructureSquareOutput> {
+  if (USE_MOCK) return mockStructureSquare(input); // 데모 모드는 명시적 mock(가짜임을 아는 경로)
+  let out = await callEdge<StructureSquareOutput>('square', input);
+  if (out.usable !== false && squareWentEnglish(input, out)) {
+    out = await callEdge<StructureSquareOutput>('square', input);
+  }
+  return out;
+}
+
 // 대화형 수정 — 현재 SQUARE + 자연어 수정요청 → 부분 패치된 새 SQUARE(단일).
 export async function patchSquare(
   input: PatchSquareInput,

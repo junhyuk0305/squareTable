@@ -278,6 +278,7 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
 
       {view === 'chat' && (
         <WorkChat
+          key={currentRoomId ?? 'all'}
           stream={stream}
           today={today}
           me={userId}

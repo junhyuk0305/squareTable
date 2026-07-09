@@ -104,6 +104,13 @@ export type PlaybookEntry = {
     label?: string;
     ref_id?: string;
   };
+  // ── 섹션·순서·출처(인수인계서 대량등록) 메타 — 0063 마이그레이션 컬럼 ──
+  // 매뉴얼은 저장물이 아니라 파생 뷰: 원자 노하우마다 [섹션+순서]만 붙여 섹션별로 렌더한다.
+  // section: 주제 섹션(오픈·마감·레시피…). import 소제목으로 자동 시드. null/undefined=미분류(기타).
+  // order_index: 섹션 내 순서(문서 순서 보존). source_id: import 배치 꼬리표(관리용, 묶음 기준 아님).
+  section?: string | null;
+  order_index?: number;
+  source_id?: string | null;
   // ── 업종 표준 노하우 팩(온보딩 자동등록) 메타 — 0024 마이그레이션 컬럼 ──
   // is_template: 아직 매장에 바인딩 안 된 순수 템플릿(번들 JSON에서만 true). fork되면 false.
   // needs_review: 사장이 교정 안 한 '매장 기본값(미확인)'. 알바/관리화면에 배지로 표시.
