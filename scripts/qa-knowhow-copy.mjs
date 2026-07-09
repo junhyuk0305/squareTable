@@ -58,6 +58,10 @@ async function main() {
   console.log('· 노하우 복제 라이브 증명:', URL, '\n');
   const O = await makeOwner('O');
   const A = await createStore(O.c, `KC소스_${rid}`);   // 소스매장(생성 → 활성)
+  // ★유료화(billing_free_mode=false) 이후: 2호점 생성은 multi 플랜 전용(0062 plan_limit_store).
+  //   전역 스위치는 건드리지 않고, 실제 유료 고객 경로 그대로 admin_activate_store 로 multi 승격(qa-multistore 패턴).
+  const { error: actErr } = await admin.rpc('admin_activate_store', { p_unit_id: A, p_days: 1, p_plan: 'multi' });
+  check('소스매장 multi 승격(admin_activate_store)', !actErr, actErr?.message ?? '');
   const B = await createStore(O.c, `KC대상_${rid}`);   // 대상매장(생성 → 활성으로 이동)
   // 이 시점 활성=B. A에 노하우를 넣으려면 A로 전환.
   await O.c.rpc('switch_active_unit', { p_unit_id: A });

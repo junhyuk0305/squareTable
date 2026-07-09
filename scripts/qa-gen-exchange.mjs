@@ -182,6 +182,10 @@ async function main() {
 
     // ── ⑦ realtime 회귀(0047) + 컬럼 필터 ───────────────────────────────────
     console.log('[7] realtime(profiles) — 이벤트 수신 + birth_date 미포함');
+    // 노드(persistSession:false)에선 realtime 소켓이 anon 토큰으로 남아 RLS상 이벤트 0건 → 명시 setAuth 필수
+    // (setAuth 없이는 SUBSCRIBED 후 timeout — 브라우저에선 onAuthStateChange 가 자동 전파해 문제 없음).
+    const { data: oSess } = await O.c.auth.getSession();
+    if (oSess?.session?.access_token) await O.c.realtime.setAuth(oSess.session.access_token);
     const rt = await new Promise((resolve) => {
       const timer = setTimeout(() => resolve({ status: 'timeout' }), 12000);
       const ch = O.c.channel(`gx_${rid}`).on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'profiles' }, (payload) => {
