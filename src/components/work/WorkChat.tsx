@@ -129,6 +129,10 @@ export function WorkChat({
   const lastY = useRef(0);
   const contentH = useRef(0);
   const nearBottom = useRef(true); // 하단 근처면 새 메시지에 자동으로 붙어 내려간다.
+  // 초기 진입 하단 고정 플래그 — 하단에 실제 도달하기 전까지는 상단 자동 loadMore 를 잠근다.
+  // (애니메이션 scrollToEnd 가 y=0에서 출발하며 상단 트리거(y≤40)를 오발 → 앵커 복원이
+  //  하단 스크롤을 끊어 중간에 걸리는 레이스 방지. 초기 점프는 무애니메이션이라 구간 자체도 없다.)
+  const initialPin = useRef(true);
 
   const loadMore = useCallback(() => {
     if (stream.length <= visible) return;
@@ -142,6 +146,9 @@ export function WorkChat({
       // 위로 붙은 만큼(delta)을 더해 스크롤을 내려 시야를 그대로 유지.
       scrollRef.current?.scrollTo({ y: a.y + (h - a.h), animated: false });
       anchorRef.current = null;
+    } else if (initialPin.current && h > 0) {
+      // 초기 진입: 콘텐츠가 붙는 즉시 무애니메이션으로 하단 점프(카톡·슬랙식).
+      scrollRef.current?.scrollTo({ y: h, animated: false });
     }
     contentH.current = h;
   }, []);
@@ -152,6 +159,11 @@ export function WorkChat({
       lastY.current = contentOffset.y;
       contentH.current = contentSize.height;
       nearBottom.current = contentOffset.y + layoutMeasurement.height >= contentSize.height - 80;
+      // 초기 하단 고정이 끝나기 전(하단 미도달)에는 상단 자동 트리거를 무시한다.
+      if (initialPin.current) {
+        if (nearBottom.current) initialPin.current = false;
+        return;
+      }
       if (contentOffset.y <= 40 && hasMore && !anchorRef.current) loadMore();
     },
     [hasMore, loadMore],
@@ -159,9 +171,11 @@ export function WorkChat({
 
   // 새 메시지/최초 로드 시 하단으로. 단, 위로 올려 과거를 읽는 중이면 끌어내리지 않는다.
   // (visible만 늘어나는 '더보기'는 stream.length가 안 변해 여기서 안 걸린다.)
+  // 초기 진입 중(initialPin)엔 무애니메이션 — 애니메이션이 y=0에서 출발하며 상단 트리거를 지나는
+  // 구간을 만들지 않는다(하단 점프 자체는 onContentSizeChange 가 담당, 여기는 보강).
   useEffect(() => {
     if (!nearBottom.current) return;
-    const t = setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 30);
+    const t = setTimeout(() => scrollRef.current?.scrollToEnd({ animated: !initialPin.current }), 30);
     return () => clearTimeout(t);
   }, [stream.length]);
 
