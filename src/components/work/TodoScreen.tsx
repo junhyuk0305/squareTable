@@ -240,10 +240,10 @@ export function TodoScreen({
                           <Text style={[s.itemText, on && s.itemTextOn]}>{t.sectionNote ? `${t.sectionNote} · ${t.text}` : t.text}</Text>
                           {mark && <Text style={s.itemMeta}>{mark.byName} 완료 · {hhmm(mark.at)}</Text>}
                         </View>
-                        {photoUrl ? <StoredImage stored={photoUrl} style={s.thumb} /> : null}
+                        {photoUrl ? <StoredImage stored={photoUrl} style={s.thumb} viewOnPress accessibilityLabel="완료 사진 크게 보기" /> : null}
                         {isRoutine ? <Text style={s.routineTag}>루틴</Text> : assignedName ? <Text style={s.assignTag}>담당 {assignedName}</Text> : isMine ? <Text style={s.mineTag}>내 할일</Text> : null}
                         {onAttachPhoto && !on && (
-                          <Pressable onPress={() => onAttachPhoto(t.id, selected)} hitSlop={6} disabled={!!uploadingId}>
+                          <Pressable onPress={() => onAttachPhoto(t.id, selected)} hitSlop={6} disabled={!!uploadingId} accessibilityRole="button" accessibilityLabel={`${t.text} 사진으로 완료`}>
                             <Ionicons name={uploadingId === t.id ? 'cloud-upload-outline' : 'camera-outline'} size={16} color={InkColors.ink3} />
                           </Pressable>
                         )}

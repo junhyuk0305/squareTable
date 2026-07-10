@@ -118,7 +118,7 @@ export function EntryDetailModal({
             {entry.photos && entry.photos.length > 0 ? (
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.photoRow}>
                 {entry.photos.map((p, i) => (
-                  <StoredImage key={i} stored={p} style={s.photo} />
+                  <StoredImage key={i} stored={p} style={s.photo} viewOnPress />
                 ))}
               </ScrollView>
             ) : null}
