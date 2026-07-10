@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import type { ChatQuery, ResponseBlock, UnknownQuery, PlaybookEntry, SourceRef } from '@/types';
 import { inferCategoryFromQuery } from '@/lib/utils/inferCategory';
-import { generateAnswer, hybridSearch, extractIntent, toSopSlices, GENERATE_THRESHOLD } from '@/lib/ai';
+import { generateAnswer, hybridSearch, extractIntent, classifyQuery, toSopSlices, GENERATE_THRESHOLD } from '@/lib/ai';
 import { MAX_ACTIONS, MAX_DONTS } from '@/lib/ai/config';
 import { usePlaybookStore } from './usePlaybookStore';
 import { useUnknownQueueStore } from './useUnknownQueueStore';
@@ -25,6 +25,13 @@ const STORE_ID = (contextPack as { unit_id: string }).unit_id;
 const CANDIDATE_FLOOR = 0.3;
 // 후보 카드 최대 개수.
 const MAX_CANDIDATES = 3;
+
+// 의도 게이트(triage) 응대 문구 — chat=잡담·도메인밖(정체 고지+용도 안내), vague=대상불명(되묻기 1회).
+// 검색·생성·사장 라우팅을 전부 건너뛰는 턴이라 노하우 카드 대신 말풍선(smalltalk)으로만 응답한다.
+const SMALLTALK_CHAT_REPLY =
+  '저는 매장 일을 도와드리는 착착이에요. 매장 업무에서 궁금한 게 생기면 편하게 물어봐 주세요!';
+const SMALLTALK_VAGUE_REPLY =
+  '어떤 걸 물어보시는 건지 조금만 구체적으로 알려주시겠어요? 예를 들어 "제빙기 청소 어떻게 해요?"처럼 물어보시면 딱 맞는 노하우를 찾아드려요.';
 
 type ChatState = {
   history: ChatQuery[];
@@ -138,21 +145,79 @@ export const useChatStore = create<ChatState>((set, get) => ({
         .map((sid) => byId.get(sid))
         .filter((e): e is PlaybookEntry => !!e)
         .map((e) => ({ entry_id: e.id, creator_name: e.creator_name, title: e.title, version: e.version, updated_at: e.updated_at }));
+      // 조건 커버리지 partial — 질문의 조건·예외("영수증 없는데")를 SOP가 안 다룸. 답 위에 미커버
+      // 조건을 고지(caveat)하고, 아래에서 pendingDeflect 를 준비해 "사장님께 물어보기" 1탭을 연다.
+      const partial = ai.coverage === 'partial' && !!ai.caveat?.trim();
       const cq: ChatQuery = {
         id, junior_id: session.userId, junior_name: session.userName, query_text: text, asked_at: now,
         matched_entry_ids: ai.usedSopIds, match_confidence: r.confidence, was_deflected: true,
         // 여러 노하우를 AI가 모아 정리 → mode:'generated'(검증 배지 비노출 + "AI 정리" 고지).
         // 2개 이상 참고했으면 sources로 복수 출처 노출(단일이면 기존 source 푸터만).
-        response_block: { ...ai.block, mode: 'generated', ...(sources.length > 1 ? { sources } : {}), ...(ai.degraded ? { degraded: true } : {}) },
+        response_block: {
+          ...ai.block, mode: 'generated',
+          ...(partial ? { caveat: ai.caveat!.trim() } : {}),
+          ...(sources.length > 1 ? { sources } : {}),
+          ...(ai.degraded ? { degraded: true } : {}),
+        },
         satisfaction: null, resolved_at: now,
       };
       set((s) => ({ history: [...s.history, cq], isLoading: false, lastSubmittedId: id }));
       persistAndCount(cq, ai.usedSopIds);
+      // partial 은 예외 노하우가 없다는 신호 — 미매칭 경로와 동일하게 UnknownQuery 를 준비해
+      // 알바가 1탭으로 사장 인박스에 올릴 수 있게 한다(예외 커버리지가 쌓이는 데이터 루프).
+      if (partial) {
+        const uq: UnknownQuery = {
+          id: genId('uq'),
+          junior_id: session.userId,
+          junior_name: anon ? '익명' : session.userName,
+          anonymous: anon,
+          query_text: text,
+          asked_at: now,
+          presumed_category: inferCategoryFromQuery(text, r.candidates),
+          presumed_subcategory: '',
+          match_attempted: true,
+          best_match_confidence: r.confidence,
+          best_match_entry_id: r.candidates[0]?.entry?.id ?? null,
+          status: 'pending_owner_answer',
+          fallback_action: '사장님께 알림 전송됨',
+          owner_notified_at: now,
+          owner_will_answer: true,
+          similar_queries_count: 1,
+          ai_general_answer: '잠시만요, 사장님 답변을 기다리고 있어요.',
+        };
+        set((s) => ({ pendingDeflects: { ...s.pendingDeflects, [id]: uq } }));
+      }
       return true;
     };
 
+    // 0) 의도 게이트 — 검색보다 먼저 "매장 질문인가"를 판정(검색과 병렬 → 실질 질문 지연 0).
+    //    실측(2026-07-10 프로브): 잡담·도메인밖 질문도 벡터 0.58~0.67로 GENERATE 컷(0.45)을 전부
+    //    통과했고 6건 중 2건은 확신 오답까지 서빙됐다("오늘 뭐 먹을까?"→음료추천 SOP). 유사도
+    //    축으로는 잡담(0.58~0.67)과 실질 질문(0.70~0.74)이 분리 불가 → LLM 의도 분류가 방어선.
+    //    chat·vague 는 검색·생성·사장 라우팅 전부 스킵(쿼터 미차감·인박스 잡음 0).
+    const [triage, firstSearch] = await Promise.all([
+      classifyQuery({ query: text }),
+      hybridSearch(text, playbookEntries),
+    ]);
+    if (triage.type === 'chat' || triage.type === 'vague') {
+      const id = genId('cq');
+      const now = new Date().toISOString();
+      const cq: ChatQuery = {
+        id, junior_id: session.userId, junior_name: session.userName, query_text: text, asked_at: now,
+        matched_entry_ids: [], match_confidence: 0, was_deflected: true,
+        response_block: {
+          summary: triage.type === 'chat' ? SMALLTALK_CHAT_REPLY : SMALLTALK_VAGUE_REPLY,
+          actions: [], donts: [], mode: 'smalltalk',
+        },
+        satisfaction: null, resolved_at: now,
+      };
+      set((s) => ({ history: [...s.history, cq], isLoading: false, lastSubmittedId: id }));
+      persistAndCount(cq, []);
+      return;
+    }
+
     // 1) 하이브리드 검색(렉시컬+벡터). mock이면 내부에서 렉시컬+데모 딜레이로 폴백.
-    let result = await hybridSearch(text, playbookEntries);
+    let result = firstSearch;
     if (result.matched) { serveStored(result.matched, result.confidence); return; }
     if (await tryGenerate(result)) return;
 

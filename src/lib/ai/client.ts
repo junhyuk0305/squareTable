@@ -10,14 +10,16 @@ import type {
   PatchSquareInput,
   IntentInput,
   IntentOutput,
+  TriageInput,
+  TriageOutput,
 } from './types';
 import { AI_ENDPOINT, ANON, USE_MOCK } from './config';
-import { mockGenerateAnswer, mockStructureSquare, mockPatchSquare, mockExtractIntent } from './mock';
+import { mockGenerateAnswer, mockStructureSquare, mockPatchSquare, mockExtractIntent, mockClassifyQuery } from './mock';
 import { isEnglishDominant } from '@/lib/utils/knowhowInput';
 import { supabase } from '@/lib/supabase';
 import { reportError } from '@/lib/analytics/track';
 
-type Task = 'answer' | 'square' | 'patch' | 'intent';
+type Task = 'answer' | 'square' | 'patch' | 'intent' | 'triage';
 
 // 한글 입력인데 결과가 통째로 영어로 나왔는지(언어 드리프트). 혼용은 통과(한글 1자라도 있으면 false).
 function squareWentEnglish(input: { rawText?: string; instruction?: string }, out: StructureSquareOutput): boolean {
@@ -162,6 +164,20 @@ export async function patchSquare(
     console.warn('[ai] patchSquare fallback to mock:', e);
     reportError('ai.patchSquare.degraded', e);
     return { ...(await mockPatchSquare(input)), degraded: true };
+  }
+}
+
+// 의도 게이트 — 검색 전에 "매장 질문(question) / 잡담·도메인밖(chat) / 대상불명(vague)"을 판정.
+// 실패·타임아웃 시 question 으로 fail-open — 게이트 장애가 실질 질문을 막으면 안 된다
+// (엣지 handleTriage 의 이상값 fail-open 과 동일 규칙, 클라·서버 이중 방어).
+export async function classifyQuery(input: TriageInput): Promise<TriageOutput> {
+  if (USE_MOCK) return mockClassifyQuery(input);
+  try {
+    const out = await callEdge<TriageOutput>('triage', input);
+    return ['question', 'chat', 'vague'].includes(out?.type) ? out : { type: 'question' };
+  } catch (e) {
+    console.warn('[ai] classifyQuery failed (fail-open → question):', e);
+    return { type: 'question' };
   }
 }
 

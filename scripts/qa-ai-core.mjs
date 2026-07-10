@@ -57,15 +57,37 @@ const SOPS = {
   aa: sop({ id: 'sop_aa', title: '아이스 아메리카노 제조', category: 'Routine', situation: '아이스 아메리카노 주문 시', steps: ['얼음을 가득 채운다', '에스프레소 2샷을 넣는다', '물 200ml를 붓는다'] }),
   clean: sop({ id: 'sop_clean', title: '마감 청소', category: 'Routine', situation: '영업 마감 후', steps: ['그라인더 원두를 비운다', '바닥을 물청소한다'] }),
   cup: sop({ id: 'sop_cup', title: '여분 컵 보관 위치', category: 'Context', situation: '여분 컵과 빨대는 창고 맨 위 칸에 보관한다', steps: [] }),
+  refund: sop({ id: 'sop_refund', title: '환불 응대', category: 'Event', situation: '손님이 환불을 요청할 때', steps: ['영수증을 확인한다', '포스에서 환불 처리한다'] }),
+  refundNr: sop({ id: 'sop_refund_nr', title: '환불 — 영수증 없는 경우', category: 'Event', situation: '환불 요청 — 영수증이 없는 경우', steps: ['사장님께 전화로 확인 후 처리한다'] }),
 };
+// cov: 조건 커버리지 기대값. partial 이면 caveat(미커버 조건 고지) 비어있으면 안 됨.
 const ANSWER = [
-  { id: 'A1', label: '직접 매칭(그라운딩)', q: '아이스 아메리카노 어떻게 만들어요?', sops: [SOPS.aa, SOPS.clean], grounded: true, cite: 'sop_aa', must: ['200'] },
+  { id: 'A1', label: '직접 매칭(그라운딩)', q: '아이스 아메리카노 어떻게 만들어요?', sops: [SOPS.aa, SOPS.clean], grounded: true, cite: 'sop_aa', must: ['200'], cov: 'full' },
   { id: 'A2', label: '근거 없음(환각 방지)', q: '환불 정책이 어떻게 되나요?', sops: [SOPS.aa, SOPS.clean], grounded: false },
   { id: 'A3', label: '사실형 SOP 답변(C3 연계)', q: '여분 컵 어디 있어요?', sops: [SOPS.cup, SOPS.clean], grounded: true, cite: 'sop_cup', must: ['창고'] },
   { id: 'A4', label: '여러 후보 중 정답 선택', q: '마감 때 뭐 해요?', sops: [SOPS.aa, SOPS.clean, SOPS.cup], grounded: true, cite: 'sop_clean', must: ['청소'] },
+  // 예외상황 정확도(2026-07-10) — 질문의 조건("영수증 없이")을 SOP가 다루는가.
+  { id: 'A5', label: '예외 미커버 → partial 고지', q: '영수증 없이 환불해 달라는데 어떻게 해요?', sops: [SOPS.refund, SOPS.clean], grounded: true, cite: 'sop_refund', cov: 'partial' },
+  { id: 'A6', label: '예외 SOP 존재 → 그걸로 full', q: '영수증 없이 환불해 달라는데 어떻게 해요?', sops: [SOPS.refund, SOPS.refundNr], grounded: true, cite: 'sop_refund_nr', must: ['사장'], cov: 'full' },
 ];
 const INTENT = [
   { id: 'I1', label: '장황한 질문 핵심추출', q: '아 그 왜 아침에 커피 기계 있잖아요 그거 뭐 어떻게 하더라', kw: ['청소', '그라인더', '커피', '기계', '아침'] },
+];
+// ── 의도 게이트(triage): 잡담·도메인밖=chat / 대상불명=vague / 실질 질문=question ──
+// 근거 실측(2026-07-10): 잡담도 벡터 0.58~0.67로 GENERATE 컷 전부 통과 → 2/6 확신 오답.
+// expect 는 허용 집합 — 경계 케이스(T6)만 관용, 실질 질문 오차단(T7~T10)은 무관용.
+const TRIAGE = [
+  { id: 'T1', label: '도메인 밖(날씨)', q: '오늘 날씨 어때?', expect: ['chat'] },
+  { id: 'T2', label: 'AI 자체 질문', q: '너 이름 뭐야?', expect: ['chat'] },
+  { id: 'T3', label: '잡담(식사)', q: '오늘 뭐 먹을까?', expect: ['chat'] },
+  { id: 'T4', label: '잡담(심심)', q: '심심한데 재밌는 얘기 해줘', expect: ['chat'] },
+  { id: 'T5', label: '지시대명사(모호)', q: '이거 뭐야?', expect: ['vague'] },
+  { id: 'T6', label: '경계(안부/업무 중의)', q: '오늘 뭐해?', expect: ['chat', 'vague'] },
+  { id: 'T7', label: '실질 질문(마감)', q: '마감 때 뭐 해요?', expect: ['question'] },
+  { id: 'T8', label: '경계-실질("뭐해" 포함)', q: '오늘 마감 뭐 해야 돼요?', expect: ['question'] },
+  { id: 'T9', label: '경계-실질(지시대명사+대상)', q: '포스기 이거 어떻게 써요?', expect: ['question'] },
+  { id: 'T10', label: '실질 질문(환불)', q: '환불 어떻게 해요?', expect: ['question'] },
+  { id: 'T11', label: '잡음(자모뿐, LLM 미호출)', q: 'ㅁㄴㅇㄹ', expect: ['vague'] },
 ];
 
 const main = async () => {
@@ -102,6 +124,10 @@ const main = async () => {
     if (c.grounded && c.cite) chk(cited.includes(c.cite), `${c.id} 출처 정확(${c.cite})`, `실제 ${JSON.stringify(cited)}`);
     if (c.must) chk(c.must.every((t) => bt.includes(norm(t))), `${c.id} 내용 포함(${c.must.join(',')})`, '답변에 핵심정보 누락');
     if (!c.grounded) chk(!cited.length || b.block == null, `${c.id} 환각 안 함(빈 출처/null)`, `cite=${JSON.stringify(cited)}`);
+    if (c.cov) {
+      chk(b.coverage === c.cov, `${c.id} coverage=${c.cov}`, `실제 ${b.coverage} caveat="${b.caveat || ''}"`);
+      if (c.cov === 'partial') chk(!!(b.caveat || '').trim(), `${c.id} caveat(미커버 조건) 고지`, 'caveat 비어있음');
+    }
   }
 
   console.log('\n━━━━━━━━━━ [3] 의도추출 (intent) ━━━━━━━━━━');
@@ -113,6 +139,35 @@ const main = async () => {
     console.log(`  ${c.id} · ${c.label} [${r.status} ${r.ms}ms]`);
     console.log(`     rewritten="${r.body.rewritten}"  keywords=${JSON.stringify(r.body.keywords)}`);
     chk(c.kw.some((t) => kws.includes(norm(t))), `${c.id} 핵심어 추출(${c.kw.join('/')} 중 1+)`, '핵심어 전무');
+  }
+
+  console.log('\n━━━━━━━━━━ [4] 의도 게이트 (triage) ━━━━━━━━━━');
+  for (const c of TRIAGE) {
+    const r = await call(token, 'triage', { query: c.q });
+    await sleep(6500);
+    if (!r.ok) { chk(false, `${c.id} ${c.label}`, `HTTP ${r.status} ${JSON.stringify(r.body).slice(0, 120)}`); continue; }
+    const t = r.body.type;
+    console.log(`  ${c.id} · ${c.label} [${r.status} ${r.ms}ms]  "${c.q}" → type=${t}`);
+    chk(c.expect.includes(t), `${c.id} 판정∈{${c.expect.join(',')}}`, `실제 ${t}`);
+  }
+
+  console.log('\n━━━━━━━━━━ [5] 노하우 정리 — 예외분기 분리 (square) ━━━━━━━━━━');
+  {
+    const raw = '환불은 영수증 확인하고 해줘. 근데 단골손님이면 영수증 없어도 그냥 해드려';
+    const r = await call(token, 'square', { storeId: 'store_001', rawText: raw, category: 'Event', categoryGuide: guide });
+    await sleep(6500);
+    if (!r.ok) { chk(false, 'S1 예외분기 분리', `HTTP ${r.status}`); }
+    else {
+      const segs = r.body.segments || [];
+      const segText = (s) => norm([s.title, s.square?.situation, ...(s.square?.action?.steps || []), (s.keywords || []).join(' ')].join(' '));
+      console.log(`  S1 · "${raw}" → entries ${segs.length}개`);
+      segs.forEach((s, i) => console.log(`     [${i + 1}] "${s.title}" situation="${s.square?.situation}" steps=${JSON.stringify(s.square?.action?.steps)}`));
+      chk(segs.length >= 2, 'S1 예외를 별도 entry로 분리(≥2)', `실제 ${segs.length}개`);
+      const hasException = segs.some((s) => segText(s).includes(norm('단골')));
+      chk(hasException, 'S1 예외 entry에 조건(단골) 명시', '조건 단어 유실');
+      const hasGeneral = segs.some((s) => segText(s).includes(norm('영수증')) && !segText(s).includes(norm('단골')));
+      chk(hasGeneral, 'S1 본 규칙 entry(영수증 확인) 보존', '일반 절차 유실');
+    }
   }
 
   console.log(`\n════════════ ${fail === 0 ? '✅ PASS' : `❌ FAIL(${fail})`} — AI 핵심플로우 QA · 통과 ${pass} / 실패 ${fail} ════════════\n`);

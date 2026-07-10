@@ -92,7 +92,13 @@ export function ChatTurn({
             </Text>
           </View>
         )}
-        {block ? (
+        {block?.mode === 'smalltalk' ? (
+          // 의도 게이트 응대(잡담·되묻기) — 노하우 카드가 아니라 어시스턴트 말풍선 텍스트만.
+          // 출처·검증배지·피드백(👍👎)·개선제안이 전부 무의미한 턴이라 SquareCard를 태우지 않는다.
+          <View style={turnStyles.smalltalkBubble}>
+            <Text style={turnStyles.smalltalkText}>{block.summary}</Text>
+          </View>
+        ) : block && block.source ? (
           <>
           <SquareCard
             summary={block.summary}
@@ -156,6 +162,32 @@ export function ChatTurn({
               </View>
             </View>
           )}
+          {/* 조건 커버리지 partial — 질문의 조건·예외를 등록 노하우가 안 다룸. 위 답은 일반 절차일 뿐임을
+              정직하게 고지하고, 1탭으로 사장님 인박스에 올려 예외 노하우가 쌓이게 한다(데이터 루프). */}
+          {!!block.caveat && (
+            <View style={turnStyles.caveatNote}>
+              <View style={turnStyles.caveatRow}>
+                <Ionicons name="alert-circle-outline" size={14} color={InkColors.ink2} />
+                <Text style={turnStyles.caveatText}>{block.caveat}</Text>
+              </View>
+              {deflectState === 'registered' ? (
+                <View style={turnStyles.caveatDone}>
+                  <Ionicons name="checkmark-circle" size={13} color={InkColors.ink3} />
+                  <Text style={turnStyles.caveatDoneText}>사장님께 전달했어요. 답변이 오면 알려드릴게요.</Text>
+                </View>
+              ) : (
+                <Pressable
+                  onPress={onRegister}
+                  style={({ pressed }) => [turnStyles.caveatBtn, pressed && { opacity: 0.7 }]}
+                  accessibilityRole="button"
+                  accessibilityLabel="이 경우를 사장님께 물어보기"
+                >
+                  <Ionicons name="paper-plane-outline" size={13} color={InkColors.ink} />
+                  <Text style={turnStyles.caveatBtnText}>이 경우 사장님께 물어보기</Text>
+                </Pressable>
+              )}
+            </View>
+          )}
           </>
         ) : candidateEntries.length > 0 && deflectState === 'asking' ? (
           // 매칭 애매 → 후보 노하우 먼저 제시. '사장님께 물어보기'를 누르면 등록(deflectState=registered)으로 전환.
@@ -212,6 +244,46 @@ const turnStyles = StyleSheet.create({
     width: '100%',
     alignItems: 'stretch',
   },
+  // 의도 게이트 응대(잡담·되묻기) 말풍선 — 카드가 아닌 가벼운 어시스턴트 텍스트.
+  smalltalkBubble: {
+    alignSelf: 'flex-start',
+    maxWidth: '100%',
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: Radius.md,
+    backgroundColor: InkColors.bgSoft,
+    borderWidth: 1,
+    borderColor: InkColors.line,
+  },
+  smalltalkText: { fontSize: 14, color: InkColors.ink, fontWeight: '600', lineHeight: 21 },
+  // 조건 커버리지 partial 고지 — 미커버 조건 한 문장 + 사장님께 물어보기 1탭.
+  caveatNote: {
+    marginTop: 8,
+    paddingVertical: 9,
+    paddingHorizontal: 11,
+    borderRadius: Radius.sm,
+    backgroundColor: InkColors.bgSoft,
+    borderWidth: 1,
+    borderColor: InkColors.line,
+    gap: 8,
+  },
+  caveatRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 6 },
+  caveatText: { flex: 1, fontSize: 12, color: InkColors.ink2, fontWeight: '600', lineHeight: 17 },
+  caveatBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 5,
+    paddingVertical: 7,
+    paddingHorizontal: 11,
+    borderRadius: Radius.pill,
+    borderWidth: 1,
+    borderColor: InkColors.line,
+    backgroundColor: InkColors.bg,
+  },
+  caveatBtnText: { fontSize: 12, fontWeight: '700', color: InkColors.ink },
+  caveatDone: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  caveatDoneText: { fontSize: 12, color: InkColors.ink3, fontWeight: '600' },
   degradedNote: {
     flexDirection: 'row',
     alignItems: 'center',

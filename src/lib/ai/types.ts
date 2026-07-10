@@ -29,6 +29,10 @@ export type GenerateAnswerOutput = {
   block: ResponseBlock | null;   // 근거 부족 시 null → 호출부가 사장님 라우팅
   grounded: boolean;             // 제공된 SOP에만 근거했는가
   usedSopIds: string[];          // 실제 인용한 SOP id (출처 바인딩)
+  // 조건 커버리지 — 질문의 조건·예외("영수증 없는데")를 SOP가 명시적으로 다루는가.
+  // partial 이면 caveat(미커버 조건 한 문장)을 답 위에 고지 + 사장 에스컬레이션 1탭 제공.
+  coverage?: 'full' | 'partial';
+  caveat?: string;
   degraded?: boolean;            // AI 서버 실패로 기본(mock) 답으로 폴백했는가 → 사용자에 고지
   // 무료 플랜 월 AI답변 한도 초과(엣지 402). mock 폴백으로 위장하지 않고 호출부가
   // 업그레이드 안내 + 후보/사장 라우팅 경로로 자연 강등한다(과금층 0062).
@@ -66,6 +70,14 @@ export type PatchSquareInput = {
 // ── 의도추출(답변 경로 재검색용) ─────────────────────────────
 export type IntentInput = { query: string };
 export type IntentOutput = { rewritten: string; keywords: string[] };
+
+// ── 의도 게이트(triage) — 검색 전 "매장 질문인가" 판정 ────────
+// question=기존 파이프라인 / chat=잡담·도메인밖(고정 응대, 검색·생성·라우팅 스킵) /
+// vague=대상 불명(되묻기 1회). 실측 근거: 잡담도 벡터 0.58~0.67로 GENERATE 컷을 전부
+// 통과해 확신 오답·인박스 잡음을 만들었다(2026-07-10 프로브) — 유사도 축으론 분리 불가.
+export type TriageInput = { query: string };
+export type TriageType = 'question' | 'chat' | 'vague';
+export type TriageOutput = { type: TriageType };
 
 // 주관적 기준 입력 요청. AI가 노하우에서 감지 시 채우고, 클라가 종류(kind)에 맞는 컨트롤을 띄운다.
 //  - spectrum: 양끝(ends) 사이 위치(굽기·농도·간·온도·완성도 등 1차원 정도)

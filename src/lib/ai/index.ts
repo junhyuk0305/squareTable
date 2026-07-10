@@ -1,5 +1,5 @@
 // lib/ai/index.ts — AI 레이어 공개 진입점
-export { generateAnswer, structureSquare, patchSquare, extractIntent } from './client';
+export { generateAnswer, structureSquare, patchSquare, extractIntent, classifyQuery } from './client';
 export { structureDoc, type DocProgress } from './structureDoc';
 export { hybridSearch, embedEntry, buildEmbedText } from './searchClient';
 export { toSopSlice, toSopSlices } from './adapter';
@@ -13,6 +13,9 @@ export type {
   PatchSquareInput,
   IntentInput,
   IntentOutput,
+  TriageInput,
+  TriageOutput,
+  TriageType,
   ScalePrompt,
   StructuredSegment,
   AiFollowup,
