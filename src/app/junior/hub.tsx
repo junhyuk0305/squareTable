@@ -70,8 +70,15 @@ export default function JuniorHub() {
 
   const onCancelPending = async () => {
     setBusy(true);
-    await cancelJoinRequest();
+    setErr(null);
+    // 예전엔 반환값을 버려 RPC 실패 시 아무 반응 없이 대기카드가 그대로 남았다(#12 무음 no-op).
+    // 이제 실패 사유를 대기카드 아래에 노출하고, 성공했을 때만 입력값을 정리한다.
+    const { error } = await cancelJoinRequest();
     setBusy(false);
+    if (error) {
+      setErr(error);
+      return;
+    }
     setCode('');
   };
 
@@ -144,6 +151,8 @@ export default function JuniorHub() {
                   <Text style={styles.ghostBtnText}>신청 취소</Text>
                 </Pressable>
               </View>
+              {/* 신청취소 실패 사유를 대기카드 안에서 노출(코드입력 섹션은 대기 중 숨겨져 err이 안 보였음 #12). */}
+              {err && <Text style={styles.err}>{err}</Text>}
             </View>
           ) : hasStore ? (
             stores.map((s) => (
