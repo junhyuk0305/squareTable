@@ -10,6 +10,7 @@ import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
 import { HeaderBackButton } from '@/components/HeaderBackButton';
 import { Wordmark } from '@/components/Wordmark';
+import { SocialAuthButtons } from '@/components/SocialAuthButtons';
 import { isValidEmail } from '@/lib/utils/validation';
 import type { Role } from '@/types';
 
@@ -145,6 +146,9 @@ export default function LoginScreen() {
               <Text style={styles.linkText}>비밀번호 없이 <Text style={styles.linkStrong}>메일로 로그인</Text></Text>
             </Pressable>
           )}
+
+          {/* 소셜 로그인(구글 등) — 웹 전용. 데모 빌드에선 렌더 안 됨. */}
+          <SocialAuthButtons />
         </View>
 
         <View style={styles.signupBlock}>

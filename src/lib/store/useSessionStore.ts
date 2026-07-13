@@ -7,6 +7,7 @@ import {
   fetchUnitSubscription,
   checkPhoneInUse,
   rpcCreateStore,
+  rpcCompleteProfile,
   rpcDeleteStore,
   rpcJoinByInvite,
   rpcCancelJoinRequest,
@@ -55,6 +56,11 @@ type SessionState = {
   // 부팅 시 1회: 기존 세션 복원 + 프로필 로드 + auth 변화 구독
   init: () => Promise<void>;
   signInWithPassword: (email: string, pw: string) => Promise<{ error: string | null; role: Role }>;
+  // 소셜 로그인(웹). 전체 페이지가 provider로 리다이렉트되고, 돌아오면 detectSessionInUrl 이 세션을 복원한다.
+  // 성공 시 페이지 이동이라 반환이 없을 수 있음 — 에러(미설정/차단)만 문자열로 돌려준다.
+  signInWithGoogle: () => Promise<{ error: string | null }>;
+  // 소셜 로그인 사용자의 결손 프로필(이름/전화/생년월일) 완성. 성공 시 프로필 재로드로 상태 반영.
+  completeProfile: (name: string, phone: string, birthDate: string) => Promise<{ error: string | null }>;
   signUp: (
     email: string,
     pw: string,
@@ -378,6 +384,42 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     }
     track('login_succeeded', { role: get().role });
     return { error: null, role: get().role };
+  },
+
+  signInWithGoogle: async () => {
+    // 웹: 현재 오리진으로 돌아오게 한다(Supabase 대시보드 Redirect URLs 에 등록 필요). 돌아오면
+    // supabase.ts 의 detectSessionInUrl:true 가 ?code= 를 세션으로 교환 → onAuthStateChange → loadProfile.
+    // 네이티브는 별도 딥링크 핸들러가 필요 — 웹 우선(출시 1차)이라 여기선 웹만 지원, 미지원 플랫폼은 안내.
+    const redirectTo = typeof window !== 'undefined' ? window.location.origin : undefined;
+    if (!redirectTo) {
+      return { error: '구글 로그인은 웹에서만 지원해요. 앱에서는 이메일로 로그인해 주세요.' };
+    }
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo },
+    });
+    // 성공이면 페이지가 구글로 리다이렉트돼 이 아래로 안 온다. 에러면(미설정 등) 문구로 안내.
+    if (error) {
+      track('login_failed', { provider: 'google', reason: (error.message || '').slice(0, 60) });
+      return { error: friendlyError(error.message, '구글 로그인을 시작하지 못했어요. 잠시 후 다시 시도해 주세요.') };
+    }
+    return { error: null };
+  },
+
+  completeProfile: async (name, phone, birthDate) => {
+    const { error } = await rpcCompleteProfile(name.trim(), phone.trim() || null, birthDate || null);
+    if (error) {
+      const msg = /birth_date_required|birth_date_invalid/.test(error.message)
+        ? '생년월일을 확인할 수 없어요. 생년월일 8자리를 다시 확인해주세요.'
+        : /not_authenticated/.test(error.message)
+        ? '로그인이 만료됐어요. 다시 로그인해 주세요.'
+        : friendlyError(error.message, '프로필 저장에 실패했어요. 잠시 후 다시 시도해 주세요.');
+      return { error: msg };
+    }
+    // phone/birth_date 가 채워졌으니 세션 상태를 갱신한다(needsProfileSetup 해제 → 게이트 통과).
+    const uid = get().userId;
+    if (uid) await loadProfile(set, uid, get().email);
+    return { error: null };
   },
 
   signUp: async (email, pw, meta) => {

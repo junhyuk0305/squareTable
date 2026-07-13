@@ -6,6 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { applyMockSeed } from '@/lib/demo/mockSeed';
 import { HAS_SUPABASE } from '@/lib/supabase';
+import { SocialAuthButtons } from '@/components/SocialAuthButtons';
 import { formatBizNo, isValidBizNo, bizDigits } from '@/lib/utils/bizno';
 import { isValidEmail, isValidPhone, normalizePhone, formatPhone, passwordError, formatBirthDate8, birthDateISO } from '@/lib/utils/validation';
 import { BrandColors, InkColors } from '@/lib/theme/colors';
@@ -357,6 +358,9 @@ export default function SignupScreen() {
             </Text>
           )}
         </Pressable>
+
+        {/* 소셜 로그인(구글 등) — 가입도 소셜로 시작 가능. 웹 전용, 데모 빌드엔 렌더 안 됨. */}
+        <SocialAuthButtons />
 
         <Pressable onPress={() => router.replace('/login')} style={styles.loginRow}>
           <Text style={styles.loginText}>이미 계정이 있나요? <Text style={styles.loginStrong}>로그인</Text></Text>

@@ -3,6 +3,7 @@ import { Stack, Redirect, usePathname } from 'expo-router';
 import { InkColors } from '@/lib/theme/colors';
 import { HeaderBackButton } from '@/components/HeaderBackButton';
 import { useSessionStore } from '@/lib/store/useSessionStore';
+import { needsProfileSetup } from '@/lib/store/profileSetup';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { useChatStore } from '@/lib/store/useChatStore';
 import { useWorkStore } from '@/lib/store/useWorkStore';
@@ -16,6 +17,8 @@ import { deriveSubscription } from '@/lib/utils/subscription';
 export default function JuniorLayout() {
   const status = useSessionStore((s) => s.status);
   const unitId = useSessionStore((s) => s.unitId);
+  const phone = useSessionStore((s) => s.phone);
+  const pendingUnitId = useSessionStore((s) => s.pendingUnitId);
   const subStatus = useSessionStore((s) => s.subStatus);
   const trialEndsAt = useSessionStore((s) => s.trialEndsAt);
   const paidUntil = useSessionStore((s) => s.paidUntil);
@@ -57,6 +60,11 @@ export default function JuniorLayout() {
 
   if (HAS_SUPABASE && status === 'loading') return null;
   if (HAS_SUPABASE && status === 'signed_out') return <Redirect href="/" />;
+  // 소셜 로그인 결손 프로필(전화/생년월일 없음)은 매장 연결 전에 완성화면으로 — 여기서 막지 않으면 hub 에서
+  // 초대코드 입력→join_by_invite 가 birth_date_required 로 막혀 갇힌다. (직접 진입 시의 안전망; 주경로는 index.)
+  if (HAS_SUPABASE && needsProfileSetup({ status, phone, unitId, pendingUnitId })) {
+    return <Redirect href="/complete-profile" />;
+  }
   // 가입은 됐지만 매장 미연결 → 빈 챗으로 떨어뜨리지 않고 개인 허브(hub)로 유도.
   // hub = 마이페이지 + 배너 + 가게 코드 입력이 있는 직원 착지 홈. join은 hub로 리다이렉트되는 레거시 경로.
   if (

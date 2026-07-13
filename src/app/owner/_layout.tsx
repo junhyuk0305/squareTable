@@ -3,6 +3,7 @@ import { Stack, Redirect, usePathname } from 'expo-router';
 import { InkColors } from '@/lib/theme/colors';
 import { HeaderBackButton } from '@/components/HeaderBackButton';
 import { useSessionStore } from '@/lib/store/useSessionStore';
+import { needsProfileSetup } from '@/lib/store/profileSetup';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { useUnknownQueueStore } from '@/lib/store/useUnknownQueueStore';
 import { useWorkStore } from '@/lib/store/useWorkStore';
@@ -18,6 +19,8 @@ import { deriveSubscription } from '@/lib/utils/subscription';
 export default function OwnerLayout() {
   const status = useSessionStore((s) => s.status);
   const unitId = useSessionStore((s) => s.unitId);
+  const phone = useSessionStore((s) => s.phone);
+  const pendingUnitId = useSessionStore((s) => s.pendingUnitId);
   const subStatus = useSessionStore((s) => s.subStatus);
   const trialEndsAt = useSessionStore((s) => s.trialEndsAt);
   const paidUntil = useSessionStore((s) => s.paidUntil);
@@ -69,6 +72,11 @@ export default function OwnerLayout() {
 
   if (HAS_SUPABASE && status === 'loading') return null;
   if (HAS_SUPABASE && status === 'signed_out') return <Redirect href="/" />;
+  // 소셜 로그인 결손 프로필(전화/생년월일 없음)은 매장 생성 전에 완성화면으로 — create_store 가
+  // birth_date_required 로 막히기 전에 정보를 채우게 한다. (직접 진입 시의 안전망; 주경로는 index.)
+  if (HAS_SUPABASE && needsProfileSetup({ status, phone, unitId, pendingUnitId })) {
+    return <Redirect href="/complete-profile" />;
+  }
   // 가입은 됐지만 매장 미연결(가게 생성 미완료/연결 해제) → 빈 대시보드로 떨어뜨리지 않고
   // 가게 만들기로 강제 유도(junior/join 의 사장 버전). create-store/onboarding 자체는 통과시킨다.
   if (

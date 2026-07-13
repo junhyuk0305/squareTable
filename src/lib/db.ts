@@ -227,6 +227,13 @@ export async function rpcCreateStore(storeName: string, industry: string | null,
   return { data: (row as CreateStoreRow) ?? null, error: error as DbErr };
 }
 
+// 소셜 로그인(구글 등) 사용자의 결손 프로필(phone/birth_date=null)을 본인이 채운다(0066).
+// role/unit_id 는 서버 함수가 건드리지 않는다(사장 승격은 create_store 만). 성공 시 void.
+export async function rpcCompleteProfile(name: string, phone: string | null, birthDate: string | null): Promise<{ error: DbErr }> {
+  const { error } = await supabase.rpc('complete_profile', { p_name: name, p_phone: phone, p_birth_date: birthDate });
+  return { error: error as DbErr };
+}
+
 export type JoinRow = { unit_id: string; store_name: string };
 export async function rpcJoinByInvite(code: string): Promise<DbResult<JoinRow>> {
   const { data, error } = await supabase.rpc('join_by_invite', { p_code: code });
