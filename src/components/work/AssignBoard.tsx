@@ -124,9 +124,9 @@ export function AssignBoard({
                       <Text style={[st.itemText, on && st.itemTextOn]}>{t.sectionNote ? `${t.sectionNote} · ${t.text}` : t.text}</Text>
                       {mark ? <Text style={st.itemMeta}>{mark.byName} 완료 · {hhmm(mark.at)}</Text> : dp ? <Text style={st.itemDp}>{dp}</Text> : null}
                     </View>
-                    {photoUrl ? <StoredImage stored={photoUrl} style={st.thumb} /> : null}
+                    {photoUrl ? <StoredImage stored={photoUrl} style={st.thumb} viewOnPress accessibilityLabel="완료 사진 크게 보기" /> : null}
                     {onAttachPhoto && !on && (
-                      <Pressable onPress={() => onAttachPhoto(t.id, today)} hitSlop={6} disabled={!!uploadingId}>
+                      <Pressable onPress={() => onAttachPhoto(t.id, today)} hitSlop={6} disabled={!!uploadingId} accessibilityRole="button" accessibilityLabel={`${t.text} 사진으로 완료`}>
                         <Ionicons name={uploadingId === t.id ? 'cloud-upload-outline' : 'camera-outline'} size={16} color={InkColors.ink3} />
                       </Pressable>
                     )}

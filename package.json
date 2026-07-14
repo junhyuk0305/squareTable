@@ -40,6 +40,7 @@
     "compile:packs": "node scripts/compile-pack.mjs",
     "qa:daypart": "node scripts/qa-daypart-labels.mjs",
     "qa:onboarding": "node scripts/qa-onboarding.mjs",
+    "qa:complete-profile": "node scripts/qa-complete-profile.mjs",
     "qa:profile": "node scripts/qa-profile-update.mjs",
     "qa:knowhow-copy": "node scripts/qa-knowhow-copy.mjs",
     "qa:photo-private": "node scripts/qa-photo-private.mjs",

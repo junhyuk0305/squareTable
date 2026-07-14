@@ -1,7 +1,11 @@
 #!/usr/bin/env node
 // qa-multistore.mjs — 다점포(0055) 라이브 증명.
 // 한 사장이 2매장 생성 → my_units 2개 → 매장별 격리(unit_subscriptions) → 전환 → SPOF(비멤버 전환 거부).
-// 자가정리: delete_my_account. 실행: node scripts/qa-multistore.mjs
+// 자가정리: delete_my_account. 실행: node scripts/qa-multistore.mjs (.env + .env.seed 필요)
+//
+// ★유료화(billing_free_mode=false) 이후: 2호점 생성은 multi 플랜 전용(0062 plan_limit_store).
+//   전역 스위치를 켜는(true) 방향의 토글은 테스트 동안 프로덕션 페이월이 꺼지는 창이 생기므로 금지 —
+//   대신 실제 유료 고객 경로 그대로 테스트 매장을 admin_activate_store 로 multi 승격한다(전역 상태 무접촉).
 import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -9,20 +13,24 @@ import { dirname, join } from 'node:path';
 
 function loadEnv() {
   const env = { ...process.env };
-  try {
-    const root = join(dirname(fileURLToPath(import.meta.url)), '..');
-    for (const line of readFileSync(join(root, '.env'), 'utf8').split('\n')) {
-      const m = line.match(/^([A-Z0-9_]+)=(.*)$/);
-      if (m && !env[m[1]]) env[m[1]] = m[2].trim();
-    }
-  } catch { /* no .env */ }
+  const root = join(dirname(fileURLToPath(import.meta.url)), '..');
+  for (const f of ['.env', '.env.seed']) {
+    try {
+      for (const line of readFileSync(join(root, f), 'utf8').split('\n')) {
+        const m = line.match(/^([A-Z0-9_]+)=(.*)$/);
+        if (m && !env[m[1]]) env[m[1]] = m[2].trim();
+      }
+    } catch { /* 없으면 skip */ }
+  }
   return env;
 }
 const env = loadEnv();
-const URL = env.EXPO_PUBLIC_SUPABASE_URL, ANON = env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
-if (!URL || !ANON) { console.error('FAIL: SUPABASE URL/ANON 필요'); process.exit(2); }
+const URL = env.EXPO_PUBLIC_SUPABASE_URL || env.SUPABASE_URL, ANON = env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+const SRV = env.SUPABASE_SERVICE_ROLE_KEY;
+if (!URL || !ANON || !SRV) { console.error('FAIL: URL/ANON/SERVICE_ROLE 필요(.env + .env.seed — multi 승격에 사용)'); process.exit(2); }
 
 const mk = () => createClient(URL, ANON, { auth: { persistSession: false, autoRefreshToken: false } });
+const admin = createClient(URL, SRV, { auth: { persistSession: false, autoRefreshToken: false } });
 const s = String(Date.now()).slice(-9);
 const pw = 'Test1234!qa';
 let pass = 0, fail = 0;
@@ -38,7 +46,11 @@ async function main() {
   const store1 = c1?.[0]?.unit_id;
   check('1호점 create_store 성공', !e1 && !!store1, store1 ?? e1?.message);
 
-  // 2) 2호점 생성 — 오너 다점포 완화가 already_in_store로 막지 않아야 함
+  // 1.5) 유료 경로: 1호점을 multi 로 승격해야 2호점 생성 허용(0062 게이트 — 기존 소유 매장 전부 multi).
+  const { error: actErr } = await admin.rpc('admin_activate_store', { p_unit_id: store1, p_days: 1, p_plan: 'multi' });
+  check('1호점 multi 승격(admin_activate_store)', !actErr, actErr?.message ?? '');
+
+  // 2) 2호점 생성 — 오너 다점포 완화가 already_in_store로 막지 않아야 함(+multi 게이트 통과)
   const { data: c2, error: e2 } = await owner.rpc('create_store', { p_store_name: 'QA 2호점', p_industry: '헬스·피트니스', p_biz_no: null });
   const store2 = c2?.[0]?.unit_id;
   check('2호점 create_store 성공(다점포 완화)', !e2 && !!store2 && store2 !== store1, store2 ?? e2?.message);

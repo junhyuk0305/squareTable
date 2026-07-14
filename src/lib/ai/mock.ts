@@ -11,6 +11,8 @@ import type {
   PatchSquareInput,
   IntentInput,
   IntentOutput,
+  TriageInput,
+  TriageOutput,
   AiFollowup,
 } from './types';
 import type { Category } from '@/types';
@@ -180,6 +182,17 @@ export function mockPatchSquare(input: PatchSquareInput): StructureSquareOutput 
 }
 
 // 의도추출(mock) — 첫 문장 + 2글자 이상 토큰을 키워드로(실 LLM이 군더더기 제거를 정교히).
+// 의도 게이트 대역 — 명백한 인사·잡담·지시대명사만 휴리스틱으로 거르고 기본은 question
+// (실질 질문을 잘못 막는 게 최악이라는 실서버 fail-open 규칙과 동일한 보수성).
+const MOCK_CHAT_RE = /^(안녕|하이|ㅎㅇ|반가워|고마워|감사|잘가|바이|사랑해|심심|배고파|졸려|힘들어|ㅋ+|ㅎ+)[\s!~^.]*$/;
+const MOCK_VAGUE_RE = /^(이거|저거|그거|이건|그건|저건)[\s?!.~]*(뭐야|뭐예요|뭔데|어떻게 해\??|어떻게 해요\??)?[\s?!.~]*$|^어떻게 해요?\??$/;
+export function mockClassifyQuery(input: TriageInput): TriageOutput {
+  const q = input.query.trim();
+  if (MOCK_CHAT_RE.test(q)) return { type: 'chat' };
+  if (MOCK_VAGUE_RE.test(q)) return { type: 'vague' };
+  return { type: 'question' };
+}
+
 export function mockExtractIntent(input: IntentInput): IntentOutput {
   const q = input.query.trim();
   const first = q.split(/[.!?\n。]/).map((s) => s.trim()).filter(Boolean)[0] ?? q;

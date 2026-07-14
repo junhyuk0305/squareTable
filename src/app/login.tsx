@@ -10,6 +10,7 @@ import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
 import { HeaderBackButton } from '@/components/HeaderBackButton';
 import { Wordmark } from '@/components/Wordmark';
+import { SocialAuthButtons } from '@/components/SocialAuthButtons';
 import { isValidEmail } from '@/lib/utils/validation';
 import type { Role } from '@/types';
 
@@ -62,7 +63,9 @@ export default function LoginScreen() {
     const { error, role: r } = await signInWithPassword(email.trim(), pw);
     setBusy(false);
     if (error) {
-      flash('로그인 실패 — 이메일/비밀번호를 확인해주세요.', true);
+      // 스토어가 상황별 정확한 사유를 준다(비번오류·네트워크·차단·탈퇴계정 등) — 예전처럼 '비번 확인'으로
+      // 뭉뚱그리지 않고 그대로 노출한다(#15). 사유가 없을 때만 보수적 기본 문구.
+      flash(error || '로그인에 실패했어요. 잠시 후 다시 시도해주세요.', true);
       return;
     }
     router.replace(r === 'owner' ? '/owner/dashboard' : '/junior/home');
@@ -143,6 +146,9 @@ export default function LoginScreen() {
               <Text style={styles.linkText}>비밀번호 없이 <Text style={styles.linkStrong}>메일로 로그인</Text></Text>
             </Pressable>
           )}
+
+          {/* 소셜 로그인(구글 등) — 웹 전용. 데모 빌드에선 렌더 안 됨. */}
+          <SocialAuthButtons />
         </View>
 
         <View style={styles.signupBlock}>

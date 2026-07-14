@@ -7,6 +7,7 @@ import {
   fetchUnitSubscription,
   checkPhoneInUse,
   rpcCreateStore,
+  rpcCompleteProfile,
   rpcDeleteStore,
   rpcJoinByInvite,
   rpcCancelJoinRequest,
@@ -55,6 +56,11 @@ type SessionState = {
   // 부팅 시 1회: 기존 세션 복원 + 프로필 로드 + auth 변화 구독
   init: () => Promise<void>;
   signInWithPassword: (email: string, pw: string) => Promise<{ error: string | null; role: Role }>;
+  // 소셜 로그인(웹). 전체 페이지가 provider로 리다이렉트되고, 돌아오면 detectSessionInUrl 이 세션을 복원한다.
+  // 성공 시 페이지 이동이라 반환이 없을 수 있음 — 에러(미설정/차단)만 문자열로 돌려준다.
+  signInWithGoogle: () => Promise<{ error: string | null }>;
+  // 소셜 로그인 사용자의 결손 프로필(이름/전화/생년월일) 완성. 성공 시 프로필 재로드로 상태 반영.
+  completeProfile: (name: string, phone: string, birthDate: string) => Promise<{ error: string | null }>;
   signUp: (
     email: string,
     pw: string,
@@ -67,7 +73,9 @@ type SessionState = {
   //   'taken'=이미 사용 / 'free'=사용 가능 / 'unknown'=검사 실패(네트워크/권한).
   //   ⚠️ 'unknown'을 'free'로 뭉뚱그리면 사전검사가 뚫려 트리거로 떨어진다 → 호출부가 'unknown'을 차단해야 함.
   isPhoneTaken: (phone: string) => Promise<'taken' | 'free' | 'unknown'>;
-  createStore: (storeName: string, industry: string, bizNo?: string, birthDate?: string) => Promise<{ error: string | null; inviteCode: string | null }>;
+  // opts.isOnboarding=true(가입/첫매장 경로)면 첫 매장 생성 중 뜨는 plan_limit_store 등은 레이스 산물로 보고
+  // 이미 만들어진 매장으로 조용히 복구한다. '스위처 매장 추가'(false)에선 plan_limit_store가 진짜 요금제 거절.
+  createStore: (storeName: string, industry: string, bizNo?: string, birthDate?: string, opts?: { isOnboarding?: boolean }) => Promise<{ error: string | null; inviteCode: string | null }>;
   // 합류는 이제 '신청'(pending) — 성공 시 pending=true. 사장 승인 후에야 unitId가 붙는다(남용 #2).
   joinByInvite: (code: string) => Promise<{ error: string | null; storeName: string | null; pending?: boolean }>;
   // 승인 대기 중 본인 신청 철회. 다른 매장에 다시 신청 가능.
@@ -161,6 +169,13 @@ function pendingOwnerMeta(user: { user_metadata?: Record<string, unknown> } | nu
 // 동시 호출(init + onAuthStateChange 가 거의 동시에 발화) 시 매장이 2개 생성되는 레이스를 막는 가드.
 let _resumingOwnerStore = false;
 
+// 로그인 직후 loadProfile 이 '인증은 됐지만' 세션을 떨군 사유를 signInWithPassword 로 전달하는 채널.
+// (loadProfile 은 init/onAuthStateChange 등 여러 곳에서 불려 void 를 반환하므로, 로그인 화면에 정확한
+//  실패 사유를 돌려주려면 이 사유를 밖으로 내보내야 한다.) loadProfile 은 오직 '설정'만 하고,
+// 소비자(signInWithPassword)가 호출 직전에 null 로 초기화한 뒤 직후에 읽어 경쟁을 피한다.
+//   'deleted' = 탈퇴 처리된 계정(재로그인 차단, 남용 #29) / 'load_failed' = 네트워크·일시 401 등 프로필 로드 실패.
+let _lastLoadFault: 'deleted' | 'load_failed' | null = null;
+
 async function loadProfile(
   set: (p: Partial<SessionState>) => void,
   userId: string,
@@ -184,6 +199,7 @@ async function loadProfile(
       // 보존/리셋 판정은 순수함수(SSOT)로 분리 — 회귀 테스트 qa:session 이 진리표를 고정한다.
       if (sessionReadFailAction(prior, userId) === 'keep') return;
       // 콜드 로드라 신원을 확정할 수 없다 → 가짜 테넌트 대신 깨끗한 signed_out(재로그인으로 복구).
+      _lastLoadFault = 'load_failed'; // 로그인 직후라면 signInWithPassword 가 '네트워크 오류' 문구로 노출(#17·#18)
       setUnitId(null);
       setAnalyticsContext({ userId: null, unitId: null, role: null });
       set({ status: 'signed_out', unitId: '', userId: '', userName: '', storeName: '', pendingUnitId: '', pendingStoreName: '', industry: '', inviteCode: '', bio: '', phone: '', plan: 'free', subStatus: '', trialEndsAt: '', paidUntil: '' });
@@ -193,6 +209,7 @@ async function loadProfile(
     // 소프트삭제(탈퇴) 계정은 재로그인 차단(남용 #29) — 유예 기간 동안 데이터는 서버에 남아있되
     // 사용자는 로그인 불가. 세션 토큰도 정리한다(fire-and-forget: signOut→onAuthStateChange는 재귀 안 함).
     if (profile?.deleted_at) {
+      _lastLoadFault = 'deleted'; // 로그인 직후라면 signInWithPassword 가 '탈퇴 처리된 계정' 문구로 노출(#16)
       setUnitId(null);
       setAnalyticsContext({ userId: null, unitId: null, role: null });
       set({ status: 'signed_out', unitId: '', userId: '', userName: '', storeName: '', pendingUnitId: '', pendingStoreName: '', industry: '', inviteCode: '', bio: '', phone: '', plan: 'free', subStatus: '', trialEndsAt: '', paidUntil: '' });
@@ -307,6 +324,7 @@ async function loadProfile(
     // (테넌트 격리가 최우선). 재접속 시 로그인/재시도로 정상 복구된다.
     console.warn('[session] loadProfile 실패, 로그아웃 처리:', (e as Error)?.message ?? e);
     reportError('session.loadProfile', e); // 오프라인 등으로 세션 로드가 던져 로그아웃되는 경로를 관측
+    _lastLoadFault = 'load_failed'; // 로그인 직후라면 signInWithPassword 가 '네트워크 오류' 문구로 노출(#17)
     setUnitId(null);
     setAnalyticsContext({ userId: null, unitId: null, role: null });
     set({ status: 'signed_out', unitId: '', userId: '', userName: '', storeName: '', stores: [], pendingUnitId: '', pendingStoreName: '', industry: '', inviteCode: '', bio: '', plan: 'free', subStatus: '', trialEndsAt: '', paidUntil: '' });
@@ -345,6 +363,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   },
 
   signInWithPassword: async (email, pw) => {
+    _lastLoadFault = null; // 이번 로그인의 loadProfile 사유만 읽도록 직전 초기화(이전/동시 호출값 배제)
     const { data, error } = await supabase.auth.signInWithPassword({ email, password: pw });
     if (error || !data.user)
       return {
@@ -353,8 +372,54 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       };
     // 이메일 인증으로 가입 시 가게 생성이 지연된 사장은 여기서 metadata 기반으로 매장이 자동 복원된다.
     await loadProfile(set, data.user.id, data.user.email ?? '', pendingOwnerMeta(data.user)); // 결정적: role 확정 후 반환
+    // ★ 인증(signInWithPassword)은 성공했어도 loadProfile 이 세션을 떨궜으면(탈퇴/로드실패) '성공'으로 라우팅하면
+    //   안 된다 — 예전엔 여기서 {error:null}을 돌려줘 로그인 화면이 홈으로 보냈고, 가드가 다시 랜딩으로 튕겨
+    //   "아무 일도 안 일어난" 무음 실패가 됐다(#16·#17·#18). 이제 정확한 사유를 로그인 화면에 돌려준다.
+    if (get().status !== 'signed_in') {
+      const msg =
+        _lastLoadFault === 'deleted'
+          ? '탈퇴 처리된 계정이에요. 복구가 필요하면 문의해 주세요.'
+          : '계정 정보를 불러오지 못했어요. 네트워크를 확인하고 잠시 후 다시 시도해 주세요.';
+      return { error: msg, role: get().role };
+    }
     track('login_succeeded', { role: get().role });
     return { error: null, role: get().role };
+  },
+
+  signInWithGoogle: async () => {
+    // 웹: 현재 오리진으로 돌아오게 한다(Supabase 대시보드 Redirect URLs 에 등록 필요). 돌아오면
+    // supabase.ts 의 detectSessionInUrl:true 가 ?code= 를 세션으로 교환 → onAuthStateChange → loadProfile.
+    // 네이티브는 별도 딥링크 핸들러가 필요 — 웹 우선(출시 1차)이라 여기선 웹만 지원, 미지원 플랫폼은 안내.
+    const redirectTo = typeof window !== 'undefined' ? window.location.origin : undefined;
+    if (!redirectTo) {
+      return { error: '구글 로그인은 웹에서만 지원해요. 앱에서는 이메일로 로그인해 주세요.' };
+    }
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo },
+    });
+    // 성공이면 페이지가 구글로 리다이렉트돼 이 아래로 안 온다. 에러면(미설정 등) 문구로 안내.
+    if (error) {
+      track('login_failed', { provider: 'google', reason: (error.message || '').slice(0, 60) });
+      return { error: friendlyError(error.message, '구글 로그인을 시작하지 못했어요. 잠시 후 다시 시도해 주세요.') };
+    }
+    return { error: null };
+  },
+
+  completeProfile: async (name, phone, birthDate) => {
+    const { error } = await rpcCompleteProfile(name.trim(), phone.trim() || null, birthDate || null);
+    if (error) {
+      const msg = /birth_date_required|birth_date_invalid/.test(error.message)
+        ? '생년월일을 확인할 수 없어요. 생년월일 8자리를 다시 확인해주세요.'
+        : /not_authenticated/.test(error.message)
+        ? '로그인이 만료됐어요. 다시 로그인해 주세요.'
+        : friendlyError(error.message, '프로필 저장에 실패했어요. 잠시 후 다시 시도해 주세요.');
+      return { error: msg };
+    }
+    // phone/birth_date 가 채워졌으니 세션 상태를 갱신한다(needsProfileSetup 해제 → 게이트 통과).
+    const uid = get().userId;
+    if (uid) await loadProfile(set, uid, get().email);
+    return { error: null };
   },
 
   signUp: async (email, pw, meta) => {
@@ -406,29 +471,60 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     return data ? 'taken' : 'free';
   },
 
-  createStore: async (storeName, industry, bizNo, birthDate) => {
+  createStore: async (storeName, industry, bizNo, birthDate, opts) => {
     // ── 첫 매장 온보딩 중복 방지 ──────────────────────────────────────────────
     // 0055 다점포 완화로 create_store의 already_in_store 가드가 오너에게 풀리면서, signup의 직접호출과
     // loadProfile의 메타데이터 자동복원(Path1)이 레이스로 둘 다 성공 → 첫 매장이 2개 만들어지던 회귀.
     // JS 단일스레드 → 같은 플래그(_resumingOwnerStore)를 동기 검사+선점하면 두 경로가 상호배제돼 정확히
     // 1회만 생성된다. 이미 진행 중이면 그 결과를 기다려 재사용(승자가 만들고 나머지는 그 매장으로 진입).
-    // 의도적 '매장 추가'는 이미 unitId가 있어 Path1이 애초에 안 돌아 이 가드에 걸리지 않는다.
+    //
+    // ★ '첫 매장 생성'인지는 호출 출처가 안다(상태로 추정하면 레이스에 취약 — Path1이 unitId를 먼저 커밋하면
+    //   진입 시 이미 매장이 있는 것처럼 보여 오판). → signup/첫매장 복구는 opts.isOnboarding=true 로 명시한다.
+    //   온보딩 중엔 plan_limit_store 가 논리적으로 불가능(0개→1개)이라, 뜨면 레이스 산물 = 이미 만들어진 매장이다.
+    const isOnboarding = !!opts?.isOnboarding;
     if (_resumingOwnerStore) {
       for (let i = 0; i < 100 && _resumingOwnerStore; i++) await new Promise((r) => setTimeout(r, 50));
       if (get().unitId) return { error: null, inviteCode: get().inviteCode || null };
-      // Path1이 끝났는데도 매장이 없다(자동복원 실패) → 아래로 폴백해 직접 생성한다.
+      // ★ 플래그는 finally에서 먼저 풀리지만 승자의 상태 커밋(set(unitId))은 그 뒤 await 구간 후에 온다.
+      //   그 틈에 여기로 깨어나면 unitId 가 아직 비어 '자동복원 실패'로 오판해 매장을 재생성 → plan_limit_store.
+      //   → (온보딩 한정) 프로필을 한 번 새로고침해 승자가 만든 매장을 확정 반영한 뒤 재확인한다(재생성 차단).
+      if (isOnboarding) {
+        const uidW = get().userId;
+        if (uidW) {
+          await loadProfile(set, uidW, get().email);
+          if (get().unitId) return { error: null, inviteCode: get().inviteCode || null };
+        }
+      }
+      // 그래도 매장이 없다(진짜 자동복원 실패) → 아래로 폴백해 직접 생성한다.
     }
     _resumingOwnerStore = true;
     try {
       const { data: row, error } = await rpcCreateStore(storeName, industry, bizNo ?? null, birthDate ?? null);
       if (error) {
-        // 이미 매장이 있음(이전 시도로 생성됐거나 중복 제출) → 데드엔드 대신 기존 매장으로 진입.
+        // (1) already_in_store: 언제나 데드엔드 대신 해당 매장으로 진입(이전 시도 성공·중복 제출).
         if (/already_in_store/.test(error.message)) {
           const uid0 = get().userId;
           if (uid0) await loadProfile(set, uid0, get().email);
+          // 온보딩 레이스로 자동복원이 먼저 만든 매장에 진입한 경우도 성공으로 계측(퍼널 정확도 — 브랜치2와 대칭).
+          // '스위처 매장 추가'의 중복제출 already_in_store 는 새 생성이 아니므로 계측하지 않는다.
+          if (isOnboarding && get().unitId) track('store_created', { has_biz: !!bizNo, recovered: true });
           return { error: null, inviteCode: get().inviteCode || null };
         }
-        // ★ 무음 사망 자동감지의 핵심 — store_created 시도 대비 실패율이 급등하면(예: 42702 재발) 알람.
+        // (2) 첫 매장 생성 레이스 흡수(온보딩 한정): 동시 실행된 자동복원(Path1)이 이미 매장을 만들어 뒀으면
+        //     (무료플랜 1개 존재로 뜨는 plan_limit_store 등) 프로필 새로고침 후 그 매장으로 조용히 진입한다.
+        //     '스위처 매장 추가'(isOnboarding=false)는 이 복구를 타지 않아 진짜 요금제 거절이 그대로 노출된다.
+        if (isOnboarding) {
+          const uid0 = get().userId;
+          if (uid0) await loadProfile(set, uid0, get().email);
+          if (get().unitId) {
+            // 레이스로 자동복원 경로가 실제 매장을 만든 것 → 성공으로 계측(recovered)해 퍼널 정확도 유지
+            // (이 경로가 없으면 성공 가입이 store_created 없이 store_created_failed 로만 찍혀 퍼널이 깨진다).
+            track('store_created', { has_biz: !!bizNo, recovered: true });
+            return { error: null, inviteCode: get().inviteCode || null };
+          }
+        }
+        // (3) 여기까지 왔다 = 복구 불가한 진짜 실패 또는 매장 추가의 정상 거절 → 알람 + 사용자 안내.
+        //     ★ 무음 사망 자동감지의 핵심 — 레이스 거짓양성을 걷어냈으므로 실패율 급등은 진짜 신호다.
         track('store_created_failed', { reason: (error.message || '').slice(0, 60), code: (error as any).code ?? null });
         const msg = /duplicate_biz_no/.test(error.message)
           ? '이미 등록된 사업자등록번호예요.'

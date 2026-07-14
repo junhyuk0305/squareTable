@@ -695,7 +695,7 @@ export function OwnerCoachChat({
           <View style={styles.photoStrip}>
             {photos.map((url) => (
               <View key={url} style={styles.photoThumbWrap}>
-                <StoredImage stored={url} style={styles.photoThumb} />
+                <StoredImage stored={url} style={styles.photoThumb} viewOnPress />
                 <Pressable
                   onPress={() => removePhoto(url)}
                   hitSlop={6}

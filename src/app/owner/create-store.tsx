@@ -36,7 +36,9 @@ export default function OwnerCreateStore() {
     if (!industry) return setErr('업종을 선택해주세요.');
     if (bizNo.trim() && !isValidBizNo(bizNo)) return setErr('사업자등록번호 형식(10자리)을 확인해주세요. 비워두면 나중에 등록할 수 있어요.');
     setBusy(true);
-    const cs = await createStore(storeName.trim(), industry, bizDigits(bizNo) || undefined);
+    // 매장 0개 강제 온보딩(첫매장 복구)이면 isOnboarding=true → 레이스성 plan_limit_store 를 복구.
+    // 스위처 '매장 추가'(isAddingStore)면 false → 무료플랜의 진짜 요금제 거절을 그대로 노출.
+    const cs = await createStore(storeName.trim(), industry, bizDigits(bizNo) || undefined, undefined, { isOnboarding: !isAddingStore });
     setBusy(false);
     if (cs.error) return setErr(cs.error);
     router.replace({ pathname: '/owner/onboarding', params: { code: cs.inviteCode ?? '------', industry } });

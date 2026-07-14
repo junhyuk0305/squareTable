@@ -59,8 +59,9 @@ const TENANT_TABLES = ['playbook_entries','chat_queries','unknown_queries','work
   // units / profiles 크로스테넌트
   const rd = async (client, table, col, val) => { const { data, error } = await client.from(table).select('*').eq(col, val); return { n: error?-1:(data?.length||0), error: error?.message, code: error?.code }; };
   { const r = await rd(A.c,'units','id',B.unit); ok(r.n===0, `A→B.units 읽기 0행`, `rows=${r.n}${r.error?' err:'+r.error.slice(0,40):''}`); }
-  { const r = await rd(A.c,'profiles','id',B.uid); ok(r.n===0, `A→B 사장 프로필(id) 0행`, `rows=${r.n}`); }
-  { const r = await rd(A.c,'profiles','unit_id',B.unit); ok(r.n===0, `A→B.profiles(unit_id) 0행`, `rows=${r.n}`); }
+  // profiles 는 0065 컬럼 GRANT로 select('*') 자체가 42501(본인 행 포함) — 0행보다 강한 차단이라 42501도 PASS.
+  { const r = await rd(A.c,'profiles','id',B.uid); ok(r.n===0 || r.code==='42501', `A→B 사장 프로필(id) 차단(0행 또는 42501)`, `rows=${r.n} code=${r.code??''}`); }
+  { const r = await rd(A.c,'profiles','unit_id',B.unit); ok(r.n===0 || r.code==='42501', `A→B.profiles(unit_id) 차단(0행 또는 42501)`, `rows=${r.n} code=${r.code??''}`); }
 
   for (const t of TENANT_TABLES) {
     const r = await rd(A.c, t, 'unit_id', B.unit);

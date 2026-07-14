@@ -5,7 +5,8 @@
 //   표준 시나리오(주간/야간-자정넘김/연장/주휴/토글OFF/진행중/단시간)를 실코드로 못박는다.
 // 방식: 러너가 없어 payroll.ts+attendance.ts 만 임시 트랜스파일 후 실제 함수로 검증(로직 중복 없음).
 import { execFileSync } from 'node:child_process';
-import { writeFileSync, rmSync, readFileSync } from 'node:fs';
+import { writeFileSync, readFileSync } from 'node:fs';
+import { rm } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
@@ -55,6 +56,8 @@ eq('20분 30분절삭→0', r.base, 0);
 r = computePay([R('2026-07-01', '10:00', '15:00')], W, { ...ALL, extraAllowance: 50000 }, NOW);
 eq('추가수당 합산', r.total, 45000 + 50000);
 
-rmSync(OUT, { recursive: true, force: true });
+// rmSync 재귀삭제는 Windows Node 24.x에서 네이티브 크래시(0xC0000409)로 15/15 PASS 후 exit 127 —
+// 비동기 rm은 정상이라 이것만 사용(결과 출력을 정리보다 먼저).
 console.log(`\nRESULT: ${pass} passed, ${fail} failed`);
+await rm(OUT, { recursive: true, force: true }).catch(() => {});
 process.exit(fail ? 1 : 0);

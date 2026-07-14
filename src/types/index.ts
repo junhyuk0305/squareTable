@@ -154,10 +154,15 @@ export type ResponseBlock = {
   donts: string[];
   degraded?: boolean;   // AI 서버 실패로 기본 답으로 폴백했는가 → 답변 위에 고지 표시
   // 신뢰 신호: 'served'=저장된 매장 노하우를 그대로 서빙(검증 배지 신뢰) /
-  //           'generated'=여러 노하우를 AI가 모아 정리(검증 배지 비노출 + "AI 정리" 고지).
+  //           'generated'=여러 노하우를 AI가 모아 정리(검증 배지 비노출 + "AI 정리" 고지) /
+  //           'smalltalk'=의도 게이트(chat·vague) 응대 — 노하우 카드 없이 말풍선 텍스트만.
   //           미설정(기존 행)은 served 취급(하위호환).
-  mode?: 'served' | 'generated';
-  source: SourceRef;
+  mode?: 'served' | 'generated' | 'smalltalk';
+  // 조건 커버리지 partial 고지 — 질문의 조건·예외를 등록 노하우가 안 다룰 때 미커버 조건 한 문장.
+  // 있으면 답 아래에 경고 노트 + "사장님께 물어보기" 1탭 에스컬레이션을 노출한다.
+  caveat?: string;
+  // smalltalk(잡담 응대·되묻기)은 출처 노하우가 없다 — 그 경우에만 미설정.
+  source?: SourceRef;
   /**
    * generated 모드에서 답을 만드는 데 실제 참고한 노하우 출처들(복수). 2개 이상일 때만 채운다.
    * served(저장된 답 그대로)는 미설정 — 단일 source만. UI는 이게 있으면 "참고한 노하우 N개" 칩으로 노출.

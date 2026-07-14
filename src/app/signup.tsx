@@ -6,6 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { applyMockSeed } from '@/lib/demo/mockSeed';
 import { HAS_SUPABASE } from '@/lib/supabase';
+import { SocialAuthButtons } from '@/components/SocialAuthButtons';
 import { formatBizNo, isValidBizNo, bizDigits } from '@/lib/utils/bizno';
 import { isValidEmail, isValidPhone, normalizePhone, formatPhone, passwordError, formatBirthDate8, birthDateISO } from '@/lib/utils/validation';
 import { BrandColors, InkColors } from '@/lib/theme/colors';
@@ -168,9 +169,11 @@ export default function SignupScreen() {
 
     // 2) 매장 연결
     if (role === 'owner') {
-      const cs = await createStore(storeName.trim(), industry, bizDigits(bizNo) || undefined, birthDateISO(birth) ?? undefined);
+      const cs = await createStore(storeName.trim(), industry, bizDigits(bizNo) || undefined, birthDateISO(birth) ?? undefined, { isOnboarding: true });
       setBusy(false);
-      if (cs.error) return setErr(`${cs.error} ‘다시 시도’를 누르면 가게 생성만 다시 시도해요.`);
+      // 계정은 이미 만들어졌으므로(accountReady) 재시도는 '가게 생성만' 다시 돈다. 버튼 라벨도 아래에서
+      // '가게 다시 만들기'로 바뀌므로 안내 문구를 그 버튼과 일치시킨다(무엇을 누르면 되는지 명확화).
+      if (cs.error) return setErr(`${cs.error} 아래 ‘가게 다시 만들기’를 누르면 가게만 다시 만들어요.`);
       // 노하우 온보딩으로 — 초대코드는 온보딩 완료 화면에서 안내(빈 매장 0건 방지).
       router.replace({ pathname: '/owner/onboarding', params: { code: cs.inviteCode ?? '------', industry } });
     } else {
@@ -348,9 +351,16 @@ export default function SignupScreen() {
           {busy ? (
             <ActivityIndicator color="#FFFFFF" />
           ) : (
-            <Text style={styles.primaryText}>{role === 'owner' ? '가게 만들고 시작하기' : '가입하고 시작하기'}</Text>
+            // 계정 생성까지 끝난 뒤 가게 연결만 실패해 재시도하는 상태면 라벨을 '가게 다시 만들기'로 바꿔
+            // (계정은 이미 있으니 다시 안 만든다는 뜻) 에러 안내문과 일치시킨다.
+            <Text style={styles.primaryText}>
+              {role === 'owner' ? (accountReady ? '가게 다시 만들기' : '가게 만들고 시작하기') : '가입하고 시작하기'}
+            </Text>
           )}
         </Pressable>
+
+        {/* 소셜 로그인(구글 등) — 가입도 소셜로 시작 가능. 웹 전용, 데모 빌드엔 렌더 안 됨. */}
+        <SocialAuthButtons />
 
         <Pressable onPress={() => router.replace('/login')} style={styles.loginRow}>
           <Text style={styles.loginText}>이미 계정이 있나요? <Text style={styles.loginStrong}>로그인</Text></Text>

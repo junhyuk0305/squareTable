@@ -3,6 +3,7 @@
 // 재공지가 필요하면 NOTICE_KEY의 버전을 올린다(v1 → v2).
 import { useState } from 'react';
 import { ConfirmModal } from '@/components/ConfirmModal';
+import { FREE_MODE } from '@/lib/utils/subscription';
 
 const NOTICE_KEY = 'sqt.notice.free-until.v2';
 
@@ -12,8 +13,10 @@ const DEADLINE_LABEL = '7/9';
 const storage =
   typeof window !== 'undefined' && window.localStorage ? window.localStorage : undefined;
 
-// 이미 확인한 기기면 false. 접근 불가(네이티브/시크릿 등)면 1회 노출(true).
+// 유료화 전환(FREE_MODE=false) 후엔 항상 숨김 — 무료 프로모션 문구가 과금 상태와 모순되면 안 된다.
+// FREE_MODE 파일럿에선: 이미 확인한 기기면 false, 접근 불가(네이티브/시크릿 등)면 1회 노출(true).
 function shouldShow(): boolean {
+  if (!FREE_MODE) return false;
   try {
     return !storage?.getItem(NOTICE_KEY);
   } catch {
