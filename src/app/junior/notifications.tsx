@@ -8,7 +8,9 @@ import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useWorkStore } from '@/lib/store/useWorkStore';
 import { useScheduleStore } from '@/lib/store/useScheduleStore';
 import { useStaffStore } from '@/lib/store/useStaffStore';
+import { showToast } from '@/lib/store/useToastStore';
 import { HeaderBackButton } from '@/components/HeaderBackButton';
+import { MarkAllReadButton } from '@/components/MarkAllReadButton';
 import { Appear } from '@/components/Appear';
 import { NotificationList } from '@/components/NotificationList';
 import { NotificationEnableCard } from '@/components/NotificationEnableCard';
@@ -45,6 +47,7 @@ export default function JuniorNotificationsScreen() {
   const taskTemplates = useWorkStore((s) => s.templates);
   const done = useWorkStore((s) => s.done);
   const markNoticeRead = useWorkStore((s) => s.markNoticeRead);
+  const markAllRead = useWorkStore((s) => s.markAllRead);
   const swaps = useScheduleStore((s) => s.swaps);
   const templates = useScheduleStore((s) => s.templates);
   const staff = useStaffStore((s) => s.staff);
@@ -67,10 +70,26 @@ export default function JuniorNotificationsScreen() {
 
   const initial = (userName ?? '나').trim().slice(0, 1) || '나';
 
+  // '전체 읽음' 대상 = 읽을 수 있는(공지·멘션) 안 읽은 알림의 피드 id. 배정·교대는 read 개념이 없어 제외.
+  const unreadReadIds = useMemo(
+    () => rows.filter((r) => r.unread && r.readFeedId).map((r) => r.readFeedId as string),
+    [rows],
+  );
+
+  function markAll() {
+    if (unreadReadIds.length === 0) return;
+    markAllRead(unreadReadIds, me);
+    showToast('모두 읽음 처리했어요', 'good');
+  }
+
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
       <Stack.Screen
-        options={{ title: '알림', headerLeft: () => <HeaderBackButton fallback="/junior/home" /> }}
+        options={{
+          title: '알림',
+          headerLeft: () => <HeaderBackButton fallback="/junior/home" />,
+          headerRight: () => (unreadReadIds.length > 0 ? <MarkAllReadButton onPress={markAll} /> : null),
+        }}
       />
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>

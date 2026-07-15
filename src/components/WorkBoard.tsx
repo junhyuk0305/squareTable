@@ -27,8 +27,11 @@ import { todayStr, tsMs } from '@/lib/utils/attendance';
 
 type ViewKey = 'chat' | 'notice' | 'todo' | 'assign';
 
-/** 웹 파일 선택 → File 반환(네이티브는 추후 image-picker). */
-function pickImageFile(onPick: (file: File) => void) {
+// 채팅에 한 번에 보낼 수 있는 사진 최대 장수.
+const MAX_CHAT_PHOTOS = 10;
+
+/** 웹 파일 선택 → File[] 반환(네이티브는 추후 image-picker). multiple=true면 여러 장 선택 허용. */
+function pickImageFiles(onPick: (files: File[]) => void, opts?: { multiple?: boolean }) {
   if (Platform.OS !== 'web') return;
   const g = globalThis as unknown as { document?: Document };
   const doc = g.document;
@@ -36,9 +39,10 @@ function pickImageFile(onPick: (file: File) => void) {
   const input = doc.createElement('input');
   input.type = 'file';
   input.accept = 'image/*';
+  if (opts?.multiple) input.multiple = true;
   input.onchange = () => {
-    const file = input.files?.[0];
-    if (file) onPick(file);
+    const files = input.files ? Array.from(input.files) : [];
+    if (files.length) onPick(files);
   };
   input.click();
 }
@@ -189,9 +193,20 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
     setComposer({ open: true, date: today, text: v, assigneeId });
   }
 
+  // 메시지를 노하우로 — 사장이 채팅에서 답한 실전 Q&A를 owner_answer 노하우로 승격(§4.1).
+  // coach 발행 플로우를 seed 프리필로 재사용(message→task와 동일 패턴). AI(handleSquare)가
+  // 상황/할일/금지 프레임으로 자동 정리하므로 사장은 '쓰기'가 아니라 '확인'만 한다.
+  function messageToKnowhow(text: string, feedId: string) {
+    const v = text.trim();
+    if (!v) return;
+    // feedId 동봉 → coach 발행 성공 시 그 메시지를 promotedEntryId 로 표시(재승격 넛지 dedupe).
+    router.push({ pathname: '/owner/coach', params: { seed: v, feedId } });
+  }
+
   function attachPhoto(templateId: string, date: string) {
     if (uploadingId) return;
-    pickImageFile(async (file) => {
+    pickImageFiles(async (files) => {
+      const file = files[0]; // 할일 인증 사진은 1장(1할일=1인증)
       setUploadingId(templateId);
       try {
         const url = await uploadPhoto(file);
@@ -211,21 +226,28 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
     });
   }
 
-  // 업무 채팅에 사진 보내기 — 픽 → 압축·업로드(db) → 사진만 담긴 메시지로 발행.
+  // 업무 채팅에 사진 보내기 — 픽(최대 10장) → 각 장을 압축·업로드(db) → 사진만 담긴 메시지로
+  // 선택 순서대로 발행한다(1메시지=1사진, 스키마 그대로). 실패한 장수만 모아 한 번 안내.
   function sendPhotoMessage() {
     if (sendingPhoto) return;
-    pickImageFile(async (file) => {
+    pickImageFiles(async (files) => {
+      const picked = files.slice(0, MAX_CHAT_PHOTOS);
+      if (files.length > MAX_CHAT_PHOTOS) showToast(`사진은 한 번에 ${MAX_CHAT_PHOTOS}장까지 보낼 수 있어요`);
       setSendingPhoto(true);
       try {
-        const url = await uploadPhoto(file);
-        if (url) postMessage(today, '', userId, userName, role, undefined, url);
-        else noteError('사진을 보내지 못했어요. 인터넷 연결을 확인하고 다시 시도해 주세요.');
+        let failed = 0;
+        for (const file of picked) {
+          const url = await uploadPhoto(file);
+          if (url) postMessage(today, '', userId, userName, role, undefined, url);
+          else failed += 1;
+        }
+        if (failed > 0) noteError(`사진 ${failed}장을 보내지 못했어요. 인터넷 연결을 확인하고 다시 시도해 주세요.`);
       } catch {
         noteError('사진을 보내지 못했어요. 인터넷 연결을 확인하고 다시 시도해 주세요.');
       } finally {
         setSendingPhoto(false);
       }
-    });
+    }, { multiple: true });
   }
 
   const headerOptions =
@@ -292,6 +314,7 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
           sendingPhoto={sendingPhoto}
           onReact={(id, emoji) => toggleReaction(id, userId, emoji)}
           onMessageToTask={messageToTask}
+          onMessageToKnowhow={isOwner ? messageToKnowhow : undefined}
           onDelete={deleteFeedItem}
           onAddTask={() => setComposer({ open: true, date: today })}
           onAssignTask={(id) => setComposer({ open: true, date: today, assigneeId: id })}

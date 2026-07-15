@@ -65,37 +65,38 @@ export default function CompleteProfileScreen() {
     if (role === 'owner' && bizNo.trim() && !isValidBizNo(bizNo)) return setErr('사업자등록번호 형식(10자리)을 확인해주세요. 비워두면 나중에 등록할 수 있어요.');
 
     setBusy(true);
-    // 전화번호 중복 사전검사(가입 폼과 동일). 'unknown'(검사실패)도 진행 차단 — 서버 유니크가 최종 방어선.
-    const phoneCheck = await isPhoneTaken(normalizePhone(phone));
-    if (phoneCheck === 'taken') {
-      setBusy(false);
-      return setErr('이미 사용 중인 번호예요. 다른 번호를 입력해 주세요.');
-    }
-    if (phoneCheck === 'unknown') {
-      setBusy(false);
-      return setErr('번호 확인 중 문제가 생겼어요. 잠시 후 다시 시도해 주세요.');
-    }
-
-    const birthISO = birthDateISO(birth) ?? undefined;
-    if (role === 'owner') {
-      // 사장: 매장을 먼저 만든다(create_store 가 생년월일 기록+오너 승격+매장 생성을 한 번에 처리).
-      //   실패하면 프로필(phone)을 아직 안 건드려 needsProfileSetup 이 유지되므로 이 화면에 남아 재시도할 수
-      //   있다(전화만 채운 채 직원홈으로 튕기는 것 방지). 성공 후에 이름/전화를 채운다.
-      const cs = await createStore(storeName.trim(), industry, bizDigits(bizNo) || undefined, birthISO, { isOnboarding: true });
-      if (cs.error) {
-        setBusy(false);
-        return setErr(cs.error);
+    // ★ try/catch/finally — completeProfile/createStore/isPhoneTaken 이 네트워크 예외를 던지면 finally 없이
+    //   setBusy(false) 를 놓쳐 버튼이 무한 스피너로 멈춘다(무음 행). finally 로 항상 busy 를 해제한다.
+    try {
+      // 전화번호 중복 사전검사(가입 폼과 동일). 'unknown'(검사실패)도 진행 차단 — 서버 유니크가 최종 방어선.
+      const phoneCheck = await isPhoneTaken(normalizePhone(phone));
+      if (phoneCheck === 'taken') {
+        return setErr('이미 사용 중인 번호예요. 다른 번호를 입력해 주세요.');
       }
-      const cp = await completeProfile(name.trim(), phone.trim(), birthISO ?? '');
+      if (phoneCheck === 'unknown') {
+        return setErr('번호 확인 중 문제가 생겼어요. 잠시 후 다시 시도해 주세요.');
+      }
+
+      const birthISO = birthDateISO(birth) ?? undefined;
+      if (role === 'owner') {
+        // 사장: 매장을 먼저 만든다(create_store 가 생년월일 기록+오너 승격+매장 생성을 한 번에 처리).
+        //   실패하면 프로필(phone)을 아직 안 건드려 needsProfileSetup 이 유지되므로 이 화면에 남아 재시도할 수
+        //   있다(전화만 채운 채 직원홈으로 튕기는 것 방지). 성공 후에 이름/전화를 채운다.
+        const cs = await createStore(storeName.trim(), industry, bizDigits(bizNo) || undefined, birthISO, { isOnboarding: true });
+        if (cs.error) return setErr(cs.error);
+        const cp = await completeProfile(name.trim(), phone.trim(), birthISO ?? '');
+        if (cp.error) return setErr(cp.error);
+        router.replace({ pathname: '/owner/onboarding', params: { code: cs.inviteCode ?? '------', industry } });
+      } else {
+        // 직원: 프로필만 채우고(생년월일 기록 → 이후 hub 에서 초대코드 입력 시 join 통과) 개인 허브로.
+        const cp = await completeProfile(name.trim(), phone.trim(), birthISO ?? '');
+        if (cp.error) return setErr(cp.error);
+        router.replace('/junior/hub');
+      }
+    } catch {
+      setErr('연결 문제로 완료하지 못했어요. 잠시 후 다시 시도해 주세요.');
+    } finally {
       setBusy(false);
-      if (cp.error) return setErr(cp.error);
-      router.replace({ pathname: '/owner/onboarding', params: { code: cs.inviteCode ?? '------', industry } });
-    } else {
-      // 직원: 프로필만 채우고(생년월일 기록 → 이후 hub 에서 초대코드 입력 시 join 통과) 개인 허브로.
-      const cp = await completeProfile(name.trim(), phone.trim(), birthISO ?? '');
-      setBusy(false);
-      if (cp.error) return setErr(cp.error);
-      router.replace('/junior/hub');
     }
   };
 

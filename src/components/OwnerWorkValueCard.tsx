@@ -1,9 +1,9 @@
 import { View, Text, StyleSheet } from 'react-native';
-import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 import { PressableScale } from '@/components/PressableScale';
 import { SectionLabel } from '@/components/SectionLabel';
+import { goToTab } from '@/components/RoleTabBar';
 import { Avatar } from '@/components/Avatar';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Elevation, Radius } from '@/lib/theme/elevation';
@@ -20,7 +20,6 @@ export interface OwnerWorkValueCardProps {
 }
 
 export function OwnerWorkValueCard({ assign }: OwnerWorkValueCardProps) {
-  const router = useRouter();
   const { total, done, groups } = assign;
   const remain = total - done;
 
@@ -31,7 +30,7 @@ export function OwnerWorkValueCard({ assign }: OwnerWorkValueCardProps) {
         title="오늘 일 배분"
         trailing={
           <PressableScale
-            onPress={() => router.push({ pathname: '/owner/work', params: { view: 'assign' } })}
+            onPress={() => goToTab({ pathname: '/owner/work', params: { view: 'assign' } })}
             scaleTo={0.96}
             accessibilityRole="button"
             accessibilityLabel="업무 배정하러 가기"
@@ -42,7 +41,7 @@ export function OwnerWorkValueCard({ assign }: OwnerWorkValueCardProps) {
       />
 
       <PressableScale
-        onPress={() => router.push('/owner/work')}
+        onPress={() => goToTab('/owner/work')}
         scaleTo={0.98}
         style={styles.card}
         accessibilityRole="button"

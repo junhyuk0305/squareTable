@@ -85,6 +85,7 @@ export type FeedItem = {
   photoUrl?: string; // task_done 사진인증
   mentions?: string[]; // @멘션된 사람 userId[] (알림 대상)
   roomId?: string; // 채팅방 id('전부 방 단위'). 레거시는 미지정.
+  promotedEntryId?: string; // 이 메시지가 노하우로 승격됐으면 그 노하우 id(§4.1). 재승격 넛지 dedupe용.
 };
 
 // 피드에서 토글 가능한 이모지 셋 (확인 = ✅)
@@ -287,8 +288,12 @@ type State = {
   editFeedText: (id: string, text: string) => void;
   deleteFeedItem: (id: string) => void;
   toggleReaction: (feedId: string, userId: string, emoji: string) => void;
+  /** 메시지→노하우 승격 성공 시 원본 메시지에 흔적(promotedEntryId)을 남겨 재승격 넛지를 끈다(§4.1). */
+  markPromoted: (feedId: string, entryId: string) => void;
   togglePin: (feedId: string) => void;
   markNoticeRead: (feedId: string, userId: string) => void;
+  /** 여러 피드행(공지·멘션)을 한 번에 읽음 처리 — 알림함 '전체 읽음'. read_by에 userId 추가(제자리 UPDATE). */
+  markAllRead: (feedIds: string[], userId: string) => void;
   applyMock: (demo: boolean) => void;
 };
 
@@ -593,6 +598,20 @@ export const useWorkStore = create<State>((set, get) => ({
       );
   },
 
+  markPromoted: (feedId, entryId) => {
+    const before = get().feed.find((f) => f.id === feedId);
+    if (!before || before.promotedEntryId === entryId) return; // 없거나 이미 같은 노하우로 표시됨=무동작(멱등).
+    const updated: FeedItem = { ...before, promotedEntryId: entryId };
+    set((s) => ({ feed: s.feed.map((f) => (f.id === feedId ? updated : f)) }));
+    // ⚠️ toggleReaction/markNoticeRead 와 동일 — 이미 존재하는 행의 제자리 UPDATE(updateFeed).
+    //    upsert 금지(남의 메시지 승격 시 wf_insert 42501). 실패하면 낙관적 표시를 롤백.
+    void guardWrite(
+      updateFeed(updated),
+      () => set((s) => ({ feed: s.feed.map((f) => (f.id === feedId ? before : f)) })),
+      '노하우 저장 표시에 실패했어요.',
+    );
+  },
+
   togglePin: (feedId) => {
     const before = get().feed.find((f) => f.id === feedId);
     if (!before) return;
@@ -644,6 +663,26 @@ export const useWorkStore = create<State>((set, get) => ({
         () => before && set((s) => ({ feed: s.feed.map((f) => (f.id === feedId ? before : f)) })),
         '읽음 표시 저장에 실패했어요.',
       );
+  },
+
+  // 알림함 '전체 읽음' — 대상 피드행(읽음 가능한 공지·멘션) 여럿을 한 번에 read_by 추가.
+  // 대상 판정(무엇이 '읽을 수 있는 안 읽은 알림'인가)은 화면이 SSOT(utils/notifications)로 골라 id만 넘긴다.
+  // 이미 읽은 건 건너뛰고(멱등), 낙관적 반영 후 각 행을 제자리 UPDATE(markNoticeRead와 동일 — upsert 금지).
+  markAllRead: (feedIds, userId) => {
+    const ids = new Set(feedIds);
+    const targets = get().feed.filter((f) => ids.has(f.id) && !(f.read_by ?? []).includes(userId));
+    if (targets.length === 0) return;
+    // 변경 대상만 id로 잡아둔다 — 실패 롤백도 '그 행들만' 되돌려, 사이에 도착한 realtime 변경(다른 행)을 덮지 않는다.
+    const beforeById = new Map<string, FeedItem>(targets.map((f) => [f.id, f]));
+    const updatedById = new Map<string, FeedItem>(
+      targets.map((f) => [f.id, { ...f, read_by: [...(f.read_by ?? []), userId] }]),
+    );
+    set((s) => ({ feed: s.feed.map((f) => updatedById.get(f.id) ?? f) }));
+    void guardWrite(
+      Promise.all([...updatedById.values()].map((u) => updateFeed(u))).then((rs) => rs.every(Boolean)),
+      () => set((s) => ({ feed: s.feed.map((f) => beforeById.get(f.id) ?? f) })),
+      '읽음 표시 저장에 실패했어요.',
+    );
   },
 
   applyMock: (demo) =>

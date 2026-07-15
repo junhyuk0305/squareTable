@@ -9,7 +9,7 @@ import { Appear } from '@/components/Appear';
 import { CoachmarkTour, type TourStep } from '@/components/CoachmarkTour';
 import { useTourStore } from '@/lib/store/useTourStore';
 
-import { RoleTabBar } from '@/components/RoleTabBar';
+import { RoleTabBar, goToTab } from '@/components/RoleTabBar';
 import { InfoDot } from '@/components/InfoDot';
 import { OwnerHomeHubCards } from '@/components/OwnerHomeHubCards';
 import { OwnerKnowhowValueCard } from '@/components/OwnerKnowhowValueCard';
@@ -197,7 +197,7 @@ export default function OwnerDashboardScreen() {
         {entriesCount > 0 && (
           <Appear delay={0}>
           <PressableScale
-            onPress={() => router.push(pending > 0 ? '/owner/inbox' : '/owner/coach')}
+            onPress={() => (pending > 0 ? goToTab('/owner/inbox') : router.push('/owner/coach'))}
             scaleTo={0.97}
             style={styles.hero}
             accessibilityRole="button"

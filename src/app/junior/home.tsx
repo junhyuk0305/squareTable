@@ -3,7 +3,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
-import { RoleTabBar } from '@/components/RoleTabBar';
+import { RoleTabBar, goToTab } from '@/components/RoleTabBar';
 import { Wordmark } from '@/components/Wordmark';
 import { NotificationBell } from '@/components/NotificationBell';
 import { Appear } from '@/components/Appear';
@@ -73,6 +73,11 @@ export default function JuniorHomeScreen() {
         options={{
           headerShown: true,
           headerTitleAlign: 'left',
+          // 홈은 탭 루트 — 하단 탭바로만 진입하므로 뒤로가기 화살표를 무조건 끈다.
+          // (탭 전환은 replace라 보통 history가 없지만, 온보딩/합류/딥링크 경로로 홈이 스택 위에
+          //  얹히면 react-navigation 기본 back 화살표가 새어나온다 → 막다른 컨트롤. owner dashboard와 동일 처리.)
+          headerLeft: () => null,
+          headerBackVisible: false,
           // 네이티브 타이틀 컨테이너가 좌측 ~17px에 앵커 → paddingLeft로 콘텐츠 거터(20)에 맞춰
           // 우측 벨(20)과 좌우 대칭을 만든다.
           headerTitle: () => (
@@ -140,7 +145,7 @@ export default function JuniorHomeScreen() {
             </Pressable>
           )}
 
-          <Pressable onPress={() => router.push('/junior/attendance')} hitSlop={6} style={({ pressed }) => [styles.clockMore, pressed && { opacity: 0.6 }]}>
+          <Pressable onPress={() => goToTab('/junior/attendance')} hitSlop={6} style={({ pressed }) => [styles.clockMore, pressed && { opacity: 0.6 }]}>
             <Text style={styles.clockMoreText}>출퇴근 내역</Text>
             <Ionicons name="chevron-forward" size={13} color={InkColors.ink3} />
           </Pressable>
@@ -152,7 +157,7 @@ export default function JuniorHomeScreen() {
           <SectionLabel icon="today-outline" title="오늘 한눈에" />
           <View style={styles.kpiRow}>
             <Pressable
-              onPress={() => router.push('/junior/work?view=todo')}
+              onPress={() => goToTab('/junior/work?view=todo')}
               style={({ pressed }) => [styles.kpi, taskRemain > 0 && styles.kpiHi, pressed && { opacity: 0.8 }]}
               accessibilityRole="button"
               accessibilityLabel={taskTotal === 0 ? '오늘 할일 없음' : `오늘 할일 ${taskRemain}개 남음`}
@@ -161,7 +166,7 @@ export default function JuniorHomeScreen() {
               <Text style={styles.kpiLabel}>할일 남음</Text>
             </Pressable>
             <Pressable
-              onPress={() => router.push('/junior/work?view=notice')}
+              onPress={() => goToTab('/junior/work?view=notice')}
               style={({ pressed }) => [styles.kpi, pressed && { opacity: 0.8 }]}
               accessibilityRole="button"
               accessibilityLabel={`안 읽은 공지 ${unreadCount}건`}
@@ -190,7 +195,7 @@ export default function JuniorHomeScreen() {
           <SectionLabel icon="search-outline" title="노하우 물어보기" />
           <View style={styles.askCard}>
             <Text style={styles.askSub}>매장 노하우를 바로 찾아드려요. 없으면 사장님께 대신 여쭤볼게요.</Text>
-            <Pressable onPress={() => router.push('/junior/chat')} style={({ pressed }) => [styles.askBar, pressed && { opacity: 0.85 }]}>
+            <Pressable onPress={() => goToTab('/junior/chat')} style={({ pressed }) => [styles.askBar, pressed && { opacity: 0.85 }]}>
               <Text style={styles.askBarText}>궁금한 걸 물어보세요</Text>
               <View style={styles.askSend}>
                 <Ionicons name="arrow-up" size={16} color={InkColors.ink} />
@@ -198,7 +203,7 @@ export default function JuniorHomeScreen() {
             </Pressable>
             <View style={styles.askChips}>
               {QUICK_ASKS.map((q) => (
-                <Pressable key={q} onPress={() => router.push('/junior/chat')} style={({ pressed }) => [styles.askChip, pressed && { opacity: 0.7 }]}>
+                <Pressable key={q} onPress={() => goToTab('/junior/chat')} style={({ pressed }) => [styles.askChip, pressed && { opacity: 0.7 }]}>
                   <Text style={styles.askChipText}>{q}</Text>
                 </Pressable>
               ))}
@@ -210,7 +215,7 @@ export default function JuniorHomeScreen() {
         {unreadCount > 0 && latestNotice && (
           <Appear delay={150} style={styles.section}>
             <Pressable
-              onPress={() => router.push('/junior/work?view=notice')}
+              onPress={() => goToTab('/junior/work?view=notice')}
               style={({ pressed }) => [styles.noticeStrip, pressed && { opacity: 0.85 }]}
               accessibilityRole="button"
               accessibilityLabel={`안 읽은 공지 ${unreadCount}건. 확인하러 가기`}

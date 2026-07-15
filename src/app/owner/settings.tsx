@@ -7,13 +7,14 @@ import Constants from 'expo-constants';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { usePreferencesStore, type TextScale } from '@/lib/store/usePreferencesStore';
 import { FREE_MODE } from '@/lib/utils/subscription';
-import { PLANS } from '@/lib/config/tiers';
 import { logout } from '@/lib/auth';
 import { confirmAction, notifyAction } from '@/lib/utils/confirm';
 import { useCopyToClipboard } from '@/lib/utils/useCopyToClipboard';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { SettingsSection, SettingsRow, SettingsToggle } from '@/components/settings/SettingsKit';
+import { SectionLabel } from '@/components/SectionLabel';
+import { PricingTable } from '@/components/PricingTable';
 import { QuietHoursModal } from '@/components/settings/QuietHoursModal';
 import { TextScaleModal } from '@/components/settings/TextScaleModal';
 import { ContactModal } from '@/components/ContactModal';
@@ -116,7 +117,7 @@ export default function OwnerSettings() {
           </Pressable>
         </View>
         <Pressable onPress={() => router.push('/owner/staff')} style={({ pressed }) => [styles.codeManage, pressed && { opacity: 0.6 }]}>
-          <Text style={styles.codeManageText}>직원 관리 · 초대 보내기</Text>
+          <Text style={styles.codeManageText}>직원 관리 · 합류 승인</Text>
           <Ionicons name="chevron-forward" size={15} color={InkColors.ink3} />
         </Pressable>
 
@@ -126,15 +127,28 @@ export default function OwnerSettings() {
           <SettingsRow icon="cash-outline" label="급여 설정" onPress={() => router.push('/owner/payroll')} />
         </SettingsSection>
 
-        <SettingsSection icon="card-outline" title="구독 및 결제">
-          <SettingsRow
-            first
-            icon="card-outline"
-            label="요금제"
-            value={FREE_MODE ? '파일럿 기간 무료' : PLANS[plan].name}
-            onPress={billing}
-          />
-        </SettingsSection>
+        {/* 구독 및 결제 — 한 줄 요약(현재 플랜명)만으론 요금제 인지·변경 유도가 약해, 3티어 표(정가 취소선 +
+            파일럿 만원 할인 배지, 현재 플랜 강조)를 그대로 노출하고 아래에 '보기·바꾸기' CTA 를 둔다.
+            FREE_MODE(파일럿 전면 무료·출시 전 flag 숨김) 동안엔 기존 단순 안내 행을 유지한다. */}
+        {FREE_MODE ? (
+          <SettingsSection icon="card-outline" title="구독 및 결제">
+            <SettingsRow first icon="card-outline" label="요금제" value="파일럿 기간 무료" onPress={billing} />
+          </SettingsSection>
+        ) : (
+          <View style={styles.billingSection}>
+            <SectionLabel icon="card-outline" title="구독 및 결제" />
+            <PricingTable currentPlan={plan} footNote={null} />
+            <Pressable
+              onPress={billing}
+              style={({ pressed }) => [styles.billingCta, pressed && { opacity: 0.9 }]}
+              accessibilityRole="button"
+              accessibilityLabel="요금제 보기·바꾸기"
+            >
+              <Text style={styles.billingCtaText}>요금제 보기 · 바꾸기</Text>
+              <Ionicons name="chevron-forward" size={16} color={InkColors.bubbleText} />
+            </Pressable>
+          </View>
+        )}
 
         <SettingsSection icon="notifications-outline" title="알림">
           <SettingsToggle
@@ -220,4 +234,17 @@ const styles = StyleSheet.create({
   codeManage: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 12, paddingHorizontal: 4, marginBottom: 14, marginTop: 6 },
   codeManageText: { fontSize: 13, fontWeight: '700', color: InkColors.ink2 },
   foot: { fontSize: 11, color: InkColors.ink3, textAlign: 'center', marginTop: 6 },
+
+  // 구독 및 결제 — SectionLabel(카드 밖) + 요금제 표 + CTA. SettingsSection 간격(marginBottom:18)과 통일.
+  billingSection: { gap: 8, marginBottom: 18 },
+  billingCta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    backgroundColor: InkColors.ink,
+    borderRadius: Radius.md,
+    paddingVertical: 13,
+  },
+  billingCtaText: { fontSize: 14, fontWeight: '800', color: InkColors.bubbleText },
 });
