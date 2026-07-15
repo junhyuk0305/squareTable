@@ -46,11 +46,12 @@ svg.ic{width:1em;height:1em;stroke:currentColor;stroke-width:1.85;fill:none;stro
 .nav .lk a:hover{background:var(--paper);color:var(--ink)}
 .nav .lk a.cta{background:var(--yellow);color:var(--ink);box-shadow:var(--ey)}
 .nav .lk a.cta:hover{background:var(--yellowDeep)}
-@media(max-width:520px){
+@media(max-width:480px){
   .nav .in{padding:12px 16px;gap:8px}
   .lg{font-size:19px}
-  .nav .lk{gap:2px}
-  .nav .lk a{font-size:12.5px;padding:8px 9px}
+  /* 기능·요금제는 인페이지 앵커라 스크롤로 도달 — 모바일 상단바에선 숨겨 로고+로그인+CTA를 한 줄로 */
+  .nav .lk a[href^="#"]{display:none}
+  .nav .lk a{font-size:13px;padding:8px 12px}
 }
 
 /* hero */
