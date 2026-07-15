@@ -149,33 +149,6 @@ export const styles = StyleSheet.create({
   },
   chipText: { fontSize: 12.5, fontWeight: '700', color: InkColors.ink2 },
 
-  // 익명 토글
-  anonRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 14,
-    paddingTop: 8,
-    backgroundColor: InkColors.bg,
-  },
-  anonChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: Radius.pill,
-    borderWidth: 1,
-    borderColor: InkColors.line,
-    backgroundColor: InkColors.bg,
-  },
-  anonChipOn: {
-    backgroundColor: InkColors.ink,
-    borderColor: InkColors.ink,
-  },
-  anonChipText: { fontSize: 12, fontWeight: '700', color: InkColors.ink3 },
-  anonChipTextOn: { color: InkColors.bubbleText },
-  anonHint: { fontSize: 12, color: InkColors.ink3, fontWeight: '500' },
-
   // 입력바
   inputBar: {
     flexDirection: 'row',

@@ -1,6 +1,6 @@
 import { useEffect, useMemo } from 'react';
 import { View, Text, Pressable, StyleSheet, Animated } from 'react-native';
-import { useRouter, usePathname, type Href } from 'expo-router';
+import { router as globalRouter, usePathname, type Href } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { InkColors } from '@/lib/theme/colors';
@@ -37,9 +37,18 @@ const TABS: Record<'junior' | 'owner', Tab[]> = {
   ],
 };
 
+/**
+ * 탭 루트로 이동 — 탭은 '전환'이지 스택 히스토리가 아니다.
+ * push 로 탭 루트를 열면 같은 탭이 스택에 중복 적재돼 ① 뒤로가기 화살표가 새고 ② 전환 애니메이션이
+ * 어긋나 하단 탭 활성화가 튀는 현상이 생긴다. 그래서 탭바든 화면 안 바로가기든 탭 이동은 모두
+ * 이 함수 하나(replace)로 통일한다(SSOT). 서브화면(뒤로가기 필요) 이동은 여전히 router.push 를 쓴다.
+ */
+export function goToTab(path: Href) {
+  globalRouter.replace(path);
+}
+
 /** 역할별 하단 탭바 (아이콘 + 라벨). 메인 화면 하단에 배치. */
 export function RoleTabBar({ role }: { role: 'junior' | 'owner' }) {
-  const router = useRouter();
   const pathname = usePathname();
   const insets = useSafeAreaInsets();
   const tabs = TABS[role];
@@ -59,7 +68,7 @@ export function RoleTabBar({ role }: { role: 'junior' | 'owner' }) {
           tab={t}
           active={isActive(t.path)}
           onPress={() => {
-            if (!isActive(t.path)) router.replace(t.path);
+            if (!isActive(t.path)) goToTab(t.path);
           }}
         />
       ))}

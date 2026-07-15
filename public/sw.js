@@ -47,13 +47,87 @@ self.addEventListener('push', (event) => {
   event.waitUntil(
     (async () => {
       await self.registration.showNotification(title, options);
-      await syncAppBadge(); // 앱 아이콘 숫자 = 지금 알림창에 떠 있는 알림 수(앱이 닫혀 있어도 갱신)
+      await bumpBadge(); // 앱 아이콘 숫자 = '실제 안 읽은 수'(IDB 공유) + 1 — 앱이 닫혀 있어도 누적 갱신
     })(),
   );
 });
 
-// 앱 아이콘 배지(숫자)를 현재 표시 중인 알림 수로 맞춘다.
-// Android PWA/데스크톱만 지원 — iOS/미지원은 조용히 무시. 앱을 열면 앱쪽(useAppBadgeSync)이 실수치로 재동기화.
+// ── 앱 아이콘 배지 카운터 (앱과 IndexedDB로 공유) ──────────────────────────────
+// 배지 숫자를 '알림창에 떠 있는 수'(getNotifications)로 잡던 옛 방식은 ① 같은 tag 알림이 접혀 실제보다
+// 적게 세지고 ② 방해금지로 푸시가 억제되면 알림창이 비어, 껐다 켠 뒤 첫 알림에서 1로 튀는 버그가 있었다.
+// → '실제 안 읽은 수'를 IDB(chakchak-badge)에 두고: 앱이 열려 있을 땐 앱(useAppBadgeSync)이 실수치를 쓰고,
+//   앱이 닫혀 푸시가 오면 여기서 그 값을 +1 한다. 알림 클릭(=하나 확인)하면 -1. IDB가 비었으면 옛 방식 폴백.
+const BADGE_DB = 'chakchak-badge';
+const BADGE_STORE = 'kv';
+const BADGE_KEY = 'count';
+
+function badgeDb() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(BADGE_DB, 1);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains(BADGE_STORE)) db.createObjectStore(BADGE_STORE);
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+async function badgeGet() {
+  try {
+    const db = await badgeDb();
+    return await new Promise((resolve) => {
+      const r = db.transaction(BADGE_STORE, 'readonly').objectStore(BADGE_STORE).get(BADGE_KEY);
+      r.onsuccess = () => resolve(typeof r.result === 'number' ? r.result : null);
+      r.onerror = () => resolve(null);
+    });
+  } catch (_e) {
+    return null;
+  }
+}
+async function badgeSet(n) {
+  try {
+    const db = await badgeDb();
+    await new Promise((resolve) => {
+      const tx = db.transaction(BADGE_STORE, 'readwrite');
+      tx.objectStore(BADGE_STORE).put(n, BADGE_KEY);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => resolve();
+    });
+  } catch (_e) {
+    /* 무시 */
+  }
+}
+
+// 푸시 도착 → 실제 안 읽은 수 +1(닫혀 있어도 누적). IDB 미동기화면 옛 방식(알림창 수)으로 폴백.
+async function bumpBadge() {
+  try {
+    if (!self.navigator || typeof self.navigator.setAppBadge !== 'function') return;
+    const stored = await badgeGet();
+    if (stored == null) return syncAppBadge();
+    const next = stored + 1;
+    await badgeSet(next);
+    await self.navigator.setAppBadge(next);
+  } catch (_e) {
+    /* 미지원 — 무시 */
+  }
+}
+
+// 알림 클릭(하나 확인) → 실제 안 읽은 수 -1. 앱이 열리면 useAppBadgeSync가 실수치로 최종 재동기화한다.
+async function decBadge() {
+  try {
+    if (!self.navigator) return;
+    const stored = await badgeGet();
+    if (stored == null) return syncAppBadge();
+    const next = Math.max(0, stored - 1);
+    await badgeSet(next);
+    if (next > 0 && typeof self.navigator.setAppBadge === 'function') await self.navigator.setAppBadge(next);
+    else if (typeof self.navigator.clearAppBadge === 'function') await self.navigator.clearAppBadge();
+  } catch (_e) {
+    /* 미지원 — 무시 */
+  }
+}
+
+// 폴백 — IDB가 아직 비어 실수치를 모를 때만 '알림창에 떠 있는 수'로 근사한다.
 async function syncAppBadge() {
   try {
     if (!self.navigator || typeof self.navigator.setAppBadge !== 'function') return;
@@ -72,7 +146,7 @@ self.addEventListener('notificationclick', (event) => {
 
   event.waitUntil(
     (async () => {
-      await syncAppBadge(); // 이 알림을 닫았으니 배지 수를 남은 알림 수로 갱신
+      await decBadge(); // 이 알림을 하나 확인 → 배지 -1 (앱 열리면 useAppBadgeSync가 실수치로 최종 동기화)
       const all = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
       for (const client of all) {
         if ('focus' in client) {

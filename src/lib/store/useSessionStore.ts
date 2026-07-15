@@ -287,9 +287,10 @@ async function loadProfile(
         plan = normalizePlan(sub?.plan);
       }
     }
-    // 다점포(0055): 소유 매장 목록 — 매장 선택 홈/헤더 스위처용. 오너만 다점포이므로 owner일 때만 로드.
+    // 다점포(0055): 내가 속한 매장 목록 — '내 매장' 허브/헤더 토글용. 오너(소유)·직원(알바 소속) 모두 로드한다
+    // (Phase 0: 직원 다매장). my_units 는 auth.uid() 소속만 반환하므로 크로스테넌트 노출 없음.
     let stores: MyUnitRow[] = [];
-    if (unitId && role === 'owner') {
+    if (unitId) {
       const { data: us } = await fetchMyUnits();
       stores = us ?? [];
     }
@@ -788,7 +789,9 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   // (setUnitId는 loadProfile 안에서 동기 반영되므로 전환 직후 쓰기도 새 매장으로 태깅 — split-brain 없음.)
   switchUnit: async (targetUnitId) => {
     if (!HAS_SUPABASE) return { error: null };
-    if (get().role !== 'owner') return { error: '사장님만 매장을 전환할 수 있어요.' };
+    // Phase 0: 직원도 자신이 속한 매장 사이를 전환할 수 있다. 권한 경계는 클라가 아니라 서버가 쥔다 —
+    // switch_active_unit RPC 가 unit_members 멤버십(역할 무관)을 검증해 비소속 매장은 not_a_member 로 거부하고,
+    // active_unit_id 는 RLS 로 동결돼 이 definer RPC 로만 바뀐다. (삭제는 여전히 오너 전용 — deleteStore 가드 유지.)
     if (!targetUnitId || targetUnitId === get().unitId) return { error: null };
     const { error } = await switchActiveUnit(targetUnitId);
     if (error) return { error: friendlyError(error.message, '매장을 전환하지 못했어요. 잠시 후 다시 시도해 주세요.') };

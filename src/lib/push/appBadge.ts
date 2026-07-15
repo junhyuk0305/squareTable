@@ -21,8 +21,40 @@ type BadgeNav = Navigator & {
   clearAppBadge?: () => Promise<void>;
 };
 
-/** 앱 아이콘 배지를 count로 설정(0이면 지움). 미지원 플랫폼(iOS 등)은 조용히 no-op. */
+// 서비스워커(public/sw.js)와 '실제 안 읽은 수'를 공유하는 IndexedDB 키.
+// 앱이 열려 있을 땐 여기(useAppBadgeSync)가 실수치를 기록하고, 앱이 닫혀 푸시가 오면 SW가 그 값을 +1 해 올린다.
+// → 방해금지(푸시 억제)로 알림창이 비어도, 껐다 켠 뒤 배지가 1이 아니라 누적수부터 이어진다.
+//   (예전엔 SW가 '알림창에 떠 있는 수'로 배지를 잡아 tag 접힘·방해금지 공백에 1로 튀었다.)
+const BADGE_DB = 'chakchak-badge';
+const BADGE_STORE = 'kv';
+const BADGE_KEY = 'count';
+
+/** 실제 안 읽은 수를 IDB에 저장(앱이 닫힌 뒤 SW가 여기서 이어 증가). 실패해도 무해(배지만 덜 정확). */
+function persistBadgeCount(count: number): void {
+  try {
+    if (typeof indexedDB === 'undefined') return;
+    const req = indexedDB.open(BADGE_DB, 1);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains(BADGE_STORE)) db.createObjectStore(BADGE_STORE);
+    };
+    req.onsuccess = () => {
+      try {
+        const tx = req.result.transaction(BADGE_STORE, 'readwrite');
+        tx.objectStore(BADGE_STORE).put(count, BADGE_KEY);
+      } catch {
+        /* 무시 */
+      }
+    };
+  } catch {
+    /* 미지원 — 무시 */
+  }
+}
+
+/** 앱 아이콘 배지를 count로 설정(0이면 지움). 미지원 플랫폼(iOS 등)은 조용히 no-op.
+ *  동시에 SW 공유 카운터(IDB)에도 실수치를 기록해, 앱이 닫힌 뒤의 증가가 '누적수'에서 이어지게 한다. */
 export function setAppBadge(count: number): void {
+  persistBadgeCount(count);
   if (typeof navigator === 'undefined') return;
   const n = navigator as BadgeNav;
   try {

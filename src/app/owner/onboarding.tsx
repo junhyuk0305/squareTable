@@ -15,6 +15,8 @@ import { PressableScale } from '@/components/PressableScale';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Space, SCREEN_GUTTER, CONTENT_MAX_WIDTH, frameCapStyle } from '@/lib/theme/layout';
 import { Radius, Elevation } from '@/lib/theme/elevation';
+import { PLANS } from '@/lib/config/tiers';
+import { formatKrw } from '@/lib/config/billing';
 import type { Category } from '@/types';
 
 // 사장 온보딩 — 업종 표준 노하우 팩에서 '선택 → 자동등록'. 빈 매장(노하우 0건) 죽음의 나선 차단.
@@ -151,6 +153,26 @@ export default function OwnerOnboardingScreen() {
             <Text style={styles.codeText}>{inviteCode}</Text>
             <Text style={styles.codeHint}>직원이 개인 홈에서 이 코드로 신청하면, 사장님이 승인해야 합류돼요.</Text>
           </View>
+
+          {/* 요금제 후킹 — 지금은 무료로 시작했음을 알리고, 직원·AI 무제한(단일 매장, 파일럿 할인가)으로
+              업그레이드 경로를 연다. 가격은 tiers.ts(SSOT)에서 읽는다. 탭하면 요금제 선택 화면(/billing). */}
+          <Pressable
+            onPress={() => router.push('/billing' as never)}
+            style={({ pressed }) => [styles.planNudge, pressed && { opacity: 0.9 }]}
+            accessibilityRole="button"
+            accessibilityLabel="요금제 보기 — 지금은 무료로 시작했어요"
+          >
+            <View style={styles.planIcon}>
+              <Ionicons name="sparkles-outline" size={16} color={InkColors.ink} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.planTitle}>지금은 무료로 시작했어요</Text>
+              <Text style={styles.planSub}>
+                직원·AI 무제한은 단일 매장 요금제(파일럿 {formatKrw(PLANS.single.monthlyKrw)})에서 열려요
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color={InkColors.ink3} />
+          </Pressable>
 
           <PressableScale onPress={goDashboard} scaleTo={0.97} style={styles.primary}>
             <Text style={styles.primaryText}>대시보드로 들어가기</Text>
@@ -477,6 +499,32 @@ const styles = StyleSheet.create({
   codeLabel: { fontSize: 12, fontWeight: '700', color: InkColors.ink3 },
   codeText: { fontSize: 32, fontWeight: '900', letterSpacing: 7, color: InkColors.ink },
   codeHint: { fontSize: 12, color: InkColors.ink3, textAlign: 'center' },
+
+  // 요금제 후킹 카드(완료 화면) — 좌 아이콘 · 중앙 카피 · 우 chevron 의 리스트형 CTA.
+  planNudge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.md,
+    alignSelf: 'stretch',
+    marginTop: Space.md,
+    backgroundColor: InkColors.bg,
+    borderWidth: 1,
+    borderColor: InkColors.line,
+    borderRadius: Radius.lg,
+    paddingVertical: Space.md,
+    paddingHorizontal: Space.lg,
+    ...Elevation.e1,
+  },
+  planIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: Radius.sm,
+    backgroundColor: BrandColors.yellowSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  planTitle: { fontSize: 14, fontWeight: '900', color: InkColors.ink },
+  planSub: { fontSize: 12, color: InkColors.ink3, fontWeight: '600', lineHeight: 17, marginTop: 1 },
   primary: {
     marginTop: Space.md,
     backgroundColor: InkColors.ink,

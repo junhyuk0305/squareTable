@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -86,18 +86,38 @@ export default function BillingScreen() {
     }
   };
 
-  const notifyPaid = () => {
-    // 백엔드 알림 파이프라인은 미구현 — 사용자가 아래 연락처로 직접 알리도록 안내한다.
-    showToast('입금 확인 후 이용이 자동 활성화돼요.');
+  const notifyPaid = async () => {
+    // 백엔드 알림 파이프라인은 미구현 — '입금 완료했어요'가 토스트만 띄우면 사용자는 알렸다고 믿지만 실제론
+    // 아무것도 안 보내지는 무음 루프가 된다. → 입금 내역을 채운 메일 초안을 열어 실제 통지가 되게 한다.
+    const subject = `착착 입금 완료 알림${storeName ? ` — ${storeName}` : ''}`;
+    const body = [
+      '입금을 완료했어요. 확인 후 활성화 부탁드려요.',
+      storeName ? `매장: ${storeName}` : '',
+      `요금제: ${PLANS[selectedPlan].name}`,
+      `금액: ${formatKrw(monthlyTotal)} / 월`,
+    ]
+      .filter(Boolean)
+      .join('\n');
+    const url = `mailto:${BILLING_INFO.contactValue}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    try {
+      await Linking.openURL(url);
+      showToast('입금 확인 후 이용이 자동 활성화돼요.');
+    } catch {
+      // 메일 앱이 없는 환경 — 무엇을 해야 하는지(어디로 알릴지)를 명확히 남긴다(무음 실패 방지).
+      showToast(`${BILLING_INFO.contactValue} 로 입금 사실을 알려주세요`);
+    }
   };
 
+  // 상태 문구 — 제품 모델은 freemium(무료 영구 + 유료 single/multi)라 '무료체험' 개념이 없다.
+  // (신규 매장 구독행이 legacy 로 status='trialing'+3일로 생기지만, plan='free' 가 deriveSubscription
+  //  에서 영구 active 로 우선 처리해 표면화되지 않는다 — 여기서도 trial 문구를 쓰지 않는다.)
   const headline =
     view.state === 'expired'
       ? isOwner
         ? '이용 기간이 만료됐어요'
         : '잠시 이용이 중단됐어요'
-      : view.state === 'trialing'
-        ? `무료체험 ${view.daysLeft}일 남았어요`
+      : plan === 'free'
+        ? '무료 요금제로 이용 중이에요'
         : '이용 중이에요';
 
   return (
@@ -287,7 +307,7 @@ const styles = StyleSheet.create({
   rowValueStrong: { fontSize: 15, fontWeight: '900' },
   copyBtn: { padding: 2 },
 
-  // 요금제 선택 카드(라디오 리스트) — 선택 시 잉크 보더 강조(StoreSwitcher rowActive 와 동일 톤).
+  // 요금제 선택 카드(라디오 리스트) — 선택 시 잉크 보더로 강조.
   planList: { gap: Space.sm },
   planCard: {
     backgroundColor: '#FFFFFF',

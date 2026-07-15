@@ -80,6 +80,7 @@ export function WorkChat({
   sendingPhoto,
   onReact,
   onMessageToTask,
+  onMessageToKnowhow,
   onDelete,
   onAddTask,
   onAssignTask,
@@ -99,6 +100,9 @@ export function WorkChat({
   sendingPhoto?: boolean;
   onReact: (id: string, emoji: string) => void;
   onMessageToTask: (text: string, mentions?: string[]) => void;
+  /** 메시지 → 노하우 승격(사장 전용). 부모(WorkBoard)가 사장일 때만 주입 → coach 발행 플로우로 진입.
+   *  owner_answer 해자의 입력 경로 — 채팅에서 답한 실전 Q&A가 증발하지 않고 노하우로 축적된다. */
+  onMessageToKnowhow?: (text: string, feedId: string) => void;
   /** 메시지 삭제 — 권한(본인 or 사장)은 여기서 게이팅, 백엔드 RLS(wf_delete)도 같은 매장·방만 허용. */
   onDelete: (id: string) => void;
   onAddTask: () => void;
@@ -114,6 +118,8 @@ export function WorkChat({
 
   const canDeleteActive = !!actionItem && (actionItem.authorId === me || isOwner);
   const canTaskActive = !!actionItem && !!actionItem.text.trim();
+  // 노하우 승격은 사장 전용(onMessageToKnowhow 주입 여부로 게이팅) + 텍스트 있고 + 아직 승격 안 된 메시지만.
+  const canKnowhowActive = !!actionItem && !!onMessageToKnowhow && !!actionItem.text.trim() && !actionItem.promotedEntryId;
 
   // ── 윈도잉 페이지네이션 ──────────────────────────────────────────────
   // 최근 visible개만 렌더. 위로 스크롤해 상단에 닿으면 이전 페이지를 붙인다.
@@ -234,6 +240,7 @@ export function WorkChat({
                   members={members}
                   onReact={(e) => onReact(f.id, e)}
                   onLongPress={f.kind === 'message' ? () => setActionItem(f) : undefined}
+                  onPromote={onMessageToKnowhow ? () => onMessageToKnowhow(f.text, f.id) : undefined}
                 />
               </Appear>
             </View>
@@ -248,7 +255,7 @@ export function WorkChat({
           <Pressable style={s.menuBackdrop} onPress={() => setMenu(false)} />
           <View style={s.menu}>
             <MenuItem icon="checkmark-circle-outline" label="할일 추가" sub={isOwner ? '가게 전체 / 나만 보기' : '나만 보기'} onPress={() => { setMenu(false); onAddTask(); }} />
-            <MenuItem icon="image-outline" label="사진 보내기" sub={sendingPhoto ? '올리는 중…' : '이미지 첨부'} onPress={() => { setMenu(false); onSendPhoto(); }} />
+            <MenuItem icon="image-outline" label="사진 보내기" sub={sendingPhoto ? '올리는 중…' : '한 번에 최대 10장'} onPress={() => { setMenu(false); onSendPhoto(); }} />
             {isOwner && <MenuItem icon="megaphone-outline" label="공지 작성" sub="사장만" onPress={() => { setMenu(false); onWriteNotice(); }} top />}
             <View style={s.menuInfoRow}>
               <Text style={s.menuInfoText}>사진은 자동 압축·EXIF 제거돼요</Text>
@@ -302,6 +309,17 @@ export function WorkChat({
                 <Text style={s.sheetItemText}>할일로 만들기</Text>
               </Pressable>
             )}
+            {canKnowhowActive && (
+              <Pressable
+                onPress={() => { const it = actionItem!; setActionItem(null); onMessageToKnowhow!(it.text, it.id); }}
+                style={({ pressed }) => [s.sheetItem, pressed && { backgroundColor: InkColors.paper }]}
+                accessibilityRole="button"
+                accessibilityLabel="이 메시지를 노하우로 저장"
+              >
+                <Ionicons name="bookmark-outline" size={19} color={InkColors.ink} />
+                <Text style={s.sheetItemText}>노하우로 저장</Text>
+              </Pressable>
+            )}
             {canDeleteActive && (
               <Pressable
                 onPress={() => { const id = actionItem!.id; setActionItem(null); onDelete(id); }}
@@ -337,7 +355,7 @@ function MenuItem({ icon, label, sub, onPress, top }: { icon: any; label: string
   );
 }
 
-function FeedRow({ item, me, nameOf, members, onReact, onLongPress }: { item: FeedItem; me: string; nameOf: (id: string) => string; members: Member[]; onReact: (e: string) => void; onLongPress?: () => void }) {
+function FeedRow({ item, me, nameOf, members, onReact, onLongPress, onPromote }: { item: FeedItem; me: string; nameOf: (id: string) => string; members: Member[]; onReact: (e: string) => void; onLongPress?: () => void; onPromote?: () => void }) {
   if (item.kind === 'task_done') {
     return (
       <View style={s.doneRow}>
@@ -351,6 +369,12 @@ function FeedRow({ item, me, nameOf, members, onReact, onLongPress }: { item: Fe
   const mine = item.authorId === me;
   const photo = item.photoUrl;
   const hasText = !!item.text.trim();
+  // 기능2 — ambient 승격 넛지: 내(사장) 답변에 ✅/👍(도움됐다는 신호)가 달리면 "노하우로 저장" 칩을 띄운다.
+  // '기록하세요'라고 시키지 않고, 질문이 해결됐다는 신호(리액션)를 트리거로 승격을 제안(onPromote=사장만 주입).
+  const resolvedSignal = !!item.reactions && ((item.reactions['✅']?.length ?? 0) > 0 || (item.reactions['👍']?.length ?? 0) > 0);
+  const showPromote = !!onPromote && mine && hasText && item.kind === 'message' && resolvedSignal && !item.promotedEntryId;
+  // 이미 승격된 내 메시지엔 넛지 대신 정적 확인 표시(사장 시점=onPromote 주입 시).
+  const showPromoted = !!onPromote && mine && item.kind === 'message' && !!item.promotedEntryId;
   return (
     <View style={[s.msgRow, mine ? s.msgRowMine : s.msgRowOther]}>
       {!mine && <Text style={s.msgAuthor}>{item.authorName}</Text>}
@@ -367,7 +391,7 @@ function FeedRow({ item, me, nameOf, members, onReact, onLongPress }: { item: Fe
               stored={photo}
               style={[s.msgImage, hasText && s.msgImageWithText]}
               resizeMode="cover"
-              openOnPress
+              viewOnPress
               accessibilityLabel="사진 크게 보기"
             />
           )}
@@ -382,6 +406,23 @@ function FeedRow({ item, me, nameOf, members, onReact, onLongPress }: { item: Fe
       {/* 리액션은 '있을 때만' 칩으로 표시(추가 버튼은 롱프레스 시트로 이동). 없으면 줄 자체가 사라진다. */}
       <View style={mine ? { alignItems: 'flex-end' } : undefined}>
         <ReactionBar reactions={item.reactions} me={me} nameOf={nameOf} onReact={onReact} side={mine ? 'left' : 'right'} hideAdd />
+        {showPromote && (
+          <Pressable
+            onPress={onPromote}
+            style={({ pressed }) => [s.promoteChip, pressed && { opacity: 0.7 }]}
+            accessibilityRole="button"
+            accessibilityLabel="이 답변을 노하우로 저장"
+          >
+            <Ionicons name="bookmark-outline" size={12} color={BrandColors.yellowDeep} />
+            <Text style={s.promoteChipText}>노하우로 저장</Text>
+          </Pressable>
+        )}
+        {showPromoted && (
+          <View style={s.promotedTag}>
+            <Ionicons name="bookmark" size={11} color={InkColors.ink3} />
+            <Text style={s.promotedTagText}>노하우로 저장됨</Text>
+          </View>
+        )}
       </View>
     </View>
   );
@@ -425,6 +466,12 @@ const s = StyleSheet.create({
   mentionMine: { color: BrandColors.yellow },
   // 인라인 시간: 말풍선 옆에 붙어 하단 baseline에 앉는다. 줄바꿈 방지로 flexShrink 0.
   msgTime: { flexShrink: 0, fontSize: 10, color: InkColors.ink3, paddingBottom: 1 },
+  // 기능2 ambient 승격 넛지 칩 — 리액션 받은 사장 답변 아래에 옅은 옐로 필로 제안.
+  promoteChip: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: BrandColors.yellowSoft, borderWidth: 1, borderColor: BrandColors.yellowDeep, borderRadius: Radius.pill, paddingHorizontal: 9, paddingVertical: 3, marginTop: 3 },
+  promoteChipText: { fontSize: 11, fontWeight: '800', color: BrandColors.yellowDeep },
+  // 승격 완료 정적 표시 — 넛지가 아니라 확인용이라 옅게(테두리 없음).
+  promotedTag: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 3 },
+  promotedTagText: { fontSize: 10.5, fontWeight: '700', color: InkColors.ink3 },
 
   composer: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 10, backgroundColor: InkColors.cream, borderTopWidth: 1, borderTopColor: InkColors.line },
   plus: { width: 38, height: 38, borderRadius: Radius.md, backgroundColor: InkColors.ink, alignItems: 'center', justifyContent: 'center' },

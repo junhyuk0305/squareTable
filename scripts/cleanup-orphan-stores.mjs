@@ -4,9 +4,10 @@
 //   node --env-file=.env.seed scripts/cleanup-orphan-stores.mjs --execute  # 실행
 //
 // 삭제 대상(테스트/고아만): (a) dangling = owner 프로필이 이미 삭제된 매장,
-//   (b) soft = deleted_at 세팅된 매장, (c) 소프트삭제된 QA/자동 계정(auth.users 하드삭제).
-// 보호(절대 삭제 안 함): PROTECT_UNITS(eval 픽스처 등) + 실사용자 이메일(naver/gmail/daum/kakao 등) +
-//   활성 owner가 있는 매장(멤버 0이어도 실사용자 소유면 유지).
+//   (b) soft = deleted_at 세팅된 매장, (c) owner 이메일이 QA 전용 도메인(@example.com·@test.com 등)인 매장(live 포함),
+//   (d) QA 전용 도메인 계정(auth.users 하드삭제, live/soft 무관).
+// 보호(절대 삭제 안 함): PROTECT_UNITS(eval 픽스처 등) + 실사용자 이메일(naver/gmail/daum/kakao 등).
+//   실사용자 소유 매장은 REAL_EMAIL 로 항상 보호(멤버 0이어도 유지) → QA_EMAIL 확장이 실매장을 건드릴 수 없다.
 import { createClient } from '@supabase/supabase-js';
 
 const U = process.env.SUPABASE_URL, K = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -15,8 +16,9 @@ const EXECUTE = process.argv.includes('--execute');
 const admin = createClient(U, K, { auth: { persistSession: false } });
 const H = { apikey: K, Authorization: `Bearer ${K}` };
 
-// 절대 건드리지 않을 매장 (eval 하네스 픽스처 — 활성 멤버·시드데이터 보유)
-const PROTECT_UNITS = new Set(['store_eval']);
+// 절대 건드리지 않을 매장. store_eval=eval 하네스 픽스처. store_001=데모 '스퀘어 카페 신촌점'(삭제금지).
+//   ★데모 owner 이메일이 QA 도메인(@example.com 류)이라 QA_EMAIL 규칙만으론 잡히므로 반드시 명시 보호.
+const PROTECT_UNITS = new Set(['store_eval', 'store_001']);
 // 실사용자 이메일 도메인/패턴 (이 계정은 QA로 오인해 지우지 않는다)
 const REAL_EMAIL = /@(naver|gmail|daum|kakao|hanmail|nate|outlook|hotmail|icloud)\.com|@team-roundtable|cristianojun/i;
 // QA/자동 계정 이메일 (하드삭제 허용)
@@ -37,6 +39,11 @@ async function listAuthUsers() {
   const liveProfIds = new Set(profs.filter(p => !p.deleted_at).map(p => p.id));
   const liveMembers = {}; profs.filter(p => !p.deleted_at && p.unit_id).forEach(p => liveMembers[p.unit_id] = (liveMembers[p.unit_id] || 0) + 1);
 
+  // 보호 매장(PROTECT_UNITS)의 owner·소속 계정은 QA 도메인이어도 하드삭제 금지 (데모 계정 보존).
+  const protectAccts = new Set();
+  units.forEach(u => { if (PROTECT_UNITS.has(u.id) && u.owner_id) protectAccts.add(u.owner_id); });
+  profs.forEach(p => { if (p.unit_id && PROTECT_UNITS.has(p.unit_id)) protectAccts.add(p.id); });
+
   // ── 삭제 대상 매장 선정 ──
   const delUnits = [];
   for (const u of units) {
@@ -47,12 +54,14 @@ async function listAuthUsers() {
     if (ownerLive && REAL_EMAIL.test(ownerEmail)) continue;           // 실사용자 소유 → 보호
     if (u.deleted_at) { delUnits.push([u, 'soft-deleted']); continue; } // 소프트삭제
     if (!allProfIds.has(u.owner_id)) { delUnits.push([u, 'dangling(owner삭제됨)']); continue; } // 하드고아
-    // owner가 소프트삭제됐고 QA면 삭제, 실사용자면 보호
-    if (!ownerLive && QA_EMAIL.test(ownerEmail)) { delUnits.push([u, 'owner소프트삭제(QA)']); continue; }
+    // owner 이메일이 QA 전용 도메인이면 삭제 — live/soft 무관. 실사용자는 위 REAL_EMAIL 보호에서 이미 제외됨.
+    //   (qa:billing-tiers 등 일부 하니스가 owner를 살아있는 채 남겨 매장이 누적되던 사각지대를 닫는다.)
+    if (QA_EMAIL.test(ownerEmail)) { delUnits.push([u, ownerLive ? 'owner활성(QA도메인)' : 'owner소프트삭제(QA)']); continue; }
   }
 
-  // ── 삭제 대상 계정(auth.users 하드삭제): 소프트삭제 + QA이메일 (실사용자·미삭제 제외) ──
-  const delUsers = profs.filter(p => p.deleted_at && QA_EMAIL.test(emailById.get(p.id) || '') && !REAL_EMAIL.test(emailById.get(p.id) || ''))
+  // ── 삭제 대상 계정(auth.users 하드삭제): QA 전용 도메인 계정 (live/soft 무관, 실사용자 제외) ──
+  //   위 매장 삭제와 짝 — 살아있던 QA owner/직원 계정까지 하드삭제해 잔여 계정이 남지 않게 한다.
+  const delUsers = profs.filter(p => QA_EMAIL.test(emailById.get(p.id) || '') && !REAL_EMAIL.test(emailById.get(p.id) || '') && !protectAccts.has(p.id))
     .map(p => ({ id: p.id, email: emailById.get(p.id) }));
 
   console.log(`\n${EXECUTE ? '🔴 EXECUTE' : '🟡 DRY-RUN (미실행)'} — 정리 계획\n`);

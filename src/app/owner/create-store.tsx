@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSessionStore } from '@/lib/store/useSessionStore';
+import { HeaderBackButton } from '@/components/HeaderBackButton';
 import { logout } from '@/lib/auth';
 import { formatBizNo, isValidBizNo, bizDigits } from '@/lib/utils/bizno';
 import { INDUSTRIES } from '@/lib/config/industry';
@@ -51,7 +52,9 @@ export default function OwnerCreateStore() {
         options={{
           headerShown: true,
           title: isAddingStore ? '매장 추가' : '가게 만들기',
-          ...(isAddingStore ? {} : { headerLeft: () => null, headerBackVisible: false }),
+          ...(isAddingStore
+            ? { headerLeft: () => <HeaderBackButton fallback="/stores" /> }
+            : { headerLeft: () => null, headerBackVisible: false }),
         }}
       />
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">

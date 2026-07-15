@@ -116,71 +116,75 @@ export default function SignupScreen() {
     // 직원 초대코드는 선택 — 비우면 가입 후 '가게 연결' 화면으로 유도
 
     setBusy(true);
-    // 1) 계정 생성 — 이미 생성됐으면(가게 연결만 실패했던 경우) 건너뛴다.
-    if (!accountReady) {
-      // 전화번호 중복 사전검사(주키). 'taken'=차단, 'unknown'=검사실패도 진행하지 않고 차단
-      // (우회시키면 트리거로 떨어진다 — 트리거는 이제 500 대신 phone=null로 살리지만, 사용자가
-      //  모르게 ‘번호 없는 반쪽 가입’이 되므로 여기서 막고 재시도를 유도하는 게 맞다).
-      const phoneCheck = await isPhoneTaken(normalizePhone(phone));
-      if (phoneCheck === 'taken') {
-        setBusy(false);
-        setEmailMsg(null);
-        return setErr('이미 가입된 번호예요. 아래 ‘로그인’으로 들어와 주세요.');
+    // ★ 전체를 try/catch/finally 로 감싼다 — signUp/createStore/isPhoneTaken 은 네트워크 예외를 던질 수 있고,
+    //   그때 finally 없이 setBusy(false) 를 놓치면 버튼이 무한 스피너로 멈춘 채(무음 행) 아무 안내도 못 준다.
+    //   내부 조기 return 은 함수를 빠져나가도 finally 가 반드시 돌아 busy 를 해제한다.
+    try {
+      // 1) 계정 생성 — 이미 생성됐으면(가게 연결만 실패했던 경우) 건너뛴다.
+      if (!accountReady) {
+        // 전화번호 중복 사전검사(주키). 'taken'=차단, 'unknown'=검사실패도 진행하지 않고 차단
+        // (우회시키면 트리거로 떨어진다 — 트리거는 이제 500 대신 phone=null로 살리지만, 사용자가
+        //  모르게 ‘번호 없는 반쪽 가입’이 되므로 여기서 막고 재시도를 유도하는 게 맞다).
+        const phoneCheck = await isPhoneTaken(normalizePhone(phone));
+        if (phoneCheck === 'taken') {
+          setEmailMsg(null);
+          return setErr('이미 가입된 번호예요. 아래 ‘로그인’으로 들어와 주세요.');
+        }
+        if (phoneCheck === 'unknown') {
+          return setErr('번호 확인 중 문제가 생겼어요. 잠시 후 다시 시도해 주세요.');
+        }
+        const up = await signUp(email.trim(), pw, {
+          name: name.trim(),
+          role,
+          phone: normalizePhone(phone),
+          // 생년월일(필수) — 트리거(handle_new_user)가 프로필 SSOT 에 기록하고,
+          // create_store/join_by_invite 가 누락을 서버에서 최종 거부한다(0065).
+          birth_date: birthDateISO(birth) ?? undefined,
+          // 사장: 이메일 인증으로 세션이 지연돼도 인증 후 첫 로그인에서 매장이 자동 생성되도록 매장 정보를 함께 싣는다.
+          ...(role === 'owner'
+            ? { store_name: storeName.trim(), industry, ...(bizDigits(bizNo) ? { biz_no: bizDigits(bizNo) } : {}) }
+            : {}),
+        });
+        if (up.emailTaken) {
+          // 중복 — 이메일 입력창 아래 안내로 표시
+          setEmailMsg('이미 가입된 이메일이에요. 로그인해 주세요.');
+          return;
+        }
+        if (up.error) {
+          return setErr(up.error);
+        }
+        if (up.needsConfirm) {
+          // 이메일 인증이 켜져 있어 세션이 아직 없는 경우. 사장은 매장 정보를 user_metadata 에 실어뒀으므로
+          // 인증 후 로그인하면 loadProfile 이 매장을 자동 생성한다(데드엔드 없음).
+          setEmailMsg(
+            role === 'owner'
+              ? '인증 메일을 보냈어요. 메일에서 인증하고 로그인하면 가게가 자동으로 만들어져요.'
+              : '인증 메일을 보냈어요. 메일에서 인증한 뒤 로그인해 주세요.',
+          );
+          return;
+        }
+        setAccountReady(true); // 세션 확보 — 이후 실패는 매장 연결만 재시도
       }
-      if (phoneCheck === 'unknown') {
-        setBusy(false);
-        return setErr('번호 확인 중 문제가 생겼어요. 잠시 후 다시 시도해 주세요.');
-      }
-      const up = await signUp(email.trim(), pw, {
-        name: name.trim(),
-        role,
-        phone: normalizePhone(phone),
-        // 생년월일(필수) — 트리거(handle_new_user)가 프로필 SSOT 에 기록하고,
-        // create_store/join_by_invite 가 누락을 서버에서 최종 거부한다(0065).
-        birth_date: birthDateISO(birth) ?? undefined,
-        // 사장: 이메일 인증으로 세션이 지연돼도 인증 후 첫 로그인에서 매장이 자동 생성되도록 매장 정보를 함께 싣는다.
-        ...(role === 'owner'
-          ? { store_name: storeName.trim(), industry, ...(bizDigits(bizNo) ? { biz_no: bizDigits(bizNo) } : {}) }
-          : {}),
-      });
-      if (up.emailTaken) {
-        // 중복 — 이메일 입력창 아래 초록 안내로 표시
-        setBusy(false);
-        setEmailMsg('이미 가입된 이메일이에요. 로그인해 주세요.');
-        return;
-      }
-      if (up.error) {
-        setBusy(false);
-        return setErr(up.error);
-      }
-      if (up.needsConfirm) {
-        // 이메일 인증이 켜져 있어 세션이 아직 없는 경우. 사장은 매장 정보를 user_metadata 에 실어뒀으므로
-        // 인증 후 로그인하면 loadProfile 이 매장을 자동 생성한다(데드엔드 없음).
-        setBusy(false);
-        setEmailMsg(
-          role === 'owner'
-            ? '인증 메일을 보냈어요. 메일에서 인증하고 로그인하면 가게가 자동으로 만들어져요.'
-            : '인증 메일을 보냈어요. 메일에서 인증한 뒤 로그인해 주세요.',
-        );
-        return;
-      }
-      setAccountReady(true); // 세션 확보 — 이후 실패는 매장 연결만 재시도
-    }
 
-    // 2) 매장 연결
-    if (role === 'owner') {
-      const cs = await createStore(storeName.trim(), industry, bizDigits(bizNo) || undefined, birthDateISO(birth) ?? undefined, { isOnboarding: true });
+      // 2) 매장 연결
+      if (role === 'owner') {
+        const cs = await createStore(storeName.trim(), industry, bizDigits(bizNo) || undefined, birthDateISO(birth) ?? undefined, { isOnboarding: true });
+        // 계정은 이미 만들어졌으므로(accountReady) 재시도는 '가게 생성만' 다시 돈다. 버튼 라벨도 아래에서
+        // '가게 다시 만들기'로 바뀌므로 안내 문구를 그 버튼과 일치시킨다(무엇을 누르면 되는지 명확화).
+        if (cs.error) return setErr(`${cs.error} 아래 ‘가게 다시 만들기’를 누르면 가게만 다시 만들어요.`);
+        // 노하우 온보딩으로 — 초대코드는 온보딩 완료 화면에서 안내(빈 매장 0건 방지).
+        router.replace({ pathname: '/owner/onboarding', params: { code: cs.inviteCode ?? '------', industry } });
+      } else {
+        // 직원은 계정만 만들고 개인 허브(junior/hub)로 — 초대코드 입력은 hub 한 곳에서만 한다
+        // (6칸 입력 + 실시간 에러 + 승인 대기 카드). 가입화면엔 코드칸을 두지 않아 '두 번 입력' 혼선을 없앤다.
+        router.replace('/junior/hub');
+      }
+    } catch {
+      // 네트워크 등 예기치 못한 예외 — 여기서 안 잡으면 busy 가 안 풀려 버튼이 무한 스피너로 멈춘다(무음 행 방지).
+      // 계정이 이미 만들어졌으면(accountReady) 안내는 '가게 다시 만들기' 재시도로 자연히 이어진다.
+      setErr('연결 문제로 완료하지 못했어요. 잠시 후 다시 시도해 주세요.');
+    } finally {
       setBusy(false);
-      // 계정은 이미 만들어졌으므로(accountReady) 재시도는 '가게 생성만' 다시 돈다. 버튼 라벨도 아래에서
-      // '가게 다시 만들기'로 바뀌므로 안내 문구를 그 버튼과 일치시킨다(무엇을 누르면 되는지 명확화).
-      if (cs.error) return setErr(`${cs.error} 아래 ‘가게 다시 만들기’를 누르면 가게만 다시 만들어요.`);
-      // 노하우 온보딩으로 — 초대코드는 온보딩 완료 화면에서 안내(빈 매장 0건 방지).
-      router.replace({ pathname: '/owner/onboarding', params: { code: cs.inviteCode ?? '------', industry } });
-    } else {
-      // 직원은 계정만 만들고 개인 허브(junior/hub)로 — 초대코드 입력은 hub 한 곳에서만 한다
-      // (6칸 입력 + 실시간 에러 + 승인 대기 카드). 가입화면엔 코드칸을 두지 않아 '두 번 입력' 혼선을 없앤다.
-      setBusy(false);
-      router.replace('/junior/hub');
     }
   };
 
@@ -302,6 +306,9 @@ export default function SignupScreen() {
                 </Text>
               )}
             </View>
+
+            {/* 요금제 안내는 가입 폼에 두지 않는다(인지부하 축소). 가입은 무료로 시작하고,
+                가격 인지·업그레이드는 온보딩 완료 화면·설정(PricingTable)에서만 노출한다(SSOT=tiers.ts). */}
           </>
         ) : (
           <View style={styles.joinNote}>

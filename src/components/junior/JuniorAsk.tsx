@@ -29,14 +29,25 @@ import type { Category } from '@/types';
 
 import { styles } from './askStyles';
 
-// 빈 채팅 추천 질문 — 업종(요식업) 일반. 데모 매장(노하우 보유)은 데모 시드 칩을 쓴다.
+// 추천 질문 풀 — 업종(요식업) 일반. 데모 매장(노하우 보유)은 데모 시드 칩을 쓴다.
 // 첫인상은 '사소한 것도 편하게'가 되도록 저부담 질문부터 — 위기 시나리오를 앞세우지 않는다.
+// 상단 상시 스트립이 매번 같은 질문만 반복하지 않도록 풀을 넉넉히 두고, '이미 물어본 질문'은 걸러낸다.
 const GENERIC_SUGGESTIONS = [
   '앞치마는 어디 있어요?',
   '마감 몇 시예요?',
   '마감 청소 어디까지 해요?',
   '재료 떨어지면 어떻게 해요?',
+  '포스기 에러 났어요',
+  '휴게시간은 어떻게 써요?',
+  '유니폼 세탁은 어떻게 해요?',
+  '손님이 환불해달래요',
+  '재고는 어디서 확인해요?',
+  '지각하면 어디로 연락해요?',
 ];
+
+// 빈 상태에서 보여줄 추천 수 / 대화 중 상단 스트립 최대 수.
+const EMPTY_SUGGEST_COUNT = 4;
+const STRIP_SUGGEST_COUNT = 6;
 
 /* ─────────────────────────────────────────────────────────
  * JuniorAsk — '물어보기' 슬롯. 기존 챗 UI를 그대로 임베드.
@@ -64,7 +75,18 @@ export function JuniorAsk() {
   const entryCount = usePlaybookStore((s) => s.entries.length);
   // 데모(mock) 매장에서만 시연용 시드 질문을 노출한다. 실서비스 계정은 항상 업종 일반 추천
   // → 실계정 알바가 남의 매장 데모 질문('수저통 빨대…')을 보는 목업 데이터 누출 방지.
-  const suggestions = !HAS_SUPABASE && entryCount > 0 ? SEED_QUERIES.slice(0, 4).map((s) => s.text) : GENERIC_SUGGESTIONS;
+  const pool = useMemo(
+    () => (!HAS_SUPABASE && entryCount > 0 ? SEED_QUERIES.map((s) => s.text) : GENERIC_SUGGESTIONS),
+    [entryCount],
+  );
+  // 이미 물어본 질문은 추천에서 제외 → 같은 추천 칩이 매번 반복되지 않고, 답할 때마다 다음 질문이 드러난다.
+  const asked = useMemo(() => new Set(history.map((h) => h.query_text.trim())), [history]);
+  // 빈 상태: 풀 앞쪽 몇 개(첫인상). 대화 중 스트립: 아직 안 물어본 것만, 상한까지.
+  const emptySuggestions = useMemo(() => pool.slice(0, EMPTY_SUGGEST_COUNT), [pool]);
+  const stripSuggestions = useMemo(
+    () => pool.filter((t) => !asked.has(t.trim())).slice(0, STRIP_SUGGEST_COUNT),
+    [pool, asked],
+  );
 
   const identity = useMemo(() => {
     // 매장 이름은 세션에서. 입사일차는 명부에 있을 때만 표시(신규 사용자엔 없음).
@@ -77,7 +99,6 @@ export function JuniorAsk() {
 
   const router = useRouter();
   const [input, setInput] = useState('');
-  const [anon, setAnon] = useState(false);
   const [focused, setFocused] = useState(false);
   const scrollRef = useRef<ScrollView | null>(null);
   // 보낼 수 있는 상태 = 입력값 있음 + 로딩 아님 → 전송 버튼이 노랑으로 '켜짐'(active 액센트).
@@ -95,7 +116,7 @@ export function JuniorAsk() {
     const value = (text ?? input).trim();
     if (!value) return;
     setInput('');
-    void submit(value, { anonymous: anon });
+    void submit(value);
   }
 
   // 추천 칩 1탭 → 바로 전송 (입력칸을 잠깐 채웠다 지우는 깜빡임 없이 질문 버블로 즉시 노출)
@@ -145,7 +166,7 @@ export function JuniorAsk() {
             </Text>
             <Text style={styles.suggestLabel}>이런 걸 물어볼 수 있어요</Text>
             <View style={styles.suggestList}>
-              {suggestions.map((text, i) => (
+              {emptySuggestions.map((text, i) => (
                 <Appear key={`${i}-${text}`} delay={120 + i * 70}>
                   <Pressable
                     onPress={() => handleSeedTap(text)}
@@ -206,8 +227,9 @@ export function JuniorAsk() {
         </View>
       )}
 
-      {/* 추천 질문 상시 노출 — 대화가 시작된 뒤에도 다음 질문을 한 탭으로(빈 상태 안내와 중복 방지) */}
-      {history.length > 0 && (
+      {/* 추천 질문 상시 노출 — 대화 시작 후에도 '다음 질문'을 한 탭으로. 이미 물어본 건 빠지므로
+          같은 추천이 반복되지 않는다. 물어볼 게 다 떨어지면 스트립 자체를 감춘다. */}
+      {history.length > 0 && stripSuggestions.length > 0 && (
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -215,9 +237,9 @@ export function JuniorAsk() {
           contentContainerStyle={styles.chipStripContent}
           keyboardShouldPersistTaps="handled"
         >
-          {suggestions.map((text, i) => (
+          {stripSuggestions.map((text) => (
             <Pressable
-              key={`chip-${i}`}
+              key={`chip-${text}`}
               onPress={() => handleSeedTap(text)}
               disabled={isLoading}
               style={({ pressed }) => [styles.chip, pressed && { opacity: 0.7 }, isLoading && { opacity: 0.5 }]}
@@ -227,25 +249,6 @@ export function JuniorAsk() {
           ))}
         </ScrollView>
       )}
-
-      {/* 익명 토글 — 묻기 어려운 질문(권리·인간관계·실수)을 부담 없이 */}
-      <View style={styles.anonRow}>
-        <Pressable
-          onPress={() => setAnon((v) => !v)}
-          accessibilityRole="switch"
-          accessibilityState={{ checked: anon }}
-          style={({ pressed }) => [
-            styles.anonChip,
-            anon && styles.anonChipOn,
-            pressed && { opacity: 0.8 },
-          ]}
-        >
-          <Text style={[styles.anonChipText, anon && styles.anonChipTextOn]}>
-            {anon ? '🔒 익명으로 묻는 중' : '🔓 익명으로 묻기'}
-          </Text>
-        </Pressable>
-        {anon && <Text style={styles.anonHint}>사장님께 이름이 안 보여요</Text>}
-      </View>
 
       {/* 입력바 */}
       <View style={styles.inputBar}>

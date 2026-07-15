@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { PressableScale } from '@/components/PressableScale';
 import { SectionLabel } from '@/components/SectionLabel';
+import { InfoDot } from '@/components/InfoDot';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { canUseMultistore } from '@/lib/config/tiers';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
@@ -37,14 +38,23 @@ export function OwnerKnowhowValueCard({ answeredHits30d, pending, entriesCount }
         icon="bulb-outline"
         title="우리 매장 노하우"
         trailing={
-          <PressableScale
-            onPress={() => router.push('/owner/knowledge')}
-            scaleTo={0.96}
-            accessibilityRole="button"
-            accessibilityLabel="노하우 전체 보기"
-          >
-            <Text style={styles.headLink}>전체 ›</Text>
-          </PressableScale>
+          <View style={styles.headActions}>
+            <InfoDot
+              title="이 숫자들은 무엇인가요?"
+              body={
+                '• 대신 답함 — 최근 30일 동안 직원이 물어봤을 때, 등록된 노하우가 답을 찾아준 횟수예요. 직원이 ‘노하우 물어보기’에서 질문하면 표현이 조금 달라도 관련 노하우를 자동으로 찾아드려요(똑같이 입력할 필요 없어요). 답을 못 찾으면 이 숫자에 안 들어가고 ‘답 기다리는 질문’으로 넘어가요.\n\n• 답 기다리는 질문 — 노하우에 없어서 사장님 답을 기다리는 질문 수예요.\n\n• 정리된 노하우 — 지금까지 쌓인 노하우 개수예요.'
+              }
+              accessibilityLabel="노하우 지표 설명 보기"
+            />
+            <PressableScale
+              onPress={() => router.push('/owner/knowledge')}
+              scaleTo={0.96}
+              accessibilityRole="button"
+              accessibilityLabel="노하우 전체 보기"
+            >
+              <Text style={styles.headLink}>전체 ›</Text>
+            </PressableScale>
+          </View>
         }
       />
 
@@ -111,6 +121,7 @@ export function OwnerKnowhowValueCard({ answeredHits30d, pending, entriesCount }
 
 const styles = StyleSheet.create({
   section: { gap: Space.sm },
+  headActions: { flexDirection: 'row', alignItems: 'center', gap: Space.xs },
   headLink: { fontSize: 12.5, fontWeight: '800', color: InkColors.ink },
   card: {
     backgroundColor: InkColors.bg,
