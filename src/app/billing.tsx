@@ -307,7 +307,7 @@ const styles = StyleSheet.create({
   rowValueStrong: { fontSize: 15, fontWeight: '900' },
   copyBtn: { padding: 2 },
 
-  // 요금제 선택 카드(라디오 리스트) — 선택 시 잉크 보더 강조(StoreSwitcher rowActive 와 동일 톤).
+  // 요금제 선택 카드(라디오 리스트) — 선택 시 잉크 보더로 강조.
   planList: { gap: Space.sm },
   planCard: {
     backgroundColor: '#FFFFFF',

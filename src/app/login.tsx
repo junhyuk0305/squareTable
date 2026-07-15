@@ -60,7 +60,7 @@ export default function LoginScreen() {
     }
     setBusy(true);
     clearMsg();
-    const { error, role: r } = await signInWithPassword(email.trim(), pw);
+    const { error } = await signInWithPassword(email.trim(), pw);
     setBusy(false);
     if (error) {
       // 스토어가 상황별 정확한 사유를 준다(비번오류·네트워크·차단·탈퇴계정 등) — 예전처럼 '비번 확인'으로
@@ -68,7 +68,7 @@ export default function LoginScreen() {
       flash(error || '로그인에 실패했어요. 잠시 후 다시 시도해주세요.', true);
       return;
     }
-    router.replace(r === 'owner' ? '/owner/dashboard' : '/junior/home');
+    router.replace('/stores');
   };
 
   const magicLink = async () => {

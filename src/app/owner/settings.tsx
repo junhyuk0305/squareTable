@@ -160,12 +160,6 @@ export default function OwnerSettings() {
             onValueChange={(v) => saveNotify({ pushEnabled: v })}
           />
           <SettingsToggle
-            icon="mail-outline"
-            label="이메일 알림"
-            value={prefs.emailEnabled}
-            onValueChange={() => prefs.toggle('emailEnabled')}
-          />
-          <SettingsToggle
             icon="moon-outline"
             label="방해 금지 시간"
             hint={`${prefs.quietStart}~${prefs.quietEnd}에는 핸드폰 알림만 꺼요 (알림함엔 그대로 쌓여요)`}

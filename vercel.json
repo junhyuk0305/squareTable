@@ -1,5 +1,5 @@
 {
-  "buildCommand": "npx expo export -p web",
+  "buildCommand": "npx expo export -p web && node scripts/inject-landing-redirect.mjs && node scripts/seo-postbuild.mjs",
   "outputDirectory": "dist",
   "installCommand": "npm install",
   "rewrites": [{ "source": "/(.*)", "destination": "/" }],

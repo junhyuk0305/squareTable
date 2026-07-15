@@ -4,7 +4,7 @@ import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 import { RoleTabBar, goToTab } from '@/components/RoleTabBar';
-import { Wordmark } from '@/components/Wordmark';
+import { StoreToggle } from '@/components/StoreToggle';
 import { NotificationBell } from '@/components/NotificationBell';
 import { Appear } from '@/components/Appear';
 import { FeatureCarousel, JUNIOR_FEATURES } from '@/components/FeatureCarousel';
@@ -82,7 +82,7 @@ export default function JuniorHomeScreen() {
           // 우측 벨(20)과 좌우 대칭을 만든다.
           headerTitle: () => (
             <View style={{ paddingLeft: 3 }}>
-              <Wordmark size="sm" />
+              <StoreToggle />
             </View>
           ),
           headerRight: () => <NotificationBell />,

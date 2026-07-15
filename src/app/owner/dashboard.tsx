@@ -15,10 +15,8 @@ import { OwnerHomeHubCards } from '@/components/OwnerHomeHubCards';
 import { OwnerKnowhowValueCard } from '@/components/OwnerKnowhowValueCard';
 import { OwnerWorkValueCard } from '@/components/OwnerWorkValueCard';
 import { SectionLabel } from '@/components/SectionLabel';
-import { Wordmark } from '@/components/Wordmark';
 import { OwnerNotificationBell } from '@/components/NotificationBell';
-import { StoreSwitcher } from '@/components/StoreSwitcher';
-import { useSessionStore } from '@/lib/store/useSessionStore';
+import { StoreToggle } from '@/components/StoreToggle';
 import { getCategoryMeta } from '@/lib/utils/category';
 import { SEED_TEMPLATES } from '@/data/seed-templates';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
@@ -44,11 +42,6 @@ export default function OwnerDashboardScreen() {
     answeredHits30d,
     assign,
   } = useOwnerDashboardData();
-
-  // 다점포(0055): 매장 목록·현재 매장명 — 2개 이상이면 헤더 스위처 노출.
-  const stores = useSessionStore((s) => s.stores);
-  const storeName = useSessionStore((s) => s.storeName);
-  const [switcherOpen, setSwitcherOpen] = useState(false);
 
   // 진입 애니는 각 섹션의 <Appear>가 단독으로 담당한다(디자인시스템 SSOT: Appear 단일 프리미티브).
   // 예전에는 콘텐츠 래퍼에도 translateY 스프링을 걸어 이중 수직 애니가 서로 다른 이징으로 충돌 →
@@ -108,26 +101,13 @@ export default function OwnerDashboardScreen() {
 
       {/* 코치마크 오버레이가 덮을 영역(헤더·스크롤·탭바를 함께 감싼다) */}
       <View ref={containerRef} style={{ flex: 1 }}>
-      {/* 좌: 워드마크 / 우: (다점포면 매장 스위처)+알림 벨 */}
+      {/* 좌: 매장 토글(⌂ 허브 복귀 + 매장 전환) / 우: 알림 벨 */}
       <View style={styles.appHeader}>
-        <Wordmark size="sm" />
+        <StoreToggle />
         <View style={styles.headerRight}>
-          {stores.length > 1 && (
-            <Pressable
-              onPress={() => setSwitcherOpen(true)}
-              style={({ pressed }) => [styles.storeSwitch, pressed && { opacity: 0.85 }]}
-              accessibilityRole="button"
-              accessibilityLabel={`현재 매장 ${storeName}, 매장 전환`}
-            >
-              <Ionicons name="storefront-outline" size={14} color={InkColors.ink} />
-              <Text style={styles.storeSwitchText} numberOfLines={1}>{storeName}</Text>
-              <Ionicons name="chevron-down" size={13} color={InkColors.ink2} />
-            </Pressable>
-          )}
           <OwnerNotificationBell edge={false} />
         </View>
       </View>
-      {stores.length > 1 && <StoreSwitcher visible={switcherOpen} onClose={() => setSwitcherOpen(false)} />}
 
       <ScrollView ref={scrollRef} contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         {/* 정적 콘텐츠 래퍼 — 진입 애니는 각 <Appear>가 담당. 코치마크 위치 측정 기준(scrollContentRef). */}

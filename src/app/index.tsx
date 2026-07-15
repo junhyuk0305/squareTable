@@ -1,4 +1,4 @@
-import { View, Text, Pressable, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, Pressable, StyleSheet, ScrollView, Platform } from 'react-native';
 import { useRouter, Redirect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -39,7 +39,6 @@ export default function LandingScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const status = useSessionStore((s) => s.status);
-  const role = useSessionStore((s) => s.role);
   const phone = useSessionStore((s) => s.phone);
   const unitId = useSessionStore((s) => s.unitId);
   const pendingUnitId = useSessionStore((s) => s.pendingUnitId);
@@ -51,9 +50,16 @@ export default function LandingScreen() {
     if (needsProfileSetup({ status, phone, unitId, pendingUnitId })) {
       return <Redirect href="/complete-profile" />;
     }
-    return <Redirect href={role === 'owner' ? '/owner/dashboard' : '/junior/home'} />;
+    return <Redirect href="/stores" />;
   }
   if (HAS_SUPABASE && status === 'loading') return null; // 스플래시가 덮는 구간 — 깜빡임 방지
+
+  // 웹 미로그인 방문자는 정적 마케팅 페이지(/welcome.html)를 앞문으로 — 로그인/가입만 앱(SPA)으로 이어진다.
+  // 네이티브(스토어 앱)는 인앱 랜딩을 그대로 쓴다. welcome.html은 실제 정적 파일이라 SPA rewrite에 안 걸린다.
+  if (HAS_SUPABASE && status === 'signed_out' && Platform.OS === 'web') {
+    if (typeof window !== 'undefined') window.location.replace('/welcome.html');
+    return null;
+  }
 
   const goSignup = () => router.push('/signup');
   const goLogin = () => router.push('/login');
