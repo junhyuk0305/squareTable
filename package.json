@@ -40,6 +40,7 @@
     "lint": "expo lint",
     "typecheck": "tsc --noEmit",
     "compile:packs": "node scripts/compile-pack.mjs",
+    "platform:status": "node scripts/platform-status.mjs",
     "qa:daypart": "node scripts/qa-daypart-labels.mjs",
     "qa:onboarding": "node scripts/qa-onboarding.mjs",
     "qa:complete-profile": "node scripts/qa-complete-profile.mjs",
