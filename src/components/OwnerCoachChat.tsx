@@ -23,6 +23,8 @@ import { uploadPhoto } from '@/lib/db';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 
 import { InfoDot } from '@/components/InfoDot';
+import { VoiceInputButton } from '@/components/VoiceInputButton';
+import { appendDictation, buildHints } from '@/lib/voice/text';
 import { StoredImage } from '@/components/StoredImage';
 import { PHOTO_UPLOAD_INFO } from '@/lib/copy/photoUploadInfo';
 import { MiniSquareCard } from './coach/MiniSquareCard';
@@ -79,6 +81,10 @@ const cardMsg = (snap: CardSnap): Msg => ({ id: nextId(), kind: 'card', snap });
 // "5개 초과"를 감지해 경고할 수 있다(6개가 오면 = 5 초과 신호). 상한 자체는 발행 시점 규칙이라
 // 데이터 계층(edge)이 아니라 여기(클라)에 둔다 — edge는 감지만, 발행 cap은 클라.
 export const MAX_SPLIT_PUBLISH = 5;
+
+// 입력창 글자 상한. edge MAX_RAWTEXT_LEN(8000) 아래 여유값 — 받아쓰기 이어붙이기도 이 값으로 자른다
+// (TextInput maxLength와 어긋나면 "말했는데 뒷부분이 조용히 사라짐"이 된다).
+const INPUT_MAX_LEN = 4000;
 
 export function OwnerCoachChat({
   uq,
@@ -152,6 +158,13 @@ export function OwnerCoachChat({
         )
         .sort((a, b) => (b.created_at ?? '').localeCompare(a.created_at ?? ''))
         .slice(0, 3),
+    [allEntries],
+  );
+
+  // 받아쓰기 힌트 — 이 매장 노하우에 실제로 쓰인 단어(메뉴·기계·재료명)를 넘겨
+  // 발음이 비슷한 고유명사가 엉뚱하게 적히는 걸 줄인다("아샷추"→"아사추" 류).
+  const voiceHints = useMemo(
+    () => buildHints(allEntries.flatMap((e) => e.search_keywords ?? [])),
     [allEntries],
   );
 
@@ -765,6 +778,13 @@ export function OwnerCoachChat({
             body={PHOTO_UPLOAD_INFO.body}
             accessibilityLabel="사진 업로드 규격 안내"
           />
+          {/* 말로 등록 — 결과는 입력창에 채워지고 전송은 사장이 직접(오인식 검토 여지를 남긴다). */}
+          <VoiceInputButton
+            surface="owner_coach"
+            hints={voiceHints}
+            disabled={busy}
+            onText={(t) => setInput((prev) => appendDictation(prev, t, INPUT_MAX_LEN))}
+          />
           <View style={[styles.inputWrap, inputFocused && styles.inputWrapFocused]}>
             <TextInput
               value={input}
@@ -776,10 +796,9 @@ export function OwnerCoachChat({
               onFocus={() => setInputFocused(true)}
               onBlur={() => setInputFocused(false)}
               multiline
-              // 긴 텍스트(인수인계서·메모)를 한 번에 붙여넣을 수 있게. edge MAX_RAWTEXT_LEN(8000) 아래
-              // 여유값 — 재정리 패스가 [추가 설명]을 덧붙여도 상한을 넘지 않는다. 입력창은 maxHeight(120)로
+              // 긴 텍스트(인수인계서·메모)를 한 번에 붙여넣을 수 있게. 입력창은 maxHeight(120)로
               // 커지다 내부 스크롤(프레임 불변식 유지). 등록 상한(5개)은 그대로라 초과분은 경고로 안내.
-              maxLength={4000}
+              maxLength={INPUT_MAX_LEN}
             />
           </View>
           <Pressable

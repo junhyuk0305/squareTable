@@ -12,6 +12,8 @@ import type {
   IntentOutput,
   TriageInput,
   TriageOutput,
+  TranscribeInput,
+  TranscribeOutput,
 } from './types';
 import { AI_ENDPOINT, ANON, USE_MOCK } from './config';
 import { mockGenerateAnswer, mockStructureSquare, mockPatchSquare, mockExtractIntent, mockClassifyQuery } from './mock';
@@ -19,7 +21,7 @@ import { isEnglishDominant } from '@/lib/utils/knowhowInput';
 import { supabase } from '@/lib/supabase';
 import { reportError } from '@/lib/analytics/track';
 
-type Task = 'answer' | 'square' | 'patch' | 'intent' | 'triage';
+type Task = 'answer' | 'square' | 'patch' | 'intent' | 'triage' | 'transcribe';
 
 // 한글 입력인데 결과가 통째로 영어로 나왔는지(언어 드리프트). 혼용은 통과(한글 1자라도 있으면 false).
 function squareWentEnglish(input: { rawText?: string; instruction?: string }, out: StructureSquareOutput): boolean {
@@ -31,6 +33,10 @@ function squareWentEnglish(input: { rawText?: string; instruction?: string }, ou
 
 // 무한 대기 방지 — 이 시간을 넘기면 중단하고 mock으로 폴백한다.
 const EDGE_TIMEOUT_MS = 12_000;
+// 받아쓰기는 오디오 업로드(최대 ~2.6MB base64) + 오디오 이해라 텍스트 태스크보다 오래 걸린다.
+// 12초 컷이면 60초 발화가 상습적으로 잘린다 → 태스크별 타임아웃.
+const EDGE_TIMEOUT_MS_TRANSCRIBE = 30_000;
+const timeoutFor = (task: Task) => (task === 'transcribe' ? EDGE_TIMEOUT_MS_TRANSCRIBE : EDGE_TIMEOUT_MS);
 // 간헐 5xx 재시도 — flash-lite upstream이 무거운 입력(다중 노하우 등)에서 간헐 500을 뱉는데,
 // 그때마다 mock으로 폴백하면 사용자는 덜 정제된 '기본 정리'(degraded)를 받는다. 5xx/네트워크
 // 오류만 1회 재시도해 진짜 결과 회복률을 높인다(실측 다중입력 500율 ~1/3 → 재시도로 ~1/9).
@@ -58,7 +64,7 @@ async function callEdge<T>(task: Task, payload: unknown): Promise<T> {
   for (let attempt = 1; attempt <= EDGE_MAX_ATTEMPTS; attempt++) {
     // 응답이 너무 오래 걸리면 끊는다 → 재시도 소진 시 catch에서 mock 폴백(사용자엔 '기본 안내' 고지).
     const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), EDGE_TIMEOUT_MS);
+    const timer = setTimeout(() => ctrl.abort(), timeoutFor(task));
     try {
       const res = await fetch(AI_ENDPOINT as string, {
         method: 'POST',
@@ -178,6 +184,25 @@ export async function classifyQuery(input: TriageInput): Promise<TriageOutput> {
   } catch (e) {
     console.warn('[ai] classifyQuery failed (fail-open → question):', e);
     return { type: 'question' };
+  }
+}
+
+// 음성 받아쓰기 — 녹음(WAV) → 텍스트. 다른 태스크와 달리 mock 폴백을 하지 않는다:
+// 가짜 문장을 입력창에 채우면 사용자가 자기가 말한 줄 알고 그대로 전송한다(무음 오염).
+// 실패는 실패로 알린다 → 호출부(VoiceInputButton)가 안내 후 타이핑으로 유도.
+export async function transcribeAudio(input: TranscribeInput): Promise<TranscribeOutput> {
+  if (USE_MOCK) {
+    // 데모 모드: 마이크는 동작하지만 STT 백엔드가 없다는 사실을 숨기지 않는다.
+    return { text: '', empty: true, error: 'mock_mode' };
+  }
+  try {
+    const out = await callEdge<TranscribeOutput>('transcribe', input);
+    const text = String(out?.text ?? '').trim();
+    return { text, empty: !text || out?.empty === true, ...(out?.error ? { error: out.error } : {}) };
+  } catch (e) {
+    console.warn('[ai] transcribeAudio failed:', e);
+    reportError('ai.transcribeAudio.failed', e, { durationMs: input.durationMs });
+    return { text: '', empty: true, error: 'failed' };
   }
 }
 

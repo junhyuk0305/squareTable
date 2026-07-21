@@ -6,7 +6,9 @@
     "@expo/vector-icons": "^15.0.2",
     "@supabase/supabase-js": "^2.108.1",
     "expo": "~56.0.6",
+    "expo-audio": "~56.0.12",
     "expo-constants": "~56.0.16",
+    "expo-file-system": "~56.0.8",
     "expo-font": "~56.0.5",
     "expo-linking": "~56.0.12",
     "expo-router": "~56.2.7",
@@ -38,6 +40,7 @@
     "lint": "expo lint",
     "typecheck": "tsc --noEmit",
     "compile:packs": "node scripts/compile-pack.mjs",
+    "platform:status": "node scripts/platform-status.mjs",
     "qa:daypart": "node scripts/qa-daypart-labels.mjs",
     "qa:onboarding": "node scripts/qa-onboarding.mjs",
     "qa:complete-profile": "node scripts/qa-complete-profile.mjs",
@@ -57,7 +60,9 @@
     "qa:delete-store": "node scripts/qa-delete-store.mjs",
     "qa:billing-tiers": "node scripts/qa-billing-tiers.mjs",
     "qa:draft": "node scripts/qa-draft-isolation.mjs",
-    "qa:gen-exchange": "node scripts/qa-gen-exchange.mjs"
+    "qa:gen-exchange": "node scripts/qa-gen-exchange.mjs",
+    "qa:transcribe": "node scripts/qa-transcribe.mjs",
+    "qa:voice-browser": "node scripts/qa-voice-browser.mjs"
   },
   "private": true
 }

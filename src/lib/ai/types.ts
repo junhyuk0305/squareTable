@@ -122,4 +122,25 @@ export type StructureSquareOutput = {
   degraded?: boolean;            // AI 서버 실패로 기본(mock) 정리로 폴백했는가 → 사용자에 고지
 };
 
+// ── 음성 받아쓰기 ────────────────────────────────────────────
+// audioBase64 = 오디오 파일 전체의 base64.
+// 형식은 Gemini 지원 목록 안에서만: 웹·iOS = 16kHz 모노 WAV, Android = AAC.
+// (브라우저 원본 컨테이너 webm/mp4 는 지원 목록 밖이라 lib/voice 가 WAV 로 정규화한다.
+//  Android 는 LINEAR PCM 녹음 자체가 불가해 AAC 로 간다 — expo-audio 문서 확인.)
+export type TranscribeInput = {
+  audioBase64: string;
+  mimeType: 'audio/wav' | 'audio/aac';
+  durationMs: number;
+  /** 매장 고유명사(메뉴·직원 이름 등). 발음이 비슷하면 이 표기를 우선하도록 모델에 힌트. */
+  hints?: string[];
+};
+
+export type TranscribeOutput = {
+  text: string;
+  /** 사람 말소리가 없었거나(무음·잡음) 알아들을 수 없었음 → 호출부가 "다시 말씀해 주세요" 안내. */
+  empty: boolean;
+  /** 엣지 거절 사유(unsupported_audio · audio_too_large). 있으면 text는 비어 있다. */
+  error?: string;
+};
+
 export type { ResponseBlock, SquareBlock };
