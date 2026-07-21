@@ -11,6 +11,9 @@
 /CLAUDE.md
 /README.md
 /데모_시연_큐시트_v1.md
+# AGENTS.md에서 분리한 도메인 규칙. 내용은 AGENTS.md와 동급(내부 아키텍처·사고 이력)이므로
+# 같은 기준으로 공개 저장소에서 차단한다. (2026-07-21)
+.claude/rules/
 
 # dependencies
 node_modules/
