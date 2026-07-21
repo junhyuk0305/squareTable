@@ -99,8 +99,14 @@ assert(/slice\(0,\s*MAX_SPLIT_PUBLISH\)/.test(coach), '표시·발행에 slice(0
 assert(/pubSegs\.length\s*>\s*MAX_SPLIT_PUBLISH/.test(coach), '초과 감지(overflow) 분기 존재', 'overflow 분기 없음(조용히 잘림 위험)');
 assert(/보다 많이 보여요|최대 .{0,6}개까지 등록/.test(coach), '초과 시 경고 문구 존재', '경고 문구 없음');
 // 긴 텍스트: 등록 입력창 maxLength가 1000 제한을 벗어났는가(Q2).
-const mlMatches = coach.match(/maxLength=\{(\d+)\}/g) || [];
-const inputMaxLen = mlMatches.length ? Math.max(...mlMatches.map((x) => Number(x.match(/\d+/)[0]))) : NaN;
+// maxLength는 리터럴({4000})일 수도, 상수({INPUT_MAX_LEN})일 수도 있다 — 상수화(b536bcf, 음성입력)
+// 이후 리터럴만 찾다가 NaN으로 거짓 FAIL이 났다. 둘 다 읽어 실제 값으로 판정한다.
+const mlMatches = coach.match(/maxLength=\{([A-Za-z_$][\w$]*|\d+)\}/g) || [];
+const mlValues = mlMatches
+  .map((x) => x.match(/\{([^}]+)\}/)[1])
+  .map((tok) => (/^\d+$/.test(tok) ? Number(tok) : numConst(coach, tok)))
+  .filter(Number.isFinite);
+const inputMaxLen = mlValues.length ? Math.max(...mlValues) : NaN;
 assert(inputMaxLen > 1000, `등록 입력창 maxLength(${inputMaxLen}) > 1000 (긴 텍스트 허용)`, 'maxLength가 여전히 1000 이하');
 
 console.log(`\n${failed === 0 ? '✅ PASS' : `❌ FAIL (${failed})`} — 다중 노하우 분리·상한 회귀 가드\n`);

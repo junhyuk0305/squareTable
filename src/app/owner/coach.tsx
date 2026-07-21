@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 
 import { OwnerCoachChat } from '@/components/OwnerCoachChat';
+import { PublishConfirmSheet } from '@/components/owner/PublishConfirmSheet';
 import { Appear } from '@/components/Appear';
 import { EmptyState } from '@/components/EmptyState';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
@@ -102,12 +103,38 @@ export default function OwnerCoachScreen() {
     [answerable, realUq, resolve, sugId, approveSuggestion, feedId, markPromoted, navAfter],
   );
 
+  // ── 저장 전 확인(겹침·챕터) ──
+  // 노하우가 창고에 들어가는 길목이 여기 하나뿐이라, 문지기도 여기 하나만 둔다.
+  // 시트는 Promise로 답을 돌려준다: null=취소(발행 잠금 해제 → 재시도 가능), {section}=진행.
+  const [pending, setPending] = useState<{
+    entries: PlaybookEntry[];
+    resolve: (r: { section: string | null } | null) => void;
+  } | null>(null);
+
+  const askBeforePublish = useCallback(
+    (entries: PlaybookEntry[]) =>
+      new Promise<{ section: string | null } | null>((resolve) => setPending({ entries, resolve })),
+    [],
+  );
+
+  // 시트가 닫히는 세 경로(취소·저장·기존 수정)가 전부 여기를 지나 pending을 비운다 —
+  // resolve를 빠뜨리면 발행 잠금이 걸린 채 영영 안 풀린다(사장이 저장을 못 하게 됨).
+  const settle = useCallback(
+    (r: { section: string | null } | null) => {
+      pending?.resolve(r);
+      setPending(null);
+    },
+    [pending],
+  );
+
   const onPublished = useCallback(
     async (entry: PlaybookEntry): Promise<boolean> => {
-      const ok = await addEntry(entry);
+      const decision = await askBeforePublish([entry]);
+      if (!decision) return false; // 취소 — 저장 안 함(잠금 해제되어 다시 시도 가능)
+      const ok = await addEntry({ ...entry, section: decision.section });
       return finishPublish([entry.id], ok, isInboxAnswer ? '답변이 알바 챗봇에 반영됐어요' : '새 노하우가 저장됐어요');
     },
-    [addEntry, finishPublish, isInboxAnswer],
+    [addEntry, finishPublish, isInboxAnswer, askBeforePublish],
   );
 
   // 다중 분리 발행 — 각 노하우를 저장. 엔트리별 성공여부(boolean[])를 반환해 호출부(publishEach)가
@@ -115,7 +142,11 @@ export default function OwnerCoachScreen() {
   const onPublishedMany = useCallback(
     async (entries: PlaybookEntry[]): Promise<boolean[]> => {
       if (entries.length === 0) return [];
-      const results = await Promise.all(entries.map((e) => addEntry(e)));
+      // 분리 발행은 한 대화에서 나온 묶음이라 챕터를 한 번만 묻고 전부에 같이 적용한다.
+      const decision = await askBeforePublish(entries);
+      // 취소는 실패가 아니다 — 실패 토스트 없이 조용히 잠금만 풀어 다시 시도할 수 있게 둔다.
+      if (!decision) return entries.map(() => false);
+      const results = await Promise.all(entries.map((e) => addEntry({ ...e, section: decision.section })));
       const okCount = results.filter(Boolean).length;
       if (results.every(Boolean)) {
         // 전체 성공 — 성공 토스트 + (인박스면) resolve + 네비.
@@ -130,7 +161,7 @@ export default function OwnerCoachScreen() {
       }
       return results;
     },
-    [addEntry, finishPublish],
+    [addEntry, finishPublish, askBeforePublish],
   );
 
   // 인박스 모드인데 질문이 이미 처리/삭제/보관됨 → 빈 상태(데드엔드·중복 답변 방지).
@@ -165,6 +196,17 @@ export default function OwnerCoachScreen() {
         seedText={typeof seed === 'string' ? seed : undefined}
         onPublished={onPublished}
         onPublishedMany={onPublishedMany}
+      />
+
+      <PublishConfirmSheet
+        visible={!!pending}
+        entries={pending?.entries ?? []}
+        onCancel={() => settle(null)}
+        onConfirm={(section) => settle({ section })}
+        onEditExisting={(entryId) => {
+          settle(null); // 저장은 접고 기존 노하우 수정으로 — 중복이 안 생긴다.
+          router.push(`/owner/edit/${entryId}`);
+        }}
       />
 
       {toast && (

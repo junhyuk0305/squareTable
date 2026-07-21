@@ -406,11 +406,12 @@ export async function fetchEntries(): Promise<ReadResult<PlaybookEntry[]>> {
   return { data: (data ?? []) as PlaybookEntry[], error: false };
 }
 
-// source/verification 은 현재 스키마에 컬럼이 없다(타입엔 있으나 0001 테이블 미포함).
+// source 는 아직 스키마에 컬럼이 없다(타입엔 있으나 0001 테이블 미포함).
 // 그대로 보내면 PostgREST가 "column does not exist"로 insert 전체를 거부 → 발행 실패.
 // 스키마에 없는 키는 떼고 보낸다(컬럼 추가 시 이 strip만 풀면 됨).
-function stripNonColumns<T extends Record<string, unknown>>(obj: T): Omit<T, 'source' | 'verification'> {
-  const { source: _s, verification: _v, ...rest } = obj as any;
+// verification 은 0068에서 컬럼이 생겨 strip 해제 — 이제 실제로 저장된다.
+function stripNonColumns<T extends Record<string, unknown>>(obj: T): Omit<T, 'source'> {
+  const { source: _s, ...rest } = obj as any;
   return rest;
 }
 

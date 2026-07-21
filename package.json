@@ -62,7 +62,8 @@
     "qa:draft": "node scripts/qa-draft-isolation.mjs",
     "qa:gen-exchange": "node scripts/qa-gen-exchange.mjs",
     "qa:transcribe": "node scripts/qa-transcribe.mjs",
-    "qa:voice-browser": "node scripts/qa-voice-browser.mjs"
+    "qa:voice-browser": "node scripts/qa-voice-browser.mjs",
+    "qa:publish-sheet": "node scripts/qa-publish-sheet-browser.mjs"
   },
   "private": true
 }
