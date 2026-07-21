@@ -34,6 +34,8 @@ export function TodoScreen({
   onAttachPhoto,
   onAddForDate,
   onEditTask,
+  knowhowOf,
+  onOpenKnowhow,
 }: {
   templates: TaskTemplate[];
   done: Record<string, Record<string, DoneMark>>;
@@ -47,6 +49,10 @@ export function TodoScreen({
   onAddForDate: (date: string) => void;
   /** 연필 → 수정/삭제 시트. (X 즉시삭제를 대체 — 회의 반영) */
   onEditTask: (t: TaskTemplate) => void;
+  /** 이 업무에 붙은 노하우(제목) — 카드에 칩으로 노출. 없으면 칩 안 뜸(0069). */
+  knowhowOf?: (templateId: string) => { id: string; title: string }[];
+  /** 칩 탭 → 노하우 원문 열람(EntryDetailModal). */
+  onOpenKnowhow?: (entryId: string) => void;
 }) {
   const dayparts = useDayparts();
   const [selected, setSelected] = useState(today);
@@ -230,6 +236,7 @@ export function TodoScreen({
                     const photoUrl = (mark as (DoneMark & { photoUrl?: string }) | undefined)?.photoUrl;
                     // 수정/삭제 권한 = 사장 or 본인이 등록/배정받은 개인 할일. (X 즉시삭제 → 연필로 수정·삭제)
                     const canManage = (isOwner || (isMine && (t.ownerId === me || t.createdBy === me))) && !isRoutine;
+                    const khs = knowhowOf?.(t.id) ?? [];
                     return (
                       <View key={t.id} style={[s.item, isMine && s.itemMine, i === g.tasks.length - 1 && { borderBottomWidth: 0 }]}>
                         <View style={[s.scopeBar, { backgroundColor: isMine ? MINE : SHARED }]} />
@@ -239,6 +246,16 @@ export function TodoScreen({
                         <View style={{ flex: 1 }}>
                           <Text style={[s.itemText, on && s.itemTextOn]}>{t.sectionNote ? `${t.sectionNote} · ${t.text}` : t.text}</Text>
                           {mark && <Text style={s.itemMeta}>{mark.byName} 완료 · {hhmm(mark.at)}</Text>}
+                          {khs.length > 0 && (
+                            <View style={s.khRow}>
+                              {khs.map((k) => (
+                                <Pressable key={k.id} onPress={() => onOpenKnowhow?.(k.id)} style={({ pressed }) => [s.khChip, pressed && { opacity: 0.6 }]} accessibilityRole="button" accessibilityLabel={`노하우 보기: ${k.title}`}>
+                                  <Ionicons name="document-text-outline" size={11} color={InkColors.ink2} />
+                                  <Text style={s.khChipText} numberOfLines={1}>{k.title}</Text>
+                                </Pressable>
+                              ))}
+                            </View>
+                          )}
                         </View>
                         {photoUrl ? <StoredImage stored={photoUrl} style={s.thumb} viewOnPress accessibilityLabel="완료 사진 크게 보기" /> : null}
                         {isRoutine ? <Text style={s.routineTag}>루틴</Text> : assignedName ? <Text style={s.assignTag}>담당 {assignedName}</Text> : isMine ? <Text style={s.mineTag}>내 할일</Text> : null}
@@ -326,6 +343,10 @@ const s = StyleSheet.create({
   itemText: { fontSize: 14, fontWeight: '500', color: InkColors.ink },
   itemTextOn: { color: InkColors.ink3, textDecorationLine: 'line-through' },
   itemMeta: { fontSize: 11, color: InkColors.ink3, marginTop: 2 },
+  // 첨부 노하우 칩 — 카드 본문 아래, 탭하면 원문 열람. 옅은 크림 필로 업무 텍스트와 구분.
+  khRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 5, marginTop: 5 },
+  khChip: { flexDirection: 'row', alignItems: 'center', gap: 4, maxWidth: '100%', borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.pill, paddingHorizontal: 8, paddingVertical: 3, backgroundColor: InkColors.cream },
+  khChipText: { flexShrink: 1, fontSize: 11, fontWeight: '700', color: InkColors.ink2 },
   thumb: { width: 32, height: 32, borderRadius: Radius.sm, borderWidth: 1, borderColor: InkColors.line, backgroundColor: InkColors.bgSoft },
   mineTag: { fontSize: 10, fontWeight: '800', color: MINE, backgroundColor: CategoryColors.Event + '1f', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 5 },
   assignTag: { fontSize: 10, fontWeight: '800', color: SHARED, backgroundColor: CategoryColors.Routine + '1f', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 5 },

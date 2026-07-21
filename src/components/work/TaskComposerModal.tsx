@@ -7,6 +7,8 @@ import { useDayparts, useDaypartLabels, type NewTask, type TaskSection, type Tas
 import { type Member } from '@/components/work/MentionInput';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
+import { searchPlaybook } from '@/lib/rag';
+import type { PlaybookEntry } from '@/types';
 
 type When = 'today' | 'date' | 'weekly';
 const DOW = ['일', '월', '화', '수', '목', '금', '토'];
@@ -37,6 +39,8 @@ export function TaskComposerModal({
   initialText,
   initialAssigneeId,
   members = [],
+  knowhowEntries = [],
+  initialKnowhowIds,
 }: {
   onClose: () => void;
   /** 신규 등록 — 다중 배정이면 담당자 수만큼 NewTask 배열로 넘어온다. */
@@ -58,6 +62,10 @@ export function TaskComposerModal({
   /** 멘션에서 넘어온 담당자(그 직원의 개인 할일로 배정). */
   initialAssigneeId?: string;
   members?: Member[];
+  /** 노하우 첨부 검색 대상 = 활성 매장의 로드된 노하우(전체). 검색은 발행분만 노출. */
+  knowhowEntries?: PlaybookEntry[];
+  /** 수정 모드 프리필 — 이 업무에 이미 붙어 있는 노하우 id들. */
+  initialKnowhowIds?: string[];
 }) {
   const isEdit = !!editTemplate;
   const dayparts = useDayparts();
@@ -92,6 +100,24 @@ export function TaskComposerModal({
   });
   const scrollRef = useRef<ScrollView>(null);
 
+  // 노하우 첨부(사장만) — 검색은 발행 노하우 대상, 선택은 id 집합. 수정 모드는 기존 첨부로 프리필.
+  const [knowhowIds, setKnowhowIds] = useState<string[]>(initialKnowhowIds ?? []);
+  const [khQuery, setKhQuery] = useState('');
+  const publishedEntries = useMemo(() => knowhowEntries.filter((e) => e.status === 'published'), [knowhowEntries]);
+  const entryById = useMemo(() => new Map(knowhowEntries.map((e) => [e.id, e])), [knowhowEntries]);
+  // 선택된 노하우(제목 표시용) — 발행 취소된 것도 프리필로 남을 수 있어 전체 맵에서 해석, 없으면 스킵.
+  const selectedEntries = useMemo(
+    () => knowhowIds.map((id) => entryById.get(id)).filter((e): e is PlaybookEntry => !!e),
+    [knowhowIds, entryById],
+  );
+  const khResults = useMemo(() => {
+    const q = khQuery.trim();
+    if (!q) return [] as PlaybookEntry[];
+    return searchPlaybook(q, publishedEntries, { topK: 6, threshold: 0 }).candidates.map((c) => c.entry);
+  }, [khQuery, publishedEntries]);
+  const toggleKnowhow = (id: string) =>
+    setKnowhowIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+
   // 담당자 칩 토글 — 신규는 여러 명(토글), 수정은 한 명(교체). '가게 전체'와는 상호배타.
   const pickAssignee = (id: string) => {
     setSharedMode(false);
@@ -123,6 +149,8 @@ export function TaskComposerModal({
       createdBy: me,
       recurrence,
       ...(date ? { date } : null),
+      // 노하우 링크는 사장이 붙이는 것만 반영. 알바 경로엔 필드를 안 실어 링크를 건드리지 않는다(수정 시 무접촉).
+      ...(isOwner ? { knowhowIds } : null),
     };
   };
 
@@ -268,6 +296,58 @@ export function TaskComposerModal({
                 </View>
               )}
             </Field>
+
+            {isOwner && (
+              <Field label="관련 노하우 (선택)">
+                {selectedEntries.length > 0 && (
+                  <View style={s.khChips}>
+                    {selectedEntries.map((e) => (
+                      <Pressable key={e.id} onPress={() => toggleKnowhow(e.id)} style={s.khChip} accessibilityRole="button" accessibilityLabel={`${e.title} 첨부 해제`}>
+                        <Ionicons name="document-text" size={12} color={InkColors.ink} />
+                        <Text style={s.khChipText} numberOfLines={1}>{e.title}</Text>
+                        <Ionicons name="close" size={13} color={InkColors.ink2} />
+                      </Pressable>
+                    ))}
+                  </View>
+                )}
+                <TextInput
+                  value={khQuery}
+                  onChangeText={setKhQuery}
+                  onFocus={revealScroll}
+                  placeholder="노하우 검색해서 첨부"
+                  placeholderTextColor={InkColors.ink3}
+                  style={s.inp}
+                />
+                {khQuery.trim().length > 0 && (
+                  <View style={s.khResults}>
+                    {publishedEntries.length === 0 ? (
+                      // 노하우 0개 매장(콜드스타트) — "매치 없음"이 아니라 "아직 등록 안 됨"으로 정직하게 구분.
+                      <Text style={s.khEmpty}>아직 등록된 노하우가 없어요. 노하우 탭에서 먼저 추가해 주세요.</Text>
+                    ) : khResults.length === 0 ? (
+                      <Text style={s.khEmpty}>맞는 노하우가 없어요</Text>
+                    ) : (
+                      khResults.map((e) => {
+                        const on = knowhowIds.includes(e.id);
+                        return (
+                          <Pressable
+                            key={e.id}
+                            onPress={() => toggleKnowhow(e.id)}
+                            style={({ pressed }) => [s.khRow, pressed && { backgroundColor: InkColors.paper }]}
+                            accessibilityRole="button"
+                            accessibilityState={{ selected: on }}
+                            accessibilityLabel={`${e.title}${on ? ' 첨부 해제' : ' 첨부'}`}
+                          >
+                            <Ionicons name={on ? 'checkmark-circle' : 'add-circle-outline'} size={17} color={on ? BrandColors.good : InkColors.ink3} />
+                            <Text style={s.khRowText} numberOfLines={1}>{e.title}</Text>
+                          </Pressable>
+                        );
+                      })
+                    )}
+                  </View>
+                )}
+                <Text style={s.khHint}>붙여두면 이 업무를 할 때 노하우를 바로 열 수 있어요</Text>
+              </Field>
+            )}
 
             <Text style={s.note}>‘매주 반복’=선택 요일마다 자동 노출 · 업무 카테고리는 할일 화면의 ‘업무 카테고리 설정’에서 추가·편집</Text>
           </ScrollView>
@@ -428,6 +508,16 @@ const s = StyleSheet.create({
   assignHint: { fontSize: 11.5, color: InkColors.ink2, fontWeight: '600', marginTop: 8, paddingHorizontal: 2 },
 
   note: { fontSize: 11, color: InkColors.ink3, textAlign: 'center', marginTop: 4, marginBottom: 8 },
+
+  // 노하우 첨부
+  khChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 8 },
+  khChip: { flexDirection: 'row', alignItems: 'center', gap: 5, maxWidth: '100%', borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.pill, paddingHorizontal: 11, paddingVertical: 7, backgroundColor: InkColors.cream },
+  khChipText: { flexShrink: 1, fontSize: 12.5, fontWeight: '700', color: InkColors.ink },
+  khResults: { marginTop: 6, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md, backgroundColor: InkColors.bg, overflow: 'hidden' },
+  khRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: InkColors.paper },
+  khRowText: { flex: 1, fontSize: 13.5, fontWeight: '600', color: InkColors.ink },
+  khEmpty: { fontSize: 12.5, color: InkColors.ink3, paddingHorizontal: 12, paddingVertical: 12 },
+  khHint: { fontSize: 11, color: InkColors.ink3, marginTop: 7, paddingHorizontal: 2 },
 
   foot: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 18, borderTopWidth: 1, borderTopColor: InkColors.line },
   destBar: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10 },

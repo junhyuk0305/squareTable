@@ -8,9 +8,12 @@ import { uploadPhoto } from '@/lib/db';
 import { HAS_SUPABASE } from '@/lib/supabase';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useStaffStore } from '@/lib/store/useStaffStore';
-import { useWorkStore, useDayparts, daypartRoutineTemplates, findDuplicateTask, type NewTask, type TaskTemplate } from '@/lib/store/useWorkStore';
+import { useWorkStore, useDayparts, daypartRoutineTemplates, findDuplicateTask, knowhowIdsForTask, type NewTask, type TaskTemplate } from '@/lib/store/useWorkStore';
+import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { useSyncStore } from '@/lib/store/useSyncStore';
 import { showToast } from '@/lib/store/useToastStore';
+import { EntryDetailModal } from '@/components/EntryDetailModal';
+import type { PlaybookEntry } from '@/types';
 import { RoleTabBar } from '@/components/RoleTabBar';
 import { useRoomStore } from '@/lib/store/useRoomStore';
 import { WorkChat } from '@/components/work/WorkChat';
@@ -65,6 +68,14 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
   const templates = useWorkStore((s) => s.templates);
   const done = useWorkStore((s) => s.done);
   const feed = useWorkStore((s) => s.feed);
+  const knowhowLinks = useWorkStore((s) => s.knowhowLinks);
+  // 노하우 첨부 검색·칩 제목 해석용 — 업무 화면에서도 노하우를 로드해 둔다(coalesce 로 중복 방지).
+  const entries = usePlaybookStore((s) => s.entries);
+  useEffect(() => {
+    usePlaybookStore.getState().hydrate();
+    return usePlaybookStore.getState().subscribe();
+  }, []);
+  const [detailEntry, setDetailEntry] = useState<PlaybookEntry | null>(null);
   const toggleTask = useWorkStore((s) => s.toggleTask);
   const addTask = useWorkStore((s) => s.addTask);
   const editTask = useWorkStore((s) => s.editTask);
@@ -146,6 +157,21 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
     members.forEach((m) => (map[m.id] = m.name));
     return (id: string) => map[id] ?? '직원';
   }, [members]);
+
+  // 업무 카드에 붙일 노하우(제목) 해석 — 링크→발행 노하우, 로드 안 됨/삭제분은 조용히 스킵(무음 아님: 링크는 남되 칩만 생략).
+  const entryById = useMemo(() => new Map(entries.map((e) => [e.id, e])), [entries]);
+  const knowhowOf = useCallback(
+    (templateId: string) =>
+      knowhowIdsForTask(knowhowLinks, templateId)
+        .map((id) => entryById.get(id))
+        .filter((e): e is PlaybookEntry => !!e)
+        .map((e) => ({ id: e.id, title: e.title })),
+    [knowhowLinks, entryById],
+  );
+  const openKnowhow = useCallback((entryId: string) => {
+    const e = entryById.get(entryId);
+    if (e) setDetailEntry(e);
+  }, [entryById]);
 
   const memberCount = Math.max(1, (owner ? 1 : 0) + staff.length);
 
@@ -371,6 +397,8 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
           onAttachPhoto={(templateId, date) => attachPhoto(templateId, date)}
           onAddForDate={(date) => setComposer({ open: true, date })}
           onEditTask={(t) => setComposer({ open: true, editTemplate: t })}
+          knowhowOf={knowhowOf}
+          onOpenKnowhow={openKnowhow}
         />
       )}
 
@@ -397,8 +425,12 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
           initialText={composer.text}
           initialAssigneeId={composer.assigneeId}
           members={members}
+          knowhowEntries={entries}
+          initialKnowhowIds={composer.editTemplate ? knowhowIdsForTask(knowhowLinks, composer.editTemplate.id) : undefined}
         />
       )}
+
+      <EntryDetailModal entry={detailEntry} visible={!!detailEntry} onClose={() => setDetailEntry(null)} />
 
       <RoleTabBar role={role} />
     </SafeAreaView>

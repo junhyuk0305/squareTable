@@ -15,6 +15,9 @@ import {
   updateFeed,
   deleteFeed,
   subscribeWork,
+  fetchTemplateKnowhow,
+  insertTemplateKnowhow,
+  deleteTemplateKnowhow,
 } from '@/lib/db';
 import { guardWrite, useSyncStore } from '@/lib/store/useSyncStore';
 import { coalesce, subscribeDebounced } from '@/lib/store/realtimeSync';
@@ -157,6 +160,20 @@ export function occursOn(t: TaskTemplate, dateStr: string): boolean {
   return true; // 레거시(recurrence/date 모두 없음): 매일 루틴
 }
 
+/**
+ * 업무 ↔ 노하우 링크(0069). 스키마 최초의 task↔knowhow 교차 연결(LIVE §4.1-2).
+ * DB는 링크 전용 테이블, 스토어는 평평한 배열로 들고 아래 두 셀렉터로 정/역방향을 파생한다.
+ */
+export type KnowhowLink = { templateId: string; entryId: string };
+/** 정방향: 이 업무에 붙은 노하우 id들(첨부 순서는 무시 — 표시 측이 제목순 정렬). */
+export function knowhowIdsForTask(links: KnowhowLink[], templateId: string): string[] {
+  return links.filter((l) => l.templateId === templateId).map((l) => l.entryId);
+}
+/** 역방향(임팩트): 이 노하우를 쓰는 업무 id들 — 사장 노하우 상세의 '쓰는 업무' 목록. */
+export function taskIdsForKnowhow(links: KnowhowLink[], entryId: string): string[] {
+  return links.filter((l) => l.entryId === entryId).map((l) => l.templateId);
+}
+
 /** 반복/예정 스케줄을 비교 가능한 한 줄 키로 정규화(중복 판정용). */
 function scheduleKey(t: { recurrence?: Recurrence; date?: string; dueDate?: string }): string {
   if (t.recurrence && t.recurrence !== 'once') return `weekly:${[...t.recurrence.weekly].sort((a, b) => a - b).join(',')}`;
@@ -267,12 +284,16 @@ export type NewTask = {
   sectionNote?: string;
   recurrence?: Recurrence;
   date?: string;
+  /** 이 업무에 첨부할 노하우 id들(0069 링크). 신규=전부 첨부, 수정=이 목록으로 재조정(diff). */
+  knowhowIds?: string[];
 };
 
 type State = {
   templates: TaskTemplate[];
   done: Record<string, Record<string, DoneMark>>;
   feed: FeedItem[];
+  /** 업무↔노하우 링크(0069) — 평평한 배열. 정/역방향은 knowhowIdsForTask/taskIdsForKnowhow 로 파생. */
+  knowhowLinks: KnowhowLink[];
   loaded: boolean;
   hydrate: () => Promise<void>;
   subscribe: () => () => void;
@@ -280,6 +301,10 @@ type State = {
   addTask: (input: NewTask) => Promise<boolean>;
   editTask: (id: string, patch: NewTask) => Promise<boolean>;
   removeTemplate: (id: string) => void;
+  /** 업무에 노하우 첨부(멱등) — 이미 붙은 건 건너뛴다. ②(완료 캡처)도 이 원자 액션을 재사용한다. */
+  attachKnowhow: (templateId: string, entryIds: string[]) => Promise<void>;
+  /** 업무에서 노하우 첨부 해제. */
+  detachKnowhow: (templateId: string, entryIds: string[]) => Promise<void>;
   // task: 합성 루틴 할일(dpr_)은 s.templates 에 없으므로 완료 피드 문구/방을 호출부가 넘긴다(없으면 lookup).
   toggleTask: (date: string, templateId: string, staffId: string, staffName: string, role: 'owner' | 'junior', photoUrl?: string, task?: { text: string; roomId?: string }) => void;
   postNotice: (date: string, text: string, authorId: string, authorName: string, important: boolean) => void;
@@ -301,14 +326,20 @@ export const useWorkStore = create<State>((set, get) => ({
   templates: HAS_SUPABASE ? [] : seedTemplates,
   done: HAS_SUPABASE ? {} : seedDone,
   feed: HAS_SUPABASE ? [] : seedFeed,
+  knowhowLinks: [],
   loaded: !HAS_SUPABASE,
 
-  // 전체 재조회(templates·done·feed 3쿼리)로 스토어를 통째로 교체한다.
+  // 전체 재조회(templates·done·feed·링크 4쿼리)로 스토어를 통째로 교체한다.
   // coalesce: 빠른 연속 체크로 realtime 이벤트가 몰려도 풀리페치가 병렬로 쌓이지 않게 합친다.
   hydrate: coalesce(async () => {
     if (!HAS_SUPABASE) return;
-    const [templates, done, feed] = await Promise.all([fetchTemplates(), fetchDone(), fetchFeed()]);
-    set({ templates, done, feed, loaded: true });
+    const [templates, done, feed, knowhowLinks] = await Promise.all([
+      fetchTemplates(),
+      fetchDone(),
+      fetchFeed(),
+      fetchTemplateKnowhow(),
+    ]);
+    set({ templates, done, feed, knowhowLinks, loaded: true });
   }),
   // realtime 변경마다 즉시 풀리페치하면 체크 한 번(work_done+work_feed 2쓰기)이 매번 3쿼리+전체
   // 리렌더가 된다 → 트레일링 디바운스로 이벤트 버스트를 1회 재조회에 합친다.
@@ -348,6 +379,10 @@ export const useWorkStore = create<State>((set, get) => ({
       () => set((s) => ({ templates: s.templates.filter((x) => x.id !== t.id) })),
       '할일 추가 저장에 실패했어요.',
     );
+    // 노하우 첨부 — 업무 행이 저장된 뒤에만(FK 무결성: 링크는 template_id 존재를 요구). 실패·롤백 시 첨부 안 함.
+    if (ok && input.knowhowIds && input.knowhowIds.length) {
+      await get().attachKnowhow(t.id, input.knowhowIds);
+    }
     // 배정 알림 — 저장 성공 후에만(실패·롤백 시 유령 배정 푸시 방지 — F2). 남에게 배정한 경우만, OS 푸시만.
     if (ok && t.ownerId && t.ownerId !== t.createdBy) {
       notifyUserAssign(t.ownerId, useSessionStore.getState().userName || '담당자', t.text);
@@ -375,6 +410,16 @@ export const useWorkStore = create<State>((set, get) => ({
       () => set((s) => ({ templates: s.templates.map((t) => (t.id === id ? before : t)) })),
       '할일 수정 저장에 실패했어요.',
     );
+    // 노하우 재조정 — patch.knowhowIds 가 곧 원하는 전체 집합. 저장 성공 후 diff 로 추가/해제만 반영.
+    // (undefined면 컴포저가 노하우 필드를 안 보낸 것 → 링크 무접촉.)
+    if (ok && patch.knowhowIds) {
+      const cur = knowhowIdsForTask(get().knowhowLinks, id);
+      const next = patch.knowhowIds;
+      const toAdd = next.filter((e) => !cur.includes(e));
+      const toRemove = cur.filter((e) => !next.includes(e));
+      if (toAdd.length) await get().attachKnowhow(id, toAdd);
+      if (toRemove.length) await get().detachKnowhow(id, toRemove);
+    }
     // 재배정 알림 — 저장 성공 후에만(F2). 담당자가 새로 바뀐 경우에만, 작성자 본인 배정 제외.
     if (ok && updated.ownerId && updated.ownerId !== before.ownerId && updated.ownerId !== updated.createdBy) {
       notifyUserAssign(updated.ownerId, useSessionStore.getState().userName || '담당자', updated.text);
@@ -384,7 +429,12 @@ export const useWorkStore = create<State>((set, get) => ({
   removeTemplate: (id) => {
     const idx = get().templates.findIndex((t) => t.id === id);
     const removed = idx >= 0 ? get().templates[idx] : undefined;
-    set((s) => ({ templates: s.templates.filter((t) => t.id !== id) }));
+    // 딸린 노하우 링크도 함께 낙관적 제거(서버는 FK cascade 가 처리). 롤백 시 링크도 복원.
+    const removedLinks = get().knowhowLinks.filter((l) => l.templateId === id);
+    set((s) => ({
+      templates: s.templates.filter((t) => t.id !== id),
+      knowhowLinks: s.knowhowLinks.filter((l) => l.templateId !== id),
+    }));
     void guardWrite(
       deleteTemplate(id),
       () =>
@@ -392,9 +442,39 @@ export const useWorkStore = create<State>((set, get) => ({
         set((s) => {
           const next = s.templates.slice();
           next.splice(Math.min(idx, next.length), 0, removed);
-          return { templates: next };
+          return { templates: next, knowhowLinks: [...s.knowhowLinks, ...removedLinks] };
         }),
       '할일 삭제에 실패했어요.',
+    );
+  },
+
+  // 낙관적 첨부 — 이미 붙은 건 제외(멱등)하고 새로 추가만. 실패 시 추가분만 롤백.
+  attachKnowhow: async (templateId, entryIds) => {
+    const existing = new Set(knowhowIdsForTask(get().knowhowLinks, templateId));
+    const toAdd = entryIds.filter((e) => !existing.has(e));
+    if (toAdd.length === 0) return;
+    const added: KnowhowLink[] = toAdd.map((entryId) => ({ templateId, entryId }));
+    set((s) => ({ knowhowLinks: [...s.knowhowLinks, ...added] }));
+    await guardWrite(
+      insertTemplateKnowhow(templateId, toAdd),
+      () =>
+        set((s) => ({
+          knowhowLinks: s.knowhowLinks.filter((l) => !(l.templateId === templateId && toAdd.includes(l.entryId))),
+        })),
+      '노하우 첨부에 실패했어요.',
+    );
+  },
+  // 낙관적 해제 — 지운 링크만 잡아 실패 시 그대로 복원(사이에 도착한 realtime 변경은 안 덮음).
+  detachKnowhow: async (templateId, entryIds) => {
+    const removed = get().knowhowLinks.filter((l) => l.templateId === templateId && entryIds.includes(l.entryId));
+    if (removed.length === 0) return;
+    set((s) => ({
+      knowhowLinks: s.knowhowLinks.filter((l) => !(l.templateId === templateId && entryIds.includes(l.entryId))),
+    }));
+    await guardWrite(
+      deleteTemplateKnowhow(templateId, entryIds),
+      () => set((s) => ({ knowhowLinks: [...s.knowhowLinks, ...removed] })),
+      '노하우 첨부 해제에 실패했어요.',
     );
   },
 
@@ -688,7 +768,7 @@ export const useWorkStore = create<State>((set, get) => ({
   applyMock: (demo) =>
     set(
       demo
-        ? { templates: seedTemplates, done: seedDone, feed: seedFeed, loaded: true }
-        : { templates: [], done: {}, feed: [], loaded: true },
+        ? { templates: seedTemplates, done: seedDone, feed: seedFeed, knowhowLinks: [], loaded: true }
+        : { templates: [], done: {}, feed: [], knowhowLinks: [], loaded: true },
     ),
 }));

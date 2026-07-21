@@ -827,6 +827,39 @@ export async function deleteTemplate(id: string): Promise<boolean> {
   return writeStrict('deleteTemplate', supabase.from('work_templates').delete().eq('id', id).select('id'));
 }
 
+// ── 업무 ↔ 노하우 링크(0069) ───────────────────────────────
+// 스키마 최초의 task↔knowhow 교차 연결(LIVE §4.1-2). unit_id/added_by 는 RLS·DB default 가 채운다.
+export type KnowhowLinkRow = { templateId: string; entryId: string };
+/** 활성 매장의 전체 (업무↔노하우) 링크 — 스토어가 정/역방향 셀렉터로 파생한다. */
+export async function fetchTemplateKnowhow(): Promise<KnowhowLinkRow[]> {
+  if (!HAS_SUPABASE) return [];
+  const { data, error } = await supabase.from('work_template_knowhow').select('template_id, entry_id');
+  if (error) {
+    readFail('fetchTemplateKnowhow', error);
+    return [];
+  }
+  return (data ?? []).map((r: any) => ({ templateId: r.template_id, entryId: r.entry_id }));
+}
+/** 업무에 노하우 여러 개 첨부. onConflict 무시(이미 붙은 건 멱등) → 재첨부는 성공으로 본다(writeStrict 금지). */
+export async function insertTemplateKnowhow(templateId: string, entryIds: string[]): Promise<boolean> {
+  if (!HAS_SUPABASE) return true;
+  if (entryIds.length === 0) return true;
+  const rows = entryIds.map((entry_id) => ({ unit_id: _unitId, template_id: templateId, entry_id }));
+  return write(
+    'insertTemplateKnowhow',
+    supabase.from('work_template_knowhow').upsert(rows, { onConflict: 'template_id,entry_id', ignoreDuplicates: true }),
+  );
+}
+/** 업무에서 노하우 여러 개 첨부 해제. 이미 없으면 0행(=원하는 상태)이라 write(멱등). */
+export async function deleteTemplateKnowhow(templateId: string, entryIds: string[]): Promise<boolean> {
+  if (!HAS_SUPABASE) return true;
+  if (entryIds.length === 0) return true;
+  return write(
+    'deleteTemplateKnowhow',
+    supabase.from('work_template_knowhow').delete().eq('template_id', templateId).in('entry_id', entryIds),
+  );
+}
+
 // ── 업무보드: 완료 체크 ────────────────────────────────────
 export async function fetchDone(): Promise<Record<string, Record<string, DoneMark>>> {
   if (!HAS_SUPABASE) return {};
@@ -964,6 +997,7 @@ export function subscribeWork(onChange: () => void): () => void {
     .on('postgres_changes', { event: '*', schema: 'public', table: 'work_feed' }, onChange)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'work_done' }, onChange)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'work_templates' }, onChange)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'work_template_knowhow' }, onChange)
     .subscribe();
   return () => {
     supabase.removeChannel(ch);

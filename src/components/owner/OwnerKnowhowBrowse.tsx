@@ -1,9 +1,10 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { View, Text, Pressable, StyleSheet, ScrollView, ActivityIndicator, TextInput } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
+import { useWorkStore } from '@/lib/store/useWorkStore';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { EmptyState } from '@/components/EmptyState';
 import { InfoDot } from '@/components/InfoDot';
@@ -42,8 +43,8 @@ const needsVerify = (e: PlaybookEntry) => e.needs_review === true;
 const isUnused = (e: PlaybookEntry) =>
   e.status === 'published' && (e.stats?.query_hits_30d ?? 0) === 0;
 
-/** 한 노하우 행(목록 뷰) — 탭하면 수정. */
-function EntryRow({ e, onPress }: { e: PlaybookEntry; onPress: () => void }) {
+/** 한 노하우 행(목록 뷰) — 탭하면 수정. usedBy=이 노하우를 첨부한 업무 수(0069 역조회, 임팩트). */
+function EntryRow({ e, onPress, usedBy = 0 }: { e: PlaybookEntry; onPress: () => void; usedBy?: number }) {
   const meta = getCategoryMeta(e.category);
   const v = e.verification ? verifyMeta(e.verification.state) : null;
   const ratePct = Math.round((e.stats?.resolution_rate ?? 0) * 100);
@@ -60,6 +61,12 @@ function EntryRow({ e, onPress }: { e: PlaybookEntry; onPress: () => void }) {
           </Text>
           {e.stats?.resolution_rate ? <Text style={styles.metaRate}>· 해결률 {ratePct}%</Text> : null}
           {e.stats?.query_hits_30d ? <Text style={styles.meta}>· 🔥 {e.stats.query_hits_30d}</Text> : null}
+          {usedBy > 0 ? (
+            <View style={styles.badgeUsed}>
+              <Ionicons name="clipboard-outline" size={9} color={InkColors.ink2} />
+              <Text style={styles.badgeUsedText}>업무 {usedBy}</Text>
+            </View>
+          ) : null}
           {e.needs_review ? (
             <View style={styles.badgeReview}>
               <Text style={styles.badgeReviewText}>확인 필요</Text>
@@ -101,6 +108,18 @@ export function OwnerKnowhowBrowse({
   const loaded = usePlaybookStore((s) => s.loaded);
   const loadError = usePlaybookStore((s) => s.loadError);
   const hydrate = usePlaybookStore((s) => s.hydrate);
+  // 노하우 임팩트 = 이 노하우를 첨부한 업무 수(0069 역조회). 카운트가 실제이려면 업무 링크가 로드돼 있어야
+  // 하므로 이 화면에서도 업무 스토어를 hydrate 한다(coalesce 로 중복 방지). 미로드로 인한 '0 위장' 방지.
+  const knowhowLinks = useWorkStore((s) => s.knowhowLinks);
+  useEffect(() => {
+    useWorkStore.getState().hydrate();
+    return useWorkStore.getState().subscribe();
+  }, []);
+  const usedCountByEntry = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const l of knowhowLinks) m.set(l.entryId, (m.get(l.entryId) ?? 0) + 1);
+    return m;
+  }, [knowhowLinks]);
   const update = usePlaybookStore((s) => s.update);
   const userName = useSessionStore((s) => s.userName);
   const storeName = useSessionStore((s) => s.storeName);
@@ -444,7 +463,7 @@ export function OwnerKnowhowBrowse({
                   </View>
                   <View style={styles.list}>
                     {g.items.map((e) => (
-                      <EntryRow key={e.id} e={e} onPress={() => onSelect(e.id)} />
+                      <EntryRow key={e.id} e={e} usedBy={usedCountByEntry.get(e.id) ?? 0} onPress={() => onSelect(e.id)} />
                     ))}
                   </View>
                 </View>
@@ -487,7 +506,7 @@ export function OwnerKnowhowBrowse({
                   </View>
                   <View style={styles.list}>
                     {g.items.map((e) => (
-                      <EntryRow key={e.id} e={e} onPress={() => onSelect(e.id)} />
+                      <EntryRow key={e.id} e={e} usedBy={usedCountByEntry.get(e.id) ?? 0} onPress={() => onSelect(e.id)} />
                     ))}
                   </View>
                 </View>
@@ -496,7 +515,7 @@ export function OwnerKnowhowBrowse({
           ) : (
             <View style={styles.list}>
               {listFiltered.map((e) => (
-                <EntryRow key={e.id} e={e} onPress={() => onSelect(e.id)} />
+                <EntryRow key={e.id} e={e} usedBy={usedCountByEntry.get(e.id) ?? 0} onPress={() => onSelect(e.id)} />
               ))}
             </View>
           )}
@@ -646,6 +665,9 @@ const styles = StyleSheet.create({
   badgeReviewText: { fontSize: 10, fontWeight: '800', color: BrandColors.warn },
   badgeUnused: { paddingVertical: 2, paddingHorizontal: 7, borderRadius: Radius.pill, backgroundColor: BrandColors.accentSoft },
   badgeUnusedText: { fontSize: 10, fontWeight: '800', color: BrandColors.bad },
+  // 업무 첨부 수(0069 역조회) — 임팩트 신호. 중립 톤(검증·미검증 배지와 색 충돌 방지).
+  badgeUsed: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingVertical: 2, paddingHorizontal: 7, borderRadius: Radius.pill, backgroundColor: InkColors.bgSoft },
+  badgeUsedText: { fontSize: 10, fontWeight: '800', color: InkColors.ink2 },
 
   // 빈 결과
   emptyResult: { alignItems: 'center', gap: 6, paddingVertical: 36 },
