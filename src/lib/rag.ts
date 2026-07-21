@@ -129,7 +129,37 @@ function normalize(raw: number, k = 1.0): number {
   return raw / (raw + k);
 }
 
-// ── 5. Public API ────────────────────────────────────────────────────────────
+// ── 5. 짧은 라벨끼리의 대칭 유사도 (챕터명 등) ───────────────────────────────
+// searchPlaybook은 "질문 vs 노하우"의 비대칭 스코어라 짧은 라벨 두 개를 견주는 데 못 쓴다.
+// 한글 라벨은 문자 n-gram만으론 약해서("고객 응대"vs"진상 응대" Dice 0.33) 세 신호의 최댓값을 쓴다:
+//   ① 한쪽이 다른 쪽을 통째로 포함(마감 ⊂ 마감 정리)  ② 의미 어절 공유(고객 응대 ∩ 진상 응대 = 응대)
+//   ③ 문자 2-gram Dice(띄어쓰기 없는 라벨 대비)
+// ②의 '관리·정리·확인' 류는 어느 챕터에나 붙어 오검출을 만들므로 제외한다.
+const LABEL_STOPWORDS = new Set(['관리', '정리', '확인', '업무', '기타', '방법', '규칙', '준비']);
+
+export function labelSimilarity(a: string, b: string): number {
+  const norm = (s: string) => s.replace(PUNCT, ' ').trim();
+  const [na, nb] = [norm(a), norm(b)];
+  if (!na || !nb) return 0;
+
+  const [ca, cb] = [na.replace(/\s+/g, ''), nb.replace(/\s+/g, '')];
+  if (!ca || !cb) return 0;
+  if (ca === cb || ca.includes(cb) || cb.includes(ca)) return 1;
+
+  const ta = tokenize(na).filter((t) => t.length >= 2 && !LABEL_STOPWORDS.has(t));
+  const tb = new Set(tokenize(nb).filter((t) => t.length >= 2 && !LABEL_STOPWORDS.has(t)));
+  const shared = ta.filter((t) => tb.has(t)).length;
+  const tokenScore = shared > 0 ? shared / Math.min(ta.length, tb.size) : 0;
+
+  const [x, y] = [ngrams(ca, 2), ngrams(cb, 2)];
+  let inter = 0;
+  for (const g of x) if (y.has(g)) inter++;
+  const dice = x.size && y.size ? (2 * inter) / (x.size + y.size) : 0;
+
+  return Math.max(tokenScore, dice);
+}
+
+// ── 6. Public API ────────────────────────────────────────────────────────────
 export function searchPlaybook(
   query: string,
   entries: PlaybookEntry[],

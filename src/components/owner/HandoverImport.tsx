@@ -11,8 +11,14 @@ import type { StructuredSegment } from '@/lib/ai/types';
 import { chunkDocument, MAX_IMPORT_CHARS, type DocChunk } from '@/lib/import/chunk';
 import { isSquarePublishable, buildPlaybookEntryFromSquare, buildDirectUq } from '@/lib/utils/buildEntry';
 import { isDraft } from '@/lib/utils/entryStatus';
-import { searchPlaybook } from '@/lib/rag';
+import {
+  findSimilarEntry,
+  dedupeQuery,
+  SAME_SCORE_MIN,
+  SIMILAR_SCORE_MIN,
+} from '@/lib/utils/knowhowSimilarity';
 import { getCategoryMeta } from '@/lib/utils/category';
+import { UNSECTIONED } from '@/lib/config/sections';
 import { EXTRACTION_MASTER } from '@/data/extraction-master';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { useSessionStore } from '@/lib/store/useSessionStore';
@@ -24,11 +30,7 @@ import { Elevation, Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
 
 const MIN_RAWTEXT = 12;
-// 겹침 판정(렉시컬 점수) — 파일럿 분포로 재보정 대상.
-// DUP: 같은 import 안 청크 경계 중복(기본 선택 해제). SIMILAR: 기존 발행본과 유사(배지만).
-const DUP_SCORE_MIN = 0.45;
-const SIMILAR_SCORE_MIN = 0.35;
-const UNSECTIONED = '기타';
+
 
 // 파이프 실행 중 가드 — 컴포넌트가 아니라 모듈 스코프에 두는 이유: 처리 중 화면을 나갔다 돌아오면
 // 컴포넌트는 리마운트(phase 초기화)되지만 파이프는 백그라운드에서 계속 돈다(체크포인트 설계).
@@ -91,19 +93,12 @@ export function HandoverImport() {
     const dup = new Map<string, string>();
     const sim = new Map<string, string>();
     drafts.forEach((d, i) => {
-      const q = `${d.title} ${d.square.situation}`.trim();
+      const q = dedupeQuery(d);
       if (!q) return;
-      const prior = drafts.slice(0, i);
-      if (prior.length) {
-        const r = searchPlaybook(q, prior, { topK: 1 });
-        const top = r.candidates[0];
-        if (top && top.score >= DUP_SCORE_MIN) dup.set(d.id, top.entry.title);
-      }
-      if (publishedEntries.length) {
-        const r = searchPlaybook(q, publishedEntries, { topK: 1 });
-        const top = r.candidates[0];
-        if (top && top.score >= SIMILAR_SCORE_MIN) sim.set(d.id, top.entry.title);
-      }
+      const prior = findSimilarEntry(q, drafts.slice(0, i), SAME_SCORE_MIN);
+      if (prior) dup.set(d.id, prior.entry.title);
+      const published = findSimilarEntry(q, publishedEntries, SIMILAR_SCORE_MIN);
+      if (published) sim.set(d.id, published.entry.title);
     });
     return { dupOf: dup, simOf: sim };
   }, [drafts, publishedEntries]);

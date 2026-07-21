@@ -13,13 +13,16 @@ import { KnowhowCarousel } from '@/components/KnowhowCarousel';
 import { getCategoryMeta, ALL_CATEGORIES } from '@/lib/utils/category';
 import { matchesKnowhowQuery } from '@/lib/utils/knowhowSearch';
 import { verifyMeta } from '@/lib/utils/verification';
+import { UNSECTIONED } from '@/lib/config/sections';
+import { manualToText } from '@/lib/utils/manualText';
+import { useCopyToClipboard, canCopyToClipboard } from '@/lib/utils/useCopyToClipboard';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
 import type { Category, PlaybookEntry } from '@/types';
 
 // ── 정렬 옵션(목록 뷰) ───────────────────────────────────────
-const UNSECTIONED = '기타'; // 섹션 미분류 노하우의 매뉴얼 뷰 표시 이름
+
 type SortKey = 'recent' | 'resolution' | 'cited' | 'category';
 const SORTS: { key: SortKey; label: string }[] = [
   { key: 'recent', label: '최신순' },
@@ -100,6 +103,8 @@ export function OwnerKnowhowBrowse({
   const hydrate = usePlaybookStore((s) => s.hydrate);
   const update = usePlaybookStore((s) => s.update);
   const userName = useSessionStore((s) => s.userName);
+  const storeName = useSessionStore((s) => s.storeName);
+  const { copied, copy } = useCopyToClipboard();
 
   const [query, setQuery] = useState('');
   const [activeCat, setActiveCat] = useState<Category | null>(null); // null = 전체(단일 선택)
@@ -417,7 +422,20 @@ export function OwnerKnowhowBrowse({
             manualGroups.length === 0 ? (
               <EmptyResult onReset={() => { setQuery(''); setActiveCat(null); }} />
             ) : (
-              manualGroups.map((g) => (
+              <>
+                {/* 내보내기 = 화면에 보이는 그룹 그대로 직렬화(검색·필터 적용분 포함). */}
+                {canCopyToClipboard() && (
+                  <Pressable
+                    onPress={() => copy(manualToText(manualGroups, { storeName, date: new Date().toLocaleDateString('ko-KR') }))}
+                    style={styles.copyBtn}
+                    accessibilityRole="button"
+                    accessibilityLabel="매뉴얼 전체 복사"
+                  >
+                    <Ionicons name={copied ? 'checkmark' : 'copy-outline'} size={14} color={InkColors.ink2} />
+                    <Text style={styles.copyBtnText}>{copied ? '복사됐어요' : '매뉴얼 전체 복사'}</Text>
+                  </Pressable>
+                )}
+                {manualGroups.map((g) => (
                 <View key={g.name} style={{ gap: 8 }}>
                   <View style={styles.groupHead}>
                     <Ionicons name="bookmark" size={13} color={InkColors.ink2} />
@@ -430,7 +448,8 @@ export function OwnerKnowhowBrowse({
                     ))}
                   </View>
                 </View>
-              ))
+                ))}
+              </>
             )
           ) : view === 'dashboard' ? (
             baseFiltered.length === 0 ? (
@@ -602,6 +621,13 @@ const styles = StyleSheet.create({
   verifyBtnText: { fontSize: 12, fontWeight: '800', color: InkColors.ink },
 
   // 그룹(목록·카테고리별)
+  copyBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Space.sm,
+    paddingVertical: Space.md, borderRadius: Radius.sm,
+    borderWidth: 1, borderColor: InkColors.line, backgroundColor: InkColors.bg,
+  },
+  copyBtnText: { fontSize: 13, fontWeight: '700', color: InkColors.ink2 },
+
   groupHead: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6, paddingHorizontal: 2 },
   groupTitle: { fontSize: 14, fontWeight: '800', color: InkColors.ink },
   groupCount: { fontSize: 12, fontWeight: '700', color: InkColors.ink3 },
