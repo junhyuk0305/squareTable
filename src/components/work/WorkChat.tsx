@@ -12,12 +12,18 @@ import { ReactionBar } from './ReactionBar';
 import { MentionInput, extractMentions, type Member } from './MentionInput';
 import { Appear } from '@/components/Appear';
 import { InfoDot } from '@/components/InfoDot';
+import { VoiceInputButton } from '@/components/VoiceInputButton';
+import { appendDictation, buildHints } from '@/lib/voice/text';
 import { PHOTO_UPLOAD_INFO } from '@/lib/copy/photoUploadInfo';
 
 // 채팅 윈도잉 — 스트림이 수백~수천 개여도 최근 것만 렌더하고, 위로 스크롤하면 이전 대화를
 // 한 페이지씩 붙인다(비가상 ScrollView라 전부 마운트하면 느려지고 @멘션 입력까지 버벅인다).
 const CHAT_WINDOW = 40; // 처음 렌더할 최근 말풍선 수
 const CHAT_PAGE = 40; // '이전 대화 더보기' 한 번에 늘리는 수
+
+// 받아쓰기 이어붙이기 상한. 타이핑 입력엔 예전부터 상한이 없어 그 동작은 그대로 두고,
+// 음성이 채우는 분량만 여기서 자른다(60초 발화 한 번은 넉넉히 들어간다).
+const DRAFT_MAX_LEN = 2000;
 
 const WD = ['일', '월', '화', '수', '목', '금', '토'];
 function dateLabel(date: string, today: string): string {
@@ -115,6 +121,9 @@ export function WorkChat({
   // 롱프레스로 연 메시지 액션 시트(할일로/삭제). null이면 닫힘.
   const [actionItem, setActionItem] = useState<FeedItem | null>(null);
   const scrollRef = useRef<ScrollView>(null);
+
+  // 받아쓰기 힌트 — 멤버 이름. 사람 이름은 사전에 없는 고유명사라 가장 자주 틀린다.
+  const voiceHints = useMemo(() => buildHints(members.map((m) => m.name)), [members]);
 
   const canDeleteActive = !!actionItem && (actionItem.authorId === me || isOwner);
   const canTaskActive = !!actionItem && !!actionItem.text.trim();
@@ -275,6 +284,13 @@ export function WorkChat({
           <Ionicons name={menu ? 'close' : 'add'} size={24} color={InkColors.bubbleText} />
         </Pressable>
         <MentionInput value={draft} onChangeText={setDraft} onSubmit={send} members={members} me={me} onAssignTask={isOwner ? onAssignTask : undefined} />
+        {/* 말로 메시지 작성. 멤버 이름을 힌트로 넘겨 이름 오인식을 줄이되, @멘션은 자동으로 붙이지
+            않는다 — 잘못 붙은 멘션은 엉뚱한 사람에게 알림이 가고 되돌릴 수 없다(사람이 직접 붙인다). */}
+        <VoiceInputButton
+          surface="work_chat"
+          hints={voiceHints}
+          onText={(t) => setDraft((prev) => appendDictation(prev, t, DRAFT_MAX_LEN))}
+        />
         <Pressable onPress={send} disabled={!draft.trim()} accessibilityRole="button" accessibilityLabel="메시지 전송" style={({ pressed }) => [s.send, !draft.trim() && { opacity: 0.4 }, pressed && { opacity: 0.85 }]}>
           <Ionicons name="arrow-up" size={20} color={InkColors.ink} />
         </Pressable>
