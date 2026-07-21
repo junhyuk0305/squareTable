@@ -20,8 +20,12 @@ export const MIN_RECORD_MS = 600;
 // → 말이 끝나면 스스로 멈춘다. 최대길이 캡은 그대로 두고(주머니 속 사고 방지) 그 위에 얹는다.
 /** 말이 한 번 시작된 뒤, 이만큼 조용하면 "끝났다"로 보고 자동 정지 → 바로 전사. */
 export const SILENCE_AFTER_SPEECH_MS = 2_500;
-/** 시작하고 이 시간까지 말이 한 번도 안 잡히면 자동 취소(전사에 보내지 않는다). */
-export const NO_SPEECH_TIMEOUT_MS = 6_000;
+/**
+ * 시작하고 이 시간까지 말이 한 번도 안 잡히면 자동 취소(전사에 보내지 않는다).
+ * 마이크를 누르고 무슨 말을 할지 정리하는 시간이 있으므로 넉넉히 — 말이 시작되면 이 타이머는
+ * 무의미해지니(그 뒤엔 SILENCE_AFTER_SPEECH_MS 가 담당) 길게 잡아도 손해가 없다.
+ */
+export const NO_SPEECH_TIMEOUT_MS = 10_000;
 const LEVEL_POLL_MS = 100;
 // 절대 임계값 하한. 카페 소음·AGC(자동 이득)로 바닥이 올라가면 아래 noiseFloor 배수가 대신 잡는다.
 const SPEECH_MIN_RMS = 0.012;
@@ -70,6 +74,13 @@ type Session = {
   // 무음 감지용 — 세션과 수명을 같이 한다(teardown에서 반드시 정리).
   audioCtx: any | null;
   levelTimer: ReturnType<typeof setInterval> | null;
+  /**
+   * 녹음 완료(= 마지막 chunk 까지 도착) 신호. ★ recorder.state 로 완료를 추론하면 안 된다:
+   * stop() 은 state 를 동기적으로 'inactive' 로 바꾸지만 dataavailable 은 그 다음 태스크에서
+   * 온다(실측: stop 직후 chunks=0 → 500ms 뒤 1개). 최대길이 타이머가 stop() 한 뒤 같은 틱에
+   * blob 을 만들면 60초 녹음이 통째로 빈 blob 이 된다.
+   */
+  stopped: Promise<void>;
 };
 
 // 동시에 하나만 — 두 화면이 겹쳐 뜨더라도 마이크는 한 세션만 잡는다.
@@ -94,10 +105,20 @@ function startLevelMonitor(session: Session, onAutoStop?: (reason: AutoStopReaso
   const AudioCtx = (globalThis as any).AudioContext ?? (globalThis as any).webkitAudioContext;
   if (!AudioCtx) return; // 레벨 감지 불가 → 최대길이 캡만으로 동작(기능이 죽지는 않는다)
   const ctx = new AudioCtx();
+  // Safari는 사용자 제스처 밖에서 만든 AudioContext를 suspended로 둔다. 이 컨텍스트는
+  // await getUserMedia 뒤에 생기므로 제스처 문맥을 벗어나 있다 → 안 깨우면 analyser가 계속
+  // 0만 뱉고, 말을 해도 감지 못 해 6초 뒤 no_speech로 취소된다(iOS에서 기능이 통째로 죽는 경로).
+  void ctx.resume?.();
   const source = ctx.createMediaStreamSource(session.stream);
   const analyser = ctx.createAnalyser();
   analyser.fftSize = 1024;
   source.connect(analyser);
+  // 일부 브라우저는 destination까지 연결된 그래프만 렌더링한다 → analyser가 데이터를 못 받는다.
+  // gain 0을 거쳐 연결해 소리는 안 나가면서 그래프만 살린다(에코·하울링 방지).
+  const mute = ctx.createGain();
+  mute.gain.value = 0;
+  analyser.connect(mute);
+  mute.connect(ctx.destination);
   session.audioCtx = ctx;
 
   const buf = new Float32Array(analyser.fftSize);
@@ -180,6 +201,9 @@ export async function startRecording(onAutoStop?: (reason: AutoStopReason) => vo
   const mimeType = pickMimeType();
   const MR = (globalThis as any).MediaRecorder;
   const recorder = new MR(stream, mimeType ? { mimeType } : undefined);
+  // 완료 신호는 시작 시점에 한 번만 건다 — 누가(사용자/타이머/무음감지) 멈추든 같은 신호를 기다린다.
+  let markStopped: () => void = () => {};
+  const stopped = new Promise<void>((res) => { markStopped = res; });
   const session: Session = {
     recorder,
     stream,
@@ -189,10 +213,14 @@ export async function startRecording(onAutoStop?: (reason: AutoStopReason) => vo
     cancelled: false,
     audioCtx: null,
     levelTimer: null,
+    stopped,
   };
   recorder.ondataavailable = (ev: any) => {
     if (ev?.data?.size > 0) session.chunks.push(ev.data);
   };
+  recorder.onstop = () => markStopped();
+  // 레코더가 죽어도 영원히 기다리지 않게 — 에러도 '완료'로 풀고, 빈 chunk 는 아래에서 no_audio 로 걸린다.
+  recorder.onerror = () => markStopped();
   current = session;
   recorder.start();
 
@@ -222,11 +250,6 @@ export function isRecording(): boolean {
   return !!current && current.recorder?.state === 'recording';
 }
 
-/** 경과 시간(ms). 녹음 중이 아니면 0. */
-export function elapsedMs(): number {
-  return current ? Date.now() - current.startedAt : 0;
-}
-
 /** 녹음 취소 — 결과를 버리고 마이크를 놓는다. */
 export async function cancelRecording(): Promise<void> {
   const session = current;
@@ -246,21 +269,20 @@ export async function stopRecording(): Promise<RecordingResult> {
   if (!session) throw new VoiceError('failed', 'no_session');
 
   const durationMs = Date.now() - session.startedAt;
-  const blob = await new Promise<Blob>((resolve, reject) => {
-    const { recorder } = session;
-    if (recorder.state === 'inactive') {
-      // 자동 정지가 이미 걸린 경우 — 남은 chunk 로 바로 만든다.
-      resolve(new Blob(session.chunks, { type: recorder.mimeType || 'audio/webm' }));
-      return;
-    }
-    recorder.onstop = () => resolve(new Blob(session.chunks, { type: recorder.mimeType || 'audio/webm' }));
-    recorder.onerror = (e: any) => reject(new VoiceError('failed', e?.error?.name ?? 'recorder_error'));
-    try {
-      recorder.stop();
-    } catch (e: any) {
-      reject(new VoiceError('failed', e?.message));
-    }
-  }).finally(() => teardown(session));
+  const { recorder } = session;
+  let blob: Blob;
+  try {
+    // 아직 녹음 중이면 여기서 멈추고, 최대길이 타이머가 이미 멈춰놨으면 그대로 완료만 기다린다.
+    // 어느 쪽이든 ★반드시 stopped(=onstop) 를 기다린다 — state 만 보고 chunk 를 읽으면
+    // 마지막 dataavailable 이 도착하기 전이라 빈 blob 이 나온다(실측).
+    if (recorder.state !== 'inactive') recorder.stop();
+    await session.stopped;
+    blob = new Blob(session.chunks, { type: recorder.mimeType || 'audio/webm' });
+  } catch (e: any) {
+    teardown(session);
+    throw new VoiceError('failed', e?.message ?? 'recorder_stop_failed');
+  }
+  teardown(session);
 
   if (session.cancelled) throw new VoiceError('failed', 'cancelled');
   if (durationMs < MIN_RECORD_MS) throw new VoiceError('too_short');

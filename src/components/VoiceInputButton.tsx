@@ -49,6 +49,13 @@ const ERROR_MESSAGE: Record<string, string> = {
   failed: '음성 입력에 실패했어요. 잠시 후 다시 시도해 주세요.',
 };
 
+// 엣지가 돌려준 거절 사유별 안내. 'failed'(네트워크·서버 오류)는 ERROR_MESSAGE 로 떨어진다.
+const EDGE_REJECT_MESSAGE: Record<string, string> = {
+  mock_mode: '데모 모드에서는 음성 입력이 동작하지 않아요.',
+  unsupported_audio: '이 기기의 녹음 형식을 지원하지 않아요. 타이핑으로 입력해 주세요.',
+  audio_too_large: '녹음이 너무 길어요. 짧게 나눠서 말씀해 주세요.',
+};
+
 function mmss(ms: number): string {
   const total = Math.floor(ms / 1000);
   return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
@@ -105,9 +112,11 @@ export function VoiceInputButton({ onText, disabled, hints, surface }: VoiceInpu
         ...(hints && hints.length > 0 ? { hints } : {}),
       });
       if (!aliveRef.current) return;
-      if (out.error === 'mock_mode') {
-        showToast('데모 모드에서는 음성 입력이 동작하지 않아요.', 'warn');
-        track('voice_input', { surface, result: 'error', reason: 'mock_mode' });
+      // 엣지가 명시적으로 거절한 경우(포맷·크기·데모모드)는 "안 들렸어요"로 뭉뚱그리지 않는다 —
+      // 사용자가 더 크게 말해봐야 해결되지 않는 문제라 안내가 틀리면 계속 헛시도하게 된다.
+      if (out.error) {
+        showToast(EDGE_REJECT_MESSAGE[out.error] ?? ERROR_MESSAGE.failed, 'warn');
+        track('voice_input', { surface, result: 'error', reason: out.error });
         return;
       }
       if (out.empty || !out.text) {
