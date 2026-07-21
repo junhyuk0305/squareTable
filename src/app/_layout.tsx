@@ -12,6 +12,7 @@ import { Toast } from '@/components/Toast';
 import { DialogHost } from '@/components/DialogHost';
 import { TextScaleTransition } from '@/components/settings/TextScaleTransition';
 import { FreeUntilNotice } from '@/components/FreeUntilNotice';
+import { VoiceRecorderBinder } from '@/components/VoiceRecorderBinder';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { usePreferencesStore, TEXT_SCALE_FACTOR } from '@/lib/store/usePreferencesStore';
 import { patchTextScaling, setTextScaleFactor } from '@/lib/theme/textScale';
@@ -71,6 +72,8 @@ export default function RootLayout() {
       <ResponsiveShell>
         {!splashDone && <SplashAnimation onDone={() => setSplashDone(true)} />}
         <SyncBanner />
+        {/* 네이티브 음성 녹음 인스턴스 주입(웹에선 .web 구현이 null 을 렌더). 화면은 안 그린다. */}
+        <VoiceRecorderBinder />
         <Toast />
         <DialogHost />
         {/* 글자 크기 전환 로딩 오버레이 — Stack 바깥이라 key 리마운트에도 살아남아 깜빡임을 가린다. */}

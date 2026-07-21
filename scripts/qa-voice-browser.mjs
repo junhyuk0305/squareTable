@@ -64,16 +64,16 @@ function loadWavSource() {
 }
 // recorder.ts 의 자동종료 상수를 소스에서 직접 뽑는다 — 상수가 바뀌면 테스트도 같이 움직인다.
 function autoStopConfig() {
-  const src = readFileSync(here('../src/lib/voice/recorder.ts'), 'utf8');
+  const src = readFileSync(here('../src/lib/voice/shared.ts'), 'utf8');
   const num = (name) => {
     const m = src.match(new RegExp(`${name}\\s*=\\s*([0-9_.]+)`));
-    if (!m) throw new Error(`recorder.ts 에서 ${name} 을 못 찾음`);
+    if (!m) throw new Error(`shared.ts 에서 ${name} 을 못 찾음`);
     return Number(m[1].replace(/_/g, ''));
   };
   return {
     SILENCE_AFTER_SPEECH_MS: num('SILENCE_AFTER_SPEECH_MS'),
     NO_SPEECH_TIMEOUT_MS: num('NO_SPEECH_TIMEOUT_MS'),
-    SPEECH_MIN_RMS: num('SPEECH_MIN_RMS'),
+    SPEECH_MIN_RMS: num('SPEECH_MIN_LEVEL'),
     SPEECH_OVER_FLOOR: num('SPEECH_OVER_FLOOR'),
     FLOOR_RISE: num('FLOOR_RISE'),
     LEVEL_POLL_MS: num('LEVEL_POLL_MS'),

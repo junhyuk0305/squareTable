@@ -123,11 +123,13 @@ export type StructureSquareOutput = {
 };
 
 // ── 음성 받아쓰기 ────────────────────────────────────────────
-// audioBase64 는 16kHz 모노 16-bit PCM WAV 의 base64(헤더 제외 순수 데이터).
-// 브라우저 원본 컨테이너(webm/mp4)는 Gemini 지원 포맷 밖 → 클라(lib/voice)가 WAV로 정규화해서 넣는다.
+// audioBase64 = 오디오 파일 전체의 base64.
+// 형식은 Gemini 지원 목록 안에서만: 웹·iOS = 16kHz 모노 WAV, Android = AAC.
+// (브라우저 원본 컨테이너 webm/mp4 는 지원 목록 밖이라 lib/voice 가 WAV 로 정규화한다.
+//  Android 는 LINEAR PCM 녹음 자체가 불가해 AAC 로 간다 — expo-audio 문서 확인.)
 export type TranscribeInput = {
   audioBase64: string;
-  mimeType: 'audio/wav';
+  mimeType: 'audio/wav' | 'audio/aac';
   durationMs: number;
   /** 매장 고유명사(메뉴·직원 이름 등). 발음이 비슷하면 이 표기를 우선하도록 모델에 힌트. */
   hints?: string[];

@@ -664,7 +664,12 @@ ${query}
 // 클라(웹)가 항상 16kHz 모노 16-bit PCM WAV 로 정규화해 올린다 — 브라우저별 컨테이너
 // (Chrome=webm/opus, Safari=mp4/aac)를 그대로 보내면 Gemini 지원 포맷 밖이라 업스트림이 거절한다.
 // 여기서는 단일 포맷만 받는다(허용 목록 밖은 400) → 엣지에 디코더를 두지 않는다.
-const AUDIO_MIME_ALLOW = ['audio/wav', 'audio/x-wav'];
+// WAV = 웹·iOS(둘 다 16kHz 모노 PCM 으로 정규화해서 올린다).
+// AAC = Android. AndroidOutputFormat 에 LINEAR PCM 이 없어 WAV 를 만들 수 없다(expo-audio 문서 확인).
+// ⚠️ 아래 비발화 게이트는 PCM 을 직접 읽으므로 WAV 에만 걸린다. AAC 경로에서는 클라이언트
+//    SpeechGate(무음이면 업로드 자체를 안 함)가 단독 방어선이라는 점을 알고 있어야 한다.
+const AUDIO_MIME_ALLOW = ['audio/wav', 'audio/x-wav', 'audio/aac'];
+const PCM_GATEABLE = ['audio/wav', 'audio/x-wav'];
 // base64 하드캡 ≈ 3MB. 16kHz 모노 WAV = 32KB/s 이므로 원본 기준 약 70초분(클라 60초 캡의 여유값).
 // 비용 DoS 방어선 — 클라 캡이 뚫려도 여기서 잘린다.
 const MAX_AUDIO_B64 = 3_000_000;
@@ -742,11 +747,14 @@ async function handleTranscribe(payload: any) {
   if (audioBase64.length > MAX_AUDIO_B64) return { error: 'audio_too_large', text: '', empty: true };
 
   // 모델에 보내기 전 비발화 컷 — 지어내기를 막는 결정적 방어선(업스트림 비용도 안 든다).
+  // PCM 을 직접 읽는 방식이라 WAV 에만 적용된다(AAC=Android 는 디코더가 없어 통과시킨다).
   // 프레임이 하나뿐인 초단문(<20ms)은 cv 판정이 무의미하므로 세기 조건만 적용된다.
-  const { rms, peak, cv } = audioLevels(audioBase64);
-  const tooQuiet = rms < SILENCE_RMS && peak < SILENCE_PEAK;
-  const tooSteady = cv > 0 && cv < MIN_SPEECH_CV;
-  if (tooQuiet || tooSteady) return { text: '', empty: true, usage: null };
+  if (PCM_GATEABLE.includes(mimeType)) {
+    const { rms, peak, cv } = audioLevels(audioBase64);
+    const tooQuiet = rms < SILENCE_RMS && peak < SILENCE_PEAK;
+    const tooSteady = cv > 0 && cv < MIN_SPEECH_CV;
+    if (tooQuiet || tooSteady) return { text: '', empty: true, usage: null };
+  }
 
   // 매장 고유명사 힌트(메뉴·직원 이름 등) — 고유명사 오인식을 줄이는 유일한 지렛대.
   // 사용자 입력에서 왔으므로 fence + 개수·길이 컷(프롬프트 폭주 방지).
@@ -765,13 +773,23 @@ async function handleTranscribe(payload: any) {
   없으면 매장에서 흔한 인사말("어서 오세요" 등)로 채우지 말고 text=""·empty=true 로 답하라.
   애매하면 비워라 — 지어낸 문장이 그대로 노하우로 등록되면 되돌릴 수 없다.${hintLine}`;
 
-  const { parsed: r, usage } = await callGeminiParts(
-    [{ inlineData: { mimeType: 'audio/wav', data: audioBase64 } }, { text: instruction }],
-    TRANSCRIBE_SCHEMA,
-    MAX_OUTPUT_TOKENS_TRANSCRIBE,
-    MODEL,
-    0, // 받아쓰기는 창작이 아니다 — 완전 결정적
-  );
+  let r: any, usage: unknown;
+  try {
+    ({ parsed: r, usage } = await callGeminiParts(
+      // 하드코딩 금지 — Android 는 AAC 를 올린다. 잘못된 mime 을 붙이면 업스트림이 디코딩에 실패한다.
+      [{ inlineData: { mimeType, data: audioBase64 } }, { text: instruction }],
+      TRANSCRIBE_SCHEMA,
+      MAX_OUTPUT_TOKENS_TRANSCRIBE,
+      MODEL,
+      0, // 받아쓰기는 창작이 아니다 — 완전 결정적
+    ));
+  } catch (e) {
+    // 업스트림이 이 오디오를 못 다룬 경우를 일반 500 과 구분해 돌려준다.
+    // Android(AAC) 는 기기 없이 검증할 수 없었던 경로라, 실패하면 "왜"가 바로 보여야 한다
+    // (일반 실패로 뭉뚱그리면 첫 안드로이드 사용자에게서 원인 파악이 몇 시간 걸린다).
+    console.error(`transcribe upstream failed (mime=${mimeType}, b64=${audioBase64.length}):`, e);
+    return { error: 'audio_not_accepted', text: '', empty: true, mimeType };
+  }
 
   const raw = String(r?.text ?? '').trim();
   // 출력 게이트: 모델이 지침/스키마를 되뱉으면 버린다(남용 #16 · 다른 태스크와 동일 방어선).

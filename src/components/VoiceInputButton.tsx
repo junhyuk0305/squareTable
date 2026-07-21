@@ -3,15 +3,15 @@ import { View, Text, Pressable, ActivityIndicator, StyleSheet } from 'react-nati
 import { Ionicons } from '@expo/vector-icons';
 
 import { transcribeAudio } from '@/lib/ai';
+// 플랫폼 구현은 Metro 가 고른다(웹=recorder.web.ts / 네이티브=recorder.ts). 여기선 구분하지 않는다.
 import {
   supportsVoice,
   startRecording,
   stopRecording,
   cancelRecording,
   isRecording,
-  VoiceError,
-  MAX_RECORD_MS,
 } from '@/lib/voice/recorder';
+import { VoiceError, MAX_RECORD_MS } from '@/lib/voice/shared';
 import { showToast } from '@/lib/store/useToastStore';
 import { track, reportError } from '@/lib/analytics/track';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
@@ -46,6 +46,7 @@ const ERROR_MESSAGE: Record<string, string> = {
   too_short: '너무 짧아요. 버튼을 누른 뒤 또박또박 말씀해 주세요.',
   no_audio: '소리가 녹음되지 않았어요. 마이크를 확인해 주세요.',
   unsupported: '이 브라우저에서는 음성 입력을 쓸 수 없어요.',
+  not_ready: '음성 입력을 준비 중이에요. 잠시 후 다시 눌러 주세요.',
   failed: '음성 입력에 실패했어요. 잠시 후 다시 시도해 주세요.',
 };
 
@@ -54,6 +55,7 @@ const EDGE_REJECT_MESSAGE: Record<string, string> = {
   mock_mode: '데모 모드에서는 음성 입력이 동작하지 않아요.',
   unsupported_audio: '이 기기의 녹음 형식을 지원하지 않아요. 타이핑으로 입력해 주세요.',
   audio_too_large: '녹음이 너무 길어요. 짧게 나눠서 말씀해 주세요.',
+  audio_not_accepted: '이 기기의 녹음을 처리하지 못했어요. 타이핑으로 입력해 주세요.',
 };
 
 function mmss(ms: number): string {
