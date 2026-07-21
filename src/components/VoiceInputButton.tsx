@@ -126,12 +126,26 @@ export function VoiceInputButton({ onText, disabled, hints, surface }: VoiceInpu
     }
   }, [hints, onText, surface, fail]);
 
+  // 취소 — 사용자가 ✕ 를 눌렀거나(reason 없음), 말이 한 번도 안 잡혀 자동으로 접었을 때.
+  const abort = useCallback(async (reason?: 'no_speech') => {
+    await cancelRecording();
+    if (aliveRef.current) setPhase('idle');
+    if (reason === 'no_speech') showToast('말소리가 안 들려서 멈췄어요. 마이크를 확인하고 다시 눌러 주세요.', 'warn');
+    track('voice_input', { surface, result: reason ?? 'cancelled' });
+  }, [surface]);
+
   const begin = useCallback(async () => {
     try {
-      // 60초 캡 자동 정지 — 녹음이 멈춘 걸 UI가 모르면 '눌러도 안 끝나는' 상태가 된다.
-      // (자동 정지는 recorder를 멈출 뿐 세션은 남겨두므로 여기서 이어서 전사할 수 있다.)
-      await startRecording(() => {
-        if (aliveRef.current) void finish();
+      // 자동 종료 — 사장님은 말을 끝내고 버튼을 다시 누르는 걸 잊는다. 그때 60초를 꽉 채워
+      // 녹음되면 침묵까지 업로드돼 느리고 비싸다. 말이 끝나면(무음 2.5초) 알아서 전사한다.
+      await startRecording((reason) => {
+        if (!aliveRef.current) return;
+        if (reason === 'no_speech') {
+          // 아무 말도 안 잡혔다 → 서버에 보낼 게 없다. 왕복 없이 여기서 끝낸다.
+          void abort('no_speech');
+          return;
+        }
+        void finish();
       });
       if (!aliveRef.current) {
         void cancelRecording();
@@ -143,13 +157,7 @@ export function VoiceInputButton({ onText, disabled, hints, surface }: VoiceInpu
     } catch (e) {
       fail(e instanceof VoiceError ? e.kind : 'failed', e);
     }
-  }, [finish, fail]);
-
-  const abort = useCallback(async () => {
-    await cancelRecording();
-    if (aliveRef.current) setPhase('idle');
-    track('voice_input', { surface, result: 'cancelled' });
-  }, [surface]);
+  }, [finish, fail, abort]);
 
   if (!enabled) return null;
 
@@ -167,7 +175,7 @@ export function VoiceInputButton({ onText, disabled, hints, surface }: VoiceInpu
     return (
       <View style={s.recRow}>
         <Pressable
-          onPress={abort}
+          onPress={() => void abort()}
           hitSlop={8}
           accessibilityRole="button"
           accessibilityLabel="녹음 취소"
@@ -178,7 +186,7 @@ export function VoiceInputButton({ onText, disabled, hints, surface }: VoiceInpu
         <Pressable
           onPress={() => void finish()}
           accessibilityRole="button"
-          accessibilityLabel="녹음 마치고 글자로 옮기기"
+          accessibilityLabel="녹음 마치고 글자로 옮기기 — 말이 끝나면 자동으로도 멈춰요"
           style={({ pressed }) => [s.stopPill, pressed && { opacity: 0.85 }]}
         >
           <View style={[s.dot, near && { backgroundColor: BrandColors.warn }]} />
