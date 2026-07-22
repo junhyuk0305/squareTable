@@ -28,12 +28,14 @@ const VALID: Category[] = ['Routine', 'Event', 'Context', 'Know-how'];
  */
 export default function OwnerCoachScreen() {
   const router = useRouter();
-  const { uqId, category: catParam, seed, sugId, feedId } = useLocalSearchParams<{ uqId?: string; category?: string; seed?: string; sugId?: string; feedId?: string }>();
+  const { uqId, category: catParam, seed, sugId, feedId, srcTemplate } = useLocalSearchParams<{ uqId?: string; category?: string; seed?: string; sugId?: string; feedId?: string; srcTemplate?: string }>();
 
   const addEntry = usePlaybookStore((s) => s.add);
   const resolve = useUnknownQueueStore((s) => s.resolve);
   // 채팅 메시지 승격(§4.1)에서 넘어온 경우: 발행 성공 시 원본 메시지에 흔적을 남겨 재승격 넛지를 끈다.
   const markPromoted = useWorkStore((s) => s.markPromoted);
+  // 완료 캡처(②) 제안이면: 발행·승인 후 그 출처 업무에 결과 노하우를 자동 첨부(0069/0070).
+  const attachKnowhow = useWorkStore((s) => s.attachKnowhow);
   // 알바 제안(신규)에서 넘어온 경우: 실제로 발행됐을 때만 그 제안을 '반영(승인)'한다.
   const approveSuggestion = useSuggestionStore((s) => s.approve);
   const realUq = useUnknownQueueStore((s) => (uqId ? s.getById(uqId) : undefined));
@@ -88,6 +90,8 @@ export default function OwnerCoachScreen() {
       let resolveOk = true;
       if (answerable && realUq) resolveOk = await resolve(realUq.id, entryIds[0]);
       if (sugId) approveSuggestion(sugId, entryIds[0]);
+      // 완료 캡처(②) 출처 업무가 있으면 그 업무에 자동 첨부 — 업무→노하우 루프를 닫는다(발행 성공 시에만).
+      if (srcTemplate) void attachKnowhow(srcTemplate, [entryIds[0]]);
       // 채팅 승격이면 원본 메시지에 흔적(promotedEntryId) → 칩/시트가 다시 안 뜬다(발행 성공한 경우만).
       if (feedId) markPromoted(feedId, entryIds[0]);
       if (!resolveOk) {
@@ -100,7 +104,7 @@ export default function OwnerCoachScreen() {
       navAfter();
       return true;
     },
-    [answerable, realUq, resolve, sugId, approveSuggestion, feedId, markPromoted, navAfter],
+    [answerable, realUq, resolve, sugId, approveSuggestion, srcTemplate, attachKnowhow, feedId, markPromoted, navAfter],
   );
 
   // ── 저장 전 확인(겹침·챕터) ──

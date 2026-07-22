@@ -47,7 +47,8 @@ export default function OwnerSuggestionsScreen() {
       router.push({ pathname: '/owner/edit/[id]', params: { id: s.target_entry_id } });
     } else {
       showToast('노하우로 정리해 발행하면 반영돼요', 'info');
-      router.push({ pathname: '/owner/coach', params: { seed: s.text, sugId: s.id } });
+      // source_template_id(②)가 있으면 함께 넘겨 발행·승인 시 그 업무에 자동 첨부(0069/0070).
+      router.push({ pathname: '/owner/coach', params: { seed: s.text, sugId: s.id, ...(s.source_template_id ? { srcTemplate: s.source_template_id } : {}) } });
     }
   }
 

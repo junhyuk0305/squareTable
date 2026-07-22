@@ -174,6 +174,30 @@ export function taskIdsForKnowhow(links: KnowhowLink[], entryId: string): string
   return links.filter((l) => l.entryId === entryId).map((l) => l.templateId);
 }
 
+/** 완료 직후 1턴 캡처(S1 ②) 넛지 피로 상태 — 인메모리(리로드 시 리셋=양호한 degradation, 네이티브 지속성 회피). */
+export type CaptureNudge = { date?: string; skips: number };
+/**
+ * 이 완료가 캡처 넛지를 띄울 자격이 있는가(전부 AND) — 순수 함수(테스트 가능).
+ *  ① 실제 반복 업무(합성 루틴 dpr_ 아님, weekly) ② 노하우 미첨부 ③ 첫 완료(이력 없음)
+ *  ④ 하루 1회(오늘 이미 안 띄움) ⑤ 2회 연속 건너뛰기 전.
+ */
+export function isCaptureEligible(args: {
+  template: TaskTemplate | undefined;
+  everDone: boolean;
+  hasKnowhow: boolean;
+  nudge: CaptureNudge;
+  today: string;
+}): boolean {
+  const { template, everDone, hasKnowhow, nudge, today } = args;
+  if (!template) return false;
+  if (!template.recurrence || template.recurrence === 'once') return false;
+  if (hasKnowhow) return false;
+  if (everDone) return false;
+  if (nudge.date === today) return false;
+  if ((nudge.skips ?? 0) >= 2) return false;
+  return true;
+}
+
 /** 반복/예정 스케줄을 비교 가능한 한 줄 키로 정규화(중복 판정용). */
 function scheduleKey(t: { recurrence?: Recurrence; date?: string; dueDate?: string }): string {
   if (t.recurrence && t.recurrence !== 'once') return `weekly:${[...t.recurrence.weekly].sort((a, b) => a - b).join(',')}`;
@@ -294,6 +318,8 @@ type State = {
   feed: FeedItem[];
   /** 업무↔노하우 링크(0069) — 평평한 배열. 정/역방향은 knowhowIdsForTask/taskIdsForKnowhow 로 파생. */
   knowhowLinks: KnowhowLink[];
+  /** 완료 캡처(②) 넛지 피로 상태(인메모리). */
+  captureNudge: CaptureNudge;
   loaded: boolean;
   hydrate: () => Promise<void>;
   subscribe: () => () => void;
@@ -305,6 +331,8 @@ type State = {
   attachKnowhow: (templateId: string, entryIds: string[]) => Promise<void>;
   /** 업무에서 노하우 첨부 해제. */
   detachKnowhow: (templateId: string, entryIds: string[]) => Promise<void>;
+  /** 완료 캡처(②) 넛지 결과 기록 — 남기면 skips 리셋, 건너뛰면 +1. 둘 다 오늘 다시 안 띄우게 date 갱신. */
+  noteCaptureNudge: (kind: 'submit' | 'skip') => void;
   // task: 합성 루틴 할일(dpr_)은 s.templates 에 없으므로 완료 피드 문구/방을 호출부가 넘긴다(없으면 lookup).
   toggleTask: (date: string, templateId: string, staffId: string, staffName: string, role: 'owner' | 'junior', photoUrl?: string, task?: { text: string; roomId?: string }) => void;
   postNotice: (date: string, text: string, authorId: string, authorName: string, important: boolean) => void;
@@ -327,6 +355,7 @@ export const useWorkStore = create<State>((set, get) => ({
   done: HAS_SUPABASE ? {} : seedDone,
   feed: HAS_SUPABASE ? [] : seedFeed,
   knowhowLinks: [],
+  captureNudge: { skips: 0 },
   loaded: !HAS_SUPABASE,
 
   // 전체 재조회(templates·done·feed·링크 4쿼리)로 스토어를 통째로 교체한다.
@@ -464,6 +493,11 @@ export const useWorkStore = create<State>((set, get) => ({
       '노하우 첨부에 실패했어요.',
     );
   },
+  noteCaptureNudge: (kind) => {
+    const today = todayStr();
+    set((s) => ({ captureNudge: { date: today, skips: kind === 'skip' ? (s.captureNudge.skips ?? 0) + 1 : 0 } }));
+  },
+
   // 낙관적 해제 — 지운 링크만 잡아 실패 시 그대로 복원(사이에 도착한 realtime 변경은 안 덮음).
   detachKnowhow: async (templateId, entryIds) => {
     const removed = get().knowhowLinks.filter((l) => l.templateId === templateId && entryIds.includes(l.entryId));

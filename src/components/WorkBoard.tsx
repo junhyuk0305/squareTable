@@ -8,12 +8,15 @@ import { uploadPhoto } from '@/lib/db';
 import { HAS_SUPABASE } from '@/lib/supabase';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useStaffStore } from '@/lib/store/useStaffStore';
-import { useWorkStore, useDayparts, daypartRoutineTemplates, findDuplicateTask, knowhowIdsForTask, type NewTask, type TaskTemplate } from '@/lib/store/useWorkStore';
+import { useWorkStore, useDayparts, daypartRoutineTemplates, findDuplicateTask, knowhowIdsForTask, isCaptureEligible, type NewTask, type TaskTemplate } from '@/lib/store/useWorkStore';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
+import { useSuggestionStore } from '@/lib/store/useSuggestionStore';
 import { useSyncStore } from '@/lib/store/useSyncStore';
 import { showToast } from '@/lib/store/useToastStore';
 import { EntryDetailModal } from '@/components/EntryDetailModal';
-import type { PlaybookEntry } from '@/types';
+import { CaptureKnowhowSheet } from '@/components/work/CaptureKnowhowSheet';
+import { buildDirectUq, buildPlaybookEntryFromSquare } from '@/lib/utils/buildEntry';
+import type { PlaybookEntry, SquareBlock } from '@/types';
 import { RoleTabBar } from '@/components/RoleTabBar';
 import { useRoomStore } from '@/lib/store/useRoomStore';
 import { WorkChat } from '@/components/work/WorkChat';
@@ -69,13 +72,20 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
   const done = useWorkStore((s) => s.done);
   const feed = useWorkStore((s) => s.feed);
   const knowhowLinks = useWorkStore((s) => s.knowhowLinks);
+  const attachKnowhow = useWorkStore((s) => s.attachKnowhow);
+  const captureNudge = useWorkStore((s) => s.captureNudge);
+  const noteCaptureNudge = useWorkStore((s) => s.noteCaptureNudge);
   // 노하우 첨부 검색·칩 제목 해석용 — 업무 화면에서도 노하우를 로드해 둔다(coalesce 로 중복 방지).
   const entries = usePlaybookStore((s) => s.entries);
+  const addEntry = usePlaybookStore((s) => s.add);
+  const submitSuggestion = useSuggestionStore((s) => s.submit);
   useEffect(() => {
     usePlaybookStore.getState().hydrate();
     return usePlaybookStore.getState().subscribe();
   }, []);
   const [detailEntry, setDetailEntry] = useState<PlaybookEntry | null>(null);
+  // 완료 직후 1턴 캡처(②) — 대상 업무(있으면 시트 노출).
+  const [capture, setCapture] = useState<{ templateId: string; text: string } | null>(null);
   const toggleTask = useWorkStore((s) => s.toggleTask);
   const addTask = useWorkStore((s) => s.addTask);
   const editTask = useWorkStore((s) => s.editTask);
@@ -198,13 +208,63 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
   // 보드(할일·배정) 렌더용 = 루틴(매장 전체) + 현재 방 할일. 컴포저 중복검사엔 roomTemplates 만 쓴다.
   const boardTemplates = useMemo(() => [...routineTemplates, ...roomTemplates], [routineTemplates, roomTemplates]);
   // 완료 토글 — 합성 루틴(dpr_)은 store.templates 에 없으므로 보드 목록에서 문구/방을 찾아 넘긴다(무음 '할일' 폴백 방지).
+  // 완료 직후 1턴 캡처(②) 자격 판정 → 시트 노출. 완료 UI가 둘(체크·사진인증)이라 공용 헬퍼로 둔다.
+  // done 은 렌더 스냅샷(토글 전) — 방금 추가된 완료는 미포함이라 '첫 완료(everDone=false)' 판정이 정확.
+  const offerCaptureIfEligible = useCallback(
+    (templateId: string) => {
+      const real = templates.find((x) => x.id === templateId); // 합성 루틴(dpr_)은 store 미포함 → 제외됨
+      const everDone = Object.values(done).some((m) => m[templateId]);
+      const hasKnowhow = knowhowIdsForTask(knowhowLinks, templateId).length > 0;
+      if (isCaptureEligible({ template: real, everDone, hasKnowhow, nudge: captureNudge, today })) {
+        setCapture({ templateId, text: real!.text });
+      }
+    },
+    [templates, done, knowhowLinks, captureNudge, today],
+  );
   const toggleBoardTask = useCallback(
     (templateId: string, date: string) => {
       const t = boardTemplates.find((x) => x.id === templateId);
+      // 완료로 전환되는 순간인지(체크 해제가 아니라) — 토글 전 스냅샷으로 판정.
+      const wasIncomplete = !(done[date] ?? {})[templateId];
       toggleTask(date, templateId, userId, userName, role, undefined, t ? { text: t.text, roomId: t.roomId } : undefined);
+      if (wasIncomplete) offerCaptureIfEligible(templateId);
     },
-    [boardTemplates, toggleTask, userId, userName, role],
+    [boardTemplates, done, toggleTask, userId, userName, role, offerCaptureIfEligible],
   );
+  // 캡처 시트 '남기기' — 사장이면 즉시 발행(상황 한 줄)+그 업무에 첨부, 알바면 사장 승인 큐로(자동첨부는 승인 시).
+  const submitCapture = useCallback(
+    async (line: string) => {
+      const cap = capture;
+      setCapture(null);
+      noteCaptureNudge('submit');
+      const text = line.trim();
+      if (!cap || !text) return;
+      if (isOwner) {
+        const square: SquareBlock = {
+          situation: text,
+          quagmire: '', uncover: '',
+          action: { steps: [], scripts: [] },
+          result: { before: '', after: '', metric: '' },
+          extract: { do: '', dont: '' },
+        };
+        const entry = buildPlaybookEntryFromSquare(buildDirectUq('Know-how', text), square, { title: cap.text });
+        const ok = await addEntry(entry);
+        if (ok) {
+          await attachKnowhow(cap.templateId, [entry.id]);
+          showToast('노하우로 저장했어요', 'good');
+        }
+      } else {
+        const ok = await submitSuggestion({ kind: 'new', text, sourceTemplateId: cap.templateId });
+        if (ok) showToast('사장님이 확인하면 노하우로 등록돼요', 'good');
+      }
+    },
+    [capture, isOwner, addEntry, attachKnowhow, submitSuggestion, noteCaptureNudge],
+  );
+  const skipCapture = useCallback(() => {
+    setCapture(null);
+    noteCaptureNudge('skip');
+  }, [noteCaptureNudge]);
+
   const pinnedNotice = useMemo(() => notices.find((n) => n.pinned), [notices]);
   const unreadNotices = isOwner ? 0 : notices.filter((n) => !(n.read_by ?? []).includes(userId)).length;
 
@@ -240,6 +300,7 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
           if (!(done[date] ?? {})[templateId]) {
             const t = boardTemplates.find((x) => x.id === templateId);
             toggleTask(date, templateId, userId, userName, role, url, t ? { text: t.text, roomId: t.roomId } : undefined);
+            offerCaptureIfEligible(templateId); // 사진 인증 완료도 캡처 대상(체크 완료와 동일 경로)
           }
         } else {
           noteError('사진을 올리지 못했어요. 인터넷 연결을 확인하고 다시 시도해 주세요.');
@@ -431,6 +492,10 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
       )}
 
       <EntryDetailModal entry={detailEntry} visible={!!detailEntry} onClose={() => setDetailEntry(null)} />
+
+      {capture && (
+        <CaptureKnowhowSheet taskText={capture.text} isOwner={isOwner} onSubmit={submitCapture} onSkip={skipCapture} />
+      )}
 
       <RoleTabBar role={role} />
     </SafeAreaView>

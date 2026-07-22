@@ -19,6 +19,8 @@ export type SuggestionInput = {
   targetEntryId?: string;
   targetTitle?: string;
   photos?: string[];
+  /** S1 ② 완료 캡처 출처 업무 id — 승인 시 그 업무에 자동 첨부(0069/0070). */
+  sourceTemplateId?: string;
 };
 
 // 데모 시드 — 사장이 검토 화면에서 바로 흐름을 볼 수 있게 1건씩(개선/신규).
@@ -78,6 +80,7 @@ export const useSuggestionStore = create<State>((set, get) => ({
       kind: input.kind,
       ...(input.targetEntryId ? { target_entry_id: input.targetEntryId } : null),
       ...(input.targetTitle ? { target_title: input.targetTitle } : null),
+      ...(input.sourceTemplateId ? { source_template_id: input.sourceTemplateId } : null),
       proposer_id: s.userId,
       proposer_name: s.userName,
       text: input.text.trim(),

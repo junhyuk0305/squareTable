@@ -142,6 +142,8 @@ export type PlaybookSuggestion = {
   owner_note?: string;
   /** 승인 후 만들어지거나 갱신된 노하우 id. */
   resulting_entry_id?: string;
+  /** S1 ② 완료 캡처 출처 업무(work_templates.id, 0070). 승인 시 이 업무에 결과 노하우를 자동 첨부(0069). */
+  source_template_id?: string;
   created_at: string;
   reviewed_at?: string;
   reviewed_by?: string;
