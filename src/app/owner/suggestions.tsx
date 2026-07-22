@@ -47,8 +47,16 @@ export default function OwnerSuggestionsScreen() {
       router.push({ pathname: '/owner/edit/[id]', params: { id: s.target_entry_id } });
     } else {
       showToast('노하우로 정리해 발행하면 반영돼요', 'info');
-      // source_template_id(②)가 있으면 함께 넘겨 발행·승인 시 그 업무에 자동 첨부(0069/0070).
-      router.push({ pathname: '/owner/coach', params: { seed: s.text, sugId: s.id, ...(s.source_template_id ? { srcTemplate: s.source_template_id } : {}) } });
+      // source_template_id(②)=발행 시 업무 자동 첨부 · source_uq_id(③/D4)=uqId로 넘겨 발행 시 그 질문 자동 resolve.
+      router.push({
+        pathname: '/owner/coach',
+        params: {
+          seed: s.text,
+          sugId: s.id,
+          ...(s.source_template_id ? { srcTemplate: s.source_template_id } : {}),
+          ...(s.source_uq_id ? { uqId: s.source_uq_id } : {}),
+        },
+      });
     }
   }
 

@@ -1,4 +1,4 @@
-import { useCallback, useId, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
@@ -39,6 +39,11 @@ export default function OwnerCoachScreen() {
   // 알바 제안(신규)에서 넘어온 경우: 실제로 발행됐을 때만 그 제안을 '반영(승인)'한다.
   const approveSuggestion = useSuggestionStore((s) => s.approve);
   const realUq = useUnknownQueueStore((s) => (uqId ? s.getById(uqId) : undefined));
+  // uqId 진입(인박스 답변·③ 제안→질문 자동해결)인데 큐가 아직 로드 안 됐으면 여기서 당긴다
+  // — 제안 화면에서 바로 넘어오면 인박스를 안 거쳐 realUq 가 비어 "이미 처리됨" 데드엔드가 뜰 수 있다.
+  useEffect(() => {
+    if (uqId) void useUnknownQueueStore.getState().hydrate();
+  }, [uqId]);
 
   const isInboxAnswer = typeof uqId === 'string' && uqId.length > 0;
   // 답변 가능 = 인박스 모드 + 질문이 여전히 '대기' 상태. (이미 해결/보관됐으면 답변 막아 중복 resolve 방지)

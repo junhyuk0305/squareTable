@@ -21,6 +21,8 @@ export type SuggestionInput = {
   photos?: string[];
   /** S1 ② 완료 캡처 출처 업무 id — 승인 시 그 업무에 자동 첨부(0069/0070). */
   sourceTemplateId?: string;
+  /** S1 ③(D4) 새-답 제안이 답하는 미답질문 id — 승인·발행 시 그 질문 자동 resolve(0071). */
+  sourceUqId?: string;
 };
 
 // 데모 시드 — 사장이 검토 화면에서 바로 흐름을 볼 수 있게 1건씩(개선/신규).
@@ -81,6 +83,7 @@ export const useSuggestionStore = create<State>((set, get) => ({
       ...(input.targetEntryId ? { target_entry_id: input.targetEntryId } : null),
       ...(input.targetTitle ? { target_title: input.targetTitle } : null),
       ...(input.sourceTemplateId ? { source_template_id: input.sourceTemplateId } : null),
+      ...(input.sourceUqId ? { source_uq_id: input.sourceUqId } : null),
       proposer_id: s.userId,
       proposer_name: s.userName,
       text: input.text.trim(),

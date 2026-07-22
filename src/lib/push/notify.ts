@@ -141,6 +141,19 @@ export const notifyOwnersQuestion = (q: string) =>
     tag: 'question',
   });
 
+// S1 ③(D4): 미답질문을 사장 + 같은 매장 직원 전체에게(누가 답하든 됨). 질문한 본인은 서버가 발송 대상에서 제외.
+// 엣지 무변경 — 기존 'owners'/'staff' audience 두 경로로 보낸다(각 매장 스코프 유지). 직원은 노하우 탭(내 공간)으로.
+export const notifyStoreQuestion = (q: string) => {
+  void notifyOwnersQuestion(q);
+  return pushNotify({
+    audience: 'staff',
+    title: '동료 질문 — 도와줄 수 있어요',
+    body: q,
+    url: '/junior/chat',
+    tag: 'question',
+  });
+};
+
 export const notifyOwnersSuggestion = (name: string, text: string) =>
   pushNotify({
     audience: 'owners',

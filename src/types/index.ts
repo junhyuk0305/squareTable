@@ -144,6 +144,8 @@ export type PlaybookSuggestion = {
   resulting_entry_id?: string;
   /** S1 ② 완료 캡처 출처 업무(work_templates.id, 0070). 승인 시 이 업무에 결과 노하우를 자동 첨부(0069). */
   source_template_id?: string;
+  /** S1 ③(D4) 직원의 새-답 제안이 답하는 미답질문(unknown_queries.id, 0071). 승인·발행 시 그 질문 자동 resolve. */
+  source_uq_id?: string;
   created_at: string;
   reviewed_at?: string;
   reviewed_by?: string;
@@ -218,6 +220,8 @@ export type UnknownQuery = {
   resolved_with_entry_id?: string;
   // 알바가 익명으로 물은 질문 — 사장 인박스에서 이름·입사일차를 가린다(심리적 진입장벽 ↓).
   anonymous?: boolean;
+  /** S1 ③(D4) 이 질문을 해결한 사람(직원이 기존 노하우로 즉시 해결 시 기록, 0071). */
+  answered_by?: string;
 };
 
 // ── RAG 결과 (lib/rag.ts 출력과 호환) ───────────────

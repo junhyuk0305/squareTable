@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { Stack } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -6,8 +6,11 @@ import { RoleTabBar } from '@/components/RoleTabBar';
 import { KnowhowSegment } from '@/components/KnowhowSegment';
 import { JuniorBrowseDashboard } from '@/components/JuniorBrowseDashboard';
 import { JuniorAsk } from '@/components/junior/JuniorAsk';
+import { JuniorMySpace } from '@/components/junior/JuniorMySpace';
 
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
+import { useUnknownQueueStore, answerableQuestions } from '@/lib/store/useUnknownQueueStore';
+import { useSessionStore } from '@/lib/store/useSessionStore';
 
 import { styles } from '@/styles/juniorChatStyles';
 
@@ -21,12 +24,23 @@ import { styles } from '@/styles/juniorChatStyles';
  */
 export default function JuniorChatScreen() {
   const entries = usePlaybookStore((s) => s.entries);
+  const me = useSessionStore((s) => s.userId);
+  const queue = useUnknownQueueStore((s) => s.queue);
+
+  // '내 공간' 배지·리스트가 항상 최신이도록 미답질문 큐를 컨테이너에서 hydrate·subscribe(D4).
+  useEffect(() => {
+    const uq = useUnknownQueueStore.getState();
+    void uq.hydrate();
+    return uq.subscribe();
+  }, []);
 
   // 둘러보기에 노출할 발행 노하우. status 없는 시드도 안전하게 통과(published 우선, 미정이면 노출).
   const publishedEntries = useMemo(
     () => entries.filter((e) => e.status === 'published' || !e.status),
     [entries],
   );
+  // '내 공간' 탭 배지 = 내가 도와줄 수 있는 매장 미답질문 수(SSOT: answerableQuestions).
+  const answerableCount = useMemo(() => answerableQuestions(queue, me).length, [queue, me]);
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
@@ -41,6 +55,8 @@ export default function JuniorChatScreen() {
           />
         }
         ask={<JuniorAsk />}
+        mine={<JuniorMySpace me={me} />}
+        mineCount={answerableCount}
       />
       <RoleTabBar role="junior" />
     </SafeAreaView>

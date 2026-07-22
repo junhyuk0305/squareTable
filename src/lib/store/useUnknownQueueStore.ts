@@ -5,7 +5,8 @@ import seedData from '@/data/unknown-queries.json';
 import { HAS_SUPABASE } from '@/lib/supabase';
 import { fetchUnknownQueue, insertUnknown, bumpUnknownSimilar, resolveUnknown, updateUnknownStatus, subscribeUnknownQueue } from '@/lib/db';
 import { guardWrite } from '@/lib/store/useSyncStore';
-import { notifyOwnersQuestion } from '@/lib/push/notify';
+import { notifyStoreQuestion } from '@/lib/push/notify';
+import { useSessionStore } from '@/lib/store/useSessionStore';
 
 const seed = seedData as unknown as UnknownQuery[];
 
@@ -23,6 +24,14 @@ type UnknownQueueState = {
   reset: () => void;
   applyMock: (demo: boolean) => void;
 };
+
+/**
+ * D4(③) 이 직원이 도와줄 수 있는 매장 미답질문 — 대기 중 + 내가 물은 건 제외(내 질문에 내가 안 답함).
+ * ★배지 카운트(junior/chat)와 리스트(JuniorMySpace)의 공용 판정 SSOT — 한 곳만 바뀌어 어긋나지 않게.
+ */
+export function answerableQuestions(queue: UnknownQuery[], me: string): UnknownQuery[] {
+  return queue.filter((u) => u.status === 'pending_owner_answer' && u.junior_id !== me);
+}
 
 // 받은질문 상태 전이 공통 헬퍼: 낙관적 업데이트 + 실패 시 롤백.
 function transition(
@@ -88,20 +97,24 @@ export const useUnknownQueueStore = create<UnknownQueueState>((set, get) => ({
       // 일반 저장 실패 + 미해결 질문 상한(남용 #18, 0033 트리거 too_many_pending)을 한 메시지로 포괄.
       // (insertUnknown이 boolean만 반환해 사유 구분 불가 → 양쪽에 자연스러운 안내로 통합.)
       '질문을 등록하지 못했어요. 대기 중인 질문이 많으면 사장님 답변을 받은 뒤 다시 등록해 주세요.',
-    ).then((ok) => { if (ok && uq.status === 'pending_owner_answer') notifyOwnersQuestion(uq.query_text); });
+    // 저장 성공 후에만 웹푸시 — D4(③): 사장 + 같은 매장 직원 전체에게(누가 답하든 됨). 발송자 제외는 서버.
+    ).then((ok) => { if (ok && uq.status === 'pending_owner_answer') notifyStoreQuestion(uq.query_text); });
   },
+  // 질문 해결 — resolved_with_entry 로 전이 + answered_by 기록(누가 답했나, 0071).
+  // 직원 즉시해결(기존 노하우 지정)·사장 발행(coach) 공통 경로. 답변자=현재 세션.
   resolve: (uqId, newEntryId) => {
     const before = get().queue.find((u) => u.id === uqId);
+    const answeredBy = useSessionStore.getState().userId || undefined;
     set((s) => ({
       queue: s.queue.map((u) =>
         u.id === uqId
-          ? { ...u, status: 'resolved_with_entry' as const, resolved_with_entry_id: newEntryId }
+          ? { ...u, status: 'resolved_with_entry' as const, resolved_with_entry_id: newEntryId, ...(answeredBy ? { answered_by: answeredBy } : null) }
           : u,
       ),
     }));
     // ok 반환 — 호출부(coach)가 질문 상태 반영이 실제로 됐을 때만 성공 처리하도록.
     return guardWrite(
-      resolveUnknown(uqId, newEntryId),
+      resolveUnknown(uqId, newEntryId, answeredBy),
       () => before && set((s) => ({ queue: s.queue.map((u) => (u.id === uqId ? before : u)) })),
       '답변 반영에 실패했어요.',
     );

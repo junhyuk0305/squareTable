@@ -513,14 +513,15 @@ export async function updateUnknownStatus(id: string, status: UnknownQuery['stat
   return writeStrict('updateUnknownStatus', supabase.from('unknown_queries').update({ status }).eq('id', id).select('id'));
 }
 
-export async function resolveUnknown(id: string, newEntryId: string): Promise<boolean> {
+export async function resolveUnknown(id: string, newEntryId: string, answeredBy?: string): Promise<boolean> {
   if (!HAS_SUPABASE) return true;
   // 질문 해결 표시가 0행이면 알바 챗봇 학습 루프가 조용히 끊긴다 → 반드시 실제 갱신 확인(P1-6).
+  // answered_by(0071): 누가 해결했나(직원 즉시해결·사장 발행 공통) — "내가 답한 질문"·크레딧용.
   return writeStrict(
     'resolveUnknown',
     supabase
       .from('unknown_queries')
-      .update({ status: 'resolved_with_entry', resolved_with_entry_id: newEntryId })
+      .update({ status: 'resolved_with_entry', resolved_with_entry_id: newEntryId, ...(answeredBy ? { answered_by: answeredBy } : null) })
       .eq('id', id)
       .select('id'),
   );
