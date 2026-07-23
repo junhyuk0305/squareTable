@@ -55,6 +55,7 @@
     "qa:knowhow-accuracy": "node scripts/qa-knowhow-accuracy.mjs",
     "qa:ai-core": "node scripts/qa-ai-core.mjs",
     "qa:ai-adversarial": "node scripts/qa-ai-adversarial.mjs",
+    "qa:task-knowhow": "node scripts/qa-task-knowhow.mjs",
     "qa:multistore": "node scripts/qa-multistore.mjs",
     "qa:junior-multistore": "node scripts/qa-junior-multistore.mjs",
     "qa:delete-store": "node scripts/qa-delete-store.mjs",
