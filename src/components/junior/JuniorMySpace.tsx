@@ -8,14 +8,16 @@ import { SectionLabel } from '@/components/SectionLabel';
 import { Appear } from '@/components/Appear';
 import { useUnknownQueueStore, answerableQuestions } from '@/lib/store/useUnknownQueueStore';
 import { useSuggestionStore } from '@/lib/store/useSuggestionStore';
+import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useChatStore } from '@/lib/store/useChatStore';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { showToast } from '@/lib/store/useToastStore';
 import { searchPlaybook } from '@/lib/rag';
+import { useCopyToClipboard, canCopyToClipboard } from '@/lib/utils/useCopyToClipboard';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
-import type { PlaybookEntry, UnknownQuery } from '@/types';
+import type { PlaybookEntry, PlaybookSuggestion, UnknownQuery } from '@/types';
 
 /**
  * JuniorMySpace — 노하우 탭 '내 공간'(직원 전용, S1 ③).
@@ -30,6 +32,9 @@ export function JuniorMySpace({ me }: { me: string }) {
   const submitSuggestion = useSuggestionStore((s) => s.submit);
   const history = useChatStore((s) => s.history);
   const entries = usePlaybookStore((s) => s.entries);
+  const userName = useSessionStore((s) => s.userName);
+  const storeName = useSessionStore((s) => s.storeName);
+  const { copied, copy } = useCopyToClipboard();
 
   // 제안·내 채팅을 로드·구독한다(미답질문 큐는 컨테이너 junior/chat 가 배지용으로 이미 hydrate·subscribe 중).
   useEffect(() => {
@@ -74,6 +79,21 @@ export function JuniorMySpace({ me }: { me: string }) {
     if (ok) showToast('사장님이 확인하면 노하우로 등록돼요', 'good');
   };
 
+  // 내 기여 내보내기 — 화면에 쌓인 내 노하우·답한 질문·제안을 텍스트로 직렬화해 클립보드로.
+  // (웹 우선 = OwnerKnowhowBrowse '매뉴얼 내보내기'와 동일 패턴. 네이티브는 canCopy=false라 버튼 숨김.)
+  const onExport = () => {
+    void copy(
+      buildMyContributionText({
+        userName: userName || '나',
+        storeName: storeName || '우리 매장',
+        date: new Date().toLocaleDateString('ko-KR'),
+        proposals: myProposals,
+        answered: myAnswered,
+        entryById,
+      }),
+    );
+  };
+
   return (
     <ScrollView style={s.flex} contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
       {/* ① 도와줄 수 있는 질문 (D4) */}
@@ -102,6 +122,19 @@ export function JuniorMySpace({ me }: { me: string }) {
           <Ionicons name="sparkles" size={14} color={BrandColors.yellowDeep} />
           <Text style={s.contribText}>내가 쌓은 노하우 <Text style={s.contribNum}>{approvedCount}</Text> · 답한 질문 <Text style={s.contribNum}>{myAnswered.length}</Text></Text>
         </View>
+      )}
+
+      {/* 내 기여 내보내기 — 내보낼 게 있고 복사가 되는 환경(웹)에서만 노출. */}
+      {canCopyToClipboard() && (myProposals.length > 0 || myAnswered.length > 0) && (
+        <Pressable
+          onPress={onExport}
+          style={({ pressed }) => [s.exportBtn, pressed && { opacity: 0.7 }]}
+          accessibilityRole="button"
+          accessibilityLabel="내 기여 내보내기"
+        >
+          <Ionicons name={copied ? 'checkmark' : 'download-outline'} size={14} color={copied ? BrandColors.good : InkColors.ink2} />
+          <Text style={[s.exportBtnText, copied && { color: BrandColors.good }]}>{copied ? '복사됐어요' : '내 기여 내보내기'}</Text>
+        </Pressable>
       )}
 
       {/* ③ 내가 답한 질문 */}
@@ -171,6 +204,41 @@ export function JuniorMySpace({ me }: { me: string }) {
       <EntryDetailModal entry={detailEntry} visible={!!detailEntry} onClose={() => setDetailEntry(null)} />
     </ScrollView>
   );
+}
+
+/** 내 기여를 사람이 읽는 텍스트로 직렬화 — 승인된 노하우·답한 질문·검토 중 제안 순. */
+function buildMyContributionText(args: {
+  userName: string;
+  storeName: string;
+  date: string;
+  proposals: PlaybookSuggestion[];
+  answered: UnknownQuery[];
+  entryById: Map<string, PlaybookEntry>;
+}): string {
+  const { userName, storeName, date, proposals, answered, entryById } = args;
+  const lines: string[] = [`${userName}님의 노하우 기여`, `${storeName} · ${date}`, ''];
+
+  const approved = proposals.filter((p) => p.status === 'approved');
+  if (approved.length) {
+    lines.push(`■ 내가 쌓은 노하우 (${approved.length})`);
+    approved.forEach((p, i) => lines.push(`${i + 1}. ${p.text}`));
+    lines.push('');
+  }
+  if (answered.length) {
+    lines.push(`■ 내가 답한 질문 (${answered.length})`);
+    answered.forEach((u, i) => {
+      const e = u.resolved_with_entry_id ? entryById.get(u.resolved_with_entry_id) : undefined;
+      lines.push(`${i + 1}. ${u.query_text}${e ? ` → ${e.title}` : ''}`);
+    });
+    lines.push('');
+  }
+  const pending = proposals.filter((p) => p.status === 'pending');
+  if (pending.length) {
+    lines.push(`■ 검토 중인 제안 (${pending.length})`);
+    pending.forEach((p, i) => lines.push(`${i + 1}. ${p.text}`));
+    lines.push('');
+  }
+  return lines.join('\n').trim();
 }
 
 /** 질문 답하기 시트 — 기존 노하우에서 찾아 지정(즉시 해결) 또는 새로 답 남기기(사장 승인). */
@@ -255,6 +323,9 @@ const s = StyleSheet.create({
   contrib: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: BrandColors.yellowSoft, borderRadius: Radius.md, paddingVertical: 10, paddingHorizontal: 12, marginBottom: Space.xs },
   contribText: { fontSize: 12.5, color: InkColors.ink2, fontWeight: '700' },
   contribNum: { color: InkColors.ink, fontWeight: '800' },
+
+  exportBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, alignSelf: 'flex-start', backgroundColor: InkColors.bg, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.pill, paddingHorizontal: 14, paddingVertical: 8, marginBottom: Space.xs },
+  exportBtnText: { fontSize: 12.5, fontWeight: '800', color: InkColors.ink2 },
 
   rowCard: { flexDirection: 'row', alignItems: 'center', gap: 9, backgroundColor: InkColors.bg, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.sm, paddingHorizontal: 12, paddingVertical: 11 },
   rowText: { flex: 1, fontSize: 13.5, fontWeight: '600', color: InkColors.ink },

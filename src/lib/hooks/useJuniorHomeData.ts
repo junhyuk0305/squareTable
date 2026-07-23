@@ -3,10 +3,12 @@ import { useEffect, useMemo, useState } from 'react';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useAttendanceStore, type AttendanceRecord } from '@/lib/store/useAttendanceStore';
 import { usePayrollStore } from '@/lib/store/usePayrollStore';
-import { useWorkStore, occursOn, type FeedItem } from '@/lib/store/useWorkStore';
+import { useWorkStore, useDayparts, occursOn, type FeedItem } from '@/lib/store/useWorkStore';
+import { daypartLabelMap } from '@/lib/store/daypartLabels';
 import { useScheduleStore } from '@/lib/store/useScheduleStore';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { useChatStore } from '@/lib/store/useChatStore';
+import { isMentionOf, isUnreadMention } from '@/lib/utils/notifications';
 import { todayStr, liveMinutes, DEFAULT_HOURLY_WAGE, tsMs } from '@/lib/utils/attendance';
 import { computePay } from '@/lib/utils/payroll';
 import type { PlaybookEntry } from '@/types';
@@ -30,6 +32,10 @@ export type JuniorHomeData = {
   // 안 읽은 공지
   unreadCount: number;
   latestNotice: FeedItem | undefined;
+  // 오늘의 매장(출근 브리핑) — 데이파트별 완료 상태 + 나를 언급한 글
+  daypartStatus: { id: string; label: string; done: number; total: number }[];
+  unreadMentionCount: number;
+  latestMention: FeedItem | undefined;
   // 근무표
   myShiftCount: number;
   incomingSwaps: number;
@@ -105,6 +111,25 @@ export function useJuniorHomeData(): JuniorHomeData {
   const taskRemain = taskTotal - taskDone;
   const tasksAllDone = taskTotal > 0 && taskDone >= taskTotal;
 
+  // 오늘의 매장 — 데이파트(오픈·미들·마감…)별 완료 상태. 오늘 뜬 할일을 section으로 묶어 done/total 집계,
+  // 매장 커스텀 순서(dayparts)대로 정렬한다. 할일이 있는 데이파트만 노출.
+  const dayparts = useDayparts();
+  const daypartStatus = useMemo(() => {
+    const dd = doneMap[today] ?? {};
+    const labelMap = daypartLabelMap(dayparts);
+    const order = new Map(dayparts.map((d, i) => [d.id, i]));
+    const groups = new Map<string, { done: number; total: number }>();
+    for (const t of myTodaysTasks) {
+      const g = groups.get(t.section) ?? { done: 0, total: 0 };
+      g.total += 1;
+      if (dd[t.id]) g.done += 1;
+      groups.set(t.section, g);
+    }
+    return [...groups.entries()]
+      .map(([id, g]) => ({ id, label: labelMap[id] ?? id, done: g.done, total: g.total }))
+      .sort((a, b) => (order.get(a.id) ?? 99) - (order.get(b.id) ?? 99));
+  }, [myTodaysTasks, doneMap, today, dayparts]);
+
   // 안 읽은 공지 — feed의 notice 중 read_by에 본인이 없는 것. 핀 공지·최신 우선.
   const unreadNotices = useMemo(
     () =>
@@ -118,6 +143,19 @@ export function useJuniorHomeData(): JuniorHomeData {
   );
   const unreadCount = unreadNotices.length;
   const latestNotice = unreadNotices[0];
+
+  // 나를 @언급한 글 — 출근 브리핑에 묶는다(안 읽은 것만 강조·카운트, 최신 우선).
+  const unreadMentionCount = useMemo(
+    () => feed.filter((f) => isUnreadMention(f, userId)).length,
+    [feed, userId],
+  );
+  const latestMention = useMemo(
+    () =>
+      feed
+        .filter((f) => isMentionOf(f, userId))
+        .sort((a, b) => tsMs(b.createdAt) - tsMs(a.createdAt))[0],
+    [feed, userId],
+  );
 
   // 직원들이 많이 물어본 노하우 — 발행된 것 중 인용수(query_hits_30d) 상위 3개.
   // 첫날 신입에게 '다들 이걸 묻더라'를 보여줘 발견성을 높인다(가게 두뇌 미리보기).
@@ -148,6 +186,9 @@ export function useJuniorHomeData(): JuniorHomeData {
     tasksAllDone,
     unreadCount,
     latestNotice,
+    daypartStatus,
+    unreadMentionCount,
+    latestMention,
     myShiftCount,
     incomingSwaps,
     popularKnowhow,

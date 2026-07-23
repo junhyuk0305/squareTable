@@ -37,6 +37,47 @@ export const styles = StyleSheet.create({
   // 교대 요청이 들어와 있으면 근무 칸 우상단에 빨간 점.
   kpiDot: { position: 'absolute', top: 8, right: 8, width: 7, height: 7, borderRadius: 4, backgroundColor: BrandColors.accent },
 
+  // 오늘의 매장(출근 브리핑) — 데이파트 완료 칩 + 멘션 한 줄을 한 카드에.
+  briefCard: {
+    backgroundColor: InkColors.bg,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: InkColors.line,
+    padding: 14,
+    gap: 10,
+    ...Elevation.e1,
+  },
+  briefDayparts: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  dpChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: InkColors.cream,
+    borderWidth: 1,
+    borderColor: InkColors.line,
+    borderRadius: Radius.pill,
+    paddingVertical: 6,
+    paddingHorizontal: 11,
+  },
+  // 완료된 데이파트 = 초록 틴트 + 체크(다 했음을 한눈에).
+  dpChipDone: { backgroundColor: '#E6F1EA', borderColor: BrandColors.good },
+  dpChipText: { fontSize: 12.5, fontWeight: '800', color: InkColors.ink2 },
+  dpChipTextDone: { color: BrandColors.good },
+  // 나를 언급한 글 — 브랜드 좌측바로 멘션임을 표시(공지 strip과 형제 패턴).
+  briefMention: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: BrandColors.brandSoft,
+    borderRadius: Radius.sm,
+    borderLeftWidth: 3,
+    borderLeftColor: BrandColors.brand,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+  },
+  briefMentionText: { flex: 1, fontSize: 13, fontWeight: '700', color: InkColors.ink },
+  briefMentionMore: { fontSize: 12, fontWeight: '700', color: InkColors.ink3 },
+
   // 출퇴근
   clockCard: {
     backgroundColor: InkColors.bg,

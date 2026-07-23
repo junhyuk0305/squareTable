@@ -61,6 +61,9 @@ export default function JuniorHomeScreen() {
     taskRemain,
     unreadCount,
     latestNotice,
+    daypartStatus,
+    unreadMentionCount,
+    latestMention,
     myShiftCount,
     incomingSwaps,
   } = useJuniorHomeData();
@@ -151,6 +154,51 @@ export default function JuniorHomeScreen() {
           </Pressable>
         </View>
         </Appear>
+
+        {/* 1.5) 오늘의 매장(출근 브리핑) — 데이파트별 완료 상태 + 나를 언급한 글을 한 카드에 묶는다.
+             할일도 멘션도 없으면 통째로 숨긴다(빈 카드 방지). */}
+        {(daypartStatus.length > 0 || unreadMentionCount > 0) && (
+          <Appear delay={40} style={styles.section}>
+            <SectionLabel icon="cafe-outline" title="오늘의 매장" />
+            <View style={styles.briefCard}>
+              {daypartStatus.length > 0 && (
+                <View style={styles.briefDayparts}>
+                  {daypartStatus.map((d) => {
+                    const complete = d.done >= d.total;
+                    return (
+                      <Pressable
+                        key={d.id}
+                        onPress={() => goToTab('/junior/work?view=todo')}
+                        style={({ pressed }) => [styles.dpChip, complete && styles.dpChipDone, pressed && { opacity: 0.7 }]}
+                        accessibilityRole="button"
+                        accessibilityLabel={`${d.label} ${d.done}/${d.total}${complete ? ' 완료' : ''}`}
+                      >
+                        {complete && <Ionicons name="checkmark" size={12} color={BrandColors.good} />}
+                        <Text style={[styles.dpChipText, complete && styles.dpChipTextDone]}>
+                          {d.label} {d.done}/{d.total}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              )}
+              {unreadMentionCount > 0 && latestMention && (
+                <Pressable
+                  onPress={() => goToTab('/junior/work')}
+                  style={({ pressed }) => [styles.briefMention, pressed && { opacity: 0.85 }]}
+                  accessibilityRole="button"
+                  accessibilityLabel={`나를 언급한 글 ${unreadMentionCount}건. 확인하러 가기`}
+                >
+                  <Ionicons name="at" size={15} color={BrandColors.brand} />
+                  <Text style={styles.briefMentionText} numberOfLines={1}>
+                    {latestMention.authorName}님이 나를 언급했어요
+                  </Text>
+                  <Text style={styles.briefMentionMore}>{unreadMentionCount > 1 ? `+${unreadMentionCount - 1} ` : ''}›</Text>
+                </Pressable>
+              )}
+            </View>
+          </Appear>
+        )}
 
         {/* 2) 오늘 한눈에 — 할일·공지·근무를 한 줄 KPI로 압축(스캔). 각 칸이 해당 화면으로 진입. */}
         <Appear delay={60} style={styles.section}>
