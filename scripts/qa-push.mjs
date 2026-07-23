@@ -15,6 +15,7 @@
 //   자기제외: 발송자 본인은 recipients 에서 빠짐
 //   합류:   join_owners 는 신청자의 pending_unit_id 사장에게 (아직 소속 아님)
 //   방어:   unit 없는 유저 → 403 no_unit
+//   매장별 설정(0076): unit_member_prefs 의 muted / 방해금지(quiet)가 그 매장 발송을 억제
 //
 // 자가정리: 만든 모든 테스트 계정은 끝에 delete_my_account 로 삭제.
 // 실행: node scripts/qa-push.mjs
@@ -58,6 +59,20 @@ async function invokePush(client, body) {
   const { data: sess } = await client.auth.getSession();
   const token = sess.session?.access_token ?? ANON;
   return invokePushRaw(token, body);
+}
+// KST 현재 시각(엣지와 동일 방식) + 분 helper — '지금을 포함/제외하는' 방해금지 구간을 동적으로 만든다.
+function kstNowMin() {
+  const t = new Date().toLocaleTimeString('en-GB', { timeZone: 'Asia/Seoul', hour12: false }).slice(0, 5);
+  const [h, m] = t.split(':').map(Number);
+  return h * 60 + m;
+}
+const hhmm = (min) => { const x = ((min % 1440) + 1440) % 1440; return `${String(Math.floor(x / 60)).padStart(2, '0')}:${String(x % 60).padStart(2, '0')}`; };
+// 매장별 개인 설정 저장(0076 upsert RPC) — 본인 세션으로만 가능.
+async function saveUnitPrefs(client, unitId, { muted = false, quiet = false, start = '22:00', end = '08:00' }) {
+  return client.rpc('save_unit_member_prefs', {
+    p_unit_id: unitId, p_nickname: null, p_color: null,
+    p_muted: muted, p_quiet_enabled: quiet, p_quiet_start: start, p_quiet_end: end,
+  });
 }
 async function invokePushRaw(bearer, body) {
   const res = await fetch(PUSH_URL, {
@@ -186,6 +201,27 @@ try {
   const { data: notOwned } = await staffA1.from('push_subscriptions').select('user_id').eq('endpoint', pep).maybeSingle();
   check('T11d 이전 유저(staffA1)는 그 구독을 더 못 봄(RLS 격리)', !notOwned, `seen=${notOwned?.user_id ?? 'none'}`);
   await staffA2.from('push_subscriptions').delete().eq('endpoint', pep); // 정리(소프트삭제는 이 행을 안 지움)
+
+  // ── T12~T14 ★매장별 설정(unit_member_prefs, 0076): muted·방해금지가 그 매장 발송을 억제 ──
+  //  엣지 push 가 발송 직전 (user, scopeUnit) 행을 읽어 반영하는 계약. 배포 전이면 여기서 FAIL(전→후 증명).
+  //  기준선: ownerA→staff = staffA1+staffA2 2명(T4b에서 확인).
+  const t12s = await saveUnitPrefs(staffA2, unitA, { muted: true });
+  check('T12a save_unit_member_prefs muted=true 성공', !t12s.error, t12s.error?.message ?? '');
+  const t12 = await invokePush(ownerA, { audience: 'staff', title: '공지' });
+  check('T12b ★매장 음소거: staffA2 억제 → recipients=1', t12.status === 200 && t12.json?.recipients === 1, JSON.stringify(t12.json));
+
+  const now = kstNowMin();
+  const inStart = hhmm(now - 30), inEnd = hhmm(now + 30); // 지금을 감싸는 60분 창(자정 넘김도 엣지가 처리)
+  const t13s = await saveUnitPrefs(staffA2, unitA, { muted: false, quiet: true, start: inStart, end: inEnd });
+  check('T13a save 매장 quiet(지금 포함) 성공', !t13s.error, t13s.error?.message ?? '');
+  const t13 = await invokePush(ownerA, { audience: 'staff', title: '공지' });
+  check(`T13b ★매장 방해금지 지금 포함(${inStart}~${inEnd}): staffA2 억제 → recipients=1`, t13.status === 200 && t13.json?.recipients === 1, JSON.stringify(t13.json));
+
+  const outStart = hhmm(now + 120), outEnd = hhmm(now + 180);
+  const t14s = await saveUnitPrefs(staffA2, unitA, { muted: false, quiet: true, start: outStart, end: outEnd });
+  check('T14a save 매장 quiet(지금 제외) 성공', !t14s.error, t14s.error?.message ?? '');
+  const t14 = await invokePush(ownerA, { audience: 'staff', title: '공지' });
+  check(`T14b 매장 방해금지 지금 제외(${outStart}~${outEnd}): 억제 안 함 → recipients=2 복귀`, t14.status === 200 && t14.json?.recipients === 2, JSON.stringify(t14.json));
 
 } catch (e) {
   fail++; console.log('  FAIL exception:', e.message);

@@ -15,7 +15,8 @@
 //   기본:     선호 미설정 수신자는 기본=켜짐(발송 대상 유지)
 //   ★push off: 수신자가 push_enabled=false → 그 수신자만 recipients 에서 빠짐
 //   push on:  다시 켜면 복귀
-//   ★quiet:   지금(KST)을 포함하는 방해금지 구간 → 그 수신자 억제. 지금을 벗어난 구간 → 억제 안 함
+//   ★quiet 이관(0076): 방해금지 판정은 매장별 unit_member_prefs 로 이동 — 전역 quiet 를 지금 포함
+//             구간으로 켜도 push 는 더 이상 억제하지 않는다(매장별 억제는 qa-push T12~T14가 검증)
 //   격리:     남의 notification_prefs 는 RLS 로 못 봄 / 시간 형식 이상은 RPC 가 거부
 //
 // 자가정리: 만든 계정은 끝에 delete_my_account 로 삭제.
@@ -125,19 +126,15 @@ try {
   const t3 = await invokePush(ownerA, { audience: 'staff', title: '공지' });
   check('T3 push 재개: recipients=2 복귀', t3.status === 200 && t3.json?.recipients === 2, JSON.stringify(t3.json));
 
-  // ── T4 ★quiet(지금 포함): staffA1 방해금지 구간이 현재 KST 를 포함 → 억제 → recipients=1 ──
+  // ── T4 ★quiet 이관(0076): 전역 방해금지를 지금 포함 구간으로 켜도 push 는 억제하지 않는다 ──
+  //  방해금지 판정은 매장별 unit_member_prefs 가 새 SSOT. 이 케이스가 FAIL(recipients=1)이면
+  //  push 엣지가 아직 전역 quiet 를 읽는 구버전 = 이관 미배포의 증거다(전→후 증명).
   const now = kstNowMin();
-  const inStart = hhmm(now - 30), inEnd = hhmm(now + 30); // 지금을 감싸는 60분 창(자정 넘김도 엣지가 처리)
+  const inStart = hhmm(now - 30), inEnd = hhmm(now + 30); // 지금을 감싸는 60분 창
   const q1 = await savePrefs(staffA1, { push: true, quiet: true, start: inStart, end: inEnd });
-  check('T4a save quiet(지금 포함 구간) 성공', !q1.error, q1.error?.message ?? '');
+  check('T4a save 전역 quiet(지금 포함 구간) 성공', !q1.error, q1.error?.message ?? '');
   const t4 = await invokePush(ownerA, { audience: 'staff', title: '공지' });
-  check(`T4b ★quiet 지금 포함(${inStart}~${inEnd}): staffA1 억제 → recipients=1`, t4.status === 200 && t4.json?.recipients === 1, JSON.stringify(t4.json));
-
-  // ── T5 quiet(지금 제외): 구간을 현재에서 멀리 → 억제 안 함 → recipients=2 ──────
-  const outStart = hhmm(now + 120), outEnd = hhmm(now + 180);
-  await savePrefs(staffA1, { push: true, quiet: true, start: outStart, end: outEnd });
-  const t5 = await invokePush(ownerA, { audience: 'staff', title: '공지' });
-  check(`T5 quiet 지금 제외(${outStart}~${outEnd}): 억제 안 함 → recipients=2`, t5.status === 200 && t5.json?.recipients === 2, JSON.stringify(t5.json));
+  check(`T4b ★전역 quiet 지금 포함(${inStart}~${inEnd})이어도 발송 유지 → recipients=2(매장별로 이관됨)`, t4.status === 200 && t4.json?.recipients === 2, JSON.stringify(t4.json));
 
   // ── T6 격리: 남의 notification_prefs 는 RLS 로 못 본다 ────────────────────────
   const { data: mine } = await staffA1.from('notification_prefs').select('user_id, push_enabled').maybeSingle();
@@ -145,7 +142,7 @@ try {
   const { data: notMine } = await staffA2.from('notification_prefs').select('user_id').eq('user_id', staffA1Id).maybeSingle();
   check('T6b ★남의 선호는 RLS 로 못 봄', !notMine, `seen=${notMine?.user_id ?? 'none'}`);
 
-  // ── T7 검증: 잘못된 시간 형식은 RPC 가 거부(엣지 문자열 비교 무결성 보호) ──────
+  // ── T7 검증: 잘못된 시간 형식은 RPC 가 거부(저장 데이터 형식 무결성 — RPC 계약 유지) ──
   const bad = await savePrefs(staffA1, { push: true, quiet: true, start: '9:00', end: '08:00' });
   check('T7 시간 형식 이상(9:00) → RPC 거부', !!bad.error, bad.error?.message ?? 'no error(FAIL)');
 

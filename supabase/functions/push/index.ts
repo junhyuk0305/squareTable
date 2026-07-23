@@ -169,24 +169,38 @@ Deno.serve(async (req) => {
   recipientIds = recipientIds.filter((id) => id !== caller.id);
   if (recipientIds.length === 0) return json(200, { sent: 0, recipients: 0 });
 
-  // ── 수신자 선호 적용(notification_prefs = SSOT) — 'OS 푸시'만 억제 ─────────────────
+  // ── 수신자 선호 적용 — 'OS 푸시'만 억제 ──────────────────────────────────────────
   // 인앱 알림함(벨/목록)은 클라가 도메인 데이터에서 파생하는 별개 경로라 여기서 아무리 걸러도 그대로 뜬다.
   //   → 방해금지 = "핸드폰 알림만 안 가고 알림함엔 표시" 가 구조적으로 성립.
-  // 행이 없는 수신자는 기본값(켜짐·방해금지 꺼짐)으로 발송 대상 유지(신규 사용자 무음화 방지).
+  // 계층(0076 이관): 계정 전역 notification_prefs = 푸시 수신 on/off 만.
+  //   방해금지·음소거는 매장별 unit_member_prefs(user × unit) 로 판정 — 전역 quiet 는 여기서 더 안 본다
+  //   (기존 유저의 전역 방해금지값 무시 = 의도된 동작 변화. 매장별 설정 화면이 새 SSOT).
+  // 행이 없는 수신자는 기본값(켜짐·음소거/방해금지 꺼짐)으로 발송 대상 유지(신규 사용자 무음화 방지).
   const { data: prefRows } = await admin
     .from('notification_prefs')
-    .select('user_id, push_enabled, quiet_enabled, quiet_start, quiet_end')
+    .select('user_id, push_enabled')
     .in('user_id', recipientIds);
   const prefByUser = new Map(
-    (prefRows ?? []).map((p: { user_id: string; push_enabled: boolean; quiet_enabled: boolean; quiet_start: string; quiet_end: string }) => [p.user_id, p]),
+    (prefRows ?? []).map((p: { user_id: string; push_enabled: boolean }) => [p.user_id, p]),
+  );
+  // 매장별 개인 설정 — 발송 범위 매장(scopeUnit) 기준. join_owners 도 수신자(사장)는 scopeUnit 소속이라 동일 축.
+  const { data: unitPrefRows } = await admin
+    .from('unit_member_prefs')
+    .select('user_id, muted, quiet_enabled, quiet_start, quiet_end')
+    .eq('unit_id', scopeUnit)
+    .in('user_id', recipientIds);
+  const unitPrefByUser = new Map(
+    (unitPrefRows ?? []).map((p: { user_id: string; muted: boolean; quiet_enabled: boolean; quiet_start: string; quiet_end: string }) => [p.user_id, p]),
   );
   const nowKst = kstNowHHMM();
   const suppressed: string[] = [];
   recipientIds = recipientIds.filter((id) => {
     const p = prefByUser.get(id);
-    if (!p) return true; // 선호 미설정 = 기본 켜짐
-    if (p.push_enabled === false) { suppressed.push(id); return false; } // 알림 끔 → 발송 안 함
-    if (p.quiet_enabled && inQuietWindow(nowKst, p.quiet_start, p.quiet_end)) { suppressed.push(id); return false; } // 방해금지 시간 → 이번 발송만 스킵
+    if (p && p.push_enabled === false) { suppressed.push(id); return false; } // 계정 전역: 알림 끔 → 발송 안 함
+    const up = unitPrefByUser.get(id);
+    if (!up) return true; // 매장별 설정 없음 = 기본(발송)
+    if (up.muted) { suppressed.push(id); return false; } // 이 매장 음소거 → 발송 안 함
+    if (up.quiet_enabled && inQuietWindow(nowKst, up.quiet_start, up.quiet_end)) { suppressed.push(id); return false; } // 이 매장 방해금지 시간 → 이번 발송만 스킵
     return true;
   });
   if (recipientIds.length === 0) return json(200, { sent: 0, recipients: 0, suppressed: suppressed.length });
