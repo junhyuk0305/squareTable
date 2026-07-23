@@ -7,10 +7,14 @@ import Constants from 'expo-constants';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { usePreferencesStore, type TextScale } from '@/lib/store/usePreferencesStore';
 import { HAS_SUPABASE } from '@/lib/supabase';
+import { FREE_MODE } from '@/lib/utils/subscription';
 import { logout } from '@/lib/auth';
 import { confirmAction, notifyAction } from '@/lib/utils/confirm';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
+import { Radius } from '@/lib/theme/elevation';
 import { SettingsSection, SettingsRow, SettingsToggle } from '@/components/settings/SettingsKit';
+import { SectionLabel } from '@/components/SectionLabel';
+import { PricingTable } from '@/components/PricingTable';
 import { TextScaleModal } from '@/components/settings/TextScaleModal';
 import { ContactModal } from '@/components/ContactModal';
 import { HeaderBackButton } from '@/components/HeaderBackButton';
@@ -18,9 +22,10 @@ import { HeaderBackButton } from '@/components/HeaderBackButton';
 const SCALE_LABEL: Record<TextScale, string> = { small: '작게', normal: '보통', large: '크게' };
 
 /**
- * 전체 계정 설정 — 매장과 무관한 "계정 단위" 설정. 직원 대시보드(내 매장 허브) 우상단 프로필에서 진입.
- * 프로필·푸시 수신 동의·글자 크기·약관·고객센터·로그아웃·회원탈퇴.
- * (매장별로 갈리는 것 — 닉네임·색·방해금지·음소거·매장 나가기 — 은 각 매장 안의 '매장 설정' 탭에 있다.)
+ * 전체 계정 설정 — 매장과 무관한 "계정 단위" 설정. 사장·직원 공용, 허브(내 매장) 우상단 프로필에서 진입.
+ * 프로필·푸시 수신 동의·(사장) 구독 및 결제·글자 크기·약관·고객센터·로그아웃·회원탈퇴.
+ * (매장별로 갈리는 것 — 닉네임·색·방해금지·음소거·매장 나가기 — 은 각 매장 안의 '매장 설정' 탭에 있다.
+ *  사장 전역 항목은 F6 대칭 분리로 owner/settings 에서 여기로 일원화됐다.)
  */
 export default function AccountSettings() {
   const router = useRouter();
@@ -28,7 +33,10 @@ export default function AccountSettings() {
   const userName = useSessionStore((s) => s.userName);
   const email = useSessionStore((s) => s.email);
   const bio = useSessionStore((s) => s.bio);
+  const role = useSessionStore((s) => s.role);
+  const plan = useSessionStore((s) => s.plan);
   const deleteAccount = useSessionStore((s) => s.deleteAccount);
+  const isOwner = role === 'owner';
   const prefs = usePreferencesStore();
   const [busy, setBusy] = useState(false);
   const [scaleModal, setScaleModal] = useState(false);
@@ -43,7 +51,9 @@ export default function AccountSettings() {
   const onDelete = async () => {
     const ok = await confirmAction(
       '회원탈퇴',
-      '계정과 내 기록(질문·출퇴근)이 삭제되며 복구할 수 없어요. 정말 탈퇴하시겠어요?',
+      isOwner
+        ? '계정과 매장 데이터(노하우·직원·근무 기록)가 모두 삭제되며 복구할 수 없어요. 정말 탈퇴하시겠어요?'
+        : '계정과 내 기록(질문·출퇴근)이 삭제되며 복구할 수 없어요. 정말 탈퇴하시겠어요?',
       '탈퇴하기',
       { destructive: true, icon: 'trash-outline' },
     );
@@ -98,11 +108,48 @@ export default function AccountSettings() {
             first
             icon="notifications-outline"
             label="푸시 알림"
-            hint="사장님이 답하거나 새 공지가 오면 알려드려요 (방해 금지·매장별 알림은 각 매장 설정에서)"
+            hint={
+              isOwner
+                ? '알바가 모르는 질문을 남기면 바로 알려드려요 (방해 금지·매장별 알림은 각 매장 설정에서)'
+                : '사장님이 답하거나 새 공지가 오면 알려드려요 (방해 금지·매장별 알림은 각 매장 설정에서)'
+            }
             value={prefs.pushEnabled}
             onValueChange={savePush}
           />
         </SettingsSection>
+
+        {/* 구독 및 결제(사장만) — 계정 단위 항목이라 F6에서 owner/settings → 여기로 이동.
+            FREE_MODE(파일럿 전면 무료·출시 전 flag 숨김) 동안엔 단순 안내 행 유지. */}
+        {isOwner &&
+          (FREE_MODE ? (
+            <SettingsSection icon="card-outline" title="구독 및 결제">
+              <SettingsRow
+                first
+                icon="card-outline"
+                label="요금제"
+                value="파일럿 기간 무료"
+                onPress={() =>
+                  notifyAction('구독 및 결제', '지금은 파일럿 기간이라 무료로 쓰실 수 있어요. 월 구독 결제는 준비 중이에요.', '확인', {
+                    icon: 'card-outline',
+                  })
+                }
+              />
+            </SettingsSection>
+          ) : (
+            <View style={styles.billingSection}>
+              <SectionLabel icon="card-outline" title="구독 및 결제" />
+              <PricingTable currentPlan={plan} footNote={null} />
+              <Pressable
+                onPress={() => router.push('/billing' as never)}
+                style={({ pressed }) => [styles.billingCta, pressed && { opacity: 0.9 }]}
+                accessibilityRole="button"
+                accessibilityLabel="요금제 보기·바꾸기"
+              >
+                <Text style={styles.billingCtaText}>요금제 보기 · 바꾸기</Text>
+                <Ionicons name="chevron-forward" size={16} color={InkColors.bubbleText} />
+              </Pressable>
+            </View>
+          ))}
 
         <SettingsSection icon="phone-portrait-outline" title="화면">
           <SettingsRow first icon="text-outline" label="글자 크기" value={SCALE_LABEL[prefs.textScale]} onPress={() => setScaleModal(true)} />
@@ -142,4 +189,17 @@ const styles = StyleSheet.create({
   pName: { fontSize: 17, fontWeight: '800', color: InkColors.ink },
   pMeta: { fontSize: 13, color: InkColors.ink3, marginTop: 1 },
   foot: { fontSize: 11, color: InkColors.ink3, textAlign: 'center', marginTop: 6 },
+
+  // 구독 및 결제 — SectionLabel(카드 밖) + 요금제 표 + CTA. SettingsSection 간격(marginBottom:18)과 통일.
+  billingSection: { gap: 8, marginBottom: 18 },
+  billingCta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    backgroundColor: InkColors.ink,
+    borderRadius: Radius.md,
+    paddingVertical: 13,
+  },
+  billingCtaText: { fontSize: 14, fontWeight: '800', color: InkColors.bubbleText },
 });

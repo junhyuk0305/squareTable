@@ -11,6 +11,7 @@ import { useStaffStore } from '@/lib/store/useStaffStore';
 import { useWorkStore } from '@/lib/store/useWorkStore';
 import { useCrossNotifStore } from '@/lib/store/useCrossNotifStore';
 import { useCrossNotifRows } from '@/lib/hooks/useCrossNotifRows';
+import { useMemberPrefsStore } from '@/lib/store/useMemberPrefsStore';
 import { showToast } from '@/lib/store/useToastStore';
 import { Appear } from '@/components/Appear';
 import { MarkAllReadButton } from '@/components/MarkAllReadButton';
@@ -42,6 +43,10 @@ export default function OwnerNotificationsScreen() {
   const feed = useWorkStore((s) => s.feed);
   const markNoticeRead = useWorkStore((s) => s.markNoticeRead);
   const markAllRead = useWorkStore((s) => s.markAllRead);
+  // '모두 읽기' 기준 시각(0078) — 처리형 항목(합류·질문·제안·교대)의 배지·강조 해제 축.
+  const unitId = useSessionStore((s) => s.unitId);
+  const ackNotifs = useMemberPrefsStore((s) => s.ackNotifs);
+  const ackAt = useMemberPrefsStore((s) => (unitId ? (s.ackByUnit[unitId] ?? null) : null));
 
   // 화면에 들어올 때마다 명부·합류신청을 다시 당겨온다. profiles 실시간이 없어도(또는 앱을 켜둔 채로
   // 신청이 들어와도) 사장이 이 화면을 열면 최신 합류 신청이 반드시 보이게 하는 안전장치.
@@ -51,6 +56,7 @@ export default function OwnerNotificationsScreen() {
   //    판정·매핑·탭 동작(전환 후 읽음처리 포함)은 공용 훅(useCrossNotifRows) SSOT.
   const sessionStores = useSessionStore((s) => s.stores);
   const hydrateCross = useCrossNotifStore((s) => s.hydrate);
+  const crossLoaded = useCrossNotifStore((s) => s.loaded);
   const multiStore = sessionStores.length > 1;
   const [seg, setSeg] = useState<'store' | 'all'>('store');
   useEffect(() => {
@@ -70,19 +76,23 @@ export default function OwnerNotificationsScreen() {
         nameOf: (id) => staff.find((x) => x.id === id)?.name ?? '직원',
         feed,
         userId: me,
+        ackAt,
       }),
-    [queue, suggestions, swaps, pending, staff, feed, me],
+    [queue, suggestions, swaps, pending, staff, feed, me, ackAt],
   );
 
-  // '전체 읽음' 대상 = 읽을 수 있는(멘션) 안 읽은 알림. 합류·질문·제안·교대는 '처리'로 사라지는 실행 항목이라 제외.
+  // '모두 읽기' = ① 멘션은 read_by 기록(기존 경로) + ② 처리형(합류·질문·제안·교대)은 ack 시각(0078)으로
+  // 배지·강조 해제. 항목은 목록에 남아 계속 처리할 수 있고, 새 항목은 ack 이후라 다시 배지에 잡힌다.
   const unreadReadIds = useMemo(
     () => rows.filter((r) => r.unread && r.readFeedId).map((r) => r.readFeedId as string),
     [rows],
   );
+  const hasUnread = useMemo(() => rows.some((r) => r.unread), [rows]);
 
   function markAll() {
-    if (unreadReadIds.length === 0) return;
-    markAllRead(unreadReadIds, me);
+    if (!hasUnread) return;
+    if (unreadReadIds.length > 0) markAllRead(unreadReadIds, me);
+    if (unitId) void ackNotifs(unitId);
     showToast('모두 읽음 처리했어요', 'good');
   }
 
@@ -90,7 +100,7 @@ export default function OwnerNotificationsScreen() {
     <SafeAreaView style={styles.safe} edges={['bottom']}>
       <Stack.Screen
         // 전체 읽음은 활성 매장 것만 가능(다른 매장 read_by 는 RLS 스코프 밖) → '이 매장' 탭에서만.
-        options={{ headerRight: () => (seg === 'store' && unreadReadIds.length > 0 ? <MarkAllReadButton onPress={markAll} /> : null) }}
+        options={{ headerRight: () => (seg === 'store' && hasUnread ? <MarkAllReadButton onPress={markAll} /> : null) }}
       />
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         {/* 맨 위 — 매장명 · 사장님 이름(정체성). 직원 알림 화면과 동일 구조 */}
@@ -131,10 +141,15 @@ export default function OwnerNotificationsScreen() {
             rows={allRows}
             kindUI={KIND_UI}
             onPress={(r) => void openRow(r)}
-            empty={{
-              text: '전체 매장에 처리할 알림이 없어요.',
-              sub: '소유한 모든 매장의 합류 신청·질문·제안·교대를 여기에 모아서 보여드려요.',
-            }}
+            // 로드 전엔 "없음"으로 위장하지 않는다(로드 실패는 readFail 배너가 표면화).
+            empty={
+              crossLoaded
+                ? {
+                    text: '전체 매장에 처리할 알림이 없어요.',
+                    sub: '소유한 모든 매장의 합류 신청·질문·제안·교대를 여기에 모아서 보여드려요.',
+                  }
+                : { icon: 'notifications-outline', text: '알림을 불러오는 중이에요.' }
+            }
           />
         ) : (
           <NotificationList

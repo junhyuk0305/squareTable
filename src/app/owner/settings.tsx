@@ -3,44 +3,29 @@ import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import Constants from 'expo-constants';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useMemberPrefsStore } from '@/lib/store/useMemberPrefsStore';
-import { usePreferencesStore, type TextScale } from '@/lib/store/usePreferencesStore';
 import { storeColor } from '@/lib/utils/storeColor';
-import { FREE_MODE } from '@/lib/utils/subscription';
-import { logout } from '@/lib/auth';
-import { confirmAction, notifyAction } from '@/lib/utils/confirm';
+import { notifyAction } from '@/lib/utils/confirm';
 import { useCopyToClipboard } from '@/lib/utils/useCopyToClipboard';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { SettingsSection, SettingsRow, SettingsToggle } from '@/components/settings/SettingsKit';
-import { SectionLabel } from '@/components/SectionLabel';
-import { PricingTable } from '@/components/PricingTable';
 import { QuietHoursModal } from '@/components/settings/QuietHoursModal';
 import { PersonalizeSheet } from '@/components/settings/PersonalizeSheet';
-import { TextScaleModal } from '@/components/settings/TextScaleModal';
-import { ContactModal } from '@/components/ContactModal';
 import { RoleTabBar } from '@/components/RoleTabBar';
-import { Avatar } from '@/components/Avatar';
-import { HeaderLogoutButton } from '@/components/HeaderLogoutButton';
 
-const SCALE_LABEL: Record<TextScale, string> = { small: '작게', normal: '보통', large: '크게' };
-
+/**
+ * 매장 설정(사장) — 사장 5탭의 설정 탭. "이 매장" 단위 설정만 담는다(2레이어 IA — F6 대칭 분리).
+ * 초대코드·직원·급여·매장 닉네임·색·이 매장 알림(음소거·방해금지).
+ * 계정 전역(프로필·푸시 수신 동의·요금제·글자 크기·약관·로그아웃·탈퇴)은 '전체 계정 설정'
+ * (account-settings — 직원과 동일 화면)으로 이동했다. 직원 매장 설정(junior/settings)과 대칭.
+ */
 export default function OwnerSettings() {
   const router = useRouter();
-  const userName = useSessionStore((s) => s.userName);
-  const email = useSessionStore((s) => s.email);
   const storeName = useSessionStore((s) => s.storeName);
   const unitId = useSessionStore((s) => s.unitId);
   const inviteCode = useSessionStore((s) => s.inviteCode) || '------';
-  const plan = useSessionStore((s) => s.plan);
-  const deleteAccount = useSessionStore((s) => s.deleteAccount);
-  const prefs = usePreferencesStore();
-  const [busy, setBusy] = useState(false);
-  const [quietModal, setQuietModal] = useState(false);
-  const [scaleModal, setScaleModal] = useState(false);
-  const [contactModal, setContactModal] = useState(false);
   const { copied, copy } = useCopyToClipboard();
 
   // 매장별 개인 설정(unit_member_prefs) — 닉네임·색·이 매장 음소거·방해금지(직원 매장 설정과 동일 레이어).
@@ -52,6 +37,8 @@ export default function OwnerSettings() {
   }, [hydratePrefs]);
   const pref = prefFor(unitId ?? '');
   const color = storeColor(unitId ?? '', pref.color);
+
+  const [quietModal, setQuietModal] = useState(false);
   // 개인화 시트 draft — 부모 소유(제어형, junior/settings 와 동일 패턴).
   const [personalize, setPersonalize] = useState(false);
   const [draftName, setDraftName] = useState('');
@@ -71,68 +58,23 @@ export default function OwnerSettings() {
     }
   };
 
-  const version = Constants.expoConfig?.version ?? '1.0.0';
-
-  const onLogout = async () => {
-    if (await confirmAction('로그아웃', '로그아웃하시겠어요?', '로그아웃', { icon: 'log-out-outline' })) await logout();
-  };
-
-  const onDelete = async () => {
-    const ok = await confirmAction(
-      '회원탈퇴',
-      '계정과 매장 데이터(노하우·직원·근무 기록)가 모두 삭제되며 복구할 수 없어요. 정말 탈퇴하시겠어요?',
-      '탈퇴하기',
-      { destructive: true, icon: 'trash-outline' },
-    );
-    if (!ok) return;
-    setBusy(true);
-    const { error } = await deleteAccount();
-    setBusy(false);
-    if (error) {
-      await notifyAction('탈퇴 실패', error, '확인', { icon: 'alert-circle-outline' });
-      return;
-    }
-    router.replace('/');
-  };
-
-  // 요금제 화면(3티어 선택 + 계좌이체 안내, 0062)으로 이동 — 캡 안내문("요금제 화면에서 변경")의 실제 진입점.
-  // FREE_MODE(파일럿) 동안엔 플랜/계좌(placeholder) 노출 대신 기존 무료 안내를 유지(출시 전 flag 숨김 정책).
-  const billing = () =>
-    FREE_MODE
-      ? notifyAction('구독 및 결제', '지금은 파일럿 기간이라 무료로 쓰실 수 있어요. 월 구독 결제는 준비 중이에요.', '확인', {
-          icon: 'card-outline',
-        })
-      : router.push('/billing' as never);
-
-  // 알림 선호는 DB(SSOT)에 원자적으로 저장한다. 저장 실패 시 스토어가 이전 값으로 롤백하므로
-  // 토글이 원위치로 되돌아오고, 여기서 실패를 고지한다(설정된 듯 보이나 서버엔 없는 무음 유실 방지).
-  const saveNotify = async (patch: Parameters<typeof prefs.saveNotify>[0]) => {
-    const { error } = await prefs.saveNotify(patch);
-    if (error) {
-      await notifyAction('저장 실패', '알림 설정을 저장하지 못했어요. 연결을 확인하고 다시 시도해 주세요.', '확인', {
-        icon: 'alert-circle-outline',
-      });
-    }
-  };
-
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
-      <Stack.Screen options={{ headerShown: true, title: '설정', headerRight: () => <HeaderLogoutButton /> }} />
+      <Stack.Screen options={{ headerShown: true, title: '매장 설정' }} />
       {/* 설정탭은 의도적으로 등장 애니메이션을 쓰지 않는다 — 자주 드나드는 관리 화면이라
           매번 카드가 떠오르면 번잡함. 카드 등장 모션은 홈·물어보기·출퇴근·업무 등 콘텐츠 탭에만(Appear). */}
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        {/* 프로필 카드 자체가 '내 계정' 진입점 — 누르면 프로필 편집·비밀번호 변경 화면으로. (직원 설정과 동일) */}
+        {/* 매장 헤더 — 색 점 + 매장명 + (있으면) 내 별칭. 탭하면 개인화 시트(직원 매장 설정과 동일). */}
         <Pressable
-          onPress={() => router.push('/account-edit')}
-          style={({ pressed }) => [styles.profile, pressed && { opacity: 0.7 }]}
+          onPress={openPersonalize}
+          style={({ pressed }) => [styles.storeHead, pressed && { opacity: 0.7 }]}
           accessibilityRole="button"
-          accessibilityLabel="내 계정 — 프로필 편집·비밀번호 변경"
+          accessibilityLabel="매장 닉네임·색 설정"
         >
-          <Avatar name={userName || '사'} size={52} fontSize={22} tone="brand" />
+          <View style={[styles.colorDot, { backgroundColor: color }]} />
           <View style={{ flex: 1 }}>
-            <Text style={styles.pName}>{userName || '사장님'} 사장님</Text>
-            <Text style={styles.pMeta}>{email || '데모 계정'}</Text>
-            <Text style={styles.pMeta}>{storeName || '매장 미연결'}</Text>
+            <Text style={styles.storeName}>{pref.nickname || storeName || '내 매장'}</Text>
+            <Text style={styles.storeSub}>{pref.nickname ? storeName : '탭해서 닉네임·색을 바꿔요'}</Text>
           </View>
           <Ionicons name="chevron-forward" size={20} color={InkColors.ink3} />
         </Pressable>
@@ -153,7 +95,6 @@ export default function OwnerSettings() {
           <Ionicons name="chevron-forward" size={15} color={InkColors.ink3} />
         </Pressable>
 
-        {/* 회의 반영: '내 노하우'·'노하우 템플릿 둘러보기'는 노하우 탭과 중복 → 설정에서 제거(노하우 탭에서 진입). */}
         <SettingsSection icon="storefront-outline" title="매장 관리">
           <SettingsRow first icon="people-outline" label="직원·초대코드 관리" onPress={() => router.push('/owner/staff')} />
           <SettingsRow icon="cash-outline" label="급여 설정" onPress={() => router.push('/owner/payroll')} />
@@ -162,41 +103,10 @@ export default function OwnerSettings() {
           <SettingsRow icon="color-palette-outline" label="매장 색" valueNode={<View style={[styles.colorDotSm, { backgroundColor: color }]} />} onPress={openPersonalize} />
         </SettingsSection>
 
-        {/* 구독 및 결제 — 한 줄 요약(현재 플랜명)만으론 요금제 인지·변경 유도가 약해, 3티어 표(정가 취소선 +
-            파일럿 만원 할인 배지, 현재 플랜 강조)를 그대로 노출하고 아래에 '보기·바꾸기' CTA 를 둔다.
-            FREE_MODE(파일럿 전면 무료·출시 전 flag 숨김) 동안엔 기존 단순 안내 행을 유지한다. */}
-        {FREE_MODE ? (
-          <SettingsSection icon="card-outline" title="구독 및 결제">
-            <SettingsRow first icon="card-outline" label="요금제" value="파일럿 기간 무료" onPress={billing} />
-          </SettingsSection>
-        ) : (
-          <View style={styles.billingSection}>
-            <SectionLabel icon="card-outline" title="구독 및 결제" />
-            <PricingTable currentPlan={plan} footNote={null} />
-            <Pressable
-              onPress={billing}
-              style={({ pressed }) => [styles.billingCta, pressed && { opacity: 0.9 }]}
-              accessibilityRole="button"
-              accessibilityLabel="요금제 보기·바꾸기"
-            >
-              <Text style={styles.billingCtaText}>요금제 보기 · 바꾸기</Text>
-              <Ionicons name="chevron-forward" size={16} color={InkColors.bubbleText} />
-            </Pressable>
-          </View>
-        )}
-
-        {/* 알림 — 푸시 on/off 는 계정 전역(notification_prefs), 방해금지·음소거는 매장별(unit_member_prefs).
-            1b(0076 이관)로 push 엣지가 전역 quiet 를 더 안 읽으므로 전역 방해금지 UI 는 여기서 제거됐다. */}
-        <SettingsSection icon="notifications-outline" title="알림">
+        {/* 이 매장 알림 — 매장별(unit_member_prefs). 계정 전역 푸시 on/off 는 전체 계정 설정에. */}
+        <SettingsSection icon="notifications-outline" title="이 매장 알림">
           <SettingsToggle
             first
-            icon="notifications-outline"
-            label="푸시 알림"
-            hint="알바가 모르는 질문을 남기면 바로 알려드려요 (계정 전체)"
-            value={prefs.pushEnabled}
-            onValueChange={(v) => saveNotify({ pushEnabled: v })}
-          />
-          <SettingsToggle
             icon="notifications-off-outline"
             label="이 매장 알림 음소거"
             hint="이 매장의 핸드폰 알림을 끕니다 (알림함엔 그대로 쌓여요)"
@@ -220,25 +130,14 @@ export default function OwnerSettings() {
           ) : null}
         </SettingsSection>
 
-        <SettingsSection icon="phone-portrait-outline" title="화면">
-          <SettingsRow first icon="text-outline" label="글자 크기" value={SCALE_LABEL[prefs.textScale]} onPress={() => setScaleModal(true)} />
-        </SettingsSection>
-
-        <SettingsSection icon="document-text-outline" title="약관 및 정책">
-          <SettingsRow first icon="document-text-outline" label="이용약관" onPress={() => router.push('/terms')} />
-          <SettingsRow icon="shield-checkmark-outline" label="개인정보처리방침" onPress={() => router.push('/privacy')} />
-          {/* 사업자 정보 — 무료 파일럿 단계라 전자상거래법 §10 고지 의무 미발생. 결제(구독) 도입 전 복구할 것. */}
-          {/* <SettingsRow icon="business-outline" label="사업자 정보" onPress={() => router.push('/business-info')} /> */}
-        </SettingsSection>
-
-        <SettingsSection icon="help-buoy-outline" title="고객센터">
-          <SettingsRow first icon="chatbubble-ellipses-outline" label="문의하기" onPress={() => setContactModal(true)} />
-          <SettingsRow icon="information-circle-outline" label="버전 정보" value={`v${version}`} />
-        </SettingsSection>
-
         <SettingsSection>
-          <SettingsRow first icon="log-out-outline" label="로그아웃" onPress={onLogout} />
-          <SettingsRow icon="trash-outline" label={busy ? '처리 중…' : '회원탈퇴'} danger onPress={busy ? undefined : onDelete} />
+          <SettingsRow
+            first
+            icon="settings-outline"
+            label="전체 계정 설정"
+            hint="프로필·푸시 수신·요금제·글자 크기·약관·로그아웃"
+            onPress={() => router.push('/account-settings')}
+          />
         </SettingsSection>
 
         <Text style={styles.foot}>착착 · 팀 스퀘어테이블</Text>
@@ -265,8 +164,6 @@ export default function OwnerSettings() {
           void savePref({ nickname: draftName.trim() ? draftName.trim() : null, color: draftColor });
         }}
       />
-      <TextScaleModal visible={scaleModal} onClose={() => setScaleModal(false)} />
-      <ContactModal visible={contactModal} onClose={() => setContactModal(false)} />
       <RoleTabBar role="owner" />
     </SafeAreaView>
   );
@@ -275,9 +172,14 @@ export default function OwnerSettings() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: InkColors.cream },
   scroll: { padding: 20, paddingTop: 16 },
-  profile: { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 16, backgroundColor: InkColors.bg, borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, marginBottom: 20 },
-  pName: { fontSize: 17, fontWeight: '800', color: InkColors.ink },
-  pMeta: { fontSize: 13, color: InkColors.ink3, marginTop: 1 },
+
+  // 매장 헤더 — 직원 매장 설정(junior/settings)과 동일 규격
+  storeHead: { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 16, backgroundColor: '#FFFFFF', borderRadius: 14, borderWidth: 1, borderColor: InkColors.line, marginBottom: 20 },
+  colorDot: { width: 20, height: 20, borderRadius: 10 },
+  colorDotSm: { width: 18, height: 18, borderRadius: 9 },
+  storeName: { fontSize: 17, fontWeight: '800', color: InkColors.ink },
+  storeSub: { fontSize: 13, color: InkColors.ink3, marginTop: 2 },
+
   codeCard: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, backgroundColor: InkColors.bg, borderRadius: Radius.md, borderWidth: 1, borderColor: BrandColors.gold },
   codeLabel: { fontSize: 12, fontWeight: '700', color: InkColors.ink2 },
   codeValue: { fontSize: 26, fontWeight: '900', color: InkColors.ink, letterSpacing: 4, marginTop: 2 },
@@ -285,19 +187,5 @@ const styles = StyleSheet.create({
   codeBtnText: { fontSize: 13, fontWeight: '800', color: InkColors.ink },
   codeManage: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 12, paddingHorizontal: 4, marginBottom: 14, marginTop: 6 },
   codeManageText: { fontSize: 13, fontWeight: '700', color: InkColors.ink2 },
-  colorDotSm: { width: 18, height: 18, borderRadius: 9 },
   foot: { fontSize: 11, color: InkColors.ink3, textAlign: 'center', marginTop: 6 },
-
-  // 구독 및 결제 — SectionLabel(카드 밖) + 요금제 표 + CTA. SettingsSection 간격(marginBottom:18)과 통일.
-  billingSection: { gap: 8, marginBottom: 18 },
-  billingCta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-    backgroundColor: InkColors.ink,
-    borderRadius: Radius.md,
-    paddingVertical: 13,
-  },
-  billingCtaText: { fontSize: 14, fontWeight: '800', color: InkColors.bubbleText },
 });

@@ -7,8 +7,10 @@ import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useWorkStore } from '@/lib/store/useWorkStore';
 import { useScheduleStore } from '@/lib/store/useScheduleStore';
 import { useStaffStore } from '@/lib/store/useStaffStore';
+import { useSuggestionStore } from '@/lib/store/useSuggestionStore';
 import { useCrossNotifStore } from '@/lib/store/useCrossNotifStore';
 import { useCrossNotifRows } from '@/lib/hooks/useCrossNotifRows';
+import { useMemberPrefsStore } from '@/lib/store/useMemberPrefsStore';
 import { showToast } from '@/lib/store/useToastStore';
 import { HeaderBackButton } from '@/components/HeaderBackButton';
 import { MarkAllReadButton } from '@/components/MarkAllReadButton';
@@ -44,12 +46,20 @@ export default function JuniorNotificationsScreen() {
   const swaps = useScheduleStore((s) => s.swaps);
   const templates = useScheduleStore((s) => s.templates);
   const staff = useStaffStore((s) => s.staff);
+  // 내 제안 검토 결과(반영/반려+사유) 알림용 — 이 화면 진입 시 당긴다(내공간 밖에선 미로드일 수 있음).
+  const suggestions = useSuggestionStore((s) => s.suggestions);
+  useEffect(() => { void useSuggestionStore.getState().hydrate(); }, []);
   const today = todayStr();
+  // '모두 읽기' 기준 시각(0078) — read 개념이 없는 배정·교대의 배지·강조 해제 축.
+  const unitId = useSessionStore((s) => s.unitId);
+  const ackNotifs = useMemberPrefsStore((s) => s.ackNotifs);
+  const ackAt = useMemberPrefsStore((s) => (unitId ? (s.ackByUnit[unitId] ?? null) : null));
 
   // ── 통합 알림(전체 매장, 0077) — 다점포 소속일 때만 세그먼트 노출.
   //    판정·매핑·탭 동작(전환 후 읽음처리 포함)은 공용 훅(useCrossNotifRows) SSOT.
   const sessionStores = useSessionStore((s) => s.stores);
   const hydrateCross = useCrossNotifStore((s) => s.hydrate);
+  const crossLoaded = useCrossNotifStore((s) => s.loaded);
   const multiStore = sessionStores.length > 1;
   const [seg, setSeg] = useState<'store' | 'all'>('store');
   useEffect(() => {
@@ -68,21 +78,25 @@ export default function JuniorNotificationsScreen() {
         today,
         taskTemplates,
         done,
+        ackAt,
+        suggestions,
       }),
-    [feed, swaps, templates, staff, me, today, taskTemplates, done],
+    [feed, swaps, templates, staff, me, today, taskTemplates, done, ackAt, suggestions],
   );
 
   const initial = (userName ?? '나').trim().slice(0, 1) || '나';
 
-  // '전체 읽음' 대상 = 읽을 수 있는(공지·멘션) 안 읽은 알림의 피드 id. 배정·교대는 read 개념이 없어 제외.
+  // '모두 읽기' = ① 공지·멘션은 read_by 기록(기존 경로) + ② 배정·교대는 ack 시각(0078)으로 강조 해제.
   const unreadReadIds = useMemo(
     () => rows.filter((r) => r.unread && r.readFeedId).map((r) => r.readFeedId as string),
     [rows],
   );
+  const hasUnread = useMemo(() => rows.some((r) => r.unread), [rows]);
 
   function markAll() {
-    if (unreadReadIds.length === 0) return;
-    markAllRead(unreadReadIds, me);
+    if (!hasUnread) return;
+    if (unreadReadIds.length > 0) markAllRead(unreadReadIds, me);
+    if (unitId) void ackNotifs(unitId);
     showToast('모두 읽음 처리했어요', 'good');
   }
 
@@ -93,7 +107,7 @@ export default function JuniorNotificationsScreen() {
           title: '알림',
           headerLeft: () => <HeaderBackButton fallback="/junior/home" />,
           // 전체 읽음은 활성 매장 것만 가능(다른 매장 read_by 는 RLS 스코프 밖) → '이 매장' 탭에서만.
-          headerRight: () => (seg === 'store' && unreadReadIds.length > 0 ? <MarkAllReadButton onPress={markAll} /> : null),
+          headerRight: () => (seg === 'store' && hasUnread ? <MarkAllReadButton onPress={markAll} /> : null),
         }}
       />
 
@@ -143,11 +157,16 @@ export default function JuniorNotificationsScreen() {
             rows={allRows}
             kindUI={KIND_UI}
             onPress={(r) => void openRow(r)}
-            empty={{
-              icon: 'notifications-off-outline',
-              text: '전체 매장에 새 알림이 없어요.',
-              sub: '소속된 모든 매장의 공지·교대 요청을 여기에 모아서 보여드려요.',
-            }}
+            // 로드 전엔 "없음"으로 위장하지 않는다(로드 실패는 readFail 배너가 표면화).
+            empty={
+              crossLoaded
+                ? {
+                    icon: 'notifications-off-outline',
+                    text: '전체 매장에 새 알림이 없어요.',
+                    sub: '소속된 모든 매장의 공지·교대 요청을 여기에 모아서 보여드려요.',
+                  }
+                : { icon: 'notifications-outline', text: '알림을 불러오는 중이에요.' }
+            }
           />
         ) : (
           <NotificationList

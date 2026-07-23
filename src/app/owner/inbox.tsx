@@ -15,7 +15,6 @@ import { EmptyState } from '@/components/EmptyState';
 import { useUnknownQueueStore } from '@/lib/store/useUnknownQueueStore';
 import { useSuggestionStore } from '@/lib/store/useSuggestionStore';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
-import { useSessionStore } from '@/lib/store/useSessionStore';
 
 import { BrandColors, InkColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
@@ -45,7 +44,6 @@ export default function OwnerInboxScreen() {
   const enableAutoAnswer = useUnknownQueueStore((s) => s.enableAutoAnswer);
 
   const entries = usePlaybookStore((s) => s.entries);
-  const userName = useSessionStore((s) => s.userName);
   const getStaff = useStaffStore((s) => s.getStaff);
 
   // 노하우 제안(알바→사장) — 받은질문과 함께 '직원 인풋' 허브로. 진입 시 당겨오고 실시간 구독.
@@ -98,7 +96,8 @@ export default function OwnerInboxScreen() {
 
   return (
     <SafeAreaView edges={['bottom']} style={styles.safe}>
-      <Stack.Screen options={{ title: `${userName} 사장님` }} />
+      {/* 헤더 = 화면 이름(탭과 일치). 사용자 정체성은 알림 화면 정체성 카드·설정에 있다. */}
+      <Stack.Screen options={{ title: '받은 질문' }} />
 
       {!loaded ? (
         <View style={styles.loadingWrap}>

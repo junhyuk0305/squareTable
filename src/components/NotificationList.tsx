@@ -17,6 +17,8 @@ export const JUNIOR_KIND_UI: Record<JuniorNotifKind, { icon: IconName; tint: str
   swap: { icon: 'swap-horizontal', tint: BrandColors.accentSoft },
   swap_approved: { icon: 'checkmark-circle', tint: '#E4F2E8' },
   swap_rejected: { icon: 'close-circle', tint: BrandColors.accentSoft },
+  suggestion_approved: { icon: 'bulb', tint: '#E4F2E8' },
+  suggestion_rejected: { icon: 'bulb', tint: BrandColors.accentSoft },
 };
 export const OWNER_KIND_UI: Record<OwnerNotifKind, { icon: IconName; tint: string }> = {
   join_request: { icon: 'person-add', tint: BrandColors.yellowSoft },

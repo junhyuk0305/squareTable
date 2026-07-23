@@ -99,6 +99,10 @@ const TENANT_TABLES = ['playbook_entries','chat_queries','unknown_queries','work
     ok(!!s.error && /not_a_member/.test(s.error.message||''), `A→B.unit prefs 저장 거부(not_a_member)`, s.error?`(${s.error.message.slice(0,40)})`:'RESP(누출)'); }
   { const f = await A.c.from('unit_member_prefs').insert({ user_id:B.uid, unit_id:A.unit, muted:true }).select();
     ok(!!f.error || (f.data?.length||0)===0, `A→B.user_id prefs 위조삽입 거부`, f.error?`(err ${f.error.code})`:`inserted=${f.data?.length}`); }
+  // ★0079: RPC 우회(PostgREST 직접 upsert)로 "비소속 매장"에 자기 행 생성 시도 — RLS 단독으로 거부돼야 한다.
+  //  (0076~0078 은 RPC 계층 가드뿐이라 이 경로가 뚫렸었다 — RLS=유일 방어선 불변식의 전→후 증명 케이스.)
+  { const f = await A.c.from('unit_member_prefs').upsert({ user_id:A.uid, unit_id:B.unit, muted:true }).select();
+    ok(!!f.error || (f.data?.length||0)===0, `★A→B.unit 비소속 prefs 직접upsert 거부(0079 RLS)`, f.error?`(err ${f.error.code})`:`inserted=${f.data?.length}(누출)`); }
 
   // ── my_units_notif_data (통합 알림, 0077) — definer RLS 우회 경로의 멤버십 스코프 격리 ──
   { const today = new Date().toISOString().slice(0,10);

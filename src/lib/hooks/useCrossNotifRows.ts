@@ -9,7 +9,8 @@ import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useCrossNotifStore } from '@/lib/store/useCrossNotifStore';
 import { useMemberPrefsStore } from '@/lib/store/useMemberPrefsStore';
 import { useWorkStore } from '@/lib/store/useWorkStore';
-import { buildStoreNotifs, mergeCrossNotifs, storeUnreadCount, type CrossNotifRow } from '@/lib/utils/crossStoreNotifs';
+import { showToast } from '@/lib/store/useToastStore';
+import { buildStoreNotifs, mergeCrossNotifs, storeUnreadCount } from '@/lib/utils/crossStoreNotifs';
 import { storeColor } from '@/lib/utils/storeColor';
 import { todayStr } from '@/lib/utils/attendance';
 import type { NotifRow } from '@/components/NotificationList';
@@ -27,21 +28,22 @@ export function useCrossNotifRows() {
   const [switching, setSwitching] = useState(false);
 
   const today = todayStr();
-  // 매장별 역할/표시명 — sessionStores(my_units) 가 SSOT. 미로드 시 전역 role 폴백(재렌더로 자기교정).
-  const roleOf = (uid: string) => sessionStores.find((u) => u.unit_id === uid)?.role ?? role;
+  // 매장 표시명 — 닉네임(unit_member_prefs) 우선, sessionStores(my_units)가 원본명 SSOT.
   const labelOf = (uid: string) =>
     prefFor(uid).nickname || sessionStores.find((u) => u.unit_id === uid)?.store_name || '매장';
 
+  const ackByUnit = useMemberPrefsStore((s) => s.ackByUnit);
   const { rows, unreadByUnit, totalUnread } = useMemo(() => {
     const rOf = (uid: string) => sessionStores.find((u) => u.unit_id === uid)?.role ?? role;
+    const ackOf = (uid: string) => ackByUnit[uid] ?? null; // 매장별 '모두 읽기' 기준(0078)
     const unreadByUnit: Record<string, number> = {};
-    for (const d of crossData) unreadByUnit[d.unitId] = storeUnreadCount(d, rOf(d.unitId), me, today);
+    for (const d of crossData) unreadByUnit[d.unitId] = storeUnreadCount(d, rOf(d.unitId), me, today, ackOf(d.unitId));
     return {
-      rows: mergeCrossNotifs(crossData.map((d) => buildStoreNotifs(d, rOf(d.unitId), me, today))),
+      rows: mergeCrossNotifs(crossData.map((d) => buildStoreNotifs(d, rOf(d.unitId), me, today, ackOf(d.unitId)))),
       unreadByUnit,
       totalUnread: Object.values(unreadByUnit).reduce((a, b) => a + b, 0),
     };
-  }, [crossData, sessionStores, role, me, today]);
+  }, [crossData, sessionStores, role, me, today, ackByUnit]);
 
   /** NotificationList 에 바로 넣을 행(매장 점·이름 칩 포함). */
   const listRows: (NotifRow & { unitId: string })[] = rows.map((r) => ({
@@ -59,8 +61,13 @@ export function useCrossNotifRows() {
     if (switching || !row.unitId) return;
     if (row.unitId !== unitId) {
       setSwitching(true);
-      await switchUnit(row.unitId);
+      const { error } = await switchUnit(row.unitId);
       setSwitching(false);
+      // 전환 실패 시 이동하지 않는다 — 이전 매장 화면을 "그 매장인 줄 알고" 보게 되는 무음 오류 방지.
+      if (error) {
+        showToast(error, 'warn');
+        return;
+      }
       if (row.readFeedId) void markFeedRead(row.unitId, row.readFeedId, me);
     } else if (row.readFeedId) {
       const inWork = !!useWorkStore.getState().feed.find((f) => f.id === row.readFeedId);
@@ -70,7 +77,6 @@ export function useCrossNotifRows() {
     if (row.route) router.push(row.route as Href);
   };
 
-  return { rows, listRows, unreadByUnit, totalUnread, labelOf, roleOf, openRow, switching };
+  // 반환 = 소비처(4화면)가 실제 쓰는 것만(죽은 export 금지 — 2026-07-24 효율 리뷰).
+  return { listRows, unreadByUnit, totalUnread, openRow };
 }
-
-export type { CrossNotifRow };

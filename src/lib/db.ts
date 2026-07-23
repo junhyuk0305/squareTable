@@ -196,7 +196,11 @@ export type UnitNotifData = {
 export async function fetchCrossStoreNotifData(): Promise<DbResult<UnitNotifData[]>> {
   if (!HAS_SUPABASE) return { data: [], error: null };
   const { data, error } = await supabase.rpc('my_units_notif_data');
-  if (error) return { data: null, error: error as DbErr };
+  if (error) {
+    // 비활성 매장 처리 큐(합류·질문 등)의 유일 경로 — 실패를 빈 뱃지로 위장하지 않는다(readFail SSOT).
+    readFail('fetchCrossStoreNotifData', error);
+    return { data: null, error: error as DbErr };
+  }
   const byUnit = new Map<string, UnitNotifData>();
   const bundle = (unitId: string): UnitNotifData => {
     let b = byUnit.get(unitId);
@@ -276,13 +280,20 @@ export type UnitMemberPrefsRow = {
   quiet_enabled: boolean;
   quiet_start: string; // "HH:MM"
   quiet_end: string; // "HH:MM"
+  /** 알림 '모두 읽기' 기준 시각(0078) — 이 시각 이전 항목은 배지·강조 제외. 저장은 ackNotifications 로만. */
+  notif_ack_at?: string | null;
 };
 export async function fetchMemberPrefs(): Promise<DbResult<UnitMemberPrefsRow[]>> {
   if (!HAS_SUPABASE) return { data: null, error: null };
   const { data, error } = await supabase
     .from('unit_member_prefs')
-    .select('unit_id, nickname, color, muted, quiet_enabled, quiet_start, quiet_end');
+    .select('unit_id, nickname, color, muted, quiet_enabled, quiet_start, quiet_end, notif_ack_at');
   return { data: (data as UnitMemberPrefsRow[]) ?? null, error: error as DbErr };
+}
+/** 알림 '모두 읽기'(0078) — 내 (user, unit) 행의 notif_ack_at 을 지금으로. */
+export async function ackNotifications(unitId: string): Promise<boolean> {
+  if (!HAS_SUPABASE) return true;
+  return write('ackNotifications', supabase.rpc('ack_notifications', { p_unit_id: unitId }));
 }
 export async function saveMemberPrefs(p: UnitMemberPrefsRow): Promise<{ error: DbErr }> {
   if (!HAS_SUPABASE) return { error: null };

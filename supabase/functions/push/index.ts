@@ -176,19 +176,23 @@ Deno.serve(async (req) => {
   //   방해금지·음소거는 매장별 unit_member_prefs(user × unit) 로 판정 — 전역 quiet 는 여기서 더 안 본다
   //   (기존 유저의 전역 방해금지값 무시 = 의도된 동작 변화. 매장별 설정 화면이 새 SSOT).
   // 행이 없는 수신자는 기본값(켜짐·음소거/방해금지 꺼짐)으로 발송 대상 유지(신규 사용자 무음화 방지).
-  const { data: prefRows } = await admin
+  // 선호 조회 실패 = fail-open(전원 발송) — 과알림이 무음 드롭보다 안전. 단 조용히 넘기지 않고
+  // 로그를 남긴다(스키마 드리프트가 나도 엣지 로그로 감지 가능 — 2026-07-24 리뷰 반영).
+  const { data: prefRows, error: prefErr } = await admin
     .from('notification_prefs')
     .select('user_id, push_enabled')
     .in('user_id', recipientIds);
+  if (prefErr) console.error('[push] notification_prefs read failed (fail-open):', prefErr.message);
   const prefByUser = new Map(
     (prefRows ?? []).map((p: { user_id: string; push_enabled: boolean }) => [p.user_id, p]),
   );
   // 매장별 개인 설정 — 발송 범위 매장(scopeUnit) 기준. join_owners 도 수신자(사장)는 scopeUnit 소속이라 동일 축.
-  const { data: unitPrefRows } = await admin
+  const { data: unitPrefRows, error: unitPrefErr } = await admin
     .from('unit_member_prefs')
     .select('user_id, muted, quiet_enabled, quiet_start, quiet_end')
     .eq('unit_id', scopeUnit)
     .in('user_id', recipientIds);
+  if (unitPrefErr) console.error('[push] unit_member_prefs read failed (fail-open):', unitPrefErr.message);
   const unitPrefByUser = new Map(
     (unitPrefRows ?? []).map((p: { user_id: string; muted: boolean; quiet_enabled: boolean; quiet_start: string; quiet_end: string }) => [p.user_id, p]),
   );

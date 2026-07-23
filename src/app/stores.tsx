@@ -7,16 +7,17 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useMemberPrefsStore } from '@/lib/store/useMemberPrefsStore';
 import { useCrossNotifStore } from '@/lib/store/useCrossNotifStore';
+import { showToast } from '@/lib/store/useToastStore';
 import { needsProfileSetup } from '@/lib/store/profileSetup';
 import { HAS_SUPABASE } from '@/lib/supabase';
 import { storeColor } from '@/lib/utils/storeColor';
 import { useCrossNotifRows } from '@/lib/hooks/useCrossNotifRows';
-import { NotificationList, ALL_KIND_UI } from '@/components/NotificationList';
+import { BellButton } from '@/components/NotificationBell';
 import { fetchOwnerOverview, type MyUnitRow, type OwnerOverviewRow } from '@/lib/db';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
-import { PLANS, planMonthlyPrice, canUseMultistore } from '@/lib/config/tiers';
+import { canUseMultistore } from '@/lib/config/tiers';
 import { Wordmark } from '@/components/Wordmark';
 import { Appear } from '@/components/Appear';
 import { SectionLabel } from '@/components/SectionLabel';
@@ -69,7 +70,7 @@ export default function StoresHub() {
   useEffect(() => {
     void hydrateCross();
   }, [hydrateCross]);
-  const { listRows, unreadByUnit, totalUnread, openRow } = useCrossNotifRows();
+  const { unreadByUnit, totalUnread } = useCrossNotifRows();
 
   // 사장 매장 카드 지표(직원·노하우·확인필요) — 통합뷰 RPC 1회. 실패해도 카드는 그대로.
   useEffect(() => {
@@ -90,24 +91,24 @@ export default function StoresHub() {
     // 이미 활성 매장이면 전환 없이 바로 진입. 다른 매장이면 활성 전환 후 진입.
     if (u.unit_id !== unitId) {
       setSwitching(u.unit_id);
-      await switchUnit(u.unit_id);
+      const { error } = await switchUnit(u.unit_id);
       setSwitching(null);
+      // 전환 실패 시 진입하지 않는다 — 이전 매장을 "선택한 매장인 줄 알고" 보게 되는 무음 오류 방지.
+      if (error) {
+        showToast(error, 'warn');
+        return;
+      }
     }
     router.replace(isOwner ? '/owner/dashboard' : '/junior/home');
   };
 
   const addStore = () => router.push(canUseMultistore(plan) ? '/owner/create-store' : '/billing');
   const joinStore = () => router.push('/junior/hub');
-  // 직원 대시보드 우상단 프로필 → 전체 계정 설정(매장 무관). 매장별 설정은 매장 안 '매장 설정' 탭.
-  const openSettings = () => router.push(isOwner ? '/owner/settings' : '/account-settings');
+  // 허브 우상단 프로필 → 전체 계정 설정(매장 무관, 사장·직원 공용 — F6 대칭 분리).
+  // 매장별 설정은 매장 안 '매장 설정' 탭.
+  const openSettings = () => router.push('/account-settings');
 
-  const planDef = PLANS[plan];
   const storeCount = stores.length;
-  const planPrice = planMonthlyPrice(plan, storeCount);
-  const planLine =
-    plan === 'free'
-      ? `무료 플랜 · 매장 ${storeCount}곳`
-      : `${planDef.name} 플랜 · 매장 ${storeCount}곳 · 월 ${planPrice.toLocaleString('ko-KR')}원`;
 
   // 게이트(index.tsx와 동일 규칙): 미로그인 → 랜딩, 프로필 미완성 → 완성화면.
   // 루트 레벨이라 owner/junior 그룹 게이트를 안 타므로 여기서 직접 지킨다.
@@ -121,14 +122,17 @@ export default function StoresHub() {
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
       <Stack.Screen options={{ headerShown: false }} />
       <ScrollView contentContainerStyle={styles.scroll}>
-        {/* 상단 바: 워드마크 + 프로필(설정 진입) */}
+        {/* 상단 바: 워드마크 + 알림 벨(통합 알림, 매장 내 벨과 동일 패턴) + 프로필(설정 진입) */}
         <View style={styles.topbar}>
           <Wordmark size="sm" />
-          <Pressable onPress={openSettings} hitSlop={8} style={({ pressed }) => [styles.avaBtn, pressed && { opacity: 0.7 }]}>
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>{(userName || '?').slice(0, 1)}</Text>
-            </View>
-          </Pressable>
+          <View style={styles.topbarRight}>
+            <BellButton count={totalUnread} edge={false} onPress={() => router.push('/notifications')} />
+            <Pressable onPress={openSettings} hitSlop={8} style={({ pressed }) => [styles.avaBtn, pressed && { opacity: 0.7 }]}>
+              <View style={styles.avatar}>
+                <Text style={styles.avatarText}>{(userName || '?').slice(0, 1)}</Text>
+              </View>
+            </Pressable>
+          </View>
         </View>
 
         {/* 제목 */}
@@ -221,39 +225,7 @@ export default function StoresHub() {
               </View>
             </Appear>
 
-            {/* ── 통합 알림(0077): 전 매장 알림을 허브에서 한눈에. 탭=그 매장으로 전환 후 이동 ── */}
-            {listRows.length > 0 && (
-              <Appear delay={90}>
-                <View style={styles.section}>
-                  <SectionLabel title="알림" hint={totalUnread > 0 ? `안읽음 ${totalUnread}` : undefined} />
-                  <NotificationList
-                    rows={listRows}
-                    kindUI={ALL_KIND_UI}
-                    onPress={(r) => void openRow(r)}
-                    empty={{ text: '새 알림이 없어요.' }}
-                  />
-                </View>
-              </Appear>
-            )}
-
-            {/* ── 요금제(사장만): 현재 플랜만 조용히. 변경은 설정에서 ── */}
-            {isOwner && (
-              <Appear delay={120}>
-                <View style={styles.section}>
-                  <SectionLabel title="요금제" />
-                  <Pressable onPress={openSettings} style={({ pressed }) => [styles.planQuiet, pressed && { opacity: 0.85 }]}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.planName}>{plan === 'free' ? '무료 플랜 이용 중' : `${planDef.name} 플랜 이용 중`}</Text>
-                      <Text style={styles.planSub}>{planLine}</Text>
-                    </View>
-                    <View style={styles.planEdit}>
-                      <Text style={styles.planEditText}>설정에서 변경</Text>
-                      <Ionicons name="chevron-forward" size={15} color={InkColors.ink3} />
-                    </View>
-                  </Pressable>
-                </View>
-              </Appear>
-            )}
+            {/* 요금제는 허브에 노출하지 않는다 — 확인·변경은 전체 계정 설정(구독 및 결제)에서. */}
           </>
         )}
       </ScrollView>
@@ -272,8 +244,20 @@ const styles = StyleSheet.create({
   scroll: { padding: Space.gutter, gap: Space.xl, paddingBottom: 40 },
 
   topbar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  topbarRight: { flexDirection: 'row', alignItems: 'center', gap: Space.md },
   avaBtn: { padding: 2 },
-  avatar: { width: 36, height: 36, borderRadius: 18, backgroundColor: InkColors.ink, alignItems: 'center', justifyContent: 'center' },
+  // 설정 진입점(프로필 앞글자) — 흰 테두리 + 그림자(입체)로 "누르는 버튼"임을 드러낸다.
+  avatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: InkColors.ink,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    ...Elevation.e2,
+  },
   avatarText: { color: '#FFFFFF', fontSize: 14, fontWeight: '900' },
 
   titleBlock: { gap: 4 },
@@ -320,22 +304,6 @@ const styles = StyleSheet.create({
   addIcon: { width: 46, height: 46, borderRadius: Radius.md, backgroundColor: InkColors.bgSoft, alignItems: 'center', justifyContent: 'center' },
   addTitle: { fontSize: 15, fontWeight: '900', color: InkColors.ink },
   addSub: { fontSize: 12, color: InkColors.ink2, marginTop: 2 },
-
-  planQuiet: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.md,
-    backgroundColor: '#FFFFFF',
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: InkColors.line,
-    padding: Space.lg,
-    ...Elevation.e1,
-  },
-  planName: { fontSize: 14, fontWeight: '900', color: InkColors.ink },
-  planSub: { fontSize: 12, color: InkColors.ink2, marginTop: 2 },
-  planEdit: { flexDirection: 'row', alignItems: 'center', gap: 1 },
-  planEditText: { fontSize: 12, fontWeight: '700', color: InkColors.ink3 },
 
   empty: { alignItems: 'center', paddingVertical: Space.xl, gap: Space.md },
   emptyIcon: { width: 64, height: 64, borderRadius: Radius.lg, backgroundColor: BrandColors.yellowSoft, alignItems: 'center', justifyContent: 'center' },
