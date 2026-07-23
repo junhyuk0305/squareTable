@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, Pressable, ScrollView, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter, Redirect } from 'expo-router';
@@ -6,9 +6,12 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useMemberPrefsStore } from '@/lib/store/useMemberPrefsStore';
+import { useCrossNotifStore } from '@/lib/store/useCrossNotifStore';
 import { needsProfileSetup } from '@/lib/store/profileSetup';
 import { HAS_SUPABASE } from '@/lib/supabase';
 import { storeColor } from '@/lib/utils/storeColor';
+import { storeUnreadCount } from '@/lib/utils/crossStoreNotifs';
+import { todayStr } from '@/lib/utils/attendance';
 import { fetchOwnerOverview, type MyUnitRow, type OwnerOverviewRow } from '@/lib/db';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
@@ -60,6 +63,21 @@ export default function StoresHub() {
   useEffect(() => {
     void hydratePrefs();
   }, [hydratePrefs]);
+
+  // 통합 알림(0077) — 매장 카드 안읽음 뱃지. 판정은 매장별 역할로 기존 카운터 재사용(crossStoreNotifs).
+  const crossData = useCrossNotifStore((s) => s.data);
+  const hydrateCross = useCrossNotifStore((s) => s.hydrate);
+  useEffect(() => {
+    void hydrateCross();
+  }, [hydrateCross]);
+  const userId = useSessionStore((s) => s.userId);
+  const unreadByUnit = useMemo(() => {
+    const today = todayStr();
+    const roleOf = (uid: string) => sessionStores.find((u) => u.unit_id === uid)?.role ?? role;
+    const map: Record<string, number> = {};
+    for (const d of crossData) map[d.unitId] = storeUnreadCount(d, roleOf(d.unitId), userId, today);
+    return map;
+  }, [crossData, sessionStores, role, userId]);
 
   // 사장 매장 카드 지표(직원·노하우·확인필요) — 통합뷰 RPC 1회. 실패해도 카드는 그대로.
   useEffect(() => {
@@ -184,8 +202,9 @@ export default function StoresHub() {
                         </Text>
                       </View>
                       <View style={styles.cardRight}>
-                        {isOwner && ov && ov.pending_q > 0 && (
-                          <Text style={styles.needChip}>확인필요 {ov.pending_q}</Text>
+                        {/* 통합 안읽음 뱃지(0077) — 기존 '확인필요(pending_q만)' 칩을 매장별 전체 안읽음으로 확장(지표 병존 금지). */}
+                        {(unreadByUnit[s.unit_id] ?? 0) > 0 && (
+                          <Text style={styles.needChip}>알림 {unreadByUnit[s.unit_id]}</Text>
                         )}
                         {busy ? (
                           <ActivityIndicator size="small" color={InkColors.ink3} />

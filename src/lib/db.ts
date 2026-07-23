@@ -177,6 +177,52 @@ export async function fetchOwnerOverview(): Promise<DbResult<OwnerOverviewRow[]>
   return { data: (data as OwnerOverviewRow[]) ?? null, error: error as DbErr };
 }
 
+// ── 통합 알림(0077) — 소속 전 매장의 알림 '원시 행' → 매장별 도메인 타입 묶음 ──────────
+// 판정(안읽음·대기)은 클라 notifications.ts SSOT — 여기선 행→타입 매핑만(기존 매퍼 재사용).
+// RLS 가 활성 매장만 노출하므로 definer RPC 로만 가능(멤버십 검증·방 격리는 RPC 내부).
+export type UnitNotifData = {
+  unitId: string;
+  feed: FeedItem[];
+  swaps: SwapRequest[];
+  taskTemplates: TaskTemplate[];
+  done: Record<string, Record<string, DoneMark>>;
+  /** userId → 이름(nameOf 용, 소속 매장 명부와 동일 노출 범위). */
+  names: Record<string, string>;
+  // 사장 매장만 채워짐(직원 매장은 빈 배열).
+  queue: UnknownQuery[];
+  suggestions: PlaybookSuggestion[];
+  pending: { id: string; name: string; phone_last4: string; created_at: string }[];
+};
+export async function fetchCrossStoreNotifData(): Promise<DbResult<UnitNotifData[]>> {
+  if (!HAS_SUPABASE) return { data: [], error: null };
+  const { data, error } = await supabase.rpc('my_units_notif_data');
+  if (error) return { data: null, error: error as DbErr };
+  const byUnit = new Map<string, UnitNotifData>();
+  const bundle = (unitId: string): UnitNotifData => {
+    let b = byUnit.get(unitId);
+    if (!b) {
+      b = { unitId, feed: [], swaps: [], taskTemplates: [], done: {}, names: {}, queue: [], suggestions: [], pending: [] };
+      byUnit.set(unitId, b);
+    }
+    return b;
+  };
+  for (const r of (data ?? []) as { unit_id: string; source: string; payload: any }[]) {
+    const b = bundle(r.unit_id);
+    const p = r.payload;
+    switch (r.source) {
+      case 'feed': b.feed.push(p as FeedItem); break;
+      case 'swap': b.swaps.push(mapSwapRow(p)); break;
+      case 'template': b.taskTemplates.push(mapTemplateRow(p)); break;
+      case 'done': (b.done[p.work_date] ??= {})[p.template_id] = p.data as DoneMark; break;
+      case 'member': b.names[p.id] = p.name ?? ''; break;
+      case 'uq': b.queue.push(p as UnknownQuery); break;
+      case 'sugg': b.suggestions.push(p as PlaybookSuggestion); break;
+      case 'join': b.pending.push({ id: p.id, name: p.name ?? '', phone_last4: p.phone_last4 ?? '', created_at: p.created_at ?? '' }); break;
+    }
+  }
+  return { data: [...byUnit.values()], error: null };
+}
+
 /** 매장 하나 삭제(오너 전용, 안전장치는 RPC 내부: 마지막매장·직원존재 차단·포인터 재지정·cascade). */
 export async function rpcDeleteStore(unitId: string): Promise<{ error: DbErr }> {
   const { error } = await supabase.rpc('delete_store', { p_unit_id: unitId });
@@ -799,15 +845,9 @@ export function subscribeRooms(onChange: () => void): () => void {
 }
 
 // ── 업무보드: 할일 템플릿 ──────────────────────────────────
-export async function fetchTemplates(): Promise<TaskTemplate[]> {
-  if (!HAS_SUPABASE) return [];
-  // select('*') — 0013 마이그레이션 적용 전후 모두 안전(없는 컬럼은 undefined).
-  const { data, error } = await supabase.from('work_templates').select('*').order('created_at');
-  if (error) {
-    readFail('fetchTemplates', error);
-    return [];
-  }
-  return (data ?? []).map((r: any) => ({
+// 행→TaskTemplate 매핑 SSOT — fetchTemplates(활성 매장)와 fetchCrossStoreNotifData(0077)가 공유.
+function mapTemplateRow(r: any): TaskTemplate {
+  return {
     id: r.id,
     section: r.section,
     text: r.text,
@@ -821,7 +861,17 @@ export async function fetchTemplates(): Promise<TaskTemplate[]> {
     ...(r.date ? { date: r.date as string } : r.due_date ? { date: r.due_date as string } : null),
     // 배정 시각 — 배정 알림 정렬 기준(없으면 매일 상단 고정 버그). DB default now() 라 항상 존재.
     ...(r.created_at ? { createdAt: r.created_at as string } : null),
-  })) as TaskTemplate[];
+  } as TaskTemplate;
+}
+export async function fetchTemplates(): Promise<TaskTemplate[]> {
+  if (!HAS_SUPABASE) return [];
+  // select('*') — 0013 마이그레이션 적용 전후 모두 안전(없는 컬럼은 undefined).
+  const { data, error } = await supabase.from('work_templates').select('*').order('created_at');
+  if (error) {
+    readFail('fetchTemplates', error);
+    return [];
+  }
+  return (data ?? []).map(mapTemplateRow);
 }
 export async function insertTemplate(t: TaskTemplate): Promise<boolean> {
   if (!HAS_SUPABASE) return true;
@@ -1205,17 +1255,9 @@ export async function saveStaffShifts(
   return true;
 }
 
-export async function fetchSwaps(): Promise<SwapRequest[]> {
-  if (!HAS_SUPABASE) return [];
-  const { data, error } = await supabase
-    .from('swap_requests')
-    .select('*')
-    .order('created_at', { ascending: false });
-  if (error) {
-    readFail('fetchSwaps', error);
-    return [];
-  }
-  return (data ?? []).map((r: any) => ({
+// 행→SwapRequest 매핑 SSOT — fetchSwaps(활성 매장)와 fetchCrossStoreNotifData(0077)가 공유.
+function mapSwapRow(r: any): SwapRequest {
+  return {
     id: r.id,
     kind: r.kind,
     requester_id: r.requester_id,
@@ -1229,7 +1271,19 @@ export async function fetchSwaps(): Promise<SwapRequest[]> {
     accepted_by: r.accepted_by ?? undefined,
     created_at: r.created_at,
     updated_at: r.updated_at,
-  })) as SwapRequest[];
+  } as SwapRequest;
+}
+export async function fetchSwaps(): Promise<SwapRequest[]> {
+  if (!HAS_SUPABASE) return [];
+  const { data, error } = await supabase
+    .from('swap_requests')
+    .select('*')
+    .order('created_at', { ascending: false });
+  if (error) {
+    readFail('fetchSwaps', error);
+    return [];
+  }
+  return (data ?? []).map(mapSwapRow);
 }
 
 export async function insertSwap(r: SwapRequest): Promise<boolean> {

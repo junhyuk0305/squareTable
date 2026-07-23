@@ -100,6 +100,20 @@ const TENANT_TABLES = ['playbook_entries','chat_queries','unknown_queries','work
   { const f = await A.c.from('unit_member_prefs').insert({ user_id:B.uid, unit_id:A.unit, muted:true }).select();
     ok(!!f.error || (f.data?.length||0)===0, `A→B.user_id prefs 위조삽입 거부`, f.error?`(err ${f.error.code})`:`inserted=${f.data?.length}`); }
 
+  // ── my_units_notif_data (통합 알림, 0077) — definer RLS 우회 경로의 멤버십 스코프 격리 ──
+  { const today = new Date().toISOString().slice(0,10);
+    const notice = { id:`xtn_${rid}`, kind:'notice', text:'B 내부 공지', authorId:B.uid, authorName:'XT_B', date:today, createdAt:new Date().toISOString(), read_by:[] };
+    const ins = await B.c.from('work_feed').insert({ id:notice.id, unit_id:B.unit, feed_date:today, data:notice }).select();
+    ok(!ins.error && (ins.data?.length||0)===1, `B 자기매장 공지 시드(0077 대조용)`, ins.error?`(err ${ins.error.code})`:''); }
+  { const { data, error } = await B.c.rpc('my_units_notif_data');
+    const mine=(data||[]).filter(r=>r.unit_id===B.unit && r.source==='feed');
+    ok(!error && mine.length>=1, `B→my_units_notif_data 자기매장 공지 반환(양성 대조)`, error?`(err ${error.message.slice(0,40)})`:`feed=${mine.length}`); }
+  { const { data, error } = await A.c.rpc('my_units_notif_data');
+    const leaked=(data||[]).filter(r=>r.unit_id===B.unit);
+    ok(!error && leaked.length===0, `A→my_units_notif_data B매장 행 0(비소속 격리)`, error?`(err ${error.message.slice(0,40)})`:`B행 ${leaked.length}`); }
+  { const { data, error } = await mk().rpc('my_units_notif_data');
+    ok(!error && (data?.length||0)===0, `anon→my_units_notif_data 0행`, error?`(err ${error.message.slice(0,40)})`:`rows=${data?.length}`); }
+
   // ── 정리: 본인 세션으로 삭제 (await, no .catch) ──
   try { await A.c.rpc('delete_my_account'); } catch(e){ console.log('  ! A cleanup', e.message); }
   try { await B.c.rpc('delete_my_account'); } catch(e){ console.log('  ! B cleanup', e.message); }

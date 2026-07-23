@@ -20,6 +20,9 @@ export type NotifRow = {
   /** 탭 시 읽음처리(read_by)할 feed id — 공지·멘션. */
   readFeedId?: string;
   noticeId?: string;
+  /** 통합(전체 매장) 목록: 어느 매장 알림인지 — 있으면 제목 위에 매장 점·이름을 그린다. */
+  storeLabel?: string;
+  storeColor?: string;
 };
 
 /**
@@ -60,6 +63,14 @@ export function NotificationList({
               <Ionicons name={ui.icon} size={17} color={InkColors.ink} />
             </View>
             <View style={{ flex: 1, gap: 2 }}>
+              {!!r.storeLabel && (
+                <View style={styles.storeRow}>
+                  <View style={[styles.storeDot, { backgroundColor: r.storeColor ?? InkColors.ink3 }]} />
+                  <Text style={styles.storeText} numberOfLines={1}>
+                    {r.storeLabel}
+                  </Text>
+                </View>
+              )}
               <Text style={styles.rowTitle} numberOfLines={1}>
                 {r.title}
               </Text>
@@ -97,6 +108,9 @@ const styles = StyleSheet.create({
     borderBottomColor: InkColors.line,
   },
   rowUnread: { backgroundColor: BrandColors.yellowSoft + '55' },
+  storeRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  storeDot: { width: 6, height: 6, borderRadius: Radius.pill },
+  storeText: { flexShrink: 1, fontSize: 11, fontWeight: '700', color: InkColors.ink3 },
   iconWrap: { width: 36, height: 36, borderRadius: Radius.sm, alignItems: 'center', justifyContent: 'center' },
   rowTitle: { fontSize: 14, fontWeight: '800', color: InkColors.ink },
   rowBody: { fontSize: 13, color: InkColors.ink2, lineHeight: 19 },
