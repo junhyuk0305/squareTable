@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TextInput, Pressable, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Stack } from 'expo-router';
+import { Stack, Redirect } from 'expo-router';
 import { useSessionStore } from '@/lib/store/useSessionStore';
+import { HAS_SUPABASE } from '@/lib/supabase';
 import { showToast } from '@/lib/store/useToastStore';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
@@ -14,6 +15,9 @@ import { HeaderBackButton } from '@/components/HeaderBackButton';
 // 프로필 편집 + 비밀번호 변경 (오너·주니어 공용).
 export default function AccountEdit() {
   const status = useSessionStore((s) => s.status);
+
+  // 게이트(stores.tsx 와 동일 규칙): 미로그인 URL 직진입 시 빈 프로필 폼이 그려지지 않게 차단(2레이어 감사 F2).
+  if (HAS_SUPABASE && status === 'signed_out') return <Redirect href="/" />;
 
   // 세션 복원(새로고침/콜드 진입) 중엔 폼이 데모/빈값으로 시드되지 않도록 로딩을 먼저 보여준다.
   if (status === 'loading') {

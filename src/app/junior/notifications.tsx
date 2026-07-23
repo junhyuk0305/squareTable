@@ -2,39 +2,27 @@ import { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter, type Href } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
 
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useWorkStore } from '@/lib/store/useWorkStore';
 import { useScheduleStore } from '@/lib/store/useScheduleStore';
 import { useStaffStore } from '@/lib/store/useStaffStore';
 import { useCrossNotifStore } from '@/lib/store/useCrossNotifStore';
-import { useMemberPrefsStore } from '@/lib/store/useMemberPrefsStore';
+import { useCrossNotifRows } from '@/lib/hooks/useCrossNotifRows';
 import { showToast } from '@/lib/store/useToastStore';
 import { HeaderBackButton } from '@/components/HeaderBackButton';
 import { MarkAllReadButton } from '@/components/MarkAllReadButton';
 import { Appear } from '@/components/Appear';
-import { NotificationList } from '@/components/NotificationList';
+import { NotificationList, JUNIOR_KIND_UI } from '@/components/NotificationList';
 import { NotificationEnableCard } from '@/components/NotificationEnableCard';
 import { SegmentTabs } from '@/components/SegmentTabs';
 import { todayStr } from '@/lib/utils/attendance';
-import { buildJuniorNotifications, type JuniorNotifKind } from '@/lib/utils/notifications';
-import { buildStoreNotifs, mergeCrossNotifs, storeUnreadCount, type CrossNotifRow } from '@/lib/utils/crossStoreNotifs';
-import { storeColor } from '@/lib/utils/storeColor';
-import { InkColors, BrandColors } from '@/lib/theme/colors';
+import { buildJuniorNotifications } from '@/lib/utils/notifications';
+import { InkColors } from '@/lib/theme/colors';
 import { Elevation, Radius } from '@/lib/theme/elevation';
 
-type IconName = React.ComponentProps<typeof Ionicons>['name'];
-
-/** kind → 아이콘·틴트 매핑(데이터는 순수 util에서, UI 표현만 여기서). */
-const KIND_UI: Record<JuniorNotifKind, { icon: IconName; tint: string }> = {
-  notice: { icon: 'megaphone', tint: BrandColors.yellowSoft },
-  mention: { icon: 'at', tint: BrandColors.brandSoft },
-  assign: { icon: 'clipboard', tint: BrandColors.yellowSoft },
-  swap: { icon: 'swap-horizontal', tint: BrandColors.accentSoft },
-  swap_approved: { icon: 'checkmark-circle', tint: '#E4F2E8' },
-  swap_rejected: { icon: 'close-circle', tint: BrandColors.accentSoft },
-};
+// kind → 아이콘·틴트 매핑은 NotificationList 의 JUNIOR_KIND_UI 공유(허브 통합 알림과 재정의 금지).
+const KIND_UI = JUNIOR_KIND_UI;
 
 /**
  * 직원 알림 화면 — 벨(NotificationBell)에서 진입.
@@ -58,47 +46,16 @@ export default function JuniorNotificationsScreen() {
   const staff = useStaffStore((s) => s.staff);
   const today = todayStr();
 
-  // ── 통합 알림(전체 매장, 0077) — 다점포 소속일 때만 세그먼트 노출 ──
-  const unitId = useSessionStore((s) => s.unitId);
+  // ── 통합 알림(전체 매장, 0077) — 다점포 소속일 때만 세그먼트 노출.
+  //    판정·매핑·탭 동작(전환 후 읽음처리 포함)은 공용 훅(useCrossNotifRows) SSOT.
   const sessionStores = useSessionStore((s) => s.stores);
-  const switchUnit = useSessionStore((s) => s.switchUnit);
-  const crossData = useCrossNotifStore((s) => s.data);
   const hydrateCross = useCrossNotifStore((s) => s.hydrate);
-  const prefFor = useMemberPrefsStore((s) => s.prefFor);
   const multiStore = sessionStores.length > 1;
   const [seg, setSeg] = useState<'store' | 'all'>('store');
-  const [switching, setSwitching] = useState(false);
   useEffect(() => {
     if (multiStore) void hydrateCross();
   }, [multiStore, hydrateCross]);
-
-  const labelOf = (uid: string) =>
-    prefFor(uid).nickname || sessionStores.find((u) => u.unit_id === uid)?.store_name || '매장';
-  const { allRows, allUnread } = useMemo(() => {
-    const roleOf = (uid: string) => sessionStores.find((u) => u.unit_id === uid)?.role ?? 'junior';
-    return {
-      allRows: mergeCrossNotifs(crossData.map((d) => buildStoreNotifs(d, roleOf(d.unitId), me, today))),
-      allUnread: crossData.reduce((n, d) => n + storeUnreadCount(d, roleOf(d.unitId), me, today), 0),
-    };
-  }, [crossData, sessionStores, me, today]);
-
-  // 다른 매장 알림 탭 = 그 매장으로 활성 전환 후 이동.
-  // 읽음처리: 크로스 행은 전환 완료 후(그 매장이 활성 = wf_update RLS 통과) cross 스토어가 직접 DB 기록,
-  //   활성 매장 행은 기존 경로(workStore.markNoticeRead)가 DB 를 쓰고 cross 뱃지는 로컬만 동기화.
-  const markCrossRead = useCrossNotifStore((s) => s.markFeedRead);
-  async function openCrossRow(r: CrossNotifRow) {
-    if (switching) return;
-    if (r.unitId !== unitId) {
-      setSwitching(true);
-      await switchUnit(r.unitId);
-      setSwitching(false);
-      if (r.readFeedId) void markCrossRead(r.unitId, r.readFeedId, me);
-    } else if (r.readFeedId) {
-      markNoticeRead(r.readFeedId, me);
-      void markCrossRead(r.unitId, r.readFeedId, me, false);
-    }
-    router.push(r.route as Href);
-  }
+  const { listRows: allRows, totalUnread: allUnread, openRow } = useCrossNotifRows();
 
   const rows = useMemo(
     () =>
@@ -183,13 +140,9 @@ export default function JuniorNotificationsScreen() {
         <Appear delay={80}>
         {seg === 'all' && multiStore ? (
           <NotificationList
-            rows={allRows.map((r) => ({
-              ...r,
-              storeLabel: labelOf(r.unitId),
-              storeColor: storeColor(r.unitId, prefFor(r.unitId).color),
-            }))}
+            rows={allRows}
             kindUI={KIND_UI}
-            onPress={(r) => void openCrossRow(r as unknown as CrossNotifRow)}
+            onPress={(r) => void openRow(r)}
             empty={{
               icon: 'notifications-off-outline',
               text: '전체 매장에 새 알림이 없어요.',

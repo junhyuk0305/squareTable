@@ -2,10 +2,11 @@ import { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Stack, useRouter } from 'expo-router';
+import { Stack, useRouter, Redirect } from 'expo-router';
 import Constants from 'expo-constants';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { usePreferencesStore, type TextScale } from '@/lib/store/usePreferencesStore';
+import { HAS_SUPABASE } from '@/lib/supabase';
 import { logout } from '@/lib/auth';
 import { confirmAction, notifyAction } from '@/lib/utils/confirm';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
@@ -23,6 +24,7 @@ const SCALE_LABEL: Record<TextScale, string> = { small: '작게', normal: '보�
  */
 export default function AccountSettings() {
   const router = useRouter();
+  const status = useSessionStore((s) => s.status);
   const userName = useSessionStore((s) => s.userName);
   const email = useSessionStore((s) => s.email);
   const bio = useSessionStore((s) => s.bio);
@@ -62,6 +64,11 @@ export default function AccountSettings() {
       });
     }
   };
+
+  // 게이트(stores.tsx 와 동일 규칙): 루트 레벨 라우트라 owner/junior 그룹 게이트 밖 —
+  // 미로그인 URL 직진입 시 빈 세션 화면이 그려지지 않게 여기서 직접 지킨다(2레이어 감사 F2).
+  if (HAS_SUPABASE && status === 'signed_out') return <Redirect href="/" />;
+  if (HAS_SUPABASE && status === 'loading') return null;
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>

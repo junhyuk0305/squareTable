@@ -1,8 +1,11 @@
 // 사용자 환경설정.
 // - textScale/emailEnabled 는 "이 기기에서의 보기 설정" → localStorage 로컬 영속(네이티브=메모리 폴백).
-// - 알림 수신 선호(pushEnabled·quietHours·quietStart·quietEnd)는 **서버(엣지 push 함수)가 발송 직전에
-//   읽어야** 하므로 DB(notification_prefs)가 SSOT다. localStorage 는 즉시 렌더용 캐시일 뿐이고, 진실은 DB다.
-//   (예전엔 이 값들이 localStorage 에만 있어 서버가 못 읽었고 → 토글/방해금지가 발송을 전혀 못 막았다.)
+// - pushEnabled(계정 전역 푸시 수신 동의)는 서버(엣지 push)가 발송 직전에 읽으므로 DB(notification_prefs)가
+//   SSOT다. localStorage 는 즉시 렌더용 캐시일 뿐이고, 진실은 DB다.
+// - ⚠️ quietHours/quietStart/quietEnd(전역 방해금지)는 **레거시 미러**: 1b(0076)에서 방해금지 판정이
+//   매장별 unit_member_prefs 로 이관돼 엣지도 UI 도 더 안 쓴다. 그런데 saveNotify 가 "전체 선호를 한
+//   트랜잭션으로" 저장하는 구조라, 필드를 지우면 푸시 토글 저장이 DB 의 기존 quiet 값을 기본값으로
+//   덮어쓴다 → 라운드트립 보존용으로만 유지한다. 새 소비처 추가 금지(매장별은 useMemberPrefsStore).
 import { create } from 'zustand';
 import { fetchNotificationPrefs, saveNotificationPrefs } from '@/lib/db';
 

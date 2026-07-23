@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Pressable, ScrollView, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter, Redirect } from 'expo-router';
@@ -10,8 +10,8 @@ import { useCrossNotifStore } from '@/lib/store/useCrossNotifStore';
 import { needsProfileSetup } from '@/lib/store/profileSetup';
 import { HAS_SUPABASE } from '@/lib/supabase';
 import { storeColor } from '@/lib/utils/storeColor';
-import { storeUnreadCount } from '@/lib/utils/crossStoreNotifs';
-import { todayStr } from '@/lib/utils/attendance';
+import { useCrossNotifRows } from '@/lib/hooks/useCrossNotifRows';
+import { NotificationList, ALL_KIND_UI } from '@/components/NotificationList';
 import { fetchOwnerOverview, type MyUnitRow, type OwnerOverviewRow } from '@/lib/db';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
@@ -64,20 +64,12 @@ export default function StoresHub() {
     void hydratePrefs();
   }, [hydratePrefs]);
 
-  // 통합 알림(0077) — 매장 카드 안읽음 뱃지. 판정은 매장별 역할로 기존 카운터 재사용(crossStoreNotifs).
-  const crossData = useCrossNotifStore((s) => s.data);
+  // 통합 알림(0077) — 카드 뱃지·허브 알림 섹션. 판정·매핑·탭 동작은 공용 훅(useCrossNotifRows) SSOT.
   const hydrateCross = useCrossNotifStore((s) => s.hydrate);
   useEffect(() => {
     void hydrateCross();
   }, [hydrateCross]);
-  const userId = useSessionStore((s) => s.userId);
-  const unreadByUnit = useMemo(() => {
-    const today = todayStr();
-    const roleOf = (uid: string) => sessionStores.find((u) => u.unit_id === uid)?.role ?? role;
-    const map: Record<string, number> = {};
-    for (const d of crossData) map[d.unitId] = storeUnreadCount(d, roleOf(d.unitId), userId, today);
-    return map;
-  }, [crossData, sessionStores, role, userId]);
+  const { listRows, unreadByUnit, totalUnread, openRow } = useCrossNotifRows();
 
   // 사장 매장 카드 지표(직원·노하우·확인필요) — 통합뷰 RPC 1회. 실패해도 카드는 그대로.
   useEffect(() => {
@@ -228,6 +220,21 @@ export default function StoresHub() {
                 </Pressable>
               </View>
             </Appear>
+
+            {/* ── 통합 알림(0077): 전 매장 알림을 허브에서 한눈에. 탭=그 매장으로 전환 후 이동 ── */}
+            {listRows.length > 0 && (
+              <Appear delay={90}>
+                <View style={styles.section}>
+                  <SectionLabel title="알림" hint={totalUnread > 0 ? `안읽음 ${totalUnread}` : undefined} />
+                  <NotificationList
+                    rows={listRows}
+                    kindUI={ALL_KIND_UI}
+                    onPress={(r) => void openRow(r)}
+                    empty={{ text: '새 알림이 없어요.' }}
+                  />
+                </View>
+              </Appear>
+            )}
 
             {/* ── 요금제(사장만): 현재 플랜만 조용히. 변경은 설정에서 ── */}
             {isOwner && (

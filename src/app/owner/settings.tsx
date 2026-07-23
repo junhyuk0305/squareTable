@@ -1,11 +1,13 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import Constants from 'expo-constants';
 import { useSessionStore } from '@/lib/store/useSessionStore';
+import { useMemberPrefsStore } from '@/lib/store/useMemberPrefsStore';
 import { usePreferencesStore, type TextScale } from '@/lib/store/usePreferencesStore';
+import { storeColor } from '@/lib/utils/storeColor';
 import { FREE_MODE } from '@/lib/utils/subscription';
 import { logout } from '@/lib/auth';
 import { confirmAction, notifyAction } from '@/lib/utils/confirm';
@@ -16,6 +18,7 @@ import { SettingsSection, SettingsRow, SettingsToggle } from '@/components/setti
 import { SectionLabel } from '@/components/SectionLabel';
 import { PricingTable } from '@/components/PricingTable';
 import { QuietHoursModal } from '@/components/settings/QuietHoursModal';
+import { PersonalizeSheet } from '@/components/settings/PersonalizeSheet';
 import { TextScaleModal } from '@/components/settings/TextScaleModal';
 import { ContactModal } from '@/components/ContactModal';
 import { RoleTabBar } from '@/components/RoleTabBar';
@@ -29,6 +32,7 @@ export default function OwnerSettings() {
   const userName = useSessionStore((s) => s.userName);
   const email = useSessionStore((s) => s.email);
   const storeName = useSessionStore((s) => s.storeName);
+  const unitId = useSessionStore((s) => s.unitId);
   const inviteCode = useSessionStore((s) => s.inviteCode) || '------';
   const plan = useSessionStore((s) => s.plan);
   const deleteAccount = useSessionStore((s) => s.deleteAccount);
@@ -38,6 +42,34 @@ export default function OwnerSettings() {
   const [scaleModal, setScaleModal] = useState(false);
   const [contactModal, setContactModal] = useState(false);
   const { copied, copy } = useCopyToClipboard();
+
+  // 매장별 개인 설정(unit_member_prefs) — 닉네임·색·이 매장 음소거·방해금지(직원 매장 설정과 동일 레이어).
+  const prefFor = useMemberPrefsStore((s) => s.prefFor);
+  const savePrefStore = useMemberPrefsStore((s) => s.save);
+  const hydratePrefs = useMemberPrefsStore((s) => s.hydrate);
+  useEffect(() => {
+    void hydratePrefs();
+  }, [hydratePrefs]);
+  const pref = prefFor(unitId ?? '');
+  const color = storeColor(unitId ?? '', pref.color);
+  // 개인화 시트 draft — 부모 소유(제어형, junior/settings 와 동일 패턴).
+  const [personalize, setPersonalize] = useState(false);
+  const [draftName, setDraftName] = useState('');
+  const [draftColor, setDraftColor] = useState<string | null>(null);
+  const openPersonalize = () => {
+    setDraftName(pref.nickname ?? '');
+    setDraftColor(pref.color);
+    setPersonalize(true);
+  };
+  const savePref = async (patch: Parameters<typeof savePrefStore>[1]) => {
+    if (!unitId) return;
+    const { error } = await savePrefStore(unitId, patch);
+    if (error) {
+      await notifyAction('저장 실패', '설정을 저장하지 못했어요. 연결을 확인하고 다시 시도해 주세요.', '확인', {
+        icon: 'alert-circle-outline',
+      });
+    }
+  };
 
   const version = Constants.expoConfig?.version ?? '1.0.0';
 
@@ -125,6 +157,9 @@ export default function OwnerSettings() {
         <SettingsSection icon="storefront-outline" title="매장 관리">
           <SettingsRow first icon="people-outline" label="직원·초대코드 관리" onPress={() => router.push('/owner/staff')} />
           <SettingsRow icon="cash-outline" label="급여 설정" onPress={() => router.push('/owner/payroll')} />
+          {/* 매장 닉네임·색(unit_member_prefs) — 허브 카드·통합 알림 매장칩에 반영(나만 보임). */}
+          <SettingsRow icon="pricetag-outline" label="매장 닉네임" value={pref.nickname || '설정 안 함'} onPress={openPersonalize} />
+          <SettingsRow icon="color-palette-outline" label="매장 색" valueNode={<View style={[styles.colorDotSm, { backgroundColor: color }]} />} onPress={openPersonalize} />
         </SettingsSection>
 
         {/* 구독 및 결제 — 한 줄 요약(현재 플랜명)만으론 요금제 인지·변경 유도가 약해, 3티어 표(정가 취소선 +
@@ -150,27 +185,36 @@ export default function OwnerSettings() {
           </View>
         )}
 
+        {/* 알림 — 푸시 on/off 는 계정 전역(notification_prefs), 방해금지·음소거는 매장별(unit_member_prefs).
+            1b(0076 이관)로 push 엣지가 전역 quiet 를 더 안 읽으므로 전역 방해금지 UI 는 여기서 제거됐다. */}
         <SettingsSection icon="notifications-outline" title="알림">
           <SettingsToggle
             first
             icon="notifications-outline"
             label="푸시 알림"
-            hint="알바가 모르는 질문을 남기면 바로 알려드려요"
+            hint="알바가 모르는 질문을 남기면 바로 알려드려요 (계정 전체)"
             value={prefs.pushEnabled}
             onValueChange={(v) => saveNotify({ pushEnabled: v })}
           />
           <SettingsToggle
+            icon="notifications-off-outline"
+            label="이 매장 알림 음소거"
+            hint="이 매장의 핸드폰 알림을 끕니다 (알림함엔 그대로 쌓여요)"
+            value={pref.muted}
+            onValueChange={(v) => savePref({ muted: v })}
+          />
+          <SettingsToggle
             icon="moon-outline"
             label="방해 금지 시간"
-            hint={`${prefs.quietStart}~${prefs.quietEnd}에는 핸드폰 알림만 꺼요 (알림함엔 그대로 쌓여요)`}
-            value={prefs.quietHours}
-            onValueChange={(v) => saveNotify({ quietHours: v })}
+            hint={`${pref.quiet_start}~${pref.quiet_end}에는 이 매장 핸드폰 알림만 꺼요`}
+            value={pref.quiet_enabled}
+            onValueChange={(v) => savePref({ quiet_enabled: v })}
           />
-          {prefs.quietHours ? (
+          {pref.quiet_enabled ? (
             <SettingsRow
               icon="time-outline"
               label="시간대 설정"
-              value={`${prefs.quietStart} ~ ${prefs.quietEnd}`}
+              value={`${pref.quiet_start} ~ ${pref.quiet_end}`}
               onPress={() => setQuietModal(true)}
             />
           ) : null}
@@ -202,10 +246,24 @@ export default function OwnerSettings() {
       </ScrollView>
       <QuietHoursModal
         visible={quietModal}
-        start={prefs.quietStart}
-        end={prefs.quietEnd}
+        start={pref.quiet_start}
+        end={pref.quiet_end}
         onClose={() => setQuietModal(false)}
-        onSave={(s, e) => saveNotify({ quietStart: s, quietEnd: e })}
+        onSave={(s, e) => savePref({ quiet_start: s, quiet_end: e })}
+      />
+      <PersonalizeSheet
+        visible={personalize}
+        name={draftName}
+        setName={setDraftName}
+        sel={draftColor}
+        setSel={setDraftColor}
+        autoColor={storeColor(unitId ?? '')}
+        storeName={storeName || '내 매장'}
+        onClose={() => setPersonalize(false)}
+        onSave={() => {
+          setPersonalize(false);
+          void savePref({ nickname: draftName.trim() ? draftName.trim() : null, color: draftColor });
+        }}
       />
       <TextScaleModal visible={scaleModal} onClose={() => setScaleModal(false)} />
       <ContactModal visible={contactModal} onClose={() => setContactModal(false)} />
@@ -227,6 +285,7 @@ const styles = StyleSheet.create({
   codeBtnText: { fontSize: 13, fontWeight: '800', color: InkColors.ink },
   codeManage: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 12, paddingHorizontal: 4, marginBottom: 14, marginTop: 6 },
   codeManageText: { fontSize: 13, fontWeight: '700', color: InkColors.ink2 },
+  colorDotSm: { width: 18, height: 18, borderRadius: 9 },
   foot: { fontSize: 11, color: InkColors.ink3, textAlign: 'center', marginTop: 6 },
 
   // 구독 및 결제 — SectionLabel(카드 밖) + 요금제 표 + CTA. SettingsSection 간격(marginBottom:18)과 통일.

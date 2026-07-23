@@ -1,11 +1,32 @@
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { formatAsked } from '@/lib/utils/time';
+import type { JuniorNotifKind, OwnerNotifKind } from '@/lib/utils/notifications';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Elevation, Radius } from '@/lib/theme/elevation';
 import type React from 'react';
 
 type IconName = React.ComponentProps<typeof Ionicons>['name'];
+
+// kind → 아이콘·틴트 매핑(데이터는 notifications util SSOT, 표현은 여기 한 곳) —
+// 직원/사장 알림 화면 + stores 허브 통합 알림이 공유한다(화면별 재정의 금지).
+export const JUNIOR_KIND_UI: Record<JuniorNotifKind, { icon: IconName; tint: string }> = {
+  notice: { icon: 'megaphone', tint: BrandColors.yellowSoft },
+  mention: { icon: 'at', tint: BrandColors.brandSoft },
+  assign: { icon: 'clipboard', tint: BrandColors.yellowSoft },
+  swap: { icon: 'swap-horizontal', tint: BrandColors.accentSoft },
+  swap_approved: { icon: 'checkmark-circle', tint: '#E4F2E8' },
+  swap_rejected: { icon: 'close-circle', tint: BrandColors.accentSoft },
+};
+export const OWNER_KIND_UI: Record<OwnerNotifKind, { icon: IconName; tint: string }> = {
+  join_request: { icon: 'person-add', tint: BrandColors.yellowSoft },
+  question: { icon: 'chatbubble-ellipses', tint: BrandColors.yellowSoft },
+  suggestion: { icon: 'bulb', tint: BrandColors.brandSoft },
+  swap_approval: { icon: 'swap-horizontal', tint: BrandColors.accentSoft },
+  mention: { icon: 'at', tint: BrandColors.brandSoft },
+};
+/** 허브(역할 혼합 가능) 용 — 두 맵 합성. mention 은 동일 표현이라 충돌 없음. */
+export const ALL_KIND_UI = { ...JUNIOR_KIND_UI, ...OWNER_KIND_UI };
 
 /** 알림 한 행의 공통 모양(직원·사장 공유). kind는 화면별 union을 문자열로 받는다.
  *  route/noticeId 는 탭 동작용 — 실제 라우팅/읽음처리는 화면(onPress)이 수행. */
