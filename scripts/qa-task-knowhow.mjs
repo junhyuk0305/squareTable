@@ -97,7 +97,19 @@ async function main() {
   await flow3(ctx);
   await flow4(ctx);
 
-  console.log(`\n${fail === 0 ? '✅ PASS' : '❌ FAIL'} — S1 업무↔노하우 QA · 통과 ${pass} / 실패 ${fail}`);
+  // ── S3: 사장 2번째 매장 생성(넛지·통합뷰·다중공지에 필요). 활성은 A로 복귀(flow5~7은 A 기준). ─────
+  const { data: cB } = await owner.rpc('create_store', { p_store_name: 'TK 2호점', p_industry: '카페·디저트', p_biz_no: null });
+  const UNIT_B = cB?.[0]?.unit_id;
+  await admin.rpc('admin_activate_store', { p_unit_id: UNIT_B, p_days: 1, p_plan: 'multi' });
+  await owner.rpc('switch_active_unit', { p_unit_id: UNIT }); // 활성 = A 복귀
+  check('S3 셋업: 2번째 매장 생성', !!UNIT_B && UNIT_B !== UNIT, `B=${UNIT_B}`);
+  const ctx3 = { ...ctx, UNIT_B };
+
+  await flow5(ctx3); // #1 copy_knowhow_to
+  await flow6(ctx3); // #2 owner_overview 커버리지
+  await flow7(ctx3); // #3 broadcast_notice + read_status
+
+  console.log(`\n${fail === 0 ? '✅ PASS' : '❌ FAIL'} — S1+S3 업무↔노하우 QA · 통과 ${pass} / 실패 ${fail}`);
   process.exit(fail === 0 ? 0 : 1);
 }
 
@@ -211,6 +223,62 @@ async function flow4({ owner, ownerId, jA, jAId, UNIT, TMPL, entryRow }) {
   // 위조 방어: 알바A가 남의 staff_id(사장)로 이해 기록 시도 → RLS WITH CHECK 차단
   const { error: forge } = await jA.from('task_understanding').insert({ unit_id: UNIT, template_id: TMPL, staff_id: ownerId, staff_name: '위조' }).select('template_id');
   check('④-7 staff_id 위조 삽입 차단(RLS)', !!forge, forge ? `거부 ${forge.code ?? ''}` : '(차단 안됨!)');
+}
+
+// ───────────────────── S3 #1 발행 넛지: copy_knowhow_to (활성 A → 다른 매장 B) ─────────────────────
+async function flow5({ owner, jA, UNIT, UNIT_B, ENTRY }) {
+  console.log('\n━━ S3 #1 발행 넛지(copy_knowhow_to) ━━');
+  // 활성=A, 대상=B로 복제(방금 발행한 ENTRY를 B에도).
+  const { data: n, error } = await owner.rpc('copy_knowhow_to', { p_to_unit: UNIT_B, p_entry_ids: [ENTRY] });
+  check('S3#1-1 활성A→B 복제 성공', !error && n >= 1, error?.message ?? `n=${n}`);
+  // B에 복제본이 needs_review=true·published로 생김(원본 ENTRY와 다른 새 id).
+  const { data: bEntries } = await admin.from('playbook_entries').select('id, unit_id, title, needs_review, status').eq('unit_id', UNIT_B);
+  const copied = (bEntries ?? []).find((e) => e.title === '아이스 아메리카노 제조');
+  check('S3#1-2 B에 복제본 생성(needs_review·published)', !!copied && copied.needs_review === true && copied.status === 'published' && copied.id !== ENTRY, `id=${copied?.id}`);
+  // ★크로스테넌트: 알바(비오너)가 copy_knowhow_to 시도 → not_owner_source(활성A 비소유).
+  const { error: jErr } = await jA.rpc('copy_knowhow_to', { p_to_unit: UNIT_B, p_entry_ids: [ENTRY] });
+  check('S3#1-3 알바 복제 거부(not_owner)', !!jErr && /not_owner/.test(jErr.message), jErr?.message ?? '(안 막힘!)');
+  // ★크로스테넌트: 대상이 내 매장 아니면 not_owner_target — 존재하지 않는 매장 id로.
+  const { error: tErr } = await owner.rpc('copy_knowhow_to', { p_to_unit: 'store_not_mine_xxx', p_entry_ids: [ENTRY] });
+  check('S3#1-4 비소유 대상 거부(not_owner_target)', !!tErr && /not_owner_target/.test(tErr.message), tErr?.message ?? '(안 막힘!)');
+}
+
+// ───────────────────── S3 #2 통합뷰: owner_overview uncovered 열 ─────────────────────
+async function flow6({ owner, ownerId, UNIT, UNIT_B }) {
+  console.log('\n━━ S3 #2 통합뷰(owner_overview 커버리지) ━━');
+  // A에 노하우 미첨부 업무 하나 추가(uncovered 카운트 대상). TMPL은 flow1에서 첨부됨 → uncovered 제외.
+  const bare = `t_bare_${s}`;
+  await owner.from('work_templates').insert({ id: bare, unit_id: UNIT, section: 'open', text: '미첨부 업무', scope: 'shared', created_at: new Date().toISOString() });
+  const { data: rows, error } = await owner.rpc('owner_overview');
+  check('S3#2-1 owner_overview 200(두 매장)', !error && (rows?.length ?? 0) >= 2, error?.message ?? `n=${rows?.length}`);
+  const rowA = (rows ?? []).find((r) => r.unit_id === UNIT);
+  check('S3#2-2 uncovered 열 존재·미첨부 업무 반영(≥1)', rowA && typeof rowA.uncovered === 'number' && rowA.uncovered >= 1, `uncovered=${rowA?.uncovered}`);
+  // 기존 6개 지표 컬럼도 여전히 존재(회귀 없음).
+  check('S3#2-3 기존 지표 컬럼 보존', rowA && ['pending_q', 'knowhow', 'staff', 'labor_month', 'is_active', 'store_name'].every((k) => k in rowA));
+}
+
+// ───────────────────── S3 #3 전 매장 공지: broadcast_notice + read_status ─────────────────────
+async function flow7({ owner, ownerId, jA, jAId, UNIT, UNIT_B }) {
+  console.log('\n━━ S3 #3 전 매장 동시 공지(broadcast) ━━');
+  const { data: b, error } = await owner.rpc('broadcast_notice', { p_units: [UNIT, UNIT_B], p_text: '전 매장 공지 테스트', p_important: false });
+  const BID = b?.[0]?.broadcast_id;
+  check('S3#3-1 다중발송 성공(sent=2)', !error && b?.[0]?.sent === 2 && !!BID, error?.message ?? JSON.stringify(b));
+  // 두 매장 각각 work_feed에 같은 broadcast_id notice가 생김. authorId=사장 강제.
+  const { data: feeds } = await admin.from('work_feed').select('id, unit_id, data').or(`unit_id.eq.${UNIT},unit_id.eq.${UNIT_B}`);
+  const bnotices = (feeds ?? []).filter((f) => f.data?.broadcast_id === BID);
+  check('S3#3-2 두 매장에 같은 broadcast_id notice', bnotices.length === 2 && new Set(bnotices.map((f) => f.unit_id)).size === 2);
+  check('S3#3-3 data.id==row.id · authorId=사장 강제', bnotices.length === 2 && bnotices.every((f) => f.data.id === f.id && f.data.authorId === ownerId && f.data.kind === 'notice'));
+  // 읽음 집계: 아직 아무도 안 읽음 → 0/2.
+  const { data: rs0 } = await owner.rpc('broadcast_read_status', { p_broadcast_id: BID });
+  check('S3#3-4 읽음 집계 0/2', rs0?.[0]?.total === 2 && rs0?.[0]?.read_count === 0, JSON.stringify(rs0));
+  // 알바A(매장A 소속)가 A의 공지를 읽음 처리(read_by 추가) → 1개 매장 읽음.
+  const aNotice = bnotices.find((f) => f.unit_id === UNIT);
+  await jA.from('work_feed').update({ data: { ...aNotice.data, read_by: [jAId] } }).eq('id', aNotice.id);
+  const { data: rs1 } = await owner.rpc('broadcast_read_status', { p_broadcast_id: BID });
+  check('S3#3-5 A 읽음 후 1/2 매장', rs1?.[0]?.total === 2 && rs1?.[0]?.read_count === 1, JSON.stringify(rs1));
+  // ★크로스테넌트: 비소유 매장 포함 발송 거부.
+  const { error: xErr } = await owner.rpc('broadcast_notice', { p_units: [UNIT, 'store_not_mine_xxx'], p_text: 'x', p_important: false });
+  check('S3#3-6 비소유 매장 포함 발송 거부(not_owner)', !!xErr && /not_owner/.test(xErr.message), xErr?.message ?? '(안 막힘!)');
 }
 
 main().catch((e) => { console.error('HARNESS ERROR:', e); process.exit(2); });

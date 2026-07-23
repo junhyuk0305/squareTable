@@ -955,6 +955,18 @@ export async function deleteFeed(id: string): Promise<boolean> {
   if (!HAS_SUPABASE) return true;
   return writeStrict('deleteFeed', supabase.from('work_feed').delete().eq('id', id).select('id'));
 }
+/** 전 매장 동시 공지(S3 #3): 소유 매장들에 같은 공지를 한 번에. 소유검증·본문 구성은 RPC 내부(definer). 반환=broadcast_id+발송 매장 수. */
+export async function broadcastNotice(unitIds: string[], text: string, important: boolean): Promise<DbResult<{ broadcast_id: string; sent: number }>> {
+  if (!HAS_SUPABASE) return { data: { broadcast_id: 'mock', sent: unitIds.length }, error: null };
+  const { data, error } = await supabase.rpc('broadcast_notice', { p_units: unitIds, p_text: text, p_important: important });
+  return { data: (data?.[0] as { broadcast_id: string; sent: number }) ?? null, error: error as DbErr };
+}
+/** 다중발송 공지의 매장 단위 읽음 집계("읽은 매장 / 전체 매장"). 소유 매장만 집계(definer). */
+export async function fetchBroadcastReadStatus(broadcastId: string): Promise<DbResult<{ total: number; read_count: number }>> {
+  if (!HAS_SUPABASE) return { data: { total: 1, read_count: 0 }, error: null };
+  const { data, error } = await supabase.rpc('broadcast_read_status', { p_broadcast_id: broadcastId });
+  return { data: (data?.[0] as { total: number; read_count: number }) ?? null, error: error as DbErr };
+}
 
 // ── 출퇴근 ─────────────────────────────────────────────────
 export async function fetchAttendance(): Promise<AttendanceRecord[]> {

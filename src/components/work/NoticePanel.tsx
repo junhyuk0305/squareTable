@@ -3,6 +3,7 @@ import { View, Text, Pressable, ScrollView, TextInput, KeyboardAvoidingView, Pla
 import { Ionicons } from '@expo/vector-icons';
 
 import { type FeedItem } from '@/lib/store/useWorkStore';
+import { fetchBroadcastReadStatus } from '@/lib/db';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Elevation, Radius } from '@/lib/theme/elevation';
 import { mdHHmm } from '@/lib/utils/attendance';
@@ -33,6 +34,9 @@ export function NoticePanel({
   onRead,
   onComment,
   onDeleteComment,
+  currentStore,
+  targetStores,
+  onBroadcast,
 }: {
   notices: FeedItem[];
   comments: FeedItem[];
@@ -50,14 +54,32 @@ export function NoticePanel({
   onRead: (id: string) => void;
   onComment: (noticeId: string, text: string, mentions: string[]) => void;
   onDeleteComment: (id: string) => void;
+  // 전 매장 동시 공지(S3 #3) — 매장 2개 이상 소유 시에만 전달. 대상 매장 선택 시 broadcast, 아니면 기존 단일 발송.
+  currentStore?: { unit_id: string; store_name: string };
+  targetStores?: { unit_id: string; store_name: string }[];
+  onBroadcast?: (text: string, unitIds: string[]) => void;
 }) {
   const [draft, setDraft] = useState('');
+  const [targets, setTargets] = useState<Set<string>>(new Set()); // 현재 매장 외 추가 대상(unit_id)
+  const canBroadcast = isOwner && !!onBroadcast && !!currentStore && (targetStores?.length ?? 0) > 0;
+
   function post() {
     const v = draft.trim();
     if (!v) return;
-    onPost(v);
+    if (canBroadcast && targets.size > 0 && currentStore && onBroadcast) {
+      onBroadcast(v, [currentStore.unit_id, ...targets]);
+    } else {
+      onPost(v);
+    }
     setDraft('');
+    setTargets(new Set());
   }
+  const toggleTarget = (id: string) =>
+    setTargets((cur) => {
+      const next = new Set(cur);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -89,21 +111,50 @@ export function NoticePanel({
       </ScrollView>
 
       {isOwner && (
-        <View style={s.foot}>
-          <Ionicons name="megaphone-outline" size={18} color={InkColors.ink2} style={{ marginLeft: 4 }} />
-          <TextInput
-            value={draft}
-            onChangeText={setDraft}
-            placeholder="새 공지 작성…"
-            placeholderTextColor={InkColors.ink3}
-            style={s.footInput}
-            onSubmitEditing={post}
-            returnKeyType="send"
-            blurOnSubmit={false}
-          />
-          <Pressable onPress={post} disabled={!draft.trim()} style={({ pressed }) => [s.footBtn, !draft.trim() && { opacity: 0.4 }, pressed && { opacity: 0.85 }]}>
-            <Text style={s.footBtnText}>등록</Text>
-          </Pressable>
+        <View style={s.footWrap}>
+          {canBroadcast && (
+            <View style={s.targetRow}>
+              <Text style={s.targetLead}>보낼 매장</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.targetChips}>
+                <View style={[s.tChip, s.tChipLocked]}>
+                  <Ionicons name="checkmark" size={12} color={InkColors.bubbleText} />
+                  <Text style={[s.tChipText, s.tChipTextOn]} numberOfLines={1}>{currentStore?.store_name} (지금)</Text>
+                </View>
+                {targetStores?.map((st) => {
+                  const on = targets.has(st.unit_id);
+                  return (
+                    <Pressable
+                      key={st.unit_id}
+                      onPress={() => toggleTarget(st.unit_id)}
+                      style={[s.tChip, on && s.tChipOn]}
+                      accessibilityRole="checkbox"
+                      accessibilityState={{ checked: on }}
+                      accessibilityLabel={`${st.store_name}에도 보내기`}
+                    >
+                      {on ? <Ionicons name="checkmark" size={12} color={InkColors.bubbleText} /> : <Ionicons name="storefront-outline" size={12} color={InkColors.ink2} />}
+                      <Text style={[s.tChipText, on && s.tChipTextOn]} numberOfLines={1}>{st.store_name}</Text>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+            </View>
+          )}
+          <View style={s.foot}>
+            <Ionicons name="megaphone-outline" size={18} color={InkColors.ink2} style={{ marginLeft: 4 }} />
+            <TextInput
+              value={draft}
+              onChangeText={setDraft}
+              placeholder={targets.size > 0 ? `${targets.size + 1}개 매장에 공지…` : '새 공지 작성…'}
+              placeholderTextColor={InkColors.ink3}
+              style={s.footInput}
+              onSubmitEditing={post}
+              returnKeyType="send"
+              blurOnSubmit={false}
+            />
+            <Pressable onPress={post} disabled={!draft.trim()} style={({ pressed }) => [s.footBtn, !draft.trim() && { opacity: 0.4 }, pressed && { opacity: 0.85 }]}>
+              <Text style={s.footBtnText}>{targets.size > 0 ? '전송' : '등록'}</Text>
+            </Pressable>
+          </View>
         </View>
       )}
     </KeyboardAvoidingView>
@@ -147,12 +198,22 @@ function NoticeCard({
   const readBy = n.read_by ?? [];
   const readCount = Math.min(readBy.length, memberCount);
   const read = readBy.includes(me);
+  // 다중발송 공지면 매장 단위 읽음("N/M 매장")을 사장에게. 소유 매장만 집계(definer RPC).
+  const [bcast, setBcast] = useState<{ total: number; read_count: number } | null>(null);
 
   // 알바가 카드를 보면 읽음 처리(한 번).
   useEffect(() => {
     if (!isOwner && !read) onRead(n.id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [n.id]);
+
+  // 사장 + 다중발송 공지 → 매장 단위 읽음 상태 조회(lazy).
+  useEffect(() => {
+    if (!isOwner || !n.broadcast_id) return;
+    let alive = true;
+    fetchBroadcastReadStatus(n.broadcast_id).then(({ data }) => { if (alive && data) setBcast(data); });
+    return () => { alive = false; };
+  }, [n.broadcast_id, isOwner]);
 
   function saveEdit() {
     const v = editText.trim();
@@ -196,8 +257,12 @@ function NoticeCard({
       <View style={s.foot2}>
         {isOwner ? (
           <View style={s.readRow}>
-            <Ionicons name="checkmark-done" size={13} color={InkColors.ink3} />
-            <Text style={s.readText}>{readCount}/{memberCount}명 읽음</Text>
+            <Ionicons name={n.broadcast_id ? 'megaphone-outline' : 'checkmark-done'} size={13} color={InkColors.ink3} />
+            <Text style={s.readText}>
+              {n.broadcast_id
+                ? (bcast ? `${bcast.read_count}/${bcast.total} 매장 읽음` : `${n.broadcast_total ?? '?'}개 매장에 발송`)
+                : `${readCount}/${memberCount}명 읽음`}
+            </Text>
           </View>
         ) : read ? (
           <View style={s.readRow}>
@@ -298,7 +363,16 @@ const s = StyleSheet.create({
   cPost: { backgroundColor: InkColors.ink, borderRadius: Radius.pill, paddingHorizontal: 14, paddingVertical: 8 },
   cPostText: { color: '#fff', fontSize: 12, fontWeight: '800' },
 
-  foot: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 10, backgroundColor: InkColors.cream, borderTopWidth: 1, borderTopColor: InkColors.line },
+  footWrap: { backgroundColor: InkColors.cream, borderTopWidth: 1, borderTopColor: InkColors.line },
+  targetRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingTop: 9 },
+  targetLead: { fontSize: 11, fontWeight: '800', color: InkColors.ink3 },
+  targetChips: { gap: 6, paddingRight: 12 },
+  tChip: { flexDirection: 'row', alignItems: 'center', gap: 4, borderWidth: 1.5, borderColor: InkColors.line, borderRadius: Radius.pill, paddingVertical: 5, paddingHorizontal: 10, backgroundColor: InkColors.bg, maxWidth: 160 },
+  tChipLocked: { backgroundColor: InkColors.ink3, borderColor: InkColors.ink3 },
+  tChipOn: { backgroundColor: InkColors.ink, borderColor: InkColors.ink },
+  tChipText: { fontSize: 12, fontWeight: '800', color: InkColors.ink2, flexShrink: 1 },
+  tChipTextOn: { color: InkColors.bubbleText },
+  foot: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 10 },
   footInput: { flex: 1, backgroundColor: InkColors.bg, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.pill, paddingHorizontal: 15, paddingVertical: 11, fontSize: 13, color: InkColors.ink },
   footBtn: { backgroundColor: InkColors.ink, borderRadius: Radius.pill, paddingHorizontal: 18, paddingVertical: 11 },
   footBtnText: { color: '#fff', fontSize: 13, fontWeight: '800' },

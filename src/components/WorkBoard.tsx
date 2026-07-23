@@ -67,6 +67,19 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
   const userName = useSessionStore((s) => s.userName);
   const isOwner = role === 'owner';
 
+  // 전 매장 동시 공지(S3 #3) — 사장이 매장 2개 이상이면 공지 작성 시 대상 매장 선택 제공.
+  const stores = useSessionStore((s) => s.stores);
+  const activeUnit = useSessionStore((s) => s.unitId);
+  const activeStoreName = useSessionStore((s) => s.storeName);
+  const currentStore = useMemo(
+    () => (activeUnit ? { unit_id: activeUnit, store_name: activeStoreName || '현재 매장' } : undefined),
+    [activeUnit, activeStoreName],
+  );
+  const broadcastTargets = useMemo(
+    () => stores.filter((st) => st.role === 'owner' && st.unit_id !== activeUnit).map((st) => ({ unit_id: st.unit_id, store_name: st.store_name })),
+    [stores, activeUnit],
+  );
+
   const owner = useStaffStore((s) => s.owner);
   const staff = useStaffStore((s) => s.staff);
 
@@ -97,6 +110,7 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
   const editTask = useWorkStore((s) => s.editTask);
   const removeTemplate = useWorkStore((s) => s.removeTemplate);
   const postNotice = useWorkStore((s) => s.postNotice);
+  const broadcastNotice = useWorkStore((s) => s.broadcastNotice);
   const postMessage = useWorkStore((s) => s.postMessage);
   const postComment = useWorkStore((s) => s.postComment);
   const editFeedText = useWorkStore((s) => s.editFeedText);
@@ -460,6 +474,9 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
           members={members}
           onBack={closePanel}
           onPost={(text) => postNotice(today, text, userId, userName, false)}
+          currentStore={isOwner ? currentStore : undefined}
+          targetStores={isOwner ? broadcastTargets : undefined}
+          onBroadcast={isOwner ? (text, unitIds) => { void broadcastNotice(unitIds, text, false, userName); } : undefined}
           onTogglePin={togglePin}
           onEdit={editFeedText}
           onDelete={deleteFeedItem}

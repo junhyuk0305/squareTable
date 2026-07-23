@@ -14,6 +14,7 @@ import {
   upsertFeed,
   updateFeed,
   deleteFeed,
+  broadcastNotice as dbBroadcastNotice,
   subscribeWork,
   fetchTemplateKnowhow,
   insertTemplateKnowhow,
@@ -92,6 +93,8 @@ export type FeedItem = {
   mentions?: string[]; // @멘션된 사람 userId[] (알림 대상)
   roomId?: string; // 채팅방 id('전부 방 단위'). 레거시는 미지정.
   promotedEntryId?: string; // 이 메시지가 노하우로 승격됐으면 그 노하우 id(§4.1). 재승격 넛지 dedupe용.
+  broadcast_id?: string; // notice 다중발송 묶음 id(S3 #3). 같은 공지가 여러 매장에 있으면 공통값.
+  broadcast_total?: number; // notice 다중발송 대상 매장 수(읽음 "N/M 매장"의 분모).
 };
 
 // 피드에서 토글 가능한 이모지 셋 (확인 = ✅)
@@ -343,6 +346,7 @@ type State = {
   // task: 합성 루틴 할일(dpr_)은 s.templates 에 없으므로 완료 피드 문구/방을 호출부가 넘긴다(없으면 lookup).
   toggleTask: (date: string, templateId: string, staffId: string, staffName: string, role: 'owner' | 'junior', photoUrl?: string, task?: { text: string; roomId?: string }) => void;
   postNotice: (date: string, text: string, authorId: string, authorName: string, important: boolean) => void;
+  broadcastNotice: (unitIds: string[], text: string, important: boolean, authorName: string) => Promise<{ ok: boolean; sent: number }>;
   postMessage: (date: string, text: string, authorId: string, authorName: string, role: 'owner' | 'junior', mentions?: string[], photoUrl?: string) => void;
   postComment: (noticeId: string, date: string, text: string, authorId: string, authorName: string, role: 'owner' | 'junior', mentions?: string[]) => void;
   editFeedText: (id: string, text: string) => void;
@@ -618,6 +622,21 @@ export const useWorkStore = create<State>((set, get) => ({
       () => set((s) => ({ feed: s.feed.filter((f) => f.id !== item.id) })),
       '공지 등록에 실패했어요.',
     ).then((ok) => { if (ok) notifyStaffNotice(authorName, text); }); // 매장 직원 전체(발송자 제외는 서버)
+  },
+
+  // 전 매장 동시 공지(S3 #3) — 소유 매장들에 같은 공지를 서버(definer)가 한 번에 넣는다.
+  // 성공 시 현재 매장 피드를 다시 당겨 내 매장 카피가 즉시 보이게(무음 유실 방지). 다른 매장은 각자 활성 시 노출.
+  // 푸시는 현재 매장 직원에게만(엣지 push 가 호출자 활성매장으로 강제) — 타 매장 직원은 인앱 공지로.
+  broadcastNotice: async (unitIds, text, important, authorName) => {
+    const { data, error } = await dbBroadcastNotice(unitIds, text.trim(), important);
+    if (error || !data) {
+      useSyncStore.getState().noteError('공지 발송에 실패했어요. 다시 시도해 주세요.');
+      return { ok: false, sent: 0 };
+    }
+    const fresh = await fetchFeed();
+    set({ feed: fresh });
+    notifyStaffNotice(authorName, text.trim());
+    return { ok: true, sent: data.sent };
   },
 
   postMessage: (date, text, authorId, authorName, role, mentions, photoUrl) => {
