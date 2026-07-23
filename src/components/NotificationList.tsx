@@ -10,9 +10,11 @@ type IconName = React.ComponentProps<typeof Ionicons>['name'];
 
 // kind → 아이콘·틴트 매핑(데이터는 notifications util SSOT, 표현은 여기 한 곳) —
 // 직원/사장 알림 화면 + stores 허브 통합 알림이 공유한다(화면별 재정의 금지).
+// mention 은 두 맵에 다 있는 유일한 키 — 상수 하나를 공유해 한쪽만 바뀌는 무음 드리프트를 원천 차단.
+const MENTION_UI = { icon: 'at', tint: BrandColors.brandSoft } as const;
 export const JUNIOR_KIND_UI: Record<JuniorNotifKind, { icon: IconName; tint: string }> = {
   notice: { icon: 'megaphone', tint: BrandColors.yellowSoft },
-  mention: { icon: 'at', tint: BrandColors.brandSoft },
+  mention: MENTION_UI,
   assign: { icon: 'clipboard', tint: BrandColors.yellowSoft },
   swap: { icon: 'swap-horizontal', tint: BrandColors.accentSoft },
   swap_approved: { icon: 'checkmark-circle', tint: '#E4F2E8' },
@@ -25,13 +27,13 @@ export const OWNER_KIND_UI: Record<OwnerNotifKind, { icon: IconName; tint: strin
   question: { icon: 'chatbubble-ellipses', tint: BrandColors.yellowSoft },
   suggestion: { icon: 'bulb', tint: BrandColors.brandSoft },
   swap_approval: { icon: 'swap-horizontal', tint: BrandColors.accentSoft },
-  mention: { icon: 'at', tint: BrandColors.brandSoft },
+  mention: MENTION_UI,
 };
-/** 허브(역할 혼합 가능) 용 — 두 맵 합성. mention 은 동일 표현이라 충돌 없음. */
+/** 허브(역할 혼합 가능) 용 — 두 맵 합성. */
 export const ALL_KIND_UI = { ...JUNIOR_KIND_UI, ...OWNER_KIND_UI };
 
 /** 알림 한 행의 공통 모양(직원·사장 공유). kind는 화면별 union을 문자열로 받는다.
- *  route/noticeId 는 탭 동작용 — 실제 라우팅/읽음처리는 화면(onPress)이 수행. */
+ *  route/readFeedId 는 탭 동작용 — 실제 라우팅/읽음처리는 화면(onPress)이 수행. */
 export type NotifRow = {
   id: string;
   kind: string;
@@ -42,7 +44,6 @@ export type NotifRow = {
   route?: string;
   /** 탭 시 읽음처리(read_by)할 feed id — 공지·멘션. */
   readFeedId?: string;
-  noticeId?: string;
   /** 통합(전체 매장) 목록: 어느 매장 알림인지 — 있으면 제목 위에 매장 점·이름을 그린다. */
   storeLabel?: string;
   storeColor?: string;

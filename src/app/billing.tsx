@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Stack, useRouter } from 'expo-router';
+import { Stack, useRouter, Redirect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSessionStore } from '@/lib/store/useSessionStore';
+import { HAS_SUPABASE } from '@/lib/supabase';
 import { logout } from '@/lib/auth';
 import { showToast } from '@/lib/store/useToastStore';
 import { deriveSubscription } from '@/lib/utils/subscription';
@@ -20,6 +21,15 @@ import { Space } from '@/lib/theme/layout';
 // 결제는 수동(계좌이체) — 입금 확인 후 운영자가 admin_activate_store(plan 포함) 로 전환하면
 // 새로고침(refreshMembership) 시 게이트가 풀린다.
 export default function BillingScreen() {
+  const status = useSessionStore((s) => s.status);
+  // 게이트(stores.tsx 와 동일 규칙): top-level 라우트(만료 강제 라우팅 목적지)라 그룹 게이트 밖 —
+  // 미로그인 URL 직진입 시 빈 세션값(무료 기본)으로 그려지던 기존 갭을 닫는다(2레이어 감사 후속).
+  if (HAS_SUPABASE && status === 'signed_out') return <Redirect href="/" />;
+  if (HAS_SUPABASE && status === 'loading') return null;
+  return <BillingBody />;
+}
+
+function BillingBody() {
   const router = useRouter();
   const role = useSessionStore((s) => s.role);
   const storeName = useSessionStore((s) => s.storeName);

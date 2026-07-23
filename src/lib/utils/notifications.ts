@@ -26,8 +26,6 @@ export type JuniorNotif = {
   route: JuniorNotifRoute;
   /** 탭 시 읽음처리(read_by)할 feed id. 공지·멘션에 설정. */
   readFeedId?: string;
-  /** @deprecated readFeedId로 대체. 하위호환용. */
-  noticeId?: string;
 };
 
 // ── 공유 술어(뱃지·목록이 동일 규칙을 쓰도록 한 곳에서) ──────────────
@@ -122,7 +120,6 @@ export function buildJuniorNotifications(args: {
       unread: isUnreadNotice(f, me) && isAfterAck(f.createdAt, ackAt),
       route: '/junior/work',
       readFeedId: f.id,
-      noticeId: f.id,
     });
   }
 

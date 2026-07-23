@@ -34,6 +34,11 @@ export function useCrossNotifRows() {
 
   const ackByUnit = useMemberPrefsStore((s) => s.ackByUnit);
   const { rows, unreadByUnit, totalUnread } = useMemo(() => {
+    // 매장 목록(my_units) 도착 전엔 계산하지 않는다 — 매장별 역할을 모른 채 전역 role 로 세면
+    // 찰나에 틀린 뱃지가 떴다 바뀌는 레이스가 생긴다. 목록이 오면(수 초 내) 자동 재계산돼 표시.
+    if (sessionStores.length === 0) {
+      return { rows: mergeCrossNotifs([]), unreadByUnit: {} as Record<string, number>, totalUnread: 0 };
+    }
     const rOf = (uid: string) => sessionStores.find((u) => u.unit_id === uid)?.role ?? role;
     const ackOf = (uid: string) => ackByUnit[uid] ?? null; // 매장별 '모두 읽기' 기준(0078)
     const unreadByUnit: Record<string, number> = {};

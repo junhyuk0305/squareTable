@@ -5,6 +5,11 @@ import { create } from 'zustand';
 import { fetchMemberPrefs, saveMemberPrefs, ackNotifications, type UnitMemberPrefsRow } from '@/lib/db';
 import { guardWrite } from '@/lib/store/useSyncStore';
 
+// 연속 진입(허브→설정 등) 순간 이중 fetch 방지 — 이 간격 안의 재호출은 스킵(useCrossNotifStore 와 동일 패턴).
+// 저장/ack 는 낙관적 로컬 반영이라 TTL 과 무관하게 즉시 보인다.
+const HYDRATE_TTL_MS = 5_000;
+let _lastHydrateAt = 0;
+
 export type MemberPref = {
   nickname: string | null;
   color: string | null; // null 이면 storeColor(unitId) 자동색
@@ -46,8 +51,14 @@ export const useMemberPrefsStore = create<State>((set, get) => ({
   loaded: false,
 
   hydrate: async () => {
+    const now = Date.now();
+    if (now - _lastHydrateAt < HYDRATE_TTL_MS) return;
+    _lastHydrateAt = now;
     const { data, error } = await fetchMemberPrefs();
-    if (error || !data) return;
+    if (error || !data) {
+      _lastHydrateAt = 0; // 실패는 TTL 미적용 — 다음 진입에서 즉시 재시도
+      return;
+    }
     const byUnit: Record<string, MemberPref> = {};
     const ackByUnit: Record<string, string | null> = {};
     for (const r of data) {
