@@ -5,11 +5,13 @@ import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 
 import { OwnerCoachChat } from '@/components/OwnerCoachChat';
 import { PublishConfirmSheet } from '@/components/owner/PublishConfirmSheet';
+import { PublishCrossStoreNudge } from '@/components/owner/PublishCrossStoreNudge';
 import { Appear } from '@/components/Appear';
 import { EmptyState } from '@/components/EmptyState';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { useUnknownQueueStore } from '@/lib/store/useUnknownQueueStore';
 import { useSuggestionStore } from '@/lib/store/useSuggestionStore';
+import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useWorkStore } from '@/lib/store/useWorkStore';
 import { buildDirectUq } from '@/lib/utils/buildEntry';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
@@ -51,6 +53,15 @@ export default function OwnerCoachScreen() {
 
   const [toast, setToast] = useState<string | null>(null);
   const [toastErr, setToastErr] = useState(false); // 실패 토스트(성공과 시각 구분·네비 안 함)
+
+  // 발행 넛지(S3 #1): 사장이 매장 2개 이상이면 발행 직후 "다른 내 매장에도?"를 제안. 대상=내 소유 다른 매장.
+  const stores = useSessionStore((s) => s.stores);
+  const activeUnit = useSessionStore((s) => s.unitId);
+  const nudgeTargets = useMemo(
+    () => stores.filter((st) => st.role === 'owner' && st.unit_id !== activeUnit).map((st) => ({ unit_id: st.unit_id, store_name: st.store_name })),
+    [stores, activeUnit],
+  );
+  const [nudgeIds, setNudgeIds] = useState<string[] | null>(null); // 발행된 entryIds(넛지 대상). null=넛지 없음.
 
   // 직접 등록용 합성 uq (capture/add와 동일 패턴). 인박스 모드면 실제 uq 사용.
   const initialCategory: Category = useMemo(() => {
@@ -106,10 +117,12 @@ export default function OwnerCoachScreen() {
       }
       setToastErr(false);
       setToast(okMsg);
-      navAfter();
+      // 매장 2개 이상이면 "다른 매장에도?" 넛지를 띄우고 네비는 넛지 닫힘까지 미룬다. 아니면 바로 이동.
+      if (nudgeTargets.length > 0 && entryIds.length > 0) setNudgeIds(entryIds);
+      else navAfter();
       return true;
     },
-    [answerable, realUq, resolve, sugId, approveSuggestion, srcTemplate, attachKnowhow, feedId, markPromoted, navAfter],
+    [answerable, realUq, resolve, sugId, approveSuggestion, srcTemplate, attachKnowhow, feedId, markPromoted, navAfter, nudgeTargets],
   );
 
   // ── 저장 전 확인(겹침·챕터) ──
@@ -217,6 +230,14 @@ export default function OwnerCoachScreen() {
           router.push(`/owner/edit/${entryId}`);
         }}
       />
+
+      {nudgeIds && (
+        <PublishCrossStoreNudge
+          entryIds={nudgeIds}
+          targets={nudgeTargets}
+          onClose={() => { setNudgeIds(null); navAfter(); }}
+        />
+      )}
 
       {toast && (
         <View pointerEvents="none" style={styles.toastWrap}>

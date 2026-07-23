@@ -157,6 +157,12 @@ export async function copyKnowhow(fromUnit: string, entryIds: string[]): Promise
   const { data, error } = await supabase.rpc('copy_knowhow', { p_from_unit: fromUnit, p_entry_ids: entryIds });
   return { data: (data as number) ?? null, error: error as DbErr };
 }
+/** 활성매장에서 방금 발행한 노하우를 "다른 내 매장(toUnit)"으로 밀어넣기(발행 넛지, S3 #1). 방향만 반대·이중 소유검증은 RPC 내부. */
+export async function copyKnowhowTo(toUnit: string, entryIds: string[]): Promise<DbResult<number>> {
+  if (!HAS_SUPABASE) return { data: entryIds.length, error: null };
+  const { data, error } = await supabase.rpc('copy_knowhow_to', { p_to_unit: toUnit, p_entry_ids: entryIds });
+  return { data: (data as number) ?? null, error: error as DbErr };
+}
 
 // ── 다점포 통합뷰(0060) — 내 전 매장 핵심 지표 집계(소유 매장만, definer). 합계는 클라 파생 ──────
 export type OwnerOverviewRow = {
