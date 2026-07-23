@@ -57,6 +57,14 @@ export function OwnerOverview() {
     return { pending_q: sum('pending_q'), knowhow: sum('knowhow'), staff: sum('staff'), labor_month: sum('labor_month') };
   }, [rows]);
 
+  // "손 필요 순" — 미답 질문 많은 매장부터, 다음은 노하우 미첨부 업무 많은 순(둘 다 매장 단위 결과물 신호).
+  // 서버는 생성순으로 주고, 사장이 볼 것(손 필요)을 먼저 보이도록 클라에서만 파생 정렬(서버 무변경).
+  const sorted = useMemo(() => {
+    return [...(rows ?? [])].sort((a, b) =>
+      (b.pending_q - a.pending_q) || ((b.uncovered ?? 0) - (a.uncovered ?? 0)) || a.store_name.localeCompare(b.store_name, 'ko'),
+    );
+  }, [rows]);
+
   const goStore = async (unitId: string) => {
     if (busyId) return;
     if (unitId === activeUnit) { router.replace('/owner/dashboard'); return; }
@@ -100,9 +108,9 @@ export function OwnerOverview() {
 
       {/* 매장별 */}
       <View style={styles.block}>
-        <SectionLabel icon="storefront-outline" title="매장별" hint="탭하면 그 매장으로" />
+        <SectionLabel icon="storefront-outline" title="매장별" hint="손 필요 순 · 탭하면 그 매장으로" />
         <View style={styles.list}>
-          {rows.map((r) => (
+          {sorted.map((r) => (
             <Pressable
               key={r.unit_id}
               onPress={() => goStore(r.unit_id)}
@@ -126,6 +134,7 @@ export function OwnerOverview() {
                 <Cell label="미답" value={String(r.pending_q)} alert={r.pending_q > 0} />
                 <Cell label="직원" value={String(r.staff)} />
                 <Cell label="노하우" value={String(r.knowhow)} />
+                <Cell label="미첨부 업무" value={String(r.uncovered ?? 0)} />
               </View>
               <View style={styles.laborRowSm}>
                 <Text style={styles.laborLabelSm}>이번 달 인건비</Text>

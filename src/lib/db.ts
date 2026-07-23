@@ -168,6 +168,7 @@ export async function copyKnowhowTo(toUnit: string, entryIds: string[]): Promise
 export type OwnerOverviewRow = {
   unit_id: string; store_name: string; is_active: boolean;
   pending_q: number; knowhow: number; staff: number; labor_month: number;
+  uncovered: number; // 첨부 노하우 없는 업무 수(커버리지, 0074). 매장 단위 결과물 카운트
 };
 /** 내가 소유한 모든 매장의 미답질문·노하우·직원·이번달 인건비를 한 번에. RLS는 활성만 보이므로 definer RPC. */
 export async function fetchOwnerOverview(): Promise<DbResult<OwnerOverviewRow[]>> {
