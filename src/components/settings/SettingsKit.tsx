@@ -31,6 +31,8 @@ export function SettingsRow({
   icon,
   label,
   value,
+  valueNode,
+  hint,
   onPress,
   danger,
   first,
@@ -38,6 +40,10 @@ export function SettingsRow({
   icon?: IconName;
   label: string;
   value?: string;
+  /** value(문자열) 대신 임의 노드(색 스와치 등). value보다 우선. */
+  valueNode?: React.ReactNode;
+  /** 라벨 아래 보조 설명(SettingsToggle과 동일 룩). */
+  hint?: string;
   onPress?: () => void;
   danger?: boolean;
   first?: boolean;
@@ -52,8 +58,11 @@ export function SettingsRow({
       style={({ pressed }) => [styles.row, !first && styles.rowBorder, pressed && onPress && { backgroundColor: InkColors.bgSoft }]}
     >
       {icon ? <Ionicons name={icon} size={19} color={tint} style={styles.rowIcon} /> : null}
-      <Text style={[styles.rowLabel, danger && { color: BrandColors.accent }]}>{label}</Text>
-      {value ? <Text style={styles.rowValue}>{value}</Text> : null}
+      <View style={styles.rowLabelWrap}>
+        <Text style={[styles.rowLabelText, danger && { color: BrandColors.accent }]}>{label}</Text>
+        {hint ? <Text style={styles.rowHint}>{hint}</Text> : null}
+      </View>
+      {valueNode ? valueNode : value ? <Text style={styles.rowValue}>{value}</Text> : null}
       {onPress && !danger ? <Ionicons name="chevron-forward" size={17} color={InkColors.ink3} /> : null}
     </Pressable>
   );
@@ -78,7 +87,7 @@ export function SettingsToggle({
     <View style={[styles.row, !first && styles.rowBorder]}>
       {icon ? <Ionicons name={icon} size={19} color={InkColors.ink2} style={styles.rowIcon} /> : null}
       <View style={{ flex: 1 }}>
-        <Text style={styles.rowLabel}>{label}</Text>
+        <Text style={styles.rowLabelText}>{label}</Text>
         {hint ? <Text style={styles.rowHint}>{hint}</Text> : null}
       </View>
       <ChachakSwitch value={value} onValueChange={onValueChange} accessibilityLabel={label} />
@@ -98,7 +107,8 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 15, minHeight: 52 },
   rowBorder: { borderTopWidth: 1, borderTopColor: InkColors.line },
   rowIcon: { width: 22, textAlign: 'center' },
-  rowLabel: { flex: 1, fontSize: 15, fontWeight: '600', color: InkColors.ink },
+  rowLabelWrap: { flex: 1 },
+  rowLabelText: { fontSize: 15, fontWeight: '600', color: InkColors.ink },
   rowHint: { fontSize: 12, color: InkColors.ink3, marginTop: 2, fontWeight: '400' },
   rowValue: { fontSize: 14, color: InkColors.ink3, marginRight: 2 },
 });

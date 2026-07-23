@@ -1,191 +1,255 @@
-import { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
+import { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, Pressable, TextInput } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
-import Constants from 'expo-constants';
 import { useSessionStore } from '@/lib/store/useSessionStore';
-import { usePreferencesStore, type TextScale } from '@/lib/store/usePreferencesStore';
-import { logout } from '@/lib/auth';
-import { confirmAction, notifyAction } from '@/lib/utils/confirm';
-import { InkColors, BrandColors } from '@/lib/theme/colors';
+import { useMemberPrefsStore } from '@/lib/store/useMemberPrefsStore';
+import { usePayrollStore } from '@/lib/store/usePayrollStore';
+import { notifyAction } from '@/lib/utils/confirm';
+import { won } from '@/lib/utils/attendance';
+import { storeColor, STORE_COLORS } from '@/lib/utils/storeColor';
+import { InkColors } from '@/lib/theme/colors';
+import { Radius, Elevation } from '@/lib/theme/elevation';
+import { Space } from '@/lib/theme/layout';
 import { SettingsSection, SettingsRow, SettingsToggle } from '@/components/settings/SettingsKit';
 import { QuietHoursModal } from '@/components/settings/QuietHoursModal';
-import { TextScaleModal } from '@/components/settings/TextScaleModal';
+import { BottomSheet } from '@/components/BottomSheet';
 import { ConfirmModal } from '@/components/ConfirmModal';
-import { ContactModal } from '@/components/ContactModal';
 import { RoleTabBar } from '@/components/RoleTabBar';
-import { HeaderLogoutButton } from '@/components/HeaderLogoutButton';
 
-const SCALE_LABEL: Record<TextScale, string> = { small: '작게', normal: '보통', large: '크게' };
-
-export default function JuniorSettings() {
+/**
+ * 매장 설정 — 직원 5탭의 설정 탭. "이 매장에서만" 갈리는 개인 설정을 담는다(직원×매장 레이어).
+ * 매장 닉네임·색·내 시급(읽기)·이 매장 방해금지·이 매장 음소거·매장 나가기.
+ * (프로필·푸시 동의·글자 크기·약관·로그아웃·탈퇴 같은 계정 전역 설정은 '전체 계정 설정'으로 이동.)
+ */
+export default function StoreSettings() {
   const router = useRouter();
-  const userName = useSessionStore((s) => s.userName);
-  const email = useSessionStore((s) => s.email);
-  const bio = useSessionStore((s) => s.bio);
-  const storeName = useSessionStore((s) => s.storeName);
-  const deleteAccount = useSessionStore((s) => s.deleteAccount);
+  const unitId = useSessionStore((s) => s.unitId);
+  const storeName = useSessionStore((s) => s.storeName) || '내 매장';
+  const userId = useSessionStore((s) => s.userId);
   const leaveStore = useSessionStore((s) => s.leaveStore);
-  const prefs = usePreferencesStore();
+  const wages = usePayrollStore((s) => s.wages);
+
+  const prefFor = useMemberPrefsStore((s) => s.prefFor);
+  const savePref = useMemberPrefsStore((s) => s.save);
+  const hydratePrefs = useMemberPrefsStore((s) => s.hydrate);
+
   const [busy, setBusy] = useState(false);
   const [quietModal, setQuietModal] = useState(false);
-  const [scaleModal, setScaleModal] = useState(false);
   const [leaveModal, setLeaveModal] = useState(false);
-  const [contactModal, setContactModal] = useState(false);
+  // 개인화 시트 draft — 부모가 소유(시트 안에서 effect로 seed하면 lint set-state-in-effect). 열 때 현재값 주입.
+  const [personalize, setPersonalize] = useState(false);
+  const [draftName, setDraftName] = useState('');
+  const [draftColor, setDraftColor] = useState<string | null>(null);
 
-  const version = Constants.expoConfig?.version ?? '1.0.0';
+  // 이 매장 개인 설정을 당긴다(내 전 매장 한 번에). 이미 로드됐으면 중복 fetch는 값만 갱신.
+  useEffect(() => {
+    void hydratePrefs();
+  }, [hydratePrefs]);
 
-  const onLogout = async () => {
-    if (await confirmAction('로그아웃', '로그아웃하시겠어요?', '로그아웃', { icon: 'log-out-outline' })) await logout();
+  const pref = prefFor(unitId ?? '');
+  const wage = userId ? wages[userId] : undefined;
+  const color = storeColor(unitId ?? '', pref.color);
+
+  const openPersonalize = () => {
+    setDraftName(pref.nickname ?? '');
+    setDraftColor(pref.color);
+    setPersonalize(true);
   };
 
-  // 매장 나가기는 시스템 '알람'(window.confirm/Alert)이 아니라 앱 내 빨강 모달로 확인받는다.
+  const save = async (patch: Parameters<typeof savePref>[1]) => {
+    if (!unitId) return;
+    const { error } = await savePref(unitId, patch);
+    if (error) {
+      await notifyAction('저장 실패', '설정을 저장하지 못했어요. 연결을 확인하고 다시 시도해 주세요.', '확인', {
+        icon: 'alert-circle-outline',
+      });
+    }
+  };
+
   const onLeaveConfirm = async () => {
     setBusy(true);
     const { error } = await leaveStore();
     setBusy(false);
     setLeaveModal(false);
     if (error) return void notifyAction('실패', error, '확인', { icon: 'alert-circle-outline' });
-    // 가드 리다이렉트 목적지(/junior/hub)와 동일하게 통일 — 매장 나가면 개인 허브로 복귀.
     router.replace('/junior/hub');
-  };
-
-  const onDelete = async () => {
-    const ok = await confirmAction(
-      '회원탈퇴',
-      '계정과 내 기록(질문·출퇴근)이 삭제되며 복구할 수 없어요. 정말 탈퇴하시겠어요?',
-      '탈퇴하기',
-      { destructive: true, icon: 'trash-outline' },
-    );
-    if (!ok) return;
-    setBusy(true);
-    const { error } = await deleteAccount();
-    setBusy(false);
-    if (error) return void notifyAction('탈퇴 실패', error, '확인', { icon: 'alert-circle-outline' });
-    router.replace('/');
-  };
-
-  // 알림 선호는 DB(SSOT)에 원자적으로 저장 — 실패 시 스토어가 롤백해 토글이 원위치되고 여기서 고지한다.
-  const saveNotify = async (patch: Parameters<typeof prefs.saveNotify>[0]) => {
-    const { error } = await prefs.saveNotify(patch);
-    if (error) {
-      await notifyAction('저장 실패', '알림 설정을 저장하지 못했어요. 연결을 확인하고 다시 시도해 주세요.', '확인', {
-        icon: 'alert-circle-outline',
-      });
-    }
   };
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
-      <Stack.Screen options={{ headerShown: true, title: '설정', headerRight: () => <HeaderLogoutButton /> }} />
-      {/* 설정탭은 의도적으로 등장 애니메이션을 쓰지 않는다 — 자주 드나드는 관리 화면이라
-          매번 카드가 떠오르면 번잡함. 카드 등장 모션은 홈·물어보기·출퇴근·업무 등 콘텐츠 탭에만(Appear). */}
+      <Stack.Screen options={{ headerShown: true, title: '매장 설정' }} />
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        {/* 프로필 카드 자체가 '내 계정' 진입점 — 누르면 프로필 편집·비밀번호 변경 화면으로. */}
+        {/* 매장 헤더 — 색 점 + 매장명 + (있으면) 내 별칭. 탭하면 개인화 시트. */}
         <Pressable
-          onPress={() => router.push('/account-edit')}
-          style={({ pressed }) => [styles.profile, pressed && { opacity: 0.7 }]}
+          onPress={openPersonalize}
+          style={({ pressed }) => [styles.storeHead, pressed && { opacity: 0.7 }]}
           accessibilityRole="button"
-          accessibilityLabel="내 계정 — 프로필 편집·비밀번호 변경"
+          accessibilityLabel="매장 닉네임·색 설정"
         >
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{(userName || '직')[0]}</Text>
-          </View>
+          <View style={[styles.colorDot, { backgroundColor: color }]} />
           <View style={{ flex: 1 }}>
-            <Text style={styles.pName}>{userName || '직원'}님</Text>
-            <Text style={styles.pMeta}>{bio || email || '데모 계정'}</Text>
-            <Text style={styles.pMeta}>{storeName || '매장 미연결'}</Text>
+            <Text style={styles.storeName}>{pref.nickname || storeName}</Text>
+            <Text style={styles.storeSub}>{pref.nickname ? storeName : '탭해서 닉네임·색을 바꿔요'}</Text>
           </View>
           <Ionicons name="chevron-forward" size={20} color={InkColors.ink3} />
         </Pressable>
 
-        <SettingsSection icon="time-outline" title="내 근무">
-          <SettingsRow first icon="time-outline" label="내 시프트 · 시급" onPress={() => router.push('/junior/schedule')} />
+        <SettingsSection icon="color-palette-outline" title="이 매장">
+          <SettingsRow first icon="pricetag-outline" label="매장 닉네임" value={pref.nickname || '설정 안 함'} onPress={openPersonalize} />
+          <SettingsRow icon="color-palette-outline" label="매장 색" valueNode={<View style={[styles.colorDotSm, { backgroundColor: color }]} />} onPress={openPersonalize} />
+          {/* 내 시급 = 읽기 표시만(사장이 정하는 값). */}
+          <SettingsRow icon="cash-outline" label="내 시급" value={wage ? `${won(wage)}/시간` : '사장님이 정해요'} />
         </SettingsSection>
 
-        <SettingsSection icon="notifications-outline" title="알림">
+        <SettingsSection icon="notifications-outline" title="이 매장 알림">
           <SettingsToggle
             first
-            icon="notifications-outline"
-            label="푸시 알림"
-            hint="사장님이 답하거나 새 공지가 오면 알려드려요"
-            value={prefs.pushEnabled}
-            onValueChange={(v) => saveNotify({ pushEnabled: v })}
+            icon="notifications-off-outline"
+            label="이 매장 알림 음소거"
+            hint="이 매장의 핸드폰 알림을 끕니다 (알림함엔 그대로 쌓여요)"
+            value={pref.muted}
+            onValueChange={(v) => save({ muted: v })}
           />
           <SettingsToggle
             icon="moon-outline"
             label="방해 금지 시간"
-            hint={`${prefs.quietStart}~${prefs.quietEnd}에는 핸드폰 알림만 꺼요 (알림함엔 그대로 쌓여요)`}
-            value={prefs.quietHours}
-            onValueChange={(v) => saveNotify({ quietHours: v })}
+            hint={`${pref.quiet_start}~${pref.quiet_end}에는 이 매장 핸드폰 알림만 꺼요`}
+            value={pref.quiet_enabled}
+            onValueChange={(v) => save({ quiet_enabled: v })}
           />
-          {prefs.quietHours ? (
-            <SettingsRow
-              icon="time-outline"
-              label="시간대 설정"
-              value={`${prefs.quietStart} ~ ${prefs.quietEnd}`}
-              onPress={() => setQuietModal(true)}
-            />
+          {pref.quiet_enabled ? (
+            <SettingsRow icon="time-outline" label="시간대 설정" value={`${pref.quiet_start} ~ ${pref.quiet_end}`} onPress={() => setQuietModal(true)} />
           ) : null}
         </SettingsSection>
 
-        <SettingsSection icon="phone-portrait-outline" title="화면">
-          <SettingsRow first icon="text-outline" label="글자 크기" value={SCALE_LABEL[prefs.textScale]} onPress={() => setScaleModal(true)} />
-        </SettingsSection>
-
-        <SettingsSection icon="document-text-outline" title="약관 및 정책">
-          <SettingsRow first icon="document-text-outline" label="이용약관" onPress={() => router.push('/terms')} />
-          <SettingsRow icon="shield-checkmark-outline" label="개인정보처리방침" onPress={() => router.push('/privacy')} />
-        </SettingsSection>
-
-        <SettingsSection icon="help-buoy-outline" title="고객센터">
-          <SettingsRow first icon="chatbubble-ellipses-outline" label="문의하기" onPress={() => setContactModal(true)} />
-          <SettingsRow icon="information-circle-outline" label="버전 정보" value={`v${version}`} />
-        </SettingsSection>
-
         <SettingsSection>
-          {/* 무해한 액션(로그아웃) 먼저, 되돌리기 어려운 액션은 아래로 — 오탭 방지. owner 설정과 동일 순서 */}
-          <SettingsRow first icon="log-out-outline" label="로그아웃" onPress={onLogout} />
+          <SettingsRow first icon="settings-outline" label="전체 계정 설정" hint="프로필·글자 크기·약관·로그아웃" onPress={() => router.push('/account-settings')} />
           <SettingsRow icon="exit-outline" label="매장 나가기" onPress={busy ? undefined : () => setLeaveModal(true)} />
-          <SettingsRow icon="trash-outline" label="회원탈퇴" danger onPress={busy ? undefined : onDelete} />
         </SettingsSection>
 
-        <Text style={styles.foot}>착착 · 팀 스퀘어테이블</Text>
         <View style={{ height: 16 }} />
       </ScrollView>
+
+      <PersonalizeSheet
+        visible={personalize}
+        name={draftName}
+        setName={setDraftName}
+        sel={draftColor}
+        setSel={setDraftColor}
+        autoColor={storeColor(unitId ?? '')}
+        storeName={storeName}
+        onClose={() => setPersonalize(false)}
+        onSave={() => {
+          setPersonalize(false);
+          void save({ nickname: draftName.trim() ? draftName.trim() : null, color: draftColor });
+        }}
+      />
       <QuietHoursModal
         visible={quietModal}
-        start={prefs.quietStart}
-        end={prefs.quietEnd}
+        start={pref.quiet_start}
+        end={pref.quiet_end}
         onClose={() => setQuietModal(false)}
-        onSave={(s, e) => saveNotify({ quietStart: s, quietEnd: e })}
+        onSave={(s, e) => save({ quiet_start: s, quiet_end: e })}
       />
       <ConfirmModal
         visible={leaveModal}
         icon="exit-outline"
         destructive
         title="매장 나가기"
-        message={`'${storeName || '현재 매장'}'에서 나가시겠어요? 다시 합류하려면 사장님의 초대코드가 필요해요.`}
+        message={`'${storeName}'에서 나가시겠어요? 다시 합류하려면 사장님의 초대코드가 필요해요.`}
         confirmLabel="나가기"
         busy={busy}
         onConfirm={onLeaveConfirm}
         onCancel={() => setLeaveModal(false)}
       />
-      <TextScaleModal visible={scaleModal} onClose={() => setScaleModal(false)} />
-      <ContactModal visible={contactModal} onClose={() => setContactModal(false)} />
       <RoleTabBar role="junior" />
     </SafeAreaView>
+  );
+}
+
+/** 매장 개인화 시트 — 이 매장에 붙일 나만의 닉네임 + 색(자동색 포함). draft는 부모가 소유(제어형). */
+function PersonalizeSheet({
+  visible,
+  name,
+  setName,
+  sel,
+  setSel,
+  autoColor,
+  storeName,
+  onClose,
+  onSave,
+}: {
+  visible: boolean;
+  name: string;
+  setName: (v: string) => void;
+  sel: string | null;
+  setSel: (v: string | null) => void;
+  autoColor: string;
+  storeName: string;
+  onClose: () => void;
+  onSave: () => void;
+}) {
+  return (
+    <BottomSheet visible={visible} onClose={onClose} sheetStyle={{ paddingBottom: 24 }}>
+      <View style={styles.sheetHead}>
+        <Text style={styles.sheetTitle}>매장 표시</Text>
+        <Pressable onPress={onClose} hitSlop={8}><Ionicons name="close" size={20} color={InkColors.ink2} /></Pressable>
+      </View>
+      <View style={styles.sheetBody}>
+        <Text style={styles.fieldLabel}>매장 닉네임</Text>
+        <TextInput
+          value={name}
+          onChangeText={(v) => setName(v.slice(0, 20))}
+          placeholder={storeName}
+          placeholderTextColor={InkColors.ink3}
+          style={styles.input}
+          maxLength={20}
+        />
+        <Text style={styles.fieldHint}>이 매장을 부르는 나만의 이름이에요 (나만 보여요).</Text>
+
+        <Text style={[styles.fieldLabel, { marginTop: 18 }]}>매장 색</Text>
+        <View style={styles.swatchRow}>
+          {/* 자동색 = 저장값 없음(null). */}
+          <Pressable onPress={() => setSel(null)} style={[styles.swatch, { backgroundColor: autoColor }, sel === null && styles.swatchOn]} accessibilityRole="button" accessibilityLabel="자동 색">
+            {sel === null && <Ionicons name="checkmark" size={16} color="#fff" />}
+          </Pressable>
+          {STORE_COLORS.map((c) => (
+            <Pressable key={c} onPress={() => setSel(c)} style={[styles.swatch, { backgroundColor: c }, sel === c && styles.swatchOn]} accessibilityRole="button" accessibilityLabel={`색 ${c}`}>
+              {sel === c && <Ionicons name="checkmark" size={16} color="#fff" />}
+            </Pressable>
+          ))}
+        </View>
+
+        <Pressable onPress={onSave} style={({ pressed }) => [styles.saveBtn, pressed && { opacity: 0.85 }]}>
+          <Text style={styles.saveBtnText}>저장</Text>
+        </Pressable>
+      </View>
+    </BottomSheet>
   );
 }
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: InkColors.cream },
   scroll: { padding: 20, paddingTop: 16 },
-  profile: { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 16, backgroundColor: '#FFFFFF', borderRadius: 14, borderWidth: 1, borderColor: InkColors.line, marginBottom: 20 },
-  avatar: { width: 52, height: 52, borderRadius: 26, backgroundColor: BrandColors.brandSoft, alignItems: 'center', justifyContent: 'center' },
-  avatarText: { fontSize: 22, fontWeight: '900', color: BrandColors.brand },
-  pName: { fontSize: 17, fontWeight: '800', color: InkColors.ink },
-  pMeta: { fontSize: 13, color: InkColors.ink3, marginTop: 1 },
-  foot: { fontSize: 11, color: InkColors.ink3, textAlign: 'center', marginTop: 6 },
+
+  storeHead: { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 16, backgroundColor: '#FFFFFF', borderRadius: 14, borderWidth: 1, borderColor: InkColors.line, marginBottom: 20 },
+  colorDot: { width: 20, height: 20, borderRadius: 10 },
+  colorDotSm: { width: 18, height: 18, borderRadius: 9 },
+  storeName: { fontSize: 17, fontWeight: '800', color: InkColors.ink },
+  storeSub: { fontSize: 13, color: InkColors.ink3, marginTop: 2 },
+
+  // 개인화 시트
+  sheetHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingBottom: 8 },
+  sheetTitle: { fontSize: 16, fontWeight: '900', color: InkColors.ink },
+  sheetBody: { paddingHorizontal: 20, paddingTop: 6 },
+  fieldLabel: { fontSize: 12.5, fontWeight: '800', color: InkColors.ink2, marginBottom: 8 },
+  fieldHint: { fontSize: 12, color: InkColors.ink3, marginTop: 6 },
+  input: { borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, color: InkColors.ink, backgroundColor: InkColors.bg },
+  swatchRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.md },
+  swatch: { width: 38, height: 38, borderRadius: Radius.pill, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: 'transparent' },
+  swatchOn: { borderColor: InkColors.ink },
+  saveBtn: { marginTop: 22, backgroundColor: InkColors.ink, borderRadius: Radius.md, paddingVertical: 15, alignItems: 'center', ...Elevation.e1 },
+  saveBtnText: { color: '#fff', fontSize: 15, fontWeight: '800' },
 });

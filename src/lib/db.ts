@@ -219,6 +219,39 @@ export async function saveNotificationPrefs(p: NotificationPrefsRow): Promise<{ 
   return { error: error as DbErr };
 }
 
+// ── 매장별 개인 설정(unit_member_prefs) — "직원×매장" 레이어(닉네임·색·매장별 방해금지·음소거) ─────
+// 순수 개인화라 본인 행만(RLS). 화면/스토어는 여기로만 접근(§계층 경계 ③). 저장=원자적 upsert RPC 한 곳.
+// 읽기는 내 전 매장 행을 한 번에 받아 클라가 unit_id 로 머지한다(my_units RPC 는 무변경 — 시그니처 보존).
+export type UnitMemberPrefsRow = {
+  unit_id: string;
+  nickname: string | null;
+  color: string | null; // null 이면 클라가 unit_id 해시로 자동 배정
+  muted: boolean;
+  quiet_enabled: boolean;
+  quiet_start: string; // "HH:MM"
+  quiet_end: string; // "HH:MM"
+};
+export async function fetchMemberPrefs(): Promise<DbResult<UnitMemberPrefsRow[]>> {
+  if (!HAS_SUPABASE) return { data: null, error: null };
+  const { data, error } = await supabase
+    .from('unit_member_prefs')
+    .select('unit_id, nickname, color, muted, quiet_enabled, quiet_start, quiet_end');
+  return { data: (data as UnitMemberPrefsRow[]) ?? null, error: error as DbErr };
+}
+export async function saveMemberPrefs(p: UnitMemberPrefsRow): Promise<{ error: DbErr }> {
+  if (!HAS_SUPABASE) return { error: null };
+  const { error } = await supabase.rpc('save_unit_member_prefs', {
+    p_unit_id: p.unit_id,
+    p_nickname: p.nickname,
+    p_color: p.color,
+    p_muted: p.muted,
+    p_quiet_enabled: p.quiet_enabled,
+    p_quiet_start: p.quiet_start,
+    p_quiet_end: p.quiet_end,
+  });
+  return { error: error as DbErr };
+}
+
 // 전화번호 중복 사전검사(주키). 비로그인 호출 가능. data=true/false, error=검사 실패.
 export async function checkPhoneInUse(phone: string): Promise<DbResult<boolean>> {
   const { data, error } = await supabase.rpc('phone_in_use', { p_phone: phone });

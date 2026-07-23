@@ -5,8 +5,10 @@ import { Stack, useRouter, Redirect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 import { useSessionStore } from '@/lib/store/useSessionStore';
+import { useMemberPrefsStore } from '@/lib/store/useMemberPrefsStore';
 import { needsProfileSetup } from '@/lib/store/profileSetup';
 import { HAS_SUPABASE } from '@/lib/supabase';
+import { storeColor } from '@/lib/utils/storeColor';
 import { fetchOwnerOverview, type MyUnitRow, type OwnerOverviewRow } from '@/lib/db';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
@@ -52,6 +54,13 @@ export default function StoresHub() {
   const [overview, setOverview] = useState<Record<string, OwnerOverviewRow>>({});
   const [switching, setSwitching] = useState<string | null>(null);
 
+  // 매장별 개인 설정(닉네임·색) — 카드에 반영. 로그인 후 내 전 매장 한 번에.
+  const prefFor = useMemberPrefsStore((s) => s.prefFor);
+  const hydratePrefs = useMemberPrefsStore((s) => s.hydrate);
+  useEffect(() => {
+    void hydratePrefs();
+  }, [hydratePrefs]);
+
   // 사장 매장 카드 지표(직원·노하우·확인필요) — 통합뷰 RPC 1회. 실패해도 카드는 그대로.
   useEffect(() => {
     let alive = true;
@@ -79,7 +88,8 @@ export default function StoresHub() {
 
   const addStore = () => router.push(canUseMultistore(plan) ? '/owner/create-store' : '/billing');
   const joinStore = () => router.push('/junior/hub');
-  const openSettings = () => router.push(isOwner ? '/owner/settings' : '/junior/settings');
+  // 직원 대시보드 우상단 프로필 → 전체 계정 설정(매장 무관). 매장별 설정은 매장 안 '매장 설정' 탭.
+  const openSettings = () => router.push(isOwner ? '/owner/settings' : '/account-settings');
 
   const planDef = PLANS[plan];
   const storeCount = stores.length;
@@ -148,19 +158,21 @@ export default function StoresHub() {
                   const ov = overview[s.unit_id];
                   const busy = switching === s.unit_id;
                   const isActive = s.unit_id === unitId;
+                  const pref = prefFor(s.unit_id);
+                  const color = storeColor(s.unit_id, pref.color);
                   return (
                     <Pressable
                       key={s.unit_id}
                       onPress={() => enterStore(s)}
                       disabled={!!switching}
-                      style={({ pressed }) => [styles.card, isActive && styles.cardActive, pressed && { opacity: 0.92 }]}
+                      style={({ pressed }) => [styles.card, isActive && styles.cardActive, { borderLeftWidth: 4, borderLeftColor: color }, pressed && { opacity: 0.92 }]}
                     >
-                      <View style={styles.cardIcon}>
-                        <Ionicons name={industryIcon(s.industry)} size={22} color="#7a5f10" />
+                      <View style={[styles.cardIcon, { backgroundColor: color + '22' }]}>
+                        <Ionicons name={industryIcon(s.industry)} size={22} color={color} />
                       </View>
                       <View style={{ flex: 1, minWidth: 0 }}>
                         <View style={styles.cardTitleRow}>
-                          <Text style={styles.storeName} numberOfLines={1}>{s.store_name}</Text>
+                          <Text style={styles.storeName} numberOfLines={1}>{pref.nickname || s.store_name}</Text>
                           {isActive && <Text style={styles.recentBadge}>최근</Text>}
                         </View>
                         <Text style={styles.storeMeta} numberOfLines={1}>
