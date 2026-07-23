@@ -87,6 +87,19 @@ const TENANT_TABLES = ['playbook_entries','chat_queries','unknown_queries','work
   { const a = await A.c.rpc('approve_member',{ p_uid:B.uid }); ok(!!a.error, `A→approve_member(B) 권한상승 거부`, a.error?`(${a.error.code||a.error.message.slice(0,30)})`:'RESP'); }
   { const r = await A.c.rpc('remove_staff',{ p_staff_id:B.uid }); ok(!!r.error, `A→remove_staff(B) 거부`, r.error?`(${r.error.code||r.error.message.slice(0,30)})`:'RESP'); }
 
+  // ── unit_member_prefs (직원×매장 개인 설정, 0076) — 본인 행(user_id) 격리 + 멤버십 가드 ──
+  { const s = await A.c.rpc('save_unit_member_prefs', { p_unit_id:A.unit, p_nickname:'A별칭', p_color:'#3E92D9', p_muted:false, p_quiet_enabled:true, p_quiet_start:'22:00', p_quiet_end:'08:00' });
+    ok(!s.error, `A 자기매장 prefs 저장 성공`, s.error?`(err ${s.error.message.slice(0,40)})`:''); }
+  { const { data, error } = await A.c.from('unit_member_prefs').select('user_id, unit_id');
+    const leaked=(data||[]).filter(r=>r.user_id!==A.uid);
+    ok(!error && leaked.length===0, `A prefs 전체나열 → 본인만`, error?`(err ${error.code})`:`본인외 ${leaked.length}`); }
+  { const { data, error } = await B.c.from('unit_member_prefs').select('*').eq('unit_id', A.unit);
+    ok(!error && (data?.length||0)===0, `B→A.unit prefs 0행(본인 아님)`, error?`(err ${error.code})`:`rows=${data?.length}`); }
+  { const s = await A.c.rpc('save_unit_member_prefs', { p_unit_id:B.unit, p_nickname:'X', p_color:null, p_muted:true, p_quiet_enabled:false, p_quiet_start:'22:00', p_quiet_end:'08:00' });
+    ok(!!s.error && /not_a_member/.test(s.error.message||''), `A→B.unit prefs 저장 거부(not_a_member)`, s.error?`(${s.error.message.slice(0,40)})`:'RESP(누출)'); }
+  { const f = await A.c.from('unit_member_prefs').insert({ user_id:B.uid, unit_id:A.unit, muted:true }).select();
+    ok(!!f.error || (f.data?.length||0)===0, `A→B.user_id prefs 위조삽입 거부`, f.error?`(err ${f.error.code})`:`inserted=${f.data?.length}`); }
+
   // ── 정리: 본인 세션으로 삭제 (await, no .catch) ──
   try { await A.c.rpc('delete_my_account'); } catch(e){ console.log('  ! A cleanup', e.message); }
   try { await B.c.rpc('delete_my_account'); } catch(e){ console.log('  ! B cleanup', e.message); }
