@@ -86,9 +86,21 @@ export default function JuniorHub() {
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
       <Stack.Screen options={{ headerShown: false }} />
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-        {/* 상단 바: 워드마크 + 마이페이지 진입 */}
+        {/* 상단 바: 매장 선택으로(뒤로) + 워드마크 + 마이페이지 진입 */}
         <View style={styles.topbar}>
-          <Wordmark size="sm" />
+          <View style={styles.topbarLeft}>
+            {/* hub는 headerShown:false라 화면 안에 탈출 경로를 둔다 — 매장 선택(/stores)으로. */}
+            <Pressable
+              onPress={() => router.replace('/stores')}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="매장 선택으로"
+              style={({ pressed }) => [styles.backBtn, pressed && { opacity: 0.6 }]}
+            >
+              <Ionicons name="arrow-back" size={24} color={InkColors.ink} />
+            </Pressable>
+            <Wordmark size="sm" />
+          </View>
           <Pressable
             onPress={() => router.push('/account-edit')}
             hitSlop={8}
@@ -280,6 +292,8 @@ const styles = StyleSheet.create({
   scroll: { padding: Space.gutter, gap: Space.xl, paddingBottom: 40 },
 
   topbar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  topbarLeft: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
+  backBtn: { padding: 2 },
   myBtn: { padding: 2 },
 
   greet: { gap: 4 },

@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { View, Text, Pressable, ScrollView, StyleSheet, TextInput } from 'react-native';
+import { useEffect, useMemo, useState } from 'react';
+import { View, Text, Pressable, ScrollView, StyleSheet, TextInput, Animated, Easing, type LayoutChangeEvent } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { SectionLabel } from './SectionLabel';
@@ -42,6 +42,41 @@ export function JuniorBrowseDashboard({ entries, emptyHint }: JuniorBrowseDashbo
   const [detailEntry, setDetailEntry] = useState<PlaybookEntry | null>(null);
   const [query, setQuery] = useState('');
   const [view, setView] = useState<ViewKey>('dashboard');
+
+  // 대시보드/목록 토글의 검정 pill을 세그먼트 사이로 부드럽게 슬라이드시킨다(색은 그대로).
+  // 두 버튼의 폭이 다르므로(대시보드>목록) onLayout으로 각 버튼의 x·width를 재고, 그 사이를 보간한다.
+  // Animated.Value는 ref가 아니라 안정 객체로 메모이즈 — render 중 ref.current 접근(react-hooks/refs) 회피(Appear와 동일 패턴).
+  const toggleAnim = useMemo(() => new Animated.Value(0), []); // 초기 view='dashboard'(0) — 아래 effect가 동기화
+  const [segLayouts, setSegLayouts] = useState<{ x: number; width: number }[]>([]);
+
+  useEffect(() => {
+    Animated.timing(toggleAnim, {
+      toValue: view === 'dashboard' ? 0 : 1,
+      duration: 180,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: false, // width는 네이티브 드라이버 불가 → JS 드라이버(작은 UI라 무해)
+    }).start();
+  }, [view, toggleAnim]);
+
+  const onSegLayout = (i: number) => (e: LayoutChangeEvent) => {
+    const { x, width } = e.nativeEvent.layout;
+    setSegLayouts((prev) => {
+      if (prev[i] && prev[i].x === x && prev[i].width === width) return prev;
+      const next = prev.slice();
+      next[i] = { x, width };
+      return next;
+    });
+  };
+
+  const pillReady = segLayouts.length === 2 && !!segLayouts[0] && !!segLayouts[1];
+  const pillStyle = pillReady
+    ? {
+        width: toggleAnim.interpolate({ inputRange: [0, 1], outputRange: [segLayouts[0].width, segLayouts[1].width] }),
+        transform: [
+          { translateX: toggleAnim.interpolate({ inputRange: [0, 1], outputRange: [segLayouts[0].x, segLayouts[1].x] }) },
+        ],
+      }
+    : null;
 
   // 검색 중에는 항상 목록(매칭 전체)을 보여준다 — 검색의 목적이 "리스트로 훑어보기"이므로.
   const searching = query.trim().length > 0;
@@ -114,24 +149,30 @@ export function JuniorBrowseDashboard({ entries, emptyHint }: JuniorBrowseDashbo
             <Text style={styles.resultCount}>{listEntries.length}개 찾음</Text>
           ) : (
             <View style={styles.viewToggle}>
-              <Pressable
-                onPress={() => setView('dashboard')}
-                style={[styles.viewToggleBtn, view === 'dashboard' && styles.viewToggleBtnOn]}
-                accessibilityRole="button"
-                accessibilityState={{ selected: view === 'dashboard' }}
-              >
-                <Ionicons name="grid-outline" size={13} color={view === 'dashboard' ? InkColors.bubbleText : InkColors.ink3} />
-                <Text style={[styles.viewToggleText, view === 'dashboard' && styles.viewToggleTextOn]}>대시보드</Text>
-              </Pressable>
-              <Pressable
-                onPress={() => setView('list')}
-                style={[styles.viewToggleBtn, view === 'list' && styles.viewToggleBtnOn]}
-                accessibilityRole="button"
-                accessibilityState={{ selected: view === 'list' }}
-              >
-                <Ionicons name="list-outline" size={14} color={view === 'list' ? InkColors.bubbleText : InkColors.ink3} />
-                <Text style={[styles.viewToggleText, view === 'list' && styles.viewToggleTextOn]}>목록</Text>
-              </Pressable>
+              {/* padding 없는 inner를 좌표계 기준으로 — 슬라이딩 pill(절대배치)과 버튼 onLayout 좌표가 같은 원점을 쓴다. */}
+              <View style={styles.viewToggleInner}>
+                {pillReady && <Animated.View pointerEvents="none" style={[styles.viewTogglePill, pillStyle]} />}
+                <Pressable
+                  onLayout={onSegLayout(0)}
+                  onPress={() => setView('dashboard')}
+                  style={styles.viewToggleBtn}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: view === 'dashboard' }}
+                >
+                  <Ionicons name="grid-outline" size={13} color={view === 'dashboard' ? InkColors.bubbleText : InkColors.ink3} />
+                  <Text style={[styles.viewToggleText, view === 'dashboard' && styles.viewToggleTextOn]}>대시보드</Text>
+                </Pressable>
+                <Pressable
+                  onLayout={onSegLayout(1)}
+                  onPress={() => setView('list')}
+                  style={styles.viewToggleBtn}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: view === 'list' }}
+                >
+                  <Ionicons name="list-outline" size={14} color={view === 'list' ? InkColors.bubbleText : InkColors.ink3} />
+                  <Text style={[styles.viewToggleText, view === 'list' && styles.viewToggleTextOn]}>목록</Text>
+                </Pressable>
+              </View>
             </View>
           )}
         </View>
@@ -199,9 +240,12 @@ const styles = StyleSheet.create({
 
   resultCount: { fontSize: 12.5, fontWeight: '700', color: InkColors.ink3, paddingLeft: 4 },
 
-  viewToggle: { flexDirection: 'row', gap: Space.xs, backgroundColor: InkColors.bgSoft, borderRadius: Radius.pill, padding: 3, alignSelf: 'flex-start' },
+  viewToggle: { backgroundColor: InkColors.bgSoft, borderRadius: Radius.pill, padding: 3, alignSelf: 'flex-start' },
+  // pill 좌표 기준(패딩 없음) — 버튼 x·width가 이 컨테이너 원점에 상대적, 절대배치 pill과 동일 원점.
+  viewToggleInner: { flexDirection: 'row', gap: Space.xs, position: 'relative' },
+  // 슬라이딩 검정 pill — inner 높이(=버튼 높이)를 채우고, width·translateX만 애니메이션.
+  viewTogglePill: { position: 'absolute', top: 0, bottom: 0, left: 0, borderRadius: Radius.pill, backgroundColor: InkColors.ink },
   viewToggleBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingVertical: 6, paddingHorizontal: 14, borderRadius: Radius.pill },
-  viewToggleBtnOn: { backgroundColor: InkColors.ink },
   viewToggleText: { fontSize: 12.5, fontWeight: '800', color: InkColors.ink3 },
   viewToggleTextOn: { color: InkColors.bubbleText },
 

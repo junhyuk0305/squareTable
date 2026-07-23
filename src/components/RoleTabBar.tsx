@@ -7,7 +7,7 @@ import { InkColors } from '@/lib/theme/colors';
 import { USE_NATIVE_DRIVER } from '@/lib/anim';
 
 type IconName = keyof typeof Ionicons.glyphMap;
-type Tab = { label: string; path: Href; icon: IconName; iconActive: IconName };
+type Tab = { label: string; path: Href; icon: IconName; iconActive: IconName; alsoActiveFor?: Href[] };
 
 /**
  * 각 탭 의미에 맞춘 아이콘. 선택된 탭은 채워진(filled) 아이콘, 나머지는 outline.
@@ -25,7 +25,8 @@ const TABS: Record<'junior' | 'owner', Tab[]> = {
     // 사장 '노하우' 탭은 자산 관리라 명사 유지(역할 비대칭은 의도된 설계).
     { label: '물어보기', path: '/junior/chat', icon: 'chatbubble-ellipses-outline', iconActive: 'chatbubble-ellipses' },
     { label: '업무 채팅', path: '/junior/work', icon: 'briefcase-outline', iconActive: 'briefcase' },
-    { label: '출퇴근', path: '/junior/attendance', icon: 'time-outline', iconActive: 'time' },
+    // 근무표·내 출퇴근 내역은 '출퇴근' 탭 계열의 서브화면 — 이 경로들에서도 탭을 활성으로 본다.
+    { label: '출퇴근', path: '/junior/attendance', icon: 'time-outline', iconActive: 'time', alsoActiveFor: ['/junior/schedule', '/junior/timesheet'] },
     { label: '설정', path: '/junior/settings', icon: 'settings-outline', iconActive: 'settings' },
   ],
   owner: [
@@ -55,10 +56,12 @@ export function RoleTabBar({ role }: { role: 'junior' | 'owner' }) {
 
   // pathname은 쿼리/해시가 제거된 문자열. t.path는 Href(미래에 쿼리·세그먼트가 붙을 수 있음)이므로
   // 정확 일치 + 하위 경로(`/base/...`)까지 활성으로 본다 → 경로가 바뀌어도 하이라이트가 깨지지 않는다.
-  const isActive = (path: Href) => {
+  const matchPath = (path: Href) => {
     const base = String(path);
     return pathname === base || pathname.startsWith(`${base}/`);
   };
+  // 탭 자기 경로 + 계열 서브화면(alsoActiveFor) 중 하나라도 맞으면 활성.
+  const isActive = (t: Tab) => matchPath(t.path) || (t.alsoActiveFor?.some(matchPath) ?? false);
 
   return (
     <View style={[styles.bar, { paddingBottom: Math.max(insets.bottom, 8) }]}>
@@ -66,9 +69,9 @@ export function RoleTabBar({ role }: { role: 'junior' | 'owner' }) {
         <TabButton
           key={String(t.path)}
           tab={t}
-          active={isActive(t.path)}
+          active={isActive(t)}
           onPress={() => {
-            if (!isActive(t.path)) goToTab(t.path);
+            if (!isActive(t)) goToTab(t.path);
           }}
         />
       ))}

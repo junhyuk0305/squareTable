@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter, type Href } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -94,8 +94,14 @@ export default function JuniorNotificationsScreen() {
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         {/* 맨 위 — 매장명 · 내 이름(정체성). 홈 헤더에서 옮겨온 정보 */}
+        {/* 카드 자체가 '내 계정' 진입점 — 누르면 프로필 편집 화면으로(설정 탭 프로필 카드와 동일 목적지). */}
         <Appear delay={0}>
-        <View style={styles.idCard}>
+        <Pressable
+          onPress={() => router.push('/account-edit')}
+          style={({ pressed }) => [styles.idCard, pressed && { opacity: 0.7 }]}
+          accessibilityRole="button"
+          accessibilityLabel="내 계정 — 프로필 편집"
+        >
           <View style={styles.avatar}>
             <Text style={styles.avatarText}>{initial}</Text>
           </View>
@@ -107,7 +113,7 @@ export default function JuniorNotificationsScreen() {
               {userName}님
             </Text>
           </View>
-        </View>
+        </Pressable>
         </Appear>
 
         <NotificationEnableCard />

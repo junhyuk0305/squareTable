@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { BottomSheet } from '@/components/BottomSheet';
 import { BrandColors, InkColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
+import { knowhowSourceLabel } from '@/lib/utils/knowhowSource';
 import type { PlaybookEntry } from '@/types';
 
 /**
@@ -126,7 +127,7 @@ export function EntryDetailModal({
             {/* 출처 */}
             <View style={s.sourceBox}>
               <Text style={s.sourceLabel}>출처</Text>
-              <Text style={s.sourceCreator}>{entry.creator_name} 사장님 가이드</Text>
+              <Text style={s.sourceCreator}>{knowhowSourceLabel(entry)} 가이드</Text>
               <Text style={s.sourceMeta}>v{entry.version} · {entry.updated_at} 갱신</Text>
             </View>
 

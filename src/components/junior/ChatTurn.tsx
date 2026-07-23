@@ -28,6 +28,8 @@ export type ChatTurnProps = {
   onDecline: () => void;
   resolveCategory: (entryId: string) => Category;
   findUQ: (queryText: string) => { presumed_category: Category; ai_general_answer: string; similar_queries_count?: number } | undefined;
+  /** 방금 들어온 턴만 등장 애니메이션을 태운다 — 과거 히스토리 전체가 매 마운트마다 재생되는 것 방지. */
+  animateIn?: boolean;
 };
 
 export function ChatTurn({
@@ -39,6 +41,7 @@ export function ChatTurn({
   onDecline,
   resolveCategory,
   findUQ,
+  animateIn = false,
 }: ChatTurnProps) {
   const router = useRouter();
   // 상세 모달은 출처(matched) 또는 후보(candidate) 어느 쪽이든 띄운다 — 단일 상태로 통일.
@@ -69,11 +72,14 @@ export function ChatTurn({
     return { general, similar };
   }, [block, findUQ, query.query_text]);
 
+  // 방금 제출한 턴만 Appear로 등장, 나머지(과거 히스토리)는 정적 View — 매 마운트 전체 재생 방지.
+  const AssistantWrap = animateIn ? Appear : View;
+
   return (
     <View style={turnStyles.turn}>
       <UserBubble text={query.query_text} />
 
-      <Appear style={turnStyles.assistant}>
+      <AssistantWrap style={turnStyles.assistant}>
         {block?.degraded && (
           <View style={turnStyles.degradedNote}>
             <Ionicons name="cloud-offline-outline" size={13} color={InkColors.ink3} />
@@ -230,7 +236,7 @@ export function ChatTurn({
             </Text>
           </View>
         )}
-      </Appear>
+      </AssistantWrap>
 
       {/* 출처·후보 → 원본 노하우 상세(읽기 전용) */}
       <EntryDetailModal entry={detailEntry} visible={!!detailEntry} onClose={() => setDetailEntry(undefined)} />

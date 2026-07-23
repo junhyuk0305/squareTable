@@ -1,4 +1,5 @@
-import { View, Text, Pressable, StyleSheet, type ViewStyle } from 'react-native';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { View, Text, Pressable, StyleSheet, Animated, Easing, type ViewStyle, type LayoutChangeEvent } from 'react-native';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 
@@ -31,25 +32,60 @@ export function SegmentTabs({
   onChange: (key: string) => void;
   style?: ViewStyle;
 }) {
+  // 선택 알약(흰 배경)을 활성 세그먼트 위로 부드럽게 슬라이드한다(색 변화 없음, 위치만 이동).
+  //  각 세그먼트 폭이 count/dot로 조금씩 달라질 수 있어 onLayout으로 실측 → translateX·width 애니메이트.
+  const [layouts, setLayouts] = useState<Record<number, { x: number; w: number }>>({});
+  const activeIndex = Math.max(0, items.findIndex((it) => it.key === value));
+  // Animated.Value는 ref가 아니라 안정 객체로 메모이즈 — render 중 ref.current 접근(react-hooks/refs) 회피(Appear와 동일 패턴).
+  const tx = useMemo(() => new Animated.Value(0), []);
+  const pw = useMemo(() => new Animated.Value(0), []);
+  const didInit = useRef(false);
+  const active = layouts[activeIndex];
+
+  useEffect(() => {
+    const l = layouts[activeIndex];
+    if (!l) return;
+    if (!didInit.current) {
+      // 첫 측정 즉시 배치(왼쪽에서 슬라이드-인 하는 착시 방지).
+      didInit.current = true;
+      tx.setValue(l.x);
+      pw.setValue(l.w);
+      return;
+    }
+    Animated.parallel([
+      Animated.timing(tx, { toValue: l.x, duration: 180, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
+      Animated.timing(pw, { toValue: l.w, duration: 180, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
+    ]).start();
+  }, [activeIndex, layouts, tx, pw]);
+
+  const onSegLayout = (i: number) => (e: LayoutChangeEvent) => {
+    const { x, width } = e.nativeEvent.layout;
+    setLayouts((m) => (m[i] && m[i].x === x && m[i].w === width ? m : { ...m, [i]: { x, w: width } }));
+  };
+
   return (
     <View style={[styles.wrap, style]} accessibilityRole="tablist">
-      {items.map((it) => {
-        const active = it.key === value;
+      {active && (
+        <Animated.View pointerEvents="none" style={[styles.pill, { transform: [{ translateX: tx }], width: pw }]} />
+      )}
+      {items.map((it, i) => {
+        const isOn = it.key === value;
         return (
           <Pressable
             key={it.key}
+            onLayout={onSegLayout(i)}
             onPress={() => onChange(it.key)}
             accessibilityRole="tab"
-            accessibilityState={{ selected: active }}
+            accessibilityState={{ selected: isOn }}
             accessibilityLabel={it.label}
-            style={[styles.seg, active && styles.segOn]}
+            style={styles.seg}
           >
             <View style={styles.labelRow}>
-              <Text numberOfLines={1} style={[styles.segText, active && styles.segTextOn]}>
+              <Text numberOfLines={1} style={[styles.segText, isOn && styles.segTextOn]}>
                 {it.label}
               </Text>
               {it.count ? (
-                <View style={[styles.count, active && styles.countOn]}>
+                <View style={[styles.count, isOn && styles.countOn]}>
                   <Text style={styles.countText}>{it.count > 99 ? '99+' : it.count}</Text>
                 </View>
               ) : it.dot ? (
@@ -74,7 +110,13 @@ const styles = StyleSheet.create({
     borderRadius: Radius.md,
   },
   seg: { flex: 1, paddingVertical: 9, borderRadius: Radius.sm, alignItems: 'center' },
-  segOn: {
+  // 슬라이드 알약 — wrap 패딩(4)에 맞춰 상하 4, 활성 세그먼트 위에 겹친다(text는 그 위로 렌더).
+  pill: {
+    position: 'absolute',
+    top: 4,
+    bottom: 4,
+    left: 0,
+    borderRadius: Radius.sm,
     backgroundColor: '#FFFFFF',
     shadowColor: '#000',
     shadowOpacity: 0.06,

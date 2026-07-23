@@ -9,6 +9,7 @@ import { useDayparts, isRoutineTaskId, occursOn, taskVisibleTo, type TaskTemplat
 import { InkColors, BrandColors, CategoryColors } from '@/lib/theme/colors';
 import { Elevation, Radius } from '@/lib/theme/elevation';
 import { hhmm } from '@/lib/utils/attendance';
+import { confirmAction } from '@/lib/utils/confirm';
 
 const SHARED = CategoryColors.Routine; // 슬레이트 = 가게 전체
 const MINE = CategoryColors.Event; // 테라코타 = 내가 등록(나만)
@@ -164,7 +165,7 @@ export function TodoScreen({
                 const isSel = c.date === selected;
                 const isToday = c.date === today;
                 return (
-                  <Pressable key={c.date} onPress={() => setSelected(c.date)} style={[s.cell, isToday && !isSel && s.cellToday, isSel && s.cellSel]}>
+                  <Pressable key={c.date} onPress={() => { setSelected(c.date); if (!c.inMonth) { const d = new Date(`${c.date}T00:00:00`); setCursor(new Date(d.getFullYear(), d.getMonth(), 1)); } }} style={[s.cell, isToday && !isSel && s.cellToday, isSel && s.cellSel]}>
                     <Text style={[s.cellNum, !c.inMonth && s.cellMute, isSel && { color: '#fff' }]}>{c.day}</Text>
                     <View style={s.dots}>
                       {d.shared && <View style={[s.dot, { backgroundColor: SHARED }]} />}
@@ -251,7 +252,14 @@ export function TodoScreen({
                     return (
                       <View key={t.id} style={[s.item, isMine && s.itemMine, i === g.tasks.length - 1 && { borderBottomWidth: 0 }]}>
                         <View style={[s.scopeBar, { backgroundColor: isMine ? MINE : SHARED }]} />
-                        <Pressable onPress={() => onToggle(t.id, selected)} style={[s.box, on && s.boxOn]}>
+                        <Pressable onPress={() => {
+                          // 완료 취소 시 첨부한 완료 사진이 함께 삭제되므로 미리 경고(파괴적 동작).
+                          if (on && photoUrl) {
+                            void confirmAction('완료를 취소할까요?', '체크를 풀면 이 업무에 첨부한 완료 사진도 함께 삭제돼요.', '취소하고 사진 삭제', { destructive: true, icon: 'image-outline' }).then((ok) => { if (ok) onToggle(t.id, selected); });
+                            return;
+                          }
+                          onToggle(t.id, selected);
+                        }} style={[s.box, on && s.boxOn]}>
                           {on && <Ionicons name="checkmark" size={13} color={InkColors.ink} />}
                         </Pressable>
                         <View style={{ flex: 1 }}>

@@ -18,6 +18,7 @@ import { deriveSubscription } from '@/lib/utils/subscription';
 
 export default function OwnerLayout() {
   const status = useSessionStore((s) => s.status);
+  const role = useSessionStore((s) => s.role);
   const unitId = useSessionStore((s) => s.unitId);
   const phone = useSessionStore((s) => s.phone);
   const pendingUnitId = useSessionStore((s) => s.pendingUnitId);
@@ -87,6 +88,12 @@ export default function OwnerLayout() {
     pathname !== '/owner/onboarding'
   ) {
     return <Redirect href="/owner/create-store" />;
+  }
+  // 역할 가드: 직원(junior)이 사장 전용 화면(/owner/*)에 딥링크/주소 직접입력으로 진입하는 것을 차단.
+  //  - unitId 확정 뒤에 검사 → 매장 생성 중(unitId 없음)인 사장 지망 계정은 위에서 create-store 로 유도됨.
+  //  - 백엔드 RLS 가 쓰기는 이미 막지만, 사장 전용 화면(급여·직원관리·요금제)이 직원에게 렌더되는 것을 막는다.
+  if (HAS_SUPABASE && status === 'signed_in' && unitId && role !== 'owner') {
+    return <Redirect href="/junior/home" />;
   }
   // 매장은 있으나 구독 만료 → 계좌이체 안내(/billing)로 강제. 소프트 페이월(수동과금).
   // fail-open: 구독 정보 없음('none')이면 막지 않는다. 무료 티어(plan='free')는 영구 무료라 만료 없음(0062).

@@ -62,6 +62,7 @@ export function JuniorAsk() {
   const error = useChatStore((s) => s.error);
   const dismissError = useChatStore((s) => s.dismissError);
   const retryLast = useChatStore((s) => s.retryLast);
+  const lastSubmittedId = useChatStore((s) => s.lastSubmittedId);
   const deflectStatus = useChatStore((s) => s.deflectStatus);
   const pendingDeflects = useChatStore((s) => s.pendingDeflects);
   const registerToOwner = useChatStore((s) => s.registerToOwner);
@@ -101,13 +102,18 @@ export function JuniorAsk() {
   const [input, setInput] = useState('');
   const [focused, setFocused] = useState(false);
   const scrollRef = useRef<ScrollView | null>(null);
+  // 첫 진입(마운트·기존 기록 hydrate)은 애니 없이 바닥으로 '점프' → 히스토리를 위에서부터 스크롤해 내려오는
+  // 잔상 없이 최신 대화가 바로 보인다. 이후 새 메시지부터만 부드럽게 스크롤한다.
+  const didInitialScroll = useRef(false);
   // 보낼 수 있는 상태 = 입력값 있음 + 로딩 아님 → 전송 버튼이 노랑으로 '켜짐'(active 액센트).
   const canSend = !!input.trim() && !isLoading;
 
   // 신규 메시지가 들어오면 자동으로 바닥까지 스크롤
   useEffect(() => {
+    const isFirst = !didInitialScroll.current;
     const t = setTimeout(() => {
-      scrollRef.current?.scrollToEnd({ animated: true });
+      scrollRef.current?.scrollToEnd({ animated: !isFirst });
+      if (history.length > 0) didInitialScroll.current = true;
     }, 60);
     return () => clearTimeout(t);
   }, [history.length, isLoading]);
@@ -185,6 +191,7 @@ export function JuniorAsk() {
           <ChatTurn
             key={q.id}
             query={q}
+            animateIn={q.id === lastSubmittedId}
             onThumbsUp={() => rate(q.id, 'up')}
             onThumbsDown={() => rate(q.id, 'down')}
             deflectState={

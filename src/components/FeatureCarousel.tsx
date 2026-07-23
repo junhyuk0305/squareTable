@@ -16,6 +16,7 @@ import { useRouter, type Href } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Elevation, Radius } from '@/lib/theme/elevation';
+import { Space } from '@/lib/theme/layout';
 
 export type FeatureCard = {
   key: string;
@@ -113,27 +114,31 @@ export function FeatureCarousel({ cards }: { cards: FeatureCard[] }) {
             decelerationRate="fast"
           >
             {cards.map((c) => (
-              <Pressable
-                key={c.key}
-                onPress={() => router.push(c.route)}
-                style={({ pressed }) => [styles.card, { width }, pressed && { opacity: 0.9 }]}
-                accessibilityRole="button"
-                accessibilityLabel={`${c.title}. ${c.cta}`}
-              >
-                <View style={styles.iconWrap}>
-                  <Ionicons name={c.icon} size={20} color={InkColors.ink} />
-                </View>
-                <View style={styles.body}>
-                  <Text style={styles.title}>{c.title}</Text>
-                  <Text style={styles.desc} numberOfLines={3}>
-                    {c.desc}
-                  </Text>
-                  <View style={styles.ctaRow}>
-                    <Text style={styles.ctaText}>{c.cta}</Text>
-                    <Ionicons name="arrow-forward" size={13} color={InkColors.ink} />
+              // 한 페이지 = 캐러셀 폭(width) 그대로 — pagingEnabled가 이 폭 단위로 스냅한다.
+              // 카드는 페이지 안에서 좌우 margin(Space.sm)만큼 들여, 카드 본문·테두리·소프트 섀도가
+              // 스크롤 오버플로 경계(프레임 우측)에 잘리지 않게 한다(좌우 대칭).
+              <View key={c.key} style={{ width }}>
+                <Pressable
+                  onPress={() => router.push(c.route)}
+                  style={({ pressed }) => [styles.card, pressed && { opacity: 0.9 }]}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${c.title}. ${c.cta}`}
+                >
+                  <View style={styles.iconWrap}>
+                    <Ionicons name={c.icon} size={20} color={InkColors.ink} />
                   </View>
-                </View>
-              </Pressable>
+                  <View style={styles.body}>
+                    <Text style={styles.title}>{c.title}</Text>
+                    <Text style={styles.desc} numberOfLines={3}>
+                      {c.desc}
+                    </Text>
+                    <View style={styles.ctaRow}>
+                      <Text style={styles.ctaText}>{c.cta}</Text>
+                      <Ionicons name="arrow-forward" size={13} color={InkColors.ink} />
+                    </View>
+                  </View>
+                </Pressable>
+              </View>
             ))}
           </ScrollView>
 
@@ -165,6 +170,7 @@ const styles = StyleSheet.create({
   card: {
     flexDirection: 'row',
     gap: 14,
+    marginHorizontal: Space.sm, // 페이지 안 좌우 인셋 — 카드 섀도/테두리가 스크롤 경계에 잘리지 않게(대칭)
     backgroundColor: InkColors.bg,
     borderRadius: Radius.lg,
     borderWidth: 1,

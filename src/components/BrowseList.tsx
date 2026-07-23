@@ -4,6 +4,7 @@ import { EmptyState } from './EmptyState';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Elevation, Radius } from '@/lib/theme/elevation';
 import { verifyMeta } from '@/lib/utils/verification';
+import { knowhowSourceLabel } from '@/lib/utils/knowhowSource';
 import type { PlaybookEntry } from '@/types';
 
 export type BrowseListProps = {
@@ -41,7 +42,7 @@ export function BrowseCard({
   const hits = entry.stats?.query_hits_30d ?? 0;
   const doText = entry.square?.extract?.do?.trim();
   const dontText = entry.square?.extract?.dont?.trim();
-  const sourceLabel = entry.source?.label ?? `${entry.creator_name} 사장님`;
+  const sourceLabel = knowhowSourceLabel(entry);
 
   return (
     // 카드 시각(테두리·배경)은 바깥 View가 소유. 탭 영역은 안쪽 Pressable 하나로 좁혀,
