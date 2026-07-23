@@ -7,6 +7,8 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Platform,
+  type NativeSyntheticEvent,
+  type NativeScrollEvent,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -48,6 +50,11 @@ const GENERIC_SUGGESTIONS = [
 // 빈 상태에서 보여줄 추천 수 / 대화 중 상단 스트립 최대 수.
 const EMPTY_SUGGEST_COUNT = 4;
 const STRIP_SUGGEST_COUNT = 6;
+
+// 히스토리 윈도잉 — 처음엔 최근 CHAT_WINDOW개만 렌더하고, 위로 스크롤하면 이전 대화를 CHAT_PAGE개씩 더 붙인다.
+//  (질문이 많이 쌓여도 전부 렌더/스크롤하지 않게. 맨위→맨아래로 번쩍 이동하던 문제 해소.)
+const CHAT_WINDOW = 20;
+const CHAT_PAGE = 20;
 
 /* ─────────────────────────────────────────────────────────
  * JuniorAsk — '물어보기' 슬롯. 기존 챗 UI를 그대로 임베드.
@@ -105,6 +112,34 @@ export function JuniorAsk() {
   // 첫 진입(마운트·기존 기록 hydrate)은 애니 없이 바닥으로 '점프' → 히스토리를 위에서부터 스크롤해 내려오는
   // 잔상 없이 최신 대화가 바로 보인다. 이후 새 메시지부터만 부드럽게 스크롤한다.
   const didInitialScroll = useRef(false);
+
+  // 윈도잉 상태 — 최근 visibleCount개만 렌더. 위로 스크롤(또는 상단 '이전 대화' 탭)하면 페이지 단위로 더 붙인다.
+  const [visibleCount, setVisibleCount] = useState(CHAT_WINDOW);
+  const contentH = useRef(0);
+  const scrollY = useRef(0);
+  const loadingOlder = useRef(false); // 이전 대화를 붙이는 중(스크롤 위치 보정 대기)
+  const visibleHistory = history.length > visibleCount ? history.slice(history.length - visibleCount) : history;
+  const hasMoreOlder = history.length > visibleHistory.length;
+
+  const loadOlder = () => {
+    if (loadingOlder.current || !hasMoreOlder) return;
+    loadingOlder.current = true; // 다음 onContentSizeChange에서 늘어난 높이만큼 아래로 밀어 같은 위치 유지
+    setVisibleCount((c) => Math.min(history.length, c + CHAT_PAGE));
+  };
+  const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const y = e.nativeEvent.contentOffset.y;
+    scrollY.current = y;
+    if (y <= 48) loadOlder(); // 상단 근처로 끌어올리면 이전 대화 로드
+  };
+  const onContentSize = (_w: number, h: number) => {
+    if (loadingOlder.current) {
+      // 위에 콘텐츠가 붙어 전체가 아래로 밀렸으니, 늘어난 만큼 스크롤을 내려 보던 메시지를 그대로 둔다.
+      const delta = h - contentH.current;
+      if (delta > 0) scrollRef.current?.scrollTo({ y: scrollY.current + delta, animated: false });
+      loadingOlder.current = false;
+    }
+    contentH.current = h;
+  };
   // 보낼 수 있는 상태 = 입력값 있음 + 로딩 아님 → 전송 버튼이 노랑으로 '켜짐'(active 액센트).
   const canSend = !!input.trim() && !isLoading;
 
@@ -156,6 +191,9 @@ export function JuniorAsk() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
+        onScroll={onScroll}
+        scrollEventThrottle={16}
+        onContentSizeChange={onContentSize}
       >
         {history.length === 0 && !isLoading && (
           <View style={styles.empty}>
@@ -187,7 +225,19 @@ export function JuniorAsk() {
           </View>
         )}
 
-        {history.map((q) => (
+        {/* 이전 대화가 더 있으면 상단에 안내 — 위로 끌어올리거나 탭하면 더 불러온다. */}
+        {hasMoreOlder && (
+          <Pressable
+            onPress={loadOlder}
+            style={({ pressed }) => [{ alignSelf: 'center', paddingVertical: 8, paddingHorizontal: 14, marginBottom: 4 }, pressed && { opacity: 0.6 }]}
+            accessibilityRole="button"
+            accessibilityLabel="이전 대화 더 보기"
+          >
+            <Text style={{ fontSize: 12.5, fontWeight: '700', color: InkColors.ink3 }}>⌃ 이전 대화 더 보기</Text>
+          </Pressable>
+        )}
+
+        {visibleHistory.map((q) => (
           <ChatTurn
             key={q.id}
             query={q}

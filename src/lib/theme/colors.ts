@@ -9,19 +9,20 @@
  *   소프트 틴트(bgSoft/paper)는 쿨 그레이로. 값만 교체하므로 토큰 참조 화면 전부 자동 반영.
  */
 
-// 4 카테고리 — 노랑 액센트와 충돌하지 않도록 채도를 더 낮춘 '음소거된 한 가족'(옵션 a).
+// 4 카테고리 — 밝고 선명한 '한 가족'. 노랑 액센트와 조화되도록 따뜻한 톤 위주로 올리되
+//  꿀팁은 노랑 계열(앰버골드)로 붙이고 나머지는 서로 구분되게 채도를 살렸다(2026-07-23 밝게 개정).
 export const CategoryColors = {
-  Routine:  '#5E6B78',   // 슬레이트 — 반복 업무
-  Event:    '#B0635A',   // 테라코타 — 돌발 상황 (벽돌에서 채도 ↓)
-  Context:  '#637A5E',   // 세이지   — 매장 룰·위치
-  'Know-how': '#9A8550', // 카키브론즈 — 꿀팁·노하우 (노랑과 분리되도록 톤 다운)
+  Routine:  '#3E92D9',   // 브라이트 블루 — 반복 업무 (차분한 앵커)
+  Event:    '#F26A50',   // 코랄 — 돌발 상황 (밝고 경고감)
+  Context:  '#2FAF6B',   // 프레시 그린 — 매장 룰·위치
+  'Know-how': '#F2A83C', // 앰버골드 — 꿀팁·노하우 (노랑과 한 가족, 더 진해 액센트와 구분)
 } as const;
 
 export const CategoryColorsSoft = {
-  Routine:  '#EEF0F2',
-  Event:    '#F5ECEA',
-  Context:  '#EDF1EC',
-  'Know-how': '#F3EFE5',
+  Routine:  '#E7F2FC',
+  Event:    '#FDEBE7',
+  Context:  '#E4F6EC',
+  'Know-how': '#FCF1DB',
 } as const;
 
 export const InkColors = {

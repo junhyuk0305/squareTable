@@ -123,6 +123,9 @@ function Wheel({ data, value, suffix, onChange }: { data: number[]; value: numbe
 
   const commit = (ev: NativeSyntheticEvent<NativeScrollEvent>) => {
     const i = Math.min(data.length - 1, Math.max(0, Math.round(ev.nativeEvent.contentOffset.y / ITEM_H)));
+    // 애매한 위치에서 멈춰도 가장 가까운 칸으로 정확히 스냅한다(웹은 snapToInterval 이 보장되지 않아
+    //  손을 떼면 칸 사이에 걸치는데, 그 위치의 값을 확정하고 스크롤도 그 칸에 딱 맞춘다).
+    ref.current?.scrollTo({ y: i * ITEM_H, animated: true });
     if (data[i] !== value) onChange(data[i]);
   };
 

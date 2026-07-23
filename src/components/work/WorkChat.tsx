@@ -267,7 +267,7 @@ export function WorkChat({
             <MenuItem icon="image-outline" label="사진 보내기" sub={sendingPhoto ? '올리는 중…' : '한 번에 최대 10장'} onPress={() => { setMenu(false); onSendPhoto(); }} />
             {isOwner && <MenuItem icon="megaphone-outline" label="공지 작성" sub="사장만" onPress={() => { setMenu(false); onWriteNotice(); }} top />}
             <View style={s.menuInfoRow}>
-              <Text style={s.menuInfoText}>사진은 자동 압축·EXIF 제거돼요</Text>
+              <Text style={s.menuInfoText}>사진은 자동으로 압축돼서 올라가요</Text>
               <InfoDot title={PHOTO_UPLOAD_INFO.title} body={PHOTO_UPLOAD_INFO.body} size={14} accessibilityLabel="사진 업로드 규격 안내" />
             </View>
           </View>
