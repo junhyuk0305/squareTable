@@ -36,6 +36,9 @@ export function TodoScreen({
   onEditTask,
   knowhowOf,
   onOpenKnowhow,
+  understoodNames,
+  canSelfCheck,
+  onSelfCheck,
 }: {
   templates: TaskTemplate[];
   done: Record<string, Record<string, DoneMark>>;
@@ -53,6 +56,12 @@ export function TodoScreen({
   knowhowOf?: (templateId: string) => { id: string; title: string }[];
   /** 칩 탭 → 노하우 원문 열람(EntryDetailModal). */
   onOpenKnowhow?: (entryId: string) => void;
+  /** 이해 확인(④) 통과자 이름 — 배지 노출(사장=전체, 직원=본인만). 없으면 배지 안 뜸. */
+  understoodNames?: (templateId: string) => string[];
+  /** '혼자 할 수 있어요' 자청 노출 여부(직원·노하우 있음·미통과). */
+  canSelfCheck?: (templateId: string) => boolean;
+  /** 자청 → 이해 확인 퀴즈 시트(직원 전용, 사장이면 undefined). */
+  onSelfCheck?: (t: TaskTemplate) => void;
 }) {
   const dayparts = useDayparts();
   const [selected, setSelected] = useState(today);
@@ -237,6 +246,8 @@ export function TodoScreen({
                     // 수정/삭제 권한 = 사장 or 본인이 등록/배정받은 개인 할일. (X 즉시삭제 → 연필로 수정·삭제)
                     const canManage = (isOwner || (isMine && (t.ownerId === me || t.createdBy === me))) && !isRoutine;
                     const khs = knowhowOf?.(t.id) ?? [];
+                    const uNames = understoodNames?.(t.id) ?? [];
+                    const selfCheckable = !!onSelfCheck && !!canSelfCheck?.(t.id);
                     return (
                       <View key={t.id} style={[s.item, isMine && s.itemMine, i === g.tasks.length - 1 && { borderBottomWidth: 0 }]}>
                         <View style={[s.scopeBar, { backgroundColor: isMine ? MINE : SHARED }]} />
@@ -255,6 +266,18 @@ export function TodoScreen({
                                 </Pressable>
                               ))}
                             </View>
+                          )}
+                          {uNames.length > 0 && (
+                            <View style={s.uBadge}>
+                              <Ionicons name="ribbon-outline" size={11} color={BrandColors.good} />
+                              <Text style={s.uBadgeText} numberOfLines={1}>{uNames.join('·')} 이해 확인</Text>
+                            </View>
+                          )}
+                          {selfCheckable && (
+                            <Pressable onPress={() => onSelfCheck?.(t)} style={({ pressed }) => [s.selfBtn, pressed && { opacity: 0.7 }]} accessibilityRole="button" accessibilityLabel={`${t.text} 혼자 할 수 있어요`}>
+                              <Ionicons name="school-outline" size={12} color={InkColors.ink} />
+                              <Text style={s.selfBtnText}>혼자 할 수 있어요</Text>
+                            </Pressable>
                           )}
                         </View>
                         {photoUrl ? <StoredImage stored={photoUrl} style={s.thumb} viewOnPress accessibilityLabel="완료 사진 크게 보기" /> : null}
@@ -347,6 +370,12 @@ const s = StyleSheet.create({
   khRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 5, marginTop: 5 },
   khChip: { flexDirection: 'row', alignItems: 'center', gap: 4, maxWidth: '100%', borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.pill, paddingHorizontal: 8, paddingVertical: 3, backgroundColor: InkColors.cream },
   khChipText: { flexShrink: 1, fontSize: 11, fontWeight: '700', color: InkColors.ink2 },
+  // ④ 이해 확인 배지(통과자) — 초록 톤, 카드 본문 아래. 노하우 칩과 구분.
+  uBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start', marginTop: 5, borderRadius: Radius.pill, paddingHorizontal: 8, paddingVertical: 3, backgroundColor: '#E6F1EA' },
+  uBadgeText: { flexShrink: 1, fontSize: 10.5, fontWeight: '800', color: BrandColors.good },
+  // ④ '혼자 할 수 있어요' 자청 버튼(직원, 미통과) — 옅은 노랑 필로 눈에 띄되 가볍게.
+  selfBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, alignSelf: 'flex-start', marginTop: 5, borderRadius: Radius.pill, paddingHorizontal: 10, paddingVertical: 5, backgroundColor: BrandColors.yellowSoft, borderWidth: 1, borderColor: BrandColors.yellowDeep },
+  selfBtnText: { fontSize: 11.5, fontWeight: '800', color: InkColors.ink },
   thumb: { width: 32, height: 32, borderRadius: Radius.sm, borderWidth: 1, borderColor: InkColors.line, backgroundColor: InkColors.bgSoft },
   mineTag: { fontSize: 10, fontWeight: '800', color: MINE, backgroundColor: CategoryColors.Event + '1f', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 5 },
   assignTag: { fontSize: 10, fontWeight: '800', color: SHARED, backgroundColor: CategoryColors.Routine + '1f', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 5 },

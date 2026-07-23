@@ -14,6 +14,8 @@ import type {
   TriageInput,
   TriageOutput,
   AiFollowup,
+  QuizInput,
+  QuizOutput,
 } from './types';
 import type { Category } from '@/types';
 import { MAX_ACTIONS, MAX_DONTS } from './config';
@@ -198,4 +200,22 @@ export function mockExtractIntent(input: IntentInput): IntentOutput {
   const first = q.split(/[.!?\n。]/).map((s) => s.trim()).filter(Boolean)[0] ?? q;
   const keywords = dedupe(q.replace(/[?!.,~]/g, ' ').split(/\s+/).filter((t) => t.length >= 2)).slice(0, 6);
   return { rewritten: first.slice(0, 60), keywords };
+}
+
+// 이해확인 퀴즈(S1 ④) mock — 노하우 단계에서 결정적으로 1~2문제 구성(데모/오프라인, AI 호출 없음).
+export function mockGenerateQuiz(input: QuizInput): QuizOutput {
+  const questions: QuizOutput['questions'] = [];
+  for (const sop of input.sops.slice(0, 2)) {
+    const step = (sop.steps ?? []).map((s) => s.trim()).filter(Boolean)[0];
+    if (!step) continue;
+    const dont = (sop.donts ?? []).map((s) => s.trim()).filter(Boolean)[0];
+    questions.push({
+      ask: `"${sop.title || sop.situation || '이 상황'}"에서 무엇을 해야 하나요?`,
+      choices: [step, dont || '아무것도 하지 않고 넘어간다', '사장님이 올 때까지 기다린다'],
+      answer_index: 0,
+      explain: '등록된 노하우의 단계예요.',
+    });
+    if (questions.length >= 3) break;
+  }
+  return { questions };
 }

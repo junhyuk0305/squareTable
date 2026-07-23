@@ -18,6 +18,9 @@ import {
   fetchTemplateKnowhow,
   insertTemplateKnowhow,
   deleteTemplateKnowhow,
+  fetchTaskUnderstanding,
+  insertTaskUnderstanding,
+  type UnderstandingRow,
 } from '@/lib/db';
 import { guardWrite, useSyncStore } from '@/lib/store/useSyncStore';
 import { coalesce, subscribeDebounced } from '@/lib/store/realtimeSync';
@@ -318,6 +321,8 @@ type State = {
   feed: FeedItem[];
   /** 업무↔노하우 링크(0069) — 평평한 배열. 정/역방향은 knowhowIdsForTask/taskIdsForKnowhow 로 파생. */
   knowhowLinks: KnowhowLink[];
+  /** 이해 확인 기록(0072, ④) — 어느 직원이 어느 업무 퀴즈를 통과했나. */
+  understanding: UnderstandingRow[];
   /** 완료 캡처(②) 넛지 피로 상태(인메모리). */
   captureNudge: CaptureNudge;
   loaded: boolean;
@@ -333,6 +338,8 @@ type State = {
   detachKnowhow: (templateId: string, entryIds: string[]) => Promise<void>;
   /** 완료 캡처(②) 넛지 결과 기록 — 남기면 skips 리셋, 건너뛰면 +1. 둘 다 오늘 다시 안 띄우게 date 갱신. */
   noteCaptureNudge: (kind: 'submit' | 'skip') => void;
+  /** 이해 확인(④) 통과 기록 — 낙관적 추가 + 실패 롤백(멱등). */
+  markUnderstood: (templateId: string, staffId: string, staffName: string) => Promise<void>;
   // task: 합성 루틴 할일(dpr_)은 s.templates 에 없으므로 완료 피드 문구/방을 호출부가 넘긴다(없으면 lookup).
   toggleTask: (date: string, templateId: string, staffId: string, staffName: string, role: 'owner' | 'junior', photoUrl?: string, task?: { text: string; roomId?: string }) => void;
   postNotice: (date: string, text: string, authorId: string, authorName: string, important: boolean) => void;
@@ -355,20 +362,22 @@ export const useWorkStore = create<State>((set, get) => ({
   done: HAS_SUPABASE ? {} : seedDone,
   feed: HAS_SUPABASE ? [] : seedFeed,
   knowhowLinks: [],
+  understanding: [],
   captureNudge: { skips: 0 },
   loaded: !HAS_SUPABASE,
 
-  // 전체 재조회(templates·done·feed·링크 4쿼리)로 스토어를 통째로 교체한다.
+  // 전체 재조회(templates·done·feed·링크·이해확인 5쿼리)로 스토어를 통째로 교체한다.
   // coalesce: 빠른 연속 체크로 realtime 이벤트가 몰려도 풀리페치가 병렬로 쌓이지 않게 합친다.
   hydrate: coalesce(async () => {
     if (!HAS_SUPABASE) return;
-    const [templates, done, feed, knowhowLinks] = await Promise.all([
+    const [templates, done, feed, knowhowLinks, understanding] = await Promise.all([
       fetchTemplates(),
       fetchDone(),
       fetchFeed(),
       fetchTemplateKnowhow(),
+      fetchTaskUnderstanding(),
     ]);
-    set({ templates, done, feed, knowhowLinks, loaded: true });
+    set({ templates, done, feed, knowhowLinks, understanding, loaded: true });
   }),
   // realtime 변경마다 즉시 풀리페치하면 체크 한 번(work_done+work_feed 2쓰기)이 매번 3쿼리+전체
   // 리렌더가 된다 → 트레일링 디바운스로 이벤트 버스트를 1회 재조회에 합친다.
@@ -496,6 +505,18 @@ export const useWorkStore = create<State>((set, get) => ({
   noteCaptureNudge: (kind) => {
     const today = todayStr();
     set((s) => ({ captureNudge: { date: today, skips: kind === 'skip' ? (s.captureNudge.skips ?? 0) + 1 : 0 } }));
+  },
+
+  // 이해 확인 통과 — 낙관적 추가(이미 있으면 무동작=멱등), 저장 실패 시 그 행만 롤백.
+  markUnderstood: async (templateId, staffId, staffName) => {
+    if (get().understanding.some((u) => u.templateId === templateId && u.staffId === staffId)) return;
+    const row: UnderstandingRow = { templateId, staffId, staffName };
+    set((s) => ({ understanding: [...s.understanding, row] }));
+    await guardWrite(
+      insertTaskUnderstanding(templateId, staffName),
+      () => set((s) => ({ understanding: s.understanding.filter((u) => !(u.templateId === templateId && u.staffId === staffId)) })),
+      '이해 확인 저장에 실패했어요.',
+    );
   },
 
   // 낙관적 해제 — 지운 링크만 잡아 실패 시 그대로 복원(사이에 도착한 realtime 변경은 안 덮음).
@@ -802,7 +823,7 @@ export const useWorkStore = create<State>((set, get) => ({
   applyMock: (demo) =>
     set(
       demo
-        ? { templates: seedTemplates, done: seedDone, feed: seedFeed, knowhowLinks: [], loaded: true }
-        : { templates: [], done: {}, feed: [], knowhowLinks: [], loaded: true },
+        ? { templates: seedTemplates, done: seedDone, feed: seedFeed, knowhowLinks: [], understanding: [], loaded: true }
+        : { templates: [], done: {}, feed: [], knowhowLinks: [], understanding: [], loaded: true },
     ),
 }));

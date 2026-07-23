@@ -14,14 +14,16 @@ import type {
   TriageOutput,
   TranscribeInput,
   TranscribeOutput,
+  QuizInput,
+  QuizOutput,
 } from './types';
 import { AI_ENDPOINT, ANON, USE_MOCK } from './config';
-import { mockGenerateAnswer, mockStructureSquare, mockPatchSquare, mockExtractIntent, mockClassifyQuery } from './mock';
+import { mockGenerateAnswer, mockStructureSquare, mockPatchSquare, mockExtractIntent, mockClassifyQuery, mockGenerateQuiz } from './mock';
 import { isEnglishDominant } from '@/lib/utils/knowhowInput';
 import { supabase } from '@/lib/supabase';
 import { reportError } from '@/lib/analytics/track';
 
-type Task = 'answer' | 'square' | 'patch' | 'intent' | 'triage' | 'transcribe';
+type Task = 'answer' | 'square' | 'patch' | 'intent' | 'triage' | 'transcribe' | 'quiz';
 
 // 한글 입력인데 결과가 통째로 영어로 나왔는지(언어 드리프트). 혼용은 통과(한글 1자라도 있으면 false).
 function squareWentEnglish(input: { rawText?: string; instruction?: string }, out: StructureSquareOutput): boolean {
@@ -119,6 +121,20 @@ export async function generateAnswer(
     console.warn('[ai] generateAnswer fallback to mock:', e);
     reportError('ai.generateAnswer.degraded', e);
     return { ...(await mockGenerateAnswer(input)), degraded: true };
+  }
+}
+
+// 이해확인 퀴즈(S1 ④) — 노하우에서 객관식 상황문제 생성. 쿼터 초과는 던지지 않고 quotaExceeded로
+// 돌려줘 호출부(퀴즈 시트)가 알바 화면에 요금제 토스트 없이 부드럽게 처리한다(③ 결제유도 금지 준수).
+export async function generateQuiz(input: QuizInput): Promise<QuizOutput> {
+  if (USE_MOCK) return mockGenerateQuiz(input);
+  try {
+    return await callEdge<QuizOutput>('quiz', input);
+  } catch (e) {
+    if (e instanceof AiQuotaError) return { questions: [], quotaExceeded: true };
+    console.warn('[ai] generateQuiz fallback to mock:', e);
+    reportError('ai.generateQuiz.degraded', e);
+    return { ...(await mockGenerateQuiz(input)), degraded: true };
   }
 }
 

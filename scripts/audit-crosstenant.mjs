@@ -48,7 +48,7 @@ async function makeOwner(tag, phone) {
 const TENANT_TABLES = ['playbook_entries','chat_queries','unknown_queries','work_rooms','work_room_members',
   'work_templates','work_done','work_feed','attendance','wages','schedule_config','shift_templates',
   'swap_requests','playbook_suggestions','playbook_embeddings','former_staff','push_subscriptions',
-  'unit_subscriptions','app_events','client_errors','work_template_knowhow'];
+  'unit_subscriptions','app_events','client_errors','work_template_knowhow','task_understanding'];
 
 (async () => {
   console.log('· 크로스테넌트 격리 실증:', URL, '\n');

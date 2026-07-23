@@ -15,8 +15,10 @@ import { useSyncStore } from '@/lib/store/useSyncStore';
 import { showToast } from '@/lib/store/useToastStore';
 import { EntryDetailModal } from '@/components/EntryDetailModal';
 import { CaptureKnowhowSheet } from '@/components/work/CaptureKnowhowSheet';
+import { UnderstandingCheckSheet } from '@/components/work/UnderstandingCheckSheet';
 import { buildDirectUq, buildPlaybookEntryFromSquare } from '@/lib/utils/buildEntry';
 import type { PlaybookEntry, SquareBlock } from '@/types';
+import type { QuizInput } from '@/lib/ai/types';
 import { RoleTabBar } from '@/components/RoleTabBar';
 import { useRoomStore } from '@/lib/store/useRoomStore';
 import { WorkChat } from '@/components/work/WorkChat';
@@ -75,6 +77,8 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
   const attachKnowhow = useWorkStore((s) => s.attachKnowhow);
   const captureNudge = useWorkStore((s) => s.captureNudge);
   const noteCaptureNudge = useWorkStore((s) => s.noteCaptureNudge);
+  const understanding = useWorkStore((s) => s.understanding);
+  const markUnderstood = useWorkStore((s) => s.markUnderstood);
   // 노하우 첨부 검색·칩 제목 해석용 — 업무 화면에서도 노하우를 로드해 둔다(coalesce 로 중복 방지).
   const entries = usePlaybookStore((s) => s.entries);
   const addEntry = usePlaybookStore((s) => s.add);
@@ -86,6 +90,8 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
   const [detailEntry, setDetailEntry] = useState<PlaybookEntry | null>(null);
   // 완료 직후 1턴 캡처(②) — 대상 업무(있으면 시트 노출).
   const [capture, setCapture] = useState<{ templateId: string; text: string } | null>(null);
+  // 이해 확인(④) — 직원이 자청한 업무 + 그 노하우를 퀴즈 소스로.
+  const [selfCheck, setSelfCheck] = useState<{ task: TaskTemplate; sops: QuizInput['sops'] } | null>(null);
   const toggleTask = useWorkStore((s) => s.toggleTask);
   const addTask = useWorkStore((s) => s.addTask);
   const editTask = useWorkStore((s) => s.editTask);
@@ -182,6 +188,40 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
     const e = entryById.get(entryId);
     if (e) setDetailEntry(e);
   }, [entryById]);
+
+  // 이해 확인(④) 배지 이름 — 사장은 통과한 직원 전체, 직원은 본인 것만(상호 비교 노출 회피).
+  const understoodNames = useCallback(
+    (templateId: string) => {
+      const rows = understanding.filter((u) => u.templateId === templateId);
+      if (isOwner) return rows.map((u) => u.staffName || nameOf(u.staffId));
+      return rows.some((u) => u.staffId === userId) ? ['나'] : [];
+    },
+    [understanding, isOwner, userId, nameOf],
+  );
+  // '혼자 할 수 있어요' 자청 노출 조건 — 직원 + 노하우 붙은 업무 + 아직 본인이 통과 안 함.
+  const canSelfCheck = useCallback(
+    (templateId: string) =>
+      !isOwner &&
+      knowhowIdsForTask(knowhowLinks, templateId).length > 0 &&
+      !understanding.some((u) => u.templateId === templateId && u.staffId === userId),
+    [isOwner, knowhowLinks, understanding, userId],
+  );
+  // 자청 → 그 업무의 첨부 노하우를 퀴즈 소스(sops)로 직렬화해 시트 오픈.
+  const openSelfCheck = useCallback(
+    (t: TaskTemplate) => {
+      const sops = knowhowIdsForTask(knowhowLinks, t.id)
+        .map((id) => entryById.get(id))
+        .filter((e): e is PlaybookEntry => !!e)
+        .map((e) => ({
+          title: e.title,
+          situation: e.square?.situation ?? '',
+          steps: e.square?.action?.steps ?? [],
+          donts: [e.square?.extract?.dont].filter((x): x is string => !!x),
+        }));
+      setSelfCheck({ task: t, sops });
+    },
+    [knowhowLinks, entryById],
+  );
 
   const memberCount = Math.max(1, (owner ? 1 : 0) + staff.length);
 
@@ -460,6 +500,9 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
           onEditTask={(t) => setComposer({ open: true, editTemplate: t })}
           knowhowOf={knowhowOf}
           onOpenKnowhow={openKnowhow}
+          understoodNames={understoodNames}
+          canSelfCheck={canSelfCheck}
+          onSelfCheck={isOwner ? undefined : openSelfCheck}
         />
       )}
 
@@ -495,6 +538,15 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
 
       {capture && (
         <CaptureKnowhowSheet taskText={capture.text} isOwner={isOwner} onSubmit={submitCapture} onSkip={skipCapture} />
+      )}
+
+      {selfCheck && (
+        <UnderstandingCheckSheet
+          taskText={selfCheck.task.text}
+          sops={selfCheck.sops}
+          onPass={() => void markUnderstood(selfCheck.task.id, userId, userName)}
+          onClose={() => setSelfCheck(null)}
+        />
       )}
 
       <RoleTabBar role={role} />

@@ -143,4 +143,22 @@ export type TranscribeOutput = {
   error?: string;
 };
 
+// ── 이해확인 퀴즈 (S1 ④) — 노하우 기반 객관식 상황문제 ─────────
+export type QuizQuestion = {
+  ask: string;              // 현장 상황 한 줄
+  choices: string[];        // 선택지 2~4
+  answer_index: number;     // 정답 인덱스(자동채점)
+  explain: string;          // 정답 근거 한 문장
+};
+export type QuizInput = {
+  taskText: string;         // 대상 업무 이름(맥락)
+  // 그 업무에 붙은 노하우(①) 요약 — 이 내용에서만 출제.
+  sops: { title: string; situation: string; steps: string[]; donts: string[] }[];
+};
+export type QuizOutput = {
+  questions: QuizQuestion[];
+  quotaExceeded?: boolean;  // 월 AI 한도 초과(엣지 402) — 알바 화면에선 요금제 토스트 대신 부드러운 안내로.
+  degraded?: boolean;       // AI 실패 폴백
+};
+
 export type { ResponseBlock, SquareBlock };

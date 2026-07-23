@@ -861,6 +861,29 @@ export async function deleteTemplateKnowhow(templateId: string, entryIds: string
   );
 }
 
+// ── 이해 확인 기록(0072, S1 ④) — 직원이 노하우 업무 퀴즈 통과 ──────────
+export type UnderstandingRow = { templateId: string; staffId: string; staffName: string };
+/** 활성 매장의 전체 이해 확인 기록 — 사장 배지·본인 확인 표시용(노출 범위는 UI 게이팅). */
+export async function fetchTaskUnderstanding(): Promise<UnderstandingRow[]> {
+  if (!HAS_SUPABASE) return [];
+  const { data, error } = await supabase.from('task_understanding').select('template_id, staff_id, staff_name');
+  if (error) {
+    readFail('fetchTaskUnderstanding', error);
+    return [];
+  }
+  return (data ?? []).map((r: any) => ({ templateId: r.template_id, staffId: r.staff_id, staffName: r.staff_name }));
+}
+/** 통과 기록 저장. staff_id 는 DB default auth.uid()(본인만·위조 차단). 재통과는 멱등(onConflict 무시). */
+export async function insertTaskUnderstanding(templateId: string, staffName: string): Promise<boolean> {
+  if (!HAS_SUPABASE) return true;
+  return write(
+    'insertTaskUnderstanding',
+    supabase
+      .from('task_understanding')
+      .upsert({ unit_id: _unitId, template_id: templateId, staff_name: staffName }, { onConflict: 'template_id,staff_id', ignoreDuplicates: true }),
+  );
+}
+
 // ── 업무보드: 완료 체크 ────────────────────────────────────
 export async function fetchDone(): Promise<Record<string, Record<string, DoneMark>>> {
   if (!HAS_SUPABASE) return {};
@@ -999,6 +1022,7 @@ export function subscribeWork(onChange: () => void): () => void {
     .on('postgres_changes', { event: '*', schema: 'public', table: 'work_done' }, onChange)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'work_templates' }, onChange)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'work_template_knowhow' }, onChange)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'task_understanding' }, onChange)
     .subscribe();
   return () => {
     supabase.removeChannel(ch);
