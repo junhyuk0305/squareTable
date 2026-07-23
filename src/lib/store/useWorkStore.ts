@@ -40,6 +40,15 @@ const MAX_PINNED_NOTICES = 3;
 /** 지금 활성화된 채팅방 id — 모든 업무 쓰기(메시지·공지·할일·완료)에 스탬프된다('전부 방 단위'). */
 const curRoom = (): string | undefined => useRoomStore.getState().currentRoomId ?? undefined;
 
+/** 같은 (날짜·할일) 키의 완료 쓰기를 직렬화 — 직전 쓰기(성공/실패 무관)가 끝난 뒤에만 다음 쓰기 실행.
+ *  체크 직후 해제하면 INSERT 도착 전에 DELETE가 먼저 실행돼 0행 삭제(가짜 실패)가 나는 레이스 방지. */
+const doneWrites = new Map<string, Promise<boolean>>();
+function chainDoneWrite(key: string, run: () => Promise<boolean>): Promise<boolean> {
+  const next = (doneWrites.get(key) ?? Promise.resolve(true)).then(run, run);
+  doneWrites.set(key, next);
+  return next;
+}
+
 /** 데이파트(시간대) 카테고리 id. 기본은 open/mid/close/etc 지만 매장이 자유롭게 추가·삭제하므로 문자열. */
 export type TaskSection = string;
 export type TaskScope = 'shared' | 'private';
@@ -537,6 +546,9 @@ export const useWorkStore = create<State>((set, get) => ({
     );
   },
 
+  // 체크→해제 레이스: 완료 INSERT가 서버에 닿기 전에 해제 DELETE가 먼저 도착하면 0행 삭제
+  // (writeStrict가 실패로 판정 → 가짜 '해제 실패' 배너)에 뒤늦게 INSERT가 도착해 DB엔 완료가
+  // 잔존한다. 같은 (날짜·할일)의 완료 쓰기는 chainDoneWrite로 직전 쓰기가 끝난 뒤 실행한다.
   toggleTask: (date, templateId, staffId, staffName, role, photoUrl, task) => {
     const s = get();
     const prevDone = s.done;
@@ -552,8 +564,10 @@ export const useWorkStore = create<State>((set, get) => ({
         done: { ...s.done, [date]: dayMap },
         feed: s.feed.filter((f) => !(f.kind === 'task_done' && f.date === date && f.refId === templateId)),
       });
-      const ok = Promise.all([clearDone(date, templateId), removed ? deleteFeed(removed.id) : Promise.resolve(true)]).then(
-        ([a, b]) => a && b,
+      const ok = chainDoneWrite(`${date}:${templateId}`, () =>
+        Promise.all([clearDone(date, templateId), removed ? deleteFeed(removed.id) : Promise.resolve(true)]).then(
+          ([a, b]) => a && b,
+        ),
       );
       void guardWrite(ok, () => set({ done: prevDone, feed: prevFeed }), '완료 해제 저장에 실패했어요.');
       return;
@@ -576,7 +590,9 @@ export const useWorkStore = create<State>((set, get) => ({
       ...(photoUrl ? { photoUrl } : null),
     };
     set({ done: { ...s.done, [date]: dayMap }, feed: [...s.feed, doneItem] });
-    const ok = Promise.all([setDone(date, templateId, mark, room), upsertFeed(doneItem)]).then(([a, b]) => a && b);
+    const ok = chainDoneWrite(`${date}:${templateId}`, () =>
+      Promise.all([setDone(date, templateId, mark, room), upsertFeed(doneItem)]).then(([a, b]) => a && b),
+    );
     void guardWrite(ok, () => set({ done: prevDone, feed: prevFeed }), '완료 체크 저장에 실패했어요.');
   },
 

@@ -11,8 +11,10 @@ import { fmtDateKo } from '@/lib/utils/schedule';
 /** 알림 목록 최대 개수 — 무한 누적 방지(최신 우선). */
 export const MAX_NOTIFS = 50;
 
-export type JuniorNotifKind = 'notice' | 'mention' | 'assign' | 'swap' | 'swap_approved' | 'swap_rejected';
-export type JuniorNotifRoute = '/junior/work' | '/junior/schedule';
+export type JuniorNotifKind =
+  | 'notice' | 'mention' | 'assign' | 'swap' | 'swap_approved' | 'swap_rejected'
+  | 'suggestion_approved' | 'suggestion_rejected';
+export type JuniorNotifRoute = '/junior/work' | '/junior/schedule' | '/junior/chat';
 
 export type JuniorNotif = {
   id: string;
@@ -29,6 +31,11 @@ export type JuniorNotif = {
 };
 
 // ── 공유 술어(뱃지·목록이 동일 규칙을 쓰도록 한 곳에서) ──────────────
+/** '모두 읽기'(0078 notif_ack_at) 이후 항목인가 — ack 이전(at <= ack) 항목은 배지·강조 제외.
+ *  처리형 항목(합류·질문·제안·교대)은 read_by 로 못 읽으므로 이 시각 비교가 유일한 읽음 축. */
+export const isAfterAck = (at: string | undefined, ackAt?: string | null): boolean =>
+  !ackAt || !at || at > ackAt;
+
 /** 안 읽은 공지(나 기준). */
 export const isUnreadNotice = (f: FeedItem, me: string): boolean =>
   f.kind === 'notice' && !(f.read_by ?? []).includes(me);
@@ -49,6 +56,10 @@ export const isPendingAssignment = (
   done: Record<string, Record<string, DoneMark>>,
 ): boolean => isAssignedToMe(t, me) && occursOn(t, today) && !done[today]?.[t.id];
 
+/** 내가 올린 제안의 검토 결과(반영/반려) — 반려 사유 전달 축(0014 owner_note). */
+export const isMySuggestionResult = (s: PlaybookSuggestion, me: string): boolean =>
+  s.proposer_id === me && s.status !== 'pending' && !!s.reviewed_at;
+
 /** 내가 대응할 수 있는 열린 교대 요청(대타 전체 + 나에게 온 맞교환). 지난 날짜 제외. */
 export const isIncomingSwap = (r: SwapRequest, me: string, today: string): boolean =>
   r.status === 'open' &&
@@ -64,12 +75,17 @@ export function juniorUnreadCount(
   today: string,
   taskTemplates: TaskTemplate[] = [],
   done: Record<string, Record<string, DoneMark>> = {},
+  ackAt?: string | null,
+  suggestions: PlaybookSuggestion[] = [],
 ): number {
   return (
-    feed.filter((f) => isUnreadNotice(f, me)).length +
-    feed.filter((f) => isUnreadMention(f, me)).length +
-    taskTemplates.filter((t) => isPendingAssignment(t, me, today, done)).length +
-    swaps.filter((r) => isIncomingSwap(r, me, today)).length
+    feed.filter((f) => isUnreadNotice(f, me) && isAfterAck(f.createdAt, ackAt)).length +
+    feed.filter((f) => isUnreadMention(f, me) && isAfterAck(f.createdAt, ackAt)).length +
+    // 배정 시각 폴백은 목록(buildJuniorNotifications)과 동일하게 — 카운트·목록 강조가 어긋나지 않게.
+    taskTemplates.filter((t) => isPendingAssignment(t, me, today, done) && isAfterAck(t.createdAt ?? `${today}T08:00:00`, ackAt)).length +
+    swaps.filter((r) => isIncomingSwap(r, me, today) && isAfterAck(r.created_at, ackAt)).length +
+    // 내 제안 검토 결과(반영/반려) — read 개념이 없어 '모두 읽기'(ack) 전까지 새 소식으로 센다.
+    suggestions.filter((sg) => isMySuggestionResult(sg, me) && isAfterAck(sg.reviewed_at, ackAt)).length
   );
 }
 
@@ -85,8 +101,12 @@ export function buildJuniorNotifications(args: {
   taskTemplates?: TaskTemplate[];
   /** 완료 상태(date → templateId → 마크). 배정 미완료 판정용. */
   done?: Record<string, Record<string, DoneMark>>;
+  /** '모두 읽기' 기준 시각(0078). 이전 항목은 unread=false 로 강조 해제. */
+  ackAt?: string | null;
+  /** 내 제안 검토 결과(반영/반려 + 반려 사유) 알림용. 없으면 해당 알림 없음. */
+  suggestions?: PlaybookSuggestion[];
 }): JuniorNotif[] {
-  const { feed, swaps, templates, nameOf, userId: me, today, taskTemplates = [], done = {} } = args;
+  const { feed, swaps, templates, nameOf, userId: me, today, taskTemplates = [], done = {}, ackAt, suggestions = [] } = args;
   const tplById = (id: string) => templates.find((t) => t.id === id);
   const out: JuniorNotif[] = [];
 
@@ -99,7 +119,7 @@ export function buildJuniorNotifications(args: {
       title: `${f.authorName}님의 공지`,
       body: f.text,
       at: f.createdAt,
-      unread: isUnreadNotice(f, me),
+      unread: isUnreadNotice(f, me) && isAfterAck(f.createdAt, ackAt),
       route: '/junior/work',
       readFeedId: f.id,
       noticeId: f.id,
@@ -115,7 +135,7 @@ export function buildJuniorNotifications(args: {
       title: `${f.authorName}님이 나를 언급했어요`,
       body: f.text,
       at: f.createdAt,
-      unread: isUnreadMention(f, me),
+      unread: isUnreadMention(f, me) && isAfterAck(f.createdAt, ackAt),
       route: '/junior/work',
       readFeedId: f.id,
     });
@@ -124,6 +144,7 @@ export function buildJuniorNotifications(args: {
   // 배정 — 남이 나에게 배정한 할일. 오늘 떠야 하고 아직 완료 안 했으면 '해야 할 배정'(강조).
   for (const t of taskTemplates) {
     if (!isAssignedToMe(t, me) || !occursOn(t, today)) continue;
+    const at = t.createdAt ?? `${today}T08:00:00`;
     out.push({
       id: `assign_${t.id}`,
       kind: 'assign',
@@ -131,8 +152,8 @@ export function buildJuniorNotifications(args: {
       body: t.text,
       // 실제 배정(생성) 시각으로 정렬 → 오래된 배정은 자연히 아래로. createdAt 없는 레거시/목업만
       // today 로 폴백(과거 전량-today 고정이 "최신 아닌데 상단 고정" 버그의 원인이었다).
-      at: t.createdAt ?? `${today}T08:00:00`,
-      unread: !done[today]?.[t.id],
+      at,
+      unread: !done[today]?.[t.id] && isAfterAck(at, ackAt),
       route: '/junior/work',
     });
   }
@@ -147,8 +168,23 @@ export function buildJuniorNotifications(args: {
       title: `${nameOf(r.requester_id)}님이 ${r.kind === 'cover' ? '대타' : '맞교환'}을 요청했어요`,
       body: `${fmtDateKo(r.date)}${tpl ? ` ${tpl.start}~${tpl.end}` : ''}`,
       at: r.created_at,
-      unread: true,
+      unread: isAfterAck(r.created_at, ackAt),
       route: '/junior/schedule',
+    });
+  }
+
+  // 내 제안 검토 결과 — 반영/반려(반려 사유 포함). 탭하면 물어보기 탭(내가 보낸 제안 목록이 있는 내공간)으로.
+  for (const sg of suggestions) {
+    if (!isMySuggestionResult(sg, me)) continue;
+    const ok = sg.status === 'approved';
+    out.push({
+      id: `sugres_${sg.id}`,
+      kind: ok ? 'suggestion_approved' : 'suggestion_rejected',
+      title: ok ? '내 노하우 제안이 반영됐어요' : '내 노하우 제안이 반려됐어요',
+      body: !ok && sg.owner_note ? `${sg.text}\n사유: ${sg.owner_note}` : sg.text,
+      at: sg.reviewed_at as string,
+      unread: isAfterAck(sg.reviewed_at, ackAt),
+      route: '/junior/chat',
     });
   }
 
@@ -204,13 +240,14 @@ export function ownerUnreadCount(
   pending: PendingMember[],
   feed: FeedItem[] = [],
   me?: string,
+  ackAt?: string | null,
 ): number {
   return (
-    pending.length +
-    queue.filter(isPendingQuestion).length +
-    suggestions.filter(isPendingSuggestion).length +
-    swaps.filter(isSwapAwaitingApproval).length +
-    (me ? feed.filter((f) => isUnreadMention(f, me)).length : 0)
+    pending.filter((p) => isAfterAck(p.created_at, ackAt)).length +
+    queue.filter((u) => isPendingQuestion(u) && isAfterAck(u.asked_at, ackAt)).length +
+    suggestions.filter((s) => isPendingSuggestion(s) && isAfterAck(s.created_at, ackAt)).length +
+    swaps.filter((r) => isSwapAwaitingApproval(r) && isAfterAck(r.updated_at, ackAt)).length +
+    (me ? feed.filter((f) => isUnreadMention(f, me) && isAfterAck(f.createdAt, ackAt)).length : 0)
   );
 }
 
@@ -224,8 +261,10 @@ export function buildOwnerNotifications(args: {
   /** 사장이 채팅에서 @언급됐는지 판정용(직원 모델과 동일). 없으면 멘션 없음으로 동작. */
   feed?: FeedItem[];
   userId?: string;
+  /** '모두 읽기' 기준 시각(0078). 이전 항목은 unread=false 로 강조 해제. */
+  ackAt?: string | null;
 }): OwnerNotif[] {
-  const { queue, suggestions, swaps, pending, nameOf, feed = [], userId: me } = args;
+  const { queue, suggestions, swaps, pending, nameOf, feed = [], userId: me, ackAt } = args;
   const out: OwnerNotif[] = [];
 
   // 멘션 — 직원/동료가 채팅·댓글에서 사장(나)을 @언급(내 글 제외). 탭하면 업무 채팅으로.
@@ -238,7 +277,7 @@ export function buildOwnerNotifications(args: {
         title: `${f.authorName}님이 나를 언급했어요`,
         body: f.text,
         at: f.createdAt,
-        unread: isUnreadMention(f, me),
+        unread: isUnreadMention(f, me) && isAfterAck(f.createdAt, ackAt),
         route: '/owner/work',
         readFeedId: f.id,
       });
@@ -253,7 +292,7 @@ export function buildOwnerNotifications(args: {
       title: `${p.name}님이 합류를 신청했어요`,
       body: '승인하면 우리 매장 직원으로 합류해요',
       at: p.created_at,
-      unread: true,
+      unread: isAfterAck(p.created_at, ackAt),
       route: '/owner/staff',
     });
   }
@@ -266,7 +305,7 @@ export function buildOwnerNotifications(args: {
       title: '답변을 기다리는 질문이 있어요',
       body: u.query_text,
       at: u.asked_at,
-      unread: true,
+      unread: isAfterAck(u.asked_at, ackAt),
       route: '/owner/inbox',
     });
   }
@@ -279,7 +318,7 @@ export function buildOwnerNotifications(args: {
       title: `${s.proposer_name}님의 ${s.kind === 'improve' ? '노하우 개선' : '새 노하우'} 제안`,
       body: s.text,
       at: s.created_at,
-      unread: true,
+      unread: isAfterAck(s.created_at, ackAt),
       route: '/owner/suggestions',
     });
   }
@@ -292,7 +331,7 @@ export function buildOwnerNotifications(args: {
       title: `${nameOf(r.requester_id)}님 교대가 승인을 기다려요`,
       body: fmtDateKo(r.date),
       at: r.updated_at,
-      unread: true,
+      unread: isAfterAck(r.updated_at, ackAt),
       route: '/owner/schedule',
     });
   }

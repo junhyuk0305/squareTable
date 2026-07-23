@@ -49,6 +49,9 @@ export type OwnerCoachChatProps = {
   isInboxAnswer: boolean;       // true면 발행 시 화면이 resolve(uq) 처리
   initialCategory: Category;
   seedText?: string;            // 프리필(콜드스타트 제목·회고 초안)
+  /** 제안 검토 모드(제안함 승인) — 알바 제안(seedText)이 직원 말풍선으로 뜨고 초안이 자동 생성된다.
+   *  사장은 고칠 부분만 말하거나(생략 가능) 바로 등록/이탈로 반영 여부를 정한다. */
+  reviewProposal?: { name: string };
   // 발행 성공 여부(boolean) 반환 — 실패면 이 컴포넌트가 발행 잠금(publishedRef)을 풀어 재시도 허용.
   onPublished: (entry: PlaybookEntry) => void | Promise<boolean>;
   // 다중 분리 발행(없으면 첫 건만). 반환=엔트리별 성공여부(boolean[]) — 부분 실패 시 성공분만 잠금해
@@ -91,6 +94,7 @@ export function OwnerCoachChat({
   isInboxAnswer,
   initialCategory,
   seedText,
+  reviewProposal,
   onPublished,
   onPublishedMany,
   editEntry,
@@ -102,6 +106,10 @@ export function OwnerCoachChat({
     if (isEdit) {
       init.push({ id: nextId(), kind: 'ai', text: '지금 이렇게 정리돼 있어요. 고칠 부분을 편하게 말씀해 주세요.\n예) “할 일에 행주 삶기 추가”, “금지는 빼줘”, “제목 바꿔줘”' });
       init.push(cardMsg({ square: editEntry!.square, title: editEntry!.title, category: editEntry!.category }));
+    } else if (reviewProposal && seedText) {
+      // 제안 검토 — 알바 제안 원문이 먼저 보이고, 초안은 아래 자동 구조화 effect가 만든다.
+      init.push({ id: nextId(), kind: 'alba', text: seedText, meta: `${reviewProposal.name}님의 제안` });
+      init.push({ id: nextId(), kind: 'ai', text: '제안을 노하우 초안으로 정리하고 있어요. 초안이 뜨면 고칠 부분만 말씀하시거나, 이대로 좋으면 바로 등록해 주세요.' });
     } else if (isInboxAnswer) {
       const who = uq.anonymous ? '익명' : uq.junior_name;
       init.push({
@@ -117,7 +125,8 @@ export function OwnerCoachChat({
     return init;
   });
 
-  const [input, setInput] = useState(typeof seedText === 'string' ? seedText : '');
+  // 제안 검토 모드는 제안이 이미 말풍선·초안으로 반영되므로 입력창 프리필을 하지 않는다.
+  const [input, setInput] = useState(typeof seedText === 'string' && !reviewProposal ? seedText : '');
   const [inputFocused, setInputFocused] = useState(false);
   const [category, setCategory] = useState<Category>(editEntry?.category ?? initialCategory);
   const [square, setSquare] = useState<SquareBlock | null>(editEntry?.square ?? null);
@@ -450,6 +459,22 @@ export function OwnerCoachChat({
     [input, busy, editing, isEdit, square, pending, reStructure, category, runStructure, runRefine, runPatch, pushMsg],
   );
 
+  // 제안 검토 모드 — 마운트 시 제안 원문을 1회 자동 구조화해 초안 카드를 바로 띄운다
+  // (사장 말풍선을 만들지 않도록 handleSend가 아니라 runStructure를 직접 호출).
+  const reviewSentRef = useRef(false);
+  useEffect(() => {
+    if (!reviewProposal || reviewSentRef.current) return;
+    const text = (seedText ?? '').trim();
+    if (!text) return;
+    // setState 연쇄를 피해 다음 틱으로 미룬다(react-hooks/set-state-in-effect). 1회 가드는 타이머 안에서.
+    const t = setTimeout(() => {
+      if (reviewSentRef.current) return;
+      reviewSentRef.current = true;
+      void runStructure(text, category);
+    }, 0);
+    return () => clearTimeout(t);
+  }, [reviewProposal, seedText, category, runStructure]);
+
   // ── 꼬리질문 조기 종료(탈출구): 사장이 "이대로 충분해요"를 누르면 남은 꼬리질문을 버리고
   //    바로 확인(등록) 단계로 간다. 꼬리질문이 떠 있는 동안 항상 동등하게 노출된다.
   const finishFollowupsEarly = useCallback(() => {
@@ -759,25 +784,31 @@ export function OwnerCoachChat({
 
       {showInput && (
         <View style={styles.inputBar}>
-          <Pressable
-            onPress={attachPhoto}
-            disabled={uploadingPhoto}
-            hitSlop={8}
-            style={({ pressed }) => [styles.attachBtn, pressed && { opacity: 0.6 }]}
-            accessibilityRole="button"
-            accessibilityLabel="사진 첨부"
-          >
-            {uploadingPhoto ? (
-              <ActivityIndicator size="small" color={InkColors.ink3} />
-            ) : (
-              <Ionicons name="image-outline" size={22} color={InkColors.ink2} />
-            )}
-          </Pressable>
-          <InfoDot
-            title={PHOTO_UPLOAD_INFO.title}
-            body={PHOTO_UPLOAD_INFO.body}
-            accessibilityLabel="사진 업로드 규격 안내"
-          />
+          {/* ⓘ는 별도 칸을 차지하지 않고 사진 아이콘 우하단에 배지처럼 붙인다(사진↔음성 간격 축소). */}
+          <View style={styles.attachWrap}>
+            <Pressable
+              onPress={attachPhoto}
+              disabled={uploadingPhoto}
+              hitSlop={8}
+              style={({ pressed }) => [styles.attachBtn, pressed && { opacity: 0.6 }]}
+              accessibilityRole="button"
+              accessibilityLabel="사진 첨부"
+            >
+              {uploadingPhoto ? (
+                <ActivityIndicator size="small" color={InkColors.ink3} />
+              ) : (
+                <Ionicons name="image-outline" size={22} color={InkColors.ink2} />
+              )}
+            </Pressable>
+            <View style={styles.attachInfo} pointerEvents="box-none">
+              <InfoDot
+                title={PHOTO_UPLOAD_INFO.title}
+                body={PHOTO_UPLOAD_INFO.body}
+                size={13}
+                accessibilityLabel="사진 업로드 규격 안내"
+              />
+            </View>
+          </View>
           {/* 말로 등록 — 결과는 입력창에 채워지고 전송은 사장이 직접(오인식 검토 여지를 남긴다). */}
           <VoiceInputButton
             surface="owner_coach"

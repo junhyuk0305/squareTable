@@ -3,6 +3,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 import { PressableScale } from '@/components/PressableScale';
+import { goToTab } from '@/components/RoleTabBar';
 import { SectionLabel } from '@/components/SectionLabel';
 import { InfoDot } from '@/components/InfoDot';
 import { useSessionStore } from '@/lib/store/useSessionStore';
@@ -47,7 +48,8 @@ export function OwnerKnowhowValueCard({ answeredHits30d, pending, entriesCount }
               accessibilityLabel="노하우 지표 설명 보기"
             />
             <PressableScale
-              onPress={() => router.push('/owner/knowledge')}
+              // 탭 루트로의 이동은 push가 아니라 탭 전환(goToTab) — 뒤로가기 없이 하단 '노하우' 탭이 활성된다.
+              onPress={() => goToTab('/owner/categories')}
               scaleTo={0.96}
               accessibilityRole="button"
               accessibilityLabel="노하우 전체 보기"

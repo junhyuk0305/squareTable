@@ -40,6 +40,8 @@ export default function OwnerCoachScreen() {
   const attachKnowhow = useWorkStore((s) => s.attachKnowhow);
   // 알바 제안(신규)에서 넘어온 경우: 실제로 발행됐을 때만 그 제안을 '반영(승인)'한다.
   const approveSuggestion = useSuggestionStore((s) => s.approve);
+  // 제안 검토 모드(신규 제안 승인) — 제안자 이름을 말풍선 메타로. 인박스 답변(③ uqId 동반)은 질문 컨텍스트 우선.
+  const reviewSug = useSuggestionStore((s) => (sugId ? s.suggestions.find((x) => x.id === sugId) : undefined));
   const realUq = useUnknownQueueStore((s) => (uqId ? s.getById(uqId) : undefined));
   // uqId 진입(인박스 답변·③ 제안→질문 자동해결)인데 큐가 아직 로드 안 됐으면 여기서 당긴다
   // — 제안 화면에서 바로 넘어오면 인박스를 안 거쳐 realUq 가 비어 "이미 처리됨" 데드엔드가 뜰 수 있다.
@@ -209,13 +211,14 @@ export default function OwnerCoachScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
-      <Stack.Screen options={{ title: isInboxAnswer ? '질문 답변' : '노하우 추가' }} />
+      <Stack.Screen options={{ title: isInboxAnswer ? '질문 답변' : sugId ? '제안 검토' : '노하우 추가' }} />
 
       <OwnerCoachChat
         uq={uq}
         isInboxAnswer={isInboxAnswer}
         initialCategory={initialCategory}
         seedText={typeof seed === 'string' ? seed : undefined}
+        reviewProposal={!isInboxAnswer && sugId ? { name: reviewSug?.proposer_name ?? '직원' } : undefined}
         onPublished={onPublished}
         onPublishedMany={onPublishedMany}
       />

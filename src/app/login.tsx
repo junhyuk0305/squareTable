@@ -23,7 +23,6 @@ export default function LoginScreen() {
   const router = useRouter();
   const switchTo = useSessionStore((s) => s.switchTo);
   const signInWithPassword = useSessionStore((s) => s.signInWithPassword);
-  const sendMagicLink = useSessionStore((s) => s.sendMagicLink);
 
   const [role, setRole] = useState<Role>('owner'); // 데모 폴백 전용
   const [email, setEmail] = useState('');
@@ -69,24 +68,6 @@ export default function LoginScreen() {
       return;
     }
     router.replace('/stores');
-  };
-
-  const magicLink = async () => {
-    if (!HAS_SUPABASE) return demoEnter();
-    if (!email) {
-      flash('이메일을 먼저 입력해주세요.', true);
-      return;
-    }
-    if (!isValidEmail(email)) {
-      flash('이메일 형식을 확인해주세요.', true);
-      return;
-    }
-    setBusy(true);
-    clearMsg();
-    const { error } = await sendMagicLink(email.trim());
-    setBusy(false);
-    if (error) flash('메일 발송 실패. 잠시 후 다시 시도해주세요.', true);
-    else flash('로그인 링크를 메일로 보냈어요. 메일함을 확인해주세요.', false);
   };
 
   return (
@@ -140,12 +121,6 @@ export default function LoginScreen() {
 
           {/* 안내/실패 문구 — 로그인 버튼 바로 아래. 실패는 빨강으로 시선 유도. */}
           {msg && <Text style={[styles.msg, msgErr && styles.msgErr]}>{msg}</Text>}
-
-          {HAS_SUPABASE && (
-            <Pressable disabled={busy} onPress={magicLink} style={styles.linkBtn}>
-              <Text style={styles.linkText}>비밀번호 없이 <Text style={styles.linkStrong}>메일로 로그인</Text></Text>
-            </Pressable>
-          )}
 
           {/* 소셜 로그인(구글 등) — 웹 전용. 데모 빌드에선 렌더 안 됨. */}
           <SocialAuthButtons />
@@ -206,9 +181,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   primaryText: { color: '#FFFFFF', fontSize: 16, lineHeight: 22, fontWeight: '800' },
-  linkBtn: { alignItems: 'center', paddingVertical: 10 },
-  linkText: { fontSize: 14, lineHeight: 20, color: InkColors.ink3 },
-  linkStrong: { color: InkColors.ink, fontWeight: '800' },
   msg: { fontSize: 13, lineHeight: 19, color: InkColors.ink2, textAlign: 'center', marginTop: 2 },
   msgErr: { color: BrandColors.accent, fontWeight: '700' },
   demoNote: { fontSize: 12, lineHeight: 18, color: InkColors.ink3, textAlign: 'center' },

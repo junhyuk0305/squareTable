@@ -98,7 +98,10 @@ export const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: InkColors.line,
   },
-  attachBtn: { width: 40, height: 44, alignItems: 'center', justifyContent: 'center' },
+  attachBtn: { width: 36, height: 44, alignItems: 'center', justifyContent: 'center' },
+  // ⓘ 배지 앵커 — 사진 아이콘 우하단에 겹쳐 붙는다(입력바 한 칸을 따로 차지하지 않게).
+  attachWrap: { position: 'relative' },
+  attachInfo: { position: 'absolute', right: -3, bottom: 3 },
   inputWrap: {
     flex: 1,
     borderWidth: 1,
@@ -112,7 +115,15 @@ export const styles = StyleSheet.create({
   },
   // 포커스(선택) 상태 — 브라우저 기본 아웃라인 대신 잉크 테두리로 일관 강조(직원 물어보기와 동일 규칙).
   inputWrapFocused: { borderColor: InkColors.ink },
-  input: { fontSize: 15, color: InkColors.ink, paddingVertical: Platform.OS === 'ios' ? 10 : 6, ...(Platform.OS === 'web' ? ({ outlineStyle: 'none' } as object) : null) },
+  // 한 줄일 때 placeholder·텍스트가 입력창(minHeight 44) 세로 중앙에 오도록 — 웹 textarea는
+  // 위로 붙는 경향이 있어 상하 패딩을 대칭(10)으로 맞춘다(android는 textAlignVertical로 중앙).
+  input: {
+    fontSize: 15,
+    color: InkColors.ink,
+    paddingVertical: Platform.OS === 'android' ? 6 : 10,
+    textAlignVertical: 'center',
+    ...(Platform.OS === 'web' ? ({ outlineStyle: 'none' } as object) : null),
+  },
   sendBtn: { width: 44, height: 44, borderRadius: Radius.pill, backgroundColor: BrandColors.brand, alignItems: 'center', justifyContent: 'center' },
   sendBtnDisabled: { backgroundColor: InkColors.line },
   sendIcon: { fontSize: 22, color: InkColors.bubbleText, fontWeight: '900', lineHeight: 24 },

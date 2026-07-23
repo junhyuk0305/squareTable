@@ -11,6 +11,7 @@ import { useScheduleStore } from '@/lib/store/useScheduleStore';
 import { useUnknownQueueStore } from '@/lib/store/useUnknownQueueStore';
 import { useSuggestionStore } from '@/lib/store/useSuggestionStore';
 import { useStaffStore } from '@/lib/store/useStaffStore';
+import { useMemberPrefsStore } from '@/lib/store/useMemberPrefsStore';
 import { todayStr } from '@/lib/utils/attendance';
 import { juniorUnreadCount, ownerUnreadCount } from '@/lib/utils/notifications';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
@@ -46,11 +47,14 @@ export function NotificationBell() {
   const templates = useWorkStore((s) => s.templates);
   const done = useWorkStore((s) => s.done);
   const swaps = useScheduleStore((s) => s.swaps);
+  const suggestions = useSuggestionStore((s) => s.suggestions);
+  const unitId = useSessionStore((s) => s.unitId);
+  const ackAt = useMemberPrefsStore((s) => (unitId ? (s.ackByUnit[unitId] ?? null) : null));
   const today = todayStr();
 
   const count = useMemo(
-    () => juniorUnreadCount(feed, swaps, userId, today, templates, done),
-    [feed, swaps, userId, today, templates, done],
+    () => juniorUnreadCount(feed, swaps, userId, today, templates, done, ackAt, suggestions),
+    [feed, swaps, userId, today, templates, done, ackAt, suggestions],
   );
 
   return <BellButton count={count} onPress={() => router.push('/junior/notifications')} />;
@@ -65,10 +69,12 @@ export function OwnerNotificationBell({ edge = true }: { edge?: boolean } = {}) 
   const swaps = useScheduleStore((s) => s.swaps);
   const pending = useStaffStore((s) => s.pending);
   const feed = useWorkStore((s) => s.feed);
+  const unitId = useSessionStore((s) => s.unitId);
+  const ackAt = useMemberPrefsStore((s) => (unitId ? (s.ackByUnit[unitId] ?? null) : null));
 
   const count = useMemo(
-    () => ownerUnreadCount(queue, suggestions, swaps, pending, feed, userId),
-    [queue, suggestions, swaps, pending, feed, userId],
+    () => ownerUnreadCount(queue, suggestions, swaps, pending, feed, userId, ackAt),
+    [queue, suggestions, swaps, pending, feed, userId, ackAt],
   );
 
   return <BellButton count={count} onPress={() => router.push('/owner/notifications')} edge={edge} />;

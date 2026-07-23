@@ -1,11 +1,12 @@
-import { useEffect, useMemo } from 'react';
-import { View, Text, Pressable, ScrollView, StyleSheet } from 'react-native';
+import { useEffect, useMemo, useState } from 'react';
+import { View, Text, Pressable, ScrollView, TextInput, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 import { RoleTabBar } from '@/components/RoleTabBar';
 import { Appear } from '@/components/Appear';
+import { BottomSheet } from '@/components/BottomSheet';
 import { useSuggestionStore } from '@/lib/store/useSuggestionStore';
 import { showToast } from '@/lib/store/useToastStore';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
@@ -14,8 +15,9 @@ import type { PlaybookSuggestion } from '@/types';
 
 /**
  * 노하우 제안함(사장) — 알바가 올린 ① 개선 제안 / ② 신규 등록 신청을 검토.
- *  - 승인: 신규 → 대화형 입력(coach)에 본문을 실어 노하우로 다듬어 발행 / 개선 → 대상 노하우 수정 화면.
- *  - 반려: 사유 없이 닫기(추후 메모 가능).
+ *  - 승인: 신규 → 제안 원문을 자동 구조화한 초안을 보고 수정(생략 가능) 후 추가 여부 결정(coach 제안검토 모드)
+ *          / 개선 → 대상 노하우 수정 화면.
+ *  - 반려: 사유 입력 시트(건너뛰기 가능) — 사유는 직원 제안 카드·알림에 표시된다.
  * 라우트는 파일 기반 자동 등록 — _layout 수정 없이 동작(헤더는 아래 Stack.Screen이 설정).
  */
 export default function OwnerSuggestionsScreen() {
@@ -39,14 +41,15 @@ export default function OwnerSuggestionsScreen() {
 
   // 승인 → 반영 화면으로.
   //  - 개선: 대상 노하우를 직접 수정하는 것 자체가 반영 → 즉시 승인 후 수정 화면.
-  //  - 신규: coach에서 '실제 발행'됐을 때만 승인되도록 sugId를 넘긴다(이탈 시 상태 괴리 방지).
+  //  - 신규: '제안 검토' 모드(coach) — 제안 원문이 자동 구조화된 초안으로 먼저 뜨고, 사장은 고칠 부분만
+  //    말하거나(생략 가능) 바로 추가/이탈(=미반영)을 결정한다. '실제 발행'됐을 때만 승인되도록 sugId를 넘긴다.
   function reflect(s: PlaybookSuggestion) {
     if (s.kind === 'improve' && s.target_entry_id) {
       approve(s.id);
       showToast('승인했어요 · 노하우를 수정해 주세요', 'good');
       router.push({ pathname: '/owner/edit/[id]', params: { id: s.target_entry_id } });
     } else {
-      showToast('노하우로 정리해 발행하면 반영돼요', 'info');
+      showToast('제안을 초안으로 정리해 드려요 · 확인 후 추가하세요', 'info');
       // source_template_id(②)=발행 시 업무 자동 첨부 · source_uq_id(③/D4)=uqId로 넘겨 발행 시 그 질문 자동 resolve.
       router.push({
         pathname: '/owner/coach',
@@ -60,8 +63,18 @@ export default function OwnerSuggestionsScreen() {
     }
   }
 
-  function decline(s: PlaybookSuggestion) {
-    reject(s.id);
+  // 반려 — 사유 입력 시트(건너뛰기 가능). 사유는 직원 '내가 보낸 제안' 카드·알림에 표시된다.
+  const [declineFor, setDeclineFor] = useState<PlaybookSuggestion | null>(null);
+  const [declineNote, setDeclineNote] = useState('');
+  function closeDecline() {
+    setDeclineFor(null);
+    setDeclineNote('');
+  }
+  function confirmDecline(withNote: boolean) {
+    if (!declineFor) return;
+    const note = withNote ? declineNote.trim() : '';
+    reject(declineFor.id, note || undefined);
+    closeDecline();
     showToast('제안을 반려했어요', 'info');
   }
 
@@ -81,7 +94,7 @@ export default function OwnerSuggestionsScreen() {
           <View style={styles.list}>
             {pending.map((s, i) => (
               <Appear key={s.id} delay={i * 40}>
-                <SuggestionCard s={s} onApprove={() => reflect(s)} onReject={() => decline(s)} />
+                <SuggestionCard s={s} onApprove={() => reflect(s)} onReject={() => setDeclineFor(s)} />
               </Appear>
             ))}
           </View>
@@ -118,6 +131,38 @@ export default function OwnerSuggestionsScreen() {
         <View style={{ height: 16 }} />
       </ScrollView>
       <RoleTabBar role="owner" />
+
+      {/* 반려 사유 시트 — 건너뛰기 가능. 사유는 직원 제안 카드·알림에 표시된다. */}
+      {declineFor && (
+        <BottomSheet visible={true} onClose={closeDecline}>
+          <View style={styles.declineSheet}>
+            <Text style={styles.declineTitle}>제안 반려</Text>
+            <Text style={styles.declineSub}>사유를 남기면 {declineFor.proposer_name}님의 제안 내역과 알림에 표시돼요</Text>
+            <TextInput
+              value={declineNote}
+              onChangeText={setDeclineNote}
+              placeholder="예) 이미 비슷한 노하우가 있어요"
+              placeholderTextColor={InkColors.ink3}
+              style={styles.declineInput}
+              multiline
+              maxLength={200}
+              autoFocus
+            />
+            <View style={styles.declineBtns}>
+              <Pressable onPress={() => confirmDecline(false)} style={({ pressed }) => [styles.btn, styles.btnGhost, pressed && { opacity: 0.7 }]}>
+                <Text style={styles.btnGhostText}>건너뛰고 반려</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => confirmDecline(true)}
+                disabled={declineNote.trim().length === 0}
+                style={({ pressed }) => [styles.btn, styles.btnPrimary, declineNote.trim().length === 0 && { opacity: 0.4 }, pressed && { opacity: 0.85 }]}
+              >
+                <Text style={styles.btnPrimaryText}>사유와 함께 반려</Text>
+              </Pressable>
+            </View>
+          </View>
+        </BottomSheet>
+      )}
     </SafeAreaView>
   );
 }
@@ -202,6 +247,13 @@ const styles = StyleSheet.create({
   btnGhostText: { fontSize: 13.5, fontWeight: '700', color: InkColors.ink2 },
   btnPrimary: { flex: 1, backgroundColor: InkColors.ink },
   btnPrimaryText: { fontSize: 13.5, fontWeight: '800', color: '#FFFFFF' },
+
+  // 반려 사유 시트
+  declineSheet: { paddingHorizontal: 20, paddingBottom: 20, gap: 10 },
+  declineTitle: { fontSize: 16, fontWeight: '800', color: InkColors.ink },
+  declineSub: { fontSize: 12.5, color: InkColors.ink3, fontWeight: '600' },
+  declineInput: { borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.sm, paddingHorizontal: 13, paddingVertical: 11, fontSize: 14, color: InkColors.ink, backgroundColor: InkColors.cream, minHeight: 72, textAlignVertical: 'top' },
+  declineBtns: { flexDirection: 'row', gap: 8, marginTop: 2 },
 
   handledWrap: { marginTop: 6, gap: 8 },
   handledHeader: { fontSize: 13, fontWeight: '800', color: InkColors.ink2 },

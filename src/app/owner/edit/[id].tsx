@@ -12,6 +12,7 @@ import { useSessionStore } from '@/lib/store/useSessionStore';
 import { confirmAction } from '@/lib/utils/confirm';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
+import { HEADER_EDGE_GUTTER, Space } from '@/lib/theme/layout';
 import type { PlaybookEntry, SquareBlock, UnknownQuery } from '@/types';
 
 /**
@@ -128,7 +129,14 @@ function ConversationalEdit({ entry }: { entry: PlaybookEntry }) {
         options={{
           title: '노하우 수정',
           headerRight: () => (
-            <Pressable onPress={del} hitSlop={10} style={({ pressed }) => [pressed && { opacity: 0.6 }]} accessibilityRole="button" accessibilityLabel="노하우 삭제">
+            // 우측 끝 여백은 헤더 표준(HEADER_EDGE_GUTTER) — 좌측 back 화살표와 좌우 대칭.
+            <Pressable
+              onPress={del}
+              hitSlop={10}
+              style={({ pressed }) => [{ paddingLeft: Space.sm, paddingRight: HEADER_EDGE_GUTTER, paddingVertical: 4 }, pressed && { opacity: 0.6 }]}
+              accessibilityRole="button"
+              accessibilityLabel="노하우 삭제"
+            >
               <Ionicons name="trash-outline" size={20} color={BrandColors.warn} />
             </Pressable>
           ),

@@ -5,6 +5,8 @@ import { create } from 'zustand';
 
 type SyncState = {
   error: string | null;
+  /** 오류 발생 시퀀스 — 같은 문구가 연달아 와도 배너 자동소거 타이머가 리셋되도록 구분자 역할. */
+  seq: number;
   noteError: (msg?: string) => void;
   clear: () => void;
 };
@@ -13,7 +15,8 @@ const DEFAULT_MSG = '저장이 서버에 반영되지 못했어요. 인터넷 �
 
 export const useSyncStore = create<SyncState>((set) => ({
   error: null,
-  noteError: (msg) => set({ error: msg ?? DEFAULT_MSG }),
+  seq: 0,
+  noteError: (msg) => set((s) => ({ error: msg ?? DEFAULT_MSG, seq: s.seq + 1 })),
   clear: () => set({ error: null }),
 }));
 

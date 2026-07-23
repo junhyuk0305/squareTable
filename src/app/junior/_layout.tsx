@@ -11,6 +11,8 @@ import { useAttendanceStore } from '@/lib/store/useAttendanceStore';
 import { usePayrollStore } from '@/lib/store/usePayrollStore';
 import { useStaffStore } from '@/lib/store/useStaffStore';
 import { useScheduleStore } from '@/lib/store/useScheduleStore';
+import { useMemberPrefsStore } from '@/lib/store/useMemberPrefsStore';
+import { useSuggestionStore } from '@/lib/store/useSuggestionStore';
 import { HAS_SUPABASE } from '@/lib/supabase';
 import { deriveSubscription } from '@/lib/utils/subscription';
 
@@ -37,15 +39,21 @@ export default function JuniorLayout() {
     usePayrollStore.getState().hydrate();
     useStaffStore.getState().hydrate();
     useScheduleStore.getState().hydrate();
+    // 알림 '모두 읽기' 기준 시각(0078·unit_member_prefs)이 벨 배지 집계에 필요 — 레이아웃에서 당긴다.
+    useMemberPrefsStore.getState().hydrate();
+    // 내 제안 검토 결과(반영/반려)가 벨 배지·알림에 잡히도록 레이아웃에서 하이드레이트+구독(사장 레이아웃과 동형).
+    useSuggestionStore.getState().hydrate();
     const offP = usePlaybookStore.getState().subscribe();
     const offW = useWorkStore.getState().subscribe();
     const offA = useAttendanceStore.getState().subscribe();
     const offS = useScheduleStore.getState().subscribe();
+    const offSg = useSuggestionStore.getState().subscribe();
     return () => {
       offP();
       offW();
       offA();
       offS();
+      offSg();
     };
   }, [status, unitId]);
 

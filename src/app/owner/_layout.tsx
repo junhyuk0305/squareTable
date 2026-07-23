@@ -12,6 +12,7 @@ import { usePayrollStore } from '@/lib/store/usePayrollStore';
 import { useStaffStore } from '@/lib/store/useStaffStore';
 import { useScheduleStore } from '@/lib/store/useScheduleStore';
 import { useSuggestionStore } from '@/lib/store/useSuggestionStore';
+import { useMemberPrefsStore } from '@/lib/store/useMemberPrefsStore';
 import { purgeExpiredFormerStaff } from '@/lib/db';
 import { HAS_SUPABASE } from '@/lib/supabase';
 import { deriveSubscription } from '@/lib/utils/subscription';
@@ -41,6 +42,8 @@ export default function OwnerLayout() {
     // 알림벨 배지가 '검토대기 제안'을 홈/어느 탭에서든 실시간 반영하도록 레이아웃에서 하이드레이트+구독.
     //  (기존엔 inbox·suggestions 화면 안에서만 구독 → 홈에 있으면 새 제안이 배지에 안 잡혔음.)
     useSuggestionStore.getState().hydrate();
+    // 알림 '모두 읽기' 기준 시각(0078·unit_member_prefs)이 벨 배지 집계에 필요 — 레이아웃에서 당긴다.
+    useMemberPrefsStore.getState().hydrate();
     // 퇴사 6개월 경과분 개인 기록 자동 정리(기회적 1회, 실패 무해).
     void purgeExpiredFormerStaff();
     const offQ = useUnknownQueueStore.getState().subscribe();

@@ -115,6 +115,17 @@ export function TaskComposerModal({
     if (!q) return [] as PlaybookEntry[];
     return searchPlaybook(q, publishedEntries, { topK: 6, threshold: 0 }).candidates.map((c) => c.entry);
   }, [khQuery, publishedEntries]);
+  // 직접 검색은 기본 접힘 — '+ 노하우 검색해서 첨부'를 눌러 연다(제목 기반 자동 추천이 1차 경로).
+  const [khOpen, setKhOpen] = useState(false);
+  // 할일 제목으로 자동 추천 — 제목을 적으면 비슷한 기존 노하우가 바로 뜬다(이미 선택한 건 제외).
+  const recommended = useMemo(() => {
+    const q = text.trim();
+    if (q.length < 2) return [] as PlaybookEntry[];
+    return searchPlaybook(q, publishedEntries, { topK: 3, threshold: 0 })
+      .candidates.filter((c) => c.score >= 0.25)
+      .map((c) => c.entry)
+      .filter((e) => !knowhowIds.includes(e.id));
+  }, [text, publishedEntries, knowhowIds]);
   const toggleKnowhow = (id: string) =>
     setKnowhowIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
 
@@ -310,6 +321,35 @@ export function TaskComposerModal({
                     ))}
                   </View>
                 )}
+                {recommended.length > 0 && (
+                  <View style={s.khResults}>
+                    <Text style={s.khRecoLabel}>제목과 비슷한 우리 매장 노하우</Text>
+                    {recommended.map((e) => (
+                      <Pressable
+                        key={e.id}
+                        onPress={() => toggleKnowhow(e.id)}
+                        style={({ pressed }) => [s.khRow, pressed && { backgroundColor: InkColors.paper }]}
+                        accessibilityRole="button"
+                        accessibilityLabel={`${e.title} 첨부`}
+                      >
+                        <Ionicons name="add-circle-outline" size={17} color={InkColors.ink3} />
+                        <Text style={s.khRowText} numberOfLines={1}>{e.title}</Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                )}
+                {!khOpen && (
+                  <Pressable
+                    onPress={() => { setKhOpen(true); revealScroll(); }}
+                    style={({ pressed }) => [s.khOpenBtn, pressed && { opacity: 0.7 }]}
+                    accessibilityRole="button"
+                    accessibilityLabel="노하우 검색해서 첨부"
+                  >
+                    <Ionicons name="add" size={16} color={InkColors.ink2} />
+                    <Text style={s.khOpenText}>노하우 검색해서 첨부</Text>
+                  </Pressable>
+                )}
+                {khOpen && (
                 <TextInput
                   value={khQuery}
                   onChangeText={setKhQuery}
@@ -317,8 +357,10 @@ export function TaskComposerModal({
                   placeholder="노하우 검색해서 첨부"
                   placeholderTextColor={InkColors.ink3}
                   style={s.inp}
+                  autoFocus
                 />
-                {khQuery.trim().length > 0 && (
+                )}
+                {khOpen && khQuery.trim().length > 0 && (
                   <View style={s.khResults}>
                     {publishedEntries.length === 0 ? (
                       // 노하우 0개 매장(콜드스타트) — "매치 없음"이 아니라 "아직 등록 안 됨"으로 정직하게 구분.
@@ -518,6 +560,9 @@ const s = StyleSheet.create({
   khRowText: { flex: 1, fontSize: 13.5, fontWeight: '600', color: InkColors.ink },
   khEmpty: { fontSize: 12.5, color: InkColors.ink3, paddingHorizontal: 12, paddingVertical: 12 },
   khHint: { fontSize: 11, color: InkColors.ink3, marginTop: 7, paddingHorizontal: 2 },
+  khRecoLabel: { fontSize: 11, fontWeight: '800', color: InkColors.ink3, paddingHorizontal: 12, paddingTop: 10, paddingBottom: 2 },
+  khOpenBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, marginTop: 6, paddingVertical: 10, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.sm, borderStyle: 'dashed', backgroundColor: InkColors.bg },
+  khOpenText: { fontSize: 12.5, fontWeight: '700', color: InkColors.ink2 },
 
   foot: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 18, borderTopWidth: 1, borderTopColor: InkColors.line },
   destBar: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10 },

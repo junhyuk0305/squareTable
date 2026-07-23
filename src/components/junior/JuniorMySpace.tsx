@@ -162,12 +162,17 @@ export function JuniorMySpace({ me }: { me: string }) {
           <SectionLabel icon="paper-plane-outline" title="내가 보낸 제안" />
           <View style={s.list}>
             {myProposals.map((sug) => (
-              <View key={sug.id} style={s.rowCard}>
-                <Ionicons name={sug.status === 'approved' ? 'checkmark-circle' : sug.status === 'rejected' ? 'close-circle' : 'time-outline'} size={16} color={sug.status === 'approved' ? BrandColors.good : sug.status === 'rejected' ? BrandColors.bad : InkColors.ink3} />
-                <Text style={s.rowText} numberOfLines={1}>{sug.text}</Text>
-                <Text style={[s.statusTag, sug.status === 'approved' && { color: BrandColors.good }, sug.status === 'rejected' && { color: BrandColors.bad }]}>
-                  {sug.status === 'approved' ? '등록됨' : sug.status === 'rejected' ? '반려' : '검토 중'}
-                </Text>
+              <View key={sug.id} style={[s.rowCard, s.rowCardCol]}>
+                <View style={s.rowLine}>
+                  <Ionicons name={sug.status === 'approved' ? 'checkmark-circle' : sug.status === 'rejected' ? 'close-circle' : 'time-outline'} size={16} color={sug.status === 'approved' ? BrandColors.good : sug.status === 'rejected' ? BrandColors.bad : InkColors.ink3} />
+                  <Text style={s.rowText} numberOfLines={1}>{sug.text}</Text>
+                  <Text style={[s.statusTag, sug.status === 'approved' && { color: BrandColors.good }, sug.status === 'rejected' && { color: BrandColors.bad }]}>
+                    {sug.status === 'approved' ? '등록됨' : sug.status === 'rejected' ? '반려' : '검토 중'}
+                  </Text>
+                </View>
+                {sug.status === 'rejected' && !!sug.owner_note && (
+                  <Text style={s.rejectNote}>사장님 메모 · {sug.owner_note}</Text>
+                )}
               </View>
             ))}
           </View>
@@ -328,6 +333,10 @@ const s = StyleSheet.create({
   exportBtnText: { fontSize: 12.5, fontWeight: '800', color: InkColors.ink2 },
 
   rowCard: { flexDirection: 'row', alignItems: 'center', gap: 9, backgroundColor: InkColors.bg, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.sm, paddingHorizontal: 12, paddingVertical: 11 },
+  // 반려 사유가 붙는 제안 행 — 카드 자체는 세로 스택, 첫 줄(rowLine)이 기존 가로 행.
+  rowCardCol: { flexDirection: 'column', alignItems: 'stretch', gap: 6 },
+  rowLine: { flexDirection: 'row', alignItems: 'center', gap: 9 },
+  rejectNote: { fontSize: 12, color: InkColors.ink2, fontWeight: '600', lineHeight: 17, backgroundColor: InkColors.cream, borderRadius: Radius.sm, paddingHorizontal: 9, paddingVertical: 7 },
   rowText: { flex: 1, fontSize: 13.5, fontWeight: '600', color: InkColors.ink },
   statusTag: { fontSize: 11, fontWeight: '800', color: InkColors.ink3 },
   answeredTag: { fontSize: 10.5, fontWeight: '800', color: BrandColors.good, backgroundColor: '#E6F1EA', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 5 },

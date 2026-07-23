@@ -13,6 +13,7 @@ import { useScheduleStore } from '@/lib/store/useScheduleStore';
 import { useUnknownQueueStore } from '@/lib/store/useUnknownQueueStore';
 import { useSuggestionStore } from '@/lib/store/useSuggestionStore';
 import { useStaffStore } from '@/lib/store/useStaffStore';
+import { useMemberPrefsStore } from '@/lib/store/useMemberPrefsStore';
 import { todayStr } from '@/lib/utils/attendance';
 import { juniorUnreadCount, ownerUnreadCount } from '@/lib/utils/notifications';
 
@@ -76,6 +77,9 @@ export function useAppBadgeSync(): void {
   const role = useSessionStore((s) => s.role);
   const me = useSessionStore((s) => s.userId);
   const signedIn = useSessionStore((s) => s.status === 'signed_in');
+  const unitId = useSessionStore((s) => s.unitId);
+  // '모두 읽기'(0078) 기준 시각 — 벨 배지와 동일 SSOT 집계 유지.
+  const ackAt = useMemberPrefsStore((s) => (unitId ? (s.ackByUnit[unitId] ?? null) : null));
 
   // 직원 집계 입력
   const feed = useWorkStore((s) => s.feed);
@@ -96,8 +100,8 @@ export function useAppBadgeSync(): void {
     }
     const count =
       role === 'owner'
-        ? ownerUnreadCount(queue, suggestions, swaps, pending, feed, me)
-        : juniorUnreadCount(feed, swaps, me, today, templates, done);
+        ? ownerUnreadCount(queue, suggestions, swaps, pending, feed, me, ackAt)
+        : juniorUnreadCount(feed, swaps, me, today, templates, done, ackAt, suggestions);
     setAppBadge(count);
-  }, [role, me, signedIn, feed, templates, done, swaps, queue, suggestions, pending, today]);
+  }, [role, me, signedIn, feed, templates, done, swaps, queue, suggestions, pending, today, ackAt]);
 }
