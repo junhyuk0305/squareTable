@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
 import { Space, frameCapStyle } from '@/lib/theme/layout';
+import { SHOW_BILLING } from '@/lib/config/store-policy';
 
 /**
  * 다점포 전용 화면의 요금제 가드(과금층 0062) — 무료·단일 요금제로 딥링크 진입 시
@@ -18,16 +19,19 @@ export function PlanUpgradeNotice({ description }: { description: string }) {
       <View style={styles.iconWrap}>
         <Ionicons name="lock-closed-outline" size={24} color={InkColors.ink2} />
       </View>
-      <Text style={styles.title}>다점포 요금제에서 열려요</Text>
-      <Text style={styles.desc}>{description}</Text>
-      <Pressable
-        onPress={() => router.push('/billing' as never)}
-        style={({ pressed }) => [styles.cta, pressed && { opacity: 0.88 }]}
-        accessibilityRole="button"
-        accessibilityLabel="요금제 보기"
-      >
-        <Text style={styles.ctaText}>요금제 보기</Text>
-      </Pressable>
+      {/* iOS 네이티브: 요금제명·업그레이드 CTA 모두 제거(3.1.3(f)). 사실 고지만 남긴다. */}
+      <Text style={styles.title}>{SHOW_BILLING ? '다점포 요금제에서 열려요' : '이 매장에서는 쓸 수 없어요'}</Text>
+      <Text style={styles.desc}>{SHOW_BILLING ? description : '여러 매장을 함께 관리할 때 쓰는 기능이에요.'}</Text>
+      {SHOW_BILLING && (
+        <Pressable
+          onPress={() => router.push('/billing' as never)}
+          style={({ pressed }) => [styles.cta, pressed && { opacity: 0.88 }]}
+          accessibilityRole="button"
+          accessibilityLabel="요금제 보기"
+        >
+          <Text style={styles.ctaText}>요금제 보기</Text>
+        </Pressable>
+      )}
     </View>
   );
 }

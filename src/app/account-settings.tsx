@@ -15,6 +15,7 @@ import { Radius } from '@/lib/theme/elevation';
 import { SettingsSection, SettingsRow, SettingsToggle } from '@/components/settings/SettingsKit';
 import { SectionLabel } from '@/components/SectionLabel';
 import { PricingTable } from '@/components/PricingTable';
+import { SHOW_BILLING } from '@/lib/config/store-policy';
 import { TextScaleModal } from '@/components/settings/TextScaleModal';
 import { ContactModal } from '@/components/ContactModal';
 import { HeaderBackButton } from '@/components/HeaderBackButton';
@@ -119,8 +120,10 @@ export default function AccountSettings() {
         </SettingsSection>
 
         {/* 구독 및 결제(사장만) — 계정 단위 항목이라 F6에서 owner/settings → 여기로 이동.
-            FREE_MODE(파일럿 전면 무료·출시 전 flag 숨김) 동안엔 단순 안내 행 유지. */}
-        {isOwner &&
+            FREE_MODE(파일럿 전면 무료·출시 전 flag 숨김) 동안엔 단순 안내 행 유지.
+            iOS 네이티브에서는 섹션 전체를 렌더하지 않는다 — 가격표(PricingTable)·요금제 CTA 모두
+            App Review 3.1.3(f) 위반. 판정은 store-policy.ts 하나에만 둔다. */}
+        {SHOW_BILLING && isOwner &&
           (FREE_MODE ? (
             <SettingsSection icon="card-outline" title="구독 및 결제">
               <SettingsRow

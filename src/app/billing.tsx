@@ -10,6 +10,7 @@ import { showToast } from '@/lib/store/useToastStore';
 import { deriveSubscription } from '@/lib/utils/subscription';
 import { BILLING_INFO, formatKrw } from '@/lib/config/billing';
 import { PLANS, PLAN_ORDER, planMonthlyPrice, type PlanId } from '@/lib/config/tiers';
+import { SHOW_BILLING } from '@/lib/config/store-policy';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
@@ -129,6 +130,52 @@ function BillingBody() {
       : plan === 'free'
         ? '무료 요금제로 이용 중이에요'
         : '이용 중이에요';
+
+  // ── iOS 네이티브: 결제 표면 전면 차단 (App Review 3.1.3(f)) ────────────────────────
+  // 계좌·금액·요금제 선택·입금 버튼을 모두 제거한다. "웹에서 결제하세요" 같은 안내도
+  // call to action 에 해당하므로 넣지 않는다(3.1.1(a) — 한국 스토어프론트는 아웃링크도 금지).
+  // 만료 시 owner/junior 레이아웃이 이 라우트로 강제 이동시키므로 라우트 자체는 살려두고,
+  // 사실 고지 + 상태 새로고침 + 로그아웃만 남긴다.
+  if (!SHOW_BILLING) {
+    const expired = view.state === 'expired';
+    return (
+      <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
+        <Stack.Screen options={{ headerShown: false }} />
+        <ScrollView contentContainerStyle={styles.scroll}>
+          <View style={styles.hero}>
+            <View style={styles.iconWrap}>
+              <Ionicons
+                name={expired ? 'lock-closed-outline' : 'checkmark-circle-outline'}
+                size={26}
+                color={expired ? BrandColors.warn : InkColors.ink}
+              />
+            </View>
+            <Text style={styles.title}>{expired ? '지금은 이용할 수 없어요' : '이용 중이에요'}</Text>
+            {!!storeName && <Text style={styles.store}>{storeName}</Text>}
+          </View>
+          <View style={styles.card}>
+            <Text style={styles.body}>
+              {expired
+                ? isOwner
+                  ? '이 매장의 이용 기간이 끝났어요. 이용 재개는 관리자에게 문의해 주세요.'
+                  : '가게의 이용 기간이 끝났어요. 사장님께 문의해 주세요.'
+                : '이 매장은 정상적으로 이용 중이에요.'}
+            </Text>
+          </View>
+          <Pressable
+            disabled={busy}
+            onPress={recheck}
+            style={({ pressed }) => [styles.ghost, pressed && { opacity: 0.7 }, busy && { opacity: 0.6 }]}
+          >
+            {busy ? <ActivityIndicator color={InkColors.ink2} /> : <Text style={styles.ghostText}>이용 상태 새로고침</Text>}
+          </Pressable>
+          <Pressable onPress={() => void logout()} style={styles.logoutRow}>
+            <Text style={styles.logoutText}>로그아웃</Text>
+          </Pressable>
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>

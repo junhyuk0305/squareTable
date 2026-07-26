@@ -19,6 +19,7 @@ import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
 import { canUseMultistore } from '@/lib/config/tiers';
+import { SHOW_BILLING } from '@/lib/config/store-policy';
 import { HubTopBar } from '@/components/hub/HubTopBar';
 import { HubTabBar } from '@/components/HubTabBar';
 import { Appear } from '@/components/Appear';
@@ -112,7 +113,12 @@ export default function StoresHub() {
     router.replace(isOwner ? '/owner/dashboard' : '/junior/home');
   };
 
-  const addStore = () => router.push(canUseMultistore(plan) ? '/owner/create-store' : '/billing');
+  const addStore = () => {
+    if (canUseMultistore(plan)) return router.push('/owner/create-store');
+    // iOS 네이티브: 결제 화면으로 유도하지 않는다(3.1.3(f)). 사실 고지만 남긴다.
+    if (!SHOW_BILLING) return showToast('매장을 더 추가하려면 관리자에게 문의해 주세요.');
+    router.push('/billing');
+  };
   const joinStore = () => router.push('/junior/hub');
 
   const storeCount = stores.length;

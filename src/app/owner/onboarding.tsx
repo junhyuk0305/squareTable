@@ -17,6 +17,7 @@ import { Space, SCREEN_GUTTER, CONTENT_MAX_WIDTH, frameCapStyle } from '@/lib/th
 import { Radius, Elevation } from '@/lib/theme/elevation';
 import { PLANS } from '@/lib/config/tiers';
 import { formatKrw } from '@/lib/config/billing';
+import { SHOW_BILLING } from '@/lib/config/store-policy';
 import type { Category } from '@/types';
 
 // 사장 온보딩 — 업종 표준 노하우 팩에서 '선택 → 자동등록'. 빈 매장(노하우 0건) 죽음의 나선 차단.
@@ -155,24 +156,27 @@ export default function OwnerOnboardingScreen() {
           </View>
 
           {/* 요금제 후킹 — 지금은 무료로 시작했음을 알리고, 직원·AI 무제한(단일 매장, 파일럿 할인가)으로
-              업그레이드 경로를 연다. 가격은 tiers.ts(SSOT)에서 읽는다. 탭하면 요금제 선택 화면(/billing). */}
-          <Pressable
-            onPress={() => router.push('/billing' as never)}
-            style={({ pressed }) => [styles.planNudge, pressed && { opacity: 0.9 }]}
-            accessibilityRole="button"
-            accessibilityLabel="요금제 보기 — 지금은 무료로 시작했어요"
-          >
-            <View style={styles.planIcon}>
-              <Ionicons name="sparkles-outline" size={16} color={InkColors.ink} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.planTitle}>지금은 무료로 시작했어요</Text>
-              <Text style={styles.planSub}>
-                직원·AI 무제한은 단일 매장 요금제(파일럿 {formatKrw(PLANS.single.monthlyKrw)})에서 열려요
-              </Text>
-            </View>
-            <Ionicons name="chevron-forward" size={16} color={InkColors.ink3} />
-          </Pressable>
+              업그레이드 경로를 연다. 가격은 tiers.ts(SSOT)에서 읽는다. 탭하면 요금제 선택 화면(/billing).
+              iOS 네이티브는 가격 노출 자체가 3.1.3(f) 상 구매 유도로 읽힐 수 있어 렌더하지 않는다. */}
+          {SHOW_BILLING && (
+            <Pressable
+              onPress={() => router.push('/billing' as never)}
+              style={({ pressed }) => [styles.planNudge, pressed && { opacity: 0.9 }]}
+              accessibilityRole="button"
+              accessibilityLabel="요금제 보기 — 지금은 무료로 시작했어요"
+            >
+              <View style={styles.planIcon}>
+                <Ionicons name="sparkles-outline" size={16} color={InkColors.ink} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.planTitle}>지금은 무료로 시작했어요</Text>
+                <Text style={styles.planSub}>
+                  직원·AI 무제한은 단일 매장 요금제(파일럿 {formatKrw(PLANS.single.monthlyKrw)})에서 열려요
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color={InkColors.ink3} />
+            </Pressable>
+          )}
 
           <PressableScale onPress={goDashboard} scaleTo={0.97} style={styles.primary}>
             <Text style={styles.primaryText}>대시보드로 들어가기</Text>

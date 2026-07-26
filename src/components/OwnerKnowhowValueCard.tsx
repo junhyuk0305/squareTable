@@ -8,6 +8,7 @@ import { SectionLabel } from '@/components/SectionLabel';
 import { InfoDot } from '@/components/InfoDot';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { canUseMultistore } from '@/lib/config/tiers';
+import { SHOW_BILLING } from '@/lib/config/store-policy';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Elevation, Radius } from '@/lib/theme/elevation';
 import { Space, frameCapStyle } from '@/lib/theme/layout';
@@ -92,8 +93,9 @@ export function OwnerKnowhowValueCard({ answeredHits30d, pending, entriesCount }
           <Ionicons name="chevron-forward" size={15} color={InkColors.ink3} />
         </PressableScale>
 
-        {/* 다점포 전용 — 다른 내 매장의 노하우를 현재 매장으로 가져오기(복제). 요금제 잠금 시 업그레이드 유도 */}
-        {multiStore ? (
+        {/* 다점포 전용 — 다른 내 매장의 노하우를 현재 매장으로 가져오기(복제). 요금제 잠금 시 업그레이드 유도.
+            iOS 네이티브에서 잠긴 상태는 요금제 유도가 되므로 행 자체를 렌더하지 않는다(3.1.3(f)). */}
+        {multiStore && (multiUnlocked || SHOW_BILLING) ? (
           <PressableScale
             onPress={() => router.push((multiUnlocked ? '/owner/import-knowhow' : '/billing') as never)}
             scaleTo={0.98}

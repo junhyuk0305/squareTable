@@ -3,6 +3,7 @@ import { View, Text, Pressable, StyleSheet, ActivityIndicator } from 'react-nati
 import { Ionicons } from '@expo/vector-icons';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { HAS_SUPABASE } from '@/lib/supabase';
+import { SHOW_SOCIAL_LOGIN } from '@/lib/config/store-policy';
 import { InkColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
@@ -20,6 +21,10 @@ export function SocialAuthButtons() {
   const [err, setErr] = useState<string | null>(null);
 
   if (!HAS_SUPABASE) return null;
+  // iOS 네이티브: Guideline 4.8 — 제3자 소셜 로그인으로 주계정을 만들면 동등한 다른 로그인 서비스
+  // (사실상 Sign in with Apple)를 함께 제공해야 한다. 여기서 감추면 "앱이 오로지 자사 계정 시스템만
+  // 사용" 예외에 해당해 면제된다. Sign in with Apple 추가는 9월 1.1 과제.
+  if (!SHOW_SOCIAL_LOGIN) return null;
 
   const onGoogle = async () => {
     setBusy(true);
