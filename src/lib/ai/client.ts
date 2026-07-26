@@ -21,7 +21,7 @@ import { AI_ENDPOINT, ANON, USE_MOCK } from './config';
 import { mockGenerateAnswer, mockStructureSquare, mockPatchSquare, mockExtractIntent, mockClassifyQuery, mockGenerateQuiz } from './mock';
 import { isEnglishDominant } from '@/lib/utils/knowhowInput';
 import { supabase } from '@/lib/supabase';
-import { reportError } from '@/lib/analytics/track';
+import { reportError, track } from '@/lib/analytics/track';
 
 type Task = 'answer' | 'square' | 'patch' | 'intent' | 'triage' | 'transcribe' | 'quiz';
 
@@ -85,7 +85,12 @@ async function callEdge<T>(task: Task, payload: unknown): Promise<T> {
       // 상태코드만 믿지 않고 body 판별자까지 확인 — 인프라 계층의 무관한 402가 가짜 페이월로 둔갑하는 것 방지.
       if (res.status === 402) {
         const body = await res.json().catch(() => null);
-        if (body?.error === 'ai_quota_exceeded') throw new AiQuotaError(Number(body?.cap) || 0, Number(body?.used) || 0);
+        if (body?.error === 'ai_quota_exceeded') {
+          // 쿼터 벽에 실제로 부딪힌 횟수는 유료 전환 판단의 직접 근거인데, 지금까지 이 분기가
+          // 아무것도 남기지 않아 "몇 번 거부됐는지"를 셀 수 없었다(ai_usage_monthly 대리 관측만 가능).
+          track('ai_quota_exceeded', { task, cap: Number(body?.cap) || 0, used: Number(body?.used) || 0 });
+          throw new AiQuotaError(Number(body?.cap) || 0, Number(body?.used) || 0);
+        }
         throw new Error(`AI edge ${task} failed: 402`); // 쿼터 외 402 → 일반 4xx(mock 폴백 경로)
       }
       // 4xx는 재시도 무의미 → 즉시 실패(catch에서 4xx로 재-throw됨).

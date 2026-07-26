@@ -17,6 +17,7 @@ import { Radius } from '@/lib/theme/elevation';
 import { DEFAULT_HOURLY_WAGE, fmtDuration, won, todayStr, liveMinutes } from '@/lib/utils/attendance';
 import { computePay } from '@/lib/utils/payroll';
 import { useCopyToClipboard } from '@/lib/utils/useCopyToClipboard';
+import { track } from '@/lib/analytics/track';
 import { showToast } from '@/lib/store/useToastStore';
 import { rotateInviteCode } from '@/lib/db';
 
@@ -133,7 +134,12 @@ export default function OwnerStaffScreen() {
           <Text style={styles.inviteCode}>{INVITE_CODE}</Text>
           <Text style={styles.inviteHint}>직원이 코드를 입력해 신청하면 아래에서 승인해 주세요. 승인 전에는 매장 정보에 접근할 수 없어요.</Text>
           <View style={styles.inviteBtnRow}>
-            <Pressable onPress={() => copy(INVITE_CODE)} style={({ pressed }) => [styles.copyBtn, pressed && { opacity: 0.85 }]}>
+            {/* 복사 = "사장이 초대코드를 실제로 뿌렸다"의 유일한 관측점. 이게 없으면 직원 합류율이
+                낮을 때 사장이 안 뿌린 건지, 뿌렸는데 직원이 안 들어온 건지 DB로 구분할 수 없다. */}
+            <Pressable
+              onPress={() => { track('invite_shared', { from: 'staff' }); copy(INVITE_CODE); }}
+              style={({ pressed }) => [styles.copyBtn, pressed && { opacity: 0.85 }]}
+            >
               <Ionicons name={copied ? 'checkmark' : 'copy-outline'} size={16} color="#FFFFFF" />
               <Text style={styles.copyText}>{copied ? '복사됨' : '코드 복사'}</Text>
             </Pressable>

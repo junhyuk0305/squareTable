@@ -8,6 +8,7 @@ import { useMemberPrefsStore } from '@/lib/store/useMemberPrefsStore';
 import { storeColor } from '@/lib/utils/storeColor';
 import { notifyAction } from '@/lib/utils/confirm';
 import { useCopyToClipboard } from '@/lib/utils/useCopyToClipboard';
+import { track } from '@/lib/analytics/track';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { SettingsSection, SettingsRow, SettingsToggle } from '@/components/settings/SettingsKit';
@@ -85,7 +86,11 @@ export default function OwnerSettings() {
             <Text style={styles.codeLabel}>직원 합류용 초대코드</Text>
             <Text style={styles.codeValue}>{inviteCode}</Text>
           </View>
-          <Pressable onPress={() => copy(inviteCode)} style={({ pressed }) => [styles.codeBtn, pressed && { opacity: 0.85 }]}>
+          {/* 복사 = "사장이 초대코드를 실제로 뿌렸다"의 관측점 — staff.tsx 와 같은 이벤트를 쓴다. */}
+          <Pressable
+            onPress={() => { track('invite_shared', { from: 'settings' }); copy(inviteCode); }}
+            style={({ pressed }) => [styles.codeBtn, pressed && { opacity: 0.85 }]}
+          >
             <Ionicons name={copied ? 'checkmark' : 'copy-outline'} size={15} color={InkColors.ink} />
             <Text style={styles.codeBtnText}>{copied ? '복사됨' : '복사'}</Text>
           </Pressable>
