@@ -11,6 +11,7 @@ import { useScheduleStore } from '@/lib/store/useScheduleStore';
 import { useUnknownQueueStore } from '@/lib/store/useUnknownQueueStore';
 import { useSuggestionStore } from '@/lib/store/useSuggestionStore';
 import { useStaffStore } from '@/lib/store/useStaffStore';
+import { usePaymentClaimStore } from '@/lib/store/usePaymentClaimStore';
 import { useMemberPrefsStore } from '@/lib/store/useMemberPrefsStore';
 import { todayStr } from '@/lib/utils/attendance';
 import { juniorUnreadCount, ownerUnreadCount } from '@/lib/utils/notifications';
@@ -69,12 +70,13 @@ export function OwnerNotificationBell({ edge = true }: { edge?: boolean } = {}) 
   const swaps = useScheduleStore((s) => s.swaps);
   const pending = useStaffStore((s) => s.pending);
   const feed = useWorkStore((s) => s.feed);
+  const claims = usePaymentClaimStore((s) => s.claims);
   const unitId = useSessionStore((s) => s.unitId);
   const ackAt = useMemberPrefsStore((s) => (unitId ? (s.ackByUnit[unitId] ?? null) : null));
 
   const count = useMemo(
-    () => ownerUnreadCount(queue, suggestions, swaps, pending, feed, userId, ackAt),
-    [queue, suggestions, swaps, pending, feed, userId, ackAt],
+    () => ownerUnreadCount(queue, suggestions, swaps, pending, feed, userId, ackAt, claims),
+    [queue, suggestions, swaps, pending, feed, userId, ackAt, claims],
   );
 
   return <BellButton count={count} onPress={() => router.push('/owner/notifications')} edge={edge} />;

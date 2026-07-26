@@ -8,6 +8,7 @@ import { useUnknownQueueStore } from '@/lib/store/useUnknownQueueStore';
 import { useSuggestionStore } from '@/lib/store/useSuggestionStore';
 import { useScheduleStore } from '@/lib/store/useScheduleStore';
 import { useStaffStore } from '@/lib/store/useStaffStore';
+import { usePaymentClaimStore } from '@/lib/store/usePaymentClaimStore';
 import { useWorkStore } from '@/lib/store/useWorkStore';
 import { useCrossNotifStore } from '@/lib/store/useCrossNotifStore';
 import { useCrossNotifRows } from '@/lib/hooks/useCrossNotifRows';
@@ -41,6 +42,7 @@ export default function OwnerNotificationsScreen() {
   const staff = useStaffStore((s) => s.staff);
   const pending = useStaffStore((s) => s.pending);
   const feed = useWorkStore((s) => s.feed);
+  const claims = usePaymentClaimStore((s) => s.claims);
   const markNoticeRead = useWorkStore((s) => s.markNoticeRead);
   const markAllRead = useWorkStore((s) => s.markAllRead);
   // '모두 읽기' 기준 시각(0078) — 처리형 항목(합류·질문·제안·교대)의 배지·강조 해제 축.
@@ -50,7 +52,11 @@ export default function OwnerNotificationsScreen() {
 
   // 화면에 들어올 때마다 명부·합류신청을 다시 당겨온다. profiles 실시간이 없어도(또는 앱을 켜둔 채로
   // 신청이 들어와도) 사장이 이 화면을 열면 최신 합류 신청이 반드시 보이게 하는 안전장치.
-  useFocusEffect(useCallback(() => { useStaffStore.getState().hydrate(); }, []));
+  //   입금 신고(0083)도 같이 — realtime 미구독 축이라 화면 진입이 최신화 시점이다.
+  useFocusEffect(useCallback(() => {
+    useStaffStore.getState().hydrate();
+    void usePaymentClaimStore.getState().hydrate();
+  }, []));
 
   // ── 통합 알림(전체 매장, 0077) — 다점포 소유일 때만 세그먼트 노출.
   //    판정·매핑·탭 동작(전환 후 읽음처리 포함)은 공용 훅(useCrossNotifRows) SSOT.
@@ -77,8 +83,9 @@ export default function OwnerNotificationsScreen() {
         feed,
         userId: me,
         ackAt,
+        claims,
       }),
-    [queue, suggestions, swaps, pending, staff, feed, me, ackAt],
+    [queue, suggestions, swaps, pending, staff, feed, me, ackAt, claims],
   );
 
   // '모두 읽기' = ① 멘션은 read_by 기록(기존 경로) + ② 처리형(합류·질문·제안·교대)은 ack 시각(0078)으로

@@ -7,8 +7,11 @@ import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { frameCapStyle } from '@/lib/theme/layout';
 import { Radius } from '@/lib/theme/elevation';
 import { useCopyToClipboard } from '@/lib/utils/useCopyToClipboard';
+import { BUSINESS_INFO } from '@/lib/config/business';
 
-const SUPPORT_EMAIL = 'cristianojun@naver.com';
+// 대외 문의 주소는 business.ts 가 SSOT — 앱·법무고지·스토어 콘솔 지원 이메일이 어긋나면
+// 심사원이 다른 회사로 오인한다. 여기서 별도 상수를 두지 않는다.
+const SUPPORT_EMAIL = BUSINESS_INFO.email;
 
 export function ContactModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   const { copied, copy } = useCopyToClipboard();

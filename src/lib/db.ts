@@ -7,7 +7,7 @@
 import { supabase, HAS_SUPABASE } from './supabase';
 import { reportError } from '@/lib/analytics/track';
 import { useSyncStore } from '@/lib/store/useSyncStore';
-import type { PlaybookEntry, PlaybookSuggestion, UnknownQuery, ChatQuery, Owner, Junior } from '@/types';
+import type { PlaybookEntry, PlaybookSuggestion, UnknownQuery, ChatQuery, Owner, Junior, PaymentClaim } from '@/types';
 import type { TaskTemplate, FeedItem, DoneMark } from '@/lib/store/useWorkStore';
 import type { Room, RoomMember } from '@/lib/store/useRoomStore';
 import type { AttendanceRecord } from '@/lib/store/useAttendanceStore';
@@ -265,6 +265,43 @@ export async function fetchUnitSubscription(unitId: string): Promise<DbResult<Un
   const { data, error } = await supabase
     .from('unit_subscriptions').select('status, trial_ends_at, paid_until, plan').eq('unit_id', unitId).maybeSingle();
   return { data: (data as UnitSubscriptionRow) ?? null, error: error as DbErr };
+}
+
+// ── 입금 신고(payment_claims, 0083) — 계좌이체 "입금했어요"의 1급 기록 ──────────────
+// RLS: 그 매장 사장만 select/insert. update/delete 는 정책도 권한도 없다(검토는 service_role RPC 전용).
+// 신고는 반드시 RPC 로 — 서버가 활성 매장·사장 여부·청구액을 스스로 정하고 중복 pending 을 갱신한다.
+export async function fetchPaymentClaims(): Promise<ReadResult<PaymentClaim[]>> {
+  if (!HAS_SUPABASE) return { data: [], error: false };
+  const { data, error } = await supabase
+    .from('payment_claims')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(20);
+  if (error) {
+    readFail('fetchPaymentClaims', error);
+    return { data: [], error: true };
+  }
+  return { data: (data ?? []) as PaymentClaim[], error: false };
+}
+
+// 신고 등록/갱신. 실패 사유를 화면이 분기해야 하므로(depositor_required·not_owner…) DbResult 원형 유지.
+export async function submitPaymentClaim(args: {
+  plan: 'single' | 'multi';
+  amountKrw: number;
+  depositorName: string;
+  months?: number;
+  memo?: string | null;
+}): Promise<DbResult<PaymentClaim>> {
+  if (!HAS_SUPABASE) return { data: null, error: null };
+  const { data, error } = await supabase.rpc('submit_payment_claim', {
+    p_plan: args.plan,
+    // 서버가 다시 계산해 저장한다(클라 금액 불신, 0083). 보내는 값은 드리프트 관측용.
+    p_amount: args.amountKrw,
+    p_depositor: args.depositorName,
+    p_months: args.months ?? 1,
+    p_memo: args.memo ?? null,
+  });
+  return { data: (data as PaymentClaim) ?? null, error: error as DbErr };
 }
 
 // ── 알림 수신 선호(notification_prefs) — 서버(엣지 push 함수)가 발송 직전에 읽는 SSOT ─────────

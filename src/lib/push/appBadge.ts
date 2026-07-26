@@ -13,6 +13,7 @@ import { useScheduleStore } from '@/lib/store/useScheduleStore';
 import { useUnknownQueueStore } from '@/lib/store/useUnknownQueueStore';
 import { useSuggestionStore } from '@/lib/store/useSuggestionStore';
 import { useStaffStore } from '@/lib/store/useStaffStore';
+import { usePaymentClaimStore } from '@/lib/store/usePaymentClaimStore';
 import { useMemberPrefsStore } from '@/lib/store/useMemberPrefsStore';
 import { todayStr } from '@/lib/utils/attendance';
 import { juniorUnreadCount, ownerUnreadCount } from '@/lib/utils/notifications';
@@ -90,6 +91,7 @@ export function useAppBadgeSync(): void {
   const queue = useUnknownQueueStore((s) => s.queue);
   const suggestions = useSuggestionStore((s) => s.suggestions);
   const pending = useStaffStore((s) => s.pending);
+  const claims = usePaymentClaimStore((s) => s.claims);
 
   const today = todayStr();
 
@@ -100,8 +102,8 @@ export function useAppBadgeSync(): void {
     }
     const count =
       role === 'owner'
-        ? ownerUnreadCount(queue, suggestions, swaps, pending, feed, me, ackAt)
+        ? ownerUnreadCount(queue, suggestions, swaps, pending, feed, me, ackAt, claims)
         : juniorUnreadCount(feed, swaps, me, today, templates, done, ackAt, suggestions);
     setAppBadge(count);
-  }, [role, me, signedIn, feed, templates, done, swaps, queue, suggestions, pending, today, ackAt]);
+  }, [role, me, signedIn, feed, templates, done, swaps, queue, suggestions, pending, today, ackAt, claims]);
 }

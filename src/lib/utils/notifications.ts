@@ -5,8 +5,10 @@ import type { FeedItem, TaskTemplate, DoneMark } from '@/lib/store/useWorkStore'
 import { occursOn } from '@/lib/store/useWorkStore';
 import type { SwapRequest, ShiftTemplate } from '@/lib/store/useScheduleStore';
 import type { PendingMember } from '@/lib/store/useStaffStore';
-import type { UnknownQuery, PlaybookSuggestion } from '@/types';
+import type { UnknownQuery, PlaybookSuggestion, PaymentClaim } from '@/types';
 import { fmtDateKo } from '@/lib/utils/schedule';
+// 요금제 표시명은 tiers.ts 가 SSOT — 알림 문구에서 이름을 재정의하지 않는다.
+import { PLANS } from '@/lib/config/tiers';
 
 /** 알림 목록 최대 개수 — 무한 누적 방지(최신 우선). */
 export const MAX_NOTIFS = 50;
@@ -205,8 +207,12 @@ export function buildJuniorNotifications(args: {
 
 // ── 사장 알림 (직원 모델과 동일 SSOT 구조) ───────────────────────────
 // 사장이 대응해야 할 것: 합류 승인 대기 · 답변 대기 질문 · 알바가 올린 제안 · 승인 대기 교대.
-export type OwnerNotifKind = 'join_request' | 'question' | 'suggestion' | 'swap_approval' | 'mention';
-export type OwnerNotifRoute = '/owner/inbox' | '/owner/suggestions' | '/owner/schedule' | '/owner/staff' | '/owner/work';
+// + 입금 신고 검토 결과(0083) — 처리 대기가 아니라 "우리가 답한 결과"라 사장이 반드시 봐야 한다.
+export type OwnerNotifKind =
+  | 'join_request' | 'question' | 'suggestion' | 'swap_approval' | 'mention'
+  | 'payment_approved' | 'payment_rejected';
+export type OwnerNotifRoute =
+  | '/owner/inbox' | '/owner/suggestions' | '/owner/schedule' | '/owner/staff' | '/owner/work' | '/billing';
 
 export type OwnerNotif = {
   id: string;
@@ -227,6 +233,10 @@ export const isPendingQuestion = (u: UnknownQuery): boolean => u.status === 'pen
 export const isPendingSuggestion = (s: PlaybookSuggestion): boolean => s.status === 'pending';
 /** 직원이 수락해 사장 승인만 남은 교대. */
 export const isSwapAwaitingApproval = (r: SwapRequest): boolean => r.status === 'accepted';
+/** 검토가 끝난 입금 신고(승인/반려) — 반려 사유 전달 축(0083 reject_reason).
+ *  claimed_by 로 좁히지 않는다: 결제는 매장 단위 소식이라 공동 사장 모두가 알아야 한다
+ *  (RLS 가 이미 '그 매장 사장'으로 좁혀 놓았다 — 여기서 또 좁히면 두 번째 사장이 결과를 영영 못 본다). */
+export const isPaymentResult = (c: PaymentClaim): boolean => c.status !== 'pending' && !!c.reviewed_at;
 
 /** 벨 뱃지 개수 = 합류 승인대기 + 답변대기 질문 + 검토대기 제안 + 승인대기 교대.
  *  pending은 이미 "승인 대기"만 담긴 목록(fetchPendingMembers)이라 그대로 센다. */
@@ -238,13 +248,17 @@ export function ownerUnreadCount(
   feed: FeedItem[] = [],
   me?: string,
   ackAt?: string | null,
+  /** 입금 신고(0083). 통합 알림(cross-store)은 이 축을 공급하지 않으므로 기본 빈 배열. */
+  claims: PaymentClaim[] = [],
 ): number {
   return (
     pending.filter((p) => isAfterAck(p.created_at, ackAt)).length +
     queue.filter((u) => isPendingQuestion(u) && isAfterAck(u.asked_at, ackAt)).length +
     suggestions.filter((s) => isPendingSuggestion(s) && isAfterAck(s.created_at, ackAt)).length +
     swaps.filter((r) => isSwapAwaitingApproval(r) && isAfterAck(r.updated_at, ackAt)).length +
-    (me ? feed.filter((f) => isUnreadMention(f, me) && isAfterAck(f.createdAt, ackAt)).length : 0)
+    (me ? feed.filter((f) => isUnreadMention(f, me) && isAfterAck(f.createdAt, ackAt)).length : 0) +
+    // 입금 검토 결과 — read 개념이 없어 '모두 읽기'(ack) 전까지 새 소식으로 센다(제안 결과와 동일).
+    claims.filter((c) => isPaymentResult(c) && isAfterAck(c.reviewed_at ?? undefined, ackAt)).length
   );
 }
 
@@ -260,8 +274,10 @@ export function buildOwnerNotifications(args: {
   userId?: string;
   /** '모두 읽기' 기준 시각(0078). 이전 항목은 unread=false 로 강조 해제. */
   ackAt?: string | null;
+  /** 입금 신고 검토 결과(0083) 알림용. 없으면 해당 알림 없음. */
+  claims?: PaymentClaim[];
 }): OwnerNotif[] {
-  const { queue, suggestions, swaps, pending, nameOf, feed = [], userId: me, ackAt } = args;
+  const { queue, suggestions, swaps, pending, nameOf, feed = [], userId: me, ackAt, claims = [] } = args;
   const out: OwnerNotif[] = [];
 
   // 멘션 — 직원/동료가 채팅·댓글에서 사장(나)을 @언급(내 글 제외). 탭하면 업무 채팅으로.
@@ -330,6 +346,24 @@ export function buildOwnerNotifications(args: {
       at: r.updated_at,
       unread: isAfterAck(r.updated_at, ackAt),
       route: '/owner/schedule',
+    });
+  }
+
+  // 입금 신고 검토 결과(0083) — 승인이면 "이용이 열렸다", 반려면 **사유**가 본문이다.
+  // 반려 사유를 못 보면 사장은 무엇을 고쳐 다시 입금해야 하는지 알 수 없다(무음 구간 재발).
+  for (const c of claims) {
+    if (!isPaymentResult(c)) continue;
+    const ok = c.status === 'approved';
+    out.push({
+      id: `pay_${c.id}`,
+      kind: ok ? 'payment_approved' : 'payment_rejected',
+      title: ok ? '입금이 확인돼 이용이 열렸어요' : '입금 확인이 어려웠어요',
+      body: ok
+        ? `${PLANS[c.plan].name} 요금제로 ${c.months}개월 활성화됐어요`
+        : (c.reject_reason ?? '입금 내역을 확인하지 못했어요. 다시 알려주세요.'),
+      at: c.reviewed_at as string,
+      unread: isAfterAck(c.reviewed_at ?? undefined, ackAt),
+      route: '/billing',
     });
   }
 

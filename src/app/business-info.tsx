@@ -4,26 +4,21 @@ import { Stack } from 'expo-router';
 import { InkColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { HeaderBackButton } from '@/components/HeaderBackButton';
+import { businessRows, BUSINESS_INFO_COMPLETE } from '@/lib/config/business';
 
-// 판매자(사업자) 정보 — 전자상거래법상 유료 판매 시 고지 의무. 실제 사업자등록 후 값 채울 것.
-const ROWS: [string, string][] = [
-  ['상호', '팀 스퀘어테이블'],
-  ['대표자', '장준혁'],
-  ['사업자등록번호', '등록 예정 (출시 전 기재)'],
-  ['통신판매업 신고번호', '신고 예정 (출시 전 기재)'],
-  ['주소', '출시 전 기재'],
-  ['고객문의', 'cristianojun@naver.com'],
-  ['호스팅 제공자', 'Supabase / Vercel'],
-];
+// 판매자(사업자) 정보 — 전자상거래법상 유료 판매 시 고지 의무.
+// 값 SSOT = src/lib/config/business.ts. 빈 값은 행 자체가 렌더되지 않는다
+// ('등록 예정' 같은 placeholder 문자열은 App Review 2.1(a) 위반).
 
 export default function BusinessInfoScreen() {
+  const rows = businessRows();
   return (
     <SafeAreaView style={styles.safe}>
       <Stack.Screen options={{ headerShown: true, title: '사업자 정보', headerStyle: { backgroundColor: '#FFFFFF' }, headerTintColor: InkColors.ink, headerLeft: () => <HeaderBackButton /> }} />
       <ScrollView contentContainerStyle={styles.scroll}>
         <Text style={styles.h1}>판매자 정보</Text>
         <View style={styles.card}>
-          {ROWS.map(([k, v], i) => (
+          {rows.map(([k, v], i) => (
             <View key={k} style={[styles.row, i > 0 && styles.rowBorder]}>
               <Text style={styles.k}>{k}</Text>
               <Text style={styles.v}>{v}</Text>
@@ -31,7 +26,9 @@ export default function BusinessInfoScreen() {
           ))}
         </View>
         <Text style={styles.note}>
-          ※ 전자상거래 등에서의 소비자보호에 관한 법률에 따른 판매자 정보 고지입니다. 사업자등록·통신판매업 신고 완료 후 정확한 값으로 갱신됩니다.
+          {BUSINESS_INFO_COMPLETE
+            ? '※ 전자상거래 등에서의 소비자보호에 관한 법률에 따른 판매자 정보 고지입니다.'
+            : '※ 전자상거래 등에서의 소비자보호에 관한 법률에 따른 판매자 정보 고지입니다. 현재는 유료 판매를 하지 않으며, 유료 판매 개시 전에 사업자등록·통신판매업 신고 정보를 여기에 게시합니다.'}
         </Text>
         <View style={{ height: 24 }} />
       </ScrollView>

@@ -17,12 +17,17 @@ const admin = createClient(U, K, { auth: { persistSession: false } });
 const H = { apikey: K, Authorization: `Bearer ${K}` };
 
 // 절대 건드리지 않을 매장. store_eval=eval 하네스 픽스처. store_001=데모 '스퀘어 카페 신촌점'(삭제금지).
+//   store_appreview=앱스토어/플레이스토어 심사용 데모 매장(scripts/seed-appreview.mjs, 고정 id).
 //   ★데모 owner 이메일이 QA 도메인(@example.com 류)이라 QA_EMAIL 규칙만으론 잡히므로 반드시 명시 보호.
-const PROTECT_UNITS = new Set(['store_eval', 'store_001']);
+//   ★store_appreview 를 지우면 심사 중 Guideline 2.1(a) 반려 — 재생성해도 id 가 고정이라 이 보호가 유지된다.
+const PROTECT_UNITS = new Set(['store_eval', 'store_001', 'store_appreview']);
 // 실사용자 이메일 도메인/패턴 (이 계정은 QA로 오인해 지우지 않는다)
 const REAL_EMAIL = /@(naver|gmail|daum|kakao|hanmail|nate|outlook|hotmail|icloud)\.com|@team-roundtable|cristianojun/i;
 // QA/자동 계정 이메일 (하드삭제 허용)
 const QA_EMAIL = /@example\.com|@squaretable\.test|@test\.com|@pilot\.squaretable/i;
+// ★스토어 심사용 데모 계정 — QA 도메인(@pilot.squaretable.app)을 쓰지만 절대 하드삭제 금지.
+//   PROTECT_UNITS 이중화: 매장이 아직 없거나 프로필 unit_id 가 잠시 비어 있는 순간에도 계정이 살아남는다.
+const PROTECT_EMAIL = /appreview\.(owner|staff)@/i;
 
 async function listAuthUsers() {
   const users = []; let p = 1;
@@ -51,6 +56,7 @@ async function listAuthUsers() {
     // 활성 owner가 있고, 그 owner가 실사용자면 보호(멤버 0이어도)
     const ownerEmail = emailById.get(u.owner_id) || '';
     const ownerLive = liveProfIds.has(u.owner_id);
+    if (PROTECT_EMAIL.test(ownerEmail)) continue;                     // 스토어 심사용 데모 → 보호(id 무관)
     if (ownerLive && REAL_EMAIL.test(ownerEmail)) continue;           // 실사용자 소유 → 보호
     if (u.deleted_at) { delUnits.push([u, 'soft-deleted']); continue; } // 소프트삭제
     if (!allProfIds.has(u.owner_id)) { delUnits.push([u, 'dangling(owner삭제됨)']); continue; } // 하드고아
@@ -61,7 +67,8 @@ async function listAuthUsers() {
 
   // ── 삭제 대상 계정(auth.users 하드삭제): QA 전용 도메인 계정 (live/soft 무관, 실사용자 제외) ──
   //   위 매장 삭제와 짝 — 살아있던 QA owner/직원 계정까지 하드삭제해 잔여 계정이 남지 않게 한다.
-  const delUsers = profs.filter(p => QA_EMAIL.test(emailById.get(p.id) || '') && !REAL_EMAIL.test(emailById.get(p.id) || '') && !protectAccts.has(p.id))
+  const delUsers = profs.filter(p => QA_EMAIL.test(emailById.get(p.id) || '') && !REAL_EMAIL.test(emailById.get(p.id) || '')
+    && !PROTECT_EMAIL.test(emailById.get(p.id) || '') && !protectAccts.has(p.id))
     .map(p => ({ id: p.id, email: emailById.get(p.id) }));
 
   console.log(`\n${EXECUTE ? '🔴 EXECUTE' : '🟡 DRY-RUN (미실행)'} — 정리 계획\n`);
@@ -69,7 +76,7 @@ async function listAuthUsers() {
   delUnits.forEach(([u, why]) => console.log(`   - ${u.id.padEnd(20)} "${u.store_name}"  [${why}]`));
   console.log(`\n■ 하드삭제할 QA 계정 ${delUsers.length}개 (auth.users → profiles cascade):`);
   console.log('   ' + (delUsers.length ? delUsers.slice(0, 8).map(u => u.email).join(', ') + (delUsers.length > 8 ? ` … 외 ${delUsers.length - 8}개` : '') : '(없음)'));
-  console.log(`\n■ 보호(유지): eval 픽스처(store_eval), 실사용자 소유 매장(코홀트커피 등)`);
+  console.log(`\n■ 보호(유지): eval 픽스처(store_eval), 스토어 심사용 데모(store_appreview + appreview.* 계정), 실사용자 소유 매장(코홀트커피 등)`);
 
   if (!EXECUTE) { console.log('\n실제 삭제하려면 `--execute` 를 붙여 다시 실행하세요.'); return; }
 

@@ -13,6 +13,7 @@ import { useStaffStore } from '@/lib/store/useStaffStore';
 import { useScheduleStore } from '@/lib/store/useScheduleStore';
 import { useSuggestionStore } from '@/lib/store/useSuggestionStore';
 import { useMemberPrefsStore } from '@/lib/store/useMemberPrefsStore';
+import { usePaymentClaimStore } from '@/lib/store/usePaymentClaimStore';
 import { purgeExpiredFormerStaff } from '@/lib/db';
 import { HAS_SUPABASE } from '@/lib/supabase';
 import { deriveSubscription } from '@/lib/utils/subscription';
@@ -44,6 +45,8 @@ export default function OwnerLayout() {
     useSuggestionStore.getState().hydrate();
     // 알림 '모두 읽기' 기준 시각(0078·unit_member_prefs)이 벨 배지 집계에 필요 — 레이아웃에서 당긴다.
     useMemberPrefsStore.getState().hydrate();
+    // 입금 신고 검토 결과(0083)도 벨 배지 축 — 어느 탭에 있든 '입금 확인됨/반려됨'이 잡히게.
+    void usePaymentClaimStore.getState().hydrate();
     // 퇴사 6개월 경과분 개인 기록 자동 정리(기회적 1회, 실패 무해).
     void purgeExpiredFormerStaff();
     const offQ = useUnknownQueueStore.getState().subscribe();

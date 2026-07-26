@@ -232,6 +232,29 @@ export type SearchResult = {
   fallbackToUnknown: boolean;
 };
 
+// ── 입금 신고(계좌이체 수동과금, 0083) ────────────────
+// 사장이 "입금 완료했어요"를 누르면 남는 1급 행. 예전엔 mailto 메일 초안뿐이라 DB에 흔적이 없었고,
+// 메일이 묻히면 "돈은 냈는데 앱이 안 열리는" 무음 구간이 생겼다.
+// 검토(승인·반려)는 service_role 전용 RPC(review_payment_claim)만 — 클라는 읽기+생성만 가능(RLS).
+export type PaymentClaim = {
+  id: string;
+  unit_id: string;
+  claimed_by: string;
+  plan: 'single' | 'multi';
+  /** 서버(payment_claim_amount)가 계산한 청구액. 클라가 보낸 금액은 저장되지 않는다. */
+  amount_krw: number;
+  /** 계좌이체 대사의 유일한 키 — 은행 거래내역과 맞추는 값. */
+  depositor_name: string;
+  months: number;
+  memo?: string | null;
+  status: 'pending' | 'approved' | 'rejected';
+  /** 운영자 식별자(관리자 콘솔 STAFF 이메일). */
+  reviewed_by?: string | null;
+  reviewed_at?: string | null;
+  reject_reason?: string | null;
+  created_at: string;
+};
+
 // ── Demo (발표 시연용) ────────────────────────────────
 export type SeedQuery = {
   id: string;

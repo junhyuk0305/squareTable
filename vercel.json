@@ -2,7 +2,12 @@
   "buildCommand": "npx expo export -p web && node scripts/inject-landing-redirect.mjs && node scripts/seo-postbuild.mjs",
   "outputDirectory": "dist",
   "installCommand": "npm install",
-  "rewrites": [{ "source": "/(.*)", "destination": "/" }],
+  "rewrites": [
+    { "source": "/privacy", "destination": "/privacy.html" },
+    { "source": "/terms", "destination": "/terms.html" },
+    { "source": "/account-deletion", "destination": "/account-deletion.html" },
+    { "source": "/(.*)", "destination": "/" }
+  ],
   "headers": [
     {
       "source": "/sw.js",

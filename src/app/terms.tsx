@@ -1,12 +1,14 @@
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, Linking } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack } from 'expo-router';
 import { InkColors } from '@/lib/theme/colors';
+import { Space } from '@/lib/theme/layout';
 import { HeaderBackButton } from '@/components/HeaderBackButton';
 import { RoleTabBar } from '@/components/RoleTabBar';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 
-// 이용약관 (1차 출시 최소선). 정식 약관은 PG 계약·법무 검토 후 교체.
+// 이용약관 요약. 전문의 SSOT 는 웹 정적 페이지(scripts/legal-content.mjs → /terms)이고
+// 이 화면은 요약 + 전문 링크만 둔다 — 전문을 앱과 웹에 이중 유지하면 반드시 어긋난다.
 export default function TermsScreen() {
   // 설정에서 진입하는 공용 화면 — 사장/알바 어느 쪽에서 왔는지에 맞춰 하단 탭바를 그대로 유지한다.
   const role = useSessionStore((s) => s.role);
@@ -15,7 +17,7 @@ export default function TermsScreen() {
       <Stack.Screen options={{ headerShown: true, title: '이용약관', headerStyle: { backgroundColor: '#FFFFFF' }, headerTintColor: InkColors.ink, headerLeft: () => <HeaderBackButton /> }} />
       <ScrollView contentContainerStyle={styles.scroll}>
         <Text style={styles.h1}>착착 이용약관</Text>
-        <Text style={styles.updated}>시행일: 2026-06-10 · 운영: 팀 스퀘어테이블</Text>
+        <Text style={styles.updated}>시행일: 2026-08-07 · 운영: 팀 스퀘어테이블</Text>
 
         <Section title="제1조 (목적)">
           본 약관은 팀 스퀘어테이블(이하 “회사”)이 제공하는 매장 운영 지원 서비스 “착착”(이하 “서비스”)의 이용 조건 및 절차, 회사와 이용자의 권리·의무를 규정합니다.
@@ -39,10 +41,17 @@ export default function TermsScreen() {
           이용자가 등록한 매장 노하우·데이터의 권리는 해당 매장에 귀속합니다. 회사는 서비스 제공 목적 범위에서만 이를 처리합니다.
         </Section>
         <Section title="제8조 (문의)">
-          서비스 관련 문의: cristianojun@naver.com
+          서비스 관련 문의: contact@team-roundtable.com
         </Section>
 
-        <Text style={styles.note}>※ 본 약관은 파일럿 1차 출시용 최소본입니다. 정식 서비스 전 법무 검토를 거쳐 보완합니다.</Text>
+        {/* 전문은 웹 정적 페이지가 정본이다. 앱에는 요약만 두고 이중 유지하지 않는다. */}
+        <Pressable
+          onPress={() => void Linking.openURL('https://dochackchack.com/terms').catch(() => {})}
+          accessibilityRole="link"
+          accessibilityLabel="이용약관 전문 보기"
+        >
+          <Text style={styles.link}>이용약관 전문 보기</Text>
+        </Pressable>
         <View style={{ height: 24 }} />
       </ScrollView>
       <RoleTabBar role={role} />
@@ -67,5 +76,5 @@ const styles = StyleSheet.create({
   section: { gap: 5 },
   h2: { fontSize: 15, fontWeight: '800', color: InkColors.ink2 },
   body: { fontSize: 14, color: InkColors.ink2, lineHeight: 21 },
-  note: { fontSize: 12, color: InkColors.ink3, lineHeight: 18, marginTop: 8 },
+  link: { fontSize: 14, fontWeight: '700', color: InkColors.ink, textDecorationLine: 'underline', marginTop: Space.sm },
 });

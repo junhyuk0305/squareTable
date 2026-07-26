@@ -18,6 +18,7 @@
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
+import { LEGAL_PAGES, EFFECTIVE_DATE, OPERATOR } from './legal-content.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DIST = resolve(__dirname, '..', 'dist');
@@ -193,6 +194,9 @@ function writeRobots() {
     'Allow: /$',
     'Allow: /welcome.html',
     'Allow: /manifest.json',
+    // 법적 고지 정적 페이지 — Apple 5.1.1(i)·Google Play 계정삭제 요건상 로그인 없이 크롤·열람이 돼야 한다.
+    // 확장자 없는 주소(rewrite 경유)와 실제 파일 주소를 둘 다 열어 둔다.
+    ...LEGAL_PAGES.flatMap((p) => [`Allow: /${p.slug}`, `Allow: /${p.slug}.html`]),
     'Disallow: /login',
     'Disallow: /signup',
     'Disallow: /stores',
@@ -208,6 +212,59 @@ function writeRobots() {
   console.log('[seo] dist/robots.txt 생성');
 }
 
+// ── 3-b) 법적 고지 정적 페이지 (privacy / terms / account-deletion) ───────────
+// 왜 정적 HTML 인가: 앱 라우트(/privacy)는 vercel.json 의 SPA catch-all 을 타고 JS 로딩 후에야
+// 내용이 뜬다. 심사원(Apple 5.1.1(i) / Google Play 계정삭제)과 크롤러가 로그인·JS 없이 본문을
+// 읽을 수 있어야 하므로 JS 의존 0인 페이지를 따로 낸다.
+// vercel.json 이 /privacy → /privacy.html 로 rewrite 하므로 확장자 없는 주소로도 열린다.
+// 본문 SSOT = scripts/legal-content.mjs.
+function writeLegalPages() {
+  for (const page of LEGAL_PAGES) {
+    // 푸터의 다른 문서 링크 — 심사원이 한 페이지에서 나머지 고지에 도달할 수 있어야 한다.
+    const siblings = LEGAL_PAGES.filter((p) => p.slug !== page.slug)
+      .map((p) => `<a href="${SITE_URL}/${p.slug}">${esc(p.title)}</a>`)
+      .join(' · ');
+    const html = `<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>${esc(page.title)} — ${BRAND}</title>
+    <meta name="description" content="${esc(page.description)}" />
+    <meta name="robots" content="index,follow" />
+    <link rel="canonical" href="${SITE_URL}/${page.slug}" />
+    <meta property="og:type" content="article" />
+    <meta property="og:site_name" content="${BRAND}" />
+    <meta property="og:locale" content="ko_KR" />
+    <meta property="og:url" content="${SITE_URL}/${page.slug}" />
+    <meta property="og:title" content="${esc(page.title)} — ${BRAND}" />
+    <meta property="og:description" content="${esc(page.description)}" />
+    <meta property="og:image" content="${OG_IMAGE}" />
+    <style>
+      body{max-width:720px;margin:0 auto;padding:40px 20px 80px;font-family:-apple-system,BlinkMacSystemFont,'Malgun Gothic',sans-serif;line-height:1.75;color:#1A1A1A;background:#FFF;word-break:keep-all}
+      h1{font-size:26px;margin:0 0 8px}
+      h2{font-size:17px;margin:32px 0 8px}
+      p,li{font-size:15px;color:#333}
+      ul{padding-left:20px;margin:8px 0}
+      li{margin:4px 0}
+      a{color:#1A1A1A}
+      .meta{font-size:13px;color:#888;margin:0 0 32px}
+      .foot{margin-top:56px;padding-top:20px;border-top:1px solid #E5E5E5;font-size:14px;color:#666}
+    </style>
+  </head>
+  <body>
+    <h1>${esc(page.title)}</h1>
+    <p class="meta">${BRAND} · ${esc(OPERATOR)} · 시행일 ${EFFECTIVE_DATE}</p>
+${page.html}
+    <p class="foot">${siblings} · <a href="${SITE_URL}/">${BRAND} 홈으로</a></p>
+  </body>
+</html>
+`;
+    writeFileSync(resolve(DIST, `${page.slug}.html`), html, 'utf8');
+    console.log(`[seo] dist/${page.slug}.html 생성 (${page.title})`);
+  }
+}
+
 // ── 4) sitemap.xml ───────────────────────────────────────────────────────
 function writeSitemap() {
   const today = new Date().toISOString().slice(0, 10);
@@ -219,6 +276,14 @@ function writeSitemap() {
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
   </url>
+${LEGAL_PAGES.map(
+  (p) => `  <url>
+    <loc>${SITE_URL}/${p.slug}</loc>
+    <lastmod>${today}</lastmod>
+    <changefreq>yearly</changefreq>
+    <priority>0.3</priority>
+  </url>`,
+).join('\n')}
 </urlset>
 `;
   writeFileSync(resolve(DIST, 'sitemap.xml'), xml, 'utf8');
@@ -230,5 +295,6 @@ console.log(`[seo] SITE_URL=${SITE_URL}`);
 patchIndex();
 patchWelcome();
 writeRobots();
+writeLegalPages();
 writeSitemap();
 console.log('[seo] 후처리 완료');

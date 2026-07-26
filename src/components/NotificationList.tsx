@@ -28,6 +28,8 @@ export const OWNER_KIND_UI: Record<OwnerNotifKind, { icon: IconName; tint: strin
   suggestion: { icon: 'bulb', tint: BrandColors.brandSoft },
   swap_approval: { icon: 'swap-horizontal', tint: BrandColors.accentSoft },
   mention: MENTION_UI,
+  payment_approved: { icon: 'checkmark-circle', tint: '#E4F2E8' },
+  payment_rejected: { icon: 'alert-circle', tint: BrandColors.accentSoft },
 };
 /** 허브(역할 혼합 가능) 용 — 두 맵 합성. */
 export const ALL_KIND_UI = { ...JUNIOR_KIND_UI, ...OWNER_KIND_UI };

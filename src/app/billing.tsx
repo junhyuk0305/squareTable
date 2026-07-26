@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, Linking } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, Linking, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter, Redirect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -11,6 +11,7 @@ import { deriveSubscription } from '@/lib/utils/subscription';
 import { BILLING_INFO, formatKrw } from '@/lib/config/billing';
 import { PLANS, PLAN_ORDER, planMonthlyPrice, type PlanId } from '@/lib/config/tiers';
 import { SHOW_BILLING } from '@/lib/config/store-policy';
+import { usePaymentClaimStore, CLAIM_ERROR_TEXT } from '@/lib/store/usePaymentClaimStore';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
@@ -34,16 +35,25 @@ function BillingBody() {
   const router = useRouter();
   const role = useSessionStore((s) => s.role);
   const storeName = useSessionStore((s) => s.storeName);
+  const userName = useSessionStore((s) => s.userName);
   const subStatus = useSessionStore((s) => s.subStatus);
   const trialEndsAt = useSessionStore((s) => s.trialEndsAt);
   const paidUntil = useSessionStore((s) => s.paidUntil);
   const plan = useSessionStore((s) => s.plan);
   const stores = useSessionStore((s) => s.stores);
   const refreshMembership = useSessionStore((s) => s.refreshMembership);
+  // 입금 신고(0083) — 신고 등록·상태 표시의 단일 축. 데이터 접근은 스토어 → db.ts 로만(계층 경계).
+  const hydrateClaims = usePaymentClaimStore((s) => s.hydrate);
+  const submitPaymentClaim = usePaymentClaimStore((s) => s.submit);
+  const claims = usePaymentClaimStore((s) => s.claims);
+  const latestClaim = claims[0] ?? null;
 
   const view = deriveSubscription({ subStatus, trialEndsAt, paidUntil, plan });
   const isOwner = role === 'owner';
   const [busy, setBusy] = useState(false);
+  // 입금자명 — 계좌이체는 이게 유일한 대사 키다(운영자가 은행 내역과 맞추는 값). 이름 기본값으로 시작.
+  const [depositor, setDepositor] = useState(userName ?? '');
+  const [claiming, setClaiming] = useState(false);
   // 선택 요금제 — 초기값은 현재 요금제. 다점포 금액 = 소유 매장수 × 매장당 가격(tiers.ts).
   const [selectedPlan, setSelectedPlan] = useState<PlanId>(plan);
   // 세션 plan이 마운트 뒤에 로드/변경되면(웹 새로고침 직진입, 30초 폴링 중 활성화 반영) 선택을
@@ -61,6 +71,10 @@ function BillingBody() {
   useEffect(() => {
     const id = setInterval(async () => {
       await refreshMembership();
+      // 신고 상태(확인 중 → 승인/반려)도 같은 주기로 당긴다. 반려는 구독이 안 열리므로 이 폴이
+      //   유일한 도달 경로다(승인은 아래 라우팅으로 앱에 들어가면서 자연히 확인된다).
+      // iOS 네이티브는 신고 UI 자체가 없다(SHOW_BILLING) — 보여줄 데 없는 조회를 돌리지 않는다.
+      if (isOwner && SHOW_BILLING) void hydrateClaims();
       const s = useSessionStore.getState();
       if (!s.unitId) return;
       if (deriveSubscription({ subStatus: s.subStatus, trialEndsAt: s.trialEndsAt, paidUntil: s.paidUntil, plan: s.plan }).entitled) {
@@ -68,7 +82,13 @@ function BillingBody() {
       }
     }, 30000);
     return () => clearInterval(id);
-  }, [refreshMembership, router, isOwner]);
+  }, [refreshMembership, router, isOwner, hydrateClaims]);
+
+  // 진입 즉시 1회 — 이전에 낸 신고가 '확인 중'인지 '반려'인지 바로 보여준다(30초 기다리게 하지 않는다).
+  // 훅은 조기 return 위에 있어야 하므로(훅 규칙) 조건은 이펙트 안에 둔다.
+  useEffect(() => {
+    if (isOwner && SHOW_BILLING) void hydrateClaims();
+  }, [isOwner, hydrateClaims]);
 
   const recheck = async () => {
     setBusy(true);
@@ -97,22 +117,40 @@ function BillingBody() {
     }
   };
 
+  // ── 입금 신고(0083) — 주경로. 예전엔 mailto 초안이 유일해서 메일이 묻히면 DB에 흔적조차 없었다.
+  //    이제 submit_payment_claim 이 pending 행을 남기고, 운영자 콘솔(/payments)이 그 목록을 본다.
+  const submitClaim = async () => {
+    const name = depositor.trim();
+    if (!name) {
+      showToast('입금자명을 입력해 주세요');
+      return;
+    }
+    if (selectedPlan === 'free') return; // 무료는 입금 자체가 없다(서버도 bad_plan 으로 거부)
+    setClaiming(true);
+    const res = await submitPaymentClaim({ plan: selectedPlan, amountKrw: monthlyTotal, depositorName: name });
+    setClaiming(false);
+    if (!res.ok) {
+      showToast(CLAIM_ERROR_TEXT[res.reason]);
+      return;
+    }
+    showToast('입금 확인 중이에요. 확인되면 바로 열려요.', 'good');
+  };
+
   const notifyPaid = async () => {
-    // 백엔드 알림 파이프라인은 미구현 — '입금 완료했어요'가 토스트만 띄우면 사용자는 알렸다고 믿지만 실제론
-    // 아무것도 안 보내지는 무음 루프가 된다. → 입금 내역을 채운 메일 초안을 열어 실제 통지가 되게 한다.
+    // 보조 경로(설계문서 B-1) — 신고는 이미 DB에 남았고, 이건 "빨리 봐달라"는 추가 통지일 뿐이다.
     const subject = `착착 입금 완료 알림${storeName ? ` — ${storeName}` : ''}`;
     const body = [
       '입금을 완료했어요. 확인 후 활성화 부탁드려요.',
       storeName ? `매장: ${storeName}` : '',
       `요금제: ${PLANS[selectedPlan].name}`,
       `금액: ${formatKrw(monthlyTotal)} / 월`,
+      depositor.trim() ? `입금자명: ${depositor.trim()}` : '',
     ]
       .filter(Boolean)
       .join('\n');
     const url = `mailto:${BILLING_INFO.contactValue}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
     try {
       await Linking.openURL(url);
-      showToast('입금 확인 후 이용이 자동 활성화돼요.');
     } catch {
       // 메일 앱이 없는 환경 — 무엇을 해야 하는지(어디로 알릴지)를 명확히 남긴다(무음 실패 방지).
       showToast(`${BILLING_INFO.contactValue} 로 입금 사실을 알려주세요`);
@@ -288,17 +326,69 @@ function BillingBody() {
                   </View>
                 </View>
 
-                {/* 입금 알림 연락처 */}
+                {/* 직전 신고 상태 — '냈는데 아무 반응 없다'를 없애는 자리. 승인은 폴링이 앱으로 넘긴다. */}
+                {latestClaim?.status === 'pending' && (
+                  <View style={[styles.card, styles.claimPending]}>
+                    <View style={styles.claimHead}>
+                      <Ionicons name="time-outline" size={18} color={InkColors.ink2} />
+                      <Text style={styles.claimTitle}>입금을 확인하고 있어요</Text>
+                    </View>
+                    <Text style={styles.hint}>
+                      {`입금자명 ${latestClaim.depositor_name} · ${formatKrw(latestClaim.amount_krw)}로 알려주셨어요.`}
+                      {'\n'}확인되면 따로 누르지 않아도 바로 열려요.
+                    </Text>
+                  </View>
+                )}
+                {latestClaim?.status === 'rejected' && (
+                  <View style={[styles.card, styles.claimRejected]}>
+                    <View style={styles.claimHead}>
+                      <Ionicons name="alert-circle-outline" size={18} color={BrandColors.warn} />
+                      <Text style={styles.claimTitle}>입금 확인이 어려웠어요</Text>
+                    </View>
+                    {/* 사유를 안 보여주면 사장은 무엇을 고쳐 다시 내야 할지 모른다(무음 구간 재발). */}
+                    <Text style={styles.body}>{latestClaim.reject_reason ?? '입금 내역을 확인하지 못했어요.'}</Text>
+                    <Text style={styles.hint}>내용을 확인하고 아래에서 다시 알려주세요.</Text>
+                  </View>
+                )}
+
+                {/* 입금자명 — 계좌이체 대사의 유일한 키. 지금까지 안 받아서 운영자가 맞출 방법이 없었다. */}
                 <View style={styles.section}>
-                  <Text style={styles.sectionLabel}>입금 후 알려주세요</Text>
+                  <Text style={styles.sectionLabel}>입금자명</Text>
                   <View style={styles.card}>
-                    <Row label={BILLING_INFO.contactLabel} value={BILLING_INFO.contactValue} />
-                    <Text style={styles.hint}>입금 사실을 알려주시면 더 빠르게 활성화해 드려요.</Text>
+                    <TextInput
+                      value={depositor}
+                      onChangeText={setDepositor}
+                      placeholder="통장에 찍히는 이름"
+                      placeholderTextColor={InkColors.ink3}
+                      style={styles.input}
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      maxLength={40}
+                      returnKeyType="done"
+                      onSubmitEditing={() => void submitClaim()}
+                      accessibilityLabel="입금자명 입력"
+                    />
+                    <Text style={styles.hint}>
+                      보내는 분 이름이 매장명·사장님 성함과 다르면 확인이 늦어져요. 실제로 이체한 이름을 적어주세요.
+                    </Text>
                   </View>
                 </View>
 
-                <Pressable onPress={notifyPaid} style={({ pressed }) => [styles.primary, pressed && { opacity: 0.88 }]}>
-                  <Text style={styles.primaryText}>입금 완료했어요</Text>
+                <Pressable
+                  disabled={claiming}
+                  onPress={() => void submitClaim()}
+                  style={({ pressed }) => [styles.primary, pressed && { opacity: 0.88 }, claiming && { opacity: 0.6 }]}
+                >
+                  {claiming ? (
+                    <ActivityIndicator color="#FFFFFF" />
+                  ) : (
+                    <Text style={styles.primaryText}>{latestClaim?.status === 'pending' ? '입금 정보 다시 보내기' : '입금 완료했어요'}</Text>
+                  )}
+                </Pressable>
+
+                {/* 보조 경로 — 신고는 이미 저장됐고, 급할 때 사람을 직접 부르는 창구(설계문서 B-1). */}
+                <Pressable onPress={() => void notifyPaid()} style={({ pressed }) => [styles.mailRow, pressed && { opacity: 0.6 }]}>
+                  <Text style={styles.mailText}>메일로도 알리기 ({BILLING_INFO.contactValue})</Text>
                 </Pressable>
               </>
             )}
@@ -384,6 +474,29 @@ const styles = StyleSheet.create({
   planPriceRegular: { fontSize: 12, fontWeight: '600', color: InkColors.ink3, textDecorationLine: 'line-through', marginRight: Space.xs },
   planTagline: { fontSize: 12.5, fontWeight: '600', color: InkColors.ink2, marginTop: 2 },
   planFeatures: { fontSize: 11.5, fontWeight: '600', color: InkColors.ink3, lineHeight: 17 },
+
+  // 입금 신고 상태 카드 — 확인 중(중립) / 반려(경고 보더). 배경은 카드 기본 흰색 유지.
+  claimPending: { borderColor: InkColors.ink3 },
+  claimRejected: { borderColor: BrandColors.warn },
+  claimHead: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
+  claimTitle: { fontSize: 14, fontWeight: '900', color: InkColors.ink },
+
+  // 입금자명 입력 — 고정 height 대신 minHeight(글자 크기 배율에서 잘림 방지).
+  input: {
+    minHeight: 44,
+    borderWidth: 1,
+    borderColor: InkColors.line,
+    borderRadius: Radius.sm,
+    paddingHorizontal: Space.md,
+    paddingVertical: Space.sm,
+    fontSize: 15,
+    fontWeight: '700',
+    color: InkColors.ink,
+    backgroundColor: InkColors.bgSoft,
+  },
+
+  mailRow: { alignItems: 'center', paddingVertical: Space.sm },
+  mailText: { fontSize: 12.5, fontWeight: '700', color: InkColors.ink3 },
 
   primary: { backgroundColor: BrandColors.brand, paddingVertical: 15, borderRadius: Radius.md, alignItems: 'center' },
   primaryText: { color: '#FFFFFF', fontSize: 15, fontWeight: '800' },
