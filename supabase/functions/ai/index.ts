@@ -327,24 +327,23 @@ function userClient(authz: string) {
   });
 }
 
-// 무료 티어 월 AI답변 한도 — tiers.ts PLANS.free.aiMonthly · 0062 consume_ai_quota v_cap 와 동일해야 함.
-const AI_MONTHLY_FREE_CAP = 300;
-
 // 쿼터 사전판정(비차감). 카운트는 답변이 "성공 서빙된 뒤" consume_ai_quota 로만 올린다 —
 // LLM 5xx/타임아웃에 대한 클라 재시도가 같은 질문을 이중차감하는 것을 막는다(실패는 공짜).
-// 판정 규칙은 0062 consume_ai_quota 와 동일(free_mode 우회·유료 무제한·free 월 300건).
-// 읽기는 호출자 JWT + RLS(자기 매장 행만)라 추가 격리 게이트 불요. 오류는 전부 fail-open.
-async function aiQuotaBlocked(authz: string): Promise<{ blocked: boolean; used: number }> {
+//
+// ★ 판정 규칙을 여기서 재구현하지 않는다. 0082 ai_quota_status() 하나만 부른다.
+//   이전에는 캡 숫자(300)와 "유료=무제한" 규칙을 엣지가 자기 상수로 들고 있어서 DB 정본과
+//   어긋났다(확정 정책은 무료150/유료1500인데 코드는 무료300/유료무제한이었다).
+//   플랜별 캡·월 경계(KST)·free_mode 우회는 전부 DB 함수의 책임이다.
+//
+// 읽기는 호출자 JWT + RLS(자기 매장 행만)라 추가 격리 게이트 불요. 오류는 전부 fail-open —
+// 과금 인프라 장애가 파일럿 답변을 막는 게 더 큰 사고다(subscription.ts 의 fail-open 철학과 동일).
+async function aiQuotaBlocked(authz: string): Promise<{ blocked: boolean; used: number; cap: number }> {
   const sb = userClient(authz);
-  const { data: freeMode, error: fmErr } = await sb.rpc('billing_free_mode');
-  if (fmErr || freeMode !== false) return { blocked: false, used: 0 }; // 무료 모드/판정 불가 → 통과
-  const { data: sub } = await sb.from('unit_subscriptions').select('plan').maybeSingle();
-  if ((sub?.plan ?? 'free') !== 'free') return { blocked: false, used: 0 }; // 유료 플랜 무제한
-  const month = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit' })
-    .format(new Date()).slice(0, 7); // KST 'YYYY-MM' — 0062 의 월 경계와 동일
-  const { data: usage } = await sb.from('ai_usage_monthly').select('used').eq('month', month).maybeSingle();
-  const used = usage?.used ?? 0;
-  return { blocked: used >= AI_MONTHLY_FREE_CAP, used };
+  const { data, error } = await sb.rpc('ai_quota_status');
+  if (error) return { blocked: false, used: 0, cap: 0 }; // 판정 불가 → 통과(fail-open)
+  const row = Array.isArray(data) ? data[0] : data;
+  if (!row) return { blocked: false, used: 0, cap: 0 };
+  return { blocked: row.exceeded === true, used: row.used_count ?? 0, cap: row.cap_count ?? 0 };
 }
 
 // 노하우 1건 색인 — 텍스트를 임베딩해 playbook_embeddings 에 upsert.
@@ -909,8 +908,9 @@ Deno.serve(async (req: Request) => {
     const payload = body?.payload ?? {};
     const authz = req.headers.get('Authorization') ?? '';
 
-    // 3) AI답변 월 쿼터(과금층 0062) — answer 태스크만. 진입 시엔 "비차감 사전판정"으로 무료
-    //    플랜 300건 초과를 402로 거부하고, 카운트 증가는 답변 성공 후(아래)로 미룬다.
+    // 3) AI답변 월 쿼터(과금층 0062·0082) — answer 태스크만. 진입 시엔 "비차감 사전판정"으로
+    //    플랜별 캡(무료 150 / 유료 매장당 1500) 초과를 402로 거부하고,
+    //    카운트 증가는 답변 성공 후(아래)로 미룬다.
     //    ⚠️ 쿼터 인프라 장애는 fail-open: 과금 로직이 파일럿 답변을 막는 게 더 큰 사고
     //    (subscription.ts 의 fail-open 철학과 동일). 로그만 남기고 통과시킨다.
     //    (denylist = 아래 라우팅 삼항식의 非answer 분기와 동일 목록 — 새 태스크를 라우팅에
@@ -922,7 +922,7 @@ Deno.serve(async (req: Request) => {
       try {
         const q = await aiQuotaBlocked(authz);
         if (q.blocked) {
-          return json({ error: 'ai_quota_exceeded', used: q.used, cap: AI_MONTHLY_FREE_CAP }, 402);
+          return json({ error: 'ai_quota_exceeded', used: q.used, cap: q.cap }, 402);
         }
       } catch (e) {
         console.error('aiQuotaBlocked failed (fail-open):', e);

@@ -47,10 +47,12 @@ const EDGE_MAX_ATTEMPTS = 2;      // 최초 1 + 재시도 1
 const EDGE_RETRY_DELAY_MS = 400;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-// 무료 플랜 월 AI답변 한도 초과(엣지 402 ai_quota_exceeded) — 일반 실패와 구분해 던진다.
+// 월 AI답변 한도 초과(엣지 402 ai_quota_exceeded) — 일반 실패와 구분해 던진다.
 // 일반 실패는 mock 폴백(degraded)이지만, 쿼터 초과를 mock 으로 위장하면 캡이 무의미해진다.
+// ★ cap 을 실어 나른다 — 0082 부터 유료 플랜에도 캡(매장당 1500)이 있어서, 화면이
+//   PLANS.free.aiMonthly(150)를 하드코딩하면 유료 매장에 틀린 숫자를 보여준다.
 class AiQuotaError extends Error {
-  constructor() { super('ai_quota_exceeded'); }
+  constructor(readonly cap: number, readonly used: number) { super('ai_quota_exceeded'); }
 }
 
 async function callEdge<T>(task: Task, payload: unknown): Promise<T> {
@@ -83,7 +85,7 @@ async function callEdge<T>(task: Task, payload: unknown): Promise<T> {
       // 상태코드만 믿지 않고 body 판별자까지 확인 — 인프라 계층의 무관한 402가 가짜 페이월로 둔갑하는 것 방지.
       if (res.status === 402) {
         const body = await res.json().catch(() => null);
-        if (body?.error === 'ai_quota_exceeded') throw new AiQuotaError();
+        if (body?.error === 'ai_quota_exceeded') throw new AiQuotaError(Number(body?.cap) || 0, Number(body?.used) || 0);
         throw new Error(`AI edge ${task} failed: 402`); // 쿼터 외 402 → 일반 4xx(mock 폴백 경로)
       }
       // 4xx는 재시도 무의미 → 즉시 실패(catch에서 4xx로 재-throw됨).
@@ -113,7 +115,7 @@ export async function generateAnswer(
     // 쿼터 초과는 mock 폴백 금지 — 가짜 답으로 캡을 위장하면 과금층이 무의미해진다.
     // block=null → 호출부(tryGenerate)가 업그레이드 안내 후 후보/사장 라우팅으로 자연 강등.
     if (e instanceof AiQuotaError) {
-      return { block: null, grounded: false, usedSopIds: [], quotaExceeded: true };
+      return { block: null, grounded: false, usedSopIds: [], quotaExceeded: true, quotaCap: e.cap };
     }
     // 실호출 실패 시에도 프론트가 죽지 않게 mock으로 폴백(데모 안전망).
     // degraded=true 로 표시해 '진짜 매장 답'이 아니라는 걸 사용자에게 알린다.

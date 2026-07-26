@@ -4,9 +4,10 @@
 // 서버 스위치(app_config.billing_free_mode)를 false 로 잠깐 뒤집고 캡 3종을 실증한 뒤
 // 반드시 true 로 원복한다(finally — 파일럿 Phase 0 유지가 최우선 불변식).
 //   ① 좌석 캡: 무료 매장 직원 3명 승인 OK → 4번째 승인 staff_limit
-//   ② AI 캡: 무료 매장 월 300건 초과 시 엣지 answer 402 ai_quota_exceeded
+//   ② AI 캡(0082 플랜별): free 150 / 유료 매장당 1500. 캡 직전 200 → 캡 도달 402 로 경계를 양쪽에서 찍는다.
+//      ★ 유료 "무제한"은 폐기됐다(행사장형 무한호출 구멍). 유료도 1500 에서 402 가 나는지 회귀 가드한다.
 //   ③ 매장 캡: 무료·단일 2번째 매장 plan_limit_store → multi 활성화 후 생성 OK
-//   + 업그레이드 해제: single 활성화로 좌석·AI 무제한, multi 로 매장 추가 허용
+//   + 업그레이드 해제: single 활성화로 좌석 무제한·AI 캡 상향, multi 로 매장 추가 허용
 //   + 원복 후: 새 무료 사장이 2매장 생성 가능(파일럿 우회 복원 실증)
 //
 // 실행: node scripts/qa-billing-tiers.mjs
@@ -33,6 +34,11 @@ function loadEnv() {
 const env = loadEnv();
 const URL = env.EXPO_PUBLIC_SUPABASE_URL || env.SUPABASE_URL;
 const ANON = env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+
+// 월 AI답변 캡(확정 정책 2026-07-22). 정본 = 0082 consume_ai_quota/ai_quota_status.
+// 클라 표시는 src/lib/config/tiers.ts PLANS.*.aiMonthly — 세 곳이 같은 값이어야 한다.
+const FREE_CAP = 150;
+const PAID_CAP = 1500;
 const SERVICE = env.SUPABASE_SERVICE_ROLE_KEY;
 if (!URL || !ANON || !SERVICE) { console.error('FAIL: URL/ANON/SERVICE_ROLE env 필요(.env + .env.seed)'); process.exit(2); }
 
@@ -149,12 +155,21 @@ async function main() {
     const { error: e4 } = await F.c.rpc('approve_member', { p_uid: staff[3].uid });
     check('4번째 승인 차단(staff_limit)', /staff_limit/.test(e4?.message ?? ''), e4?.message ?? '승인돼버림');
 
-    // ③ AI 캡: 한도 내 200 → used=300 시드 후 402
+    // ③ AI 캡(0082 플랜별): free=150. 한도 내 200 → 경계 아래(149)에서도 200 → 캡 도달(150)에서 402.
+    //    경계를 149/150 양쪽으로 찍는 이유: 상수만 바꾸고 부등호를 안 고치면 off-by-one 이 조용히 남는다.
     const a1 = await edgeAnswer(F.c, '마감은 몇 시에 하나요');
     check('AI answer 한도 내 200', a1.status === 200, `status=${a1.status}`);
-    await seedAiUsage(store1, 300);
+    await seedAiUsage(store1, FREE_CAP - 1);
+    const a1b = await edgeAnswer(F.c, '마감은 몇 시에 하나요');
+    check(`free: 캡 직전(used=${FREE_CAP - 1})은 200`, a1b.status === 200, `status=${a1b.status}`);
+    await seedAiUsage(store1, FREE_CAP);
     const a2 = await edgeAnswer(F.c, '마감은 몇 시에 하나요');
-    check('AI 301건째 402 ai_quota_exceeded', a2.status === 402 && a2.body?.error === 'ai_quota_exceeded', `status=${a2.status} used=${a2.body?.used}`);
+    check(
+      `free: 캡 도달(used=${FREE_CAP}) 402 ai_quota_exceeded`,
+      a2.status === 402 && a2.body?.error === 'ai_quota_exceeded',
+      `status=${a2.status} used=${a2.body?.used}`,
+    );
+    check(`free: 402 응답이 캡 ${FREE_CAP} 을 실어보냄`, a2.body?.cap === FREE_CAP, `cap=${a2.body?.cap}`);
 
     // ④ 매장 캡: free 2호점 차단
     const { error: e2 } = await F.c.rpc('create_store', { p_store_name: 'QA 과금 2호점', p_industry: '헬스·피트니스', p_biz_no: null });
@@ -165,8 +180,22 @@ async function main() {
     check('admin_activate_store(single)', act1?.plan === 'single' && act1?.status === 'active', `plan=${act1?.plan}`);
     const { error: e4b } = await F.c.rpc('approve_member', { p_uid: staff[3].uid });
     check('single: 4번째 직원 승인 해제', !e4b, e4b?.message ?? '');
+    // 0082 부터 유료도 무제한이 아니다 — 매장당 1500. free 캡을 넘긴 상태에서 200 이 나와야 하고
+    // (플랜 상향으로 해제), 유료 캡까지 채우면 다시 402 여야 한다("무제한" 폐기 회귀 가드).
     const a3 = await edgeAnswer(F.c, '마감은 몇 시에 하나요');
-    check('single: AI 무제한(used>300에도 200)', a3.status === 200, `status=${a3.status}`);
+    check(`single: free 캡 초과분 해제(used>${FREE_CAP} 에도 200)`, a3.status === 200, `status=${a3.status}`);
+    await seedAiUsage(store1, PAID_CAP - 1);
+    const a3b = await edgeAnswer(F.c, '마감은 몇 시에 하나요');
+    check(`single: 유료 캡 직전(used=${PAID_CAP - 1})은 200`, a3b.status === 200, `status=${a3b.status}`);
+    await seedAiUsage(store1, PAID_CAP);
+    const a3c = await edgeAnswer(F.c, '마감은 몇 시에 하나요');
+    check(
+      `single: 유료 캡 도달(used=${PAID_CAP}) 402 — '무제한' 폐기 확인`,
+      a3c.status === 402 && a3c.body?.error === 'ai_quota_exceeded',
+      `status=${a3c.status} cap=${a3c.body?.cap}`,
+    );
+    check(`single: 402 응답이 캡 ${PAID_CAP} 을 실어보냄`, a3c.body?.cap === PAID_CAP, `cap=${a3c.body?.cap}`);
+    await seedAiUsage(store1, 0); // 뒤 검사(multi 2호점 등)가 캡에 걸리지 않게 원복
     const { error: e2b } = await F.c.rpc('create_store', { p_store_name: 'QA 과금 2호점', p_industry: '헬스·피트니스', p_biz_no: null });
     check('single: 2호점 여전히 차단', /plan_limit_store/.test(e2b?.message ?? ''), e2b?.message ?? '생성돼버림');
 

@@ -33,8 +33,8 @@ export const PLANS: Record<PlanId, PlanDef> = {
     perStore: false,
     maxStores: 1,
     maxStaff: 3,
-    aiMonthly: 300,
-    features: ['매장 1개', '직원 3명까지', 'AI 답변 월 300건', '노하우 등록 무제한'],
+    aiMonthly: 150,
+    features: ['매장 1개', '직원 3명까지', 'AI 답변 월 150건', '노하우 등록 무제한'],
   },
   single: {
     id: 'single',
@@ -46,8 +46,8 @@ export const PLANS: Record<PlanId, PlanDef> = {
     perStore: false,
     maxStores: 1,
     maxStaff: null,
-    aiMonthly: null,
-    features: ['매장 1개', '직원 무제한', 'AI 답변 무제한', '질문·노하우 무제한'],
+    aiMonthly: 1500,
+    features: ['매장 1개', '직원 무제한', 'AI 답변 월 1,500건', '질문·노하우 무제한'],
   },
   multi: {
     id: 'multi',
@@ -59,8 +59,8 @@ export const PLANS: Record<PlanId, PlanDef> = {
     perStore: true,
     maxStores: null,
     maxStaff: null,
-    aiMonthly: null,
-    features: ['매장 2개 이상', '매장별 무제한 이용', '전체 매장 한눈에 보기', '매장 간 노하우 가져오기'],
+    aiMonthly: 1500,
+    features: ['매장 2개 이상', '매장당 AI 답변 월 1,500건', '전체 매장 한눈에 보기', '매장 간 노하우 가져오기'],
   },
 } as const;
 

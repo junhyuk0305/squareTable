@@ -34,9 +34,10 @@ export type GenerateAnswerOutput = {
   coverage?: 'full' | 'partial';
   caveat?: string;
   degraded?: boolean;            // AI 서버 실패로 기본(mock) 답으로 폴백했는가 → 사용자에 고지
-  // 무료 플랜 월 AI답변 한도 초과(엣지 402). mock 폴백으로 위장하지 않고 호출부가
-  // 업그레이드 안내 + 후보/사장 라우팅 경로로 자연 강등한다(과금층 0062).
+  // 월 AI답변 한도 초과(엣지 402). mock 폴백으로 위장하지 않고 호출부가
+  // 업그레이드 안내 + 후보/사장 라우팅 경로로 자연 강등한다(과금층 0062·0082).
   quotaExceeded?: boolean;
+  quotaCap?: number;             // 그때 적용된 캡(무료 150 / 유료 매장당 1500) — 화면이 숫자를 하드코딩하지 않게 서버값을 싣는다.
 };
 
 // ── 사장님 SQUARE 정리 (원문 → 6칸 구조화) ───────────────────

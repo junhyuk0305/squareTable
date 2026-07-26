@@ -40,6 +40,8 @@ export function OwnerStatusView() {
   const prefFor = useMemberPrefsStore((s) => s.prefFor);
   const hydratePrefs = useMemberPrefsStore((s) => s.hydrate);
   const { goStore, switching } = useStoreNav();
+  // 현재 플랜의 월 AI 캡(무료 150 / 유료 매장당 1500). null 이면 캡 없음 = 분모를 그리지 않는다.
+  const aiCap = PLANS[plan].aiMonthly;
 
   useEffect(() => {
     void hydrateOwner();
@@ -257,7 +259,9 @@ export function OwnerStatusView() {
             <View style={[styles.statCell, styles.statDivider]}>
               <Text style={styles.statV}>
                 {aiTotal.toLocaleString()}
-                {plan === 'free' && <Text style={styles.statUnit}> / {PLANS.free.aiMonthly}</Text>}
+                {/* 0082 부터 유료 플랜에도 캡(매장당 1500)이 있다 — free 만 분모를 보여주면
+                    유료 사장은 자기 한도를 모른 채 402를 맞는다. 현재 플랜의 캡을 그대로 쓴다. */}
+                {aiCap != null && <Text style={styles.statUnit}> / {aiCap.toLocaleString()}</Text>}
               </Text>
               <Text style={styles.statL}>AI 답변 사용</Text>
             </View>
@@ -270,8 +274,12 @@ export function OwnerStatusView() {
                 <Text style={styles.rowSub}>{`${r.labor_month.toLocaleString()}원 · AI ${r.ai_used}건`}</Text>
               </View>
             ))}
-          {plan === 'free' && (
-            <Text style={styles.caption}>무료 요금제는 매장당 월 {PLANS.free.aiMonthly}건까지예요</Text>
+          {aiCap != null && (
+            <Text style={styles.caption}>
+              {plan === 'free'
+                ? `무료 요금제는 매장당 월 ${aiCap.toLocaleString()}건까지예요`
+                : `매장당 월 ${aiCap.toLocaleString()}건까지 쓸 수 있어요`}
+            </Text>
           )}
         </View>
       </Appear>
