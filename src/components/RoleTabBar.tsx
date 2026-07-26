@@ -3,11 +3,12 @@ import { View, Text, Pressable, StyleSheet, Animated } from 'react-native';
 import { router as globalRouter, usePathname, type Href } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { InkColors } from '@/lib/theme/colors';
+import { InkColors, BrandColors } from '@/lib/theme/colors';
+import { Radius } from '@/lib/theme/elevation';
 import { USE_NATIVE_DRIVER } from '@/lib/anim';
 
 type IconName = keyof typeof Ionicons.glyphMap;
-type Tab = { label: string; path: Href; icon: IconName; iconActive: IconName; alsoActiveFor?: Href[] };
+export type Tab = { label: string; path: Href; icon: IconName; iconActive: IconName; alsoActiveFor?: Href[] };
 
 /**
  * 각 탭 의미에 맞춘 아이콘. 선택된 탭은 채워진(filled) 아이콘, 나머지는 outline.
@@ -79,8 +80,9 @@ export function RoleTabBar({ role }: { role: 'junior' | 'owner' }) {
   );
 }
 
-/** 개별 탭 — 누르면 살짝 줄고, 활성화되는 순간 아이콘이 톡 튀어오른다. */
-function TabButton({ tab, active, onPress }: { tab: Tab; active: boolean; onPress: () => void }) {
+/** 개별 탭 — 누르면 살짝 줄고, 활성화되는 순간 아이콘이 톡 튀어오른다.
+ *  badge: 허브 탭바(HubTabBar)가 쓰는 카운트 뱃지(벨 뱃지와 동일 스타일). RoleTabBar 는 미사용. */
+export function TabButton({ tab, active, onPress, badge }: { tab: Tab; active: boolean; onPress: () => void; badge?: number }) {
   const color = active ? InkColors.ink : InkColors.ink3;
   const press = useMemo(() => new Animated.Value(1), []); // 눌림 스케일
   const pop = useMemo(() => new Animated.Value(1), []); // 활성화 순간 팝(0.8→1)
@@ -107,6 +109,11 @@ function TabButton({ tab, active, onPress }: { tab: Tab; active: boolean; onPres
     >
       <Animated.View style={{ transform: [{ scale: Animated.multiply(press, iconScale) }] }}>
         <Ionicons name={active ? tab.iconActive : tab.icon} size={23} color={color} />
+        {(badge ?? 0) > 0 && (
+          <View style={styles.badge}>
+            <Text style={styles.badgeText}>{badge! > 99 ? '99+' : badge}</Text>
+          </View>
+        )}
       </Animated.View>
       <Text numberOfLines={1} style={[styles.label, { color, fontWeight: active ? '800' : '600' }]}>{tab.label}</Text>
     </Pressable>
@@ -132,4 +139,18 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 11,
   },
+  // 벨 뱃지(NotificationBell)와 동일 문법 — 아이콘 우상단 카운트.
+  badge: {
+    position: 'absolute',
+    top: -4,
+    right: -10,
+    minWidth: 16,
+    height: 16,
+    paddingHorizontal: 4,
+    borderRadius: Radius.pill,
+    backgroundColor: BrandColors.accent,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  badgeText: { fontSize: 10, fontWeight: '900', color: '#FFFFFF' },
 });

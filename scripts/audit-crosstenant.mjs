@@ -118,6 +118,27 @@ const TENANT_TABLES = ['playbook_entries','chat_queries','unknown_queries','work
   { const { data, error } = await mk().rpc('my_units_notif_data');
     ok(!error && (data?.length||0)===0, `anon→my_units_notif_data 0행`, error?`(err ${error.message.slice(0,40)})`:`rows=${data?.length}`); }
 
+  // ── 허브 대시보드 RPC (0081) — owner_overview 확장·owner_today·my_cross_summary 격리 ──
+  { const { data, error } = await A.c.rpc('owner_overview');
+    const r=(data||[]).find(x=>x.unit_id===A.unit);
+    ok(!error && !!r && r.sugg_pending!==undefined && r.needs_review!==undefined && r.ai_used!==undefined,
+      `A→owner_overview 0081 확장 컬럼(제안·검증·AI) 존재`, error?`(err ${error.message.slice(0,40)})`:(r?`sugg=${r.sugg_pending} rev=${r.needs_review} ai=${r.ai_used}`:'자기매장 행 없음')); }
+  { const { data, error } = await A.c.rpc('owner_today');
+    const mine=(data||[]).filter(r=>r.unit_id===A.unit);
+    const leaked=(data||[]).filter(r=>r.unit_id===B.unit);
+    ok(!error && mine.length===1 && leaked.length===0, `A→owner_today 자기매장만(양성 대조+B 격리)`, error?`(err ${error.message.slice(0,40)})`:`mine=${mine.length} B행=${leaked.length}`); }
+  { const { data, error } = await mk().rpc('owner_today');
+    ok(!error && (data?.length||0)===0, `anon→owner_today 0행`, error?`(err ${error.message.slice(0,40)})`:`rows=${data?.length}`); }
+  { const { data, error } = await B.c.rpc('my_cross_summary');
+    const mine=(data||[]).filter(r=>r.unit_id===B.unit);
+    ok(!error && mine.length===1 && mine[0].shifts!==undefined && mine[0].month_minutes!==undefined,
+      `B→my_cross_summary 자기매장 반환(양성 대조)`, error?`(err ${error.message.slice(0,40)})`:`rows=${mine.length}`); }
+  { const { data, error } = await A.c.rpc('my_cross_summary');
+    const leaked=(data||[]).filter(r=>r.unit_id===B.unit);
+    ok(!error && leaked.length===0, `A→my_cross_summary B매장 행 0(비소속 격리)`, error?`(err ${error.message.slice(0,40)})`:`B행 ${leaked.length}`); }
+  { const { data, error } = await mk().rpc('my_cross_summary');
+    ok(!error && (data?.length||0)===0, `anon→my_cross_summary 0행`, error?`(err ${error.message.slice(0,40)})`:`rows=${data?.length}`); }
+
   // ── 정리: 본인 세션으로 삭제 (await, no .catch) ──
   try { await A.c.rpc('delete_my_account'); } catch(e){ console.log('  ! A cleanup', e.message); }
   try { await B.c.rpc('delete_my_account'); } catch(e){ console.log('  ! B cleanup', e.message); }

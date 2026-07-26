@@ -4,6 +4,7 @@ import type { UnitNotifData } from '@/lib/db';
 import {
   buildJuniorNotifications,
   buildOwnerNotifications,
+  isPendingAssignment,
   juniorUnreadCount,
   ownerUnreadCount,
   MAX_NOTIFS,
@@ -35,4 +36,11 @@ export function buildStoreNotifs(d: UnitNotifData, role: string, me: string, tod
 /** 전 매장 병합 목록(시간 역순, 단일 매장과 동일 상한). */
 export function mergeCrossNotifs(perStore: CrossNotifRow[][]): CrossNotifRow[] {
   return perStore.flat().sort((a, b) => b.at.localeCompare(a.at)).slice(0, MAX_NOTIFS);
+}
+
+/** 매장 하나의 "오늘 내 일" 수 — 나에게 배정됐고 오늘 떠야 하는데 아직 완료 안 한 할일.
+ *  술어는 notifications.ts SSOT(isPendingAssignment) 재사용 — 허브 매장 카드 '오늘 할일' 칩·
+ *  직원 오늘 탭·허브 탭바 뱃지가 이 하나를 공유한다(카운트 3곳 복제 금지). */
+export function assignedTodayCount(d: UnitNotifData, me: string, today: string): number {
+  return d.taskTemplates.filter((t) => isPendingAssignment(t, me, today, d.done)).length;
 }

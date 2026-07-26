@@ -169,12 +169,38 @@ export type OwnerOverviewRow = {
   unit_id: string; store_name: string; is_active: boolean;
   pending_q: number; knowhow: number; staff: number; labor_month: number;
   uncovered: number; // 첨부 노하우 없는 업무 수(커버리지, 0074). 매장 단위 결과물 카운트
+  sugg_pending: number; // 검토 대기 제안 수(0081) — 허브 현황 '확인 필요'
+  needs_review: number; // 검증 필요 노하우 수(발행본, 0081)
+  ai_used: number; // 이번달(KST) AI답변 사용량(0081, ai_usage_monthly)
 };
 /** 내가 소유한 모든 매장의 미답질문·노하우·직원·이번달 인건비를 한 번에. RLS는 활성만 보이므로 definer RPC. */
 export async function fetchOwnerOverview(): Promise<DbResult<OwnerOverviewRow[]>> {
   if (!HAS_SUPABASE) return { data: [], error: null };
   const { data, error } = await supabase.rpc('owner_overview');
   return { data: (data as OwnerOverviewRow[]) ?? null, error: error as DbErr };
+}
+
+// ── 허브 대시보드(0081) — 사장 현황 탭·직원 오늘 탭 데이터 (definer, 0074/0077 패턴) ─────────
+export type OwnerTodayRow = { unit_id: string; working_now: number; scheduled: number };
+/** 소유 매장별 지금 근무중/오늘 근무 예정 "카운트" — 현황 탭 오늘 스냅샷. 명단은 매장 출퇴근 화면 담당. */
+export async function fetchOwnerToday(): Promise<DbResult<OwnerTodayRow[]>> {
+  if (!HAS_SUPABASE) return { data: [], error: null };
+  const { data, error } = await supabase.rpc('owner_today');
+  if (error) readFail('fetchOwnerToday', error);
+  return { data: (data as OwnerTodayRow[]) ?? null, error: error as DbErr };
+}
+
+export type MyShiftRow = { id: string; weekday: number; start: string; end: string };
+export type MyCrossSummaryRow = {
+  unit_id: string; store_name: string; shifts: MyShiftRow[]; month_minutes: number; hourly_wage: number;
+};
+/** 본인의 소속 매장별 근무표·이번달 근무분·시급 — 직원 오늘 탭. 본인 행만(RPC 내부 강제).
+ *  "오늘/다음 근무" 판정은 클라가 weekday 로 파생 — 승인된 교대 반영은 매장 근무표 화면이 정본(v1 미반영). */
+export async function fetchMyCrossSummary(): Promise<DbResult<MyCrossSummaryRow[]>> {
+  if (!HAS_SUPABASE) return { data: [], error: null };
+  const { data, error } = await supabase.rpc('my_cross_summary');
+  if (error) readFail('fetchMyCrossSummary', error);
+  return { data: (data as MyCrossSummaryRow[]) ?? null, error: error as DbErr };
 }
 
 // ── 통합 알림(0077) — 소속 전 매장의 알림 '원시 행' → 매장별 도메인 타입 묶음 ──────────

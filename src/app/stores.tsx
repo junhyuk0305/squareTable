@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, Pressable, ScrollView, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter, Redirect } from 'expo-router';
@@ -12,13 +12,15 @@ import { needsProfileSetup } from '@/lib/store/profileSetup';
 import { HAS_SUPABASE } from '@/lib/supabase';
 import { storeColor } from '@/lib/utils/storeColor';
 import { useCrossNotifRows } from '@/lib/hooks/useCrossNotifRows';
-import { BellButton } from '@/components/NotificationBell';
+import { assignedTodayCount } from '@/lib/utils/crossStoreNotifs';
+import { todayStr } from '@/lib/utils/attendance';
 import { fetchOwnerOverview, type MyUnitRow, type OwnerOverviewRow } from '@/lib/db';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
 import { canUseMultistore } from '@/lib/config/tiers';
-import { Wordmark } from '@/components/Wordmark';
+import { HubTopBar } from '@/components/hub/HubTopBar';
+import { HubTabBar } from '@/components/HubTabBar';
 import { Appear } from '@/components/Appear';
 import { SectionLabel } from '@/components/SectionLabel';
 
@@ -32,7 +34,7 @@ import { SectionLabel } from '@/components/SectionLabel';
 export default function StoresHub() {
   const router = useRouter();
   const role = useSessionStore((s) => s.role);
-  const userName = useSessionStore((s) => s.userName);
+  const userId = useSessionStore((s) => s.userId);
   const unitId = useSessionStore((s) => s.unitId);
   const storeName = useSessionStore((s) => s.storeName);
   const plan = useSessionStore((s) => s.plan);
@@ -70,7 +72,15 @@ export default function StoresHub() {
   useEffect(() => {
     void hydrateCross();
   }, [hydrateCross]);
-  const { unreadByUnit, totalUnread } = useCrossNotifRows();
+  const { unreadByUnit } = useCrossNotifRows();
+  // 직원 '오늘 할일' 칩 — 카운트는 assignedTodayCount SSOT(오늘 탭·허브 탭바 뱃지와 동일 술어).
+  const crossData = useCrossNotifStore((s) => s.data);
+  const today = todayStr();
+  const todoByUnit = useMemo(() => {
+    const m: Record<string, number> = {};
+    if (!isOwner) for (const d of crossData) m[d.unitId] = assignedTodayCount(d, userId, today);
+    return m;
+  }, [isOwner, crossData, userId, today]);
 
   // 사장 매장 카드 지표(직원·노하우·확인필요) — 통합뷰 RPC 1회. 실패해도 카드는 그대로.
   useEffect(() => {
@@ -104,9 +114,6 @@ export default function StoresHub() {
 
   const addStore = () => router.push(canUseMultistore(plan) ? '/owner/create-store' : '/billing');
   const joinStore = () => router.push('/junior/hub');
-  // 허브 우상단 프로필 → 전체 계정 설정(매장 무관, 사장·직원 공용 — F6 대칭 분리).
-  // 매장별 설정은 매장 안 '매장 설정' 탭.
-  const openSettings = () => router.push('/account-settings');
 
   const storeCount = stores.length;
 
@@ -122,18 +129,8 @@ export default function StoresHub() {
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
       <Stack.Screen options={{ headerShown: false }} />
       <ScrollView contentContainerStyle={styles.scroll}>
-        {/* 상단 바: 워드마크 + 알림 벨(통합 알림, 매장 내 벨과 동일 패턴) + 프로필(설정 진입) */}
-        <View style={styles.topbar}>
-          <Wordmark size="sm" />
-          <View style={styles.topbarRight}>
-            <BellButton count={totalUnread} edge={false} onPress={() => router.push('/notifications')} />
-            <Pressable onPress={openSettings} hitSlop={8} style={({ pressed }) => [styles.avaBtn, pressed && { opacity: 0.7 }]}>
-              <View style={styles.avatar}>
-                <Text style={styles.avatarText}>{(userName || '?').slice(0, 1)}</Text>
-              </View>
-            </Pressable>
-          </View>
-        </View>
+        {/* 상단 바(HubTopBar 공용) — 알림 벨은 여기 고정(탭 금지 — 07-24 사용자 확정) + 프로필(계정 설정) */}
+        <HubTopBar />
 
         {/* 제목 */}
         <Appear delay={0}>
@@ -198,6 +195,11 @@ export default function StoresHub() {
                         </Text>
                       </View>
                       <View style={styles.cardRight}>
+                        {/* 사장 = 받은질문 칩(내가 답해야 풀리는 것만, 0이면 숨김 — 대시보드 기획 v2 유지분).
+                            직원 = 오늘 할일 칩(오늘 배정·미완료, assignedTodayCount SSOT). */}
+                        {isOwner
+                          ? (ov?.pending_q ?? 0) > 0 && <Text style={styles.qChip}>받은질문 {ov!.pending_q}</Text>
+                          : (todoByUnit[s.unit_id] ?? 0) > 0 && <Text style={styles.qChip}>오늘 할일 {todoByUnit[s.unit_id]}</Text>}
                         {/* 통합 안읽음 뱃지(0077) — 기존 '확인필요(pending_q만)' 칩을 매장별 전체 안읽음으로 확장(지표 병존 금지). */}
                         {(unreadByUnit[s.unit_id] ?? 0) > 0 && (
                           <Text style={styles.needChip}>알림 {unreadByUnit[s.unit_id]}</Text>
@@ -229,6 +231,8 @@ export default function StoresHub() {
           </>
         )}
       </ScrollView>
+      {/* 허브 2탭 [현황/오늘 · 매장] — 매장 앱에 들어가면 사라진다(2레이어 경계). */}
+      <HubTabBar role={isOwner ? 'owner' : 'junior'} />
     </SafeAreaView>
   );
 }
@@ -242,23 +246,6 @@ function industryIcon(industry: string | null): keyof typeof Ionicons.glyphMap {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: InkColors.cream },
   scroll: { padding: Space.gutter, gap: Space.xl, paddingBottom: 40 },
-
-  topbar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  topbarRight: { flexDirection: 'row', alignItems: 'center', gap: Space.md },
-  avaBtn: { padding: 2 },
-  // 설정 진입점(프로필 앞글자) — 흰 테두리 + 그림자(입체)로 "누르는 버튼"임을 드러낸다.
-  avatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: InkColors.ink,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#FFFFFF',
-    ...Elevation.e2,
-  },
-  avatarText: { color: '#FFFFFF', fontSize: 14, fontWeight: '900' },
 
   titleBlock: { gap: 4 },
   title: { fontSize: 26, fontWeight: '900', color: InkColors.ink, letterSpacing: -0.5 },
@@ -287,6 +274,12 @@ const styles = StyleSheet.create({
   needChip: {
     fontSize: 11, fontWeight: '900', color: '#8a5a12',
     backgroundColor: BrandColors.warnSoft, borderWidth: 1, borderColor: BrandColors.warnBorder,
+    paddingHorizontal: 8, paddingVertical: 1, borderRadius: Radius.pill, overflow: 'hidden',
+  },
+  // 받은질문(사장)/오늘 할일(직원) 칩 — 알림 칩(앰버)과 색을 벌려 "내 몫의 일"을 구분(노랑 계열).
+  qChip: {
+    fontSize: 11, fontWeight: '900', color: '#7a5f10',
+    backgroundColor: BrandColors.yellowSoft, borderWidth: 1, borderColor: BrandColors.gold,
     paddingHorizontal: 8, paddingVertical: 1, borderRadius: Radius.pill, overflow: 'hidden',
   },
 

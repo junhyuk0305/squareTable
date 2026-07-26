@@ -67,7 +67,7 @@ export default function LoginScreen() {
       flash(error || '로그인에 실패했어요. 잠시 후 다시 시도해주세요.', true);
       return;
     }
-    router.replace('/stores');
+    router.replace('/hub');
   };
 
   return (

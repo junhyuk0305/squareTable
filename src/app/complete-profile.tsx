@@ -50,7 +50,7 @@ export default function CompleteProfileScreen() {
   //   명시적으로 라우팅하므로, 제출 중(busy)엔 가드를 쉰다.
   if (HAS_SUPABASE && status === 'signed_out') return <Redirect href="/" />;
   if (!busy && HAS_SUPABASE && status === 'signed_in' && !needsProfileSetup({ status, phone: phone0, unitId, pendingUnitId })) {
-    return <Redirect href="/stores" />;
+    return <Redirect href="/hub" />;
   }
 
   const submit = async () => {

@@ -50,7 +50,7 @@ export default function LandingScreen() {
     if (needsProfileSetup({ status, phone, unitId, pendingUnitId })) {
       return <Redirect href="/complete-profile" />;
     }
-    return <Redirect href="/stores" />;
+    return <Redirect href="/hub" />;
   }
   if (HAS_SUPABASE && status === 'loading') return null; // 스플래시가 덮는 구간 — 깜빡임 방지
 
