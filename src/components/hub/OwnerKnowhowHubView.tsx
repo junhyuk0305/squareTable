@@ -6,7 +6,7 @@
 //   · 오래 손 안 댄 노하우(stale, 90일+) — 메뉴·가격이 변했는데 노하우만 옛날일 위험
 // 원칙: 허브는 읽기·이동까지(실행은 매장 화면) · 매장 단위만 · 0은 위험이 아니라 좋은 소식
 //   ("지금은 손볼 노하우가 없어요") · 노하우 0인 매장은 행동 버튼(노하우 담기)이 먼저.
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { View, Text, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -14,6 +14,7 @@ import { useHubStore } from '@/lib/store/useHubStore';
 import { useMemberPrefsStore } from '@/lib/store/useMemberPrefsStore';
 import { useStoreNav } from '@/lib/hooks/useStoreNav';
 import { storeColor } from '@/lib/utils/storeColor';
+import { StorePickerSheet } from '@/components/hub/StorePickerSheet';
 import { SectionLabel } from '@/components/SectionLabel';
 import { Appear } from '@/components/Appear';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
@@ -54,6 +55,14 @@ export function OwnerKnowhowHubView() {
   const emptyStores = useMemo(() => overview.filter((r) => r.knowhow === 0), [overview]);
   const allClear = totals.pending === 0 && totals.review === 0 && totals.stale === 0;
 
+  // 노하우 담기 — 템플릿 구경은 매장 무관이지만 "담기"는 매장에 종속되므로,
+  // 다점포면 어느 매장에 담을지 먼저 고르게 한다(매장 1곳이면 시트 없이 바로 이동).
+  const [pickOpen, setPickOpen] = useState(false);
+  const startTemplates = (uid: string) => {
+    if (overview.length > 1) setPickOpen(true);
+    else void goStore(uid, '/owner/templates');
+  };
+
   if (!ownerLoaded && overview.length === 0) {
     return (
       <View style={styles.loading}>
@@ -89,7 +98,7 @@ export function OwnerKnowhowHubView() {
             <Text style={styles.emptyTitle}>{labelOf(r.unit_id)}에 아직 노하우가 없어요</Text>
             <Text style={styles.emptyBody}>업종 추천 노하우를 담으면 직원이 물을 때 AI가 대신 답해요.</Text>
             <Pressable
-              onPress={() => goStore(r.unit_id, '/owner/templates')}
+              onPress={() => startTemplates(r.unit_id)}
               disabled={!!switching}
               style={({ pressed }) => [styles.emptyBtn, pressed && { opacity: 0.9 }]}
               accessibilityRole="button"
@@ -148,6 +157,18 @@ export function OwnerKnowhowHubView() {
           <Text style={styles.allClearText}>지금은 손볼 노하우가 없어요</Text>
         </Appear>
       )}
+
+      <StorePickerSheet
+        visible={pickOpen}
+        title="노하우 담기"
+        hint="어느 매장에 담을지 골라 주세요"
+        rows={overview.map((r) => ({ uid: r.unit_id, label: labelOf(r.unit_id), color: colorOf(r.unit_id) }))}
+        onPick={(uid) => {
+          setPickOpen(false);
+          void goStore(uid, '/owner/templates');
+        }}
+        onClose={() => setPickOpen(false)}
+      />
     </View>
   );
 }

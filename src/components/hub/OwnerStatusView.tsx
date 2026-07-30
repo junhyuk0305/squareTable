@@ -18,6 +18,7 @@ import { canUseMultistore, PLANS } from '@/lib/config/tiers';
 import { starterGraduated } from '@/lib/utils/starterProgress';
 import { PlanUpgradeNotice } from '@/components/PlanUpgradeNotice';
 import { StarterChecklist } from '@/components/hub/StarterChecklist';
+import { StorePickerSheet, type StorePickerRow } from '@/components/hub/StorePickerSheet';
 import { SectionLabel } from '@/components/SectionLabel';
 import { Appear } from '@/components/Appear';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
@@ -66,27 +67,28 @@ export function OwnerStatusView() {
   // 소유 매장 집합 = overview(owner_overview 소유검증)가 SSOT — 직원 수 판정 4중 복제 방지(실사 경고).
   const ownedIds = useMemo(() => new Set(overview.map((r) => r.unit_id)), [overview]);
 
-  // ── 확인 필요 집계(합류·질문·제안·검증) — 각 항목의 이동 목적지는 "건수가 가장 많은 매장" ──
+  // ── 확인 필요 집계(합류·질문·제안·검증) — 항목마다 "어느 매장에 몇 건"을 들고 있는다.
+  //    건수가 1개 매장뿐이면 행 탭 = 그 매장으로 바로 이동, 2+ 매장이면 매장 선택 시트를 띄운다. ──
   const inbox = useMemo(() => {
     const joins = crossData
       .filter((d) => ownedIds.has(d.unitId))
       .flatMap((d) => d.pending.map((p) => ({ uid: d.unitId, name: p.name })));
-    const maxUnit = (val: (r: (typeof overview)[number]) => number) =>
-      overview.reduce<{ uid: string | null; n: number }>(
-        (acc, r) => (val(r) > acc.n ? { uid: r.unit_id, n: val(r) } : acc),
-        { uid: null, n: 0 },
-      ).uid;
+    const joinCounts = new Map<string, number>();
+    for (const j of joins) joinCounts.set(j.uid, (joinCounts.get(j.uid) ?? 0) + 1);
+    const unitsOf = (val: (r: (typeof overview)[number]) => number) =>
+      overview.filter((r) => val(r) > 0).map((r) => ({ uid: r.unit_id, count: val(r) }));
     return {
       joins,
-      joinUnit: joins[0]?.uid ?? null,
+      joinUnits: [...joinCounts].map(([uid, count]) => ({ uid, count })),
       questions: overview.reduce((n, r) => n + r.pending_q, 0),
-      questionUnit: maxUnit((r) => r.pending_q),
+      questionUnits: unitsOf((r) => r.pending_q),
       suggestions: overview.reduce((n, r) => n + r.sugg_pending, 0),
-      suggestionUnit: maxUnit((r) => r.sugg_pending),
+      suggestionUnits: unitsOf((r) => r.sugg_pending),
       needsReview: overview.reduce((n, r) => n + r.needs_review, 0),
-      needsReviewUnit: maxUnit((r) => r.needs_review),
+      needsReviewUnits: unitsOf((r) => r.needs_review),
     };
   }, [crossData, ownedIds, overview]);
+  const [picker, setPicker] = useState<{ title: string; path: Href; units: { uid: string; count: number }[] } | null>(null);
   const inboxEmpty =
     inbox.joins.length === 0 && inbox.questions === 0 && inbox.suggestions === 0 && inbox.needsReview === 0;
 
@@ -119,7 +121,7 @@ export function OwnerStatusView() {
     icon: keyof typeof Ionicons.glyphMap,
     title: string,
     count: number,
-    uid: string | null,
+    units: { uid: string; count: number }[],
     path: Href,
     sub?: string,
   ) => {
@@ -127,7 +129,10 @@ export function OwnerStatusView() {
     return (
       <Pressable
         key={title}
-        onPress={() => uid && goStore(uid, path)}
+        onPress={() => {
+          if (units.length > 1) setPicker({ title, path, units });
+          else if (units[0]) void goStore(units[0].uid, path);
+        }}
         disabled={!!switching}
         style={({ pressed }) => [styles.row, pressed && { opacity: 0.85 }]}
       >
@@ -207,13 +212,13 @@ export function OwnerStatusView() {
                 'person-add-outline',
                 '합류 신청',
                 inbox.joins.length,
-                inbox.joinUnit,
+                inbox.joinUnits,
                 '/owner/staff',
                 inbox.joins[0] ? `${labelOf(inbox.joins[0].uid)} · ${inbox.joins[0].name}님` : undefined,
               )}
-              {inboxRow('chatbubble-outline', '받은질문', inbox.questions, inbox.questionUnit, '/owner/inbox')}
-              {inboxRow('bulb-outline', '검토할 제안', inbox.suggestions, inbox.suggestionUnit, '/owner/suggestions')}
-              {inboxRow('search-outline', '검증이 필요한 노하우', inbox.needsReview, inbox.needsReviewUnit, '/owner/categories')}
+              {inboxRow('chatbubble-outline', '받은질문', inbox.questions, inbox.questionUnits, '/owner/inbox')}
+              {inboxRow('bulb-outline', '검토할 제안', inbox.suggestions, inbox.suggestionUnits, '/owner/suggestions')}
+              {inboxRow('search-outline', '검증이 필요한 노하우', inbox.needsReview, inbox.needsReviewUnits, '/owner/categories')}
             </>
           )}
         </View>
@@ -295,6 +300,21 @@ export function OwnerStatusView() {
           )}
         </View>
       </Appear>
+
+      <StorePickerSheet
+        visible={!!picker}
+        title={picker?.title ?? ''}
+        hint="확인할 매장을 골라 주세요"
+        rows={(picker?.units ?? []).map(
+          (u): StorePickerRow => ({ uid: u.uid, label: labelOf(u.uid), color: colorOf(u.uid), count: u.count }),
+        )}
+        onPick={(uid) => {
+          const path = picker?.path;
+          setPicker(null);
+          if (path) void goStore(uid, path);
+        }}
+        onClose={() => setPicker(null)}
+      />
     </View>
   );
 }
