@@ -40,6 +40,8 @@ const H = { apikey: K, Authorization: `Bearer ${K}`, 'Content-Type': 'applicatio
 // cleanup-orphan-stores.mjs 와 동일 목록 — 데모·심사 매장은 절대 건드리지 않는다.
 const PROTECT_UNITS = new Set(['store_eval', 'store_001', 'store_appreview', 'store_002_demo', 'store_starter_demo']);
 const QA_EMAIL = /@example\.com|@squaretable\.test|@pilot\.squaretable/i;
+// 2026-07-30 사장 결정: 파일럿 시절 중복 생성 매장 2계정은 무료 유지(소급 면제).
+const EXEMPT_EMAIL = new Set(['239kk@naver.com', 'aes607@naver.com']);
 
 const get = async (path) => {
   const r = await fetch(`${URL}${path}`, { headers: H });
@@ -77,6 +79,7 @@ for (const [owner, list] of byOwner) {
   const email = emails.get(owner) ?? '';
   if (list.some((u) => PROTECT_UNITS.has(u.id))) { console.log(`skip(보호): ${email}`); continue; }
   if (QA_EMAIL.test(email)) { console.log(`skip(QA): ${email}`); continue; }
+  if (EXEMPT_EMAIL.has(email)) { console.log(`skip(면제): ${email}`); continue; }
 
   const free = list.filter((u) => (subOf.get(u.id)?.plan ?? 'free') === 'free');
   if (free.length < 2 && free.length === list.length) continue; // 무료 1곳뿐이면 정책 위반 아님
