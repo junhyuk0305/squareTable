@@ -9,6 +9,7 @@ import { HAS_SUPABASE } from '@/lib/supabase';
 import { SocialAuthButtons } from '@/components/SocialAuthButtons';
 import { formatBizNo, isValidBizNo, bizDigits } from '@/lib/utils/bizno';
 import { isValidEmail, isValidPhone, normalizePhone, formatPhone, passwordError, formatBirthDate8, birthDateISO } from '@/lib/utils/validation';
+import { usePhoneOtp } from '@/lib/otp';
 import { BrandColors, InkColors } from '@/lib/theme/colors';
 import { Space } from '@/lib/theme/layout';
 import { Radius, Elevation } from '@/lib/theme/elevation';
@@ -28,6 +29,9 @@ export default function SignupScreen() {
   const [phone, setPhone] = useState('');
   const [birth, setBirth] = useState(''); // YYYYMMDD 8자리(숫자만) — 서버 SSOT는 profiles.birth_date(0065)
   const [pw, setPw] = useState('');
+  // 전화번호 SMS 인증 — 번호를 고치면 훅이 정규화 번호 비교로 sent/verified 를 자동으로 푼다.
+  const otp = usePhoneOtp(normalizePhone(phone));
+  const [otpCode, setOtpCode] = useState('');
   const [storeName, setStoreName] = useState('');
   const [bizNo, setBizNo] = useState('');
   const [industry, setIndustry] = useState('');
@@ -95,6 +99,8 @@ export default function SignupScreen() {
     if (pwErr) return setErr(pwErr);
     if (!phone.trim()) return setErr('전화번호를 입력해주세요.');
     if (!isValidPhone(phone)) return setErr('전화번호 형식을 확인해주세요. (예: 010-1234-5678)');
+    // SMS 인증 — 실서버에서만. 서버 게이트(0088)가 최종 강제하고 여기는 첫 겹이다.
+    if (HAS_SUPABASE && !otp.verified) return setErr('전화번호 인증을 완료해주세요.');
     if (!birth) return setErr('생년월일을 입력해주세요.');
     if (!birthDateISO(birth)) return setErr('생년월일 8자리를 확인해주세요. (예: 19900131)');
     if (role === 'owner' && !storeName.trim()) return setErr('매장 이름을 입력해주세요.');
@@ -254,7 +260,66 @@ export default function SignupScreen() {
           )}
         </View>
 
-        <Field label="전화번호" value={phone} onChange={(v) => setPhone(formatPhone(v))} placeholder="010-1234-5678" keyboard="phone-pad" maxLength={13} required />
+        {/* 전화번호 + SMS 인증(솔라피) — 실서버에서만 인증 단계를 요구한다(데모는 입력만). */}
+        <View style={styles.field}>
+          <Text style={styles.label}>전화번호<Text style={styles.req}> *</Text></Text>
+          <View style={styles.otpRow}>
+            <TextInput
+              value={phone}
+              onChangeText={(v) => setPhone(formatPhone(v))}
+              placeholder="010-1234-5678"
+              placeholderTextColor={InkColors.ink3}
+              keyboardType="phone-pad"
+              maxLength={13}
+              style={[styles.input, styles.otpInput]}
+            />
+            {HAS_SUPABASE && !otp.verified && (
+              <Pressable
+                onPress={() => {
+                  if (!isValidPhone(phone)) return setErr('전화번호 형식을 확인해주세요. (예: 010-1234-5678)');
+                  setErr(null);
+                  void otp.send();
+                }}
+                disabled={otp.busy === 'send' || otp.countdown > 0}
+                style={[styles.otpBtn, (otp.busy === 'send' || otp.countdown > 0) && styles.otpBtnDim]}
+              >
+                {otp.busy === 'send' ? (
+                  <ActivityIndicator size="small" color={InkColors.ink2} />
+                ) : (
+                  <Text style={styles.otpBtnText}>
+                    {otp.countdown > 0 ? `재발송 ${otp.countdown}초` : otp.sent ? '인증번호 재발송' : '인증번호 받기'}
+                  </Text>
+                )}
+              </Pressable>
+            )}
+          </View>
+          {HAS_SUPABASE && otp.sent && !otp.verified && (
+            <View style={styles.otpRow}>
+              <TextInput
+                value={otpCode}
+                onChangeText={(v) => setOtpCode(v.replace(/\D/g, '').slice(0, 6))}
+                placeholder="인증번호 6자리"
+                placeholderTextColor={InkColors.ink3}
+                keyboardType="number-pad"
+                maxLength={6}
+                style={[styles.input, styles.otpInput]}
+              />
+              <Pressable
+                onPress={() => void otp.verify(otpCode)}
+                disabled={otp.busy === 'verify' || otpCode.length !== 6}
+                style={[styles.otpBtn, (otp.busy === 'verify' || otpCode.length !== 6) && styles.otpBtnDim]}
+              >
+                {otp.busy === 'verify' ? (
+                  <ActivityIndicator size="small" color={InkColors.ink2} />
+                ) : (
+                  <Text style={styles.otpBtnText}>인증하기</Text>
+                )}
+              </Pressable>
+            </View>
+          )}
+          {HAS_SUPABASE && otp.verified && <Text style={[styles.bizHint, styles.bizOk]}>✓ 인증된 번호예요</Text>}
+          {otp.msg && <Text style={styles.otpMsg}>{otp.msg}</Text>}
+        </View>
 
         {/* 생년월일 — 숫자 8자리 단일 필드(토스류 금융 서비스 표준 패턴). 입력 중 즉시 통과/안내 표시. */}
         <View style={styles.field}>
@@ -471,6 +536,12 @@ const styles = StyleSheet.create({
   bizHint: { fontSize: 12, fontWeight: '600', marginTop: -2 },
   bizOk: { color: BrandColors.good },
   bizBad: { color: InkColors.ink3 },
+  otpRow: { flexDirection: 'row', gap: Space.sm },
+  otpInput: { flex: 1 },
+  otpBtn: { minWidth: 116, paddingHorizontal: Space.md, borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' },
+  otpBtnDim: { opacity: 0.5 },
+  otpBtnText: { fontSize: 14, fontWeight: '800', color: InkColors.ink2 },
+  otpMsg: { fontSize: 12, fontWeight: '600', color: BrandColors.accent, marginTop: -2 },
   chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.sm },
   chip: { paddingHorizontal: Space.md, paddingVertical: Space.sm, borderRadius: Radius.pill, borderWidth: 1, borderColor: InkColors.line, backgroundColor: '#FFFFFF' },
   chipOn: { borderColor: BrandColors.brand, backgroundColor: '#FFFDFB' },

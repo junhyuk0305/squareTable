@@ -411,3 +411,9 @@ s3_secret_key = "env(S3_SECRET_KEY)"
 # declarative_schema_path = "./database"
 # JSON string passed through to pg-delta SQL formatting.
 # format_options = "{\"keywordCase\":\"upper\",\"indent\":2,\"maxWidth\":80,\"commaStyle\":\"trailing\"}"
+
+# otp — 전화번호 SMS 인증. 가입 전(무세션) 호출이 전제라 JWT 검증을 끈다.
+# 방어는 함수 내부 레이트리밋(번호 쿨다운·일일캡·IP)뿐이다 — functions/otp/index.ts 헤더 참조.
+[functions.otp]
+enabled = true
+verify_jwt = false

@@ -49,6 +49,7 @@ yarn-error.*
 .env
 .env*.local
 .env.seed
+.env.solapi
 !.env.example
 
 # supabase

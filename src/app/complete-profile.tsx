@@ -10,6 +10,7 @@ import { HAS_SUPABASE } from '@/lib/supabase';
 import { INDUSTRIES } from '@/lib/config/industry';
 import { formatBizNo, isValidBizNo, bizDigits } from '@/lib/utils/bizno';
 import { isValidPhone, normalizePhone, formatPhone, formatBirthDate8, birthDateISO } from '@/lib/utils/validation';
+import { usePhoneOtp } from '@/lib/otp';
 import { BrandColors, InkColors } from '@/lib/theme/colors';
 import { Space } from '@/lib/theme/layout';
 import { Radius, Elevation } from '@/lib/theme/elevation';
@@ -37,19 +38,25 @@ export default function CompleteProfileScreen() {
   const [role, setRole] = useState<Role>('owner');
   const [name, setName] = useState(userName || '');
   const [phone, setPhone] = useState('');
+  // 전화번호 SMS 인증 — 번호를 고치면 훅이 정규화 번호 비교로 sent/verified 를 자동으로 푼다.
+  const otp = usePhoneOtp(normalizePhone(phone));
+  const [otpCode, setOtpCode] = useState('');
   const [birth, setBirth] = useState('');
   const [storeName, setStoreName] = useState('');
   const [industry, setIndustry] = useState('');
   const [bizNo, setBizNo] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  // 사장 경로에서 프로필(phone)은 저장됐는데 매장 생성만 실패한 상태 — 아래 가드가 홈으로 튕기지
+  // 않게 붙잡고, 재시도 시 completeProfile/중복검사를 건너뛰고 매장 생성만 다시 돈다.
+  const [storeRetry, setStoreRetry] = useState(false);
 
   // 로그인 안 됐으면 랜딩으로, 이미 프로필이 완성됐으면(이 화면 불필요) 역할 홈으로 — 오유입/재방문 차단.
   // ★ !busy 필수: 제출 중엔 completeProfile 이 phone 을 먼저 채워 needsProfileSetup 이 false 로 바뀌는데,
   //   그 순간 이 가드가 발동하면 createStore 전에 홈으로 튕겨 사장 온보딩이 깨진다. 제출은 submit()이 끝에서
   //   명시적으로 라우팅하므로, 제출 중(busy)엔 가드를 쉰다.
   if (HAS_SUPABASE && status === 'signed_out') return <Redirect href="/" />;
-  if (!busy && HAS_SUPABASE && status === 'signed_in' && !needsProfileSetup({ status, phone: phone0, unitId, pendingUnitId })) {
+  if (!busy && !storeRetry && HAS_SUPABASE && status === 'signed_in' && !needsProfileSetup({ status, phone: phone0, unitId, pendingUnitId })) {
     return <Redirect href="/hub" />;
   }
 
@@ -58,6 +65,8 @@ export default function CompleteProfileScreen() {
     if (!name.trim()) return setErr('이름을 입력해주세요.');
     if (!phone.trim()) return setErr('전화번호를 입력해주세요.');
     if (!isValidPhone(phone)) return setErr('전화번호 형식을 확인해주세요. (예: 010-1234-5678)');
+    // SMS 인증 — 매장 재시도(storeRetry) 땐 phone 이 이미 저장돼 있어 재인증 불필요.
+    if (HAS_SUPABASE && !storeRetry && !otp.verified) return setErr('전화번호 인증을 완료해주세요.');
     if (!birth) return setErr('생년월일을 입력해주세요.');
     if (!birthDateISO(birth)) return setErr('생년월일 8자리를 확인해주세요. (예: 19900131)');
     if (role === 'owner' && !storeName.trim()) return setErr('매장 이름을 입력해주세요.');
@@ -69,23 +78,32 @@ export default function CompleteProfileScreen() {
     //   setBusy(false) 를 놓쳐 버튼이 무한 스피너로 멈춘다(무음 행). finally 로 항상 busy 를 해제한다.
     try {
       // 전화번호 중복 사전검사(가입 폼과 동일). 'unknown'(검사실패)도 진행 차단 — 서버 유니크가 최종 방어선.
-      const phoneCheck = await isPhoneTaken(normalizePhone(phone));
-      if (phoneCheck === 'taken') {
-        return setErr('이미 사용 중인 번호예요. 다른 번호를 입력해 주세요.');
-      }
-      if (phoneCheck === 'unknown') {
-        return setErr('번호 확인 중 문제가 생겼어요. 잠시 후 다시 시도해 주세요.');
+      // ★ storeRetry(매장만 재시도) 땐 건너뛴다 — phone 이 이미 내 프로필에 저장돼 'taken'이 나온다.
+      if (!storeRetry) {
+        const phoneCheck = await isPhoneTaken(normalizePhone(phone));
+        if (phoneCheck === 'taken') {
+          return setErr('이미 사용 중인 번호예요. 다른 번호를 입력해 주세요.');
+        }
+        if (phoneCheck === 'unknown') {
+          return setErr('번호 확인 중 문제가 생겼어요. 잠시 후 다시 시도해 주세요.');
+        }
       }
 
       const birthISO = birthDateISO(birth) ?? undefined;
       if (role === 'owner') {
-        // 사장: 매장을 먼저 만든다(create_store 가 생년월일 기록+오너 승격+매장 생성을 한 번에 처리).
-        //   실패하면 프로필(phone)을 아직 안 건드려 needsProfileSetup 이 유지되므로 이 화면에 남아 재시도할 수
-        //   있다(전화만 채운 채 직원홈으로 튕기는 것 방지). 성공 후에 이름/전화를 채운다.
+        // ★ 순서: 프로필(phone) 먼저 → 매장 생성. 서버 게이트(_hold/0088)가 units INSERT 시점에
+        //   "소유자 프로필의 인증된 번호"를 검사하므로 phone 이 먼저 기록돼 있어야 한다.
+        //   (예전엔 create_store 먼저였다 — 실패 시 needsProfileSetup 유지로 이 화면에 남기 위해.
+        //    그 붙잡는 역할은 이제 storeRetry 가 대신한다 — 위 가드 조건 참조.)
+        if (!storeRetry) {
+          const cp = await completeProfile(name.trim(), phone.trim(), birthISO ?? '');
+          if (cp.error) return setErr(cp.error);
+        }
         const cs = await createStore(storeName.trim(), industry, bizDigits(bizNo) || undefined, birthISO, { isOnboarding: true });
-        if (cs.error) return setErr(cs.error);
-        const cp = await completeProfile(name.trim(), phone.trim(), birthISO ?? '');
-        if (cp.error) return setErr(cp.error);
+        if (cs.error) {
+          setStoreRetry(true);
+          return setErr(`${cs.error} 아래 '매장 다시 만들기'를 누르면 매장만 다시 만들어요.`);
+        }
         router.replace({ pathname: '/owner/onboarding', params: { code: cs.inviteCode ?? '------', industry } });
       } else {
         // 직원: 프로필만 채우고(생년월일 기록 → 이후 hub 에서 초대코드 입력 시 join 통과) 개인 허브로.
@@ -132,7 +150,67 @@ export default function CompleteProfileScreen() {
         </View>
 
         <Field label="이름" value={name} onChange={setName} placeholder="홍길동" required />
-        <Field label="전화번호" value={phone} onChange={(v) => setPhone(formatPhone(v))} placeholder="010-1234-5678" keyboard="phone-pad" maxLength={13} required />
+
+        {/* 전화번호 + SMS 인증(솔라피) — 가입 폼(signup)과 동일한 흐름. 데모는 입력만. */}
+        <View style={styles.field}>
+          <Text style={styles.label}>전화번호<Text style={styles.req}> *</Text></Text>
+          <View style={styles.otpRow}>
+            <TextInput
+              value={phone}
+              onChangeText={(v) => setPhone(formatPhone(v))}
+              placeholder="010-1234-5678"
+              placeholderTextColor={InkColors.ink3}
+              keyboardType="phone-pad"
+              maxLength={13}
+              style={[styles.input, styles.otpInput]}
+            />
+            {HAS_SUPABASE && !otp.verified && (
+              <Pressable
+                onPress={() => {
+                  if (!isValidPhone(phone)) return setErr('전화번호 형식을 확인해주세요. (예: 010-1234-5678)');
+                  setErr(null);
+                  void otp.send();
+                }}
+                disabled={otp.busy === 'send' || otp.countdown > 0}
+                style={[styles.otpBtn, (otp.busy === 'send' || otp.countdown > 0) && styles.otpBtnDim]}
+              >
+                {otp.busy === 'send' ? (
+                  <ActivityIndicator size="small" color={InkColors.ink2} />
+                ) : (
+                  <Text style={styles.otpBtnText}>
+                    {otp.countdown > 0 ? `재발송 ${otp.countdown}초` : otp.sent ? '인증번호 재발송' : '인증번호 받기'}
+                  </Text>
+                )}
+              </Pressable>
+            )}
+          </View>
+          {HAS_SUPABASE && otp.sent && !otp.verified && (
+            <View style={styles.otpRow}>
+              <TextInput
+                value={otpCode}
+                onChangeText={(v) => setOtpCode(v.replace(/\D/g, '').slice(0, 6))}
+                placeholder="인증번호 6자리"
+                placeholderTextColor={InkColors.ink3}
+                keyboardType="number-pad"
+                maxLength={6}
+                style={[styles.input, styles.otpInput]}
+              />
+              <Pressable
+                onPress={() => void otp.verify(otpCode)}
+                disabled={otp.busy === 'verify' || otpCode.length !== 6}
+                style={[styles.otpBtn, (otp.busy === 'verify' || otpCode.length !== 6) && styles.otpBtnDim]}
+              >
+                {otp.busy === 'verify' ? (
+                  <ActivityIndicator size="small" color={InkColors.ink2} />
+                ) : (
+                  <Text style={styles.otpBtnText}>인증하기</Text>
+                )}
+              </Pressable>
+            </View>
+          )}
+          {HAS_SUPABASE && otp.verified && <Text style={[styles.hint, styles.hintOk]}>✓ 인증된 번호예요</Text>}
+          {otp.msg && <Text style={styles.otpMsg}>{otp.msg}</Text>}
+        </View>
 
         <View style={styles.field}>
           <Text style={styles.label}>생년월일<Text style={styles.req}> *</Text></Text>
@@ -196,7 +274,7 @@ export default function CompleteProfileScreen() {
         {err && <Text style={styles.err}>{err}</Text>}
 
         <Pressable onPress={submit} disabled={busy} style={({ pressed }) => [styles.primary, busy && styles.primaryDisabled, pressed && !busy && { opacity: 0.88 }]}>
-          {busy ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.primaryText}>{role === 'owner' ? '매장 만들고 시작하기' : '저장하고 시작하기'}</Text>}
+          {busy ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.primaryText}>{role === 'owner' ? (storeRetry ? '매장 다시 만들기' : '매장 만들고 시작하기') : '저장하고 시작하기'}</Text>}
         </Pressable>
 
         <Pressable onPress={() => void logout()} style={styles.logoutRow}>
@@ -268,6 +346,12 @@ const styles = StyleSheet.create({
   hint: { fontSize: 12, fontWeight: '600', marginTop: -2 },
   hintOk: { color: BrandColors.good },
   hintBad: { color: InkColors.ink3 },
+  otpRow: { flexDirection: 'row', gap: Space.sm },
+  otpInput: { flex: 1 },
+  otpBtn: { minWidth: 116, paddingHorizontal: Space.md, borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' },
+  otpBtnDim: { opacity: 0.5 },
+  otpBtnText: { fontSize: 14, fontWeight: '800', color: InkColors.ink2 },
+  otpMsg: { fontSize: 12, fontWeight: '600', color: BrandColors.accent, marginTop: -2 },
   chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.sm },
   chip: { paddingHorizontal: Space.md, paddingVertical: Space.sm, borderRadius: Radius.pill, borderWidth: 1, borderColor: InkColors.line, backgroundColor: '#FFFFFF' },
   chipOn: { borderColor: BrandColors.brand, backgroundColor: '#FFFDFB' },
