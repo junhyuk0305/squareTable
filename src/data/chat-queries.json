@@ -9,7 +9,7 @@
     "match_confidence": 0.94,
     "was_deflected": true,
     "response_block": {
-      "summary": "음료에 이물질이 발견된 클레임 상황입니다. 사장 부재 시 알바 1차 응대 기준이 잡혀 있어요.",
+      "summary": "음료에 이물질이 발견된 클레임 상황입니다. 사장 부재 시 직원 1차 응대 기준이 잡혀 있어요.",
       "actions": [
         "음료를 두 손으로 받고 '정말 죄송합니다'를 먼저 말합니다.",
         "5분만 자리에 앉아 계시도록 안내합니다.",
@@ -146,7 +146,7 @@
       "source": {
         "entry_id": "pb_context_001",
         "creator_name": "김영자",
-        "title": "첫날 5분 — 알바가 꼭 알아야 할 것",
+        "title": "첫날 5분 — 직원이 꼭 알아야 할 것",
         "version": 1,
         "updated_at": "2026-05-15"
       }

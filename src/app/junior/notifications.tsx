@@ -36,7 +36,7 @@ export default function JuniorNotificationsScreen() {
   const router = useRouter();
   const me = useSessionStore((s) => s.userId);
   const userName = useSessionStore((s) => s.userName);
-  const storeName = useSessionStore((s) => s.storeName) || '우리 가게';
+  const storeName = useSessionStore((s) => s.storeName) || '우리 매장';
 
   const feed = useWorkStore((s) => s.feed);
   const taskTemplates = useWorkStore((s) => s.templates);

@@ -188,7 +188,7 @@ const styles = StyleSheet.create({
   },
   body: { flex: 1, gap: 4 },
   title: { fontSize: 15.5, fontWeight: '900', color: InkColors.ink, letterSpacing: -0.3 },
-  desc: { fontSize: 13, color: InkColors.ink2, lineHeight: 19, fontWeight: '500' },
+  desc: { fontSize: 15, color: InkColors.ink2, lineHeight: 22, fontWeight: '500' },
   ctaRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 6 },
   ctaText: { fontSize: 13, fontWeight: '800', color: InkColors.ink },
 

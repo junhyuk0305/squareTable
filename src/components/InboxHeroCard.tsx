@@ -31,7 +31,7 @@ export function InboxHeroCard({ uq, careerDays, onPress }: Props) {
 
       {/* 메타: 누가, 입사 N일차 (익명이면 신원 숨김) */}
       <Text style={styles.meta}>
-        {uq.anonymous ? '🔒 익명 질문' : uq.junior_name}
+        {uq.anonymous ? '익명 질문' : uq.junior_name}
         {typeof careerDays === 'number' ? ` · 입사 ${careerDays}일차` : ''}
       </Text>
 

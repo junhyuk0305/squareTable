@@ -1,6 +1,6 @@
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Stack, useLocalSearchParams } from 'expo-router';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 
 import { usePayrollStore } from '@/lib/store/usePayrollStore';
 import { useStaffStore } from '@/lib/store/useStaffStore';
@@ -9,11 +9,13 @@ import { RoleTabBar } from '@/components/RoleTabBar';
 import { Avatar } from '@/components/Avatar';
 import { InkColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
+import { Space } from '@/lib/theme/layout';
 import { won, DEFAULT_HOURLY_WAGE } from '@/lib/utils/attendance';
 
 // 근무·급여(또는 직원관리)에서 직원 행 탭 시 진입. 사장이 직원 출근기록을 보정.
 // 직원이 직접 보정한 건은 '직원 수정' 배지로 구분.
 export default function OwnerTimesheetScreen() {
+  const router = useRouter();
   const { staffId } = useLocalSearchParams<{ staffId: string }>();
   const wages = usePayrollStore((s) => s.wages);
   const getStaff = useStaffStore((s) => s.getStaff);
@@ -25,7 +27,15 @@ export default function OwnerTimesheetScreen() {
     return (
       <SafeAreaView style={styles.safe} edges={['bottom']}>
         <Stack.Screen options={{ title: '출근 기록' }} />
-        <Text style={styles.empty}>직원을 찾을 수 없어요.</Text>
+        {/* 막다른 길 금지 — 빈/오류 상태에도 다음 행동 하나를 준다(복잡도 원칙 P6). */}
+        <Text style={styles.empty}>직원을 찾을 수 없어요.{'\n'}내보냈거나 아직 합류하지 않은 직원이에요.</Text>
+        <Pressable
+          onPress={() => router.replace('/owner/staff')}
+          style={({ pressed }) => [styles.backBtn, pressed && { opacity: 0.85 }]}
+          accessibilityRole="button"
+        >
+          <Text style={styles.backBtnText}>직원 목록 보기</Text>
+        </Pressable>
         <RoleTabBar role="owner" />
       </SafeAreaView>
     );
@@ -59,7 +69,9 @@ export default function OwnerTimesheetScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: InkColors.cream },
-  empty: { fontSize: 13, color: InkColors.ink3, padding: 24, textAlign: 'center' },
+  empty: { fontSize: 15, color: InkColors.ink3, padding: 24, textAlign: 'center', lineHeight: 22 },
+  backBtn: { alignSelf: 'center', minHeight: 48, justifyContent: 'center', paddingHorizontal: Space.xl, borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, backgroundColor: '#FFFFFF' },
+  backBtnText: { fontSize: 15, fontWeight: '800', color: InkColors.ink },
   staffCard: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#FFFFFF', borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, padding: 14 },
   staffName: { fontSize: 16, fontWeight: '800', color: InkColors.ink },
   staffMeta: { fontSize: 12, color: InkColors.ink3, marginTop: 2 },

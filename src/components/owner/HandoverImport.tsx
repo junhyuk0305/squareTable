@@ -166,7 +166,7 @@ export function HandoverImport() {
       if (failedSaves > 0) notes.push(`${failedSaves}개 항목은 저장에 실패했어요 — 연결 확인 후 그 부분만 다시 올려주세요.`);
       setNote(notes.length ? notes.join('\n') : null);
       if (r.saved === 0 && drafts.length === 0) {
-        setError('매장 운영 내용을 못 알아봤어요. 오픈·마감·레시피·규칙처럼 알바가 따라 할 내용을 올려주세요.');
+        setError('매장 운영 내용을 못 알아봤어요. 오픈·마감·레시피·규칙처럼 직원이 따라 할 내용을 올려주세요.');
         setPhase('input');
         return;
       }

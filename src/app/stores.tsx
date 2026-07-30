@@ -255,7 +255,7 @@ const styles = StyleSheet.create({
 
   titleBlock: { gap: 4 },
   title: { fontSize: 26, fontWeight: '900', color: InkColors.ink, letterSpacing: -0.5 },
-  subtitle: { fontSize: 14, color: InkColors.ink2 },
+  subtitle: { fontSize: 15, color: InkColors.ink2 },
 
   section: { gap: Space.md },
 
@@ -307,7 +307,7 @@ const styles = StyleSheet.create({
   empty: { alignItems: 'center', paddingVertical: Space.xl, gap: Space.md },
   emptyIcon: { width: 64, height: 64, borderRadius: Radius.lg, backgroundColor: BrandColors.yellowSoft, alignItems: 'center', justifyContent: 'center' },
   emptyTitle: { fontSize: 18, fontWeight: '900', color: InkColors.ink },
-  emptyBody: { fontSize: 13.5, color: InkColors.ink2, textAlign: 'center', lineHeight: 20, maxWidth: 260 },
+  emptyBody: { fontSize: 15, color: InkColors.ink2, textAlign: 'center', lineHeight: 22, maxWidth: 260 },
   emptyBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
     backgroundColor: BrandColors.yellow, paddingHorizontal: 22, paddingVertical: 14, borderRadius: Radius.pill, ...Elevation.ey,

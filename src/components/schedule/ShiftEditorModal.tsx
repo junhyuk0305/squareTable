@@ -150,7 +150,7 @@ const s = StyleSheet.create({
   dayLabel: { fontSize: 15, fontWeight: '800', color: InkColors.ink },
 
   timeRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  timeInp: { width: 64, textAlign: 'center', borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.sm, paddingVertical: 7, fontSize: 14, fontWeight: '700', color: InkColors.ink, backgroundColor: InkColors.bg, ...(Platform.OS === 'web' ? ({ outlineStyle: 'none' } as object) : null) },
+  timeInp: { width: 64, textAlign: 'center', borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.sm, paddingVertical: 7, fontSize: 15, fontWeight: '700', color: InkColors.ink, backgroundColor: InkColors.bg, ...(Platform.OS === 'web' ? ({ outlineStyle: 'none' } as object) : null) },
   timeInpBad: { borderColor: BrandColors.bad },
   tilde: { fontSize: 13, color: InkColors.ink3, fontWeight: '700' },
   off: { fontSize: 13, color: InkColors.ink3, fontWeight: '600' },

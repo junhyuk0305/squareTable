@@ -4,7 +4,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSessionStore } from '@/lib/store/useSessionStore';
-import { logout } from '@/lib/auth';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
@@ -22,7 +21,6 @@ type IconName = keyof typeof Ionicons.glyphMap;
 export default function JuniorHub() {
   const router = useRouter();
   const userName = useSessionStore((s) => s.userName);
-  const email = useSessionStore((s) => s.email);
   const unitId = useSessionStore((s) => s.unitId);
   const storeName = useSessionStore((s) => s.storeName);
   const joinByInvite = useSessionStore((s) => s.joinByInvite);
@@ -37,7 +35,7 @@ export default function JuniorHub() {
   const [err, setErr] = useState<string | null>(null);
 
   // 내 가게 목록 — 단일매장이라 연결 시 1개. 멀티매장 전환 시 여기만 배열로 바뀐다.
-  const stores = unitId ? [{ id: unitId, name: storeName || '내 가게' }] : [];
+  const stores = unitId ? [{ id: unitId, name: storeName || '내 매장' }] : [];
   const hasStore = stores.length > 0;
 
   const cells = Array.from({ length: CODE_LEN }, (_, i) => code[i] ?? '');
@@ -86,7 +84,10 @@ export default function JuniorHub() {
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
       <Stack.Screen options={{ headerShown: false }} />
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-        {/* 상단 바: 매장 선택으로(뒤로) + 워드마크 + 마이페이지 진입 */}
+        {/* 상단 바: 매장 선택으로(뒤로) + 워드마크.
+            ★마이페이지 아이콘 버튼은 제거함(2026-07-29) — 같은 화면 아래 '마이페이지' 카드가 이미
+              프로필 편집·로그아웃을 제공해 목적지가 완전히 겹쳤고(중복 진입점), 라벨 없는 아이콘 단독
+              버튼이라 복잡도 원칙 P9(아이콘 단독 버튼 금지)에도 걸렸다. 이 화면의 목적은 '매장 합류'다. */}
         <View style={styles.topbar}>
           <View style={styles.topbarLeft}>
             {/* hub는 headerShown:false라 화면 안에 탈출 경로를 둔다 — 매장 선택(/stores)으로. */}
@@ -101,23 +102,16 @@ export default function JuniorHub() {
             </Pressable>
             <Wordmark size="sm" />
           </View>
-          <Pressable
-            onPress={() => router.push('/account-edit')}
-            hitSlop={8}
-            style={({ pressed }) => [styles.myBtn, pressed && { opacity: 0.7 }]}
-          >
-            <Ionicons name="person-circle-outline" size={26} color={InkColors.ink} />
-          </Pressable>
         </View>
 
         {/* 인사 */}
         <Appear delay={0}>
         <View style={styles.greet}>
           <Text style={styles.hello}>
-            안녕하세요{userName ? `, ${userName}님` : ''} 👋
+            안녕하세요{userName ? `, ${userName}님` : ''}
           </Text>
           <Text style={styles.helloSub}>
-            {hasStore ? '오늘도 착착 시작해볼까요?' : '가게에 연결하면 착착을 시작할 수 있어요.'}
+            {hasStore ? '오늘도 착착 시작해볼까요?' : '매장에 연결하면 착착을 시작할 수 있어요.'}
           </Text>
         </View>
         </Appear>
@@ -141,7 +135,7 @@ export default function JuniorHub() {
         {/* 내 가게 */}
         <Appear delay={120}>
         <View style={styles.section}>
-          <Text style={styles.sectionLabel}>내 가게</Text>
+          <Text style={styles.sectionLabel}>내 매장</Text>
 
           {pendingUnitId ? (
             <View style={styles.pendingCard}>
@@ -150,11 +144,11 @@ export default function JuniorHub() {
                   <Ionicons name="hourglass-outline" size={20} color={BrandColors.warn} />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.storeName}>{pendingStoreName || '신청한 가게'}</Text>
+                  <Text style={styles.storeName}>{pendingStoreName || '신청한 매장'}</Text>
                   <Text style={styles.pendingMeta}>사장님 승인 대기 중</Text>
                 </View>
               </View>
-              <Text style={styles.pendingBody}>승인되면 바로 이 가게로 들어갈 수 있어요.</Text>
+              <Text style={styles.pendingBody}>승인되면 바로 이 매장으로 들어갈 수 있어요.</Text>
               <View style={styles.pendingActions}>
                 <Pressable disabled={busy} onPress={() => void refreshMembership()} style={({ pressed }) => [styles.ghostBtn, pressed && { opacity: 0.7 }]}>
                   <Text style={styles.ghostBtnText}>승인 확인</Text>
@@ -178,7 +172,7 @@ export default function JuniorHub() {
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.storeName}>{s.name}</Text>
-                  <Text style={styles.storeMeta}>탭하면 가게로 들어가요</Text>
+                  <Text style={styles.storeMeta}>탭하면 매장으로 들어가요</Text>
                 </View>
                 <Ionicons name="chevron-forward" size={18} color={InkColors.ink3} />
               </Pressable>
@@ -186,7 +180,7 @@ export default function JuniorHub() {
           ) : (
             <View style={styles.emptyCard}>
               <Ionicons name="add-circle-outline" size={22} color={InkColors.ink3} />
-              <Text style={styles.emptyText}>아직 연결된 가게가 없어요.{'\n'}아래에 초대코드를 입력해 가게를 추가하세요.</Text>
+              <Text style={styles.emptyText}>아직 연결된 매장이 없어요.{'\n'}아래에 초대코드를 입력해 매장을 추가하세요.</Text>
             </View>
           )}
         </View>
@@ -196,7 +190,7 @@ export default function JuniorHub() {
         {!pendingUnitId && (
           <Appear delay={160}>
           <View style={styles.section}>
-            <Text style={styles.sectionLabel}>가게 코드 입력</Text>
+            <Text style={styles.sectionLabel}>매장 코드 입력</Text>
             <View style={styles.codeCard}>
               <Pressable onPress={focusCode} style={styles.cells}>
                 {cells.map((ch, i) => (
@@ -217,9 +211,9 @@ export default function JuniorHub() {
               </Pressable>
               {err && <Text style={styles.err}>{err}</Text>}
               <Pressable disabled={busy} onPress={join} style={({ pressed }) => [styles.primary, pressed && { opacity: 0.88 }, busy && { opacity: 0.6 }]}>
-                {busy ? <ActivityIndicator color="#FFF" /> : <Text style={styles.primaryText}>가게 추가하기</Text>}
+                {busy ? <ActivityIndicator color="#FFF" /> : <Text style={styles.primaryText}>매장 추가하기</Text>}
               </Pressable>
-              <Text style={styles.codeHint}>코드가 없으신가요? 사장님께 요청하세요 (사장님: 설정 › 가게 관리).</Text>
+              <Text style={styles.codeHint}>코드가 없으신가요? 사장님께 요청하세요 (사장님: 설정 › 매장 관리).</Text>
             </View>
           </View>
           </Appear>
@@ -247,31 +241,24 @@ export default function JuniorHub() {
         </View>
         </Appear>
 
-        {/* 마이페이지 */}
+        {/* 내 계정 — 이 화면의 목적은 '매장 합류'이므로 계정 관리는 한 줄로 강등한다(IA 결정 1 = 안 A, 2026-07-29).
+            ★통째로 옮기지 않은 이유: hub는 자체 상단바를 써서 HubTopBar의 계정 진입점이 없다. 카드를 없애면
+              미합류 직원에게 로그아웃 경로가 사라진다. 대신 프로필편집·로그아웃·탈퇴를 모두 가진
+              상위 화면(/account-settings) 한 줄로 합쳤다 — 요소 2개 → 1개, 기능은 오히려 늘어난다. */}
         <Appear delay={240}>
         <View style={styles.section}>
-          <Text style={styles.sectionLabel}>마이페이지</Text>
-          <View style={styles.myCard}>
-            <View style={styles.myHead}>
-              <View style={styles.avatar}>
-                <Text style={styles.avatarText}>{(userName || '?').slice(0, 1)}</Text>
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.myName}>{userName || '이름 미설정'}</Text>
-                {!!email && <Text style={styles.myEmail}>{email}</Text>}
-              </View>
+          <Pressable
+            onPress={() => router.push('/account-settings')}
+            style={({ pressed }) => [styles.myRow, styles.myRowSolo, pressed && { opacity: 0.7 }]}
+            accessibilityRole="button"
+            accessibilityLabel="내 계정 — 프로필 편집·로그아웃"
+          >
+            <View style={styles.avatarSm}>
+              <Text style={styles.avatarText}>{(userName || '?').slice(0, 1)}</Text>
             </View>
-            <Pressable onPress={() => router.push('/account-edit')} style={({ pressed }) => [styles.myRow, pressed && { opacity: 0.7 }]}>
-              <Ionicons name="create-outline" size={18} color={InkColors.ink2} />
-              <Text style={styles.myRowText}>프로필 편집</Text>
-              <Ionicons name="chevron-forward" size={16} color={InkColors.ink3} />
-            </Pressable>
-            <Pressable onPress={() => void logout()} style={({ pressed }) => [styles.myRow, pressed && { opacity: 0.7 }]}>
-              <Ionicons name="log-out-outline" size={18} color={InkColors.ink2} />
-              <Text style={styles.myRowText}>로그아웃</Text>
-              <Ionicons name="chevron-forward" size={16} color={InkColors.ink3} />
-            </Pressable>
-          </View>
+            <Text style={styles.myRowText}>{userName ? `${userName}님 · 내 계정` : '내 계정'}</Text>
+            <Ionicons name="chevron-forward" size={16} color={InkColors.ink3} />
+          </Pressable>
         </View>
         </Appear>
       </ScrollView>
@@ -294,11 +281,10 @@ const styles = StyleSheet.create({
   topbar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   topbarLeft: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
   backBtn: { padding: 2 },
-  myBtn: { padding: 2 },
 
   greet: { gap: 4 },
   hello: { fontSize: 22, fontWeight: '900', color: InkColors.ink },
-  helloSub: { fontSize: 14, color: InkColors.ink2, lineHeight: 20 },
+  helloSub: { fontSize: 15, color: InkColors.ink2, lineHeight: 22 },
 
   heroBanner: {
     backgroundColor: BrandColors.brandSoft,
@@ -311,7 +297,7 @@ const styles = StyleSheet.create({
   },
   heroText: { gap: 4 },
   heroTitle: { fontSize: 16, fontWeight: '800', color: InkColors.ink },
-  heroSub: { fontSize: 13, color: InkColors.ink2, lineHeight: 19 },
+  heroSub: { fontSize: 15, color: InkColors.ink2, lineHeight: 22 },
   heroCta: { flexDirection: 'row', alignItems: 'center', gap: 5, alignSelf: 'flex-start' },
   heroCtaText: { fontSize: 14, fontWeight: '800', color: InkColors.ink },
 
@@ -344,7 +330,7 @@ const styles = StyleSheet.create({
     borderStyle: 'dashed',
     padding: Space.lg,
   },
-  emptyText: { flex: 1, fontSize: 13, color: InkColors.ink2, lineHeight: 19 },
+  emptyText: { flex: 1, fontSize: 15, color: InkColors.ink2, lineHeight: 22 },
 
   pendingCard: {
     backgroundColor: '#FFFFFF',
@@ -358,7 +344,7 @@ const styles = StyleSheet.create({
   pendingHead: { flexDirection: 'row', alignItems: 'center', gap: Space.md },
   pendingIcon: { width: 40, height: 40, borderRadius: Radius.md, backgroundColor: '#FBF3E2', alignItems: 'center', justifyContent: 'center' },
   pendingMeta: { fontSize: 12, color: BrandColors.warn, fontWeight: '700', marginTop: 2 },
-  pendingBody: { fontSize: 13, color: InkColors.ink2, lineHeight: 19 },
+  pendingBody: { fontSize: 15, color: InkColors.ink2, lineHeight: 22 },
   pendingActions: { flexDirection: 'row', gap: Space.sm },
   ghostBtn: { flex: 1, alignItems: 'center', paddingVertical: 11, borderRadius: Radius.md, backgroundColor: InkColors.bgSoft, borderWidth: 1, borderColor: InkColors.line },
   ghostBtnText: { fontSize: 14, fontWeight: '700', color: InkColors.ink2 },
@@ -387,7 +373,7 @@ const styles = StyleSheet.create({
   cellActive: { borderColor: BrandColors.brand },
   cellText: { fontSize: 22, fontWeight: '900', color: InkColors.ink },
   hiddenInput: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, opacity: 0, color: 'transparent' },
-  err: { fontSize: 13, color: BrandColors.accent, fontWeight: '600' },
+  err: { fontSize: 15, color: BrandColors.accent, fontWeight: '600' },
   primary: { backgroundColor: BrandColors.brand, paddingVertical: 15, borderRadius: Radius.md, alignItems: 'center' },
   primaryText: { color: '#FFFFFF', fontSize: 15, fontWeight: '800' },
   codeHint: { fontSize: 12, color: InkColors.ink3, lineHeight: 18 },
@@ -407,20 +393,18 @@ const styles = StyleSheet.create({
   featureTitle: { fontSize: 14, fontWeight: '800', color: InkColors.ink },
   featureBody: { fontSize: 12, color: InkColors.ink2, lineHeight: 17 },
 
-  myCard: {
+  avatarSm: { width: 30, height: 30, borderRadius: Radius.pill, backgroundColor: InkColors.ink, alignItems: 'center', justifyContent: 'center' },
+  avatarText: { color: '#FFFFFF', fontSize: 14, fontWeight: '900' },
+  myRow: { flexDirection: 'row', alignItems: 'center', gap: Space.md, paddingVertical: 12 },
+  // 카드 안 행이 아니라 단독 행 — 테두리·배경을 스스로 갖고 터치 타깃 48dp를 지킨다.
+  myRowSolo: {
+    minHeight: 48,
+    paddingHorizontal: Space.lg,
     backgroundColor: '#FFFFFF',
     borderRadius: Radius.lg,
     borderWidth: 1,
     borderColor: InkColors.line,
-    padding: Space.lg,
-    gap: Space.sm,
     ...Elevation.e1,
   },
-  myHead: { flexDirection: 'row', alignItems: 'center', gap: Space.md, paddingBottom: Space.sm },
-  avatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: InkColors.ink, alignItems: 'center', justifyContent: 'center' },
-  avatarText: { color: '#FFFFFF', fontSize: 18, fontWeight: '900' },
-  myName: { fontSize: 15, fontWeight: '800', color: InkColors.ink },
-  myEmail: { fontSize: 12, color: InkColors.ink3, marginTop: 2 },
-  myRow: { flexDirection: 'row', alignItems: 'center', gap: Space.md, paddingVertical: 12, borderTopWidth: 1, borderTopColor: InkColors.line },
-  myRowText: { flex: 1, fontSize: 14, fontWeight: '700', color: InkColors.ink },
+  myRowText: { flex: 1, fontSize: 15, fontWeight: '700', color: InkColors.ink },
 });

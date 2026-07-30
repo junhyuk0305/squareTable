@@ -48,7 +48,7 @@ export function CoachStarter({
     <View style={styles.wrap}>
       {/* 0) 작성 tip — 무엇을 적어야 할지 막막함을 줄이는 넛지(언제·무엇을·어떻게) */}
       <View style={styles.tip}>
-        <Text style={styles.tipTitle}>💡 이렇게 적으면 쉬워요</Text>
+        <Text style={styles.tipTitle}>이렇게 적으면 쉬워요</Text>
         <Text style={styles.tipBody}>
           <Text style={styles.tipStrong}>언제</Text>(상황) · <Text style={styles.tipStrong}>무엇을</Text> · <Text style={styles.tipStrong}>어떻게</Text> — 한 문장이면 충분해요. 정리는 제가 할게요.
         </Text>
@@ -137,7 +137,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
   },
   tipTitle: { fontSize: 13, fontWeight: '800', color: InkColors.ink },
-  tipBody: { fontSize: 13, fontWeight: '600', color: InkColors.ink2, lineHeight: 19 },
+  tipBody: { fontSize: 15, fontWeight: '600', color: InkColors.ink2, lineHeight: 22 },
   tipStrong: { fontWeight: '800', color: InkColors.ink },
 
   chips: { gap: 8 },

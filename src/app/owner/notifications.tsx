@@ -35,7 +35,7 @@ export default function OwnerNotificationsScreen() {
   const router = useRouter();
   const me = useSessionStore((s) => s.userId);
   const userName = useSessionStore((s) => s.userName);
-  const storeName = useSessionStore((s) => s.storeName) || '우리 가게';
+  const storeName = useSessionStore((s) => s.storeName) || '우리 매장';
   const queue = useUnknownQueueStore((s) => s.queue);
   const suggestions = useSuggestionStore((s) => s.suggestions);
   const swaps = useScheduleStore((s) => s.swaps);

@@ -74,9 +74,9 @@ const s = StyleSheet.create({
   sub: { fontSize: 12.5, color: InkColors.ink3, lineHeight: 18, paddingHorizontal: 16, paddingTop: 4, paddingBottom: 8 },
 
   scroll: { paddingHorizontal: 16, paddingTop: 4 },
-  empty: { fontSize: 13, color: InkColors.ink3, lineHeight: 20, paddingVertical: 16, textAlign: 'center' },
+  empty: { fontSize: 15, color: InkColors.ink3, lineHeight: 22, paddingVertical: 16, textAlign: 'center' },
 
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md, paddingVertical: 13, paddingHorizontal: 13, backgroundColor: InkColors.bg, marginBottom: 8 },
   rowIcon: { width: 32, height: 32, borderRadius: Radius.sm, backgroundColor: InkColors.cream, alignItems: 'center', justifyContent: 'center' },
-  rowText: { flex: 1, fontSize: 14, fontWeight: '700', color: InkColors.ink },
+  rowText: { flex: 1, fontSize: 15, fontWeight: '700', color: InkColors.ink },
 });

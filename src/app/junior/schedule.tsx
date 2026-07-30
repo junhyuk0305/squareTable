@@ -140,7 +140,8 @@ export default function JuniorScheduleScreen() {
             ) : (
               <View style={styles.heroEmpty}>
                 <Ionicons name="calendar-clear-outline" size={16} color={InkColors.ink3} />
-                <Text style={styles.heroEmptyText}>앞으로 2주간 예정된 내 근무가 없어요.</Text>
+                {/* 직원은 근무를 스스로 못 만든다 → 행동 버튼 대신 '누가 채우는지'를 알려준다(P6). */}
+                <Text style={styles.heroEmptyText}>앞으로 2주간 예정된 내 근무가 없어요. 사장님이 근무표를 올리면 여기에 보여요.</Text>
               </View>
             )}
             </Appear>
@@ -433,7 +434,7 @@ const styles = StyleSheet.create({
   reqBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, backgroundColor: InkColors.ink, borderRadius: Radius.md, paddingVertical: 14, ...Elevation.e1 },
   reqText: { fontSize: 15, fontWeight: '800', color: '#fff' },
 
-  empty: { fontSize: 13, color: InkColors.ink3, lineHeight: 19, paddingVertical: 6 },
+  empty: { fontSize: 15, color: InkColors.ink3, lineHeight: 22, paddingVertical: 6 },
 
   card: { backgroundColor: InkColors.bg, borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, padding: 14, gap: 6, ...Elevation.e1 },
   cardHead: { flexDirection: 'row', alignItems: 'center', gap: 6 },
@@ -444,10 +445,10 @@ const styles = StyleSheet.create({
   statusText: { fontSize: 11, fontWeight: '800' },
   cardTime: { marginLeft: 'auto', fontSize: 11.5, color: InkColors.ink3, fontWeight: '600' },
 
-  cardLine: { fontSize: 13.5, color: InkColors.ink2, lineHeight: 20 },
+  cardLine: { fontSize: 15, color: InkColors.ink2, lineHeight: 22 },
   cardStrong: { fontWeight: '800', color: InkColors.ink },
   cardAccepted: { fontSize: 12.5, fontWeight: '700', color: BrandColors.good },
-  cardNote: { fontSize: 13, color: InkColors.ink2, fontStyle: 'italic', backgroundColor: InkColors.cream, borderRadius: Radius.sm, paddingHorizontal: 10, paddingVertical: 8 },
+  cardNote: { fontSize: 15, color: InkColors.ink2, fontStyle: 'italic', backgroundColor: InkColors.cream, borderRadius: Radius.sm, paddingHorizontal: 10, paddingVertical: 8 },
 
   conflict: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: BrandColors.accentSoft, borderRadius: Radius.sm, paddingHorizontal: 10, paddingVertical: 8, marginTop: 2 },
   conflictText: { flex: 1, fontSize: 12, color: BrandColors.bad, fontWeight: '700', lineHeight: 17 },

@@ -36,7 +36,7 @@ const POINTS: { icon: React.ComponentProps<typeof Ionicons>['name']; title: stri
   {
     icon: 'search',
     title: '모르면 물어보세요',
-    body: '궁금한 걸 검색하면 우리 가게 노하우로 바로 답해줘요. 없으면 사장님께 대신 여쭤봐요.',
+    body: '궁금한 걸 검색하면 우리 매장 노하우로 바로 답해줘요. 없으면 사장님께 대신 여쭤봐요.',
   },
   {
     icon: 'bulb-outline',
@@ -66,7 +66,7 @@ export function JuniorWelcomeCoach() {
             <Ionicons name="hand-left-outline" size={26} color={BrandColors.brand} />
           </View>
           <Text style={styles.title}>여기서 이렇게 쓰면 돼요</Text>
-          <Text style={styles.sub}>가게 노하우를 묻고, 내가 아는 건 직접 쌓을 수 있어요.</Text>
+          <Text style={styles.sub}>매장 노하우를 묻고, 내가 아는 건 직접 쌓을 수 있어요.</Text>
 
           <View style={styles.points}>
             {POINTS.map((p) => (
@@ -98,7 +98,7 @@ const styles = StyleSheet.create({
   card: { backgroundColor: InkColors.bg, borderRadius: Radius.sheet, padding: Space.xl, gap: Space.sm, ...Elevation.e3 },
   iconWrap: { width: 52, height: 52, borderRadius: 26, backgroundColor: BrandColors.brandSoft, alignItems: 'center', justifyContent: 'center' },
   title: { fontSize: 20, fontWeight: '900', color: InkColors.ink, marginTop: Space.xs },
-  sub: { fontSize: 13.5, color: InkColors.ink2, lineHeight: 20 },
+  sub: { fontSize: 15, color: InkColors.ink2, lineHeight: 22 },
   points: { gap: Space.md, marginTop: Space.sm, marginBottom: Space.xs },
   point: { flexDirection: 'row', gap: Space.md, alignItems: 'flex-start' },
   pointIcon: { width: 34, height: 34, borderRadius: Radius.sm, backgroundColor: InkColors.bgSoft, alignItems: 'center', justifyContent: 'center' },

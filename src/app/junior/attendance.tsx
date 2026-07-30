@@ -227,7 +227,7 @@ const styles = StyleSheet.create({
     borderColor: InkColors.line,
     paddingHorizontal: 14,
   },
-  empty: { fontSize: 14, color: InkColors.ink3, paddingVertical: 18, textAlign: 'center' },
+  empty: { fontSize: 15, color: InkColors.ink3, paddingVertical: 18, textAlign: 'center' },
   recRow: {
     flexDirection: 'row',
     alignItems: 'center',

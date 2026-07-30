@@ -180,7 +180,7 @@ const styles = StyleSheet.create({
   },
   head: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   title: { fontSize: 18, fontWeight: '800', color: InkColors.ink },
-  sub: { fontSize: 13, color: InkColors.ink2, marginTop: 6 },
+  sub: { fontSize: 15, color: InkColors.ink2, marginTop: 6 },
 
   seg: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, marginTop: 18 },
   segBtn: { flex: 1, alignItems: 'center', paddingVertical: 8, borderRadius: Radius.md, backgroundColor: InkColors.bgSoft, borderWidth: 1, borderColor: InkColors.line },

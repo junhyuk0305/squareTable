@@ -224,7 +224,7 @@ export default function JuniorSuggestScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: InkColors.cream },
   scroll: { padding: 20, gap: 14 },
-  lead: { fontSize: 14, color: InkColors.ink2, lineHeight: 21 },
+  lead: { fontSize: 15, color: InkColors.ink2, lineHeight: 22 },
 
   seg: { flexDirection: 'row', gap: 8 },
   segO: { flex: 1, alignItems: 'center', paddingVertical: 11, borderRadius: 12, borderWidth: 1, borderColor: InkColors.line, backgroundColor: InkColors.bg },
@@ -240,7 +240,7 @@ const styles = StyleSheet.create({
 
   pickWrap: { gap: 10 },
   searchBox: { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderColor: InkColors.line, borderRadius: 12, paddingHorizontal: 12, height: 44, backgroundColor: InkColors.bg },
-  searchInput: { flex: 1, fontSize: 14.5, color: InkColors.ink },
+  searchInput: { flex: 1, fontSize: 15, color: InkColors.ink },
   pickEmpty: { fontSize: 13, color: InkColors.ink3, lineHeight: 20, paddingVertical: 8 },
   pickList: { borderWidth: 1, borderColor: InkColors.line, borderRadius: 13, backgroundColor: InkColors.bg, overflow: 'hidden' },
   pickRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 13, paddingVertical: 13, borderBottomWidth: 1, borderBottomColor: InkColors.line },

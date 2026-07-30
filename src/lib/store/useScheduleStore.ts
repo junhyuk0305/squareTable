@@ -180,7 +180,7 @@ export const useScheduleStore = create<ScheduleState>((set, get) => ({
     void guardWrite(
       upsertScheduleConfig(next),
       () => set({ config: before }),
-      '가게 정보 저장에 실패했어요. 다시 시도해 주세요.',
+      '매장 정보 저장에 실패했어요. 다시 시도해 주세요.',
     );
   },
 

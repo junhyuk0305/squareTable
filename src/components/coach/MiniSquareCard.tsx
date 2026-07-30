@@ -164,10 +164,10 @@ export function MiniSquareCard({
       {showActions && (
         <View style={cardStyles.actionRow}>
           <Pressable onPress={onEdit} style={({ pressed }) => [cardStyles.editBtn, pressed && { opacity: 0.7 }]}>
-            <Text style={cardStyles.editText}>✏️ 고칠래요</Text>
+            <Text style={cardStyles.editText}>고칠래요</Text>
           </Pressable>
           <Pressable onPress={onRetalk} style={({ pressed }) => [cardStyles.editBtn, pressed && { opacity: 0.7 }]}>
-            <Text style={cardStyles.editText}>➕ 내용 추가하기</Text>
+            <Text style={cardStyles.editText}>내용 추가하기</Text>
           </Pressable>
           <Pressable
             onPress={onPublish}
@@ -249,11 +249,11 @@ const cardStyles = StyleSheet.create({
   cellHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   cellLetter: { fontSize: 15, fontWeight: '900' },
   cellName: { fontSize: 12.5, fontWeight: '700', color: InkColors.ink3 },
-  cellText: { fontSize: 14.5, color: InkColors.ink, lineHeight: 21 },
+  cellText: { fontSize: 15, color: InkColors.ink, lineHeight: 22 },
 
   stepRow: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' },
   stepNum: { fontSize: 15, fontWeight: '900', minWidth: 16 },
-  stepText: { flex: 1, fontSize: 14.5, color: InkColors.ink, lineHeight: 21 },
+  stepText: { flex: 1, fontSize: 15, color: InkColors.ink, lineHeight: 22 },
   stepEdit: {
     flex: 1, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.sm,
     paddingHorizontal: 10, paddingVertical: 6, fontSize: 14.5, color: InkColors.ink, backgroundColor: InkColors.bg,
@@ -263,7 +263,7 @@ const cardStyles = StyleSheet.create({
     paddingHorizontal: 12, paddingVertical: 10, marginTop: 2, backgroundColor: InkColors.bg,
   },
   scriptMark: { fontSize: 14 },
-  scriptText: { flex: 1, fontSize: 14, color: InkColors.ink, fontStyle: 'italic', lineHeight: 20 },
+  scriptText: { flex: 1, fontSize: 15, color: InkColors.ink, fontStyle: 'italic', lineHeight: 22 },
 
   actionRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 2 },
   editBtn: {

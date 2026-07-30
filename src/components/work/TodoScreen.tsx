@@ -198,7 +198,7 @@ export function TodoScreen({
             )}
             <View style={s.setSep} />
             <View style={s.legendRow}>
-              <View style={s.legendItem}><View style={[s.legendDot, { backgroundColor: SHARED }]} /><Text style={s.legendText}>가게 전체</Text></View>
+              <View style={s.legendItem}><View style={[s.legendDot, { backgroundColor: SHARED }]} /><Text style={s.legendText}>매장 전체</Text></View>
               <View style={s.legendItem}><View style={[s.legendDot, { backgroundColor: MINE }]} /><Text style={s.legendText}>내가 등록(나만)</Text></View>
             </View>
           </View>
@@ -212,7 +212,7 @@ export function TodoScreen({
         <View style={s.legendInline}>
           <View style={s.legendChip}>
             <View style={[s.legendDot, { backgroundColor: SHARED }]} />
-            <Text style={s.legendChipText}>가게 전체</Text>
+            <Text style={s.legendChipText}>매장 전체</Text>
           </View>
           <View style={s.legendChip}>
             <View style={[s.legendDot, { backgroundColor: MINE }]} />
@@ -359,7 +359,7 @@ const s = StyleSheet.create({
   legendChipText: { fontSize: 10.5, fontWeight: '700', color: InkColors.ink2 },
 
   listScroll: { paddingHorizontal: 13, paddingTop: 8, gap: 11 },
-  empty: { textAlign: 'center', color: InkColors.ink3, fontSize: 13, marginTop: 30 },
+  empty: { textAlign: 'center', color: InkColors.ink3, fontSize: 15, marginTop: 30 },
   group: { backgroundColor: InkColors.bg, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md, ...Elevation.e1 },
   groupHead: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, minHeight: 46 },
   groupName: { fontWeight: '800', fontSize: 13.5, color: InkColors.ink },
@@ -371,7 +371,7 @@ const s = StyleSheet.create({
   scopeBar: { width: 4, height: 22, borderRadius: Radius.pill },
   box: { width: 21, height: 21, borderRadius: 6, borderWidth: 1.6, borderColor: InkColors.line, alignItems: 'center', justifyContent: 'center', backgroundColor: InkColors.bg },
   boxOn: { backgroundColor: BrandColors.yellow, borderColor: BrandColors.yellowDeep },
-  itemText: { fontSize: 14, fontWeight: '500', color: InkColors.ink },
+  itemText: { fontSize: 15, fontWeight: '500', color: InkColors.ink },
   itemTextOn: { color: InkColors.ink3, textDecorationLine: 'line-through' },
   itemMeta: { fontSize: 11, color: InkColors.ink3, marginTop: 2 },
   // 첨부 노하우 칩 — 카드 본문 아래, 탭하면 원문 열람. 옅은 크림 필로 업무 텍스트와 구분.

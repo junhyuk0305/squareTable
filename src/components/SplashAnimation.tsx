@@ -62,7 +62,7 @@ export function SplashAnimation({ onDone }: { onDone: () => void }) {
             { opacity: copy, transform: [{ translateY: copy.interpolate({ inputRange: [0, 1], outputRange: [10, 0] }) }] },
           ]}
         >
-          할 일이 착착 끝나는 가게
+          할 일이 착착 끝나는 매장
         </Animated.Text>
       </View>
     </Animated.View>

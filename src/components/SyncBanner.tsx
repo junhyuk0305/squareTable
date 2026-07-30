@@ -69,5 +69,5 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 4 },
   },
-  text: { flex: 1, color: '#FFFFFF', fontSize: 13, fontWeight: '700', lineHeight: 18 },
+  text: { flex: 1, color: '#FFFFFF', fontSize: 15, fontWeight: '700', lineHeight: 22 },
 });

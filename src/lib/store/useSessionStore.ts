@@ -535,7 +535,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
           ? '매장은 최대 15개까지 만들 수 있어요.'
           : /birth_date_required|birth_date_invalid/.test(error.message)
           ? '생년월일을 확인할 수 없어요. 생년월일 8자리를 다시 확인해주세요.'
-          : friendlyError(error.message, '가게를 만들지 못했어요. 잠시 후 다시 시도해 주세요.');
+          : friendlyError(error.message, '매장을 만들지 못했어요. 잠시 후 다시 시도해 주세요.');
         return { error: msg, inviteCode: null };
       }
       // 프로필 unit_id가 바뀌었으니 세션 상태 갱신
@@ -737,7 +737,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   renameStore: async (name) => {
     const trimmed = name.trim();
     if (get().role !== 'owner') return { error: '사장님만 변경할 수 있어요.', remaining: 0 };
-    if (!trimmed) return { error: '가게 이름을 입력해주세요.', remaining: get().storeRenameInfo().remaining };
+    if (!trimmed) return { error: '매장 이름을 입력해주세요.', remaining: get().storeRenameInfo().remaining };
     if (trimmed === get().storeName) return { error: '기존과 같은 이름이에요.', remaining: get().storeRenameInfo().remaining };
     const info = get().storeRenameInfo();
 
@@ -749,10 +749,10 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       const { data, error } = await rpcRenameStore(trimmed);
       if (error) {
         const msg = /rename_limit/.test(error.message)
-          ? '가게 이름은 14일 이내 2회까지만 변경할 수 있어요.'
+          ? '매장 이름은 14일 이내 2회까지만 변경할 수 있어요.'
           : /store_name_required/.test(error.message)
-          ? '가게 이름을 입력해주세요.'
-          : friendlyError(error.message, '가게 이름을 변경하지 못했어요. 잠시 후 다시 시도해 주세요.');
+          ? '매장 이름을 입력해주세요.'
+          : friendlyError(error.message, '매장 이름을 변경하지 못했어요. 잠시 후 다시 시도해 주세요.');
         return { error: msg, remaining: /rename_limit/.test(error.message) ? 0 : info.remaining };
       }
       pushRenameTime(unitId); // 로컬 힌트 동기화
@@ -762,7 +762,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       return { error: null, remaining };
     }
     // 데모(Supabase 없음): 기존 로컬 제한 유지.
-    if (info.remaining <= 0) return { error: '가게 이름은 14일 이내 2회까지만 변경할 수 있어요.', remaining: 0 };
+    if (info.remaining <= 0) return { error: '매장 이름은 14일 이내 2회까지만 변경할 수 있어요.', remaining: 0 };
     if (unitId) pushRenameTime(unitId);
     set({ storeName: trimmed });
     return { error: null, remaining: get().storeRenameInfo().remaining };

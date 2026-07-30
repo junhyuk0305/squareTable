@@ -135,13 +135,13 @@ export default function OwnerOnboardingScreen() {
             <>
               <Text style={styles.doneTitle}>노하우 {registeredCount}개로 시작해요</Text>
               <Text style={styles.doneSub}>
-                이제 알바가 물어보면 AI가 이 노하우로 대신 답해줘요.{'\n'}
+                이제 직원이 물어보면 AI가 이 노하우로 대신 답해줘요.{'\n'}
                 <Text style={styles.doneStrong}>‘확인 필요’ 표시</Text>가 붙은 건 나중에 우리 매장에 맞게 다듬어 주세요.
               </Text>
             </>
           ) : (
             <>
-              <Text style={styles.doneTitle}>가게가 만들어졌어요</Text>
+              <Text style={styles.doneTitle}>매장이 만들어졌어요</Text>
               <Text style={styles.doneSub}>
                 지금은 건너뛰었어요. 대시보드의 <Text style={styles.doneStrong}>‘추천 노하우 깔기’</Text>로{'\n'}
                 언제든 노하우를 한 번에 추가할 수 있어요.
@@ -193,7 +193,7 @@ export default function OwnerOnboardingScreen() {
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <Appear delay={0} style={styles.intro}>
           <Text style={styles.introEmoji}>👋</Text>
-          <Text style={styles.introTitle}>알바가 물어볼 걸,{'\n'}미리 답을 깔아둘게요</Text>
+          <Text style={styles.introTitle}>직원이 물어볼 걸,{'\n'}미리 답을 깔아둘게요</Text>
           <Text style={styles.introBody}>
             {industry ? `${industry} ` : ''}매장에서 자주 생기는 일을 모아뒀어요. 추천 묶음으로 바로 시작하거나,
             직접 골라 담을 수 있어요.
@@ -357,7 +357,7 @@ const styles = StyleSheet.create({
   intro: { gap: Space.sm, paddingTop: Space.sm },
   introEmoji: { fontSize: 34 },
   introTitle: { fontSize: 24, fontWeight: '900', color: InkColors.ink, lineHeight: 32 },
-  introBody: { fontSize: 14, color: InkColors.ink2, lineHeight: 21 },
+  introBody: { fontSize: 15, color: InkColors.ink2, lineHeight: 22 },
 
   // ① 추천 묶음 카드
   bundle: {
@@ -486,7 +486,7 @@ const styles = StyleSheet.create({
   doneWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: Space.xl, gap: Space.md },
   doneEmoji: { fontSize: 52 },
   doneTitle: { fontSize: 23, fontWeight: '900', color: InkColors.ink, textAlign: 'center' },
-  doneSub: { fontSize: 14, color: InkColors.ink2, textAlign: 'center', lineHeight: 21 },
+  doneSub: { fontSize: 15, color: InkColors.ink2, textAlign: 'center', lineHeight: 22 },
   doneStrong: { fontWeight: '800', color: InkColors.ink },
   codeCard: {
     backgroundColor: InkColors.bg,

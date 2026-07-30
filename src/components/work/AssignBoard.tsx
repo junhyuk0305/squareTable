@@ -160,7 +160,7 @@ const st = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: InkColors.line,
   },
-  summaryText: { fontSize: 14, fontWeight: '800', color: InkColors.ink },
+  summaryText: { fontSize: 15, fontWeight: '800', color: InkColors.ink },
   rest: { color: BrandColors.bad },
   donec: { color: BrandColors.good },
   assignBtn: {
@@ -177,7 +177,7 @@ const st = StyleSheet.create({
   assignBtnText: { fontSize: 12.5, fontWeight: '900', color: InkColors.ink },
 
   scroll: { paddingHorizontal: 13, paddingTop: 10, gap: 11 },
-  empty: { textAlign: 'center', color: InkColors.ink3, fontSize: 13, marginTop: 30 },
+  empty: { textAlign: 'center', color: InkColors.ink3, fontSize: 15, marginTop: 30 },
   group: { backgroundColor: InkColors.bg, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md, ...Elevation.e1 },
   groupHead: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, minHeight: 48 },
   sharedAvatar: { width: 26, height: 26, borderRadius: Radius.pill, backgroundColor: InkColors.ink3, alignItems: 'center', justifyContent: 'center' },
@@ -189,7 +189,7 @@ const st = StyleSheet.create({
   scopeBar: { width: 4, height: 22, borderRadius: Radius.pill },
   box: { width: 21, height: 21, borderRadius: 6, borderWidth: 1.6, borderColor: InkColors.line, alignItems: 'center', justifyContent: 'center', backgroundColor: InkColors.bg },
   boxOn: { backgroundColor: BrandColors.yellow, borderColor: BrandColors.yellowDeep },
-  itemText: { fontSize: 14, fontWeight: '500', color: InkColors.ink },
+  itemText: { fontSize: 15, fontWeight: '500', color: InkColors.ink },
   itemTextOn: { color: InkColors.ink3, textDecorationLine: 'line-through' },
   itemMeta: { fontSize: 11, color: InkColors.ink3, marginTop: 2 },
   itemDp: { fontSize: 11, fontWeight: '700', color: InkColors.ink3, marginTop: 2 },

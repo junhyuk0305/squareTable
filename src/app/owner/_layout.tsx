@@ -133,7 +133,7 @@ export default function OwnerLayout() {
       {/* 서브화면 — 전역 headerLeft(HeaderBackButton) 사용 */}
       <Stack.Screen name="staff" options={{ title: '직원·급여' }} />
       <Stack.Screen name="schedule" options={{ title: '근무표' }} />
-      <Stack.Screen name="store-config" options={{ title: '가게 기본 정보' }} />
+      <Stack.Screen name="store-config" options={{ title: '매장 기본 정보' }} />
       <Stack.Screen name="timesheet/[staffId]" options={{ title: '출근 기록' }} />
       <Stack.Screen name="payroll" options={{ title: '급여 설정' }} />
       <Stack.Screen name="knowledge" options={{ title: '내 노하우' }} />

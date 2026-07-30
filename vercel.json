@@ -6,6 +6,8 @@
     { "source": "/privacy", "destination": "/privacy.html" },
     { "source": "/terms", "destination": "/terms.html" },
     { "source": "/account-deletion", "destination": "/account-deletion.html" },
+    { "source": "/ai-policy", "destination": "/ai-policy.html" },
+    { "source": "/dpa", "destination": "/dpa.html" },
     { "source": "/(.*)", "destination": "/" }
   ],
   "headers": [

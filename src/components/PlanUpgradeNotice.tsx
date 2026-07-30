@@ -44,7 +44,7 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: InkColors.line, ...Elevation.e1,
   },
   title: { fontSize: 16, fontWeight: '900', color: InkColors.ink, textAlign: 'center' },
-  desc: { fontSize: 13, fontWeight: '600', color: InkColors.ink3, textAlign: 'center', lineHeight: 19 },
+  desc: { fontSize: 15, fontWeight: '600', color: InkColors.ink3, textAlign: 'center', lineHeight: 22 },
   cta: {
     marginTop: Space.md, backgroundColor: BrandColors.brand,
     paddingVertical: 12, paddingHorizontal: Space.xl, borderRadius: Radius.md,

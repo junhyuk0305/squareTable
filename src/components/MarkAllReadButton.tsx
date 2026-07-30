@@ -31,5 +31,5 @@ const styles = StyleSheet.create({
     paddingRight: HEADER_EDGE_GUTTER,
     paddingVertical: 4,
   },
-  text: { fontSize: 13, fontWeight: '800', color: InkColors.ink2 },
+  text: { fontSize: 15, fontWeight: '800', color: InkColors.ink2 },
 });

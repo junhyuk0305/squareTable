@@ -355,7 +355,7 @@ const styles = StyleSheet.create({
   scroll: { padding: Space.gutter, gap: Space.md },
 
   lead: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  leadText: { fontSize: 13, color: InkColors.ink3, fontWeight: '600' },
+  leadText: { fontSize: 15, color: InkColors.ink3, fontWeight: '600' },
 
   // 검색창(주인공)
   search: {
@@ -410,8 +410,8 @@ const styles = StyleSheet.create({
   field: { gap: 4 },
   fieldLabel: { fontSize: 11, fontWeight: '800', color: InkColors.ink3, letterSpacing: 0.2 },
   fieldText: { fontSize: 14, color: InkColors.ink2, lineHeight: 21 },
-  stepText: { fontSize: 14, color: InkColors.ink, lineHeight: 22 },
-  scriptText: { fontSize: 14, color: InkColors.ink2, lineHeight: 21, fontStyle: 'italic' },
+  stepText: { fontSize: 15, color: InkColors.ink, lineHeight: 22 },
+  scriptText: { fontSize: 15, color: InkColors.ink2, lineHeight: 22, fontStyle: 'italic' },
 
   // 가져오기 버튼
   importBtn: {
@@ -425,6 +425,6 @@ const styles = StyleSheet.create({
   // 빈 결과
   empty: { alignItems: 'center', gap: 6, paddingVertical: 40 },
   emptyEmoji: { fontSize: 34 },
-  emptyText: { fontSize: 14, fontWeight: '700', color: InkColors.ink2 },
+  emptyText: { fontSize: 15, fontWeight: '700', color: InkColors.ink2 },
   resetLink: { fontSize: 13, fontWeight: '800', color: BrandColors.brand, marginTop: 4, textDecorationLine: 'underline' },
 });

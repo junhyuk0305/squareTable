@@ -117,7 +117,7 @@ export function MentionInput({
                   </View>
                   <Text style={s.name}>{m.id === '__all__' ? '@전체' : m.name}</Text>
                   {i === 0 && <Text style={s.tabHint}>Tab</Text>}
-                  <Text style={s.role}>{m.id === '__all__' ? '모두에게' : m.role === 'owner' ? '사장' : '알바'}</Text>
+                  <Text style={s.role}>{m.id === '__all__' ? '모두에게' : m.role === 'owner' ? '사장' : '직원'}</Text>
                 </Pressable>
                 {canAssign && (
                   <Pressable onPress={() => onAssignTask!(m.id)} hitSlop={6} style={({ pressed }) => [s.assignPill, pressed && { opacity: 0.7 }]}>

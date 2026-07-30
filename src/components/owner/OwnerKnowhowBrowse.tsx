@@ -60,7 +60,7 @@ function EntryRow({ e, onPress, usedBy = 0 }: { e: PlaybookEntry; onPress: () =>
             {meta.label} · v{e.version}
           </Text>
           {e.stats?.resolution_rate ? <Text style={styles.metaRate}>· 해결률 {ratePct}%</Text> : null}
-          {e.stats?.query_hits_30d ? <Text style={styles.meta}>· 🔥 {e.stats.query_hits_30d}</Text> : null}
+          {e.stats?.query_hits_30d ? <Text style={styles.meta}>· {e.stats.query_hits_30d}</Text> : null}
           {usedBy > 0 ? (
             <View style={styles.badgeUsed}>
               <Ionicons name="clipboard-outline" size={9} color={InkColors.ink2} />
@@ -325,7 +325,7 @@ export function OwnerKnowhowBrowse({
           <EmptyState
             emoji="📒"
             title="아직 등록된 노하우가 없어요"
-            body="알바 질문에 답하거나, 직접 추가하면 여기에 쌓여요."
+            body="직원 질문에 답하거나, 직접 추가하면 여기에 쌓여요."
             cta={{ label: '첫 노하우 추가하기', onPress: goAdd }}
           />
         )
@@ -492,7 +492,7 @@ export function OwnerKnowhowBrowse({
           ) : listFiltered.length === 0 ? (
             <EmptyResult
               onReset={() => { setQuery(''); setActiveCat(null); setOnlyNeedsReview(false); }}
-              label={onlyNeedsReview ? '확인할 노하우가 없어요 🎉' : undefined}
+              label={onlyNeedsReview ? '확인할 노하우가 없어요' : undefined}
             />
           ) : groups ? (
             groups.map((g) => {
@@ -542,10 +542,10 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   scroll: { padding: Space.gutter, gap: Space.md },
   center: { alignItems: 'center', justifyContent: 'center', gap: 10, paddingVertical: 48 },
-  loadingText: { fontSize: 13, color: InkColors.ink3, fontWeight: '600' },
+  loadingText: { fontSize: 15, color: InkColors.ink3, fontWeight: '600' },
 
   headRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
-  subline: { flexShrink: 1, fontSize: 13, color: InkColors.ink3, fontWeight: '600' },
+  subline: { flexShrink: 1, fontSize: 15, color: InkColors.ink3, fontWeight: '600' },
   addBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: InkColors.ink, paddingVertical: 8, paddingHorizontal: 12, borderRadius: Radius.pill },
   addBtnText: { color: InkColors.bubbleText, fontSize: 13, fontWeight: '800' },
 
@@ -604,7 +604,7 @@ const styles = StyleSheet.create({
     backgroundColor: InkColors.bg, borderWidth: 1, borderColor: InkColors.line,
     borderRadius: Radius.pill, paddingHorizontal: 14, paddingVertical: 9, ...Elevation.e1,
   },
-  searchInput: { flex: 1, fontSize: 14, color: InkColors.ink, padding: 0 },
+  searchInput: { flex: 1, fontSize: 15, color: InkColors.ink, padding: 0 },
 
   // 카테고리 칩
   chipRow: { flexDirection: 'row', gap: 7, paddingVertical: 1, paddingRight: 4 },
@@ -672,6 +672,6 @@ const styles = StyleSheet.create({
   // 빈 결과
   emptyResult: { alignItems: 'center', gap: 6, paddingVertical: 36 },
   emptyResultEmoji: { fontSize: 34 },
-  emptyResultText: { fontSize: 14, fontWeight: '700', color: InkColors.ink2 },
+  emptyResultText: { fontSize: 15, fontWeight: '700', color: InkColors.ink2 },
   resetLink: { fontSize: 13, fontWeight: '800', color: BrandColors.brand, marginTop: 4, textDecorationLine: 'underline' },
 });

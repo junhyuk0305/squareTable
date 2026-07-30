@@ -20,22 +20,22 @@ export default function PrivacyScreen() {
         <Text style={styles.updated}>시행일: 2026-08-07 · 운영: 팀 스퀘어테이블</Text>
 
         <Section title="1. 수집 항목">
-          이름, 이메일, 휴대전화번호, 생년월일, 매장 정보, 사용자가 입력한 매장 운영 노하우·질문 내용.
+          이름, 이메일, 휴대전화번호, 생년월일, 매장 정보, 사용자가 입력한 매장 운영 노하우·질문 내용, 음성 입력 시 음성(변환 즉시 파기), 서비스 이용·오류 기록, 유료 이용 시 입금자명 등 결제 신고 정보.
         </Section>
         <Section title="2. 수집·이용 목적">
-          매장 단위 계정 식별, 노하우 저장·검색·답변 제공, 알바-사장님 간 질문 전달 등 서비스 핵심 기능 제공, 서비스 이용 통계 및 세대 간 지식 교류 분석.
+          매장 단위 계정 식별, 노하우 저장·검색·답변 제공, 직원-사장님 간 질문 전달 등 서비스 핵심 기능 제공, 유료 이용권 관리, 서비스 이용 통계·품질 개선 분석 및 세대 간 지식 교류 분석.
         </Section>
         <Section title="3. 보유·이용 기간">
-          회원 탈퇴 또는 매장 계약 종료 시까지. 이후 지체 없이 파기합니다. 관계 법령에 따라 보존이 필요한 경우 해당 기간 동안 보관합니다.
+          회원 탈퇴 또는 매장 계약 종료 시까지. 탈퇴 신청 즉시 이용이 차단되고 30일간 분리 보관 후 영구 파기합니다. 질문·채팅 기록은 6개월, 내부 이용·오류 기록은 12개월 경과분을 정기 파기하며, 관계 법령에 따라 보존이 필요한 경우 해당 기간 동안 보관합니다.
         </Section>
         <Section title="4. 처리 위탁">
-          서비스 운영을 위해 클라우드 인프라(Supabase), 웹 호스팅(Vercel), AI 처리 제공자(Google)에 데이터 처리를 위탁하며, 이들은 국외 사업자입니다. 위탁·국외이전의 상세와 이전 거부 방법은 전문 제5조·제6조에 있습니다.
+          서비스 운영을 위해 클라우드 인프라(Supabase), 웹 호스팅(Vercel), AI 처리 제공자(Google), 이용 분석 도구(PostHog)에 데이터 처리를 위탁하며, 이들은 국외 사업자입니다. 위탁·국외이전의 상세와 이전 거부 방법은 전문 제5조·제6조에 있습니다.
         </Section>
         <Section title="5. 이용자 권리">
           본인의 개인정보 열람·정정·삭제·처리정지를 요청할 수 있으며, 아래 연락처로 문의하면 지체 없이 처리합니다.
         </Section>
         <Section title="6. 문의처">
-          개인정보 보호책임자 장준혁 · contact@team-roundtable.com
+          개인정보 보호책임자 장준혁 · cristianojun@naver.com
         </Section>
 
         {/* 전문은 웹 정적 페이지가 정본이다. Apple 5.1.1(i)은 앱 안에서도 방침에 접근 가능할 것을
@@ -70,6 +70,6 @@ const styles = StyleSheet.create({
   updated: { fontSize: 12, color: InkColors.ink3, marginTop: -8 },
   section: { gap: 5 },
   h2: { fontSize: 15, fontWeight: '800', color: InkColors.ink2 },
-  body: { fontSize: 14, color: InkColors.ink2, lineHeight: 21 },
+  body: { fontSize: 15, color: InkColors.ink2, lineHeight: 22 },
   link: { fontSize: 14, fontWeight: '700', color: InkColors.ink, textDecorationLine: 'underline', marginTop: Space.sm },
 });

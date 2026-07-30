@@ -65,7 +65,7 @@ export default function OwnerStoreConfigScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
-      <Stack.Screen options={{ title: '가게 기본 정보' }} />
+      <Stack.Screen options={{ title: '매장 기본 정보' }} />
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <Text style={styles.lead}>운영시간과 정기 휴무를 정해두면 근무표에 반영돼요.</Text>
 
@@ -167,7 +167,7 @@ export default function OwnerStoreConfigScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: InkColors.cream },
   scroll: { padding: 20, gap: 10 },
-  lead: { fontSize: 13.5, color: InkColors.ink2, lineHeight: 20 },
+  lead: { fontSize: 15, color: InkColors.ink2, lineHeight: 22 },
 
   label: { fontSize: 14, fontWeight: '800', color: InkColors.ink2, marginTop: 10 },
   labelSub: { fontSize: 12.5, fontWeight: '600', color: InkColors.ink3 },
@@ -187,7 +187,7 @@ const styles = StyleSheet.create({
   dowText: { fontSize: 14, fontWeight: '800', color: InkColors.ink2 },
   hint: { fontSize: 12, color: InkColors.ink3 },
 
-  noteInp: { fontSize: 14, color: InkColors.ink, minHeight: 56, lineHeight: 20, ...(Platform.OS === 'web' ? ({ outlineStyle: 'none' } as object) : null) },
+  noteInp: { fontSize: 15, color: InkColors.ink, minHeight: 56, lineHeight: 22, ...(Platform.OS === 'web' ? ({ outlineStyle: 'none' } as object) : null) },
 
   saveBtn: { backgroundColor: InkColors.ink, borderRadius: Radius.md, paddingVertical: 15, alignItems: 'center', marginTop: 14 },
   saveText: { fontSize: 15, fontWeight: '800', color: '#fff' },

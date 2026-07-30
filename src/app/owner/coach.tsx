@@ -156,7 +156,7 @@ export default function OwnerCoachScreen() {
       const decision = await askBeforePublish([entry]);
       if (!decision) return false; // 취소 — 저장 안 함(잠금 해제되어 다시 시도 가능)
       const ok = await addEntry({ ...entry, section: decision.section });
-      return finishPublish([entry.id], ok, isInboxAnswer ? '답변이 알바 챗봇에 반영됐어요' : '새 노하우가 저장됐어요');
+      return finishPublish([entry.id], ok, isInboxAnswer ? '답변이 직원 챗봇에 반영됐어요' : '새 노하우가 저장됐어요');
     },
     [addEntry, finishPublish, isInboxAnswer, askBeforePublish],
   );
@@ -266,5 +266,5 @@ const styles = StyleSheet.create({
   },
   toastCheck: { color: BrandColors.yellow, fontWeight: '800', fontSize: 16 },
   toastCheckErr: { color: BrandColors.accent },
-  toastText: { color: '#FFFFFF', fontWeight: '700', fontSize: 14 },
+  toastText: { color: '#FFFFFF', fontWeight: '700', fontSize: 15 },
 });

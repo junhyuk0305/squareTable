@@ -47,7 +47,7 @@ const jsonLd = JSON.stringify({
       name: BRAND,
       url: `${SITE_URL}/`,
       logo: OG_IMAGE,
-      email: 'contact@team-roundtable.com',
+      email: 'cristianojun@naver.com',
     },
     {
       '@type': 'WebSite',

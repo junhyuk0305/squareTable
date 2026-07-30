@@ -143,7 +143,7 @@ function QuizBody({
             <View style={[s.resultBox, passed ? s.resultPass : s.resultFail]}>
               <Ionicons name={passed ? 'ribbon' : 'refresh-circle'} size={22} color={passed ? BrandColors.good : BrandColors.warn} />
               <Text style={s.resultText}>
-                {passed ? '이해 확인 완료! 사장님께 전달됐어요.' : `${questions.length}개 중 ${correctCount}개 맞았어요. 다시 해볼까요?`}
+                {passed ? '이해 확인이 끝났어요. 사장님께 전달됐어요.' : `${questions.length}개 중 ${correctCount}개 맞았어요. 다시 해볼까요?`}
               </Text>
             </View>
           )}
@@ -160,7 +160,7 @@ function QuizBody({
       {phase === 'result' && (
         <View style={s.foot}>
           {passed ? (
-            <Pressable onPress={onClose} style={({ pressed }) => [s.cta, pressed && { opacity: 0.85 }]}><Text style={s.ctaText}>완료</Text></Pressable>
+            <Pressable onPress={onClose} style={({ pressed }) => [s.cta, pressed && { opacity: 0.85 }]}><Text style={s.ctaText}>닫기</Text></Pressable>
           ) : (
             <View style={s.footRow}>
               <Pressable onPress={onClose} style={({ pressed }) => [s.softBtnFlat, pressed && { opacity: 0.7 }]}><Text style={s.softBtnFlatText}>닫기</Text></Pressable>
@@ -194,7 +194,7 @@ const s = StyleSheet.create({
   resultBox: { flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: Radius.md, padding: 14, marginTop: 4 },
   resultPass: { backgroundColor: '#E6F1EA' },
   resultFail: { backgroundColor: BrandColors.warnSoft },
-  resultText: { flex: 1, fontSize: 13.5, fontWeight: '800', color: InkColors.ink, lineHeight: 20 },
+  resultText: { flex: 1, fontSize: 15, fontWeight: '800', color: InkColors.ink, lineHeight: 22 },
 
   foot: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 18, borderTopWidth: 1, borderTopColor: InkColors.line },
   footRow: { flexDirection: 'row', alignItems: 'stretch', gap: 8 },

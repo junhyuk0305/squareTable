@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Pressable, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter, Redirect } from 'expo-router';
@@ -111,7 +111,7 @@ export default function AccountSettings() {
             label="푸시 알림"
             hint={
               isOwner
-                ? '알바가 모르는 질문을 남기면 바로 알려드려요 (방해 금지·매장별 알림은 각 매장 설정에서)'
+                ? '직원이 모르는 질문을 남기면 바로 알려드려요 (방해 금지·매장별 알림은 각 매장 설정에서)'
                 : '사장님이 답하거나 새 공지가 오면 알려드려요 (방해 금지·매장별 알림은 각 매장 설정에서)'
             }
             value={prefs.pushEnabled}
@@ -161,6 +161,12 @@ export default function AccountSettings() {
         <SettingsSection icon="document-text-outline" title="약관 및 정책">
           <SettingsRow first icon="document-text-outline" label="이용약관" onPress={() => router.push('/terms')} />
           <SettingsRow icon="shield-checkmark-outline" label="개인정보처리방침" onPress={() => router.push('/privacy')} />
+          {/* AI 이용정책·처리위탁 계약은 웹 정적 페이지가 유일한 정본(legal-content.mjs)이라 앱 요약 화면이 없다.
+              약관·처리방침 본문이 참조하는 문서이므로 앱에서도 도달 경로가 있어야 죽은 참조가 안 된다. */}
+          <SettingsRow icon="sparkles-outline" label="AI 이용정책" onPress={() => void Linking.openURL('https://dochackchack.com/ai-policy').catch(() => {})} />
+          {/* 전자상거래법상 판매자 정보 고지 의무 — 화면(/business-info)은 있었지만 앱 어디서도 링크가 없어
+              사용자가 도달할 수 없었다(2026-07-29 IA 점검에서 발견). 유료 판매 중이므로 접근 경로가 필수다. */}
+          <SettingsRow icon="business-outline" label="사업자 정보" onPress={() => router.push('/business-info')} />
         </SettingsSection>
 
         <SettingsSection icon="help-buoy-outline" title="고객센터">

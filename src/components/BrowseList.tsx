@@ -71,7 +71,7 @@ export function BrowseCard({
         {/* 해결률 · 물어본 수 — 있는 것만 */}
         <View style={styles.statRow}>
           <Text style={styles.rate}>해결률 {ratePct}%</Text>
-          {hits > 0 ? <Text style={styles.hits}>🔥 {hits}명이 물어봤어요</Text> : null}
+          {hits > 0 ? <Text style={styles.hits}>{hits}명이 물어봤어요</Text> : null}
         </View>
 
         {/* DO / DON'T 1줄 미리보기 — 있는 것만 */}
@@ -167,6 +167,6 @@ const styles = StyleSheet.create({
     paddingLeft: 8,
   },
   previewTag: { fontSize: 10, fontWeight: '800', letterSpacing: 0.5, width: 36 },
-  previewText: { flex: 1, fontSize: 13, color: InkColors.ink2, lineHeight: 18 },
+  previewText: { flex: 1, fontSize: 15, color: InkColors.ink2, lineHeight: 22 },
   source: { fontSize: 11, color: InkColors.ink3, marginTop: 2 },
 });

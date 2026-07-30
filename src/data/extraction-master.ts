@@ -9,7 +9,7 @@
  * Edge MAX_GUIDE_LEN(2000자) 안에 들도록 운영 버전으로 압축했다(few-shot 포함).
  * 기존 category-guides.ts 의 extractionGuide(카테고리별 분산)를 대체한다.
  */
-export const EXTRACTION_MASTER = `너는 매장 사장의 말을 알바가 바로 따라 할 수 있게 정리한다. 결과는 entries 배열.
+export const EXTRACTION_MASTER = `너는 매장 사장의 말을 직원이 바로 따라 할 수 있게 정리한다. 결과는 entries 배열.
 
 [뽑을 것 — 핵심 3개]
 - situation(상황): 언제/어디서/무엇인지 한 줄

@@ -24,6 +24,8 @@ export function HubTopBar() {
         <Pressable
           onPress={() => router.push('/account-settings')}
           hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel="내 계정 · 설정"
           style={({ pressed }) => [styles.avaBtn, pressed && { opacity: 0.7 }]}
         >
           <View style={styles.avatar}>

@@ -41,9 +41,11 @@ function SectionLabel({
 }
 
 /**
- * 직원 홈 — 사령탑(하루의 앵커). 정보 피라미드로 재배치.
- * 1) 출퇴근 히어로(가장 자주 누름) 2) 오늘 한눈에(할일·공지·근무 KPI 한 줄)
- * 3) 노하우 물어보기(전송버튼 달린 큰 유도) 4) 안 읽은 공지 한 줄 미리보기 5) 기능 안내.
+ * 직원 홈 — 사령탑(하루의 앵커).
+ * ★Primary = 노하우 물어보기 하나(IA 결정 2 = 안 B, 2026-07-29). 화면당 강조는 1개다(복잡도 원칙 P1).
+ * 1) 노하우 물어보기(Primary) 2) 출퇴근 3) 오늘의 매장 4) 오늘 한눈에 5) 안 읽은 공지 6) 기능 안내.
+ * (직전까지는 출퇴근이 히어로였다. 출퇴근은 어느 앱에나 있는 기능이라 얼굴을 내주면 '출퇴근 앱'이 되고,
+ *  질문→노하우 루프가 전략 정본의 북극성이라 그쪽에 1등석을 줬다.)
  */
 export default function JuniorHomeScreen() {
   const router = useRouter();
@@ -95,8 +97,31 @@ export default function JuniorHomeScreen() {
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <Text style={styles.greet}>{userName}님, 오늘도 화이팅이에요</Text>
 
-        {/* 1) 출퇴근 퀵액션 — 제목은 카드 밖, 내용은 카드 안 */}
+        {/* 1) 노하우 물어보기 = 이 화면의 Primary (IA 결정 2 = 안 B, 2026-07-29).
+            전략 정본의 북극성(질문→노하우 루프)에 직접 붙는 유일한 섹션이라 1등석을 준다.
+            출퇴근은 어느 앱에나 있는 기능이라 여기에 얼굴을 내주면 '출퇴근 앱'으로 인식된다. */}
         <Appear delay={0} style={styles.section}>
+          <SectionLabel icon="search-outline" title="노하우 물어보기" />
+          <View style={styles.askCard}>
+            <Text style={styles.askSub}>매장 노하우를 바로 찾아드려요. 없으면 사장님께 대신 여쭤볼게요.</Text>
+            <Pressable onPress={() => goToTab('/junior/chat')} style={({ pressed }) => [styles.askBar, pressed && { opacity: 0.85 }]}>
+              <Text style={styles.askBarText}>궁금한 걸 물어보세요</Text>
+              <View style={styles.askSend}>
+                <Ionicons name="arrow-up" size={16} color={InkColors.ink} />
+              </View>
+            </Pressable>
+            <View style={styles.askChips}>
+              {QUICK_ASKS.map((q) => (
+                <Pressable key={q} onPress={() => goToTab('/junior/chat')} style={({ pressed }) => [styles.askChip, pressed && { opacity: 0.7 }]}>
+                  <Text style={styles.askChipText}>{q}</Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+        </Appear>
+
+        {/* 2) 출퇴근 퀵액션 — 제목은 카드 밖, 내용은 카드 안 */}
+        <Appear delay={60} style={styles.section}>
         <SectionLabel icon="time-outline" title="출퇴근" />
         <View style={styles.clockCard}>
           {working && <Text style={styles.workingTag}>● 근무 중</Text>}
@@ -155,10 +180,10 @@ export default function JuniorHomeScreen() {
         </View>
         </Appear>
 
-        {/* 1.5) 오늘의 매장(출근 브리핑) — 데이파트별 완료 상태 + 나를 언급한 글을 한 카드에 묶는다.
+        {/* 3) 오늘의 매장(출근 브리핑) — 데이파트별 완료 상태 + 나를 언급한 글을 한 카드에 묶는다.
              할일도 멘션도 없으면 통째로 숨긴다(빈 카드 방지). */}
         {(daypartStatus.length > 0 || unreadMentionCount > 0) && (
-          <Appear delay={40} style={styles.section}>
+          <Appear delay={90} style={styles.section}>
             <SectionLabel icon="cafe-outline" title="오늘의 매장" />
             <View style={styles.briefCard}>
               {daypartStatus.length > 0 && (
@@ -200,8 +225,8 @@ export default function JuniorHomeScreen() {
           </Appear>
         )}
 
-        {/* 2) 오늘 한눈에 — 할일·공지·근무를 한 줄 KPI로 압축(스캔). 각 칸이 해당 화면으로 진입. */}
-        <Appear delay={60} style={styles.section}>
+        {/* 4) 오늘 한눈에 — 할일·공지·근무를 한 줄 KPI로 압축(스캔). 각 칸이 해당 화면으로 진입. */}
+        <Appear delay={120} style={styles.section}>
           <SectionLabel icon="today-outline" title="오늘 한눈에" />
           <View style={styles.kpiRow}>
             <Pressable
@@ -238,28 +263,7 @@ export default function JuniorHomeScreen() {
           </View>
         </Appear>
 
-        {/* 3) 노하우 물어보기 — 진짜 입력처럼 보이는 큰 유도(전송 버튼 포함). 탭하면 물어보기 탭으로. */}
-        <Appear delay={120} style={styles.section}>
-          <SectionLabel icon="search-outline" title="노하우 물어보기" />
-          <View style={styles.askCard}>
-            <Text style={styles.askSub}>매장 노하우를 바로 찾아드려요. 없으면 사장님께 대신 여쭤볼게요.</Text>
-            <Pressable onPress={() => goToTab('/junior/chat')} style={({ pressed }) => [styles.askBar, pressed && { opacity: 0.85 }]}>
-              <Text style={styles.askBarText}>궁금한 걸 물어보세요</Text>
-              <View style={styles.askSend}>
-                <Ionicons name="arrow-up" size={16} color={InkColors.ink} />
-              </View>
-            </Pressable>
-            <View style={styles.askChips}>
-              {QUICK_ASKS.map((q) => (
-                <Pressable key={q} onPress={() => goToTab('/junior/chat')} style={({ pressed }) => [styles.askChip, pressed && { opacity: 0.7 }]}>
-                  <Text style={styles.askChipText}>{q}</Text>
-                </Pressable>
-              ))}
-            </View>
-          </View>
-        </Appear>
-
-        {/* 4) 안 읽은 공지 — 있을 때만, 한 줄 미리보기로 강등(내용은 보존, 면적은 최소). */}
+        {/* 5) 안 읽은 공지 — 있을 때만, 한 줄 미리보기로 강등(내용은 보존, 면적은 최소). */}
         {unreadCount > 0 && latestNotice && (
           <Appear delay={150} style={styles.section}>
             <Pressable
@@ -270,7 +274,7 @@ export default function JuniorHomeScreen() {
             >
               <Ionicons name="megaphone" size={15} color={BrandColors.yellowDeep} />
               <Text style={styles.noticeStripText} numberOfLines={1}>
-                {latestNotice.pinned ? '📌 ' : ''}
+                {latestNotice.pinned ? '고정 · ' : ''}
                 {latestNotice.text}
               </Text>
               <Text style={styles.noticeStripMore}>{unreadCount > 1 ? `+${unreadCount - 1} ` : ''}›</Text>
@@ -278,7 +282,7 @@ export default function JuniorHomeScreen() {
           </Appear>
         )}
 
-        {/* 5) 핵심 기능 안내 배너 — 최하단. 스와이프로 핵심 기능을 소개하고 탭하면 바로 그 화면으로 */}
+        {/* 6) 핵심 기능 안내 배너 — 최하단. 스와이프로 핵심 기능을 소개하고 탭하면 바로 그 화면으로 */}
         <Appear delay={180} style={styles.section}>
           <SectionLabel icon="sparkles-outline" title="이런 것도 할 수 있어요" />
           <FeatureCarousel cards={JUNIOR_FEATURES} />

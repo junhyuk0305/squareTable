@@ -97,7 +97,7 @@ export default function SignupScreen() {
     if (!isValidPhone(phone)) return setErr('전화번호 형식을 확인해주세요. (예: 010-1234-5678)');
     if (!birth) return setErr('생년월일을 입력해주세요.');
     if (!birthDateISO(birth)) return setErr('생년월일 8자리를 확인해주세요. (예: 19900131)');
-    if (role === 'owner' && !storeName.trim()) return setErr('가게 이름을 입력해주세요.');
+    if (role === 'owner' && !storeName.trim()) return setErr('매장 이름을 입력해주세요.');
     if (role === 'owner' && !industry) return setErr('업종을 선택해주세요.');
     // 직원 초대코드는 선택 — 비우면 가입 후 '가게 연결'(junior/join)로 유도하므로 여기서 막지 않는다.
 
@@ -158,7 +158,7 @@ export default function SignupScreen() {
           // 인증 후 로그인하면 loadProfile 이 매장을 자동 생성한다(데드엔드 없음).
           setEmailMsg(
             role === 'owner'
-              ? '인증 메일을 보냈어요. 메일에서 인증하고 로그인하면 가게가 자동으로 만들어져요.'
+              ? '인증 메일을 보냈어요. 메일에서 인증하고 로그인하면 매장이 자동으로 만들어져요.'
               : '인증 메일을 보냈어요. 메일에서 인증한 뒤 로그인해 주세요.',
           );
           return;
@@ -171,7 +171,7 @@ export default function SignupScreen() {
         const cs = await createStore(storeName.trim(), industry, bizDigits(bizNo) || undefined, birthDateISO(birth) ?? undefined, { isOnboarding: true });
         // 계정은 이미 만들어졌으므로(accountReady) 재시도는 '가게 생성만' 다시 돈다. 버튼 라벨도 아래에서
         // '가게 다시 만들기'로 바뀌므로 안내 문구를 그 버튼과 일치시킨다(무엇을 누르면 되는지 명확화).
-        if (cs.error) return setErr(`${cs.error} 아래 ‘가게 다시 만들기’를 누르면 가게만 다시 만들어요.`);
+        if (cs.error) return setErr(`${cs.error} 아래 ‘매장 다시 만들기’를 누르면 매장만 다시 만들어요.`);
         // 노하우 온보딩으로 — 초대코드는 온보딩 완료 화면에서 안내(빈 매장 0건 방지).
         router.replace({ pathname: '/owner/onboarding', params: { code: cs.inviteCode ?? '------', industry } });
       } else {
@@ -198,12 +198,12 @@ export default function SignupScreen() {
         <View style={styles.roleRow}>
           {(
             [
-              { r: 'owner', emoji: '🏪', label: '사장님', desc: '가게를 운영하고\n노하우를 등록해요' },
-              { r: 'junior', emoji: '🧑‍🍳', label: '직원·알바', desc: '초대코드로\n가게에 합류해요' },
+              { r: 'owner', icon: 'storefront', label: '사장님', desc: '매장을 운영하고\n노하우를 등록해요' },
+              { r: 'junior', icon: 'person', label: '직원', desc: '초대코드로\n매장에 합류해요' },
             ] as const
           ).map((o) => (
             <Pressable key={o.r} onPress={() => setRole(o.r)} style={[styles.roleCard, role === o.r && styles.roleCardOn]}>
-              <Text style={styles.roleEmoji}>{o.emoji}</Text>
+              <Ionicons name={o.icon} size={28} color={role === o.r ? InkColors.ink : InkColors.ink3} style={styles.roleIcon} />
               <Text style={[styles.roleLabel, role === o.r && styles.roleLabelOn]}>{o.label}</Text>
               <Text style={styles.roleDesc}>{o.desc}</Text>
               {role === o.r && (
@@ -279,7 +279,7 @@ export default function SignupScreen() {
 
         {role === 'owner' ? (
           <>
-            <Field label="가게 이름" value={storeName} onChange={setStoreName} placeholder="예: 착착 카페 신촌점" required />
+            <Field label="매장 이름" value={storeName} onChange={setStoreName} placeholder="예: 착착 카페 신촌점" required />
             <View style={styles.field}>
               <Text style={styles.label}>업종<Text style={styles.req}> *</Text></Text>
               <View style={styles.chipWrap}>
@@ -314,7 +314,7 @@ export default function SignupScreen() {
           <View style={styles.joinNote}>
             <Ionicons name="information-circle-outline" size={18} color={InkColors.ink2} />
             <Text style={styles.joinNoteText}>
-              가입하면 개인 홈으로 이동해요. 거기서 사장님께 받은 <Text style={styles.joinNoteStrong}>6자리 초대코드</Text>를 넣으면 가게에 합류 신청이 돼요.
+              가입하면 개인 홈으로 이동해요. 거기서 사장님께 받은 <Text style={styles.joinNoteStrong}>6자리 초대코드</Text>를 넣으면 매장에 합류 신청이 돼요.
             </Text>
           </View>
         )}
@@ -361,7 +361,7 @@ export default function SignupScreen() {
             // 계정 생성까지 끝난 뒤 가게 연결만 실패해 재시도하는 상태면 라벨을 '가게 다시 만들기'로 바꿔
             // (계정은 이미 있으니 다시 안 만든다는 뜻) 에러 안내문과 일치시킨다.
             <Text style={styles.primaryText}>
-              {role === 'owner' ? (accountReady ? '가게 다시 만들기' : '가게 만들고 시작하기') : '가입하고 시작하기'}
+              {role === 'owner' ? (accountReady ? '매장 다시 만들기' : '매장 만들고 시작하기') : '가입하고 시작하기'}
             </Text>
           )}
         </Pressable>
@@ -433,7 +433,8 @@ const styles = StyleSheet.create({
   },
   // 선택 = 잉크 테두리 + 소프트 섀도로 '선택된 border'를 굵게(bold) 강조(입력칸 선택 효과와 통일).
   roleCardOn: { borderColor: BrandColors.brand, backgroundColor: '#FFFDFB', ...Elevation.e1 },
-  roleEmoji: { fontSize: 28 },
+  // 그림 이모지 금지(워딩 §2.3) — Ionicons로 교체. 아이콘도 Text 기반이라 글자 크기 설정에 함께 반응한다.
+  roleIcon: { marginBottom: 4 },
   roleLabel: { fontSize: 16, fontWeight: '800', color: InkColors.ink2, marginTop: 4 },
   roleLabelOn: { color: BrandColors.brand },
   roleDesc: { fontSize: 12, color: InkColors.ink3, lineHeight: 17 },
@@ -463,7 +464,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
   },
   joinNote: { flexDirection: 'row', alignItems: 'flex-start', gap: Space.sm, backgroundColor: BrandColors.brandSoft, borderRadius: Radius.md, padding: 14 },
-  joinNoteText: { flex: 1, fontSize: 13, color: InkColors.ink2, lineHeight: 19 },
+  joinNoteText: { flex: 1, fontSize: 15, color: InkColors.ink2, lineHeight: 22 },
   joinNoteStrong: { fontWeight: '800', color: InkColors.ink },
   // 안내 문구(이미 가입된 이메일 등) — 성공 초록이 아닌 중립 톤으로 오해 방지.
   emailOk: { fontSize: 12, color: InkColors.ink2, fontWeight: '700', marginTop: 1 },
@@ -503,11 +504,11 @@ const styles = StyleSheet.create({
   checkboxOn: { backgroundColor: BrandColors.brand, borderColor: BrandColors.brand },
   checkmark: { color: '#FFFFFF', fontSize: 13, fontWeight: '900' },
   checkmarkSm: { color: '#FFFFFF', fontSize: 11, fontWeight: '900' },
-  consentText: { flex: 1, fontSize: 13, color: InkColors.ink2, lineHeight: 19 },
+  consentText: { flex: 1, fontSize: 15, color: InkColors.ink2, lineHeight: 22 },
   consentReq: { fontWeight: '800', color: InkColors.ink },
   consentOpt: { fontWeight: '800', color: InkColors.ink3 },
   consentLink: { color: BrandColors.brand, fontWeight: '800', textDecorationLine: 'underline', fontSize: 12 },
-  err: { fontSize: 13, color: BrandColors.accent, fontWeight: '600', lineHeight: 19 },
+  err: { fontSize: 15, color: BrandColors.accent, fontWeight: '600', lineHeight: 22 },
   primary: { marginTop: 6, backgroundColor: BrandColors.brand, paddingVertical: 16, borderRadius: 12, alignItems: 'center' },
   primaryDisabled: { backgroundColor: InkColors.line },
   primaryText: { color: '#FFFFFF', fontSize: 16, fontWeight: '800' },

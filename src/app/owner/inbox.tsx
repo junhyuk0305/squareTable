@@ -152,7 +152,7 @@ export default function OwnerInboxScreen() {
             <View style={{ flex: 1 }}>
               <Text style={styles.sugTitle}>노하우 제안</Text>
               <Text style={styles.sugSub}>
-                {pendingSuggestions > 0 ? '알바가 올린 개선·등록 신청을 확인하세요' : '알바가 노하우를 제안하면 여기로 와요'}
+                {pendingSuggestions > 0 ? '직원이 올린 개선·등록 신청을 확인하세요' : '직원이 노하우를 제안하면 여기로 와요'}
               </Text>
             </View>
             {pendingSuggestions > 0 && (
@@ -172,7 +172,7 @@ export default function OwnerInboxScreen() {
           ) : (
             <View style={styles.emptyHero}>
               <Text style={styles.emptyTitle}>아직 새 질문이 없어요</Text>
-              <Text style={styles.emptySub}>알바가 모르는 걸 물으면 여기로 와요.</Text>
+              <Text style={styles.emptySub}>직원이 모르는 걸 물으면 여기로 와요.</Text>
             </View>
           )}
 
@@ -260,7 +260,7 @@ function sortByUrgency(list: UnknownQuery[]): UnknownQuery[] {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: InkColors.cream },
   loadingWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 10 },
-  loadingText: { fontSize: 13, color: InkColors.ink3, fontWeight: '600' },
+  loadingText: { fontSize: 15, color: InkColors.ink3, fontWeight: '600' },
   scroll: {
     paddingHorizontal: Space.gutter,
     paddingTop: Space.md,
@@ -359,5 +359,5 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   emptyTitle: { fontSize: 16, fontWeight: '700', color: InkColors.ink },
-  emptySub: { fontSize: 14, color: InkColors.ink3 },
+  emptySub: { fontSize: 15, color: InkColors.ink3 },
 });

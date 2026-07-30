@@ -45,7 +45,7 @@ export default function JuniorOnboarding() {
         </View>
 
         <View style={styles.card}>
-          <Text style={styles.label}>가게 초대코드</Text>
+          <Text style={styles.label}>매장 초대코드</Text>
           <TextInput
             value={code}
             onChangeText={(v) => setCode(v.replace(/[^0-9]/g, '').slice(0, 6))}
@@ -82,17 +82,17 @@ const styles = StyleSheet.create({
   hero: { alignItems: 'center', gap: 10 },
   iconWrap: { width: 64, height: 64, borderRadius: Radius.sheet, backgroundColor: BrandColors.brandSoft, alignItems: 'center', justifyContent: 'center' },
   title: { fontSize: 22, fontWeight: '900', color: InkColors.ink, textAlign: 'center' },
-  sub: { fontSize: 14, color: InkColors.ink2, textAlign: 'center', lineHeight: 21 },
+  sub: { fontSize: 15, color: InkColors.ink2, textAlign: 'center', lineHeight: 22 },
   strong: { fontWeight: '800', color: InkColors.ink },
   card: { backgroundColor: '#FFFFFF', borderRadius: Radius.lg, borderWidth: 1, borderColor: InkColors.line, padding: 20, gap: 10 },
   label: { fontSize: 13, fontWeight: '700', color: InkColors.ink2 },
   input: { borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md, paddingHorizontal: 14, paddingVertical: 14, fontSize: 20, fontWeight: '800', letterSpacing: 4, textAlign: 'center', color: InkColors.ink, backgroundColor: '#FFFFFF' },
-  err: { fontSize: 13, color: BrandColors.accent, fontWeight: '600' },
+  err: { fontSize: 15, color: BrandColors.accent, fontWeight: '600' },
   primary: { marginTop: 6, backgroundColor: BrandColors.brand, paddingVertical: 16, borderRadius: Radius.md, alignItems: 'center' },
   primaryText: { color: '#FFFFFF', fontSize: 16, fontWeight: '800' },
   helpBox: { backgroundColor: InkColors.bgSoft, borderRadius: Radius.md, padding: 16, gap: 4 },
   helpTitle: { fontSize: 13, fontWeight: '800', color: InkColors.ink2 },
-  helpBody: { fontSize: 13, color: InkColors.ink3, lineHeight: 19 },
+  helpBody: { fontSize: 15, color: InkColors.ink3, lineHeight: 22 },
   logoutRow: { alignItems: 'center', paddingVertical: 4 },
   logoutText: { fontSize: 13, color: InkColors.ink3, fontWeight: '600' },
 });

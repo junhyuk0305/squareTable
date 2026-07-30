@@ -9,7 +9,7 @@
 //   - VAPID_PRIVATE_KEY → 엣지 시크릿에만(절대 클라/깃에 넣지 말 것)
 //
 // 배포(값 세팅):
-//   supabase secrets set VAPID_PUBLIC_KEY=... VAPID_PRIVATE_KEY=... VAPID_SUBJECT=mailto:contact@team-roundtable.com
+//   supabase secrets set VAPID_PUBLIC_KEY=... VAPID_PRIVATE_KEY=... VAPID_SUBJECT=mailto:cristianojun@naver.com
 //   그리고 .env 에 EXPO_PUBLIC_VAPID_PUBLIC_KEY=<PUBLIC> 추가 후 웹 재빌드.
 
 import { generateKeyPairSync } from 'node:crypto';
@@ -32,7 +32,7 @@ console.log('VAPID_PRIVATE_KEY =', privateKeyB64u);
 console.log('');
 console.log('# 엣지 시크릿:');
 console.log(
-  `supabase secrets set VAPID_PUBLIC_KEY=${publicKeyB64u} VAPID_PRIVATE_KEY=${privateKeyB64u} VAPID_SUBJECT=mailto:contact@team-roundtable.com`,
+  `supabase secrets set VAPID_PUBLIC_KEY=${publicKeyB64u} VAPID_PRIVATE_KEY=${privateKeyB64u} VAPID_SUBJECT=mailto:cristianojun@naver.com`,
 );
 console.log('');
 console.log('# 클라(.env):');

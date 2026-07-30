@@ -24,7 +24,7 @@ const STATUS_OF: Record<SubtabKey, UnknownQuery['status']> = {
 // 세그먼트별 빈 상태 문구 — 03 카피 카탈로그(해요체 · 시니어=사장님).
 const EMPTY_TEXT: Record<SubtabKey, { title: string; body: string }> = {
   pending: {
-    title: '깔끔하네요!',
+    title: '깔끔하네요',
     body: '답할 질문이 하나도 없어요. 새 질문이 오면 여기로 알려드릴게요.',
   },
   auto: {

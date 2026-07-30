@@ -316,7 +316,7 @@ function AnswerSheet({
 const s = StyleSheet.create({
   flex: { flex: 1 },
   scroll: { padding: Space.gutter, gap: Space.sm },
-  empty: { fontSize: 13, color: InkColors.ink3, paddingVertical: 14, textAlign: 'center' },
+  empty: { fontSize: 15, color: InkColors.ink3, paddingVertical: 14, textAlign: 'center' },
   list: { gap: Space.sm, marginBottom: Space.sm },
 
   qCard: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, backgroundColor: InkColors.bg, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md, padding: Space.md, ...Elevation.e1 },
@@ -337,7 +337,7 @@ const s = StyleSheet.create({
   rowCardCol: { flexDirection: 'column', alignItems: 'stretch', gap: 6 },
   rowLine: { flexDirection: 'row', alignItems: 'center', gap: 9 },
   rejectNote: { fontSize: 12, color: InkColors.ink2, fontWeight: '600', lineHeight: 17, backgroundColor: InkColors.cream, borderRadius: Radius.sm, paddingHorizontal: 9, paddingVertical: 7 },
-  rowText: { flex: 1, fontSize: 13.5, fontWeight: '600', color: InkColors.ink },
+  rowText: { flex: 1, fontSize: 15, fontWeight: '600', color: InkColors.ink },
   statusTag: { fontSize: 11, fontWeight: '800', color: InkColors.ink3 },
   answeredTag: { fontSize: 10.5, fontWeight: '800', color: BrandColors.good, backgroundColor: '#E6F1EA', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 5 },
 
@@ -348,11 +348,11 @@ const s = StyleSheet.create({
   qBox: { backgroundColor: InkColors.cream, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md, padding: 13, marginBottom: 14 },
   qBoxText: { fontSize: 14.5, fontWeight: '700', color: InkColors.ink, lineHeight: 21 },
   sheetLabel: { fontSize: 11.5, fontWeight: '800', color: InkColors.ink2, marginBottom: 7 },
-  inp: { borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md, paddingHorizontal: 13, paddingVertical: 11, fontSize: 14, color: InkColors.ink, backgroundColor: InkColors.bg },
+  inp: { borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md, paddingHorizontal: 13, paddingVertical: 11, fontSize: 15, color: InkColors.ink, backgroundColor: InkColors.bg },
   inpMulti: { minHeight: 68, textAlignVertical: 'top', lineHeight: 20 },
   results: { marginTop: 6, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md, backgroundColor: InkColors.bg, overflow: 'hidden' },
   resultRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: InkColors.paper },
-  resultText: { flex: 1, fontSize: 13.5, fontWeight: '600', color: InkColors.ink },
+  resultText: { flex: 1, fontSize: 15, fontWeight: '600', color: InkColors.ink },
   resultPick: { fontSize: 11.5, fontWeight: '800', color: BrandColors.good },
   resultEmpty: { fontSize: 12.5, color: InkColors.ink3, paddingHorizontal: 12, paddingVertical: 12 },
   divider: { height: 1, backgroundColor: InkColors.line, marginVertical: 18 },

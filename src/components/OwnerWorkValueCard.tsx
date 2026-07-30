@@ -107,7 +107,7 @@ const styles = StyleSheet.create({
   },
   empty: { fontSize: 12.5, fontWeight: '600', color: InkColors.ink3, lineHeight: 18, paddingVertical: 4 },
   summary: { marginBottom: 4 },
-  summaryText: { fontSize: 13, fontWeight: '800', color: InkColors.ink },
+  summaryText: { fontSize: 15, fontWeight: '800', color: InkColors.ink },
   summaryRest: { color: BrandColors.bad },
   summaryDone: { color: BrandColors.good },
   row: {

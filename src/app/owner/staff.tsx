@@ -130,7 +130,7 @@ export default function OwnerStaffScreen() {
         {/* ② 초대코드 */}
         <Appear delay={60}>
         <View style={styles.inviteCard}>
-          <Text style={styles.inviteLabel}>가게 초대코드</Text>
+          <Text style={styles.inviteLabel}>매장 초대코드</Text>
           <Text style={styles.inviteCode}>{INVITE_CODE}</Text>
           <Text style={styles.inviteHint}>직원이 코드를 입력해 신청하면 아래에서 승인해 주세요. 승인 전에는 매장 정보에 접근할 수 없어요.</Text>
           <View style={styles.inviteBtnRow}>
@@ -342,13 +342,13 @@ const styles = StyleSheet.create({
   wageBox: { alignItems: 'flex-end', gap: 3 },
   wageLabel: { fontSize: 11, color: InkColors.ink3, fontWeight: '600' },
   wageInputRow: { flexDirection: 'row', alignItems: 'center', gap: 3 },
-  wageInput: { minWidth: 64, textAlign: 'right', borderWidth: 1, borderColor: InkColors.line, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 5, fontSize: 14, color: InkColors.ink },
+  wageInput: { minWidth: 64, textAlign: 'right', borderWidth: 1, borderColor: InkColors.line, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 5, fontSize: 15, color: InkColors.ink },
   wageWon: { fontSize: 13, color: InkColors.ink3 },
   removeBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center', borderRadius: Radius.sm, backgroundColor: BrandColors.accentSoft },
 
   demoNote: { fontSize: 12, color: InkColors.ink3, marginTop: 6 },
   emptyBox: { alignItems: 'center', gap: 8, paddingVertical: 28, backgroundColor: '#FFFFFF', borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line },
-  emptyText: { fontSize: 13, color: InkColors.ink3, textAlign: 'center', lineHeight: 19 },
+  emptyText: { fontSize: 15, color: InkColors.ink3, textAlign: 'center', lineHeight: 22 },
   retryBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: InkColors.ink, paddingVertical: 9, paddingHorizontal: 16, borderRadius: Radius.pill, marginTop: 2 },
   retryText: { color: '#FFFFFF', fontSize: 13, fontWeight: '800' },
 });

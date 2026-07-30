@@ -117,7 +117,7 @@ export default function JuniorLayout() {
       <Stack.Screen name="schedule" options={{ title: '근무표', headerLeft: () => <HeaderBackButton fallback="/junior/home" /> }} />
       <Stack.Screen name="notifications" options={{ title: '알림', headerLeft: () => <HeaderBackButton fallback="/junior/home" /> }} />
       <Stack.Screen name="hub" options={{ headerShown: false }} />
-      <Stack.Screen name="join" options={{ title: '가게 연결' }} />
+      <Stack.Screen name="join" options={{ title: '매장 연결' }} />
       <Stack.Screen name="onboarding" options={{ headerShown: false }} />
     </Stack>
   );

@@ -11,7 +11,7 @@
 //
 // 배포:
 //   supabase functions deploy push
-//   supabase secrets set VAPID_PUBLIC_KEY=...  VAPID_PRIVATE_KEY=...  VAPID_SUBJECT=mailto:contact@team-roundtable.com
+//   supabase secrets set VAPID_PUBLIC_KEY=...  VAPID_PRIVATE_KEY=...  VAPID_SUBJECT=mailto:cristianojun@naver.com
 //   (SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY / SUPABASE_ANON_KEY 는 플랫폼이 기본 주입)
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
@@ -22,7 +22,7 @@ const SERVICE_ROLE = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 const ANON = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
 const VAPID_PUBLIC = Deno.env.get('VAPID_PUBLIC_KEY') ?? '';
 const VAPID_PRIVATE = Deno.env.get('VAPID_PRIVATE_KEY') ?? '';
-const VAPID_SUBJECT = Deno.env.get('VAPID_SUBJECT') ?? 'mailto:contact@team-roundtable.com';
+const VAPID_SUBJECT = Deno.env.get('VAPID_SUBJECT') ?? 'mailto:cristianojun@naver.com';
 
 if (VAPID_PUBLIC && VAPID_PRIVATE) {
   webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC, VAPID_PRIVATE);

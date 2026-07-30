@@ -33,7 +33,7 @@ export default function OwnerCreateStore() {
 
   const submit = async () => {
     setErr(null);
-    if (!storeName.trim()) return setErr('가게 이름을 입력해주세요.');
+    if (!storeName.trim()) return setErr('매장 이름을 입력해주세요.');
     if (!industry) return setErr('업종을 선택해주세요.');
     if (bizNo.trim() && !isValidBizNo(bizNo)) return setErr('사업자등록번호 형식(10자리)을 확인해주세요. 비워두면 나중에 등록할 수 있어요.');
     setBusy(true);
@@ -51,7 +51,7 @@ export default function OwnerCreateStore() {
       <Stack.Screen
         options={{
           headerShown: true,
-          title: isAddingStore ? '매장 추가' : '가게 만들기',
+          title: isAddingStore ? '매장 추가' : '매장 만들기',
           ...(isAddingStore
             ? { headerLeft: () => <HeaderBackButton fallback="/stores" /> }
             : { headerLeft: () => null, headerBackVisible: false }),
@@ -62,16 +62,16 @@ export default function OwnerCreateStore() {
           <View style={styles.iconWrap}>
             <Ionicons name="storefront-outline" size={28} color={BrandColors.brand} />
           </View>
-          <Text style={styles.title}>{isAddingStore ? '새 매장을 추가해요' : '아직 만들어진 가게가 없어요'}</Text>
+          <Text style={styles.title}>{isAddingStore ? '새 매장을 추가해요' : '아직 만들어진 매장이 없어요'}</Text>
           <Text style={styles.sub}>
             {isAddingStore
               ? <>매장을 만들면 <Text style={styles.strong}>직원 초대코드</Text>가{'\n'}바로 발급돼요. 지금 매장은 그대로 있어요.</>
-              : <>{userName ? `${userName} 사장님, ` : ''}가게를 만들면 <Text style={styles.strong}>직원 초대코드</Text>가{'\n'}바로 발급돼요.</>}
+              : <>{userName ? `${userName} 사장님, ` : ''}매장을 만들면 <Text style={styles.strong}>직원 초대코드</Text>가{'\n'}바로 발급돼요.</>}
           </Text>
         </View>
 
         <View style={styles.card}>
-          <Text style={styles.label}>가게 이름<Text style={styles.req}> *</Text></Text>
+          <Text style={styles.label}>매장 이름<Text style={styles.req}> *</Text></Text>
           <TextInput
             value={storeName}
             onChangeText={(v) => {
@@ -120,7 +120,7 @@ export default function OwnerCreateStore() {
             onPress={submit}
             style={({ pressed }) => [styles.primary, pressed && valid && { opacity: 0.88 }, (busy || !valid) && { opacity: 0.5 }]}
           >
-            {busy ? <ActivityIndicator color="#FFF" /> : <Text style={styles.primaryText}>가게 만들고 시작하기</Text>}
+            {busy ? <ActivityIndicator color="#FFF" /> : <Text style={styles.primaryText}>매장 만들고 시작하기</Text>}
           </Pressable>
         </View>
 
@@ -138,7 +138,7 @@ const styles = StyleSheet.create({
   hero: { alignItems: 'center', gap: 10 },
   iconWrap: { width: 56, height: 56, borderRadius: 28, backgroundColor: BrandColors.brandSoft, alignItems: 'center', justifyContent: 'center' },
   title: { fontSize: 21, fontWeight: '900', color: InkColors.ink, textAlign: 'center' },
-  sub: { fontSize: 14, color: InkColors.ink2, textAlign: 'center', lineHeight: 21 },
+  sub: { fontSize: 15, color: InkColors.ink2, textAlign: 'center', lineHeight: 22 },
   strong: { fontWeight: '800', color: InkColors.ink },
 
   card: { backgroundColor: '#FFFFFF', borderRadius: Radius.lg, borderWidth: 1, borderColor: InkColors.line, padding: 20, gap: 8 },
@@ -154,7 +154,7 @@ const styles = StyleSheet.create({
   bizOk: { color: BrandColors.good },
   bizBad: { color: InkColors.ink3 },
 
-  err: { fontSize: 13, color: BrandColors.accent, fontWeight: '600', marginTop: 4 },
+  err: { fontSize: 15, color: BrandColors.accent, fontWeight: '600', marginTop: 4 },
   primary: { marginTop: 12, backgroundColor: BrandColors.brand, paddingVertical: 16, borderRadius: Radius.md, alignItems: 'center' },
   primaryText: { color: '#FFFFFF', fontSize: 16, fontWeight: '800' },
   logoutRow: { alignItems: 'center', paddingVertical: 4 },

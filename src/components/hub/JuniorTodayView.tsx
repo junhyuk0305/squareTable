@@ -244,7 +244,7 @@ const styles = StyleSheet.create({
   groupTitle: { fontSize: 11.5, fontWeight: '800', color: InkColors.ink3 },
   todoRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingVertical: Space.sm },
   checkbox: { width: 16, height: 16, borderRadius: 5, borderWidth: 1.5, borderColor: InkColors.ink3 },
-  todoText: { flex: 1, fontSize: 13, fontWeight: '600', color: InkColors.ink, minWidth: 0 },
+  todoText: { flex: 1, fontSize: 15, fontWeight: '600', color: InkColors.ink, minWidth: 0 },
   mineChip: {
     fontSize: 10, fontWeight: '900', color: '#7a5f10', backgroundColor: BrandColors.yellowSoft,
     paddingHorizontal: 6, paddingVertical: 1, borderRadius: Radius.pill, overflow: 'hidden',
@@ -269,6 +269,6 @@ const styles = StyleSheet.create({
   storeName: { flex: 1, fontSize: 13.5, fontWeight: '700', color: InkColors.ink, minWidth: 0 },
   storeMeta: { fontSize: 12, color: InkColors.ink3 },
 
-  emptyText: { fontSize: 13, color: InkColors.ink3, textAlign: 'center', paddingVertical: Space.sm },
+  emptyText: { fontSize: 15, color: InkColors.ink3, textAlign: 'center', paddingVertical: Space.sm },
   caption: { fontSize: 11.5, color: InkColors.ink3, marginTop: Space.sm, textAlign: 'center' },
 });

@@ -91,7 +91,7 @@ export default function OwnerScheduleScreen() {
             <Ionicons name="storefront-outline" size={18} color={InkColors.ink} />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={styles.infoTitle}>가게 기본 정보</Text>
+            <Text style={styles.infoTitle}>매장 기본 정보</Text>
             <Text style={styles.infoSub}>
               운영 {config.open}~{config.close} · 휴무 {closedDaysLabel(config.closedDays)}
             </Text>
@@ -107,7 +107,15 @@ export default function OwnerScheduleScreen() {
           {staff.length === 0 ? (
             <View style={styles.emptyBox}>
               <Ionicons name="people-outline" size={20} color={InkColors.ink3} />
-              <Text style={styles.emptyText}>합류한 직원이 없어요.{'\n'}직원 관리에서 먼저 초대해 주세요.</Text>
+              <Text style={styles.emptyText}>합류한 직원이 없어요.{'\n'}먼저 직원을 초대해 주세요.</Text>
+              {/* "직원 관리로 가세요"라고 쓰고 이동을 안 주면 사장이 메뉴를 찾아 헤맨다(복잡도 원칙 P6). */}
+              <Pressable
+                onPress={() => router.push('/owner/staff')}
+                style={({ pressed }) => [styles.emptyBtn, pressed && { opacity: 0.85 }]}
+                accessibilityRole="button"
+              >
+                <Text style={styles.emptyBtnText}>직원 초대하기</Text>
+              </Pressable>
             </View>
           ) : (
             <View style={styles.staffList}>
@@ -229,7 +237,9 @@ const styles = StyleSheet.create({
   badgeText: { fontSize: 12, fontWeight: '900', color: InkColors.bubbleText },
 
   emptyBox: { alignItems: 'center', gap: 8, paddingVertical: 24, backgroundColor: InkColors.bg, borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line },
-  emptyText: { fontSize: 13, color: InkColors.ink3, textAlign: 'center', lineHeight: 19 },
+  emptyText: { fontSize: 15, color: InkColors.ink3, textAlign: 'center', lineHeight: 22 },
+  emptyBtn: { minHeight: 48, justifyContent: 'center', paddingHorizontal: 24, borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.ink, backgroundColor: '#FFFFFF' },
+  emptyBtnText: { fontSize: 15, fontWeight: '800', color: InkColors.ink },
 
   // 컨펌 카드
   card: { backgroundColor: InkColors.bg, borderRadius: Radius.md, borderWidth: 1, borderColor: BrandColors.yellowDeep, padding: 14, gap: 10, ...Elevation.e1 },
@@ -244,7 +254,7 @@ const styles = StyleSheet.create({
   flowLabel: { fontSize: 11, fontWeight: '800', color: InkColors.ink3 },
   flowName: { fontSize: 15, fontWeight: '800', color: InkColors.ink },
   flowWhen: { fontSize: 12, color: InkColors.ink2, lineHeight: 17, fontWeight: '600' },
-  cardNote: { fontSize: 13, color: InkColors.ink2, fontStyle: 'italic', backgroundColor: InkColors.cream, borderRadius: Radius.sm, paddingHorizontal: 10, paddingVertical: 8 },
+  cardNote: { fontSize: 15, color: InkColors.ink2, fontStyle: 'italic', backgroundColor: InkColors.cream, borderRadius: Radius.sm, paddingHorizontal: 10, paddingVertical: 8 },
 
   actions: { flexDirection: 'row', gap: 10 },
   actBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: 12, borderRadius: Radius.md },

@@ -72,12 +72,12 @@ function AccountEditForm() {
   };
 
   const saveStore = async () => {
-    if (!store.trim()) return showToast('가게 이름을 입력해주세요.', 'warn');
+    if (!store.trim()) return showToast('매장 이름을 입력해주세요.', 'warn');
     setBusy(true);
     const { error, remaining: left } = await renameStore(store.trim());
     setBusy(false);
     setRemaining(left);
-    showToast(error ?? '가게 이름을 변경했어요.', error ? 'warn' : 'good');
+    showToast(error ?? '매장 이름을 변경했어요.', error ? 'warn' : 'good');
   };
 
   const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -153,7 +153,7 @@ function AccountEditForm() {
 
         {role === 'owner' && (
           <>
-            <Text style={[styles.group, { color: BrandColors.brand }]}>가게 이름<Text style={styles.req}> *</Text> · 사장님만</Text>
+            <Text style={[styles.group, { color: BrandColors.brand }]}>매장 이름<Text style={styles.req}> *</Text> · 사장님만</Text>
             <View style={[styles.card, styles.storeCard]}>
               <TextInput value={store} onChangeText={setStore} placeholder="예: 착착 카페 신촌점" placeholderTextColor={InkColors.ink3} style={styles.input} />
               <View style={styles.storeMetaRow}>
@@ -167,7 +167,7 @@ function AccountEditForm() {
                 onPress={saveStore}
                 style={({ pressed }) => [styles.primary, { marginTop: 4 }, pressed && { opacity: 0.88 }, (busy || remaining <= 0 || !store.trim()) && { opacity: 0.5 }]}
               >
-                {busy ? <ActivityIndicator color="#FFF" /> : <Text style={styles.primaryText}>{remaining <= 0 ? '변경 횟수 소진' : '가게 이름 저장'}</Text>}
+                {busy ? <ActivityIndicator color="#FFF" /> : <Text style={styles.primaryText}>{remaining <= 0 ? '변경 횟수 소진' : '매장 이름 저장'}</Text>}
               </Pressable>
             </View>
 

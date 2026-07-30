@@ -57,7 +57,7 @@ export function TextScaleModal({ visible, onClose }: { visible: boolean; onClose
       </View>
 
       <Pressable onPress={onClose} style={({ pressed }) => [s.doneBtn, pressed && { opacity: 0.85 }]}>
-        <Text style={s.doneText}>완료</Text>
+        <Text style={s.doneText}>닫기</Text>
       </Pressable>
     </BottomSheet>
   );

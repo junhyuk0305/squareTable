@@ -133,7 +133,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 3,
-    minHeight: 44,
+    // 터치 타깃 하한 48dp (화면복잡도 원칙 §4) — 40대 사용자 + 매장 환경 기준.
+    minHeight: 48,
     paddingVertical: 4,
   },
   label: {

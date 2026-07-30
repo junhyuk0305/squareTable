@@ -212,7 +212,7 @@ const styles = StyleSheet.create({
   dotOn: { backgroundColor: InkColors.ink, width: 16 },
   count: { marginLeft: 'auto', fontSize: 12, fontWeight: '700', color: InkColors.ink3 },
   title: { fontSize: 17, lineHeight: 24, fontWeight: '900', color: InkColors.ink },
-  body: { fontSize: 14, color: InkColors.ink2, lineHeight: 21 },
+  body: { fontSize: 15, color: InkColors.ink2, lineHeight: 22 },
   actions: { flexDirection: 'row', alignItems: 'center', marginTop: Space.sm },
   skip: { paddingVertical: Space.sm, paddingHorizontal: Space.xs },
   skipText: { fontSize: 13, fontWeight: '700', color: InkColors.ink3 },

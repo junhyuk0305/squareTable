@@ -65,5 +65,5 @@ const styles = StyleSheet.create({
   scroll: { padding: Space.gutter, gap: Space.lg, paddingBottom: 40 },
   titleBlock: { gap: 4 },
   title: { fontSize: 26, fontWeight: '900', color: InkColors.ink, letterSpacing: -0.5 },
-  subtitle: { fontSize: 14, color: InkColors.ink2 },
+  subtitle: { fontSize: 15, color: InkColors.ink2 },
 });

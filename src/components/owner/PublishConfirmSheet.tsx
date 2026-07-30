@@ -226,7 +226,7 @@ const styles = StyleSheet.create({
   warnHead: { flexDirection: 'row', alignItems: 'center', gap: Space.xs },
   warnTitle: { fontSize: 14, fontWeight: '800', color: InkColors.ink },
   warnRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
-  warnExisting: { flex: 1, fontSize: 13, color: InkColors.ink2 },
+  warnExisting: { flex: 1, fontSize: 15, color: InkColors.ink2 },
   warnCta: { paddingVertical: 6, paddingHorizontal: Space.md, borderRadius: Radius.pill, backgroundColor: InkColors.ink },
   warnCtaText: { fontSize: 12, fontWeight: '800', color: '#FFFFFF' },
   warnHint: { fontSize: 12, color: InkColors.ink3, lineHeight: 17 },

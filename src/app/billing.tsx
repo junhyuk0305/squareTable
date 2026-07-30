@@ -196,7 +196,7 @@ function BillingBody() {
               {expired
                 ? isOwner
                   ? '이 매장의 이용 기간이 끝났어요. 이용 재개는 관리자에게 문의해 주세요.'
-                  : '가게의 이용 기간이 끝났어요. 사장님께 문의해 주세요.'
+                  : '매장의 이용 기간이 끝났어요. 사장님께 문의해 주세요.'
                 : '이 매장은 정상적으로 이용 중이에요.'}
             </Text>
           </View>
@@ -236,7 +236,7 @@ function BillingBody() {
           <View style={styles.card}>
             <Text style={styles.body}>
               {view.state === 'expired'
-                ? '가게의 이용 기간이 끝났어요. 사장님이 이용을 연장하면 바로 다시 쓸 수 있어요.'
+                ? '매장의 이용 기간이 끝났어요. 사장님이 이용을 연장하면 바로 다시 쓸 수 있어요.'
                 : '이용에 문제가 없어요.'}
             </Text>
           </View>
@@ -444,7 +444,7 @@ const styles = StyleSheet.create({
     gap: Space.md,
     ...Elevation.e1,
   },
-  body: { fontSize: 14, color: InkColors.ink2, lineHeight: 21 },
+  body: { fontSize: 15, color: InkColors.ink2, lineHeight: 22 },
   hint: { fontSize: 12, color: InkColors.ink3, lineHeight: 18 },
 
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Space.md },

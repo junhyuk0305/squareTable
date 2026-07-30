@@ -113,7 +113,7 @@ const styles = StyleSheet.create({
   iconCircleDanger: { backgroundColor: BrandColors.accentSoft },
   title: { fontSize: 18, fontWeight: '800', color: InkColors.ink, textAlign: 'center' },
   titleDanger: { color: BrandColors.bad },
-  message: { fontSize: 14, color: InkColors.ink2, marginTop: 8, lineHeight: 21, textAlign: 'center' },
+  message: { fontSize: 15, color: InkColors.ink2, marginTop: 8, lineHeight: 22, textAlign: 'center' },
   accent: { fontSize: 13, color: BrandColors.bad, fontWeight: '700', marginTop: 8, lineHeight: 20, textAlign: 'center' },
   actions: { flexDirection: 'row', gap: 10, marginTop: 22, alignSelf: 'stretch' },
   btn: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 13, borderRadius: 12 },

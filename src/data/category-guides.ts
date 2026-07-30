@@ -93,7 +93,7 @@ export const CATEGORY_GUIDES: Record<Category, CategoryGuide> = {
     followups: [
       {
         cell: 'situation',
-        ask: '알바가 이걸 모르면 무슨 실수를 하나요?',
+        ask: '직원이 이걸 모르면 무슨 실수를 하나요?',
         hint: '모르면 생기는 사고 한 가지.',
       },
     ],

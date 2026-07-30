@@ -236,7 +236,7 @@ const styles = StyleSheet.create({
     backgroundColor: InkColors.bg, borderWidth: 1, borderColor: InkColors.line,
     borderRadius: Radius.pill, paddingHorizontal: 14, paddingVertical: 9, ...Elevation.e1,
   },
-  searchInput: { flex: 1, fontSize: 14, color: InkColors.ink, padding: 0 },
+  searchInput: { flex: 1, fontSize: 15, color: InkColors.ink, padding: 0 },
 
   resultCount: { fontSize: 12.5, fontWeight: '700', color: InkColors.ink3, paddingLeft: 4 },
 

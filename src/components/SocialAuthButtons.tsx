@@ -82,5 +82,5 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
   },
   btnText: { fontSize: 15, lineHeight: 21, fontWeight: '800', color: InkColors.ink },
-  err: { fontSize: 13, lineHeight: 19, color: '#D14343', fontWeight: '700', textAlign: 'center' },
+  err: { fontSize: 15, lineHeight: 22, color: '#D14343', fontWeight: '700', textAlign: 'center' },
 });

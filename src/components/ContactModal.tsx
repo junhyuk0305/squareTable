@@ -68,7 +68,7 @@ const styles = StyleSheet.create({
   card: { width: '100%', maxWidth: 360, backgroundColor: '#FFFFFF', borderRadius: Radius.lg, padding: 22, borderWidth: 1, borderColor: InkColors.line, alignItems: 'center' },
   iconCircle: { width: 52, height: 52, borderRadius: 26, backgroundColor: InkColors.bgSoft, alignItems: 'center', justifyContent: 'center', marginBottom: 14 },
   title: { fontSize: 18, fontWeight: '800', color: InkColors.ink, textAlign: 'center' },
-  message: { fontSize: 14, color: InkColors.ink2, marginTop: 8, lineHeight: 21, textAlign: 'center' },
+  message: { fontSize: 15, color: InkColors.ink2, marginTop: 8, lineHeight: 22, textAlign: 'center' },
   emailRow: {
     flexDirection: 'row',
     alignItems: 'center',

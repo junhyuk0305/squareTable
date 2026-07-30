@@ -120,7 +120,7 @@ export function OwnerCoachChat({
       });
       init.push({ id: nextId(), kind: 'ai', text: '이 질문에 사장님이 평소 하시던 대로 답해 주세요. 제가 노하우로 정리할게요.' });
     } else {
-      init.push({ id: nextId(), kind: 'ai', text: '알바한테 알려주듯 편하게 적어주세요. 상황·방법을 한 번에 말해도 돼요 — 정리는 제가 할게요.' });
+      init.push({ id: nextId(), kind: 'ai', text: '직원한테 알려주듯 편하게 적어주세요. 상황·방법을 한 번에 말해도 돼요 — 정리는 제가 할게요.' });
     }
     return init;
   });
@@ -195,7 +195,7 @@ export function OwnerCoachChat({
     setMessages((prev) => [
       ...prev,
       cardMsg(snap),
-      { id: nextId(), kind: 'ai', text: '이대로 등록할까요? 맞으면 ✅, 고칠 게 있으면 ✏️ 눌러주세요.' },
+      { id: nextId(), kind: 'ai', text: '이대로 등록할까요? 고칠 게 있으면 아래 ‘고칠래요’를 눌러주세요.' },
     ]);
   }, []);
 
@@ -409,7 +409,7 @@ export function OwnerCoachChat({
           pushMsg({ kind: 'ai', text: '지금은 AI 수정이 어려워 간단히 반영했어요. 내용을 확인해 주세요.' });
         }
         setMessages((prev) => [...prev, cardMsg({ square: nextSq, title: nextTitle, category })]);
-        pushMsg({ kind: 'ai', text: '고쳤어요! 더 고칠 게 있으면 말씀하시고, 괜찮으면 저장하세요.' });
+        pushMsg({ kind: 'ai', text: '고쳤어요. 더 고칠 게 있으면 말씀하시고, 괜찮으면 저장하세요.' });
       } catch (e) {
         console.warn('[coach] patch failed', e);
         setError('수정 중 문제가 생겼어요 — 다시 한 번 말씀해 주세요.');
@@ -562,7 +562,7 @@ export function OwnerCoachChat({
   const handlePublish = useCallback(() => {
     if (publishedRef.current || !square) return;
     if (!isSquarePublishable(square)) {
-      setError('할 행동이나 멘트가 하나는 있어야 등록돼요. ✏️로 한 줄만 더 채워주세요.');
+      setError('할 행동이나 멘트가 하나는 있어야 등록돼요. ‘고칠래요’로 한 줄만 더 채워주세요.');
       return;
     }
     // 수정 모드: 기존 노하우 갱신(새로 add 아님).
@@ -595,7 +595,7 @@ export function OwnerCoachChat({
   const attachPhoto = useCallback(() => {
     if (uploadingPhoto) return;
     if (Platform.OS !== 'web') {
-      pushMsg({ kind: 'ai', text: '사진 첨부는 앱을 홈 화면에 추가해 웹으로 열면 바로 쓸 수 있어요. 지금은 글로 적어 주셔도 돼요. 📷' });
+      pushMsg({ kind: 'ai', text: '사진 첨부는 앱을 홈 화면에 추가해 웹으로 열면 바로 쓸 수 있어요. 지금은 글로 적어 주셔도 돼요.' });
       return;
     }
     if (photos.length >= MAX_PHOTOS) {

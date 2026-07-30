@@ -20,17 +20,17 @@ import { Wordmark } from '@/components/Wordmark';
 
 type Pain = { icon: keyof typeof Ionicons.glyphMap; title: string; body: string };
 const PAINS: Pain[] = [
-  { icon: 'repeat-outline', title: '또 처음부터 교육', body: '알바가 바뀔 때마다 같은 걸 몇 번씩 다시 설명하고 계신가요?' },
+  { icon: 'repeat-outline', title: '또 처음부터 교육', body: '직원이 바뀔 때마다 같은 걸 몇 번씩 다시 설명하고 계신가요?' },
   { icon: 'call-outline', title: '쉬는 날에도 울리는 전화', body: '"사장님, 이건 어떻게 해요?" 쉬는 날에도 마음 편할 틈이 없어요.' },
-  { icon: 'bulb-outline', title: '노하우가 머릿속에만', body: '내가 없으면 멈추는 가게. 그렇다고 하나하나 적어둘 시간도 없죠.' },
+  { icon: 'bulb-outline', title: '노하우가 머릿속에만', body: '내가 없으면 멈추는 매장. 그렇다고 하나하나 적어둘 시간도 없죠.' },
   { icon: 'chatbubbles-outline', title: '지시가 여기저기 흩어져요', body: '카톡 공지·메모지·말로 전한 지시… 결국 아무도 제대로 안 봐요.' },
 ];
 
 type Feature = { icon: keyof typeof Ionicons.glyphMap; title: string; body: string };
 const FEATURES: Feature[] = [
-  { icon: 'sparkles', title: '우리 가게 노하우, AI가 즉답', body: '사장님이 한 번만 답을 남기면, 직원이 물을 때 AI가 우리 가게 방식 그대로 대신 답해요.' },
+  { icon: 'sparkles', title: '우리 매장 노하우, AI가 즉답', body: '사장님이 한 번만 답을 남기면, 직원이 물을 때 AI가 우리 매장 방식 그대로 대신 답해요.' },
   { icon: 'checkmark-done', title: '오픈·마감 체크리스트 한눈에', body: '오늘 할 일과 마감 점검을 채팅에서 착착. 누가 뭘 끝냈는지 사장님이 바로 확인해요.' },
-  { icon: 'chatbubble-ellipses', title: '매장 관리가 채팅 하나로', body: '공지·지시·질문이 흩어지지 않고 한곳에. 알바가 바뀌어도 노하우는 그대로 쌓여요.' },
+  { icon: 'chatbubble-ellipses', title: '매장 관리가 채팅 하나로', body: '공지·지시·질문이 흩어지지 않고 한곳에. 직원이 바뀌어도 노하우는 그대로 쌓여요.' },
 ];
 
 const OFFERS = ['설치 없이 QR로 바로 시작', '사장님이 답을 남기면 AI 두뇌 완성', '부담되면 언제든 그만두기'];
@@ -88,7 +88,7 @@ export default function LandingScreen() {
 
           <Text style={styles.h1}>
             사장님이 자리를 비워도,{'\n'}
-            <Text style={styles.h1Strong}>가게는 사장님처럼</Text> 답합니다.
+            <Text style={styles.h1Strong}>매장은 사장님처럼</Text> 답합니다.
           </Text>
           <Text style={styles.heroSub}>
             한 번만 답해두면, AI가 평생 대신 답해요.{'\n'}
@@ -254,7 +254,7 @@ const styles = StyleSheet.create({
   },
   painText: { flex: 1, gap: 3 },
   painTitle: { fontSize: 16, lineHeight: 23, fontWeight: '800', color: InkColors.ink },
-  painBody: { fontSize: 13, lineHeight: 20, color: InkColors.ink2 },
+  painBody: { fontSize: 15, lineHeight: 22, color: InkColors.ink2 },
 
   // ── SOLUTION ──
   featCard: {
@@ -277,7 +277,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   featTitle: { fontSize: 16, lineHeight: 23, fontWeight: '800', color: InkColors.ink },
-  featBody: { fontSize: 13, lineHeight: 20, color: InkColors.ink2 },
+  featBody: { fontSize: 15, lineHeight: 22, color: InkColors.ink2 },
 
   // ── OFFER ──
   offerCard: {
@@ -290,7 +290,7 @@ const styles = StyleSheet.create({
     ...Elevation.e2,
   },
   offerTitle: { fontSize: 22, lineHeight: 31, fontWeight: '900', color: InkColors.ink, letterSpacing: -0.4, marginTop: 2 },
-  offerBody: { fontSize: 14, lineHeight: 22, color: InkColors.ink2, fontWeight: '600' },
+  offerBody: { fontSize: 15, lineHeight: 22, color: InkColors.ink2, fontWeight: '600' },
   offerList: { gap: Space.sm, marginTop: Space.xs },
   offerRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
   offerRowText: { fontSize: 14, lineHeight: 21, color: InkColors.ink, fontWeight: '700' },

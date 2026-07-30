@@ -263,7 +263,7 @@ export function WorkChat({
         <>
           <Pressable style={s.menuBackdrop} onPress={() => setMenu(false)} />
           <View style={s.menu}>
-            <MenuItem icon="checkmark-circle-outline" label="할일 추가" sub={isOwner ? '가게 전체 / 나만 보기' : '나만 보기'} onPress={() => { setMenu(false); onAddTask(); }} />
+            <MenuItem icon="checkmark-circle-outline" label="할일 추가" sub={isOwner ? '매장 전체 / 나만 보기' : '나만 보기'} onPress={() => { setMenu(false); onAddTask(); }} />
             <MenuItem icon="image-outline" label="사진 보내기" sub={sendingPhoto ? '올리는 중…' : '한 번에 최대 10장'} onPress={() => { setMenu(false); onSendPhoto(); }} />
             {isOwner && <MenuItem icon="megaphone-outline" label="공지 작성" sub="사장만" onPress={() => { setMenu(false); onWriteNotice(); }} top />}
             <View style={s.menuInfoRow}>
@@ -452,7 +452,7 @@ const s = StyleSheet.create({
   // 웹: 말풍선 롱프레스로 액션시트를 여는데, 브라우저가 대신 드래그-선택을 시작해 화면 전체가
   // 선택되는 걸 막는다(스트림 전역 user-select:none). 단, 말풍선 '텍스트'(msgText)만 다시 선택 허용.
   scroll: { padding: 12, gap: 11, ...(Platform.OS === 'web' ? ({ userSelect: 'none' } as object) : null) },
-  empty: { textAlign: 'center', color: InkColors.ink3, fontSize: 13, marginTop: 40 },
+  empty: { textAlign: 'center', color: InkColors.ink3, fontSize: 15, marginTop: 40 },
   loadMore: { alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: InkColors.scrim, borderRadius: Radius.pill, paddingHorizontal: 13, paddingVertical: 6, marginBottom: 2 },
   loadMoreText: { fontSize: 11.5, color: InkColors.ink3, fontWeight: '700' },
   divider: { alignItems: 'center', marginVertical: 2 },

@@ -60,7 +60,7 @@ export default function CompleteProfileScreen() {
     if (!isValidPhone(phone)) return setErr('전화번호 형식을 확인해주세요. (예: 010-1234-5678)');
     if (!birth) return setErr('생년월일을 입력해주세요.');
     if (!birthDateISO(birth)) return setErr('생년월일 8자리를 확인해주세요. (예: 19900131)');
-    if (role === 'owner' && !storeName.trim()) return setErr('가게 이름을 입력해주세요.');
+    if (role === 'owner' && !storeName.trim()) return setErr('매장 이름을 입력해주세요.');
     if (role === 'owner' && !industry) return setErr('업종을 선택해주세요.');
     if (role === 'owner' && bizNo.trim() && !isValidBizNo(bizNo)) return setErr('사업자등록번호 형식(10자리)을 확인해주세요. 비워두면 나중에 등록할 수 있어요.');
 
@@ -105,7 +105,7 @@ export default function CompleteProfileScreen() {
       <Stack.Screen options={{ headerShown: true, title: '프로필 완성', headerStyle: { backgroundColor: '#FFFFFF' }, headerTintColor: InkColors.ink }} />
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
         <View style={styles.intro}>
-          <Text style={styles.introTitle}>거의 다 왔어요 👋</Text>
+          <Text style={styles.introTitle}>거의 다 왔어요</Text>
           <Text style={styles.introSub}>착착을 시작하려면 몇 가지만 알려주세요.</Text>
         </View>
 
@@ -114,12 +114,12 @@ export default function CompleteProfileScreen() {
         <View style={styles.roleRow}>
           {(
             [
-              { r: 'owner', emoji: '🏪', label: '사장님', desc: '가게를 운영하고\n노하우를 등록해요' },
-              { r: 'junior', emoji: '🧑‍🍳', label: '직원·알바', desc: '초대코드로\n가게에 합류해요' },
+              { r: 'owner', icon: 'storefront', label: '사장님', desc: '매장을 운영하고\n노하우를 등록해요' },
+              { r: 'junior', icon: 'person', label: '직원', desc: '초대코드로\n매장에 합류해요' },
             ] as const
           ).map((o) => (
             <Pressable key={o.r} onPress={() => setRole(o.r)} style={[styles.roleCard, role === o.r && styles.roleCardOn]}>
-              <Text style={styles.roleEmoji}>{o.emoji}</Text>
+              <Ionicons name={o.icon} size={28} color={role === o.r ? InkColors.ink : InkColors.ink3} style={styles.roleIcon} />
               <Text style={[styles.roleLabel, role === o.r && styles.roleLabelOn]}>{o.label}</Text>
               <Text style={styles.roleDesc}>{o.desc}</Text>
               {role === o.r && (
@@ -156,7 +156,7 @@ export default function CompleteProfileScreen() {
 
         {role === 'owner' ? (
           <>
-            <Field label="가게 이름" value={storeName} onChange={setStoreName} placeholder="예: 착착 카페 신촌점" required />
+            <Field label="매장 이름" value={storeName} onChange={setStoreName} placeholder="예: 착착 카페 신촌점" required />
             <View style={styles.field}>
               <Text style={styles.label}>업종<Text style={styles.req}> *</Text></Text>
               <View style={styles.chipWrap}>
@@ -188,7 +188,7 @@ export default function CompleteProfileScreen() {
           <View style={styles.joinNote}>
             <Ionicons name="information-circle-outline" size={18} color={InkColors.ink2} />
             <Text style={styles.joinNoteText}>
-              저장하면 개인 홈으로 이동해요. 거기서 사장님께 받은 <Text style={styles.joinNoteStrong}>6자리 초대코드</Text>를 넣으면 가게에 합류 신청이 돼요.
+              저장하면 개인 홈으로 이동해요. 거기서 사장님께 받은 <Text style={styles.joinNoteStrong}>6자리 초대코드</Text>를 넣으면 매장에 합류 신청이 돼요.
             </Text>
           </View>
         )}
@@ -196,7 +196,7 @@ export default function CompleteProfileScreen() {
         {err && <Text style={styles.err}>{err}</Text>}
 
         <Pressable onPress={submit} disabled={busy} style={({ pressed }) => [styles.primary, busy && styles.primaryDisabled, pressed && !busy && { opacity: 0.88 }]}>
-          {busy ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.primaryText}>{role === 'owner' ? '가게 만들고 시작하기' : '저장하고 시작하기'}</Text>}
+          {busy ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.primaryText}>{role === 'owner' ? '매장 만들고 시작하기' : '저장하고 시작하기'}</Text>}
         </Pressable>
 
         <Pressable onPress={() => void logout()} style={styles.logoutRow}>
@@ -249,12 +249,13 @@ const styles = StyleSheet.create({
   scroll: { padding: 24, gap: 14 },
   intro: { gap: 4, marginBottom: 2 },
   introTitle: { fontSize: 20, fontWeight: '900', color: InkColors.ink },
-  introSub: { fontSize: 14, lineHeight: 21, color: InkColors.ink2 },
+  introSub: { fontSize: 15, lineHeight: 22, color: InkColors.ink2 },
   roleQ: { fontSize: 16, fontWeight: '800', color: InkColors.ink, marginBottom: 2 },
   roleRow: { flexDirection: 'row', gap: 12, marginBottom: 4 },
   roleCard: { flex: 1, backgroundColor: '#FFFFFF', borderWidth: 2, borderColor: InkColors.line, borderRadius: 16, padding: 16, gap: 4 },
   roleCardOn: { borderColor: BrandColors.brand, backgroundColor: '#FFFDFB', ...Elevation.e1 },
-  roleEmoji: { fontSize: 28 },
+  // 그림 이모지 금지(워딩 §2.3) — Ionicons로 교체. 아이콘도 Text 기반이라 글자 크기 설정에 함께 반응한다.
+  roleIcon: { marginBottom: 4 },
   roleLabel: { fontSize: 16, fontWeight: '800', color: InkColors.ink2, marginTop: 4 },
   roleLabelOn: { color: BrandColors.brand },
   roleDesc: { fontSize: 12, color: InkColors.ink3, lineHeight: 17 },
@@ -273,9 +274,9 @@ const styles = StyleSheet.create({
   chipText: { fontSize: 13, fontWeight: '700', color: InkColors.ink2 },
   chipTextOn: { color: BrandColors.brand },
   joinNote: { flexDirection: 'row', alignItems: 'flex-start', gap: Space.sm, backgroundColor: BrandColors.brandSoft, borderRadius: Radius.md, padding: 14 },
-  joinNoteText: { flex: 1, fontSize: 13, color: InkColors.ink2, lineHeight: 19 },
+  joinNoteText: { flex: 1, fontSize: 15, color: InkColors.ink2, lineHeight: 22 },
   joinNoteStrong: { fontWeight: '800', color: InkColors.ink },
-  err: { color: BrandColors.accent, fontSize: 13, fontWeight: '700', lineHeight: 19 },
+  err: { color: BrandColors.accent, fontSize: 15, fontWeight: '700', lineHeight: 22 },
   primary: { marginTop: Space.sm, backgroundColor: BrandColors.brand, paddingVertical: 16, borderRadius: Radius.md, alignItems: 'center' },
   primaryDisabled: { opacity: 0.6 },
   primaryText: { color: '#FFFFFF', fontSize: 16, lineHeight: 22, fontWeight: '800' },

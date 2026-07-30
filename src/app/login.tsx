@@ -79,7 +79,7 @@ export default function LoginScreen() {
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
         <View style={styles.header}>
           <Wordmark size="lg" showEng />
-          <Text style={styles.tagline}>할 일이 착착 끝나는 가게 · 현장 운영 AI</Text>
+          <Text style={styles.tagline}>할 일이 착착 끝나는 매장 · 현장 운영 AI</Text>
         </View>
 
         <View style={styles.card}>
@@ -87,7 +87,7 @@ export default function LoginScreen() {
             <View style={styles.seg}>
               {(['owner', 'junior'] as Role[]).map((r) => (
                 <Pressable key={r} onPress={() => setRole(r)} style={[styles.segBtn, role === r && styles.segBtnOn]}>
-                  <Text style={[styles.segText, role === r && styles.segTextOn]}>{r === 'owner' ? '사장님' : '직원·알바'}</Text>
+                  <Text style={[styles.segText, role === r && styles.segTextOn]}>{r === 'owner' ? '사장님' : '직원'}</Text>
                 </Pressable>
               ))}
             </View>
@@ -181,7 +181,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   primaryText: { color: '#FFFFFF', fontSize: 16, lineHeight: 22, fontWeight: '800' },
-  msg: { fontSize: 13, lineHeight: 19, color: InkColors.ink2, textAlign: 'center', marginTop: 2 },
+  msg: { fontSize: 15, lineHeight: 22, color: InkColors.ink2, textAlign: 'center', marginTop: 2 },
   msgErr: { color: BrandColors.accent, fontWeight: '700' },
   demoNote: { fontSize: 12, lineHeight: 18, color: InkColors.ink3, textAlign: 'center' },
   signupBlock: { alignItems: 'center', gap: Space.md },

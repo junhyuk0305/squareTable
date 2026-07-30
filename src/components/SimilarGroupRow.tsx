@@ -53,7 +53,7 @@ export function SimilarGroupRow({ uq, onPress, onAutoAnswer }: SimilarGroupRowPr
 
           <View style={styles.metaRow}>
             <Text style={styles.meta} numberOfLines={1}>
-              {uq.anonymous ? '🔒 익명' : uq.junior_name} · {formatAsked(uq.asked_at, '방금')}
+              {uq.anonymous ? '익명' : uq.junior_name} · {formatAsked(uq.asked_at, '방금')}
             </Text>
             {groupLabel && (
               <View style={styles.groupBadge}>

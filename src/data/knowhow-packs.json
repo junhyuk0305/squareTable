@@ -23,7 +23,7 @@
       "환불"
     ],
     "square": {
-      "situation": "손님이 음식/음료에서 이물질 발견. 사장 부재 시 알바 1차 응대.",
+      "situation": "손님이 음식/음료에서 이물질 발견. 사장 부재 시 직원 1차 응대.",
       "quagmire": "",
       "uncover": "",
       "action": {
@@ -174,7 +174,7 @@
         "steps": [
           "1) 절대 맞받아치지 않고 낮은 목소리로 1회 정중히 안내.",
           "2) 다른 손님 안전 우선 — 동선 분리.",
-          "3) 위협 지속 시 무리한 제지 금지, 112 신고. 알바 안전이 1순위."
+          "3) 위협 지속 시 무리한 제지 금지, 112 신고. 직원 안전이 1순위."
         ],
         "scripts": [
           "\"손님, 다른 분들도 계셔서요. 진정 안 되시면 경찰에 도움 요청하겠습니다.\""
@@ -715,7 +715,7 @@
     "pack_id": "common",
     "needs_review": true,
     "correction_points": [
-      "알바 재량 한도, 사장 호출 기준"
+      "직원 재량 한도, 사장 호출 기준"
     ],
     "recommended": false
   },
@@ -1722,7 +1722,7 @@
       "밥"
     ],
     "square": {
-      "situation": "신입 알바 첫 출근.",
+      "situation": "신입 직원 첫 출근.",
       "quagmire": "",
       "uncover": "",
       "action": {
@@ -1861,7 +1861,7 @@
       "급여일"
     ],
     "square": {
-      "situation": "신입 알바 입사 시 근로 조건 확인.",
+      "situation": "신입 직원 입사 시 근로 조건 확인.",
       "quagmire": "",
       "uncover": "",
       "action": {
@@ -2608,7 +2608,7 @@
     "pack_id": "common",
     "needs_review": true,
     "correction_points": [
-      "알바 선에서 줄 수 있는 해결 카드"
+      "직원 선에서 줄 수 있는 해결 카드"
     ],
     "recommended": false
   },
@@ -2775,7 +2775,7 @@
       "어떡해"
     ],
     "square": {
-      "situation": "알바가 주문·계산·서빙 실수를 했을 때.",
+      "situation": "직원이 주문·계산·서빙 실수를 했을 때.",
       "quagmire": "",
       "uncover": "",
       "action": {
@@ -2821,7 +2821,7 @@
     "pack_id": "common",
     "needs_review": true,
     "correction_points": [
-      "알바 단독 정정 가능 범위, 보고 기준"
+      "직원 단독 정정 가능 범위, 보고 기준"
     ],
     "recommended": false
   },

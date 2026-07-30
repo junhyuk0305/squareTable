@@ -82,13 +82,13 @@ export default function OwnerSuggestionsScreen() {
     <SafeAreaView edges={['bottom']} style={styles.safe}>
       <Stack.Screen options={{ title: '노하우 제안함' }} />
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        <Text style={styles.subline}>알바가 올린 노하우 제안을 확인하고 반영하세요</Text>
+        <Text style={styles.subline}>직원이 올린 노하우 제안을 확인하고 반영하세요</Text>
 
         {pending.length === 0 ? (
           <View style={styles.empty}>
             <Text style={styles.emptyEmoji}>🤝</Text>
             <Text style={styles.emptyTitle}>대기 중인 제안이 없어요</Text>
-            <Text style={styles.emptySub}>알바가 노하우 개선·등록을 신청하면 여기로 와요.</Text>
+            <Text style={styles.emptySub}>직원이 노하우 개선·등록을 신청하면 여기로 와요.</Text>
           </View>
         ) : (
           <View style={styles.list}>
@@ -220,12 +220,12 @@ function SuggestionCard({
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: InkColors.cream },
   scroll: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 24, gap: 14 },
-  subline: { fontSize: 13, color: InkColors.ink3, fontWeight: '600' },
+  subline: { fontSize: 15, color: InkColors.ink3, fontWeight: '600' },
 
   empty: { backgroundColor: InkColors.bg, borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, padding: 28, gap: 6, alignItems: 'center' },
   emptyEmoji: { fontSize: 34 },
   emptyTitle: { fontSize: 16, fontWeight: '800', color: InkColors.ink },
-  emptySub: { fontSize: 13, color: InkColors.ink3, textAlign: 'center' },
+  emptySub: { fontSize: 15, color: InkColors.ink3, textAlign: 'center' },
 
   list: { gap: 12 },
   card: { backgroundColor: InkColors.bg, borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, padding: 16, gap: 10, ...Elevation.e1 },
@@ -239,7 +239,7 @@ const styles = StyleSheet.create({
   targetRow: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: InkColors.bgSoft, borderRadius: Radius.sm, paddingHorizontal: 10, paddingVertical: 7 },
   targetText: { flex: 1, fontSize: 12.5, fontWeight: '700', color: InkColors.ink2 },
 
-  body: { fontSize: 14.5, color: InkColors.ink, lineHeight: 21 },
+  body: { fontSize: 15, color: InkColors.ink, lineHeight: 22 },
 
   actions: { flexDirection: 'row', gap: 8, marginTop: 2 },
   btn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: 11, borderRadius: Radius.md },
@@ -252,7 +252,7 @@ const styles = StyleSheet.create({
   declineSheet: { paddingHorizontal: 20, paddingBottom: 20, gap: 10 },
   declineTitle: { fontSize: 16, fontWeight: '800', color: InkColors.ink },
   declineSub: { fontSize: 12.5, color: InkColors.ink3, fontWeight: '600' },
-  declineInput: { borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.sm, paddingHorizontal: 13, paddingVertical: 11, fontSize: 14, color: InkColors.ink, backgroundColor: InkColors.cream, minHeight: 72, textAlignVertical: 'top' },
+  declineInput: { borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.sm, paddingHorizontal: 13, paddingVertical: 11, fontSize: 15, color: InkColors.ink, backgroundColor: InkColors.cream, minHeight: 72, textAlignVertical: 'top' },
   declineBtns: { flexDirection: 'row', gap: 8, marginTop: 2 },
 
   handledWrap: { marginTop: 6, gap: 8 },

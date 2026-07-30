@@ -26,10 +26,10 @@ export default function TermsScreen() {
           이용자는 회원가입 시 본 약관에 동의함으로써 서비스를 이용할 수 있습니다. 매장 단위로 계정이 생성되며, 사장님은 초대코드로 직원을 합류시킬 수 있습니다.
         </Section>
         <Section title="제3조 (유료 서비스 및 결제)">
-          일부 기능은 매장 단위 월 정기결제(구독)로 제공됩니다. 결제 금액·주기·해지 방법은 결제 화면에 고지하며, 결제는 회사가 위탁한 전자결제대행사를 통해 처리됩니다.
+          일부 기능은 매장 단위 월 선불 이용권으로 제공됩니다. 결제는 계좌이체로 하며, 회사는 결제수단을 저장하지 않고 자동결제·자동청구를 하지 않습니다. 요금은 앱 내 요금제 화면에 게시합니다.
         </Section>
-        <Section title="제4조 (구독 해지 및 환불)">
-          이용자는 언제든지 구독을 해지할 수 있습니다. 환불은 관계 법령(전자상거래법 등) 및 회사가 별도 고지하는 환불 정책에 따릅니다.
+        <Section title="제4조 (이용권 종료 및 환불)">
+          이용 기간이 끝나면 추가 요금 없이 무료 요금제로 자동 전환되며, 매장 데이터는 삭제되지 않습니다. 환불은 전자상거래법 및 약관 전문 제13조(개시 전 전액, 이용 중 해지 시 일할 정산)에 따릅니다.
         </Section>
         <Section title="제5조 (이용자의 의무)">
           이용자는 타인의 정보를 도용하거나, 서비스 운영을 방해하거나, 법령·공서양속에 반하는 콘텐츠를 등록해서는 안 됩니다.
@@ -41,7 +41,7 @@ export default function TermsScreen() {
           이용자가 등록한 매장 노하우·데이터의 권리는 해당 매장에 귀속합니다. 회사는 서비스 제공 목적 범위에서만 이를 처리합니다.
         </Section>
         <Section title="제8조 (문의)">
-          서비스 관련 문의: contact@team-roundtable.com
+          서비스 관련 문의: cristianojun@naver.com
         </Section>
 
         {/* 전문은 웹 정적 페이지가 정본이다. 앱에는 요약만 두고 이중 유지하지 않는다. */}
@@ -75,6 +75,6 @@ const styles = StyleSheet.create({
   updated: { fontSize: 12, color: InkColors.ink3, marginTop: -8 },
   section: { gap: 5 },
   h2: { fontSize: 15, fontWeight: '800', color: InkColors.ink2 },
-  body: { fontSize: 14, color: InkColors.ink2, lineHeight: 21 },
+  body: { fontSize: 15, color: InkColors.ink2, lineHeight: 22 },
   link: { fontSize: 14, fontWeight: '700', color: InkColors.ink, textDecorationLine: 'underline', marginTop: Space.sm },
 });

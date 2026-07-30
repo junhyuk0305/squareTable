@@ -308,7 +308,7 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: 15, fontWeight: '800', color: InkColors.ink2, marginTop: 2 },
   sectionHint: { fontSize: 12, fontWeight: '600', color: InkColors.ink3 },
   list: { backgroundColor: '#FFFFFF', borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, paddingHorizontal: 14 },
-  empty: { fontSize: 13, color: InkColors.ink3, paddingVertical: 16, textAlign: 'center' },
+  empty: { fontSize: 15, color: InkColors.ink3, paddingVertical: 16, textAlign: 'center' },
 
   recWrap: { borderBottomWidth: 1, borderBottomColor: InkColors.line },
   recRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12 },
@@ -326,7 +326,7 @@ const styles = StyleSheet.create({
   editInline: { paddingBottom: 14, gap: 12 },
   editCard: { backgroundColor: '#FFFFFF', borderRadius: Radius.md, borderWidth: 1, borderColor: BrandColors.brand, padding: 16, gap: 12 },
   editTitle: { fontSize: 14, fontWeight: '800', color: InkColors.ink },
-  errText: { fontSize: 13, color: BrandColors.accent, fontWeight: '600' },
+  errText: { fontSize: 15, color: BrandColors.accent, fontWeight: '600' },
   editRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   editFieldLabel: { fontSize: 13, color: InkColors.ink2, fontWeight: '700' },
   editTilde: { fontSize: 14, color: InkColors.ink3, marginHorizontal: 2 },

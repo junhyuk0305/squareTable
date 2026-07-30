@@ -188,7 +188,7 @@ const styles = StyleSheet.create({
 
   createCard: { backgroundColor: InkColors.bg, borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, padding: 16, gap: 11, ...Elevation.e1 },
   createTitle: { fontSize: 15, fontWeight: '800', color: InkColors.ink },
-  input: { borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.sm, paddingHorizontal: 13, paddingVertical: 11, fontSize: 14, color: InkColors.ink, backgroundColor: InkColors.cream },
+  input: { borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.sm, paddingHorizontal: 13, paddingVertical: 11, fontSize: 15, color: InkColors.ink, backgroundColor: InkColors.cream },
   pickLabel: { fontSize: 12, fontWeight: '800', color: InkColors.ink2 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 7 },
   pick: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: Radius.pill, borderWidth: 1, borderColor: InkColors.line, backgroundColor: InkColors.bg },

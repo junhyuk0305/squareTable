@@ -67,8 +67,8 @@ export default function OwnerDashboardScreen() {
       },
       {
         targetRef: ctaRef,
-        title: '마지막으로, 알바 답을 깔아요',
-        body: '사장님이 한 번 알려주면 알바가 물었을 때 AI가 대신 답해요. 업종 추천 노하우로 빠르게 시작해보세요.',
+        title: '마지막으로, 직원 답을 깔아요',
+        body: '사장님이 한 번 알려주면 직원이 물었을 때 AI가 대신 답해요. 업종 추천 노하우로 빠르게 시작해보세요.',
         ctaLabel: '추천 노하우 깔기',
       },
     ],
@@ -143,7 +143,7 @@ export default function OwnerDashboardScreen() {
             <Text style={styles.onboardEmoji}>👋</Text>
             <Text style={styles.onboardTitle}>매장을 막 시작하셨네요</Text>
             <Text style={styles.onboardBody}>
-              아직 등록된 노하우가 없어요. 사장님이 알려주신 내용이 있어야 알바가 물었을 때 AI가 대신 답할 수 있어요.
+              아직 등록된 노하우가 없어요. 사장님이 알려주신 내용이 있어야 직원이 물었을 때 AI가 대신 답할 수 있어요.
               {'\n'}업종 <Text style={{ fontWeight: '800' }}>추천 노하우</Text>를 한 번에 깔고 시작해보세요.
             </Text>
             <View ref={ctaRef} style={{ alignSelf: 'flex-start' }}>

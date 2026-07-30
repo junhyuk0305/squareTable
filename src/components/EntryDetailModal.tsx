@@ -158,7 +158,7 @@ const s = StyleSheet.create({
   stepText: { flex: 1, fontSize: 15, color: InkColors.ink, lineHeight: 22 },
   scriptBox: { flexDirection: 'row', gap: 8, borderWidth: 1, borderColor: BrandColors.good, borderRadius: Radius.sm, paddingHorizontal: 12, paddingVertical: 10, marginTop: 2, backgroundColor: '#FFFFFF' },
   scriptMark: { fontSize: 14 },
-  scriptText: { flex: 1, fontSize: 14, color: InkColors.ink, fontStyle: 'italic', lineHeight: 20 },
+  scriptText: { flex: 1, fontSize: 15, color: InkColors.ink, fontStyle: 'italic', lineHeight: 22 },
 
   gaugeBox: { gap: 6, paddingVertical: 2 },
   gaugeHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' },

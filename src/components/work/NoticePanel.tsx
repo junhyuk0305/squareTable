@@ -84,8 +84,9 @@ export function NoticePanel({
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
+        {/* 빈 상태는 다음 행동을 알려준다(복잡도 원칙 P6). 직원은 공지를 못 쓰므로 '누가 올리는지'를 알려준다. */}
         {notices.length === 0 && (
-          <Text style={s.empty}>{isOwner ? '아직 공지가 없어요. 아래에 첫 공지를 적어보세요.' : '아직 공지가 없어요.'}</Text>
+          <Text style={s.empty}>{isOwner ? '아직 공지가 없어요. 아래에 첫 공지를 적어보세요.' : '아직 공지가 없어요. 사장님이 공지를 올리면 여기에 보여요.'}</Text>
         )}
         {notices.map((n, i) => (
           <Appear key={n.id} delay={Math.min(i * 60, 240)}>
@@ -237,7 +238,7 @@ function NoticeCard({
     <View style={[s.card, n.pinned && s.cardPinned]}>
       <View style={s.head}>
         <Text style={s.tag}>공지</Text>
-        {n.pinned && <Text style={s.pinlab}>📌 고정됨</Text>}
+        {n.pinned && <Text style={s.pinlab}>고정됨</Text>}
         <Text style={s.who}>{n.authorName}</Text>
         <Text style={s.time}>{mdHHmm(n.createdAt)}</Text>
       </View>
@@ -325,7 +326,7 @@ function NoticeCard({
 
 const s = StyleSheet.create({
   scroll: { padding: 13, gap: 11 },
-  empty: { textAlign: 'center', color: InkColors.ink3, fontSize: 13, marginTop: 40 },
+  empty: { textAlign: 'center', color: InkColors.ink3, fontSize: 15, marginTop: 40 },
 
   card: { backgroundColor: InkColors.bg, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md, padding: 12, ...Elevation.e1 },
   cardPinned: { borderColor: InkColors.ink3 },
@@ -334,9 +335,9 @@ const s = StyleSheet.create({
   pinlab: { fontSize: 10, color: InkColors.ink3, fontWeight: '700' },
   who: { fontSize: 11, color: InkColors.ink2, fontWeight: '700', marginLeft: 'auto' },
   time: { fontSize: 10, color: InkColors.ink3 },
-  body: { fontSize: 14, fontWeight: '600', color: InkColors.ink, lineHeight: 21 },
+  body: { fontSize: 15, fontWeight: '600', color: InkColors.ink, lineHeight: 22 },
 
-  editInput: { borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.sm, padding: 10, fontSize: 14, color: InkColors.ink, backgroundColor: InkColors.cream, minHeight: 60 },
+  editInput: { borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.sm, padding: 10, fontSize: 15, color: InkColors.ink, backgroundColor: InkColors.cream, minHeight: 60 },
   editActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 16, marginTop: 8 },
   editCancel: { fontSize: 13, fontWeight: '700', color: InkColors.ink3 },
   editSave: { fontSize: 13, fontWeight: '800', color: InkColors.ink },

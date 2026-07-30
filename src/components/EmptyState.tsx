@@ -45,7 +45,7 @@ const styles = StyleSheet.create({
   },
   emoji: { fontSize: 40, marginBottom: Space.xs },
   title: { fontSize: 16, fontWeight: '800', color: InkColors.ink, textAlign: 'center' },
-  body: { fontSize: 14, color: InkColors.ink2, lineHeight: 21, textAlign: 'center' },
+  body: { fontSize: 15, color: InkColors.ink2, lineHeight: 22, textAlign: 'center' },
   cta: {
     marginTop: Space.md,
     backgroundColor: BrandColors.brand,

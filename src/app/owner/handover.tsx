@@ -76,7 +76,7 @@ function LegacyHandover() {
       const out = await structureSquare({ storeId, rawText: clipped, categoryGuide: EXTRACTION_MASTER });
 
       if (out.usable === false) {
-        setError('매장 운영 내용을 못 알아봤어요. 오픈·마감·레시피·규칙처럼 알바가 따라 할 내용을 올려주세요.');
+        setError('매장 운영 내용을 못 알아봤어요. 오픈·마감·레시피·규칙처럼 직원이 따라 할 내용을 올려주세요.');
         setPhase('input');
         return;
       }

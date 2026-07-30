@@ -191,7 +191,7 @@ export function TaskComposerModal({
     const scopeL = !isOwner
       ? '나만 보기'
       : sharedMode
-        ? '가게 전체'
+        ? '매장 전체'
         : picked.length === 0
           ? '담당자 선택'
           : `담당: ${picked.map((id) => nameById[id] ?? '직원').join('·')}`;
@@ -281,7 +281,7 @@ export function TaskComposerModal({
                 <>
                   <View style={s.seg}>
                     <Pressable onPress={pickShared} style={[s.segO, sharedMode && s.segOn]}>
-                      <Text style={[s.segText, sharedMode && { color: '#fff' }]}>가게 전체</Text>
+                      <Text style={[s.segText, sharedMode && { color: '#fff' }]}>매장 전체</Text>
                     </Pressable>
                     {[{ id: me, name: '나' }, ...others].map((m) => {
                       const on = !sharedMode && picked.includes(m.id);
@@ -303,7 +303,7 @@ export function TaskComposerModal({
               ) : (
                 <View style={s.lockedScope}>
                   <Text style={s.lockedScopeText}>나만 보기</Text>
-                  <Text style={s.lockedScopeHint}>알바가 등록한 할일은 본인에게만 보여요</Text>
+                  <Text style={s.lockedScopeHint}>직원이 등록한 할일은 본인에게만 보여요</Text>
                 </View>
               )}
             </Field>
@@ -512,7 +512,7 @@ const s = StyleSheet.create({
   scroll: { flex: 1, paddingHorizontal: 16 },
   fld: { marginBottom: 13 },
   fldLabel: { fontSize: 11.5, lineHeight: 17, fontWeight: '800', color: InkColors.ink2, marginBottom: 6 },
-  inp: { borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.sm, paddingHorizontal: 13, paddingVertical: 11, fontSize: 14, color: InkColors.ink, backgroundColor: InkColors.cream },
+  inp: { borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.sm, paddingHorizontal: 13, paddingVertical: 11, fontSize: 15, color: InkColors.ink, backgroundColor: InkColors.cream },
 
   seg: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   // 칩 내부는 반드시 가로 정렬 — 담당자 칩은 선택 시 체크마크 아이콘+이름을 나란히 둔다.

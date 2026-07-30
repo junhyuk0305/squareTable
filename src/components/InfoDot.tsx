@@ -93,7 +93,7 @@ const styles = StyleSheet.create({
   },
   head: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   title: { fontSize: 17, fontWeight: '800', color: InkColors.ink, flex: 1 },
-  body: { fontSize: 14, color: InkColors.ink2, lineHeight: 22 },
+  body: { fontSize: 15, color: InkColors.ink2, lineHeight: 22 },
   btn: {
     marginTop: 4,
     alignItems: 'center',

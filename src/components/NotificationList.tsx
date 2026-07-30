@@ -144,5 +144,5 @@ const styles = StyleSheet.create({
   unreadDot: { width: 8, height: 8, borderRadius: Radius.pill, backgroundColor: BrandColors.accent },
   empty: { alignItems: 'center', gap: 8, paddingVertical: 48 },
   emptyText: { fontSize: 15, fontWeight: '800', color: InkColors.ink2 },
-  emptySub: { fontSize: 13, color: InkColors.ink3, textAlign: 'center', lineHeight: 19 },
+  emptySub: { fontSize: 15, color: InkColors.ink3, textAlign: 'center', lineHeight: 22 },
 });

@@ -9,8 +9,8 @@
 //   전자우편주소를 함께 표시하도록 요구하므로, 유료 판매를 여는 시점 전에 대표번호(070 등)를
 //   확보해 여기에 채워야 한다. 채워지면 자동으로 행이 렌더된다.
 //
-// ★ 대외 창구는 contact@team-roundtable.com 하나로 통일한다. 결제 문의·환불 요청·개인정보
-//   권리행사가 전부 이 주소로 오므로, 개인 계정 주소를 대외 문서에 섞지 않는다.
+// ★ 대외 창구는 cristianojun@naver.com 하나로 통일한다. 결제 문의·환불 요청·개인정보
+//   권리행사가 전부 이 주소로 오므로, 다른 주소를 대외 문서에 섞지 않는다.
 
 export const BUSINESS_INFO = {
   companyName: '팀 스퀘어테이블',
@@ -19,7 +19,7 @@ export const BUSINESS_INFO = {
   mailOrderNo: '', // ← 통신판매업 신고증 수령 후 여기만 (예: '제2026-서울마포-1234호')
   address: '', // ← 사업자등록증 기재 주소 그대로
   phone: '', // ← 고객센터 대표번호 확보 후 (예: '070-1234-5678')
-  email: 'contact@team-roundtable.com',
+  email: 'cristianojun@naver.com',
   hosting: 'Supabase / Vercel',
 } as const;
 

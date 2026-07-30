@@ -53,11 +53,12 @@ export function PersonalizeSheet({
         <Text style={[styles.fieldLabel, { marginTop: 18 }]}>매장 색</Text>
         <View style={styles.swatchRow}>
           {/* 자동색 = 저장값 없음(null). */}
-          <Pressable onPress={() => setSel(null)} style={[styles.swatch, { backgroundColor: autoColor }, sel === null && styles.swatchOn]} accessibilityRole="button" accessibilityLabel="자동 색">
+          {/* hitSlop 5 — 스와치는 38dp라 그대로면 터치 타깃 하한(48dp) 미달. 색 원은 그대로 두고 터치만 넓힌다. */}
+          <Pressable onPress={() => setSel(null)} hitSlop={5} style={[styles.swatch, { backgroundColor: autoColor }, sel === null && styles.swatchOn]} accessibilityRole="button" accessibilityLabel="자동 색">
             {sel === null && <Ionicons name="checkmark" size={16} color="#fff" />}
           </Pressable>
           {STORE_COLORS.map((c) => (
-            <Pressable key={c} onPress={() => setSel(c)} style={[styles.swatch, { backgroundColor: c }, sel === c && styles.swatchOn]} accessibilityRole="button" accessibilityLabel={`색 ${c}`}>
+            <Pressable key={c} onPress={() => setSel(c)} hitSlop={5} style={[styles.swatch, { backgroundColor: c }, sel === c && styles.swatchOn]} accessibilityRole="button" accessibilityLabel={`색 ${c}`}>
               {sel === c && <Ionicons name="checkmark" size={16} color="#fff" />}
             </Pressable>
           ))}
