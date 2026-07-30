@@ -12,6 +12,7 @@ import { BILLING_INFO, formatKrw } from '@/lib/config/billing';
 import { PLANS, PLAN_ORDER, planMonthlyPrice, type PlanId } from '@/lib/config/tiers';
 import { SHOW_BILLING } from '@/lib/config/store-policy';
 import { usePaymentClaimStore, CLAIM_ERROR_TEXT } from '@/lib/store/usePaymentClaimStore';
+import { HeaderBackButton } from '@/components/HeaderBackButton';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
@@ -50,6 +51,10 @@ function BillingBody() {
 
   const view = deriveSubscription({ subStatus, trialEndsAt, paidUntil, plan });
   const isOwner = role === 'owner';
+  // 이 화면은 두 모드다: ①만료 페이월(강제 라우팅 — 뒤로 갈 곳이 없다) ②자발 방문(설정·매장 추가에서
+  // 업그레이드하러 옴 — 뒤로가기가 있어야 한다). 진입 시점 entitled 로 모드를 고정한다 — 승인으로
+  // 도중에 entitled 가 돼도 모드가 바뀌며 헤더가 출렁이지 않게. (useState 초기값 = 마운트 1회 고정)
+  const [entitledAtMount] = useState(view.entitled);
   const [busy, setBusy] = useState(false);
   // 입금자명 — 계좌이체는 이게 유일한 대사 키다(운영자가 은행 내역과 맞추는 값). 이름 기본값으로 시작.
   const [depositor, setDepositor] = useState(userName ?? '');
@@ -75,6 +80,9 @@ function BillingBody() {
       //   유일한 도달 경로다(승인은 아래 라우팅으로 앱에 들어가면서 자연히 확인된다).
       // iOS 네이티브는 신고 UI 자체가 없다(SHOW_BILLING) — 보여줄 데 없는 조회를 돌리지 않는다.
       if (isOwner && SHOW_BILLING) void hydrateClaims();
+      // 자동 진입은 페이월 모드에서만 — 자발 방문(entitled 로 진입, 무료 사장 업그레이드 등)은 처음부터
+      // entitled 라 이 판정이 30초 만에 무조건 참이 되어, 입금자명 입력 중에 화면을 뺏는다.
+      if (entitledAtMount) return;
       const s = useSessionStore.getState();
       if (!s.unitId) return;
       if (deriveSubscription({ subStatus: s.subStatus, trialEndsAt: s.trialEndsAt, paidUntil: s.paidUntil, plan: s.plan }).entitled) {
@@ -102,8 +110,10 @@ function BillingBody() {
       paidUntil: useSessionStore.getState().paidUntil,
       plan: useSessionStore.getState().plan,
     });
-    if (v.entitled) router.replace(isOwner ? '/owner/dashboard' : '/junior/home');
-    else showToast('아직 활성화 전이에요. 입금 확인 후 반영돼요.');
+    if (!v.entitled) return showToast('아직 활성화 전이에요. 입금 확인 후 반영돼요.');
+    // 페이월 모드에서만 앱으로 진입시킨다. 자발 방문자는 화면에 남아 현재 요금제를 확인한다(뒤로가기로 나감).
+    if (!entitledAtMount) return router.replace(isOwner ? '/owner/dashboard' : '/junior/home');
+    showToast(`현재 ${PLANS[useSessionStore.getState().plan].name} 요금제예요.`);
   };
 
   const copy = (label: string, value: string) => {
@@ -216,8 +226,16 @@ function BillingBody() {
   }
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
-      <Stack.Screen options={{ headerShown: false }} />
+    <SafeAreaView style={styles.safe} edges={entitledAtMount ? ['bottom'] : ['top', 'bottom']}>
+      {/* 자발 방문(업그레이드하러 옴)엔 뒤로가기 헤더 — 없으면 로그아웃 말곤 나갈 길이 없다.
+          페이월 모드(만료 강제 라우팅)는 헤더 없음 유지 — 뒤로 갈 유효한 화면이 없다. */}
+      <Stack.Screen
+        options={
+          entitledAtMount
+            ? { headerShown: true, title: '요금제', headerLeft: () => <HeaderBackButton fallback="/stores" /> }
+            : { headerShown: false }
+        }
+      />
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
         <View style={styles.hero}>
           <View style={styles.iconWrap}>
