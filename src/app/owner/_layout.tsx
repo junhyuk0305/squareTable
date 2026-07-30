@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { Stack, Redirect, usePathname } from 'expo-router';
 import { InkColors } from '@/lib/theme/colors';
 import { HeaderBackButton } from '@/components/HeaderBackButton';
+import { StoreHeaderTitle } from '@/components/StoreHeaderTitle';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { needsProfileSetup } from '@/lib/store/profileSetup';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
@@ -49,7 +50,8 @@ export default function OwnerLayout() {
     // 입금 신고 검토 결과(0083)도 벨 배지 축 — 어느 탭에 있든 '입금 확인됨/반려됨'이 잡히게.
     void usePaymentClaimStore.getState().hydrate();
     // 퇴사 6개월 경과분 개인 기록 자동 정리(기회적 1회, 실패 무해).
-    void purgeExpiredFormerStaff();
+    // 0093: 파기는 사장 전용(0027 owner_only) — 매니저 세션에서 부르면 400 + 관측 노이즈만 남아 게이트.
+    if (useSessionStore.getState().role === 'owner') void purgeExpiredFormerStaff();
     const offQ = useUnknownQueueStore.getState().subscribe();
     const offP = usePlaybookStore.getState().subscribe();
     const offW = useWorkStore.getState().subscribe();
@@ -128,10 +130,11 @@ export default function OwnerLayout() {
           ⚠️ headerLeft: undefined 는 "제거"가 아니라 위 screenOptions 의 HeaderBackButton 을 "상속"한다(=화살표가 붙음).
              확실히 없애려면 headerLeft: () => null + headerBackVisible: false 로 명시한다. */}
       <Stack.Screen name="dashboard" options={{ title: '홈', headerLeft: () => null, headerBackVisible: false }} />
-      <Stack.Screen name="categories" options={{ title: '노하우 추가', headerLeft: () => null, headerBackVisible: false }} />
-      <Stack.Screen name="inbox" options={{ title: '받은 질문', headerLeft: () => null, headerBackVisible: false }} />
-      <Stack.Screen name="work" options={{ title: '업무 채팅', headerLeft: () => null, headerBackVisible: false }} />
-      <Stack.Screen name="settings" options={{ title: '설정', headerLeft: () => null, headerBackVisible: false }} />
+      {/* 탭 루트 헤더엔 "어느 매장의 화면인가"를 상시 표시(StoreHeaderTitle) — 홈은 StoreToggle 이 담당. */}
+      <Stack.Screen name="categories" options={{ title: '노하우 추가', headerTitle: () => <StoreHeaderTitle title="노하우 추가" />, headerLeft: () => null, headerBackVisible: false }} />
+      <Stack.Screen name="inbox" options={{ title: '받은 질문', headerTitle: () => <StoreHeaderTitle title="받은 질문" />, headerLeft: () => null, headerBackVisible: false }} />
+      <Stack.Screen name="work" options={{ title: '업무 채팅', headerTitle: () => <StoreHeaderTitle title="업무 채팅" />, headerLeft: () => null, headerBackVisible: false }} />
+      <Stack.Screen name="settings" options={{ title: '설정', headerTitle: () => <StoreHeaderTitle title="설정" />, headerLeft: () => null, headerBackVisible: false }} />
       {/* 서브화면 — 전역 headerLeft(HeaderBackButton) 사용 */}
       <Stack.Screen name="staff" options={{ title: '직원·급여' }} />
       <Stack.Screen name="schedule" options={{ title: '근무표' }} />

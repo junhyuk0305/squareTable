@@ -222,17 +222,20 @@ export default function OwnerStaffScreen() {
                 <View style={styles.nameCol}>
                   <View style={styles.nameRow}>
                     <Text style={styles.staffName} numberOfLines={1}>{s.name}</Text>
-                    {/* 매니저 배지(0093) — 색이 아니라 말로(P9). 전 역할에게 보인다. */}
+                    <StatusChip status={agg?.status ?? 'out'} />
+                  </View>
+                  <View style={styles.metaRow}>
+                    {/* 매니저 배지(0093) — 색이 아니라 말로(P9). 이름 줄에 두면 이름이 0폭으로
+                        찌부러져(QA 실측) 둘째 줄에 둔다. 전 역할에게 보인다. */}
                     {isManager && (
                       <View style={[chip.wrap, { backgroundColor: InkColors.ink }]}>
                         <Text style={[chip.text, { color: '#FFFFFF' }]}>매니저</Text>
                       </View>
                     )}
-                    <StatusChip status={agg?.status ?? 'out'} />
+                    <Text style={styles.staffMeta} numberOfLines={1}>
+                      이번 달 {fmtDuration(agg?.min ?? 0)} · {won(agg?.pay ?? 0)}
+                    </Text>
                   </View>
-                  <Text style={styles.staffMeta} numberOfLines={1}>
-                    이번 달 {fmtDuration(agg?.min ?? 0)} · {won(agg?.pay ?? 0)}
-                  </Text>
                 </View>
               </Pressable>
               <View style={styles.wageBox}>
@@ -375,11 +378,14 @@ const styles = StyleSheet.create({
   nameCol: { flex: 1, minWidth: 0 },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6, minWidth: 0 },
   staffName: { fontSize: 15, fontWeight: '700', color: InkColors.ink, flexShrink: 1 },
-  staffMeta: { fontSize: 12, color: InkColors.ink3, marginTop: 2 },
+  staffMeta: { fontSize: 12, color: InkColors.ink3, flexShrink: 1 },
+  metaRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2, minWidth: 0 },
   wageBox: { alignItems: 'flex-end', gap: 3 },
   wageLabel: { fontSize: 11, color: InkColors.ink3, fontWeight: '600' },
   wageInputRow: { flexDirection: 'row', alignItems: 'center', gap: 3 },
-  wageInput: { minWidth: 64, textAlign: 'right', borderWidth: 1, borderColor: InkColors.line, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 5, fontSize: 15, color: InkColors.ink },
+  // ★폭 고정: 웹 TextInput은 명시 폭이 없으면 기본 ~20ch로 늘어나 이름 칼럼을 찌부러뜨린다(QA 실측).
+  //   maxLength 7("1000000")이 15px 폰트로 72px 안에 들어간다.
+  wageInput: { width: 72, textAlign: 'right', borderWidth: 1, borderColor: InkColors.line, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 5, fontSize: 15, color: InkColors.ink },
   wageWon: { fontSize: 13, color: InkColors.ink3 },
   removeBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center', borderRadius: Radius.sm, backgroundColor: BrandColors.accentSoft },
 
