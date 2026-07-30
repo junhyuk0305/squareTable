@@ -11,6 +11,7 @@ import { InfoDot } from '@/components/InfoDot';
 import { SectionLabel } from '@/components/SectionLabel';
 import { Appear } from '@/components/Appear';
 import { KnowhowCarousel } from '@/components/KnowhowCarousel';
+import { KnowhowCategorySheet } from '@/components/owner/KnowhowCategorySheet';
 import { getCategoryMeta, ALL_CATEGORIES } from '@/lib/utils/category';
 import { matchesKnowhowQuery } from '@/lib/utils/knowhowSearch';
 import { track } from '@/lib/analytics/track';
@@ -21,7 +22,7 @@ import { useCopyToClipboard, canCopyToClipboard } from '@/lib/utils/useCopyToCli
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
-import type { Category, PlaybookEntry } from '@/types';
+import type { PlaybookEntry } from '@/types';
 
 // ── 정렬 옵션(목록 뷰) ───────────────────────────────────────
 
@@ -122,15 +123,23 @@ export function OwnerKnowhowBrowse({
     return m;
   }, [knowhowLinks]);
   const update = usePlaybookStore((s) => s.update);
+  const customCats = usePlaybookStore((s) => s.customCategories); // 매장 커스텀 카테고리(0096)
   const userName = useSessionStore((s) => s.userName);
   const storeName = useSessionStore((s) => s.storeName);
   const { copied, copy } = useCopyToClipboard();
 
   const [query, setQuery] = useState('');
-  const [activeCat, setActiveCat] = useState<Category | null>(null); // null = 전체(단일 선택)
+  const [activeCat, setActiveCat] = useState<string | null>(null); // null = 전체(단일 선택). 기본 4종 키 또는 커스텀 id.
   const [sort, setSort] = useState<SortKey>('recent');
   const [view, setView] = useState<'dashboard' | 'list' | 'manual'>(initialNeedsReview ? 'list' : 'dashboard');
   const [onlyNeedsReview, setOnlyNeedsReview] = useState(initialNeedsReview); // 미검증 배너에서 진입
+  const [catSheet, setCatSheet] = useState(false); // 카테고리 편집 시트
+
+  // 필터칩·카테고리별 그룹의 공통 목록 = 기본 4종 + 매장 커스텀.
+  const allCats = useMemo(() => [...ALL_CATEGORIES, ...customCats.map((c) => c.id)], [customCats]);
+
+  // 편집 시트에서 지워진 커스텀이 활성 필터로 남았으면 전체 취급(상태 리셋 effect 대신 파생).
+  const effectiveCat = activeCat && allCats.includes(activeCat) ? activeCat : null;
 
   // 검토 대기(draft·인수인계서 파이프라인 증분저장분)는 둘러보기에서 제외 — 검수는 handover 화면이 담당.
   // (직원은 RLS 0064로 애초에 draft를 못 받지만, 사장 화면도 발행본과 섞이면 자산 목록이 오염된다.)
@@ -141,7 +150,7 @@ export function OwnerKnowhowBrowse({
   const goTemplates = () => router.push('/owner/templates' as never);
   const goHandover = () => router.push('/owner/handover' as never);
   // 카테고리 필터는 단일 선택(라디오) — '전체' + 한 카테고리만. 같은 칩 재탭 시 전체로 해제.
-  const selectCat = (c: Category) => setActiveCat((prev) => (prev === c ? null : c));
+  const selectCat = (c: string) => setActiveCat((prev) => (prev === c ? null : c));
 
   // 미검증 상태 필터 — 켜면 미검증만 목록으로 전환.
   const toggleReview = () => {
@@ -160,9 +169,9 @@ export function OwnerKnowhowBrowse({
   const baseFiltered = useMemo(() => {
     const q = query.trim().toLowerCase();
     let list = visible.filter((e) => matchesKnowhowQuery(e, q));
-    if (activeCat) list = list.filter((e) => e.category === activeCat);
+    if (effectiveCat) list = list.filter((e) => e.category === effectiveCat);
     return list;
-  }, [visible, query, activeCat]);
+  }, [visible, query, effectiveCat]);
 
   // 검색 실패 로그(O8, 슬라이스 D) — "찾다 못 찾은 주제"가 노하우 공백 신호다.
   // 타자 중 스팸 방지로 800ms 정지 후 1회만 기록. 노하우 0개 매장은 제외(공백 신호가 아니라 빈 매장).
@@ -201,13 +210,20 @@ export function OwnerKnowhowBrowse({
 
   const groups = useMemo(() => {
     if (sort !== 'category') return null;
-    return ALL_CATEGORIES.map((cat) => ({
+    const byCat = allCats.map((cat) => ({
       cat,
       items: listFiltered
         .filter((e) => e.category === cat)
         .sort((a, b) => (b.updated_at ?? '').localeCompare(a.updated_at ?? '')),
-    })).filter((g) => g.items.length > 0);
-  }, [listFiltered, sort]);
+    }));
+    // 삭제된 커스텀 카테고리의 노하우가 이 뷰에서 사라지지 않게 '기타'로 흡수.
+    const known = new Set(allCats);
+    const orphans = listFiltered
+      .filter((e) => !known.has(e.category))
+      .sort((a, b) => (b.updated_at ?? '').localeCompare(a.updated_at ?? ''));
+    if (orphans.length > 0) byCat.push({ cat: '__unknown', items: orphans });
+    return byCat.filter((g) => g.items.length > 0);
+  }, [listFiltered, sort, allCats]);
 
   // ── 매뉴얼 뷰(파생 뷰) — 발행본을 [섹션 → order_index] 순으로 렌더. 별도 저장물 없음(설계 §4·5c).
   // 섹션 순서 = 문서 등장 순서(섹션 내 최소 order_index), 미분류(기타)는 맨 뒤.
@@ -401,12 +417,12 @@ export function OwnerKnowhowBrowse({
 
           {/* 카테고리 칩 */}
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
-            <Pressable onPress={() => setActiveCat(null)} style={[styles.chip, activeCat === null && styles.chipOn]}>
-              <Text style={[styles.chipText, activeCat === null && styles.chipTextOn]}>전체</Text>
+            <Pressable onPress={() => setActiveCat(null)} style={[styles.chip, effectiveCat === null && styles.chipOn]}>
+              <Text style={[styles.chipText, effectiveCat === null && styles.chipTextOn]}>전체</Text>
             </Pressable>
-            {ALL_CATEGORIES.map((c) => {
-              const on = activeCat === c;
-              const m = getCategoryMeta(c);
+            {allCats.map((c) => {
+              const on = effectiveCat === c;
+              const m = getCategoryMeta(c, customCats);
               return (
                 <Pressable key={c} onPress={() => selectCat(c)} style={[styles.chip, on && styles.chipOn]}>
                   <View style={[styles.chipDot, { backgroundColor: m.color }]} />
@@ -414,6 +430,16 @@ export function OwnerKnowhowBrowse({
                 </Pressable>
               );
             })}
+            {/* 카테고리 편집 — 기본 4종 고정 + 매장 커스텀 추가·수정·삭제(0096) */}
+            <Pressable
+              onPress={() => setCatSheet(true)}
+              style={styles.chip}
+              accessibilityRole="button"
+              accessibilityLabel="카테고리 편집"
+            >
+              <Ionicons name="pencil-outline" size={12} color={InkColors.ink2} />
+              <Text style={styles.chipText}>편집</Text>
+            </Pressable>
           </ScrollView>
 
           {/* 미검증 상태 필터 — 카운트>0일 때만 노출되는 정식 토글. 탭하면 미검증만 목록으로. */}
@@ -506,7 +532,7 @@ export function OwnerKnowhowBrowse({
             />
           ) : groups ? (
             groups.map((g) => {
-              const m = getCategoryMeta(g.cat);
+              const m = getCategoryMeta(g.cat, customCats);
               return (
                 <View key={g.cat} style={{ gap: 8 }}>
                   <View style={styles.groupHead}>
@@ -532,6 +558,7 @@ export function OwnerKnowhowBrowse({
         </>
       )}
       <View style={{ height: 16 }} />
+      {catSheet && <KnowhowCategorySheet onClose={() => setCatSheet(false)} />}
     </ScrollView>
   );
 }

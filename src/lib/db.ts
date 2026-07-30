@@ -12,6 +12,7 @@ import type { TaskTemplate, FeedItem, DoneMark } from '@/lib/store/useWorkStore'
 import type { Room, RoomMember } from '@/lib/store/useRoomStore';
 import type { AttendanceRecord } from '@/lib/store/useAttendanceStore';
 import type { StoreConfig, ShiftTemplate, SwapRequest } from '@/lib/store/useScheduleStore';
+import type { CustomCategory } from '@/lib/store/knowhowCategories';
 
 // 현재 로그인 사용자의 unit_id (RLS가 어차피 막지만, INSERT 시 채워야 함)
 let _unitId: string | null = null;
@@ -219,6 +220,14 @@ export async function fetchMyGrowth(): Promise<DbResult<MyGrowthRow[]>> {
   const { data, error } = await supabase.rpc('my_growth');
   if (error) readFail('fetchMyGrowth', error);
   return { data: (data as MyGrowthRow[]) ?? null, error: error as DbErr };
+}
+
+/** 내 노하우 원문 목록(0094) — my_growth 카운트와 동일 술어(직접 작성 or 제안 채택). 본인 귀속만(RPC 내부 강제). */
+export async function fetchMyKnowhowEntries(): Promise<DbResult<PlaybookEntry[]>> {
+  if (!HAS_SUPABASE) return { data: [], error: null };
+  const { data, error } = await supabase.rpc('my_knowhow_entries');
+  if (error) readFail('fetchMyKnowhowEntries', error);
+  return { data: (data as PlaybookEntry[]) ?? null, error: error as DbErr };
 }
 
 // ── 통합 알림(0077) — 소속 전 매장의 알림 '원시 행' → 매장별 도메인 타입 묶음 ──────────
@@ -1285,6 +1294,33 @@ export async function fetchScheduleConfig(): Promise<StoreConfig | null> {
     note: data.note ?? '',
     ...(data.dayparts && typeof data.dayparts === 'object' ? { dayparts: data.dayparts as StoreConfig['dayparts'] } : null),
   };
+}
+
+// ── 노하우 커스텀 카테고리(0096) — 매장 공유 설정 schedule_config.knowhow_categories(jsonb) ──
+// 해석/정리는 knowhowCategories.ts(resolve/sanitize)가 SSOT — 여기서는 원시 jsonb만 나른다.
+export async function fetchKnowhowCategories(): Promise<unknown> {
+  if (!HAS_SUPABASE) return [];
+  const { data, error } = await supabase
+    .from('schedule_config')
+    .select('knowhow_categories')
+    .maybeSingle();
+  if (error) {
+    readFail('fetchKnowhowCategories', error);
+    return [];
+  }
+  return data?.knowhow_categories ?? [];
+}
+
+export async function saveKnowhowCategories(cats: CustomCategory[]): Promise<boolean> {
+  if (!HAS_SUPABASE) return true;
+  return write(
+    'saveKnowhowCategories',
+    supabase.from('schedule_config').upsert({
+      unit_id: _unitId,
+      knowhow_categories: cats,
+      updated_at: new Date().toISOString(),
+    }),
+  );
 }
 
 export async function upsertScheduleConfig(c: StoreConfig): Promise<boolean> {

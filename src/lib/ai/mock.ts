@@ -17,7 +17,6 @@ import type {
   QuizInput,
   QuizOutput,
 } from './types';
-import type { Category } from '@/types';
 import { MAX_ACTIONS, MAX_DONTS } from './config';
 
 function dedupe(arr: string[]): string[] {
@@ -56,7 +55,7 @@ export function mockGenerateAnswer(input: GenerateAnswerInput): GenerateAnswerOu
 }
 
 // 텍스트 1조각 → SQUARE 1개(휴리스틱). 다중 분리 시 조각마다 호출.
-function structureOne(raw: string, category?: Category): StructuredSegment {
+function structureOne(raw: string, category?: string): StructuredSegment {
   const sentences = raw
     .split(/[.!?\n。]/)
     .map((s) => s.trim())
@@ -90,7 +89,7 @@ function structureOne(raw: string, category?: Category): StructuredSegment {
   }
 
   return {
-    category: (category ?? 'Routine') as Category,
+    category: category ?? 'Routine',
     title,
     keywords: dedupe(raw.split(/\s+/).filter((t) => t.length >= 2)).slice(0, 8),
     square: {

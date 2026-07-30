@@ -66,7 +66,7 @@ export default function OwnerCoachScreen() {
   const [nudgeIds, setNudgeIds] = useState<string[] | null>(null); // 발행된 entryIds(넛지 대상). null=넛지 없음.
 
   // 직접 등록용 합성 uq (capture/add와 동일 패턴). 인박스 모드면 실제 uq 사용.
-  const initialCategory: Category = useMemo(() => {
+  const initialCategory: string = useMemo(() => {
     if (isInboxAnswer && realUq) return realUq.presumed_category;
     return (VALID.includes(catParam as Category) ? (catParam as Category) : 'Routine');
   }, [isInboxAnswer, realUq, catParam]);

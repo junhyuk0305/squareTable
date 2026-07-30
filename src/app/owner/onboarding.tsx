@@ -20,7 +20,6 @@ import { Radius, Elevation } from '@/lib/theme/elevation';
 import { PLANS } from '@/lib/config/tiers';
 import { formatKrw } from '@/lib/config/billing';
 import { SHOW_BILLING } from '@/lib/config/store-policy';
-import type { Category } from '@/types';
 
 // 사장 온보딩 — 업종 표준 노하우 팩에서 '선택 → 자동등록'. 빈 매장(노하우 0건) 죽음의 나선 차단.
 // 레이아웃: ① 추천 묶음 한 번에 담기(결정 최소화) → ② '직접 고르기' 접이식 카테고리 섹션(미세조정).
@@ -53,7 +52,7 @@ export default function OwnerOnboardingScreen() {
   );
   // 추천 묶음 카테고리 분해(돌발 3·루틴 2 …) — 히어로 카드 칩.
   const recByCat = useMemo(() => {
-    const m = new Map<Category, number>();
+    const m = new Map<string, number>();
     recommended.forEach((t) => m.set(t.category, (m.get(t.category) ?? 0) + 1));
     return ALL_CATEGORIES.filter((c) => m.has(c)).map((c) => ({ cat: c, count: m.get(c) as number }));
   }, [recommended]);
@@ -296,7 +295,7 @@ export default function OwnerOnboardingScreen() {
                 return (
                   <View key={cat} style={styles.group}>
                     <SectionLabel
-                      title={`${cm.emoji} ${cm.label}`}
+                      title={cm.label}
                       trailing={
                         <Pressable onPress={() => toggleCategory(items)} hitSlop={8} style={styles.catAll}>
                           <Text style={styles.catAllText}>{allOn ? '전체 해제' : '전체 선택'}</Text>

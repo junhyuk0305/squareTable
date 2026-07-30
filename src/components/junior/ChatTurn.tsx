@@ -14,7 +14,7 @@ import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { InkColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 
-import type { Category, ChatQuery, PlaybookEntry } from '@/types';
+import type { ChatQuery, PlaybookEntry } from '@/types';
 
 /* ─────────────────────────────────────────────────────────
  * 한 턴: 사용자 질문 + AI 응답(SquareCard | DeflectCard)
@@ -26,8 +26,8 @@ export type ChatTurnProps = {
   deflectState: 'asking' | 'registered' | 'declined';
   onRegister: () => void;
   onDecline: () => void;
-  resolveCategory: (entryId: string) => Category;
-  findUQ: (queryText: string) => { presumed_category: Category; ai_general_answer: string; similar_queries_count?: number } | undefined;
+  resolveCategory: (entryId: string) => string;
+  findUQ: (queryText: string) => { presumed_category: string; ai_general_answer: string; similar_queries_count?: number } | undefined;
   /** 방금 들어온 턴만 등장 애니메이션을 태운다 — 과거 히스토리 전체가 매 마운트마다 재생되는 것 방지. */
   animateIn?: boolean;
 };

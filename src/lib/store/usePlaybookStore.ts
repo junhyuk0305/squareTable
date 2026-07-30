@@ -3,7 +3,13 @@ import { coalesce, subscribeDebounced } from '@/lib/store/realtimeSync';
 import type { PlaybookEntry } from '@/types';
 import seedData from '@/data/playbook-entries.json';
 import { HAS_SUPABASE } from '@/lib/supabase';
-import { fetchEntries, insertEntry, updateEntry, deleteEntry, subscribePlaybook } from '@/lib/db';
+import { fetchEntries, insertEntry, updateEntry, deleteEntry, subscribePlaybook, fetchKnowhowCategories, saveKnowhowCategories } from '@/lib/db';
+import {
+  resolveCustomCategories,
+  sanitizeCustomCategories,
+  setCustomCategoryRegistry,
+  type CustomCategory,
+} from '@/lib/store/knowhowCategories';
 import { optimisticAdd, optimisticPatch, optimisticRemove } from '@/lib/store/crudHelpers';
 import { embedEntry } from '@/lib/ai/searchClient';
 
@@ -13,6 +19,9 @@ type PlaybookState = {
   entries: PlaybookEntry[];
   loaded: boolean;
   loadError: boolean; // 마지막 hydrate가 실패했는가 — 화면이 "없음"과 "못 불러옴"을 구분해 재시도 UI를 띄운다.
+  /** 매장 커스텀 카테고리(0096) — 기본 4종 외. getCategoryMeta 레지스트리와 동기 유지. */
+  customCategories: CustomCategory[];
+  saveCustomCategories: (items: CustomCategory[]) => Promise<boolean>;
   hydrate: () => Promise<void>;
   subscribe: () => () => void;
   add: (entry: PlaybookEntry) => Promise<boolean>;
@@ -30,12 +39,26 @@ export const usePlaybookStore = create<PlaybookState>((set, get) => ({
   entries: HAS_SUPABASE ? [] : seed,
   loaded: !HAS_SUPABASE,
   loadError: false,
+  customCategories: [],
 
   hydrate: coalesce(async () => {
     if (!HAS_SUPABASE) return;
-    const { data, error } = await fetchEntries();
-    set({ entries: data, loaded: true, loadError: error });
+    const [{ data, error }, rawCats] = await Promise.all([fetchEntries(), fetchKnowhowCategories()]);
+    const customCategories = resolveCustomCategories(rawCats);
+    setCustomCategoryRegistry(customCategories); // getCategoryMeta 인자 생략 호출부(대시보드 등)용
+    set({ entries: data, loaded: true, loadError: error, customCategories });
   }),
+
+  // 커스텀 카테고리 저장 — sanitize 후 DB 반영이 성공했을 때만 상태/레지스트리 갱신(실패 시 기존 유지).
+  saveCustomCategories: async (items) => {
+    const cleaned = sanitizeCustomCategories(items);
+    const ok = await saveKnowhowCategories(cleaned);
+    if (ok) {
+      setCustomCategoryRegistry(cleaned);
+      set({ customCategories: cleaned });
+    }
+    return ok;
+  },
 
   // 다른 기기(사장님)가 노하우를 발행하면 실시간으로 다시 당겨온다.
   subscribe: () => subscribeDebounced(subscribePlaybook, () => get().hydrate()),
@@ -66,7 +89,10 @@ export const usePlaybookStore = create<PlaybookState>((set, get) => ({
   remove: (id) => {
     optimisticRemove(set, get, 'entries', id, () => deleteEntry(id), '삭제에 실패했어요.');
   },
-  reset: () => set({ entries: HAS_SUPABASE ? [] : seed, loadError: false }),
+  reset: () => {
+    setCustomCategoryRegistry([]); // 매장 전환 시 이전 매장 커스텀 라벨 누출 방지(hydrate가 다시 채움)
+    set({ entries: HAS_SUPABASE ? [] : seed, loadError: false, customCategories: [] });
+  },
   // 데모 매장이면 시드, 신규 계정이면 빈 채로(가짜 노하우 노출 방지).
   applyMock: (demo) => set({ entries: demo ? seed : [], loaded: true, loadError: false }),
 }));

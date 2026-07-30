@@ -33,7 +33,7 @@ import { SplitProposal } from './coach/SplitProposal';
 import { styles } from './coach/coachStyles';
 import { formatRelative, pickImageWeb } from './coach/coachUtils';
 
-import type { Category, PlaybookEntry, SquareBlock, UnknownQuery } from '@/types';
+import type { PlaybookEntry, SquareBlock, UnknownQuery } from '@/types';
 
 /* ───────────────────────────────────────────────────────────
  * 대화형 노하우 입력 (chat-first). 두 진입점이 같은 컴포넌트를 공유:
@@ -47,7 +47,7 @@ import type { Category, PlaybookEntry, SquareBlock, UnknownQuery } from '@/types
 export type OwnerCoachChatProps = {
   uq: UnknownQuery;             // 실제(인박스) 또는 합성(직접등록) 질문 컨텍스트
   isInboxAnswer: boolean;       // true면 발행 시 화면이 resolve(uq) 처리
-  initialCategory: Category;
+  initialCategory: string;      // 기본 4종 키 또는 커스텀 id
   seedText?: string;            // 프리필(콜드스타트 제목·회고 초안)
   /** 제안 검토 모드(제안함 승인) — 알바 제안(seedText)이 직원 말풍선으로 뜨고 초안이 자동 생성된다.
    *  사장은 고칠 부분만 말하거나(생략 가능) 바로 등록/이탈로 반영 여부를 정한다. */
@@ -66,7 +66,7 @@ export type OwnerCoachChatProps = {
 
 // 카드 말풍선이 "그 대화 시점에 어떻게 정리됐는지"를 고정하는 스냅샷.
 // (과거 카드가 최신 square로 다 바뀌던 버그 방지 — 마지막 카드만 라이브로 렌더한다.)
-type CardSnap = { square: SquareBlock; title: string; category: Category };
+type CardSnap = { square: SquareBlock; title: string; category: string };
 
 type MsgInput =
   | { kind: 'alba'; text: string; meta?: string }   // 알바 질문(인박스)
@@ -128,7 +128,7 @@ export function OwnerCoachChat({
   // 제안 검토 모드는 제안이 이미 말풍선·초안으로 반영되므로 입력창 프리필을 하지 않는다.
   const [input, setInput] = useState(typeof seedText === 'string' && !reviewProposal ? seedText : '');
   const [inputFocused, setInputFocused] = useState(false);
-  const [category, setCategory] = useState<Category>(editEntry?.category ?? initialCategory);
+  const [category, setCategory] = useState<string>(editEntry?.category ?? initialCategory);
   const [square, setSquare] = useState<SquareBlock | null>(editEntry?.square ?? null);
   const [title, setTitle] = useState(editEntry?.title ?? '');
   const [keywords, setKeywords] = useState<string[]>(editEntry?.search_keywords ?? []);
@@ -217,7 +217,7 @@ export function OwnerCoachChat({
 
   // ── AI 1콜: 원문 → SQUARE. 다중이면 분리 제안, 단일이면 바로 제시. ──
   const runStructure = useCallback(
-    async (rawText: string, cat: Category) => {
+    async (rawText: string, cat: string) => {
       setBusy(true);
       setError(null);
       try {

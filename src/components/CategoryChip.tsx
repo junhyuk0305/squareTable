@@ -1,10 +1,10 @@
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { getCategoryMeta } from '@/lib/utils/category';
+import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { Radius } from '@/lib/theme/elevation';
-import type { Category } from '@/types';
 
 type Props = {
-  category: Category;
+  category: string; // 기본 4종 키 또는 매장 커스텀 카테고리 id
   size?: 'sm' | 'md' | 'lg';
   count?: number;
   selected?: boolean;
@@ -13,7 +13,8 @@ type Props = {
 };
 
 export function CategoryChip({ category, size = 'md', count, selected, onPress, showLabel = true }: Props) {
-  const meta = getCategoryMeta(category);
+  const customs = usePlaybookStore((s) => s.customCategories); // 커스텀 라벨 변경에 즉시 반응
+  const meta = getCategoryMeta(category, customs);
   const sz = SIZES[size];
 
   const content = (
@@ -29,7 +30,15 @@ export function CategoryChip({ category, size = 'md', count, selected, onPress, 
         },
       ]}
     >
-      <Text style={{ fontSize: sz.emoji }}>{meta.emoji}</Text>
+      {/* 이모티콘 대신 색깔 점 — 카테고리는 (색점 + 이름)으로만 표시(그림 이모지 금지). */}
+      <View
+        style={{
+          width: sz.dot,
+          height: sz.dot,
+          borderRadius: Radius.pill,
+          backgroundColor: selected ? '#FFFFFF' : meta.color,
+        }}
+      />
       {showLabel && (
         <Text
           style={[
@@ -64,9 +73,9 @@ export function CategoryChip({ category, size = 'md', count, selected, onPress, 
 }
 
 const SIZES = {
-  sm: { padV: 3, padH: 8,  emoji: 11, label: 11, count: 10 },
-  md: { padV: 6, padH: 12, emoji: 14, label: 13, count: 11 },
-  lg: { padV: 12, padH: 20, emoji: 22, label: 18, count: 14 },
+  sm: { padV: 3, padH: 8,  dot: 6, label: 11, count: 10 },
+  md: { padV: 6, padH: 12, dot: 7, label: 13, count: 11 },
+  lg: { padV: 12, padH: 20, dot: 9, label: 18, count: 14 },
 } as const;
 
 const styles = StyleSheet.create({

@@ -66,7 +66,7 @@ export type PlaybookEntry = {
   unit_id: string;
   creator_id: string;
   creator_name: string;
-  category: Category;
+  category: string; // 기본 4종(Category) 키 또는 매장 커스텀 카테고리 id(0096, 수동 지정 전용)
   subcategory: string;
   title: string;
   tags: string[];
@@ -206,7 +206,7 @@ export type UnknownQuery = {
   junior_name: string;
   query_text: string;
   asked_at: string;
-  presumed_category: Category;
+  presumed_category: string; // AI 추정은 기본 4종(Category), 답변 발행 시 사장이 커스텀으로 재지정 가능
   presumed_subcategory: string;
   match_attempted: boolean;
   best_match_confidence: number;

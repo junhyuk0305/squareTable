@@ -5,7 +5,7 @@
  * (구 위저드 answers 경로는 chat-first 통합으로 폐기됨.)
  */
 
-import type { Category, PlaybookEntry, SquareBlock, UnknownQuery } from '@/types';
+import type { PlaybookEntry, SquareBlock, UnknownQuery } from '@/types';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { genId } from '@/lib/utils/id';
 import { sanitizeKeywords } from '@/lib/utils/knowhowQuality';
@@ -15,7 +15,7 @@ import { sanitizeKeywords } from '@/lib/utils/knowhowQuality';
  * buildPlaybookEntryFromSquare에 넘길 uq 스캐폴드. 한 곳(SSOT)에 두어 UnknownQuery 스키마 변경 시
  * 경로마다 드리프트되는 걸 막는다. junior_id='' 이므로 source.kind='owner'로 저장된다.
  */
-export function buildDirectUq(category: Category, queryText: string, id?: string): UnknownQuery {
+export function buildDirectUq(category: string, queryText: string, id?: string): UnknownQuery {
   const now = new Date().toISOString();
   return {
     id: id ?? genId('direct'),
@@ -53,8 +53,8 @@ function extractKeywords(text: string): string[] {
   return Array.from(new Set(tokens)).slice(0, 8);
 }
 
-/** category → execution defaults. */
-function buildExecution(category: Category): PlaybookEntry['execution'] {
+/** category → execution defaults. 커스텀 카테고리는 비4종 → '필요할 때/친절' 기본값. */
+function buildExecution(category: string): PlaybookEntry['execution'] {
   return {
     timing: category === 'Event' ? '즉시' : category === 'Routine' ? '정기' : '필요할 때',
     channel: '구두',

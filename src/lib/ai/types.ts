@@ -2,7 +2,7 @@
 // AI 레이어 입출력 계약. DB 스키마와 독립 — 여기서 쓰는 건 얇은 SopSlice 뿐.
 // 스키마가 바뀌어도 adapter.ts 한 겹만 고치면 됨.
 
-import type { Category, ResponseBlock, SquareBlock } from '@/types';
+import type { ResponseBlock, SquareBlock } from '@/types';
 
 // AI가 답변 생성에 필요로 하는 "최소 SOP 조각". PlaybookEntry 전체가 아님.
 export type SopSlice = {
@@ -44,7 +44,7 @@ export type GenerateAnswerOutput = {
 export type StructureSquareInput = {
   storeId: string;
   rawText: string;               // 사장 음성 전사 또는 직접 입력 원문
-  category?: Category;
+  category?: string;             // 분류 힌트 — 기본 4종 키 또는 커스텀 id(0096). AI 출력은 여전히 기본 4종.
   categoryGuide?: string;  // 카테고리별 추출 지침(프롬프트 주입용). 클라가 src/data/category-guides.ts의 extractionGuide를 실어 보냄.
   skipFollowups?: boolean; // 재정리(2차) 패스 — followups 재생성 안 함(무한 되묻기 방지).
   // 인박스 답변 모드에서 알바가 실제로 물은 원래 질문. AI가 "이 답이 그 질문에 이미 충분히
@@ -59,7 +59,7 @@ export type PatchSquareInput = {
   instruction: string;           // 사장의 자연어 수정 요청 ("청소 단계에 행주 삶기 추가")
   current: {                     // 현재 노하우 스냅샷(보존 기준)
     title: string;
-    category: Category;
+    category: string;            // 기본 4종 키 또는 커스텀 id — 컨텍스트 전달용(패치는 category를 바꾸지 않음)
     situation: string;
     steps: string[];
     scripts: string[];
@@ -102,7 +102,7 @@ export type AiFollowup = {
 
 // 분리된 노하우 1조각. 한 발화에 성격 다른 노하우가 여럿이면 AI가 여러 segment로 나눈다.
 export type StructuredSegment = {
-  category: Category;
+  category: string;              // 실 엣지는 기본 4종만 출력(스키마 enum). mock은 힌트(커스텀 id 포함) 그대로 반환.
   title: string;
   keywords: string[];
   square: SquareBlock;

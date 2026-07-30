@@ -3,7 +3,6 @@ import { SourceFooter } from './SourceFooter';
 import { BrandColors, InkColors } from '@/lib/theme/colors';
 import { Elevation, Radius } from '@/lib/theme/elevation';
 import { verifyMeta, type VerifyState } from '@/lib/utils/verification';
-import type { Category } from '@/types';
 
 type Props = {
   summary: string;
@@ -18,7 +17,7 @@ type Props = {
     /** 출처 라벨(받은질문 답변/매뉴얼 등). 없으면 creatorName 사용. */
     label?: string;
   };
-  category: Category;
+  category: string; // 기본 4종 키 또는 커스텀 id
   confidence?: number;
   onThumbsUp?: () => void;
   onThumbsDown?: () => void;

@@ -2,16 +2,17 @@ import { View, Text, StyleSheet, Pressable, TextInput } from 'react-native';
 
 import { isSquarePublishable } from '@/lib/utils/buildEntry';
 import { getCategoryMeta, ALL_CATEGORIES } from '@/lib/utils/category';
+import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
 
-import type { Category, SquareBlock } from '@/types';
+import type { SquareBlock } from '@/types';
 
 /* ───────────────────────── 미니 SQUARE 카드 ───────────────────────── */
 type MiniProps = {
   square: SquareBlock;
   title: string;
-  category: Category;          // 카드 액센트 색 + (onCategory 있으면) 사장이 고르는 종류
+  category: string;            // 기본 4종 키 또는 커스텀 id — 카드 액센트 색 + (onCategory 있으면) 사장이 고르는 종류
   editable: boolean;
   showActions: boolean;
   onEdit: () => void;
@@ -20,7 +21,7 @@ type MiniProps = {
   onPublish: () => void;
   onPatch: (sq: SquareBlock) => void;
   onTitle: (t: string) => void;
-  onCategory?: (c: Category) => void; // 있으면 리뷰 카드에 종류 선택칩 노출(발행 전 재분류)
+  onCategory?: (c: string) => void; // 있으면 리뷰 카드에 종류 선택칩 노출(발행 전 재분류 — 커스텀 포함)
   publishLabel: string;        // 발행 결과를 명시 — 인박스='이 답변 보내기' / 직접='노하우로 저장'
 };
 
@@ -40,7 +41,8 @@ export function MiniSquareCard({
   onCategory,
   publishLabel,
 }: MiniProps) {
-  const meta = getCategoryMeta(category); // 액센트 색 전용(라벨 노출 안 함)
+  const customCats = usePlaybookStore((s) => s.customCategories); // 종류 선택칩에 커스텀 합류(0096)
+  const meta = getCategoryMeta(category, customCats); // 액센트 색 전용(라벨 노출 안 함)
   const publishable = isSquarePublishable(square);
 
   const setStep = (i: number, v: string) =>
@@ -139,8 +141,8 @@ export function MiniSquareCard({
         <View style={cardStyles.catPick}>
           <Text style={cardStyles.catPickLabel}>종류</Text>
           <View style={cardStyles.chipRow}>
-            {ALL_CATEGORIES.map((c) => {
-              const cm = getCategoryMeta(c);
+            {[...ALL_CATEGORIES, ...customCats.map((cc) => cc.id)].map((c) => {
+              const cm = getCategoryMeta(c, customCats);
               const on = c === category;
               return (
                 <Pressable

@@ -43,6 +43,7 @@
     "platform:status": "node scripts/platform-status.mjs",
     "qa:coldstart": "node scripts/qa-coldstart.mjs",
     "qa:daypart": "node scripts/qa-daypart-labels.mjs",
+    "qa:category": "node scripts/qa-knowhow-categories.mjs",
     "qa:onboarding": "node scripts/qa-onboarding.mjs",
     "qa:complete-profile": "node scripts/qa-complete-profile.mjs",
     "qa:profile": "node scripts/qa-profile-update.mjs",

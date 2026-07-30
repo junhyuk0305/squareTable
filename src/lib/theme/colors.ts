@@ -25,6 +25,11 @@ export const CategoryColorsSoft = {
   'Know-how': '#FCF1DB',
 } as const;
 
+// 커스텀 카테고리(매장이 직접 만든 종류) — 기본 4색과 겹치지 않는 바이올렛 단일색.
+// 커스텀끼리 색을 나누지 않는다(색 선택 UI 없음 — 단순함 원칙).
+export const CustomCategoryColor = '#8A63D2';
+export const CustomCategoryColorSoft = '#EFEAFA';
+
 export const InkColors = {
   ink:    '#111111',   // 주색 · 텍스트 · 1차 버튼/말풍선 배경
   ink2:   '#6b6b6b',   // 본문 보조 텍스트 (--soft)
