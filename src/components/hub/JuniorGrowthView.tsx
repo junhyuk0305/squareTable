@@ -1,0 +1,233 @@
+// 직원 허브 '성장' 탭 본문 — 축적 레이어(슬라이스 C, 3탭 확장의 두 번째 탭).
+//
+// 무엇: "내가 남긴 것"의 축적을 본인에게 되돌려준다(순환 보상 단계 — M1 채택).
+//   · 가르침 실적(내 답이 노하우로 채택) — 최고 역량 = "가르칠 수 있음"(실적, 도장 아님)
+//   · 내 노하우·최근 30일 참조 수(query_hits — 살아있는 카운트)
+//   · 해본 업무 종류 수 — ★완료≠숙련: "해봤다"(경험)까지만 말하고 숙련을 주장하지 않는다
+// 원칙: 전부 본인 전용(my_growth RPC 내부 강제·사장 화면에 개인별 뷰 없음) · 남과 비교 없음 ·
+//   빈 상태는 "예시" 라벨 카드(실데이터 1건 들어오면 자동 교체 — 조건 렌더) + 행동 버튼.
+import { useEffect, useMemo } from 'react';
+import { View, Text, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+
+import { useHubStore } from '@/lib/store/useHubStore';
+import { useMemberPrefsStore } from '@/lib/store/useMemberPrefsStore';
+import { useStoreNav } from '@/lib/hooks/useStoreNav';
+import { storeColor } from '@/lib/utils/storeColor';
+import { SectionLabel } from '@/components/SectionLabel';
+import { Appear } from '@/components/Appear';
+import { InkColors, BrandColors } from '@/lib/theme/colors';
+import { Radius, Elevation } from '@/lib/theme/elevation';
+import { Space } from '@/lib/theme/layout';
+
+export function JuniorGrowthView() {
+  const growth = useHubStore((s) => s.growth);
+  const growthLoaded = useHubStore((s) => s.growthLoaded);
+  const hydrateGrowth = useHubStore((s) => s.hydrateGrowth);
+  const prefFor = useMemberPrefsStore((s) => s.prefFor);
+  const hydratePrefs = useMemberPrefsStore((s) => s.hydrate);
+  const { goStore, switching } = useStoreNav();
+
+  useEffect(() => {
+    void hydrateGrowth();
+    void hydratePrefs();
+  }, [hydrateGrowth, hydratePrefs]);
+
+  const totals = useMemo(
+    () =>
+      growth.reduce(
+        (a, r) => ({
+          knowhow: a.knowhow + r.my_knowhow,
+          hits: a.hits + r.my_hits,
+          taught: a.taught + r.taught,
+          doneKinds: a.doneKinds + r.done_kinds,
+        }),
+        { knowhow: 0, hits: 0, taught: 0, doneKinds: 0 },
+      ),
+    [growth],
+  );
+  const empty = totals.knowhow === 0 && totals.taught === 0 && totals.doneKinds === 0;
+  const labelOf = (uid: string, fallback: string) => prefFor(uid).nickname || fallback;
+
+  if (!growthLoaded) {
+    return (
+      <View style={styles.loading}>
+        <ActivityIndicator color={InkColors.ink3} />
+      </View>
+    );
+  }
+
+  // ── 빈 상태: 골격 + 정직한 예시(라벨 명시·실데이터 들어오면 이 분기 자체가 사라짐) ──
+  if (empty) {
+    const firstUnit = growth[0]?.unit_id;
+    return (
+      <View style={{ gap: Space.md }}>
+        <Appear delay={40}>
+          <View style={styles.card}>
+            <Text style={styles.emptyTitle}>여기에 내가 남긴 것이 쌓여요</Text>
+            <Text style={styles.emptyBody}>
+              일하다 막히면 물어보고, 할일을 완료하면 그 기록이 이 화면에 모여요. 이 화면은 나만 볼 수 있어요.
+            </Text>
+            {firstUnit && (
+              <Pressable
+                onPress={() => goStore(firstUnit, '/junior/chat')}
+                disabled={!!switching}
+                style={({ pressed }) => [styles.emptyBtn, pressed && { opacity: 0.9 }]}
+                accessibilityRole="button"
+                accessibilityLabel="물어보러 가기"
+              >
+                <Ionicons name="chatbubble-outline" size={15} color={InkColors.ink} />
+                <Text style={styles.emptyBtnText}>물어보러 가기</Text>
+              </Pressable>
+            )}
+          </View>
+        </Appear>
+        <Appear delay={80}>
+          <View style={styles.ghostCard}>
+            <View style={styles.exBadge}>
+              <Text style={styles.exBadgeText}>예시</Text>
+            </View>
+            <Text style={styles.ghostTitle}>내 노하우가 최근 30일 7번 도움 됐어요</Text>
+            <Text style={styles.ghostBody}>첫 기록이 들어오면 진짜 숫자로 바뀌어요.</Text>
+          </View>
+        </Appear>
+      </View>
+    );
+  }
+
+  return (
+    <View style={{ gap: Space.md }}>
+      {/* ── 가르침 실적(있을 때만) — 최고 역량 = 남을 도운 기록 ── */}
+      {totals.taught > 0 && (
+        <Appear delay={40}>
+          <View style={[styles.card, styles.taughtCard]}>
+            <View style={styles.taughtHead}>
+              <Ionicons name="school-outline" size={18} color={InkColors.ink} />
+              <Text style={styles.taughtTitle}>내 답이 매장 노하우가 됐어요</Text>
+            </View>
+            <Text style={styles.taughtCount}>{totals.taught}건</Text>
+            <Text style={styles.caption}>그만둬도 매장에 남아, 다음 사람을 도와요</Text>
+          </View>
+        </Appear>
+      )}
+
+      {/* ── 내가 남긴 것 ── */}
+      <Appear delay={totals.taught > 0 ? 80 : 40}>
+        <SectionLabel title="내가 남긴 것" hint="나만 볼 수 있어요" />
+        <View style={styles.card}>
+          <View style={styles.statRow}>
+            <View style={styles.statCell}>
+              <Text style={styles.statV}>{totals.knowhow}<Text style={styles.statUnit}>개</Text></Text>
+              <Text style={styles.statL}>내가 만든 노하우</Text>
+            </View>
+            <View style={[styles.statCell, styles.statDivider]}>
+              <Text style={styles.statV}>{totals.hits}<Text style={styles.statUnit}>번</Text></Text>
+              <Text style={styles.statL}>최근 30일 참조</Text>
+            </View>
+          </View>
+          {totals.knowhow > 0 && totals.hits === 0 && (
+            <Text style={styles.caption}>아직 참조 전이에요 — 누가 같은 걸 물으면 숫자가 올라요</Text>
+          )}
+        </View>
+      </Appear>
+
+      {/* ── 해본 업무(경험) — 숙련 주장 없음(완료≠숙련) ── */}
+      <Appear delay={totals.taught > 0 ? 120 : 80}>
+        <SectionLabel title="해본 업무" />
+        <View style={styles.card}>
+          <View style={styles.statRow}>
+            <View style={styles.statCell}>
+              <Text style={styles.statV}>{totals.doneKinds}<Text style={styles.statUnit}>종</Text></Text>
+              <Text style={styles.statL}>완료 기록이 있는 업무</Text>
+            </View>
+          </View>
+          {/* 매장별 분해(다매장 직원만) — 행 탭 = 그 매장 업무 화면 */}
+          {growth.length > 1 &&
+            growth.map((r) => (
+              <Pressable
+                key={r.unit_id}
+                onPress={() => goStore(r.unit_id, '/junior/work')}
+                disabled={!!switching}
+                style={({ pressed }) => [styles.row, pressed && { opacity: 0.85 }]}
+              >
+                <View style={[styles.dot, { backgroundColor: storeColor(r.unit_id, prefFor(r.unit_id).color) }]} />
+                <Text style={styles.rowTitle} numberOfLines={1}>{labelOf(r.unit_id, r.store_name)}</Text>
+                <Text style={styles.rowSub}>{`노하우 ${r.my_knowhow} · 해본 업무 ${r.done_kinds}종`}</Text>
+                <Ionicons name="chevron-forward" size={15} color={InkColors.ink3} />
+              </Pressable>
+            ))}
+        </View>
+      </Appear>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  loading: { paddingVertical: Space.xl * 2, alignItems: 'center' },
+  card: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    borderColor: InkColors.line,
+    paddingHorizontal: Space.lg,
+    paddingVertical: Space.md,
+    marginTop: Space.sm,
+    ...Elevation.e2,
+  },
+
+  // 빈 상태
+  emptyTitle: { fontSize: 17, fontWeight: '900', color: InkColors.ink, paddingTop: Space.xs },
+  emptyBody: { fontSize: 15, color: InkColors.ink2, lineHeight: 22, marginTop: Space.xs },
+  emptyBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: BrandColors.yellowSoft,
+    borderRadius: Radius.md,
+    paddingVertical: Space.md,
+    marginTop: Space.md,
+    marginBottom: Space.xs,
+  },
+  emptyBtnText: { fontSize: 14, fontWeight: '800', color: InkColors.ink },
+  ghostCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    borderColor: InkColors.line,
+    paddingHorizontal: Space.lg,
+    paddingVertical: Space.md,
+    opacity: 0.55,
+    gap: 2,
+  },
+  exBadge: {
+    alignSelf: 'flex-start',
+    backgroundColor: InkColors.bgSoft,
+    borderRadius: Radius.pill,
+    paddingHorizontal: Space.sm,
+    paddingVertical: 2,
+    marginBottom: Space.xs,
+  },
+  exBadgeText: { fontSize: 11, fontWeight: '800', color: InkColors.ink3 },
+  ghostTitle: { fontSize: 15, fontWeight: '800', color: InkColors.ink2 },
+  ghostBody: { fontSize: 12.5, color: InkColors.ink3 },
+
+  // 가르침 실적
+  taughtCard: { backgroundColor: BrandColors.yellowSoft, borderColor: BrandColors.yellowDeep },
+  taughtHead: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingTop: Space.xs },
+  taughtTitle: { fontSize: 15, fontWeight: '900', color: InkColors.ink },
+  taughtCount: { fontSize: 28, fontWeight: '900', color: InkColors.ink, letterSpacing: -0.5, marginTop: 2 },
+  caption: { fontSize: 11.5, color: InkColors.ink3, marginTop: Space.xs, marginBottom: Space.xs },
+
+  statRow: { flexDirection: 'row', paddingVertical: Space.xs },
+  statCell: { flex: 1, alignItems: 'center', gap: 2 },
+  statDivider: { borderLeftWidth: 1, borderLeftColor: InkColors.line },
+  statV: { fontSize: 22, fontWeight: '900', color: InkColors.ink, letterSpacing: -0.5 },
+  statUnit: { fontSize: 13, fontWeight: '700', color: InkColors.ink3 },
+  statL: { fontSize: 11.5, color: InkColors.ink3 },
+
+  row: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingVertical: Space.sm + 2, borderTopWidth: 1, borderTopColor: InkColors.line },
+  rowTitle: { flex: 1, fontSize: 13.5, fontWeight: '700', color: InkColors.ink, minWidth: 0 },
+  rowSub: { fontSize: 12, color: InkColors.ink3 },
+  dot: { width: 8, height: 8, borderRadius: 4 },
+});

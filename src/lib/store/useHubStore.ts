@@ -6,14 +6,17 @@ import {
   fetchOwnerOverview,
   fetchOwnerToday,
   fetchMyCrossSummary,
+  fetchMyGrowth,
   type OwnerOverviewRow,
   type OwnerTodayRow,
   type MyCrossSummaryRow,
+  type MyGrowthRow,
 } from '@/lib/db';
 
 const HYDRATE_TTL_MS = 5_000;
 let _ownerAt = 0;
 let _juniorAt = 0;
+let _growthAt = 0;
 
 type State = {
   overview: OwnerOverviewRow[];
@@ -24,8 +27,12 @@ type State = {
   todayLoaded: boolean;
   myCross: MyCrossSummaryRow[];
   juniorLoaded: boolean;
+  /** 성장 탭(0089) — 본인 매장별 축적. growthLoaded 로 "0건"과 "로드 전/실패"를 구분(빈화면 위장 금지). */
+  growth: MyGrowthRow[];
+  growthLoaded: boolean;
   hydrateOwner: () => Promise<void>;
   hydrateJunior: () => Promise<void>;
+  hydrateGrowth: () => Promise<void>;
 };
 
 export const useHubStore = create<State>((set) => ({
@@ -35,6 +42,8 @@ export const useHubStore = create<State>((set) => ({
   todayLoaded: false,
   myCross: [],
   juniorLoaded: false,
+  growth: [],
+  growthLoaded: false,
 
   hydrateOwner: async () => {
     const now = Date.now();
@@ -65,5 +74,17 @@ export const useHubStore = create<State>((set) => ({
       return;
     }
     set({ myCross: data, juniorLoaded: true });
+  },
+
+  hydrateGrowth: async () => {
+    const now = Date.now();
+    if (now - _growthAt < HYDRATE_TTL_MS) return;
+    _growthAt = now;
+    const { data, error } = await fetchMyGrowth();
+    if (error || !data) {
+      _growthAt = 0; // 실패 = TTL 미적용(다음 진입 즉시 재시도). 표면화는 db.ts readFail.
+      return;
+    }
+    set({ growth: data, growthLoaded: true });
   },
 }));

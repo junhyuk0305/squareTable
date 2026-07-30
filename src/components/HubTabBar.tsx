@@ -19,6 +19,8 @@ const TABS: Record<'junior' | 'owner', Tab[]> = {
   ],
   junior: [
     { label: '오늘', path: '/hub', icon: 'today-outline', iconActive: 'today' },
+    // 3탭 확장(2026-07-30 확정) — 축적·순환 레이어의 독립 홈. 뱃지 없음(재촉 아닌 축적 공간).
+    { label: '성장', path: '/hub-growth', icon: 'trending-up-outline', iconActive: 'trending-up' },
     { label: '매장', path: '/stores', icon: 'storefront-outline', iconActive: 'storefront' },
   ],
 };

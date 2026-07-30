@@ -205,6 +205,21 @@ export async function fetchMyCrossSummary(): Promise<DbResult<MyCrossSummaryRow[
   return { data: (data as MyCrossSummaryRow[]) ?? null, error: error as DbErr };
 }
 
+export type MyGrowthRow = {
+  unit_id: string; store_name: string;
+  my_knowhow: number; // 내가 만든 발행 노하우 수(0089)
+  my_hits: number; // 그 노하우들의 최근 30일 참조 합
+  taught: number; // 내 제안이 노하우로 채택된 수(실적)
+  done_kinds: number; // 내 완료 기록의 업무 종류 수(경험 — 완료≠숙련)
+};
+/** 본인의 매장별 축적(노하우·참조·채택·해본 업무) — 직원 허브 '성장' 탭. 전부 본인 데이터만(RPC 내부 강제). */
+export async function fetchMyGrowth(): Promise<DbResult<MyGrowthRow[]>> {
+  if (!HAS_SUPABASE) return { data: [], error: null };
+  const { data, error } = await supabase.rpc('my_growth');
+  if (error) readFail('fetchMyGrowth', error);
+  return { data: (data as MyGrowthRow[]) ?? null, error: error as DbErr };
+}
+
 // ── 통합 알림(0077) — 소속 전 매장의 알림 '원시 행' → 매장별 도메인 타입 묶음 ──────────
 // 판정(안읽음·대기)은 클라 notifications.ts SSOT — 여기선 행→타입 매핑만(기존 매퍼 재사용).
 // RLS 가 활성 매장만 노출하므로 definer RPC 로만 가능(멤버십 검증·방 격리는 RPC 내부).

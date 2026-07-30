@@ -117,6 +117,37 @@ async function main() {
   { const { error } = await ownerB.from('chat_queries').insert({ id: `cq_csx_${s}`, unit_id: UNIT, junior_id: 'x', junior_name: 'x', query_text: 'x', asked_at: now, matched_entry_ids: [], match_confidence: 0, was_deflected: true, response_block: null, satisfaction: null, resolved_at: null });
     check('⑦ B의 A매장 chat_queries insert 차단(42501)', !!error, error?.code ?? ''); }
 
+  // ── ⑧ my_growth(0089) — 직원 축적 집계 + 본인 스코프 ───────────────────
+  // 직원(j)이 A매장에 남긴 것: 발행 노하우 1 + 완료 기록 2종 + 승인된 제안 1 → 각 열 전이 검증.
+  await j.rpc('switch_active_unit', { p_unit_id: UNIT }); // 에러는 반환값(throw 아님) — 실패해도 아래 insert가 실증
+
+  // 직원의 published 직접 insert 는 RLS 가 막아야 정상(직원 노하우 = 제안 승격 경로만, 0064 계보).
+  { const { error } = await j.from('playbook_entries').insert({ id: `pb_csj_${s}`, unit_id: UNIT, creator_id: jId, creator_name: 'QA직원', category: 'Routine', subcategory: '음료 제조', title: '직원 노하우', tags: [], search_keywords: ['직원'], square: { situation: '테스트', action: { steps: ['한다'], scripts: [] }, extract: { do: '', dont: '', template: '' }, result: { before: '', after: '', metric: '' }, uncover: '', quagmire: '' }, execution: { tone: '', timing: '', channel: '', stakeholders: [] }, stats: { thumbs_up: 0, thumbs_down: 0, last_used_at: null, query_hits_30d: 5, resolution_rate: 0 }, photos: [], version: 1, status: 'published', quality_score: 0.7, created_at: now, updated_at: now, is_template: false, pack_id: null, needs_review: false, correction_points: [], section: null, order_index: 0 });
+    check('⑧ 직원 published 직접 insert 차단(RLS)', !!error, error?.code ?? ''); }
+  for (const [i, ref] of [['1', 'tpl_a'], ['2', 'tpl_b']]) {
+    const { error } = await j.from('work_feed').insert({ id: `wf_csj${i}_${s}`, unit_id: UNIT, feed_date: today, data: { id: `wf_csj${i}_${s}`, kind: 'task_done', date: today, refId: ref, authorId: jId, authorName: 'QA직원', createdAt: now } });
+    if (error) check(`⑧ 직원 완료기록 ${i}`, false, error.message);
+  }
+  { const { error: se } = await j.from('playbook_suggestions').insert({ id: `ps_cs_${s}`, unit_id: UNIT, kind: 'new', proposer_id: jId, proposer_name: 'QA직원', text: '이렇게 하면 좋아요', status: 'pending', created_at: now });
+    check('⑧ 직원 제안 insert', !se, se?.message ?? '');
+    // 승인 결과 엔트리 = 사장이 만든 pb_cs (실제 앱 흐름과 동일: creator=사장, 크레딧=제안 링크).
+    const { error: ae } = await owner.from('playbook_suggestions').update({ status: 'approved', resulting_entry_id: `pb_cs_${s}`, reviewed_at: now }).eq('id', `ps_cs_${s}`);
+    check('⑧ 사장 제안 승인 update', !ae, ae?.message ?? ''); }
+  { const { data, error } = await j.rpc('my_growth');
+    check('⑧ my_growth 호출', !error, error?.message ?? '');
+    const row = (data ?? []).find((r) => r.unit_id === UNIT);
+    check('⑧ 직원: my_knowhow=1(제안 채택 크레딧) · taught=1 · done_kinds=2',
+      Number(row?.my_knowhow) === 1 && Number(row?.taught) === 1 && Number(row?.done_kinds) === 2,
+      row ? `k=${row.my_knowhow} h=${row.my_hits} t=${row.taught} d=${row.done_kinds}` : 'row 없음'); }
+  // 본인 스코프: 사장(같은 매장)의 my_growth엔 직원 실적이 안 섞인다(사장 자신의 것만).
+  { const { data } = await owner.rpc('my_growth');
+    const row = (data ?? []).find((r) => r.unit_id === UNIT);
+    check('⑧ 사장 my_growth는 사장 것만(taught=0·직원 노하우 미포함)',
+      Number(row?.taught) === 0 && Number(row?.my_knowhow) === 1, row ? `k=${row.my_knowhow} t=${row.taught}` : 'row 없음'); }
+  // 크로스테넌트: B 사장의 my_growth에 A 매장 행이 없다.
+  { const { data } = await ownerB.rpc('my_growth');
+    check('⑧ B my_growth에 A 매장 없음', !(data ?? []).some((r) => r.unit_id === UNIT)); }
+
   console.log(`\n결과: ${pass} PASS / ${fail} FAIL`);
   process.exit(fail === 0 ? 0 : 1);
 }
