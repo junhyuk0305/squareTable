@@ -532,7 +532,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 12,
   },
-  errorText: { flex: 1, fontSize: 12.5, fontWeight: '700', color: BrandColors.bad, lineHeight: 17 },
+  errorText: { flex: 1, fontSize: 15, fontWeight: '700', color: BrandColors.bad, lineHeight: 21 },
 
   cta: {
     flexDirection: 'row',

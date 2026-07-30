@@ -215,7 +215,7 @@ const styles = StyleSheet.create({
   delLink: { flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start', marginTop: 2 },
   delLinkText: { fontSize: 12.5, fontWeight: '700', color: BrandColors.bad },
   delConfirm: { backgroundColor: BrandColors.accentSoft, borderRadius: Radius.sm, padding: 12, gap: 9 },
-  delConfirmText: { fontSize: 12.5, fontWeight: '700', color: BrandColors.bad, lineHeight: 18 },
+  delConfirmText: { fontSize: 15, fontWeight: '700', color: BrandColors.bad, lineHeight: 21 },
   delActions: { flexDirection: 'row', gap: 8, justifyContent: 'flex-end' },
   delCancel: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: Radius.sm, borderWidth: 1, borderColor: InkColors.line, backgroundColor: InkColors.bg },
   delCancelText: { fontSize: 12.5, fontWeight: '700', color: InkColors.ink2 },

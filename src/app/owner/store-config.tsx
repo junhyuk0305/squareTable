@@ -178,7 +178,7 @@ const styles = StyleSheet.create({
   timeLabel: { fontSize: 12, fontWeight: '700', color: InkColors.ink3 },
   timeInp: { width: 110, textAlign: 'center', fontSize: 24, fontWeight: '800', color: InkColors.ink, letterSpacing: 1, paddingVertical: 10, backgroundColor: InkColors.cream, borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, ...(Platform.OS === 'web' ? ({ outlineStyle: 'none' } as object) : null) },
   bad: { borderColor: BrandColors.bad },
-  warn: { fontSize: 12, color: BrandColors.bad, fontWeight: '700', textAlign: 'center' },
+  warn: { fontSize: 15, color: BrandColors.bad, fontWeight: '700', textAlign: 'center' },
 
   dows: { flexDirection: 'row', justifyContent: 'space-between' },
   dow: { width: 38, height: 38, borderRadius: Radius.pill, borderWidth: 1, borderColor: InkColors.line, backgroundColor: InkColors.bg, alignItems: 'center', justifyContent: 'center' },
@@ -194,7 +194,7 @@ const styles = StyleSheet.create({
 
   dangerBox: { marginTop: 28, borderWidth: 1, borderColor: BrandColors.bad, borderRadius: Radius.md, padding: 16, gap: 8, backgroundColor: InkColors.bg },
   dangerLabel: { fontSize: 12, fontWeight: '800', color: BrandColors.bad, letterSpacing: 0.3 },
-  dangerDesc: { fontSize: 12.5, color: InkColors.ink3, lineHeight: 18 },
+  dangerDesc: { fontSize: 15, color: InkColors.ink3, lineHeight: 21 },
   dangerBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 4, paddingVertical: 12, borderRadius: Radius.sm, borderWidth: 1, borderColor: BrandColors.bad, backgroundColor: InkColors.bg },
   dangerBtnText: { fontSize: 14, fontWeight: '800', color: BrandColors.bad },
 });

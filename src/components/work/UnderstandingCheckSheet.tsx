@@ -153,7 +153,7 @@ function QuizBody({
       {phase === 'quiz' && (
         <View style={s.foot}>
           <Pressable onPress={submit} disabled={!allAnswered} style={({ pressed }) => [s.cta, !allAnswered && { opacity: 0.4 }, pressed && { opacity: 0.85 }]}>
-            <Text style={s.ctaText}>제출하기</Text>
+            <Text style={s.ctaText}>답 보내기</Text>
           </Pressable>
         </View>
       )}
