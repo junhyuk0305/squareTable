@@ -36,6 +36,10 @@ export default function AccountSettings() {
   const bio = useSessionStore((s) => s.bio);
   const role = useSessionStore((s) => s.role);
   const plan = useSessionStore((s) => s.plan);
+  const storeName = useSessionStore((s) => s.storeName);
+  const stores = useSessionStore((s) => s.stores);
+  // 요금제는 매장 단위 — 다점포 사장은 지금 보는 플랜이 어느 매장 것인지 알아야 한다(1곳이면 소음이라 생략).
+  const multiOwner = stores.filter((st) => st.role === 'owner').length > 1;
   const deleteAccount = useSessionStore((s) => s.deleteAccount);
   const isOwner = role === 'owner';
   const prefs = usePreferencesStore();
@@ -140,7 +144,11 @@ export default function AccountSettings() {
             </SettingsSection>
           ) : (
             <View style={styles.billingSection}>
-              <SectionLabel icon="card-outline" title="구독 및 결제" />
+              <SectionLabel
+                icon="card-outline"
+                title="구독 및 결제"
+                hint={multiOwner && storeName ? `${storeName} 기준` : undefined}
+              />
               <PricingTable currentPlan={plan} footNote={null} />
               <Pressable
                 onPress={() => router.push('/billing' as never)}
