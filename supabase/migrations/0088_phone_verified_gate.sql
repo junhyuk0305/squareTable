@@ -1,4 +1,4 @@
--- _hold/0088_phone_verified_gate.sql — 전화번호 인증 서버 강제 게이트 (⛔ 아직 적용 금지)
+-- 0088_phone_verified_gate.sql — 전화번호 인증 서버 강제 게이트 (2026-07-30 적용, OTP UI 웹 라이브 확인 후)
 --
 -- ⛔ 적용 순서 엄수(런북: 기획/전화번호인증_솔라피_런북_2026-07-30.md):
 --    OTP UI가 포함된 웹이 라이브가 된 "뒤에" 이 파일을 supabase/migrations/ 로 옮기고,
@@ -24,7 +24,7 @@ create or replace function public.phone_gate_cutoff()
 returns timestamptz
 language sql
 immutable
-as $$ select timestamptz '2026-08-04 00:00:00+09' $$;
+as $$ select timestamptz '2026-07-30 19:27:00+09' $$;
 
 -- 판정 SSOT — 사장/직원 두 트리거가 같은 함수를 본다(판정 복제 금지).
 create or replace function public.phone_verified_ok(p_uid uuid)
