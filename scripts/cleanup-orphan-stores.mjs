@@ -20,14 +20,17 @@ const H = { apikey: K, Authorization: `Bearer ${K}` };
 //   store_appreview=앱스토어/플레이스토어 심사용 데모 매장(scripts/seed-appreview.mjs, 고정 id).
 //   ★데모 owner 이메일이 QA 도메인(@example.com 류)이라 QA_EMAIL 규칙만으론 잡히므로 반드시 명시 보호.
 //   ★store_appreview 를 지우면 심사 중 Guideline 2.1(a) 반려 — 재생성해도 id 가 고정이라 이 보호가 유지된다.
-const PROTECT_UNITS = new Set(['store_eval', 'store_001', 'store_appreview']);
+//   ★store_002_demo(홍대)·store_starter_demo(성수)=허브 대시보드 QA 데모(scripts/seed-demo-hub.mjs, 고정 id).
+const PROTECT_UNITS = new Set(['store_eval', 'store_001', 'store_appreview', 'store_002_demo', 'store_starter_demo']);
 // 실사용자 이메일 도메인/패턴 (이 계정은 QA로 오인해 지우지 않는다)
 const REAL_EMAIL = /@(naver|gmail|daum|kakao|hanmail|nate|outlook|hotmail|icloud)\.com|@team-roundtable|cristianojun/i;
 // QA/자동 계정 이메일 (하드삭제 허용)
 const QA_EMAIL = /@example\.com|@squaretable\.test|@test\.com|@pilot\.squaretable/i;
 // ★스토어 심사용 데모 계정 — QA 도메인(@pilot.squaretable.app)을 쓰지만 절대 하드삭제 금지.
 //   PROTECT_UNITS 이중화: 매장이 아직 없거나 프로필 unit_id 가 잠시 비어 있는 순간에도 계정이 살아남는다.
-const PROTECT_EMAIL = /appreview\.(owner|staff)@/i;
+//   hubdemo.* = 허브 대시보드 QA 데모 계정(seed-demo-hub.mjs) — 합류신청 pending 계정은 소속 매장이
+//   없어 PROTECT_UNITS 경유 보호가 안 되므로 이메일 패턴으로 보호한다.
+const PROTECT_EMAIL = /appreview\.(owner|staff)@|hubdemo\./i;
 
 async function listAuthUsers() {
   const users = []; let p = 1;
