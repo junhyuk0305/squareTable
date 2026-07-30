@@ -11,6 +11,7 @@ import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { seedVerifiedPhones, cleanupSeededPhones } from './qa-otp-seed.mjs';
 
 function loadEnv() {
   const env = { ...process.env };
@@ -41,9 +42,13 @@ const check = (n, ok, x = '') => { ok ? (pass++, console.log('  PASS', n, x)) : 
 const phone = () => '010' + String(Math.floor(1e7 + Math.random() * 8e7));
 const vec768 = '[' + Array.from({ length: 768 }, (_, i) => (i === 0 ? 0.1 : 0.001)).join(',') + ']';
 
+const seededPhones = []; // 0088 게이트 라이브 — 번호를 '인증됨'으로 선등록해야 create_store 통과
 async function makeOwner(tag) {
   const c = mk();
-  const { data: su, error: se } = await c.auth.signUp({ email: `kc_${tag}_${rid}@example.com`, password: pw, options: { data: { name: `KC_${tag}`, role: 'owner', phone: phone(), birth_date: '1990-01-15' } } });
+  const ph = phone();
+  await seedVerifiedPhones(URL, SRV, [ph]);
+  seededPhones.push(ph);
+  const { data: su, error: se } = await c.auth.signUp({ email: `kc_${tag}_${rid}@example.com`, password: pw, options: { data: { name: `KC_${tag}`, role: 'owner', phone: ph, birth_date: '1990-01-15' } } });
   if (se) throw new Error(`${tag} signUp: ${se.message}`);
   if (!su.session) throw new Error(`${tag} no session`);
   return { c, uid: su.user.id };
@@ -139,6 +144,7 @@ async function main() {
   try { await X.c.rpc('delete_my_account'); } catch {}
   for (const uid of [O.uid, X.uid]) { try { await admin.auth.admin.deleteUser(uid); } catch {} }
   for (const u of [A, B, C]) { try { await admin.from('units').delete().eq('id', u); } catch {} }
+  await cleanupSeededPhones(URL, SRV, seededPhones);
 
   console.log(`\nRESULT: ${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);

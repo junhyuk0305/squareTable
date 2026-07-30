@@ -7,6 +7,7 @@
 // 실행: node --env-file=.env.seed scripts/qa-photo-private.mjs   (자가정리)
 import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'node:fs';
+import { seedVerifiedPhones, cleanupSeededPhones } from './qa-otp-seed.mjs';
 
 const env = { ...process.env };
 for (const f of ['.env', '.env.seed']) { try { for (const l of readFileSync(f, 'utf8').split('\n')) { const m = l.match(/^([A-Z0-9_]+)=(.*)$/); if (m && !env[m[1]]) env[m[1]] = m[2].trim(); } } catch {} }
@@ -19,9 +20,12 @@ const ok = (c, m, x = '') => { console.log(`  ${c ? 'PASS' : 'FAIL'} ${m} ${x}`)
 // 1x1 PNG
 const PNG = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M8AAAMBAQDJ/pLvAAAAAElFTkSuQmCC'), c => c.charCodeAt(0));
 
+const seededPhones = []; // 0088 게이트 라이브 — 번호를 '인증됨'으로 선등록해야 create_store 통과
 async function owner(tag) {
   const c = createClient(URL, ANON, { auth: { persistSession: false, autoRefreshToken: false } });
   const ph = '010' + String(Math.floor(1e7 + Math.random() * 8e7));
+  await seedVerifiedPhones(URL, SRV, [ph]);
+  seededPhones.push(ph);
   const { data: su, error: se } = await c.auth.signUp({ email: `ph_${tag}_${rid}@example.com`, password: 'Test!2345', options: { data: { name: `PH_${tag}`, role: 'owner', phone: ph, phone_last4: ph.slice(-4), birth_date: '1990-01-15' } } });
   if (se || !su.session) throw new Error(`${tag} signUp ${se?.message}`);
   const { data: cs, error: ce } = await c.rpc('create_store', { p_store_name: `PH_${tag}_${rid}`, p_industry: '카페·디저트', p_biz_no: null });
@@ -62,6 +66,7 @@ async function owner(tag) {
     await admin.from('units').delete().like('store_name', 'PH_%');
     let p = 1; for (;;) { const res = await fetch(`${URL}/auth/v1/admin/users?page=${p}&per_page=200`, { headers: { apikey: SRV, Authorization: `Bearer ${SRV}` } }); const j = await res.json(); const us = j.users || []; for (const u of us) if ((u.email || '').startsWith('ph_')) await fetch(`${URL}/auth/v1/admin/users/${u.id}`, { method: 'DELETE', headers: { apikey: SRV, Authorization: `Bearer ${SRV}` } }); if (us.length < 200) break; p++; }
   }
+  await cleanupSeededPhones(URL, SRV, seededPhones);
   console.log(`\nRESULT: ${pass} passed, ${fail} failed${fail ? '  (0052 미적용 상태면 2·3번 FAIL = 구멍 실증)' : ''}`);
   process.exit(fail ? 1 : 0);
 })().catch(e => { console.error('✗', e.message); process.exit(2); });

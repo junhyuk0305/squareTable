@@ -9,6 +9,7 @@ import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { seedVerifiedPhones, cleanupSeededPhones } from './qa-otp-seed.mjs';
 
 function loadEnv() {
   const env = { ...process.env };
@@ -26,6 +27,7 @@ function loadEnv() {
 const env = loadEnv();
 const URL = env.EXPO_PUBLIC_SUPABASE_URL || env.SUPABASE_URL;
 const ANON = env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+const SRV = env.SUPABASE_SERVICE_ROLE_KEY; // 있으면 phone_otps 시드(게이트 0088 대비)
 if (!URL || !ANON) { console.error('env 없음(.env/.env.seed)'); process.exit(2); }
 
 const mk = () => createClient(URL, ANON, { auth: { persistSession: false, autoRefreshToken: false } });
@@ -45,12 +47,16 @@ const SQUARE = {
 (async () => {
   console.log('· draft 격리(0063/0064) 라이브 실증:', URL, '\n');
 
+  // 0088 게이트 라이브 — 사장·직원 번호를 '인증됨'으로 선등록해야 create_store/join 통과.
+  const qaPhones = [phone(), phone()];
+  await seedVerifiedPhones(URL, SRV, qaPhones);
+
   // ── 사장 A + 매장 ──
   const A = mk();
   const aEmail = `dq_owner_${rid}@example.com`;
   const { data: su, error: se } = await A.auth.signUp({
     email: aEmail, password: 'Test!2345',
-    options: { data: { name: `DQ_사장_${rid}`, role: 'owner', phone: phone(), phone_last4: '0000', birth_date: '1990-01-15' } },
+    options: { data: { name: `DQ_사장_${rid}`, role: 'owner', phone: qaPhones[0], phone_last4: '0000', birth_date: '1990-01-15' } },
   });
   if (se || !su.session) { console.error('✗ owner signUp:', se?.message || 'no session'); process.exit(2); }
   const { data: cs, error: ce } = await A.rpc('create_store', { p_store_name: `DQ_${rid}`, p_industry: '카페·디저트', p_biz_no: null });
@@ -88,7 +94,7 @@ const SQUARE = {
   const S = mk();
   const { data: ss, error: sse } = await S.auth.signUp({
     email: `dq_staff_${rid}@example.com`, password: 'Test!2345',
-    options: { data: { name: `DQ_직원_${rid}`, role: 'staff', phone: phone(), phone_last4: '1111', birth_date: '2000-03-05' } },
+    options: { data: { name: `DQ_직원_${rid}`, role: 'staff', phone: qaPhones[1], phone_last4: '1111', birth_date: '2000-03-05' } },
   });
   if (sse || !ss.session) { console.error('✗ staff signUp:', sse?.message || 'no session'); process.exit(2); }
   {
@@ -119,6 +125,7 @@ const SQUARE = {
   // ── 자가정리 ──
   try { await S.rpc('delete_my_account'); } catch (e) { console.log('  ! staff cleanup', e.message); }
   try { await A.rpc('delete_my_account'); } catch (e) { console.log('  ! owner cleanup', e.message); }
+  await cleanupSeededPhones(URL, SRV, qaPhones);
 
   console.log(`\nRESULT: ${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);

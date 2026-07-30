@@ -14,6 +14,7 @@ import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { seedVerifiedPhones, cleanupSeededPhones } from './qa-otp-seed.mjs';
 
 function loadEnv() {
   const env = { ...process.env };
@@ -47,9 +48,13 @@ let seq = 0;
 const phone = () => `0107${String((Number(rid) + ++seq * 131) % 100000000).padStart(8, '0').slice(0, 8)}`;
 
 const uids = [];
+const seededPhones = []; // 0088 게이트 라이브 — 번호를 '인증됨'으로 선등록해야 create_store/join이 통과
 async function signUp(name, role, birth) {
   const c = mk();
-  const meta = { name, role, phone: phone(), ...(birth ? { birth_date: birth } : {}) };
+  const ph = phone();
+  await seedVerifiedPhones(URL_, SERVICE, [ph]);
+  seededPhones.push(ph);
+  const meta = { name, role, phone: ph, ...(birth ? { birth_date: birth } : {}) };
   const { data, error } = await c.auth.signUp({ email: `gx_${name}_${rid}@example.com`, password: pw, options: { data: meta } });
   if (error || !data.session) throw new Error(`signUp(${name}) 실패: ${error?.message}`);
   await c.auth.setSession({ access_token: data.session.access_token, refresh_token: data.session.refresh_token });
@@ -220,6 +225,7 @@ async function main() {
       for (const uid of uids) await admin.auth.admin.deleteUser(uid).catch(() => {});
       console.log(`\n정리 완료(매장 1·계정 ${uids.length})`);
     } catch (e) { console.log('정리 중 오류(수동 확인):', e?.message); }
+    await cleanupSeededPhones(URL_, SERVICE, seededPhones);
   }
 
   console.log(`\n결과: PASS ${pass} / FAIL ${fail}`);

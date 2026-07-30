@@ -4,27 +4,35 @@ import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { seedVerifiedPhones, cleanupSeededPhones } from './qa-otp-seed.mjs';
 
 function loadEnv() {
   const env = { ...process.env };
-  try {
-    const root = join(dirname(fileURLToPath(import.meta.url)), '..');
-    for (const line of readFileSync(join(root, '.env'), 'utf8').split('\n')) {
-      const m = line.match(/^([A-Z0-9_]+)=(.*)$/);
-      if (m && !env[m[1]]) env[m[1]] = m[2].trim();
-    }
-  } catch {}
+  const root = join(dirname(fileURLToPath(import.meta.url)), '..');
+  // .env.seed 는 phone_otps 인증 시드용 service_role 키 확보 목적(없으면 시드 스킵 — 게이트 미적용 환경).
+  for (const f of ['.env', '.env.seed']) {
+    try {
+      for (const line of readFileSync(join(root, f), 'utf8').split('\n')) {
+        const m = line.match(/^([A-Z0-9_]+)=(.*)$/);
+        if (m && !env[m[1]]) env[m[1]] = m[2].trim();
+      }
+    } catch { /* 파일 없음 */ }
+  }
   return env;
 }
 const env = loadEnv();
 const URL = env.EXPO_PUBLIC_SUPABASE_URL, ANON = env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+const SERVICE = env.SUPABASE_SERVICE_ROLE_KEY; // 있으면 phone_otps 시드(게이트 0088 대비)
 const s = String(Date.now()).slice(-9);
 const pw = 'Test1234!qa';
 // 200바이트짜리 유효 webp 흉내(실제 인코딩 아님 — RLS/스토리지 정책 검증엔 바이트 내용 무관)
 const buf = Buffer.from('UklGRhIAAABXRUJQVlA4TAYAAAAvAAAAAAfQ//73v/+BiOh/AAA=', 'base64');
 
 const owner = createClient(URL, ANON, { auth: { persistSession: false, autoRefreshToken: false } });
+// 0088 게이트 라이브 — signUp 번호를 '인증됨'으로 선등록해야 create_store 통과.
+const qaPhones = [`0108${s.slice(0, 7)}`];
 try {
+  await seedVerifiedPhones(URL, SERVICE, qaPhones);
   const { data: up, error: upErr } = await owner.auth.signUp({
     email: `qa_photo_${s}@example.com`, password: pw,
     options: { data: { name: 'QA사진사장', role: 'owner', phone: `0108${s.slice(0,7)}`, store_name: 'QA사진매장', industry: '카페·디저트', birth_date: '1990-01-15' } },
@@ -67,4 +75,5 @@ try {
   console.log('PROBE ERROR:', e.message);
 } finally {
   try { await owner.rpc('delete_my_account'); console.log('\n(정리) 테스트 계정 삭제'); } catch (e) { console.log('cleanup 실패:', e.message); }
+  await cleanupSeededPhones(URL, SERVICE, qaPhones);
 }

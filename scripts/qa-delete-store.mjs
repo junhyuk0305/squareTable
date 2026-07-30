@@ -5,6 +5,7 @@ import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { seedVerifiedPhones, cleanupSeededPhones } from './qa-otp-seed.mjs';
 function loadEnv() { const env = { ...process.env }; try { const root = join(dirname(fileURLToPath(import.meta.url)), '..'); for (const f of ['.env', '.env.seed']) for (const l of readFileSync(join(root, f), 'utf8').split('\n')) { const m = l.match(/^([A-Z0-9_]+)=(.*)$/); if (m && !env[m[1]]) env[m[1]] = m[2].trim(); } } catch {} return env; }
 const env = loadEnv();
 const URL = env.EXPO_PUBLIC_SUPABASE_URL || env.SUPABASE_URL, ANON = env.EXPO_PUBLIC_SUPABASE_ANON_KEY, SRV = env.SUPABASE_SERVICE_ROLE_KEY;
@@ -16,7 +17,8 @@ const pw = 'Test1234!qa';
 let pass = 0, fail = 0;
 const check = (n, ok, x = '') => { ok ? (pass++, console.log('  PASS', n, x)) : (fail++, console.log('  FAIL', n, x)); };
 const phone = () => '010' + String(Math.floor(1e7 + Math.random() * 8e7));
-async function mkOwner(tag) { const c = mk(); const { data, error } = await c.auth.signUp({ email: `ds_${tag}_${rid}@example.com`, password: pw, options: { data: { name: `DS_${tag}`, role: 'owner', phone: phone(), birth_date: '1990-01-15' } } }); if (error || !data.session) throw new Error(`${tag} signUp ${error?.message}`); return { c, uid: data.user.id }; }
+const seededPhones = []; // 0088 게이트 라이브 — 번호를 '인증됨'으로 선등록해야 create_store 통과
+async function mkOwner(tag) { const c = mk(); const ph = phone(); await seedVerifiedPhones(URL, SRV, [ph]); seededPhones.push(ph); const { data, error } = await c.auth.signUp({ email: `ds_${tag}_${rid}@example.com`, password: pw, options: { data: { name: `DS_${tag}`, role: 'owner', phone: ph, birth_date: '1990-01-15' } } }); if (error || !data.session) throw new Error(`${tag} signUp ${error?.message}`); return { c, uid: data.user.id }; }
 async function store(c, n) { const { data, error } = await c.rpc('create_store', { p_store_name: n, p_industry: '카페·디저트', p_biz_no: null }); if (error) throw new Error(error.message); return (Array.isArray(data) ? data[0] : data).unit_id; }
 // 유료화(0062) 후 2호점+ 생성은 기존 소유 매장 전부 multi 여야 한다 — 전역 스위치 토글 대신
 // 실제 유료 경로(admin_activate_store)로 테스트 매장만 승격한다(프로덕션 페이월 무접촉).
@@ -68,6 +70,7 @@ async function main() {
   for (const cli of [O.c, X.c, J.c]) { try { await cli.rpc('delete_my_account'); } catch {} }
   for (const uid of [O.uid, X.uid, J.uid]) { try { await admin.auth.admin.deleteUser(uid); } catch {} }
   for (const u of [A, B, C, D]) { try { await admin.from('units').delete().eq('id', u); } catch {} }
+  await cleanupSeededPhones(URL, SRV, seededPhones);
 
   console.log(`\nRESULT: ${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);

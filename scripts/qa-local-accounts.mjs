@@ -6,6 +6,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { seedVerifiedPhones, cleanupSeededPhones } from './qa-otp-seed.mjs';
 const here = (r) => fileURLToPath(new URL(r, import.meta.url));
 function pe(f){const o={};try{for(const l of readFileSync(f,'utf8').split(/\r?\n/)){const m=l.match(/^([A-Z_]+)=(.*)$/);if(m)o[m[1]]=m[2].trim();}}catch{}return o;}
 const env = { ...pe(here('../.env')), ...pe(here('../.env.seed')) };
@@ -30,7 +31,11 @@ async function ensureUser(client, email, meta) {
   return { id: data.user.id, isNew: true };
 }
 
+// 0088 게이트 라이브 — 고정 계정 번호를 '인증됨'으로 선등록해야 create_store/join 통과.
+const qaPhones = ['01099990001', '01099990011', '01099990012'];
+
 async function main() {
+  await seedVerifiedPhones(URL_, SRV, qaPhones);
   const owner = mk();
   const o = await ensureUser(owner, OWNER, { name: 'QA사장', role: 'owner', phone: '01099990001', store_name: 'QA', industry: '카페·디저트' });
   console.log(`사장 ${o.isNew ? '생성' : '기존'}: ${OWNER}`);
@@ -100,6 +105,7 @@ async function main() {
   console.log(`직원2  : ${STAFF2}  → QA 카페 본점 소속`);
   console.log('시드(본점): 노하우 2개, 반복업무 2개(아메리카노=노하우 첨부됨 / 마감정리=미첨부)');
   console.log('════════════════════════════════════════════════');
+  await cleanupSeededPhones(URL_, SRV, qaPhones);
   process.exit(0);
 }
 main().catch((e) => { console.error('SETUP ERROR:', e); process.exit(1); });

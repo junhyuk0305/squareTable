@@ -25,21 +25,26 @@ import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { seedVerifiedPhones, cleanupSeededPhones } from './qa-otp-seed.mjs';
 
 function loadEnv() {
   const env = { ...process.env };
-  try {
-    const root = join(dirname(fileURLToPath(import.meta.url)), '..');
-    for (const line of readFileSync(join(root, '.env'), 'utf8').split('\n')) {
-      const m = line.match(/^([A-Z0-9_]+)=(.*)$/);
-      if (m && !env[m[1]]) env[m[1]] = m[2].trim();
-    }
-  } catch { /* no .env */ }
+  const root = join(dirname(fileURLToPath(import.meta.url)), '..');
+  // .env.seed 는 phone_otps 인증 시드용 service_role 키 확보 목적(없으면 시드 스킵 — 게이트 미적용 환경).
+  for (const f of ['.env', '.env.seed']) {
+    try {
+      for (const line of readFileSync(join(root, f), 'utf8').split('\n')) {
+        const m = line.match(/^([A-Z0-9_]+)=(.*)$/);
+        if (m && !env[m[1]]) env[m[1]] = m[2].trim();
+      }
+    } catch { /* 파일 없음 */ }
+  }
   return env;
 }
 const env = loadEnv();
 const URL = env.EXPO_PUBLIC_SUPABASE_URL;
 const ANON = env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+const SERVICE = env.SUPABASE_SERVICE_ROLE_KEY; // 있으면 phone_otps 시드(게이트 0088 대비)
 if (!URL || !ANON) { console.error('FAIL: EXPO_PUBLIC_SUPABASE_URL/ANON_KEY 필요'); process.exit(2); }
 const PUSH_URL = `${URL}/functions/v1/push`;
 
@@ -79,6 +84,11 @@ function kstNowMin() {
   return h * 60 + m;
 }
 const hhmm = (min) => { const x = ((min % 1440) + 1440) % 1440; return `${String(Math.floor(x / 60)).padStart(2, '0')}:${String(x % 60).padStart(2, '0')}`; };
+
+// 0088 게이트 라이브 — 아래 signUp 이 쓰는 번호(ph 51~53) 전부를 '인증됨'으로 선등록.
+const qaPhones = ['51', '52', '53'].map((tag) => `010${tag}${s.slice(0, 6)}`);
+const seededRes = await seedVerifiedPhones(URL, SERVICE, qaPhones);
+if (seededRes.skipped) console.log(`  (phone_otps 시드 스킵: ${seededRes.skipped})`);
 
 const cleanup = [];
 try {
@@ -152,6 +162,7 @@ try {
   for (const c of cleanup) {
     try { await c.rpc('delete_my_account'); } catch { /* best-effort */ }
   }
+  await cleanupSeededPhones(URL, SERVICE, qaPhones);
 }
 
 console.log(`\nRESULT: ${pass} passed, ${fail} failed`);

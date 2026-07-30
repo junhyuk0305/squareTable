@@ -5,6 +5,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { seedVerifiedPhones, cleanupSeededPhones } from './qa-otp-seed.mjs';
 
 const here = (r) => fileURLToPath(new URL(r, import.meta.url));
 function pe(f){const o={};try{for(const l of readFileSync(f,'utf8').split(/\r?\n/)){const m=l.match(/^([A-Z_]+)=(.*)$/);if(m)o[m[1]]=m[2].trim();}}catch{}return o;}
@@ -39,8 +40,12 @@ async function edgeAi(token, task, payload) {
   return { ok: res.ok, status: res.status, body };
 }
 
+// 0088 게이트 라이브 — 아래 signUp 이 쓰는 번호 전부를 '인증됨'으로 선등록해야 create_store/join 통과.
+const qaPhones = [`0106${s.slice(0,7)}`, `0108${s.slice(0,7)}`, `0109${s.slice(0,7)}`];
+
 async function main() {
   // ── 셋업: 격리 매장 + 사장 + 알바2 ────────────────────────────────────────
+  await seedVerifiedPhones(URL_, SRV, qaPhones);
   const owner = mk();
   const ownerId = await signUpSession(owner, `qa_tk_o_${s}@example.com`, { name: 'QA사장', role: 'owner', phone: `0106${s.slice(0,7)}`, store_name: 'TK', industry: '카페·디저트' });
   const { data: c1, error: ce } = await owner.rpc('create_store', { p_store_name: 'TK 노하우매장', p_industry: '카페·디저트', p_biz_no: null });
@@ -109,6 +114,7 @@ async function main() {
   await flow6(ctx3); // #2 owner_overview 커버리지
   await flow7(ctx3); // #3 broadcast_notice + read_status
 
+  await cleanupSeededPhones(URL_, SRV, qaPhones);
   console.log(`\n${fail === 0 ? '✅ PASS' : '❌ FAIL'} — S1+S3 업무↔노하우 QA · 통과 ${pass} / 실패 ${fail}`);
   process.exit(fail === 0 ? 0 : 1);
 }

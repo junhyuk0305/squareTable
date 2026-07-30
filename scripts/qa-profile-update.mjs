@@ -12,6 +12,7 @@ import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { seedVerifiedPhones, cleanupSeededPhones } from './qa-otp-seed.mjs';
 
 function loadEnv() {
   const env = { ...process.env };
@@ -36,6 +37,7 @@ const rid = Math.random().toString(36).slice(2, 8) + Date.now().toString(36).sli
 (async () => {
   const c = createClient(URL, ANON, { auth: { persistSession: false, autoRefreshToken: false } });
   const ph = '010' + String(Math.floor(1e7 + Math.random() * 8e7));
+  await seedVerifiedPhones(URL, SRV, [ph]); // 0088 게이트 라이브 — 미인증 번호는 create_store가 차단
   const { data: su, error: se } = await c.auth.signUp({ email: `pu_${rid}@example.com`, password: 'Test!2345', options: { data: { name: '원래이름', role: 'owner', phone: ph, phone_last4: ph.slice(-4), birth_date: '1990-01-15' } } });
   if (se || !su.session) { console.error('FAIL signUp:', se?.message); process.exit(2); }
   await c.rpc('create_store', { p_store_name: `PU_${rid}`, p_industry: '카페·디저트', p_biz_no: null });
@@ -71,6 +73,7 @@ const rid = Math.random().toString(36).slice(2, 8) + Date.now().toString(36).sli
 
   // 정리
   try { await c.rpc('delete_my_account'); } catch {}
+  await cleanupSeededPhones(URL, SRV, [ph]);
   if (SRV) {
     const a = createClient(URL, SRV, { auth: { persistSession: false } });
     await a.from('units').delete().like('store_name', 'PU_%');

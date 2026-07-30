@@ -12,6 +12,7 @@ import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { seedVerifiedPhones, cleanupSeededPhones } from './qa-otp-seed.mjs';
 
 function loadEnv() {
   const env = { ...process.env };
@@ -46,6 +47,10 @@ async function signUpSession(client, email, meta) {
   await client.auth.setSession({ access_token: data.session.access_token, refresh_token: data.session.refresh_token });
   return data.user.id;
 }
+
+// 0088 게이트 라이브 — 아래 signUp 이 쓰는 번호 전부를 '인증됨'으로 선등록해야 create_store/join 통과.
+const qaPhones = [`0106${s.slice(0, 7)}`, `0105${s.slice(0, 7)}`, `0108${s.slice(0, 7)}`];
+await seedVerifiedPhones(URL, SRV, qaPhones);
 
 const cleanup = [];
 try {
@@ -120,6 +125,7 @@ try {
   fail++; console.log('  FAIL exception:', e.message);
 } finally {
   for (const c of cleanup) { try { await c.rpc('delete_my_account'); } catch { /* best-effort */ } }
+  await cleanupSeededPhones(URL, SRV, qaPhones);
 }
 
 console.log(`\nRESULT: ${pass} passed, ${fail} failed`);

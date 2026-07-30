@@ -18,6 +18,7 @@ import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { seedVerifiedPhones, cleanupSeededPhones } from './qa-otp-seed.mjs';
 
 function loadEnv() {
   const env = { ...process.env };
@@ -62,10 +63,13 @@ async function svcSelect(path) {
 
 // ── 계정 헬퍼 ────────────────────────────────────────────────────────────────
 let seq = 0;
+const seededPhones = []; // 0088 게이트 라이브 — 번호를 '인증됨'으로 선등록해야 create_store/join이 통과
 async function signUp(role, name) {
   const c = mk();
   seq += 1;
   const phone = `0107${String((Number(s) + seq * 17) % 10000000).padStart(7, '0')}`;
+  await seedVerifiedPhones(URL, SERVICE, [phone]);
+  seededPhones.push(phone);
   const email = `qa_pc_${s}_${seq}@example.com`;
   const { data, error } = await c.auth.signUp({ email, password: pw, options: { data: { name, role, phone, birth_date: '1990-01-15' } } });
   if (error || !data.session) throw new Error(`signUp(${name}) 실패: ${error?.message}`);
@@ -224,6 +228,9 @@ async function main() {
   check('⑦ 입금자명 없으면 거부(depositor_required)', /depositor_required/.test(eDep?.message ?? ''), eDep?.message?.slice(0, 60) ?? '통과돼버림');
   const { error: ePlan } = await B.c.rpc('submit_payment_claim', { p_plan: 'free', p_amount: 0, p_depositor: '무료', p_months: 1, p_memo: null });
   check('⑦ free 플랜 신고 거부(bad_plan)', /bad_plan/.test(ePlan?.message ?? ''), ePlan?.message?.slice(0, 60) ?? '통과돼버림');
+
+  // ★main 이 process.exit 로 끝나 .finally(cleanupAll)는 도달하지 않는다 — 시드 정리는 여기서.
+  await cleanupSeededPhones(URL, SERVICE, seededPhones);
 
   console.log(`\nRESULT: ${pass} passed, ${fail} failed`);
   process.exit(fail === 0 ? 0 : 1);

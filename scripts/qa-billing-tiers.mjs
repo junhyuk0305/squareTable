@@ -227,6 +227,9 @@ async function main() {
   }
 
   console.log(`\nRESULT: ${pass} passed, ${fail} failed`);
+  // process.exit는 .finally 콜백을 기다리지 않는다 — 정리는 exit 전에 직접 수행.
+  await cleanupAll();
+  await cleanupSeededPhones(URL, SERVICE, seededPhones);
   process.exit(fail === 0 ? 0 : 1);
 }
 

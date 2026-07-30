@@ -18,21 +18,26 @@ import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { seedVerifiedPhones, cleanupSeededPhones } from './qa-otp-seed.mjs';
 
 function loadEnv() {
   const env = { ...process.env };
-  try {
-    const root = join(dirname(fileURLToPath(import.meta.url)), '..');
-    for (const line of readFileSync(join(root, '.env'), 'utf8').split('\n')) {
-      const m = line.match(/^([A-Z0-9_]+)=(.*)$/);
-      if (m && !env[m[1]]) env[m[1]] = m[2].trim();
-    }
-  } catch { /* no .env */ }
+  const root = join(dirname(fileURLToPath(import.meta.url)), '..');
+  // .env.seed 는 phone_otps 인증 시드용 service_role 키 확보 목적(없으면 시드 스킵 — 게이트 미적용 환경).
+  for (const f of ['.env', '.env.seed']) {
+    try {
+      for (const line of readFileSync(join(root, f), 'utf8').split('\n')) {
+        const m = line.match(/^([A-Z0-9_]+)=(.*)$/);
+        if (m && !env[m[1]]) env[m[1]] = m[2].trim();
+      }
+    } catch { /* 파일 없음 */ }
+  }
   return env;
 }
 const env = loadEnv();
 const URL = env.EXPO_PUBLIC_SUPABASE_URL;
 const ANON = env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+const SERVICE = env.SUPABASE_SERVICE_ROLE_KEY; // 있으면 phone_otps 시드(게이트 0088 대비)
 if (!URL || !ANON) { console.error('FAIL: EXPO_PUBLIC_SUPABASE_URL/ANON_KEY 필요'); process.exit(2); }
 
 const mk = () => createClient(URL, ANON, { auth: { persistSession: false, autoRefreshToken: false } });
@@ -49,6 +54,12 @@ async function signUpOAuthLike(client, email, name) {
   await client.auth.setSession({ access_token: data.session.access_token, refresh_token: data.session.refresh_token });
   return data.user.id;
 }
+
+// 0088 게이트 라이브 — complete_profile 로 기록될 번호(A=0107·C=0108)와 E 선충전 번호(0104)를
+// '인증됨'으로 선등록해야 create_store/join 통과. (게이트 판정 = 프로필 phone ↔ phone_otps.verified_at)
+const qaPhones = [`0107${s.slice(0, 7)}`, `0108${s.slice(0, 7)}`, `0104${s.slice(0, 7)}`];
+const seededRes = await seedVerifiedPhones(URL, SERVICE, qaPhones);
+if (seededRes.skipped) console.log(`  (phone_otps 시드 스킵: ${seededRes.skipped})`);
 
 const cleanup = [];
 try {
@@ -110,8 +121,17 @@ try {
   // ── E: 완성화면의 실제 순서(사장) — create_store 가 생년월일을 직접 기록하며 성공 → complete_profile ──
   // 결손(birth_date=null) 프로필에 create_store(p_birth_date=지정) 를 바로 불러도 통과해야 한다(트랩 없음).
   const eo = mk();
-  await signUpOAuthLike(eo, `qa_cp_e_${s}@example.com`, 'CP순서');
+  const eid = await signUpOAuthLike(eo, `qa_cp_e_${s}@example.com`, 'CP순서');
   cleanup.push(eo);
+  // 0088 게이트는 phone 축(별도) — E 는 birth_date 결손 축만 검증하므로, 인증된 번호를
+  // service_role 로 선충전해 phone 게이트만 통과시킨다(birth_date=null 결손은 그대로 유지).
+  if (SERVICE) {
+    await fetch(`${URL}/rest/v1/profiles?id=eq.${eid}`, {
+      method: 'PATCH',
+      headers: { apikey: SERVICE, Authorization: `Bearer ${SERVICE}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone: `0104${s.slice(0, 7)}` }),
+    });
+  }
   const { data: eCs, error: eCsErr } = await eo.rpc('create_store', { p_store_name: 'CP순서매장', p_industry: '카페·디저트', p_biz_no: null, p_birth_date: '1988-08-08' });
   const eRow = Array.isArray(eCs) ? eCs[0] : eCs;
   check('E1 결손 프로필에 create_store(생년월일 지정) 바로 성공(완성화면 순서)', !eCsErr && !!eRow?.invite_code, eCsErr?.message ?? `code=${eRow?.invite_code}`);
@@ -123,6 +143,7 @@ try {
   for (const c of cleanup) {
     try { await c.rpc('delete_my_account'); } catch { /* best-effort */ }
   }
+  await cleanupSeededPhones(URL, SERVICE, qaPhones);
 }
 
 console.log(`\nRESULT: ${pass} passed, ${fail} failed`);
