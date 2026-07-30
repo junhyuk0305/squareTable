@@ -1,4 +1,5 @@
-// 허브(1레이어) 하단 탭바 — 2탭: [현황(사장)/오늘(직원) · 매장]. 기획 v2 확정(2026-07-24).
+// 허브(1레이어) 하단 탭바 — 3탭(2026-07-30 확장): 사장 [현황·노하우·매장] / 직원 [오늘·성장·매장].
+// 두 번째 탭 = 축적·순환 레이어의 독립 홈(/hub-growth) — 뱃지 없음(재촉 아닌 축적 공간).
 // ★알림은 탭이 아니다 — 상단 벨 고정(사용자 확정). 매장 앱 RoleTabBar 와 별개 컴포넌트이며
 // 매장 앱에 들어가면 이 탭바는 사라진다(2레이어 경계). 탭 이동은 goToTab(replace) 규칙 공유.
 import { View, StyleSheet } from 'react-native';
@@ -15,6 +16,8 @@ import { InkColors } from '@/lib/theme/colors';
 const TABS: Record<'junior' | 'owner', Tab[]> = {
   owner: [
     { label: '현황', path: '/hub', icon: 'stats-chart-outline', iconActive: 'stats-chart' },
+    // 허브 '노하우'(지식 신선도) — 매장 앱 노하우 탭과 층이 다르다(허브=계정 스코프 집계·이동).
+    { label: '노하우', path: '/hub-growth', icon: 'library-outline', iconActive: 'library' },
     { label: '매장', path: '/stores', icon: 'storefront-outline', iconActive: 'storefront' },
   ],
   junior: [

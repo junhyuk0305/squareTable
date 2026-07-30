@@ -148,6 +148,15 @@ async function main() {
   { const { data } = await ownerB.rpc('my_growth');
     check('⑧ B my_growth에 A 매장 없음', !(data ?? []).some((r) => r.unit_id === UNIT)); }
 
+  // ── ⑨ stale(0091) — 90일 넘게 수정 없는 발행 노하우 감지 ─────────────────
+  { let ov9 = await overviewOf(owner, UNIT);
+    check('⑨ 초기 stale=0(전부 최근 수정)', Number(ov9?.stale) === 0, `stale=${ov9?.stale}`);
+    const old = new Date(Date.now() - 100 * 24 * 3600 * 1000).toISOString();
+    const { error } = await owner.from('playbook_entries').update({ updated_at: old }).eq('id', `pb_cs_${s}`);
+    check('⑨ updated_at 백데이트(100일 전)', !error, error?.message ?? '');
+    ov9 = await overviewOf(owner, UNIT);
+    check('⑨ stale 0→1 전이', Number(ov9?.stale) === 1, `stale=${ov9?.stale}`); }
+
   console.log(`\n결과: ${pass} PASS / ${fail} FAIL`);
   process.exit(fail === 0 ? 0 : 1);
 }

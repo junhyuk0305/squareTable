@@ -174,6 +174,7 @@ export type OwnerOverviewRow = {
   ai_used: number; // 이번달(KST) AI답변 사용량(0081, ai_usage_monthly)
   asked_ever: boolean; // AI 질문 1건 이상(ever, 0086) — 시작 체크리스트. 월 리셋되는 ai_used로 판정 금지
   done_ever: boolean; // 업무 완료 기록 1건 이상(ever, 0086) — 시작 체크리스트
+  stale: number; // 90일 넘게 수정 없는 발행 노하우 수(0091) — 허브 노하우 탭
 };
 /** 내가 소유한 모든 매장의 미답질문·노하우·직원·이번달 인건비를 한 번에. RLS는 활성만 보이므로 definer RPC. */
 export async function fetchOwnerOverview(): Promise<DbResult<OwnerOverviewRow[]>> {

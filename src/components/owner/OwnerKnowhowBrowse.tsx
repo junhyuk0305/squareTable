@@ -13,6 +13,7 @@ import { Appear } from '@/components/Appear';
 import { KnowhowCarousel } from '@/components/KnowhowCarousel';
 import { getCategoryMeta, ALL_CATEGORIES } from '@/lib/utils/category';
 import { matchesKnowhowQuery } from '@/lib/utils/knowhowSearch';
+import { track } from '@/lib/analytics/track';
 import { verifyMeta } from '@/lib/utils/verification';
 import { UNSECTIONED } from '@/lib/config/sections';
 import { manualToText } from '@/lib/utils/manualText';
@@ -162,6 +163,15 @@ export function OwnerKnowhowBrowse({
     if (activeCat) list = list.filter((e) => e.category === activeCat);
     return list;
   }, [visible, query, activeCat]);
+
+  // 검색 실패 로그(O8, 슬라이스 D) — "찾다 못 찾은 주제"가 노하우 공백 신호다.
+  // 타자 중 스팸 방지로 800ms 정지 후 1회만 기록. 노하우 0개 매장은 제외(공백 신호가 아니라 빈 매장).
+  useEffect(() => {
+    const q = query.trim();
+    if (!q || baseFiltered.length > 0 || visible.length === 0) return;
+    const t = setTimeout(() => track('knowhow_search_no_result', { q: q.slice(0, 80) }), 800);
+    return () => clearTimeout(t);
+  }, [query, baseFiltered.length, visible.length]);
 
   // 미검증(needs_review) — 전체 기준 카운트(배너·섹션 노출 판단). 0이 되면 배너/섹션 자동 소멸.
   const needsReview = useMemo(() => baseFiltered.filter(needsVerify), [baseFiltered]);
