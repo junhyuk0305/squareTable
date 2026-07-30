@@ -15,7 +15,9 @@ import { useMemberPrefsStore } from '@/lib/store/useMemberPrefsStore';
 import { useStoreNav } from '@/lib/hooks/useStoreNav';
 import { storeColor } from '@/lib/utils/storeColor';
 import { canUseMultistore, PLANS } from '@/lib/config/tiers';
+import { starterGraduated } from '@/lib/utils/starterProgress';
 import { PlanUpgradeNotice } from '@/components/PlanUpgradeNotice';
+import { StarterChecklist } from '@/components/hub/StarterChecklist';
 import { SectionLabel } from '@/components/SectionLabel';
 import { Appear } from '@/components/Appear';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
@@ -142,8 +144,18 @@ export function OwnerStatusView() {
     );
   };
 
+  // 시작 체크리스트(콜드스타트) — 매장 1곳 사장만(신규 단일 매장이 타깃, 다점포는 이미 루프를 앎).
+  // ownerLoaded 게이트로 "로드 전"을 "새 매장"으로 위장하지 않는다. 4단계 완료 시 영구 소멸.
+  const starterRow = overview.length === 1 && !starterGraduated(overview[0]) ? overview[0] : null;
+
   return (
     <View style={{ gap: Space.md }}>
+      {starterRow && (
+        <Appear delay={0}>
+          <StarterChecklist row={starterRow} />
+        </Appear>
+      )}
+
       {/* ── 1) 오늘 스냅샷 ── */}
       <Appear delay={40}>
         <SectionLabel title="오늘" />

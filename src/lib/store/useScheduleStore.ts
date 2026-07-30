@@ -5,7 +5,8 @@
 // 다른 스토어와 동일 패턴 — 낙관적 업데이트 후 guardWrite로 DB 반영, 실패 시 롤백, Realtime로 재수화.
 // HAS_SUPABASE=false면 데모 시드(store_001)로 폴백해 프론트가 끊기지 않는다.
 import { create } from 'zustand';
-import { type Daypart } from '@/lib/store/daypartLabels';
+import { newRoutine, resolveDayparts, type Daypart } from '@/lib/store/daypartLabels';
+import { routineSeedForIndustry } from '@/data/industryRoutines';
 import { coalesce, subscribeDebounced } from '@/lib/store/realtimeSync';
 import { HAS_SUPABASE } from '@/lib/supabase';
 import {
@@ -108,6 +109,26 @@ const nowIso = () => new Date().toISOString();
 
 // ── 기본/시드 ───────────────────────────────────────────
 const DEFAULT_CONFIG: StoreConfig = { open: '09:00', close: '22:00', closedDays: [], note: '' };
+
+/**
+ * 온보딩 1회: 업종 기본 루틴 선주입(콜드스타트 슬라이스 A).
+ * 신규 매장의 day-1 "오늘 할일"이 비지 않도록 카페 팩 업종에 오픈/마감 루틴을 심는다.
+ * 가드: 어느 데이파트든 루틴이 하나라도 있으면 no-op — 기존 매장 설정을 절대 덮지 않는다(멱등).
+ * 스토어 상태는 건드리지 않는다(온보딩 시점엔 미수화) — 매장 앱 진입 시 hydrate가 DB에서 읽는다.
+ * 실패는 upsertScheduleConfig(write 헬퍼)가 표면화하며, 온보딩 완주를 막지 않는 비치명 실패다.
+ */
+export async function seedDaypartRoutines(industry: string | undefined): Promise<boolean> {
+  if (!HAS_SUPABASE) return false;
+  const seed = routineSeedForIndustry(industry);
+  if (!seed) return false;
+  const config = await fetchScheduleConfig();
+  const dayparts = resolveDayparts(config?.dayparts);
+  if (dayparts.some((d) => d.routines.length > 0)) return false;
+  const filled = dayparts.map((d) =>
+    seed[d.id] ? { ...d, routines: seed[d.id].map((text) => ({ ...newRoutine(), text })) } : d,
+  );
+  return upsertScheduleConfig({ ...(config ?? DEFAULT_CONFIG), dayparts: filled });
+}
 
 // 데모 매장(store_001) 시드 — users.json의 두 직원 기준 주간 근무표. HAS_SUPABASE=false일 때만 사용.
 function demoSeed(): { config: StoreConfig; templates: ShiftTemplate[]; swaps: SwapRequest[] } {

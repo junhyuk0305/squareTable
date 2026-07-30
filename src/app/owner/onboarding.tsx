@@ -6,7 +6,9 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
+import { seedDaypartRoutines } from '@/lib/store/useScheduleStore';
 import { showToast } from '@/lib/store/useToastStore';
+import { OwnerFirstAsk } from '@/components/owner/OwnerFirstAsk';
 import { templatesForIndustry, forkTemplate, type PlaybookTemplate } from '@/data/knowhowPacks';
 import { getCategoryMeta, ALL_CATEGORIES } from '@/lib/utils/category';
 import { Appear } from '@/components/Appear';
@@ -27,7 +29,7 @@ const MIN_RECOMMENDED = 5;
 
 export default function OwnerOnboardingScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ code?: string; industry?: string }>();
+  const params = useLocalSearchParams<{ code?: string; industry?: string; step?: string }>();
   const userId = useSessionStore((s) => s.userId);
   const userName = useSessionStore((s) => s.userName);
   const unitId = useSessionStore((s) => s.unitId);
@@ -61,7 +63,9 @@ export default function OwnerOnboardingScreen() {
     Object.fromEntries(templates.map((t) => [t.id, Boolean(t.recommended)])),
   );
   const [expanded, setExpanded] = useState(false); // '직접 고르기' 펼침
-  const [step, setStep] = useState<'pick' | 'done'>('pick');
+  // ask = aha 스텝(콜드스타트): 담기 성공 직후 "첫 질문" 경험. 허브 시작 체크리스트가
+  // ?step=ask 로 직접 재진입할 수 있다(사장이 질문할 수 있는 유일한 표면).
+  const [step, setStep] = useState<'pick' | 'ask' | 'done'>(params.step === 'ask' ? 'ask' : 'pick');
   const [registeredCount, setRegisteredCount] = useState(0);
   const [registering, setRegistering] = useState(false);
   // 더블탭으로 onRegister가 두 번 돌아 중복 적재되는 걸 막는다(setStep 반영 전 재호출 가드).
@@ -98,6 +102,8 @@ export default function OwnerOnboardingScreen() {
     if (picks.length === 0) return;
     committed.current = true;
     setRegistering(true);
+    // 업종 기본 루틴 선주입(콜드스타트) — 기존 루틴 있으면 no-op(멱등). 실패해도 온보딩은 진행.
+    void seedDaypartRoutines(industry);
     // 각 노하우가 서버에 실제로 저장됐는지 확인 — 저장 안 된 개수를 정직하게 반영(예전엔 실패해도
     // "N개 등록했어요"를 띄우고 완료 화면으로 넘어가 무음 유실됐음).
     const results = await Promise.all(
@@ -117,12 +123,32 @@ export default function OwnerOnboardingScreen() {
       showToast(`노하우 ${okCount}개를 등록했어요`, 'good');
     }
     setRegisteredCount(okCount);
-    setStep('done');
+    // 담기 성공 → aha 스텝(첫 질문). 초대코드는 aha 뒤 done 에서(초대는 aha 이후 — 콜드스타트 원칙).
+    setStep('ask');
   };
 
   // 건너뛰기도 완료 화면을 거친다 — 초대코드를 한 번은 보여주기 위함(0건으로 done 진입).
-  const onSkip = () => setStep('done');
+  // 노하우 0건이면 ask 스텝도 건너뛴다(빈 검색 대상에 질문 = 보장된 실패 경험 차단).
+  const onSkip = () => {
+    void seedDaypartRoutines(industry);
+    setStep('done');
+  };
   const goDashboard = () => router.replace('/owner/dashboard');
+
+  // ── aha 스텝: 첫 질문 ──
+  if (step === 'ask') {
+    return (
+      <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
+        <Stack.Screen options={{ headerShown: false }} />
+        <OwnerFirstAsk
+          // 첫 훈련 흐름(담기→ask)이면 done(초대코드)으로. 허브 체크리스트 재진입(?step=ask)이면
+          // done 의 "건너뛰었어요" 카피가 오표시라 원래 화면(허브)으로 복귀한다.
+          onNext={() => (params.step === 'ask' ? router.back() : setStep('done'))}
+          nextLabel={params.step === 'ask' ? '현황으로 돌아가기' : '초대코드 보기'}
+        />
+      </SafeAreaView>
+    );
+  }
 
   // ── 완료 화면 ──
   if (step === 'done') {
