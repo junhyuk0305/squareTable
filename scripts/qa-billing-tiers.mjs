@@ -17,6 +17,7 @@ import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { seedVerifiedPhones, cleanupSeededPhones } from './qa-otp-seed.mjs';
 
 function loadEnv() {
   const env = { ...process.env };
@@ -82,10 +83,13 @@ async function adminActivate(unitId, days, plan) {
 
 // ── 계정 헬퍼 ────────────────────────────────────────────────────────────────
 let seq = 0;
+const seededPhones = []; // 0088 게이트 라이브 — 번호를 '인증됨'으로 선등록해야 create_store/join이 통과
 async function signUp(role, name) {
   const c = mk();
   seq += 1;
   const phone = `0107${String((Number(s) + seq * 13) % 10000000).padStart(7, '0')}`;
+  await seedVerifiedPhones(URL, SERVICE, [phone]);
+  seededPhones.push(phone);
   const email = `qa_bt_${s}_${seq}@example.com`;
   const { data, error } = await c.auth.signUp({ email, password: pw, options: { data: { name, role, phone, birth_date: '1990-01-15' } } });
   if (error || !data.session) throw new Error(`signUp(${name}) 실패: ${error?.message}`);
@@ -238,4 +242,7 @@ main()
     } catch { console.error('  !! 스위치 원복 실패 — 수동 확인 필요'); }
     process.exitCode = 1;
   })
-  .finally(cleanupAll);
+  .finally(async () => {
+    await cleanupAll();
+    await cleanupSeededPhones(URL, SERVICE, seededPhones);
+  });

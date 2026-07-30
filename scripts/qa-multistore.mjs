@@ -10,6 +10,7 @@ import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { seedVerifiedPhones, cleanupSeededPhones } from './qa-otp-seed.mjs';
 
 function loadEnv() {
   const env = { ...process.env };
@@ -38,7 +39,9 @@ const check = (n, ok, extra = '') => { ok ? (pass++, console.log('  PASS', n, ex
 
 async function main() {
   const owner = mk();
-  const { error: upErr } = await owner.auth.signUp({ email: `qa_ms_${s}@example.com`, password: pw, options: { data: { name: 'QA다점포', role: 'owner', phone: `0106${s.slice(0, 7)}`, birth_date: '1990-01-15' } } });
+  const phone = `0106${s.slice(0, 7)}`;
+  await seedVerifiedPhones(URL, SRV, [phone]); // 0088 게이트 라이브 — 미인증 번호는 create_store가 차단
+  const { error: upErr } = await owner.auth.signUp({ email: `qa_ms_${s}@example.com`, password: pw, options: { data: { name: 'QA다점포', role: 'owner', phone, birth_date: '1990-01-15' } } });
   if (upErr) { console.error('signUp 실패', upErr.message); process.exit(2); }
 
   // 1) 1호점 생성
@@ -92,6 +95,7 @@ async function main() {
 
   // 정리
   try { await owner.rpc('delete_my_account'); } catch { /* best-effort */ }
+  await cleanupSeededPhones(URL, SRV, [phone]);
 
   console.log(`\nRESULT: ${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);
