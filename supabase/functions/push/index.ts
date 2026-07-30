@@ -209,10 +209,12 @@ Deno.serve(async (req) => {
   });
   if (recipientIds.length === 0) return json(200, { sent: 0, recipients: 0, suppressed: suppressed.length });
 
-  const { data: subs } = await admin
+  const { data: subs, error: subsErr } = await admin
     .from('push_subscriptions')
     .select('id, endpoint, p256dh, auth')
     .in('user_id', recipientIds);
+  // 조회 실패를 삼키면 "구독 없음(sent:0)"으로 위장된다 — 원인 규명을 위해 로그는 남긴다.
+  if (subsErr) console.error('push: subscriptions read failed:', subsErr.message);
 
   const list = subs ?? [];
   const notif = JSON.stringify({ title, body, url: url || '/', tag });
@@ -238,6 +240,8 @@ Deno.serve(async (req) => {
         const code = (e as { statusCode?: number })?.statusCode;
         // 404/410 = 구독 만료(브라우저가 폐기) → 원장에서 제거
         if (code === 404 || code === 410) dead.push(s.id);
+        // 그 외(400/413/429/5xx)는 무음으로 삼키면 "특정 사용자만 푸시 안 옴"의 흔적이 안 남는다.
+        else console.error('push: send failed:', code ?? 'no-status', (e as Error)?.message ?? String(e));
       }
     }),
   );

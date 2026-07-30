@@ -357,7 +357,9 @@ async function handleEmbed(payload: any, user: { unitId: string | null }, authz:
 
   const sb = userClient(authz);
   // RLS: 내 매장 노하우만 조회됨 → 없으면 권한 밖(또는 부재) → 거부.
-  const { data: row } = await sb.from('playbook_entries').select('unit_id').eq('id', entryId).single();
+  const { data: row, error: rowErr } = await sb.from('playbook_entries').select('unit_id').eq('id', entryId).single();
+  // PGRST116(0행)=부재/권한 밖 → forbidden 이 맞다. 그 외 오류를 forbidden 으로 뭉개면 장애가 권한 문제로 위장된다.
+  if (rowErr && rowErr.code !== 'PGRST116') { console.error('embed: entry read failed:', rowErr.message); throw new Error('embed_read'); }
   if (!row || row.unit_id !== user.unitId) throw new Error('forbidden');
 
   const vec = await callEmbed(text, 'RETRIEVAL_DOCUMENT');
