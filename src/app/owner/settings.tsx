@@ -70,12 +70,12 @@ export default function OwnerSettings() {
           onPress={openPersonalize}
           style={({ pressed }) => [styles.storeHead, pressed && { opacity: 0.7 }]}
           accessibilityRole="button"
-          accessibilityLabel="매장 닉네임·색 설정"
+          accessibilityLabel="내가 보는 매장 이름·색 설정"
         >
           <View style={[styles.colorDot, { backgroundColor: color }]} />
           <View style={{ flex: 1 }}>
             <Text style={styles.storeName}>{pref.nickname || storeName || '내 매장'}</Text>
-            <Text style={styles.storeSub}>{pref.nickname ? storeName : '탭해서 닉네임·색을 바꿔요'}</Text>
+            <Text style={styles.storeSub}>{pref.nickname ? storeName : '탭해서 내가 보는 매장 이름·색을 바꿔요 (나만 보여요)'}</Text>
           </View>
           <Ionicons name="chevron-forward" size={20} color={InkColors.ink3} />
         </Pressable>
@@ -103,9 +103,6 @@ export default function OwnerSettings() {
         <SettingsSection icon="storefront-outline" title="매장 관리">
           <SettingsRow first icon="people-outline" label="직원·초대코드 관리" onPress={() => router.push('/owner/staff')} />
           <SettingsRow icon="cash-outline" label="급여 설정" onPress={() => router.push('/owner/payroll')} />
-          {/* 매장 닉네임·색(unit_member_prefs) — 허브 카드·통합 알림 매장칩에 반영(나만 보임). */}
-          <SettingsRow icon="pricetag-outline" label="매장 닉네임" value={pref.nickname || '설정 안 함'} onPress={openPersonalize} />
-          <SettingsRow icon="color-palette-outline" label="매장 색" valueNode={<View style={[styles.colorDotSm, { backgroundColor: color }]} />} onPress={openPersonalize} />
         </SettingsSection>
 
         {/* 이 매장 알림 — 매장별(unit_member_prefs). 계정 전역 푸시 on/off 는 전체 계정 설정에. */}
@@ -181,7 +178,6 @@ const styles = StyleSheet.create({
   // 매장 헤더 — 직원 매장 설정(junior/settings)과 동일 규격
   storeHead: { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 16, backgroundColor: '#FFFFFF', borderRadius: 14, borderWidth: 1, borderColor: InkColors.line, marginBottom: 20 },
   colorDot: { width: 20, height: 20, borderRadius: 10 },
-  colorDotSm: { width: 18, height: 18, borderRadius: 9 },
   storeName: { fontSize: 17, fontWeight: '800', color: InkColors.ink },
   storeSub: { fontSize: 13, color: InkColors.ink3, marginTop: 2 },
 

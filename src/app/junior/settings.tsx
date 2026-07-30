@@ -26,6 +26,7 @@ export default function StoreSettings() {
   const unitId = useSessionStore((s) => s.unitId);
   const storeName = useSessionStore((s) => s.storeName) || '내 매장';
   const userId = useSessionStore((s) => s.userId);
+  const userName = useSessionStore((s) => s.userName);
   const leaveStore = useSessionStore((s) => s.leaveStore);
   const wages = usePayrollStore((s) => s.wages);
 
@@ -84,19 +85,19 @@ export default function StoreSettings() {
           onPress={openPersonalize}
           style={({ pressed }) => [styles.storeHead, pressed && { opacity: 0.7 }]}
           accessibilityRole="button"
-          accessibilityLabel="매장 닉네임·색 설정"
+          accessibilityLabel="내가 보는 매장 이름·색 설정"
         >
           <View style={[styles.colorDot, { backgroundColor: color }]} />
           <View style={{ flex: 1 }}>
             <Text style={styles.storeName}>{pref.nickname || storeName}</Text>
-            <Text style={styles.storeSub}>{pref.nickname ? storeName : '탭해서 닉네임·색을 바꿔요'}</Text>
+            <Text style={styles.storeSub}>{pref.nickname ? storeName : '탭해서 내가 보는 매장 이름·색을 바꿔요 (나만 보여요)'}</Text>
           </View>
           <Ionicons name="chevron-forward" size={20} color={InkColors.ink3} />
         </Pressable>
 
-        <SettingsSection icon="color-palette-outline" title="이 매장">
-          <SettingsRow first icon="pricetag-outline" label="매장 닉네임" value={pref.nickname || '설정 안 함'} onPress={openPersonalize} />
-          <SettingsRow icon="color-palette-outline" label="매장 색" valueNode={<View style={[styles.colorDotSm, { backgroundColor: color }]} />} onPress={openPersonalize} />
+        <SettingsSection icon="storefront-outline" title="이 매장">
+          {/* 내 이름 = 매장에서 다른 사람에게 보이는 이름(프로필 이름, 전역) — 수정은 프로필 편집에서. */}
+          <SettingsRow first icon="person-outline" label="내 이름" value={userName || ''} onPress={() => router.push('/account-edit')} />
           {/* 내 시급 = 읽기 표시만(사장이 정하는 값). */}
           <SettingsRow icon="cash-outline" label="내 시급" value={wage ? `${won(wage)}/시간` : '사장님이 정해요'} />
         </SettingsSection>
@@ -173,7 +174,6 @@ const styles = StyleSheet.create({
 
   storeHead: { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 16, backgroundColor: '#FFFFFF', borderRadius: 14, borderWidth: 1, borderColor: InkColors.line, marginBottom: 20 },
   colorDot: { width: 20, height: 20, borderRadius: 10 },
-  colorDotSm: { width: 18, height: 18, borderRadius: 9 },
   storeName: { fontSize: 17, fontWeight: '800', color: InkColors.ink },
   storeSub: { fontSize: 13, color: InkColors.ink3, marginTop: 2 },
 });

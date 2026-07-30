@@ -39,7 +39,7 @@ export function PersonalizeSheet({
         <Pressable onPress={onClose} hitSlop={8}><Ionicons name="close" size={20} color={InkColors.ink2} /></Pressable>
       </View>
       <View style={styles.sheetBody}>
-        <Text style={styles.fieldLabel}>매장 닉네임</Text>
+        <Text style={styles.fieldLabel}>내가 보는 매장 이름</Text>
         <TextInput
           value={name}
           onChangeText={(v) => setName(v.slice(0, 20))}
