@@ -11,6 +11,7 @@ import { INDUSTRIES } from '@/lib/config/industry';
 import { formatBizNo, isValidBizNo, bizDigits } from '@/lib/utils/bizno';
 import { isValidPhone, normalizePhone, formatPhone, formatBirthDate8, birthDateISO } from '@/lib/utils/validation';
 import { usePhoneOtp } from '@/lib/otp';
+import { Appear } from '@/components/Appear';
 import { BrandColors, InkColors } from '@/lib/theme/colors';
 import { Space } from '@/lib/theme/layout';
 import { Radius, Elevation } from '@/lib/theme/elevation';
@@ -122,13 +123,18 @@ export default function CompleteProfileScreen() {
     <SafeAreaView style={styles.safe}>
       <Stack.Screen options={{ headerShown: true, title: '프로필 완성', headerStyle: { backgroundColor: '#FFFFFF' }, headerTintColor: InkColors.ink }} />
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+        <Appear delay={0}>
         <View style={styles.intro}>
           <Text style={styles.introTitle}>거의 다 왔어요</Text>
           <Text style={styles.introSub}>착착을 시작하려면 몇 가지만 알려주세요.</Text>
         </View>
+        </Appear>
 
         {/* 역할 — 소셜 로그인은 역할 정보가 없으니 여기서 고른다(트리거는 항상 직원으로 시작). */}
+        <Appear delay={40}>
         <Text style={styles.roleQ}>어떤 분이세요?</Text>
+        </Appear>
+        <Appear delay={40}>
         <View style={styles.roleRow}>
           {(
             [
@@ -148,10 +154,14 @@ export default function CompleteProfileScreen() {
             </Pressable>
           ))}
         </View>
+        </Appear>
 
+        <Appear delay={80}>
         <Field label="이름" value={name} onChange={setName} placeholder="홍길동" required />
+        </Appear>
 
         {/* 전화번호 + SMS 인증(솔라피) — 가입 폼(signup)과 동일한 흐름. 데모는 입력만. */}
+        <Appear delay={80}>
         <View style={styles.field}>
           <Text style={styles.label}>전화번호<Text style={styles.req}> *</Text></Text>
           <View style={styles.otpRow}>
@@ -211,7 +221,9 @@ export default function CompleteProfileScreen() {
           {HAS_SUPABASE && otp.verified && <Text style={[styles.hint, styles.hintOk]}>✓ 인증된 번호예요</Text>}
           {otp.msg && <Text style={styles.otpMsg}>{otp.msg}</Text>}
         </View>
+        </Appear>
 
+        <Appear delay={80}>
         <View style={styles.field}>
           <Text style={styles.label}>생년월일<Text style={styles.req}> *</Text></Text>
           <TextInput
@@ -231,10 +243,14 @@ export default function CompleteProfileScreen() {
             </Text>
           )}
         </View>
+        </Appear>
 
         {role === 'owner' ? (
           <>
+            <Appear delay={120}>
             <Field label="매장 이름" value={storeName} onChange={setStoreName} placeholder="예: 착착 카페 신촌점" required />
+            </Appear>
+            <Appear delay={120}>
             <View style={styles.field}>
               <Text style={styles.label}>업종<Text style={styles.req}> *</Text></Text>
               <View style={styles.chipWrap}>
@@ -245,6 +261,8 @@ export default function CompleteProfileScreen() {
                 ))}
               </View>
             </View>
+            </Appear>
+            <Appear delay={120}>
             <View style={styles.field}>
               <Text style={styles.label}>사업자등록번호 (선택)</Text>
               <TextInput
@@ -261,25 +279,32 @@ export default function CompleteProfileScreen() {
                 </Text>
               )}
             </View>
+            </Appear>
           </>
         ) : (
+          <Appear delay={120}>
           <View style={styles.joinNote}>
             <Ionicons name="information-circle-outline" size={18} color={InkColors.ink2} />
             <Text style={styles.joinNoteText}>
               저장하면 개인 홈으로 이동해요. 거기서 사장님께 받은 <Text style={styles.joinNoteStrong}>6자리 초대코드</Text>를 넣으면 매장에 합류 신청이 돼요.
             </Text>
           </View>
+          </Appear>
         )}
 
         {err && <Text style={styles.err}>{err}</Text>}
 
+        <Appear delay={160}>
         <Pressable onPress={submit} disabled={busy} style={({ pressed }) => [styles.primary, busy && styles.primaryDisabled, pressed && !busy && { opacity: 0.88 }]}>
           {busy ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.primaryText}>{role === 'owner' ? (storeRetry ? '매장 다시 만들기' : '매장 만들고 시작하기') : '저장하고 시작하기'}</Text>}
         </Pressable>
+        </Appear>
 
+        <Appear delay={160}>
         <Pressable onPress={() => void logout()} style={styles.logoutRow}>
           <Text style={styles.logoutText}>다른 계정으로 <Text style={styles.logoutStrong}>로그인</Text></Text>
         </Pressable>
+        </Appear>
       </ScrollView>
     </SafeAreaView>
   );

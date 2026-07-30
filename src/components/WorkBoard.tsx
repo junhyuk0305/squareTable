@@ -20,6 +20,7 @@ import { buildDirectUq, buildPlaybookEntryFromSquare } from '@/lib/utils/buildEn
 import type { PlaybookEntry, SquareBlock } from '@/types';
 import type { QuizInput } from '@/lib/ai/types';
 import { RoleTabBar } from '@/components/RoleTabBar';
+import { Appear } from '@/components/Appear';
 import { useRoomStore } from '@/lib/store/useRoomStore';
 import { WorkChat } from '@/components/work/WorkChat';
 import { RoomBar } from '@/components/work/RoomBar';
@@ -442,6 +443,7 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
       {(view === 'chat' || view === 'assign') && <RoomBar role={role} me={userId} />}
 
       {view === 'chat' && (
+        <Appear delay={0} style={{ flex: 1 }}>
         <WorkChat
           key={currentRoomId ?? 'all'}
           stream={stream}
@@ -463,9 +465,11 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
           onAssignTask={(id) => setComposer({ open: true, date: today, assigneeId: id })}
           onWriteNotice={() => openPanel('notice')}
         />
+        </Appear>
       )}
 
       {view === 'notice' && (
+        <Appear delay={0} style={{ flex: 1 }}>
         <NoticePanel
           notices={notices}
           comments={comments}
@@ -487,9 +491,11 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
           onComment={(noticeId, text, mentions) => postComment(noticeId, today, text, userId, userName, role, mentions)}
           onDeleteComment={deleteFeedItem}
         />
+        </Appear>
       )}
 
       {view === 'assign' && isOwner && (
+        <Appear delay={0} style={{ flex: 1 }}>
         <AssignBoard
           templates={boardTemplates}
           done={done}
@@ -502,9 +508,11 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
           onAssign={(assigneeId) => setComposer({ open: true, date: today, assigneeId })}
           onEditTask={(t) => setComposer({ open: true, editTemplate: t })}
         />
+        </Appear>
       )}
 
       {view === 'todo' && (
+        <Appear delay={0} style={{ flex: 1 }}>
         <TodoScreen
           templates={boardTemplates}
           done={done}
@@ -523,6 +531,7 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
           canSelfCheck={canSelfCheck}
           onSelfCheck={isOwner ? undefined : openSelfCheck}
         />
+        </Appear>
       )}
 
       {composer.open && (

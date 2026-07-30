@@ -11,6 +11,7 @@ import { Space } from '@/lib/theme/layout';
 import { isValidPhone, normalizePhone, formatPhone, passwordError } from '@/lib/utils/validation';
 import { INDUSTRIES } from '@/lib/config/industry';
 import { HeaderBackButton } from '@/components/HeaderBackButton';
+import { Appear } from '@/components/Appear';
 
 // 프로필 편집 + 비밀번호 변경 (오너·주니어 공용).
 export default function AccountEdit() {
@@ -117,7 +118,10 @@ function AccountEditForm() {
     <SafeAreaView style={styles.safe} edges={['bottom']}>
       <Stack.Screen options={{ headerShown: true, title: '프로필 편집', headerLeft: () => <HeaderBackButton /> }} />
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-        <Text style={styles.group}>기본 정보</Text>
+        <Appear delay={0}>
+          <Text style={styles.group}>기본 정보</Text>
+        </Appear>
+        <Appear delay={0}>
         <View style={styles.card}>
           <Text style={styles.label}>이름<Text style={styles.req}> *</Text></Text>
           <TextInput value={name} onChangeText={setName} placeholder="이름" placeholderTextColor={InkColors.ink3} autoComplete="name" textContentType="name" style={styles.input} />
@@ -150,10 +154,14 @@ function AccountEditForm() {
             {busy ? <ActivityIndicator color="#FFF" /> : <Text style={styles.primaryText}>프로필 저장</Text>}
           </Pressable>
         </View>
+        </Appear>
 
         {role === 'owner' && (
           <>
-            <Text style={[styles.group, { color: BrandColors.brand }]}>매장 이름<Text style={styles.req}> *</Text> · 사장님만</Text>
+            <Appear delay={60}>
+              <Text style={[styles.group, { color: BrandColors.brand }]}>매장 이름<Text style={styles.req}> *</Text> · 사장님만</Text>
+            </Appear>
+            <Appear delay={60}>
             <View style={[styles.card, styles.storeCard]}>
               <TextInput value={store} onChangeText={setStore} placeholder="예: 착착 카페 신촌점" placeholderTextColor={InkColors.ink3} style={styles.input} />
               <View style={styles.storeMetaRow}>
@@ -170,8 +178,12 @@ function AccountEditForm() {
                 {busy ? <ActivityIndicator color="#FFF" /> : <Text style={styles.primaryText}>{remaining <= 0 ? '변경 횟수 소진' : '매장 이름 저장'}</Text>}
               </Pressable>
             </View>
+            </Appear>
 
-            <Text style={[styles.group, { color: BrandColors.brand }]}>업종<Text style={styles.req}> *</Text> · 사장님만</Text>
+            <Appear delay={120}>
+              <Text style={[styles.group, { color: BrandColors.brand }]}>업종<Text style={styles.req}> *</Text> · 사장님만</Text>
+            </Appear>
+            <Appear delay={120}>
             <View style={[styles.card, styles.storeCard]}>
               <View style={styles.chipWrap}>
                 {INDUSTRIES.map((it) => (
@@ -188,10 +200,14 @@ function AccountEditForm() {
                 {busy ? <ActivityIndicator color="#FFF" /> : <Text style={styles.primaryText}>업종 저장</Text>}
               </Pressable>
             </View>
+            </Appear>
           </>
         )}
 
-        <Text style={styles.group}>비밀번호 변경</Text>
+        <Appear delay={180}>
+          <Text style={styles.group}>비밀번호 변경</Text>
+        </Appear>
+        <Appear delay={180}>
         <View style={styles.card}>
           <Text style={styles.label}>새 비밀번호<Text style={styles.req}> *</Text></Text>
           {/* autoComplete="new-password": 브라우저/비번 매니저가 '기존 비밀번호'를 자동완성하지 못하게 막는다.
@@ -230,6 +246,7 @@ function AccountEditForm() {
             <Text style={styles.secondaryText}>비밀번호 변경</Text>
           </Pressable>
         </View>
+        </Appear>
 
         <View style={{ height: 24 }} />
       </ScrollView>

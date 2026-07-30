@@ -41,7 +41,6 @@ export default function OwnerInboxScreen() {
   const loaded = useUnknownQueueStore((s) => s.loaded);
   const loadError = useUnknownQueueStore((s) => s.loadError);
   const hydrate = useUnknownQueueStore((s) => s.hydrate);
-  const enableAutoAnswer = useUnknownQueueStore((s) => s.enableAutoAnswer);
 
   const entries = usePlaybookStore((s) => s.entries);
   const getStaff = useStaffStore((s) => s.getStaff);
@@ -115,6 +114,7 @@ export default function OwnerInboxScreen() {
       ) : (
         <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
           {/* 1) 한눈에 보기 — 요약 스트립 + 자동응답률 */}
+          <Appear delay={0}>
           <View style={styles.block}>
             <SectionLabel title="한눈에 보기" />
             <View style={styles.summary}>
@@ -138,8 +138,10 @@ export default function OwnerInboxScreen() {
               </View>
             )}
           </View>
+          </Appear>
 
           {/* 2) 노하우 제안 진입 — 알바가 올린 개선·등록 신청(받은질문과 같은 '직원 인풋' 허브) */}
+          <Appear delay={40}>
           <Pressable
             onPress={() => router.push('/owner/suggestions')}
             style={({ pressed }) => [styles.sugEntry, pressed && { opacity: 0.85 }]}
@@ -162,21 +164,25 @@ export default function OwnerInboxScreen() {
             )}
             <Ionicons name="chevron-forward" size={16} color={InkColors.ink3} />
           </Pressable>
+          </Appear>
 
           {/* 3) Hero — 우선 답변 (가장 시급한 미답변) */}
           {hero ? (
-            <Appear style={styles.heroWrap} offsetY={12}>
+            <Appear delay={80} style={styles.heroWrap} offsetY={12}>
               <Text style={styles.sectionTag}>우선 답변</Text>
               <InboxHeroCard uq={hero} careerDays={careerDays} onPress={() => goAnswer(hero.id)} />
             </Appear>
           ) : (
+            <Appear delay={80}>
             <View style={styles.emptyHero}>
               <Text style={styles.emptyTitle}>아직 새 질문이 없어요</Text>
               <Text style={styles.emptySub}>직원이 모르는 걸 물으면 여기로 와요.</Text>
             </View>
+            </Appear>
           )}
 
           {/* 4) 서브탭 [답할 질문 | AI가 답함] — 상태별 필터·카운트는 InboxSubtabs가 처리. */}
+          <Appear delay={120}>
           <InboxSubtabs
             queue={queue}
             initial="pending"
@@ -184,14 +190,14 @@ export default function OwnerInboxScreen() {
               <SimilarGroupRow
                 uq={uq}
                 onPress={openAnswer}
-                onAutoAnswer={
-                  uq.status === 'pending_owner_answer' ? (u) => enableAutoAnswer(u.id) : undefined
-                }
+                onAnswer={uq.status === 'pending_owner_answer' ? openAnswer : undefined}
               />
             )}
           />
+          </Appear>
 
           {/* 5) 그동안 쌓은 노하우 — 진입 카드(목록은 상세 화면에서). 안 쓰임 있으면 정리 유도. */}
+          <Appear delay={160}>
           <View style={styles.block}>
             <SectionLabel title="그동안 쌓은 노하우" />
             <Pressable
@@ -218,6 +224,7 @@ export default function OwnerInboxScreen() {
               <Ionicons name="chevron-forward" size={16} color={InkColors.ink3} />
             </Pressable>
           </View>
+          </Appear>
 
           {/* 푸터 여백 */}
           <View style={{ height: 16 }} />

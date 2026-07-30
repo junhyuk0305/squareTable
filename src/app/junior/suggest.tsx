@@ -8,9 +8,11 @@ import { useSuggestionStore } from '@/lib/store/useSuggestionStore';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { showToast } from '@/lib/store/useToastStore';
-import { InkColors, BrandColors, CategoryColors } from '@/lib/theme/colors';
+import { InkColors, BrandColors } from '@/lib/theme/colors';
+import { getCategoryMeta } from '@/lib/utils/category';
 import { Radius, Elevation } from '@/lib/theme/elevation';
 import { RoleTabBar } from '@/components/RoleTabBar';
+import { Appear } from '@/components/Appear';
 
 /**
  * 알바 노하우 제안 — ① 새 노하우 등록 신청 / ② 기존 노하우 개선 제안.
@@ -86,12 +88,15 @@ export default function JuniorSuggestScreen() {
       <Stack.Screen options={{ title: '노하우 제안' }} />
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+          <Appear delay={0}>
           <Text style={styles.lead}>
             더 나은 방법을 알게 됐나요? 사장님께 제안하면, 확인 후 매장 노하우에 반영돼요.
           </Text>
+          </Appear>
 
           {/* 종류 선택 — 개선 프리셋이면 잠금(대상 고정) */}
           {!presetImprove && (
+            <Appear delay={60}>
             <View style={styles.seg}>
               <Pressable onPress={() => setKind('new')} style={[styles.segO, kind === 'new' && styles.segOn]}>
                 <Text style={[styles.segText, kind === 'new' && styles.segTextOn]}>새 노하우 등록</Text>
@@ -100,10 +105,12 @@ export default function JuniorSuggestScreen() {
                 <Text style={[styles.segText, kind === 'improve' && styles.segTextOn]}>기존 노하우 개선</Text>
               </Pressable>
             </View>
+            </Appear>
           )}
 
           {/* 개선 대상 — 프리셋이거나 목록에서 고른 노하우. 골랐으면 카드로, 아니면 아래 목록에서 선택. */}
           {kind === 'improve' && targetEntryId && (targetTitle || picked) && (
+            <Appear delay={120}>
             <View style={styles.targetCard}>
               <Ionicons name="sparkles-outline" size={15} color={'#8A5A12'} />
               <View style={{ flex: 1 }}>
@@ -117,10 +124,12 @@ export default function JuniorSuggestScreen() {
                 </Pressable>
               )}
             </View>
+            </Appear>
           )}
 
           {/* 개선할 노하우 고르기 — 개선 모드인데 대상이 아직 없을 때만 */}
           {needsPick && (
+            <Appear delay={120}>
             <View style={styles.pickWrap}>
               <Text style={styles.fieldLabel}>어떤 노하우를 개선할까요?</Text>
               <View style={styles.searchBox}>
@@ -145,7 +154,7 @@ export default function JuniorSuggestScreen() {
                       onPress={() => setPickedId(e.id)}
                       style={({ pressed }) => [styles.pickRow, pressed && { backgroundColor: InkColors.bgSoft }]}
                     >
-                      <View style={[styles.catDot, { backgroundColor: CategoryColors[e.category] ?? InkColors.ink3 }]} />
+                      <View style={[styles.catDot, { backgroundColor: getCategoryMeta(e.category).color }]} />
                       <Text style={styles.pickTitle} numberOfLines={1}>{e.title}</Text>
                       <Ionicons name="chevron-forward" size={16} color={InkColors.ink3} />
                     </Pressable>
@@ -153,14 +162,18 @@ export default function JuniorSuggestScreen() {
                 </View>
               )}
             </View>
+            </Appear>
           )}
 
           {/* 본문 입력 — 신규이거나, 개선 대상을 정한 뒤에만 노출 */}
           {!needsPick && (
             <>
+              <Appear delay={120}>
               <Text style={styles.fieldLabel}>
                 {kind === 'improve' ? '어떻게 바꾸면 더 좋을까요?' : '어떤 노하우인가요?'}
               </Text>
+              </Appear>
+              <Appear delay={120}>
               <TextInput
                 value={text}
                 onChangeText={setText}
@@ -174,17 +187,23 @@ export default function JuniorSuggestScreen() {
                 multiline
                 textAlignVertical="top"
               />
+              </Appear>
+              <Appear delay={120}>
               <Text style={styles.hint}>구체적으로 적을수록 사장님이 반영하기 쉬워요. (최소 5자)</Text>
+              </Appear>
             </>
           )}
 
+          <Appear delay={180}>
           <Pressable onPress={send} disabled={!canSubmit || sending} style={({ pressed }) => [styles.cta, (!canSubmit || sending) && { opacity: 0.4 }, pressed && { opacity: 0.85 }]}>
             <Ionicons name="paper-plane-outline" size={16} color="#FFFFFF" />
             <Text style={styles.ctaText}>{sending ? '보내는 중…' : '사장님께 제안 보내기'}</Text>
           </Pressable>
+          </Appear>
 
           {/* 내 제안 — 데드엔드 방지(보낸 제안의 상태를 본인이 추적) */}
           {mine.length > 0 && (
+            <Appear delay={240}>
             <View style={styles.mineWrap}>
               <Text style={styles.mineHeader}>내가 보낸 제안</Text>
               {mine.slice(0, 10).map((s) => (
@@ -211,6 +230,7 @@ export default function JuniorSuggestScreen() {
                 </View>
               ))}
             </View>
+            </Appear>
           )}
 
           <View style={{ height: 16 }} />

@@ -7,6 +7,7 @@ import { useSessionStore } from '@/lib/store/useSessionStore';
 import { applyMockSeed } from '@/lib/demo/mockSeed';
 import { HAS_SUPABASE } from '@/lib/supabase';
 import { SocialAuthButtons } from '@/components/SocialAuthButtons';
+import { Appear } from '@/components/Appear';
 import { formatBizNo, isValidBizNo, bizDigits } from '@/lib/utils/bizno';
 import { isValidEmail, isValidPhone, normalizePhone, formatPhone, passwordError, formatBirthDate8, birthDateISO } from '@/lib/utils/validation';
 import { usePhoneOtp } from '@/lib/otp';
@@ -200,7 +201,10 @@ export default function SignupScreen() {
       <Stack.Screen options={{ headerShown: true, title: '회원가입', headerStyle: { backgroundColor: '#FFFFFF' }, headerTintColor: InkColors.ink }} />
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
         {/* 역할 — 가입 첫 단계에서 어떤 사용자인지 분명히 고른다 */}
+        <Appear delay={0}>
         <Text style={styles.roleQ}>어떤 분이세요?</Text>
+        </Appear>
+        <Appear delay={0}>
         <View style={styles.roleRow}>
           {(
             [
@@ -220,10 +224,14 @@ export default function SignupScreen() {
             </Pressable>
           ))}
         </View>
+        </Appear>
 
+        <Appear delay={60}>
         <Field label="이름" value={name} onChange={setName} placeholder="홍길동" required />
+        </Appear>
 
         {/* 이메일 — 로그인 ID로 사용. 이메일 인증(확인 메일)은 추후 도입 예정. */}
+        <Appear delay={60}>
         <View style={styles.field}>
           <Text style={styles.label}>이메일<Text style={styles.req}> *</Text></Text>
           <TextInput
@@ -240,8 +248,10 @@ export default function SignupScreen() {
           />
           {emailMsg && <Text style={styles.emailOk}>{emailMsg}</Text>}
         </View>
+        </Appear>
 
         {/* 비밀번호 — 영문·숫자 조합 9자 이상. 입력 중 즉시 통과/안내 표시 */}
+        <Appear delay={60}>
         <View style={styles.field}>
           <Text style={styles.label}>비밀번호<Text style={styles.req}> *</Text></Text>
           <TextInput
@@ -259,8 +269,10 @@ export default function SignupScreen() {
             </Text>
           )}
         </View>
+        </Appear>
 
         {/* 전화번호 + SMS 인증(솔라피) — 실서버에서만 인증 단계를 요구한다(데모는 입력만). */}
+        <Appear delay={60}>
         <View style={styles.field}>
           <Text style={styles.label}>전화번호<Text style={styles.req}> *</Text></Text>
           <View style={styles.otpRow}>
@@ -320,8 +332,10 @@ export default function SignupScreen() {
           {HAS_SUPABASE && otp.verified && <Text style={[styles.bizHint, styles.bizOk]}>✓ 인증된 번호예요</Text>}
           {otp.msg && <Text style={styles.otpMsg}>{otp.msg}</Text>}
         </View>
+        </Appear>
 
         {/* 생년월일 — 숫자 8자리 단일 필드(토스류 금융 서비스 표준 패턴). 입력 중 즉시 통과/안내 표시. */}
+        <Appear delay={60}>
         <View style={styles.field}>
           <Text style={styles.label}>생년월일<Text style={styles.req}> *</Text></Text>
           <TextInput
@@ -341,10 +355,14 @@ export default function SignupScreen() {
             </Text>
           )}
         </View>
+        </Appear>
 
         {role === 'owner' ? (
           <>
+            <Appear delay={120}>
             <Field label="매장 이름" value={storeName} onChange={setStoreName} placeholder="예: 착착 카페 신촌점" required />
+            </Appear>
+            <Appear delay={120}>
             <View style={styles.field}>
               <Text style={styles.label}>업종<Text style={styles.req}> *</Text></Text>
               <View style={styles.chipWrap}>
@@ -355,6 +373,8 @@ export default function SignupScreen() {
                 ))}
               </View>
             </View>
+            </Appear>
+            <Appear delay={120}>
             <View style={styles.field}>
               <Text style={styles.label}>사업자등록번호 (선택)</Text>
               <TextInput
@@ -371,20 +391,24 @@ export default function SignupScreen() {
                 </Text>
               )}
             </View>
+            </Appear>
 
             {/* 요금제 안내는 가입 폼에 두지 않는다(인지부하 축소). 가입은 무료로 시작하고,
                 가격 인지·업그레이드는 온보딩 완료 화면·설정(PricingTable)에서만 노출한다(SSOT=tiers.ts). */}
           </>
         ) : (
+          <Appear delay={120}>
           <View style={styles.joinNote}>
             <Ionicons name="information-circle-outline" size={18} color={InkColors.ink2} />
             <Text style={styles.joinNoteText}>
               가입하면 개인 홈으로 이동해요. 거기서 사장님께 받은 <Text style={styles.joinNoteStrong}>6자리 초대코드</Text>를 넣으면 매장에 합류 신청이 돼요.
             </Text>
           </View>
+          </Appear>
         )}
 
         {/* 동의 — 전체동의 + 항목별 토글, 필수/선택 분리 */}
+        <Appear delay={180}>
         <View style={styles.consentBox}>
           <Pressable onPress={toggleAll} style={styles.consentAll}>
             <View style={[styles.checkbox, allChecked && styles.checkboxOn]}>
@@ -410,11 +434,13 @@ export default function SignupScreen() {
             </Pressable>
           ))}
         </View>
+        </Appear>
 
         {err && <Text style={styles.err}>{err}</Text>}
 
         {/* 버튼은 항상 누를 수 있게 둔다 — 미충족 항목은 start()의 순차 검증이 '무엇이 왜 안 되는지'
             정확한 문구로 알려준다(비활성 버튼이 무반응이라 이유를 못 알려주던 문제 해소). */}
+        <Appear delay={240}>
         <Pressable
           onPress={start}
           disabled={busy}
@@ -430,13 +456,16 @@ export default function SignupScreen() {
             </Text>
           )}
         </Pressable>
+        </Appear>
 
         {/* 소셜 로그인(구글 등) — 가입도 소셜로 시작 가능. 웹 전용, 데모 빌드엔 렌더 안 됨. */}
         <SocialAuthButtons />
 
+        <Appear delay={240}>
         <Pressable onPress={() => router.replace('/login')} style={styles.loginRow}>
           <Text style={styles.loginText}>이미 계정이 있나요? <Text style={styles.loginStrong}>로그인</Text></Text>
         </Pressable>
+        </Appear>
       </ScrollView>
     </SafeAreaView>
   );

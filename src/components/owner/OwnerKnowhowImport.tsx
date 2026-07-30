@@ -121,6 +121,7 @@ export function OwnerKnowhowImport() {
   return (
     <View style={styles.flex}>
       <ScrollView style={styles.flex} contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+        <Appear delay={0}>
         <View style={styles.lead}>
           <Text style={styles.leadText}>다른 내 매장의 노하우를 “{activeName || '현재 매장'}”으로 가져와요</Text>
           <InfoDot
@@ -128,8 +129,10 @@ export function OwnerKnowhowImport() {
             body={'선택한 노하우가 현재 매장으로 복사돼요.\n· 사진은 함께 옮겨지지 않아요.\n· 가져온 노하우는 “확인 필요”로 표시돼요 — 새 매장 기준(주소·연락처 등)이 맞는지 확인하세요.'}
           />
         </View>
+        </Appear>
 
         {/* 소스 매장 선택 */}
+        <Appear delay={60}>
         <View style={styles.block}>
           <SectionLabel icon="storefront-outline" title="어느 매장에서 가져올까요?" />
           <View style={styles.sourceWrap}>
@@ -150,6 +153,7 @@ export function OwnerKnowhowImport() {
             })}
           </View>
         </View>
+        </Appear>
 
         {/* 노하우 목록 */}
         {!sourceId ? (
@@ -169,7 +173,7 @@ export function OwnerKnowhowImport() {
             <Text style={styles.emptyBody}>이 매장에는 발행된 노하우가 없어요.</Text>
           </View>
         ) : (
-          <Appear style={styles.block}>
+          <Appear delay={120} style={styles.block}>
             <View style={styles.listHead}>
               <Text style={styles.listCount}>{rows?.length}개 중 {selected.size}개 선택</Text>
               <Pressable onPress={toggleAll} hitSlop={8}>

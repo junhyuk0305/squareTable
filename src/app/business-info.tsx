@@ -4,6 +4,7 @@ import { Stack } from 'expo-router';
 import { InkColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { HeaderBackButton } from '@/components/HeaderBackButton';
+import { Appear } from '@/components/Appear';
 import { businessRows, BUSINESS_INFO_COMPLETE } from '@/lib/config/business';
 
 // 판매자(사업자) 정보 — 전자상거래법상 유료 판매 시 고지 의무.
@@ -16,7 +17,10 @@ export default function BusinessInfoScreen() {
     <SafeAreaView style={styles.safe}>
       <Stack.Screen options={{ headerShown: true, title: '사업자 정보', headerStyle: { backgroundColor: '#FFFFFF' }, headerTintColor: InkColors.ink, headerLeft: () => <HeaderBackButton /> }} />
       <ScrollView contentContainerStyle={styles.scroll}>
-        <Text style={styles.h1}>판매자 정보</Text>
+        <Appear delay={0}>
+          <Text style={styles.h1}>판매자 정보</Text>
+        </Appear>
+        <Appear delay={60}>
         <View style={styles.card}>
           {rows.map(([k, v], i) => (
             <View key={k} style={[styles.row, i > 0 && styles.rowBorder]}>
@@ -25,11 +29,14 @@ export default function BusinessInfoScreen() {
             </View>
           ))}
         </View>
+        </Appear>
+        <Appear delay={120}>
         <Text style={styles.note}>
           {BUSINESS_INFO_COMPLETE
             ? '※ 전자상거래 등에서의 소비자보호에 관한 법률에 따른 판매자 정보 고지입니다.'
             : '※ 전자상거래 등에서의 소비자보호에 관한 법률에 따른 판매자 정보 고지입니다. 사업자등록·통신판매업 신고 절차가 진행 중이며, 완료되는 즉시 등록번호 등 나머지 정보를 여기에 게시합니다. 그 전까지의 문의는 설정의 문의하기로 받고 있습니다.'}
         </Text>
+        </Appear>
         <View style={{ height: 24 }} />
       </ScrollView>
     </SafeAreaView>

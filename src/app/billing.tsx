@@ -15,6 +15,7 @@ import { SHOW_BILLING } from '@/lib/config/store-policy';
 import { usePaymentClaimStore, CLAIM_ERROR_TEXT } from '@/lib/store/usePaymentClaimStore';
 import { redeemPromoCode } from '@/lib/db';
 import { HeaderBackButton } from '@/components/HeaderBackButton';
+import { Appear } from '@/components/Appear';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
@@ -239,6 +240,7 @@ function BillingBody() {
       <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
         <Stack.Screen options={{ headerShown: false }} />
         <ScrollView contentContainerStyle={styles.scroll}>
+          <Appear delay={0}>
           <View style={styles.hero}>
             <View style={styles.iconWrap}>
               <Ionicons
@@ -250,6 +252,8 @@ function BillingBody() {
             <Text style={styles.title}>{expired ? '지금은 이용할 수 없어요' : '이용 중이에요'}</Text>
             {!!storeName && <Text style={styles.store}>{storeName}</Text>}
           </View>
+          </Appear>
+          <Appear delay={60}>
           <View style={styles.card}>
             <Text style={styles.body}>
               {expired
@@ -259,6 +263,8 @@ function BillingBody() {
                 : '이 매장은 정상적으로 이용 중이에요.'}
             </Text>
           </View>
+          </Appear>
+          <Appear delay={120}>
           <Pressable
             disabled={busy}
             onPress={recheck}
@@ -266,9 +272,12 @@ function BillingBody() {
           >
             {busy ? <ActivityIndicator color={InkColors.ink2} /> : <Text style={styles.ghostText}>이용 상태 새로고침</Text>}
           </Pressable>
+          </Appear>
+          <Appear delay={120}>
           <Pressable onPress={() => void logout()} style={styles.logoutRow}>
             <Text style={styles.logoutText}>로그아웃</Text>
           </Pressable>
+          </Appear>
         </ScrollView>
       </SafeAreaView>
     );
@@ -286,6 +295,7 @@ function BillingBody() {
         }
       />
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+        <Appear delay={0}>
         <View style={styles.hero}>
           <View style={styles.iconWrap}>
             <Ionicons
@@ -297,9 +307,11 @@ function BillingBody() {
           <Text style={styles.title}>{headline}</Text>
           {!!storeName && <Text style={styles.store}>{storeName}</Text>}
         </View>
+        </Appear>
 
         {/* 직원: 계좌 정보 대신 사장 결제 안내만 */}
         {!isOwner ? (
+          <Appear delay={60}>
           <View style={styles.card}>
             <Text style={styles.body}>
               {view.state === 'expired'
@@ -307,9 +319,11 @@ function BillingBody() {
                 : '이용에 문제가 없어요.'}
             </Text>
           </View>
+          </Appear>
         ) : (
           <>
             {/* 요금제 선택(3티어, SSOT=tiers.ts). 선택에 따라 아래 금액이 계산된다. */}
+            <Appear delay={60}>
             <View style={styles.section}>
               <Text style={styles.sectionLabel}>요금제</Text>
               <View style={styles.planList}>
@@ -356,15 +370,19 @@ function BillingBody() {
                 })}
               </View>
             </View>
+            </Appear>
 
             {selectedPlan === 'free' ? (
               /* 무료 선택 — 입금 절차 없음 */
+              <Appear delay={120}>
               <View style={styles.card}>
                 <Text style={styles.body}>무료 요금제는 입금 없이 쓸 수 있어요. 직원 {PLANS.free.maxStaff}명, AI 답변 월 {PLANS.free.aiMonthly}건까지 제공돼요.</Text>
               </View>
+              </Appear>
             ) : (
               <>
                 {/* 안내 문구 */}
+                <Appear delay={120}>
                 <View style={styles.card}>
                   <Text style={styles.body}>
                     {view.state === 'expired'
@@ -372,8 +390,10 @@ function BillingBody() {
                       : '계속 이용하려면 아래 계좌로 이용료를 입금해 주세요. 확인 후 반영돼요.'}
                   </Text>
                 </View>
+                </Appear>
 
                 {/* 계좌 정보 */}
+                <Appear delay={120}>
                 <View style={styles.section}>
                   <Text style={styles.sectionLabel}>입금 계좌</Text>
                   <View style={styles.card}>
@@ -392,6 +412,7 @@ function BillingBody() {
                     )}
                   </View>
                 </View>
+                </Appear>
 
                 {/* 직전 신고 상태 — '냈는데 아무 반응 없다'를 없애는 자리. 승인은 폴링이 앱으로 넘긴다. */}
                 {latestClaim?.status === 'pending' && (
@@ -419,6 +440,7 @@ function BillingBody() {
                 )}
 
                 {/* 입금자명 — 계좌이체 대사의 유일한 키. 지금까지 안 받아서 운영자가 맞출 방법이 없었다. */}
+                <Appear delay={120}>
                 <View style={styles.section}>
                   <Text style={styles.sectionLabel}>입금자명</Text>
                   <View style={styles.card}>
@@ -440,7 +462,9 @@ function BillingBody() {
                     </Text>
                   </View>
                 </View>
+                </Appear>
 
+                <Appear delay={120}>
                 <Pressable
                   disabled={claiming}
                   onPress={() => void submitClaim()}
@@ -452,11 +476,14 @@ function BillingBody() {
                     <Text style={styles.primaryText}>{latestClaim?.status === 'pending' ? '입금 정보 다시 보내기' : '입금 완료했어요'}</Text>
                   )}
                 </Pressable>
+                </Appear>
 
                 {/* 보조 경로 — 신고는 이미 저장됐고, 급할 때 사람을 직접 부르는 창구(설계문서 B-1). */}
+                <Appear delay={120}>
                 <Pressable onPress={() => void notifyPaid()} style={({ pressed }) => [styles.mailRow, pressed && { opacity: 0.6 }]}>
                   <Text style={styles.mailText}>메일로도 알리기 ({BILLING_INFO.contactValue})</Text>
                 </Pressable>
+                </Appear>
               </>
             )}
             {/* 무료 이용 코드(0092) — 캠페인으로 받은 코드. 기본 접힘, 펼침은 아래로(레이아웃 규칙). */}
@@ -494,13 +521,17 @@ function BillingBody() {
           </>
         )}
 
+        <Appear delay={180}>
         <Pressable disabled={busy} onPress={recheck} style={({ pressed }) => [styles.ghost, pressed && { opacity: 0.7 }, busy && { opacity: 0.6 }]}>
           {busy ? <ActivityIndicator color={InkColors.ink2} /> : <Text style={styles.ghostText}>이용 상태 새로고침</Text>}
         </Pressable>
+        </Appear>
 
+        <Appear delay={180}>
         <Pressable onPress={() => void logout()} style={styles.logoutRow}>
           <Text style={styles.logoutText}>로그아웃</Text>
         </Pressable>
+        </Appear>
       </ScrollView>
     </SafeAreaView>
   );

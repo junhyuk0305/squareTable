@@ -82,25 +82,30 @@ export default function OwnerSuggestionsScreen() {
     <SafeAreaView edges={['bottom']} style={styles.safe}>
       <Stack.Screen options={{ title: '노하우 제안함' }} />
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        <Text style={styles.subline}>직원이 올린 노하우 제안을 확인하고 반영하세요</Text>
+        <Appear delay={0}>
+          <Text style={styles.subline}>직원이 올린 노하우 제안을 확인하고 반영하세요</Text>
+        </Appear>
 
         {pending.length === 0 ? (
+          <Appear delay={60}>
           <View style={styles.empty}>
             <Text style={styles.emptyEmoji}>🤝</Text>
             <Text style={styles.emptyTitle}>대기 중인 제안이 없어요</Text>
             <Text style={styles.emptySub}>직원이 노하우 개선·등록을 신청하면 여기로 와요.</Text>
           </View>
+          </Appear>
         ) : (
+          <Appear delay={60}>
           <View style={styles.list}>
-            {pending.map((s, i) => (
-              <Appear key={s.id} delay={i * 40}>
-                <SuggestionCard s={s} onApprove={() => reflect(s)} onReject={() => setDeclineFor(s)} />
-              </Appear>
+            {pending.map((s) => (
+              <SuggestionCard key={s.id} s={s} onApprove={() => reflect(s)} onReject={() => setDeclineFor(s)} />
             ))}
           </View>
+          </Appear>
         )}
 
         {handled.length > 0 && (
+          <Appear delay={120}>
           <View style={styles.handledWrap}>
             <Text style={styles.handledHeader}>처리됨</Text>
             {handled.map((s) => (
@@ -126,6 +131,7 @@ export default function OwnerSuggestionsScreen() {
               </View>
             ))}
           </View>
+          </Appear>
         )}
 
         <View style={{ height: 16 }} />

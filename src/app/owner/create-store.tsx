@@ -5,6 +5,7 @@ import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { HeaderBackButton } from '@/components/HeaderBackButton';
+import { Appear } from '@/components/Appear';
 import { logout } from '@/lib/auth';
 import { formatBizNo, isValidBizNo, bizDigits } from '@/lib/utils/bizno';
 import { INDUSTRIES } from '@/lib/config/industry';
@@ -58,6 +59,7 @@ export default function OwnerCreateStore() {
         }}
       />
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+        <Appear delay={0}>
         <View style={styles.hero}>
           <View style={styles.iconWrap}>
             <Ionicons name="storefront-outline" size={28} color={BrandColors.brand} />
@@ -69,7 +71,9 @@ export default function OwnerCreateStore() {
               : <>{userName ? `${userName} 사장님, ` : ''}매장을 만들면 <Text style={styles.strong}>직원 초대코드</Text>가{'\n'}바로 발급돼요.</>}
           </Text>
         </View>
+        </Appear>
 
+        <Appear delay={60}>
         <View style={styles.card}>
           <Text style={styles.label}>매장 이름<Text style={styles.req}> *</Text></Text>
           <TextInput
@@ -123,10 +127,13 @@ export default function OwnerCreateStore() {
             {busy ? <ActivityIndicator color="#FFF" /> : <Text style={styles.primaryText}>매장 만들고 시작하기</Text>}
           </Pressable>
         </View>
+        </Appear>
 
+        <Appear delay={120}>
         <Pressable onPress={() => void logout()} style={styles.logoutRow}>
           <Text style={styles.logoutText}>다른 계정으로 로그인</Text>
         </Pressable>
+        </Appear>
       </ScrollView>
     </SafeAreaView>
   );

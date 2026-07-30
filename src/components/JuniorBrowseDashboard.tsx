@@ -199,14 +199,14 @@ export function JuniorBrowseDashboard({ entries, emptyHint }: JuniorBrowseDashbo
             )}
 
             {recent.length > 0 && (
-              <Appear delay={80} style={styles.block}>
+              <Appear delay={60} style={styles.block}>
                 <SectionLabel icon="sparkles-outline" title="최근 추가됨" hint="새로 올라온 순" />
                 <KnowhowCarousel entries={recent} onSelect={setDetailEntry} showCategory={false} />
               </Appear>
             )}
 
             {resolved.length > 0 && (
-              <Appear delay={160} style={styles.block}>
+              <Appear delay={120} style={styles.block}>
                 <SectionLabel icon="checkmark-circle-outline" title="잘 통하는 노하우" hint="해결률 순" />
                 <KnowhowCarousel entries={resolved} onSelect={setDetailEntry} showCategory={false} />
               </Appear>

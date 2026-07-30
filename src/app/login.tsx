@@ -9,6 +9,7 @@ import { BrandColors, InkColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
 import { HeaderBackButton } from '@/components/HeaderBackButton';
+import { Appear } from '@/components/Appear';
 import { Wordmark } from '@/components/Wordmark';
 import { SocialAuthButtons } from '@/components/SocialAuthButtons';
 import { isValidEmail } from '@/lib/utils/validation';
@@ -77,11 +78,14 @@ export default function LoginScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-        <View style={styles.header}>
-          <Wordmark size="lg" showEng />
-          <Text style={styles.tagline}>할 일이 착착 끝나는 매장 · 현장 운영 AI</Text>
-        </View>
+        <Appear delay={0}>
+          <View style={styles.header}>
+            <Wordmark size="lg" showEng />
+            <Text style={styles.tagline}>할 일이 착착 끝나는 매장 · 현장 운영 AI</Text>
+          </View>
+        </Appear>
 
+        <Appear delay={60}>
         <View style={styles.card}>
           {!HAS_SUPABASE && (
             <View style={styles.seg}>
@@ -125,17 +129,22 @@ export default function LoginScreen() {
           {/* 소셜 로그인(구글 등) — 웹 전용. 데모 빌드에선 렌더 안 됨. */}
           <SocialAuthButtons />
         </View>
+        </Appear>
 
-        <View style={styles.signupBlock}>
-          <Text style={styles.signupLead}>아직 착착이 처음이신가요?</Text>
-          <Pressable onPress={() => router.push('/signup')} style={({ pressed }) => [styles.signupBtn, pressed && { opacity: 0.85 }]}>
-            <Text style={styles.signupBtnText}>무료로 시작하기</Text>
-          </Pressable>
-        </View>
+        <Appear delay={120}>
+          <View style={styles.signupBlock}>
+            <Text style={styles.signupLead}>아직 착착이 처음이신가요?</Text>
+            <Pressable onPress={() => router.push('/signup')} style={({ pressed }) => [styles.signupBtn, pressed && { opacity: 0.85 }]}>
+              <Text style={styles.signupBtnText}>무료로 시작하기</Text>
+            </Pressable>
+          </View>
+        </Appear>
 
-        <Text style={styles.demoNote}>
-          {HAS_SUPABASE ? '파일럿 계정으로 로그인하세요' : '* 데모: 입력 없이 로그인됩니다'}
-        </Text>
+        <Appear delay={180}>
+          <Text style={styles.demoNote}>
+            {HAS_SUPABASE ? '파일럿 계정으로 로그인하세요' : '* 데모: 입력 없이 로그인됩니다'}
+          </Text>
+        </Appear>
       </ScrollView>
     </SafeAreaView>
   );

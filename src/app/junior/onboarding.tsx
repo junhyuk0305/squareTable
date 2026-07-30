@@ -5,6 +5,7 @@ import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { logout } from '@/lib/auth';
+import { Appear } from '@/components/Appear';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 
@@ -34,6 +35,7 @@ export default function JuniorOnboarding() {
     <SafeAreaView style={styles.safe}>
       <Stack.Screen options={{ headerShown: false }} />
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+        <Appear delay={0}>
         <View style={styles.hero}>
           <View style={styles.iconWrap}>
             <Ionicons name="storefront-outline" size={30} color={BrandColors.brand} />
@@ -43,7 +45,9 @@ export default function JuniorOnboarding() {
             아직 합류한 매장이 없어요.{'\n'}사장님께 받은 <Text style={styles.strong}>6자리 초대코드</Text>를 입력하면 바로 시작돼요.
           </Text>
         </View>
+        </Appear>
 
+        <Appear delay={60}>
         <View style={styles.card}>
           <Text style={styles.label}>매장 초대코드</Text>
           <TextInput
@@ -60,17 +64,22 @@ export default function JuniorOnboarding() {
             {busy ? <ActivityIndicator color="#FFF" /> : <Text style={styles.primaryText}>합류하기</Text>}
           </Pressable>
         </View>
+        </Appear>
 
+        <Appear delay={120}>
         <View style={styles.helpBox}>
           <Text style={styles.helpTitle}>코드가 없으신가요?</Text>
           <Text style={styles.helpBody}>
             초대코드는 매장 사장님이 발급해요. 사장님께 “착착 초대코드 알려주세요”라고 요청해보세요.
           </Text>
         </View>
+        </Appear>
 
+        <Appear delay={180}>
         <Pressable onPress={() => void logout()} style={styles.logoutRow}>
           <Text style={styles.logoutText}>다른 계정으로 로그인</Text>
         </Pressable>
+        </Appear>
       </ScrollView>
     </SafeAreaView>
   );

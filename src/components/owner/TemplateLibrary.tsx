@@ -240,6 +240,7 @@ export function TemplateLibrary() {
       keyboardShouldPersistTaps="handled"
     >
       {/* 안내 한 줄 */}
+      <Appear delay={0}>
       <View style={styles.lead}>
         <Text style={styles.leadText}>업종에서 자주 쓰는 노하우 예시예요</Text>
         <InfoDot
@@ -247,8 +248,10 @@ export function TemplateLibrary() {
           body={'다른 매장들이 많이 쓰는 상황별 대응 예시예요.\n마음에 드는 걸 가져와서 우리 매장 기준으로 고치면 바로 내 노하우가 돼요.'}
         />
       </View>
+      </Appear>
 
       {/* 검색창 — 주인공 */}
+      <Appear delay={40}>
       <View style={styles.search}>
         <Ionicons name="search" size={18} color={InkColors.ink3} />
         <TextInput
@@ -265,9 +268,11 @@ export function TemplateLibrary() {
           </Pressable>
         ) : null}
       </View>
+      </Appear>
 
       {/* 업종 범위 토글 — 전체 팩에만 있는 템플릿이 있을 때만 */}
       {hasOtherIndustry ? (
+        <Appear delay={80}>
         <View style={styles.scopeRow}>
           <Pressable
             onPress={() => setScope('mine')}
@@ -284,9 +289,11 @@ export function TemplateLibrary() {
             <Text style={[styles.scopeText, scope === 'all' && styles.scopeTextOn]}>전체 업종</Text>
           </Pressable>
         </View>
+        </Appear>
       ) : null}
 
       {/* 카테고리 칩(보조 필터) */}
+      <Appear delay={80}>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
         <Pressable onPress={() => setActiveCat(null)} style={[styles.chip, activeCat === null && styles.chipOn]}>
           <Text style={[styles.chipText, activeCat === null && styles.chipTextOn]}>전체</Text>
@@ -302,11 +309,13 @@ export function TemplateLibrary() {
           );
         })}
       </ScrollView>
+      </Appear>
 
       {/* 본문 — 검색 전: 빠른검색 + 추천 / 검색 중: 결과 리스트 */}
       {!searching ? (
         <>
           {topTags.length > 0 ? (
+            <Appear delay={120}>
             <View style={styles.block}>
               <SectionLabel icon="pricetags-outline" title="빠른 검색" />
               <View style={styles.tagWrap}>
@@ -317,10 +326,11 @@ export function TemplateLibrary() {
                 ))}
               </View>
             </View>
+            </Appear>
           ) : null}
 
           {recommended.length > 0 ? (
-            <Appear style={styles.block}>
+            <Appear delay={160} style={styles.block}>
               <SectionLabel icon="star-outline" title="추천 템플릿" hint="많이 쓰는 순" />
               <View style={styles.list}>{recommended.map(renderCard)}</View>
             </Appear>
@@ -331,6 +341,7 @@ export function TemplateLibrary() {
           </View>
         </>
       ) : filtered.length === 0 ? (
+        <Appear delay={120}>
         <View style={styles.empty}>
           <Text style={styles.emptyEmoji}>🔍</Text>
           <Text style={styles.emptyText}>조건에 맞는 템플릿이 없어요</Text>
@@ -338,11 +349,14 @@ export function TemplateLibrary() {
             <Text style={styles.resetLink}>검색 초기화</Text>
           </Pressable>
         </View>
+        </Appear>
       ) : (
+        <Appear delay={120}>
         <View style={styles.block}>
           <Text style={styles.resultCount}>{filtered.length}개</Text>
           <View style={styles.list}>{filtered.map(renderCard)}</View>
         </View>
+        </Appear>
       )}
 
       <View style={{ height: 24 }} />
