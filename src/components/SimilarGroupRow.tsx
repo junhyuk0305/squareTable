@@ -10,8 +10,8 @@ export type SimilarGroupRowProps = {
   uq: UnknownQuery;
   /** 행 탭 → 답변 화면 등으로 이동. */
   onPress: (uq: UnknownQuery) => void;
-  /** 자동응답 켜기(인라인 버튼). 미지정 시 버튼 숨김. */
-  onAutoAnswer?: (uq: UnknownQuery) => void;
+  /** 답변하기(인라인 버튼) — 사장이 직접 답변을 입력하는 화면으로. 미지정 시 버튼 숨김. */
+  onAnswer?: (uq: UnknownQuery) => void;
 };
 
 /**
@@ -19,14 +19,14 @@ export type SimilarGroupRowProps = {
  * - 질문 텍스트(2줄 truncate) · 카테고리 칩(presumed_category) · 메타(이름·시각).
  * - similar_queries_count > 0 이면 "비슷한 질문 N건" 묶음 배지(노랑 액센트).
  * - anonymous면 이름 대신 🔒 익명.
- * - onAutoAnswer가 오면 작은 인라인 '자동응답' 버튼을 보여준다.
+ * - onAnswer가 오면 작은 인라인 '답변하기' 버튼을 보여준다(사장 직접 입력 — AI 대리응답 없음).
  * 모두 프레임 내부 일반 흐름 — 별도 캡 불필요.
  */
-export function SimilarGroupRow({ uq, onPress, onAutoAnswer }: SimilarGroupRowProps) {
+export function SimilarGroupRow({ uq, onPress, onAnswer }: SimilarGroupRowProps) {
   const n = uq.similar_queries_count;
   // 표기는 전 화면 '{총 인원}명이 물었어요'로 통일 (n = 본인 외 인원).
   const groupLabel = n > 0 ? `${n + 1}명이 물었어요` : null;
-  const hasActions = !!onAutoAnswer;
+  const hasActions = !!onAnswer;
 
   const a11yParts = [
     uq.query_text,
@@ -66,15 +66,15 @@ export function SimilarGroupRow({ uq, onPress, onAutoAnswer }: SimilarGroupRowPr
 
       {hasActions && (
         <View style={styles.actions}>
-          {onAutoAnswer && (
+          {onAnswer && (
             <Pressable
-              onPress={() => onAutoAnswer(uq)}
+              onPress={() => onAnswer(uq)}
               accessibilityRole="button"
-              accessibilityLabel="자동응답 켜기"
+              accessibilityLabel="답변하기"
               hitSlop={6}
               style={({ pressed }) => [styles.actionBtn, pressed && styles.actionBtnPressed]}
             >
-              <Text style={styles.actionText}>자동응답</Text>
+              <Text style={styles.actionText}>답변하기</Text>
             </Pressable>
           )}
         </View>

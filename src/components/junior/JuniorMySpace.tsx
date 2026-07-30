@@ -47,16 +47,23 @@ export function JuniorMySpace({ me }: { me: string }) {
 
   const [answerFor, setAnswerFor] = useState<UnknownQuery | null>(null);
   const [detailEntry, setDetailEntry] = useState<PlaybookEntry | null>(null);
+  // 기록 리스트는 첫 노출을 캡(복잡도 원칙: 리스트 첫 노출 5±2)하고 '더 보기'로 아래로 펼친다.
+  const [showAllAnswered, setShowAllAnswered] = useState(false);
+  const [showAllProposals, setShowAllProposals] = useState(false);
+  const [showAllQuestions, setShowAllQuestions] = useState(false);
 
   const entryById = useMemo(() => new Map(entries.map((e) => [e.id, e])), [entries]);
   const publishedEntries = useMemo(() => entries.filter((e) => e.status === 'published'), [entries]);
 
   // 도와줄 수 있는 질문 — 배지와 동일한 SSOT 판정(answerableQuestions).
   const answerable = useMemo(() => answerableQuestions(queue, me), [queue, me]);
-  const myProposals = useMemo(
-    () => suggestions.filter((s) => s.proposer_id === me).sort((a, b) => (b.created_at ?? '').localeCompare(a.created_at ?? '')),
-    [suggestions, me],
-  );
+  // 제안은 상태 변화가 있는 것(검토 중·반려)을 위로 — 등록된 건 기여 배너가 이미 말해준다.
+  const myProposals = useMemo(() => {
+    const weight = (st: PlaybookSuggestion['status']) => (st === 'pending' ? 0 : st === 'rejected' ? 1 : 2);
+    return suggestions
+      .filter((s) => s.proposer_id === me)
+      .sort((a, b) => weight(a.status) - weight(b.status) || (b.created_at ?? '').localeCompare(a.created_at ?? ''));
+  }, [suggestions, me]);
   const myAnswered = useMemo(
     () => queue.filter((u) => u.answered_by === me).sort((a, b) => (b.asked_at ?? '').localeCompare(a.asked_at ?? '')),
     [queue, me],
@@ -137,33 +144,41 @@ export function JuniorMySpace({ me }: { me: string }) {
         </Pressable>
       )}
 
-      {/* ③ 내가 답한 질문 */}
+      {/* ③ 내가 답한 질문 — 섹션당 카드 1장 + 헤어라인 행(낱개 보더 카드 반복 = 시각 소음) */}
       {myAnswered.length > 0 && (
         <>
-          <SectionLabel icon="checkmark-done-outline" title="내가 답한 질문" />
-          <View style={s.list}>
-            {myAnswered.map((u) => {
+          <SectionLabel icon="checkmark-done-outline" title="내가 답한 질문" hint={`${myAnswered.length}건`} />
+          <View style={s.groupCard}>
+            {(showAllAnswered ? myAnswered : myAnswered.slice(0, 3)).map((u, i) => {
               const e = u.resolved_with_entry_id ? entryById.get(u.resolved_with_entry_id) : undefined;
               return (
-                <Pressable key={u.id} disabled={!e} onPress={() => e && setDetailEntry(e)} style={({ pressed }) => [s.rowCard, pressed && e && { opacity: 0.7 }]}>
+                <Pressable
+                  key={u.id}
+                  disabled={!e}
+                  onPress={() => e && setDetailEntry(e)}
+                  style={({ pressed }) => [s.groupRow, i > 0 && s.rowDivider, pressed && e && { opacity: 0.7 }]}
+                >
                   <Ionicons name="checkmark-circle" size={16} color={BrandColors.good} />
                   <Text style={s.rowText} numberOfLines={1}>{u.query_text}</Text>
                   {e ? <Ionicons name="chevron-forward" size={15} color={InkColors.ink3} /> : null}
                 </Pressable>
               );
             })}
+            {!showAllAnswered && myAnswered.length > 3 && (
+              <MoreRow count={myAnswered.length - 3} onPress={() => setShowAllAnswered(true)} />
+            )}
           </View>
         </>
       )}
 
-      {/* ② 내가 보낸 제안 */}
+      {/* ② 내가 보낸 제안 — 검토 중·반려가 위(정렬은 myProposals에서) */}
       {myProposals.length > 0 && (
         <>
-          <SectionLabel icon="paper-plane-outline" title="내가 보낸 제안" />
-          <View style={s.list}>
-            {myProposals.map((sug) => (
-              <View key={sug.id} style={[s.rowCard, s.rowCardCol]}>
-                <View style={s.rowLine}>
+          <SectionLabel icon="paper-plane-outline" title="내가 보낸 제안" hint={`${myProposals.length}건`} />
+          <View style={s.groupCard}>
+            {(showAllProposals ? myProposals : myProposals.slice(0, 3)).map((sug, i) => (
+              <View key={sug.id} style={i > 0 ? s.rowDivider : undefined}>
+                <View style={s.groupRow}>
                   <Ionicons name={sug.status === 'approved' ? 'checkmark-circle' : sug.status === 'rejected' ? 'close-circle' : 'time-outline'} size={16} color={sug.status === 'approved' ? BrandColors.good : sug.status === 'rejected' ? BrandColors.bad : InkColors.ink3} />
                   <Text style={s.rowText} numberOfLines={1}>{sug.text}</Text>
                   <Text style={[s.statusTag, sug.status === 'approved' && { color: BrandColors.good }, sug.status === 'rejected' && { color: BrandColors.bad }]}>
@@ -175,22 +190,31 @@ export function JuniorMySpace({ me }: { me: string }) {
                 )}
               </View>
             ))}
+            {!showAllProposals && myProposals.length > 3 && (
+              <MoreRow count={myProposals.length - 3} onPress={() => setShowAllProposals(true)} />
+            )}
           </View>
         </>
       )}
 
-      {/* ④ 내 질문 이력 */}
+      {/* ④ 내 질문 이력 — 예외(답 기다리는 중)만 강조, 답 받음은 흐린 메타로 */}
       {myQuestions.length > 0 && (
         <>
-          <SectionLabel icon="chatbubble-ellipses-outline" title="내가 물어본 것" />
-          <View style={s.list}>
-            {myQuestions.slice(0, 20).map((q) => (
-              <View key={q.id} style={s.rowCard}>
-                <Ionicons name="help-circle-outline" size={16} color={InkColors.ink3} />
-                <Text style={s.rowText} numberOfLines={1}>{q.query_text}</Text>
-                {q.resolved_at || (q.matched_entry_ids?.length ?? 0) > 0 ? <Text style={s.answeredTag}>답 받음</Text> : null}
-              </View>
-            ))}
+          <SectionLabel icon="chatbubble-ellipses-outline" title="내가 물어본 것" hint={`${myQuestions.length}건`} />
+          <View style={s.groupCard}>
+            {(showAllQuestions ? myQuestions.slice(0, 20) : myQuestions.slice(0, 5)).map((q, i) => {
+              const answered = !!q.resolved_at || (q.matched_entry_ids?.length ?? 0) > 0;
+              return (
+                <View key={q.id} style={[s.groupRow, i > 0 && s.rowDivider]}>
+                  <Ionicons name="help-circle-outline" size={16} color={InkColors.ink3} />
+                  <Text style={s.rowText} numberOfLines={1}>{q.query_text}</Text>
+                  {answered ? <Text style={s.doneMeta}>답 받음</Text> : <Text style={s.waitTag}>답 기다리는 중</Text>}
+                </View>
+              );
+            })}
+            {!showAllQuestions && myQuestions.length > 5 && (
+              <MoreRow count={Math.min(myQuestions.length, 20) - 5} onPress={() => setShowAllQuestions(true)} />
+            )}
           </View>
         </>
       )}
@@ -208,6 +232,21 @@ export function JuniorMySpace({ me }: { me: string }) {
       )}
       <EntryDetailModal entry={detailEntry} visible={!!detailEntry} onClose={() => setDetailEntry(null)} />
     </ScrollView>
+  );
+}
+
+/** 기록 리스트 공용 '더 보기' 행 — 아래로 펼침(시트·모달 금지). */
+function MoreRow({ count, onPress }: { count: number; onPress: () => void }) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [s.moreRow, pressed && { opacity: 0.7 }]}
+      accessibilityRole="button"
+      accessibilityLabel={`${count}건 더 보기`}
+    >
+      <Text style={s.moreText}>{count}건 더 보기</Text>
+      <Ionicons name="chevron-down" size={14} color={InkColors.ink2} />
+    </Pressable>
   );
 }
 
@@ -332,14 +371,17 @@ const s = StyleSheet.create({
   exportBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, alignSelf: 'flex-start', backgroundColor: InkColors.bg, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.pill, paddingHorizontal: 14, paddingVertical: 8, marginBottom: Space.xs },
   exportBtnText: { fontSize: 12.5, fontWeight: '800', color: InkColors.ink2 },
 
-  rowCard: { flexDirection: 'row', alignItems: 'center', gap: 9, backgroundColor: InkColors.bg, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.sm, paddingHorizontal: 12, paddingVertical: 11 },
-  // 반려 사유가 붙는 제안 행 — 카드 자체는 세로 스택, 첫 줄(rowLine)이 기존 가로 행.
-  rowCardCol: { flexDirection: 'column', alignItems: 'stretch', gap: 6 },
-  rowLine: { flexDirection: 'row', alignItems: 'center', gap: 9 },
-  rejectNote: { fontSize: 12, color: InkColors.ink2, fontWeight: '600', lineHeight: 17, backgroundColor: InkColors.cream, borderRadius: Radius.sm, paddingHorizontal: 9, paddingVertical: 7 },
+  // 기록 섹션 = 카드 1장 + 헤어라인 행 (허브 '오늘'과 같은 문법)
+  groupCard: { backgroundColor: InkColors.bg, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md, paddingHorizontal: Space.md, marginBottom: Space.sm, ...Elevation.e1 },
+  groupRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingVertical: Space.md },
+  rowDivider: { borderTopWidth: 1, borderTopColor: InkColors.line },
+  rejectNote: { fontSize: 12, color: InkColors.ink2, fontWeight: '600', lineHeight: 17, backgroundColor: InkColors.bgSoft, borderRadius: Radius.sm, paddingHorizontal: Space.sm, paddingVertical: Space.xs, marginBottom: Space.md },
   rowText: { flex: 1, fontSize: 15, fontWeight: '600', color: InkColors.ink },
   statusTag: { fontSize: 11, fontWeight: '800', color: InkColors.ink3 },
-  answeredTag: { fontSize: 10.5, fontWeight: '800', color: BrandColors.good, backgroundColor: '#E6F1EA', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 5 },
+  doneMeta: { fontSize: 11, fontWeight: '600', color: InkColors.ink3 },
+  waitTag: { fontSize: 10.5, fontWeight: '800', color: BrandColors.warn, backgroundColor: BrandColors.warnSoft, paddingHorizontal: 6, paddingVertical: 1, borderRadius: 5, overflow: 'hidden' },
+  moreRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, borderTopWidth: 1, borderTopColor: InkColors.line, paddingVertical: Space.sm },
+  moreText: { fontSize: 12.5, fontWeight: '700', color: InkColors.ink2 },
 
   // 답변 시트
   sheetHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingBottom: 10 },

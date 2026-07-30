@@ -128,7 +128,7 @@ export function EntryDetailModal({
             <View style={s.sourceBox}>
               <Text style={s.sourceLabel}>출처</Text>
               <Text style={s.sourceCreator}>{knowhowSourceLabel(entry)} 가이드</Text>
-              <Text style={s.sourceMeta}>v{entry.version} · {entry.updated_at} 갱신</Text>
+              <Text style={s.sourceMeta}>v{entry.version} · {String(entry.updated_at).slice(0, 10)} 갱신</Text>
             </View>
 
             <View style={{ height: 8 }} />

@@ -10,6 +10,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { seedVerifiedPhones, cleanupSeededPhones } from './qa-otp-seed.mjs';
 
 const here = (r) => fileURLToPath(new URL(r, import.meta.url));
 function pe(f){const o={};try{for(const l of readFileSync(f,'utf8').split(/\r?\n/)){const m=l.match(/^([A-Z_]+)=(.*)$/);if(m)o[m[1]]=m[2].trim();}}catch{}return o;}
@@ -17,6 +18,7 @@ const env = { ...pe(here('../.env')), ...pe(here('../.env.seed')) };
 const URL_ = env.EXPO_PUBLIC_SUPABASE_URL || env.SUPABASE_URL;
 const ANON = env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 if (!URL_ || !ANON) { console.error('FAIL: URL/ANON 필요(.env)'); process.exit(2); }
+const SRV = env.SUPABASE_SERVICE_ROLE_KEY; // 0088 게이트 시드용(없으면 seed 헬퍼가 조용히 스킵)
 
 const mk = () => createClient(URL_, ANON, { auth: { persistSession: false, autoRefreshToken: false } });
 const s = String(Date.now()).slice(-9);
@@ -37,8 +39,12 @@ const overviewOf = async (client, unit) => {
   return (data ?? []).find((r) => r.unit_id === unit);
 };
 
+// 0088 전화 게이트 라이브 — signUp이 쓰는 번호 전부 '인증됨' 선등록(qa-roles와 동일 패턴).
+const qaPhones = ['0106', '0107', '0108'].map((p) => `${p}${s.slice(0, 7)}`);
+
 async function main() {
   console.log('— 콜드스타트 QA (0086 starter flags · 루틴 선주입 · 사장 첫 질문) —');
+  await seedVerifiedPhones(URL_, SRV, qaPhones);
 
   // ── 셋업: 매장 A(카페) + 크로스테넌트용 매장 B ──────────────────────────
   const owner = mk();
@@ -148,6 +154,19 @@ async function main() {
   { const { data } = await ownerB.rpc('my_growth');
     check('⑧ B my_growth에 A 매장 없음', !(data ?? []).some((r) => r.unit_id === UNIT)); }
 
+  // ── ⑧-2 my_knowhow_entries(0094) — 원문 목록 = my_growth 카운트와 동일 술어 ──
+  // 직원: 제안 채택 크레딧 엔트리(pb_cs, creator=사장)가 원문으로 보인다 — 카운트(1)와 개수 일치.
+  { const { data, error } = await j.rpc('my_knowhow_entries');
+    check('⑧-2 직원 my_knowhow_entries 호출', !error, error?.message ?? '');
+    const rows = data ?? [];
+    check('⑧-2 직원 목록 = 채택 엔트리 1건(카운트와 일치)',
+      rows.length === 1 && rows[0]?.id === `pb_cs_${s}`, `n=${rows.length} id=${rows[0]?.id ?? '없음'}`);
+    check('⑧-2 원문 필드 존재(title·square.action)',
+      !!rows[0]?.title && Array.isArray(rows[0]?.square?.action?.steps), ''); }
+  // 크로스테넌트: B 사장의 목록에 A 매장 엔트리가 없다.
+  { const { data } = await ownerB.rpc('my_knowhow_entries');
+    check('⑧-2 B 목록에 A 매장 엔트리 없음', !(data ?? []).some((r) => r.unit_id === UNIT)); }
+
   // ── ⑨ stale(0091) — 90일 넘게 수정 없는 발행 노하우 감지 ─────────────────
   { let ov9 = await overviewOf(owner, UNIT);
     check('⑨ 초기 stale=0(전부 최근 수정)', Number(ov9?.stale) === 0, `stale=${ov9?.stale}`);
@@ -157,8 +176,13 @@ async function main() {
     ov9 = await overviewOf(owner, UNIT);
     check('⑨ stale 0→1 전이', Number(ov9?.stale) === 1, `stale=${ov9?.stale}`); }
 
+  await cleanupSeededPhones(URL_, SRV, qaPhones); // ★process.exit 전에 직접 정리(.finally는 exit가 삼킴)
   console.log(`\n결과: ${pass} PASS / ${fail} FAIL`);
   process.exit(fail === 0 ? 0 : 1);
 }
 
-main().catch((e) => { console.error('FAIL(예외):', e.message); process.exit(1); });
+main().catch(async (e) => {
+  console.error('FAIL(예외):', e.message);
+  await cleanupSeededPhones(URL_, SRV, qaPhones);
+  process.exit(1);
+});

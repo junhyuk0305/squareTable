@@ -96,6 +96,10 @@ try {
   await owner.rpc('switch_active_unit', { p_unit_id: S2 });
   const { error: appr2 } = await owner.rpc('approve_member', { p_uid: jId });
   check('★직원: S2 합류 승인', !appr2, appr2?.message ?? '');
+  // ★명부 가시성(0095): 승인 직후 S2 활성 사장이 J의 profiles 행을 읽어야 직원 목록에 보인다.
+  // approve 는 profiles.unit_id(주매장 S1)를 보존하므로 멤버십(unit_members) 분기가 read 정책에 필요.
+  { const { data } = await owner.from('profiles').select('id').eq('id', jId);
+    check('★S2 사장 직원목록: 승인 직후 J 프로필 열람', (data?.length ?? 0) === 1, `rows=${data?.length ?? 0}`); }
   u = (await J.rpc('my_units')).data;
   const ids2 = (u ?? []).map((x) => x.unit_id).sort();
   check('★직원 my_units = S1+S2 둘', ids2.length === 2 && ids2.includes(S1) && ids2.includes(S2), `ids=[${ids2}]`);

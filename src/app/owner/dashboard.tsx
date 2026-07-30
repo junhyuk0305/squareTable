@@ -17,7 +17,6 @@ import { OwnerWorkValueCard } from '@/components/OwnerWorkValueCard';
 import { SectionLabel } from '@/components/SectionLabel';
 import { OwnerNotificationBell } from '@/components/NotificationBell';
 import { StoreToggle } from '@/components/StoreToggle';
-import { getCategoryMeta } from '@/lib/utils/category';
 import { SEED_TEMPLATES } from '@/data/seed-templates';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { won } from '@/lib/utils/attendance';
@@ -162,9 +161,7 @@ export default function OwnerDashboardScreen() {
                   onPress={() => router.push({ pathname: '/owner/coach', params: { seed: t.draft } })}
                   style={({ pressed }) => [styles.seedChip, pressed && { opacity: 0.7 }]}
                 >
-                  <Text style={styles.seedChipText}>
-                    {getCategoryMeta(t.category).emoji} {t.title}
-                  </Text>
+                  <Text style={styles.seedChipText}>{t.title}</Text>
                 </Pressable>
               ))}
             </View>

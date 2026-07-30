@@ -6,7 +6,8 @@
 //   · 해본 업무 종류 수 — ★완료≠숙련: "해봤다"(경험)까지만 말하고 숙련을 주장하지 않는다
 // 원칙: 전부 본인 전용(my_growth RPC 내부 강제·사장 화면에 개인별 뷰 없음) · 남과 비교 없음 ·
 //   빈 상태는 "예시" 라벨 카드(실데이터 1건 들어오면 자동 교체 — 조건 렌더) + 행동 버튼.
-import { useEffect, useMemo } from 'react';
+//   내 노하우는 원문까지 본인이 직접 본다(0094 — 행 탭 = EntryDetailModal 재사용).
+import { useEffect, useMemo, useState } from 'react';
 import { View, Text, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -15,23 +16,33 @@ import { useMemberPrefsStore } from '@/lib/store/useMemberPrefsStore';
 import { useStoreNav } from '@/lib/hooks/useStoreNav';
 import { storeColor } from '@/lib/utils/storeColor';
 import { SectionLabel } from '@/components/SectionLabel';
+import { EntryDetailModal } from '@/components/EntryDetailModal';
 import { Appear } from '@/components/Appear';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
+import type { PlaybookEntry } from '@/types';
+
+const ENTRY_LIST_FIRST = 5; // 리스트 첫 노출 5±2 — 넘치면 "나머지 보기"로 아래로 펼침
 
 export function JuniorGrowthView() {
   const growth = useHubStore((s) => s.growth);
   const growthLoaded = useHubStore((s) => s.growthLoaded);
   const hydrateGrowth = useHubStore((s) => s.hydrateGrowth);
+  const myEntries = useHubStore((s) => s.myEntries);
+  const myEntriesLoaded = useHubStore((s) => s.myEntriesLoaded);
+  const hydrateMyEntries = useHubStore((s) => s.hydrateMyEntries);
   const prefFor = useMemberPrefsStore((s) => s.prefFor);
   const hydratePrefs = useMemberPrefsStore((s) => s.hydrate);
   const { goStore, switching } = useStoreNav();
+  const [openEntry, setOpenEntry] = useState<PlaybookEntry | null>(null);
+  const [showAllEntries, setShowAllEntries] = useState(false);
 
   useEffect(() => {
     void hydrateGrowth();
+    void hydrateMyEntries();
     void hydratePrefs();
-  }, [hydrateGrowth, hydratePrefs]);
+  }, [hydrateGrowth, hydrateMyEntries, hydratePrefs]);
 
   const totals = useMemo(
     () =>
@@ -49,7 +60,8 @@ export function JuniorGrowthView() {
   const empty = totals.knowhow === 0 && totals.taught === 0 && totals.doneKinds === 0;
   const labelOf = (uid: string, fallback: string) => prefFor(uid).nickname || fallback;
 
-  if (!growthLoaded) {
+  // 전부 도착 전엔 무조건 로딩 — 집계만 먼저 그리고 목록이 나중에 튀어나오는 부분 렌더 금지.
+  if (!growthLoaded || !myEntriesLoaded) {
     return (
       <View style={styles.loading}>
         <ActivityIndicator color={InkColors.ink3} />
@@ -128,6 +140,35 @@ export function JuniorGrowthView() {
           {totals.knowhow > 0 && totals.hits === 0 && (
             <Text style={styles.caption}>아직 참조 전이에요 — 누가 같은 걸 물으면 숫자가 올라요</Text>
           )}
+          {/* 내 노하우 원문 목록(0094) — 행 탭 = 원문 시트. 카운트와 같은 술어라 개수가 일치한다. */}
+          {(showAllEntries ? myEntries : myEntries.slice(0, ENTRY_LIST_FIRST)).map((e) => (
+            <Pressable
+              key={e.id}
+              onPress={() => setOpenEntry(e)}
+              style={({ pressed }) => [styles.row, pressed && { opacity: 0.85 }]}
+              accessibilityRole="button"
+              accessibilityLabel={`노하우 ${e.title} 원문 보기`}
+            >
+              {growth.length > 1 && (
+                <View style={[styles.dot, { backgroundColor: storeColor(e.unit_id, prefFor(e.unit_id).color) }]} />
+              )}
+              <Text style={styles.rowTitle} numberOfLines={1}>{e.title}</Text>
+              {(e.stats?.query_hits_30d ?? 0) > 0 && (
+                <Text style={styles.rowSub}>{`${e.stats.query_hits_30d}번 참조`}</Text>
+              )}
+              <Ionicons name="chevron-forward" size={15} color={InkColors.ink3} />
+            </Pressable>
+          ))}
+          {!showAllEntries && myEntries.length > ENTRY_LIST_FIRST && (
+            <Pressable
+              onPress={() => setShowAllEntries(true)}
+              style={({ pressed }) => [styles.moreBtn, pressed && { opacity: 0.85 }]}
+              accessibilityRole="button"
+              accessibilityLabel="노하우 나머지 보기"
+            >
+              <Text style={styles.moreBtnText}>{`나머지 ${myEntries.length - ENTRY_LIST_FIRST}개 보기`}</Text>
+            </Pressable>
+          )}
         </View>
       </Appear>
 
@@ -158,6 +199,9 @@ export function JuniorGrowthView() {
             ))}
         </View>
       </Appear>
+
+      {/* 노하우 원문 시트 — 물어보기 [출처]와 동일 컴포넌트(읽기 전용) 재사용 */}
+      <EntryDetailModal entry={openEntry} visible={!!openEntry} onClose={() => setOpenEntry(null)} />
     </View>
   );
 }
@@ -227,6 +271,8 @@ const styles = StyleSheet.create({
   statL: { fontSize: 11.5, color: InkColors.ink3 },
 
   row: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingVertical: Space.sm + 2, borderTopWidth: 1, borderTopColor: InkColors.line },
+  moreBtn: { alignItems: 'center', paddingVertical: Space.sm + 2, borderTopWidth: 1, borderTopColor: InkColors.line },
+  moreBtnText: { fontSize: 13, fontWeight: '700', color: InkColors.ink2 },
   rowTitle: { flex: 1, fontSize: 13.5, fontWeight: '700', color: InkColors.ink, minWidth: 0 },
   rowSub: { fontSize: 12, color: InkColors.ink3 },
   dot: { width: 8, height: 8, borderRadius: 4 },

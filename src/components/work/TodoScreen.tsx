@@ -177,6 +177,17 @@ export function TodoScreen({
             </View>
           </View>
         )}
+
+        {/* 접기/펴기 핸들 — 월 라벨 탭과 같은 토글. 작은 캐럿만으론 발견이 안 돼 전폭 핸들 병행. */}
+        <Pressable
+          onPress={() => setFolded((v) => !v)}
+          hitSlop={{ top: 8, bottom: 8 }}
+          style={({ pressed }) => [s.foldHandle, pressed && { opacity: 0.6 }]}
+          accessibilityRole="button"
+          accessibilityLabel={folded ? '달력 펴기' : '달력 접기'}
+        >
+          <Ionicons name={folded ? 'chevron-down' : 'chevron-up'} size={16} color={InkColors.ink3} />
+        </Pressable>
       </View>
 
       {/* 설정 메뉴 */}
@@ -339,6 +350,7 @@ const s = StyleSheet.create({
   cellMute: { color: InkColors.ink3, opacity: 0.45 },
   dots: { flexDirection: 'row', gap: 2.5, height: 6 },
   dot: { width: 5, height: 5, borderRadius: Radius.pill },
+  foldHandle: { alignItems: 'center', justifyContent: 'center', minHeight: 32 },
 
   menuBackdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 5 },
   setMenu: { position: 'absolute', right: 12, top: 44, backgroundColor: InkColors.bg, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md, padding: 6, width: 220, zIndex: 6, ...Elevation.e3 },

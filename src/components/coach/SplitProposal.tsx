@@ -53,7 +53,7 @@ export function SplitProposal({
           return (
             <View key={i} style={[splitStyles.item, { borderLeftColor: m.color }]}>
               <View style={[splitStyles.itemChip, { backgroundColor: m.color }]}>
-                <Text style={splitStyles.itemChipText}>{m.emoji} {m.label}</Text>
+                <Text style={splitStyles.itemChipText}>{m.label}</Text>
               </View>
               <View style={{ flex: 1 }}>
                 {editing ? (

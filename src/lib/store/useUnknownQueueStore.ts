@@ -3,7 +3,7 @@ import { coalesce, subscribeDebounced } from '@/lib/store/realtimeSync';
 import type { UnknownQuery } from '@/types';
 import seedData from '@/data/unknown-queries.json';
 import { HAS_SUPABASE } from '@/lib/supabase';
-import { fetchUnknownQueue, insertUnknown, bumpUnknownSimilar, resolveUnknown, updateUnknownStatus, subscribeUnknownQueue } from '@/lib/db';
+import { fetchUnknownQueue, insertUnknown, bumpUnknownSimilar, resolveUnknown, subscribeUnknownQueue } from '@/lib/db';
 import { guardWrite } from '@/lib/store/useSyncStore';
 import { notifyStoreQuestion } from '@/lib/push/notify';
 import { useSessionStore } from '@/lib/store/useSessionStore';
@@ -18,7 +18,6 @@ type UnknownQueueState = {
   subscribe: () => () => void;
   enqueue: (uq: UnknownQuery) => void;
   resolve: (uqId: string, newEntryId: string) => Promise<boolean>;
-  enableAutoAnswer: (uqId: string) => void;
   getPending: () => UnknownQuery[];
   getById: (id: string) => UnknownQuery | undefined;
   reset: () => void;
@@ -31,24 +30,6 @@ type UnknownQueueState = {
  */
 export function answerableQuestions(queue: UnknownQuery[], me: string): UnknownQuery[] {
   return queue.filter((u) => u.status === 'pending_owner_answer' && u.junior_id !== me);
-}
-
-// 받은질문 상태 전이 공통 헬퍼: 낙관적 업데이트 + 실패 시 롤백.
-function transition(
-  set: (fn: (s: UnknownQueueState) => Partial<UnknownQueueState>) => void,
-  get: () => UnknownQueueState,
-  uqId: string,
-  status: UnknownQuery['status'],
-  failMsg: string,
-) {
-  const before = get().queue.find((u) => u.id === uqId);
-  if (!before) return;
-  set((s) => ({ queue: s.queue.map((u) => (u.id === uqId ? { ...u, status } : u)) }));
-  void guardWrite(
-    updateUnknownStatus(uqId, status),
-    () => set((s) => ({ queue: s.queue.map((u) => (u.id === uqId ? before : u)) })),
-    failMsg,
-  );
 }
 
 export const useUnknownQueueStore = create<UnknownQueueState>((set, get) => ({
@@ -119,8 +100,7 @@ export const useUnknownQueueStore = create<UnknownQueueState>((set, get) => ({
       '답변 반영에 실패했어요.',
     );
   },
-  // 자동응답 사용 — AI 일반답변(ai_general_answer)으로 자동 응답하도록 표시.
-  enableAutoAnswer: (uqId) => transition(set, get, uqId, 'auto_answered', '자동응답 설정에 실패했어요.'),
+  // (자동응답 전이 제거 — 2026-07-31 사용자 결정: 질문은 사장이 직접 답한다. auto_answered 는 과거 데이터 표시용으로만 남음.)
   getPending: () => get().queue.filter((u) => u.status === 'pending_owner_answer'),
   getById: (id) => get().queue.find((u) => u.id === id),
   reset: () => set({ queue: HAS_SUPABASE ? [] : [...seed], loadError: false }),

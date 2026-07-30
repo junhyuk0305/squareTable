@@ -1,7 +1,7 @@
-// 직원 허브 '오늘' 탭 본문 — 3블록(기획 v2 §04): 오늘 근무 · 매장별 오늘 할일 · 이번달 근무/예상 급여.
+// 직원 허브 '오늘' 탭 본문 — 3블록(기획 v2 §04): 오늘 근무 · 오늘 할 일 · 이번달 근무/예상 급여.
 // 전부 본인 데이터(my_cross_summary 는 본인 행만, 할일은 0077 원시 행 + isPendingAssignment SSOT).
 // 사장 지표는 이 화면에 없다(시장 표준: 직원에게 관리자 위젯 숨김 — When I Work 명문화).
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { View, Text, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -26,6 +26,7 @@ export function JuniorTodayView() {
   const juniorLoaded = useHubStore((s) => s.juniorLoaded);
   const hydrateJunior = useHubStore((s) => s.hydrateJunior);
   const crossData = useCrossNotifStore((s) => s.data);
+  const crossLoaded = useCrossNotifStore((s) => s.loaded);
   const hydrateCross = useCrossNotifStore((s) => s.hydrate);
   const me = useSessionStore((s) => s.userId);
   const prefFor = useMemberPrefsStore((s) => s.prefFor);
@@ -66,18 +67,23 @@ export function JuniorTodayView() {
     return null;
   }, [myCross, dow, todayShifts.length]);
 
-  // ── 2) 매장별 오늘 할일 — 배정(미완료) + 안 읽은 멘션. 술어는 notifications.ts SSOT ──
-  const todos = useMemo(
-    () =>
-      crossData
-        .map((d) => ({
-          uid: d.unitId,
-          tasks: d.taskTemplates.filter((t) => isPendingAssignment(t, me, today, d.done)),
-          mentions: d.feed.filter((f) => isUnreadMention(f, me)),
-        }))
-        .filter((g) => g.tasks.length + g.mentions.length > 0),
-    [crossData, me, today],
-  );
+  // ── 2) 오늘 할 일 — 배정(미완료) + 안 읽은 멘션. 술어는 notifications.ts SSOT.
+  //     멘션(사람이 기다림)을 위로, 매장은 그룹헤더 대신 행 보조줄로 — 근무 행과 같은 해부구조.
+  const todoItems = useMemo(() => {
+    const tasks: { key: string; uid: string; kind: 'task' | 'mention'; text: string }[] = [];
+    const mentions: typeof tasks = [];
+    crossData.forEach((d) => {
+      d.taskTemplates
+        .filter((t) => isPendingAssignment(t, me, today, d.done))
+        .forEach((t) => tasks.push({ key: `t_${d.unitId}_${t.id}`, uid: d.unitId, kind: 'task', text: t.text }));
+      d.feed
+        .filter((f) => isUnreadMention(f, me))
+        .forEach((f) => mentions.push({ key: `m_${d.unitId}_${f.id}`, uid: d.unitId, kind: 'mention', text: f.text }));
+    });
+    return [...mentions, ...tasks];
+  }, [crossData, me, today]);
+  const [showAllTodos, setShowAllTodos] = useState(false);
+  const TODO_CAP = 5;
 
   // ── 3) 이번달 — 근무시간·예상 급여(근무분 × 시급 / 60, 기존 급여 집계식과 동일 계산) ──
   const month = useMemo(() => {
@@ -96,7 +102,8 @@ export function JuniorTodayView() {
   }, [myCross]);
   const fmtHours = (min: number) => (min >= 60 ? `${Math.floor(min / 60)}시간` : `${min}분`);
 
-  if (!juniorLoaded && myCross.length === 0) {
+  // 전부 도착 전엔 무조건 로딩 — 근무 카드만 먼저 그리고 할일이 나중에 튀어나오는 부분 렌더 금지.
+  if (!juniorLoaded || !crossLoaded) {
     return (
       <View style={styles.loading}>
         <ActivityIndicator color={InkColors.ink3} />
@@ -144,45 +151,57 @@ export function JuniorTodayView() {
         </View>
       </Appear>
 
-      {/* ── 2) 매장별 오늘 할일 ── */}
+      {/* ── 2) 오늘 할 일 ── */}
       <Appear delay={80}>
-        <SectionLabel title="매장별 오늘 할일" />
+        <SectionLabel title="오늘 할 일" hint={todoItems.length > 0 ? `${todoItems.length}건` : undefined} />
         <View style={styles.card}>
-          {todos.length === 0 ? (
+          {todoItems.length === 0 ? (
             <Text style={styles.emptyText}>오늘 처리할 일이 없어요</Text>
           ) : (
-            todos.map((g, gi) => (
-              <View key={g.uid} style={gi > 0 && styles.groupTop}>
-                <View style={styles.groupHead}>
-                  <View style={[styles.dot, { backgroundColor: colorOf(g.uid) }]} />
-                  <Text style={styles.groupTitle}>{labelOf(g.uid)}</Text>
-                </View>
-                {g.tasks.map((t) => (
-                  <Pressable
-                    key={`t_${t.id}`}
-                    onPress={() => goStore(g.uid, '/junior/work')}
-                    disabled={!!switching}
-                    style={({ pressed }) => [styles.todoRow, pressed && { opacity: 0.85 }]}
+            <>
+              {(showAllTodos ? todoItems : todoItems.slice(0, TODO_CAP)).map((it) => (
+                <Pressable
+                  key={it.key}
+                  onPress={() => goStore(it.uid, '/junior/work')}
+                  disabled={!!switching}
+                  style={({ pressed }) => [styles.shiftRow, pressed && { opacity: 0.85 }]}
+                >
+                  <View
+                    style={[
+                      styles.shiftIcon,
+                      { backgroundColor: it.kind === 'mention' ? BrandColors.mentionSoft : colorOf(it.uid) + '22' },
+                    ]}
                   >
-                    <View style={styles.checkbox} />
-                    <Text style={styles.todoText} numberOfLines={1}>{t.text}</Text>
-                    <Text style={styles.mineChip}>내 담당</Text>
-                  </Pressable>
-                ))}
-                {g.mentions.map((f) => (
-                  <Pressable
-                    key={`m_${f.id}`}
-                    onPress={() => goStore(g.uid, '/junior/work')}
-                    disabled={!!switching}
-                    style={({ pressed }) => [styles.todoRow, pressed && { opacity: 0.85 }]}
-                  >
-                    <Ionicons name="at-outline" size={15} color={BrandColors.mention} />
-                    <Text style={styles.todoText} numberOfLines={1}>{f.text}</Text>
-                    <Text style={styles.mentionChip}>나를 불렀어요</Text>
-                  </Pressable>
-                ))}
-              </View>
-            ))
+                    <Ionicons
+                      name={it.kind === 'mention' ? 'at' : 'checkbox-outline'}
+                      size={18}
+                      color={it.kind === 'mention' ? BrandColors.mention : colorOf(it.uid)}
+                    />
+                  </View>
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={styles.todoText} numberOfLines={2}>{it.text}</Text>
+                    <View style={styles.subLine}>
+                      <View style={[styles.subDot, { backgroundColor: colorOf(it.uid) }]} />
+                      <Text style={styles.shiftSub} numberOfLines={1}>
+                        {labelOf(it.uid)} · {it.kind === 'mention' ? '나를 불렀어요' : '내 담당'}
+                      </Text>
+                    </View>
+                  </View>
+                  <Ionicons name="chevron-forward" size={16} color={InkColors.ink3} />
+                </Pressable>
+              ))}
+              {!showAllTodos && todoItems.length > TODO_CAP && (
+                <Pressable
+                  onPress={() => setShowAllTodos(true)}
+                  style={({ pressed }) => [styles.moreRow, pressed && { opacity: 0.7 }]}
+                  accessibilityRole="button"
+                  accessibilityLabel={`남은 할 일 ${todoItems.length - TODO_CAP}건 더 보기`}
+                >
+                  <Text style={styles.moreText}>{todoItems.length - TODO_CAP}건 더 보기</Text>
+                  <Ionicons name="chevron-down" size={14} color={InkColors.ink2} />
+                </Pressable>
+              )}
+            </>
           )}
         </View>
       </Appear>
@@ -239,20 +258,14 @@ const styles = StyleSheet.create({
   shiftTitle: { fontSize: 15, fontWeight: '900', color: InkColors.ink, letterSpacing: -0.3 },
   shiftSub: { fontSize: 11.5, color: InkColors.ink3, marginTop: 1 },
 
-  groupTop: { borderTopWidth: 1, borderTopColor: InkColors.line, marginTop: Space.xs, paddingTop: Space.xs },
-  groupHead: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: Space.xs },
-  groupTitle: { fontSize: 11.5, fontWeight: '800', color: InkColors.ink3 },
-  todoRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingVertical: Space.sm },
-  checkbox: { width: 16, height: 16, borderRadius: 5, borderWidth: 1.5, borderColor: InkColors.ink3 },
-  todoText: { flex: 1, fontSize: 15, fontWeight: '600', color: InkColors.ink, minWidth: 0 },
-  mineChip: {
-    fontSize: 10, fontWeight: '900', color: '#7a5f10', backgroundColor: BrandColors.yellowSoft,
-    paddingHorizontal: 6, paddingVertical: 1, borderRadius: Radius.pill, overflow: 'hidden',
+  todoText: { fontSize: 15, fontWeight: '600', color: InkColors.ink, lineHeight: 20 },
+  subLine: { flexDirection: 'row', alignItems: 'center', gap: Space.xs, marginTop: 1 },
+  subDot: { width: 6, height: 6, borderRadius: 3 },
+  moreRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4,
+    borderTopWidth: 1, borderTopColor: InkColors.line, marginTop: Space.xs, paddingVertical: Space.sm,
   },
-  mentionChip: {
-    fontSize: 10, fontWeight: '900', color: BrandColors.mention, backgroundColor: InkColors.bgSoft,
-    paddingHorizontal: 6, paddingVertical: 1, borderRadius: Radius.pill, overflow: 'hidden',
-  },
+  moreText: { fontSize: 12.5, fontWeight: '700', color: InkColors.ink2 },
 
   statRow: { flexDirection: 'row', paddingVertical: Space.xs },
   statCell: { flex: 1, alignItems: 'center', gap: 2 },

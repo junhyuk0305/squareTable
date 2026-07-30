@@ -7,16 +7,19 @@ import {
   fetchOwnerToday,
   fetchMyCrossSummary,
   fetchMyGrowth,
+  fetchMyKnowhowEntries,
   type OwnerOverviewRow,
   type OwnerTodayRow,
   type MyCrossSummaryRow,
   type MyGrowthRow,
 } from '@/lib/db';
+import type { PlaybookEntry } from '@/types';
 
 const HYDRATE_TTL_MS = 5_000;
 let _ownerAt = 0;
 let _juniorAt = 0;
 let _growthAt = 0;
+let _myEntriesAt = 0;
 
 type State = {
   overview: OwnerOverviewRow[];
@@ -30,9 +33,14 @@ type State = {
   /** 성장 탭(0089) — 본인 매장별 축적. growthLoaded 로 "0건"과 "로드 전/실패"를 구분(빈화면 위장 금지). */
   growth: MyGrowthRow[];
   growthLoaded: boolean;
+  /** 내 노하우 원문 목록(0094) — growth 의 my_knowhow 카운트와 동일 술어(어긋나면 RPC 술어 드리프트). */
+  myEntries: PlaybookEntry[];
+  /** true = 목록 최소 1회 성공 — 성장 탭이 "전부 도착"까지 로딩을 유지(부분 렌더 금지). */
+  myEntriesLoaded: boolean;
   hydrateOwner: () => Promise<void>;
   hydrateJunior: () => Promise<void>;
   hydrateGrowth: () => Promise<void>;
+  hydrateMyEntries: () => Promise<void>;
 };
 
 export const useHubStore = create<State>((set) => ({
@@ -44,6 +52,8 @@ export const useHubStore = create<State>((set) => ({
   juniorLoaded: false,
   growth: [],
   growthLoaded: false,
+  myEntries: [],
+  myEntriesLoaded: false,
 
   hydrateOwner: async () => {
     const now = Date.now();
@@ -86,5 +96,17 @@ export const useHubStore = create<State>((set) => ({
       return;
     }
     set({ growth: data, growthLoaded: true });
+  },
+
+  hydrateMyEntries: async () => {
+    const now = Date.now();
+    if (now - _myEntriesAt < HYDRATE_TTL_MS) return;
+    _myEntriesAt = now;
+    const { data, error } = await fetchMyKnowhowEntries();
+    if (error || !data) {
+      _myEntriesAt = 0;
+      return;
+    }
+    set({ myEntries: data, myEntriesLoaded: true });
   },
 }));
