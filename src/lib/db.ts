@@ -322,6 +322,16 @@ export async function submitPaymentClaim(args: {
   return { data: (data as PaymentClaim) ?? null, error: error as DbErr };
 }
 
+// ── 무료 이용 코드(promo_codes, 0092) — 코드 검증·기록·활성화는 전부 서버(RPC) ────────────
+// 테이블은 클라 전면 deny — 성패는 RPC 결과로만 안다. named 에러 분기는 billing.tsx 한 곳.
+export type PromoRedeemRow = { unit_id: string; status: string; paid_until: string | null; plan: string; days: number };
+export async function redeemPromoCode(code: string): Promise<DbResult<PromoRedeemRow>> {
+  if (!HAS_SUPABASE) return { data: null, error: null };
+  const { data, error } = await supabase.rpc('redeem_promo_code', { p_code: code });
+  // returns table → 배열로 온다(admin_activate_store 계열과 동일).
+  return { data: (data as PromoRedeemRow[])?.[0] ?? null, error: error as DbErr };
+}
+
 // ── 알림 수신 선호(notification_prefs) — 서버(엣지 push 함수)가 발송 직전에 읽는 SSOT ─────────
 // 화면/스토어는 여기로만 접근한다(§계층 경계 ③). 저장은 원자적 upsert RPC 한 곳(save_notification_prefs).
 // 읽기는 RLS 로 본인 행만 반환(where 없이도 user_id=auth.uid() 로 좁혀짐). 행이 없으면 null → 스토어가 기본값.
@@ -554,6 +564,26 @@ export async function approveMember(uid: string): Promise<{ ok: boolean; code: '
 export async function rejectMember(uid: string): Promise<boolean> {
   if (!HAS_SUPABASE) return true;
   return write('rejectMember', supabase.rpc('reject_member', { p_uid: uid }));
+}
+
+// ── 매장별 멤버 역할(0093) ─────────────────────────────────
+// 활성 매장 멤버들의 unit_members.role — 매니저 배지·임명 UI 입력(um_select_same_unit).
+export async function fetchUnitMemberRoles(): Promise<ReadResult<Record<string, string>>> {
+  if (!HAS_SUPABASE || !_unitId) return { data: {}, error: false };
+  const { data, error } = await supabase.from('unit_members').select('user_id, role').eq('unit_id', _unitId);
+  if (error) {
+    readFail('fetchUnitMemberRoles', error);
+    return { data: {}, error: true };
+  }
+  const map: Record<string, string> = {};
+  for (const r of (data ?? []) as { user_id: string; role: string }[]) map[r.user_id] = r.role;
+  return { data: map, error: false };
+}
+
+// 사장이 직원을 매니저로 지정/해제(0093). RPC = 매장 소유자 본인만·이 매장 junior/manager 대상만.
+export async function setMemberRoleDb(uid: string, role: 'manager' | 'junior'): Promise<boolean> {
+  if (!HAS_SUPABASE) return true;
+  return write('setMemberRole', supabase.rpc('set_member_role', { p_uid: uid, p_role: role }));
 }
 
 // ── 초대코드 재발급(남용 #31) ──────────────────────────────
@@ -1203,8 +1233,10 @@ export async function fetchPayrollSettings(): Promise<Record<string, unknown> | 
 }
 export async function savePayrollSettings(settings: Record<string, unknown>): Promise<boolean> {
   if (!HAS_SUPABASE) return true;
-  // 급여 규칙=돈 직결 — 0행(사장 아님·RLS·경합)이면 화면엔 바뀐 듯 보이나 계산은 옛 규칙 → 실제 반영 확인.
-  return writeStrict('savePayrollSettings', supabase.from('units').update({ payroll_settings: settings }).eq('id', _unitId).select('id'));
+  // 급여 규칙=돈 직결. 0093: 매니저도 저장 가능 — units 직접 update(units_write=사장 전용 유지)가 아니라
+  // save_payroll_settings RPC(auth_can_manage 게이트·payroll_settings 한 컬럼만)로 쓴다.
+  // RPC 는 권한 거부를 예외로 던지므로(0행 무음 없음) write 경유로 실패가 그대로 드러난다.
+  return write('savePayrollSettings', supabase.rpc('save_payroll_settings', { p_settings: settings }));
 }
 
 // ── 업무보드/출퇴근 Realtime 구독 ─────────────────────────

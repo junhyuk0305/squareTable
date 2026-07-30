@@ -27,7 +27,9 @@ import type { SubStatusRaw } from '@/lib/utils/subscription';
 import { normalizePlan, type PlanId } from '@/lib/config/tiers';
 import { notifyOwnersJoinRequest } from '@/lib/push/notify';
 
-type Role = 'owner' | 'junior';
+// 0093: 세션 유효 역할. manager 는 가입 시 선택지가 아니라(가입은 owner/junior 뿐) 활성 매장의
+// unit_members.role 에서 파생된다 — loadProfile 의 파생 로직이 유일한 승격 지점.
+type Role = 'owner' | 'manager' | 'junior';
 type Status = 'loading' | 'signed_in' | 'signed_out';
 
 type SessionState = {
@@ -293,6 +295,12 @@ async function loadProfile(
     if (unitId) {
       const { data: us } = await fetchMyUnits();
       stores = us ?? [];
+    }
+    // 매장별 역할(0093): 정본 = unit_members.role(my_units 로 로드). 전역 junior 계정이라도
+    // 활성 매장에서 매니저로 승격됐으면 세션 유효 역할은 manager(사장 화면 표면).
+    // my_units 읽기 실패 시 junior 유지 = fail-closed(권한이 새는 방향이 아니라 잠기는 방향).
+    if (role !== 'owner' && stores.some((s) => s.unit_id === unitId && s.role === 'manager')) {
+      role = 'manager';
     }
     setUnitId(unitId || null);
     setAnalyticsContext({ userId, unitId: unitId || null, role }); // 관측 이벤트에 매장/유저/역할 태깅

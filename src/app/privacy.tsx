@@ -6,6 +6,7 @@ import { Space } from '@/lib/theme/layout';
 import { HeaderBackButton } from '@/components/HeaderBackButton';
 import { RoleTabBar } from '@/components/RoleTabBar';
 import { useSessionStore } from '@/lib/store/useSessionStore';
+import { canManage } from '@/lib/utils/roles';
 
 // 개인정보처리방침 요약. 전문의 SSOT 는 웹 정적 페이지(scripts/legal-content.mjs → /privacy)이고
 // 이 화면은 요약 + 전문 링크만 둔다 — 전문을 앱과 웹에 이중 유지하면 반드시 어긋난다.
@@ -49,7 +50,7 @@ export default function PrivacyScreen() {
         </Pressable>
         <View style={{ height: 24 }} />
       </ScrollView>
-      <RoleTabBar role={role} />
+      <RoleTabBar role={canManage(role) ? 'owner' : 'junior'} />
     </SafeAreaView>
   );
 }

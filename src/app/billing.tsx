@@ -8,14 +8,35 @@ import { HAS_SUPABASE } from '@/lib/supabase';
 import { logout } from '@/lib/auth';
 import { showToast } from '@/lib/store/useToastStore';
 import { deriveSubscription } from '@/lib/utils/subscription';
+import { canManage } from '@/lib/utils/roles';
 import { BILLING_INFO, formatKrw } from '@/lib/config/billing';
 import { PLANS, PLAN_ORDER, planMonthlyPrice, type PlanId } from '@/lib/config/tiers';
 import { SHOW_BILLING } from '@/lib/config/store-policy';
 import { usePaymentClaimStore, CLAIM_ERROR_TEXT } from '@/lib/store/usePaymentClaimStore';
+import { redeemPromoCode } from '@/lib/db';
 import { HeaderBackButton } from '@/components/HeaderBackButton';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
+
+// 무료 이용 코드(0092) — RPC named 에러 → 화면 문구 판정은 여기 한 곳(§② SSOT).
+const PROMO_ERROR_TEXT: Record<string, string> = {
+  code_not_found: '등록되지 않은 코드예요. 다시 확인해 주세요.',
+  code_inactive: '지금은 쓸 수 없는 코드예요.',
+  code_expired: '기간이 지난 코드예요.',
+  code_exhausted: '준비된 수량이 모두 사용된 코드예요.',
+  already_paid: '이미 유료 이용 중인 매장에는 쓸 수 없어요.',
+  already_redeemed: '이 매장에서 이미 사용한 코드예요.',
+  not_owner: '사장님 계정에서만 코드를 쓸 수 있어요.',
+  unknown: '코드 적용에 실패했어요. 잠시 후 다시 시도해 주세요.',
+};
+function promoErrorText(message?: string): string {
+  const m = message ?? '';
+  for (const key of Object.keys(PROMO_ERROR_TEXT)) {
+    if (key !== 'unknown' && m.includes(key)) return PROMO_ERROR_TEXT[key];
+  }
+  return PROMO_ERROR_TEXT.unknown;
+}
 
 // 구독 만료/계좌이체 안내 + 요금제 선택 화면(과금층 0062).
 // 만료된 매장은 각 역할 레이아웃이 여기로 강제 라우팅한다.
@@ -51,6 +72,8 @@ function BillingBody() {
 
   const view = deriveSubscription({ subStatus, trialEndsAt, paidUntil, plan });
   const isOwner = role === 'owner';
+  // 0093: 라우팅 목적지만 매니저 포함(사장 화면 세트) — 결제 액션·신고(claims)는 isOwner 유지.
+  const manages = canManage(role);
   // 이 화면은 두 모드다: ①만료 페이월(강제 라우팅 — 뒤로 갈 곳이 없다) ②자발 방문(설정·매장 추가에서
   // 업그레이드하러 옴 — 뒤로가기가 있어야 한다). 진입 시점 entitled 로 모드를 고정한다 — 승인으로
   // 도중에 entitled 가 돼도 모드가 바뀌며 헤더가 출렁이지 않게. (useState 초기값 = 마운트 1회 고정)
@@ -59,6 +82,10 @@ function BillingBody() {
   // 입금자명 — 계좌이체는 이게 유일한 대사 키다(운영자가 은행 내역과 맞추는 값). 이름 기본값으로 시작.
   const [depositor, setDepositor] = useState(userName ?? '');
   const [claiming, setClaiming] = useState(false);
+  // 무료 이용 코드(0092) — 기본 접힘(화면 요소 예산). 검증·기록·활성화는 전부 서버 RPC.
+  const [promoOpen, setPromoOpen] = useState(false);
+  const [promoCode, setPromoCode] = useState('');
+  const [redeeming, setRedeeming] = useState(false);
   // 선택 요금제 — 초기값은 현재 요금제. 다점포 금액 = 소유 매장수 × 매장당 가격(tiers.ts).
   const [selectedPlan, setSelectedPlan] = useState<PlanId>(plan);
   // 세션 plan이 마운트 뒤에 로드/변경되면(웹 새로고침 직진입, 30초 폴링 중 활성화 반영) 선택을
@@ -86,11 +113,11 @@ function BillingBody() {
       const s = useSessionStore.getState();
       if (!s.unitId) return;
       if (deriveSubscription({ subStatus: s.subStatus, trialEndsAt: s.trialEndsAt, paidUntil: s.paidUntil, plan: s.plan }).entitled) {
-        router.replace(isOwner ? '/owner/dashboard' : '/junior/home');
+        router.replace(manages ? '/owner/dashboard' : '/junior/home');
       }
     }, 30000);
     return () => clearInterval(id);
-  }, [refreshMembership, router, isOwner, hydrateClaims]);
+  }, [refreshMembership, router, isOwner, manages, hydrateClaims]);
 
   // 진입 즉시 1회 — 이전에 낸 신고가 '확인 중'인지 '반려'인지 바로 보여준다(30초 기다리게 하지 않는다).
   // 훅은 조기 return 위에 있어야 하므로(훅 규칙) 조건은 이펙트 안에 둔다.
@@ -112,7 +139,7 @@ function BillingBody() {
     });
     if (!v.entitled) return showToast('아직 활성화 전이에요. 입금 확인 후 반영돼요.');
     // 페이월 모드에서만 앱으로 진입시킨다. 자발 방문자는 화면에 남아 현재 요금제를 확인한다(뒤로가기로 나감).
-    if (!entitledAtMount) return router.replace(isOwner ? '/owner/dashboard' : '/junior/home');
+    if (!entitledAtMount) return router.replace(manages ? '/owner/dashboard' : '/junior/home');
     showToast(`현재 ${PLANS[useSessionStore.getState().plan].name} 요금제예요.`);
   };
 
@@ -144,6 +171,28 @@ function BillingBody() {
       return;
     }
     showToast('입금 확인 중이에요. 확인되면 바로 열려요.', 'good');
+  };
+
+  // ── 무료 이용 코드 사용(0092) — 성공하면 서버가 이미 활성화까지 끝낸 상태다.
+  const redeemCode = async () => {
+    const code = promoCode.trim();
+    if (!code) {
+      showToast('코드를 입력해 주세요');
+      return;
+    }
+    setRedeeming(true);
+    const { data, error } = await redeemPromoCode(code);
+    setRedeeming(false);
+    if (error || !data) {
+      showToast(promoErrorText(error?.message));
+      return;
+    }
+    showToast(`코드가 적용됐어요. ${data.days}일 동안 이용할 수 있어요.`, 'good');
+    setPromoCode('');
+    setPromoOpen(false);
+    await refreshMembership();
+    // 페이월 모드였다면 즉시 앱으로(recheck 와 동일 규칙). 자발 방문은 화면에 남아 상태를 확인한다.
+    if (!entitledAtMount) router.replace(manages ? '/owner/dashboard' : '/junior/home');
   };
 
   const notifyPaid = async () => {
@@ -410,6 +459,38 @@ function BillingBody() {
                 </Pressable>
               </>
             )}
+            {/* 무료 이용 코드(0092) — 캠페인으로 받은 코드. 기본 접힘, 펼침은 아래로(레이아웃 규칙). */}
+            {!promoOpen ? (
+              <Pressable onPress={() => setPromoOpen(true)} style={({ pressed }) => [styles.promoToggle, pressed && { opacity: 0.6 }]}>
+                <Text style={styles.promoToggleText}>무료 이용 코드가 있으신가요?</Text>
+              </Pressable>
+            ) : (
+              <View style={styles.section}>
+                <Text style={styles.sectionLabel}>무료 이용 코드</Text>
+                <View style={styles.card}>
+                  <TextInput
+                    value={promoCode}
+                    onChangeText={(t) => setPromoCode(t.toUpperCase())}
+                    placeholder="CHACHAK7"
+                    placeholderTextColor={InkColors.ink3}
+                    style={styles.input}
+                    autoCapitalize="characters"
+                    autoCorrect={false}
+                    maxLength={24}
+                    returnKeyType="done"
+                    onSubmitEditing={() => void redeemCode()}
+                    accessibilityLabel="무료 이용 코드 입력"
+                  />
+                  <Pressable
+                    disabled={redeeming}
+                    onPress={() => void redeemCode()}
+                    style={({ pressed }) => [styles.ghost, pressed && { opacity: 0.7 }, redeeming && { opacity: 0.6 }]}
+                  >
+                    {redeeming ? <ActivityIndicator color={InkColors.ink2} /> : <Text style={styles.ghostText}>코드 사용</Text>}
+                  </Pressable>
+                </View>
+              </View>
+            )}
           </>
         )}
 
@@ -515,6 +596,10 @@ const styles = StyleSheet.create({
 
   mailRow: { alignItems: 'center', paddingVertical: Space.sm },
   mailText: { fontSize: 12.5, fontWeight: '700', color: InkColors.ink3 },
+
+  // 무료 이용 코드 — 접힘 상태 토글(보조 링크 톤, mailRow 계열).
+  promoToggle: { alignItems: 'center', paddingVertical: Space.sm },
+  promoToggleText: { fontSize: 12.5, fontWeight: '700', color: InkColors.ink3, textDecorationLine: 'underline' },
 
   primary: { backgroundColor: BrandColors.brand, paddingVertical: 15, borderRadius: Radius.md, alignItems: 'center' },
   primaryText: { color: '#FFFFFF', fontSize: 15, fontWeight: '800' },

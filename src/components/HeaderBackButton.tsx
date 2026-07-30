@@ -8,6 +8,7 @@ import { Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useNavigation, type Href } from 'expo-router';
 import { useSessionStore } from '@/lib/store/useSessionStore';
+import { canManage } from '@/lib/utils/roles';
 import { InkColors } from '@/lib/theme/colors';
 import { HEADER_EDGE_GUTTER } from '@/lib/theme/layout';
 
@@ -16,7 +17,7 @@ export function HeaderBackButton({ fallback }: { fallback?: Href }) {
   const navigation = useNavigation();
   const role = useSessionStore((s) => s.role);
   const status = useSessionStore((s) => s.status);
-  const home: Href = fallback ?? (status !== 'signed_in' ? '/' : role === 'owner' ? '/owner/dashboard' : '/junior/home');
+  const home: Href = fallback ?? (status !== 'signed_in' ? '/' : canManage(role) ? '/owner/dashboard' : '/junior/home');
 
   return (
     <Pressable

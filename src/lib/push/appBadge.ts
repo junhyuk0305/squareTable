@@ -17,6 +17,7 @@ import { usePaymentClaimStore } from '@/lib/store/usePaymentClaimStore';
 import { useMemberPrefsStore } from '@/lib/store/useMemberPrefsStore';
 import { todayStr } from '@/lib/utils/attendance';
 import { juniorUnreadCount, ownerUnreadCount } from '@/lib/utils/notifications';
+import { canManage } from '@/lib/utils/roles';
 
 type BadgeNav = Navigator & {
   setAppBadge?: (count?: number) => Promise<void>;
@@ -101,7 +102,7 @@ export function useAppBadgeSync(): void {
       return;
     }
     const count =
-      role === 'owner'
+      canManage(role)
         ? ownerUnreadCount(queue, suggestions, swaps, pending, feed, me, ackAt, claims)
         : juniorUnreadCount(feed, swaps, me, today, templates, done, ackAt, suggestions);
     setAppBadge(count);

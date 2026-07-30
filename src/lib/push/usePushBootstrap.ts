@@ -7,6 +7,7 @@
 import { useEffect } from 'react';
 import { router } from 'expo-router';
 import { useSessionStore } from '@/lib/store/useSessionStore';
+import { canManage } from '@/lib/utils/roles';
 import { usePreferencesStore } from '@/lib/store/usePreferencesStore';
 import { registerServiceWorker, ensurePushSubscribed } from '@/lib/push/webpush';
 
@@ -16,7 +17,8 @@ import { registerServiceWorker, ensurePushSubscribed } from '@/lib/push/webpush'
 // (예: 사장이 언급 알림 클릭 → '/junior/work' → '/owner/work'). 대응 화면이 없으면 원본 유지.
 function routeForRole(url: string): string {
   const role = useSessionStore.getState().role;
-  if (role === 'owner' && url.startsWith('/junior/')) return '/owner/' + url.slice('/junior/'.length);
+  // 0093: 매니저는 사장 화면 세트를 쓴다 — '/owner/*' 로 교정.
+  if (canManage(role) && url.startsWith('/junior/')) return '/owner/' + url.slice('/junior/'.length);
   if (role === 'junior' && url.startsWith('/owner/')) return '/junior/' + url.slice('/owner/'.length);
   return url;
 }

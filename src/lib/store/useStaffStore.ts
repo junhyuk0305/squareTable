@@ -4,7 +4,9 @@ import { create } from 'zustand';
 import type { Owner, Junior } from '@/types';
 import usersData from '@/data/users.json';
 import { HAS_SUPABASE } from '@/lib/supabase';
-import { fetchStaffProfiles, removeStaffMember, subscribeStaff, fetchPendingMembers, approveMember, rejectMember } from '@/lib/db';
+import { fetchStaffProfiles, removeStaffMember, subscribeStaff, fetchPendingMembers, approveMember, rejectMember, fetchUnitMemberRoles, setMemberRoleDb } from '@/lib/db';
+import { showToast } from '@/lib/store/useToastStore';
+import { notifyUserRoleChange } from '@/lib/push/notify';
 import { PLANS } from '@/lib/config/tiers';
 import { subscribeDebounced } from '@/lib/store/realtimeSync';
 import { optimisticRemove } from '@/lib/store/crudHelpers';
@@ -21,6 +23,8 @@ type StaffState = {
   owner: Owner | null;
   staff: Junior[];
   pending: PendingMember[];
+  // 매장별 역할 맵(0093, unit_members.role) — 매니저 배지·임명 UI 입력. 키=userId.
+  roles: Record<string, string>;
   loaded: boolean;
   loadError: boolean; // 마지막 hydrate 실패 여부 — 명부가 "직원 0명"과 "못 불러옴"을 구분한다.
   hydrate: () => Promise<void>;
@@ -31,6 +35,8 @@ type StaffState = {
   // 사장이 합류 신청을 승인/거절(남용 #2). 낙관적 제거 후 실패 시 복원 + 승인은 로스터 재조회.
   approve: (id: string) => void;
   reject: (id: string) => void;
+  // 사장이 매니저 지정/해제(0093). 낙관적 갱신 + 실패 시 복원. 서버 게이트=set_member_role(소유자만).
+  setRole: (id: string, role: 'manager' | 'junior') => void;
   // profiles 실시간 구독 — 신규 합류/탈퇴가 사장 화면에 즉시 반영. 해제 함수 반환.
   subscribe: () => () => void;
 };
@@ -56,16 +62,23 @@ export const useStaffStore = create<StaffState>((set, get) => ({
   owner: HAS_SUPABASE ? null : demoOwner,
   staff: HAS_SUPABASE ? [] : demoStaff,
   pending: [],
+  roles: {},
   loaded: !HAS_SUPABASE,
   loadError: false,
 
   hydrate: async () => {
     if (!HAS_SUPABASE) return;
-    const [staffRes, pendingRes] = await Promise.all([fetchStaffProfiles(), fetchPendingMembers()]);
+    const [staffRes, pendingRes, rolesRes] = await Promise.all([
+      fetchStaffProfiles(),
+      fetchPendingMembers(),
+      fetchUnitMemberRoles(),
+    ]);
     set({
       owner: staffRes.owner,
       staff: staffRes.staff,
       pending: pendingRes.data,
+      // 역할 맵 읽기 실패는 명부 자체를 막지 않는다 — 배지·임명만 잠시 기본값(junior)으로 보인다.
+      roles: rolesRes.data,
       loaded: true,
       loadError: staffRes.error || pendingRes.error,
     });
@@ -101,6 +114,24 @@ export const useStaffStore = create<StaffState>((set, get) => ({
             : '승인에 실패했어요. 다시 시도해 주세요.',
         );
       }
+    });
+  },
+
+  // 매니저 지정/해제(0093): 낙관적 갱신 + 실패 시 복원. 성공 시 토스트 + 대상 본인에게 푸시.
+  // 확인 모달 없음(P7) — 같은 버튼으로 즉시 되돌릴 수 있는 동작이라 실행 + 알림으로 충분하다.
+  setRole: (id, role) => {
+    const before = get().roles;
+    if ((before[id] ?? 'junior') === role) return;
+    set({ roles: { ...before, [id]: role } });
+    void setMemberRoleDb(id, role).then((ok) => {
+      if (!ok) {
+        set({ roles: before });
+        useSyncStore.getState().noteError('역할 변경에 실패했어요. 다시 시도해 주세요.');
+        return;
+      }
+      const name = get().staff.find((s) => s.id === id)?.name || '직원';
+      showToast(role === 'manager' ? `${name}님을 매니저로 지정했어요` : `${name}님을 매니저에서 해제했어요`, 'good');
+      notifyUserRoleChange(id, useSessionStore.getState().storeName, role === 'manager');
     });
   },
 

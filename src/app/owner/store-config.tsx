@@ -45,6 +45,8 @@ export default function OwnerStoreConfigScreen() {
   const stores = useSessionStore((s) => s.stores);
   const storeName = useSessionStore((s) => s.storeName);
   const deleteStore = useSessionStore((s) => s.deleteStore);
+  // 0093: 매장 삭제 = 사장 전용(잠금 영역). 매니저에겐 위험 구역 자체를 비노출.
+  const isOwner = useSessionStore((s) => s.role) === 'owner';
   const [deleting, setDeleting] = useState(false);
 
   const onDelete = async () => {
@@ -139,8 +141,8 @@ export default function OwnerStoreConfigScreen() {
           <Text style={styles.saveText}>{saved ? '저장됐어요 ✓' : '저장'}</Text>
         </Pressable>
 
-        {/* 다점포 전용 위험 구역 — 이 매장 삭제(매장 2개 이상일 때만) */}
-        {stores.length > 1 ? (
+        {/* 다점포 전용 위험 구역 — 이 매장 삭제(사장 전용 + 매장 2개 이상일 때만) */}
+        {isOwner && stores.length > 1 ? (
           <View style={styles.dangerBox}>
             <Text style={styles.dangerLabel}>위험 구역</Text>
             <Text style={styles.dangerDesc}>이 매장(“{storeName}”)을 완전히 삭제해요. 노하우·근무·급여 등 모든 데이터가 사라지고 되돌릴 수 없어요. (직원이 있으면 먼저 내보내야 해요.)</Text>

@@ -32,6 +32,7 @@ import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { HEADER_EDGE_GUTTER } from '@/lib/theme/layout';
 import { todayStr, tsMs } from '@/lib/utils/attendance';
+import { canManage } from '@/lib/utils/roles';
 
 type ViewKey = 'chat' | 'notice' | 'todo' | 'assign';
 
@@ -65,7 +66,8 @@ function pickImageFiles(onPick: (files: File[]) => void, opts?: { multiple?: boo
 export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
   const userId = useSessionStore((s) => s.userId);
   const userName = useSessionStore((s) => s.userName);
-  const isOwner = role === 'owner';
+  // 0093: 업무보드의 관리 표면(배정 뷰·전원 이름 등)은 매니저 포함 — 사장 전용 요소는 이 화면에 없다.
+  const isOwner = canManage(role);
 
   // 전 매장 동시 공지(S3 #3) — 사장이 매장 2개 이상이면 공지 작성 시 대상 매장 선택 제공.
   const stores = useSessionStore((s) => s.stores);

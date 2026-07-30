@@ -111,10 +111,13 @@ Deno.serve(async (req) => {
   // 조회/발송은 service_role(RLS 우회) — 대상 프로필·구독을 읽어야 한다.
   const admin = createClient(SUPABASE_URL, SERVICE_ROLE);
 
-  // 호출자의 매장(unit_id) + 신청 대기중 매장(pending_unit_id).
+  // 호출자의 매장 + 신청 대기중 매장(pending_unit_id).
+  // 0093: 주매장(unit_id) 고정 → 활성 매장(active_unit_id) 우선으로 교정 — 다점포에서 "2호점을 보며
+  // 보낸 알림이 1호점으로 가는" 무음 오발송 방지(0056 이 RPC 에서 고친 것과 같은 클래스).
+  // active_unit_id 는 RLS 로 동결돼 switch_active_unit(멤버십 검증)로만 바뀌므로 신뢰 가능.
   const { data: me } = await admin
-    .from('profiles').select('unit_id, pending_unit_id, role').eq('id', caller.id).single();
-  const callerUnit = me?.unit_id as string | null;
+    .from('profiles').select('unit_id, active_unit_id, pending_unit_id, role').eq('id', caller.id).single();
+  const callerUnit = (me?.active_unit_id ?? me?.unit_id) as string | null;
   const pendingUnit = me?.pending_unit_id as string | null;
 
   let payload: {
@@ -148,21 +151,26 @@ Deno.serve(async (req) => {
   if (audience === 'user') {
     const target = clip(payload.userId, 80);
     if (!target) return json(400, { error: 'missing_userId' });
-    // 대상이 같은 매장인지 확인 — 크로스테넌트 발송 차단.
+    // 대상이 같은 매장 멤버인지 확인 — 크로스테넌트 발송 차단.
+    // 0093: 판정을 profiles.unit_id(주매장) → unit_members(매장별 멤버십 SSOT)로 교체 —
+    // 주매장이 다른 멤버(다점포 직원·매니저)에게 가던 멘션/배정 알림이 403 으로 죽던 갭도 함께 해소.
     const { data: t } = await admin
-      .from('profiles').select('id, unit_id').eq('id', target).single();
-    if (!t || t.unit_id !== callerUnit) return json(403, { error: 'cross_tenant' });
+      .from('unit_members').select('user_id').eq('user_id', target).eq('unit_id', callerUnit).maybeSingle();
+    if (!t) return json(403, { error: 'cross_tenant' });
     recipientIds = [target];
   } else if (audience === 'join_owners') {
-    // 합류 신청 알림 — 신청자가 지정한 pending_unit_id 의 사장에게만.
+    // 합류 신청 알림 — 신청자가 지정한 pending_unit_id 의 관리자(사장+매니저, 0093 승인권자)에게만.
+    // 0093: 대상 해석을 profiles(주매장·전역 role) → unit_members(매장별 멤버십·역할 SSOT, 0067)로 교체.
     const { data: rows } = await admin
-      .from('profiles').select('id').eq('unit_id', pendingUnit).eq('role', 'owner');
-    recipientIds = (rows ?? []).map((r: { id: string }) => r.id);
+      .from('unit_members').select('user_id').eq('unit_id', pendingUnit).in('role', ['owner', 'manager']);
+    recipientIds = (rows ?? []).map((r: { user_id: string }) => r.user_id);
   } else {
-    const role = audience === 'owners' ? 'owner' : 'junior';
+    // 0093: 'owners' = 그 매장의 관리자(사장+매니저), 'staff' = 그 매장의 직원(junior).
+    // unit_members 기준이라 주매장이 다른 멤버도 정확히 잡히고, 매니저가 staff 쪽으로 중복 수신하지 않는다.
+    const roles = audience === 'owners' ? ['owner', 'manager'] : ['junior'];
     const { data: rows } = await admin
-      .from('profiles').select('id').eq('unit_id', callerUnit).eq('role', role);
-    recipientIds = (rows ?? []).map((r: { id: string }) => r.id);
+      .from('unit_members').select('user_id').eq('unit_id', callerUnit).in('role', roles);
+    recipientIds = (rows ?? []).map((r: { user_id: string }) => r.user_id);
   }
 
   // 발송자 본인에게는 알림을 보내지 않는다(자기 행동의 메아리 방지).

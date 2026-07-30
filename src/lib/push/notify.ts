@@ -172,6 +172,17 @@ export const notifyOwnersSwapApproval = (when: string) =>
     tag: 'swap-approval',
   });
 
+/** 매니저 지정/해제(0093) — 대상 본인에게만. 다음 진입부터 화면 세트가 바뀌는 걸 알린다. */
+export const notifyUserRoleChange = (userId: string, storeName: string, promoted: boolean) =>
+  pushNotify({
+    audience: 'user',
+    userId,
+    title: promoted ? '매니저가 됐어요' : '매니저에서 해제됐어요',
+    body: storeName,
+    url: promoted ? '/owner/dashboard' : '/junior/home',
+    tag: 'role',
+  });
+
 // 직원이 받는 것들 (사장/동료 행동 → 직원)
 export const notifyStaffNotice = (author: string, text: string) =>
   pushNotify({

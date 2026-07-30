@@ -33,7 +33,11 @@ export default function OwnerStaffScreen() {
   const loadError = useStaffStore((s) => s.loadError);
   const approve = useStaffStore((s) => s.approve);
   const reject = useStaffStore((s) => s.reject);
+  const roles = useStaffStore((s) => s.roles);
+  const setRole = useStaffStore((s) => s.setRole);
   const INVITE_CODE = useSessionStore((s) => s.inviteCode) || '------';
+  // 0093: 이 화면은 매니저도 쓴다(승인·시급·급여). 사장 전용 = 내보내기·코드 변경·매니저 지정.
+  const isOwner = useSessionStore((s) => s.role) === 'owner';
 
   // 내보낼 직원 — 확인 모달용. 실수 방지 위해 빨강 모달로 한 번 더 확인한다.
   const [removeTarget, setRemoveTarget] = useState<{ id: string; name: string } | null>(null);
@@ -143,10 +147,13 @@ export default function OwnerStaffScreen() {
               <Ionicons name={copied ? 'checkmark' : 'copy-outline'} size={16} color="#FFFFFF" />
               <Text style={styles.copyText}>{copied ? '복사됨' : '코드 복사'}</Text>
             </Pressable>
-            <Pressable onPress={() => setRotateOpen(true)} style={({ pressed }) => [styles.rotateBtn, pressed && { opacity: 0.7 }]}>
-              <Ionicons name="refresh-outline" size={16} color="#FFFFFF" />
-              <Text style={styles.copyText}>코드 변경</Text>
-            </Pressable>
+            {/* 코드 변경 = 사장 전용(rotate_invite_code RPC 가 소유자만 통과) — 매니저에겐 비노출. */}
+            {isOwner && (
+              <Pressable onPress={() => setRotateOpen(true)} style={({ pressed }) => [styles.rotateBtn, pressed && { opacity: 0.7 }]}>
+                <Ionicons name="refresh-outline" size={16} color="#FFFFFF" />
+                <Text style={styles.copyText}>코드 변경</Text>
+              </Pressable>
+            )}
           </View>
         </View>
         </Appear>
@@ -206,13 +213,21 @@ export default function OwnerStaffScreen() {
         <View style={styles.list}>
           {staff.map((s) => {
             const agg = perStaff[s.id];
+            const isManager = roles[s.id] === 'manager';
             return (
-            <View key={s.id} style={styles.staffRow}>
+            <View key={s.id} style={styles.staffItem}>
+            <View style={[styles.staffRow, styles.staffRowFlat]}>
               <Pressable onPress={() => router.push(`/owner/timesheet/${s.id}`)} style={({ pressed }) => [styles.staffTap, pressed && { opacity: 0.6 }]}>
                 <Avatar name={s.name} size={40} fontSize={15} />
                 <View style={styles.nameCol}>
                   <View style={styles.nameRow}>
                     <Text style={styles.staffName} numberOfLines={1}>{s.name}</Text>
+                    {/* 매니저 배지(0093) — 색이 아니라 말로(P9). 전 역할에게 보인다. */}
+                    {isManager && (
+                      <View style={[chip.wrap, { backgroundColor: InkColors.ink }]}>
+                        <Text style={[chip.text, { color: '#FFFFFF' }]}>매니저</Text>
+                      </View>
+                    )}
                     <StatusChip status={agg?.status ?? 'out'} />
                   </View>
                   <Text style={styles.staffMeta} numberOfLines={1}>
@@ -233,15 +248,32 @@ export default function OwnerStaffScreen() {
                   <Text style={styles.wageWon}>원</Text>
                 </View>
               </View>
-              {/* 내보내기 — 오탭 방지로 빨강 모달 확인 후 실행 */}
+              {/* 내보내기 — 사장 전용(remove_staff RPC 소유자만). 오탭 방지로 빨강 모달 확인 후 실행 */}
+              {isOwner && (
+                <Pressable
+                  onPress={() => setRemoveTarget({ id: s.id, name: s.name })}
+                  hitSlop={8}
+                  accessibilityLabel={`${s.name} 내보내기`}
+                  style={({ pressed }) => [styles.removeBtn, pressed && { opacity: 0.6 }]}
+                >
+                  <Ionicons name="person-remove-outline" size={19} color={BrandColors.bad} />
+                </Pressable>
+              )}
+            </View>
+            {/* 매니저 지정/해제(0093) — 사장 전용. 확인 모달 없이 즉시 실행(P7, 같은 버튼으로 되돌림).
+                staffTap(출근기록 진입)과 형제로 분리 — Pressable 중첩 금지(RNW). */}
+            {isOwner && (
               <Pressable
-                onPress={() => setRemoveTarget({ id: s.id, name: s.name })}
-                hitSlop={8}
-                accessibilityLabel={`${s.name} 내보내기`}
-                style={({ pressed }) => [styles.removeBtn, pressed && { opacity: 0.6 }]}
+                onPress={() => setRole(s.id, isManager ? 'junior' : 'manager')}
+                hitSlop={6}
+                accessibilityRole="button"
+                accessibilityLabel={isManager ? `${s.name} 매니저 해제` : `${s.name} 매니저로 지정`}
+                style={({ pressed }) => [styles.roleBtn, pressed && { opacity: 0.6 }]}
               >
-                <Ionicons name="person-remove-outline" size={19} color={BrandColors.bad} />
+                <Ionicons name={isManager ? 'remove-circle-outline' : 'ribbon-outline'} size={14} color={InkColors.ink3} />
+                <Text style={styles.roleBtnText}>{isManager ? '매니저 해제' : '매니저로 지정'}</Text>
               </Pressable>
+            )}
             </View>
             );
           })}
@@ -334,6 +366,11 @@ const styles = StyleSheet.create({
 
   list: { backgroundColor: '#FFFFFF', borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, paddingHorizontal: 14 },
   staffRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: InkColors.line },
+  // 직원 항목 컨테이너(0093) — 행 + (사장 전용) 매니저 지정 줄. 구분선은 여기 하나만.
+  staffItem: { borderBottomWidth: 1, borderBottomColor: InkColors.line },
+  staffRowFlat: { borderBottomWidth: 0 },
+  roleBtn: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-end', gap: 4, paddingBottom: 12, paddingHorizontal: 2 },
+  roleBtnText: { fontSize: 12, fontWeight: '700', color: InkColors.ink3 },
   staffTap: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12, minWidth: 0 },
   nameCol: { flex: 1, minWidth: 0 },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6, minWidth: 0 },

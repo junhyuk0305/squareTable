@@ -13,6 +13,7 @@ import { HAS_SUPABASE } from '@/lib/supabase';
 import { storeColor } from '@/lib/utils/storeColor';
 import { useCrossNotifRows } from '@/lib/hooks/useCrossNotifRows';
 import { assignedTodayCount } from '@/lib/utils/crossStoreNotifs';
+import { canManage } from '@/lib/utils/roles';
 import { todayStr } from '@/lib/utils/attendance';
 import { fetchOwnerOverview, type MyUnitRow, type OwnerOverviewRow } from '@/lib/db';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
@@ -110,7 +111,8 @@ export default function StoresHub() {
         return;
       }
     }
-    router.replace(isOwner ? '/owner/dashboard' : '/junior/home');
+    // 0093: 역할은 매장별(A매장 매니저·B매장 직원 가능) — 전환 '후'의 세션 역할로 착지 화면을 정한다.
+    router.replace(canManage(useSessionStore.getState().role) ? '/owner/dashboard' : '/junior/home');
   };
 
   const addStore = () => {
