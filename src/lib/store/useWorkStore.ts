@@ -28,8 +28,12 @@ import {
   updateTrainingPositions,
   fetchRegularDueDays,
   saveRegularDueDays,
+  fetchTrainingRequests,
+  insertTrainingRequests,
+  deleteTrainingRequest,
   type TrainingItemRow,
   type TrainingCourse,
+  type TrainingRequestRow,
 } from '@/lib/db';
 import { guardWrite, useSyncStore } from '@/lib/store/useSyncStore';
 import { coalesce, subscribeDebounced } from '@/lib/store/realtimeSync';
@@ -37,7 +41,7 @@ import { genId } from '@/lib/utils/id';
 import { useRoomStore } from '@/lib/store/useRoomStore';
 import { useScheduleStore } from '@/lib/store/useScheduleStore';
 import { DEFAULT_DAYPARTS, resolveDayparts, daypartLabelMap, type Daypart } from '@/lib/store/daypartLabels';
-import { notifyStaffNotice, notifyUserMention, notifyUserAssign } from '@/lib/push/notify';
+import { notifyStaffNotice, notifyUserMention, notifyUserAssign, notifyUserTraining } from '@/lib/push/notify';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 
 /** 방마다 동시에 둘 수 있는 활성 반복(주간) 할일 상한(남용 #26) — 캘린더/피드 폭주 방지. */
@@ -61,7 +65,7 @@ export const REGULAR_DUE_OPTIONS = [
 export function regularDueLabel(days: number): string {
   return REGULAR_DUE_OPTIONS.find((o) => o.days === days)?.label ?? `${days}일`;
 }
-export type { TrainingCourse, TrainingItemRow };
+export type { TrainingCourse, TrainingItemRow, TrainingRequestRow };
 
 /** 코스별 항목(position 순) — 화면 파생 셀렉터. */
 export function trainingOf(items: TrainingItemRow[], course: TrainingCourse): TrainingItemRow[] {
@@ -72,6 +76,21 @@ export function isRegularDue(verifiedAt: string | undefined, now: number, dueDay
   if (!verifiedAt) return true;
   const t = Date.parse(verifiedAt);
   return !Number.isFinite(t) || now - t > dueDays * 24 * 60 * 60 * 1000;
+}
+/** 훈련 요청(0102) due 판정 — 즉시형: 요청 이후 통과가 없으면 계속 / 매주형: 그 요일에 그날 통과가 없으면. */
+export function isRequestDue(
+  req: Pick<TrainingRequestRow, 'recurrence' | 'createdAt'>,
+  verifiedAt: string | undefined,
+  now: number,
+): boolean {
+  if (req.recurrence && req.recurrence !== 'once') {
+    if (!req.recurrence.weekly.includes(new Date(now).getDay())) return false;
+    if (!verifiedAt) return true;
+    return new Date(verifiedAt).toDateString() !== new Date(now).toDateString();
+  }
+  if (!verifiedAt) return true;
+  const t = Date.parse(verifiedAt);
+  return !Number.isFinite(t) || t < Date.parse(req.createdAt);
 }
 /** 방마다 상단 고정 공지 최대 개수(남용 #27) — 고정 영역 점유로 UI 무력화 방지. */
 const MAX_PINNED_NOTICES = 3;
@@ -378,6 +397,8 @@ type State = {
   training: TrainingItemRow[];
   /** 정기 훈련 재확인 주기(일, 0100 매장 설정). 로드 전·미설정 = 기본 30. */
   regularDueDays: number;
+  /** 훈련 요청(0102) — 직원은 본인 것만, 관리 권한은 매장 전체(RLS 스코프). */
+  trainingRequests: TrainingRequestRow[];
   /** 완료 캡처(②) 넛지 피로 상태(인메모리). */
   captureNudge: CaptureNudge;
   loaded: boolean;
@@ -405,6 +426,10 @@ type State = {
   moveTrainingItem: (templateId: string, dir: 'up' | 'down') => Promise<void>;
   /** 정기 훈련 재확인 주기 변경(관리 권한, 0100). */
   setRegularDueDays: (days: number) => Promise<void>;
+  /** 훈련 요청 보내기(0102) — 대상 직원들에게 즉시/매주 요청 + 푸시. 성공 여부 반환. */
+  requestTraining: (templateId: string, taskText: string, staffIds: string[], recurrence: Recurrence | null) => Promise<boolean>;
+  /** 훈련 요청 취소(관리 권한). */
+  cancelTrainingRequest: (id: string) => Promise<void>;
   // task: 합성 루틴 할일(dpr_)은 s.templates 에 없으므로 완료 피드 문구/방을 호출부가 넘긴다(없으면 lookup).
   toggleTask: (date: string, templateId: string, staffId: string, staffName: string, role: 'owner' | 'junior', photoUrl?: string, task?: { text: string; roomId?: string }) => void;
   postNotice: (date: string, text: string, authorId: string, authorName: string, important: boolean) => void;
@@ -431,14 +456,15 @@ export const useWorkStore = create<State>((set, get) => ({
   understanding: [],
   training: [],
   regularDueDays: REGULAR_DUE_DAYS_DEFAULT,
+  trainingRequests: [],
   captureNudge: { skips: 0 },
   loaded: !HAS_SUPABASE,
 
-  // 전체 재조회(templates·done·feed·링크·이해확인·훈련·주기 7쿼리)로 스토어를 통째로 교체한다.
+  // 전체 재조회(templates·done·feed·링크·이해확인·훈련·주기·요청 8쿼리)로 스토어를 통째로 교체한다.
   // coalesce: 빠른 연속 체크로 realtime 이벤트가 몰려도 풀리페치가 병렬로 쌓이지 않게 합친다.
   hydrate: coalesce(async () => {
     if (!HAS_SUPABASE) return;
-    const [templates, done, feed, knowhowLinks, understanding, training, dueDays] = await Promise.all([
+    const [templates, done, feed, knowhowLinks, understanding, training, dueDays, trainingRequests] = await Promise.all([
       fetchTemplates(),
       fetchDone(),
       fetchFeed(),
@@ -446,9 +472,10 @@ export const useWorkStore = create<State>((set, get) => ({
       fetchTaskUnderstanding(),
       fetchTrainingItems(),
       fetchRegularDueDays(),
+      fetchTrainingRequests(),
     ]);
     set({
-      templates, done, feed, knowhowLinks, understanding, training,
+      templates, done, feed, knowhowLinks, understanding, training, trainingRequests,
       regularDueDays: dueDays ?? REGULAR_DUE_DAYS_DEFAULT,
       loaded: true,
     });
@@ -669,6 +696,40 @@ export const useWorkStore = create<State>((set, get) => ({
       ]),
       () => set({ training: before }),
       '순서 변경에 실패했어요.',
+    );
+  },
+
+  // 훈련 요청(0102) — 낙관적 추가 + 실패 롤백. 저장 성공 후에만 대상 직원에게 푸시(F2: 유령 알림 방지).
+  requestTraining: async (templateId, taskText, staffIds, recurrence) => {
+    if (staffIds.length === 0) return false;
+    const rows: TrainingRequestRow[] = staffIds.map((staffId) => ({
+      id: genId('trq'),
+      templateId,
+      staffId,
+      recurrence,
+      createdAt: new Date().toISOString(),
+    }));
+    set((s) => ({ trainingRequests: [...s.trainingRequests, ...rows] }));
+    const ids = new Set(rows.map((r) => r.id));
+    const ok = await guardWrite(
+      insertTrainingRequests(rows),
+      () => set((s) => ({ trainingRequests: s.trainingRequests.filter((r) => !ids.has(r.id)) })),
+      '훈련 요청 저장에 실패했어요.',
+    );
+    if (ok) {
+      const author = useSessionStore.getState().userName || '사장님';
+      staffIds.forEach((uid) => notifyUserTraining(uid, author, taskText));
+    }
+    return ok;
+  },
+  cancelTrainingRequest: async (id) => {
+    const removed = get().trainingRequests.find((r) => r.id === id);
+    if (!removed) return;
+    set((s) => ({ trainingRequests: s.trainingRequests.filter((r) => r.id !== id) }));
+    await guardWrite(
+      deleteTrainingRequest(id),
+      () => set((s) => ({ trainingRequests: [...s.trainingRequests, removed] })),
+      '요청 취소에 실패했어요.',
     );
   },
 

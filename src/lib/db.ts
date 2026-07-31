@@ -8,7 +8,7 @@ import { supabase, HAS_SUPABASE } from './supabase';
 import { reportError } from '@/lib/analytics/track';
 import { useSyncStore } from '@/lib/store/useSyncStore';
 import type { PlaybookEntry, PlaybookSuggestion, UnknownQuery, ChatQuery, Owner, Junior, PaymentClaim } from '@/types';
-import type { TaskTemplate, FeedItem, DoneMark } from '@/lib/store/useWorkStore';
+import type { TaskTemplate, FeedItem, DoneMark, Recurrence } from '@/lib/store/useWorkStore';
 import type { Room, RoomMember } from '@/lib/store/useRoomStore';
 import type { AttendanceRecord } from '@/lib/store/useAttendanceStore';
 import type { StoreConfig, ShiftTemplate, SwapRequest } from '@/lib/store/useScheduleStore';
@@ -1161,6 +1161,43 @@ export async function updateTrainingPositions(pairs: { templateId: string; posit
     if (!ok) return false;
   }
   return true;
+}
+
+// ── 훈련 요청(0102) — 특정 직원에게 이해 확인을 지금/매주로 요청 ──────────
+// recurrence: null = 즉시 1회 / {weekly:[0..6]} = 매주. 완료는 파생(verified_at 비교) — 컬럼 없음.
+export type TrainingRequestRow = {
+  id: string;
+  templateId: string;
+  staffId: string;
+  recurrence: Recurrence | null;
+  createdAt: string;
+};
+/** 내 요청(직원) 또는 매장 전체 요청(관리 권한) — 범위는 RLS(trq_select)가 가른다. */
+export async function fetchTrainingRequests(): Promise<TrainingRequestRow[]> {
+  if (!HAS_SUPABASE) return [];
+  const { data, error } = await supabase.from('training_requests').select('id, template_id, staff_id, recurrence, created_at');
+  if (error) {
+    readFail('fetchTrainingRequests', error);
+    return [];
+  }
+  return (data ?? []).map((r: any) => ({
+    id: r.id, templateId: r.template_id, staffId: r.staff_id,
+    recurrence: (r.recurrence as Recurrence) ?? null, createdAt: r.created_at,
+  }));
+}
+export async function insertTrainingRequests(rows: TrainingRequestRow[]): Promise<boolean> {
+  if (!HAS_SUPABASE) return true;
+  if (rows.length === 0) return true;
+  return write(
+    'insertTrainingRequests',
+    supabase.from('training_requests').insert(
+      rows.map((r) => ({ id: r.id, unit_id: _unitId, template_id: r.templateId, staff_id: r.staffId, recurrence: r.recurrence })),
+    ),
+  );
+}
+export async function deleteTrainingRequest(id: string): Promise<boolean> {
+  if (!HAS_SUPABASE) return true;
+  return write('deleteTrainingRequest', supabase.from('training_requests').delete().eq('id', id));
 }
 
 // ── 업무보드: 완료 체크 ────────────────────────────────────

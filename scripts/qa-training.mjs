@@ -185,6 +185,43 @@ async function main() {
     const due30 = Date.now() - Date.parse(u4?.verified_at) > 30 * 24 * 3600 * 1000;
     check('⑥-6 10일 전 통과 → 7일 기준 due · 30일 기준 미도래(주기가 판정을 가름)', due7 && !due30); }
 
+  // ── ⑦ 훈련 요청(0102) — 즉시/매주·본인만 열람·직원 조작 차단·완료 파생 ─────
+  console.log('\n━━ ⑦ 훈련 요청(0102) ━━');
+  const RQ1 = `trq1_${s}`, RQ2 = `trq2_${s}`;
+  const todayDow = new Date().getDay();
+  { const { error } = await owner.from('training_requests').insert([
+      { id: RQ1, unit_id: UNIT, template_id: T[0], staff_id: jAId, recurrence: null },
+      { id: RQ2, unit_id: UNIT, template_id: T[1], staff_id: jAId, recurrence: { weekly: [todayDow] } },
+    ]);
+    check('⑦-1 사장 요청 2건(즉시+매주 오늘요일)', !error, error?.message ?? ''); }
+  { const { data } = await jA.from('training_requests').select('id, template_id, recurrence, created_at');
+    check('⑦-2 직원이 본인 요청 열람', (data ?? []).length === 2, `n=${data?.length}`);
+    // 즉시형 due 판정(클라 미러): 요청 이후 통과 없음(T0 의 내 통과기록은 ④ 이전 시각... T0 은 통과기록 없음) → due
+    const rq1 = (data ?? []).find((r) => r.id === RQ1);
+    const { data: myU } = await jA.from('task_understanding').select('template_id, verified_at').eq('staff_id', jAId);
+    const vT0 = (myU ?? []).find((u) => u.template_id === T[0])?.verified_at;
+    const due1 = !vT0 || Date.parse(vT0) < Date.parse(rq1.created_at);
+    check('⑦-3 즉시 요청 → due(통과 전)', due1, `v=${vT0 ?? '없음'}`);
+    // 매주형: 오늘 요일 포함 + 오늘 통과 없음 → due
+    const vT1 = (myU ?? []).find((u) => u.template_id === T[1])?.verified_at;
+    const dueW = !vT1 || new Date(vT1).toDateString() !== new Date().toDateString();
+    check('⑦-4 매주(오늘) 요청 → due(오늘 통과 전)', dueW, `v=${vT1 ?? '없음'}`); }
+  // 통과 → 즉시형 해소(파생)
+  { await jA.from('task_understanding').upsert(
+      { unit_id: UNIT, template_id: T[0], staff_name: 'QA직원', verified_at: new Date().toISOString() }, { onConflict: 'template_id,staff_id' });
+    const { data: rq } = await jA.from('training_requests').select('created_at').eq('id', RQ1).maybeSingle();
+    const { data: u } = await jA.from('task_understanding').select('verified_at').eq('template_id', T[0]).eq('staff_id', jAId).maybeSingle();
+    check('⑦-5 통과 후 즉시 요청 해소(verified_at ≥ 요청시각)', Date.parse(u?.verified_at) >= Date.parse(rq?.created_at)); }
+  // RLS: 직원 요청 생성·삭제 차단, 사장 취소 가능
+  { const { error } = await jA.from('training_requests').insert({ id: `trqX_${s}`, unit_id: UNIT, template_id: T[0], staff_id: jAId, recurrence: null });
+    check('⑦-6 직원 요청 생성 차단', !!error, error ? `거부 ${error.code ?? ''}` : '(차단 안됨!)'); }
+  { await jA.from('training_requests').delete().eq('id', RQ2);
+    const { data: still } = await owner.from('training_requests').select('id').eq('id', RQ2).maybeSingle();
+    check('⑦-7 직원 요청 삭제 차단', !!still); }
+  { const { error } = await owner.from('training_requests').delete().eq('id', RQ2);
+    const { data: gone } = await owner.from('training_requests').select('id').eq('id', RQ2).maybeSingle();
+    check('⑦-8 사장 요청 취소', !error && !gone, error?.message ?? ''); }
+
   // ── ⑤ cascade: 업무 삭제 → 코스 항목 소멸 ────────────────────────────────
   console.log('\n━━ ⑤ cascade ━━');
   await owner.from('work_templates').delete().eq('id', T[2]);

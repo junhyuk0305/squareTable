@@ -6,11 +6,11 @@ import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
 
-/** 직원 훈련 카드의 항목 상태 — passed=통과 · next=다음 차례 · todo=대기 · due=다시 확인할 때. */
+/** 직원 훈련 카드의 항목 상태 — passed=통과 · next=다음 차례 · todo=대기 · due=주기 도래 · asked=관리자 요청. */
 export type TrainingCardItem = {
   id: string;
   text: string;
-  state: 'passed' | 'next' | 'todo' | 'due';
+  state: 'passed' | 'next' | 'todo' | 'due' | 'asked';
   hasKnowhow: boolean;
 };
 
@@ -19,6 +19,7 @@ const STATE_CHIP: Record<TrainingCardItem['state'], { label: string; color: stri
   next: { label: '다음', color: InkColors.ink, bg: InkColors.cream },
   todo: { label: '대기', color: InkColors.ink3, bg: InkColors.bgSoft },
   due: { label: '다시 확인', color: '#8a5a12', bg: BrandColors.warnSoft },
+  asked: { label: '사장님 요청', color: '#8a5a12', bg: BrandColors.warnSoft },
 };
 
 /**
@@ -38,13 +39,14 @@ export function TrainingCard({
   onStartCheck: (templateId: string) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
-  const next = items.find((it) => it.state === 'next' || it.state === 'due');
+  // 요청(asked)이 주기(due)보다 먼저 — 사람이 기다리는 것부터.
+  const next = items.find((it) => it.state === 'asked') ?? items.find((it) => it.state === 'next' || it.state === 'due');
   if (!next) return null;
 
   const passedCount = items.filter((it) => it.state === 'passed').length;
-  const dueCount = items.filter((it) => it.state === 'due').length;
-  const title = kind === 'first' ? '첫 훈련' : '정기 훈련';
-  const badge = kind === 'first' ? `${passedCount}/${items.length}` : `다시 확인 ${dueCount}개`;
+  const dueCount = items.filter((it) => it.state === 'due' || it.state === 'asked').length;
+  const title = kind === 'first' ? '첫 훈련' : '훈련 확인';
+  const badge = kind === 'first' ? `${passedCount}/${items.length}` : `확인할 것 ${dueCount}개`;
   const ctaLabel = kind === 'first' ? '혼자 할 수 있어요' : '다시 확인하기';
 
   return (
@@ -56,7 +58,7 @@ export function TrainingCard({
       </View>
 
       <Text style={st.next} numberOfLines={2}>
-        {kind === 'first' ? '다음 훈련' : '다시 확인할 업무'} · {next.text}
+        {kind === 'first' ? '다음 훈련' : next.state === 'asked' ? '사장님이 요청했어요' : '다시 확인할 업무'} · {next.text}
       </Text>
 
       <View style={st.btnRow}>

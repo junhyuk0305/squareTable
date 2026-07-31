@@ -244,3 +244,14 @@ export const notifyUserAssign = (userId: string, author: string, text: string) =
     url: '/junior/work',
     tag: 'assign',
   });
+
+/** 훈련 요청(0102) — 관리자가 나에게 이해 확인을 요청했을 때 그 직원에게만. */
+export const notifyUserTraining = (userId: string, author: string, text: string) =>
+  pushNotify({
+    audience: 'user',
+    userId,
+    title: `${author}님이 훈련 확인을 요청했어요`,
+    body: text,
+    url: '/junior/work',
+    tag: 'training',
+  });

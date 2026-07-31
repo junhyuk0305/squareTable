@@ -8,7 +8,7 @@ import { uploadPhoto } from '@/lib/db';
 import { HAS_SUPABASE } from '@/lib/supabase';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useStaffStore } from '@/lib/store/useStaffStore';
-import { useWorkStore, useDayparts, daypartRoutineTemplates, findDuplicateTask, knowhowIdsForTask, isCaptureEligible, trainingOf, isRegularDue, FIRST_DAY_MIN_ITEMS, type NewTask, type TaskTemplate } from '@/lib/store/useWorkStore';
+import { useWorkStore, useDayparts, daypartRoutineTemplates, findDuplicateTask, knowhowIdsForTask, isCaptureEligible, trainingOf, isRegularDue, isRequestDue, FIRST_DAY_MIN_ITEMS, type NewTask, type TaskTemplate } from '@/lib/store/useWorkStore';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { useSuggestionStore } from '@/lib/store/useSuggestionStore';
 import { useSyncStore } from '@/lib/store/useSyncStore';
@@ -98,6 +98,7 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
   const markUnderstood = useWorkStore((s) => s.markUnderstood);
   const training = useWorkStore((s) => s.training);
   const regularDueDays = useWorkStore((s) => s.regularDueDays);
+  const trainingRequests = useWorkStore((s) => s.trainingRequests);
   // 노하우 첨부 검색·칩 제목 해석용 — 업무 화면에서도 노하우를 로드해 둔다(coalesce 로 중복 방지).
   const entries = usePlaybookStore((s) => s.entries);
   const addEntry = usePlaybookStore((s) => s.add);
@@ -273,7 +274,7 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
             }));
     }
 
-    // 정기 훈련 — 마지막 통과가 주기(30일)보다 오래됐거나 통과 기록이 없으면 '다시 확인'.
+    // 정기 훈련 — 마지막 통과가 매장 주기보다 오래됐거나 통과 기록이 없으면 '다시 확인'.
     const rg = resolve('regular');
     let regular: TrainingCardItem[] | null = rg.map((t) => ({
       id: t.id,
@@ -281,10 +282,26 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
       state: isRegularDue(myRow(t.id)?.verifiedAt, trainingNow, regularDueDays) ? ('due' as const) : ('passed' as const),
       hasKnowhow: hasKnowhow(t.id),
     }));
-    if (!regular.some((it) => it.state === 'due')) regular = null; // 확인할 게 없으면 조용히
+
+    // 훈련 요청(0102) — 나에게 온 요청 중 오늘 due 인 것. 정기 항목과 겹치면 상태를 '요청'으로
+    // 승격, 코스 밖 업무면 항목을 추가한다(요청은 코스 소속과 무관하게 업무를 직접 가리킨다).
+    const myReqs = trainingRequests.filter((r) => r.staffId === userId);
+    const askedIds = new Set(
+      myReqs.filter((r) => isRequestDue(r, myRow(r.templateId)?.verifiedAt, trainingNow)).map((r) => r.templateId),
+    );
+    regular = regular.map((it) => (askedIds.has(it.id) ? { ...it, state: 'asked' as const } : it));
+    askedIds.forEach((tid) => {
+      if (regular!.some((it) => it.id === tid)) return;
+      const t = byId.get(tid);
+      if (t) regular!.push({ id: t.id, text: t.text, state: 'asked', hasKnowhow: hasKnowhow(t.id) });
+    });
+    if (!regular.some((it) => it.state === 'due' || it.state === 'asked')) regular = null; // 확인할 게 없으면 조용히
+    // 첫 훈련이 진행 중이면 주기(due)만으로는 두 번째 카드를 띄우지 않는다(첫 훈련이 먼저).
+    // 단 명시적 요청(asked)은 사람이 기다리는 것 — 첫 훈련 중이어도 보여준다.
+    if (first && regular && !regular.some((it) => it.state === 'asked')) regular = null;
 
     return { first, regular };
-  }, [isOwner, training, templates, understanding, knowhowLinks, userId, trainingNow, regularDueDays]);
+  }, [isOwner, training, templates, understanding, knowhowLinks, userId, trainingNow, regularDueDays, trainingRequests]);
 
   // 카드의 퀴즈 시작 — 항목 id 로 템플릿을 찾아 기존 자청 흐름(openSelfCheck) 재사용.
   const startTrainingCheck = useCallback(
@@ -507,8 +524,8 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
       {view === 'chat' && trainingCards.first && (
         <TrainingCard kind="first" items={trainingCards.first} onOpenKnowhow={openTrainingKnowhow} onStartCheck={startTrainingCheck} />
       )}
-      {/* 첫 훈련을 마친 뒤에만 정기 훈련을 노출 — 카드 2장 동시 점유 방지(신입은 첫 훈련이 먼저다). */}
-      {view === 'chat' && !trainingCards.first && trainingCards.regular && (
+      {/* 두 번째 카드 노출 규칙은 trainingCards 메모가 판정(첫 훈련 우선·요청은 예외). */}
+      {view === 'chat' && trainingCards.regular && (
         <TrainingCard kind="regular" items={trainingCards.regular} onOpenKnowhow={openTrainingKnowhow} onStartCheck={startTrainingCheck} />
       )}
 

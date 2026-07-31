@@ -15,8 +15,10 @@ import {
   REGULAR_DUE_OPTIONS,
   knowhowIdsForTask,
   type TrainingCourse,
+  type Recurrence,
 } from '@/lib/store/useWorkStore';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
+import { useStaffStore } from '@/lib/store/useStaffStore';
 import { showToast } from '@/lib/store/useToastStore';
 import { buildDirectUq, buildPlaybookEntryFromSquare } from '@/lib/utils/buildEntry';
 import { BottomSheet } from '@/components/BottomSheet';
@@ -30,6 +32,8 @@ import type { PlaybookEntry, SquareBlock } from '@/types';
 
 /** 하는 법 최소 길이 — 이 밑이면 노하우가 draft 로 떨어져 훈련 문제를 못 만든다. */
 const MIN_HOW_LEN = 10;
+/** 요일 라벨(0=일 ~ 6=토) — 할일 recurrence 와 같은 인덱스 체계. */
+const WEEKDAY_LABELS = ['일', '월', '화', '수', '목', '금', '토'] as const;
 
 const COURSE_META: Record<TrainingCourse, { label: string; max: number }> = {
   first_day: { label: '첫 훈련', max: FIRST_DAY_MAX_ITEMS },
@@ -52,6 +56,10 @@ export default function OwnerTrainingScreen() {
   const moveTrainingItem = useWorkStore((s) => s.moveTrainingItem);
   const regularDueDays = useWorkStore((s) => s.regularDueDays);
   const setRegularDueDays = useWorkStore((s) => s.setRegularDueDays);
+  const trainingRequests = useWorkStore((s) => s.trainingRequests);
+  const requestTraining = useWorkStore((s) => s.requestTraining);
+  const cancelTrainingRequest = useWorkStore((s) => s.cancelTrainingRequest);
+  const staffList = useStaffStore((s) => s.staff);
   const entries = usePlaybookStore((s) => s.entries);
   const addEntry = usePlaybookStore((s) => s.add);
 
@@ -103,6 +111,38 @@ export default function OwnerTrainingScreen() {
   const [pickerQuery, setPickerQuery] = useState('');
   const [actionItem, setActionItem] = useState<(typeof items)[number] | null>(null);
   const [detailEntry, setDetailEntry] = useState<PlaybookEntry | null>(null);
+  // 직원에게 요청(0102) — 액션 시트에서 항목을 골라 연다(시트는 순차 전환 — 모달 위 모달 금지).
+  const [requestItem, setRequestItem] = useState<(typeof items)[number] | null>(null);
+  const [reqStaff, setReqStaff] = useState<Set<string>>(new Set());
+  const [reqMode, setReqMode] = useState<'now' | 'weekly'>('now');
+  const [reqDays, setReqDays] = useState<Set<number>>(new Set());
+  const [sending, setSending] = useState(false);
+
+  const staffNameOf = useMemo(() => {
+    const m = new Map(staffList.map((p) => [p.id, p.name]));
+    return (id: string) => m.get(id) ?? '직원';
+  }, [staffList]);
+
+  const openRequest = (it: (typeof items)[number]) => {
+    setActionItem(null);
+    setReqStaff(new Set());
+    setReqMode('now');
+    setReqDays(new Set());
+    setRequestItem(it);
+  };
+  const sendRequest = async () => {
+    if (!requestItem || sending) return;
+    const staffIds = [...reqStaff];
+    const recurrence: Recurrence | null = reqMode === 'weekly' ? { weekly: [...reqDays].sort() } : null;
+    if (staffIds.length === 0 || (reqMode === 'weekly' && reqDays.size === 0)) return;
+    setSending(true);
+    const ok = await requestTraining(requestItem.templateId, requestItem.text, staffIds, recurrence);
+    setSending(false);
+    if (ok) {
+      setRequestItem(null);
+      showToast(`${staffIds.length}명에게 요청을 보냈어요`, 'good');
+    }
+  };
 
   const canSave = !saving && !full && name.trim().length > 0 && how.trim().length >= MIN_HOW_LEN;
 
@@ -364,6 +404,12 @@ export default function OwnerTrainingScreen() {
             }}
           />
           <SheetAction
+            icon="paper-plane-outline"
+            label="직원에게 요청"
+            disabled={!actionItem.entryId || staffList.length === 0}
+            onPress={() => openRequest(actionItem)}
+          />
+          <SheetAction
             icon="arrow-up-outline"
             label="위로 이동"
             disabled={items[0]?.templateId === actionItem.templateId}
@@ -385,6 +431,108 @@ export default function OwnerTrainingScreen() {
               showToast('훈련에서 뺐어요 · 업무와 노하우는 남아요', 'good');
             }}
           />
+        </BottomSheet>
+      )}
+
+      {/* ── 직원에게 요청 시트(0102) — 대상 다중선택 + 지금/매주, 기존 요청 취소 ── */}
+      {requestItem && (
+        <BottomSheet visible={true} onClose={() => setRequestItem(null)} sheetStyle={{ height: '78%' }}>
+          <View style={st.sheetHead}>
+            <Text style={st.sheetTitle} numberOfLines={1}>훈련 요청 · {requestItem.text}</Text>
+            <Pressable onPress={() => setRequestItem(null)} hitSlop={8}>
+              <Ionicons name="close" size={20} color={InkColors.ink2} />
+            </Pressable>
+          </View>
+          <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 16 }} showsVerticalScrollIndicator={false}>
+            {/* 이미 보낸 요청 — 이름·방식이 보이고 바로 취소할 수 있다. */}
+            {trainingRequests.filter((r) => r.templateId === requestItem.templateId).length > 0 && (
+              <View style={st.reqSection}>
+                <Text style={st.reqLabel}>보낸 요청</Text>
+                {trainingRequests
+                  .filter((r) => r.templateId === requestItem.templateId)
+                  .map((r) => (
+                    <View key={r.id} style={st.reqRow}>
+                      <Text style={st.reqRowText} numberOfLines={1}>
+                        {staffNameOf(r.staffId)} · {r.recurrence && r.recurrence !== 'once'
+                          ? `매주 ${r.recurrence.weekly.map((d) => WEEKDAY_LABELS[d]).join('·')}`
+                          : '1회'}
+                      </Text>
+                      <Pressable onPress={() => void cancelTrainingRequest(r.id)} hitSlop={8} accessibilityRole="button" accessibilityLabel="요청 취소">
+                        <Ionicons name="close-circle-outline" size={19} color={InkColors.ink3} />
+                      </Pressable>
+                    </View>
+                  ))}
+              </View>
+            )}
+
+            <View style={st.reqSection}>
+              <Text style={st.reqLabel}>누구에게 요청할까요?</Text>
+              <View style={st.reqChipWrap}>
+                {staffList.map((p) => {
+                  const on = reqStaff.has(p.id);
+                  return (
+                    <Pressable
+                      key={p.id}
+                      onPress={() => setReqStaff((prev) => { const n = new Set(prev); if (n.has(p.id)) n.delete(p.id); else n.add(p.id); return n; })}
+                      style={[st.reqChip, on && st.reqChipOn]}
+                      accessibilityRole="checkbox"
+                      accessibilityState={{ checked: on }}
+                      accessibilityLabel={p.name}
+                    >
+                      <Text style={[st.reqChipText, on && st.reqChipTextOn]}>{p.name}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+
+            <View style={st.reqSection}>
+              <Text style={st.reqLabel}>언제 할까요?</Text>
+              <View style={st.reqChipWrap}>
+                <Pressable onPress={() => setReqMode('now')} style={[st.reqChip, reqMode === 'now' && st.reqChipOn]} accessibilityRole="radio" accessibilityState={{ selected: reqMode === 'now' }}>
+                  <Text style={[st.reqChipText, reqMode === 'now' && st.reqChipTextOn]}>지금 바로</Text>
+                </Pressable>
+                <Pressable onPress={() => setReqMode('weekly')} style={[st.reqChip, reqMode === 'weekly' && st.reqChipOn]} accessibilityRole="radio" accessibilityState={{ selected: reqMode === 'weekly' }}>
+                  <Text style={[st.reqChipText, reqMode === 'weekly' && st.reqChipTextOn]}>매주 반복</Text>
+                </Pressable>
+              </View>
+              {reqMode === 'weekly' && (
+                <View style={[st.reqChipWrap, { marginTop: Space.xs }]}>
+                  {WEEKDAY_LABELS.map((label, d) => {
+                    const on = reqDays.has(d);
+                    return (
+                      <Pressable
+                        key={d}
+                        onPress={() => setReqDays((prev) => { const n = new Set(prev); if (n.has(d)) n.delete(d); else n.add(d); return n; })}
+                        style={[st.dayChip, on && st.reqChipOn]}
+                        accessibilityRole="checkbox"
+                        accessibilityState={{ checked: on }}
+                        accessibilityLabel={`${label}요일`}
+                      >
+                        <Text style={[st.reqChipText, on && st.reqChipTextOn]}>{label}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              )}
+              <Text style={st.reqHint}>
+                {reqMode === 'now'
+                  ? '보내면 바로 그 직원의 훈련 카드에 뜨고 알림이 가요'
+                  : '고른 요일마다 그 직원의 훈련 카드에 떠요'}
+              </Text>
+            </View>
+          </ScrollView>
+          <View style={st.reqFoot}>
+            <Pressable
+              onPress={() => void sendRequest()}
+              disabled={sending || reqStaff.size === 0 || (reqMode === 'weekly' && reqDays.size === 0)}
+              style={({ pressed }) => [st.cta, (sending || reqStaff.size === 0 || (reqMode === 'weekly' && reqDays.size === 0)) && { opacity: 0.4 }, pressed && { opacity: 0.85 }]}
+              accessibilityRole="button"
+              accessibilityLabel="훈련 요청 보내기"
+            >
+              <Text style={st.ctaText}>{sending ? '보내는 중...' : '훈련 요청 보내기'}</Text>
+            </Pressable>
+          </View>
         </BottomSheet>
       )}
 
@@ -550,6 +698,25 @@ const st = StyleSheet.create({
   sheetTitle: { flex: 1, fontSize: 15, fontWeight: '800', color: InkColors.ink },
   sheetAction: { flexDirection: 'row', alignItems: 'center', gap: Space.md, paddingHorizontal: 16, minHeight: 52 },
   sheetActionText: { fontSize: 15, fontWeight: '700', color: InkColors.ink },
+
+  reqSection: { paddingHorizontal: 16, marginTop: Space.sm },
+  reqLabel: { fontSize: 13, fontWeight: '800', color: InkColors.ink3, marginBottom: Space.xs },
+  reqRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingVertical: Space.xs + 2, minHeight: 36 },
+  reqRowText: { flex: 1, fontSize: 14, fontWeight: '600', color: InkColors.ink },
+  reqChipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.xs + 2 },
+  reqChip: {
+    minHeight: 40, paddingHorizontal: Space.lg, alignItems: 'center', justifyContent: 'center',
+    borderRadius: Radius.pill, borderWidth: 1, borderColor: InkColors.line, backgroundColor: InkColors.bg,
+  },
+  reqChipOn: { backgroundColor: InkColors.ink, borderColor: InkColors.ink },
+  reqChipText: { fontSize: 13.5, fontWeight: '800', color: InkColors.ink2 },
+  reqChipTextOn: { color: '#FFFFFF' },
+  dayChip: {
+    minWidth: 40, minHeight: 40, alignItems: 'center', justifyContent: 'center',
+    borderRadius: Radius.pill, borderWidth: 1, borderColor: InkColors.line, backgroundColor: InkColors.bg,
+  },
+  reqHint: { fontSize: 12, color: InkColors.ink3, fontWeight: '600', marginTop: Space.xs },
+  reqFoot: { paddingHorizontal: 16, paddingTop: Space.sm, paddingBottom: 18, borderTopWidth: 1, borderTopColor: InkColors.line },
 
   searchWrap: {
     flexDirection: 'row', alignItems: 'center', gap: 6, marginHorizontal: 16, marginBottom: Space.sm,
