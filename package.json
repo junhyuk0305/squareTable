@@ -69,6 +69,7 @@
     "qa:gen-exchange": "node scripts/qa-gen-exchange.mjs",
     "qa:transcribe": "node scripts/qa-transcribe.mjs",
     "qa:voice-browser": "node scripts/qa-voice-browser.mjs",
+    "qa:join-reject": "node scripts/qa-join-reject-browser.mjs",
     "qa:publish-sheet": "node scripts/qa-publish-sheet-browser.mjs"
   },
   "private": true

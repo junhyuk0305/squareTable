@@ -22,6 +22,7 @@ import {
 } from '@/lib/db';
 import { friendlyError } from '@/lib/utils/userError';
 import { sessionReadFailAction } from './sessionReadFail';
+import { joinRejectAction, type JoinMarker } from './joinRejectDetect';
 import { setAnalyticsContext, track, reportError } from '@/lib/analytics/track';
 import type { SubStatusRaw } from '@/lib/utils/subscription';
 import { normalizePlan, type PlanId } from '@/lib/config/tiers';
@@ -44,6 +45,8 @@ type SessionState = {
   // 합류 승인 대기(남용 #2) — 코드는 입력했으나 사장 승인 전. unitId는 아직 비어 데이터가 격리된다.
   pendingUnitId: string; // 신청한 매장 id(승인 전). 있으면 '승인 대기' 상태.
   pendingStoreName: string; // 신청한 매장 이름(대기 화면 표시용 — join 응답에서 채움, 재로드 시 유실 가능).
+  // 이 기기에서 감지한 '합류 신청 미승인' 안내(매장 이름, 없으면 ''). 닫기 전까지 재시작에도 유지.
+  rejectedJoinStoreName: string;
   industry: string; // 매장 업종(노하우 팩 매칭 키) — 온보딩 자동등록에 사용
   // 매장 단위 구독상태(유료 게이팅). 원시값만 저장하고 화면은 deriveSubscription 으로 '지금' 기준 계산.
   subStatus: SubStatusRaw; // '' | 'trialing' | 'active' | 'expired'
@@ -82,6 +85,8 @@ type SessionState = {
   joinByInvite: (code: string) => Promise<{ error: string | null; storeName: string | null; pending?: boolean }>;
   // 승인 대기 중 본인 신청 철회. 다른 매장에 다시 신청 가능.
   cancelJoinRequest: () => Promise<{ error: string | null }>;
+  // '합류 신청 미승인' 안내 닫기 — 기기 마커까지 지워 재시작 후에도 다시 뜨지 않는다.
+  dismissRejectedJoin: () => void;
   // 현재 로그인 사용자의 소속을 서버에서 재확인(승인 반영·강제 소속해제 감지). 대기화면 폴링/직원홈 가드에 사용.
   refreshMembership: () => Promise<void>;
   sendMagicLink: (email: string) => Promise<{ error: string | null }>;
@@ -119,6 +124,7 @@ const DEMO = {
   stores: [] as MyUnitRow[],
   pendingUnitId: '',
   pendingStoreName: '',
+  rejectedJoinStoreName: '',
   industry: '카페·디저트',
   subStatus: 'active' as SubStatusRaw, // 데모는 항상 사용 가능(무기한 active)
   trialEndsAt: '',
@@ -149,6 +155,36 @@ function recentRenameTimes(unitId: string): number[] {
 function pushRenameTime(unitId: string) {
   try {
     renameStorage?.setItem(renameKey(unitId), JSON.stringify([...recentRenameTimes(unitId), Date.now()]));
+  } catch {
+    /* noop */
+  }
+}
+
+// ── 합류 신청 마커(기기 로컬) — 거절 감지용(#미아 방지) ─────────────────
+// 왜/판정 규칙은 joinRejectDetect.ts(SSOT) 참고 — 여기는 저장(localStorage) 계층만.
+// 웹=localStorage(기기 단위), 저장 불가 환경(네이티브)은 감지 생략 — best effort.
+const joinStorage =
+  typeof window !== 'undefined' && window.localStorage ? window.localStorage : undefined;
+const joinMarkerKey = (uid: string) => `sqt.pendingJoin.${uid}`;
+function readJoinMarker(uid: string): JoinMarker | null {
+  try {
+    const raw = joinStorage?.getItem(joinMarkerKey(uid));
+    const m: unknown = raw ? JSON.parse(raw) : null;
+    return m && typeof m === 'object' && typeof (m as JoinMarker).unitId === 'string' ? (m as JoinMarker) : null;
+  } catch {
+    return null;
+  }
+}
+function writeJoinMarker(uid: string, m: JoinMarker) {
+  try {
+    joinStorage?.setItem(joinMarkerKey(uid), JSON.stringify(m));
+  } catch {
+    /* noop */
+  }
+}
+function clearJoinMarker(uid: string) {
+  try {
+    joinStorage?.removeItem(joinMarkerKey(uid));
   } catch {
     /* noop */
   }
@@ -204,7 +240,7 @@ async function loadProfile(
       _lastLoadFault = 'load_failed'; // 로그인 직후라면 signInWithPassword 가 '네트워크 오류' 문구로 노출(#17·#18)
       setUnitId(null);
       setAnalyticsContext({ userId: null, unitId: null, role: null });
-      set({ status: 'signed_out', unitId: '', userId: '', userName: '', storeName: '', pendingUnitId: '', pendingStoreName: '', industry: '', inviteCode: '', bio: '', phone: '', plan: 'free', subStatus: '', trialEndsAt: '', paidUntil: '' });
+      set({ status: 'signed_out', unitId: '', userId: '', userName: '', storeName: '', pendingUnitId: '', pendingStoreName: '', rejectedJoinStoreName: '', industry: '', inviteCode: '', bio: '', phone: '', plan: 'free', subStatus: '', trialEndsAt: '', paidUntil: '' });
       return;
     }
 
@@ -214,7 +250,7 @@ async function loadProfile(
       _lastLoadFault = 'deleted'; // 로그인 직후라면 signInWithPassword 가 '탈퇴 처리된 계정' 문구로 노출(#16)
       setUnitId(null);
       setAnalyticsContext({ userId: null, unitId: null, role: null });
-      set({ status: 'signed_out', unitId: '', userId: '', userName: '', storeName: '', pendingUnitId: '', pendingStoreName: '', industry: '', inviteCode: '', bio: '', phone: '', plan: 'free', subStatus: '', trialEndsAt: '', paidUntil: '' });
+      set({ status: 'signed_out', unitId: '', userId: '', userName: '', storeName: '', pendingUnitId: '', pendingStoreName: '', rejectedJoinStoreName: '', industry: '', inviteCode: '', bio: '', phone: '', plan: 'free', subStatus: '', trialEndsAt: '', paidUntil: '' });
       void supabase.auth.signOut().catch(() => {});
       return;
     }
@@ -292,9 +328,11 @@ async function loadProfile(
     // 다점포(0055): 내가 속한 매장 목록 — '내 매장' 허브/헤더 토글용. 오너(소유)·직원(알바 소속) 모두 로드한다
     // (Phase 0: 직원 다매장). my_units 는 auth.uid() 소속만 반환하므로 크로스테넌트 노출 없음.
     let stores: MyUnitRow[] = [];
+    let storesReadFailed = false; // 거절 감지의 오판 방지 — 목록 읽기 실패를 "소속 없음"으로 위장하지 않는다
     if (unitId) {
-      const { data: us } = await fetchMyUnits();
+      const { data: us, error: usErr } = await fetchMyUnits();
       stores = us ?? [];
+      storesReadFailed = !!usErr;
     }
     // 매장별 역할(0093): 정본 = unit_members.role(my_units 로 로드). 전역 junior 계정이라도
     // 활성 매장에서 매니저로 승격됐으면 세션 유효 역할은 manager(사장 화면 표면).
@@ -302,6 +340,22 @@ async function loadProfile(
     if (role !== 'owner' && stores.some((s) => s.unit_id === unitId && s.role === 'manager')) {
       role = 'manager';
     }
+    // 합류 거절 감지(#미아 방지): 신청 시점의 기기 마커와 현재 서버 상태를 대조한다.
+    // 판정은 joinRejectDetect.ts 순수함수(SSOT — qa:session 진리표로 회귀 고정), 여기선 저장·반영만.
+    const pendingServer = profile?.pending_unit_id ?? '';
+    let rejectedJoinStoreName = '';
+    const jr = joinRejectAction(
+      readJoinMarker(userId),
+      pendingServer,
+      unitId,
+      stores.map((s) => s.unit_id),
+      storesReadFailed,
+      useSessionStore.getState().pendingStoreName, // 마커 신규 생성 시 표시 이름 힌트
+    );
+    if (jr.kind === 'refresh' || jr.kind === 'reject') writeJoinMarker(userId, jr.marker);
+    else if (jr.kind === 'clear') clearJoinMarker(userId);
+    // 이름을 모르는 마커(콜드 로드 생성 등)도 안내는 떠야 한다 — 빈값이면 대기 카드와 같은 폴백.
+    if (jr.kind === 'show' || jr.kind === 'reject') rejectedJoinStoreName = jr.storeName || '신청한 매장';
     setUnitId(unitId || null);
     setAnalyticsContext({ userId, unitId: unitId || null, role }); // 관측 이벤트에 매장/유저/역할 태깅
     set({
@@ -315,8 +369,9 @@ async function loadProfile(
       unitId,
       storeName,
       // 승인 대기 상태 반영(남용 #2). 승인돼 unitId가 붙으면 pending은 비운다(pendingStoreName도 정리).
-      pendingUnitId: unitId ? '' : (profile?.pending_unit_id ?? ''),
+      pendingUnitId: unitId ? '' : pendingServer,
       ...(unitId ? { pendingStoreName: '' } : {}),
+      rejectedJoinStoreName,
       industry,
       subStatus,
       trialEndsAt,
@@ -336,7 +391,7 @@ async function loadProfile(
     _lastLoadFault = 'load_failed'; // 로그인 직후라면 signInWithPassword 가 '네트워크 오류' 문구로 노출(#17)
     setUnitId(null);
     setAnalyticsContext({ userId: null, unitId: null, role: null });
-    set({ status: 'signed_out', unitId: '', userId: '', userName: '', storeName: '', stores: [], pendingUnitId: '', pendingStoreName: '', industry: '', inviteCode: '', bio: '', plan: 'free', subStatus: '', trialEndsAt: '', paidUntil: '' });
+    set({ status: 'signed_out', unitId: '', userId: '', userName: '', storeName: '', stores: [], pendingUnitId: '', pendingStoreName: '', rejectedJoinStoreName: '', industry: '', inviteCode: '', bio: '', plan: 'free', subStatus: '', trialEndsAt: '', paidUntil: '' });
   }
 }
 
@@ -597,6 +652,8 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     // 대기 화면에 보여줄 매장 이름을 세션에 심고, 프로필 재로드로 pendingUnitId를 반영한다.
     set({ pendingStoreName: row?.store_name ?? '' });
     const uid = get().userId;
+    // 거절 감지용 기기 마커(#미아 방지) — loadProfile 의 판정이 이 마커를 읽으므로 먼저 남긴다.
+    if (uid) writeJoinMarker(uid, { unitId: row.unit_id, storeName: row?.store_name ?? '' });
     if (uid) await loadProfile(set, uid, get().email);
     track('join_requested', { result: 'pending' });
     // 신청 매장 사장에게 웹푸시(승인 대기 신청이 들어옴). loadProfile 이후라 pending_unit_id 반영됨.
@@ -613,8 +670,15 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     if (error) return { error: friendlyError(error.message, '신청을 취소하지 못했어요. 잠시 후 다시 시도해 주세요.') };
     set({ pendingUnitId: '', pendingStoreName: '' });
     const uid = get().userId;
+    if (uid) clearJoinMarker(uid); // 본인 철회 — 거절로 오판하지 않도록 마커 제거
     if (uid) await loadProfile(set, uid, get().email);
     return { error: null };
+  },
+
+  dismissRejectedJoin: () => {
+    const uid = get().userId;
+    if (uid) clearJoinMarker(uid);
+    set({ rejectedJoinStoreName: '' });
   },
 
   refreshMembership: async () => {
@@ -703,11 +767,13 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   deleteAccount: async () => {
     if (!HAS_SUPABASE) {
       // 데모 모드: 실제 삭제 대상 없음 → 세션만 종료.
-      set({ status: 'signed_out', unitId: '', userId: '', userName: '', pendingUnitId: '', pendingStoreName: '', industry: '', plan: 'free', subStatus: '', trialEndsAt: '', paidUntil: '' });
+      set({ status: 'signed_out', unitId: '', userId: '', userName: '', pendingUnitId: '', pendingStoreName: '', rejectedJoinStoreName: '', industry: '', plan: 'free', subStatus: '', trialEndsAt: '', paidUntil: '' });
       return { error: null };
     }
     const { error } = await rpcDeleteMyAccount();
     if (error) return { error: friendlyError(error.message, '탈퇴 처리에 실패했어요. 잠시 후 다시 시도해 주세요.') };
+    // 탈퇴한 계정의 합류 마커(신청 매장·거절 여부)를 기기에 남기지 않는다(프라이버시 위생).
+    { const uid0 = get().userId; if (uid0) clearJoinMarker(uid0); }
     // 계정은 이미 서버에서 파기됨 → signOut이 실패(네트워크 등)해도 로컬 세션은 반드시 종료.
     // (가드 안 하면 예외가 호출부로 튀어 busy가 영구 정지되고, '탈퇴됐는데 로그인 상태'가 됨)
     try {
@@ -715,7 +781,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     } catch (e) {
       console.warn('[session] signOut after delete failed:', e);
     }
-    set({ status: 'signed_out', unitId: '', userId: '', userName: '', pendingUnitId: '', pendingStoreName: '', industry: '', plan: 'free', subStatus: '', trialEndsAt: '', paidUntil: '' });
+    set({ status: 'signed_out', unitId: '', userId: '', userName: '', pendingUnitId: '', pendingStoreName: '', rejectedJoinStoreName: '', industry: '', plan: 'free', subStatus: '', trialEndsAt: '', paidUntil: '' });
     return { error: null };
   },
 
@@ -837,7 +903,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
         console.warn('[session] signOut failed:', e);
       }
     }
-    set({ status: 'signed_out', unitId: '', userId: '', userName: '', pendingUnitId: '', pendingStoreName: '', industry: '', plan: 'free', subStatus: '', trialEndsAt: '', paidUntil: '' });
+    set({ status: 'signed_out', unitId: '', userId: '', userName: '', pendingUnitId: '', pendingStoreName: '', rejectedJoinStoreName: '', industry: '', plan: 'free', subStatus: '', trialEndsAt: '', paidUntil: '' });
   },
 
   switchTo: (role) => {
@@ -845,8 +911,8 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     setUnitId(DEMO.unitId);
     set(
       role === 'owner'
-        ? { role: 'owner', userId: 'u_owner_001', userName: '김영자', unitId: DEMO.unitId, storeName: DEMO.storeName, pendingUnitId: '', pendingStoreName: '', industry: DEMO.industry, inviteCode: DEMO.inviteCode, email: '', bio: '', phone: '' }
-        : { role: 'junior', userId: 'u_staff_001', userName: '박지원', unitId: DEMO.unitId, storeName: DEMO.storeName, pendingUnitId: '', pendingStoreName: '', industry: DEMO.industry, inviteCode: DEMO.inviteCode, email: '', bio: '', phone: '' }
+        ? { role: 'owner', userId: 'u_owner_001', userName: '김영자', unitId: DEMO.unitId, storeName: DEMO.storeName, pendingUnitId: '', pendingStoreName: '', rejectedJoinStoreName: '', industry: DEMO.industry, inviteCode: DEMO.inviteCode, email: '', bio: '', phone: '' }
+        : { role: 'junior', userId: 'u_staff_001', userName: '박지원', unitId: DEMO.unitId, storeName: DEMO.storeName, pendingUnitId: '', pendingStoreName: '', rejectedJoinStoreName: '', industry: DEMO.industry, inviteCode: DEMO.inviteCode, email: '', bio: '', phone: '' }
     );
   },
 

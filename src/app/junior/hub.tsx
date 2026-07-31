@@ -28,6 +28,8 @@ export default function JuniorHub() {
   const pendingStoreName = useSessionStore((s) => s.pendingStoreName);
   const cancelJoinRequest = useSessionStore((s) => s.cancelJoinRequest);
   const refreshMembership = useSessionStore((s) => s.refreshMembership);
+  const rejectedJoinStoreName = useSessionStore((s) => s.rejectedJoinStoreName);
+  const dismissRejectedJoin = useSessionStore((s) => s.dismissRejectedJoin);
 
   const inputRef = useRef<TextInput>(null);
   const [code, setCode] = useState('');
@@ -129,6 +131,29 @@ export default function JuniorHub() {
               <Ionicons name="arrow-forward" size={15} color={InkColors.ink} />
             </View>
           </Pressable>
+          </Appear>
+        )}
+
+        {/* 합류 미승인 안내(#미아 방지) — 승인 대기가 조용히 사라지던 것을 기기 마커로 감지해 알린다. */}
+        {!pendingUnitId && !!rejectedJoinStoreName && (
+          <Appear delay={90}>
+          <View style={styles.pendingCard}>
+            <View style={styles.pendingHead}>
+              <View style={styles.pendingIcon}>
+                <Ionicons name="alert-circle-outline" size={20} color={BrandColors.warn} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.storeName}>{rejectedJoinStoreName || '신청한 매장'}</Text>
+                <Text style={styles.pendingMeta}>합류 신청이 승인되지 않았어요</Text>
+              </View>
+            </View>
+            <Text style={styles.pendingBody}>코드를 다시 확인해 신청하거나, 사장님께 문의해 주세요.</Text>
+            <View style={styles.pendingActions}>
+              <Pressable onPress={dismissRejectedJoin} style={({ pressed }) => [styles.ghostBtn, pressed && { opacity: 0.7 }]}>
+                <Text style={styles.ghostBtnText}>닫기</Text>
+              </Pressable>
+            </View>
+          </View>
           </Appear>
         )}
 
