@@ -97,6 +97,7 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
   const understanding = useWorkStore((s) => s.understanding);
   const markUnderstood = useWorkStore((s) => s.markUnderstood);
   const training = useWorkStore((s) => s.training);
+  const regularDueDays = useWorkStore((s) => s.regularDueDays);
   // 노하우 첨부 검색·칩 제목 해석용 — 업무 화면에서도 노하우를 로드해 둔다(coalesce 로 중복 방지).
   const entries = usePlaybookStore((s) => s.entries);
   const addEntry = usePlaybookStore((s) => s.add);
@@ -277,13 +278,13 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
     let regular: TrainingCardItem[] | null = rg.map((t) => ({
       id: t.id,
       text: t.text,
-      state: isRegularDue(myRow(t.id)?.verifiedAt, trainingNow) ? ('due' as const) : ('passed' as const),
+      state: isRegularDue(myRow(t.id)?.verifiedAt, trainingNow, regularDueDays) ? ('due' as const) : ('passed' as const),
       hasKnowhow: hasKnowhow(t.id),
     }));
     if (!regular.some((it) => it.state === 'due')) regular = null; // 확인할 게 없으면 조용히
 
     return { first, regular };
-  }, [isOwner, training, templates, understanding, knowhowLinks, userId, trainingNow]);
+  }, [isOwner, training, templates, understanding, knowhowLinks, userId, trainingNow, regularDueDays]);
 
   // 카드의 퀴즈 시작 — 항목 id 로 템플릿을 찾아 기존 자청 흐름(openSelfCheck) 재사용.
   const startTrainingCheck = useCallback(

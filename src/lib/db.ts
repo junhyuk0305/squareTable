@@ -656,6 +656,19 @@ export async function deleteEntry(id: string): Promise<boolean> {
   return writeStrict('deleteEntry', supabase.from('playbook_entries').delete().eq('id', id).select('id'));
 }
 
+/**
+ * 카테고리(section) 일괄 이동 — 카테고리 편집(개명·삭제)용. to=null 이면 '기타'(미분류)로.
+ * 단일 bulk update 라 per-entry 재색인(embedEntry)을 태우지 않는다(섹션은 색인 텍스트가 아님).
+ * RLS가 활성 매장 행으로 범위를 좁힌다. 0행 매칭도 성공(이미 옮겨진 재시도 멱등).
+ */
+export async function renameEntrySection(from: string, to: string | null): Promise<boolean> {
+  if (!HAS_SUPABASE) return true;
+  return write(
+    'renameEntrySection',
+    supabase.from('playbook_entries').update({ section: to, updated_at: new Date().toISOString() }).eq('section', from),
+  );
+}
+
 // ── 노하우 제안/신청(알바 → 사장) ─────────────────────────
 export async function fetchSuggestions(): Promise<PlaybookSuggestion[]> {
   if (!HAS_SUPABASE) return [];
@@ -1363,6 +1376,28 @@ export async function saveKnowhowCategories(cats: CustomCategory[]): Promise<boo
     supabase.from('schedule_config').upsert({
       unit_id: _unitId,
       knowhow_categories: cats,
+      updated_at: new Date().toISOString(),
+    }),
+  );
+}
+
+// ── 정기 훈련 재확인 주기(0100) — 매장 공유 설정 schedule_config.regular_due_days ──
+export async function fetchRegularDueDays(): Promise<number | null> {
+  if (!HAS_SUPABASE) return null;
+  const { data, error } = await supabase.from('schedule_config').select('regular_due_days').maybeSingle();
+  if (error) {
+    readFail('fetchRegularDueDays', error);
+    return null;
+  }
+  return typeof data?.regular_due_days === 'number' ? data.regular_due_days : null;
+}
+export async function saveRegularDueDays(days: number): Promise<boolean> {
+  if (!HAS_SUPABASE) return true;
+  return write(
+    'saveRegularDueDays',
+    supabase.from('schedule_config').upsert({
+      unit_id: _unitId,
+      regular_due_days: days,
       updated_at: new Date().toISOString(),
     }),
   );

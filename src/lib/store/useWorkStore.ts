@@ -26,6 +26,8 @@ import {
   insertTrainingItem,
   deleteTrainingItem,
   updateTrainingPositions,
+  fetchRegularDueDays,
+  saveRegularDueDays,
   type TrainingItemRow,
   type TrainingCourse,
 } from '@/lib/db';
@@ -44,22 +46,32 @@ const MAX_ACTIVE_RECURRING = 40;
 /** 훈련 코스(0099) 숫자 SSOT — 관리 화면 안내와 직원 카드 노출이 같은 값을 봐야
  *  안내와 동작이 어긋나지 않는다.
  *  첫 훈련 3~5(하한=완주 부담 축소·상한=Escoffier 핵심 판단 5). 정기 훈련 최대 10 ·
- *  재확인 주기 30일 고정(간격반복 D4 의 v1 — 주기 설정 UI 는 과설정이라 두지 않는다). */
+ *  재확인 주기는 매장 설정(0100 schedule_config.regular_due_days, 기본 30일). */
 export const FIRST_DAY_MIN_ITEMS = 3;
 export const FIRST_DAY_MAX_ITEMS = 5;
 export const REGULAR_MAX_ITEMS = 10;
-export const REGULAR_DUE_DAYS = 30;
+export const REGULAR_DUE_DAYS_DEFAULT = 30;
+/** 주기 선택지 — 자유 입력 대신 칩(복잡도 원칙). 라벨은 사장이 이미 쓰는 말로. */
+export const REGULAR_DUE_OPTIONS = [
+  { days: 7, label: '1주' },
+  { days: 14, label: '2주' },
+  { days: 30, label: '1달' },
+  { days: 90, label: '3달' },
+] as const;
+export function regularDueLabel(days: number): string {
+  return REGULAR_DUE_OPTIONS.find((o) => o.days === days)?.label ?? `${days}일`;
+}
 export type { TrainingCourse, TrainingItemRow };
 
 /** 코스별 항목(position 순) — 화면 파생 셀렉터. */
 export function trainingOf(items: TrainingItemRow[], course: TrainingCourse): TrainingItemRow[] {
   return items.filter((i) => i.course === course).sort((a, b) => a.position - b.position);
 }
-/** 정기 훈련 due 판정 — 통과 기록이 없거나 마지막 통과가 주기보다 오래됐으면 다시 확인할 때. */
-export function isRegularDue(verifiedAt: string | undefined, now: number): boolean {
+/** 정기 훈련 due 판정 — 통과 기록이 없거나 마지막 통과가 매장 주기(dueDays)보다 오래됐으면 다시 확인할 때. */
+export function isRegularDue(verifiedAt: string | undefined, now: number, dueDays: number): boolean {
   if (!verifiedAt) return true;
   const t = Date.parse(verifiedAt);
-  return !Number.isFinite(t) || now - t > REGULAR_DUE_DAYS * 24 * 60 * 60 * 1000;
+  return !Number.isFinite(t) || now - t > dueDays * 24 * 60 * 60 * 1000;
 }
 /** 방마다 상단 고정 공지 최대 개수(남용 #27) — 고정 영역 점유로 UI 무력화 방지. */
 const MAX_PINNED_NOTICES = 3;
@@ -364,6 +376,8 @@ type State = {
   understanding: UnderstandingRow[];
   /** 훈련 코스(0099) — 첫 훈련·정기 훈련 항목 합본(코스 분리는 trainingOf 셀렉터). */
   training: TrainingItemRow[];
+  /** 정기 훈련 재확인 주기(일, 0100 매장 설정). 로드 전·미설정 = 기본 30. */
+  regularDueDays: number;
   /** 완료 캡처(②) 넛지 피로 상태(인메모리). */
   captureNudge: CaptureNudge;
   loaded: boolean;
@@ -389,6 +403,8 @@ type State = {
   removeTrainingItem: (templateId: string) => Promise<void>;
   /** 같은 코스 안에서 한 칸 위/아래로 — 이웃과 position 스왑. */
   moveTrainingItem: (templateId: string, dir: 'up' | 'down') => Promise<void>;
+  /** 정기 훈련 재확인 주기 변경(관리 권한, 0100). */
+  setRegularDueDays: (days: number) => Promise<void>;
   // task: 합성 루틴 할일(dpr_)은 s.templates 에 없으므로 완료 피드 문구/방을 호출부가 넘긴다(없으면 lookup).
   toggleTask: (date: string, templateId: string, staffId: string, staffName: string, role: 'owner' | 'junior', photoUrl?: string, task?: { text: string; roomId?: string }) => void;
   postNotice: (date: string, text: string, authorId: string, authorName: string, important: boolean) => void;
@@ -414,22 +430,28 @@ export const useWorkStore = create<State>((set, get) => ({
   knowhowLinks: [],
   understanding: [],
   training: [],
+  regularDueDays: REGULAR_DUE_DAYS_DEFAULT,
   captureNudge: { skips: 0 },
   loaded: !HAS_SUPABASE,
 
-  // 전체 재조회(templates·done·feed·링크·이해확인·훈련 6쿼리)로 스토어를 통째로 교체한다.
+  // 전체 재조회(templates·done·feed·링크·이해확인·훈련·주기 7쿼리)로 스토어를 통째로 교체한다.
   // coalesce: 빠른 연속 체크로 realtime 이벤트가 몰려도 풀리페치가 병렬로 쌓이지 않게 합친다.
   hydrate: coalesce(async () => {
     if (!HAS_SUPABASE) return;
-    const [templates, done, feed, knowhowLinks, understanding, training] = await Promise.all([
+    const [templates, done, feed, knowhowLinks, understanding, training, dueDays] = await Promise.all([
       fetchTemplates(),
       fetchDone(),
       fetchFeed(),
       fetchTemplateKnowhow(),
       fetchTaskUnderstanding(),
       fetchTrainingItems(),
+      fetchRegularDueDays(),
     ]);
-    set({ templates, done, feed, knowhowLinks, understanding, training, loaded: true });
+    set({
+      templates, done, feed, knowhowLinks, understanding, training,
+      regularDueDays: dueDays ?? REGULAR_DUE_DAYS_DEFAULT,
+      loaded: true,
+    });
   }),
   // realtime 변경마다 즉시 풀리페치하면 체크 한 번(work_done+work_feed 2쓰기)이 매번 3쿼리+전체
   // 리렌더가 된다 → 트레일링 디바운스로 이벤트 버스트를 1회 재조회에 합친다.
@@ -647,6 +669,18 @@ export const useWorkStore = create<State>((set, get) => ({
       ]),
       () => set({ training: before }),
       '순서 변경에 실패했어요.',
+    );
+  },
+
+  // 정기 훈련 주기(0100) — 낙관적 반영 + 실패 시 원복. RLS(sc_write)가 관리 권한을 강제.
+  setRegularDueDays: async (days) => {
+    const prev = get().regularDueDays;
+    if (prev === days) return;
+    set({ regularDueDays: days });
+    await guardWrite(
+      saveRegularDueDays(days),
+      () => set({ regularDueDays: prev }),
+      '재확인 주기 변경에 실패했어요.',
     );
   },
 

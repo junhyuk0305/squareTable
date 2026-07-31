@@ -8,10 +8,11 @@ import {
   useWorkStore,
   trainingOf,
   isRegularDue,
+  regularDueLabel,
   FIRST_DAY_MIN_ITEMS,
   FIRST_DAY_MAX_ITEMS,
   REGULAR_MAX_ITEMS,
-  REGULAR_DUE_DAYS,
+  REGULAR_DUE_OPTIONS,
   knowhowIdsForTask,
   type TrainingCourse,
 } from '@/lib/store/useWorkStore';
@@ -49,6 +50,8 @@ export default function OwnerTrainingScreen() {
   const addTrainingTask = useWorkStore((s) => s.addTrainingTask);
   const removeTrainingItem = useWorkStore((s) => s.removeTrainingItem);
   const moveTrainingItem = useWorkStore((s) => s.moveTrainingItem);
+  const regularDueDays = useWorkStore((s) => s.regularDueDays);
+  const setRegularDueDays = useWorkStore((s) => s.setRegularDueDays);
   const entries = usePlaybookStore((s) => s.entries);
   const addEntry = usePlaybookStore((s) => s.add);
 
@@ -74,12 +77,12 @@ export default function OwnerTrainingScreen() {
           const rows = understanding.filter((u) => u.templateId === t.id);
           const passedNames =
             course === 'regular'
-              ? rows.filter((u) => !isRegularDue(u.verifiedAt, now)).map((u) => u.staffName)
+              ? rows.filter((u) => !isRegularDue(u.verifiedAt, now, regularDueDays)).map((u) => u.staffName)
               : rows.map((u) => u.staffName);
           return { templateId: t.id, text: t.text, entryId, passedNames };
         })
         .filter((x): x is NonNullable<typeof x> => !!x),
-    [training, course, templates, knowhowLinks, understanding, now],
+    [training, course, templates, knowhowLinks, understanding, now, regularDueDays],
   );
   const full = items.length >= meta.max;
   const firstDayReady = course !== 'first_day' || items.length >= FIRST_DAY_MIN_ITEMS;
@@ -198,8 +201,27 @@ export default function OwnerTrainingScreen() {
               </>
             ) : (
               <>
-                <GuideLine icon="refresh-outline" strong={`${REGULAR_DUE_DAYS}일마다`} rest="다 배운 업무도 다시 이해 확인해요" />
+                <GuideLine icon="refresh-outline" strong={`${regularDueLabel(regularDueDays)}마다`} rest="다 배운 업무도 다시 이해 확인해요" />
                 <GuideLine icon="list-outline" strong={`최대 ${REGULAR_MAX_ITEMS}개`} rest="틀리면 안 되는 업무만 담아요 · 실수 예방이 목적" />
+                {/* 재확인 주기 — 자유 입력 대신 칩(0100 매장 설정). 선택 즉시 저장·안내 문구도 같이 바뀐다. */}
+                <View style={st.cycleRow}>
+                  <Text style={st.cycleLabel}>재확인 주기</Text>
+                  {REGULAR_DUE_OPTIONS.map((o) => {
+                    const on = regularDueDays === o.days;
+                    return (
+                      <Pressable
+                        key={o.days}
+                        onPress={() => { if (!on) { void setRegularDueDays(o.days); showToast(`재확인 주기를 ${o.label}로 바꿨어요`, 'good'); } }}
+                        style={[st.cycleChip, on && st.cycleChipOn]}
+                        accessibilityRole="radio"
+                        accessibilityState={{ selected: on }}
+                        accessibilityLabel={`재확인 주기 ${o.label}`}
+                      >
+                        <Text style={[st.cycleChipText, on && st.cycleChipTextOn]}>{o.label}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
                 <View style={st.statusRow}>
                   <View style={[st.statusDot, { backgroundColor: items.length > 0 ? BrandColors.good : InkColors.ink3 }]} />
                   <Text style={[st.statusText, { color: items.length > 0 ? BrandColors.good : InkColors.ink3 }]}>
@@ -233,7 +255,7 @@ export default function OwnerTrainingScreen() {
                       {!it.entryId
                         ? '노하우 없음 · 문제를 못 만들어요'
                         : it.passedNames.length > 0
-                          ? `${course === 'regular' ? `최근 ${REGULAR_DUE_DAYS}일 확인` : '이해 확인'} · ${it.passedNames.join(', ')}`
+                          ? `${course === 'regular' ? `최근 ${regularDueLabel(regularDueDays)} 안에 확인` : '이해 확인'} · ${it.passedNames.join(', ')}`
                           : course === 'regular' ? '확인한 직원이 아직 없어요' : '통과한 직원이 아직 없어요'}
                     </Text>
                   </View>
@@ -475,6 +497,15 @@ const st = StyleSheet.create({
   guideLine: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
   guideText: { flex: 1, fontSize: 15, color: InkColors.ink2, fontWeight: '600', lineHeight: 22 },
   guideStrong: { fontWeight: '900', color: InkColors.ink },
+  cycleRow: { flexDirection: 'row', alignItems: 'center', gap: Space.xs + 2, marginTop: Space.xs, flexWrap: 'wrap' },
+  cycleLabel: { fontSize: 12.5, fontWeight: '800', color: InkColors.ink2, marginRight: 2 },
+  cycleChip: {
+    minHeight: 34, paddingHorizontal: Space.md, alignItems: 'center', justifyContent: 'center',
+    borderRadius: Radius.pill, borderWidth: 1, borderColor: InkColors.line, backgroundColor: '#FFFFFF',
+  },
+  cycleChipOn: { backgroundColor: InkColors.ink, borderColor: InkColors.ink },
+  cycleChipText: { fontSize: 12.5, fontWeight: '800', color: InkColors.ink2 },
+  cycleChipTextOn: { color: '#FFFFFF' },
   statusRow: { flexDirection: 'row', alignItems: 'center', gap: Space.xs + 2, marginTop: Space.xs },
   statusDot: { width: 8, height: 8, borderRadius: 4 },
   statusText: { fontSize: 13, fontWeight: '800' },

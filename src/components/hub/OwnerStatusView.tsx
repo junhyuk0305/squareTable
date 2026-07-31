@@ -254,7 +254,7 @@ export function OwnerStatusView() {
             </View>
             <View style={{ flex: 1, minWidth: 0 }}>
               <Text style={styles.rowTitle} numberOfLines={1}>훈련</Text>
-              <Text style={styles.rowSub} numberOfLines={1}>첫 훈련(신입 첫날)과 정기 훈련(30일 재확인)을 만들어요</Text>
+              <Text style={styles.rowSub} numberOfLines={1}>첫 훈련(신입 첫날)과 정기 훈련(주기 재확인)을 만들어요</Text>
             </View>
             <Ionicons name="chevron-forward" size={15} color={InkColors.ink3} />
           </Pressable>

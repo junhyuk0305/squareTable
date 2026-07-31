@@ -162,6 +162,29 @@ async function main() {
   { const { data } = await jA.from('task_understanding').update({ verified_at: new Date().toISOString() }).eq('template_id', T[0]).eq('staff_id', ownerId).select('template_id');
     check('④-6 남의 통과 시각 갱신 차단(0행)', (data?.length ?? 0) === 0, `n=${data?.length}`); }
 
+  // ── ⑥ 재확인 주기(0100) — 매장 설정·관리 권한·범위 제약·due 반영 ─────────
+  console.log('\n━━ ⑥ 재확인 주기(0100) ━━');
+  { const { error } = await owner.from('schedule_config').upsert({ unit_id: UNIT, regular_due_days: 7, updated_at: new Date().toISOString() });
+    check('⑥-1 사장 주기 변경(7일)', !error, error?.message ?? ''); }
+  const { data: sc1 } = await jA.from('schedule_config').select('regular_due_days').maybeSingle();
+  check('⑥-2 직원도 주기 열람(카드 판정용)', sc1?.regular_due_days === 7, `v=${sc1?.regular_due_days}`);
+  { const { data } = await jA.from('schedule_config').update({ regular_due_days: 365 }).eq('unit_id', UNIT).select('unit_id');
+    const { data: sc2 } = await owner.from('schedule_config').select('regular_due_days').maybeSingle();
+    check('⑥-3 직원 주기 변경 차단(관리 권한만)', (data?.length ?? 0) === 0 && sc2?.regular_due_days === 7, `n=${data?.length} v=${sc2?.regular_due_days}`); }
+  { const { error } = await owner.from('schedule_config').upsert({ unit_id: UNIT, regular_due_days: 0 });
+    check('⑥-4 범위 밖(0일) 거부(check)', !!error, error ? `거부 ${error.code ?? ''}` : '(차단 안됨!)'); }
+  // due 판정에 주기 반영(클라 로직 미러): 방금 재통과(④-4, 지금)한 T3 는 7일 기준 미도래,
+  // 10일 전으로 되돌리면 7일 기준 due.
+  { const { data: u3 } = await jA.from('task_understanding').select('verified_at').eq('template_id', T[3]).maybeSingle();
+    const dueNow = Date.now() - Date.parse(u3?.verified_at) > 7 * 24 * 3600 * 1000;
+    check('⑥-5 방금 통과 → 7일 기준 미도래', !dueNow, `verified_at=${u3?.verified_at}`); }
+  { const tenDaysAgo = new Date(Date.now() - 10 * 24 * 3600 * 1000).toISOString();
+    await jA.from('task_understanding').update({ verified_at: tenDaysAgo }).eq('template_id', T[3]).eq('staff_id', jAId);
+    const { data: u4 } = await jA.from('task_understanding').select('verified_at').eq('template_id', T[3]).maybeSingle();
+    const due7 = Date.now() - Date.parse(u4?.verified_at) > 7 * 24 * 3600 * 1000;
+    const due30 = Date.now() - Date.parse(u4?.verified_at) > 30 * 24 * 3600 * 1000;
+    check('⑥-6 10일 전 통과 → 7일 기준 due · 30일 기준 미도래(주기가 판정을 가름)', due7 && !due30); }
+
   // ── ⑤ cascade: 업무 삭제 → 코스 항목 소멸 ────────────────────────────────
   console.log('\n━━ ⑤ cascade ━━');
   await owner.from('work_templates').delete().eq('id', T[2]);
