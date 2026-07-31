@@ -109,7 +109,9 @@ export function OwnerStatusView() {
   const scheduledTotal = today.reduce((n, r) => n + r.scheduled, 0);
   const multi = overview.length > 1;
 
-  if (!ownerLoaded && overview.length === 0) {
+  // 전부 도착 전엔 무조건 로딩 — 스냅샷 '—' 채움부터 그리지 않는다(부분 렌더 금지, 2026-07-31).
+  // 부분 실패 시 재시도는 hydrateOwner TTL 리셋이 맡고, 표면화는 db.ts readFail(SyncBanner).
+  if (!ownerLoaded || !todayLoaded) {
     return (
       <View style={styles.loading}>
         <ActivityIndicator color={InkColors.ink3} />

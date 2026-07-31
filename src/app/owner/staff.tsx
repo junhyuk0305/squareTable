@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, Text, Pressable, StyleSheet, ScrollView, TextInput } from 'react-native';
+import { View, Text, Pressable, StyleSheet, ScrollView, TextInput, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useFocusEffect, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -30,6 +30,7 @@ export default function OwnerStaffScreen() {
   const staff = useStaffStore((s) => s.staff);
   const removeStaff = useStaffStore((s) => s.removeStaff);
   const pending = useStaffStore((s) => s.pending);
+  const staffLoaded = useStaffStore((s) => s.loaded);
   const loadError = useStaffStore((s) => s.loadError);
   const approve = useStaffStore((s) => s.approve);
   const reject = useStaffStore((s) => s.reject);
@@ -109,6 +110,13 @@ export default function OwnerStaffScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
       <Stack.Screen options={{ title: '직원·급여' }} />
+      {/* 전부 도착 전엔 무조건 로딩 — "직원 0명" 기본 화면이 먼저 떴다가 채워지는 부분 렌더 금지. */}
+      {!staffLoaded ? (
+        <View style={styles.loadingWrap}>
+          <ActivityIndicator color={InkColors.ink3} />
+          <Text style={styles.loadingText}>직원 목록을 불러오는 중...</Text>
+        </View>
+      ) : (
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         {/* ① 급여 — 이번 달 인건비 총액 + 급여 설정 진입(상단). 구 '근무·급여'·'급여 설정' 카드를 흡수. */}
         <Appear delay={0}>
@@ -288,6 +296,7 @@ export default function OwnerStaffScreen() {
         </Appear>
         <View style={{ height: 12 }} />
       </ScrollView>
+      )}
       <ConfirmModal
         visible={!!removeTarget}
         icon="person-remove-outline"
@@ -340,6 +349,8 @@ function StatusChip({ status }: { status: 'out' | 'working' | 'done' }) {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: InkColors.cream },
   scroll: { padding: 20, gap: 12 },
+  loadingWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
+  loadingText: { fontSize: 13, color: InkColors.ink3 },
 
   // 급여 요약 카드(구 근무·급여 totalCard + 급여 설정 진입)
   payCard: { backgroundColor: InkColors.ink, borderRadius: Radius.lg, padding: 20, gap: 4 },
