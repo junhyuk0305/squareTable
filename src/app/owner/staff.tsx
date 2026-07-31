@@ -166,6 +166,25 @@ export default function OwnerStaffScreen() {
         </View>
         </Appear>
 
+        {/* ②-b 훈련 — 새 직원이 들어오기로 한 순간이 코스를 만들 순간(초대코드 바로 아래). */}
+        <Appear delay={80}>
+        <Pressable
+          onPress={() => router.push('/owner/training')}
+          style={({ pressed }) => [styles.firstDayCard, pressed && { opacity: 0.85 }]}
+          accessibilityRole="button"
+          accessibilityLabel="훈련 열기"
+        >
+          <View style={styles.firstDayIcon}>
+            <Ionicons name="school-outline" size={19} color={InkColors.ink} />
+          </View>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={styles.firstDayTitle}>훈련</Text>
+            <Text style={styles.firstDayDesc}>첫 훈련(신입 첫날)과 정기 훈련을 준비해요</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={16} color={InkColors.ink3} />
+        </Pressable>
+        </Appear>
+
         {/* 합류 신청(승인 대기) — 남용 #2. 코드로 신청한 사람을 사장이 승인해야 소속된다. */}
         {pending.length > 0 && (
           <Appear delay={100}>
@@ -368,6 +387,15 @@ const styles = StyleSheet.create({
   copyBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(255,255,255,0.16)', paddingVertical: 9, paddingHorizontal: 14, borderRadius: Radius.pill },
   rotateBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(255,255,255,0.10)', paddingVertical: 9, paddingHorizontal: 14, borderRadius: Radius.pill },
   copyText: { color: '#FFFFFF', fontWeight: '700', fontSize: 13 },
+
+  firstDayCard: {
+    flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 56,
+    backgroundColor: '#FFFFFF', borderRadius: Radius.lg, borderWidth: 1, borderColor: InkColors.line,
+    paddingHorizontal: 16, paddingVertical: 12,
+  },
+  firstDayIcon: { width: 38, height: 38, borderRadius: Radius.md, backgroundColor: InkColors.cream, alignItems: 'center', justifyContent: 'center' },
+  firstDayTitle: { fontSize: 15, fontWeight: '800', color: InkColors.ink },
+  firstDayDesc: { fontSize: 12.5, color: InkColors.ink3, marginTop: 1 },
 
   pendingWrap: { gap: 8 },
   rejectBtn: { paddingVertical: 7, paddingHorizontal: 12, borderRadius: Radius.sm, borderWidth: 1, borderColor: InkColors.line },

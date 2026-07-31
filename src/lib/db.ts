@@ -1083,26 +1083,71 @@ export async function deleteTemplateKnowhow(templateId: string, entryIds: string
 }
 
 // ── 이해 확인 기록(0072, S1 ④) — 직원이 노하우 업무 퀴즈 통과 ──────────
-export type UnderstandingRow = { templateId: string; staffId: string; staffName: string };
-/** 활성 매장의 전체 이해 확인 기록 — 사장 배지·본인 확인 표시용(노출 범위는 UI 게이팅). */
+export type UnderstandingRow = { templateId: string; staffId: string; staffName: string; verifiedAt: string };
+/** 활성 매장의 전체 이해 확인 기록 — 사장 배지·본인 확인·정기 훈련 due 판정용(노출 범위는 UI 게이팅). */
 export async function fetchTaskUnderstanding(): Promise<UnderstandingRow[]> {
   if (!HAS_SUPABASE) return [];
-  const { data, error } = await supabase.from('task_understanding').select('template_id, staff_id, staff_name');
+  const { data, error } = await supabase.from('task_understanding').select('template_id, staff_id, staff_name, verified_at');
   if (error) {
     readFail('fetchTaskUnderstanding', error);
     return [];
   }
-  return (data ?? []).map((r: any) => ({ templateId: r.template_id, staffId: r.staff_id, staffName: r.staff_name }));
+  return (data ?? []).map((r: any) => ({ templateId: r.template_id, staffId: r.staff_id, staffName: r.staff_name, verifiedAt: r.verified_at ?? '' }));
 }
-/** 통과 기록 저장. staff_id 는 DB default auth.uid()(본인만·위조 차단). 재통과는 멱등(onConflict 무시). */
+/** 통과 기록 저장. staff_id 는 DB default auth.uid()(본인만·위조 차단).
+ *  재통과는 verified_at 갱신(0099 tu_update) — 정기 훈련 due 판정의 근거라 멱등 무시가 아니라 갱신이다. */
 export async function insertTaskUnderstanding(templateId: string, staffName: string): Promise<boolean> {
   if (!HAS_SUPABASE) return true;
   return write(
     'insertTaskUnderstanding',
     supabase
       .from('task_understanding')
-      .upsert({ unit_id: _unitId, template_id: templateId, staff_name: staffName }, { onConflict: 'template_id,staff_id', ignoreDuplicates: true }),
+      .upsert(
+        { unit_id: _unitId, template_id: templateId, staff_name: staffName, verified_at: new Date().toISOString() },
+        { onConflict: 'template_id,staff_id' },
+      ),
   );
+}
+
+// ── 훈련 코스(0099) — 첫 훈련(first_day)·정기 훈련(regular) 2종의 업무 목록 ──────────
+export type TrainingCourse = 'first_day' | 'regular';
+export type TrainingItemRow = { templateId: string; course: TrainingCourse; position: number };
+/** 활성 매장의 훈련 항목 전체(두 코스 합본) — 코스 분리는 스토어 셀렉터가 한다. */
+export async function fetchTrainingItems(): Promise<TrainingItemRow[]> {
+  if (!HAS_SUPABASE) return [];
+  const { data, error } = await supabase.from('training_items').select('template_id, course, position').order('position');
+  if (error) {
+    readFail('fetchTrainingItems', error);
+    return [];
+  }
+  return (data ?? []).map((r: any) => ({ templateId: r.template_id, course: r.course, position: r.position }));
+}
+/** 코스에 업무 추가(관리 권한만, RLS). 이미 있으면 멱등(onConflict 무시 — 코스 간 이동은 미지원). */
+export async function insertTrainingItem(templateId: string, course: TrainingCourse, position: number): Promise<boolean> {
+  if (!HAS_SUPABASE) return true;
+  return write(
+    'insertTrainingItem',
+    supabase
+      .from('training_items')
+      .upsert({ unit_id: _unitId, template_id: templateId, course, position }, { onConflict: 'template_id', ignoreDuplicates: true }),
+  );
+}
+/** 코스에서 업무 빼기(업무·노하우는 남는다). 이미 없으면 0행 = 원하는 상태(멱등). */
+export async function deleteTrainingItem(templateId: string): Promise<boolean> {
+  if (!HAS_SUPABASE) return true;
+  return write('deleteTrainingItem', supabase.from('training_items').delete().eq('template_id', templateId));
+}
+/** 순서 변경 — 이웃 항목과 position 스왑(관리 권한만, 0099 ti_update). 두 행을 개별 update. */
+export async function updateTrainingPositions(pairs: { templateId: string; position: number }[]): Promise<boolean> {
+  if (!HAS_SUPABASE) return true;
+  for (const p of pairs) {
+    const ok = await writeStrict(
+      'updateTrainingPositions',
+      supabase.from('training_items').update({ position: p.position }).eq('template_id', p.templateId).select('template_id'),
+    );
+    if (!ok) return false;
+  }
+  return true;
 }
 
 // ── 업무보드: 완료 체크 ────────────────────────────────────

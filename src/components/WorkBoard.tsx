@@ -8,7 +8,7 @@ import { uploadPhoto } from '@/lib/db';
 import { HAS_SUPABASE } from '@/lib/supabase';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useStaffStore } from '@/lib/store/useStaffStore';
-import { useWorkStore, useDayparts, daypartRoutineTemplates, findDuplicateTask, knowhowIdsForTask, isCaptureEligible, type NewTask, type TaskTemplate } from '@/lib/store/useWorkStore';
+import { useWorkStore, useDayparts, daypartRoutineTemplates, findDuplicateTask, knowhowIdsForTask, isCaptureEligible, trainingOf, isRegularDue, FIRST_DAY_MIN_ITEMS, type NewTask, type TaskTemplate } from '@/lib/store/useWorkStore';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { useSuggestionStore } from '@/lib/store/useSuggestionStore';
 import { useSyncStore } from '@/lib/store/useSyncStore';
@@ -16,6 +16,7 @@ import { showToast } from '@/lib/store/useToastStore';
 import { EntryDetailModal } from '@/components/EntryDetailModal';
 import { CaptureKnowhowSheet } from '@/components/work/CaptureKnowhowSheet';
 import { UnderstandingCheckSheet } from '@/components/work/UnderstandingCheckSheet';
+import { TrainingCard, type TrainingCardItem } from '@/components/work/TrainingCard';
 import { buildDirectUq, buildPlaybookEntryFromSquare } from '@/lib/utils/buildEntry';
 import type { PlaybookEntry, SquareBlock } from '@/types';
 import type { QuizInput } from '@/lib/ai/types';
@@ -95,6 +96,7 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
   const noteCaptureNudge = useWorkStore((s) => s.noteCaptureNudge);
   const understanding = useWorkStore((s) => s.understanding);
   const markUnderstood = useWorkStore((s) => s.markUnderstood);
+  const training = useWorkStore((s) => s.training);
   // 노하우 첨부 검색·칩 제목 해석용 — 업무 화면에서도 노하우를 로드해 둔다(coalesce 로 중복 방지).
   const entries = usePlaybookStore((s) => s.entries);
   const addEntry = usePlaybookStore((s) => s.add);
@@ -108,6 +110,8 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
   const [capture, setCapture] = useState<{ templateId: string; text: string } | null>(null);
   // 이해 확인(④) — 직원이 자청한 업무 + 그 노하우를 퀴즈 소스로.
   const [selfCheck, setSelfCheck] = useState<{ task: TaskTemplate; sops: QuizInput['sops'] } | null>(null);
+  // 정기 훈련 due 판정 기준 시각 — 렌더 중 Date.now() 금지(컴파일러 순수성), 마운트 시 1회로 충분(주기=30일).
+  const [trainingNow] = useState(() => Date.now());
   const toggleTask = useWorkStore((s) => s.toggleTask);
   const addTask = useWorkStore((s) => s.addTask);
   const editTask = useWorkStore((s) => s.editTask);
@@ -238,6 +242,63 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
       setSelfCheck({ task: t, sops });
     },
     [knowhowLinks, entryById],
+  );
+
+  // 훈련 카드(0099) — 직원에게만. 첫 훈련 = 하한(3) 이상일 때·전부 통과하면 소멸.
+  // 정기 훈련 = 다시 확인할 항목(due)이 있을 때만. 상태는 항목 단위(통과/다음/대기/다시 확인).
+  const trainingCards = useMemo(() => {
+    if (isOwner) return { first: null as TrainingCardItem[] | null, regular: null as TrainingCardItem[] | null };
+    const byId = new Map(templates.map((t) => [t.id, t]));
+    const resolve = (course: 'first_day' | 'regular') =>
+      trainingOf(training, course)
+        .map((f) => byId.get(f.templateId))
+        .filter((t): t is TaskTemplate => !!t);
+    const myRow = (id: string) => understanding.find((u) => u.templateId === id && u.staffId === userId);
+    const hasKnowhow = (id: string) => knowhowIdsForTask(knowhowLinks, id).length > 0;
+
+    // 첫 훈련 — 통과 여부만 본다(첫 통과가 목적). 순서상 첫 미통과 = '다음'.
+    let first: TrainingCardItem[] | null = null;
+    const fd = resolve('first_day');
+    if (fd.length >= FIRST_DAY_MIN_ITEMS) {
+      const nextIdx = fd.findIndex((t) => !myRow(t.id));
+      first =
+        nextIdx < 0
+          ? null // 전부 통과 → 카드 소멸
+          : fd.map((t, i) => ({
+              id: t.id,
+              text: t.text,
+              state: myRow(t.id) ? ('passed' as const) : i === nextIdx ? ('next' as const) : ('todo' as const),
+              hasKnowhow: hasKnowhow(t.id),
+            }));
+    }
+
+    // 정기 훈련 — 마지막 통과가 주기(30일)보다 오래됐거나 통과 기록이 없으면 '다시 확인'.
+    const rg = resolve('regular');
+    let regular: TrainingCardItem[] | null = rg.map((t) => ({
+      id: t.id,
+      text: t.text,
+      state: isRegularDue(myRow(t.id)?.verifiedAt, trainingNow) ? ('due' as const) : ('passed' as const),
+      hasKnowhow: hasKnowhow(t.id),
+    }));
+    if (!regular.some((it) => it.state === 'due')) regular = null; // 확인할 게 없으면 조용히
+
+    return { first, regular };
+  }, [isOwner, training, templates, understanding, knowhowLinks, userId, trainingNow]);
+
+  // 카드의 퀴즈 시작 — 항목 id 로 템플릿을 찾아 기존 자청 흐름(openSelfCheck) 재사용.
+  const startTrainingCheck = useCallback(
+    (templateId: string) => {
+      const t = templates.find((x) => x.id === templateId);
+      if (t) openSelfCheck(t);
+    },
+    [templates, openSelfCheck],
+  );
+  const openTrainingKnowhow = useCallback(
+    (templateId: string) => {
+      const k = knowhowIdsForTask(knowhowLinks, templateId);
+      if (k.length) openKnowhow(k[0]);
+    },
+    [knowhowLinks, openKnowhow],
   );
 
   const memberCount = Math.max(1, (owner ? 1 : 0) + staff.length);
@@ -441,6 +502,14 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
       <Stack.Screen options={headerOptions} />
 
       {(view === 'chat' || view === 'assign') && <RoomBar role={role} me={userId} />}
+
+      {view === 'chat' && trainingCards.first && (
+        <TrainingCard kind="first" items={trainingCards.first} onOpenKnowhow={openTrainingKnowhow} onStartCheck={startTrainingCheck} />
+      )}
+      {/* 첫 훈련을 마친 뒤에만 정기 훈련을 노출 — 카드 2장 동시 점유 방지(신입은 첫 훈련이 먼저다). */}
+      {view === 'chat' && !trainingCards.first && trainingCards.regular && (
+        <TrainingCard kind="regular" items={trainingCards.regular} onOpenKnowhow={openTrainingKnowhow} onStartCheck={startTrainingCheck} />
+      )}
 
       {view === 'chat' && (
         <Appear delay={0} style={{ flex: 1 }}>
