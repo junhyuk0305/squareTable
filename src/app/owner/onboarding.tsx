@@ -180,7 +180,7 @@ export default function OwnerOnboardingScreen() {
             <Text style={styles.codeHint}>직원이 개인 홈에서 이 코드로 신청하면, 사장님이 승인해야 합류돼요.</Text>
           </View>
 
-          {/* 요금제 후킹 — 지금은 무료로 시작했음을 알리고, 직원·AI 무제한(단일 매장, 파일럿 할인가)으로
+          {/* 요금제 후킹 — 지금은 무료로 시작했음을 알리고, 직원·AI 무제한(단일 매장)으로
               업그레이드 경로를 연다. 가격은 tiers.ts(SSOT)에서 읽는다. 탭하면 요금제 선택 화면(/billing).
               iOS 네이티브는 가격 노출 자체가 3.1.3(f) 상 구매 유도로 읽힐 수 있어 렌더하지 않는다. */}
           {SHOW_BILLING && (
@@ -196,7 +196,7 @@ export default function OwnerOnboardingScreen() {
               <View style={{ flex: 1 }}>
                 <Text style={styles.planTitle}>지금은 무료로 시작했어요</Text>
                 <Text style={styles.planSub}>
-                  직원·AI 무제한은 단일 매장 요금제(파일럿 {formatKrw(PLANS.single.monthlyKrw)})에서 열려요
+                  직원·AI 무제한은 단일 매장 요금제(월 {formatKrw(PLANS.single.monthlyKrw)})에서 열려요
                 </Text>
               </View>
               <Ionicons name="chevron-forward" size={16} color={InkColors.ink3} />

@@ -40,9 +40,8 @@ export const PLANS: Record<PlanId, PlanDef> = {
     id: 'single',
     name: '단일 매장',
     tagline: '직원과 함께 운영하는 매장',
-    // ★파일럿 할인가(정가 19,000 — 만원 할인, 2026-07-10 확정). 파일럿 종료 시 정가 복귀.
-    monthlyKrw: 9000,
-    regularKrw: 19000,
+    // ★정가(2026-07-31 파일럿 할인 종료 — 서버 카운터파트 payment_claim_amount(0098)와 함께 변경).
+    monthlyKrw: 19000,
     perStore: false,
     maxStores: 1,
     maxStaff: null,
@@ -53,9 +52,8 @@ export const PLANS: Record<PlanId, PlanDef> = {
     id: 'multi',
     name: '다점포',
     tagline: '매장 2개부터, 매장당 요금',
-    // ★파일럿 할인가(정가 29,000 — 만원 할인, 2026-07-10 확정). 파일럿 종료 시 정가 복귀.
-    monthlyKrw: 19000,
-    regularKrw: 29000,
+    // ★정가(2026-07-31 파일럿 할인 종료 — 서버 카운터파트 payment_claim_amount(0098)와 함께 변경).
+    monthlyKrw: 29000,
     perStore: true,
     maxStores: null,
     maxStaff: null,

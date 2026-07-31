@@ -1,5 +1,5 @@
 // 계좌이체 수동과금 안내 정보(실계좌 — 2026-07-10 유료화 전환 시 확정). PG 연동 전까지 사용.
-// 가격·티어 한도는 여기 아님 — SSOT = src/lib/config/tiers.ts (파일럿 할인가 적용 중).
+// 가격·티어 한도는 여기 아님 — SSOT = src/lib/config/tiers.ts.
 
 import { BUSINESS_INFO } from '@/lib/config/business';
 

@@ -13,7 +13,7 @@ import { Wordmark } from '@/components/Wordmark';
 
 /**
  * 랜딩(홈) — 기존 로그인 화면을 대체한다.
- * QR로 들어온 사장님이 스크롤만으로 [공감(문제) → 해결(기능) → 무료(파일럿)]를 읽고
+ * QR로 들어온 사장님이 스크롤만으로 [공감(문제) → 해결(기능) → 무료(무료 티어)]를 읽고
  * 우하단 고정 FAB로 자연스럽게 가입(/signup)에 도달하는 1단 세로 스토리.
  * 로그인 폼은 /login 으로 분리 — 재방문·로그아웃 복귀는 상단/오퍼의 '로그인' 링크로.
  */
@@ -81,7 +81,7 @@ export default function LandingScreen() {
         <Appear style={styles.hero}>
           <View style={styles.badge}>
             <View style={styles.badgeDot} />
-            <Text style={styles.badgeText}>파일럿 매장 무료 모집 중</Text>
+            <Text style={styles.badgeText}>카드 등록 없이 무료 시작</Text>
           </View>
 
           <Wordmark size="lg" showEng style={styles.wordmark} />
@@ -153,12 +153,12 @@ export default function LandingScreen() {
             <View style={styles.offerCard}>
               <View style={styles.badge}>
                 <View style={styles.badgeDot} />
-                <Text style={styles.badgeText}>지금은 파일럿 기간</Text>
+                <Text style={styles.badgeText}>무료로 시작</Text>
               </View>
-              <Text style={styles.offerTitle}>모든 기능, 지금은 전액 무료</Text>
+              <Text style={styles.offerTitle}>작은 매장은 계속 무료</Text>
               <Text style={styles.offerBody}>
-                함께 만들어갈 매장을 모집하고 있어요.{'\n'}
-                파일럿 매장은 카드 등록 없이 무료로 씁니다.
+                매장 1곳·직원 3명까지는 무료로 쓸 수 있어요.{'\n'}
+                카드 등록 없이 바로 시작합니다.
               </Text>
 
               <View style={styles.offerList}>
