@@ -1,5 +1,4 @@
 import { View, Text, Pressable, StyleSheet } from 'react-native';
-import { CategoryChip } from '@/components/CategoryChip';
 import { BrandColors, InkColors } from '@/lib/theme/colors';
 import { Elevation, Radius } from '@/lib/theme/elevation';
 import { formatAsked } from '@/lib/utils/time';
@@ -20,9 +19,8 @@ export function InboxHeroCard({ uq, careerDays, onPress }: Props) {
 
   return (
     <View style={styles.card}>
-      {/* 헤더: 카테고리 chip + 시급도 */}
+      {/* 헤더: 시급도. 종류(루틴/돌발) 칩은 AI 내부 분류라 비노출(2026-07-31 카테고리 단일화). */}
       <View style={styles.head}>
-        <CategoryChip category={uq.presumed_category} size="md" />
         <Text style={styles.urgent}>가장 시급 · {ago}</Text>
       </View>
 

@@ -143,6 +143,8 @@ export function buildPlaybookEntryFromSquare(
     unit_id: s.unitId || 'store_001',
     creator_id: s.userId || 'u_owner_001',
     creator_name: s.userName || '사장님',
+    // 저자 역할 스냅샷(0101) — 표기 SSOT(knowhowSourceLabel)가 "사장님/매니저"를 가른다.
+    creator_role: s.role === 'manager' ? 'manager' : s.role === 'owner' ? 'owner' : null,
     category,
     subcategory: uq.presumed_subcategory || '일반',
     title,

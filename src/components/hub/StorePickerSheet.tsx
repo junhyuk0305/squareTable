@@ -22,6 +22,7 @@ export function StorePickerSheet({
   title,
   hint,
   rows,
+  currentUid,
   onPick,
   onClose,
 }: {
@@ -29,6 +30,8 @@ export function StorePickerSheet({
   title: string;
   hint: string;
   rows: StorePickerRow[];
+  /** 지금 보고 있는 매장 uid — 행에 '현재 매장' 표시(전환기처럼 현 매장도 목록에 넣는 흐름용). */
+  currentUid?: string;
   onPick: (uid: string) => void;
   onClose: () => void;
 }) {
@@ -37,20 +40,28 @@ export function StorePickerSheet({
       <Text style={styles.title}>{title}</Text>
       <Text style={styles.hint}>{hint}</Text>
       <ScrollView style={styles.list} showsVerticalScrollIndicator={false}>
-        {rows.map((r, i) => (
-          <Pressable
-            key={r.uid}
-            onPress={() => onPick(r.uid)}
-            style={({ pressed }) => [styles.row, i > 0 && styles.rowTop, pressed && { opacity: 0.85 }]}
-            accessibilityRole="button"
-            accessibilityLabel={`${r.label} 선택`}
-          >
-            <View style={[styles.dot, { backgroundColor: r.color }]} />
-            <Text style={styles.rowTitle} numberOfLines={1}>{r.label}</Text>
-            {r.count != null && <Text style={styles.cnt}>{r.count}</Text>}
-            <Ionicons name="chevron-forward" size={15} color={InkColors.ink3} />
-          </Pressable>
-        ))}
+        {rows.map((r, i) => {
+          const isCurrent = currentUid != null && r.uid === currentUid;
+          return (
+            <Pressable
+              key={r.uid}
+              onPress={() => onPick(r.uid)}
+              style={({ pressed }) => [styles.row, i > 0 && styles.rowTop, pressed && { opacity: 0.85 }]}
+              accessibilityRole="button"
+              accessibilityLabel={isCurrent ? `${r.label}, 현재 매장` : `${r.label} 선택`}
+            >
+              <View style={[styles.dot, { backgroundColor: r.color }]} />
+              <Text style={styles.rowTitle} numberOfLines={1}>{r.label}</Text>
+              {isCurrent && <Text style={styles.currentBadge}>현재 매장</Text>}
+              {r.count != null && <Text style={styles.cnt}>{r.count}</Text>}
+              {isCurrent ? (
+                <Ionicons name="checkmark" size={15} color={InkColors.ink} />
+              ) : (
+                <Ionicons name="chevron-forward" size={15} color={InkColors.ink3} />
+              )}
+            </Pressable>
+          );
+        })}
       </ScrollView>
     </BottomSheet>
   );
@@ -68,6 +79,11 @@ const styles = StyleSheet.create({
   rowTop: { borderTopWidth: 1, borderTopColor: InkColors.line },
   rowTitle: { flex: 1, fontSize: 15, fontWeight: '700', color: InkColors.ink, minWidth: 0 },
   dot: { width: 8, height: 8, borderRadius: 4 },
+  currentBadge: {
+    fontSize: 11, fontWeight: '800', color: InkColors.ink2,
+    backgroundColor: InkColors.bgSoft, borderWidth: 1, borderColor: InkColors.line,
+    paddingHorizontal: Space.xs + 2, paddingVertical: 2, borderRadius: Radius.pill, overflow: 'hidden',
+  },
   cnt: {
     minWidth: 24, textAlign: 'center', fontSize: 11.5, fontWeight: '900', color: '#8a5a12',
     backgroundColor: BrandColors.warnSoft, borderWidth: 1, borderColor: BrandColors.warnBorder,

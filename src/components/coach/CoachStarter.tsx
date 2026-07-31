@@ -1,6 +1,6 @@
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 
-import { getCategoryMeta } from '@/lib/utils/category';
+import { getSectionMeta } from '@/lib/utils/category';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
 
@@ -100,7 +100,7 @@ export function CoachStarter({
           <Text style={styles.hint}>최근 이렇게 알려주셨어요</Text>
           <View style={{ gap: 6 }}>
             {recent.map((e) => {
-              const m = getCategoryMeta(e.category);
+              const m = getSectionMeta(e.section);
               return (
                 <Pressable
                   key={e.id}

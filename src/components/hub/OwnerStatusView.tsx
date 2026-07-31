@@ -68,7 +68,8 @@ export function OwnerStatusView() {
   const ownedIds = useMemo(() => new Set(overview.map((r) => r.unit_id)), [overview]);
 
   // ── 확인 필요 집계(합류·질문·제안·검증) — 항목마다 "어느 매장에 몇 건"을 들고 있는다.
-  //    건수가 1개 매장뿐이면 행 탭 = 그 매장으로 바로 이동, 2+ 매장이면 매장 선택 시트를 띄운다. ──
+  //    다점포면 행 탭 = 항상 매장 선택 시트(0건 매장 포함 — 어느 매장 건인지 보이게, 2026-07-31),
+  //    매장 1곳이면 시트 없이 바로 이동. ──
   const inbox = useMemo(() => {
     const joins = crossData
       .filter((d) => ownedIds.has(d.unitId))
@@ -76,10 +77,10 @@ export function OwnerStatusView() {
     const joinCounts = new Map<string, number>();
     for (const j of joins) joinCounts.set(j.uid, (joinCounts.get(j.uid) ?? 0) + 1);
     const unitsOf = (val: (r: (typeof overview)[number]) => number) =>
-      overview.filter((r) => val(r) > 0).map((r) => ({ uid: r.unit_id, count: val(r) }));
+      overview.map((r) => ({ uid: r.unit_id, count: val(r) }));
     return {
       joins,
-      joinUnits: [...joinCounts].map(([uid, count]) => ({ uid, count })),
+      joinUnits: unitsOf((r) => joinCounts.get(r.unit_id) ?? 0),
       questions: overview.reduce((n, r) => n + r.pending_q, 0),
       questionUnits: unitsOf((r) => r.pending_q),
       suggestions: overview.reduce((n, r) => n + r.sugg_pending, 0),
@@ -132,7 +133,7 @@ export function OwnerStatusView() {
       <Pressable
         key={title}
         onPress={() => {
-          if (units.length > 1) setPicker({ title, path, units });
+          if (multi) setPicker({ title, path, units });
           else if (units[0]) void goStore(units[0].uid, path);
         }}
         disabled={!!switching}
@@ -314,8 +315,10 @@ export function OwnerStatusView() {
               <Text style={styles.statV}>
                 {aiTotal.toLocaleString()}
                 {/* 0082 부터 유료 플랜에도 캡(매장당 1500)이 있다 — free 만 분모를 보여주면
-                    유료 사장은 자기 한도를 모른 채 402를 맞는다. 현재 플랜의 캡을 그대로 쓴다. */}
-                {aiCap != null && <Text style={styles.statUnit}> / {aiCap.toLocaleString()}</Text>}
+                    유료 사장은 자기 한도를 모른 채 402를 맞는다. 캡은 매장당이므로 합산 분모 = 캡 × 매장 수. */}
+                {aiCap != null && (
+                  <Text style={styles.statUnit}> / {(aiCap * Math.max(overview.length, 1)).toLocaleString()}</Text>
+                )}
               </Text>
               <Text style={styles.statL}>AI 답변 사용</Text>
             </View>
@@ -325,7 +328,9 @@ export function OwnerStatusView() {
               <View key={r.unit_id} style={[styles.row, styles.rowTop]}>
                 <View style={[styles.dot, { backgroundColor: colorOf(r.unit_id) }]} />
                 <Text style={styles.rowTitle} numberOfLines={1}>{labelOf(r.unit_id)}</Text>
-                <Text style={styles.rowSub}>{`${r.labor_month.toLocaleString()}원 · AI ${r.ai_used}건`}</Text>
+                <Text style={styles.rowSub}>
+                  {`${r.labor_month.toLocaleString()}원 · AI ${r.ai_used}${aiCap != null ? `/${aiCap.toLocaleString()}` : ''}건`}
+                </Text>
               </View>
             ))}
           {aiCap != null && (
@@ -343,7 +348,8 @@ export function OwnerStatusView() {
         title={picker?.title ?? ''}
         hint="확인할 매장을 골라 주세요"
         rows={(picker?.units ?? []).map(
-          (u): StorePickerRow => ({ uid: u.uid, label: labelOf(u.uid), color: colorOf(u.uid), count: u.count }),
+          // 0건 매장은 배지를 그리지 않는다(배지 없음 = 없음) — "0" 경고 배지는 오독을 부른다.
+          (u): StorePickerRow => ({ uid: u.uid, label: labelOf(u.uid), color: colorOf(u.uid), count: u.count > 0 ? u.count : undefined }),
         )}
         onPick={(uid) => {
           const path = picker?.path;

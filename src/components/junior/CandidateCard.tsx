@@ -1,7 +1,7 @@
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
-import { getCategoryMeta } from '@/lib/utils/category';
+import { getSectionMeta } from '@/lib/utils/category';
 import { InkColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 
@@ -32,7 +32,7 @@ export function CandidateCard({ entries, onPick, onRegister }: Props) {
 
       <View style={styles.list}>
         {entries.map((e) => {
-          const meta = getCategoryMeta(e.category);
+          const meta = getSectionMeta(e.section);
           const preview = e.square.situation || e.square.action.steps[0] || '';
           return (
             <Pressable

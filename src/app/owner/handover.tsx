@@ -11,7 +11,6 @@ import { HandoverImport } from '@/components/owner/HandoverImport';
 import { structureSquare, BULK_IMPORT_PIPELINE } from '@/lib/ai';
 import type { StructuredSegment } from '@/lib/ai/types';
 import { isSquarePublishable, buildPlaybookEntryFromSquare, buildDirectUq } from '@/lib/utils/buildEntry';
-import { getCategoryMeta } from '@/lib/utils/category';
 import { EXTRACTION_MASTER } from '@/data/extraction-master';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { useSessionStore } from '@/lib/store/useSessionStore';
@@ -364,7 +363,6 @@ function SegmentCard({
   onToggleExpand: () => void;
   onEdit: (next: StructuredSegment) => void;
 }) {
-  const meta = getCategoryMeta(seg.category);
   const steps = seg.square.action.steps;
   const scripts = seg.square.action.scripts;
   const publishable = isSquarePublishable(seg.square);
@@ -393,11 +391,10 @@ function SegmentCard({
         >
           <View style={{ flex: 1 }}>
             <Text style={styles.rowTitle} numberOfLines={expanded ? undefined : 2}>{seg.title || '제목 없음'}</Text>
+            {/* 종류(루틴/돌발) 라벨은 AI 내부 분류라 비노출(07-31 단일화) — 카테고리는 저장 시트에서 배정된다. */}
             <View style={styles.rowMeta}>
-              <View style={[styles.catDot, { backgroundColor: meta.color }]} />
-              <Text style={styles.catLabel}>{meta.label}</Text>
-              {steps.length > 0 && <Text style={styles.stepCount}>· 할 일 {steps.length}단계</Text>}
-              {!publishable && <Text style={styles.needContent}>· 내용 없음</Text>}
+              {steps.length > 0 && <Text style={styles.stepCount}>할 일 {steps.length}단계</Text>}
+              {!publishable && <Text style={styles.needContent}>{steps.length > 0 ? '· ' : ''}내용 없음</Text>}
             </View>
           </View>
           <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={18} color={InkColors.ink3} style={styles.chevron} />
@@ -589,8 +586,6 @@ const styles = StyleSheet.create({
   cboxOn: { backgroundColor: InkColors.ink, borderColor: InkColors.ink },
   rowTitle: { fontSize: 13.5, fontWeight: '800', color: InkColors.ink, lineHeight: 19 },
   rowMeta: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 5 },
-  catDot: { width: 7, height: 7, borderRadius: Radius.pill },
-  catLabel: { fontSize: 11, fontWeight: '800', color: InkColors.ink2 },
   stepCount: { fontSize: 11, fontWeight: '600', color: InkColors.ink3 },
   needContent: { fontSize: 11, fontWeight: '700', color: BrandColors.warn },
 

@@ -22,7 +22,8 @@ import { formatKrw } from '@/lib/config/billing';
 import { SHOW_BILLING } from '@/lib/config/store-policy';
 
 // 사장 온보딩 — 업종 표준 노하우 팩에서 '선택 → 자동등록'. 빈 매장(노하우 0건) 죽음의 나선 차단.
-// 레이아웃: ① 추천 묶음 한 번에 담기(결정 최소화) → ② '직접 고르기' 접이식 카테고리 섹션(미세조정).
+// 레이아웃: ① 추천 묶음 한 번에 담기(결정 최소화) → ② '직접 고르기' 접이식 카테고리 섹션(미세조정)
+// → ③ 기존 매뉴얼 올리기(/owner/handover — 템플릿 대신 이미 쓰던 인수인계서로 시작하는 선택지).
 // 추천 항목 프리체크(기본 ≥5) → 매장 노하우로 fork(needs_review 배지). [[project_squaretable_onboarding]]
 const MIN_RECOMMENDED = 5;
 
@@ -50,13 +51,6 @@ export default function OwnerOnboardingScreen() {
       ),
     [templates],
   );
-  // 추천 묶음 카테고리 분해(돌발 3·루틴 2 …) — 히어로 카드 칩.
-  const recByCat = useMemo(() => {
-    const m = new Map<string, number>();
-    recommended.forEach((t) => m.set(t.category, (m.get(t.category) ?? 0) + 1));
-    return ALL_CATEGORIES.filter((c) => m.has(c)).map((c) => ({ cat: c, count: m.get(c) as number }));
-  }, [recommended]);
-
   // 추천은 미리 체크 — 기본값만으로 목표(≥5)를 충족시킨다.
   const [checked, setChecked] = useState<Record<string, boolean>>(() =>
     Object.fromEntries(templates.map((t) => [t.id, Boolean(t.recommended)])),
@@ -248,20 +242,7 @@ export default function OwnerOnboardingScreen() {
                 </View>
               </View>
 
-              {/* 카테고리 분해 칩 */}
-              <View style={styles.chipRow}>
-                {recByCat.map(({ cat, count }) => {
-                  const cm = getCategoryMeta(cat);
-                  return (
-                    <View key={cat} style={styles.chip}>
-                      <View style={[styles.chipDot, { backgroundColor: cm.color }]} />
-                      <Text style={styles.chipText}>
-                        {cm.label} {count}
-                      </Text>
-                    </View>
-                  );
-                })}
-              </View>
+              {/* 종류(루틴/돌발) 분해 칩은 07-31 카테고리 단일화로 비노출 — 개수·예시 제목이 구체성을 담당. */}
 
               {/* 예시 미리보기 — 추상적이지 않게 첫 3개 제목 */}
               <Text style={styles.bundlePreview} numberOfLines={1}>
@@ -312,6 +293,25 @@ export default function OwnerOnboardingScreen() {
               })}
             </Appear>
           )}
+        </Appear>
+
+        {/* ③ 기존 매뉴얼 경로 — 뒤로가기로 이 화면에 복귀할 수 있게 push. */}
+        <Appear delay={180}>
+          <Pressable
+            onPress={() => router.push('/owner/handover')}
+            style={({ pressed }) => [styles.manualCard, pressed && { opacity: 0.9 }]}
+            accessibilityRole="button"
+            accessibilityLabel="기존 매뉴얼 올리기 — 붙여넣으면 AI가 노하우로 정리해요"
+          >
+            <View style={styles.manualIcon}>
+              <Ionicons name="document-text-outline" size={16} color={InkColors.ink} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.manualTitle}>이미 쓰던 매뉴얼이 있다면</Text>
+              <Text style={styles.manualSub}>인수인계서·매뉴얼을 붙여넣으면 AI가 노하우로 정리해요</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color={InkColors.ink3} />
+          </Pressable>
         </Appear>
 
         <View style={{ height: 168 }} />
@@ -430,6 +430,30 @@ const styles = StyleSheet.create({
   chipDot: { width: 7, height: 7, borderRadius: Radius.pill },
   chipText: { fontSize: 12.5, fontWeight: '700', color: InkColors.ink2 },
   bundlePreview: { fontSize: 12.5, color: InkColors.ink3, fontWeight: '600' },
+
+  // ③ 기존 매뉴얼 카드 — 완료 화면 planNudge와 같은 리스트형 CTA 형태.
+  manualCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.md,
+    backgroundColor: InkColors.bg,
+    borderWidth: 1,
+    borderColor: InkColors.line,
+    borderRadius: Radius.lg,
+    paddingVertical: Space.md,
+    paddingHorizontal: Space.lg,
+    ...Elevation.e1,
+  },
+  manualIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: Radius.sm,
+    backgroundColor: BrandColors.yellowSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  manualTitle: { fontSize: 14, fontWeight: '900', color: InkColors.ink },
+  manualSub: { fontSize: 12, color: InkColors.ink3, fontWeight: '600', lineHeight: 17, marginTop: 1 },
 
   // ② 직접 고르기(접이식)
   pickerWrap: { gap: Space.md },

@@ -8,6 +8,7 @@ import { PressableScale } from '@/components/PressableScale';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { sectionOptions } from '@/lib/config/sections';
+import { getSectionMeta } from '@/lib/utils/category';
 import {
   findSimilarEntry,
   findSimilarSection,
@@ -25,7 +26,8 @@ import type { PlaybookEntry } from '@/types';
  * 두 가지를 한 번에 처리한다(시트를 두 번 띄우지 않기 위해 합쳤다):
  *  ① 겹침 확인: 이미 비슷한 노하우가 있으면 "그걸 수정" 경로를 먼저 제시한다.
  *     (막지는 않는다 — 사장이 "그래도 새로"를 고르면 그대로 저장. 판정은 렉시컬이라 오검출이 있다.)
- *  ② 챕터 배정: 표준 세트에서 고르게 해 '기타' 몰림과 표기 난립(응대/진상응대/클레임)을 막는다.
+ *  ② 카테고리(section) 배정: 표준 세트에서 고르게 해 '기타' 몰림과 표기 난립(응대/진상응대/클레임)을 막는다.
+ *     사용자 표면의 분류는 이것 하나다(종류 4종은 AI 내부용 — 2026-07-31 단일화).
  *
  * 판정 규칙은 여기서 만들지 않고 knowhowSimilarity(SSOT)를 부른다.
  */
@@ -40,7 +42,7 @@ export function PublishConfirmSheet({
   /** 저장하려는 노하우(단건 발행=1개, 분리 발행=N개). */
   entries: PlaybookEntry[];
   onCancel: () => void;
-  /** 사장이 고른 챕터로 저장 진행. null=미분류(기타). */
+  /** 사장이 고른 카테고리로 저장 진행. null=미분류(기타). */
   onConfirm: (section: string | null) => void;
   /** "기존 것 수정하기" — 겹치는 기존 노하우 수정 화면으로. */
   onEditExisting: (entryId: string) => void;
@@ -64,9 +66,11 @@ export function PublishConfirmSheet({
       .filter((r): r is { draft: PlaybookEntry; hit: NonNullable<ReturnType<typeof findSimilarEntry>> } => !!r.hit);
   }, [visible, entries, published]);
 
+  // 선택지 = 표준 + 사용 중 + 매장이 만든 카테고리(0개짜리 포함 — 카테고리 편집에서 추가한 것).
+  const customs = usePlaybookStore((s) => s.customCategories);
   const options = useMemo(
-    () => sectionOptions(industry, published.map((e) => e.section)),
-    [industry, published],
+    () => sectionOptions(industry, [...published.map((e) => e.section), ...customs.map((c) => c.label)]),
+    [industry, published, customs],
   );
 
   const pickNew = () => {
@@ -114,10 +118,11 @@ export function PublishConfirmSheet({
           </View>
         )}
 
-        <SectionLabel title="챕터" hint="매뉴얼에서 묶이는 단위예요" />
+        <SectionLabel title="카테고리" hint="매뉴얼에서 묶이는 단위예요" />
         <View style={styles.chips}>
           {options.map((name) => {
             const on = section === name;
+            const m = getSectionMeta(name);
             return (
               <PressableScale
                 key={name}
@@ -125,14 +130,16 @@ export function PublishConfirmSheet({
                 style={[styles.chip, on && styles.chipOn]}
                 accessibilityRole="button"
                 accessibilityState={{ selected: on }}
-                accessibilityLabel={`챕터 ${name}`}
+                accessibilityLabel={`카테고리 ${name}`}
               >
+                <View style={[styles.chipDot, { backgroundColor: m.color }]} />
                 <Text style={[styles.chipText, on && styles.chipTextOn]}>{name}</Text>
               </PressableScale>
             );
           })}
           {section && !options.includes(section) && (
             <View style={[styles.chip, styles.chipOn]}>
+              <View style={[styles.chipDot, { backgroundColor: getSectionMeta(section).color }]} />
               <Text style={[styles.chipText, styles.chipTextOn]}>{section}</Text>
             </View>
           )}
@@ -141,7 +148,7 @@ export function PublishConfirmSheet({
               onPress={() => setAdding(true)}
               style={styles.chipAdd}
               accessibilityRole="button"
-              accessibilityLabel="챕터 직접 추가"
+              accessibilityLabel="카테고리 직접 추가"
             >
               <Ionicons name="add" size={14} color={InkColors.ink3} />
               <Text style={styles.chipAddText}>직접 추가</Text>
@@ -154,16 +161,16 @@ export function PublishConfirmSheet({
             <TextInput
               value={newName}
               onChangeText={(t) => { setNewName(t); setDupSection(null); }}
-              placeholder="새 챕터 이름 (예: 배달앱)"
+              placeholder="새 카테고리 이름 (예: 배달앱)"
               placeholderTextColor={InkColors.ink3}
               style={styles.addInput}
               onSubmitEditing={pickNew}
               returnKeyType="done"
-              accessibilityLabel="새 챕터 이름"
+              accessibilityLabel="새 카테고리 이름"
             />
             {dupSection && (
               <Text style={styles.addWarn}>
-                이미 «{dupSection}» 챕터가 있어요. 같은 뜻이면 그쪽에 넣어 주세요 — 한 번 더 누르면 새로 만듭니다.
+                이미 «{dupSection}» 카테고리가 있어요. 같은 뜻이면 그쪽에 넣어 주세요 — 한 번 더 누르면 새로 만들어요.
               </Text>
             )}
             <View style={styles.addRow}>
@@ -181,7 +188,7 @@ export function PublishConfirmSheet({
                 onPress={pickNew}
                 style={styles.addOk}
                 accessibilityRole="button"
-                accessibilityLabel="챕터 만들기"
+                accessibilityLabel="카테고리 만들기"
               >
                 <Text style={styles.addOkText}>{dupSection ? '그래도 만들기' : '추가'}</Text>
               </PressableScale>
@@ -208,7 +215,7 @@ export function PublishConfirmSheet({
             accessibilityLabel="노하우 저장"
           >
             <Text style={styles.saveText} numberOfLines={1}>
-              {section ? `«${section}»에 저장` : '챕터 없이 저장'}
+              {section ? `«${section}»에 저장` : '카테고리 없이 저장'}
             </Text>
           </Pressable>
         </View>
@@ -232,7 +239,8 @@ const styles = StyleSheet.create({
   warnHint: { fontSize: 12, color: InkColors.ink3, lineHeight: 17 },
 
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.sm },
-  chip: { paddingVertical: Space.sm, paddingHorizontal: Space.md, borderRadius: Radius.pill, backgroundColor: InkColors.bgSoft },
+  chip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: Space.sm, paddingHorizontal: Space.md, borderRadius: Radius.pill, backgroundColor: InkColors.bgSoft },
+  chipDot: { width: 7, height: 7, borderRadius: Radius.pill },
   chipOn: { backgroundColor: BrandColors.yellow },
   chipText: { fontSize: 13, fontWeight: '700', color: InkColors.ink2 },
   chipTextOn: { color: InkColors.ink },

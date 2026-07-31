@@ -172,7 +172,11 @@ export default function StoresHub() {
             {/* ── 매장 목록 ── */}
             <Appear delay={60}>
               <View style={styles.section}>
-                <SectionLabel title={`매장 ${storeCount}곳`} hint={isOwner ? '사장' : '직원'} />
+                {/* 역할은 매장별(0093) — 매니저 매장이 하나라도 있으면 '직원' 대신 '매니저'로 표기 */}
+                <SectionLabel
+                  title={`매장 ${storeCount}곳`}
+                  hint={isOwner ? '사장' : stores.some((s) => s.role === 'manager') ? '매니저' : '직원'}
+                />
                 {stores.map((s) => {
                   const ov = overview[s.unit_id];
                   const busy = switching === s.unit_id;

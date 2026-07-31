@@ -11,12 +11,12 @@ import { InfoDot } from '@/components/InfoDot';
 import { SectionLabel } from '@/components/SectionLabel';
 import { Appear } from '@/components/Appear';
 import { KnowhowCarousel } from '@/components/KnowhowCarousel';
-import { KnowhowCategorySheet } from '@/components/owner/KnowhowCategorySheet';
-import { getCategoryMeta, ALL_CATEGORIES } from '@/lib/utils/category';
+import { CategoryEditSheet } from '@/components/owner/CategoryEditSheet';
+import { getSectionMeta } from '@/lib/utils/category';
 import { matchesKnowhowQuery } from '@/lib/utils/knowhowSearch';
 import { track } from '@/lib/analytics/track';
 import { verifyMeta } from '@/lib/utils/verification';
-import { UNSECTIONED } from '@/lib/config/sections';
+import { UNSECTIONED, sectionOptions } from '@/lib/config/sections';
 import { manualToText } from '@/lib/utils/manualText';
 import { useCopyToClipboard, canCopyToClipboard } from '@/lib/utils/useCopyToClipboard';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
@@ -45,9 +45,12 @@ const needsVerify = (e: PlaybookEntry) => e.needs_review === true;
 const isUnused = (e: PlaybookEntry) =>
   e.status === 'published' && (e.stats?.query_hits_30d ?? 0) === 0;
 
+// 사용자 표면의 분류는 카테고리(= section) 하나 — 종류(루틴/돌발 등)는 AI 내부용이라 안 보여준다.
+const sectionOf = (e: PlaybookEntry) => e.section?.trim() || UNSECTIONED;
+
 /** 한 노하우 행(목록 뷰) — 탭하면 수정. usedBy=이 노하우를 첨부한 업무 수(0069 역조회, 임팩트). */
 function EntryRow({ e, onPress, usedBy = 0 }: { e: PlaybookEntry; onPress: () => void; usedBy?: number }) {
-  const meta = getCategoryMeta(e.category);
+  const meta = getSectionMeta(e.section);
   const v = e.verification ? verifyMeta(e.verification.state) : null;
   const ratePct = Math.round((e.stats?.resolution_rate ?? 0) * 100);
   return (
@@ -123,32 +126,44 @@ export function OwnerKnowhowBrowse({
     return m;
   }, [knowhowLinks]);
   const update = usePlaybookStore((s) => s.update);
-  const customCats = usePlaybookStore((s) => s.customCategories); // 매장 커스텀 카테고리(0096)
   const userName = useSessionStore((s) => s.userName);
   const storeName = useSessionStore((s) => s.storeName);
+  const industry = useSessionStore((s) => s.industry);
+  const role = useSessionStore((s) => s.role);
   const { copied, copy } = useCopyToClipboard();
 
   const [query, setQuery] = useState('');
-  const [activeCat, setActiveCat] = useState<string | null>(null); // null = 전체(단일 선택). 기본 4종 키 또는 커스텀 id.
+  const [activeCat, setActiveCat] = useState<string | null>(null); // null = 전체(단일 선택). 카테고리(section) 이름.
   const [sort, setSort] = useState<SortKey>('recent');
   const [view, setView] = useState<'dashboard' | 'list' | 'manual'>(initialNeedsReview ? 'list' : 'dashboard');
   const [onlyNeedsReview, setOnlyNeedsReview] = useState(initialNeedsReview); // 미검증 배너에서 진입
   const [catSheet, setCatSheet] = useState(false); // 카테고리 편집 시트
-
-  // 필터칩·카테고리별 그룹의 공통 목록 = 기본 4종 + 매장 커스텀.
-  const allCats = useMemo(() => [...ALL_CATEGORIES, ...customCats.map((c) => c.id)], [customCats]);
-
-  // 편집 시트에서 지워진 커스텀이 활성 필터로 남았으면 전체 취급(상태 리셋 effect 대신 파생).
-  const effectiveCat = activeCat && allCats.includes(activeCat) ? activeCat : null;
 
   // 검토 대기(draft·인수인계서 파이프라인 증분저장분)는 둘러보기에서 제외 — 검수는 handover 화면이 담당.
   // (직원은 RLS 0064로 애초에 draft를 못 받지만, 사장 화면도 발행본과 섞이면 자산 목록이 오염된다.)
   const visible = useMemo(() => entries.filter((e) => e.status !== 'draft'), [entries]);
   const draftCount = entries.length - visible.length;
 
+  // 필터칩·카테고리별 그룹의 공통 목록 = 실제 쓰이는 카테고리 + 매장이 만든 카테고리(0개여도 노출).
+  // 순서: 표준 → 매장 고유 → 기타.
+  const customCats = usePlaybookStore((s) => s.customCategories);
+  const allCats = useMemo(() => {
+    const customLabels = customCats.map((c) => c.label);
+    const keep = new Set([...visible.map(sectionOf), ...customLabels]);
+    const ordered = sectionOptions(industry, [...visible.map((e) => e.section), ...customLabels]).filter((s) => keep.has(s));
+    if (keep.has(UNSECTIONED)) ordered.push(UNSECTIONED);
+    return ordered;
+  }, [visible, industry, customCats]);
+
+  // 노하우가 지워져 카테고리가 사라졌는데 활성 필터로 남았으면 전체 취급(상태 리셋 effect 대신 파생).
+  const effectiveCat = activeCat && allCats.includes(activeCat) ? activeCat : null;
+
   const goAdd = () => router.push('/owner/coach' as never);
   const goTemplates = () => router.push('/owner/templates' as never);
   const goHandover = () => router.push('/owner/handover' as never);
+  // 매니저 전용 물어보기(정본 §4 "AI 질문 매니저 ✅") — 검색으로 못 찾았을 때의 다음 행동.
+  // 사장에겐 숨김(자기 노하우에 자기가 질문하는 표면은 불필요, 사장 AI는 coach가 담당).
+  const goAsk = role === 'manager' ? () => router.push('/owner/ask' as never) : undefined;
   // 카테고리 필터는 단일 선택(라디오) — '전체' + 한 카테고리만. 같은 칩 재탭 시 전체로 해제.
   const selectCat = (c: string) => setActiveCat((prev) => (prev === c ? null : c));
 
@@ -169,7 +184,7 @@ export function OwnerKnowhowBrowse({
   const baseFiltered = useMemo(() => {
     const q = query.trim().toLowerCase();
     let list = visible.filter((e) => matchesKnowhowQuery(e, q));
-    if (effectiveCat) list = list.filter((e) => e.category === effectiveCat);
+    if (effectiveCat) list = list.filter((e) => sectionOf(e) === effectiveCat);
     return list;
   }, [visible, query, effectiveCat]);
 
@@ -210,18 +225,13 @@ export function OwnerKnowhowBrowse({
 
   const groups = useMemo(() => {
     if (sort !== 'category') return null;
+    // allCats는 visible 전체에서 파생되므로 listFiltered의 모든 항목이 반드시 어느 그룹엔가 속한다.
     const byCat = allCats.map((cat) => ({
       cat,
       items: listFiltered
-        .filter((e) => e.category === cat)
+        .filter((e) => sectionOf(e) === cat)
         .sort((a, b) => (b.updated_at ?? '').localeCompare(a.updated_at ?? '')),
     }));
-    // 삭제된 커스텀 카테고리의 노하우가 이 뷰에서 사라지지 않게 '기타'로 흡수.
-    const known = new Set(allCats);
-    const orphans = listFiltered
-      .filter((e) => !known.has(e.category))
-      .sort((a, b) => (b.updated_at ?? '').localeCompare(a.updated_at ?? ''));
-    if (orphans.length > 0) byCat.push({ cat: '__unknown', items: orphans });
     return byCat.filter((g) => g.items.length > 0);
   }, [listFiltered, sort, allCats]);
 
@@ -286,7 +296,7 @@ export function OwnerKnowhowBrowse({
           />
         </View>
         <Pressable onPress={goAdd} style={({ pressed }) => [styles.addBtn, pressed && { opacity: 0.85 }]}>
-          <Ionicons name="add" size={16} color={InkColors.bubbleText} />
+          <Ionicons name="add" size={16} color={InkColors.ink} />
           <Text style={styles.addBtnText}>노하우 추가</Text>
         </Pressable>
       </View>
@@ -422,7 +432,7 @@ export function OwnerKnowhowBrowse({
             </Pressable>
             {allCats.map((c) => {
               const on = effectiveCat === c;
-              const m = getCategoryMeta(c, customCats);
+              const m = getSectionMeta(c);
               return (
                 <Pressable key={c} onPress={() => selectCat(c)} style={[styles.chip, on && styles.chipOn]}>
                   <View style={[styles.chipDot, { backgroundColor: m.color }]} />
@@ -430,7 +440,7 @@ export function OwnerKnowhowBrowse({
                 </Pressable>
               );
             })}
-            {/* 카테고리 편집 — 기본 4종 고정 + 매장 커스텀 추가·수정·삭제(0096) */}
+            {/* 카테고리 자체의 추가·이름 수정·삭제(→기타 이동) */}
             <Pressable
               onPress={() => setCatSheet(true)}
               style={styles.chip}
@@ -475,7 +485,7 @@ export function OwnerKnowhowBrowse({
           {/* 결과 */}
           {view === 'manual' ? (
             manualGroups.length === 0 ? (
-              <EmptyResult onReset={() => { setQuery(''); setActiveCat(null); }} />
+              <EmptyResult onReset={() => { setQuery(''); setActiveCat(null); }} onAsk={goAsk} />
             ) : (
               <>
                 {/* 내보내기 = 화면에 보이는 그룹 그대로 직렬화(검색·필터 적용분 포함). */}
@@ -493,7 +503,7 @@ export function OwnerKnowhowBrowse({
                 {manualGroups.map((g) => (
                 <View key={g.name} style={{ gap: 8 }}>
                   <View style={styles.groupHead}>
-                    <Ionicons name="bookmark" size={13} color={InkColors.ink2} />
+                    <View style={[styles.dot, { backgroundColor: getSectionMeta(g.name).color }]} />
                     <Text style={styles.groupTitle}>{g.name}</Text>
                     <Text style={styles.groupCount}>{g.items.length}</Text>
                   </View>
@@ -508,7 +518,7 @@ export function OwnerKnowhowBrowse({
             )
           ) : view === 'dashboard' ? (
             baseFiltered.length === 0 ? (
-              <EmptyResult onReset={() => { setQuery(''); setActiveCat(null); }} />
+              <EmptyResult onReset={() => { setQuery(''); setActiveCat(null); }} onAsk={goAsk} />
             ) : (
               <View style={{ gap: Space.xl }}>
                 {needsReview.length > 0 && (
@@ -528,11 +538,12 @@ export function OwnerKnowhowBrowse({
           ) : listFiltered.length === 0 ? (
             <EmptyResult
               onReset={() => { setQuery(''); setActiveCat(null); setOnlyNeedsReview(false); }}
+              onAsk={onlyNeedsReview ? undefined : goAsk}
               label={onlyNeedsReview ? '확인할 노하우가 없어요' : undefined}
             />
           ) : groups ? (
             groups.map((g) => {
-              const m = getCategoryMeta(g.cat, customCats);
+              const m = getSectionMeta(g.cat);
               return (
                 <View key={g.cat} style={{ gap: 8 }}>
                   <View style={styles.groupHead}>
@@ -558,16 +569,22 @@ export function OwnerKnowhowBrowse({
         </>
       )}
       <View style={{ height: 16 }} />
-      {catSheet && <KnowhowCategorySheet onClose={() => setCatSheet(false)} />}
+      {catSheet && <CategoryEditSheet onClose={() => setCatSheet(false)} />}
     </ScrollView>
   );
 }
 
-function EmptyResult({ onReset, label }: { onReset: () => void; label?: string }) {
+function EmptyResult({ onReset, onAsk, label }: { onReset: () => void; onAsk?: () => void; label?: string }) {
   return (
     <View style={styles.emptyResult}>
       <Text style={styles.emptyResultEmoji}>{label ? '✅' : '🔍'}</Text>
       <Text style={styles.emptyResultText}>{label ?? '조건에 맞는 노하우가 없어요'}</Text>
+      {/* 매니저 전용: 목록에서 못 찾으면 다음 행동은 물어보기(AI 답변, 없으면 사장님께 질문) */}
+      {onAsk && (
+        <Pressable onPress={onAsk} accessibilityRole="button" accessibilityLabel="물어보기">
+          <Text style={styles.resetLink}>물어보기</Text>
+        </Pressable>
+      )}
       <Pressable onPress={onReset}>
         <Text style={styles.resetLink}>필터 초기화</Text>
       </Pressable>
@@ -583,8 +600,9 @@ const styles = StyleSheet.create({
 
   headRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
   subline: { flexShrink: 1, fontSize: 15, color: InkColors.ink3, fontWeight: '600' },
-  addBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: InkColors.ink, paddingVertical: 8, paddingHorizontal: 12, borderRadius: Radius.pill },
-  addBtnText: { color: InkColors.bubbleText, fontSize: 13, fontWeight: '800' },
+  // 주 CTA — 검정 헤더 요소들 사이에서 묻혀서 노랑 액센트로(2026-07-31 사용자 요청).
+  addBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: BrandColors.yellow, borderWidth: 1, borderColor: BrandColors.yellowDeep, paddingVertical: 8, paddingHorizontal: 12, borderRadius: Radius.pill },
+  addBtnText: { color: InkColors.ink, fontSize: 13, fontWeight: '800' },
 
   // 템플릿 둘러보기 진입 링크(홈에서 이관)
   templateLink: {

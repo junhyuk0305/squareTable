@@ -1,8 +1,7 @@
 import { View, Text, StyleSheet, Pressable, TextInput } from 'react-native';
 
 import { isSquarePublishable } from '@/lib/utils/buildEntry';
-import { getCategoryMeta, ALL_CATEGORIES } from '@/lib/utils/category';
-import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
+import { getCategoryMeta } from '@/lib/utils/category';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
 
@@ -12,7 +11,7 @@ import type { SquareBlock } from '@/types';
 type MiniProps = {
   square: SquareBlock;
   title: string;
-  category: string;            // 기본 4종 키 또는 커스텀 id — 카드 액센트 색 + (onCategory 있으면) 사장이 고르는 종류
+  category: string;            // AI 내부 분류(기본 4종 키) — 카드 액센트 색 전용, 라벨·선택 UI 비노출
   editable: boolean;
   showActions: boolean;
   onEdit: () => void;
@@ -21,7 +20,6 @@ type MiniProps = {
   onPublish: () => void;
   onPatch: (sq: SquareBlock) => void;
   onTitle: (t: string) => void;
-  onCategory?: (c: string) => void; // 있으면 리뷰 카드에 종류 선택칩 노출(발행 전 재분류 — 커스텀 포함)
   publishLabel: string;        // 발행 결과를 명시 — 인박스='이 답변 보내기' / 직접='노하우로 저장'
 };
 
@@ -38,11 +36,9 @@ export function MiniSquareCard({
   onPublish,
   onPatch,
   onTitle,
-  onCategory,
   publishLabel,
 }: MiniProps) {
-  const customCats = usePlaybookStore((s) => s.customCategories); // 종류 선택칩에 커스텀 합류(0096)
-  const meta = getCategoryMeta(category, customCats); // 액센트 색 전용(라벨 노출 안 함)
+  const meta = getCategoryMeta(category); // 액센트 색 전용(라벨 노출 안 함)
   const publishable = isSquarePublishable(square);
 
   const setStep = (i: number, v: string) =>
@@ -136,31 +132,7 @@ export function MiniSquareCard({
         );
       })()}
 
-      {/* 종류 선택 — 리뷰 카드에서만. AI가 1차 분류하되 사장이 직접 바꿀 수 있다(오분류 복구). */}
-      {showActions && onCategory && (
-        <View style={cardStyles.catPick}>
-          <Text style={cardStyles.catPickLabel}>종류</Text>
-          <View style={cardStyles.chipRow}>
-            {[...ALL_CATEGORIES, ...customCats.map((cc) => cc.id)].map((c) => {
-              const cm = getCategoryMeta(c, customCats);
-              const on = c === category;
-              return (
-                <Pressable
-                  key={c}
-                  onPress={() => onCategory(c)}
-                  style={[cardStyles.catChip, on && { borderColor: cm.color, backgroundColor: cm.soft }]}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: on }}
-                  accessibilityLabel={`종류 ${cm.label}`}
-                >
-                  <View style={[cardStyles.catDot, { backgroundColor: cm.color }]} />
-                  <Text style={[cardStyles.catChipText, on && cardStyles.catChipTextOn]}>{cm.label}</Text>
-                </Pressable>
-              );
-            })}
-          </View>
-        </View>
-      )}
+      {/* 종류(AI 내부 분류) 선택칩은 2026-07-31 카테고리 단일화로 제거 — 사용자 분류는 저장 시 카테고리(챕터) 선택 하나. */}
 
       {/* 액션 행 */}
       {showActions && (
@@ -219,19 +191,6 @@ const cardStyles = StyleSheet.create({
     gap: 10,
     ...Elevation.e1,
   },
-  // 종류 선택칩(리뷰 카드)
-  catPick: { gap: 6 },
-  catPickLabel: { fontSize: 12.5, fontWeight: '700', color: InkColors.ink3 },
-  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  catChip: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    paddingVertical: 6, paddingHorizontal: 11,
-    borderRadius: Radius.pill, borderWidth: 1, borderColor: InkColors.line, backgroundColor: InkColors.bg,
-  },
-  catDot: { width: 7, height: 7, borderRadius: Radius.pill },
-  catChipText: { fontSize: 12.5, fontWeight: '700', color: InkColors.ink2 },
-  catChipTextOn: { color: InkColors.ink, fontWeight: '800' },
-
   title: { fontSize: 18, fontWeight: '800', color: InkColors.ink, letterSpacing: -0.3 },
   titleEdit: {
     borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.sm,

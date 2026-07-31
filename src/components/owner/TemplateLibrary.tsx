@@ -13,12 +13,11 @@ import {
   forkTemplate,
   type PlaybookTemplate,
 } from '@/data/knowhowPacks';
-import { getCategoryMeta, ALL_CATEGORIES } from '@/lib/utils/category';
+import { getCategoryMeta } from '@/lib/utils/category';
 import { notifyAction } from '@/lib/utils/confirm';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
-import type { Category } from '@/types';
 
 const RECO_LIMIT = 6; // 검색 전 추천으로 띄울 개수
 const TAG_LIMIT = 10; // 빠른검색 칩 개수
@@ -48,7 +47,7 @@ function TemplateCard({
   imported: boolean;
   onImport: () => void;
 }) {
-  const m = getCategoryMeta(t.category);
+  const m = getCategoryMeta(t.category); // 액센트 색 전용 — 종류 라벨은 비노출(07-31 단일화)
   const steps = t.square?.action?.steps ?? [];
   const scripts = t.square?.action?.scripts ?? [];
   const dont = t.square?.extract?.dont?.trim();
@@ -67,8 +66,7 @@ function TemplateCard({
             {t.title}
           </Text>
           <View style={styles.metaRow}>
-            <Text style={styles.metaCat}>{m.label}</Text>
-            {t.subcategory ? <Text style={styles.metaSub}>· {t.subcategory}</Text> : null}
+            {t.subcategory ? <Text style={styles.metaSub}>{t.subcategory}</Text> : null}
             {imported ? (
               <View style={styles.addedBadge}>
                 <Ionicons name="checkmark" size={10} color={InkColors.ink2} />
@@ -155,7 +153,6 @@ export function TemplateLibrary() {
   const industry = useSessionStore((s) => s.industry);
 
   const [query, setQuery] = useState('');
-  const [activeCat, setActiveCat] = useState<Category | null>(null);
   const [scope, setScope] = useState<'mine' | 'all'>('mine');
   const [openId, setOpenId] = useState<string | null>(null); // 한 번에 하나만 펼침(아코디언)
 
@@ -183,13 +180,9 @@ export function TemplateLibrary() {
   }, [pool]);
 
   const q = query.trim().toLowerCase();
-  const searching = q.length > 0 || activeCat !== null;
+  const searching = q.length > 0;
 
-  const filtered = useMemo(() => {
-    let list = pool.filter((t) => matchesQuery(t, q));
-    if (activeCat) list = list.filter((t) => t.category === activeCat);
-    return list;
-  }, [pool, q, activeCat]);
+  const filtered = useMemo(() => pool.filter((t) => matchesQuery(t, q)), [pool, q]);
 
   const recommended = useMemo(
     () => pool.filter((t) => t.recommended).slice(0, RECO_LIMIT),
@@ -200,7 +193,13 @@ export function TemplateLibrary() {
 
   const doImport = async (t: PlaybookTemplate) => {
     if (isImported(t)) return;
-    const entry = forkTemplate(t, { unitId, creatorId: userId, creatorName: userName });
+    const entry = forkTemplate(t, {
+      unitId,
+      creatorId: userId,
+      creatorName: userName,
+      // 매니저도 이 화면에서 fork 가능(0093) — 저자 표기 스냅샷을 세션 역할로.
+      creatorRole: useSessionStore.getState().role === 'manager' ? 'manager' : 'owner',
+    });
     // 서버에 실제로 저장됐을 때만 "추가했어요"를 띄운다 — 실패 시 낙관적 추가가 롤백되므로
     // 성공 다이얼로그를 그대로 띄우면 "추가됨" 배지가 사라지며 무음 유실이 된다.
     const ok = await add({ ...entry, source: { kind: 'import', label: '업종 표준 템플릿' } });
@@ -292,24 +291,7 @@ export function TemplateLibrary() {
         </Appear>
       ) : null}
 
-      {/* 카테고리 칩(보조 필터) */}
-      <Appear delay={80}>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
-        <Pressable onPress={() => setActiveCat(null)} style={[styles.chip, activeCat === null && styles.chipOn]}>
-          <Text style={[styles.chipText, activeCat === null && styles.chipTextOn]}>전체</Text>
-        </Pressable>
-        {ALL_CATEGORIES.map((c) => {
-          const on = activeCat === c;
-          const m = getCategoryMeta(c);
-          return (
-            <Pressable key={c} onPress={() => setActiveCat(on ? null : c)} style={[styles.chip, on && styles.chipOn]}>
-              <View style={[styles.chipDot, { backgroundColor: m.color }]} />
-              <Text style={[styles.chipText, on && styles.chipTextOn]}>{m.label}</Text>
-            </Pressable>
-          );
-        })}
-      </ScrollView>
-      </Appear>
+      {/* 종류(루틴/돌발) 필터칩은 07-31 카테고리 단일화로 제거 — 템플릿 탐색은 검색·태그로. */}
 
       {/* 본문 — 검색 전: 빠른검색 + 추천 / 검색 중: 결과 리스트 */}
       {!searching ? (
@@ -337,7 +319,7 @@ export function TemplateLibrary() {
           ) : null}
 
           <View style={styles.allHint}>
-            <Text style={styles.allHintText}>위에서 검색하거나 카테고리를 누르면 전체 {pool.length}개를 볼 수 있어요</Text>
+            <Text style={styles.allHintText}>위에서 검색하면 전체 {pool.length}개를 볼 수 있어요</Text>
           </View>
         </>
       ) : filtered.length === 0 ? (
@@ -345,7 +327,7 @@ export function TemplateLibrary() {
         <View style={styles.empty}>
           <Text style={styles.emptyEmoji}>🔍</Text>
           <Text style={styles.emptyText}>조건에 맞는 템플릿이 없어요</Text>
-          <Pressable onPress={() => { setQuery(''); setActiveCat(null); }}>
+          <Pressable onPress={() => setQuery('')}>
             <Text style={styles.resetLink}>검색 초기화</Text>
           </Pressable>
         </View>
@@ -385,14 +367,6 @@ const styles = StyleSheet.create({
   scopeChipOn: { backgroundColor: InkColors.ink },
   scopeText: { fontSize: 12.5, fontWeight: '800', color: InkColors.ink3 },
   scopeTextOn: { color: InkColors.bubbleText },
-
-  // 카테고리 칩
-  chipRow: { flexDirection: 'row', gap: 7, paddingVertical: 1, paddingRight: 4 },
-  chip: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: InkColors.bg, borderWidth: 1, borderColor: InkColors.line, paddingVertical: 6, paddingHorizontal: 12, borderRadius: Radius.pill },
-  chipOn: { backgroundColor: InkColors.ink, borderColor: InkColors.ink },
-  chipDot: { width: 7, height: 7, borderRadius: Radius.pill },
-  chipText: { fontSize: 12.5, fontWeight: '700', color: InkColors.ink2 },
-  chipTextOn: { color: InkColors.bubbleText },
 
   block: { gap: Space.md },
 

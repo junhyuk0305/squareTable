@@ -52,7 +52,7 @@ export function templatesForIndustry(industry: string | undefined): PlaybookTemp
  */
 export function forkTemplate(
   tpl: PlaybookTemplate,
-  ctx: { unitId: string; creatorId: string; creatorName: string },
+  ctx: { unitId: string; creatorId: string; creatorName: string; creatorRole?: 'owner' | 'manager' },
 ): PlaybookEntry {
   const { recommended: _omit, ...base } = tpl;
   const now = new Date().toISOString();
@@ -62,6 +62,7 @@ export function forkTemplate(
     unit_id: ctx.unitId,
     creator_id: ctx.creatorId,
     creator_name: ctx.creatorName,
+    creator_role: ctx.creatorRole ?? 'owner', // 저자 표기 스냅샷(0101). 온보딩 fork=사장.
     is_template: false, // 이제 매장 실엔트리
     needs_review: true, // 사장이 교정 전 = '매장 기본값(미확인)'
     status: 'published',

@@ -6,10 +6,13 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { OwnerCoachChat } from '@/components/OwnerCoachChat';
 import { Appear } from '@/components/Appear';
+import { BottomSheet } from '@/components/BottomSheet';
 import { EmptyState } from '@/components/EmptyState';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { confirmAction } from '@/lib/utils/confirm';
+import { UNSECTIONED, sectionOptions } from '@/lib/config/sections';
+import { getSectionMeta } from '@/lib/utils/category';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { HEADER_EDGE_GUTTER, Space } from '@/lib/theme/layout';
@@ -60,7 +63,23 @@ function ConversationalEdit({ entry }: { entry: PlaybookEntry }) {
   const router = useRouter();
   const update = usePlaybookStore((s) => s.update);
   const remove = usePlaybookStore((s) => s.remove);
+  const entries = usePlaybookStore((s) => s.entries);
   const userName = useSessionStore((s) => s.userName);
+  const industry = useSessionStore((s) => s.industry);
+
+  // 카테고리(= section) 변경 — 저장 시 고른 카테고리를 여기서도 바꿀 수 있다(발행 시트와 같은 선택지).
+  const customs = usePlaybookStore((s) => s.customCategories);
+  const [catOpen, setCatOpen] = useState(false);
+  const catMeta = getSectionMeta(entry.section);
+  const catOptions = useMemo(
+    () => sectionOptions(industry, [...entries.map((e) => e.section), ...customs.map((c) => c.label)]),
+    [industry, entries, customs],
+  );
+  const pickCategory = (name: string | null) => {
+    setCatOpen(false);
+    if ((entry.section?.trim() || null) === name) return;
+    update(entry.id, { section: name });
+  };
 
   const [toast, setToast] = useState<string | null>(null);
   const navTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -143,6 +162,19 @@ function ConversationalEdit({ entry }: { entry: PlaybookEntry }) {
         }}
       />
 
+      {/* 카테고리 바 — 매뉴얼에서 묶이는 분류를 여기서 바로 바꾼다. */}
+      <Pressable
+        onPress={() => setCatOpen(true)}
+        style={({ pressed }) => [styles.catBar, pressed && { opacity: 0.7 }]}
+        accessibilityRole="button"
+        accessibilityLabel={`카테고리 ${catMeta.label}, 변경`}
+      >
+        <Text style={styles.catBarLabel}>카테고리</Text>
+        <View style={[styles.catDot, { backgroundColor: catMeta.color }]} />
+        <Text style={styles.catBarValue}>{catMeta.label}</Text>
+        <Ionicons name="chevron-down" size={14} color={InkColors.ink3} />
+      </Pressable>
+
       <OwnerCoachChat
         uq={syntheticUq}
         isInboxAnswer={false}
@@ -151,6 +183,47 @@ function ConversationalEdit({ entry }: { entry: PlaybookEntry }) {
         onUpdated={onUpdated}
         onPublished={() => {}}
       />
+
+      {catOpen && (
+        <BottomSheet visible onClose={() => setCatOpen(false)} sheetStyle={styles.catSheet}>
+          <Text style={styles.catSheetTitle}>카테고리 변경</Text>
+          <Text style={styles.catSheetHint}>매뉴얼에서 묶이는 단위예요</Text>
+          <View style={styles.catChips}>
+            {catOptions.map((name) => {
+              const m = getSectionMeta(name);
+              const on = (entry.section?.trim() || UNSECTIONED) === name;
+              return (
+                <Pressable
+                  key={name}
+                  onPress={() => pickCategory(name)}
+                  style={({ pressed }) => [styles.catChip, on && styles.catChipOn, pressed && { opacity: 0.7 }]}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: on }}
+                  accessibilityLabel={`카테고리 ${name}`}
+                >
+                  <View style={[styles.catDot, { backgroundColor: m.color }]} />
+                  <Text style={[styles.catChipText, on && styles.catChipTextOn]}>{name}</Text>
+                </Pressable>
+              );
+            })}
+            {/* 미분류(기타)로 되돌리기 */}
+            <Pressable
+              onPress={() => pickCategory(null)}
+              style={({ pressed }) => [
+                styles.catChip,
+                !entry.section?.trim() && styles.catChipOn,
+                pressed && { opacity: 0.7 },
+              ]}
+              accessibilityRole="button"
+              accessibilityState={{ selected: !entry.section?.trim() }}
+              accessibilityLabel={`카테고리 ${UNSECTIONED}`}
+            >
+              <View style={[styles.catDot, { backgroundColor: getSectionMeta(null).color }]} />
+              <Text style={[styles.catChipText, !entry.section?.trim() && styles.catChipTextOn]}>{UNSECTIONED}</Text>
+            </Pressable>
+          </View>
+        </BottomSheet>
+      )}
 
       {toast && (
         <View pointerEvents="none" style={styles.toastWrap}>
@@ -169,6 +242,30 @@ function ConversationalEdit({ entry }: { entry: PlaybookEntry }) {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: InkColors.cream },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
+
+  // 카테고리 바(헤더 아래) + 변경 시트
+  catBar: {
+    flexDirection: 'row', alignItems: 'center', gap: Space.sm,
+    marginHorizontal: Space.gutter, marginTop: Space.sm, marginBottom: Space.xs,
+    paddingVertical: Space.sm, paddingHorizontal: Space.md, minHeight: 40,
+    borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.pill, backgroundColor: InkColors.bg,
+    alignSelf: 'flex-start',
+  },
+  catBarLabel: { fontSize: 12.5, fontWeight: '700', color: InkColors.ink3 },
+  catBarValue: { fontSize: 13.5, fontWeight: '800', color: InkColors.ink },
+  catDot: { width: 8, height: 8, borderRadius: Radius.pill },
+  catSheet: { maxHeight: '70%', paddingBottom: Space.xl },
+  catSheetTitle: { fontSize: 16, fontWeight: '800', color: InkColors.ink, paddingHorizontal: Space.gutter, paddingTop: Space.sm },
+  catSheetHint: { fontSize: 12.5, color: InkColors.ink3, paddingHorizontal: Space.gutter, marginTop: 2, marginBottom: Space.md },
+  catChips: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.sm, paddingHorizontal: Space.gutter },
+  catChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 40,
+    paddingVertical: Space.sm, paddingHorizontal: Space.md,
+    borderRadius: Radius.pill, backgroundColor: InkColors.bgSoft,
+  },
+  catChipOn: { backgroundColor: BrandColors.yellow },
+  catChipText: { fontSize: 13, fontWeight: '700', color: InkColors.ink2 },
+  catChipTextOn: { color: InkColors.ink },
 
   toastWrap: { position: 'absolute', left: 0, right: 0, bottom: 36, alignItems: 'center' },
   toast: {

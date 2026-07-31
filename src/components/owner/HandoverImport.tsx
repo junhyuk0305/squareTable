@@ -17,7 +17,7 @@ import {
   SAME_SCORE_MIN,
   SIMILAR_SCORE_MIN,
 } from '@/lib/utils/knowhowSimilarity';
-import { getCategoryMeta } from '@/lib/utils/category';
+import { getSectionMeta } from '@/lib/utils/category';
 import { UNSECTIONED } from '@/lib/config/sections';
 import { EXTRACTION_MASTER } from '@/data/extraction-master';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
@@ -439,7 +439,7 @@ function DraftCard({
   const [expanded, setExpanded] = useState(false);
   const [newSectionMode, setNewSectionMode] = useState(false);
   const [newSection, setNewSection] = useState('');
-  const meta = getCategoryMeta(entry.category);
+  const meta = getSectionMeta(view.section); // 사용자 표면 분류 = 카테고리(section) — 종류는 비노출(07-31 단일화)
   const steps = view.square.action.steps;
   const scripts = view.square.action.scripts;
   const publishable = isSquarePublishable(view.square);

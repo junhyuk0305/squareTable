@@ -47,14 +47,11 @@ export function SplitProposal({
       {!!onRename && <Text style={splitStyles.hint}>제목을 눌러 고칠 수 있어요</Text>}
       <View style={{ gap: 8 }}>
         {segments.map((s, i) => {
-          const m = getCategoryMeta(s.category);
+          const m = getCategoryMeta(s.category); // 액센트 색 전용 — 종류 라벨은 비노출(07-31 단일화)
           const editing = editIdx === i;
           const shownTitle = s.title || `노하우 ${i + 1}`;
           return (
             <View key={i} style={[splitStyles.item, { borderLeftColor: m.color }]}>
-              <View style={[splitStyles.itemChip, { backgroundColor: m.color }]}>
-                <Text style={splitStyles.itemChipText}>{m.label}</Text>
-              </View>
               <View style={{ flex: 1 }}>
                 {editing ? (
                   <TextInput
@@ -128,8 +125,6 @@ const splitStyles = StyleSheet.create({
     paddingHorizontal: 12,
     backgroundColor: InkColors.bg,
   },
-  itemChip: { paddingVertical: 3, paddingHorizontal: 8, borderRadius: Radius.pill },
-  itemChipText: { fontSize: 10.5, fontWeight: '800', color: InkColors.bubbleText },
   titleRow: { flexDirection: 'row', alignItems: 'center' },
   itemTitle: { flexShrink: 1, fontSize: 14, fontWeight: '700', color: InkColors.ink },
   titleInput: {

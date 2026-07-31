@@ -138,6 +138,8 @@ export default function OwnerLayout() {
       {/* 서브화면 — 전역 headerLeft(HeaderBackButton) 사용 */}
       <Stack.Screen name="staff" options={{ title: '직원·급여' }} />
       <Stack.Screen name="training" options={{ title: '훈련' }} />
+      {/* 물어보기(매니저) — 직원 물어보기 재사용, 노하우 탭 검색 결과 없음에서 진입 */}
+      <Stack.Screen name="ask" options={{ title: '물어보기' }} />
       <Stack.Screen name="schedule" options={{ title: '근무표' }} />
       <Stack.Screen name="store-config" options={{ title: '매장 기본 정보' }} />
       <Stack.Screen name="timesheet/[staffId]" options={{ title: '출근 기록' }} />

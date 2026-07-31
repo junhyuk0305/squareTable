@@ -55,11 +55,11 @@ export function OwnerKnowhowHubView() {
   const emptyStores = useMemo(() => overview.filter((r) => r.knowhow === 0), [overview]);
   const allClear = totals.pending === 0 && totals.review === 0 && totals.stale === 0;
 
-  // 노하우 담기 — 템플릿 구경은 매장 무관이지만 "담기"는 매장에 종속되므로,
-  // 다점포면 어느 매장에 담을지 먼저 고르게 한다(매장 1곳이면 시트 없이 바로 이동).
-  const [pickOpen, setPickOpen] = useState(false);
+  // 매장 선택 시트 공용 — templates(노하우 담기)·import(다른 매장에서 가져오기) 두 흐름이 쓴다.
+  // 담기·가져오기 모두 "어느 매장에"가 먼저이므로, 다점포면 시트로 대상 매장을 고르게 한다.
+  const [picker, setPicker] = useState<null | 'templates' | 'import'>(null);
   const startTemplates = (uid: string) => {
-    if (overview.length > 1) setPickOpen(true);
+    if (overview.length > 1) setPicker('templates');
     else void goStore(uid, '/owner/templates');
   };
 
@@ -111,6 +111,45 @@ export function OwnerKnowhowHubView() {
         </Appear>
       ))}
 
+      {/* ── 매장별 노하우 — 각 매장의 노하우 화면으로 가는 관리 입구 + 매장 간 가져오기 ── */}
+      {(overview.some((r) => r.knowhow > 0) || overview.length > 1) && (
+        <Appear delay={20}>
+          <SectionLabel title="매장별 노하우" />
+          <View style={styles.card}>
+            {overview
+              .filter((r) => r.knowhow > 0)
+              .map((r) => (
+                <Pressable
+                  key={r.unit_id}
+                  onPress={() => goStore(r.unit_id, '/owner/knowledge')}
+                  disabled={!!switching}
+                  style={({ pressed }) => [styles.row, pressed && { opacity: 0.85 }]}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${labelOf(r.unit_id)} 노하우 ${r.knowhow}개 관리`}
+                >
+                  <View style={[styles.dot, { backgroundColor: colorOf(r.unit_id) }]} />
+                  <Text style={styles.rowTitle} numberOfLines={1}>{labelOf(r.unit_id)}</Text>
+                  <Text style={styles.cntNeutral}>{r.knowhow}</Text>
+                  <Ionicons name="chevron-forward" size={15} color={InkColors.ink3} />
+                </Pressable>
+              ))}
+            {overview.length > 1 && (
+              <Pressable
+                onPress={() => setPicker('import')}
+                disabled={!!switching}
+                style={({ pressed }) => [styles.row, styles.importRow, pressed && { opacity: 0.85 }]}
+                accessibilityRole="button"
+                accessibilityLabel="다른 매장에서 노하우 가져오기"
+              >
+                <Ionicons name="swap-horizontal" size={15} color={InkColors.ink2} />
+                <Text style={styles.importText}>다른 매장에서 가져오기</Text>
+                <Ionicons name="chevron-forward" size={15} color={InkColors.ink3} />
+              </Pressable>
+            )}
+          </View>
+        </Appear>
+      )}
+
       {/* ── 노하우로 만들 것(미답변 질문) ── */}
       <Appear delay={40}>
         <SectionLabel title="노하우로 만들 것" hint="답 하나가 노하우 하나가 돼요" />
@@ -159,15 +198,16 @@ export function OwnerKnowhowHubView() {
       )}
 
       <StorePickerSheet
-        visible={pickOpen}
-        title="노하우 담기"
-        hint="어느 매장에 담을지 골라 주세요"
+        visible={picker !== null}
+        title={picker === 'import' ? '다른 매장에서 가져오기' : '노하우 담기'}
+        hint={picker === 'import' ? '어느 매장으로 가져올지 골라 주세요' : '어느 매장에 담을지 골라 주세요'}
         rows={overview.map((r) => ({ uid: r.unit_id, label: labelOf(r.unit_id), color: colorOf(r.unit_id) }))}
         onPick={(uid) => {
-          setPickOpen(false);
-          void goStore(uid, '/owner/templates');
+          const path = picker === 'import' ? '/owner/import-knowhow' : '/owner/templates';
+          setPicker(null);
+          void goStore(uid, path);
         }}
-        onClose={() => setPickOpen(false)}
+        onClose={() => setPicker(null)}
       />
     </View>
   );
@@ -212,5 +252,13 @@ const styles = StyleSheet.create({
     backgroundColor: BrandColors.warnSoft, borderWidth: 1, borderColor: BrandColors.warnBorder,
     paddingHorizontal: Space.xs + 2, paddingVertical: 1, borderRadius: Radius.pill, overflow: 'hidden',
   },
+  // 매장별 노하우 개수 — 경고가 아닌 중립 정보라 warn 배지 대신 무채색.
+  cntNeutral: {
+    minWidth: 24, textAlign: 'center', fontSize: 11.5, fontWeight: '900', color: InkColors.ink2,
+    backgroundColor: InkColors.bgSoft, borderWidth: 1, borderColor: InkColors.line,
+    paddingHorizontal: Space.xs + 2, paddingVertical: 1, borderRadius: Radius.pill, overflow: 'hidden',
+  },
+  importRow: { borderTopWidth: 1, borderTopColor: InkColors.line, marginTop: Space.xs },
+  importText: { flex: 1, fontSize: 13.5, fontWeight: '700', color: InkColors.ink2, minWidth: 0 },
   dot: { width: 8, height: 8, borderRadius: 4 },
 });

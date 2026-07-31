@@ -387,11 +387,8 @@ export function TaskComposerModal({
                     )}
                   </View>
                 )}
-                <Text style={s.khHint}>붙여두면 이 업무를 할 때 노하우를 바로 열 수 있어요</Text>
               </Field>
             )}
-
-            <Text style={s.note}>‘매주 반복’=선택 요일마다 자동 노출 · 업무 카테고리는 할일 화면의 ‘업무 카테고리 설정’에서 추가·편집</Text>
           </ScrollView>
 
           <View style={s.foot}>
@@ -549,7 +546,6 @@ const s = StyleSheet.create({
   lockedScopeHint: { fontSize: 11, color: InkColors.ink3, marginTop: 2 },
   assignHint: { fontSize: 11.5, color: InkColors.ink2, fontWeight: '600', marginTop: 8, paddingHorizontal: 2 },
 
-  note: { fontSize: 11, color: InkColors.ink3, textAlign: 'center', marginTop: 4, marginBottom: 8 },
 
   // 노하우 첨부
   khChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 8 },
@@ -559,7 +555,6 @@ const s = StyleSheet.create({
   khRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: InkColors.paper },
   khRowText: { flex: 1, fontSize: 13.5, fontWeight: '600', color: InkColors.ink },
   khEmpty: { fontSize: 12.5, color: InkColors.ink3, paddingHorizontal: 12, paddingVertical: 12 },
-  khHint: { fontSize: 11, color: InkColors.ink3, marginTop: 7, paddingHorizontal: 2 },
   khRecoLabel: { fontSize: 11, fontWeight: '800', color: InkColors.ink3, paddingHorizontal: 12, paddingTop: 10, paddingBottom: 2 },
   khOpenBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, marginTop: 6, paddingVertical: 10, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.sm, borderStyle: 'dashed', backgroundColor: InkColors.bg },
   khOpenText: { fontSize: 12.5, fontWeight: '700', color: InkColors.ink2 },

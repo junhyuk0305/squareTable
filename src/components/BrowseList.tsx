@@ -1,8 +1,8 @@
 import { View, Text, Pressable, ScrollView, StyleSheet, type ViewStyle } from 'react-native';
-import { CategoryChip } from './CategoryChip';
 import { EmptyState } from './EmptyState';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Elevation, Radius } from '@/lib/theme/elevation';
+import { getSectionMeta } from '@/lib/utils/category';
 import { verifyMeta } from '@/lib/utils/verification';
 import { knowhowSourceLabel } from '@/lib/utils/knowhowSource';
 import type { PlaybookEntry } from '@/types';
@@ -15,8 +15,8 @@ export type BrowseListProps = {
   /** 빈 상태 안내 문구(미지정 시 카탈로그 기본 문구 사용) */
   emptyHint?: string;
   /**
-   * 카테고리 칩 라벨 노출 여부(기본 true). 프레임 v2에서 카테고리는 AI 내부 비계라
-   * 직원(end-user)에겐 라벨을 숨긴다(false → 색만). 사장 관리화면은 true 유지.
+   * 카테고리(= section) 칩 노출 여부(기본 true). 종류(루틴/돌발 등)는 AI 내부 비계라
+   * 어디에도 라벨을 노출하지 않는다(2026-07-31 카테고리 단일화).
    */
   showCategory?: boolean;
 };
@@ -54,9 +54,17 @@ export function BrowseCard({
         accessibilityLabel={`${entry.title}, ${v.label}, 해결률 ${ratePct}%${hits > 0 ? `, ${hits}명이 물어봄` : ''}`}
         style={({ pressed }) => [styles.cardBody, pressed && styles.pressed]}
       >
-        {/* 헤더: 카테고리(색 액센트) + 검증배지. 라벨 노출은 showCategory로 제어(프레임 v2). */}
+        {/* 헤더: 카테고리(색점+이름) + 검증배지. 노출은 showCategory로 제어. */}
         <View style={[styles.header, !showCategory && { justifyContent: 'flex-end' }]}>
-          {showCategory && <CategoryChip category={entry.category} size="sm" />}
+          {showCategory && (() => {
+            const sm = getSectionMeta(entry.section);
+            return (
+              <View style={styles.sectionChip}>
+                <View style={[styles.sectionDot, { backgroundColor: sm.color }]} />
+                <Text style={styles.sectionChipText}>{sm.label}</Text>
+              </View>
+            );
+          })()}
           <View style={[styles.badge, { backgroundColor: v.bg }]}>
             <Text style={[styles.badgeText, { color: v.fg }]}>
               {v.icon} {v.label}
@@ -154,6 +162,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     borderRadius: Radius.pill,
   },
+  // 카테고리(section) 칩 — 색점 + 이름
+  sectionChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingVertical: 3,
+    paddingHorizontal: 8,
+    borderRadius: Radius.pill,
+    backgroundColor: InkColors.bgSoft,
+  },
+  sectionDot: { width: 7, height: 7, borderRadius: Radius.pill },
+  sectionChipText: { fontSize: 11, fontWeight: '800', color: InkColors.ink2 },
   badgeText: { fontSize: 11, fontWeight: '800' },
   title: { fontSize: 15, fontWeight: '700', color: InkColors.ink, lineHeight: 21 },
   statRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8 },

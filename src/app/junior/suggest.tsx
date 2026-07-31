@@ -9,7 +9,7 @@ import { useSessionStore } from '@/lib/store/useSessionStore';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { showToast } from '@/lib/store/useToastStore';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
-import { getCategoryMeta } from '@/lib/utils/category';
+import { getSectionMeta } from '@/lib/utils/category';
 import { Radius, Elevation } from '@/lib/theme/elevation';
 import { RoleTabBar } from '@/components/RoleTabBar';
 import { Appear } from '@/components/Appear';
@@ -154,7 +154,7 @@ export default function JuniorSuggestScreen() {
                       onPress={() => setPickedId(e.id)}
                       style={({ pressed }) => [styles.pickRow, pressed && { backgroundColor: InkColors.bgSoft }]}
                     >
-                      <View style={[styles.catDot, { backgroundColor: getCategoryMeta(e.category).color }]} />
+                      <View style={[styles.catDot, { backgroundColor: getSectionMeta(e.section).color }]} />
                       <Text style={styles.pickTitle} numberOfLines={1}>{e.title}</Text>
                       <Ionicons name="chevron-forward" size={16} color={InkColors.ink3} />
                     </Pressable>

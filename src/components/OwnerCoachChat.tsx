@@ -555,8 +555,8 @@ export function OwnerCoachChat({
     presentSingle([], { square: merged, title: segments[0].title, category: cat });
   }, [segments, presentSingle, pushMsg]);
 
-  // 카테고리 = AI가 1차 분류(제안)하되, 리뷰 카드에서 사장이 직접 바꿀 수 있다(회의 반영: 꿀팁을
-  //   루틴으로 오분류하던 문제). setCategory를 활성 카드에 넘겨 발행 직전까지 재지정 가능.
+  // 종류(category) = AI 내부 분류. 2026-07-31 카테고리 단일화로 사용자 선택 UI는 제거 —
+  //   사용자 표면의 분류는 저장 시트의 카테고리(section) 하나다. category는 AI가 정한 값을 그대로 저장.
 
   // ── 발행 / 수정 저장 ──
   const handlePublish = useCallback(() => {
@@ -708,7 +708,6 @@ export function OwnerCoachChat({
                 onPublish={handlePublish}
                 onPatch={(sq) => setSquare(sq)}
                 onTitle={setTitle}
-                onCategory={isLastCard ? setCategory : undefined}
                 publishLabel={isEdit ? '수정 저장' : isInboxAnswer ? '이 답변 보내기' : '노하우로 저장'}
               />
             </Appear>

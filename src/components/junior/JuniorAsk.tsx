@@ -61,7 +61,9 @@ const CHAT_PAGE = 20;
  * 크롬(SafeArea/탭바/헤더)은 컨테이너가 소유하므로 여기선 KeyboardAvoidingView부터.
  * RAG·useChatStore·만족도·익명·시드칩 동작은 기존과 100% 동일.
  * ───────────────────────────────────────────────────────── */
-export function JuniorAsk() {
+// suggestEntry: '노하우 제안' 진입(/junior/suggest) 노출 여부 — 매니저(owner/ask 재사용)는
+// 제안 경로 대신 직접 발행 권한이 있으므로 숨긴다.
+export function JuniorAsk({ suggestEntry = true }: { suggestEntry?: boolean } = {}) {
   const history = useChatStore((s) => s.history);
   const isLoading = useChatStore((s) => s.isLoading);
   const submit = useChatStore((s) => s.submit);
@@ -174,14 +176,16 @@ export function JuniorAsk() {
       {/* 상단 안내 + 노하우 제안 진입(새 노하우 등록 신청) */}
       <View style={styles.identityBar}>
         <Text style={styles.identityText} numberOfLines={1}>{identity}</Text>
-        <Pressable
-          onPress={() => router.push('/junior/suggest')}
-          hitSlop={6}
-          style={({ pressed }) => [styles.suggestEntry, pressed && { opacity: 0.7 }]}
-        >
-          <Ionicons name="bulb" size={13} color={BrandColors.yellowDeep} />
-          <Text style={styles.suggestEntryText}>노하우 제안</Text>
-        </Pressable>
+        {suggestEntry && (
+          <Pressable
+            onPress={() => router.push('/junior/suggest')}
+            hitSlop={6}
+            style={({ pressed }) => [styles.suggestEntry, pressed && { opacity: 0.7 }]}
+          >
+            <Ionicons name="bulb" size={13} color={BrandColors.yellowDeep} />
+            <Text style={styles.suggestEntryText}>노하우 제안</Text>
+          </Pressable>
+        )}
       </View>
 
       {/* 대화 히스토리 */}

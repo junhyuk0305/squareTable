@@ -3,6 +3,7 @@ import { BrandColors, InkColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 
 type Props = {
+  /** 존칭 포함 완성 라벨("김영자 사장님"/"박지원 매니저") — 판정은 knowhowSourceLabel SSOT가 담당. */
   creatorName: string;
   title: string;
   version: number;
@@ -17,7 +18,7 @@ export function SourceFooter({ creatorName, title, version, updatedAt, onPress }
         <Text style={styles.label}>출처</Text>
         <View style={styles.ribbon} />
       </View>
-      <Text style={styles.creator}>{creatorName} 사장님 가이드</Text>
+      <Text style={styles.creator}>{creatorName} 가이드</Text>
       <Text style={styles.title} numberOfLines={2}>{title}</Text>
       <View style={styles.metaRow}>
         <Text style={styles.meta}>v{version} · {updatedAt} 갱신</Text>

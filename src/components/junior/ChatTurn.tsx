@@ -11,6 +11,9 @@ import { UserBubble } from '@/components/UserBubble';
 import { Appear } from '@/components/Appear';
 
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
+import { useSessionStore } from '@/lib/store/useSessionStore';
+import { canManage } from '@/lib/utils/roles';
+import { knowhowSourceLabel } from '@/lib/utils/knowhowSource';
 import { InkColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 
@@ -44,6 +47,8 @@ export function ChatTurn({
   animateIn = false,
 }: ChatTurnProps) {
   const router = useRouter();
+  // 매니저(owner/ask 재사용)는 제안 대신 직접 수정 권한 — 개선 진입을 owner 수정 화면으로 보낸다.
+  const manager = canManage(useSessionStore((s) => s.role));
   // 상세 모달은 출처(matched) 또는 후보(candidate) 어느 쪽이든 띄운다 — 단일 상태로 통일.
   const [detailEntry, setDetailEntry] = useState<PlaybookEntry | undefined>(undefined);
 
@@ -112,7 +117,11 @@ export function ChatTurn({
             donts={block.donts}
             source={{
               entryId: block.source.entry_id,
-              creatorName: block.source.creator_name,
+              // 존칭 판정은 knowhowSourceLabel SSOT — 원본 엔트리가 있으면 역할(사장님/매니저)까지 반영,
+              // 없으면(삭제 등) 엣지 스냅샷 이름에 기존 기본 존칭을 붙인다.
+              creatorName: matchedEntry
+                ? knowhowSourceLabel(matchedEntry)
+                : `${block.source.creator_name} 사장님`,
               title: block.source.title,
               version: block.source.version,
               updatedAt: block.source.updated_at,
@@ -214,16 +223,20 @@ export function ChatTurn({
           )
         )}
 
-        {/* 더 나은 방법을 아는 알바 → 이 노하우 개선 제안(사장 검토 후 반영) */}
+        {/* 더 나은 방법을 아는 직원 → 이 노하우 개선 제안(사장 검토 후 반영). 매니저는 직접 수정. */}
         {block && matchedEntry && (
           <Pressable
             onPress={() =>
-              router.push({ pathname: '/junior/suggest', params: { entryId: matchedEntry.id, title: matchedEntry.title } })
+              manager
+                ? router.push(`/owner/edit/${matchedEntry.id}` as never)
+                : router.push({ pathname: '/junior/suggest', params: { entryId: matchedEntry.id, title: matchedEntry.title } })
             }
             style={({ pressed }) => [turnStyles.improveLink, pressed && { opacity: 0.6 }]}
           >
             <Ionicons name="sparkles-outline" size={13} color={InkColors.ink3} />
-            <Text style={turnStyles.improveText}>더 좋은 방법이 있나요? 개선 제안하기</Text>
+            <Text style={turnStyles.improveText}>
+              {manager ? '더 좋은 방법이 있나요? 노하우 수정하기' : '더 좋은 방법이 있나요? 개선 제안하기'}
+            </Text>
           </Pressable>
         )}
 

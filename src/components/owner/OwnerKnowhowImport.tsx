@@ -9,12 +9,10 @@ import { fetchUnitKnowhow, copyKnowhow, type UnitKnowhowRow } from '@/lib/db';
 import { SectionLabel } from '@/components/SectionLabel';
 import { InfoDot } from '@/components/InfoDot';
 import { Appear } from '@/components/Appear';
-import { getCategoryMeta } from '@/lib/utils/category';
 import { notifyAction } from '@/lib/utils/confirm';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
-import type { Category } from '@/types';
 
 // RPC 예외 → 사장이 읽을 수 있는 문구. (definer RPC 의 raise 메시지 코드 매핑)
 const ERR_MSG: Record<string, string> = {
@@ -183,7 +181,6 @@ export function OwnerKnowhowImport() {
             <View style={styles.list}>
               {rows?.map((r) => {
                 const on = selected.has(r.id);
-                const m = getCategoryMeta(r.category as Category);
                 const situation = typeof r.square?.situation === 'string' ? (r.square.situation as string) : '';
                 return (
                   <Pressable
@@ -199,11 +196,12 @@ export function OwnerKnowhowImport() {
                     </View>
                     <View style={{ flex: 1, minWidth: 0 }}>
                       <Text style={styles.rowTitle} numberOfLines={1}>{r.title}</Text>
-                      <View style={styles.rowMeta}>
-                        <View style={[styles.mdot, { backgroundColor: m.color }]} />
-                        <Text style={styles.rowCat}>{m.label}</Text>
-                        {r.subcategory ? <Text style={styles.rowSub} numberOfLines={1}>· {r.subcategory}</Text> : null}
-                      </View>
+                      {/* 종류(루틴/돌발) 라벨 비노출(07-31 단일화). RPC가 section을 안 주므로 소분류만 남긴다. */}
+                      {r.subcategory ? (
+                        <View style={styles.rowMeta}>
+                          <Text style={styles.rowSub} numberOfLines={1}>{r.subcategory}</Text>
+                        </View>
+                      ) : null}
                       {situation ? <Text style={styles.rowPreview} numberOfLines={1}>{situation}</Text> : null}
                     </View>
                   </Pressable>
@@ -281,8 +279,6 @@ const styles = StyleSheet.create({
   checkOn: { backgroundColor: InkColors.ink, borderColor: InkColors.ink },
   rowTitle: { fontSize: 15, fontWeight: '700', color: InkColors.ink },
   rowMeta: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 3 },
-  mdot: { width: 7, height: 7, borderRadius: Radius.pill },
-  rowCat: { fontSize: 12, color: InkColors.ink2, fontWeight: '700' },
   rowSub: { fontSize: 12, color: InkColors.ink3, fontWeight: '600', flexShrink: 1 },
   rowPreview: { fontSize: 12.5, color: InkColors.ink3, fontWeight: '500', marginTop: 4, lineHeight: 17 },
 

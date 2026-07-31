@@ -1,5 +1,6 @@
-import { CategoryColors, CategoryColorsSoft, CustomCategoryColor, CustomCategoryColorSoft } from '@/lib/theme/colors';
+import { CategoryColors, CategoryColorsSoft, CustomCategoryColor, CustomCategoryColorSoft, InkColors } from '@/lib/theme/colors';
 import { getCustomCategoryRegistry, type CustomCategory } from '@/lib/store/knowhowCategories';
+import { UNSECTIONED } from '@/lib/config/sections';
 import type { Category } from '@/types';
 
 type CategoryMeta = {
@@ -62,3 +63,36 @@ export function getCategoryMeta(category: string, customs?: CustomCategory[]): C
 }
 
 export const ALL_CATEGORIES: Category[] = ['Routine', 'Event', 'Context', 'Know-how'];
+
+// ── 사용자 표면 카테고리(= playbook_entries.section) 색 ──────────────────
+// 2026-07-31 단일화: 사용자에게 보이는 분류는 섹션(매뉴얼 챕터) 하나뿐이다.
+// 기본 4종(루틴/돌발/원칙/꿀팁)은 AI 내부 비계로만 남고 UI에 라벨을 노출하지 않는다.
+// 표준 챕터는 고정색(인접 챕터 색 충돌 방지), 매장이 만든 챕터는 이름 해시로 결정적 배정.
+
+const SECTION_FIXED_COLORS: Record<string, string> = {
+  '오픈': '#3E92D9',      // 블루
+  '마감': '#8A63D2',      // 퍼플
+  '고객 응대': '#F26A50', // 코랄
+  '위생·청소': '#2FAF6B', // 그린
+  '기기·설비': '#2FA79B', // 틸
+  '재고·발주': '#C77D3A', // 브론즈
+  '결제·정산': '#F2A83C', // 앰버골드
+  '근무·인사': '#D2637F', // 로즈
+  '비상 상황': '#c44b4b', // 레드 — 비상은 경고색
+};
+
+// 해시 폴백 팔레트(STORE_COLORS와 같은 가족 톤) — 같은 이름 = 항상 같은 색.
+const SECTION_PALETTE = ['#3E92D9', '#F26A50', '#2FAF6B', '#F2A83C', '#8A63D2', '#D2637F', '#2FA79B', '#C77D3A'];
+
+export type SectionMeta = { label: string; color: string };
+
+/** 섹션(사용자 표면의 "카테고리") 표시 메타. null/빈 값/'기타'는 회색 '기타'. */
+export function getSectionMeta(section: string | null | undefined): SectionMeta {
+  const name = section?.trim();
+  if (!name || name === UNSECTIONED) return { label: UNSECTIONED, color: InkColors.ink3 };
+  const fixed = SECTION_FIXED_COLORS[name];
+  if (fixed) return { label: name, color: fixed };
+  let sum = 0;
+  for (let i = 0; i < name.length; i++) sum = (sum + name.charCodeAt(i)) % SECTION_PALETTE.length;
+  return { label: name, color: SECTION_PALETTE[sum] };
+}

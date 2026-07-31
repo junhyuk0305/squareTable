@@ -3,7 +3,7 @@ import { coalesce, subscribeDebounced } from '@/lib/store/realtimeSync';
 import type { PlaybookEntry } from '@/types';
 import seedData from '@/data/playbook-entries.json';
 import { HAS_SUPABASE } from '@/lib/supabase';
-import { fetchEntries, insertEntry, updateEntry, deleteEntry, subscribePlaybook, fetchKnowhowCategories, saveKnowhowCategories } from '@/lib/db';
+import { fetchEntries, insertEntry, updateEntry, deleteEntry, renameEntrySection, subscribePlaybook, fetchKnowhowCategories, saveKnowhowCategories } from '@/lib/db';
 import {
   resolveCustomCategories,
   sanitizeCustomCategories,
@@ -22,6 +22,8 @@ type PlaybookState = {
   /** 매장 커스텀 카테고리(0096) — 기본 4종 외. getCategoryMeta 레지스트리와 동기 유지. */
   customCategories: CustomCategory[];
   saveCustomCategories: (items: CustomCategory[]) => Promise<boolean>;
+  /** 카테고리(section) 일괄 이동(개명·삭제→기타). bulk 1쿼리 — per-entry 재색인 없음. */
+  renameSection: (from: string, to: string | null) => Promise<boolean>;
   hydrate: () => Promise<void>;
   subscribe: () => () => void;
   add: (entry: PlaybookEntry) => Promise<boolean>;
@@ -57,6 +59,13 @@ export const usePlaybookStore = create<PlaybookState>((set, get) => ({
       setCustomCategoryRegistry(cleaned);
       set({ customCategories: cleaned });
     }
+    return ok;
+  },
+
+  // 카테고리 개명·삭제 — 서버 반영 성공 시에만 로컬 갱신(섹션은 색인 텍스트가 아니라 재색인 불요).
+  renameSection: async (from, to) => {
+    const ok = await renameEntrySection(from, to);
+    if (ok) set((s) => ({ entries: s.entries.map((e) => (e.section === from ? { ...e, section: to } : e)) }));
     return ok;
   },
 

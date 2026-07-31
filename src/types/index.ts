@@ -66,6 +66,8 @@ export type PlaybookEntry = {
   unit_id: string;
   creator_id: string;
   creator_name: string;
+  /** 작성 시점 역할 스냅샷(0101) — 저자 표기("○○ 사장님"/"○○ 매니저")용. 레거시(미저장)=null. */
+  creator_role?: 'owner' | 'manager' | null;
   category: string; // 기본 4종(Category) 키 또는 매장 커스텀 카테고리 id(0096, 수동 지정 전용)
   subcategory: string;
   title: string;
