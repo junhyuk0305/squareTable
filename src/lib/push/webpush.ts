@@ -163,7 +163,13 @@ export async function disablePush(): Promise<void> {
     if (sub) {
       const endpoint = sub.endpoint;
       await sub.unsubscribe();
-      await supabase.from('push_subscriptions').delete().eq('endpoint', endpoint);
+      // supabase-js 는 쿼리 실패를 throw 하지 않고 {error}로 반환 → 아래 catch 에 안 잡힌다.
+      // 삭제 실패 시 고아 구독행이 남아 발송 대상에 계속 포함되므로 최소한 관측은 남긴다.
+      const { error } = await supabase.from('push_subscriptions').delete().eq('endpoint', endpoint);
+      if (error) {
+        console.warn('[push] 구독행 삭제 실패:', error.message);
+        reportError('push.disable.delete', error);
+      }
     }
   } catch (e) {
     console.warn('[push] 구독 해제 실패:', e);
