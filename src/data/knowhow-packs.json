@@ -5,6 +5,7 @@
     "creator_id": "",
     "creator_name": "",
     "category": "Event",
+    "section": "고객 응대",
     "subcategory": "클레임",
     "title": "이물질 클레임 (머리카락·벌레)",
     "tags": [
@@ -80,6 +81,7 @@
     "creator_id": "",
     "creator_name": "",
     "category": "Event",
+    "section": "고객 응대",
     "subcategory": "환불",
     "title": "환불 요구 (반쯤 먹고 \"맛 이상\")",
     "tags": [
@@ -151,6 +153,7 @@
     "creator_id": "",
     "creator_name": "",
     "category": "Event",
+    "section": "비상 상황",
     "subcategory": "취객",
     "title": "취객·고성·난동",
     "tags": [
@@ -223,6 +226,7 @@
     "creator_id": "",
     "creator_name": "",
     "category": "Event",
+    "section": "결제·정산",
     "subcategory": "포스기",
     "title": "포스기/결제 먹통 (인터넷·카드단말 끊김)",
     "tags": [
@@ -295,6 +299,7 @@
     "creator_id": "",
     "creator_name": "",
     "category": "Event",
+    "section": "비상 상황",
     "subcategory": "알레르기",
     "title": "알레르기·이물 섭취 호소",
     "tags": [
@@ -367,6 +372,7 @@
     "creator_id": "",
     "creator_name": "",
     "category": "Event",
+    "section": "고객 응대",
     "subcategory": "주문",
     "title": "주문 누락·오배달",
     "tags": [
@@ -438,6 +444,7 @@
     "creator_id": "",
     "creator_name": "",
     "category": "Event",
+    "section": "고객 응대",
     "subcategory": "웨이팅",
     "title": "대기·웨이팅 항의",
     "tags": [
@@ -510,6 +517,7 @@
     "creator_id": "",
     "creator_name": "",
     "category": "Event",
+    "section": "고객 응대",
     "subcategory": "예약",
     "title": "예약 노쇼·중복",
     "tags": [
@@ -581,6 +589,7 @@
     "creator_id": "",
     "creator_name": "",
     "category": "Event",
+    "section": "고객 응대",
     "subcategory": "분실물",
     "title": "카드 분실물·습득물",
     "tags": [
@@ -653,6 +662,7 @@
     "creator_id": "",
     "creator_name": "",
     "category": "Event",
+    "section": "고객 응대",
     "subcategory": "진상",
     "title": "진상·과도한 요구",
     "tags": [
@@ -725,6 +735,7 @@
     "creator_id": "",
     "creator_name": "",
     "category": "Event",
+    "section": "고객 응대",
     "subcategory": "아이",
     "title": "어린이·반려동물 동반",
     "tags": [
@@ -797,6 +808,7 @@
     "creator_id": "",
     "creator_name": "",
     "category": "Event",
+    "section": "고객 응대",
     "subcategory": "자리안내",
     "title": "빈 테이블 안내·합석",
     "tags": [
@@ -868,6 +880,7 @@
     "creator_id": "",
     "creator_name": "",
     "category": "Event",
+    "section": "고객 응대",
     "subcategory": "단체",
     "title": "단체·대량 주문 돌발",
     "tags": [
@@ -939,6 +952,7 @@
     "creator_id": "",
     "creator_name": "",
     "category": "Event",
+    "section": "고객 응대",
     "subcategory": "온도",
     "title": "음식 온도·덜 익음 항의",
     "tags": [
@@ -1010,6 +1024,7 @@
     "creator_id": "",
     "creator_name": "",
     "category": "Routine",
+    "section": "오픈",
     "subcategory": "오픈",
     "title": "오픈 준비 표준 순서",
     "tags": [
@@ -1080,6 +1095,7 @@
     "creator_id": "",
     "creator_name": "",
     "category": "Routine",
+    "section": "마감",
     "subcategory": "마감",
     "title": "마감 표준 순서",
     "tags": [
@@ -1151,6 +1167,7 @@
     "creator_id": "",
     "creator_name": "",
     "category": "Routine",
+    "section": "재고·발주",
     "subcategory": "재고",
     "title": "재고 소진·발주 알림",
     "tags": [
@@ -1221,6 +1238,7 @@
     "creator_id": "",
     "creator_name": "",
     "category": "Routine",
+    "section": "위생·청소",
     "subcategory": "테이블",
     "title": "테이블 세팅·리셋",
     "tags": [
@@ -1290,6 +1308,7 @@
     "creator_id": "",
     "creator_name": "",
     "category": "Routine",
+    "section": "위생·청소",
     "subcategory": "위생",
     "title": "위생·소독 점검",
     "tags": [
@@ -1360,6 +1379,7 @@
     "creator_id": "",
     "creator_name": "",
     "category": "Routine",
+    "section": "위생·청소",
     "subcategory": "온도",
     "title": "냉장·냉동 온도 기록",
     "tags": [
@@ -1429,6 +1449,7 @@
     "creator_id": "",
     "creator_name": "",
     "category": "Routine",
+    "section": "재고·발주",
     "subcategory": "선입선출",
     "title": "선입선출·유통기한 관리",
     "tags": [
@@ -1498,6 +1519,7 @@
     "creator_id": "",
     "creator_name": "",
     "category": "Routine",
+    "section": "위생·청소",
     "subcategory": "청결",
     "title": "화장실·홀 청결 순회",
     "tags": [
@@ -1568,6 +1590,7 @@
     "creator_id": "",
     "creator_name": "",
     "category": "Routine",
+    "section": "근무·인사",
     "subcategory": "교대",
     "title": "교대 인수인계",
     "tags": [
@@ -1637,6 +1660,7 @@
     "creator_id": "",
     "creator_name": "",
     "category": "Routine",
+    "section": "위생·청소",
     "subcategory": "쓰레기",
     "title": "쓰레기·분리수거 처리",
     "tags": [
@@ -1706,6 +1730,7 @@
     "creator_id": "",
     "creator_name": "",
     "category": "Context",
+    "section": "근무·인사",
     "subcategory": "근태",
     "title": "근태·복장·휴게 기본",
     "tags": [
@@ -1776,6 +1801,7 @@
     "creator_id": "",
     "creator_name": "",
     "category": "Context",
+    "section": "근무·인사",
     "subcategory": "보안",
     "title": "개인정보·CCTV·금전 취급",
     "tags": [
@@ -1846,6 +1872,7 @@
     "creator_id": "",
     "creator_name": "",
     "category": "Context",
+    "section": "근무·인사",
     "subcategory": "시급",
     "title": "시급·근로계약·주휴 기본",
     "tags": [
@@ -1915,6 +1942,7 @@
     "creator_id": "",
     "creator_name": "",
     "category": "Context",
+    "section": "근무·인사",
     "subcategory": "직원식사",
     "title": "직원 식사·서비스 음식 규정",
     "tags": [
@@ -1984,6 +2012,7 @@
     "creator_id": "",
     "creator_name": "",
     "category": "Context",
+    "section": "근무·인사",
     "subcategory": "휴대폰",
     "title": "휴대폰·SNS 사용 규정",
     "tags": [
@@ -2054,6 +2083,7 @@
     "creator_id": "",
     "creator_name": "",
     "category": "Context",
+    "section": "고객 응대",
     "subcategory": "응대",
     "title": "손님 응대 기본 태도",
     "tags": [
@@ -2125,6 +2155,7 @@
     "creator_id": "",
     "creator_name": "",
     "category": "Context",
+    "section": "마감",
     "subcategory": "영업시간",
     "title": "영업시간·라스트오더 규정",
     "tags": [
@@ -2196,6 +2227,7 @@
     "creator_id": "",
     "creator_name": "",
     "category": "Context",
+    "section": "비상 상황",
     "subcategory": "안전",
     "title": "사고·부상 보고 절차",
     "tags": [
@@ -2266,6 +2298,7 @@
     "creator_id": "",
     "creator_name": "",
     "category": "Know-how",
+    "section": "고객 응대",
     "subcategory": "피크타임",
     "title": "피크타임 동선·우선순위",
     "tags": [
@@ -2338,6 +2371,7 @@
     "creator_id": "",
     "creator_name": "",
     "category": "Know-how",
+    "section": "위생·청소",
     "subcategory": "금기",
     "title": "절대 금기 (위생·안전 Don't)",
     "tags": [
@@ -2405,6 +2439,7 @@
     "creator_id": "",
     "creator_name": "",
     "category": "Know-how",
+    "section": "고객 응대",
     "subcategory": "효율",
     "title": "빈손으로 안 움직이기",
     "tags": [
@@ -2474,6 +2509,7 @@
     "creator_id": "",
     "creator_name": "",
     "category": "Know-how",
+    "section": "고객 응대",
     "subcategory": "주문",
     "title": "주문 받기 정확 요령",
     "tags": [
@@ -2546,6 +2582,7 @@
     "creator_id": "",
     "creator_name": "",
     "category": "Know-how",
+    "section": "고객 응대",
     "subcategory": "클레임",
     "title": "클레임 진정시키는 순서",
     "tags": [
@@ -2618,6 +2655,7 @@
     "creator_id": "",
     "creator_name": "",
     "category": "Know-how",
+    "section": "고객 응대",
     "subcategory": "관찰",
     "title": "손님 사인 미리 읽기",
     "tags": [
@@ -2690,6 +2728,7 @@
     "creator_id": "",
     "creator_name": "",
     "category": "Know-how",
+    "section": "오픈",
     "subcategory": "피크",
     "title": "피크 전 미리 준비(밋업)",
     "tags": [
@@ -2759,6 +2798,7 @@
     "creator_id": "",
     "creator_name": "",
     "category": "Know-how",
+    "section": "근무·인사",
     "subcategory": "실수",
     "title": "실수했을 때 대처",
     "tags": [
@@ -2831,6 +2871,7 @@
     "creator_id": "",
     "creator_name": "",
     "category": "Know-how",
+    "section": "음료 제조",
     "subcategory": "에스프레소",
     "title": "아메리카노 농도 기준",
     "tags": [
@@ -2902,6 +2943,7 @@
     "creator_id": "",
     "creator_name": "",
     "category": "Know-how",
+    "section": "음료 제조",
     "subcategory": "라떼",
     "title": "우유 스팀 온도·라떼 기준",
     "tags": [
@@ -2971,6 +3013,7 @@
     "creator_id": "",
     "creator_name": "",
     "category": "Know-how",
+    "section": "음료 제조",
     "subcategory": "시럽",
     "title": "시럽·펌프 개수 기준",
     "tags": [
@@ -3040,6 +3083,7 @@
     "creator_id": "",
     "creator_name": "",
     "category": "Know-how",
+    "section": "음료 제조",
     "subcategory": "에스프레소",
     "title": "에스프레소 추출 시간",
     "tags": [
@@ -3110,6 +3154,7 @@
     "creator_id": "",
     "creator_name": "",
     "category": "Know-how",
+    "section": "음료 제조",
     "subcategory": "스팀",
     "title": "우유 거품 곱기(라떼아트)",
     "tags": [
@@ -3182,6 +3227,7 @@
     "creator_id": "",
     "creator_name": "",
     "category": "Know-how",
+    "section": "음료 제조",
     "subcategory": "아이스",
     "title": "아이스 음료 얼음·물 비율",
     "tags": [
@@ -3250,6 +3296,7 @@
     "creator_id": "",
     "creator_name": "",
     "category": "Know-how",
+    "section": "음료 제조",
     "subcategory": "디카페인",
     "title": "디카페인·연하게 대응",
     "tags": [
@@ -3320,6 +3367,7 @@
     "creator_id": "",
     "creator_name": "",
     "category": "Know-how",
+    "section": "음료 제조",
     "subcategory": "휘핑",
     "title": "휘핑·토핑 기준",
     "tags": [
@@ -3389,6 +3437,7 @@
     "creator_id": "",
     "creator_name": "",
     "category": "Know-how",
+    "section": "음료 제조",
     "subcategory": "티",
     "title": "차·티 우림 시간",
     "tags": [
@@ -3459,6 +3508,7 @@
     "creator_id": "",
     "creator_name": "",
     "category": "Know-how",
+    "section": "고객 응대",
     "subcategory": "단골",
     "title": "단골 픽업·취향 기억",
     "tags": [
@@ -3529,6 +3579,7 @@
     "creator_id": "",
     "creator_name": "",
     "category": "Know-how",
+    "section": "음료 제조",
     "subcategory": "픽업",
     "title": "음료 픽업 순서·세팅",
     "tags": [
@@ -3598,6 +3649,7 @@
     "creator_id": "",
     "creator_name": "",
     "category": "Event",
+    "section": "고객 응대",
     "subcategory": "픽업",
     "title": "진동벨/번호 못 받고 음료 식음",
     "tags": [
@@ -3669,6 +3721,7 @@
     "creator_id": "",
     "creator_name": "",
     "category": "Event",
+    "section": "고객 응대",
     "subcategory": "텀블러",
     "title": "텀블러·개인컵 위생/용량 이슈",
     "tags": [
@@ -3737,6 +3790,7 @@
     "creator_id": "",
     "creator_name": "",
     "category": "Event",
+    "section": "고객 응대",
     "subcategory": "좌석",
     "title": "노트북족 장시간/콘센트 분쟁",
     "tags": [
@@ -3807,6 +3861,7 @@
     "creator_id": "",
     "creator_name": "",
     "category": "Event",
+    "section": "고객 응대",
     "subcategory": "오제조",
     "title": "음료 잘못 만듦/주문 착오",
     "tags": [
@@ -3878,6 +3933,7 @@
     "creator_id": "",
     "creator_name": "",
     "category": "Event",
+    "section": "고객 응대",
     "subcategory": "쏟음",
     "title": "음료 흘림·테이블 쏟음",
     "tags": [
@@ -3950,6 +4006,7 @@
     "creator_id": "",
     "creator_name": "",
     "category": "Event",
+    "section": "고객 응대",
     "subcategory": "분리",
     "title": "라떼 분리·음료 상태 클레임",
     "tags": [
@@ -4020,6 +4077,7 @@
     "creator_id": "",
     "creator_name": "",
     "category": "Event",
+    "section": "고객 응대",
     "subcategory": "알레르기",
     "title": "알레르기·우유 대체 클레임",
     "tags": [
@@ -4092,6 +4150,7 @@
     "creator_id": "",
     "creator_name": "",
     "category": "Event",
+    "section": "고객 응대",
     "subcategory": "품절",
     "title": "시즌·인기메뉴 품절",
     "tags": [
@@ -4163,6 +4222,7 @@
     "creator_id": "",
     "creator_name": "",
     "category": "Routine",
+    "section": "기기·설비",
     "subcategory": "머신",
     "title": "머신·그라인더 오픈/마감 관리",
     "tags": [
@@ -4232,6 +4292,7 @@
     "creator_id": "",
     "creator_name": "",
     "category": "Routine",
+    "section": "재고·발주",
     "subcategory": "재고",
     "title": "원두·우유 선입선출/유통기한",
     "tags": [
@@ -4301,6 +4362,7 @@
     "creator_id": "",
     "creator_name": "",
     "category": "Routine",
+    "section": "기기·설비",
     "subcategory": "그라인더",
     "title": "그라인더 분쇄도 점검·보정",
     "tags": [
@@ -4370,6 +4432,7 @@
     "creator_id": "",
     "creator_name": "",
     "category": "Routine",
+    "section": "재고·발주",
     "subcategory": "재고",
     "title": "우유·시럽 냉장 비축",
     "tags": [
@@ -4439,6 +4502,7 @@
     "creator_id": "",
     "creator_name": "",
     "category": "Routine",
+    "section": "기기·설비",
     "subcategory": "제빙기",
     "title": "제빙기·정수 필터 관리",
     "tags": [
@@ -4508,6 +4572,7 @@
     "creator_id": "",
     "creator_name": "",
     "category": "Routine",
+    "section": "기기·설비",
     "subcategory": "머신",
     "title": "영업 중 머신 백플러싱·잔비움",
     "tags": [
@@ -4576,6 +4641,7 @@
     "creator_id": "",
     "creator_name": "",
     "category": "Context",
+    "section": "고객 응대",
     "subcategory": "메뉴",
     "title": "메뉴·알레르기·논커피 응대 기본",
     "tags": [
@@ -4646,6 +4712,7 @@
     "creator_id": "",
     "creator_name": "",
     "category": "Context",
+    "section": "음료 제조",
     "subcategory": "사이즈",
     "title": "사이즈·HOT/ICE 규격",
     "tags": [
@@ -4718,6 +4785,7 @@
     "creator_id": "",
     "creator_name": "",
     "category": "Context",
+    "section": "음료 제조",
     "subcategory": "시즌",
     "title": "시즌 한정 메뉴 운영",
     "tags": [
@@ -4787,6 +4855,7 @@
     "creator_id": "",
     "creator_name": "",
     "category": "Context",
+    "section": "고객 응대",
     "subcategory": "원두",
     "title": "원두 소개·산미 설명",
     "tags": [
@@ -4859,6 +4928,7 @@
     "creator_id": "",
     "creator_name": "",
     "category": "Context",
+    "section": "결제·정산",
     "subcategory": "적립",
     "title": "포인트·쿠폰·결제 정책",
     "tags": [

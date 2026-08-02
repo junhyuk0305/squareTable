@@ -10,7 +10,7 @@ import { seedDaypartRoutines } from '@/lib/store/useScheduleStore';
 import { showToast } from '@/lib/store/useToastStore';
 import { OwnerFirstAsk } from '@/components/owner/OwnerFirstAsk';
 import { templatesForIndustry, forkTemplate, type PlaybookTemplate } from '@/data/knowhowPacks';
-import { getCategoryMeta, ALL_CATEGORIES } from '@/lib/utils/category';
+import { standardSections, UNSECTIONED } from '@/lib/config/sections';
 import { Appear } from '@/components/Appear';
 import { SectionLabel } from '@/components/SectionLabel';
 import { PressableScale } from '@/components/PressableScale';
@@ -43,14 +43,14 @@ export default function OwnerOnboardingScreen() {
   const templates = useMemo(() => templatesForIndustry(industry), [industry]);
   const recommended = useMemo(() => templates.filter((t) => t.recommended), [templates]);
 
-  // 카테고리별 묶음(직접 고르기 섹션) — SQUARE 4분류 순서, 비어있는 카테고리는 제외.
-  const byCategory = useMemo(
-    () =>
-      ALL_CATEGORIES.map((cat) => ({ cat, items: templates.filter((t) => t.category === cat) })).filter(
-        (g) => g.items.length > 0,
-      ),
-    [templates],
-  );
+  // 카테고리별 묶음(직접 고르기 섹션) — 사용자 표면 분류 = section 하나(07-31 단일화).
+  // 표준 카테고리 순서(오픈→운영→마감→관리)로 묶고, 비어있는 카테고리는 제외.
+  const bySection = useMemo(() => {
+    const order = [...standardSections(industry), UNSECTIONED];
+    return order
+      .map((sec) => ({ sec, items: templates.filter((t) => (t.section ?? UNSECTIONED) === sec) }))
+      .filter((g) => g.items.length > 0);
+  }, [templates, industry]);
   // 추천은 미리 체크 — 기본값만으로 목표(≥5)를 충족시킨다.
   const [checked, setChecked] = useState<Record<string, boolean>>(() =>
     Object.fromEntries(templates.map((t) => [t.id, Boolean(t.recommended)])),
@@ -113,7 +113,7 @@ export default function OwnerOnboardingScreen() {
     if (okCount < picks.length) {
       showToast(`${okCount}/${picks.length}개만 저장됐어요. 나머지는 대시보드에서 다시 담아 주세요.`, 'warn');
     } else {
-      showToast(`노하우 ${okCount}개를 등록했어요`, 'good');
+      showToast(`노하우 ${okCount}개를 담았어요`, 'good');
     }
     setRegisteredCount(okCount);
     // 담기 성공 → aha 스텝(첫 질문). 초대코드는 aha 뒤 done 에서(초대는 aha 이후 — 콜드스타트 원칙).
@@ -270,13 +270,12 @@ export default function OwnerOnboardingScreen() {
 
           {expanded && (
             <Appear delay={0} style={styles.groups}>
-              {byCategory.map(({ cat, items }) => {
-                const cm = getCategoryMeta(cat);
+              {bySection.map(({ sec, items }) => {
                 const allOn = items.every((t) => checked[t.id]);
                 return (
-                  <View key={cat} style={styles.group}>
+                  <View key={sec} style={styles.group}>
                     <SectionLabel
-                      title={cm.label}
+                      title={sec}
                       trailing={
                         <Pressable onPress={() => toggleCategory(items)} hitSlop={8} style={styles.catAll}>
                           <Text style={styles.catAllText}>{allOn ? '전체 해제' : '전체 선택'}</Text>
@@ -321,7 +320,7 @@ export default function OwnerOnboardingScreen() {
       <View style={styles.barWrap}>
         <View style={[styles.bar, frameCapStyle]}>
           {selectedCount < MIN_RECOMMENDED && (
-            <Text style={styles.barNudge}>최소 {MIN_RECOMMENDED}개는 등록하길 권해요 (지금 {selectedCount}개)</Text>
+            <Text style={styles.barNudge}>최소 {MIN_RECOMMENDED}개는 담아두길 권해요 (지금 {selectedCount}개)</Text>
           )}
           <PressableScale
             onPress={onRegister}

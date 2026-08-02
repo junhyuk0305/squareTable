@@ -18,7 +18,8 @@
 //   - 교정포인트: ...
 //   - 추천: true
 //
-// 매핑: 상황→square.situation, 할 일→square.action.steps, 멘트→square.action.scripts,
+// 매핑: 섹션→section(사용자 표면 분류, 표준 세트 강제), 상황→square.situation,
+//       할 일→square.action.steps, 멘트→square.action.scripts,
 //       금지→square.extract.dont, 검색어→search_keywords, 실행→execution{timing,channel,tone}.
 // 빈 square 칸(quagmire/uncover/result)은 마스터지침 §원칙대로 공란으로 둔다(날조 금지).
 
@@ -39,7 +40,22 @@ const PACK_FILES = [
 // 한글 카테고리 라벨 → 내부 Category 코드
 const CAT_MAP = { 원칙: 'Context', 루틴: 'Routine', 변수: 'Event', 비법: 'Know-how' };
 
-const FIELD_KEYS = ['태그', '상황', '할 일', '할일', '금지', '멘트', '실행', '검색어', '교정포인트', '추천'];
+// 사용자 표면 분류(playbook_entries.section) — src/lib/config/sections.ts 표준 세트와 동일해야 한다.
+// 없는·모르는 섹션은 컴파일 실패로 막는다(fork 시 '기타'로 쌓이는 회귀 방지).
+const KNOWN_SECTIONS = new Set([
+  '오픈',
+  '마감',
+  '고객 응대',
+  '위생·청소',
+  '기기·설비',
+  '재고·발주',
+  '결제·정산',
+  '근무·인사',
+  '비상 상황',
+  '음료 제조', // 카페·디저트 전용
+]);
+
+const FIELD_KEYS = ['섹션', '태그', '상황', '할 일', '할일', '금지', '멘트', '실행', '검색어', '교정포인트', '추천'];
 
 const clean = (s) =>
   s
@@ -82,6 +98,11 @@ function parseBlock(catLabel, title, lines, packId, seq) {
   const correction = (buckets['교정포인트'] ?? []).map(clean).filter(Boolean);
   const recommended = /^(true|네|y|yes|예)$/i.test((buckets['추천']?.[0] ?? '').trim());
 
+  const section = clean((buckets['섹션'] ?? []).join(' '));
+  if (!KNOWN_SECTIONS.has(section)) {
+    throw new Error(`[compile-pack] "${title}" — 섹션 누락 또는 비표준: "${section || '(없음)'}"`);
+  }
+
   const category = CAT_MAP[catLabel] ?? 'Context';
   const id = `tpl_${packId}_${String(seq).padStart(3, '0')}`;
 
@@ -91,6 +112,7 @@ function parseBlock(catLabel, title, lines, packId, seq) {
     creator_id: '',
     creator_name: '',
     category,
+    section,
     subcategory: tags[0]?.replace(/^#/, '') ?? catLabel,
     title: clean(title),
     tags,
