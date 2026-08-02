@@ -141,13 +141,6 @@ svg.ic{width:1em;height:1em;stroke:currentColor;stroke-width:1.85;fill:none;stro
 .talert{position:absolute;left:13px;right:13px;bottom:13px;display:flex;align-items:center;gap:7px;background:var(--ink);color:#fff;font-size:11.5px;font-weight:800;padding:10px 12px;border-radius:12px;box-shadow:var(--e3);opacity:0;transform:translateY(24px);transition:opacity .34s,transform .34s cubic-bezier(.2,.7,.3,1)}
 .talert .yb{color:var(--yellow)}.talert.show{opacity:1;transform:none}
 /* mini chat preview (core1) */
-/* swap card */
-.swaphead{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:800}
-.swaphead .chip{margin-left:auto;font-size:10.5px;font-weight:900;color:var(--ink2);background:var(--bg);border:1px solid var(--line);padding:3px 9px;border-radius:var(--r-pill)}
-.swapsub{font-size:11.5px;color:var(--ink2);margin-top:9px}
-.swapbtns{display:flex;gap:7px;margin-top:11px}
-.swapbtns .ap{flex:1;text-align:center;background:var(--yellow);color:var(--ink);font-weight:900;font-size:12.5px;padding:9px;border-radius:10px}
-.swapbtns .rj{text-align:center;background:var(--bg);border:1px solid var(--line);color:var(--ink2);font-weight:800;font-size:12.5px;padding:9px 14px;border-radius:10px}
 /* mini rows */
 .rows{display:flex;flex-direction:column;gap:8px}
 .row{display:flex;align-items:center;gap:9px;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:8px 10px}
@@ -181,6 +174,7 @@ svg.ic{width:1em;height:1em;stroke:currentColor;stroke-width:1.85;fill:none;stro
 .pc .pbtn.p{background:var(--yellow);color:var(--ink);box-shadow:var(--ey)}
 .pc .pbtn.s{background:var(--paper);color:var(--ink)}
 .pnote{font-size:12.5px;color:var(--ink3);margin-top:16px;text-align:center}
+.pnote a{text-decoration:underline;font-weight:800;color:var(--ink2)}
 
 /* foot */
 .foot{background:var(--ink);color:#fff;padding:60px 24px;text-align:center;margin-top:56px}
@@ -200,7 +194,6 @@ svg.ic{width:1em;height:1em;stroke:currentColor;stroke-width:1.85;fill:none;stro
 <symbol id="i-bulb" viewBox="0 0 24 24"><path d="M9.5 18h5M10.5 21h3M12 3a6 6 0 0 1 4 10.5c-.8.8-1 1.5-1 2.5H9c0-1-.2-1.7-1-2.5A6 6 0 0 1 12 3z"/></symbol>
 <symbol id="i-chat" viewBox="0 0 24 24"><path d="M4 5h16v10H9l-5 4z"/></symbol>
 <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 13l4 4L19 6"/></symbol>
-<symbol id="i-swap" viewBox="0 0 24 24"><path d="M7 4L4 7l3 3M4 7h11M17 20l3-3-3-3M20 17H9"/></symbol>
 </defs></svg>
 
 <div class="nav"><div class="in">
@@ -254,13 +247,13 @@ svg.ic{width:1em;height:1em;stroke:currentColor;stroke-width:1.85;fill:none;stro
       <div class="cell core reveal">
         <span class="kind core"><svg class="ic"><use href="#i-bulb"/></svg>핵심 · 노하우 AI</span>
         <h4>우리 가게 노하우, AI가 즉답</h4>
-        <p>사장님이 한 번 남긴 답을, 직원이 물을 때 AI가 우리 가게 방식 그대로 대신 답해요.</p>
+        <p>사장님이 한 번 남긴 답을, 직원이 물을 때 AI가 우리 가게 방식 그대로 대신 답해요. 말로 남기거나 인수인계서 PDF를 올려도 노하우가 돼요.</p>
         <div class="prev fchat" id="coreChat"></div>
       </div>
       <div class="cell core reveal">
         <span class="kind core"><svg class="ic"><use href="#i-chat"/></svg>핵심 · 채팅 업무</span>
         <h4>체크하면, 채팅에 기록되고 알림까지</h4>
-        <p>직원이 할 일을 체크하면 업무 채팅에 자동으로 남고, 사장님께 바로 알림이 가요.</p>
+        <p>할 일마다 노하우를 붙여두면 직원이 보고 그대로 해요. 체크하면 업무 채팅에 남고, 사장님께 바로 알림이 가요.</p>
         <div class="prev" id="todo">
           <div class="mcheck">
             <div class="mck done"><span class="box"><svg class="ic"><use href="#i-check"/></svg></span><span>원두 그라인더 청소</span></div>
@@ -272,21 +265,20 @@ svg.ic{width:1em;height:1em;stroke:currentColor;stroke-width:1.85;fill:none;stro
       </div>
       <div class="cell sub reveal">
         <span class="kind sub">부가</span>
-        <h4>교대는 직원끼리, 사장은 승인만</h4>
-        <p>직원끼리 근무를 맞바꾸고 요청하면, 사장님은 승인 한 번으로 끝.</p>
-        <div class="prev">
-          <div class="swaphead"><b>이수민</b><svg class="ic" style="color:var(--ink3)"><use href="#i-swap"/></svg><b>김민재</b><span class="chip">토 15–21시</span></div>
-          <div class="swapsub">교대 요청 · 사장님 승인 대기</div>
-          <div class="swapbtns"><span class="ap">승인</span><span class="rj">거절</span></div>
+        <h4>신입 교육은 훈련 코스로</h4>
+        <p>배울 노하우를 골라두면 신입이 첫 출근부터 순서대로 배우고, 이해 확인 퀴즈로 통과해요. 잊을 때쯤 정기 훈련으로 다시 확인해요.</p>
+        <div class="prev rows">
+          <div class="row"><span class="mi"><svg class="ic"><use href="#i-check"/></svg></span><span class="mn">포스 마감 정산</span><span class="mb">통과</span></div>
+          <div class="row"><span class="mi"><svg class="ic"><use href="#i-bulb"/></svg></span><span class="mn">우유 스팀 온도</span><span class="mb">다음</span></div>
         </div>
       </div>
       <div class="cell sub reveal">
         <span class="kind sub">부가</span>
         <h4>여러 매장도 한 계정에서</h4>
-        <p>매장을 한 화면에서 오가고, 검증된 노하우를 매장 간에 복제해요.</p>
+        <p>매장을 한 화면에서 오가며 한눈에 보고, 검증된 노하우를 매장 간에 가져와요. 매장 운영은 매니저에게 맡길 수 있어요.</p>
         <div class="prev rows">
           <div class="row"><span class="mi"><svg class="ic"><use href="#i-cafe"/></svg></span><span class="mn">신촌점</span><span class="mb">확인필요 2</span></div>
-          <div class="row"><span class="mi"><svg class="ic"><use href="#i-cafe"/></svg></span><span class="mn">홍대점</span><span class="mb">노하우 복제</span></div>
+          <div class="row"><span class="mi"><svg class="ic"><use href="#i-cafe"/></svg></span><span class="mn">홍대점</span><span class="mb">노하우 가져오기</span></div>
         </div>
       </div>
       <div class="cell sub reveal">
@@ -294,7 +286,7 @@ svg.ic{width:1em;height:1em;stroke:currentColor;stroke-width:1.85;fill:none;stro
         <h4>출퇴근·인건비 한눈에</h4>
         <p>출근·퇴근이 기록으로 남고, 이번 달 인건비가 자동 집계돼요.</p>
         <div class="prev rows">
-          <div class="row"><span class="mi"><svg class="ic"><use href="#i-clock"/></svg></span><span class="mn">박지원 · 6시간</span><span class="mb">₩61,000</span></div>
+          <div class="row"><span class="mi"><svg class="ic"><use href="#i-clock"/></svg></span><span class="mn">김민재 · 6시간</span><span class="mb">₩61,000</span></div>
           <div class="row"><span class="mi"><svg class="ic"><use href="#i-clock"/></svg></span><span class="mn">이수민 · 5시간</span><span class="mb">₩51,000</span></div>
         </div>
       </div>
@@ -304,9 +296,9 @@ svg.ic{width:1em;height:1em;stroke:currentColor;stroke-width:1.85;fill:none;stro
   <!-- STEPS -->
   <section class="sec">
     <div class="reveal"><div class="eyebrow2">3단계면 끝</div>
-    <h2 class="h2">등록하고, 물어보고, <span class="u">쌓인다</span></h2></div>
+    <h2 class="h2">시작하고, 물어보고, <span class="u">쌓인다</span></h2></div>
     <div class="steps stagger">
-      <div class="step reveal"><div class="n">1</div><h5>매장 등록</h5><p>업종만 고르면 그 업종 기본 노하우가 미리 담겨요.</p></div>
+      <div class="step reveal"><div class="n">1</div><h5>매장 만들기</h5><p>업종만 고르면 그 업종 기본 노하우가 미리 담겨요.</p></div>
       <div class="step reveal"><div class="n">2</div><h5>직원이 질문</h5><p>모르는 건 AI에게. 답이 없으면 사장님께 1탭으로 전달돼요.</p></div>
       <div class="step reveal"><div class="n">3</div><h5>노하우로 축적</h5><p>사장님 답 한 번이 가게 매뉴얼로 영구 저장돼요.</p></div>
     </div>
@@ -315,7 +307,7 @@ svg.ic{width:1em;height:1em;stroke:currentColor;stroke-width:1.85;fill:none;stro
   <!-- PRICING -->
   <section class="sec" id="price">
     <div class="reveal"><div class="eyebrow2">요금제</div>
-    <h2 class="h2">무료로 시작, <span class="u">직원 생기면 그때</span></h2></div>
+    <h2 class="h2">무료로 시작, <span class="u">직원이 늘면 그때</span></h2></div>
     <div class="pgrid stagger">
       <div class="pc reveal">
         <div class="pn">무료</div><div class="pg">혼자 운영하는 작은 매장</div>
@@ -323,7 +315,7 @@ svg.ic{width:1em;height:1em;stroke:currentColor;stroke-width:1.85;fill:none;stro
         <ul>
           <li><svg class="ic"><use href="#i-check"/></svg>매장 1곳 · 직원 3명까지</li>
           <li><svg class="ic"><use href="#i-check"/></svg>AI 답변 월 150건</li>
-          <li><svg class="ic"><use href="#i-check"/></svg>노하우 등록 무제한</li>
+          <li><svg class="ic"><use href="#i-check"/></svg>노하우 무제한</li>
         </ul>
         <a class="pbtn s" href="/signup">무료로 시작</a>
       </div>
@@ -349,14 +341,14 @@ svg.ic{width:1em;height:1em;stroke:currentColor;stroke-width:1.85;fill:none;stro
         <a class="pbtn s" href="/signup">시작하기</a>
       </div>
     </div>
-    <div class="pnote">프랜차이즈 본사는 상담 견적</div>
+    <div class="pnote">여러 매장·프랜차이즈 본사는 <a href="/inquiry">도입 문의</a></div>
   </section>
 </div>
 
 <div class="foot" id="start">
-  <h3>알려준 적 없어도, <span class="k">착착</span>.</h3>
+  <h3>한 번만 알려주면, 다음부터 <span class="k">착착</span>.</h3>
   <a class="fcta" href="/signup">무료로 시작하기</a>
-  <div class="meta">스퀘어테이블 · <a href="mailto:cristianojun@naver.com">cristianojun@naver.com</a> · <a href="/login">로그인</a></div>
+  <div class="meta">스퀘어테이블 · <a href="mailto:cristianojun@naver.com">cristianojun@naver.com</a> · <a href="/inquiry">도입 문의</a> · <a href="/login">로그인</a></div>
 </div>
 
 <script>
@@ -401,7 +393,7 @@ svg.ic{width:1em;height:1em;stroke:currentColor;stroke-width:1.85;fill:none;stro
       box.classList.remove('done'); log.innerHTML=''; log.style.display='none'; toast.classList.remove('show');
       await sleep(1000); box.classList.add('done'); await sleep(750);
       log.style.display='block';
-      log.innerHTML='<div class="tlogrow"><span class="tk"><svg class="ic"><use href="#i-check"/></svg></span><span>박지원님이 <b>‘포스 시재 점검’</b> 완료 · 오후 9:12</span></div>';
+      log.innerHTML='<div class="tlogrow"><span class="tk"><svg class="ic"><use href="#i-check"/></svg></span><span>김민재님이 <b>‘포스 시재 점검’</b> 완료 · 오후 9:12</span></div>';
       await sleep(850); toast.classList.add('show'); await sleep(reduce?3000:2600); toast.classList.remove('show'); await sleep(600);
     }
   }

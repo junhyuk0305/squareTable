@@ -331,6 +331,29 @@ export async function submitPaymentClaim(args: {
   return { data: (data as PaymentClaim) ?? null, error: error as DbErr };
 }
 
+// ── 도입 문의(sales_inquiries, 0105) — 웹 영업 퍼널의 리드 캡처 ──────────────────
+// RLS: insert 만(anon 포함 — 랜딩의 비로그인 방문자도 남긴다). 조회·처리는 service_role 전용.
+// 로그인 상태면 계정을 연결해 운영자가 어떤 계정의 문의인지 맞춰볼 수 있게 한다(위조는 RLS 봉쇄).
+export async function insertSalesInquiry(args: {
+  name: string;
+  phone: string;
+  company?: string | null;
+  message?: string | null;
+}): Promise<boolean> {
+  if (!HAS_SUPABASE) return true; // 데모 폴백 — 프론트 흐름 유지
+  const { data: sess } = await supabase.auth.getSession();
+  return write(
+    'insertSalesInquiry',
+    supabase.from('sales_inquiries').insert({
+      user_id: sess?.session?.user?.id ?? null,
+      name: args.name.trim(),
+      phone: args.phone.trim(),
+      company: args.company?.trim() || null,
+      message: args.message?.trim() || null,
+    }),
+  );
+}
+
 // ── 무료 이용 코드(promo_codes, 0092) — 코드 검증·기록·활성화는 전부 서버(RPC) ────────────
 // 테이블은 클라 전면 deny — 성패는 RPC 결과로만 안다. named 에러 분기는 billing.tsx 한 곳.
 export type PromoRedeemRow = { unit_id: string; status: string; paid_until: string | null; plan: string; days: number };

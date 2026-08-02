@@ -486,6 +486,14 @@ function BillingBody() {
                 </Appear>
               </>
             )}
+            {/* 도입 문의(0105) — 표준 3티어에 안 담기는 도입(다점포 대량·프랜차이즈 본사)의 상담 창구. */}
+            <Pressable
+              onPress={() => router.push('/inquiry')}
+              style={({ pressed }) => [styles.promoToggle, pressed && { opacity: 0.6 }]}
+            >
+              <Text style={styles.promoToggleText}>여러 매장·프랜차이즈 본사는 도입 문의</Text>
+            </Pressable>
+
             {/* 무료 이용 코드(0092) — 캠페인으로 받은 코드. 기본 접힘, 펼침은 아래로(레이아웃 규칙). */}
             {!promoOpen ? (
               <Pressable onPress={() => setPromoOpen(true)} style={({ pressed }) => [styles.promoToggle, pressed && { opacity: 0.6 }]}>
