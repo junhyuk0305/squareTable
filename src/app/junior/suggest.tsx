@@ -99,7 +99,7 @@ export default function JuniorSuggestScreen() {
             <Appear delay={60}>
             <View style={styles.seg}>
               <Pressable onPress={() => setKind('new')} style={[styles.segO, kind === 'new' && styles.segOn]}>
-                <Text style={[styles.segText, kind === 'new' && styles.segTextOn]}>새 노하우 등록</Text>
+                <Text style={[styles.segText, kind === 'new' && styles.segTextOn]}>새 노하우 제안</Text>
               </Pressable>
               <Pressable onPress={() => setKind('improve')} style={[styles.segO, kind === 'improve' && styles.segOn]}>
                 <Text style={[styles.segText, kind === 'improve' && styles.segTextOn]}>기존 노하우 개선</Text>
@@ -144,7 +144,7 @@ export default function JuniorSuggestScreen() {
               </View>
               {filtered.length === 0 ? (
                 <Text style={styles.pickEmpty}>
-                  {entries.length === 0 ? '아직 등록된 노하우가 없어요. 위에서 "새 노하우 등록"으로 제안해 주세요.' : '검색 결과가 없어요.'}
+                  {entries.length === 0 ? '아직 등록된 노하우가 없어요. 위에서 "새 노하우 제안"으로 보내 주세요.' : '검색 결과가 없어요.'}
                 </Text>
               ) : (
                 <View style={styles.pickList}>

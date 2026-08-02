@@ -78,12 +78,12 @@ export function JuniorMySpace({ me }: { me: string }) {
   const onResolveWith = async (uqId: string, entryId: string) => {
     setAnswerFor(null);
     const ok = await resolveUq(uqId, entryId);
-    if (ok) showToast('답으로 등록했어요 · 다음 사람은 바로 봐요', 'good');
+    if (ok) showToast('답으로 남겼어요 · 다음 사람은 바로 봐요', 'good');
   };
   const onNewAnswer = async (uqId: string, text: string) => {
     setAnswerFor(null);
     const ok = await submitSuggestion({ kind: 'new', text, sourceUqId: uqId });
-    if (ok) showToast('사장님이 확인하면 노하우로 등록돼요', 'good');
+    if (ok) showToast('사장님이 승인하면 노하우에 추가돼요', 'good');
   };
 
   // 내 기여 내보내기 — 화면에 쌓인 내 노하우·답한 질문·제안을 텍스트로 직렬화해 클립보드로.
@@ -182,7 +182,7 @@ export function JuniorMySpace({ me }: { me: string }) {
                   <Ionicons name={sug.status === 'approved' ? 'checkmark-circle' : sug.status === 'rejected' ? 'close-circle' : 'time-outline'} size={16} color={sug.status === 'approved' ? BrandColors.good : sug.status === 'rejected' ? BrandColors.bad : InkColors.ink3} />
                   <Text style={s.rowText} numberOfLines={1}>{sug.text}</Text>
                   <Text style={[s.statusTag, sug.status === 'approved' && { color: BrandColors.good }, sug.status === 'rejected' && { color: BrandColors.bad }]}>
-                    {sug.status === 'approved' ? '등록됨' : sug.status === 'rejected' ? '반려' : '검토 중'}
+                    {sug.status === 'approved' ? '반영됨' : sug.status === 'rejected' ? '반려' : '검토 중'}
                   </Text>
                 </View>
                 {sug.status === 'rejected' && !!sug.owner_note && (
@@ -337,7 +337,7 @@ function AnswerSheet({
 
         <Text style={s.sheetLabel}>찾는 답이 없으면 — 새로 남기기</Text>
         <TextInput value={line} onChangeText={setLine} placeholder="한 줄로 답을 적어주세요" placeholderTextColor={InkColors.ink3} style={[s.inp, s.inpMulti]} multiline />
-        <Text style={s.sheetHint}>사장님이 확인하면 노하우로 등록돼 다음 사람이 바로 봐요.</Text>
+        <Text style={s.sheetHint}>사장님이 승인하면 노하우에 추가돼 다음 사람이 바로 봐요.</Text>
         <Pressable
           onPress={() => onNewAnswer(uq.id, line.trim())}
           disabled={!line.trim()}

@@ -40,7 +40,7 @@ const POINTS: { icon: React.ComponentProps<typeof Ionicons>['name']; title: stri
   },
   {
     icon: 'bulb-outline',
-    title: '아는 건 등록하세요',
+    title: '아는 건 제안하세요',
     body: '내가 아는 요령·고칠 점은 ‘노하우 제안’으로 올리면 사장님 확인 뒤 매장 노하우가 돼요.',
   },
 ];

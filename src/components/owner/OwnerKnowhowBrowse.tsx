@@ -312,7 +312,7 @@ export function OwnerKnowhowBrowse({
           <Ionicons name="file-tray-full" size={18} color={InkColors.ink} />
           <View style={{ flex: 1 }}>
             <Text style={styles.bannerTitle}>검토 대기 노하우 {draftCount}개</Text>
-            <Text style={styles.bannerBody}>인수인계서에서 정리한 항목이에요. 확인 후 등록해 주세요.</Text>
+            <Text style={styles.bannerBody}>인수인계서에서 정리한 항목이에요. 확인 후 추가해 주세요.</Text>
           </View>
           <Text style={styles.draftBannerCta}>검수하기 ›</Text>
         </Pressable>

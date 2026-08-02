@@ -91,7 +91,7 @@ export default function OwnerSuggestionsScreen() {
           <View style={styles.empty}>
             <Text style={styles.emptyEmoji}>🤝</Text>
             <Text style={styles.emptyTitle}>대기 중인 제안이 없어요</Text>
-            <Text style={styles.emptySub}>직원이 노하우 개선·등록을 신청하면 여기로 와요.</Text>
+            <Text style={styles.emptySub}>직원이 노하우 개선·신규를 제안하면 여기로 와요.</Text>
           </View>
           </Appear>
         ) : (
@@ -193,7 +193,7 @@ function SuggestionCard({
             color={isImprove ? '#8A5A12' : InkColors.ink}
           />
           <Text style={[styles.kindText, { color: isImprove ? '#8A5A12' : InkColors.ink }]}>
-            {isImprove ? '개선 제안' : '신규 등록 신청'}
+            {isImprove ? '개선 제안' : '신규 제안'}
           </Text>
         </View>
         <Text style={styles.proposer}>{s.proposer_name}</Text>

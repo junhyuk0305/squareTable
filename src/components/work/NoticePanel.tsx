@@ -153,7 +153,7 @@ export function NoticePanel({
               blurOnSubmit={false}
             />
             <Pressable onPress={post} disabled={!draft.trim()} style={({ pressed }) => [s.footBtn, !draft.trim() && { opacity: 0.4 }, pressed && { opacity: 0.85 }]}>
-              <Text style={s.footBtnText}>{targets.size > 0 ? '전송' : '등록'}</Text>
+              <Text style={s.footBtnText}>{targets.size > 0 ? '전송' : '올리기'}</Text>
             </Pressable>
           </View>
         </View>
@@ -316,7 +316,7 @@ function NoticeCard({
             <MentionInput value={cDraft} onChangeText={setCDraft} onSubmit={postComment} members={members} placeholder="댓글 달기…" style={s.cInput} />
           </View>
           <Pressable onPress={postComment} disabled={!cDraft.trim()} style={({ pressed }) => [s.cPost, !cDraft.trim() && { opacity: 0.4 }, pressed && { opacity: 0.85 }]}>
-            <Text style={s.cPostText}>등록</Text>
+            <Text style={s.cPostText}>달기</Text>
           </Pressable>
         </View>
       </View>

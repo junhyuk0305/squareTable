@@ -154,7 +154,7 @@ export default function OwnerInboxScreen() {
             <View style={{ flex: 1 }}>
               <Text style={styles.sugTitle}>노하우 제안</Text>
               <Text style={styles.sugSub}>
-                {pendingSuggestions > 0 ? '직원이 올린 개선·등록 신청을 확인하세요' : '직원이 노하우를 제안하면 여기로 와요'}
+                {pendingSuggestions > 0 ? '직원이 올린 노하우 제안을 확인하세요' : '직원이 노하우를 제안하면 여기로 와요'}
               </Text>
             </View>
             {pendingSuggestions > 0 && (

@@ -109,7 +109,7 @@ export function OwnerCoachChat({
     } else if (reviewProposal && seedText) {
       // 제안 검토 — 알바 제안 원문이 먼저 보이고, 초안은 아래 자동 구조화 effect가 만든다.
       init.push({ id: nextId(), kind: 'alba', text: seedText, meta: `${reviewProposal.name}님의 제안` });
-      init.push({ id: nextId(), kind: 'ai', text: '제안을 노하우 초안으로 정리하고 있어요. 초안이 뜨면 고칠 부분만 말씀하시거나, 이대로 좋으면 바로 등록해 주세요.' });
+      init.push({ id: nextId(), kind: 'ai', text: '제안을 노하우 초안으로 정리하고 있어요. 초안이 뜨면 고칠 부분만 말씀하시거나, 이대로 좋으면 바로 저장해 주세요.' });
     } else if (isInboxAnswer) {
       const who = uq.anonymous ? '익명' : uq.junior_name;
       init.push({
@@ -195,7 +195,7 @@ export function OwnerCoachChat({
     setMessages((prev) => [
       ...prev,
       cardMsg(snap),
-      { id: nextId(), kind: 'ai', text: '이대로 등록할까요? 고칠 게 있으면 아래 ‘고칠래요’를 눌러주세요.' },
+      { id: nextId(), kind: 'ai', text: '이대로 저장할까요? 고칠 게 있으면 아래 ‘고칠래요’를 눌러주세요.' },
     ]);
   }, []);
 
@@ -283,8 +283,8 @@ export function OwnerCoachChat({
               id: nextId(),
               kind: 'ai',
               text: overflow
-                ? `노하우가 ${MAX_SPLIT_PUBLISH}개보다 많이 보여요. 한 번에 최대 ${MAX_SPLIT_PUBLISH}개까지 등록돼요 — 우선 앞선 ${MAX_SPLIT_PUBLISH}개를 정리했어요. 제목을 눌러 고칠 수 있고, 나머지는 등록 후 한 번 더 올려주세요.`
-                : `노하우 ${shown.length}개가 보여요. 제목을 눌러 고친 뒤, 나눠서 등록할까요?`,
+                ? `노하우가 ${MAX_SPLIT_PUBLISH}개보다 많이 보여요. 한 번에 최대 ${MAX_SPLIT_PUBLISH}개까지 저장돼요 — 우선 앞선 ${MAX_SPLIT_PUBLISH}개를 정리했어요. 제목을 눌러 고칠 수 있고, 나머지는 저장한 뒤 한 번 더 올려주세요.`
+                : `노하우 ${shown.length}개가 보여요. 제목을 눌러 고친 뒤, 나눠서 저장할까요?`,
             },
             { id: nextId(), kind: 'split' },
           ]);
@@ -500,7 +500,7 @@ export function OwnerCoachChat({
       .filter(({ s, i }) => !publishedSegRef.current.has(i) && isSquarePublishable(s.square))
       .slice(0, MAX_SPLIT_PUBLISH); // 이중 방어: 표시 단계에서 이미 잘렸지만 발행 시점에도 상한 강제.
     if (pending.length === 0) {
-      setError('등록할 내용이 부족해요. ➕ 내용 추가하기로 보완해 주세요.');
+      setError('저장할 내용이 부족해요. ➕ 내용 추가하기로 보완해 주세요.');
       return;
     }
     const entries = pending.map(({ s }) =>
@@ -562,7 +562,7 @@ export function OwnerCoachChat({
   const handlePublish = useCallback(() => {
     if (publishedRef.current || !square) return;
     if (!isSquarePublishable(square)) {
-      setError('할 행동이나 멘트가 하나는 있어야 등록돼요. ‘고칠래요’로 한 줄만 더 채워주세요.');
+      setError('할 행동이나 멘트가 하나는 있어야 저장돼요. ‘고칠래요’로 한 줄만 더 채워주세요.');
       return;
     }
     // 수정 모드: 기존 노하우 갱신(새로 add 아님).
@@ -766,7 +766,7 @@ export function OwnerCoachChat({
             hitSlop={6}
           >
             <Ionicons name="checkmark-circle-outline" size={17} color={InkColors.ink2} />
-            <Text style={styles.escapeText}>이대로 충분해요 · 바로 등록</Text>
+            <Text style={styles.escapeText}>이대로 충분해요 · 바로 저장</Text>
           </Pressable>
         </View>
       )}

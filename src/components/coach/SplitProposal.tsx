@@ -92,7 +92,7 @@ export function SplitProposal({
           <Text style={splitStyles.mergeTxt}>하나로 합치기</Text>
         </Pressable>
         <Pressable onPress={onEach} style={({ pressed }) => [splitStyles.eachBtn, pressed && { opacity: 0.85 }]}>
-          <Text style={splitStyles.eachTxt}>각각 등록 ({segments.length}개)</Text>
+          <Text style={splitStyles.eachTxt}>각각 저장 ({segments.length}개)</Text>
         </Pressable>
       </View>
     </View>

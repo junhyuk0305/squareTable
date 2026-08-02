@@ -26,10 +26,10 @@ type Props = {
 export function DeflectCard({ aiGeneralAnswer, similarCount, status, onRegister, onDecline }: Props) {
   const header =
     status === 'registered'
-      ? { icon: '🙋', title: '사장님께 등록했어요', sub: '답이 등록되면 ‘노하우’에서 확인할 수 있어요' }
+      ? { icon: '🙋', title: '사장님께 보냈어요', sub: '사장님이 답을 정하면 ‘노하우’에서 확인할 수 있어요' }
       : status === 'declined'
-        ? { icon: '🙂', title: '등록하지 않았어요', sub: '필요하면 언제든 다시 사장님께 등록할 수 있어요' }
-        : { icon: '🙋', title: '사장님께 등록할까요?', sub: '아직 매장에 없는 질문이에요 — 등록하면 사장님이 답을 정해줘요' };
+        ? { icon: '🙂', title: '보내지 않았어요', sub: '필요하면 언제든 다시 사장님께 보낼 수 있어요' }
+        : { icon: '🙋', title: '사장님께 보낼까요?', sub: '아직 매장에 없는 질문이에요 — 보내면 사장님이 답을 정해줘요' };
 
   return (
     <View style={styles.card}>
@@ -58,7 +58,7 @@ export function DeflectCard({ aiGeneralAnswer, similarCount, status, onRegister,
             onPress={onRegister}
             style={({ pressed }) => [styles.btn, styles.btnPrimary, pressed && { opacity: 0.85 }]}
           >
-            <Text style={[styles.btnText, styles.btnPrimaryText]}>사장님께 등록</Text>
+            <Text style={[styles.btnText, styles.btnPrimaryText]}>질문 보내기</Text>
           </Pressable>
           <Pressable
             onPress={onDecline}
@@ -74,7 +74,7 @@ export function DeflectCard({ aiGeneralAnswer, similarCount, status, onRegister,
         <View style={styles.notifyRow}>
           <Text style={styles.notifyDot}>✦</Text>
           <Text style={styles.notifyText}>
-            사장님이 답을 등록하면 ‘노하우’에서 확인할 수 있어요. 급하면 사장님께 직접 여쭤보세요.
+            사장님이 답을 정하면 ‘노하우’에서 확인할 수 있어요. 급하면 사장님께 직접 여쭤보세요.
           </Text>
         </View>
       )}
@@ -85,7 +85,7 @@ export function DeflectCard({ aiGeneralAnswer, similarCount, status, onRegister,
           onPress={onRegister}
           style={({ pressed }) => [styles.reRegister, pressed && { opacity: 0.7 }]}
         >
-          <Text style={styles.reRegisterText}>역시 사장님께 등록할래요</Text>
+          <Text style={styles.reRegisterText}>역시 사장님께 보낼래요</Text>
         </Pressable>
       )}
 
