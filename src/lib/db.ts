@@ -1122,6 +1122,47 @@ export async function insertTaskUnderstanding(templateId: string, staffName: str
   );
 }
 
+// ── 퀴즈 오답 집계(0103) — 문항이 근거한 노하우에 귀속(개인 저장 없음), 사장 결함 검출용 ──────────
+export type QuizStatRow = { entryId: string; attempts: number; misses: number };
+/** 채점 결과 합산(비치명 fire-and-forget) — 서버 RPC가 활성 매장 소속 엔트리만 반영한다. */
+export async function recordQuizStats(rows: QuizStatRow[]): Promise<void> {
+  if (!HAS_SUPABASE || rows.length === 0) return;
+  const { error } = await supabase.rpc('record_quiz_stats', {
+    p_stats: rows.map((r) => ({ entry_id: r.entryId, attempts: r.attempts, misses: r.misses })),
+  });
+  if (error) console.warn('[recordQuizStats]', error.message); // 집계 실패가 채점 UX를 막으면 안 된다
+}
+/** 활성 매장의 문항 오답 집계(RLS: 사장·매니저만) — entry_id → {attempts, misses}. */
+export async function fetchQuizStats(): Promise<Record<string, { attempts: number; misses: number }>> {
+  if (!HAS_SUPABASE) return {};
+  const { data, error } = await supabase.from('knowhow_quiz_stats').select('entry_id, attempt_count, miss_count');
+  if (error) {
+    readFail('fetchQuizStats', error);
+    return {};
+  }
+  const out: Record<string, { attempts: number; misses: number }> = {};
+  for (const r of data ?? []) out[r.entry_id] = { attempts: r.attempt_count ?? 0, misses: r.miss_count ?? 0 };
+  return out;
+}
+
+// ── 본인 훈련 통과 이력(0104) — 허브 성장 탭용, 교차 매장·본인 한정(definer RPC) ──────────
+export type TrainingHistoryRow = { unitId: string; storeName: string; templateId: string; taskText: string; verifiedAt: string };
+export async function fetchMyTrainingHistory(): Promise<TrainingHistoryRow[]> {
+  if (!HAS_SUPABASE) return [];
+  const { data, error } = await supabase.rpc('my_training_history');
+  if (error) {
+    readFail('fetchMyTrainingHistory', error);
+    return [];
+  }
+  return (data ?? []).map((r: any) => ({
+    unitId: r.unit_id,
+    storeName: r.store_name,
+    templateId: r.template_id,
+    taskText: r.task_text,
+    verifiedAt: r.verified_at ?? '',
+  }));
+}
+
 // ── 훈련 코스(0099) — 첫 훈련(first_day)·정기 훈련(regular) 2종의 업무 목록 ──────────
 export type TrainingCourse = 'first_day' | 'regular';
 export type TrainingItemRow = { templateId: string; course: TrainingCourse; position: number };

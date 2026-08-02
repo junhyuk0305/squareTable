@@ -12,6 +12,7 @@ import { View, Text, Pressable, StyleSheet, ActivityIndicator } from 'react-nati
 import { Ionicons } from '@expo/vector-icons';
 
 import { useHubStore } from '@/lib/store/useHubStore';
+import { fetchMyTrainingHistory, type TrainingHistoryRow } from '@/lib/db';
 import { useMemberPrefsStore } from '@/lib/store/useMemberPrefsStore';
 import { useStoreNav } from '@/lib/hooks/useStoreNav';
 import { storeColor } from '@/lib/utils/storeColor';
@@ -25,6 +26,12 @@ import type { PlaybookEntry } from '@/types';
 
 const ENTRY_LIST_FIRST = 5; // 리스트 첫 노출 5±2 — 넘치면 "나머지 보기"로 아래로 펼침
 
+// 통과 시각 표기 — "8월 2일". 연도는 생략(최근 이력 중심, 좁은 행 폭).
+const fmtMonthDay = (iso: string) => {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? '' : `${d.getMonth() + 1}월 ${d.getDate()}일`;
+};
+
 export function JuniorGrowthView() {
   const growth = useHubStore((s) => s.growth);
   const growthLoaded = useHubStore((s) => s.growthLoaded);
@@ -37,6 +44,19 @@ export function JuniorGrowthView() {
   const { goStore, switching } = useStoreNav();
   const [openEntry, setOpenEntry] = useState<PlaybookEntry | null>(null);
   const [showAllEntries, setShowAllEntries] = useState(false);
+  // 훈련 통과 이력(0104) — 교차 매장·본인 한정. 통과만 저장되는 테이블이라 이력 = 통과 이력.
+  const [trainingHistory, setTrainingHistory] = useState<TrainingHistoryRow[]>([]);
+  const [trainingLoaded, setTrainingLoaded] = useState(false); // 부분 렌더 금지 게이트에 합류(빈상태↔실화면 플립 방지)
+  const [showAllTraining, setShowAllTraining] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    void fetchMyTrainingHistory().then((rows) => {
+      if (!alive) return;
+      setTrainingHistory(rows);
+      setTrainingLoaded(true); // 에러여도 []로 확정(readFail 로그) — 로딩에 갇히지 않는다
+    });
+    return () => { alive = false; };
+  }, []);
 
   useEffect(() => {
     void hydrateGrowth();
@@ -57,11 +77,12 @@ export function JuniorGrowthView() {
       ),
     [growth],
   );
-  const empty = totals.knowhow === 0 && totals.taught === 0 && totals.doneKinds === 0;
+  // 훈련 통과만 있는 신입(업무 완료·노하우 0)도 실화면을 봐야 한다 — 이력이 있으면 빈 상태가 아니다.
+  const empty = totals.knowhow === 0 && totals.taught === 0 && totals.doneKinds === 0 && trainingHistory.length === 0;
   const labelOf = (uid: string, fallback: string) => prefFor(uid).nickname || fallback;
 
   // 전부 도착 전엔 무조건 로딩 — 집계만 먼저 그리고 목록이 나중에 튀어나오는 부분 렌더 금지.
-  if (!growthLoaded || !myEntriesLoaded) {
+  if (!growthLoaded || !myEntriesLoaded || !trainingLoaded) {
     return (
       <View style={styles.loading}>
         <ActivityIndicator color={InkColors.ink3} />
@@ -199,6 +220,34 @@ export function JuniorGrowthView() {
             ))}
         </View>
       </Appear>
+
+      {/* ── 훈련 통과 이력(0104) — 있을 때만. 통과 사실만 말하고 점수·등급을 만들지 않는다 ── */}
+      {trainingHistory.length > 0 && (
+        <Appear delay={totals.taught > 0 ? 160 : 120}>
+          <SectionLabel title="훈련" hint="통과한 확인" />
+          <View style={styles.card}>
+            {(showAllTraining ? trainingHistory : trainingHistory.slice(0, ENTRY_LIST_FIRST)).map((h) => (
+              <View key={`${h.unitId}_${h.templateId}`} style={styles.row}>
+                {growth.length > 1 && (
+                  <View style={[styles.dot, { backgroundColor: storeColor(h.unitId, prefFor(h.unitId).color) }]} />
+                )}
+                <Text style={styles.rowTitle} numberOfLines={1}>{h.taskText}</Text>
+                <Text style={styles.rowSub}>{fmtMonthDay(h.verifiedAt)}</Text>
+              </View>
+            ))}
+            {!showAllTraining && trainingHistory.length > ENTRY_LIST_FIRST && (
+              <Pressable
+                onPress={() => setShowAllTraining(true)}
+                style={({ pressed }) => [styles.moreBtn, pressed && { opacity: 0.85 }]}
+                accessibilityRole="button"
+                accessibilityLabel="훈련 이력 나머지 보기"
+              >
+                <Text style={styles.moreBtnText}>{`나머지 ${trainingHistory.length - ENTRY_LIST_FIRST}개 보기`}</Text>
+              </Pressable>
+            )}
+          </View>
+        </Appear>
+      )}
 
       {/* 노하우 원문 시트 — 물어보기 [출처]와 동일 컴포넌트(읽기 전용) 재사용 */}
       <EntryDetailModal entry={openEntry} visible={!!openEntry} onClose={() => setOpenEntry(null)} />

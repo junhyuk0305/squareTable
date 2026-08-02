@@ -207,12 +207,14 @@ async function flow3({ owner, ownerId, jA, jAId, jB, jBId, UNIT, ENTRY }) {
 async function flow4({ owner, ownerId, jA, jAId, UNIT, TMPL, entryRow }) {
   console.log('\n━━ ④ 이해 확인 퀴즈 ━━');
   // 트리거 조건: 알바 + 첨부 노하우 있음(①에서 첨부됨) → quiz 엣지 호출(실 AI)
-  const sops = [{ title: entryRow.title, situation: entryRow.square.situation, steps: entryRow.square.action.steps, donts: [entryRow.square.extract.dont].filter(Boolean) }];
+  const sops = [{ id: entryRow.id, title: entryRow.title, situation: entryRow.square.situation, steps: entryRow.square.action.steps, donts: [entryRow.square.extract.dont].filter(Boolean) }];
   const token = await tokenOf(jA);
   const r = await edgeAi(token, 'quiz', { taskText: '아이스 아메리카노 만들기', sops });
   check('④-1 quiz 엣지 200', r.ok, `status=${r.status} ${JSON.stringify(r.body).slice(0, 160)}`);
   const qs = r.body?.questions ?? [];
   check('④-2 문항 생성(≥1, 객관식 정상)', qs.length >= 1 && qs.every((q) => Array.isArray(q.choices) && q.choices.length >= 2 && q.answer_index >= 0 && q.answer_index < q.choices.length), `n=${qs.length}`);
+  // 0103 문항 귀속 — 노하우 1개짜리 퀴즈는 모든 문항이 그 노하우를 근거로 가져야 한다(엣지 폴백 포함).
+  check('④-1b 문항 entry_id 귀속(0103)', qs.length >= 1 && qs.every((q) => q.entry_id === entryRow.id), qs.map((q) => q.entry_id).join(','));
   // 자동채점(클라 재현): 각 문항 정답 인덱스를 pick → correctCount===문항수면 통과
   const picks = qs.map((q) => q.answer_index);
   const correct = picks.filter((p, i) => p === qs[i].answer_index).length;
@@ -229,7 +231,32 @@ async function flow4({ owner, ownerId, jA, jAId, UNIT, TMPL, entryRow }) {
   // 위조 방어: 알바A가 남의 staff_id(사장)로 이해 기록 시도 → RLS WITH CHECK 차단
   const { error: forge } = await jA.from('task_understanding').insert({ unit_id: UNIT, template_id: TMPL, staff_id: ownerId, staff_name: '위조' }).select('template_id');
   check('④-7 staff_id 위조 삽입 차단(RLS)', !!forge, forge ? `거부 ${forge.code ?? ''}` : '(차단 안됨!)');
+
+  // ── 0103 오답 집계(record_quiz_stats) — 문항 귀속·개인 비저장·사장만 열람 ──
+  const { error: rqe } = await jA.rpc('record_quiz_stats', { p_stats: [{ entry_id: ENTRY_OF(entryRow), attempts: 2, misses: 1 }] });
+  check('④-8 직원 채점 집계 RPC 성공', !rqe, rqe?.message ?? '');
+  const { data: qsRow } = await admin.from('knowhow_quiz_stats').select('attempt_count, miss_count, unit_id').eq('entry_id', ENTRY_OF(entryRow)).maybeSingle();
+  check('④-9 집계 합산(attempts=2·misses=1·개인 컬럼 없음)', qsRow?.attempt_count === 2 && qsRow?.miss_count === 1 && qsRow?.unit_id === UNIT, JSON.stringify(qsRow));
+  // 두 번째 채점 = on conflict 누적 경로(실서비스의 지배 경로) — insert가 아니라 합산이어야 한다.
+  const { error: rqe2 } = await jA.rpc('record_quiz_stats', { p_stats: [{ entry_id: ENTRY_OF(entryRow), attempts: 2, misses: 1 }] });
+  const { data: qsRow2 } = await admin.from('knowhow_quiz_stats').select('attempt_count, miss_count').eq('entry_id', ENTRY_OF(entryRow)).maybeSingle();
+  check('④-9b 재채점 누적(on conflict: 4·2)', !rqe2 && qsRow2?.attempt_count === 4 && qsRow2?.miss_count === 2, rqe2?.message ?? JSON.stringify(qsRow2));
+  const { data: jaRead } = await jA.from('knowhow_quiz_stats').select('entry_id').eq('entry_id', ENTRY_OF(entryRow));
+  check('④-10 직원은 집계 열람 불가(RLS)', (jaRead ?? []).length === 0, `rows=${jaRead?.length}`);
+  const { data: ownerRead } = await owner.from('knowhow_quiz_stats').select('entry_id, miss_count').eq('entry_id', ENTRY_OF(entryRow));
+  check('④-11 사장은 집계 열람 가능(RLS)', (ownerRead ?? []).some((x) => x.entry_id === ENTRY_OF(entryRow) && x.miss_count === 2), `rows=${ownerRead?.length}`);
+  const { error: fkRpc } = await jA.rpc('record_quiz_stats', { p_stats: [{ entry_id: 'pb_qa_nonexistent', attempts: 1, misses: 1 }] });
+  const { data: fkRow } = await admin.from('knowhow_quiz_stats').select('entry_id').eq('entry_id', 'pb_qa_nonexistent').maybeSingle();
+  check('④-12 남의/없는 entry는 무시(0행)', !fkRpc && !fkRow, fkRpc?.message ?? '');
+
+  // ── 0104 본인 훈련 이력 — ④-4에서 남긴 통과 기록이 업무명과 함께 돌아온다(본인 한정 definer) ──
+  const { data: hist, error: he } = await jA.rpc('my_training_history');
+  check('④-13 훈련 이력 RPC(본인 통과 행·업무명 조인)', !he && (hist ?? []).some((h) => h.template_id === TMPL && h.unit_id === UNIT && !!h.task_text), he?.message ?? JSON.stringify(hist?.slice(0, 2)));
+  const { data: ownerHist } = await owner.rpc('my_training_history');
+  check('④-14 훈련 이력은 본인 것만(사장에겐 직원 통과 행 없음)', !(ownerHist ?? []).some((h) => h.template_id === TMPL), `rows=${ownerHist?.length}`);
 }
+// 0103 검증에서 entryRow.id 접근을 한 곳으로(오타 방지).
+const ENTRY_OF = (row) => row.id;
 
 // ───────────────────── S3 #1 발행 넛지: copy_knowhow_to (활성 A → 다른 매장 B) ─────────────────────
 async function flow5({ owner, jA, UNIT, UNIT_B, ENTRY }) {

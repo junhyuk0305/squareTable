@@ -236,6 +236,7 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
         .map((id) => entryById.get(id))
         .filter((e): e is PlaybookEntry => !!e)
         .map((e) => ({
+          id: e.id, // 오답의 문항 귀속(0103) — 엣지가 문항별 근거 노하우 id로 되돌려준다.
           title: e.title,
           situation: e.square?.situation ?? '',
           steps: e.square?.action?.steps ?? [],

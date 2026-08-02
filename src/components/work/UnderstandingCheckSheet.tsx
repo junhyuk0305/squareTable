@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { BottomSheet } from '@/components/BottomSheet';
 import { generateQuiz } from '@/lib/ai/client';
+import { recordQuizStats } from '@/lib/db';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import type { QuizInput, QuizQuestion } from '@/lib/ai/types';
@@ -75,6 +76,16 @@ function QuizBody({
   const submit = () => {
     if (!allAnswered) return;
     setPhase('result');
+    // 오답의 문항 귀속(0103) — 어느 노하우 문항이 틀렸는지만 집계한다(누가 틀렸는지는 안 남김).
+    const byEntry = new Map<string, { attempts: number; misses: number }>();
+    questions.forEach((q, i) => {
+      if (!q.entry_id) return;
+      const cur = byEntry.get(q.entry_id) ?? { attempts: 0, misses: 0 };
+      cur.attempts += 1;
+      if (picks[i] !== q.answer_index) cur.misses += 1;
+      byEntry.set(q.entry_id, cur);
+    });
+    void recordQuizStats([...byEntry].map(([entryId, v]) => ({ entryId, ...v })));
     if (correctCount === questions.length) onPass();
   };
   const retry = () => onRetry();

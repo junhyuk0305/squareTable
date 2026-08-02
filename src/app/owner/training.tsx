@@ -21,6 +21,7 @@ import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { useStaffStore } from '@/lib/store/useStaffStore';
 import { showToast } from '@/lib/store/useToastStore';
 import { buildDirectUq, buildPlaybookEntryFromSquare } from '@/lib/utils/buildEntry';
+import { fetchQuizStats } from '@/lib/db';
 import { BottomSheet } from '@/components/BottomSheet';
 import { EntryDetailModal } from '@/components/EntryDetailModal';
 import { Appear } from '@/components/Appear';
@@ -32,6 +33,9 @@ import type { PlaybookEntry, SquareBlock } from '@/types';
 
 /** 하는 법 최소 길이 — 이 밑이면 노하우가 draft 로 떨어져 훈련 문제를 못 만든다. */
 const MIN_HOW_LEN = 10;
+/** 오답 잦음 판정(0103) — 표본이 이만큼 쌓이고 오답률이 이 선을 넘으면 노하우 결함 신호. */
+const QUIZ_MISS_MIN_ATTEMPTS = 5;
+const QUIZ_MISS_RATE = 0.4;
 /** 요일 라벨(0=일 ~ 6=토) — 할일 recurrence 와 같은 인덱스 체계. */
 const WEEKDAY_LABELS = ['일', '월', '화', '수', '목', '금', '토'] as const;
 
@@ -52,6 +56,7 @@ export default function OwnerTrainingScreen() {
   const knowhowLinks = useWorkStore((s) => s.knowhowLinks);
   const understanding = useWorkStore((s) => s.understanding);
   const addTrainingTask = useWorkStore((s) => s.addTrainingTask);
+  const editTask = useWorkStore((s) => s.editTask);
   const removeTrainingItem = useWorkStore((s) => s.removeTrainingItem);
   const moveTrainingItem = useWorkStore((s) => s.moveTrainingItem);
   const regularDueDays = useWorkStore((s) => s.regularDueDays);
@@ -66,6 +71,14 @@ export default function OwnerTrainingScreen() {
   useEffect(() => {
     void useWorkStore.getState().hydrate();
     void usePlaybookStore.getState().hydrate();
+  }, []);
+
+  // 문항 오답 집계(0103) — "이 노하우 문항이 자주 틀린다"는 노하우 결함 신호(사장 전용 읽기).
+  const [quizStats, setQuizStats] = useState<Record<string, { attempts: number; misses: number }>>({});
+  useEffect(() => {
+    let alive = true;
+    void fetchQuizStats().then((s) => { if (alive) setQuizStats(s); });
+    return () => { alive = false; };
   }, []);
 
   const [course, setCourse] = useState<TrainingCourse>('first_day');
@@ -87,10 +100,14 @@ export default function OwnerTrainingScreen() {
             course === 'regular'
               ? rows.filter((u) => !isRegularDue(u.verifiedAt, now, regularDueDays)).map((u) => u.staffName)
               : rows.map((u) => u.staffName);
-          return { templateId: t.id, text: t.text, entryId, passedNames };
+          // 오답 잦음(0103) — 표본 QUIZ_MISS_MIN_ATTEMPTS 이상 + 오답률 QUIZ_MISS_RATE 초과.
+          const qs = entryId ? quizStats[entryId] : undefined;
+          const missRate = qs && qs.attempts >= QUIZ_MISS_MIN_ATTEMPTS ? qs.misses / qs.attempts : 0;
+          const missPct = missRate >= QUIZ_MISS_RATE ? Math.round(missRate * 100) : 0;
+          return { templateId: t.id, text: t.text, entryId, passedNames, missPct };
         })
         .filter((x): x is NonNullable<typeof x> => !!x),
-    [training, course, templates, knowhowLinks, understanding, now, regularDueDays],
+    [training, course, templates, knowhowLinks, understanding, now, regularDueDays, quizStats],
   );
   const full = items.length >= meta.max;
   const firstDayReady = course !== 'first_day' || items.length >= FIRST_DAY_MIN_ITEMS;
@@ -111,6 +128,10 @@ export default function OwnerTrainingScreen() {
   const [pickerQuery, setPickerQuery] = useState('');
   const [actionItem, setActionItem] = useState<(typeof items)[number] | null>(null);
   const [detailEntry, setDetailEntry] = useState<PlaybookEntry | null>(null);
+  // 업무명 수정 — 액션 시트에서 순차 전환(모달 위 모달 금지). 저장은 editTask(제목만 교체, 링크 무접촉).
+  const [renameItem, setRenameItem] = useState<(typeof items)[number] | null>(null);
+  const [renameText, setRenameText] = useState('');
+  const [renaming, setRenaming] = useState(false);
   // 직원에게 요청(0102) — 액션 시트에서 항목을 골라 연다(시트는 순차 전환 — 모달 위 모달 금지).
   const [requestItem, setRequestItem] = useState<(typeof items)[number] | null>(null);
   const [reqStaff, setReqStaff] = useState<Set<string>>(new Set());
@@ -130,6 +151,36 @@ export default function OwnerTrainingScreen() {
     setReqDays(new Set());
     setRequestItem(it);
   };
+  const saveRename = async () => {
+    if (!renameItem || renaming) return;
+    const next = renameText.trim();
+    if (!next || next === renameItem.text) {
+      setRenameItem(null);
+      return;
+    }
+    const t = templates.find((x) => x.id === renameItem.templateId);
+    if (!t) {
+      setRenameItem(null);
+      return;
+    }
+    setRenaming(true);
+    // 제목만 교체 — 나머지 필드는 현재 값 그대로, knowhowIds 생략 = 링크 무접촉.
+    const ok = await editTask(t.id, {
+      section: t.section,
+      text: next,
+      scope: t.scope ?? 'shared', // 구버전 행은 scope 부재 가능 — 기본값은 매장 공유(훈련 업무의 기본 성격)
+      ownerId: t.ownerId,
+      sectionNote: t.sectionNote,
+      recurrence: t.recurrence,
+      date: t.date,
+    });
+    setRenaming(false);
+    if (ok) {
+      setRenameItem(null);
+      showToast('업무명을 바꿨어요', 'good');
+    }
+  };
+
   const sendRequest = async () => {
     if (!requestItem || sending) return;
     const staffIds = [...reqStaff];
@@ -298,6 +349,11 @@ export default function OwnerTrainingScreen() {
                           ? `${course === 'regular' ? `최근 ${regularDueLabel(regularDueDays)} 안에 확인` : '이해 확인'} · ${it.passedNames.join(', ')}`
                           : course === 'regular' ? '확인한 직원이 아직 없어요' : '통과한 직원이 아직 없어요'}
                     </Text>
+                    {it.missPct > 0 && (
+                      <Text style={st.itemWarn} numberOfLines={1}>
+                        문제 오답률 {it.missPct}% · 노하우가 헷갈리게 적혔을 수 있어요
+                      </Text>
+                    )}
                   </View>
                   <Ionicons name="ellipsis-horizontal" size={17} color={InkColors.ink3} />
                 </Pressable>
@@ -404,6 +460,15 @@ export default function OwnerTrainingScreen() {
             }}
           />
           <SheetAction
+            icon="text-outline"
+            label="업무명 수정"
+            onPress={() => {
+              setRenameText(actionItem.text);
+              setRenameItem(actionItem);
+              setActionItem(null);
+            }}
+          />
+          <SheetAction
             icon="paper-plane-outline"
             label="직원에게 요청"
             disabled={!actionItem.entryId || staffList.length === 0}
@@ -431,6 +496,40 @@ export default function OwnerTrainingScreen() {
               showToast('훈련에서 뺐어요 · 업무와 노하우는 남아요', 'good');
             }}
           />
+        </BottomSheet>
+      )}
+
+      {/* ── 업무명 수정 시트 — 제목 한 칸만(설정·수정 보관이라 CTA는 '저장') ── */}
+      {renameItem && (
+        <BottomSheet visible={true} onClose={() => setRenameItem(null)}>
+          <View style={st.sheetHead}>
+            <Text style={st.sheetTitle} numberOfLines={1}>업무명 수정</Text>
+            <Pressable onPress={() => setRenameItem(null)} hitSlop={8}>
+              <Ionicons name="close" size={20} color={InkColors.ink2} />
+            </Pressable>
+          </View>
+          <View style={st.renameBody}>
+            <TextInput
+              value={renameText}
+              onChangeText={setRenameText}
+              placeholder="예) 오픈 청소"
+              placeholderTextColor={InkColors.ink3}
+              style={st.input}
+              autoFocus
+              maxLength={60}
+              returnKeyType="done"
+              onSubmitEditing={() => void saveRename()}
+              accessibilityLabel="업무명 입력"
+            />
+            <Pressable
+              onPress={() => void saveRename()}
+              disabled={!renameText.trim() || renaming}
+              style={({ pressed }) => [st.cta, (!renameText.trim() || renaming) && { opacity: 0.4 }, pressed && { opacity: 0.85 }]}
+              accessibilityRole="button"
+            >
+              <Text style={st.ctaText}>{renaming ? '저장 중…' : '저장'}</Text>
+            </Pressable>
+          </View>
         </BottomSheet>
       )}
 
@@ -668,6 +767,8 @@ const st = StyleSheet.create({
   itemNumText: { fontSize: 12, fontWeight: '800', color: InkColors.ink2 },
   itemText: { fontSize: 15, fontWeight: '700', color: InkColors.ink },
   itemMeta: { fontSize: 12, color: InkColors.ink3, marginTop: 1 },
+  itemWarn: { fontSize: 12, fontWeight: '700', color: '#8a5a12', marginTop: 1 },
+  renameBody: { paddingHorizontal: 16, paddingBottom: 18, gap: Space.sm },
   emptyText: { fontSize: 15, color: InkColors.ink3, textAlign: 'center', paddingVertical: Space.md },
 
   addRow: { flexDirection: 'row', gap: Space.sm },
