@@ -14,6 +14,8 @@ import type {
   TriageOutput,
   TranscribeInput,
   TranscribeOutput,
+  DocExtractInput,
+  DocExtractOutput,
   QuizInput,
   QuizOutput,
 } from './types';
@@ -23,7 +25,7 @@ import { isEnglishDominant } from '@/lib/utils/knowhowInput';
 import { supabase } from '@/lib/supabase';
 import { reportError, track } from '@/lib/analytics/track';
 
-type Task = 'answer' | 'square' | 'patch' | 'intent' | 'triage' | 'transcribe' | 'quiz';
+type Task = 'answer' | 'square' | 'patch' | 'intent' | 'triage' | 'transcribe' | 'doc_extract' | 'quiz';
 
 // 한글 입력인데 결과가 통째로 영어로 나왔는지(언어 드리프트). 혼용은 통과(한글 1자라도 있으면 false).
 function squareWentEnglish(input: { rawText?: string; instruction?: string }, out: StructureSquareOutput): boolean {
@@ -38,7 +40,13 @@ const EDGE_TIMEOUT_MS = 12_000;
 // 받아쓰기는 오디오 업로드(최대 ~2.6MB base64) + 오디오 이해라 텍스트 태스크보다 오래 걸린다.
 // 12초 컷이면 60초 발화가 상습적으로 잘린다 → 태스크별 타임아웃.
 const EDGE_TIMEOUT_MS_TRANSCRIBE = 30_000;
-const timeoutFor = (task: Task) => (task === 'transcribe' ? EDGE_TIMEOUT_MS_TRANSCRIBE : EDGE_TIMEOUT_MS);
+// 문서 추출은 업로드(최대 ~14MB base64) + 다페이지 OCR 이라 가장 오래 걸린다. 30초 컷이면
+// 스캔 10장짜리가 상습적으로 잘린다 → 별도 상한.
+const EDGE_TIMEOUT_MS_DOC_EXTRACT = 90_000;
+const timeoutFor = (task: Task) =>
+  task === 'doc_extract' ? EDGE_TIMEOUT_MS_DOC_EXTRACT
+    : task === 'transcribe' ? EDGE_TIMEOUT_MS_TRANSCRIBE
+      : EDGE_TIMEOUT_MS;
 // 간헐 5xx 재시도 — flash-lite upstream이 무거운 입력(다중 노하우 등)에서 간헐 500을 뱉는데,
 // 그때마다 mock으로 폴백하면 사용자는 덜 정제된 '기본 정리'(degraded)를 받는다. 5xx/네트워크
 // 오류만 1회 재시도해 진짜 결과 회복률을 높인다(실측 다중입력 500율 ~1/3 → 재시도로 ~1/9).
@@ -225,6 +233,25 @@ export async function transcribeAudio(input: TranscribeInput): Promise<Transcrib
   } catch (e) {
     console.warn('[ai] transcribeAudio failed:', e);
     reportError('ai.transcribeAudio.failed', e, { durationMs: input.durationMs });
+    return { text: '', empty: true, error: 'failed' };
+  }
+}
+
+// 문서 텍스트 추출 — PDF → 본문 텍스트(인수인계서 입력창 주입용). transcribe 와 같은 이유로
+// mock 폴백 금지: 가짜 텍스트가 입력창에 채워지면 사장은 문서 내용인 줄 알고 그대로 정리한다.
+// 실패는 실패로 알린다 → 호출부(HandoverImport)가 안내 후 붙여넣기로 유도.
+export async function extractDocText(input: DocExtractInput): Promise<DocExtractOutput> {
+  if (USE_MOCK) {
+    // 데모 모드: 추출 백엔드가 없다는 사실을 숨기지 않는다.
+    return { text: '', empty: true, error: 'mock_mode' };
+  }
+  try {
+    const out = await callEdge<DocExtractOutput>('doc_extract', input);
+    const text = String(out?.text ?? '').trim();
+    return { text, empty: !text || out?.empty === true, ...(out?.error ? { error: out.error } : {}) };
+  } catch (e) {
+    console.warn('[ai] extractDocText failed:', e);
+    reportError('ai.extractDocText.failed', e);
     return { text: '', empty: true, error: 'failed' };
   }
 }

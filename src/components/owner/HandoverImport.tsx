@@ -6,9 +6,10 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { PressableScale } from '@/components/PressableScale';
 import { Appear } from '@/components/Appear';
-import { structureDoc, type DocProgress } from '@/lib/ai';
+import { structureDoc, extractDocText, type DocProgress } from '@/lib/ai';
 import type { StructuredSegment } from '@/lib/ai/types';
 import { chunkDocument, MAX_IMPORT_CHARS, type DocChunk } from '@/lib/import/chunk';
+import { pickPdf, PDF_PICK_SUPPORTED } from '@/lib/import/pickPdf';
 import { isSquarePublishable, buildPlaybookEntryFromSquare, buildDirectUq } from '@/lib/utils/buildEntry';
 import { isDraft } from '@/lib/utils/entryStatus';
 import {
@@ -30,6 +31,8 @@ import { Elevation, Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
 
 const MIN_RAWTEXT = 12;
+// PDF 원본 크기 캡(클라 1차 방어 — 엣지 base64 하드캡 14MB 와 정렬). 넘으면 "나눠 올리기" 안내.
+const MAX_PDF_BYTES = 10 * 1024 * 1024;
 
 
 // 파이프 실행 중 가드 — 컴포넌트가 아니라 모듈 스코프에 두는 이유: 처리 중 화면을 나갔다 돌아오면
@@ -72,6 +75,7 @@ export function HandoverImport() {
   const [choices, setChoices] = useState<Record<string, boolean>>({});
   const [edits, setEdits] = useState<Record<string, DraftEdit>>({});
   const [saving, setSaving] = useState(false);
+  const [extracting, setExtracting] = useState(false); // PDF → 텍스트 추출 중(웹 전용)
   // 언마운트 후 setState 방지 — 파이프 자체는 계속 돌아 draft가 쌓인다(체크포인트라 의도된 동작).
   const mounted = useRef(true);
   useEffect(() => () => { mounted.current = false; }, []);
@@ -161,7 +165,7 @@ export function HandoverImport() {
       });
       if (!mounted.current) return;
       const notes: string[] = [];
-      if (truncatedChunks > 0) notes.push(`문서가 길어 앞 ${chunks.length}묶음만 정리했어요 — 남은 부분은 등록 후 이어서 붙여넣어 주세요.`);
+      if (truncatedChunks > 0) notes.push(`문서가 길어 앞 ${chunks.length}묶음만 정리했어요 — 남은 부분은 추가한 뒤 이어서 붙여넣어 주세요.`);
       if (r.failedChunks > 0) notes.push(`${r.failedChunks}개 묶음은 정리에 실패했어요 — 그 부분만 다시 올려주세요.`);
       if (failedSaves > 0) notes.push(`${failedSaves}개 항목은 저장에 실패했어요 — 연결 확인 후 그 부분만 다시 올려주세요.`);
       setNote(notes.length ? notes.join('\n') : null);
@@ -189,6 +193,42 @@ export function HandoverImport() {
       pipelineRunning = false;
     }
   }, [tooShort, trimmed, storeId, addEntry, drafts.length]);
+
+  // ── PDF 올리기(웹 전용) ──
+  // 추출 텍스트는 입력창에 "이어붙인다"(교체 아님) — 큰 문서를 파일로 나눠 여러 번 올리면
+  // 같은 입력창에 쌓인다(나눠 올리기). 자동으로 파이프에 넣지 않는다: 사장이 추출 결과를
+  // 눈으로 확인한 뒤에만 아래 CTA 로 정리를 시작한다(스캔 오인식이 노하우로 새는 것 방지).
+  const importPdf = useCallback(async () => {
+    if (extracting) return;
+    const picked = await pickPdf(); // 선택창을 닫으면 null — 로딩 상태는 선택 완료 후에만 켠다
+    if (!picked) return;
+    if (picked.size > MAX_PDF_BYTES) {
+      setError('PDF가 너무 커요 (최대 10MB). 페이지를 나눠 저장한 뒤 한 부분씩 올려주세요.');
+      return;
+    }
+    setError(null);
+    setExtracting(true);
+    const out = await extractDocText({ docBase64: picked.base64, mimeType: 'application/pdf' });
+    if (!mounted.current) return;
+    setExtracting(false);
+    if (out.empty) {
+      setError(
+        out.error === 'doc_too_large'
+          ? 'PDF가 너무 커요 (최대 10MB). 페이지를 나눠 저장한 뒤 한 부분씩 올려주세요.'
+          : out.error === 'failed' || out.error === 'mock_mode'
+            ? 'PDF를 읽는 중 연결 문제가 생겼어요. 잠시 후 다시 시도해 주세요.'
+            : 'PDF에서 글자를 읽지 못했어요. 스캔이 흐리면 다시 찍거나, 내용을 직접 붙여넣어 주세요.',
+      );
+      return;
+    }
+    const base = trimmed ? `${rawText.trimEnd()}\n\n` : '';
+    const clipped = out.text.slice(0, Math.max(0, MAX_IMPORT_CHARS - base.length));
+    setRawText(base + clipped);
+    if (clipped.length < out.text.length) {
+      // 조용히 안 자름 — 상한에 걸린 사실과 다음 행동을 알린다.
+      showToast('입력 상한에 맞춰 앞부분만 담았어요. 먼저 정리한 뒤 나머지를 이어서 올려주세요.', 'warn');
+    }
+  }, [extracting, rawText, trimmed]);
 
   // ── 검수 조작 ──
   const toggle = useCallback((d: PlaybookEntry) => {
@@ -224,7 +264,7 @@ export function HandoverImport() {
     if (!mounted.current) return;
     const okCount = results.filter(Boolean).length;
     if (results.every(Boolean)) {
-      showToast(`노하우 ${okCount}개가 등록됐어요`);
+      showToast(`노하우 ${okCount}개를 추가했어요`);
       const remaining = drafts.length - okCount;
       if (remaining <= 0) router.replace('/owner/knowledge');
     } else {
@@ -235,7 +275,7 @@ export function HandoverImport() {
         return next;
       });
       showToast(
-        okCount > 0 ? `${okCount}개는 등록됐어요. 남은 항목만 다시 시도해 주세요.` : '등록에 실패했어요. 연결을 확인하고 다시 시도해 주세요.',
+        okCount > 0 ? `${okCount}개는 추가됐어요. 남은 항목만 다시 시도해 주세요.` : '추가에 실패했어요. 연결을 확인하고 다시 시도해 주세요.',
         'warn',
       );
     }
@@ -270,7 +310,7 @@ export function HandoverImport() {
             <View style={styles.reviewBanner}>
               <Ionicons name="sparkles" size={16} color={BrandColors.warn} />
               <Text style={styles.reviewBannerText}>
-                검토 대기 <Text style={{ fontWeight: '900' }}>노하우 {drafts.length}개</Text> — 등록할 것만 고르고, 카드를 눌러 내용을 다듬어 주세요. 등록 전에는 직원에게 보이지 않아요.
+                검토 대기 <Text style={{ fontWeight: '900' }}>노하우 {drafts.length}개</Text> — 추가할 것만 고르고, 카드를 눌러 내용을 다듬어 주세요. 추가 전에는 직원에게 보이지 않아요.
               </Text>
             </View>
             {note && <Text style={styles.overflowNote}>{note}</Text>}
@@ -329,9 +369,31 @@ export function HandoverImport() {
               <Text style={styles.uploadEmoji}>📄</Text>
               <Text style={styles.uploadTitle}>인수인계서·매뉴얼을 올리세요</Text>
               <Text style={styles.uploadSub}>
-                긴 문서도 통째로 붙여넣으세요. AI가 소제목별로 나눠 노하우 항목으로 정리해요.
+                {PDF_PICK_SUPPORTED
+                  ? 'PDF 파일을 올리거나 내용을 붙여넣으세요. AI가 소제목별로 나눠 노하우 항목으로 정리해요.'
+                  : '긴 문서도 통째로 붙여넣으세요. AI가 소제목별로 나눠 노하우 항목으로 정리해요.'}
               </Text>
             </View>
+
+            {PDF_PICK_SUPPORTED && (
+              <PressableScale
+                onPress={importPdf}
+                scaleTo={0.98}
+                style={[styles.pdfBtn, extracting && styles.ctaDisabled]}
+                disabled={extracting}
+                accessibilityRole="button"
+                accessibilityLabel="PDF 올리기"
+              >
+                {extracting ? (
+                  <ActivityIndicator size="small" color={InkColors.ink} />
+                ) : (
+                  <Ionicons name="document-attach-outline" size={16} color={InkColors.ink} />
+                )}
+                <Text style={styles.pdfBtnText}>
+                  {extracting ? 'PDF에서 글자를 읽는 중… (잠시 걸려요)' : 'PDF 올리기'}
+                </Text>
+              </PressableScale>
+            )}
 
             {drafts.length > 0 && (
               <PressableScale
@@ -355,6 +417,9 @@ export function HandoverImport() {
               placeholder={'예)\n[오픈]\n머신 20분 예열 후 시운전 2잔\n\n[레시피]\n아이스 아메리카노는 시럽 없이 물 200ml\n\n[마감]\n그라인더 원두 비우고 청소'}
               placeholderTextColor={InkColors.ink3}
               maxLength={MAX_IMPORT_CHARS}
+              // 추출 완료 시 주입이 이 값 기준으로 이어붙는다 — 추출 중 타이핑을 허용하면
+              // 완료 시점에 그 타이핑이 덮여 사라진다(무음 유실) → 잠금.
+              editable={!extracting}
               textAlignVertical="top"
             />
             <View style={styles.metaRow}>
@@ -371,8 +436,10 @@ export function HandoverImport() {
             <PressableScale
               onPress={run}
               scaleTo={0.98}
-              style={[styles.cta, tooShort && styles.ctaDisabled]}
-              disabled={tooShort}
+              // 추출 중 파이프 시작 금지 — 파이프 종료의 setRawText('')가 뒤늦게 도착한
+              // 추출 텍스트를 지우는 레이스가 있다.
+              style={[styles.cta, (tooShort || extracting) && styles.ctaDisabled]}
+              disabled={tooShort || extracting}
               accessibilityRole="button"
               accessibilityLabel="AI로 노하우 정리하기"
             >
@@ -392,12 +459,12 @@ export function HandoverImport() {
             style={[styles.saveBtn, (chosenCount === 0 || saving) && styles.ctaDisabled]}
             disabled={chosenCount === 0 || saving}
             accessibilityRole="button"
-            accessibilityLabel={`노하우 ${chosenCount}개 등록하기`}
+            accessibilityLabel={`노하우 ${chosenCount}개 추가하기`}
           >
             {saving ? (
               <ActivityIndicator size="small" color={InkColors.bubbleText} />
             ) : (
-              <Text style={styles.saveText}>{chosenCount > 0 ? `노하우 ${chosenCount}개 등록하기` : '등록할 항목을 선택하세요'}</Text>
+              <Text style={styles.saveText}>{chosenCount > 0 ? `노하우 ${chosenCount}개 추가하기` : '추가할 항목을 선택하세요'}</Text>
             )}
           </PressableScale>
         </View>
@@ -464,7 +531,7 @@ function DraftCard({
           style={[styles.cbox, selected && styles.cboxOn]}
           accessibilityRole="checkbox"
           accessibilityState={{ checked: selected }}
-          accessibilityLabel={`등록 선택: ${view.title || '제목 없음'}`}
+          accessibilityLabel={`추가 선택: ${view.title || '제목 없음'}`}
         >
           {selected && <Ionicons name="checkmark" size={14} color={InkColors.bubbleText} />}
         </PressableScale>
@@ -623,7 +690,7 @@ function DraftCard({
             maxLength={200}
           />
 
-          {!publishable && <Text style={styles.editorWarn}>상황·할 일·멘트 중 하나는 채워야 등록할 수 있어요.</Text>}
+          {!publishable && <Text style={styles.editorWarn}>상황·할 일·멘트 중 하나는 채워야 추가할 수 있어요.</Text>}
 
           <PressableScale onPress={onRemove} scaleTo={0.97} style={styles.deleteLink} accessibilityRole="button" accessibilityLabel="이 항목 삭제">
             <Ionicons name="trash-outline" size={14} color={BrandColors.bad} />
@@ -665,6 +732,20 @@ const styles = StyleSheet.create({
     marginBottom: Space.md,
   },
   resumeText: { flex: 1, fontSize: 13.5, fontWeight: '800', color: InkColors.ink },
+
+  pdfBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 7,
+    backgroundColor: InkColors.bg,
+    borderWidth: 1,
+    borderColor: InkColors.line,
+    borderRadius: Radius.md,
+    paddingVertical: 14,
+    marginBottom: Space.sm,
+  },
+  pdfBtnText: { fontSize: 14, fontWeight: '800', color: InkColors.ink },
 
   input: {
     minHeight: 180,

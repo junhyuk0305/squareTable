@@ -70,6 +70,8 @@
     "qa:draft": "node scripts/qa-draft-isolation.mjs",
     "qa:gen-exchange": "node scripts/qa-gen-exchange.mjs",
     "qa:transcribe": "node scripts/qa-transcribe.mjs",
+    "qa:import-pdf": "node scripts/qa-import-pdf.mjs",
+    "qa:import-pdf-browser": "node scripts/qa-import-pdf-browser.mjs",
     "qa:voice-browser": "node scripts/qa-voice-browser.mjs",
     "qa:join-reject": "node scripts/qa-join-reject-browser.mjs",
     "qa:publish-sheet": "node scripts/qa-publish-sheet-browser.mjs"

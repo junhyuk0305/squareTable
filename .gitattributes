@@ -1,0 +1,3 @@
+# PDF 는 항상 바이너리 — 순수 ASCII PDF(QA 픽스처)를 git 이 텍스트로 오판해
+# CRLF 변환하면 xref 바이트 오프셋이 깨져 파일이 손상된다.
+*.pdf binary

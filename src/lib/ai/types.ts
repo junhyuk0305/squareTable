@@ -144,17 +144,33 @@ export type TranscribeOutput = {
   error?: string;
 };
 
+// ── 문서 텍스트 추출(PDF → 인수인계서 붙여넣기 입력창 주입) ──
+// docBase64 = PDF 파일 전체의 base64. 텍스트 PDF·스캔 PDF 모두 한 경로(Gemini 내장 OCR).
+export type DocExtractInput = {
+  docBase64: string;
+  mimeType: 'application/pdf';
+};
+
+export type DocExtractOutput = {
+  text: string;
+  /** 문서에서 읽을 수 있는 글자가 없었음 → 호출부가 재스캔/직접 붙여넣기 안내. */
+  empty: boolean;
+  /** 엣지 거절 사유(unsupported_doc · doc_too_large · doc_not_accepted). 있으면 text는 비어 있다. */
+  error?: string;
+};
+
 // ── 이해확인 퀴즈 (S1 ④) — 노하우 기반 객관식 상황문제 ─────────
 export type QuizQuestion = {
   ask: string;              // 현장 상황 한 줄
   choices: string[];        // 선택지 2~4
   answer_index: number;     // 정답 인덱스(자동채점)
   explain: string;          // 정답 근거 한 문장
+  entry_id?: string;        // 근거 노하우 id — 오답의 문항 귀속(0103, 결함 검출)용. 엣지가 매핑.
 };
 export type QuizInput = {
   taskText: string;         // 대상 업무 이름(맥락)
-  // 그 업무에 붙은 노하우(①) 요약 — 이 내용에서만 출제.
-  sops: { title: string; situation: string; steps: string[]; donts: string[] }[];
+  // 그 업무에 붙은 노하우(①) 요약 — 이 내용에서만 출제. id는 오답 귀속용(프롬프트엔 안 실림).
+  sops: { id?: string; title: string; situation: string; steps: string[]; donts: string[] }[];
 };
 export type QuizOutput = {
   questions: QuizQuestion[];
