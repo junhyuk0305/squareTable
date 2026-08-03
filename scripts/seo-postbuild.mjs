@@ -69,8 +69,8 @@ const jsonLd = JSON.stringify({
       featureList: [
         '우리 가게 노하우를 AI가 즉시 답변',
         '업무 체크 시 채팅 자동 기록·사장님 알림',
-        '알바 교대 근무 요청과 사장님 승인',
-        '여러 매장 한 계정 관리·노하우 매장 간 복제',
+        '신입 훈련 코스와 이해 확인 퀴즈',
+        '여러 매장 한 계정 관리·노하우 매장 간 가져오기',
         '출퇴근·인건비 자동 집계',
       ],
       publisher: { '@id': `${SITE_URL}/#org` },
@@ -118,7 +118,7 @@ const NOSCRIPT = `<noscript>
       <p>사장님 머릿속 노하우를 가게 전용 AI로. 직원이 묻는 순간, 우리 가게 방식 그대로 답이 나옵니다. 카페·헬스장·학원·미용실 매장 운영 AI, 착착.</p>
       <h2>이런 순간, 있으시죠</h2>
       <ul>
-        <li>알바가 바뀔 때마다 같은 걸 몇 번씩 다시 설명</li>
+        <li>직원이 바뀔 때마다 같은 걸 몇 번씩 다시 설명</li>
         <li>쉬는 날에도 울리는 “사장님, 이건 어떻게 해요?” 전화</li>
         <li>노하우가 머릿속에만 있어 내가 없으면 멈추는 가게</li>
         <li>카톡 공지·메모지·말로 전한 지시가 흩어져 아무도 제대로 안 봄</li>
@@ -127,12 +127,12 @@ const NOSCRIPT = `<noscript>
       <ul>
         <li>우리 가게 노하우, AI가 즉시 답변 — 사장님이 한 번 남긴 답을 직원이 물을 때 대신 답해요</li>
         <li>채팅 업무 — 직원이 할 일을 체크하면 업무 채팅에 자동 기록되고 사장님께 알림</li>
-        <li>교대 근무 — 알바끼리 근무를 맞바꾸고 사장님은 승인 한 번으로 끝</li>
-        <li>여러 매장을 한 계정에서 — 매장을 오가고 검증된 노하우를 매장 간에 복제</li>
+        <li>훈련 코스 — 신입이 첫 출근부터 순서대로 배우고 이해 확인 퀴즈로 통과</li>
+        <li>여러 매장을 한 계정에서 — 매장을 오가고 검증된 노하우를 매장 간에 가져오기</li>
         <li>출퇴근·인건비 자동 집계</li>
       </ul>
-      <p>신용카드 없이 무료로 시작 · 매장 1곳 · 직원 3명 · AI 월 300건 무료.</p>
-      <p><a href="/welcome.html">착착 소개 페이지 보기</a> · <a href="/signup">무료로 시작</a></p>
+      <p>신용카드 없이 무료로 시작 · 매장 1곳 · 직원 3명 · AI 월 150건 무료.</p>
+      <p><a href="/welcome.html">착착 소개</a> · <a href="/features">기능</a> · <a href="/pricing">요금제</a> · <a href="/faq">자주 묻는 질문</a> · <a href="/inquiry">도입 문의</a> · <a href="/signup">무료로 시작</a></p>
     </div>
     <!-- seo:noscript:end -->
   </noscript>`;
@@ -186,13 +186,17 @@ function patchWelcome() {
   console.log('[seo] dist/welcome.html 패치 완료 (og:image·og:url·canonical·twitter·JSON-LD)');
 }
 
+// 마케팅 정적 페이지(public/*.html + vercel.json rewrite) — robots Allow·sitemap 공용 목록.
+const MARKETING_PAGES = ['features', 'pricing', 'faq', 'inquiry'];
+
 // ── 3) robots.txt ────────────────────────────────────────────────────────
 function writeRobots() {
-  // 마케팅 루트(및 welcome.html)만 색인. 나머지 앱 라우트는 CSR 빈 껍데기라 색인 가치 없음 → 제외.
+  // 마케팅 페이지(루트·welcome·features 등 정적)만 색인. 나머지 앱 라우트는 CSR 빈 껍데기라 색인 가치 없음 → 제외.
   const body = [
     'User-agent: *',
     'Allow: /$',
     'Allow: /welcome.html',
+    ...MARKETING_PAGES.flatMap((s) => [`Allow: /${s}`, `Allow: /${s}.html`]),
     'Allow: /manifest.json',
     // 법적 고지 정적 페이지 — Apple 5.1.1(i)·Google Play 계정삭제 요건상 로그인 없이 크롤·열람이 돼야 한다.
     // 확장자 없는 주소(rewrite 경유)와 실제 파일 주소를 둘 다 열어 둔다.
@@ -276,6 +280,14 @@ function writeSitemap() {
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
   </url>
+${MARKETING_PAGES.map(
+  (s) => `  <url>
+    <loc>${SITE_URL}/${s}</loc>
+    <lastmod>${today}</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>`,
+).join('\n')}
 ${LEGAL_PAGES.map(
   (p) => `  <url>
     <loc>${SITE_URL}/${p.slug}</loc>

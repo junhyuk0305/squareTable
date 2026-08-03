@@ -9,51 +9,10 @@
 <meta property="og:description" content="사장님이 한 번 알려주면, 직원이 물을 때 AI가 우리 가게 방식 그대로 대신 답해요.">
 <link rel="icon" href="/favicon.png">
 <link rel="preconnect" href="https://cdn.jsdelivr.net">
+<link rel="stylesheet" href="/site.css">
 <script>document.documentElement.className+=' js';</script>
 <style>
-@import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.css');
-:root{
-  --ink:#111111; --ink2:#6b6b6b; --ink3:#a4a29b; --line:#EAECEF;
-  --bg:#FFFFFF; --paper:#F4F5F7;
-  --yellow:#FFE14D; --yellowDeep:#F5C518; --yellowSoft:#FFF3B8;
-  --good:#1c7d3f; --warn:#c98a2e; --warnSoft:#FCE8C4; --warnBorder:#E6A94D;
-  --sourceBg:#FEF9EC;
-  --r-sm:10px; --r-md:16px; --r-lg:20px; --r-pill:100px;
-  --e1:0 1px 2px rgba(17,17,17,.04),0 5px 14px rgba(17,17,17,.06);
-  --e2:0 1px 3px rgba(17,17,17,.04),0 10px 28px rgba(17,17,17,.08);
-  --e3:0 8px 22px rgba(17,17,17,.10),0 24px 56px rgba(17,17,17,.13);
-  --ey:0 8px 20px rgba(245,197,24,.32);
-}
-*{box-sizing:border-box}
-html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}
-body{margin:0;background:var(--bg);color:var(--ink);
-  font-family:'Pretendard Variable',Pretendard,-apple-system,'Malgun Gothic',system-ui,sans-serif;
-  line-height:1.5;letter-spacing:-.01em}
-a{text-decoration:none;color:inherit}
-svg.ic{width:1em;height:1em;stroke:currentColor;stroke-width:1.85;fill:none;stroke-linecap:round;stroke-linejoin:round;vertical-align:-.14em;display:inline-block}
-.wrap{max-width:1080px;margin:0 auto;padding:0 24px}
-.js .reveal{opacity:0;transform:translateY(18px);transition:opacity .62s cubic-bezier(.2,.7,.3,1),transform .62s cubic-bezier(.2,.7,.3,1)}
-.js .reveal.in{opacity:1;transform:none}
-@media(prefers-reduced-motion:reduce){.js .reveal{opacity:1!important;transform:none!important;transition:none!important}}
-
-/* nav */
-.nav{position:sticky;top:0;z-index:20;background:rgba(255,255,255,.9);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
-.nav .in{max-width:1080px;margin:0 auto;padding:14px 24px;display:flex;align-items:center;gap:16px}
-.lg{font-weight:900;font-size:21px;letter-spacing:-.04em;position:relative}
-.lg::after{content:"";position:absolute;left:0;right:0;bottom:2px;height:6px;background:var(--yellow);z-index:-1;border-radius:2px}
-.nav .lk{margin-left:auto;display:flex;gap:6px;align-items:center;flex-shrink:0}
-.nav .lk a{font-size:13.5px;font-weight:800;color:var(--ink2);padding:9px 13px;border-radius:var(--r-pill);white-space:nowrap}
-.nav .lk a:hover{background:var(--paper);color:var(--ink)}
-.nav .lk a.cta{background:var(--yellow);color:var(--ink);box-shadow:var(--ey)}
-.nav .lk a.cta:hover{background:var(--yellowDeep)}
-@media(max-width:480px){
-  .nav .in{padding:12px 16px;gap:8px}
-  .lg{font-size:19px}
-  /* 기능·요금제는 인페이지 앵커라 스크롤로 도달 — 모바일 상단바에선 숨겨 로고+로그인+CTA를 한 줄로 */
-  .nav .lk a[href^="#"]{display:none}
-  .nav .lk a{font-size:13px;padding:8px 12px}
-}
-
+/* ── 홈 전용 ── */
 /* hero */
 .hero{display:grid;grid-template-columns:1.05fr .95fr;gap:24px;align-items:center;padding:64px 0 48px;background:radial-gradient(90% 120% at 6% 0%,#FFFDF3 0%,#fff 60%)}
 @media(max-width:860px){.hero{grid-template-columns:1fr;padding:44px 0 30px}}
@@ -65,11 +24,11 @@ svg.ic{width:1em;height:1em;stroke:currentColor;stroke-width:1.85;fill:none;stro
 .js .hero h1 .mk.lit .bar{animation:swipe .6s .35s cubic-bezier(.2,.7,.3,1) forwards}
 @keyframes swipe{to{transform:scaleX(1)}}
 .hero p.sub{font-size:17px;color:var(--ink2);max-width:460px;margin:18px 0 0;font-weight:500}
-.hero .cta{display:flex;gap:10px;margin-top:26px;flex-wrap:wrap}
-.hero .cta a{font-size:15px;font-weight:900;padding:15px 26px;border-radius:var(--r-pill)}
-.hero .cta a.p{background:var(--yellow);color:var(--ink);box-shadow:var(--ey)}
-.hero .cta a.p:hover{background:var(--yellowDeep)}
-.hero .cta a.s{background:var(--bg);color:var(--ink);border:1px solid var(--line);box-shadow:var(--e1)}
+.hero .hcta{display:flex;gap:10px;margin-top:26px;flex-wrap:wrap}
+.hero .hcta a{font-size:15px;font-weight:900;padding:15px 26px;border-radius:var(--r-pill)}
+.hero .hcta a.p{background:var(--yellow);color:var(--ink);box-shadow:var(--ey)}
+.hero .hcta a.p:hover{background:var(--yellowDeep)}
+.hero .hcta a.s{background:var(--bg);color:var(--ink);border:1px solid var(--line);box-shadow:var(--e1)}
 .trust{font-size:12.5px;color:var(--ink3);margin-top:16px}
 .trust b{color:var(--ink2);font-weight:800}
 .heroArt{display:flex;justify-content:center}
@@ -94,13 +53,6 @@ svg.ic{width:1em;height:1em;stroke:currentColor;stroke-width:1.85;fill:none;stro
 .saved{align-self:center;font-size:11px;font-weight:900;color:#7a5f10;background:var(--yellowSoft);padding:5px 12px;border-radius:var(--r-pill);animation:popIn .34s both;display:flex;align-items:center;gap:5px}
 .caret::after{content:"▍";color:var(--ink3);animation:cb .7s steps(1) infinite}
 @keyframes cb{50%{opacity:0}}
-
-/* sections */
-.sec{padding:56px 0;border-top:1px solid var(--line)}
-.eyebrow2{font-size:12px;font-weight:900;letter-spacing:.08em;color:var(--yellowDeep);text-transform:uppercase}
-.h2{font-size:clamp(24px,3.4vw,34px);font-weight:900;letter-spacing:-.035em;margin:10px 0 0;line-height:1.15}
-.h2 .u{position:relative;white-space:nowrap}
-.h2 .u::after{content:"";position:absolute;left:-2px;right:-2px;bottom:2px;height:10px;background:var(--yellow);z-index:-1;border-radius:2px}
 
 /* pain — editorial */
 .pains{margin-top:26px}
@@ -127,6 +79,9 @@ svg.ic{width:1em;height:1em;stroke:currentColor;stroke-width:1.85;fill:none;stro
 .cell.core .prev{height:200px}
 .prev.fchat{justify-content:flex-end}
 #todo{justify-content:flex-start}
+.morelink{margin-top:22px;text-align:center}
+.morelink a{display:inline-flex;align-items:center;gap:6px;font-size:14px;font-weight:900;color:var(--ink);background:var(--paper);padding:12px 22px;border-radius:var(--r-pill)}
+.morelink a:hover{background:var(--line)}
 /* mini checklist + tlog + toast */
 .mcheck{display:flex;flex-direction:column;gap:9px}
 .mck{display:flex;align-items:center;gap:10px;font-size:12.5px;font-weight:700}
@@ -140,13 +95,6 @@ svg.ic{width:1em;height:1em;stroke:currentColor;stroke-width:1.85;fill:none;stro
 .tlogrow .tk svg{width:11px;height:11px;stroke-width:2.6}
 .talert{position:absolute;left:13px;right:13px;bottom:13px;display:flex;align-items:center;gap:7px;background:var(--ink);color:#fff;font-size:11.5px;font-weight:800;padding:10px 12px;border-radius:12px;box-shadow:var(--e3);opacity:0;transform:translateY(24px);transition:opacity .34s,transform .34s cubic-bezier(.2,.7,.3,1)}
 .talert .yb{color:var(--yellow)}.talert.show{opacity:1;transform:none}
-/* mini chat preview (core1) */
-/* mini rows */
-.rows{display:flex;flex-direction:column;gap:8px}
-.row{display:flex;align-items:center;gap:9px;background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:8px 10px}
-.row .mi{width:22px;height:22px;border-radius:7px;background:var(--yellowSoft);color:#7a5f10;display:flex;align-items:center;justify-content:center;font-size:12px}
-.row .mn{font-size:12.5px;font-weight:800;flex:1}
-.row .mb{font-size:9.5px;font-weight:900;color:#7a5f10;background:var(--yellowSoft);padding:2px 7px;border-radius:var(--r-pill)}
 
 /* steps */
 .steps{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:30px}
@@ -156,54 +104,45 @@ svg.ic{width:1em;height:1em;stroke:currentColor;stroke-width:1.85;fill:none;stro
 .step h5{font-size:17px;font-weight:900;margin:14px 0 5px;letter-spacing:-.02em}
 .step p{font-size:13.5px;color:var(--ink2);margin:0}
 
-/* pricing */
-.pgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:26px}
-@media(max-width:860px){.pgrid{grid-template-columns:1fr}}
-.pc{background:var(--bg);border:1.5px solid var(--line);border-radius:var(--r-lg);padding:24px 22px;box-shadow:var(--e1);position:relative}
-.pc.hot{border-color:var(--ink);box-shadow:var(--e2)}
-.pc .rec{position:absolute;top:-11px;left:22px;font-size:10.5px;font-weight:900;background:var(--ink);color:var(--yellow);padding:4px 11px;border-radius:var(--r-pill)}
-.pc .pn{font-size:15px;font-weight:900}
-.pc .pg{font-size:12.5px;color:var(--ink2);margin-top:3px}
-.pc .pp{font-size:30px;font-weight:900;margin:16px 0 2px;letter-spacing:-.03em;display:flex;align-items:baseline;gap:8px}
-.pc .pp s{font-size:15px;color:var(--ink3);font-weight:700}
-.pc .pp small{font-size:13px;color:var(--ink2);font-weight:700}
-.pc ul{margin:16px 0 0;padding:0;list-style:none;display:flex;flex-direction:column;gap:8px}
-.pc li{font-size:13px;padding-left:22px;position:relative}
-.pc li svg{position:absolute;left:0;top:2px;color:var(--good);width:15px;height:15px}
-.pc .pbtn{margin-top:18px;display:block;text-align:center;font-size:14px;font-weight:900;padding:13px;border-radius:var(--r-pill)}
-.pc .pbtn.p{background:var(--yellow);color:var(--ink);box-shadow:var(--ey)}
-.pc .pbtn.s{background:var(--paper);color:var(--ink)}
-.pnote{font-size:12.5px;color:var(--ink3);margin-top:16px;text-align:center}
-.pnote a{text-decoration:underline;font-weight:800;color:var(--ink2)}
-
-/* foot */
-.foot{background:var(--ink);color:#fff;padding:60px 24px;text-align:center;margin-top:56px}
-.foot h3{font-size:clamp(26px,3.6vw,38px);font-weight:900;letter-spacing:-.035em;margin:0}
-.foot h3 .k{color:var(--yellow)}
-.foot .fcta{display:inline-flex;margin-top:24px;background:var(--yellow);color:var(--ink);font-weight:900;font-size:16px;padding:16px 30px;border-radius:var(--r-pill);box-shadow:var(--ey)}
-.foot .meta{font-size:12px;color:rgba(255,255,255,.45);margin-top:26px}
-.foot .meta a{color:rgba(255,255,255,.6);text-decoration:underline}
+/* 요금 티저 */
+.pteaser{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:26px}
+@media(max-width:720px){.pteaser{grid-template-columns:1fr}}
+.pt{display:flex;flex-direction:column;background:var(--bg);border:1.5px solid var(--line);border-radius:var(--r-lg);padding:20px 22px;box-shadow:var(--e1)}
+.pt:hover{border-color:var(--ink)}
+.pt.hot{border-color:var(--ink);box-shadow:var(--e2)}
+.pt .n{font-size:13.5px;font-weight:900}
+.pt .v{font-size:24px;font-weight:900;letter-spacing:-.03em;margin-top:8px}
+.pt .v small{font-size:12px;color:var(--ink2);font-weight:700}
+.pt .d{font-size:12.5px;color:var(--ink2);margin-top:6px}
 </style>
 </head>
 <body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
-<symbol id="i-store" viewBox="0 0 24 24"><path d="M3 9l1.6-5h14.8L21 9M4.2 9v10h15.6V9M4 9h16"/></symbol>
 <symbol id="i-cafe" viewBox="0 0 24 24"><path d="M4 8h13v4a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5V8zM17 9h2a2 2 0 0 1 0 4h-2M6 3v2M9.5 3v2M13 3v2"/></symbol>
 <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 9a6 6 0 0 1 12 0c0 6 2.5 8 2.5 8H3.5S6 15 6 9M10 20a2 2 0 0 0 4 0"/></symbol>
 <symbol id="i-clock" viewBox="0 0 24 24"><path d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 7.5V12l3 2"/></symbol>
 <symbol id="i-bulb" viewBox="0 0 24 24"><path d="M9.5 18h5M10.5 21h3M12 3a6 6 0 0 1 4 10.5c-.8.8-1 1.5-1 2.5H9c0-1-.2-1.7-1-2.5A6 6 0 0 1 12 3z"/></symbol>
 <symbol id="i-chat" viewBox="0 0 24 24"><path d="M4 5h16v10H9l-5 4z"/></symbol>
 <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 13l4 4L19 6"/></symbol>
+<symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3l7 2.5V11c0 4.6-3 7.7-7 9.5-4-1.8-7-4.9-7-9.5V5.5zM9 11.5l2 2 4-4"/></symbol>
+<symbol id="i-phone2" viewBox="0 0 24 24"><path d="M8 2.5h8a1 1 0 0 1 1 1v17a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1v-17a1 1 0 0 1 1-1zM11 18.5h2"/></symbol>
+<symbol id="i-doc" viewBox="0 0 24 24"><path d="M6 3h9l3 3v15H6zM9 10h6M9 14h6M9 18h4"/></symbol>
+<symbol id="i-export" viewBox="0 0 24 24"><path d="M12 14V4M8 8l4-4 4 4M5 14v6h14v-6"/></symbol>
+<symbol id="i-arrow" viewBox="0 0 24 24"><path d="M4 12h15M13 6l6 6-6 6"/></symbol>
 </defs></svg>
 
 <div class="nav"><div class="in">
-  <span class="lg">착착</span>
+  <a class="lg" href="/welcome.html">착착</a>
+  <input type="checkbox" id="nm" class="nmcb">
   <div class="lk">
-    <a href="#feature">기능</a>
-    <a href="#price">요금제</a>
+    <a href="/features">기능</a>
+    <a href="/pricing">요금제</a>
+    <a href="/faq">자주 묻는 질문</a>
+    <a href="/inquiry">도입 문의</a>
     <a href="/login">로그인</a>
-    <a class="cta" href="/signup">무료로 시작</a>
   </div>
+  <a class="cta" href="/signup">무료로 시작</a>
+  <label class="nmb" for="nm" aria-label="메뉴 열기"><span></span><span></span><span></span></label>
 </div></div>
 
 <div class="wrap">
@@ -213,9 +152,9 @@ svg.ic{width:1em;height:1em;stroke:currentColor;stroke-width:1.85;fill:none;stro
       <span class="eyebrow"><span class="pin"></span>카페 · 헬스장 · 학원 · 미용실 사장님을 위한 매장 운영 AI</span>
       <h1>할 일이 <span class="mk" id="mk"><span class="bar"></span>착착</span><br>끝나는 가게</h1>
       <p class="sub">사장님 머릿속 노하우를 가게 전용 AI로. 직원이 묻는 순간, 우리 가게 방식 그대로 답이 나옵니다.</p>
-      <div class="cta">
+      <div class="hcta">
         <a class="p" href="/signup">무료로 시작하기</a>
-        <a class="s" href="#price">요금제 보기</a>
+        <a class="s" href="/features">기능 살펴보기</a>
       </div>
       <div class="trust">신용카드 없이 시작 · <b>매장 1곳 · 직원 3명 · AI 월 150건</b> 무료</div>
     </div>
@@ -239,7 +178,7 @@ svg.ic{width:1em;height:1em;stroke:currentColor;stroke-width:1.85;fill:none;stro
     </div>
   </section>
 
-  <!-- FEATURE -->
+  <!-- FEATURE 요약 -->
   <section class="sec" id="feature">
     <div class="reveal"><div class="eyebrow2">착착이 하는 일</div>
     <h2 class="h2">한 번만 알려주면, <span class="u">그다음은 AI가</span></h2></div>
@@ -291,6 +230,7 @@ svg.ic{width:1em;height:1em;stroke:currentColor;stroke-width:1.85;fill:none;stro
         </div>
       </div>
     </div>
+    <div class="morelink reveal"><a href="/features">기능 자세히 보기<svg class="ic"><use href="#i-arrow"/></svg></a></div>
   </section>
 
   <!-- STEPS -->
@@ -304,52 +244,101 @@ svg.ic{width:1em;height:1em;stroke:currentColor;stroke-width:1.85;fill:none;stro
     </div>
   </section>
 
-  <!-- PRICING -->
-  <section class="sec" id="price">
-    <div class="reveal"><div class="eyebrow2">요금제</div>
-    <h2 class="h2">무료로 시작, <span class="u">직원이 늘면 그때</span></h2></div>
-    <div class="pgrid stagger">
-      <div class="pc reveal">
-        <div class="pn">무료</div><div class="pg">혼자 운영하는 작은 매장</div>
-        <div class="pp">₩0</div>
-        <ul>
-          <li><svg class="ic"><use href="#i-check"/></svg>매장 1곳 · 직원 3명까지</li>
-          <li><svg class="ic"><use href="#i-check"/></svg>AI 답변 월 150건</li>
-          <li><svg class="ic"><use href="#i-check"/></svg>노하우 무제한</li>
-        </ul>
-        <a class="pbtn s" href="/signup">무료로 시작</a>
+  <!-- TRUST -->
+  <section class="sec">
+    <div class="reveal"><div class="eyebrow2">데이터와 보안</div>
+    <h2 class="h2">가게 데이터, <span class="u">이렇게 지켜요</span></h2></div>
+    <div class="tgrid stagger">
+      <div class="tc reveal">
+        <div class="ti"><svg class="ic"><use href="#i-shield"/></svg></div>
+        <h5>매장별 데이터 분리</h5>
+        <p>모든 데이터는 데이터베이스 단계에서 매장 단위로 분리돼요. 다른 매장, 다른 계정에서는 접근할 수 없어요.</p>
       </div>
-      <div class="pc hot reveal">
-        <div class="rec">가장 많이 선택</div>
-        <div class="pn">단일 매장</div><div class="pg">직원과 함께 운영하는 매장</div>
-        <div class="pp">₩19,000<small>/월</small></div>
-        <ul>
-          <li><svg class="ic"><use href="#i-check"/></svg>매장 1곳 · 직원 무제한</li>
-          <li><svg class="ic"><use href="#i-check"/></svg>AI 답변 월 1,500건</li>
-          <li><svg class="ic"><use href="#i-check"/></svg>노하우 무제한</li>
-        </ul>
-        <a class="pbtn p" href="/signup">시작하기</a>
+      <div class="tc reveal">
+        <div class="ti"><svg class="ic"><use href="#i-phone2"/></svg></div>
+        <h5>휴대폰 본인인증</h5>
+        <p>모든 계정은 문자 인증을 거쳐 만들어져요. 매장 합류도 사장님이 직접 승인한 사람만 들어와요.</p>
       </div>
-      <div class="pc reveal">
-        <div class="pn">다점포</div><div class="pg">매장 2곳부터, 매장당 요금</div>
-        <div class="pp">₩29,000<small>/매장</small></div>
-        <ul>
-          <li><svg class="ic"><use href="#i-check"/></svg>매장 2곳 이상 · 매장당 AI 월 1,500건</li>
-          <li><svg class="ic"><use href="#i-check"/></svg>전체 매장 한눈에 보기</li>
-          <li><svg class="ic"><use href="#i-check"/></svg>매장 간 노하우 가져오기</li>
-        </ul>
-        <a class="pbtn s" href="/signup">시작하기</a>
+      <div class="tc reveal">
+        <div class="ti"><svg class="ic"><use href="#i-doc"/></svg></div>
+        <h5>근거 있는 답변만</h5>
+        <p>AI는 사장님이 남긴 노하우에 근거해서만 답하고, 출처를 함께 보여줘요. 근거가 없으면 지어내지 않고 사장님께 질문을 전달해요.</p>
+      </div>
+      <div class="tc reveal">
+        <div class="ti"><svg class="ic"><use href="#i-export"/></svg></div>
+        <h5>데이터는 사장님 소유</h5>
+        <p>쌓인 노하우는 언제든 텍스트로 내보낼 수 있어요. 계정을 삭제하면 개인정보 처리방침에 따라 파기돼요.</p>
       </div>
     </div>
-    <div class="pnote">여러 매장·프랜차이즈 본사는 <a href="/inquiry">도입 문의</a></div>
+  </section>
+
+  <!-- 요금 티저 -->
+  <section class="sec">
+    <div class="reveal"><div class="eyebrow2">요금제</div>
+    <h2 class="h2">무료로 시작, <span class="u">직원이 늘면 그때</span></h2></div>
+    <div class="pteaser stagger">
+      <a class="pt reveal" href="/pricing">
+        <span class="n">무료</span>
+        <span class="v">₩0</span>
+        <span class="d">매장 1곳 · 직원 3명 · AI 월 150건</span>
+      </a>
+      <a class="pt hot reveal" href="/pricing">
+        <span class="n">단일 매장</span>
+        <span class="v">₩19,000<small>/월</small></span>
+        <span class="d">직원 무제한 · AI 월 1,500건</span>
+      </a>
+      <a class="pt reveal" href="/pricing">
+        <span class="n">다점포</span>
+        <span class="v">₩29,000<small>/매장</small></span>
+        <span class="d">매장 2곳부터 · 통합 관리</span>
+      </a>
+    </div>
+    <div class="pnote reveal"><a href="/pricing">요금제 자세히 보기</a> · 프랜차이즈 본사는 <a href="/inquiry">도입 문의</a></div>
   </section>
 </div>
 
 <div class="foot" id="start">
   <h3>한 번만 알려주면, 다음부터 <span class="k">착착</span>.</h3>
-  <a class="fcta" href="/signup">무료로 시작하기</a>
-  <div class="meta">스퀘어테이블 · <a href="mailto:cristianojun@naver.com">cristianojun@naver.com</a> · <a href="/inquiry">도입 문의</a> · <a href="/login">로그인</a></div>
+  <div class="fbtns">
+    <a class="fcta" href="/signup">무료로 시작하기</a>
+    <a class="fghost" href="/inquiry">도입 문의</a>
+  </div>
 </div>
+
+<footer class="site">
+  <div class="grid">
+    <div class="b">
+      <span class="lg2">착착</span>
+      <p>사장님 머릿속 노하우를 가게 전용 AI로. 카페 · 헬스장 · 학원 · 미용실 매장 운영 서비스.</p>
+      <a class="em" href="mailto:cristianojun@naver.com">cristianojun@naver.com</a>
+    </div>
+    <div>
+      <h6>제품</h6>
+      <ul>
+        <li><a href="/features">기능</a></li>
+        <li><a href="/pricing">요금제</a></li>
+        <li><a href="/faq">자주 묻는 질문</a></li>
+      </ul>
+    </div>
+    <div>
+      <h6>시작하기</h6>
+      <ul>
+        <li><a href="/signup">무료로 시작</a></li>
+        <li><a href="/login">로그인</a></li>
+        <li><a href="/inquiry">도입 문의</a></li>
+      </ul>
+    </div>
+    <div>
+      <h6>정책</h6>
+      <ul>
+        <li><a href="/terms">이용약관</a></li>
+        <li><a href="/privacy">개인정보 처리방침</a></li>
+        <li><a href="/ai-policy">AI 운영 정책</a></li>
+      </ul>
+    </div>
+  </div>
+  <div class="base">© 2026 스퀘어테이블 · 문의 cristianojun@naver.com</div>
+</footer>
 
 <script>
 (function(){

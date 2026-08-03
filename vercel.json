@@ -8,6 +8,10 @@
     { "source": "/account-deletion", "destination": "/account-deletion.html" },
     { "source": "/ai-policy", "destination": "/ai-policy.html" },
     { "source": "/dpa", "destination": "/dpa.html" },
+    { "source": "/inquiry", "destination": "/inquiry.html" },
+    { "source": "/features", "destination": "/features.html" },
+    { "source": "/pricing", "destination": "/pricing.html" },
+    { "source": "/faq", "destination": "/faq.html" },
     { "source": "/(.*)", "destination": "/" }
   ],
   "headers": [
