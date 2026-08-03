@@ -244,11 +244,13 @@
 </footer>
 
 <script>
-/* 도입 문의 폼 → 엣지 함수 inquiry (리드 저장 + 운영자 메일).
+/* 도입 문의 폼 → sales_inquiries(0105) 직접 insert.
+   · 0105 가 anon insert 를 열어둔 설계 그대로 쓴다(엣지 함수를 거치지 않아 배포 의존이 없다).
+   · 조회·상태변경 경로는 없다 — 접수된 문의는 내부 관리자 콘솔(service_role)에서만 보인다.
    · anon 키는 웹 번들에도 이미 들어 있는 공개 값이다(RLS 가 방어선) — 정적 페이지에 둬도 동일.
    · 실패해도 메일 주소를 함께 안내해 문의 경로가 끊기지 않게 한다. */
 (function () {
-  var ENDPOINT = 'https://htestcrcphssgnljdwyh.supabase.co/functions/v1/inquiry';
+  var ENDPOINT = 'https://htestcrcphssgnljdwyh.supabase.co/rest/v1/sales_inquiries';
   var ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh0ZXN0Y3JjcGhzc2dubGpkd3loIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEwNTg5NDUsImV4cCI6MjA5NjYzNDk0NX0.D_Mo-iZ1cNlmao8pFlAdRJyZ_ynL2fVVACgjscxFbVM';
   var form = document.getElementById('iform');
   if (!form) return;
@@ -271,8 +273,16 @@
     try {
       var r = await fetch(ENDPOINT, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', apikey: ANON, Authorization: 'Bearer ' + ANON },
-        body: JSON.stringify({ name: name, phone: phone, company: (d.get('company') || '').trim(), message: (d.get('message') || '').trim() }),
+        headers: {
+          'Content-Type': 'application/json', apikey: ANON, Authorization: 'Bearer ' + ANON,
+          // 응답 본문을 받지 않는다 — insert 만 허용된 테이블이라 되돌려받을 것도 없다.
+          Prefer: 'return=minimal',
+        },
+        body: JSON.stringify({
+          user_id: null, name: name, phone: phone,
+          company: (d.get('company') || '').trim() || null,
+          message: (d.get('message') || '').trim() || null,
+        }),
       });
       if (r.ok) {
         form.querySelectorAll('input,textarea').forEach(function (el) { el.value = ''; });
@@ -280,11 +290,7 @@
         btn.textContent = '접수 완료';
         return;
       }
-      var body = await r.json().catch(function () { return {}; });
-      if (r.status === 429) say('잠시 뒤에 다시 시도해 주세요. 급하시면 cristianojun@naver.com 으로 보내주셔도 돼요.', 'err');
-      else if (body.error === 'name_required') { fieldOf('name').classList.add('bad'); say('이름을 적어주세요.', 'err'); }
-      else if (body.error === 'phone_required') { fieldOf('phone').classList.add('bad'); say('연락 받으실 번호를 적어주세요.', 'err'); }
-      else say('지금은 접수가 안 돼요. cristianojun@naver.com 으로 보내주시면 확인할게요.', 'err');
+      say('지금은 접수가 안 돼요. cristianojun@naver.com 으로 보내주시면 확인할게요.', 'err');
     } catch (_e) {
       say('연결이 끊겼어요. 잠시 뒤 다시 시도하거나 cristianojun@naver.com 으로 보내주세요.', 'err');
     }
