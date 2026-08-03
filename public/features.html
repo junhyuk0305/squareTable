@@ -18,21 +18,28 @@
    ★ 폰 크기는 절대 유동값(%)을 쓰지 않는다 — 화면 폭이 바뀔 때마다 폰이 늘었다 줄면
      "실제 기기"로 안 보인다. 브레이크포인트마다 고정 px 로만 바꾼다. */
 
-/* ── 레이아웃 ── */
-.story{border-top:1px solid var(--line);padding:8px 0 0}
-.story-in{display:grid;grid-template-columns:1fr 476px;gap:48px;align-items:start}
-.stage{grid-column:2;grid-row:1;position:sticky;top:84px;padding:22px 0 8px}
-/* 마지막 챕터도 끝까지(3단계) 재생되도록 아래 여유를 둔다 — 없으면 문서 끝에 걸려 마지막 단계가 스쳐 지나간다. */
-.chapters{grid-column:1;grid-row:1;padding-bottom:22vh}
+/* ── 레이아웃: 핀 고정 스크롤텔링 ──
+   텍스트와 폰이 모두 화면 가운데 고정되고, 스크롤이 "재생 위치"만 움직인다.
+   .story 높이 = 핀(100vh) + 트랙(단계 수 × 단계당 스크롤). 트랙이 길수록 천천히 넘어간다. */
+.story{position:relative;border-top:1px solid var(--line)}
+.pin{position:sticky;top:0;height:100vh;display:flex;align-items:center}
+.pin-in{width:100%;display:grid;grid-template-columns:1fr 486px;gap:44px;align-items:center}
+.track{height:calc(21 * 46vh)}
 
-/* ── 폰 (고정 px) ── */
-.duo{display:flex;gap:16px;justify-content:center}
+/* 왼쪽 글: 같은 자리에 겹쳐두고 활성만 보인다(스크롤로 밀려 올라가지 않음) */
+.txt{display:grid}
+.txt .chapter{grid-area:1/1;opacity:0;transform:translateY(18px);pointer-events:none;
+  transition:opacity .42s ease,transform .42s cubic-bezier(.2,.7,.3,1)}
+.txt .chapter.on{opacity:1;transform:none;pointer-events:auto}
+
+/* ── 폰 (고정 px — 뷰포트 폭에 따라 절대 늘거나 줄지 않는다) ── */
+.duo{display:flex;gap:18px;justify-content:center}
 .phwrap{width:222px;flex:0 0 222px}
-.plab{display:flex;align-items:center;gap:6px;justify-content:center;margin-bottom:9px}
-.who{font-size:10px;font-weight:900;padding:3px 9px;border-radius:99px;letter-spacing:-.01em}
+/* 역할 라벨 — 누구 화면인지가 한눈에 보여야 한다 */
+.plab{display:flex;justify-content:center;margin-bottom:11px}
+.who{font-size:12.5px;font-weight:900;padding:6px 14px;border-radius:99px;letter-spacing:-.02em;box-shadow:var(--e1)}
 .who.o{background:var(--ink);color:var(--yellow)}
-.who.s{background:var(--yellowSoft);color:#7a5f10}
-.scr{font-size:10px;font-weight:800;color:var(--ink3)}
+.who.s{background:var(--yellow);color:var(--ink)}
 .ph{width:222px;height:452px;background:#0c0c0c;border-radius:26px;padding:6px;box-shadow:var(--e3)}
 .phw{background:var(--bg);border-radius:21px;overflow:hidden;display:flex;flex-direction:column;height:100%}
 .sbar{display:flex;align-items:center;justify-content:space-between;padding:7px 12px 3px;font-size:9px;font-weight:800;color:var(--ink);flex:0 0 auto}
@@ -40,7 +47,7 @@
 .sbar .rt i{display:block;width:3px;border-radius:1px;background:var(--ink3)}
 .ahd{display:flex;align-items:center;gap:6px;padding:7px 12px 9px;border-bottom:1px solid var(--line);flex:0 0 auto}
 .ahd .ttl{font-size:13px;font-weight:900;letter-spacing:-.03em;color:var(--ink)}
-.scrn{flex:1;padding:10px;display:flex;flex-direction:column;gap:7px;overflow:hidden}
+.scrn{flex:1;padding:10px;display:flex;flex-direction:column;gap:7px;overflow:hidden;transition:opacity .2s ease}
 .scrn.chat{justify-content:flex-end}
 .tabs{display:flex;border-top:1px solid var(--line);padding:5px 2px 6px;background:#fff;flex:0 0 auto}
 .tabs .tb{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;color:var(--ink3)}
@@ -52,20 +59,18 @@
 .tabs .tb .bdg em{position:absolute;top:-3px;right:-7px;min-width:11px;height:11px;padding:0 3px;border-radius:99px;background:#E5484D;color:#fff;font-size:7px;font-weight:900;font-style:normal;display:flex;align-items:center;justify-content:center}
 
 /* ── 진행 표시 ── */
-.stepcap{margin-top:15px;display:flex;align-items:center;justify-content:center;gap:8px;font-size:12.5px;font-weight:800;color:var(--ink2);min-height:38px;text-align:center;line-height:1.4}
-.stepcap .n{flex:0 0 auto;width:18px;height:18px;border-radius:50%;background:var(--yellow);color:var(--ink);font-size:10px;font-weight:900;display:flex;align-items:center;justify-content:center}
-.dots{display:flex;gap:5px;justify-content:center;margin-top:4px}
+.stepcap{margin-top:16px;display:flex;align-items:center;justify-content:center;gap:8px;font-size:13px;font-weight:800;color:var(--ink);min-height:40px;text-align:center;line-height:1.4;transition:opacity .22s ease}
+.stepcap .n{flex:0 0 auto;width:19px;height:19px;border-radius:50%;background:var(--yellow);color:var(--ink);font-size:10.5px;font-weight:900;display:flex;align-items:center;justify-content:center}
+.dots{display:flex;gap:5px;justify-content:center;margin-top:8px}
 .dots i{width:5px;height:5px;border-radius:99px;background:var(--line);transition:background .25s,width .25s}
-.dots i.on{background:var(--yellowDeep);width:16px}
+.dots i.on{background:var(--yellowDeep);width:18px}
 
-/* ── 왼쪽 기능 설명(챕터) ── */
-.chapter{min-height:76vh;display:flex;flex-direction:column;justify-content:center;padding:30px 0;opacity:.34;transition:opacity .4s ease;scroll-margin-top:80px}
-.chapter.on{opacity:1}
+/* ── 왼쪽 기능 설명 ── */
 .chapter .no{font-size:12px;font-weight:900;color:var(--yellowDeep);letter-spacing:.06em}
-.chapter h3{font-size:clamp(22px,2.8vw,29px);font-weight:900;letter-spacing:-.035em;margin:9px 0 0;line-height:1.24}
-.chapter .fp{font-size:15px;color:var(--ink2);margin:12px 0 0;max-width:470px;line-height:1.65}
+.chapter h3{font-size:clamp(22px,2.8vw,30px);font-weight:900;letter-spacing:-.035em;margin:9px 0 0;line-height:1.24}
+.chapter .fp{font-size:15px;color:var(--ink2);margin:12px 0 0;max-width:480px;line-height:1.65}
 /* 예시 본문 — 현장에서 실제로 벌어지는 상황과, 착착에서 그게 어떻게 되는지 */
-.chapter .ex{margin-top:18px;background:var(--paper);border-radius:var(--r-md);padding:15px 17px;border-left:3px solid var(--yellowDeep);max-width:470px}
+.chapter .ex{margin-top:18px;background:var(--paper);border-radius:var(--r-md);padding:15px 17px;border-left:3px solid var(--yellowDeep);max-width:480px}
 .chapter .ex .exlb{display:block;font-size:10.5px;font-weight:900;letter-spacing:.06em;color:var(--ink3)}
 .chapter .ex p{font-size:13.5px;color:var(--ink2);margin:5px 0 0;line-height:1.65}
 .chapter .ex .exlb+p+.exlb{margin-top:13px}
@@ -75,13 +80,19 @@
 .chapter li svg{position:absolute;left:0;top:3px;color:var(--good);width:15px;height:15px}
 .chapter li b{color:var(--ink);font-weight:800}
 
-/* ── 좁은 화면: sticky 유지하되 폰을 위로, 크기는 다시 고정 px ── */
+/* ── 좁은 화면: 핀 해제. 폰만 상단 고정, 글은 순서대로 흐른다 ── */
 @media(max-width:1000px){
-  .story-in{grid-template-columns:1fr;gap:0}
-  .stage{grid-column:1;grid-row:1;top:56px;z-index:6;padding:12px 0 10px;background:rgba(255,255,255,.94);backdrop-filter:blur(6px);border-bottom:1px solid var(--line)}
-  .chapters{grid-column:1;grid-row:2}
+  .pin{position:static;height:auto;display:block}
+  .pin-in{grid-template-columns:1fr;gap:0}
+  .stage{grid-row:1;position:sticky;top:56px;z-index:6;padding:12px 0 10px;background:rgba(255,255,255,.94);backdrop-filter:blur(6px);border-bottom:1px solid var(--line)}
+  .txt{grid-row:2;display:block}
+  .txt .chapter{opacity:1;transform:none;pointer-events:auto;padding:34px 0;transition:opacity .4s ease}
+  .txt .chapter:not(.on){opacity:.4}
+  .track{display:none}
   .duo{gap:12px}
   .phwrap{width:158px;flex:0 0 158px}
+  .who{font-size:11px;padding:4px 11px}
+  .plab{margin-bottom:7px}
   .ph{width:158px;height:296px;border-radius:20px;padding:5px}
   .phw{border-radius:16px}
   .ahd{padding:5px 9px 7px}
@@ -89,10 +100,8 @@
   .scrn{padding:7px;gap:5px}
   .tabs .tb svg{width:12px;height:12px}
   .tabs .tb b{font-size:6.5px}
-  .plab{margin-bottom:6px}
-  .stepcap{margin-top:10px;font-size:11.5px;min-height:32px}
-  .chapter{min-height:auto;padding:34px 0}
-  .chapter:first-child{padding-top:26px}
+  .stepcap{margin-top:10px;font-size:12px;min-height:34px}
+  .dots{margin-top:5px}
 }
 
 /* ── 화면 부품 (실제 앱 UI 대응) ── */
@@ -244,36 +253,9 @@
 
   <!-- 스크롤 연동 데모 -->
   <section class="story" id="story">
-    <div class="story-in">
-      <!-- 오른쪽: 고정된 폰 두 대 -->
-      <div class="stage">
-        <div class="duo">
-          <div class="phwrap">
-            <div class="plab"><span class="who o">사장님</span><span class="scr" id="oScr">노하우</span></div>
-            <div class="ph"><div class="phw">
-              <div class="sbar"><span>9:41</span><span class="rt"><i style="height:5px"></i><i style="height:7px"></i><i style="height:9px"></i></span></div>
-              <div class="ahd"><span class="ttl" id="oTtl">노하우</span></div>
-              <div class="scrn o-body" id="oBody"></div>
-              <div class="tabs" id="oTabs"></div>
-            </div></div>
-          </div>
-          <div class="phwrap">
-            <div class="plab"><span class="who s" id="sWho">직원</span><span class="scr" id="sScr">물어보기</span></div>
-            <div class="ph"><div class="phw">
-              <div class="sbar"><span>9:41</span><span class="rt"><i style="height:5px"></i><i style="height:7px"></i><i style="height:9px"></i></span></div>
-              <div class="ahd"><span class="ttl" id="sTtl">물어보기</span></div>
-              <div class="scrn s-body" id="sBody"></div>
-              <div class="tabs" id="sTabs"></div>
-            </div></div>
-          </div>
-        </div>
-        <div class="stepcap" id="cap"></div>
-        <div class="dots" id="dots"></div>
-      </div>
-
-      <!-- 왼쪽: 기능 설명 -->
-      <div class="chapters">
-        <article class="chapter" id="ai">
+    <div class="pin"><div class="pin-in">
+      <div class="txt">
+<article class="chapter" id="ai">
           <div class="no">01 · 노하우 AI</div>
           <h3>직원이 물으면,<br>우리 가게 방식대로 답해요</h3>
           <p class="fp">매장에서 나오는 질문은 대부분 처음 나오는 질문이 아니에요. 같은 질문이 사람이 바뀔 때마다 반복되고, 그때마다 사장님이 답합니다. 착착은 그 답을 한 번만 받아두고, 다음부터 대신 답해요.</p>
@@ -392,7 +374,32 @@
           </ul>
         </article>
       </div>
-    </div>
+      <div class="stage">
+        <div class="duo">
+          <div class="phwrap">
+            <div class="plab"><span class="who o">사장님 화면</span></div>
+            <div class="ph"><div class="phw">
+              <div class="sbar"><span>9:41</span><span class="rt"><i style="height:5px"></i><i style="height:7px"></i><i style="height:9px"></i></span></div>
+              <div class="ahd"><span class="ttl" id="oTtl">노하우</span></div>
+              <div class="scrn o-body" id="oBody"></div>
+              <div class="tabs" id="oTabs"></div>
+            </div></div>
+          </div>
+          <div class="phwrap">
+            <div class="plab"><span class="who s" id="sWho">직원 화면</span></div>
+            <div class="ph"><div class="phw">
+              <div class="sbar"><span>9:41</span><span class="rt"><i style="height:5px"></i><i style="height:7px"></i><i style="height:9px"></i></span></div>
+              <div class="ahd"><span class="ttl" id="sTtl">물어보기</span></div>
+              <div class="scrn s-body" id="sBody"></div>
+              <div class="tabs" id="sTabs"></div>
+            </div></div>
+          </div>
+        </div>
+        <div class="stepcap" id="cap"></div>
+        <div class="dots" id="dots"></div>
+      </div>
+    </div></div>
+    <div class="track" aria-hidden="true"></div>
   </section>
 </div>
 
@@ -512,22 +519,28 @@
   ];
 
   var els = {
-    oScr: document.getElementById('oScr'), oTtl: document.getElementById('oTtl'), oBody: document.getElementById('oBody'), oTabs: document.getElementById('oTabs'),
-    sWho: document.getElementById('sWho'), sScr: document.getElementById('sScr'), sTtl: document.getElementById('sTtl'), sBody: document.getElementById('sBody'), sTabs: document.getElementById('sTabs'),
-    cap: document.getElementById('cap'), dots: document.getElementById('dots'),
+    oTtl: document.getElementById('oTtl'), oBody: document.getElementById('oBody'), oTabs: document.getElementById('oTabs'),
+    sWho: document.getElementById('sWho'), sTtl: document.getElementById('sTtl'), sBody: document.getElementById('sBody'), sTabs: document.getElementById('sTabs'),
+    cap: document.getElementById('cap'), dots: document.getElementById('dots'), story: document.getElementById('story'),
   };
-  if (!els.oBody) return;
+  if (!els.oBody || !els.story) return;
   var nodes = CH.map(function (c) { return document.getElementById(c.el); });
   els.dots.innerHTML = CH.map(function () { return '<i></i>'; }).join('');
   var dots = els.dots.querySelectorAll('i');
+
+  /* 전체 단계 수와, 전역 인덱스 ↔ (챕터, 단계) 매핑 */
+  var FLAT = [];
+  CH.forEach(function (c, ci) { c.steps.forEach(function (_, si) { FLAT.push([ci, si]); }); });
 
   var curC = -1, curS = -1;
   function render(ci, si) {
     if (ci === curC && si === curS) return;
     var ch = CH[ci], st = ch.steps[si];
     if (ci !== curC) {
-      els.oScr.textContent = ch.o.t; els.oTtl.textContent = ch.o.t;
-      els.sWho.textContent = ch.s.who; els.sScr.textContent = ch.s.t; els.sTtl.textContent = ch.s.t;
+      // 챕터가 바뀔 때만: 글 교체(겹쳐둔 것 중 활성만 보임) + 폰 헤더·탭바 전환
+      els.oTtl.textContent = ch.o.t;
+      els.sWho.textContent = ch.s.who + ' 화면';
+      els.sTtl.textContent = ch.s.t;
       els.oTabs.innerHTML = tabHtml(OWNER_TABS, ch.o.tab, ch.o.badge);
       els.sTabs.innerHTML = tabHtml(JUNIOR_TABS, ch.s.tab, -1);
       nodes.forEach(function (n, k) { n.classList.toggle('on', k === ci); });
@@ -539,27 +552,32 @@
     curC = ci; curS = si;
   }
 
-  var ticking = false;
-  function update() {
-    ticking = false;
-    // 기준선 = 폰이 실제로 놓인 높이(뷰포트 위쪽 45%). 이 선을 지나는 챕터가 활성.
-    var line = innerHeight * 0.45;
-    var ci = 0, si = 0, best = null;
+  var pinned = matchMedia('(min-width:1001px)');
+
+  function pick() {
+    if (pinned.matches) {
+      /* 핀 모드: 섹션을 지나는 진행률이 곧 재생 위치.
+         트랙 길이 = 섹션 높이 − 뷰포트 높이(핀이 붙어 있는 동안의 스크롤 양). */
+      var r = els.story.getBoundingClientRect();
+      var run = els.story.offsetHeight - innerHeight;
+      var p = run > 0 ? (-r.top) / run : 0;
+      p = p < 0 ? 0 : (p > 0.99999 ? 0.99999 : p);
+      return FLAT[Math.floor(p * FLAT.length)];
+    }
+    /* 좁은 화면: 글이 흐르므로 화면 기준선을 지나는 챕터가 활성 */
+    var line = innerHeight * 0.5;
     for (var k = 0; k < nodes.length; k++) {
-      var r = nodes[k].getBoundingClientRect();
-      if (r.top <= line && r.bottom > line) { best = k;
-        var p = (line - r.top) / Math.max(1, r.height);
-        si = Math.min(CH[k].steps.length - 1, Math.floor(p * CH[k].steps.length));
-        break;
+      var b = nodes[k].getBoundingClientRect();
+      if (b.top <= line && b.bottom > line) {
+        var q = (line - b.top) / Math.max(1, b.height);
+        return [k, Math.min(CH[k].steps.length - 1, Math.floor(q * CH[k].steps.length))];
       }
     }
-    if (best === null) {
-      // 섹션 위/아래 바깥 — 가장 가까운 끝 챕터로 고정
-      best = nodes[0].getBoundingClientRect().top > line ? 0 : nodes.length - 1;
-      si = best === 0 ? 0 : CH[best].steps.length - 1;
-    }
-    render(best, si);
+    return nodes[0].getBoundingClientRect().top > line ? [0, 0] : [CH.length - 1, CH[CH.length - 1].steps.length - 1];
   }
+
+  var ticking = false;
+  function update() { ticking = false; var v = pick(); render(v[0], v[1]); }
   function onScroll() { if (!ticking) { ticking = true; requestAnimationFrame(update); } }
   addEventListener('scroll', onScroll, { passive: true });
   addEventListener('resize', onScroll);
