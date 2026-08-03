@@ -35,13 +35,26 @@ svg.ic{width:1em;height:1em;stroke:currentColor;stroke-width:1.85;fill:none;stro
 .nav .lk a[aria-current="page"]{background:var(--paper);color:var(--ink)}
 .nav .cta{background:var(--yellow);color:var(--ink);box-shadow:var(--ey);font-size:13.5px;font-weight:800;padding:9px 15px;border-radius:var(--r-pill);white-space:nowrap}
 .nav .cta:hover{background:var(--yellowDeep)}
-/* 드롭다운(데스크톱 hover·키보드 focus) */
-.lk .drop{position:relative;display:flex}
+/* 메가 메뉴(데스크톱 hover·키보드 focus)
+   나열식 링크 대신 "무슨 일을 해주는지"를 한 줄로 설명한다. 패널은 nav 컨테이너(.in) 기준
+   우측 정렬 — 링크가 오른쪽에 몰려 있어 left 기준으로 열면 뷰포트를 넘친다. */
+.lk .drop{position:static;display:flex}
 .lk .drop>a::after{content:" ▾";font-size:9px;opacity:.6}
-.dm{display:none;position:absolute;top:100%;left:0;background:var(--bg);border:1px solid var(--line);border-radius:var(--r-md);box-shadow:var(--e2);padding:8px;min-width:172px;flex-direction:column;gap:2px;z-index:30}
-.lk .drop:hover .dm,.lk .drop:focus-within .dm{display:flex}
-.dm a{font-size:13px;padding:9px 11px;border-radius:8px;white-space:nowrap;color:var(--ink2);font-weight:700}
-.dm a:hover{background:var(--paper);color:var(--ink)}
+.dm{display:none;position:absolute;top:calc(100% + 1px);right:0;background:var(--bg);border:1px solid var(--line);border-top:0;border-radius:0 0 var(--r-lg) var(--r-lg);box-shadow:var(--e3);padding:20px;z-index:30;gap:6px 26px;max-width:min(94vw,920px)}
+.lk .drop:hover .dm,.lk .drop:focus-within .dm{display:grid}
+.dm.f{grid-template-columns:repeat(3,minmax(196px,1fr)) 208px}
+.dm.i{grid-template-columns:repeat(2,minmax(210px,1fr))}
+.mgt{font-size:11px;font-weight:900;letter-spacing:.06em;color:var(--ink3);padding:0 10px 6px}
+/* ★ .nav .lk a 의 nowrap 을 반드시 되돌린다 — 설명 줄이 안 접히면 옆 칸을 침범한다. */
+.dm a.mi{display:block;padding:10px;border-radius:12px;color:inherit;white-space:normal}
+.dm a.mi:hover{background:var(--paper)}
+.dm a.mi .mt{display:block;font-size:13.5px;font-weight:800;color:var(--ink);letter-spacing:-.01em}
+.dm a.mi .md{display:block;font-size:12px;color:var(--ink2);margin-top:3px;line-height:1.45}
+.mhi{background:var(--paper);border-radius:var(--r-md);padding:16px;display:flex;flex-direction:column;justify-content:center}
+.mhi b{font-size:14px;font-weight:900;letter-spacing:-.02em;line-height:1.35}
+.mhi p{font-size:12px;color:var(--ink2);margin:7px 0 0;line-height:1.5}
+.mhi .go{margin-top:12px;display:inline-flex;align-items:center;gap:5px;font-size:12.5px;font-weight:900;color:var(--ink)}
+.mhi .go:hover{color:var(--yellowDeep)}
 .nmcb{display:none}
 .nmb{display:none}
 @media(max-width:840px){
@@ -56,11 +69,14 @@ svg.ic{width:1em;height:1em;stroke:currentColor;stroke-width:1.85;fill:none;stro
   .nmcb:checked~.nmb span:nth-child(3){transform:translateY(-6.5px) rotate(-45deg)}
   .nmcb:checked~.lk{display:flex;flex-direction:column;align-items:stretch;position:absolute;top:100%;left:0;right:0;margin:0;background:var(--bg);border-bottom:1px solid var(--line);padding:10px 16px 14px;gap:2px;box-shadow:var(--e2);max-height:calc(100vh - 64px);overflow-y:auto}
   .nmcb:checked~.lk a{padding:13px 12px;font-size:15px}
-  /* 모바일 메뉴에선 드롭다운을 펼친 목록으로 */
-  .nmcb:checked~.lk .drop{flex-direction:column}
+  /* 모바일 메뉴에선 펼친 목록으로 — 설명·하이라이트는 접어 스캔하기 쉽게 */
+  .nmcb:checked~.lk .drop{flex-direction:column;align-items:stretch}
   .nmcb:checked~.lk .drop>a::after{content:""}
-  .nmcb:checked~.lk .dm{display:flex;position:static;border:0;box-shadow:none;padding:0 0 6px 14px;min-width:0}
-  .nmcb:checked~.lk .dm a{padding:10px 12px;font-size:14px}
+  .nmcb:checked~.lk .dm{display:flex;flex-direction:column;position:static;border:0;box-shadow:none;padding:0 0 6px 14px;max-width:none;gap:0}
+  .nmcb:checked~.lk .dm a.mi{padding:11px 12px}
+  .nmcb:checked~.lk .dm a.mi .mt{font-size:14px}
+  .nmcb:checked~.lk .dm a.mi .md,.nmcb:checked~.lk .mhi{display:none}
+  .nmcb:checked~.lk .mgt{padding:10px 12px 2px}
 }
 
 /* ── 섹션 공통 ── */
