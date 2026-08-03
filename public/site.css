@@ -42,12 +42,19 @@ svg.ic{width:1em;height:1em;stroke:currentColor;stroke-width:1.85;fill:none;stro
 .lk .drop>a::after{content:" ▾";font-size:9px;opacity:.6}
 .dm{display:none;position:absolute;top:calc(100% + 1px);right:0;background:var(--bg);border:1px solid var(--line);border-top:0;border-radius:0 0 var(--r-lg) var(--r-lg);box-shadow:var(--e3);padding:20px;z-index:30;gap:6px 26px;max-width:min(94vw,920px)}
 .lk .drop:hover .dm,.lk .drop:focus-within .dm{display:grid}
+/* ★ hover 다리 — 트리거 링크와 패널 사이(상단바 아래 여백)는 .drop 의 박스가 아니라서,
+   커서가 그 구간을 지나는 순간 :hover 가 끊겨 메뉴가 닫힌다. 패널의 투명한 확장부로 잇는다.
+   패널의 자식(::before)이므로 여기 올라가 있어도 .drop:hover 가 유지된다. */
+.dm::before{content:"";position:absolute;left:0;right:0;top:-22px;height:22px}
 .dm.f{grid-template-columns:repeat(3,minmax(196px,1fr)) 208px}
 .dm.i{grid-template-columns:repeat(2,minmax(210px,1fr))}
 .mgt{font-size:11px;font-weight:900;letter-spacing:.06em;color:var(--ink3);padding:0 10px 6px}
 /* ★ .nav .lk a 의 nowrap 을 반드시 되돌린다 — 설명 줄이 안 접히면 옆 칸을 침범한다. */
-.dm a.mi{display:block;padding:10px;border-radius:12px;color:inherit;white-space:normal}
+.dm a.mi{display:flex;gap:11px;align-items:flex-start;padding:10px;border-radius:12px;color:inherit;white-space:normal}
 .dm a.mi:hover{background:var(--paper)}
+.dm a.mi .mic{flex:0 0 auto;width:32px;height:32px;border-radius:10px;background:var(--yellowSoft);color:#7a5f10;display:flex;align-items:center;justify-content:center;font-size:16px;transition:background .18s,color .18s}
+.dm a.mi:hover .mic{background:var(--yellow);color:var(--ink)}
+.dm a.mi .mtx{min-width:0}
 .dm a.mi .mt{display:block;font-size:13.5px;font-weight:800;color:var(--ink);letter-spacing:-.01em}
 .dm a.mi .md{display:block;font-size:12px;color:var(--ink2);margin-top:3px;line-height:1.45}
 .mhi{background:var(--paper);border-radius:var(--r-md);padding:16px;display:flex;flex-direction:column;justify-content:center}
@@ -73,7 +80,8 @@ svg.ic{width:1em;height:1em;stroke:currentColor;stroke-width:1.85;fill:none;stro
   .nmcb:checked~.lk .drop{flex-direction:column;align-items:stretch}
   .nmcb:checked~.lk .drop>a::after{content:""}
   .nmcb:checked~.lk .dm{display:flex;flex-direction:column;position:static;border:0;box-shadow:none;padding:0 0 6px 14px;max-width:none;gap:0}
-  .nmcb:checked~.lk .dm a.mi{padding:11px 12px}
+  .nmcb:checked~.lk .dm a.mi{padding:11px 12px;align-items:center;gap:10px}
+  .nmcb:checked~.lk .dm a.mi .mic{width:28px;height:28px;border-radius:9px;font-size:14px}
   .nmcb:checked~.lk .dm a.mi .mt{font-size:14px}
   .nmcb:checked~.lk .dm a.mi .md,.nmcb:checked~.lk .mhi{display:none}
   .nmcb:checked~.lk .mgt{padding:10px 12px 2px}
