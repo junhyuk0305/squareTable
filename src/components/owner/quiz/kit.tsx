@@ -6,7 +6,7 @@
  *      role=button Pressable 중첩 금지(행 안의 액션은 형제로 분리).
  */
 
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { View, Text, TextInput, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -197,8 +197,35 @@ export function ErrorNote({ text }: { text: string }) {
   );
 }
 
+/**
+ * 정답 — 탭해야 보인다.
+ *
+ * 목록에 정답을 그냥 띄우면 "풀어보기"가 무의미해진다(풀기 전에 답을 본다).
+ * 그렇다고 지우면 문항이 멀쩡한지 훑어보는 길이 없어져 검수가 느려진다 → 접어 둔다.
+ * 행 자체는 Pressable 이 아니므로 이건 형제 버튼이다(RNW 중첩 버튼 회피).
+ */
+export function AnswerReveal({ text }: { text: string }) {
+  const [shown, setShown] = useState(false);
+  return (
+    <Pressable
+      onPress={() => setShown((v) => !v)}
+      style={qst.answerRow}
+      accessibilityRole="button"
+      accessibilityLabel={shown ? '정답 가리기' : '정답 보기'}
+    >
+      <Ionicons name={shown ? 'eye-off-outline' : 'eye-outline'} size={15} color={InkColors.ink3} />
+      <Text style={[qst.answerText, !shown && { color: InkColors.ink3 }]} numberOfLines={2}>
+        {shown ? `정답 · ${text || '없음'}` : '정답 보기'}
+      </Text>
+    </Pressable>
+  );
+}
+
 export const qst = StyleSheet.create({
   sheetHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingBottom: 10, gap: Space.sm },
+
+  answerRow: { flexDirection: 'row', alignItems: 'center', gap: Space.xs, minHeight: 32, paddingVertical: Space.xs },
+  answerText: { flex: 1, fontSize: 15, fontWeight: '700', color: BrandColors.good, lineHeight: 21 },
   sheetTitle: { flex: 1, fontSize: 15, fontWeight: '800', color: InkColors.ink },
 
   body: { paddingHorizontal: 16, paddingBottom: 20, gap: Space.sm },

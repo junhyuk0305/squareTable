@@ -30,8 +30,9 @@ import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
 import type { PlaybookEntry, SquareBlock } from '@/types';
 
-import { SheetHead, Chip, PrimaryButton, GhostButton, ErrorNote, qst } from './kit';
+import { SheetHead, Chip, PrimaryButton, GhostButton, ErrorNote, AnswerReveal, qst } from './kit';
 import { PayloadForm, emptyPayload, answerTextOf, isDontFormat, orderedStepsOf } from './PayloadForm';
+import { QuizPreviewSheet, type QuizPreviewTarget } from './QuizPreviewSheet';
 
 /** 형태 라벨 — 레지스트리가 SSOT. 화면에 게임 이름을 띄우지 않는다는 규칙은 FORMATS.label 이 지킨다. */
 const labelOf = (f: QuizFormat) => FORMATS[f]?.label ?? f;
@@ -91,6 +92,23 @@ export function QuizEditorSheet({
   const [aiFormats, setAiFormats] = useState<Set<QuizFormat>>(new Set());
   const [drafts, setDrafts] = useState<QuizItem[]>([]);
   const [aiNote, setAiNote] = useState<string | null>(null);
+
+  /**
+   * 풀어보기 — 승인 전에 직접 풀어보는 게 검수의 핵심이다(AI가 만든 문항은 특히).
+   * 모달 위 모달 금지라 편집 시트를 감추고 미리보기를 연다. 이 컴포넌트는 마운트된 채라
+   * 초안 목록·작성 중인 폼이 그대로 남는다(닫으면 그 자리로 돌아온다).
+   */
+  const [preview, setPreview] = useState<QuizPreviewTarget | null>(null);
+  const openPreview = (q: QuizPreviewTarget) => {
+    // 빈 칸이 남은 문항은 풀어봐야 뭐가 잘못됐는지 안 보인다 — 저장과 같은 잣대로 먼저 거른다.
+    const problem = FORMATS[q.format]?.validate(q.payload) ?? null;
+    if (problem) {
+      setErr(problem);
+      return;
+    }
+    setErr(null);
+    setPreview(q);
+  };
 
   const pickFormat = (f: QuizFormat) => {
     setFormat(f);
@@ -235,7 +253,8 @@ export function QuizEditorSheet({
   const title = editing ? '문제 고치기' : step === 'review' ? '만든 문제 확인' : startMode === 'ai' ? '문제 만들기' : '문제 직접 쓰기';
 
   return (
-    <BottomSheet visible={true} onClose={onClose} sheetStyle={{ height: '88%' }}>
+    <>
+    <BottomSheet visible={!preview} onClose={onClose} sheetStyle={{ height: '88%' }}>
       <SheetHead title={`${title} · ${task.text}`} onClose={onClose} />
 
       <ScrollView style={{ flex: 1 }} contentContainerStyle={qst.body} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
@@ -318,8 +337,11 @@ export function QuizEditorSheet({
               <View key={d.id} style={est.draftCard}>
                 <Text style={est.draftFormat}>{labelOf(d.format)}</Text>
                 <Text style={est.draftAsk}>{String(d.payload?.ask ?? '')}</Text>
-                <Text style={est.draftAnswer} numberOfLines={2}>정답 · {answerTextOf(d.format, d.payload ?? {}) || '없음'}</Text>
+                <AnswerReveal text={answerTextOf(d.format, d.payload ?? {})} />
                 {d.payload?.explain ? <Text style={est.draftExplain} numberOfLines={3}>{String(d.payload.explain)}</Text> : null}
+                <View style={est.draftActions}>
+                  <GhostButton icon="play-outline" label="풀어보기" fill disabled={busy} onPress={() => openPreview(d)} />
+                </View>
                 <View style={est.draftActions}>
                   <GhostButton icon="checkmark-outline" label="승인" fill disabled={busy} onPress={() => void approveDraft(d)} />
                   <GhostButton
@@ -362,15 +384,28 @@ export function QuizEditorSheet({
           />
         )}
         {step === 'form' && (
-          <PrimaryButton
-            label={busy ? '저장하는 중…' : editing ? '저장' : '문제 추가'}
-            disabled={busy}
-            onPress={() => void saveForm()}
-          />
+          <>
+            <GhostButton
+              icon="play-outline"
+              label="풀어보기"
+              disabled={busy}
+              onPress={() => openPreview({ id: editing?.id, format, payload })}
+            />
+            <PrimaryButton
+              label={busy ? '저장하는 중…' : editing ? '저장' : '문제 추가'}
+              disabled={busy}
+              onPress={() => void saveForm()}
+            />
+          </>
         )}
         {step === 'review' && drafts.length === 0 && <PrimaryButton label="닫기" onPress={onClose} />}
       </View>
     </BottomSheet>
+
+    {preview ? (
+      <QuizPreviewSheet quiz={preview} onClose={() => setPreview(null)} />
+    ) : null}
+    </>
   );
 }
 

@@ -19,8 +19,9 @@ import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
 
-import { SheetHead, GhostButton, qst } from './kit';
+import { SheetHead, GhostButton, AnswerReveal, qst } from './kit';
 import { answerTextOf } from './PayloadForm';
+import { QuizPreviewSheet } from './QuizPreviewSheet';
 
 export function QuizItemsSheet({
   task,
@@ -41,6 +42,9 @@ export function QuizItemsSheet({
   onChanged: () => void;
 }) {
   const [items, setItems] = useState<QuizItem[]>([]);
+  // 풀어보기 — 모달 위 모달 금지라 목록 시트를 감추고 미리보기 시트를 연다.
+  // 이 컴포넌트는 그대로 마운트돼 있어 목록 상태는 남는다(닫으면 그 자리로 돌아온다).
+  const [preview, setPreview] = useState<QuizItem | null>(null);
   // 붙은 노하우가 없으면 읽을 것도 없다 → 처음부터 로딩이 아니다(빈 상태 문구를 바로 보여준다).
   const [loading, setLoading] = useState(entryIds.length > 0);
   const [busy, setBusy] = useState(false);
@@ -83,7 +87,8 @@ export function QuizItemsSheet({
   const active = items.filter((i) => i.status === 'active');
 
   return (
-    <BottomSheet visible={true} onClose={onClose} sheetStyle={{ height: '82%' }}>
+    <>
+    <BottomSheet visible={!preview} onClose={onClose} sheetStyle={{ height: '82%' }}>
       <SheetHead title={`문제 · ${task.text}`} onClose={onClose} />
 
       <ScrollView style={{ flex: 1 }} contentContainerStyle={qst.body} showsVerticalScrollIndicator={false}>
@@ -104,7 +109,11 @@ export function QuizItemsSheet({
                 {it.status === 'archived' ? <Text style={[ist.badge, { color: BrandColors.warn }]}>보관됨</Text> : null}
               </View>
               <Text style={ist.ask} numberOfLines={3}>{String(it.payload?.ask ?? '')}</Text>
-              <Text style={ist.answer} numberOfLines={2}>정답 · {answerTextOf(it.format, it.payload ?? {}) || '없음'}</Text>
+              <AnswerReveal text={answerTextOf(it.format, it.payload ?? {})} />
+              {/* 보관된 문항도 풀어볼 수 있다 — 다시 쓸지 정하려면 직접 풀어보는 게 가장 빠르다. */}
+              <View style={ist.actions}>
+                <GhostButton icon="play-outline" label="풀어보기" fill onPress={() => setPreview(it)} />
+              </View>
               <View style={ist.actions}>
                 <GhostButton icon="create-outline" label="고치기" fill disabled={busy} onPress={() => onEdit(it)} />
                 <GhostButton
@@ -132,6 +141,11 @@ export function QuizItemsSheet({
         </View>
       </View>
     </BottomSheet>
+
+    {preview ? (
+      <QuizPreviewSheet quiz={preview} onClose={() => setPreview(null)} />
+    ) : null}
+    </>
   );
 }
 
