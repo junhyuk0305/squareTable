@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>착착 — 할 일이 착착 끝나는 가게</title>
-<meta name="description" content="사장님 머릿속 노하우를 가게 전용 AI로. 직원이 묻는 순간, 우리 가게 방식 그대로 답이 나옵니다. 카페·헬스장·학원·미용실 매장 운영 AI, 착착.">
+<meta name="description" content="사장님 머릿속 노하우를 가게 전용 AI로. 직원이 묻는 순간, 우리 가게 방식 그대로 답이 나옵니다. 카페·음식점·헬스장·학원 매장 운영 AI, 착착.">
 <meta property="og:title" content="착착 — 할 일이 착착 끝나는 가게">
 <meta property="og:description" content="사장님이 한 번 알려주면, 직원이 물을 때 AI가 우리 가게 방식 그대로 대신 답해요.">
 <link rel="icon" href="/favicon.png">
@@ -145,23 +145,24 @@
   <a class="lg" href="/welcome.html">착착</a>
   <input type="checkbox" id="nm" class="nmcb">
   <div class="lk">
-    <div class="drop"><a href="/features">제품</a>
+    <div class="drop"><a href="/features">기능</a>
       <div class="dm">
-        <a href="/features">기능 전체 보기</a>
-        <a href="/features#ai">노하우 AI</a>
-        <a href="/features#input">노하우 만들기</a>
-        <a href="/features#training">훈련 코스</a>
-        <a href="/features#chat">채팅 업무</a>
-        <a href="/features#pay">출퇴근·급여</a>
-        <a href="/features#multi">다점포·매니저</a>
+        <a href="/features">기능 한눈에 보기</a>
+        <a href="/features#ai">직원 질문에 AI가 답하기</a>
+        <a href="/features#input">노하우 만들기 · PDF·음성</a>
+        <a href="/features#inbox">받은 질문으로 매뉴얼 쌓기</a>
+        <a href="/features#training">신입 훈련 코스 · 이해 확인</a>
+        <a href="/features#chat">업무 배정과 완료 기록</a>
+        <a href="/features#pay">출퇴근 기록과 인건비 집계</a>
+        <a href="/features#multi">여러 매장 관리 · 매니저</a>
       </div>
     </div>
     <div class="drop"><a href="/cafe">업종별 활용</a>
       <div class="dm">
         <a href="/cafe">카페</a>
+        <a href="/restaurant">음식점</a>
         <a href="/gym">헬스장·필라테스</a>
         <a href="/academy">학원</a>
-        <a href="/salon">미용실</a>
       </div>
     </div>
     <a href="/pricing">요금제</a>
@@ -176,7 +177,7 @@
   <!-- HERO -->
   <section class="hero">
     <div class="hleft">
-      <span class="eyebrow"><span class="pin"></span>카페 · 헬스장 · 학원 · 미용실 사장님을 위한 매장 운영 AI</span>
+      <span class="eyebrow"><span class="pin"></span>카페 · 음식점 · 헬스장 · 학원 사장님을 위한 매장 운영 AI</span>
       <h1>할 일이 <span class="mk" id="mk"><span class="bar"></span>착착</span><br>끝나는 가게</h1>
       <p class="sub">사장님 머릿속 노하우를 가게 전용 AI로. 직원이 묻는 순간, 우리 가게 방식 그대로 답이 나옵니다.</p>
       <div class="hcta">
@@ -271,6 +272,11 @@
         <span class="id2">레시피 기준 · 오픈/마감 · 클레임 대응</span>
         <span class="ig">보러 가기<svg class="ic"><use href="#i-arrow"/></svg></span>
       </a>
+      <a class="ic2 reveal" href="/restaurant">
+        <span class="in">음식점</span>
+        <span class="id2">계량·조리 기준 · 홀 응대 · 오픈/마감</span>
+        <span class="ig">보러 가기<svg class="ic"><use href="#i-arrow"/></svg></span>
+      </a>
       <a class="ic2 reveal" href="/gym">
         <span class="in">헬스장·필라테스</span>
         <span class="id2">환불·홀딩 규정 · 상담 순서 · 시설 점검</span>
@@ -279,11 +285,6 @@
       <a class="ic2 reveal" href="/academy">
         <span class="in">학원</span>
         <span class="id2">보강·환불 기준 · 등하원 · 강사 교육</span>
-        <span class="ig">보러 가기<svg class="ic"><use href="#i-arrow"/></svg></span>
-      </a>
-      <a class="ic2 reveal" href="/salon">
-        <span class="in">미용실</span>
-        <span class="id2">시술 기준 · 재시술 응대 · 스태프 교육</span>
         <span class="ig">보러 가기<svg class="ic"><use href="#i-arrow"/></svg></span>
       </a>
     </div>
@@ -300,33 +301,6 @@
     </div>
   </section>
 
-  <!-- TRUST -->
-  <section class="sec">
-    <div class="reveal"><div class="eyebrow2">데이터와 보안</div>
-    <h2 class="h2">가게 데이터, <span class="u">이렇게 지켜요</span></h2></div>
-    <div class="tgrid stagger">
-      <div class="tc reveal">
-        <div class="ti"><svg class="ic"><use href="#i-shield"/></svg></div>
-        <h5>매장별 데이터 분리</h5>
-        <p>모든 데이터는 데이터베이스 단계에서 매장 단위로 분리돼요. 다른 매장, 다른 계정에서는 접근할 수 없어요.</p>
-      </div>
-      <div class="tc reveal">
-        <div class="ti"><svg class="ic"><use href="#i-phone2"/></svg></div>
-        <h5>휴대폰 본인인증</h5>
-        <p>모든 계정은 문자 인증을 거쳐 만들어져요. 매장 합류도 사장님이 직접 승인한 사람만 들어와요.</p>
-      </div>
-      <div class="tc reveal">
-        <div class="ti"><svg class="ic"><use href="#i-doc"/></svg></div>
-        <h5>근거 있는 답변만</h5>
-        <p>AI는 사장님이 남긴 노하우에 근거해서만 답하고, 출처를 함께 보여줘요. 근거가 없으면 지어내지 않고 사장님께 질문을 전달해요.</p>
-      </div>
-      <div class="tc reveal">
-        <div class="ti"><svg class="ic"><use href="#i-export"/></svg></div>
-        <h5>데이터는 사장님 소유</h5>
-        <p>쌓인 노하우는 언제든 텍스트로 내보낼 수 있어요. 계정을 삭제하면 개인정보 처리방침에 따라 파기돼요.</p>
-      </div>
-    </div>
-  </section>
 
   <!-- 요금 티저 -->
   <section class="sec">
@@ -365,26 +339,26 @@
   <div class="grid">
     <div class="b">
       <span class="lg2">착착</span>
-      <p>사장님 머릿속 노하우를 가게 전용 AI로. 카페 · 헬스장 · 학원 · 미용실 매장 운영 서비스.</p>
+      <p>사장님 머릿속 노하우를 가게 전용 AI로. 카페 · 음식점 · 헬스장 · 학원 매장 운영 서비스.</p>
       <a class="em" href="mailto:cristianojun@naver.com">cristianojun@naver.com</a>
     </div>
     <div>
-      <h6>제품</h6>
+      <h6>기능</h6>
       <ul>
-        <li><a href="/features">기능 전체</a></li>
-        <li><a href="/features#ai">노하우 AI</a></li>
-        <li><a href="/features#training">훈련 코스</a></li>
-        <li><a href="/features#chat">채팅 업무</a></li>
-        <li><a href="/features#multi">다점포·매니저</a></li>
+        <li><a href="/features">기능 한눈에 보기</a></li>
+        <li><a href="/features#ai">직원 질문에 AI가 답하기</a></li>
+        <li><a href="/features#training">신입 훈련 코스</a></li>
+        <li><a href="/features#chat">업무 배정과 완료 기록</a></li>
+        <li><a href="/features#multi">여러 매장 관리</a></li>
       </ul>
     </div>
     <div>
       <h6>업종별 활용</h6>
       <ul>
         <li><a href="/cafe">카페</a></li>
+        <li><a href="/restaurant">음식점</a></li>
         <li><a href="/gym">헬스장·필라테스</a></li>
         <li><a href="/academy">학원</a></li>
-        <li><a href="/salon">미용실</a></li>
       </ul>
     </div>
     <div>

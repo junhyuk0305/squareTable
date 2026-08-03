@@ -56,7 +56,7 @@ export default function LegalDocScreen() {
       <Stack.Screen options={{ headerShown: true, title: data.title, headerStyle: { backgroundColor: '#FFFFFF' }, headerTintColor: InkColors.ink, headerLeft: () => <HeaderBackButton /> }} />
       <ScrollView contentContainerStyle={styles.scroll}>
         <Text style={styles.h1}>{data.h1}</Text>
-        <Text style={styles.updated}>시행일: 2026-07-10 · 운영: 팀 스퀘어테이블</Text>
+        <Text style={styles.updated}>시행일: 2026-07-10 · 운영: 스퀘어테이블</Text>
         {data.sections.map((s) => (
           <View key={s.h} style={styles.section}>
             <Text style={styles.h2}>{s.h}</Text>

@@ -12,9 +12,9 @@
     { "source": "/features", "destination": "/features.html" },
     { "source": "/pricing", "destination": "/pricing.html" },
     { "source": "/cafe", "destination": "/cafe.html" },
+    { "source": "/restaurant", "destination": "/restaurant.html" },
     { "source": "/gym", "destination": "/gym.html" },
     { "source": "/academy", "destination": "/academy.html" },
-    { "source": "/salon", "destination": "/salon.html" },
     { "source": "/faq", "destination": "/pricing.html" },
     { "source": "/(.*)", "destination": "/" }
   ],

@@ -53,8 +53,8 @@ export const ANNOUNCED_DATE = '2026-07-30';
 /** 대외 대표 창구. 앱 쪽 SSOT 는 src/lib/config/business.ts 이나, .mjs 에서 .ts 를 import 할 수 없다. */
 export const CONTACT_EMAIL = 'cristianojun@naver.com';
 
-/** 운영 주체 표기. 사업자등록증 상호가 확정되면 business.ts 의 companyName 과 함께 갱신한다. */
-export const OPERATOR = '팀 스퀘어테이블';
+/** 운영 주체 표기 = 사업자등록증 상호(2026-08-03 확정). business.ts 의 companyName 과 항상 같아야 한다. */
+export const OPERATOR = '스퀘어테이블';
 
 const DATES = `
 <ul>

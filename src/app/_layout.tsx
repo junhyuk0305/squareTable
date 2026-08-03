@@ -21,6 +21,11 @@ import { injectPwaHead } from '@/lib/pwa/head';
 import { usePushBootstrap } from '@/lib/push/usePushBootstrap';
 import { useAppBadgeSync } from '@/lib/push/appBadge';
 import { initAnalytics, installGlobalErrorHandlers, track } from '@/lib/analytics/track';
+import { guardMarketingRoutes } from '@/lib/web/marketingGuard';
+
+// 마케팅 경로(/features·/pricing·/cafe…)로 앱이 뜨는 것을 렌더 전에 차단하고 정적 웹으로 돌려보낸다.
+// 개발 서버엔 vercel rewrite 가 없어 여기서만 막힌다. 반드시 렌더 전(모듈 평가 시)에 호출할 것.
+guardMarketingRoutes();
 
 // 전역 글자 크기 패치는 앱 모듈 로드 시 1회만.
 patchTextScaling();

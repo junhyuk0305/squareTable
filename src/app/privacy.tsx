@@ -18,7 +18,7 @@ export default function PrivacyScreen() {
       <Stack.Screen options={{ headerShown: true, title: '개인정보 처리방침', headerStyle: { backgroundColor: '#FFFFFF' }, headerTintColor: InkColors.ink, headerLeft: () => <HeaderBackButton /> }} />
       <ScrollView contentContainerStyle={styles.scroll}>
         <Text style={styles.h1}>개인정보 수집·이용 안내</Text>
-        <Text style={styles.updated}>시행일: 2026-08-07 · 운영: 팀 스퀘어테이블</Text>
+        <Text style={styles.updated}>시행일: 2026-08-07 · 운영: 스퀘어테이블</Text>
 
         <Section title="1. 수집 항목">
           이름, 이메일, 휴대전화번호, 생년월일, 매장 정보, 사용자가 입력한 매장 운영 노하우·질문 내용, 음성 입력 시 음성(변환 즉시 파기), 서비스 이용·오류 기록, 유료 이용 시 입금자명 등 결제 신고 정보.

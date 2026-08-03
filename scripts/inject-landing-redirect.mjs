@@ -30,15 +30,16 @@ let html = readFileSync(file, 'utf8');
 if (html.includes(MARK)) { console.log('inject-landing-redirect: 이미 주입됨(skip)'); process.exit(0); }
 if (!html.includes('<head>')) { console.error('inject-landing-redirect: <head> 없음 — 템플릿 변경 확인'); process.exit(1); }
 
-// 정적 마케팅 페이지 목록 — vercel.json rewrite와 한 쌍(둘 다 갱신할 것).
-const MARKETING_PATHS = ['features', 'pricing', 'inquiry', 'cafe', 'gym', 'academy', 'salon'];
+// 마케팅 경로 목록 SSOT = src/data/marketing-paths.json (앱 런타임 가드 marketingGuard.web.ts와 공유).
+const marketing = JSON.parse(readFileSync(join(root, 'src', 'data', 'marketing-paths.json'), 'utf8'));
 
 const script =
   `<script id="${MARK}">(function(){try{` +
   `var p=location.pathname.replace(/\\/+$/,'')||'/';` +
-  `var M=${JSON.stringify(MARKETING_PATHS)};` +
-  `if(p==='/faq'){location.replace('/pricing.html#faq');return;}` +
-  `for(var j=0;j<M.length;j++){if(p==='/'+M[j]){location.replace('/'+M[j]+'.html');return;}}` +
+  `var M=${JSON.stringify(marketing.pages)},A=${JSON.stringify(marketing.aliases)};` +
+  `var s=p.slice(1);` +
+  `if(A[s]){location.replace(A[s]);return;}` +
+  `for(var j=0;j<M.length;j++){if(s===M[j]){location.replace('/'+M[j]+'.html'+location.hash);return;}}` +
   `if(p==='/'){` +
   `for(var i=0,s=0;i<localStorage.length;i++){var k=localStorage.key(i);` +
   `if(k&&k.indexOf('sb-')===0&&k.indexOf('-auth-token')!==-1){s=1;break;}}` +

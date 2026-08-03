@@ -13,11 +13,11 @@
 //   권리행사가 전부 이 주소로 오므로, 다른 주소를 대외 문서에 섞지 않는다.
 
 export const BUSINESS_INFO = {
-  companyName: '팀 스퀘어테이블',
+  companyName: '스퀘어테이블', // 사업자등록증 상호 그대로. legal-content.mjs 의 OPERATOR 와 항상 같아야 한다
   ceo: '장준혁',
-  bizRegNo: '', // ← 사업자등록증 수령 후 여기만 (예: '123-45-67890')
-  mailOrderNo: '', // ← 통신판매업 신고증 수령 후 여기만 (예: '제2026-서울마포-1234호')
-  address: '', // ← 사업자등록증 기재 주소 그대로
+  bizRegNo: '466-03-04380',
+  mailOrderNo: '', // ← 통신판매업 신고증 수령 후 여기만 (예: '제2026-서울구로-1234호')
+  address: '서울특별시 구로구 남부순환로95길 54, 106동 1504호',
   phone: '', // ← 고객센터 대표번호 확보 후 (예: '070-1234-5678')
   email: 'cristianojun@naver.com',
   hosting: 'Supabase / Vercel',

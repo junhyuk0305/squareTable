@@ -29,7 +29,7 @@ const OG_IMAGE = `${SITE_URL}/icon-512.png`; // TODO: 1200×630 전용 OG 이미
 const BRAND = '착착';
 const TITLE = '착착 — 할 일이 착착 끝나는 가게';
 const DESC =
-  '사장님 머릿속 노하우를 가게 전용 AI로. 직원이 묻는 순간, 우리 가게 방식 그대로 답이 나옵니다. 카페·헬스장·학원·미용실 매장 운영 AI, 착착.';
+  '사장님 머릿속 노하우를 가게 전용 AI로. 직원이 묻는 순간, 우리 가게 방식 그대로 답이 나옵니다. 카페·음식점·헬스장·학원 매장 운영 AI, 착착.';
 const OG_DESC = '사장님이 한 번 알려주면, 직원이 물을 때 AI가 우리 가게 방식 그대로 대신 답해요.';
 // 검색엔진 소유확인(선택) — Vercel 환경변수로 넣으면 자동 주입. 없으면 생략.
 const NAVER_VERIFY = process.env.SEO_NAVER_VERIFY || '';
@@ -115,7 +115,7 @@ const NOSCRIPT = `<noscript>
     <!-- seo:noscript:start -->
     <div style="max-width:680px;margin:0 auto;padding:32px 20px;font-family:'Malgun Gothic',sans-serif;line-height:1.7;color:#111">
       <h1>착착 — 할 일이 착착 끝나는 가게</h1>
-      <p>사장님 머릿속 노하우를 가게 전용 AI로. 직원이 묻는 순간, 우리 가게 방식 그대로 답이 나옵니다. 카페·헬스장·학원·미용실 매장 운영 AI, 착착.</p>
+      <p>사장님 머릿속 노하우를 가게 전용 AI로. 직원이 묻는 순간, 우리 가게 방식 그대로 답이 나옵니다. 카페·음식점·헬스장·학원 매장 운영 AI, 착착.</p>
       <h2>이런 순간, 있으시죠</h2>
       <ul>
         <li>직원이 바뀔 때마다 같은 걸 몇 번씩 다시 설명</li>
@@ -133,7 +133,7 @@ const NOSCRIPT = `<noscript>
       </ul>
       <p>신용카드 없이 무료로 시작 · 매장 1곳 · 직원 3명 · AI 월 150건 무료.</p>
       <p><a href="/welcome.html">착착 소개</a> · <a href="/features">기능</a> · <a href="/pricing">요금제·자주 묻는 질문</a> · <a href="/inquiry">도입 문의</a></p>
-      <p>업종별 활용: <a href="/cafe">카페</a> · <a href="/gym">헬스장·필라테스</a> · <a href="/academy">학원</a> · <a href="/salon">미용실</a> · <a href="/signup">무료로 시작</a></p>
+      <p>업종별 활용: <a href="/cafe">카페</a> · <a href="/restaurant">음식점</a> · <a href="/gym">헬스장·필라테스</a> · <a href="/academy">학원</a> · <a href="/signup">무료로 시작</a></p>
     </div>
     <!-- seo:noscript:end -->
   </noscript>`;
@@ -188,7 +188,10 @@ function patchWelcome() {
 }
 
 // 마케팅 정적 페이지(public/*.html + vercel.json rewrite) — robots Allow·sitemap 공용 목록.
-const MARKETING_PAGES = ['features', 'pricing', 'inquiry', 'cafe', 'gym', 'academy', 'salon'];
+// 마케팅 경로 SSOT = src/data/marketing-paths.json (앱 가드·리다이렉트 주입과 공유).
+const MARKETING_PAGES = JSON.parse(
+  readFileSync(resolve(__dirname, '..', 'src', 'data', 'marketing-paths.json'), 'utf8'),
+).pages;
 
 // ── 3) robots.txt ────────────────────────────────────────────────────────
 function writeRobots() {
