@@ -23,7 +23,7 @@
    .story 높이 = 핀(100vh) + 트랙(단계 수 × 단계당 스크롤). 트랙이 길수록 천천히 넘어간다. */
 .story{position:relative;border-top:1px solid var(--line)}
 .pin{position:sticky;top:0;height:100vh;display:flex;align-items:center}
-.pin-in{width:100%;display:grid;grid-template-columns:1fr 486px;gap:44px;align-items:center}
+.pin-in{width:100%;display:grid;grid-template-columns:1fr 486px;gap:40px;align-items:center;padding-right:46px}
 .track{height:calc(21 * 46vh)}
 
 /* 왼쪽 글: 같은 자리에 겹쳐두고 활성만 보인다(스크롤로 밀려 올라가지 않음) */
@@ -61,9 +61,25 @@
 /* ── 진행 표시 ── */
 .stepcap{margin-top:22px;display:flex;align-items:center;justify-content:center;gap:11px;font-size:clamp(17px,1.55vw,21px);font-weight:900;letter-spacing:-.03em;color:var(--ink);min-height:62px;text-align:center;line-height:1.35}
 .stepcap .n{flex:0 0 auto;width:27px;height:27px;border-radius:50%;background:var(--yellow);color:var(--ink);font-size:14px;font-weight:900;display:flex;align-items:center;justify-content:center;box-shadow:var(--ey)}
-.dots{display:flex;gap:5px;justify-content:center;margin-top:8px}
-.dots i{width:5px;height:5px;border-radius:99px;background:var(--line);transition:background .25s,width .25s}
-.dots i.on{background:var(--yellowDeep);width:18px}
+/* 기능 이동 레일 — 오른쪽 세로 막대. 누르면 그 기능으로 바로 이동한다.
+   폰 아래 가로 점은 "단계 표시"와 헷갈려서 옮겼다.
+   ★ 컨테이너 안(.pin 기준)에 두고 .pin-in 에 그만큼 여백을 줘서, 어떤 폭에서도 폰과 겹치지 않게 한다. */
+.rail{position:absolute;right:0;top:50%;transform:translateY(-50%);z-index:12;
+  display:flex;flex-direction:column;align-items:flex-end;
+  opacity:0;visibility:hidden;transition:opacity .3s ease,visibility .3s}
+.rail.show{opacity:1;visibility:visible}
+.rail button{position:relative;display:flex;align-items:center;justify-content:flex-end;
+  background:none;border:0;cursor:pointer;padding:9px 0;font:inherit;color:inherit}
+.rail .bar{display:block;width:20px;height:3px;border-radius:99px;background:var(--line);
+  transition:background .25s ease,width .25s ease}
+.rail button:hover .bar{background:var(--ink3)}
+.rail button.on .bar{background:var(--yellowDeep);width:34px}
+/* 이름표는 hover 때만 왼쪽으로 떠오른다(평소엔 폭을 차지하지 않음) */
+.rail .lb{position:absolute;right:calc(100% + 10px);top:50%;transform:translateY(-50%) translateX(6px);
+  background:var(--ink);color:#fff;font-size:11.5px;font-weight:800;padding:5px 10px;border-radius:99px;
+  white-space:nowrap;opacity:0;pointer-events:none;box-shadow:var(--e2);
+  transition:opacity .2s ease,transform .2s ease}
+.rail button:hover .lb{opacity:1;transform:translateY(-50%)}
 
 /* ── 왼쪽 기능 설명 ── */
 .chapter .no{font-size:12px;font-weight:900;color:var(--yellowDeep);letter-spacing:.06em}
@@ -105,7 +121,13 @@
   .tabs .tb b{font-size:6.5px}
   .stepcap{margin-top:12px;font-size:15px;min-height:44px;gap:8px}
   .stepcap .n{width:22px;height:22px;font-size:12px}
-  .dots{margin-top:5px}
+  /* 폰이 하단 고정이라 레일은 글 영역(위쪽)에 띄우고, 터치 타깃을 넉넉히 */
+  .pin-in{padding-right:0}
+  .rail{position:fixed;right:6px;top:27%}
+  .rail button{padding:0;min-height:42px}
+  .rail .lb{display:none}
+  .rail .bar{width:15px}
+  .rail button.on .bar{width:25px}
 }
 
 /* ── 화면 부품 (실제 앱 UI 대응) ── */
@@ -359,8 +381,8 @@
           </div>
         </div>
         <div class="stepcap" id="cap"></div>
-        <div class="dots" id="dots"></div>
       </div>
+      <nav class="rail" id="rail" aria-label="기능 바로가기"></nav>
     </div></div>
     <div class="track" aria-hidden="true"></div>
   </section>
@@ -484,16 +506,38 @@
   var els = {
     oTtl: document.getElementById('oTtl'), oBody: document.getElementById('oBody'), oTabs: document.getElementById('oTabs'),
     sWho: document.getElementById('sWho'), sTtl: document.getElementById('sTtl'), sBody: document.getElementById('sBody'), sTabs: document.getElementById('sTabs'),
-    cap: document.getElementById('cap'), dots: document.getElementById('dots'), story: document.getElementById('story'),
+    cap: document.getElementById('cap'), rail: document.getElementById('rail'), story: document.getElementById('story'),
   };
   if (!els.oBody || !els.story) return;
   var nodes = CH.map(function (c) { return document.getElementById(c.el); });
-  els.dots.innerHTML = CH.map(function () { return '<i></i>'; }).join('');
-  var dots = els.dots.querySelectorAll('i');
 
   /* 전체 단계 수와, 전역 인덱스 ↔ (챕터, 단계) 매핑 */
   var FLAT = [];
   CH.forEach(function (c, ci) { c.steps.forEach(function (_, si) { FLAT.push([ci, si]); }); });
+
+  var pinned = matchMedia('(min-width:1001px)');
+
+  /* 오른쪽 이동 레일 — 기능 이름 + 막대. 누르면 그 기능의 첫 단계로 스크롤. */
+  var RAIL_NAMES = ['노하우 AI', '노하우 만들기', '받은 질문', '훈련 코스', '업무 배정', '출퇴근·급여', '다점포·매니저'];
+  els.rail.innerHTML = CH.map(function (c, k) {
+    return '<button type="button" data-i="' + k + '" aria-label="' + RAIL_NAMES[k] + '으로 이동">' +
+      '<span class="lb">' + RAIL_NAMES[k] + '</span><span class="bar"></span></button>';
+  }).join('');
+  var railBtns = els.rail.querySelectorAll('button');
+  railBtns.forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var ci = +btn.dataset.i;
+      var top = els.story.getBoundingClientRect().top + scrollY;
+      if (pinned.matches) {
+        // 핀 구간에서 그 챕터의 첫 단계 한가운데로
+        var run = els.story.offsetHeight - innerHeight;
+        scrollTo({ top: Math.round(top + ((ci * CH[ci].steps.length + 0.5) / FLAT.length) * run), behavior: 'smooth' });
+      } else {
+        var r = nodes[ci].getBoundingClientRect();
+        scrollTo({ top: Math.round(r.top + scrollY - 76), behavior: 'smooth' });
+      }
+    });
+  });
 
   var curC = -1, curS = -1;
   function render(ci, si) {
@@ -507,15 +551,13 @@
       els.oTabs.innerHTML = tabHtml(OWNER_TABS, ch.o.tab, ch.o.badge);
       els.sTabs.innerHTML = tabHtml(JUNIOR_TABS, ch.s.tab, -1);
       nodes.forEach(function (n, k) { n.classList.toggle('on', k === ci); });
-      dots.forEach(function (d, k) { d.classList.toggle('on', k === ci); });
+      railBtns.forEach(function (d, k) { d.classList.toggle('on', k === ci); });
     }
     els.oBody.innerHTML = st.o; els.oBody.className = 'scrn o-body' + (st.oc ? ' ' + st.oc : '');
     els.sBody.innerHTML = st.s; els.sBody.className = 'scrn s-body' + (st.sc ? ' ' + st.sc : '');
     els.cap.innerHTML = '<span class="n">' + (si + 1) + '</span>' + st.c;
     curC = ci; curS = si;
   }
-
-  var pinned = matchMedia('(min-width:1001px)');
 
   function pick() {
     if (pinned.matches) {
@@ -541,7 +583,13 @@
   }
 
   var ticking = false;
-  function update() { ticking = false; var v = pick(); render(v[0], v[1]); }
+  function update() {
+    ticking = false;
+    var v = pick(); render(v[0], v[1]);
+    // 레일은 이 섹션을 보고 있을 때만 보인다(페이지 다른 곳에서 떠 있으면 방해가 된다).
+    var r = els.story.getBoundingClientRect();
+    els.rail.classList.toggle('show', r.top < innerHeight * 0.25 && r.bottom > innerHeight * 0.5);
+  }
   function onScroll() { if (!ticking) { ticking = true; requestAnimationFrame(update); } }
   addEventListener('scroll', onScroll, { passive: true });
   addEventListener('resize', onScroll);
