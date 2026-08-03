@@ -10,7 +10,7 @@ import { showToast } from '@/lib/store/useToastStore';
 import { deriveSubscription } from '@/lib/utils/subscription';
 import { canManage } from '@/lib/utils/roles';
 import { BILLING_INFO, formatKrw } from '@/lib/config/billing';
-import { PLANS, PLAN_ORDER, planMonthlyPrice, type PlanId } from '@/lib/config/tiers';
+import { PLANS, PLAN_ORDER, planMonthlyPrice, withVat, VAT_NOTE_SENTENCE, type PlanId } from '@/lib/config/tiers';
 import { SHOW_BILLING } from '@/lib/config/store-policy';
 import { usePaymentClaimStore, CLAIM_ERROR_TEXT } from '@/lib/store/usePaymentClaimStore';
 import { redeemPromoCode } from '@/lib/db';
@@ -96,7 +96,8 @@ function BillingBody() {
     if (!planTouched.current) setSelectedPlan(plan);
   }, [plan]);
   const ownedCount = Math.max(1, stores.filter((st) => st.role === 'owner').length);
-  const monthlyTotal = planMonthlyPrice(selectedPlan, ownedCount);
+  const monthlyTotal = planMonthlyPrice(selectedPlan, ownedCount); // 공급가액(표시가)
+  const monthlyBilled = withVat(monthlyTotal); // 실제 입금 요청액 — 서버 payment_claim_amount(0106)와 같은 값
 
   // 자동 재확인: /billing 은 top-level 라우트라 owner/junior 레이아웃의 refreshMembership 폴이 여기선 안 돈다.
   //   → 이 화면 자체에서 30초마다 상태를 당겨, 계좌이체 활성화가 반영되면 새로고침 탭 없이 자동으로 앱에 진입.
@@ -165,7 +166,7 @@ function BillingBody() {
     }
     if (selectedPlan === 'free') return; // 무료는 입금 자체가 없다(서버도 bad_plan 으로 거부)
     setClaiming(true);
-    const res = await submitPaymentClaim({ plan: selectedPlan, amountKrw: monthlyTotal, depositorName: name });
+    const res = await submitPaymentClaim({ plan: selectedPlan, amountKrw: monthlyBilled, depositorName: name });
     setClaiming(false);
     if (!res.ok) {
       showToast(CLAIM_ERROR_TEXT[res.reason]);
@@ -203,7 +204,7 @@ function BillingBody() {
       '입금을 완료했어요. 확인 후 활성화 부탁드려요.',
       storeName ? `매장: ${storeName}` : '',
       `요금제: ${PLANS[selectedPlan].name}`,
-      `금액: ${formatKrw(monthlyTotal)} / 월`,
+      `금액: ${formatKrw(monthlyBilled)} / 월 (부가세 포함)`,
       depositor.trim() ? `입금자명: ${depositor.trim()}` : '',
     ]
       .filter(Boolean)
@@ -369,6 +370,7 @@ function BillingBody() {
                   );
                 })}
               </View>
+              <Text style={[styles.hint, { marginLeft: 2 }]}>{VAT_NOTE_SENTENCE}</Text>
             </View>
             </Appear>
 
@@ -404,7 +406,10 @@ function BillingBody() {
                       onCopy={() => copy('계좌번호', BILLING_INFO.account)}
                     />
                     <Row label="예금주" value={BILLING_INFO.holder} />
-                    <Row label="금액" value={`${formatKrw(monthlyTotal)} / 월`} strong />
+                    <Row label="금액" value={`${formatKrw(monthlyBilled)} / 월`} strong />
+                    <Text style={styles.hint}>
+                      {formatKrw(monthlyTotal)} + 부가세 {formatKrw(monthlyBilled - monthlyTotal)}이에요.
+                    </Text>
                     {selectedPlan === 'multi' && (
                       <Text style={styles.hint}>
                         매장 {ownedCount}개 × {formatKrw(PLANS.multi.monthlyKrw)} 기준이에요. 매장을 추가하면 매장수만큼 계산돼요.

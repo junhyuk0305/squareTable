@@ -1,6 +1,6 @@
 import { View, Text, StyleSheet } from 'react-native';
 
-import { PLANS, PLAN_ORDER, type PlanId } from '@/lib/config/tiers';
+import { PLANS, PLAN_ORDER, VAT_NOTE_SENTENCE, type PlanId } from '@/lib/config/tiers';
 import { formatKrw } from '@/lib/config/billing';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
@@ -70,6 +70,8 @@ export function PricingTable({
         })}
       </View>
 
+      <Text style={styles.vat}>{VAT_NOTE_SENTENCE}</Text>
+
       {footNote ? <Text style={styles.foot}>{footNote}</Text> : null}
     </View>
   );
@@ -131,5 +133,6 @@ const styles = StyleSheet.create({
   regular: { fontSize: 12, color: InkColors.ink3, fontWeight: '600', textDecorationLine: 'line-through' },
   price: { fontSize: 14.5, fontWeight: '900', color: InkColors.ink },
 
+  vat: { fontSize: 12, color: InkColors.ink3, lineHeight: 18, fontWeight: '600' },
   foot: { fontSize: 12, color: InkColors.ink3, lineHeight: 18, fontWeight: '600' },
 });

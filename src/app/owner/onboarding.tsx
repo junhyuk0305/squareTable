@@ -17,7 +17,7 @@ import { PressableScale } from '@/components/PressableScale';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Space, SCREEN_GUTTER, CONTENT_MAX_WIDTH, frameCapStyle } from '@/lib/theme/layout';
 import { Radius, Elevation } from '@/lib/theme/elevation';
-import { PLANS } from '@/lib/config/tiers';
+import { PLANS, VAT_NOTE } from '@/lib/config/tiers';
 import { formatKrw } from '@/lib/config/billing';
 import { SHOW_BILLING } from '@/lib/config/store-policy';
 
@@ -190,7 +190,7 @@ export default function OwnerOnboardingScreen() {
               <View style={{ flex: 1 }}>
                 <Text style={styles.planTitle}>지금은 무료로 시작했어요</Text>
                 <Text style={styles.planSub}>
-                  직원·AI 무제한은 단일 매장 요금제(월 {formatKrw(PLANS.single.monthlyKrw)})에서 열려요
+                  직원·AI 무제한은 단일 매장 요금제(월 {formatKrw(PLANS.single.monthlyKrw)} · {VAT_NOTE})에서 열려요
                 </Text>
               </View>
               <Ionicons name="chevron-forward" size={16} color={InkColors.ink3} />

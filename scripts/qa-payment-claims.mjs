@@ -39,9 +39,10 @@ const ANON = env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 const SERVICE = env.SUPABASE_SERVICE_ROLE_KEY;
 if (!URL || !ANON || !SERVICE) { console.error('FAIL: URL/ANON/SERVICE_ROLE env 필요(.env + .env.seed)'); process.exit(2); }
 
-// 요금 SSOT 3중 확인 대상: src/lib/config/tiers.ts · 0083 payment_claim_amount · 여기.
-const SINGLE_KRW = 9000;
-const MULTI_KRW = 19000;
+// 요금 SSOT 3중 확인 대상: src/lib/config/tiers.ts · 0106 payment_claim_amount · 여기.
+// ★청구액은 부가세 포함(0106) — 공급가액 19,000/29,000 에 10% 를 더한 값이다.
+const SINGLE_KRW = 20900;
+const MULTI_KRW = 31900;
 
 const mk = () => createClient(URL, ANON, { auth: { persistSession: false, autoRefreshToken: false } });
 const s = String(Date.now()).slice(-9);
