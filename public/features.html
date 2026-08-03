@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>기능 — 착착</title>
-<meta name="description" content="노하우 AI 답변, 훈련 코스, 채팅 업무, 출퇴근·급여, 다점포 관리까지. 착착이 매장 운영에서 대신하는 일을 소개해요.">
+<meta name="description" content="노하우 AI 답변, 훈련 코스, 채팅 업무, 출퇴근·급여, 다점포 관리까지. 착착이 매장 운영에서 대신하는 일을 실제 화면으로 보여드려요.">
 <meta property="og:title" content="기능 — 착착">
 <meta property="og:description" content="한 번만 알려주면 그다음은 AI가. 착착이 매장 운영에서 대신하는 일들.">
 <link rel="canonical" href="https://dochackchack.com/features">
@@ -12,38 +12,37 @@
 <link rel="preconnect" href="https://cdn.jsdelivr.net">
 <link rel="stylesheet" href="/site.css">
 <style>
-/* 기능 페이지 전용 — 앵커 진입 시 섹션이 상단바에 가리지 않게 */
-.frow{scroll-margin-top:72px}
+/* ══ 기능 페이지 — 스크롤 연동 데모 ══
+   오른쪽에 폰 두 대(사장님·직원)를 sticky 로 고정하고, 왼쪽 기능 설명을 스크롤하면
+   스크롤 위치에 따라 폰 화면이 그 기능의 단계로 전환된다.
+   ★ 폰 크기는 절대 유동값(%)을 쓰지 않는다 — 화면 폭이 바뀔 때마다 폰이 늘었다 줄면
+     "실제 기기"로 안 보인다. 브레이크포인트마다 고정 px 로만 바꾼다. */
 
-/* ── 두 화면 데모 ──
-   "사장님 화면에서 이걸 하면 → 직원 화면에 이렇게 나온다"를 단계별로 재생한다.
-   화면에 보일 때만 돌고(IntersectionObserver), '동작 줄이기'면 마지막 단계만 정지 표시. */
-@media(min-width:821px){.frow{grid-template-columns:.78fr 1.22fr;gap:36px}}
-.art{position:relative;padding:22px 16px 18px;justify-content:flex-start;gap:0;background:linear-gradient(180deg,#FBFBFC 0%,var(--paper) 100%)}
-.duo{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start;justify-items:center}
-@media(max-width:560px){.duo{grid-template-columns:1fr;gap:22px}}
+/* ── 레이아웃 ── */
+.story{border-top:1px solid var(--line);padding:8px 0 0}
+.story-in{display:grid;grid-template-columns:1fr 476px;gap:48px;align-items:start}
+.stage{grid-column:2;grid-row:1;position:sticky;top:84px;padding:22px 0 8px}
+/* 마지막 챕터도 끝까지(3단계) 재생되도록 아래 여유를 둔다 — 없으면 문서 끝에 걸려 마지막 단계가 스쳐 지나간다. */
+.chapters{grid-column:1;grid-row:1;padding-bottom:22vh}
 
-/* 실제 폰 프레임 — 앱과 같은 세로 화면 */
-.ph{width:100%;max-width:236px;background:#0c0c0c;border-radius:26px;padding:6px;box-shadow:var(--e3)}
-.phw{background:var(--bg);border-radius:21px;overflow:hidden;display:flex;flex-direction:column;height:428px}
-/* 상태바 */
-.sbar{display:flex;align-items:center;justify-content:space-between;padding:7px 12px 3px;font-size:9px;font-weight:800;color:var(--ink)}
-.sbar .rt{display:flex;gap:3px;align-items:center;color:var(--ink3)}
-.sbar .rt i{display:block;width:4px;border-radius:1px;background:var(--ink3)}
-/* 앱 헤더 */
-.ahd{display:flex;align-items:center;gap:6px;padding:7px 12px 9px;border-bottom:1px solid var(--line)}
+/* ── 폰 (고정 px) ── */
+.duo{display:flex;gap:16px;justify-content:center}
+.phwrap{width:222px;flex:0 0 222px}
+.plab{display:flex;align-items:center;gap:6px;justify-content:center;margin-bottom:9px}
+.who{font-size:10px;font-weight:900;padding:3px 9px;border-radius:99px;letter-spacing:-.01em}
+.who.o{background:var(--ink);color:var(--yellow)}
+.who.s{background:var(--yellowSoft);color:#7a5f10}
+.scr{font-size:10px;font-weight:800;color:var(--ink3)}
+.ph{width:222px;height:452px;background:#0c0c0c;border-radius:26px;padding:6px;box-shadow:var(--e3)}
+.phw{background:var(--bg);border-radius:21px;overflow:hidden;display:flex;flex-direction:column;height:100%}
+.sbar{display:flex;align-items:center;justify-content:space-between;padding:7px 12px 3px;font-size:9px;font-weight:800;color:var(--ink);flex:0 0 auto}
+.sbar .rt{display:flex;gap:3px;align-items:flex-end;color:var(--ink3)}
+.sbar .rt i{display:block;width:3px;border-radius:1px;background:var(--ink3)}
+.ahd{display:flex;align-items:center;gap:6px;padding:7px 12px 9px;border-bottom:1px solid var(--line);flex:0 0 auto}
 .ahd .ttl{font-size:13px;font-weight:900;letter-spacing:-.03em;color:var(--ink)}
-.ahd .st{margin-left:auto;font-size:9px;font-weight:800;color:var(--ink2);background:var(--paper);padding:3px 7px;border-radius:99px;white-space:nowrap}
-/* 세그먼트 — 화면 맨 위 고정(채팅 화면처럼 본문이 아래로 정렬돼도 따라 내려가지 않게) */
-.seg{display:flex;gap:3px;padding:0 0 3px;flex:0 0 auto}
-.seg span{flex:1;text-align:center;font-size:9.5px;font-weight:800;color:var(--ink3);padding:5px 2px;border-radius:8px}
-.seg span.on{background:var(--ink);color:#fff}
-.scrn.chat .seg{margin-bottom:auto}
-/* 화면 본문 */
 .scrn{flex:1;padding:10px;display:flex;flex-direction:column;gap:7px;overflow:hidden}
 .scrn.chat{justify-content:flex-end}
-/* 하단 탭바 — 앱 5탭 그대로 */
-.tabs{display:flex;border-top:1px solid var(--line);padding:5px 2px 6px;background:#fff}
+.tabs{display:flex;border-top:1px solid var(--line);padding:5px 2px 6px;background:#fff;flex:0 0 auto}
 .tabs .tb{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;color:var(--ink3)}
 .tabs .tb svg{width:15px;height:15px}
 .tabs .tb b{font-size:7.5px;font-weight:600;letter-spacing:-.03em}
@@ -51,20 +50,58 @@
 .tabs .tb.on b{font-weight:800}
 .tabs .tb .bdg{position:relative}
 .tabs .tb .bdg em{position:absolute;top:-3px;right:-7px;min-width:11px;height:11px;padding:0 3px;border-radius:99px;background:#E5484D;color:#fff;font-size:7px;font-weight:900;font-style:normal;display:flex;align-items:center;justify-content:center}
-/* 역할 라벨 */
-.plab{display:flex;align-items:center;gap:6px;justify-content:center;margin-bottom:9px}
-.who{font-size:10px;font-weight:900;padding:3px 9px;border-radius:99px;letter-spacing:-.01em}
-.who.o{background:var(--ink);color:var(--yellow)}
-.who.s{background:var(--yellowSoft);color:#7a5f10}
-.scr{font-size:10px;font-weight:800;color:var(--ink3)}
 
-/* 진행 캡션 */
-.stepcap{margin-top:16px;display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:800;color:var(--ink2);min-height:20px;justify-content:center;text-align:center}
+/* ── 진행 표시 ── */
+.stepcap{margin-top:15px;display:flex;align-items:center;justify-content:center;gap:8px;font-size:12.5px;font-weight:800;color:var(--ink2);min-height:38px;text-align:center;line-height:1.4}
 .stepcap .n{flex:0 0 auto;width:18px;height:18px;border-radius:50%;background:var(--yellow);color:var(--ink);font-size:10px;font-weight:900;display:flex;align-items:center;justify-content:center}
+.dots{display:flex;gap:5px;justify-content:center;margin-top:4px}
+.dots i{width:5px;height:5px;border-radius:99px;background:var(--line);transition:background .25s,width .25s}
+.dots i.on{background:var(--yellowDeep);width:16px}
 
-/* 미니 화면 부품 */
+/* ── 왼쪽 기능 설명(챕터) ── */
+.chapter{min-height:76vh;display:flex;flex-direction:column;justify-content:center;padding:30px 0;opacity:.34;transition:opacity .4s ease;scroll-margin-top:80px}
+.chapter.on{opacity:1}
+.chapter .no{font-size:12px;font-weight:900;color:var(--yellowDeep);letter-spacing:.06em}
+.chapter h3{font-size:clamp(22px,2.8vw,29px);font-weight:900;letter-spacing:-.035em;margin:9px 0 0;line-height:1.24}
+.chapter .fp{font-size:15px;color:var(--ink2);margin:12px 0 0;max-width:470px;line-height:1.65}
+/* 예시 본문 — 현장에서 실제로 벌어지는 상황과, 착착에서 그게 어떻게 되는지 */
+.chapter .ex{margin-top:18px;background:var(--paper);border-radius:var(--r-md);padding:15px 17px;border-left:3px solid var(--yellowDeep);max-width:470px}
+.chapter .ex .exlb{display:block;font-size:10.5px;font-weight:900;letter-spacing:.06em;color:var(--ink3)}
+.chapter .ex p{font-size:13.5px;color:var(--ink2);margin:5px 0 0;line-height:1.65}
+.chapter .ex .exlb+p+.exlb{margin-top:13px}
+.chapter .ex .then{color:var(--ink);font-weight:600}
+.chapter ul{margin:16px 0 0;padding:0;list-style:none;display:flex;flex-direction:column;gap:9px}
+.chapter li{font-size:14px;color:var(--ink2);padding-left:23px;position:relative;line-height:1.55}
+.chapter li svg{position:absolute;left:0;top:3px;color:var(--good);width:15px;height:15px}
+.chapter li b{color:var(--ink);font-weight:800}
+
+/* ── 좁은 화면: sticky 유지하되 폰을 위로, 크기는 다시 고정 px ── */
+@media(max-width:1000px){
+  .story-in{grid-template-columns:1fr;gap:0}
+  .stage{grid-column:1;grid-row:1;top:56px;z-index:6;padding:12px 0 10px;background:rgba(255,255,255,.94);backdrop-filter:blur(6px);border-bottom:1px solid var(--line)}
+  .chapters{grid-column:1;grid-row:2}
+  .duo{gap:12px}
+  .phwrap{width:158px;flex:0 0 158px}
+  .ph{width:158px;height:296px;border-radius:20px;padding:5px}
+  .phw{border-radius:16px}
+  .ahd{padding:5px 9px 7px}
+  .ahd .ttl{font-size:11px}
+  .scrn{padding:7px;gap:5px}
+  .tabs .tb svg{width:12px;height:12px}
+  .tabs .tb b{font-size:6.5px}
+  .plab{margin-bottom:6px}
+  .stepcap{margin-top:10px;font-size:11.5px;min-height:32px}
+  .chapter{min-height:auto;padding:34px 0}
+  .chapter:first-child{padding-top:26px}
+}
+
+/* ── 화면 부품 (실제 앱 UI 대응) ── */
 @keyframes dIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
 .din{animation:dIn .3s cubic-bezier(.2,.7,.3,1) both}
+.seg{display:flex;gap:3px;padding:0 0 3px;flex:0 0 auto}
+.seg span{flex:1;text-align:center;font-size:9.5px;font-weight:800;color:var(--ink3);padding:5px 2px;border-radius:8px}
+.seg span.on{background:var(--ink);color:#fff}
+.scrn.chat .seg{margin-bottom:auto}
 .mk2{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:8px 9px;box-shadow:var(--e1)}
 .mk2 .t{font-size:11px;font-weight:800;color:var(--ink);line-height:1.35}
 .mk2 .s{font-size:10px;color:var(--ink2);margin-top:3px;line-height:1.45}
@@ -77,18 +114,13 @@
 .ba .bd{font-size:10.5px;color:var(--ink);margin-top:4px;line-height:1.45}
 .ba .bd b{font-weight:800}
 .ba .sc{margin-top:6px;background:var(--sourceBg);border-left:2px solid var(--yellowDeep);border-radius:0 6px 6px 0;padding:4px 7px;font-size:9px;color:#8a6a12;font-weight:700}
-/* 입력창 */
-.inp{display:flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:99px;padding:6px 10px;background:var(--bg);font-size:9.5px;color:var(--ink3);font-weight:600}
-.inp .snd{margin-left:auto;width:18px;height:18px;border-radius:50%;background:var(--yellow);color:var(--ink);display:flex;align-items:center;justify-content:center}
-.inp .snd svg{width:10px;height:10px}
-.inp.typed{color:var(--ink);font-weight:600}
 .typ{align-self:flex-start;display:flex;gap:3px;background:var(--bg);border:1px solid var(--line);padding:8px 10px;border-radius:4px 12px 12px 12px}
 .typ i{width:5px;height:5px;border-radius:50%;background:var(--ink3);animation:dBl 1.2s infinite}
 .typ i:nth-child(2){animation-delay:.2s}.typ i:nth-child(3){animation-delay:.4s}
 @keyframes dBl{0%,60%,100%{opacity:.3;transform:translateY(0)}30%{opacity:1;transform:translateY(-3px)}}
-.caret::after{content:"▍";color:var(--ink3);animation:dCb .7s steps(1) infinite}
-@keyframes dCb{50%{opacity:0}}
-/* 할 일 카드(TodoScreen 형태) */
+.inp{display:flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:99px;padding:6px 10px;background:var(--bg);font-size:9.5px;color:var(--ink3);font-weight:600;flex:0 0 auto}
+.inp .snd{margin-left:auto;width:18px;height:18px;border-radius:50%;background:var(--yellow);color:var(--ink);display:flex;align-items:center;justify-content:center;flex:0 0 auto}
+.inp .snd svg{width:10px;height:10px}
 .tcard{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:8px 9px;box-shadow:var(--e1)}
 .trow{display:flex;align-items:center;gap:8px;font-size:10.5px;font-weight:700;color:var(--ink)}
 .trow .bx{flex:0 0 auto;width:16px;height:16px;border-radius:5px;border:2px solid var(--line);display:flex;align-items:center;justify-content:center}
@@ -107,33 +139,23 @@
 .btn2{align-self:stretch;text-align:center;background:var(--yellow);color:var(--ink);font-size:10.5px;font-weight:900;padding:8px;border-radius:10px;box-shadow:var(--ey)}
 .btn2.gh{background:var(--bg);border:1px solid var(--line);color:var(--ink2);box-shadow:none}
 .push{display:flex;align-items:flex-start;gap:6px;background:var(--ink);color:#fff;font-size:9.5px;font-weight:700;padding:8px 10px;border-radius:11px;line-height:1.4}
-.push b{color:var(--yellow);font-weight:900;flex:0 0 auto}
+.push svg{flex:0 0 auto;color:var(--yellow);margin-top:1px}
 .bar2{height:5px;border-radius:99px;background:var(--line);overflow:hidden}
-.bar2 i{display:block;height:100%;width:0;background:var(--yellowDeep);border-radius:99px;transition:width 1.1s linear}
-.num{font-variant-numeric:tabular-nums}
+.bar2 i{display:block;height:100%;background:var(--yellowDeep);border-radius:99px}
 .tot{display:flex;align-items:center;justify-content:space-between;background:var(--ink);color:#fff;border-radius:10px;padding:9px 10px;font-size:10.5px;font-weight:800}
 .tot b{font-weight:900;color:var(--yellow);font-variant-numeric:tabular-nums;font-size:12px}
 .big{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px;text-align:center;box-shadow:var(--e1)}
 .big .lb2{font-size:9px;font-weight:800;color:var(--ink3)}
 .big .vl{font-size:19px;font-weight:900;letter-spacing:-.03em;margin-top:2px;font-variant-numeric:tabular-nums}
-.empty{font-size:10px;color:var(--ink3);text-align:center;padding:20px 6px;line-height:1.6;margin:auto 0}
+.empty{font-size:10px;color:var(--ink3);text-align:center;padding:18px 6px;line-height:1.6;margin:auto 0}
 @media(prefers-reduced-motion:reduce){
   .din{animation:none!important}
   .typ i{animation:none}
-  .caret::after{animation:none;content:""}
+  .chapter{opacity:1}
 }
 </style>
 </head>
 <body>
-<svg width="0" height="0" style="position:absolute" aria-hidden="true" id="tab-icons"><defs>
-<symbol id="t-home" viewBox="0 0 24 24"><path d="M3.5 10.5L12 4l8.5 6.5V20h-5v-5.5h-7V20h-5z"/></symbol>
-<symbol id="t-bulb" viewBox="0 0 24 24"><path d="M9.5 18h5M10.5 21h3M12 3a6 6 0 0 1 4 10.5c-.8.8-1 1.5-1 2.5H9c0-1-.2-1.7-1-2.5A6 6 0 0 1 12 3z"/></symbol>
-<symbol id="t-tray" viewBox="0 0 24 24"><path d="M4 5h16v14H4zM4 13h5l1.5 2h3L15 13h5"/></symbol>
-<symbol id="t-case" viewBox="0 0 24 24"><path d="M3 8h18v12H3zM9 8V5.5h6V8"/></symbol>
-<symbol id="t-clock" viewBox="0 0 24 24"><path d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 7.5V12l3 2"/></symbol>
-<symbol id="t-gear" viewBox="0 0 24 24"><path d="M12 15.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4zM19.2 12c0-.5-.1-1-.2-1.4l1.7-1.3-1.8-3.1-2 .8c-.7-.6-1.5-1-2.4-1.3L14.2 3.5H9.8L9.5 5.7c-.9.3-1.7.7-2.4 1.3l-2-.8-1.8 3.1L5 10.6c-.1.4-.2.9-.2 1.4s.1 1 .2 1.4l-1.7 1.3 1.8 3.1 2-.8c.7.6 1.5 1 2.4 1.3l.3 2.2h4.4l.3-2.2c.9-.3 1.7-.7 2.4-1.3l2 .8 1.8-3.1-1.7-1.3c.1-.4.2-.9.2-1.4z"/></symbol>
-<symbol id="t-bubble" viewBox="0 0 24 24"><path d="M4 5h16v10H9l-5 4zM8.5 10h.01M12 10h.01M15.5 10h.01"/></symbol>
-</defs></svg>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true" id="nav-icons"><defs>
 <symbol id="n-input" viewBox="0 0 24 24"><path d="M4 20h4l10.5-10.5a2.1 2.1 0 0 0-3-3L5 17v3zM13.5 6.5l3 3"/></symbol>
 <symbol id="n-inbox" viewBox="0 0 24 24"><path d="M4 5h16v14H4zM4 13h5l1.5 2h3L15 13h5"/></symbol>
@@ -147,20 +169,21 @@
 <symbol id="n-gym" viewBox="0 0 24 24"><path d="M4 9v6M7 7v10M17 7v10M20 9v6M7 12h10"/></symbol>
 <symbol id="n-academy" viewBox="0 0 24 24"><path d="M4 4.5h6a2.5 2.5 0 0 1 2 2.5 2.5 2.5 0 0 1 2-2.5h6v13h-6a2.5 2.5 0 0 0-2 2 2.5 2.5 0 0 0-2-2H4zM12 7v12"/></symbol>
 </defs></svg>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" id="tab-icons"><defs>
+<symbol id="t-home" viewBox="0 0 24 24"><path d="M3.5 10.5L12 4l8.5 6.5V20h-5v-5.5h-7V20h-5z"/></symbol>
+<symbol id="t-bulb" viewBox="0 0 24 24"><path d="M9.5 18h5M10.5 21h3M12 3a6 6 0 0 1 4 10.5c-.8.8-1 1.5-1 2.5H9c0-1-.2-1.7-1-2.5A6 6 0 0 1 12 3z"/></symbol>
+<symbol id="t-tray" viewBox="0 0 24 24"><path d="M4 5h16v14H4zM4 13h5l1.5 2h3L15 13h5"/></symbol>
+<symbol id="t-case" viewBox="0 0 24 24"><path d="M3 8h18v12H3zM9 8V5.5h6V8"/></symbol>
+<symbol id="t-clock" viewBox="0 0 24 24"><path d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 7.5V12l3 2"/></symbol>
+<symbol id="t-gear" viewBox="0 0 24 24"><path d="M12 15.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4zM19.2 12c0-.5-.1-1-.2-1.4l1.7-1.3-1.8-3.1-2 .8c-.7-.6-1.5-1-2.4-1.3L14.2 3.5H9.8L9.5 5.7c-.9.3-1.7.7-2.4 1.3l-2-.8-1.8 3.1L5 10.6c-.1.4-.2.9-.2 1.4s.1 1 .2 1.4l-1.7 1.3 1.8 3.1 2-.8c.7.6 1.5 1 2.4 1.3l.3 2.2h4.4l.3-2.2c.9-.3 1.7-.7 2.4-1.3l2 .8 1.8-3.1-1.7-1.3c.1-.4.2-.9.2-1.4z"/></symbol>
+<symbol id="t-bubble" viewBox="0 0 24 24"><path d="M4 5h16v10H9l-5 4zM8.5 10h.01M12 10h.01M15.5 10h.01"/></symbol>
+</defs></svg>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
-<symbol id="i-cafe" viewBox="0 0 24 24"><path d="M4 8h13v4a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5V8zM17 9h2a2 2 0 0 1 0 4h-2M6 3v2M9.5 3v2M13 3v2"/></symbol>
-<symbol id="i-clock" viewBox="0 0 24 24"><path d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 7.5V12l3 2"/></symbol>
-<symbol id="i-bulb" viewBox="0 0 24 24"><path d="M9.5 18h5M10.5 21h3M12 3a6 6 0 0 1 4 10.5c-.8.8-1 1.5-1 2.5H9c0-1-.2-1.7-1-2.5A6 6 0 0 1 12 3z"/></symbol>
-<symbol id="i-chat" viewBox="0 0 24 24"><path d="M4 5h16v10H9l-5 4z"/></symbol>
-<symbol id="i-arrow-up" viewBox="0 0 24 24"><path d="M12 20V5M6 11l6-6 6 6"/></symbol>
 <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 13l4 4L19 6"/></symbol>
-<symbol id="i-mic" viewBox="0 0 24 24"><path d="M12 3a3 3 0 0 1 3 3v5a3 3 0 0 1-6 0V6a3 3 0 0 1 3-3zM6 11a6 6 0 0 0 12 0M12 17v4M9 21h6"/></symbol>
-<symbol id="i-doc" viewBox="0 0 24 24"><path d="M6 3h9l3 3v15H6zM9 10h6M9 14h6M9 18h4"/></symbol>
-<symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3l7 2.5V11c0 4.6-3 7.7-7 9.5-4-1.8-7-4.9-7-9.5V5.5zM9 11.5l2 2 4-4"/></symbol>
-<symbol id="i-phone2" viewBox="0 0 24 24"><path d="M8 2.5h8a1 1 0 0 1 1 1v17a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1v-17a1 1 0 0 1 1-1zM11 18.5h2"/></symbol>
-<symbol id="i-export" viewBox="0 0 24 24"><path d="M12 14V4M8 8l4-4 4 4M5 14v6h14v-6"/></symbol>
+<symbol id="i-bulb" viewBox="0 0 24 24"><path d="M9.5 18h5M10.5 21h3M12 3a6 6 0 0 1 4 10.5c-.8.8-1 1.5-1 2.5H9c0-1-.2-1.7-1-2.5A6 6 0 0 1 12 3z"/></symbol>
 <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 9a6 6 0 0 1 12 0c0 6 2.5 8 2.5 8H3.5S6 15 6 9M10 20a2 2 0 0 0 4 0"/></symbol>
-<symbol id="i-inbox" viewBox="0 0 24 24"><path d="M4 5h16v14H4zM4 13h5l1.5 2h3L15 13h5"/></symbol>
+<symbol id="i-arrow-up" viewBox="0 0 24 24"><path d="M12 20V5M6 11l6-6 6 6"/></symbol>
+<symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3l7 2.5V11c0 4.6-3 7.7-7 9.5-4-1.8-7-4.9-7-9.5V5.5zM9 11.5l2 2 4-4"/></symbol>
 </defs></svg>
 
 <div class="nav"><div class="in">
@@ -216,274 +239,161 @@
   <section class="phero">
     <div class="eyebrow2">기능</div>
     <h1>착착이 매장에서 <span class="u">대신하는 일</span></h1>
-    <p class="sub">사장님이 한 번 알려주면, 답하고 · 가르치고 · 기록하는 일은 착착이 해요. 아래 전부가 하나의 앱에서 돌아가요.</p>
+    <p class="sub">사장님이 한 번 알려주면, 답하고 · 가르치고 · 기록하는 일은 착착이 해요. 스크롤하면 실제 화면이 따라 움직여요.</p>
   </section>
 
-  <div class="frows">
-    <!-- 1 노하우 AI -->
-    <section class="frow" id="ai">
-      <div>
-        <div class="no">01 · 노하우 AI</div>
-        <h3>직원이 물으면,<br>우리 가게 방식대로 답해요</h3>
-        <p class="fp">"이건 어떻게 해요?"가 사장님 휴대폰 대신 AI에게 가요. 답은 사장님이 남긴 노하우에서 나와요.</p>
-        <ul>
-          <li><svg class="ic"><use href="#i-check"/></svg><b>출처를 함께 표시</b> — 어떤 노하우에서 나온 답인지 보여줘요</li>
-          <li><svg class="ic"><use href="#i-check"/></svg>근거가 없으면 지어내지 않고 <b>사장님께 1탭으로 전달</b>돼요</li>
-          <li><svg class="ic"><use href="#i-check"/></svg>같은 질문은 다음부터 AI가 대신 답해요</li>
-        </ul>
-      </div>
-      <div class="art" id="dAi">
+  <!-- 스크롤 연동 데모 -->
+  <section class="story" id="story">
+    <div class="story-in">
+      <!-- 오른쪽: 고정된 폰 두 대 -->
+      <div class="stage">
         <div class="duo">
           <div class="phwrap">
-            <div class="plab"><span class="who o">사장님</span><span class="scr">노하우</span></div>
+            <div class="plab"><span class="who o">사장님</span><span class="scr" id="oScr">노하우</span></div>
             <div class="ph"><div class="phw">
               <div class="sbar"><span>9:41</span><span class="rt"><i style="height:5px"></i><i style="height:7px"></i><i style="height:9px"></i></span></div>
-              <div class="ahd"><span class="ttl">노하우</span></div>
-              <div class="scrn o-body"></div>
-              <div class="tabs"><span class="tb"><span class="bdg"><svg class="ic"><use href="#t-home"/></svg></span><b>홈</b></span><span class="tb on"><span class="bdg"><svg class="ic"><use href="#t-bulb"/></svg></span><b>노하우</b></span><span class="tb"><span class="bdg"><svg class="ic"><use href="#t-tray"/></svg></span><b>받은질문</b></span><span class="tb"><span class="bdg"><svg class="ic"><use href="#t-case"/></svg></span><b>업무 채팅</b></span><span class="tb"><span class="bdg"><svg class="ic"><use href="#t-gear"/></svg></span><b>설정</b></span></div>
+              <div class="ahd"><span class="ttl" id="oTtl">노하우</span></div>
+              <div class="scrn o-body" id="oBody"></div>
+              <div class="tabs" id="oTabs"></div>
             </div></div>
           </div>
           <div class="phwrap">
-            <div class="plab"><span class="who s">직원</span><span class="scr">물어보기</span></div>
+            <div class="plab"><span class="who s" id="sWho">직원</span><span class="scr" id="sScr">물어보기</span></div>
             <div class="ph"><div class="phw">
               <div class="sbar"><span>9:41</span><span class="rt"><i style="height:5px"></i><i style="height:7px"></i><i style="height:9px"></i></span></div>
-              <div class="ahd"><span class="ttl">물어보기</span></div>
-              <div class="scrn s-body"></div>
-              <div class="tabs"><span class="tb"><span class="bdg"><svg class="ic"><use href="#t-home"/></svg></span><b>홈</b></span><span class="tb on"><span class="bdg"><svg class="ic"><use href="#t-bubble"/></svg></span><b>물어보기</b></span><span class="tb"><span class="bdg"><svg class="ic"><use href="#t-case"/></svg></span><b>업무 채팅</b></span><span class="tb"><span class="bdg"><svg class="ic"><use href="#t-clock"/></svg></span><b>출퇴근</b></span><span class="tb"><span class="bdg"><svg class="ic"><use href="#t-gear"/></svg></span><b>설정</b></span></div>
+              <div class="ahd"><span class="ttl" id="sTtl">물어보기</span></div>
+              <div class="scrn s-body" id="sBody"></div>
+              <div class="tabs" id="sTabs"></div>
             </div></div>
           </div>
         </div>
-        <div class="stepcap"></div>
+        <div class="stepcap" id="cap"></div>
+        <div class="dots" id="dots"></div>
       </div>
-    </section>
 
-    <!-- 2 입력 -->
-    <section class="frow rev" id="input">
-      <div>
-        <div class="no">02 · 노하우 만들기</div>
-        <h3>적을 시간이 없어도<br>노하우가 쌓여요</h3>
-        <p class="fp">매뉴얼을 새로 쓸 필요 없어요. 이미 있는 것, 이미 말하는 방식 그대로 넣으면 AI가 정리해요.</p>
-        <ul>
-          <li><svg class="ic"><use href="#i-check"/></svg><b>인수인계서·PDF 올리기</b> — AI가 노하우 여러 개로 나눠 정리해요</li>
-          <li><svg class="ic"><use href="#i-check"/></svg><b>말로 받아쓰기</b> — 바쁠 땐 말하면 글이 돼요</li>
-          <li><svg class="ic"><use href="#i-check"/></svg>자유롭게 쓰면 상황 · 할 일 · 하지 말 것으로 정리돼요</li>
-          <li><svg class="ic"><use href="#i-check"/></svg>업종을 고르면 <b>기본 노하우가 미리 담긴 채</b> 시작해요</li>
-        </ul>
-      </div>
-      <div class="art" id="dInput">
-        <div class="duo">
-          <div class="phwrap">
-            <div class="plab"><span class="who o">사장님</span><span class="scr">노하우</span></div>
-            <div class="ph"><div class="phw">
-              <div class="sbar"><span>9:41</span><span class="rt"><i style="height:5px"></i><i style="height:7px"></i><i style="height:9px"></i></span></div>
-              <div class="ahd"><span class="ttl">노하우</span></div>
-              <div class="scrn o-body"></div>
-              <div class="tabs"><span class="tb"><span class="bdg"><svg class="ic"><use href="#t-home"/></svg></span><b>홈</b></span><span class="tb on"><span class="bdg"><svg class="ic"><use href="#t-bulb"/></svg></span><b>노하우</b></span><span class="tb"><span class="bdg"><svg class="ic"><use href="#t-tray"/></svg></span><b>받은질문</b></span><span class="tb"><span class="bdg"><svg class="ic"><use href="#t-case"/></svg></span><b>업무 채팅</b></span><span class="tb"><span class="bdg"><svg class="ic"><use href="#t-gear"/></svg></span><b>설정</b></span></div>
-            </div></div>
+      <!-- 왼쪽: 기능 설명 -->
+      <div class="chapters">
+        <article class="chapter" id="ai">
+          <div class="no">01 · 노하우 AI</div>
+          <h3>직원이 물으면,<br>우리 가게 방식대로 답해요</h3>
+          <p class="fp">매장에서 나오는 질문은 대부분 처음 나오는 질문이 아니에요. 같은 질문이 사람이 바뀔 때마다 반복되고, 그때마다 사장님이 답합니다. 착착은 그 답을 한 번만 받아두고, 다음부터 대신 답해요.</p>
+          <div class="ex">
+            <span class="exlb">이런 경우</span>
+            <p>금요일 저녁 피크타임. 새로 온 직원이 포장 주문을 취소하지 못해 사장님께 전화해요. 사장님은 다른 매장에 있고, 손님은 카운터 앞에서 기다립니다.</p>
+            <span class="exlb">착착에서는</span>
+            <p class="then">직원이 앱에 묻고, 우리 가게 기준 그대로 답을 받아요. "결제 전이면 포스에서 바로 취소, 결제 후엔 당일에만" — 사장님 휴대폰은 울리지 않아요.</p>
           </div>
-          <div class="phwrap">
-            <div class="plab"><span class="who s">직원</span><span class="scr">물어보기</span></div>
-            <div class="ph"><div class="phw">
-              <div class="sbar"><span>9:41</span><span class="rt"><i style="height:5px"></i><i style="height:7px"></i><i style="height:9px"></i></span></div>
-              <div class="ahd"><span class="ttl">물어보기</span></div>
-              <div class="scrn s-body"></div>
-              <div class="tabs"><span class="tb"><span class="bdg"><svg class="ic"><use href="#t-home"/></svg></span><b>홈</b></span><span class="tb on"><span class="bdg"><svg class="ic"><use href="#t-bubble"/></svg></span><b>물어보기</b></span><span class="tb"><span class="bdg"><svg class="ic"><use href="#t-case"/></svg></span><b>업무 채팅</b></span><span class="tb"><span class="bdg"><svg class="ic"><use href="#t-clock"/></svg></span><b>출퇴근</b></span><span class="tb"><span class="bdg"><svg class="ic"><use href="#t-gear"/></svg></span><b>설정</b></span></div>
-            </div></div>
-          </div>
-        </div>
-        <div class="stepcap"></div>
-      </div>
-    </section>
+          <ul>
+            <li><svg class="ic"><use href="#i-check"/></svg><b>출처를 함께 표시</b> — 어떤 노하우에서 나온 답인지 보여줘요</li>
+            <li><svg class="ic"><use href="#i-check"/></svg>근거가 없으면 지어내지 않고 <b>사장님께 1탭으로 전달</b>돼요</li>
+            <li><svg class="ic"><use href="#i-check"/></svg>같은 질문은 다음부터 AI가 대신 답해요</li>
+          </ul>
+        </article>
 
-    <!-- 3 받은 질문 -->
-    <section class="frow" id="inbox">
-      <div>
-        <div class="no">03 · 받은 질문</div>
-        <h3>답할수록 두꺼워지는<br>가게 매뉴얼</h3>
-        <p class="fp">AI가 못 답한 질문만 사장님께 모여요. 한 번 답하면 끝 — 같은 질문이 다시 사장님까지 오지 않아요.</p>
-        <ul>
-          <li><svg class="ic"><use href="#i-check"/></svg>모르는 질문은 <b>받은 질문함</b>에 자동으로 쌓여요</li>
-          <li><svg class="ic"><use href="#i-check"/></svg>사장님 답 한 번이 <b>영구 노하우</b>로 저장돼요</li>
-          <li><svg class="ic"><use href="#i-check"/></svg>같은 질문은 묶어서 보여줘요</li>
-        </ul>
-      </div>
-      <div class="art" id="dInbox">
-        <div class="duo">
-          <div class="phwrap">
-            <div class="plab"><span class="who o">사장님</span><span class="scr">받은 질문</span></div>
-            <div class="ph"><div class="phw">
-              <div class="sbar"><span>9:41</span><span class="rt"><i style="height:5px"></i><i style="height:7px"></i><i style="height:9px"></i></span></div>
-              <div class="ahd"><span class="ttl">받은 질문</span></div>
-              <div class="scrn o-body"></div>
-              <div class="tabs"><span class="tb"><span class="bdg"><svg class="ic"><use href="#t-home"/></svg></span><b>홈</b></span><span class="tb"><span class="bdg"><svg class="ic"><use href="#t-bulb"/></svg><em>1</em></span><b>노하우</b></span><span class="tb on"><span class="bdg"><svg class="ic"><use href="#t-tray"/></svg></span><b>받은질문</b></span><span class="tb"><span class="bdg"><svg class="ic"><use href="#t-case"/></svg></span><b>업무 채팅</b></span><span class="tb"><span class="bdg"><svg class="ic"><use href="#t-gear"/></svg></span><b>설정</b></span></div>
-            </div></div>
+        <article class="chapter" id="input">
+          <div class="no">02 · 노하우 만들기</div>
+          <h3>적을 시간이 없어도<br>노하우가 쌓여요</h3>
+          <p class="fp">노하우를 쌓아두면 좋다는 건 알지만, 앉아서 매뉴얼을 쓸 시간이 없습니다. 착착은 새로 쓰라고 하지 않아요. 이미 있는 문서, 이미 말로 하던 설명을 그대로 넣으면 AI가 상황 · 할 일 · 하지 말 것으로 나눠 정리해요.</p>
+          <div class="ex">
+            <span class="exlb">이런 경우</span>
+            <p>3년 치 노하우가 사장님 머릿속과 오래된 인수인계서 파일에만 있어요. 정리하려면 며칠은 앉아 있어야 하는데, 그럴 시간이 안 납니다.</p>
+            <span class="exlb">착착에서는</span>
+            <p class="then">인수인계서 PDF를 올리면 AI가 읽고 노하우 6개로 나눠요. 사장님은 우리 가게에 맞게 숫자만 고치면 끝이에요.</p>
           </div>
-          <div class="phwrap">
-            <div class="plab"><span class="who s">직원</span><span class="scr">물어보기</span></div>
-            <div class="ph"><div class="phw">
-              <div class="sbar"><span>9:41</span><span class="rt"><i style="height:5px"></i><i style="height:7px"></i><i style="height:9px"></i></span></div>
-              <div class="ahd"><span class="ttl">물어보기</span></div>
-              <div class="scrn s-body"></div>
-              <div class="tabs"><span class="tb"><span class="bdg"><svg class="ic"><use href="#t-home"/></svg></span><b>홈</b></span><span class="tb on"><span class="bdg"><svg class="ic"><use href="#t-bubble"/></svg></span><b>물어보기</b></span><span class="tb"><span class="bdg"><svg class="ic"><use href="#t-case"/></svg></span><b>업무 채팅</b></span><span class="tb"><span class="bdg"><svg class="ic"><use href="#t-clock"/></svg></span><b>출퇴근</b></span><span class="tb"><span class="bdg"><svg class="ic"><use href="#t-gear"/></svg></span><b>설정</b></span></div>
-            </div></div>
-          </div>
-        </div>
-        <div class="stepcap"></div>
-      </div>
-    </section>
+          <ul>
+            <li><svg class="ic"><use href="#i-check"/></svg><b>인수인계서·PDF 올리기</b> — AI가 노하우 여러 개로 나눠 정리해요</li>
+            <li><svg class="ic"><use href="#i-check"/></svg><b>말로 받아쓰기</b> — 바쁠 땐 말하면 글이 돼요</li>
+            <li><svg class="ic"><use href="#i-check"/></svg>업종을 고르면 <b>기본 노하우가 미리 담긴 채</b> 시작해요</li>
+          </ul>
+        </article>
 
-    <!-- 4 훈련 -->
-    <section class="frow rev" id="training">
-      <div>
-        <div class="no">04 · 훈련 코스</div>
-        <h3>신입 교육,<br>훈련 코스가 대신해요</h3>
-        <p class="fp">"또 처음부터 설명"을 끝내요. 배울 노하우를 골라두면 신입이 첫 출근부터 순서대로 배워요.</p>
-        <ul>
-          <li><svg class="ic"><use href="#i-check"/></svg><b>첫 훈련</b> — 첫 출근에 배울 것 3~5개를 정해둬요</li>
-          <li><svg class="ic"><use href="#i-check"/></svg><b>이해 확인 퀴즈</b> — 읽었다가 아니라 이해했는지 확인해요</li>
-          <li><svg class="ic"><use href="#i-check"/></svg><b>정기 훈련</b> — 잊을 때쯤 다시 확인해요(주기는 매장이 정해요)</li>
-          <li><svg class="ic"><use href="#i-check"/></svg>누가 어디까지 통과했는지 기록으로 남아요</li>
-        </ul>
-      </div>
-      <div class="art" id="dTrain">
-        <div class="duo">
-          <div class="phwrap">
-            <div class="plab"><span class="who o">사장님</span><span class="scr">훈련</span></div>
-            <div class="ph"><div class="phw">
-              <div class="sbar"><span>9:41</span><span class="rt"><i style="height:5px"></i><i style="height:7px"></i><i style="height:9px"></i></span></div>
-              <div class="ahd"><span class="ttl">훈련</span></div>
-              <div class="scrn o-body"></div>
-              <div class="tabs"><span class="tb"><span class="bdg"><svg class="ic"><use href="#t-home"/></svg></span><b>홈</b></span><span class="tb on"><span class="bdg"><svg class="ic"><use href="#t-bulb"/></svg></span><b>노하우</b></span><span class="tb"><span class="bdg"><svg class="ic"><use href="#t-tray"/></svg></span><b>받은질문</b></span><span class="tb"><span class="bdg"><svg class="ic"><use href="#t-case"/></svg></span><b>업무 채팅</b></span><span class="tb"><span class="bdg"><svg class="ic"><use href="#t-gear"/></svg></span><b>설정</b></span></div>
-            </div></div>
+        <article class="chapter" id="inbox">
+          <div class="no">03 · 받은 질문</div>
+          <h3>답할수록 두꺼워지는<br>가게 매뉴얼</h3>
+          <p class="fp">AI가 모든 걸 답할 수는 없어요. 중요한 건 모를 때 지어내지 않는 것, 그리고 그 질문이 그냥 사라지지 않는 것입니다. 착착은 답할 수 없는 질문만 사장님께 모으고, 사장님이 한 번 답하면 그게 노하우로 남아요.</p>
+          <div class="ex">
+            <span class="exlb">이런 경우</span>
+            <p>"단체 주문도 선결제인가요?" 한 번도 정해둔 적 없는 질문이에요. 직원은 그 자리에서 임의로 답하고, 그게 나중에 문제가 됩니다.</p>
+            <span class="exlb">착착에서는</span>
+            <p class="then">근거가 없으면 지어내지 않고 "아직 등록되지 않은 내용이에요"라고 말한 뒤 사장님께 전달해요. 사장님이 답한 다음부터는 같은 질문이 사장님까지 오지 않아요.</p>
           </div>
-          <div class="phwrap">
-            <div class="plab"><span class="who s">직원</span><span class="scr">업무 채팅</span></div>
-            <div class="ph"><div class="phw">
-              <div class="sbar"><span>9:41</span><span class="rt"><i style="height:5px"></i><i style="height:7px"></i><i style="height:9px"></i></span></div>
-              <div class="ahd"><span class="ttl">업무 채팅</span></div>
-              <div class="scrn s-body"></div>
-              <div class="tabs"><span class="tb"><span class="bdg"><svg class="ic"><use href="#t-home"/></svg></span><b>홈</b></span><span class="tb"><span class="bdg"><svg class="ic"><use href="#t-bubble"/></svg></span><b>물어보기</b></span><span class="tb on"><span class="bdg"><svg class="ic"><use href="#t-case"/></svg></span><b>업무 채팅</b></span><span class="tb"><span class="bdg"><svg class="ic"><use href="#t-clock"/></svg></span><b>출퇴근</b></span><span class="tb"><span class="bdg"><svg class="ic"><use href="#t-gear"/></svg></span><b>설정</b></span></div>
-            </div></div>
-          </div>
-        </div>
-        <div class="stepcap"></div>
-      </div>
-    </section>
+          <ul>
+            <li><svg class="ic"><use href="#i-check"/></svg>모르는 질문은 <b>받은 질문함</b>에 자동으로 쌓여요</li>
+            <li><svg class="ic"><use href="#i-check"/></svg>사장님 답 한 번이 <b>영구 노하우</b>로 저장돼요</li>
+            <li><svg class="ic"><use href="#i-check"/></svg>같은 질문은 묶어서 보여줘요</li>
+          </ul>
+        </article>
 
-    <!-- 5 채팅 업무 -->
-    <section class="frow" id="chat">
-      <div>
-        <div class="no">05 · 채팅 업무</div>
-        <h3>지시 · 확인 · 기록이<br>채팅 한 곳에서</h3>
-        <p class="fp">카톡 공지 따로, 메모 따로, 구두 지시 따로 — 흩어진 걸 업무 채팅 하나로 모아요.</p>
-        <ul>
-          <li><svg class="ic"><use href="#i-check"/></svg>할 일을 배정하고 <b>노하우를 첨부</b>하면 직원이 보고 그대로 해요</li>
-          <li><svg class="ic"><use href="#i-check"/></svg>완료 체크가 채팅에 남고 <b>사장님께 알림</b>이 가요(사진 첨부 가능)</li>
-          <li><svg class="ic"><use href="#i-check"/></svg>공지 고정 · @멘션 · 읽음 확인</li>
-          <li><svg class="ic"><use href="#i-check"/></svg>매주 반복 업무와 시간대(오픈 · 마감)별 정리</li>
-        </ul>
-      </div>
-      <div class="art" id="dChat">
-        <div class="duo">
-          <div class="phwrap">
-            <div class="plab"><span class="who o">사장님</span><span class="scr">업무 채팅</span></div>
-            <div class="ph"><div class="phw">
-              <div class="sbar"><span>9:41</span><span class="rt"><i style="height:5px"></i><i style="height:7px"></i><i style="height:9px"></i></span></div>
-              <div class="ahd"><span class="ttl">업무 채팅</span></div>
-              <div class="scrn o-body"></div>
-              <div class="tabs"><span class="tb"><span class="bdg"><svg class="ic"><use href="#t-home"/></svg></span><b>홈</b></span><span class="tb"><span class="bdg"><svg class="ic"><use href="#t-bulb"/></svg></span><b>노하우</b></span><span class="tb"><span class="bdg"><svg class="ic"><use href="#t-tray"/></svg></span><b>받은질문</b></span><span class="tb on"><span class="bdg"><svg class="ic"><use href="#t-case"/></svg></span><b>업무 채팅</b></span><span class="tb"><span class="bdg"><svg class="ic"><use href="#t-gear"/></svg></span><b>설정</b></span></div>
-            </div></div>
+        <article class="chapter" id="training">
+          <div class="no">04 · 훈련 코스</div>
+          <h3>신입 교육,<br>훈련 코스가 대신해요</h3>
+          <p class="fp">신입이 올 때마다 같은 걸 처음부터 설명하는 일이 반복됩니다. 문제는 설명을 안 해서가 아니라, 설명한 게 남지 않아서예요. 첫 훈련 코스를 한 번 만들어두면 다음 신입부터는 그대로 돌아가요.</p>
+          <div class="ex">
+            <span class="exlb">이런 경우</span>
+            <p>신입에게 마감 방법을 알려줬는데, 2주 뒤 같은 실수가 나와요. 알려준 건 맞지만 그날의 말은 기억에만 남았어요.</p>
+            <span class="exlb">착착에서는</span>
+            <p class="then">첫 출근에 배울 것 3개를 순서대로 읽고 이해 확인 문제를 풀어요. 통과하면 사장님 화면에 기록이 남고, 30일 뒤 정기 훈련으로 한 번 더 확인해요.</p>
           </div>
-          <div class="phwrap">
-            <div class="plab"><span class="who s">직원</span><span class="scr">업무 채팅</span></div>
-            <div class="ph"><div class="phw">
-              <div class="sbar"><span>9:41</span><span class="rt"><i style="height:5px"></i><i style="height:7px"></i><i style="height:9px"></i></span></div>
-              <div class="ahd"><span class="ttl">업무 채팅</span></div>
-              <div class="scrn s-body"></div>
-              <div class="tabs"><span class="tb"><span class="bdg"><svg class="ic"><use href="#t-home"/></svg></span><b>홈</b></span><span class="tb"><span class="bdg"><svg class="ic"><use href="#t-bubble"/></svg></span><b>물어보기</b></span><span class="tb on"><span class="bdg"><svg class="ic"><use href="#t-case"/></svg></span><b>업무 채팅</b></span><span class="tb"><span class="bdg"><svg class="ic"><use href="#t-clock"/></svg></span><b>출퇴근</b></span><span class="tb"><span class="bdg"><svg class="ic"><use href="#t-gear"/></svg></span><b>설정</b></span></div>
-            </div></div>
-          </div>
-        </div>
-        <div class="stepcap"></div>
-      </div>
-    </section>
+          <ul>
+            <li><svg class="ic"><use href="#i-check"/></svg><b>첫 훈련</b> — 첫 출근에 배울 것 3~5개를 정해둬요</li>
+            <li><svg class="ic"><use href="#i-check"/></svg><b>이해 확인 퀴즈</b> — 읽었다가 아니라 이해했는지 확인해요</li>
+            <li><svg class="ic"><use href="#i-check"/></svg><b>정기 훈련</b> — 잊을 때쯤 다시 확인해요(주기는 매장이 정해요)</li>
+          </ul>
+        </article>
 
-    <!-- 6 출퇴근·급여 -->
-    <section class="frow rev" id="pay">
-      <div>
-        <div class="no">06 · 출퇴근과 급여</div>
-        <h3>출퇴근부터 인건비까지<br>자동으로 계산돼요</h3>
-        <p class="fp">종이 근무일지와 계산기 대신, 기록이 남고 숫자가 맞아요.</p>
-        <ul>
-          <li><svg class="ic"><use href="#i-check"/></svg>출근 · 퇴근 체크가 기록으로 남아요(수정 이력 표시)</li>
-          <li><svg class="ic"><use href="#i-check"/></svg>시급만 넣으면 <b>이번 달 인건비가 자동 집계</b>돼요</li>
-          <li><svg class="ic"><use href="#i-check"/></svg>근무표를 시간대별로 짜고 직원과 공유해요</li>
-        </ul>
-      </div>
-      <div class="art" id="dPay">
-        <div class="duo">
-          <div class="phwrap">
-            <div class="plab"><span class="who o">사장님</span><span class="scr">직원·급여</span></div>
-            <div class="ph"><div class="phw">
-              <div class="sbar"><span>9:41</span><span class="rt"><i style="height:5px"></i><i style="height:7px"></i><i style="height:9px"></i></span></div>
-              <div class="ahd"><span class="ttl">직원·급여</span></div>
-              <div class="scrn o-body"></div>
-              <div class="tabs"><span class="tb on"><span class="bdg"><svg class="ic"><use href="#t-home"/></svg></span><b>홈</b></span><span class="tb"><span class="bdg"><svg class="ic"><use href="#t-bulb"/></svg></span><b>노하우</b></span><span class="tb"><span class="bdg"><svg class="ic"><use href="#t-tray"/></svg></span><b>받은질문</b></span><span class="tb"><span class="bdg"><svg class="ic"><use href="#t-case"/></svg></span><b>업무 채팅</b></span><span class="tb"><span class="bdg"><svg class="ic"><use href="#t-gear"/></svg></span><b>설정</b></span></div>
-            </div></div>
+        <article class="chapter" id="chat">
+          <div class="no">05 · 업무 배정</div>
+          <h3>지시 · 확인 · 기록이<br>채팅 한 곳에서</h3>
+          <p class="fp">지시는 카톡으로, 체크리스트는 종이로, 확인은 전화로. 흩어지면 "했다 · 안 했다"가 남지 않아요. 착착은 배정부터 완료 기록까지 한 곳에서 끝내고, 할 일마다 방법을 붙여둘 수 있어요.</p>
+          <div class="ex">
+            <span class="exlb">이런 경우</span>
+            <p>마감 시재 점검을 맡겼는데 방법을 몰라 전화가 옵니다. 다 했다는 말은 들었지만, 정말 했는지 남은 기록은 없어요.</p>
+            <span class="exlb">착착에서는</span>
+            <p class="then">할 일에 노하우가 붙어 있어 보고 그대로 해요. 체크하면 "김민재 · 포스 시재 점검 완료 · 21:12"가 채팅에 남고 사장님께 알림이 가요.</p>
           </div>
-          <div class="phwrap">
-            <div class="plab"><span class="who s">직원</span><span class="scr">출퇴근</span></div>
-            <div class="ph"><div class="phw">
-              <div class="sbar"><span>9:41</span><span class="rt"><i style="height:5px"></i><i style="height:7px"></i><i style="height:9px"></i></span></div>
-              <div class="ahd"><span class="ttl">출퇴근</span></div>
-              <div class="scrn s-body"></div>
-              <div class="tabs"><span class="tb"><span class="bdg"><svg class="ic"><use href="#t-home"/></svg></span><b>홈</b></span><span class="tb"><span class="bdg"><svg class="ic"><use href="#t-bubble"/></svg></span><b>물어보기</b></span><span class="tb"><span class="bdg"><svg class="ic"><use href="#t-case"/></svg></span><b>업무 채팅</b></span><span class="tb on"><span class="bdg"><svg class="ic"><use href="#t-clock"/></svg></span><b>출퇴근</b></span><span class="tb"><span class="bdg"><svg class="ic"><use href="#t-gear"/></svg></span><b>설정</b></span></div>
-            </div></div>
-          </div>
-        </div>
-        <div class="stepcap"></div>
-      </div>
-    </section>
+          <ul>
+            <li><svg class="ic"><use href="#i-check"/></svg>할 일을 배정하고 <b>노하우를 첨부</b>하면 직원이 보고 그대로 해요</li>
+            <li><svg class="ic"><use href="#i-check"/></svg>완료 체크가 채팅에 남고 <b>사장님께 알림</b>이 가요(사진 첨부 가능)</li>
+            <li><svg class="ic"><use href="#i-check"/></svg>매주 반복 업무와 시간대(오픈 · 마감)별 정리</li>
+          </ul>
+        </article>
 
-    <!-- 7 다점포 -->
-    <section class="frow" id="multi">
-      <div>
-        <div class="no">07 · 다점포와 매니저</div>
-        <h3>매장이 늘어도<br>계정은 하나</h3>
-        <p class="fp">2호점을 내는 순간 필요한 것들 — 착착은 매장 수가 늘어도 같은 방식으로 돌아가요.</p>
-        <ul>
-          <li><svg class="ic"><use href="#i-check"/></svg><b>전체 매장 한눈에</b> — 매장별 질문 · 직원 · 인건비를 한 화면에서</li>
-          <li><svg class="ic"><use href="#i-check"/></svg>1호점에서 검증한 노하우를 <b>새 매장으로 가져오기</b></li>
-          <li><svg class="ic"><use href="#i-check"/></svg>전 매장 동시 공지</li>
-          <li><svg class="ic"><use href="#i-check"/></svg><b>매니저 역할</b> — 매장 운영은 맡기고, 돈과 계정은 사장님만</li>
-        </ul>
-      </div>
-      <div class="art" id="dMulti">
-        <div class="duo">
-          <div class="phwrap">
-            <div class="plab"><span class="who o">사장님</span><span class="scr">전체 매장</span></div>
-            <div class="ph"><div class="phw">
-              <div class="sbar"><span>9:41</span><span class="rt"><i style="height:5px"></i><i style="height:7px"></i><i style="height:9px"></i></span></div>
-              <div class="ahd"><span class="ttl">전체 매장</span></div>
-              <div class="scrn o-body"></div>
-              <div class="tabs"><span class="tb on"><span class="bdg"><svg class="ic"><use href="#t-home"/></svg></span><b>홈</b></span><span class="tb"><span class="bdg"><svg class="ic"><use href="#t-bulb"/></svg></span><b>노하우</b></span><span class="tb"><span class="bdg"><svg class="ic"><use href="#t-tray"/></svg></span><b>받은질문</b></span><span class="tb"><span class="bdg"><svg class="ic"><use href="#t-case"/></svg></span><b>업무 채팅</b></span><span class="tb"><span class="bdg"><svg class="ic"><use href="#t-gear"/></svg></span><b>설정</b></span></div>
-            </div></div>
+        <article class="chapter" id="pay">
+          <div class="no">06 · 출퇴근과 급여</div>
+          <h3>출퇴근부터 인건비까지<br>자동으로 계산돼요</h3>
+          <p class="fp">근무시간을 종이에 적고 월말에 계산기로 두드리면 시간도 걸리고, 서로 기억이 다릅니다. 착착은 출퇴근 체크가 곧 기록이고, 시급만 넣으면 이번 달 인건비가 자동으로 맞춰져요.</p>
+          <div class="ex">
+            <span class="exlb">이런 경우</span>
+            <p>월말 정산 때 "그날 몇 시까지 있었죠?"를 서로 다르게 기억해요. 확인할 방법이 없어서 결국 좋게 넘어갑니다.</p>
+            <span class="exlb">착착에서는</span>
+            <p class="then">출근 · 퇴근 시각이 그대로 남고, 시간을 고치면 누가 고쳤는지까지 표시돼요. 이번 달 인건비는 따로 계산하지 않아도 맞춰져 있어요.</p>
           </div>
-          <div class="phwrap">
-            <div class="plab"><span class="who s">매니저</span><span class="scr">노하우</span></div>
-            <div class="ph"><div class="phw">
-              <div class="sbar"><span>9:41</span><span class="rt"><i style="height:5px"></i><i style="height:7px"></i><i style="height:9px"></i></span></div>
-              <div class="ahd"><span class="ttl">노하우</span></div>
-              <div class="scrn s-body"></div>
-              <div class="tabs"><span class="tb"><span class="bdg"><svg class="ic"><use href="#t-home"/></svg></span><b>홈</b></span><span class="tb on"><span class="bdg"><svg class="ic"><use href="#t-bubble"/></svg></span><b>물어보기</b></span><span class="tb"><span class="bdg"><svg class="ic"><use href="#t-case"/></svg></span><b>업무 채팅</b></span><span class="tb"><span class="bdg"><svg class="ic"><use href="#t-clock"/></svg></span><b>출퇴근</b></span><span class="tb"><span class="bdg"><svg class="ic"><use href="#t-gear"/></svg></span><b>설정</b></span></div>
-            </div></div>
-          </div>
-        </div>
-        <div class="stepcap"></div>
-      </div>
-    </section>
-  </div>
+          <ul>
+            <li><svg class="ic"><use href="#i-check"/></svg>출근 · 퇴근 체크가 기록으로 남아요(수정 이력 표시)</li>
+            <li><svg class="ic"><use href="#i-check"/></svg>시급만 넣으면 <b>이번 달 인건비가 자동 집계</b>돼요</li>
+            <li><svg class="ic"><use href="#i-check"/></svg>근무표를 시간대별로 짜고 직원과 공유해요</li>
+          </ul>
+        </article>
 
+        <article class="chapter" id="multi">
+          <div class="no">07 · 다점포와 매니저</div>
+          <h3>매장이 늘어도<br>계정은 하나</h3>
+          <p class="fp">2호점을 내면 1호점에서 몇 년 걸려 만든 기준을 처음부터 다시 만들게 됩니다. 착착은 검증된 노하우를 새 매장으로 그대로 옮기고, 매장 운영은 매니저에게 맡기되 돈과 매장의 존재는 사장님만 건드리게 나눠요.</p>
+          <div class="ex">
+            <span class="exlb">이런 경우</span>
+            <p>새 매장 직원이 1호점과 다르게 응대해요. 사장님은 두 매장을 오가며 같은 설명을 다시 하고, 어느 매장이 지금 문제인지는 가봐야 압니다.</p>
+            <span class="exlb">착착에서는</span>
+            <p class="then">1호점에서 검증된 노하우 24개를 새 매장으로 한 번에 가져와요. 매장별 미답 질문과 인건비는 한 화면에서 보고, 운영은 매니저가 맡아요.</p>
+          </div>
+          <ul>
+            <li><svg class="ic"><use href="#i-check"/></svg><b>전체 매장 한눈에</b> — 매장별 질문 · 직원 · 인건비를 한 화면에서</li>
+            <li><svg class="ic"><use href="#i-check"/></svg>1호점에서 검증한 노하우를 <b>새 매장으로 가져오기</b></li>
+            <li><svg class="ic"><use href="#i-check"/></svg><b>매니저 역할</b> — 매장 운영은 맡기고, 돈과 계정은 사장님만</li>
+          </ul>
+        </article>
+      </div>
+    </div>
+  </section>
 </div>
 
 <div class="foot">
@@ -495,198 +405,165 @@
 </div>
 
 <footer class="site">
-  <div class="grid">
-    <div class="b">
-      <span class="lg2">착착</span>
-      <p>사장님 머릿속 노하우를 가게 전용 AI로. 카페 · 음식점 · 헬스장 · 학원 매장 운영 서비스.</p>
-      <a class="em" href="mailto:cristianojun@naver.com">cristianojun@naver.com</a>
-    </div>
-    <div>
-      <h6>기능</h6>
-      <ul>
-        <li><a href="/features">기능 한눈에 보기</a></li>
-        <li><a href="/features#ai">직원 질문에 AI가 답하기</a></li>
-        <li><a href="/features#training">신입 훈련 코스</a></li>
-        <li><a href="/features#chat">업무 배정과 완료 기록</a></li>
-        <li><a href="/features#multi">여러 매장 관리</a></li>
-      </ul>
-    </div>
-    <div>
-      <h6>업종별 활용</h6>
-      <ul>
-        <li><a href="/cafe">카페</a></li>
-        <li><a href="/restaurant">음식점</a></li>
-        <li><a href="/gym">헬스장·필라테스</a></li>
-        <li><a href="/academy">학원</a></li>
-      </ul>
-    </div>
-    <div>
-      <h6>시작하기</h6>
-      <ul>
-        <li><a href="/signup">무료로 시작</a></li>
-        <li><a href="/pricing">요금제</a></li>
-        <li><a href="/inquiry">도입 문의</a></li>
-        <li><a href="/login">로그인</a></li>
-      </ul>
-    </div>
-    <div>
-      <h6>정책</h6>
-      <ul>
-        <li><a href="/terms">이용약관</a></li>
-        <li><a href="/privacy">개인정보 처리방침</a></li>
-        <li><a href="/ai-policy">AI 운영 정책</a></li>
-      </ul>
-    </div>
-  </div>
+  <div class="grid"></div>
   <div class="base">© 2026 스퀘어테이블 · 문의 cristianojun@naver.com</div>
 </footer>
 
 <script>
-/* 기능 데모 — 실제 앱 화면(사장님 ↔ 직원)을 폰 프레임에 그리고, 단계로 재생한다.
-   화면 문구·라벨은 실제 앱에서 쓰는 문자열을 그대로 옮겼다(물어보기 placeholder,
-   받은 질문 서브탭, 훈련 세그먼트, 출퇴근 버튼 등). 지어낸 UI 를 넣지 않는다.
-   · 화면에 보일 때만 루프(IntersectionObserver) — 벗어나면 즉시 멈춘다.
-   · '동작 줄이기' 설정이면 마지막 단계만 정지 상태로 그린다. */
+/* 스크롤 연동 데모 — 왼쪽 기능 설명의 스크롤 위치가 오른쪽 폰 화면을 움직인다.
+   · 챕터(기능) 하나당 3단계. 챕터 안에서 얼마나 내려왔는지가 곧 단계.
+   · 폰은 sticky 로 고정, 크기는 CSS 고정 px(유동 금지).
+   · rAF 로 스크롤당 1회만 계산하고, (챕터·단계)가 바뀔 때만 DOM 을 건드린다. */
 (function () {
-  var reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
-  var sleep = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
-  var ic = function (id, w) { return '<svg class="ic"' + (w ? ' style="width:' + w + 'px;height:' + w + 'px"' : '') + '><use href="#' + id + '"/></svg>'; };
-
-  /* ── 화면 부품 (실제 앱 컴포넌트 대응) ── */
+  var ic = function (id) { return '<svg class="ic"><use href="#' + id + '"/></svg>'; };
   var SEG = function (labels, on) {
-    return '<div class="seg">' + labels.map(function (l, i) {
-      return '<span class="' + (i === on ? 'on' : '') + '">' + l + '</span>';
-    }).join('') + '</div>';
+    return '<div class="seg">' + labels.map(function (l, i) { return '<span class="' + (i === on ? 'on' : '') + '">' + l + '</span>'; }).join('') + '</div>';
   };
   var K = function (t, s, cls) { return '<div class="mk2 ' + (cls || '') + ' din"><div class="t">' + t + '</div>' + (s ? '<div class="s">' + s + '</div>' : '') + '</div>'; };
   var Q = function (t) { return '<div class="bq din">' + t + '</div>'; };
-  /* 답변 카드 = SquareCard 축약(출처 푸터 포함) */
   var A = function (body, src) {
     return '<div class="ba din"><div class="lb"><i></i>우리 가게 노하우</div><div class="bd">' + body + '</div>' +
       (src ? '<div class="sc">출처 · ' + src + '</div>' : '') + '</div>';
   };
   var TYPING = '<div class="typ din"><i></i><i></i><i></i></div>';
-  var INP = function (text, typed) { return '<div class="inp ' + (typed ? 'typed' : '') + '">' + text + '<span class="snd">' + ic('i-arrow-up') + '</span></div>'; };
-  var L = function (name, tag, tagCls) {
-    return '<div class="lrow din"><span class="gr">' + name + '</span>' + (tag ? '<span class="tag2 ' + (tagCls || '') + '">' + tag + '</span>' : '') + '</div>';
-  };
-  /* 할 일 카드 = TodoScreen 행(체크박스 + 업무명 + 노하우 칩 + 담당 태그) */
+  var INP = function () { return '<div class="inp">궁금한 걸 물어보세요<span class="snd">' + ic('i-arrow-up') + '</span></div>'; };
+  var L = function (name, tag, cls) { return '<div class="lrow din"><span class="gr">' + name + '</span>' + (tag ? '<span class="tag2 ' + (cls || '') + '">' + tag + '</span>' : '') + '</div>'; };
   var TODO = function (name, on, att, tag) {
     return '<div class="tcard din"><div class="trow ' + (on ? 'on' : '') + '"><span class="bx">' + ic('i-check') +
       '</span><span class="nm" style="flex:1">' + name + '</span>' + (tag ? '<span class="tag2">' + tag + '</span>' : '') + '</div>' +
       (att ? '<span class="att">' + ic('i-bulb') + att + '</span>' : '') + '</div>';
   };
-  var DPT = function (label, done, total) { return '<div class="dpt din">' + label + ' ' + done + '/' + total + '</div>'; };
-  var BTN = function (t, ghost) { return '<div class="btn2 din ' + (ghost ? 'gh' : '') + '">' + t + '</div>'; };
+  var DPT = function (l, a, b) { return '<div class="dpt din">' + l + ' ' + a + '/' + b + '</div>'; };
+  var BTN = function (t, gh) { return '<div class="btn2 din ' + (gh ? 'gh' : '') + '">' + t + '</div>'; };
   var PUSH = function (t) { return '<div class="push din">' + ic('i-bell') + '<span>' + t + '</span></div>'; };
-  var BIG = function (lb, v) { return '<div class="big din"><div class="lb2">' + lb + '</div><div class="vl">' + v + '</div></div>'; };
-  var TOT = function (lb, v) { return '<div class="tot din">' + lb + '<b>' + v + '</b></div>'; };
+  var BIG = function (l, v) { return '<div class="big din"><div class="lb2">' + l + '</div><div class="vl">' + v + '</div></div>'; };
+  var TOT = function (l, v) { return '<div class="tot din">' + l + '<b>' + v + '</b></div>'; };
   var EMPTY = function (t) { return '<div class="empty">' + t + '</div>'; };
+  var BAR = function (w) { return '<div class="bar2 din"><i style="width:' + w + '"></i></div>'; };
 
-  function play(id, steps) {
-    var art = document.getElementById(id);
-    if (!art) return;
-    var ob = art.querySelector('.o-body'), sb = art.querySelector('.s-body'), cap = art.querySelector('.stepcap');
-    function draw(st) {
-      ob.innerHTML = st.o; sb.innerHTML = st.s;
-      ob.className = 'scrn o-body' + (st.oc ? ' ' + st.oc : '');
-      sb.className = 'scrn s-body' + (st.sc ? ' ' + st.sc : '');
-      cap.innerHTML = '<span class="n">' + st.i + '</span>' + st.c;
-    }
-    if (reduce) { draw(steps[steps.length - 1]); return; }
-    var state = { stopped: true, gen: 0 };
-    async function loop(mine) {
-      var dead = function () { return state.stopped || state.gen !== mine; };
-      while (!dead()) {
-        for (var k = 0; k < steps.length; k++) {
-          if (dead()) return;
-          draw(steps[k]);
-          var waited = 0, want = steps[k].d || 2400;
-          while (waited < want) { if (dead()) return; await sleep(90); waited += 90; }
-        }
-      }
-    }
-    new IntersectionObserver(function (es) {
-      es.forEach(function (e) {
-        if (e.isIntersecting && state.stopped) { state.stopped = false; state.gen++; loop(state.gen); }
-        else if (!e.isIntersecting) { state.stopped = true; }
-      });
-    }, { threshold: 0.2 }).observe(art);
+  var OWNER_TABS = [['home', '홈'], ['bulb', '노하우'], ['tray', '받은질문'], ['case', '업무 채팅'], ['gear', '설정']];
+  var JUNIOR_TABS = [['home', '홈'], ['bubble', '물어보기'], ['case', '업무 채팅'], ['clock', '출퇴근'], ['gear', '설정']];
+  function tabHtml(set, active, badgeAt) {
+    return set.map(function (t, k) {
+      return '<span class="tb' + (k === active ? ' on' : '') + '"><span class="bdg">' + ic('t-' + t[0]) +
+        (badgeAt === k ? '<em>1</em>' : '') + '</span><b>' + t[1] + '</b></span>';
+    }).join('');
   }
 
-  /* ① 노하우 AI — 사장님 노하우 목록 ↔ 직원 물어보기 */
+  var ASK = ['둘러보기', '물어보기', '내 공간'];
   var OWNER_KNOWHOW = SEG(['둘러보기', '카테고리'], 0) + K('포장 주문 취소', '결제 전 → 포스에서 바로 취소 / 결제 후 → 당일만') + K('마감 시재 점검', '포스 정산표 먼저, 현금과 1,000원 이내면 마감');
-  var ASK_SEG = SEG(['둘러보기', '물어보기', '내 공간'], 1);
-  play('dAi', [
-    { i: 1, c: '사장님이 노하우를 한 번 등록해둬요', o: OWNER_KNOWHOW,
-      s: ASK_SEG + EMPTY('무엇이든 물어보세요<br>매장 노하우를 바로 찾아드려요.') + INP('궁금한 걸 물어보세요'), sc: 'chat', d: 2300 },
-    { i: 2, c: '직원이 앱에서 물어봐요 — 사장님 전화 대신', o: OWNER_KNOWHOW,
-      s: ASK_SEG + Q('포장 주문 취소는 어떻게 해요?') + TYPING + INP('궁금한 걸 물어보세요'), sc: 'chat', d: 2000 },
-    { i: 3, c: '등록된 노하우 그대로 답이 나가요', o: SEG(['둘러보기', '카테고리'], 0) + K('포장 주문 취소', '4번 쓰였어요 · 방금 사용', 'hl') + K('마감 시재 점검', '포스 정산표 먼저, 현금과 1,000원 이내면 마감'),
-      s: ASK_SEG + Q('포장 주문 취소는 어떻게 해요?') + A('결제 전이면 포스에서 바로 취소, 결제 후엔 <b>당일에만 취소</b>하고 다음날부터는 사장님 승인이 필요해요.', '사장님 가이드 · 포스 사용법') + INP('궁금한 걸 물어보세요'), sc: 'chat', d: 3600 },
-  ]);
 
-  /* ② 노하우 만들기 — 인수인계서 PDF → 노하우 여러 개 */
-  play('dInput', [
-    { i: 1, c: '사장님이 인수인계서 PDF를 올려요', o: L('인수인계서.pdf', '올리는 중') + '<div class="bar2 din"><i style="width:100%"></i></div>' + EMPTY('AI가 읽고 노하우로 나눠 드려요'),
-      s: SEG(['둘러보기', '물어보기', '내 공간'], 0) + EMPTY('아직 등록된 노하우가 없어요.<br>물어보기로 질문하면 사장님이 채워줘요.'), d: 2200 },
-    { i: 2, c: 'AI가 읽고 노하우 여러 개로 나눠요', o: L('인수인계서.pdf', '노하우 6개', 'g') + K('포장 주문 취소 절차') + K('마감 시재 점검') + K('원두 선입선출'),
-      s: SEG(['둘러보기', '물어보기', '내 공간'], 0) + EMPTY('아직 등록된 노하우가 없어요.<br>물어보기로 질문하면 사장님이 채워줘요.'), d: 2600 },
-    { i: 3, c: '직원 화면에도 바로 보여요', o: L('인수인계서.pdf', '노하우 6개', 'g') + K('포장 주문 취소 절차') + K('마감 시재 점검') + K('원두 선입선출'),
-      s: SEG(['둘러보기', '물어보기', '내 공간'], 1) + Q('마감 시재 어떻게 맞춰요?') + A('포스 정산표를 먼저 뽑고, 현금 시재와 <b>1,000원 이내</b>면 그대로 마감해요.', '사장님 가이드 · 마감') + INP('궁금한 걸 물어보세요'), sc: 'chat', d: 3600 },
-  ]);
+  /* 챕터 = 왼쪽 설명 하나 + 오른쪽 화면 설정 + 3단계 */
+  var CH = [
+    { el: 'ai', o: { t: '노하우', tab: 1 }, s: { who: '직원', t: '물어보기', tab: 1 }, steps: [
+      { c: '사장님이 노하우를 한 번 등록해둬요', o: OWNER_KNOWHOW, s: SEG(ASK, 1) + EMPTY('무엇이든 물어보세요<br>매장 노하우를 바로 찾아드려요.') + INP(), sc: 'chat' },
+      { c: '직원이 앱에서 물어봐요 — 사장님 전화 대신', o: OWNER_KNOWHOW, s: SEG(ASK, 1) + Q('포장 주문 취소는 어떻게 해요?') + TYPING + INP(), sc: 'chat' },
+      { c: '등록된 노하우 그대로 답이 나가요', o: SEG(['둘러보기', '카테고리'], 0) + K('포장 주문 취소', '4번 쓰였어요 · 방금 사용', 'hl') + K('마감 시재 점검', '포스 정산표 먼저, 현금과 1,000원 이내면 마감'),
+        s: SEG(ASK, 1) + Q('포장 주문 취소는 어떻게 해요?') + A('결제 전이면 포스에서 바로 취소, 결제 후엔 <b>당일에만 취소</b>하고 다음날부터는 사장님 승인이 필요해요.', '사장님 가이드 · 포스 사용법') + INP(), sc: 'chat' },
+    ] },
+    { el: 'input', o: { t: '노하우', tab: 1 }, s: { who: '직원', t: '물어보기', tab: 1 }, steps: [
+      { c: '사장님이 인수인계서 PDF를 올려요', o: L('인수인계서.pdf', '올리는 중') + BAR('38%') + EMPTY('AI가 읽고 노하우로 나눠 드려요'),
+        s: SEG(ASK, 0) + EMPTY('아직 등록된 노하우가 없어요.<br>물어보기로 질문하면 사장님이 채워줘요.') },
+      { c: 'AI가 읽고 노하우 여러 개로 나눠요', o: L('인수인계서.pdf', '노하우 6개', 'g') + K('포장 주문 취소 절차') + K('마감 시재 점검') + K('원두 선입선출'),
+        s: SEG(ASK, 0) + EMPTY('아직 등록된 노하우가 없어요.<br>물어보기로 질문하면 사장님이 채워줘요.') },
+      { c: '직원 화면에도 바로 보여요', o: L('인수인계서.pdf', '노하우 6개', 'g') + K('포장 주문 취소 절차') + K('마감 시재 점검') + K('원두 선입선출'),
+        s: SEG(ASK, 1) + Q('마감 시재 어떻게 맞춰요?') + A('포스 정산표를 먼저 뽑고, 현금 시재와 <b>1,000원 이내</b>면 그대로 마감해요.', '사장님 가이드 · 마감') + INP(), sc: 'chat' },
+    ] },
+    { el: 'inbox', o: { t: '받은 질문', tab: 2, badge: 2 }, s: { who: '직원', t: '물어보기', tab: 1 }, steps: [
+      { c: '노하우에 없으면 지어내지 않아요', o: SEG(['답할 질문', 'AI가 답함'], 0) + EMPTY('아직 새 질문이 없어요<br>직원이 모르는 걸 물으면 여기로 와요.'),
+        s: SEG(ASK, 1) + Q('단체 주문도 선결제인가요?') + A('아직 등록되지 않은 내용이에요.') + BTN('이 경우 사장님께 물어보기'), sc: 'chat' },
+      { c: '사장님 받은 질문함으로 바로 넘어가요', o: SEG(['답할 질문', 'AI가 답함'], 0) + K('"단체 주문도 선결제인가요?"', '김민재 · 방금 · 2명이 물었어요', 'hl') + BTN('답변하기  →'),
+        s: SEG(ASK, 1) + Q('단체 주문도 선결제인가요?') + A('아직 등록되지 않은 내용이에요.') + L('사장님께 전달됨', '대기 중', 'y'), sc: 'chat' },
+      { c: '답 한 번이 노하우로 남아, 다음부터는 AI가 답해요', o: SEG(['답할 질문', 'AI가 답함'], 1) + K('"단체 주문도 선결제인가요?"', '노하우로 저장됨 · AI가 답함', 'gd') + L('AI 자동응답률', '82%', 'g'),
+        s: SEG(ASK, 1) + Q('단체 주문도 선결제인가요?') + A('10인 이상 단체는 <b>선결제</b>예요. 그 아래는 후결제도 돼요.', '사장님 가이드 · 결제') + INP(), sc: 'chat' },
+    ] },
+    { el: 'training', o: { t: '훈련', tab: 1 }, s: { who: '직원', t: '업무 채팅', tab: 2 }, steps: [
+      { c: '사장님이 첫날 배울 것을 골라둬요', o: SEG(['첫 훈련', '정기 훈련'], 0) + K('1. 포스 마감 정산', '확인한 직원이 아직 없어요') + K('2. 우유 스팀 온도', '확인한 직원이 아직 없어요') + BTN('기존 노하우로 추가', true),
+        s: EMPTY('첫 출근 전이에요') },
+      { c: '직원 업무 채팅 맨 위에 훈련 카드가 떠요', o: SEG(['첫 훈련', '정기 훈련'], 0) + L('첫 훈련', '직원 업무 채팅에 보여요', 'g') + K('1. 포스 마감 정산', '확인한 직원이 아직 없어요') + K('2. 우유 스팀 온도', '확인한 직원이 아직 없어요'),
+        s: K('오늘의 훈련 1/3', '포스 마감 정산 — 읽고 나면 이해 확인 문제가 나와요', 'hl') + BTN('다 읽었어요') + DPT('오늘 할 일', 1, 4) },
+      { c: '통과 기록이 사장님 화면에 남아요', o: SEG(['첫 훈련', '정기 훈련'], 0) + K('1. 포스 마감 정산', '이해 확인 · 김민재', 'gd') + K('2. 우유 스팀 온도', '이해 확인 · 김민재', 'gd'),
+        s: K('첫 훈련 완료', '3개 모두 이해 확인했어요', 'gd') + K('정기 훈련', '30일 뒤 다시 확인해요') + DPT('오늘 할 일', 1, 4) },
+    ] },
+    { el: 'chat', o: { t: '업무 채팅', tab: 3 }, s: { who: '직원', t: '업무 채팅', tab: 2 }, steps: [
+      { c: '사장님이 할 일을 배정하고 노하우를 붙여요', o: DPT('마감', 0, 2) + TODO('포스 시재 점검', false, '마감 시재 점검', '담당 김민재') + TODO('홀 청소', false, '', '루틴'),
+        s: EMPTY('아직 오늘 할일이 없어요') },
+      { c: '직원 오늘 할 일에 그대로 떠요 — 방법까지 같이', o: DPT('마감', 0, 2) + TODO('포스 시재 점검', false, '마감 시재 점검', '담당 김민재') + TODO('홀 청소', false, '', '루틴'),
+        s: DPT('마감', 1, 2) + TODO('홀 청소', true, '', '루틴') + TODO('포스 시재 점검', false, '마감 시재 점검', '내 할일') },
+      { c: '체크하면 채팅에 남고 사장님께 알림이 가요', o: DPT('마감', 2, 2) + TODO('포스 시재 점검', true, '', '담당 김민재') + PUSH('김민재 · 포스 시재 점검 완료 · 21:12'),
+        s: DPT('마감', 2, 2) + TODO('홀 청소', true, '', '루틴') + TODO('포스 시재 점검', true, '', '내 할일') + L('오늘 할 일', '전부 완료', 'g') },
+    ] },
+    { el: 'pay', o: { t: '직원·급여', tab: 0 }, s: { who: '직원', t: '출퇴근', tab: 3 }, steps: [
+      { c: '직원이 출근을 눌러요', o: L('김민재', '근무 중', 'y') + L('이수민', '퇴근', '') + TOT('이번 달 인건비', '₩1,057,680'),
+        s: L('김민재님, 오늘도 화이팅이에요', '근무 중', 'y') + BIG('경과 시간', '0:03') + BTN('퇴근하기', true) },
+      { c: '근무 시간이 자동으로 쌓여요', o: L('김민재', '근무 중 · 3:00', 'y') + L('이수민', '퇴근 · 5:00', '') + TOT('이번 달 인건비', '₩1,088,190'),
+        s: L('김민재님, 오늘도 화이팅이에요', '근무 중', 'y') + BIG('경과 시간', '3:00') + BIG('오늘', '₩30,510') },
+      { c: '퇴근하면 이번 달 인건비에 바로 반영돼요', o: L('김민재', '퇴근 · 6:00', 'g') + L('이수민', '퇴근 · 5:00', 'g') + TOT('이번 달 인건비', '₩1,118,700'),
+        s: BIG('이번 달 근무', '112시간') + BIG('예상 급여', '₩1,139,040') + L('시급 10,170원 기준 · 세전', '', '') },
+    ] },
+    { el: 'multi', o: { t: '전체 매장', tab: 0 }, s: { who: '매니저', t: '노하우', tab: 1 }, steps: [
+      { c: '사장님은 전 매장을 한 화면에서 봐요', o: L('신촌점 · 1호점', '노하우 24', 'g') + L('홍대점 · 새 매장', '노하우 0', '') + K('확인 필요', '홍대점 받은 질문 3건', 'hl'),
+        s: SEG(ASK, 0) + EMPTY('아직 등록된 노하우가 없어요.<br>물어보기로 질문하면 사장님이 채워줘요.') },
+      { c: '1호점에서 검증된 노하우를 새 매장으로 가져와요', o: L('신촌점 · 1호점', '노하우 24', 'g') + K('홍대점으로 가져오기', '24개 복제 중…', 'hl') + BAR('72%'),
+        s: SEG(ASK, 0) + K('노하우가 들어오는 중', '신촌점에서 24개', 'hl') },
+      { c: '매장 운영은 매니저에게 — 결제와 매장 삭제는 사장님만', o: L('신촌점 · 1호점', '노하우 24', 'g') + L('홍대점 · 김민재 매니저', '노하우 24', 'g') + K('매니저 권한', '매장 운영 가능 · 결제·매장 삭제 제외'),
+        s: SEG(ASK, 0) + K('포장 주문 취소', '결제 전 → 포스에서 바로 취소') + K('마감 시재 점검', '포스 정산표 먼저') + L('내 역할', '매니저', 'y') },
+    ] },
+  ];
 
-  /* ③ 받은 질문 — 직원 에스컬레이션 → 사장 받은질문함 → 노하우로 저장 */
-  var INBOX_SEG = SEG(['답할 질문', 'AI가 답함'], 0);
-  play('dInbox', [
-    { i: 1, c: '노하우에 없으면 지어내지 않아요', o: INBOX_SEG + EMPTY('아직 새 질문이 없어요<br>직원이 모르는 걸 물으면 여기로 와요.'),
-      s: SEG(['둘러보기', '물어보기', '내 공간'], 1) + Q('단체 주문도 선결제인가요?') + A('아직 등록되지 않은 내용이에요.') + BTN('이 경우 사장님께 물어보기'), sc: 'chat', d: 2600 },
-    { i: 2, c: '사장님 받은 질문함으로 바로 넘어가요', o: INBOX_SEG + K('"단체 주문도 선결제인가요?"', '김민재 · 방금 · 2명이 물었어요', 'hl') + BTN('답변하기  →'),
-      s: SEG(['둘러보기', '물어보기', '내 공간'], 1) + Q('단체 주문도 선결제인가요?') + A('아직 등록되지 않은 내용이에요.') + L('사장님께 전달됨', '대기 중', 'y'), sc: 'chat', d: 2800 },
-    { i: 3, c: '답 한 번이 노하우로 남아, 다음부터는 AI가 답해요', o: SEG(['답할 질문', 'AI가 답함'], 1) + K('"단체 주문도 선결제인가요?"', '노하우로 저장됨 · AI가 답함', 'gd') + L('AI 자동응답률', '82%', 'g'),
-      s: SEG(['둘러보기', '물어보기', '내 공간'], 1) + Q('단체 주문도 선결제인가요?') + A('10인 이상 단체는 <b>선결제</b>예요. 그 아래는 후결제도 돼요.', '사장님 가이드 · 결제') + INP('궁금한 걸 물어보세요'), sc: 'chat', d: 3600 },
-  ]);
+  var els = {
+    oScr: document.getElementById('oScr'), oTtl: document.getElementById('oTtl'), oBody: document.getElementById('oBody'), oTabs: document.getElementById('oTabs'),
+    sWho: document.getElementById('sWho'), sScr: document.getElementById('sScr'), sTtl: document.getElementById('sTtl'), sBody: document.getElementById('sBody'), sTabs: document.getElementById('sTabs'),
+    cap: document.getElementById('cap'), dots: document.getElementById('dots'),
+  };
+  if (!els.oBody) return;
+  var nodes = CH.map(function (c) { return document.getElementById(c.el); });
+  els.dots.innerHTML = CH.map(function () { return '<i></i>'; }).join('');
+  var dots = els.dots.querySelectorAll('i');
 
-  /* ④ 훈련 코스 — 사장 훈련 관리 ↔ 직원 업무 채팅 훈련 카드 */
-  var TR_SEG = SEG(['첫 훈련', '정기 훈련'], 0);
-  play('dTrain', [
-    { i: 1, c: '사장님이 첫날 배울 것을 골라둬요', o: TR_SEG + L('첫 훈련', '준비됨', 'g') + K('1. 포스 마감 정산', '확인한 직원이 아직 없어요') + K('2. 우유 스팀 온도', '확인한 직원이 아직 없어요') + BTN('기존 노하우로 추가', true),
-      s: EMPTY('첫 출근 전이에요'), d: 2400 },
-    { i: 2, c: '직원 업무 채팅 맨 위에 훈련 카드가 떠요', o: TR_SEG + L('첫 훈련', '준비됨 · 직원 업무 채팅에 보여요', 'g') + K('1. 포스 마감 정산', '확인한 직원이 아직 없어요') + K('2. 우유 스팀 온도', '확인한 직원이 아직 없어요'),
-      s: K('오늘의 훈련 1/3', '포스 마감 정산 — 읽고 나면 이해 확인 문제가 나와요', 'hl') + BTN('다 읽었어요') + DPT('오늘 할 일', 1, 4), d: 2800 },
-    { i: 3, c: '통과 기록이 사장님 화면에 남아요', o: TR_SEG + L('첫 훈련', '준비됨', 'g') + K('1. 포스 마감 정산', '이해 확인 · 김민재', 'gd') + K('2. 우유 스팀 온도', '이해 확인 · 김민재', 'gd'),
-      s: K('첫 훈련 완료', '3개 모두 이해 확인했어요', 'gd') + K('정기 훈련', '30일 뒤 다시 확인해요') + DPT('오늘 할 일', 1, 4), d: 3600 },
-  ]);
+  var curC = -1, curS = -1;
+  function render(ci, si) {
+    if (ci === curC && si === curS) return;
+    var ch = CH[ci], st = ch.steps[si];
+    if (ci !== curC) {
+      els.oScr.textContent = ch.o.t; els.oTtl.textContent = ch.o.t;
+      els.sWho.textContent = ch.s.who; els.sScr.textContent = ch.s.t; els.sTtl.textContent = ch.s.t;
+      els.oTabs.innerHTML = tabHtml(OWNER_TABS, ch.o.tab, ch.o.badge);
+      els.sTabs.innerHTML = tabHtml(JUNIOR_TABS, ch.s.tab, -1);
+      nodes.forEach(function (n, k) { n.classList.toggle('on', k === ci); });
+      dots.forEach(function (d, k) { d.classList.toggle('on', k === ci); });
+    }
+    els.oBody.innerHTML = st.o; els.oBody.className = 'scrn o-body' + (st.oc ? ' ' + st.oc : '');
+    els.sBody.innerHTML = st.s; els.sBody.className = 'scrn s-body' + (st.sc ? ' ' + st.sc : '');
+    els.cap.innerHTML = '<span class="n">' + (si + 1) + '</span>' + st.c;
+    curC = ci; curS = si;
+  }
 
-  /* ⑤ 업무 배정 — 사장 배정(노하우 첨부) → 직원 체크 → 사장 알림 */
-  play('dChat', [
-    { i: 1, c: '사장님이 할 일을 배정하고 노하우를 붙여요', o: DPT('마감', 0, 2) + TODO('포스 시재 점검', false, '마감 시재 점검', '담당 김민재') + TODO('홀 청소', false, '', '루틴'),
-      s: EMPTY('아직 오늘 할일이 없어요'), d: 2400 },
-    { i: 2, c: '직원 오늘 할 일에 그대로 떠요 — 방법까지 같이', o: DPT('마감', 0, 2) + TODO('포스 시재 점검', false, '마감 시재 점검', '담당 김민재') + TODO('홀 청소', false, '', '루틴'),
-      s: DPT('마감', 1, 2) + TODO('홀 청소', true, '', '루틴') + TODO('포스 시재 점검', false, '마감 시재 점검', '내 할일'), d: 2800 },
-    { i: 3, c: '체크하면 채팅에 남고 사장님께 알림이 가요', o: DPT('마감', 2, 2) + TODO('포스 시재 점검', true, '', '담당 김민재') + PUSH('김민재 · 포스 시재 점검 완료 · 21:12'),
-      s: DPT('마감', 2, 2) + TODO('홀 청소', true, '', '루틴') + TODO('포스 시재 점검', true, '', '내 할일') + L('오늘 할 일', '전부 완료', 'g'), d: 3600 },
-  ]);
-
-  /* ⑥ 출퇴근·인건비 — 직원 출근 체크 → 사장 급여 화면 반영 */
-  play('dPay', [
-    { i: 1, c: '직원이 출근을 눌러요', o: L('김민재', '근무 중', 'y') + L('이수민', '퇴근', '') + TOT('이번 달 인건비', '₩1,057,680'),
-      s: L('김민재님, 오늘도 화이팅이에요', '근무 중', 'y') + BIG('경과 시간', '0:03') + BTN('퇴근하기', true), d: 2300 },
-    { i: 2, c: '근무 시간이 자동으로 쌓여요', o: L('김민재', '근무 중 · 3:00', 'y') + L('이수민', '퇴근 · 5:00', '') + TOT('이번 달 인건비', '₩1,088,190'),
-      s: L('김민재님, 오늘도 화이팅이에요', '근무 중', 'y') + BIG('경과 시간', '3:00') + BIG('오늘', '₩30,510'), d: 2600 },
-    { i: 3, c: '퇴근하면 이번 달 인건비에 바로 반영돼요', o: L('김민재', '퇴근 · 6:00', 'g') + L('이수민', '퇴근 · 5:00', 'g') + TOT('이번 달 인건비', '₩1,118,700'),
-      s: BIG('이번 달 근무', '112시간') + BIG('예상 급여', '₩1,139,040') + L('시급 10,170원 기준 · 세전', '', ''), d: 3600 },
-  ]);
-
-  /* ⑦ 다점포·매니저 — 전체 매장 ↔ 새 매장 매니저 */
-  play('dMulti', [
-    { i: 1, c: '사장님은 전 매장을 한 화면에서 봐요', o: L('신촌점 · 1호점', '노하우 24', 'g') + L('홍대점 · 새 매장', '노하우 0', '') + K('확인 필요', '홍대점 받은 질문 3건', 'hl'),
-      s: SEG(['둘러보기', '물어보기', '내 공간'], 0) + EMPTY('아직 등록된 노하우가 없어요.<br>물어보기로 질문하면 사장님이 채워줘요.'), d: 2400 },
-    { i: 2, c: '1호점에서 검증된 노하우를 새 매장으로 가져와요', o: L('신촌점 · 1호점', '노하우 24', 'g') + K('홍대점으로 가져오기', '24개 복제 중…', 'hl') + '<div class="bar2 din"><i style="width:100%"></i></div>',
-      s: SEG(['둘러보기', '물어보기', '내 공간'], 0) + K('노하우가 들어오는 중', '신촌점에서 24개', 'hl'), d: 2600 },
-    { i: 3, c: '매장 운영은 매니저에게 — 결제와 매장 삭제는 사장님만', o: L('신촌점 · 1호점', '노하우 24', 'g') + L('홍대점 · 김민재 매니저', '노하우 24', 'g') + K('매니저 권한', '매장 운영 가능 · 결제·매장 삭제 제외'),
-      s: SEG(['둘러보기', '물어보기', '내 공간'], 0) + K('포장 주문 취소', '결제 전 → 포스에서 바로 취소') + K('마감 시재 점검', '포스 정산표 먼저') + L('내 역할', '매니저', 'y'), d: 3600 },
-  ]);
+  var ticking = false;
+  function update() {
+    ticking = false;
+    // 기준선 = 폰이 실제로 놓인 높이(뷰포트 위쪽 45%). 이 선을 지나는 챕터가 활성.
+    var line = innerHeight * 0.45;
+    var ci = 0, si = 0, best = null;
+    for (var k = 0; k < nodes.length; k++) {
+      var r = nodes[k].getBoundingClientRect();
+      if (r.top <= line && r.bottom > line) { best = k;
+        var p = (line - r.top) / Math.max(1, r.height);
+        si = Math.min(CH[k].steps.length - 1, Math.floor(p * CH[k].steps.length));
+        break;
+      }
+    }
+    if (best === null) {
+      // 섹션 위/아래 바깥 — 가장 가까운 끝 챕터로 고정
+      best = nodes[0].getBoundingClientRect().top > line ? 0 : nodes.length - 1;
+      si = best === 0 ? 0 : CH[best].steps.length - 1;
+    }
+    render(best, si);
+  }
+  function onScroll() { if (!ticking) { ticking = true; requestAnimationFrame(update); } }
+  addEventListener('scroll', onScroll, { passive: true });
+  addEventListener('resize', onScroll);
+  update();
 })();
 </script>
 </body>
