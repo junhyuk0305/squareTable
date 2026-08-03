@@ -15,56 +15,70 @@
 /* 기능 페이지 전용 — 앵커 진입 시 섹션이 상단바에 가리지 않게 */
 .frow{scroll-margin-top:72px}
 
-/* ── 동작 데모(애니메이션) ──
-   각 기능이 "실제로 어떻게 움직이는지"를 보여준다. 화면에 들어올 때만 돌고(IntersectionObserver),
-   시스템 '동작 줄이기' 설정이면 최종 상태만 정지 표시한다. */
-.art{position:relative;min-height:232px}
-.art .demo{width:100%;display:flex;flex-direction:column;gap:9px}
-@keyframes dIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
-.din{animation:dIn .34s cubic-bezier(.2,.7,.3,1) both}
-.dhide{opacity:0}
+/* ── 두 화면 데모 ──
+   "사장님 화면에서 이걸 하면 → 직원 화면에 이렇게 나온다"를 단계별로 재생한다.
+   화면에 보일 때만 돌고(IntersectionObserver), '동작 줄이기'면 마지막 단계만 정지 표시. */
+@media(min-width:821px){.frow{grid-template-columns:.86fr 1.14fr;gap:34px}}
+.art{position:relative;min-height:270px;padding:16px;justify-content:flex-start;gap:0}
+.duo{display:grid;grid-template-columns:1fr 1fr;gap:10px;align-items:stretch}
+@media(max-width:560px){.duo{grid-template-columns:1fr}}
+.pane{background:var(--bg);border:1px solid var(--line);border-radius:14px;box-shadow:var(--e1);overflow:hidden;display:flex;flex-direction:column}
+.pane .phd{display:flex;align-items:center;gap:6px;padding:8px 10px;border-bottom:1px solid var(--line)}
+.who{font-size:9.5px;font-weight:900;padding:3px 8px;border-radius:99px;letter-spacing:-.01em}
+.who.o{background:var(--ink);color:var(--yellow)}
+.who.s{background:var(--yellowSoft);color:#7a5f10}
+.scr{font-size:10px;font-weight:800;color:var(--ink3)}
+.pbody{padding:10px;display:flex;flex-direction:column;gap:7px;min-height:158px}
 
-/* 말풍선 데모 */
-.art .typing{align-self:flex-start;display:flex;gap:4px;background:var(--bg);border:1px solid var(--line);box-shadow:var(--e1);padding:11px 13px;border-radius:5px 14px 14px 14px}
-.art .typing i{width:6px;height:6px;border-radius:50%;background:var(--ink3);animation:dBlink 1.2s infinite}
-.art .typing i:nth-child(2){animation-delay:.2s}.art .typing i:nth-child(3){animation-delay:.4s}
-@keyframes dBlink{0%,60%,100%{opacity:.3;transform:translateY(0)}30%{opacity:1;transform:translateY(-3px)}}
+/* 진행 캡션 */
+.stepcap{margin-top:13px;display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:800;color:var(--ink2);min-height:20px}
+.stepcap .n{flex:0 0 auto;width:18px;height:18px;border-radius:50%;background:var(--yellow);color:var(--ink);font-size:10px;font-weight:900;display:flex;align-items:center;justify-content:center}
+
+/* 미니 화면 부품 */
+@keyframes dIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.din{animation:dIn .3s cubic-bezier(.2,.7,.3,1) both}
+.mk2{background:var(--paper);border-radius:10px;padding:8px 9px}
+.mk2 .t{font-size:11.5px;font-weight:800;color:var(--ink);line-height:1.35}
+.mk2 .s{font-size:10.5px;color:var(--ink2);margin-top:3px;line-height:1.45}
+.mk2.hl{background:var(--yellowSoft)}
+.mk2.gd{background:#E7F3EB}
+.bq{align-self:flex-end;max-width:92%;background:var(--ink);color:#fff;font-size:11.5px;font-weight:600;padding:7px 10px;border-radius:12px 12px 4px 12px;line-height:1.4}
+.ba{align-self:flex-start;max-width:96%;background:var(--bg);border:1px solid var(--line);border-radius:4px 12px 12px 12px;padding:8px 10px}
+.ba .lb{font-size:9.5px;font-weight:900;color:var(--ink2);display:flex;align-items:center;gap:5px}
+.ba .lb i{width:6px;height:6px;border-radius:50%;background:var(--yellowDeep);display:block}
+.ba .bd{font-size:11.5px;color:var(--ink);margin-top:4px;line-height:1.45}
+.ba .bd b{font-weight:800}
+.ba .sc{margin-top:6px;background:var(--sourceBg);border-left:2px solid var(--yellowDeep);border-radius:0 6px 6px 0;padding:4px 7px;font-size:9.5px;color:#8a6a12;font-weight:700}
+.typ{align-self:flex-start;display:flex;gap:3px;background:var(--bg);border:1px solid var(--line);padding:8px 10px;border-radius:4px 12px 12px 12px}
+.typ i{width:5px;height:5px;border-radius:50%;background:var(--ink3);animation:dBl 1.2s infinite}
+.typ i:nth-child(2){animation-delay:.2s}.typ i:nth-child(3){animation-delay:.4s}
+@keyframes dBl{0%,60%,100%{opacity:.3;transform:translateY(0)}30%{opacity:1;transform:translateY(-3px)}}
 .caret::after{content:"▍";color:var(--ink3);animation:dCb .7s steps(1) infinite}
 @keyframes dCb{50%{opacity:0}}
-.savedchip{align-self:center;font-size:11px;font-weight:900;color:#7a5f10;background:var(--yellowSoft);padding:5px 12px;border-radius:var(--r-pill);display:flex;align-items:center;gap:5px}
-
-/* 상태 칩 색 */
-.mb.wait{background:var(--paper);color:var(--ink3)}
-.mb.now{background:var(--yellow);color:var(--ink)}
-
-/* 체크리스트 데모 */
-.dcheck{display:flex;flex-direction:column;gap:9px}
-.dck{display:flex;align-items:center;gap:10px;font-size:12.5px;font-weight:700}
-.dck .box{width:20px;height:20px;border-radius:6px;border:2px solid var(--line);display:flex;align-items:center;justify-content:center;transition:background .2s,border-color .2s}
-.dck .box svg{width:12px;height:12px;opacity:0;transition:opacity .2s}
-.dck.done .box{background:var(--yellow);border-color:var(--yellowDeep);color:var(--ink)}
-.dck.done .box svg{opacity:1}
-.dck.done span{color:var(--ink3);text-decoration:line-through}
-.dtoast{display:flex;align-items:center;gap:7px;background:var(--ink);color:#fff;font-size:11.5px;font-weight:800;padding:10px 12px;border-radius:12px;box-shadow:var(--e2)}
-.dtoast .yb{color:var(--yellow)}
-
-/* 진행 막대(PDF 분석) */
-.dbar{height:6px;border-radius:99px;background:var(--line);overflow:hidden}
-.dbar i{display:block;height:100%;width:0;background:var(--yellowDeep);border-radius:99px;transition:width .5s linear}
-
-/* 숫자 카운터 */
-.dnum{font-variant-numeric:tabular-nums}
-.dtotal{display:flex;align-items:center;justify-content:space-between;background:var(--ink);color:#fff;border-radius:10px;padding:10px 12px;font-size:12.5px;font-weight:800}
-.dtotal b{font-weight:900;color:var(--yellow);font-variant-numeric:tabular-nums}
-
-/* 매장 간 복제 */
-.dflow{position:relative}
-.dchip{position:absolute;left:50%;top:0;transform:translate(-50%,0);font-size:10.5px;font-weight:900;color:#7a5f10;background:var(--yellowSoft);border:1px solid var(--yellowDeep);padding:3px 9px;border-radius:var(--r-pill);opacity:0}
-.dchip.fly{animation:dFly 1.5s cubic-bezier(.4,0,.3,1) forwards}
-@keyframes dFly{0%{opacity:0;transform:translate(-50%,0) scale(.9)}18%{opacity:1;transform:translate(-50%,4px) scale(1)}82%{opacity:1;transform:translate(-50%,44px) scale(1)}100%{opacity:0;transform:translate(-50%,50px) scale(.95)}}
+.trow{display:flex;align-items:center;gap:8px;font-size:11.5px;font-weight:700;color:var(--ink)}
+.trow .bx{flex:0 0 auto;width:17px;height:17px;border-radius:5px;border:2px solid var(--line);display:flex;align-items:center;justify-content:center}
+.trow .bx svg{width:10px;height:10px;opacity:0}
+.trow.on .bx{background:var(--yellow);border-color:var(--yellowDeep);color:var(--ink)}
+.trow.on .bx svg{opacity:1}
+.trow.on span{color:var(--ink3);text-decoration:line-through}
+.tag2{font-size:9.5px;font-weight:900;padding:2px 7px;border-radius:99px;background:var(--paper);color:var(--ink3);white-space:nowrap}
+.tag2.y{background:var(--yellow);color:var(--ink)}
+.tag2.g{background:#E7F3EB;color:var(--good)}
+.lrow{display:flex;align-items:center;gap:7px}
+.lrow .gr{flex:1;min-width:0}
+.btn2{align-self:stretch;text-align:center;background:var(--yellow);color:var(--ink);font-size:11px;font-weight:900;padding:8px;border-radius:9px}
+.btn2.gh{background:var(--paper);color:var(--ink2)}
+.push{display:flex;align-items:center;gap:6px;background:var(--ink);color:#fff;font-size:10.5px;font-weight:800;padding:8px 10px;border-radius:10px}
+.push b{color:var(--yellow);font-weight:900}
+.bar2{height:5px;border-radius:99px;background:var(--line);overflow:hidden}
+.bar2 i{display:block;height:100%;width:0;background:var(--yellowDeep);border-radius:99px;transition:width 1.1s linear}
+.num{font-variant-numeric:tabular-nums}
+.tot{display:flex;align-items:center;justify-content:space-between;background:var(--ink);color:#fff;border-radius:9px;padding:8px 10px;font-size:11px;font-weight:800}
+.tot b{font-weight:900;color:var(--yellow);font-variant-numeric:tabular-nums}
+.empty{font-size:10.5px;color:var(--ink3);text-align:center;padding:14px 4px;line-height:1.5}
 @media(prefers-reduced-motion:reduce){
-  .din,.dchip.fly{animation:none!important}
-  .art .typing i{animation:none}
+  .din{animation:none!important}
+  .typ i{animation:none}
   .caret::after{animation:none;content:""}
 }
 </style>
@@ -167,7 +181,13 @@
           <li><svg class="ic"><use href="#i-check"/></svg>같은 질문은 다음부터 AI가 대신 답해요</li>
         </ul>
       </div>
-      <div class="art"><div class="demo" id="dAi"></div></div>
+      <div class="art" id="dAi">
+        <div class="duo">
+          <div class="pane"><div class="phd"><span class="who o">사장님</span><span class="scr">노하우</span></div><div class="pbody o-body"></div></div>
+          <div class="pane"><div class="phd"><span class="who s">직원</span><span class="scr">물어보기</span></div><div class="pbody s-body"></div></div>
+        </div>
+        <div class="stepcap"></div>
+      </div>
     </section>
 
     <!-- 2 입력 -->
@@ -183,7 +203,13 @@
           <li><svg class="ic"><use href="#i-check"/></svg>업종을 고르면 <b>기본 노하우가 미리 담긴 채</b> 시작해요</li>
         </ul>
       </div>
-      <div class="art"><div class="demo" id="dInput"></div></div>
+      <div class="art" id="dInput">
+        <div class="duo">
+          <div class="pane"><div class="phd"><span class="who o">사장님</span><span class="scr">노하우 만들기</span></div><div class="pbody o-body"></div></div>
+          <div class="pane"><div class="phd"><span class="who s">직원</span><span class="scr">물어보기</span></div><div class="pbody s-body"></div></div>
+        </div>
+        <div class="stepcap"></div>
+      </div>
     </section>
 
     <!-- 3 받은 질문 -->
@@ -198,7 +224,13 @@
           <li><svg class="ic"><use href="#i-check"/></svg>같은 질문은 묶어서 보여줘요</li>
         </ul>
       </div>
-      <div class="art"><div class="demo" id="dInbox"></div></div>
+      <div class="art" id="dInbox">
+        <div class="duo">
+          <div class="pane"><div class="phd"><span class="who o">사장님</span><span class="scr">받은 질문</span></div><div class="pbody o-body"></div></div>
+          <div class="pane"><div class="phd"><span class="who s">직원</span><span class="scr">물어보기</span></div><div class="pbody s-body"></div></div>
+        </div>
+        <div class="stepcap"></div>
+      </div>
     </section>
 
     <!-- 4 훈련 -->
@@ -214,7 +246,13 @@
           <li><svg class="ic"><use href="#i-check"/></svg>누가 어디까지 통과했는지 기록으로 남아요</li>
         </ul>
       </div>
-      <div class="art"><div class="demo" id="dTrain"></div></div>
+      <div class="art" id="dTrain">
+        <div class="duo">
+          <div class="pane"><div class="phd"><span class="who o">사장님</span><span class="scr">훈련 코스</span></div><div class="pbody o-body"></div></div>
+          <div class="pane"><div class="phd"><span class="who s">직원</span><span class="scr">업무 채팅</span></div><div class="pbody s-body"></div></div>
+        </div>
+        <div class="stepcap"></div>
+      </div>
     </section>
 
     <!-- 5 채팅 업무 -->
@@ -230,7 +268,13 @@
           <li><svg class="ic"><use href="#i-check"/></svg>매주 반복 업무와 시간대(오픈 · 마감)별 정리</li>
         </ul>
       </div>
-      <div class="art"><div class="demo" id="dChat"></div></div>
+      <div class="art" id="dChat">
+        <div class="duo">
+          <div class="pane"><div class="phd"><span class="who o">사장님</span><span class="scr">업무 배정</span></div><div class="pbody o-body"></div></div>
+          <div class="pane"><div class="phd"><span class="who s">직원</span><span class="scr">오늘 할 일</span></div><div class="pbody s-body"></div></div>
+        </div>
+        <div class="stepcap"></div>
+      </div>
     </section>
 
     <!-- 6 출퇴근·급여 -->
@@ -245,7 +289,13 @@
           <li><svg class="ic"><use href="#i-check"/></svg>근무표를 시간대별로 짜고 직원과 공유해요</li>
         </ul>
       </div>
-      <div class="art"><div class="demo" id="dPay"></div></div>
+      <div class="art" id="dPay">
+        <div class="duo">
+          <div class="pane"><div class="phd"><span class="who o">사장님</span><span class="scr">직원·급여</span></div><div class="pbody o-body"></div></div>
+          <div class="pane"><div class="phd"><span class="who s">직원</span><span class="scr">출퇴근</span></div><div class="pbody s-body"></div></div>
+        </div>
+        <div class="stepcap"></div>
+      </div>
     </section>
 
     <!-- 7 다점포 -->
@@ -261,7 +311,13 @@
           <li><svg class="ic"><use href="#i-check"/></svg><b>매니저 역할</b> — 매장 운영은 맡기고, 돈과 계정은 사장님만</li>
         </ul>
       </div>
-      <div class="art"><div class="demo dflow" id="dMulti"></div></div>
+      <div class="art" id="dMulti">
+        <div class="duo">
+          <div class="pane"><div class="phd"><span class="who o">사장님</span><span class="scr">전체 매장</span></div><div class="pbody o-body"></div></div>
+          <div class="pane"><div class="phd"><span class="who s">매니저</span><span class="scr">홍대점</span></div><div class="pbody s-body"></div></div>
+        </div>
+        <div class="stepcap"></div>
+      </div>
     </section>
   </div>
 
@@ -323,195 +379,131 @@
 </footer>
 
 <script>
-/* 기능 동작 데모 — 각 기능이 실제로 어떻게 움직이는지 보여준다.
-   · 화면에 보일 때만 루프(IntersectionObserver) → 안 보이는 데모가 CPU 를 먹지 않는다.
-   · '동작 줄이기' 설정이면 애니메이션 없이 최종 상태만 그린다.
-   · 각 데모는 async 루프 하나. stop 플래그로 화면 밖에서 즉시 빠져나온다. */
+/* 두 화면 데모 — "사장님 화면에서 이걸 하면 → 직원 화면에 이렇게 나온다"를 단계로 재생.
+   · 각 데모 = 단계 배열. 단계마다 [사장 화면 / 직원 화면 / 진행 캡션]을 통째로 갈아끼운다.
+   · 화면에 보일 때만 루프(IntersectionObserver) — 벗어나면 즉시 멈춘다(유휴 CPU 0).
+   · '동작 줄이기' 설정이면 마지막 단계만 정지 상태로 그린다. */
 (function () {
   var reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
   var sleep = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
-  var el = function (cls, html) { var d = document.createElement('div'); d.className = cls; if (html != null) d.innerHTML = html; return d; };
   var ic = function (id, w) { return '<svg class="ic"' + (w ? ' style="width:' + w + 'px;height:' + w + 'px"' : '') + '><use href="#' + id + '"/></svg>'; };
-  var row = function (icon, name, badge, badgeCls) {
-    return '<div class="row din"><span class="mi">' + ic(icon) + '</span><span class="mn">' + name + '</span>' +
-      (badge ? '<span class="mb ' + (badgeCls || '') + '">' + badge + '</span>' : '') + '</div>';
+
+  /* 조각들 */
+  var K = function (t, s, cls) { return '<div class="mk2 ' + (cls || '') + ' din"><div class="t">' + t + '</div>' + (s ? '<div class="s">' + s + '</div>' : '') + '</div>'; };
+  var Q = function (t) { return '<div class="bq din">' + t + '</div>'; };
+  var A = function (body, src) {
+    return '<div class="ba din"><div class="lb"><i></i>우리 가게 노하우</div><div class="bd">' + body + '</div>' +
+      (src ? '<div class="sc">' + src + '</div>' : '') + '</div>';
   };
+  var TYPING = '<div class="typ din"><i></i><i></i><i></i></div>';
+  var L = function (name, tag, tagCls) {
+    return '<div class="lrow din"><span class="gr" style="font-size:11.5px;font-weight:800">' + name + '</span>' +
+      (tag ? '<span class="tag2 ' + (tagCls || '') + '">' + tag + '</span>' : '') + '</div>';
+  };
+  var T = function (name, on, tag) {
+    return '<div class="trow din ' + (on ? 'on' : '') + '"><span class="bx">' + ic('i-check') + '</span><span style="flex:1">' + name + '</span>' +
+      (tag ? '<span class="tag2">' + tag + '</span>' : '') + '</div>';
+  };
+  var BTN = function (t, ghost) { return '<div class="btn2 din ' + (ghost ? 'gh' : '') + '">' + t + '</div>'; };
+  var PUSH = function (t) { return '<div class="push din">' + ic('i-bell') + '<b>알림</b>' + t + '</div>'; };
+  var EMPTY = function (t) { return '<div class="empty">' + t + '</div>'; };
 
-  /* 화면 안에서만 도는 루프 러너. fn(ctx) 는 ctx.stopped 를 보고 스스로 종료한다. */
-  function runVisible(id, fn, still) {
-    var node = document.getElementById(id);
-    if (!node) return;
-    if (reduce) { node.innerHTML = still; return; }
-    var ctx = { node: node, stopped: true, gen: 0 };
-    var io = new IntersectionObserver(function (es) {
+  /* 단계 재생기 */
+  function play(id, steps) {
+    var art = document.getElementById(id);
+    if (!art) return;
+    var ob = art.querySelector('.o-body'), sb = art.querySelector('.s-body'), cap = art.querySelector('.stepcap');
+    function draw(st) {
+      ob.innerHTML = st.o; sb.innerHTML = st.s;
+      cap.innerHTML = '<span class="n">' + st.i + '</span>' + st.c;
+    }
+    if (reduce) { draw(steps[steps.length - 1]); return; }
+
+    var state = { stopped: true, gen: 0 };
+    async function loop(mine) {
+      var dead = function () { return state.stopped || state.gen !== mine; };
+      while (!dead()) {
+        for (var k = 0; k < steps.length; k++) {
+          if (dead()) return;
+          draw(steps[k]);
+          var waited = 0, want = steps[k].d || 2200;
+          while (waited < want) { if (dead()) return; await sleep(90); waited += 90; }
+        }
+      }
+    }
+    new IntersectionObserver(function (es) {
       es.forEach(function (e) {
-        if (e.isIntersecting && ctx.stopped) {
-          ctx.stopped = false; ctx.gen++;
-          var mine = ctx.gen;
-          (async function () { try { await fn(ctx, function () { return ctx.stopped || ctx.gen !== mine; }); } catch (_) {} })();
-        } else if (!e.isIntersecting) { ctx.stopped = true; }
+        if (e.isIntersecting && state.stopped) { state.stopped = false; state.gen++; loop(state.gen); }
+        else if (!e.isIntersecting) { state.stopped = true; }
       });
-    }, { threshold: 0.25 });
-    io.observe(node);
-  }
-  /* 중단 가능한 대기 — 화면 밖으로 나가면 바로 끊는다. */
-  async function nap(ms, dead) { var t = 0; while (t < ms) { if (dead()) return true; await sleep(Math.min(80, ms - t)); t += 80; } return dead(); }
-
-  async function typeInto(node, text, dead) {
-    node.textContent = ''; node.classList.add('caret');
-    for (var i = 0; i < text.length; i++) { if (dead()) return true; node.textContent += text[i]; await sleep(38); }
-    node.classList.remove('caret'); return dead();
+    }, { threshold: 0.25 }).observe(art);
   }
 
-  /* ① 노하우 AI — 질문 → 생각 → 우리 가게 답(출처 포함) → 재사용 표시 */
-  var AI_ANS = '<div class="lbl"><span class="yd"></span>우리 가게 노하우</div>' +
-    '<div class="abody">결제 전이면 포스에서 바로 취소, 결제 후엔 <b>당일에만 취소</b>하고 다음날부터는 사장님 승인이 필요해요.</div>' +
-    '<div class="src">사장님이 남긴 노하우 · 포스 사용법</div>';
-  runVisible('dAi', async function (ctx, dead) {
-    while (!dead()) {
-      ctx.node.innerHTML = '';
-      if (await nap(300, dead)) return;
-      var q = el('sq din'); var s = document.createElement('span'); q.appendChild(s); ctx.node.appendChild(q);
-      if (await typeInto(s, '포장 주문 취소는 어떻게 해요?', dead)) return;
-      if (await nap(350, dead)) return;
-      var ty = el('typing din', '<i></i><i></i><i></i>'); ctx.node.appendChild(ty);
-      if (await nap(1000, dead)) return; ty.remove();
-      ctx.node.appendChild(el('sa din', AI_ANS));
-      if (await nap(700, dead)) return;
-      ctx.node.appendChild(el('savedchip din', ic('i-check', 12) + ' 4명이 같은 걸 물어봤어요'));
-      if (await nap(3000, dead)) return;
-      ctx.node.style.transition = 'opacity .4s'; ctx.node.style.opacity = 0;
-      if (await nap(450, dead)) return;
-      ctx.node.style.transition = ''; ctx.node.style.opacity = 1;
-    }
-  }, '<div class="sq">포장 주문 취소는 어떻게 해요?</div><div class="sa">' + AI_ANS + '</div>');
+  /* ① 노하우 AI — 사장님이 등록해둔 노하우가 직원 질문에 그대로 나간다 */
+  var AI_CARD = K('포장 주문 취소', '결제 전 → 포스에서 바로 취소 / 결제 후 → 당일만');
+  play('dAi', [
+    { i: 1, c: '사장님이 노하우를 한 번 등록해둬요', o: AI_CARD, s: EMPTY('직원이 아직 묻기 전이에요'), d: 2000 },
+    { i: 2, c: '직원이 앱에서 물어봐요 — 전화 대신', o: AI_CARD, s: Q('포장 주문 취소는 어떻게 해요?') + TYPING, d: 1800 },
+    { i: 3, c: '등록된 노하우 그대로 답이 나가요', o: AI_CARD + K('이 노하우가 4번 쓰였어요', '', 'hl'),
+      s: Q('포장 주문 취소는 어떻게 해요?') + A('결제 전이면 포스에서 바로 취소, 결제 후엔 <b>당일에만 취소</b>하고 다음날부터는 사장님 승인이 필요해요.', '사장님이 남긴 노하우 · 포스 사용법'), d: 3400 },
+  ]);
 
-  /* ② 노하우 만들기 — PDF 올리기 → 분석 진행 → 노하우 여러 개로 쪼개짐 */
-  var INPUT_ITEMS = [['i-doc', '포장 주문 취소 절차'], ['i-doc', '마감 시재 점검'], ['i-doc', '원두 선입선출']];
-  runVisible('dInput', async function (ctx, dead) {
-    while (!dead()) {
-      ctx.node.innerHTML =
-        '<div class="row din"><span class="mi">' + ic('i-doc') + '</span><span class="mn">인수인계서.pdf</span><span class="mb" id="pdfB">올리는 중</span></div>' +
-        '<div class="dbar din"><i id="pdfBar"></i></div>';
-      var bar = ctx.node.querySelector('#pdfBar'), badge = ctx.node.querySelector('#pdfB');
-      if (await nap(260, dead)) return;
-      bar.style.width = '100%'; badge.textContent = 'AI가 읽는 중';
-      if (await nap(1300, dead)) return;
-      badge.textContent = '노하우 6개로 정리'; badge.className = 'mb mbdone';
-      for (var i = 0; i < INPUT_ITEMS.length; i++) {
-        if (await nap(340, dead)) return;
-        ctx.node.insertAdjacentHTML('beforeend', row(INPUT_ITEMS[i][0], INPUT_ITEMS[i][1], i === 0 ? '새 노하우' : '', 'now'));
-      }
-      if (await nap(3200, dead)) return;
-    }
-  }, row('i-doc', '인수인계서.pdf', '노하우 6개로 정리', 'mbdone') + row('i-doc', '포장 주문 취소 절차', '새 노하우', 'now'));
+  /* ② 노하우 만들기 — 인수인계서 PDF 한 장이 노하우 여러 개가 된다 */
+  play('dInput', [
+    { i: 1, c: '사장님이 인수인계서 PDF를 올려요', o: '<div class="lrow din"><span class="gr" style="font-size:11.5px;font-weight:800">인수인계서.pdf</span><span class="tag2">올리는 중</span></div><div class="bar2 din"><i style="width:100%"></i></div>', s: EMPTY('직원 화면은 아직 그대로예요'), d: 1900 },
+    { i: 2, c: 'AI가 읽고 노하우 여러 개로 쪼개요', o: L('인수인계서.pdf', '노하우 6개로 정리', 'g') + K('포장 주문 취소 절차') + K('마감 시재 점검') + K('원두 선입선출'), s: EMPTY('직원 화면은 아직 그대로예요'), d: 2400 },
+    { i: 3, c: '직원이 바로 찾아 쓸 수 있어요', o: L('인수인계서.pdf', '노하우 6개로 정리', 'g') + K('포장 주문 취소 절차') + K('마감 시재 점검') + K('원두 선입선출'),
+      s: Q('마감 시재 어떻게 맞춰요?') + A('포스 정산표를 먼저 뽑고, 현금 시재와 <b>1,000원 이내</b>면 그대로 마감해요.', '인수인계서에서 만든 노하우'), d: 3400 },
+  ]);
 
-  /* ③ 받은 질문 — 모르는 질문이 쌓임 → 사장님이 답 → 매뉴얼로 저장 */
-  runVisible('dInbox', async function (ctx, dead) {
-    while (!dead()) {
-      ctx.node.innerHTML = '';
-      ctx.node.insertAdjacentHTML('beforeend', '<div class="row din" id="q1"><span class="mi">' + ic('i-inbox') +
-        '</span><span class="mn">"단체 주문 선결제인가요?"</span><span class="mb wait" id="b1">대기</span></div>');
-      if (await nap(900, dead)) return;
-      ctx.node.insertAdjacentHTML('beforeend', row('i-inbox', '"영수증 재발행 되나요?"', '대기', 'wait'));
-      if (await nap(1000, dead)) return;
-      var b1 = ctx.node.querySelector('#b1'); b1.textContent = '사장님이 답하는 중'; b1.className = 'mb now';
-      if (await nap(1200, dead)) return;
-      b1.textContent = '노하우로 저장됨'; b1.className = 'mb mbdone';
-      ctx.node.querySelector('#q1').querySelector('.mi').innerHTML = ic('i-check');
-      if (await nap(600, dead)) return;
-      ctx.node.insertAdjacentHTML('beforeend', '<div class="savedchip din">' + ic('i-check', 12) + ' 다음부터는 AI가 대신 답해요</div>');
-      if (await nap(3000, dead)) return;
-    }
-  }, row('i-check', '"단체 주문 선결제인가요?"', '노하우로 저장됨', 'mbdone') + row('i-inbox', '"영수증 재발행 되나요?"', '대기', 'wait'));
+  /* ③ 받은 질문 — 모르는 질문이 사장님께 가고, 그 답이 다음 사람에게 남는다 */
+  play('dInbox', [
+    { i: 1, c: '아직 없는 내용은 지어내지 않아요', o: EMPTY('받은 질문 없음'),
+      s: Q('단체 주문도 선결제인가요?') + A('아직 등록되지 않은 내용이에요.') + BTN('사장님께 물어보기'), d: 2400 },
+    { i: 2, c: '사장님 받은 질문함으로 넘어가요', o: K('단체 주문도 선결제인가요?', '직원 김민재 · 방금', 'hl') + BTN('답하고 노하우로 저장'),
+      s: Q('단체 주문도 선결제인가요?') + A('아직 등록되지 않은 내용이에요.') + '<div class="lrow din"><span class="tag2 y">사장님께 전달됨</span></div>', d: 2600 },
+    { i: 3, c: '답 한 번이 노하우로 남아 다음부터는 AI가 답해요', o: K('단체 주문도 선결제인가요?', '노하우로 저장됨', 'gd') + L('이제 AI가 대신 답해요', '자동', 'g'),
+      s: Q('단체 주문도 선결제인가요?') + A('10인 이상 단체는 <b>선결제</b>예요. 그 아래는 후결제도 돼요.', '사장님이 남긴 노하우 · 결제'), d: 3400 },
+  ]);
 
-  /* ④ 훈련 코스 — 항목을 하나씩 배우고 퀴즈로 통과 */
-  var TRAIN = ['포스 마감 정산', '우유 스팀 온도', '기물 파손 대응'];
-  runVisible('dTrain', async function (ctx, dead) {
-    while (!dead()) {
-      ctx.node.innerHTML = TRAIN.map(function (t, i) {
-        return '<div class="row din" id="t' + i + '"><span class="mi">' + ic('i-bulb') + '</span><span class="mn">' + t +
-          '</span><span class="mb ' + (i === 0 ? 'now' : 'wait') + '" id="tb' + i + '">' + (i === 0 ? '배우는 중' : '대기') + '</span></div>';
-      }).join('');
-      if (await nap(700, dead)) return;
-      for (var i = 0; i < TRAIN.length; i++) {
-        var b = ctx.node.querySelector('#tb' + i);
-        b.textContent = '이해 확인 퀴즈'; b.className = 'mb now';
-        if (await nap(900, dead)) return;
-        b.textContent = '통과'; b.className = 'mb mbdone';
-        ctx.node.querySelector('#t' + i).querySelector('.mi').innerHTML = ic('i-check');
-        var nb = ctx.node.querySelector('#tb' + (i + 1));
-        if (nb) { nb.textContent = '배우는 중'; nb.className = 'mb now'; }
-        if (await nap(700, dead)) return;
-      }
-      ctx.node.insertAdjacentHTML('beforeend', '<div class="savedchip din">' + ic('i-check', 12) + ' 첫 훈련 완료 · 30일 뒤 다시 확인해요</div>');
-      if (await nap(3000, dead)) return;
-    }
-  }, TRAIN.map(function (t) { return row('i-check', t, '통과', 'mbdone'); }).join(''));
+  /* ④ 훈련 코스 — 사장님이 고른 것을 신입이 순서대로 배우고, 통과가 사장 화면에 남는다 */
+  var TR_LIST = K('첫 훈련 3개', '포스 마감 정산 · 우유 스팀 온도 · 기물 파손 대응');
+  play('dTrain', [
+    { i: 1, c: '사장님이 첫날 배울 것을 골라둬요', o: TR_LIST + L('김민재 · 신입', '훈련 시작 전', ''), s: EMPTY('첫 출근 전이에요'), d: 2100 },
+    { i: 2, c: '신입이 순서대로 배우고 퀴즈를 풀어요', o: TR_LIST + L('김민재 · 신입', '1/3 진행 중', 'y'),
+      s: K('포스 마감 정산', '읽고 나면 이해 확인 퀴즈가 나와요') + BTN('다 읽었어요'), d: 2400 },
+    { i: 3, c: '통과 기록이 사장님 화면에 남아요', o: TR_LIST + L('김민재 · 신입', '3/3 통과', 'g') + K('포스 마감 정산', '이해 확인 완료 · 30일 뒤 재확인', 'gd'),
+      s: K('포스 마감 정산', '통과', 'gd') + K('우유 스팀 온도', '통과', 'gd') + L('첫 훈련 완료', '수고했어요', 'g'), d: 3400 },
+  ]);
 
-  /* ⑤ 채팅 업무 — 체크 → 채팅 기록 → 사장님 알림 */
-  runVisible('dChat', async function (ctx, dead) {
-    while (!dead()) {
-      ctx.node.innerHTML =
-        '<div class="dcheck">' +
-        '<div class="dck done"><span class="box">' + ic('i-check') + '</span><span>원두 그라인더 청소</span></div>' +
-        '<div class="dck" id="ck2"><span class="box">' + ic('i-check') + '</span><span>포스 시재 점검</span></div>' +
-        '</div>';
-      if (await nap(1000, dead)) return;
-      ctx.node.querySelector('#ck2').classList.add('done');
-      if (await nap(700, dead)) return;
-      ctx.node.insertAdjacentHTML('beforeend', '<div class="row din"><span class="mi">' + ic('i-check') +
-        '</span><span class="mn">김민재님이 ‘포스 시재 점검’ 완료</span><span class="mb">오후 9:12</span></div>');
-      if (await nap(800, dead)) return;
-      ctx.node.insertAdjacentHTML('beforeend', '<div class="dtoast din"><span class="yb">' + ic('i-bell') + '</span>사장님께 알림 전송</div>');
-      if (await nap(3000, dead)) return;
-    }
-  }, '<div class="dcheck"><div class="dck done"><span class="box">' + ic('i-check') + '</span><span>원두 그라인더 청소</span></div>' +
-     '<div class="dck done"><span class="box">' + ic('i-check') + '</span><span>포스 시재 점검</span></div></div>' +
-     '<div class="dtoast"><span class="yb">' + ic('i-bell') + '</span>사장님께 알림 전송</div>');
+  /* ⑤ 채팅 업무 — 배정한 일이 직원 화면에 뜨고, 체크가 사장님께 돌아온다 */
+  play('dChat', [
+    { i: 1, c: '사장님이 할 일을 배정하고 노하우를 붙여요', o: K('포스 시재 점검', '담당 김민재 · 마감') + L('노하우 첨부', '마감 시재 점검', 'y'), s: EMPTY('아직 배정 전이에요'), d: 2200 },
+    { i: 2, c: '직원 오늘 할 일에 그대로 떠요', o: K('포스 시재 점검', '담당 김민재 · 마감') + L('상태', '진행 중', 'y'),
+      s: T('원두 그라인더 청소', true) + T('포스 시재 점검', false, '노하우') + BTN('완료 체크', true), d: 2400 },
+    { i: 3, c: '체크하면 기록이 남고 사장님께 알림이 가요', o: K('포스 시재 점검', '완료 · 오후 9:12', 'gd') + PUSH('김민재님이 완료했어요'),
+      s: T('원두 그라인더 청소', true) + T('포스 시재 점검', true) + L('오늘 할 일', '전부 완료', 'g'), d: 3400 },
+  ]);
 
-  /* ⑥ 출퇴근·인건비 — 근무시간이 쌓이면서 이번 달 인건비가 같이 올라간다 */
-  var WAGE = 10170;
-  function won(n) { return '₩' + n.toLocaleString('ko-KR'); }
-  runVisible('dPay', async function (ctx, dead) {
-    while (!dead()) {
-      ctx.node.innerHTML =
-        '<div class="row din"><span class="mi">' + ic('i-clock') + '</span><span class="mn">김민재 · <span class="dnum" id="h1">0</span>시간</span><span class="mb dnum" id="w1">₩0</span></div>' +
-        '<div class="row din"><span class="mi">' + ic('i-clock') + '</span><span class="mn">이수민 · <span class="dnum" id="h2">0</span>시간</span><span class="mb dnum" id="w2">₩0</span></div>' +
-        '<div class="dtotal din">이번 달 인건비<b class="dnum" id="tt">₩0</b></div>';
-      var h1 = ctx.node.querySelector('#h1'), w1 = ctx.node.querySelector('#w1'),
-          h2 = ctx.node.querySelector('#h2'), w2 = ctx.node.querySelector('#w2'), tt = ctx.node.querySelector('#tt');
-      if (await nap(500, dead)) return;
-      for (var s = 1; s <= 12; s++) {
-        if (dead()) return;
-        var a = Math.min(6, s * 0.5), b = Math.min(5, s * 0.42);
-        h1.textContent = a.toFixed(1).replace('.0', ''); w1.textContent = won(Math.round(a * WAGE));
-        h2.textContent = b.toFixed(1).replace('.0', ''); w2.textContent = won(Math.round(b * WAGE));
-        tt.textContent = won(Math.round((a + b) * WAGE));
-        await sleep(90);
-      }
-      if (await nap(3200, dead)) return;
-    }
-  }, '<div class="row"><span class="mi">' + ic('i-clock') + '</span><span class="mn">김민재 · 6시간</span><span class="mb">₩61,020</span></div>' +
-     '<div class="row"><span class="mi">' + ic('i-clock') + '</span><span class="mn">이수민 · 5시간</span><span class="mb">₩50,850</span></div>' +
-     '<div class="dtotal">이번 달 인건비<b>₩111,870</b></div>');
+  /* ⑥ 출퇴근·인건비 — 직원 체크가 사장님 급여 화면에 바로 반영된다 */
+  play('dPay', [
+    { i: 1, c: '직원이 출근을 체크해요', o: L('김민재', '근무 중', 'y') + '<div class="tot din">오늘 인건비<b>₩0</b></div>',
+      s: K('오늘 근무', '오후 3:00 출근') + BTN('출근 체크됨', true), d: 2100 },
+    { i: 2, c: '근무 시간이 자동으로 쌓여요', o: L('김민재', '근무 중 · 3시간', 'y') + '<div class="tot din">오늘 인건비<b>₩30,510</b></div>',
+      s: K('오늘 근무', '3시간 00분 근무 중') + K('오늘 예상 급여', '₩30,510', 'hl'), d: 2400 },
+    { i: 3, c: '퇴근하면 이번 달 인건비에 바로 반영돼요', o: L('김민재', '퇴근 · 6시간', 'g') + L('이수민', '퇴근 · 5시간', 'g') + '<div class="tot din">이번 달 인건비<b>₩1,118,700</b></div>',
+      s: K('오늘 근무', '6시간 00분 · 오후 9:00 퇴근', 'gd') + K('오늘 급여', '₩61,020', 'hl'), d: 3400 },
+  ]);
 
-  /* ⑦ 다점포 — 1호점에서 검증된 노하우가 새 매장으로 넘어간다 */
-  runVisible('dMulti', async function (ctx, dead) {
-    while (!dead()) {
-      ctx.node.innerHTML =
-        '<div class="row din"><span class="mi">' + ic('i-cafe') + '</span><span class="mn">신촌점 · 1호점</span><span class="mb">검증된 노하우 24</span></div>' +
-        '<div class="dchip" id="fly">노하우 24개</div>' +
-        '<div class="row din" style="margin-top:34px"><span class="mi">' + ic('i-cafe') + '</span><span class="mn">홍대점 · 김민재 매니저</span><span class="mb wait" id="m2">노하우 0</span></div>';
-      var fly = ctx.node.querySelector('#fly'), m2 = ctx.node.querySelector('#m2');
-      if (await nap(800, dead)) return;
-      fly.classList.add('fly');
-      if (await nap(1500, dead)) return;
-      m2.textContent = '노하우 24개 복제됨'; m2.className = 'mb mbdone';
-      if (await nap(3000, dead)) return;
-    }
-  }, '<div class="row"><span class="mi">' + ic('i-cafe') + '</span><span class="mn">신촌점 · 1호점</span><span class="mb">검증된 노하우 24</span></div>' +
-     '<div class="row" style="margin-top:34px"><span class="mi">' + ic('i-cafe') + '</span><span class="mn">홍대점 · 김민재 매니저</span><span class="mb mbdone">노하우 24개 복제됨</span></div>');
+  /* ⑦ 다점포·매니저 — 1호점에서 검증된 것이 새 매장으로 넘어간다 */
+  play('dMulti', [
+    { i: 1, c: '사장님은 전 매장을 한 화면에서 봐요', o: L('신촌점 · 1호점', '노하우 24', 'g') + L('홍대점 · 새 매장', '노하우 0', '') + K('확인 필요', '홍대점 받은 질문 3건', 'hl'),
+      s: EMPTY('새 매장은 아직 비어 있어요'), d: 2300 },
+    { i: 2, c: '검증된 노하우를 새 매장으로 가져와요', o: L('신촌점 · 1호점', '노하우 24', 'g') + K('홍대점으로 가져오기', '24개 복제 중…', 'hl'),
+      s: K('노하우가 들어오는 중', '신촌점에서 24개', 'hl'), d: 2400 },
+    { i: 3, c: '매장 운영은 매니저에게 맡겨요 — 돈과 계정은 사장님만', o: L('신촌점 · 1호점', '노하우 24', 'g') + L('홍대점 · 김민재 매니저', '노하우 24', 'g') + K('매니저 권한', '운영 가능 · 결제와 매장 삭제는 제외'),
+      s: K('홍대점 노하우', '24개 · 바로 쓸 수 있어요', 'gd') + L('내 권한', '매니저', 'y'), d: 3400 },
+  ]);
 })();
 </script>
 </body>
