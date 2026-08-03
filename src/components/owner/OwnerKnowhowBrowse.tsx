@@ -8,9 +8,6 @@ import { useWorkStore } from '@/lib/store/useWorkStore';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { EmptyState } from '@/components/EmptyState';
 import { InfoDot } from '@/components/InfoDot';
-import { SectionLabel } from '@/components/SectionLabel';
-import { Appear } from '@/components/Appear';
-import { KnowhowCarousel } from '@/components/KnowhowCarousel';
 import { CategoryEditSheet } from '@/components/owner/CategoryEditSheet';
 import { getSectionMeta } from '@/lib/utils/category';
 import { matchesKnowhowQuery } from '@/lib/utils/knowhowSearch';
@@ -34,8 +31,6 @@ const SORTS: { key: SortKey; label: string }[] = [
   { key: 'category', label: '카테고리별' },
 ];
 
-const SECTION_LIMIT = 8;
-
 // 미검증 = 온보딩 업종팩 fork분(needs_review) 또는 검증정보 없음/미검증.
 // 검증 nudge의 대상은 needs_review(사장이 우리 매장 기준으로 아직 안 다듬음)로 좁힌다.
 const needsVerify = (e: PlaybookEntry) => e.needs_review === true;
@@ -48,13 +43,16 @@ const isUnused = (e: PlaybookEntry) =>
 // 사용자 표면의 분류는 카테고리(= section) 하나 — 종류(루틴/돌발 등)는 AI 내부용이라 안 보여준다.
 const sectionOf = (e: PlaybookEntry) => e.section?.trim() || UNSECTIONED;
 
-/** 한 노하우 행(목록 뷰) — 탭하면 수정. usedBy=이 노하우를 첨부한 업무 수(0069 역조회, 임팩트). */
-function EntryRow({ e, onPress, usedBy = 0 }: { e: PlaybookEntry; onPress: () => void; usedBy?: number }) {
+/**
+ * 한 노하우 행(목록) — 탭하면 수정. usedBy=이 노하우를 첨부한 업무 수(0069 역조회, 임팩트).
+ * divider=false 는 아래에 1탭 검증 버튼이 붙는 경우 — 구분선을 래퍼가 대신 갖는다.
+ */
+function EntryRow({ e, onPress, usedBy = 0, divider = true }: { e: PlaybookEntry; onPress: () => void; usedBy?: number; divider?: boolean }) {
   const meta = getSectionMeta(e.section);
   const v = e.verification ? verifyMeta(e.verification.state) : null;
   const ratePct = Math.round((e.stats?.resolution_rate ?? 0) * 100);
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => [styles.row, pressed && { opacity: 0.7 }]}>
+    <Pressable onPress={onPress} style={({ pressed }) => [styles.row, !divider && styles.rowNoDivider, pressed && { opacity: 0.7 }]}>
       <View style={[styles.dot, { backgroundColor: meta.color }]} />
       <View style={{ flex: 1 }}>
         <Text style={styles.rowTitle} numberOfLines={1}>
@@ -97,8 +95,12 @@ function EntryRow({ e, onPress, usedBy = 0 }: { e: PlaybookEntry; onPress: () =>
  * OwnerKnowhowBrowse — 사장 '둘러보기' 본문(크롬리스). KnowhowSegment 슬롯으로 들어가며
  * SafeAreaView/Stack.Screen/RoleTabBar 같은 크롬은 상위(categories)가 소유한다.
  *
- * 구성: 상단행(개수+추가) → 미검증 배너 → 검색/필터/뷰토글
- *      → 대시보드(가로 캐러셀: 검증필요·인기·최근·잘통하는) ↔ 목록(세로 정렬 리스트).
+ * 구성: 상단행(개수+추가) → 미검증 배너 → 검색/카테고리/상태/정렬 → 내보내기 → 목록.
+ *
+ * (이력 2026-08-03) 뷰 3종[대시보드|목록|매뉴얼] → 목록 하나. 대시보드는 목록의 중복 투영이었고
+ * (확인필요=상태칩·최근추가=최신순), 매뉴얼도 같은 EntryRow를 섹션으로 묶은 것뿐이라 '카테고리별'
+ * 정렬과 실질 동일했다. 매뉴얼에만 있던 고유 기능인 **내보내기**(본문까지 평문화)는 목록으로 옮겼고,
+ * 대시보드 캐러셀에만 있던 **1탭 검증**은 목록 행으로 옮겼다.
  */
 export function OwnerKnowhowBrowse({
   onSelect,
@@ -135,7 +137,6 @@ export function OwnerKnowhowBrowse({
   const [query, setQuery] = useState('');
   const [activeCat, setActiveCat] = useState<string | null>(null); // null = 전체(단일 선택). 카테고리(section) 이름.
   const [sort, setSort] = useState<SortKey>('recent');
-  const [view, setView] = useState<'dashboard' | 'list' | 'manual'>(initialNeedsReview ? 'list' : 'dashboard');
   const [onlyNeedsReview, setOnlyNeedsReview] = useState(initialNeedsReview); // 미검증 배너에서 진입
   const [catSheet, setCatSheet] = useState(false); // 카테고리 편집 시트
 
@@ -167,11 +168,8 @@ export function OwnerKnowhowBrowse({
   // 카테고리 필터는 단일 선택(라디오) — '전체' + 한 카테고리만. 같은 칩 재탭 시 전체로 해제.
   const selectCat = (c: string) => setActiveCat((prev) => (prev === c ? null : c));
 
-  // 미검증 상태 필터 — 켜면 미검증만 목록으로 전환.
-  const toggleReview = () => {
-    setOnlyNeedsReview((v) => !v);
-    setView('list');
-  };
+  // 미검증 상태 필터 — 켜면 미검증만 남긴다.
+  const toggleReview = () => setOnlyNeedsReview((v) => !v);
 
   // 1탭 검증 — 우리 매장 기준 확인 완료. needs_review 해제 + 사장님 검증 배지.
   const verify = (e: PlaybookEntry) =>
@@ -180,7 +178,7 @@ export function OwnerKnowhowBrowse({
       verification: { state: 'owner_verified', verified_by: userName, verified_at: new Date().toISOString() },
     });
 
-  // 검색 + 카테고리 필터(대시보드/목록/매뉴얼 공통 베이스).
+  // 검색 + 카테고리 필터(목록·내보내기 공통 베이스).
   const baseFiltered = useMemo(() => {
     const q = query.trim().toLowerCase();
     let list = visible.filter((e) => matchesKnowhowQuery(e, q));
@@ -200,15 +198,7 @@ export function OwnerKnowhowBrowse({
   // 미검증(needs_review) — 전체 기준 카운트(배너·섹션 노출 판단). 0이 되면 배너/섹션 자동 소멸.
   const needsReview = useMemo(() => baseFiltered.filter(needsVerify), [baseFiltered]);
 
-  // 대시보드 렌즈 — 회의 반영: '인기 노하우'·'잘 통하는 노하우'처럼 사용 통계(query_hits/resolution)에
-  // 기대는 섹션은 제거했다. 초기 세팅 유저에겐 시드/템플릿의 조작된 수치가 마치 실적처럼 보여
-  // (본인이 안 쓴 노하우가 인기·해결률로 노출) 신뢰를 깬다. 정직한 '최근 추가됨'만 남긴다.
-  const recent = useMemo(
-    () => [...baseFiltered].sort((a, b) => (b.created_at ?? '').localeCompare(a.created_at ?? '')).slice(0, SECTION_LIMIT),
-    [baseFiltered],
-  );
-
-  // 목록 뷰 필터(미검증만 보기 옵션 적용) → 정렬.
+  // 목록 필터(미검증만 보기 옵션 적용) → 정렬.
   const listFiltered = useMemo(() => {
     let list = baseFiltered;
     if (onlyNeedsReview) list = list.filter(needsVerify);
@@ -235,11 +225,13 @@ export function OwnerKnowhowBrowse({
     return byCat.filter((g) => g.items.length > 0);
   }, [listFiltered, sort, allCats]);
 
-  // ── 매뉴얼 뷰(파생 뷰) — 발행본을 [섹션 → order_index] 순으로 렌더. 별도 저장물 없음(설계 §4·5c).
+  // ── 내보내기 대상 — 지금 목록에 보이는 것 중 발행본을 [섹션 → order_index] 순으로 묶는다.
+  // 별도 저장물 없음(설계 §4·5c): 매뉴얼은 원자의 파생 투영일 뿐이다.
   // 섹션 순서 = 문서 등장 순서(섹션 내 최소 order_index), 미분류(기타)는 맨 뒤.
-  const manualGroups = useMemo(() => {
-    if (view !== 'manual') return [];
-    const pub = [...baseFiltered.filter((e) => e.status === 'published')].sort(
+  // 발행본만인 이유 = 남에게 주는 문서라 검토중·보관본이 섞이면 안 된다. 목록과 개수가 갈릴 수 있어
+  // 버튼 라벨에 대상 개수를 적는다(무엇이 복사되는지 화면에서 보이게).
+  const exportGroups = useMemo(() => {
+    const pub = [...listFiltered.filter((e) => e.status === 'published')].sort(
       (a, b) => (a.order_index ?? 0) - (b.order_index ?? 0) || (a.created_at ?? '').localeCompare(b.created_at ?? ''),
     );
     const order: string[] = [];
@@ -252,7 +244,8 @@ export function OwnerKnowhowBrowse({
     const names = order.filter((n) => n !== UNSECTIONED);
     if (byName.has(UNSECTIONED)) names.push(UNSECTIONED);
     return names.map((name) => ({ name, items: byName.get(name)! }));
-  }, [view, baseFiltered]);
+  }, [listFiltered]);
+  const exportCount = useMemo(() => exportGroups.reduce((n, g) => n + g.items.length, 0), [exportGroups]);
 
   if (!loaded) {
     return (
@@ -265,14 +258,11 @@ export function OwnerKnowhowBrowse({
 
   const hasEntries = visible.length > 0;
 
-  // 미검증 섹션/목록 카드에 붙는 1탭 검증 버튼.
+  // 확인 필요 노하우 행에 붙는 1탭 검증 버튼. 행(Pressable)과 형제로 둔다 — 중첩하면 RNW에서
+  // role=button 이 겹쳐 탭이 편집 진입으로 샌다.
   const verifyButton = (e: PlaybookEntry) => (
     <Pressable
-      // 카드(부모 Pressable) 위에 겹친 버튼 — 탭이 카드 편집 진입으로 새지 않게 전파 차단(웹 버블링).
-      onPress={(ev) => {
-        ev.stopPropagation();
-        verify(e);
-      }}
+      onPress={() => verify(e)}
       accessibilityRole="button"
       accessibilityLabel={`${e.title} 확인 완료로 표시`}
       style={({ pressed }) => [styles.verifyBtn, pressed && { opacity: 0.85 }]}
@@ -281,6 +271,18 @@ export function OwnerKnowhowBrowse({
       <Text style={styles.verifyBtnText}>확인 완료 (우리 매장 기준 맞아요)</Text>
     </Pressable>
   );
+
+  // 목록 한 항목 — 확인 필요면 행 아래에 1탭 검증 버튼을 함께 그린다(구분선은 래퍼가 갖는다).
+  const entryItem = (e: PlaybookEntry) => {
+    const usedBy = usedCountByEntry.get(e.id) ?? 0;
+    if (!needsVerify(e)) return <EntryRow key={e.id} e={e} usedBy={usedBy} onPress={() => onSelect(e.id)} />;
+    return (
+      <View key={e.id} style={styles.entryWrap}>
+        <EntryRow e={e} usedBy={usedBy} onPress={() => onSelect(e.id)} divider={false} />
+        {verifyButton(e)}
+      </View>
+    );
+  };
 
   return (
     <ScrollView style={styles.flex} contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
@@ -372,7 +374,7 @@ export function OwnerKnowhowBrowse({
             <Pressable
               onPress={() => {
                 // '확인하기'는 확인할 노하우를 곧장 연다(수정 저장 = 우리 매장 기준 확인 완료).
-                // 필터만 바꾸면 진입 상태(홈 '확인 필요'로 들어오면 이미 목록+미검증)가 그대로라
+                // 필터만 바꾸면 진입 상태(홈 '확인 필요'로 들어오면 이미 미검증만 켜진 상태)가 그대로라
                 // 아무 반응이 없어 '안 눌린다'처럼 보인다. 목록 필터는 아래 '확인 필요 N' 칩이 담당.
                 const first = needsReview[0];
                 if (first) onSelect(first.id);
@@ -389,23 +391,6 @@ export function OwnerKnowhowBrowse({
               <Text style={styles.bannerCta}>확인하기 ›</Text>
             </Pressable>
           )}
-
-          {/* 뷰 토글 */}
-          <View style={styles.viewToggle}>
-            <Pressable onPress={() => { setView('dashboard'); setOnlyNeedsReview(false); }} style={[styles.viewToggleBtn, view === 'dashboard' && styles.viewToggleBtnOn]}>
-              <Ionicons name="grid-outline" size={13} color={view === 'dashboard' ? InkColors.bubbleText : InkColors.ink3} />
-              <Text style={[styles.viewToggleText, view === 'dashboard' && styles.viewToggleTextOn]}>대시보드</Text>
-            </Pressable>
-            <Pressable onPress={() => setView('list')} style={[styles.viewToggleBtn, view === 'list' && styles.viewToggleBtnOn]}>
-              <Ionicons name="list-outline" size={14} color={view === 'list' ? InkColors.bubbleText : InkColors.ink3} />
-              <Text style={[styles.viewToggleText, view === 'list' && styles.viewToggleTextOn]}>목록</Text>
-            </Pressable>
-            {/* 매뉴얼 = 파생 뷰(섹션→순서로 발행본을 문서처럼) — 저장물이 아니라 같은 원자의 다른 투영. */}
-            <Pressable onPress={() => { setView('manual'); setOnlyNeedsReview(false); }} style={[styles.viewToggleBtn, view === 'manual' && styles.viewToggleBtnOn]}>
-              <Ionicons name="book-outline" size={13} color={view === 'manual' ? InkColors.bubbleText : InkColors.ink3} />
-              <Text style={[styles.viewToggleText, view === 'manual' && styles.viewToggleTextOn]}>매뉴얼</Text>
-            </Pressable>
-          </View>
 
           {/* 검색창 */}
           <View style={styles.search}>
@@ -452,7 +437,7 @@ export function OwnerKnowhowBrowse({
             </Pressable>
           </ScrollView>
 
-          {/* 미검증 상태 필터 — 카운트>0일 때만 노출되는 정식 토글. 탭하면 미검증만 목록으로. */}
+          {/* 미검증 상태 필터 — 카운트>0일 때만 노출되는 정식 토글. 탭하면 미검증만 남긴다. */}
           {needsReview.length > 0 && (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
               <Pressable
@@ -468,74 +453,33 @@ export function OwnerKnowhowBrowse({
             </ScrollView>
           )}
 
-          {/* 정렬 — 목록 뷰에서만 */}
-          {view === 'list' && (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.sortRow}>
-              {SORTS.map((s) => {
-                const on = sort === s.key;
-                return (
-                  <Pressable key={s.key} onPress={() => setSort(s.key)} style={[styles.sortChip, on && styles.sortChipOn]}>
-                    <Text style={[styles.sortText, on && styles.sortTextOn]}>{s.label}</Text>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
+          {/* 정렬 */}
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.sortRow}>
+            {SORTS.map((s) => {
+              const on = sort === s.key;
+              return (
+                <Pressable key={s.key} onPress={() => setSort(s.key)} style={[styles.sortChip, on && styles.sortChipOn]}>
+                  <Text style={[styles.sortText, on && styles.sortTextOn]}>{s.label}</Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+
+          {/* 내보내기 — 지금 목록에 보이는 발행본을 카테고리로 묶어 평문으로. 웹에서만(클립보드). */}
+          {canCopyToClipboard() && exportCount > 0 && (
+            <Pressable
+              onPress={() => copy(manualToText(exportGroups, { storeName, date: new Date().toLocaleDateString('ko-KR') }))}
+              style={styles.copyBtn}
+              accessibilityRole="button"
+              accessibilityLabel={`노하우 ${exportCount}개 내보내기`}
+            >
+              <Ionicons name={copied ? 'checkmark' : 'copy-outline'} size={14} color={InkColors.ink2} />
+              <Text style={styles.copyBtnText}>{copied ? '복사됐어요' : `노하우 ${exportCount}개 내보내기`}</Text>
+            </Pressable>
           )}
 
-          {/* 결과 */}
-          {view === 'manual' ? (
-            manualGroups.length === 0 ? (
-              <EmptyResult onReset={() => { setQuery(''); setActiveCat(null); }} onAsk={goAsk} />
-            ) : (
-              <>
-                {/* 내보내기 = 화면에 보이는 그룹 그대로 직렬화(검색·필터 적용분 포함). */}
-                {canCopyToClipboard() && (
-                  <Pressable
-                    onPress={() => copy(manualToText(manualGroups, { storeName, date: new Date().toLocaleDateString('ko-KR') }))}
-                    style={styles.copyBtn}
-                    accessibilityRole="button"
-                    accessibilityLabel="매뉴얼 전체 복사"
-                  >
-                    <Ionicons name={copied ? 'checkmark' : 'copy-outline'} size={14} color={InkColors.ink2} />
-                    <Text style={styles.copyBtnText}>{copied ? '복사됐어요' : '매뉴얼 전체 복사'}</Text>
-                  </Pressable>
-                )}
-                {manualGroups.map((g) => (
-                <View key={g.name} style={{ gap: 8 }}>
-                  <View style={styles.groupHead}>
-                    <View style={[styles.dot, { backgroundColor: getSectionMeta(g.name).color }]} />
-                    <Text style={styles.groupTitle}>{g.name}</Text>
-                    <Text style={styles.groupCount}>{g.items.length}</Text>
-                  </View>
-                  <View style={styles.list}>
-                    {g.items.map((e) => (
-                      <EntryRow key={e.id} e={e} usedBy={usedCountByEntry.get(e.id) ?? 0} onPress={() => onSelect(e.id)} />
-                    ))}
-                  </View>
-                </View>
-                ))}
-              </>
-            )
-          ) : view === 'dashboard' ? (
-            baseFiltered.length === 0 ? (
-              <EmptyResult onReset={() => { setQuery(''); setActiveCat(null); }} onAsk={goAsk} />
-            ) : (
-              <View style={{ gap: Space.xl }}>
-                {needsReview.length > 0 && (
-                  <Appear delay={0} style={styles.block}>
-                    <SectionLabel icon="alert-circle-outline" title="확인이 필요해요" hint={`${needsReview.length}개`} />
-                    <KnowhowCarousel entries={needsReview} onSelect={(e) => onSelect(e.id)} showCategory renderExtra={verifyButton} />
-                  </Appear>
-                )}
-                {recent.length > 0 && (
-                  <Appear delay={60} style={styles.block}>
-                    <SectionLabel icon="sparkles-outline" title="최근 추가됨" hint="새로 올라온 순" />
-                    <KnowhowCarousel entries={recent} onSelect={(e) => onSelect(e.id)} showCategory />
-                  </Appear>
-                )}
-              </View>
-            )
-          ) : listFiltered.length === 0 ? (
+          {/* 목록 */}
+          {listFiltered.length === 0 ? (
             <EmptyResult
               onReset={() => { setQuery(''); setActiveCat(null); setOnlyNeedsReview(false); }}
               onAsk={onlyNeedsReview ? undefined : goAsk}
@@ -551,20 +495,12 @@ export function OwnerKnowhowBrowse({
                     <Text style={styles.groupTitle}>{m.label}</Text>
                     <Text style={styles.groupCount}>{g.items.length}</Text>
                   </View>
-                  <View style={styles.list}>
-                    {g.items.map((e) => (
-                      <EntryRow key={e.id} e={e} usedBy={usedCountByEntry.get(e.id) ?? 0} onPress={() => onSelect(e.id)} />
-                    ))}
-                  </View>
+                  <View style={styles.list}>{g.items.map(entryItem)}</View>
                 </View>
               );
             })
           ) : (
-            <View style={styles.list}>
-              {listFiltered.map((e) => (
-                <EntryRow key={e.id} e={e} usedBy={usedCountByEntry.get(e.id) ?? 0} onPress={() => onSelect(e.id)} />
-              ))}
-            </View>
+            <View style={styles.list}>{listFiltered.map(entryItem)}</View>
           )}
         </>
       )}
@@ -643,16 +579,6 @@ const styles = StyleSheet.create({
   },
   draftBannerCta: { fontSize: 13, fontWeight: '800', color: InkColors.ink },
 
-  // 뷰 토글
-  viewToggle: { flexDirection: 'row', gap: Space.xs, backgroundColor: InkColors.bgSoft, borderRadius: Radius.pill, padding: 3, alignSelf: 'flex-start' },
-  viewToggleBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingVertical: 6, paddingHorizontal: 14, borderRadius: Radius.pill },
-  viewToggleBtnOn: { backgroundColor: InkColors.ink },
-  viewToggleText: { fontSize: 12.5, fontWeight: '800', color: InkColors.ink3 },
-  viewToggleTextOn: { color: InkColors.bubbleText },
-
-  // 캐러셀 블록 = [밖 라벨] + [가로 카드]
-  block: { gap: Space.md },
-
   // 검색
   search: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
@@ -686,7 +612,11 @@ const styles = StyleSheet.create({
   sortText: { fontSize: 12, fontWeight: '700', color: InkColors.ink3 },
   sortTextOn: { color: InkColors.ink },
 
-  // 1탭 검증 버튼(카드 하단)
+  // 확인 필요 항목 = [행 + 1탭 검증 버튼] 묶음. 구분선을 행 대신 래퍼가 갖는다(버튼이 다음 항목에
+  // 붙어 보이지 않게).
+  entryWrap: { borderBottomWidth: 1, borderBottomColor: InkColors.line, paddingBottom: Space.md },
+
+  // 1탭 검증 버튼(행 하단)
   verifyBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5,
     marginTop: 4, paddingVertical: 9, borderRadius: Radius.sm,
@@ -709,6 +639,7 @@ const styles = StyleSheet.create({
   // 리스트/행
   list: { backgroundColor: InkColors.bg, borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, paddingHorizontal: 14 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: InkColors.line },
+  rowNoDivider: { borderBottomWidth: 0 },
   dot: { width: 10, height: 10, borderRadius: Radius.pill },
   rowTitle: { fontSize: 15, fontWeight: '600', color: InkColors.ink },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3, flexWrap: 'wrap' },

@@ -6,8 +6,8 @@ import { OwnerKnowhowBrowse } from '@/components/owner/OwnerKnowhowBrowse';
 import { InkColors } from '@/lib/theme/colors';
 
 /**
- * 노하우 탭(사장님) — 매장 노하우 대시보드 단일 화면.
- * 검색·카테고리 필터·가로 캐러셀·미검증 검증을 한 화면에서 처리한다(OwnerKnowhowBrowse).
+ * 노하우 탭(사장님) — 매장 노하우 목록 단일 화면.
+ * 검색·카테고리 필터·정렬·미검증 검증·내보내기를 한 화면에서 처리한다(OwnerKnowhowBrowse).
  *
  * (이력) 옛 KnowhowSegment 3칸[둘러보기|물어보기|내노하우] → 2칸 → 세그먼트 폐지.
  * '물어보기' 세그먼트는 '받은질문' 탭으로 보내는 중복 진입점일 뿐이라 제거했다.
