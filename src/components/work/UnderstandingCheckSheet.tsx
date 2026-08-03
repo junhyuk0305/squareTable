@@ -1,20 +1,28 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { View, Text, Pressable, ScrollView, ActivityIndicator, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { BottomSheet } from '@/components/BottomSheet';
+import { QUIZ_RENDERERS } from '@/components/work/quiz';
 import { generateQuiz } from '@/lib/ai/client';
-import { recordQuizStats } from '@/lib/db';
+import { fetchQuizItemsForAttempt, gradeQuiz, recordQuizStats } from '@/lib/db';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
+import { Space } from '@/lib/theme/layout';
 import type { QuizInput, QuizQuestion } from '@/lib/ai/types';
+import type { QuizGrade, QuizItem, QuizResponse } from '@/lib/quiz/types';
 
 type Phase = 'loading' | 'quiz' | 'result' | 'empty' | 'quota';
 
 /**
  * UnderstandingCheckSheet — "이 업무 혼자 할 수 있어요" 자청 시 뜨는 이해 확인 퀴즈(S1 ④).
- * 붙은 노하우로 AI가 객관식 상황문제 2~3개 생성 → 앱이 자동 채점 → 전부 정답이면 통과(사장에게 전달).
- * 자발·페널티 0·재시도 자유·실패는 사장에게 안 감. 알바 화면이라 쿼터 초과 시 요금제 유도 없이 부드럽게.
+ * 자발·페널티 0·재시도 자유·실패는 사장에게 안 감.
+ *
+ * 경로가 둘이다.
+ *  ① 저장된 문항(0107 quiz_items) — 형태별 렌더러로 풀고 **채점은 서버**(grade_quiz).
+ *     응시용 payload 에는 정답이 없다. AI 호출도 0이라 월 한도를 안 먹는다.
+ *  ② 폴백: 저장된 문항이 0개면 기존 AI 즉석 생성(4지선다)을 그대로 쓴다.
+ *     아직 문항을 안 만든 매장이 훈련을 못 하면 안 되므로 이 경로는 지우지 않는다.
  */
 export function UnderstandingCheckSheet({
   taskText,
@@ -40,7 +48,214 @@ export function UnderstandingCheckSheet({
   );
 }
 
-function QuizBody({
+/** 어느 경로로 갈지 한 번만 정한다 — 저장된 문항이 있으면 ①, 없으면 ②(AI 즉석 생성). */
+function QuizBody(props: {
+  taskText: string;
+  sops: QuizInput['sops'];
+  onPass: () => void;
+  onClose: () => void;
+  onRetry: () => void;
+}) {
+  const { sops } = props;
+  // 근거 노하우 id 가 하나도 없으면 조회할 게 없다 → 처음부터 폴백으로 시작(이펙트에서 동기 setState 회피).
+  const entryIds = useMemo(() => sops.map((sop) => sop.id).filter((id): id is string => !!id), [sops]);
+  const [route, setRoute] = useState<'probe' | 'saved' | 'legacy'>(entryIds.length > 0 ? 'probe' : 'legacy');
+  const [items, setItems] = useState<QuizItem[]>([]);
+
+  useEffect(() => {
+    let alive = true;
+    if (entryIds.length === 0) return;
+    fetchQuizItemsForAttempt(entryIds, 3)
+      .then(({ data }) => {
+        if (!alive) return;
+        // 아직 렌더러가 없는 형태(레지스트리 미등록)는 거른다 — 빈 화면 대신 폴백으로 간다.
+        const usable = (data ?? []).filter((it) => !!QUIZ_RENDERERS[it.format]);
+        if (usable.length > 0) {
+          setItems(usable);
+          setRoute('saved');
+        } else {
+          setRoute('legacy');
+        }
+      })
+      .catch(() => {
+        if (alive) setRoute('legacy');
+      });
+    return () => {
+      alive = false;
+    };
+  }, [entryIds]);
+
+  if (route === 'probe') {
+    return (
+      <View style={s.center}>
+        <ActivityIndicator color={InkColors.ink3} />
+        <Text style={s.centerText}>문제를 가져오는 중...</Text>
+      </View>
+    );
+  }
+  if (route === 'saved') return <SavedQuizBody items={items} onPass={props.onPass} onClose={props.onClose} onRetry={props.onRetry} />;
+  return <LegacyQuizBody {...props} />;
+}
+
+// ── ① 저장된 문항 경로 ────────────────────────────────────────────────────────
+/**
+ * 한 번에 한 문항. 답을 내면 즉시 서버가 채점하고 그 자리에서 결과가 보인다(설계 07-29 §04 규칙 4).
+ * 채점이 실패하면 오답으로 치지 않는다 — 답을 들고 있다가 다시 보낸다(규칙 6: 막지 않는다).
+ */
+function SavedQuizBody({
+  items,
+  onPass,
+  onClose,
+  onRetry,
+}: {
+  items: QuizItem[];
+  onPass: () => void;
+  onClose: () => void;
+  onRetry: () => void;
+}) {
+  const [at, setAt] = useState(0);
+  const [pending, setPending] = useState<QuizResponse | null>(null);
+  const [grade, setGrade] = useState<QuizGrade | null>(null);
+  const [grading, setGrading] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const [results, setResults] = useState<boolean[]>([]);
+  const [done, setDone] = useState(false);
+
+  const item = items[at];
+
+  const send = async (itemId: string, res: QuizResponse) => {
+    setGrading(true);
+    setFailed(false);
+    const { data } = await gradeQuiz(itemId, res);
+    setGrading(false);
+    if (!data) {
+      setFailed(true);
+      return;
+    }
+    setGrade(data);
+    setResults((prev) => [...prev, data.correct]);
+  };
+
+  const answer = (res: QuizResponse) => {
+    setPending(res);
+    void send(item.id, res);
+  };
+
+  const finish = (marks: boolean[]) => {
+    // 오답의 문항 귀속(0103) — 어느 노하우가 헷갈리게 적혔는지만 집계한다(누가 틀렸는지는 안 남김).
+    // entry_ids 가 배열이 됐으므로 근거 노하우 전부에 기록한다.
+    const byEntry = new Map<string, { attempts: number; misses: number }>();
+    items.slice(0, marks.length).forEach((it, i) => {
+      for (const entryId of it.entry_ids ?? []) {
+        const cur = byEntry.get(entryId) ?? { attempts: 0, misses: 0 };
+        cur.attempts += 1;
+        if (!marks[i]) cur.misses += 1;
+        byEntry.set(entryId, cur);
+      }
+    });
+    void recordQuizStats([...byEntry].map(([entryId, v]) => ({ entryId, ...v })));
+    // 통과 기준은 그대로 — 전부 맞아야 통과(사장에게 전달).
+    if (marks.length === items.length && marks.every(Boolean)) onPass();
+    setDone(true);
+  };
+
+  const next = () => {
+    if (at + 1 < items.length) {
+      setAt(at + 1);
+      setPending(null);
+      setGrade(null);
+      setFailed(false);
+      return;
+    }
+    finish(results);
+  };
+
+  if (done) {
+    const correctCount = results.filter(Boolean).length;
+    const passed = correctCount === items.length;
+    return (
+      <>
+        <ScrollView style={s.scroll} contentContainerStyle={{ paddingBottom: Space.gutter }} showsVerticalScrollIndicator={false}>
+          <View style={[s.resultBox, passed ? s.resultPass : s.resultFail]}>
+            <Ionicons name={passed ? 'ribbon' : 'refresh-circle'} size={22} color={passed ? BrandColors.good : BrandColors.warn} />
+            <Text style={s.resultText}>
+              {passed ? '이해 확인이 끝났어요. 사장님께 전달됐어요.' : `${items.length}개 중 ${correctCount}개 맞았어요. 다시 해볼까요?`}
+            </Text>
+          </View>
+        </ScrollView>
+        <View style={s.foot}>
+          {passed ? (
+            <Pressable onPress={onClose} style={({ pressed }) => [s.cta, pressed && { opacity: 0.85 }]}><Text style={s.ctaText}>닫기</Text></Pressable>
+          ) : (
+            <View style={s.footRow}>
+              <Pressable onPress={onClose} style={({ pressed }) => [s.softBtnFlat, pressed && { opacity: 0.7 }]}><Text style={s.softBtnFlatText}>닫기</Text></Pressable>
+              <Pressable onPress={onRetry} style={({ pressed }) => [s.cta, { flex: 1 }, pressed && { opacity: 0.85 }]}><Text style={s.ctaText}>다시 하기</Text></Pressable>
+            </View>
+          )}
+        </View>
+      </>
+    );
+  }
+
+  if (!item) return null;
+  const Renderer = QUIZ_RENDERERS[item.format];
+  const ask = typeof item.payload?.ask === 'string' ? item.payload.ask : '';
+
+  return (
+    <>
+      <ScrollView style={s.scroll} contentContainerStyle={{ paddingBottom: Space.gutter }} showsVerticalScrollIndicator={false}>
+        <Text style={s.step}>{at + 1} / {items.length}</Text>
+        {ask ? <Text style={s.ask}>{ask}</Text> : null}
+
+        <Renderer
+          key={item.id}
+          payload={item.payload ?? {}}
+          disabled={grading || pending !== null}
+          result={grade ? { correct: grade.correct, answer: grade.answer } : null}
+          onAnswer={answer}
+        />
+
+        {grade ? (
+          <View style={[s.gradeBox, grade.correct ? s.resultPass : s.resultFail]}>
+            <Text style={s.gradeTitle}>{grade.correct ? '맞았어요' : '이건 이렇게 해요'}</Text>
+            {grade.explain ? <Text style={s.gradeText}>{grade.explain}</Text> : null}
+          </View>
+        ) : null}
+
+        {failed ? (
+          <View style={s.gradeBox}>
+            <Text style={s.gradeTitle}>지금은 채점이 안 됐어요</Text>
+            <Text style={s.gradeText}>답은 그대로 있어요. 잠시 후 다시 보내면 돼요.</Text>
+          </View>
+        ) : null}
+      </ScrollView>
+
+      <View style={s.foot}>
+        {grading ? (
+          <View style={s.footWait}>
+            <ActivityIndicator color={InkColors.ink3} />
+            <Text style={s.footWaitText}>채점하는 중...</Text>
+          </View>
+        ) : failed ? (
+          <Pressable
+            onPress={() => pending !== null && void send(item.id, pending)}
+            style={({ pressed }) => [s.cta, pressed && { opacity: 0.85 }]}
+          >
+            <Text style={s.ctaText}>다시 보내기</Text>
+          </Pressable>
+        ) : grade ? (
+          <Pressable onPress={next} style={({ pressed }) => [s.cta, pressed && { opacity: 0.85 }]}>
+            <Text style={s.ctaText}>{at + 1 < items.length ? '다음 문제' : '결과 보기'}</Text>
+          </Pressable>
+        ) : null}
+      </View>
+    </>
+  );
+}
+
+// ── ② 폴백: AI 즉석 생성 경로(하위호환) ────────────────────────────────────────
+/** 저장된 문항이 아직 없는 매장용. 붙은 노하우로 AI가 4지선다를 만들고 앱이 채점한다(기존 동작 그대로). */
+function LegacyQuizBody({
   taskText,
   sops,
   onPass,
@@ -192,6 +407,15 @@ const s = StyleSheet.create({
   centerText: { fontSize: 14, color: InkColors.ink2, fontWeight: '600', textAlign: 'center', lineHeight: 21 },
   scroll: { flex: 1, paddingHorizontal: 16 },
   intro: { fontSize: 12.5, color: InkColors.ink3, fontWeight: '600', marginBottom: 14, lineHeight: 18 },
+
+  // 저장된 문항 경로
+  step: { fontSize: 12, fontWeight: '800', color: InkColors.ink3, marginBottom: Space.xs },
+  ask: { fontSize: 16, fontWeight: '800', color: InkColors.ink, lineHeight: 24, marginBottom: Space.md },
+  gradeBox: { borderRadius: Radius.md, backgroundColor: InkColors.bgSoft, padding: Space.lg, marginTop: Space.lg, gap: Space.xs },
+  gradeTitle: { fontSize: 15, fontWeight: '800', color: InkColors.ink, lineHeight: 22 },
+  gradeText: { fontSize: 15, fontWeight: '600', color: InkColors.ink2, lineHeight: 22 },
+  footWait: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Space.sm, minHeight: 48 },
+  footWaitText: { fontSize: 15, fontWeight: '700', color: InkColors.ink3 },
 
   qBlock: { marginBottom: 18 },
   qAsk: { fontSize: 14.5, fontWeight: '800', color: InkColors.ink, marginBottom: 9, lineHeight: 21 },

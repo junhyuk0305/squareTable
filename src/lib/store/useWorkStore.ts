@@ -26,15 +26,16 @@ import {
   insertTrainingItem,
   deleteTrainingItem,
   updateTrainingPositions,
-  fetchRegularDueDays,
-  saveRegularDueDays,
   fetchTrainingRequests,
   insertTrainingRequests,
   deleteTrainingRequest,
+  fetchTrainingCourses,
   type TrainingItemRow,
   type TrainingCourse,
   type TrainingRequestRow,
 } from '@/lib/db';
+// 코스 행(0108 training_courses). db.ts 의 TrainingCourse 는 코스 **key** 문자열이라 이름이 겹친다 → 행은 Row 로 별칭.
+import type { TrainingCourse as TrainingCourseRow } from '@/lib/quiz/types';
 import { guardWrite, useSyncStore } from '@/lib/store/useSyncStore';
 import { coalesce, subscribeDebounced } from '@/lib/store/realtimeSync';
 import { genId } from '@/lib/utils/id';
@@ -47,10 +48,16 @@ import { useSessionStore } from '@/lib/store/useSessionStore';
 /** 방마다 동시에 둘 수 있는 활성 반복(주간) 할일 상한(남용 #26) — 캘린더/피드 폭주 방지. */
 const MAX_ACTIVE_RECURRING = 40;
 
-/** 훈련 코스(0099) 숫자 SSOT — 관리 화면 안내와 직원 카드 노출이 같은 값을 봐야
- *  안내와 동작이 어긋나지 않는다.
- *  첫 훈련 3~5(하한=완주 부담 축소·상한=Escoffier 핵심 판단 5). 정기 훈련 최대 10 ·
- *  재확인 주기는 매장 설정(0100 schedule_config.regular_due_days, 기본 30일). */
+/**
+ * 개수 상한·재확인 주기의 SSOT 는 **코스 행(0108 training_courses)** 하나다 — 사장 화면과
+ * 직원 카드가 같은 행을 봐야 안내와 동작이 어긋나지 않는다.
+ *
+ * 아래 4개는 그 행을 못 읽었을 때만 쓰는 **폴백 기본값**이다(0099 시절 하드코딩과 같은 값):
+ * 코스 목록 읽기가 실패하거나 코스 없이 training_items 만 남은 매장에서 카드가 통째로
+ * 사라지지 않게 한다. 실제 적용은 trainingCourseViews().
+ * MAX 두 개는 사장 화면 전용 값인데 그 화면은 코스 행 없이는 렌더하지 않아 지금 소비처가 없다
+ * — 폴백의 기준값으로 남겨 둔다(0099 첫 훈련 3~5 · 정기 훈련 최대 10).
+ */
 export const FIRST_DAY_MIN_ITEMS = 3;
 export const FIRST_DAY_MAX_ITEMS = 5;
 export const REGULAR_MAX_ITEMS = 10;
@@ -65,11 +72,46 @@ export const REGULAR_DUE_OPTIONS = [
 export function regularDueLabel(days: number): string {
   return REGULAR_DUE_OPTIONS.find((o) => o.days === days)?.label ?? `${days}일`;
 }
-export type { TrainingCourse, TrainingItemRow, TrainingRequestRow };
+export type { TrainingCourse, TrainingItemRow, TrainingRequestRow, TrainingCourseRow };
 
-/** 코스별 항목(position 순) — 화면 파생 셀렉터. */
+/** 화면이 코스에서 실제로 쓰는 값만 뽑은 것 — 상한·주기의 출처를 한 군데로 모은다. */
+export type TrainingCourseView = {
+  key: TrainingCourse;
+  /** training_courses.name — 직원 카드 제목이 이 이름을 그대로 쓴다. */
+  name: string;
+  /** 이 수를 채워야 직원에게 보인다(사장 화면 '준비됨' 판정과 같은 기준). */
+  minItems: number;
+  /** null = 1회성(한 번 통과하면 끝) · N = N일마다 다시 확인. */
+  dueDays: number | null;
+};
+/**
+ * 직원 카드가 볼 코스 목록 — 코스 행이 SSOT다.
+ * 코스 행을 못 읽었을 때만(읽기 실패 등) 항목에 남은 key 로 폴백 코스를 만든다 —
+ * 값은 0099 하드코딩과 같다(first_day = 1회성·하한 3 / 그 밖 = 30일 주기·하한 없음).
+ */
+export function trainingCourseViews(courses: TrainingCourseRow[], items: TrainingItemRow[]): TrainingCourseView[] {
+  if (courses.length > 0) {
+    return courses.map((c) => ({ key: c.key, name: c.name, minItems: c.min_items, dueDays: c.due_days ?? null }));
+  }
+  return [...new Set(items.map((i) => i.course))].map((key) =>
+    key === 'first_day'
+      ? { key, name: '첫 출근', minItems: FIRST_DAY_MIN_ITEMS, dueDays: null }
+      : { key, name: '정기 점검', minItems: 0, dueDays: REGULAR_DUE_DAYS_DEFAULT },
+  );
+}
+
+/** 코스별 항목(position 순) — 화면 파생 셀렉터. course = 코스 key('first_day' 등 또는 매장이 만든 key). */
 export function trainingOf(items: TrainingItemRow[], course: TrainingCourse): TrainingItemRow[] {
   return items.filter((i) => i.course === course).sort((a, b) => a.position - b.position);
+}
+/**
+ * 코스 key → 코스 행. training_items 쓰기는 course_id 가 필수인데(0108) 호출부는 key 만 안다.
+ * 스토어 캐시(s.courses)가 아니라 그때그때 서버에서 찾는다 — 사장이 방금 만든 코스는 아직
+ * 캐시에 없다(코스 추가는 드문 동작이라 왕복 1회가 캐시 무효화 로직보다 싸다).
+ */
+async function resolveCourse(key: TrainingCourse) {
+  const { data } = await fetchTrainingCourses();
+  return (data ?? []).find((c) => c.key === key) ?? null;
 }
 /** 정기 훈련 due 판정 — 통과 기록이 없거나 마지막 통과가 매장 주기(dueDays)보다 오래됐으면 다시 확인할 때. */
 export function isRegularDue(verifiedAt: string | undefined, now: number, dueDays: number): boolean {
@@ -393,10 +435,10 @@ type State = {
   knowhowLinks: KnowhowLink[];
   /** 이해 확인 기록(0072, ④) — 어느 직원이 어느 업무 퀴즈를 통과했나. */
   understanding: UnderstandingRow[];
-  /** 훈련 코스(0099) — 첫 훈련·정기 훈련 항목 합본(코스 분리는 trainingOf 셀렉터). */
+  /** 훈련 코스(0099) — 전 코스 항목 합본(코스 분리는 trainingOf 셀렉터). */
   training: TrainingItemRow[];
-  /** 정기 훈련 재확인 주기(일, 0100 매장 설정). 로드 전·미설정 = 기본 30. */
-  regularDueDays: number;
+  /** 훈련 코스 행(0108) — 활성 코스만, position 순. 개수 상한·재확인 주기의 SSOT. */
+  courses: TrainingCourseRow[];
   /** 훈련 요청(0102) — 직원은 본인 것만, 관리 권한은 매장 전체(RLS 스코프). */
   trainingRequests: TrainingRequestRow[];
   /** 완료 캡처(②) 넛지 피로 상태(인메모리). */
@@ -420,12 +462,12 @@ type State = {
    *  방 무소속(신입이 어느 방이든 보게)·recurrence 없음(레거시=매일 루틴). 성공 여부 반환.
    *  기존 노하우로 추가할 때도 이 액션 하나(name=노하우 제목, entryId=기존 entry). */
   addTrainingTask: (name: string, entryId: string, course: TrainingCourse) => Promise<boolean>;
-  /** 코스에서 항목 빼기 — 업무·노하우는 남는다(업무 삭제는 removeTemplate). */
-  removeTrainingItem: (templateId: string) => Promise<void>;
-  /** 같은 코스 안에서 한 칸 위/아래로 — 이웃과 position 스왑. */
-  moveTrainingItem: (templateId: string, dir: 'up' | 'down') => Promise<void>;
-  /** 정기 훈련 재확인 주기 변경(관리 권한, 0100). */
-  setRegularDueDays: (days: number) => Promise<void>;
+  /** 코스에서 항목 빼기 — 업무·노하우는 남는다(업무 삭제는 removeTemplate).
+   *  course 를 주면 그 코스에서만, 생략하면 이 업무가 담긴 모든 코스에서 뺀다(0108 이전 동작). */
+  removeTrainingItem: (templateId: string, course?: TrainingCourse) => Promise<void>;
+  /** 같은 코스 안에서 한 칸 위/아래로 — 이웃과 position 스왑.
+   *  course 를 주면 그 코스 안에서, 생략하면 이 업무가 처음 발견된 코스에서 옮긴다. */
+  moveTrainingItem: (templateId: string, dir: 'up' | 'down', course?: TrainingCourse) => Promise<void>;
   /** 훈련 요청 보내기(0102) — 대상 직원들에게 즉시/매주 요청 + 푸시. 성공 여부 반환. */
   requestTraining: (templateId: string, taskText: string, staffIds: string[], recurrence: Recurrence | null) => Promise<boolean>;
   /** 훈련 요청 취소(관리 권한). */
@@ -455,28 +497,29 @@ export const useWorkStore = create<State>((set, get) => ({
   knowhowLinks: [],
   understanding: [],
   training: [],
-  regularDueDays: REGULAR_DUE_DAYS_DEFAULT,
+  courses: [],
   trainingRequests: [],
   captureNudge: { skips: 0 },
   loaded: !HAS_SUPABASE,
 
-  // 전체 재조회(templates·done·feed·링크·이해확인·훈련·주기·요청 8쿼리)로 스토어를 통째로 교체한다.
+  // 전체 재조회(templates·done·feed·링크·이해확인·훈련항목·코스·요청 8쿼리)로 스토어를 통째로 교체한다.
   // coalesce: 빠른 연속 체크로 realtime 이벤트가 몰려도 풀리페치가 병렬로 쌓이지 않게 합친다.
   hydrate: coalesce(async () => {
     if (!HAS_SUPABASE) return;
-    const [templates, done, feed, knowhowLinks, understanding, training, dueDays, trainingRequests] = await Promise.all([
+    const [templates, done, feed, knowhowLinks, understanding, training, courses, trainingRequests] = await Promise.all([
       fetchTemplates(),
       fetchDone(),
       fetchFeed(),
       fetchTemplateKnowhow(),
       fetchTaskUnderstanding(),
       fetchTrainingItems(),
-      fetchRegularDueDays(),
+      fetchTrainingCourses(),
       fetchTrainingRequests(),
     ]);
     set({
       templates, done, feed, knowhowLinks, understanding, training, trainingRequests,
-      regularDueDays: dueDays ?? REGULAR_DUE_DAYS_DEFAULT,
+      // 직원에게 보일 코스만(비활성 제외) 사장 화면과 같은 순서로 — 카드 순서 = 사장이 정한 순서.
+      courses: (courses.data ?? []).filter((c) => c.active).sort((a, b) => a.position - b.position),
       loaded: true,
     });
   }),
@@ -635,6 +678,12 @@ export const useWorkStore = create<State>((set, get) => ({
   // 훈련 항목(0099) — 업무 생성은 addTask 를 안 쓴다: curRoom() 스탬프가 붙으면 신입이
   // 그 방 멤버가 아닐 때 업무가 안 보인다(can_see_room RLS). 훈련 업무는 항상 방 무소속.
   addTrainingTask: async (name, entryId, course) => {
+    // 코스 행을 먼저 확보한다 — 업무부터 만들고 나서 코스를 못 찾으면 어디에도 안 담긴 업무만 남는다.
+    const courseRow = await resolveCourse(course);
+    if (!courseRow) {
+      useSyncStore.getState().noteError('퀴즈 종류를 찾지 못했어요. 새로고침 후 다시 시도해 주세요.');
+      return false;
+    }
     const t: TaskTemplate = {
       id: genId('t'),
       section: 'etc',
@@ -646,51 +695,60 @@ export const useWorkStore = create<State>((set, get) => ({
     const ok = await guardWrite(
       insertTemplate(t),
       () => set((s) => ({ templates: s.templates.filter((x) => x.id !== t.id) })),
-      '훈련 업무 저장에 실패했어요.',
+      '퀴즈 업무 저장에 실패했어요.',
     );
     if (!ok) return false;
     // 노하우 첨부(0069) — 업무 행 저장 뒤에만(FK). 실패해도 업무는 남는다(첨부만 배너 고지).
     await get().attachKnowhow(t.id, [entryId]);
-    // 코스 등록(0099) — position = 그 코스의 현재 길이(입력 순서 보존).
+    // 코스 등록(0099 → 0108) — position = 그 코스의 현재 길이(입력 순서 보존).
     const position = trainingOf(get().training, course).length;
-    const row: TrainingItemRow = { templateId: t.id, course, position };
+    const row: TrainingItemRow = { templateId: t.id, courseId: courseRow.id, course, position };
     set((s) => ({ training: [...s.training, row] }));
     return guardWrite(
-      insertTrainingItem(t.id, course, position),
-      () => set((s) => ({ training: s.training.filter((f) => f.templateId !== t.id) })),
-      '훈련 저장에 실패했어요.',
+      insertTrainingItem(t.id, courseRow.id, position, course),
+      () => set((s) => ({ training: s.training.filter((f) => !(f.templateId === t.id && f.courseId === courseRow.id)) })),
+      '퀴즈 저장에 실패했어요.',
     );
   },
 
   // 코스에서 빼기 — 업무·노하우·통과 기록은 그대로(코스 소속만 해제). 낙관적 제거 + 실패 롤백.
-  removeTrainingItem: async (templateId) => {
-    const removed = get().training.find((f) => f.templateId === templateId);
-    if (!removed) return;
-    set((s) => ({ training: s.training.filter((f) => f.templateId !== templateId) }));
+  // 0108 부터 한 업무가 여러 코스에 있을 수 있어 삭제는 (course_id, template_id) 쌍 단위다.
+  removeTrainingItem: async (templateId, course) => {
+    const removed = get().training.filter((f) => f.templateId === templateId && (course === undefined || f.course === course));
+    if (removed.length === 0) return;
+    const keys = new Set(removed.map((f) => `${f.courseId}:${f.templateId}`));
+    set((s) => ({ training: s.training.filter((f) => !keys.has(`${f.courseId}:${f.templateId}`)) }));
     await guardWrite(
-      deleteTrainingItem(templateId),
-      () => set((s) => ({ training: [...s.training, removed] })),
-      '훈련에서 빼기에 실패했어요.',
+      Promise.all(removed.map((f) => deleteTrainingItem(f.templateId, f.courseId))).then((rs) => rs.every(Boolean)),
+      () => set((s) => ({ training: [...s.training, ...removed] })),
+      '퀴즈에서 빼기에 실패했어요.',
     );
   },
 
   // 순서 변경 — 같은 코스의 이웃과 position 스왑. 낙관적 스왑 + 실패 시 원상복구.
-  moveTrainingItem: async (templateId, dir) => {
+  moveTrainingItem: async (templateId, dir, course) => {
     const all = get().training;
-    const me = all.find((f) => f.templateId === templateId);
+    const me = all.find((f) => f.templateId === templateId && (course === undefined || f.course === course));
     if (!me) return;
-    const course = trainingOf(all, me.course);
-    const idx = course.findIndex((f) => f.templateId === templateId);
-    const other = course[dir === 'up' ? idx - 1 : idx + 1];
+    const list = trainingOf(all, me.course);
+    const idx = list.findIndex((f) => f.templateId === templateId);
+    const other = list[dir === 'up' ? idx - 1 : idx + 1];
     if (!other) return;
+    // ★같은 코스의 행만 건드린다 — 같은 업무가 다른 코스에도 있으면 그쪽 순서까지 흔들린다.
     const swap = (rows: TrainingItemRow[], aPos: number, bPos: number) =>
       rows.map((f) =>
-        f.templateId === me.templateId ? { ...f, position: bPos } : f.templateId === other.templateId ? { ...f, position: aPos } : f,
+        f.courseId !== me.courseId
+          ? f
+          : f.templateId === me.templateId
+            ? { ...f, position: bPos }
+            : f.templateId === other.templateId
+              ? { ...f, position: aPos }
+              : f,
       );
     const before = all;
     set((s) => ({ training: swap(s.training, me.position, other.position) }));
     await guardWrite(
-      updateTrainingPositions([
+      updateTrainingPositions(me.courseId, [
         { templateId: me.templateId, position: other.position },
         { templateId: other.templateId, position: me.position },
       ]),
@@ -714,7 +772,7 @@ export const useWorkStore = create<State>((set, get) => ({
     const ok = await guardWrite(
       insertTrainingRequests(rows),
       () => set((s) => ({ trainingRequests: s.trainingRequests.filter((r) => !ids.has(r.id)) })),
-      '훈련 요청 저장에 실패했어요.',
+      '퀴즈 요청 저장에 실패했어요.',
     );
     if (ok) {
       const author = useSessionStore.getState().userName || '사장님';
@@ -730,18 +788,6 @@ export const useWorkStore = create<State>((set, get) => ({
       deleteTrainingRequest(id),
       () => set((s) => ({ trainingRequests: [...s.trainingRequests, removed] })),
       '요청 취소에 실패했어요.',
-    );
-  },
-
-  // 정기 훈련 주기(0100) — 낙관적 반영 + 실패 시 원복. RLS(sc_write)가 관리 권한을 강제.
-  setRegularDueDays: async (days) => {
-    const prev = get().regularDueDays;
-    if (prev === days) return;
-    set({ regularDueDays: days });
-    await guardWrite(
-      saveRegularDueDays(days),
-      () => set({ regularDueDays: prev }),
-      '재확인 주기 변경에 실패했어요.',
     );
   },
 

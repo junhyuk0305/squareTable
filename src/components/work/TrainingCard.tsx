@@ -14,6 +14,19 @@ export type TrainingCardItem = {
   hasKnowhow: boolean;
 };
 
+/**
+ * 이 카드가 어느 코스인가 — 값은 코스 행(0108 training_courses)에서 그대로 온다.
+ * 예전의 kind:'first'|'regular' 는 DB 에 없는 이름이라 호출부가 코스 key 를 몰래 매핑해야 했다.
+ */
+export type TrainingCardCourse = {
+  /** training_courses.key — 카드 식별용(호출부 React key). */
+  key: string;
+  /** training_courses.name — 카드 제목. 코스가 여러 종류라 고정 제목을 쓰면 전부 같은 이름으로 뜬다. */
+  name: string;
+  /** null = 1회성(한 번 통과하면 끝) · N = N일마다 다시 확인. 카드의 말투가 이 값으로 갈린다. */
+  dueDays: number | null;
+};
+
 const STATE_CHIP: Record<TrainingCardItem['state'], { label: string; color: string; bg: string }> = {
   passed: { label: '통과', color: BrandColors.good, bg: '#E6F1EA' },
   next: { label: '다음', color: InkColors.ink, bg: InkColors.cream },
@@ -23,17 +36,17 @@ const STATE_CHIP: Record<TrainingCardItem['state'], { label: string; color: stri
 };
 
 /**
- * TrainingCard — 직원 업무 채팅 상단의 훈련 카드(첫 훈련 / 정기 훈련 공용).
+ * TrainingCard — 직원 업무 채팅 상단의 훈련 카드(코스 1개 = 카드 1장).
  * 위에는 "다음 한 개"(순서의 외부화), 펼치면 전체 항목과 상태가 보인다(색+텍스트 병기).
- * 문제 풀이는 자발 — 페널티 없음. 첫 훈련은 전부 통과하면, 정기 훈련은 다시 확인할 게 없으면 사라진다.
+ * 문제 풀이는 자발 — 페널티 없음. 1회성 코스는 전부 통과하면, 주기 코스는 다시 확인할 게 없으면 사라진다.
  */
 export function TrainingCard({
-  kind,
+  course,
   items,
   onOpenKnowhow,
   onStartCheck,
 }: {
-  kind: 'first' | 'regular';
+  course: TrainingCardCourse;
   items: TrainingCardItem[];
   onOpenKnowhow: (templateId: string) => void;
   onStartCheck: (templateId: string) => void;
@@ -43,22 +56,25 @@ export function TrainingCard({
   const next = items.find((it) => it.state === 'asked') ?? items.find((it) => it.state === 'next' || it.state === 'due');
   if (!next) return null;
 
+  // 1회성(due_days 없음)이면 "처음 배우는 중", 주기가 있으면 "다시 확인하는 중" — 코스 행 하나로 갈린다.
+  const oneShot = course.dueDays === null;
   const passedCount = items.filter((it) => it.state === 'passed').length;
   const dueCount = items.filter((it) => it.state === 'due' || it.state === 'asked').length;
-  const title = kind === 'first' ? '첫 훈련' : '훈련 확인';
-  const badge = kind === 'first' ? `${passedCount}/${items.length}` : `확인할 것 ${dueCount}개`;
-  const ctaLabel = kind === 'first' ? '혼자 할 수 있어요' : '다시 확인하기';
+  // 제목은 코스 이름 그대로 — 종류가 여러 개라 '첫 출근'/'포지션 바뀔 때'가 구분돼야 한다.
+  const title = course.name;
+  const badge = oneShot ? `${passedCount}/${items.length}` : `확인할 것 ${dueCount}개`;
+  const ctaLabel = oneShot ? '혼자 할 수 있어요' : '다시 확인하기';
 
   return (
     <View style={st.card}>
       <View style={st.head}>
-        <Ionicons name={kind === 'first' ? 'school-outline' : 'refresh-outline'} size={16} color={InkColors.ink} />
+        <Ionicons name={oneShot ? 'school-outline' : 'refresh-outline'} size={16} color={InkColors.ink} />
         <Text style={st.title}>{title}</Text>
-        <Text style={[st.progress, kind === 'regular' && { color: '#8a5a12' }]}>{badge}</Text>
+        <Text style={[st.progress, !oneShot && { color: '#8a5a12' }]}>{badge}</Text>
       </View>
 
       <Text style={st.next} numberOfLines={2}>
-        {kind === 'first' ? '다음 훈련' : next.state === 'asked' ? '사장님이 요청했어요' : '다시 확인할 업무'} · {next.text}
+        {oneShot ? '다음 퀴즈' : next.state === 'asked' ? '사장님이 요청했어요' : '다시 확인할 업무'} · {next.text}
       </Text>
 
       <View style={st.btnRow}>

@@ -250,7 +250,7 @@ export const notifyUserTraining = (userId: string, author: string, text: string)
   pushNotify({
     audience: 'user',
     userId,
-    title: `${author}님이 훈련 확인을 요청했어요`,
+    title: `${author}님이 퀴즈를 요청했어요`,
     body: text,
     url: '/junior/work',
     tag: 'training',

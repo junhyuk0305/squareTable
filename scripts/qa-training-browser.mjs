@@ -1,15 +1,18 @@
-// qa-training-browser.mjs — 훈련 코스 2종(0099) 실브라우저 E2E (실 백엔드 + expo web dev 서버).
+// qa-training-browser.mjs — 퀴즈 코스(0099 → 0108 v2) 실브라우저 E2E (실 백엔드 + expo web dev 서버).
+//
+// ★ 화면 문구는 "퀴즈", 코드·라우트·DB 는 training 그대로다(2026-08-03 개명). 기대값은 화면 문구를 쓴다.
+// ★ v2 부터 코스는 하드코딩 2종이 아니라 사장이 프리셋에서 만드는 행이다 — 코스 만들기가 선행 단계다.
 //
 //   [사장 /owner/training]
-//   T1  직원·급여 → "훈련" 카드 → 훈련 화면 진입(세그먼트·안내 카드)
-//   T2  새 문답: 글자수 힌트(10자 미만 경고 → 충족 문구 전환) → "훈련에 추가" → 목록 1행
+//   T1  직원·급여 → "퀴즈" 카드 → 퀴즈 화면(프리셋 고르기) → '첫 출근' 만들기 → 추천 시트 → 미달 안내
+//   T2  새 문답: 글자수 힌트(10자 미만 경고 → 충족 문구 전환) → "퀴즈에 추가" → 목록 1행
 //   T3  기존 노하우로 추가: 시트 → 시드 노하우 탭 → 목록 2행
 //   T4  3개째 추가 → 상태 표시등 "준비됨"
-//   T5  항목 액션 시트: 아래로 이동(순서 스왑) · 훈련에서 빼기(목록 2행 + 미달 안내 복귀) → 재추가
-//   T6  정기 훈련 세그먼트: 기존 노하우 추가 → "운영 중"
-//   T7  허브 현황 "훈련" 섹션 노출
+//   T5  항목 액션 시트: 아래로 이동(순서 스왑) · 퀴즈에서 빼기(목록 2행 + 미달 안내 복귀) → 재추가
+//   T6  종류 추가 → '정기 점검' 프리셋 → 주기 안내(1달마다) · 비운영 상태
+//   T7  허브 현황 "퀴즈" 섹션 노출
 //   [직원 업무 채팅]
-//   T8  TrainingCard: 첫 훈련 2/차기 항목 표기 · 전체 펼침(상태칩 다음/대기)
+//   T8  TrainingCard: 제목=코스 이름('첫 출근') · 진행 0/3 · 전체 펼침(상태칩 다음/대기)
 //   T9  "혼자 할 수 있어요" → 이해 확인 시트 → 실 AI 문항 렌더
 //   T10 콘솔 에러 0(치명 오류 무음 감지)
 //
@@ -122,21 +125,29 @@ async function main() {
   const wait = (page, t, timeout = 20000) =>
     page.getByText(t, { exact: false }).first().waitFor({ state: 'visible', timeout }).then(() => true).catch(() => false);
   const tap = async (page, t) => { await page.getByText(t, { exact: false }).first().dispatchEvent('click'); };
-  // 스택 내비로 이전 화면 텍스트가 DOM에 남는다 — 부분일치가 위험한 라벨(세그먼트 등)은 exact 로만 탭.
-  const tapExact = async (page, t) => { await page.getByText(t, { exact: true }).first().dispatchEvent('click'); };
+  // 스택 내비로 이전 화면 텍스트가 DOM에 남는다 — 시트 닫기·프리셋 카드처럼 텍스트가 겹치는
+  // 대상은 부분일치가 위험하므로 accessibilityLabel(aria-label)로 집는다.
+  const tapLabel = async (page, l) => { await page.getByLabel(l, { exact: true }).last().dispatchEvent('click'); };
 
   try {
     // ════ 사장 ════
     const po = await newPage(oEmail);
-    console.log('\n[사장] 진입점 → 훈련 화면');
+    console.log('\n[사장] 진입점 → 퀴즈 화면 → 코스 만들기');
     await po.goto(`${ORIGIN}/owner/staff`, { waitUntil: 'domcontentloaded' });
-    const hasEntryCard = await wait(po, '첫 훈련(신입 첫날)과 정기 훈련', 30000);
-    check('T1a 직원·급여에 훈련 카드', hasEntryCard);
-    await tap(po, '첫 훈련(신입 첫날)과 정기 훈련');
-    const onTraining = await wait(po, '순서대로 배우는 훈련');
-    check('T1b 훈련 화면 진입(첫 훈련 안내)', onTraining);
-    check('T1c 미달 안내(3개부터 직원에게)', await see(po, '3개부터 직원에게 보여요'));
-    await shot(po, '01-training-empty');
+    const hasEntryCard = await wait(po, '첫 출근(신입 첫날)과 정기 점검', 30000);
+    check('T1a 직원·급여에 퀴즈 카드', hasEntryCard);
+    await tap(po, '첫 출근(신입 첫날)과 정기 점검');
+    const onTraining = await wait(po, '어떤 퀴즈부터 만들까요');
+    check('T1b 퀴즈 화면 진입(코스 0개 → 프리셋 고르기)', onTraining);
+    await shot(po, '01-preset-onboarding');
+    // 프리셋 '첫 출근' 만들기 → 코스 행만 생기고 담을 업무는 추천 시트에서 사장이 고른다(계약 §3).
+    await tapLabel(po, '첫 출근 만들기');
+    check('T1c 만들기 토스트', await wait(po, '첫 출근을(를) 만들었어요'));
+    check('T1d 추천 업무 담기 시트', await wait(po, '담을 업무 고르기'));
+    await shot(po, '01b-recommend');
+    await tapLabel(po, '닫기'); // 추천은 건너뛰고 아래 T2·T3 경로로 담는다
+    check('T1e 미달 안내(3개부터 직원에게)', await wait(po, '3개부터 직원에게 보여요'));
+    await shot(po, '01c-training-empty');
 
     console.log('\n[사장] 새 문답 추가 + 글자수 힌트');
     await tap(po, '새로 만들기');
@@ -152,8 +163,8 @@ async function main() {
     await howInput.pressSequentially(' 포스 켜고 시재 5만원 확인, 머신 예열 순서로 해요. 시재가 안 맞으면 바로 알려 주세요.', { delay: 3 });
     check('T2b 충족 → 안내 문구 전환', await wait(po, '자세할수록 이해 확인 문제가'));
     await shot(po, '02-form-filled');
-    await tap(po, '훈련에 추가');
-    check('T2c 추가 토스트', await wait(po, '첫 훈련에 추가했어요'));
+    await tap(po, '퀴즈에 추가');
+    check('T2c 추가 토스트', await wait(po, '첫 출근에 추가했어요'));
     check('T2d 목록 1행(오픈 청소)', await wait(po, '오픈 청소'));
 
     console.log('\n[사장] 기존 노하우로 추가');
@@ -165,21 +176,21 @@ async function main() {
     check('T3b 시드 노하우 노출', pickRow);
     await shot(po, '03-picker');
     await tap(po, '원두 채우기');
-    check('T3c 추가 토스트', await wait(po, '첫 훈련에 추가했어요'));
+    check('T3c 추가 토스트', await wait(po, '첫 출근에 추가했어요'));
     check('T3d 남은 1개 안내', await wait(po, '1개 더 채우면 직원에게 보여요'));
 
     console.log('\n[사장] 3개째 → 준비됨');
     await tap(po, '기존 노하우로 추가');
     await wait(po, '가스 밸브 잠그기');
     await tap(po, '가스 밸브 잠그기');
-    await wait(po, '첫 훈련에 추가했어요');
+    await wait(po, '첫 출근에 추가했어요');
     check('T4 상태 표시등 "준비됨"', await wait(po, '준비됨 · 직원 업무 채팅에 보여요'));
     await shot(po, '04-ready');
 
     console.log('\n[사장] 항목 액션: 이동·빼기');
     await tap(po, '오픈 청소'); // 1번 항목 → 액션 시트
     const sheetUp = await wait(po, '아래로 이동');
-    check('T5a 액션 시트(이동·빼기)', sheetUp && (await see(po, '훈련에서 빼기')) && (await see(po, '노하우 수정')));
+    check('T5a 액션 시트(이동·빼기)', sheetUp && (await see(po, '퀴즈에서 빼기')) && (await see(po, '노하우 수정')));
     await shot(po, '05-action-sheet');
     await tap(po, '아래로 이동');
     await po.waitForTimeout(1500);
@@ -191,37 +202,42 @@ async function main() {
     const orderTexts = (posRows ?? []).map((r) => textOf.get(r.template_id));
     check('T5b 아래로 이동 → 순서 스왑(DB)', orderTexts[0] === '원두 채우기' && orderTexts[1] === '오픈 청소', JSON.stringify(orderTexts));
     await tap(po, '오픈 청소'); // 이제 2번
-    await wait(po, '훈련에서 빼기');
-    await tap(po, '훈련에서 빼기');
+    await wait(po, '퀴즈에서 빼기');
+    await tap(po, '퀴즈에서 빼기');
     check('T5c 빼기 토스트(업무·노하우 보존 안내)', await wait(po, '업무와 노하우는 남아요'));
     check('T5d 미달 안내 복귀(1개 더)', await wait(po, '1개 더 채우면 직원에게 보여요'));
     // 직원 카드 검증을 위해 3개로 복구 — 픽커에서 방금 뺀 항목의 노하우(오픈 청소)를 재선택.
     await tap(po, '기존 노하우로 추가');
     await wait(po, '오픈 청소');
     await tap(po, '오픈 청소');
-    await wait(po, '첫 훈련에 추가했어요');
+    await wait(po, '첫 출근에 추가했어요');
     await wait(po, '준비됨 · 직원 업무 채팅에 보여요');
 
-    console.log('\n[사장] 정기 훈련');
-    // '정기 훈련'은 스택에 남은 직원·급여 카드 설명에도 부분일치로 존재 → 세그먼트는 exact 로 탭.
-    await tapExact(po, '정기 훈련');
-    check('T6a 정기 안내(30일)', await wait(po, '일마다'));
-    check('T6b 비운영 상태', await see(po, '아직 없어요'));
+    console.log('\n[사장] 종류 추가 → 정기 점검');
+    // v2 부터 '정기 점검'은 기본 제공이 아니라 사장이 프리셋에서 만든다.
+    await tapLabel(po, '퀴즈 종류 추가');
+    await wait(po, '어떤 퀴즈부터 만들까요');
+    await tapLabel(po, '정기 점검 만들기');
+    check('T6a 정기 점검 만들기', await wait(po, '정기 점검을(를) 만들었어요'));
+    await wait(po, '담을 업무 고르기');
+    await tapLabel(po, '닫기');
+    check('T6b 주기 안내(1달마다)', await wait(po, '1달마다'));
+    check('T6c 비운영 상태', await see(po, '아직 없어요'));
     await shot(po, '06-regular-empty');
 
     console.log('\n[사장] 허브 현황 진입점');
     await po.goto(`${ORIGIN}/hub`, { waitUntil: 'domcontentloaded' });
-    const hubTraining = await wait(po, '첫 훈련(신입 첫날)과 정기 훈련(30일 재확인)', 30000);
-    check('T7 허브 현황 "훈련" 섹션', hubTraining);
+    const hubTraining = await wait(po, '첫 출근(신입 첫날)과 정기 점검(주기 재확인)', 30000);
+    check('T7 허브 현황 "퀴즈" 섹션', hubTraining);
     await shot(po, '07-hub');
     await po.close();
 
     // ════ 직원 ════
-    console.log('\n[직원] 업무 채팅 훈련 카드');
+    console.log('\n[직원] 업무 채팅 퀴즈 카드');
     const pj = await newPage(jEmail);
     await pj.goto(`${ORIGIN}/junior/work`, { waitUntil: 'domcontentloaded' });
-    const cardUp = await wait(pj, '다음 훈련', 30000);
-    check('T8a TrainingCard 노출(다음 훈련)', cardUp);
+    const cardUp = await wait(pj, '다음 퀴즈', 30000);
+    check('T8a TrainingCard 노출(제목=코스 이름·다음 퀴즈)', cardUp && (await see(pj, '첫 출근')));
     check('T8b 진행 0/3', await see(pj, '0/3'));
     await shot(pj, '08-junior-card');
     await tap(pj, '전체 3개 보기');
@@ -248,7 +264,7 @@ async function main() {
     await cleanupSeededPhones(URL_, SRV, [phoneO, phoneJ]).catch(() => {});
   }
 
-  console.log(`\n${fail === 0 ? '✅ PASS' : '❌ FAIL'} — 훈련 브라우저 QA · 통과 ${pass} / 실패 ${fail}`);
+  console.log(`\n${fail === 0 ? '✅ PASS' : '❌ FAIL'} — 퀴즈 브라우저 QA · 통과 ${pass} / 실패 ${fail}`);
   process.exit(fail ? 1 : 0);
 }
 

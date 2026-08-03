@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
@@ -9,23 +9,34 @@ import {
   trainingOf,
   isRegularDue,
   regularDueLabel,
-  FIRST_DAY_MIN_ITEMS,
-  FIRST_DAY_MAX_ITEMS,
-  REGULAR_MAX_ITEMS,
-  REGULAR_DUE_OPTIONS,
   knowhowIdsForTask,
-  type TrainingCourse,
+  type TrainingCourse as TrainingCourseKey,
   type Recurrence,
 } from '@/lib/store/useWorkStore';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { useStaffStore } from '@/lib/store/useStaffStore';
+import { useSessionStore } from '@/lib/store/useSessionStore';
 import { showToast } from '@/lib/store/useToastStore';
+import { guardWrite } from '@/lib/store/useSyncStore';
 import { buildDirectUq, buildPlaybookEntryFromSquare } from '@/lib/utils/buildEntry';
-import { fetchQuizStats } from '@/lib/db';
+import { genId } from '@/lib/utils/id';
+import { fetchQuizStats, fetchQuizItems, fetchTrainingCourses, upsertTrainingCourse } from '@/lib/db';
+import type { QuizItem, TrainingCourse } from '@/lib/quiz/types';
 import { BottomSheet } from '@/components/BottomSheet';
 import { EntryDetailModal } from '@/components/EntryDetailModal';
 import { Appear } from '@/components/Appear';
 import { SectionLabel } from '@/components/SectionLabel';
+import {
+  CoursePresetOnboarding,
+  CourseFormSheet,
+  CourseRecommendSheet,
+  PRESET_LIST,
+  type CoursePreset,
+} from '@/components/owner/quiz/CourseSetup';
+import { QuizItemsSheet } from '@/components/owner/quiz/QuizItemsSheet';
+import { QuizEditorSheet } from '@/components/owner/quiz/QuizEditorSheet';
+import { TrainingInsights } from '@/components/owner/quiz/TrainingInsights';
+import { SheetHead } from '@/components/owner/quiz/kit';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
@@ -39,15 +50,15 @@ const QUIZ_MISS_RATE = 0.4;
 /** 요일 라벨(0=일 ~ 6=토) — 할일 recurrence 와 같은 인덱스 체계. */
 const WEEKDAY_LABELS = ['일', '월', '화', '수', '목', '금', '토'] as const;
 
-const COURSE_META: Record<TrainingCourse, { label: string; max: number }> = {
-  first_day: { label: '첫 훈련', max: FIRST_DAY_MAX_ITEMS },
-  regular: { label: '정기 훈련', max: REGULAR_MAX_ITEMS },
-};
-
 /**
- * 훈련 관리(0099) — 첫 훈련(신입 첫날 3~5개)·정기 훈련(30일 주기 재확인, 최대 10개) 2코스.
- * 항목 = 노하우가 붙은 업무. 추가 경로 2개(새 문답 / 기존 노하우 선택), 항목별 수정·순서·빼기.
- * 직원 쪽 노출·문제 출제·통과 기록은 기존 체인(0069 링크 → quiz → 0072) 재사용.
+ * 훈련 관리(0099 → v2) — 코스는 하드코딩 2종이 아니라 training_courses(0108) 행이다.
+ * 기본 제공 프리셋(첫 출근·정기 점검·단기 주말·포지션)에서 만들거나 사장이 직접 만든다.
+ * 항목 = 노하우가 붙은 업무. 한 업무가 여러 코스에 들어갈 수 있다(0108 PK = course_id + template_id).
+ * 문항은 저장된다(0107) — 코스/업무별로 사장이 만들고 검수한다.
+ *
+ * ★ training_items.course 에는 **코스 key** 를 넣는다. 기존 'first_day'/'regular' 행이 같은 key 로
+ *   그대로 이어지므로 백필 없이 호환된다. db.ts 의 TrainingCourse 문자열 유니온('first_day'|'regular')이
+ *   넓혀지기 전까지는 호출부에서 캐스팅한다(TrainingCourseKey).
  */
 export default function OwnerTrainingScreen() {
   const router = useRouter();
@@ -59,14 +70,13 @@ export default function OwnerTrainingScreen() {
   const editTask = useWorkStore((s) => s.editTask);
   const removeTrainingItem = useWorkStore((s) => s.removeTrainingItem);
   const moveTrainingItem = useWorkStore((s) => s.moveTrainingItem);
-  const regularDueDays = useWorkStore((s) => s.regularDueDays);
-  const setRegularDueDays = useWorkStore((s) => s.setRegularDueDays);
   const trainingRequests = useWorkStore((s) => s.trainingRequests);
   const requestTraining = useWorkStore((s) => s.requestTraining);
   const cancelTrainingRequest = useWorkStore((s) => s.cancelTrainingRequest);
   const staffList = useStaffStore((s) => s.staff);
   const entries = usePlaybookStore((s) => s.entries);
   const addEntry = usePlaybookStore((s) => s.add);
+  const unitId = useSessionStore((s) => s.unitId);
 
   useEffect(() => {
     void useWorkStore.getState().hydrate();
@@ -81,43 +91,94 @@ export default function OwnerTrainingScreen() {
     return () => { alive = false; };
   }, []);
 
-  const [course, setCourse] = useState<TrainingCourse>('first_day');
-  const meta = COURSE_META[course];
+  // ── 훈련 종류(0108) — 하드코딩 2종을 대체. 없으면 프리셋 고르기부터 시작한다 ──
+  const [courses, setCourses] = useState<TrainingCourse[]>([]);
+  const [coursesLoaded, setCoursesLoaded] = useState(false);
+  const [courseKey, setCourseKey] = useState<string>('');
+  const [courseReload, setCourseReload] = useState(0);
+  const reloadCourses = useCallback(() => setCourseReload((v) => v + 1), []);
+  useEffect(() => {
+    let alive = true;
+    void fetchTrainingCourses().then(({ data }) => {
+      if (!alive) return;
+      setCourses((data ?? []).filter((c) => c.active).sort((a, b) => a.position - b.position));
+      setCoursesLoaded(true);
+    });
+    return () => { alive = false; };
+  }, [courseReload]);
+
+  // 활성 코스는 파생으로 정한다 — 아직 안 고른 상태/삭제 직후에도 첫 코스로 자연히 떨어진다.
+  const course = useMemo(() => courses.find((c) => c.key === courseKey) ?? courses[0] ?? null, [courses, courseKey]);
+  const activeKey = course?.key ?? '';
+  /** 재확인 주기 = 코스 행의 due_days 하나(SSOT). null = 1회성. 직원 카드도 같은 값을 본다. */
+  const activeDueDays = course?.due_days ?? null;
 
   // ── 코스 항목(순서대로) — 업무명·첨부 노하우·확인 인원까지 풀어서 든다 ──
   const entryById = useMemo(() => new Map(entries.map((e) => [e.id, e])), [entries]);
   // "최근 30일 확인" 판정 기준 시각 — 렌더 중 Date.now() 금지(컴파일러 순수성), 마운트 시 1회로 충분.
   const [now] = useState(() => Date.now());
+
+  // ── 저장된 문항(0107) — 훈련에 담긴 노하우 전체를 한 번에 읽어 개수 배지·재고 구멍을 계산한다 ──
+  const trainedEntryIds = useMemo(() => {
+    const ids = new Set<string>();
+    training.forEach((f) => knowhowIdsForTask(knowhowLinks, f.templateId).forEach((id) => ids.add(id)));
+    return [...ids];
+  }, [training, knowhowLinks]);
+  const [quizItems, setQuizItems] = useState<QuizItem[]>([]);
+  const [quizReload, setQuizReload] = useState(0);
+  useEffect(() => {
+    if (trainedEntryIds.length === 0) return;   // 훈련에 담긴 게 없으면 읽을 것도 없다
+    let alive = true;
+    void fetchQuizItems(trainedEntryIds).then(({ data }) => { if (alive) setQuizItems(data ?? []); });
+    return () => { alive = false; };
+  }, [trainedEntryIds, quizReload]);
+  /** 그 노하우로 실제 '나가는' 문항 수 — 보관(archived)은 세지 않는다. */
+  const quizCountOf = useCallback(
+    (entryId: string) =>
+      trainedEntryIds.includes(entryId)
+        ? quizItems.filter((q) => q.status === 'active' && (q.entry_ids ?? []).includes(entryId)).length
+        : 0,
+    [quizItems, trainedEntryIds],
+  );
+
   const items = useMemo(
     () =>
-      trainingOf(training, course)
+      trainingOf(training, activeKey as TrainingCourseKey)
         .map((f) => {
           const t = templates.find((x) => x.id === f.templateId);
           if (!t) return null;
-          const entryId = knowhowIdsForTask(knowhowLinks, t.id)[0];
+          const entryIds = knowhowIdsForTask(knowhowLinks, t.id);
+          const entryId = entryIds[0];
           const rows = understanding.filter((u) => u.templateId === t.id);
-          const passedNames =
-            course === 'regular'
-              ? rows.filter((u) => !isRegularDue(u.verifiedAt, now, regularDueDays)).map((u) => u.staffName)
-              : rows.map((u) => u.staffName);
+          const passedNames = activeDueDays
+            ? rows.filter((u) => !isRegularDue(u.verifiedAt, now, activeDueDays)).map((u) => u.staffName)
+            : rows.map((u) => u.staffName);
           // 오답 잦음(0103) — 표본 QUIZ_MISS_MIN_ATTEMPTS 이상 + 오답률 QUIZ_MISS_RATE 초과.
           const qs = entryId ? quizStats[entryId] : undefined;
           const missRate = qs && qs.attempts >= QUIZ_MISS_MIN_ATTEMPTS ? qs.misses / qs.attempts : 0;
           const missPct = missRate >= QUIZ_MISS_RATE ? Math.round(missRate * 100) : 0;
-          return { templateId: t.id, text: t.text, entryId, passedNames, missPct };
+          const quizCount = entryIds.reduce((n, id) => n + quizCountOf(id), 0);
+          return { templateId: t.id, text: t.text, entryId, entryIds, passedNames, missPct, quizCount };
         })
         .filter((x): x is NonNullable<typeof x> => !!x),
-    [training, course, templates, knowhowLinks, understanding, now, regularDueDays, quizStats],
+    [training, activeKey, templates, knowhowLinks, understanding, now, activeDueDays, quizStats, quizCountOf],
   );
-  const full = items.length >= meta.max;
-  const firstDayReady = course !== 'first_day' || items.length >= FIRST_DAY_MIN_ITEMS;
+  const maxItems = course?.max_items ?? 0;
+  const minItems = course?.min_items ?? 0;
+  const full = !!course && items.length >= maxItems;
+  const ready = !course || items.length >= minItems;
 
-  // 코스에 이미 쓰인 노하우(중복 추가 방지용) — 두 코스 전체 기준.
+  /**
+   * 이 코스에 이미 쓰인 노하우(중복 추가 방지용) — **코스 단위**로 판정한다.
+   * 한 업무가 여러 코스에 들어갈 수 있으므로(0108) 다른 코스에 있다는 이유로 막지 않는다.
+   */
   const usedEntryIds = useMemo(() => {
     const ids = new Set<string>();
-    training.forEach((f) => knowhowIdsForTask(knowhowLinks, f.templateId).forEach((id) => ids.add(id)));
+    training
+      .filter((f) => f.course === activeKey)
+      .forEach((f) => knowhowIdsForTask(knowhowLinks, f.templateId).forEach((id) => ids.add(id)));
     return ids;
-  }, [training, knowhowLinks]);
+  }, [training, activeKey, knowhowLinks]);
 
   // ── 추가 흐름 상태: 문답 폼 / 기존 노하우 선택 시트 / 항목 액션 시트 / 노하우 열람 ──
   const [formOpen, setFormOpen] = useState(false);
@@ -138,6 +199,16 @@ export default function OwnerTrainingScreen() {
   const [reqMode, setReqMode] = useState<'now' | 'weekly'>('now');
   const [reqDays, setReqDays] = useState<Set<number>>(new Set());
   const [sending, setSending] = useState(false);
+  // ── 훈련 종류 흐름: 만들기·고치기 시트 / 종류 추가 시트 / 추천 업무 담기 시트 ──
+  const [courseFormOpen, setCourseFormOpen] = useState(false);
+  const [courseEditing, setCourseEditing] = useState<TrainingCourse | null>(null);
+  const [coursePreset, setCoursePreset] = useState<CoursePreset | null>(null);
+  const [courseAddOpen, setCourseAddOpen] = useState(false);
+  const [recommendCourse, setRecommendCourse] = useState<TrainingCourse | null>(null);
+  // ── 문항 흐름: 업무별 문항 목록 시트 → 만들기/고치기 시트(모달 위 모달 금지 — 순차 전환) ──
+  const [quizTask, setQuizTask] = useState<{ templateId: string; text: string; entryIds: string[] } | null>(null);
+  const [composeMode, setComposeMode] = useState<'ai' | 'manual' | null>(null);
+  const [editingQuiz, setEditingQuiz] = useState<QuizItem | null>(null);
 
   const staffNameOf = useMemo(() => {
     const m = new Map(staffList.map((p) => [p.id, p.name]));
@@ -195,10 +266,58 @@ export default function OwnerTrainingScreen() {
     }
   };
 
-  const canSave = !saving && !full && name.trim().length > 0 && how.trim().length >= MIN_HOW_LEN;
+  // ── 훈련 종류 만들기 ──────────────────────────────────────────────
+  /**
+   * 프리셋 고르기 = 코스 행만 만든다. 업무는 자동으로 채우지 않는다(계약 §3) —
+   * 만든 직후 추천 목록을 띄워 사장이 체크해서 담는다.
+   */
+  /**
+   * 저장된 코스를 목록에 바로 반영하고 활성으로 만든다.
+   * 서버 재조회를 기다리면 그 사이 파생 활성 코스가 옛 첫 코스로 떨어져
+   * 뒤이어 뜨는 추천 시트가 엉뚱한 코스의 목록을 보게 된다.
+   */
+  const applyCourse = (c: TrainingCourse) => {
+    setCourses((prev) => (prev.some((x) => x.key === c.key) ? prev.map((x) => (x.key === c.key ? c : x)) : [...prev, c]));
+    setCourseKey(c.key);
+    reloadCourses();
+  };
+
+  const createFromPreset = async (p: CoursePreset) => {
+    const next: TrainingCourse = {
+      id: genId('tc'),
+      unit_id: unitId,
+      key: p.key,
+      name: p.name,
+      description: p.description,
+      preset: p.key,
+      min_items: p.min_items,
+      max_items: p.max_items,
+      due_days: p.due_days,
+      position: courses.length,
+      active: true,
+    };
+    const ok = await guardWrite(upsertTrainingCourse(next), () => {}, '퀴즈 종류 저장에 실패했어요.');
+    if (!ok) return;
+    setCourseAddOpen(false);
+    applyCourse(next);
+    showToast(`${next.name}을(를) 만들었어요`, 'good');
+    setRecommendCourse(next);
+  };
+
+  const onCourseSaved = (saved: TrainingCourse) => {
+    setCourseFormOpen(false);
+    setCourseAddOpen(false);
+    const wasNew = !courseEditing;
+    setCourseEditing(null);
+    setCoursePreset(null);
+    applyCourse(saved);
+    if (wasNew) setRecommendCourse(saved);
+  };
+
+  const canSave = !saving && !full && !!course && name.trim().length > 0 && how.trim().length >= MIN_HOW_LEN;
 
   const saveNew = async () => {
-    if (!canSave) return;
+    if (!canSave || !course) return;
     setSaving(true);
     const taskName = name.trim();
     const howText = how.trim();
@@ -212,20 +331,32 @@ export default function OwnerTrainingScreen() {
     };
     const entry = buildPlaybookEntryFromSquare(buildDirectUq('Know-how', howText), square, { title: taskName });
     const okEntry = await addEntry(entry);
-    const ok = okEntry && (await addTrainingTask(taskName, entry.id, course));
+    const ok = okEntry && (await addTrainingTask(taskName, entry.id, course.key as TrainingCourseKey));
     setSaving(false);
     if (ok) {
       setName('');
       setHow('');
-      showToast(`${meta.label}에 추가했어요`, 'good');
+      showToast(`${course.name}에 추가했어요`, 'good');
     }
   };
 
   const addFromEntry = async (e: PlaybookEntry) => {
+    if (!course) return;
     setPickerOpen(false);
     setPickerQuery('');
-    const ok = await addTrainingTask(e.title, e.id, course);
-    if (ok) showToast(`${meta.label}에 추가했어요`, 'good');
+    const ok = await addTrainingTask(e.title, e.id, course.key as TrainingCourseKey);
+    if (ok) showToast(`${course.name}에 추가했어요`, 'good');
+  };
+
+  /** 추천 목록에서 고른 여러 건을 순서대로 담는다(position 이 고른 순서로 남게 직렬 실행). */
+  const addManyFromEntries = async (list: PlaybookEntry[]) => {
+    if (!course) return;
+    let added = 0;
+    for (const e of list) {
+      // position 이 고른 순서를 따라야 해서 직렬로 넣는다(병렬이면 순서가 섞인다).
+      if (await addTrainingTask(e.title, e.id, course.key as TrainingCourseKey)) added += 1;
+    }
+    if (added > 0) showToast(`${course.name}에 ${added}개 담았어요`, 'good');
   };
 
   // 검색(제목·키워드) + 발행본만 + 이미 코스에 쓰인 노하우 제외.
@@ -245,88 +376,92 @@ export default function OwnerTrainingScreen() {
 
   return (
     <SafeAreaView style={st.safe} edges={['bottom']}>
-      <Stack.Screen options={{ title: '훈련' }} />
+      <Stack.Screen options={{ title: '퀴즈' }} />
       <ScrollView contentContainerStyle={st.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-        {/* ── 코스 선택 ── */}
-        <Appear delay={0}>
-          <View style={st.segRow}>
-            {(Object.keys(COURSE_META) as TrainingCourse[]).map((c) => {
-              const on = course === c;
-              return (
-                <Pressable
-                  key={c}
-                  onPress={() => { setCourse(c); closeForm(); }}
-                  style={[st.segBtn, on && st.segBtnOn]}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: on }}
-                >
-                  <Text style={[st.segText, on && st.segTextOn]}>{COURSE_META[c].label}</Text>
-                </Pressable>
-              );
-            })}
-          </View>
-        </Appear>
+        {/* ── 훈련 종류가 하나도 없을 때: 프리셋 고르기부터 ── */}
+        {coursesLoaded && courses.length === 0 && (
+          <Appear delay={0}>
+            <CoursePresetOnboarding
+              takenKeys={new Set()}
+              onPickPreset={(p) => void createFromPreset(p)}
+              onCustom={() => { setCourseEditing(null); setCoursePreset(null); setCourseFormOpen(true); }}
+            />
+          </Appear>
+        )}
+
+        {/* ── 코스 선택 — 종류가 늘어나므로 가로 스크롤. 5개를 넘어도 줄이 깨지지 않는다 ── */}
+        {courses.length > 0 && (
+          <Appear delay={0}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={st.segScroll}>
+              {courses.map((c) => {
+                const on = c.key === activeKey;
+                return (
+                  <Pressable
+                    key={c.id}
+                    onPress={() => { setCourseKey(c.key); closeForm(); }}
+                    style={[st.segBtn, on && st.segBtnOn]}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: on }}
+                    accessibilityLabel={c.name}
+                  >
+                    <Text style={[st.segText, on && st.segTextOn]} numberOfLines={1}>{c.name}</Text>
+                  </Pressable>
+                );
+              })}
+              <Pressable
+                onPress={() => setCourseAddOpen(true)}
+                style={[st.segBtn, st.segAdd]}
+                accessibilityRole="button"
+                accessibilityLabel="퀴즈 종류 추가"
+              >
+                <Ionicons name="add" size={17} color={InkColors.ink2} />
+                <Text style={st.segText}>종류 추가</Text>
+              </Pressable>
+            </ScrollView>
+          </Appear>
+        )}
 
         {/* ── 코스 안내 — 핵심 숫자·상태를 강조해서(줄글 금지) ── */}
-        <Appear delay={30}>
-          <View style={st.guideCard}>
-            {course === 'first_day' ? (
-              <>
-                <GuideLine icon="footsteps-outline" strong="새 직원이 첫날" rest="순서대로 배우는 훈련이에요" />
-                <GuideLine icon="list-outline" strong={`${FIRST_DAY_MIN_ITEMS}~${FIRST_DAY_MAX_ITEMS}개`} rest="핵심 업무만 담아요 · 문제는 노하우로 자동 출제" />
-                {firstDayReady ? (
-                  <View style={st.statusRow}>
-                    <View style={[st.statusDot, { backgroundColor: BrandColors.good }]} />
-                    <Text style={[st.statusText, { color: BrandColors.good }]}>준비됨 · 직원 업무 채팅에 보여요</Text>
-                  </View>
-                ) : (
-                  <View style={st.statusRow}>
-                    <View style={[st.statusDot, { backgroundColor: '#8a5a12' }]} />
-                    <Text style={[st.statusText, { color: '#8a5a12' }]}>
-                      {items.length === 0
-                        ? `아직 없어요 · ${FIRST_DAY_MIN_ITEMS}개부터 직원에게 보여요`
-                        : `${FIRST_DAY_MIN_ITEMS - items.length}개 더 채우면 직원에게 보여요`}
-                    </Text>
-                  </View>
-                )}
-              </>
-            ) : (
-              <>
-                <GuideLine icon="refresh-outline" strong={`${regularDueLabel(regularDueDays)}마다`} rest="다 배운 업무도 다시 이해 확인해요" />
-                <GuideLine icon="list-outline" strong={`최대 ${REGULAR_MAX_ITEMS}개`} rest="틀리면 안 되는 업무만 담아요 · 실수 예방이 목적" />
-                {/* 재확인 주기 — 자유 입력 대신 칩(0100 매장 설정). 선택 즉시 저장·안내 문구도 같이 바뀐다. */}
-                <View style={st.cycleRow}>
-                  <Text style={st.cycleLabel}>재확인 주기</Text>
-                  {REGULAR_DUE_OPTIONS.map((o) => {
-                    const on = regularDueDays === o.days;
-                    return (
-                      <Pressable
-                        key={o.days}
-                        onPress={() => { if (!on) { void setRegularDueDays(o.days); showToast(`재확인 주기를 ${o.label}로 바꿨어요`, 'good'); } }}
-                        style={[st.cycleChip, on && st.cycleChipOn]}
-                        accessibilityRole="radio"
-                        accessibilityState={{ selected: on }}
-                        accessibilityLabel={`재확인 주기 ${o.label}`}
-                      >
-                        <Text style={[st.cycleChipText, on && st.cycleChipTextOn]}>{o.label}</Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-                <View style={st.statusRow}>
-                  <View style={[st.statusDot, { backgroundColor: items.length > 0 ? BrandColors.good : InkColors.ink3 }]} />
-                  <Text style={[st.statusText, { color: items.length > 0 ? BrandColors.good : InkColors.ink3 }]}>
-                    {items.length > 0 ? '운영 중 · 확인할 때가 되면 직원에게 보여요' : '아직 없어요'}
-                  </Text>
-                </View>
-              </>
-            )}
-          </View>
-        </Appear>
+        {course && (
+          <Appear delay={30}>
+            <View style={st.guideCard}>
+              <GuideLine
+                icon="list-outline"
+                strong={`${minItems}~${maxItems}개`}
+                rest={course.description || '핵심 업무만 담아요'}
+              />
+              <GuideLine
+                icon={activeDueDays ? 'refresh-outline' : 'footsteps-outline'}
+                strong={activeDueDays ? `${regularDueLabel(activeDueDays)}마다` : '한 번 통과하면 끝'}
+                rest={activeDueDays ? '다 배운 업무도 다시 이해 확인해요' : '통과한 직원에게는 다시 묻지 않아요'}
+              />
+              {/* 재확인 주기 변경은 아래 '훈련 종류 설정'(CourseFormSheet)에서 — 코스별 due_days 하나로 모았다. */}
+              <View style={st.statusRow}>
+                <View style={[st.statusDot, { backgroundColor: ready ? BrandColors.good : BrandColors.warn }]} />
+                <Text style={[st.statusText, { color: ready ? BrandColors.good : BrandColors.warn }]}>
+                  {ready
+                    ? '준비됨 · 직원 업무 채팅에 보여요'
+                    : items.length === 0
+                      ? `아직 없어요 · ${minItems}개부터 직원에게 보여요`
+                      : `${minItems - items.length}개 더 채우면 직원에게 보여요`}
+                </Text>
+              </View>
+              <Pressable
+                onPress={() => { setCourseEditing(course); setCoursePreset(null); setCourseFormOpen(true); }}
+                style={({ pressed }) => [st.guideLink, pressed && { opacity: 0.7 }]}
+                accessibilityRole="button"
+                accessibilityLabel="퀴즈 종류 설정"
+              >
+                <Text style={st.guideLinkText}>퀴즈 종류 설정</Text>
+              </Pressable>
+            </View>
+          </Appear>
+        )}
 
         {/* ── 항목 목록 ── */}
+        {course && (
         <Appear delay={60}>
-          <SectionLabel title={`${meta.label} 업무`} hint={`${items.length}/${meta.max}`} />
+          <SectionLabel title={`${course.name} 업무`} hint={`${items.length}/${maxItems}`} />
           <View style={st.card}>
             {items.length === 0 ? (
               <Text style={st.emptyText}>아래에서 업무를 추가해 주세요</Text>
@@ -344,10 +479,14 @@ export default function OwnerTrainingScreen() {
                     <Text style={st.itemText} numberOfLines={1}>{it.text}</Text>
                     <Text style={st.itemMeta} numberOfLines={1}>
                       {!it.entryId
-                        ? '노하우 없음 · 문제를 못 만들어요'
+                        ? '노하우 없음 · 문제를 쓰면서 노하우도 만들 수 있어요'
                         : it.passedNames.length > 0
-                          ? `${course === 'regular' ? `최근 ${regularDueLabel(regularDueDays)} 안에 확인` : '이해 확인'} · ${it.passedNames.join(', ')}`
-                          : course === 'regular' ? '확인한 직원이 아직 없어요' : '통과한 직원이 아직 없어요'}
+                          ? `${activeDueDays ? `최근 ${regularDueLabel(activeDueDays)} 안에 확인` : '이해 확인'} · ${it.passedNames.join(', ')}`
+                          : activeDueDays ? '확인한 직원이 아직 없어요' : '통과한 직원이 아직 없어요'}
+                    </Text>
+                    {/* 문항 재고 — 0개면 이 업무는 훈련에 담겨도 실제로 나가지 않는다. */}
+                    <Text style={[st.itemMeta, it.quizCount === 0 && st.itemWarn]} numberOfLines={1}>
+                      {it.quizCount === 0 ? '문제 없음 · 눌러서 만들어 주세요' : `문제 ${it.quizCount}개`}
                     </Text>
                     {it.missPct > 0 && (
                       <Text style={st.itemWarn} numberOfLines={1}>
@@ -361,9 +500,10 @@ export default function OwnerTrainingScreen() {
             )}
           </View>
         </Appear>
+        )}
 
         {/* ── 추가 — 경로 2개: 새 문답 / 기존 노하우 선택 ── */}
-        {!full && (
+        {course && !full && (
           <Appear delay={90}>
             <View style={st.addRow}>
               <Pressable
@@ -415,17 +555,38 @@ export default function OwnerTrainingScreen() {
                   disabled={!canSave}
                   style={({ pressed }) => [st.cta, !canSave && { opacity: 0.4 }, pressed && { opacity: 0.85 }]}
                   accessibilityRole="button"
-                  accessibilityLabel="훈련에 추가"
+                  accessibilityLabel="퀴즈에 추가"
                 >
-                  <Text style={st.ctaText}>{saving ? '저장하는 중...' : '훈련에 추가'}</Text>
+                  <Text style={st.ctaText}>{saving ? '저장하는 중...' : '퀴즈에 추가'}</Text>
                 </Pressable>
               </View>
             )}
           </Appear>
         )}
-        {full && (
+        {course && full && (
           <Appear delay={90}>
-            <Text style={st.fullNote}>{meta.label}은 {meta.max}개까지예요. 항목을 눌러 빼면 새로 넣을 수 있어요.</Text>
+            <Text style={st.fullNote}>{course.name}은 {maxItems}개까지예요. 항목을 눌러 빼면 새로 넣을 수 있어요.</Text>
+          </Appear>
+        )}
+
+        {/* ── 훈련 현황(인사이트) — 새 라우트 없이 이 화면 안의 섹션으로 ── */}
+        {courses.length > 0 && (
+          <Appear delay={120}>
+            <TrainingInsights
+              courses={courses}
+              training={training}
+              taskTextOf={(id) => templates.find((t) => t.id === id)?.text}
+              entryIdsOf={(id) => knowhowIdsForTask(knowhowLinks, id)}
+              entryTitleOf={(id) => entryById.get(id)?.title}
+              understanding={understanding}
+              staff={staffList}
+              quizStats={quizStats}
+              quizCountOf={quizCountOf}
+              now={now}
+              onFixHole={(h) =>
+                setQuizTask({ templateId: h.templateId, text: h.text, entryIds: knowhowIdsForTask(knowhowLinks, h.templateId) })
+              }
+            />
           </Appear>
         )}
       </ScrollView>
@@ -439,6 +600,15 @@ export default function OwnerTrainingScreen() {
               <Ionicons name="close" size={20} color={InkColors.ink2} />
             </Pressable>
           </View>
+          {/* 문항(0107) — 이 업무로 실제 나갈 문제를 만들고 검수한다. 문항 0개면 훈련이 안 나간다. */}
+          <SheetAction
+            icon="help-circle-outline"
+            label={actionItem.quizCount === 0 ? '문제 만들기' : `문제 관리 · ${actionItem.quizCount}개`}
+            onPress={() => {
+              setQuizTask({ templateId: actionItem.templateId, text: actionItem.text, entryIds: actionItem.entryIds });
+              setActionItem(null);
+            }}
+          />
           <SheetAction
             icon="book-outline"
             label="노하우 보기"
@@ -478,22 +648,22 @@ export default function OwnerTrainingScreen() {
             icon="arrow-up-outline"
             label="위로 이동"
             disabled={items[0]?.templateId === actionItem.templateId}
-            onPress={() => { void moveTrainingItem(actionItem.templateId, 'up'); setActionItem(null); }}
+            onPress={() => { void moveTrainingItem(actionItem.templateId, 'up', activeKey); setActionItem(null); }}
           />
           <SheetAction
             icon="arrow-down-outline"
             label="아래로 이동"
             disabled={items[items.length - 1]?.templateId === actionItem.templateId}
-            onPress={() => { void moveTrainingItem(actionItem.templateId, 'down'); setActionItem(null); }}
+            onPress={() => { void moveTrainingItem(actionItem.templateId, 'down', activeKey); setActionItem(null); }}
           />
           <SheetAction
             icon="remove-circle-outline"
-            label="훈련에서 빼기"
+            label="퀴즈에서 빼기"
             danger
             onPress={() => {
-              void removeTrainingItem(actionItem.templateId);
+              void removeTrainingItem(actionItem.templateId, activeKey);
               setActionItem(null);
-              showToast('훈련에서 뺐어요 · 업무와 노하우는 남아요', 'good');
+              showToast('퀴즈에서 뺐어요 · 업무와 노하우는 남아요', 'good');
             }}
           />
         </BottomSheet>
@@ -537,7 +707,7 @@ export default function OwnerTrainingScreen() {
       {requestItem && (
         <BottomSheet visible={true} onClose={() => setRequestItem(null)} sheetStyle={{ height: '78%' }}>
           <View style={st.sheetHead}>
-            <Text style={st.sheetTitle} numberOfLines={1}>훈련 요청 · {requestItem.text}</Text>
+            <Text style={st.sheetTitle} numberOfLines={1}>퀴즈 요청 · {requestItem.text}</Text>
             <Pressable onPress={() => setRequestItem(null)} hitSlop={8}>
               <Ionicons name="close" size={20} color={InkColors.ink2} />
             </Pressable>
@@ -616,8 +786,8 @@ export default function OwnerTrainingScreen() {
               )}
               <Text style={st.reqHint}>
                 {reqMode === 'now'
-                  ? '보내면 바로 그 직원의 훈련 카드에 뜨고 알림이 가요'
-                  : '고른 요일마다 그 직원의 훈련 카드에 떠요'}
+                  ? '보내면 바로 그 직원의 퀴즈 카드에 뜨고 알림이 가요'
+                  : '고른 요일마다 그 직원의 퀴즈 카드에 떠요'}
               </Text>
             </View>
           </ScrollView>
@@ -627,9 +797,9 @@ export default function OwnerTrainingScreen() {
               disabled={sending || reqStaff.size === 0 || (reqMode === 'weekly' && reqDays.size === 0)}
               style={({ pressed }) => [st.cta, (sending || reqStaff.size === 0 || (reqMode === 'weekly' && reqDays.size === 0)) && { opacity: 0.4 }, pressed && { opacity: 0.85 }]}
               accessibilityRole="button"
-              accessibilityLabel="훈련 요청 보내기"
+              accessibilityLabel="퀴즈 요청 보내기"
             >
-              <Text style={st.ctaText}>{sending ? '보내는 중...' : '훈련 요청 보내기'}</Text>
+              <Text style={st.ctaText}>{sending ? '보내는 중...' : '퀴즈 요청 보내기'}</Text>
             </Pressable>
           </View>
         </BottomSheet>
@@ -666,7 +836,7 @@ export default function OwnerTrainingScreen() {
                   onPress={() => void addFromEntry(e)}
                   style={({ pressed }) => [st.pickRow, pressed && { opacity: 0.85 }]}
                   accessibilityRole="button"
-                  accessibilityLabel={`${e.title} 훈련에 추가`}
+                  accessibilityLabel={`${e.title} 퀴즈에 추가`}
                 >
                   <View style={{ flex: 1, minWidth: 0 }}>
                     <Text style={st.itemText} numberOfLines={1}>{e.title}</Text>
@@ -678,6 +848,79 @@ export default function OwnerTrainingScreen() {
             )}
           </ScrollView>
         </BottomSheet>
+      )}
+
+      {/* ── 훈련 종류 추가 시트 — 프리셋 고르기 또는 직접 만들기(빈 화면과 같은 내용을 재사용) ── */}
+      {courseAddOpen && (
+        <BottomSheet visible={true} onClose={() => setCourseAddOpen(false)} sheetStyle={{ height: '80%' }}>
+          <SheetHead title="퀴즈 종류 추가" onClose={() => setCourseAddOpen(false)} />
+          <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 24 }} showsVerticalScrollIndicator={false}>
+            <CoursePresetOnboarding
+              takenKeys={new Set(courses.map((c) => c.key))}
+              onPickPreset={(p) => void createFromPreset(p)}
+              onCustom={() => { setCourseAddOpen(false); setCourseEditing(null); setCoursePreset(null); setCourseFormOpen(true); }}
+            />
+            {PRESET_LIST.every((p) => courses.some((c) => c.key === p.key)) ? (
+              <Text style={st.fullNote}>기본 제공 종류는 모두 만들었어요. 직접 만들기로 더 추가할 수 있어요.</Text>
+            ) : null}
+          </ScrollView>
+        </BottomSheet>
+      )}
+
+      {/* ── 훈련 종류 만들기·설정 시트 ── */}
+      {courseFormOpen && (
+        <CourseFormSheet
+          editing={courseEditing}
+          preset={coursePreset}
+          position={courses.length}
+          onClose={() => { setCourseFormOpen(false); setCourseEditing(null); setCoursePreset(null); }}
+          onSaved={onCourseSaved}
+          onDeleted={(c) => {
+            setCourseFormOpen(false);
+            setCourseEditing(null);
+            setCourses((prev) => prev.filter((x) => x.id !== c.id));
+            setCourseKey('');
+            reloadCourses();
+          }}
+        />
+      )}
+
+      {/* ── 추천 업무 담기 — 코스를 만든 직후. 자동으로 채우지 않고 사장이 골라 담는다 ── */}
+      {recommendCourse && (
+        <CourseRecommendSheet
+          course={recommendCourse}
+          entries={entries}
+          usedEntryIds={usedEntryIds}
+          remaining={Math.max(0, (recommendCourse.max_items ?? 0) - items.length)}
+          onAdd={addManyFromEntries}
+          onClose={() => setRecommendCourse(null)}
+        />
+      )}
+
+      {/* ── 업무별 문항 목록 → 만들기/고치기 (모달 위 모달 금지: 목록을 닫고 편집을 연다) ── */}
+      {quizTask && !composeMode && !editingQuiz && (
+        <QuizItemsSheet
+          task={quizTask}
+          entryIds={quizTask.entryIds}
+          reloadKey={quizReload}
+          onClose={() => setQuizTask(null)}
+          onCompose={(mode) => setComposeMode(mode)}
+          onEdit={(it) => setEditingQuiz(it)}
+          onChanged={() => setQuizReload((v) => v + 1)}
+        />
+      )}
+      {quizTask && (composeMode || editingQuiz) && (
+        <QuizEditorSheet
+          task={quizTask}
+          entryIds={quizTask.entryIds}
+          entries={entries}
+          // 새로 만들 노하우가 승계할 카테고리 = 같은 업무에 붙은 다른 노하우의 것. 없으면 미분류.
+          defaultSection={quizTask.entryIds.map((id) => entryById.get(id)?.section).find((s) => !!s) ?? null}
+          editing={editingQuiz}
+          startMode={editingQuiz ? 'manual' : (composeMode ?? 'manual')}
+          onClose={() => { setComposeMode(null); setEditingQuiz(null); }}
+          onSaved={() => setQuizReload((v) => v + 1)}
+        />
       )}
 
       <EntryDetailModal entry={detailEntry} visible={!!detailEntry} onClose={() => setDetailEntry(null)} />
@@ -729,11 +972,14 @@ const st = StyleSheet.create({
   safe: { flex: 1, backgroundColor: InkColors.paper },
   scroll: { padding: Space.gutter, paddingBottom: Space.xl * 2, gap: Space.md },
 
-  segRow: { flexDirection: 'row', gap: Space.sm },
+  // 코스 세그먼트는 종류 수만큼 늘어나므로 가로 스크롤 — 5개를 넘어도 줄이 깨지지 않는다.
+  segScroll: { flexDirection: 'row', gap: Space.sm, paddingRight: Space.sm },
   segBtn: {
-    flex: 1, alignItems: 'center', justifyContent: 'center', minHeight: 48,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, minHeight: 48, minWidth: 104,
+    paddingHorizontal: Space.md,
     borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, backgroundColor: '#FFFFFF',
   },
+  segAdd: { borderStyle: 'dashed' },
   segBtnOn: { backgroundColor: InkColors.ink, borderColor: InkColors.ink },
   segText: { fontSize: 15, fontWeight: '800', color: InkColors.ink2 },
   segTextOn: { color: '#FFFFFF' },
@@ -744,18 +990,11 @@ const st = StyleSheet.create({
   guideLine: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
   guideText: { flex: 1, fontSize: 15, color: InkColors.ink2, fontWeight: '600', lineHeight: 22 },
   guideStrong: { fontWeight: '900', color: InkColors.ink },
-  cycleRow: { flexDirection: 'row', alignItems: 'center', gap: Space.xs + 2, marginTop: Space.xs, flexWrap: 'wrap' },
-  cycleLabel: { fontSize: 12.5, fontWeight: '800', color: InkColors.ink2, marginRight: 2 },
-  cycleChip: {
-    minHeight: 34, paddingHorizontal: Space.md, alignItems: 'center', justifyContent: 'center',
-    borderRadius: Radius.pill, borderWidth: 1, borderColor: InkColors.line, backgroundColor: '#FFFFFF',
-  },
-  cycleChipOn: { backgroundColor: InkColors.ink, borderColor: InkColors.ink },
-  cycleChipText: { fontSize: 12.5, fontWeight: '800', color: InkColors.ink2 },
-  cycleChipTextOn: { color: '#FFFFFF' },
   statusRow: { flexDirection: 'row', alignItems: 'center', gap: Space.xs + 2, marginTop: Space.xs },
   statusDot: { width: 8, height: 8, borderRadius: 4 },
-  statusText: { fontSize: 13, fontWeight: '800' },
+  statusText: { flex: 1, fontSize: 13, fontWeight: '800' },
+  guideLink: { alignSelf: 'flex-start', minHeight: 40, justifyContent: 'center', marginTop: Space.xs },
+  guideLinkText: { fontSize: 13, fontWeight: '800', color: InkColors.ink2, textDecorationLine: 'underline' },
 
   card: {
     backgroundColor: '#FFFFFF', borderRadius: Radius.lg, borderWidth: 1, borderColor: InkColors.line,

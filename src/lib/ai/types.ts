@@ -3,6 +3,7 @@
 // 스키마가 바뀌어도 adapter.ts 한 겹만 고치면 됨.
 
 import type { ResponseBlock, SquareBlock } from '@/types';
+import type { QuizFormat, QuizKind } from '@/lib/quiz/types';
 
 // AI가 답변 생성에 필요로 하는 "최소 SOP 조각". PlaybookEntry 전체가 아님.
 export type SopSlice = {
@@ -176,6 +177,28 @@ export type QuizOutput = {
   questions: QuizQuestion[];
   quotaExceeded?: boolean;  // 월 AI 한도 초과(엣지 402) — 알바 화면에선 요금제 토스트 대신 부드러운 안내로.
   degraded?: boolean;       // AI 실패 폴백
+};
+
+// ── 훈련 퀴즈 v2 — 형태별 문항 생성 (엣지 task:'quiz_item') ──
+// 위 QuizInput/QuizOutput(task:'quiz')과의 차이: 형태(format)를 요청이 지정하고,
+// 결과가 DB(quiz_items)에 저장된다 → 응시 때는 AI 호출이 0이다.
+// 형태 목록·채점·검증의 SSOT는 src/lib/quiz/formats 레지스트리다(여기는 전송 계약만).
+export type QuizItemGenInput = {
+  format: QuizFormat;
+  kind: QuizKind;
+  // 이 노하우들에서만 출제(그라운딩). id는 오답 귀속(0103)용.
+  sops: { id?: string; title: string; situation: string; steps: string[]; donts: string[]; scripts?: string[] }[];
+  /** 한 번에 만들 문항 수(1~2). 생략 시 1. */
+  count?: number;
+  /** 매장 고유 용어 후보(detect.storeTerms). 이름·초성 형태의 재료. */
+  terms?: string[];
+};
+
+export type QuizItemGenOutput = {
+  // payload 는 형태별 본문 + 정답. 저장 전에 FORMATS[format].validate 로 한 번 더 거른다.
+  items: { format: QuizFormat; kind: QuizKind; entry_ids: string[]; payload: Record<string, any> }[];
+  quotaExceeded?: boolean;
+  degraded?: boolean;
 };
 
 export type { ResponseBlock, SquareBlock };
