@@ -10,6 +10,7 @@
 <link rel="canonical" href="https://dochackchack.com/features">
 <link rel="icon" href="/favicon.png">
 <link rel="preconnect" href="https://cdn.jsdelivr.net">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.css">
 <link rel="stylesheet" href="/site.css">
 <style>
 /* ══ 기능 페이지 — 스크롤 연동 데모 ══
@@ -74,12 +75,19 @@
   transition:background .25s ease,width .25s ease}
 .rail button:hover .bar{background:var(--ink3)}
 .rail button.on .bar{background:var(--yellowDeep);width:34px}
-/* 이름표는 hover 때만 왼쪽으로 떠오른다(평소엔 폭을 차지하지 않음) */
-.rail .lb{position:absolute;right:calc(100% + 10px);top:50%;transform:translateY(-50%) translateX(6px);
+/* 이름표는 기본적으로 감춘다 — 오른쪽 여백이 좁은 화면에서 띄우면 폰을 가리거나 화면 밖으로 나간다.
+   그 구간에서는 button[title] 의 브라우저 기본 툴팁이 이름을 알려준다. */
+.rail .lb{display:none;position:absolute;top:50%;
   background:var(--ink);color:#fff;font-size:11.5px;font-weight:800;padding:5px 10px;border-radius:99px;
   white-space:nowrap;opacity:0;pointer-events:none;box-shadow:var(--e2);
   transition:opacity .2s ease,transform .2s ease}
-.rail button:hover .lb{opacity:1;transform:translateY(-50%)}
+/* 여백이 넉넉한 화면(≥1400px): 레일을 컨테이너 바깥으로 더 빼고, 이름표를 막대 오른쪽에 띄운다. */
+@media(min-width:1400px){
+  .pin-in{padding-right:0}
+  .rail{position:fixed;left:calc(50% + 548px);right:auto}
+  .rail .lb{display:block;left:calc(100% + 12px);transform:translateY(-50%) translateX(-6px)}
+  .rail button:hover .lb{opacity:1;transform:translateY(-50%)}
+}
 
 /* ── 왼쪽 기능 설명 ── */
 .chapter .no{font-size:12px;font-weight:900;color:var(--yellowDeep);letter-spacing:.06em}
@@ -520,7 +528,7 @@
   /* 오른쪽 이동 레일 — 기능 이름 + 막대. 누르면 그 기능의 첫 단계로 스크롤. */
   var RAIL_NAMES = ['노하우 AI', '노하우 만들기', '받은 질문', '훈련 코스', '업무 배정', '출퇴근·급여', '다점포·매니저'];
   els.rail.innerHTML = CH.map(function (c, k) {
-    return '<button type="button" data-i="' + k + '" aria-label="' + RAIL_NAMES[k] + '으로 이동">' +
+    return '<button type="button" data-i="' + k + '" title="' + RAIL_NAMES[k] + '" aria-label="' + RAIL_NAMES[k] + '으로 이동">' +
       '<span class="lb">' + RAIL_NAMES[k] + '</span><span class="bar"></span></button>';
   }).join('');
   var railBtns = els.rail.querySelectorAll('button');
