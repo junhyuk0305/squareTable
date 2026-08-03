@@ -6,7 +6,7 @@
 <title>도입 문의 — 착착</title>
 <meta name="description" content="여러 매장을 운영하거나 프랜차이즈 본사 단위로 착착 도입을 검토 중이시라면, 매장 수와 업종을 알려주세요. 확인 후 회신드려요.">
 <meta property="og:title" content="도입 문의 — 착착">
-<meta property="og:description" content="여러 매장 · 프랜차이즈 본사 단위 도입은 메일로 문의해 주세요.">
+<meta property="og:description" content="여러 매장 · 프랜차이즈 본사 단위 도입 문의를 여기에 남겨주세요.">
 <link rel="canonical" href="https://dochackchack.com/inquiry">
 <link rel="icon" href="/favicon.png">
 <link rel="preconnect" href="https://cdn.jsdelivr.net">
@@ -33,12 +33,30 @@
 .how{margin:44px 0 0;background:var(--paper);border:1px solid var(--line);border-radius:var(--r-lg);padding:28px 24px}
 .how h2{font-size:20px;font-weight:900;letter-spacing:-.02em;margin:0}
 .how p{font-size:14px;color:var(--ink2);margin:8px 0 0;max-width:620px}
-.how .tpl{margin-top:16px;background:var(--bg);border:1px solid var(--line);border-radius:var(--r-md);padding:16px 18px;font-size:13.5px;color:var(--ink);line-height:1.9}
-.how .tpl b{font-weight:800}
-.how .mailrow{display:flex;gap:14px;margin-top:18px;flex-wrap:wrap;align-items:center}
-.how .mailrow a.m{display:inline-flex;background:var(--ink);color:#fff;font-weight:900;font-size:14.5px;padding:14px 24px;border-radius:var(--r-pill)}
-.how .mailrow .addr{font-size:13.5px;font-weight:800;color:var(--ink2)}
 .note{font-size:12.5px;color:var(--ink3);margin-top:14px}
+.note a{text-decoration:underline;font-weight:700}
+/* 문의 폼 */
+#iform{margin-top:18px;max-width:620px}
+.frow2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:560px){.frow2{grid-template-columns:1fr}}
+.fld{display:block;margin-top:12px}
+.frow2 .fld{margin-top:0}
+.flb{display:block;font-size:12.5px;font-weight:800;color:var(--ink2);margin-bottom:6px}
+.flb i{font-style:normal;font-size:11px;font-weight:900;color:var(--yellowDeep);margin-left:3px}
+.fld input,.fld textarea{width:100%;background:var(--bg);border:1px solid var(--line);border-radius:12px;
+  padding:13px 14px;font:inherit;font-size:14.5px;color:var(--ink);outline:none;
+  transition:border-color .18s,box-shadow .18s}
+.fld textarea{resize:vertical;min-height:96px;line-height:1.6}
+.fld input::placeholder,.fld textarea::placeholder{color:var(--ink3)}
+.fld input:focus,.fld textarea:focus{border-color:var(--yellowDeep);box-shadow:0 0 0 3px var(--yellowSoft)}
+.fld.bad input{border-color:#E5484D}
+.fsub{margin-top:16px;width:100%;background:var(--yellow);color:var(--ink);border:0;border-radius:var(--r-pill);
+  padding:15px;font:inherit;font-size:15px;font-weight:900;cursor:pointer;box-shadow:var(--ey)}
+.fsub:hover{background:var(--yellowDeep)}
+.fsub:disabled{opacity:.55;cursor:default;box-shadow:none}
+.fmsg{margin:12px 0 0;font-size:13.5px;font-weight:700;min-height:20px}
+.fmsg.ok{color:var(--good)}
+.fmsg.err{color:#C13B3F}
 </style>
 </head>
 <body>
@@ -112,7 +130,7 @@
   <section class="phero">
     <div class="eyebrow2">도입 문의</div>
     <h1>여러 매장, 본사 단위 도입은<br><span class="u">이렇게 시작해요</span></h1>
-    <p class="sub">매장 2곳부터는 다점포 요금제로 바로 시작할 수 있어요. 가맹점 여러 곳을 한 번에 들이는 프랜차이즈 본사 단위 도입은 메일로 문의해 주세요.</p>
+    <p class="sub">매장 2곳부터는 다점포 요금제로 바로 시작할 수 있어요. 가맹점 여러 곳을 한 번에 들이는 프랜차이즈 본사 단위 도입은 아래에 남겨주시면 확인하고 연락드려요.</p>
   </section>
 
   <div class="cards">
@@ -137,22 +155,36 @@
         <li><svg class="ic"><use href="#i-check"/></svg>본사 매뉴얼을 매장 노하우로 옮기기</li>
         <li><svg class="ic"><use href="#i-check"/></svg>가맹점 수에 따른 요금 협의</li>
       </ul>
-      <div class="btn"><a class="s" href="#contact">메일로 문의하기</a></div>
+      <div class="btn"><a class="s" href="#contact">문의 남기기</a></div>
     </div>
   </div>
 
   <div class="how" id="contact">
-    <h2>문의 방법</h2>
-    <p>아래 내용을 메일로 보내주시면 확인 후 회신드려요. 도입 전에 궁금한 점만 물어보셔도 돼요.</p>
-    <div class="tpl">
-      <b>브랜드(상호)</b> · <b>업종</b> · <b>매장 수</b> · <b>연락처</b><br>
-      지금 매장 운영에서 가장 번거로운 일 한 가지
-    </div>
-    <div class="mailrow">
-      <a class="m" href="mailto:cristianojun@naver.com?subject=%5B%EC%B0%A9%EC%B0%A9%20%EB%8F%84%EC%9E%85%20%EB%AC%B8%EC%9D%98%5D&body=%EB%B8%8C%EB%9E%9C%EB%93%9C(%EC%83%81%ED%98%B8)%3A%20%0A%EC%97%85%EC%A2%85%3A%20%0A%EB%A7%A4%EC%9E%A5%20%EC%88%98%3A%20%0A%EC%97%B0%EB%9D%BD%EC%B2%98%3A%20%0A%EA%B0%80%EC%9E%A5%20%EB%B2%88%EA%B1%B0%EB%A1%9C%EC%9A%B4%20%EC%9D%BC%3A%20">메일로 문의하기</a>
-      <span class="addr">cristianojun@naver.com</span>
-    </div>
-    <div class="note">개인 매장 이용 관련 문의도 같은 주소로 받아요.</div>
+    <h2>여기에 바로 남겨주세요</h2>
+    <p>확인하고 연락드려요. 도입 전에 궁금한 점만 물어보셔도 돼요.</p>
+    <form id="iform" novalidate>
+      <div class="frow2">
+        <label class="fld">
+          <span class="flb">이름 <i>필수</i></span>
+          <input name="name" type="text" maxlength="40" autocomplete="name" placeholder="홍길동" required>
+        </label>
+        <label class="fld">
+          <span class="flb">연락처 <i>필수</i></span>
+          <input name="phone" type="tel" maxlength="20" autocomplete="tel" placeholder="010-1234-5678" required>
+        </label>
+      </div>
+      <label class="fld">
+        <span class="flb">브랜드 · 매장 이름</span>
+        <input name="company" type="text" maxlength="80" autocomplete="organization" placeholder="착착커피 (매장 3곳)">
+      </label>
+      <label class="fld">
+        <span class="flb">문의 내용</span>
+        <textarea name="message" maxlength="1000" rows="4" placeholder="업종과 매장 수, 지금 매장 운영에서 가장 번거로운 일을 적어주시면 더 정확히 답해드려요."></textarea>
+      </label>
+      <button class="fsub" type="submit" id="isub">문의 남기기</button>
+      <p class="fmsg" id="imsg" role="status" aria-live="polite"></p>
+      <p class="note">남겨주신 연락처는 도입 문의 회신에만 써요. 메일이 편하시면 <a href="mailto:cristianojun@naver.com">cristianojun@naver.com</a> 으로 보내셔도 돼요.</p>
+    </form>
   </div>
 </div>
 
@@ -210,5 +242,55 @@
   </div>
   <div class="base">© 2026 스퀘어테이블 · 문의 cristianojun@naver.com</div>
 </footer>
+
+<script>
+/* 도입 문의 폼 → 엣지 함수 inquiry (리드 저장 + 운영자 메일).
+   · anon 키는 웹 번들에도 이미 들어 있는 공개 값이다(RLS 가 방어선) — 정적 페이지에 둬도 동일.
+   · 실패해도 메일 주소를 함께 안내해 문의 경로가 끊기지 않게 한다. */
+(function () {
+  var ENDPOINT = 'https://htestcrcphssgnljdwyh.supabase.co/functions/v1/inquiry';
+  var ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh0ZXN0Y3JjcGhzc2dubGpkd3loIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEwNTg5NDUsImV4cCI6MjA5NjYzNDk0NX0.D_Mo-iZ1cNlmao8pFlAdRJyZ_ynL2fVVACgjscxFbVM';
+  var form = document.getElementById('iform');
+  if (!form) return;
+  var btn = document.getElementById('isub'), msg = document.getElementById('imsg');
+
+  function say(text, kind) { msg.textContent = text; msg.className = 'fmsg ' + (kind || ''); }
+  function fieldOf(name) { return form.querySelector('[name="' + name + '"]').closest('.fld'); }
+
+  form.addEventListener('submit', async function (e) {
+    e.preventDefault();
+    var d = new FormData(form);
+    var name = (d.get('name') || '').trim();
+    var phone = (d.get('phone') || '').trim();
+    form.querySelectorAll('.fld').forEach(function (f) { f.classList.remove('bad'); });
+
+    if (!name) { fieldOf('name').classList.add('bad'); say('이름을 적어주세요.', 'err'); return; }
+    if (phone.replace(/\D/g, '').length < 8) { fieldOf('phone').classList.add('bad'); say('연락 받으실 번호를 적어주세요.', 'err'); return; }
+
+    btn.disabled = true; say('보내는 중이에요…');
+    try {
+      var r = await fetch(ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', apikey: ANON, Authorization: 'Bearer ' + ANON },
+        body: JSON.stringify({ name: name, phone: phone, company: (d.get('company') || '').trim(), message: (d.get('message') || '').trim() }),
+      });
+      if (r.ok) {
+        form.querySelectorAll('input,textarea').forEach(function (el) { el.value = ''; });
+        say('문의가 접수됐어요. 확인하고 연락드릴게요.', 'ok');
+        btn.textContent = '접수 완료';
+        return;
+      }
+      var body = await r.json().catch(function () { return {}; });
+      if (r.status === 429) say('잠시 뒤에 다시 시도해 주세요. 급하시면 cristianojun@naver.com 으로 보내주셔도 돼요.', 'err');
+      else if (body.error === 'name_required') { fieldOf('name').classList.add('bad'); say('이름을 적어주세요.', 'err'); }
+      else if (body.error === 'phone_required') { fieldOf('phone').classList.add('bad'); say('연락 받으실 번호를 적어주세요.', 'err'); }
+      else say('지금은 접수가 안 돼요. cristianojun@naver.com 으로 보내주시면 확인할게요.', 'err');
+    } catch (_e) {
+      say('연결이 끊겼어요. 잠시 뒤 다시 시도하거나 cristianojun@naver.com 으로 보내주세요.', 'err');
+    }
+    btn.disabled = false;
+  });
+})();
+</script>
 </body>
 </html>

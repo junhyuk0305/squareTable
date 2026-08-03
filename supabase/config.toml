@@ -417,3 +417,10 @@ s3_secret_key = "env(S3_SECRET_KEY)"
 [functions.otp]
 enabled = true
 verify_jwt = false
+
+# 도입 문의 폼(정적 마케팅 페이지 /inquiry) — 비로그인 방문자가 호출하므로 JWT 없음.
+# 방어선은 함수 내부 IP 레이트리밋(10분 3건) + 길이 캡뿐 — functions/inquiry/index.ts 헤더 참조.
+# SMS 와 달리 건당 과금이 없어 otp 만큼 조이지 않는다(리드를 놓치는 쪽이 더 손해).
+[functions.inquiry]
+enabled = true
+verify_jwt = false
