@@ -30,7 +30,18 @@
 .card .btn a.p{background:var(--yellow);color:var(--ink);box-shadow:var(--ey)}
 .card .btn a.p:hover{background:var(--yellowDeep)}
 .card .btn a.s{background:var(--paper);color:var(--ink)}
-.how{margin:44px 0 0;background:var(--paper);border:1px solid var(--line);border-radius:var(--r-lg);padding:28px 24px}
+/* 단일 매장·무료 사용자 안내 — 문의 카드와 폼 사이. 톤을 낮춰 본 흐름(문의)을 가리지 않게. */
+.solo{margin:16px 0 0;border:1px dashed var(--line);border-radius:var(--r-lg);padding:20px 22px;background:var(--sourceBg)}
+.solo .st{font-size:15px;font-weight:900;letter-spacing:-.02em;color:var(--ink)}
+.solo p{font-size:13.5px;color:var(--ink2);margin:8px 0 0;max-width:660px;line-height:1.7}
+.solo p b{color:var(--ink);font-weight:800}
+.solo .sbtns{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap}
+.solo .sbtns a{font-size:13px;font-weight:900;padding:10px 18px;border-radius:var(--r-pill)}
+.solo .sbtns a.p{background:var(--ink);color:#fff}
+.solo .sbtns a.p:hover{background:#000}
+.solo .sbtns a.g{background:var(--bg);border:1px solid var(--line);color:var(--ink)}
+.solo .sbtns a.g:hover{border-color:var(--ink3)}
+.how{margin:26px 0 0;background:var(--paper);border:1px solid var(--line);border-radius:var(--r-lg);padding:28px 24px}
 .how h2{font-size:20px;font-weight:900;letter-spacing:-.02em;margin:0}
 .how p{font-size:14px;color:var(--ink2);margin:8px 0 0;max-width:620px}
 .note{font-size:12.5px;color:var(--ink3);margin-top:14px}
@@ -159,9 +170,19 @@
     </div>
   </div>
 
+  <!-- 단일 매장·무료 사용자는 문의를 기다릴 필요가 없다 — 여기서 막히지 않게 길을 따로 알려준다. -->
+  <div class="solo">
+    <div class="st">매장이 한 곳이거나, 아직 무료로 써보시는 중인가요?</div>
+    <p>문의를 남기지 않으셔도 바로 시작하실 수 있어요. 무료 요금제는 <b>매장 1곳 · 직원 3명 · AI 답변 월 150건</b>까지 기간 제한 없이 쓰고, 직원이 늘면 <b>단일 매장 요금제(월 19,000원, 부가세 별도)</b>로 바꾸면 돼요. 쓰다가 막히는 건 앱 안에서 물어보셔도 되고, 아래에 남겨주셔도 답해드려요.</p>
+    <div class="sbtns">
+      <a class="p" href="/signup">무료로 시작하기</a>
+      <a class="g" href="/pricing">요금제 자세히 보기</a>
+    </div>
+  </div>
+
   <div class="how" id="contact">
     <h2>여기에 바로 남겨주세요</h2>
-    <p>확인하고 연락드려요. 도입 전에 궁금한 점만 물어보셔도 돼요.</p>
+    <p>확인하고 연락드려요. 여러 매장·본사 도입은 물론, 지금 쓰시면서 막히는 점이나 요금제 문의도 괜찮아요.</p>
     <form id="iform" novalidate>
       <div class="frow2">
         <label class="fld">
