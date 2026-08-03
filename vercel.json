@@ -11,7 +11,11 @@
     { "source": "/inquiry", "destination": "/inquiry.html" },
     { "source": "/features", "destination": "/features.html" },
     { "source": "/pricing", "destination": "/pricing.html" },
-    { "source": "/faq", "destination": "/faq.html" },
+    { "source": "/cafe", "destination": "/cafe.html" },
+    { "source": "/gym", "destination": "/gym.html" },
+    { "source": "/academy", "destination": "/academy.html" },
+    { "source": "/salon", "destination": "/salon.html" },
+    { "source": "/faq", "destination": "/pricing.html" },
     { "source": "/(.*)", "destination": "/" }
   ],
   "headers": [

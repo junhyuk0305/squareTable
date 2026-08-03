@@ -132,7 +132,8 @@ const NOSCRIPT = `<noscript>
         <li>출퇴근·인건비 자동 집계</li>
       </ul>
       <p>신용카드 없이 무료로 시작 · 매장 1곳 · 직원 3명 · AI 월 150건 무료.</p>
-      <p><a href="/welcome.html">착착 소개</a> · <a href="/features">기능</a> · <a href="/pricing">요금제</a> · <a href="/faq">자주 묻는 질문</a> · <a href="/inquiry">도입 문의</a> · <a href="/signup">무료로 시작</a></p>
+      <p><a href="/welcome.html">착착 소개</a> · <a href="/features">기능</a> · <a href="/pricing">요금제·자주 묻는 질문</a> · <a href="/inquiry">도입 문의</a></p>
+      <p>업종별 활용: <a href="/cafe">카페</a> · <a href="/gym">헬스장·필라테스</a> · <a href="/academy">학원</a> · <a href="/salon">미용실</a> · <a href="/signup">무료로 시작</a></p>
     </div>
     <!-- seo:noscript:end -->
   </noscript>`;
@@ -187,7 +188,7 @@ function patchWelcome() {
 }
 
 // 마케팅 정적 페이지(public/*.html + vercel.json rewrite) — robots Allow·sitemap 공용 목록.
-const MARKETING_PAGES = ['features', 'pricing', 'faq', 'inquiry'];
+const MARKETING_PAGES = ['features', 'pricing', 'inquiry', 'cafe', 'gym', 'academy', 'salon'];
 
 // ── 3) robots.txt ────────────────────────────────────────────────────────
 function writeRobots() {

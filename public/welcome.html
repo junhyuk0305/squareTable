@@ -104,6 +104,16 @@
 .step h5{font-size:17px;font-weight:900;margin:14px 0 5px;letter-spacing:-.02em}
 .step p{font-size:13.5px;color:var(--ink2);margin:0}
 
+/* 업종별 활용 카드 */
+.igrid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-top:26px}
+@media(max-width:860px){.igrid{grid-template-columns:1fr 1fr}}
+@media(max-width:520px){.igrid{grid-template-columns:1fr}}
+.ic2{display:flex;flex-direction:column;background:var(--bg);border:1px solid var(--line);border-radius:var(--r-lg);padding:20px;box-shadow:var(--e1)}
+.ic2:hover{border-color:var(--ink);box-shadow:var(--e2)}
+.ic2 .in{font-size:16px;font-weight:900;letter-spacing:-.02em}
+.ic2 .id2{font-size:12.5px;color:var(--ink2);margin-top:7px;line-height:1.55}
+.ic2 .ig{margin-top:14px;display:inline-flex;align-items:center;gap:5px;font-size:12.5px;font-weight:900;color:var(--ink)}
+
 /* 요금 티저 */
 .pteaser{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:26px}
 @media(max-width:720px){.pteaser{grid-template-columns:1fr}}
@@ -135,9 +145,26 @@
   <a class="lg" href="/welcome.html">착착</a>
   <input type="checkbox" id="nm" class="nmcb">
   <div class="lk">
-    <a href="/features">기능</a>
+    <div class="drop"><a href="/features">제품</a>
+      <div class="dm">
+        <a href="/features">기능 전체 보기</a>
+        <a href="/features#ai">노하우 AI</a>
+        <a href="/features#input">노하우 만들기</a>
+        <a href="/features#training">훈련 코스</a>
+        <a href="/features#chat">채팅 업무</a>
+        <a href="/features#pay">출퇴근·급여</a>
+        <a href="/features#multi">다점포·매니저</a>
+      </div>
+    </div>
+    <div class="drop"><a href="/cafe">업종별 활용</a>
+      <div class="dm">
+        <a href="/cafe">카페</a>
+        <a href="/gym">헬스장·필라테스</a>
+        <a href="/academy">학원</a>
+        <a href="/salon">미용실</a>
+      </div>
+    </div>
     <a href="/pricing">요금제</a>
-    <a href="/faq">자주 묻는 질문</a>
     <a href="/inquiry">도입 문의</a>
     <a href="/login">로그인</a>
   </div>
@@ -233,6 +260,35 @@
     <div class="morelink reveal"><a href="/features">기능 자세히 보기<svg class="ic"><use href="#i-arrow"/></svg></a></div>
   </section>
 
+  <!-- 업종별 활용 -->
+  <section class="sec">
+    <div class="reveal"><div class="eyebrow2">업종별 활용</div>
+    <h2 class="h2">우리 가게에서는 <span class="u">어떻게 쓰나요</span></h2>
+    <p class="hsub">업종마다 반복되는 일이 달라요. 하루 흐름을 따라가며 어디에 쓰는지 보여드려요.</p></div>
+    <div class="igrid stagger">
+      <a class="ic2 reveal" href="/cafe">
+        <span class="in">카페</span>
+        <span class="id2">레시피 기준 · 오픈/마감 · 클레임 대응</span>
+        <span class="ig">보러 가기<svg class="ic"><use href="#i-arrow"/></svg></span>
+      </a>
+      <a class="ic2 reveal" href="/gym">
+        <span class="in">헬스장·필라테스</span>
+        <span class="id2">환불·홀딩 규정 · 상담 순서 · 시설 점검</span>
+        <span class="ig">보러 가기<svg class="ic"><use href="#i-arrow"/></svg></span>
+      </a>
+      <a class="ic2 reveal" href="/academy">
+        <span class="in">학원</span>
+        <span class="id2">보강·환불 기준 · 등하원 · 강사 교육</span>
+        <span class="ig">보러 가기<svg class="ic"><use href="#i-arrow"/></svg></span>
+      </a>
+      <a class="ic2 reveal" href="/salon">
+        <span class="in">미용실</span>
+        <span class="id2">시술 기준 · 재시술 응대 · 스태프 교육</span>
+        <span class="ig">보러 가기<svg class="ic"><use href="#i-arrow"/></svg></span>
+      </a>
+    </div>
+  </section>
+
   <!-- STEPS -->
   <section class="sec">
     <div class="reveal"><div class="eyebrow2">3단계면 끝</div>
@@ -293,7 +349,7 @@
         <span class="d">매장 2곳부터 · 통합 관리</span>
       </a>
     </div>
-    <div class="pnote reveal"><a href="/pricing">요금제 자세히 보기</a> · 프랜차이즈 본사는 <a href="/inquiry">도입 문의</a></div>
+    <div class="pnote reveal"><a href="/pricing">요금제·자주 묻는 질문 보기</a> · 프랜차이즈 본사는 <a href="/inquiry">도입 문의</a></div>
   </section>
 </div>
 
@@ -315,17 +371,29 @@
     <div>
       <h6>제품</h6>
       <ul>
-        <li><a href="/features">기능</a></li>
-        <li><a href="/pricing">요금제</a></li>
-        <li><a href="/faq">자주 묻는 질문</a></li>
+        <li><a href="/features">기능 전체</a></li>
+        <li><a href="/features#ai">노하우 AI</a></li>
+        <li><a href="/features#training">훈련 코스</a></li>
+        <li><a href="/features#chat">채팅 업무</a></li>
+        <li><a href="/features#multi">다점포·매니저</a></li>
+      </ul>
+    </div>
+    <div>
+      <h6>업종별 활용</h6>
+      <ul>
+        <li><a href="/cafe">카페</a></li>
+        <li><a href="/gym">헬스장·필라테스</a></li>
+        <li><a href="/academy">학원</a></li>
+        <li><a href="/salon">미용실</a></li>
       </ul>
     </div>
     <div>
       <h6>시작하기</h6>
       <ul>
         <li><a href="/signup">무료로 시작</a></li>
-        <li><a href="/login">로그인</a></li>
+        <li><a href="/pricing">요금제</a></li>
         <li><a href="/inquiry">도입 문의</a></li>
+        <li><a href="/login">로그인</a></li>
       </ul>
     </div>
     <div>

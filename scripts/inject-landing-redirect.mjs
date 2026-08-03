@@ -9,7 +9,7 @@
 // 동작 ①: 루트('/')에서 Supabase 세션 토큰(localStorage sb-*-auth-token)이 없으면 정적 마케팅
 //   페이지(/welcome.html)로 즉시 replace. welcome.html은 정적 파일이라 이 스크립트가 없어 되돌이표 없음.
 //   로그인 상태면 토큰이 있어 그대로 앱이 뜬다(→ /stores). 네이티브 빌드와는 무관(웹 export 전용).
-// 동작 ②(안전망): 마케팅 경로(/features /pricing /faq /inquiry)로 SPA가 뜨면 **로그인 여부와 무관하게**
+// 동작 ②(안전망): 마케팅 경로(MARKETING_PATHS)로 SPA가 뜨면 **로그인 여부와 무관하게**
 //   대응하는 정적 .html로 즉시 replace. 원래는 vercel.json rewrite가 정적 파일을 직접 서빙해 SPA가
 //   로드될 일이 없지만, rewrite가 없는 환경(개발 서버·설정 누락)에서도 "웹=웹 레이아웃만" 원칙이
 //   깨지지 않도록 이중으로 막는다. 앱 전환은 오직 로그인 이후 실무 화면에서만.
@@ -30,10 +30,15 @@ let html = readFileSync(file, 'utf8');
 if (html.includes(MARK)) { console.log('inject-landing-redirect: 이미 주입됨(skip)'); process.exit(0); }
 if (!html.includes('<head>')) { console.error('inject-landing-redirect: <head> 없음 — 템플릿 변경 확인'); process.exit(1); }
 
+// 정적 마케팅 페이지 목록 — vercel.json rewrite와 한 쌍(둘 다 갱신할 것).
+const MARKETING_PATHS = ['features', 'pricing', 'inquiry', 'cafe', 'gym', 'academy', 'salon'];
+
 const script =
   `<script id="${MARK}">(function(){try{` +
   `var p=location.pathname.replace(/\\/+$/,'')||'/';` +
-  `if(p==='/features'||p==='/pricing'||p==='/faq'||p==='/inquiry'){location.replace(p+'.html');return;}` +
+  `var M=${JSON.stringify(MARKETING_PATHS)};` +
+  `if(p==='/faq'){location.replace('/pricing.html#faq');return;}` +
+  `for(var j=0;j<M.length;j++){if(p==='/'+M[j]){location.replace('/'+M[j]+'.html');return;}}` +
   `if(p==='/'){` +
   `for(var i=0,s=0;i<localStorage.length;i++){var k=localStorage.key(i);` +
   `if(k&&k.indexOf('sb-')===0&&k.indexOf('-auth-token')!==-1){s=1;break;}}` +
