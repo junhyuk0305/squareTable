@@ -4,8 +4,8 @@ import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { USE_NATIVE_DRIVER } from '@/lib/anim';
 
 /**
- * 진입 스플래시 모션 (착착 디자인시스템.md 5장).
- * 착(1)→착(2)→노란 밑줄 좌→우→카피 페이드업 → 로그인으로 페이드.
+ * 진입 스플래시 모션 (디자인시스템.md 5장).
+ * 매장의(1)→정석(2)→노란 밑줄 좌→우→카피 페이드업 → 로그인으로 페이드.
  * 이 구간(~1.9s)에 세션 체크/로딩 시간을 숨긴다. 라이트(크림) 배경.
  * RN core Animated + native driver. 밑줄은 transformOrigin:left 로 좌→우 scaleX.
  */
@@ -50,10 +50,10 @@ export function SplashAnimation({ onDone }: { onDone: () => void }) {
             ]}
           />
           <Animated.Text style={[styles.char, charStyle(c1)]} allowFontScaling={false}>
-            착
+            매장의{' '}
           </Animated.Text>
           <Animated.Text style={[styles.char, charStyle(c2)]} allowFontScaling={false}>
-            착
+            정석
           </Animated.Text>
         </View>
         <Animated.Text
@@ -62,7 +62,7 @@ export function SplashAnimation({ onDone }: { onDone: () => void }) {
             { opacity: copy, transform: [{ translateY: copy.interpolate({ inputRange: [0, 1], outputRange: [10, 0] }) }] },
           ]}
         >
-          할 일이 착착 끝나는 매장
+          우리 매장 운영의 기준
         </Animated.Text>
       </View>
     </Animated.View>
@@ -85,19 +85,19 @@ const styles = StyleSheet.create({
   markRow: { position: 'relative', flexDirection: 'row' },
   underline: {
     position: 'absolute',
-    left: -6,
-    right: -6,
-    bottom: 6,
-    height: 22,
-    borderRadius: 7,
+    left: -5,
+    right: -5,
+    bottom: 4,
+    height: 15,
+    borderRadius: 5,
     backgroundColor: BrandColors.yellow,
     zIndex: 0,
     transformOrigin: 'left center', // 좌→우로 채워지게 (RN 0.76+ 지원)
   },
   char: {
-    fontSize: 56,
+    fontSize: 38,
     fontWeight: '900',
-    letterSpacing: -3,
+    letterSpacing: -2,
     color: InkColors.ink,
     zIndex: 1,
   },

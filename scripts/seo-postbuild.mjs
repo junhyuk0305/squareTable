@@ -26,10 +26,10 @@ const DIST = resolve(__dirname, '..', 'dist');
 // ── 설정 ───────────────────────────────────────────────────────────────
 const SITE_URL = (process.env.SEO_SITE_URL || 'https://dochackchack.com').replace(/\/+$/, '');
 const OG_IMAGE = `${SITE_URL}/icon-512.png`; // TODO: 1200×630 전용 OG 이미지로 교체 권장(현재 정사각 아이콘 임시)
-const BRAND = '착착';
-const TITLE = '착착 — 할 일이 착착 끝나는 가게';
+const BRAND = '매장의 정석';
+const TITLE = '매장의 정석 — 우리 매장 운영의 기준';
 const DESC =
-  '사장님 머릿속 노하우를 가게 전용 AI로. 직원이 묻는 순간, 우리 가게 방식 그대로 답이 나옵니다. 카페·음식점·헬스장·학원 매장 운영 AI, 착착.';
+  '사장님 머릿속 노하우를 가게 전용 AI로. 직원이 묻는 순간, 우리 가게 방식 그대로 답이 나옵니다. 카페·음식점·헬스장·학원 매장 운영 AI, 매장의 정석.';
 const OG_DESC = '사장님이 한 번 알려주면, 직원이 물을 때 AI가 우리 가게 방식 그대로 대신 답해요.';
 // 검색엔진 소유확인(선택) — Vercel 환경변수로 넣으면 자동 주입. 없으면 생략.
 const NAVER_VERIFY = process.env.SEO_NAVER_VERIFY || '';
@@ -89,7 +89,7 @@ function metaBlock({ withDescription }) {
   if (GOOGLE_VERIFY) lines.push(`<meta name="google-site-verification" content="${esc(GOOGLE_VERIFY)}" />`);
   // Open Graph
   lines.push('<meta property="og:type" content="website" />');
-  lines.push('<meta property="og:site_name" content="착착" />');
+  lines.push('<meta property="og:site_name" content="매장의 정석" />');
   lines.push('<meta property="og:locale" content="ko_KR" />');
   lines.push(`<meta property="og:url" content="${SITE_URL}/" />`);
   if (withDescription) {
@@ -114,8 +114,8 @@ function metaBlock({ withDescription }) {
 const NOSCRIPT = `<noscript>
     <!-- seo:noscript:start -->
     <div style="max-width:680px;margin:0 auto;padding:32px 20px;font-family:'Malgun Gothic',sans-serif;line-height:1.7;color:#111">
-      <h1>착착 — 할 일이 착착 끝나는 가게</h1>
-      <p>사장님 머릿속 노하우를 가게 전용 AI로. 직원이 묻는 순간, 우리 가게 방식 그대로 답이 나옵니다. 카페·음식점·헬스장·학원 매장 운영 AI, 착착.</p>
+      <h1>매장의 정석 — 우리 매장 운영의 기준</h1>
+      <p>사장님 머릿속 노하우를 가게 전용 AI로. 직원이 묻는 순간, 우리 가게 방식 그대로 답이 나옵니다. 카페·음식점·헬스장·학원 매장 운영 AI, 매장의 정석.</p>
       <h2>이런 순간, 있으시죠</h2>
       <ul>
         <li>직원이 바뀔 때마다 같은 걸 몇 번씩 다시 설명</li>
@@ -123,7 +123,7 @@ const NOSCRIPT = `<noscript>
         <li>노하우가 머릿속에만 있어 내가 없으면 멈추는 가게</li>
         <li>카톡 공지·메모지·말로 전한 지시가 흩어져 아무도 제대로 안 봄</li>
       </ul>
-      <h2>착착이 하는 일</h2>
+      <h2>매장의 정석이 하는 일</h2>
       <ul>
         <li>우리 가게 노하우, AI가 즉시 답변 — 사장님이 한 번 남긴 답을 직원이 물을 때 대신 답해요</li>
         <li>채팅 업무 — 직원이 할 일을 체크하면 업무 채팅에 자동 기록되고 사장님께 알림</li>
@@ -132,7 +132,7 @@ const NOSCRIPT = `<noscript>
         <li>출퇴근·인건비 자동 집계</li>
       </ul>
       <p>신용카드 없이 무료로 시작 · 매장 1곳 · 직원 3명 · AI 월 150건 무료.</p>
-      <p><a href="/welcome.html">착착 소개</a> · <a href="/features">기능</a> · <a href="/pricing">요금제·자주 묻는 질문</a> · <a href="/inquiry">도입 문의</a></p>
+      <p><a href="/welcome.html">매장의 정석 소개</a> · <a href="/features">기능</a> · <a href="/pricing">요금제·자주 묻는 질문</a> · <a href="/inquiry">도입 문의</a></p>
       <p>업종별 활용: <a href="/cafe">카페</a> · <a href="/restaurant">음식점</a> · <a href="/gym">헬스장·필라테스</a> · <a href="/academy">학원</a> · <a href="/signup">무료로 시작</a></p>
     </div>
     <!-- seo:noscript:end -->
@@ -154,7 +154,7 @@ function patchIndex() {
   let html = readFileSync(p, 'utf8');
 
   html = html.replace(/<html lang="[^"]*">/i, '<html lang="ko">');
-  // 검색 스니펫 제목 = 설명형. 앱 런타임(head.ts)이 로드 후 document.title 을 '착착'으로 덮으므로
+  // 검색 스니펫 제목 = 설명형. 앱 런타임(head.ts)이 로드 후 document.title 을 '매장의 정석'으로 덮으므로
   // 실제 탭 제목엔 영향 없고, JS 미실행 크롤러·검색결과 헤드라인만 풍부해진다.
   html = html.replace(/<title>[^<]*<\/title>/i, `<title>${esc(TITLE)}</title>`);
   html = stripMarker(html, '<!-- seo:start \\(scripts/seo-postbuild\\.mjs\\) -->', '<!-- seo:end -->');

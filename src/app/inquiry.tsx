@@ -124,7 +124,7 @@ export default function InquiryScreen() {
               <TextInput
                 value={company}
                 onChangeText={setCompany}
-                placeholder="착착커피 신촌점"
+                placeholder="우리커피 신촌점"
                 placeholderTextColor={InkColors.ink3}
                 style={styles.input}
                 maxLength={80}

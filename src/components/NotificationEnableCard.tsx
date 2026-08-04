@@ -43,7 +43,7 @@ export function NotificationEnableCard() {
         <View style={{ flex: 1 }}>
           <Text style={styles.title}>아이폰은 홈 화면에 추가하면 알림을 받아요</Text>
           <Text style={styles.sub}>
-            사파리 하단 공유 버튼 → &lsquo;홈 화면에 추가&rsquo; 후, 추가된 착착 아이콘으로 열면 알림을 켤 수 있어요.
+            사파리 하단 공유 버튼 → &lsquo;홈 화면에 추가&rsquo; 후, 추가된 매장의 정석 아이콘으로 열면 알림을 켤 수 있어요.
           </Text>
         </View>
       </View>

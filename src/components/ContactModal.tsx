@@ -17,7 +17,7 @@ export function ContactModal({ visible, onClose }: { visible: boolean; onClose: 
   const { copied, copy } = useCopyToClipboard();
 
   const openMail = () => {
-    void Linking.openURL(`mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent('[착착] 문의')}`).catch(() => {});
+    void Linking.openURL(`mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent('[매장의 정석] 문의')}`).catch(() => {});
   };
 
   return (

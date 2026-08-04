@@ -120,7 +120,7 @@ const DEMO = {
   userId: 'u_staff_001',
   userName: '박지원',
   unitId: 'store_001',
-  storeName: '착착 카페 신촌점',
+  storeName: '우리 카페 신촌점',
   stores: [] as MyUnitRow[],
   pendingUnitId: '',
   pendingStoreName: '',

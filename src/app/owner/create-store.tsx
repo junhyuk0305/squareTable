@@ -82,7 +82,7 @@ export default function OwnerCreateStore() {
               setErr(null);
               setStoreName(v);
             }}
-            placeholder="예: 착착 카페 신촌점"
+            placeholder="예: 우리 카페 신촌점"
             placeholderTextColor={InkColors.ink3}
             style={styles.input}
           />

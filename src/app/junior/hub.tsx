@@ -113,7 +113,7 @@ export default function JuniorHub() {
             안녕하세요{userName ? `, ${userName}님` : ''}
           </Text>
           <Text style={styles.helloSub}>
-            {hasStore ? '오늘도 착착 시작해볼까요?' : '매장에 연결하면 착착을 시작할 수 있어요.'}
+            {hasStore ? '오늘도 시작해볼까요?' : '매장에 연결하면 매장의 정석을 시작할 수 있어요.'}
           </Text>
         </View>
         </Appear>
@@ -247,7 +247,7 @@ export default function JuniorHub() {
         {/* 후킹 배너 ② — 기능 소개/온보딩 */}
         <Appear delay={200}>
         <View style={styles.section}>
-          <Text style={styles.sectionLabel}>착착으로 이런 걸 할 수 있어요</Text>
+          <Text style={styles.sectionLabel}>매장의 정석으로 이런 걸 할 수 있어요</Text>
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}

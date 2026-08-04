@@ -360,7 +360,7 @@ export default function SignupScreen() {
         {role === 'owner' ? (
           <>
             <Appear delay={120}>
-            <Field label="매장 이름" value={storeName} onChange={setStoreName} placeholder="예: 착착 카페 신촌점" required />
+            <Field label="매장 이름" value={storeName} onChange={setStoreName} placeholder="예: 우리 카페 신촌점" required />
             </Appear>
             <Appear delay={120}>
             <View style={styles.field}>

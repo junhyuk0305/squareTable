@@ -73,7 +73,7 @@ export default function JuniorHomeScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
       {/* 헤더는 다른 화면들과 동일한 네이티브 헤더 크롬을 사용한다(상단 여백·타이포 통일).
-          왼쪽=착착 로고, 오른쪽=알림 벨. 매장명·내 이름은 벨 → 알림 화면 맨 위에서 보여준다. */}
+          왼쪽=매장의 정석 로고, 오른쪽=알림 벨. 매장명·내 이름은 벨 → 알림 화면 맨 위에서 보여준다. */}
       <Stack.Screen
         options={{
           headerShown: true,

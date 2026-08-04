@@ -154,7 +154,7 @@ Deno.serve(async (req) => {
     if (upErr) return json(500, { ok: false, reason: 'db' }, cors);
 
     try {
-      await sendSms(phone, `[착착] 인증번호 ${code}\n3분 안에 입력해 주세요.`);
+      await sendSms(phone, `[매장의 정석] 인증번호 ${code}\n3분 안에 입력해 주세요.`);
     } catch (e) {
       console.error('solapi send failed:', e);
       return json(502, { ok: false, reason: 'send_failed' }, cors);

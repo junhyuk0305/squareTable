@@ -8,7 +8,7 @@ type Props = {
 
 /**
  * 우측 정렬 사용자 발화 버블.
- * 착착 디자인: 검정(ink) 버블 + 흰 텍스트 + 소프트 드롭섀도(e2).
+ * 매장의 정석 디자인: 검정(ink) 버블 + 흰 텍스트 + 소프트 드롭섀도(e2).
  */
 export function UserBubble({ text }: Props) {
   return (

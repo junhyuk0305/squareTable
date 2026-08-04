@@ -479,7 +479,7 @@ function FieldLabel({ text }: { text: string }) {
 
 /**
  * 검토 대기 draft 1개 카드 — 접힘(선택+요약+배지)/펼침(내용·섹션 수정).
- * 체크박스(등록 선택)·본문(펼침)·삭제는 형제 Pressable(RNW <button> 중첩 금지 — 착착 규칙).
+ * 체크박스(등록 선택)·본문(펼침)·삭제는 형제 Pressable(RNW <button> 중첩 금지 — 매장의 정석 규칙).
  * 편집은 로컬(edits)에만 쌓고 발행 때 한 번에 커밋 — 타이핑마다 DB 쓰기(수백 회) 방지.
  */
 function DraftCard({

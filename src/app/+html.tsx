@@ -26,7 +26,7 @@ export default function Root({ children }: PropsWithChildren) {
         {/* iOS Safari: manifest 를 거의 안 보므로 아래 메타로 전체화면·아이콘 지정 */}
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-        <meta name="apple-mobile-web-app-title" content="착착" />
+        <meta name="apple-mobile-web-app-title" content="매장의 정석" />
         <link rel="apple-touch-icon" href="/icon.png" />
         <link rel="icon" type="image/png" href="/favicon.png" />
         {/* ──────────────────────────────────────────────────────────────── */}

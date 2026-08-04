@@ -163,7 +163,7 @@ function AccountEditForm() {
             </Appear>
             <Appear delay={60}>
             <View style={[styles.card, styles.storeCard]}>
-              <TextInput value={store} onChangeText={setStore} placeholder="예: 착착 카페 신촌점" placeholderTextColor={InkColors.ink3} style={styles.input} />
+              <TextInput value={store} onChangeText={setStore} placeholder="예: 우리 카페 신촌점" placeholderTextColor={InkColors.ink3} style={styles.input} />
               <View style={styles.storeMetaRow}>
                 <View style={styles.storeChip}>
                   <Text style={styles.storeChipText}>14일 내 2회 변경 가능</Text>

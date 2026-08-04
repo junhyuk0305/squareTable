@@ -29,7 +29,7 @@ const PAINS: Pain[] = [
 type Feature = { icon: keyof typeof Ionicons.glyphMap; title: string; body: string };
 const FEATURES: Feature[] = [
   { icon: 'sparkles', title: '우리 매장 노하우, AI가 즉답', body: '사장님이 한 번만 답을 남기면, 직원이 물을 때 AI가 우리 매장 방식 그대로 대신 답해요.' },
-  { icon: 'checkmark-done', title: '오픈·마감 체크리스트 한눈에', body: '오늘 할 일과 마감 점검을 채팅에서 착착. 누가 뭘 끝냈는지 사장님이 바로 확인해요.' },
+  { icon: 'checkmark-done', title: '오픈·마감 체크리스트 한눈에', body: '오늘 할 일과 마감 점검을 채팅에서 한 번에. 누가 뭘 끝냈는지 사장님이 바로 확인해요.' },
   { icon: 'chatbubble-ellipses', title: '매장 관리가 채팅 하나로', body: '공지·지시·질문이 흩어지지 않고 한곳에. 직원이 바뀌어도 노하우는 그대로 쌓여요.' },
 ];
 
@@ -84,7 +84,7 @@ export default function LandingScreen() {
             <Text style={styles.badgeText}>카드 등록 없이 무료 시작</Text>
           </View>
 
-          <Wordmark size="lg" showEng style={styles.wordmark} />
+          <Wordmark size="lg" style={styles.wordmark} />
 
           <Text style={styles.h1}>
             사장님이 자리를 비워도,{'\n'}
@@ -127,7 +127,7 @@ export default function LandingScreen() {
         {/* ── SOLUTION ── */}
         <View style={styles.section}>
           <Appear>
-            <Text style={[styles.kicker, styles.kickerInk]}>그래서, 착착이 대신합니다</Text>
+            <Text style={[styles.kicker, styles.kickerInk]}>그래서, 매장의 정석이 대신합니다</Text>
             <Text style={styles.h2}>사장님 대신 답하고, 대신 챙겨요</Text>
           </Appear>
           <View style={styles.stack}>
@@ -176,7 +176,7 @@ export default function LandingScreen() {
               </Pressable>
 
               <Pressable onPress={goLogin} hitSlop={8} style={styles.offerLogin}>
-                <Text style={styles.offerLoginText}>이미 착착을 쓰고 계신가요? <Text style={styles.offerLoginStrong}>로그인</Text></Text>
+                <Text style={styles.offerLoginText}>이미 매장의 정석을 쓰고 계신가요? <Text style={styles.offerLoginStrong}>로그인</Text></Text>
               </Pressable>
             </View>
           </Appear>

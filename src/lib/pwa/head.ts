@@ -32,8 +32,8 @@ export function injectPwaHead(): void {
   }
 
   // 브라우저 탭 제목 = 브랜드명. (output=single 빌드의 index.html 은 app.json name 을
-  // 쓰므로 app.json 도 '착착' 으로 맞췄고, 여기서 런타임에도 한 번 더 보장한다.)
-  document.title = '착착';
+  // 쓰므로 app.json 도 '매장의 정석' 으로 맞췄고, 여기서 런타임에도 한 번 더 보장한다.)
+  document.title = '매장의 정석';
 
   // 브라우저 탭 favicon — Expo 기본 아이콘(∧)을 우리 로고로 교체한다.
   // dev/단일빌드(index.html)에 기본 icon 링크가 이미 있어 ensure() 로는 못 덮으므로,
@@ -78,7 +78,7 @@ export function injectPwaHead(): void {
   });
   ensure('meta', 'meta[name="apple-mobile-web-app-title"]', {
     name: 'apple-mobile-web-app-title',
-    content: '착착',
+    content: '매장의 정석',
   });
   ensure('link', 'link[rel="apple-touch-icon"]', {
     rel: 'apple-touch-icon',

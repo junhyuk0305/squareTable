@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, Animated } from 'react-native';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 
 /**
- * 착착 토글 스위치 — 디자인 스펙: on = 검정 track + 노란 knob, off = 회색 track + 흰 knob.
+ * 매장의 정석 토글 스위치 — 디자인 스펙: on = 검정 track + 노란 knob, off = 회색 track + 흰 knob.
  * RN <Switch> 는 웹에서 trackColor 가 안 먹어(틸색 기본값) 커스텀으로 통일.
  */
 const W = 50;

@@ -107,7 +107,7 @@ export default function JuniorLayout() {
     >
       {/* 홈 헤더(로고+알림벨)는 home.tsx의 <Stack.Screen>이 단일 소스로 구성한다 — 여기선 등록만. */}
       <Stack.Screen name="home" />
-      {/* 메인 탭 메뉴 — 좌상단 로고 없음(홈 화면에만 착착 로고 노출).
+      {/* 메인 탭 메뉴 — 좌상단 로고 없음(홈 화면에만 매장의 정석 로고 노출).
           탭 루트는 하단 탭바로만 이동하므로 뒤로가기 화살표를 무조건 끈다
           (headerLeft 미지정 시 react-navigation 기본 back 화살표가 history에 따라 노출됨 → 막다른 컨트롤). */}
       {/* 탭 루트 헤더엔 "어느 매장의 화면인가"를 상시 표시(StoreHeaderTitle) — 홈은 StoreToggle 이 담당. */}

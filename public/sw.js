@@ -1,4 +1,4 @@
-/* 착착 서비스워커 — 웹푸시 수신 + 알림 클릭 라우팅.
+/* 매장의 정석 서비스워커 — 웹푸시 수신 + 알림 클릭 라우팅.
  *
  * 이 파일은 public/ 에 있어 빌드 시 사이트 루트(/sw.js)로 복사된다. 반드시 origin 루트에서
  * 서빙돼야 스코프('/')로 등록돼 앱 전체 경로의 알림을 받을 수 있다.
@@ -27,10 +27,10 @@ self.addEventListener('push', (event) => {
     data = event.data ? event.data.json() : {};
   } catch (_e) {
     // 페이로드가 JSON이 아니면 텍스트로라도 표시
-    data = { title: '착착', body: event.data ? event.data.text() : '' };
+    data = { title: '매장의 정석', body: event.data ? event.data.text() : '' };
   }
 
-  const title = data.title || '착착';
+  const title = data.title || '매장의 정석';
   const options = {
     body: data.body || '',
     icon: '/icon-192.png',

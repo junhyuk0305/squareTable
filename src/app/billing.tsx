@@ -199,7 +199,7 @@ function BillingBody() {
 
   const notifyPaid = async () => {
     // 보조 경로(설계문서 B-1) — 신고는 이미 DB에 남았고, 이건 "빨리 봐달라"는 추가 통지일 뿐이다.
-    const subject = `착착 입금 완료 알림${storeName ? ` — ${storeName}` : ''}`;
+    const subject = `매장의 정석 입금 완료 알림${storeName ? ` — ${storeName}` : ''}`;
     const body = [
       '입금을 완료했어요. 확인 후 활성화 부탁드려요.',
       storeName ? `매장: ${storeName}` : '',
@@ -511,7 +511,7 @@ function BillingBody() {
                   <TextInput
                     value={promoCode}
                     onChangeText={(t) => setPromoCode(t.toUpperCase())}
-                    placeholder="CHACHAK7"
+                    placeholder="STORE7"
                     placeholderTextColor={InkColors.ink3}
                     style={styles.input}
                     autoCapitalize="characters"

@@ -142,7 +142,7 @@ export default function OwnerSettings() {
           />
         </SettingsSection>
 
-        <Text style={styles.foot}>착착 · 스퀘어테이블</Text>
+        <Text style={styles.foot}>매장의 정석 · 스퀘어테이블</Text>
         <View style={{ height: 16 }} />
       </ScrollView>
       <QuietHoursModal

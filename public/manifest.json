@@ -1,8 +1,8 @@
 {
   "id": "/",
-  "name": "착착",
-  "short_name": "착착",
-  "description": "할 일이 착착 끝나는 가게 · 현장 운영 AI",
+  "name": "매장의 정석",
+  "short_name": "매장의 정석",
+  "description": "우리 매장 운영의 기준 · 현장 운영 AI",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

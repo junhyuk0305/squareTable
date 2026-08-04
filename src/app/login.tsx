@@ -80,8 +80,8 @@ export default function LoginScreen() {
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
         <Appear delay={0}>
           <View style={styles.header}>
-            <Wordmark size="lg" showEng />
-            <Text style={styles.tagline}>할 일이 착착 끝나는 매장 · 현장 운영 AI</Text>
+            <Wordmark size="lg" />
+            <Text style={styles.tagline}>우리 매장 운영의 기준 · 현장 운영 AI</Text>
           </View>
         </Appear>
 
@@ -133,7 +133,7 @@ export default function LoginScreen() {
 
         <Appear delay={120}>
           <View style={styles.signupBlock}>
-            <Text style={styles.signupLead}>아직 착착이 처음이신가요?</Text>
+            <Text style={styles.signupLead}>아직 매장의 정석이 처음이신가요?</Text>
             <Pressable onPress={() => router.push('/signup')} style={({ pressed }) => [styles.signupBtn, pressed && { opacity: 0.85 }]}>
               <Text style={styles.signupBtnText}>무료로 시작하기</Text>
             </Pressable>

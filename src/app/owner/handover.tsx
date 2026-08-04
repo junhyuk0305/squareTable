@@ -345,7 +345,7 @@ function FieldLabel({ text }: { text: string }) {
 /**
  * 분리된 노하우 1개 카드 — 접힘(선택+요약)/펼침(내용 수정).
  * 체크박스(저장 선택)와 카드 본문(펼쳐 수정)은 형제 Pressable로 분리한다
- * (RNW <button> 중첩 금지 — 착착 규칙).
+ * (RNW <button> 중첩 금지 — 매장의 정석 규칙).
  * 편집은 타이핑마다 부모 segs로 라이브 커밋 → '수정 직후 저장'이 옛 값으로 나가는 경쟁 제거.
  */
 function SegmentCard({

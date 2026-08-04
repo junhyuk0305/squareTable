@@ -2,7 +2,7 @@
 //
 // 왜 있나:
 //   · Apple Guideline 2.1(a) — 로그인이 있는 앱은 데모 계정을 제출해야 하고 백엔드가 살아 있어야 한다.
-//     착착은 사장(owner)/직원(junior) 화면이 완전히 달라 계정 2개를 모두 줘야 한다(하나면 절반을 못 봄).
+//     매장의 정석은 사장(owner)/직원(junior) 화면이 완전히 달라 계정 2개를 모두 줘야 한다(하나면 절반을 못 봄).
 //   · Apple Guideline 4.2 — 빈 앱은 "not particularly useful"로 반려된다. 그래서 노하우/할일/채팅/
 //     출퇴근/질문답변을 "쓸모 있어 보이는" 수준으로 채운다.
 //
@@ -57,7 +57,7 @@ const OWNER_EMAIL = 'appreview.owner@pilot.squaretable.app';
 const STAFF_EMAIL = 'appreview.staff@pilot.squaretable.app';
 const PASSWORD = 'ChackChack!2026';
 const INVITE_CODE = '770427';
-const STORE_NAME = '착착 데모 카페 (App Review)';
+const STORE_NAME = '우리 데모 카페 (App Review)';
 const P = 'apr_';                                     // 노하우 id 접두(전역 PK 충돌 방지)
 
 const db = createClient(URL, SERVICE, { auth: { persistSession: false } });
@@ -286,7 +286,7 @@ async function main() {
   await step('profiles(사장)', db.from('profiles').update({
     name: '김민서', role: 'owner', unit_id: UNIT, active_unit_id: UNIT, pending_unit_id: null,
     deleted_at: null, avatar: 'owner', phone_last4: '0001', birth_date: '1984-03-11',
-    bio: '착착 데모 카페 사장. 9년째 카페 운영 중.', meta: { career_years: 9 },
+    bio: '우리 데모 카페 사장. 9년째 카페 운영 중.', meta: { career_years: 9 },
   }).eq('id', ownerId));
   await step('unit_members(사장)', db.from('unit_members')
     .upsert({ user_id: ownerId, unit_id: UNIT, role: 'owner' }, { onConflict: 'user_id,unit_id' }));
