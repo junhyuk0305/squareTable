@@ -224,7 +224,7 @@ export function JuniorGrowthView() {
       {/* ── 훈련 통과 이력(0104) — 있을 때만. 통과 사실만 말하고 점수·등급을 만들지 않는다 ── */}
       {trainingHistory.length > 0 && (
         <Appear delay={totals.taught > 0 ? 160 : 120}>
-          <SectionLabel title="훈련" hint="통과한 확인" />
+          <SectionLabel title="퀴즈" hint="통과한 퀴즈" />
           <View style={styles.card}>
             {(showAllTraining ? trainingHistory : trainingHistory.slice(0, ENTRY_LIST_FIRST)).map((h) => (
               <View key={`${h.unitId}_${h.templateId}`} style={styles.row}>
@@ -240,7 +240,7 @@ export function JuniorGrowthView() {
                 onPress={() => setShowAllTraining(true)}
                 style={({ pressed }) => [styles.moreBtn, pressed && { opacity: 0.85 }]}
                 accessibilityRole="button"
-                accessibilityLabel="훈련 이력 나머지 보기"
+                accessibilityLabel="퀴즈 이력 나머지 보기"
               >
                 <Text style={styles.moreBtnText}>{`나머지 ${trainingHistory.length - ENTRY_LIST_FIRST}개 보기`}</Text>
               </Pressable>

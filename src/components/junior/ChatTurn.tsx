@@ -97,7 +97,7 @@ export function ChatTurn({
             검증 배지를 달지 않고(아래 SquareCard verification 비노출) 정직하게 고지 → 신뢰 오인 방지. */}
         {block?.mode === 'generated' && !block?.degraded && (
           <View style={turnStyles.composedNote}>
-            <Ionicons name="sparkles-outline" size={13} color={InkColors.ink3} />
+            <Ionicons name="information-circle-outline" size={13} color={InkColors.ink3} />
             <Text style={turnStyles.composedText}>
               매장 노하우들을 모아 AI가 정리한 답이에요. 확실하지 않으면 사장님께 확인하세요.
             </Text>
@@ -233,7 +233,7 @@ export function ChatTurn({
             }
             style={({ pressed }) => [turnStyles.improveLink, pressed && { opacity: 0.6 }]}
           >
-            <Ionicons name="sparkles-outline" size={13} color={InkColors.ink3} />
+            <Ionicons name="create-outline" size={13} color={InkColors.ink3} />
             <Text style={turnStyles.improveText}>
               {manager ? '더 좋은 방법이 있나요? 노하우 수정하기' : '더 좋은 방법이 있나요? 개선 제안하기'}
             </Text>

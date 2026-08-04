@@ -188,7 +188,7 @@ function SuggestionCard({
       <View style={styles.cardHead}>
         <View style={[styles.kindChip, isImprove ? styles.kindImprove : styles.kindNew]}>
           <Ionicons
-            name={isImprove ? 'sparkles-outline' : 'add-circle-outline'}
+            name={isImprove ? 'create-outline' : 'add-circle-outline'}
             size={13}
             color={isImprove ? '#8A5A12' : InkColors.ink}
           />

@@ -1100,9 +1100,13 @@ Deno.serve(async (req: Request) => {
     //     추가하면 여기도 함께. 미지 태스크는 기본 라우팅과 같이 answer 로 취급해 과금 우회를 막는다.)
     //    (transcribe = 받아쓰기, doc_extract = 문서 추출 = '입력 수단'이라 답변 캡을 차감하지 않는다 —
     //     캡을 물리면 등록·질문 자체를 억제해 북극성과 충돌. 남용 방어는 레이트리밋 + 길이/페이로드 하드캡이 담당.)
-    //    (quiz · quiz_item = 차감 태스크라 일부러 목록에 없다. quiz_item 은 문항을 DB에 저장하므로
-    //     생성 때 1회만 차감되고 이후 응시는 AI 호출 0 → 현행보다 캡을 덜 쓴다.)
-    const isAnswer = !['square', 'patch', 'intent', 'embed', 'search', 'triage', 'transcribe', 'doc_extract'].includes(task);
+    //    (quiz_item = 문항 '제작 수단'이라 doc_extract·transcribe 와 같은 이유로 비차감이다.
+    //     캡을 물리면 사장이 문항 만들기를 아끼게 되고, 문항이 없으면 퀴즈가 아예 안 나간다
+    //     — 기능 자체를 억제하는 캡이 된다. 형태 하나당 1회 호출이라 다양하게 낼수록 캡을
+    //     많이 먹는 구조라 특히 그렇다. 남용 방어는 레이트리밋(사용자 10/분·매장 20/분)이 담당한다.
+    //     ⚠️ 대신 문항 무한 생성이 열린다 — 매장당 quiz_items 행 상한을 두는 걸 후속으로 검토할 것.)
+    //    (레거시 quiz = 응시 때마다 즉석 생성하던 옛 경로라 차감을 유지한다. 신규 경로가 아니다.)
+    const isAnswer = !['square', 'patch', 'intent', 'embed', 'search', 'triage', 'transcribe', 'doc_extract', 'quiz_item'].includes(task);
     if (isAnswer) {
       try {
         const q = await aiQuotaBlocked(authz);

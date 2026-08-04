@@ -284,7 +284,7 @@ export default function JuniorHomeScreen() {
 
         {/* 6) 핵심 기능 안내 배너 — 최하단. 스와이프로 핵심 기능을 소개하고 탭하면 바로 그 화면으로 */}
         <Appear delay={180} style={styles.section}>
-          <SectionLabel icon="sparkles-outline" title="이런 것도 할 수 있어요" />
+          <SectionLabel icon="compass-outline" title="이런 것도 할 수 있어요" />
           <FeatureCarousel cards={JUNIOR_FEATURES} />
         </Appear>
       </ScrollView>

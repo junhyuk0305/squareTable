@@ -292,7 +292,7 @@ export default function JuniorHub() {
 }
 
 const FEATURES: { icon: IconName; title: string; body: string }[] = [
-  { icon: 'sparkles-outline', title: '노하우 물어보기', body: '모르는 건 AI에게 바로 물어봐요.' },
+  { icon: 'help-circle-outline', title: '노하우 물어보기', body: '모르는 건 AI에게 바로 물어봐요.' },
   { icon: 'time-outline', title: '출퇴근 체크', body: '출근·퇴근을 한 번에 기록해요.' },
   { icon: 'calendar-outline', title: '근무표 확인', body: '내 근무 일정을 바로 확인해요.' },
 ];

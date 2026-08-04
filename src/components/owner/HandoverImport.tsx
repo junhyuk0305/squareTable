@@ -308,7 +308,7 @@ export function HandoverImport() {
         {phase === 'review' ? (
           <Appear delay={0}>
             <View style={styles.reviewBanner}>
-              <Ionicons name="sparkles" size={16} color={BrandColors.warn} />
+              <Ionicons name="list-outline" size={16} color={BrandColors.warn} />
               <Text style={styles.reviewBannerText}>
                 검토 대기 <Text style={{ fontWeight: '900' }}>노하우 {drafts.length}개</Text> — 추가할 것만 고르고, 카드를 눌러 내용을 다듬어 주세요. 추가 전에는 직원에게 보이지 않아요.
               </Text>
@@ -443,7 +443,7 @@ export function HandoverImport() {
               accessibilityRole="button"
               accessibilityLabel="AI로 노하우 정리하기"
             >
-              <Ionicons name="sparkles" size={16} color={InkColors.bubbleText} />
+              <Ionicons name="document-text-outline" size={16} color={InkColors.bubbleText} />
               <Text style={styles.ctaText}>AI로 노하우 정리하기</Text>
             </PressableScale>
             <Text style={styles.hint}>* 정리된 항목은 사장님이 확인한 뒤에만 직원에게 보여요.</Text>

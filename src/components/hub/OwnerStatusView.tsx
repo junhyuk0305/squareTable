@@ -231,13 +231,13 @@ export function OwnerStatusView() {
               발견이 안 되던 문제(2026-07-31) → 현황에 상시 노출. 허브 원칙대로 이동만 담당,
               다점포는 기존 매장 선택 시트 재사용. ── */}
       <Appear delay={100}>
-        <SectionLabel title="훈련" />
+        <SectionLabel title="퀴즈" />
         <View style={styles.card}>
           <Pressable
             onPress={() => {
               if (multi) {
                 setPicker({
-                  title: '훈련',
+                  title: '퀴즈',
                   path: '/owner/training',
                   units: overview.map((r) => ({ uid: r.unit_id, count: 0 })),
                 });
@@ -248,14 +248,14 @@ export function OwnerStatusView() {
             disabled={!!switching}
             style={({ pressed }) => [styles.row, pressed && { opacity: 0.85 }]}
             accessibilityRole="button"
-            accessibilityLabel="훈련 열기"
+            accessibilityLabel="퀴즈 열기"
           >
             <View style={styles.rowIcon}>
               <Ionicons name="school-outline" size={15} color={InkColors.ink2} />
             </View>
             <View style={{ flex: 1, minWidth: 0 }}>
-              <Text style={styles.rowTitle} numberOfLines={1}>훈련</Text>
-              <Text style={styles.rowSub} numberOfLines={1}>첫 훈련(신입 첫날)과 정기 훈련(주기 재확인)을 만들어요</Text>
+              <Text style={styles.rowTitle} numberOfLines={1}>퀴즈</Text>
+              <Text style={styles.rowSub} numberOfLines={1}>첫 출근(신입 첫날)과 정기 점검(주기 재확인)을 만들어요</Text>
             </View>
             <Ionicons name="chevron-forward" size={15} color={InkColors.ink3} />
           </Pressable>

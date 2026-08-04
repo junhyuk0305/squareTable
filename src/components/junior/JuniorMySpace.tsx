@@ -126,7 +126,7 @@ export function JuniorMySpace({ me }: { me: string }) {
       {/* ⑤ 내 기여 요약 (자기 뷰 — 랭킹 아님) */}
       {contribCount > 0 && (
         <View style={s.contrib}>
-          <Ionicons name="sparkles" size={14} color={BrandColors.yellowDeep} />
+          <Ionicons name="bookmark-outline" size={14} color={BrandColors.yellowDeep} />
           <Text style={s.contribText}>내가 쌓은 노하우 <Text style={s.contribNum}>{approvedCount}</Text> · 답한 질문 <Text style={s.contribNum}>{myAnswered.length}</Text></Text>
         </View>
       )}

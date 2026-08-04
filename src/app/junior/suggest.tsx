@@ -112,7 +112,7 @@ export default function JuniorSuggestScreen() {
           {kind === 'improve' && targetEntryId && (targetTitle || picked) && (
             <Appear delay={120}>
             <View style={styles.targetCard}>
-              <Ionicons name="sparkles-outline" size={15} color={'#8A5A12'} />
+              <Ionicons name="create-outline" size={15} color={'#8A5A12'} />
               <View style={{ flex: 1 }}>
                 <Text style={styles.targetLabel}>이 노하우를 개선해요</Text>
                 <Text style={styles.targetTitle} numberOfLines={2}>{targetTitle}</Text>

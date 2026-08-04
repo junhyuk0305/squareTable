@@ -172,14 +172,14 @@ export default function OwnerStaffScreen() {
           onPress={() => router.push('/owner/training')}
           style={({ pressed }) => [styles.firstDayCard, pressed && { opacity: 0.85 }]}
           accessibilityRole="button"
-          accessibilityLabel="훈련 열기"
+          accessibilityLabel="퀴즈 열기"
         >
           <View style={styles.firstDayIcon}>
             <Ionicons name="school-outline" size={19} color={InkColors.ink} />
           </View>
           <View style={{ flex: 1, minWidth: 0 }}>
-            <Text style={styles.firstDayTitle}>훈련</Text>
-            <Text style={styles.firstDayDesc}>첫 훈련(신입 첫날)과 정기 훈련을 준비해요</Text>
+            <Text style={styles.firstDayTitle}>퀴즈</Text>
+            <Text style={styles.firstDayDesc}>첫 출근(신입 첫날)과 정기 점검(주기 재확인)을 준비해요</Text>
           </View>
           <Ionicons name="chevron-forward" size={16} color={InkColors.ink3} />
         </Pressable>

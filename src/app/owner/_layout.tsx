@@ -137,7 +137,7 @@ export default function OwnerLayout() {
       <Stack.Screen name="settings" options={{ title: '설정', headerTitle: () => <StoreHeaderTitle title="설정" />, headerLeft: () => null, headerBackVisible: false }} />
       {/* 서브화면 — 전역 headerLeft(HeaderBackButton) 사용 */}
       <Stack.Screen name="staff" options={{ title: '직원·급여' }} />
-      <Stack.Screen name="training" options={{ title: '훈련' }} />
+      <Stack.Screen name="training" options={{ title: '퀴즈' }} />
       {/* 물어보기(매니저) — 직원 물어보기 재사용, 노하우 탭 검색 결과 없음에서 진입 */}
       <Stack.Screen name="ask" options={{ title: '물어보기' }} />
       <Stack.Screen name="schedule" options={{ title: '근무표' }} />
