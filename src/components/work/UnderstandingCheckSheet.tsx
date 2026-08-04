@@ -15,14 +15,22 @@ import type { QuizGrade, QuizItem, QuizResponse } from '@/lib/quiz/types';
 type Phase = 'loading' | 'quiz' | 'result' | 'empty' | 'quota';
 
 /**
+ * 저장된 문항이 0개일 때 AI 즉석 생성으로 폴백할지 — **끈다**(2026-08-04 결정: 검수된 문항만 내보낸다).
+ * 즉석 생성은 사장이 검수한 적 없는 문제가 직원에게 나가는 유일한 경로였다. 이제 낼 문항이 있는
+ * 업무만 카드에 오르므로(0109) 여기 도달하는 건 "있다고 봤는데 실제로는 못 쓴다"는 예외 상황뿐이고,
+ * 그 자리에서 문제를 지어내는 것보다 준비 중이라고 말하는 편이 정직하다.
+ * 아래 LegacyQuizBody 는 남겨 둔다 — 되돌릴 땐 이 값 하나만 true 로.
+ */
+const ALLOW_AI_FALLBACK: boolean = false;
+
+/**
  * UnderstandingCheckSheet — "이 업무 혼자 할 수 있어요" 자청 시 뜨는 이해 확인 퀴즈(S1 ④).
  * 자발·페널티 0·재시도 자유·실패는 사장에게 안 감.
  *
  * 경로가 둘이다.
  *  ① 저장된 문항(0107 quiz_items) — 형태별 렌더러로 풀고 **채점은 서버**(grade_quiz).
  *     응시용 payload 에는 정답이 없다. AI 호출도 0이라 월 한도를 안 먹는다.
- *  ② 폴백: 저장된 문항이 0개면 기존 AI 즉석 생성(4지선다)을 그대로 쓴다.
- *     아직 문항을 안 만든 매장이 훈련을 못 하면 안 되므로 이 경로는 지우지 않는다.
+ *  ② 폴백: 저장된 문항이 0개인 경우. 예전엔 AI 즉석 생성이었으나 지금은 안내만 한다(아래 상수).
  */
 export function UnderstandingCheckSheet({
   taskText,
@@ -94,7 +102,17 @@ function QuizBody(props: {
     );
   }
   if (route === 'saved') return <SavedQuizBody items={items} onPass={props.onPass} onClose={props.onClose} onRetry={props.onRetry} />;
-  return <LegacyQuizBody {...props} />;
+  return ALLOW_AI_FALLBACK ? <LegacyQuizBody {...props} /> : <NotReadyBody onClose={props.onClose} />;
+}
+
+/** 낼 문항이 없어 응시가 성립하지 않을 때 — 지어내지 않고 그대로 말한다. */
+function NotReadyBody({ onClose }: { onClose: () => void }) {
+  return (
+    <View style={s.center}>
+      <Text style={s.noticeText}>아직 이 업무의 퀴즈가 준비되지 않았어요.{'\n'}사장님이 문제를 만들면 여기에 떠요.</Text>
+      <Pressable onPress={onClose} style={s.softBtn}><Text style={s.softBtnText}>닫기</Text></Pressable>
+    </View>
+  );
 }
 
 // ── ① 저장된 문항 경로 ────────────────────────────────────────────────────────
@@ -405,6 +423,7 @@ const s = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, paddingHorizontal: 24 },
   centerEmoji: { fontSize: 34 },
   centerText: { fontSize: 14, color: InkColors.ink2, fontWeight: '600', textAlign: 'center', lineHeight: 21 },
+  noticeText: { fontSize: 15, color: InkColors.ink2, fontWeight: '600', textAlign: 'center', lineHeight: 23 },
   scroll: { flex: 1, paddingHorizontal: 16 },
   intro: { fontSize: 12.5, color: InkColors.ink3, fontWeight: '600', marginBottom: 14, lineHeight: 18 },
 

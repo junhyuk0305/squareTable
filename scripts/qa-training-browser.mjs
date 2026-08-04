@@ -7,7 +7,7 @@
 //   T1  직원·급여 → "퀴즈" 카드 → 퀴즈 화면(프리셋 고르기) → '첫 출근' 만들기 → 추천 시트 → 미달 안내
 //   T2  새 문답: 글자수 힌트(10자 미만 경고 → 충족 문구 전환) → "퀴즈에 추가" → 목록 1행
 //   T3  기존 노하우로 추가: 시트 → 시드 노하우 탭 → 목록 2행
-//   T4  3개째 추가 → 상태 표시등 "준비됨"
+//   T4  3개째 추가 → 항목은 찼지만 문항 0개 → '준비됨'이 아니라 "문제부터 만들어 주세요"
 //   T5  항목 액션 시트: 아래로 이동(순서 스왑) · 퀴즈에서 빼기(목록 2행 + 미달 안내 복귀) → 재추가
 //   T6  종류 추가 → '정기 점검' 프리셋 → 주기 안내(1달마다) · 비운영 상태
 //   T7  허브 현황 "퀴즈" 섹션 노출
@@ -146,7 +146,7 @@ async function main() {
     check('T1d 추천 업무 담기 시트', await wait(po, '담을 업무 고르기'));
     await shot(po, '01b-recommend');
     await tapLabel(po, '닫기'); // 추천은 건너뛰고 아래 T2·T3 경로로 담는다
-    check('T1e 미달 안내(3개부터 직원에게)', await wait(po, '3개부터 직원에게 보여요'));
+    check('T1e 미달 안내(3개부터 공개)', await wait(po, '비어 있음 · 3개부터 공개'));
     await shot(po, '01c-training-empty');
 
     console.log('\n[사장] 새 문답 추가 + 글자수 힌트');
@@ -177,14 +177,15 @@ async function main() {
     await shot(po, '03-picker');
     await tap(po, '원두 채우기');
     check('T3c 추가 토스트', await wait(po, '첫 출근에 추가했어요'));
-    check('T3d 남은 1개 안내', await wait(po, '1개 더 채우면 직원에게 보여요'));
+    check('T3d 문항 0개 안내(2개)', await wait(po, '문제 없는 업무 2개 · 문제부터 만들어 주세요'));
 
-    console.log('\n[사장] 3개째 → 준비됨');
+    console.log('\n[사장] 3개째 → 항목은 찼지만 문항 0개');
     await tap(po, '기존 노하우로 추가');
     await wait(po, '가스 밸브 잠그기');
     await tap(po, '가스 밸브 잠그기');
     await wait(po, '첫 출근에 추가했어요');
-    check('T4 상태 표시등 "준비됨"', await wait(po, '준비됨 · 직원 업무 채팅에 보여요'));
+    // ★ 항목 수만 보던 옛 판정은 문항이 0개인데도 '준비됨'을 띄웠다. 지금은 문항까지 봐야 초록이다.
+    check('T4 문항 0개면 준비됨 아님', await wait(po, '문제 없는 업무 3개 · 문제부터 만들어 주세요'));
     await shot(po, '04-ready');
 
     console.log('\n[사장] 항목 액션: 이동·빼기');
@@ -205,13 +206,13 @@ async function main() {
     await wait(po, '퀴즈에서 빼기');
     await tap(po, '퀴즈에서 빼기');
     check('T5c 빼기 토스트(업무·노하우 보존 안내)', await wait(po, '업무와 노하우는 남아요'));
-    check('T5d 미달 안내 복귀(1개 더)', await wait(po, '1개 더 채우면 직원에게 보여요'));
+    check('T5d 미달 안내 복귀(2개)', await wait(po, '문제 없는 업무 2개 · 문제부터 만들어 주세요'));
     // 직원 카드 검증을 위해 3개로 복구 — 픽커에서 방금 뺀 항목의 노하우(오픈 청소)를 재선택.
     await tap(po, '기존 노하우로 추가');
     await wait(po, '오픈 청소');
     await tap(po, '오픈 청소');
     await wait(po, '첫 출근에 추가했어요');
-    await wait(po, '준비됨 · 직원 업무 채팅에 보여요');
+    await wait(po, '문제 없는 업무 3개 · 문제부터 만들어 주세요');
 
     console.log('\n[사장] 종류 추가 → 정기 점검');
     // v2 부터 '정기 점검'은 기본 제공이 아니라 사장이 프리셋에서 만든다.

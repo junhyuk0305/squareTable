@@ -1360,6 +1360,19 @@ export async function fetchQuizItemsForAttempt(
   };
 }
 
+/** 노하우별 '나가는' 문항 수(0109). 직원도 호출 가능 — 개수만 나오고 문항·정답은 안 나온다. */
+export async function fetchQuizItemCounts(): Promise<DbResult<Record<string, number>>> {
+  if (!HAS_SUPABASE) return { data: {}, error: null };
+  const { data, error } = await supabase.rpc('quiz_item_counts');
+  if (error) {
+    readFail('fetchQuizItemCounts', error);
+    return { data: null, error: error as DbErr };
+  }
+  const out: Record<string, number> = {};
+  for (const r of (data as any[]) ?? []) out[r.entry_id] = r.n ?? 0;
+  return { data: out, error: null };
+}
+
 /** 서버 채점(RPC grade_quiz). answer 는 틀렸을 때만 채워진다(맞으면 null). */
 export async function gradeQuiz(itemId: string, response: QuizResponse): Promise<DbResult<QuizGrade>> {
   if (!HAS_SUPABASE) return { data: null, error: { message: 'no_backend' } };

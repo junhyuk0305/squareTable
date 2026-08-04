@@ -30,6 +30,7 @@ import {
   insertTrainingRequests,
   deleteTrainingRequest,
   fetchTrainingCourses,
+  fetchQuizItemCounts,
   type TrainingItemRow,
   type TrainingCourse,
   type TrainingRequestRow,
@@ -289,6 +290,19 @@ export function taskIdsForKnowhow(links: KnowhowLink[], entryId: string): string
   return links.filter((l) => l.entryId === entryId).map((l) => l.templateId);
 }
 
+/**
+ * 이 업무가 실제로 낼 수 있는 문항 수 — 붙은 노하우들의 문항 수 합. 0이면 퀴즈로 안 나간다.
+ * 한 문항이 노하우 여러 건을 근거로 하면 중복해서 세지므로 정확한 총량이 아니라 상한이다
+ * — 쓰는 곳은 "있나/없나" 판정뿐이라 그걸로 충분하다.
+ */
+export function quizCountForTask(
+  quizCounts: Record<string, number>,
+  knowhowLinks: KnowhowLink[],
+  templateId: string,
+): number {
+  return knowhowIdsForTask(knowhowLinks, templateId).reduce((n, id) => n + (quizCounts[id] ?? 0), 0);
+}
+
 /** 완료 직후 1턴 캡처(S1 ②) 넛지 피로 상태 — 인메모리(리로드 시 리셋=양호한 degradation, 네이티브 지속성 회피). */
 export type CaptureNudge = { date?: string; skips: number };
 /**
@@ -441,6 +455,8 @@ type State = {
   courses: TrainingCourseRow[];
   /** 훈련 요청(0102) — 직원은 본인 것만, 관리 권한은 매장 전체(RLS 스코프). */
   trainingRequests: TrainingRequestRow[];
+  /** 노하우별 저장 문항 수(0109) — 직원도 읽는 개수만. 업무 단위 판정은 quizCountForTask. */
+  quizCounts: Record<string, number>;
   /** 완료 캡처(②) 넛지 피로 상태(인메모리). */
   captureNudge: CaptureNudge;
   loaded: boolean;
@@ -499,14 +515,15 @@ export const useWorkStore = create<State>((set, get) => ({
   training: [],
   courses: [],
   trainingRequests: [],
+  quizCounts: {},
   captureNudge: { skips: 0 },
   loaded: !HAS_SUPABASE,
 
-  // 전체 재조회(templates·done·feed·링크·이해확인·훈련항목·코스·요청 8쿼리)로 스토어를 통째로 교체한다.
+  // 전체 재조회(templates·done·feed·링크·이해확인·훈련항목·코스·요청·문항수 9쿼리)로 스토어를 통째로 교체한다.
   // coalesce: 빠른 연속 체크로 realtime 이벤트가 몰려도 풀리페치가 병렬로 쌓이지 않게 합친다.
   hydrate: coalesce(async () => {
     if (!HAS_SUPABASE) return;
-    const [templates, done, feed, knowhowLinks, understanding, training, courses, trainingRequests] = await Promise.all([
+    const [templates, done, feed, knowhowLinks, understanding, training, courses, trainingRequests, quizCounts] = await Promise.all([
       fetchTemplates(),
       fetchDone(),
       fetchFeed(),
@@ -515,11 +532,15 @@ export const useWorkStore = create<State>((set, get) => ({
       fetchTrainingItems(),
       fetchTrainingCourses(),
       fetchTrainingRequests(),
+      fetchQuizItemCounts(),
     ]);
     set({
       templates, done, feed, knowhowLinks, understanding, training, trainingRequests,
       // 직원에게 보일 코스만(비활성 제외) 사장 화면과 같은 순서로 — 카드 순서 = 사장이 정한 순서.
       courses: (courses.data ?? []).filter((c) => c.active).sort((a, b) => a.position - b.position),
+      // 읽기 실패(null)면 빈 맵 = 문항 0건 취급이다. 퀴즈가 잠깐 안 뜨는 쪽이 검수 안 된 문제가
+      // 나가는 쪽보다 낫다(fail-closed). 실패 자체는 readFail 이 이미 보고한다.
+      quizCounts: quizCounts.data ?? {},
       loaded: true,
     });
   }),

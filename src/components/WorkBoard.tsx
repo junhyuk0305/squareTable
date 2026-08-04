@@ -8,7 +8,7 @@ import { uploadPhoto } from '@/lib/db';
 import { HAS_SUPABASE } from '@/lib/supabase';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useStaffStore } from '@/lib/store/useStaffStore';
-import { useWorkStore, useDayparts, daypartRoutineTemplates, findDuplicateTask, knowhowIdsForTask, isCaptureEligible, trainingOf, trainingCourseViews, isRegularDue, isRequestDue, REGULAR_DUE_DAYS_DEFAULT, type NewTask, type TaskTemplate } from '@/lib/store/useWorkStore';
+import { useWorkStore, useDayparts, daypartRoutineTemplates, findDuplicateTask, knowhowIdsForTask, quizCountForTask, isCaptureEligible, trainingOf, trainingCourseViews, isRegularDue, isRequestDue, REGULAR_DUE_DAYS_DEFAULT, type NewTask, type TaskTemplate } from '@/lib/store/useWorkStore';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { useSuggestionStore } from '@/lib/store/useSuggestionStore';
 import { useSyncStore } from '@/lib/store/useSyncStore';
@@ -99,6 +99,7 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
   const training = useWorkStore((s) => s.training);
   const courses = useWorkStore((s) => s.courses);
   const trainingRequests = useWorkStore((s) => s.trainingRequests);
+  const quizCounts = useWorkStore((s) => s.quizCounts);
   // 노하우 첨부 검색·칩 제목 해석용 — 업무 화면에서도 노하우를 로드해 둔다(coalesce 로 중복 방지).
   const entries = usePlaybookStore((s) => s.entries);
   const addEntry = usePlaybookStore((s) => s.add);
@@ -221,13 +222,19 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
     },
     [understanding, isOwner, userId, nameOf],
   );
-  // '혼자 할 수 있어요' 자청 노출 조건 — 직원 + 노하우 붙은 업무 + 아직 본인이 통과 안 함.
+  // 직원에게 퀴즈를 내보낼 수 있는 업무인가(0109) — 사장이 저장해 둔 문항이 1건이라도 있어야 한다.
+  // 문항 0건이면 예전엔 AI가 즉석 생성했는데, 그건 사장이 검수한 적 없는 문제다 → 아예 안 내보낸다.
+  const hasQuiz = useCallback(
+    (templateId: string) => quizCountForTask(quizCounts, knowhowLinks, templateId) > 0,
+    [quizCounts, knowhowLinks],
+  );
+  // '혼자 할 수 있어요' 자청 노출 조건 — 직원 + 낼 문항이 있는 업무 + 아직 본인이 통과 안 함.
   const canSelfCheck = useCallback(
     (templateId: string) =>
       !isOwner &&
-      knowhowIdsForTask(knowhowLinks, templateId).length > 0 &&
+      hasQuiz(templateId) &&
       !understanding.some((u) => u.templateId === templateId && u.staffId === userId),
-    [isOwner, knowhowLinks, understanding, userId],
+    [isOwner, hasQuiz, understanding, userId],
   );
   // 자청 → 그 업무의 첨부 노하우를 퀴즈 소스(sops)로 직렬화해 시트 오픈.
   const openSelfCheck = useCallback(
@@ -256,10 +263,14 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
     const hasKnowhow = (id: string) => knowhowIdsForTask(knowhowLinks, id).length > 0;
 
     // 훈련 요청(0102) — 나에게 온 요청 중 오늘 due 인 것. 코스 소속과 무관하게 업무를 직접 가리킨다.
+    // ★문항 0건인 업무는 요청이어도 뺀다 — 열어도 풀 문제가 없어 응시가 성립하지 않는다(0109).
+    //   사장이 콕 집어 보낸 요청이 사라지는 건 아프지만, 답할 수 없는 항목을 카드에 영구히
+    //   남겨두는 쪽이 더 나쁘다(통과해야 사라지는데 통과할 방법이 없다).
     const askedIds = new Set(
       trainingRequests
         .filter((r) => r.staffId === userId && isRequestDue(r, myRow(r.templateId)?.verifiedAt, trainingNow))
-        .map((r) => r.templateId),
+        .map((r) => r.templateId)
+        .filter((id) => hasQuiz(id)),
     );
 
     const cards: { course: TrainingCardCourse; items: TrainingCardItem[] }[] = [];
@@ -267,8 +278,10 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
     for (const c of trainingCourseViews(courses, training)) {
       const list = trainingOf(training, c.key)
         .map((f) => byId.get(f.templateId))
-        .filter((t): t is TaskTemplate => !!t);
-      // 하한 미달이면 사장 화면이 "아직 직원에게 안 보여요"라고 말하는 상태 — 카드도 띄우지 않는다.
+        .filter((t): t is TaskTemplate => !!t)
+        // 낼 문항이 없는 업무는 항목에서 뺀다 — 카드에 띄워도 시작할 수가 없다(0109).
+        .filter((t) => hasQuiz(t.id));
+      // 남은 항목이 하한 미달이면 사장 화면이 "아직 직원에게 안 보여요"라고 말하는 상태 — 카드도 띄우지 않는다.
       if (list.length < c.minItems) continue;
       // 1회성 코스(dueDays 없음)는 통과 여부만 본다(첫 통과가 목적, 순서상 첫 미통과 = '다음').
       // 주기 코스는 마지막 통과가 주기보다 오래됐거나 기록이 없으면 '다시 확인'.
@@ -310,7 +323,7 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
     return cards.filter((c) =>
       c.course.dueDays === null ? c === firstOnce : !firstOnce || c.items.some((it) => it.state === 'asked'),
     );
-  }, [isOwner, courses, training, templates, understanding, knowhowLinks, userId, trainingNow, trainingRequests]);
+  }, [isOwner, courses, training, templates, understanding, knowhowLinks, hasQuiz, userId, trainingNow, trainingRequests]);
 
   // 카드의 퀴즈 시작 — 항목 id 로 템플릿을 찾아 기존 자청 흐름(openSelfCheck) 재사용.
   const startTrainingCheck = useCallback(

@@ -33,6 +33,7 @@ import {
   PRESET_LIST,
   type CoursePreset,
 } from '@/components/owner/quiz/CourseSetup';
+import { courseScoreFor } from '@/lib/quiz/presets';
 import { QuizItemsSheet } from '@/components/owner/quiz/QuizItemsSheet';
 import { QuizEditorSheet } from '@/components/owner/quiz/QuizEditorSheet';
 import { TrainingInsights } from '@/components/owner/quiz/TrainingInsights';
@@ -158,15 +159,27 @@ export default function OwnerTrainingScreen() {
           const missRate = qs && qs.attempts >= QUIZ_MISS_MIN_ATTEMPTS ? qs.misses / qs.attempts : 0;
           const missPct = missRate >= QUIZ_MISS_RATE ? Math.round(missRate * 100) : 0;
           const quizCount = entryIds.reduce((n, id) => n + quizCountOf(id), 0);
-          return { templateId: t.id, text: t.text, entryId, entryIds, passedNames, missPct, quizCount };
+          // 사고 위험 = 붙은 노하우에 '하면 안 되는 것'(dont)이 적혀 있다. 사장이 정하는 게 아니라
+          // 이미 적어둔 글에서 코드가 읽는다. 표시는 이것 하나뿐 — 상/중/하 다단계 배지는 쓰지 않는다.
+          const risky = entryIds.some((id) => !!String(entryById.get(id)?.square?.extract?.dont ?? '').trim());
+          return { templateId: t.id, text: t.text, entryId, entryIds, passedNames, missPct, quizCount, risky };
         })
         .filter((x): x is NonNullable<typeof x> => !!x),
-    [training, activeKey, templates, knowhowLinks, understanding, now, activeDueDays, quizStats, quizCountOf],
+    [training, activeKey, templates, knowhowLinks, understanding, now, activeDueDays, quizStats, quizCountOf, entryById],
   );
   const maxItems = course?.max_items ?? 0;
   const minItems = course?.min_items ?? 0;
   const full = !!course && items.length >= maxItems;
-  const ready = !course || items.length >= minItems;
+  /**
+   * ★ '준비됨'은 항목 수만으로 정하지 않는다 — 문항이 0개인 업무는 담겨 있어도 직원에게 안 나간다.
+   * 실제로 나가는 항목(liveCount)이 하한을 채웠을 때만 초록이다. 항목 수만 보던 옛 판정은
+   * "문제 없음"이라 적힌 행 위에서 "준비됨"이라고 말하는 거짓 신호였다.
+   */
+  const liveCount = items.filter((it) => it.quizCount > 0).length;
+  const noQuizCount = items.length - liveCount;
+  const ready = !course || liveCount >= minItems;
+  /** 코스 설명·주기 안내는 담는 동안만 — 항목이 차면 접는다(프리셋 카드·설정 시트에서 이미 본 문장). */
+  const guideOpen = !!course && items.length < minItems;
 
   /**
    * 이 코스에 이미 쓰인 노하우(중복 추가 방지용) — **코스 단위**로 판정한다.
@@ -359,6 +372,33 @@ export default function OwnerTrainingScreen() {
     if (added > 0) showToast(`${course.name}에 ${added}개 담았어요`, 'good');
   };
 
+  /**
+   * 인사이트는 **다른 코스 것만** 본다 — 위 목록이 이미 말한 업무를 아래에서 같은 이름·같은 이유로
+   * 또 보여주던 중복(누르면 가는 곳까지 같았다)을 없앤다. 코스가 하나뿐이면 섹션 자체가 안 그려진다.
+   */
+  const otherCourses = useMemo(() => courses.filter((c) => c.key !== activeKey), [courses, activeKey]);
+  const activeEntryIds = useMemo(() => new Set(items.flatMap((it) => it.entryIds)), [items]);
+  /**
+   * 어느 업무부터 손대야 하나 — 사장이 아무것도 정하지 않아도 코드가 판단한다.
+   * 판단 함수는 코스를 만들 때 추천에 쓰던 것과 같다(scoreFor). 목록의 순서(position)는
+   * 직원이 배우는 순서라 건드리지 않고, 순서에 뜻이 없는 '문제 없는 업무' 줄만 이 점수로 정렬한다.
+   */
+  const riskOf = useCallback(
+    (templateId: string, preset?: string | null) =>
+      courseScoreFor(
+        preset,
+        {
+          templateId,
+          templateName: templates.find((t) => t.id === templateId)?.text ?? '',
+          entries: knowhowIdsForTask(knowhowLinks, templateId)
+            .map((id) => entryById.get(id))
+            .filter((e): e is PlaybookEntry => !!e),
+        },
+        now,
+      ),
+    [templates, knowhowLinks, entryById, now],
+  );
+
   // 검색(제목·키워드) + 발행본만 + 이미 코스에 쓰인 노하우 제외.
   const pickerEntries = useMemo(() => {
     const q = pickerQuery.trim().toLowerCase();
@@ -425,26 +465,34 @@ export default function OwnerTrainingScreen() {
         {course && (
           <Appear delay={30}>
             <View style={st.guideCard}>
-              <GuideLine
-                icon="list-outline"
-                strong={`${minItems}~${maxItems}개`}
-                rest={course.description || '핵심 업무만 담아요'}
-              />
-              <GuideLine
-                icon={activeDueDays ? 'refresh-outline' : 'footsteps-outline'}
-                strong={activeDueDays ? `${regularDueLabel(activeDueDays)}마다` : '한 번 통과하면 끝'}
-                rest={activeDueDays ? '다 배운 업무도 다시 이해 확인해요' : '통과한 직원에게는 다시 묻지 않아요'}
-              />
+              {/* 설명·주기는 코스를 채우는 동안만 — 다 채우면 상태 한 줄만 남긴다(중복 노출 제거). */}
+              {guideOpen && (
+                <>
+                  <GuideLine
+                    icon="list-outline"
+                    strong={`${minItems}~${maxItems}개`}
+                    rest={course.description || '핵심 업무만 담아요'}
+                  />
+                  <GuideLine
+                    icon={activeDueDays ? 'refresh-outline' : 'footsteps-outline'}
+                    strong={activeDueDays ? `${regularDueLabel(activeDueDays)}마다` : '한 번 통과하면 끝'}
+                    rest={activeDueDays ? '다 배운 업무도 다시 이해 확인해요' : '통과한 직원에게는 다시 묻지 않아요'}
+                  />
+                </>
+              )}
               {/* 재확인 주기 변경은 아래 '훈련 종류 설정'(CourseFormSheet)에서 — 코스별 due_days 하나로 모았다. */}
               <View style={st.statusRow}>
                 <View style={[st.statusDot, { backgroundColor: ready ? BrandColors.good : BrandColors.warn }]} />
                 <Text style={[st.statusText, { color: ready ? BrandColors.good : BrandColors.warn }]}>
-                  {/* 상태 꼬리표 자리 — 명사구로 끝낸다(AI티 규칙 R2-1·R2-5). */}
+                  {/* 상태 꼬리표 자리 — 명사구로 끝낸다(AI티 규칙 R2-1·R2-5).
+                      문항이 빈 업무가 있으면 그게 지금 유일하게 할 일이라 그 문구를 먼저 낸다. */}
                   {ready
                     ? '준비됨 · 직원에게 공개'
                     : items.length === 0
                       ? `비어 있음 · ${minItems}개부터 공개`
-                      : `공개까지 ${minItems - items.length}개 남음`}
+                      : noQuizCount > 0
+                        ? `문제 없는 업무 ${noQuizCount}개 · 문제부터 만들어 주세요`
+                        : `공개까지 ${minItems - liveCount}개 남음`}
                 </Text>
               </View>
               <Pressable
@@ -478,22 +526,17 @@ export default function OwnerTrainingScreen() {
                   <View style={st.itemNum}><Text style={st.itemNumText}>{i + 1}</Text></View>
                   <View style={{ flex: 1, minWidth: 0 }}>
                     <Text style={st.itemText} numberOfLines={1}>{it.text}</Text>
-                    <Text style={st.itemMeta} numberOfLines={1}>
-                      {!it.entryId
-                        ? '노하우 없음 · 문제를 쓰면서 노하우도 만들 수 있어요'
-                        : it.passedNames.length > 0
-                          ? `${activeDueDays ? `최근 ${regularDueLabel(activeDueDays)} 안에 확인` : '이해 확인'} · ${it.passedNames.join(', ')}`
-                          : activeDueDays ? '확인한 직원이 아직 없어요' : '통과한 직원이 아직 없어요'}
-                    </Text>
-                    {/* 문항 재고 — 0개면 이 업무는 훈련에 담겨도 실제로 나가지 않는다. */}
-                    <Text style={[st.itemMeta, it.quizCount === 0 && st.itemWarn]} numberOfLines={1}>
-                      {it.quizCount === 0 ? '문제 없음 · 눌러서 만들어 주세요' : `문제 ${it.quizCount}개`}
-                    </Text>
-                    {it.missPct > 0 && (
-                      <Text style={st.itemWarn} numberOfLines={1}>
-                        문제 오답률 {it.missPct}% · 노하우가 헷갈리게 적혔을 수 있어요
+                    {/* 캡션은 한 줄뿐 — 줄을 쌓지 않고 같은 자리의 문구를 상황에 따라 바꾼다.
+                        행당 고유 표시는 순번 · (사고 위험) · 캡션 = 최대 3개로 묶어 둔다. */}
+                    <View style={st.itemMetaRow}>
+                      {it.risky ? <Text style={st.riskTag}>사고 위험</Text> : null}
+                      <Text
+                        style={[st.itemMeta, it.quizCount === 0 && st.itemWarn]}
+                        numberOfLines={1}
+                      >
+                        {itemCaption(it, staffList.length, activeDueDays)}
                       </Text>
-                    )}
+                    </View>
                   </View>
                   <Ionicons name="ellipsis-horizontal" size={17} color={InkColors.ink3} />
                 </Pressable>
@@ -571,11 +614,13 @@ export default function OwnerTrainingScreen() {
           </Appear>
         )}
 
-        {/* ── 훈련 현황(인사이트) — 새 라우트 없이 이 화면 안의 섹션으로 ── */}
-        {courses.length > 0 && (
+        {/* ── 다른 퀴즈 현황(인사이트) — 새 라우트 없이 이 화면 안의 섹션으로 ── */}
+        {otherCourses.length > 0 && (
           <Appear delay={120}>
             <TrainingInsights
-              courses={courses}
+              courses={otherCourses}
+              excludeEntryIds={activeEntryIds}
+              riskOf={riskOf}
               training={training}
               taskTextOf={(id) => templates.find((t) => t.id === id)?.text}
               entryIdsOf={(id) => knowhowIdsForTask(knowhowLinks, id)}
@@ -930,6 +975,29 @@ export default function OwnerTrainingScreen() {
   );
 }
 
+/**
+ * 항목 행의 캡션 한 줄 — 이 업무에서 **지금 가장 먼저 알아야 할 것** 하나만 말한다.
+ * 우선순위 = 사장이 손대야 하는 순서: 노하우 없음 → 문제 없음 → 오답 많음 → 통과 규모.
+ * 행을 구분해 주는 건 업무명이 아니라 이 문구다(전부 같은 말이 나오지 않게 규모·개수를 넣는다).
+ */
+function itemCaption(
+  it: { entryId?: string; quizCount: number; missPct: number; passedNames: string[] },
+  staffCount: number,
+  dueDays: number | null,
+): string {
+  if (!it.entryId) return '노하우 없음 · 눌러서 문제부터 만들어 주세요';
+  if (it.quizCount === 0) return '문제 없음 · 눌러서 만들어 주세요';
+  const q = `문제 ${it.quizCount}개`;
+  if (it.missPct > 0) return `${q} · 오답률 ${it.missPct}% · 노하우가 헷갈리게 적혔을 수 있어요`;
+  // 주기 코스는 '확인'(최근 주기 안에 다시 봤나), 1회성 코스는 '통과'.
+  const verb = dueDays ? '확인' : '통과';
+  const done = it.passedNames.length;
+  if (staffCount === 0) return `${q} · 아직 직원이 없어요`;
+  if (done === 0) return `${q} · 직원 ${staffCount}명 아직 ${verb} 전`;
+  if (done >= staffCount) return `${q} · 직원 ${staffCount}명 전원 ${verb}`;
+  return `${q} · ${staffCount}명 중 ${done}명 ${verb} · ${it.passedNames.join(', ')}`;
+}
+
 /** 안내 카드 한 줄 — 아이콘 + 강조(굵게) + 나머지 설명. */
 function GuideLine({ icon, strong, rest }: { icon: keyof typeof Ionicons.glyphMap; strong: string; rest: string }) {
   return (
@@ -994,7 +1062,8 @@ const st = StyleSheet.create({
   guideStrong: { fontWeight: '900', color: InkColors.ink },
   statusRow: { flexDirection: 'row', alignItems: 'center', gap: Space.xs + 2, marginTop: Space.xs },
   statusDot: { width: 8, height: 8, borderRadius: 4 },
-  statusText: { flex: 1, fontSize: 13, fontWeight: '800' },
+  // 안내 두 줄을 접고 나면 이 줄이 "지금 무엇을 해야 하는지"를 말하는 유일한 문장이라 본문 크기로 둔다.
+  statusText: { flex: 1, fontSize: 15, fontWeight: '800', lineHeight: 22 },
   guideLink: { alignSelf: 'flex-start', minHeight: 40, justifyContent: 'center', marginTop: Space.xs },
   guideLinkText: { fontSize: 13, fontWeight: '800', color: InkColors.ink2, textDecorationLine: 'underline' },
 
@@ -1007,8 +1076,15 @@ const st = StyleSheet.create({
   itemNum: { width: 24, height: 24, borderRadius: Radius.pill, backgroundColor: InkColors.bgSoft, alignItems: 'center', justifyContent: 'center' },
   itemNumText: { fontSize: 12, fontWeight: '800', color: InkColors.ink2 },
   itemText: { fontSize: 15, fontWeight: '700', color: InkColors.ink },
-  itemMeta: { fontSize: 12, color: InkColors.ink3, marginTop: 1 },
-  itemWarn: { fontSize: 12, fontWeight: '700', color: '#8a5a12', marginTop: 1 },
+  itemMetaRow: { flexDirection: 'row', alignItems: 'center', gap: Space.xs, marginTop: 1, minWidth: 0 },
+  itemMeta: { flex: 1, minWidth: 0, fontSize: 12, color: InkColors.ink3 },
+  itemWarn: { fontSize: 12, fontWeight: '700', color: '#8a5a12' },
+  // 사고 위험 = 이 화면의 유일한 중요도 표시. 색만으로 구분하지 않게 글자 라벨을 그대로 쓴다.
+  riskTag: {
+    fontSize: 11, fontWeight: '800', color: BrandColors.warn,
+    backgroundColor: BrandColors.warnSoft, borderRadius: Radius.pill,
+    paddingHorizontal: Space.sm, paddingVertical: 2, overflow: 'hidden',
+  },
   renameBody: { paddingHorizontal: 16, paddingBottom: 18, gap: Space.sm },
   emptyText: { fontSize: 15, color: InkColors.ink3, textAlign: 'center', paddingVertical: Space.md },
 

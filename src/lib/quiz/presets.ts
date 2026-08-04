@@ -91,7 +91,7 @@ function latestUpdatedAt(entries: PlaybookEntry[]): number {
   return max;
 }
 
-function scoreFor(preset: QuizPresetKey, ctx: TemplateQuizContext, now: number): number {
+export function scoreFor(preset: QuizPresetKey, ctx: TemplateQuizContext, now: number): number {
   const entries = ctx.entries ?? [];
   // 노하우가 없으면 문항이 안 나온다. 추천에서 맨 뒤로 보내되 목록에서 지우지는 않는다
   // (사장이 "이 업무엔 노하우를 붙여야 하는구나"를 볼 수 있어야 한다).
@@ -124,6 +124,19 @@ function scoreFor(preset: QuizPresetKey, ctx: TemplateQuizContext, now: number):
     case 'position':
       return base + (kinds.has('t5') ? 3 : 0) + (kinds.has('t4') ? 3 : 0);
   }
+}
+
+/**
+ * 코스 행(training_courses)의 preset 문자열로 점수를 낸다 — 목록 정렬용 얇은 래퍼.
+ * 계산은 scoreFor 그대로다(로직 무접촉). 사장이 직접 만든 코스는 preset 이 null 이라 기준이 없는데,
+ * 그때는 'short_term'(= 금지가 적힌 업무 우선 = 사고 나는 자리)을 쓴다 — 모르면 사고부터 막는 게 안전하다.
+ */
+export function courseScoreFor(
+  preset: string | null | undefined,
+  ctx: TemplateQuizContext,
+  now: number,
+): number {
+  return scoreFor(PRESET_ORDER.find((k) => k === preset) ?? 'short_term', ctx, now);
 }
 
 /**

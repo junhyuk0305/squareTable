@@ -29,6 +29,8 @@ export type InsightHole = { templateId: string; text: string; courseName: string
 
 export function TrainingInsights({
   courses,
+  excludeEntryIds,
+  riskOf,
   training,
   taskTextOf,
   entryIdsOf,
@@ -40,7 +42,15 @@ export function TrainingInsights({
   now,
   onFixHole,
 }: {
+  /**
+   * ★ 지금 보고 있는 코스는 빼고 넘긴다(호출부에서 필터). 위 목록이 이미 말한 업무를
+   * 같은 이름·같은 이유로 또 보여주면 중복이다. 코스가 하나뿐이면 호출부가 아예 안 그린다.
+   */
   courses: TrainingCourse[];
+  /** 활성 코스에서 이미 다룬 노하우 — '자주 틀리는 노하우'에서 뺀다. */
+  excludeEntryIds: Set<string>;
+  /** 이 업무를 얼마나 먼저 손봐야 하나(높을수록 먼저). 판정은 코드가 한다 — 사장 입력 없음. */
+  riskOf: (templateId: string, preset?: string | null) => number;
   training: TrainingItemRow[];
   taskTextOf: (templateId: string) => string | undefined;
   entryIdsOf: (templateId: string) => string[];
@@ -54,9 +64,11 @@ export function TrainingInsights({
   onFixHole: (hole: InsightHole) => void;
 }) {
   // ── ④ 문항 재고 — 코스에 담겼는데 문항이 0개인 업무. 훈련이 실제로 작동 안 하는 구멍이라 맨 위에 둔다.
+  // 정렬은 riskOf 가 정한다(사고 나는 자리부터). 이 줄은 사장이 순서를 정한 적이 없는 '할 일'이라
+  // 재정렬해도 잃는 뜻이 없다 — 반대로 위 목록의 position 은 직원이 배우는 순서라 건드리지 않는다.
   const holes = useMemo(() => {
     const seen = new Set<string>();
-    const out: InsightHole[] = [];
+    const out: (InsightHole & { score: number })[] = [];
     for (const c of courses) {
       for (const row of training.filter((t) => t.course === c.key)) {
         if (seen.has(row.templateId)) continue;
@@ -64,11 +76,17 @@ export function TrainingInsights({
         const count = ids.reduce((n, id) => n + quizCountOf(id), 0);
         if (count > 0) continue;
         seen.add(row.templateId);
-        out.push({ templateId: row.templateId, text: taskTextOf(row.templateId) ?? '업무', courseName: c.name });
+        out.push({
+          templateId: row.templateId,
+          text: taskTextOf(row.templateId) ?? '업무',
+          courseName: c.name,
+          score: riskOf(row.templateId, c.preset),
+        });
       }
     }
-    return out;
-  }, [courses, training, entryIdsOf, quizCountOf, taskTextOf]);
+    // 동점은 업무 이름으로 갈라 매번 같은 순서가 나오게 한다(결정적).
+    return out.sort((a, b) => (b.score - a.score) || a.text.localeCompare(b.text, 'ko'));
+  }, [courses, training, entryIdsOf, quizCountOf, taskTextOf, riskOf]);
 
   // ── ① 코스별 이수 현황 — 그 코스의 업무를 전부 확인한 직원 수. 점수가 아니라 도달 여부만 센다.
   const progress = useMemo(
@@ -116,25 +134,23 @@ export function TrainingInsights({
   const confusing = useMemo(
     () =>
       Object.entries(quizStats)
+        // 활성 코스에서 이미 행 캡션이 오답률을 말한 노하우는 여기서 반복하지 않는다.
+        .filter(([entryId]) => !excludeEntryIds.has(entryId))
         .filter(([, s]) => s.attempts >= QUIZ_MISS_MIN_ATTEMPTS && s.misses / s.attempts >= QUIZ_MISS_RATE)
         .map(([entryId, s]) => ({ entryId, pct: Math.round((s.misses / s.attempts) * 100), title: entryTitleOf(entryId) }))
         .filter((x) => !!x.title)
         .sort((a, b) => b.pct - a.pct)
         .slice(0, 3),
-    [quizStats, entryTitleOf],
+    [quizStats, entryTitleOf, excludeEntryIds],
   );
 
+  // 할 말이 없으면 섹션 제목까지 통째로 안 그린다 — 빈 카드 한 장도 사장 화면에서는 요소 하나다.
   const nothing = holes.length === 0 && progress.every((p) => p.itemCount === 0) && dueSoon.length === 0 && confusing.length === 0;
+  if (nothing) return null;
 
   return (
     <View style={{ gap: Space.sm }}>
-      <SectionLabel title="퀴즈 현황" />
-
-      {nothing ? (
-        <View style={tst.card}>
-          <Text style={tst.empty}>업무를 담고 문제를 만들면 여기에 현황이 쌓여요</Text>
-        </View>
-      ) : null}
+      <SectionLabel title="다른 퀴즈 현황" />
 
       {/* ④ 문항 재고 — 가장 중요. 다만 앰버 배너로 쌓지 않는다(2026-08-04):
           경고 앰버가 브랜드 노랑과 섞여 화면 최대 면적을 먹었고, 위의 업무 목록과 정보가 겹쳤다.
@@ -243,7 +259,6 @@ const tst = StyleSheet.create({
   blockLine: { fontSize: 15, fontWeight: '700', color: InkColors.ink, lineHeight: 22 },
   blockMeta: { fontSize: 13, color: InkColors.ink2, fontWeight: '600', lineHeight: 19 },
   strong: { fontWeight: '900', color: InkColors.ink },
-  empty: { fontSize: 15, color: InkColors.ink3, textAlign: 'center', paddingVertical: Space.md, lineHeight: 21 },
 
   holeRow: {
     flexDirection: 'row', alignItems: 'center', gap: Space.md, minHeight: 48,
