@@ -287,7 +287,10 @@ export function QuizEditorSheet({
                     />
                   ))}
                 </View>
-                <Text style={est.note}>고르지 않으면 알아서 만들어요 · AI 사용량을 1회 써요</Text>
+                {/* 문항 만들기는 AI 사용량을 쓰지 않는다(엣지 denylist) — 캡을 물리면 사장이 아껴서
+                    문항이 안 만들어지고, 그러면 퀴즈가 아예 안 나간다. 옛 문구는 "1회 써요"였는데
+                    실제로는 형태 개수만큼 썼다(최대 6회) — 숫자도 틀렸고 이제 차감 자체가 없다. */}
+                <Text style={est.note}>고르지 않으면 노하우에 맞는 형태로 알아서 만들어요</Text>
                 {aiNote ? <ErrorNote text={aiNote} /> : null}
               </>
             )}
