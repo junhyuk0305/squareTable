@@ -28,7 +28,7 @@ const PAINS: Pain[] = [
 
 type Feature = { icon: keyof typeof Ionicons.glyphMap; title: string; body: string };
 const FEATURES: Feature[] = [
-  { icon: 'sparkles', title: '우리 매장 노하우, AI가 즉답', body: '사장님이 한 번만 답을 남기면, 직원이 물을 때 AI가 우리 매장 방식 그대로 대신 답해요.' },
+  { icon: 'help-circle', title: '우리 매장 노하우, AI가 즉답', body: '사장님이 한 번만 답을 남기면, 직원이 물을 때 AI가 우리 매장 방식 그대로 대신 답해요.' },
   { icon: 'checkmark-done', title: '오픈·마감 체크리스트 한눈에', body: '오늘 할 일과 마감 점검을 채팅에서 한 번에. 누가 뭘 끝냈는지 사장님이 바로 확인해요.' },
   { icon: 'chatbubble-ellipses', title: '매장 관리가 채팅 하나로', body: '공지·지시·질문이 흩어지지 않고 한곳에. 직원이 바뀌어도 노하우는 그대로 쌓여요.' },
 ];
