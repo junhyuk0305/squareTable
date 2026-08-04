@@ -38,7 +38,7 @@ export const Elevation = {
   }),
   /** 노랑 요소 전용 글로우 — 히어로 CTA·FAB 전용(리스트 행 버튼엔 쓰지 말 것: overflow:hidden 카드에서 잘림) */
   ey: shadow('0 8px 20px rgba(245,197,24,.32)', {
-    shadowColor: '#F5C518',
+    shadowColor: '#F0D000',
     shadowOffset: { width: 0, height: 7 },
     shadowOpacity: 0.32,
     shadowRadius: 16,
