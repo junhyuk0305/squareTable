@@ -8,7 +8,7 @@ import { uploadPhoto } from '@/lib/db';
 import { HAS_SUPABASE } from '@/lib/supabase';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useStaffStore } from '@/lib/store/useStaffStore';
-import { useWorkStore, useDayparts, daypartRoutineTemplates, findDuplicateTask, knowhowIdsForTask, quizCountForTask, isCaptureEligible, trainingOf, trainingCourseViews, isRegularDue, isRequestDue, REGULAR_DUE_DAYS_DEFAULT, type NewTask, type TaskTemplate } from '@/lib/store/useWorkStore';
+import { useWorkStore, useDayparts, daypartRoutineTemplates, findDuplicateTask, knowhowIdsForTask, quizCountForTask, isCaptureEligible, courseEntriesOf, trainingCourseViews, staffWhoUnderstandTask, understandsTask, isRegularDue, isRequestDue, REGULAR_DUE_DAYS_DEFAULT, type NewTask, type TaskTemplate } from '@/lib/store/useWorkStore';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { useSuggestionStore } from '@/lib/store/useSuggestionStore';
 import { useSyncStore } from '@/lib/store/useSyncStore';
@@ -96,7 +96,7 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
   const noteCaptureNudge = useWorkStore((s) => s.noteCaptureNudge);
   const understanding = useWorkStore((s) => s.understanding);
   const markUnderstood = useWorkStore((s) => s.markUnderstood);
-  const training = useWorkStore((s) => s.training);
+  const courseEntries = useWorkStore((s) => s.courseEntries);
   const courses = useWorkStore((s) => s.courses);
   const trainingRequests = useWorkStore((s) => s.trainingRequests);
   const quizCounts = useWorkStore((s) => s.quizCounts);
@@ -111,8 +111,8 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
   const [detailEntry, setDetailEntry] = useState<PlaybookEntry | null>(null);
   // 완료 직후 1턴 캡처(②) — 대상 업무(있으면 시트 노출).
   const [capture, setCapture] = useState<{ templateId: string; text: string } | null>(null);
-  // 이해 확인(④) — 직원이 자청한 업무 + 그 노하우를 퀴즈 소스로.
-  const [selfCheck, setSelfCheck] = useState<{ task: TaskTemplate; sops: QuizInput['sops'] } | null>(null);
+  // 이해 확인(④) — 제목 + 퀴즈 소스(노하우들). 통과 처리는 시트가 실제로 푼 노하우 id 를 돌려준다(0111).
+  const [selfCheck, setSelfCheck] = useState<{ title: string; sops: QuizInput['sops'] } | null>(null);
   // 정기 훈련 due 판정 기준 시각 — 렌더 중 Date.now() 금지(컴파일러 순수성), 마운트 시 1회로 충분(주기=30일).
   const [trainingNow] = useState(() => Date.now());
   const toggleTask = useWorkStore((s) => s.toggleTask);
@@ -213,14 +213,15 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
     if (e) setDetailEntry(e);
   }, [entryById]);
 
-  // 이해 확인(④) 배지 이름 — 사장은 통과한 직원 전체, 직원은 본인 것만(상호 비교 노출 회피).
+  // 이해 확인(④) 배지 이름 — 사장은 할 줄 아는 직원 전체, 직원은 본인 것만(상호 비교 노출 회피).
+  // ★판정은 저장돼 있지 않다 — "그 업무가 참조하는 노하우를 전부 아는가"의 파생이다(SSOT=useWorkStore).
   const understoodNames = useCallback(
     (templateId: string) => {
-      const rows = understanding.filter((u) => u.templateId === templateId);
+      const rows = staffWhoUnderstandTask(understanding, knowhowLinks, templateId);
       if (isOwner) return rows.map((u) => u.staffName || nameOf(u.staffId));
       return rows.some((u) => u.staffId === userId) ? ['나'] : [];
     },
-    [understanding, isOwner, userId, nameOf],
+    [understanding, knowhowLinks, isOwner, userId, nameOf],
   );
   // 직원에게 퀴즈를 내보낼 수 있는 업무인가(0109) — 사장이 저장해 둔 문항이 1건이라도 있어야 한다.
   // 문항 0건이면 예전엔 AI가 즉석 생성했는데, 그건 사장이 검수한 적 없는 문제다 → 아예 안 내보낸다.
@@ -228,76 +229,73 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
     (templateId: string) => quizCountForTask(quizCounts, knowhowLinks, templateId) > 0,
     [quizCounts, knowhowLinks],
   );
-  // '혼자 할 수 있어요' 자청 노출 조건 — 직원 + 낼 문항이 있는 업무 + 아직 본인이 통과 안 함.
+  // '혼자 할 수 있어요' 자청 노출 조건 — 직원 + 낼 문항이 있는 업무 + 아직 전부는 이해 못 함.
+  // 노하우 하나만 통과해도 버튼이 남는다(그 업무를 할 줄 아는 게 아직 아니다) — 파생 규칙 그대로.
   const canSelfCheck = useCallback(
     (templateId: string) =>
-      !isOwner &&
-      hasQuiz(templateId) &&
-      !understanding.some((u) => u.templateId === templateId && u.staffId === userId),
-    [isOwner, hasQuiz, understanding, userId],
+      !isOwner && hasQuiz(templateId) && !understandsTask(understanding, knowhowLinks, templateId, userId),
+    [isOwner, hasQuiz, understanding, knowhowLinks, userId],
   );
-  // 자청 → 그 업무의 첨부 노하우를 퀴즈 소스(sops)로 직렬화해 시트 오픈.
-  const openSelfCheck = useCallback(
-    (t: TaskTemplate) => {
-      const sops = knowhowIdsForTask(knowhowLinks, t.id)
+  /** 노하우 id 목록 → 퀴즈 소스(sops) 직렬화. 자청·카드 두 경로가 같은 변환을 쓴다. */
+  const sopsOf = useCallback(
+    (entryIds: string[]) =>
+      entryIds
         .map((id) => entryById.get(id))
         .filter((e): e is PlaybookEntry => !!e)
         .map((e) => ({
-          id: e.id, // 오답의 문항 귀속(0103) — 엣지가 문항별 근거 노하우 id로 되돌려준다.
+          id: e.id, // 오답의 문항 귀속(0103) + 통과 처리 대상(0111) — 문항이 근거한 노하우 id.
           title: e.title,
           situation: e.square?.situation ?? '',
           steps: e.square?.action?.steps ?? [],
           donts: [e.square?.extract?.dont].filter((x): x is string => !!x),
-        }));
-      setSelfCheck({ task: t, sops });
-    },
-    [knowhowLinks, entryById],
+        })),
+    [entryById],
+  );
+  // 자청 → 그 업무의 첨부 노하우 전체를 소스로 시트 오픈(푼 노하우만 통과 처리된다).
+  const openSelfCheck = useCallback(
+    (t: TaskTemplate) => setSelfCheck({ title: t.text, sops: sopsOf(knowhowIdsForTask(knowhowLinks, t.id)) }),
+    [knowhowLinks, sopsOf],
   );
 
-  // 훈련 카드(0099 → 0108) — 직원에게만. 코스 1개 = 카드 1장이고, 개수 하한·재확인 주기는
-  // 코스 행(training_courses)이 SSOT다(사장 화면과 같은 값). 상태는 항목 단위(통과/다음/대기/다시 확인/요청).
+  // 퀴즈 카드(0111) — 직원에게만. 코스 1개 = 카드 1장이고, 담기는 항목은 **노하우**다.
+  // 개수 하한·재확인 주기는 코스 행(training_courses)이 SSOT(사장 화면과 같은 값).
+  // 상태는 항목 단위(통과/다음/대기/다시 확인/요청).
   const trainingCards = useMemo(() => {
     if (isOwner) return [] as { course: TrainingCardCourse; items: TrainingCardItem[] }[];
-    const byId = new Map(templates.map((t) => [t.id, t]));
-    const myRow = (id: string) => understanding.find((u) => u.templateId === id && u.staffId === userId);
-    const hasKnowhow = (id: string) => knowhowIdsForTask(knowhowLinks, id).length > 0;
+    const myRow = (entryId: string) => understanding.find((u) => u.entryId === entryId && u.staffId === userId);
+    // 낼 문항이 없는 노하우는 카드에 띄워도 시작할 수가 없다(0109 · 문항 0건 = 의도된 미노출).
+    const hasEntryQuiz = (entryId: string) => (quizCounts[entryId] ?? 0) > 0;
+    const titleOf = (entryId: string) => entryById.get(entryId)?.title;
 
-    // 훈련 요청(0102) — 나에게 온 요청 중 오늘 due 인 것. 코스 소속과 무관하게 업무를 직접 가리킨다.
-    // ★문항 0건인 업무는 요청이어도 뺀다 — 열어도 풀 문제가 없어 응시가 성립하지 않는다(0109).
-    //   사장이 콕 집어 보낸 요청이 사라지는 건 아프지만, 답할 수 없는 항목을 카드에 영구히
-    //   남겨두는 쪽이 더 나쁘다(통과해야 사라지는데 통과할 방법이 없다).
+    // 퀴즈 요청(0111) — 나에게 온 요청 중 오늘 due 인 것. 코스 소속과 무관하게 노하우를 직접 가리킨다.
+    // ★문항 0건이면 요청이어도 뺀다 — 사장이 콕 집어 보낸 게 사라지는 건 아프지만, 통과해야
+    //   사라지는데 통과할 방법이 없는 항목을 카드에 영구히 남겨두는 쪽이 더 나쁘다.
     const askedIds = new Set(
       trainingRequests
-        .filter((r) => r.staffId === userId && isRequestDue(r, myRow(r.templateId)?.verifiedAt, trainingNow))
-        .map((r) => r.templateId)
-        .filter((id) => hasQuiz(id)),
+        .filter((r) => r.staffId === userId && isRequestDue(r, myRow(r.entryId)?.verifiedAt, trainingNow))
+        .map((r) => r.entryId)
+        .filter((id) => hasEntryQuiz(id) && !!titleOf(id)),
     );
 
     const cards: { course: TrainingCardCourse; items: TrainingCardItem[] }[] = [];
     const placedAsked = new Set<string>();
-    for (const c of trainingCourseViews(courses, training)) {
-      const list = trainingOf(training, c.key)
-        .map((f) => byId.get(f.templateId))
-        .filter((t): t is TaskTemplate => !!t)
-        // 낼 문항이 없는 업무는 항목에서 뺀다 — 카드에 띄워도 시작할 수가 없다(0109).
-        .filter((t) => hasQuiz(t.id));
+    for (const c of trainingCourseViews(courses)) {
+      const list = courseEntriesOf(courseEntries, c.id)
+        .map((e) => ({ id: e.entryId, text: titleOf(e.entryId) }))
+        .filter((x): x is { id: string; text: string } => !!x.text)
+        .filter((x) => hasEntryQuiz(x.id));
       // 남은 항목이 하한 미달이면 사장 화면이 "아직 직원에게 안 보여요"라고 말하는 상태 — 카드도 띄우지 않는다.
       if (list.length < c.minItems) continue;
       // 1회성 코스(dueDays 없음)는 통과 여부만 본다(첫 통과가 목적, 순서상 첫 미통과 = '다음').
       // 주기 코스는 마지막 통과가 주기보다 오래됐거나 기록이 없으면 '다시 확인'.
       const dueDays = c.dueDays;
-      const nextIdx = dueDays === null ? list.findIndex((t) => !myRow(t.id)) : -1;
-      const stateOf = (t: TaskTemplate, i: number): TrainingCardItem['state'] => {
-        if (askedIds.has(t.id)) return 'asked'; // 요청이 최우선 — 사람이 기다리는 것
-        if (dueDays === null) return myRow(t.id) ? 'passed' : i === nextIdx ? 'next' : 'todo';
-        return isRegularDue(myRow(t.id)?.verifiedAt, trainingNow, dueDays) ? 'due' : 'passed';
+      const nextIdx = dueDays === null ? list.findIndex((x) => !myRow(x.id)) : -1;
+      const stateOf = (id: string, i: number): TrainingCardItem['state'] => {
+        if (askedIds.has(id)) return 'asked'; // 요청이 최우선 — 사람이 기다리는 것
+        if (dueDays === null) return myRow(id) ? 'passed' : i === nextIdx ? 'next' : 'todo';
+        return isRegularDue(myRow(id)?.verifiedAt, trainingNow, dueDays) ? 'due' : 'passed';
       };
-      const items: TrainingCardItem[] = list.map((t, i) => ({
-        id: t.id,
-        text: t.text,
-        state: stateOf(t, i),
-        hasKnowhow: hasKnowhow(t.id),
-      }));
+      const items: TrainingCardItem[] = list.map((x, i) => ({ id: x.id, text: x.text, state: stateOf(x.id, i) }));
       // 할 게 없으면 조용히 사라진다(1회성=전부 통과 · 주기=다시 확인할 것 없음).
       if (!items.some((it) => it.state === 'next' || it.state === 'due' || it.state === 'asked')) continue;
       items.forEach((it) => { if (it.state === 'asked') placedAsked.add(it.id); });
@@ -308,9 +306,9 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
     // 것이라 버리지 않는다. 주기 카드에 얹고, 그런 카드도 없으면 요청만 담은 카드를 만든다.
     const orphans: TrainingCardItem[] = [...askedIds]
       .filter((id) => !placedAsked.has(id))
-      .map((id) => byId.get(id))
-      .filter((t): t is TaskTemplate => !!t)
-      .map((t) => ({ id: t.id, text: t.text, state: 'asked' as const, hasKnowhow: hasKnowhow(t.id) }));
+      .map((id) => ({ id, text: titleOf(id) ?? '' }))
+      .filter((x) => !!x.text)
+      .map((x) => ({ id: x.id, text: x.text, state: 'asked' as const }));
     if (orphans.length > 0) {
       const host = cards.find((c) => c.course.dueDays !== null);
       if (host) host.items = [...host.items, ...orphans];
@@ -323,22 +321,15 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
     return cards.filter((c) =>
       c.course.dueDays === null ? c === firstOnce : !firstOnce || c.items.some((it) => it.state === 'asked'),
     );
-  }, [isOwner, courses, training, templates, understanding, knowhowLinks, hasQuiz, userId, trainingNow, trainingRequests]);
+  }, [isOwner, courses, courseEntries, understanding, entryById, quizCounts, userId, trainingNow, trainingRequests]);
 
-  // 카드의 퀴즈 시작 — 항목 id 로 템플릿을 찾아 기존 자청 흐름(openSelfCheck) 재사용.
+  // 카드의 퀴즈 시작 — 항목이 노하우 하나라 그 노하우만 소스로 넣는다(푼 만큼만 통과 처리).
   const startTrainingCheck = useCallback(
-    (templateId: string) => {
-      const t = templates.find((x) => x.id === templateId);
-      if (t) openSelfCheck(t);
+    (entryId: string) => {
+      const title = entryById.get(entryId)?.title;
+      if (title) setSelfCheck({ title, sops: sopsOf([entryId]) });
     },
-    [templates, openSelfCheck],
-  );
-  const openTrainingKnowhow = useCallback(
-    (templateId: string) => {
-      const k = knowhowIdsForTask(knowhowLinks, templateId);
-      if (k.length) openKnowhow(k[0]);
-    },
-    [knowhowLinks, openKnowhow],
+    [entryById, sopsOf],
   );
 
   const memberCount = Math.max(1, (owner ? 1 : 0) + staff.length);
@@ -550,7 +541,7 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
             key={c.course.key}
             course={c.course}
             items={c.items}
-            onOpenKnowhow={openTrainingKnowhow}
+            onOpenKnowhow={openKnowhow}
             onStartCheck={startTrainingCheck}
           />
         ))}
@@ -683,9 +674,9 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
 
       {selfCheck && (
         <UnderstandingCheckSheet
-          taskText={selfCheck.task.text}
+          title={selfCheck.title}
           sops={selfCheck.sops}
-          onPass={() => void markUnderstood(selfCheck.task.id, userId, userName)}
+          onPass={(entryIds) => void markUnderstood(entryIds, userId, userName)}
           onClose={() => setSelfCheck(null)}
         />
       )}

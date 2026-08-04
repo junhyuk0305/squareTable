@@ -1037,6 +1037,8 @@ function mapTemplateRow(r: any): TaskTemplate {
     ...(r.date ? { date: r.date as string } : r.due_date ? { date: r.due_date as string } : null),
     // 배정 시각 — 배정 알림 정렬 기준(없으면 매일 상단 고정 버그). DB default now() 라 항상 존재.
     ...(r.created_at ? { createdAt: r.created_at as string } : null),
+    // 할일 목록에서 숨김(0110). 퀴즈가 만들어 낸 껍데기 업무를 사장이 정리한 표시.
+    ...(r.hidden ? { hidden: true } : null),
   } as TaskTemplate;
 }
 export async function fetchTemplates(): Promise<TaskTemplate[]> {
@@ -1093,6 +1095,16 @@ export async function deleteTemplate(id: string): Promise<boolean> {
   if (!HAS_SUPABASE) return true;
   return writeStrict('deleteTemplate', supabase.from('work_templates').delete().eq('id', id).select('id'));
 }
+/** 할일 목록에서 숨기기·되돌리기(0110) — 업무 행·노하우 링크·코스 소속은 그대로 남는다.
+ *  updateTemplate 은 hidden 을 건드리지 않으므로 할일 수정이 이 표시를 지우지 않는다. */
+export async function setTemplateHidden(ids: string[], hidden: boolean): Promise<boolean> {
+  if (!HAS_SUPABASE) return true;
+  if (ids.length === 0) return true;
+  return writeStrict(
+    'setTemplateHidden',
+    supabase.from('work_templates').update({ hidden }).in('id', ids).select('id'),
+  );
+}
 
 // ── 업무 ↔ 노하우 링크(0069) ───────────────────────────────
 // 스키마 최초의 task↔knowhow 교차 연결(LIVE §4.1-2). unit_id/added_by 는 RLS·DB default 가 채운다.
@@ -1127,29 +1139,34 @@ export async function deleteTemplateKnowhow(templateId: string, entryIds: string
   );
 }
 
-// ── 이해 확인 기록(0072, S1 ④) — 직원이 노하우 업무 퀴즈 통과 ──────────
-export type UnderstandingRow = { templateId: string; staffId: string; staffName: string; verifiedAt: string };
-/** 활성 매장의 전체 이해 확인 기록 — 사장 배지·본인 확인·정기 훈련 due 판정용(노출 범위는 UI 게이팅). */
-export async function fetchTaskUnderstanding(): Promise<UnderstandingRow[]> {
+// ── 이해 확인 기록(0111) — 직원이 **노하우**를 이해했다는 통과 기록 ──────────
+// 0072 는 업무 단위(task_understanding)였다. 0111 에서 노하우 단위로 옮겼다(기획 §3.1) —
+// 같은 지식을 업무마다 다시 배우지 않게, 그리고 못 했을 때 무엇이 빠졌는지 알 수 있게.
+// "이 업무를 할 줄 아는가"는 저장하지 않고 파생한다 — 판정 SSOT 는 useWorkStore 한 곳.
+export type UnderstandingRow = { entryId: string; staffId: string; staffName: string; verifiedAt: string };
+/** 활성 매장의 전체 이해 확인 기록 — 사장 배지·본인 확인·재확인 주기 판정용(노출 범위는 UI 게이팅). */
+export async function fetchKnowhowUnderstanding(): Promise<UnderstandingRow[]> {
   if (!HAS_SUPABASE) return [];
-  const { data, error } = await supabase.from('task_understanding').select('template_id, staff_id, staff_name, verified_at');
+  const { data, error } = await supabase.from('knowhow_understanding').select('entry_id, staff_id, staff_name, verified_at');
   if (error) {
-    readFail('fetchTaskUnderstanding', error);
+    readFail('fetchKnowhowUnderstanding', error);
     return [];
   }
-  return (data ?? []).map((r: any) => ({ templateId: r.template_id, staffId: r.staff_id, staffName: r.staff_name, verifiedAt: r.verified_at ?? '' }));
+  return (data ?? []).map((r: any) => ({ entryId: r.entry_id, staffId: r.staff_id, staffName: r.staff_name, verifiedAt: r.verified_at ?? '' }));
 }
-/** 통과 기록 저장. staff_id 는 DB default auth.uid()(본인만·위조 차단).
- *  재통과는 verified_at 갱신(0099 tu_update) — 정기 훈련 due 판정의 근거라 멱등 무시가 아니라 갱신이다. */
-export async function insertTaskUnderstanding(templateId: string, staffName: string): Promise<boolean> {
+/** 통과 기록 저장(푼 문항의 근거 노하우 전부). staff_id 는 DB default auth.uid()(본인만·위조 차단).
+ *  재통과는 verified_at 갱신(0111 ku_update) — 재확인 주기 판정의 근거라 멱등 무시가 아니라 갱신이다. */
+export async function insertKnowhowUnderstanding(entryIds: string[], staffName: string): Promise<boolean> {
   if (!HAS_SUPABASE) return true;
+  if (entryIds.length === 0) return true;
+  const at = new Date().toISOString();
   return write(
-    'insertTaskUnderstanding',
+    'insertKnowhowUnderstanding',
     supabase
-      .from('task_understanding')
+      .from('knowhow_understanding')
       .upsert(
-        { unit_id: _unitId, template_id: templateId, staff_name: staffName, verified_at: new Date().toISOString() },
-        { onConflict: 'template_id,staff_id' },
+        entryIds.map((entry_id) => ({ unit_id: _unitId, entry_id, staff_name: staffName, verified_at: at })),
+        { onConflict: 'entry_id,staff_id' },
       ),
   );
 }
@@ -1177,8 +1194,9 @@ export async function fetchQuizStats(): Promise<Record<string, { attempts: numbe
   return out;
 }
 
-// ── 본인 훈련 통과 이력(0104) — 허브 성장 탭용, 교차 매장·본인 한정(definer RPC) ──────────
-export type TrainingHistoryRow = { unitId: string; storeName: string; templateId: string; taskText: string; verifiedAt: string };
+// ── 본인 퀴즈 통과 이력(0104 → 0111) — 허브 성장 탭용, 교차 매장·본인 한정(definer RPC) ──────────
+// 0111 에서 읽는 테이블이 knowhow_understanding 으로 바뀌면서 단위도 업무 → 노하우가 됐다.
+export type TrainingHistoryRow = { unitId: string; storeName: string; entryId: string; entryTitle: string; verifiedAt: string };
 export async function fetchMyTrainingHistory(): Promise<TrainingHistoryRow[]> {
   if (!HAS_SUPABASE) return [];
   const { data, error } = await supabase.rpc('my_training_history');
@@ -1189,16 +1207,16 @@ export async function fetchMyTrainingHistory(): Promise<TrainingHistoryRow[]> {
   return (data ?? []).map((r: any) => ({
     unitId: r.unit_id,
     storeName: r.store_name,
-    templateId: r.template_id,
-    taskText: r.task_text,
+    entryId: r.entry_id,
+    entryTitle: r.entry_title,
     verifiedAt: r.verified_at ?? '',
   }));
 }
 
-// ── 훈련 코스 항목(0099 → 0108) — 어떤 코스에 어떤 업무가 담겼나 ──────────
-// 0108 로 PK 가 template_id 단독 → (course_id, template_id) 로 바뀌었다. 한 업무가 여러 코스에
-// 들어갈 수 있어서다. 그래서 **모든 쓰기에 course_id 가 반드시 실려야 하고**, 단건 지정도
-// (courseId, templateId) 쌍이어야 한다 — templateId 단독으로 지우면 다른 코스 것까지 날아간다.
+// ── 훈련 코스 항목(0099 → 0108) — ⚠️ 레거시·읽기 전용 ──────────
+// 0111 에서 코스가 담는 것이 업무 → 노하우(course_entries)로 옮겨졌다. 이 테이블은 드롭하지
+// 않고 남아 있으며, **1단계 정리 화면**이 "퀴즈 때문에 생긴 껍데기 업무"를 찾는 데만 읽는다.
+// 새 쓰기 경로는 없다 — 코스 구성은 insertCourseEntry 계열을 쓴다.
 /** 코스 key(training_courses.key). 0108 이전엔 'first_day'|'regular' 뿐이었으나 이제 매장이 만든 key 도 온다. */
 export type TrainingCourse = string;
 export type TrainingItemRow = {
@@ -1227,60 +1245,72 @@ export async function fetchTrainingItems(): Promise<TrainingItemRow[]> {
     position: r.position,
   }));
 }
-/** 코스에 업무 추가(관리 권한만, RLS). 충돌 기준 = (course_id, template_id) — 같은 코스 재추가만 멱등.
- *  courseKey 는 레거시 course 컬럼(비정규화 사본)을 코스 key 와 같게 유지하기 위해 함께 쓴다. */
-export async function insertTrainingItem(
-  templateId: string,
-  courseId: string,
-  position: number,
-  courseKey: TrainingCourse,
-): Promise<boolean> {
+// ── 코스에 담긴 노하우(0111) — 퀴즈의 정본 축 ─────────────────────────────
+// training_items(위)는 이제 **읽기 전용 레거시**다. 1단계 정리 화면이 "퀴즈 때문에 생긴 껍데기
+// 업무"를 찾는 데만 쓰고, 코스 구성·직원 카드·통과 판정은 전부 여기를 본다.
+export type CourseEntryRow = { courseId: string; entryId: string; position: number };
+/** 활성 매장의 코스 항목 전체(전 코스 합본) — 코스 분리는 스토어 셀렉터가 한다. */
+export async function fetchCourseEntries(): Promise<CourseEntryRow[]> {
+  if (!HAS_SUPABASE) return [];
+  const { data, error } = await supabase
+    .from('course_entries')
+    .select('course_id, entry_id, position')
+    .order('position');
+  if (error) {
+    readFail('fetchCourseEntries', error);
+    return [];
+  }
+  return (data ?? []).map((r: any) => ({ courseId: r.course_id, entryId: r.entry_id, position: r.position }));
+}
+/** 코스에 노하우 담기(관리 권한만, RLS). 충돌 기준 = (course_id, entry_id) — 같은 코스 재추가만 멱등. */
+export async function insertCourseEntry(courseId: string, entryId: string, position: number): Promise<boolean> {
   if (!HAS_SUPABASE) return true;
   return write(
-    'insertTrainingItem',
+    'insertCourseEntry',
     supabase
-      .from('training_items')
+      .from('course_entries')
       .upsert(
-        { unit_id: _unitId, template_id: templateId, course_id: courseId, course: courseKey, position },
-        { onConflict: 'course_id,template_id', ignoreDuplicates: true },
+        { unit_id: _unitId, course_id: courseId, entry_id: entryId, position },
+        { onConflict: 'course_id,entry_id', ignoreDuplicates: true },
       ),
   );
 }
-/** 코스 하나에서 업무 빼기(업무·노하우·다른 코스 소속은 남는다). 이미 없으면 0행 = 원하는 상태(멱등). */
-export async function deleteTrainingItem(templateId: string, courseId: string): Promise<boolean> {
+/** 코스 하나에서 노하우 빼기(노하우·다른 코스 소속·통과 기록은 남는다). 이미 없으면 0행 = 원하는 상태(멱등). */
+export async function deleteCourseEntry(courseId: string, entryId: string): Promise<boolean> {
   if (!HAS_SUPABASE) return true;
   return write(
-    'deleteTrainingItem',
-    supabase.from('training_items').delete().eq('course_id', courseId).eq('template_id', templateId),
+    'deleteCourseEntry',
+    supabase.from('course_entries').delete().eq('course_id', courseId).eq('entry_id', entryId),
   );
 }
-/** 순서 변경 — 한 코스 안에서 이웃과 position 스왑(관리 권한만, 0099 ti_update). 두 행을 개별 update.
- *  ★course_id 로 먼저 좁힌다 — 같은 업무가 다른 코스에도 있으면 그쪽 순서까지 덮어쓴다. */
-export async function updateTrainingPositions(
+/** 순서 변경 — 한 코스 안에서 이웃과 position 스왑(관리 권한만, ce_update). 두 행을 개별 update.
+ *  ★course_id 로 먼저 좁힌다 — 같은 노하우가 다른 코스에도 있으면 그쪽 순서까지 덮어쓴다. */
+export async function updateCourseEntryPositions(
   courseId: string,
-  pairs: { templateId: string; position: number }[],
+  pairs: { entryId: string; position: number }[],
 ): Promise<boolean> {
   if (!HAS_SUPABASE) return true;
   for (const p of pairs) {
     const ok = await writeStrict(
-      'updateTrainingPositions',
+      'updateCourseEntryPositions',
       supabase
-        .from('training_items')
+        .from('course_entries')
         .update({ position: p.position })
         .eq('course_id', courseId)
-        .eq('template_id', p.templateId)
-        .select('template_id'),
+        .eq('entry_id', p.entryId)
+        .select('entry_id'),
     );
     if (!ok) return false;
   }
   return true;
 }
 
-// ── 훈련 요청(0102) — 특정 직원에게 이해 확인을 지금/매주로 요청 ──────────
+// ── 퀴즈 요청(0102 → 0111) — 특정 직원에게 노하우 확인을 지금/매주로 요청 ──────────
 // recurrence: null = 즉시 1회 / {weekly:[0..6]} = 매주. 완료는 파생(verified_at 비교) — 컬럼 없음.
+// 0111 에서 축이 업무 → 노하우로 옮겨졌다. 옛 template_id 행(entry_id null)은 읽지 않는다.
 export type TrainingRequestRow = {
   id: string;
-  templateId: string;
+  entryId: string;
   staffId: string;
   recurrence: Recurrence | null;
   createdAt: string;
@@ -1288,13 +1318,16 @@ export type TrainingRequestRow = {
 /** 내 요청(직원) 또는 매장 전체 요청(관리 권한) — 범위는 RLS(trq_select)가 가른다. */
 export async function fetchTrainingRequests(): Promise<TrainingRequestRow[]> {
   if (!HAS_SUPABASE) return [];
-  const { data, error } = await supabase.from('training_requests').select('id, template_id, staff_id, recurrence, created_at');
+  const { data, error } = await supabase
+    .from('training_requests')
+    .select('id, entry_id, staff_id, recurrence, created_at')
+    .not('entry_id', 'is', null);
   if (error) {
     readFail('fetchTrainingRequests', error);
     return [];
   }
   return (data ?? []).map((r: any) => ({
-    id: r.id, templateId: r.template_id, staffId: r.staff_id,
+    id: r.id, entryId: r.entry_id, staffId: r.staff_id,
     recurrence: (r.recurrence as Recurrence) ?? null, createdAt: r.created_at,
   }));
 }
@@ -1304,7 +1337,7 @@ export async function insertTrainingRequests(rows: TrainingRequestRow[]): Promis
   return write(
     'insertTrainingRequests',
     supabase.from('training_requests').insert(
-      rows.map((r) => ({ id: r.id, unit_id: _unitId, template_id: r.templateId, staff_id: r.staffId, recurrence: r.recurrence })),
+      rows.map((r) => ({ id: r.id, unit_id: _unitId, entry_id: r.entryId, staff_id: r.staffId, recurrence: r.recurrence })),
     ),
   );
 }
@@ -1318,7 +1351,7 @@ export async function deleteTrainingRequest(id: string): Promise<boolean> {
 //   SELECT 가능), 응시 화면은 정답 키가 제거된 사본(fetchQuizItemsForAttempt = definer RPC).
 //   채점은 반드시 서버(gradeQuiz) — 문항을 저장하는 순간 클라 채점은 곧 정답 유출이다.
 const QUIZ_ITEM_COLS =
-  'id, unit_id, entry_ids, kind, format, payload, source, status, created_by, created_at, updated_at';
+  'id, unit_id, entry_ids, kind, format, payload, source, status, created_by, created_at, updated_at, source_updated_at';
 
 /** 근거 노하우로 문항 찾기(정답 포함) — 사장 문항 편집용. 직원이 부르면 RLS 상 빈 배열. */
 export async function fetchQuizItems(entryIds: string[]): Promise<DbResult<QuizItem[]>> {
@@ -1472,11 +1505,185 @@ export async function upsertTrainingCourse(c: TrainingCourseRow): Promise<boolea
   );
 }
 
-/** 코스 삭제 — 담긴 훈련 항목(training_items)도 함께 사라진다(0108 FK cascade).
- *  업무(work_templates)·노하우는 남는다. training_items 는 연결행일 뿐이다. */
+/** 코스 삭제 — 담긴 코스 항목(course_entries)도 함께 사라진다(0111 FK cascade).
+ *  노하우·통과 기록은 남는다. course_entries 는 "무엇이 담겼나"의 연결행일 뿐이다. */
 export async function deleteTrainingCourse(id: string): Promise<boolean> {
   if (!HAS_SUPABASE) return true;
   return writeStrict('deleteTrainingCourse', supabase.from('training_courses').delete().eq('id', id).select('id'));
+}
+
+// ── 응시 단위 점수(0112) — `김민지 · 3문제 중 2개 · 8월 4일` ────────────────
+// 행 단위 = (응시 1회, 노하우 1건). 문항별로 무엇을 틀렸는지는 저장하지 않는다(기획 §4.1).
+export type QuizAttemptRow = {
+  id: string;
+  entryId: string;
+  /** 로그인 직원이면 uid, 외부 링크 손님이면 null. */
+  staffId: string | null;
+  /** 외부 링크 손님이면 이름, 직원이면 null. */
+  guestName: string | null;
+  total: number;
+  correct: number;
+  takenAt: string;
+};
+/** 활성 매장의 응시 기록 — 관리 권한은 전체, 직원은 본인 것만(RLS qa_select). */
+export async function fetchQuizAttempts(): Promise<QuizAttemptRow[]> {
+  if (!HAS_SUPABASE) return [];
+  const { data, error } = await supabase
+    .from('quiz_attempts')
+    .select('id, entry_id, staff_id, guest_name, total, correct, taken_at')
+    .order('taken_at', { ascending: false })
+    .limit(200);
+  if (error) {
+    readFail('fetchQuizAttempts', error);
+    return [];
+  }
+  return (data ?? []).map((r: any) => ({
+    id: r.id, entryId: r.entry_id, staffId: r.staff_id ?? null, guestName: r.guest_name ?? null,
+    total: r.total ?? 0, correct: r.correct ?? 0, takenAt: r.taken_at ?? '',
+  }));
+}
+/** 응시 기록 남기기(직원 본인). id·staff_id·taken_at 은 DB default 가 채운다.
+ *  기록 실패가 응시 UX 를 막으면 안 되므로 호출부는 fire-and-forget 으로 쓴다. */
+export async function insertQuizAttempts(rows: { entryId: string; total: number; correct: number }[]): Promise<boolean> {
+  if (!HAS_SUPABASE) return true;
+  const usable = rows.filter((r) => r.total > 0);
+  if (usable.length === 0) return true;
+  // getUser() 는 서버 왕복이라 네트워크가 흔들리면 기록이 조용히 사라진다 — 로컬 세션에서 읽는다.
+  const { data: session } = await supabase.auth.getSession();
+  const uid = session.session?.user?.id ?? null;
+  if (!uid) {
+    reportError('db.write:insertQuizAttempts', { message: 'no session' });
+    return false;
+  }
+  return write(
+    'insertQuizAttempts',
+    supabase.from('quiz_attempts').insert(
+      usable.map((r) => ({ unit_id: _unitId, entry_id: r.entryId, staff_id: uid, total: r.total, correct: r.correct })),
+    ),
+  );
+}
+
+// ── 외부 공유 링크(0113) — 단기 직원용. 로그인 없이 도는 유일한 경로 ────────────
+export type QuizLinkRow = {
+  id: string;
+  courseId: string;
+  token: string;
+  expiresAt: string;
+  revokedAt: string | null;
+  createdAt: string;
+};
+/** 이 매장의 링크 전체(관리 권한만 — RLS ql_select). 만료·회수 판정은 화면이 한다. */
+export async function fetchQuizLinks(): Promise<QuizLinkRow[]> {
+  if (!HAS_SUPABASE) return [];
+  const { data, error } = await supabase
+    .from('quiz_links')
+    .select('id, course_id, token, expires_at, revoked_at, created_at')
+    .order('created_at', { ascending: false });
+  if (error) {
+    readFail('fetchQuizLinks', error);
+    return [];
+  }
+  return (data ?? []).map((r: any) => ({
+    id: r.id, courseId: r.course_id, token: r.token,
+    expiresAt: r.expires_at, revokedAt: r.revoked_at ?? null, createdAt: r.created_at,
+  }));
+}
+export async function insertQuizLink(row: QuizLinkRow): Promise<boolean> {
+  if (!HAS_SUPABASE) return true;
+  return writeStrict(
+    'insertQuizLink',
+    supabase
+      .from('quiz_links')
+      .insert({
+        id: row.id, unit_id: _unitId, course_id: row.courseId,
+        token: row.token, expires_at: row.expiresAt,
+      })
+      .select('id'),
+  );
+}
+/** 회수 — 지우지 않고 revoked_at 을 찍는다(누가 언제 뭘 내보냈는지가 남아야 한다). */
+export async function revokeQuizLink(id: string): Promise<boolean> {
+  if (!HAS_SUPABASE) return true;
+  return writeStrict(
+    'revokeQuizLink',
+    supabase.from('quiz_links').update({ revoked_at: new Date().toISOString() }).eq('id', id).select('id'),
+  );
+}
+
+// ── 손님(비로그인) 응시 경로 — 전부 definer RPC. 테이블 직접 접근은 0행이다 ────
+/**
+ * ★failed 와 ok=false 를 구분한다. 둘을 뭉뚱그리면 **장애가 "만료된 링크"로 위장**되고,
+ * 손님은 멀쩡한 링크를 두고 사장에게 새 링크를 달라고 하게 된다(읽기 실패의 정상화면 위장).
+ *   failed = 우리 쪽 문제(네트워크·서버) → "잠시 후 다시" · ok=false = 링크가 닫힘 → "다시 받아 주세요"
+ */
+export type QuizLinkInfo = { ok: boolean; failed: boolean; storeName: string; courseName: string; itemCount: number };
+export async function openQuizLink(token: string): Promise<QuizLinkInfo> {
+  if (!HAS_SUPABASE) return { ok: false, failed: true, storeName: '', courseName: '', itemCount: 0 };
+  const { data, error } = await supabase.rpc('quiz_link_open', { p_token: token });
+  if (error) {
+    reportError('db.rpc:openQuizLink', error);
+    return { ok: false, failed: true, storeName: '', courseName: '', itemCount: 0 };
+  }
+  const row = (Array.isArray(data) ? data[0] : data) as any;
+  return {
+    ok: !!row?.ok,
+    failed: false,
+    storeName: row?.store_name ?? '',
+    courseName: row?.course_name ?? '',
+    itemCount: row?.item_count ?? 0,
+  };
+}
+/** 응시용 문항(정답 제거본) — 그 링크의 코스에 담긴 노하우 문항만. */
+export async function fetchQuizLinkItems(token: string, limit = 5): Promise<DbResult<QuizItem[]>> {
+  if (!HAS_SUPABASE) return { data: [], error: null };
+  const { data, error } = await supabase.rpc('quiz_link_items', { p_token: token, p_limit: limit });
+  if (error) {
+    reportError('db.rpc:fetchQuizLinkItems', error);
+    return { data: null, error: error as DbErr };
+  }
+  return {
+    data: ((data as any[]) ?? []).map((r) => ({
+      id: r.id,
+      unit_id: '',
+      entry_ids: (r.entry_ids as string[]) ?? [],
+      kind: r.kind,
+      format: r.format,
+      payload: (r.payload as Record<string, any>) ?? {},
+      source: 'ai' as const,
+      status: 'active' as const,
+    })),
+    error: null,
+  };
+}
+/** 토큰 채점 — 판정 본체는 로그인 경로와 같은 함수(quiz_grade_item)다. */
+export async function gradeQuizLink(token: string, itemId: string, response: QuizResponse): Promise<DbResult<QuizGrade>> {
+  if (!HAS_SUPABASE) return { data: null, error: { message: 'no_backend' } };
+  const { data, error } = await supabase.rpc('quiz_link_grade', { p_token: token, p_item_id: itemId, p_response: response });
+  if (error) {
+    reportError('db.rpc:gradeQuizLink', error);
+    return { data: null, error: error as DbErr };
+  }
+  const row = (Array.isArray(data) ? data[0] : data) as any;
+  if (!row) return { data: null, error: { message: 'grade_quiz_empty' } };
+  return { data: { correct: !!row.correct, explain: row.explain ?? '', answer: row.answer ?? null }, error: null };
+}
+/** 결과 기록(손님) — quiz_attempts 에 guest_name 으로. 노하우별로 나눠 적는다. */
+export async function submitQuizLink(
+  token: string,
+  guestName: string,
+  rows: { entryId: string; total: number; correct: number }[],
+): Promise<boolean> {
+  if (!HAS_SUPABASE) return true;
+  const usable = rows.filter((r) => r.total > 0);
+  if (usable.length === 0) return true;
+  return write(
+    'submitQuizLink',
+    supabase.rpc('quiz_link_submit', {
+      p_token: token,
+      p_guest_name: guestName,
+      p_rows: usable.map((r) => ({ entry_id: r.entryId, total: r.total, correct: r.correct })),
+    }),
+  );
 }
 
 // ── 업무보드: 완료 체크 ────────────────────────────────────
@@ -1631,7 +1838,8 @@ export function subscribeWork(onChange: () => void): () => void {
     .on('postgres_changes', { event: '*', schema: 'public', table: 'work_done' }, onChange)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'work_templates' }, onChange)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'work_template_knowhow' }, onChange)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'task_understanding' }, onChange)
+    // 0111 publication 멤버(AGENTS.md ⑤) — 직원이 통과하면 사장 배지가 즉시 바뀐다.
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'knowhow_understanding' }, onChange)
     .subscribe();
   return () => {
     supabase.removeChannel(ch);

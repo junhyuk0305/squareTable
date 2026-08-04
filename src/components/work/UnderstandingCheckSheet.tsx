@@ -5,7 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { BottomSheet } from '@/components/BottomSheet';
 import { QUIZ_RENDERERS } from '@/components/work/quiz';
 import { generateQuiz } from '@/lib/ai/client';
-import { fetchQuizItemsForAttempt, gradeQuiz, recordQuizStats } from '@/lib/db';
+import { fetchQuizItemsForAttempt, gradeQuiz, recordQuizStats, insertQuizAttempts } from '@/lib/db';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
@@ -33,14 +33,16 @@ const ALLOW_AI_FALLBACK: boolean = false;
  *  ② 폴백: 저장된 문항이 0개인 경우. 예전엔 AI 즉석 생성이었으나 지금은 안내만 한다(아래 상수).
  */
 export function UnderstandingCheckSheet({
-  taskText,
+  title,
   sops,
   onPass,
   onClose,
 }: {
-  taskText: string;
+  /** 무엇에 대한 확인인가 — 카드에서 오면 노하우 제목, 할일에서 오면 업무 이름. */
+  title: string;
   sops: QuizInput['sops'];
-  onPass: () => void;
+  /** 실제로 푼 문항이 근거한 **노하우 id 들**만 통과 처리한다(0111). */
+  onPass: (entryIds: string[]) => void;
   onClose: () => void;
 }) {
   // 재시도 = QuizBody 리마운트(key) → 새 문제·초기상태. 이펙트에서 동기 리셋(set-state-in-effect) 회피.
@@ -48,19 +50,25 @@ export function UnderstandingCheckSheet({
   return (
     <BottomSheet visible={true} onClose={onClose} sheetStyle={{ height: '84%' }}>
       <View style={s.head}>
-        <Text style={s.kicker}>이해 확인 · {taskText}</Text>
+        <Text style={s.kicker}>이해 확인 · {title}</Text>
         <Pressable onPress={onClose} hitSlop={8}><Ionicons name="close" size={20} color={InkColors.ink2} /></Pressable>
       </View>
-      <QuizBody key={round} taskText={taskText} sops={sops} onPass={onPass} onClose={onClose} onRetry={() => setRound((r) => r + 1)} />
+      <QuizBody key={round} taskText={title} sops={sops} onPass={onPass} onClose={onClose} onRetry={() => setRound((r) => r + 1)} />
     </BottomSheet>
   );
+}
+
+/** 시작 전 분량·소요 시간 고지(레퍼런스 home_05) — 부담을 미리 계산할 수 있게 한다.
+ *  추정은 문항당 20초(설계 07-29 §04 "30초 안에 끝난다"보다 보수적으로 잡되 올림). */
+function minutesFor(n: number): number {
+  return Math.max(1, Math.ceil((n * 20) / 60));
 }
 
 /** 어느 경로로 갈지 한 번만 정한다 — 저장된 문항이 있으면 ①, 없으면 ②(AI 즉석 생성). */
 function QuizBody(props: {
   taskText: string;
   sops: QuizInput['sops'];
-  onPass: () => void;
+  onPass: (entryIds: string[]) => void;
   onClose: () => void;
   onRetry: () => void;
 }) {
@@ -69,6 +77,8 @@ function QuizBody(props: {
   const entryIds = useMemo(() => sops.map((sop) => sop.id).filter((id): id is string => !!id), [sops]);
   const [route, setRoute] = useState<'probe' | 'saved' | 'legacy'>(entryIds.length > 0 ? 'probe' : 'legacy');
   const [items, setItems] = useState<QuizItem[]>([]);
+  // 시작 고지를 본 뒤에만 문제로 넘어간다 — 분량·시간을 모른 채 시작하게 두지 않는다.
+  const [started, setStarted] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -101,7 +111,24 @@ function QuizBody(props: {
       </View>
     );
   }
-  if (route === 'saved') return <SavedQuizBody items={items} onPass={props.onPass} onClose={props.onClose} onRetry={props.onRetry} />;
+  if (route === 'saved') {
+    if (!started) {
+      return (
+        <>
+          <View style={s.center}>
+            <Text style={s.startLead}>문제 {items.length}개 · {minutesFor(items.length)}분 정도</Text>
+            <Text style={s.centerText}>틀려도 괜찮아요. 언제든 다시 할 수 있어요.</Text>
+          </View>
+          <View style={s.foot}>
+            <Pressable onPress={() => setStarted(true)} style={({ pressed }) => [s.cta, pressed && { opacity: 0.85 }]} accessibilityRole="button">
+              <Text style={s.ctaText}>퀴즈 시작하기</Text>
+            </Pressable>
+          </View>
+        </>
+      );
+    }
+    return <SavedQuizBody items={items} onPass={props.onPass} onClose={props.onClose} onRetry={props.onRetry} />;
+  }
   return ALLOW_AI_FALLBACK ? <LegacyQuizBody {...props} /> : <NotReadyBody onClose={props.onClose} />;
 }
 
@@ -127,7 +154,7 @@ function SavedQuizBody({
   onRetry,
 }: {
   items: QuizItem[];
-  onPass: () => void;
+  onPass: (entryIds: string[]) => void;
   onClose: () => void;
   onRetry: () => void;
 }) {
@@ -160,8 +187,10 @@ function SavedQuizBody({
   };
 
   const finish = (marks: boolean[]) => {
-    // 오답의 문항 귀속(0103) — 어느 노하우가 헷갈리게 적혔는지만 집계한다(누가 틀렸는지는 안 남김).
-    // entry_ids 가 배열이 됐으므로 근거 노하우 전부에 기록한다.
+    // 문항이 근거한 노하우별로 집계한다(entry_ids 가 배열이라 한 문항이 여러 건에 걸린다).
+    // 같은 집계가 두 곳으로 간다:
+    //  ① 매장 오답 통계(0103) — 누가 틀렸는지는 안 남긴다. "노하우 글이 헷갈리나"의 신호.
+    //  ② 응시 단위 점수(0112) — 누가 몇 개 중 몇 개인지. 문항별로 무엇을 틀렸는지는 안 남긴다.
     const byEntry = new Map<string, { attempts: number; misses: number }>();
     items.slice(0, marks.length).forEach((it, i) => {
       for (const entryId of it.entry_ids ?? []) {
@@ -171,9 +200,12 @@ function SavedQuizBody({
         byEntry.set(entryId, cur);
       }
     });
-    void recordQuizStats([...byEntry].map(([entryId, v]) => ({ entryId, ...v })));
-    // 통과 기준은 그대로 — 전부 맞아야 통과(사장에게 전달).
-    if (marks.length === items.length && marks.every(Boolean)) onPass();
+    const perEntry = [...byEntry].map(([entryId, v]) => ({ entryId, ...v }));
+    void recordQuizStats(perEntry);
+    void insertQuizAttempts(perEntry.map((e) => ({ entryId: e.entryId, total: e.attempts, correct: e.attempts - e.misses })));
+    // 통과 기준은 그대로 — 전부 맞아야 통과. 통과 처리 대상은 **실제로 푼 문항의 근거 노하우**뿐이다
+    // (0111: 다루지 않은 노하우까지 "안다"로 켜지 않는다).
+    if (marks.length === items.length && marks.every(Boolean)) onPass(perEntry.map((e) => e.entryId));
     setDone(true);
   };
 
@@ -222,7 +254,8 @@ function SavedQuizBody({
   return (
     <>
       <ScrollView style={s.scroll} contentContainerStyle={{ paddingBottom: Space.gutter }} showsVerticalScrollIndicator={false}>
-        <Text style={s.step}>{at + 1} / {items.length}</Text>
+        {/* 완료가 아니라 잔여를 센다(레퍼런스 leveltest_05) — 0이 되는 순간 화면이 끝나므로 0 전시가 없다. */}
+        <Text style={s.step}>{items.length - at}문제 남았어요</Text>
         {ask ? <Text style={s.ask}>{ask}</Text> : null}
 
         <Renderer
@@ -282,7 +315,7 @@ function LegacyQuizBody({
 }: {
   taskText: string;
   sops: QuizInput['sops'];
-  onPass: () => void;
+  onPass: (entryIds: string[]) => void;
   onClose: () => void;
   onRetry: () => void;
 }) {
@@ -319,7 +352,8 @@ function LegacyQuizBody({
       byEntry.set(q.entry_id, cur);
     });
     void recordQuizStats([...byEntry].map(([entryId, v]) => ({ entryId, ...v })));
-    if (correctCount === questions.length) onPass();
+    // 통과 처리 대상은 실제로 푼 문항의 근거 노하우뿐(0111) — 저장된 문항 경로와 같은 규칙.
+    if (correctCount === questions.length) onPass([...byEntry.keys()]);
   };
   const retry = () => onRetry();
 
@@ -424,6 +458,8 @@ const s = StyleSheet.create({
   centerEmoji: { fontSize: 34 },
   centerText: { fontSize: 14, color: InkColors.ink2, fontWeight: '600', textAlign: 'center', lineHeight: 21 },
   noticeText: { fontSize: 15, color: InkColors.ink2, fontWeight: '600', textAlign: 'center', lineHeight: 23 },
+  // 시작 고지 — 이 화면에서 유일하게 굵은 잉크(R4-1). 아래 안내 한 줄은 ink2.
+  startLead: { fontSize: 17, fontWeight: '800', color: InkColors.ink, textAlign: 'center', lineHeight: 25 },
   scroll: { flex: 1, paddingHorizontal: 16 },
   intro: { fontSize: 12.5, color: InkColors.ink3, fontWeight: '600', marginBottom: 14, lineHeight: 18 },
 

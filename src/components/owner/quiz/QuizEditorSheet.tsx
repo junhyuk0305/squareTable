@@ -38,22 +38,26 @@ import { QuizPreviewSheet, type QuizPreviewTarget } from './QuizPreviewSheet';
 const labelOf = (f: QuizFormat) => FORMATS[f]?.label ?? f;
 
 export function QuizEditorSheet({
-  task,
-  entryIds,
+  subject,
+  courseId,
   entries,
   defaultSection,
   editing,
+  replacing,
   startMode,
   onClose,
   onSaved,
 }: {
-  task: { templateId: string; text: string };
-  /** 이 업무에 붙은 노하우 id. 비어 있으면 "노하우 원클릭 추가"가 유일한 근거 확보 경로다. */
-  entryIds: string[];
+  /** 0111: 문항이 붙는 대상은 노하우 하나다. */
+  subject: { entryId: string; title: string };
+  /** "노하우로도 추가"로 새 노하우가 생기면 이 코스에 같이 담는다(예전엔 업무에 첨부했다). */
+  courseId: string;
   entries: PlaybookEntry[];
-  /** 새로 만들 노하우가 승계할 카테고리(같은 업무의 다른 노하우 것). 없으면 null = 기타. */
+  /** 새로 만들 노하우가 승계할 카테고리(지금 노하우 것). 없으면 null = 기타. */
   defaultSection: string | null;
   editing?: QuizItem | null;
+  /** [다시 만들기](0114)로 열렸을 때의 옛 문항 — 새 문항을 승인하면 이걸 보관한다. */
+  replacing?: QuizItem | null;
   startMode: 'ai' | 'manual';
   onClose: () => void;
   onSaved: () => void;
@@ -61,10 +65,10 @@ export function QuizEditorSheet({
   const unitId = useSessionStore((s) => s.unitId);
   const userId = useSessionStore((s) => s.userId);
   const addEntry = usePlaybookStore((s) => s.add);
-  const attachKnowhow = useWorkStore((s) => s.attachKnowhow);
+  const addCourseEntry = useWorkStore((s) => s.addCourseEntry);
 
   // 근거 노하우는 저장 중에 늘어날 수 있다(원클릭 추가) — 로컬로 들고 간다.
-  const [linkedIds, setLinkedIds] = useState<string[]>(entryIds);
+  const [linkedIds, setLinkedIds] = useState<string[]>([subject.entryId]);
   const linkedEntries = useMemo(
     () => linkedIds.map((id) => entries.find((e) => e.id === id)).filter((e): e is PlaybookEntry => !!e),
     [linkedIds, entries],
@@ -203,11 +207,18 @@ export function QuizEditorSheet({
   const approveDraft = async (d: QuizItem) => {
     const ok = await save(d, true);
     if (!ok) return;
+    // [다시 만들기] 경로면 옛 문항을 보관한다 — 지우지 않는 이유는 목록의 보관 규칙과 같다
+    // (한 번의 오탭으로 사라지지 않게). 새 문항이 저장된 뒤에만 손댄다.
+    if (replacing) {
+      const archived = await guardWrite(updateQuizItem(replacing.id, { status: 'archived' }), () => {}, '옛 문제를 보관하지 못했어요.');
+      if (archived) showToast('새 문제로 바꿨어요 · 옛 문제는 보관했어요', 'good');
+    } else {
+      showToast('문제를 추가했어요', 'good');
+    }
     const rest = drafts.filter((x) => x.id !== d.id);
     setDrafts(rest);
-    showToast('문제를 추가했어요', 'good');
     onSaved();
-    if (rest.length === 0) onClose();
+    if (rest.length === 0 || replacing) onClose();
   };
 
   /**
@@ -241,34 +252,42 @@ export function QuizEditorSheet({
     });
     const ok = await addEntry(entry);
     if (ok) {
-      // 업무에도 붙여야 직원이 이 노하우로 훈련을 받는다(기존 첨부 경로 재사용).
-      await attachKnowhow(task.templateId, [entry.id]);
+      // 코스에도 담아야 직원 퀴즈에 나간다(0111 — 예전엔 업무에 첨부했다).
+      if (courseId) await addCourseEntry(courseId, entry.id);
       setLinkedIds((prev) => [...prev, entry.id]);
       setErr(null);
-      showToast('노하우로 추가하고 이 업무에 붙였어요', 'good');
+      showToast('노하우로 추가하고 퀴즈에 담았어요', 'good');
     }
     setBusy(false);
   };
 
-  const title = editing ? '문제 고치기' : step === 'review' ? '만든 문제 확인' : startMode === 'ai' ? '문제 만들기' : '문제 직접 쓰기';
+  const title = replacing
+    ? '문제 다시 만들기'
+    : editing
+      ? '문제 고치기'
+      : step === 'review'
+        ? '만든 문제 확인'
+        : startMode === 'ai'
+          ? '문제 만들기'
+          : '문제 직접 쓰기';
 
   return (
     <>
     <BottomSheet visible={!preview} onClose={onClose} sheetStyle={{ height: '88%' }}>
-      <SheetHead title={`${title} · ${task.text}`} onClose={onClose} />
+      <SheetHead title={`${title} · ${subject.title}`} onClose={onClose} />
 
       <ScrollView style={{ flex: 1 }} contentContainerStyle={qst.body} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
         {step === 'pick' && (
           <>
             {linkedEntries.length === 0 && (
               <Text style={qst.emptyText}>
-                이 업무에 붙은 노하우가 없어요. 직접 쓰고 아래 버튼으로 노하우까지 한 번에 만들 수 있어요.
+                근거로 쓸 노하우를 아직 못 읽었어요. 잠시 후 다시 열어 주세요.
               </Text>
             )}
 
             {startMode === 'ai' && linkedEntries.length > 0 && (
               <>
-                <Text style={est.lead}>붙어 있는 노하우로 만들 수 있는 형태예요</Text>
+                <Text style={est.lead}>이 노하우로 만들 수 있는 형태예요</Text>
                 <View style={qst.chipWrap}>
                   {availableFormats.map((spec) => (
                     <Chip

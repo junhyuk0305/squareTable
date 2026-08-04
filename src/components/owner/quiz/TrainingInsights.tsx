@@ -1,11 +1,11 @@
 /**
- * 훈련 현황 — /owner/training 안의 섹션. **새 라우트를 만들지 않는다**(IA 정본).
+ * 퀴즈 현황 — /owner/training 안의 섹션. **새 라우트를 만들지 않는다**(IA 정본).
  *
- * 전부 이미 있는 데이터로만 계산한다: training_items · understanding · training_courses ·
- * knowhow_quiz_stats(0103) · quiz_items.
+ * 전부 이미 있는 데이터로만 계산한다: course_entries(0111) · knowhow_understanding(0111) ·
+ * training_courses · knowhow_quiz_stats(0103) · quiz_items.
  *
  * ★ 개인별 오답 이력은 만들지 않는다. knowhow_quiz_stats 에 staff_id 가 없는 건 의도된 설계다(0103).
- *   여기서 보이는 개인 정보는 "이수 여부"뿐이고, 점수·오답·소요시간은 만들지도 보여주지도 않는다.
+ *   여기서 보이는 개인 정보는 "이수 여부"뿐이고, 오답·소요시간은 만들지도 보여주지도 않는다.
  */
 
 import { useMemo } from 'react';
@@ -13,7 +13,7 @@ import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import type { TrainingCourse } from '@/lib/quiz/types';
-import type { TrainingItemRow, UnderstandingRow } from '@/lib/db';
+import type { CourseEntryRow, UnderstandingRow } from '@/lib/db';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
@@ -25,15 +25,13 @@ const QUIZ_MISS_RATE = 0.4;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-export type InsightHole = { templateId: string; text: string; courseName: string };
+export type InsightHole = { entryId: string; text: string; courseName: string };
 
 export function TrainingInsights({
   courses,
   excludeEntryIds,
   riskOf,
-  training,
-  taskTextOf,
-  entryIdsOf,
+  courseEntries,
   entryTitleOf,
   understanding,
   staff,
@@ -49,11 +47,9 @@ export function TrainingInsights({
   courses: TrainingCourse[];
   /** 활성 코스에서 이미 다룬 노하우 — '자주 틀리는 노하우'에서 뺀다. */
   excludeEntryIds: Set<string>;
-  /** 이 업무를 얼마나 먼저 손봐야 하나(높을수록 먼저). 판정은 코드가 한다 — 사장 입력 없음. */
-  riskOf: (templateId: string, preset?: string | null) => number;
-  training: TrainingItemRow[];
-  taskTextOf: (templateId: string) => string | undefined;
-  entryIdsOf: (templateId: string) => string[];
+  /** 이 노하우를 얼마나 먼저 손봐야 하나(높을수록 먼저). 판정은 코드가 한다 — 사장 입력 없음. */
+  riskOf: (entryId: string, preset?: string | null) => number;
+  courseEntries: CourseEntryRow[];
   entryTitleOf: (entryId: string) => string | undefined;
   understanding: UnderstandingRow[];
   staff: { id: string; name: string }[];
@@ -63,41 +59,36 @@ export function TrainingInsights({
   now: number;
   onFixHole: (hole: InsightHole) => void;
 }) {
-  // ── ④ 문항 재고 — 코스에 담겼는데 문항이 0개인 업무. 훈련이 실제로 작동 안 하는 구멍이라 맨 위에 둔다.
+  // ── ④ 문항 재고 — 코스에 담겼는데 문항이 0개인 노하우. 퀴즈가 실제로 작동 안 하는 구멍이라 맨 위에 둔다.
   // 정렬은 riskOf 가 정한다(사고 나는 자리부터). 이 줄은 사장이 순서를 정한 적이 없는 '할 일'이라
   // 재정렬해도 잃는 뜻이 없다 — 반대로 위 목록의 position 은 직원이 배우는 순서라 건드리지 않는다.
   const holes = useMemo(() => {
     const seen = new Set<string>();
     const out: (InsightHole & { score: number })[] = [];
     for (const c of courses) {
-      for (const row of training.filter((t) => t.course === c.key)) {
-        if (seen.has(row.templateId)) continue;
-        const ids = entryIdsOf(row.templateId);
-        const count = ids.reduce((n, id) => n + quizCountOf(id), 0);
-        if (count > 0) continue;
-        seen.add(row.templateId);
-        out.push({
-          templateId: row.templateId,
-          text: taskTextOf(row.templateId) ?? '업무',
-          courseName: c.name,
-          score: riskOf(row.templateId, c.preset),
-        });
+      for (const row of courseEntries.filter((e) => e.courseId === c.id)) {
+        if (seen.has(row.entryId)) continue;
+        if (quizCountOf(row.entryId) > 0) continue;
+        const title = entryTitleOf(row.entryId);
+        if (!title) continue;
+        seen.add(row.entryId);
+        out.push({ entryId: row.entryId, text: title, courseName: c.name, score: riskOf(row.entryId, c.preset) });
       }
     }
-    // 동점은 업무 이름으로 갈라 매번 같은 순서가 나오게 한다(결정적).
+    // 동점은 제목으로 갈라 매번 같은 순서가 나오게 한다(결정적).
     return out.sort((a, b) => (b.score - a.score) || a.text.localeCompare(b.text, 'ko'));
-  }, [courses, training, entryIdsOf, quizCountOf, taskTextOf, riskOf]);
+  }, [courses, courseEntries, quizCountOf, entryTitleOf, riskOf]);
 
-  // ── ① 코스별 이수 현황 — 그 코스의 업무를 전부 확인한 직원 수. 점수가 아니라 도달 여부만 센다.
+  // ── ① 코스별 이수 현황 — 그 코스의 노하우를 전부 확인한 직원 수. 점수가 아니라 도달 여부만 센다.
   const progress = useMemo(
     () =>
       courses.map((c) => {
-        const items = training.filter((t) => t.course === c.key);
+        const items = courseEntries.filter((e) => e.courseId === c.id);
         const passedNames: string[] = [];
         const pendingNames: string[] = [];
         for (const p of staff) {
           const done = items.length > 0 && items.every((it) => {
-            const row = understanding.find((u) => u.templateId === it.templateId && u.staffId === p.id);
+            const row = understanding.find((u) => u.entryId === it.entryId && u.staffId === p.id);
             if (!row) return false;
             if (!c.due_days) return true;
             const t = Date.parse(row.verifiedAt);
@@ -107,7 +98,7 @@ export function TrainingInsights({
         }
         return { course: c, itemCount: items.length, passedNames, pendingNames };
       }),
-    [courses, training, staff, understanding, now],
+    [courses, courseEntries, staff, understanding, now],
   );
 
   // ── ③ 다시 확인할 때가 된 사람 — 주기가 있는 코스에서 마지막 확인이 주기를 넘긴 직원 수.
@@ -116,18 +107,17 @@ export function TrainingInsights({
       courses
         .filter((c) => !!c.due_days)
         .map((c) => {
-          const items = training.filter((t) => t.course === c.key);
-          const ids = new Set(items.map((i) => i.templateId));
+          const ids = new Set(courseEntries.filter((e) => e.courseId === c.id).map((e) => e.entryId));
           const staffIds = new Set<string>();
           for (const u of understanding) {
-            if (!ids.has(u.templateId)) continue;
+            if (!ids.has(u.entryId)) continue;
             const t = Date.parse(u.verifiedAt);
             if (!Number.isFinite(t) || now - t > (c.due_days as number) * DAY_MS) staffIds.add(u.staffId);
           }
           return { course: c, count: staffIds.size };
         })
         .filter((x) => x.count > 0),
-    [courses, training, understanding, now],
+    [courses, courseEntries, understanding, now],
   );
 
   // ── ② 헷갈리는 노하우 top 3 — 개인 비난이 아니라 "노하우가 헷갈리게 적혔을 수 있어요" 신호(0103).
@@ -158,11 +148,11 @@ export function TrainingInsights({
       {holes.length > 0 && (
         <View style={tst.card}>
           <View style={tst.block}>
-            <Text style={tst.blockTitle}>문제가 없는 업무 {holes.length}개</Text>
+            <Text style={tst.blockTitle}>문제가 없는 노하우 {holes.length}개</Text>
           </View>
           {holes.slice(0, 5).map((h) => (
             <Pressable
-              key={h.templateId}
+              key={h.entryId}
               onPress={() => onFixHole(h)}
               style={({ pressed }) => [tst.holeRow, tst.blockTop, pressed && { opacity: 0.85 }]}
               accessibilityRole="button"

@@ -128,6 +128,17 @@ async function main() {
   // 스택 내비로 이전 화면 텍스트가 DOM에 남는다 — 시트 닫기·프리셋 카드처럼 텍스트가 겹치는
   // 대상은 부분일치가 위험하므로 accessibilityLabel(aria-label)로 집는다.
   const tapLabel = async (page, l) => { await page.getByLabel(l, { exact: true }).last().dispatchEvent('click'); };
+  /**
+   * 기존 노하우 선택 시트 열기.
+   * ★2026-08-04(a50e979 "Primary 1개") 구조 정리로 이 진입점이 **최상위 버튼 → 폼 안 링크**로 내려갔다.
+   *   링크를 누르면 폼이 닫히므로(모달 위 모달 회피) 두 번째부터는 폼을 다시 열어야 한다.
+   *   그래서 "링크가 보이면 누르고, 안 보이면 폼부터 연다"로 화면 상태에 무관하게 만든다.
+   */
+  const openPicker = async (page) => {
+    if (!(await see(page, '이미 적어둔 노하우에서 고르기'))) await tap(page, '새로 만들기');
+    await wait(page, '이미 적어둔 노하우에서 고르기');
+    await tap(page, '이미 적어둔 노하우에서 고르기');
+  };
 
   try {
     // ════ 사장 ════
@@ -143,7 +154,7 @@ async function main() {
     // 프리셋 '첫 출근' 만들기 → 코스 행만 생기고 담을 업무는 추천 시트에서 사장이 고른다(계약 §3).
     await tapLabel(po, '첫 출근 만들기');
     check('T1c 만들기 토스트', await wait(po, '첫 출근을(를) 만들었어요'));
-    check('T1d 추천 업무 담기 시트', await wait(po, '담을 업무 고르기'));
+    check('T1d 추천 노하우 담기 시트', await wait(po, '담을 노하우 고르기'));
     await shot(po, '01b-recommend');
     await tapLabel(po, '닫기'); // 추천은 건너뛰고 아래 T2·T3 경로로 담는다
     check('T1e 미달 안내(3개부터 공개)', await wait(po, '비어 있음 · 3개부터 공개'));
@@ -151,7 +162,7 @@ async function main() {
 
     console.log('\n[사장] 새 문답 추가 + 글자수 힌트');
     await tap(po, '새로 만들기');
-    await wait(po, '맡길 업무는 무엇인가요');
+    await wait(po, '어떤 노하우인가요');
     // 스택 내비 특성상 이전 화면(직원·급여 시급 input 등)이 DOM에 남는다 → placeholder 로만 집는다.
     const nameInput = po.getByPlaceholder('예) 오픈 청소');
     await nameInput.click();
@@ -164,11 +175,11 @@ async function main() {
     check('T2b 충족 → 안내 문구 전환', await wait(po, '자세할수록 이해 확인 문제가'));
     await shot(po, '02-form-filled');
     await tap(po, '퀴즈에 추가');
-    check('T2c 추가 토스트', await wait(po, '첫 출근에 추가했어요'));
+    check('T2c 추가 토스트', await wait(po, '첫 출근에 담았어요'));
     check('T2d 목록 1행(오픈 청소)', await wait(po, '오픈 청소'));
 
     console.log('\n[사장] 기존 노하우로 추가');
-    await tap(po, '기존 노하우로 추가');
+    await openPicker(po);
     // placeholder 는 getByText 로 안 잡힌다 — 검색 input 자체의 노출로 판정.
     const pickerUp = await po.getByPlaceholder('예) 마감, 발주').waitFor({ state: 'visible', timeout: 20000 }).then(() => true).catch(() => false);
     check('T3a 선택 시트 열림', pickerUp);
@@ -176,16 +187,16 @@ async function main() {
     check('T3b 시드 노하우 노출', pickRow);
     await shot(po, '03-picker');
     await tap(po, '원두 채우기');
-    check('T3c 추가 토스트', await wait(po, '첫 출근에 추가했어요'));
-    check('T3d 문항 0개 안내(2개)', await wait(po, '문제 없는 업무 2개 · 문제부터 만들어 주세요'));
+    check('T3c 추가 토스트', await wait(po, '첫 출근에 담았어요'));
+    check('T3d 문항 0개 안내(2개)', await wait(po, '문제 없는 노하우 2개 · 문제부터 만들어 주세요'));
 
     console.log('\n[사장] 3개째 → 항목은 찼지만 문항 0개');
-    await tap(po, '기존 노하우로 추가');
+    await openPicker(po);
     await wait(po, '가스 밸브 잠그기');
     await tap(po, '가스 밸브 잠그기');
-    await wait(po, '첫 출근에 추가했어요');
+    await wait(po, '첫 출근에 담았어요');
     // ★ 항목 수만 보던 옛 판정은 문항이 0개인데도 '준비됨'을 띄웠다. 지금은 문항까지 봐야 초록이다.
-    check('T4 문항 0개면 준비됨 아님', await wait(po, '문제 없는 업무 3개 · 문제부터 만들어 주세요'));
+    check('T4 문항 0개면 준비됨 아님', await wait(po, '문제 없는 노하우 3개 · 문제부터 만들어 주세요'));
     await shot(po, '04-ready');
 
     console.log('\n[사장] 항목 액션: 이동·빼기');
@@ -197,22 +208,25 @@ async function main() {
     await po.waitForTimeout(1500);
     await shot(po, '05b-after-move');
     // 순서 검증은 DB(진실)로 — DOM 전수 텍스트 스캔은 중첩 div 때문에 순서 판정이 부정확했다.
-    const { data: posRows } = await owner.from('training_items').select('template_id, position').eq('course', 'first_day').order('position');
-    const { data: tmplRows } = await owner.from('work_templates').select('id, text');
-    const textOf = new Map((tmplRows ?? []).map((r) => [r.id, r.text]));
-    const orderTexts = (posRows ?? []).map((r) => textOf.get(r.template_id));
+    // 0111: 코스에 담기는 것이 업무 → 노하우라 course_entries 를 본다(레거시 training_items 아님).
+    const { data: courseRow } = await owner.from('training_courses').select('id').eq('key', 'first_day').maybeSingle();
+    const FD = courseRow?.id ?? '';
+    const { data: posRows } = await owner.from('course_entries').select('entry_id, position').eq('course_id', FD).order('position');
+    const { data: entryRows } = await owner.from('playbook_entries').select('id, title');
+    const textOf = new Map((entryRows ?? []).map((r) => [r.id, r.title]));
+    const orderTexts = (posRows ?? []).map((r) => textOf.get(r.entry_id));
     check('T5b 아래로 이동 → 순서 스왑(DB)', orderTexts[0] === '원두 채우기' && orderTexts[1] === '오픈 청소', JSON.stringify(orderTexts));
     await tap(po, '오픈 청소'); // 이제 2번
     await wait(po, '퀴즈에서 빼기');
     await tap(po, '퀴즈에서 빼기');
-    check('T5c 빼기 토스트(업무·노하우 보존 안내)', await wait(po, '업무와 노하우는 남아요'));
-    check('T5d 미달 안내 복귀(2개)', await wait(po, '문제 없는 업무 2개 · 문제부터 만들어 주세요'));
+    check('T5c 빼기 토스트(노하우 보존 안내)', await wait(po, '노하우는 남아요'));
+    check('T5d 미달 안내 복귀(2개)', await wait(po, '문제 없는 노하우 2개 · 문제부터 만들어 주세요'));
     // 직원 카드 검증을 위해 3개로 복구 — 픽커에서 방금 뺀 항목의 노하우(오픈 청소)를 재선택.
-    await tap(po, '기존 노하우로 추가');
+    await openPicker(po);
     await wait(po, '오픈 청소');
     await tap(po, '오픈 청소');
-    await wait(po, '첫 출근에 추가했어요');
-    await wait(po, '문제 없는 업무 3개 · 문제부터 만들어 주세요');
+    await wait(po, '첫 출근에 담았어요');
+    await wait(po, '문제 없는 노하우 3개 · 문제부터 만들어 주세요');
 
     console.log('\n[사장] 종류 추가 → 정기 점검');
     // v2 부터 '정기 점검'은 기본 제공이 아니라 사장이 프리셋에서 만든다.
@@ -220,10 +234,10 @@ async function main() {
     await wait(po, '어떤 퀴즈부터 만들까요');
     await tapLabel(po, '정기 점검 만들기');
     check('T6a 정기 점검 만들기', await wait(po, '정기 점검을(를) 만들었어요'));
-    await wait(po, '담을 업무 고르기');
+    await wait(po, '담을 노하우 고르기');
     await tapLabel(po, '닫기');
     check('T6b 주기 안내(1달마다)', await wait(po, '1달마다'));
-    check('T6c 비운영 상태', await see(po, '아직 없어요'));
+    check('T6c 비운영 상태(빈 코스는 담으라고 말한다)', await see(po, '아래에서 노하우를 담아 주세요'));
     await shot(po, '06-regular-empty');
 
     console.log('\n[사장] 허브 현황 진입점');
@@ -234,26 +248,46 @@ async function main() {
     await po.close();
 
     // ════ 직원 ════
+    // ★직원 카드는 "낼 문항이 있는 항목"만 센다(0109) — 문항이 0개면 카드가 아예 안 뜬다(의도된 동작).
+    //   그래서 T4 까지의 상태(문항 0개)로는 직원 경로를 검증할 수 없다. 사장이 검수한 문항의 대역으로
+    //   코스에 담긴 노하우마다 문항을 하나씩 심고 나서 직원 화면을 본다.
+    {
+      const { data: ceRows } = await owner.from('course_entries').select('entry_id').eq('course_id', FD);
+      const { error } = await owner.from('quiz_items').insert(
+        (ceRows ?? []).map((r, i) => ({
+          id: `qi_trb${i}_${s}`, unit_id: UNIT, entry_ids: [r.entry_id], kind: 't0', format: 'mc4',
+          payload: { ask: '가장 먼저 할 일은 무엇인가요?', choices: ['확인하고 알리기', '그냥 넘어가기'], answer_index: 0, explain: '먼저 확인해요' },
+        })),
+      );
+      check('T7b 직원 카드 전제: 코스 항목마다 문항 1개 심기', !error && (ceRows ?? []).length === 3, error?.message ?? `n=${ceRows?.length}`);
+    }
     console.log('\n[직원] 업무 채팅 퀴즈 카드');
     const pj = await newPage(jEmail);
     await pj.goto(`${ORIGIN}/junior/work`, { waitUntil: 'domcontentloaded' });
     const cardUp = await wait(pj, '다음 퀴즈', 30000);
     check('T8a TrainingCard 노출(제목=코스 이름·다음 퀴즈)', cardUp && (await see(pj, '첫 출근')));
-    check('T8b 진행 0/3', await see(pj, '0/3'));
+    // 완료가 아니라 잔여를 센다(레퍼런스 leveltest_05) — 0 전시가 구조적으로 안 생긴다.
+    check('T8b 잔여 카운터(3개 남았어요)', await see(pj, '3개 남았어요'));
     await shot(pj, '08-junior-card');
     await tap(pj, '전체 3개 보기');
     const chips = (await see(pj, '다음')) && (await see(pj, '대기'));
     check('T8c 전체 펼침 + 상태칩(다음·대기)', chips);
     await shot(pj, '09-junior-expanded');
 
-    console.log('\n[직원] 이해 확인 시트(실 AI)');
+    console.log('\n[직원] 이해 확인 시트(저장된 문항 경로)');
     await tap(pj, '혼자 할 수 있어요');
     const quizHead = await wait(pj, '이해 확인 ·', 15000);
     check('T9a 이해 확인 시트', quizHead);
-    // 실 AI 문항 생성 대기 — 문항 라디오(1.)가 뜨는지.
-    const q1 = await wait(pj, '1.', 40000);
-    check('T9b 문항 렌더(실 AI)', q1);
-    await shot(pj, '10-junior-quiz');
+    // ★옛 기대값은 '1.'(AI 즉석 생성 경로의 문항 번호)이었다. 그 경로는 2026-08-04 에 꺼졌고
+    //   (ALLOW_AI_FALLBACK=false) 지금은 저장된 문항(0107)만 나간다 → 기대값을 실제 경로로 바꾼다.
+    // 시작 전에 분량·소요 시간을 먼저 말한다(레퍼런스 home_05).
+    check('T9b 시작 고지(분량 · 소요 시간)', await wait(pj, '분 정도', 15000));
+    await shot(pj, '10-junior-quiz-start');
+    await tap(pj, '퀴즈 시작하기');
+    // 완료가 아니라 잔여를 센다(레퍼런스 leveltest_05).
+    check('T9c 응시 중 잔여 카운터', await wait(pj, '문제 남았어요', 20000));
+    check('T9d 저장된 문항 렌더(정답 제거본)', await see(pj, '가장 먼저 할 일은 무엇인가요'));
+    await shot(pj, '10b-junior-quiz');
     await pj.close();
 
     const fatal = errors.filter((e) => !/favicon|manifest|source map|net::ERR_ABORTED/i.test(e));

@@ -60,7 +60,7 @@ export function CoursePresetOnboarding({
   return (
     <View style={cst.onboard}>
       <Text style={cst.onboardLead}>어떤 퀴즈부터 만들까요</Text>
-      <Text style={cst.onboardSub}>고르면 종류가 만들어지고, 담을 업무를 바로 골라요</Text>
+      <Text style={cst.onboardSub}>고르면 종류가 만들어지고, 담을 노하우를 바로 골라요</Text>
       {open.map((p) => (
         <Pressable
           key={p.key}
@@ -151,7 +151,7 @@ export function CourseFormSheet({
     const ok = await guardWrite(deleteTrainingCourse(editing.id), () => {}, '퀴즈 종류 삭제에 실패했어요.');
     setBusy(false);
     if (ok) {
-      showToast('퀴즈 종류를 삭제했어요 · 업무와 노하우는 남아요', 'good');
+      showToast('퀴즈 종류를 삭제했어요 · 노하우는 남아요', 'good');
       onDeleted?.(editing);
     }
   };
@@ -174,7 +174,7 @@ export function CourseFormSheet({
             ))}
           </View>
         </Field>
-        <Field label="담을 업무 수" hint={`최소 ${minItems}개부터 직원에게 보여요`}>
+        <Field label="담을 노하우 수" hint={`최소 ${minItems}개부터 직원에게 보여요`}>
           <IntField value={maxItems} onChange={setMaxItems} min={Math.max(1, minItems)} max={20} unit="개" />
         </Field>
         {err ? <ErrorNote text={err} /> : null}
@@ -220,7 +220,7 @@ export function CourseRecommendSheet({
   /**
    * 추천 순위 계산은 src/lib/quiz/presets.ts 의 recommendTemplates 하나가 SSOT다 —
    * 여기에 규칙을 복제하지 않는다. 담을 후보 = 아직 이 코스에 없는 발행 노하우
-   * (기존 "기존 노하우로 추가" 경로와 같은 재료 — 담을 때 업무가 만들어진다).
+   * (기존 "기존 노하우로 추가" 경로와 같은 재료 — 0111 부터 노하우가 그대로 코스에 담긴다).
    */
   const preset = isPresetKey(course.preset) ? course.preset : null;
   const recommended = useMemo(() => {
@@ -250,7 +250,7 @@ export function CourseRecommendSheet({
 
   return (
     <BottomSheet visible={true} onClose={onClose} sheetStyle={{ height: '82%' }}>
-      <SheetHead title={`${course.name} · 담을 업무 고르기`} onClose={onClose} />
+      <SheetHead title={`${course.name} · 담을 노하우 고르기`} onClose={onClose} />
       <ScrollView style={{ flex: 1 }} contentContainerStyle={qst.body} showsVerticalScrollIndicator={false}>
         <Text style={cst.recLead}>
           {recommended.length === 0
@@ -291,7 +291,7 @@ export function CourseRecommendSheet({
       <View style={qst.foot}>
         {overflow ? <ErrorNote text={`${remaining}개까지만 담을 수 있어요. ${picked.size - remaining}개를 빼 주세요.`} /> : null}
         <PrimaryButton
-          label={busy ? '담는 중…' : picked.size > 0 ? `고른 ${picked.size}개 담기` : '담을 업무를 골라 주세요'}
+          label={busy ? '담는 중…' : picked.size > 0 ? `고른 ${picked.size}개 담기` : '담을 노하우를 골라 주세요'}
           disabled={busy || picked.size === 0 || overflow}
           onPress={() => void submit()}
         />
