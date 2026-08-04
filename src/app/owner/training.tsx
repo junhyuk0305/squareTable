@@ -439,11 +439,12 @@ export default function OwnerTrainingScreen() {
               <View style={st.statusRow}>
                 <View style={[st.statusDot, { backgroundColor: ready ? BrandColors.good : BrandColors.warn }]} />
                 <Text style={[st.statusText, { color: ready ? BrandColors.good : BrandColors.warn }]}>
+                  {/* 상태 꼬리표 자리 — 명사구로 끝낸다(AI티 규칙 R2-1·R2-5). */}
                   {ready
-                    ? '준비됨 · 직원 업무 채팅에 보여요'
+                    ? '준비됨 · 직원에게 공개'
                     : items.length === 0
-                      ? `아직 없어요 · ${minItems}개부터 직원에게 보여요`
-                      : `${minItems - items.length}개 더 채우면 직원에게 보여요`}
+                      ? `비어 있음 · ${minItems}개부터 공개`
+                      : `공개까지 ${minItems - items.length}개 남음`}
                 </Text>
               </View>
               <Pressable
@@ -502,7 +503,7 @@ export default function OwnerTrainingScreen() {
         </Appear>
         )}
 
-        {/* ── 추가 — 경로 2개: 새 문답 / 기존 노하우 선택 ── */}
+        {/* ── 추가 — 시작점은 하나(Primary 1개). 기존 노하우 선택은 이 안에서 갈라진다(2026-08-04). ── */}
         {course && !full && (
           <Appear delay={90}>
             <View style={st.addRow}>
@@ -514,18 +515,19 @@ export default function OwnerTrainingScreen() {
                 <Ionicons name="create-outline" size={16} color={formOpen ? '#FFFFFF' : InkColors.ink} />
                 <Text style={[st.addBtnText, formOpen && { color: '#FFFFFF' }]}>새로 만들기</Text>
               </Pressable>
-              <Pressable
-                onPress={() => { setPickerOpen(true); closeForm(); }}
-                style={({ pressed }) => [st.addBtn, pressed && { opacity: 0.85 }]}
-                accessibilityRole="button"
-              >
-                <Ionicons name="albums-outline" size={16} color={InkColors.ink} />
-                <Text style={st.addBtnText}>기존 노하우로 추가</Text>
-              </Pressable>
             </View>
 
             {formOpen && (
               <View style={st.formCard}>
+                <Pressable
+                  onPress={() => { setPickerOpen(true); closeForm(); }}
+                  style={({ pressed }) => [st.pickLink, pressed && { opacity: 0.85 }]}
+                  accessibilityRole="button"
+                >
+                  <Ionicons name="albums-outline" size={16} color={InkColors.ink} />
+                  <Text style={st.pickLinkText}>이미 적어둔 노하우에서 고르기</Text>
+                  <Ionicons name="chevron-forward" size={15} color={InkColors.ink3} />
+                </Pressable>
                 <Text style={st.qLabel}>맡길 업무는 무엇인가요?</Text>
                 <TextInput
                   style={st.input}
@@ -1023,6 +1025,11 @@ const st = StyleSheet.create({
     backgroundColor: '#FFFFFF', borderRadius: Radius.lg, borderWidth: 1, borderColor: InkColors.line,
     paddingHorizontal: Space.lg, paddingVertical: Space.lg, gap: Space.sm, marginTop: Space.sm, ...Elevation.e2,
   },
+  pickLink: {
+    flexDirection: 'row', alignItems: 'center', gap: Space.sm, minHeight: 48,
+    borderRadius: Radius.md, backgroundColor: InkColors.bgSoft, paddingHorizontal: Space.md,
+  },
+  pickLinkText: { flex: 1, fontSize: 15, fontWeight: '700', color: InkColors.ink },
   qLabel: { fontSize: 15, fontWeight: '800', color: InkColors.ink, marginTop: Space.xs },
   input: {
     borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md, backgroundColor: InkColors.bg,

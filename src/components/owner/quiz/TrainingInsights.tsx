@@ -136,19 +136,19 @@ export function TrainingInsights({
         </View>
       ) : null}
 
-      {/* ④ 문항 재고 — 가장 중요. 눈에 띄게 두고 누르면 바로 문제를 만들러 간다. */}
+      {/* ④ 문항 재고 — 가장 중요. 다만 앰버 배너로 쌓지 않는다(2026-08-04):
+          경고 앰버가 브랜드 노랑과 섞여 화면 최대 면적을 먹었고, 위의 업무 목록과 정보가 겹쳤다.
+          같은 흰 카드 안의 리스트로 내리고, 행 전체를 눌러 문제를 만들러 간다. */}
       {holes.length > 0 && (
-        <View style={tst.holeCard}>
-          <View style={tst.holeHead}>
-            <Ionicons name="alert-circle-outline" size={16} color={BrandColors.warn} />
-            <Text style={tst.holeTitle}>문제가 없는 업무 {holes.length}개</Text>
+        <View style={tst.card}>
+          <View style={tst.block}>
+            <Text style={tst.blockTitle}>문제가 없는 업무 {holes.length}개</Text>
           </View>
-          <Text style={tst.holeSub}>담겨 있지만 낼 문제가 없어서 직원에게 퀴즈가 안 나가요</Text>
           {holes.slice(0, 5).map((h) => (
             <Pressable
               key={h.templateId}
               onPress={() => onFixHole(h)}
-              style={({ pressed }) => [tst.holeRow, pressed && { opacity: 0.85 }]}
+              style={({ pressed }) => [tst.holeRow, tst.blockTop, pressed && { opacity: 0.85 }]}
               accessibilityRole="button"
               accessibilityLabel={`${h.text} 문제 만들기`}
             >
@@ -156,10 +156,14 @@ export function TrainingInsights({
                 <Text style={tst.holeRowText} numberOfLines={1}>{h.text}</Text>
                 <Text style={tst.holeRowMeta} numberOfLines={1}>{h.courseName}</Text>
               </View>
-              <Text style={tst.holeCta}>문제 만들기</Text>
+              <Ionicons name="chevron-forward" size={16} color={InkColors.ink3} />
             </Pressable>
           ))}
-          {holes.length > 5 ? <Text style={tst.holeRowMeta}>그리고 {holes.length - 5}개 더 있어요</Text> : null}
+          {holes.length > 5 ? (
+            <View style={[tst.block, tst.blockTop]}>
+              <Text style={tst.blockMeta}>그리고 {holes.length - 5}개 더 있어요</Text>
+            </View>
+          ) : null}
         </View>
       )}
 
@@ -171,11 +175,19 @@ export function TrainingInsights({
             .map((p, i) => (
               <View key={p.course.id} style={[tst.block, i > 0 && tst.blockTop]}>
                 <Text style={tst.blockTitle}>{p.course.name}</Text>
+                {/* 통과자가 0이면 "0명 통과"를 쓰지 않는다(2026-08-04) — 같은 화면에서 0이 반복되면
+                    아직 시작 안 한 매장이 '망가진 화면'으로 읽힌다. 1명이라도 생기면 숫자로 전환된다. */}
                 <Text style={tst.blockLine}>
-                  직원 {staff.length}명 중 <Text style={tst.strong}>{p.passedNames.length}명</Text> 통과
+                  {p.passedNames.length === 0 ? (
+                    '아직 시작 전'
+                  ) : (
+                    <>직원 {staff.length}명 중 <Text style={tst.strong}>{p.passedNames.length}명</Text> 통과</>
+                  )}
                 </Text>
                 {p.pendingNames.length > 0 ? (
-                  <Text style={tst.blockMeta} numberOfLines={2}>아직 안 끝난 직원 · {p.pendingNames.join(', ')}</Text>
+                  p.passedNames.length > 0 ? (
+                    <Text style={tst.blockMeta} numberOfLines={2}>아직 안 끝난 직원 · {p.pendingNames.join(', ')}</Text>
+                  ) : null
                 ) : staff.length > 0 ? (
                   <Text style={[tst.blockMeta, { color: BrandColors.good }]}>전원 통과</Text>
                 ) : (
@@ -233,18 +245,10 @@ const tst = StyleSheet.create({
   strong: { fontWeight: '900', color: InkColors.ink },
   empty: { fontSize: 15, color: InkColors.ink3, textAlign: 'center', paddingVertical: Space.md, lineHeight: 21 },
 
-  holeCard: {
-    backgroundColor: BrandColors.warnSoft, borderRadius: Radius.lg, borderWidth: 1, borderColor: BrandColors.warnBorder,
-    paddingHorizontal: Space.lg, paddingVertical: Space.md, gap: Space.xs,
-  },
-  holeHead: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  holeTitle: { fontSize: 15, fontWeight: '900', color: InkColors.ink },
-  holeSub: { fontSize: 15, color: InkColors.ink2, fontWeight: '600', lineHeight: 21 },
   holeRow: {
     flexDirection: 'row', alignItems: 'center', gap: Space.md, minHeight: 48,
-    borderTopWidth: 1, borderTopColor: BrandColors.warnBorder, paddingVertical: Space.sm,
+    paddingVertical: Space.sm,
   },
   holeRowText: { fontSize: 15, fontWeight: '700', color: InkColors.ink },
   holeRowMeta: { fontSize: 12, color: InkColors.ink2, fontWeight: '600', marginTop: 1 },
-  holeCta: { fontSize: 13, fontWeight: '800', color: InkColors.ink, textDecorationLine: 'underline' },
 });
