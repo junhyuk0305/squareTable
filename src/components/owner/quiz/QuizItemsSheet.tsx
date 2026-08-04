@@ -136,7 +136,7 @@ export function QuizItemsSheet({
       <View style={qst.foot}>
         <Text style={ist.count}>{loading ? ' ' : `나가는 문제 ${active.length}개`}</Text>
         <View style={ist.footRow}>
-          <GhostButton icon="sparkles-outline" label="AI가 만들어 주기" fill disabled={entryIds.length === 0} onPress={() => onCompose('ai')} />
+          <GhostButton icon="help-circle-outline" label="AI가 만들어 주기" fill disabled={entryIds.length === 0} onPress={() => onCompose('ai')} />
           <GhostButton icon="create-outline" label="직접 쓰기" fill onPress={() => onCompose('manual')} />
         </View>
       </View>

@@ -529,7 +529,7 @@ export function OwnerKnowhowBrowse({
                 )}
                 {recent.length > 0 && (
                   <Appear delay={60} style={styles.block}>
-                    <SectionLabel icon="sparkles-outline" title="최근 추가됨" hint="새로 올라온 순" />
+                    <SectionLabel icon="time-outline" title="최근 추가됨" hint="새로 올라온 순" />
                     <KnowhowCarousel entries={recent} onSelect={(e) => onSelect(e.id)} showCategory />
                   </Appear>
                 )}

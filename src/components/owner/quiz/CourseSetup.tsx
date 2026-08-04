@@ -256,8 +256,8 @@ export function CourseRecommendSheet({
           {recommended.length === 0
             ? '담을 수 있는 노하우가 아직 없어요. 목록 아래에서 새로 만들어 주세요.'
             : preset
-              ? `${PRESETS[preset].recommendReason} ${remaining}개까지 담을 수 있어요.`
-              : `최근에 고친 순서로 놓았어요 · ${remaining}개까지 담을 수 있어요`}
+              ? `${PRESETS[preset].recommendReason} · ${remaining}개까지`
+              : `최근 수정순 · ${remaining}개까지`}
         </Text>
         {recommended.map(({ entry, top }) => {
           const on = picked.has(entry.id);

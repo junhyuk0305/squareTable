@@ -232,7 +232,7 @@ function LegacyHandover() {
                 </>
               ) : (
                 <>
-                  <Ionicons name="sparkles" size={16} color={InkColors.bubbleText} />
+                  <Ionicons name="document-text-outline" size={16} color={InkColors.bubbleText} />
                   <Text style={styles.ctaText}>AI로 노하우 정리하기</Text>
                 </>
               )}
@@ -288,7 +288,7 @@ function ReviewList({
   return (
     <Appear delay={0}>
       <View style={styles.reviewBanner}>
-        <Ionicons name="sparkles" size={16} color={BrandColors.warn} />
+        <Ionicons name="list-outline" size={16} color={BrandColors.warn} />
         <Text style={styles.reviewBannerText}>
           인수인계서에서 <Text style={{ fontWeight: '900' }}>노하우 {segs.length}개</Text>를 찾았어요. 저장할 것만 고르고, 카드를 눌러 내용을 다듬어 주세요.
         </Text>

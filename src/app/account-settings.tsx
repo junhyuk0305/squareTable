@@ -171,7 +171,7 @@ export default function AccountSettings() {
           <SettingsRow icon="shield-checkmark-outline" label="개인정보처리방침" onPress={() => router.push('/privacy')} />
           {/* AI 이용정책·처리위탁 계약은 웹 정적 페이지가 유일한 정본(legal-content.mjs)이라 앱 요약 화면이 없다.
               약관·처리방침 본문이 참조하는 문서이므로 앱에서도 도달 경로가 있어야 죽은 참조가 안 된다. */}
-          <SettingsRow icon="sparkles-outline" label="AI 이용정책" onPress={() => void Linking.openURL('https://dochackchack.com/ai-policy').catch(() => {})} />
+          <SettingsRow icon="document-text-outline" label="AI 이용정책" onPress={() => void Linking.openURL('https://dochackchack.com/ai-policy').catch(() => {})} />
           {/* 전자상거래법상 판매자 정보 고지 의무 — 화면(/business-info)은 있었지만 앱 어디서도 링크가 없어
               사용자가 도달할 수 없었다(2026-07-29 IA 점검에서 발견). 유료 판매 중이므로 접근 경로가 필수다. */}
           <SettingsRow icon="business-outline" label="사업자 정보" onPress={() => router.push('/business-info')} />

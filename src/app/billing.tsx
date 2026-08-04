@@ -300,7 +300,7 @@ function BillingBody() {
         <View style={styles.hero}>
           <View style={styles.iconWrap}>
             <Ionicons
-              name={view.state === 'expired' ? 'lock-closed-outline' : 'sparkles-outline'}
+              name={view.state === 'expired' ? 'lock-closed-outline' : 'card-outline'}
               size={26}
               color={view.state === 'expired' ? BrandColors.warn : InkColors.ink}
             />

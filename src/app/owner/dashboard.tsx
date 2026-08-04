@@ -147,7 +147,7 @@ export default function OwnerDashboardScreen() {
             </Text>
             <View ref={ctaRef} style={{ alignSelf: 'flex-start' }}>
               <PressableScale onPress={() => router.push('/owner/onboarding')} scaleTo={0.96} style={styles.onboardCta}>
-                <Ionicons name="sparkles-outline" size={16} color={InkColors.bubbleText} />
+                <Ionicons name="download-outline" size={16} color={InkColors.bubbleText} />
                 <Text style={styles.onboardCtaText}>추천 노하우 깔기</Text>
               </PressableScale>
             </View>
@@ -183,7 +183,7 @@ export default function OwnerDashboardScreen() {
             }
           >
             <View style={styles.heroHead}>
-              <Ionicons name="sparkles" size={15} color={InkColors.bubbleText} />
+              <Ionicons name="calendar-outline" size={15} color={InkColors.bubbleText} />
               <Text style={styles.heroKicker}>최근 30일</Text>
               <InfoDot
                 color="rgba(255,255,255,0.85)"

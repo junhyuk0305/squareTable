@@ -185,7 +185,7 @@ export default function OwnerOnboardingScreen() {
               accessibilityLabel="요금제 보기 — 지금은 무료로 시작했어요"
             >
               <View style={styles.planIcon}>
-                <Ionicons name="sparkles-outline" size={16} color={InkColors.ink} />
+                <Ionicons name="card-outline" size={16} color={InkColors.ink} />
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.planTitle}>지금은 무료로 시작했어요</Text>
@@ -231,7 +231,7 @@ export default function OwnerOnboardingScreen() {
             >
               <View style={styles.bundleHead}>
                 <View style={styles.bundleIcon}>
-                  <Ionicons name="sparkles" size={16} color={InkColors.ink} />
+                  <Ionicons name="albums-outline" size={16} color={InkColors.ink} />
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.bundleKicker}>도입 1일차 필수</Text>
