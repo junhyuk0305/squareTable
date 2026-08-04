@@ -220,16 +220,33 @@ async function flow4({ owner, ownerId, jA, jAId, UNIT, TMPL, entryRow }) {
   const correct = picks.filter((p, i) => p === qs[i].answer_index).length;
   const passed = qs.length >= 1 && correct === qs.length;
   check('④-3 전부 정답 채점=통과', passed, `${correct}/${qs.length}`);
-  // 통과 → task_understanding upsert (staff_id=DB default auth.uid())
-  const { error: ue } = await jA.from('task_understanding').upsert({ unit_id: UNIT, template_id: TMPL, staff_name: 'QA알바A' }, { onConflict: 'template_id,staff_id', ignoreDuplicates: true });
-  check('④-4 이해 기록(task_understanding)', !ue, ue?.message ?? '');
-  const { data: tu } = await admin.from('task_understanding').select('staff_id, staff_name, template_id').eq('template_id', TMPL).maybeSingle();
+  // 통과 → knowhow_understanding upsert (0111: 축이 업무 → 노하우. staff_id=DB default auth.uid())
+  const ENTRY_ID = ENTRY_OF(entryRow);
+  const { error: ue } = await jA.from('knowhow_understanding').upsert({ unit_id: UNIT, entry_id: ENTRY_ID, staff_name: 'QA알바A' }, { onConflict: 'entry_id,staff_id', ignoreDuplicates: true });
+  check('④-4 이해 기록(knowhow_understanding · 0111 노하우 축)', !ue, ue?.message ?? '');
+  const { data: tu } = await admin.from('knowhow_understanding').select('staff_id, staff_name, entry_id').eq('entry_id', ENTRY_ID).maybeSingle();
   check('④-5 staff_id=알바A uid(위조 아닌 DB default)', tu?.staff_id === jAId, `staff_id=${tu?.staff_id}`);
-  // 사장 '이해 확인' 배지: fetchTaskUnderstanding → understoodNames(templateId)
-  const { data: ownerView } = await owner.from('task_understanding').select('template_id, staff_id, staff_name').eq('template_id', TMPL);
+  // 사장 '이해 확인' 배지의 소스 — 업무 단위 판정은 클라 파생(staffWhoUnderstandTask)이라 여기선 원시 행만 본다.
+  const { data: ownerView } = await owner.from('knowhow_understanding').select('entry_id, staff_id, staff_name').eq('entry_id', ENTRY_ID);
   check('④-6 사장이 통과자 이름 조회(배지 소스)', (ownerView ?? []).some((u) => u.staff_id === jAId && u.staff_name === 'QA알바A'));
+  // ★파생 규칙 실증(0111): "이 업무를 할 줄 안다 = 그 업무가 참조하는 노하우를 **전부** 안다".
+  //   이 업무에는 ②-4 에서 두 번째 노하우(캡처 승인분)가 붙어 있다 → 1건만 통과한 지금은 아직 아니다.
+  const { data: linkRows } = await owner.from('work_template_knowhow').select('entry_id').eq('template_id', TMPL);
+  const need = [...new Set((linkRows ?? []).map((l) => l.entry_id))];
+  const { data: mine1 } = await owner.from('knowhow_understanding').select('entry_id').eq('staff_id', jAId);
+  const knows1 = new Set((mine1 ?? []).map((x) => x.entry_id));
+  const missing = need.filter((id) => !knows1.has(id));
+  check('④-6b 일부 노하우만 통과 → 업무는 아직 아님(파생)', need.length >= 2 && missing.length > 0, `need=${need.length} knows=${knows1.size}`);
+  // 남은 노하우까지 통과시키면 그때 업무 통과가 된다 — 저장은 노하우 단위, 업무는 계산.
+  if (missing.length > 0) {
+    await jA.from('knowhow_understanding').upsert(
+      missing.map((id) => ({ unit_id: UNIT, entry_id: id, staff_name: 'QA알바A' })), { onConflict: 'entry_id,staff_id' });
+  }
+  const { data: mine2 } = await owner.from('knowhow_understanding').select('entry_id').eq('staff_id', jAId);
+  const knows2 = new Set((mine2 ?? []).map((x) => x.entry_id));
+  check('④-6c 나머지까지 통과 → 업무 통과(파생)', need.length > 0 && need.every((id) => knows2.has(id)), `need=${need.length} knows=${knows2.size}`);
   // 위조 방어: 알바A가 남의 staff_id(사장)로 이해 기록 시도 → RLS WITH CHECK 차단
-  const { error: forge } = await jA.from('task_understanding').insert({ unit_id: UNIT, template_id: TMPL, staff_id: ownerId, staff_name: '위조' }).select('template_id');
+  const { error: forge } = await jA.from('knowhow_understanding').insert({ unit_id: UNIT, entry_id: ENTRY_ID, staff_id: ownerId, staff_name: '위조' }).select('entry_id');
   check('④-7 staff_id 위조 삽입 차단(RLS)', !!forge, forge ? `거부 ${forge.code ?? ''}` : '(차단 안됨!)');
 
   // ── 0103 오답 집계(record_quiz_stats) — 문항 귀속·개인 비저장·사장만 열람 ──
@@ -249,11 +266,11 @@ async function flow4({ owner, ownerId, jA, jAId, UNIT, TMPL, entryRow }) {
   const { data: fkRow } = await admin.from('knowhow_quiz_stats').select('entry_id').eq('entry_id', 'pb_qa_nonexistent').maybeSingle();
   check('④-12 남의/없는 entry는 무시(0행)', !fkRpc && !fkRow, fkRpc?.message ?? '');
 
-  // ── 0104 본인 훈련 이력 — ④-4에서 남긴 통과 기록이 업무명과 함께 돌아온다(본인 한정 definer) ──
+  // ── 0104→0111 본인 퀴즈 이력 — ④-4에서 남긴 통과 기록이 노하우 제목과 함께 돌아온다(본인 한정 definer) ──
   const { data: hist, error: he } = await jA.rpc('my_training_history');
-  check('④-13 훈련 이력 RPC(본인 통과 행·업무명 조인)', !he && (hist ?? []).some((h) => h.template_id === TMPL && h.unit_id === UNIT && !!h.task_text), he?.message ?? JSON.stringify(hist?.slice(0, 2)));
+  check('④-13 퀴즈 이력 RPC(본인 통과 행·노하우 제목 조인)', !he && (hist ?? []).some((h) => h.entry_id === ENTRY_ID && h.unit_id === UNIT && !!h.entry_title), he?.message ?? JSON.stringify(hist?.slice(0, 2)));
   const { data: ownerHist } = await owner.rpc('my_training_history');
-  check('④-14 훈련 이력은 본인 것만(사장에겐 직원 통과 행 없음)', !(ownerHist ?? []).some((h) => h.template_id === TMPL), `rows=${ownerHist?.length}`);
+  check('④-14 퀴즈 이력은 본인 것만(사장에겐 직원 통과 행 없음)', !(ownerHist ?? []).some((h) => h.entry_id === ENTRY_ID), `rows=${ownerHist?.length}`);
 }
 // 0103 검증에서 entryRow.id 접근을 한 곳으로(오타 방지).
 const ENTRY_OF = (row) => row.id;

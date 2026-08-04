@@ -6,12 +6,13 @@ import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
 
-/** 직원 훈련 카드의 항목 상태 — passed=통과 · next=다음 차례 · todo=대기 · due=주기 도래 · asked=관리자 요청. */
+/** 직원 퀴즈 카드의 항목 상태 — passed=통과 · next=다음 차례 · todo=대기 · due=주기 도래 · asked=관리자 요청. */
 export type TrainingCardItem = {
+  /** 0111 부터 항목은 **노하우**다(playbook_entries.id). 예전엔 업무 id 였다. */
   id: string;
+  /** 노하우 제목. */
   text: string;
   state: 'passed' | 'next' | 'todo' | 'due' | 'asked';
-  hasKnowhow: boolean;
 };
 
 /**
@@ -36,7 +37,7 @@ const STATE_CHIP: Record<TrainingCardItem['state'], { label: string; color: stri
 };
 
 /**
- * TrainingCard — 직원 업무 채팅 상단의 훈련 카드(코스 1개 = 카드 1장).
+ * TrainingCard — 직원 업무 채팅 상단의 퀴즈 카드(코스 1개 = 카드 1장).
  * 위에는 "다음 한 개"(순서의 외부화), 펼치면 전체 항목과 상태가 보인다(색+텍스트 병기).
  * 문제 풀이는 자발 — 페널티 없음. 1회성 코스는 전부 통과하면, 주기 코스는 다시 확인할 게 없으면 사라진다.
  */
@@ -48,8 +49,9 @@ export function TrainingCard({
 }: {
   course: TrainingCardCourse;
   items: TrainingCardItem[];
-  onOpenKnowhow: (templateId: string) => void;
-  onStartCheck: (templateId: string) => void;
+  /** 항목 id = 노하우 id(0111). */
+  onOpenKnowhow: (entryId: string) => void;
+  onStartCheck: (entryId: string) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   // 요청(asked)이 주기(due)보다 먼저 — 사람이 기다리는 것부터.
@@ -58,11 +60,13 @@ export function TrainingCard({
 
   // 1회성(due_days 없음)이면 "처음 배우는 중", 주기가 있으면 "다시 확인하는 중" — 코스 행 하나로 갈린다.
   const oneShot = course.dueDays === null;
-  const passedCount = items.filter((it) => it.state === 'passed').length;
   const dueCount = items.filter((it) => it.state === 'due' || it.state === 'asked').length;
   // 제목은 코스 이름 그대로 — 종류가 여러 개라 '첫 출근'/'포지션 바뀔 때'가 구분돼야 한다.
   const title = course.name;
-  const badge = oneShot ? `${passedCount}/${items.length}` : `확인할 것 ${dueCount}개`;
+  // ★완료가 아니라 **잔여**를 센다(뤼이드 튜터 레퍼런스 leveltest_05). 잔여는 0이 되는 순간
+  //   카드가 사라지므로 "0/5 통과" 같은 0 전시가 구조적으로 생기지 않는다(R1-1의 상위 해법).
+  const leftCount = oneShot ? items.filter((it) => it.state !== 'passed').length : dueCount;
+  const badge = `${leftCount}개 남았어요`;
   const ctaLabel = oneShot ? '혼자 할 수 있어요' : '다시 확인하기';
 
   return (
@@ -74,21 +78,19 @@ export function TrainingCard({
       </View>
 
       <Text style={st.next} numberOfLines={2}>
-        {oneShot ? '다음 퀴즈' : next.state === 'asked' ? '사장님이 요청했어요' : '다시 확인할 업무'} · {next.text}
+        {oneShot ? '다음 퀴즈' : next.state === 'asked' ? '사장님이 요청했어요' : '다시 확인할 노하우'} · {next.text}
       </Text>
 
       <View style={st.btnRow}>
-        {next.hasKnowhow && (
-          <Pressable
-            onPress={() => onOpenKnowhow(next.id)}
-            style={({ pressed }) => [st.softBtn, pressed && { opacity: 0.7 }]}
-            accessibilityRole="button"
-            accessibilityLabel="노하우 읽기"
-          >
-            <Ionicons name="book-outline" size={15} color={InkColors.ink} />
-            <Text style={st.softBtnText}>노하우 읽기</Text>
-          </Pressable>
-        )}
+        <Pressable
+          onPress={() => onOpenKnowhow(next.id)}
+          style={({ pressed }) => [st.softBtn, pressed && { opacity: 0.7 }]}
+          accessibilityRole="button"
+          accessibilityLabel="노하우 읽기"
+        >
+          <Ionicons name="book-outline" size={15} color={InkColors.ink} />
+          <Text style={st.softBtnText}>노하우 읽기</Text>
+        </Pressable>
         <Pressable
           onPress={() => onStartCheck(next.id)}
           style={({ pressed }) => [st.cta, pressed && { opacity: 0.85 }]}
@@ -116,8 +118,7 @@ export function TrainingCard({
           return (
             <Pressable
               key={it.id}
-              onPress={() => it.hasKnowhow && onOpenKnowhow(it.id)}
-              disabled={!it.hasKnowhow}
+              onPress={() => onOpenKnowhow(it.id)}
               style={({ pressed }) => [st.itemRow, pressed && { opacity: 0.7 }]}
               accessibilityRole="button"
               accessibilityLabel={`${it.text} 노하우 읽기`}

@@ -227,11 +227,11 @@ export function JuniorGrowthView() {
           <SectionLabel title="퀴즈" hint="통과한 퀴즈" />
           <View style={styles.card}>
             {(showAllTraining ? trainingHistory : trainingHistory.slice(0, ENTRY_LIST_FIRST)).map((h) => (
-              <View key={`${h.unitId}_${h.templateId}`} style={styles.row}>
+              <View key={`${h.unitId}_${h.entryId}`} style={styles.row}>
                 {growth.length > 1 && (
                   <View style={[styles.dot, { backgroundColor: storeColor(h.unitId, prefFor(h.unitId).color) }]} />
                 )}
-                <Text style={styles.rowTitle} numberOfLines={1}>{h.taskText}</Text>
+                <Text style={styles.rowTitle} numberOfLines={1}>{h.entryTitle}</Text>
                 <Text style={styles.rowSub}>{fmtMonthDay(h.verifiedAt)}</Text>
               </View>
             ))}
