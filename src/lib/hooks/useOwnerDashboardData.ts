@@ -16,8 +16,6 @@ export type OwnerDashboardData = {
   entriesCount: number;
   needsReviewCount: number;
   working: number;
-  taskTotal: number;
-  taskDoneCount: number;
   /** 오늘 떠야 하는 업무 — 홈 목록(3건 + 전체보기)용. 완료 여부까지 붙여 표시 전용으로 내보낸다. */
   todayTasks: { id: string; text: string; done: boolean }[];
   pending: number;
@@ -25,10 +23,8 @@ export type OwnerDashboardData = {
   heroQuery?: UnknownQuery;
   /** heroQuery 작성자의 입사 경과일 — 익명이면 undefined. */
   heroCareerDays?: number;
-  topFaq: UnknownQuery[];
   /** 최근 30일 노하우가 알바 질문에 '대신 답한' 실카운트(Σ query_hits_30d). 히어로 가치 지표. */
   answeredHits30d: number;
-  isSolo: boolean;
 };
 
 /** 사장 대시보드 화면의 뷰모델 — 스토어 셀렉터 읽기 + 파생값 계산을 한곳에 모은다. */
@@ -58,9 +54,6 @@ export function useOwnerDashboardData(): OwnerDashboardData {
     () => templates.filter((t) => occursOn(t, today) && taskVisibleTo(t, userId)),
     [templates, today, userId],
   );
-  const taskTotal = todaysTasks.length;
-  const taskDoneCount = todaysTasks.filter((t) => (doneMap[today] ?? {})[t.id]).length;
-
   // 홈 목록용 — 남은 일이 먼저 보이도록 미완료를 위로. todaysTasks(가시성 필터)를 그대로 재사용한다.
   const todayTasks = useMemo(() => {
     const doneToday = doneMap[today] ?? {};
@@ -98,19 +91,9 @@ export function useOwnerDashboardData(): OwnerDashboardData {
     return staff.find((s) => s.id === heroQuery.junior_id)?.career_days;
   }, [heroQuery, staff]);
 
-  const isSolo = staff.length === 0; // 직원 미합류 = 혼자 모드
-
   // 미검증(needs_review) 노하우 — 템플릿/업종팩 fork 등 사장이 아직 우리 매장 기준으로 안 다듬은 것.
   // 0보다 크면 대시보드 최상단 배너로 먼저 노출(검증 유도).
   const needsReviewCount = useMemo(() => entries.filter((e) => e.needs_review === true).length, [entries]);
-
-  const topFaq = useMemo(
-    () =>
-      [...pendingList]
-        .sort((a, b) => b.similar_queries_count - a.similar_queries_count)
-        .slice(0, 3),
-    [pendingList],
-  );
 
   return {
     userName,
@@ -120,14 +103,10 @@ export function useOwnerDashboardData(): OwnerDashboardData {
     entriesCount: entries.filter((e) => e.status !== 'draft').length,
     needsReviewCount,
     working,
-    taskTotal,
-    taskDoneCount,
     todayTasks,
     pending,
     heroQuery,
     heroCareerDays,
-    topFaq,
     answeredHits30d,
-    isSolo,
   };
 }
