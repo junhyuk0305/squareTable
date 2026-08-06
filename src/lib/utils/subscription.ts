@@ -32,6 +32,41 @@ const ceilDays = (ms: number) => Math.max(0, Math.ceil(ms / DAY));
 // false 인 동안: 무료 티어는 영구 무료(캡만 적용), 유료 플랜은 paid_until 만료 시 /billing 페이월.
 export const FREE_MODE = false;
 
+/**
+ * 유효 플랜 — 만료를 반영한 '지금' 기준 요금제. **과금 판정의 클라측 SSOT.**
+ *
+ * ★서버 카운터파트 = public.effective_plan(unit) (0115). 두 곳이 어긋나면
+ *   "서버는 무료로 막는데 화면은 유료로 보이는" split-brain 이 된다 — 규칙을 함께 고친다.
+ *
+ * 2026-08-06 결정: 유료 기간이 끝나면 **앱을 잠그지 않고 무료 요금제로 강등**한다.
+ *   (7일 체험이 끝난 매장이 8일째에 앱을 아예 못 열던 동작을 폐기. 라이브 검증으로 확인된 결함.)
+ *   미납 압박은 잠금이 아니라 무료 한도(직원 3명·AI 150건)와 좌석 잠금으로 건다.
+ */
+export function effectivePlanOf(
+  s: { plan?: PlanId; subStatus: SubStatusRaw; paidUntil: string; trialEndsAt: string },
+  now: number = Date.now(),
+): PlanId {
+  const plan = s.plan;
+  if (plan !== 'single' && plan !== 'multi') return 'free';
+  const paidUntil = s.paidUntil ? Date.parse(s.paidUntil) : NaN;
+  const trialEnd = s.trialEndsAt ? Date.parse(s.trialEndsAt) : NaN;
+  // paid_until 없음 = 수동 무기한 부여(0083 admin_activate_store 경로).
+  if (s.subStatus === 'active' && (!s.paidUntil || paidUntil > now)) return plan;
+  if (s.subStatus === 'trialing' && Number.isFinite(trialEnd) && trialEnd > now) return plan;
+  return 'free';
+}
+
+/**
+ * 유료 기간이 끝나서 무료로 내려온 상태인가 — 화면 문구 판정용(처음부터 무료인 매장과 구분).
+ * 판정만 다르고 권한은 무료와 완전히 같다.
+ */
+export function isPlanLapsed(
+  s: { plan?: PlanId; subStatus: SubStatusRaw; paidUntil: string; trialEndsAt: string },
+  now: number = Date.now(),
+): boolean {
+  return !!s.paidUntil && Date.parse(s.paidUntil) <= now && effectivePlanOf(s, now) === 'free';
+}
+
 export function deriveSubscription(s: SubscriptionFields, now: number = Date.now()): SubscriptionView {
   if (FREE_MODE) return { state: 'active', entitled: true, daysLeft: -1 };
 

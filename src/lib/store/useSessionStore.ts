@@ -5,6 +5,7 @@ import {
   fetchSessionProfile,
   fetchUnitInfo,
   fetchUnitSubscription,
+  fetchMySeatLocked,
   checkPhoneInUse,
   rpcCreateStore,
   rpcCompleteProfile,
@@ -24,7 +25,7 @@ import { friendlyError } from '@/lib/utils/userError';
 import { sessionReadFailAction } from './sessionReadFail';
 import { joinRejectAction, type JoinMarker } from './joinRejectDetect';
 import { setAnalyticsContext, track, reportError } from '@/lib/analytics/track';
-import type { SubStatusRaw } from '@/lib/utils/subscription';
+import { effectivePlanOf, type SubStatusRaw } from '@/lib/utils/subscription';
 import { normalizePlan, type PlanId } from '@/lib/config/tiers';
 import { notifyOwnersJoinRequest } from '@/lib/push/notify';
 
@@ -52,7 +53,11 @@ type SessionState = {
   subStatus: SubStatusRaw; // '' | 'trialing' | 'active' | 'expired'
   trialEndsAt: string; // ISO — 무료체험 만료
   paidUntil: string; // ISO — 유료 활성 만료(빈값=무기한)
-  plan: PlanId; // 과금 티어(0062). 다점포 기능 노출·업그레이드 안내의 기준(canUseMultistore)
+  // 과금 티어 — ★원시 컬럼이 아니라 **유효 플랜**(만료 반영, 0115 effectivePlanOf). 유료 기간이 끝나면
+  // 여기가 'free' 가 되어 다점포 노출·캡 안내·페이월이 전부 무료 기준을 따른다.
+  plan: PlanId;
+  // 좌석 잠금(0115) — 무료 강등으로 직원 수가 한도를 넘어 내 자리가 잠겼는가(직원 전용 판정).
+  seatLocked: boolean;
   inviteCode: string; // 내 매장 초대코드(사장 화면에서 직원에게 공유)
   email: string;
   bio: string; // 한줄 소개
@@ -130,6 +135,7 @@ const DEMO = {
   trialEndsAt: '',
   paidUntil: '',
   plan: 'free' as PlanId,
+  seatLocked: false,
   inviteCode: '482913',
   email: '',
   bio: '',
@@ -240,7 +246,7 @@ async function loadProfile(
       _lastLoadFault = 'load_failed'; // 로그인 직후라면 signInWithPassword 가 '네트워크 오류' 문구로 노출(#17·#18)
       setUnitId(null);
       setAnalyticsContext({ userId: null, unitId: null, role: null });
-      set({ status: 'signed_out', unitId: '', userId: '', userName: '', storeName: '', pendingUnitId: '', pendingStoreName: '', rejectedJoinStoreName: '', industry: '', inviteCode: '', bio: '', phone: '', plan: 'free', subStatus: '', trialEndsAt: '', paidUntil: '' });
+      set({ status: 'signed_out', unitId: '', userId: '', userName: '', storeName: '', pendingUnitId: '', pendingStoreName: '', rejectedJoinStoreName: '', industry: '', inviteCode: '', bio: '', phone: '', plan: 'free', seatLocked: false, subStatus: '', trialEndsAt: '', paidUntil: '' });
       return;
     }
 
@@ -250,7 +256,7 @@ async function loadProfile(
       _lastLoadFault = 'deleted'; // 로그인 직후라면 signInWithPassword 가 '탈퇴 처리된 계정' 문구로 노출(#16)
       setUnitId(null);
       setAnalyticsContext({ userId: null, unitId: null, role: null });
-      set({ status: 'signed_out', unitId: '', userId: '', userName: '', storeName: '', pendingUnitId: '', pendingStoreName: '', rejectedJoinStoreName: '', industry: '', inviteCode: '', bio: '', phone: '', plan: 'free', subStatus: '', trialEndsAt: '', paidUntil: '' });
+      set({ status: 'signed_out', unitId: '', userId: '', userName: '', storeName: '', pendingUnitId: '', pendingStoreName: '', rejectedJoinStoreName: '', industry: '', inviteCode: '', bio: '', phone: '', plan: 'free', seatLocked: false, subStatus: '', trialEndsAt: '', paidUntil: '' });
       void supabase.auth.signOut().catch(() => {});
       return;
     }
@@ -295,6 +301,7 @@ async function loadProfile(
     let trialEndsAt = '';
     let paidUntil = '';
     let plan: PlanId = 'free';
+    let seatLocked = false;
     if (unitId) {
       const { data: unit } = await fetchUnitInfo(unitId);
       storeName = unit?.store_name ?? '';
@@ -322,7 +329,20 @@ async function loadProfile(
         subStatus = (sub?.status as SubStatusRaw) ?? '';
         trialEndsAt = sub?.trial_ends_at ?? '';
         paidUntil = sub?.paid_until ?? '';
-        plan = normalizePlan(sub?.plan);
+        // ★0115: 세션의 plan 은 원시 컬럼이 아니라 **유효 플랜**(만료 반영)이다.
+        //   유료 기간이 끝나면 여기서 'free' 가 되고, 그 결과 캡·다점포 노출·페이월이 전부
+        //   자동으로 무료 기준을 따른다(판정을 화면마다 복제하지 않는다).
+        //   서버 카운터파트 = public.effective_plan(unit).
+        plan = effectivePlanOf({ plan: normalizePlan(sub?.plan), subStatus, paidUntil, trialEndsAt });
+      }
+
+      // 좌석 잠금(0115) — 무료 강등으로 직원 수가 한도를 넘으면 늦게 합류한 순서로 잠긴다.
+      // 판정은 서버(my_seat_locked)가 SSOT. 사장·매니저는 대상이 아니라 조회하지 않는다.
+      if (role !== 'owner') {
+        const { data: locked, error: lockErr } = await fetchMySeatLocked();
+        // 읽기 실패는 '잠김'으로 위장하지 않는다(fail-open) — 과금 조회 오류로 직원을 막지 않는다.
+        if (lockErr) reportError('session.fetchMySeatLocked', lockErr);
+        else seatLocked = locked === true;
       }
     }
     // 다점포(0055): 내가 속한 매장 목록 — '내 매장' 허브/헤더 토글용. 오너(소유)·직원(알바 소속) 모두 로드한다
@@ -377,6 +397,7 @@ async function loadProfile(
       trialEndsAt,
       paidUntil,
       plan,
+      seatLocked,
       bio: profile?.bio ?? '',
       phone: profile?.phone ?? '',
     });
@@ -391,7 +412,7 @@ async function loadProfile(
     _lastLoadFault = 'load_failed'; // 로그인 직후라면 signInWithPassword 가 '네트워크 오류' 문구로 노출(#17)
     setUnitId(null);
     setAnalyticsContext({ userId: null, unitId: null, role: null });
-    set({ status: 'signed_out', unitId: '', userId: '', userName: '', storeName: '', stores: [], pendingUnitId: '', pendingStoreName: '', rejectedJoinStoreName: '', industry: '', inviteCode: '', bio: '', plan: 'free', subStatus: '', trialEndsAt: '', paidUntil: '' });
+    set({ status: 'signed_out', unitId: '', userId: '', userName: '', storeName: '', stores: [], pendingUnitId: '', pendingStoreName: '', rejectedJoinStoreName: '', industry: '', inviteCode: '', bio: '', plan: 'free', seatLocked: false, subStatus: '', trialEndsAt: '', paidUntil: '' });
   }
 }
 
@@ -420,7 +441,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
         if (u) loadProfile(set, u.id, u.email ?? '', pendingOwnerMeta(u));
         else {
           setAnalyticsContext({ userId: null, unitId: null, role: null });
-          set({ status: 'signed_out', unitId: '', userId: '', userName: '', plan: 'free', subStatus: '', trialEndsAt: '', paidUntil: '' });
+          set({ status: 'signed_out', unitId: '', userId: '', userName: '', plan: 'free', seatLocked: false, subStatus: '', trialEndsAt: '', paidUntil: '' });
         }
       });
     }
@@ -767,7 +788,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   deleteAccount: async () => {
     if (!HAS_SUPABASE) {
       // 데모 모드: 실제 삭제 대상 없음 → 세션만 종료.
-      set({ status: 'signed_out', unitId: '', userId: '', userName: '', pendingUnitId: '', pendingStoreName: '', rejectedJoinStoreName: '', industry: '', plan: 'free', subStatus: '', trialEndsAt: '', paidUntil: '' });
+      set({ status: 'signed_out', unitId: '', userId: '', userName: '', pendingUnitId: '', pendingStoreName: '', rejectedJoinStoreName: '', industry: '', plan: 'free', seatLocked: false, subStatus: '', trialEndsAt: '', paidUntil: '' });
       return { error: null };
     }
     const { error } = await rpcDeleteMyAccount();
@@ -781,7 +802,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     } catch (e) {
       console.warn('[session] signOut after delete failed:', e);
     }
-    set({ status: 'signed_out', unitId: '', userId: '', userName: '', pendingUnitId: '', pendingStoreName: '', rejectedJoinStoreName: '', industry: '', plan: 'free', subStatus: '', trialEndsAt: '', paidUntil: '' });
+    set({ status: 'signed_out', unitId: '', userId: '', userName: '', pendingUnitId: '', pendingStoreName: '', rejectedJoinStoreName: '', industry: '', plan: 'free', seatLocked: false, subStatus: '', trialEndsAt: '', paidUntil: '' });
     return { error: null };
   },
 
@@ -903,7 +924,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
         console.warn('[session] signOut failed:', e);
       }
     }
-    set({ status: 'signed_out', unitId: '', userId: '', userName: '', pendingUnitId: '', pendingStoreName: '', rejectedJoinStoreName: '', industry: '', plan: 'free', subStatus: '', trialEndsAt: '', paidUntil: '' });
+    set({ status: 'signed_out', unitId: '', userId: '', userName: '', pendingUnitId: '', pendingStoreName: '', rejectedJoinStoreName: '', industry: '', plan: 'free', seatLocked: false, subStatus: '', trialEndsAt: '', paidUntil: '' });
   },
 
   switchTo: (role) => {

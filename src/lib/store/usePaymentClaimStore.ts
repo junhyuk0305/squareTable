@@ -12,13 +12,21 @@ import { HAS_SUPABASE } from '@/lib/supabase';
 import { fetchPaymentClaims, submitPaymentClaim } from '@/lib/db';
 
 /** 신고 실패 사유 — RPC 의 named 에러를 화면 문구로 옮기는 판정은 여기 한 곳(§② SSOT). */
-export type ClaimError = 'depositor_required' | 'not_owner' | 'bad_plan' | 'unknown';
+export type ClaimError =
+  | 'depositor_required'
+  | 'not_owner'
+  | 'bad_plan'
+  | 'consent_required'
+  | 'bad_biz_no'
+  | 'unknown';
 
 function toClaimError(message?: string): ClaimError {
   const m = message ?? '';
   if (m.includes('depositor_required')) return 'depositor_required';
   if (m.includes('not_owner')) return 'not_owner';
   if (m.includes('bad_plan')) return 'bad_plan';
+  if (m.includes('consent_required')) return 'consent_required';
+  if (m.includes('bad_biz_no')) return 'bad_biz_no';
   return 'unknown';
 }
 
@@ -26,6 +34,8 @@ export const CLAIM_ERROR_TEXT: Record<ClaimError, string> = {
   depositor_required: '입금자명을 입력해 주세요.',
   not_owner: '사장님 계정에서만 입금을 알릴 수 있어요.',
   bad_plan: '유료 요금제를 먼저 선택해 주세요.',
+  consent_required: '유료 이용 조건에 동의해 주세요.',
+  bad_biz_no: '사업자등록번호는 숫자 10자리예요.',
   unknown: '입금 알림에 실패했어요. 잠시 후 다시 시도해 주세요.',
 };
 
@@ -38,6 +48,10 @@ type State = {
     amountKrw: number;
     depositorName: string;
     months?: number;
+    // 주문 시점 동의(0116) — 없으면 서버가 consent_required 로 거부한다.
+    termsVersion: string;
+    bizNo?: string | null;
+    bizEmail?: string | null;
   }) => Promise<{ ok: true } | { ok: false; reason: ClaimError }>;
   /** 가장 최근 신고 1건(없으면 null) — /billing 이 이걸로 상태 문구를 고른다. */
   latest: () => PaymentClaim | null;
@@ -60,6 +74,9 @@ export const usePaymentClaimStore = create<State>((set, get) => ({
       amountKrw: args.amountKrw,
       depositorName: args.depositorName,
       months: args.months ?? 1,
+      termsVersion: args.termsVersion,
+      bizNo: args.bizNo ?? null,
+      bizEmail: args.bizEmail ?? null,
     });
     if (error) return { ok: false, reason: toClaimError(error.message) };
     // 서버가 돌려준 행(금액·상태는 서버 값이 정본)을 그대로 반영 — 낙관적 추정 금지.

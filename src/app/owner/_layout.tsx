@@ -17,7 +17,6 @@ import { useMemberPrefsStore } from '@/lib/store/useMemberPrefsStore';
 import { usePaymentClaimStore } from '@/lib/store/usePaymentClaimStore';
 import { purgeExpiredFormerStaff } from '@/lib/db';
 import { HAS_SUPABASE } from '@/lib/supabase';
-import { deriveSubscription } from '@/lib/utils/subscription';
 import { canManage } from '@/lib/utils/roles';
 
 export default function OwnerLayout() {
@@ -26,10 +25,6 @@ export default function OwnerLayout() {
   const unitId = useSessionStore((s) => s.unitId);
   const phone = useSessionStore((s) => s.phone);
   const pendingUnitId = useSessionStore((s) => s.pendingUnitId);
-  const subStatus = useSessionStore((s) => s.subStatus);
-  const trialEndsAt = useSessionStore((s) => s.trialEndsAt);
-  const paidUntil = useSessionStore((s) => s.paidUntil);
-  const plan = useSessionStore((s) => s.plan);
   const pathname = usePathname();
 
   // 로그인되면 DB에서 당겨오고 실시간 구독(인박스·업무보드·출퇴근이 다른 기기 변경에 즉시 반응).
@@ -105,17 +100,10 @@ export default function OwnerLayout() {
   if (HAS_SUPABASE && status === 'signed_in' && unitId && !canManage(role)) {
     return <Redirect href="/junior/home" />;
   }
-  // 매장은 있으나 구독 만료 → 계좌이체 안내(/billing)로 강제. 소프트 페이월(수동과금).
-  // fail-open: 구독 정보 없음('none')이면 막지 않는다. 무료 티어(plan='free')는 영구 무료라 만료 없음(0062).
-  if (
-    HAS_SUPABASE &&
-    status === 'signed_in' &&
-    unitId &&
-    !deriveSubscription({ subStatus, trialEndsAt, paidUntil, plan }).entitled &&
-    pathname !== '/billing'
-  ) {
-    return <Redirect href="/billing" />;
-  }
+  // ★2026-08-06: 만료 페이월(구독 만료 → /billing 강제) 제거.
+  //   만료는 이제 앱 잠금이 아니라 **무료 요금제 강등**이다(effectivePlanOf / 0115 effective_plan).
+  //   사장은 만료돼도 앱을 그대로 쓰고, 제한은 무료 한도(직원 3명·AI 150건)와 좌석 잠금으로만 걸린다.
+  //   업그레이드 경로는 강제 라우팅이 아니라 /billing 자발 방문(설정·매장 추가·한도 안내)이다.
   return (
     <Stack
       screenOptions={{

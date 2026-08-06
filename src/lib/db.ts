@@ -327,6 +327,11 @@ export async function submitPaymentClaim(args: {
   depositorName: string;
   months?: number;
   memo?: string | null;
+  // 주문 시점 동의(0116) — 없으면 서버가 consent_required 로 거부한다. 이게 계약서를 대신하는 기록이다.
+  termsVersion: string;
+  // 세금계산서 — 요청하는 사장만(선택).
+  bizNo?: string | null;
+  bizEmail?: string | null;
 }): Promise<DbResult<PaymentClaim>> {
   if (!HAS_SUPABASE) return { data: null, error: null };
   const { data, error } = await supabase.rpc('submit_payment_claim', {
@@ -336,8 +341,28 @@ export async function submitPaymentClaim(args: {
     p_depositor: args.depositorName,
     p_months: args.months ?? 1,
     p_memo: args.memo ?? null,
+    p_terms_version: args.termsVersion,
+    p_biz_no: args.bizNo ?? null,
+    p_biz_email: args.bizEmail ?? null,
   });
   return { data: (data as PaymentClaim) ?? null, error: error as DbErr };
+}
+
+// ── 좌석 잠금(0115) — 무료 강등으로 한도를 넘은 직원 자리 ────────────────────────
+// 판정은 전부 서버(my_seat_locked / unit_seat_status)가 갖는다. 화면은 결과만 그린다.
+export async function fetchMySeatLocked(): Promise<DbResult<boolean>> {
+  if (!HAS_SUPABASE) return { data: false, error: null };
+  const { data, error } = await supabase.rpc('my_seat_locked');
+  return { data: (data as boolean) ?? false, error: error as DbErr };
+}
+
+export type SeatStatus = { total: number; cap: number; locked: number };
+
+export async function fetchUnitSeatStatus(): Promise<DbResult<SeatStatus>> {
+  if (!HAS_SUPABASE) return { data: null, error: null };
+  const { data, error } = await supabase.rpc('unit_seat_status');
+  const row = Array.isArray(data) ? (data[0] as SeatStatus) : (data as SeatStatus);
+  return { data: row ?? null, error: error as DbErr };
 }
 
 // ── 도입 문의(sales_inquiries, 0105) — 웹 영업 퍼널의 리드 캡처 ──────────────────
