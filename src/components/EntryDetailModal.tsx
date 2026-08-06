@@ -74,7 +74,8 @@ export function EntryDetailModal({
                 ))}
                 {sq.action.scripts.map((sc, i) => (
                   <View key={`sc-${i}`} style={s.scriptBox}>
-                    <Text style={s.scriptMark}>💬</Text>
+                    {/* 2026-08-06: 💬 → 아이콘(ADR-003 예외 3범주 밖 — 워딩 §2.3 적용) */}
+                    <Ionicons name="chatbubble-outline" size={13} color={InkColors.ink3} />
                     <Text style={s.scriptText}>“{sc}”</Text>
                   </View>
                 ))}
@@ -144,7 +145,6 @@ const s = StyleSheet.create({
   stepNum: { width: 22, height: 22, borderRadius: Radius.sm, backgroundColor: BrandColors.goodSolid, color: '#FFFFFF', fontSize: 12, fontWeight: '800', textAlign: 'center', lineHeight: 22 },
   stepText: { flex: 1, fontSize: 15, color: InkColors.ink, lineHeight: 22 },
   scriptBox: { flexDirection: 'row', gap: 8, borderWidth: 1, borderColor: BrandColors.good, borderRadius: Radius.sm, paddingHorizontal: 12, paddingVertical: 10, marginTop: 2, backgroundColor: '#FFFFFF' },
-  scriptMark: { fontSize: 14 },
   scriptText: { flex: 1, fontSize: 15, color: InkColors.ink, fontStyle: 'italic', lineHeight: 22 },
 
   gaugeBox: { gap: 6, paddingVertical: 2 },

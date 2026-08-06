@@ -124,19 +124,6 @@ export function JuniorMySpace({ me }: { me: string }) {
         </View>
       )}
 
-      {/* ⑤ 내 기여 요약 (자기 뷰 — 랭킹 아님)
-          2026-08-06: 숫자 둘을 문장 안에 섞어 쓰던 한 줄을 MiniStats(I3)로 올렸다.
-          아래 세 섹션이 전부 '제목 → 목록 카드'라, 여기서 형태를 한 번 끊어준다. */}
-      {contribCount > 0 && (
-        <MiniStats
-          items={[
-            { key: 'knowhow', value: approvedCount, label: '내가 쌓은 노하우' },
-            { key: 'answered', value: myAnswered.length, label: '답한 질문' },
-            { key: 'proposed', value: myProposals.length, label: '보낸 제안' },
-          ]}
-        />
-      )}
-
       {/* 내 기여 내보내기 — 내보낼 게 있고 복사가 되는 환경(웹)에서만 노출. */}
       {canCopyToClipboard() && (myProposals.length > 0 || myAnswered.length > 0) && (
         <Pressable
@@ -175,6 +162,21 @@ export function JuniorMySpace({ me }: { me: string }) {
             )}
           </View>
         </>
+      )}
+
+      {/* ⑤ 내 기여 요약 (자기 뷰 — 랭킹 아님)
+          2026-08-06: 숫자 둘을 문장 안에 섞어 쓰던 한 줄을 MiniStats(I3)로 올렸다.
+          ★같은 날 2차: 이 블록의 목적은 "세 섹션이 전부 '제목 → 목록 카드'라 형태를 한 번 끊는 것"인데,
+            정작 위치가 세 섹션 **위**여서 groupCard 3연속(배치규칙①)이 그대로였다 → 섹션 사이로 내렸다.
+            (주석은 의도를 적어뒀지만 코드가 그 의도를 이행하지 않은 자리였다) */}
+      {contribCount > 0 && (
+        <MiniStats
+          items={[
+            { key: 'knowhow', value: approvedCount, label: '내가 쌓은 노하우' },
+            { key: 'answered', value: myAnswered.length, label: '답한 질문' },
+            { key: 'proposed', value: myProposals.length, label: '보낸 제안' },
+          ]}
+        />
       )}
 
       {/* ② 내가 보낸 제안 — 검토 중·반려가 위(정렬은 myProposals에서) */}
@@ -399,7 +401,8 @@ const s = StyleSheet.create({
   resultRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: InkColors.paper },
   resultText: { flex: 1, fontSize: 15, fontWeight: '600', color: InkColors.ink },
   resultPick: { fontSize: 11.5, fontWeight: '800', color: BrandColors.goodText },
-  resultEmpty: { fontSize: 12.5, color: InkColors.ink3, paddingHorizontal: 12, paddingVertical: 12 },
+  // 검색 결과 없음 = 본문(simplicity-voice §4: 빈 화면 문구) → 꼬리표용 ink3(2.55:1) 금지.
+  resultEmpty: { fontSize: 12.5, color: InkColors.ink2, paddingHorizontal: 12, paddingVertical: 12 },
   divider: { height: 1, backgroundColor: InkColors.line, marginVertical: 18 },
   sheetHint: { fontSize: 11.5, color: InkColors.ink3, marginTop: 7 },
   cta: { backgroundColor: InkColors.ink, borderRadius: Radius.md, paddingVertical: 14, alignItems: 'center', marginTop: 12 },

@@ -384,7 +384,8 @@ const styles = StyleSheet.create({
   err: { fontSize: 15, color: BrandColors.accentText, fontWeight: '600' },
   primary: { backgroundColor: BrandColors.brand, paddingVertical: 15, borderRadius: Radius.md, alignItems: 'center' },
   primaryText: { color: '#FFFFFF', fontSize: 15, fontWeight: '800' },
-  codeHint: { fontSize: 12, color: InkColors.ink3, lineHeight: 18 },
+  // 안내문 = 본문(simplicity-voice §4) → 꼬리표용 ink3(2.55:1) 금지.
+  codeHint: { fontSize: 12, color: InkColors.ink2, lineHeight: 18 },
 
   avatarSm: { width: 30, height: 30, borderRadius: Radius.pill, backgroundColor: InkColors.ink, alignItems: 'center', justifyContent: 'center' },
   avatarText: { color: '#FFFFFF', fontSize: 14, fontWeight: '900' },

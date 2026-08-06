@@ -2,7 +2,7 @@
 //
 // 무엇: "매장 지식이 지금도 맞는가"를 매장 단위로 보여준다(O4·O5 — 격자·bus factor 없이).
 //   · 노하우로 만들 것 = 미답변 질문(pending_q) — 답 하나가 노하우 하나가 되는 입구
-//   · 검증이 필요한 노하우(needs_review) — 시드·제안 반영분의 확인 대기
+//   · 확인이 필요한 노하우(needs_review) — 시드·제안 반영분의 확인 대기
 //   · 오래 손 안 댄 노하우(stale, 90일+) — 메뉴·가격이 변했는데 노하우만 옛날일 위험
 // 원칙: 허브는 읽기·이동까지(실행은 매장 화면) · 매장 단위만 · 0은 위험이 아니라 좋은 소식
 //   ("지금은 손볼 노하우가 없어요") · 노하우 0인 매장은 행동 버튼(노하우 담기)이 먼저.
@@ -173,16 +173,22 @@ export function OwnerKnowhowHubView() {
               onPress: jump('노하우로 만들 것', (r) => r.pending_q, '/owner/inbox'),
               info: {
                 title: "'노하우로 만들 것'이 뭐예요?",
-                body: '노하우에 없어서 사장님 답을 기다리는 질문이에요.\n답 하나가 노하우 하나가 돼요.',
+                // 같은 pending_q 를 현황 탭은 '답 기다리는 질문'이라 부른다 — 한 수치를 두 이름으로 부르면
+                // 사장이 서로 다른 지표로 읽는다. 이름을 통일하는 대신(탭마다 문맥이 다르다) 같은 수임을 밝힌다.
+                body: '노하우에 없어서 사장님 답을 기다리는 질문이에요.\n답 하나가 노하우 하나가 돼요.\n현황 탭의 ‘답 기다리는 질문’과 같은 수예요.',
               },
             },
             {
               key: 'review',
+              // ★2026-08-06: '검증'은 승인 어휘 8개 밖 신조어였다(허브 개편에서 새로 쓴 말).
+              //   매장 앱은 같은 needs_review 를 전부 '확인 필요'로 부른다 → 앱 쪽으로 통일.
+              //   착지도 매장 앱과 맞춘다: /owner/knowledge?review=1 = '확인 필요만' 필터가 걸린 목록.
+              //   (옛 /owner/categories 는 필터 없는 전체 목록이라 "N건"을 눌러도 그 N건이 안 보였다)
               value: totals.review,
-              label: '검증 필요',
-              onPress: jump('검증이 필요한 노하우', (r) => r.needs_review, '/owner/categories'),
+              label: '확인 필요',
+              onPress: jump('확인이 필요한 노하우', (r) => r.needs_review, '/owner/knowledge?review=1'),
               info: {
-                title: "'검증 필요'가 뭐예요?",
+                title: "'확인 필요'가 뭐예요?",
                 body: '업종 추천이나 직원 제안으로 들어온 노하우 중, 아직 우리 매장 기준이 맞는지 확인하지 않은 것이에요.',
               },
             },
@@ -190,7 +196,9 @@ export function OwnerKnowhowHubView() {
               key: 'stale',
               value: totals.stale,
               label: '오래 손 안 댐',
-              onPress: jump('오래 손 안 댄 노하우', (r) => r.stale, '/owner/categories'),
+              // 위 '확인 필요'와 같은 층(백버튼 있는 서브화면)으로 보낸다 — 한 줄의 세 칸이 서로 다른
+              // 네비게이션 층에 떨어지면 뒤로가기가 칸마다 다르게 동작한다.
+              onPress: jump('오래 손 안 댄 노하우', (r) => r.stale, '/owner/knowledge'),
               info: {
                 title: "'오래 손 안 댐'이 뭐예요?",
                 body: '90일 넘게 수정이 없는 노하우예요.\n메뉴·가격이 바뀌었는데 노하우만 옛날일 수 있어요. 한 번 훑어봐 주세요.',
@@ -250,7 +258,8 @@ const styles = StyleSheet.create({
   },
   emptyBtnText: { fontSize: 14, fontWeight: '800', color: InkColors.ink },
 
-  allClearText: { fontSize: 13, color: InkColors.ink3, textAlign: 'center' },
+  // 빈 상태 문구 = 본문(simplicity-voice §4) → 꼬리표용 ink3(2.55:1)를 쓰지 않는다.
+  allClearText: { fontSize: 13, color: InkColors.ink2, textAlign: 'center' },
 
   row: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingVertical: Space.sm + 2 },
   rowTitle: { flex: 1, fontSize: 13.5, fontWeight: '700', color: InkColors.ink, minWidth: 0 },

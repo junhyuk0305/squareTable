@@ -1,4 +1,5 @@
 import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 
 import { getSectionMeta } from '@/lib/utils/category';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
@@ -66,7 +67,8 @@ export function CoachStarter({
               accessibilityRole="button"
               accessibilityLabel={`예시: ${ex}`}
             >
-              <Text style={styles.chipMark}>💬</Text>
+              {/* 2026-08-06: 💬 → 아이콘(ADR-003 예외 3범주 밖 — 워딩 §2.3 적용) */}
+              <Ionicons name="chatbubble-outline" size={13} color={InkColors.ink3} />
               <Text style={styles.chipText}>{ex}</Text>
             </Pressable>
           ))}
@@ -153,7 +155,6 @@ const styles = StyleSheet.create({
     backgroundColor: InkColors.bg,
     ...Elevation.e1,
   },
-  chipMark: { fontSize: 14 },
   chipText: { flex: 1, fontSize: 14, fontWeight: '600', color: InkColors.ink2, lineHeight: 20 },
 
   previewCap: { opacity: 0.55 },

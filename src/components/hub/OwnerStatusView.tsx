@@ -1,6 +1,6 @@
 // 사장 허브 '현황' 탭 본문 — 대시보드 본체 4블록(기획 v2 §03).
 //  1) 오늘 스냅샷: 매장별 근무중/예정 카운트(카운트까지만 — 명단은 매장 출퇴근 화면)
-//  2) 확인 필요: 합류 신청·받은질문·검토할 제안·검증 필요 노하우(행 탭 = 해당 매장 화면)
+//  2) 확인 필요: 합류 신청·받은질문·검토할 제안·확인 필요 노하우(행 탭 = 해당 매장 화면)
 //  3) 매장 비교 표: 손 필요 순 기본·헤더 탭 정렬(★이 블록만 multi 게이팅, 매장 1곳=단일 요약)
 //  4) 이번달: 인건비 합계 + AI 사용(무료 캡 대비 표기)
 // 원칙: 전부 매장 단위(개인별 지표 산출 금지) · 허브는 읽기·이동까지(실행 UI 없음).
@@ -246,7 +246,10 @@ export function OwnerStatusView() {
               )}
               {/* 받은질문은 맨 위 AlertRow로 승격됐다(2026-08-06) — 여기서 다시 세지 않는다. */}
               {inboxRow('bulb-outline', '검토할 제안', inbox.suggestions, inbox.suggestionUnits, '/owner/suggestions')}
-              {inboxRow('search-outline', '검증이 필요한 노하우', inbox.needsReview, inbox.needsReviewUnits, '/owner/categories')}
+              {/* ★2026-08-06: '검증' → '확인'(승인 어휘 8개 밖 신조어였다. 매장 앱은 전부 '확인 필요').
+                  착지도 매장 앱과 맞춘다 — ?review=1 = '확인 필요만' 필터가 걸린 목록.
+                  옛 /owner/categories 는 필터 없는 전체라 "N건"을 눌러도 그 N건이 안 보였다. */}
+              {inboxRow('search-outline', '확인이 필요한 노하우', inbox.needsReview, inbox.needsReviewUnits, '/owner/knowledge?review=1')}
             </>
           )}
 

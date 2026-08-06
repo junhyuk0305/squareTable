@@ -11,8 +11,8 @@
   "_시딩": "2026-08-06 첫 실행 출력. 정적 상한은 과대 추정 방향으로만 틀리도록 설계했다 — 수기값보다 크게 나오는 것은 정상이다.",
 
   "screens": [
-    { "id": "/", "file": "src/app/index.tsx", "type": "A", "maxAccepted": 7, "verdict": "todo",
-      "note": "마케팅 랜딩. 앱 화면 기준(A ≤5)을 그대로 물리는 게 맞는지 미정" },
+    { "id": "/", "file": "src/app/index.tsx", "type": null, "maxAccepted": 7, "verdict": "closed",
+      "note": "2026-08-06 판정: 앱 화면 예산 대상 아님(type=null). index.tsx:59-62 는 웹 미로그인을 /welcome.html 로 리다이렉트하고 네이티브 배포 태그는 0건이라, 이 라우트는 프로덕션에서 렌더되지 않는다. 마케팅 페이지의 복잡도는 기획/ux/SaaS_웹디자인_참고서 관할." },
     { "id": "/+not-found", "file": "src/app/+not-found.tsx", "type": null, "maxAccepted": 0, "verdict": "todo" },
     { "id": "/account-edit", "file": "src/app/account-edit.tsx", "type": null, "maxAccepted": 8, "verdict": "todo",
       "note": "같은 파일 안 위임 AccountEdit→AccountEditForm 으로 해소됨" },

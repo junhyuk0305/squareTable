@@ -59,7 +59,7 @@ export default function OwnerInboxScreen() {
     return sugSubscribe();
   }, [sugHydrate, sugSubscribe]);
 
-  // pending 정렬: 시급한 순(confidence asc) → 최근 순(asked_at desc)
+  // pending 정렬: 오래 기다린 순(asked_at asc) → 동시각이면 confidence asc (sortByUrgency SSOT)
   const pending = useMemo(
     () => sortByUrgency(queue.filter((u) => u.status === 'pending_owner_answer')),
     [queue],
@@ -74,10 +74,12 @@ export default function OwnerInboxScreen() {
   const ratePct = answered > 0 ? Math.round((autoCount / answered) * 100) : 0;
 
   // 내 노하우 · 안 쓰임 카운트(진입 카드).
-  const knowhowCount = entries.length;
+  // ★2026-08-06: draft(인수인계서 파이프라인 초안)를 뺀다 — 사장 홈의 entriesCount(useOwnerDashboardData)는
+  //   이미 빼고 세는데 여기만 포함해서, 같은 '내 노하우'가 두 화면에서 다른 수로 나왔다.
+  const knowhowCount = useMemo(() => entries.filter((e) => e.status !== 'draft').length, [entries]);
   const unusedCount = useMemo(() => entries.filter(isUnused).length, [entries]);
 
-  // hero: 전체 pending 중 가장 시급. 깊은 답변 → 기존 answer 위저드.
+  // hero: 전체 pending 중 가장 오래 기다린 것. 깊은 답변 → 기존 answer 위저드.
   const hero = pending[0];
 
   // hero 작성자 경력(익명이면 숨김).
@@ -204,7 +206,13 @@ export default function OwnerInboxScreen() {
           />
           </Appear>
 
-          {/* 5) 그동안 쌓은 노하우 — 진입 카드(목록은 상세 화면에서). 안 쓰임 있으면 정리 유도. */}
+          {/* 5) 안 쓰이는 노하우 정리 — ★2026-08-06: **안 쓰임이 있을 때만** 그린다.
+              이 화면의 목적은 '질문에 답해 노하우로 만든다'(정본 §2)인데 자산 관리 진입점이
+              MiniStats·이 카드·탭바까지 3중이었다. 게다가 평시에는 "잘 쌓이고 있어요"를 냈는데,
+              노하우 0개 매장에서는 '내 노하우 0개' 바로 밑에 그 문구가 붙어 사실과 달랐다.
+              '안 쓰임 합계'를 말하는 자리는 앱에서 여기 하나뿐이라(노하우 화면엔 행 배지만 있다)
+              카드를 지우지 않고 조건부로 남긴다 — 정리 신호가 필요한 순간에만 뜬다. */}
+          {unusedCount > 0 && (
           <Appear>
           <View style={styles.block}>
             <SectionLabel title="그동안 쌓은 노하우" />
@@ -212,7 +220,7 @@ export default function OwnerInboxScreen() {
               onPress={goKnowledge}
               style={({ pressed }) => [styles.sugEntry, pressed && { opacity: 0.85 }]}
               accessibilityRole="button"
-              accessibilityLabel={`내 노하우 ${knowhowCount}개${unusedCount > 0 ? `, 안 쓰임 ${unusedCount}개` : ''}, 관리하기`}
+              accessibilityLabel={`내 노하우 ${knowhowCount}개, 안 쓰임 ${unusedCount}개, 관리하기`}
             >
               <View style={[styles.sugIcon, styles.sugIconKnow]}>
                 <Ionicons name="library-outline" size={17} color={InkColors.ink} />
@@ -220,19 +228,14 @@ export default function OwnerInboxScreen() {
               <View style={{ flex: 1 }}>
                 <Text style={styles.sugTitle}>내 노하우 {knowhowCount}개</Text>
                 <Text style={styles.sugSub}>
-                  {unusedCount > 0 ? (
-                    <>
-                      <Text style={styles.sugSubBad}>{unusedCount}개는 최근 안 쓰였어요</Text> · 확인해볼까요?
-                    </>
-                  ) : (
-                    '잘 쌓이고 있어요. 탭해서 관리하기'
-                  )}
+                  <Text style={styles.sugSubBad}>{unusedCount}개는 최근 안 쓰였어요</Text> · 확인해볼까요?
                 </Text>
               </View>
               <Ionicons name="chevron-forward" size={16} color={InkColors.ink3} />
             </Pressable>
           </View>
           </Appear>
+          )}
 
           {/* 푸터 여백 */}
           <View style={{ height: 16 }} />

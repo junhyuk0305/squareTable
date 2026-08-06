@@ -183,9 +183,17 @@ export default function JuniorHomeScreen() {
               <Text style={styles.askPrimaryText}>궁금한 거 물어보기</Text>
               <Ionicons name="arrow-forward" size={16} color={InkColors.ink} />
             </Pressable>
+            {/* ★2026-08-06: 칩이 문구를 안 넘겨서 탭한 질문이 착지 화면에서 사라졌다.
+                3개 중 '진상 손님 응대법'은 착지 화면 추천 풀에 아예 없어 직접 타이핑해야 했다.
+                사장 쪽 씨앗 칩(dashboard→/owner/coach)과 같은 params 패턴으로 넘긴다.
+                **입력칸만 채우고 보내지는 않는다** — 자동 전송이면 오탭이 곧 질문 전송이 된다. */}
             <View style={styles.askChips}>
               {QUICK_ASKS.map((q) => (
-                <Pressable key={q} onPress={() => goToTab('/junior/chat')} style={({ pressed }) => [styles.askChip, pressed && { opacity: 0.7 }]}>
+                <Pressable
+                  key={q}
+                  onPress={() => goToTab(`/junior/chat?seed=${encodeURIComponent(q)}`)}
+                  style={({ pressed }) => [styles.askChip, pressed && { opacity: 0.7 }]}
+                >
                   <Text style={styles.askChipText}>{q}</Text>
                 </Pressable>
               ))}

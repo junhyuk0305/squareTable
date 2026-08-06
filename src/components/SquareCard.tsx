@@ -1,4 +1,5 @@
 import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { SourceFooter } from './SourceFooter';
 import { VerifyBadge } from './VerifyBadge';
 import { BrandColors, InkColors } from '@/lib/theme/colors';
@@ -191,7 +192,13 @@ export function SquareCard({
             accessibilityState={{ selected: feedback === 'up' }}
             style={[styles.fbBtn, feedback === 'up' && styles.fbBtnActive]}
           >
-            <Text style={[styles.fbEmoji, feedback === 'up' && { color: InkColors.bubbleText }]}>👍</Text>
+            {/* 2026-08-06: 그림 이모지(👍) → 아이콘. ADR-003이 유지하기로 한 3범주(EmptyState 일러스트·
+                카테고리 식별자·중앙 일러스트) 어디에도 안 들어가는 자리라 워딩 §2.3을 그대로 적용한다. */}
+            <Ionicons
+              name="thumbs-up-outline"
+              size={14}
+              color={feedback === 'up' ? InkColors.bubbleText : InkColors.ink2}
+            />
             <Text style={[styles.fbLabel, feedback === 'up' && { color: InkColors.bubbleText }]}>도움됐어요</Text>
           </Pressable>
           <Pressable
@@ -202,7 +209,11 @@ export function SquareCard({
             accessibilityState={{ selected: feedback === 'down' }}
             style={[styles.fbBtn, feedback === 'down' && styles.fbBtnActive]}
           >
-            <Text style={[styles.fbEmoji, feedback === 'down' && { color: InkColors.bubbleText }]}>👎</Text>
+            <Ionicons
+              name="thumbs-down-outline"
+              size={14}
+              color={feedback === 'down' ? InkColors.bubbleText : InkColors.ink2}
+            />
             <Text style={[styles.fbLabel, feedback === 'down' && { color: InkColors.bubbleText }]}>아쉬워요</Text>
           </Pressable>
         </View>
@@ -312,6 +323,5 @@ const styles = StyleSheet.create({
     backgroundColor: InkColors.bgSoft,
   },
   fbBtnActive: { backgroundColor: BrandColors.goodSolid },
-  fbEmoji: { fontSize: 14 },
   fbLabel: { fontSize: 13, fontWeight: '700', color: InkColors.ink2 },
 });

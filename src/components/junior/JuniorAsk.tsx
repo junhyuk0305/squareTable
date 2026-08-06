@@ -63,7 +63,10 @@ const CHAT_PAGE = 20;
  * ───────────────────────────────────────────────────────── */
 // suggestEntry: '노하우 제안' 진입(/junior/suggest) 노출 여부 — 매니저(owner/ask 재사용)는
 // 제안 경로 대신 직접 발행 권한이 있으므로 숨긴다.
-export function JuniorAsk({ suggestEntry = true }: { suggestEntry?: boolean } = {}) {
+// seed: 홈에서 탭한 예시 질문 문구. **입력칸을 채우기만 하고 보내지는 않는다** —
+//   자동 전송하면 오탭이 곧 질문 전송이 되고, 직원은 자기가 안 쓴 질문이 올라간 걸 보게 된다.
+//   (사장 쪽 씨앗 칩 dashboard.tsx→/owner/coach 와 같은 params 패턴)
+export function JuniorAsk({ suggestEntry = true, seed }: { suggestEntry?: boolean; seed?: string } = {}) {
   const history = useChatStore((s) => s.history);
   const isLoading = useChatStore((s) => s.isLoading);
   const submit = useChatStore((s) => s.submit);
@@ -108,7 +111,10 @@ export function JuniorAsk({ suggestEntry = true }: { suggestEntry?: boolean } = 
   const unknownQueue = useUnknownQueueStore((s) => s.queue);
 
   const router = useRouter();
-  const [input, setInput] = useState('');
+  // 홈 예시 칩이 넘긴 문구로 입력칸을 시작한다. effect가 아니라 **초기값**인 이유 —
+  // 홈 칩 → goToTab(replace)은 이 화면을 새로 마운트하므로 초기값이면 충분하고,
+  // effect로 하면 사용자가 타이핑한 뒤 리렌더에서 덮어쓸 위험만 생긴다.
+  const [input, setInput] = useState(seed ?? '');
   const [focused, setFocused] = useState(false);
   const scrollRef = useRef<ScrollView | null>(null);
   // 첫 진입(마운트·기존 기록 hydrate)은 애니 없이 바닥으로 '점프' → 히스토리를 위에서부터 스크롤해 내려오는

@@ -1,4 +1,5 @@
 import { View, Text, StyleSheet, Pressable, TextInput } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 
 import { isSquarePublishable } from '@/lib/utils/buildEntry';
 import { getCategoryMeta } from '@/lib/utils/category';
@@ -77,7 +78,8 @@ export function MiniSquareCard({
           ))}
           {square.action.scripts.map((s, i) => (
             <View key={`sc-${i}`} style={[cardStyles.scriptBox, { borderColor: meta.color }]}>
-              <Text style={cardStyles.scriptMark}>💬</Text>
+              {/* 2026-08-06: 💬 → 아이콘(ADR-003 예외 3범주 밖 — 워딩 §2.3 적용) */}
+              <Ionicons name="chatbubble-outline" size={13} color={InkColors.ink3} />
               <Text style={cardStyles.scriptText}>“{s}”</Text>
             </View>
           ))}
@@ -223,7 +225,6 @@ const cardStyles = StyleSheet.create({
     flexDirection: 'row', gap: 8, borderWidth: 1, borderRadius: Radius.sm,
     paddingHorizontal: 12, paddingVertical: 10, marginTop: 2, backgroundColor: InkColors.bg,
   },
-  scriptMark: { fontSize: 14 },
   scriptText: { flex: 1, fontSize: 15, color: InkColors.ink, fontStyle: 'italic', lineHeight: 22 },
 
   actionRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 2 },
