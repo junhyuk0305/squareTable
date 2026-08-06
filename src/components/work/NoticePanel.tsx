@@ -326,7 +326,7 @@ function NoticeCard({
 
 const s = StyleSheet.create({
   scroll: { padding: 13, gap: 11 },
-  empty: { textAlign: 'center', color: InkColors.ink3, fontSize: 15, marginTop: 40 },
+  empty: { textAlign: 'center', color: InkColors.ink2, fontSize: 15, marginTop: 40 },
 
   card: { backgroundColor: InkColors.bg, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md, padding: 12, ...Elevation.e1 },
   cardPinned: { borderColor: InkColors.ink3 },

@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TextInput, Pressable, ActivityIndicator } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, Redirect } from 'expo-router';
 import { useSessionStore } from '@/lib/store/useSessionStore';
@@ -11,6 +12,7 @@ import { Space } from '@/lib/theme/layout';
 import { isValidPhone, normalizePhone, formatPhone, passwordError } from '@/lib/utils/validation';
 import { INDUSTRIES } from '@/lib/config/industry';
 import { HeaderBackButton } from '@/components/HeaderBackButton';
+import { SectionLabel } from '@/components/SectionLabel';
 import { Appear } from '@/components/Appear';
 
 // 프로필 편집 + 비밀번호 변경 (오너·주니어 공용).
@@ -58,27 +60,51 @@ function AccountEditForm() {
   const [pw2, setPw2] = useState('');
   const [busy, setBusy] = useState(false);
 
-  // 가게 이름 편집(사장 전용)
+  // 비밀번호는 이 화면에서 가장 드물게 쓰는 폼이라 접어 둔다(2026-08-06).
+  // 접힘 상태에서도 여는 줄 자체는 항상 렌더되므로 되돌릴 수단이 함께 사라지지 않는다.
+  const [pwOpen, setPwOpen] = useState(false);
+  const pwRef = useRef<TextInput>(null);
+
+  // 가게 이름 + 업종 편집(사장 전용) — 둘 다 같은 unit 속성이라 한 카드·한 저장으로 묶는다(2026-08-06).
+  // 업종은 노하우팩 매칭 키.
   const [store, setStore] = useState(storeName);
   const [remaining, setRemaining] = useState(() => storeRenameInfo().remaining);
-
-  // 업종 편집(사장 전용) — 가게 이름과 같은 unit 속성. 노하우팩 매칭 키.
   const [biz, setBiz] = useState(industry);
-  const saveIndustry = async () => {
+
+  const nameChanged = store.trim() !== storeName;
+  const bizChanged = !!biz && biz !== industry;
+
+  const saveStoreInfo = async () => {
+    if (!store.trim()) return showToast('매장 이름을 입력해주세요.', 'warn');
     if (!biz) return showToast('업종을 선택해주세요.', 'warn');
     setBusy(true);
-    const { error } = await updateIndustry(biz);
+    // 바뀐 쪽만 호출한다 — 이름이 그대로인데 renameStore를 부르면 '기존과 같은 이름' 에러가 떠서
+    // 업종만 고친 저장이 실패로 보인다. 이름 변경 제한(14일 2회)의 판정은 renameStore·서버가 SSOT.
+    // ★한쪽만 실패하는 경우를 따로 말한다(2026-08-06 검증에서 잡힘).
+    //   이름·업종을 한 버튼으로 합치면서, 이름이 거절되면 업종이 실제로 저장됐는데도
+    //   토스트에 이름 에러만 떠서 "아무것도 저장 안 됐다"로 읽혔다.
+    let nameErr: string | null = null;
+    let bizErr: string | null = null;
+    if (nameChanged) {
+      const { error, remaining: left } = await renameStore(store.trim());
+      setRemaining(left);
+      nameErr = error;
+    }
+    // 이름이 거절돼도(횟수 소진 등) 업종은 따로 저장한다 — 한쪽 실패가 다른 쪽을 막지 않는다.
+    if (bizChanged) {
+      const { error } = await updateIndustry(biz);
+      bizErr = error;
+    }
     setBusy(false);
-    showToast(error ?? '업종을 변경했어요.', error ? 'warn' : 'good');
-  };
 
-  const saveStore = async () => {
-    if (!store.trim()) return showToast('매장 이름을 입력해주세요.', 'warn');
-    setBusy(true);
-    const { error, remaining: left } = await renameStore(store.trim());
-    setBusy(false);
-    setRemaining(left);
-    showToast(error ?? '매장 이름을 변경했어요.', error ? 'warn' : 'good');
+    const bizSaved = bizChanged && !bizErr;
+    if (nameErr && bizSaved) {
+      // 부분 성공 — 무엇이 됐고 무엇이 안 됐는지 둘 다 말한다.
+      showToast(`업종은 저장했어요. ${nameErr}`, 'warn');
+    } else {
+      const err = nameErr ?? bizErr;
+      showToast(err ?? '매장 정보를 저장했어요.', err ? 'warn' : 'good');
+    }
   };
 
   const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -114,12 +140,19 @@ function AccountEditForm() {
     showToast('비밀번호를 변경했어요.', 'good');
   };
 
+  // 펼치면 곧바로 입력 대기 상태로 — 펼치고 다시 탭하게 만들지 않는다(허브의 코드 입력 줄과 같은 규칙).
+  const togglePw = () => {
+    const next = !pwOpen;
+    setPwOpen(next);
+    if (next) setTimeout(() => pwRef.current?.focus(), 120);
+  };
+
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
       <Stack.Screen options={{ headerShown: true, title: '프로필 편집', headerLeft: () => <HeaderBackButton /> }} />
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
         <Appear delay={0}>
-          <Text style={styles.group}>기본 정보</Text>
+          <SectionLabel title="기본 정보" />
         </Appear>
         <Appear delay={0}>
         <View style={styles.card}>
@@ -159,10 +192,13 @@ function AccountEditForm() {
         {role === 'owner' && (
           <>
             <Appear delay={60}>
-              <Text style={[styles.group, { color: BrandColors.brand }]}>매장 이름<Text style={styles.req}> *</Text> · 사장님만</Text>
+              <SectionLabel title="매장 정보" hint="사장님만 바꿀 수 있어요" />
             </Appear>
             <Appear delay={60}>
+            {/* 매장 이름과 업종은 같은 매장 속성이라 한 카드 안 두 행으로 둔다 — 카드가 나뉘어 있으면
+                저장 버튼도 나뉘고, 사장 화면에 주 액션이 세 개가 된다(2026-08-06). */}
             <View style={[styles.card, styles.storeCard]}>
+              <Text style={styles.label}>매장 이름<Text style={styles.req}> *</Text></Text>
               <TextInput value={store} onChangeText={setStore} placeholder="예: 우리 카페 신촌점" placeholderTextColor={InkColors.ink3} style={styles.input} />
               <View style={styles.storeMetaRow}>
                 <View style={styles.storeChip}>
@@ -170,21 +206,10 @@ function AccountEditForm() {
                 </View>
                 <Text style={styles.storeRemain}>남은 변경 {remaining}회</Text>
               </View>
-              <Pressable
-                disabled={busy || remaining <= 0 || !store.trim()}
-                onPress={saveStore}
-                style={({ pressed }) => [styles.primary, { marginTop: 4 }, pressed && { opacity: 0.88 }, (busy || remaining <= 0 || !store.trim()) && { opacity: 0.5 }]}
-              >
-                {busy ? <ActivityIndicator color="#FFF" /> : <Text style={styles.primaryText}>{remaining <= 0 ? '변경 횟수 소진' : '매장 이름 저장'}</Text>}
-              </Pressable>
-            </View>
-            </Appear>
 
-            <Appear delay={120}>
-              <Text style={[styles.group, { color: BrandColors.brand }]}>업종<Text style={styles.req}> *</Text> · 사장님만</Text>
-            </Appear>
-            <Appear delay={120}>
-            <View style={[styles.card, styles.storeCard]}>
+              <View style={styles.rowDivider} />
+
+              <Text style={styles.label}>업종<Text style={styles.req}> *</Text></Text>
               <View style={styles.chipWrap}>
                 {INDUSTRIES.map((it) => (
                   <Pressable key={it} onPress={() => setBiz(it)} style={[styles.chip, biz === it && styles.chipOn]}>
@@ -192,61 +217,80 @@ function AccountEditForm() {
                   </Pressable>
                 ))}
               </View>
+              {/* 이름 변경 횟수가 0이어도 버튼을 막지 않는다 — 막으면 업종까지 못 고치게 된다.
+                  이름만 서버가 거절하고 업종은 저장된다. */}
               <Pressable
-                disabled={busy || !biz || biz === industry}
-                onPress={saveIndustry}
-                style={({ pressed }) => [styles.primary, { marginTop: 4 }, pressed && { opacity: 0.88 }, (busy || !biz || biz === industry) && { opacity: 0.5 }]}
+                disabled={busy || !(nameChanged || bizChanged)}
+                onPress={saveStoreInfo}
+                style={({ pressed }) => [styles.secondary, pressed && { opacity: 0.88 }, (busy || !(nameChanged || bizChanged)) && { opacity: 0.5 }]}
               >
-                {busy ? <ActivityIndicator color="#FFF" /> : <Text style={styles.primaryText}>업종 저장</Text>}
+                {busy ? <ActivityIndicator color={InkColors.ink} /> : <Text style={styles.secondaryText}>매장 정보 저장</Text>}
               </Pressable>
             </View>
             </Appear>
           </>
         )}
 
-        <Appear delay={180}>
-          <Text style={styles.group}>비밀번호 변경</Text>
-        </Appear>
-        <Appear delay={180}>
-        <View style={styles.card}>
-          <Text style={styles.label}>새 비밀번호<Text style={styles.req}> *</Text></Text>
-          {/* autoComplete="new-password": 브라우저/비번 매니저가 '기존 비밀번호'를 자동완성하지 못하게 막는다.
-              (이메일 입력이 생기며 이 화면이 로그인 폼으로 오인돼 저장된 비번이 채워지던 보안 문제 방지) */}
-          <TextInput
-            value={pw}
-            onChangeText={setPw}
-            placeholder="영문·숫자 조합 9자 이상"
-            placeholderTextColor={InkColors.ink3}
-            secureTextEntry
-            autoComplete="new-password"
-            textContentType="newPassword"
-            autoCapitalize="none"
-            autoCorrect={false}
-            style={styles.input}
-          />
-          {pw.length > 0 && (
-            <Text style={[styles.pwHint, passwordError(pw) ? styles.pwBad : styles.pwOk]}>
-              {passwordError(pw) ?? '✓ 사용할 수 있는 비밀번호예요'}
-            </Text>
-          )}
-          <Text style={styles.label}>새 비밀번호 확인<Text style={styles.req}> *</Text></Text>
-          <TextInput
-            value={pw2}
-            onChangeText={setPw2}
-            placeholder="다시 입력"
-            placeholderTextColor={InkColors.ink3}
-            secureTextEntry
-            autoComplete="new-password"
-            textContentType="newPassword"
-            autoCapitalize="none"
-            autoCorrect={false}
-            style={styles.input}
-          />
-          <Pressable disabled={busy || !pw || !pw2} onPress={savePw} style={({ pressed }) => [styles.secondary, pressed && { opacity: 0.88 }, (busy || !pw || !pw2) && { opacity: 0.5 }]}>
-            <Text style={styles.secondaryText}>비밀번호 변경</Text>
+        {/* 비밀번호 변경은 카드가 아니라 접힌 한 줄 — 이 화면에서 가장 드문 작업이고,
+            카드가 계속 이어지면 전부 같은 무게로 읽힌다(배치 규칙 ①). 2026-08-06 */}
+        <Appear delay={120}>
+          <Pressable
+            onPress={togglePw}
+            accessibilityRole="button"
+            accessibilityState={{ expanded: pwOpen }}
+            accessibilityLabel="비밀번호 변경"
+            style={({ pressed }) => [styles.pwToggle, pressed && { opacity: 0.7 }]}
+          >
+            <Ionicons name="lock-closed-outline" size={17} color={InkColors.ink2} />
+            <Text style={styles.pwToggleText}>비밀번호 변경</Text>
+            <Ionicons name={pwOpen ? 'chevron-up' : 'chevron-down'} size={16} color={InkColors.ink3} />
           </Pressable>
-        </View>
         </Appear>
+
+        {pwOpen && (
+          <Appear delay={0}>
+          <View style={styles.pwPanel}>
+            <Text style={styles.label}>새 비밀번호<Text style={styles.req}> *</Text></Text>
+            {/* autoComplete="new-password": 브라우저/비번 매니저가 '기존 비밀번호'를 자동완성하지 못하게 막는다.
+                (이메일 입력이 생기며 이 화면이 로그인 폼으로 오인돼 저장된 비번이 채워지던 보안 문제 방지) */}
+            <TextInput
+              ref={pwRef}
+              value={pw}
+              onChangeText={setPw}
+              placeholder="영문·숫자 조합 9자 이상"
+              placeholderTextColor={InkColors.ink3}
+              secureTextEntry
+              autoComplete="new-password"
+              textContentType="newPassword"
+              autoCapitalize="none"
+              autoCorrect={false}
+              style={styles.input}
+            />
+            {pw.length > 0 && (
+              <Text style={[styles.pwHint, passwordError(pw) ? styles.pwBad : styles.pwOk]}>
+                {passwordError(pw) ?? '✓ 사용할 수 있는 비밀번호예요'}
+              </Text>
+            )}
+            <Text style={styles.label}>새 비밀번호 확인<Text style={styles.req}> *</Text></Text>
+            <TextInput
+              value={pw2}
+              onChangeText={setPw2}
+              placeholder="다시 입력"
+              placeholderTextColor={InkColors.ink3}
+              secureTextEntry
+              autoComplete="new-password"
+              textContentType="newPassword"
+              autoCapitalize="none"
+              autoCorrect={false}
+              style={styles.input}
+            />
+            {/* 여는 줄과 같은 말을 쓰지 않는다 — 위아래로 겹치면 어느 쪽을 눌러야 하는지 흐려진다. */}
+            <Pressable disabled={busy || !pw || !pw2} onPress={savePw} style={({ pressed }) => [styles.secondary, pressed && { opacity: 0.88 }, (busy || !pw || !pw2) && { opacity: 0.5 }]}>
+              <Text style={styles.secondaryText}>새 비밀번호 저장</Text>
+            </Pressable>
+          </View>
+          </Appear>
+        )}
 
         <View style={{ height: 24 }} />
       </ScrollView>
@@ -258,8 +302,8 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: InkColors.cream },
   loading: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   scroll: { padding: 20, gap: 8 },
-  group: { fontSize: 13, fontWeight: '800', color: InkColors.ink3, marginLeft: 4, marginTop: 8 },
   card: { backgroundColor: '#FFFFFF', borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, padding: 16, gap: 8, marginBottom: 8 },
+  rowDivider: { height: 1, backgroundColor: InkColors.line, marginVertical: Space.xs },
   label: { fontSize: 13, fontWeight: '700', color: InkColors.ink2, marginTop: 4 },
   req: { color: BrandColors.accentText, fontWeight: '900' },
   input: { borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md, paddingHorizontal: 14, paddingVertical: 13, fontSize: 16, color: InkColors.ink, backgroundColor: '#FFFFFF' },
@@ -277,6 +321,20 @@ const styles = StyleSheet.create({
   storeChip: { backgroundColor: BrandColors.brandSoft, borderRadius: Radius.pill, paddingVertical: 5, paddingHorizontal: 10 },
   storeChipText: { fontSize: 11, fontWeight: '700', color: InkColors.ink2 },
   storeRemain: { fontSize: 12, color: InkColors.ink3, fontWeight: '600' },
+  // 비밀번호 여는 줄 — 카드와 형태를 일부러 다르게 둔다(상하 보더만 있는 행 = 카드 아님).
+  pwToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    minHeight: 52,
+    paddingHorizontal: Space.xs,
+    marginTop: Space.sm,
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: InkColors.line,
+  },
+  pwToggleText: { flex: 1, fontSize: 15, fontWeight: '800', color: InkColors.ink },
+  pwPanel: { gap: Space.sm, paddingHorizontal: Space.xs, paddingBottom: Space.sm },
   primary: { marginTop: 12, backgroundColor: BrandColors.brand, paddingVertical: 15, borderRadius: Radius.md, alignItems: 'center' },
   primaryText: { color: '#FFFFFF', fontSize: 15, fontWeight: '800' },
   secondary: { marginTop: 12, backgroundColor: InkColors.bgSoft, paddingVertical: 15, borderRadius: Radius.md, alignItems: 'center', borderWidth: 1, borderColor: InkColors.line },

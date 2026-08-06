@@ -106,7 +106,7 @@ const report = (id, screen, texts, bad) => {
   if (old.length) console.log(`     ↳ 참고: 기존 ink3(#a4a29b) 저대비 ${old.length}건 — 이번 변경 밖의 부채`);
 };
 
-let ownerId, juniorId, oEmail, jEmail, hEmail;
+let ownerId, juniorId, oEmail, jEmail, hEmail, eEmail;
 
 async function main() {
   // ── 셋업: 사장+매장+직원 합류, 노하우 3건(1건 미검증), 미답변 질문 2건, 오늘 업무 4건 ──
@@ -211,18 +211,36 @@ async function main() {
   const lowContrastTexts = (page) =>
     page.evaluate(() => {
       const out = [];
+      /**
+       * 실효 배경색 — **반투명 면은 부모와 알파 합성한다.**
+       * 옛 판본은 alpha가 0만 아니면 그대로 반환해서, 검정 히어로 위에 얹힌
+       * rgba(255,255,255,0.12) 오버레이를 '흰 배경'으로 읽었다. 그 위 흰 글자가 1.00으로 나온다
+       * (2026-08-06 실측에서 오탐으로 드러남).
+       */
       const bgOf = (el) => {
+        const layers = [];
         let n = el;
         while (n && n !== document.documentElement) {
-          const bg = getComputedStyle(n).backgroundColor;
-          const m = String(bg).match(/rgba?\(([^)]+)\)/);
+          const m = String(getComputedStyle(n).backgroundColor).match(/rgba?\(([^)]+)\)/);
           if (m) {
             const p = m[1].split(',').map(parseFloat);
-            if (!(p.length >= 4 && p[3] === 0)) return bg;
+            const a = p.length >= 4 ? p[3] : 1;
+            if (a > 0) {
+              layers.push([p[0], p[1], p[2], a]);
+              if (a >= 1) break; // 불투명 면을 만나면 그 아래는 안 보인다
+            }
           }
           n = n.parentElement;
         }
-        return 'rgb(255,255,255)';
+        // 아래(마지막)부터 위로 덮어 합성. 최하단은 흰 종이.
+        let [r, g, b] = [255, 255, 255];
+        for (let i = layers.length - 1; i >= 0; i--) {
+          const [lr, lg, lb, la] = layers[i];
+          r = lr * la + r * (1 - la);
+          g = lg * la + g * (1 - la);
+          b = lb * la + b * (1 - la);
+        }
+        return `rgb(${Math.round(r)}, ${Math.round(g)}, ${Math.round(b)})`;
       };
       // 아이콘 폰트(Ionicons)는 사용자 영역(U+E000~U+F8FF) 글리프를 텍스트로 렌더한다.
       // 이건 '텍스트'가 아니라 '그림'이므로 WCAG 비텍스트 3:1 대상이고, 여기서는 제외한다.
@@ -471,6 +489,130 @@ async function main() {
     check('B5-11 ③ 펼치면 코드 입력이 열린다', await see(ph, '코드가 없으신가요'));
     await shot(ph, '07-junior-hub-3-joined');
 
+    // ═══════════ B10 카드 3연속 해체 6화면 — 형태를 DOM에서 실측 ═══════════
+    // "제목 → 카드" 반복이 이번 개편이 없애려던 증상이다. 배치 규칙 ①(같은 형태 연속 3회 이상 금지).
+    // 정적 grep으로는 판정 못 한다(형태는 렌더돼야 안다) → 형제 노드를 훑어 카드 런(run)을 잰다.
+    console.log('\n[B10] 카드 3연속 해체 — 6화면');
+    /** 스크롤 컨테이너의 형제들 중 '카드'(흰 면+보더/그림자+라운드)가 몇 개나 연달아 있나. */
+    const maxCardRun = (page) =>
+      page.evaluate(() => {
+        const isCard = (el) => {
+          const cs = getComputedStyle(el);
+          const r = el.getBoundingClientRect();
+          return (
+            cs.backgroundColor === 'rgb(255, 255, 255)' &&
+            parseFloat(cs.borderRadius) >= 10 &&
+            (parseFloat(cs.borderTopWidth) >= 1 || cs.boxShadow !== 'none') &&
+            r.width > 260
+          );
+        };
+        // 카드를 가장 많이 품은 부모 = 화면 본문 컨테이너로 본다.
+        let best = null, bestN = 0;
+        for (const p of document.querySelectorAll('div')) {
+          const n = [...p.children].filter((c) => c.nodeType === 1 && isCard(c)).length;
+          if (n > bestN) { bestN = n; best = p; }
+        }
+        if (!best) return { run: 0, cards: 0 };
+        let run = 0, cur = 0;
+        for (const c of best.children) {
+          if (c.nodeType !== 1) continue;
+          // Appear 래퍼가 카드를 한 겹 감싸는 경우가 있어 자기 자신 또는 단일 자식을 본다.
+          const node = isCard(c) ? c : (c.children.length === 1 && isCard(c.children[0]) ? c.children[0] : null);
+          if (node) { cur++; run = Math.max(run, cur); } else cur = 0;
+        }
+        return { run, cards: bestN };
+      });
+    /** 솔리드 풀폭 버튼(=Primary로 읽히는 것) 개수. 검정/브랜드 면 + 흰 글자 + 폭 260↑. */
+    const primaryCount = (page) =>
+      page.evaluate(() =>
+        [...document.querySelectorAll('[role="button"]')].filter((el) => {
+          const cs = getComputedStyle(el);
+          const r = el.getBoundingClientRect();
+          if (r.width < 260 || r.height < 40) return false;
+          const bg = cs.backgroundColor;
+          return /^rgb\((17, 17, 17|204, 42, 42|254, 229, 0)\)$/.test(bg.replace(/\s+/g, ' '));
+        }).length,
+      );
+
+    for (const [path, name] of [
+      ['/owner/staff', '직원·급여'],
+      ['/owner/store-config', '매장 정보'],
+      ['/owner/payroll', '급여 설정'],
+      ['/junior/settings', '직원 설정'],
+      ['/account-edit', '프로필 편집'],
+    ]) {
+      const pg = name === '직원 설정' ? pj : po;
+      await pg.goto(`${ORIGIN}${path}`, { waitUntil: 'domcontentloaded' });
+      await pg.waitForTimeout(2600);
+      const { run, cards } = await maxCardRun(pg);
+      const prim = await primaryCount(pg);
+      check(`B10 ${name} — 카드 연속 ≤2 (실측 ${run} · 카드 ${cards})`, run <= 2, `run=${run}`);
+      check(`B10 ${name} — Primary ≤1 (실측 ${prim})`, prim <= 1, `primary=${prim}`);
+      await shot(pg, `11-cards-${path.split('/').pop()}`);
+    }
+    // 직원 근무표는 세그먼트 안이라 따로 — '교대 요청' 탭에서 3연속이었다.
+    await pj.goto(`${ORIGIN}/junior/schedule`, { waitUntil: 'domcontentloaded' });
+    await pj.waitForTimeout(2400);
+    const swapTab = pj.getByText('교대', { exact: false }).first();
+    if (await swapTab.isVisible().catch(() => false)) {
+      await swapTab.dispatchEvent('click');
+      await pj.waitForTimeout(1600);
+    }
+    const sched = await maxCardRun(pj);
+    check(`B10 근무표(교대 요청) — 카드 연속 ≤2 (실측 ${sched.run})`, sched.run <= 2, `run=${sched.run}`);
+    await shot(pj, '11-cards-junior-schedule');
+
+    // ═══════════ B9 빈 화면 문구 대비 — ★데이터 0인 매장으로 따로 잰다 ═══════════
+    // 이 하니스의 구조적 공백이었다: 위 시드가 노하우 3건·업무 4건·질문 2건을 넣고 돌기 때문에
+    // **빈 화면이 한 번도 렌더되지 않았다.** 2026-08-06 조사에서 "문제 없는 곳 39건을 세고,
+    // 진짜 문제인 빈 화면 문구 34곳을 0건으로 셌다"가 드러났다.
+    // → 아무것도 없는 매장을 하나 더 세워 빈 화면만 훑는다. 여기서 재는 게 진짜 본문이다.
+    console.log('\n[B9] 빈 화면 문구 — 데이터 0 매장');
+    const empty = mk();
+    const phoneE = `0106${s.slice(0, 7)}`;
+    await seedVerifiedPhones(URL_, SRV, [phoneE]);
+    eEmail = `qa_blk_e_${s}@example.com`;
+    const eUp = await empty.auth.signUp({ email: eEmail, password: pw, options: { data: { name: 'QA빈매장사장', role: 'owner', phone: phoneE, birth_date: '1985-06-06' } } });
+    if (eUp.error) throw new Error('empty owner signUp: ' + eUp.error.message);
+    const { data: c2, error: e2 } = await empty.rpc('create_store', { p_store_name: 'QA빈카페', p_industry: '카페·디저트', p_biz_no: null });
+    const row2 = Array.isArray(c2) ? c2[0] : c2;
+    if (e2 || !row2?.unit_id) throw new Error('create_store(empty): ' + (e2?.message ?? 'no row'));
+    await admin.rpc('admin_activate_store', { p_unit_id: row2.unit_id, p_days: 1, p_plan: 'multi' });
+    await empty.rpc('switch_active_unit', { p_unit_id: row2.unit_id });
+
+    const pe = await newPage(eEmail);
+    // 빈 화면이 실제로 뜨는 경로들 — 노하우 0 · 직원 0 · 근무표 0 · 제안 0 · 질문 0 · 퀴즈 0
+    const EMPTY_ROUTES = [
+      ['/owner/staff', '직원'],
+      ['/owner/schedule', '근무표'],
+      ['/owner/suggestions', '제안함'],
+      ['/owner/inbox', '받은질문'],
+      ['/owner/training', '퀴즈'],
+      ['/owner/knowledge', '노하우'],
+    ];
+    let emptyChecked = 0;
+    const emptyBad = [];
+    const emptyOcc = [];
+    for (const [path, name] of EMPTY_ROUTES) {
+      await pe.goto(`${ORIGIN}${path}`, { waitUntil: 'domcontentloaded' });
+      await pe.waitForTimeout(2600);
+      const texts = await lowContrastTexts(pe);
+      emptyChecked += texts.length;
+      emptyOcc.push(...texts.filter((t) => t.occluded).map((t) => `${name}:"${t.text}"`));
+      // ★대상은 **본문(≥15sp)만**이다. simplicity-voice §4가 하한을 거는 자리가 정확히 그것이고,
+      //   2026-08-06에 고친 34곳도 전부 ≥15sp였다(그래서 '진짜 문제'로 분류된 것).
+      //   탭 라벨·배지·카운트·칩·섹션 힌트(10~13sp)는 규칙이 명시적으로 하한 대상에서 뺀 자리라 세지 않는다.
+      // preexisting(ink3) 면제도 여기서는 쓰지 않는다 — 이 34곳이 정확히 그 ink3였고, 그래서 고친 것이다.
+      emptyBad.push(...lowContrast(texts.filter((t) => t.size >= 15)).map((t) => ({ ...t, screen: name })));
+      await shot(pe, `10-empty-${path.split('/').pop()}`);
+    }
+    check(`B9-0 빈 화면 측정 시점에 가려진 텍스트 0건`, emptyOcc.length === 0, emptyOcc.slice(0, 3).join(' '));
+    check(
+      `B9-1 ★빈 화면 본문(≥15sp) 저대비 0건 (6화면 · 텍스트 ${emptyChecked}개 스캔)`,
+      emptyBad.length === 0,
+      emptyBad.slice(0, 8).map((t) => `[${t.screen}] ${fmt(t)}`).join(' | '),
+    );
+
     // ═══════════ B6 콘솔 에러 ═══════════
     const fatal = errors.filter((e) => !/favicon|Download the React DevTools|ResizeObserver/.test(e));
     check(`B6 콘솔 치명 에러 0 (총 ${errors.length})`, fatal.length === 0, fatal.slice(0, 4).join(' | '));
@@ -487,13 +629,13 @@ try {
 } finally {
   // ── 자가정리 ──
   try {
-    for (const email of [oEmail, jEmail, hEmail]) {
+    for (const email of [oEmail, jEmail, hEmail, eEmail]) {
       if (!email) continue;
       const c = mk();
       const r = await c.auth.signInWithPassword({ email, password: pw });
       if (!r.error) await c.rpc('delete_my_account');
     }
-    await cleanupSeededPhones(URL_, SRV, [`0107${s.slice(0, 7)}`, `0108${s.slice(0, 7)}`, `0109${s.slice(0, 7)}`]);
+    await cleanupSeededPhones(URL_, SRV, [`0107${s.slice(0, 7)}`, `0108${s.slice(0, 7)}`, `0109${s.slice(0, 7)}`, `0106${s.slice(0, 7)}`]);
   } catch (e) { console.log('  (정리 일부 실패:', e.message, ')'); }
   console.log(`\n${fail === 0 ? '✅ PASS' : '❌ FAIL'} — 블록 어휘 실화면 QA · 통과 ${pass} / 실패 ${fail}`);
   console.log(`   스크린샷: ${SHOTS}/`);

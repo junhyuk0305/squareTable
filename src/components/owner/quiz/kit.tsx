@@ -277,5 +277,5 @@ export const qst = StyleSheet.create({
   },
   rowText: { fontSize: 15, fontWeight: '700', color: InkColors.ink },
   rowMeta: { fontSize: 12, color: InkColors.ink3, marginTop: 1 },
-  emptyText: { fontSize: 15, color: InkColors.ink3, textAlign: 'center', paddingVertical: Space.md, lineHeight: 21 },
+  emptyText: { fontSize: 15, color: InkColors.ink2, textAlign: 'center', paddingVertical: Space.md, lineHeight: 21 },
 });

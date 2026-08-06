@@ -361,7 +361,7 @@ function AnswerSheet({
 const s = StyleSheet.create({
   flex: { flex: 1 },
   scroll: { padding: Space.gutter, gap: Space.sm },
-  empty: { fontSize: 15, color: InkColors.ink3, paddingVertical: 14, textAlign: 'center' },
+  empty: { fontSize: 15, color: InkColors.ink2, paddingVertical: 14, textAlign: 'center' },
   list: { gap: Space.sm, marginBottom: Space.sm },
 
   qCard: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, backgroundColor: InkColors.bg, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md, padding: Space.md, ...Elevation.e1 },

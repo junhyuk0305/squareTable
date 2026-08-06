@@ -371,7 +371,7 @@ const s = StyleSheet.create({
   legendChipText: { fontSize: 10.5, fontWeight: '700', color: InkColors.ink2 },
 
   listScroll: { paddingHorizontal: 13, paddingTop: 8, gap: 11 },
-  empty: { textAlign: 'center', color: InkColors.ink3, fontSize: 15, marginTop: 30 },
+  empty: { textAlign: 'center', color: InkColors.ink2, fontSize: 15, marginTop: 30 },
   group: { backgroundColor: InkColors.bg, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md, ...Elevation.e1 },
   groupHead: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, minHeight: 46 },
   groupName: { fontWeight: '800', fontSize: 13.5, color: InkColors.ink },

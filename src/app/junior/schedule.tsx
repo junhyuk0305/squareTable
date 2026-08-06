@@ -25,14 +25,15 @@ import { mondayOf, fmtDateKo, closedDaysLabel, weekdayOf, addDays } from '@/lib/
 import { formatAsked } from '@/lib/utils/time';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Elevation, Radius } from '@/lib/theme/elevation';
+import { Space } from '@/lib/theme/layout';
 
 const STATUS_META: Record<
   SwapRequest['status'],
   { label: string; color: string; bg: string }
 > = {
-  open: { label: '수락 대기', color: BrandColors.warnText, bg: '#FBF1DC' },
-  accepted: { label: '사장님 승인 대기', color: BrandColors.warnText, bg: '#FBF1DC' },
-  approved: { label: '확정', color: BrandColors.goodText, bg: '#E4F2E8' },
+  open: { label: '수락 대기', color: BrandColors.warnText, bg: BrandColors.warnSoft },
+  accepted: { label: '사장님 승인 대기', color: BrandColors.warnText, bg: BrandColors.warnSoft },
+  approved: { label: '확정', color: BrandColors.goodText, bg: BrandColors.goodSoft },
   rejected: { label: '사장님 반려', color: BrandColors.badText, bg: BrandColors.accentSoft },
   cancelled: { label: '취소됨', color: InkColors.ink3, bg: InkColors.bgSoft },
 };
@@ -51,6 +52,8 @@ export default function JuniorScheduleScreen() {
   const [monday, setMonday] = useState(() => mondayOf(today));
   const [composer, setComposer] = useState<{ date: string; template: ShiftTemplate } | null>(null);
   const [picking, setPicking] = useState(false);
+  // 지난 요청은 기본 접힘 — 목록 세 덩어리가 연달아 같은 형태로 쌓이던 걸 끊는다(2026-08-06).
+  const [showHistory, setShowHistory] = useState(false);
 
   const nameOf = (id: string) => (id === me ? '나' : staff.find((x) => x.id === id)?.name ?? '직원');
   const tplById = (id: string) => templates.find((t) => t.id === id);
@@ -82,16 +85,24 @@ export default function JuniorScheduleScreen() {
         tpl.start < t.end,
     );
   };
-  // 내가 올린 요청.
-  const mine = useMemo(() => swaps.filter((r) => r.requester_id === me), [swaps, me]);
-  // 마무리된 요청(이력).
-  const history = useMemo(
+  // 내가 올린 진행 중 요청. 날짜가 지났어도 열려 있으면 보여준다 — 취소 수단이 여기밖에 없어서
+  // 감추면 되돌릴 방법이 사라진다(예전엔 빈 판정에만 날짜 필터가 있어 '없어요'와 목록이 어긋났다).
+  const myOpen = useMemo(
+    () => swaps.filter((r) => r.requester_id === me && (r.status === 'open' || r.status === 'accepted')),
+    [swaps, me],
+  );
+  // 마무리된 요청(이력) — 매장 전체. 표시는 8건까지만 자른다.
+  // ★총합과 표시분을 나눈다(2026-08-06 검증에서 잡힘): 자른 뒤의 length를 접기 라벨에 쓰면
+  //   9건 이상 쌓였을 때 실제 개수와 무관하게 늘 "지난 요청 8건"이라 총합을 거짓으로 말한다.
+  const historyAll = useMemo(
     () =>
       swaps
         .filter((r) => ['approved', 'rejected', 'cancelled'].includes(r.status))
         .sort((a, b) => b.updated_at.localeCompare(a.updated_at)),
     [swaps],
   );
+  const HISTORY_CAP = 8;
+  const history = useMemo(() => historyAll.slice(0, HISTORY_CAP), [historyAll]);
 
   // 현재 시각 "HH:MM"(오늘 이미 끝난 근무 제외용). 순수 헬퍼로 분리 — useMemo 안에서 new Date()를
   // 부르면 비순수라 React Compiler가 메모이즈를 못 한다(컴파일러가 헬퍼 호출 결과를 자동 메모이즈).
@@ -164,7 +175,7 @@ export default function JuniorScheduleScreen() {
           </>
         ) : (
           <View style={{ gap: 18 }}>
-            {/* 교대 요청 올리기 — 교대 탭의 주 진입점 */}
+            {/* 교대 요청 올리기 — 이 탭의 유일한 Primary(카드 안 수락 버튼은 보조 형태로 내렸다) */}
             <Appear delay={0}>
             <Pressable
               onPress={() => setPicking(true)}
@@ -177,7 +188,7 @@ export default function JuniorScheduleScreen() {
             </Pressable>
             </Appear>
 
-            {/* 내가 대응할 수 있는 요청 */}
+            {/* 내가 대응할 수 있는 요청 — 읽고 판단해서 수락까지 하는 유일한 목록이라 카드로 남긴다(배치⑤) */}
             <Appear delay={60}>
             <Section icon="people-outline" title="동료가 올린 요청" hint="수락하면 사장님 승인으로 넘어가요">
               {incoming.length === 0 ? (
@@ -199,7 +210,7 @@ export default function JuniorScheduleScreen() {
                         accessibilityLabel={r.kind === 'cover' ? '대타 수락하기' : '맞교환 수락하기'}
                         style={({ pressed }) => [styles.acceptBtn, pressed && { opacity: 0.85 }]}
                       >
-                        <Ionicons name="hand-left-outline" size={15} color="#fff" />
+                        <Ionicons name="hand-left-outline" size={15} color={BrandColors.goodText} />
                         <Text style={styles.acceptText}>
                           {r.kind === 'cover' ? '내가 대신할게요' : '맞교환 수락'}
                         </Text>
@@ -211,36 +222,77 @@ export default function JuniorScheduleScreen() {
             </Section>
             </Appear>
 
-            {/* 내가 올린 요청 */}
+            {/* 내가 올린 요청 — 상태만 확인하고 넘기는 목록이라 카드가 아니라 구분선 행으로 내린다(배치①) */}
             <Appear delay={120}>
             <Section icon="paper-plane-outline" title="내가 올린 요청">
-              {mine.filter((r) => (r.status === 'open' || r.status === 'accepted') && r.date >= today).length === 0 ? (
+              {myOpen.length === 0 ? (
                 <Empty text="진행 중인 요청이 없어요. 위 ‘교대 요청하기’로 올려보세요." />
               ) : (
-                mine
-                  .filter((r) => r.status === 'open' || r.status === 'accepted')
-                  .map((r) => (
-                    <SwapCard key={r.id} r={r} nameOf={nameOf} tplById={tplById}>
-                      <Pressable
-                        onPress={() => cancelSwap(r.id)}
-                        style={({ pressed }) => [styles.cancelBtn, pressed && { opacity: 0.7 }]}
-                      >
-                        <Text style={styles.cancelText}>요청 취소</Text>
-                      </Pressable>
-                    </SwapCard>
-                  ))
+                <View>
+                  {myOpen.map((r, i) => (
+                    <SwapRow
+                      key={r.id}
+                      r={r}
+                      nameOf={nameOf}
+                      tplById={tplById}
+                      divider={i > 0}
+                      action={
+                        <Pressable
+                          onPress={() => cancelSwap(r.id)}
+                          accessibilityRole="button"
+                          accessibilityLabel="요청 취소"
+                          style={({ pressed }) => [styles.cancelBtn, pressed && { opacity: 0.7 }]}
+                        >
+                          <Text style={styles.cancelText}>요청 취소</Text>
+                        </Pressable>
+                      }
+                    />
+                  ))}
+                </View>
               )}
             </Section>
             </Appear>
 
-            {/* 처리 결과 */}
+            {/* 처리 결과 — 세 번째 목록. 접기 행 하나로 강등하고, 토글은 펼친 뒤에도 자리에 남는다 */}
             {history.length > 0 && (
               <Appear delay={180}>
-              <Section icon="time-outline" title="지난 요청">
-                {history.slice(0, 8).map((r) => (
-                  <SwapCard key={r.id} r={r} nameOf={nameOf} tplById={tplById} />
-                ))}
-              </Section>
+              <View>
+                <Pressable
+                  onPress={() => setShowHistory((v) => !v)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`지난 요청 ${historyAll.length}건`}
+                  accessibilityState={{ expanded: showHistory }}
+                  style={({ pressed }) => [styles.disclosure, pressed && { opacity: 0.7 }]}
+                >
+                  <Ionicons name="time-outline" size={15} color={InkColors.ink2} />
+                  <Text style={styles.disclosureText}>지난 요청 {historyAll.length}건</Text>
+                  <Ionicons
+                    name={showHistory ? 'chevron-up' : 'chevron-down'}
+                    size={16}
+                    color={InkColors.ink3}
+                  />
+                </Pressable>
+                {showHistory && (
+                  <View>
+                    {history.map((r, i) => (
+                      <SwapRow
+                        key={r.id}
+                        r={r}
+                        nameOf={nameOf}
+                        tplById={tplById}
+                        showRequester
+                        divider={i > 0}
+                      />
+                    ))}
+                    {/* 잘렸으면 잘렸다고 말한다 — 조용한 절단은 "이게 전부"로 읽힌다. */}
+                    {historyAll.length > HISTORY_CAP && (
+                      <Text style={styles.historyMore}>
+                        최근 {HISTORY_CAP}건만 보여요
+                      </Text>
+                    )}
+                  </View>
+                )}
+              </View>
               </Appear>
             )}
           </View>
@@ -411,6 +463,64 @@ function SwapCard({
   );
 }
 
+/**
+ * 같은 교대 요청을 '행'으로 그린다 — 카드와 내용은 같고 크롬(배경·보더·그림자)만 뺀 형태.
+ * 카드 목록 아래에 카드 목록이 또 오면 같은 형태가 연달아 쌓여 전부 같은 것으로 읽힌다(2026-08-06).
+ * 수락처럼 판단이 필요한 목록은 카드로 두고, 상태만 확인하는 목록(내 요청·지난 요청)이 이 형태를 쓴다.
+ */
+function SwapRow({
+  r,
+  nameOf,
+  tplById,
+  showRequester,
+  divider,
+  action,
+}: {
+  r: SwapRequest;
+  nameOf: (id: string) => string;
+  tplById: (id: string) => ShiftTemplate | undefined;
+  /** 매장 전체가 섞이는 목록(지난 요청)에서만 누구 요청인지 밝힌다 — 내 목록에선 '나님'이 된다. */
+  showRequester?: boolean;
+  divider?: boolean;
+  action?: React.ReactNode;
+}) {
+  const meta = STATUS_META[r.status];
+  const tpl = tplById(r.template_id);
+  const tTpl = r.target_template_id ? tplById(r.target_template_id) : undefined;
+  return (
+    <View style={[styles.row, divider && styles.rowDivider]}>
+      <View style={styles.rowMain}>
+        <View style={styles.rowHead}>
+          <View style={[styles.statusTag, { backgroundColor: meta.bg }]}>
+            <Text style={[styles.statusText, { color: meta.color }]}>{meta.label}</Text>
+          </View>
+          <Text style={styles.rowKind}>{r.kind === 'cover' ? '대타' : '맞교환'}</Text>
+          <Text style={styles.cardTime}>{formatAsked(r.created_at)}</Text>
+        </View>
+
+        <Text style={styles.cardLine}>
+          {showRequester ? <Text style={styles.cardStrong}>{nameOf(r.requester_id)}님 · </Text> : null}
+          {fmtDateKo(r.date)} {tpl ? `${tpl.start}~${tpl.end}` : ''}
+        </Text>
+        {r.kind === 'swap' && r.target_date && (
+          <Text style={styles.cardLine}>
+            ↔ <Text style={styles.cardStrong}>{nameOf(r.target_staff_id ?? '')}</Text>님 ·{' '}
+            {fmtDateKo(r.target_date)} {tTpl ? `${tTpl.start}~${tTpl.end}` : ''}
+          </Text>
+        )}
+        {r.accepted_by && (
+          <Text style={styles.cardAccepted}>
+            {nameOf(r.accepted_by)}님이 수락{r.status === 'approved' ? ' · 확정' : ''}
+          </Text>
+        )}
+        {!!r.note && <Text style={styles.rowNote}>“{r.note}”</Text>}
+      </View>
+
+      {action}
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: InkColors.cream },
   scroll: { paddingHorizontal: 20, paddingBottom: 8, gap: 14 },
@@ -423,7 +533,7 @@ const styles = StyleSheet.create({
   heroCta: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: InkColors.ink, borderRadius: Radius.md, paddingVertical: 11, marginTop: 13 },
   heroCtaText: { fontSize: 13.5, fontWeight: '800', color: '#fff' },
   heroEmpty: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: InkColors.bg, borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, paddingVertical: 14, paddingHorizontal: 14, ...Elevation.e1 },
-  heroEmptyText: { flex: 1, fontSize: 13, fontWeight: '700', color: InkColors.ink2 },
+  heroEmptyText: { flex: 1, fontSize: 15, lineHeight: 21, fontWeight: '700', color: InkColors.ink2 },
 
   infoNote: { fontSize: 12, color: InkColors.ink3, paddingHorizontal: 2 },
   storeChip: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: InkColors.cream, borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, paddingVertical: 10, paddingHorizontal: 12 },
@@ -434,7 +544,7 @@ const styles = StyleSheet.create({
   reqBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, backgroundColor: InkColors.ink, borderRadius: Radius.md, paddingVertical: 14, ...Elevation.e1 },
   reqText: { fontSize: 15, fontWeight: '800', color: '#fff' },
 
-  empty: { fontSize: 15, color: InkColors.ink3, lineHeight: 22, paddingVertical: 6 },
+  empty: { fontSize: 15, color: InkColors.ink2, lineHeight: 22, paddingVertical: 6 },
 
   card: { backgroundColor: InkColors.bg, borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, padding: 14, gap: 6, ...Elevation.e1 },
   cardHead: { flexDirection: 'row', alignItems: 'center', gap: 6 },
@@ -451,9 +561,22 @@ const styles = StyleSheet.create({
   cardNote: { fontSize: 15, color: InkColors.ink2, fontStyle: 'italic', backgroundColor: InkColors.cream, borderRadius: Radius.sm, paddingHorizontal: 10, paddingVertical: 8 },
 
   conflict: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: BrandColors.accentSoft, borderRadius: Radius.sm, paddingHorizontal: 10, paddingVertical: 8, marginTop: 2 },
-  conflictText: { flex: 1, fontSize: 12, color: BrandColors.badText, fontWeight: '700', lineHeight: 17 },
-  acceptBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: InkColors.ink, borderRadius: Radius.md, paddingVertical: 12, marginTop: 4 },
-  acceptText: { fontSize: 14, fontWeight: '800', color: '#fff' },
-  cancelBtn: { alignItems: 'center', justifyContent: 'center', borderRadius: Radius.md, paddingVertical: 11, marginTop: 4, backgroundColor: InkColors.bgSoft, borderWidth: 1, borderColor: InkColors.line },
+  conflictText: { flex: 1, fontSize: 15, color: BrandColors.badText, fontWeight: '700', lineHeight: 21 },
+  // 카드 안 수락은 목록마다 반복돼 Primary가 될 수 없다 → 잉크 솔리드에서 초록 틴트(면 50 + 글자 800)로.
+  acceptBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: BrandColors.goodSoft, borderRadius: Radius.md, minHeight: 48, paddingVertical: 12, marginTop: 4 },
+  acceptText: { fontSize: 14, fontWeight: '800', color: BrandColors.goodText },
+  cancelBtn: { alignItems: 'center', justifyContent: 'center', borderRadius: Radius.md, minHeight: 48, paddingHorizontal: Space.md, backgroundColor: InkColors.bgSoft, borderWidth: 1, borderColor: InkColors.line },
   cancelText: { fontSize: 13.5, fontWeight: '700', color: InkColors.ink2 },
+
+  // 행(카드 아님) — 배경·보더·그림자 없이 구분선만. 우측에 행 액션(요청 취소)이 붙는다.
+  row: { flexDirection: 'row', alignItems: 'center', gap: Space.md, paddingVertical: Space.md },
+  rowDivider: { borderTopWidth: 1, borderTopColor: InkColors.line },
+  rowMain: { flex: 1, gap: Space.xs },
+  rowHead: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
+  rowKind: { fontSize: 12, fontWeight: '800', color: InkColors.ink2 },
+  rowNote: { fontSize: 15, lineHeight: 22, color: InkColors.ink2, fontStyle: 'italic' },
+
+  disclosure: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, minHeight: 48, paddingHorizontal: Space.lg, borderRadius: Radius.md, backgroundColor: InkColors.bgSoft },
+  disclosureText: { flex: 1, fontSize: 15, fontWeight: '700', color: InkColors.ink2 },
+  historyMore: { fontSize: 12, color: InkColors.ink3, paddingVertical: Space.sm, textAlign: 'center' },
 });

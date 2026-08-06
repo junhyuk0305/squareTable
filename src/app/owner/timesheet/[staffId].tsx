@@ -69,7 +69,7 @@ export default function OwnerTimesheetScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: InkColors.cream },
-  empty: { fontSize: 15, color: InkColors.ink3, padding: 24, textAlign: 'center', lineHeight: 22 },
+  empty: { fontSize: 15, color: InkColors.ink2, padding: 24, textAlign: 'center', lineHeight: 22 },
   backBtn: { alignSelf: 'center', minHeight: 48, justifyContent: 'center', paddingHorizontal: Space.xl, borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, backgroundColor: '#FFFFFF' },
   backBtnText: { fontSize: 15, fontWeight: '800', color: InkColors.ink },
   staffCard: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#FFFFFF', borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, padding: 14 },

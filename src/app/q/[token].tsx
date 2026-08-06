@@ -295,7 +295,7 @@ const st = StyleSheet.create({
   // 화면당 굵은 잉크는 하나(R4-1) — 제목만 잉크, 나머지는 ink2/ink3.
   title: { fontSize: 24, fontWeight: '900', color: InkColors.ink, lineHeight: 34 },
   lead: { fontSize: 17, fontWeight: '700', color: InkColors.ink2, lineHeight: 25, marginTop: Space.sm },
-  sub: { fontSize: 15, fontWeight: '600', color: InkColors.ink3, lineHeight: 22 },
+  sub: { fontSize: 15, fontWeight: '600', color: InkColors.ink2, lineHeight: 22 },
   input: {
     marginTop: Space.lg, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md,
     backgroundColor: InkColors.bg, paddingHorizontal: Space.md, paddingVertical: Space.md,
@@ -312,7 +312,7 @@ const st = StyleSheet.create({
 
   foot: { paddingHorizontal: Space.gutter, paddingTop: Space.sm, paddingBottom: Space.lg, borderTopWidth: 1, borderTopColor: InkColors.line },
   footWait: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Space.sm, minHeight: 56 },
-  footWaitText: { fontSize: 15, fontWeight: '700', color: InkColors.ink3 },
+  footWaitText: { fontSize: 15, fontWeight: '700', color: InkColors.ink2 },
   cta: { backgroundColor: InkColors.ink, borderRadius: Radius.md, paddingVertical: 16, alignItems: 'center', minHeight: 56, justifyContent: 'center' },
   ctaText: { color: '#FFFFFF', fontSize: 16, fontWeight: '800' },
 });

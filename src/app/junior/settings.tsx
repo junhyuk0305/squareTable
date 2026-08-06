@@ -9,7 +9,8 @@ import { usePayrollStore } from '@/lib/store/usePayrollStore';
 import { notifyAction } from '@/lib/utils/confirm';
 import { won } from '@/lib/utils/attendance';
 import { storeColor } from '@/lib/utils/storeColor';
-import { InkColors } from '@/lib/theme/colors';
+import { InkColors, BrandColors } from '@/lib/theme/colors';
+import { Space } from '@/lib/theme/layout';
 import { SettingsSection, SettingsRow, SettingsToggle } from '@/components/settings/SettingsKit';
 import { QuietHoursModal } from '@/components/settings/QuietHoursModal';
 import { PersonalizeSheet } from '@/components/settings/PersonalizeSheet';
@@ -80,24 +81,27 @@ export default function StoreSettings() {
     <SafeAreaView style={styles.safe} edges={['bottom']}>
       <Stack.Screen options={{ headerShown: true, title: '매장 설정' }} />
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        {/* 매장 헤더 — 색 점 + 매장명 + (있으면) 내 별칭. 탭하면 개인화 시트. */}
-        <Pressable
-          onPress={openPersonalize}
-          style={({ pressed }) => [styles.storeHead, pressed && { opacity: 0.7 }]}
-          accessibilityRole="button"
-          accessibilityLabel="내가 보는 매장 이름·색 설정"
-        >
-          <View style={[styles.colorDot, { backgroundColor: color }]} />
-          <View style={{ flex: 1 }}>
-            <Text style={styles.storeName}>{pref.nickname || storeName}</Text>
-            <Text style={styles.storeSub}>{pref.nickname ? storeName : '탭해서 내가 보는 매장 이름·색을 바꿔요 (나만 보여요)'}</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={20} color={InkColors.ink3} />
-        </Pressable>
-
-        <SettingsSection icon="storefront-outline" title="이 매장">
+        {/* 매장 헤더 + '이 매장' 두 행을 한 카드로 합쳤다 — 원래 헤더 카드와 '이 매장' 카드가 따로였고
+            그래서 흰 카드 면이 4연속이었다(배치규칙① 위반, 2026-08-06). 매장명이 곧 이 묶음의 제목이라
+            '이 매장' 라벨은 없애도 방향을 잃지 않는다. 카드는 SettingsSection(=SettingsKit) 것을 그대로 쓴다. */}
+        <SettingsSection>
+          {/* 색 점 + 매장명 + (있으면) 내 별칭. 탭하면 개인화 시트.
+              카드 안 첫 행이므로 카드 크롬(배경·보더·라운드)은 SettingsSection이 이고 여기는 여백만 갖는다. */}
+          <Pressable
+            onPress={openPersonalize}
+            style={({ pressed }) => [styles.storeHead, pressed && { opacity: 0.7 }]}
+            accessibilityRole="button"
+            accessibilityLabel="내가 보는 매장 이름·색 설정"
+          >
+            <View style={[styles.colorDot, { backgroundColor: color }]} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.storeName}>{pref.nickname || storeName}</Text>
+              <Text style={styles.storeSub}>{pref.nickname ? storeName : '탭해서 내가 보는 매장 이름·색을 바꿔요 (나만 보여요)'}</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color={InkColors.ink3} />
+          </Pressable>
           {/* 내 이름 = 매장에서 다른 사람에게 보이는 이름(프로필 이름, 전역) — 수정은 프로필 편집에서. */}
-          <SettingsRow first icon="person-outline" label="내 이름" value={userName || ''} onPress={() => router.push('/account-edit')} />
+          <SettingsRow icon="person-outline" label="내 이름" value={userName || ''} onPress={() => router.push('/account-edit')} />
           {/* 내 시급 = 읽기 표시만(사장이 정하는 값). */}
           <SettingsRow icon="cash-outline" label="내 시급" value={wage ? `${won(wage)}/시간` : '사장님이 정해요'} />
         </SettingsSection>
@@ -123,10 +127,32 @@ export default function StoreSettings() {
           ) : null}
         </SettingsSection>
 
-        <SettingsSection>
-          <SettingsRow first icon="settings-outline" label="전체 계정 설정" hint="프로필·글자 크기·약관·로그아웃" onPress={() => router.push('/account-settings')} />
-          <SettingsRow icon="exit-outline" label="매장 나가기" onPress={busy ? undefined : () => setLeaveModal(true)} />
-        </SettingsSection>
+        {/* 카드 밖 행 — 위 두 카드와 형태를 갈라 흰 카드 연속을 끊는다(배치규칙①).
+            둘 다 '이 매장' 설정이 아니라 화면을 떠나는 동작이라, 카드에서 내려도 위계가 맞다. */}
+        <Pressable
+          onPress={() => router.push('/account-settings')}
+          style={({ pressed }) => [styles.outRow, pressed && { opacity: 0.6 }]}
+          accessibilityRole="button"
+          accessibilityLabel="전체 계정 설정"
+        >
+          <Ionicons name="settings-outline" size={19} color={InkColors.ink2} style={styles.outIcon} />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.outLabel}>전체 계정 설정</Text>
+            <Text style={styles.outHint}>프로필·글자 크기·약관·로그아웃</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={17} color={InkColors.ink3} />
+        </Pressable>
+        {/* 되돌리기 어려운 동작이라 위 행과 붙지 않게 한 칸 띄운다(오탭 방지). */}
+        <Pressable
+          onPress={() => setLeaveModal(true)}
+          disabled={busy}
+          style={({ pressed }) => [styles.outRow, styles.outRowGap, pressed && { opacity: 0.6 }]}
+          accessibilityRole="button"
+          accessibilityLabel="매장 나가기"
+        >
+          <Ionicons name="exit-outline" size={19} color={BrandColors.accent} style={styles.outIcon} />
+          <Text style={[styles.outLabel, { color: BrandColors.accentText }]}>매장 나가기</Text>
+        </Pressable>
 
         <View style={{ height: 16 }} />
       </ScrollView>
@@ -172,8 +198,16 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: InkColors.cream },
   scroll: { padding: 20, paddingTop: 16 },
 
-  storeHead: { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 16, backgroundColor: '#FFFFFF', borderRadius: 14, borderWidth: 1, borderColor: InkColors.line, marginBottom: 20 },
+  // 카드 크롬은 SettingsSection이 갖는다 — 여기는 카드 안 첫 행의 여백만(토큰).
+  storeHead: { flexDirection: 'row', alignItems: 'center', gap: Space.md, padding: Space.lg },
   colorDot: { width: 20, height: 20, borderRadius: 10 },
   storeName: { fontSize: 17, fontWeight: '800', color: InkColors.ink },
   storeSub: { fontSize: 13, color: InkColors.ink3, marginTop: 2 },
+
+  // 카드 밖 행 — 좌우 4는 SectionLabel과 같은 들여쓰기(카드 안 16이 아니다). 최소 높이는 터치 타깃 48dp.
+  outRow: { flexDirection: 'row', alignItems: 'center', gap: Space.md, paddingHorizontal: Space.xs, paddingVertical: Space.md, minHeight: 48 },
+  outRowGap: { marginTop: Space.sm },
+  outIcon: { width: 22, textAlign: 'center' },
+  outLabel: { fontSize: 15, fontWeight: '600', color: InkColors.ink },
+  outHint: { fontSize: 12, color: InkColors.ink3, marginTop: 2 },
 });

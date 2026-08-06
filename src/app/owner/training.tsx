@@ -1224,7 +1224,7 @@ const st = StyleSheet.create({
     paddingHorizontal: Space.sm, paddingVertical: 2, overflow: 'hidden',
   },
   renameBody: { paddingHorizontal: 16, paddingBottom: 18, gap: Space.sm },
-  emptyText: { fontSize: 15, color: InkColors.ink3, textAlign: 'center', paddingVertical: Space.md },
+  emptyText: { fontSize: 15, color: InkColors.ink2, textAlign: 'center', paddingVertical: Space.md },
 
   addRow: { flexDirection: 'row', gap: Space.sm },
   addBtn: {

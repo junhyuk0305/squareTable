@@ -101,7 +101,7 @@ const styles = StyleSheet.create({
   primaryText: { color: '#FFFFFF', fontSize: 16, fontWeight: '800' },
   helpBox: { backgroundColor: InkColors.bgSoft, borderRadius: Radius.md, padding: 16, gap: 4 },
   helpTitle: { fontSize: 13, fontWeight: '800', color: InkColors.ink2 },
-  helpBody: { fontSize: 15, color: InkColors.ink3, lineHeight: 22 },
+  helpBody: { fontSize: 15, color: InkColors.ink2, lineHeight: 22 },
   logoutRow: { alignItems: 'center', paddingVertical: 4 },
   logoutText: { fontSize: 13, color: InkColors.ink3, fontWeight: '600' },
 });

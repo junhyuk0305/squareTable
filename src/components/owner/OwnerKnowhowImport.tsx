@@ -242,7 +242,7 @@ const styles = StyleSheet.create({
   scroll: { padding: Space.gutter, gap: Space.md },
 
   lead: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  leadText: { flex: 1, fontSize: 15, color: InkColors.ink3, fontWeight: '600', lineHeight: 22 },
+  leadText: { flex: 1, fontSize: 15, color: InkColors.ink2, fontWeight: '600', lineHeight: 22 },
 
   block: { gap: Space.sm },
 
@@ -299,5 +299,5 @@ const styles = StyleSheet.create({
   emptyState: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 8, padding: Space.xl },
   emptyEmoji: { fontSize: 34 },
   emptyTitle: { fontSize: 16, fontWeight: '800', color: InkColors.ink2 },
-  emptyBody: { fontSize: 15, color: InkColors.ink3, fontWeight: '600', textAlign: 'center', lineHeight: 22 },
+  emptyBody: { fontSize: 15, color: InkColors.ink2, fontWeight: '600', textAlign: 'center', lineHeight: 22 },
 });

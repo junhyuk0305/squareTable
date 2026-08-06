@@ -452,7 +452,7 @@ const s = StyleSheet.create({
   // 웹: 말풍선 롱프레스로 액션시트를 여는데, 브라우저가 대신 드래그-선택을 시작해 화면 전체가
   // 선택되는 걸 막는다(스트림 전역 user-select:none). 단, 말풍선 '텍스트'(msgText)만 다시 선택 허용.
   scroll: { padding: 12, gap: 11, ...(Platform.OS === 'web' ? ({ userSelect: 'none' } as object) : null) },
-  empty: { textAlign: 'center', color: InkColors.ink3, fontSize: 15, marginTop: 40 },
+  empty: { textAlign: 'center', color: InkColors.ink2, fontSize: 15, marginTop: 40 },
   loadMore: { alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: InkColors.scrim, borderRadius: Radius.pill, paddingHorizontal: 13, paddingVertical: 6, marginBottom: 2 },
   loadMoreText: { fontSize: 11.5, color: InkColors.ink3, fontWeight: '700' },
   divider: { alignItems: 'center', marginVertical: 2 },

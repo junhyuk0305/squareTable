@@ -308,7 +308,7 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: 15, fontWeight: '800', color: InkColors.ink2, marginTop: 2 },
   sectionHint: { fontSize: 12, fontWeight: '600', color: InkColors.ink3 },
   list: { backgroundColor: '#FFFFFF', borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, paddingHorizontal: 14 },
-  empty: { fontSize: 15, color: InkColors.ink3, paddingVertical: 16, textAlign: 'center' },
+  empty: { fontSize: 15, color: InkColors.ink2, paddingVertical: 16, textAlign: 'center' },
 
   recWrap: { borderBottomWidth: 1, borderBottomColor: InkColors.line },
   recRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12 },

@@ -227,7 +227,7 @@ const s = StyleSheet.create({
   candRowOn: { borderColor: InkColors.ink, backgroundColor: InkColors.cream },
   candText: { fontSize: 13.5, color: InkColors.ink2, fontWeight: '600' },
 
-  empty: { fontSize: 15, color: InkColors.ink3, lineHeight: 22, paddingVertical: 4 },
+  empty: { fontSize: 15, color: InkColors.ink2, lineHeight: 22, paddingVertical: 4 },
 
   foot: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 18, borderTopWidth: 1, borderTopColor: InkColors.line },
   cta: { backgroundColor: InkColors.ink, borderRadius: Radius.md, paddingVertical: 14, alignItems: 'center' },

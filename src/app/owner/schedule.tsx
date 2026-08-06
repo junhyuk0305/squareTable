@@ -237,7 +237,7 @@ const styles = StyleSheet.create({
   badgeText: { fontSize: 12, fontWeight: '900', color: InkColors.bubbleText },
 
   emptyBox: { alignItems: 'center', gap: 8, paddingVertical: 24, backgroundColor: InkColors.bg, borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line },
-  emptyText: { fontSize: 15, color: InkColors.ink3, textAlign: 'center', lineHeight: 22 },
+  emptyText: { fontSize: 15, color: InkColors.ink2, textAlign: 'center', lineHeight: 22 },
   emptyBtn: { minHeight: 48, justifyContent: 'center', paddingHorizontal: 24, borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.ink, backgroundColor: '#FFFFFF' },
   emptyBtnText: { fontSize: 15, fontWeight: '800', color: InkColors.ink },
 

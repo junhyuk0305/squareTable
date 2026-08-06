@@ -606,10 +606,13 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   scroll: { padding: Space.gutter, gap: Space.md },
   center: { alignItems: 'center', justifyContent: 'center', gap: 10, paddingVertical: 48 },
-  loadingText: { fontSize: 15, color: InkColors.ink3, fontWeight: '600' },
+  loadingText: { fontSize: 15, color: InkColors.ink2, fontWeight: '600' },
 
   headRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
-  subline: { flexShrink: 1, fontSize: 15, color: InkColors.ink3, fontWeight: '600' },
+  // "총 N개 · 탭하면 수정" = 카운트+힌트라 **보조**다(본문 아님).
+  // 15sp였던 건 크기가 틀린 것이지 색이 틀린 게 아니다 — ink3는 보조의 정당한 색이고,
+  // 보조는 15sp 하한 대상이 아니다(simplicity-voice §4). 12sp로 내린다. (2026-08-06)
+  subline: { flexShrink: 1, fontSize: 12, color: InkColors.ink3, fontWeight: '600' },
   // 주 CTA — 검정 헤더 요소들 사이에서 묻혀서 노랑 액센트로(2026-07-31 사용자 요청).
   addBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: BrandColors.yellow, borderWidth: 1, borderColor: BrandColors.yellowDeep, paddingVertical: 8, paddingHorizontal: 12, borderRadius: Radius.pill },
   addBtnText: { color: InkColors.ink, fontSize: 13, fontWeight: '800' },

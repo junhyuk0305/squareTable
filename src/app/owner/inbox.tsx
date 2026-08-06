@@ -250,7 +250,7 @@ export default function OwnerInboxScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: InkColors.cream },
   loadingWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 10 },
-  loadingText: { fontSize: 15, color: InkColors.ink3, fontWeight: '600' },
+  loadingText: { fontSize: 15, color: InkColors.ink2, fontWeight: '600' },
   scroll: {
     paddingHorizontal: Space.gutter,
     paddingTop: Space.md,
@@ -332,5 +332,5 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   emptyTitle: { fontSize: 16, fontWeight: '700', color: InkColors.ink },
-  emptySub: { fontSize: 15, color: InkColors.ink3 },
+  emptySub: { fontSize: 15, color: InkColors.ink2 },
 });

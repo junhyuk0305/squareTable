@@ -470,7 +470,7 @@ const s = StyleSheet.create({
   gradeTitle: { fontSize: 15, fontWeight: '800', color: InkColors.ink, lineHeight: 22 },
   gradeText: { fontSize: 15, fontWeight: '600', color: InkColors.ink2, lineHeight: 22 },
   footWait: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Space.sm, minHeight: 48 },
-  footWaitText: { fontSize: 15, fontWeight: '700', color: InkColors.ink3 },
+  footWaitText: { fontSize: 15, fontWeight: '700', color: InkColors.ink2 },
 
   qBlock: { marginBottom: 18 },
   qAsk: { fontSize: 14.5, fontWeight: '800', color: InkColors.ink, marginBottom: 9, lineHeight: 21 },
