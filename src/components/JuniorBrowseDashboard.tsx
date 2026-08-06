@@ -80,7 +80,16 @@ export function JuniorBrowseDashboard({ entries, emptyHint }: JuniorBrowseDashbo
 
   // 검색 중에는 항상 목록(매칭 전체)을 보여준다 — 검색의 목적이 "리스트로 훑어보기"이므로.
   const searching = query.trim().length > 0;
-  const effectiveView: ViewKey = searching ? 'list' : view;
+  /**
+   * 렌즈를 나눌 만큼 노하우가 쌓였는가.
+   *
+   * 대시보드의 세 렌즈(인기·최근·해결률)는 **같은 목록을 정렬만 바꿔 자른다.** 노하우가 적으면
+   * 세 섹션이 글자 그대로 같은 카드를 3번 보여준다(2026-08-06 실측: 3건 매장에서 3섹션 전부 동일).
+   * 캐러셀 나열은 콘텐츠가 많을 때 성립하는 형태다 — 적을 때는 목록 하나가 낫다.
+   * 기준 = 한 섹션이 자르는 최대치(SECTION_LIMIT)의 2배. 그 미만이면 렌즈가 서로 구분되지 않는다.
+   */
+  const enoughForLenses = entries.length >= SECTION_LIMIT * 2;
+  const effectiveView: ViewKey = searching || !enoughForLenses ? 'list' : view;
 
   // 목록/검색용 필터 — 제목·키워드·태그 매칭(SSOT: matchesKnowhowQuery) 후 최근 갱신순.
   const listEntries = useMemo(() => {
@@ -147,6 +156,10 @@ export function JuniorBrowseDashboard({ entries, emptyHint }: JuniorBrowseDashbo
 
           {searching ? (
             <Text style={styles.resultCount}>{listEntries.length}개 찾음</Text>
+          ) : !enoughForLenses ? (
+            // 렌즈가 구분되지 않는 구간에서는 토글을 숨긴다 — 남겨두면 '대시보드'를 눌러도
+            // effectiveView가 목록으로 고정돼 있어 아무 반응이 없는 죽은 버튼이 된다.
+            null
           ) : (
             <View style={styles.viewToggle}>
               {/* padding 없는 inner를 좌표계 기준으로 — 슬라이딩 pill(절대배치)과 버튼 onLayout 좌표가 같은 원점을 쓴다. */}

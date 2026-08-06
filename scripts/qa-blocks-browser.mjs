@@ -418,6 +418,22 @@ async function main() {
     const hubTexts = await lowContrastTexts(po);
     report('B7-6', '허브 현황', hubTexts, lowContrast(hubTexts));
 
+    // ═══════════ B8 직원 둘러보기 — 렌즈 동어반복 방지 ═══════════
+    // 대시보드의 세 렌즈(인기·최근·해결률)는 같은 목록을 정렬만 바꿔 자른다.
+    // 노하우가 적으면 세 섹션이 **같은 카드를 3번** 보여준다(2026-08-06 실측: 3건 매장에서 전부 동일).
+    // 시드는 노하우 3건 = SECTION_LIMIT*2 미만이므로 목록 하나로 떨어져야 한다.
+    console.log('\n[B8] 직원 둘러보기 — 노하우가 적으면 렌즈를 나누지 않는다');
+    await pj.goto(`${ORIGIN}/junior/chat`, { waitUntil: 'domcontentloaded' });
+    await pj.waitForTimeout(2500);
+    await pj.getByText('둘러보기', { exact: false }).first().dispatchEvent('click');
+    await pj.waitForTimeout(2000);
+    check('B8-1 렌즈 섹션(인기 노하우) 안 뜸', !(await see(pj, '인기 노하우')));
+    check('B8-2 렌즈 섹션(최근 추가됨) 안 뜸', !(await see(pj, '최근 추가됨')));
+    check('B8-3 렌즈 섹션(잘 통하는 노하우) 안 뜸', !(await see(pj, '잘 통하는 노하우')));
+    check('B8-4 죽은 대시보드/목록 토글도 숨겼다', !(await see(pj, '대시보드')));
+    check('B8-5 목록으로 노하우는 보인다', await see(pj, '원두 채우기'));
+    await shot(pj, '09-junior-browse');
+
     // ═══════════ B5 직원 허브 3상태 ═══════════
     // 이 화면은 성격이 다른 세 상태를 겸한다(2026-08-06 상태 분기). 셋 다 실제로 태워서 본다.
     console.log('\n[B5] 직원 허브 — ① 미합류 · ② 승인 대기 · ③ 매장 있음');

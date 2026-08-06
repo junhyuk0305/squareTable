@@ -17,6 +17,7 @@ import { useMemberPrefsStore } from '@/lib/store/useMemberPrefsStore';
 import { useStoreNav } from '@/lib/hooks/useStoreNav';
 import { storeColor } from '@/lib/utils/storeColor';
 import { SectionLabel } from '@/components/SectionLabel';
+import { MiniStats } from '@/components/blocks/MiniStats';
 import { EntryDetailModal } from '@/components/EntryDetailModal';
 import { Appear } from '@/components/Appear';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
@@ -147,20 +148,32 @@ export function JuniorGrowthView() {
       {/* ── 내가 남긴 것 ── */}
       <Appear delay={totals.taught > 0 ? 80 : 40}>
         <SectionLabel title="내가 남긴 것" hint="나만 볼 수 있어요" />
+        {/* 블록 I3 — 카드가 아니다. 2026-08-06: '내가 남긴 것'·'해본 업무'가 각각 stat을 품은 카드라
+            이 화면이 '제목 → 카드' 반복이었다. 세 숫자를 한 줄로 올리고 아래 목록만 카드로 남긴다.
+            '해본 업무'의 단독 1칸도 여기로 끌어올렸다 — 1칸짜리 통계에 카드를 세울 이유가 없다. */}
+        <MiniStats
+          items={[
+            {
+              key: 'knowhow',
+              value: `${totals.knowhow}개`,
+              label: '내가 만든 노하우',
+            },
+            {
+              key: 'hits',
+              value: `${totals.hits}번`,
+              label: '최근 30일 참조',
+              info:
+                totals.knowhow > 0 && totals.hits === 0
+                  ? {
+                      title: '참조가 0이에요',
+                      body: '아직 참조 전이에요 — 누가 같은 걸 물으면 숫자가 올라요.',
+                    }
+                  : undefined,
+            },
+            { key: 'done', value: `${totals.doneKinds}종`, label: '해본 업무' },
+          ]}
+        />
         <View style={styles.card}>
-          <View style={styles.statRow}>
-            <View style={styles.statCell}>
-              <Text style={styles.statV}>{totals.knowhow}<Text style={styles.statUnit}>개</Text></Text>
-              <Text style={styles.statL}>내가 만든 노하우</Text>
-            </View>
-            <View style={[styles.statCell, styles.statDivider]}>
-              <Text style={styles.statV}>{totals.hits}<Text style={styles.statUnit}>번</Text></Text>
-              <Text style={styles.statL}>최근 30일 참조</Text>
-            </View>
-          </View>
-          {totals.knowhow > 0 && totals.hits === 0 && (
-            <Text style={styles.caption}>아직 참조 전이에요 — 누가 같은 걸 물으면 숫자가 올라요</Text>
-          )}
           {/* 내 노하우 원문 목록(0094) — 행 탭 = 원문 시트. 카운트와 같은 술어라 개수가 일치한다. */}
           {(showAllEntries ? myEntries : myEntries.slice(0, ENTRY_LIST_FIRST)).map((e) => (
             <Pressable
@@ -193,19 +206,15 @@ export function JuniorGrowthView() {
         </View>
       </Appear>
 
-      {/* ── 해본 업무(경험) — 숙련 주장 없음(완료≠숙련) ── */}
+      {/* ── 해본 업무 — 합계는 위 MiniStats로 올라갔다(2026-08-06). 여기 남는 건 매장별 분해뿐이라
+             **다매장 직원에게만** 그린다. 단일 매장이면 위 숫자가 곧 그 매장의 값이라 섹션 자체가 사라진다.
+             숙련 주장 없음(완료 ≠ 숙련). ── */}
+      {growth.length > 1 && (
       <Appear delay={totals.taught > 0 ? 120 : 80}>
-        <SectionLabel title="해본 업무" />
+        <SectionLabel title="해본 업무" hint="매장별" />
         <View style={styles.card}>
-          <View style={styles.statRow}>
-            <View style={styles.statCell}>
-              <Text style={styles.statV}>{totals.doneKinds}<Text style={styles.statUnit}>종</Text></Text>
-              <Text style={styles.statL}>완료 기록이 있는 업무</Text>
-            </View>
-          </View>
-          {/* 매장별 분해(다매장 직원만) — 행 탭 = 그 매장 업무 화면 */}
-          {growth.length > 1 &&
-            growth.map((r) => (
+          {/* 행 탭 = 그 매장 업무 화면 */}
+          {growth.map((r) => (
               <Pressable
                 key={r.unit_id}
                 onPress={() => goStore(r.unit_id, '/junior/work')}
@@ -220,6 +229,7 @@ export function JuniorGrowthView() {
             ))}
         </View>
       </Appear>
+      )}
 
       {/* ── 훈련 통과 이력(0104) — 있을 때만. 통과 사실만 말하고 점수·등급을 만들지 않는다 ── */}
       {trainingHistory.length > 0 && (
