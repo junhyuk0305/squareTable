@@ -20,6 +20,8 @@ import { PlanUpgradeNotice } from '@/components/PlanUpgradeNotice';
 import { StarterChecklist } from '@/components/hub/StarterChecklist';
 import { StorePickerSheet, type StorePickerRow } from '@/components/hub/StorePickerSheet';
 import { SectionLabel } from '@/components/SectionLabel';
+import { AlertRow } from '@/components/blocks/AlertRow';
+import { MiniStats } from '@/components/blocks/MiniStats';
 import { Appear } from '@/components/Appear';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
@@ -90,8 +92,10 @@ export function OwnerStatusView() {
     };
   }, [crossData, ownedIds, overview]);
   const [picker, setPicker] = useState<{ title: string; path: Href; units: { uid: string; count: number }[] } | null>(null);
+  // '확인 필요' 카드가 비었는가 — 받은질문(questions)은 2026-08-06에 맨 위 AlertRow로 빠졌으므로
+  // 여기 세지 않는다. 세면 질문만 있을 때 카드가 "확인할 일이 있다"고 하고선 아무 행도 못 그린다.
   const inboxEmpty =
-    inbox.joins.length === 0 && inbox.questions === 0 && inbox.suggestions === 0 && inbox.needsReview === 0;
+    inbox.joins.length === 0 && inbox.suggestions === 0 && inbox.needsReview === 0;
 
   // ── 매장 비교 정렬(손 필요 순 기본) — 정렬은 표 전용, 스냅샷·이번달은 매장 생성순 유지 ──
   const sorted = useMemo(() => {
@@ -164,21 +168,41 @@ export function OwnerStatusView() {
         </Appear>
       )}
 
-      {/* ── 1) 오늘 스냅샷 ── */}
+      {/* ── 1) 답 기다리는 질문(블록 X2) — 사장이 오늘 손대야 할 유일한 '막힌 것'.
+             2026-08-06: '확인 필요' 카드 안 한 행이던 것을 맨 위 경고행으로 승격했다.
+             0건이면 AlertRow가 스스로 숨는다. 아래 '확인 필요'에서는 뺐다(같은 사실 두 번 금지). ── */}
+      <Appear delay={20}>
+        <AlertRow
+          label="답 기다리는 질문"
+          count={inbox.questions}
+          unit="건"
+          icon="chatbubble"
+          onPress={() => {
+            if (multi) setPicker({ title: '받은질문', path: '/owner/inbox', units: inbox.questionUnits });
+            else if (inbox.questionUnits[0]) void goStore(inbox.questionUnits[0].uid, '/owner/inbox');
+          }}
+        />
+      </Appear>
+
+      {/* ── 2) 오늘 근무(블록 I3) — 카드가 아니다.
+             옛 판본은 '오늘'·'이번달'이 각각 stat 2칸을 품은 카드였고, 그래서 이 화면이
+             제목→카드 5연속이 됐다(개편 전 사장 홈과 같은 증상). 통계는 MiniStats로 내린다. ── */}
       <Appear delay={40}>
         <SectionLabel title="오늘" />
+        <MiniStats
+          items={[
+            // 부분 실패 시 "0명"으로 위장하지 않는다 — todayLoaded 전엔 '—' (빈화면 위장 금지).
+            { key: 'working', value: todayLoaded ? `${workingTotal}명` : '—', label: '지금 근무중' },
+            { key: 'scheduled', value: todayLoaded ? `${scheduledTotal}명` : '—', label: '오늘 근무 예정' },
+          ]}
+        />
+      </Appear>
+
+      {/* 매장별 근무 현황 — 단일 매장이면 위 MiniStats가 이미 같은 숫자를 말하므로 그리지 않는다.
+          다점포에서만 '어느 매장이 비었나'가 새 정보가 된다. */}
+      {multi && (
+      <Appear delay={60}>
         <View style={styles.card}>
-          <View style={styles.statRow}>
-            {/* 부분 실패 시 "0명"으로 위장하지 않는다 — todayLoaded 전엔 '—' (빈화면 위장 금지). */}
-            <View style={styles.statCell}>
-              <Text style={styles.statV}>{todayLoaded ? workingTotal : '—'}{todayLoaded && <Text style={styles.statUnit}>명</Text>}</Text>
-              <Text style={styles.statL}>지금 근무중</Text>
-            </View>
-            <View style={[styles.statCell, styles.statDivider]}>
-              <Text style={styles.statV}>{todayLoaded ? scheduledTotal : '—'}{todayLoaded && <Text style={styles.statUnit}>명</Text>}</Text>
-              <Text style={styles.statL}>오늘 근무 예정</Text>
-            </View>
-          </View>
           {overview.map((r) => {
             const t = todayByUnit[r.unit_id];
             return (
@@ -202,8 +226,9 @@ export function OwnerStatusView() {
           })}
         </View>
       </Appear>
+      )}
 
-      {/* ── 2) 확인 필요 ── */}
+      {/* ── 3) 확인 필요 ── */}
       <Appear delay={80}>
         <SectionLabel title="확인 필요" />
         <View style={styles.card}>
@@ -219,20 +244,16 @@ export function OwnerStatusView() {
                 '/owner/staff',
                 inbox.joins[0] ? `${labelOf(inbox.joins[0].uid)} · ${inbox.joins[0].name}님` : undefined,
               )}
-              {inboxRow('chatbubble-outline', '받은질문', inbox.questions, inbox.questionUnits, '/owner/inbox')}
+              {/* 받은질문은 맨 위 AlertRow로 승격됐다(2026-08-06) — 여기서 다시 세지 않는다. */}
               {inboxRow('bulb-outline', '검토할 제안', inbox.suggestions, inbox.suggestionUnits, '/owner/suggestions')}
               {inboxRow('search-outline', '검증이 필요한 노하우', inbox.needsReview, inbox.needsReviewUnits, '/owner/categories')}
             </>
           )}
-        </View>
-      </Appear>
 
-      {/* ── 2-b) 훈련 — 첫 훈련·정기 훈련 진입점. 기능이 직원·급여 화면에만 숨어 있어
-              발견이 안 되던 문제(2026-07-31) → 현황에 상시 노출. 허브 원칙대로 이동만 담당,
-              다점포는 기존 매장 선택 시트 재사용. ── */}
-      <Appear delay={100}>
-        <SectionLabel title="퀴즈" />
-        <View style={styles.card}>
+          {/* 퀴즈 — 첫 출근·정기 점검 진입점. 기능이 직원·급여 화면에만 숨어 있어 발견이 안 되던
+              문제(2026-07-31) → 현황에 상시 노출. 2026-08-06: 행 1개짜리 별도 섹션이 '제목→카드'
+              반복을 한 칸 늘리고 있어 이 카드 안 마지막 행으로 합쳤다(카운트가 없으니 항상 맨 아래).
+              허브 원칙대로 이동만 담당, 다점포는 기존 매장 선택 시트 재사용. */}
           <Pressable
             onPress={() => {
               if (multi) {
@@ -302,29 +323,42 @@ export function OwnerStatusView() {
         </Appear>
       )}
 
-      {/* ── 4) 이번달 ── */}
+      {/* ── 4) 이번달(블록 I3) — 여기도 카드가 아니다. 위 '오늘'과 형태는 같지만 사이에
+             카드 2장이 끼어 있어 연속이 아니다(배치 규칙 ①). ── */}
       <Appear delay={multi ? 160 : 120}>
         <SectionLabel title="이번달" />
-        <View style={styles.card}>
-          <View style={styles.statRow}>
-            <View style={styles.statCell}>
-              <Text style={styles.statV}>{laborTotal.toLocaleString()}<Text style={styles.statUnit}>원</Text></Text>
-              <Text style={styles.statL}>인건비 합계</Text>
-            </View>
-            <View style={[styles.statCell, styles.statDivider]}>
-              <Text style={styles.statV}>
-                {aiTotal.toLocaleString()}
-                {/* 0082 부터 유료 플랜에도 캡(매장당 1500)이 있다 — free 만 분모를 보여주면
-                    유료 사장은 자기 한도를 모른 채 402를 맞는다. 캡은 매장당이므로 합산 분모 = 캡 × 매장 수. */}
-                {aiCap != null && (
-                  <Text style={styles.statUnit}> / {(aiCap * Math.max(overview.length, 1)).toLocaleString()}</Text>
-                )}
-              </Text>
-              <Text style={styles.statL}>AI 답변 사용</Text>
-            </View>
-          </View>
-          {multi &&
-            overview.map((r) => (
+        <MiniStats
+          items={[
+            { key: 'labor', value: `${laborTotal.toLocaleString()}원`, label: '인건비 합계' },
+            {
+              // 0082 부터 유료 플랜에도 캡(매장당 1500)이 있다 — free 만 분모를 보여주면
+              // 유료 사장은 자기 한도를 모른 채 402를 맞는다. 캡은 매장당이므로 합산 분모 = 캡 × 매장 수.
+              key: 'ai',
+              value:
+                aiCap != null
+                  ? `${aiTotal.toLocaleString()} / ${(aiCap * Math.max(overview.length, 1)).toLocaleString()}`
+                  : aiTotal.toLocaleString(),
+              label: 'AI 답변 사용',
+              // 카드 하단 캡션이던 한도 안내를 ⓘ로 옮긴다(카드가 사라졌으므로 붙을 자리가 없다).
+              info:
+                aiCap != null
+                  ? {
+                      title: 'AI 답변 사용이 뭐예요?',
+                      body:
+                        (plan === 'free'
+                          ? `무료 요금제는 매장당 월 ${aiCap.toLocaleString()}건까지예요.`
+                          : `매장당 월 ${aiCap.toLocaleString()}건까지 쓸 수 있어요.`) +
+                        '\n직원이 물었을 때 AI가 답한 횟수예요. 한도를 넘으면 다음 달에 다시 채워져요.',
+                    }
+                  : undefined,
+            },
+          ]}
+        />
+        {/* 매장별 내역은 다점포에서만 — 단일 매장이면 위 두 칸이 곧 그 매장의 값이다.
+            한도 안내 캡션은 'AI 답변 사용'의 ⓘ로 옮겼다. */}
+        {multi && (
+          <View style={[styles.card, { marginTop: Space.sm }]}>
+            {overview.map((r) => (
               <View key={r.unit_id} style={[styles.row, styles.rowTop]}>
                 <View style={[styles.dot, { backgroundColor: colorOf(r.unit_id) }]} />
                 <Text style={styles.rowTitle} numberOfLines={1}>{labelOf(r.unit_id)}</Text>
@@ -333,14 +367,8 @@ export function OwnerStatusView() {
                 </Text>
               </View>
             ))}
-          {aiCap != null && (
-            <Text style={styles.caption}>
-              {plan === 'free'
-                ? `무료 요금제는 매장당 월 ${aiCap.toLocaleString()}건까지예요`
-                : `매장당 월 ${aiCap.toLocaleString()}건까지 쓸 수 있어요`}
-            </Text>
-          )}
-        </View>
+          </View>
+        )}
       </Appear>
 
       <StorePickerSheet

@@ -392,6 +392,32 @@ async function main() {
     const jTexts = await lowContrastTexts(pj);
     report('B4-6', '직원 홈', jTexts, lowContrast(jTexts));
 
+    // ═══════════ B7 사장 허브 현황 ═══════════
+    // 앱 골격은 /hub ↔ /stores ↔ 매장 앱 3층인데 블록 어휘 개편은 매장 앱 층만 했다.
+    // 허브 현황은 '제목 → 카드' 5연속이었다(개편 전 사장 홈과 같은 증상). 2026-08-06 정리분을 지킨다.
+    console.log('\n[B7] 사장 허브 현황 — 카드 나열 해체');
+    await po.goto(`${ORIGIN}/hub`, { waitUntil: 'domcontentloaded' });
+    check('B7-0 허브 진입', await wait(po, '현황', 40000));
+    await po.waitForTimeout(3000);
+    check('B7-1 AlertRow — 답 기다리는 질문(맨 위로 승격)', await see(po, '답 기다리는 질문'));
+    check('B7-2 옛 "받은질문" 행은 확인 필요에서 빠졌다', !(await see(po, '받은질문')));
+    check('B7-3 MiniStats — 지금 근무중', await see(po, '지금 근무중'));
+    check('B7-4 퀴즈가 별도 섹션이 아니다(확인 필요 카드로 흡수)', await see(po, '퀴즈'));
+    // 카드(흰 면 + 보더 + 그림자) 개수 — 옛 판본은 5장이었다. 배치 규칙 ⑤: 화면당 1~2장만 남긴다.
+    const hubCards = await po.evaluate(() => {
+      let n = 0;
+      for (const el of document.querySelectorAll('div')) {
+        const cs = getComputedStyle(el);
+        if (cs.backgroundColor === 'rgb(255, 255, 255)' && parseFloat(cs.borderTopWidth) >= 1
+            && parseFloat(cs.borderRadius) >= 12 && el.getBoundingClientRect().width > 300) n++;
+      }
+      return n;
+    });
+    check(`B7-5 카드 ≤3장 (옛 5장) — 실측 ${hubCards}`, hubCards <= 3, String(hubCards));
+    await shot(po, '08-owner-hub-status');
+    const hubTexts = await lowContrastTexts(po);
+    report('B7-6', '허브 현황', hubTexts, lowContrast(hubTexts));
+
     // ═══════════ B5 직원 허브 3상태 ═══════════
     // 이 화면은 성격이 다른 세 상태를 겸한다(2026-08-06 상태 분기). 셋 다 실제로 태워서 본다.
     console.log('\n[B5] 직원 허브 — ① 미합류 · ② 승인 대기 · ③ 매장 있음');
