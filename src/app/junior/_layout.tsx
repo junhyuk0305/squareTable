@@ -15,17 +15,13 @@ import { useScheduleStore } from '@/lib/store/useScheduleStore';
 import { useMemberPrefsStore } from '@/lib/store/useMemberPrefsStore';
 import { useSuggestionStore } from '@/lib/store/useSuggestionStore';
 import { HAS_SUPABASE } from '@/lib/supabase';
-import { deriveSubscription } from '@/lib/utils/subscription';
 
 export default function JuniorLayout() {
   const status = useSessionStore((s) => s.status);
   const unitId = useSessionStore((s) => s.unitId);
   const phone = useSessionStore((s) => s.phone);
   const pendingUnitId = useSessionStore((s) => s.pendingUnitId);
-  const subStatus = useSessionStore((s) => s.subStatus);
-  const trialEndsAt = useSessionStore((s) => s.trialEndsAt);
-  const paidUntil = useSessionStore((s) => s.paidUntil);
-  const plan = useSessionStore((s) => s.plan);
+  const seatLocked = useSessionStore((s) => s.seatLocked);
   const pathname = usePathname();
 
   // 로그인 + 매장 소속이 확정된 뒤에만 데이터를 당겨오고 실시간 구독한다.
@@ -86,15 +82,11 @@ export default function JuniorLayout() {
   ) {
     return <Redirect href="/junior/hub" />;
   }
-  // 매장 구독 만료 → 직원은 계좌 정보 없이 '사장님 결제 대기' 고지(/billing 이 역할별로 렌더).
-  // fail-open: 구독 정보 없음이면 막지 않는다. 무료 티어(plan='free') 매장은 영구 무료라 만료 없음(0062).
-  if (
-    HAS_SUPABASE &&
-    status === 'signed_in' &&
-    unitId &&
-    !deriveSubscription({ subStatus, trialEndsAt, paidUntil, plan }).entitled &&
-    pathname !== '/billing'
-  ) {
+  // 좌석 잠금(0115) → 직원은 계좌 정보 없이 '자리가 잠겼다' 고지(/billing 이 역할별로 렌더).
+  // ★2026-08-06 전까지 여기는 '구독 만료 → 페이월'이었다. 만료가 무료 강등으로 바뀌면서
+  //   (effectivePlanOf) 만료만으로 앱이 잠기는 일은 없어졌고, 대신 무료 한도를 넘은 좌석만 잠근다.
+  // fail-open: 판정 조회 실패는 잠금으로 위장하지 않는다(세션 로드에서 false 유지).
+  if (HAS_SUPABASE && status === 'signed_in' && unitId && seatLocked && pathname !== '/billing') {
     return <Redirect href="/billing" />;
   }
   return (

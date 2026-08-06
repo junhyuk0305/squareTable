@@ -23,6 +23,21 @@ export const BUSINESS_INFO = {
   hosting: 'Supabase / Vercel',
 } as const;
 
+/**
+ * 이용약관 시행일 — 주문 시점 동의 기록(payment_claims.terms_version, 0116)에 그대로 저장한다.
+ * ★SSOT 는 scripts/legal-content.mjs 의 EFFECTIVE_DATE 다(.ts 에서 .mjs 를 import 할 수 없어 복제).
+ *   약관을 개정하면 **두 곳을 함께** 고친다 — 어긋나면 실제로 동의한 조건을 특정할 수 없게 된다.
+ */
+export const TERMS_VERSION = '2026-08-07';
+
+/**
+ * 입금 확인 약속(SLA) — 계좌이체는 사람이 통장을 보고 승인하는 구조라, 이 문장이 없으면
+ * 사장은 "돈은 보냈는데 앱이 안 열리는" 무음 구간에 갇힌다.
+ * ★시간(hour)이 아니라 영업일로 건다 — 밤·주말 입금을 자동으로 덮고, 1인 운영에서 지킬 수 있다.
+ * ★같은 문장이 앱·웹·인스타 응대에 동일하게 쓰인다. 여기가 SSOT.
+ */
+export const PAYMENT_SLA_SENTENCE = '평일 10시~19시에 확인하고, 늦어도 다음 영업일 안에 열어드려요.';
+
 /** 값이 채워진 행만 [라벨, 값] 쌍으로 돌려준다. 빈 값은 렌더하지 않는다. */
 export function businessRows(): [string, string][] {
   const b = BUSINESS_INFO;

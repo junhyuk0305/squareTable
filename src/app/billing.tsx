@@ -7,13 +7,14 @@ import { useSessionStore } from '@/lib/store/useSessionStore';
 import { HAS_SUPABASE } from '@/lib/supabase';
 import { logout } from '@/lib/auth';
 import { showToast } from '@/lib/store/useToastStore';
-import { deriveSubscription } from '@/lib/utils/subscription';
+import { deriveSubscription, isPlanLapsed } from '@/lib/utils/subscription';
 import { canManage } from '@/lib/utils/roles';
 import { BILLING_INFO, formatKrw } from '@/lib/config/billing';
+import { TERMS_VERSION, PAYMENT_SLA_SENTENCE } from '@/lib/config/business';
 import { PLANS, PLAN_ORDER, planMonthlyPrice, withVat, VAT_NOTE_SENTENCE, type PlanId } from '@/lib/config/tiers';
 import { SHOW_BILLING } from '@/lib/config/store-policy';
 import { usePaymentClaimStore, CLAIM_ERROR_TEXT } from '@/lib/store/usePaymentClaimStore';
-import { redeemPromoCode } from '@/lib/db';
+import { redeemPromoCode, fetchUnitSeatStatus, type SeatStatus } from '@/lib/db';
 import { HeaderBackButton } from '@/components/HeaderBackButton';
 import { Appear } from '@/components/Appear';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
@@ -59,6 +60,7 @@ function BillingBody() {
   const role = useSessionStore((s) => s.role);
   const storeName = useSessionStore((s) => s.storeName);
   const userName = useSessionStore((s) => s.userName);
+  const seatLocked = useSessionStore((s) => s.seatLocked);
   const subStatus = useSessionStore((s) => s.subStatus);
   const trialEndsAt = useSessionStore((s) => s.trialEndsAt);
   const paidUntil = useSessionStore((s) => s.paidUntil);
@@ -83,6 +85,14 @@ function BillingBody() {
   // 입금자명 — 계좌이체는 이게 유일한 대사 키다(운영자가 은행 내역과 맞추는 값). 이름 기본값으로 시작.
   const [depositor, setDepositor] = useState(userName ?? '');
   const [claiming, setClaiming] = useState(false);
+  // 주문 시점 동의(0116) — 체크 없이는 서버가 consent_required 로 거부한다. 이게 계약서를 대신한다.
+  const [agreed, setAgreed] = useState(false);
+  // 세금계산서 정보 — 요청하는 사장만. 기본 접힘(화면 블록 예산).
+  const [bizOpen, setBizOpen] = useState(false);
+  const [bizNo, setBizNo] = useState('');
+  const [bizEmail, setBizEmail] = useState('');
+  // 좌석 현황(0115) — 무료 강등으로 잠긴 직원이 있으면 사장에게 알린다.
+  const [seat, setSeat] = useState<SeatStatus | null>(null);
   // 무료 이용 코드(0092) — 기본 접힘(화면 요소 예산). 검증·기록·활성화는 전부 서버 RPC.
   const [promoOpen, setPromoOpen] = useState(false);
   const [promoCode, setPromoCode] = useState('');
@@ -127,6 +137,12 @@ function BillingBody() {
     if (isOwner && SHOW_BILLING) void hydrateClaims();
   }, [isOwner, hydrateClaims]);
 
+  // 좌석 현황 — 사장에게 "몇 명이 잠겼는지"를 보여주는 자리. 판정은 서버(unit_seat_status)가 SSOT.
+  useEffect(() => {
+    if (!manages) return;
+    void fetchUnitSeatStatus().then(({ data }) => setSeat(data));
+  }, [manages, plan]);
+
   const recheck = async () => {
     setBusy(true);
     await refreshMembership();
@@ -165,8 +181,25 @@ function BillingBody() {
       return;
     }
     if (selectedPlan === 'free') return; // 무료는 입금 자체가 없다(서버도 bad_plan 으로 거부)
+    // 주문 시점 동의(0116) — 서버도 consent_required 로 막지만, 여기서 무엇이 빠졌는지 먼저 알린다.
+    if (!agreed) {
+      showToast('유료 이용 조건에 동의해 주세요');
+      return;
+    }
+    const biz = bizNo.replace(/\D/g, '');
+    if (biz && biz.length !== 10) {
+      showToast('사업자등록번호는 숫자 10자리예요');
+      return;
+    }
     setClaiming(true);
-    const res = await submitPaymentClaim({ plan: selectedPlan, amountKrw: monthlyBilled, depositorName: name });
+    const res = await submitPaymentClaim({
+      plan: selectedPlan,
+      amountKrw: monthlyBilled,
+      depositorName: name,
+      termsVersion: TERMS_VERSION,
+      bizNo: biz || null,
+      bizEmail: bizEmail.trim() || null,
+    });
     setClaiming(false);
     if (!res.ok) {
       showToast(CLAIM_ERROR_TEXT[res.reason]);
@@ -219,16 +252,14 @@ function BillingBody() {
   };
 
   // 상태 문구 — 제품 모델은 freemium(무료 영구 + 유료 single/multi)라 '무료체험' 개념이 없다.
-  // (신규 매장 구독행이 legacy 로 status='trialing'+3일로 생기지만, plan='free' 가 deriveSubscription
-  //  에서 영구 active 로 우선 처리해 표면화되지 않는다 — 여기서도 trial 문구를 쓰지 않는다.)
-  const headline =
-    view.state === 'expired'
-      ? isOwner
-        ? '이용 기간이 만료됐어요'
-        : '잠시 이용이 중단됐어요'
-      : plan === 'free'
-        ? '무료 요금제로 이용 중이에요'
-        : '이용 중이에요';
+  // ★2026-08-06: 유료 기간이 끝나도 앱이 잠기지 않는다(무료 강등). '만료' 문구를 쓰지 않고,
+  //   처음부터 무료인 매장과 구분해 "무료로 바뀌었다"고 말한다(isPlanLapsed).
+  const lapsed = isPlanLapsed({ plan, subStatus, paidUntil, trialEndsAt });
+  const headline = lapsed
+    ? '무료 요금제로 바뀌었어요'
+    : plan === 'free'
+      ? '무료 요금제로 이용 중이에요'
+      : '이용 중이에요';
 
   // ── iOS 네이티브: 결제 표면 전면 차단 (App Review 3.1.3(f)) ────────────────────────
   // 계좌·금액·요금제 선택·입금 버튼을 모두 제거한다. "웹에서 결제하세요" 같은 안내도
@@ -314,15 +345,34 @@ function BillingBody() {
         {!isOwner ? (
           <Appear delay={60}>
           <View style={styles.card}>
+            {/* 좌석 잠금(0115) — 직원에게는 금액·계좌를 보여주지 않는다. 무슨 일이 있었는지와
+                누구에게 말하면 되는지만 남긴다(사용자 탓 금지·다음 행동 명시). */}
             <Text style={styles.body}>
-              {view.state === 'expired'
-                ? '매장의 이용 기간이 끝났어요. 사장님이 이용을 연장하면 바로 다시 쓸 수 있어요.'
+              {seatLocked
+                ? '매장이 무료 요금제로 바뀌면서 지금은 이용할 수 없어요. 사장님께 문의해 주세요.'
                 : '이용에 문제가 없어요.'}
             </Text>
           </View>
           </Appear>
         ) : (
           <>
+            {/* 좌석 잠금 알림(0115) — 잠긴 직원이 있을 때만. 0명이면 렌더하지 않는다(AlertRow 규칙). */}
+            {!!seat && seat.locked > 0 && (
+              <Appear delay={60}>
+                <View style={[styles.card, styles.claimRejected]}>
+                  <View style={styles.claimHead}>
+                    <Ionicons name="lock-closed-outline" size={18} color={BrandColors.warn} />
+                    <Text style={styles.claimTitle}>직원 {seat.locked}명의 자리가 잠겼어요</Text>
+                  </View>
+                  <Text style={styles.body}>
+                    무료 요금제는 직원 {seat.cap}명까지예요. 지금 {seat.total}명이라 나중에 합류한 {seat.locked}명이
+                    앱을 쓸 수 없어요.
+                  </Text>
+                  <Text style={styles.hint}>단일 매장 요금제로 바꾸면 인원 제한 없이 다시 열려요.</Text>
+                </View>
+              </Appear>
+            )}
+
             {/* 요금제 선택(3티어, SSOT=tiers.ts). 선택에 따라 아래 금액이 계산된다. */}
             <Appear delay={60}>
             <View style={styles.section}>
@@ -387,10 +437,12 @@ function BillingBody() {
                 <Appear delay={120}>
                 <View style={styles.card}>
                   <Text style={styles.body}>
-                    {view.state === 'expired'
-                      ? '아래 계좌로 이용료를 입금하시면, 확인 후 이용이 다시 열려요.'
-                      : '계속 이용하려면 아래 계좌로 이용료를 입금해 주세요. 확인 후 반영돼요.'}
+                    {lapsed
+                      ? '아래 계좌로 이용료를 입금하시면, 확인 후 다시 열려요.'
+                      : '아래 계좌로 이용료를 입금해 주세요. 확인 후 반영돼요.'}
                   </Text>
+                  {/* 계좌이체는 사람이 통장을 보고 승인한다 — 언제까지 기다리면 되는지 반드시 말한다. */}
+                  <Text style={styles.hint}>{PAYMENT_SLA_SENTENCE}</Text>
                 </View>
                 </Appear>
 
@@ -428,7 +480,8 @@ function BillingBody() {
                     </View>
                     <Text style={styles.hint}>
                       {`입금자명 ${latestClaim.depositor_name} · ${formatKrw(latestClaim.amount_krw)}로 알려주셨어요.`}
-                      {'\n'}확인되면 따로 누르지 않아도 바로 열려요.
+                      {'\n'}
+                      {PAYMENT_SLA_SENTENCE} 확인되면 따로 누르지 않아도 바로 열려요.
                     </Text>
                   </View>
                 )}
@@ -467,6 +520,64 @@ function BillingBody() {
                     </Text>
                   </View>
                 </View>
+                </Appear>
+
+                {/* 세금계산서 — 필요한 사장만 편다. 기본 접힘(무료·개인 사장에게 불필요한 입력을 강요하지 않는다). */}
+                {!bizOpen ? (
+                  <Pressable onPress={() => setBizOpen(true)} style={({ pressed }) => [styles.promoToggle, pressed && { opacity: 0.6 }]}>
+                    <Text style={styles.promoToggleText}>세금계산서가 필요하신가요?</Text>
+                  </Pressable>
+                ) : (
+                  <Appear delay={0}>
+                  <View style={styles.section}>
+                    <Text style={styles.sectionLabel}>세금계산서</Text>
+                    <View style={styles.card}>
+                      <TextInput
+                        value={bizNo}
+                        onChangeText={setBizNo}
+                        placeholder="466-03-04380"
+                        placeholderTextColor={InkColors.ink3}
+                        style={styles.input}
+                        keyboardType="number-pad"
+                        maxLength={12}
+                        accessibilityLabel="사업자등록번호 입력"
+                      />
+                      <TextInput
+                        value={bizEmail}
+                        onChangeText={setBizEmail}
+                        placeholder="계산서 받을 이메일"
+                        placeholderTextColor={InkColors.ink3}
+                        style={styles.input}
+                        keyboardType="email-address"
+                        autoCapitalize="none"
+                        autoCorrect={false}
+                        maxLength={120}
+                        accessibilityLabel="계산서 받을 이메일 입력"
+                      />
+                      <Text style={styles.hint}>입금 확인 후 적어주신 주소로 보내드려요.</Text>
+                    </View>
+                  </View>
+                  </Appear>
+                )}
+
+                {/* 주문 시점 동의(0116) — 이 기록이 계약서를 대신한다. 서버도 없으면 거부한다. */}
+                <Appear delay={120}>
+                <Pressable
+                  onPress={() => setAgreed((v) => !v)}
+                  style={({ pressed }) => [styles.consentRow, pressed && { opacity: 0.7 }]}
+                  accessibilityRole="checkbox"
+                  accessibilityState={{ checked: agreed }}
+                  accessibilityLabel="유료 이용 조건 동의"
+                >
+                  <Ionicons
+                    name={agreed ? 'checkbox' : 'square-outline'}
+                    size={22}
+                    color={agreed ? InkColors.ink : InkColors.ink3}
+                  />
+                  <Text style={styles.consentText}>
+                    한 달치 선불이고 자동으로 결제되지 않는다는 점, 환불 규정을 확인했어요.
+                  </Text>
+                </Pressable>
                 </Appear>
 
                 <Appear delay={120}>
@@ -637,6 +748,10 @@ const styles = StyleSheet.create({
     color: InkColors.ink,
     backgroundColor: InkColors.bgSoft,
   },
+
+  // 주문 시점 동의 체크 — 48dp 터치 타깃(체크박스 단독이 아니라 행 전체가 눌린다).
+  consentRow: { flexDirection: 'row', alignItems: 'center', gap: Space.md, minHeight: 48, paddingHorizontal: 2 },
+  consentText: { flex: 1, fontSize: 15, lineHeight: 22, color: InkColors.ink2, fontWeight: '600' },
 
   mailRow: { alignItems: 'center', paddingVertical: Space.sm },
   mailText: { fontSize: 12.5, fontWeight: '700', color: InkColors.ink3 },
