@@ -26,13 +26,16 @@ const HOME_LIST_LIMIT = 3;
 /**
  * 직원 홈 — 사령탑(하루의 앵커).
  *
- * ★Primary = **오늘 할 일**(2026-08-05 블록 어휘 개편에서 교체).
- *   직전까지는 '노하우 물어보기'가 Primary였다(IA 결정 2 = 안 B, 2026-07-29 — 질문→노하우 루프가
- *   전략 정본의 북극성이라 1등석을 줬다). 그러나 직원은 배우러 앱을 열지 않는다 —
- *   "오늘 뭘 해야 하나"를 보러 연다. 물어보기는 그 아래 2번 자리로 내리되 카드는 그대로 남긴다
- *   (진입점을 없애는 게 아니라 순서만 바꾼 것 — 북극성 루프는 채팅 탭에서 그대로 살아 있다).
+ * ★**최우선과 Primary는 다른 자리다**(2026-08-06 정정). 정본 §2 직원 표가 둘을 나눠 적어뒀다.
+ *   - 최우선(첫 스크린에서 가장 큰 것) = **오늘 할 일**. 직원은 배우러 앱을 열지 않고
+ *     "오늘 뭘 해야 하나"를 보러 연다. 위치·크기 1등은 여기.
+ *   - Primary(화면당 1개인 채운 액션 버튼) = **노하우 물어보기**. 질문→노하우 루프가 북극성이다.
+ *   2026-08-05에 이 둘을 한 단어로 뭉쳐 'Primary = 오늘 할 일'로 적었더니, 실제 화면에서는
+ *   셋째 자리 **출퇴근**이 유일한 옐로 글로우 채움 버튼이라 1등석을 가져가 있었다(선언·주석·시각이 전부 불일치).
+ *   → 물어보기를 채운 버튼으로, 출근하기를 아웃라인으로 되돌렸다.
  *
  * 블록 5개(A형 예산): 1) 오늘 할 일 2) 노하우 물어보기 3) 출퇴근 4) 오늘 한눈에 5) 기능 안내.
+ * 카드는 1)·3) 둘만 — 2)는 카드를 벗겨 같은 형태 3연속(배치규칙①)을 끊었다.
  * 카드 밖 라벨은 공용 <SectionLabel>을 쓴다 — 로컬 재구현본은 폐기했다(ui.md 재구현 금지).
  */
 export default function JuniorHomeScreen() {
@@ -164,16 +167,21 @@ export default function JuniorHomeScreen() {
           </View>
         </Appear>
 
-        {/* 2) 노하우 물어보기 — Primary 자리는 내줬지만 카드는 그대로. 북극성 루프의 홈 진입점이다. */}
+        {/* 2) 노하우 물어보기 — ★이 화면의 Primary(정본 §2 직원 표). 2026-08-06에 되돌렸다.
+             최우선(가장 큰 것) = 위 '오늘 할 일', Primary(주 액션 버튼) = 여기. 둘은 다른 자리다.
+             카드는 벗기고 버튼을 채웠다 — 카드 3연속을 끊으면서 위계는 올린다(styles.askBlock 주석). */}
         <Appear style={styles.section}>
           <SectionLabel icon="search-outline" title="노하우 물어보기" />
-          <View style={styles.askCard}>
+          <View style={styles.askBlock}>
             <Text style={styles.askSub}>매장 노하우를 바로 찾아드려요. 없으면 사장님께 대신 여쭤볼게요.</Text>
-            <Pressable onPress={() => goToTab('/junior/chat')} style={({ pressed }) => [styles.askBar, pressed && { opacity: 0.85 }]}>
-              <Text style={styles.askBarText}>궁금한 걸 물어보세요</Text>
-              <View style={styles.askSend}>
-                <Ionicons name="arrow-up" size={16} color={InkColors.ink} />
-              </View>
+            <Pressable
+              onPress={() => goToTab('/junior/chat')}
+              accessibilityRole="button"
+              accessibilityLabel="궁금한 거 물어보기"
+              style={({ pressed }) => [styles.askPrimary, pressed && { opacity: 0.85 }]}
+            >
+              <Text style={styles.askPrimaryText}>궁금한 거 물어보기</Text>
+              <Ionicons name="arrow-forward" size={16} color={InkColors.ink} />
             </Pressable>
             <View style={styles.askChips}>
               {QUICK_ASKS.map((q) => (

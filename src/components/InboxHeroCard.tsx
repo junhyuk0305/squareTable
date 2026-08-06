@@ -8,20 +8,23 @@ type Props = {
   uq: UnknownQuery;
   careerDays?: number;
   onPress: () => void;
+  /** 이 1건을 뺀 나머지 대기 건수. 0이면 '외 n건' 줄을 그리지 않는다(홈에서만 쓴다). */
+  moreCount?: number;
+  onMore?: () => void;
 };
 
 /**
- * 우선 답변 hero 카드 — pending 중 best_match_confidence 가장 낮은 1건.
- * 디자인: 큰 카드 + 시급도 텍스트 + 큰 답변 CTA.
+ * 우선 답변 hero 카드 — pending 중 가장 오래 기다린 1건(sortByUrgency SSOT).
+ * 디자인: 큰 카드 + 대기시간 + 큰 답변 CTA.
  */
-export function InboxHeroCard({ uq, careerDays, onPress }: Props) {
+export function InboxHeroCard({ uq, careerDays, onPress, moreCount = 0, onMore }: Props) {
   const ago = formatAsked(uq.asked_at);
 
   return (
     <View style={styles.card}>
-      {/* 헤더: 시급도. 종류(루틴/돌발) 칩은 AI 내부 분류라 비노출(2026-07-31 카테고리 단일화). */}
+      {/* 헤더: 얼마나 기다렸나. 종류(루틴/돌발) 칩은 AI 내부 분류라 비노출(2026-07-31 카테고리 단일화). */}
       <View style={styles.head}>
-        <Text style={styles.urgent}>가장 시급 · {ago}</Text>
+        <Text style={styles.urgent}>가장 오래 기다린 질문 · {ago}</Text>
       </View>
 
       {/* 질문 본문 */}
@@ -49,6 +52,19 @@ export function InboxHeroCard({ uq, careerDays, onPress }: Props) {
       >
         <Text style={styles.ctaText}>답변하기  →</Text>
       </Pressable>
+
+      {/* 규모 노출 — 1건만 보이면 "이거 하나만 하면 되는구나"로 읽힌다. 히어로는 시작 지점이지 전부가 아니다. */}
+      {moreCount > 0 && onMore && (
+        <Pressable
+          onPress={onMore}
+          hitSlop={6}
+          accessibilityRole="button"
+          accessibilityLabel={`답 기다리는 질문 ${moreCount}건 더 보기`}
+          style={({ pressed }) => [styles.more, pressed && { opacity: 0.6 }]}
+        >
+          <Text style={styles.moreText}>외 {moreCount}건 더 기다려요 ›</Text>
+        </Pressable>
+      )}
     </View>
   );
 }
@@ -113,4 +129,7 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: '800',
   },
+  // '외 n건'은 꼬리표(보조)라 본문 하한(15sp) 대상이 아니다 — 위치·규모를 알리는 라벨.
+  more: { alignSelf: 'center', minHeight: 24, justifyContent: 'center' },
+  moreText: { fontSize: 13, fontWeight: '700', color: InkColors.ink2 },
 });

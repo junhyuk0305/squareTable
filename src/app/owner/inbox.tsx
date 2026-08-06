@@ -31,9 +31,10 @@ const isUnused = (e: PlaybookEntry) =>
 
 /**
  * Owner Inbox — 받은질문 시니어(사장님) 인박스 = 질문 처리 대시보드.
- * ★최우선 = 가장 시급한 질문 1건. 2026-08-05에 Hero를 3번째에서 맨 위로 올렸다.
- *   ("시급" = AI 자신감 최저 → 동점이면 최근 순. '가장 오래 기다린 것'이 아니다 — sortByUrgency 참조)
- * 1) Hero 우선 답변 1건 (가장 시급 = confidence 최저, sortByUrgency SSOT)
+ * ★최우선 = 가장 오래 기다린 질문 1건. 2026-08-05에 Hero를 3번째에서 맨 위로 올렸다.
+ *   (2026-08-06: 1차 기준을 confidence → 대기시간으로 교체. 카드에 찍히는 "2시간 전"과 정렬 기준을
+ *    일치시켜 사장이 순서를 이해할 수 있게 했다 — 사유는 sortByUrgency 주석 참조)
+ * 1) Hero 우선 답변 1건 (가장 오래 기다린 것, sortByUrgency SSOT)
  * 2) 한눈에 보기 — 요약 3칸(MiniStats) + AI 자동응답률(누적)
  * 3) 노하우 제안 진입 (직원→사장)
  * 4) <InboxSubtabs> [답할 질문 | AI가 답함] — 상태별 파생 필터·카운트는 컴포넌트가 처리.

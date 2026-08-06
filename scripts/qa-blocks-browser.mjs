@@ -162,9 +162,11 @@ async function main() {
   }
 
   // 미답변 질문 2건 — InboxHeroCard(사장 홈 히어로)를 띄우는 조건
-  const uq = (id, text, conf, similar) => ({
+  // ★2026-08-06: 두 건 모두 asked_at=now 라 **대기시간 정렬을 검증하지 못했다**(동점이라 항상 conf로 갈림).
+  //   sortByUrgency 1차 기준이 confidence → 대기시간으로 바뀌었으므로, 시각을 갈라 규칙을 실제로 태운다.
+  const uq = (id, text, conf, similar, askedAt = now) => ({
     id, unit_id: UNIT, junior_id: juniorId, junior_name: 'QA블록직원',
-    query_text: text, asked_at: now,
+    query_text: text, asked_at: askedAt,
     presumed_category: 'Event', presumed_subcategory: '응대',
     match_attempted: true, best_match_confidence: conf, best_match_entry_id: null,
     status: 'pending_owner_answer', fallback_action: '사장님께 알림 전송됨.',
@@ -172,9 +174,14 @@ async function main() {
     similar_queries_count: similar, anonymous: false, ai_general_answer: '',
   });
   {
+    // ★두 건이 서로 반대 결론을 내도록 심는다 — 이게 정렬 규칙의 회귀 증명이다.
+    //   파라솔: confidence 높음(0.35) + 26시간 대기 → **새 규칙(대기시간 1차)의 히어로**
+    //   기프티콘: confidence 최저(0.12) + 1시간 대기 → 옛 규칙(confidence 1차)이었다면 이게 히어로였다
+    //   즉 히어로에 '파라솔'이 떠야 새 규칙이 실제로 걸린 것이다.
+    const hoursAgo = (h) => new Date(Date.now() - h * 3600_000).toISOString();
     const { error } = await admin.from('unknown_queries').insert([
-      uq(`uq_blk1_${s}`, '기프티콘 유효기간 지난 거 가져오시면 어떻게 해요?', 0.12, 2),
-      uq(`uq_blk2_${s}`, '테라스 파라솔 바람 불면 접어야 하나요?', 0.35, 0),
+      uq(`uq_blk1_${s}`, '기프티콘 유효기간 지난 거 가져오시면 어떻게 해요?', 0.12, 2, hoursAgo(1)),
+      uq(`uq_blk2_${s}`, '테라스 파라솔 바람 불면 접어야 하나요?', 0.35, 0, hoursAgo(26)),
     ]);
     if (error) throw new Error('미답변 질문 시드: ' + error.message);
   }
@@ -302,9 +309,14 @@ async function main() {
     check('B1-0 홈 진입', await wait(po, '오늘도 고생 많으세요', 40000));
     await po.waitForTimeout(2500); // 스토어 하이드레이션(노하우·질문·업무)
     check('B1-1 AlertRow — 확인이 필요한 노하우', await see(po, '확인이 필요한 노하우'));
-    check('B1-2 히어로 = 답 기다리는 질문(가장 시급)', await see(po, '가장 시급'));
-    check('B1-3 히어로 질문 본문(confidence 최저 건)', await see(po, '기프티콘 유효기간'));
+    check('B1-2 히어로 = 답 기다리는 질문(가장 오래 기다린 것)', await see(po, '가장 오래 기다린 질문'));
+    // ★정렬 규칙 회귀 — 파라솔(conf 0.35·26시간)이 기프티콘(conf 0.12·1시간)을 이겨야 한다.
+    //   기프티콘이 뜨면 sortByUrgency 1차 기준이 confidence 로 되돌아간 것이다(2026-08-06 교체분).
+    check('B1-3 히어로 = 가장 오래 기다린 건(파라솔)', await see(po, '테라스 파라솔'));
+    check('B1-3b 옛 규칙(confidence 최저=기프티콘)이 히어로가 아니다', !(await see(po, '기프티콘 유효기간')));
     check('B1-4 히어로 CTA', await see(po, '답변하기'));
+    // 대기열 규모 — 히어로 1건만 보이면 "이거 하나만 하면 되는구나"로 읽힌다(pending 2건 → 외 1건).
+    check('B1-4b 히어로 하단 "외 n건"', await see(po, '외 1건'));
     // ★ see()(부분 문자열)로 세지 않는다 — '노하우'는 AlertRow·MiniStats·하단 탭에도 있어서
     //   ActionRow를 통째로 지워도 통과했다(2026-08-06). ActionRow가 실제로 그린 버튼만 센다:
     //   accessibilityRole="button" + accessibilityLabel=라벨, 그리고 5개가 **한 부모** 밑에 있어야 한다.
@@ -371,7 +383,9 @@ async function main() {
     report('B3-5', '퀴즈', qTexts, lowContrast(qTexts));
 
     // ═══════════ B4 직원 홈 ═══════════
-    console.log('\n[B4] 직원 홈 — 오늘 할 일이 Primary');
+    // 최우선(가장 큰 것)=오늘 할 일 · Primary(유일한 채운 버튼)=노하우 물어보기. **둘은 다른 자리다.**
+    // 2026-08-06 이전엔 셋째 자리 '출근하기'가 유일한 옐로 채움+글로우 버튼이라 1등석을 갖고 있었다.
+    console.log('\n[B4] 직원 홈 — 최우선=오늘 할 일 · Primary=물어보기');
     const pj = await newPage(jEmail);
     await pj.goto(`${ORIGIN}/junior/home`, { waitUntil: 'domcontentloaded' });
     check('B4-0 직원 홈 진입', await wait(pj, '오늘도 화이팅이에요', 40000));
@@ -404,6 +418,23 @@ async function main() {
     });
     check('B4-5 ★오늘 할 일이 노하우 물어보기보다 위', order.todo !== null && order.ask !== null && order.todo < order.ask,
       JSON.stringify(order));
+
+    // ★Primary 위계 — "화면당 채운 버튼 1개"를 **렌더된 배경색으로** 잰다.
+    //   선언(주석)·순서만 검사하면 '출근하기가 유일한 옐로 채움'인 상태가 계속 green 으로 통과한다(2026-08-06 실패 원인).
+    //   브랜드 옐로 #FEE500 = rgb(254,229,0). 폭 200px 이상 = 바 형태 버튼만(칩·원형 아이콘 제외).
+    const yellowBtns = await pj.evaluate(() => {
+      const out = [];
+      for (const el of document.querySelectorAll('[role="button"]')) {
+        const cs = getComputedStyle(el);
+        const r = el.getBoundingClientRect();
+        if (cs.backgroundColor === 'rgb(254, 229, 0)' && r.width >= 200) {
+          out.push((el.getAttribute('aria-label') || el.textContent || '').trim().slice(0, 20));
+        }
+      }
+      return out;
+    });
+    check(`B4-5b Primary 채운 버튼은 1개 — 실측 ${JSON.stringify(yellowBtns)}`, yellowBtns.length === 1, JSON.stringify(yellowBtns));
+    check('B4-5c 그 1개가 물어보기다', yellowBtns.length === 1 && yellowBtns[0].includes('물어보기'), JSON.stringify(yellowBtns));
     await shot(pj, '04-junior-home');
 
     console.log('\n[B4-색] 직원 홈 대비 실측');

@@ -19,7 +19,7 @@ export type OwnerDashboardData = {
   /** 오늘 떠야 하는 업무 — 홈 목록(3건 + 전체보기)용. 완료 여부까지 붙여 표시 전용으로 내보낸다. */
   todayTasks: { id: string; text: string; done: boolean }[];
   pending: number;
-  /** 사장 홈 히어로 = 가장 시급한 미답변 질문 1건. 받은질문 화면의 hero와 **같은 1건**(sortByUrgency SSOT). */
+  /** 사장 홈 히어로 = 가장 오래 기다린 미답변 질문 1건. 받은질문 화면의 hero와 **같은 1건**(sortByUrgency SSOT). */
   heroQuery?: UnknownQuery;
   /** heroQuery 작성자의 입사 경과일 — 익명이면 undefined. */
   heroCareerDays?: number;
@@ -84,7 +84,7 @@ export function useOwnerDashboardData(): OwnerDashboardData {
   const pending = pendingList.length;
 
   // 홈 히어로 1건 — 받은질문 화면과 같은 정렬을 쓴다(sortByUrgency = 판정 SSOT).
-  // 두 화면이 다른 질문을 가리키면 "가장 시급"이라는 말이 거짓이 된다.
+  // 두 화면이 다른 질문을 가리키면 "가장 오래 기다린 질문"이라는 말이 거짓이 된다.
   const heroQuery = useMemo(() => sortByUrgency(pendingList)[0], [pendingList]);
   const heroCareerDays = useMemo(() => {
     if (!heroQuery || heroQuery.anonymous) return undefined;

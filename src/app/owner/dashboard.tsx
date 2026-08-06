@@ -34,6 +34,7 @@ export default function OwnerDashboardScreen() {
     entriesCount,
     needsReviewCount,
     working,
+    pending,
     heroQuery,
     heroCareerDays,
     answeredHits30d,
@@ -77,6 +78,29 @@ export default function OwnerDashboardScreen() {
       { key: 'schedule', icon: 'calendar-outline', label: '근무', onPress: () => router.push('/owner/schedule') },
     ],
     [router, pendingJoin],
+  );
+
+  // 경고행(X2)은 화면에 한 자리다. 무엇이 그 자리를 쓰는지만 여기서 정한다.
+  //  ★2026-08-06: 노하우 0건 구간에서 아래 온보딩 블록이 히어로·MiniStats를 통째로 가려,
+  //    "답 기다리는 질문"(D3 최우선·파이프라인 ②포착)이 홈에서 사라져 있었다. 노하우가 없을수록
+  //    AI가 답할 근거가 없어 질문은 오히려 전부 사장에게 쌓인다. 벨 배지는 '모두 읽기'(ackAt) 뒤
+  //    0이 되므로 영속 신호가 못 된다 → 그 구간에서는 경고행이 대기 질문을 가리킨다.
+  //  노하우가 생기면 이 자리는 미검증 경고로 돌아가고, 대기 질문은 아래 H4 히어로가 맡는다
+  //  (같은 것을 한 화면에 두 번 그리지 않는다).
+  const alertRow = useMemo(
+    () =>
+      needsReviewCount > 0
+        ? {
+            label: '확인이 필요한 노하우',
+            count: needsReviewCount,
+            onPress: () => router.push({ pathname: '/owner/knowledge', params: { review: '1' } }),
+          }
+        : {
+            label: '답 기다리는 질문',
+            count: entriesCount === 0 ? pending : 0,
+            onPress: () => goToTab('/owner/inbox'),
+          },
+    [needsReviewCount, entriesCount, pending, router],
   );
 
   const tourSteps: TourStep[] = useMemo(
@@ -135,13 +159,8 @@ export default function OwnerDashboardScreen() {
         <View ref={scrollContentRef} style={styles.scrollInner}>
         <Text style={styles.greet}>오늘도 고생 많으세요</Text>
 
-        {/* ① X2 인라인 경고행 — 미검증(needs_review) 노하우. 0건이면 AlertRow가 스스로 렌더하지 않는다.
-            탭하면 노하우 화면의 '미검증만' 목록으로 바로 진입(review 파라미터 유지). */}
-        <AlertRow
-          label="확인이 필요한 노하우"
-          count={needsReviewCount}
-          onPress={() => router.push({ pathname: '/owner/knowledge', params: { review: '1' } })}
-        />
+        {/* ① X2 인라인 경고행 — 한 자리다. 0건이면 AlertRow가 스스로 렌더하지 않는다. */}
+        <AlertRow label={alertRow.label} count={alertRow.count} onPress={alertRow.onPress} />
 
         {/* 신규 매장 온보딩 — 노하우 0건이면 가장 먼저 첫 입력을 유도(빈 매장 = 직원 답변 0 → 이탈 방지) */}
         {entriesCount === 0 && (
@@ -177,13 +196,16 @@ export default function OwnerDashboardScreen() {
         {/* ② H4 히어로 카드 — 답 기다리는 질문 1건.
             2026-08-05: 히어로를 '대신 답한 횟수'(⑤결과)에서 '답 기다리는 질문'(②포착)으로 교체했다.
             노하우 파이프라인에서 포착이 유일한 유입구이고, 여기가 막히면 전체가 멈춘다.
-            컴포넌트·정렬은 받은질문 화면과 공유한다(InboxHeroCard · sortByUrgency SSOT). */}
+            컴포넌트·정렬은 받은질문 화면과 공유한다(InboxHeroCard · sortByUrgency SSOT).
+            2026-08-06: '외 n건'을 붙였다 — 1건만 보이면 대기열 규모가 안 보여 "이거 하나만"으로 읽힌다. */}
         {entriesCount > 0 && heroQuery && (
           <Appear>
             <InboxHeroCard
               uq={heroQuery}
               careerDays={heroCareerDays}
               onPress={() => router.push({ pathname: '/owner/coach', params: { uqId: heroQuery.id } })}
+              moreCount={Math.max(0, pending - 1)}
+              onMore={() => goToTab('/owner/inbox')}
             />
           </Appear>
         )}

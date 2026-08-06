@@ -348,14 +348,15 @@ export function OwnerKnowhowBrowse({
 
       {/* 미검증 경고행(블록 X2) — 화면 맨 위. 0건이면 AlertRow가 스스로 숨는다.
           2026-08-06: 아래 '한 번에 늘리기' 카드보다 밑에 있어서 경고가 안내에 묻혀 있었다 → 위로 올렸다.
-          목록 필터는 아래 '확인 필요' 칩이 담당하고, 여기는 **개수 알림 + 첫 항목 열기**만 맡는다. */}
+          ★2026-08-06(2차): 탭하면 첫 항목 하나를 열던 것을 **'확인 필요만' 목록 필터**로 바꿨다.
+            "n건"을 눌렀는데 1건만 열리면 나머지 n-1건으로 돌아올 길이 없고, 대시보드 배너의 착지
+            (/owner/knowledge?review=1 = 미검증 필터)와도 서로 달랐다.
+            필터를 켜면 viewAltered 가 true 가 되어 찾기 바가 강제로 나오므로 '확인 필요' 칩으로
+            되돌릴 수 있다 — 끌 수 없는 필터가 생기지 않는다(위 showFindBar 주석). */}
       <AlertRow
         label="확인이 필요한 노하우"
         count={needsReview.length}
-        onPress={() => {
-          const first = needsReview[0];
-          if (first) onSelect(first.id);
-        }}
+        onPress={() => setOnlyNeedsReview(true)}
       />
 
       {/* 노하우 한 번에 늘리기 — 인수인계서 업로드 / 업종 템플릿.

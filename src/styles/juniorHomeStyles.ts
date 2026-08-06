@@ -86,8 +86,11 @@ export const styles = StyleSheet.create({
   payValue: { fontSize: 24, fontWeight: '900', color: InkColors.ink, letterSpacing: -0.5 },
   clockBtn: { width: '100%', paddingVertical: 16, borderRadius: Radius.md, alignItems: 'center' },
   clockBtnBig: { paddingVertical: 20, borderRadius: Radius.lg },
-  // 출근 = 가장 자주 누르는 주인공 액션 → 브랜드 옐로 + 검정 글씨 + 옐로 글로우(액센트의 핵심 자리).
-  clockBtnIn: { backgroundColor: BrandColors.yellow, ...Elevation.ey },
+  // 출근 = ★2026-08-06 옐로 채움+글로우 → **아웃라인**으로 내렸다.
+  //  이 화면의 Primary 는 '물어보기'(정본 §2 직원 표)인데, 실제로는 폭 100% 옐로 글로우 버튼인
+  //  출근하기가 유일한 채운 버튼이라 1등석을 갖고 있었다(정본·주석·시각 위계가 셋 다 달랐다).
+  //  위치·크기(첫 출근 전 clockBtnBig)는 그대로라 못 찾을 일은 없다.
+  clockBtnIn: { backgroundColor: InkColors.bg, borderWidth: 1.5, borderColor: InkColors.ink },
   // 퇴근 = '멈춤' 보조 액션 → 차분한 잉크 블랙(옐로 1차 버튼과 위계 분리).
   clockBtnOut: { backgroundColor: BrandColors.brand },
   clockBtnText: { fontSize: 16, fontWeight: '800', color: InkColors.bubbleText },
@@ -114,42 +117,26 @@ export const styles = StyleSheet.create({
   noticeStripText: { flex: 1, fontSize: 13, fontWeight: '700', color: InkColors.ink },
   noticeStripMore: { fontSize: 12, fontWeight: '700', color: InkColors.ink3 },
 
-  // 노하우 묻기
-  askCard: {
-    backgroundColor: InkColors.bg,
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: InkColors.line,
-    padding: 18,
-    gap: 10,
-    ...Elevation.e1,
-  },
+  // 노하우 묻기 — ★2026-08-06: 카드를 벗겼다(카드 아닌 블록).
+  //  ① 할 일·물어보기·출퇴근 세 카드가 같은 형태로 이어져 배치규칙①(연속 3회 금지) 위반이었다.
+  //  ② 카드를 없앤 게 아니라 옮긴 것이다 — 이 화면의 카드는 '오늘 할 일'·'출퇴근' 2개가 남는다(규칙⑤).
+  askBlock: { gap: 10 },
   askSub: { fontSize: 13, color: InkColors.ink3, lineHeight: 19 },
-  // 진짜 입력처럼 보이는 흰 바 + 우측 노란 전송 버튼(탭하면 물어보기 탭으로 진입).
-  askBar: {
+  // ★Primary — 이 화면에서 유일한 '채운' 버튼(복잡도 원칙: 화면당 Primary 1개).
+  //  직전까지는 가짜 입력창(회색 placeholder + 32px 노란 전송 원)이라 위계가 보조로 읽혔고,
+  //  탭해도 입력이 안 되는 가짜였다. 누르면 이동하는 것이므로 버튼으로 정직하게 그린다.
+  askPrimary: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    backgroundColor: InkColors.bg,
-    borderWidth: 1,
-    borderColor: InkColors.line,
-    borderRadius: Radius.pill,
-    paddingLeft: 16,
-    paddingRight: 6,
-    paddingVertical: 6,
-    ...Elevation.e1,
-  },
-  askBarText: { flex: 1, fontSize: 14, color: InkColors.ink3, fontWeight: '600' },
-  // 전송 버튼 = 노랑 원형 + 검정 화살표(옐로 글로우). 입력창의 주인공 액션 자리.
-  askSend: {
-    width: 32,
-    height: 32,
-    borderRadius: Radius.pill,
-    backgroundColor: BrandColors.yellow,
-    alignItems: 'center',
     justifyContent: 'center',
+    gap: 8,
+    minHeight: 52,
+    paddingHorizontal: Space.lg,
+    borderRadius: Radius.md,
+    backgroundColor: BrandColors.yellow,
     ...Elevation.ey,
   },
+  askPrimaryText: { fontSize: 16, fontWeight: '800', color: InkColors.ink },
   askChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   askChip: {
     backgroundColor: InkColors.bg,
