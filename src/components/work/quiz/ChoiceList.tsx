@@ -54,7 +54,7 @@ export function ChoiceList({
                   color={showRight ? BrandColors.good : BrandColors.bad}
                 />
                 {/* 색만으로 상태를 구분하지 않는다 — 라벨 병기 */}
-                <Text style={[qs.choiceMark, { color: showRight ? BrandColors.good : BrandColors.bad }]}>
+                <Text style={[qs.choiceMark, { color: showRight ? BrandColors.goodText : BrandColors.badText }]}>
                   {showRight ? '이게 맞아요' : '고른 답'}
                 </Text>
               </>

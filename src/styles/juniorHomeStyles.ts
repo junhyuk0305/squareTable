@@ -1,6 +1,7 @@
 import { StyleSheet } from 'react-native';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Elevation, Radius } from '@/lib/theme/elevation';
+import { Space } from '@/lib/theme/layout';
 
 export const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: InkColors.cream },
@@ -10,43 +11,43 @@ export const styles = StyleSheet.create({
 
   // 섹션: [밖 라벨] + [안 카드] 묶음. scroll의 gap이 섹션 사이를 벌리고, 이 gap이 라벨↔카드를 붙인다.
   section: { gap: 8 },
-  // 섹션 라벨 — 카드 밖(위)
-  sectionLabel: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 4 },
-  sectionLabelText: { fontSize: 13.5, fontWeight: '800', color: InkColors.ink2, letterSpacing: -0.2 },
-  sectionLabelTrailing: { marginLeft: 'auto' },
+  // 섹션 라벨은 공용 <SectionLabel>을 쓴다 — 로컬 재구현본 폐기(2026-08-05).
 
-  // 오늘 한눈에 — 3칸 KPI(할일·공지·근무). 각 칸 동일 크기로 스캔.
-  kpiRow: { flexDirection: 'row', gap: 8 },
-  kpi: {
-    flex: 1,
+  // 오늘 할 일(Primary) — 남은 개수 + 데이파트 칩 + 목록 3건을 한 카드에.
+  todoCard: {
     backgroundColor: InkColors.bg,
     borderRadius: Radius.md,
     borderWidth: 1,
     borderColor: InkColors.line,
-    paddingVertical: 14,
-    paddingHorizontal: 8,
-    alignItems: 'center',
-    gap: 5,
+    paddingVertical: Space.md,
+    paddingHorizontal: Space.lg,
+    gap: Space.md,
     ...Elevation.e1,
   },
-  // 할일이 남았을 때만 노란 틴트로 '아직 할 게 있음'을 약하게 강조(액센트).
-  kpiHi: { backgroundColor: BrandColors.yellowSoft, borderColor: BrandColors.yellowDeep },
-  kpiValue: { fontSize: 22, fontWeight: '900', color: InkColors.ink, letterSpacing: -0.5, lineHeight: 24 },
-  kpiUnit: { fontSize: 13, fontWeight: '800', color: InkColors.ink2 },
-  kpiLabel: { fontSize: 11, fontWeight: '700', color: InkColors.ink3 },
-  // 교대 요청이 들어와 있으면 근무 칸 우상단에 빨간 점.
-  kpiDot: { position: 'absolute', top: 8, right: 8, width: 7, height: 7, borderRadius: 4, backgroundColor: BrandColors.accent },
-
-  // 오늘의 매장(출근 브리핑) — 데이파트 완료 칩 + 멘션 한 줄을 한 카드에.
-  briefCard: {
-    backgroundColor: InkColors.bg,
+  todoLead: { fontSize: 17, lineHeight: 24, fontWeight: '900', color: InkColors.ink, letterSpacing: -0.3 },
+  todoRow: { flexDirection: 'row', alignItems: 'center', gap: Space.md, minHeight: 48, paddingVertical: Space.xs },
+  todoRowDivider: { borderTopWidth: 1, borderTopColor: InkColors.line },
+  todoText: { flex: 1, minWidth: 0, fontSize: 15, lineHeight: 21, fontWeight: '600', color: InkColors.ink },
+  todoTextDone: { color: InkColors.ink3, textDecorationLine: 'line-through' },
+  todoEmpty: { fontSize: 15, lineHeight: 22, fontWeight: '600', color: InkColors.ink2 },
+  // 빈 상태 버튼은 **아웃라인**이다 — 같은 화면의 '퇴근하기'(검정 솔리드)와 겹치면
+  // Primary가 2개로 보인다(복잡도 원칙: 화면당 Primary 1개).
+  todoEmptyBtn: {
+    alignSelf: 'flex-start',
+    minHeight: 48,
+    justifyContent: 'center',
+    paddingHorizontal: Space.lg,
     borderRadius: Radius.md,
     borderWidth: 1,
-    borderColor: InkColors.line,
-    padding: 14,
-    gap: 10,
-    ...Elevation.e1,
+    borderColor: InkColors.ink,
+    backgroundColor: InkColors.bg,
   },
+  todoEmptyBtnText: { fontSize: 15, fontWeight: '800', color: InkColors.ink },
+  moreLink: { fontSize: 13, fontWeight: '700', color: InkColors.ink2 },
+
+  // 오늘 한눈에 3칸 KPI는 공용 <MiniStats>(블록 I3)로 대체됨(2026-08-05).
+
+  // 데이파트 완료 칩 — '오늘 할 일' 카드 안으로 이관(2026-08-05). 멘션 한 줄은 MiniStats 칸으로 압축.
   briefDayparts: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   dpChip: {
     flexDirection: 'row',
@@ -62,21 +63,7 @@ export const styles = StyleSheet.create({
   // 완료된 데이파트 = 초록 틴트 + 체크(다 했음을 한눈에).
   dpChipDone: { backgroundColor: '#E6F1EA', borderColor: BrandColors.good },
   dpChipText: { fontSize: 12.5, fontWeight: '800', color: InkColors.ink2 },
-  dpChipTextDone: { color: BrandColors.good },
-  // 나를 언급한 글 — 브랜드 좌측바로 멘션임을 표시(공지 strip과 형제 패턴).
-  briefMention: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: BrandColors.brandSoft,
-    borderRadius: Radius.sm,
-    borderLeftWidth: 3,
-    borderLeftColor: BrandColors.brand,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-  },
-  briefMentionText: { flex: 1, fontSize: 13, fontWeight: '700', color: InkColors.ink },
-  briefMentionMore: { fontSize: 12, fontWeight: '700', color: InkColors.ink3 },
+  dpChipTextDone: { color: BrandColors.goodText },
 
   // 출퇴근
   clockCard: {
@@ -89,7 +76,7 @@ export const styles = StyleSheet.create({
     gap: 6,
     ...Elevation.e1,
   },
-  workingTag: { fontSize: 13, fontWeight: '800', color: BrandColors.accent },
+  workingTag: { fontSize: 13, fontWeight: '800', color: BrandColors.accentText },
   clockTime: { fontSize: 38, fontWeight: '900', color: InkColors.ink, letterSpacing: -1 },
   clockReady: { fontSize: 19, fontWeight: '800', color: InkColors.ink, letterSpacing: -0.3, marginTop: 2 },
   clockSub: { fontSize: 14, color: InkColors.ink3, fontWeight: '600', marginBottom: 4 },

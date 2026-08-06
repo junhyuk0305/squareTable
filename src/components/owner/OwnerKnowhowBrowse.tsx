@@ -8,11 +8,13 @@ import { useWorkStore } from '@/lib/store/useWorkStore';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { EmptyState } from '@/components/EmptyState';
 import { InfoDot } from '@/components/InfoDot';
+import { VerifyBadge } from '@/components/VerifyBadge';
+import { AlertRow } from '@/components/blocks/AlertRow';
+import { SectionLabel } from '@/components/SectionLabel';
 import { CategoryEditSheet } from '@/components/owner/CategoryEditSheet';
 import { getSectionMeta } from '@/lib/utils/category';
 import { matchesKnowhowQuery } from '@/lib/utils/knowhowSearch';
 import { track } from '@/lib/analytics/track';
-import { verifyMeta } from '@/lib/utils/verification';
 import { UNSECTIONED, sectionOptions } from '@/lib/config/sections';
 import { manualToText } from '@/lib/utils/manualText';
 import { useCopyToClipboard, canCopyToClipboard } from '@/lib/utils/useCopyToClipboard';
@@ -49,7 +51,6 @@ const sectionOf = (e: PlaybookEntry) => e.section?.trim() || UNSECTIONED;
  */
 function EntryRow({ e, onPress, usedBy = 0, divider = true }: { e: PlaybookEntry; onPress: () => void; usedBy?: number; divider?: boolean }) {
   const meta = getSectionMeta(e.section);
-  const v = e.verification ? verifyMeta(e.verification.state) : null;
   const ratePct = Math.round((e.stats?.resolution_rate ?? 0) * 100);
   return (
     <Pressable onPress={onPress} style={({ pressed }) => [styles.row, !divider && styles.rowNoDivider, pressed && { opacity: 0.7 }]}>
@@ -79,11 +80,7 @@ function EntryRow({ e, onPress, usedBy = 0, divider = true }: { e: PlaybookEntry
               <Text style={styles.badgeUnusedText}>안 쓰임</Text>
             </View>
           ) : null}
-          {v ? (
-            <View style={[styles.badge, { backgroundColor: v.bg }]}>
-              <Text style={[styles.badgeText, { color: v.fg }]}>{v.label}</Text>
-            </View>
-          ) : null}
+          {e.verification ? <VerifyBadge state={e.verification.state} size="list" /> : null}
         </View>
       </View>
       <Ionicons name="chevron-forward" size={18} color={InkColors.ink3} />
@@ -320,35 +317,53 @@ export function OwnerKnowhowBrowse({
         </Pressable>
       )}
 
-      {/* 인수인계서 올리기 — 노하우 주 입구. 사장이 이미 가진 매뉴얼·메모를 통째로 올리면 AI가 항목별로 분리. */}
-      <Pressable
-        onPress={goHandover}
-        style={({ pressed }) => [styles.templateLink, pressed && { opacity: 0.85 }]}
-        accessibilityRole="button"
-        accessibilityLabel="인수인계서 올리기"
-      >
-        <Ionicons name="cloud-upload-outline" size={16} color={InkColors.ink2} />
-        <View style={{ flex: 1 }}>
-          <Text style={styles.templateLinkTitle}>인수인계서 올리기</Text>
-          <Text style={styles.templateLinkSub}>오픈·마감·규칙 메모를 올리면 AI가 노하우로 정리해요</Text>
-        </View>
-        <Ionicons name="chevron-forward" size={16} color={InkColors.ink3} />
-      </Pressable>
+      {/* 미검증 경고행(블록 X2) — 화면 맨 위. 0건이면 AlertRow가 스스로 숨는다.
+          2026-08-06: 아래 '한 번에 늘리기' 카드보다 밑에 있어서 경고가 안내에 묻혀 있었다 → 위로 올렸다.
+          목록 필터는 아래 '확인 필요' 칩이 담당하고, 여기는 **개수 알림 + 첫 항목 열기**만 맡는다. */}
+      <AlertRow
+        label="확인이 필요한 노하우"
+        count={needsReview.length}
+        onPress={() => {
+          const first = needsReview[0];
+          if (first) onSelect(first.id);
+        }}
+      />
 
-      {/* 템플릿 둘러보기 — 홈에서 이관(회의 반영). 업종 표준 노하우를 검색해 내 노하우로 가져온다. */}
-      <Pressable
-        onPress={goTemplates}
-        style={({ pressed }) => [styles.templateLink, pressed && { opacity: 0.85 }]}
-        accessibilityRole="button"
-        accessibilityLabel="노하우 템플릿 둘러보기"
-      >
-        <Ionicons name="albums-outline" size={16} color={InkColors.ink2} />
-        <View style={{ flex: 1 }}>
-          <Text style={styles.templateLinkTitle}>노하우 템플릿 둘러보기</Text>
-          <Text style={styles.templateLinkSub}>업종에서 자주 쓰는 노하우를 내 노하우로 바로 가져와요</Text>
+      {/* 노하우 한 번에 늘리기 — 인수인계서 업로드 / 업종 템플릿.
+          ★2026-08-06: 같은 형태의 카드 2장이 나란히 서 있어(이번 개편이 없애려던 증상) **한 카드 안 2행**으로 묶었다.
+          반복은 블록 1개로 센다(복잡도 원칙 §4) — 형태가 늘지 않는다. */}
+      <View style={styles.growSection}>
+        <SectionLabel icon="sparkles-outline" title="한 번에 늘리기" />
+        <View style={styles.growCard}>
+          <Pressable
+            onPress={goHandover}
+            style={({ pressed }) => [styles.growRow, pressed && { opacity: 0.85 }]}
+            accessibilityRole="button"
+            accessibilityLabel="인수인계서 올리기"
+          >
+            <Ionicons name="cloud-upload-outline" size={16} color={InkColors.ink2} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.templateLinkTitle}>인수인계서 올리기</Text>
+              <Text style={styles.templateLinkSub}>오픈·마감·규칙 메모를 올리면 AI가 노하우로 정리해요</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color={InkColors.ink3} />
+          </Pressable>
+
+          <Pressable
+            onPress={goTemplates}
+            style={({ pressed }) => [styles.growRow, styles.growRowDivider, pressed && { opacity: 0.85 }]}
+            accessibilityRole="button"
+            accessibilityLabel="노하우 템플릿 둘러보기"
+          >
+            <Ionicons name="albums-outline" size={16} color={InkColors.ink2} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.templateLinkTitle}>노하우 템플릿 둘러보기</Text>
+              <Text style={styles.templateLinkSub}>업종에서 자주 쓰는 노하우를 내 노하우로 바로 가져와요</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color={InkColors.ink3} />
+          </Pressable>
         </View>
-        <Ionicons name="chevron-forward" size={16} color={InkColors.ink3} />
-      </Pressable>
+      </View>
 
       {!hasEntries ? (
         loadError ? (
@@ -369,29 +384,6 @@ export function OwnerKnowhowBrowse({
         )
       ) : (
         <>
-          {/* 미검증 배너 — needs_review가 남아있는 동안만. 탭하면 확인할 노하우로 바로 데려간다. */}
-          {needsReview.length > 0 && (
-            <Pressable
-              onPress={() => {
-                // '확인하기'는 확인할 노하우를 곧장 연다(수정 저장 = 우리 매장 기준 확인 완료).
-                // 필터만 바꾸면 진입 상태(홈 '확인 필요'로 들어오면 이미 미검증만 켜진 상태)가 그대로라
-                // 아무 반응이 없어 '안 눌린다'처럼 보인다. 목록 필터는 아래 '확인 필요 N' 칩이 담당.
-                const first = needsReview[0];
-                if (first) onSelect(first.id);
-              }}
-              style={({ pressed }) => [styles.banner, pressed && { opacity: 0.9 }]}
-              accessibilityRole="button"
-              accessibilityLabel={`확인 필요한 노하우 ${needsReview.length}개 확인하기`}
-            >
-              <Ionicons name="alert-circle" size={18} color={BrandColors.warn} />
-              <View style={{ flex: 1 }}>
-                <Text style={styles.bannerTitle}>확인 필요한 노하우 {needsReview.length}개</Text>
-                <Text style={styles.bannerBody}>업종 표준값이에요. 우리 매장 기준이 맞는지 확인해 주세요.</Text>
-              </View>
-              <Text style={styles.bannerCta}>확인하기 ›</Text>
-            </Pressable>
-          )}
-
           {/* 검색창 */}
           <View style={styles.search}>
             <Ionicons name="search" size={16} color={InkColors.ink3} />
@@ -448,7 +440,9 @@ export function OwnerKnowhowBrowse({
                 accessibilityLabel={`확인 필요 ${needsReview.length}개만 보기`}
               >
                 <Ionicons name="alert-circle" size={13} color={onlyNeedsReview ? InkColors.ink : BrandColors.warn} />
-                <Text style={[styles.statusChipText, onlyNeedsReview && styles.statusChipTextInk]}>확인 필요 {needsReview.length}</Text>
+                {/* ★개수를 쓰지 않는다 — 같은 화면 위 AlertRow가 이미 개수를 말한다(2026-08-06).
+                    이 칩의 책임은 '거르기' 하나다. 개수는 스크린리더용 라벨에만 남긴다. */}
+                <Text style={[styles.statusChipText, onlyNeedsReview && styles.statusChipTextInk]}>확인 필요</Text>
               </Pressable>
             </ScrollView>
           )}
@@ -541,29 +535,23 @@ const styles = StyleSheet.create({
   addBtnText: { color: InkColors.ink, fontSize: 13, fontWeight: '800' },
 
   // 템플릿 둘러보기 진입 링크(홈에서 이관)
-  templateLink: {
-    flexDirection: 'row', alignItems: 'center', gap: Space.sm,
+  // '한 번에 늘리기' — 두 진입을 한 카드 안 2행으로. 카드 1장 = 블록 1개(2026-08-06).
+  growSection: { gap: Space.sm },
+  growCard: {
     backgroundColor: InkColors.bg, borderWidth: 1, borderColor: InkColors.line,
-    borderRadius: Radius.md, paddingVertical: Space.md, paddingHorizontal: Space.md, ...Elevation.e1,
+    borderRadius: Radius.md, ...Elevation.e1,
   },
+  growRow: {
+    flexDirection: 'row', alignItems: 'center', gap: Space.sm,
+    paddingVertical: Space.md, paddingHorizontal: Space.md,
+  },
+  growRowDivider: { borderTopWidth: 1, borderTopColor: InkColors.line },
   templateLinkTitle: { fontSize: 14, fontWeight: '800', color: InkColors.ink },
   templateLinkSub: { fontSize: 12, color: InkColors.ink3, fontWeight: '600', marginTop: 1 },
 
-  // 미검증 배너
-  banner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.sm,
-    backgroundColor: BrandColors.warnSoft,
-    borderWidth: 1,
-    borderColor: BrandColors.warnBorder,
-    borderRadius: Radius.md,
-    paddingVertical: Space.md,
-    paddingHorizontal: Space.md,
-  },
+  // 미검증 배너는 공용 <AlertRow>(블록 X2)로 대체됨. 아래 둘은 검토 대기(draft) 배너가 계속 쓴다.
   bannerTitle: { fontSize: 14, fontWeight: '800', color: InkColors.ink },
   bannerBody: { fontSize: 12, color: InkColors.ink2, marginTop: 1 },
-  bannerCta: { fontSize: 13, fontWeight: '800', color: BrandColors.warn },
 
   // 검토 대기(draft) 배너 — 인수인계서 검수 재진입점
   draftBanner: {
@@ -645,12 +633,10 @@ const styles = StyleSheet.create({
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3, flexWrap: 'wrap' },
   meta: { fontSize: 12, color: InkColors.ink3, fontWeight: '600' },
   metaRate: { fontSize: 12, color: InkColors.ink2, fontWeight: '700' },
-  badge: { paddingVertical: 2, paddingHorizontal: 7, borderRadius: Radius.pill },
-  badgeText: { fontSize: 10, fontWeight: '800' },
   badgeReview: { paddingVertical: 2, paddingHorizontal: 7, borderRadius: Radius.pill, backgroundColor: BrandColors.warnSoft },
-  badgeReviewText: { fontSize: 10, fontWeight: '800', color: BrandColors.warn },
+  badgeReviewText: { fontSize: 10, fontWeight: '800', color: BrandColors.warnText },
   badgeUnused: { paddingVertical: 2, paddingHorizontal: 7, borderRadius: Radius.pill, backgroundColor: BrandColors.accentSoft },
-  badgeUnusedText: { fontSize: 10, fontWeight: '800', color: BrandColors.bad },
+  badgeUnusedText: { fontSize: 10, fontWeight: '800', color: BrandColors.badText },
   // 업무 첨부 수(0069 역조회) — 임팩트 신호. 중립 톤(검증·미검증 배지와 색 충돌 방지).
   badgeUsed: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingVertical: 2, paddingHorizontal: 7, borderRadius: Radius.pill, backgroundColor: InkColors.bgSoft },
   badgeUsedText: { fontSize: 10, fontWeight: '800', color: InkColors.ink2 },

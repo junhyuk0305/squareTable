@@ -119,9 +119,9 @@ export function QuizItemsSheet({
                 <View style={ist.rowHead}>
                   <Text style={ist.format} numberOfLines={1}>{FORMATS[it.format]?.label ?? it.format}</Text>
                   <Text style={ist.badge}>{it.source === 'ai' ? '만들어 준 문제' : '직접 쓴 문제'}</Text>
-                  {it.status === 'archived' ? <Text style={[ist.badge, { color: BrandColors.warn }]}>보관됨</Text> : null}
+                  {it.status === 'archived' ? <Text style={[ist.badge, { color: BrandColors.warnText }]}>보관됨</Text> : null}
                   {isStale(it) && it.status === 'active' ? (
-                    <Text style={[ist.badge, { color: BrandColors.warn }]}>노하우가 바뀌었어요</Text>
+                    <Text style={[ist.badge, { color: BrandColors.warnText }]}>노하우가 바뀌었어요</Text>
                   ) : null}
                 </View>
                 <Text style={ist.ask} numberOfLines={3}>{String(it.payload?.ask ?? '')}</Text>
@@ -181,7 +181,7 @@ const ist = StyleSheet.create({
   format: { fontSize: 13, fontWeight: '800', color: InkColors.ink2 },
   badge: { fontSize: 11.5, fontWeight: '800', color: InkColors.ink3 },
   ask: { fontSize: 15, fontWeight: '800', color: InkColors.ink, lineHeight: 22 },
-  answer: { fontSize: 15, fontWeight: '700', color: BrandColors.good, lineHeight: 21 },
+  answer: { fontSize: 15, fontWeight: '700', color: BrandColors.goodText, lineHeight: 21 },
   actions: { flexDirection: 'row', gap: Space.sm, marginTop: Space.xs },
   count: { fontSize: 12.5, fontWeight: '700', color: InkColors.ink3, textAlign: 'center' },
   footRow: { flexDirection: 'row', gap: Space.sm },

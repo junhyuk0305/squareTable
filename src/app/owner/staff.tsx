@@ -353,7 +353,7 @@ export default function OwnerStaffScreen() {
 
 function StatusChip({ status }: { status: 'out' | 'working' | 'done' }) {
   const map = {
-    working: { label: '근무 중', color: BrandColors.accent, bg: BrandColors.accentSoft },
+    working: { label: '근무 중', color: BrandColors.accentText, bg: BrandColors.accentSoft },
     done: { label: '퇴근', color: InkColors.ink3, bg: InkColors.bgSoft },
     out: { label: '미출근', color: InkColors.ink3, bg: InkColors.bgSoft },
   } as const;

@@ -87,7 +87,7 @@ export function QuickJudge({ payload, disabled, result, onAnswer }: QuizRenderer
                     size={18}
                     color={ok ? BrandColors.good : BrandColors.bad}
                   />
-                  <Text style={[qs.choiceMark, { color: ok ? BrandColors.good : BrandColors.bad }]}>
+                  <Text style={[qs.choiceMark, { color: ok ? BrandColors.goodText : BrandColors.badText }]}>
                     {labels[right as number] ?? ''}
                   </Text>
                 </>

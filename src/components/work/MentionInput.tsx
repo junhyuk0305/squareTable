@@ -201,7 +201,7 @@ const s = StyleSheet.create({
   },
   // 위층 입력창은 투명(배경·테두리·글자 모두) + caret만 보이게. 아래 오버레이가 비쳐 보인다.
   inputTransparent: ({ color: 'transparent', caretColor: InkColors.ink, backgroundColor: 'transparent', borderColor: 'transparent', zIndex: 2 } as unknown) as object,
-  mentionTok: { color: BrandColors.mention, fontWeight: '800' },
+  mentionTok: { color: BrandColors.mentionText, fontWeight: '800' },
   pop: {
     position: 'absolute',
     bottom: '110%',

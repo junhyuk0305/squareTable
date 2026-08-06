@@ -398,7 +398,7 @@ const styles = StyleSheet.create({
   },
   rowTitle: { flex: 1, fontSize: 13.5, fontWeight: '700', color: InkColors.ink, minWidth: 0 },
   rowSub: { fontSize: 12, color: InkColors.ink3 },
-  onair: { color: BrandColors.good, fontWeight: '800' },
+  onair: { color: BrandColors.goodText, fontWeight: '800' },
   dot: { width: 8, height: 8, borderRadius: 4 },
   cnt: {
     minWidth: 24, textAlign: 'center', fontSize: 11.5, fontWeight: '900', color: '#8a5a12',

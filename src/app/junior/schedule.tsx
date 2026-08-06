@@ -30,10 +30,10 @@ const STATUS_META: Record<
   SwapRequest['status'],
   { label: string; color: string; bg: string }
 > = {
-  open: { label: '수락 대기', color: BrandColors.warn, bg: '#FBF1DC' },
-  accepted: { label: '사장님 승인 대기', color: BrandColors.warn, bg: '#FBF1DC' },
-  approved: { label: '확정', color: BrandColors.good, bg: '#E4F2E8' },
-  rejected: { label: '사장님 반려', color: BrandColors.bad, bg: BrandColors.accentSoft },
+  open: { label: '수락 대기', color: BrandColors.warnText, bg: '#FBF1DC' },
+  accepted: { label: '사장님 승인 대기', color: BrandColors.warnText, bg: '#FBF1DC' },
+  approved: { label: '확정', color: BrandColors.goodText, bg: '#E4F2E8' },
+  rejected: { label: '사장님 반려', color: BrandColors.badText, bg: BrandColors.accentSoft },
   cancelled: { label: '취소됨', color: InkColors.ink3, bg: InkColors.bgSoft },
 };
 
@@ -447,11 +447,11 @@ const styles = StyleSheet.create({
 
   cardLine: { fontSize: 15, color: InkColors.ink2, lineHeight: 22 },
   cardStrong: { fontWeight: '800', color: InkColors.ink },
-  cardAccepted: { fontSize: 12.5, fontWeight: '700', color: BrandColors.good },
+  cardAccepted: { fontSize: 12.5, fontWeight: '700', color: BrandColors.goodText },
   cardNote: { fontSize: 15, color: InkColors.ink2, fontStyle: 'italic', backgroundColor: InkColors.cream, borderRadius: Radius.sm, paddingHorizontal: 10, paddingVertical: 8 },
 
   conflict: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: BrandColors.accentSoft, borderRadius: Radius.sm, paddingHorizontal: 10, paddingVertical: 8, marginTop: 2 },
-  conflictText: { flex: 1, fontSize: 12, color: BrandColors.bad, fontWeight: '700', lineHeight: 17 },
+  conflictText: { flex: 1, fontSize: 12, color: BrandColors.badText, fontWeight: '700', lineHeight: 17 },
   acceptBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: InkColors.ink, borderRadius: Radius.md, paddingVertical: 12, marginTop: 4 },
   acceptText: { fontSize: 14, fontWeight: '800', color: '#fff' },
   cancelBtn: { alignItems: 'center', justifyContent: 'center', borderRadius: Radius.md, paddingVertical: 11, marginTop: 4, backgroundColor: InkColors.bgSoft, borderWidth: 1, borderColor: InkColors.line },

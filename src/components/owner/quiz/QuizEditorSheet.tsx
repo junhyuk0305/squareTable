@@ -30,12 +30,28 @@ import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
 import type { PlaybookEntry, SquareBlock } from '@/types';
 
+import { StepProgress } from '@/components/blocks/StepProgress';
+
 import { SheetHead, Chip, PrimaryButton, GhostButton, ErrorNote, AnswerReveal, qst } from './kit';
 import { PayloadForm, emptyPayload, answerTextOf, isDontFormat, orderedStepsOf } from './PayloadForm';
 import { QuizPreviewSheet, type QuizPreviewTarget } from './QuizPreviewSheet';
 
 /** 형태 라벨 — 레지스트리가 SSOT. 화면에 게임 이름을 띄우지 않는다는 규칙은 FORMATS.label 이 지킨다. */
 const labelOf = (f: QuizFormat) => FORMATS[f]?.label ?? f;
+
+/**
+ * 문항 만들기 단계 — 진행 표시(n/m)의 SSOT. step 상태값의 순서와 이름을 여기 한 곳에서 정한다.
+ * ★경로마다 단계 수가 다르다: AI는 형태를 고르면 곧장 결과 확인으로 간다(`runGenerate`가 form을 건너뛴다).
+ *   경로를 무시하고 3으로 고정하면 AI에서 "1/3 → 3/3"으로 점프해, 사용자가 안 본 단계가 있는 것처럼 보인다.
+ */
+const STEP_TITLES = {
+  pick: '어떻게 물어볼까요',
+  form: '문제를 채워요',
+  review: '이렇게 낼까요',
+} as const;
+type StepKey = keyof typeof STEP_TITLES;
+const stepOrderOf = (mode: 'ai' | 'manual'): readonly StepKey[] =>
+  mode === 'ai' ? (['pick', 'review'] as const) : (['pick', 'form', 'review'] as const);
 
 export function QuizEditorSheet({
   subject,
@@ -277,6 +293,18 @@ export function QuizEditorSheet({
       <SheetHead title={`${title} · ${subject.title}`} onClose={onClose} />
 
       <ScrollView style={{ flex: 1 }} contentContainerStyle={qst.body} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+        {/* 진행 표시 — 이미 순차 전환하던 단계 위에 "지금 몇 번째인지"만 얹는다.
+            ★'고치기'(editing)만 제외한다 — 그건 form 하나로 바로 들어와 단계가 없다.
+            '다시 만들기'(replacing)는 pick→review 다단계라 표시한다(옛 주석이 틀렸다). */}
+        {!editing && (() => {
+          const order = stepOrderOf(startMode);
+          const i = order.indexOf(step);
+          // 현재 단계가 이 경로에 없으면(방어) 표시하지 않는다 — 틀린 n/m을 보여주느니 안 보이는 게 낫다.
+          return i < 0 ? null : (
+            <StepProgress step={i + 1} total={order.length} title={STEP_TITLES[step]} />
+          );
+        })()}
+
         {step === 'pick' && (
           <>
             {linkedEntries.length === 0 && (
@@ -453,7 +481,7 @@ const est = StyleSheet.create({
   },
   draftFormat: { fontSize: 12, fontWeight: '800', color: InkColors.ink3 },
   draftAsk: { fontSize: 15, fontWeight: '800', color: InkColors.ink, lineHeight: 22 },
-  draftAnswer: { fontSize: 15, fontWeight: '700', color: BrandColors.good, lineHeight: 21 },
+  draftAnswer: { fontSize: 15, fontWeight: '700', color: BrandColors.goodText, lineHeight: 21 },
   draftExplain: { fontSize: 13, color: InkColors.ink2, lineHeight: 19 },
   draftActions: { flexDirection: 'row', gap: Space.sm, marginTop: Space.xs },
 });

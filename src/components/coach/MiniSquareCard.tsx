@@ -88,7 +88,7 @@ export function MiniSquareCard({
       {(editable || !!square.extract.dont) && (
         <View style={[cardStyles.cell, { borderLeftColor: BrandColors.bad }]}>
           <View style={cardStyles.cellHead}>
-            <Text style={[cardStyles.cellName, { color: BrandColors.bad }]}>금지</Text>
+            <Text style={[cardStyles.cellName, { color: BrandColors.badText }]}>금지</Text>
           </View>
           {editable ? (
             <TextInput value={square.extract.dont} onChangeText={(v) => setField({ extract: { ...square.extract, dont: v } })}

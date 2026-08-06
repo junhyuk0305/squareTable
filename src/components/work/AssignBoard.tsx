@@ -161,8 +161,8 @@ const st = StyleSheet.create({
     borderBottomColor: InkColors.line,
   },
   summaryText: { fontSize: 15, fontWeight: '800', color: InkColors.ink },
-  rest: { color: BrandColors.bad },
-  donec: { color: BrandColors.good },
+  rest: { color: BrandColors.badText },
+  donec: { color: BrandColors.goodText },
   assignBtn: {
     marginLeft: 'auto',
     flexDirection: 'row',

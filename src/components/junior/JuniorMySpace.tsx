@@ -140,7 +140,7 @@ export function JuniorMySpace({ me }: { me: string }) {
           accessibilityLabel="내 기여 내보내기"
         >
           <Ionicons name={copied ? 'checkmark' : 'download-outline'} size={14} color={copied ? BrandColors.good : InkColors.ink2} />
-          <Text style={[s.exportBtnText, copied && { color: BrandColors.good }]}>{copied ? '복사됐어요' : '내 기여 내보내기'}</Text>
+          <Text style={[s.exportBtnText, copied && { color: BrandColors.goodText }]}>{copied ? '복사됐어요' : '내 기여 내보내기'}</Text>
         </Pressable>
       )}
 
@@ -181,7 +181,7 @@ export function JuniorMySpace({ me }: { me: string }) {
                 <View style={s.groupRow}>
                   <Ionicons name={sug.status === 'approved' ? 'checkmark-circle' : sug.status === 'rejected' ? 'close-circle' : 'time-outline'} size={16} color={sug.status === 'approved' ? BrandColors.good : sug.status === 'rejected' ? BrandColors.bad : InkColors.ink3} />
                   <Text style={s.rowText} numberOfLines={1}>{sug.text}</Text>
-                  <Text style={[s.statusTag, sug.status === 'approved' && { color: BrandColors.good }, sug.status === 'rejected' && { color: BrandColors.bad }]}>
+                  <Text style={[s.statusTag, sug.status === 'approved' && { color: BrandColors.goodText }, sug.status === 'rejected' && { color: BrandColors.badText }]}>
                     {sug.status === 'approved' ? '반영됨' : sug.status === 'rejected' ? '반려' : '검토 중'}
                   </Text>
                 </View>
@@ -379,7 +379,7 @@ const s = StyleSheet.create({
   rowText: { flex: 1, fontSize: 15, fontWeight: '600', color: InkColors.ink },
   statusTag: { fontSize: 11, fontWeight: '800', color: InkColors.ink3 },
   doneMeta: { fontSize: 11, fontWeight: '600', color: InkColors.ink3 },
-  waitTag: { fontSize: 10.5, fontWeight: '800', color: BrandColors.warn, backgroundColor: BrandColors.warnSoft, paddingHorizontal: 6, paddingVertical: 1, borderRadius: 5, overflow: 'hidden' },
+  waitTag: { fontSize: 10.5, fontWeight: '800', color: BrandColors.warnText, backgroundColor: BrandColors.warnSoft, paddingHorizontal: 6, paddingVertical: 1, borderRadius: 5, overflow: 'hidden' },
   moreRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, borderTopWidth: 1, borderTopColor: InkColors.line, paddingVertical: Space.sm },
   moreText: { fontSize: 12.5, fontWeight: '700', color: InkColors.ink2 },
 
@@ -395,7 +395,7 @@ const s = StyleSheet.create({
   results: { marginTop: 6, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md, backgroundColor: InkColors.bg, overflow: 'hidden' },
   resultRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: InkColors.paper },
   resultText: { flex: 1, fontSize: 15, fontWeight: '600', color: InkColors.ink },
-  resultPick: { fontSize: 11.5, fontWeight: '800', color: BrandColors.good },
+  resultPick: { fontSize: 11.5, fontWeight: '800', color: BrandColors.goodText },
   resultEmpty: { fontSize: 12.5, color: InkColors.ink3, paddingHorizontal: 12, paddingVertical: 12 },
   divider: { height: 1, backgroundColor: InkColors.line, marginVertical: 18 },
   sheetHint: { fontSize: 11.5, color: InkColors.ink3, marginTop: 7 },

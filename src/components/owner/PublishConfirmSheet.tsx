@@ -256,7 +256,7 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.sm,
     paddingHorizontal: Space.md, paddingVertical: Space.md, fontSize: 14, color: InkColors.ink,
   },
-  addWarn: { fontSize: 12, color: BrandColors.warn, lineHeight: 17 },
+  addWarn: { fontSize: 12, color: BrandColors.warnText, lineHeight: 17 },
   addRow: { flexDirection: 'row', gap: Space.sm },
   addUse: { flex: 1, paddingVertical: Space.md, borderRadius: Radius.sm, backgroundColor: BrandColors.yellow, alignItems: 'center' },
   addUseText: { fontSize: 13, fontWeight: '800', color: InkColors.ink },

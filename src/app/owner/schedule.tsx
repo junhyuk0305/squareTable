@@ -233,7 +233,7 @@ const styles = StyleSheet.create({
   scroll: { padding: 20, gap: 16 },
   section: { gap: 10 },
 
-  badge: { minWidth: 22, height: 22, paddingHorizontal: 7, borderRadius: Radius.pill, backgroundColor: BrandColors.accent, alignItems: 'center', justifyContent: 'center' },
+  badge: { minWidth: 22, height: 22, paddingHorizontal: 7, borderRadius: Radius.pill, backgroundColor: BrandColors.accentSolid, alignItems: 'center', justifyContent: 'center' },
   badgeText: { fontSize: 12, fontWeight: '900', color: InkColors.bubbleText },
 
   emptyBox: { alignItems: 'center', gap: 8, paddingVertical: 24, backgroundColor: InkColors.bg, borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line },
@@ -247,7 +247,7 @@ const styles = StyleSheet.create({
   kindTag: { backgroundColor: InkColors.bgSoft, borderRadius: Radius.pill, paddingHorizontal: 9, paddingVertical: 3 },
   kindTagSwap: { backgroundColor: InkColors.ink },
   kindTagText: { fontSize: 11, fontWeight: '800', color: InkColors.ink2 },
-  cardWait: { fontSize: 11.5, fontWeight: '800', color: BrandColors.warn },
+  cardWait: { fontSize: 11.5, fontWeight: '800', color: BrandColors.warnText },
 
   flow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   flowCol: { flex: 1, gap: 2 },

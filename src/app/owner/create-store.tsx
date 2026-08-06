@@ -150,7 +150,7 @@ const styles = StyleSheet.create({
 
   card: { backgroundColor: '#FFFFFF', borderRadius: Radius.lg, borderWidth: 1, borderColor: InkColors.line, padding: 20, gap: 8 },
   label: { fontSize: 13, fontWeight: '700', color: InkColors.ink2, marginTop: 6 },
-  req: { color: BrandColors.accent, fontWeight: '900' },
+  req: { color: BrandColors.accentText, fontWeight: '900' },
   input: { borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md, paddingHorizontal: 14, paddingVertical: 13, fontSize: 15, color: InkColors.ink, backgroundColor: '#FFFFFF' },
   chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.sm },
   chip: { paddingHorizontal: Space.md, paddingVertical: Space.sm, borderRadius: Radius.pill, borderWidth: 1, borderColor: InkColors.line, backgroundColor: '#FFFFFF' },
@@ -158,10 +158,10 @@ const styles = StyleSheet.create({
   chipText: { fontSize: 13, fontWeight: '700', color: InkColors.ink2 },
   chipTextOn: { color: BrandColors.brand },
   bizHint: { fontSize: 12, fontWeight: '600', marginTop: -2 },
-  bizOk: { color: BrandColors.good },
+  bizOk: { color: BrandColors.goodText },
   bizBad: { color: InkColors.ink3 },
 
-  err: { fontSize: 15, color: BrandColors.accent, fontWeight: '600', marginTop: 4 },
+  err: { fontSize: 15, color: BrandColors.accentText, fontWeight: '600', marginTop: 4 },
   primary: { marginTop: 12, backgroundColor: BrandColors.brand, paddingVertical: 16, borderRadius: Radius.md, alignItems: 'center' },
   primaryText: { color: '#FFFFFF', fontSize: 16, fontWeight: '800' },
   logoutRow: { alignItems: 'center', paddingVertical: 4 },

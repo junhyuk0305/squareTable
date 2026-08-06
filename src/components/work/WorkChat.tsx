@@ -344,7 +344,7 @@ export function WorkChat({
                 accessibilityLabel="이 메시지 삭제"
               >
                 <Ionicons name="trash-outline" size={19} color={BrandColors.bad} />
-                <Text style={[s.sheetItemText, { color: BrandColors.bad }]}>삭제</Text>
+                <Text style={[s.sheetItemText, { color: BrandColors.badText }]}>삭제</Text>
               </Pressable>
             )}
             <Pressable onPress={() => setActionItem(null)} style={({ pressed }) => [s.sheetCancel, pressed && { opacity: 0.85 }]}>
@@ -478,7 +478,7 @@ const s = StyleSheet.create({
   msgCaption: { paddingHorizontal: 8, paddingBottom: 5, paddingTop: 1 },
   // 스트림 전역 user-select:none 위에서, 말풍선 본문 텍스트만 선택/복사 가능하게 복원(웹).
   msgText: { fontSize: 14, color: InkColors.ink, lineHeight: 21, ...(Platform.OS === 'web' ? ({ userSelect: 'text' } as object) : null) },
-  mention: { color: BrandColors.mention, fontWeight: '800' },
+  mention: { color: BrandColors.mentionText, fontWeight: '800' },
   mentionMine: { color: BrandColors.yellow },
   // 인라인 시간: 말풍선 옆에 붙어 하단 baseline에 앉는다. 줄바꿈 방지로 flexShrink 0.
   msgTime: { flexShrink: 0, fontSize: 10, color: InkColors.ink3, paddingBottom: 1 },

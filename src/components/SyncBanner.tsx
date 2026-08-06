@@ -60,7 +60,7 @@ const styles = StyleSheet.create({
     gap: Space.sm,
     maxWidth: CONTENT_MAX_WIDTH,
     width: '100%',
-    backgroundColor: BrandColors.accent,
+    backgroundColor: BrandColors.accentSolid,
     borderRadius: Radius.md,
     paddingVertical: Space.md,
     paddingHorizontal: Space.lg,

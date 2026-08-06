@@ -3,6 +3,7 @@ import { StoredImage } from '@/components/StoredImage';
 import { Ionicons } from '@expo/vector-icons';
 
 import { BottomSheet } from '@/components/BottomSheet';
+import { VerifyBadge } from '@/components/VerifyBadge';
 import { BrandColors, InkColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { knowhowSourceLabel } from '@/lib/utils/knowhowSource';
@@ -13,16 +14,6 @@ import type { PlaybookEntry } from '@/types';
  * 답변 카드는 요약(상황/할 일/금지 3핵심)만 보여주므로, 여기선 단계·멘트·기준·사진·검증까지 전부 노출.
  * 프레임 v2 준수 — 카테고리·SQUARE 라벨은 노출하지 않는다.
  */
-function verifyLabel(state?: PlaybookEntry['verification']): { label: string; fg: string; bg: string } | null {
-  switch (state?.state) {
-    case 'owner_verified':
-      return { label: '✓ 사장님 검증', fg: InkColors.ink, bg: BrandColors.yellowSoft };
-    case 'field_tested':
-      return { label: '✓ 현장 검증', fg: BrandColors.good, bg: '#E6F1EA' };
-    default:
-      return null;
-  }
-}
 
 export function EntryDetailModal({
   entry,
@@ -35,7 +26,6 @@ export function EntryDetailModal({
 }) {
   if (!entry) return null;
   const sq = entry.square;
-  const v = verifyLabel(entry.verification);
   const ratePct = typeof entry.stats?.resolution_rate === 'number' ? Math.round(entry.stats.resolution_rate * 100) : null;
   const std = sq.standard;
   const stdMax = std?.max && std.max > 0 ? std.max : 100;
@@ -55,11 +45,8 @@ export function EntryDetailModal({
 
             {/* 메타 배지 */}
             <View style={s.badges}>
-              {v && (
-                <View style={[s.badge, { backgroundColor: v.bg }]}>
-                  <Text style={[s.badgeText, { color: v.fg }]}>{v.label}</Text>
-                </View>
-              )}
+              {/* 검증 배지 — 목록·답변카드와 같은 모양(파란 원 + 흰 체크). 판정·색은 verifyMeta SSOT. */}
+              {entry.verification ? <VerifyBadge state={entry.verification.state} size="detail" /> : null}
               {ratePct !== null && (
                 <View style={[s.badge, { backgroundColor: InkColors.bgSoft }]}>
                   <Text style={[s.badgeText, { color: InkColors.ink2 }]}>해결률 {ratePct}%</Text>
@@ -78,7 +65,7 @@ export function EntryDetailModal({
             {/* 할 일 — 단계 + 멘트 */}
             {(sq.action.steps.length > 0 || sq.action.scripts.length > 0) && (
               <View style={[s.block, { borderLeftColor: BrandColors.good }]}>
-                <Text style={[s.blockLabel, { color: BrandColors.good }]}>할 일</Text>
+                <Text style={[s.blockLabel, { color: BrandColors.goodText }]}>할 일</Text>
                 {sq.action.steps.map((st, i) => (
                   <View key={`st-${i}`} style={s.stepRow}>
                     <Text style={s.stepNum}>{i + 1}</Text>
@@ -97,7 +84,7 @@ export function EntryDetailModal({
             {/* 금지 */}
             {sq.extract.dont?.trim() ? (
               <View style={[s.block, { borderLeftColor: BrandColors.bad }]}>
-                <Text style={[s.blockLabel, { color: BrandColors.bad }]}>금지</Text>
+                <Text style={[s.blockLabel, { color: BrandColors.badText }]}>금지</Text>
                 <Text style={s.body}>{sq.extract.dont}</Text>
               </View>
             ) : null}
@@ -154,7 +141,7 @@ const s = StyleSheet.create({
   body: { fontSize: 15, color: InkColors.ink, lineHeight: 22 },
 
   stepRow: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' },
-  stepNum: { width: 22, height: 22, borderRadius: Radius.sm, backgroundColor: BrandColors.good, color: '#FFFFFF', fontSize: 12, fontWeight: '800', textAlign: 'center', lineHeight: 22 },
+  stepNum: { width: 22, height: 22, borderRadius: Radius.sm, backgroundColor: BrandColors.goodSolid, color: '#FFFFFF', fontSize: 12, fontWeight: '800', textAlign: 'center', lineHeight: 22 },
   stepText: { flex: 1, fontSize: 15, color: InkColors.ink, lineHeight: 22 },
   scriptBox: { flexDirection: 'row', gap: 8, borderWidth: 1, borderColor: BrandColors.good, borderRadius: Radius.sm, paddingHorizontal: 12, paddingVertical: 10, marginTop: 2, backgroundColor: '#FFFFFF' },
   scriptMark: { fontSize: 14 },

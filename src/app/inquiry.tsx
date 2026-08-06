@@ -202,7 +202,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   primaryText: { color: '#FFFFFF', fontSize: 16, lineHeight: 22, fontWeight: '800' },
-  msg: { fontSize: 15, lineHeight: 22, color: BrandColors.accent, fontWeight: '700', textAlign: 'center', marginTop: 2 },
+  msg: { fontSize: 15, lineHeight: 22, color: BrandColors.accentText, fontWeight: '700', textAlign: 'center', marginTop: 2 },
 
   doneHead: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
   doneTitle: { fontSize: 17, fontWeight: '900', color: InkColors.ink },

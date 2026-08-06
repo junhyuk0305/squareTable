@@ -158,7 +158,7 @@ const s = StyleSheet.create({
   navBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
   navCenter: { alignItems: 'center', gap: 2 },
   navRange: { fontSize: 16, fontWeight: '900', color: InkColors.ink },
-  navThis: { fontSize: 12, fontWeight: '700', color: BrandColors.warn },
+  navThis: { fontSize: 12, fontWeight: '700', color: BrandColors.warnText },
   navToday: { fontSize: 12, fontWeight: '700', color: InkColors.ink3 },
 
   // 7칼럼 그리드
@@ -170,7 +170,7 @@ const s = StyleSheet.create({
   colHeadToday: { backgroundColor: InkColors.ink, borderBottomColor: InkColors.ink },
   colDow: { fontSize: 11, fontWeight: '800', color: InkColors.ink2 },
   colDate: { fontSize: 13, fontWeight: '900', color: InkColors.ink },
-  sun: { color: BrandColors.bad },
+  sun: { color: BrandColors.badText },
   headTextToday: { color: '#fff' },
 
   colBody: { padding: 3, gap: 3, minHeight: 44 },

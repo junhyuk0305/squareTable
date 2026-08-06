@@ -195,7 +195,7 @@ export function TrainingInsights({
                     <Text style={tst.blockMeta} numberOfLines={2}>아직 안 끝난 직원 · {p.pendingNames.join(', ')}</Text>
                   ) : null
                 ) : staff.length > 0 ? (
-                  <Text style={[tst.blockMeta, { color: BrandColors.good }]}>전원 통과</Text>
+                  <Text style={[tst.blockMeta, { color: BrandColors.goodText }]}>전원 통과</Text>
                 ) : (
                   <Text style={tst.blockMeta}>아직 직원이 없어요</Text>
                 )}

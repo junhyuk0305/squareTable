@@ -771,7 +771,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 12,
   },
-  errorText: { flex: 1, fontSize: 12.5, fontWeight: '700', color: BrandColors.bad, lineHeight: 17 },
+  errorText: { flex: 1, fontSize: 12.5, fontWeight: '700', color: BrandColors.badText, lineHeight: 17 },
 
   cta: {
     flexDirection: 'row',
@@ -817,7 +817,7 @@ const styles = StyleSheet.create({
     marginBottom: Space.md,
   },
   reviewBannerText: { flex: 1, fontSize: 12.5, fontWeight: '700', color: InkColors.ink, lineHeight: 18 },
-  overflowNote: { fontSize: 12, fontWeight: '600', color: BrandColors.warn, lineHeight: 17, marginBottom: Space.sm },
+  overflowNote: { fontSize: 12, fontWeight: '600', color: BrandColors.warnText, lineHeight: 17, marginBottom: Space.sm },
 
   sectionBlock: { marginBottom: Space.lg, gap: Space.sm },
   sectionHead: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 2 },
@@ -853,12 +853,12 @@ const styles = StyleSheet.create({
   catDot: { width: 7, height: 7, borderRadius: Radius.pill },
   catLabel: { fontSize: 11, fontWeight: '800', color: InkColors.ink2 },
   stepCount: { fontSize: 11, fontWeight: '600', color: InkColors.ink3 },
-  needContent: { fontSize: 11, fontWeight: '700', color: BrandColors.warn },
+  needContent: { fontSize: 11, fontWeight: '700', color: BrandColors.warnText },
 
   badgeDup: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 6, alignSelf: 'flex-start', backgroundColor: BrandColors.accentSoft, borderRadius: Radius.pill, paddingVertical: 3, paddingHorizontal: 8 },
-  badgeDupText: { fontSize: 10.5, fontWeight: '800', color: BrandColors.bad, maxWidth: 240 },
+  badgeDupText: { fontSize: 10.5, fontWeight: '800', color: BrandColors.badText, maxWidth: 240 },
   badgeSim: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 6, alignSelf: 'flex-start', backgroundColor: BrandColors.warnSoft, borderRadius: Radius.pill, paddingVertical: 3, paddingHorizontal: 8 },
-  badgeSimText: { fontSize: 10.5, fontWeight: '800', color: BrandColors.warn, maxWidth: 240 },
+  badgeSimText: { fontSize: 10.5, fontWeight: '800', color: BrandColors.warnText, maxWidth: 240 },
 
   // ── 카드 펼침 편집기 ──
   editor: {
@@ -913,9 +913,9 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   addBtnText: { fontSize: 12.5, fontWeight: '800', color: InkColors.ink2 },
-  editorWarn: { fontSize: 12, fontWeight: '700', color: BrandColors.warn, marginTop: 12 },
+  editorWarn: { fontSize: 12, fontWeight: '700', color: BrandColors.warnText, marginTop: 12 },
   deleteLink: { flexDirection: 'row', alignItems: 'center', gap: 5, alignSelf: 'flex-start', marginTop: 12, paddingVertical: 4 },
-  deleteLinkText: { fontSize: 12, fontWeight: '800', color: BrandColors.bad },
+  deleteLinkText: { fontSize: 12, fontWeight: '800', color: BrandColors.badText },
 
   backLink: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12 },
   backLinkText: { fontSize: 13, fontWeight: '800', color: InkColors.ink2 },

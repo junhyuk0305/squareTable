@@ -182,7 +182,7 @@ export function GhostButton({
       accessibilityLabel={label}
     >
       <Ionicons name={icon} size={16} color={color} />
-      <Text style={[qst.ghostText, danger && { color: BrandColors.bad }]}>{label}</Text>
+      <Text style={[qst.ghostText, danger && { color: BrandColors.badText }]}>{label}</Text>
     </Pressable>
   );
 }
@@ -225,7 +225,7 @@ export const qst = StyleSheet.create({
   sheetHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingBottom: 10, gap: Space.sm },
 
   answerRow: { flexDirection: 'row', alignItems: 'center', gap: Space.xs, minHeight: 32, paddingVertical: Space.xs },
-  answerText: { flex: 1, fontSize: 15, fontWeight: '700', color: BrandColors.good, lineHeight: 21 },
+  answerText: { flex: 1, fontSize: 15, fontWeight: '700', color: BrandColors.goodText, lineHeight: 21 },
   sheetTitle: { flex: 1, fontSize: 15, fontWeight: '800', color: InkColors.ink },
 
   body: { paddingHorizontal: 16, paddingBottom: 20, gap: Space.sm },
@@ -269,7 +269,7 @@ export const qst = StyleSheet.create({
     flexDirection: 'row', alignItems: 'flex-start', gap: Space.sm, marginTop: Space.sm,
     backgroundColor: BrandColors.accentSoft, borderRadius: Radius.md, padding: Space.md,
   },
-  errText: { flex: 1, fontSize: 15, color: BrandColors.bad, fontWeight: '700', lineHeight: 21 },
+  errText: { flex: 1, fontSize: 15, color: BrandColors.badText, fontWeight: '700', lineHeight: 21 },
 
   card: {
     backgroundColor: '#FFFFFF', borderRadius: Radius.lg, borderWidth: 1, borderColor: InkColors.line,

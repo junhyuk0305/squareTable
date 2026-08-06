@@ -111,7 +111,7 @@ function TemplateCard({
 
           {dont ? (
             <View style={styles.field}>
-              <Text style={[styles.fieldLabel, { color: BrandColors.warn }]}>이건 하지 마세요</Text>
+              <Text style={[styles.fieldLabel, { color: BrandColors.warnText }]}>이건 하지 마세요</Text>
               <Text style={styles.fieldText}>{dont}</Text>
             </View>
           ) : null}

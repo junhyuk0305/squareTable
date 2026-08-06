@@ -149,7 +149,7 @@ const styles = StyleSheet.create({
     height: 16,
     paddingHorizontal: 4,
     borderRadius: Radius.pill,
-    backgroundColor: BrandColors.accent,
+    backgroundColor: BrandColors.accentSolid,
     alignItems: 'center',
     justifyContent: 'center',
   },

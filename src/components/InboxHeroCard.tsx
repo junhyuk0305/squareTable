@@ -72,7 +72,7 @@ const styles = StyleSheet.create({
   urgent: {
     fontSize: 13,
     fontWeight: '700',
-    color: BrandColors.accent,
+    color: BrandColors.accentText,
   },
   query: {
     fontSize: 18,
@@ -100,7 +100,8 @@ const styles = StyleSheet.create({
   },
   cta: {
     marginTop: 6,
-    backgroundColor: BrandColors.accent,
+    // 흰 글자를 얹는 솔리드 CTA → 500(#F53D3D, 흰 글자 3.74)이 아니라 Solid(5.34).
+    backgroundColor: BrandColors.accentSolid,
     paddingVertical: 14,
     paddingHorizontal: 16,
     borderRadius: Radius.md,

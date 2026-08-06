@@ -3,12 +3,11 @@ import { useMemo } from 'react';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useUnknownQueueStore } from '@/lib/store/useUnknownQueueStore';
 import { useAttendanceStore } from '@/lib/store/useAttendanceStore';
-import { usePayrollStore } from '@/lib/store/usePayrollStore';
 import { useWorkStore, occursOn, taskVisibleTo } from '@/lib/store/useWorkStore';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { useStaffStore } from '@/lib/store/useStaffStore';
-import { todayStr, DEFAULT_HOURLY_WAGE } from '@/lib/utils/attendance';
-import { computePay } from '@/lib/utils/payroll';
+import { todayStr } from '@/lib/utils/attendance';
+import { sortByUrgency } from '@/lib/utils/unknownQuery';
 import type { UnknownQuery } from '@/types';
 
 export type OwnerDashboardData = {
@@ -17,20 +16,20 @@ export type OwnerDashboardData = {
   entriesCount: number;
   needsReviewCount: number;
   working: number;
-  monthPay: number;
   taskTotal: number;
   taskDoneCount: number;
+  /** 오늘 떠야 하는 업무 — 홈 목록(3건 + 전체보기)용. 완료 여부까지 붙여 표시 전용으로 내보낸다. */
+  todayTasks: { id: string; text: string; done: boolean }[];
   pending: number;
+  /** 사장 홈 히어로 = 가장 시급한 미답변 질문 1건. 받은질문 화면의 hero와 **같은 1건**(sortByUrgency SSOT). */
+  heroQuery?: UnknownQuery;
+  /** heroQuery 작성자의 입사 경과일 — 익명이면 undefined. */
+  heroCareerDays?: number;
   topFaq: UnknownQuery[];
   /** 최근 30일 노하우가 알바 질문에 '대신 답한' 실카운트(Σ query_hits_30d). 히어로 가치 지표. */
   answeredHits30d: number;
-  /** 오늘 배정 요약 — 담당자별 그룹(누가 무슨 일). */
-  assign: AssignSummary;
   isSolo: boolean;
 };
-
-export type AssignGroup = { key: string; name: string; total: number; done: number };
-export type AssignSummary = { total: number; done: number; groups: AssignGroup[] };
 
 /** 사장 대시보드 화면의 뷰모델 — 스토어 셀렉터 읽기 + 파생값 계산을 한곳에 모은다. */
 export function useOwnerDashboardData(): OwnerDashboardData {
@@ -41,25 +40,19 @@ export function useOwnerDashboardData(): OwnerDashboardData {
 
   const queue = useUnknownQueueStore((s) => s.queue);
   const records = useAttendanceStore((s) => s.records);
-  const wages = usePayrollStore((s) => s.wages);
-  const settings = usePayrollStore((s) => s.settings);
   const templates = useWorkStore((s) => s.templates);
   const doneMap = useWorkStore((s) => s.done);
   const entries = usePlaybookStore((s) => s.entries);
   const staff = useStaffStore((s) => s.staff);
 
   const today = todayStr();
-  const ym = today.slice(0, 7);
 
-  const { working, monthPay } = useMemo(() => {
-    const working = records.filter((r) => r.date === today && r.check_in && !r.check_out).length;
-    // 급여 규칙(주휴·휴게·야간·연장·추가수당)을 반영한 실제 예상 인건비 — computePay SSOT(F1).
-    const monthPay = staff.reduce((sum, s) => {
-      const recs = records.filter((r) => r.staff_id === s.id && r.date.startsWith(ym));
-      return sum + computePay(recs, wages[s.id] ?? DEFAULT_HOURLY_WAGE, settings).total;
-    }, 0);
-    return { working, monthPay };
-  }, [records, wages, today, ym, staff, settings]);
+  // 2026-08-06: 인건비(monthPay)는 홈 KPI가 MiniStats로 흡수되며 소비자가 사라져 제거했다.
+  // 인건비는 /owner/staff·/owner/payroll이 각자 computePay로 계산한다(SSOT는 그대로 computePay).
+  const working = useMemo(
+    () => records.filter((r) => r.date === today && r.check_in && !r.check_out).length,
+    [records, today],
+  );
   // 매장 진행률: 오늘 떠야 하는 것 중 가게 전체(shared) + 내 private(대상=나 or 내가 배정). (직원 자가등록은 제외)
   const todaysTasks = useMemo(
     () => templates.filter((t) => occursOn(t, today) && taskVisibleTo(t, userId)),
@@ -68,27 +61,16 @@ export function useOwnerDashboardData(): OwnerDashboardData {
   const taskTotal = todaysTasks.length;
   const taskDoneCount = todaysTasks.filter((t) => (doneMap[today] ?? {})[t.id]).length;
 
-  // 오늘 배정 요약 — 담당자별 그룹(private=대상자 ownerId / shared=매장 공통). "누가 무슨 일"의 홈 요약.
-  // todaysTasks(occursOn+가시성 필터)를 SSOT로 재사용해 배정 판정을 복제하지 않는다.
-  const assign = useMemo<AssignSummary>(() => {
+  // 홈 목록용 — 남은 일이 먼저 보이도록 미완료를 위로. todaysTasks(가시성 필터)를 그대로 재사용한다.
+  const todayTasks = useMemo(() => {
     const doneToday = doneMap[today] ?? {};
-    const map = new Map<string, AssignGroup>();
-    for (const t of todaysTasks) {
-      const key = (t.scope ?? 'shared') === 'private' ? (t.ownerId ?? 'me') : 'shared';
-      const name = key === 'shared' ? '매장 공통' : (staff.find((s) => s.id === key)?.name ?? '나');
-      const g = map.get(key) ?? { key, name, total: 0, done: 0 };
-      g.total += 1;
-      if (doneToday[t.id]) g.done += 1;
-      map.set(key, g);
-    }
-    // 미완료 많은 순 → 사장이 볼 것(남은 일)을 먼저. 공통은 뒤로.
-    const groups = [...map.values()].sort((a, b) => {
-      if (a.key === 'shared') return 1;
-      if (b.key === 'shared') return -1;
-      return (b.total - b.done) - (a.total - a.done);
-    });
-    return { total: todaysTasks.length, done: groups.reduce((s, g) => s + g.done, 0), groups };
-  }, [todaysTasks, doneMap, today, staff]);
+    return todaysTasks
+      .map((t) => ({ id: t.id, text: t.text, done: !!doneToday[t.id] }))
+      .sort((a, b) => Number(a.done) - Number(b.done));
+  }, [todaysTasks, doneMap, today]);
+
+  // 2026-08-06: 담당자별 배정 요약(assign)은 홈에서 OwnerWorkValueCard가 사라지며 소비자가 없어져 제거했다.
+  // "누가 무슨 일"은 /owner/work(AssignBoard)가 담당한다.
 
   // 최근 30일 노하우 자동응답 실카운트 — 발행된 노하우의 query_hits_30d 합.
   // "사장님 대신 답한 횟수"의 정직한 근거(0037 노하우 사용통계). 지어낸 값 아님.
@@ -107,6 +89,14 @@ export function useOwnerDashboardData(): OwnerDashboardData {
     [queue],
   );
   const pending = pendingList.length;
+
+  // 홈 히어로 1건 — 받은질문 화면과 같은 정렬을 쓴다(sortByUrgency = 판정 SSOT).
+  // 두 화면이 다른 질문을 가리키면 "가장 시급"이라는 말이 거짓이 된다.
+  const heroQuery = useMemo(() => sortByUrgency(pendingList)[0], [pendingList]);
+  const heroCareerDays = useMemo(() => {
+    if (!heroQuery || heroQuery.anonymous) return undefined;
+    return staff.find((s) => s.id === heroQuery.junior_id)?.career_days;
+  }, [heroQuery, staff]);
 
   const isSolo = staff.length === 0; // 직원 미합류 = 혼자 모드
 
@@ -130,13 +120,14 @@ export function useOwnerDashboardData(): OwnerDashboardData {
     entriesCount: entries.filter((e) => e.status !== 'draft').length,
     needsReviewCount,
     working,
-    monthPay,
     taskTotal,
     taskDoneCount,
+    todayTasks,
     pending,
+    heroQuery,
+    heroCareerDays,
     topFaq,
     answeredHits30d,
-    assign,
     isSolo,
   };
 }

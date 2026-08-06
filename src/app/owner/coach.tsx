@@ -265,6 +265,6 @@ const styles = StyleSheet.create({
     backgroundColor: InkColors.ink, paddingVertical: 12, paddingHorizontal: 18, borderRadius: Radius.md, maxWidth: '90%',
   },
   toastCheck: { color: BrandColors.yellow, fontWeight: '800', fontSize: 16 },
-  toastCheckErr: { color: BrandColors.accent },
+  toastCheckErr: { color: BrandColors.accentText },
   toastText: { color: '#FFFFFF', fontWeight: '700', fontSize: 15 },
 });

@@ -220,7 +220,7 @@ export default function JuniorSuggestScreen() {
                     <Text
                       style={[
                         styles.mineChipText,
-                        { color: s.status === 'approved' ? BrandColors.good : s.status === 'rejected' ? InkColors.ink3 : '#8A5A12' },
+                        { color: s.status === 'approved' ? BrandColors.goodText : s.status === 'rejected' ? InkColors.ink3 : '#8A5A12' },
                       ]}
                     >
                       {s.status === 'approved' ? '반영됨' : s.status === 'rejected' ? '반려' : '검토 중'}

@@ -96,7 +96,7 @@ const styles = StyleSheet.create({
   card: { backgroundColor: '#FFFFFF', borderRadius: Radius.lg, borderWidth: 1, borderColor: InkColors.line, padding: 20, gap: 10 },
   label: { fontSize: 13, fontWeight: '700', color: InkColors.ink2 },
   input: { borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md, paddingHorizontal: 14, paddingVertical: 14, fontSize: 20, fontWeight: '800', letterSpacing: 4, textAlign: 'center', color: InkColors.ink, backgroundColor: '#FFFFFF' },
-  err: { fontSize: 15, color: BrandColors.accent, fontWeight: '600' },
+  err: { fontSize: 15, color: BrandColors.accentText, fontWeight: '600' },
   primary: { marginTop: 6, backgroundColor: BrandColors.brand, paddingVertical: 16, borderRadius: Radius.md, alignItems: 'center' },
   primaryText: { color: '#FFFFFF', fontSize: 16, fontWeight: '800' },
   helpBox: { backgroundColor: InkColors.bgSoft, borderRadius: Radius.md, padding: 16, gap: 4 },

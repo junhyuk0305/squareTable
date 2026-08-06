@@ -46,7 +46,7 @@ export function MineTap({ payload, disabled, result, onAnswer }: QuizRendererPro
                     size={18}
                     color={ok ? BrandColors.good : BrandColors.bad}
                   />
-                  <Text style={[qs.choiceMark, { color: ok ? BrandColors.good : BrandColors.bad }]}>
+                  <Text style={[qs.choiceMark, { color: ok ? BrandColors.goodText : BrandColors.badText }]}>
                     {isMine ? '하면 안 되는 것' : '해도 되는 것'}
                   </Text>
                 </>

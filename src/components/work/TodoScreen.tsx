@@ -156,7 +156,7 @@ export function TodoScreen({
           <View style={s.calGrid}>
             <View style={s.weekRow}>
               {WD.map((w, i) => (
-                <Text key={w} style={[s.weekCell, i === 0 && { color: BrandColors.bad }]}>{w}</Text>
+                <Text key={w} style={[s.weekCell, i === 0 && { color: BrandColors.badText }]}>{w}</Text>
               ))}
             </View>
             <View style={s.daysWrap}>
@@ -392,7 +392,7 @@ const s = StyleSheet.create({
   khChipText: { flexShrink: 1, fontSize: 11, fontWeight: '700', color: InkColors.ink2 },
   // ④ 이해 확인 배지(통과자) — 초록 톤, 카드 본문 아래. 노하우 칩과 구분.
   uBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start', marginTop: 5, borderRadius: Radius.pill, paddingHorizontal: 8, paddingVertical: 3, backgroundColor: '#E6F1EA' },
-  uBadgeText: { flexShrink: 1, fontSize: 10.5, fontWeight: '800', color: BrandColors.good },
+  uBadgeText: { flexShrink: 1, fontSize: 10.5, fontWeight: '800', color: BrandColors.goodText },
   // ④ '혼자 할 수 있어요' 자청 버튼(직원, 미통과) — 옅은 노랑 필로 눈에 띄되 가볍게.
   selfBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, alignSelf: 'flex-start', marginTop: 5, borderRadius: Radius.pill, paddingHorizontal: 10, paddingVertical: 5, backgroundColor: BrandColors.yellowSoft, borderWidth: 1, borderColor: BrandColors.yellowDeep },
   selfBtnText: { fontSize: 11.5, fontWeight: '800', color: InkColors.ink },

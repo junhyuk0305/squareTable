@@ -163,7 +163,7 @@ export function QuizLinkSheet({ course, onClose }: { course: TrainingCourse; onC
                     accessibilityRole="button"
                     accessibilityLabel="링크 회수"
                   >
-                    <Text style={[lst.actionText, { color: BrandColors.bad }]}>회수</Text>
+                    <Text style={[lst.actionText, { color: BrandColors.badText }]}>회수</Text>
                   </Pressable>
                 </View>
               ))}

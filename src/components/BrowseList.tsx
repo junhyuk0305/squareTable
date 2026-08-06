@@ -1,5 +1,6 @@
 import { View, Text, Pressable, ScrollView, StyleSheet, type ViewStyle } from 'react-native';
 import { EmptyState } from './EmptyState';
+import { VerifyBadge } from './VerifyBadge';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Elevation, Radius } from '@/lib/theme/elevation';
 import { getSectionMeta } from '@/lib/utils/category';
@@ -65,11 +66,7 @@ export function BrowseCard({
               </View>
             );
           })()}
-          <View style={[styles.badge, { backgroundColor: v.bg }]}>
-            <Text style={[styles.badgeText, { color: v.fg }]}>
-              {v.icon} {v.label}
-            </Text>
-          </View>
+          <VerifyBadge state={entry.verification?.state} size="list" />
         </View>
 
         <Text style={styles.title} numberOfLines={2}>
@@ -85,7 +82,7 @@ export function BrowseCard({
         {/* DO / DON'T 1줄 미리보기 — 있는 것만 */}
         {doText ? (
           <View style={[styles.preview, { borderLeftColor: BrandColors.good }]}>
-            <Text style={[styles.previewTag, { color: BrandColors.good }]}>DO</Text>
+            <Text style={[styles.previewTag, { color: BrandColors.goodText }]}>DO</Text>
             <Text style={styles.previewText} numberOfLines={1}>
               {doText}
             </Text>
@@ -93,7 +90,7 @@ export function BrowseCard({
         ) : null}
         {dontText ? (
           <View style={[styles.preview, { borderLeftColor: BrandColors.warn }]}>
-            <Text style={[styles.previewTag, { color: BrandColors.warn }]}>{"DON'T"}</Text>
+            <Text style={[styles.previewTag, { color: BrandColors.warnText }]}>{"DON'T"}</Text>
             <Text style={styles.previewText} numberOfLines={1}>
               {dontText}
             </Text>
@@ -157,11 +154,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
   },
-  badge: {
-    paddingVertical: 3,
-    paddingHorizontal: 8,
-    borderRadius: Radius.pill,
-  },
   // 카테고리(section) 칩 — 색점 + 이름
   sectionChip: {
     flexDirection: 'row',
@@ -174,11 +166,10 @@ const styles = StyleSheet.create({
   },
   sectionDot: { width: 7, height: 7, borderRadius: Radius.pill },
   sectionChipText: { fontSize: 11, fontWeight: '800', color: InkColors.ink2 },
-  badgeText: { fontSize: 11, fontWeight: '800' },
   title: { fontSize: 15, fontWeight: '700', color: InkColors.ink, lineHeight: 21 },
   statRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8 },
   rate: { fontSize: 12, fontWeight: '700', color: InkColors.ink2 },
-  hits: { fontSize: 12, fontWeight: '700', color: BrandColors.warn },
+  hits: { fontSize: 12, fontWeight: '700', color: BrandColors.warnText },
   preview: {
     flexDirection: 'row',
     alignItems: 'center',

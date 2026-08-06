@@ -119,7 +119,7 @@ export default function OwnerSuggestionsScreen() {
                   <Text
                     style={[
                       styles.statusChipText,
-                      { color: s.status === 'approved' ? BrandColors.good : InkColors.ink3 },
+                      { color: s.status === 'approved' ? BrandColors.goodText : InkColors.ink3 },
                     ]}
                   >
                     {s.status === 'approved' ? '반영' : '반려'}

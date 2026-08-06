@@ -78,7 +78,7 @@ export function ShiftEditorModal({ staff, onClose }: { staff: Junior; onClose: (
                       <View style={[s.check, r.on && s.checkOn, wd === 0 && r.on && s.checkSun]}>
                         {r.on && <Ionicons name="checkmark" size={14} color="#fff" />}
                       </View>
-                      <Text style={[s.dayLabel, wd === 0 && { color: BrandColors.bad }]}>
+                      <Text style={[s.dayLabel, wd === 0 && { color: BrandColors.badText }]}>
                         {WEEKDAY_LABELS[wd]}
                       </Text>
                     </Pressable>
@@ -142,11 +142,11 @@ const s = StyleSheet.create({
   rowOn: { backgroundColor: InkColors.cream, borderColor: InkColors.line },
   rowMain: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   noteRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  noteText: { fontSize: 11.5, color: BrandColors.warn, fontWeight: '700' },
+  noteText: { fontSize: 11.5, color: BrandColors.warnText, fontWeight: '700' },
   dayToggle: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   check: { width: 22, height: 22, borderRadius: 6, borderWidth: 1.5, borderColor: InkColors.line, alignItems: 'center', justifyContent: 'center', backgroundColor: InkColors.bg },
   checkOn: { backgroundColor: InkColors.ink, borderColor: InkColors.ink },
-  checkSun: { backgroundColor: BrandColors.bad, borderColor: BrandColors.bad },
+  checkSun: { backgroundColor: BrandColors.badSolid, borderColor: BrandColors.bad },
   dayLabel: { fontSize: 15, fontWeight: '800', color: InkColors.ink },
 
   timeRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
@@ -155,7 +155,7 @@ const s = StyleSheet.create({
   tilde: { fontSize: 13, color: InkColors.ink3, fontWeight: '700' },
   off: { fontSize: 13, color: InkColors.ink3, fontWeight: '600' },
 
-  warn: { fontSize: 12, color: BrandColors.bad, fontWeight: '700', marginTop: 2, lineHeight: 18 },
+  warn: { fontSize: 12, color: BrandColors.badText, fontWeight: '700', marginTop: 2, lineHeight: 18 },
 
   foot: { flexDirection: 'row', gap: 10, paddingHorizontal: 16, paddingTop: 10, paddingBottom: 18, borderTopWidth: 1, borderTopColor: InkColors.line },
   btn: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 14, borderRadius: Radius.md },

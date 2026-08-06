@@ -457,7 +457,7 @@ function MiniCalendar({ value, today, onChange }: { value: string; today: string
       </View>
       <View style={s.weekRow}>
         {DOW.map((w, i) => (
-          <Text key={w} style={[s.weekCell, i === 0 && { color: BrandColors.bad }]}>{w}</Text>
+          <Text key={w} style={[s.weekCell, i === 0 && { color: BrandColors.badText }]}>{w}</Text>
         ))}
       </View>
       <View style={s.daysWrap}>
@@ -537,9 +537,9 @@ const s = StyleSheet.create({
   dowRow: { flexDirection: 'row', gap: 5 },
   dow: { width: 34, height: 34, borderRadius: Radius.pill, borderWidth: 1, borderColor: InkColors.line, backgroundColor: InkColors.bg, alignItems: 'center', justifyContent: 'center' },
   dowOn: { backgroundColor: InkColors.ink, borderColor: InkColors.ink },
-  dowSun: { backgroundColor: BrandColors.bad, borderColor: BrandColors.bad },
+  dowSun: { backgroundColor: BrandColors.badSolid, borderColor: BrandColors.bad },
   dowText: { fontSize: 12.5, fontWeight: '700', color: InkColors.ink2 },
-  dowWarn: { fontSize: 11, color: BrandColors.bad, fontWeight: '700', marginTop: 8 },
+  dowWarn: { fontSize: 11, color: BrandColors.badText, fontWeight: '700', marginTop: 8 },
 
   lockedScope: { backgroundColor: InkColors.cream, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.sm, paddingHorizontal: 13, paddingVertical: 10 },
   lockedScopeText: { fontSize: 14, fontWeight: '700', color: InkColors.ink },
@@ -569,5 +569,5 @@ const s = StyleSheet.create({
   cta: { backgroundColor: InkColors.ink, borderRadius: Radius.md, paddingVertical: 14, alignItems: 'center', justifyContent: 'center' },
   ctaText: { color: '#fff', fontSize: 15, fontWeight: '800' },
   delBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingHorizontal: 16, borderRadius: Radius.md, borderWidth: 1, borderColor: BrandColors.bad, backgroundColor: InkColors.bg },
-  delText: { color: BrandColors.bad, fontSize: 14, fontWeight: '800' },
+  delText: { color: BrandColors.badText, fontSize: 14, fontWeight: '800' },
 });

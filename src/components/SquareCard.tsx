@@ -1,8 +1,9 @@
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { SourceFooter } from './SourceFooter';
+import { VerifyBadge } from './VerifyBadge';
 import { BrandColors, InkColors } from '@/lib/theme/colors';
 import { Elevation, Radius } from '@/lib/theme/elevation';
-import { verifyMeta, type VerifyState } from '@/lib/utils/verification';
+import { type VerifyState } from '@/lib/utils/verification';
 
 type Props = {
   summary: string;
@@ -63,7 +64,6 @@ export function SquareCard({
     : null;
   const hasVerification = typeof verification !== 'undefined';
   const hasRate = typeof resolutionRate === 'number';
-  const v = hasVerification ? verifyMeta(verification) : null;
   const ratePct = hasRate ? Math.round((resolutionRate as number) * 100) : null;
   const doLine = doText?.trim();
   const dontLine = dontText?.trim();
@@ -79,12 +79,8 @@ export function SquareCard({
               <Text style={styles.rateText}>해결률 {ratePct}%</Text>
             </View>
           ) : null}
-          {v ? (
-            <View style={[styles.verifyBadge, { backgroundColor: v.bg }]}>
-              <Text style={[styles.verifyText, { color: v.fg }]}>
-                {v.icon} {v.label}
-              </Text>
-            </View>
+          {hasVerification ? (
+            <VerifyBadge state={verification} size="detail" />
           ) : typeof confidence === 'number' ? (
             <View style={styles.confBadge}>
               <Text style={styles.confText}>매칭 {Math.round(confidence * 100)}%</Text>
@@ -104,7 +100,7 @@ export function SquareCard({
       {/* Actions — 항목 있을 때만 (빈 '지금 할 일' 헤더 방지) */}
       {actions.length > 0 ? (
         <View style={[styles.block, { borderLeftColor: BrandColors.good }]}>
-          <Text style={[styles.blockLabel, { color: BrandColors.good }]}>할 일</Text>
+          <Text style={[styles.blockLabel, { color: BrandColors.goodText }]}>할 일</Text>
           {actions.map((a, i) => (
             <View key={i} style={styles.actionRow}>
               <Text style={styles.actionNum}>{i + 1}</Text>
@@ -124,7 +120,7 @@ export function SquareCard({
       {/* Don'ts */}
       {donts.length > 0 && (
         <View style={[styles.block, { borderLeftColor: BrandColors.warn }]}>
-          <Text style={[styles.blockLabel, { color: BrandColors.warn }]}>금지</Text>
+          <Text style={[styles.blockLabel, { color: BrandColors.warnText }]}>금지</Text>
           {donts.map((d, i) => (
             <Text key={i} style={styles.dontText}>· {d}</Text>
           ))}
@@ -160,13 +156,13 @@ export function SquareCard({
       {/* DO / DON'T 2색 한 줄 요약(보강 메타) — 있을 때만 */}
       {doLine ? (
         <View style={[styles.tagRow, { borderLeftColor: BrandColors.good }]}>
-          <Text style={[styles.tagLabel, { color: BrandColors.good }]}>DO</Text>
+          <Text style={[styles.tagLabel, { color: BrandColors.goodText }]}>DO</Text>
           <Text style={styles.tagText}>{doLine}</Text>
         </View>
       ) : null}
       {dontLine ? (
         <View style={[styles.tagRow, { borderLeftColor: BrandColors.bad }]}>
-          <Text style={[styles.tagLabel, { color: BrandColors.bad }]}>DON&apos;T</Text>
+          <Text style={[styles.tagLabel, { color: BrandColors.badText }]}>DON&apos;T</Text>
           <Text style={styles.tagText}>{dontLine}</Text>
         </View>
       ) : null}
@@ -253,12 +249,6 @@ const styles = StyleSheet.create({
     borderRadius: 6,
   },
   rateText: { fontSize: 11, fontWeight: '800', color: InkColors.ink2 },
-  verifyBadge: {
-    paddingVertical: 3,
-    paddingHorizontal: 8,
-    borderRadius: Radius.pill,
-  },
-  verifyText: { fontSize: 11, fontWeight: '800' },
   block: {
     borderLeftWidth: 3,
     paddingLeft: 12,
@@ -278,7 +268,7 @@ const styles = StyleSheet.create({
     width: 22,
     height: 22,
     borderRadius: Radius.sm,
-    backgroundColor: BrandColors.good,
+    backgroundColor: BrandColors.goodSolid,
     color: InkColors.bubbleText,
     fontSize: 12,
     fontWeight: '800',
@@ -321,7 +311,7 @@ const styles = StyleSheet.create({
     borderRadius: Radius.pill,
     backgroundColor: InkColors.bgSoft,
   },
-  fbBtnActive: { backgroundColor: BrandColors.good },
+  fbBtnActive: { backgroundColor: BrandColors.goodSolid },
   fbEmoji: { fontSize: 14 },
   fbLabel: { fontSize: 13, fontWeight: '700', color: InkColors.ink2 },
 });

@@ -191,7 +191,7 @@ const styles = StyleSheet.create({
   },
   primaryText: { color: '#FFFFFF', fontSize: 16, lineHeight: 22, fontWeight: '800' },
   msg: { fontSize: 15, lineHeight: 22, color: InkColors.ink2, textAlign: 'center', marginTop: 2 },
-  msgErr: { color: BrandColors.accent, fontWeight: '700' },
+  msgErr: { color: BrandColors.accentText, fontWeight: '700' },
   demoNote: { fontSize: 12, lineHeight: 18, color: InkColors.ink3, textAlign: 'center' },
   signupBlock: { alignItems: 'center', gap: Space.md },
   signupLead: { fontSize: 13, lineHeight: 19, color: InkColors.ink3 },
