@@ -74,7 +74,9 @@
     "qa:import-pdf-browser": "node scripts/qa-import-pdf-browser.mjs",
     "qa:voice-browser": "node scripts/qa-voice-browser.mjs",
     "qa:join-reject": "node scripts/qa-join-reject-browser.mjs",
-    "qa:publish-sheet": "node scripts/qa-publish-sheet-browser.mjs"
+    "qa:publish-sheet": "node scripts/qa-publish-sheet-browser.mjs",
+    "ia": "node scripts/ia-snapshot.mjs",
+    "qa:blocks": "node scripts/qa-blocks-browser.mjs"
   },
   "private": true
 }
