@@ -552,6 +552,8 @@ async function main() {
       ['/account-edit', '프로필 편집'],
       // 2026-08-06: 섹션 6개(카드 6장·연속 4)를 4개로 합쳐 해체했다. 되돌아오면 여기서 잡힌다.
       ['/account-settings', '계정 설정'],
+      // 2026-08-06: 안내·계좌·입금자명 3연속 카드를 '입금하기' 한 카드로 합쳤다.
+      ['/billing', '요금제'],
     ]) {
       const pg = name === '직원 설정' ? pj : po;
       await pg.goto(`${ORIGIN}${path}`, { waitUntil: 'domcontentloaded' });
