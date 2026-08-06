@@ -512,15 +512,25 @@ async function main() {
           const n = [...p.children].filter((c) => c.nodeType === 1 && isCard(c)).length;
           if (n > bestN) { bestN = n; best = p; }
         }
-        if (!best) return { run: 0, cards: 0 };
-        let run = 0, cur = 0;
-        for (const c of best.children) {
-          if (c.nodeType !== 1) continue;
-          // Appear 래퍼가 카드를 한 겹 감싸는 경우가 있어 자기 자신 또는 단일 자식을 본다.
-          const node = isCard(c) ? c : (c.children.length === 1 && isCard(c.children[0]) ? c.children[0] : null);
-          if (node) { cur++; run = Math.max(run, cur); } else cur = 0;
+        // ★형제 인접만 보면 놓친다: SettingsSection처럼 <래퍼><제목/><카드/></래퍼> 구조면
+        //   카드마다 부모가 달라 run이 늘 1로 나온다(2026-08-06 실측에서 /account-settings가 1로 오판).
+        //   card-stack 증상은 DOM 중첩이 아니라 **세로로 쌓인 카드 수**다 → 문서 전체에서
+        //   '카드 안에 든 카드'를 뺀 최상위 카드를 Y 순으로 세고, 그 사이에 다른 형태가 있는지 본다.
+        const allCards = [...document.querySelectorAll('div')].filter(isCard);
+        const topCards = allCards
+          .filter((el) => !allCards.some((o) => o !== el && o.contains(el)))
+          .map((el) => ({ el, r: el.getBoundingClientRect() }))
+          .sort((a, b) => a.r.top - b.r.top);
+        if (topCards.length === 0) return { run: 0, cards: 0 };
+        // 세로로 연달아 놓인 카드의 최대 개수. 두 카드 사이 간격이 좁으면(제목 한 줄 정도 = 56px 이하)
+        // '연속'으로 본다. 그보다 벌어져 있으면 사이에 다른 형태(통계·경고행·버튼)가 들어간 것으로 본다.
+        let run = 1, cur = 1;
+        for (let i = 1; i < topCards.length; i++) {
+          const gap = topCards[i].r.top - (topCards[i - 1].r.top + topCards[i - 1].r.height);
+          if (gap <= 56) cur++; else cur = 1;
+          run = Math.max(run, cur);
         }
-        return { run, cards: bestN };
+        return { run, cards: topCards.length };
       });
     /** 솔리드 풀폭 버튼(=Primary로 읽히는 것) 개수. 검정/브랜드 면 + 흰 글자 + 폭 260↑. */
     const primaryCount = (page) =>
@@ -540,6 +550,8 @@ async function main() {
       ['/owner/payroll', '급여 설정'],
       ['/junior/settings', '직원 설정'],
       ['/account-edit', '프로필 편집'],
+      // 2026-08-06: 섹션 6개(카드 6장·연속 4)를 4개로 합쳐 해체했다. 되돌아오면 여기서 잡힌다.
+      ['/account-settings', '계정 설정'],
     ]) {
       const pg = name === '직원 설정' ? pj : po;
       await pg.goto(`${ORIGIN}${path}`, { waitUntil: 'domcontentloaded' });
@@ -561,6 +573,38 @@ async function main() {
     const sched = await maxCardRun(pj);
     check(`B10 근무표(교대 요청) — 카드 연속 ≤2 (실측 ${sched.run})`, sched.run <= 2, `run=${sched.run}`);
     await shot(pj, '11-cards-junior-schedule');
+
+    // ═══════════ B11 예산 초과 후보 실측 — 정적 상한을 실화면으로 검증한다 ═══════════
+    // `npm run ia`는 조건부 블록을 전부 세는 **상한 추정치**를 낸다(스크립트가 스스로 밝히는 한계).
+    // 그래서 "절대 예산 초과 10개"가 진짜인지 부풀린 건지 정적으로는 판정할 수 없다.
+    // 여기서 카드 런·Primary를 DOM에서 재서 **실제 상태를 기록**한다. 실패시키지 않고 표로 남긴다 —
+    // 판정(감축이냐 ADR이냐)은 사람이 한다.
+    console.log('\n[B11] 예산 초과 후보 — 실화면 실측(판정용 기록, 실패 아님)');
+    const budgetRows = [];
+    for (const [pg, path, name] of [
+      [po, '/account-settings', '계정 설정'],
+      [po, '/owner/categories', '노하우(탭)'],
+      [po, '/owner/inbox', '받은질문'],
+      [po, '/hub', '허브 현황'],
+      [po, '/owner/staff', '직원·급여'],
+      [po, '/billing', '결제(다른 작업 소유 — 읽기만)'],
+      [pj, '/junior/attendance', '출퇴근'],
+      [pj, '/junior/schedule', '근무표'],
+    ]) {
+      await pg.goto(`${ORIGIN}${path}`, { waitUntil: 'domcontentloaded' }).catch(() => {});
+      await pg.waitForTimeout(2400);
+      const m = await maxCardRun(pg).catch(() => ({ run: -1, cards: -1 }));
+      const p = await primaryCount(pg).catch(() => -1);
+      budgetRows.push({ name, path, run: m.run, cards: m.cards, primary: p });
+      await shot(pg, `12-budget-${path.replace(/\//g, '_')}`);
+    }
+    console.log('    화면              카드런  카드수  Primary');
+    for (const r of budgetRows) {
+      const flag = r.run >= 3 ? ' ← 카드 3연속' : r.primary > 1 ? ' ← Primary 다수' : '';
+      console.log(`    ${r.name.padEnd(16)}  ${String(r.run).padStart(4)}  ${String(r.cards).padStart(5)}  ${String(r.primary).padStart(6)}${flag}`);
+    }
+    const budgetReal = budgetRows.filter((r) => r.run >= 3 || r.primary > 1);
+    console.log(`    → 실측으로 규칙 위반이 남은 화면: ${budgetReal.length ? budgetReal.map((r) => r.name).join(', ') : '없음'}`);
 
     // ═══════════ B9 빈 화면 문구 대비 — ★데이터 0인 매장으로 따로 잰다 ═══════════
     // 이 하니스의 구조적 공백이었다: 위 시드가 노하우 3건·업무 4건·질문 2건을 넣고 돌기 때문에
