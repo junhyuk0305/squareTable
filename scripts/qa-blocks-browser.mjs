@@ -106,20 +106,25 @@ const report = (id, screen, texts, bad) => {
   if (old.length) console.log(`     ↳ 참고: 기존 ink3(#a4a29b) 저대비 ${old.length}건 — 이번 변경 밖의 부채`);
 };
 
-let ownerId, juniorId, oEmail, jEmail;
+let ownerId, juniorId, oEmail, jEmail, hEmail;
 
 async function main() {
   // ── 셋업: 사장+매장+직원 합류, 노하우 3건(1건 미검증), 미답변 질문 2건, 오늘 업무 4건 ──
+  //    + 허브 3상태 검증용 미합류 직원 1명(B5에서 ①→②→③으로 태운다)
   const owner = mk(), junior = mk();
-  const phoneO = `0107${s.slice(0, 7)}`, phoneJ = `0108${s.slice(0, 7)}`;
-  await seedVerifiedPhones(URL_, SRV, [phoneO, phoneJ]);
-  oEmail = `qa_blk_o_${s}@example.com`; jEmail = `qa_blk_j_${s}@example.com`;
+  const phoneO = `0107${s.slice(0, 7)}`, phoneJ = `0108${s.slice(0, 7)}`, phoneH = `0109${s.slice(0, 7)}`;
+  await seedVerifiedPhones(URL_, SRV, [phoneO, phoneJ, phoneH]);
+  oEmail = `qa_blk_o_${s}@example.com`; jEmail = `qa_blk_j_${s}@example.com`; hEmail = `qa_blk_h_${s}@example.com`;
   const oUp = await owner.auth.signUp({ email: oEmail, password: pw, options: { data: { name: 'QA블록사장', role: 'owner', phone: phoneO, birth_date: '1980-01-15' } } });
   if (oUp.error) throw new Error('owner signUp: ' + oUp.error.message);
   ownerId = oUp.data.user?.id;
   const jUp = await junior.auth.signUp({ email: jEmail, password: pw, options: { data: { name: 'QA블록직원', role: 'junior', phone: phoneJ, birth_date: '2000-05-05' } } });
   if (jUp.error) throw new Error('junior signUp: ' + jUp.error.message);
   juniorId = jUp.data.user?.id;
+  const hub = mk();
+  const hUp = await hub.auth.signUp({ email: hEmail, password: pw, options: { data: { name: 'QA허브직원', role: 'junior', phone: phoneH, birth_date: '2001-03-03' } } });
+  if (hUp.error) throw new Error('hub junior signUp: ' + hUp.error.message);
+  const hubId = hUp.data.user?.id;
 
   const { data: c1, error: e1 } = await owner.rpc('create_store', { p_store_name: 'QA블록카페', p_industry: '카페·디저트', p_biz_no: null });
   const storeRow = Array.isArray(c1) ? c1[0] : c1;
@@ -387,6 +392,43 @@ async function main() {
     const jTexts = await lowContrastTexts(pj);
     report('B4-6', '직원 홈', jTexts, lowContrast(jTexts));
 
+    // ═══════════ B5 직원 허브 3상태 ═══════════
+    // 이 화면은 성격이 다른 세 상태를 겸한다(2026-08-06 상태 분기). 셋 다 실제로 태워서 본다.
+    console.log('\n[B5] 직원 허브 — ① 미합류 · ② 승인 대기 · ③ 매장 있음');
+    const ph = await newPage(hEmail);
+
+    // ① 매장 0개 — 할 일은 '코드 넣기' 하나. 곁가지가 없어야 한다.
+    await ph.goto(`${ORIGIN}/junior/hub`, { waitUntil: 'domcontentloaded' });
+    check('B5-1 ① 진입', await wait(ph, '안녕하세요', 40000));
+    await ph.waitForTimeout(2000);
+    check('B5-2 ① 코드 입력이 곧바로 보인다', await see(ph, '매장 추가하기'));
+    check('B5-3 ① 가짜 버튼(히어로 "코드를 받으셨나요?") 제거됨', !(await see(ph, '코드를 받으셨나요')));
+    check('B5-4 ① 중복 안내("아래에 초대코드를 입력") 제거됨', !(await see(ph, '아래에 초대코드를 입력')));
+    check('B5-5 ① 기능 소개 캐러셀 제거됨', !(await see(ph, '이런 걸 할 수 있어요')));
+    await shot(ph, '05-junior-hub-1-empty');
+    const hTexts = await lowContrastTexts(ph);
+    report('B5-6', '허브 ①', hTexts, lowContrast(hTexts));
+
+    // ② 승인 대기 — 코드 입력이 사라지고 대기 카드만 남아야 한다.
+    await hub.rpc('join_by_invite', { p_code: storeRow.invite_code });
+    await ph.reload({ waitUntil: 'domcontentloaded' });
+    await ph.waitForTimeout(2500);
+    check('B5-7 ② 승인 대기 카드', await see(ph, '사장님 승인 대기 중'));
+    check('B5-8 ② 대기 중엔 코드 입력을 숨긴다', !(await see(ph, '코드가 없으신가요')));
+    await shot(ph, '06-junior-hub-2-pending');
+
+    // ③ 매장 있음 — 코드 입력은 접힌 한 줄로 강등. 펼치면 아래로 열린다.
+    const { error: apErr2 } = await owner.rpc('approve_member', { p_uid: hubId });
+    if (apErr2) throw new Error('approve_member(hub): ' + apErr2.message);
+    await ph.reload({ waitUntil: 'domcontentloaded' });
+    await ph.waitForTimeout(2500);
+    check('B5-9 ③ 매장 카드', await see(ph, 'QA블록카페'));
+    check('B5-10 ③ 코드 입력이 접혀 있다', !(await see(ph, '코드가 없으신가요')));
+    await ph.getByLabel('코드로 매장 추가 — 초대코드 입력', { exact: true }).last().dispatchEvent('click');
+    await ph.waitForTimeout(700);
+    check('B5-11 ③ 펼치면 코드 입력이 열린다', await see(ph, '코드가 없으신가요'));
+    await shot(ph, '07-junior-hub-3-joined');
+
     // ═══════════ B6 콘솔 에러 ═══════════
     const fatal = errors.filter((e) => !/favicon|Download the React DevTools|ResizeObserver/.test(e));
     check(`B6 콘솔 치명 에러 0 (총 ${errors.length})`, fatal.length === 0, fatal.slice(0, 4).join(' | '));
@@ -403,13 +445,13 @@ try {
 } finally {
   // ── 자가정리 ──
   try {
-    for (const [email] of [[oEmail], [jEmail]]) {
+    for (const email of [oEmail, jEmail, hEmail]) {
       if (!email) continue;
       const c = mk();
       const r = await c.auth.signInWithPassword({ email, password: pw });
       if (!r.error) await c.rpc('delete_my_account');
     }
-    await cleanupSeededPhones(URL_, SRV, [`0107${s.slice(0, 7)}`, `0108${s.slice(0, 7)}`]);
+    await cleanupSeededPhones(URL_, SRV, [`0107${s.slice(0, 7)}`, `0108${s.slice(0, 7)}`, `0109${s.slice(0, 7)}`]);
   } catch (e) { console.log('  (정리 일부 실패:', e.message, ')'); }
   console.log(`\n${fail === 0 ? '✅ PASS' : '❌ FAIL'} — 블록 어휘 실화면 QA · 통과 ${pass} / 실패 ${fail}`);
   console.log(`   스크린샷: ${SHOTS}/`);

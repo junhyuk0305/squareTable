@@ -43,6 +43,13 @@ const POINTS: { icon: React.ComponentProps<typeof Ionicons>['name']; title: stri
     title: '아는 건 제안하세요',
     body: '내가 아는 요령·고칠 점은 ‘노하우 제안’으로 올리면 사장님 확인 뒤 매장 노하우가 돼요.',
   },
+  // 2026-08-06: /junior/hub의 기능 소개 캐러셀에서 이관. 합류 전에는 쓸 수 없는 기능이라
+  // 소개 시점을 '실제로 쓸 수 있게 된 직후'인 여기로 옮겼다(캐러셀은 제거).
+  {
+    icon: 'time-outline',
+    title: '출퇴근을 찍어요',
+    body: '출근·퇴근을 앱에서 기록하고, 내 근무표도 여기서 확인해요.',
+  },
 ];
 
 export function JuniorWelcomeCoach() {
