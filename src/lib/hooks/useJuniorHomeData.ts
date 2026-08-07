@@ -1,16 +1,11 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useAttendanceStore, type AttendanceRecord } from '@/lib/store/useAttendanceStore';
-import { usePayrollStore } from '@/lib/store/usePayrollStore';
-import { useWorkStore, useDayparts, occursOn, type FeedItem } from '@/lib/store/useWorkStore';
-import { daypartLabelMap } from '@/lib/store/daypartLabels';
-import { useScheduleStore } from '@/lib/store/useScheduleStore';
+import { useWorkStore, occursOn, trainingCourseViews, courseEntriesOf } from '@/lib/store/useWorkStore';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { useChatStore } from '@/lib/store/useChatStore';
-import { isMentionOf, isUnreadMention } from '@/lib/utils/notifications';
-import { todayStr, liveMinutes, DEFAULT_HOURLY_WAGE, tsMs } from '@/lib/utils/attendance';
-import { computePay } from '@/lib/utils/payroll';
+import { todayStr } from '@/lib/utils/attendance';
 import type { PlaybookEntry } from '@/types';
 
 export type JuniorHomeData = {
@@ -22,8 +17,6 @@ export type JuniorHomeData = {
   todayRecs: AttendanceRecord[];
   openRec: AttendanceRecord | undefined;
   working: boolean;
-  todayMin: number;
-  todayPay: number;
   // 오늘 할일
   taskTotal: number;
   taskDone: number;
@@ -31,16 +24,8 @@ export type JuniorHomeData = {
   tasksAllDone: boolean;
   /** 오늘 내가 해야 하는 업무 — 홈 히어로 목록(3건 + 전체보기)용. 미완료가 먼저. */
   todayTasks: { id: string; text: string; done: boolean }[];
-  // 안 읽은 공지
-  unreadCount: number;
-  latestNotice: FeedItem | undefined;
-  // 오늘의 매장(출근 브리핑) — 데이파트별 완료 상태 + 나를 언급한 글
-  daypartStatus: { id: string; label: string; done: number; total: number }[];
-  unreadMentionCount: number;
-  latestMention: FeedItem | undefined;
-  // 근무표
-  myShiftCount: number;
-  incomingSwaps: number;
+  /** 아직 통과 못 한 퀴즈(노하우) 수 — 홈 경고행(AlertRow)용. 0이면 행이 안 그려진다. */
+  openQuizCount: number;
   // 많이 물어본 노하우
   popularKnowhow: PlaybookEntry[];
   submitChat: (text: string, opts?: { anonymous?: boolean }) => Promise<void>;
@@ -54,36 +39,11 @@ export function useJuniorHomeData(): JuniorHomeData {
   const records = useAttendanceStore((s) => s.records);
   const checkIn = useAttendanceStore((s) => s.checkIn);
   const checkOut = useAttendanceStore((s) => s.checkOut);
-  const wages = usePayrollStore((s) => s.wages);
-  const settings = usePayrollStore((s) => s.settings);
-  const wage = wages[userId] ?? DEFAULT_HOURLY_WAGE;
 
   const templates = useWorkStore((s) => s.templates);
   const doneMap = useWorkStore((s) => s.done);
-  const feed = useWorkStore((s) => s.feed);
 
-  // 근무표 — 이번 주 내 근무 횟수 + 내가 대응할 교대 요청 수.
-  const shiftTemplates = useScheduleStore((s) => s.templates);
-  const swaps = useScheduleStore((s) => s.swaps);
-
-  const [, setTick] = useState(0);
   const today = todayStr();
-
-  const myShiftCount = useMemo(
-    () => shiftTemplates.filter((t) => t.staff_id === userId).length,
-    [shiftTemplates, userId],
-  );
-  const incomingSwaps = useMemo(
-    () =>
-      swaps.filter(
-        (r) =>
-          r.status === 'open' &&
-          r.requester_id !== userId &&
-          r.date >= today &&
-          (r.kind === 'cover' || r.target_staff_id === userId),
-      ).length,
-    [swaps, userId, today],
-  );
 
   const todayRecs = useMemo(
     () => records.filter((r) => r.staff_id === userId && r.date === today),
@@ -91,16 +51,6 @@ export function useJuniorHomeData(): JuniorHomeData {
   );
   const openRec = todayRecs.find((r) => r.check_in && !r.check_out);
   const working = !!openRec;
-  const todayMin = todayRecs.reduce((sum, r) => sum + liveMinutes(r), 0);
-  // 오늘 예상급여 — 하루 단위라 주휴수당·월 정액수당은 제외(휴게·야간·연장만). 급여규칙 SSOT=computePay(F1).
-  const todayPay = computePay(todayRecs, wage, { ...settings, weeklyHolidayPay: false, extraAllowance: 0 }).total;
-
-  // 근무 중이면 경과시간 30초마다 갱신.
-  useEffect(() => {
-    if (!working) return;
-    const t = setInterval(() => setTick((x) => x + 1), 30000);
-    return () => clearInterval(t);
-  }, [working]);
 
   // 오늘 할일 진행 — 오늘 떠야 하는 것(occursOn) + 본인이 볼 수 있는 것(shared/내 private)만.
   const dayDone = doneMap[today] ?? {};
@@ -123,51 +73,28 @@ export function useJuniorHomeData(): JuniorHomeData {
     [myTodaysTasks, doneMap, today], // eslint-disable-line react-hooks/exhaustive-deps
   );
 
-  // 오늘의 매장 — 데이파트(오픈·미들·마감…)별 완료 상태. 오늘 뜬 할일을 section으로 묶어 done/total 집계,
-  // 매장 커스텀 순서(dayparts)대로 정렬한다. 할일이 있는 데이파트만 노출.
-  const dayparts = useDayparts();
-  const daypartStatus = useMemo(() => {
-    const dd = doneMap[today] ?? {};
-    const labelMap = daypartLabelMap(dayparts);
-    const order = new Map(dayparts.map((d, i) => [d.id, i]));
-    const groups = new Map<string, { done: number; total: number }>();
-    for (const t of myTodaysTasks) {
-      const g = groups.get(t.section) ?? { done: 0, total: 0 };
-      g.total += 1;
-      if (dd[t.id]) g.done += 1;
-      groups.set(t.section, g);
+  // 안 푼 퀴즈 — 홈 경고행(AlertRow)에 쓸 **개수 하나**만 만든다.
+  //  카드 렌더 판정(어느 코스 카드를 몇 장 띄울지·요청 예외·1회성 우선)은 WorkBoard 가 SSOT다.
+  //  여기서 그 판정을 복제하지 않으려고, "눌러서 갈 곳이 실제로 있는 것"만 최소 조건으로 센다:
+  //   ① 코스에 담긴 노하우이고 ② 낼 문항이 있고(0109: 문항 0건 = 의도된 미노출)
+  //   ③ 코스가 하한(min_items)을 채워 직원에게 열려 있고 ④ 내 통과 기록이 아직 없는 것.
+  //  주기 코스의 '다시 확인'(due)은 안 푼 게 아니라 재확인이라 여기서 세지 않는다.
+  const courses = useWorkStore((s) => s.courses);
+  const courseEntries = useWorkStore((s) => s.courseEntries);
+  const understanding = useWorkStore((s) => s.understanding);
+  const quizCounts = useWorkStore((s) => s.quizCounts);
+  const openQuizCount = useMemo(() => {
+    const passed = new Set(understanding.filter((u) => u.staffId === userId).map((u) => u.entryId));
+    const open = new Set<string>();
+    for (const c of trainingCourseViews(courses)) {
+      const list = courseEntriesOf(courseEntries, c.id)
+        .map((e) => e.entryId)
+        .filter((id) => (quizCounts[id] ?? 0) > 0);
+      if (list.length < c.minItems) continue;
+      for (const id of list) if (!passed.has(id)) open.add(id);
     }
-    return [...groups.entries()]
-      .map(([id, g]) => ({ id, label: labelMap[id] ?? id, done: g.done, total: g.total }))
-      .sort((a, b) => (order.get(a.id) ?? 99) - (order.get(b.id) ?? 99));
-  }, [myTodaysTasks, doneMap, today, dayparts]);
-
-  // 안 읽은 공지 — feed의 notice 중 read_by에 본인이 없는 것. 핀 공지·최신 우선.
-  const unreadNotices = useMemo(
-    () =>
-      feed
-        .filter((f) => f.kind === 'notice' && !(f.read_by ?? []).includes(userId))
-        .sort((a, b) => {
-          if (!!a.pinned !== !!b.pinned) return a.pinned ? -1 : 1;
-          return tsMs(b.createdAt) - tsMs(a.createdAt);
-        }),
-    [feed, userId],
-  );
-  const unreadCount = unreadNotices.length;
-  const latestNotice = unreadNotices[0];
-
-  // 나를 @언급한 글 — 출근 브리핑에 묶는다(안 읽은 것만 강조·카운트, 최신 우선).
-  const unreadMentionCount = useMemo(
-    () => feed.filter((f) => isUnreadMention(f, userId)).length,
-    [feed, userId],
-  );
-  const latestMention = useMemo(
-    () =>
-      feed
-        .filter((f) => isMentionOf(f, userId))
-        .sort((a, b) => tsMs(b.createdAt) - tsMs(a.createdAt))[0],
-    [feed, userId],
-  );
+    return open.size;
+  }, [courses, courseEntries, understanding, quizCounts, userId]);
 
   // 직원들이 많이 물어본 노하우 — 발행된 것 중 인용수(query_hits_30d) 상위 3개.
   // 첫날 신입에게 '다들 이걸 묻더라'를 보여줘 발견성을 높인다(가게 두뇌 미리보기).
@@ -190,20 +117,12 @@ export function useJuniorHomeData(): JuniorHomeData {
     todayRecs,
     openRec,
     working,
-    todayMin,
-    todayPay,
     taskTotal,
     taskDone,
     taskRemain,
     tasksAllDone,
     todayTasks,
-    unreadCount,
-    latestNotice,
-    daypartStatus,
-    unreadMentionCount,
-    latestMention,
-    myShiftCount,
-    incomingSwaps,
+    openQuizCount,
     popularKnowhow,
     submitChat,
   };

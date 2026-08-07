@@ -1,24 +1,20 @@
 import { View, Text, Pressable, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Stack, useRouter } from 'expo-router';
+import { Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 import { RoleTabBar, goToTab } from '@/components/RoleTabBar';
 import { StoreToggle } from '@/components/StoreToggle';
 import { NotificationBell } from '@/components/NotificationBell';
 import { Appear } from '@/components/Appear';
-import { FeatureCarousel, JUNIOR_FEATURES } from '@/components/FeatureCarousel';
 import { JuniorWelcomeCoach } from '@/components/junior/JuniorWelcomeCoach';
-import { InfoDot } from '@/components/InfoDot';
 import { SectionLabel } from '@/components/SectionLabel';
-import { MiniStats } from '@/components/blocks/MiniStats';
+import { HeroSubNav } from '@/components/blocks/HeroSubNav';
+import { AlertRow } from '@/components/blocks/AlertRow';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
-import { fmtDuration, won, hhmm } from '@/lib/utils/attendance';
+import { hhmm } from '@/lib/utils/attendance';
 import { useJuniorHomeData } from '@/lib/hooks/useJuniorHomeData';
 import { styles } from '@/styles/juniorHomeStyles';
-
-// 빈 상태에서도 '뭘 물어볼 수 있는지' 보여주는 추천(업종 일반).
-const QUICK_ASKS = ['마감 청소 어디까지 해요?', '포스기 에러 났어요', '진상 손님 응대법'];
 
 /** 홈 목록은 3건 + "전체보기 ›" — 전 화면 공통 배치 규칙(2026-08-05 블록 어휘). */
 const HOME_LIST_LIMIT = 3;
@@ -26,20 +22,22 @@ const HOME_LIST_LIMIT = 3;
 /**
  * 직원 홈 — 사령탑(하루의 앵커).
  *
- * ★**최우선과 Primary는 다른 자리다**(2026-08-06 정정). 정본 §2 직원 표가 둘을 나눠 적어뒀다.
- *   - 최우선(첫 스크린에서 가장 큰 것) = **오늘 할 일**. 직원은 배우러 앱을 열지 않고
- *     "오늘 뭘 해야 하나"를 보러 연다. 위치·크기 1등은 여기.
- *   - Primary(화면당 1개인 채운 액션 버튼) = **노하우 물어보기**. 질문→노하우 루프가 북극성이다.
- *   2026-08-05에 이 둘을 한 단어로 뭉쳐 'Primary = 오늘 할 일'로 적었더니, 실제 화면에서는
- *   셋째 자리 **출퇴근**이 유일한 옐로 글로우 채움 버튼이라 1등석을 가져가 있었다(선언·주석·시각이 전부 불일치).
- *   → 물어보기를 채운 버튼으로, 출근하기를 아웃라인으로 되돌렸다.
+ * ★2026-08-07 정본 §12: 섹션 5개 → **3개**.
+ *   1) HeroSubNav(서브내비 없음) — "오늘 할 일 / n개 / 지금은 ○○ · 출퇴근 상태" + **출근 버튼이 CTA**
+ *   2) 오늘 업무 — 목록 3건 + 전체보기 ›
+ *   3) 안 푼 퀴즈 경고행(AlertRow) — 0건이면 스스로 안 그린다
  *
- * 블록 5개(A형 예산): 1) 오늘 할 일 2) 노하우 물어보기 3) 출퇴근 4) 오늘 한눈에 5) 기능 안내.
- * 카드는 1)·3) 둘만 — 2)는 카드를 벗겨 같은 형태 3연속(배치규칙①)을 끊었다.
- * 카드 밖 라벨은 공용 <SectionLabel>을 쓴다 — 로컬 재구현본은 폐기했다(ui.md 재구현 금지).
+ * 뺀 것과 이유:
+ *   · '노하우 물어보기' · '출퇴근' 섹션 → **하단 탭에 이미 있다.** 같은 진입점을 두 번 그리면
+ *     화면만 길어지고 무엇이 중요한지가 흐려진다.
+ *   · '오늘 한눈에'(MiniStats) → 카운트 3칸은 탭/벨과 겹치는 요약이었다.
+ *   · '이런 것도 할 수 있어요'(FeatureCarousel) → 처음 며칠만 필요한 안내(합류 코치마크가 덮는다).
+ *
+ * 출근 버튼만은 하루 한 번 반드시 눌러야 하므로 맨 위 큰 색면(히어로 CTA)으로 올렸다.
+ * 이 화면의 유일한 '채운' 버튼이라 Primary도 여기 하나다.
+ * 직원은 화면이 14개뿐이라 **바로가기(서브내비)도 ☰도 만들지 않는다** — 사장 규칙 복사가 곧 과설계다.
  */
 export default function JuniorHomeScreen() {
-  const router = useRouter();
   const {
     userName,
     checkIn,
@@ -48,19 +46,21 @@ export default function JuniorHomeScreen() {
     todayRecs,
     openRec,
     working,
-    todayMin,
-    todayPay,
     taskTotal,
     taskRemain,
     todayTasks,
-    unreadCount,
-    latestNotice,
-    daypartStatus,
-    unreadMentionCount,
-    latestMention,
-    myShiftCount,
-    incomingSwaps,
+    openQuizCount,
   } = useJuniorHomeData();
+
+  // 히어로 큰 수 — 0을 전시하지 않는다(할 일이 없거나 다 끝난 상태는 숫자가 아니라 말로).
+  const heroValue = taskTotal === 0 ? '없어요' : taskRemain === 0 ? '다 했어요' : `${taskRemain}개`;
+  // 히어로 한 줄 = [지금 할 일] · [출퇴근 상태]. 남은 일이 없으면 출퇴근 상태만.
+  const nextTask = todayTasks.find((t) => !t.done);
+  const clockLine = working
+    ? `${hhmm(openRec!.check_in!)} 출근 · 근무 중`
+    : todayRecs.length > 0
+      ? `오늘 ${todayRecs.length}회 근무`
+      : '아직 출근 전이에요';
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
@@ -89,18 +89,31 @@ export default function JuniorHomeScreen() {
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <Text style={styles.greet}>{userName}님, 오늘도 화이팅이에요</Text>
 
-        {/* 1) 오늘 할 일 = 이 화면의 Primary (2026-08-05).
-            데이파트 칩(오픈·미들·마감별 진행)을 같은 블록에 묶어, '오늘'에 관한 것은 한 덩어리로 읽히게 한다. */}
+        {/* 1) 오늘 할 일 히어로 — items를 비워 서브내비 없이 히어로만 전체 라운드로 그린다.
+            ★출퇴근 판정(근무 중 → 퇴근 / 오늘 기록 있음 → 다시 출근 / 없음 → 출근)은
+            기존 출퇴근 카드에서 **그대로 옮겨온 것**이다. checkIn·checkOut 은 useAttendanceStore의
+            같은 액션이라 중복 출근 방지도 스토어 쪽 로직을 그대로 탄다. */}
+        <Appear>
+          <HeroSubNav
+            label="오늘 할 일"
+            value={heroValue}
+            caption={nextTask ? `지금은 ${nextTask.text} · ${clockLine}` : clockLine}
+            ctaLabel={working ? '퇴근하기' : todayRecs.length > 0 ? '다시 출근하기' : '출근하기'}
+            onCta={() => (working ? checkOut(userId) : checkIn(userId))}
+          />
+        </Appear>
+
+        {/* 2) 오늘 업무 — 목록 3건 + 전체보기 ›. 상세·완료 처리는 업무 탭이 소유한다. */}
         <Appear style={styles.section}>
           <SectionLabel
             icon="checkbox-outline"
-            title="오늘 할 일"
+            title="오늘 업무"
             trailing={
               taskTotal > 0 ? (
                 <Pressable
                   onPress={() => goToTab('/junior/work?view=todo')}
                   accessibilityRole="button"
-                  accessibilityLabel="오늘 할 일 전체보기"
+                  accessibilityLabel="오늘 업무 전체보기"
                   style={({ pressed }) => pressed && { opacity: 0.6 }}
                 >
                   <Text style={styles.moreLink}>전체보기 ›</Text>
@@ -110,221 +123,27 @@ export default function JuniorHomeScreen() {
           />
           <View style={styles.todoCard}>
             {taskTotal === 0 ? (
-              <>
-                <Text style={styles.todoEmpty}>오늘 할 일이 없어요</Text>
-                <Pressable
-                  onPress={() => goToTab('/junior/work?view=todo')}
-                  style={({ pressed }) => [styles.todoEmptyBtn, pressed && { opacity: 0.8 }]}
-                  accessibilityRole="button"
-                  accessibilityLabel="업무 보러 가기"
-                >
-                  <Text style={styles.todoEmptyBtnText}>업무 보러 가기</Text>
-                </Pressable>
-              </>
+              <Text style={styles.todoEmpty}>오늘 할 일이 없어요</Text>
             ) : (
-              <>
-                <Text style={styles.todoLead}>
-                  {taskRemain === 0 ? '오늘 할 일을 다 마쳤어요' : `${taskRemain}개 남았어요`}
-                </Text>
-
-                {/* 데이파트별 진행 — 할일이 있는 시간대만 나온다. */}
-                {daypartStatus.length > 0 && (
-                  <View style={styles.briefDayparts}>
-                    {daypartStatus.map((d) => {
-                      const complete = d.done >= d.total;
-                      return (
-                        <Pressable
-                          key={d.id}
-                          onPress={() => goToTab('/junior/work?view=todo')}
-                          style={({ pressed }) => [styles.dpChip, complete && styles.dpChipDone, pressed && { opacity: 0.7 }]}
-                          accessibilityRole="button"
-                          accessibilityLabel={`${d.label} ${d.done}/${d.total}${complete ? ' 완료' : ''}`}
-                        >
-                          {complete && <Ionicons name="checkmark" size={12} color={BrandColors.good} />}
-                          <Text style={[styles.dpChipText, complete && styles.dpChipTextDone]}>
-                            {d.label} {d.done}/{d.total}
-                          </Text>
-                        </Pressable>
-                      );
-                    })}
-                  </View>
-                )}
-
-                {todayTasks.slice(0, HOME_LIST_LIMIT).map((t, i) => (
-                  <View key={t.id} style={[styles.todoRow, i > 0 && styles.todoRowDivider]}>
-                    <Ionicons
-                      name={t.done ? 'checkmark-circle' : 'ellipse-outline'}
-                      size={20}
-                      color={t.done ? BrandColors.good : InkColors.ink3}
-                    />
-                    <Text style={[styles.todoText, t.done && styles.todoTextDone]} numberOfLines={1}>
-                      {t.text}
-                    </Text>
-                  </View>
-                ))}
-              </>
+              todayTasks.slice(0, HOME_LIST_LIMIT).map((t, i) => (
+                <View key={t.id} style={[styles.todoRow, i > 0 && styles.todoRowDivider]}>
+                  <Ionicons
+                    name={t.done ? 'checkmark-circle' : 'ellipse-outline'}
+                    size={20}
+                    color={t.done ? BrandColors.good : InkColors.ink3}
+                  />
+                  <Text style={[styles.todoText, t.done && styles.todoTextDone]} numberOfLines={1}>
+                    {t.text}
+                  </Text>
+                </View>
+              ))
             )}
           </View>
         </Appear>
 
-        {/* 2) 노하우 물어보기 — ★이 화면의 Primary(정본 §2 직원 표). 2026-08-06에 되돌렸다.
-             최우선(가장 큰 것) = 위 '오늘 할 일', Primary(주 액션 버튼) = 여기. 둘은 다른 자리다.
-             카드는 벗기고 버튼을 채웠다 — 카드 3연속을 끊으면서 위계는 올린다(styles.askBlock 주석). */}
-        <Appear style={styles.section}>
-          <SectionLabel icon="search-outline" title="노하우 물어보기" />
-          <View style={styles.askBlock}>
-            <Text style={styles.askSub}>매장 노하우를 바로 찾아드려요. 없으면 사장님께 대신 여쭤볼게요.</Text>
-            <Pressable
-              onPress={() => goToTab('/junior/chat')}
-              accessibilityRole="button"
-              accessibilityLabel="궁금한 거 물어보기"
-              style={({ pressed }) => [styles.askPrimary, pressed && { opacity: 0.85 }]}
-            >
-              <Text style={styles.askPrimaryText}>궁금한 거 물어보기</Text>
-              <Ionicons name="arrow-forward" size={16} color={InkColors.ink} />
-            </Pressable>
-            {/* ★2026-08-06: 칩이 문구를 안 넘겨서 탭한 질문이 착지 화면에서 사라졌다.
-                3개 중 '진상 손님 응대법'은 착지 화면 추천 풀에 아예 없어 직접 타이핑해야 했다.
-                사장 쪽 씨앗 칩(dashboard→/owner/coach)과 같은 params 패턴으로 넘긴다.
-                **입력칸만 채우고 보내지는 않는다** — 자동 전송이면 오탭이 곧 질문 전송이 된다. */}
-            <View style={styles.askChips}>
-              {QUICK_ASKS.map((q) => (
-                <Pressable
-                  key={q}
-                  onPress={() => goToTab(`/junior/chat?seed=${encodeURIComponent(q)}`)}
-                  style={({ pressed }) => [styles.askChip, pressed && { opacity: 0.7 }]}
-                >
-                  <Text style={styles.askChipText}>{q}</Text>
-                </Pressable>
-              ))}
-            </View>
-          </View>
-        </Appear>
-
-        {/* 3) 출퇴근 퀵액션 — 제목은 카드 밖, 내용은 카드 안 */}
-        <Appear style={styles.section}>
-        <SectionLabel icon="time-outline" title="출퇴근" />
-        <View style={styles.clockCard}>
-          {working && <Text style={styles.workingTag}>● 근무 중</Text>}
-          {/* 출근 전엔 '0분' 큰 숫자 대신 가벼운 인사 — 군더더기 제거 후 버튼에 집중 */}
-          {todayRecs.length > 0 ? (
-            <Text style={styles.clockTime}>{fmtDuration(todayMin)}</Text>
-          ) : (
-            <Text style={styles.clockReady}>오늘도 좋은 하루 보내요</Text>
-          )}
-          <Text style={styles.clockSub}>
-            {working
-              ? `${hhmm(openRec!.check_in!)} 출근 · 근무 중`
-              : todayRecs.length > 0
-                ? `오늘 ${todayRecs.length}회 근무`
-                : '아직 출근 전이에요'}
-          </Text>
-
-          {/* 오늘 번 돈 — 페이백을 크게 노출(P4). 출근 전이면 숨김 */}
-          {todayPay > 0 && (
-            <View style={styles.payRow}>
-              <Text style={styles.payLabel}>오늘 번 돈</Text>
-              <InfoDot
-                title="오늘 번 돈은 어떻게 계산돼요?"
-                body={
-                  '오늘 일한 시간 × 시급으로 계산한 ‘세전 예상액’이에요.\n근무시간은 30분 단위로 정산하고, 사장님이 정한 시급을 기준으로 해요.\n세금·4대보험·수당에 따라 실제 받는 금액과 다를 수 있어요.'
-                }
-              />
-              <Text style={styles.payValue}>{won(todayPay)}</Text>
-            </View>
-          )}
-
-          {working ? (
-            <Pressable onPress={() => checkOut(userId)} style={({ pressed }) => [styles.clockBtn, styles.clockBtnOut, pressed && { opacity: 0.85 }]}>
-              <Text style={styles.clockBtnText}>퇴근하기</Text>
-            </Pressable>
-          ) : (
-            <Pressable
-              onPress={() => checkIn(userId)}
-              style={({ pressed }) => [
-                styles.clockBtn,
-                styles.clockBtnIn,
-                todayRecs.length === 0 && styles.clockBtnBig,
-                pressed && { opacity: 0.85 },
-              ]}
-            >
-              <Text style={[styles.clockBtnText, styles.clockBtnTextIn, todayRecs.length === 0 && styles.clockBtnTextBig]}>
-                {todayRecs.length > 0 ? '다시 출근하기' : '출근하기'}
-              </Text>
-            </Pressable>
-          )}
-
-          <Pressable onPress={() => goToTab('/junior/attendance')} hitSlop={6} style={({ pressed }) => [styles.clockMore, pressed && { opacity: 0.6 }]}>
-            <Text style={styles.clockMoreText}>출퇴근 내역</Text>
-            <Ionicons name="chevron-forward" size={13} color={InkColors.ink3} />
-          </Pressable>
-        </View>
-        </Appear>
-
-        {/* 4) 오늘 한눈에 — 공지·근무·멘션을 미니 통계 한 줄로(블록 I3). 각 칸이 해당 화면으로 진입.
-             데이파트·할일 카운트는 위 '오늘 할 일' 블록으로 이관했다(같은 주제를 두 번 그리지 않는다). */}
-        <Appear style={styles.section}>
-          <SectionLabel icon="today-outline" title="오늘 한눈에" />
-          <MiniStats
-            items={[
-              {
-                key: 'notice',
-                value: unreadCount > 99 ? '99+' : unreadCount,
-                label: '안 읽은 공지',
-                onPress: () => goToTab('/junior/work?view=notice'),
-              },
-              {
-                key: 'shift',
-                value: `${myShiftCount}회`,
-                label: incomingSwaps > 0 ? '이번 주 근무 · 교대 요청' : '이번 주 근무',
-                onPress: () => router.push('/junior/schedule'),
-              },
-              {
-                key: 'mention',
-                value: unreadMentionCount > 99 ? '99+' : unreadMentionCount,
-                label: '나를 언급',
-                onPress: () => goToTab('/junior/work'),
-              },
-            ]}
-          />
-          {/* 가장 최근 것 한 줄만 미리보기 — 카운트만 두면 "무슨 일인지"를 알 수 없다.
-              공지와 멘션 **둘 다** 준다. 한쪽만 주면 "누가 나를 언급했는지"가 카운트 뒤로 사라진다. */}
-          {unreadCount > 0 && latestNotice && (
-            <Pressable
-              onPress={() => goToTab('/junior/work?view=notice')}
-              style={({ pressed }) => [styles.noticeStrip, pressed && { opacity: 0.85 }]}
-              accessibilityRole="button"
-              accessibilityLabel={`안 읽은 공지 ${unreadCount}건. 확인하러 가기`}
-            >
-              <Ionicons name="megaphone" size={15} color={BrandColors.yellowDeep} />
-              <Text style={styles.noticeStripText} numberOfLines={1}>
-                {latestNotice.pinned ? '고정 · ' : ''}
-                {latestNotice.text}
-              </Text>
-              <Text style={styles.noticeStripMore}>{unreadCount > 1 ? `+${unreadCount - 1} ` : ''}›</Text>
-            </Pressable>
-          )}
-          {unreadMentionCount > 0 && latestMention && (
-            <Pressable
-              onPress={() => goToTab('/junior/work')}
-              style={({ pressed }) => [styles.noticeStrip, pressed && { opacity: 0.85 }]}
-              accessibilityRole="button"
-              accessibilityLabel={`나를 언급한 글 ${unreadMentionCount}건. 확인하러 가기`}
-            >
-              <Ionicons name="at" size={15} color={BrandColors.mention} />
-              <Text style={styles.noticeStripText} numberOfLines={1}>
-                {latestMention.authorName}님이 나를 언급했어요
-              </Text>
-              <Text style={styles.noticeStripMore}>{unreadMentionCount > 1 ? `+${unreadMentionCount - 1} ` : ''}›</Text>
-            </Pressable>
-          )}
-        </Appear>
-
-        {/* 5) 핵심 기능 안내 배너 — 최하단. 스와이프로 핵심 기능을 소개하고 탭하면 바로 그 화면으로 */}
-        <Appear style={styles.section}>
-          <SectionLabel icon="compass-outline" title="이런 것도 할 수 있어요" />
-          <FeatureCarousel cards={JUNIOR_FEATURES} />
-        </Appear>
+        {/* 3) 안 푼 퀴즈 — 0건이면 AlertRow가 스스로 null을 돌려준다(상시 노출 금지).
+            Appear로 감싸지 않는다 — 0건일 때 빈 래퍼가 남아 목록 간격만 벌어진다. */}
+        <AlertRow label="안 푼 퀴즈" count={openQuizCount} onPress={() => goToTab('/junior/work')} />
       </ScrollView>
 
       <RoleTabBar role="junior" />

@@ -20,35 +20,17 @@ import { useChatStore } from '@/lib/store/useChatStore';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { useUnknownQueueStore } from '@/lib/store/useUnknownQueueStore';
-import { HAS_SUPABASE } from '@/lib/supabase';
 
 import { useStaffStore } from '@/lib/store/useStaffStore';
 
-import { SEED_QUERIES } from '@/lib/demo/seedQueries';
 import { BrandColors, InkColors } from '@/lib/theme/colors';
 
 import type { Category } from '@/types';
 
 import { styles } from './askStyles';
 
-// 추천 질문 풀 — 업종(요식업) 일반. 데모 매장(노하우 보유)은 데모 시드 칩을 쓴다.
-// 첫인상은 '사소한 것도 편하게'가 되도록 저부담 질문부터 — 위기 시나리오를 앞세우지 않는다.
-// 상단 상시 스트립이 매번 같은 질문만 반복하지 않도록 풀을 넉넉히 두고, '이미 물어본 질문'은 걸러낸다.
-const GENERIC_SUGGESTIONS = [
-  '앞치마는 어디 있어요?',
-  '마감 몇 시예요?',
-  '마감 청소 어디까지 해요?',
-  '재료 떨어지면 어떻게 해요?',
-  '포스기 에러 났어요',
-  '휴게시간은 어떻게 써요?',
-  '유니폼 세탁은 어떻게 해요?',
-  '손님이 환불해달래요',
-  '재고는 어디서 확인해요?',
-  '지각하면 어디로 연락해요?',
-];
-
 // 빈 상태에서 보여줄 추천 수 / 대화 중 상단 스트립 최대 수.
-const EMPTY_SUGGEST_COUNT = 4;
+const EMPTY_SUGGEST_COUNT = 3;
 const STRIP_SUGGEST_COUNT = 6;
 
 // 히스토리 윈도잉 — 처음엔 최근 CHAT_WINDOW개만 렌더하고, 위로 스크롤하면 이전 대화를 CHAT_PAGE개씩 더 붙인다.
@@ -85,13 +67,21 @@ export function JuniorAsk({ suggestEntry = true, seed }: { suggestEntry?: boolea
   const sessionStore = useSessionStore((s) => s.storeName);
   const getStaff = useStaffStore((s) => s.getStaff);
   const getEntryById = usePlaybookStore((s) => s.getById);
-  const entryCount = usePlaybookStore((s) => s.entries.length);
-  // 데모(mock) 매장에서만 시연용 시드 질문을 노출한다. 실서비스 계정은 항상 업종 일반 추천
-  // → 실계정 알바가 남의 매장 데모 질문('수저통 빨대…')을 보는 목업 데이터 누출 방지.
-  const pool = useMemo(
-    () => (!HAS_SUPABASE && entryCount > 0 ? SEED_QUERIES.map((s) => s.text) : GENERIC_SUGGESTIONS),
-    [entryCount],
+  const entries = usePlaybookStore((s) => s.entries);
+  // ★추천 문구는 **그 매장에 실제로 있는 노하우**에서만 뽑는다(정본 §13).
+  //  고정 문구를 쓰면 답이 없는 질문을 추천하게 되고, 첫 시도에서 신뢰가 깨진다.
+  //  풀 = 발행됐고, 팩 템플릿이 아니고, 사장님이 확인한 것(needs_review=미확인은 뺀다).
+  //  이 풀이 곧 아래 안내 문구의 'n개'라 문장과 칩이 같은 것을 가리킨다.
+  const askable = useMemo(
+    () =>
+      entries
+        .filter((e) => (e.status ?? 'published') === 'published' && !e.is_template && !e.needs_review)
+        // 많이 물어본 것 먼저 — 답이 잘 나오는 것이 앞에 온다.
+        .sort((a, b) => (b.stats?.query_hits_30d ?? 0) - (a.stats?.query_hits_30d ?? 0)),
+    [entries],
   );
+  // 칩 문구 = 노하우 제목 그대로. 문장을 지어내면 원문과 어긋나 매칭이 빗나간다.
+  const pool = useMemo(() => askable.map((e) => e.title).filter(Boolean), [askable]);
   // 이미 물어본 질문은 추천에서 제외 → 같은 추천 칩이 매번 반복되지 않고, 답할 때마다 다음 질문이 드러난다.
   const asked = useMemo(() => new Set(history.map((h) => h.query_text.trim())), [history]);
   // 빈 상태: 풀 앞쪽 몇 개(첫인상). 대화 중 스트립: 아직 안 물어본 것만, 상한까지.
@@ -218,20 +208,30 @@ export function JuniorAsk({ suggestEntry = true, seed }: { suggestEntry?: boolea
             <Text style={styles.emptySub}>
               매장 노하우를 바로 찾아드려요. 없으면 사장님께 대신 여쭤볼게요.
             </Text>
-            <Text style={styles.suggestLabel}>이런 걸 물어볼 수 있어요</Text>
-            <View style={styles.suggestList}>
-              {emptySuggestions.map((text, i) => (
-                <Appear key={`${i}-${text}`} delay={120 + i * 70}>
-                  <Pressable
-                    onPress={() => handleSeedTap(text)}
-                    style={({ pressed }) => [styles.suggest, pressed && { opacity: 0.7 }]}
-                  >
-                    <Text style={styles.suggestText}>{text}</Text>
-                    <Text style={styles.suggestArrow}>↗</Text>
-                  </Pressable>
-                </Appear>
-              ))}
-            </View>
+            {/* ★노하우가 하나도 없으면 안내도 칩도 그리지 않는다 — 빈 칩·가짜 예시를 누르면
+                "물어봐도 답이 없다"가 첫 인상이 된다. 이때는 위 두 줄만 남는다. */}
+            {emptySuggestions.length > 0 && (
+              <>
+                <Text style={styles.groundingText}>
+                  우리 매장 노하우 {askable.length}개를 보고 답해요. 사장님이 확인한 것만 씁니다.
+                </Text>
+                <View style={styles.suggestList}>
+                  {emptySuggestions.map((text, i) => (
+                    <Appear key={`${i}-${text}`} delay={120 + i * 70}>
+                      <Pressable
+                        onPress={() => handleSeedTap(text)}
+                        accessibilityRole="button"
+                        accessibilityLabel={`${text} 물어보기`}
+                        style={({ pressed }) => [styles.suggest, pressed && { opacity: 0.7 }]}
+                      >
+                        <Text style={styles.suggestText}>{text}</Text>
+                        <Text style={styles.suggestArrow}>↗</Text>
+                      </Pressable>
+                    </Appear>
+                  ))}
+                </View>
+              </>
+            )}
           </View>
         )}
 

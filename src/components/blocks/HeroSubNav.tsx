@@ -130,8 +130,10 @@ const styles = StyleSheet.create({
     marginBottom: Space.sm,
   },
   caption: {
-    fontSize: 13.5,
-    lineHeight: 20,
+    // 사장 홈에서 이 자리는 직원 질문 원문이다 — 읽어서 판단하는 문장이라 본문 15sp 하한 대상.
+    // (정본 HTML의 12~13.5px은 웹 목업 값이다.)
+    fontSize: 15,
+    lineHeight: 22,
     color: InkColors.bubbleText,
     opacity: 0.82,
   },

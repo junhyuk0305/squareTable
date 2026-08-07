@@ -72,7 +72,15 @@ export const styles = StyleSheet.create({
     lineHeight: 20,
     marginBottom: 8,
   },
-  suggestLabel: { fontSize: 12, fontWeight: '800', color: InkColors.ink3, letterSpacing: 0.3, marginBottom: 2 },
+  // 근거 한 줄 — 추천 칩이 어디서 나왔는지("우리 매장 노하우 n개")를 칩 바로 위에 붙인다.
+  // 본문 하한 15sp 를 지킨다: 이 문장은 장식이 아니라 답변의 출처 고지다.
+  groundingText: {
+    fontSize: 15,
+    lineHeight: 21,
+    fontWeight: '700',
+    color: InkColors.ink2,
+    marginBottom: 2,
+  },
   suggestList: { gap: 10 },
   suggest: {
     flexDirection: 'row',
