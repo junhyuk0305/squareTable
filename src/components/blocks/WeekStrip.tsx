@@ -31,25 +31,30 @@ export type WeekDay = {
 export function WeekStrip({
   days,
   selectedKey,
+  todayKey,
   onSelect,
 }: {
   days: WeekDay[];
   selectedKey: string;
+  /** 오늘의 key — 다른 날을 골라 놨을 때 "여기가 오늘"을 잃지 않게 옅은 면으로 표시한다. */
+  todayKey?: string;
   onSelect: (key: string) => void;
 }) {
   return (
     <View style={styles.strip}>
       {days.map((d) => {
         const on = d.key === selectedKey;
+        const isToday = !!todayKey && d.key === todayKey;
         return (
           <Pressable
             key={d.key}
             accessibilityRole="button"
             accessibilityState={{ selected: on }}
-            accessibilityLabel={`${d.dow}요일 ${d.date}일${d.hasEvent ? ' · 일정 있음' : ''}`}
+            accessibilityLabel={`${isToday ? '오늘 ' : ''}${d.dow}요일 ${d.date}일${d.hasEvent ? ' · 일정 있음' : ''}`}
             onPress={() => onSelect(d.key)}
             style={({ pressed }) => [
               styles.cell,
+              isToday && !on && styles.cellToday,
               on && styles.cellOn,
               d.dimmed && !on && styles.cellDim,
               pressed && !on && styles.pressed,
@@ -81,6 +86,8 @@ const styles = StyleSheet.create({
     minHeight: 48,
   },
   cellOn: { backgroundColor: InkColors.ink },
+  // 오늘 ≠ 선택일. 색이 아니라 면의 세기로 구분한다 — 점(일정 있음)과 뜻이 겹치면 안 된다.
+  cellToday: { backgroundColor: InkColors.bgSoft },
   cellDim: { opacity: 0.45 },
   pressed: { backgroundColor: InkColors.bgSoft },
   dow: { fontSize: 10, fontWeight: '700', color: InkColors.ink2 },
