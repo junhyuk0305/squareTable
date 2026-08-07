@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, Pressable, ScrollView, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, Pressable, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter, Redirect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -7,6 +7,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useMemberPrefsStore } from '@/lib/store/useMemberPrefsStore';
 import { useCrossNotifStore } from '@/lib/store/useCrossNotifStore';
+import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
+import { useUnknownQueueStore } from '@/lib/store/useUnknownQueueStore';
+import { useWorkStore } from '@/lib/store/useWorkStore';
+import { useAttendanceStore } from '@/lib/store/useAttendanceStore';
+import { useScheduleStore } from '@/lib/store/useScheduleStore';
 import { showToast } from '@/lib/store/useToastStore';
 import { needsProfileSetup } from '@/lib/store/profileSetup';
 import { HAS_SUPABASE } from '@/lib/supabase';
@@ -25,6 +30,56 @@ import { HubTopBar } from '@/components/hub/HubTopBar';
 import { HubTabBar } from '@/components/HubTabBar';
 import { Appear } from '@/components/Appear';
 import { SectionLabel } from '@/components/SectionLabel';
+import { TransitionCover } from '@/components/blocks/TransitionCover';
+
+/**
+ * 진입 커버가 최대 이만큼만 기다린다.
+ *
+ * ⚠️ 이 값이 이 화면에서 가장 위험한 부분이다 — 읽기가 끝내 안 오면(오프라인 등) 스토어의 loaded 가
+ * 영원히 false 라, 타임아웃이 없으면 사용자가 커버에 갇힌다. **무음 실패를 로딩으로 위장하는 것이
+ * 지금보다 나쁘다.** 시간이 지나면 덜 채워진 채로라도 매장 화면(다음 행동이 있는 화면)으로 내보내고,
+ * 실패 자체는 전역 SyncBanner(db.ts readFail)가 말한다.
+ */
+const ENTER_TIMEOUT_MS = 6000;
+
+/**
+ * 착지 화면(사장 홈 / 직원 홈)이 그리기 전에 필요한 것만 미리 채운다.
+ *
+ * 왜 여기서 당기는가: 스토어는 매장이 바뀌어도 비워지지 않는다(loaded 는 true 로 남는다).
+ * 그래서 전환 직후 그냥 넘어가면 ① 빈 상태가 스치거나 ② 잠깐 **이전 매장 데이터**가 보인다.
+ * 하이드레이트 함수는 owner/junior _layout 이 부르는 것과 **같은 것**이라 새 경로가 아니다.
+ */
+async function prefetchStoreData(manage: boolean): Promise<void> {
+  const jobs = manage
+    ? [
+        usePlaybookStore.getState().hydrate(),
+        useUnknownQueueStore.getState().hydrate(),
+        useWorkStore.getState().hydrate(),
+        useAttendanceStore.getState().hydrate(),
+      ]
+    : [
+        useWorkStore.getState().hydrate(),
+        useAttendanceStore.getState().hydrate(),
+        useScheduleStore.getState().hydrate(),
+      ];
+  // allSettled: 한 스토어가 던져도(오프라인) 나머지를 기다린다. race: 그래도 안 끝나면 놓아준다.
+  await Promise.race([
+    Promise.allSettled(jobs),
+    new Promise<void>((resolve) => setTimeout(resolve, ENTER_TIMEOUT_MS)),
+  ]);
+}
+
+/**
+ * 매장 이름 뒤의 '으로/로' — 매장 이름은 사장이 자유 입력이라 조사를 하드코딩할 수 없다.
+ * 받침 없음·ㄹ 받침이면 '로'. 한글이 아니면(영문 상호 등) '으로'로 둔다.
+ */
+function euroRo(name: string): string {
+  const last = name.trim().slice(-1);
+  const code = last.charCodeAt(0);
+  if (!(code >= 0xac00 && code <= 0xd7a3)) return '으로';
+  const jong = (code - 0xac00) % 28;
+  return jong === 0 || jong === 8 ? '로' : '으로';
+}
 
 // ── 내 매장 (허브) ──────────────────────────────────────────────────────────
 // 로그인 후 사장·직원이 공통으로 착지하는 매장 선택 화면. 매장 카드를 탭하면
@@ -60,7 +115,8 @@ export default function StoresHub() {
         : [];
 
   const [overview, setOverview] = useState<Record<string, OwnerOverviewRow>>({});
-  const [switching, setSwitching] = useState<string | null>(null);
+  // 매장을 고른 순간부터 그 매장 화면이 그릴 준비가 될 때까지 — 이 값이 있으면 화면 전체를 커버가 덮는다.
+  const [entering, setEntering] = useState<{ uid: string; name: string } | null>(null);
 
   // 매장별 개인 설정(닉네임·색) — 카드에 반영. 로그인 후 내 전 매장 한 번에.
   const prefFor = useMemberPrefsStore((s) => s.prefFor);
@@ -74,6 +130,8 @@ export default function StoresHub() {
   useEffect(() => {
     void hydrateCross();
   }, [hydrateCross]);
+  // 도착 전엔 전부 0이라 뱃지·칩이 "없음"으로 보였다가 뒤늦게 튀어나온다 — loaded 전엔 아예 안 그린다.
+  const crossLoaded = useCrossNotifStore((s) => s.loaded);
   const { unreadByUnit } = useCrossNotifRows();
   // 직원 '오늘 할일' 칩 — 카운트는 assignedTodayCount SSOT(오늘 탭·허브 탭바 뱃지와 동일 술어).
   const crossData = useCrossNotifStore((s) => s.data);
@@ -99,19 +157,23 @@ export default function StoresHub() {
   }, [isOwner]);
 
   const enterStore = async (u: MyUnitRow) => {
-    if (switching) return;
+    if (entering) return;
+    setEntering({ uid: u.unit_id, name: prefFor(u.unit_id).nickname || u.store_name || '내 매장' });
     // 이미 활성 매장이면 전환 없이 바로 진입. 다른 매장이면 활성 전환 후 진입.
     if (u.unit_id !== unitId) {
-      setSwitching(u.unit_id);
       const { error } = await switchUnit(u.unit_id);
-      setSwitching(null);
       // 전환 실패 시 진입하지 않는다 — 이전 매장을 "선택한 매장인 줄 알고" 보게 되는 무음 오류 방지.
+      // 커버를 걷고 매장 목록으로 돌려보낸다(갇히지 않는다).
       if (error) {
+        setEntering(null);
         showToast(error, 'warn');
         return;
       }
     }
+    // 착지 화면이 그릴 준비가 될 때까지 커버 아래에서 채운다. 실패·지연이면 타임아웃으로 빠져나온다.
+    await prefetchStoreData(canManage(useSessionStore.getState().role));
     // 0093: 역할은 매장별(A매장 매니저·B매장 직원 가능) — 전환 '후'의 세션 역할로 착지 화면을 정한다.
+    // replace 로 이 화면이 사라지며 커버도 함께 걷힌다(entering 을 되돌릴 필요가 없다).
     router.replace(canManage(useSessionStore.getState().role) ? '/owner/dashboard' : '/junior/home');
   };
 
@@ -131,6 +193,20 @@ export default function StoresHub() {
   if (HAS_SUPABASE && status === 'loading') return null;
   if (HAS_SUPABASE && needsProfileSetup({ status, phone, unitId, pendingUnitId })) {
     return <Redirect href="/complete-profile" />;
+  }
+
+  // 매장 진입 커버 — 고른 순간부터 그 매장 화면이 그릴 준비가 될 때까지 화면 전체를 덮는다.
+  // 빈 상태·이전 매장 데이터가 스치는 구간이 여기 통째로 들어간다.
+  if (entering) {
+    return (
+      <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
+        <Stack.Screen options={{ headerShown: false }} />
+        <TransitionCover
+          title={`${entering.name}${euroRo(entering.name)} 가고 있어요`}
+          caption="노하우와 오늘 업무를 가져오는 중"
+        />
+      </SafeAreaView>
+    );
   }
 
   return (
@@ -179,7 +255,6 @@ export default function StoresHub() {
                 />
                 {stores.map((s) => {
                   const ov = overview[s.unit_id];
-                  const busy = switching === s.unit_id;
                   const isActive = s.unit_id === unitId;
                   const pref = prefFor(s.unit_id);
                   const color = storeColor(s.unit_id, pref.color);
@@ -187,7 +262,6 @@ export default function StoresHub() {
                     <Pressable
                       key={s.unit_id}
                       onPress={() => enterStore(s)}
-                      disabled={!!switching}
                       style={({ pressed }) => [styles.card, isActive && styles.cardActive, { borderLeftWidth: 4, borderLeftColor: color }, pressed && { opacity: 0.92 }]}
                     >
                       <View style={[styles.cardIcon, { backgroundColor: color + '22' }]}>
@@ -211,16 +285,12 @@ export default function StoresHub() {
                             직원 = 오늘 할일 칩(오늘 배정·미완료, assignedTodayCount SSOT). */}
                         {isOwner
                           ? (ov?.pending_q ?? 0) > 0 && <Text style={styles.qChip}>받은질문 {ov!.pending_q}</Text>
-                          : (todoByUnit[s.unit_id] ?? 0) > 0 && <Text style={styles.qChip}>오늘 할일 {todoByUnit[s.unit_id]}</Text>}
+                          : crossLoaded && (todoByUnit[s.unit_id] ?? 0) > 0 && <Text style={styles.qChip}>오늘 할일 {todoByUnit[s.unit_id]}</Text>}
                         {/* 통합 안읽음 뱃지(0077) — 기존 '확인필요(pending_q만)' 칩을 매장별 전체 안읽음으로 확장(지표 병존 금지). */}
-                        {(unreadByUnit[s.unit_id] ?? 0) > 0 && (
+                        {crossLoaded && (unreadByUnit[s.unit_id] ?? 0) > 0 && (
                           <Text style={styles.needChip}>알림 {unreadByUnit[s.unit_id]}</Text>
                         )}
-                        {busy ? (
-                          <ActivityIndicator size="small" color={InkColors.ink3} />
-                        ) : (
-                          <Ionicons name="chevron-forward" size={18} color={InkColors.ink3} />
-                        )}
+                        <Ionicons name="chevron-forward" size={18} color={InkColors.ink3} />
                       </View>
                     </Pressable>
                   );

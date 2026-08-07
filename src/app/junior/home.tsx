@@ -12,6 +12,7 @@ import { SectionLabel } from '@/components/SectionLabel';
 import { HeroSubNav } from '@/components/blocks/HeroSubNav';
 import { AlertRow } from '@/components/blocks/AlertRow';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
+import { showToast } from '@/lib/store/useToastStore';
 import { hhmm } from '@/lib/utils/attendance';
 import { useJuniorHomeData } from '@/lib/hooks/useJuniorHomeData';
 import { styles } from '@/styles/juniorHomeStyles';
@@ -39,6 +40,7 @@ const HOME_LIST_LIMIT = 3;
  */
 export default function JuniorHomeScreen() {
   const {
+    loaded,
     userName,
     checkIn,
     checkOut,
@@ -53,14 +55,18 @@ export default function JuniorHomeScreen() {
   } = useJuniorHomeData();
 
   // 히어로 큰 수 — 0을 전시하지 않는다(할 일이 없거나 다 끝난 상태는 숫자가 아니라 말로).
-  const heroValue = taskTotal === 0 ? '없어요' : taskRemain === 0 ? '다 했어요' : `${taskRemain}개`;
+  // ★도착 전엔 '없어요'(=0건 단정) 대신 중립 표기. 블록은 그대로 두고 값만 채운다.
+  const heroValue = !loaded ? '—' : taskTotal === 0 ? '없어요' : taskRemain === 0 ? '다 했어요' : `${taskRemain}개`;
   // 히어로 한 줄 = [지금 할 일] · [출퇴근 상태]. 남은 일이 없으면 출퇴근 상태만.
   const nextTask = todayTasks.find((t) => !t.done);
-  const clockLine = working
-    ? `${hhmm(openRec!.check_in!)} 출근 · 근무 중`
-    : todayRecs.length > 0
-      ? `오늘 ${todayRecs.length}회 근무`
-      : '아직 출근 전이에요';
+  // ★'아직 출근 전이에요'는 도착 전엔 거짓말이다 — 근무 중인 직원에게도 그렇게 보인다.
+  const clockLine = !loaded
+    ? '출퇴근 기록을 가져오는 중이에요'
+    : working
+      ? `${hhmm(openRec!.check_in!)} 출근 · 근무 중`
+      : todayRecs.length > 0
+        ? `오늘 ${todayRecs.length}회 근무`
+        : '아직 출근 전이에요';
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
@@ -98,8 +104,20 @@ export default function JuniorHomeScreen() {
             label="오늘 할 일"
             value={heroValue}
             caption={nextTask ? `지금은 ${nextTask.text} · ${clockLine}` : clockLine}
-            ctaLabel={working ? '퇴근하기' : todayRecs.length > 0 ? '다시 출근하기' : '출근하기'}
-            onCta={() => (working ? checkOut(userId) : checkIn(userId))}
+            ctaLabel={
+              !loaded ? '출퇴근 기록 확인 중' : working ? '퇴근하기' : todayRecs.length > 0 ? '다시 출근하기' : '출근하기'
+            }
+            onCta={() => {
+              // ★★중복 출근 방지: 도착 전엔 records 가 [] 라 checkIn 의 '열린 기록' 검사가 그냥 통과한다
+              //   → 이미 근무 중인 직원이 이 버튼을 누르면 두 번째 출근이 찍히고 어제 기록이 24h로 부푼다.
+              //   버튼을 지우면 히어로 높이가 튀므로, 자리는 두고 **동작만** 막는다(무음 무시 금지 — 왜 안 되는지 말해준다).
+              if (!loaded) {
+                showToast('출퇴근 기록을 가져오는 중이에요. 잠시 후 다시 눌러 주세요');
+                return;
+              }
+              if (working) checkOut(userId);
+              else checkIn(userId);
+            }}
           />
         </Appear>
 
@@ -109,7 +127,7 @@ export default function JuniorHomeScreen() {
             icon="checkbox-outline"
             title="오늘 업무"
             trailing={
-              taskTotal > 0 ? (
+              loaded && taskTotal > 0 ? (
                 <Pressable
                   onPress={() => goToTab('/junior/work?view=todo')}
                   accessibilityRole="button"
@@ -122,7 +140,10 @@ export default function JuniorHomeScreen() {
             }
           />
           <View style={styles.todoCard}>
-            {taskTotal === 0 ? (
+            {!loaded ? (
+              // 도착 전 '오늘 할 일이 없어요'는 0건 단정 — 업무가 있는 직원에게도 스쳤다.
+              <Text style={styles.todoEmpty}>오늘 업무를 가져오는 중이에요</Text>
+            ) : taskTotal === 0 ? (
               <Text style={styles.todoEmpty}>오늘 할 일이 없어요</Text>
             ) : (
               todayTasks.slice(0, HOME_LIST_LIMIT).map((t, i) => (
@@ -143,7 +164,7 @@ export default function JuniorHomeScreen() {
 
         {/* 3) 안 푼 퀴즈 — 0건이면 AlertRow가 스스로 null을 돌려준다(상시 노출 금지).
             Appear로 감싸지 않는다 — 0건일 때 빈 래퍼가 남아 목록 간격만 벌어진다. */}
-        <AlertRow label="안 푼 퀴즈" count={openQuizCount} onPress={() => goToTab('/junior/work')} />
+        <AlertRow label="안 푼 퀴즈" count={loaded ? openQuizCount : 0} onPress={() => goToTab('/junior/work')} />
       </ScrollView>
 
       <RoleTabBar role="junior" />

@@ -15,6 +15,17 @@ import { sortByUrgency } from '@/lib/utils/unknownQuery';
 import type { UnknownQuery } from '@/types';
 
 export type OwnerDashboardData = {
+  /**
+   * 이 화면이 "0건"이라고 **판단해도 되는가**.
+   *
+   * Supabase 모드에서 스토어는 전부 `[]` + `loaded:false` 로 시작한다. 즉 배열 길이만 보면
+   * "정말 0건"과 "아직 안 옴"이 같은 값이라, 노하우 18개인 매장에서도 온보딩 블록이 0.3초 스친다.
+   * 빈 상태·온보딩·"없어요" 같은 **단정**은 이 값이 true 일 때만 그린다.
+   *
+   * 읽기 '실패'는 여기서 로딩으로 위장하지 않는다 — 실패해도 loaded 는 true 가 되고(스토어 계약),
+   * 표면화는 전역 SyncBanner(db.ts readFail)와 화면별 loadError 가 맡는다.
+   */
+  loaded: boolean;
   userName: string;
   storeName: string;
   entriesCount: number;
@@ -57,6 +68,14 @@ export function useOwnerDashboardData(): OwnerDashboardData {
   const doneMap = useWorkStore((s) => s.done);
   const entries = usePlaybookStore((s) => s.entries);
   const staff = useStaffStore((s) => s.staff);
+
+  // 빈 상태 판정의 전제 — 이 화면이 읽는 스토어 4개가 전부 도착했는가.
+  // (staff·suggestion·quiz 는 이 화면에서 "0건"을 단정하는 자리가 없어 게이트에 넣지 않는다.)
+  const playbookLoaded = usePlaybookStore((s) => s.loaded);
+  const queueLoaded = useUnknownQueueStore((s) => s.loaded);
+  const workLoaded = useWorkStore((s) => s.loaded);
+  const attendanceLoaded = useAttendanceStore((s) => s.loaded);
+  const loaded = playbookLoaded && queueLoaded && workLoaded && attendanceLoaded;
 
   const today = todayStr();
 
@@ -143,6 +162,7 @@ export function useOwnerDashboardData(): OwnerDashboardData {
   );
 
   return {
+    loaded,
     userName,
     storeName,
     // 검토 대기(draft·인수인계서 파이프라인 초안)는 자산 카운트에서 제외 —

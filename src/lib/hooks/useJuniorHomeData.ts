@@ -4,11 +4,20 @@ import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useAttendanceStore, type AttendanceRecord } from '@/lib/store/useAttendanceStore';
 import { useWorkStore, occursOn, trainingCourseViews, courseEntriesOf } from '@/lib/store/useWorkStore';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
+import { useScheduleStore } from '@/lib/store/useScheduleStore';
 import { useChatStore } from '@/lib/store/useChatStore';
 import { todayStr } from '@/lib/utils/attendance';
 import type { PlaybookEntry } from '@/types';
 
 export type JuniorHomeData = {
+  /**
+   * 이 화면이 "0건"·"출근 전"이라고 **판단해도 되는가**.
+   *
+   * ★가장 위험한 소비자는 출근 버튼이다. 도착 전엔 records 가 `[]` 라 근무 중인 직원에게도
+   * 잠깐 '출근하기'가 보이고, 그 순간 탭하면 useAttendanceStore.checkIn 의 '열린 기록' 검사가
+   * 통과해 **두 번째 출근이 찍힌다**(이중 오픈 → 급여 왜곡). 그래서 라벨·동작 둘 다 게이트한다.
+   */
+  loaded: boolean;
   userName: string;
   // 출퇴근
   checkIn: (staffId: string) => void;
@@ -42,6 +51,12 @@ export function useJuniorHomeData(): JuniorHomeData {
 
   const templates = useWorkStore((s) => s.templates);
   const doneMap = useWorkStore((s) => s.done);
+
+  // 빈 상태·출퇴근 상태를 단정해도 되는 시점 — junior/_layout 이 이 셋을 함께 hydrate 한다.
+  const workLoaded = useWorkStore((s) => s.loaded);
+  const attendanceLoaded = useAttendanceStore((s) => s.loaded);
+  const scheduleLoaded = useScheduleStore((s) => s.loaded);
+  const loaded = workLoaded && attendanceLoaded && scheduleLoaded;
 
   const today = todayStr();
 
@@ -110,6 +125,7 @@ export function useJuniorHomeData(): JuniorHomeData {
   );
 
   return {
+    loaded,
     userName,
     checkIn,
     checkOut,

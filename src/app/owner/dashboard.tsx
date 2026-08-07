@@ -18,7 +18,6 @@ import { StoreToggle } from '@/components/StoreToggle';
 import { SEED_TEMPLATES } from '@/data/seed-templates';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { useOwnerDashboardData } from '@/lib/hooks/useOwnerDashboardData';
-import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { useStaffStore } from '@/lib/store/useStaffStore';
 import { formatAsked } from '@/lib/utils/time';
 import { styles } from '@/styles/ownerDashboardStyles';
@@ -29,6 +28,7 @@ const HOME_LIST_LIMIT = 3;
 export default function OwnerDashboardScreen() {
   const router = useRouter();
   const {
+    loaded,
     entriesCount,
     needsReviewCount,
     pending,
@@ -142,15 +142,16 @@ export default function OwnerDashboardScreen() {
   );
 
   // 진입 애니메이션이 자리 잡은 뒤 자동 시작 — 0건 + 아직 안 본 사장만.
-  // ⚠️ playbookLoaded 게이트: Supabase에서 entries는 비동기 하이드레이션이라, 로딩 전엔
+  // ⚠️ loaded 게이트: Supabase에서 entries는 비동기 하이드레이션이라, 로딩 전엔
   //    entriesCount가 0으로 보인다. loaded 전에 시작하면 노하우 있는 기존 사장에게도 잠깐 떴다 닫힌다.
+  //    게이트는 아래 온보딩 블록과 **같은 것**을 써야 한다 — 투어 2단계가 그 블록 안의 ctaRef를 비추므로
+  //    투어가 먼저 켜지면 타깃이 아직 없는 상태에서 코치마크가 뜬다.
   const seenTour = useTourStore((s) => !!s.seen[TOUR_ID]);
-  const playbookLoaded = usePlaybookStore((s) => s.loaded);
   useEffect(() => {
-    if (!playbookLoaded || entriesCount !== 0 || seenTour) return;
+    if (!loaded || entriesCount !== 0 || seenTour) return;
     const t = setTimeout(() => setTourOn(true), 520);
     return () => clearTimeout(t);
-  }, [playbookLoaded, entriesCount, seenTour]);
+  }, [loaded, entriesCount, seenTour]);
 
   const endTour = () => {
     setTourOn(false);
@@ -184,15 +185,21 @@ export default function OwnerDashboardScreen() {
             서브내비를 히어로 바닥에 **붙이는** 이유: 떼면 A1 원형 액션 로우와 중복돼 블록을 하나 더 먹는다. */}
         <Appear>
           <View ref={hubRef}>
+          {/* ★로딩 중엔 값을 단정하지 않는다 — 블록은 그대로 두고(자리 유지) 내용만 중립 표기로 채운다.
+              '없어요'는 "질문이 0건"이라는 단정인데, 도착 전엔 pending 이 항상 0이라 거짓말이 된다. */}
           <HeroSubNav
             label="답을 기다리는 질문"
-            value={pending > 0 ? `${pending}건` : '없어요'}
+            value={!loaded ? '—' : pending > 0 ? `${pending}건` : '없어요'}
             caption={
-              heroQuery
-                ? `“${heroQuery.query_text}”\n${heroQuery.anonymous ? '익명 질문' : heroQuery.junior_name} · ${formatAsked(heroQuery.asked_at)}`
-                : '직원이 모르는 걸 물으면 여기로 와요.'
+              !loaded
+                ? '직원이 물어본 것을 가져오는 중이에요'
+                : heroQuery
+                  ? `“${heroQuery.query_text}”\n${heroQuery.anonymous ? '익명 질문' : heroQuery.junior_name} · ${formatAsked(heroQuery.asked_at)}`
+                  : '직원이 모르는 걸 물으면 여기로 와요.'
             }
-            ctaLabel={heroQuery ? '답하러 가기 →' : '오늘 한 줄 노하우 남기기 →'}
+            // 로딩 중에도 CTA는 남긴다(빼면 히어로 높이가 튄다). 다만 "답할 질문이 없다"는 뜻의
+            // 문구 대신 어느 상태에서나 참인 행동으로 — 눌리면 실제로 노하우 입력으로 간다(죽은 컨트롤 아님).
+            ctaLabel={!loaded ? '노하우 남기기 →' : heroQuery ? '답하러 가기 →' : '오늘 한 줄 노하우 남기기 →'}
             onCta={() =>
               heroQuery
                 ? router.push({ pathname: '/owner/coach', params: { uqId: heroQuery.id } })
@@ -203,8 +210,10 @@ export default function OwnerDashboardScreen() {
           </View>
         </Appear>
 
-        {/* 신규 매장 온보딩 — 노하우 0건이면 가장 먼저 첫 입력을 유도(빈 매장 = 직원 답변 0 → 이탈 방지) */}
-        {entriesCount === 0 && (
+        {/* 신규 매장 온보딩 — 노하우 0건이면 가장 먼저 첫 입력을 유도(빈 매장 = 직원 답변 0 → 이탈 방지)
+            ★loaded 게이트: 도착 전엔 entriesCount 가 항상 0이라, 이 블록이 노하우 18개인 매장에서도
+            0.3초 떴다가 사라졌다("매장을 막 시작하셨네요" 스침). "0건"과 "아직 안 옴"을 구분한다. */}
+        {loaded && entriesCount === 0 && (
           <Appear style={styles.onboard}>
             <Text style={styles.onboardTitle}>매장을 막 시작하셨네요</Text>
             <Text style={styles.onboardBody}>
@@ -236,7 +245,7 @@ export default function OwnerDashboardScreen() {
 
         {/* ② L2 제목+목록 — 오늘 업무 3건 + 전체보기. 목록은 카드 안에 둔다
             (배치 규칙: 화면당 카드 1~2개는 남긴다 — 카드는 '이건 특별하다'는 신호다). */}
-        {entriesCount > 0 && todayTasks.length > 0 && (
+        {loaded && entriesCount > 0 && todayTasks.length > 0 && (
           <Appear style={styles.section}>
             <SectionLabel
               icon="today-outline"
@@ -271,9 +280,11 @@ export default function OwnerDashboardScreen() {
 
         {/* ③ X2 다음 행동 — 화면에 한 자리다. 우선순위는 nextAction이 정하고,
             0건이면 AlertRow가 스스로 렌더하지 않는다. */}
+        {/* 도착 전엔 count 를 0으로 눌러 아무것도 그리지 않는다 — 로딩 중 0을 "할 일 없음"으로 읽히게
+            두면 잠깐 사라졌다 나타나는 행이 된다(AlertRow 는 0건이면 스스로 null). */}
         <AlertRow
           label={nextAction.label}
-          count={nextAction.count}
+          count={loaded ? nextAction.count : 0}
           unit={nextAction.unit}
           icon={nextAction.icon}
           onPress={nextAction.onPress}
@@ -288,7 +299,7 @@ export default function OwnerDashboardScreen() {
       {/* 신규 사장 코치마크 투어 — 매장 운영 허브 → 첫 노하우 깔기까지 순차 안내.
           entriesCount===0 가드: 스토어 지연 로딩으로 기존 사장에게 잘못 뜨거나, 도중에 노하우가
           생기면(ctaRef 타깃 소멸) 즉시 닫는다. */}
-      {tourOn && entriesCount === 0 && (
+      {tourOn && loaded && entriesCount === 0 && (
         <CoachmarkTour
           steps={tourSteps}
           containerRef={containerRef}

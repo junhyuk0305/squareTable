@@ -30,6 +30,12 @@ import type { Href } from 'expo-router';
 
 type SortKey = 'pending_q' | 'working' | 'uncovered' | 'labor_month';
 
+/**
+ * 로딩 자리표의 최소 높이 — 본문(경고행·오늘·확인 필요·이번달)이 도착해도 화면이 튀지 않게 미리 자리를 잡는다.
+ * ⚠️ 고정 height 금지: 글자 배율이 커지면 상자가 터진다(재발 이력). 최소값만 잡고 내용이 넘치면 늘어난다.
+ */
+const LOADING_MIN_HEIGHT = 360;
+
 /** 표 셀용 축약 금액 — 1만 미만은 그대로, 이상은 만 단위(표 폭 보호). */
 const fmtWonShort = (n: number) => (n >= 10000 ? `${Math.round(n / 10000)}만` : n.toLocaleString());
 
@@ -376,7 +382,7 @@ function SortTh({ label, k, cur, onPress }: { label: string; k: SortKey; cur: So
 }
 
 const styles = StyleSheet.create({
-  loading: { paddingVertical: Space.xl * 2, alignItems: 'center' },
+  loading: { minHeight: LOADING_MIN_HEIGHT, paddingVertical: Space.xl * 2, alignItems: 'center', justifyContent: 'center' },
   card: {
     backgroundColor: '#FFFFFF',
     borderRadius: Radius.lg,
