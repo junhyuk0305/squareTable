@@ -359,11 +359,13 @@ export function OwnerKnowhowBrowse({
         onPress={() => setOnlyNeedsReview(true)}
       />
 
-      {/* 노하우 한 번에 늘리기 — 인수인계서 업로드 / 업종 템플릿.
+      {/* 인수인계서 업로드 / 업종 템플릿 — 한 건씩 쓰지 않고 여러 건을 한꺼번에 만드는 두 경로.
           ★2026-08-06: 같은 형태의 카드 2장이 나란히 서 있어(이번 개편이 없애려던 증상) **한 카드 안 2행**으로 묶었다.
-          반복은 블록 1개로 센다(복잡도 원칙 §4) — 형태가 늘지 않는다. */}
+          반복은 블록 1개로 센다(복잡도 원칙 §4) — 형태가 늘지 않는다.
+          ★2026-08-07: 제목을 '한 번에 늘리기' → '여러 개 한 번에 추가'로. 무엇이 늘어나는지·무엇을 하는지가
+          이름에 없었다(QA #5-1). 장식용 sparkles 아이콘도 뺐다 — 뜻을 더하지 않는 그림이다(QA #5-2). */}
       <View style={styles.growSection}>
-        <SectionLabel icon="sparkles-outline" title="한 번에 늘리기" />
+        <SectionLabel title="여러 개 한 번에 추가" />
         <View style={styles.growCard}>
           <Pressable
             onPress={goHandover}
@@ -398,15 +400,14 @@ export function OwnerKnowhowBrowse({
       {!hasEntries ? (
         loadError ? (
           // 로드 실패를 "노하우 없음"으로 위장하지 않고 재시도를 띄운다(무음 실패 방지).
+          // 그림 이모지는 워딩 규칙상 금지다(기호·Ionicons만) — 남아 있던 위반을 걷었다(2026-08-07 QA #5-2).
           <EmptyState
-            emoji="📡"
             title="노하우를 불러오지 못했어요"
             body="연결을 확인하고 다시 시도해 주세요."
             cta={{ label: '다시 시도', onPress: () => hydrate() }}
           />
         ) : (
           <EmptyState
-            emoji="📒"
             title="아직 등록된 노하우가 없어요"
             body="직원 질문에 답하거나, 직접 추가하면 여기에 쌓여요."
             cta={{ label: '첫 노하우 추가하기', onPress: goAdd }}
@@ -414,6 +415,37 @@ export function OwnerKnowhowBrowse({
         )
       ) : (
         <>
+          {/* 목록 관리 액션 — 필터가 아니라 관리라서 칩 줄에서 내렸다(2026-08-06).
+              ★2026-08-07(QA #6): 목록 폭을 꽉 채우던 두 버튼을 **찾기 바 위 오른쪽의 작은 버튼**으로 줄였다.
+              ★표시 조건은 찾기 바(showFindBar)와 **분리한다.** 안에 넣으면 노하우가 8건 미만인 매장에서
+                카테고리 편집(CategoryEditSheet 의 유일한 진입점)과 내보내기에 아예 닿지 못한다
+                — 이 프로젝트에서 세 번 재발한 '죽은 컨트롤' 유형이다.
+              ★시각 크기와 터치 타깃을 분리한다 — 작게 그리되 hitSlop 으로 48dp 하한을 지킨다. */}
+          <View style={styles.manageActions}>
+            <Pressable
+              onPress={() => setCatSheet(true)}
+              hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
+              style={({ pressed }) => [styles.manageBtn, pressed && { opacity: 0.7 }]}
+              accessibilityRole="button"
+              accessibilityLabel="카테고리 편집"
+            >
+              <Ionicons name="pricetags-outline" size={13} color={InkColors.ink2} />
+              <Text style={styles.manageBtnText}>카테고리 편집</Text>
+            </Pressable>
+            {canCopyToClipboard() && exportCount > 0 && (
+              <Pressable
+                onPress={() => copy(manualToText(exportGroups, { storeName, date: new Date().toLocaleDateString('ko-KR') }))}
+                hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
+                style={({ pressed }) => [styles.manageBtn, pressed && { opacity: 0.7 }]}
+                accessibilityRole="button"
+                accessibilityLabel={`지금 목록에 보이는 노하우 ${exportCount}개 내보내기`}
+              >
+                <Ionicons name={copied ? 'checkmark' : 'copy-outline'} size={13} color={InkColors.ink2} />
+                <Text style={styles.manageBtnText} numberOfLines={1}>{copied ? '복사됐어요' : `내보내기 ${exportCount}개`}</Text>
+              </Pressable>
+            )}
+          </View>
+
           {/* 찾기 바 — 검색·상태·카테고리·정렬을 한 블록(최대 2행)으로. 넷이 형제로 서 있을 때
               목록 위에 약 168px이 상시 깔려 있었다(같은 형태 4연속 = 이번 개편이 없애려던 증상). */}
           {showFindBar && (
@@ -527,32 +559,6 @@ export function OwnerKnowhowBrowse({
             </View>
           )}
 
-          {/* 목록 관리 액션 — 필터가 아니라 관리라서 칩 줄에서 내렸다(2026-08-06).
-              카테고리 편집은 CategoryEditSheet 의 유일한 진입점이라 FILTER_MIN 과 무관하게 항상 렌더한다.
-              내보내기 = 지금 목록에 보이는 발행본을 카테고리로 묶어 평문으로. 웹에서만(클립보드). */}
-          <View style={styles.footActions}>
-            <Pressable
-              onPress={() => setCatSheet(true)}
-              style={styles.footBtn}
-              accessibilityRole="button"
-              accessibilityLabel="카테고리 편집"
-            >
-              <Ionicons name="pricetags-outline" size={14} color={InkColors.ink2} />
-              <Text style={styles.footBtnText}>카테고리 편집</Text>
-            </Pressable>
-            {canCopyToClipboard() && exportCount > 0 && (
-              <Pressable
-                onPress={() => copy(manualToText(exportGroups, { storeName, date: new Date().toLocaleDateString('ko-KR') }))}
-                style={styles.footBtn}
-                accessibilityRole="button"
-                accessibilityLabel={`노하우 ${exportCount}개 내보내기`}
-              >
-                <Ionicons name={copied ? 'checkmark' : 'copy-outline'} size={14} color={InkColors.ink2} />
-                <Text style={styles.footBtnText} numberOfLines={1}>{copied ? '복사됐어요' : `노하우 ${exportCount}개 내보내기`}</Text>
-              </Pressable>
-            )}
-          </View>
-
           {/* 목록 */}
           {listFiltered.length === 0 ? (
             <EmptyResult
@@ -588,7 +594,8 @@ export function OwnerKnowhowBrowse({
 function EmptyResult({ onReset, onAsk, label }: { onReset: () => void; onAsk?: () => void; label?: string }) {
   return (
     <View style={styles.emptyResult}>
-      <Text style={styles.emptyResultEmoji}>{label ? '✅' : '🔍'}</Text>
+      {/* 그림 이모지 금지(워딩 §1) — 같은 뜻을 Ionicons 로. 2026-08-07 QA #5-2. */}
+      <Ionicons name={label ? 'checkmark-circle-outline' : 'search-outline'} size={30} color={InkColors.ink3} />
       <Text style={styles.emptyResultText}>{label ?? '조건에 맞는 노하우가 없어요'}</Text>
       {/* 매니저 전용: 목록에서 못 찾으면 다음 행동은 물어보기(AI 답변, 없으면 사장님께 질문) */}
       {onAsk && (
@@ -718,13 +725,14 @@ const styles = StyleSheet.create({
   verifyBtnText: { fontSize: 12, fontWeight: '800', color: InkColors.ink },
 
   // 목록 관리 액션(카테고리 편집 · 내보내기) — 2칸 행
-  footActions: { flexDirection: 'row', gap: Space.sm },
-  footBtn: {
-    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Space.sm,
-    minHeight: 48, paddingHorizontal: Space.md, borderRadius: Radius.sm,
+  // 관리 액션 — 찾기 바 위 오른쪽의 작은 버튼. 시각은 칩 크기, 터치 타깃은 hitSlop 이 48dp까지 넓힌다.
+  manageActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: Space.sm },
+  manageBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 5, maxWidth: 180,
+    paddingVertical: 6, paddingHorizontal: 10, borderRadius: Radius.pill,
     borderWidth: 1, borderColor: InkColors.line, backgroundColor: InkColors.bg,
   },
-  footBtnText: { fontSize: 13, fontWeight: '700', color: InkColors.ink2 },
+  manageBtnText: { flexShrink: 1, fontSize: 12.5, fontWeight: '700', color: InkColors.ink2 },
 
   // 그룹(목록·카테고리별)
   groupHead: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6, paddingHorizontal: 2 },

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { View, Text, Pressable, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
+import { View, Text, TextInput, Pressable, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -29,6 +29,12 @@ function friendly(msg?: string): string {
 }
 
 /**
+ * 찾기 바를 띄우는 최소 건수 — `OwnerKnowhowBrowse.FILTER_MIN` 과 같은 판정이다
+ * (복잡도 원칙 §4 "리스트 첫 노출 5±2"). 이 수 미만이면 거르는 장치가 목록보다 커진다.
+ */
+const FILTER_MIN = 8;
+
+/**
  * OwnerKnowhowImport — 다른 내 매장의 노하우를 현재(활성) 매장으로 가져오는 본문(크롬리스).
  * 흐름: 소스 매장 선택 → 발행 노하우 목록(체크 다중선택) → '가져오기'가 copy_knowhow 로 서버 복제.
  * 복제 성공 시에만 성공 안내 + 현재 매장 노하우 재hydrate(무음 유실 방지). 사진 미복제·확인필요는 안내로 고지.
@@ -54,6 +60,7 @@ export function OwnerKnowhowImport() {
   const [loadErr, setLoadErr] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [copying, setCopying] = useState(false);
+  const [query, setQuery] = useState('');
 
   // 동기 setState를 이펙트에 두지 않는다(cascading render 방지) — 로딩/선택 리셋은 소스칩/재시도 핸들러가 담당.
   useEffect(() => {
@@ -71,7 +78,7 @@ export function OwnerKnowhowImport() {
   // 소스 매장 선택(칩) — 이펙트 트리거 전에 로딩/에러/선택을 핸들러에서 리셋.
   const pickSource = (id: string) => {
     if (id === sourceId) return;
-    setSourceId(id); setLoading(true); setLoadErr(false); setRows(null); setSelected(new Set());
+    setSourceId(id); setLoading(true); setLoadErr(false); setRows(null); setSelected(new Set()); setQuery('');
   };
 
   const toggle = (id: string) =>
@@ -80,8 +87,36 @@ export function OwnerKnowhowImport() {
       if (next.has(id)) next.delete(id); else next.add(id);
       return next;
     });
-  const allSelected = !!rows && rows.length > 0 && selected.size === rows.length;
-  const toggleAll = () => setSelected(allSelected ? new Set() : new Set((rows ?? []).map((r) => r.id)));
+
+  // ── 찾기(2026-08-07 QA #2) — 제목·소분류·본문 첫 문단까지 본다. 나열 + 스크롤로는 못 찾던 자리다.
+  const filtering = query.trim() !== '';
+  const visible = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q || !rows) return rows ?? [];
+    return rows.filter((r) =>
+      [r.title, r.subcategory ?? '', typeof r.square?.situation === 'string' ? (r.square.situation as string) : '']
+        .some((t) => t.toLowerCase().includes(q)),
+    );
+  }, [rows, query]);
+
+  /**
+   * ★'전체 선택'의 뜻을 거른 뒤에 맞춘다 — 검색 중에 '전체'가 원래 전체를 뜻하면
+   * 화면에 없는 것까지 조용히 딸려 들어간다. 대신 라벨이 무엇을 고르는지 말한다.
+   * 거르기 밖에서 이미 고른 것은 **지우지 않는다**(고른 것을 검색 때문에 잃으면 안 된다) —
+   * 대신 몇 개가 안 보이는지 아래 줄에 밝힌다(조용한 절단 금지).
+   */
+  const visibleAllSelected = visible.length > 0 && visible.every((r) => selected.has(r.id));
+  const toggleAll = () =>
+    setSelected((cur) => {
+      const next = new Set(cur);
+      for (const r of visible) { if (visibleAllSelected) next.delete(r.id); else next.add(r.id); }
+      return next;
+    });
+  const hiddenSelected = useMemo(() => {
+    if (!filtering) return 0;
+    const shown = new Set(visible.map((r) => r.id));
+    return [...selected].filter((id) => !shown.has(id)).length;
+  }, [filtering, visible, selected]);
 
   const doImport = async () => {
     if (!sourceId || selected.size === 0 || copying) return;
@@ -109,7 +144,8 @@ export function OwnerKnowhowImport() {
   if (sources.length === 0) {
     return (
       <View style={styles.emptyState}>
-        <Text style={styles.emptyEmoji}>🏪</Text>
+        {/* 그림 이모지 금지(워딩 §1) — Ionicons 로 대체. 2026-08-07 QA #5-2 와 같은 규칙. */}
+        <Ionicons name="storefront-outline" size={30} color={InkColors.ink3} />
         <Text style={styles.emptyTitle}>가져올 다른 매장이 없어요</Text>
         <Text style={styles.emptyBody}>매장이 2개 이상일 때 다른 매장의 노하우를 현재 매장으로 가져올 수 있어요.</Text>
       </View>
@@ -167,19 +203,55 @@ export function OwnerKnowhowImport() {
           </View>
         ) : rows && rows.length === 0 ? (
           <View style={styles.center}>
-            <Text style={styles.emptyEmoji}>📭</Text>
+            <Ionicons name="file-tray-outline" size={30} color={InkColors.ink3} />
             <Text style={styles.emptyBody}>이 매장에는 발행된 노하우가 없어요.</Text>
           </View>
         ) : (
           <Appear delay={120} style={styles.block}>
+            {/* 찾기 — 8건 미만이면 안 그린다. 단, 검색어가 남아 있으면 강제로 띄운다(끌 수 없는 거르기 금지). */}
+            {(rows?.length ?? 0) >= FILTER_MIN || filtering ? (
+              <View style={styles.search}>
+                <Ionicons name="search" size={16} color={InkColors.ink3} />
+                <TextInput
+                  value={query}
+                  onChangeText={setQuery}
+                  placeholder="예) 마감, 발주"
+                  placeholderTextColor={InkColors.ink3}
+                  style={styles.searchInput}
+                  returnKeyType="search"
+                />
+                {query.length > 0 ? (
+                  <Pressable onPress={() => setQuery('')} hitSlop={8} accessibilityRole="button" accessibilityLabel="검색어 지우기">
+                    <Ionicons name="close-circle" size={16} color={InkColors.ink3} />
+                  </Pressable>
+                ) : null}
+              </View>
+            ) : null}
             <View style={styles.listHead}>
-              <Text style={styles.listCount}>{rows?.length}개 중 {selected.size}개 선택</Text>
-              <Pressable onPress={toggleAll} hitSlop={8}>
-                <Text style={styles.selectAll}>{allSelected ? '전체 해제' : '전체 선택'}</Text>
+              <Text style={styles.listCount}>
+                {filtering ? `${rows?.length}개 중 ${visible.length}개 보임 · ` : `${rows?.length}개 중 `}
+                {selected.size}개 선택
+              </Text>
+              <Pressable onPress={toggleAll} hitSlop={8} accessibilityRole="button" accessibilityLabel={filtering ? '보이는 노하우 전부 선택' : '전체 선택'}>
+                <Text style={styles.selectAll}>
+                  {visibleAllSelected ? (filtering ? '보이는 것 해제' : '전체 해제') : filtering ? '보이는 것 전부' : '전체 선택'}
+                </Text>
               </Pressable>
             </View>
+            {/* 거르기 밖에서 고른 것을 숨기지 않는다 — 아래 도크의 숫자가 화면과 안 맞는 이유를 여기서 말한다. */}
+            {hiddenSelected > 0 ? (
+              <Text style={styles.hiddenNote}>지금 안 보이는 {hiddenSelected}개도 고른 상태예요. 함께 가져와요.</Text>
+            ) : null}
+            {visible.length === 0 ? (
+              <View style={styles.center}>
+                <Text style={styles.emptyBody}>찾는 노하우가 없어요.</Text>
+                <Pressable onPress={() => setQuery('')} hitSlop={8} accessibilityRole="button" accessibilityLabel="검색어 지우기">
+                  <Text style={styles.retryLink}>검색어 지우기</Text>
+                </Pressable>
+              </View>
+            ) : null}
             <View style={styles.list}>
-              {rows?.map((r) => {
+              {visible.map((r) => {
                 const on = selected.has(r.id);
                 const situation = typeof r.square?.situation === 'string' ? (r.square.situation as string) : '';
                 return (
@@ -202,7 +274,9 @@ export function OwnerKnowhowImport() {
                           <Text style={styles.rowSub} numberOfLines={1}>{r.subcategory}</Text>
                         </View>
                       ) : null}
-                      {situation ? <Text style={styles.rowPreview} numberOfLines={1}>{situation}</Text> : null}
+                      {/* 본문 미리보기 — 행 탭이 '선택'이라 내용을 열어볼 어포던스가 없다.
+                          제목만으로는 비슷한 이름 여럿 중 무엇을 복제하는지 알 수 없어 2줄까지 편다(QA #2). */}
+                      {situation ? <Text style={styles.rowPreview} numberOfLines={2}>{situation}</Text> : null}
                     </View>
                   </Pressable>
                 );
@@ -261,6 +335,15 @@ const styles = StyleSheet.create({
   hintText: { fontSize: 13, color: InkColors.ink3, fontWeight: '600' },
   center: { paddingVertical: 40, alignItems: 'center', gap: 8 },
 
+  // 찾기 바 — OwnerKnowhowBrowse 의 검색행과 같은 형태(새로 발명하지 않는다).
+  search: {
+    flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 44,
+    borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md, backgroundColor: InkColors.bg,
+    paddingHorizontal: Space.md,
+  },
+  searchInput: { flex: 1, fontSize: 15, color: InkColors.ink, paddingVertical: 8 },
+  hiddenNote: { fontSize: 12.5, color: InkColors.ink2, fontWeight: '600', lineHeight: 18 },
+
   // 목록
   listHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   listCount: { fontSize: 13, color: InkColors.ink3, fontWeight: '700' },
@@ -297,7 +380,6 @@ const styles = StyleSheet.create({
 
   // 빈 상태(단일 매장)
   emptyState: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 8, padding: Space.xl },
-  emptyEmoji: { fontSize: 34 },
   emptyTitle: { fontSize: 16, fontWeight: '800', color: InkColors.ink2 },
   emptyBody: { fontSize: 15, color: InkColors.ink2, fontWeight: '600', textAlign: 'center', lineHeight: 22 },
 });
