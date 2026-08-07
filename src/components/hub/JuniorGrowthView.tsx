@@ -17,6 +17,7 @@ import { useMemberPrefsStore } from '@/lib/store/useMemberPrefsStore';
 import { useStoreNav } from '@/lib/hooks/useStoreNav';
 import { storeColor } from '@/lib/utils/storeColor';
 import { SectionLabel } from '@/components/SectionLabel';
+import { MiniStats } from '@/components/blocks/MiniStats';
 import { EntryDetailModal } from '@/components/EntryDetailModal';
 import { Appear } from '@/components/Appear';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
@@ -115,13 +116,17 @@ export function JuniorGrowthView() {
             )}
           </View>
         </Appear>
+        {/* ★2026-08-06: 가짜 실적("내 노하우가 최근 30일 7번 도움 됐어요")을 **스켈레톤**으로 교체했다.
+            옛 판본은 카드 전체에 opacity 0.55를 걸어 가짜임을 표현했는데, 합성 대비 실측 결과
+            가짜 숫자 2.22:1 > '예시' 배지 1.54:1 이라 **가짜 주장이 그것을 부정하는 표시보다 또렷했다**.
+            대비만 올리면 가짜가 실데이터처럼 읽히고, 흐리게 두면 딱지가 안 읽히는 딜레마라
+            "무엇이 쌓이는지"만 남기고 수치 자체를 없앤다 — 그러면 흐릴 이유도, '예시' 딱지도 없다.
+            (자동 검사는 조상 opacity를 색에 합성하지 않아 이 자리를 앞으로도 못 잡는다.) */}
         <Appear delay={80}>
           <View style={styles.ghostCard}>
-            <View style={styles.exBadge}>
-              <Text style={styles.exBadgeText}>예시</Text>
-            </View>
-            <Text style={styles.ghostTitle}>내 노하우가 최근 30일 7번 도움 됐어요</Text>
-            <Text style={styles.ghostBody}>첫 기록이 들어오면 진짜 숫자로 바뀌어요.</Text>
+            <Text style={styles.ghostTitle}>최근 30일 도움 된 횟수</Text>
+            <View style={styles.ghostBar} />
+            <Text style={styles.ghostBody}>첫 기록이 들어오면 여기에 숫자가 나와요.</Text>
           </View>
         </Appear>
       </View>
@@ -147,20 +152,34 @@ export function JuniorGrowthView() {
       {/* ── 내가 남긴 것 ── */}
       <Appear delay={totals.taught > 0 ? 80 : 40}>
         <SectionLabel title="내가 남긴 것" hint="나만 볼 수 있어요" />
+        {/* 블록 I3 — 카드가 아니다. 2026-08-06: '내가 남긴 것'·'해본 업무'가 각각 stat을 품은 카드라
+            이 화면이 '제목 → 카드' 반복이었다. 세 숫자를 한 줄로 올리고 아래 목록만 카드로 남긴다.
+            '해본 업무'의 단독 1칸도 여기로 끌어올렸다 — 1칸짜리 통계에 카드를 세울 이유가 없다. */}
+        <MiniStats
+          items={[
+            {
+              key: 'knowhow',
+              value: `${totals.knowhow}개`,
+              label: '내가 만든 노하우',
+            },
+            {
+              key: 'hits',
+              value: `${totals.hits}번`,
+              label: '최근 30일 참조',
+              info:
+                totals.knowhow > 0 && totals.hits === 0
+                  ? {
+                      title: '참조가 0이에요',
+                      body: '아직 참조 전이에요 — 누가 같은 걸 물으면 숫자가 올라요.',
+                    }
+                  : undefined,
+            },
+            { key: 'done', value: `${totals.doneKinds}종`, label: '해본 업무' },
+          ]}
+        />
+        {/* 노하우 0개면 카드를 세우지 않는다 — 옛 판본은 테두리·그림자만 있는 빈 상자가 남았다(2026-08-06). */}
+        {myEntries.length > 0 && (
         <View style={styles.card}>
-          <View style={styles.statRow}>
-            <View style={styles.statCell}>
-              <Text style={styles.statV}>{totals.knowhow}<Text style={styles.statUnit}>개</Text></Text>
-              <Text style={styles.statL}>내가 만든 노하우</Text>
-            </View>
-            <View style={[styles.statCell, styles.statDivider]}>
-              <Text style={styles.statV}>{totals.hits}<Text style={styles.statUnit}>번</Text></Text>
-              <Text style={styles.statL}>최근 30일 참조</Text>
-            </View>
-          </View>
-          {totals.knowhow > 0 && totals.hits === 0 && (
-            <Text style={styles.caption}>아직 참조 전이에요 — 누가 같은 걸 물으면 숫자가 올라요</Text>
-          )}
           {/* 내 노하우 원문 목록(0094) — 행 탭 = 원문 시트. 카운트와 같은 술어라 개수가 일치한다. */}
           {(showAllEntries ? myEntries : myEntries.slice(0, ENTRY_LIST_FIRST)).map((e) => (
             <Pressable
@@ -191,21 +210,18 @@ export function JuniorGrowthView() {
             </Pressable>
           )}
         </View>
+        )}
       </Appear>
 
-      {/* ── 해본 업무(경험) — 숙련 주장 없음(완료≠숙련) ── */}
+      {/* ── 해본 업무 — 합계는 위 MiniStats로 올라갔다(2026-08-06). 여기 남는 건 매장별 분해뿐이라
+             **다매장 직원에게만** 그린다. 단일 매장이면 위 숫자가 곧 그 매장의 값이라 섹션 자체가 사라진다.
+             숙련 주장 없음(완료 ≠ 숙련). ── */}
+      {growth.length > 1 && (
       <Appear delay={totals.taught > 0 ? 120 : 80}>
-        <SectionLabel title="해본 업무" />
+        <SectionLabel title="해본 업무" hint="매장별" />
         <View style={styles.card}>
-          <View style={styles.statRow}>
-            <View style={styles.statCell}>
-              <Text style={styles.statV}>{totals.doneKinds}<Text style={styles.statUnit}>종</Text></Text>
-              <Text style={styles.statL}>완료 기록이 있는 업무</Text>
-            </View>
-          </View>
-          {/* 매장별 분해(다매장 직원만) — 행 탭 = 그 매장 업무 화면 */}
-          {growth.length > 1 &&
-            growth.map((r) => (
+          {/* 행 탭 = 그 매장 업무 화면 */}
+          {growth.map((r) => (
               <Pressable
                 key={r.unit_id}
                 onPress={() => goStore(r.unit_id, '/junior/work')}
@@ -220,6 +236,7 @@ export function JuniorGrowthView() {
             ))}
         </View>
       </Appear>
+      )}
 
       {/* ── 훈련 통과 이력(0104) — 있을 때만. 통과 사실만 말하고 점수·등급을 만들지 않는다 ── */}
       {trainingHistory.length > 0 && (
@@ -283,6 +300,7 @@ const styles = StyleSheet.create({
     marginBottom: Space.xs,
   },
   emptyBtnText: { fontSize: 14, fontWeight: '800', color: InkColors.ink },
+  // 스켈레톤 카드 — 가짜 수치가 없으므로 opacity 로 흐리지 않는다(흐림 = 가짜 표시였다).
   ghostCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: Radius.lg,
@@ -290,20 +308,12 @@ const styles = StyleSheet.create({
     borderColor: InkColors.line,
     paddingHorizontal: Space.lg,
     paddingVertical: Space.md,
-    opacity: 0.55,
-    gap: 2,
+    gap: Space.xs,
   },
-  exBadge: {
-    alignSelf: 'flex-start',
-    backgroundColor: InkColors.bgSoft,
-    borderRadius: Radius.pill,
-    paddingHorizontal: Space.sm,
-    paddingVertical: 2,
-    marginBottom: Space.xs,
-  },
-  exBadgeText: { fontSize: 11, fontWeight: '800', color: InkColors.ink3 },
   ghostTitle: { fontSize: 15, fontWeight: '800', color: InkColors.ink2 },
-  ghostBody: { fontSize: 12.5, color: InkColors.ink3 },
+  // 숫자가 올 자리 — 값을 지어내지 않고 '여기에 온다'만 표시한다.
+  ghostBar: { width: 64, height: 22, borderRadius: Radius.sm, backgroundColor: InkColors.bgSoft },
+  ghostBody: { fontSize: 12.5, color: InkColors.ink2 },
 
   // 가르침 실적
   taughtCard: { backgroundColor: BrandColors.yellowSoft, borderColor: BrandColors.yellowDeep },

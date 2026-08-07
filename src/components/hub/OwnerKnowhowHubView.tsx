@@ -2,7 +2,7 @@
 //
 // 무엇: "매장 지식이 지금도 맞는가"를 매장 단위로 보여준다(O4·O5 — 격자·bus factor 없이).
 //   · 노하우로 만들 것 = 미답변 질문(pending_q) — 답 하나가 노하우 하나가 되는 입구
-//   · 검증이 필요한 노하우(needs_review) — 시드·제안 반영분의 확인 대기
+//   · 확인이 필요한 노하우(needs_review) — 시드·제안 반영분의 확인 대기
 //   · 오래 손 안 댄 노하우(stale, 90일+) — 메뉴·가격이 변했는데 노하우만 옛날일 위험
 // 원칙: 허브는 읽기·이동까지(실행은 매장 화면) · 매장 단위만 · 0은 위험이 아니라 좋은 소식
 //   ("지금은 손볼 노하우가 없어요") · 노하우 0인 매장은 행동 버튼(노하우 담기)이 먼저.
@@ -14,8 +14,9 @@ import { useHubStore } from '@/lib/store/useHubStore';
 import { useMemberPrefsStore } from '@/lib/store/useMemberPrefsStore';
 import { useStoreNav } from '@/lib/hooks/useStoreNav';
 import { storeColor } from '@/lib/utils/storeColor';
-import { StorePickerSheet } from '@/components/hub/StorePickerSheet';
+import { StorePickerSheet, type StorePickerRow } from '@/components/hub/StorePickerSheet';
 import { SectionLabel } from '@/components/SectionLabel';
+import { MiniStats } from '@/components/blocks/MiniStats';
 import { Appear } from '@/components/Appear';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
@@ -55,12 +56,33 @@ export function OwnerKnowhowHubView() {
   const emptyStores = useMemo(() => overview.filter((r) => r.knowhow === 0), [overview]);
   const allClear = totals.pending === 0 && totals.review === 0 && totals.stale === 0;
 
-  // 매장 선택 시트 공용 — templates(노하우 담기)·import(다른 매장에서 가져오기) 두 흐름이 쓴다.
-  // 담기·가져오기 모두 "어느 매장에"가 먼저이므로, 다점포면 시트로 대상 매장을 고르게 한다.
-  const [picker, setPicker] = useState<null | 'templates' | 'import'>(null);
+  // 매장 선택 시트 공용 — "어느 매장에/에서"가 먼저인 모든 흐름이 쓴다.
+  // 2026-08-06: templates·import 두 상수였던 것을 범용 형태로 바꿨다. 챙길 것 3지표(MiniStats)도
+  // 다점포에서는 같은 시트로 매장을 고르게 하고, **매장별 건수는 시트의 배지가 보여준다** —
+  // 옛 판본은 그 분해를 위해 섹션 카드를 3장 세워서 '제목 → 카드' 반복을 만들고 있었다.
+  type Picker = { title: string; hint: string; path: Href; rows: StorePickerRow[] };
+  const [picker, setPicker] = useState<Picker | null>(null);
+  const allRows = (): StorePickerRow[] =>
+    overview.map((r) => ({ uid: r.unit_id, label: labelOf(r.unit_id), color: colorOf(r.unit_id) }));
   const startTemplates = (uid: string) => {
-    if (overview.length > 1) setPicker('templates');
-    else void goStore(uid, '/owner/templates');
+    if (overview.length > 1) {
+      setPicker({ title: '노하우 담기', hint: '어느 매장에 담을지 골라 주세요', path: '/owner/templates', rows: allRows() });
+    } else void goStore(uid, '/owner/templates');
+  };
+
+  /** 챙길 것 한 칸을 눌렀을 때 — 다점포면 매장 선택(건수 배지 포함), 단일이면 바로 이동. */
+  const jump = (title: string, val: (r: (typeof overview)[number]) => number, path: Href) => () => {
+    const hits = overview.filter((r) => val(r) > 0);
+    if (overview.length > 1) {
+      setPicker({
+        title,
+        hint: '확인할 매장을 골라 주세요',
+        path,
+        // 0건 매장은 배지를 그리지 않는다(배지 없음 = 없음) — StatusView와 같은 규칙.
+        rows: overview.map((r) => ({ uid: r.unit_id, label: labelOf(r.unit_id), color: colorOf(r.unit_id), count: val(r) > 0 ? val(r) : undefined })),
+      });
+    } else if (hits[0]) void goStore(hits[0].unit_id, path);
+    else if (overview[0]) void goStore(overview[0].unit_id, path);
   };
 
   if (!ownerLoaded && overview.length === 0) {
@@ -71,23 +93,8 @@ export function OwnerKnowhowHubView() {
     );
   }
 
-  // 매장별 카운트 행(0인 매장은 숨김 — 리스트 소음 방지). 탭 = 그 매장의 해당 화면으로 이동.
-  const storeRows = (val: (r: (typeof overview)[number]) => number, path: Href) =>
-    overview
-      .filter((r) => val(r) > 0)
-      .map((r) => (
-        <Pressable
-          key={r.unit_id}
-          onPress={() => goStore(r.unit_id, path)}
-          disabled={!!switching}
-          style={({ pressed }) => [styles.row, pressed && { opacity: 0.85 }]}
-        >
-          <View style={[styles.dot, { backgroundColor: colorOf(r.unit_id) }]} />
-          <Text style={styles.rowTitle} numberOfLines={1}>{labelOf(r.unit_id)}</Text>
-          <Text style={styles.cnt}>{val(r)}</Text>
-          <Ionicons name="chevron-forward" size={15} color={InkColors.ink3} />
-        </Pressable>
-      ));
+  // (2026-08-06) 매장별 카운트 행 storeRows는 제거했다 — 세 섹션 카드가 사라지면서 소비자가 없어졌고,
+  // 매장별 분해는 이제 매장 선택 시트의 count 배지가 맡는다.
 
   return (
     <View style={{ gap: Space.md }}>
@@ -135,7 +142,7 @@ export function OwnerKnowhowHubView() {
               ))}
             {overview.length > 1 && (
               <Pressable
-                onPress={() => setPicker('import')}
+                onPress={() => setPicker({ title: '다른 매장에서 가져오기', hint: '어느 매장으로 가져올지 골라 주세요', path: '/owner/import-knowhow', rows: allRows() })}
                 disabled={!!switching}
                 style={({ pressed }) => [styles.row, styles.importRow, pressed && { opacity: 0.85 }]}
                 accessibilityRole="button"
@@ -150,45 +157,55 @@ export function OwnerKnowhowHubView() {
         </Appear>
       )}
 
-      {/* ── 노하우로 만들 것(미답변 질문) ── */}
+      {/* ── 챙길 것(블록 I3) — 세 지표를 한 줄로.
+             2026-08-06: '노하우로 만들 것 / 검증이 필요한 / 오래 손 안 댄'이 각각 제목+카드였다.
+             셋 다 "N건 남았다" 하나만 말하는데 카드를 3장 세우니 이 화면이 카드 나열이 됐다.
+             숫자는 MiniStats 한 줄로 내리고, 매장별 분해는 탭했을 때 매장 선택 시트의 배지가 맡는다
+             (StatusView가 이미 쓰는 패턴). 섹션 힌트는 각 칸의 ⓘ로 옮겼다. ── */}
       <Appear delay={40}>
-        <SectionLabel title="노하우로 만들 것" hint="답 하나가 노하우 하나가 돼요" />
-        <View style={styles.card}>
-          {totals.pending === 0 ? (
-            <Text style={styles.clearText}>기다리는 질문이 없어요</Text>
-          ) : (
-            storeRows((r) => r.pending_q, '/owner/inbox')
-          )}
-        </View>
-      </Appear>
-
-      {/* ── 검증이 필요한 노하우 ── */}
-      <Appear delay={80}>
-        <SectionLabel title="검증이 필요한 노하우" />
-        <View style={styles.card}>
-          {totals.review === 0 ? (
-            <Text style={styles.clearText}>확인을 기다리는 노하우가 없어요</Text>
-          ) : (
-            storeRows((r) => r.needs_review, '/owner/categories')
-          )}
-        </View>
-      </Appear>
-
-      {/* ── 오래 손 안 댄 노하우(90일+) ── */}
-      <Appear delay={120}>
-        <SectionLabel title="오래 손 안 댄 노하우" hint="90일 넘게 수정 없음" />
-        <View style={styles.card}>
-          {totals.stale === 0 ? (
-            <Text style={styles.clearText}>
-              {totals.knowhow === 0 ? '노하우가 쌓이면 여기서 신선도를 챙겨드려요' : '전부 최근에 손봤어요'}
-            </Text>
-          ) : (
-            <>
-              <Text style={styles.staleHint}>메뉴·가격이 바뀌었는데 노하우만 옛날일 수 있어요. 한 번 훑어봐 주세요.</Text>
-              {storeRows((r) => r.stale, '/owner/categories')}
-            </>
-          )}
-        </View>
+        <SectionLabel title="챙길 것" />
+        <MiniStats
+          items={[
+            {
+              key: 'pending',
+              value: totals.pending,
+              label: '노하우로 만들 것',
+              onPress: jump('노하우로 만들 것', (r) => r.pending_q, '/owner/inbox'),
+              info: {
+                title: "'노하우로 만들 것'이 뭐예요?",
+                // 같은 pending_q 를 현황 탭은 '답 기다리는 질문'이라 부른다 — 한 수치를 두 이름으로 부르면
+                // 사장이 서로 다른 지표로 읽는다. 이름을 통일하는 대신(탭마다 문맥이 다르다) 같은 수임을 밝힌다.
+                body: '노하우에 없어서 사장님 답을 기다리는 질문이에요.\n답 하나가 노하우 하나가 돼요.\n현황 탭의 ‘답 기다리는 질문’과 같은 수예요.',
+              },
+            },
+            {
+              key: 'review',
+              // ★2026-08-06: '검증'은 승인 어휘 8개 밖 신조어였다(허브 개편에서 새로 쓴 말).
+              //   매장 앱은 같은 needs_review 를 전부 '확인 필요'로 부른다 → 앱 쪽으로 통일.
+              //   착지도 매장 앱과 맞춘다: /owner/knowledge?review=1 = '확인 필요만' 필터가 걸린 목록.
+              //   (옛 /owner/categories 는 필터 없는 전체 목록이라 "N건"을 눌러도 그 N건이 안 보였다)
+              value: totals.review,
+              label: '확인 필요',
+              onPress: jump('확인이 필요한 노하우', (r) => r.needs_review, '/owner/knowledge?review=1'),
+              info: {
+                title: "'확인 필요'가 뭐예요?",
+                body: '업종 추천이나 직원 제안으로 들어온 노하우 중, 아직 우리 매장 기준이 맞는지 확인하지 않은 것이에요.',
+              },
+            },
+            {
+              key: 'stale',
+              value: totals.stale,
+              label: '오래 손 안 댐',
+              // 위 '확인 필요'와 같은 층(백버튼 있는 서브화면)으로 보낸다 — 한 줄의 세 칸이 서로 다른
+              // 네비게이션 층에 떨어지면 뒤로가기가 칸마다 다르게 동작한다.
+              onPress: jump('오래 손 안 댄 노하우', (r) => r.stale, '/owner/knowledge'),
+              info: {
+                title: "'오래 손 안 댐'이 뭐예요?",
+                body: '90일 넘게 수정이 없는 노하우예요.\n메뉴·가격이 바뀌었는데 노하우만 옛날일 수 있어요. 한 번 훑어봐 주세요.',
+              },
+            },
+          ]}
+        />
       </Appear>
 
       {allClear && totals.knowhow > 0 && (
@@ -199,13 +216,13 @@ export function OwnerKnowhowHubView() {
 
       <StorePickerSheet
         visible={picker !== null}
-        title={picker === 'import' ? '다른 매장에서 가져오기' : '노하우 담기'}
-        hint={picker === 'import' ? '어느 매장으로 가져올지 골라 주세요' : '어느 매장에 담을지 골라 주세요'}
-        rows={overview.map((r) => ({ uid: r.unit_id, label: labelOf(r.unit_id), color: colorOf(r.unit_id) }))}
+        title={picker?.title ?? ''}
+        hint={picker?.hint ?? ''}
+        rows={picker?.rows ?? []}
         onPick={(uid) => {
-          const path = picker === 'import' ? '/owner/import-knowhow' : '/owner/templates';
+          const path = picker?.path;
           setPicker(null);
-          void goStore(uid, path);
+          if (path) void goStore(uid, path);
         }}
         onClose={() => setPicker(null)}
       />
@@ -241,17 +258,11 @@ const styles = StyleSheet.create({
   },
   emptyBtnText: { fontSize: 14, fontWeight: '800', color: InkColors.ink },
 
-  clearText: { fontSize: 15, color: InkColors.ink3, textAlign: 'center', paddingVertical: Space.sm },
-  staleHint: { fontSize: 12.5, color: InkColors.ink3, lineHeight: 18, paddingVertical: Space.xs },
-  allClearText: { fontSize: 13, color: InkColors.ink3, textAlign: 'center' },
+  // 빈 상태 문구 = 본문(simplicity-voice §4) → 꼬리표용 ink3(2.55:1)를 쓰지 않는다.
+  allClearText: { fontSize: 13, color: InkColors.ink2, textAlign: 'center' },
 
   row: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingVertical: Space.sm + 2 },
   rowTitle: { flex: 1, fontSize: 13.5, fontWeight: '700', color: InkColors.ink, minWidth: 0 },
-  cnt: {
-    minWidth: 24, textAlign: 'center', fontSize: 11.5, fontWeight: '900', color: '#8a5a12',
-    backgroundColor: BrandColors.warnSoft, borderWidth: 1, borderColor: BrandColors.warnBorder,
-    paddingHorizontal: Space.xs + 2, paddingVertical: 1, borderRadius: Radius.pill, overflow: 'hidden',
-  },
   // 매장별 노하우 개수 — 경고가 아닌 중립 정보라 warn 배지 대신 무채색.
   cntNeutral: {
     minWidth: 24, textAlign: 'center', fontSize: 11.5, fontWeight: '900', color: InkColors.ink2,

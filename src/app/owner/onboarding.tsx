@@ -516,7 +516,7 @@ const styles = StyleSheet.create({
     gap: Space.sm,
     ...Elevation.e2,
   },
-  barNudge: { fontSize: 12, color: BrandColors.warn, fontWeight: '700', textAlign: 'center' },
+  barNudge: { fontSize: 12, color: BrandColors.warnText, fontWeight: '700', textAlign: 'center' },
   cta: {
     backgroundColor: InkColors.ink,
     paddingVertical: Space.lg,

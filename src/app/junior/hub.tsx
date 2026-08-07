@@ -12,8 +12,6 @@ import { Appear } from '@/components/Appear';
 
 const CODE_LEN = 6;
 
-type IconName = keyof typeof Ionicons.glyphMap;
-
 // 직원 개인 허브 홈 — 회원가입 직후(매장 미연결) 착지점.
 // 마이페이지 + 후킹 배너 + 가게 코드 입력 + 내 가게 목록을 한 화면에 모은다.
 // 단일매장 모델이라 지금 '내 가게'는 0~1개지만, 목록(stores)으로 그려 향후 멀티매장 확장에 대비한다.
@@ -35,6 +33,8 @@ export default function JuniorHub() {
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  /** 매장이 이미 있을 때 코드 입력을 접어두는 상태. 매장 0개면 이 값과 무관하게 항상 펼쳐진다. */
+  const [addOpen, setAddOpen] = useState(false);
 
   // 내 가게 목록 — 단일매장이라 연결 시 1개. 멀티매장 전환 시 여기만 배열로 바뀐다.
   const stores = unitId ? [{ id: unitId, name: storeName || '내 매장' }] : [];
@@ -48,6 +48,14 @@ export default function JuniorHub() {
   };
 
   const focusCode = () => inputRef.current?.focus();
+
+  // 접힌 줄을 펼치면 곧바로 입력 대기 상태로 — 펼치고 다시 탭하게 만들지 않는다.
+  const openAdd = () => {
+    setAddOpen((v) => {
+      if (!v) setTimeout(focusCode, 120);
+      return !v;
+    });
+  };
 
   const join = async () => {
     if (code.length < CODE_LEN) {
@@ -82,6 +90,39 @@ export default function JuniorHub() {
     setCode('');
   };
 
+  // 코드 입력 본문 — 상태 ①(매장 0개)과 ③(펼친 '매장 추가하기')이 **같은 한 벌**을 쓴다.
+  // 컴포넌트로 쪼개지 않는다: 새 컴포넌트 경계를 만들면 상태가 바뀔 때 TextInput이 리마운트되며 포커스가 풀린다.
+  const codeEntry = (
+    <View style={styles.codeCard}>
+      <Pressable onPress={focusCode} style={styles.cells}>
+        {cells.map((ch, i) => (
+          <View key={i} style={[styles.cell, i === Math.min(code.length, CODE_LEN - 1) && styles.cellActive]}>
+            <Text style={styles.cellText}>{ch}</Text>
+          </View>
+        ))}
+        <TextInput
+          ref={inputRef}
+          value={code}
+          onChangeText={onChange}
+          keyboardType="number-pad"
+          maxLength={CODE_LEN}
+          style={styles.hiddenInput}
+          caretHidden
+          onSubmitEditing={join}
+        />
+      </Pressable>
+      {err && <Text style={styles.err}>{err}</Text>}
+      <Pressable
+        disabled={busy}
+        onPress={join}
+        style={({ pressed }) => [styles.primary, pressed && { opacity: 0.88 }, busy && { opacity: 0.6 }]}
+      >
+        {busy ? <ActivityIndicator color="#FFF" /> : <Text style={styles.primaryText}>매장 추가하기</Text>}
+      </Pressable>
+      <Text style={styles.codeHint}>코드가 없으신가요? 사장님께 요청하세요 (사장님: 설정 › 매장 관리).</Text>
+    </View>
+  );
+
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
       <Stack.Screen options={{ headerShown: false }} />
@@ -113,26 +154,14 @@ export default function JuniorHub() {
             안녕하세요{userName ? `, ${userName}님` : ''}
           </Text>
           <Text style={styles.helloSub}>
-            {hasStore ? '오늘도 시작해볼까요?' : '매장에 연결하면 매장의 정석을 시작할 수 있어요.'}
+            {hasStore
+              ? '오늘도 시작해볼까요?'
+              : pendingUnitId
+                ? '사장님 승인을 기다리고 있어요.'
+                : '사장님께 받은 6자리 코드를 넣으면 시작할 수 있어요.'}
           </Text>
         </View>
         </Appear>
-
-        {/* 후킹 배너 ① — 가게 연결 유도 (매장 없을 때만) */}
-        {!hasStore && !pendingUnitId && (
-          <Appear delay={60}>
-          <Pressable onPress={focusCode} style={({ pressed }) => [styles.heroBanner, pressed && { opacity: 0.92 }]}>
-            <View style={styles.heroText}>
-              <Text style={styles.heroTitle}>사장님께 코드를 받으셨나요?</Text>
-              <Text style={styles.heroSub}>6자리 초대코드를 넣으면 합류 신청이 되고, 사장님이 승인하면 연결돼요.</Text>
-            </View>
-            <View style={styles.heroCta}>
-              <Text style={styles.heroCtaText}>코드 입력</Text>
-              <Ionicons name="arrow-forward" size={15} color={InkColors.ink} />
-            </View>
-          </Pressable>
-          </Appear>
-        )}
 
         {/* 합류 미승인 안내(#미아 방지) — 승인 대기가 조용히 사라지던 것을 기기 마커로 감지해 알린다. */}
         {!pendingUnitId && !!rejectedJoinStoreName && (
@@ -157,10 +186,17 @@ export default function JuniorHub() {
           </Appear>
         )}
 
-        {/* 내 가게 */}
-        <Appear delay={120}>
+        {/* ══ 상태 분기 ══
+            이 화면은 성격이 다른 세 상태를 겸한다(2026-08-06 정리).
+              ① 매장 0개  = C 몰입형 — 할 일은 '코드 넣기' 하나. 입력을 최상단에 두고 그 외를 없앤다.
+              ② 승인 대기 = C 몰입형 — 기다리는 것 말곤 할 게 없다. 대기 카드 하나.
+              ③ 매장 있음 = A 조합형 — 매장 고르기. 코드 입력은 '＋ 매장 추가하기' 한 줄로 접는다.
+            옛 판본은 셋을 한 레이아웃으로 그려서 ①에 "코드를 넣어라"가 세 번(히어로 배너·빈 카드·
+            입력 섹션) 나왔고, 그중 히어로의 [코드 입력]은 화면 이동이 아니라 포커스만 주는 가짜 버튼이었다.
+            ③에서는 이미 연결된 직원에게 코드 입력이 상시 노출됐다. */}
+        <Appear delay={60}>
         <View style={styles.section}>
-          <Text style={styles.sectionLabel}>내 매장</Text>
+          {(pendingUnitId || hasStore) && <Text style={styles.sectionLabel}>내 매장</Text>}
 
           {pendingUnitId ? (
             <View style={styles.pendingCard}>
@@ -202,69 +238,35 @@ export default function JuniorHub() {
                 <Ionicons name="chevron-forward" size={18} color={InkColors.ink3} />
               </Pressable>
             ))
-          ) : (
-            <View style={styles.emptyCard}>
-              <Ionicons name="add-circle-outline" size={22} color={InkColors.ink3} />
-              <Text style={styles.emptyText}>아직 연결된 매장이 없어요.{'\n'}아래에 초대코드를 입력해 매장을 추가하세요.</Text>
-            </View>
+          ) : null}
+
+          {/* ③ 매장 있음 — 코드 입력은 접힌 한 줄. 펼침은 아래로(집 스타일). */}
+          {!pendingUnitId && hasStore && (
+            <Pressable
+              onPress={openAdd}
+              style={({ pressed }) => [styles.addRow, pressed && { opacity: 0.7 }]}
+              accessibilityRole="button"
+              accessibilityState={{ expanded: addOpen }}
+              accessibilityLabel="코드로 매장 추가 — 초대코드 입력"
+            >
+              <Ionicons name="add" size={18} color={InkColors.ink2} />
+              {/* 펼치면 나오는 Primary가 '매장 추가하기'라 라벨을 다르게 둔다 —
+                  같은 말이 위아래로 겹치면 어느 쪽을 눌러야 하는지 흐려진다. */}
+              <Text style={styles.addRowText}>코드로 매장 추가</Text>
+              <Ionicons name={addOpen ? 'chevron-up' : 'chevron-down'} size={16} color={InkColors.ink3} />
+            </Pressable>
           )}
+
+          {/* ① 매장 0개면 곧바로 · ③ 매장 있으면 펼쳤을 때만 — 코드 입력 본문은 한 벌뿐이다(SSOT). */}
+          {!pendingUnitId && (!hasStore || addOpen) && codeEntry}
         </View>
         </Appear>
 
-        {/* 가게 코드 입력 (대기 중이 아닐 때만) */}
-        {!pendingUnitId && (
-          <Appear delay={160}>
-          <View style={styles.section}>
-            <Text style={styles.sectionLabel}>매장 코드 입력</Text>
-            <View style={styles.codeCard}>
-              <Pressable onPress={focusCode} style={styles.cells}>
-                {cells.map((ch, i) => (
-                  <View key={i} style={[styles.cell, i === Math.min(code.length, CODE_LEN - 1) && styles.cellActive]}>
-                    <Text style={styles.cellText}>{ch}</Text>
-                  </View>
-                ))}
-                <TextInput
-                  ref={inputRef}
-                  value={code}
-                  onChangeText={onChange}
-                  keyboardType="number-pad"
-                  maxLength={CODE_LEN}
-                  style={styles.hiddenInput}
-                  caretHidden
-                  onSubmitEditing={join}
-                />
-              </Pressable>
-              {err && <Text style={styles.err}>{err}</Text>}
-              <Pressable disabled={busy} onPress={join} style={({ pressed }) => [styles.primary, pressed && { opacity: 0.88 }, busy && { opacity: 0.6 }]}>
-                {busy ? <ActivityIndicator color="#FFF" /> : <Text style={styles.primaryText}>매장 추가하기</Text>}
-              </Pressable>
-              <Text style={styles.codeHint}>코드가 없으신가요? 사장님께 요청하세요 (사장님: 설정 › 매장 관리).</Text>
-            </View>
-          </View>
-          </Appear>
-        )}
-
-        {/* 후킹 배너 ② — 기능 소개/온보딩 */}
-        <Appear delay={200}>
-        <View style={styles.section}>
-          <Text style={styles.sectionLabel}>매장의 정석으로 이런 걸 할 수 있어요</Text>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.featureRow}
-          >
-            {FEATURES.map((f) => (
-              <View key={f.title} style={styles.featureCard}>
-                <View style={styles.featureIcon}>
-                  <Ionicons name={f.icon} size={20} color={InkColors.ink} />
-                </View>
-                <Text style={styles.featureTitle}>{f.title}</Text>
-                <Text style={styles.featureBody}>{f.body}</Text>
-              </View>
-            ))}
-          </ScrollView>
-        </View>
-        </Appear>
+        {/* 기능 소개 캐러셀(3장)은 2026-08-06에 제거했다.
+            ① 합류 전 기능 소개는 시장 표준이 아니다(Slack·Discord·7shifts 전부 참여 후에 보여준다)
+            ② 이 앱엔 이미 <JuniorWelcomeCoach>가 합류 직후 1회 뜬다 — '노하우 물어보기'가 겹쳤다
+            ③ 코드를 넣은 사람은 입력칸 아래의 이 캐러셀을 볼 일이 없었다
+            빠진 '출퇴근 체크'·'근무표 확인'은 JuniorWelcomeCoach로 옮겼다(실제로 쓸 수 있게 된 시점). */}
 
         {/* 내 계정 — 이 화면의 목적은 '매장 합류'이므로 계정 관리는 한 줄로 강등한다(IA 결정 1 = 안 A, 2026-07-29).
             ★통째로 옮기지 않은 이유: hub는 자체 상단바를 써서 HubTopBar의 계정 진입점이 없다. 카드를 없애면
@@ -291,12 +293,6 @@ export default function JuniorHub() {
   );
 }
 
-const FEATURES: { icon: IconName; title: string; body: string }[] = [
-  { icon: 'help-circle-outline', title: '노하우 물어보기', body: '모르는 건 AI에게 바로 물어봐요.' },
-  { icon: 'time-outline', title: '출퇴근 체크', body: '출근·퇴근을 한 번에 기록해요.' },
-  { icon: 'calendar-outline', title: '근무표 확인', body: '내 근무 일정을 바로 확인해요.' },
-];
-
 const CELL_GAP = 8;
 
 const styles = StyleSheet.create({
@@ -310,21 +306,6 @@ const styles = StyleSheet.create({
   greet: { gap: 4 },
   hello: { fontSize: 22, fontWeight: '900', color: InkColors.ink },
   helloSub: { fontSize: 15, color: InkColors.ink2, lineHeight: 22 },
-
-  heroBanner: {
-    backgroundColor: BrandColors.brandSoft,
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    borderColor: InkColors.line,
-    padding: Space.lg,
-    gap: Space.md,
-    ...Elevation.e1,
-  },
-  heroText: { gap: 4 },
-  heroTitle: { fontSize: 16, fontWeight: '800', color: InkColors.ink },
-  heroSub: { fontSize: 15, color: InkColors.ink2, lineHeight: 22 },
-  heroCta: { flexDirection: 'row', alignItems: 'center', gap: 5, alignSelf: 'flex-start' },
-  heroCtaText: { fontSize: 14, fontWeight: '800', color: InkColors.ink },
 
   section: { gap: Space.md },
   sectionLabel: { fontSize: 13, fontWeight: '800', color: InkColors.ink2, marginLeft: 2 },
@@ -344,18 +325,20 @@ const styles = StyleSheet.create({
   storeName: { fontSize: 15, fontWeight: '800', color: InkColors.ink },
   storeMeta: { fontSize: 12, color: InkColors.ink3, marginTop: 2 },
 
-  emptyCard: {
+  // '＋ 매장 추가하기' — 매장이 이미 있을 때 코드 입력을 접어두는 줄.
+  // 매장 카드와 형태를 일부러 다르게 한다(카드가 아니라 점선 행) — 같은 형태가 이어지면 목록으로 읽힌다.
+  addRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Space.md,
-    backgroundColor: '#FFFFFF',
-    borderRadius: Radius.lg,
+    gap: Space.sm,
+    minHeight: 48,
+    paddingHorizontal: Space.lg,
+    borderRadius: Radius.md,
     borderWidth: 1,
     borderColor: InkColors.line,
     borderStyle: 'dashed',
-    padding: Space.lg,
   },
-  emptyText: { flex: 1, fontSize: 15, color: InkColors.ink2, lineHeight: 22 },
+  addRowText: { flex: 1, fontSize: 14, fontWeight: '800', color: InkColors.ink2 },
 
   pendingCard: {
     backgroundColor: '#FFFFFF',
@@ -368,7 +351,7 @@ const styles = StyleSheet.create({
   },
   pendingHead: { flexDirection: 'row', alignItems: 'center', gap: Space.md },
   pendingIcon: { width: 40, height: 40, borderRadius: Radius.md, backgroundColor: '#FBF3E2', alignItems: 'center', justifyContent: 'center' },
-  pendingMeta: { fontSize: 12, color: BrandColors.warn, fontWeight: '700', marginTop: 2 },
+  pendingMeta: { fontSize: 12, color: BrandColors.warnText, fontWeight: '700', marginTop: 2 },
   pendingBody: { fontSize: 15, color: InkColors.ink2, lineHeight: 22 },
   pendingActions: { flexDirection: 'row', gap: Space.sm },
   ghostBtn: { flex: 1, alignItems: 'center', paddingVertical: 11, borderRadius: Radius.md, backgroundColor: InkColors.bgSoft, borderWidth: 1, borderColor: InkColors.line },
@@ -398,25 +381,11 @@ const styles = StyleSheet.create({
   cellActive: { borderColor: BrandColors.brand },
   cellText: { fontSize: 22, fontWeight: '900', color: InkColors.ink },
   hiddenInput: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, opacity: 0, color: 'transparent' },
-  err: { fontSize: 15, color: BrandColors.accent, fontWeight: '600' },
+  err: { fontSize: 15, color: BrandColors.accentText, fontWeight: '600' },
   primary: { backgroundColor: BrandColors.brand, paddingVertical: 15, borderRadius: Radius.md, alignItems: 'center' },
   primaryText: { color: '#FFFFFF', fontSize: 15, fontWeight: '800' },
-  codeHint: { fontSize: 12, color: InkColors.ink3, lineHeight: 18 },
-
-  featureRow: { gap: Space.md, paddingRight: Space.gutter },
-  featureCard: {
-    width: 150,
-    backgroundColor: '#FFFFFF',
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    borderColor: InkColors.line,
-    padding: Space.lg,
-    gap: Space.sm,
-    ...Elevation.e1,
-  },
-  featureIcon: { width: 36, height: 36, borderRadius: Radius.md, backgroundColor: InkColors.bgSoft, alignItems: 'center', justifyContent: 'center' },
-  featureTitle: { fontSize: 14, fontWeight: '800', color: InkColors.ink },
-  featureBody: { fontSize: 12, color: InkColors.ink2, lineHeight: 17 },
+  // 안내문 = 본문(simplicity-voice §4) → 꼬리표용 ink3(2.55:1) 금지.
+  codeHint: { fontSize: 12, color: InkColors.ink2, lineHeight: 18 },
 
   avatarSm: { width: 30, height: 30, borderRadius: Radius.pill, backgroundColor: InkColors.ink, alignItems: 'center', justifyContent: 'center' },
   avatarText: { color: '#FFFFFF', fontSize: 14, fontWeight: '900' },

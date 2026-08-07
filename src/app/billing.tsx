@@ -433,24 +433,23 @@ function BillingBody() {
               </Appear>
             ) : (
               <>
-                {/* 안내 문구 */}
-                <Appear delay={120}>
-                <View style={styles.card}>
-                  <Text style={styles.body}>
-                    {lapsed
-                      ? '아래 계좌로 이용료를 입금하시면, 확인 후 다시 열려요.'
-                      : '아래 계좌로 이용료를 입금해 주세요. 확인 후 반영돼요.'}
-                  </Text>
-                  {/* 계좌이체는 사람이 통장을 보고 승인한다 — 언제까지 기다리면 되는지 반드시 말한다. */}
-                  <Text style={styles.hint}>{PAYMENT_SLA_SENTENCE}</Text>
-                </View>
-                </Appear>
-
-                {/* 계좌 정보 */}
+                {/* ★2026-08-06: 안내 문구 · 입금 계좌 · 입금자명이 각각 카드라 **카드 3연속**이었다
+                    (배치규칙① 위반 · 실브라우저 실측 카드런 3). 셋은 "입금하기" 한 동작이라
+                    — 계좌를 보고 이체한 뒤 그 이름을 적는다 — 한 카드로 합친다. 행은 하나도 안 없앴다. */}
                 <Appear delay={120}>
                 <View style={styles.section}>
-                  <Text style={styles.sectionLabel}>입금 계좌</Text>
+                  <Text style={styles.sectionLabel}>입금하기</Text>
                   <View style={styles.card}>
+                    <Text style={styles.body}>
+                      {lapsed
+                        ? '아래 계좌로 이용료를 입금하시면, 확인 후 다시 열려요.'
+                        : '아래 계좌로 이용료를 입금해 주세요. 확인 후 반영돼요.'}
+                    </Text>
+                    {/* 계좌이체는 사람이 통장을 보고 승인한다 — 언제까지 기다리면 되는지 반드시 말한다. */}
+                    <Text style={styles.hint}>{PAYMENT_SLA_SENTENCE}</Text>
+
+                    <View style={styles.payDivider} />
+
                     <Row label="은행" value={BILLING_INFO.bankName} />
                     <Row
                       label="계좌번호"
@@ -467,6 +466,28 @@ function BillingBody() {
                         매장 {ownedCount}개 × {formatKrw(PLANS.multi.monthlyKrw)} 기준이에요. 매장을 추가하면 매장수만큼 계산돼요.
                       </Text>
                     )}
+
+                    <View style={styles.payDivider} />
+
+                    {/* 입금자명 — 계좌이체 대사의 유일한 키. 지금까지 안 받아서 운영자가 맞출 방법이 없었다.
+                        계좌를 본 직후가 이 값을 적는 자리라, 카드를 나누는 것보다 이어 붙는 게 자연스럽다. */}
+                    <Text style={styles.payFieldLabel}>입금자명</Text>
+                    <TextInput
+                      value={depositor}
+                      onChangeText={setDepositor}
+                      placeholder="통장에 찍히는 이름"
+                      placeholderTextColor={InkColors.ink3}
+                      style={styles.input}
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      maxLength={40}
+                      returnKeyType="done"
+                      onSubmitEditing={() => void submitClaim()}
+                      accessibilityLabel="입금자명 입력"
+                    />
+                    <Text style={styles.hint}>
+                      보내는 분 이름이 매장명·사장님 성함과 다르면 확인이 늦어져요. 실제로 이체한 이름을 적어주세요.
+                    </Text>
                   </View>
                 </View>
                 </Appear>
@@ -496,31 +517,6 @@ function BillingBody() {
                     <Text style={styles.hint}>내용을 확인하고 아래에서 다시 알려주세요.</Text>
                   </View>
                 )}
-
-                {/* 입금자명 — 계좌이체 대사의 유일한 키. 지금까지 안 받아서 운영자가 맞출 방법이 없었다. */}
-                <Appear delay={120}>
-                <View style={styles.section}>
-                  <Text style={styles.sectionLabel}>입금자명</Text>
-                  <View style={styles.card}>
-                    <TextInput
-                      value={depositor}
-                      onChangeText={setDepositor}
-                      placeholder="통장에 찍히는 이름"
-                      placeholderTextColor={InkColors.ink3}
-                      style={styles.input}
-                      autoCapitalize="none"
-                      autoCorrect={false}
-                      maxLength={40}
-                      returnKeyType="done"
-                      onSubmitEditing={() => void submitClaim()}
-                      accessibilityLabel="입금자명 입력"
-                    />
-                    <Text style={styles.hint}>
-                      보내는 분 이름이 매장명·사장님 성함과 다르면 확인이 늦어져요. 실제로 이체한 이름을 적어주세요.
-                    </Text>
-                  </View>
-                </View>
-                </Appear>
 
                 {/* 세금계산서 — 필요한 사장만 편다. 기본 접힘(무료·개인 사장에게 불필요한 입력을 강요하지 않는다). */}
                 {!bizOpen ? (
@@ -688,6 +684,10 @@ const styles = StyleSheet.create({
 
   section: { gap: Space.md },
   sectionLabel: { fontSize: 13, fontWeight: '800', color: InkColors.ink2, marginLeft: 2 },
+  // '입금하기' 한 카드 안에서 안내 / 계좌 / 입금자명을 가르는 선. 카드를 셋으로 나누는 대신
+  // 한 카드 안 구분선으로 리듬을 만든다(2026-08-06).
+  payDivider: { height: 1, backgroundColor: InkColors.line, marginVertical: Space.md },
+  payFieldLabel: { fontSize: 13, fontWeight: '800', color: InkColors.ink2, marginBottom: Space.xs },
 
   card: {
     backgroundColor: '#FFFFFF',

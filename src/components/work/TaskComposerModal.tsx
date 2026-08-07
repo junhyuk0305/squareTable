@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { BottomSheet } from '@/components/BottomSheet';
 import { useDayparts, useDaypartLabels, type NewTask, type TaskSection, type TaskTemplate, type Recurrence } from '@/lib/store/useWorkStore';
 import { type Member } from '@/components/work/MentionInput';
+import { maskHHMM } from '@/lib/utils/attendance';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { searchPlaybook } from '@/lib/rag';
@@ -89,6 +90,13 @@ export function TaskComposerModal({
   );
   const [section, setSection] = useState<TaskSection>(editTemplate?.section ?? dayparts[0]?.id ?? 'open');
 
+  // 업무 시간(선택, 0118) — 정하면 그 시간에 서버 크론이 알림을 쏜다. 수신자 판정은 서버가 한다.
+  // 화면 어휘는 '업무 시간', 코드·DB 이름은 remindAt/remind_at 유지(워딩 규칙: 개명 대상은 보이는 문자열뿐).
+  const [remindOn, setRemindOn] = useState(!!editTemplate?.remindAt);
+  const [remindAt, setRemindAt] = useState(editTemplate?.remindAt ?? '');
+  const [remindInfo, setRemindInfo] = useState(false); // ⓘ 인라인 펼침
+  const remindValid = !remindOn || /^([01]\d|2[0-3]):[0-5]\d$/.test(remindAt);
+
   // 담당: sharedMode(가게 전체) 또는 picked(개인 담당자 여러 명). 신규=다중 토글, 수정=단일 교체.
   const deriveShared = isOwner && (editTemplate ? (editTemplate.scope ?? 'shared') === 'shared' : !(initialAssigneeId && others.some((o) => o.id === initialAssigneeId)));
   const [sharedMode, setSharedMode] = useState(deriveShared);
@@ -141,7 +149,7 @@ export function TaskComposerModal({
 
   // 매주 반복인데 요일 0개면 유령 할일 → 막는다. 사장은 담당(전체/개인 1명 이상)도 정해야 한다.
   const assigneeChosen = !isOwner || sharedMode || picked.length > 0;
-  const canSubmit = text.trim().length > 0 && !(when === 'weekly' && dows.length === 0) && assigneeChosen;
+  const canSubmit = text.trim().length > 0 && !(when === 'weekly' && dows.length === 0) && assigneeChosen && remindValid;
 
   const scheduleParts = () => {
     let recurrence: Recurrence | undefined;
@@ -160,6 +168,7 @@ export function TaskComposerModal({
       createdBy: me,
       recurrence,
       ...(date ? { date } : null),
+      ...(remindOn && remindValid ? { remindAt } : null),
       // 노하우 링크는 사장이 붙이는 것만 반영. 알바 경로엔 필드를 안 실어 링크를 건드리지 않는다(수정 시 무접촉).
       ...(isOwner ? { knowhowIds } : null),
     };
@@ -168,7 +177,7 @@ export function TaskComposerModal({
   // 신규 등록 입력(다중 배정이면 담당자 수만큼).
   function buildInputs(): NewTask[] {
     const v = text.trim();
-    if (!v || (when === 'weekly' && dows.length === 0) || !assigneeChosen) return [];
+    if (!v || (when === 'weekly' && dows.length === 0) || !assigneeChosen || !remindValid) return [];
     const base = baseInput(v);
     if (!isOwner) return [{ ...base, scope: 'private', ownerId: me }];
     if (sharedMode) return [{ ...base, scope: 'shared' }];
@@ -178,7 +187,7 @@ export function TaskComposerModal({
   // 수정 입력(단일).
   function buildEditInput(): NewTask | null {
     const v = text.trim();
-    if (!v || (when === 'weekly' && dows.length === 0) || !assigneeChosen) return null;
+    if (!v || (when === 'weekly' && dows.length === 0) || !assigneeChosen || !remindValid) return null;
     const base = baseInput(v);
     if (!isOwner) return { ...base, scope: 'private', ownerId: me };
     if (sharedMode) return { ...base, scope: 'shared' };
@@ -199,8 +208,9 @@ export function TaskComposerModal({
     if (when === 'weekly') whenL = dows.length ? `매주 ${dows.slice().sort().map((d) => DOW[d]).join('·')}` : '매주(요일 미선택)';
     else if (when === 'date') whenL = fmtDate(pickedDate);
     else whenL = `오늘 (${fmtDate(today)})`;
-    return `${whenL} · ${secL} · ${scopeL}`;
-  }, [when, pickedDate, dows, section, sharedMode, picked, nameById, isOwner, today, DL]);
+    const remindL = remindOn && remindValid ? ` · ${remindAt}` : '';
+    return `${whenL} · ${secL} · ${scopeL}${remindL}`;
+  }, [when, pickedDate, dows, section, sharedMode, picked, nameById, isOwner, today, DL, remindOn, remindValid, remindAt]);
 
   // 중복 검사 — 신규 등록에서만(수정은 자기 자신과 겹칠 수 있어 제외). 배정 대상 중 하나라도 중복이면 경고.
   const isDup = useMemo(() => {
@@ -264,6 +274,54 @@ export function TaskComposerModal({
                     })}
                   </View>
                   {dows.length === 0 && <Text style={s.dowWarn}>요일을 하나 이상 선택해 주세요.</Text>}
+                </View>
+              )}
+            </Field>
+
+            <Field
+              label="업무 시간 (선택)"
+              info={
+                // 공용 InfoDot 은 안 쓴다 — 이 화면 자체가 바텀시트(Modal)라 그 위에 모달을 또 여는 꼴이 된다.
+                // 인라인 펼침이 규칙에도 맞고, 시간을 고르는 동안 설명이 가려지지 않는다.
+                <Pressable
+                  onPress={() => { setRemindInfo((v) => !v); if (!remindInfo) revealScroll(); }}
+                  hitSlop={10}
+                  accessibilityRole="button"
+                  accessibilityLabel="업무 시간 설명 보기"
+                  style={({ pressed }) => pressed && { opacity: 0.6 }}
+                >
+                  <Ionicons name="information-circle-outline" size={15} color={InkColors.ink3} />
+                </Pressable>
+              }
+            >
+              {remindInfo && (
+                <View style={s.infoNote}>
+                  <Text style={s.infoText}>
+                    정한 시간이 되면 앱이 꺼져 있어도 알림이 가요.{'\n'}
+                    ‘매장 전체’ 할일이면 그 시간에 근무 중인 직원에게 가요.{'\n'}
+                    담당자를 정했으면 그 담당자에게 가요.{'\n'}
+                    근무표에 그 시간 근무자가 없으면 매장 전원에게 가요.
+                  </Text>
+                </View>
+              )}
+              <Seg
+                options={[{ k: 'off', l: '안 정함' }, { k: 'on', l: '시간 정하기' }]}
+                value={remindOn ? 'on' : 'off'}
+                onChange={(k) => { setRemindOn(k === 'on'); if (k === 'on') revealScroll(); }}
+              />
+              {remindOn && (
+                <View style={s.reveal}>
+                  <Text style={s.revealLabel}>이 시간에 알림이 가요</Text>
+                  <TextInput
+                    value={remindAt}
+                    onChangeText={(t) => setRemindAt(maskHHMM(t))}
+                    keyboardType="number-pad"
+                    maxLength={5}
+                    placeholder="14:00"
+                    placeholderTextColor={InkColors.ink3}
+                    style={[s.inp, s.timeInp]}
+                  />
+                  {!remindValid && <Text style={s.dowWarn}>시간을 HH:MM 형식으로 적어 주세요. 예) 14:00</Text>}
                 </View>
               )}
             </Field>
@@ -457,7 +515,7 @@ function MiniCalendar({ value, today, onChange }: { value: string; today: string
       </View>
       <View style={s.weekRow}>
         {DOW.map((w, i) => (
-          <Text key={w} style={[s.weekCell, i === 0 && { color: BrandColors.bad }]}>{w}</Text>
+          <Text key={w} style={[s.weekCell, i === 0 && { color: BrandColors.badText }]}>{w}</Text>
         ))}
       </View>
       <View style={s.daysWrap}>
@@ -475,10 +533,17 @@ function MiniCalendar({ value, today, onChange }: { value: string; today: string
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, info, children }: { label: string; info?: React.ReactNode; children: React.ReactNode }) {
   return (
     <View style={s.fld}>
-      <Text style={s.fldLabel}>{label}</Text>
+      {info ? (
+        <View style={s.fldLabelRow}>
+          <Text style={[s.fldLabel, s.fldLabelInRow]}>{label}</Text>
+          {info}
+        </View>
+      ) : (
+        <Text style={s.fldLabel}>{label}</Text>
+      )}
       {children}
     </View>
   );
@@ -509,6 +574,11 @@ const s = StyleSheet.create({
   scroll: { flex: 1, paddingHorizontal: 16 },
   fld: { marginBottom: 13 },
   fldLabel: { fontSize: 11.5, lineHeight: 17, fontWeight: '800', color: InkColors.ink2, marginBottom: 6 },
+  fldLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 2, marginBottom: 6 },
+  fldLabelInRow: { marginBottom: 0 },
+  timeInp: { alignSelf: 'flex-start', minWidth: 96, textAlign: 'center' },
+  infoNote: { marginBottom: 6, padding: 11, backgroundColor: InkColors.cream, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md },
+  infoText: { fontSize: 15, lineHeight: 22, color: InkColors.ink2 },
   inp: { borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.sm, paddingHorizontal: 13, paddingVertical: 11, fontSize: 15, color: InkColors.ink, backgroundColor: InkColors.cream },
 
   seg: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
@@ -537,9 +607,9 @@ const s = StyleSheet.create({
   dowRow: { flexDirection: 'row', gap: 5 },
   dow: { width: 34, height: 34, borderRadius: Radius.pill, borderWidth: 1, borderColor: InkColors.line, backgroundColor: InkColors.bg, alignItems: 'center', justifyContent: 'center' },
   dowOn: { backgroundColor: InkColors.ink, borderColor: InkColors.ink },
-  dowSun: { backgroundColor: BrandColors.bad, borderColor: BrandColors.bad },
+  dowSun: { backgroundColor: BrandColors.badSolid, borderColor: BrandColors.bad },
   dowText: { fontSize: 12.5, fontWeight: '700', color: InkColors.ink2 },
-  dowWarn: { fontSize: 11, color: BrandColors.bad, fontWeight: '700', marginTop: 8 },
+  dowWarn: { fontSize: 11, color: BrandColors.badText, fontWeight: '700', marginTop: 8 },
 
   lockedScope: { backgroundColor: InkColors.cream, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.sm, paddingHorizontal: 13, paddingVertical: 10 },
   lockedScopeText: { fontSize: 14, fontWeight: '700', color: InkColors.ink },
@@ -569,5 +639,5 @@ const s = StyleSheet.create({
   cta: { backgroundColor: InkColors.ink, borderRadius: Radius.md, paddingVertical: 14, alignItems: 'center', justifyContent: 'center' },
   ctaText: { color: '#fff', fontSize: 15, fontWeight: '800' },
   delBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingHorizontal: 16, borderRadius: Radius.md, borderWidth: 1, borderColor: BrandColors.bad, backgroundColor: InkColors.bg },
-  delText: { color: BrandColors.bad, fontSize: 14, fontWeight: '800' },
+  delText: { color: BrandColors.badText, fontSize: 14, fontWeight: '800' },
 });

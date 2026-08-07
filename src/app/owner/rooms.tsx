@@ -213,12 +213,12 @@ const styles = StyleSheet.create({
   memberLabel: { fontSize: 12, fontWeight: '700', color: InkColors.ink2 },
 
   delLink: { flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start', marginTop: 2 },
-  delLinkText: { fontSize: 12.5, fontWeight: '700', color: BrandColors.bad },
+  delLinkText: { fontSize: 12.5, fontWeight: '700', color: BrandColors.badText },
   delConfirm: { backgroundColor: BrandColors.accentSoft, borderRadius: Radius.sm, padding: 12, gap: 9 },
-  delConfirmText: { fontSize: 15, fontWeight: '700', color: BrandColors.bad, lineHeight: 21 },
+  delConfirmText: { fontSize: 15, fontWeight: '700', color: BrandColors.badText, lineHeight: 21 },
   delActions: { flexDirection: 'row', gap: 8, justifyContent: 'flex-end' },
   delCancel: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: Radius.sm, borderWidth: 1, borderColor: InkColors.line, backgroundColor: InkColors.bg },
   delCancelText: { fontSize: 12.5, fontWeight: '700', color: InkColors.ink2 },
-  delGo: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: Radius.sm, backgroundColor: BrandColors.bad },
+  delGo: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: Radius.sm, backgroundColor: BrandColors.badSolid },
   delGoText: { fontSize: 12.5, fontWeight: '800', color: '#FFFFFF' },
 });

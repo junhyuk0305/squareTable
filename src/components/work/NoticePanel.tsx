@@ -268,7 +268,7 @@ function NoticeCard({
         ) : read ? (
           <View style={s.readRow}>
             <Ionicons name="checkmark-done" size={13} color={BrandColors.good} />
-            <Text style={[s.readText, { color: BrandColors.good }]}>읽음</Text>
+            <Text style={[s.readText, { color: BrandColors.goodText }]}>읽음</Text>
           </View>
         ) : (
           <View style={{ flex: 1 }} />
@@ -283,7 +283,7 @@ function NoticeCard({
               <Text style={s.actText}>수정</Text>
             </Pressable>
             <Pressable onPress={confirmDelete} style={({ pressed }) => [s.act, pressed && { opacity: 0.6 }]}>
-              <Text style={[s.actText, { color: BrandColors.bad }]}>삭제</Text>
+              <Text style={[s.actText, { color: BrandColors.badText }]}>삭제</Text>
             </Pressable>
           </View>
         )}
@@ -326,7 +326,7 @@ function NoticeCard({
 
 const s = StyleSheet.create({
   scroll: { padding: 13, gap: 11 },
-  empty: { textAlign: 'center', color: InkColors.ink3, fontSize: 15, marginTop: 40 },
+  empty: { textAlign: 'center', color: InkColors.ink2, fontSize: 15, marginTop: 40 },
 
   card: { backgroundColor: InkColors.bg, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md, padding: 12, ...Elevation.e1 },
   cardPinned: { borderColor: InkColors.ink3 },
@@ -358,7 +358,7 @@ const s = StyleSheet.create({
   cBubble: { flex: 1, backgroundColor: InkColors.paper, borderRadius: Radius.sm, paddingHorizontal: 10, paddingVertical: 7 },
   cName: { fontSize: 10.5, fontWeight: '800', color: InkColors.ink2, marginBottom: 2 },
   cText: { fontSize: 12.5, color: InkColors.ink },
-  cDel: { fontSize: 11, color: BrandColors.bad, fontWeight: '700', padding: 3 },
+  cDel: { fontSize: 11, color: BrandColors.badText, fontWeight: '700', padding: 3 },
   cInputRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 },
   cInput: { paddingVertical: 8, fontSize: 12 },
   cPost: { backgroundColor: InkColors.ink, borderRadius: Radius.pill, paddingHorizontal: 14, paddingVertical: 8 },

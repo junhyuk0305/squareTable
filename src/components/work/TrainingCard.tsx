@@ -29,7 +29,7 @@ export type TrainingCardCourse = {
 };
 
 const STATE_CHIP: Record<TrainingCardItem['state'], { label: string; color: string; bg: string }> = {
-  passed: { label: '통과', color: BrandColors.good, bg: '#E6F1EA' },
+  passed: { label: '통과', color: BrandColors.goodText, bg: '#E6F1EA' },
   next: { label: '다음', color: InkColors.ink, bg: InkColors.cream },
   todo: { label: '대기', color: InkColors.ink3, bg: InkColors.bgSoft },
   due: { label: '다시 확인', color: '#8a5a12', bg: BrandColors.warnSoft },
@@ -141,7 +141,7 @@ const st = StyleSheet.create({
   },
   head: { flexDirection: 'row', alignItems: 'center', gap: Space.xs },
   title: { flex: 1, fontSize: 13, fontWeight: '800', color: InkColors.ink },
-  progress: { fontSize: 12, fontWeight: '800', color: BrandColors.good },
+  progress: { fontSize: 12, fontWeight: '800', color: BrandColors.goodText },
   next: { fontSize: 15, fontWeight: '700', color: InkColors.ink, lineHeight: 21 },
   btnRow: { flexDirection: 'row', gap: Space.sm, marginTop: Space.xs },
   softBtn: {

@@ -108,7 +108,8 @@ export default function AccountSettings() {
           <Ionicons name="chevron-forward" size={20} color={InkColors.ink3} />
         </Pressable>
 
-        <SettingsSection icon="notifications-outline" title="알림">
+        {/* 앱 설정 = 알림 + 글자 크기. 둘 다 "내가 이 앱을 어떻게 쓸지"라 한 덩어리로 묶는다(2026-08-06). */}
+        <SettingsSection icon="options-outline" title="앱 설정">
           <SettingsToggle
             first
             icon="notifications-outline"
@@ -121,6 +122,7 @@ export default function AccountSettings() {
             value={prefs.pushEnabled}
             onValueChange={savePush}
           />
+          <SettingsRow icon="text-outline" label="글자 크기" value={SCALE_LABEL[prefs.textScale]} onPress={() => setScaleModal(true)} />
         </SettingsSection>
 
         {/* 구독 및 결제(사장만) — 계정 단위 항목이라 F6에서 owner/settings → 여기로 이동.
@@ -162,11 +164,11 @@ export default function AccountSettings() {
             </View>
           ))}
 
-        <SettingsSection icon="phone-portrait-outline" title="화면">
-          <SettingsRow first icon="text-outline" label="글자 크기" value={SCALE_LABEL[prefs.textScale]} onPress={() => setScaleModal(true)} />
-        </SettingsSection>
-
-        <SettingsSection icon="document-text-outline" title="약관 및 정책">
+        {/* ★2026-08-06: 섹션 6개 → 4개. SettingsSection은 '제목 + 흰 카드'라, 여섯 개가 이어지면
+            화면 전체가 같은 형태의 나열이 된다(카드 6장 · 연속 4 — 배치규칙① 위반, 실브라우저 실측).
+            성격이 같은 것끼리만 합쳤다: 알림+글자크기 = 내가 앱을 어떻게 쓸지(앱 설정) ·
+            약관+고객센터 = 회사·문서 쪽 참조(약관·고객센터). 행은 하나도 없애지 않았다. */}
+        <SettingsSection icon="document-text-outline" title="약관·고객센터">
           <SettingsRow first icon="document-text-outline" label="이용약관" onPress={() => router.push('/terms')} />
           <SettingsRow icon="shield-checkmark-outline" label="개인정보처리방침" onPress={() => router.push('/privacy')} />
           {/* AI 이용정책·처리위탁 계약은 웹 정적 페이지가 유일한 정본(legal-content.mjs)이라 앱 요약 화면이 없다.
@@ -175,10 +177,7 @@ export default function AccountSettings() {
           {/* 전자상거래법상 판매자 정보 고지 의무 — 화면(/business-info)은 있었지만 앱 어디서도 링크가 없어
               사용자가 도달할 수 없었다(2026-07-29 IA 점검에서 발견). 유료 판매 중이므로 접근 경로가 필수다. */}
           <SettingsRow icon="business-outline" label="사업자 정보" onPress={() => router.push('/business-info')} />
-        </SettingsSection>
-
-        <SettingsSection icon="help-buoy-outline" title="고객센터">
-          <SettingsRow first icon="chatbubble-ellipses-outline" label="문의하기" onPress={() => setContactModal(true)} />
+          <SettingsRow icon="chatbubble-ellipses-outline" label="문의하기" onPress={() => setContactModal(true)} />
           <SettingsRow icon="information-circle-outline" label="버전 정보" value={`v${version}`} />
         </SettingsSection>
 

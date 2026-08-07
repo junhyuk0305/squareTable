@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { BottomSheet } from '@/components/BottomSheet';
 import { EntryDetailModal } from '@/components/EntryDetailModal';
 import { SectionLabel } from '@/components/SectionLabel';
+import { MiniStats } from '@/components/blocks/MiniStats';
 import { Appear } from '@/components/Appear';
 import { useUnknownQueueStore, answerableQuestions } from '@/lib/store/useUnknownQueueStore';
 import { useSuggestionStore } from '@/lib/store/useSuggestionStore';
@@ -123,14 +124,6 @@ export function JuniorMySpace({ me }: { me: string }) {
         </View>
       )}
 
-      {/* ⑤ 내 기여 요약 (자기 뷰 — 랭킹 아님) */}
-      {contribCount > 0 && (
-        <View style={s.contrib}>
-          <Ionicons name="bookmark-outline" size={14} color={BrandColors.yellowDeep} />
-          <Text style={s.contribText}>내가 쌓은 노하우 <Text style={s.contribNum}>{approvedCount}</Text> · 답한 질문 <Text style={s.contribNum}>{myAnswered.length}</Text></Text>
-        </View>
-      )}
-
       {/* 내 기여 내보내기 — 내보낼 게 있고 복사가 되는 환경(웹)에서만 노출. */}
       {canCopyToClipboard() && (myProposals.length > 0 || myAnswered.length > 0) && (
         <Pressable
@@ -140,7 +133,7 @@ export function JuniorMySpace({ me }: { me: string }) {
           accessibilityLabel="내 기여 내보내기"
         >
           <Ionicons name={copied ? 'checkmark' : 'download-outline'} size={14} color={copied ? BrandColors.good : InkColors.ink2} />
-          <Text style={[s.exportBtnText, copied && { color: BrandColors.good }]}>{copied ? '복사됐어요' : '내 기여 내보내기'}</Text>
+          <Text style={[s.exportBtnText, copied && { color: BrandColors.goodText }]}>{copied ? '복사됐어요' : '내 기여 내보내기'}</Text>
         </Pressable>
       )}
 
@@ -171,6 +164,21 @@ export function JuniorMySpace({ me }: { me: string }) {
         </>
       )}
 
+      {/* ⑤ 내 기여 요약 (자기 뷰 — 랭킹 아님)
+          2026-08-06: 숫자 둘을 문장 안에 섞어 쓰던 한 줄을 MiniStats(I3)로 올렸다.
+          ★같은 날 2차: 이 블록의 목적은 "세 섹션이 전부 '제목 → 목록 카드'라 형태를 한 번 끊는 것"인데,
+            정작 위치가 세 섹션 **위**여서 groupCard 3연속(배치규칙①)이 그대로였다 → 섹션 사이로 내렸다.
+            (주석은 의도를 적어뒀지만 코드가 그 의도를 이행하지 않은 자리였다) */}
+      {contribCount > 0 && (
+        <MiniStats
+          items={[
+            { key: 'knowhow', value: approvedCount, label: '내가 쌓은 노하우' },
+            { key: 'answered', value: myAnswered.length, label: '답한 질문' },
+            { key: 'proposed', value: myProposals.length, label: '보낸 제안' },
+          ]}
+        />
+      )}
+
       {/* ② 내가 보낸 제안 — 검토 중·반려가 위(정렬은 myProposals에서) */}
       {myProposals.length > 0 && (
         <>
@@ -181,7 +189,7 @@ export function JuniorMySpace({ me }: { me: string }) {
                 <View style={s.groupRow}>
                   <Ionicons name={sug.status === 'approved' ? 'checkmark-circle' : sug.status === 'rejected' ? 'close-circle' : 'time-outline'} size={16} color={sug.status === 'approved' ? BrandColors.good : sug.status === 'rejected' ? BrandColors.bad : InkColors.ink3} />
                   <Text style={s.rowText} numberOfLines={1}>{sug.text}</Text>
-                  <Text style={[s.statusTag, sug.status === 'approved' && { color: BrandColors.good }, sug.status === 'rejected' && { color: BrandColors.bad }]}>
+                  <Text style={[s.statusTag, sug.status === 'approved' && { color: BrandColors.goodText }, sug.status === 'rejected' && { color: BrandColors.badText }]}>
                     {sug.status === 'approved' ? '반영됨' : sug.status === 'rejected' ? '반려' : '검토 중'}
                   </Text>
                 </View>
@@ -355,7 +363,7 @@ function AnswerSheet({
 const s = StyleSheet.create({
   flex: { flex: 1 },
   scroll: { padding: Space.gutter, gap: Space.sm },
-  empty: { fontSize: 15, color: InkColors.ink3, paddingVertical: 14, textAlign: 'center' },
+  empty: { fontSize: 15, color: InkColors.ink2, paddingVertical: 14, textAlign: 'center' },
   list: { gap: Space.sm, marginBottom: Space.sm },
 
   qCard: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, backgroundColor: InkColors.bg, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md, padding: Space.md, ...Elevation.e1 },
@@ -364,9 +372,6 @@ const s = StyleSheet.create({
   qCta: { backgroundColor: InkColors.ink, borderRadius: Radius.pill, paddingHorizontal: 14, paddingVertical: 8 },
   qCtaText: { color: '#fff', fontSize: 12.5, fontWeight: '800' },
 
-  contrib: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: BrandColors.yellowSoft, borderRadius: Radius.md, paddingVertical: 10, paddingHorizontal: 12, marginBottom: Space.xs },
-  contribText: { fontSize: 12.5, color: InkColors.ink2, fontWeight: '700' },
-  contribNum: { color: InkColors.ink, fontWeight: '800' },
 
   exportBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, alignSelf: 'flex-start', backgroundColor: InkColors.bg, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.pill, paddingHorizontal: 14, paddingVertical: 8, marginBottom: Space.xs },
   exportBtnText: { fontSize: 12.5, fontWeight: '800', color: InkColors.ink2 },
@@ -379,7 +384,7 @@ const s = StyleSheet.create({
   rowText: { flex: 1, fontSize: 15, fontWeight: '600', color: InkColors.ink },
   statusTag: { fontSize: 11, fontWeight: '800', color: InkColors.ink3 },
   doneMeta: { fontSize: 11, fontWeight: '600', color: InkColors.ink3 },
-  waitTag: { fontSize: 10.5, fontWeight: '800', color: BrandColors.warn, backgroundColor: BrandColors.warnSoft, paddingHorizontal: 6, paddingVertical: 1, borderRadius: 5, overflow: 'hidden' },
+  waitTag: { fontSize: 10.5, fontWeight: '800', color: BrandColors.warnText, backgroundColor: BrandColors.warnSoft, paddingHorizontal: 6, paddingVertical: 1, borderRadius: 5, overflow: 'hidden' },
   moreRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, borderTopWidth: 1, borderTopColor: InkColors.line, paddingVertical: Space.sm },
   moreText: { fontSize: 12.5, fontWeight: '700', color: InkColors.ink2 },
 
@@ -395,8 +400,9 @@ const s = StyleSheet.create({
   results: { marginTop: 6, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md, backgroundColor: InkColors.bg, overflow: 'hidden' },
   resultRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: InkColors.paper },
   resultText: { flex: 1, fontSize: 15, fontWeight: '600', color: InkColors.ink },
-  resultPick: { fontSize: 11.5, fontWeight: '800', color: BrandColors.good },
-  resultEmpty: { fontSize: 12.5, color: InkColors.ink3, paddingHorizontal: 12, paddingVertical: 12 },
+  resultPick: { fontSize: 11.5, fontWeight: '800', color: BrandColors.goodText },
+  // 검색 결과 없음 = 본문(simplicity-voice §4: 빈 화면 문구) → 꼬리표용 ink3(2.55:1) 금지.
+  resultEmpty: { fontSize: 12.5, color: InkColors.ink2, paddingHorizontal: 12, paddingVertical: 12 },
   divider: { height: 1, backgroundColor: InkColors.line, marginVertical: 18 },
   sheetHint: { fontSize: 11.5, color: InkColors.ink3, marginTop: 7 },
   cta: { backgroundColor: InkColors.ink, borderRadius: Radius.md, paddingVertical: 14, alignItems: 'center', marginTop: 12 },

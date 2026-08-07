@@ -358,7 +358,7 @@ const fst = StyleSheet.create({
     minHeight: 48, paddingHorizontal: Space.md, alignItems: 'center', justifyContent: 'center', maxWidth: 108,
     borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, backgroundColor: InkColors.bgSoft,
   },
-  markOn: { backgroundColor: BrandColors.good, borderColor: BrandColors.good },
+  markOn: { backgroundColor: BrandColors.goodSolid, borderColor: BrandColors.good },
   markText: { fontSize: 12.5, fontWeight: '800', color: InkColors.ink3 },
   markTextOn: { color: '#FFFFFF' },
   addRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, minHeight: 44, marginTop: Space.xs },

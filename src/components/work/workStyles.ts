@@ -78,7 +78,7 @@ export const styles = StyleSheet.create({
   },
   noticePinned: { borderColor: BrandColors.accent, borderWidth: 1.5 },
   noticeHead: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  noticeAuthor: { fontSize: 12, fontWeight: '800', color: BrandColors.accent },
+  noticeAuthor: { fontSize: 12, fontWeight: '800', color: BrandColors.accentText },
   noticeTime: { fontSize: 11, color: InkColors.ink3, marginLeft: 'auto' },
   noticeText: { fontSize: 15, color: InkColors.ink, lineHeight: 21 },
   readRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },

@@ -51,7 +51,7 @@ export function WrongSpot({ payload, disabled, result, onAnswer }: QuizRendererP
                   size={18}
                   color={showRight ? BrandColors.good : BrandColors.bad}
                 />
-                <Text style={[qs.choiceMark, { color: showRight ? BrandColors.good : BrandColors.bad }]}>
+                <Text style={[qs.choiceMark, { color: showRight ? BrandColors.goodText : BrandColors.badText }]}>
                   {showRight ? '여기가 틀린 자리' : '고른 자리'}
                 </Text>
               </>

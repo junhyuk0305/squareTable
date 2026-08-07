@@ -344,7 +344,7 @@ export function WorkChat({
                 accessibilityLabel="이 메시지 삭제"
               >
                 <Ionicons name="trash-outline" size={19} color={BrandColors.bad} />
-                <Text style={[s.sheetItemText, { color: BrandColors.bad }]}>삭제</Text>
+                <Text style={[s.sheetItemText, { color: BrandColors.badText }]}>삭제</Text>
               </Pressable>
             )}
             <Pressable onPress={() => setActionItem(null)} style={({ pressed }) => [s.sheetCancel, pressed && { opacity: 0.85 }]}>
@@ -452,7 +452,7 @@ const s = StyleSheet.create({
   // 웹: 말풍선 롱프레스로 액션시트를 여는데, 브라우저가 대신 드래그-선택을 시작해 화면 전체가
   // 선택되는 걸 막는다(스트림 전역 user-select:none). 단, 말풍선 '텍스트'(msgText)만 다시 선택 허용.
   scroll: { padding: 12, gap: 11, ...(Platform.OS === 'web' ? ({ userSelect: 'none' } as object) : null) },
-  empty: { textAlign: 'center', color: InkColors.ink3, fontSize: 15, marginTop: 40 },
+  empty: { textAlign: 'center', color: InkColors.ink2, fontSize: 15, marginTop: 40 },
   loadMore: { alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: InkColors.scrim, borderRadius: Radius.pill, paddingHorizontal: 13, paddingVertical: 6, marginBottom: 2 },
   loadMoreText: { fontSize: 11.5, color: InkColors.ink3, fontWeight: '700' },
   divider: { alignItems: 'center', marginVertical: 2 },
@@ -478,7 +478,7 @@ const s = StyleSheet.create({
   msgCaption: { paddingHorizontal: 8, paddingBottom: 5, paddingTop: 1 },
   // 스트림 전역 user-select:none 위에서, 말풍선 본문 텍스트만 선택/복사 가능하게 복원(웹).
   msgText: { fontSize: 14, color: InkColors.ink, lineHeight: 21, ...(Platform.OS === 'web' ? ({ userSelect: 'text' } as object) : null) },
-  mention: { color: BrandColors.mention, fontWeight: '800' },
+  mention: { color: BrandColors.mentionText, fontWeight: '800' },
   mentionMine: { color: BrandColors.yellow },
   // 인라인 시간: 말풍선 옆에 붙어 하단 baseline에 앉는다. 줄바꿈 방지로 flexShrink 0.
   msgTime: { flexShrink: 0, fontSize: 10, color: InkColors.ink3, paddingBottom: 1 },

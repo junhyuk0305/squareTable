@@ -131,10 +131,10 @@ export const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: BrandColors.accent,
   },
-  errorText: { flex: 1, fontSize: 13, color: BrandColors.accent, fontWeight: '600' },
-  retryBtn: { paddingVertical: 4, paddingHorizontal: 10, borderRadius: Radius.pill, backgroundColor: BrandColors.accent },
+  errorText: { flex: 1, fontSize: 13, color: BrandColors.accentText, fontWeight: '600' },
+  retryBtn: { paddingVertical: 4, paddingHorizontal: 10, borderRadius: Radius.pill, backgroundColor: BrandColors.accentSolid },
   retryText: { fontSize: 12, fontWeight: '800', color: InkColors.bubbleText },
-  errorClose: { fontSize: 14, fontWeight: '800', color: BrandColors.accent },
+  errorClose: { fontSize: 14, fontWeight: '800', color: BrandColors.accentText },
 
   // 추천 질문 상시 스트립 (대화 시작 후)
   chipStrip: { maxHeight: 44, backgroundColor: InkColors.bg },

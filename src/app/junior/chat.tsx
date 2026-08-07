@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from 'react';
-import { Stack } from 'expo-router';
+import { Stack, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { RoleTabBar } from '@/components/RoleTabBar';
@@ -23,6 +23,8 @@ import { styles } from '@/styles/juniorChatStyles';
  * 자체 SafeAreaView/RoleTabBar를 갖지 않는다(중복 방지).
  */
 export default function JuniorChatScreen() {
+  // 홈의 예시 질문 칩이 넘긴 문구 — 입력칸을 채우기만 한다(전송은 직원이).
+  const { seed } = useLocalSearchParams<{ seed?: string }>();
   const entries = usePlaybookStore((s) => s.entries);
   const me = useSessionStore((s) => s.userId);
   const queue = useUnknownQueueStore((s) => s.queue);
@@ -54,7 +56,7 @@ export default function JuniorChatScreen() {
             emptyHint="아직 등록된 노하우가 없어요. 물어보기로 질문하면 사장님이 채워줘요."
           />
         }
-        ask={<JuniorAsk />}
+        ask={<JuniorAsk seed={seed} />}
         mine={<JuniorMySpace me={me} />}
         mineCount={answerableCount}
       />

@@ -11,7 +11,7 @@ import { USE_NATIVE_DRIVER } from '@/lib/anim';
 
 const TONE: Record<ToastTone, { bg: string; icon: keyof typeof Ionicons.glyphMap }> = {
   good: { bg: InkColors.ink, icon: 'checkmark-circle' },
-  warn: { bg: BrandColors.warn, icon: 'alert-circle' },
+  warn: { bg: BrandColors.warnSolid, icon: 'alert-circle' },
   info: { bg: InkColors.ink2, icon: 'information-circle' },
 };
 

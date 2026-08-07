@@ -13,6 +13,13 @@ import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Elevation, Radius } from '@/lib/theme/elevation';
 import type { PlaybookSuggestion } from '@/types';
 
+/** 처리됨 상태칩 — 면(bg)과 글자(fg)를 한 쌍으로 묶는다. 떨어져 있으면 '반영'에 빨간 틴트가 깔린다. */
+const STATUS_CHIP: Record<PlaybookSuggestion['status'], { bg: string; fg: string }> = {
+  approved: { bg: BrandColors.goodSoft, fg: BrandColors.goodText },
+  rejected: { bg: InkColors.bgSoft, fg: InkColors.ink3 },
+  pending: { bg: InkColors.bgSoft, fg: InkColors.ink3 },
+};
+
 /**
  * 노하우 제안함(사장) — 알바가 올린 ① 개선 제안 / ② 신규 등록 신청을 검토.
  *  - 승인: 신규 → 제안 원문을 자동 구조화한 초안을 보고 수정(생략 가능) 후 추가 여부 결정(coach 제안검토 모드)
@@ -110,18 +117,8 @@ export default function OwnerSuggestionsScreen() {
             <Text style={styles.handledHeader}>처리됨</Text>
             {handled.map((s) => (
               <View key={s.id} style={styles.handledRow}>
-                <View
-                  style={[
-                    styles.statusChip,
-                    { backgroundColor: s.status === 'approved' ? BrandColors.accentSoft : InkColors.bgSoft },
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.statusChipText,
-                      { color: s.status === 'approved' ? BrandColors.good : InkColors.ink3 },
-                    ]}
-                  >
+                <View style={[styles.statusChip, { backgroundColor: STATUS_CHIP[s.status].bg }]}>
+                  <Text style={[styles.statusChipText, { color: STATUS_CHIP[s.status].fg }]}>
                     {s.status === 'approved' ? '반영' : '반려'}
                   </Text>
                 </View>
@@ -226,12 +223,12 @@ function SuggestionCard({
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: InkColors.cream },
   scroll: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 24, gap: 14 },
-  subline: { fontSize: 15, color: InkColors.ink3, fontWeight: '600' },
+  subline: { fontSize: 15, color: InkColors.ink2, fontWeight: '600' },
 
   empty: { backgroundColor: InkColors.bg, borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, padding: 28, gap: 6, alignItems: 'center' },
   emptyEmoji: { fontSize: 34 },
   emptyTitle: { fontSize: 16, fontWeight: '800', color: InkColors.ink },
-  emptySub: { fontSize: 15, color: InkColors.ink3, textAlign: 'center' },
+  emptySub: { fontSize: 15, color: InkColors.ink2, textAlign: 'center' },
 
   list: { gap: 12 },
   card: { backgroundColor: InkColors.bg, borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, padding: 16, gap: 10, ...Elevation.e1 },

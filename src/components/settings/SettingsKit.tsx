@@ -59,7 +59,7 @@ export function SettingsRow({
     >
       {icon ? <Ionicons name={icon} size={19} color={tint} style={styles.rowIcon} /> : null}
       <View style={styles.rowLabelWrap}>
-        <Text style={[styles.rowLabelText, danger && { color: BrandColors.accent }]}>{label}</Text>
+        <Text style={[styles.rowLabelText, danger && { color: BrandColors.accentText }]}>{label}</Text>
         {hint ? <Text style={styles.rowHint}>{hint}</Text> : null}
       </View>
       {valueNode ? valueNode : value ? <Text style={styles.rowValue}>{value}</Text> : null}

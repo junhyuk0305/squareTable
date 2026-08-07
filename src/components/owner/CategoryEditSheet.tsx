@@ -172,7 +172,7 @@ const s = StyleSheet.create({
   confirmBtns: { flexDirection: 'row', gap: 8, marginTop: 8, justifyContent: 'flex-end' },
   cCancel: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: Radius.sm, borderWidth: 1, borderColor: InkColors.line, backgroundColor: InkColors.bg },
   cCancelText: { fontSize: 12.5, fontWeight: '800', color: InkColors.ink2 },
-  cDel: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: Radius.sm, backgroundColor: BrandColors.bad },
+  cDel: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: Radius.sm, backgroundColor: BrandColors.badSolid },
   cDelText: { fontSize: 12.5, fontWeight: '800', color: '#fff' },
 
   addBtn: {

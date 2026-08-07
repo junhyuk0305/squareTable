@@ -82,6 +82,147 @@ function inQuietWindow(now: string, start?: string | null, end?: string | null):
   return s < e ? (now >= s && now < e) : (now >= s || now < e);
 }
 
+type Admin = ReturnType<typeof createClient>;
+
+/**
+ * 실제 배달 — 수신자 선호 적용 → 구독 조회 → 웹푸시 발송 → 죽은 구독 정리.
+ * "누구에게 보낼지"는 호출부가 이미 정했다. 이 함수는 **어떤 경로로 들어왔든 동일하게** 적용돼야 하는
+ * 규칙(방해금지·음소거·구독 정리)만 담는다 → 사용자 발송과 크론 리마인더가 같은 한 곳을 쓴다(AGENTS.md ②).
+ *
+ * ── 수신자 선호 적용 — 'OS 푸시'만 억제 ──────────────────────────────────────────
+ * 인앱 알림함(벨/목록)은 클라가 도메인 데이터에서 파생하는 별개 경로라 여기서 아무리 걸러도 그대로 뜬다.
+ *   → 방해금지 = "핸드폰 알림만 안 가고 알림함엔 표시" 가 구조적으로 성립.
+ * 계층(0076 이관): 계정 전역 notification_prefs = 푸시 수신 on/off 만.
+ *   방해금지·음소거는 매장별 unit_member_prefs(user × unit) 로 판정 — 전역 quiet 는 여기서 더 안 본다
+ *   (기존 유저의 전역 방해금지값 무시 = 의도된 동작 변화. 매장별 설정 화면이 새 SSOT).
+ * 행이 없는 수신자는 기본값(켜짐·음소거/방해금지 꺼짐)으로 발송 대상 유지(신규 사용자 무음화 방지).
+ * 선호 조회 실패 = fail-open(전원 발송) — 과알림이 무음 드롭보다 안전. 단 조용히 넘기지 않고
+ * 로그를 남긴다(스키마 드리프트가 나도 엣지 로그로 감지 가능 — 2026-07-24 리뷰 반영).
+ */
+async function deliver(
+  admin: Admin,
+  scopeUnit: string,
+  targets: string[],
+  notifIn: { title: string; body: string; url: string; tag?: string },
+): Promise<{ sent: number; recipients: number; suppressed: number; pruned: number }> {
+  if (targets.length === 0) return { sent: 0, recipients: 0, suppressed: 0, pruned: 0 };
+
+  const { data: prefRows, error: prefErr } = await admin
+    .from('notification_prefs')
+    .select('user_id, push_enabled')
+    .in('user_id', targets);
+  if (prefErr) console.error('[push] notification_prefs read failed (fail-open):', prefErr.message);
+  const prefByUser = new Map(
+    (prefRows ?? []).map((p: { user_id: string; push_enabled: boolean }) => [p.user_id, p]),
+  );
+  // 매장별 개인 설정 — 발송 범위 매장(scopeUnit) 기준. join_owners 도 수신자(사장)는 scopeUnit 소속이라 동일 축.
+  const { data: unitPrefRows, error: unitPrefErr } = await admin
+    .from('unit_member_prefs')
+    .select('user_id, muted, quiet_enabled, quiet_start, quiet_end')
+    .eq('unit_id', scopeUnit)
+    .in('user_id', targets);
+  if (unitPrefErr) console.error('[push] unit_member_prefs read failed (fail-open):', unitPrefErr.message);
+  const unitPrefByUser = new Map(
+    (unitPrefRows ?? []).map((p: { user_id: string; muted: boolean; quiet_enabled: boolean; quiet_start: string; quiet_end: string }) => [p.user_id, p]),
+  );
+  const nowKst = kstNowHHMM();
+  const suppressed: string[] = [];
+  const recipientIds = targets.filter((id) => {
+    const p = prefByUser.get(id);
+    if (p && p.push_enabled === false) { suppressed.push(id); return false; } // 계정 전역: 알림 끔 → 발송 안 함
+    const up = unitPrefByUser.get(id);
+    if (!up) return true; // 매장별 설정 없음 = 기본(발송)
+    if (up.muted) { suppressed.push(id); return false; } // 이 매장 음소거 → 발송 안 함
+    if (up.quiet_enabled && inQuietWindow(nowKst, up.quiet_start, up.quiet_end)) { suppressed.push(id); return false; } // 이 매장 방해금지 시간 → 이번 발송만 스킵
+    return true;
+  });
+  if (recipientIds.length === 0) return { sent: 0, recipients: 0, suppressed: suppressed.length, pruned: 0 };
+
+  const { data: subs, error: subsErr } = await admin
+    .from('push_subscriptions')
+    .select('id, endpoint, p256dh, auth')
+    .in('user_id', recipientIds);
+  // 조회 실패를 삼키면 "구독 없음(sent:0)"으로 위장된다 — 원인 규명을 위해 로그는 남긴다.
+  if (subsErr) console.error('push: subscriptions read failed:', subsErr.message);
+
+  const list = subs ?? [];
+  const notif = JSON.stringify({ title: notifIn.title, body: notifIn.body, url: notifIn.url || '/', tag: notifIn.tag });
+
+  let sent = 0;
+  const dead: string[] = [];
+  await Promise.all(
+    list.map(async (s: { id: string; endpoint: string; p256dh: string; auth: string }) => {
+      try {
+        await webpush.sendNotification(
+          { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
+          notif,
+          {
+            TTL: 60 * 60 * 24, // 24h — 오래된 알림은 무의미(기기 오프라인이어도 재접속 시 배달)
+            // Urgency:high → 푸시서비스가 '지금 즉시' 배달(APNs priority 10). 기본 'normal'은 배터리
+            //   절약을 위해 묶어서 지연 배달될 수 있어, 업무 알림엔 즉시성이 중요하므로 high 로 지정.
+            //   (앱이 닫혀 SW가 잠든 경우의 iOS 지연은 OS 소관이라 이걸로도 완전 제거는 불가.)
+            urgency: 'high',
+          },
+        );
+        sent += 1;
+      } catch (e) {
+        const code = (e as { statusCode?: number })?.statusCode;
+        // 404/410 = 구독 만료(브라우저가 폐기) → 원장에서 제거
+        if (code === 404 || code === 410) dead.push(s.id);
+        // 그 외(400/413/429/5xx)는 무음으로 삼키면 "특정 사용자만 푸시 안 옴"의 흔적이 안 남는다.
+        else console.error('push: send failed:', code ?? 'no-status', (e as Error)?.message ?? String(e));
+      }
+    }),
+  );
+
+  if (dead.length > 0) {
+    await admin.from('push_subscriptions').delete().in('id', dead);
+  }
+
+  return { sent, recipients: recipientIds.length, suppressed: suppressed.length, pruned: dead.length };
+}
+
+/**
+ * 할일 시간대 알림 스윕(0118) — pg_cron 이 5분마다 부른다.
+ * 입력이 없다: 제목·본문·수신자를 전부 due_task_reminders() 가 정한다(수신자 규칙 SSOT = DB).
+ * 순서가 중요하다 — **발송 전에** task_reminder_sent 를 선점(insert)한다. PK(template_id, remind_date)
+ * 충돌이 곧 잠금이라, 크론이 겹쳐 돌거나 재시도해도 같은 할일이 두 번 나가지 않는다.
+ * (발송 후 기록으로 하면 그 사이에 두 번째 실행이 끼어들어 중복 발송된다.)
+ */
+async function sweepTaskReminders(token: string): Promise<{ swept: number; sent: number; error?: string }> {
+  // 인증 = "이 토큰으로 due_task_reminders 를 실행할 수 있는가". 0118 에서 anon/authenticated 에게
+  // revoke 했으므로 service_role 만 통과한다. SERVICE_ROLE 문자열 비교로 하면 프로젝트가 새 API 키
+  // 체계로 바뀌었을 때 조용히 어긋난다(2026-08-06 실측: 유효한 키인데 401).
+  const admin = createClient(SUPABASE_URL, token);
+  const { data, error } = await admin.rpc('due_task_reminders');
+  if (error) {
+    console.error('[push] due_task_reminders failed:', error.message);
+    const denied = /permission denied|not exist/i.test(error.message);
+    return { swept: 0, sent: 0, error: denied ? 'forbidden' : 'rpc_failed' };
+  }
+  const rows = (data ?? []) as {
+    out_template_id: string; out_unit_id: string; out_text: string; out_date: string; out_recipients: string[];
+  }[];
+  let sent = 0;
+  for (const r of rows) {
+    const { error: claimErr } = await admin.from('task_reminder_sent').insert({
+      template_id: r.out_template_id,
+      remind_date: r.out_date,
+      unit_id: r.out_unit_id,
+      recipients: r.out_recipients.length,
+    });
+    if (claimErr) continue; // 이미 다른 실행이 가져감(중복 키) → 건너뛴다.
+    const res = await deliver(admin, r.out_unit_id, r.out_recipients, {
+      title: '할일 시간이에요',
+      body: r.out_text,
+      url: '/junior/work',
+      tag: `task-${r.out_template_id}`,
+    });
+    sent += res.sent;
+  }
+  return { swept: rows.length, sent };
+}
+
 Deno.serve(async (req) => {
   const origin = req.headers.get('origin');
   const cors = corsFor(origin);
@@ -99,6 +240,31 @@ Deno.serve(async (req) => {
   const authHeader = req.headers.get('Authorization') ?? '';
   const token = authHeader.replace(/^Bearer\s+/i, '');
   if (!token) return json(401, { error: 'unauthorized' });
+
+  let payload: {
+    mode?: string;
+    audience?: 'owners' | 'staff' | 'user' | 'join_owners';
+    userId?: string;
+    title?: string;
+    body?: string;
+    url?: string;
+    tag?: string;
+  };
+  try {
+    payload = await req.json();
+  } catch {
+    return json(400, { error: 'bad_json' });
+  }
+
+  // ── 크론 경로(0118 할일 시간대 알림) ──
+  // 사용자 JWT 가 아니라 service_role 키로 들어온다(pg_cron → net.http_post). 사용자 입력이 0이고
+  // (mode 하나뿐) 제목·본문·수신자를 DB 가 정하므로, 아래의 "호출자 매장으로 제한" 검사가 필요 없다.
+  // 인증은 sweepTaskReminders 안에서 RPC 실행 권한으로 판정한다.
+  if (payload.mode) {
+    if (payload.mode !== 'task_reminders') return json(400, { error: 'unknown_mode' });
+    const swept = await sweepTaskReminders(token);
+    return json(swept.error === 'forbidden' ? 403 : 200, swept);
+  }
 
   // 호출자 신원 확인용(anon 키 + 호출자 토큰)
   const asCaller = createClient(SUPABASE_URL, ANON, {
@@ -119,20 +285,6 @@ Deno.serve(async (req) => {
     .from('profiles').select('unit_id, active_unit_id, pending_unit_id, role').eq('id', caller.id).single();
   const callerUnit = (me?.active_unit_id ?? me?.unit_id) as string | null;
   const pendingUnit = me?.pending_unit_id as string | null;
-
-  let payload: {
-    audience?: 'owners' | 'staff' | 'user' | 'join_owners';
-    userId?: string;
-    title?: string;
-    body?: string;
-    url?: string;
-    tag?: string;
-  };
-  try {
-    payload = await req.json();
-  } catch {
-    return json(400, { error: 'bad_json' });
-  }
 
   const audience = payload.audience;
   const title = clip(payload.title, MAX_TITLE);
@@ -177,86 +329,6 @@ Deno.serve(async (req) => {
   recipientIds = recipientIds.filter((id) => id !== caller.id);
   if (recipientIds.length === 0) return json(200, { sent: 0, recipients: 0 });
 
-  // ── 수신자 선호 적용 — 'OS 푸시'만 억제 ──────────────────────────────────────────
-  // 인앱 알림함(벨/목록)은 클라가 도메인 데이터에서 파생하는 별개 경로라 여기서 아무리 걸러도 그대로 뜬다.
-  //   → 방해금지 = "핸드폰 알림만 안 가고 알림함엔 표시" 가 구조적으로 성립.
-  // 계층(0076 이관): 계정 전역 notification_prefs = 푸시 수신 on/off 만.
-  //   방해금지·음소거는 매장별 unit_member_prefs(user × unit) 로 판정 — 전역 quiet 는 여기서 더 안 본다
-  //   (기존 유저의 전역 방해금지값 무시 = 의도된 동작 변화. 매장별 설정 화면이 새 SSOT).
-  // 행이 없는 수신자는 기본값(켜짐·음소거/방해금지 꺼짐)으로 발송 대상 유지(신규 사용자 무음화 방지).
-  // 선호 조회 실패 = fail-open(전원 발송) — 과알림이 무음 드롭보다 안전. 단 조용히 넘기지 않고
-  // 로그를 남긴다(스키마 드리프트가 나도 엣지 로그로 감지 가능 — 2026-07-24 리뷰 반영).
-  const { data: prefRows, error: prefErr } = await admin
-    .from('notification_prefs')
-    .select('user_id, push_enabled')
-    .in('user_id', recipientIds);
-  if (prefErr) console.error('[push] notification_prefs read failed (fail-open):', prefErr.message);
-  const prefByUser = new Map(
-    (prefRows ?? []).map((p: { user_id: string; push_enabled: boolean }) => [p.user_id, p]),
-  );
-  // 매장별 개인 설정 — 발송 범위 매장(scopeUnit) 기준. join_owners 도 수신자(사장)는 scopeUnit 소속이라 동일 축.
-  const { data: unitPrefRows, error: unitPrefErr } = await admin
-    .from('unit_member_prefs')
-    .select('user_id, muted, quiet_enabled, quiet_start, quiet_end')
-    .eq('unit_id', scopeUnit)
-    .in('user_id', recipientIds);
-  if (unitPrefErr) console.error('[push] unit_member_prefs read failed (fail-open):', unitPrefErr.message);
-  const unitPrefByUser = new Map(
-    (unitPrefRows ?? []).map((p: { user_id: string; muted: boolean; quiet_enabled: boolean; quiet_start: string; quiet_end: string }) => [p.user_id, p]),
-  );
-  const nowKst = kstNowHHMM();
-  const suppressed: string[] = [];
-  recipientIds = recipientIds.filter((id) => {
-    const p = prefByUser.get(id);
-    if (p && p.push_enabled === false) { suppressed.push(id); return false; } // 계정 전역: 알림 끔 → 발송 안 함
-    const up = unitPrefByUser.get(id);
-    if (!up) return true; // 매장별 설정 없음 = 기본(발송)
-    if (up.muted) { suppressed.push(id); return false; } // 이 매장 음소거 → 발송 안 함
-    if (up.quiet_enabled && inQuietWindow(nowKst, up.quiet_start, up.quiet_end)) { suppressed.push(id); return false; } // 이 매장 방해금지 시간 → 이번 발송만 스킵
-    return true;
-  });
-  if (recipientIds.length === 0) return json(200, { sent: 0, recipients: 0, suppressed: suppressed.length });
-
-  const { data: subs, error: subsErr } = await admin
-    .from('push_subscriptions')
-    .select('id, endpoint, p256dh, auth')
-    .in('user_id', recipientIds);
-  // 조회 실패를 삼키면 "구독 없음(sent:0)"으로 위장된다 — 원인 규명을 위해 로그는 남긴다.
-  if (subsErr) console.error('push: subscriptions read failed:', subsErr.message);
-
-  const list = subs ?? [];
-  const notif = JSON.stringify({ title, body, url: url || '/', tag });
-
-  let sent = 0;
-  const dead: string[] = [];
-  await Promise.all(
-    list.map(async (s: { id: string; endpoint: string; p256dh: string; auth: string }) => {
-      try {
-        await webpush.sendNotification(
-          { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
-          notif,
-          {
-            TTL: 60 * 60 * 24, // 24h — 오래된 알림은 무의미(기기 오프라인이어도 재접속 시 배달)
-            // Urgency:high → 푸시서비스가 '지금 즉시' 배달(APNs priority 10). 기본 'normal'은 배터리
-            //   절약을 위해 묶어서 지연 배달될 수 있어, 업무 알림엔 즉시성이 중요하므로 high 로 지정.
-            //   (앱이 닫혀 SW가 잠든 경우의 iOS 지연은 OS 소관이라 이걸로도 완전 제거는 불가.)
-            urgency: 'high',
-          },
-        );
-        sent += 1;
-      } catch (e) {
-        const code = (e as { statusCode?: number })?.statusCode;
-        // 404/410 = 구독 만료(브라우저가 폐기) → 원장에서 제거
-        if (code === 404 || code === 410) dead.push(s.id);
-        // 그 외(400/413/429/5xx)는 무음으로 삼키면 "특정 사용자만 푸시 안 옴"의 흔적이 안 남는다.
-        else console.error('push: send failed:', code ?? 'no-status', (e as Error)?.message ?? String(e));
-      }
-    }),
-  );
-
-  if (dead.length > 0) {
-    await admin.from('push_subscriptions').delete().in('id', dead);
-  }
-
-  return json(200, { sent, recipients: recipientIds.length, pruned: dead.length });
+  const r = await deliver(admin, scopeUnit, recipientIds, { title, body, url, tag });
+  return json(200, { sent: r.sent, recipients: r.recipients, pruned: r.pruned, suppressed: r.suppressed });
 });

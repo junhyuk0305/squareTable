@@ -529,7 +529,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 12,
   },
-  errorText: { flex: 1, fontSize: 15, fontWeight: '700', color: BrandColors.bad, lineHeight: 21 },
+  errorText: { flex: 1, fontSize: 15, fontWeight: '700', color: BrandColors.badText, lineHeight: 21 },
 
   cta: {
     flexDirection: 'row',
@@ -558,7 +558,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 13,
   },
   reviewBannerText: { flex: 1, fontSize: 12.5, fontWeight: '700', color: InkColors.ink, lineHeight: 18 },
-  overflowNote: { fontSize: 12, fontWeight: '600', color: BrandColors.warn, lineHeight: 17 },
+  overflowNote: { fontSize: 12, fontWeight: '600', color: BrandColors.warnText, lineHeight: 17 },
   list: { gap: Space.sm },
   row: {
     backgroundColor: InkColors.bg,
@@ -587,7 +587,7 @@ const styles = StyleSheet.create({
   rowTitle: { fontSize: 13.5, fontWeight: '800', color: InkColors.ink, lineHeight: 19 },
   rowMeta: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 5 },
   stepCount: { fontSize: 11, fontWeight: '600', color: InkColors.ink3 },
-  needContent: { fontSize: 11, fontWeight: '700', color: BrandColors.warn },
+  needContent: { fontSize: 11, fontWeight: '700', color: BrandColors.warnText },
 
   // ── 카드 펼침 편집기 ──
   editor: {
@@ -630,7 +630,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   addBtnText: { fontSize: 12.5, fontWeight: '800', color: InkColors.ink2 },
-  editorWarn: { fontSize: 12, fontWeight: '700', color: BrandColors.warn, marginTop: 12 },
+  editorWarn: { fontSize: 12, fontWeight: '700', color: BrandColors.warnText, marginTop: 12 },
 
   backLink: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12 },
   backLinkText: { fontSize: 13, fontWeight: '800', color: InkColors.ink2 },

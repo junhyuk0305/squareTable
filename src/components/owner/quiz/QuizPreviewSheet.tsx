@@ -79,7 +79,7 @@ export function QuizPreviewSheet({ quiz, onClose }: { quiz: QuizPreviewTarget; o
 
         {result ? (
           <View style={pst.gradeBox}>
-            <Text style={[pst.gradeTitle, { color: result.correct ? BrandColors.good : BrandColors.bad }]}>
+            <Text style={[pst.gradeTitle, { color: result.correct ? BrandColors.goodText : BrandColors.badText }]}>
               {result.correct ? '맞았어요' : '아쉬워요'}
             </Text>
             {explain ? <Text style={pst.gradeText}>{explain}</Text> : null}

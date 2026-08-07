@@ -5,6 +5,7 @@ import { useRouter, Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 import { InboxHeroCard } from '@/components/InboxHeroCard';
+import { MiniStats } from '@/components/blocks/MiniStats';
 import { InboxSubtabs } from '@/components/InboxSubtabs';
 import { SimilarGroupRow } from '@/components/SimilarGroupRow';
 import { SectionLabel } from '@/components/SectionLabel';
@@ -21,6 +22,7 @@ import { Radius, Elevation } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
 
 import { useStaffStore } from '@/lib/store/useStaffStore';
+import { sortByUrgency } from '@/lib/utils/unknownQuery';
 import type { PlaybookEntry, UnknownQuery } from '@/types';
 
 // 안 쓰임 = 게시됐는데 최근 30일 인용 0회. (OwnerKnowhowBrowse의 isUnused와 동일 기준)
@@ -29,9 +31,12 @@ const isUnused = (e: PlaybookEntry) =>
 
 /**
  * Owner Inbox — 받은질문 시니어(사장님) 인박스 = 질문 처리 대시보드.
- * 1) 한눈에 보기 — 요약 스트립(답할 질문·AI가 답함·내 노하우) + AI 자동응답률(누적)
- * 2) 노하우 제안 진입 (알바→사장)
- * 3) Hero 우선 답변 1건 (가장 시급 = confidence 최저)
+ * ★최우선 = 가장 오래 기다린 질문 1건. 2026-08-05에 Hero를 3번째에서 맨 위로 올렸다.
+ *   (2026-08-06: 1차 기준을 confidence → 대기시간으로 교체. 카드에 찍히는 "2시간 전"과 정렬 기준을
+ *    일치시켜 사장이 순서를 이해할 수 있게 했다 — 사유는 sortByUrgency 주석 참조)
+ * 1) Hero 우선 답변 1건 (가장 오래 기다린 것, sortByUrgency SSOT)
+ * 2) 한눈에 보기 — 요약 3칸(MiniStats) + AI 자동응답률(누적)
+ * 3) 노하우 제안 진입 (직원→사장)
  * 4) <InboxSubtabs> [답할 질문 | AI가 답함] — 상태별 파생 필터·카운트는 컴포넌트가 처리.
  * 5) '그동안 쌓은 노하우' 진입 카드 → /owner/knowledge
  */
@@ -54,7 +59,7 @@ export default function OwnerInboxScreen() {
     return sugSubscribe();
   }, [sugHydrate, sugSubscribe]);
 
-  // pending 정렬: 시급한 순(confidence asc) → 최근 순(asked_at desc)
+  // pending 정렬: 오래 기다린 순(asked_at asc) → 동시각이면 confidence asc (sortByUrgency SSOT)
   const pending = useMemo(
     () => sortByUrgency(queue.filter((u) => u.status === 'pending_owner_answer')),
     [queue],
@@ -69,10 +74,12 @@ export default function OwnerInboxScreen() {
   const ratePct = answered > 0 ? Math.round((autoCount / answered) * 100) : 0;
 
   // 내 노하우 · 안 쓰임 카운트(진입 카드).
-  const knowhowCount = entries.length;
+  // ★2026-08-06: draft(인수인계서 파이프라인 초안)를 뺀다 — 사장 홈의 entriesCount(useOwnerDashboardData)는
+  //   이미 빼고 세는데 여기만 포함해서, 같은 '내 노하우'가 두 화면에서 다른 수로 나왔다.
+  const knowhowCount = useMemo(() => entries.filter((e) => e.status !== 'draft').length, [entries]);
   const unusedCount = useMemo(() => entries.filter(isUnused).length, [entries]);
 
-  // hero: 전체 pending 중 가장 시급. 깊은 답변 → 기존 answer 위저드.
+  // hero: 전체 pending 중 가장 오래 기다린 것. 깊은 답변 → 기존 answer 위저드.
   const hero = pending[0];
 
   // hero 작성자 경력(익명이면 숨김).
@@ -113,15 +120,33 @@ export default function OwnerInboxScreen() {
         />
       ) : (
         <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-          {/* 1) 한눈에 보기 — 요약 스트립 + 자동응답률 */}
-          <Appear delay={0}>
+          {/* 1) Hero — 우선 답변(가장 시급한 미답변). 이 화면의 최우선이라 맨 위다(2026-08-05).
+                 직전까지는 요약 스트립·제안 진입 아래 3번째였다 — 정작 할 일이 스크롤 밑에 있었다. */}
+          {hero ? (
+            <Appear style={styles.heroWrap} offsetY={12}>
+              <Text style={styles.sectionTag}>우선 답변</Text>
+              <InboxHeroCard uq={hero} careerDays={careerDays} onPress={() => goAnswer(hero.id)} />
+            </Appear>
+          ) : (
+            <Appear>
+            <View style={styles.emptyHero}>
+              <Text style={styles.emptyTitle}>아직 새 질문이 없어요</Text>
+              <Text style={styles.emptySub}>직원이 모르는 걸 물으면 여기로 와요.</Text>
+            </View>
+            </Appear>
+          )}
+
+          {/* 2) 한눈에 보기 — 요약 3칸(블록 I3) + 자동응답률 */}
+          <Appear>
           <View style={styles.block}>
             <SectionLabel title="한눈에 보기" />
-            <View style={styles.summary}>
-              <StatCard n={pending.length} label="답할 질문" hot={pending.length > 0} />
-              <StatCard n={autoCount} label="AI가 답함" />
-              <StatCard n={knowhowCount} label="내 노하우" />
-            </View>
+            <MiniStats
+              items={[
+                { key: 'pending', value: pending.length, label: '답할 질문' },
+                { key: 'auto', value: autoCount, label: 'AI가 답함' },
+                { key: 'knowhow', value: knowhowCount, label: '내 노하우', onPress: goKnowledge },
+              ]}
+            />
 
             {answered > 0 && (
               <View style={styles.rateCard}>
@@ -140,8 +165,8 @@ export default function OwnerInboxScreen() {
           </View>
           </Appear>
 
-          {/* 2) 노하우 제안 진입 — 알바가 올린 개선·등록 신청(받은질문과 같은 '직원 인풋' 허브) */}
-          <Appear delay={40}>
+          {/* 3) 노하우 제안 진입 — 직원이 올린 개선·등록 신청(받은질문과 같은 '직원 인풋' 허브) */}
+          <Appear>
           <Pressable
             onPress={() => router.push('/owner/suggestions')}
             style={({ pressed }) => [styles.sugEntry, pressed && { opacity: 0.85 }]}
@@ -166,23 +191,8 @@ export default function OwnerInboxScreen() {
           </Pressable>
           </Appear>
 
-          {/* 3) Hero — 우선 답변 (가장 시급한 미답변) */}
-          {hero ? (
-            <Appear delay={80} style={styles.heroWrap} offsetY={12}>
-              <Text style={styles.sectionTag}>우선 답변</Text>
-              <InboxHeroCard uq={hero} careerDays={careerDays} onPress={() => goAnswer(hero.id)} />
-            </Appear>
-          ) : (
-            <Appear delay={80}>
-            <View style={styles.emptyHero}>
-              <Text style={styles.emptyTitle}>아직 새 질문이 없어요</Text>
-              <Text style={styles.emptySub}>직원이 모르는 걸 물으면 여기로 와요.</Text>
-            </View>
-            </Appear>
-          )}
-
           {/* 4) 서브탭 [답할 질문 | AI가 답함] — 상태별 필터·카운트는 InboxSubtabs가 처리. */}
-          <Appear delay={120}>
+          <Appear>
           <InboxSubtabs
             queue={queue}
             initial="pending"
@@ -196,15 +206,21 @@ export default function OwnerInboxScreen() {
           />
           </Appear>
 
-          {/* 5) 그동안 쌓은 노하우 — 진입 카드(목록은 상세 화면에서). 안 쓰임 있으면 정리 유도. */}
-          <Appear delay={160}>
+          {/* 5) 안 쓰이는 노하우 정리 — ★2026-08-06: **안 쓰임이 있을 때만** 그린다.
+              이 화면의 목적은 '질문에 답해 노하우로 만든다'(정본 §2)인데 자산 관리 진입점이
+              MiniStats·이 카드·탭바까지 3중이었다. 게다가 평시에는 "잘 쌓이고 있어요"를 냈는데,
+              노하우 0개 매장에서는 '내 노하우 0개' 바로 밑에 그 문구가 붙어 사실과 달랐다.
+              '안 쓰임 합계'를 말하는 자리는 앱에서 여기 하나뿐이라(노하우 화면엔 행 배지만 있다)
+              카드를 지우지 않고 조건부로 남긴다 — 정리 신호가 필요한 순간에만 뜬다. */}
+          {unusedCount > 0 && (
+          <Appear>
           <View style={styles.block}>
             <SectionLabel title="그동안 쌓은 노하우" />
             <Pressable
               onPress={goKnowledge}
               style={({ pressed }) => [styles.sugEntry, pressed && { opacity: 0.85 }]}
               accessibilityRole="button"
-              accessibilityLabel={`내 노하우 ${knowhowCount}개${unusedCount > 0 ? `, 안 쓰임 ${unusedCount}개` : ''}, 관리하기`}
+              accessibilityLabel={`내 노하우 ${knowhowCount}개, 안 쓰임 ${unusedCount}개, 관리하기`}
             >
               <View style={[styles.sugIcon, styles.sugIconKnow]}>
                 <Ionicons name="library-outline" size={17} color={InkColors.ink} />
@@ -212,19 +228,14 @@ export default function OwnerInboxScreen() {
               <View style={{ flex: 1 }}>
                 <Text style={styles.sugTitle}>내 노하우 {knowhowCount}개</Text>
                 <Text style={styles.sugSub}>
-                  {unusedCount > 0 ? (
-                    <>
-                      <Text style={styles.sugSubBad}>{unusedCount}개는 최근 안 쓰였어요</Text> · 확인해볼까요?
-                    </>
-                  ) : (
-                    '잘 쌓이고 있어요. 탭해서 관리하기'
-                  )}
+                  <Text style={styles.sugSubBad}>{unusedCount}개는 최근 안 쓰였어요</Text> · 확인해볼까요?
                 </Text>
               </View>
               <Ionicons name="chevron-forward" size={16} color={InkColors.ink3} />
             </Pressable>
           </View>
           </Appear>
+          )}
 
           {/* 푸터 여백 */}
           <View style={{ height: 16 }} />
@@ -236,38 +247,14 @@ export default function OwnerInboxScreen() {
   );
 }
 
-// ─── 보조 컴포넌트 ─────────────────────────────────────────
-
-/** 요약 스트립 카드 1칸. hot(=답할 질문 있음)이면 노랑 강조 + 빨간 점. */
-function StatCard({ n, label, hot }: { n: number; label: string; hot?: boolean }) {
-  return (
-    <View style={[styles.stat, hot && styles.statHot]}>
-      <View style={styles.statNumRow}>
-        {hot ? <View style={styles.statDot} /> : null}
-        <Text style={styles.statNum}>{n}</Text>
-      </View>
-      <Text style={styles.statLabel}>{label}</Text>
-    </View>
-  );
-}
-
-// ─── 정렬·도우미 ──────────────────────────────────────────
-
-function sortByUrgency(list: UnknownQuery[]): UnknownQuery[] {
-  return [...list].sort((a, b) => {
-    if (a.best_match_confidence !== b.best_match_confidence) {
-      return a.best_match_confidence - b.best_match_confidence;
-    }
-    return new Date(b.asked_at).getTime() - new Date(a.asked_at).getTime();
-  });
-}
+// 요약 스트립 카드(StatCard)는 공용 <MiniStats>(블록 I3)로 대체됨(2026-08-05).
 
 // ─── 스타일 ──────────────────────────────────────────────
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: InkColors.cream },
   loadingWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 10 },
-  loadingText: { fontSize: 15, color: InkColors.ink3, fontWeight: '600' },
+  loadingText: { fontSize: 15, color: InkColors.ink2, fontWeight: '600' },
   scroll: {
     paddingHorizontal: Space.gutter,
     paddingTop: Space.md,
@@ -278,24 +265,7 @@ const styles = StyleSheet.create({
   // 섹션 블록 = [밖 라벨] + [내용]
   block: { gap: Space.sm },
 
-  // 요약 스트립
-  summary: { flexDirection: 'row', gap: Space.sm },
-  stat: {
-    flex: 1,
-    backgroundColor: InkColors.bg,
-    borderWidth: 1,
-    borderColor: InkColors.line,
-    borderRadius: Radius.md,
-    paddingVertical: 14,
-    paddingHorizontal: 12,
-    gap: 3,
-    ...Elevation.e1,
-  },
-  statHot: { borderColor: BrandColors.yellowDeep, backgroundColor: '#FFFBEA' },
-  statNumRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  statDot: { width: 7, height: 7, borderRadius: Radius.pill, backgroundColor: BrandColors.bad },
-  statNum: { fontSize: 26, fontWeight: '800', letterSpacing: -1, color: InkColors.ink, lineHeight: 28 },
-  statLabel: { fontSize: 12, fontWeight: '600', color: InkColors.ink3 },
+  // 요약 스트립 스타일은 공용 <MiniStats>가 가진다(2026-08-05).
 
   // 자동응답률 게이지
   rateCard: {
@@ -337,13 +307,13 @@ const styles = StyleSheet.create({
   sugIconKnow: { backgroundColor: InkColors.bgSoft },
   sugTitle: { fontSize: 15, fontWeight: '800', color: InkColors.ink },
   sugSub: { fontSize: 12.5, color: InkColors.ink3, fontWeight: '600', marginTop: 2 },
-  sugSubBad: { color: BrandColors.bad, fontWeight: '800' },
+  sugSubBad: { color: BrandColors.badText, fontWeight: '800' },
   sugBadge: {
     minWidth: 22,
     height: 22,
     paddingHorizontal: 7,
     borderRadius: Radius.pill,
-    backgroundColor: BrandColors.accent,
+    backgroundColor: BrandColors.accentSolid,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -354,7 +324,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '800',
     letterSpacing: 1.2,
-    color: BrandColors.accent,
+    color: BrandColors.accentText,
     textTransform: 'uppercase',
   },
   emptyHero: {
@@ -366,5 +336,5 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   emptyTitle: { fontSize: 16, fontWeight: '700', color: InkColors.ink },
-  emptySub: { fontSize: 15, color: InkColors.ink3 },
+  emptySub: { fontSize: 15, color: InkColors.ink2 },
 });

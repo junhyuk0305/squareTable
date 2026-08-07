@@ -29,6 +29,8 @@ export type JuniorHomeData = {
   taskDone: number;
   taskRemain: number;
   tasksAllDone: boolean;
+  /** 오늘 내가 해야 하는 업무 — 홈 히어로 목록(3건 + 전체보기)용. 미완료가 먼저. */
+  todayTasks: { id: string; text: string; done: boolean }[];
   // 안 읽은 공지
   unreadCount: number;
   latestNotice: FeedItem | undefined;
@@ -111,6 +113,16 @@ export function useJuniorHomeData(): JuniorHomeData {
   const taskRemain = taskTotal - taskDone;
   const tasksAllDone = taskTotal > 0 && taskDone >= taskTotal;
 
+  // 홈 히어로 목록용 — 남은 것이 먼저. myTodaysTasks(가시성 필터)를 그대로 재사용해 판정을 복제하지 않는다.
+  const todayTasks = useMemo(
+    () =>
+      myTodaysTasks
+        .map((t) => ({ id: t.id, text: t.text, done: !!dayDone[t.id] }))
+        .sort((a, b) => Number(a.done) - Number(b.done)),
+    // dayDone은 doneMap[today]의 파생이라 doneMap·today를 의존성으로 든다(객체 신원 불안정 회피).
+    [myTodaysTasks, doneMap, today], // eslint-disable-line react-hooks/exhaustive-deps
+  );
+
   // 오늘의 매장 — 데이파트(오픈·미들·마감…)별 완료 상태. 오늘 뜬 할일을 section으로 묶어 done/total 집계,
   // 매장 커스텀 순서(dayparts)대로 정렬한다. 할일이 있는 데이파트만 노출.
   const dayparts = useDayparts();
@@ -184,6 +196,7 @@ export function useJuniorHomeData(): JuniorHomeData {
     taskDone,
     taskRemain,
     tasksAllDone,
+    todayTasks,
     unreadCount,
     latestNotice,
     daypartStatus,

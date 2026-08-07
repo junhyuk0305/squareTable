@@ -161,8 +161,8 @@ const st = StyleSheet.create({
     borderBottomColor: InkColors.line,
   },
   summaryText: { fontSize: 15, fontWeight: '800', color: InkColors.ink },
-  rest: { color: BrandColors.bad },
-  donec: { color: BrandColors.good },
+  rest: { color: BrandColors.badText },
+  donec: { color: BrandColors.goodText },
   assignBtn: {
     marginLeft: 'auto',
     flexDirection: 'row',
@@ -177,7 +177,7 @@ const st = StyleSheet.create({
   assignBtnText: { fontSize: 12.5, fontWeight: '900', color: InkColors.ink },
 
   scroll: { paddingHorizontal: 13, paddingTop: 10, gap: 11 },
-  empty: { textAlign: 'center', color: InkColors.ink3, fontSize: 15, marginTop: 30 },
+  empty: { textAlign: 'center', color: InkColors.ink2, fontSize: 15, marginTop: 30 },
   group: { backgroundColor: InkColors.bg, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md, ...Elevation.e1 },
   groupHead: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, minHeight: 48 },
   sharedAvatar: { width: 26, height: 26, borderRadius: Radius.pill, backgroundColor: InkColors.ink3, alignItems: 'center', justifyContent: 'center' },

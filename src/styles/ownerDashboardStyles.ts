@@ -1,6 +1,7 @@
 import { StyleSheet } from 'react-native';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Elevation, Radius } from '@/lib/theme/elevation';
+import { Space } from '@/lib/theme/layout';
 
 export const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: InkColors.cream },
@@ -12,28 +13,7 @@ export const styles = StyleSheet.create({
   // 섹션: [밖 라벨] + [안 카드] 묶음
   section: { gap: 8 },
 
-  // 미검증 우선 배너(홈 최상단) — 검증 필요 강도를 레드 액센트로
-  reviewBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    backgroundColor: BrandColors.warnSoft,
-    borderWidth: 1,
-    borderColor: BrandColors.warnBorder,
-    borderRadius: Radius.md,
-    padding: 14,
-  },
-  reviewIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: Radius.pill,
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  reviewTitle: { fontSize: 14, fontWeight: '800', color: InkColors.ink },
-  reviewSub: { fontSize: 12, color: InkColors.ink2, marginTop: 2, lineHeight: 17 },
-  reviewCta: { fontSize: 13, fontWeight: '800', color: BrandColors.warn },
+  // 미검증 우선 배너는 공용 <AlertRow>(블록 X2)로 대체됨(2026-08-05).
 
   // 상단 커스텀 헤더 — 좌측 로고 / 우측 매장명·사용자명
   appHeader: {
@@ -57,7 +37,6 @@ export const styles = StyleSheet.create({
     gap: 8,
     alignItems: 'flex-start',
   },
-  onboardEmoji: { fontSize: 34 },
   onboardTitle: { fontSize: 18, fontWeight: '900', color: InkColors.ink },
   onboardBody: { fontSize: 14, color: InkColors.ink2, lineHeight: 21 },
   onboardCta: {
@@ -83,58 +62,36 @@ export const styles = StyleSheet.create({
   },
   seedChipText: { fontSize: 12.5, fontWeight: '700', color: InkColors.ink },
 
-  // ① 받은질문 히어로 (사령탑 주인공)
-  hero: { backgroundColor: InkColors.ink, borderRadius: Radius.lg, padding: 18, gap: 7, ...Elevation.e2 },
-  heroHead: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  heroKicker: { fontSize: 13, fontWeight: '800', color: InkColors.bubbleText, letterSpacing: 0.3 },
-  heroBadge: {
-    marginLeft: 'auto',
-    minWidth: 24,
-    height: 24,
-    paddingHorizontal: 7,
-    borderRadius: Radius.pill,
-    backgroundColor: BrandColors.accent,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  heroBadgeText: { fontSize: 13, fontWeight: '900', color: InkColors.bubbleText },
-  heroLead: { fontSize: 16, fontWeight: '700', color: InkColors.bubbleText, lineHeight: 23 },
-  heroSub: { fontSize: 12, color: 'rgba(255,255,255,0.6)', lineHeight: 18 },
-  heroCta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    alignSelf: 'flex-start',
-    marginTop: 4,
-    backgroundColor: InkColors.bg,
-    paddingVertical: 9,
-    paddingHorizontal: 14,
-    borderRadius: Radius.pill,
-  },
-  heroCtaText: { fontSize: 13, fontWeight: '800', color: InkColors.ink },
-  // 가치 히어로 — 반복을 대신 답한 실카운트를 큰 숫자로. (자기계발형 게이지 폐기 → 부담 경감 서사)
-  heroValue: { fontSize: 33, fontWeight: '900', letterSpacing: -1, color: InkColors.bubbleText, lineHeight: 36, marginTop: 2 },
-  heroValueUnit: { fontSize: 19, fontWeight: '800', color: InkColors.bubbleText },
-  heroCtaY: { backgroundColor: BrandColors.yellow, ...Elevation.ey },
+  // 히어로는 공용 <InboxHeroCard>(블록 H4), KPI 2칸은 <MiniStats>(블록 I3)로 대체됨(2026-08-05).
 
-  // ② 오늘 한눈에 — 3칸 KPI(업무·근무·인건비). 동일 크기로 스캔. 인건비 칸만 노란 틴트로 강조.
-  kpiRow: { flexDirection: 'row', gap: 8 },
-  kpi: {
-    flex: 1,
+  // 답 기다리는 질문이 0건일 때의 조용한 카드 — 빈 화면을 안내로 위장하지 않고 다음 행동을 준다.
+  quietCard: {
+    backgroundColor: InkColors.bg,
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    borderColor: InkColors.line,
+    padding: Space.xl,
+    gap: Space.xs,
+    ...Elevation.e1,
+  },
+  quietTitle: { fontSize: 17, lineHeight: 24, fontWeight: '800', color: InkColors.ink },
+  quietSub: { fontSize: 15, lineHeight: 22, fontWeight: '600', color: InkColors.ink2 },
+  quietCta: { marginTop: Space.sm, fontSize: 15, fontWeight: '800', color: InkColors.ink },
+
+  // ⑤ 오늘 업무 3건 — 섹션 라벨은 카드 밖, 목록은 카드 안.
+  moreLink: { fontSize: 13, fontWeight: '700', color: InkColors.ink2 },
+  taskCard: {
     backgroundColor: InkColors.bg,
     borderRadius: Radius.md,
     borderWidth: 1,
     borderColor: InkColors.line,
-    paddingVertical: 14,
-    paddingHorizontal: 8,
-    alignItems: 'center',
-    gap: 5,
+    paddingHorizontal: Space.lg,
     ...Elevation.e1,
   },
-  kpiHi: { backgroundColor: BrandColors.yellowSoft, borderColor: BrandColors.yellowDeep },
-  kpiValue: { fontSize: 21, fontWeight: '900', color: InkColors.ink, letterSpacing: -0.5, lineHeight: 24 },
-  kpiUnit: { fontSize: 13, fontWeight: '800', color: InkColors.ink2 },
-  kpiLabel: { fontSize: 11, fontWeight: '700', color: InkColors.ink3, textAlign: 'center' },
+  taskRow: { flexDirection: 'row', alignItems: 'center', gap: Space.md, minHeight: 48, paddingVertical: Space.sm },
+  taskRowDivider: { borderTopWidth: 1, borderTopColor: InkColors.line },
+  taskText: { flex: 1, minWidth: 0, fontSize: 15, lineHeight: 21, fontWeight: '600', color: InkColors.ink },
+  taskTextDone: { color: InkColors.ink3, textDecorationLine: 'line-through' },
 
   miniRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8 },
   miniLink: { fontSize: 13, color: InkColors.ink2, fontWeight: '700' },

@@ -12,8 +12,11 @@ import { RoleTabBar } from '@/components/RoleTabBar';
 import { Appear } from '@/components/Appear';
 import { ConfirmModal } from '@/components/ConfirmModal';
 import { Avatar } from '@/components/Avatar';
+import { SectionLabel } from '@/components/SectionLabel';
+import { InfoDot } from '@/components/InfoDot';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
+import { Space } from '@/lib/theme/layout';
 import { DEFAULT_HOURLY_WAGE, fmtDuration, won, todayStr, liveMinutes } from '@/lib/utils/attendance';
 import { computePay } from '@/lib/utils/payroll';
 import { useCopyToClipboard } from '@/lib/utils/useCopyToClipboard';
@@ -118,7 +121,8 @@ export default function OwnerStaffScreen() {
         </View>
       ) : (
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        {/* ① 급여 — 이번 달 인건비 총액 + 급여 설정 진입(상단). 구 '근무·급여'·'급여 설정' 카드를 흡수. */}
+        {/* ① 급여 — 이번 달 인건비 총액 + 급여 설정 진입(상단). 구 '근무·급여'·'급여 설정' 카드를 흡수.
+            이 화면의 히어로는 여기 하나다(2026-08-06) — 아래 초대코드가 같은 다크·30sp 규격이라 히어로가 둘이었다. */}
         <Appear delay={0}>
         <View style={styles.payCard}>
           <Text style={styles.payLabel}>이번 달 예상 인건비</Text>
@@ -139,47 +143,64 @@ export default function OwnerStaffScreen() {
         </View>
         </Appear>
 
-        {/* ② 초대코드 */}
+        {/* ② 초대코드 — 카드가 아니라 상하 보더 한 줄(2026-08-06).
+            같은 코드를 /owner/settings 에서도 상시 보고 복사할 수 있어, 여기서까지 히어로 규격을 쓸 이유가 없다.
+            안내 문장은 ⓘ 로 옮겼다 — 접었을 뿐 도달은 그대로다. */}
         <Appear delay={60}>
-        <View style={styles.inviteCard}>
-          <Text style={styles.inviteLabel}>매장 초대코드</Text>
-          <Text style={styles.inviteCode}>{INVITE_CODE}</Text>
-          <Text style={styles.inviteHint}>직원이 코드를 입력해 신청하면 아래에서 승인해 주세요. 승인 전에는 매장 정보에 접근할 수 없어요.</Text>
-          <View style={styles.inviteBtnRow}>
-            {/* 복사 = "사장이 초대코드를 실제로 뿌렸다"의 유일한 관측점. 이게 없으면 직원 합류율이
-                낮을 때 사장이 안 뿌린 건지, 뿌렸는데 직원이 안 들어온 건지 DB로 구분할 수 없다. */}
-            <Pressable
-              onPress={() => { track('invite_shared', { from: 'staff' }); copy(INVITE_CODE); }}
-              style={({ pressed }) => [styles.copyBtn, pressed && { opacity: 0.85 }]}
-            >
-              <Ionicons name={copied ? 'checkmark' : 'copy-outline'} size={16} color="#FFFFFF" />
-              <Text style={styles.copyText}>{copied ? '복사됨' : '코드 복사'}</Text>
-            </Pressable>
-            {/* 코드 변경 = 사장 전용(rotate_invite_code RPC 가 소유자만 통과) — 매니저에겐 비노출. */}
-            {isOwner && (
-              <Pressable onPress={() => setRotateOpen(true)} style={({ pressed }) => [styles.rotateBtn, pressed && { opacity: 0.7 }]}>
-                <Ionicons name="refresh-outline" size={16} color="#FFFFFF" />
-                <Text style={styles.copyText}>코드 변경</Text>
-              </Pressable>
-            )}
+        <View style={styles.inviteRow}>
+          <View style={styles.inviteCol}>
+            <View style={styles.inviteLabelRow}>
+              <Text style={styles.inviteLabel}>매장 초대코드</Text>
+              <InfoDot
+                size={14}
+                title="초대코드로 어떻게 합류해요?"
+                body={'직원이 코드를 입력해 신청하면 아래 ‘합류 신청’에서 승인해 주세요.\n승인 전에는 매장 정보에 접근할 수 없어요.'}
+              />
+            </View>
+            <Text style={styles.inviteCode}>{INVITE_CODE}</Text>
           </View>
+          {/* 복사 = "사장이 초대코드를 실제로 뿌렸다"의 유일한 관측점. 이게 없으면 직원 합류율이
+              낮을 때 사장이 안 뿌린 건지, 뿌렸는데 직원이 안 들어온 건지 DB로 구분할 수 없다. */}
+          <Pressable
+            onPress={() => { track('invite_shared', { from: 'staff' }); copy(INVITE_CODE); }}
+            hitSlop={6}
+            accessibilityRole="button"
+            accessibilityLabel="초대코드 복사"
+            style={({ pressed }) => [styles.copyBtn, pressed && { opacity: 0.85 }]}
+          >
+            <Ionicons name={copied ? 'checkmark' : 'copy-outline'} size={15} color={InkColors.ink} />
+            <Text style={styles.copyText}>{copied ? '복사됨' : '복사'}</Text>
+          </Pressable>
+          {/* 코드 변경 = 사장 전용(rotate_invite_code RPC 가 소유자만 통과) — 매니저에겐 비노출. */}
+          {isOwner && (
+            <Pressable
+              onPress={() => setRotateOpen(true)}
+              hitSlop={6}
+              accessibilityRole="button"
+              accessibilityLabel="초대코드 변경"
+              style={({ pressed }) => [styles.rotateBtn, pressed && { opacity: 0.7 }]}
+            >
+              <Text style={styles.rotateText}>코드 변경</Text>
+            </Pressable>
+          )}
         </View>
         </Appear>
 
-        {/* ②-b 훈련 — 새 직원이 들어오기로 한 순간이 코스를 만들 순간(초대코드 바로 아래). */}
+        {/* ③ 퀴즈 — 흰 카드였지만 위 두 블록과 함께 '카드 3연속'을 만들던 자리라 행으로 낮춘다(2026-08-06).
+            새 직원이 들어오기로 한 순간이 코스를 만들 순간(초대코드 바로 아래). */}
         <Appear delay={80}>
         <Pressable
           onPress={() => router.push('/owner/training')}
-          style={({ pressed }) => [styles.firstDayCard, pressed && { opacity: 0.85 }]}
+          style={({ pressed }) => [styles.quizRow, pressed && { opacity: 0.6 }]}
           accessibilityRole="button"
           accessibilityLabel="퀴즈 열기"
         >
-          <View style={styles.firstDayIcon}>
+          <View style={styles.quizIcon}>
             <Ionicons name="school-outline" size={19} color={InkColors.ink} />
           </View>
           <View style={{ flex: 1, minWidth: 0 }}>
-            <Text style={styles.firstDayTitle}>퀴즈</Text>
-            <Text style={styles.firstDayDesc}>첫 출근(신입 첫날)과 정기 점검(주기 재확인)을 준비해요</Text>
+            <Text style={styles.quizTitle}>퀴즈</Text>
+            <Text style={styles.quizDesc}>첫 출근(신입 첫날)과 정기 점검(주기 재확인)을 준비해요</Text>
           </View>
           <Ionicons name="chevron-forward" size={16} color={InkColors.ink3} />
         </Pressable>
@@ -189,7 +210,7 @@ export default function OwnerStaffScreen() {
         {pending.length > 0 && (
           <Appear delay={100}>
           <View style={styles.pendingWrap}>
-            <Text style={styles.sectionTitle}>합류 신청 ({pending.length}명) <Text style={styles.sectionSub}>· 승인해야 합류돼요</Text></Text>
+            <SectionLabel title={`합류 신청 (${pending.length}명)`} hint="승인해야 합류돼요" />
             <View style={styles.list}>
               {pending.map((p) => (
                 <View key={p.id} style={styles.staffRow}>
@@ -213,7 +234,7 @@ export default function OwnerStaffScreen() {
 
         {/* 직원 목록 — 시급 편집 + 이번 달 시간·급여·근무상태(구 근무·급여 화면 흡수) */}
         <Appear delay={140}>
-        <Text style={styles.sectionTitle}>합류한 직원 ({staff.length}명) <Text style={styles.sectionSub}>· 탭 → 출근기록</Text></Text>
+        <SectionLabel title={`합류한 직원 (${staff.length}명)`} hint="탭 → 출근기록" />
         </Appear>
         <Appear delay={160}>
         {staff.length === 0 ? (
@@ -353,7 +374,8 @@ export default function OwnerStaffScreen() {
 
 function StatusChip({ status }: { status: 'out' | 'working' | 'done' }) {
   const map = {
-    working: { label: '근무 중', color: BrandColors.accent, bg: BrandColors.accentSoft },
+    // '근무 중'은 정상 상태다 — accent(=bad 레드) 틴트라 정상이 경고로 읽혔다(2026-08-06). 색은 good, 판별은 라벨이 한다.
+    working: { label: '근무 중', color: BrandColors.goodText, bg: BrandColors.goodSoft },
     done: { label: '퇴근', color: InkColors.ink3, bg: InkColors.bgSoft },
     out: { label: '미출근', color: InkColors.ink3, bg: InkColors.bgSoft },
   } as const;
@@ -379,32 +401,29 @@ const styles = StyleSheet.create({
   payrollBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12, backgroundColor: 'rgba(255,255,255,0.12)', paddingVertical: 11, paddingHorizontal: 14, borderRadius: Radius.md },
   payrollBtnText: { flex: 1, color: '#FFFFFF', fontWeight: '700', fontSize: 14 },
 
-  inviteCard: { backgroundColor: InkColors.ink, borderRadius: Radius.lg, padding: 20, gap: 6, alignItems: 'flex-start' },
-  inviteLabel: { fontSize: 13, color: 'rgba(255,255,255,0.7)', fontWeight: '600' },
-  inviteCode: { fontSize: 30, fontWeight: '900', color: '#FFFFFF', letterSpacing: 3 },
-  inviteHint: { fontSize: 12, color: 'rgba(255,255,255,0.6)', lineHeight: 17 },
-  inviteBtnRow: { flexDirection: 'row', gap: 8, marginTop: 8 },
-  copyBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(255,255,255,0.16)', paddingVertical: 9, paddingHorizontal: 14, borderRadius: Radius.pill },
-  rotateBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(255,255,255,0.10)', paddingVertical: 9, paddingHorizontal: 14, borderRadius: Radius.pill },
-  copyText: { color: '#FFFFFF', fontWeight: '700', fontSize: 13 },
+  // 초대코드 — 카드가 아닌 상하 보더 스트립. 히어로(인건비)와 형태를 갈라 '카드 나열'을 끊는 자리다.
+  inviteRow: { flexDirection: 'row', alignItems: 'center', gap: Space.md, paddingVertical: Space.md, borderTopWidth: 1, borderBottomWidth: 1, borderColor: InkColors.line },
+  inviteCol: { flex: 1, minWidth: 0 },
+  inviteLabelRow: { flexDirection: 'row', alignItems: 'center', gap: Space.xs },
+  inviteLabel: { fontSize: 12, fontWeight: '700', color: InkColors.ink2 },
+  inviteCode: { fontSize: 22, lineHeight: 30, fontWeight: '900', color: InkColors.ink, letterSpacing: 3 },
+  // 복사·코드 변경은 보조 액션 — 화면 Primary(급여 설정)와 경쟁하지 않게 중립 면/고스트로 둔다.
+  copyBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, minHeight: 48, paddingHorizontal: Space.md, borderRadius: Radius.pill, backgroundColor: InkColors.bgSoft, borderWidth: 1, borderColor: InkColors.line },
+  copyText: { fontSize: 13, fontWeight: '800', color: InkColors.ink },
+  rotateBtn: { alignItems: 'center', justifyContent: 'center', minHeight: 48, paddingHorizontal: Space.md, borderRadius: Radius.pill, borderWidth: 1, borderColor: InkColors.line },
+  rotateText: { fontSize: 13, fontWeight: '700', color: InkColors.ink2 },
 
-  firstDayCard: {
-    flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 56,
-    backgroundColor: '#FFFFFF', borderRadius: Radius.lg, borderWidth: 1, borderColor: InkColors.line,
-    paddingHorizontal: 16, paddingVertical: 12,
-  },
-  firstDayIcon: { width: 38, height: 38, borderRadius: Radius.md, backgroundColor: InkColors.cream, alignItems: 'center', justifyContent: 'center' },
-  firstDayTitle: { fontSize: 15, fontWeight: '800', color: InkColors.ink },
-  firstDayDesc: { fontSize: 12.5, color: InkColors.ink3, marginTop: 1 },
+  // 퀴즈 진입 — 카드 아님(행). 아이콘 칩 배경은 bgSoft: 화면 배경이 흰색이라 cream(=#FFFFFF)이면 칩이 사라진다.
+  quizRow: { flexDirection: 'row', alignItems: 'center', gap: Space.md, minHeight: 56, paddingVertical: Space.sm },
+  quizIcon: { width: 38, height: 38, borderRadius: Radius.md, backgroundColor: InkColors.bgSoft, alignItems: 'center', justifyContent: 'center' },
+  quizTitle: { fontSize: 15, fontWeight: '800', color: InkColors.ink },
+  quizDesc: { fontSize: 12.5, color: InkColors.ink3, marginTop: 1 },
 
   pendingWrap: { gap: 8 },
   rejectBtn: { paddingVertical: 7, paddingHorizontal: 12, borderRadius: Radius.sm, borderWidth: 1, borderColor: InkColors.line },
   rejectText: { fontSize: 13, fontWeight: '700', color: InkColors.ink3 },
   approveBtn: { paddingVertical: 7, paddingHorizontal: 14, borderRadius: Radius.sm, backgroundColor: BrandColors.brand },
   approveText: { fontSize: 13, fontWeight: '800', color: '#FFFFFF' },
-
-  sectionTitle: { fontSize: 14, fontWeight: '800', color: InkColors.ink2, marginTop: 6 },
-  sectionSub: { fontSize: 12, fontWeight: '600', color: InkColors.ink3 },
 
   list: { backgroundColor: '#FFFFFF', borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, paddingHorizontal: 14 },
   staffRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: InkColors.line },
@@ -424,13 +443,13 @@ const styles = StyleSheet.create({
   wageInputRow: { flexDirection: 'row', alignItems: 'center', gap: 3 },
   // ★폭 고정: 웹 TextInput은 명시 폭이 없으면 기본 ~20ch로 늘어나 이름 칼럼을 찌부러뜨린다(QA 실측).
   //   maxLength 7("1000000")이 15px 폰트로 72px 안에 들어간다.
-  wageInput: { width: 72, textAlign: 'right', borderWidth: 1, borderColor: InkColors.line, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 5, fontSize: 15, color: InkColors.ink },
+  wageInput: { width: 72, textAlign: 'right', borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.sm, paddingHorizontal: 8, paddingVertical: 5, fontSize: 15, color: InkColors.ink },
   wageWon: { fontSize: 13, color: InkColors.ink3 },
   removeBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center', borderRadius: Radius.sm, backgroundColor: BrandColors.accentSoft },
 
   demoNote: { fontSize: 12, color: InkColors.ink3, marginTop: 6 },
   emptyBox: { alignItems: 'center', gap: 8, paddingVertical: 28, backgroundColor: '#FFFFFF', borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line },
-  emptyText: { fontSize: 15, color: InkColors.ink3, textAlign: 'center', lineHeight: 22 },
+  emptyText: { fontSize: 15, color: InkColors.ink2, textAlign: 'center', lineHeight: 22 },
   retryBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: InkColors.ink, paddingVertical: 9, paddingHorizontal: 16, borderRadius: Radius.pill, marginTop: 2 },
   retryText: { color: '#FFFFFF', fontSize: 13, fontWeight: '800' },
 });

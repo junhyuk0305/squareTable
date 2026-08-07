@@ -34,7 +34,7 @@ export function FillCount({ payload, disabled, result, onAnswer }: QuizRendererP
       </View>
 
       {answer !== null ? (
-        <Text style={[st.answerLine, { color: result?.correct ? BrandColors.good : BrandColors.bad }]}>
+        <Text style={[st.answerLine, { color: result?.correct ? BrandColors.goodText : BrandColors.badText }]}>
           맞는 개수 · {answer}
           {unit}
         </Text>

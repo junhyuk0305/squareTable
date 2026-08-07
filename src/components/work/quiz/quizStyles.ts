@@ -71,7 +71,7 @@ export const qs = StyleSheet.create({
   cardText: { fontSize: 17, fontWeight: '800', color: InkColors.ink, lineHeight: 25, textAlign: 'center' },
 
   /** 한 줄 조작 안내(설계 07-29 목업의 그 한 줄 — 튜토리얼 화면 대신) */
-  hint: { fontSize: 15, fontWeight: '700', color: InkColors.ink3, textAlign: 'center', lineHeight: 22 },
+  hint: { fontSize: 15, fontWeight: '700', color: InkColors.ink2, textAlign: 'center', lineHeight: 22 },
 
   btnRow: { flexDirection: 'row', gap: Space.sm },
   /** 화면당 1개만 쓰는 채움 버튼 */

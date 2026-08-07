@@ -20,7 +20,7 @@ export const styles = StyleSheet.create({
   similarText: { fontSize: 12.5, fontWeight: '700', color: InkColors.ink },
 
   albaWrap: { gap: 4, alignItems: 'flex-start', maxWidth: '90%' },
-  albaLabel: { fontSize: 11, fontWeight: '800', color: BrandColors.accent, letterSpacing: 0.5 },
+  albaLabel: { fontSize: 11, fontWeight: '800', color: BrandColors.accentText, letterSpacing: 0.5 },
   albaBubble: {
     backgroundColor: InkColors.bg,
     borderWidth: 1,
@@ -70,8 +70,8 @@ export const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: BrandColors.accent,
   },
-  errorText: { flex: 1, fontSize: 13, color: BrandColors.accent, fontWeight: '600' },
-  errorClose: { fontSize: 14, fontWeight: '800', color: BrandColors.accent },
+  errorText: { flex: 1, fontSize: 13, color: BrandColors.accentText, fontWeight: '600' },
+  errorClose: { fontSize: 14, fontWeight: '800', color: BrandColors.accentText },
 
   // 꼬리질문 탈출구 — 입력창 바로 위, 답 안 해도 바로 등록할 수 있는 동등 액션.
   escapeBar: { alignItems: 'center', paddingHorizontal: 12, paddingBottom: 6 },

@@ -24,6 +24,8 @@ import { BottomSheet } from '@/components/BottomSheet';
 import { EntryDetailModal } from '@/components/EntryDetailModal';
 import { Appear } from '@/components/Appear';
 import { SectionLabel } from '@/components/SectionLabel';
+import { AlertRow } from '@/components/blocks/AlertRow';
+import { ProgressRing } from '@/components/blocks/ProgressRing';
 import { ShellTaskCleanupSheet } from '@/components/owner/quiz/ShellTaskCleanupSheet';
 import { QuizLinkSheet } from '@/components/owner/quiz/QuizLinkSheet';
 import {
@@ -50,6 +52,9 @@ const QUIZ_MISS_MIN_ATTEMPTS = 5;
 const QUIZ_MISS_RATE = 0.4;
 /** 요일 라벨(0=일 ~ 6=토) — 할일 recurrence 와 같은 인덱스 체계. */
 const WEEKDAY_LABELS = ['일', '월', '화', '수', '목', '금', '토'] as const;
+
+/** 직원별 진행 첫 노출 인원. 리스트 첫 노출 5±2(복잡도 원칙 §4) — 나머지는 인라인으로 편다. */
+const STAFF_LIST_LIMIT = 5;
 
 /**
  * 퀴즈 관리(0099 → v2 → 0111 노하우 축) — 코스는 training_courses(0108) 행이고,
@@ -168,7 +173,10 @@ export default function OwnerTrainingScreen() {
         .map((row) => {
           const e = entryById.get(row.entryId);
           if (!e) return null;
-          const passedNames = understandingOf(understanding, row.entryId, { now, dueDays: activeDueDays }).map((u) => u.staffName);
+          const passedRows = understandingOf(understanding, row.entryId, { now, dueDays: activeDueDays });
+          const passedNames = passedRows.map((u) => u.staffName);
+          // 직원별 진행 표시용 — 이름은 중복될 수 있어 판정은 staffId로 한다(표시 전용 파생).
+          const passedIds = passedRows.map((u) => u.staffId);
           // 오답 잦음(0103) — 표본 QUIZ_MISS_MIN_ATTEMPTS 이상 + 오답률 QUIZ_MISS_RATE 초과.
           const qs = quizStats[row.entryId];
           const missRate = qs && qs.attempts >= QUIZ_MISS_MIN_ATTEMPTS ? qs.misses / qs.attempts : 0;
@@ -181,6 +189,7 @@ export default function OwnerTrainingScreen() {
             entryId: row.entryId,
             text: e.title,
             passedNames,
+            passedIds,
             missPct,
             quizCount,
             risky,
@@ -201,6 +210,24 @@ export default function OwnerTrainingScreen() {
   const liveCount = items.filter((it) => it.quizCount > 0).length;
   const noQuizCount = items.length - liveCount;
   const ready = !course || liveCount >= minItems;
+
+  /**
+   * 직원별 진행 — 이 화면의 최우선은 "누가 아직 모르나"다(2026-08-05 D6).
+   * 통과 = 실제로 나가는 항목(문항이 있는 것)을 **전부** 통과. 문항 0개인 항목은 직원에게
+   * 나가지 않으므로 분모에서 뺀다 — 넣으면 아무도 통과할 수 없는 분모가 된다.
+   * 표시 전용 파생: 채점·영속화(0107)에는 손대지 않는다.
+   */
+  const staffProgress = useMemo(() => {
+    const live = items.filter((it) => it.quizCount > 0);
+    return staffList
+      .map((s) => {
+        const passedCount = live.filter((it) => it.passedIds.includes(s.id)).length;
+        return { id: s.id, name: s.name, passedCount, total: live.length, passed: live.length > 0 && passedCount === live.length };
+      })
+      // 아직 못 한 사람이 먼저 — 사장이 볼 것은 남은 사람이다.
+      .sort((a, b) => Number(a.passed) - Number(b.passed) || a.passedCount - b.passedCount);
+  }, [items, staffList]);
+  const passedStaffCount = staffProgress.filter((s) => s.passed).length;
   /** 코스 설명·주기 안내는 담는 동안만 — 항목이 차면 접는다(프리셋 카드·설정 시트에서 이미 본 문장). */
   const guideOpen = !!course && items.length < minItems;
 
@@ -250,6 +277,8 @@ export default function OwnerTrainingScreen() {
   const [coursePreset, setCoursePreset] = useState<CoursePreset | null>(null);
   const [courseAddOpen, setCourseAddOpen] = useState(false);
   const [recommendCourse, setRecommendCourse] = useState<TrainingCourse | null>(null);
+  /** 직원별 진행 목록을 전부 펼쳤는가 — 첫 노출은 5명, 나머지는 인라인으로 편다. */
+  const [staffAllOpen, setStaffAllOpen] = useState(false);
   // ── 문항 흐름: 노하우별 문항 목록 시트 → 만들기/고치기 시트(모달 위 모달 금지 — 순차 전환) ──
   const [quizSubject, setQuizSubject] = useState<{ entryId: string; title: string } | null>(null);
   const [composeMode, setComposeMode] = useState<'ai' | 'manual' | null>(null);
@@ -477,21 +506,24 @@ export default function OwnerTrainingScreen() {
                   />
                 </>
               )}
-              {/* 재확인 주기 변경은 아래 '훈련 종류 설정'(CourseFormSheet)에서 — 코스별 due_days 하나로 모았다. */}
-              <View style={st.statusRow}>
-                <View style={[st.statusDot, { backgroundColor: ready ? BrandColors.good : BrandColors.warn }]} />
-                <Text style={[st.statusText, { color: ready ? BrandColors.good : BrandColors.warn }]}>
-                  {/* 상태 꼬리표 자리 — 명사구로 끝낸다(AI티 규칙 R2-1·R2-5).
-                      문항이 빈 업무가 있으면 그게 지금 유일하게 할 일이라 그 문구를 먼저 낸다. */}
-                  {ready
+              {/* 재확인 주기 변경은 아래 '훈련 종류 설정'(CourseFormSheet)에서 — 코스별 due_days 하나로 모았다.
+                  2026-08-05: 상태 한 줄을 진행 링(블록 H3)에 흡수했다 — 이 화면의 최우선은
+                  "누가 아직 모르나"이므로, 코스 상태는 그 아래 보조 문구로 내린다. */}
+              <ProgressRing
+                value={passedStaffCount}
+                total={staffList.length}
+                label="통과한 직원"
+                color={ready ? BrandColors.good : BrandColors.warn}
+                sub={
+                  // ★'문항 없는 노하우 N개'를 여기서 말하지 않는다 — 바로 아래 AlertRow가 같은 말을 하고 있어
+                  //   한 화면에 같은 사실이 두 번 떴다(2026-08-06). 이 자리는 '공개까지 얼마나 남았나'만 맡는다.
+                  ready
                     ? '준비됨 · 직원에게 공개'
                     : items.length === 0
                       ? `비어 있음 · ${minItems}개부터 공개`
-                      : noQuizCount > 0
-                        ? `문제 없는 노하우 ${noQuizCount}개 · 문제부터 만들어 주세요`
-                        : `공개까지 ${minItems - liveCount}개 남음`}
-                </Text>
-              </View>
+                      : `공개까지 ${minItems - liveCount}개 남음`
+                }
+              />
               <View style={st.guideLinkRow}>
                 <Pressable
                   onPress={() => { setCourseEditing(course); setCoursePreset(null); setCourseFormOpen(true); }}
@@ -513,6 +545,60 @@ export default function OwnerTrainingScreen() {
                   </Pressable>
                 )}
               </View>
+            </View>
+          </Appear>
+        )}
+
+        {/* ── 문항 없는 노하우(블록 X2) — 담겨 있어도 직원에게 안 나가는 항목. 0건이면 스스로 숨는다.
+               탭하면 첫 번째 항목의 문항 목록으로 바로 들어간다. ── */}
+        {course && (
+          <AlertRow
+            label="문항 없는 노하우"
+            count={noQuizCount}
+            onPress={() => {
+              const first = items.find((it) => it.quizCount === 0);
+              if (first) setQuizSubject({ entryId: first.entryId, title: first.text });
+            }}
+          />
+        )}
+
+        {/* ── 직원별 진행(블록 L2) — 이 화면의 최우선 = "누가 아직 모르나".
+               ★"전체보기 ›"를 두지 않는다. 이 정보를 보여주는 화면이 여기 말고 없어서
+               (/owner/staff에는 통과 표시가 없고 오히려 여기로 되돌아온다) 링크를 걸면 막다른 길이 된다.
+               대신 5명까지 펼쳐 두고, 더 있으면 인라인으로 편다 — 잘라내면 나머지 직원의 통과 여부가
+               앱 어디에서도 도달 불가가 된다. ── */}
+        {course && staffProgress.length > 0 && (
+          <Appear style={st.staffSection}>
+            <SectionLabel
+              icon="people-outline"
+              title="직원별"
+              hint={`${passedStaffCount}/${staffProgress.length} 통과`}
+            />
+            <View style={st.staffCard}>
+              {(staffAllOpen ? staffProgress : staffProgress.slice(0, STAFF_LIST_LIMIT)).map((s, i) => (
+                <View key={s.id} style={[st.staffRow, i > 0 && st.staffRowDivider]}>
+                  <Ionicons
+                    name={s.passed ? 'checkmark-circle' : 'ellipse-outline'}
+                    size={20}
+                    color={s.passed ? BrandColors.good : BrandColors.warn}
+                  />
+                  <Text style={st.staffName} numberOfLines={1}>{s.name}</Text>
+                  <Text style={[st.staffStat, !s.passed && st.staffStatWait]}>
+                    {s.passed ? '통과' : `${s.passedCount}/${s.total}`}
+                  </Text>
+                </View>
+              ))}
+              {!staffAllOpen && staffProgress.length > STAFF_LIST_LIMIT && (
+                <Pressable
+                  onPress={() => setStaffAllOpen(true)}
+                  style={({ pressed }) => [st.staffRow, st.staffRowDivider, pressed && { opacity: 0.6 }]}
+                  accessibilityRole="button"
+                  accessibilityLabel={`나머지 직원 ${staffProgress.length - STAFF_LIST_LIMIT}명 더 보기`}
+                >
+                  <Ionicons name="chevron-down" size={18} color={InkColors.ink3} />
+                  <Text style={st.staffMore}>{staffProgress.length - STAFF_LIST_LIMIT}명 더 보기</Text>
+                </Pressable>
+              )}
             </View>
           </Appear>
         )}
@@ -1058,7 +1144,7 @@ function SheetAction({
       accessibilityLabel={label}
     >
       <Ionicons name={icon} size={18} color={color} />
-      <Text style={[st.sheetActionText, danger && { color: BrandColors.bad }]}>{label}</Text>
+      <Text style={[st.sheetActionText, danger && { color: BrandColors.badText }]}>{label}</Text>
     </Pressable>
   );
 }
@@ -1085,13 +1171,26 @@ const st = StyleSheet.create({
   guideLine: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
   guideText: { flex: 1, fontSize: 15, color: InkColors.ink2, fontWeight: '600', lineHeight: 22 },
   guideStrong: { fontWeight: '900', color: InkColors.ink },
-  statusRow: { flexDirection: 'row', alignItems: 'center', gap: Space.xs + 2, marginTop: Space.xs },
-  statusDot: { width: 8, height: 8, borderRadius: 4 },
-  // 안내 두 줄을 접고 나면 이 줄이 "지금 무엇을 해야 하는지"를 말하는 유일한 문장이라 본문 크기로 둔다.
-  statusText: { flex: 1, fontSize: 15, fontWeight: '800', lineHeight: 22 },
+  // 상태 한 줄(statusRow/statusDot/statusText)은 진행 링(ProgressRing)의 sub로 흡수됨(2026-08-05).
   guideLinkRow: { flexDirection: 'row', alignItems: 'center', gap: Space.lg },
   guideLink: { alignSelf: 'flex-start', minHeight: 40, justifyContent: 'center', marginTop: Space.xs },
   guideLinkText: { fontSize: 13, fontWeight: '800', color: InkColors.ink2, textDecorationLine: 'underline' },
+
+  // 직원별 진행 — 섹션 라벨은 카드 밖, 목록은 카드 안(블록 L2).
+  staffSection: { gap: Space.sm },
+  staffMore: { fontSize: 13, fontWeight: '700', color: InkColors.ink2 },
+  staffCard: {
+    backgroundColor: InkColors.bg,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: InkColors.line,
+    paddingHorizontal: Space.lg,
+  },
+  staffRow: { flexDirection: 'row', alignItems: 'center', gap: Space.md, minHeight: 48, paddingVertical: Space.sm },
+  staffRowDivider: { borderTopWidth: 1, borderTopColor: InkColors.line },
+  staffName: { flex: 1, minWidth: 0, fontSize: 15, lineHeight: 21, fontWeight: '600', color: InkColors.ink },
+  staffStat: { fontSize: 13, fontWeight: '800', color: BrandColors.goodText },
+  staffStatWait: { color: BrandColors.warnText },
 
   // 정리 도구 한 줄 — 배경색 블록을 새로 만들지 않는다(R4-4). 목록과 같은 흰 카드 계열.
   cleanupRow: {
@@ -1120,12 +1219,12 @@ const st = StyleSheet.create({
   itemWarn: { fontSize: 12, fontWeight: '700', color: '#8a5a12' },
   // 사고 위험 = 이 화면의 유일한 중요도 표시. 색만으로 구분하지 않게 글자 라벨을 그대로 쓴다.
   riskTag: {
-    fontSize: 11, fontWeight: '800', color: BrandColors.warn,
+    fontSize: 11, fontWeight: '800', color: BrandColors.warnText,
     backgroundColor: BrandColors.warnSoft, borderRadius: Radius.pill,
     paddingHorizontal: Space.sm, paddingVertical: 2, overflow: 'hidden',
   },
   renameBody: { paddingHorizontal: 16, paddingBottom: 18, gap: Space.sm },
-  emptyText: { fontSize: 15, color: InkColors.ink3, textAlign: 'center', paddingVertical: Space.md },
+  emptyText: { fontSize: 15, color: InkColors.ink2, textAlign: 'center', paddingVertical: Space.md },
 
   addRow: { flexDirection: 'row', gap: Space.sm },
   addBtn: {

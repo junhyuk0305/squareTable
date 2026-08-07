@@ -111,7 +111,7 @@ function TemplateCard({
 
           {dont ? (
             <View style={styles.field}>
-              <Text style={[styles.fieldLabel, { color: BrandColors.warn }]}>이건 하지 마세요</Text>
+              <Text style={[styles.fieldLabel, { color: BrandColors.warnText }]}>이건 하지 마세요</Text>
               <Text style={styles.fieldText}>{dont}</Text>
             </View>
           ) : null}
@@ -351,7 +351,7 @@ const styles = StyleSheet.create({
   scroll: { padding: Space.gutter, gap: Space.md },
 
   lead: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  leadText: { fontSize: 15, color: InkColors.ink3, fontWeight: '600' },
+  leadText: { fontSize: 15, color: InkColors.ink2, fontWeight: '600' },
 
   // 검색창(주인공)
   search: {

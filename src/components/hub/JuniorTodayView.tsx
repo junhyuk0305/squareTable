@@ -14,6 +14,7 @@ import { storeColor } from '@/lib/utils/storeColor';
 import { todayStr } from '@/lib/utils/attendance';
 import { isPendingAssignment, isUnreadMention } from '@/lib/utils/notifications';
 import { SectionLabel } from '@/components/SectionLabel';
+import { MiniStats } from '@/components/blocks/MiniStats';
 import { Appear } from '@/components/Appear';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
@@ -206,24 +207,30 @@ export function JuniorTodayView() {
         </View>
       </Appear>
 
-      {/* ── 3) 이번달 ── */}
+      {/* ── 3) 이번달(블록 I3) — 카드가 아니다.
+             2026-08-06: 위 두 블록이 이미 카드라 여기까지 카드면 '제목 → 카드' 3연속이 된다(배치 규칙 ①).
+             통계는 MiniStats로 내리고, 급여 계산 방식 안내는 그 칸의 ⓘ로 옮긴다. ── */}
       <Appear delay={120}>
         <SectionLabel title="이번달" />
-        <View style={styles.card}>
-          <View style={styles.statRow}>
-            <View style={styles.statCell}>
-              <Text style={styles.statV}>{fmtHours(month.minutes)}</Text>
-              <Text style={styles.statL}>근무시간</Text>
-            </View>
-            {month.anyWage && (
-              <View style={[styles.statCell, styles.statDivider]}>
-                <Text style={styles.statV}>{month.pay.toLocaleString()}<Text style={styles.statUnit}>원</Text></Text>
-                <Text style={styles.statL}>예상 급여</Text>
-              </View>
-            )}
-          </View>
-          {myCross.length > 1 &&
-            month.perStore.map((s) => (
+        <MiniStats
+          items={[
+            { key: 'hours', value: fmtHours(month.minutes), label: '근무시간' },
+            ...(month.anyWage
+              ? [{
+                  key: 'pay',
+                  value: `${month.pay.toLocaleString()}원`,
+                  label: '예상 급여',
+                  info: {
+                    title: '예상 급여가 어떻게 나온 거예요?',
+                    body: '근무 기록 × 시급으로 계산한 값이에요.\n실제 지급액은 매장 정산 기준에 따라 달라질 수 있어요.',
+                  },
+                }]
+              : []),
+          ]}
+        />
+        {myCross.length > 1 && (
+          <View style={styles.card}>
+            {month.perStore.map((s) => (
               <View key={s.uid} style={styles.storeRow}>
                 <View style={[styles.dot, { backgroundColor: colorOf(s.uid) }]} />
                 <Text style={styles.storeName} numberOfLines={1}>{labelOf(s.uid)}</Text>
@@ -233,8 +240,8 @@ export function JuniorTodayView() {
                 </Text>
               </View>
             ))}
-          {month.anyWage && <Text style={styles.caption}>예상 급여는 근무 기록 × 시급으로 계산해요</Text>}
-        </View>
+          </View>
+        )}
       </Appear>
     </View>
   );
@@ -282,6 +289,6 @@ const styles = StyleSheet.create({
   storeName: { flex: 1, fontSize: 13.5, fontWeight: '700', color: InkColors.ink, minWidth: 0 },
   storeMeta: { fontSize: 12, color: InkColors.ink3 },
 
-  emptyText: { fontSize: 15, color: InkColors.ink3, textAlign: 'center', paddingVertical: Space.sm },
+  emptyText: { fontSize: 15, color: InkColors.ink2, textAlign: 'center', paddingVertical: Space.sm },
   caption: { fontSize: 11.5, color: InkColors.ink3, marginTop: Space.sm, textAlign: 'center' },
 });

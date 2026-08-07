@@ -7,6 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { RoleTabBar } from '@/components/RoleTabBar';
 import { Appear } from '@/components/Appear';
 import { InfoDot } from '@/components/InfoDot';
+import { MiniStats } from '@/components/blocks/MiniStats';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useAttendanceStore } from '@/lib/store/useAttendanceStore';
 import { usePayrollStore } from '@/lib/store/usePayrollStore';
@@ -100,21 +101,26 @@ export function AttendancePanel() {
       </View>
       </Appear>
 
-      {/* 이번 달 합계 */}
+      {/* 이번 달 합계 — ★2026-08-06: 흰 카드 2장(statCard)이었다.
+          이 화면은 위아래가 전부 카드(메인 액션·근무표 링크·최근 기록)라 카드가 4~5연속이었고,
+          그게 이번 개편이 없애려던 증상이다. 숫자 두 개에 카드를 세울 이유가 없어 I3(MiniStats,
+          카드 아님)로 내렸다 — 기능은 하나도 자르지 않는다(정본 §3-2: 숫자를 맞추려고 기능을 자르지 않는다).
+          아래 '시급 X 기준 · 세전 예상액' 한 줄은 MiniStats 의 ⓘ 슬롯으로 흡수했다(블록도 하나 준다). */}
       <Appear delay={120}>
-      <View style={styles.statRow}>
-        <View style={styles.statCard}>
-          <Text style={styles.statLabel}>이번 달 근무</Text>
-          <Text style={styles.statValue}>{fmtDuration(monthMin)}</Text>
-        </View>
-        <View style={styles.statCard}>
-          <Text style={styles.statLabel}>예상 급여</Text>
-          <Text style={styles.statValue}>{won(monthPay)}</Text>
-        </View>
-      </View>
-      </Appear>
-      <Appear delay={120}>
-        <Text style={styles.wageNote}>시급 {won(wage)} 기준 · 세전 예상액</Text>
+        <MiniStats
+          items={[
+            { key: 'month', value: fmtDuration(monthMin), label: '이번 달 근무' },
+            {
+              key: 'pay',
+              value: won(monthPay),
+              label: '예상 급여',
+              info: {
+                title: '예상 급여는 어떻게 계산돼요?',
+                body: `시급 ${won(wage)} 기준으로 계산한 세전 예상액이에요.\n세금·4대보험·수당에 따라 실제 받는 금액과 다를 수 있어요.`,
+              },
+            },
+          ]}
+        />
       </Appear>
 
       {/* 근무표 진입 — 내 시프트 확인 + 대타/맞교환 요청 */}
@@ -189,27 +195,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
   },
-  workingTag: { fontSize: 13, fontWeight: '800', color: BrandColors.accent },
+  workingTag: { fontSize: 13, fontWeight: '800', color: BrandColors.accentText },
   bigTime: { fontSize: 40, fontWeight: '900', color: InkColors.ink, letterSpacing: -1 },
   bigSub: { fontSize: 14, color: InkColors.ink3, fontWeight: '600', marginBottom: 14 },
   btn: { width: '100%', paddingVertical: 17, borderRadius: Radius.md, alignItems: 'center' },
   btnIn: { backgroundColor: BrandColors.brand },
-  btnOut: { backgroundColor: BrandColors.accent },
+  btnOut: { backgroundColor: BrandColors.accentSolid },
   btnText: { fontSize: 17, fontWeight: '800', color: '#FFFFFF' },
 
-  statRow: { flexDirection: 'row', gap: 12 },
-  statCard: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: InkColors.line,
-    padding: 16,
-    gap: 6,
-  },
-  statLabel: { fontSize: 13, color: InkColors.ink3, fontWeight: '600' },
-  statValue: { fontSize: 22, fontWeight: '800', color: InkColors.ink },
-  wageNote: { fontSize: 12, color: InkColors.ink3, marginTop: -6 },
+  // 이번 달 합계는 공용 <MiniStats>(I3)로 대체됨 — 로컬 statCard·wageNote 폐기(2026-08-06).
 
   schedLink: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#FFFFFF', borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, paddingVertical: 14, paddingHorizontal: 16 },
   schedLinkTitle: { fontSize: 15, fontWeight: '800', color: InkColors.ink },
@@ -227,7 +221,7 @@ const styles = StyleSheet.create({
     borderColor: InkColors.line,
     paddingHorizontal: 14,
   },
-  empty: { fontSize: 15, color: InkColors.ink3, paddingVertical: 18, textAlign: 'center' },
+  empty: { fontSize: 15, color: InkColors.ink2, paddingVertical: 18, textAlign: 'center' },
   recRow: {
     flexDirection: 'row',
     alignItems: 'center',

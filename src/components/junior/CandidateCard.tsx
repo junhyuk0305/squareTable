@@ -78,7 +78,7 @@ const styles = StyleSheet.create({
   headerRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
   icon: { fontSize: 24, lineHeight: 28 },
   title: { fontSize: 16, fontWeight: '800', color: InkColors.ink },
-  subtitle: { fontSize: 15, color: InkColors.ink3, fontWeight: '500' },
+  subtitle: { fontSize: 15, color: InkColors.ink2, fontWeight: '500' },
 
   list: { gap: 8 },
   item: {
