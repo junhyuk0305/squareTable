@@ -9,9 +9,11 @@ import { useSessionStore } from '@/lib/store/useSessionStore';
 import { EmptyState } from '@/components/EmptyState';
 import { InfoDot } from '@/components/InfoDot';
 import { VerifyBadge } from '@/components/VerifyBadge';
-import { AlertRow } from '@/components/blocks/AlertRow';
 import { SectionLabel } from '@/components/SectionLabel';
+import { SegmentTabs, type SegmentItem } from '@/components/SegmentTabs';
 import { CategoryEditSheet } from '@/components/owner/CategoryEditSheet';
+import { OwnerTodoSegment } from '@/components/owner/OwnerTodoSegment';
+import { useOwnerTodoCount } from '@/lib/hooks/useOwnerTodoCount';
 import { getSectionMeta } from '@/lib/utils/category';
 import { matchesKnowhowQuery } from '@/lib/utils/knowhowSearch';
 import { track } from '@/lib/analytics/track';
@@ -22,6 +24,10 @@ import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
 import type { PlaybookEntry } from '@/types';
+
+// ── 세그먼트(칸) ─────────────────────────────────────────────
+// 세 칸이 곧 노하우가 만들어지는 순서다: 손대야 나아가는 것 → 다듬어져 AI가 쓰는 것 → 낡아서 다시 볼 것.
+export type KnowhowSegKey = 'todo' | 'knowhow' | 'unused';
 
 // ── 정렬 옵션(목록 뷰) ───────────────────────────────────────
 
@@ -35,18 +41,33 @@ const SORTS: { key: SortKey; label: string }[] = [
 ];
 
 /**
- * 찾기 바(검색·카테고리·상태·정렬)를 띄우는 최소 노하우 수.
+ * 찾기 바(검색·카테고리·정렬)를 띄우는 최소 노하우 수.
  * ① 복잡도 원칙 §4 "리스트 첫 노출 5±2" — 7건까지는 스크롤 한 번이면 다 훑힌다.
  * ② JuniorBrowseDashboard 의 SECTION_LIMIT*2(=8)와 같은 수 — "잘라 보여줄 만큼 쌓였나"라는 같은 판정.
  * 이 수 미만에서는 거르는 장치가 목록보다 커진다(실측: 데모 매장 4~5건에 필터 4종).
+ * ★세그먼트(3칸)는 이 게이트에 걸지 않는다 — 받은질문 탭이 사라진 뒤로 '할 일' 칸이 유일한 진입점이라,
+ *   숨기면 노하우 8건 미만 매장에서 받은 질문에 아예 닿지 못한다.
  */
 const FILTER_MIN = 8;
+
+/**
+ * 목록을 묶음(그룹 헤더 + 집계)으로 나누기 시작하는 수.
+ * ★30·100은 실측이 아니라 추정이다 — "한 화면 8~10행"을 기준으로, 3~4번 스크롤하면 목록이 벽처럼
+ *   느껴진다는 계산에서 나온 값이다. 파일럿 매장에서 재고 나서 고쳐야 한다.
+ */
+const GROUP_MIN = 30;
+
+/** 정렬 컨트롤(SORTS 4종)을 다시 꺼내는 수. 그 아래에서는 그룹 헤더가 정렬을 대신한다. (역시 추정값) */
+const SORT_MIN = 100;
+
+/** 우하단 FAB 지름. 터치 타깃 하한 48dp보다 크게. */
+const FAB_SIZE = 56;
 
 // 미검증 = 온보딩 업종팩 fork분(needs_review) 또는 검증정보 없음/미검증.
 // 검증 nudge의 대상은 needs_review(사장이 우리 매장 기준으로 아직 안 다듬음)로 좁힌다.
 const needsVerify = (e: PlaybookEntry) => e.needs_review === true;
 
-// 안 쓰임 = 게시됐는데 최근 30일 인용 0회. 내용이 어렵거나 알바가 못 찾는다는 신호 → 다듬거나 정리.
+// 안 쓰임 = 게시됐는데 최근 30일 인용 0회. 내용이 어렵거나 직원이 못 찾는다는 신호 → 다듬거나 정리.
 // (미검증과 다른 개념: 미검증=아직 확인 안 함 / 안 쓰임=확인은 됐는데 아무도 안 물어봄)
 const isUnused = (e: PlaybookEntry) =>
   e.status === 'published' && (e.stats?.query_hits_30d ?? 0) === 0;
@@ -98,23 +119,31 @@ function EntryRow({ e, onPress, usedBy = 0, divider = true }: { e: PlaybookEntry
 }
 
 /**
- * OwnerKnowhowBrowse — 사장 '둘러보기' 본문(크롬리스). KnowhowSegment 슬롯으로 들어가며
- * SafeAreaView/Stack.Screen/RoleTabBar 같은 크롬은 상위(categories)가 소유한다.
+ * OwnerKnowhowBrowse — 사장 노하우 탭 본문(크롬리스). SafeAreaView/Stack.Screen/RoleTabBar 같은
+ * 크롬은 상위(categories·knowledge)가 소유한다.
  *
- * 구성: 상단행(개수+추가) → 미검증 배너 → 한 번에 늘리기 → 찾기 바(검색+칩+정렬, N≥FILTER_MIN) → 관리 액션 → 목록.
+ * 구성: 세그먼트 3칸(고정) → [할 일 | 노하우 | 안 쓰임] 본문 → 우하단 FAB(고정).
+ *  · 할 일   = OwnerTodoSegment (구 '받은질문' 탭 본문 + 검토할 제안)
+ *  · 노하우  = 검색·카테고리 칩·목록 + '여러 개 한 번에 추가'
+ *  · 안 쓰임 = 확인 안 한 것 / 오래 확인 안 함 / 퀴즈 오답 링크
  *
  * (이력 2026-08-03) 뷰 3종[대시보드|목록|매뉴얼] → 목록 하나. 대시보드는 목록의 중복 투영이었고
  * (확인필요=상태칩·최근추가=최신순), 매뉴얼도 같은 EntryRow를 섹션으로 묶은 것뿐이라 '카테고리별'
  * 정렬과 실질 동일했다. 매뉴얼에만 있던 고유 기능인 **내보내기**(본문까지 평문화)는 목록으로 옮겼고,
  * 대시보드 캐러셀에만 있던 **1탭 검증**은 목록 행으로 옮겼다.
+ *
+ * (이력 2026-08-07) 받은질문 탭을 흡수해 3칸 세그먼트가 됐다. 같이 걷어낸 것:
+ *  ① 미검증 AlertRow 배너 + '확인 필요만' 상태 칩 → 세그먼트 ③이 그 수를 센다(같은 말을 세 번 하지 않는다).
+ *  ② 상단 '노하우 추가' 버튼 → 우하단 FAB(세 칸 전부에서 보인다).
+ *  ③ 정렬 컨트롤 → SORT_MIN 미만에서는 그룹 헤더가 대신한다.
  */
 export function OwnerKnowhowBrowse({
   onSelect,
-  initialNeedsReview = false,
+  initialSegment,
 }: {
   onSelect: (id: string) => void;
-  /** 진입 즉시 '미검증만' 목록으로 시작(대시보드 미검증 배너에서 들어올 때). */
-  initialNeedsReview?: boolean;
+  /** 진입 즉시 열 칸(딥링크). `/owner/categories?seg=todo` · `/owner/knowledge?review=1`. 없으면 '노하우'. */
+  initialSegment?: KnowhowSegKey;
 }) {
   const router = useRouter();
   const entries = usePlaybookStore((s) => s.entries);
@@ -139,13 +168,23 @@ export function OwnerKnowhowBrowse({
   const industry = useSessionStore((s) => s.industry);
   const role = useSessionStore((s) => s.role);
   const { copied, copy } = useCopyToClipboard();
+  const todo = useOwnerTodoCount();
 
+  const [seg, setSeg] = useState<KnowhowSegKey>(initialSegment ?? 'knowhow');
   const [query, setQuery] = useState('');
   const [activeCat, setActiveCat] = useState<string | null>(null); // null = 전체(단일 선택). 카테고리(section) 이름.
   const [sort, setSort] = useState<SortKey>('recent');
-  const [onlyNeedsReview, setOnlyNeedsReview] = useState(initialNeedsReview); // 미검증 배너에서 진입
   const [catSheet, setCatSheet] = useState(false); // 카테고리 편집 시트
   const [sortOpen, setSortOpen] = useState(false); // 정렬 펼침(인라인, 모달 아님)
+
+  // 딥링크로 다시 들어오면(푸시 → /owner/inbox → ?seg=todo) 화면이 이미 떠 있어 useState 초기값이
+  // 안 먹는다. prop이 **실제로 바뀐 렌더에서만** 칸을 옮긴다 — 값이 그대로면 사용자의 칸 선택을
+  // 되돌리지 않는다. (effect가 아니라 렌더 중 조정 — effect로 하면 한 프레임 늦게 튄다.)
+  const [lastSegParam, setLastSegParam] = useState(initialSegment);
+  if (initialSegment && initialSegment !== lastSegParam) {
+    setLastSegParam(initialSegment);
+    setSeg(initialSegment);
+  }
 
   // 검토 대기(draft·인수인계서 파이프라인 증분저장분)는 둘러보기에서 제외 — 검수는 handover 화면이 담당.
   // (직원은 RLS 0064로 애초에 draft를 못 받지만, 사장 화면도 발행본과 섞이면 자산 목록이 오염된다.)
@@ -169,14 +208,12 @@ export function OwnerKnowhowBrowse({
   const goAdd = () => router.push('/owner/coach' as never);
   const goTemplates = () => router.push('/owner/templates' as never);
   const goHandover = () => router.push('/owner/handover' as never);
+  const goTraining = () => router.push('/owner/training' as never);
   // 매니저 전용 물어보기(정본 §4 "AI 질문 매니저 ✅") — 검색으로 못 찾았을 때의 다음 행동.
   // 사장에겐 숨김(자기 노하우에 자기가 질문하는 표면은 불필요, 사장 AI는 coach가 담당).
   const goAsk = role === 'manager' ? () => router.push('/owner/ask' as never) : undefined;
   // 카테고리 필터는 단일 선택(라디오) — '전체' + 한 카테고리만. 같은 칩 재탭 시 전체로 해제.
   const selectCat = (c: string) => setActiveCat((prev) => (prev === c ? null : c));
-
-  // 미검증 상태 필터 — 켜면 미검증만 남긴다.
-  const toggleReview = () => setOnlyNeedsReview((v) => !v);
 
   // 1탭 검증 — 우리 매장 기준 확인 완료. needs_review 해제 + 사장님 검증 배지.
   const verify = (e: PlaybookEntry) =>
@@ -202,13 +239,18 @@ export function OwnerKnowhowBrowse({
     return () => clearTimeout(t);
   }, [query, baseFiltered.length, visible.length]);
 
-  // 미검증(needs_review) — 전체 기준 카운트(배너·섹션 노출 판단). 0이 되면 배너/섹션 자동 소멸.
-  const needsReview = useMemo(() => baseFiltered.filter(needsVerify), [baseFiltered]);
+  // '안 쓰임' 칸의 두 그룹 — 검색·카테고리 필터를 타지 않는다(그 칸엔 찾기 바가 없다).
+  const reviewList = useMemo(() => visible.filter(needsVerify), [visible]);
+  const unusedList = useMemo(() => visible.filter(isUnused), [visible]);
+  // 칸 배지는 두 그룹의 **합집합**(둘 다 해당하는 항목을 두 번 세지 않는다).
+  const unusedSegCount = useMemo(
+    () => visible.filter((e) => needsVerify(e) || isUnused(e)).length,
+    [visible],
+  );
 
-  // 목록 필터(미검증만 보기 옵션 적용) → 정렬.
+  // 목록 정렬.
   const listFiltered = useMemo(() => {
     let list = baseFiltered;
-    if (onlyNeedsReview) list = list.filter(needsVerify);
     if (sort !== 'category') {
       list = [...list].sort((a, b) => {
         if (sort === 'recent') return (b.updated_at ?? '').localeCompare(a.updated_at ?? '');
@@ -218,7 +260,7 @@ export function OwnerKnowhowBrowse({
       });
     }
     return list;
-  }, [baseFiltered, onlyNeedsReview, sort]);
+  }, [baseFiltered, sort]);
 
   const groups = useMemo(() => {
     if (sort !== 'category') return null;
@@ -254,35 +296,28 @@ export function OwnerKnowhowBrowse({
   }, [listFiltered]);
   const exportCount = useMemo(() => exportGroups.reduce((n, g) => n + g.items.length, 0), [exportGroups]);
 
-  if (!loaded) {
-    return (
-      <View style={styles.center}>
-        <ActivityIndicator color={InkColors.ink3} />
-        <Text style={styles.loadingText}>노하우를 불러오는 중...</Text>
-      </View>
-    );
-  }
-
   const hasEntries = visible.length > 0;
 
   // 찾기 바 노출 — FILTER_MIN 미만이면 목록이 곧 전부라 거를 게 없다(필터가 목록보다 커진다).
-  // 뒤 두 절은 전부 "잠김 방지"다. 하나라도 빠지면 끌 수 없는 필터가 생긴다:
-  //  ① /owner/knowledge?review=1 로 들어온 소형 매장 — 바가 없으면 '확인 필요만'을 끌 수 없다.
-  //     state(onlyNeedsReview)가 아니라 prop을 보는 이유 = 칩을 끄는 순간 바가 손가락 밑에서 사라지는 것도 막는다.
-  //  ② 8건에서 필터를 건 뒤 노하우를 지워 7건이 되는 경로 — 바가 사라지면 그 필터를 풀 방법이 없다.
-  //     ★정렬도 같은 경로다(2026-08-06 검증에서 잡힘). 정렬만 바꾼 뒤 7건이 되면 바가 사라지는데
-  //     sort 상태는 'recent'로 안 돌아가서, 목록이 계속 비-기본 순서인 채 되돌릴 수단이 없어진다.
-  //     그래서 '거르기'가 아니라 **기본값에서 벗어난 상태 전부**를 센다.
-  const viewAltered =
-    query.trim() !== '' || effectiveCat !== null || onlyNeedsReview || sort !== 'recent';
-  const showFindBar = visible.length >= FILTER_MIN || initialNeedsReview || viewAltered;
+  // 뒤 절은 "잠김 방지"다. 빠지면 끌 수 없는 필터가 생긴다:
+  //  8건에서 필터를 건 뒤 노하우를 지워 7건이 되는 경로 — 바가 사라지면 그 필터를 풀 방법이 없다.
+  //  ★정렬도 같은 경로다(2026-08-06 검증에서 잡힘). 정렬만 바꾼 뒤 7건이 되면 바가 사라지는데
+  //  sort 상태는 'recent'로 안 돌아가서, 목록이 계속 비-기본 순서인 채 되돌릴 수단이 없어진다.
+  //  그래서 '거르기'가 아니라 **기본값에서 벗어난 상태 전부**를 센다.
+  const viewAltered = query.trim() !== '' || effectiveCat !== null || sort !== 'recent';
+  const showFindBar = visible.length >= FILTER_MIN || viewAltered;
+
+  // 정렬 컨트롤 — 기본은 숨김. SORT_MIN 이상이거나, 이미 기본값을 벗어나 있으면(=되돌릴 수단이
+  // 필요하면) 켠다. 이 두 번째 절이 없으면 100건에서 정렬을 바꾼 뒤 99건이 될 때 잠긴다.
+  const showSort = visible.length >= SORT_MIN || sort !== 'recent';
+  // 정렬 컨트롤이 없는 구간에서 목록이 길면 묶음이 정렬을 대신한다.
+  const showUsageGroups = !showSort && listFiltered.length >= GROUP_MIN;
 
   const sortLabel = SORTS.find((s) => s.key === sort)?.label ?? SORTS[0].label;
 
   // 필터를 한 줄로 압축하면 "지금 걸려 있다"가 안 보인다 — 카운트가 그 신호를 대신 든다.
-  const countLabel = onlyNeedsReview
-    ? `확인 필요 ${listFiltered.length}개만`
-    : query.trim() || effectiveCat
+  const countLabel =
+    query.trim() || effectiveCat
       ? `${visible.length}개 중 ${listFiltered.length}개`
       : `총 ${visible.length}개${hasEntries ? ' · 탭하면 수정' : ''}`;
 
@@ -312,291 +347,366 @@ export function OwnerKnowhowBrowse({
     );
   };
 
-  return (
-    <ScrollView style={styles.flex} contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-      {/* 상단행 */}
-      <View style={styles.headRow}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, flexShrink: 1, minWidth: 0 }}>
-          <Text style={styles.subline}>{countLabel}</Text>
-          <InfoDot
-            title="노하우가 뭐예요?"
-            body={'여기 적어두면 직원이 물을 때 AI가 사장님 대신 답해줘요.\n많이 쌓일수록 같은 질문에 일일이 답할 일이 줄어요.'}
-          />
+  // 묶음 한 덩어리 = [카드 밖 라벨 + n건] + 카드 목록.
+  const groupBlock = (key: string, title: string, items: PlaybookEntry[]) => (
+    <View key={key} style={styles.group}>
+      <SectionLabel title={title} hint={`${items.length}건`} />
+      <View style={styles.list}>{items.map(entryItem)}</View>
+    </View>
+  );
+
+  // 정렬 컨트롤 대신 쓰는 묶음 — "많이 쓰임 / 오래 확인 안 함 / 그 밖".
+  // 사장이 목록을 여는 이유는 찾으려고가 아니라 **손볼 것을 고르려고**라서 쓰임새로 나눈다.
+  // ★'그 밖'을 반드시 남긴다 — 두 조건에 안 걸리는 항목이 묶음 사이로 사라지면 안 된다.
+  const usageGroups = useMemo(() => {
+    const hot = listFiltered
+      .filter((e) => (e.stats?.query_hits_30d ?? 0) > 0)
+      .sort((a, b) => (b.stats?.query_hits_30d ?? 0) - (a.stats?.query_hits_30d ?? 0));
+    const cold = listFiltered.filter(isUnused);
+    const seen = new Set([...hot, ...cold].map((e) => e.id));
+    const rest = listFiltered.filter((e) => !seen.has(e.id));
+    return [
+      { key: 'hot', title: '많이 쓰임', items: hot },
+      // ★라벨은 판정(isUnused = 최근 30일 인용 0회)을 그대로 말한다. '3개월'이라고 쓰면 화면이
+      //   사실과 다른 말을 한다 — 기간을 바꾸려면 라벨이 아니라 isUnused 를 바꿔야 한다.
+      { key: 'cold', title: '한 달간 아무도 안 물어봤어요', items: cold },
+      { key: 'rest', title: '그 밖', items: rest },
+    ].filter((g) => g.items.length > 0);
+  }, [listFiltered]);
+
+  const segItems: SegmentItem[] = [
+    { key: 'todo', label: '할 일', count: todo.total },
+    { key: 'knowhow', label: '노하우', count: visible.length },
+    { key: 'unused', label: '안 쓰임', count: unusedSegCount },
+  ];
+
+  // ── 칸 ② 노하우 ────────────────────────────────────────────
+  const knowhowSegment = () => {
+    if (!loaded) {
+      return (
+        <View style={styles.center}>
+          <ActivityIndicator color={InkColors.ink3} />
+          <Text style={styles.loadingText}>노하우를 불러오는 중...</Text>
         </View>
-        <Pressable onPress={goAdd} style={({ pressed }) => [styles.addBtn, pressed && { opacity: 0.85 }]}>
-          <Ionicons name="add" size={16} color={InkColors.ink} />
-          <Text style={styles.addBtnText}>노하우 추가</Text>
-        </Pressable>
-      </View>
-
-      {/* 검토 대기(draft) — 인수인계서 파이프라인이 증분 저장한 항목. 발행 전이라 직원·AI에 안 보임. */}
-      {draftCount > 0 && (
-        <Pressable
-          onPress={goHandover}
-          style={({ pressed }) => [styles.draftBanner, pressed && { opacity: 0.9 }]}
-          accessibilityRole="button"
-          accessibilityLabel={`검토 대기 노하우 ${draftCount}개 검수하기`}
-        >
-          <Ionicons name="file-tray-full" size={18} color={InkColors.ink} />
-          <View style={{ flex: 1 }}>
-            <Text style={styles.bannerTitle}>검토 대기 노하우 {draftCount}개</Text>
-            <Text style={styles.bannerBody}>인수인계서에서 정리한 항목이에요. 확인 후 추가해 주세요.</Text>
+      );
+    }
+    return (
+      <>
+        <View style={styles.headRow}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, flexShrink: 1, minWidth: 0 }}>
+            <Text style={styles.subline}>{countLabel}</Text>
+            <InfoDot
+              title="노하우가 뭐예요?"
+              body={'여기 적어두면 직원이 물을 때 AI가 사장님 대신 답해줘요.\n많이 쌓일수록 같은 질문에 일일이 답할 일이 줄어요.'}
+            />
           </View>
-          <Text style={styles.draftBannerCta}>검수하기 ›</Text>
-        </Pressable>
-      )}
+        </View>
 
-      {/* 미검증 경고행(블록 X2) — 화면 맨 위. 0건이면 AlertRow가 스스로 숨는다.
-          2026-08-06: 아래 '한 번에 늘리기' 카드보다 밑에 있어서 경고가 안내에 묻혀 있었다 → 위로 올렸다.
-          ★2026-08-06(2차): 탭하면 첫 항목 하나를 열던 것을 **'확인 필요만' 목록 필터**로 바꿨다.
-            "n건"을 눌렀는데 1건만 열리면 나머지 n-1건으로 돌아올 길이 없고, 대시보드 배너의 착지
-            (/owner/knowledge?review=1 = 미검증 필터)와도 서로 달랐다.
-            필터를 켜면 viewAltered 가 true 가 되어 찾기 바가 강제로 나오므로 '확인 필요' 칩으로
-            되돌릴 수 있다 — 끌 수 없는 필터가 생기지 않는다(위 showFindBar 주석). */}
-      <AlertRow
-        label="확인이 필요한 노하우"
-        count={needsReview.length}
-        onPress={() => setOnlyNeedsReview(true)}
-      />
-
-      {/* 인수인계서 업로드 / 업종 템플릿 — 한 건씩 쓰지 않고 여러 건을 한꺼번에 만드는 두 경로.
-          ★2026-08-06: 같은 형태의 카드 2장이 나란히 서 있어(이번 개편이 없애려던 증상) **한 카드 안 2행**으로 묶었다.
-          반복은 블록 1개로 센다(복잡도 원칙 §4) — 형태가 늘지 않는다.
-          ★2026-08-07: 제목을 '한 번에 늘리기' → '여러 개 한 번에 추가'로. 무엇이 늘어나는지·무엇을 하는지가
-          이름에 없었다(QA #5-1). 장식용 sparkles 아이콘도 뺐다 — 뜻을 더하지 않는 그림이다(QA #5-2). */}
-      <View style={styles.growSection}>
-        <SectionLabel title="여러 개 한 번에 추가" />
-        <View style={styles.growCard}>
+        {/* 검토 대기(draft) — 인수인계서 파이프라인이 증분 저장한 항목. 발행 전이라 직원·AI에 안 보임. */}
+        {draftCount > 0 && (
           <Pressable
             onPress={goHandover}
-            style={({ pressed }) => [styles.growRow, pressed && { opacity: 0.85 }]}
+            style={({ pressed }) => [styles.draftBanner, pressed && { opacity: 0.9 }]}
             accessibilityRole="button"
-            accessibilityLabel="인수인계서 올리기"
+            accessibilityLabel={`검토 대기 노하우 ${draftCount}개 검수하기`}
           >
-            <Ionicons name="cloud-upload-outline" size={16} color={InkColors.ink2} />
+            <Ionicons name="file-tray-full" size={18} color={InkColors.ink} />
             <View style={{ flex: 1 }}>
-              <Text style={styles.templateLinkTitle}>인수인계서 올리기</Text>
-              <Text style={styles.templateLinkSub}>오픈·마감·규칙 메모를 올리면 AI가 노하우로 정리해요</Text>
+              <Text style={styles.bannerTitle}>검토 대기 노하우 {draftCount}개</Text>
+              <Text style={styles.bannerBody}>인수인계서에서 정리한 항목이에요. 확인 후 추가해 주세요.</Text>
             </View>
-            <Ionicons name="chevron-forward" size={16} color={InkColors.ink3} />
+            <Text style={styles.draftBannerCta}>검수하기 ›</Text>
           </Pressable>
+        )}
 
-          <Pressable
-            onPress={goTemplates}
-            style={({ pressed }) => [styles.growRow, styles.growRowDivider, pressed && { opacity: 0.85 }]}
-            accessibilityRole="button"
-            accessibilityLabel="노하우 템플릿 둘러보기"
-          >
-            <Ionicons name="albums-outline" size={16} color={InkColors.ink2} />
-            <View style={{ flex: 1 }}>
-              <Text style={styles.templateLinkTitle}>노하우 템플릿 둘러보기</Text>
-              <Text style={styles.templateLinkSub}>업종에서 자주 쓰는 노하우를 내 노하우로 바로 가져와요</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={16} color={InkColors.ink3} />
-          </Pressable>
-        </View>
-      </View>
-
-      {!hasEntries ? (
-        loadError ? (
-          // 로드 실패를 "노하우 없음"으로 위장하지 않고 재시도를 띄운다(무음 실패 방지).
-          // 그림 이모지는 워딩 규칙상 금지다(기호·Ionicons만) — 남아 있던 위반을 걷었다(2026-08-07 QA #5-2).
-          <EmptyState
-            title="노하우를 불러오지 못했어요"
-            body="연결을 확인하고 다시 시도해 주세요."
-            cta={{ label: '다시 시도', onPress: () => hydrate() }}
-          />
+        {!hasEntries ? (
+          loadError ? (
+            // 로드 실패를 "노하우 없음"으로 위장하지 않고 재시도를 띄운다(무음 실패 방지).
+            <EmptyState
+              title="노하우를 불러오지 못했어요"
+              body="연결을 확인하고 다시 시도해 주세요."
+              cta={{ label: '다시 시도', onPress: () => hydrate() }}
+            />
+          ) : (
+            <EmptyState
+              title="아직 등록된 노하우가 없어요"
+              body="직원 질문에 답하거나, 직접 추가하면 여기에 쌓여요."
+              cta={{ label: '첫 노하우 추가하기', onPress: goAdd }}
+            />
+          )
         ) : (
-          <EmptyState
-            title="아직 등록된 노하우가 없어요"
-            body="직원 질문에 답하거나, 직접 추가하면 여기에 쌓여요."
-            cta={{ label: '첫 노하우 추가하기', onPress: goAdd }}
-          />
-        )
-      ) : (
-        <>
-          {/* 목록 관리 액션 — 필터가 아니라 관리라서 칩 줄에서 내렸다(2026-08-06).
-              ★2026-08-07(QA #6): 목록 폭을 꽉 채우던 두 버튼을 **찾기 바 위 오른쪽의 작은 버튼**으로 줄였다.
-              ★표시 조건은 찾기 바(showFindBar)와 **분리한다.** 안에 넣으면 노하우가 8건 미만인 매장에서
-                카테고리 편집(CategoryEditSheet 의 유일한 진입점)과 내보내기에 아예 닿지 못한다
-                — 이 프로젝트에서 세 번 재발한 '죽은 컨트롤' 유형이다.
-              ★시각 크기와 터치 타깃을 분리한다 — 작게 그리되 hitSlop 으로 48dp 하한을 지킨다. */}
-          <View style={styles.manageActions}>
-            <Pressable
-              onPress={() => setCatSheet(true)}
-              hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
-              style={({ pressed }) => [styles.manageBtn, pressed && { opacity: 0.7 }]}
-              accessibilityRole="button"
-              accessibilityLabel="카테고리 편집"
-            >
-              <Ionicons name="pricetags-outline" size={13} color={InkColors.ink2} />
-              <Text style={styles.manageBtnText}>카테고리 편집</Text>
-            </Pressable>
-            {canCopyToClipboard() && exportCount > 0 && (
+          <>
+            {/* 목록 관리 액션 — 필터가 아니라 관리라서 칩 줄에서 내렸다(2026-08-06).
+                ★표시 조건은 찾기 바(showFindBar)와 **분리한다.** 안에 넣으면 노하우가 8건 미만인 매장에서
+                  카테고리 편집(CategoryEditSheet 의 유일한 진입점)과 내보내기에 아예 닿지 못한다
+                  — 이 프로젝트에서 세 번 재발한 '죽은 컨트롤' 유형이다.
+                ★시각 크기와 터치 타깃을 분리한다 — 작게 그리되 hitSlop 으로 48dp 하한을 지킨다. */}
+            <View style={styles.manageActions}>
               <Pressable
-                onPress={() => copy(manualToText(exportGroups, { storeName, date: new Date().toLocaleDateString('ko-KR') }))}
+                onPress={() => setCatSheet(true)}
                 hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
                 style={({ pressed }) => [styles.manageBtn, pressed && { opacity: 0.7 }]}
                 accessibilityRole="button"
-                accessibilityLabel={`지금 목록에 보이는 노하우 ${exportCount}개 내보내기`}
+                accessibilityLabel="카테고리 편집"
               >
-                <Ionicons name={copied ? 'checkmark' : 'copy-outline'} size={13} color={InkColors.ink2} />
-                <Text style={styles.manageBtnText} numberOfLines={1}>{copied ? '복사됐어요' : `내보내기 ${exportCount}개`}</Text>
+                <Ionicons name="pricetags-outline" size={13} color={InkColors.ink2} />
+                <Text style={styles.manageBtnText}>카테고리 편집</Text>
               </Pressable>
-            )}
-          </View>
-
-          {/* 찾기 바 — 검색·상태·카테고리·정렬을 한 블록(최대 2행)으로. 넷이 형제로 서 있을 때
-              목록 위에 약 168px이 상시 깔려 있었다(같은 형태 4연속 = 이번 개편이 없애려던 증상). */}
-          {showFindBar && (
-            <View style={styles.findBar}>
-              {/* 행1 — 검색 */}
-              <View style={styles.search}>
-                <Ionicons name="search" size={16} color={InkColors.ink3} />
-                <TextInput
-                  value={query}
-                  onChangeText={setQuery}
-                  placeholder="제목·키워드로 검색"
-                  placeholderTextColor={InkColors.ink3}
-                  style={styles.searchInput}
-                  returnKeyType="search"
-                />
-                {query.length > 0 ? (
-                  <Pressable onPress={() => setQuery('')} hitSlop={8}>
-                    <Ionicons name="close-circle" size={16} color={InkColors.ink3} />
-                  </Pressable>
-                ) : null}
-              </View>
-
-              {/* 행2 — [정렬 고정] │ [상태·카테고리 가로 스크롤].
-                  정렬만 왼쪽에 붙박이인 이유: 칩이 많아 오른쪽이 스크롤로 밀려도
-                  "지금 어떤 순서로 보고 있는지"는 항상 보여야 한다. */}
-              <View style={styles.findRow}>
+              {canCopyToClipboard() && exportCount > 0 && (
                 <Pressable
-                  onPress={() => setSortOpen((v) => !v)}
-                  hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+                  onPress={() => copy(manualToText(exportGroups, { storeName, date: new Date().toLocaleDateString('ko-KR') }))}
+                  hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
+                  style={({ pressed }) => [styles.manageBtn, pressed && { opacity: 0.7 }]}
                   accessibilityRole="button"
-                  // accessibilityState 가 아니라 aria-expanded 인 이유: RNW 0.21은 View/Pressable의
-                  // accessibilityState 를 무시한다(웹에서 펼침 상태가 아예 안 읽힌다). aria-expanded 는
-                  // RN 쪽에서 accessibilityState.expanded 로 매핑되므로 네이티브도 같이 산다.
-                  aria-expanded={sortOpen}
-                  accessibilityLabel={`정렬 ${sortLabel}, 바꾸기`}
-                  style={[styles.chip, styles.sortTrigger, sortOpen && styles.chipActive]}
+                  accessibilityLabel={`지금 목록에 보이는 노하우 ${exportCount}개 내보내기`}
                 >
-                  <Text style={styles.sortTriggerKey}>정렬</Text>
-                  <Text style={styles.sortTriggerValue} numberOfLines={1}>{sortLabel}</Text>
-                  <Ionicons name={sortOpen ? 'chevron-up' : 'chevron-down'} size={12} color={InkColors.ink2} />
+                  <Ionicons name={copied ? 'checkmark' : 'copy-outline'} size={13} color={InkColors.ink2} />
+                  <Text style={styles.manageBtnText} numberOfLines={1}>{copied ? '복사됐어요' : `내보내기 ${exportCount}개`}</Text>
                 </Pressable>
-                <View style={styles.findDivider} />
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  style={styles.findScroll}
-                  contentContainerStyle={styles.chipRow}
-                >
-                  {/* 미검증 상태 필터 — 카운트>0일 때만 노출되는 정식 토글. 탭하면 미검증만 남긴다. */}
-                  {needsReview.length > 0 && (
-                    <Pressable
-                      onPress={toggleReview}
-                      hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
-                      style={[styles.statusChip, onlyNeedsReview && styles.statusReviewOn]}
-                      accessibilityRole="button"
-                      accessibilityState={{ selected: onlyNeedsReview }}
-                      accessibilityLabel={`확인 필요 ${needsReview.length}개만 보기`}
-                    >
-                      <Ionicons name="alert-circle" size={13} color={onlyNeedsReview ? InkColors.ink : BrandColors.warn} />
-                      {/* ★개수를 쓰지 않는다 — 같은 화면 위 AlertRow가 이미 개수를 말한다(2026-08-06).
-                          이 칩의 책임은 '거르기' 하나다. 개수는 스크린리더용 라벨에만 남긴다. */}
-                      <Text style={[styles.statusChipText, onlyNeedsReview && styles.statusChipTextInk]}>확인 필요</Text>
-                    </Pressable>
-                  )}
-                  <Pressable
-                    onPress={() => setActiveCat(null)}
-                    hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
-                    style={[styles.chip, effectiveCat === null && styles.chipOn]}
-                  >
-                    <Text style={[styles.chipText, effectiveCat === null && styles.chipTextOn]}>전체</Text>
-                  </Pressable>
-                  {allCats.map((c) => {
-                    const on = effectiveCat === c;
-                    const m = getSectionMeta(c);
-                    return (
-                      <Pressable
-                        key={c}
-                        onPress={() => selectCat(c)}
-                        hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
-                        style={[styles.chip, on && styles.chipOn]}
-                      >
-                        <View style={[styles.chipDot, { backgroundColor: m.color }]} />
-                        <Text style={[styles.chipText, on && styles.chipTextOn]}>{m.label}</Text>
-                      </Pressable>
-                    );
-                  })}
-                </ScrollView>
-              </View>
-
-              {/* 정렬 펼침 — 아래로. 시트로 만들지 않는다: 이 화면은 이미 CategoryEditSheet 를 띄우므로
-                  시트 2개가 공존하게 된다(모달 위 모달 금지). */}
-              {sortOpen && (
-                <View style={styles.sortPanel}>
-                  {SORTS.map((s, i) => {
-                    const on = sort === s.key;
-                    return (
-                      <Pressable
-                        key={s.key}
-                        onPress={() => { setSort(s.key); setSortOpen(false); }}
-                        accessibilityRole="button"
-                        accessibilityState={{ selected: on }}
-                        style={({ pressed }) => [styles.sortOption, i > 0 && styles.sortOptionDivider, pressed && { opacity: 0.7 }]}
-                      >
-                        <Text style={[styles.sortOptionText, on && styles.sortOptionTextOn]}>{s.label}</Text>
-                        {on ? <Ionicons name="checkmark" size={16} color={InkColors.ink} /> : null}
-                      </Pressable>
-                    );
-                  })}
-                </View>
               )}
             </View>
-          )}
 
-          {/* 목록 */}
-          {listFiltered.length === 0 ? (
-            <EmptyResult
-              onReset={() => { setQuery(''); setActiveCat(null); setOnlyNeedsReview(false); }}
-              onAsk={onlyNeedsReview ? undefined : goAsk}
-              label={onlyNeedsReview ? '확인할 노하우가 없어요' : undefined}
-            />
-          ) : groups ? (
-            groups.map((g) => {
-              const m = getSectionMeta(g.cat);
-              return (
-                <View key={g.cat} style={{ gap: 8 }}>
-                  <View style={styles.groupHead}>
-                    <View style={[styles.dot, { backgroundColor: m.color }]} />
-                    <Text style={styles.groupTitle}>{m.label}</Text>
-                    <Text style={styles.groupCount}>{g.items.length}</Text>
-                  </View>
-                  <View style={styles.list}>{g.items.map(entryItem)}</View>
+            {/* 찾기 바 — 검색·카테고리(+정렬은 SORT_MIN 이상에서만)를 한 블록으로. */}
+            {showFindBar && (
+              <View style={styles.findBar}>
+                {/* 행1 — 검색 */}
+                <View style={styles.search}>
+                  <Ionicons name="search" size={16} color={InkColors.ink3} />
+                  <TextInput
+                    value={query}
+                    onChangeText={setQuery}
+                    placeholder="제목·키워드로 검색"
+                    placeholderTextColor={InkColors.ink3}
+                    style={styles.searchInput}
+                    returnKeyType="search"
+                  />
+                  {query.length > 0 ? (
+                    <Pressable onPress={() => setQuery('')} hitSlop={8}>
+                      <Ionicons name="close-circle" size={16} color={InkColors.ink3} />
+                    </Pressable>
+                  ) : null}
                 </View>
-              );
-            })
-          ) : (
-            <View style={styles.list}>{listFiltered.map(entryItem)}</View>
-          )}
-        </>
-      )}
-      <View style={{ height: 16 }} />
+
+                {/* 행2 — [정렬 고정] │ [카테고리 가로 스크롤].
+                    정렬만 왼쪽에 붙박이인 이유: 칩이 많아 오른쪽이 스크롤로 밀려도
+                    "지금 어떤 순서로 보고 있는지"는 항상 보여야 한다. */}
+                <View style={styles.findRow}>
+                  {showSort && (
+                    <>
+                      <Pressable
+                        onPress={() => setSortOpen((v) => !v)}
+                        hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+                        accessibilityRole="button"
+                        // accessibilityState 가 아니라 aria-expanded 인 이유: RNW 0.21은 View/Pressable의
+                        // accessibilityState 를 무시한다(웹에서 펼침 상태가 아예 안 읽힌다). aria-expanded 는
+                        // RN 쪽에서 accessibilityState.expanded 로 매핑되므로 네이티브도 같이 산다.
+                        aria-expanded={sortOpen}
+                        accessibilityLabel={`정렬 ${sortLabel}, 바꾸기`}
+                        style={[styles.chip, styles.sortTrigger, sortOpen && styles.chipActive]}
+                      >
+                        <Text style={styles.sortTriggerKey}>정렬</Text>
+                        <Text style={styles.sortTriggerValue} numberOfLines={1}>{sortLabel}</Text>
+                        <Ionicons name={sortOpen ? 'chevron-up' : 'chevron-down'} size={12} color={InkColors.ink2} />
+                      </Pressable>
+                      <View style={styles.findDivider} />
+                    </>
+                  )}
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    style={styles.findScroll}
+                    contentContainerStyle={styles.chipRow}
+                  >
+                    <Pressable
+                      onPress={() => setActiveCat(null)}
+                      hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+                      style={[styles.chip, effectiveCat === null && styles.chipOn]}
+                    >
+                      <Text style={[styles.chipText, effectiveCat === null && styles.chipTextOn]}>전체</Text>
+                    </Pressable>
+                    {allCats.map((c) => {
+                      const on = effectiveCat === c;
+                      const m = getSectionMeta(c);
+                      return (
+                        <Pressable
+                          key={c}
+                          onPress={() => selectCat(c)}
+                          hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+                          style={[styles.chip, on && styles.chipOn]}
+                        >
+                          <View style={[styles.chipDot, { backgroundColor: m.color }]} />
+                          <Text style={[styles.chipText, on && styles.chipTextOn]}>{m.label}</Text>
+                        </Pressable>
+                      );
+                    })}
+                  </ScrollView>
+                </View>
+
+                {/* 정렬 펼침 — 아래로. 시트로 만들지 않는다: 이 화면은 이미 CategoryEditSheet 를 띄우므로
+                    시트 2개가 공존하게 된다(모달 위 모달 금지). */}
+                {showSort && sortOpen && (
+                  <View style={styles.sortPanel}>
+                    {SORTS.map((s, i) => {
+                      const on = sort === s.key;
+                      return (
+                        <Pressable
+                          key={s.key}
+                          onPress={() => { setSort(s.key); setSortOpen(false); }}
+                          accessibilityRole="button"
+                          accessibilityState={{ selected: on }}
+                          style={({ pressed }) => [styles.sortOption, i > 0 && styles.sortOptionDivider, pressed && { opacity: 0.7 }]}
+                        >
+                          <Text style={[styles.sortOptionText, on && styles.sortOptionTextOn]}>{s.label}</Text>
+                          {on ? <Ionicons name="checkmark" size={16} color={InkColors.ink} /> : null}
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                )}
+              </View>
+            )}
+
+            {/* 목록 */}
+            {listFiltered.length === 0 ? (
+              <EmptyResult onReset={() => { setQuery(''); setActiveCat(null); }} onAsk={goAsk} />
+            ) : groups ? (
+              groups.map((g) => {
+                const m = getSectionMeta(g.cat);
+                return (
+                  <View key={g.cat} style={{ gap: 8 }}>
+                    <View style={styles.groupHead}>
+                      <View style={[styles.dot, { backgroundColor: m.color }]} />
+                      <Text style={styles.groupTitle}>{m.label}</Text>
+                      <Text style={styles.groupCount}>{g.items.length}</Text>
+                    </View>
+                    <View style={styles.list}>{g.items.map(entryItem)}</View>
+                  </View>
+                );
+              })
+            ) : showUsageGroups ? (
+              usageGroups.map((g) => groupBlock(g.key, g.title, g.items))
+            ) : (
+              <View style={styles.list}>{listFiltered.map(entryItem)}</View>
+            )}
+          </>
+        )}
+
+        {/* 인수인계서 업로드 / 업종 템플릿 — 한 건씩 쓰지 않고 여러 건을 한꺼번에 만드는 두 경로.
+            ★2026-08-06: 같은 형태의 카드 2장이 나란히 서 있어(이번 개편이 없애려던 증상) **한 카드 안 2행**으로 묶었다.
+            ★2026-08-07: 목록 **아래**로 내렸다. 매일 보는 건 목록이지 이 카드가 아니다. */}
+        <View style={styles.growSection}>
+          <SectionLabel title="여러 개 한 번에 추가" />
+          <View style={styles.growCard}>
+            <Pressable
+              onPress={goHandover}
+              style={({ pressed }) => [styles.growRow, pressed && { opacity: 0.85 }]}
+              accessibilityRole="button"
+              accessibilityLabel="인수인계서 올리기"
+            >
+              <Ionicons name="cloud-upload-outline" size={16} color={InkColors.ink2} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.templateLinkTitle}>인수인계서 올리기</Text>
+                <Text style={styles.templateLinkSub}>오픈·마감·규칙 메모를 올리면 AI가 노하우로 정리해요</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color={InkColors.ink3} />
+            </Pressable>
+
+            <Pressable
+              onPress={goTemplates}
+              style={({ pressed }) => [styles.growRow, styles.growRowDivider, pressed && { opacity: 0.85 }]}
+              accessibilityRole="button"
+              accessibilityLabel="노하우 템플릿 둘러보기"
+            >
+              <Ionicons name="albums-outline" size={16} color={InkColors.ink2} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.templateLinkTitle}>노하우 템플릿 둘러보기</Text>
+                <Text style={styles.templateLinkSub}>업종에서 자주 쓰는 노하우를 내 노하우로 바로 가져와요</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color={InkColors.ink3} />
+            </Pressable>
+          </View>
+        </View>
+      </>
+    );
+  };
+
+  // ── 칸 ③ 안 쓰임 ───────────────────────────────────────────
+  const unusedSegment = () => {
+    if (!loaded) {
+      return (
+        <View style={styles.center}>
+          <ActivityIndicator color={InkColors.ink3} />
+          <Text style={styles.loadingText}>노하우를 불러오는 중...</Text>
+        </View>
+      );
+    }
+    return (
+      <>
+        {reviewList.length === 0 && unusedList.length === 0 ? (
+          <EmptyState
+            title="손볼 노하우가 없어요"
+            body="확인이 필요하거나 한 달간 아무도 안 물어본 노하우가 생기면 여기로 모아드릴게요."
+            cta={{ label: '노하우 추가하기', onPress: goAdd }}
+          />
+        ) : (
+          <>
+            {reviewList.length > 0 && groupBlock('review', '확인 안 한 것', reviewList)}
+            {/* 라벨=판정(isUnused = 최근 30일 인용 0회) 그대로. 위 usageGroups 의 'cold' 와 같은 말이어야 한다. */}
+            {unusedList.length > 0 && groupBlock('unused', '한 달간 아무도 안 물어봤어요', unusedList)}
+          </>
+        )}
+
+        {/* 오답이 몰린 노하우는 여기서 세지 않는다 — 퀴즈 결과가 이 화면에 없다.
+            수를 지어내는 대신 그 수를 아는 화면으로 보내는 링크 한 줄만 둔다. */}
+        <View style={styles.growCard}>
+          <Pressable
+            onPress={goTraining}
+            style={({ pressed }) => [styles.growRow, pressed && { opacity: 0.85 }]}
+            accessibilityRole="button"
+            accessibilityLabel="퀴즈에서 자주 틀리는 노하우 보기"
+          >
+            <Ionicons name="help-circle-outline" size={16} color={InkColors.ink2} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.templateLinkTitle}>퀴즈에서 자주 틀리는 노하우</Text>
+              <Text style={styles.templateLinkSub}>직원이 자꾸 틀리면 설명이 부족하다는 뜻이에요</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color={InkColors.ink3} />
+          </Pressable>
+        </View>
+      </>
+    );
+  };
+
+  return (
+    <View style={styles.flex}>
+      {/* 세그먼트는 스크롤과 무관하게 항상 손 닿는 곳에 — 이게 사라지면 '할 일' 칸이 잠긴다. */}
+      <SegmentTabs items={segItems} value={seg} onChange={(k) => setSeg(k as KnowhowSegKey)} style={styles.segTabs} />
+
+      <ScrollView style={styles.flex} contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+        {seg === 'todo' ? <OwnerTodoSegment /> : seg === 'unused' ? unusedSegment() : knowhowSegment()}
+      </ScrollView>
+
+      {/* FAB — ★ScrollView '밖'(형제)이라 스크롤과 같이 움직이지 않는다. 부모가 프레임 안이라 460px을 안 넘는다. */}
+      <Pressable
+        onPress={goAdd}
+        accessibilityRole="button"
+        accessibilityLabel="노하우 추가"
+        style={({ pressed }) => [styles.fab, pressed && { opacity: 0.85 }]}
+      >
+        <Ionicons name="add" size={28} color={InkColors.ink} />
+      </Pressable>
+
       {catSheet && <CategoryEditSheet onClose={() => setCatSheet(false)} />}
-    </ScrollView>
+    </View>
   );
 }
 
-function EmptyResult({ onReset, onAsk, label }: { onReset: () => void; onAsk?: () => void; label?: string }) {
+function EmptyResult({ onReset, onAsk }: { onReset: () => void; onAsk?: () => void }) {
   return (
     <View style={styles.emptyResult}>
       {/* 그림 이모지 금지(워딩 §1) — 같은 뜻을 Ionicons 로. 2026-08-07 QA #5-2. */}
-      <Ionicons name={label ? 'checkmark-circle-outline' : 'search-outline'} size={30} color={InkColors.ink3} />
-      <Text style={styles.emptyResultText}>{label ?? '조건에 맞는 노하우가 없어요'}</Text>
+      <Ionicons name="search-outline" size={30} color={InkColors.ink3} />
+      <Text style={styles.emptyResultText}>조건에 맞는 노하우가 없어요</Text>
       {/* 매니저 전용: 목록에서 못 찾으면 다음 행동은 물어보기(AI 답변, 없으면 사장님께 질문) */}
       {onAsk && (
         <Pressable onPress={onAsk} accessibilityRole="button" accessibilityLabel="물어보기">
@@ -612,21 +722,38 @@ function EmptyResult({ onReset, onAsk, label }: { onReset: () => void; onAsk?: (
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  scroll: { padding: Space.gutter, gap: Space.md },
+  // 하단 여백 = FAB 지름 + 위아래 거터. 마지막 행이 FAB 밑에 깔리지 않게.
+  scroll: { padding: Space.gutter, paddingBottom: FAB_SIZE + Space.gutter * 2, gap: Space.md },
   center: { alignItems: 'center', justifyContent: 'center', gap: 10, paddingVertical: 48 },
   loadingText: { fontSize: 15, color: InkColors.ink2, fontWeight: '600' },
+
+  // 세그먼트 — 공용 SegmentTabs 의 margin(16)을 화면 거터(20)에 맞춘다.
+  segTabs: { marginHorizontal: Space.gutter, marginTop: Space.md, marginBottom: 0 },
 
   headRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
   // "총 N개 · 탭하면 수정" = 카운트+힌트라 **보조**다(본문 아님).
   // 15sp였던 건 크기가 틀린 것이지 색이 틀린 게 아니다 — ink3는 보조의 정당한 색이고,
   // 보조는 15sp 하한 대상이 아니다(simplicity-voice §4). 12sp로 내린다. (2026-08-06)
   subline: { flexShrink: 1, fontSize: 12, color: InkColors.ink3, fontWeight: '600' },
-  // 주 CTA — 검정 헤더 요소들 사이에서 묻혀서 노랑 액센트로(2026-07-31 사용자 요청).
-  addBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: BrandColors.yellow, borderWidth: 1, borderColor: BrandColors.yellowDeep, paddingVertical: 8, paddingHorizontal: 12, borderRadius: Radius.pill },
-  addBtnText: { color: InkColors.ink, fontSize: 13, fontWeight: '800' },
+
+  // 노하우 추가 FAB — 세 칸 전부에서 보이는 이 화면의 Primary. 상단 버튼을 대체한다(2026-08-07).
+  fab: {
+    position: 'absolute',
+    right: Space.gutter,
+    bottom: Space.gutter,
+    width: FAB_SIZE,
+    height: FAB_SIZE,
+    borderRadius: Radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: BrandColors.yellow,
+    borderWidth: 1,
+    borderColor: BrandColors.yellowDeep,
+    ...Elevation.ey,
+  },
 
   // 템플릿 둘러보기 진입 링크(홈에서 이관)
-  // '한 번에 늘리기' — 두 진입을 한 카드 안 2행으로. 카드 1장 = 블록 1개(2026-08-06).
+  // '여러 개 한 번에 추가' — 두 진입을 한 카드 안 2행으로. 카드 1장 = 블록 1개(2026-08-06).
   growSection: { gap: Space.sm },
   growCard: {
     backgroundColor: InkColors.bg, borderWidth: 1, borderColor: InkColors.line,
@@ -637,11 +764,11 @@ const styles = StyleSheet.create({
     paddingVertical: Space.md, paddingHorizontal: Space.md,
   },
   growRowDivider: { borderTopWidth: 1, borderTopColor: InkColors.line },
-  templateLinkTitle: { fontSize: 14, fontWeight: '800', color: InkColors.ink },
+  templateLinkTitle: { fontSize: 15, fontWeight: '800', color: InkColors.ink },
   templateLinkSub: { fontSize: 12, color: InkColors.ink3, fontWeight: '600', marginTop: 1 },
 
-  // 미검증 배너는 공용 <AlertRow>(블록 X2)로 대체됨. 아래 둘은 검토 대기(draft) 배너가 계속 쓴다.
-  bannerTitle: { fontSize: 14, fontWeight: '800', color: InkColors.ink },
+  // 검토 대기(draft) 배너가 계속 쓰는 두 줄.
+  bannerTitle: { fontSize: 15, fontWeight: '800', color: InkColors.ink },
   bannerBody: { fontSize: 12, color: InkColors.ink2, marginTop: 1 },
 
   // 검토 대기(draft) 배너 — 인수인계서 검수 재진입점
@@ -681,16 +808,6 @@ const styles = StyleSheet.create({
   chipText: { fontSize: 12.5, fontWeight: '700', color: InkColors.ink2 },
   chipTextOn: { color: InkColors.bubbleText },
 
-  // 미검증 상태 필터 칩 — 카테고리 칩과 같은 형태의 정식 토글.
-  statusChip: {
-    flexDirection: 'row', alignItems: 'center', gap: 5,
-    backgroundColor: InkColors.bg, borderWidth: 1, borderColor: InkColors.line,
-    paddingVertical: 6, paddingHorizontal: 12, borderRadius: Radius.pill,
-  },
-  statusReviewOn: { backgroundColor: BrandColors.warnSoft, borderColor: BrandColors.warnBorder },
-  statusChipText: { fontSize: 12.5, fontWeight: '700', color: InkColors.ink2 },
-  statusChipTextInk: { color: InkColors.ink },
-
   // 정렬 — 라벨은 '정렬'(무엇을) + 현재값(어떻게) 두 토막. 현재값을 감추면 무슨 순서인지 모른다.
   sortTrigger: { gap: Space.xs, maxWidth: 150 },
   // ★줄어드는 쪽은 값이지 '정렬'이 아니다 — flexShrink를 안 정하면 배율 ×1.18에서 '정렬'이
@@ -724,7 +841,6 @@ const styles = StyleSheet.create({
   },
   verifyBtnText: { fontSize: 12, fontWeight: '800', color: InkColors.ink },
 
-  // 목록 관리 액션(카테고리 편집 · 내보내기) — 2칸 행
   // 관리 액션 — 찾기 바 위 오른쪽의 작은 버튼. 시각은 칩 크기, 터치 타깃은 hitSlop 이 48dp까지 넓힌다.
   manageActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: Space.sm },
   manageBtn: {
@@ -733,6 +849,9 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: InkColors.line, backgroundColor: InkColors.bg,
   },
   manageBtnText: { flexShrink: 1, fontSize: 12.5, fontWeight: '700', color: InkColors.ink2 },
+
+  // 묶음(쓰임새·안 쓰임) = 카드 밖 라벨 + 목록
+  group: { gap: Space.sm },
 
   // 그룹(목록·카테고리별)
   groupHead: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6, paddingHorizontal: 2 },
@@ -758,7 +877,6 @@ const styles = StyleSheet.create({
 
   // 빈 결과
   emptyResult: { alignItems: 'center', gap: 6, paddingVertical: 36 },
-  emptyResultEmoji: { fontSize: 34 },
   emptyResultText: { fontSize: 15, fontWeight: '700', color: InkColors.ink2 },
   resetLink: { fontSize: 13, fontWeight: '800', color: BrandColors.brand, marginTop: 4, textDecorationLine: 'underline' },
 });

@@ -19,7 +19,9 @@ export default function OwnerKnowledgeScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
-      <OwnerKnowhowBrowse onSelect={openEntry} initialNeedsReview={review === '1'} />
+      {/* ?review=1 = 홈 '확인이 필요한 노하우' 착지점. 미검증 배너·상태 칩이 사라진 대신
+          그 수를 세는 '안 쓰임' 칸으로 보낸다(2026-08-07) — 링크가 죽지 않게. */}
+      <OwnerKnowhowBrowse onSelect={openEntry} initialSegment={review === '1' ? 'unused' : undefined} />
       <RoleTabBar role="owner" />
     </SafeAreaView>
   );

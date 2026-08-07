@@ -6,17 +6,23 @@ import { Ionicons } from '@expo/vector-icons';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { USE_NATIVE_DRIVER } from '@/lib/anim';
+import { useOwnerTodoCount } from '@/lib/hooks/useOwnerTodoCount';
 
 type IconName = keyof typeof Ionicons.glyphMap;
 export type Tab = { label: string; path: Href; icon: IconName; iconActive: IconName; alsoActiveFor?: Href[] };
 
+/** 사장 '할 일' 배지가 붙는 탭. 아래 TABS 정의와 배지 판정이 같은 문자열을 보게 상수로 둔다. */
+const OWNER_KNOWHOW_TAB = '/owner/categories';
+
 /**
  * 각 탭 의미에 맞춘 아이콘. 선택된 탭은 채워진(filled) 아이콘, 나머지는 outline.
- *  - 홈=집, 노하우=전구, 받은질문=수신함, 업무=서류가방, 출퇴근=시계, 설정=톱니
+ *  - 홈=집, 노하우=전구, 업무=서류가방, 출퇴근=시계, 설정=톱니
  *
- * 역할별 비대칭 5탭: 공통 spine(홈·노하우·업무·설정) + 역할 본업 1탭.
- *  - 시니어: 가운데 '받은질문'(음성 1터치 답변 = 지식 자산화 플라이휠)
- *  - 주니어: 4번째 '출퇴근'(현장 실행). 질문하기는 노하우 탭 안 세그먼트로.
+ * 역할별 비대칭: 공통 spine(홈·노하우·업무·설정) + 주니어만 본업 1탭(출퇴근).
+ *  - 시니어 4탭: ★2026-08-07 '받은질문'을 노하우 탭 '할 일' 칸으로 흡수했다.
+ *    받은 질문·검토할 제안·쌓인 노하우는 "노하우가 만들어지는 한 흐름"인데 탭이 나뉘어 있어
+ *    사장이 세 군데를 돌아다녔다. 밀린 게 있다는 신호는 탭이 아니라 노하우 탭 **배지**가 든다.
+ *  - 주니어 5탭: 4번째 '출퇴근'(현장 실행). 질문하기는 노하우 탭 안 세그먼트로.
  * 맨 오른쪽은 두 역할 모두 '설정'(내 정보 관리)으로 고정한다.
  */
 const TABS: Record<'junior' | 'owner', Tab[]> = {
@@ -32,8 +38,9 @@ const TABS: Record<'junior' | 'owner', Tab[]> = {
   ],
   owner: [
     { label: '홈', path: '/owner/dashboard', icon: 'home-outline', iconActive: 'home' },
-    { label: '노하우', path: '/owner/categories', icon: 'bulb-outline', iconActive: 'bulb' },
-    { label: '받은질문', path: '/owner/inbox', icon: 'file-tray-outline', iconActive: 'file-tray' },
+    // /owner/inbox 는 라우트로 남아 '할 일' 칸으로 리다이렉트된다(딥링크·푸시가 물고 있음).
+    // 리다이렉트가 도는 찰나에 탭이 전부 꺼져 보이지 않게 이 탭의 계열로 선언한다.
+    { label: '노하우', path: OWNER_KNOWHOW_TAB, icon: 'bulb-outline', iconActive: 'bulb', alsoActiveFor: ['/owner/inbox'] },
     { label: '업무 채팅', path: '/owner/work', icon: 'briefcase-outline', iconActive: 'briefcase' },
     { label: '설정', path: '/owner/settings', icon: 'settings-outline', iconActive: 'settings' },
   ],
@@ -54,6 +61,9 @@ export function RoleTabBar({ role }: { role: 'junior' | 'owner' }) {
   const pathname = usePathname();
   const insets = useSafeAreaInsets();
   const tabs = TABS[role];
+  // '할 일'(답할 질문 + 검토할 제안) 배지 — 받은질문 탭이 사라진 자리를 대신하는 신호.
+  //  판정 SSOT = useOwnerTodoCount. 훅은 조건부 호출이 안 되므로 junior 에서도 부르되 배지는 안 붙인다.
+  const todo = useOwnerTodoCount();
 
   // pathname은 쿼리/해시가 제거된 문자열. t.path는 Href(미래에 쿼리·세그먼트가 붙을 수 있음)이므로
   // 정확 일치 + 하위 경로(`/base/...`)까지 활성으로 본다 → 경로가 바뀌어도 하이라이트가 깨지지 않는다.
@@ -71,6 +81,7 @@ export function RoleTabBar({ role }: { role: 'junior' | 'owner' }) {
           key={String(t.path)}
           tab={t}
           active={isActive(t)}
+          badge={role === 'owner' && String(t.path) === OWNER_KNOWHOW_TAB ? todo.total : undefined}
           onPress={() => {
             if (!isActive(t)) goToTab(t.path);
           }}
@@ -81,7 +92,7 @@ export function RoleTabBar({ role }: { role: 'junior' | 'owner' }) {
 }
 
 /** 개별 탭 — 누르면 살짝 줄고, 활성화되는 순간 아이콘이 톡 튀어오른다.
- *  badge: 허브 탭바(HubTabBar)가 쓰는 카운트 뱃지(벨 뱃지와 동일 스타일). RoleTabBar 는 미사용. */
+ *  badge: 카운트 뱃지(벨 뱃지와 동일 스타일). 허브 탭바(HubTabBar)와 사장 '노하우' 탭이 쓴다. */
 export function TabButton({ tab, active, onPress, badge }: { tab: Tab; active: boolean; onPress: () => void; badge?: number }) {
   const color = active ? InkColors.ink : InkColors.ink3;
   const press = useMemo(() => new Animated.Value(1), []); // 눌림 스케일

@@ -1,20 +1,24 @@
 import { View, Text, StyleSheet } from 'react-native';
-import { Stack, useRouter } from 'expo-router';
+import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
 
 import { RoleTabBar } from '@/components/RoleTabBar';
-import { OwnerKnowhowBrowse } from '@/components/owner/OwnerKnowhowBrowse';
+import { OwnerKnowhowBrowse, type KnowhowSegKey } from '@/components/owner/OwnerKnowhowBrowse';
 import { InkColors } from '@/lib/theme/colors';
 
+const SEG_KEYS: KnowhowSegKey[] = ['todo', 'knowhow', 'unused'];
+
 /**
- * 노하우 탭(사장님) — 매장 노하우 목록 단일 화면.
- * 검색·카테고리 필터·정렬·미검증 검증·내보내기를 한 화면에서 처리한다(OwnerKnowhowBrowse).
+ * 노하우 탭(사장님) — 할 일 · 노하우 · 안 쓰임 3칸(OwnerKnowhowBrowse).
  *
  * (이력) 옛 KnowhowSegment 3칸[둘러보기|물어보기|내노하우] → 2칸 → 세그먼트 폐지.
- * '물어보기' 세그먼트는 '받은질문' 탭으로 보내는 중복 진입점일 뿐이라 제거했다.
- * 사장님은 '묻는' 주체가 아니라 '답하는' 주체 — 받은 질문 답변은 하단 '받은질문' 탭이 전담한다.
+ * (2026-08-07) 받은질문 탭을 흡수하며 세그먼트가 [할 일|노하우|안 쓰임]으로 돌아왔다.
+ * `?seg=todo` = 구 /owner/inbox 착지점(딥링크·푸시가 리다이렉트로 들어온다).
  */
 export default function OwnerCategoriesScreen() {
   const router = useRouter();
+  const { seg } = useLocalSearchParams<{ seg?: string }>();
+  // 모르는 값이면 넘기지 않는다 — undefined면 컴포넌트가 기본 칸('노하우')을 쓴다.
+  const initialSegment = SEG_KEYS.find((k) => k === seg);
 
   // 카드를 탭하면 해당 노하우 수정으로 (검토/보강 흐름).
   const openEntry = (id: string) => router.push({ pathname: '/owner/edit/[id]', params: { id } });
@@ -30,7 +34,7 @@ export default function OwnerCategoriesScreen() {
         }}
       />
 
-      <OwnerKnowhowBrowse onSelect={openEntry} />
+      <OwnerKnowhowBrowse onSelect={openEntry} initialSegment={initialSegment} />
       <RoleTabBar role="owner" />
     </View>
   );
