@@ -709,6 +709,35 @@ function stripNonColumns<T extends Record<string, unknown>>(obj: T): Omit<T, 'so
   return rest;
 }
 
+// ── 계정 스코프 노하우(0121) — 허브(윗층)는 활성 매장이 아니라 **소유 매장 전체**를 본다 ──────
+// playbook_entries 의 RLS 는 `unit_id = auth_unit_id()`(= profiles.active_unit_id = UI 상태)라
+// 허브에서는 권한이 아니라 "지금 보고 있는 매장"으로 좁혀진다. 층이 어긋난 것이라 definer 로 뚫는다.
+// 집계·판정은 RPC 본문이 SSOT — 여기서 다시 계산하지 않는다.
+
+/** 소유 매장 전체의 발행 노하우. 매장별 묶음은 화면이 한다(행이 unit_id 를 들고 온다). */
+export async function fetchOwnerKnowhowEntries(): Promise<DbResult<PlaybookEntry[]>> {
+  if (!HAS_SUPABASE) return { data: [], error: null };
+  const { data, error } = await supabase.rpc('owner_knowhow_entries');
+  if (error) readFail('fetchOwnerKnowhowEntries', error);
+  return { data: (data as PlaybookEntry[]) ?? null, error: error as DbErr };
+}
+
+/**
+ * 활성 매장을 **건드리지 않고** 소유 매장 중 하나에 노하우를 쓴다(0121).
+ *
+ * ★소유 검사는 RPC 안에서 한다(`units.owner_id = auth.uid()`). 클라 검사는 방어선이 아니다.
+ * ★활성 매장에 쓰는 경로는 그대로 `insertEntry`(RLS) 다 — 이 함수는 **다른 매장일 때만** 쓴다.
+ *   같은 일을 두 경로가 하면 정책 변경이 한쪽에만 반영되는 드리프트가 생긴다.
+ */
+export async function insertKnowhowToUnit(unitId: string, entry: PlaybookEntry): Promise<boolean> {
+  if (!HAS_SUPABASE) return true;
+  // RPC 는 성공하면 삽입된 id 를 돌려준다 — 0행 유령 성공이 없다(not_owner 는 예외로 온다).
+  return write('insertKnowhowToUnit', supabase.rpc('owner_insert_knowhow', {
+    p_unit_id: unitId,
+    p_entry: stripNonColumns(entry),
+  }));
+}
+
 export async function insertEntry(entry: PlaybookEntry): Promise<boolean> {
   if (!HAS_SUPABASE) return true;
   const row = { ...stripNonColumns(entry), unit_id: entry.unit_id || _unitId };

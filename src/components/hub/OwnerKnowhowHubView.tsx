@@ -8,6 +8,7 @@
 //   ("지금은 손볼 노하우가 없어요") · 노하우 0인 매장은 행동 버튼(노하우 담기)이 먼저.
 import { useEffect, useMemo, useState } from 'react';
 import { View, Text, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
+import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 import { useHubStore } from '@/lib/store/useHubStore';
@@ -36,6 +37,7 @@ export function OwnerKnowhowHubView() {
   const prefFor = useMemberPrefsStore((s) => s.prefFor);
   const hydratePrefs = useMemberPrefsStore((s) => s.hydrate);
   const { goStore, switching } = useStoreNav();
+  const router = useRouter();
 
   useEffect(() => {
     void hydrateOwner();
@@ -88,7 +90,13 @@ export function OwnerKnowhowHubView() {
   // 2026-08-06: templates·import 두 상수였던 것을 범용 형태로 바꿨다. 챙길 것 3지표(MiniStats)도
   // 다점포에서는 같은 시트로 매장을 고르게 하고, **매장별 건수는 시트의 배지가 보여준다** —
   // 옛 판본은 그 분해를 위해 섹션 카드를 3장 세워서 '제목 → 카드' 반복을 만들고 있었다.
-  type Picker = { title: string; hint: string; path: Href; rows: StorePickerRow[] };
+  /**
+   * ★`stay: true` = **활성 매장을 건드리지 않고** 그 매장을 대상으로만 삼는다(0121).
+   * 여기서 고르는 매장은 권한 관문이 아니라 **입력 항목**이다 — 사장 권한은
+   * `units.owner_id = auth.uid()` 로 매장 전체를 이미 덮는다. 전환하면 다른 탭의 맥락이
+   * 따라 움직이고, "끝나면 되돌리기"라는 없어도 될 개념이 생긴다(재기획 §4-1).
+   */
+  type Picker = { title: string; hint: string; path: Href; rows: StorePickerRow[]; stay?: boolean };
   const [picker, setPicker] = useState<Picker | null>(null);
   const allRows = (): StorePickerRow[] =>
     overview.map((r) => ({ uid: r.unit_id, label: labelOf(r.unit_id), color: colorOf(r.unit_id) }));
@@ -102,9 +110,12 @@ export function OwnerKnowhowHubView() {
    * 관리 액션(A1) — 다점포면 "어느 매장에서 할지"를 먼저 고른다. 건수 배지는 없다:
    * 챙길 것 3지표와 달리 이건 "밀린 일"이 아니라 어느 매장에서든 시작할 수 있는 행동이다.
    */
-  const act = (title: string, hint: string, path: Href) => () => {
-    if (overview.length > 1) setPicker({ title, hint, path, rows: allRows() });
-    else if (overview[0]) void goStore(overview[0].unit_id, path);
+  const act = (title: string, hint: string, path: Href, stay = false) => () => {
+    if (overview.length > 1) setPicker({ title, hint, path, rows: allRows(), stay });
+    else if (overview[0]) {
+      if (stay) router.push(`${path}?unit=${overview[0].unit_id}` as never);
+      else void goStore(overview[0].unit_id, path);
+    }
   };
 
   /** 챙길 것 한 칸을 눌렀을 때 — 다점포면 매장 선택(건수 배지 포함), 단일이면 바로 이동. */
@@ -209,15 +220,19 @@ export function OwnerKnowhowHubView() {
               key: 'add',
               icon: 'add-circle-outline',
               label: '노하우 추가',
-              onPress: act('노하우 추가', '어느 매장에 추가할지 골라 주세요', '/owner/coach'),
+              // ★2026-08-07(0121): 매장을 골라도 **전환하지 않는다**. 고른 매장은 대상(입력 항목)일
+              // 뿐이고, 쓰기는 definer RPC 가 `units.owner_id = auth.uid()` 를 검사해 처리한다.
+              // 예전엔 전환 → 추가 → 되돌리기였는데, 그건 UI 상태가 권한 정책에 박혀 있어서
+              // 생긴 땜질이었다(재기획 §4-1).
+              onPress: act('노하우 추가', '어느 매장 이야기예요?', '/owner/coach', true),
             },
             {
               key: 'list',
               icon: 'list-outline',
               label: '노하우 목록',
-              // 단일 매장에서는 아래 '매장별 노하우' 카드를 그리지 않으므로(정보가 아니라 반복이다)
-              // 목록으로 가는 길이 여기 하나다. 없애면 단일 매장 사장이 목록에 닿지 못한다.
-              onPress: act('노하우 목록', '어느 매장의 노하우를 볼지 골라 주세요', '/owner/knowledge'),
+              // ★2026-08-07(0121): 매장을 먼저 고르게 하지 않는다. 허브 층 목록이 소유 매장 전체를
+              // 매장별로 묶어 보여주고 **매장을 가로질러 검색**한다 — 전환해서 내려가면 그게 불가능했다.
+              onPress: () => router.push('/hub-knowhow' as never),
             },
             {
               key: 'quiz',
@@ -338,8 +353,12 @@ export function OwnerKnowhowHubView() {
         rows={picker?.rows ?? []}
         onPick={(uid) => {
           const path = picker?.path;
+          const stay = picker?.stay;
           setPicker(null);
-          if (path) void goStore(uid, path);
+          if (!path) return;
+          // stay = 활성 매장을 안 바꾸고 대상만 넘긴다. 쓰기는 definer RPC 가 소유를 검사한다(0121).
+          if (stay) router.push(`${path}?unit=${uid}` as never);
+          else void goStore(uid, path);
         }}
         onClose={() => setPicker(null)}
       />

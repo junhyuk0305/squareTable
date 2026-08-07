@@ -14,6 +14,7 @@ import { useSuggestionStore } from '@/lib/store/useSuggestionStore';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useWorkStore } from '@/lib/store/useWorkStore';
 import { buildDirectUq } from '@/lib/utils/buildEntry';
+import { insertKnowhowToUnit } from '@/lib/db';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 
@@ -30,7 +31,7 @@ const VALID: Category[] = ['Routine', 'Event', 'Context', 'Know-how'];
  */
 export default function OwnerCoachScreen() {
   const router = useRouter();
-  const { uqId, category: catParam, seed, sugId, feedId, srcTemplate } = useLocalSearchParams<{ uqId?: string; category?: string; seed?: string; sugId?: string; feedId?: string; srcTemplate?: string }>();
+  const { uqId, category: catParam, seed, sugId, feedId, srcTemplate, unit: unitParam } = useLocalSearchParams<{ uqId?: string; category?: string; seed?: string; sugId?: string; feedId?: string; srcTemplate?: string; unit?: string }>();
 
   const addEntry = usePlaybookStore((s) => s.add);
   const resolve = useUnknownQueueStore((s) => s.resolve);
@@ -59,6 +60,28 @@ export default function OwnerCoachScreen() {
   // 발행 넛지(S3 #1): 사장이 매장 2개 이상이면 발행 직후 "다른 내 매장에도?"를 제안. 대상=내 소유 다른 매장.
   const stores = useSessionStore((s) => s.stores);
   const activeUnit = useSessionStore((s) => s.unitId);
+
+  /**
+   * 저장 대상 매장(0121) — 허브에서 `?unit=` 로 넘어오면 **활성 매장이 아닌 그 매장**에 쓴다.
+   *
+   * 예전엔 다른 매장에 노하우를 넣으려면 매장을 전환하고 끝나면 되돌려야 했다. 그건 사장 권한이
+   * 좁아서가 아니라 playbook_entries 의 RLS 가 `auth_unit_id()`(= UI 상태)로 좁혀져 있어서
+   * 생긴 땜질이었다(재기획 §4-1). 대상 매장은 이제 **입력 항목**이다.
+   *
+   * ★소유 검사는 클라가 아니라 RPC 안에서 한다(`units.owner_id = auth.uid()`).
+   * ★활성 매장이면 기존 경로(usePlaybookStore.add → insertEntry, RLS)를 그대로 탄다 —
+   *   같은 일을 두 경로가 하면 정책 변경이 한쪽에만 반영되는 드리프트가 생긴다.
+   * ★크로스 매장 저장은 로컬 목록에 낙관적 추가를 하지 않는다. 그 노하우는 지금 보고 있는
+   *   매장의 것이 아니라서, 넣으면 남의 매장 노하우가 이 매장 목록에 뜬다.
+   */
+  const targetUnitId = unitParam && unitParam !== activeUnit ? unitParam : null;
+  const saveEntry = useCallback(
+    (entry: PlaybookEntry): Promise<boolean> =>
+      targetUnitId
+        ? insertKnowhowToUnit(targetUnitId, { ...entry, unit_id: targetUnitId })
+        : addEntry(entry),
+    [targetUnitId, addEntry],
+  );
   const nudgeTargets = useMemo(
     () => stores.filter((st) => st.role === 'owner' && st.unit_id !== activeUnit).map((st) => ({ unit_id: st.unit_id, store_name: st.store_name })),
     [stores, activeUnit],
@@ -120,11 +143,13 @@ export default function OwnerCoachScreen() {
       setToastErr(false);
       setToast(okMsg);
       // 매장 2개 이상이면 "다른 매장에도?" 넛지를 띄우고 네비는 넛지 닫힘까지 미룬다. 아니면 바로 이동.
-      if (nudgeTargets.length > 0 && entryIds.length > 0) setNudgeIds(entryIds);
+      // ★크로스 매장 저장(0121)에는 넛지를 띄우지 않는다 — 넛지의 복제는 **활성 매장을 원본으로** 하는데
+      //   방금 쓴 노하우는 활성 매장에 없다. 띄우면 엉뚱한 것을 복제하거나 조용히 0건이 된다.
+      if (nudgeTargets.length > 0 && entryIds.length > 0 && !targetUnitId) setNudgeIds(entryIds);
       else navAfter();
       return true;
     },
-    [answerable, realUq, resolve, sugId, approveSuggestion, srcTemplate, attachKnowhow, feedId, markPromoted, navAfter, nudgeTargets],
+    [answerable, realUq, resolve, sugId, approveSuggestion, srcTemplate, attachKnowhow, feedId, markPromoted, navAfter, nudgeTargets, targetUnitId],
   );
 
   // ── 저장 전 확인(겹침·챕터) ──
@@ -155,10 +180,10 @@ export default function OwnerCoachScreen() {
     async (entry: PlaybookEntry): Promise<boolean> => {
       const decision = await askBeforePublish([entry]);
       if (!decision) return false; // 취소 — 저장 안 함(잠금 해제되어 다시 시도 가능)
-      const ok = await addEntry({ ...entry, section: decision.section });
+      const ok = await saveEntry({ ...entry, section: decision.section });
       return finishPublish([entry.id], ok, isInboxAnswer ? '답변이 직원 챗봇에 반영됐어요' : '새 노하우가 저장됐어요');
     },
-    [addEntry, finishPublish, isInboxAnswer, askBeforePublish],
+    [saveEntry, finishPublish, isInboxAnswer, askBeforePublish],
   );
 
   // 다중 분리 발행 — 각 노하우를 저장. 엔트리별 성공여부(boolean[])를 반환해 호출부(publishEach)가
@@ -170,7 +195,7 @@ export default function OwnerCoachScreen() {
       const decision = await askBeforePublish(entries);
       // 취소는 실패가 아니다 — 실패 토스트 없이 조용히 잠금만 풀어 다시 시도할 수 있게 둔다.
       if (!decision) return entries.map(() => false);
-      const results = await Promise.all(entries.map((e) => addEntry({ ...e, section: decision.section })));
+      const results = await Promise.all(entries.map((e) => saveEntry({ ...e, section: decision.section })));
       const okCount = results.filter(Boolean).length;
       if (results.every(Boolean)) {
         // 전체 성공 — 성공 토스트 + (인박스면) resolve + 네비.
@@ -185,7 +210,7 @@ export default function OwnerCoachScreen() {
       }
       return results;
     },
-    [addEntry, finishPublish, askBeforePublish],
+    [saveEntry, finishPublish, askBeforePublish],
   );
 
   // 인박스 모드인데 질문이 이미 처리/삭제/보관됨 → 빈 상태(데드엔드·중복 답변 방지).

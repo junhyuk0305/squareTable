@@ -29,6 +29,8 @@
     { "id": "/hub-growth#owner", "file": "src/app/hub-growth.tsx", "component": "OwnerKnowhowHubView",
       "componentFile": "src/components/hub/OwnerKnowhowHubView.tsx", "type": "A", "maxAccepted": 7, "verdict": "pass",
       "note": "2026-08-07 이해도 지표 추가로 4→7. 7은 조건부를 전부 세는 정적 상한이고 실제 렌더 최대는 5(A형 예산 내)다. 상호배타이기 때문: 히어로(직원 있음) XOR 직원0 안내 · 노하우0 카드(단일 매장) XOR 매장별 카드(다점포)." },
+    { "id": "/hub-knowhow", "file": "src/app/hub-knowhow.tsx", "type": "B", "maxAccepted": 4, "verdict": "todo",
+      "note": "2026-08-07 신설(허브 층). 소유 매장 전체의 노하우를 매장별로 묶어 보여주고 **매장을 가로질러** 검색한다(0121 owner_knowhow_entries). 예전 허브 '노하우 목록'은 goStore = 매장 전환 후 매장 앱 이동이라 가로지르는 검색이 불가능했다. B형이라 블록 예산 없음 — 반복 단위 1종(노하우 행)" },
     { "id": "/hub-growth#junior", "file": "src/app/hub-growth.tsx", "component": "JuniorGrowthView",
       "componentFile": "src/components/hub/JuniorGrowthView.tsx", "type": "A", "maxAccepted": 4, "verdict": "pass" },
     { "id": "/inquiry", "file": "src/app/inquiry.tsx", "type": null, "maxAccepted": 3, "verdict": "todo" },

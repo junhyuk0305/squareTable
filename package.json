@@ -69,6 +69,7 @@
     "qa:payment-claims": "node scripts/qa-payment-claims.mjs",
     "qa:promo": "node scripts/qa-promo-codes.mjs",
     "qa:draft": "node scripts/qa-draft-isolation.mjs",
+    "qa:owner-knowhow": "node scripts/qa-owner-scoped-knowhow.mjs",
     "qa:gen-exchange": "node scripts/qa-gen-exchange.mjs",
     "qa:transcribe": "node scripts/qa-transcribe.mjs",
     "qa:import-pdf": "node scripts/qa-import-pdf.mjs",
