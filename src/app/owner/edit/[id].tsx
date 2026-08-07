@@ -8,8 +8,14 @@ import { OwnerCoachChat } from '@/components/OwnerCoachChat';
 import { Appear } from '@/components/Appear';
 import { BottomSheet } from '@/components/BottomSheet';
 import { EmptyState } from '@/components/EmptyState';
+import { VerifyBadge } from '@/components/VerifyBadge';
+import { KvTable, type KvRow } from '@/components/blocks/KvTable';
+import { formatRelative } from '@/components/coach/coachUtils';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { useSessionStore } from '@/lib/store/useSessionStore';
+import { useStaffStore } from '@/lib/store/useStaffStore';
+import { useWorkStore, understandingOf } from '@/lib/store/useWorkStore';
+import { useQuizBoard } from '@/lib/quiz/useQuizBoard';
 import { confirmAction } from '@/lib/utils/confirm';
 import { UNSECTIONED, sectionOptions } from '@/lib/config/sections';
 import { getSectionMeta } from '@/lib/utils/category';
@@ -182,6 +188,7 @@ function ConversationalEdit({ entry }: { entry: PlaybookEntry }) {
         editEntry={entry}
         onUpdated={onUpdated}
         onPublished={() => {}}
+        docHeader={<KnowhowDoc entry={entry} />}
       />
 
       {catOpen && (
@@ -239,8 +246,113 @@ function ConversationalEdit({ entry }: { entry: PlaybookEntry }) {
   );
 }
 
+/** 진행바 트랙 높이 — 도형 자체 치수라 간격 토큰 대상이 아니다. */
+const PROGRESS_TRACK_H = 5;
+
+/**
+ * 노하우 문서 머리말 + 본문 표 — 상세 화면의 '읽는 면'(비포애프터 §3, 2026-08-07).
+ *
+ * ★ 진행바는 '읽음'이 아니라 '통과'다(knowhow_understanding). 여기서 집계하지 않는다 —
+ *   문항 수는 useQuizBoard, 통과자는 understandingOf 가 SSOT고 이 블록은 배치만 한다.
+ * ★ 문항이 0개면 바를 그리지 않는다 — 빈 바는 0%(아무도 못 맞힘)로 읽힌다.
+ *
+ * ★ 본문은 여기서 한 번만 그린다. 아래 코치챗 카드는 docHeader가 있으면 hideBody로 본문을
+ *   접고 '고치는 면'(고칠래요·내용 추가·수정 저장)만 맡는다 — 같은 본문이 두 번 나오지 않게.
+ *   '고칠래요'를 누르면 카드가 본문을 다시 펴고 거기서 고친다.
+ */
+function KnowhowDoc({ entry }: { entry: PlaybookEntry }) {
+  const router = useRouter();
+  const staff = useStaffStore((s) => s.staff);
+  const understanding = useWorkStore((s) => s.understanding);
+  const { quizCountOf } = useQuizBoard();
+
+  const quizCount = quizCountOf(entry.id);
+  const passed = understandingOf(understanding, entry.id).length;
+  const total = staff.length;
+  const pct = total > 0 ? Math.min(100, Math.round((passed / total) * 100)) : 0;
+
+  const verifiedAt = entry.verification?.verified_at;
+  const hits = entry.stats?.query_hits_30d ?? 0;
+  const hasMeta = !!entry.verification || !!verifiedAt || hits > 0;
+
+  // 사용자 표면 3핵심만 — 내부 비계(quagmire/uncover/result)는 표에 넣지 않는다(manualToText와 같은 규칙).
+  const rows = useMemo<KvRow[]>(() => {
+    const sq = entry.square;
+    const steps = (sq?.action?.steps ?? []).map((s) => s.trim()).filter(Boolean);
+    const todo = steps.length > 1 ? steps.map((s, i) => `${i + 1}. ${s}`).join('\n') : (steps[0] ?? '');
+    return [
+      { key: '상황', value: (sq?.situation ?? '').trim() },
+      { key: '할 일', value: todo },
+      { key: '금지', value: (sq?.extract?.dont ?? '').trim() },
+    ].filter((r) => !!r.value);
+  }, [entry.square]);
+
+  return (
+    <View style={styles.doc}>
+      <Text style={styles.docTitle}>{entry.title}</Text>
+
+      {quizCount === 0 ? (
+        // 누를 수 있는 것은 이 행 하나뿐 — 문서 블록 자체는 누를 수 없다(중첩 버튼 금지).
+        <Pressable
+          onPress={() => router.push('/owner/quiz-list?status=no_items' as never)}
+          style={({ pressed }) => [styles.quizEmpty, pressed && { opacity: 0.7 }]}
+          accessibilityRole="button"
+          accessibilityLabel="아직 문제가 없어요, 만들기"
+        >
+          <Text style={styles.quizEmptyText}>아직 문제가 없어요 ·</Text>
+          <Text style={styles.quizEmptyCta}>만들기</Text>
+          <Ionicons name="chevron-forward" size={14} color={InkColors.ink3} />
+        </Pressable>
+      ) : total > 0 ? (
+        <View style={styles.progressWrap}>
+          <View style={styles.progressTrack}>
+            <View style={[styles.progressFill, { width: `${pct}%` }]} />
+          </View>
+          <Text style={styles.progressText}>직원 {total}명 중 {passed}명이 퀴즈를 통과했어요</Text>
+        </View>
+      ) : null}
+
+      {hasMeta ? (
+        <View style={styles.metaRow}>
+          {/* 색·라벨은 verifyMeta(SSOT)에서 온다 — 여기서 상태색을 직접 쓰지 않는다. */}
+          {entry.verification ? <VerifyBadge state={entry.verification.state} /> : null}
+          {verifiedAt ? <Text style={styles.metaChip}>{formatRelative(verifiedAt)}</Text> : null}
+          {hits > 0 ? <Text style={styles.metaChip}>최근 30일 {hits}번 쓰임</Text> : null}
+        </View>
+      ) : null}
+
+      <KvTable rows={rows} />
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: InkColors.cream },
+
+  // 문서 머리말 + 본문 표(상세의 읽는 면)
+  doc: { gap: Space.md },
+  docTitle: { fontSize: 17, fontWeight: '800', color: InkColors.ink, letterSpacing: -0.3 },
+  progressWrap: { gap: Space.xs },
+  progressTrack: {
+    height: PROGRESS_TRACK_H, borderRadius: Radius.pill,
+    backgroundColor: InkColors.bgSoft, overflow: 'hidden',
+  },
+  progressFill: { height: '100%', borderRadius: Radius.pill, backgroundColor: BrandColors.good },
+  // 카운트 문장이라 본문 15sp 하한의 예외(배지·칩·카운트 10~12sp).
+  progressText: { fontSize: 12, color: InkColors.ink2 },
+  quizEmpty: {
+    flexDirection: 'row', alignItems: 'center', gap: Space.xs, alignSelf: 'flex-start',
+    minHeight: 40, paddingVertical: Space.sm, paddingHorizontal: Space.md,
+    borderRadius: Radius.pill, backgroundColor: InkColors.bgSoft,
+  },
+  quizEmptyText: { fontSize: 12.5, fontWeight: '700', color: InkColors.ink2 },
+  quizEmptyCta: { fontSize: 12.5, fontWeight: '800', color: InkColors.ink },
+  metaRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: Space.xs },
+  metaChip: {
+    fontSize: 11, fontWeight: '800', color: InkColors.ink2,
+    backgroundColor: InkColors.bgSoft, borderRadius: Radius.pill, overflow: 'hidden',
+    paddingVertical: Space.xs, paddingHorizontal: Space.sm,
+  },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
 
   // 카테고리 바(헤더 아래) + 변경 시트

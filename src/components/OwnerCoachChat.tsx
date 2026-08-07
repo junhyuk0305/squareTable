@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   View,
   Text,
@@ -62,6 +62,8 @@ export type OwnerCoachChatProps = {
   // 사장이 말로 고치면 patchSquare로 부분 패치. 저장은 onUpdated로(새 add 아님).
   editEntry?: PlaybookEntry;
   onUpdated?: (square: SquareBlock, extras: { title: string; keywords: string[] }) => void;
+  /** 대화 맨 위에 얹는 읽기 블록(노하우 상세의 문서 머리말·본문 표). 스크롤과 함께 올라간다. */
+  docHeader?: ReactNode;
 };
 
 // 카드 말풍선이 "그 대화 시점에 어떻게 정리됐는지"를 고정하는 스냅샷.
@@ -99,6 +101,7 @@ export function OwnerCoachChat({
   onPublishedMany,
   editEntry,
   onUpdated,
+  docHeader,
 }: OwnerCoachChatProps) {
   const isEdit = !!editEntry;
   const [messages, setMessages] = useState<Msg[]>(() => {
@@ -654,6 +657,7 @@ export function OwnerCoachChat({
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
+        {docHeader}
         {messages.map((m) => {
           if (m.kind === 'owner') {
             return (
@@ -691,6 +695,9 @@ export function OwnerCoachChat({
           }
           // card — 마지막(활성) 카드만 라이브 상태로, 과거 카드는 스냅샷 고정(모든 카드가 최신으로 바뀌던 버그 수정).
           const isLastCard = m.id === lastCardId;
+          // 위에 문서(docHeader)가 이미 본문을 그리고 있으면 카드는 '고치는 면'만 맡는다.
+          // 편집에 들어가는 순간(고칠래요) 본문이 다시 열린다 — 안 그러면 고칠 대상이 안 보인다.
+          const cardEditing = isLastCard && inReview && editing;
           const cSquare = isLastCard ? (square ?? m.snap.square) : m.snap.square;
           const cTitle = isLastCard ? title : m.snap.title;
           const cCategory = isLastCard ? category : m.snap.category;
@@ -700,8 +707,9 @@ export function OwnerCoachChat({
                 square={cSquare}
                 title={cTitle}
                 category={cCategory}
-                editable={isLastCard && inReview && editing}
+                editable={cardEditing}
                 showActions={isLastCard && inReview && !editing}
+                hideBody={!!docHeader && !cardEditing}
                 onEdit={() => setEditing(true)}
                 onDoneEditing={() => setEditing(false)}
                 onRetalk={startRetalk}
