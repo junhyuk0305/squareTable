@@ -60,7 +60,7 @@ export function CoursePresetOnboarding({
   return (
     <View style={cst.onboard}>
       <Text style={cst.onboardLead}>어떤 퀴즈부터 만들까요</Text>
-      <Text style={cst.onboardSub}>고르면 종류가 만들어지고, 담을 노하우를 바로 골라요</Text>
+      <Text style={cst.onboardSub}>고르면 묶음이 만들어지고, 담을 노하우를 바로 골라요</Text>
       {open.map((p) => (
         <Pressable
           key={p.key}
@@ -117,7 +117,7 @@ export function CourseFormSheet({
   const save = async () => {
     const nm = name.trim();
     if (!nm) {
-      setErr('퀴즈 종류 이름을 적어 주세요.');
+      setErr('퀴즈 묶음 이름을 적어 주세요.');
       return;
     }
     setBusy(true);
@@ -137,10 +137,10 @@ export function CourseFormSheet({
           position,
           active: true,
         };
-    const ok = await guardWrite(upsertTrainingCourse(course), () => {}, '퀴즈 종류 저장에 실패했어요.');
+    const ok = await guardWrite(upsertTrainingCourse(course), () => {}, '퀴즈 묶음 저장에 실패했어요.');
     setBusy(false);
     if (ok) {
-      showToast(editing ? '퀴즈 종류를 고쳤어요' : `${nm}을(를) 만들었어요`, 'good');
+      showToast(editing ? '퀴즈 묶음을 고쳤어요' : `${nm}을(를) 만들었어요`, 'good');
       onSaved(course);
     }
   };
@@ -148,17 +148,17 @@ export function CourseFormSheet({
   const remove = async () => {
     if (!editing || busy) return;
     setBusy(true);
-    const ok = await guardWrite(deleteTrainingCourse(editing.id), () => {}, '퀴즈 종류 삭제에 실패했어요.');
+    const ok = await guardWrite(deleteTrainingCourse(editing.id), () => {}, '퀴즈 묶음 삭제에 실패했어요.');
     setBusy(false);
     if (ok) {
-      showToast('퀴즈 종류를 삭제했어요 · 노하우는 남아요', 'good');
+      showToast('퀴즈 묶음을 삭제했어요 · 노하우는 남아요', 'good');
       onDeleted?.(editing);
     }
   };
 
   return (
     <BottomSheet visible={true} onClose={onClose} sheetStyle={{ height: '80%' }}>
-      <SheetHead title={editing ? '퀴즈 종류 설정' : '퀴즈 종류 만들기'} onClose={onClose} />
+      <SheetHead title={editing ? '퀴즈 묶음 설정' : '퀴즈 묶음 만들기'} onClose={onClose} />
       <ScrollView style={{ flex: 1 }} contentContainerStyle={qst.body} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
         <Field label="이름">
           <TextField value={name} onChange={setName} placeholder="예) 주말 마감조" maxLength={20} />
@@ -180,12 +180,12 @@ export function CourseFormSheet({
         {err ? <ErrorNote text={err} /> : null}
         {editing ? (
           <View style={{ marginTop: Space.xl }}>
-            <GhostButton icon="trash-outline" label="이 퀴즈 종류 삭제" danger disabled={busy} onPress={() => void remove()} />
+            <GhostButton icon="trash-outline" label="이 퀴즈 묶음 삭제" danger disabled={busy} onPress={() => void remove()} />
           </View>
         ) : null}
       </ScrollView>
       <View style={qst.foot}>
-        <PrimaryButton label={busy ? '저장하는 중…' : editing ? '저장' : '퀴즈 종류 만들기'} disabled={busy} onPress={() => void save()} />
+        <PrimaryButton label={busy ? '저장하는 중…' : editing ? '저장' : '퀴즈 묶음 만들기'} disabled={busy} onPress={() => void save()} />
       </View>
     </BottomSheet>
   );

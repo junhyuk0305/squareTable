@@ -7,16 +7,28 @@ import { Ionicons } from '@expo/vector-icons';
 import { useWorkStore, type Recurrence } from '@/lib/store/useWorkStore';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { useStaffStore } from '@/lib/store/useStaffStore';
+import { useSessionStore } from '@/lib/store/useSessionStore';
 import { showToast } from '@/lib/store/useToastStore';
+import { guardWrite } from '@/lib/store/useSyncStore';
+import { genId } from '@/lib/utils/id';
 import { buildDirectUq, buildPlaybookEntryFromSquare } from '@/lib/utils/buildEntry';
-import { fetchQuizAttempts, type QuizAttemptRow } from '@/lib/db';
+import { fetchQuizAttempts, upsertTrainingCourse, type QuizAttemptRow } from '@/lib/db';
 import { useQuizBoard, type QuizRow } from '@/lib/quiz/useQuizBoard';
-import type { QuizItem } from '@/lib/quiz/types';
+import type { QuizItem, TrainingCourse } from '@/lib/quiz/types';
 import { BottomSheet } from '@/components/BottomSheet';
 import { EntryDetailModal } from '@/components/EntryDetailModal';
 import { EmptyState } from '@/components/EmptyState';
 import { QuizItemsSheet } from '@/components/owner/quiz/QuizItemsSheet';
 import { QuizEditorSheet } from '@/components/owner/quiz/QuizEditorSheet';
+import { QuizLinkSheet } from '@/components/owner/quiz/QuizLinkSheet';
+import { SheetHead } from '@/components/owner/quiz/kit';
+import {
+  CoursePresetOnboarding,
+  CourseFormSheet,
+  CourseRecommendSheet,
+  PRESET_LIST,
+  type CoursePreset,
+} from '@/components/owner/quiz/CourseSetup';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
@@ -56,12 +68,16 @@ const isStatusFilter = (v: string | undefined): v is StatusFilter =>
  * 검색·거르기·연결 표시가 이 화면의 존재 이유다.
  *
  * 집계는 하지 않는다. 숫자의 SSOT 는 `useQuizBoard`(1층과 공용)다.
+ *
+ * ★ 2026-08-07: **묶음(코스) 만들기·설정·공유 링크가 여기로 내려왔다.** 1층이 업무 목록으로 바뀌면서
+ *   코스를 다루는 자리가 없어졌는데, 사장이 묶음을 찾으러 갈 곳은 묶음 화면인 여기다.
+ *   만들기 흐름은 1층에 있던 순서를 그대로 옮겼다 — **프리셋 고르기 → (만들어짐) → 추천 노하우 담기**.
  */
 export default function OwnerQuizListScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ course?: string; status?: string }>();
   const {
-    entries, entryById, courses, coursesLoaded, quizReload, bumpQuiz, buildRows,
+    entries, entryById, courses, setCourses, coursesLoaded, reloadCourses, quizReload, bumpQuiz, buildRows,
   } = useQuizBoard();
 
   const addCourseEntry = useWorkStore((s) => s.addCourseEntry);
@@ -73,6 +89,7 @@ export default function OwnerQuizListScreen() {
   const cancelTrainingRequest = useWorkStore((s) => s.cancelTrainingRequest);
   const staffList = useStaffStore((s) => s.staff);
   const addEntry = usePlaybookStore((s) => s.add);
+  const unitId = useSessionStore((s) => s.unitId);
 
   // 코스 필터 — null = 전체. 딥링크(`?course=`)로 1층에서 코스를 지정해 들어온다.
   const [courseId, setCourseId] = useState<string | null>(params.course ?? null);
@@ -132,10 +149,24 @@ export default function OwnerQuizListScreen() {
   const [reqMode, setReqMode] = useState<'now' | 'weekly'>('now');
   const [reqDays, setReqDays] = useState<Set<number>>(new Set());
   const [sending, setSending] = useState(false);
+  // ── 묶음(코스) 만들기·설정 / 공유 링크 ────────────────────────────────
+  const [courseAddOpen, setCourseAddOpen] = useState(false);
+  const [courseFormOpen, setCourseFormOpen] = useState(false);
+  const [courseEditing, setCourseEditing] = useState<TrainingCourse | null>(null);
+  const [coursePreset, setCoursePreset] = useState<CoursePreset | null>(null);
+  const [recommendCourse, setRecommendCourse] = useState<TrainingCourse | null>(null);
+  const [linkOpen, setLinkOpen] = useState(false);
 
   const usedEntryIds = useMemo(() => new Set(rows.map((r) => r.entryId)), [rows]);
   const maxItems = course?.max_items ?? 0;
+  const minItems = course?.min_items ?? 0;
   const full = !!course && rows.length >= maxItems;
+  /**
+   * 공유 링크를 만들 수 있나 — 항목 수가 아니라 **실제로 나가는 항목 수**로 판정한다.
+   * 문항 0개인 노하우는 담겨 있어도 직원에게 안 나가므로, 세면 잠긴 화면을 받는 링크가 만들어진다.
+   */
+  const liveCount = useMemo(() => rows.filter((r) => r.quizCount > 0).length, [rows]);
+  const linkReady = !!course && liveCount >= minItems;
 
   const pickerEntries = useMemo(() => {
     const q = pickerQuery.trim().toLowerCase();
@@ -172,6 +203,71 @@ export default function OwnerQuizListScreen() {
     if (await addCourseEntry(course.id, e.id)) showToast(`${course.name}에 담았어요`, 'good');
   };
 
+  /**
+   * 저장된 묶음을 목록에 바로 반영하고 활성으로 만든다.
+   * 서버 재조회를 기다리면 그 사이 뒤이어 뜨는 추천 시트가 엉뚱한 묶음의 목록을 보게 된다.
+   */
+  const applyCourse = (c: TrainingCourse) => {
+    setCourses((prev) => (prev.some((x) => x.key === c.key) ? prev.map((x) => (x.key === c.key ? c : x)) : [...prev, c]));
+    setCourseId(c.id);
+    closeForm();
+    reloadCourses();
+  };
+
+  const createFromPreset = async (p: CoursePreset) => {
+    const next: TrainingCourse = {
+      id: genId('tc'),
+      unit_id: unitId,
+      key: p.key,
+      name: p.name,
+      description: p.description,
+      preset: p.key,
+      min_items: p.min_items,
+      max_items: p.max_items,
+      due_days: p.due_days,
+      position: courses.length,
+      active: true,
+    };
+    const ok = await guardWrite(upsertTrainingCourse(next), () => {}, '퀴즈 묶음 저장에 실패했어요.');
+    if (!ok) return;
+    setCourseAddOpen(false);
+    applyCourse(next);
+    showToast(`${next.name}을(를) 만들었어요`, 'good');
+    setRecommendCourse(next);
+  };
+
+  const onCourseSaved = (saved: TrainingCourse) => {
+    setCourseFormOpen(false);
+    setCourseAddOpen(false);
+    const wasNew = !courseEditing;
+    setCourseEditing(null);
+    setCoursePreset(null);
+    applyCourse(saved);
+    if (wasNew) setRecommendCourse(saved);
+  };
+
+  /** 추천 목록에서 고른 여러 건을 순서대로 담는다(position 이 고른 순서로 남게 직렬 실행). */
+  const addManyFromEntries = async (list: PlaybookEntry[]) => {
+    if (!recommendCourse) return;
+    let added = 0;
+    for (const e of list) {
+      if (await addCourseEntry(recommendCourse.id, e.id)) added += 1;
+    }
+    if (added > 0) showToast(`${recommendCourse.name}에 ${added}개 담았어요`, 'good');
+  };
+
+  /** ★준비 전에도 죽은 버튼으로 두지 않는다 — 왜 아직 못 만드는지 그 자리에서 말한다. */
+  const openLink = () => {
+    if (linkReady) { setLinkOpen(true); return; }
+    showToast(
+      !course
+        ? '먼저 위에서 퀴즈 묶음을 골라 주세요'
+        : rows.length === 0
+          ? '먼저 노하우를 담고 문제를 만들어 주세요'
+          : `문제가 있는 노하우가 ${minItems - liveCount}개 더 있으면 링크를 만들 수 있어요`,
+    );
+  };
+
   const sendRequest = async () => {
     if (!requestRow || sending) return;
     const staffIds = [...reqStaff];
@@ -190,6 +286,17 @@ export default function OwnerQuizListScreen() {
    */
   const viewAltered = query.trim() !== '' || status !== 'none';
   const showFindBar = rows.length >= FILTER_MIN || viewAltered;
+
+  /**
+   * 빈 상태의 다음 행동 — 무엇이 없느냐에 따라 달라진다.
+   * 묶음이 없으면 만들기가 먼저다(노하우 담기는 담을 곳이 없어 죽은 버튼이 된다).
+   */
+  const emptyCta =
+    courses.length === 0
+      ? { label: '묶음 만들기', onPress: () => setCourseAddOpen(true) }
+      : course
+        ? { label: '노하우 담기', onPress: () => setFormOpen(true) }
+        : { label: '퀴즈 현황으로', onPress: () => router.replace('/owner/training' as never) };
 
   const countLabel = viewAltered
     ? `${rows.length}개 중 ${filtered.length}개`
@@ -340,12 +447,18 @@ export default function OwnerQuizListScreen() {
         {filtered.length === 0 ? (
           coursesLoaded && rows.length === 0 ? (
             <EmptyState
-              title={course ? `${course.name}에 담긴 노하우가 없어요` : '퀴즈에 담긴 노하우가 없어요'}
-              body="노하우를 담으면 직원에게 물어볼 문항을 만들 수 있어요."
-              cta={
-                course
-                  ? { label: '노하우 담기', onPress: () => setFormOpen(true) }
-                  : { label: '퀴즈 현황으로', onPress: () => router.replace('/owner/training' as never) }
+              cta={emptyCta}
+              title={
+                courses.length === 0
+                  ? '퀴즈 묶음이 없어요'
+                  : course
+                    ? `${course.name}에 담긴 노하우가 없어요`
+                    : '퀴즈에 담긴 노하우가 없어요'
+              }
+              body={
+                courses.length === 0
+                  ? '묶음을 만들면 노하우를 담고 직원에게 물어볼 문제를 만들 수 있어요.'
+                  : '노하우를 담으면 직원에게 물어볼 문항을 만들 수 있어요.'
               }
             />
           ) : (
@@ -387,6 +500,25 @@ export default function OwnerQuizListScreen() {
                 <Ionicons name="ellipsis-horizontal" size={17} color={InkColors.ink3} />
               </Pressable>
             ))}
+          </View>
+        )}
+
+        {/* ── 묶음 자체를 다루는 자리(2026-08-07 1층에서 이관) — 목록 아래 링크 줄.
+               카드로 세우지 않는다. 만드는 일은 시트가, 읽는 일은 위 목록이 맡는다. ── */}
+        {courses.length > 0 && (
+          <View style={st.footLinks}>
+            <FootLink icon="add" label="묶음 만들기" onPress={() => setCourseAddOpen(true)} />
+            {course ? (
+              <>
+                <FootLink
+                  icon="options-outline"
+                  label={`${course.name} 설정`}
+                  onPress={() => { setCourseEditing(course); setCoursePreset(null); setCourseFormOpen(true); }}
+                />
+                {/* 앱 없이 링크로 푸는 경로(0113). 만료·회수는 시트가 강제한다. */}
+                <FootLink icon="link-outline" label="링크로 보내기" onPress={openLink} />
+              </>
+            ) : null}
           </View>
         )}
       </ScrollView>
@@ -649,8 +781,80 @@ export default function OwnerQuizListScreen() {
         />
       )}
 
+      {/* ── 묶음 만들기 — 프리셋 고르기가 먼저다(직접 만들기는 그 아래 한 줄) ── */}
+      {courseAddOpen && (
+        <BottomSheet visible={true} onClose={() => setCourseAddOpen(false)} sheetStyle={{ height: '80%' }}>
+          <SheetHead title="퀴즈 묶음 만들기" onClose={() => setCourseAddOpen(false)} />
+          <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 24 }} showsVerticalScrollIndicator={false}>
+            <CoursePresetOnboarding
+              takenKeys={new Set(courses.map((c) => c.key))}
+              onPickPreset={(p) => void createFromPreset(p)}
+              onCustom={() => { setCourseAddOpen(false); setCourseEditing(null); setCoursePreset(null); setCourseFormOpen(true); }}
+            />
+            {PRESET_LIST.every((p) => courses.some((c) => c.key === p.key)) ? (
+              <Text style={st.fullNote}>기본 제공 묶음은 모두 만들었어요. 직접 만들기로 더 추가할 수 있어요.</Text>
+            ) : null}
+          </ScrollView>
+        </BottomSheet>
+      )}
+
+      {/* ── 묶음 만들기·설정 폼(이름·주기·상한·삭제) ── */}
+      {courseFormOpen && (
+        <CourseFormSheet
+          editing={courseEditing}
+          preset={coursePreset}
+          position={courses.length}
+          onClose={() => { setCourseFormOpen(false); setCourseEditing(null); setCoursePreset(null); }}
+          onSaved={onCourseSaved}
+          onDeleted={(c) => {
+            setCourseFormOpen(false);
+            setCourseEditing(null);
+            setCourses((prev) => prev.filter((x) => x.id !== c.id));
+            setCourseId(null);
+            reloadCourses();
+          }}
+        />
+      )}
+
+      {/* ── 추천 노하우 담기 — 묶음을 만든 직후. 자동으로 채우지 않고 사장이 골라 담는다 ── */}
+      {recommendCourse && (
+        <CourseRecommendSheet
+          course={recommendCourse}
+          entries={entries}
+          usedEntryIds={usedEntryIds}
+          remaining={Math.max(0, (recommendCourse.max_items ?? 0) - rows.length)}
+          onAdd={addManyFromEntries}
+          onClose={() => setRecommendCourse(null)}
+        />
+      )}
+
+      {/* ── 외부 공유 링크 시트(0113) — 단기 직원용. 만료·회수 필수 ── */}
+      {linkOpen && course && <QuizLinkSheet course={course} onClose={() => setLinkOpen(false)} />}
+
       <EntryDetailModal entry={detailEntry} visible={!!detailEntry} onClose={() => setDetailEntry(null)} />
     </SafeAreaView>
+  );
+}
+
+/** 목록 아래 링크 한 줄 — 묶음을 다루는 자리. 카드가 아니라 링크다. */
+function FootLink({
+  icon, label, onPress,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [st.footLink, pressed && { opacity: 0.6 }]}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+    >
+      <Ionicons name={icon} size={16} color={InkColors.ink2} />
+      <Text style={st.footLinkText} numberOfLines={1}>{label}</Text>
+      <Ionicons name="chevron-forward" size={15} color={InkColors.ink3} />
+    </Pressable>
   );
 }
 
@@ -755,6 +959,10 @@ const st = StyleSheet.create({
   resetBtn: { alignSelf: 'center', minHeight: 48, justifyContent: 'center', paddingHorizontal: Space.lg },
   resetText: { fontSize: 15, fontWeight: '800', color: InkColors.ink, textDecorationLine: 'underline' },
   fullNote: { fontSize: 12.5, color: InkColors.ink3, textAlign: 'center', fontWeight: '600' },
+
+  footLinks: { gap: Space.xs },
+  footLink: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, minHeight: 44, paddingHorizontal: Space.xs },
+  footLinkText: { flex: 1, minWidth: 0, fontSize: 15, lineHeight: 21, fontWeight: '800', color: InkColors.ink2 },
 
   formCard: {
     backgroundColor: '#FFFFFF', borderRadius: Radius.lg, borderWidth: 1, borderColor: InkColors.line,
