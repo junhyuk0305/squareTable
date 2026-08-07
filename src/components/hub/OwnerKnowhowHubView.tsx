@@ -17,6 +17,9 @@ import { storeColor } from '@/lib/utils/storeColor';
 import { StorePickerSheet, type StorePickerRow } from '@/components/hub/StorePickerSheet';
 import { SectionLabel } from '@/components/SectionLabel';
 import { MiniStats } from '@/components/blocks/MiniStats';
+import { ActionRow } from '@/components/blocks/ActionRow';
+import { ProgressRing } from '@/components/blocks/ProgressRing';
+import { AlertRow } from '@/components/blocks/AlertRow';
 import { Appear } from '@/components/Appear';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
@@ -27,14 +30,39 @@ export function OwnerKnowhowHubView() {
   const overview = useHubStore((s) => s.overview);
   const ownerLoaded = useHubStore((s) => s.ownerLoaded);
   const hydrateOwner = useHubStore((s) => s.hydrateOwner);
+  const stats = useHubStore((s) => s.knowhowStats);
+  const statsLoaded = useHubStore((s) => s.knowhowStatsLoaded);
+  const hydrateStats = useHubStore((s) => s.hydrateKnowhowStats);
   const prefFor = useMemberPrefsStore((s) => s.prefFor);
   const hydratePrefs = useMemberPrefsStore((s) => s.hydrate);
   const { goStore, switching } = useStoreNav();
 
   useEffect(() => {
     void hydrateOwner();
+    void hydrateStats();
     void hydratePrefs();
-  }, [hydrateOwner, hydratePrefs]);
+  }, [hydrateOwner, hydrateStats, hydratePrefs]);
+
+  /**
+   * 이해도 합계 — ★매장마다 (노하우 × 직원)을 곱한 뒤 더한다.
+   * 합계끼리 곱하면(전체 노하우 × 전체 직원) 다른 매장의 노하우와 직원이 교차해
+   * 존재하지 않는 칸까지 분모에 들어간다. 다점포에서 이해율이 실제보다 낮게 나오는 경로다.
+   */
+  const understanding = useMemo(() => {
+    let cells = 0;
+    let known = 0;
+    let noItems = 0;
+    let entries = 0;
+    let staff = 0;
+    for (const s of stats) {
+      cells += s.entries * s.staff;
+      known += s.understood;
+      noItems += s.no_items;
+      entries += s.entries;
+      staff += s.staff;
+    }
+    return { cells, known, noItems, entries, staff };
+  }, [stats]);
 
   const labelOf = (uid: string) =>
     prefFor(uid).nickname || overview.find((r) => r.unit_id === uid)?.store_name || '매장';
@@ -70,6 +98,15 @@ export function OwnerKnowhowHubView() {
     } else void goStore(uid, '/owner/templates');
   };
 
+  /**
+   * 관리 액션(A1) — 다점포면 "어느 매장에서 할지"를 먼저 고른다. 건수 배지는 없다:
+   * 챙길 것 3지표와 달리 이건 "밀린 일"이 아니라 어느 매장에서든 시작할 수 있는 행동이다.
+   */
+  const act = (title: string, hint: string, path: Href) => () => {
+    if (overview.length > 1) setPicker({ title, hint, path, rows: allRows() });
+    else if (overview[0]) void goStore(overview[0].unit_id, path);
+  };
+
   /** 챙길 것 한 칸을 눌렀을 때 — 다점포면 매장 선택(건수 배지 포함), 단일이면 바로 이동. */
   const jump = (title: string, val: (r: (typeof overview)[number]) => number, path: Href) => () => {
     const hits = overview.filter((r) => val(r) > 0);
@@ -98,8 +135,10 @@ export function OwnerKnowhowHubView() {
 
   return (
     <View style={{ gap: Space.md }}>
-      {/* ── 노하우 0 매장 = 담기가 먼저(빈 화면 행동 버튼) ── */}
-      {emptyStores.map((r) => (
+      {/* ── 노하우 0 매장 = 담기가 먼저(빈 화면 행동 버튼).
+             2026-08-07: **단일 매장에서만** 그린다. 다점포에서는 아래 '매장별 노하우' 카드가
+             0개인 매장까지 전부 행으로 보여주므로, 여기에 또 세우면 같은 매장이 두 번 나온다. ── */}
+      {overview.length === 1 && emptyStores.map((r) => (
         <Appear key={r.unit_id} delay={0}>
           <View style={styles.card}>
             <Text style={styles.emptyTitle}>{labelOf(r.unit_id)}에 아직 노하우가 없어요</Text>
@@ -118,13 +157,89 @@ export function OwnerKnowhowHubView() {
         </Appear>
       ))}
 
-      {/* ── 매장별 노하우 — 각 매장의 노하우 화면으로 가는 관리 입구 + 매장 간 가져오기 ── */}
-      {(overview.some((r) => r.knowhow > 0) || overview.length > 1) && (
+      {/* ── 이해도 히어로(블록 H3) — 2026-08-07 신설.
+             "우리 매장 노하우를 직원들이 실제로 아는가"에 답하는 단 하나의 숫자.
+             ★분모 = 발행 노하우 전체 × 직원(사용자 확정). 노하우를 추가하면 비율이 내려가므로
+             절대 수(노하우 n개 · 직원 m명)를 함께 보여 "분모가 늘어난 것"이 실패로 안 읽히게 한다.
+             ★로드 전에는 그리지 않는다 — 0%가 잠깐 스쳐 지나가면 사실이 아닌 것을 말한 것이다. ── */}
+      {statsLoaded && understanding.cells > 0 && (
+        <Appear delay={10}>
+          <ProgressRing
+            value={understanding.known}
+            total={understanding.cells}
+            label="직원이 확인한 노하우"
+            sub={`노하우 ${understanding.entries}개 × 직원 ${understanding.staff}명`}
+          />
+        </Appear>
+      )}
+      {statsLoaded && understanding.cells === 0 && understanding.entries > 0 && (
+        <Appear delay={10}>
+          <Text style={styles.allClearText}>직원이 들어오면 노하우를 얼마나 아는지 보여드려요</Text>
+        </Appear>
+      )}
+
+      {/* ── 경고행(블록 X2) — 퀴즈로 안 쓰인 노하우. 0건이면 AlertRow 가 스스로 숨는다.
+             ★2026-08-07: '아무도 모르는 노하우'(통과자 0)가 아니라 **문항이 없는 노하우**(no_items)를
+             건다. 파이프라인상 이쪽이 먼저다 — 문항이 없으면 직원이 알 방법 자체가 없어서 아무리
+             기다려도 이해율이 오르지 않는다. 사장이 지금 바로 할 수 있는 일이기도 하다.
+             (통과자 0 지표 no_one 은 C단계 퀴즈 대시보드가 쓴다) ── */}
+      {/* ★직원이 0명이면 그리지 않는다(cells === 0). 1인 매장에서는 모든 노하우가 정의상
+             '아무도 모르는' 것이 되어 "24개가 위험"이라고 겁을 주는데, 직원이 없으니 사실은
+             위험이 아니다. 지표가 참이어도 그 상태에서 할 수 있는 일이 없으면 경고가 아니다. */}
+      {statsLoaded && understanding.cells > 0 && (
         <Appear delay={20}>
+          <AlertRow
+            label="퀴즈로 안 쓰인 노하우"
+            count={understanding.noItems}
+            unit="개"
+            onPress={act('퀴즈로 안 쓰인 노하우', '어느 매장의 퀴즈를 볼지 골라 주세요', '/owner/training')}
+          />
+        </Appear>
+      )}
+
+      {/* ── 관리 액션(블록 A1) — 2026-08-07 신설.
+             이 탭에서 할 수 있는 일이 '가져오기'뿐이라, 노하우를 추가하려면 매장을 고르고 한 층
+             아래(매장 앱 노하우 탭)로 내려가야 했다. 진입점을 여기로 끌어올린다.
+             ★ 새 입력 경로를 만들지 않는다 — '노하우 추가'는 매장 앱과 같은 /owner/coach 로 보낸다.
+             퀴즈는 현황 탭에서 옮겨 온 것이다(퀴즈 = 노하우 이해도의 계측기). ── */}
+      <Appear delay={20}>
+        <ActionRow
+          items={[
+            {
+              key: 'add',
+              icon: 'add-circle-outline',
+              label: '노하우 추가',
+              onPress: act('노하우 추가', '어느 매장에 추가할지 골라 주세요', '/owner/coach'),
+            },
+            {
+              key: 'list',
+              icon: 'list-outline',
+              label: '노하우 목록',
+              // 단일 매장에서는 아래 '매장별 노하우' 카드를 그리지 않으므로(정보가 아니라 반복이다)
+              // 목록으로 가는 길이 여기 하나다. 없애면 단일 매장 사장이 목록에 닿지 못한다.
+              onPress: act('노하우 목록', '어느 매장의 노하우를 볼지 골라 주세요', '/owner/knowledge'),
+            },
+            {
+              key: 'quiz',
+              icon: 'school-outline',
+              label: '퀴즈',
+              onPress: act('퀴즈', '어느 매장의 퀴즈를 볼지 골라 주세요', '/owner/training'),
+            },
+          ]}
+        />
+      </Appear>
+
+      {/* ── 매장별 노하우 — 매장 간 비교·가져오기. 2026-08-07: **다점포에서만** 그린다.
+             단일 매장에서는 행이 하나뿐이라 "어느 매장이 비었나"라는 새 정보가 없고, 그 숫자는
+             바로 위 히어로가 이미 말한다(현황 탭이 매장별 행에 쓰는 규칙과 같다).
+             목록으로 가는 길은 위 ActionRow '노하우 목록'이 대신한다 — 도달 경로 손실 0. ── */}
+      {overview.length > 1 && (
+        <Appear delay={40}>
           <SectionLabel title="매장별 노하우" />
           <View style={styles.card}>
+            {/* 0개인 매장도 뺴지 않는다 — "어느 매장이 비었나"가 이 카드의 존재 이유다.
+                착지는 매장을 가리지 않고 노하우 목록 하나로 통일한다(빈 목록 화면이 담기를 안내한다). */}
             {overview
-              .filter((r) => r.knowhow > 0)
               .map((r) => (
                 <Pressable
                   key={r.unit_id}
@@ -162,17 +277,19 @@ export function OwnerKnowhowHubView() {
              셋 다 "N건 남았다" 하나만 말하는데 카드를 3장 세우니 이 화면이 카드 나열이 됐다.
              숫자는 MiniStats 한 줄로 내리고, 매장별 분해는 탭했을 때 매장 선택 시트의 배지가 맡는다
              (StatusView가 이미 쓰는 패턴). 섹션 힌트는 각 칸의 ⓘ로 옮겼다. ── */}
-      <Appear delay={40}>
+      <Appear delay={60}>
         <SectionLabel title="챙길 것" />
         <MiniStats
           items={[
             {
               key: 'pending',
               value: totals.pending,
-              label: '노하우로 만들 것',
-              onPress: jump('노하우로 만들 것', (r) => r.pending_q, '/owner/inbox'),
+              // 2026-08-07: '노하우로 만들 것' → '직원 질문'. 앞의 이름은 사장이 해야 할 **가공**을
+              // 가리켰는데, 정작 그게 무엇에서 나온 것인지(직원이 물었다)를 감췄다. 있는 그대로 부른다.
+              label: '직원 질문',
+              onPress: jump('직원 질문', (r) => r.pending_q, '/owner/inbox'),
               info: {
-                title: "'노하우로 만들 것'이 뭐예요?",
+                title: "'직원 질문'이 뭐예요?",
                 // 같은 pending_q 를 현황 탭은 '답 기다리는 질문'이라 부른다 — 한 수치를 두 이름으로 부르면
                 // 사장이 서로 다른 지표로 읽는다. 이름을 통일하는 대신(탭마다 문맥이 다르다) 같은 수임을 밝힌다.
                 body: '노하우에 없어서 사장님 답을 기다리는 질문이에요.\n답 하나가 노하우 하나가 돼요.\n현황 탭의 ‘답 기다리는 질문’과 같은 수예요.',

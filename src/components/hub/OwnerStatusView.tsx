@@ -253,36 +253,9 @@ export function OwnerStatusView() {
             </>
           )}
 
-          {/* 퀴즈 — 첫 출근·정기 점검 진입점. 기능이 직원·급여 화면에만 숨어 있어 발견이 안 되던
-              문제(2026-07-31) → 현황에 상시 노출. 2026-08-06: 행 1개짜리 별도 섹션이 '제목→카드'
-              반복을 한 칸 늘리고 있어 이 카드 안 마지막 행으로 합쳤다(카운트가 없으니 항상 맨 아래).
-              허브 원칙대로 이동만 담당, 다점포는 기존 매장 선택 시트 재사용. */}
-          <Pressable
-            onPress={() => {
-              if (multi) {
-                setPicker({
-                  title: '퀴즈',
-                  path: '/owner/training',
-                  units: overview.map((r) => ({ uid: r.unit_id, count: 0 })),
-                });
-              } else if (overview[0]) {
-                void goStore(overview[0].unit_id, '/owner/training');
-              }
-            }}
-            disabled={!!switching}
-            style={({ pressed }) => [styles.row, pressed && { opacity: 0.85 }]}
-            accessibilityRole="button"
-            accessibilityLabel="퀴즈 열기"
-          >
-            <View style={styles.rowIcon}>
-              <Ionicons name="school-outline" size={15} color={InkColors.ink2} />
-            </View>
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <Text style={styles.rowTitle} numberOfLines={1}>퀴즈</Text>
-              <Text style={styles.rowSub} numberOfLines={1}>첫 출근(신입 첫날)과 정기 점검(주기 재확인)을 만들어요</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={15} color={InkColors.ink3} />
-          </Pressable>
+          {/* 퀴즈 진입점은 2026-08-07에 노하우 탭(OwnerKnowhowHubView)으로 옮겼다.
+              퀴즈가 남기는 기록은 점수가 아니라 knowhow_understanding = "누가 어떤 노하우를 아는가"라
+              노하우의 계측기다. 현황 탭은 '지금 막힌 것'을 말하는 자리이고, 퀴즈는 축적·순환 레이어다. */}
         </View>
       </Appear>
 

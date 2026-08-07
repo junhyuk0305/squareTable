@@ -5,11 +5,13 @@ import { create } from 'zustand';
 import {
   fetchOwnerOverview,
   fetchOwnerToday,
+  fetchOwnerKnowhowStats,
   fetchMyCrossSummary,
   fetchMyGrowth,
   fetchMyKnowhowEntries,
   type OwnerOverviewRow,
   type OwnerTodayRow,
+  type OwnerKnowhowStatRow,
   type MyCrossSummaryRow,
   type MyGrowthRow,
 } from '@/lib/db';
@@ -20,6 +22,7 @@ let _ownerAt = 0;
 let _juniorAt = 0;
 let _growthAt = 0;
 let _myEntriesAt = 0;
+let _knowhowStatsAt = 0;
 
 type State = {
   overview: OwnerOverviewRow[];
@@ -37,10 +40,15 @@ type State = {
   myEntries: PlaybookEntry[];
   /** true = 목록 최소 1회 성공 — 성장 탭이 "전부 도착"까지 로딩을 유지(부분 렌더 금지). */
   myEntriesLoaded: boolean;
+  /** 노하우 이해도 지표(0120) — 노하우 탭 전용이라 hydrateOwner 와 분리한다(현황 탭이 값을 치르지 않게). */
+  knowhowStats: OwnerKnowhowStatRow[];
+  /** true = 최소 1회 성공 — 이해율 0%와 "아직 못 읽음"을 화면이 구분한다(빈화면 위장 금지). */
+  knowhowStatsLoaded: boolean;
   hydrateOwner: () => Promise<void>;
   hydrateJunior: () => Promise<void>;
   hydrateGrowth: () => Promise<void>;
   hydrateMyEntries: () => Promise<void>;
+  hydrateKnowhowStats: () => Promise<void>;
 };
 
 export const useHubStore = create<State>((set) => ({
@@ -54,6 +62,20 @@ export const useHubStore = create<State>((set) => ({
   growthLoaded: false,
   myEntries: [],
   myEntriesLoaded: false,
+  knowhowStats: [],
+  knowhowStatsLoaded: false,
+
+  hydrateKnowhowStats: async () => {
+    const now = Date.now();
+    if (now - _knowhowStatsAt < HYDRATE_TTL_MS) return;
+    _knowhowStatsAt = now;
+    const { data, error } = await fetchOwnerKnowhowStats();
+    if (error || !data) {
+      _knowhowStatsAt = 0; // 실패 = TTL 미적용(다음 진입 즉시 재시도). 표면화는 db.ts readFail.
+      return;
+    }
+    set({ knowhowStats: data, knowhowStatsLoaded: true });
+  },
 
   hydrateOwner: async () => {
     const now = Date.now();

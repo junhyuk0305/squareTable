@@ -193,6 +193,26 @@ export async function fetchOwnerOverview(): Promise<DbResult<OwnerOverviewRow[]>
   return { data: (data as OwnerOverviewRow[]) ?? null, error: error as DbErr };
 }
 
+// ── 노하우 이해도(0120) — 허브 노하우 탭 히어로·경고행 ──────────────────────────────────
+// 퀴즈가 남기는 것은 점수가 아니라 (노하우 × 직원) 격자다(knowhow_understanding, 0111).
+// 집계 규칙(분모=발행 전체·현재 직원 한정·외부 응시 제외)의 SSOT는 0120 함수 본문이다 —
+// 여기서 다시 계산하지 않는다. 화면은 이 숫자를 그리기만 한다.
+export type OwnerKnowhowStatRow = {
+  unit_id: string;
+  entries: number; // 발행 노하우 수
+  staff: number; // 직원 수
+  understood: number; // 확인된 칸 수
+  no_one: number; // 아무도 모르는 노하우 수
+  no_items: number; // 문항이 없는 노하우 수
+};
+/** 소유 매장별 노하우 이해도 지표. 읽기 실패는 빈 화면으로 위장되면 안 되므로 readFail로 남긴다. */
+export async function fetchOwnerKnowhowStats(): Promise<DbResult<OwnerKnowhowStatRow[]>> {
+  if (!HAS_SUPABASE) return { data: [], error: null };
+  const { data, error } = await supabase.rpc('owner_knowhow_stats');
+  if (error) readFail('fetchOwnerKnowhowStats', error);
+  return { data: (data as OwnerKnowhowStatRow[]) ?? null, error: error as DbErr };
+}
+
 // ── 허브 대시보드(0081) — 사장 현황 탭·직원 오늘 탭 데이터 (definer, 0074/0077 패턴) ─────────
 export type OwnerTodayRow = { unit_id: string; working_now: number; scheduled: number };
 /** 소유 매장별 지금 근무중/오늘 근무 예정 "카운트" — 현황 탭 오늘 스냅샷. 명단은 매장 출퇴근 화면 담당. */
