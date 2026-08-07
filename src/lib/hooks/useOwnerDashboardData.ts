@@ -1,6 +1,7 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 
 import { useSessionStore } from '@/lib/store/useSessionStore';
+import { useHubStore } from '@/lib/store/useHubStore';
 import { useUnknownQueueStore } from '@/lib/store/useUnknownQueueStore';
 import { useAttendanceStore } from '@/lib/store/useAttendanceStore';
 import { useWorkStore, occursOn, taskVisibleTo } from '@/lib/store/useWorkStore';
@@ -23,8 +24,15 @@ export type OwnerDashboardData = {
   heroQuery?: UnknownQuery;
   /** heroQuery 작성자의 입사 경과일 — 익명이면 undefined. */
   heroCareerDays?: number;
-  /** 최근 30일 노하우가 알바 질문에 '대신 답한' 실카운트(Σ query_hits_30d). 히어로 가치 지표. */
-  answeredHits30d: number;
+  /**
+   * 이번 달(KST) 이 매장의 AI 답변 사용 건수 — 허브 현황의 'AI 답변 사용'과 **같은 원천**(owner_overview.ai_used).
+   *
+   * ★2026-08-07: 옛 '30일간 대신 답함'(Σ query_hits_30d)을 대체한다. 두 숫자는 정의가 달랐는데
+   *   (롤링 30일 vs 이번 달 · 노하우가 쓰인 답만 vs 모든 AI 답변 · 현재 매장 vs 전체 매장)
+   *   이름이 그 차이를 안 알려줘 같은 말로 읽혔다. 이름과 정의를 'AI 답변 사용' 하나로 통일했다.
+   *   잃은 '가치 증명'은 숫자가 아니라 **목록**이 맡는다 — 받은질문의 'AI가 답함' 세그먼트.
+   */
+  aiUsedMonth: number;
 };
 
 /** 사장 대시보드 화면의 뷰모델 — 스토어 셀렉터 읽기 + 파생값 계산을 한곳에 모은다. */
@@ -65,15 +73,14 @@ export function useOwnerDashboardData(): OwnerDashboardData {
   // 2026-08-06: 담당자별 배정 요약(assign)은 홈에서 OwnerWorkValueCard가 사라지며 소비자가 없어져 제거했다.
   // "누가 무슨 일"은 /owner/work(AssignBoard)가 담당한다.
 
-  // 최근 30일 노하우 자동응답 실카운트 — 발행된 노하우의 query_hits_30d 합.
-  // "사장님 대신 답한 횟수"의 정직한 근거(0037 노하우 사용통계). 지어낸 값 아님.
-  const answeredHits30d = useMemo(
-    () =>
-      entries.reduce(
-        (sum, e) => sum + ((e.status === 'published' || !e.status) ? (e.stats?.query_hits_30d ?? 0) : 0),
-        0,
-      ),
-    [entries],
+  // AI 답변 사용(이번 달) — 허브와 같은 definer RPC(owner_overview, 0081)를 그대로 읽는다.
+  // 새 권한 경로가 아니고, 같은 화면 두 곳이 다른 말을 하지 않게 원천을 하나로 둔다.
+  const overview = useHubStore((s) => s.overview);
+  const activeUnitId = useSessionStore((s) => s.unitId);
+  useEffect(() => { void useHubStore.getState().hydrateOwner(); }, []);
+  const aiUsedMonth = useMemo(
+    () => overview.find((r) => r.unit_id === activeUnitId)?.ai_used ?? 0,
+    [overview, activeUnitId],
   );
 
   // 알바 FAQ Top — 미답변 질문을 '많이 물은 순'으로. 답변 시 노하우로 전환됨.
@@ -107,6 +114,6 @@ export function useOwnerDashboardData(): OwnerDashboardData {
     pending,
     heroQuery,
     heroCareerDays,
-    answeredHits30d,
+    aiUsedMonth,
   };
 }

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Text, Pressable, ScrollView, StyleSheet, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, Stack } from 'expo-router';
@@ -7,6 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { InboxHeroCard } from '@/components/InboxHeroCard';
 import { MiniStats } from '@/components/blocks/MiniStats';
 import { InboxSubtabs } from '@/components/InboxSubtabs';
+import { AiAnswerRow } from '@/components/AiAnswerRow';
 import { SimilarGroupRow } from '@/components/SimilarGroupRow';
 import { SectionLabel } from '@/components/SectionLabel';
 import { RoleTabBar } from '@/components/RoleTabBar';
@@ -22,6 +23,7 @@ import { Radius, Elevation } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
 
 import { useStaffStore } from '@/lib/store/useStaffStore';
+import { fetchAiAnswers, type AiAnswerRow as AiAnswer } from '@/lib/db';
 import { sortByUrgency } from '@/lib/utils/unknownQuery';
 import type { PlaybookEntry, UnknownQuery } from '@/types';
 
@@ -37,7 +39,9 @@ const isUnused = (e: PlaybookEntry) =>
  * 1) Hero 우선 답변 1건 (가장 오래 기다린 것, sortByUrgency SSOT)
  * 2) 한눈에 보기 — 요약 3칸(MiniStats) + AI 자동응답률(누적)
  * 3) 노하우 제안 진입 (직원→사장)
- * 4) <InboxSubtabs> [답할 질문 | AI가 답함] — 상태별 파생 필터·카운트는 컴포넌트가 처리.
+ * 4) <InboxSubtabs> [답할 질문 | AI가 답함] — 세그먼트·빈 상태는 컴포넌트가, 데이터는 화면이 갖는다.
+ *    ★2026-08-07: 'AI가 답함'을 chat_queries 로 갈아끼웠다. 사장이 보고 싶어 한 것은 개수가 아니라
+ *    **어떤 질문에 어떤 노하우로 답했나**인데, unknown_queries 는 그걸 모른다(무엇으로 답했는지 없음).
  * 5) '그동안 쌓은 노하우' 진입 카드 → /owner/knowledge
  */
 export default function OwnerInboxScreen() {
@@ -79,6 +83,19 @@ export default function OwnerInboxScreen() {
   const knowhowCount = useMemo(() => entries.filter((e) => e.status !== 'draft').length, [entries]);
   const unusedCount = useMemo(() => entries.filter(isUnused).length, [entries]);
 
+  // ── 'AI가 답함' 목록(2026-08-07) — 원천 chat_queries. 최근 30일·최대 50건.
+  // 실패를 빈 목록으로 위장하지 않기 위해 로드 여부를 따로 든다(db.ts readFail 이 표면화도 한다).
+  const [aiAnswers, setAiAnswers] = useState<AiAnswer[]>([]);
+  useEffect(() => {
+    let alive = true;
+    void fetchAiAnswers().then(({ data }) => { if (alive && data) setAiAnswers(data); });
+    return () => { alive = false; };
+  }, []);
+  const entryTitleOf = useMemo(() => {
+    const m = new Map(entries.map((e) => [e.id, e.title]));
+    return (id: string) => m.get(id);
+  }, [entries]);
+
   // hero: 전체 pending 중 가장 오래 기다린 것. 깊은 답변 → 기존 answer 위저드.
   const hero = pending[0];
 
@@ -112,8 +129,8 @@ export default function OwnerInboxScreen() {
         </View>
       ) : loadError && queue.length === 0 ? (
         // 로드 실패 + 빈 큐 → "질문 없음"으로 위장하지 않고 재시도를 띄운다(무음 실패 방지).
+        // 그림 이모지 금지(워딩 §1) — 남아 있던 위반을 걷었다(2026-08-07).
         <EmptyState
-          emoji="📡"
           title="질문을 불러오지 못했어요"
           body="연결을 확인하고 다시 시도해 주세요."
           cta={{ label: '다시 시도', onPress: () => hydrate() }}
@@ -191,7 +208,8 @@ export default function OwnerInboxScreen() {
           </Pressable>
           </Appear>
 
-          {/* 4) 서브탭 [답할 질문 | AI가 답함] — 상태별 필터·카운트는 InboxSubtabs가 처리. */}
+          {/* 4) 서브탭 [답할 질문 | AI가 답함] — ①사장님께 온 것 / ②AI가 바로 답한 것.
+                 새 탭을 만들지 않는다(ADR-002) — 깊이는 세그먼트로. */}
           <Appear>
           <InboxSubtabs
             queue={queue}
@@ -203,6 +221,16 @@ export default function OwnerInboxScreen() {
                 onAnswer={uq.status === 'pending_owner_answer' ? openAnswer : undefined}
               />
             )}
+            aiRows={aiAnswers.map((r) => ({
+              key: r.id,
+              node: (
+                <AiAnswerRow
+                  row={r}
+                  titleOf={entryTitleOf}
+                  onOpenEntry={(id) => router.push(`/owner/edit/${id}`)}
+                />
+              ),
+            }))}
           />
           </Appear>
 

@@ -37,7 +37,7 @@ export default function OwnerDashboardScreen() {
     pending,
     heroQuery,
     heroCareerDays,
-    answeredHits30d,
+    aiUsedMonth,
     todayTasks,
   } = useOwnerDashboardData();
 
@@ -242,14 +242,19 @@ export default function OwnerDashboardScreen() {
               items={[
                 { key: 'knowhow', value: capCount(entriesCount), label: '노하우', onPress: () => goToTab('/owner/categories') },
                 {
+                  // ★2026-08-07: '30일간 대신 답함' → 'AI 답변 사용'. 허브 현황과 **같은 이름·같은 정의**로
+                  //   통일했다(이번 달 · owner_overview.ai_used). 옛 이름은 기간·범위·세는 대상이 전부
+                  //   달랐는데(롤링 30일 vs 이번 달 · 노하우가 쓰인 답만 vs 모든 AI 답변) 이름이 그 차이를
+                  //   안 알려줘 두 화면의 숫자가 같은 말로 읽혔다.
+                  //   숫자가 못 하던 '가치 증명'은 착지가 맡는다 — 받은질문의 'AI가 답함' 목록에서
+                  //   어떤 질문에 어떤 노하우로 답했는지 그대로 보인다.
                   key: 'answered',
-                  value: capCount(answeredHits30d),
-                  label: '30일간 대신 답함',
-                  // KPI 카드가 이고 있던 ⓘ 설명이 MiniStats로 흡수되면서 사라졌던 것을 되살린다(2026-08-06).
-                  // 이 숫자만 라벨로 뜻이 안 선다 — '노하우'·'근무 중'은 말 그대로다.
+                  value: capCount(aiUsedMonth),
+                  label: 'AI 답변 사용',
+                  onPress: () => goToTab('/owner/inbox'),
                   info: {
-                    title: "'대신 답함'이 뭐예요?",
-                    body: '직원이 AI에게 물었을 때, 우리 매장 노하우로 답이 나간 횟수예요.\n노하우가 쌓일수록 사장님이 직접 답하는 일이 줄어요.\n\n답을 못 찾은 질문은 이 숫자에 안 들어가고 ‘답 기다리는 질문’으로 넘어가요.',
+                    title: 'AI 답변 사용이 뭐예요?',
+                    body: '이번 달에 직원이 물었을 때 AI가 답한 횟수예요.\n눌러서 어떤 질문에 어떤 노하우로 답했는지 볼 수 있어요.\n\n요금제 한도는 매장 목록 화면에서 확인할 수 있어요.',
                   },
                 },
                 { key: 'working', value: working, label: '근무 중', onPress: () => router.push('/owner/staff') },

@@ -851,6 +851,39 @@ export async function fetchChatQueries(juniorId: string): Promise<ChatQuery[]> {
   return (data ?? []) as ChatQuery[];
 }
 
+/**
+ * 사장이 보는 'AI가 답한 질문' 목록(2026-08-07) — 받은질문 세그먼트 ②.
+ *
+ * ★ 새 권한 경로가 아니다. chat_queries 의 RLS 는 `unit_id = auth_unit_id()`(0019)이고
+ *   이 화면은 매장 앱 층(활성 매장)이라 그 정책이 그대로 정답이다. definer RPC 를 만들지 않는다.
+ * ★ 거르기는 **matched_entry_ids 가 비지 않은 것**이다 — "노하우로 답이 나갔다"의 유일한 증거고,
+ *   "아직 등록되지 않았어요"로 끝난 질문(빈 배열)은 여기 들어오면 안 된다.
+ *   서버에서 거를 수단이 마땅치 않아(배열 비교) 최근 창을 읽고 클라에서 거른다.
+ */
+export type AiAnswerRow = {
+  id: string;
+  query_text: string;
+  junior_name: string;
+  asked_at: string;
+  matched_entry_ids: string[];
+  satisfaction: 'up' | 'down' | null;
+};
+export async function fetchAiAnswers(days = 30, limit = 50): Promise<DbResult<AiAnswerRow[]>> {
+  if (!HAS_SUPABASE) return { data: [], error: null };
+  const { data, error } = await supabase
+    .from('chat_queries')
+    .select('id, query_text, junior_name, asked_at, matched_entry_ids, satisfaction')
+    .gte('asked_at', sinceTs(days))
+    .order('asked_at', { ascending: false })
+    .limit(PAGE_LIMIT);
+  if (error) {
+    readFail('fetchAiAnswers', error);
+    return { data: null, error: error as DbErr };
+  }
+  const rows = ((data ?? []) as AiAnswerRow[]).filter((r) => (r.matched_entry_ids ?? []).length > 0);
+  return { data: rows.slice(0, limit), error: null };
+}
+
 export async function insertChatQuery(cq: ChatQuery): Promise<boolean> {
   if (!HAS_SUPABASE) return true;
   // candidate_entry_ids는 클라 UI 전용(비영속) — DB 컬럼이 없으므로 insert에서 제외.
