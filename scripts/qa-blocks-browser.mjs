@@ -622,7 +622,9 @@ async function main() {
     for (const [pg, path, name] of [
       [po, '/account-settings', '계정 설정'],
       [po, '/owner/categories', '노하우(탭)'],
-      [po, '/owner/inbox', '받은질문'],
+      // 2026-08-07: '받은질문' 탭이 노하우 탭 '할 일' 세그먼트로 흡수됐다(/owner/inbox 는 리다이렉트).
+      // 재는 대상은 그 세그먼트가 실제로 그리는 면이다.
+      [po, '/owner/categories?seg=todo', '노하우 탭 · 할 일'],
       [po, '/hub', '허브 현황'],
       [po, '/owner/staff', '직원·급여'],
       [po, '/billing', '결제(다른 작업 소유 — 읽기만)'],
@@ -668,7 +670,7 @@ async function main() {
       ['/owner/staff', '직원'],
       ['/owner/schedule', '근무표'],
       ['/owner/suggestions', '제안함'],
-      ['/owner/inbox', '받은질문'],
+      ['/owner/categories?seg=todo', '노하우 탭 · 할 일'],
       ['/owner/training', '퀴즈'],
       ['/owner/knowledge', '노하우'],
     ];

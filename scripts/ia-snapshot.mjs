@@ -95,6 +95,9 @@ const rows = registry.screens.map((e) => {
     inlineEmpty: rt?.inlineEmpty ?? false,
     regressed: blocks.max > (e.maxAccepted ?? Infinity),
     overBudget: budget != null && blocks.max > budget,
+    // 겹(tier) = 얼마나 자주 여는가. 0 탭 · 1 홈 서브내비 · 2 한 단계 안 · 3 주 1회 이하.
+    // 사람이 등록표에 선언한다 — 코드에서 못 뽑는다(진입 경로 수는 빈도가 아니다).
+    tierOk: Number.isInteger(e.tier) && e.tier >= 0 && e.tier <= 3,
   };
 });
 
@@ -117,6 +120,7 @@ for (const role of ['common', 'owner', 'junior']) {
     const span = `${r.blocks.min}–${r.blocks.max}/${r.type ?? '-'}`;
     const state = r.regressed ? '▲래칫' : r.verdict === 'adr' ? '·ADR ' : r.overBudget ? '△예산' : '     ';
     const flags = [
+      r.tierOk ? `겹${r.tier}` : '겹?',
       (r.blocks.flags || '').padEnd(3),
       r.isTab ? 'TAB' : '   ',
       r.hasEmpty ? (r.emptyCta ? 'E+' : 'E-') : (r.inlineEmpty ? 'e-' : '  '),
@@ -131,6 +135,7 @@ for (const role of ['common', 'owner', 'junior']) {
 const regressed = rows.filter((r) => r.regressed);
 const overNoAdr = rows.filter((r) => r.overBudget && !r.regressed && r.verdict !== 'adr');
 const adrAllowed = rows.filter((r) => r.verdict === 'adr');
+const noTier = rows.filter((r) => !r.tierOk);
 const noCta = routes.filter((r) => (r.hasEmpty && !r.emptyCta) || (r.inlineEmpty && !r.emptyCta));
 const orphan = routes.filter((r) => r.in === 0 && !r.isTab);
 
@@ -140,6 +145,10 @@ console.log(`· 래칫 초과(=지난번보다 나빠짐) ${regressed.length}개
 if (regressed.length) for (const r of regressed) console.log(`    ${r.id}  ${r.blocks.max} > maxAccepted ${r.maxAccepted}`);
 console.log(`· 절대 예산 초과 ${overNoAdr.length}개 (ADR 없음) — 사람이 판정할 것: ${overNoAdr.map((r) => `${r.id}(${r.blocks.max}/${r.type})`).join(', ') || '없음'}`);
 console.log(`· ADR 로 허용 중 ${adrAllowed.length}개: ${adrAllowed.map((r) => `${r.id}(${r.adr ?? 'ADR?'})`).join(', ') || '없음'}`);
+// 겹 미배정은 **exit 1 에 넣지 않는다.** 미등록·유령은 "표가 코드와 다르다"는 사실 오류라 자동으로 참·거짓이
+// 갈리지만, 겹은 빈도에 대한 사람의 판단이고 새 화면을 만든 시점엔 아직 안 정해진 게 정상이다.
+// 여기에 걸면 화면을 하나 추가하는 것 자체가 빌드 실패가 된다 → 표시(겹?)와 이 줄로 남긴다.
+console.log(`· 겹 배정 없음 ${noTier.length}개 (표시만 — exit 조건 아님): ${noTier.map((r) => r.id).join(', ') || '없음'}`);
 
 console.log(`\n── 못 재는 것 ${'─'.repeat(48)}`);
 console.log('· 형태가 같은 블록이 연속인지 (배치규칙① — 이번 개편의 진짜 증상)');
