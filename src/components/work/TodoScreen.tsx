@@ -1,9 +1,10 @@
-import { useMemo, useState } from 'react';
-import { View, Text, Pressable, ScrollView, StyleSheet } from 'react-native';
+import { useEffect, useMemo, useState } from 'react';
+import { View, Text, Pressable, ScrollView, StyleSheet, Animated, Easing } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { Appear } from '@/components/Appear';
 import { StoredImage } from '@/components/StoredImage';
+import { WeekStrip, type WeekDay } from '@/components/blocks/WeekStrip';
 import { DaypartSettingsSheet } from '@/components/work/DaypartSettingsSheet';
 import { useDayparts, isRoutineTaskId, occursOn, taskVisibleTo, type TaskTemplate, type DoneMark } from '@/lib/store/useWorkStore';
 import { InkColors, BrandColors, CategoryColors } from '@/lib/theme/colors';
@@ -14,9 +15,22 @@ import { confirmAction } from '@/lib/utils/confirm';
 const SHARED = CategoryColors.Routine; // 슬레이트 = 가게 전체
 const MINE = CategoryColors.Event; // 테라코타 = 내가 등록(나만)
 const WD = ['일', '월', '화', '수', '목', '금', '토'];
+/** 달력 접기·펴기 높이 애니메이션(ms). height는 네이티브 드라이버를 못 써서 JS 드라이버 고정 — 웹에서도 같은 코드로 돈다. */
+const FOLD_MS = 200;
 
 function ymd(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/**
+ * 이 할일이 반복인가 — 반복이라는 사실은 별도 화면이 아니라 목록 안 부제로 알린다.
+ * 매일(7요일 전부)·레거시(일정 정보 없음=매일 루틴)는 '매일 반복', 일부 요일은 '매주 반복'.
+ */
+function repeatLabel(t: TaskTemplate): string | null {
+  const r = t.recurrence;
+  if (r && r !== 'once') return r.weekly.length >= 7 ? '매일 반복' : '매주 반복';
+  if (!r && !t.date && !t.dueDate) return '매일 반복';
+  return null;
 }
 
 /**
@@ -35,6 +49,7 @@ export function TodoScreen({
   onAttachPhoto,
   onAddForDate,
   onEditTask,
+  onOpenRepeat,
   knowhowOf,
   onOpenKnowhow,
   understoodNames,
@@ -53,6 +68,8 @@ export function TodoScreen({
   onAddForDate: (date: string) => void;
   /** 연필 → 수정/삭제 시트. (X 즉시삭제를 대체 — 회의 반영) */
   onEditTask: (t: TaskTemplate) => void;
+  /** 목록 아래 '반복 업무 만들기' 행 → 담당자별 보드. 없으면 행이 안 뜬다(사장·매니저 전용). */
+  onOpenRepeat?: () => void;
   /** 이 업무에 붙은 노하우(제목) — 카드에 칩으로 노출. 없으면 칩 안 뜸(0069). */
   knowhowOf?: (templateId: string) => { id: string; title: string }[];
   /** 칩 탭 → 노하우 원문 열람(EntryDetailModal). */
@@ -66,7 +83,8 @@ export function TodoScreen({
 }) {
   const dayparts = useDayparts();
   const [selected, setSelected] = useState(today);
-  const [folded, setFolded] = useState(false);
+  // 접힌 채로 시작한다 — 이 화면을 여는 이유는 '오늘 뭘 하는지'이지 '날짜 고르기'가 아니다.
+  const [folded, setFolded] = useState(true);
   const [cursor, setCursor] = useState(() => new Date(`${today}T00:00:00`)); // 보고 있는 월
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [hideDone, setHideDone] = useState(false);
@@ -75,6 +93,25 @@ export function TodoScreen({
 
   // 내가 볼 수 있는 할일 — taskVisibleTo SSOT(0017 RLS 정합).
   const visible = useMemo(() => templates.filter((t) => taskVisibleTo(t, me)), [templates, me]);
+
+  // 접기·펴기 높이 애니메이션 — 주간 스트립(접힘) ↔ 월 그리드(펼침)를 서로 반대로 여닫는다.
+  // height는 useNativeDriver 를 못 쓴다(=JS 드라이버). RNW도 같은 JS 경로라 웹에서 그대로 돈다.
+  // Animated.Value는 ref가 아니라 안정 객체로 메모이즈 — render 중 ref.current 접근(react-hooks/refs) 회피(SegmentTabs와 동일 패턴).
+  const fold = useMemo(() => new Animated.Value(1), []); // 1=접힘(주간) · 0=펼침(월)
+  const [weekH, setWeekH] = useState(0);
+  const [gridH, setGridH] = useState(0);
+  useEffect(() => {
+    Animated.timing(fold, {
+      toValue: folded ? 1 : 0,
+      duration: FOLD_MS,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: false,
+    }).start();
+  }, [folded, fold]);
+  // 아직 못 잰 상태(첫 프레임·ResizeObserver 부재)에서는 애니메이션 대신 접힘/펴짐 그대로 그린다.
+  // 재기 전에 0으로 눌러두면 "영영 안 보임"이 되고, 그건 애니메이션이 없는 것보다 나쁘다.
+  const weekBoxStyle = weekH > 0 ? { height: fold.interpolate({ inputRange: [0, 1], outputRange: [0, weekH] }) } : folded ? null : { height: 0 };
+  const gridBoxStyle = gridH > 0 ? { height: fold.interpolate({ inputRange: [0, 1], outputRange: [gridH, 0] }) } : folded ? { height: 0 } : null;
 
   // 월 그리드
   const grid = useMemo(() => {
@@ -110,6 +147,20 @@ export function TodoScreen({
     return { shared, mine };
   }
 
+  // 접힌 상태의 주간 스트립 — 선택일이 든 주(일요일 시작, 월 그리드와 같은 축).
+  const weekDays: WeekDay[] = (() => {
+    const base = new Date(`${selected}T00:00:00`);
+    base.setDate(base.getDate() - base.getDay());
+    const out: WeekDay[] = [];
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(base.getFullYear(), base.getMonth(), base.getDate() + i);
+      const key = ymd(d);
+      const dots = dotsFor(key);
+      out.push({ key, dow: WD[d.getDay()], date: String(d.getDate()).padStart(2, '0'), hasEvent: dots.shared || dots.mine });
+    }
+    return out;
+  })();
+
   // 선택일 그룹 — 매장 카테고리(데이파트) 순서대로 + 삭제된 카테고리 할일 흡수용 말미 '기타' 그룹.
   const dayTasks = useMemo(() => visible.filter((t) => occursOn(t, selected)), [visible, selected]);
   const dayDone = done[selected] ?? {};
@@ -133,27 +184,54 @@ export function TodoScreen({
     setCursor((c) => new Date(c.getFullYear(), c.getMonth() + delta, 1));
   }
 
+  // 접혀 있을 땐 월을 넘겨도 보이는 게 없다(죽은 컨트롤) → 같은 화살표가 주 단위로 움직인다.
+  function shiftWeek(delta: number) {
+    const d = new Date(`${selected}T00:00:00`);
+    const next = new Date(d.getFullYear(), d.getMonth(), d.getDate() + delta * 7);
+    setSelected(ymd(next));
+    setCursor(new Date(next.getFullYear(), next.getMonth(), 1));
+  }
+  const shiftBy = (delta: number) => (folded ? shiftWeek(delta) : shiftMonth(delta));
+
+  // 주간 스트립에서 지난달/다음달 날짜를 고르면 월 커서도 따라간다 — 펼쳤을 때 엉뚱한 달이 떠 있지 않게.
+  function selectDate(date: string) {
+    setSelected(date);
+    const d = new Date(`${date}T00:00:00`);
+    if (d.getFullYear() !== cursor.getFullYear() || d.getMonth() !== cursor.getMonth()) {
+      setCursor(new Date(d.getFullYear(), d.getMonth(), 1));
+    }
+  }
+
   return (
     <View style={{ flex: 1 }}>
       {/* 접이식 캘린더 */}
       <View style={s.calWrap}>
         <View style={s.calBar}>
-          <Pressable onPress={() => shiftMonth(-1)} hitSlop={8}><Ionicons name="chevron-back" size={18} color={InkColors.ink2} /></Pressable>
-          <Pressable onPress={() => setFolded((v) => !v)} style={s.monthTap}>
-            <Text style={s.month}>{monthLabel}</Text>
-            <Ionicons name={folded ? 'chevron-down' : 'chevron-up'} size={15} color={InkColors.ink2} />
+          <Pressable onPress={() => shiftBy(-1)} hitSlop={8} accessibilityRole="button" accessibilityLabel={folded ? '지난 주' : '지난 달'}>
+            <Ionicons name="chevron-back" size={18} color={InkColors.ink2} />
           </Pressable>
-          <Pressable onPress={() => shiftMonth(1)} hitSlop={8}><Ionicons name="chevron-forward" size={18} color={InkColors.ink2} /></Pressable>
+          {/* 라벨은 표시 전용 — 접기 버튼은 아래 핸들 하나뿐이다(어느 걸 눌러야 하나가 없게). */}
+          <Text style={s.month}>{monthLabel}</Text>
+          <Pressable onPress={() => shiftBy(1)} hitSlop={8} accessibilityRole="button" accessibilityLabel={folded ? '다음 주' : '다음 달'}>
+            <Ionicons name="chevron-forward" size={18} color={InkColors.ink2} />
+          </Pressable>
           <Pressable onPress={() => { setCursor(new Date(`${today}T00:00:00`)); setSelected(today); }} style={s.todayBtn}>
             <Text style={s.todayText}>오늘</Text>
           </Pressable>
-          <Pressable onPress={() => setSetMenu((v) => !v)} hitSlop={8} style={{ marginLeft: 4 }}>
+          <Pressable onPress={() => setSetMenu((v) => !v)} hitSlop={8} style={{ marginLeft: 4 }} accessibilityRole="button" accessibilityLabel="할일 화면 설정">
             <Ionicons name="ellipsis-horizontal" size={18} color={InkColors.ink2} />
           </Pressable>
         </View>
 
-        {!folded && (
-          <View style={s.calGrid}>
+        {/* 접힘 = 주간 스트립. 펼침 = 월 그리드. 둘 다 항상 마운트해 두고 높이만 서로 반대로 움직인다. */}
+        <Animated.View style={[s.foldBox, weekBoxStyle]} pointerEvents={folded ? 'auto' : 'none'}>
+          <View onLayout={(e) => setWeekH(e.nativeEvent.layout.height)} style={s.weekStripWrap}>
+            <WeekStrip days={weekDays} selectedKey={selected} onSelect={selectDate} />
+          </View>
+        </Animated.View>
+
+        <Animated.View style={[s.foldBox, gridBoxStyle]} pointerEvents={folded ? 'none' : 'auto'}>
+          <View onLayout={(e) => setGridH(e.nativeEvent.layout.height)} style={s.calGrid}>
             <View style={s.weekRow}>
               {WD.map((w, i) => (
                 <Text key={w} style={[s.weekCell, i === 0 && { color: BrandColors.badText }]}>{w}</Text>
@@ -176,9 +254,9 @@ export function TodoScreen({
               })}
             </View>
           </View>
-        )}
+        </Animated.View>
 
-        {/* 접기/펴기 핸들 — 월 라벨 탭과 같은 토글. 작은 캐럿만으론 발견이 안 돼 전폭 핸들 병행. */}
+        {/* 접기·펴기는 이 핸들 하나뿐. */}
         <Pressable
           onPress={() => setFolded((v) => !v)}
           hitSlop={{ top: 8, bottom: 8 }}
@@ -187,6 +265,7 @@ export function TodoScreen({
           accessibilityLabel={folded ? '달력 펴기' : '달력 접기'}
         >
           <Ionicons name={folded ? 'chevron-down' : 'chevron-up'} size={16} color={InkColors.ink3} />
+          <Text style={s.foldText}>{folded ? '달력 펴기' : '달력 접기'}</Text>
         </Pressable>
       </View>
 
@@ -260,6 +339,8 @@ export function TodoScreen({
                     const khs = knowhowOf?.(t.id) ?? [];
                     const uNames = understoodNames?.(t.id) ?? [];
                     const selfCheckable = !!onSelfCheck && !!canSelfCheck?.(t.id);
+                    // '반복 업무'라는 사실은 별도 칸이 아니라 여기 한 줄로만 알린다(§14).
+                    const repeat = repeatLabel(t);
                     return (
                       <View key={t.id} style={[s.item, isMine && s.itemMine, i === g.tasks.length - 1 && { borderBottomWidth: 0 }]}>
                         <View style={[s.scopeBar, { backgroundColor: isMine ? MINE : SHARED }]} />
@@ -279,7 +360,13 @@ export function TodoScreen({
                             {t.remindAt ? <Text style={s.timeTag}>{t.remindAt} </Text> : null}
                             {t.sectionNote ? `${t.sectionNote} · ${t.text}` : t.text}
                           </Text>
-                          {mark && <Text style={s.itemMeta}>{mark.byName} 완료 · {hhmm(mark.at)}</Text>}
+                          {(mark || repeat) && (
+                            <Text style={s.itemMeta}>
+                              {mark ? `${mark.byName} 완료 · ${hhmm(mark.at)}` : ''}
+                              {mark && repeat ? ' · ' : ''}
+                              {repeat ? <Text style={s.repeatTag}>{repeat}</Text> : null}
+                            </Text>
+                          )}
                           {khs.length > 0 && (
                             <View style={s.khRow}>
                               {khs.map((k) => (
@@ -327,6 +414,19 @@ export function TodoScreen({
           <Ionicons name="add" size={17} color={InkColors.ink} />
           <Text style={s.addText}>이 날 할일 추가</Text>
         </Pressable>
+        {/* 매일 반복될 업무를 만드는 자리 — 예전엔 별도 칸이었고, 지금은 목록 아래 행 하나다(§14). */}
+        {onOpenRepeat && (
+          <Pressable
+            onPress={onOpenRepeat}
+            style={({ pressed }) => [s.repeatRow, pressed && { opacity: 0.7 }]}
+            accessibilityRole="button"
+            accessibilityLabel="반복 업무 만들기"
+          >
+            <Ionicons name="repeat" size={17} color={InkColors.ink} />
+            <Text style={s.repeatRowText}>반복 업무 만들기</Text>
+            <Ionicons name="chevron-forward" size={16} color={InkColors.ink3} style={{ marginLeft: 'auto' }} />
+          </Pressable>
+        )}
         <View style={{ height: 20 }} />
       </ScrollView>
 
@@ -338,7 +438,6 @@ export function TodoScreen({
 const s = StyleSheet.create({
   calWrap: { backgroundColor: InkColors.cream, borderBottomWidth: 1, borderBottomColor: InkColors.line },
   calBar: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 8 },
-  monthTap: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   month: { fontSize: 15, fontWeight: '800', color: InkColors.ink },
   todayBtn: { marginLeft: 'auto', borderWidth: 1, borderColor: InkColors.line, backgroundColor: InkColors.bg, borderRadius: Radius.pill, paddingHorizontal: 9, paddingVertical: 3 },
   todayText: { fontSize: 11, fontWeight: '700', color: InkColors.ink2 },
@@ -354,7 +453,11 @@ const s = StyleSheet.create({
   cellMute: { color: InkColors.ink3, opacity: 0.45 },
   dots: { flexDirection: 'row', gap: 2.5, height: 6 },
   dot: { width: 5, height: 5, borderRadius: Radius.pill },
-  foldHandle: { alignItems: 'center', justifyContent: 'center', minHeight: 32 },
+  // 높이만 애니메이션하는 상자 — 안쪽은 자기 키를 그대로 재고(onLayout), 바깥이 잘라낸다.
+  foldBox: { overflow: 'hidden' },
+  weekStripWrap: { paddingHorizontal: 10, paddingBottom: 4 },
+  foldHandle: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, minHeight: 32 },
+  foldText: { fontSize: 13, fontWeight: '700', color: InkColors.ink3 },
 
   menuBackdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 5 },
   setMenu: { position: 'absolute', right: 12, top: 44, backgroundColor: InkColors.bg, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md, padding: 6, width: 220, zIndex: 6, ...Elevation.e3 },
@@ -390,6 +493,8 @@ const s = StyleSheet.create({
   itemText: { fontSize: 15, fontWeight: '500', color: InkColors.ink },
   itemTextOn: { color: InkColors.ink3, textDecorationLine: 'line-through' },
   itemMeta: { fontSize: 11, color: InkColors.ink3, marginTop: 2 },
+  // '매일 반복' — 반복이라는 사실만 알리는 부제. 경고가 아니라 정보라 파랑 계열.
+  repeatTag: { fontWeight: '800', color: BrandColors.mentionText },
   // 본문 앞에 붙는 시각 꼬리표 — 상태색이 아니라 굵기로만 구분한다(빨강은 경고로 읽힌다).
   timeTag: { fontWeight: '800', color: InkColors.ink2 },
   // 첨부 노하우 칩 — 카드 본문 아래, 탭하면 원문 열람. 옅은 크림 필로 업무 텍스트와 구분.
@@ -409,4 +514,7 @@ const s = StyleSheet.create({
 
   addBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, borderWidth: 1.5, borderStyle: 'dashed', borderColor: InkColors.ink3, borderRadius: Radius.md, paddingVertical: 13 },
   addText: { fontSize: 13, fontWeight: '700', color: InkColors.ink },
+
+  repeatRow: { flexDirection: 'row', alignItems: 'center', gap: 9, backgroundColor: InkColors.bg, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md, paddingHorizontal: 14, minHeight: 50, ...Elevation.e1 },
+  repeatRowText: { fontSize: 15, fontWeight: '700', color: InkColors.ink },
 });

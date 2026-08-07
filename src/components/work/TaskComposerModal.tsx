@@ -3,8 +3,10 @@ import { View, Text, Pressable, TextInput, ScrollView, StyleSheet } from 'react-
 import { Ionicons } from '@expo/vector-icons';
 
 import { BottomSheet } from '@/components/BottomSheet';
+import { ProgressPill } from '@/components/blocks/ProgressPill';
 import { useDayparts, useDaypartLabels, type NewTask, type TaskSection, type TaskTemplate, type Recurrence } from '@/lib/store/useWorkStore';
-import { type Member } from '@/components/work/MentionInput';
+import { INVITE_FIRST, type Member } from '@/components/work/MentionInput';
+import { showToast } from '@/lib/store/useToastStore';
 import { maskHHMM } from '@/lib/utils/attendance';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
@@ -98,12 +100,13 @@ export function TaskComposerModal({
   const remindValid = !remindOn || /^([01]\d|2[0-3]):[0-5]\d$/.test(remindAt);
 
   // 담당: sharedMode(가게 전체) 또는 picked(개인 담당자 여러 명). 신규=다중 토글, 수정=단일 교체.
-  const deriveShared = isOwner && (editTemplate ? (editTemplate.scope ?? 'shared') === 'shared' : !(initialAssigneeId && others.some((o) => o.id === initialAssigneeId)));
+  const deriveShared = isOwner && (editTemplate ? (editTemplate.scope ?? 'shared') === 'shared' : !(initialAssigneeId && others.some((o) => o.id === initialAssigneeId && o.inRoom !== false)));
   const [sharedMode, setSharedMode] = useState(deriveShared);
   const [picked, setPicked] = useState<string[]>(() => {
     if (!isOwner) return [me];
     if (editTemplate) return (editTemplate.scope ?? 'shared') === 'shared' ? [] : editTemplate.ownerId ? [editTemplate.ownerId] : [me];
-    if (initialAssigneeId && others.some((o) => o.id === initialAssigneeId)) return [initialAssigneeId];
+    // 이 방에 없는 사람은 미리 골라두지 않는다 — 고를 수 없는 상태로 선택돼 있으면 등록이 막힌 채 이유가 안 보인다.
+    if (initialAssigneeId && others.some((o) => o.id === initialAssigneeId && o.inRoom !== false)) return [initialAssigneeId];
     return [];
   });
   const scrollRef = useRef<ScrollView>(null);
@@ -138,7 +141,12 @@ export function TaskComposerModal({
     setKnowhowIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
 
   // 담당자 칩 토글 — 신규는 여러 명(토글), 수정은 한 명(교체). '가게 전체'와는 상호배타.
+  // 이 방에 없는 사람은 고를 수 없다(§16-②) — 목록에서 지우지 않고 고르려 할 때 이유를 말한다.
   const pickAssignee = (id: string) => {
+    if (others.find((o) => o.id === id)?.inRoom === false) {
+      showToast(INVITE_FIRST);
+      return;
+    }
     setSharedMode(false);
     setPicked((prev) => {
       if (isEdit) return [id];
@@ -341,16 +349,27 @@ export function TaskComposerModal({
                     <Pressable onPress={pickShared} style={[s.segO, sharedMode && s.segOn]}>
                       <Text style={[s.segText, sharedMode && { color: '#fff' }]}>매장 전체</Text>
                     </Pressable>
-                    {[{ id: me, name: '나' }, ...others].map((m) => {
+                    {[{ id: me, name: '나', inRoom: true }, ...others].map((m) => {
                       const on = !sharedMode && picked.includes(m.id);
+                      const blocked = m.inRoom === false;
                       return (
-                        <Pressable key={m.id} onPress={() => pickAssignee(m.id)} style={[s.segO, on && s.segOn]}>
+                        <Pressable
+                          key={m.id}
+                          onPress={() => pickAssignee(m.id)}
+                          style={[s.segO, on && s.segOn, blocked && s.segBlocked]}
+                          accessibilityRole="button"
+                          accessibilityLabel={blocked ? `${m.name} — 이 방에 없어요` : m.name}
+                        >
                           {on && !isEdit && <Ionicons name="checkmark" size={13} color="#fff" style={{ marginRight: 3 }} />}
                           <Text style={[s.segText, on && { color: '#fff' }]}>{m.name}</Text>
+                          {blocked && <View style={s.segPill}><ProgressPill text="불가" tone="neutral" /></View>}
                         </Pressable>
                       );
                     })}
                   </View>
+                  {others.some((o) => o.inRoom === false) && (
+                    <Text style={s.assignHint}>‘불가’인 직원은 이 방에 없어요. 먼저 이 방에 초대해 주세요.</Text>
+                  )}
                   {!sharedMode && picked.length > 0 && (
                     <Text style={s.assignHint}>
                       ‘{picked.map((id) => nameById[id] ?? '직원').join('·')}’{picked.length > 1 ? ' 각자에게 배정' : '에게 배정'} — 그 직원과 사장님만 볼 수 있어요
@@ -586,6 +605,9 @@ const s = StyleSheet.create({
   // (RN 기본 flexDirection=column이라 이 줄이 없으면 체크마크가 이름 위로 쌓여 칩이 깨진다.)
   segO: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.pill, paddingHorizontal: 13, paddingVertical: 8, backgroundColor: InkColors.bg },
   segOn: { backgroundColor: InkColors.ink, borderColor: InkColors.ink },
+  // 이 방에 없는 직원 — 지우지 않고 흐리게. 옆의 '불가' 알약이 색 없이도 상태를 말한다.
+  segBlocked: { opacity: 0.45 },
+  segPill: { marginLeft: 6 },
   segText: { fontSize: 12.5, fontWeight: '700', color: InkColors.ink2 },
 
   reveal: { marginTop: 9, padding: 11, backgroundColor: InkColors.cream, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md },

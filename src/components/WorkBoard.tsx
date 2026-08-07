@@ -83,6 +83,10 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
     () => stores.filter((st) => st.role === 'owner' && st.unit_id !== activeUnit).map((st) => ({ unit_id: st.unit_id, store_name: st.store_name })),
     [stores, activeUnit],
   );
+  // 다중 발송은 **지금 이 매장의 사장**만 할 수 있다(서버 0075 broadcast_notice = owner_id 검사).
+  // A매장 매니저이면서 B매장 사장인 사람에게 대상 칩을 그려주면, 보내는 순간 서버가 전부 거부한다.
+  // canManage(매니저 포함)가 아니라 role === 'owner' — 사장 전용 영역이라 roles 헬퍼를 쓰지 않는다(0093 주석).
+  const isStoreOwner = role === 'owner';
 
   const owner = useStaffStore((s) => s.owner);
   const staff = useStaffStore((s) => s.staff);
@@ -148,7 +152,8 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
   );
 
   // 다른 화면(홈 '오늘 할일'·'안 읽은 공지'·'오늘 일 배분' 등)에서 ?view=todo|notice|assign 로 들어오면 해당 패널을 연다.
-  // 배정(assign)은 사장 전용 — 직원 딥링크는 채팅으로 무시.
+  // assign 은 세그먼트에서는 없어졌지만(§14) 화면은 그대로 살아 있다 — 기존 링크를 죽이지 않고
+  // '반복 업무 만들기'로 착지시키고, 뒤로가기는 새 자리인 할일로 돌려보낸다. 사장 전용은 그대로.
   const { view: viewParam } = useLocalSearchParams<{ view?: string }>();
   const paramView: ViewKey | null =
     viewParam === 'todo' || viewParam === 'notice' ? viewParam : viewParam === 'assign' && isOwner ? 'assign' : null;
@@ -175,22 +180,42 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
     setView(v);
   }, []);
   // 패널 닫기 — 딥링크로 들어왔으면 진입 화면으로, 아니면 채팅으로.
+  // 담당자별 보드(assign)는 이제 할일 목록 아래 행으로만 들어오므로 뒤로가기도 할일로 돌아간다.
   const closePanel = useCallback(() => {
     if (openedExternally && router.canGoBack()) router.back();
-    else setView('chat');
-  }, [openedExternally]);
+    else setView(view === 'assign' ? 'todo' : 'chat');
+  }, [openedExternally, view]);
   const [composer, setComposer] = useState<{ open: boolean; date?: string; text?: string; assigneeId?: string; editTemplate?: TaskTemplate }>({ open: false });
   const [uploadingId, setUploadingId] = useState<string | null>(null);
   const [sendingPhoto, setSendingPhoto] = useState(false);
 
-  // 멤버(멘션·이름) — 사장 + 직원 + 본인.
+  // 이 방에 있는 사람인가 — 판정은 **기존 방 가시성 규칙 그대로**다. 새 규칙을 만들지 않는다.
+  //   서버: can_see_room()(0015_work_rooms.sql:38) = is_default or auth_is_owner() or 방 멤버
+  //   클라: RoomBar 의 visible(role === 'owner' or isDefault or 멤버) — 둘이 같은 판정이다.
+  // ★매니저는 여기서 사장 취급이 아니다: can_see_room 은 0093 에서도 auth_can_manage() 로 안 바뀌었고
+  //   RoomBar 도 role === 'owner' 를 쓴다. canManage 로 넓히면 "볼 수 없는 방의 멘션 알림"이 생긴다.
+  // 방이 없으면(레거시/degraded) 전부 통과 — inRoom() 폴백과 같다.
+  const roomMemberRows = useRoomStore((s) => s.members);
+  const memberRoles = useStaffStore((s) => s.roles);
+  const roomMemberIds = useMemo(
+    () => new Set(roomMemberRows.filter((m) => m.roomId === currentRoomId).map((m) => m.userId)),
+    [roomMemberRows, currentRoomId],
+  );
+  const inThisRoom = useCallback(
+    (uid: string, memberRole: string) => !currentRoomId || isDefaultRoom || memberRole === 'owner' || roomMemberIds.has(uid),
+    [currentRoomId, isDefaultRoom, roomMemberIds],
+  );
+
+  // 멤버(멘션·이름) — 사장 + 직원 + 본인. inRoom=false 도 목록에는 남는다(숨기면 "왜 없지?"가 된다).
   const members: Member[] = useMemo(() => {
     const m: Member[] = [];
-    if (owner) m.push({ id: owner.id, name: owner.name, role: 'owner' });
-    staff.forEach((s) => m.push({ id: s.id, name: s.name, role: 'junior' }));
-    if (userId && !m.some((x) => x.id === userId)) m.push({ id: userId, name: userName, role });
+    if (owner) m.push({ id: owner.id, name: owner.name, role: 'owner', inRoom: true });
+    staff.forEach((s) => m.push({ id: s.id, name: s.name, role: 'junior', inRoom: inThisRoom(s.id, memberRoles[s.id] ?? 'junior') }));
+    if (userId && !m.some((x) => x.id === userId)) m.push({ id: userId, name: userName, role, inRoom: true });
     return m;
-  }, [owner, staff, userId, userName, role]);
+  }, [owner, staff, userId, userName, role, inThisRoom, memberRoles]);
+  // 언급·배정에 실을 수 있는 사람인가 — 흐리게 보여주기만 하고 발송·배정은 여기서 막는다.
+  const canReach = useCallback((id: string) => members.find((m) => m.id === id)?.inRoom !== false, [members]);
 
   const nameOf = useMemo(() => {
     const map: Record<string, string> = {};
@@ -422,8 +447,9 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
   function messageToTask(text: string, mentions?: string[]) {
     const v = text.trim();
     if (!v) return;
+    // 이 방에 없는 사람은 담당자 후보에서 뺀다 — 컴포저에는 흐리게 남지만 자동 선택은 안 한다.
     const assigneeId = isOwner
-      ? (mentions ?? []).find((id) => id !== userId && members.some((m) => m.id === id && m.id !== owner?.id))
+      ? (mentions ?? []).find((id) => id !== userId && canReach(id) && members.some((m) => m.id === id && m.id !== owner?.id))
       : undefined;
     setComposer({ open: true, date: today, text: v, assigneeId });
   }
@@ -500,13 +526,7 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
           headerBackVisible: false,
           headerRight: () => (
             <View style={st.nav}>
-              {/* 배정 — 사장 전용. "누가 무슨 일"을 담당자별로 모아 보는 세그먼트. */}
-              {isOwner && (
-                <Pressable onPress={() => openPanel('assign')} style={({ pressed }) => [st.navBtn, pressed && { opacity: 0.7 }]}>
-                  <Ionicons name="people-outline" size={15} color={InkColors.ink} />
-                  <Text style={st.navText}>배정</Text>
-                </Pressable>
-              )}
+              {/* 세그먼트는 공지·할일 둘뿐. 담당자별 보드는 할일 목록 아래 '반복 업무 만들기' 행으로 들어간다(§14). */}
               <Pressable onPress={() => openPanel('notice')} style={({ pressed }) => [st.navBtn, pressed && { opacity: 0.7 }]}>
                 <Ionicons name="megaphone-outline" size={15} color={InkColors.ink} />
                 <Text style={st.navText}>공지</Text>
@@ -520,7 +540,7 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
           ),
         }
       : {
-          title: view === 'notice' ? '공지' : view === 'assign' ? '배정' : '할일',
+          title: view === 'notice' ? '공지' : view === 'assign' ? '반복 업무 만들기' : '할일',
           headerLeft: () => (
             <Pressable onPress={closePanel} hitSlop={8} style={({ pressed }) => [{ paddingLeft: HEADER_EDGE_GUTTER, paddingRight: 14, paddingVertical: 4 }, pressed && { opacity: 0.6 }]}>
               <Ionicons name="arrow-back" size={24} color={InkColors.ink} />
@@ -558,7 +578,8 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
           isOwner={isOwner}
           pinnedNotice={pinnedNotice}
           onOpenNotice={() => openPanel('notice')}
-          onSend={(text, mentions) => postMessage(today, text, userId, userName, role, mentions)}
+          // @전체·직접 타이핑으로 비멤버가 섞여 들어와도 알림은 이 방 사람에게만 간다(§16-①).
+          onSend={(text, mentions) => postMessage(today, text, userId, userName, role, mentions.filter(canReach))}
           onSendPhoto={sendPhotoMessage}
           sendingPhoto={sendingPhoto}
           onReact={(id, emoji) => toggleReaction(id, userId, emoji)}
@@ -584,15 +605,15 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
           members={members}
           onBack={closePanel}
           onPost={(text) => postNotice(today, text, userId, userName, false)}
-          currentStore={isOwner ? currentStore : undefined}
-          targetStores={isOwner ? broadcastTargets : undefined}
-          onBroadcast={isOwner ? (text, unitIds) => { void broadcastNotice(unitIds, text, false, userName); } : undefined}
+          currentStore={isStoreOwner ? currentStore : undefined}
+          targetStores={isStoreOwner ? broadcastTargets : undefined}
+          onBroadcast={isStoreOwner ? (text, unitIds) => { void broadcastNotice(unitIds, text, false, userName); } : undefined}
           onTogglePin={togglePin}
           onEdit={editFeedText}
           onDelete={deleteFeedItem}
           onReact={(id, emoji) => toggleReaction(id, userId, emoji)}
           onRead={(id) => markNoticeRead(id, userId)}
-          onComment={(noticeId, text, mentions) => postComment(noticeId, today, text, userId, userName, role, mentions)}
+          onComment={(noticeId, text, mentions) => postComment(noticeId, today, text, userId, userName, role, mentions.filter(canReach))}
           onDeleteComment={deleteFeedItem}
         />
         </Appear>
@@ -629,6 +650,7 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
           onAttachPhoto={(templateId, date) => attachPhoto(templateId, date)}
           onAddForDate={(date) => setComposer({ open: true, date })}
           onEditTask={(t) => setComposer({ open: true, editTemplate: t })}
+          onOpenRepeat={isOwner ? () => openPanel('assign') : undefined}
           knowhowOf={knowhowOf}
           onOpenKnowhow={openKnowhow}
           understoodNames={understoodNames}

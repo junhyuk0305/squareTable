@@ -1,12 +1,32 @@
 import { useMemo, useRef, useState } from 'react';
 import { View, Text, Pressable, TextInput, Platform, StyleSheet } from 'react-native';
 
+import { ProgressPill } from '@/components/blocks/ProgressPill';
+import { showToast } from '@/lib/store/useToastStore';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Elevation, Radius } from '@/lib/theme/elevation';
 
-export type Member = { id: string; name: string; role: 'owner' | 'junior' };
+export type Member = {
+  id: string;
+  name: string;
+  role: 'owner' | 'junior';
+  /**
+   * 지금 보고 있는 채팅방에 있는가. 판정은 부모(WorkBoard)가 0093 방 가시성 규칙으로 계산한다.
+   * false여도 목록에서 빼지 않는다 — 숨기면 "왜 없지?"가 되므로 흐리게 + 이유를 보여준다.
+   */
+  inRoom?: boolean;
+};
 
 const ALL_TOKEN = '전체';
+/** 방에 없는 사람을 부르려 할 때. 언급·할일 배정이 같은 문구를 쓴다. */
+export const INVITE_FIRST = '먼저 이 방에 초대해 주세요';
+
+/** 이름 뒤 목적격 조사 — 받침 있으면 '을', 없으면 '를'. */
+function objJosa(name: string): string {
+  const c = name.charCodeAt(name.length - 1);
+  if (c < 0xac00 || c > 0xd7a3) return '을';
+  return (c - 0xac00) % 28 === 0 ? '를' : '을';
+}
 
 /**
  * 텍스트에서 멘션된 멤버 id를 추출(+@전체면 모든 멤버).
@@ -73,6 +93,10 @@ export function MentionInput({
   }, [query, members]);
 
   const open = focused && query !== null && suggestions.length > 0;
+  // 목록에 뜬 사람 중 이 방에 없는 첫 사람 — 아래 한 줄 안내에 이름을 그대로 쓴다.
+  const blockedName = useMemo(() => suggestions.slice(0, 5).find((m) => m.inRoom === false)?.name, [suggestions]);
+  // Tab이 실제로 완성할 후보 = 이 방에 있는 첫 사람. 배지 위치와 키 동작이 어긋나지 않게 한 곳에서 뽑는다.
+  const tabTargetId = useMemo(() => suggestions.find((m) => m.inRoom !== false)?.id, [suggestions]);
 
   function pick(name: string) {
     // 끝의 @쿼리를 @이름 + 공백으로 치환(@전체는 그대로 토큰명).
@@ -88,10 +112,12 @@ export function MentionInput({
   function handleKeyPress(e: { nativeEvent: { key: string }; preventDefault?: () => void }) {
     if (!open) return;
     const k = e.nativeEvent?.key;
-    // suggestions 가 비어 있을 때(필터 결과 0 + 같은 프레임 Enter 레이스) [0] 인덱싱 크래시 방지.
-    if ((k === 'Tab' || (k === 'Enter' && query)) && suggestions.length > 0) {
+    // 이 방에 없는 사람은 키보드 완성으로도 들어가지 않는다 — 눌러서 막는 것과 같은 판정.
+    const first = suggestions.find((m) => m.id === tabTargetId);
+    // 후보가 없을 때(필터 결과 0 + 같은 프레임 Enter 레이스) 크래시 방지.
+    if ((k === 'Tab' || (k === 'Enter' && query)) && first) {
       e.preventDefault?.();
-      pick(suggestions[0].name);
+      pick(first.name);
     }
   }
 
@@ -107,18 +133,27 @@ export function MentionInput({
           <Text style={s.popHead}>
             {onAssignTask ? '이름=멘션 · ‘＋할일’=그 직원에게 바로 배정' : '멤버 멘션 — 누르거나 Tab으로 완성, 태그하면 알림이 가요'}
           </Text>
-          {suggestions.slice(0, 5).map((m, i) => {
-            const canAssign = !!onAssignTask && m.id !== '__all__' && m.id !== me;
+          {suggestions.slice(0, 5).map((m) => {
+            const blocked = m.inRoom === false;
+            const isTabTarget = m.id === tabTargetId;
+            const canAssign = !!onAssignTask && !blocked && m.id !== '__all__' && m.id !== me;
             return (
-              <View key={m.id} style={[s.row, i === 0 && s.rowTop]}>
-                <Pressable onPress={() => pick(m.name)} style={({ pressed }) => [s.rowMain, pressed && { opacity: 0.55 }]}>
+              <View key={m.id} style={[s.row, isTabTarget && s.rowTop, blocked && s.rowBlocked]}>
+                <Pressable
+                  onPress={() => (blocked ? showToast(INVITE_FIRST) : pick(m.name))}
+                  style={({ pressed }) => [s.rowMain, pressed && { opacity: 0.55 }]}
+                >
                   <View style={[s.av, m.id === '__all__' && { backgroundColor: BrandColors.yellowSoft }]}>
                     <Text style={s.avTx}>{m.id === '__all__' ? '@' : m.name.slice(-2)}</Text>
                   </View>
-                  <Text style={s.name}>{m.id === '__all__' ? '@전체' : m.name}</Text>
-                  {i === 0 && <Text style={s.tabHint}>Tab</Text>}
-                  <Text style={s.role}>{m.id === '__all__' ? '모두에게' : m.role === 'owner' ? '사장' : '직원'}</Text>
+                  <View style={s.nameCol}>
+                    <Text style={s.name}>{m.id === '__all__' ? '@전체' : m.name}</Text>
+                    {blocked && <Text style={s.blockedSub}>이 방에 없어요</Text>}
+                  </View>
+                  {isTabTarget && <Text style={s.tabHint}>Tab</Text>}
+                  {!blocked && <Text style={s.role}>{m.id === '__all__' ? '모두에게' : m.role === 'owner' ? '사장' : '직원'}</Text>}
                 </Pressable>
+                {blocked && <ProgressPill text="불가" tone="neutral" />}
                 {canAssign && (
                   <Pressable onPress={() => onAssignTask!(m.id)} hitSlop={6} style={({ pressed }) => [s.assignPill, pressed && { opacity: 0.7 }]}>
                     <Text style={s.assignPillText}>＋할일</Text>
@@ -127,6 +162,9 @@ export function MentionInput({
               </View>
             );
           })}
+          {blockedName && (
+            <Text style={s.inviteHint}>{blockedName}{objJosa(blockedName)} 부르려면 먼저 이 방에 초대해야 해요.</Text>
+          )}
         </View>
       )}
       <View style={s.field}>
@@ -218,6 +256,11 @@ const s = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 5, paddingHorizontal: 6, borderRadius: Radius.sm },
   rowMain: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 9, padding: 3, borderRadius: Radius.sm },
   rowTop: { backgroundColor: InkColors.paper },
+  // 이 방에 없는 사람 — 지우지 않고 흐리게. 옆의 '불가' 알약이 색 없이도 상태를 말한다.
+  rowBlocked: { opacity: 0.45 },
+  nameCol: { flexShrink: 1 },
+  blockedSub: { fontSize: 11, fontWeight: '700', color: InkColors.ink3, marginTop: 1 },
+  inviteHint: { fontSize: 11.5, lineHeight: 17, color: InkColors.ink3, paddingHorizontal: 9, paddingTop: 4, paddingBottom: 6 },
   assignPill: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: BrandColors.yellowSoft, borderWidth: 1, borderColor: BrandColors.yellowDeep, borderRadius: Radius.pill, paddingHorizontal: 11, paddingVertical: 6 },
   assignPillText: { fontSize: 11.5, fontWeight: '800', color: InkColors.ink },
   av: { width: 29, height: 29, borderRadius: Radius.pill, backgroundColor: InkColors.bgSoft, alignItems: 'center', justifyContent: 'center' },

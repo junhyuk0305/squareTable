@@ -16,7 +16,8 @@ const MINE = CategoryColors.Event; // 테라코타 = 개인 담당
 type Group = { key: string; name: string; shared: boolean; tasks: TaskTemplate[]; done: number };
 
 /**
- * AssignBoard — 업무 탭 '배정' 세그먼트(사장 전용). 오늘 할일을 **담당자별**로 모아 보여준다.
+ * AssignBoard — 할일 목록 아래 '반복 업무 만들기' 행으로 들어오는 화면(사장·매니저 전용).
+ * 오늘 할일을 **담당자별**로 모아 보여준다.
  * "누가 무슨 일"을 채팅 되짚기 없이 위임 상태로. 데이터·모델·완료토글·사진은 TodoScreen과 동일 재사용
  * (occursOn·taskVisibleTo SSOT). 유일한 차이는 그룹핑 축 = 데이파트 → 담당자(ownerId).
  */
@@ -75,7 +76,7 @@ export function AssignBoard({
       {/* 요약 바 */}
       <View style={st.summary}>
         <Text style={st.summaryText}>
-          오늘 배정 {total}건
+          오늘 업무 {total}건
           {total > 0 && (remain > 0 ? <Text style={st.rest}> · 남음 {remain}</Text> : <Text style={st.donec}> · 모두 완료</Text>)}
         </Text>
         <Pressable onPress={() => onAssign(undefined)} style={({ pressed }) => [st.assignBtn, pressed && { opacity: 0.85 }]} accessibilityRole="button" accessibilityLabel="일 맡기기">
@@ -86,7 +87,7 @@ export function AssignBoard({
 
       <ScrollView contentContainerStyle={st.scroll} showsVerticalScrollIndicator={false}>
         {groups.length === 0 && (
-          <Text style={st.empty}>오늘 배정된 일이 없어요. ‘일 맡기기’로 담당을 정해보세요.</Text>
+          <Text style={st.empty}>오늘 맡긴 일이 없어요. ‘일 맡기기’로 담당을 정해보세요.</Text>
         )}
         {groups.map((g, gi) => (
           <Appear key={g.key} delay={gi * 70} style={st.group}>
