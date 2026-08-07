@@ -7,7 +7,10 @@ import { useAttendanceStore } from '@/lib/store/useAttendanceStore';
 import { useWorkStore, occursOn, taskVisibleTo } from '@/lib/store/useWorkStore';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { useStaffStore } from '@/lib/store/useStaffStore';
+import { useSuggestionStore } from '@/lib/store/useSuggestionStore';
+import { useQuizBoard } from '@/lib/quiz/useQuizBoard';
 import { todayStr } from '@/lib/utils/attendance';
+import { gradableTasks, staffBehind, type StaffBehind } from '@/lib/utils/taskProgress';
 import { sortByUrgency } from '@/lib/utils/unknownQuery';
 import type { UnknownQuery } from '@/types';
 
@@ -33,6 +36,12 @@ export type OwnerDashboardData = {
    *   잃은 '가치 증명'은 숫자가 아니라 **목록**이 맡는다 — 받은질문의 'AI가 답함' 세그먼트.
    */
   aiUsedMonth: number;
+  /** 사장이 아직 답 안 한 직원 제안 건수 — 홈 '다음 행동' 2순위. */
+  pendingSuggestions: number;
+  /** 퀴즈에서 오답이 몰린 노하우 수 — 3순위. 판정 기준(표본 5·오답률 40%)의 SSOT는 useQuizBoard. */
+  missedKnowhowCount: number;
+  /** 진도가 가장 많이 밀린 직원 1명 — 4순위. 없으면 undefined. */
+  behindStaff?: StaffBehind;
 };
 
 /** 사장 대시보드 화면의 뷰모델 — 스토어 셀렉터 읽기 + 파생값 계산을 한곳에 모은다. */
@@ -102,6 +111,37 @@ export function useOwnerDashboardData(): OwnerDashboardData {
   // 0보다 크면 대시보드 최상단 배너로 먼저 노출(검증 유도).
   const needsReviewCount = useMemo(() => entries.filter((e) => e.needs_review === true).length, [entries]);
 
+  // ── 홈 '다음 행동' 한 자리를 채우는 나머지 신호들 ──────────────────────────
+  // 스토어는 전부 owner/_layout에서 이미 hydrate·subscribe 중이라 여기서 새로 부르지 않는다.
+  const pendingSuggestions = useSuggestionStore(
+    (s) => s.suggestions.filter((x) => x.status === 'pending').length,
+  );
+
+  // 오답 판정(표본 5회·오답률 40%)은 useQuizBoard가 SSOT다 — 여기서 다시 정의하면
+  // 홈과 퀴즈 화면이 같은 노하우를 두고 다른 말을 하게 된다.
+  // ⚠️ 비용: 이 훅은 마운트 시 코스·문항·오답집계 3쿼리를 스스로 친다(홈 진입마다).
+  const { buildRows } = useQuizBoard();
+  const missedKnowhowCount = useMemo(
+    () => buildRows(null).filter((r) => r.missPct > 0).length,
+    [buildRows],
+  );
+
+  // 진도가 밀린 직원 — 판정 대상 게이트(노하우≥1 ∧ 문항≥1)를 반드시 통과시킨다.
+  // 게이트가 없으면 노하우 안 붙은 업무에서 전원이 '못 함'으로 나온다.
+  const knowhowLinks = useWorkStore((s) => s.knowhowLinks);
+  const understanding = useWorkStore((s) => s.understanding);
+  const quizCounts = useWorkStore((s) => s.quizCounts);
+  const behindStaff = useMemo(
+    () =>
+      staffBehind(
+        staff,
+        gradableTasks(templates, knowhowLinks, quizCounts),
+        understanding,
+        knowhowLinks,
+      )[0],
+    [staff, templates, knowhowLinks, quizCounts, understanding],
+  );
+
   return {
     userName,
     storeName,
@@ -115,5 +155,8 @@ export function useOwnerDashboardData(): OwnerDashboardData {
     heroQuery,
     heroCareerDays,
     aiUsedMonth,
+    pendingSuggestions,
+    missedKnowhowCount,
+    behindStaff,
   };
 }

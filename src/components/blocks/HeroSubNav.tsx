@@ -9,12 +9,19 @@ import { Space } from '@/lib/theme/layout';
 const SUBNAV_MAX = 4;
 /** 칸 구분선의 위아래 여백 — 전체 높이 선이 아니라 가운데만 긋는다. */
 const DIVIDER_INSET = Space.md;
+/** 배지 도형 — 아이콘 우상단에 걸친다. 도형 치수라 간격 토큰 대상이 아니다. */
+const BADGE_SIZE = 14;
+const BADGE_LEFT = 10;
 
 export type HeroSubNavItem = {
   key: string;
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
   onPress: () => void;
+  /** 놓치면 안 되는 대기 건수(예: 합류 승인). 0·undefined면 그리지 않는다. */
+  badge?: number;
+  /** 배지가 무엇인지 — 화면 낭독용. 색만으로 뜻을 알 수 없으니 반드시 같이 준다. */
+  badgeHint?: string;
 };
 
 /**
@@ -75,11 +82,20 @@ export function HeroSubNav({
               {i > 0 && <View style={styles.divider} />}
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel={it.label}
+                accessibilityLabel={
+                  it.badge ? `${it.label} · ${it.badgeHint ?? '대기'} ${it.badge}` : it.label
+                }
                 onPress={it.onPress}
                 style={({ pressed }) => [styles.cellTap, pressed && styles.pressed]}
               >
-                <Ionicons name={it.icon} size={18} color={InkColors.ink} />
+                <View>
+                  <Ionicons name={it.icon} size={18} color={InkColors.ink} />
+                  {!!it.badge && it.badge > 0 && (
+                    <View style={styles.badge}>
+                      <Text style={styles.badgeText}>{it.badge > 9 ? '9+' : it.badge}</Text>
+                    </View>
+                  )}
+                </View>
                 <Text style={styles.cellLabel} numberOfLines={1}>{it.label}</Text>
               </Pressable>
             </View>
@@ -158,4 +174,18 @@ const styles = StyleSheet.create({
     minHeight: 48,
   },
   cellLabel: { fontSize: 11, fontWeight: '700', color: InkColors.ink2 },
+  badge: {
+    position: 'absolute',
+    top: -4,
+    left: BADGE_LEFT,
+    minWidth: BADGE_SIZE,
+    height: BADGE_SIZE,
+    paddingHorizontal: 3,
+    borderRadius: BADGE_SIZE / 2,
+    // 흰 글자를 얹는 면이라 500(bad)이 아니라 Solid.
+    backgroundColor: BrandColors.badSolid,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  badgeText: { fontSize: 9, fontWeight: '900', color: InkColors.bubbleText },
 });

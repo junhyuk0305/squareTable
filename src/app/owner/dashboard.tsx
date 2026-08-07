@@ -11,18 +11,16 @@ import { useTourStore } from '@/lib/store/useTourStore';
 
 import { RoleTabBar, goToTab } from '@/components/RoleTabBar';
 import { SectionLabel } from '@/components/SectionLabel';
-import { InboxHeroCard } from '@/components/InboxHeroCard';
 import { AlertRow } from '@/components/blocks/AlertRow';
-import { ActionRow, type ActionRowItem } from '@/components/blocks/ActionRow';
-import { MiniStats } from '@/components/blocks/MiniStats';
+import { HeroSubNav, type HeroSubNavItem } from '@/components/blocks/HeroSubNav';
 import { OwnerNotificationBell } from '@/components/NotificationBell';
 import { StoreToggle } from '@/components/StoreToggle';
 import { SEED_TEMPLATES } from '@/data/seed-templates';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
-import { capCount } from '@/lib/utils/format';
 import { useOwnerDashboardData } from '@/lib/hooks/useOwnerDashboardData';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { useStaffStore } from '@/lib/store/useStaffStore';
+import { formatAsked } from '@/lib/utils/time';
 import { styles } from '@/styles/ownerDashboardStyles';
 
 /** 홈 목록은 3건 + "전체보기 ›" — 전 화면 공통 배치 규칙(2026-08-05 블록 어휘). */
@@ -33,15 +31,16 @@ export default function OwnerDashboardScreen() {
   const {
     entriesCount,
     needsReviewCount,
-    working,
     pending,
     heroQuery,
-    heroCareerDays,
-    aiUsedMonth,
     todayTasks,
+    pendingSuggestions,
+    missedKnowhowCount,
+    behindStaff,
   } = useOwnerDashboardData();
 
-  // 합류 승인 대기 인원 — 기존 OwnerHomeHubCards가 들고 있던 배지를 ActionRow로 이관.
+  // 합류 승인 대기 인원 — 사장이 승인을 놓치면 직원이 합류 못 한 채 갇힌다.
+  // A1 액션 로우가 사라지면서(ADR-004) 이 배지는 서브내비 '직원' 칸으로 옮겼다.
   const pendingJoin = useStaffStore((s) => s.pending.length);
 
   // 진입 애니는 각 섹션의 <Appear>가 단독으로 담당한다(디자인시스템 SSOT: Appear 단일 프리미티브).
@@ -59,12 +58,9 @@ export default function OwnerDashboardScreen() {
   const markSeen = useTourStore((s) => s.markSeen);
   const [tourOn, setTourOn] = useState(false);
 
-  // 홈 아이콘 액션 — 노하우·업무·퀴즈·직원·근무. 탭바가 못 덮는 진입점(퀴즈·직원·근무)까지 한 줄로.
-  // 합류 승인 대기 배지는 '직원'에 붙인다(사장이 승인을 놓치면 직원이 합류 못 한 채 갇힌다).
-  const actions: ActionRowItem[] = useMemo(
+  // 히어로 바닥에 붙는 바로가기 — 탭바가 못 덮는 진입점만. **4칸 고정**(5칸이면 라벨이 깨진다).
+  const subnav: HeroSubNavItem[] = useMemo(
     () => [
-      { key: 'knowhow', icon: 'bulb-outline', label: '노하우', onPress: () => goToTab('/owner/categories') },
-      { key: 'work', icon: 'briefcase-outline', label: '업무', onPress: () => goToTab('/owner/work') },
       { key: 'quiz', icon: 'help-circle-outline', label: '퀴즈', onPress: () => router.push('/owner/training') },
       {
         key: 'staff',
@@ -72,43 +68,68 @@ export default function OwnerDashboardScreen() {
         label: '직원',
         onPress: () => router.push('/owner/staff'),
         badge: pendingJoin,
-        badgeUnit: '명',
         badgeHint: '합류 승인 대기',
       },
-      { key: 'schedule', icon: 'calendar-outline', label: '근무', onPress: () => router.push('/owner/schedule') },
+      { key: 'payroll', icon: 'cash-outline', label: '급여', onPress: () => router.push('/owner/payroll') },
+      { key: 'schedule', icon: 'calendar-outline', label: '근무표', onPress: () => router.push('/owner/schedule') },
     ],
     [router, pendingJoin],
   );
 
-  // 경고행(X2)은 화면에 한 자리다. 무엇이 그 자리를 쓰는지만 여기서 정한다.
-  //  ★2026-08-06: 노하우 0건 구간에서 아래 온보딩 블록이 히어로·MiniStats를 통째로 가려,
-  //    "답 기다리는 질문"(D3 최우선·파이프라인 ②포착)이 홈에서 사라져 있었다. 노하우가 없을수록
-  //    AI가 답할 근거가 없어 질문은 오히려 전부 사장에게 쌓인다. 벨 배지는 '모두 읽기'(ackAt) 뒤
-  //    0이 되므로 영속 신호가 못 된다 → 그 구간에서는 경고행이 대기 질문을 가리킨다.
-  //  노하우가 생기면 이 자리는 미검증 경고로 돌아가고, 대기 질문은 아래 H4 히어로가 맡는다
-  //  (같은 것을 한 화면에 두 번 그리지 않는다).
-  const alertRow = useMemo(
-    () =>
-      needsReviewCount > 0
-        ? {
-            label: '확인이 필요한 노하우',
-            count: needsReviewCount,
-            onPress: () => router.push({ pathname: '/owner/knowledge', params: { review: '1' } }),
-          }
-        : {
-            label: '답 기다리는 질문',
-            count: entriesCount === 0 ? pending : 0,
-            onPress: () => goToTab('/owner/inbox'),
-          },
-    [needsReviewCount, entriesCount, pending, router],
-  );
+  /**
+   * 다음 행동 — 화면에 **한 자리**다. 위에서부터 처음 걸리는 것 하나만 뜬다.
+   *
+   * 정본의 1순위 '답 안 한 질문'은 여기 없다 — 히어로가 **상시** 그것을 가리키기 때문이다.
+   * (2026-08-06에 노하우 0건 구간에서 온보딩 블록이 히어로를 가려 대기 질문이 홈에서 사라진 적이 있다.
+   *  히어로를 조건 없이 그리는 것으로 그 구멍을 막았고, 그래서 이 자리는 2순위부터 시작한다.
+   *  같은 것을 한 화면에 두 번 그리지 않는다.)
+   *
+   * 0건이면 AlertRow가 스스로 렌더하지 않으므로 마지막 항목은 count 0인 자리표시다.
+   */
+  const nextAction = useMemo(() => {
+    if (pendingSuggestions > 0) {
+      return {
+        label: '답장 없는 직원 제안',
+        count: pendingSuggestions,
+        unit: '건' as const,
+        icon: 'chatbubble-ellipses' as const,
+        onPress: () => router.push('/owner/suggestions'),
+      };
+    }
+    if (needsReviewCount > 0) {
+      return {
+        label: '확인이 필요한 노하우',
+        count: needsReviewCount,
+        unit: '개' as const,
+        icon: 'alert-circle' as const,
+        onPress: () => router.push({ pathname: '/owner/knowledge', params: { review: '1' } }),
+      };
+    }
+    if (missedKnowhowCount > 0) {
+      return {
+        label: '퀴즈에서 자꾸 틀리는 노하우',
+        count: missedKnowhowCount,
+        unit: '개' as const,
+        icon: 'help-buoy' as const,
+        onPress: () => router.push('/owner/training'),
+      };
+    }
+    // ★점수(`0/7`)로 쓰지 않는다 — 숫자로 쓰면 직원 줄세우기, 업무 이름으로 쓰면 진도다(감시원칙).
+    return {
+      label: behindStaff ? `${behindStaff.name} · ${behindStaff.firstTask} 아직` : '',
+      count: behindStaff?.total ?? 0,
+      unit: '개' as const,
+      icon: 'person-circle' as const,
+      onPress: () => router.push('/owner/staff'),
+    };
+  }, [pendingSuggestions, needsReviewCount, missedKnowhowCount, behindStaff, router]);
 
   const tourSteps: TourStep[] = useMemo(
     () => [
       {
         targetRef: hubRef,
         title: '매장 운영부터 둘러보세요',
-        body: '노하우·업무·퀴즈·직원·근무를 여기서 바로 열 수 있어요. 노하우가 없어도 지금 바로 쓸 수 있어요.',
+        body: '직원이 물은 질문이 위에 뜨고, 퀴즈·직원·급여·근무표는 아래 네 칸에서 바로 열 수 있어요. 노하우가 없어도 지금 바로 쓸 수 있어요.',
       },
       {
         targetRef: ctaRef,
@@ -157,10 +178,30 @@ export default function OwnerDashboardScreen() {
       <ScrollView ref={scrollRef} contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         {/* 정적 콘텐츠 래퍼 — 진입 애니는 각 <Appear>가 담당. 코치마크 위치 측정 기준(scrollContentRef). */}
         <View ref={scrollContentRef} style={styles.scrollInner}>
-        <Text style={styles.greet}>오늘도 고생 많으세요</Text>
-
-        {/* ① X2 인라인 경고행 — 한 자리다. 0건이면 AlertRow가 스스로 렌더하지 않는다. */}
-        <AlertRow label={alertRow.label} count={alertRow.count} onPress={alertRow.onPress} />
+        {/* ① N2 히어로 + 서브내비 한 덩어리 — 홈의 유일한 히어로.
+            히어로는 **조건 없이** 그린다. 노하우가 없을수록 AI가 답할 근거가 없어 질문은 오히려
+            전부 사장에게 쌓이는데, 예전엔 그 구간에서 아래 온보딩 블록이 히어로를 통째로 가렸다(08-06).
+            서브내비를 히어로 바닥에 **붙이는** 이유: 떼면 A1 원형 액션 로우와 중복돼 블록을 하나 더 먹는다. */}
+        <Appear>
+          <View ref={hubRef}>
+          <HeroSubNav
+            label="답을 기다리는 질문"
+            value={pending > 0 ? `${pending}건` : '없어요'}
+            caption={
+              heroQuery
+                ? `“${heroQuery.query_text}”\n${heroQuery.anonymous ? '익명 질문' : heroQuery.junior_name} · ${formatAsked(heroQuery.asked_at)}`
+                : '직원이 모르는 걸 물으면 여기로 와요.'
+            }
+            ctaLabel={heroQuery ? '답하러 가기 →' : '오늘 한 줄 노하우 남기기 →'}
+            onCta={() =>
+              heroQuery
+                ? router.push({ pathname: '/owner/coach', params: { uqId: heroQuery.id } })
+                : router.push('/owner/coach')
+            }
+            items={subnav}
+          />
+          </View>
+        </Appear>
 
         {/* 신규 매장 온보딩 — 노하우 0건이면 가장 먼저 첫 입력을 유도(빈 매장 = 직원 답변 0 → 이탈 방지) */}
         {entriesCount === 0 && (
@@ -193,77 +234,7 @@ export default function OwnerDashboardScreen() {
           </Appear>
         )}
 
-        {/* ② H4 히어로 카드 — 답 기다리는 질문 1건.
-            2026-08-05: 히어로를 '대신 답한 횟수'(⑤결과)에서 '답 기다리는 질문'(②포착)으로 교체했다.
-            노하우 파이프라인에서 포착이 유일한 유입구이고, 여기가 막히면 전체가 멈춘다.
-            컴포넌트·정렬은 받은질문 화면과 공유한다(InboxHeroCard · sortByUrgency SSOT).
-            2026-08-06: '외 n건'을 붙였다 — 1건만 보이면 대기열 규모가 안 보여 "이거 하나만"으로 읽힌다. */}
-        {entriesCount > 0 && heroQuery && (
-          <Appear>
-            <InboxHeroCard
-              uq={heroQuery}
-              careerDays={heroCareerDays}
-              onPress={() => router.push({ pathname: '/owner/coach', params: { uqId: heroQuery.id } })}
-              moreCount={Math.max(0, pending - 1)}
-              onMore={() => goToTab('/owner/inbox')}
-            />
-          </Appear>
-        )}
-
-        {/* 질문이 하나도 없을 때 — 빈 화면을 안내로 위장하지 않고 다음 행동(노하우 남기기)을 준다. */}
-        {entriesCount > 0 && !heroQuery && (
-          <Appear>
-            <PressableScale
-              onPress={() => router.push('/owner/coach')}
-              scaleTo={0.98}
-              style={styles.quietCard}
-              accessibilityRole="button"
-              accessibilityLabel="오늘 한 줄 노하우 남기기"
-            >
-              <Text style={styles.quietTitle}>답 기다리는 질문이 없어요</Text>
-              <Text style={styles.quietSub}>직원이 모르는 걸 물으면 여기로 와요.</Text>
-              <Text style={styles.quietCta}>오늘 한 줄 노하우 남기기 ›</Text>
-            </PressableScale>
-          </Appear>
-        )}
-
-        {/* ③ A1 아이콘 액션 행 — 노하우 0건이어도 항상 노출(첫날부터 매장 운영이 필요).
-            코치마크 투어 1단계의 타깃이기도 하다(hubRef). */}
-        <Appear>
-          <View ref={hubRef}>
-            <ActionRow items={actions} />
-          </View>
-        </Appear>
-
-        {/* ④ I3 미니 통계 — 카드 여러 장이던 KPI를 한 줄로 흡수해 '카드의 나열'을 끊는다. */}
-        {entriesCount > 0 && (
-          <Appear>
-            <MiniStats
-              items={[
-                { key: 'knowhow', value: capCount(entriesCount), label: '노하우', onPress: () => goToTab('/owner/categories') },
-                {
-                  // ★2026-08-07: '30일간 대신 답함' → 'AI 답변 사용'. 허브 현황과 **같은 이름·같은 정의**로
-                  //   통일했다(이번 달 · owner_overview.ai_used). 옛 이름은 기간·범위·세는 대상이 전부
-                  //   달랐는데(롤링 30일 vs 이번 달 · 노하우가 쓰인 답만 vs 모든 AI 답변) 이름이 그 차이를
-                  //   안 알려줘 두 화면의 숫자가 같은 말로 읽혔다.
-                  //   숫자가 못 하던 '가치 증명'은 착지가 맡는다 — 받은질문의 'AI가 답함' 목록에서
-                  //   어떤 질문에 어떤 노하우로 답했는지 그대로 보인다.
-                  key: 'answered',
-                  value: capCount(aiUsedMonth),
-                  label: 'AI 답변 사용',
-                  onPress: () => goToTab('/owner/inbox'),
-                  info: {
-                    title: 'AI 답변 사용이 뭐예요?',
-                    body: '이번 달에 직원이 물었을 때 AI가 답한 횟수예요.\n눌러서 어떤 질문에 어떤 노하우로 답했는지 볼 수 있어요.\n\n요금제 한도는 매장 목록 화면에서 확인할 수 있어요.',
-                  },
-                },
-                { key: 'working', value: working, label: '근무 중', onPress: () => router.push('/owner/staff') },
-              ]}
-            />
-          </Appear>
-        )}
-
-        {/* ⑤ L2 제목+목록 — 오늘 업무 3건 + 전체보기. 목록은 카드 안에 둔다
+        {/* ② L2 제목+목록 — 오늘 업무 3건 + 전체보기. 목록은 카드 안에 둔다
             (배치 규칙: 화면당 카드 1~2개는 남긴다 — 카드는 '이건 특별하다'는 신호다). */}
         {entriesCount > 0 && todayTasks.length > 0 && (
           <Appear style={styles.section}>
@@ -297,6 +268,16 @@ export default function OwnerDashboardScreen() {
             </View>
           </Appear>
         )}
+
+        {/* ③ X2 다음 행동 — 화면에 한 자리다. 우선순위는 nextAction이 정하고,
+            0건이면 AlertRow가 스스로 렌더하지 않는다. */}
+        <AlertRow
+          label={nextAction.label}
+          count={nextAction.count}
+          unit={nextAction.unit}
+          icon={nextAction.icon}
+          onPress={nextAction.onPress}
+        />
 
         {/* 오늘의 제안·핵심 기능 캐러셀은 홈에서 제거(회의 반영):
             기능을 이미 아는 사장에겐 중복 노출 → 템플릿 둘러보기는 노하우 탭으로 이관했다. */}

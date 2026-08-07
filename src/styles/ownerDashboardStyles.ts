@@ -9,7 +9,6 @@ export const styles = StyleSheet.create({
   // (contentContainer는 자식이 하나라 gap이 무효 → 래퍼로 일원화해 중복/혼동 제거)
   scroll: { padding: 20 },
   scrollInner: { gap: 18 },
-  greet: { fontSize: 16, fontWeight: '700', color: InkColors.ink2 },
   // 섹션: [밖 라벨] + [안 카드] 묶음
   section: { gap: 8 },
 
@@ -62,23 +61,11 @@ export const styles = StyleSheet.create({
   },
   seedChipText: { fontSize: 12.5, fontWeight: '700', color: InkColors.ink },
 
-  // 히어로는 공용 <InboxHeroCard>(블록 H4), KPI 2칸은 <MiniStats>(블록 I3)로 대체됨(2026-08-05).
+  // 2026-08-07: 히어로가 <HeroSubNav>(블록 N2 · 검은 색면)로 바뀌면서
+  // InboxHeroCard(H4)·MiniStats(I3)·ActionRow(A1)와 '질문 0건 조용한 카드'가 홈에서 빠졌다.
+  // 질문 0건 상태는 히어로가 직접 말한다("없어요" + 노하우 남기기 CTA) — 블록을 하나 더 쓰지 않는다.
 
-  // 답 기다리는 질문이 0건일 때의 조용한 카드 — 빈 화면을 안내로 위장하지 않고 다음 행동을 준다.
-  quietCard: {
-    backgroundColor: InkColors.bg,
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    borderColor: InkColors.line,
-    padding: Space.xl,
-    gap: Space.xs,
-    ...Elevation.e1,
-  },
-  quietTitle: { fontSize: 17, lineHeight: 24, fontWeight: '800', color: InkColors.ink },
-  quietSub: { fontSize: 15, lineHeight: 22, fontWeight: '600', color: InkColors.ink2 },
-  quietCta: { marginTop: Space.sm, fontSize: 15, fontWeight: '800', color: InkColors.ink },
-
-  // ⑤ 오늘 업무 3건 — 섹션 라벨은 카드 밖, 목록은 카드 안.
+  // ② 오늘 업무 3건 — 섹션 라벨은 카드 밖, 목록은 카드 안.
   moreLink: { fontSize: 13, fontWeight: '700', color: InkColors.ink2 },
   taskCard: {
     backgroundColor: InkColors.bg,
