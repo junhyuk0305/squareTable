@@ -8,17 +8,20 @@ import { usePayrollStore } from '@/lib/store/usePayrollStore';
 import { useStaffStore } from '@/lib/store/useStaffStore';
 import { useAttendanceStore } from '@/lib/store/useAttendanceStore';
 import { useSessionStore } from '@/lib/store/useSessionStore';
+import { useWorkStore } from '@/lib/store/useWorkStore';
 import { RoleTabBar } from '@/components/RoleTabBar';
 import { Appear } from '@/components/Appear';
 import { ConfirmModal } from '@/components/ConfirmModal';
 import { Avatar } from '@/components/Avatar';
 import { SectionLabel } from '@/components/SectionLabel';
 import { InfoDot } from '@/components/InfoDot';
+import { ProgressPill } from '@/components/blocks/ProgressPill';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
 import { DEFAULT_HOURLY_WAGE, fmtDuration, won, todayStr, liveMinutes } from '@/lib/utils/attendance';
 import { computePay } from '@/lib/utils/payroll';
+import { gradableTasks, staffBehind, type StaffBehind } from '@/lib/utils/taskProgress';
 import { useCopyToClipboard } from '@/lib/utils/useCopyToClipboard';
 import { track } from '@/lib/analytics/track';
 import { showToast } from '@/lib/store/useToastStore';
@@ -78,6 +81,23 @@ export default function OwnerStaffScreen() {
     }
     return map;
   }, [records, wages, settings, staff, ym, today]);
+
+  // 직원별 퀴즈 진도 — 판정 본체는 taskProgress(사장 홈과 같은 잣대). 여기서 다시 세지 않는다.
+  // hydrate 는 owner/_layout 이 이미 돌린다.
+  const templates = useWorkStore((s) => s.templates);
+  const knowhowLinks = useWorkStore((s) => s.knowhowLinks);
+  const understanding = useWorkStore((s) => s.understanding);
+  const quizCounts = useWorkStore((s) => s.quizCounts);
+  const gradable = useMemo(
+    () => gradableTasks(templates, knowhowLinks, quizCounts),
+    [templates, knowhowLinks, quizCounts],
+  );
+  // 밀린 직원만 담긴 맵 — 없으면 "다 봤어요"다. 단 gradable 이 0이면 잴 수 없는 것이라 아예 안 그린다.
+  const behindOf = useMemo(() => {
+    const map: Record<string, StaffBehind> = {};
+    for (const r of staffBehind(staff, gradable, understanding, knowhowLinks)) map[r.staffId] = r;
+    return map;
+  }, [staff, gradable, understanding, knowhowLinks]);
 
   const totalPay = staff.reduce((a, s) => a + (perStaff[s.id]?.pay ?? 0), 0);
   const workingCount = staff.filter((s) => perStaff[s.id]?.status === 'working').length;
@@ -262,6 +282,7 @@ export default function OwnerStaffScreen() {
           {staff.map((s) => {
             const agg = perStaff[s.id];
             const isManager = roles[s.id] === 'manager';
+            const behind = behindOf[s.id];
             return (
             <View key={s.id} style={styles.staffItem}>
             <View style={[styles.staffRow, styles.staffRowFlat]}>
@@ -311,6 +332,22 @@ export default function OwnerStaffScreen() {
                 </Pressable>
               )}
             </View>
+            {/* 퀴즈 진도 — 이름 줄(근무 상태 칩)·둘째 줄(시간·급여)이 이미 꽉 차서 셋째 줄로 뺀다.
+                같은 줄에 밀어 넣으면 이름·금액·업무 이름이 전부 잘린다(폭 실측).
+                ★ 점수(`0/7`) 대신 업무 이름으로 쓴다 — 숫자로 쓰면 직원 줄세우기다(감시원칙 D1~D5).
+                잴 수 있는 업무(노하우+문항)가 하나도 없으면 아무것도 안 그린다: "판정 불가"는 "다 했음"이 아니다.
+                staffTap(출근기록 진입)과 형제 — Pressable 중첩 금지(RNW). */}
+            {gradable.length > 0 && (
+              <View style={styles.progressRow}>
+                <Text style={styles.progressText} numberOfLines={1}>
+                  {behind ? `${behind.firstTask} 아직` : '다 봤어요'}
+                </Text>
+                <ProgressPill
+                  text={behind ? `${behind.total}개` : '✓'}
+                  tone={!behind ? 'done' : behind.total === 1 ? 'progress' : 'behind'}
+                />
+              </View>
+            )}
             {/* 매니저 지정/해제(0093) — 사장 전용. 확인 모달 없이 즉시 실행(P7, 같은 버튼으로 되돌림).
                 staffTap(출근기록 진입)과 형제로 분리 — Pressable 중첩 금지(RNW). */}
             {isOwner && (
@@ -431,6 +468,10 @@ const styles = StyleSheet.create({
   staffItem: { borderBottomWidth: 1, borderBottomColor: InkColors.line },
   staffRowFlat: { borderBottomWidth: 0 },
   roleBtn: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-end', gap: 4, paddingBottom: 12, paddingHorizontal: 2 },
+  // 퀴즈 진도 줄 — 항목 폭 전체를 쓴다(이름 칼럼은 시급 입력·내보내기와 폭을 다투는 자리라 여기 못 둔다).
+  // 알약은 오른쪽 끝 고정 → 열지 않고 세로로 훑을 수 있다.
+  progressRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, minHeight: 28, paddingBottom: Space.sm },
+  progressText: { flex: 1, minWidth: 0, fontSize: 12, fontWeight: '600', color: InkColors.ink2 },
   roleBtnText: { fontSize: 12, fontWeight: '700', color: InkColors.ink3 },
   staffTap: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12, minWidth: 0 },
   nameCol: { flex: 1, minWidth: 0 },
