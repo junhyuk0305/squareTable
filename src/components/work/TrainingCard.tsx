@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
+import { Collapse } from '@/components/Collapse';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
@@ -112,23 +113,26 @@ export function TrainingCard({
         <Text style={st.expandText}>{expanded ? '접기' : `전체 ${items.length}개 보기`}</Text>
         <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={14} color={InkColors.ink2} />
       </Pressable>
-      {expanded &&
-        items.map((it, i) => {
-          const chip = STATE_CHIP[it.state];
-          return (
-            <Pressable
-              key={it.id}
-              onPress={() => onOpenKnowhow(it.id)}
-              style={({ pressed }) => [st.itemRow, pressed && { opacity: 0.7 }]}
-              accessibilityRole="button"
-              accessibilityLabel={`${it.text} 노하우 읽기`}
-            >
-              <Text style={st.itemNum}>{i + 1}</Text>
-              <Text style={st.itemText} numberOfLines={1}>{it.text}</Text>
-              <Text style={[st.chip, { color: chip.color, backgroundColor: chip.bg }]}>{chip.label}</Text>
-            </Pressable>
-          );
-        })}
+      {expanded && (
+        <Collapse style={st.itemList}>
+          {items.map((it, i) => {
+            const chip = STATE_CHIP[it.state];
+            return (
+              <Pressable
+                key={it.id}
+                onPress={() => onOpenKnowhow(it.id)}
+                style={({ pressed }) => [st.itemRow, pressed && { opacity: 0.7 }]}
+                accessibilityRole="button"
+                accessibilityLabel={`${it.text} 노하우 읽기`}
+              >
+                <Text style={st.itemNum}>{i + 1}</Text>
+                <Text style={st.itemText} numberOfLines={1}>{it.text}</Text>
+                <Text style={[st.chip, { color: chip.color, backgroundColor: chip.bg }]}>{chip.label}</Text>
+              </Pressable>
+            );
+          })}
+        </Collapse>
+      )}
     </View>
   );
 }
@@ -160,6 +164,8 @@ const st = StyleSheet.create({
     borderTopWidth: 1, borderTopColor: InkColors.line, marginTop: Space.xs, paddingVertical: Space.sm, minHeight: 40,
   },
   expandText: { fontSize: 12.5, fontWeight: '700', color: InkColors.ink2 },
+  // 카드가 gap 으로 벌리던 항목 간격 — Collapse 로 한 겹 감싸면서 이 안쪽으로 옮겨 온다(간격 유지).
+  itemList: { gap: Space.xs },
   itemRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingVertical: Space.xs + 2, minHeight: 36 },
   itemNum: { width: 18, fontSize: 12, fontWeight: '800', color: InkColors.ink3, textAlign: 'center' },
   itemText: { flex: 1, fontSize: 13.5, fontWeight: '600', color: InkColors.ink, minWidth: 0 },

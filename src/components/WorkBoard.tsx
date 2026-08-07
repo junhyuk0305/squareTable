@@ -21,7 +21,7 @@ import { buildDirectUq, buildPlaybookEntryFromSquare } from '@/lib/utils/buildEn
 import type { PlaybookEntry, SquareBlock } from '@/types';
 import type { QuizInput } from '@/lib/ai/types';
 import { RoleTabBar } from '@/components/RoleTabBar';
-import { Appear } from '@/components/Appear';
+import { Appear, stagger } from '@/components/Appear';
 import { useRoomStore } from '@/lib/store/useRoomStore';
 import { WorkChat } from '@/components/work/WorkChat';
 import { RoomBar } from '@/components/work/RoomBar';
@@ -556,14 +556,15 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
 
       {/* 어떤 코스 카드가 몇 장 뜨는지는 trainingCards 메모가 판정(하한·주기·1회성 우선·요청 예외). */}
       {view === 'chat' &&
-        trainingCards.map((c) => (
-          <TrainingCard
-            key={c.course.key}
-            course={c.course}
-            items={c.items}
-            onOpenKnowhow={openKnowhow}
-            onStartCheck={startTrainingCheck}
-          />
+        trainingCards.map((c, i) => (
+          <Appear key={c.course.key} delay={stagger(i)}>
+            <TrainingCard
+              course={c.course}
+              items={c.items}
+              onOpenKnowhow={openKnowhow}
+              onStartCheck={startTrainingCheck}
+            />
+          </Appear>
         ))}
 
       {view === 'chat' && (

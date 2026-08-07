@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { Appear } from '@/components/Appear';
+import { Collapse } from '@/components/Collapse';
 import { SectionLabel } from '@/components/SectionLabel';
 import { InfoDot } from '@/components/InfoDot';
 import {
@@ -79,7 +80,7 @@ function TemplateCard({
       </Pressable>
 
       {open ? (
-        <View style={styles.body}>
+        <Collapse style={styles.body}>
           {t.square?.situation ? (
             <View style={styles.field}>
               <Text style={styles.fieldLabel}>상황</Text>
@@ -132,7 +133,7 @@ function TemplateCard({
               <Text style={styles.importBtnText}>내 노하우로 추가</Text>
             </Pressable>
           )}
-        </View>
+        </Collapse>
       ) : null}
     </View>
   );

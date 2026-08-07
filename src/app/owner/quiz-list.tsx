@@ -15,6 +15,7 @@ import { buildDirectUq, buildPlaybookEntryFromSquare } from '@/lib/utils/buildEn
 import { fetchQuizAttempts, upsertTrainingCourse, type QuizAttemptRow } from '@/lib/db';
 import { useQuizBoard, type QuizRow } from '@/lib/quiz/useQuizBoard';
 import type { QuizItem, TrainingCourse } from '@/lib/quiz/types';
+import { Appear, stagger } from '@/components/Appear';
 import { BottomSheet } from '@/components/BottomSheet';
 import { EntryDetailModal } from '@/components/EntryDetailModal';
 import { EmptyState } from '@/components/EmptyState';
@@ -477,28 +478,29 @@ export default function OwnerQuizListScreen() {
         ) : (
           <View style={st.card}>
             {filtered.map((r, i) => (
-              <Pressable
-                key={r.entryId}
-                onPress={() => setActionRow(r)}
-                style={({ pressed }) => [st.itemRow, i > 0 && st.itemRowTop, pressed && { opacity: 0.85 }]}
-                accessibilityRole="button"
-                accessibilityLabel={`${r.text} 관리`}
-              >
-                <View style={{ flex: 1, minWidth: 0 }}>
-                  <Text style={st.itemText} numberOfLines={1}>{r.text}</Text>
-                  <View style={st.itemMetaRow}>
-                    {r.risky ? <Text style={st.riskTag}>사고 위험</Text> : null}
-                    <Text style={[st.itemMeta, r.quizCount === 0 && st.itemWarn]} numberOfLines={1}>
-                      {rowCaption(r, staffList.length)}
-                    </Text>
+              <Appear key={r.entryId} delay={stagger(i)}>
+                <Pressable
+                  onPress={() => setActionRow(r)}
+                  style={({ pressed }) => [st.itemRow, i > 0 && st.itemRowTop, pressed && { opacity: 0.85 }]}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${r.text} 관리`}
+                >
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={st.itemText} numberOfLines={1}>{r.text}</Text>
+                    <View style={st.itemMetaRow}>
+                      {r.risky ? <Text style={st.riskTag}>사고 위험</Text> : null}
+                      <Text style={[st.itemMeta, r.quizCount === 0 && st.itemWarn]} numberOfLines={1}>
+                        {rowCaption(r, staffList.length)}
+                      </Text>
+                    </View>
+                    {/* 노하우 연결 표시 — 이 노하우가 어느 퀴즈에 담겨 있나. 코스를 고른 상태면 이미 아는 사실이라 안 그린다. */}
+                    {effectiveCourseId === null && r.courseNames.length > 0 ? (
+                      <Text style={st.itemCourses} numberOfLines={1}>담긴 퀴즈 · {r.courseNames.join(', ')}</Text>
+                    ) : null}
                   </View>
-                  {/* 노하우 연결 표시 — 이 노하우가 어느 퀴즈에 담겨 있나. 코스를 고른 상태면 이미 아는 사실이라 안 그린다. */}
-                  {effectiveCourseId === null && r.courseNames.length > 0 ? (
-                    <Text style={st.itemCourses} numberOfLines={1}>담긴 퀴즈 · {r.courseNames.join(', ')}</Text>
-                  ) : null}
-                </View>
-                <Ionicons name="ellipsis-horizontal" size={17} color={InkColors.ink3} />
-              </Pressable>
+                  <Ionicons name="ellipsis-horizontal" size={17} color={InkColors.ink3} />
+                </Pressable>
+              </Appear>
             ))}
           </View>
         )}

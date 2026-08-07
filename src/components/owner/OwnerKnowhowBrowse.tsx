@@ -6,6 +6,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { useWorkStore } from '@/lib/store/useWorkStore';
 import { useSessionStore } from '@/lib/store/useSessionStore';
+import { Appear, stagger } from '@/components/Appear';
+import { Collapse } from '@/components/Collapse';
 import { EmptyState } from '@/components/EmptyState';
 import { InfoDot } from '@/components/InfoDot';
 import { VerifyBadge } from '@/components/VerifyBadge';
@@ -336,14 +338,19 @@ export function OwnerKnowhowBrowse({
   );
 
   // 목록 한 항목 — 확인 필요면 행 아래에 1탭 검증 버튼을 함께 그린다(구분선은 래퍼가 갖는다).
-  const entryItem = (e: PlaybookEntry) => {
+  const entryItem = (e: PlaybookEntry, i: number) => {
     const usedBy = usedCountByEntry.get(e.id) ?? 0;
-    if (!needsVerify(e)) return <EntryRow key={e.id} e={e} usedBy={usedBy} onPress={() => onSelect(e.id)} />;
     return (
-      <View key={e.id} style={styles.entryWrap}>
-        <EntryRow e={e} usedBy={usedBy} onPress={() => onSelect(e.id)} divider={false} />
-        {verifyButton(e)}
-      </View>
+      <Appear key={e.id} delay={stagger(i)}>
+        {needsVerify(e) ? (
+          <View style={styles.entryWrap}>
+            <EntryRow e={e} usedBy={usedBy} onPress={() => onSelect(e.id)} divider={false} />
+            {verifyButton(e)}
+          </View>
+        ) : (
+          <EntryRow e={e} usedBy={usedBy} onPress={() => onSelect(e.id)} />
+        )}
+      </Appear>
     );
   };
 
@@ -545,23 +552,25 @@ export function OwnerKnowhowBrowse({
                 {/* 정렬 펼침 — 아래로. 시트로 만들지 않는다: 이 화면은 이미 CategoryEditSheet 를 띄우므로
                     시트 2개가 공존하게 된다(모달 위 모달 금지). */}
                 {showSort && sortOpen && (
-                  <View style={styles.sortPanel}>
-                    {SORTS.map((s, i) => {
-                      const on = sort === s.key;
-                      return (
-                        <Pressable
-                          key={s.key}
-                          onPress={() => { setSort(s.key); setSortOpen(false); }}
-                          accessibilityRole="button"
-                          accessibilityState={{ selected: on }}
-                          style={({ pressed }) => [styles.sortOption, i > 0 && styles.sortOptionDivider, pressed && { opacity: 0.7 }]}
-                        >
-                          <Text style={[styles.sortOptionText, on && styles.sortOptionTextOn]}>{s.label}</Text>
-                          {on ? <Ionicons name="checkmark" size={16} color={InkColors.ink} /> : null}
-                        </Pressable>
-                      );
-                    })}
-                  </View>
+                  <Collapse>
+                    <View style={styles.sortPanel}>
+                      {SORTS.map((s, i) => {
+                        const on = sort === s.key;
+                        return (
+                          <Pressable
+                            key={s.key}
+                            onPress={() => { setSort(s.key); setSortOpen(false); }}
+                            accessibilityRole="button"
+                            accessibilityState={{ selected: on }}
+                            style={({ pressed }) => [styles.sortOption, i > 0 && styles.sortOptionDivider, pressed && { opacity: 0.7 }]}
+                          >
+                            <Text style={[styles.sortOptionText, on && styles.sortOptionTextOn]}>{s.label}</Text>
+                            {on ? <Ionicons name="checkmark" size={16} color={InkColors.ink} /> : null}
+                          </Pressable>
+                        );
+                      })}
+                    </View>
+                  </Collapse>
                 )}
               </View>
             )}

@@ -1,4 +1,5 @@
 import { View, Text, Pressable, ScrollView, StyleSheet, type ViewStyle } from 'react-native';
+import { Appear, stagger } from './Appear';
 import { EmptyState } from './EmptyState';
 import { VerifyBadge } from './VerifyBadge';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
@@ -127,8 +128,10 @@ export function BrowseList({ entries, onSelect, emptyHint, showCategory = true }
       contentContainerStyle={styles.scrollContent}
       showsVerticalScrollIndicator={false}
     >
-      {entries.map((entry) => (
-        <BrowseCard key={entry.id} entry={entry} onSelect={onSelect} showCategory={showCategory} />
+      {entries.map((entry, i) => (
+        <Appear key={entry.id} delay={stagger(i)}>
+          <BrowseCard entry={entry} onSelect={onSelect} showCategory={showCategory} />
+        </Appear>
       ))}
     </ScrollView>
   );
