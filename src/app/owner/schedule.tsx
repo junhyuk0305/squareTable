@@ -114,7 +114,9 @@ export default function OwnerScheduleScreen() {
     const working = dayShifts.map((sh) => ({
       key: sh.template.id,
       staff: staff.find((x) => x.id === sh.workerStaffId),
-      name: nameOf(sh.workerStaffId),
+      // nameOf 를 쓰지 않고 여기서 직접 찾는다 — 렌더마다 새로 만들어지는 클로저를
+      // useMemo 가 잡으면 staff 가 늦게 도착했을 때 '직원' 폴백이 굳는다.
+      name: staff.find((x) => x.id === sh.workerStaffId)?.name ?? '직원',
       start: sh.template.start,
       end: sh.template.end,
       working: true,
