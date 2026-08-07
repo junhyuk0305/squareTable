@@ -21,8 +21,12 @@ import { readFileSync } from 'node:fs';
 //   블록을 추가·삭제하면 **여기도 같이 고친다** — ui.md가 "쓰이지 않으면 삭제"를 규정하므로
 //   드리프트가 실제로 생긴다(H1·H2·I2·L4가 08-06에 삭제된 선례).
 const BLOCK_LEAF = new Set([
-  // src/components/blocks/ 5종 — ui.md와 정확히 같아야 한다
+  // src/components/blocks/ 8종 — ui.md와 정확히 같아야 한다
   'ProgressRing', 'StepProgress', 'ActionRow', 'MiniStats', 'AlertRow',
+  // 2026-08-07 추가 3종 — 화면에서 '한 덩어리'로 서는 것만 여기 넣는다.
+  //   ProgressPill·GutterRow 는 행 안의 원자(칩·행)라 블록이 아니다 —
+  //   넣으면 목록 한 줄이 블록 1개로 세어져 상한이 터진다.
+  'HeroSubNav', 'KvTable', 'WeekStrip',
   // 이미 있어서 재구현 금지인 표시 블록들(ui.md "이미 있는 것도 재구현 금지")
   'InboxHeroCard', 'StarterChecklist', 'PlanUpgradeNotice', 'EmptyState',
   'KnowhowCarousel', 'FeatureCarousel', 'BrowseList', 'NotificationList',
@@ -41,6 +45,8 @@ const CHROME = new Set([
   'NotificationBell', 'OwnerNotificationBell', 'HeaderBackButton', 'HeaderLogoutButton',
   'StoreHeaderTitle', 'Toast', 'SyncBanner', 'CoachmarkTour', 'DialogHost', 'ErrorBoundary',
   'ResponsiveShell', 'InfoDot',
+  // TransitionCover 는 화면을 '대체하는' 로딩 커버다 — 화면의 내용 블록이 아니다.
+  'TransitionCover',
   // Appear 는 래퍼다 — starts() 로 잡지 않고 A-3의 전용 규칙으로 처리한다.
   'Appear',
 ]);
