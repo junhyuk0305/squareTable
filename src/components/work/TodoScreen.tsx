@@ -274,7 +274,11 @@ export function TodoScreen({
                           {on && <Ionicons name="checkmark" size={13} color={InkColors.ink} />}
                         </Pressable>
                         <View style={{ flex: 1 }}>
-                          <Text style={[s.itemText, on && s.itemTextOn]}>{t.sectionNote ? `${t.sectionNote} · ${t.text}` : t.text}</Text>
+                          <Text style={[s.itemText, on && s.itemTextOn]}>
+                            {/* 업무 시간(0118) — 정했는데 안 보이면 "정했나?" 를 확인할 방법이 없다. */}
+                            {t.remindAt ? <Text style={s.timeTag}>{t.remindAt} </Text> : null}
+                            {t.sectionNote ? `${t.sectionNote} · ${t.text}` : t.text}
+                          </Text>
                           {mark && <Text style={s.itemMeta}>{mark.byName} 완료 · {hhmm(mark.at)}</Text>}
                           {khs.length > 0 && (
                             <View style={s.khRow}>
@@ -386,6 +390,8 @@ const s = StyleSheet.create({
   itemText: { fontSize: 15, fontWeight: '500', color: InkColors.ink },
   itemTextOn: { color: InkColors.ink3, textDecorationLine: 'line-through' },
   itemMeta: { fontSize: 11, color: InkColors.ink3, marginTop: 2 },
+  // 본문 앞에 붙는 시각 꼬리표 — 상태색이 아니라 굵기로만 구분한다(빨강은 경고로 읽힌다).
+  timeTag: { fontWeight: '800', color: InkColors.ink2 },
   // 첨부 노하우 칩 — 카드 본문 아래, 탭하면 원문 열람. 옅은 크림 필로 업무 텍스트와 구분.
   khRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 5, marginTop: 5 },
   khChip: { flexDirection: 'row', alignItems: 'center', gap: 4, maxWidth: '100%', borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.pill, paddingHorizontal: 8, paddingVertical: 3, backgroundColor: InkColors.cream },

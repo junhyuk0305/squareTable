@@ -168,6 +168,9 @@ export type TaskTemplate = {
   recurrence?: Recurrence;
   /** 'once' 예정일. */
   date?: string;
+  /** 업무 시간 "HH:MM"(KST, 0118) — 화면 라벨은 '업무 시간'. 이 시간에 알림이 나간다.
+   *  없으면 알림 없음. 발송·수신자 판정은 전부 서버(due_task_reminders). */
+  remindAt?: string;
   /** @deprecated 레거시 일회성 예정일. date로 매핑. */
   dueDate?: string;
   /** 생성(배정) 시각 ISO. work_templates.created_at 에서 채움. 배정 알림의 정렬 기준
@@ -496,6 +499,8 @@ export type NewTask = {
   sectionNote?: string;
   recurrence?: Recurrence;
   date?: string;
+  /** 업무 시간 "HH:MM"(선택). 없으면 알림 없음. */
+  remindAt?: string;
   /** 이 업무에 첨부할 노하우 id들(0069 링크). 신규=전부 첨부, 수정=이 목록으로 재조정(diff). */
   knowhowIds?: string[];
 };
@@ -636,6 +641,7 @@ export const useWorkStore = create<State>((set, get) => ({
       ...(input.sectionNote ? { sectionNote: input.sectionNote } : null),
       ...(input.recurrence ? { recurrence: input.recurrence } : null),
       ...(input.date ? { date: input.date } : null),
+      ...(input.remindAt ? { remindAt: input.remindAt } : null),
       createdAt: new Date().toISOString(), // 재조회 전에도 배정 알림 정렬 정확(DB default now()와 일치).
     };
     set((s) => ({ templates: [...s.templates, t] }));
@@ -668,6 +674,8 @@ export const useWorkStore = create<State>((set, get) => ({
       ...(patch.section === 'etc' && patch.sectionNote ? { sectionNote: patch.sectionNote } : { sectionNote: undefined }),
       ...(patch.recurrence ? { recurrence: patch.recurrence } : { recurrence: undefined }),
       ...(patch.date ? { date: patch.date } : { date: undefined }),
+      // 업무 시간도 조건부 필드 — 지우면 명시적으로 제거해야 서버 알림이 같이 멈춘다.
+      ...(patch.remindAt ? { remindAt: patch.remindAt } : { remindAt: undefined }),
     };
     set((s) => ({ templates: s.templates.map((t) => (t.id === id ? updated : t)) }));
     const ok = await guardWrite(

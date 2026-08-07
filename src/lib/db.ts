@@ -1060,6 +1060,8 @@ function mapTemplateRow(r: any): TaskTemplate {
     ...(r.recurrence ? { recurrence: r.recurrence } : null),
     // date(신규) 우선, 없으면 due_date(레거시) → date로 흡수.
     ...(r.date ? { date: r.date as string } : r.due_date ? { date: r.due_date as string } : null),
+    // 업무 시간(0118). 이 값이 있으면 서버 크론이 그 시간에 알림을 쏜다.
+    ...(r.remind_at ? { remindAt: r.remind_at as string } : null),
     // 배정 시각 — 배정 알림 정렬 기준(없으면 매일 상단 고정 버그). DB default now() 라 항상 존재.
     ...(r.created_at ? { createdAt: r.created_at as string } : null),
     // 할일 목록에서 숨김(0110). 퀴즈가 만들어 낸 껍데기 업무를 사장이 정리한 표시.
@@ -1092,6 +1094,7 @@ export async function insertTemplate(t: TaskTemplate): Promise<boolean> {
       ...(t.createdBy ? { created_by: t.createdBy } : null),
       recurrence: t.recurrence ?? null,
       date: t.date ?? t.dueDate ?? null,
+      remind_at: t.remindAt ?? null,
       // due_date 컬럼은 NOT NULL 제약이 없으니 신규 경로에선 사용 안 함(date로 통일).
       unit_id: _unitId,
     }),
@@ -1111,6 +1114,7 @@ export async function updateTemplate(t: TaskTemplate): Promise<boolean> {
         owner_id: t.ownerId ?? null,
         recurrence: t.recurrence ?? null,
         date: t.date ?? t.dueDate ?? null,
+        remind_at: t.remindAt ?? null,
       })
       .eq('id', t.id)
       .select('id'),

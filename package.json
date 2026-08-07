@@ -52,6 +52,7 @@
     "qa:payroll": "node scripts/qa-payroll.mjs",
     "qa:push": "node scripts/qa-push.mjs",
     "qa:notify": "node scripts/qa-notify-prefs.mjs",
+    "qa:task-reminder": "node scripts/qa-task-reminder.mjs",
     "qa:session": "node scripts/qa-session-readfail.mjs",
     "qa:split": "node scripts/qa-knowhow-split.mjs",
     "qa:knowhow-accuracy": "node scripts/qa-knowhow-accuracy.mjs",
