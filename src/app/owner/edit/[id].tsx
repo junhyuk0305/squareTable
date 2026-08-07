@@ -87,6 +87,10 @@ function ConversationalEdit({ entry }: { entry: PlaybookEntry }) {
     update(entry.id, { section: name });
   };
 
+  // 상세 표 행 — 카드 본문을 접을지(hideBody) 여기서 같은 값으로 판정한다.
+  // 표가 비었는데 카드까지 접으면 노하우 내용이 화면 어디에도 안 남는다 → rows가 0개면 안 접는다.
+  const docRows = useMemo(() => buildDocRows(entry.square), [entry.square]);
+
   const [toast, setToast] = useState<string | null>(null);
   const navTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const rid = useId();
@@ -188,7 +192,8 @@ function ConversationalEdit({ entry }: { entry: PlaybookEntry }) {
         editEntry={entry}
         onUpdated={onUpdated}
         onPublished={() => {}}
-        docHeader={<KnowhowDoc entry={entry} />}
+        docHeader={<KnowhowDoc entry={entry} rows={docRows} />}
+        docHeaderCoversBody={docRows.length > 0}
       />
 
       {catOpen && (
@@ -250,42 +255,56 @@ function ConversationalEdit({ entry }: { entry: PlaybookEntry }) {
 const PROGRESS_TRACK_H = 5;
 
 /**
+ * 상세 표(KvTable)에 들어갈 행 — **카드가 hideBody로 감추는 것을 전부 덮는다.**
+ *
+ * ★ 여기 없는 칸은 화면 어디에도 안 남는다. MiniSquareCard가 감추는 3블록
+ *   (상황 · 할 일+멘트 · 금지)과 항상 같은 집합이어야 하고, 라벨도 카드가 쓰는 말 그대로 쓴다.
+ * ★ 기준(square.standard)은 게이지라 표에 못 담는다 → 카드의 hideBody 대상에서 뺐다(카드가 계속 그린다).
+ * ★ 내부 비계(quagmire/uncover/result)는 넣지 않는다 — manualToText와 같은 규칙.
+ * ★ 빈 칸은 행을 만들지 않는다. 그래서 0개가 나올 수 있고, 그때는 호출부가 카드를 안 접는다.
+ */
+function buildDocRows(sq: PlaybookEntry['square']): KvRow[] {
+  const steps = (sq?.action?.steps ?? []).map((s) => s.trim()).filter(Boolean);
+  const todo = steps.length > 1 ? steps.map((s, i) => `${i + 1}. ${s}`).join('\n') : (steps[0] ?? '');
+  const scripts = (sq?.action?.scripts ?? []).map((s) => s.trim()).filter(Boolean);
+  return [
+    { key: '상황', value: (sq?.situation ?? '').trim() },
+    { key: '할 일', value: todo },
+    // 카드와 같은 겹따옴표 표기 — 그대로 읽어서 말하는 문장이라는 표시.
+    { key: '멘트', value: scripts.map((s) => `“${s}”`).join('\n') },
+    { key: '금지', value: (sq?.extract?.dont ?? '').trim() },
+  ].filter((r) => !!r.value);
+}
+
+/**
  * 노하우 문서 머리말 + 본문 표 — 상세 화면의 '읽는 면'(비포애프터 §3, 2026-08-07).
  *
  * ★ 진행바는 '읽음'이 아니라 '통과'다(knowhow_understanding). 여기서 집계하지 않는다 —
  *   문항 수는 useQuizBoard, 통과자는 understandingOf 가 SSOT고 이 블록은 배치만 한다.
  * ★ 문항이 0개면 바를 그리지 않는다 — 빈 바는 0%(아무도 못 맞힘)로 읽힌다.
  *
- * ★ 본문은 여기서 한 번만 그린다. 아래 코치챗 카드는 docHeader가 있으면 hideBody로 본문을
+ * ★ 본문은 여기서 한 번만 그린다. 아래 코치챗 카드는 rows가 1개 이상일 때만 hideBody로 본문을
  *   접고 '고치는 면'(고칠래요·내용 추가·수정 저장)만 맡는다 — 같은 본문이 두 번 나오지 않게.
  *   '고칠래요'를 누르면 카드가 본문을 다시 펴고 거기서 고친다.
+ * ★ rows는 호출부(ConversationalEdit)가 만든 것을 그대로 받는다 — 접을지 말지를 같은 값으로 판정하려고.
  */
-function KnowhowDoc({ entry }: { entry: PlaybookEntry }) {
+function KnowhowDoc({ entry, rows }: { entry: PlaybookEntry; rows: KvRow[] }) {
   const router = useRouter();
   const staff = useStaffStore((s) => s.staff);
   const understanding = useWorkStore((s) => s.understanding);
   const { quizCountOf } = useQuizBoard();
 
   const quizCount = quizCountOf(entry.id);
-  const passed = understandingOf(understanding, entry.id).length;
   const total = staff.length;
+  // 분자·분모는 같은 모집단이어야 한다 — 통과 기록엔 퇴사자가 남아 있어서(명부는 RLS로 제외)
+  // 교집합을 안 하면 "직원 2명 중 3명이 통과"가 나온다.
+  const staffIds = new Set(staff.map((s) => s.id));
+  const passed = understandingOf(understanding, entry.id).filter((r) => staffIds.has(r.staffId)).length;
   const pct = total > 0 ? Math.min(100, Math.round((passed / total) * 100)) : 0;
 
   const verifiedAt = entry.verification?.verified_at;
   const hits = entry.stats?.query_hits_30d ?? 0;
   const hasMeta = !!entry.verification || !!verifiedAt || hits > 0;
-
-  // 사용자 표면 3핵심만 — 내부 비계(quagmire/uncover/result)는 표에 넣지 않는다(manualToText와 같은 규칙).
-  const rows = useMemo<KvRow[]>(() => {
-    const sq = entry.square;
-    const steps = (sq?.action?.steps ?? []).map((s) => s.trim()).filter(Boolean);
-    const todo = steps.length > 1 ? steps.map((s, i) => `${i + 1}. ${s}`).join('\n') : (steps[0] ?? '');
-    return [
-      { key: '상황', value: (sq?.situation ?? '').trim() },
-      { key: '할 일', value: todo },
-      { key: '금지', value: (sq?.extract?.dont ?? '').trim() },
-    ].filter((r) => !!r.value);
-  }, [entry.square]);
 
   return (
     <View style={styles.doc}>
@@ -338,11 +357,12 @@ const styles = StyleSheet.create({
     backgroundColor: InkColors.bgSoft, overflow: 'hidden',
   },
   progressFill: { height: '100%', borderRadius: Radius.pill, backgroundColor: BrandColors.good },
-  // 카운트 문장이라 본문 15sp 하한의 예외(배지·칩·카운트 10~12sp).
-  progressText: { fontSize: 12, color: InkColors.ink2 },
+  // 숫자만 있는 배지가 아니라 읽어서 판단하는 문장이라 본문 15sp 하한을 그대로 적용한다.
+  progressText: { fontSize: 15, color: InkColors.ink2 },
   quizEmpty: {
     flexDirection: 'row', alignItems: 'center', gap: Space.xs, alignSelf: 'flex-start',
-    minHeight: 40, paddingVertical: Space.sm, paddingHorizontal: Space.md,
+    // 누를 수 있는 행이라 최소 터치 타깃 48.
+    minHeight: 48, paddingVertical: Space.sm, paddingHorizontal: Space.md,
     borderRadius: Radius.pill, backgroundColor: InkColors.bgSoft,
   },
   quizEmptyText: { fontSize: 12.5, fontWeight: '700', color: InkColors.ink2 },

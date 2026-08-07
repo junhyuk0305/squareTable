@@ -35,6 +35,12 @@ export function Collapse({ children, style }: { children: ReactNode; style?: Sty
 
   useEffect(() => {
     if (h <= 0) return;
+    // 이미 자연 높이로 보여주고 있었다면(측정이 늦게 온 경우) 애니메이션을 다시 돌리지 않는다.
+    // 0에서 시작하면 열려 있던 패널이 접혔다가 다시 열려 더 나쁘다.
+    if (unmeasured) {
+      v.setValue(1);
+      return;
+    }
     const anim = Animated.timing(v, {
       toValue: 1,
       duration: OPEN_MS,
@@ -43,7 +49,7 @@ export function Collapse({ children, style }: { children: ReactNode; style?: Sty
     });
     anim.start();
     return () => anim.stop();
-  }, [v, h]);
+  }, [v, h, unmeasured]);
 
   const height = v.interpolate({ inputRange: [0, 1], outputRange: [0, h] });
 

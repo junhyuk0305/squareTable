@@ -1,7 +1,6 @@
-import { useEffect, useMemo } from 'react';
+import { useMemo } from 'react';
 
 import { useSessionStore } from '@/lib/store/useSessionStore';
-import { useHubStore } from '@/lib/store/useHubStore';
 import { useUnknownQueueStore } from '@/lib/store/useUnknownQueueStore';
 import { useAttendanceStore } from '@/lib/store/useAttendanceStore';
 import { useWorkStore, occursOn, taskVisibleTo } from '@/lib/store/useWorkStore';
@@ -26,27 +25,13 @@ export type OwnerDashboardData = {
    * 표면화는 전역 SyncBanner(db.ts readFail)와 화면별 loadError 가 맡는다.
    */
   loaded: boolean;
-  userName: string;
-  storeName: string;
   entriesCount: number;
   needsReviewCount: number;
-  working: number;
   /** 오늘 떠야 하는 업무 — 홈 목록(3건 + 전체보기)용. 완료 여부까지 붙여 표시 전용으로 내보낸다. */
   todayTasks: { id: string; text: string; done: boolean }[];
   pending: number;
   /** 사장 홈 히어로 = 가장 오래 기다린 미답변 질문 1건. 받은질문 화면의 hero와 **같은 1건**(sortByUrgency SSOT). */
   heroQuery?: UnknownQuery;
-  /** heroQuery 작성자의 입사 경과일 — 익명이면 undefined. */
-  heroCareerDays?: number;
-  /**
-   * 이번 달(KST) 이 매장의 AI 답변 사용 건수 — 허브 현황의 'AI 답변 사용'과 **같은 원천**(owner_overview.ai_used).
-   *
-   * ★2026-08-07: 옛 '30일간 대신 답함'(Σ query_hits_30d)을 대체한다. 두 숫자는 정의가 달랐는데
-   *   (롤링 30일 vs 이번 달 · 노하우가 쓰인 답만 vs 모든 AI 답변 · 현재 매장 vs 전체 매장)
-   *   이름이 그 차이를 안 알려줘 같은 말로 읽혔다. 이름과 정의를 'AI 답변 사용' 하나로 통일했다.
-   *   잃은 '가치 증명'은 숫자가 아니라 **목록**이 맡는다 — 받은질문의 'AI가 답함' 세그먼트.
-   */
-  aiUsedMonth: number;
   /** 사장이 아직 답 안 한 직원 제안 건수 — 홈 '다음 행동' 2순위. */
   pendingSuggestions: number;
   /** 퀴즈에서 오답이 몰린 노하우 수 — 3순위. 판정 기준(표본 5·오답률 40%)의 SSOT는 useQuizBoard. */
@@ -58,12 +43,8 @@ export type OwnerDashboardData = {
 /** 사장 대시보드 화면의 뷰모델 — 스토어 셀렉터 읽기 + 파생값 계산을 한곳에 모은다. */
 export function useOwnerDashboardData(): OwnerDashboardData {
   const userId = useSessionStore((s) => s.userId);
-  const userName = useSessionStore((s) => s.userName);
-  // 실매장 이름은 세션(프로필→unit)에서.
-  const storeName = useSessionStore((s) => s.storeName) || '내 매장';
 
   const queue = useUnknownQueueStore((s) => s.queue);
-  const records = useAttendanceStore((s) => s.records);
   const templates = useWorkStore((s) => s.templates);
   const doneMap = useWorkStore((s) => s.done);
   const entries = usePlaybookStore((s) => s.entries);
@@ -81,10 +62,8 @@ export function useOwnerDashboardData(): OwnerDashboardData {
 
   // 2026-08-06: 인건비(monthPay)는 홈 KPI가 MiniStats로 흡수되며 소비자가 사라져 제거했다.
   // 인건비는 /owner/staff·/owner/payroll이 각자 computePay로 계산한다(SSOT는 그대로 computePay).
-  const working = useMemo(
-    () => records.filter((r) => r.date === today && r.check_in && !r.check_out).length,
-    [records, today],
-  );
+  // 2026-08-07: 같은 이유로 근무 중 인원(working)·userName·storeName·heroCareerDays도 제거했다 —
+  // MiniStats가 사라진 뒤 사장 홈에서 읽는 곳이 하나도 없었다(출퇴근 현황은 /owner/attendance가 소유).
   // 매장 진행률: 오늘 떠야 하는 것 중 가게 전체(shared) + 내 private(대상=나 or 내가 배정). (직원 자가등록은 제외)
   const todaysTasks = useMemo(
     () => templates.filter((t) => occursOn(t, today) && taskVisibleTo(t, userId)),
@@ -101,15 +80,9 @@ export function useOwnerDashboardData(): OwnerDashboardData {
   // 2026-08-06: 담당자별 배정 요약(assign)은 홈에서 OwnerWorkValueCard가 사라지며 소비자가 없어져 제거했다.
   // "누가 무슨 일"은 /owner/work(AssignBoard)가 담당한다.
 
-  // AI 답변 사용(이번 달) — 허브와 같은 definer RPC(owner_overview, 0081)를 그대로 읽는다.
-  // 새 권한 경로가 아니고, 같은 화면 두 곳이 다른 말을 하지 않게 원천을 하나로 둔다.
-  const overview = useHubStore((s) => s.overview);
-  const activeUnitId = useSessionStore((s) => s.unitId);
-  useEffect(() => { void useHubStore.getState().hydrateOwner(); }, []);
-  const aiUsedMonth = useMemo(
-    () => overview.find((r) => r.unit_id === activeUnitId)?.ai_used ?? 0,
-    [overview, activeUnitId],
-  );
+  // 2026-08-07: 'AI 답변 사용(이번 달)'은 홈에 소비자가 없어 제거했다. 그것 하나 때문에
+  // 홈에 들어올 때마다 useHubStore.hydrateOwner()(owner_overview RPC)를 한 번씩 더 쳤다.
+  // 이 숫자가 필요한 곳은 허브 현황(/hub#owner)이고, 거기서 같은 스토어를 그대로 읽는다.
 
   // 알바 FAQ Top — 미답변 질문을 '많이 물은 순'으로. 답변 시 노하우로 전환됨.
   const pendingList = useMemo(
@@ -121,10 +94,6 @@ export function useOwnerDashboardData(): OwnerDashboardData {
   // 홈 히어로 1건 — 받은질문 화면과 같은 정렬을 쓴다(sortByUrgency = 판정 SSOT).
   // 두 화면이 다른 질문을 가리키면 "가장 오래 기다린 질문"이라는 말이 거짓이 된다.
   const heroQuery = useMemo(() => sortByUrgency(pendingList)[0], [pendingList]);
-  const heroCareerDays = useMemo(() => {
-    if (!heroQuery || heroQuery.anonymous) return undefined;
-    return staff.find((s) => s.id === heroQuery.junior_id)?.career_days;
-  }, [heroQuery, staff]);
 
   // 미검증(needs_review) 노하우 — 템플릿/업종팩 fork 등 사장이 아직 우리 매장 기준으로 안 다듬은 것.
   // 0보다 크면 대시보드 최상단 배너로 먼저 노출(검증 유도).
@@ -163,18 +132,13 @@ export function useOwnerDashboardData(): OwnerDashboardData {
 
   return {
     loaded,
-    userName,
-    storeName,
     // 검토 대기(draft·인수인계서 파이프라인 초안)는 자산 카운트에서 제외 —
     // 발행 전 초안이 "노하우 N개"를 부풀리면 지표가 정직하지 않다(검수는 handover 배너가 담당).
     entriesCount: entries.filter((e) => e.status !== 'draft').length,
     needsReviewCount,
-    working,
     todayTasks,
     pending,
     heroQuery,
-    heroCareerDays,
-    aiUsedMonth,
     pendingSuggestions,
     missedKnowhowCount,
     behindStaff,

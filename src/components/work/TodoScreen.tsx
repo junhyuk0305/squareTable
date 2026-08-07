@@ -226,7 +226,7 @@ export function TodoScreen({
         {/* 접힘 = 주간 스트립. 펼침 = 월 그리드. 둘 다 항상 마운트해 두고 높이만 서로 반대로 움직인다. */}
         <Animated.View style={[s.foldBox, weekBoxStyle]} pointerEvents={folded ? 'auto' : 'none'}>
           <View onLayout={(e) => setWeekH(e.nativeEvent.layout.height)} style={s.weekStripWrap}>
-            <WeekStrip days={weekDays} selectedKey={selected} onSelect={selectDate} />
+            <WeekStrip days={weekDays} selectedKey={selected} todayKey={today} onSelect={selectDate} />
           </View>
         </Animated.View>
 

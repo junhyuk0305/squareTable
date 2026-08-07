@@ -260,7 +260,8 @@ const s = StyleSheet.create({
   rowBlocked: { opacity: 0.45 },
   nameCol: { flexShrink: 1 },
   blockedSub: { fontSize: 11, fontWeight: '700', color: InkColors.ink3, marginTop: 1 },
-  inviteHint: { fontSize: 11.5, lineHeight: 17, color: InkColors.ink3, paddingHorizontal: 9, paddingTop: 4, paddingBottom: 6 },
+  // 읽어서 판단하는 안내 문장 — 본문 하한 15sp(simplicity-voice §4). 라벨·배지가 아니다.
+  inviteHint: { fontSize: 15, lineHeight: 22, color: InkColors.ink2, paddingHorizontal: 9, paddingTop: 4, paddingBottom: 6 },
   assignPill: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: BrandColors.yellowSoft, borderWidth: 1, borderColor: BrandColors.yellowDeep, borderRadius: Radius.pill, paddingHorizontal: 11, paddingVertical: 6 },
   assignPillText: { fontSize: 11.5, fontWeight: '800', color: InkColors.ink },
   av: { width: 29, height: 29, borderRadius: Radius.pill, backgroundColor: InkColors.bgSoft, alignItems: 'center', justifyContent: 'center' },

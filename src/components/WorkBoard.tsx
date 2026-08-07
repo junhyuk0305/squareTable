@@ -29,7 +29,7 @@ import { NoticePanel } from '@/components/work/NoticePanel';
 import { TodoScreen } from '@/components/work/TodoScreen';
 import { AssignBoard } from '@/components/work/AssignBoard';
 import { TaskComposerModal } from '@/components/work/TaskComposerModal';
-import { type Member } from '@/components/work/MentionInput';
+import { INVITE_FIRST, type Member } from '@/components/work/MentionInput';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { HEADER_EDGE_GUTTER } from '@/lib/theme/layout';
@@ -222,6 +222,22 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
     members.forEach((m) => (map[m.id] = m.name));
     return (id: string) => map[id] ?? '직원';
   }, [members]);
+
+  // ★걸러진 멘션은 **말해준다**. `@전체`나 직접 타이핑으로 이 방에 없는 사람이 섞이면 알림을 안 보내는데,
+  //   조용히 지우면 보낸 사람은 알림이 안 갔다는 걸 끝내 모른다(무음 실패 금지).
+  const reachableMentions = useCallback(
+    (mentions: string[]) => {
+      const ok = mentions.filter(canReach);
+      const blocked = mentions.filter((id) => !canReach(id));
+      if (blocked.length > 0) {
+        const names = blocked.slice(0, 2).map(nameOf).join('·');
+        const more = blocked.length > 2 ? ` 외 ${blocked.length - 2}명` : '';
+        showToast(`${names}${more}에게는 알림이 안 갔어요 · ${INVITE_FIRST}`);
+      }
+      return ok;
+    },
+    [canReach, nameOf],
+  );
 
   // 업무 카드에 붙일 노하우(제목) 해석 — 링크→발행 노하우, 로드 안 됨/삭제분은 조용히 스킵(무음 아님: 링크는 남되 칩만 생략).
   const entryById = useMemo(() => new Map(entries.map((e) => [e.id, e])), [entries]);
@@ -580,7 +596,8 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
           pinnedNotice={pinnedNotice}
           onOpenNotice={() => openPanel('notice')}
           // @전체·직접 타이핑으로 비멤버가 섞여 들어와도 알림은 이 방 사람에게만 간다(§16-①).
-          onSend={(text, mentions) => postMessage(today, text, userId, userName, role, mentions.filter(canReach))}
+          // 빠진 사람이 있으면 토스트로 알린다(reachableMentions).
+          onSend={(text, mentions) => postMessage(today, text, userId, userName, role, reachableMentions(mentions))}
           onSendPhoto={sendPhotoMessage}
           sendingPhoto={sendingPhoto}
           onReact={(id, emoji) => toggleReaction(id, userId, emoji)}
@@ -614,7 +631,7 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
           onDelete={deleteFeedItem}
           onReact={(id, emoji) => toggleReaction(id, userId, emoji)}
           onRead={(id) => markNoticeRead(id, userId)}
-          onComment={(noticeId, text, mentions) => postComment(noticeId, today, text, userId, userName, role, mentions.filter(canReach))}
+          onComment={(noticeId, text, mentions) => postComment(noticeId, today, text, userId, userName, role, reachableMentions(mentions))}
           onDeleteComment={deleteFeedItem}
         />
         </Appear>

@@ -33,14 +33,27 @@ import { SectionLabel } from '@/components/SectionLabel';
 import { TransitionCover } from '@/components/blocks/TransitionCover';
 
 /**
- * 진입 커버가 최대 이만큼만 기다린다.
+ * 진입 커버가 **각 단계**(① 활성 매장 전환 ② 착지 데이터 선반입)마다 최대 이만큼만 기다린다.
  *
  * ⚠️ 이 값이 이 화면에서 가장 위험한 부분이다 — 읽기가 끝내 안 오면(오프라인 등) 스토어의 loaded 가
  * 영원히 false 라, 타임아웃이 없으면 사용자가 커버에 갇힌다. **무음 실패를 로딩으로 위장하는 것이
  * 지금보다 나쁘다.** 시간이 지나면 덜 채워진 채로라도 매장 화면(다음 행동이 있는 화면)으로 내보내고,
  * 실패 자체는 전역 SyncBanner(db.ts readFail)가 말한다.
+ *
+ * ①에는 예외가 있다 — 전환이 안 끝난 채로 진입하면 **이전 매장**이 보이므로, ①의 타임아웃은
+ * 진입이 아니라 매장 목록으로의 복귀다(아래 enterStore 참고).
  */
 const ENTER_TIMEOUT_MS = 6000;
+
+/**
+ * 정해진 시간 안에 안 끝나면 'timeout'.
+ *
+ * fetch 는 취소하지 못하므로 **기다림만 포기**한다. settle 되지 않는 네트워크(캡티브 포털·
+ * TCP 블랙홀)에서 await 이 영원히 안 풀리는 것을 막는 유일한 수단이다.
+ */
+function withTimeout<T>(p: Promise<T>, ms: number): Promise<T | 'timeout'> {
+  return Promise.race([p, new Promise<'timeout'>((resolve) => setTimeout(() => resolve('timeout'), ms))]);
+}
 
 /**
  * 착지 화면(사장 홈 / 직원 홈)이 그리기 전에 필요한 것만 미리 채운다.
@@ -161,12 +174,22 @@ export default function StoresHub() {
     setEntering({ uid: u.unit_id, name: prefFor(u.unit_id).nickname || u.store_name || '내 매장' });
     // 이미 활성 매장이면 전환 없이 바로 진입. 다른 매장이면 활성 전환 후 진입.
     if (u.unit_id !== unitId) {
-      const { error } = await switchUnit(u.unit_id);
+      // ★switchUnit(RPC + loadProfile)도 타임아웃 안에 둔다 — 예전엔 이 await 만 무기한이라,
+      //   응답이 끝내 안 오는 네트워크에서 entering 이 영원히 true 로 남았다. 커버엔 뒤로가기가 없고
+      //   위 `if (entering) return` 이 재시도까지 막아 앱 재시작 말고는 빠져나갈 길이 없었다.
+      const res = await withTimeout(switchUnit(u.unit_id), ENTER_TIMEOUT_MS);
+      // 전환이 안 끝났으면 진입하지 않는다 — 덜 채워진 화면은 괜찮지만 **다른 매장** 화면은 안 된다.
+      // 커버를 걷고 매장 목록으로 돌려보낸다(무음으로 넘기지 않는다).
+      if (res === 'timeout') {
+        setEntering(null);
+        showToast('연결이 느려서 매장을 열지 못했어요. 잠시 후 다시 눌러 주세요', 'warn');
+        return;
+      }
       // 전환 실패 시 진입하지 않는다 — 이전 매장을 "선택한 매장인 줄 알고" 보게 되는 무음 오류 방지.
       // 커버를 걷고 매장 목록으로 돌려보낸다(갇히지 않는다).
-      if (error) {
+      if (res.error) {
         setEntering(null);
-        showToast(error, 'warn');
+        showToast(res.error, 'warn');
         return;
       }
     }

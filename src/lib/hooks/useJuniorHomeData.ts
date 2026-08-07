@@ -3,11 +3,8 @@ import { useMemo } from 'react';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useAttendanceStore, type AttendanceRecord } from '@/lib/store/useAttendanceStore';
 import { useWorkStore, occursOn, trainingCourseViews, courseEntriesOf } from '@/lib/store/useWorkStore';
-import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { useScheduleStore } from '@/lib/store/useScheduleStore';
-import { useChatStore } from '@/lib/store/useChatStore';
 import { todayStr } from '@/lib/utils/attendance';
-import type { PlaybookEntry } from '@/types';
 
 export type JuniorHomeData = {
   /**
@@ -28,16 +25,11 @@ export type JuniorHomeData = {
   working: boolean;
   // 오늘 할일
   taskTotal: number;
-  taskDone: number;
   taskRemain: number;
-  tasksAllDone: boolean;
   /** 오늘 내가 해야 하는 업무 — 홈 히어로 목록(3건 + 전체보기)용. 미완료가 먼저. */
   todayTasks: { id: string; text: string; done: boolean }[];
   /** 아직 통과 못 한 퀴즈(노하우) 수 — 홈 경고행(AlertRow)용. 0이면 행이 안 그려진다. */
   openQuizCount: number;
-  // 많이 물어본 노하우
-  popularKnowhow: PlaybookEntry[];
-  submitChat: (text: string, opts?: { anonymous?: boolean }) => Promise<void>;
 };
 
 /** 직원 홈 화면의 뷰모델 — 스토어 셀렉터 읽기 + 파생값 계산 + 30초 틱을 한곳에 모은다. */
@@ -74,9 +66,10 @@ export function useJuniorHomeData(): JuniorHomeData {
     [templates, today, userId],
   );
   const taskTotal = myTodaysTasks.length;
+  // taskDone 은 taskRemain 을 만들려고만 쓴다 — 2026-08-07 정본 §12로 홈 섹션이 3개로 줄며
+  // 완료 수·'다 했어요' 판정(tasksAllDone)을 읽는 곳이 없어져 내보내지 않는다.
   const taskDone = myTodaysTasks.filter((t) => dayDone[t.id]).length;
   const taskRemain = taskTotal - taskDone;
-  const tasksAllDone = taskTotal > 0 && taskDone >= taskTotal;
 
   // 홈 히어로 목록용 — 남은 것이 먼저. myTodaysTasks(가시성 필터)를 그대로 재사용해 판정을 복제하지 않는다.
   const todayTasks = useMemo(
@@ -111,18 +104,9 @@ export function useJuniorHomeData(): JuniorHomeData {
     return open.size;
   }, [courses, courseEntries, understanding, quizCounts, userId]);
 
-  // 직원들이 많이 물어본 노하우 — 발행된 것 중 인용수(query_hits_30d) 상위 3개.
-  // 첫날 신입에게 '다들 이걸 묻더라'를 보여줘 발견성을 높인다(가게 두뇌 미리보기).
-  const entries = usePlaybookStore((s) => s.entries);
-  const submitChat = useChatStore((s) => s.submit);
-  const popularKnowhow = useMemo(
-    () =>
-      entries
-        .filter((e) => (e.status === 'published' || !e.status) && (e.stats?.query_hits_30d ?? 0) > 0)
-        .sort((a, b) => (b.stats?.query_hits_30d ?? 0) - (a.stats?.query_hits_30d ?? 0))
-        .slice(0, 3),
-    [entries],
-  );
+  // 2026-08-07: '많이 물어본 노하우'(popularKnowhow)와 물어보기 전송(submitChat)은 제거했다 —
+  // 홈 섹션이 3개로 줄며(정본 §12) 둘 다 읽는 곳이 없어졌다. 노하우 발견성은 노하우 탭이,
+  // 질문 전송은 물어보기 화면이 각자 같은 스토어를 그대로 소유한다.
 
   return {
     loaded,
@@ -134,12 +118,8 @@ export function useJuniorHomeData(): JuniorHomeData {
     openRec,
     working,
     taskTotal,
-    taskDone,
     taskRemain,
-    tasksAllDone,
     todayTasks,
     openQuizCount,
-    popularKnowhow,
-    submitChat,
   };
 }

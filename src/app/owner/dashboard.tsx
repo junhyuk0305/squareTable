@@ -244,8 +244,10 @@ export default function OwnerDashboardScreen() {
         )}
 
         {/* ② L2 제목+목록 — 오늘 업무 3건 + 전체보기. 목록은 카드 안에 둔다
-            (배치 규칙: 화면당 카드 1~2개는 남긴다 — 카드는 '이건 특별하다'는 신호다). */}
-        {loaded && entriesCount > 0 && todayTasks.length > 0 && (
+            (배치 규칙: 화면당 카드 1~2개는 남긴다 — 카드는 '이건 특별하다'는 신호다).
+            ★노하우 건수로 게이트하지 않는다 — 업무와 노하우는 별개 축이라, 노하우 0건 매장이
+            업무를 등록해도 홈에서 사라지는 버그였다. 뜨는 조건은 "오늘 업무가 있는가" 하나다. */}
+        {loaded && todayTasks.length > 0 && (
           <Appear style={styles.section}>
             <SectionLabel
               icon="today-outline"

@@ -37,6 +37,7 @@ export function ScheduleWeek({
   meId,
   onShiftPress,
   canPress,
+  hideNav,
 }: {
   monday: string;
   setMonday: (m: string) => void;
@@ -47,6 +48,8 @@ export function ScheduleWeek({
   meId?: string;
   onShiftPress?: (date: string, shift: ResolvedShift) => void;
   canPress?: (date: string, shift: ResolvedShift) => boolean;
+  /** 주 이동 네비를 숨긴다 — 바깥에 이미 주 이동 컨트롤이 있는 화면(사장 근무표)에서 중복을 막는다. */
+  hideNav?: boolean;
 }) {
   const today = todayStr();
   const thisMonday = mondayOf(today);
@@ -62,24 +65,26 @@ export function ScheduleWeek({
   return (
     <View>
       {/* 주 이동 네비 */}
-      <View style={s.nav}>
-        <Pressable onPress={() => setMonday(addDays(monday, -7))} hitSlop={8} style={({ pressed }) => [s.navBtn, pressed && { opacity: 0.6 }]}>
-          <Ionicons name="chevron-back" size={20} color={InkColors.ink2} />
-        </Pressable>
-        <View style={s.navCenter}>
-          <Text style={s.navRange}>{fmtWeekRange(monday)}</Text>
-          {monday === thisMonday ? (
-            <Text style={s.navThis}>이번 주</Text>
-          ) : (
-            <Pressable onPress={() => setMonday(thisMonday)} hitSlop={6}>
-              <Text style={s.navToday}>오늘로</Text>
-            </Pressable>
-          )}
+      {!hideNav && (
+        <View style={s.nav}>
+          <Pressable onPress={() => setMonday(addDays(monday, -7))} hitSlop={8} style={({ pressed }) => [s.navBtn, pressed && { opacity: 0.6 }]}>
+            <Ionicons name="chevron-back" size={20} color={InkColors.ink2} />
+          </Pressable>
+          <View style={s.navCenter}>
+            <Text style={s.navRange}>{fmtWeekRange(monday)}</Text>
+            {monday === thisMonday ? (
+              <Text style={s.navThis}>이번 주</Text>
+            ) : (
+              <Pressable onPress={() => setMonday(thisMonday)} hitSlop={6}>
+                <Text style={s.navToday}>오늘로</Text>
+              </Pressable>
+            )}
+          </View>
+          <Pressable onPress={() => setMonday(addDays(monday, 7))} hitSlop={8} style={({ pressed }) => [s.navBtn, pressed && { opacity: 0.6 }]}>
+            <Ionicons name="chevron-forward" size={20} color={InkColors.ink2} />
+          </Pressable>
         </View>
-        <Pressable onPress={() => setMonday(addDays(monday, 7))} hitSlop={8} style={({ pressed }) => [s.navBtn, pressed && { opacity: 0.6 }]}>
-          <Ionicons name="chevron-forward" size={20} color={InkColors.ink2} />
-        </Pressable>
-      </View>
+      )}
 
       {/* 요일 7칼럼 그리드 */}
       <View style={s.grid}>

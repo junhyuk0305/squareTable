@@ -3,10 +3,10 @@
 // 메가프롬프트 완료 정의의 "npm run web으로 눈으로 확인 — 사장 홈 / 노하우 / 퀴즈 / 직원 홈 4화면 최소"를 집행한다.
 // 목업이 아니라 실 백엔드 + 실 세션이다(AGENTS.md ⑥ 라이브 증명).
 //
-//   B1 사장 홈    — AlertRow(확인이 필요한 노하우) · InboxHeroCard(답 기다리는 질문) · ActionRow 5칸 · MiniStats · 오늘 업무 3건
+//   B1 사장 홈    — HeroSubNav(답을 기다리는 질문 + 퀴즈·직원·급여·근무표 4칸) · AlertRow(확인이 필요한 노하우) · 오늘 업무 3건
 //   B2 노하우      — AlertRow(상단 미검증) · VerifyBadge(파란 체크)
 //   B3 퀴즈        — ProgressRing(통과한 직원 n/m) · AlertRow(문항 없는 노하우) · 직원별 목록
-//   B4 직원 홈     — 오늘 할 일이 Primary(최상단) · MiniStats · 노하우 물어보기는 2번
+//   B4 직원 홈     — 오늘 할 일 히어로가 최상단 · Primary는 히어로 CTA '출근하기' 하나 · 오늘 업무 3건
 //   B5 색 역할     — 렌더된 DOM에서 500 면 위 흰 글자 / 저대비 글자 실측
 //   B6 콘솔 에러 0
 //
@@ -306,30 +306,86 @@ async function main() {
     const po = await newPage(oEmail);
     console.log('\n[B1] 사장 홈 — 블록 5종');
     await po.goto(`${ORIGIN}/owner/dashboard`, { waitUntil: 'domcontentloaded' });
-    check('B1-0 홈 진입', await wait(po, '오늘도 고생 많으세요', 40000));
+    // ★2026-08-07: 홈 인사말("오늘도 고생 많으세요")은 삭제됐다 — 매일 같은 말이라 정보가 0.
+    //   진입 신호는 이제 홈의 유일한 히어로(HeroSubNav) 라벨이다. 라벨은 loaded 게이트 밖이라
+    //   데이터 도착과 무관하게 그려지므로 '진입했다'의 지표로 인사말과 같은 자리다.
+    check('B1-0 홈 진입 — 히어로 라벨', await wait(po, '답을 기다리는 질문', 40000));
     await po.waitForTimeout(2500); // 스토어 하이드레이션(노하우·질문·업무)
     check('B1-1 AlertRow — 확인이 필요한 노하우', await see(po, '확인이 필요한 노하우'));
-    check('B1-2 히어로 = 답 기다리는 질문(가장 오래 기다린 것)', await see(po, '가장 오래 기다린 질문'));
+    // 히어로 큰 수 = **대기열 전체 규모**. 아래 인용은 1건뿐이라, 이 수가 없으면
+    // "이거 하나만 답하면 되는구나"로 읽힌다(옛 판본의 '외 n건'이 하던 일). pending 시드 = 2건.
+    // see()(부분 문자열)로 '2건'을 찾으면 '12건'에도 걸리므로 라벨의 형제 노드를 정확히 읽는다.
+    const heroValue = await po.evaluate(() => {
+      for (const el of document.querySelectorAll('div,span')) {
+        if ((el.textContent ?? '').trim() === '답을 기다리는 질문') {
+          return (el.nextElementSibling?.textContent ?? '').trim() || null;
+        }
+      }
+      return null;
+    });
+    check('B1-2 히어로 큰 수 = 대기 질문 전체(2건)', heroValue === '2건', String(heroValue));
     // ★정렬 규칙 회귀 — 파라솔(conf 0.35·26시간)이 기프티콘(conf 0.12·1시간)을 이겨야 한다.
     //   기프티콘이 뜨면 sortByUrgency 1차 기준이 confidence 로 되돌아간 것이다(2026-08-06 교체분).
     check('B1-3 히어로 = 가장 오래 기다린 건(파라솔)', await see(po, '테라스 파라솔'));
     check('B1-3b 옛 규칙(confidence 최저=기프티콘)이 히어로가 아니다', !(await see(po, '기프티콘 유효기간')));
-    check('B1-4 히어로 CTA', await see(po, '답변하기'));
-    // 대기열 규모 — 히어로 1건만 보이면 "이거 하나만 하면 되는구나"로 읽힌다(pending 2건 → 외 1건).
-    check('B1-4b 히어로 하단 "외 n건"', await see(po, '외 1건'));
-    // ★ see()(부분 문자열)로 세지 않는다 — '노하우'는 AlertRow·MiniStats·하단 탭에도 있어서
-    //   ActionRow를 통째로 지워도 통과했다(2026-08-06). ActionRow가 실제로 그린 버튼만 센다:
-    //   accessibilityRole="button" + accessibilityLabel=라벨, 그리고 5개가 **한 부모** 밑에 있어야 한다.
-    const actionRow = await po.evaluate((labels) => {
+    // CTA 문구도 바뀌었다: '답변하기' → '답하러 가기'(대기 질문이 있을 때).
+    check('B1-4 히어로 CTA — 답하러 가기', await see(po, '답하러 가기'));
+    // ★Primary 위계 — 사장 홈도 '화면당 채운 버튼 1개' 규칙 아래다. 옛 '외 n건'이 하던
+    //   "이 히어로가 화면의 중심"이라는 확인을 여기서 더 강하게 잰다.
+    //   브랜드 옐로 #FEE500 = rgb(254,229,0) · 폭 200px 이상(바 형태만; 칩·원형 아이콘 제외).
+    const ownerYellow = await po.evaluate(() => {
+      const out = [];
+      for (const el of document.querySelectorAll('[role="button"]')) {
+        const cs = getComputedStyle(el);
+        const r = el.getBoundingClientRect();
+        if (cs.backgroundColor === 'rgb(254, 229, 0)' && r.width >= 200) {
+          out.push((el.getAttribute('aria-label') || el.textContent || '').trim().slice(0, 20));
+        }
+      }
+      return out;
+    });
+    check('B1-4b Primary 채운 버튼 1개 = 히어로 CTA', ownerYellow.length === 1 && ownerYellow[0].includes('답하러'),
+      JSON.stringify(ownerYellow));
+    // ★2026-08-07: A1 원형 액션 로우(5칸)는 사장 홈에서 삭제됐다. 그 자리는 히어로 바닥에 이어 붙은
+    //   HeroSubNav 4칸(퀴즈·직원·급여·근무표)이다 — 검사 의도는 그대로다:
+    //   "바로가기 라벨이 실제 버튼으로, 한 행에 있는가".
+    //   see()(부분 문자열)로 세지 않는 이유도 그대로다: '퀴즈'·'직원'은 다른 블록에도 있어서
+    //   서브내비를 통째로 지워도 통과한다(2026-08-06 ActionRow에서 겪은 것과 같은 함정).
+    //   ★'직원' 칸은 합류 승인 대기가 있으면 aria-label이 "직원 · 합류 승인 대기 N"이 된다.
+    //     B1 시점엔 대기 0명이라(허브 직원 합류는 B5) 정확일치가 성립한다.
+    //   한 행 판정은 부모 노드가 아니라 **렌더된 좌표**로 한다 — HeroSubNav는 칸마다 래퍼 View가
+    //   따로 있어 parentElement가 전부 다르다(부모로 세면 무조건 실패한다).
+    const subnavRow = await po.evaluate((labels) => {
       const btns = labels.map((l) =>
         [...document.querySelectorAll('[role="button"]')].find((el) => (el.getAttribute('aria-label') ?? '') === l),
       );
       if (btns.some((b) => !b)) return { found: btns.filter(Boolean).length, sameRow: false };
-      const parents = new Set(btns.map((b) => b.parentElement));
-      return { found: btns.length, sameRow: parents.size === 1 };
-    }, ['노하우', '업무', '퀴즈', '직원', '근무']);
-    check('B1-5 ActionRow 5칸(한 행 · aria-label 정확일치)', actionRow.found === 5 && actionRow.sameRow, JSON.stringify(actionRow));
-    check('B1-6 MiniStats — 30일간 대신 답함', await see(po, '30일간 대신 답함'));
+      const rects = btns.map((b) => b.getBoundingClientRect());
+      const top = Math.min(...rects.map((r) => r.top));
+      const sameRow =
+        rects.every((r) => Math.abs(r.top - top) <= 4) &&
+        rects.every((r, i) => i === 0 || r.left > rects[i - 1].left);
+      return { found: btns.length, sameRow };
+    }, ['퀴즈', '직원', '급여', '근무표']);
+    check('B1-5 히어로 서브내비 4칸(한 행 · aria-label 정확일치)', subnavRow.found === 4 && subnavRow.sameRow,
+      JSON.stringify(subnavRow));
+    // ★옛 ActionRow가 되돌아오지 않았는지. 판별 라벨은 '업무'·'근무' 둘뿐이다 —
+    //   '노하우'는 하단 탭, '퀴즈'·'직원'은 서브내비와 겹쳐 되살아나도 구분이 안 된다.
+    const oldActionRow = await po.evaluate(
+      (labels) =>
+        labels.filter((l) =>
+          [...document.querySelectorAll('[role="button"]')].some((el) => (el.getAttribute('aria-label') ?? '') === l),
+        ),
+      ['업무', '근무'],
+    );
+    check('B1-5b 옛 ActionRow(원형 5칸)가 되살아나지 않았다', oldActionRow.length === 0, oldActionRow.join(' '));
+    // ★삭제분 회귀 — 인사말(매일 같은 말이라 정보가 0)·MiniStats(벨·탭과 겹치는 요약)는 홈에서 뺐다.
+    //   '30일간 대신 답함'은 정의까지 폐기됐다(롤링 30일 ≠ 이번 달 · 노하우가 쓰인 답 ≠ 모든 AI 답변).
+    const ownerRevived = [];
+    for (const t of ['오늘도 고생 많으세요', '30일간 대신 답함', '오늘 한눈에']) {
+      if (await see(po, t)) ownerRevived.push(t);
+    }
+    check('B1-6 삭제된 인사말·MiniStats가 되살아나지 않았다', ownerRevived.length === 0, ownerRevived.join(' '));
     check('B1-7 오늘 업무 목록 + 전체보기', (await see(po, '오늘 업무')) && (await see(po, '전체보기')));
     check('B1-8 옛 히어로("반복 질문을 AI가 대신 받았어요") 제거됨', !(await see(po, '반복 질문을 AI가 대신 받았어요')));
     await shot(po, '01-owner-home');
@@ -383,9 +439,11 @@ async function main() {
     report('B3-5', '퀴즈', qTexts, lowContrast(qTexts));
 
     // ═══════════ B4 직원 홈 ═══════════
-    // 최우선(가장 큰 것)=오늘 할 일 · Primary(유일한 채운 버튼)=노하우 물어보기. **둘은 다른 자리다.**
-    // 2026-08-06 이전엔 셋째 자리 '출근하기'가 유일한 옐로 채움+글로우 버튼이라 1등석을 갖고 있었다.
-    console.log('\n[B4] 직원 홈 — 최우선=오늘 할 일 · Primary=물어보기');
+    // ★2026-08-07 정본 §12: 섹션 5개 → 3개(오늘 할 일 히어로 · 오늘 업무 · 안 푼 퀴즈).
+    //   최우선(가장 큰 것)=오늘 할 일 히어로. Primary(유일한 채운 버튼)=그 히어로의 CTA '출근하기'.
+    //   즉 **둘이 한 자리로 합쳐졌다** — 하루 한 번 반드시 눌러야 하는 행동이라 히어로가 직접 든다.
+    //   '노하우 물어보기'·MiniStats·기능 캐러셀은 홈에서 삭제(하단 탭·벨과 중복).
+    console.log('\n[B4] 직원 홈 — 최우선=오늘 할 일 히어로 · Primary=그 히어로 CTA');
     const pj = await newPage(jEmail);
     await pj.goto(`${ORIGIN}/junior/home`, { waitUntil: 'domcontentloaded' });
     check('B4-0 직원 홈 진입', await wait(pj, '오늘도 화이팅이에요', 40000));
@@ -402,11 +460,22 @@ async function main() {
       await pj.waitForTimeout(600);
     }
 
-    check('B4-1 오늘 할 일 블록', await see(pj, '오늘 할 일'));
+    check('B4-1 오늘 할 일 히어로', await see(pj, '오늘 할 일'));
     check('B4-2 할 일 목록 렌더(오픈 청소)', await see(pj, '오픈 청소'));
-    check('B4-3 노하우 물어보기는 남아 있다', await see(pj, '노하우 물어보기'));
-    check('B4-4 MiniStats — 나를 언급', await see(pj, '나를 언급'));
-    // 순서 검증: '오늘 할 일'이 '노하우 물어보기'보다 위에 있어야 한다(Primary 교체의 핵심)
+    // 히어로 CTA — 시드 직원은 오늘 출퇴근 기록이 0이라 '출근하기'다(근무 중이면 '퇴근하기').
+    check('B4-3 히어로 CTA — 출근하기', await see(pj, '출근하기'));
+    // ★홈에서 뺀 것이 되살아나지 않았는지. 셋 다 다른 자리가 이미 갖고 있다:
+    //   물어보기=하단 탭 · MiniStats=벨/탭과 겹치는 요약 · 기능 캐러셀=합류 코치마크.
+    //   (하단 탭 라벨은 '물어보기'라 '노하우 물어보기' 부분일치에 걸리지 않는다.)
+    const juniorRevived = [];
+    for (const t of ['노하우 물어보기', '나를 언급', '오늘 한눈에', '이런 것도 할 수 있어요']) {
+      if (await see(pj, t)) juniorRevived.push(t);
+    }
+    check('B4-4 삭제된 물어보기 섹션·MiniStats·기능 캐러셀이 되살아나지 않았다', juniorRevived.length === 0,
+      juniorRevived.join(' '));
+    // 순서 검증: 최우선(오늘 할 일 히어로)이 둘째 섹션('오늘 업무')보다 위에 있어야 한다.
+    //   옛 판본은 '노하우 물어보기'와 비교했는데 그 섹션이 사라졌다 — 같은 의도(최우선이 1등석)를
+    //   지금 화면에 남아 있는 다음 블록으로 옮겨 잰다.
     const order = await pj.evaluate(() => {
       const y = (t) => {
         for (const el of document.querySelectorAll('div,span')) {
@@ -414,13 +483,13 @@ async function main() {
         }
         return null;
       };
-      return { todo: y('오늘 할 일'), ask: y('노하우 물어보기') };
+      return { hero: y('오늘 할 일'), work: y('오늘 업무') };
     });
-    check('B4-5 ★오늘 할 일이 노하우 물어보기보다 위', order.todo !== null && order.ask !== null && order.todo < order.ask,
+    check('B4-5 ★오늘 할 일 히어로가 오늘 업무 섹션보다 위', order.hero !== null && order.work !== null && order.hero < order.work,
       JSON.stringify(order));
 
     // ★Primary 위계 — "화면당 채운 버튼 1개"를 **렌더된 배경색으로** 잰다.
-    //   선언(주석)·순서만 검사하면 '출근하기가 유일한 옐로 채움'인 상태가 계속 green 으로 통과한다(2026-08-06 실패 원인).
+    //   선언(주석)·순서만 검사하면 채운 버튼이 둘로 늘어난 상태가 계속 green 으로 통과한다(2026-08-06 실패 원인).
     //   브랜드 옐로 #FEE500 = rgb(254,229,0). 폭 200px 이상 = 바 형태 버튼만(칩·원형 아이콘 제외).
     const yellowBtns = await pj.evaluate(() => {
       const out = [];
@@ -434,7 +503,12 @@ async function main() {
       return out;
     });
     check(`B4-5b Primary 채운 버튼은 1개 — 실측 ${JSON.stringify(yellowBtns)}`, yellowBtns.length === 1, JSON.stringify(yellowBtns));
-    check('B4-5c 그 1개가 물어보기다', yellowBtns.length === 1 && yellowBtns[0].includes('물어보기'), JSON.stringify(yellowBtns));
+    // ★2026-08-07: Primary는 '노하우 물어보기'가 아니라 히어로 CTA '출근하기'다.
+    //   물어보기는 하단 탭이 상시 들고 있고, 출근은 하루 한 번 반드시 눌러야 하는 유일한 행동이라
+    //   1등석을 그쪽으로 옮겼다. ('퇴근하기'·'다시 출근하기'도 같은 버튼이라 '출근'/'퇴근'으로 잰다.)
+    check('B4-5c 그 1개가 히어로 출퇴근 CTA다',
+      yellowBtns.length === 1 && (yellowBtns[0].includes('출근') || yellowBtns[0].includes('퇴근')),
+      JSON.stringify(yellowBtns));
     await shot(pj, '04-junior-home');
 
     console.log('\n[B4-색] 직원 홈 대비 실측');

@@ -68,17 +68,27 @@ export function JuniorAsk({ suggestEntry = true, seed }: { suggestEntry?: boolea
   const getStaff = useStaffStore((s) => s.getStaff);
   const getEntryById = usePlaybookStore((s) => s.getById);
   const entries = usePlaybookStore((s) => s.entries);
-  // ★추천 문구는 **그 매장에 실제로 있는 노하우**에서만 뽑는다(정본 §13).
-  //  고정 문구를 쓰면 답이 없는 질문을 추천하게 되고, 첫 시도에서 신뢰가 깨진다.
-  //  풀 = 발행됐고, 팩 템플릿이 아니고, 사장님이 확인한 것(needs_review=미확인은 뺀다).
-  //  이 풀이 곧 아래 안내 문구의 'n개'라 문장과 칩이 같은 것을 가리킨다.
+  // ★그라운딩 범위 — **AI가 실제로 보는 것과 같은 집합**을 센다.
+  //  match_playbook(0012_pgvector_search.sql)의 조건은 이 매장의 `status='published'` 하나뿐이다.
+  //  needs_review·is_template 로 더 좁혀 세면 화면의 'n개'와 AI가 쓰는 노하우가 어긋난다 —
+  //  업종팩을 fork한 매장(전부 needs_review=true)은 화면이 칩을 아예 안 그리는데
+  //  AI는 그 노하우들로 답했다. 개수는 여기서, 문장도 이 값으로 말한다.
+  const grounded = useMemo(
+    () => entries.filter((e) => (e.status ?? 'published') === 'published'),
+    [entries],
+  );
+  // 그중 사장님이 아직 확인 안 한 것 — 안내 문장이 이 수를 그대로 밝힌다(숨기지 않는다).
+  const unreviewedCount = useMemo(() => grounded.filter((e) => e.needs_review === true).length, [grounded]);
+  // ★추천 칩도 **같은 풀**에서 뽑는다(정본 §13: 그 매장에 실제로 있는 노하우만).
+  //  다만 순서는 사장님이 확인한 것 → 많이 물어본 것 순. 안내 문장이 그렇게 말한다.
   const askable = useMemo(
     () =>
-      entries
-        .filter((e) => (e.status ?? 'published') === 'published' && !e.is_template && !e.needs_review)
-        // 많이 물어본 것 먼저 — 답이 잘 나오는 것이 앞에 온다.
-        .sort((a, b) => (b.stats?.query_hits_30d ?? 0) - (a.stats?.query_hits_30d ?? 0)),
-    [entries],
+      [...grounded].sort(
+        (a, b) =>
+          Number(a.needs_review === true) - Number(b.needs_review === true) ||
+          (b.stats?.query_hits_30d ?? 0) - (a.stats?.query_hits_30d ?? 0),
+      ),
+    [grounded],
   );
   // 칩 문구 = 노하우 제목 그대로. 문장을 지어내면 원문과 어긋나 매칭이 빗나간다.
   const pool = useMemo(() => askable.map((e) => e.title).filter(Boolean), [askable]);
@@ -212,8 +222,12 @@ export function JuniorAsk({ suggestEntry = true, seed }: { suggestEntry?: boolea
                 "물어봐도 답이 없다"가 첫 인상이 된다. 이때는 위 두 줄만 남는다. */}
             {emptySuggestions.length > 0 && (
               <>
+                {/* ★"사장님이 확인한 것만 씁니다"는 사실이 아니었다 — match_playbook은 published 전부를 본다.
+                    확인 안 한 것도 답에 쓰이므로 그 수를 그대로 밝히고, 추천 순서만 확인한 것을 앞에 둔다. */}
                 <Text style={styles.groundingText}>
-                  우리 매장 노하우 {askable.length}개를 보고 답해요. 사장님이 확인한 것만 씁니다.
+                  {unreviewedCount > 0
+                    ? `우리 매장 노하우 ${grounded.length}개를 보고 답해요. 그중 ${unreviewedCount}개는 사장님이 아직 확인 안 했어요. 아래 추천은 확인한 것부터 보여드려요.`
+                    : `우리 매장 노하우 ${grounded.length}개를 보고 답해요. 아래 추천은 많이 물어본 것부터 보여드려요.`}
                 </Text>
                 <View style={styles.suggestList}>
                   {emptySuggestions.map((text, i) => (

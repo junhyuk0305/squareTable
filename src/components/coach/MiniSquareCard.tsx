@@ -22,8 +22,9 @@ type MiniProps = {
   onPatch: (sq: SquareBlock) => void;
   onTitle: (t: string) => void;
   publishLabel: string;        // 발행 결과를 명시 — 인박스='이 답변 보내기' / 직접='노하우로 저장'
-  /** 본문(상황·할 일·금지·기준)을 감춘다 — 같은 본문을 이미 화면 위에서 읽고 있을 때(노하우 상세의 문서).
-   *  ★ **가리는 것이지 지우는 게 아니다** — square 는 그대로 받아 publishable 판정·패치 대상이 살아 있다. */
+  /** 본문(상황·할 일·멘트·금지)을 감춘다 — 같은 본문을 이미 화면 위에서 읽고 있을 때(노하우 상세의 문서 표).
+   *  ★ **가리는 것이지 지우는 게 아니다** — square 는 그대로 받아 publishable 판정·패치 대상이 살아 있다.
+   *  ★ 기준(standard)은 감추지 않는다 — 게이지라 표로 못 옮긴다. 감추면 화면 어디에도 안 남는다. */
   hideBody?: boolean;
 };
 
@@ -58,9 +59,10 @@ export function MiniSquareCard({
         <Text style={cardStyles.title}>{title}</Text>
       )}
 
-      {/* ── 본문 4블록(상황·할 일·금지·기준) — hideBody면 감춘다.
+      {/* ── 본문 3블록(상황 · 할 일+멘트 · 금지) — hideBody면 감춘다. 기준은 아래에서 항상 그린다.
              감추는 것은 '그리기'뿐이다: square 는 그대로 들고 있어 아래 publishable 판정과
-             '고칠래요' 진입이 살아 있다(본문을 지우면 저장 버튼이 죽는다). ── */}
+             '고칠래요' 진입이 살아 있다(본문을 지우면 저장 버튼이 죽는다).
+             ★ hideBody를 켜는 쪽은 이 3블록을 전부 대신 그려야 한다 — 안 그리면 내용이 사라진다. ── */}
       {/* 상황 */}
       {!hideBody && (editable || !!square.situation) && (
         <Cell name="상황" color={meta.color} text={square.situation}
@@ -108,8 +110,9 @@ export function MiniSquareCard({
         </View>
       )}
 
-      {/* 기준 — square.standard 있을 때만. count=개수칩 / spectrum=위치바 / 구형=게이지 */}
-      {!hideBody && square.standard && (() => {
+      {/* 기준 — square.standard 있을 때만. count=개수칩 / spectrum=위치바 / 구형=게이지.
+          hideBody 대상 밖: 게이지는 표(KvTable)로 옮길 수 없어 여기서 안 그리면 어디에도 안 남는다. */}
+      {square.standard && (() => {
         const st = square.standard;
         if (st.kind === 'count') {
           return (

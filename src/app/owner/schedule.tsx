@@ -6,9 +6,12 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { RoleTabBar } from '@/components/RoleTabBar';
 import { Appear } from '@/components/Appear';
+import { Collapse } from '@/components/Collapse';
+import { EmptyState } from '@/components/EmptyState';
 import { SectionLabel } from '@/components/SectionLabel';
 import { WeekStrip, type WeekDay } from '@/components/blocks/WeekStrip';
 import { GutterRow } from '@/components/blocks/GutterRow';
+import { ScheduleWeek } from '@/components/schedule/ScheduleWeek';
 import { ShiftEditorModal } from '@/components/schedule/ShiftEditorModal';
 import { useStaffStore } from '@/lib/store/useStaffStore';
 import { useScheduleStore, shiftsOn, type ShiftTemplate, type SwapRequest } from '@/lib/store/useScheduleStore';
@@ -69,6 +72,8 @@ export default function OwnerScheduleScreen() {
   const today = todayStr();
   // 날짜 선택 UI는 주간 스트립 하나. 보이는 주는 선택일에서 파생된다(월요일 시작 — 기존 규칙 유지).
   const [selected, setSelected] = useState(() => today);
+  // 스트립의 점은 "그날 근무가 있다"만 뜻한다 — 누가 언제 나오는지는 이 그리드를 펴야 보인다.
+  const [weekOpen, setWeekOpen] = useState(false);
   const [editStaff, setEditStaff] = useState<Junior | null>(null);
   const monday = useMemo(() => mondayOf(selected), [selected]);
 
@@ -176,6 +181,29 @@ export default function OwnerScheduleScreen() {
             </Pressable>
           </View>
           <WeekStrip days={days} selectedKey={selected} todayKey={today} onSelect={setSelected} />
+          {/* 주간 전체 — 스트립의 점만으로는 "누가 언제 나오나"를 볼 수 없다. 펴면 7칼럼 그리드. */}
+          <Pressable
+            onPress={() => setWeekOpen((v) => !v)}
+            accessibilityRole="button"
+            accessibilityState={{ expanded: weekOpen }}
+            style={({ pressed }) => [styles.weekMoreBtn, pressed && { opacity: 0.7 }]}
+          >
+            <Text style={styles.weekMoreText}>{weekOpen ? '주간 전체 접기' : '주간 전체 보기'}</Text>
+            <Ionicons name={weekOpen ? 'chevron-up' : 'chevron-down'} size={14} color={InkColors.ink2} />
+          </Pressable>
+          {weekOpen && (
+            <Collapse>
+              <ScheduleWeek
+                hideNav
+                monday={monday}
+                setMonday={setSelected}
+                templates={templates}
+                swaps={swaps}
+                staff={staff}
+                config={config}
+              />
+            </Collapse>
+          )}
         </View>
         </Appear>
 
@@ -227,18 +255,12 @@ export default function OwnerScheduleScreen() {
             }
           />
           {staff.length === 0 ? (
-            <View style={styles.emptyBox}>
-              <Ionicons name="people-outline" size={20} color={InkColors.ink3} />
-              <Text style={styles.emptyText}>합류한 직원이 없어요.{'\n'}먼저 직원을 초대해 주세요.</Text>
-              {/* "직원 관리로 가세요"라고 쓰고 이동을 안 주면 사장이 메뉴를 찾아 헤맨다(복잡도 원칙 P6). */}
-              <Pressable
-                onPress={() => router.push('/owner/staff')}
-                style={({ pressed }) => [styles.emptyBtn, pressed && { opacity: 0.85 }]}
-                accessibilityRole="button"
-              >
-                <Text style={styles.emptyBtnText}>직원 초대하기</Text>
-              </Pressable>
-            </View>
+            /* "직원 관리로 가세요"라고 쓰고 이동을 안 주면 사장이 메뉴를 찾아 헤맨다(복잡도 원칙 P6). */
+            <EmptyState
+              title="합류한 직원이 없어요"
+              body="먼저 직원을 초대하면 근무 시간을 넣을 수 있어요."
+              cta={{ label: '직원 초대하기', onPress: () => router.push('/owner/staff') }}
+            />
           ) : (
             <View style={styles.dayList}>
               {rows.map((r, i) => {
@@ -374,8 +396,6 @@ const styles = StyleSheet.create({
 
   emptyBox: { alignItems: 'center', gap: Space.sm, paddingVertical: Space.xl, backgroundColor: InkColors.bg, borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line },
   emptyText: { fontSize: 15, color: InkColors.ink2, textAlign: 'center', lineHeight: 22 },
-  emptyBtn: { minHeight: 48, justifyContent: 'center', paddingHorizontal: Space.xl, borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.ink, backgroundColor: '#FFFFFF' },
-  emptyBtnText: { fontSize: 15, fontWeight: '800', color: InkColors.ink },
 
   // 주 이동 네비 — 스트립 위 한 줄
   weekNav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
@@ -383,6 +403,9 @@ const styles = StyleSheet.create({
   weekNavCenter: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
   weekRange: { fontSize: 15, lineHeight: 21, fontWeight: '800', color: InkColors.ink },
   todayText: { fontSize: 12, fontWeight: '800', color: BrandColors.warnText },
+  // 주간 전체 펼침 토글 — 스트립 바로 아래. 카드가 아니라 스트립에 딸린 컨트롤이다.
+  weekMoreBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Space.xs, minHeight: 48 },
+  weekMoreText: { fontSize: 15, lineHeight: 21, fontWeight: '800', color: InkColors.ink2 },
 
   // 하루 목록
   total: { fontSize: 12, fontWeight: '800', color: InkColors.ink2 },
