@@ -10,7 +10,6 @@ import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { useWorkStore } from '@/lib/store/useWorkStore';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { Appear, stagger } from '@/components/Appear';
-import { Collapse } from '@/components/Collapse';
 import { EmptyState } from '@/components/EmptyState';
 import { InfoDot } from '@/components/InfoDot';
 import { VerifyBadge } from '@/components/VerifyBadge';
@@ -34,19 +33,8 @@ import type { PlaybookEntry } from '@/types';
 // 세 칸이 곧 노하우가 만들어지는 순서다: 손대야 나아가는 것 → 다듬어져 AI가 쓰는 것 → 낡아서 다시 볼 것.
 export type KnowhowSegKey = 'todo' | 'knowhow' | 'unused';
 
-// ── 정렬 옵션(목록 뷰) ───────────────────────────────────────
-
-type SortKey = 'recent' | 'resolution' | 'cited' | 'category';
-const SORTS: { key: SortKey; label: string }[] = [
-  { key: 'recent', label: '최신순' },
-  { key: 'resolution', label: '해결률순' },
-  { key: 'cited', label: '인용순' },
-  // 이것만 순서가 아니라 그룹 분기(groups)다 — 왜 혼자 다르게 구는지 라벨로 밝힌다.
-  { key: 'category', label: '카테고리별로 묶어보기' },
-];
-
 /**
- * 찾기 바(검색·카테고리·정렬)를 띄우는 최소 노하우 수.
+ * 찾기 바(검색·카테고리)를 띄우는 최소 노하우 수.
  * ① 복잡도 원칙 §4 "리스트 첫 노출 5±2" — 7건까지는 스크롤 한 번이면 다 훑힌다.
  * ② JuniorBrowseDashboard 의 SECTION_LIMIT*2(=8)와 같은 수 — "잘라 보여줄 만큼 쌓였나"라는 같은 판정.
  * 이 수 미만에서는 거르는 장치가 목록보다 커진다(실측: 데모 매장 4~5건에 필터 4종).
@@ -61,9 +49,6 @@ const FILTER_MIN = 8;
  *   느껴진다는 계산에서 나온 값이다. 파일럿 매장에서 재고 나서 고쳐야 한다.
  */
 const GROUP_MIN = 30;
-
-/** 정렬 컨트롤(SORTS 4종)을 다시 꺼내는 수. 그 아래에서는 그룹 헤더가 정렬을 대신한다. (역시 추정값) */
-const SORT_MIN = 100;
 
 /** 우하단 FAB 지름. 터치 타깃 하한 48dp보다 크게. */
 const FAB_SIZE = 56;
@@ -178,9 +163,7 @@ export function OwnerKnowhowBrowse({
   const [seg, setSeg] = useState<KnowhowSegKey>(initialSegment ?? 'knowhow');
   const [query, setQuery] = useState('');
   const [activeCat, setActiveCat] = useState<string | null>(null); // null = 전체(단일 선택). 카테고리(section) 이름.
-  const [sort, setSort] = useState<SortKey>('recent');
   const [catSheet, setCatSheet] = useState(false); // 카테고리 편집 시트
-  const [sortOpen, setSortOpen] = useState(false); // 정렬 펼침(인라인, 모달 아님)
 
   // 딥링크로 다시 들어오면(푸시 → /owner/inbox → ?seg=todo) 화면이 이미 떠 있어 useState 초기값이
   // 안 먹는다. prop이 **실제로 바뀐 렌더에서만** 칸을 옮긴다 — 값이 그대로면 사용자의 칸 선택을
@@ -253,31 +236,18 @@ export function OwnerKnowhowBrowse({
     [visible],
   );
 
-  // 목록 정렬.
-  const listFiltered = useMemo(() => {
-    let list = baseFiltered;
-    if (sort !== 'category') {
-      list = [...list].sort((a, b) => {
-        if (sort === 'recent') return (b.updated_at ?? '').localeCompare(a.updated_at ?? '');
-        if (sort === 'resolution') return (b.stats?.resolution_rate ?? 0) - (a.stats?.resolution_rate ?? 0);
-        if (sort === 'cited') return (b.stats?.query_hits_30d ?? 0) - (a.stats?.query_hits_30d ?? 0);
-        return 0;
-      });
-    }
-    return list;
-  }, [baseFiltered, sort]);
-
-  const groups = useMemo(() => {
-    if (sort !== 'category') return null;
-    // allCats는 visible 전체에서 파생되므로 listFiltered의 모든 항목이 반드시 어느 그룹엔가 속한다.
-    const byCat = allCats.map((cat) => ({
-      cat,
-      items: listFiltered
-        .filter((e) => sectionOf(e) === cat)
-        .sort((a, b) => (b.updated_at ?? '').localeCompare(a.updated_at ?? '')),
-    }));
-    return byCat.filter((g) => g.items.length > 0);
-  }, [listFiltered, sort, allCats]);
+  /**
+   * 목록 순서 — **최근 고친 것부터** 하나로 고정한다(2026-08-08 정렬 기능 삭제).
+   *
+   * 옛 판본은 정렬 4종(최신·해결률·인용·카테고리별)을 컨트롤로 내줬는데, 그 컨트롤이 뜨는 조건이
+   * `노하우 100건 이상`이었고 **실사용 매장은 전부 그 아래**라 아무도 못 쓰는 기능이었다.
+   * 쓰이지 않는 컨트롤은 화면만 차지하고 되돌림 경로(잠김 방지) 같은 부수 규칙까지 달고 다닌다.
+   * "무엇부터 손볼까"는 아래 쓰임새 묶음(usageGroups)이 대신 답한다 — 정렬보다 그쪽이 질문에 맞는다.
+   */
+  const listFiltered = useMemo(
+    () => [...baseFiltered].sort((a, b) => (b.updated_at ?? '').localeCompare(a.updated_at ?? '')),
+    [baseFiltered],
+  );
 
   // ── 내보내기 대상 — 지금 목록에 보이는 것 중 발행본을 [섹션 → order_index] 순으로 묶는다.
   // 별도 저장물 없음(설계 §4·5c): 매뉴얼은 원자의 파생 투영일 뿐이다.
@@ -306,26 +276,12 @@ export function OwnerKnowhowBrowse({
   // 찾기 바 노출 — FILTER_MIN 미만이면 목록이 곧 전부라 거를 게 없다(필터가 목록보다 커진다).
   // 뒤 절은 "잠김 방지"다. 빠지면 끌 수 없는 필터가 생긴다:
   //  8건에서 필터를 건 뒤 노하우를 지워 7건이 되는 경로 — 바가 사라지면 그 필터를 풀 방법이 없다.
-  //  ★정렬도 같은 경로다(2026-08-06 검증에서 잡힘). 정렬만 바꾼 뒤 7건이 되면 바가 사라지는데
-  //  sort 상태는 'recent'로 안 돌아가서, 목록이 계속 비-기본 순서인 채 되돌릴 수단이 없어진다.
-  //  그래서 '거르기'가 아니라 **기본값에서 벗어난 상태 전부**를 센다.
-  const viewAltered = query.trim() !== '' || effectiveCat !== null || sort !== 'recent';
+  //  (2026-08-08 정렬 삭제로 '정렬만 바꾼 뒤 잠김' 경로는 사라졌다 — 남은 것은 검색·카테고리 둘뿐이다.)
+  const viewAltered = query.trim() !== '' || effectiveCat !== null;
   const showFindBar = visible.length >= FILTER_MIN || viewAltered;
 
-  // 정렬 컨트롤 — 기본은 숨김. SORT_MIN 이상이거나, 이미 기본값을 벗어나 있으면(=되돌릴 수단이
-  // 필요하면) 켠다. 이 두 번째 절이 없으면 100건에서 정렬을 바꾼 뒤 99건이 될 때 잠긴다.
-  //
-  // ★정직하게 적어둔다(2026-08-07 검증): 두 번째 절은 **100건을 한 번 넘었다가 줄어든 매장에서만**
-  //   참이 된다. 100건에 한 번도 닿지 않는 매장에서는 sort 가 'recent' 를 벗어날 수단이 없으므로
-  //   '해결률순'·'인용순'·'카테고리별로 묶어보기' 세 가지가 **사실상 사라진 것**과 같다.
-  //   이건 잠김(끌 수 없는 상태)이 아니라 **의도된 삭제**다 — 그 구간에서는 그룹 헤더가 대신한다.
-  //   다만 SORT_MIN=100 은 실측이 아니라 추정이고 실사용 매장은 대부분 그 아래다. 카테고리로
-  //   묶어 보고 싶다는 요구가 실제로 나오면 임계값이 아니라 **그룹 헤더 축**을 손보는 게 맞다.
-  const showSort = visible.length >= SORT_MIN || sort !== 'recent';
-  // 정렬 컨트롤이 없는 구간에서 목록이 길면 묶음이 정렬을 대신한다.
-  const showUsageGroups = !showSort && listFiltered.length >= GROUP_MIN;
-
-  const sortLabel = SORTS.find((s) => s.key === sort)?.label ?? SORTS[0].label;
+  // 목록이 길면 쓰임새 묶음(많이 쓰임 / 오래 확인 안 함 / 그 밖)이 "무엇부터 손볼까"에 답한다.
+  const showUsageGroups = listFiltered.length >= GROUP_MIN;
 
   // 필터를 한 줄로 압축하면 "지금 걸려 있다"가 안 보인다 — 카운트가 그 신호를 대신 든다.
   const countLabel =
@@ -507,30 +463,8 @@ export function OwnerKnowhowBrowse({
                   ) : null}
                 </View>
 
-                {/* 행2 — [정렬 고정] │ [카테고리 가로 스크롤].
-                    정렬만 왼쪽에 붙박이인 이유: 칩이 많아 오른쪽이 스크롤로 밀려도
-                    "지금 어떤 순서로 보고 있는지"는 항상 보여야 한다. */}
+                {/* 행2 — 카테고리 가로 스크롤. */}
                 <View style={styles.findRow}>
-                  {showSort && (
-                    <>
-                      <Pressable
-                        onPress={() => setSortOpen((v) => !v)}
-                        hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
-                        accessibilityRole="button"
-                        // accessibilityState 가 아니라 aria-expanded 인 이유: RNW 0.21은 View/Pressable의
-                        // accessibilityState 를 무시한다(웹에서 펼침 상태가 아예 안 읽힌다). aria-expanded 는
-                        // RN 쪽에서 accessibilityState.expanded 로 매핑되므로 네이티브도 같이 산다.
-                        aria-expanded={sortOpen}
-                        accessibilityLabel={`정렬 ${sortLabel}, 바꾸기`}
-                        style={[styles.chip, styles.sortTrigger, sortOpen && styles.chipActive]}
-                      >
-                        <Text style={styles.sortTriggerKey}>정렬</Text>
-                        <Text style={styles.sortTriggerValue} numberOfLines={1}>{sortLabel}</Text>
-                        <Ionicons name={sortOpen ? 'chevron-up' : 'chevron-down'} size={12} color={InkColors.ink2} />
-                      </Pressable>
-                      <View style={styles.findDivider} />
-                    </>
-                  )}
                   <ScrollView
                     horizontal
                     showsHorizontalScrollIndicator={false}
@@ -562,54 +496,12 @@ export function OwnerKnowhowBrowse({
                   </ScrollView>
                 </View>
 
-                {/* 정렬 펼침 — 아래로. 시트로 만들지 않는다: 이 화면은 이미 CategoryEditSheet 를 띄우므로
-                    시트 2개가 공존하게 된다(모달 위 모달 금지). */}
-                {showSort && sortOpen && (
-                  <Collapse>
-                    <View style={styles.sortPanel}>
-                      {SORTS.map((s, i) => {
-                        const on = sort === s.key;
-                        return (
-                          <Pressable
-                            key={s.key}
-                            onPress={() => { setSort(s.key); setSortOpen(false); }}
-                            accessibilityRole="button"
-                            accessibilityState={{ selected: on }}
-                            style={({ pressed }) => [styles.sortOption, i > 0 && styles.sortOptionDivider, pressed && { opacity: 0.7 }]}
-                          >
-                            <Text style={[styles.sortOptionText, on && styles.sortOptionTextOn]}>{s.label}</Text>
-                            {on ? <Ionicons name="checkmark" size={16} color={InkColors.ink} /> : null}
-                          </Pressable>
-                        );
-                      })}
-                    </View>
-                  </Collapse>
-                )}
               </View>
             )}
 
             {/* 목록 */}
             {listFiltered.length === 0 ? (
               <EmptyResult onReset={() => { setQuery(''); setActiveCat(null); }} onAsk={goAsk} />
-            ) : groups ? (
-              groups.map((g) => {
-                const m = getSectionMeta(g.cat);
-                return (
-                  <View key={g.cat} style={{ gap: 8 }}>
-                    <View style={styles.groupHead}>
-                      <View style={[styles.dot, { backgroundColor: m.color }]} />
-                      <Text style={styles.groupTitle}>{m.label}</Text>
-                      <Text style={styles.groupCount}>{g.items.length}</Text>
-                    </View>
-                    <PagedRows
-                      key={`${g.cat}-${seg}-${query}`}
-                      items={g.items}
-                      render={entryItem}
-                      style={styles.list}
-                    />
-                  </View>
-                );
-              })
             ) : showUsageGroups ? (
               usageGroups.map((g) => groupBlock(g.key, g.title, g.items))
             ) : (
@@ -858,7 +750,6 @@ const styles = StyleSheet.create({
   findRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
   // ★minWidth:0 없으면 웹 flexbox 의 min-width:auto 때문에 가로 스크롤이 안 생기고 부모를 밀어낸다.
   findScroll: { flex: 1, minWidth: 0 },
-  findDivider: { width: 1, alignSelf: 'stretch', minHeight: 18, backgroundColor: InkColors.line },
 
   // 검색
   search: {
@@ -876,26 +767,7 @@ const styles = StyleSheet.create({
   chipText: { fontSize: 12.5, fontWeight: '700', color: InkColors.ink2 },
   chipTextOn: { color: InkColors.bubbleText },
 
-  // 정렬 — 라벨은 '정렬'(무엇을) + 현재값(어떻게) 두 토막. 현재값을 감추면 무슨 순서인지 모른다.
-  sortTrigger: { gap: Space.xs, maxWidth: 150 },
-  // ★줄어드는 쪽은 값이지 '정렬'이 아니다 — flexShrink를 안 정하면 배율 ×1.18에서 '정렬'이
-  //   두 글자로 세로로 쪼개진다(실측). 값은 numberOfLines=1로 말줄임되고 전체 라벨은 패널이 보여준다.
-  sortTriggerKey: { flexShrink: 0, fontSize: 11, fontWeight: '700', color: InkColors.ink3 },
-  sortTriggerValue: { flexShrink: 1, fontSize: 12.5, fontWeight: '800', color: InkColors.ink },
-  chipActive: { backgroundColor: InkColors.bgSoft, borderColor: InkColors.ink3 },
-
-  sortPanel: {
-    borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md,
-    backgroundColor: InkColors.bg, overflow: 'hidden', ...Elevation.e1,
-  },
-  // ★고정 height 금지 → minHeight. 배율 ×1.18에서는 글자가 아니라 상자가 터진다.
-  sortOption: {
-    minHeight: 48, flexDirection: 'row', alignItems: 'center',
-    justifyContent: 'space-between', paddingHorizontal: Space.lg,
-  },
-  sortOptionDivider: { borderTopWidth: 1, borderTopColor: InkColors.line },
-  sortOptionText: { fontSize: 15, fontWeight: '600', color: InkColors.ink2 },
-  sortOptionTextOn: { fontWeight: '800', color: InkColors.ink },
+  // (2026-08-08: 정렬 컨트롤 스타일 8종 + 카테고리 묶음 헤더 3종은 기능과 함께 삭제됐다.)
 
   // 확인 필요 항목 = [행 + 1탭 검증 버튼] 묶음. 구분선을 행 대신 래퍼가 갖는다(버튼이 다음 항목에
   // 붙어 보이지 않게).
@@ -921,10 +793,6 @@ const styles = StyleSheet.create({
   // 묶음(쓰임새·안 쓰임) = 카드 밖 라벨 + 목록
   group: { gap: Space.sm },
 
-  // 그룹(목록·카테고리별)
-  groupHead: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6, paddingHorizontal: 2 },
-  groupTitle: { fontSize: 14, fontWeight: '800', color: InkColors.ink },
-  groupCount: { fontSize: 12, fontWeight: '700', color: InkColors.ink3 },
 
   // 리스트/행
   list: { backgroundColor: InkColors.bg, borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, paddingHorizontal: 14 },
