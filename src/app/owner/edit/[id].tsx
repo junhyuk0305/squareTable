@@ -9,7 +9,6 @@ import { Appear } from '@/components/Appear';
 import { BottomSheet } from '@/components/BottomSheet';
 import { EmptyState } from '@/components/EmptyState';
 import { VerifyBadge } from '@/components/VerifyBadge';
-import { KvTable, type KvRow } from '@/components/blocks/KvTable';
 import { formatRelative } from '@/components/coach/coachUtils';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { useSessionStore } from '@/lib/store/useSessionStore';
@@ -86,10 +85,6 @@ function ConversationalEdit({ entry }: { entry: PlaybookEntry }) {
     if ((entry.section?.trim() || null) === name) return;
     update(entry.id, { section: name });
   };
-
-  // 상세 표 행 — 카드 본문을 접을지(hideBody) 여기서 같은 값으로 판정한다.
-  // 표가 비었는데 카드까지 접으면 노하우 내용이 화면 어디에도 안 남는다 → rows가 0개면 안 접는다.
-  const docRows = useMemo(() => buildDocRows(entry.square), [entry.square]);
 
   const [toast, setToast] = useState<string | null>(null);
   const navTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -192,8 +187,7 @@ function ConversationalEdit({ entry }: { entry: PlaybookEntry }) {
         editEntry={entry}
         onUpdated={onUpdated}
         onPublished={() => {}}
-        docHeader={<KnowhowDoc entry={entry} rows={docRows} />}
-        docHeaderCoversBody={docRows.length > 0}
+        docHeader={<KnowhowDoc entry={entry} />}
       />
 
       {catOpen && (
@@ -255,40 +249,18 @@ function ConversationalEdit({ entry }: { entry: PlaybookEntry }) {
 const PROGRESS_TRACK_H = 5;
 
 /**
- * 상세 표(KvTable)에 들어갈 행 — **카드가 hideBody로 감추는 것을 전부 덮는다.**
- *
- * ★ 여기 없는 칸은 화면 어디에도 안 남는다. MiniSquareCard가 감추는 3블록
- *   (상황 · 할 일+멘트 · 금지)과 항상 같은 집합이어야 하고, 라벨도 카드가 쓰는 말 그대로 쓴다.
- * ★ 기준(square.standard)은 게이지라 표에 못 담는다 → 카드의 hideBody 대상에서 뺐다(카드가 계속 그린다).
- * ★ 내부 비계(quagmire/uncover/result)는 넣지 않는다 — manualToText와 같은 규칙.
- * ★ 빈 칸은 행을 만들지 않는다. 그래서 0개가 나올 수 있고, 그때는 호출부가 카드를 안 접는다.
- */
-function buildDocRows(sq: PlaybookEntry['square']): KvRow[] {
-  const steps = (sq?.action?.steps ?? []).map((s) => s.trim()).filter(Boolean);
-  const todo = steps.length > 1 ? steps.map((s, i) => `${i + 1}. ${s}`).join('\n') : (steps[0] ?? '');
-  const scripts = (sq?.action?.scripts ?? []).map((s) => s.trim()).filter(Boolean);
-  return [
-    { key: '상황', value: (sq?.situation ?? '').trim() },
-    { key: '할 일', value: todo },
-    // 카드와 같은 겹따옴표 표기 — 그대로 읽어서 말하는 문장이라는 표시.
-    { key: '멘트', value: scripts.map((s) => `“${s}”`).join('\n') },
-    { key: '금지', value: (sq?.extract?.dont ?? '').trim() },
-  ].filter((r) => !!r.value);
-}
-
-/**
- * 노하우 문서 머리말 + 본문 표 — 상세 화면의 '읽는 면'(비포애프터 §3, 2026-08-07).
+ * 노하우 문서 머리말 — 상세 화면의 '읽는 면' 중 **제목·진도·메타**만.
  *
  * ★ 진행바는 '읽음'이 아니라 '통과'다(knowhow_understanding). 여기서 집계하지 않는다 —
  *   문항 수는 useQuizBoard, 통과자는 understandingOf 가 SSOT고 이 블록은 배치만 한다.
  * ★ 문항이 0개면 바를 그리지 않는다 — 빈 바는 0%(아무도 못 맞힘)로 읽힌다.
  *
- * ★ 본문은 여기서 한 번만 그린다. 아래 코치챗 카드는 rows가 1개 이상일 때만 hideBody로 본문을
- *   접고 '고치는 면'(고칠래요·내용 추가·수정 저장)만 맡는다 — 같은 본문이 두 번 나오지 않게.
- *   '고칠래요'를 누르면 카드가 본문을 다시 펴고 거기서 고친다.
- * ★ rows는 호출부(ConversationalEdit)가 만든 것을 그대로 받는다 — 접을지 말지를 같은 값으로 판정하려고.
+ * ★ 2026-08-08: **본문(상황·할 일·멘트·금지)은 여기서 안 그린다.** 아래 코치챗 카드가 유일한 자리다.
+ *   옛 구조는 문서와 카드가 같은 본문을 둘 다 그릴 수 있어 "어느 쪽을 접을지" 판정이 필요했고,
+ *   그 판정이 어긋나면 본문이 화면 어디에도 안 남았다(08-07 [치명]). 그릴 수 있는 자리를 하나로 줄여
+ *   그 버그 종류를 없앴다. 제목만 이쪽이 들고, 카드는 hideTitle 로 양보한다.
  */
-function KnowhowDoc({ entry, rows }: { entry: PlaybookEntry; rows: KvRow[] }) {
+function KnowhowDoc({ entry }: { entry: PlaybookEntry }) {
   const router = useRouter();
   const staff = useStaffStore((s) => s.staff);
   const understanding = useWorkStore((s) => s.understanding);
@@ -339,8 +311,6 @@ function KnowhowDoc({ entry, rows }: { entry: PlaybookEntry; rows: KvRow[] }) {
           {hits > 0 ? <Text style={styles.metaChip}>최근 30일 {hits}번 쓰임</Text> : null}
         </View>
       ) : null}
-
-      <KvTable rows={rows} />
     </View>
   );
 }

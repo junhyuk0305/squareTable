@@ -7,7 +7,7 @@ import { Radius, Elevation } from '@/lib/theme/elevation';
 
 import { MiniSquareCard } from './MiniSquareCard';
 
-import type { Category, PlaybookEntry, SquareBlock } from '@/types';
+import type { PlaybookEntry, SquareBlock } from '@/types';
 
 /* ───────────────────────────────────────────────────────────
  * 빈 상태 스타터 — 직접 등록 화면이 초기 AI 안내만 있고 텅 빌 때 노출.
@@ -82,11 +82,8 @@ export function CoachStarter({
           <MiniSquareCard
             square={PREVIEW_SQUARE}
             title="오픈 커피머신 예열"
-            category={'Routine' as Category}
             editable={false}
             showActions={false}
-            onEdit={noop}
-            onDoneEditing={noop}
             onRetalk={noop}
             onPublish={noop}
             onPatch={noop}

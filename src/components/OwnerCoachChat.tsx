@@ -64,10 +64,6 @@ export type OwnerCoachChatProps = {
   onUpdated?: (square: SquareBlock, extras: { title: string; keywords: string[] }) => void;
   /** 대화 맨 위에 얹는 읽기 블록(노하우 상세의 문서 머리말·본문 표). 스크롤과 함께 올라간다. */
   docHeader?: ReactNode;
-  /** docHeader가 카드 본문(상황·할 일·멘트·금지)을 **전부** 대신 그리고 있는가.
-   *  true일 때만 카드 본문을 접는다. ★기본값 false = fail-open — 확신이 없으면 카드가 본문을 그린다.
-   *  (표가 비었는데 카드도 접으면 내용이 화면 어디에도 안 남는다. 그게 이 플래그가 생긴 이유다.) */
-  docHeaderCoversBody?: boolean;
 };
 
 // 카드 말풍선이 "그 대화 시점에 어떻게 정리됐는지"를 고정하는 스냅샷.
@@ -106,7 +102,6 @@ export function OwnerCoachChat({
   editEntry,
   onUpdated,
   docHeader,
-  docHeaderCoversBody,
 }: OwnerCoachChatProps) {
   const isEdit = !!editEntry;
   const [messages, setMessages] = useState<Msg[]>(() => {
@@ -700,24 +695,22 @@ export function OwnerCoachChat({
           }
           // card — 마지막(활성) 카드만 라이브 상태로, 과거 카드는 스냅샷 고정(모든 카드가 최신으로 바뀌던 버그 수정).
           const isLastCard = m.id === lastCardId;
-          // 위에 문서(docHeader)가 본문을 **전부** 그리고 있다고 알려줄 때만(docHeaderCoversBody)
-          // 카드가 '고치는 면'만 맡는다. 안 알려주면 카드가 그대로 본문을 그린다(fail-open).
-          // 편집에 들어가는 순간(고칠래요) 본문이 다시 열린다 — 안 그러면 고칠 대상이 안 보인다.
-          const cardEditing = isLastCard && inReview && editing;
+          // ★2026-08-08: **본문을 그리는 자리는 이 카드 하나다.** 위 문서(docHeader)는 제목·진도·메타만 맡는다.
+          //   옛 구조는 문서와 카드가 같은 본문을 둘 다 그릴 수 있어서, 어느 쪽을 접을지 판정하는
+          //   플래그(docHeaderCoversBody)가 필요했고 그 판정이 어긋나면 본문이 통째로 사라졌다(08-07 [치명]).
+          //   그릴 수 있는 자리를 하나로 줄여 그 버그 종류를 없앴다. 카드는 제목만 문서에 양보한다.
+          const canEdit = isLastCard && inReview;
           const cSquare = isLastCard ? (square ?? m.snap.square) : m.snap.square;
           const cTitle = isLastCard ? title : m.snap.title;
-          const cCategory = isLastCard ? category : m.snap.category;
           return (
             <Appear key={m.id} offsetY={14} duration={340}>
               <MiniSquareCard
                 square={cSquare}
                 title={cTitle}
-                category={cCategory}
-                editable={cardEditing}
-                showActions={isLastCard && inReview && !editing}
-                hideBody={!!docHeader && !!docHeaderCoversBody && !cardEditing}
-                onEdit={() => setEditing(true)}
-                onDoneEditing={() => setEditing(false)}
+                editable={canEdit}
+                showActions={canEdit}
+                hideTitle={!!docHeader}
+                onEditingChange={setEditing}
                 onRetalk={startRetalk}
                 onPublish={handlePublish}
                 onPatch={(sq) => setSquare(sq)}

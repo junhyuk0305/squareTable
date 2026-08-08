@@ -27,6 +27,10 @@ const BLOCK_LEAF = new Set([
   //   ProgressPill·GutterRow 는 행 안의 원자(칩·행)라 블록이 아니다 —
   //   넣으면 목록 한 줄이 블록 1개로 세어져 상한이 터진다.
   'HeroSubNav', 'KvTable', 'WeekStrip',
+  // 2026-08-08 추가 — 노하우 본문(상황·할 일·멘트·금지)을 그리는 **유일한** 형태.
+  //   KnowhowRows = 표시 전용 / SquareRowsEditor = 그것에 칸 편집(E2)을 얹은 래퍼.
+  //   둘은 서로 다른 파일에 있어 한 화면에서 겹쳐 세지 않는다.
+  'KnowhowRows', 'SquareRowsEditor',
   // 이미 있어서 재구현 금지인 표시 블록들(ui.md "이미 있는 것도 재구현 금지")
   'InboxHeroCard', 'StarterChecklist', 'PlanUpgradeNotice', 'EmptyState',
   'KnowhowCarousel', 'FeatureCarousel', 'BrowseList', 'NotificationList',

@@ -2,6 +2,7 @@ import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SourceFooter } from './SourceFooter';
 import { VerifyBadge } from './VerifyBadge';
+import { KnowhowRows } from '@/components/blocks/KnowhowRows';
 import { BrandColors, InkColors } from '@/lib/theme/colors';
 import { Elevation, Radius } from '@/lib/theme/elevation';
 import { type VerifyState } from '@/lib/utils/verification';
@@ -90,26 +91,15 @@ export function SquareCard({
         </View>
       </View>
 
-      {/* Summary — 내용 있을 때만 (날조 제거로 빈 값 가능) */}
-      {summary?.trim() ? (
-        <View style={[styles.block, { borderLeftColor: BrandColors.brand }]}>
-          <Text style={styles.blockLabel}>상황</Text>
-          <Text style={styles.body}>{summary}</Text>
-        </View>
-      ) : null}
-
-      {/* Actions — 항목 있을 때만 (빈 '지금 할 일' 헤더 방지) */}
-      {actions.length > 0 ? (
-        <View style={[styles.block, { borderLeftColor: BrandColors.good }]}>
-          <Text style={[styles.blockLabel, { color: BrandColors.goodText }]}>할 일</Text>
-          {actions.map((a, i) => (
-            <View key={i} style={styles.actionRow}>
-              <Text style={styles.actionNum}>{i + 1}</Text>
-              <Text style={styles.actionText}>{a}</Text>
-            </View>
-          ))}
-        </View>
-      ) : null}
+      {/* 본문 — 상황 · 할 일 · 금지. 형태는 노하우 추가·상세·원문과 같은 KnowhowRows(D10) 하나다.
+          ★할 일에 번호를 붙이지 않는다(순서 보장이 없다). 빈 칸은 행을 만들지 않는다. */}
+      <KnowhowRows
+        rows={[
+          ...(summary?.trim() ? [{ kind: 'situation' as const, text: summary }] : []),
+          ...(actions.length > 0 ? [{ kind: 'todo' as const, items: actions }] : []),
+          ...(donts.length > 0 ? [{ kind: 'dont' as const, items: donts }] : []),
+        ]}
+      />
 
       {/* 셋 다 비면 빈 카드 대신 정직한 안내 */}
       {!summary?.trim() && actions.length === 0 && donts.length === 0 ? (
@@ -117,16 +107,6 @@ export function SquareCard({
           등록된 가이드에 이 질문에 대한 구체적 내용이 부족해요. 사장님께 확인해 볼게요.
         </Text>
       ) : null}
-
-      {/* Don'ts */}
-      {donts.length > 0 && (
-        <View style={[styles.block, { borderLeftColor: BrandColors.warn }]}>
-          <Text style={[styles.blockLabel, { color: BrandColors.warnText }]}>금지</Text>
-          {donts.map((d, i) => (
-            <Text key={i} style={styles.dontText}>· {d}</Text>
-          ))}
-        </View>
-      )}
 
       {/* 기준(보강 메타) — count=개수칩 / spectrum=양끝 사이 위치 / 구형=게이지 */}
       {standard && standard.kind === 'count' ? (
@@ -260,34 +240,8 @@ const styles = StyleSheet.create({
     borderRadius: 6,
   },
   rateText: { fontSize: 11, fontWeight: '800', color: InkColors.ink2 },
-  block: {
-    borderLeftWidth: 3,
-    paddingLeft: 12,
-    gap: 6,
-  },
-  blockLabel: {
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 1.2,
-    color: BrandColors.brand,
-    textTransform: 'uppercase',
-  },
-  body: { fontSize: 15, color: InkColors.ink, lineHeight: 22 },
+  // 상황·할 일·금지 본문 스타일은 KnowhowRows(D10)로 옮겼다(2026-08-08 형태 통일).
   sparse: { fontSize: 14, color: InkColors.ink3, lineHeight: 21, paddingVertical: 4 },
-  actionRow: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' },
-  actionNum: {
-    width: 22,
-    height: 22,
-    borderRadius: Radius.sm,
-    backgroundColor: BrandColors.goodSolid,
-    color: InkColors.bubbleText,
-    fontSize: 12,
-    fontWeight: '800',
-    textAlign: 'center',
-    lineHeight: 22,
-  },
-  actionText: { flex: 1, fontSize: 15, color: InkColors.ink, lineHeight: 22 },
-  dontText: { fontSize: 14, color: InkColors.ink2, lineHeight: 20 },
   // DO/DON'T 2색 한 줄 태그
   tagRow: {
     flexDirection: 'row',

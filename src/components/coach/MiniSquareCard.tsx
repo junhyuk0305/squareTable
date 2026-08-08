@@ -1,10 +1,11 @@
+import { useState } from 'react';
 import { View, Text, StyleSheet, Pressable, TextInput } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 
+import { SquareRowsEditor } from '@/components/coach/SquareRowsEditor';
 import { isSquarePublishable } from '@/lib/utils/buildEntry';
-import { getCategoryMeta } from '@/lib/utils/category';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
+import { Space } from '@/lib/theme/layout';
 
 import type { SquareBlock } from '@/types';
 
@@ -12,106 +13,82 @@ import type { SquareBlock } from '@/types';
 type MiniProps = {
   square: SquareBlock;
   title: string;
-  category: string;            // AI 내부 분류(기본 4종 키) — 카드 액센트 색 전용, 라벨·선택 UI 비노출
+  /** 이 카드를 고칠 수 있나(= 마지막 카드 + 리뷰 중). **편집 '모드'가 아니다** — 칸을 누르면 그 칸만 열린다. */
   editable: boolean;
   showActions: boolean;
-  onEdit: () => void;
-  onDoneEditing: () => void;
   onRetalk: () => void;
   onPublish: () => void;
   onPatch: (sq: SquareBlock) => void;
   onTitle: (t: string) => void;
   publishLabel: string;        // 발행 결과를 명시 — 인박스='이 답변 보내기' / 직접='노하우로 저장'
-  /** 본문(상황·할 일·멘트·금지)을 감춘다 — 같은 본문을 이미 화면 위에서 읽고 있을 때(노하우 상세의 문서 표).
-   *  ★ **가리는 것이지 지우는 게 아니다** — square 는 그대로 받아 publishable 판정·패치 대상이 살아 있다.
-   *  ★ 기준(standard)은 감추지 않는다 — 게이지라 표로 못 옮긴다. 감추면 화면 어디에도 안 남는다. */
-  hideBody?: boolean;
+  /** 어느 칸이든 열려 있나 — 호출부가 채팅 입력창을 숨기는 데 쓴다(입력 표면 2개 방지). */
+  onEditingChange?: (open: boolean) => void;
+  /** 제목을 감춘다 — 위 문서 머리말(노하우 상세의 docHeader)이 이미 제목을 들고 있을 때.
+   *  ★본문은 감추지 않는다. 본문을 그리는 자리는 언제나 이 카드 하나다(2026-08-08). */
+  hideTitle?: boolean;
 };
 
-// 사용자 표면 = 상황 / 할 일 / 금지 3핵심 (+ 멘트·기준 옵션). SQUARE 글자·카테고리 칩 비노출.
+/**
+ * 사용자 표면 = 상황 / 할 일 / 멘트 / 금지 (+ 기준 옵션). SQUARE 글자·카테고리 칩 비노출.
+ *
+ * 2026-08-08 개편 3가지:
+ *  ① 본문 형태를 `KnowhowRows`(D10) 하나로 — 옛 '라운드 박스 + 왼쪽 4px 컬러바 ×3'을 폐기.
+ *  ② **카테고리 색을 안 쓴다.** 그 색(`meta.color`)은 07-31 카테고리 단일화에서 라벨을 비노출로
+ *     정하고도 색만 남아, 사장이 뜻을 알 수 없는 색이었다.
+ *  ③ 편집 **모드 폐기**(E2) — '고칠래요'·'수정 완료' 두 버튼이 사라지고 칸을 눌러 그 칸만 고친다.
+ *     그래서 저장 버튼이 편집 중에도 자리를 지킨다(옛 구조는 저장이 2단계였다).
+ */
 export function MiniSquareCard({
   square,
   title,
-  category,
   editable,
   showActions,
-  onEdit,
-  onDoneEditing,
   onRetalk,
   onPublish,
   onPatch,
   onTitle,
   publishLabel,
-  hideBody,
+  onEditingChange,
+  hideTitle,
 }: MiniProps) {
-  const meta = getCategoryMeta(category); // 액센트 색 전용(라벨 노출 안 함)
   const publishable = isSquarePublishable(square);
-
-  const setStep = (i: number, v: string) =>
-    onPatch({ ...square, action: { ...square.action, steps: square.action.steps.map((s, idx) => (idx === i ? v : s)) } });
-  const setField = (patch: Partial<SquareBlock>) => onPatch({ ...square, ...patch });
+  // 제목도 같은 방식(탭 → 그 자리에서 고침). 한 줄이라 별도 '다 고쳤어요' 없이 포커스가 빠지면 닫는다.
+  const [titleOpen, setTitleOpen] = useState(false);
 
   return (
-    <View style={[cardStyles.card, { borderTopColor: meta.color }]}>
-      {editable ? (
-        <TextInput value={title} onChangeText={onTitle} style={cardStyles.titleEdit} placeholder="제목" placeholderTextColor={InkColors.ink3} />
+    <View style={cardStyles.card}>
+      {hideTitle ? null : editable && titleOpen ? (
+        <TextInput
+          value={title}
+          onChangeText={onTitle}
+          onBlur={() => setTitleOpen(false)}
+          autoFocus
+          style={cardStyles.titleEdit}
+          placeholder="제목"
+          placeholderTextColor={InkColors.ink3}
+        />
+      ) : editable ? (
+        <Pressable
+          onPress={() => setTitleOpen(true)}
+          accessibilityRole="button"
+          accessibilityLabel="제목 고치기"
+          style={({ pressed }) => [pressed && { opacity: 0.6 }]}
+        >
+          <Text style={cardStyles.title}>{title || '제목을 눌러서 적어요'}</Text>
+        </Pressable>
       ) : (
         <Text style={cardStyles.title}>{title}</Text>
       )}
 
-      {/* ── 본문 3블록(상황 · 할 일+멘트 · 금지) — hideBody면 감춘다. 기준은 아래에서 항상 그린다.
-             감추는 것은 '그리기'뿐이다: square 는 그대로 들고 있어 아래 publishable 판정과
-             '고칠래요' 진입이 살아 있다(본문을 지우면 저장 버튼이 죽는다).
-             ★ hideBody를 켜는 쪽은 이 3블록을 전부 대신 그려야 한다 — 안 그리면 내용이 사라진다. ── */}
-      {/* 상황 */}
-      {!hideBody && (editable || !!square.situation) && (
-        <Cell name="상황" color={meta.color} text={square.situation}
-          editable={editable} onChange={(v) => setField({ situation: v })} />
-      )}
-
-      {/* 할 일 (+ 멘트) */}
-      {!hideBody && (square.action.steps.length > 0 || square.action.scripts.length > 0 || editable) && (
-        <View style={[cardStyles.cell, { borderLeftColor: meta.color }]}>
-          <View style={cardStyles.cellHead}>
-            <Text style={cardStyles.cellName}>할 일</Text>
-          </View>
-          {square.action.steps.map((s, i) => (
-            <View key={`st-${i}`} style={cardStyles.stepRow}>
-              <Text style={[cardStyles.stepNum, { color: meta.color }]}>{i + 1}</Text>
-              {editable ? (
-                <TextInput value={s} onChangeText={(v) => setStep(i, v)} style={cardStyles.stepEdit} multiline />
-              ) : (
-                <Text style={cardStyles.stepText}>{s}</Text>
-              )}
-            </View>
-          ))}
-          {square.action.scripts.map((s, i) => (
-            <View key={`sc-${i}`} style={[cardStyles.scriptBox, { borderColor: meta.color }]}>
-              {/* 2026-08-06: 💬 → 아이콘(ADR-003 예외 3범주 밖 — 워딩 §2.3 적용) */}
-              <Ionicons name="chatbubble-outline" size={13} color={InkColors.ink3} />
-              <Text style={cardStyles.scriptText}>“{s}”</Text>
-            </View>
-          ))}
-        </View>
-      )}
-
-      {/* 금지 (있을 때만 / 편집 중엔 항상) */}
-      {!hideBody && (editable || !!square.extract.dont) && (
-        <View style={[cardStyles.cell, { borderLeftColor: BrandColors.bad }]}>
-          <View style={cardStyles.cellHead}>
-            <Text style={[cardStyles.cellName, { color: BrandColors.badText }]}>금지</Text>
-          </View>
-          {editable ? (
-            <TextInput value={square.extract.dont} onChangeText={(v) => setField({ extract: { ...square.extract, dont: v } })}
-              style={cardStyles.stepEdit} placeholder="절대 하면 안 되는 것 (선택)" placeholderTextColor={InkColors.ink3} />
-          ) : (
-            <Text style={cardStyles.cellText}>{square.extract.dont}</Text>
-          )}
-        </View>
-      )}
+      <SquareRowsEditor
+        square={square}
+        editable={editable}
+        onPatch={onPatch}
+        onOpenChange={(k) => onEditingChange?.(k !== null)}
+      />
 
       {/* 기준 — square.standard 있을 때만. count=개수칩 / spectrum=위치바 / 구형=게이지.
-          hideBody 대상 밖: 게이지는 표(KvTable)로 옮길 수 없어 여기서 안 그리면 어디에도 안 남는다. */}
+          게이지는 행(KnowhowRows)으로 옮길 수 없어 여기서만 그린다. */}
       {square.standard && (() => {
         const st = square.standard;
         if (st.kind === 'count') {
@@ -144,49 +121,28 @@ export function MiniSquareCard({
         );
       })()}
 
-      {/* 종류(AI 내부 분류) 선택칩은 2026-07-31 카테고리 단일화로 제거 — 사용자 분류는 저장 시 카테고리(챕터) 선택 하나. */}
-
-      {/* 액션 행 */}
+      {/* 액션 행 — '고칠래요'는 없다(칸을 눌러 고친다). Primary 는 앱 전체와 같은 브랜드 옐로. */}
       {showActions && (
         <View style={cardStyles.actionRow}>
-          <Pressable onPress={onEdit} style={({ pressed }) => [cardStyles.editBtn, pressed && { opacity: 0.7 }]}>
-            <Text style={cardStyles.editText}>고칠래요</Text>
-          </Pressable>
-          <Pressable onPress={onRetalk} style={({ pressed }) => [cardStyles.editBtn, pressed && { opacity: 0.7 }]}>
+          <Pressable
+            onPress={onRetalk}
+            accessibilityRole="button"
+            accessibilityLabel="내용 추가하기"
+            style={({ pressed }) => [cardStyles.editBtn, pressed && { opacity: 0.7 }]}
+          >
             <Text style={cardStyles.editText}>내용 추가하기</Text>
           </Pressable>
           <Pressable
             onPress={onPublish}
             disabled={!publishable}
-            style={({ pressed }) => [cardStyles.okBtn, { backgroundColor: meta.color, opacity: !publishable ? 0.4 : pressed ? 0.85 : 1 }]}
+            accessibilityRole="button"
+            accessibilityLabel={publishLabel}
+            style={({ pressed }) => [cardStyles.okBtn, { opacity: !publishable ? 0.4 : pressed ? 0.85 : 1 }]}
           >
-            <Text style={cardStyles.okText}>✅ {publishLabel}</Text>
+            {/* 기호 ✓ 만 쓴다 — 그림 이모지(✅)는 워딩 §1 금지. */}
+            <Text style={cardStyles.okText}>✓ {publishLabel}</Text>
           </Pressable>
         </View>
-      )}
-
-      {editable && (
-        <Pressable onPress={onDoneEditing} style={({ pressed }) => [cardStyles.doneBtn, { backgroundColor: meta.color }, pressed && { opacity: 0.85 }]}>
-          <Text style={cardStyles.okText}>수정 완료</Text>
-        </Pressable>
-      )}
-    </View>
-  );
-}
-
-function Cell({ name, color, text, editable, onChange }: {
-  name: string; color: string; text: string;
-  editable?: boolean; onChange?: (v: string) => void;
-}) {
-  return (
-    <View style={[cardStyles.cell, { borderLeftColor: color }]}>
-      <View style={cardStyles.cellHead}>
-        <Text style={cardStyles.cellName}>{name}</Text>
-      </View>
-      {editable ? (
-        <TextInput value={text} onChangeText={onChange} style={cardStyles.stepEdit} multiline placeholder="(비워둬도 돼요)" placeholderTextColor={InkColors.ink3} />
-      ) : (
-        <Text style={cardStyles.cellText}>{text}</Text>
       )}
     </View>
   );
@@ -198,54 +154,29 @@ const cardStyles = StyleSheet.create({
     borderRadius: Radius.lg,
     borderWidth: 1,
     borderColor: InkColors.line,
-    borderTopWidth: 4,
-    padding: 14,
-    gap: 10,
+    padding: Space.lg,
+    gap: Space.sm,
     ...Elevation.e1,
   },
   title: { fontSize: 18, fontWeight: '800', color: InkColors.ink, letterSpacing: -0.3 },
   titleEdit: {
     borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.sm,
-    paddingHorizontal: 12, paddingVertical: 10, fontSize: 17, fontWeight: '700', color: InkColors.ink, backgroundColor: InkColors.bg,
+    paddingHorizontal: Space.md, paddingVertical: Space.sm, fontSize: 17, fontWeight: '700',
+    color: InkColors.ink, backgroundColor: InkColors.bg,
   },
 
-  cell: {
-    backgroundColor: InkColors.bg,
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: InkColors.line,
-    borderLeftWidth: 4,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    gap: 6,
-  },
-  cellHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  cellLetter: { fontSize: 15, fontWeight: '900' },
-  cellName: { fontSize: 12.5, fontWeight: '700', color: InkColors.ink3 },
-  cellText: { fontSize: 15, color: InkColors.ink, lineHeight: 22 },
-
-  stepRow: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' },
-  stepNum: { fontSize: 15, fontWeight: '900', minWidth: 16 },
-  stepText: { flex: 1, fontSize: 15, color: InkColors.ink, lineHeight: 22 },
-  stepEdit: {
-    flex: 1, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.sm,
-    paddingHorizontal: 10, paddingVertical: 6, fontSize: 14.5, color: InkColors.ink, backgroundColor: InkColors.bg,
-  },
-  scriptBox: {
-    flexDirection: 'row', gap: 8, borderWidth: 1, borderRadius: Radius.sm,
-    paddingHorizontal: 12, paddingVertical: 10, marginTop: 2, backgroundColor: InkColors.bg,
-  },
-  scriptText: { flex: 1, fontSize: 15, color: InkColors.ink, fontStyle: 'italic', lineHeight: 22 },
-
-  actionRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 2 },
+  actionRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.sm, marginTop: 2 },
   editBtn: {
-    paddingVertical: 10, paddingHorizontal: 12, borderRadius: Radius.sm,
+    minHeight: 48, justifyContent: 'center', paddingHorizontal: Space.md, borderRadius: Radius.sm,
     borderWidth: 1, borderColor: InkColors.line, backgroundColor: InkColors.bg,
   },
-  editText: { fontSize: 13, fontWeight: '700', color: InkColors.ink2 },
-  okBtn: { flex: 1, minWidth: 96, paddingVertical: 12, borderRadius: Radius.sm, alignItems: 'center', justifyContent: 'center' },
-  okText: { fontSize: 14, fontWeight: '800', color: InkColors.bubbleText },
-  doneBtn: { paddingVertical: 12, borderRadius: Radius.sm, alignItems: 'center', justifyContent: 'center' },
+  editText: { fontSize: 14, fontWeight: '700', color: InkColors.ink2 },
+  okBtn: {
+    flex: 1, minWidth: 112, minHeight: 48, borderRadius: Radius.sm,
+    alignItems: 'center', justifyContent: 'center', backgroundColor: BrandColors.yellow,
+  },
+  // 옐로 면 위 글자는 검정이다(흰 글자는 대비가 안 나온다).
+  okText: { fontSize: 14, fontWeight: '800', color: InkColors.ink },
 
   // 정도 기준 게이지(노란 바)
   gaugeBox: { gap: 6, paddingVertical: 2 },
