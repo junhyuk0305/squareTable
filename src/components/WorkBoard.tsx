@@ -158,7 +158,7 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
 
   // 다른 화면(홈 '오늘 할일'·'안 읽은 공지'·'오늘 일 배분' 등)에서 ?view=todo|notice|assign 로 들어오면 해당 패널을 연다.
   // assign 은 세그먼트에서는 없어졌지만(§14) 화면은 그대로 살아 있다 — 기존 링크를 죽이지 않고
-  // '반복 업무 만들기'로 착지시키고, 뒤로가기는 새 자리인 할일로 돌려보낸다. 사장 전용은 그대로.
+  // '루틴 업무 설정'으로 착지시키고, 뒤로가기는 새 자리인 할일로 돌려보낸다. 사장 전용은 그대로.
   const { view: viewParam } = useLocalSearchParams<{ view?: string }>();
   const paramView: ViewKey | null =
     viewParam === 'todo' || viewParam === 'notice' ? viewParam : viewParam === 'assign' && isOwner ? 'assign' : null;
@@ -552,7 +552,7 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
           headerBackVisible: false,
           headerRight: () => (
             <View style={st.nav}>
-              {/* 세그먼트는 공지·할일 둘뿐. 담당자별 보드는 할일 목록 아래 '반복 업무 만들기' 행으로 들어간다(§14). */}
+              {/* 세그먼트는 공지·할일 둘뿐. 담당자별 보드는 할일 목록 아래 '루틴 업무 설정' 행으로 들어간다(§14). */}
               <Pressable onPress={() => openPanel('notice')} style={({ pressed }) => [st.navBtn, pressed && { opacity: 0.7 }]}>
                 <Ionicons name="megaphone-outline" size={15} color={InkColors.ink} />
                 <Text style={st.navText}>공지</Text>
@@ -566,7 +566,7 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
           ),
         }
       : {
-          title: view === 'notice' ? '공지' : view === 'assign' ? '반복 업무 만들기' : '할일',
+          title: view === 'notice' ? '공지' : view === 'assign' ? '루틴 업무 설정' : '할일',
           headerLeft: () => (
             <Pressable onPress={closePanel} hitSlop={8} style={({ pressed }) => [{ paddingLeft: HEADER_EDGE_GUTTER, paddingRight: 14, paddingVertical: 4 }, pressed && { opacity: 0.6 }]}>
               <Ionicons name="arrow-back" size={24} color={InkColors.ink} />

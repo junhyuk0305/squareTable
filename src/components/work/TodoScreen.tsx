@@ -68,7 +68,7 @@ export function TodoScreen({
   onAddForDate: (date: string) => void;
   /** 연필 → 수정/삭제 시트. (X 즉시삭제를 대체 — 회의 반영) */
   onEditTask: (t: TaskTemplate) => void;
-  /** 목록 아래 '반복 업무 만들기' 행 → 담당자별 보드. 없으면 행이 안 뜬다(사장·매니저 전용). */
+  /** 목록 아래 '루틴 업무 설정' 행 → 담당자별 보드. 없으면 행이 안 뜬다(사장·매니저 전용). */
   onOpenRepeat?: () => void;
   /** 이 업무에 붙은 노하우(제목) — 카드에 칩으로 노출. 없으면 칩 안 뜸(0069). */
   knowhowOf?: (templateId: string) => { id: string; title: string }[];
@@ -414,16 +414,18 @@ export function TodoScreen({
           <Ionicons name="add" size={17} color={InkColors.ink} />
           <Text style={s.addText}>이 날 할일 추가</Text>
         </Pressable>
-        {/* 매일 반복될 업무를 만드는 자리 — 예전엔 별도 칸이었고, 지금은 목록 아래 행 하나다(§14). */}
+        {/* 누가 어떤 루틴을 맡는지 정하는 자리 — 예전엔 별도 칸이었고, 지금은 목록 아래 행 하나다(§14).
+            ※ 열리는 화면은 담당자별 보드이고 **오늘 뜨는 것만**(occursOn) 보여준다. 전체 루틴 목록이 아니다.
+            ※ 반복 주기 자체(매주 어느 요일)는 위 '이 날 할일 추가' 컴포저의 '매주 반복'에서 정한다. */}
         {onOpenRepeat && (
           <Pressable
             onPress={onOpenRepeat}
             style={({ pressed }) => [s.repeatRow, pressed && { opacity: 0.7 }]}
             accessibilityRole="button"
-            accessibilityLabel="반복 업무 만들기"
+            accessibilityLabel="루틴 업무 설정"
           >
             <Ionicons name="repeat" size={17} color={InkColors.ink} />
-            <Text style={s.repeatRowText}>반복 업무 만들기</Text>
+            <Text style={s.repeatRowText}>루틴 업무 설정</Text>
             <Ionicons name="chevron-forward" size={16} color={InkColors.ink3} style={{ marginLeft: 'auto' }} />
           </Pressable>
         )}

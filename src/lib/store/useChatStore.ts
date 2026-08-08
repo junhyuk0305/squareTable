@@ -78,6 +78,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
     // 익명이면 사장 인박스에 노출될 이름을 '익명'으로 가린다. junior_id는 라우팅용으로만 유지.
     const anon = !!opts?.anonymous;
 
+    // 답변을 history에 꽂았는지. 꽂은 뒤에 넘어진 것은 '전송 실패'가 아니다 — 아래 catch 참조.
+    let answered = false;
+
     try {
     const session = useSessionStore.getState();
     // 답변 corpus는 발행본만(SSOT: entryStatus.isServable) — 인수인계서 draft(검토 전)가
@@ -116,6 +119,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         matched_entry_ids: [entry.id], match_confidence: confidence, was_deflected: true,
         response_block: block, satisfaction: null, resolved_at: now,
       };
+      answered = true;
       set((s) => ({ history: [...s.history, cq], isLoading: false, lastSubmittedId: id }));
       persistAndCount(cq, [entry.id]);
     };
@@ -164,31 +168,39 @@ export const useChatStore = create<ChatState>((set, get) => ({
         },
         satisfaction: null, resolved_at: now,
       };
+      answered = true;
       set((s) => ({ history: [...s.history, cq], isLoading: false, lastSubmittedId: id }));
       persistAndCount(cq, ai.usedSopIds);
       // partial 은 예외 노하우가 없다는 신호 — 미매칭 경로와 동일하게 UnknownQuery 를 준비해
       // 알바가 1탭으로 사장 인박스에 올릴 수 있게 한다(예외 커버리지가 쌓이는 데이터 루프).
+      // 답은 위에서 이미 화면에 나갔다 — 여기부터는 '1탭 에스컬' 준비물이라 실패해도 답변은 유효하다.
+      // 바깥 catch로 새면 전송 실패로 오인돼 재시도 → 이중 표시가 된다. 그래서 여기서 닫는다.
       if (partial) {
-        const uq: UnknownQuery = {
-          id: genId('uq'),
-          junior_id: session.userId,
-          junior_name: anon ? '익명' : session.userName,
-          anonymous: anon,
-          query_text: text,
-          asked_at: now,
-          presumed_category: inferCategoryFromQuery(text, r.candidates),
-          presumed_subcategory: '',
-          match_attempted: true,
-          best_match_confidence: r.confidence,
-          best_match_entry_id: r.candidates[0]?.entry?.id ?? null,
-          status: 'pending_owner_answer',
-          fallback_action: '사장님께 알림 전송됨',
-          owner_notified_at: now,
-          owner_will_answer: true,
-          similar_queries_count: 1,
-          ai_general_answer: '잠시만요, 사장님 답변을 기다리고 있어요.',
-        };
-        set((s) => ({ pendingDeflects: { ...s.pendingDeflects, [id]: uq } }));
+        try {
+          const uq: UnknownQuery = {
+            id: genId('uq'),
+            junior_id: session.userId,
+            junior_name: anon ? '익명' : session.userName,
+            anonymous: anon,
+            query_text: text,
+            asked_at: now,
+            presumed_category: inferCategoryFromQuery(text, r.candidates),
+            presumed_subcategory: '',
+            match_attempted: true,
+            best_match_confidence: r.confidence,
+            best_match_entry_id: r.candidates[0]?.entry?.id ?? null,
+            status: 'pending_owner_answer',
+            fallback_action: '사장님께 알림 전송됨',
+            owner_notified_at: now,
+            owner_will_answer: true,
+            similar_queries_count: 1,
+            ai_general_answer: '잠시만요, 사장님 답변을 기다리고 있어요.',
+          };
+          set((s) => ({ pendingDeflects: { ...s.pendingDeflects, [id]: uq } }));
+        } catch (e) {
+          // 에스컬 버튼만 안 뜬다. 답변·저장은 그대로 — 화면에 실패를 알리지 않는다.
+          console.warn('[chat] partial deflect prep failed:', e);
+        }
       }
       return true;
     };
@@ -214,6 +226,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         },
         satisfaction: null, resolved_at: now,
       };
+      answered = true;
       set((s) => ({ history: [...s.history, cq], isLoading: false, lastSubmittedId: id }));
       persistAndCount(cq, []);
       return;
@@ -264,41 +277,55 @@ export const useChatStore = create<ChatState>((set, get) => ({
         resolved_at: null,
         ...(candidateIds.length > 0 ? { candidate_entry_ids: candidateIds } : {}),
       };
+      answered = true;
       set((s) => ({ history: [...s.history, cq], isLoading: false, lastSubmittedId: id }));
       // 답변은 이미 보여줬으니 화면에선 유지하고, 영속 실패만 배너로 알린다(롤백 없음).
       void guardWrite(insertChatQuery(cq), () => {}, '대화 기록 저장에 실패했어요. (답변은 그대로 보여요)');
 
-      const uq: UnknownQuery = {
-        id: genId('uq'),
-        junior_id: session.userId,
-        junior_name: anon ? '익명' : session.userName,
-        anonymous: anon,
-        query_text: text,
-        asked_at: now,
-        presumed_category: presumed,
-        presumed_subcategory: '',
-        match_attempted: true,
-        best_match_confidence: result.confidence,
-        best_match_entry_id: result.candidates[0]?.entry?.id ?? null,
-        status: 'pending_owner_answer',
-        fallback_action: '사장님께 알림 전송됨',
-        owner_notified_at: now,
-        owner_will_answer: true,
-        similar_queries_count: 1,
-        ai_general_answer: '잠시만요, 사장님 답변을 기다리고 있어요.',
-      };
-      // 곧장 enqueue 하지 않는다 — 알바가 카드에서 '등록'을 눌러야 사장님 인박스로 보낸다.
-      set((s) => ({ pendingDeflects: { ...s.pendingDeflects, [id]: uq } }));
+      // 후보 카드는 이미 화면에 나갔다 — 아래 준비물 실패를 바깥 catch로 흘리지 않는다(위와 같은 이유).
+      try {
+        const uq: UnknownQuery = {
+          id: genId('uq'),
+          junior_id: session.userId,
+          junior_name: anon ? '익명' : session.userName,
+          anonymous: anon,
+          query_text: text,
+          asked_at: now,
+          presumed_category: presumed,
+          presumed_subcategory: '',
+          match_attempted: true,
+          best_match_confidence: result.confidence,
+          best_match_entry_id: result.candidates[0]?.entry?.id ?? null,
+          status: 'pending_owner_answer',
+          fallback_action: '사장님께 알림 전송됨',
+          owner_notified_at: now,
+          owner_will_answer: true,
+          similar_queries_count: 1,
+          ai_general_answer: '잠시만요, 사장님 답변을 기다리고 있어요.',
+        };
+        // 곧장 enqueue 하지 않는다 — 알바가 카드에서 '등록'을 눌러야 사장님 인박스로 보낸다.
+        set((s) => ({ pendingDeflects: { ...s.pendingDeflects, [id]: uq } }));
+      } catch (e) {
+        console.warn('[chat] deflect prep failed:', e);
+      }
     }
     } catch (e) {
       // 조용히 삼키지 않는다 — 질문이 흔적 없이 사라지는 데드엔드 방지.
       // 입력을 보관해 '다시 시도'로 복구할 수 있게 한다.
       console.warn('[chat] submit failed:', e);
-      set({
-        isLoading: false,
-        error: '질문을 보내지 못했어요. 잠시 후 다시 시도해 주세요.',
-        lastFailed: { text, anonymous: anon },
-      });
+      // ★답이 이미 화면에 나간 뒤의 실패는 '전송 실패'가 아니다.
+      //   여기서 배너·lastFailed를 만들면 사용자가 '다시 시도'를 누르고, retryLast가 submit을
+      //   처음부터 다시 돌려 **새 id로 같은 답을 한 번 더 append** 한다(= 채팅 이중 표시).
+      //   id가 서로 다르므로 hydrate(통째 교체)로도 정리되지 않는다.
+      set(
+        answered
+          ? { isLoading: false }
+          : {
+              isLoading: false,
+              error: '질문을 보내지 못했어요. 잠시 후 다시 시도해 주세요.',
+              lastFailed: { text, anonymous: anon },
+            },
+      );
     } finally {
       // 안전망: 성공/실패 모든 경로에서 이미 isLoading=false로 두지만, 예기치 못한 조기 return이나
       // 미래 코드 변경으로 스피너가 남는 걸 원천 차단(무한 로딩 데드엔드 방지).
