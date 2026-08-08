@@ -3,13 +3,15 @@ import { View, Text, Pressable, TextInput, Platform, StyleSheet } from 'react-na
 
 import { ProgressPill } from '@/components/blocks/ProgressPill';
 import { showToast } from '@/lib/store/useToastStore';
+import { roleNoun, type MemberRole } from '@/lib/utils/roles';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Elevation, Radius } from '@/lib/theme/elevation';
 
 export type Member = {
   id: string;
   name: string;
-  role: 'owner' | 'junior';
+  /** 매장별 역할(unit_members.role) — 표기는 roleNoun SSOT. 'manager' 를 빠뜨리면 매니저가 '직원'이 된다. */
+  role: MemberRole;
   /**
    * 지금 보고 있는 채팅방에 있는가. 판정은 부모(WorkBoard)가 0093 방 가시성 규칙으로 계산한다.
    * false여도 목록에서 빼지 않는다 — 숨기면 "왜 없지?"가 되므로 흐리게 + 이유를 보여준다.
@@ -151,7 +153,7 @@ export function MentionInput({
                     {blocked && <Text style={s.blockedSub}>이 방에 없어요</Text>}
                   </View>
                   {isTabTarget && <Text style={s.tabHint}>Tab</Text>}
-                  {!blocked && <Text style={s.role}>{m.id === '__all__' ? '모두에게' : m.role === 'owner' ? '사장' : '직원'}</Text>}
+                  {!blocked && <Text style={s.role}>{m.id === '__all__' ? '모두에게' : roleNoun(m.role)}</Text>}
                 </Pressable>
                 {blocked && <ProgressPill text="불가" tone="neutral" />}
                 {canAssign && (

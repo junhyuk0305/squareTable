@@ -18,7 +18,7 @@ import { HAS_SUPABASE } from '@/lib/supabase';
 import { storeColor } from '@/lib/utils/storeColor';
 import { useCrossNotifRows } from '@/lib/hooks/useCrossNotifRows';
 import { assignedTodayCount } from '@/lib/utils/crossStoreNotifs';
-import { canManage } from '@/lib/utils/roles';
+import { canManage, roleNoun } from '@/lib/utils/roles';
 import { todayStr } from '@/lib/utils/attendance';
 import { fetchOwnerOverview, type MyUnitRow, type OwnerOverviewRow } from '@/lib/db';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
@@ -126,6 +126,9 @@ export default function StoresHub() {
       : unitId
         ? [{ unit_id: unitId, store_name: storeName || '내 매장', role, industry: null, is_active: true }]
         : [];
+
+  // 전 매장이 같은 역할인가 — 목록 전체를 한 단어로 부를 수 있을 때만 섹션 라벨에 역할을 쓴다(0093).
+  const uniformRole = stores.length > 0 && stores.every((s) => s.role === stores[0].role) ? stores[0].role : null;
 
   const [overview, setOverview] = useState<Record<string, OwnerOverviewRow>>({});
   // 매장을 고른 순간부터 그 매장 화면이 그릴 준비가 될 때까지 — 이 값이 있으면 화면 전체를 커버가 덮는다.
@@ -271,11 +274,10 @@ export default function StoresHub() {
             {/* ── 매장 목록 ── */}
             <Appear delay={60}>
               <View style={styles.section}>
-                {/* 역할은 매장별(0093) — 매니저 매장이 하나라도 있으면 '직원' 대신 '매니저'로 표기 */}
-                <SectionLabel
-                  title={`매장 ${storeCount}곳`}
-                  hint={isOwner ? '사장' : stores.some((s) => s.role === 'manager') ? '매니저' : '직원'}
-                />
+                {/* 역할은 매장별(0093)이라 목록 전체를 한 단어로 부를 수 없다 — 전 매장이 같은 역할일
+                    때만 표기하고, 섞여 있으면(사장 매장 + 매니저 매장) 각 매장 줄에서 말한다.
+                    예전엔 "매니저 매장이 하나라도 있으면 매니저"라 사장 매장까지 매니저로 불렀다. */}
+                <SectionLabel title={`매장 ${storeCount}곳`} hint={uniformRole ? roleNoun(uniformRole) : undefined} />
                 {stores.map((s) => {
                   const ov = overview[s.unit_id];
                   const isActive = s.unit_id === unitId;
@@ -295,12 +297,13 @@ export default function StoresHub() {
                           <Text style={styles.storeName} numberOfLines={1}>{pref.nickname || s.store_name}</Text>
                           {isActive && <Text style={styles.recentBadge}>최근</Text>}
                         </View>
+                        {/* 역할이 섞인 사람에겐 이 줄이 "이 매장에서 나는 누구인가"를 말한다.
+                            전 매장이 같은 역할이면 위 섹션 라벨이 이미 말했으므로 반복하지 않는다. */}
                         <Text style={styles.storeMeta} numberOfLines={1}>
-                          {isOwner
-                            ? ov
+                          {(uniformRole ? '' : `${roleNoun(s.role)} · `) +
+                            (s.role === 'owner' && ov
                               ? `직원 ${ov.staff} · 노하우 ${ov.knowhow}`
-                              : '탭하면 매장으로 들어가요'
-                            : '탭하면 매장으로 들어가요'}
+                              : '탭하면 매장으로 들어가요')}
                         </Text>
                       </View>
                       <View style={styles.cardRight}>

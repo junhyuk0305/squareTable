@@ -34,7 +34,7 @@ import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { HEADER_EDGE_GUTTER } from '@/lib/theme/layout';
 import { todayStr, tsMs } from '@/lib/utils/attendance';
-import { canManage } from '@/lib/utils/roles';
+import { asMemberRole, canManage } from '@/lib/utils/roles';
 
 type ViewKey = 'chat' | 'notice' | 'todo' | 'assign';
 
@@ -68,6 +68,10 @@ function pickImageFiles(onPick: (files: File[]) => void, opts?: { multiple?: boo
 export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
   const userId = useSessionStore((s) => s.userId);
   const userName = useSessionStore((s) => s.userName);
+  // ★ prop `role` 은 **화면 세트**다(owner/work.tsx 가 리터럴 "owner" 를 넘긴다) — 세션의 실제 역할이 아니다.
+  //   역할로 갈라야 하는 판정은 반드시 세션에서 읽는다. 예전엔 이 둘을 같은 이름으로 섞어 써서
+  //   `role === 'owner'` 가 매니저에게도 true 였고, 0093 이 막으려던 케이스가 그대로 뚫려 있었다(2026-08-08).
+  const sessionRole = useSessionStore((s) => s.role);
   // 0093: 업무보드의 관리 표면(배정 뷰·전원 이름 등)은 매니저 포함 — 사장 전용 요소는 이 화면에 없다.
   const isOwner = canManage(role);
 
@@ -85,8 +89,9 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
   );
   // 다중 발송은 **지금 이 매장의 사장**만 할 수 있다(서버 0075 broadcast_notice = owner_id 검사).
   // A매장 매니저이면서 B매장 사장인 사람에게 대상 칩을 그려주면, 보내는 순간 서버가 전부 거부한다.
-  // canManage(매니저 포함)가 아니라 role === 'owner' — 사장 전용 영역이라 roles 헬퍼를 쓰지 않는다(0093 주석).
-  const isStoreOwner = role === 'owner';
+  // canManage(매니저 포함)가 아니라 'owner' 판정 — 사장 전용 영역이라 roles 헬퍼를 쓰지 않는다(0093 주석).
+  // ★화면 세트 prop 이 아니라 **세션 역할**을 본다: prop 은 사장 화면이면 늘 'owner' 라 가드가 무효였다.
+  const isStoreOwner = sessionRole === 'owner';
 
   const owner = useStaffStore((s) => s.owner);
   const staff = useStaffStore((s) => s.staff);
@@ -190,10 +195,10 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
   const [sendingPhoto, setSendingPhoto] = useState(false);
 
   // 이 방에 있는 사람인가 — 판정은 **기존 방 가시성 규칙 그대로**다. 새 규칙을 만들지 않는다.
-  //   서버: can_see_room()(0015_work_rooms.sql:38) = is_default or auth_is_owner() or 방 멤버
-  //   클라: RoomBar 의 visible(role === 'owner' or isDefault or 멤버) — 둘이 같은 판정이다.
-  // ★매니저는 여기서 사장 취급이 아니다: can_see_room 은 0093 에서도 auth_can_manage() 로 안 바뀌었고
-  //   RoomBar 도 role === 'owner' 를 쓴다. canManage 로 넓히면 "볼 수 없는 방의 멘션 알림"이 생긴다.
+  //   서버: can_see_room()(0122 개정) = is_default or auth_can_manage() or 방 멤버
+  //   클라: RoomBar 의 visible(canManage or isDefault or 멤버) — 둘이 같은 판정이다.
+  // ★0122 이전엔 서버 can_see_room 만 auth_is_owner() 로 남아, 매니저는 방 목록(wr_select, 0093)은
+  //   보이는데 그 방 메시지는 0건인 "빈 방"이 됐다. 세 자리(함수·정책·클라)를 한 기준으로 맞췄다.
   // 방이 없으면(레거시/degraded) 전부 통과 — inRoom() 폴백과 같다.
   const roomMemberRows = useRoomStore((s) => s.members);
   const memberRoles = useStaffStore((s) => s.roles);
@@ -202,18 +207,23 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
     [roomMemberRows, currentRoomId],
   );
   const inThisRoom = useCallback(
-    (uid: string, memberRole: string) => !currentRoomId || isDefaultRoom || memberRole === 'owner' || roomMemberIds.has(uid),
+    (uid: string, memberRole: string) => !currentRoomId || isDefaultRoom || canManage(memberRole) || roomMemberIds.has(uid),
     [currentRoomId, isDefaultRoom, roomMemberIds],
   );
 
   // 멤버(멘션·이름) — 사장 + 직원 + 본인. inRoom=false 도 목록에는 남는다(숨기면 "왜 없지?"가 된다).
+  // 역할은 명부의 매장별 역할(unit_members.role)을 그대로 싣는다 — 매니저를 '직원'으로 굳혀 보내면
+  // 멘션 목록에서만 매니저가 직원으로 보이는 표기 드리프트가 난다(직원 명부 배지와 어긋남).
   const members: Member[] = useMemo(() => {
     const m: Member[] = [];
     if (owner) m.push({ id: owner.id, name: owner.name, role: 'owner', inRoom: true });
-    staff.forEach((s) => m.push({ id: s.id, name: s.name, role: 'junior', inRoom: inThisRoom(s.id, memberRoles[s.id] ?? 'junior') }));
-    if (userId && !m.some((x) => x.id === userId)) m.push({ id: userId, name: userName, role, inRoom: true });
+    staff.forEach((s) => {
+      const r = asMemberRole(memberRoles[s.id]);
+      m.push({ id: s.id, name: s.name, role: r, inRoom: inThisRoom(s.id, r) });
+    });
+    if (userId && !m.some((x) => x.id === userId)) m.push({ id: userId, name: userName, role: asMemberRole(sessionRole), inRoom: true });
     return m;
-  }, [owner, staff, userId, userName, role, inThisRoom, memberRoles]);
+  }, [owner, staff, userId, userName, sessionRole, inThisRoom, memberRoles]);
   // 언급·배정에 실을 수 있는 사람인가 — 흐리게 보여주기만 하고 발송·배정은 여기서 막는다.
   const canReach = useCallback((id: string) => members.find((m) => m.id === id)?.inRoom !== false, [members]);
 
@@ -568,7 +578,7 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
     <SafeAreaView style={st.safe} edges={['bottom']}>
       <Stack.Screen options={headerOptions} />
 
-      {(view === 'chat' || view === 'assign') && <RoomBar role={role} me={userId} />}
+      {(view === 'chat' || view === 'assign') && <RoomBar role={sessionRole} me={userId} />}
 
       {/* 어떤 코스 카드가 몇 장 뜨는지는 trainingCards 메모가 판정(하한·주기·1회성 우선·요청 예외). */}
       {view === 'chat' &&

@@ -64,6 +64,8 @@
     "qa:multistore": "node scripts/qa-multistore.mjs",
     "qa:junior-multistore": "node scripts/qa-junior-multistore.mjs",
     "qa:roles": "node scripts/qa-roles.mjs",
+    "qa:role-read": "node scripts/qa-role-read-boundary.mjs",
+    "qa:notif-axis": "node scripts/qa-notif-axis.mjs",
     "qa:delete-store": "node scripts/qa-delete-store.mjs",
     "qa:billing-tiers": "node scripts/qa-billing-tiers.mjs",
     "qa:payment-claims": "node scripts/qa-payment-claims.mjs",

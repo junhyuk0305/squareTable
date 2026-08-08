@@ -1,5 +1,7 @@
+import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useSuggestionStore } from '@/lib/store/useSuggestionStore';
 import { useUnknownQueueStore } from '@/lib/store/useUnknownQueueStore';
+import { isPendingSuggestionToReview } from '@/lib/utils/notifications';
 import type { PlaybookSuggestion, UnknownQuery } from '@/types';
 
 /**
@@ -14,13 +16,16 @@ import type { PlaybookSuggestion, UnknownQuery } from '@/types';
 /** 사장이 답해야 하는 질문 = 아직 대기 중인 미답질문. */
 export const isTodoQuestion = (u: UnknownQuery) => u.status === 'pending_owner_answer';
 
-/** 사장이 검토해야 하는 제안 = 아직 승인·반려하지 않은 것. */
-export const isTodoSuggestion = (s: PlaybookSuggestion) => s.status === 'pending';
+/** 검토해야 하는 제안 = 아직 승인·반려하지 않았고 **내가 올린 게 아닌** 것.
+ *  판정 본체는 알림 축과 같은 함수(notifications.isPendingSuggestionToReview) — 배지·목록·알림이
+ *  같은 술어를 봐야 "알림엔 없는데 배지엔 있다"가 안 생긴다. 매니저가 승격 전 올린 제안이 그 케이스다. */
+export const isTodoSuggestion = (s: PlaybookSuggestion, me?: string) => isPendingSuggestionToReview(s, me);
 
 export function useOwnerTodoCount(): { questions: number; suggestions: number; total: number } {
   // ★셀렉터는 배열이 아니라 **수**를 돌려준다 — filter 결과(새 배열)를 돌려주면 참조가 매번 달라져
   //   zustand가 상태 변화로 오인하고 무한 재렌더로 간다.
+  const me = useSessionStore((s) => s.userId);
   const questions = useUnknownQueueStore((s) => s.queue.filter(isTodoQuestion).length);
-  const suggestions = useSuggestionStore((s) => s.suggestions.filter(isTodoSuggestion).length);
+  const suggestions = useSuggestionStore((s) => s.suggestions.filter((x) => isTodoSuggestion(x, me)).length);
   return { questions, suggestions, total: questions + suggestions };
 }

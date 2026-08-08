@@ -212,7 +212,8 @@ export type OwnerNotifKind =
   | 'join_request' | 'question' | 'suggestion' | 'swap_approval' | 'mention'
   | 'payment_approved' | 'payment_rejected';
 export type OwnerNotifRoute =
-  | '/owner/inbox' | '/owner/suggestions' | '/owner/schedule' | '/owner/staff' | '/owner/work' | '/billing';
+  | '/owner/inbox' | '/owner/suggestions' | '/owner/schedule' | '/owner/staff' | '/owner/work'
+  | '/owner/categories' | '/billing';
 
 export type OwnerNotif = {
   id: string;
@@ -229,8 +230,13 @@ export type OwnerNotif = {
 // ── 공유 술어(뱃지·목록 동일 규칙) ──
 /** 아직 사장이 답 안 한 받은질문. */
 export const isPendingQuestion = (u: UnknownQuery): boolean => u.status === 'pending_owner_answer';
-/** 검토 대기 중인 알바 제안. */
+/** 검토 대기 중인 직원 제안. */
 export const isPendingSuggestion = (s: PlaybookSuggestion): boolean => s.status === 'pending';
+/** **내가 검토해야 할** 제안 = 검토 대기 중이면서 내가 올린 게 아닌 것.
+ *  직원이 매니저로 승격되면 승격 전에 올린 제안이 자기 결재함으로 이월돼, 자기 제안을 자기가
+ *  승인하는 표면이 생겼다(2026-08-08 실측: 박지원 매니저 화면). 제안자는 결과만 받는다. */
+export const isPendingSuggestionToReview = (s: PlaybookSuggestion, me?: string): boolean =>
+  isPendingSuggestion(s) && (!me || s.proposer_id !== me);
 /** 직원이 수락해 사장 승인만 남은 교대. */
 export const isSwapAwaitingApproval = (r: SwapRequest): boolean => r.status === 'accepted';
 /** 검토가 끝난 입금 신고(승인/반려) — 반려 사유 전달 축(0083 reject_reason).
@@ -254,7 +260,7 @@ export function ownerUnreadCount(
   return (
     pending.filter((p) => isAfterAck(p.created_at, ackAt)).length +
     queue.filter((u) => isPendingQuestion(u) && isAfterAck(u.asked_at, ackAt)).length +
-    suggestions.filter((s) => isPendingSuggestion(s) && isAfterAck(s.created_at, ackAt)).length +
+    suggestions.filter((s) => isPendingSuggestionToReview(s, me) && isAfterAck(s.created_at, ackAt)).length +
     swaps.filter((r) => isSwapAwaitingApproval(r) && isAfterAck(r.updated_at, ackAt)).length +
     (me ? feed.filter((f) => isUnreadMention(f, me) && isAfterAck(f.createdAt, ackAt)).length : 0) +
     // 입금 검토 결과 — read 개념이 없어 '모두 읽기'(ack) 전까지 새 소식으로 센다(제안 결과와 동일).
@@ -324,7 +330,7 @@ export function buildOwnerNotifications(args: {
   }
 
   for (const s of suggestions) {
-    if (!isPendingSuggestion(s)) continue;
+    if (!isPendingSuggestionToReview(s, me)) continue;
     out.push({
       id: `s_${s.id}`,
       kind: 'suggestion',
@@ -368,4 +374,100 @@ export function buildOwnerNotifications(args: {
   }
 
   return out.sort((a, b) => b.at.localeCompare(a.at)).slice(0, MAX_NOTIFS);
+}
+
+// ── 매니저 알림 (0093 매니저 = 사장 화면 세트 + 여전히 '받는 쪽') ───────────
+// 알림 축이 원래 **화면 세트**(사장/직원)로 갈려 있어서, 사장 화면을 쓰는 매니저는 사장 축만 받고
+// "나에게 온 것"(공지·배정·내 제안 결과)이 인앱에서 통째로 빠져 있었다 — 앱을 켜도 사장이 올린 공지가
+// 알림에 안 뜨는 상태(2026-08-08 감사). 축을 화면이 아니라 **① 내가 처리할 것 / ② 나에게 온 것**으로
+// 나누고, 매니저는 둘 다 받는다.
+//
+// ★①에 있는 것을 ②에 다시 넣지 않는다: 멘션은 사장 축(buildOwnerNotifications)에 이미 있다.
+// ★매니저 화면에서 **행동할 수 없는 것은 넣지 않는다**: 교대 수락·내 교대 요청 결과는 직원 화면
+//   (/junior/schedule)에서만 할 수 있는 일이라, 넣으면 알림만 오고 갈 곳이 없어진다 → 제외.
+//   (매니저의 교대 축은 사장 축의 '승인 대기'(swap_approval)가 담당한다.)
+export type ManagerNotifKind =
+  | OwnerNotifKind | 'notice' | 'assign' | 'suggestion_approved' | 'suggestion_rejected';
+export type ManagerNotif = Omit<OwnerNotif, 'kind'> & { kind: ManagerNotifKind };
+
+export type ManagerReceivedArgs = {
+  feed: FeedItem[];
+  taskTemplates: TaskTemplate[];
+  done: Record<string, Record<string, DoneMark>>;
+  today: string;
+  suggestions: PlaybookSuggestion[];
+  userId: string;
+  nameOf: (id: string) => string;
+  ackAt?: string | null;
+};
+
+/** ② 나에게 온 것 — 매니저 표면(/owner/*) 경로로. 카운트와 목록이 같은 배열을 보게 이 함수 하나만 쓴다. */
+function buildManagerReceived(args: ManagerReceivedArgs): ManagerNotif[] {
+  const { feed, taskTemplates, done, today, suggestions, userId: me, nameOf, ackAt } = args;
+  const out: ManagerNotif[] = [];
+
+  // 공지 — 사장(또는 다른 관리자)이 올린 것. 내가 쓴 공지는 제외한다(read_by 에 내가 없어 '안 읽음'으로
+  // 잡히는데, 자기가 쓴 글이 자기 알림에 뜨는 건 메아리다 — 푸시 엣지의 발송자 제외와 같은 규칙).
+  for (const f of feed) {
+    if (f.kind !== 'notice' || f.authorId === me) continue;
+    out.push({
+      id: `notice_${f.id}`,
+      kind: 'notice',
+      title: `${f.authorName}님의 공지`,
+      body: f.text,
+      at: f.createdAt,
+      unread: isUnreadNotice(f, me) && isAfterAck(f.createdAt, ackAt),
+      route: '/owner/work',
+      readFeedId: f.id,
+    });
+  }
+
+  // 배정 — 매니저도 할 일을 배정받는다(명부에 있는 사람이라 사장이 지정할 수 있다).
+  for (const t of taskTemplates) {
+    if (!isAssignedToMe(t, me) || !occursOn(t, today)) continue;
+    const at = t.createdAt ?? `${today}T08:00:00`;
+    out.push({
+      id: `assign_${t.id}`,
+      kind: 'assign',
+      title: `${nameOf(t.createdBy ?? '')}님이 할 일을 배정했어요`,
+      body: t.text,
+      at,
+      unread: !done[today]?.[t.id] && isAfterAck(at, ackAt),
+      route: '/owner/work',
+    });
+  }
+
+  // 내 제안 검토 결과 — 직원이던 시절 올린 제안이 뒤늦게 처리되는 경로(승격 이월).
+  // 검토함(①)에서 자기 제안을 뺀 대신, 결과는 반드시 도착해야 한다.
+  for (const sg of suggestions) {
+    if (!isMySuggestionResult(sg, me)) continue;
+    const ok = sg.status === 'approved';
+    out.push({
+      id: `sugres_${sg.id}`,
+      kind: ok ? 'suggestion_approved' : 'suggestion_rejected',
+      title: ok ? '내 노하우 제안이 반영됐어요' : '내 노하우 제안이 반려됐어요',
+      body: !ok && sg.owner_note ? `${sg.text}\n사유: ${sg.owner_note}` : sg.text,
+      at: sg.reviewed_at as string,
+      unread: isAfterAck(sg.reviewed_at, ackAt),
+      route: '/owner/categories',
+    });
+  }
+
+  return out;
+}
+
+/** 매니저 알림 목록 = ① 사장 축(처리형) + ② 개인 수신 축. */
+export function buildManagerNotifications(
+  ownerArgs: Parameters<typeof buildOwnerNotifications>[0],
+  received: ManagerReceivedArgs,
+): ManagerNotif[] {
+  return [...buildOwnerNotifications(ownerArgs), ...buildManagerReceived(received)]
+    .sort((a, b) => b.at.localeCompare(a.at))
+    .slice(0, MAX_NOTIFS);
+}
+
+/** 매니저 벨 뱃지 = 사장 축 카운트 + 개인 수신 축의 안읽음.
+ *  ②는 술어를 다시 쓰지 않고 목록에서 파생한다 — 배지와 목록이 어긋나는 고전적 드리프트 차단. */
+export function managerUnreadCount(ownerCount: number, received: ManagerReceivedArgs): number {
+  return ownerCount + buildManagerReceived(received).filter((r) => r.unread).length;
 }

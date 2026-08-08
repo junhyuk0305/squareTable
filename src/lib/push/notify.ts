@@ -184,14 +184,27 @@ export const notifyUserRoleChange = (userId: string, storeName: string, promoted
   });
 
 // 직원이 받는 것들 (사장/동료 행동 → 직원)
-export const notifyStaffNotice = (author: string, text: string) =>
+/** 공지 — 매장 전원에게. 엣지의 audience 는 'staff'=직원 / 'owners'=사장+매니저 두 갈래라 둘 다 쏜다.
+ *  ★매니저가 빠져 있던 자리다: 매니저는 사장 화면 세트를 쓰는 **수신자**인데 'staff'(=junior)에 안 잡혀
+ *    사장이 올린 공지를 푸시로도 인앱으로도 못 받았다(2026-08-08 역할 감사).
+ *  발송자 본인은 서버가 대상에서 제외하므로(엣지 index.ts) 자기 공지가 자기에게 오지 않는다 —
+ *  같은 이유로 사장이 쓰면 매니저만, 매니저가 쓰면 사장·직원이 받는다. 경로는 각자의 화면 세트로. */
+export const notifyStaffNotice = (author: string, text: string) => {
   pushNotify({
+    audience: 'owners',
+    title: `${author}님의 공지`,
+    body: text,
+    url: '/owner/work',
+    tag: 'notice',
+  });
+  return pushNotify({
     audience: 'staff',
     title: `${author}님의 공지`,
     body: text,
     url: '/junior/work',
     tag: 'notice',
   });
+};
 
 /** 대타 요청 — 아무나 수락 가능하므로 매장 직원 전체에게. */
 export const notifyStaffSwapRequest = (when: string) =>

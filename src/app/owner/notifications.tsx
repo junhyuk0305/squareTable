@@ -16,25 +16,32 @@ import { useMemberPrefsStore } from '@/lib/store/useMemberPrefsStore';
 import { showToast } from '@/lib/store/useToastStore';
 import { Appear } from '@/components/Appear';
 import { MarkAllReadButton } from '@/components/MarkAllReadButton';
-import { NotificationList, OWNER_KIND_UI } from '@/components/NotificationList';
+import { NotificationList, ALL_KIND_UI } from '@/components/NotificationList';
 import { NotificationEnableCard } from '@/components/NotificationEnableCard';
 import { SegmentTabs } from '@/components/SegmentTabs';
-import { buildOwnerNotifications } from '@/lib/utils/notifications';
+import { buildManagerNotifications, buildOwnerNotifications } from '@/lib/utils/notifications';
+import { honorific } from '@/lib/utils/roles';
+import { todayStr } from '@/lib/utils/attendance';
 import { InkColors } from '@/lib/theme/colors';
 import { Elevation, Radius } from '@/lib/theme/elevation';
 
-// kind → 아이콘·틴트 매핑은 NotificationList 의 OWNER_KIND_UI 공유(허브 통합 알림과 재정의 금지).
-const KIND_UI = OWNER_KIND_UI;
+// kind → 아이콘·틴트 매핑은 NotificationList 의 상수 공유(화면별 재정의 금지).
+// 매니저 목록에는 사장 축 + 개인 수신 축이 섞이므로 합성 맵(ALL_KIND_UI)을 쓴다 — 사장은 사장 축
+// kind 만 나오므로 같은 맵을 써도 결과가 같다(맵을 둘로 갈라 한쪽만 바뀌는 드리프트를 안 만든다).
+const KIND_UI = ALL_KIND_UI;
 
 /**
- * 사장 알림 화면 — 벨(OwnerNotificationBell)에서 진입.
- * 답변 대기 질문 · 알바 제안 · 승인 대기 교대를 시간 역순으로 모아 보여준다.
+ * 사장·매니저 알림 화면 — 벨(OwnerNotificationBell)에서 진입.
+ * 답변 대기 질문 · 직원 제안 · 승인 대기 교대를 시간 역순으로 모아 보여준다.
+ * 매니저는 여기에 '나에게 온 것'(공지·배정·내 제안 결과)이 함께 온다 — 축 정의는 notifications util.
  * 데이터 모델·목록 렌더는 직원 알림과 공유(notifications util · NotificationList).
  */
 export default function OwnerNotificationsScreen() {
   const router = useRouter();
   const me = useSessionStore((s) => s.userId);
   const userName = useSessionStore((s) => s.userName);
+  // 세션 유효 역할(매장별, 0093) — 호칭·알림 축을 여기서 갈린다. 화면 세트('사장 화면')와 역할은 다르다.
+  const role = useSessionStore((s) => s.role);
   const storeName = useSessionStore((s) => s.storeName) || '우리 매장';
   const queue = useUnknownQueueStore((s) => s.queue);
   const suggestions = useSuggestionStore((s) => s.suggestions);
@@ -72,21 +79,25 @@ export default function OwnerNotificationsScreen() {
 
   const initial = (userName ?? '나').trim().slice(0, 1) || '나';
 
-  const rows = useMemo(
-    () =>
-      buildOwnerNotifications({
-        queue,
-        suggestions,
-        swaps,
-        pending,
-        nameOf: (id) => staff.find((x) => x.id === id)?.name ?? '직원',
-        feed,
-        userId: me,
-        ackAt,
-        claims,
-      }),
-    [queue, suggestions, swaps, pending, staff, feed, me, ackAt, claims],
-  );
+  // 매니저는 사장 축 + 개인 수신 축을 함께 받는다(공지·배정·내 제안 결과). 사장은 사장 축 그대로.
+  const templates = useWorkStore((s) => s.templates);
+  const done = useWorkStore((s) => s.done);
+  const today = todayStr();
+  const rows = useMemo(() => {
+    const nameOf = (id: string) => staff.find((x) => x.id === id)?.name ?? '직원';
+    const ownerArgs = { queue, suggestions, swaps, pending, nameOf, feed, userId: me, ackAt, claims };
+    if (role !== 'manager') return buildOwnerNotifications(ownerArgs);
+    return buildManagerNotifications(ownerArgs, {
+      feed,
+      taskTemplates: templates,
+      done,
+      today,
+      suggestions,
+      userId: me,
+      nameOf,
+      ackAt,
+    });
+  }, [queue, suggestions, swaps, pending, staff, feed, me, ackAt, claims, role, templates, done, today]);
 
   // '모두 읽기' = ① 멘션은 read_by 기록(기존 경로) + ② 처리형(합류·질문·제안·교대)은 ack 시각(0078)으로
   // 배지·강조 해제. 항목은 목록에 남아 계속 처리할 수 있고, 새 항목은 ack 이후라 다시 배지에 잡힌다.
@@ -110,7 +121,9 @@ export default function OwnerNotificationsScreen() {
         options={{ headerRight: () => (seg === 'store' && hasUnread ? <MarkAllReadButton onPress={markAll} /> : null) }}
       />
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        {/* 맨 위 — 매장명 · 사장님 이름(정체성). 직원 알림 화면과 동일 구조 */}
+        {/* 맨 위 — 매장명 · 내 이름(정체성). 직원 알림 화면과 동일 구조.
+            호칭은 세션 역할에서 파생한다(roles.honorific) — 매니저도 이 화면을 쓰기 때문에
+            "사장님"을 하드코딩하면 매니저가 자기를 사장으로 부르게 된다(2026-08-08 수정). */}
         <Appear delay={0}>
         <View style={styles.idCard}>
           <View style={styles.avatar}>
@@ -121,7 +134,7 @@ export default function OwnerNotificationsScreen() {
               {storeName}
             </Text>
             <Text style={styles.idUser} numberOfLines={1}>
-              {userName} 사장님
+              {honorific(userName, role)}
             </Text>
           </View>
         </View>

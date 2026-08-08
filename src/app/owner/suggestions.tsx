@@ -7,7 +7,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { RoleTabBar } from '@/components/RoleTabBar';
 import { Appear } from '@/components/Appear';
 import { BottomSheet } from '@/components/BottomSheet';
+import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useSuggestionStore } from '@/lib/store/useSuggestionStore';
+import { isPendingSuggestionToReview } from '@/lib/utils/notifications';
 import { showToast } from '@/lib/store/useToastStore';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Elevation, Radius } from '@/lib/theme/elevation';
@@ -40,7 +42,10 @@ export default function OwnerSuggestionsScreen() {
     return subscribe();
   }, [hydrate, subscribe]);
 
-  const pending = useMemo(() => suggestions.filter((s) => s.status === 'pending'), [suggestions]);
+  // 검토 대기 = 내가 올린 게 아닌 것만(isPendingSuggestionToReview SSOT — 알림·탭 배지와 같은 술어).
+  // 직원이 매니저로 승격되면 승격 전 제안이 자기 결재함으로 넘어와, 자기 제안을 자기가 승인할 수 있었다.
+  const me = useSessionStore((s) => s.userId);
+  const pending = useMemo(() => suggestions.filter((s) => isPendingSuggestionToReview(s, me)), [suggestions, me]);
   const handled = useMemo(
     () => suggestions.filter((s) => s.status !== 'pending').slice(0, 20),
     [suggestions],

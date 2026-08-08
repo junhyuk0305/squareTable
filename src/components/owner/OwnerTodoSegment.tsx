@@ -8,6 +8,7 @@ import { SectionLabel } from '@/components/SectionLabel';
 import { SimilarGroupRow } from '@/components/SimilarGroupRow';
 import { AiAnswerRow } from '@/components/AiAnswerRow';
 
+import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useUnknownQueueStore } from '@/lib/store/useUnknownQueueStore';
 import { useSuggestionStore } from '@/lib/store/useSuggestionStore';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
@@ -57,17 +58,20 @@ export function OwnerTodoSegment() {
   const loadError = useUnknownQueueStore((s) => s.loadError);
   const hydrate = useUnknownQueueStore((s) => s.hydrate);
   const suggestions = useSuggestionStore((s) => s.suggestions);
+  const me = useSessionStore((s) => s.userId);
 
   // 대기 질문 — 오래 기다린 순(sortByUrgency SSOT). 판정(isTodoQuestion)은 탭 배지와 공용.
   const pending = useMemo(() => sortByUrgency(queue.filter(isTodoQuestion)), [queue]);
 
   // 검토 대기 제안 — 오래된 것부터. 판정(isTodoSuggestion)은 탭 배지와 공용.
+  // ★내가 올린 제안은 내 결재함에 넣지 않는다(매니저 승격 이월) — me 를 반드시 넘긴다.
+  //   `.filter(isTodoSuggestion)` 처럼 바로 넘기면 두 번째 인자로 **index** 가 들어가 판정이 조용히 죽는다.
   const pendingSuggestions = useMemo(
     () =>
       suggestions
-        .filter(isTodoSuggestion)
+        .filter((s) => isTodoSuggestion(s, me))
         .sort((a, b) => (a.created_at ?? '').localeCompare(b.created_at ?? '')),
-    [suggestions],
+    [suggestions, me],
   );
 
   // ── 'AI가 답한 질문' — 원천은 unknown_queries 가 아니라 chat_queries(무엇으로 답했는지를 아는 쪽).

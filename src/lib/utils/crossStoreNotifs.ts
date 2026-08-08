@@ -3,35 +3,54 @@
 import type { UnitNotifData } from '@/lib/db';
 import {
   buildJuniorNotifications,
+  buildManagerNotifications,
   buildOwnerNotifications,
   isPendingAssignment,
   juniorUnreadCount,
+  managerUnreadCount,
   ownerUnreadCount,
   MAX_NOTIFS,
   type JuniorNotif,
+  type ManagerNotif,
+  type ManagerReceivedArgs,
   type OwnerNotif,
 } from './notifications';
 import { canManage } from './roles';
 
 /** 통합 리스트 한 행 = 기존 알림 행 + 어느 매장 것인지(unitId). 매장명·색 표시는 화면이 붙인다. */
-export type CrossNotifRow = (JuniorNotif | OwnerNotif) & { unitId: string };
+export type CrossNotifRow = (JuniorNotif | OwnerNotif | ManagerNotif) & { unitId: string };
+
+// 매장 하나에서 쓸 인자 묶음 — 카운트와 목록이 **같은 입력**을 보게 한 곳에서 만든다.
+const ownerArgsOf = (d: UnitNotifData, me: string, nameOf: (id: string) => string, ackAt?: string | null) =>
+  ({ queue: d.queue, suggestions: d.suggestions, swaps: d.swaps, pending: d.pending, nameOf, feed: d.feed, userId: me, ackAt });
+const receivedArgsOf = (
+  d: UnitNotifData, me: string, today: string, nameOf: (id: string) => string, ackAt?: string | null,
+): ManagerReceivedArgs =>
+  ({ feed: d.feed, taskTemplates: d.taskTemplates, done: d.done, today, suggestions: d.suggestions, userId: me, nameOf, ackAt });
 
 /** 매장 하나의 안읽음 카운트 — 그 매장에서의 역할(unit_members.role)에 맞는 기존 카운터 재사용.
  *  ackAt = 그 매장의 '모두 읽기' 기준 시각(0078, unit_member_prefs — 전 매장 행을 이미 당겨둠). */
 export function storeUnreadCount(d: UnitNotifData, role: string, me: string, today: string, ackAt?: string | null): number {
-  // 0093: 매니저 매장은 사장 판(질문·제안·합류신청 포함 — RPC 가 manager 매장에도 해당 원천을 준다).
-  return canManage(role)
-    ? ownerUnreadCount(d.queue, d.suggestions, d.swaps, d.pending, d.feed, me, ackAt)
-    : juniorUnreadCount(d.feed, d.swaps, me, today, d.taskTemplates, d.done, ackAt, d.suggestions);
+  const nameOf = nameOfFor(d, role, me);
+  if (!canManage(role)) return juniorUnreadCount(d.feed, d.swaps, me, today, d.taskTemplates, d.done, ackAt, d.suggestions);
+  // 0093: 매니저 매장은 사장 판(질문·제안·합류신청 포함 — RPC 가 manager 매장에도 해당 원천을 준다)
+  //       + 매니저가 받는 쪽인 축(공지·배정·내 제안 결과).
+  const base = ownerUnreadCount(d.queue, d.suggestions, d.swaps, d.pending, d.feed, me, ackAt);
+  return role === 'manager' ? managerUnreadCount(base, receivedArgsOf(d, me, today, nameOf, ackAt)) : base;
 }
+
+const nameOfFor = (d: UnitNotifData, role: string, me: string) => (id: string) =>
+  id === me ? '나' : d.names[id] || (canManage(role) ? '직원' : '동료');
 
 /** 매장 하나의 알림 목록 — 기존 빌더 재사용(교대 시간표기용 ShiftTemplate 은 cross-store 미제공 → 날짜만). */
 export function buildStoreNotifs(d: UnitNotifData, role: string, me: string, today: string, ackAt?: string | null): CrossNotifRow[] {
-  const nameOf = (id: string) => (id === me ? '나' : d.names[id] || (canManage(role) ? '직원' : '동료'));
-  const rows: (JuniorNotif | OwnerNotif)[] =
-    canManage(role)
-      ? buildOwnerNotifications({ queue: d.queue, suggestions: d.suggestions, swaps: d.swaps, pending: d.pending, nameOf, feed: d.feed, userId: me, ackAt })
-      : buildJuniorNotifications({ feed: d.feed, swaps: d.swaps, templates: [], nameOf, userId: me, today, taskTemplates: d.taskTemplates, done: d.done, ackAt, suggestions: d.suggestions });
+  const nameOf = nameOfFor(d, role, me);
+  const rows: (JuniorNotif | OwnerNotif | ManagerNotif)[] =
+    role === 'manager'
+      ? buildManagerNotifications(ownerArgsOf(d, me, nameOf, ackAt), receivedArgsOf(d, me, today, nameOf, ackAt))
+      : canManage(role)
+        ? buildOwnerNotifications(ownerArgsOf(d, me, nameOf, ackAt))
+        : buildJuniorNotifications({ feed: d.feed, swaps: d.swaps, templates: [], nameOf, userId: me, today, taskTemplates: d.taskTemplates, done: d.done, ackAt, suggestions: d.suggestions });
   return rows.map((r) => ({ ...r, unitId: d.unitId }));
 }
 

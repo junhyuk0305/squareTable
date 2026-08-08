@@ -14,7 +14,7 @@ import { useStaffStore } from '@/lib/store/useStaffStore';
 import { usePaymentClaimStore } from '@/lib/store/usePaymentClaimStore';
 import { useMemberPrefsStore } from '@/lib/store/useMemberPrefsStore';
 import { todayStr } from '@/lib/utils/attendance';
-import { juniorUnreadCount, ownerUnreadCount } from '@/lib/utils/notifications';
+import { juniorUnreadCount, managerUnreadCount, ownerUnreadCount } from '@/lib/utils/notifications';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { HEADER_EDGE_GUTTER } from '@/lib/theme/layout';
@@ -61,23 +61,40 @@ export function NotificationBell() {
   return <BellButton count={count} onPress={() => router.push('/junior/notifications')} />;
 }
 
-/** 사장 알림 벨 — 배지 = 합류 승인대기 + 답변대기 질문 + 검토대기 제안 + 승인대기 교대 → /owner/notifications. */
+/** 사장·매니저 알림 벨 — 배지 = 합류 승인대기 + 답변대기 질문 + 검토대기 제안 + 승인대기 교대
+ *  (+ 매니저는 나에게 온 것: 공지·배정·내 제안 결과) → /owner/notifications.
+ *  배지와 목록(owner/notifications.tsx)이 **같은 축**을 봐야 하므로 역할 분기를 여기서도 그대로 한다. */
 export function OwnerNotificationBell({ edge = true }: { edge?: boolean } = {}) {
   const router = useRouter();
   const userId = useSessionStore((s) => s.userId);
+  const role = useSessionStore((s) => s.role);
   const queue = useUnknownQueueStore((s) => s.queue);
   const suggestions = useSuggestionStore((s) => s.suggestions);
   const swaps = useScheduleStore((s) => s.swaps);
   const pending = useStaffStore((s) => s.pending);
+  const staff = useStaffStore((s) => s.staff);
   const feed = useWorkStore((s) => s.feed);
+  const templates = useWorkStore((s) => s.templates);
+  const done = useWorkStore((s) => s.done);
   const claims = usePaymentClaimStore((s) => s.claims);
   const unitId = useSessionStore((s) => s.unitId);
   const ackAt = useMemberPrefsStore((s) => (unitId ? (s.ackByUnit[unitId] ?? null) : null));
+  const today = todayStr();
 
-  const count = useMemo(
-    () => ownerUnreadCount(queue, suggestions, swaps, pending, feed, userId, ackAt, claims),
-    [queue, suggestions, swaps, pending, feed, userId, ackAt, claims],
-  );
+  const count = useMemo(() => {
+    const base = ownerUnreadCount(queue, suggestions, swaps, pending, feed, userId, ackAt, claims);
+    if (role !== 'manager') return base;
+    return managerUnreadCount(base, {
+      feed,
+      taskTemplates: templates,
+      done,
+      today,
+      suggestions,
+      userId,
+      nameOf: (id) => staff.find((x) => x.id === id)?.name ?? '직원',
+      ackAt,
+    });
+  }, [queue, suggestions, swaps, pending, feed, userId, ackAt, claims, role, templates, done, today, staff]);
 
   return <BellButton count={count} onPress={() => router.push('/owner/notifications')} edge={edge} />;
 }
