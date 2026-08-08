@@ -365,11 +365,13 @@ export function OwnerKnowhowBrowse({
   };
 
   // 묶음 한 덩어리 = [카드 밖 라벨 + n건] + 카드 목록.
-  // (묶음은 갈래마다 나뉘어 한 덩어리가 작다 — 끊어 그리기는 안 나뉜 전체 목록에만 건다.)
+  // ★묶음도 끊어 그린다. "갈래로 나뉘니 한 덩어리가 작다"는 틀린 판단이었다 —
+  //   묶음은 **전부 한 화면에 같이 그려지므로** 총 행 수는 안 나눈 것과 똑같고,
+  //   한 갈래에 몰리면(예: '고객 응대' 300건) 그 묶음 하나가 300줄이다.
   const groupBlock = (key: string, title: string, items: PlaybookEntry[]) => (
     <View key={key} style={styles.group}>
       <SectionLabel title={title} hint={`${items.length}건`} />
-      <View style={styles.list}>{items.map(entryItem)}</View>
+      <PagedRows key={`${key}-${seg}-${query}`} items={items} render={entryItem} style={styles.list} />
     </View>
   );
 
@@ -599,7 +601,12 @@ export function OwnerKnowhowBrowse({
                       <Text style={styles.groupTitle}>{m.label}</Text>
                       <Text style={styles.groupCount}>{g.items.length}</Text>
                     </View>
-                    <View style={styles.list}>{g.items.map(entryItem)}</View>
+                    <PagedRows
+                      key={`${g.cat}-${seg}-${query}`}
+                      items={g.items}
+                      render={entryItem}
+                      style={styles.list}
+                    />
                   </View>
                 );
               })
