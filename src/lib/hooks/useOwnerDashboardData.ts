@@ -89,7 +89,11 @@ export function useOwnerDashboardData(): OwnerDashboardData {
     () => queue.filter((u) => u.status === 'pending_owner_answer'),
     [queue],
   );
-  const pending = pendingList.length;
+  // ★히어로 큰 수는 **대기열 전체 규모**다 → 목록 길이가 아니라 서버 집계를 쓴다.
+  //   목록은 상한(PAGE_LIMIT)까지만 불러오므로, 길이로 세면 1,200건 매장이 "1000건"이 된다(2026-08-08 실측).
+  //   못 셌으면(null) 목록 길이로 물러난다 — 없는 수를 지어내지 않는다.
+  const pendingTotal = useUnknownQueueStore((s) => s.pendingTotal);
+  const pending = pendingTotal ?? pendingList.length;
 
   // 홈 히어로 1건 — 받은질문 화면과 같은 정렬을 쓴다(sortByUrgency = 판정 SSOT).
   // 두 화면이 다른 질문을 가리키면 "가장 오래 기다린 질문"이라는 말이 거짓이 된다.

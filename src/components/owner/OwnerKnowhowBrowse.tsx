@@ -1,5 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
-import { View, Text, Pressable, StyleSheet, ScrollView, ActivityIndicator, TextInput } from 'react-native';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import {
+  View, Text, Pressable, StyleSheet, ScrollView, ActivityIndicator, TextInput,
+  type StyleProp, type ViewStyle,
+} from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -362,6 +365,7 @@ export function OwnerKnowhowBrowse({
   };
 
   // 묶음 한 덩어리 = [카드 밖 라벨 + n건] + 카드 목록.
+  // (묶음은 갈래마다 나뉘어 한 덩어리가 작다 — 끊어 그리기는 안 나뉜 전체 목록에만 건다.)
   const groupBlock = (key: string, title: string, items: PlaybookEntry[]) => (
     <View key={key} style={styles.group}>
       <SectionLabel title={title} hint={`${items.length}건`} />
@@ -602,7 +606,15 @@ export function OwnerKnowhowBrowse({
             ) : showUsageGroups ? (
               usageGroups.map((g) => groupBlock(g.key, g.title, g.items))
             ) : (
-              <View style={styles.list}>{listFiltered.map(entryItem)}</View>
+              // ★전량 렌더 금지 — 이 목록은 일반 ScrollView 안이라 가상화가 없다.
+              //   2026-08-08 실측: 노하우 400건에서 DOM 5,776 노드 · 6.7초. 끊어 그리고 남은 수를 밝힌다.
+              //   key = 거르기 조건 → 조건이 바뀌면 컴포넌트가 다시 서면서 '더 보기'가 처음으로 돌아간다.
+              <PagedRows
+                key={`${seg}-${query}-${activeCat ?? ''}`}
+                items={listFiltered}
+                render={entryItem}
+                style={styles.list}
+              />
             )}
           </>
         )}
@@ -713,6 +725,39 @@ export function OwnerKnowhowBrowse({
       </Pressable>
 
       {catSheet && <CategoryEditSheet onClose={() => setCatSheet(false)} />}
+    </View>
+  );
+}
+
+/** 한 번에 그리는 행 수 — 전량 렌더가 실제로 무너지는 지점은 실측으로 확인했다(위 주석). */
+const LIST_PAGE = 30;
+
+/**
+ * 목록을 LIST_PAGE 개씩 끊어 그린다. **남은 수를 버튼이 밝힌다** — 조용히 자르면
+ * "이게 전부"로 읽혀서, 안 그려진 노하우가 없는 것이 된다.
+ */
+function PagedRows({
+  items, render, style,
+}: {
+  items: PlaybookEntry[];
+  render: (e: PlaybookEntry, i: number) => ReactNode;
+  style?: StyleProp<ViewStyle>;
+}) {
+  const [shown, setShown] = useState(LIST_PAGE);
+  const rest = items.length - shown;
+  return (
+    <View style={style}>
+      {items.slice(0, shown).map(render)}
+      {rest > 0 && (
+        <Pressable
+          onPress={() => setShown((n) => n + LIST_PAGE)}
+          accessibilityRole="button"
+          accessibilityLabel={`${Math.min(rest, LIST_PAGE)}개 더 보기`}
+          style={({ pressed }) => [styles.moreRow, pressed && { opacity: 0.6 }]}
+        >
+          <Text style={styles.moreText}>{Math.min(rest, LIST_PAGE)}개 더 보기 · 남은 {rest}개</Text>
+        </Pressable>
+      )}
     </View>
   );
 }
@@ -876,6 +921,9 @@ const styles = StyleSheet.create({
 
   // 리스트/행
   list: { backgroundColor: InkColors.bg, borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, paddingHorizontal: 14 },
+  // '더 보기' — 행과 같은 세로 리듬. 누를 수 있는 행이라 최소 터치 타깃 48.
+  moreRow: { minHeight: 48, justifyContent: 'center', paddingVertical: 14 },
+  moreText: { fontSize: 15, fontWeight: '700', color: InkColors.ink2 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: InkColors.line },
   rowNoDivider: { borderBottomWidth: 0 },
   dot: { width: 10, height: 10, borderRadius: Radius.pill },

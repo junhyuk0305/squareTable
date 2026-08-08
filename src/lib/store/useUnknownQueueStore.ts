@@ -3,7 +3,7 @@ import { coalesce, subscribeDebounced } from '@/lib/store/realtimeSync';
 import type { UnknownQuery } from '@/types';
 import seedData from '@/data/unknown-queries.json';
 import { HAS_SUPABASE } from '@/lib/supabase';
-import { fetchUnknownQueue, insertUnknown, bumpUnknownSimilar, resolveUnknown, subscribeUnknownQueue } from '@/lib/db';
+import { fetchUnknownQueue, fetchPendingQuestionCount, insertUnknown, bumpUnknownSimilar, resolveUnknown, subscribeUnknownQueue } from '@/lib/db';
 import { guardWrite } from '@/lib/store/useSyncStore';
 import { notifyStoreQuestion } from '@/lib/push/notify';
 import { useSessionStore } from '@/lib/store/useSessionStore';
@@ -14,6 +14,9 @@ type UnknownQueueState = {
   queue: UnknownQuery[];
   loaded: boolean;
   loadError: boolean; // 마지막 hydrate 실패 여부 — 인박스가 "질문 없음"과 "못 불러옴"을 구분한다.
+  /** 대기 질문의 **진짜 개수**(서버 집계). 목록은 상한까지만 불러오므로 수는 따로 센다.
+   *  null = 아직/못 셌음 → 화면은 목록 길이로 물러난다. */
+  pendingTotal: number | null;
   hydrate: () => Promise<void>;
   subscribe: () => () => void;
   enqueue: (uq: UnknownQuery) => void;
@@ -36,11 +39,13 @@ export const useUnknownQueueStore = create<UnknownQueueState>((set, get) => ({
   queue: HAS_SUPABASE ? [] : [...seed],
   loaded: !HAS_SUPABASE,
   loadError: false,
+  pendingTotal: null,
 
   hydrate: coalesce(async () => {
     if (!HAS_SUPABASE) return;
-    const { data, error } = await fetchUnknownQueue();
-    set({ queue: data, loaded: true, loadError: error });
+    // 목록과 개수를 같이 읽는다 — 목록은 상한에 걸려도 개수는 정확해야 화면이 거짓말을 안 한다.
+    const [{ data, error }, total] = await Promise.all([fetchUnknownQueue(), fetchPendingQuestionCount()]);
+    set({ queue: data, loaded: true, loadError: error, pendingTotal: total });
   }),
 
   // 알바 폰에서 질문이 들어오면 사장님 인박스가 실시간으로 갱신된다(학습순환의 핵심).

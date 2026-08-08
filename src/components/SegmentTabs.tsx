@@ -132,10 +132,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 5,
     paddingVertical: 1,
     borderRadius: Radius.pill,
-    backgroundColor: InkColors.ink3,
+    // ★흰 글자를 얹는 면이라 ink3(#a4a29b)를 쓰지 않는다 — 대비 2.55로 AA(4.5)에 한참 못 미친다.
+    //   ink2(#6b6b6b) 위 흰 글자 = 5.32 로 통과하고, 켜진 칸(ink #111)보다는 여전히 옅다.
+    //   (2026-08-08 qa:blocks B2-6 실측으로 잡힌 자리. 노하우 탭이 세그먼트를 쓰면서 드러났다.)
+    backgroundColor: InkColors.ink2,
     alignItems: 'center',
     justifyContent: 'center',
   },
   countOn: { backgroundColor: InkColors.ink },
-  countText: { fontSize: 10, fontWeight: '800', color: '#FFFFFF' },
+  countText: { fontSize: 10, fontWeight: '800', color: InkColors.bubbleText },
 });

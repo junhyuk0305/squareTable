@@ -781,7 +781,9 @@ export async function fetchSuggestions(): Promise<PlaybookSuggestion[]> {
   const { data, error } = await supabase
     .from('playbook_suggestions')
     .select('*')
-    .order('created_at', { ascending: false });
+    .order('created_at', { ascending: false })
+    // 상한이 없으면 PostgREST 서버 기본값에서 **말없이** 잘린다 — 우리 상한을 명시해 어디서 잘리는지 고정한다.
+    .limit(PAGE_LIMIT);
   if (error) {
     readFail('fetchSuggestions', error);
     return [];
@@ -817,18 +819,61 @@ export function subscribeSuggestions(onChange: () => void): () => void {
 }
 
 // ── 미답변 큐(사장님 인박스) ───────────────────────────────
+/**
+ * 미답변 큐 — **두 번 나눠 읽는다.**
+ *
+ * ★한 번에 '최신순 PAGE_LIMIT'만 읽으면 **가장 오래 기다린 질문이 잘려 나간다.**
+ *  사장 홈 히어로가 가리키는 게 정확히 그 '가장 오래 기다린 건'(sortByUrgency 1차 기준)이라,
+ *  잘린 순간 히어로가 **틀린 질문을 1순위로 지목**한다.
+ *  2026-08-08 실측: 미답 1,200건 매장에서 화면은 "1000건"이라 말하고 히어로는 1000번째(41일 전)를
+ *  가리켰다 — 진짜 가장 오래된 건 1200번째(50일 전)였는데 데이터에 아예 없었다.
+ *
+ *  ① 대기 중(사장이 답해야 할 것) = **오래된 것부터**. 잘리면 안 되는 집합이라 이쪽에 상한을 다 준다.
+ *  ② 나머지(해결·보관) = 최신순. 참고용이라 최근 것만 있으면 된다.
+ *  한쪽만 실패해도 '못 불러옴'으로 올린다 — 반쪽 목록을 정상처럼 보여주면 무음 실패가 된다.
+ */
 export async function fetchUnknownQueue(): Promise<ReadResult<UnknownQuery[]>> {
   if (!HAS_SUPABASE) return { data: [], error: false };
-  const { data, error } = await supabase
-    .from('unknown_queries')
-    .select('*')
-    .order('asked_at', { ascending: false })
-    .limit(PAGE_LIMIT);
+  const [pending, others] = await Promise.all([
+    supabase
+      .from('unknown_queries')
+      .select('*')
+      .eq('status', 'pending_owner_answer')
+      .order('asked_at', { ascending: true })
+      .limit(PAGE_LIMIT),
+    supabase
+      .from('unknown_queries')
+      .select('*')
+      .neq('status', 'pending_owner_answer')
+      .order('asked_at', { ascending: false })
+      .limit(PAGE_LIMIT),
+  ]);
+  const error = pending.error ?? others.error;
   if (error) {
     readFail('fetchUnknownQueue', error);
     return { data: [], error: true };
   }
-  return { data: (data ?? []) as UnknownQuery[], error: false };
+  return { data: [...(pending.data ?? []), ...(others.data ?? [])] as UnknownQuery[], error: false };
+}
+
+/**
+ * 대기 중 질문의 **진짜 개수**(서버 집계).
+ *
+ * ★목록 길이로 세면 상한(PAGE_LIMIT)에 걸린 순간 화면이 거짓말을 한다 —
+ *  2026-08-08 실측: 서버 1,200건인데 홈 히어로와 '답할 질문' 라벨이 둘 다 "1000건"이라고 했다.
+ *  행은 안 불러와도 **수는 정확히** 말할 수 있다. 실패하면 null → 호출부가 목록 길이로 물러난다.
+ */
+export async function fetchPendingQuestionCount(): Promise<number | null> {
+  if (!HAS_SUPABASE) return null;
+  const { count, error } = await supabase
+    .from('unknown_queries')
+    .select('id', { count: 'exact', head: true })
+    .eq('status', 'pending_owner_answer');
+  if (error) {
+    readFail('fetchPendingQuestionCount', error);
+    return null;
+  }
+  return count ?? null;
 }
 
 export async function insertUnknown(uq: UnknownQuery): Promise<boolean> {
@@ -897,7 +942,9 @@ export type AiAnswerRow = {
   matched_entry_ids: string[];
   satisfaction: 'up' | 'down' | null;
 };
-export async function fetchAiAnswers(days = 30, limit = 50): Promise<DbResult<AiAnswerRow[]>> {
+/** 'AI가 답한 질문' 목록 상한 — 화면이 "몇 건까지만 보여주는지"를 정직하게 말하려면 이 수를 알아야 한다. */
+export const AI_ANSWER_LIMIT = 50;
+export async function fetchAiAnswers(days = 30, limit = AI_ANSWER_LIMIT): Promise<DbResult<AiAnswerRow[]>> {
   if (!HAS_SUPABASE) return { data: [], error: null };
   const { data, error } = await supabase
     .from('chat_queries')

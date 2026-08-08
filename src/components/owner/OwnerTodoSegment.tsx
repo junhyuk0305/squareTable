@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { View, Text, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -15,7 +15,7 @@ import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { isTodoQuestion, isTodoSuggestion } from '@/lib/hooks/useOwnerTodoCount';
 import { sortByUrgency } from '@/lib/utils/unknownQuery';
 import { formatAsked } from '@/lib/utils/time';
-import { fetchAiAnswers, type AiAnswerRow as AiAnswer } from '@/lib/db';
+import { fetchAiAnswers, AI_ANSWER_LIMIT, type AiAnswerRow as AiAnswer } from '@/lib/db';
 
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Space } from '@/lib/theme/layout';
@@ -28,6 +28,14 @@ import type { PlaybookSuggestion, UnknownQuery } from '@/types';
  */
 const DELAY_DAYS = 2;
 const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * 한 번에 그리는 행 수.
+ * ★전량 렌더는 실제로 무너진다 — 2026-08-08 실측: 질문 400 + 제안 120 + AI 300 매장에서
+ *   DOM 5,984 노드 · 버튼 975개 · 6.5초. 질문 1,200건이면 12,104 노드 · 2,005개였다.
+ *   이 화면은 일반 ScrollView 안이라 가상화가 없다(RN FlatList 아님) → 스스로 잘라 그린다.
+ */
+const PAGE = 30;
 
 const daysWaiting = (iso: string) => {
   const t = new Date(iso).getTime();
@@ -57,6 +65,7 @@ export function OwnerTodoSegment() {
   const loaded = useUnknownQueueStore((s) => s.loaded);
   const loadError = useUnknownQueueStore((s) => s.loadError);
   const hydrate = useUnknownQueueStore((s) => s.hydrate);
+  const pendingTotal = useUnknownQueueStore((s) => s.pendingTotal);
   const suggestions = useSuggestionStore((s) => s.suggestions);
   const me = useSessionStore((s) => s.userId);
 
@@ -135,36 +144,63 @@ export function OwnerTodoSegment() {
 
       {pending.length > 0 && (
         <View style={styles.group}>
-          <SectionLabel title="답할 질문" hint={`${pending.length}건`} />
-          <View>
-            {pending.map((uq) => (
-              <SimilarGroupRow key={uq.id} uq={uq} onPress={goAnswer} onAnswer={goAnswer} />
-            ))}
-          </View>
+          {/* ★수는 서버 집계(pendingTotal)를 쓴다 — 목록은 상한까지만 오므로 길이로 세면 거짓이 된다. */}
+          <SectionLabel title="답할 질문" hint={`${pendingTotal ?? pending.length}건`} />
+          <PagedList
+            items={pending}
+            render={(uq) => <SimilarGroupRow key={uq.id} uq={uq} onPress={goAnswer} onAnswer={goAnswer} />}
+          />
         </View>
       )}
 
       {pendingSuggestions.length > 0 && (
         <View style={styles.group}>
           <SectionLabel title="검토할 제안" hint={`${pendingSuggestions.length}건`} />
-          <View>
-            {pendingSuggestions.map((s) => (
-              <SuggestionRow key={s.id} s={s} onPress={goSuggestions} />
-            ))}
-          </View>
+          <PagedList
+            items={pendingSuggestions}
+            render={(s) => <SuggestionRow key={s.id} s={s} onPress={goSuggestions} />}
+          />
         </View>
       )}
 
-      {/* 세그먼트 안에 세그먼트를 또 두지 않는다(구 InboxSubtabs 부활 금지) — 위 두 그룹과 나란히 세운다. */}
+      {/* 세그먼트 안에 세그먼트를 또 두지 않는다(구 InboxSubtabs 부활 금지) — 위 두 그룹과 나란히 세운다.
+          ★힌트는 **상한에 걸렸는지**를 말해야 한다. 옛 판본은 slice(0,50) 한 길이를 그대로 써서
+          300건 매장에서도 "50건"이라고 했다 — 그건 거짓이고, 51번째부터는 앱 어디에도 없다. */}
       {aiLoaded && aiAnswers.length > 0 && (
         <View style={styles.group}>
-          <SectionLabel title="AI가 답한 질문" hint={`${aiAnswers.length}건`} />
-          <View>
-            {aiAnswers.map((r) => (
-              <AiAnswerRow key={r.id} row={r} titleOf={entryTitleOf} onOpenEntry={goEntry} />
-            ))}
-          </View>
+          <SectionLabel
+            title="AI가 답한 질문"
+            hint={aiAnswers.length >= AI_ANSWER_LIMIT ? `최근 ${aiAnswers.length}건` : `${aiAnswers.length}건`}
+          />
+          <PagedList
+            items={aiAnswers}
+            render={(r) => <AiAnswerRow key={r.id} row={r} titleOf={entryTitleOf} onOpenEntry={goEntry} />}
+          />
         </View>
+      )}
+    </View>
+  );
+}
+
+/**
+ * 목록 한 그룹 — PAGE 개씩 끊어 그리고 남은 수를 버튼으로 밝힌다.
+ * ★조용히 자르지 않는다 — 몇 건이 안 그려졌는지 버튼이 말한다(무음 절단 금지).
+ */
+function PagedList<T>({ items, render }: { items: T[]; render: (it: T) => ReactNode }) {
+  const [shown, setShown] = useState(PAGE);
+  const rest = items.length - shown;
+  return (
+    <View>
+      {items.slice(0, shown).map(render)}
+      {rest > 0 && (
+        <Pressable
+          onPress={() => setShown((n) => n + PAGE)}
+          accessibilityRole="button"
+          accessibilityLabel={`${Math.min(rest, PAGE)}건 더 보기`}
+          style={({ pressed }) => [styles.moreRow, pressed && { opacity: 0.6 }]}
+        >
+          <Text style={styles.moreText}>{Math.min(rest, PAGE)}건 더 보기 · 남은 {rest}건</Text>
+        </Pressable>
       )}
     </View>
   );
@@ -220,4 +256,12 @@ const styles = StyleSheet.create({
   sugMeta: { fontSize: 12, fontWeight: '600', color: InkColors.ink3 },
   // 밀린 항목만 눈에 걸리게 — 500이 아니라 800(글자는 전부 800).
   sugMetaLate: { color: BrandColors.badText, fontWeight: '700' },
+
+  // '더 보기' — 행들과 같은 좌우 인셋. 누를 수 있는 행이라 최소 터치 타깃 48.
+  moreRow: {
+    minHeight: 48, justifyContent: 'center',
+    paddingHorizontal: Space.lg, paddingVertical: Space.md,
+    borderBottomWidth: 1, borderBottomColor: InkColors.line,
+  },
+  moreText: { fontSize: 15, fontWeight: '700', color: InkColors.ink2 },
 });

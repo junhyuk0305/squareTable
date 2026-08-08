@@ -198,6 +198,16 @@ async function main() {
     if (error) throw new Error('업무 시드: ' + error.message);
   }
 
+  // ★업무↔노하우 링크 1건(0069). 이게 없으면 퀴즈 화면(업무 목록 + 진도)이 **빈 화면만** 렌더돼
+  //   B3 전체가 사실상 아무것도 검사하지 못한다(2026-08-08에 드러난 공백). 링크가 있어야 진도 행이 선다.
+  {
+    // unit_id 는 DB default 가 없다 — 앱(insertTemplateKnowhow)도 명시해서 보낸다. 빼면 RLS 가 막는다.
+    const { error } = await owner
+      .from('work_template_knowhow')
+      .insert([{ unit_id: UNIT, template_id: `wt_blk1_${s}`, entry_id: `pb_blk1_${s}` }]);
+    if (error) throw new Error('업무↔노하우 링크 시드: ' + error.message);
+  }
+
   const browser = await chromium.launch();
   const errors = [];
   const newPage = async (email) => {
@@ -398,7 +408,10 @@ async function main() {
     console.log('\n[B2] 노하우 목록 — AlertRow + 파란 검증 배지');
     await po.goto(`${ORIGIN}/owner/knowledge`, { waitUntil: 'domcontentloaded' });
     await po.waitForTimeout(2500);
-    check('B2-1 상단 AlertRow(미검증 개수)', await see(po, '확인이 필요한 노하우'));
+    // ★2026-08-07: 이 화면의 상단 AlertRow 는 **의도적으로 없앴다**(knowledge.tsx 주석).
+    //   미검증은 '안 쓰임' 칸이 세고, 홈의 '확인이 필요한 노하우'가 `?review=1` 로 그 칸에 착지시킨다.
+    //   그래서 여기서 재는 것은 경고행이 아니라 **세그먼트 3칸이 실제로 섰는가**다.
+    check('B2-1 세그먼트 3칸 — 안 쓰임 칸이 미검증을 받는다', await see(po, '안 쓰임'));
     check('B2-2 검증 배지 — 사장님 검증', await see(po, '사장님 검증'));
     check('B2-3 검증 배지 — 현장 검증', await see(po, '현장 검증'));
     check('B2-4 옛 배너 문구 제거됨', !(await see(po, '업종 표준값이에요')));
@@ -422,17 +435,15 @@ async function main() {
     console.log('\n[B3] 퀴즈 — 진행 링 + 직원별 + 문항 없는 노하우');
     await po.goto(`${ORIGIN}/owner/training`, { waitUntil: 'domcontentloaded' });
     await po.waitForTimeout(2500);
-    const presetScreen = await see(po, '어떤 퀴즈부터 만들까요');
-    check('B3-0 퀴즈 화면 진입', presetScreen || (await see(po, '퀴즈 종류 설정')));
-    if (presetScreen) {
-      await po.getByLabel('첫 출근 만들기', { exact: true }).last().dispatchEvent('click');
-      await wait(po, '담을 노하우 고르기');
-      await po.getByLabel('닫기', { exact: true }).last().dispatchEvent('click');
-      await po.waitForTimeout(1500);
-    }
-    check('B3-1 ProgressRing — 통과한 직원', await see(po, '통과한 직원'));
-    check('B3-2 직원별 섹션', await see(po, '직원별'));
-    check('B3-3 상태 문구가 링 아래로 흡수됨', await see(po, '비어 있음') || await see(po, '문항 없는 노하우'));
+    // ★2026-08-07 축 이동: 이 화면은 '코스 가로 탭 + 진행 링 + 직원별'이 아니라
+    //   **업무 목록 + 진도**다(training.tsx 주석). 옛 단언 4개는 그 개편을 한 번도 안 따라갔다.
+    //   코스(묶음) 관리는 2층 `/owner/quiz-list` 로 내려갔고 여기엔 링크 한 줄만 남는다.
+    check('B3-0 퀴즈 화면 진입 — 거르기 3칸', (await see(po, '전체')) && (await see(po, '문제 없음')));
+    // 링크된 업무(오픈 청소)가 진도 행으로 선다. 링크가 없으면 이 화면은 빈 화면만 그린다.
+    check('B3-1 업무 진도 행 — 링크된 업무가 목록에 뜬다', await see(po, '오픈 청소'));
+    check('B3-2 코스는 2층 링크 한 줄로만 남는다', await see(po, '퀴즈 목록에서 노하우 담기'));
+    // 옛 코스 프리셋 화면(1층에 있던 것)이 되살아나지 않았는지.
+    check('B3-3 옛 코스 프리셋 화면이 1층에 없다', !(await see(po, '어떤 퀴즈부터 만들까요')));
     check('B3-4 옛 워딩 "문제 없는 노하우" 제거됨', !(await see(po, '문제 없는 노하우')));
     await shot(po, '03-owner-quiz');
     const qTexts = await lowContrastTexts(po);
@@ -525,7 +536,10 @@ async function main() {
     check('B7-1 AlertRow — 답 기다리는 질문(맨 위로 승격)', await see(po, '답 기다리는 질문'));
     check('B7-2 옛 "받은질문" 행은 확인 필요에서 빠졌다', !(await see(po, '받은질문')));
     check('B7-3 MiniStats — 지금 근무중', await see(po, '지금 근무중'));
-    check('B7-4 퀴즈가 별도 섹션이 아니다(확인 필요 카드로 흡수)', await see(po, '퀴즈'));
+    // ★2026-08-07: 퀴즈 진입점은 허브 '현황'에서 **노하우 탭(OwnerKnowhowHubView)으로 옮겼다**
+    //   (OwnerStatusView 주석: 현황은 '지금 막힌 것', 퀴즈는 축적·순환 레이어).
+    //   옛 단언은 '퀴즈'가 여기 **있어야** 통과였다 — 이동 자체를 회귀로 잡던 것이라 뒤집는다.
+    check('B7-4 퀴즈는 현황 탭에 없다(노하우 탭으로 이동)', !(await see(po, '퀴즈')));
     // ★워딩 드리프트 — 같은 needs_review 를 허브만 '검증 필요'라 부르고 있었다(승인 어휘 8개 밖 신조어).
     //   매장 앱은 전부 '확인 필요'다. 세 렌즈가 동시에 걸린 자리라 회귀 검사를 남긴다.
     //   ('사장님 검증' 배지(D4)는 별개 — 여기서 금지하는 건 지표 라벨의 '검증'이다.)
