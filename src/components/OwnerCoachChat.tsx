@@ -123,7 +123,9 @@ export function OwnerCoachChat({
       });
       init.push({ id: nextId(), kind: 'ai', text: '이 질문에 사장님이 평소 하시던 대로 답해 주세요. 제가 노하우로 정리할게요.' });
     } else {
-      init.push({ id: nextId(), kind: 'ai', text: '직원한테 알려주듯 편하게 적어주세요. 상황·방법을 한 번에 말해도 돼요 — 정리는 제가 할게요.' });
+      // ★안내는 여기 한 번만 한다. 예전엔 이 말풍선 + 노란 팁 카드 + 예시 라벨이 같은 말을 세 번 했고
+      //   "정리는 제가 할게요"는 **글자 그대로 두 번** 나왔다. 팁 카드를 걷고 그 내용만 흡수했다.
+      init.push({ id: nextId(), kind: 'ai', text: '직원한테 알려주듯 한 문장이면 돼요. 언제·무엇을·어떻게만 있으면 정리는 제가 할게요.' });
     }
     return init;
   });
@@ -198,7 +200,8 @@ export function OwnerCoachChat({
     setMessages((prev) => [
       ...prev,
       cardMsg(snap),
-      { id: nextId(), kind: 'ai', text: '이대로 저장할까요? 고칠 게 있으면 아래 ‘고칠래요’를 눌러주세요.' },
+      // ★2026-08-08: '고칠래요' 버튼은 없어졌다(칸을 눌러 고친다). 문구가 없는 버튼을 가리키면 안 된다.
+      { id: nextId(), kind: 'ai', text: '이대로 저장할까요? 고칠 게 있으면 카드에서 그 칸을 눌러 주세요.' },
     ]);
   }, []);
 
@@ -565,7 +568,7 @@ export function OwnerCoachChat({
   const handlePublish = useCallback(() => {
     if (publishedRef.current || !square) return;
     if (!isSquarePublishable(square)) {
-      setError('할 행동이나 멘트가 하나는 있어야 저장돼요. ‘고칠래요’로 한 줄만 더 채워주세요.');
+      setError('할 행동이나 멘트가 하나는 있어야 저장돼요. 카드에서 ‘할 일’ 칸을 눌러 한 줄만 더 채워주세요.');
       return;
     }
     // 수정 모드: 기존 노하우 갱신(새로 add 아님).
@@ -838,9 +841,14 @@ export function OwnerCoachChat({
               maxLength={INPUT_MAX_LEN}
             />
           </View>
+          {/* ★이 화면의 Primary. 옛 판본은 회색인 데다 accessibilityRole 조차 없어서
+              **버튼으로 노출되지도 않았다**(2026-08-08 DOM 실측에서 버튼 목록에 안 잡혔다).
+              아이콘 단독 버튼 금지 규칙도 라벨로 해소한다. */}
           <Pressable
             onPress={() => handleSend()}
             disabled={!input.trim() || busy}
+            accessibilityRole="button"
+            accessibilityLabel="보내기"
             style={({ pressed }) => [
               styles.sendBtn,
               (!input.trim() || busy) && styles.sendBtnDisabled,

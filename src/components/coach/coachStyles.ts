@@ -43,7 +43,8 @@ export const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 14,
   },
-  aiText: { fontSize: 14.5, color: InkColors.ink2, lineHeight: 21, fontWeight: '500' },
+  // 읽어서 판단해야 하는 안내문이라 본문 하한 15sp(simplicity-voice §4). 14.5 는 그 하한 위반이었다.
+  aiText: { fontSize: 15, color: InkColors.ink2, lineHeight: 22, fontWeight: '500' },
 
   loading: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 6, paddingHorizontal: 4 },
   loadingText: { fontSize: 13, color: InkColors.ink2, fontWeight: '600' },
