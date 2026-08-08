@@ -122,7 +122,7 @@ const b64Of = (rel) => readFileSync(here(rel)).toString('base64');
     await sleep(1200);
     await call(token, 'answer', {
       query: '마감 청소 어떻게 해요?',
-      sops: [{ id: 'sop_qa_d', title: '마감 청소', category: 'Routine', situation: '영업 마감 후', steps: ['바닥을 청소한다'], donts: [], scripts: [], creatorName: '사장님', version: 1, updatedAt: '2026-07-01T00:00:00Z' }],
+      sops: [{ id: 'sop_qa_d', title: '마감 청소', category: 'Routine', situation: '영업 마감 후', steps: ['바닥을 청소한다'], donts: [], creatorName: '사장님', version: 1, updatedAt: '2026-07-01T00:00:00Z' }],
     });
     await sleep(800);
     const afterA = await usedNow(token);

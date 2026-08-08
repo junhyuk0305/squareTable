@@ -1,11 +1,10 @@
 import type { ComponentType } from 'react';
 
 import type { QuizFormat } from '@/lib/quiz/types';
-import { Mc4, OrderPick, ValuePick, TrapPick, PairPick, CasePick, NamePick, Chosung } from './PickFormats';
+import { Mc4, OrderPick, ValuePick, TrapPick, CasePick, NamePick, Chosung } from './PickFormats';
 import { WrongSpot } from './WrongSpot';
 import { FillCount } from './FillCount';
 import { MineTap } from './MineTap';
-import { MatchLine } from './MatchLine';
 import { QuickJudge } from './QuickJudge';
 import type { QuizRendererProps } from './types';
 
@@ -22,8 +21,6 @@ export const QUIZ_RENDERERS: Record<QuizFormat, ComponentType<QuizRendererProps>
   fill_count: FillCount,
   trap_pick: TrapPick,
   mine_tap: MineTap,
-  pair_pick: PairPick,
-  match_line: MatchLine,
   case_pick: CasePick,
   quick_judge: QuickJudge,
   name_pick: NamePick,

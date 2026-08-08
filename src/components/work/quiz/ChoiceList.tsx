@@ -5,7 +5,7 @@ import { BrandColors } from '@/lib/theme/colors';
 import { qs } from './quizStyles';
 
 /**
- * 선택지 한 벌 — 선택형 8개 형태(mc4·order_pick·value_pick·trap_pick·pair_pick·case_pick·name_pick·chosung)가 공유한다.
+ * 선택지 한 벌 — 선택형 7개 형태(mc4·order_pick·value_pick·trap_pick·case_pick·name_pick·chosung)가 공유한다.
  * 규칙 4(즉시 판정): 탭하는 순간 답이 올라간다. 별도 제출 버튼 없음.
  * 정답 표시는 서버 판정(answerIndex)이 내려온 뒤에만 — 클라는 정답을 미리 갖고 있지 않다.
  */

@@ -200,46 +200,6 @@ export const QUIZ_FORMATS: Record<string, QuizFormatSpec> = {
     },
   },
 
-  // t4 짝
-  pair_pick: choicePickSpec(
-    '왼쪽 항목 하나(left)를 주고 오른쪽 3~4개 중 맞는 짝을 고르는 문제다. '
-    + '짝은 상황↔말(scripts)·물건↔자리처럼 노하우에 실제로 붙어 있는 대응만 쓴다. '
-    + '오답 해설은 "틀렸어요"가 아니라 "이 매장은 이렇게 해요" 방향으로 쓴다.',
-    { extras: ['left'] },
-  ),
-
-  match_line: {
-    bundled: true,
-    hint:
-      '좌우를 잇는 문제다. 노하우에 실제로 붙어 있는 대응(상황↔말·물건↔자리·메뉴↔재료)만 3~5쌍 뽑아라. '
-      + '오른쪽 값이 서로 겹치면 안 된다. 짝이 3쌍도 안 나오면 출제하지 마라.',
-    schema: {
-      type: 'object',
-      properties: {
-        ask: STR,
-        pairs: {
-          type: 'array',
-          items: { type: 'object', properties: { left: STR, right: STR }, required: ['left', 'right'] },
-          maxItems: 5,
-        },
-        explain: STR,
-        source_index: INT,
-      },
-      required: ['ask', 'pairs'],
-    },
-    normalize: (raw) => {
-      const ask = normAsk(raw);
-      if (!ask) return null;
-      const src = Array.isArray(raw?.pairs) ? raw.pairs : [];
-      if (src.length < 3 || src.length > 5) return null;
-      const pairs = src.map((p: any) => ({ left: text(p?.left), right: text(p?.right) }));
-      if (pairs.some((p: any) => !p.left || !p.right)) return null;
-      // 오른쪽이 겹치면 어느 줄로 이어도 맞는 게 되어 채점이 모호해진다.
-      if (new Set(pairs.map((p: any) => p.right)).size !== pairs.length) return null;
-      return { ask, pairs, explain: text(raw?.explain) };
-    },
-  },
-
   // t5 갈래
   case_pick: choicePickSpec(
     '조건이 붙은 상황 한 줄(situation)을 주고 대응 3~4개 중 맞는 것을 고르는 문제다. '

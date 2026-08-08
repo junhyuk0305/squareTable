@@ -32,11 +32,6 @@ export function applyFollowupAnswer(
         ...square,
         action: { ...square.action, steps: [...square.action.steps, text] },
       };
-    case 'action.scripts':
-      return {
-        ...square,
-        action: { ...square.action, scripts: [...square.action.scripts, text] },
-      };
     case 'extract.do':
       return { ...square, extract: { ...square.extract, do: text } };
     case 'extract.dont':

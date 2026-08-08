@@ -14,7 +14,7 @@ type EntryLike = {
   updated_at: string;
   square: {
     situation: string;
-    action: { steps: string[]; scripts?: string[] };
+    action: { steps: string[] };
     extract: { dont?: string };
   };
 };
@@ -28,7 +28,6 @@ export function toSopSlice(entry: EntryLike): SopSlice {
     situation: entry.square?.situation ?? '',
     steps: entry.square?.action?.steps ?? [],
     donts: dont ? [dont] : [],
-    scripts: entry.square?.action?.scripts ?? [],
     creatorName: entry.creator_name,
     version: entry.version,
     updatedAt: entry.updated_at,

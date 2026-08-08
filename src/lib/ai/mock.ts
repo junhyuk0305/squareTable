@@ -96,7 +96,7 @@ function structureOne(raw: string, category?: string): StructuredSegment {
       situation,
       quagmire: '',
       uncover,
-      action: { steps, scripts: [] },
+      action: { steps },
       result: { before: '', after: '', metric: '' },
       extract: { do: '', dont },
     },
@@ -150,16 +150,12 @@ export function mockPatchSquare(input: PatchSquareInput): StructureSquareOutput 
   const ins = instruction.trim();
   const isRemove = /빼|삭제|제거|없애|지워/.test(ins);
   const mentionsDont = /금지|하지\s*말|하면\s*안/.test(ins);
-  const mentionsScript = /멘트|말|대사|스크립트/.test(ins);
 
   let steps = [...current.steps];
-  let scripts = [...current.scripts];
   let dont = current.dont;
 
   if (isRemove && mentionsDont) {
     dont = '';
-  } else if (mentionsScript) {
-    scripts = [...scripts, ins].slice(0, 3);
   } else {
     // 기본: 할 일에 한 줄 추가(가장 흔한 수정).
     steps = [...steps, ins].slice(0, MAX_ACTIONS + 2);
@@ -169,7 +165,7 @@ export function mockPatchSquare(input: PatchSquareInput): StructureSquareOutput 
     situation: current.situation,
     quagmire: '',
     uncover: '',
-    action: { steps, scripts },
+    action: { steps },
     result: { before: '', after: '', metric: '' },
     extract: { do: '', dont },
   };

@@ -80,7 +80,7 @@ function LegacyHandover() {
         return;
       }
 
-      // 발행 가능한 세그먼트만(할 일·멘트가 하나라도 있어야). 단일이면 top-level square로 1개 구성.
+      // 발행 가능한 세그먼트만(할 일이 하나라도 있어야). 단일이면 top-level square로 1개 구성.
       let pub = (out.segments ?? []).filter((s) => isSquarePublishable(s.square));
       if (pub.length === 0 && out.square && isSquarePublishable(out.square)) {
         pub = [
@@ -121,7 +121,7 @@ function LegacyHandover() {
   }, []);
 
   // 리뷰 단계에서 사장이 노하우 내용을 즉석 수정 → segs에 라이브 반영(발행이 항상 최신본으로 나가게).
-  // 편집 결과 '할 일·멘트 0개'(발행 불가)가 되면 저장 대상에서 자동 제외해 빈 노하우 저장을 막는다.
+  // 편집 결과 '할 일 0개'(발행 불가)가 되면 저장 대상에서 자동 제외해 빈 노하우 저장을 막는다.
   const editSeg = useCallback((i: number, next: StructuredSegment) => {
     setSegs((prev) => prev.map((s, idx) => (idx === i ? next : s)));
     if (!isSquarePublishable(next.square)) {
@@ -319,8 +319,8 @@ function ReviewList({
   );
 }
 
-// 편집 패치를 seg에 불변 적용. 사용자에게 보이는 칸(상황·할 일·멘트·금지)만 손대고 나머지 SQUARE는 보존.
-type SegPatch = Partial<{ title: string; situation: string; dont: string; steps: string[]; scripts: string[] }>;
+// 편집 패치를 seg에 불변 적용. 사용자에게 보이는 칸(상황·할 일·금지)만 손대고 나머지 SQUARE는 보존.
+type SegPatch = Partial<{ title: string; situation: string; dont: string; steps: string[] }>;
 function applyPatch(seg: StructuredSegment, patch: SegPatch): StructuredSegment {
   return {
     ...seg,
@@ -331,7 +331,6 @@ function applyPatch(seg: StructuredSegment, patch: SegPatch): StructuredSegment 
       action: {
         ...seg.square.action,
         steps: patch.steps ?? seg.square.action.steps,
-        scripts: patch.scripts ?? seg.square.action.scripts,
       },
       extract: { ...seg.square.extract, dont: patch.dont ?? seg.square.extract.dont },
     },
@@ -364,7 +363,6 @@ function SegmentCard({
   onEdit: (next: StructuredSegment) => void;
 }) {
   const steps = seg.square.action.steps;
-  const scripts = seg.square.action.scripts;
   const publishable = isSquarePublishable(seg.square);
   const patch = (p: SegPatch) => onEdit(applyPatch(seg, p));
 
@@ -447,28 +445,6 @@ function SegmentCard({
             <Text style={styles.addBtnText}>할 일 추가</Text>
           </PressableScale>
 
-          <FieldLabel text="멘트 (손님에게 할 말)" />
-          {scripts.map((sc, j) => (
-            <View key={`script-${j}`} style={styles.listRow}>
-              <Ionicons name="chatbubble-ellipses-outline" size={14} color={InkColors.ink3} style={styles.listBulletIcon} />
-              <TextInput
-                style={[styles.fieldInput, styles.listInput]}
-                value={sc}
-                onChangeText={(t) => patch({ scripts: scripts.map((v, k) => (k === j ? t : v)) })}
-                placeholder="예) 맛있게 드세요"
-                placeholderTextColor={InkColors.ink3}
-                maxLength={200}
-              />
-              <PressableScale onPress={() => patch({ scripts: scripts.filter((_, k) => k !== j) })} scaleTo={0.9} hitSlop={8} style={styles.removeBtn} accessibilityRole="button" accessibilityLabel={`멘트 ${j + 1} 삭제`}>
-                <Ionicons name="close" size={16} color={InkColors.ink3} />
-              </PressableScale>
-            </View>
-          ))}
-          <PressableScale onPress={() => patch({ scripts: [...scripts, ''] })} scaleTo={0.98} style={styles.addBtn} accessibilityRole="button" accessibilityLabel="멘트 추가">
-            <Ionicons name="add" size={16} color={InkColors.ink2} />
-            <Text style={styles.addBtnText}>멘트 추가</Text>
-          </PressableScale>
-
           <FieldLabel text="금지 (하면 안 되는 것)" />
           <TextInput
             style={styles.fieldInput}
@@ -480,7 +456,7 @@ function SegmentCard({
           />
 
           {!publishable && (
-            <Text style={styles.editorWarn}>상황·할 일·멘트 중 하나는 채워야 저장할 수 있어요.</Text>
+            <Text style={styles.editorWarn}>상황·할 일 중 하나는 채워야 저장할 수 있어요.</Text>
           )}
         </View>
       )}

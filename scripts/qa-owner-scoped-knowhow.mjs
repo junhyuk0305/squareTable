@@ -47,7 +47,7 @@ const qaPhones = [`0111${s.slice(0, 7)}`, `0112${s.slice(0, 7)}`, `0113${s.slice
 /** 최소 필드 노하우 — not null 컬럼의 기본값 병합이 살아 있는지도 이걸로 본다(⑦). */
 const minEntry = (id, title) => ({
   id, category: 'Know-how', title,
-  square: { situation: `${title} 하는 법이에요`, action: { steps: [], scripts: [] }, extract: { do: '', dont: '' }, result: { before: '', after: '', metric: '' }, uncover: '', quagmire: '' },
+  square: { situation: `${title} 하는 법이에요`, action: { steps: [] }, extract: { do: '', dont: '' }, result: { before: '', after: '', metric: '' }, uncover: '', quagmire: '' },
 });
 
 /** 활성 매장 읽기 — 쓰기가 활성 매장을 건드리지 않았는지 확인하는 데 쓴다. */

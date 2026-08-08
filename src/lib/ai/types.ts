@@ -13,7 +13,6 @@ export type SopSlice = {
   situation: string;   // square.situation
   steps: string[];     // square.action.steps
   donts: string[];     // square.extract.dont → 배열화
-  scripts?: string[];  // square.action.scripts
   creatorName: string;
   version: number;
   updatedAt: string;
@@ -63,7 +62,6 @@ export type PatchSquareInput = {
     category: string;            // 기본 4종 키 또는 커스텀 id — 컨텍스트 전달용(패치는 category를 바꾸지 않음)
     situation: string;
     steps: string[];
-    scripts: string[];
     dont: string;
   };
   categoryGuide?: string;
@@ -98,7 +96,7 @@ export type ScalePrompt = {
 // AI가 생성한 맞춤 꼬리질문(단답·모호 보강용). cell은 답이 들어갈 칸 힌트(클라 표시·placeholder용).
 export type AiFollowup = {
   ask: string;
-  cell?: 'situation' | 'steps' | 'scripts' | 'dont';
+  cell?: 'situation' | 'steps' | 'dont';
 };
 
 // 분리된 노하우 1조각. 한 발화에 성격 다른 노하우가 여럿이면 AI가 여러 segment로 나눈다.
@@ -187,7 +185,7 @@ export type QuizItemGenInput = {
   format: QuizFormat;
   kind: QuizKind;
   // 이 노하우들에서만 출제(그라운딩). id는 오답 귀속(0103)용.
-  sops: { id?: string; title: string; situation: string; steps: string[]; donts: string[]; scripts?: string[] }[];
+  sops: { id?: string; title: string; situation: string; steps: string[]; donts: string[] }[];
   /** 한 번에 만들 문항 수(1~2). 생략 시 1. */
   count?: number;
   /** 매장 고유 용어 후보(detect.storeTerms). 이름·초성 형태의 재료. */

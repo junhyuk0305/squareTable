@@ -110,7 +110,7 @@ const main = async () => {
 
   // ── B. 수정(patch) ──
   console.log('\n\n========== B. 수정 (patch / 부분 패치·보존) ==========');
-  const current = { title: '마감 청소', category: 'Routine', situation: '마감 시', steps: ['그릴 끄기', '바닥 쓸기'], scripts: [], dont: '가스 안 끄고 가기' };
+  const current = { title: '마감 청소', category: 'Routine', situation: '마감 시', steps: ['그릴 끄기', '바닥 쓸기'], dont: '가스 안 끄고 가기' };
   const B = {
     B1: "할 일에 '행주 삶기' 추가해줘",
     B2: '금지는 빼줘',

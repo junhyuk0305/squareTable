@@ -79,7 +79,7 @@ async function main() {
   const now = new Date().toISOString();
   const entry = (id, title, sub, situation, steps, dont) => ({
     id, unit_id: A.unit_id, creator_id: o.id, creator_name: 'QA사장', category: 'Routine', subcategory: sub,
-    title, tags: [], search_keywords: [title], square: { situation, action: { steps, scripts: [] }, extract: { do: '', dont, template: '' }, result: { before: '', after: '', metric: '' }, uncover: '', quagmire: '' },
+    title, tags: [], search_keywords: [title], square: { situation, action: { steps }, extract: { do: '', dont, template: '' }, result: { before: '', after: '', metric: '' }, uncover: '', quagmire: '' },
     execution: { tone: '', timing: '', channel: '', stakeholders: [] }, stats: { thumbs_up: 0, thumbs_down: 0, last_used_at: null, query_hits_30d: 0, resolution_rate: 0 },
     photos: [], version: 1, status: 'published', quality_score: 0.8, created_at: now, updated_at: now, is_template: false, pack_id: null, needs_review: false, correction_points: [], section: null, order_index: 0,
   });

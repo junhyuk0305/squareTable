@@ -150,7 +150,7 @@ export async function generateQuizItems(
 
   const sops = list.map((e) => {
     const s = toSopSlice(e);
-    return { id: s.id, title: s.title, situation: s.situation, steps: s.steps, donts: s.donts, scripts: s.scripts };
+    return { id: s.id, title: s.title, situation: s.situation, steps: s.steps, donts: s.donts };
   });
   // 매장 고유 용어 — 이름·초성 형태의 재료. 중복 제거해서 한 번만 싣는다.
   const terms = [...new Set(list.flatMap(storeTerms))].slice(0, 12);

@@ -13,7 +13,7 @@ import { View, Text, ScrollView, StyleSheet } from 'react-native';
 
 import type { QuizFormat, QuizResponse } from '@/lib/quiz/types';
 import { FORMATS } from '@/lib/quiz/formats';
-import { previewPayload, previewAnswer } from '@/lib/quiz/preview';
+import { previewAnswer } from '@/lib/quiz/preview';
 import { QUIZ_RENDERERS } from '@/components/work/quiz';
 import { BottomSheet } from '@/components/BottomSheet';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
@@ -37,11 +37,7 @@ export function QuizPreviewSheet({ quiz, onClose }: { quiz: QuizPreviewTarget; o
 
   const spec = FORMATS[quiz.format];
   const Renderer = QUIZ_RENDERERS[quiz.format];
-  const seed = quiz.id ?? `${quiz.format}:${String(quiz.payload?.ask ?? '')}`;
-  const payload = useMemo(
-    () => previewPayload(quiz.format, quiz.payload ?? {}, seed),
-    [quiz.format, quiz.payload, seed],
-  );
+  const payload = useMemo(() => quiz.payload ?? {}, [quiz.payload]);
 
   // DB의 format 은 자유 text 라 레지스트리에 없는 값이 올 수 있다 — 빈 화면 대신 안내로 떨어뜨린다.
   const usable = !!Renderer && !!spec;

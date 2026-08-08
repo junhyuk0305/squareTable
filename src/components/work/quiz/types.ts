@@ -9,7 +9,7 @@ import type { QuizResponse } from '@/lib/quiz/types';
  */
 export type QuizGradeView = {
   correct: boolean;
-  /** 서버가 돌려준 정답. 형태마다 모양이 다르다(선택형=index, match_line=매핑 …). */
+  /** 서버가 돌려준 정답. 형태마다 모양이 다르다(선택형=index, mine_tap=index 배열 …). */
   answer: any;
 };
 

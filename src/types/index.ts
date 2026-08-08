@@ -36,7 +36,6 @@ export type SquareBlock = {
   uncover: string;
   action: {
     steps: string[];
-    scripts: string[];
   };
   result: {
     before: string;

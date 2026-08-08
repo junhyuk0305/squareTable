@@ -70,7 +70,6 @@ function computeQuality(sq: SquareBlock): number {
     !!sq.quagmire,
     !!sq.uncover,
     sq.action.steps.length >= 1,
-    sq.action.scripts.length >= 1,
     !!(sq.result.before || sq.result.after || sq.result.metric),
     !!sq.extract.do,
     !!sq.extract.dont,
@@ -85,7 +84,7 @@ const MIN_FACT_SITUATION_LEN = 4;
 
 /**
  * 발행 가능 여부 — "텅 빈 노하우" 차단용.
- * 알바에게 실제로 도움이 되려면 '할 행동(steps)'·'멘트(scripts)' 중 하나가 있거나,
+ * 알바에게 실제로 도움이 되려면 '할 행동(steps)'이 있거나,
  * 또는 실질적인 '상황(situation)'(위치·규칙·사실 등)이 채워져 있어야 한다.
  * 사실형은 할 일이 없는 게 정상(Context) — 상황만 있어도 알바가 답을 찾을 수 있으므로 발행 대상이다.
  * 호출부(coach 발행·인수인계서 정리)는 이게 false면 저장하지 말고 보완을 요구한다.
@@ -93,7 +92,6 @@ const MIN_FACT_SITUATION_LEN = 4;
 export function isSquarePublishable(square: SquareBlock): boolean {
   return (
     square.action.steps.length >= 1 ||
-    square.action.scripts.length >= 1 ||
     square.situation.trim().length >= MIN_FACT_SITUATION_LEN
   );
 }

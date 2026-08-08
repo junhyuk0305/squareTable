@@ -1,13 +1,14 @@
 // 훈련 퀴즈 v2 — 공용 타입 (SSOT)
 //
 // 설계 근거: 산출물/퀴즈시스템_설계_2026-07-29.html
-//   축 = "정답이 어떤 모양인가" — 나열(t1) / 값(t2) / 배제(t3) / 대응(t4) / 갈래(t5) / 이름(t6), t0=안전망
+//   축 = "정답이 어떤 모양인가" — 나열(t1) / 값(t2) / 배제(t3) / 갈래(t5) / 이름(t6), t0=안전망
+//   ※ 대응(t4)은 2026-08-08 멘트(action.scripts) 삭제로 재료가 사라져 함께 폐기했다.
 //
 // 이 파일은 순수 타입만 둔다. db.ts / 레지스트리 / 화면이 전부 여기를 import 하므로
 // 런타임 의존(supabase, store 등)을 절대 넣지 않는다(순환 참조 방지).
 
-/** 지식 유형 7종. 노하우 본문 구조로 코드가 판정한다(AI 아님). */
-export type QuizKind = 't0' | 't1' | 't2' | 't3' | 't4' | 't5' | 't6';
+/** 지식 유형 6종. 노하우 본문 구조로 코드가 판정한다(AI 아님). */
+export type QuizKind = 't0' | 't1' | 't2' | 't3' | 't5' | 't6';
 
 /**
  * 출제 형태. DB는 자유 text로 받는다(형태 추가에 마이그레이션이 필요 없게).
@@ -21,8 +22,6 @@ export type QuizFormat =
   | 'fill_count'   // t2 채워 넣기(탭할 때마다 +1)
   | 'trap_pick'    // t3 함정 찾기
   | 'mine_tap'     // t3 지뢰 밟기(금지 행동만 탭)
-  | 'pair_pick'    // t4 짝 고르기
-  | 'match_line'   // t4 줄 잇기
   | 'case_pick'    // t5 상황 고르기
   | 'quick_judge'  // t5 빠른 판별(둘 중 하나, 연속)
   | 'name_pick'    // t6 이름 고르기
@@ -32,9 +31,8 @@ export type QuizFormat =
  * 응시자의 답. 형태마다 모양이 다르다.
  *   number                  — 선택지 하나 고르는 형태 / fill_count의 누른 횟수
  *   number[]                — mine_tap(탭한 index들) / quick_judge(카드별 선택)
- *   Record<number, number>  — match_line(왼쪽 index → 오른쪽 index)
  */
-export type QuizResponse = number | number[] | Record<number, number>;
+export type QuizResponse = number | number[];
 
 /**
  * 저장되는 문항 하나.

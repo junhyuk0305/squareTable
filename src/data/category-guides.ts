@@ -22,7 +22,6 @@ export type CellPath =
   | 'quagmire'
   | 'uncover'
   | 'action.steps'
-  | 'action.scripts'
   | 'result'
   | 'extract.do'
   | 'extract.dont';
@@ -79,7 +78,7 @@ export const CATEGORY_GUIDES: Record<Category, CategoryGuide> = {
     extractionGuide: [
       '이 유형은 갑자기 터지는 상황에 대한 대응이다(컴플레인, 사고, 기기 고장 등).',
       '최우선 추출 칸은 action.steps의 첫 조치와 extract.dont(절대 금지)다.',
-      '손님께 할 멘트가 있으면 action.scripts에, 보고 경로가 보이면 situation에 담아라.',
+      '보고 경로가 보이면 situation에 담아라.',
       '원문에 없는 칸은 절대 지어내지 말고 빈 문자열(또는 빈 배열)로 둬라.',
       '예) 입력: "손님이 머리카락 나왔다 하면 일단 사과하고 새로 해드려. 변명은 절대 금지"',
       '→ action.steps: ["사과부터", "새로 조리해 드리기"], extract.dont: "변명하지 않기"',

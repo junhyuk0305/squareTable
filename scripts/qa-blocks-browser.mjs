@@ -141,7 +141,7 @@ async function main() {
   const mkEntry = (id, title, situation, opts = {}) => ({
     id, unit_id: UNIT, creator_id: ownerId, creator_name: 'QA블록사장',
     category: 'Know-how', subcategory: '일반', title, tags: [], search_keywords: [title],
-    square: { situation, action: { steps: [], scripts: [] }, extract: { do: '바로 알려요', dont: '혼자 판단하지 않아요' }, result: { before: '', after: '', metric: '' }, uncover: '', quagmire: '' },
+    square: { situation, action: { steps: [] }, extract: { do: '바로 알려요', dont: '혼자 판단하지 않아요' }, result: { before: '', after: '', metric: '' }, uncover: '', quagmire: '' },
     execution: { tone: '친절', timing: '필요할 때', channel: '구두', stakeholders: [] },
     stats: { thumbs_up: 0, thumbs_down: 0, last_used_at: now, query_hits_30d: opts.hits ?? 7, resolution_rate: 0.8 },
     photos: [], version: 1, status: 'published', quality_score: 0.6,

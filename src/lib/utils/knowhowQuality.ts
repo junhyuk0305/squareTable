@@ -67,14 +67,13 @@ export function assessKnowhowQuality(input: {
   const title = (input.title ?? '').trim();
   const sq = input.square ?? {};
   const steps = (sq.action?.steps ?? []).map((s) => (s ?? '').trim()).filter(Boolean);
-  const scripts = (sq.action?.scripts ?? []).map((s) => (s ?? '').trim()).filter(Boolean);
   const situation = (sq.situation ?? '').trim();
   const dont = (sq.extract?.dont ?? '').trim();
 
   const { kept, dropped } = sanitizeKeywords(input.keywords);
 
-  // ① 내용 부족 → 재입력(block). 실질 내용(할 일/할 말/충분한 상황·금지)이 하나도 없으면 빈 카드.
-  const hasBody = steps.length + scripts.length > 0 || situation.length >= 8 || dont.length >= 4;
+  // ① 내용 부족 → 재입력(block). 실질 내용(할 일/충분한 상황·금지)이 하나도 없으면 빈 카드.
+  const hasBody = steps.length > 0 || situation.length >= 8 || dont.length >= 4;
   if (!hasBody) {
     issues.push({
       kind: 'sparse', severity: 'block',

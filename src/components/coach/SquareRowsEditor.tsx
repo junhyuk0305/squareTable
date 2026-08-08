@@ -30,7 +30,6 @@ type Props = {
 
 const ADD_LABEL: Partial<Record<KnowhowRowKind, string>> = {
   todo: '할 일 추가',
-  script: '멘트 추가',
 };
 
 export function SquareRowsEditor({ square, editable, onPatch, source, onOpenChange }: Props) {
@@ -40,7 +39,6 @@ export function SquareRowsEditor({ square, editable, onPatch, source, onOpenChan
   const [snapshot, setSnapshot] = useState<SquareBlock | null>(null);
 
   const steps = square.action?.steps ?? [];
-  const scripts = square.action?.scripts ?? [];
   const dont = square.extract?.dont ?? '';
   const situation = square.situation ?? '';
 
@@ -52,8 +50,8 @@ export function SquareRowsEditor({ square, editable, onPatch, source, onOpenChan
   const closeCell = () => { setOpen(null); setSnapshot(null); onOpenChange?.(null); };
   const revert = () => { if (snapshot) onPatch(snapshot); closeCell(); };
 
-  const setList = (kind: 'todo' | 'script', list: string[]) =>
-    onPatch({ ...square, action: { ...square.action, [kind === 'todo' ? 'steps' : 'scripts']: list } });
+  const setList = (list: string[]) =>
+    onPatch({ ...square, action: { ...square.action, steps: list } });
 
   /** 읽기 값을 누르면 그 칸이 열린다. 편집 불가면 그냥 값만 그린다. */
   const tappable = (kind: KnowhowRowKind, label: string, node: React.ReactNode) => {
@@ -83,23 +81,23 @@ export function SquareRowsEditor({ square, editable, onPatch, source, onOpenChan
     </View>
   );
 
-  /** 여러 줄 칸(할 일·멘트) 편집 — 줄 추가·삭제까지. 옛 카드엔 추가·삭제가 아예 없었다. */
-  const listEditor = (kind: 'todo' | 'script', list: string[]) => (
+  /** 여러 줄 칸(할 일) 편집 — 줄 추가·삭제까지. 옛 카드엔 추가·삭제가 아예 없었다. */
+  const listEditor = (list: string[]) => (
     <View>
       {list.map((v, i) => (
         <View key={i} style={[styles.lineRow, i > 0 && styles.lineGap]}>
-          <View style={[styles.bulletDot, { backgroundColor: kind === 'todo' ? BrandColors.good : BrandColors.mention }]} />
+          <View style={[styles.bulletDot, { backgroundColor: BrandColors.good }]} />
           <TextInput
             value={v}
-            onChangeText={(t) => setList(kind, list.map((x, idx) => (idx === i ? t : x)))}
+            onChangeText={(t) => setList(list.map((x, idx) => (idx === i ? t : x)))}
             style={styles.input}
             multiline
           />
           <Pressable
-            onPress={() => setList(kind, list.filter((_, idx) => idx !== i))}
+            onPress={() => setList(list.filter((_, idx) => idx !== i))}
             hitSlop={8}
             accessibilityRole="button"
-            accessibilityLabel={`${kind === 'todo' ? '할 일' : '멘트'} 지우기`}
+            accessibilityLabel="할 일 지우기"
             style={({ pressed }) => [styles.removeBtn, pressed && { opacity: 0.6 }]}
           >
             <Ionicons name="close" size={14} color={InkColors.ink3} />
@@ -107,13 +105,13 @@ export function SquareRowsEditor({ square, editable, onPatch, source, onOpenChan
         </View>
       ))}
       <Pressable
-        onPress={() => setList(kind, [...list, ''])}
+        onPress={() => setList([...list, ''])}
         accessibilityRole="button"
-        accessibilityLabel={ADD_LABEL[kind]!}
+        accessibilityLabel={ADD_LABEL.todo!}
         style={({ pressed }) => [styles.addRow, pressed && { opacity: 0.6 }]}
       >
         <Ionicons name="add-circle-outline" size={17} color={BrandColors.goodText} />
-        <Text style={styles.addText}>{ADD_LABEL[kind]}</Text>
+        <Text style={styles.addText}>{ADD_LABEL.todo}</Text>
       </Pressable>
       {cellFooter}
     </View>
@@ -151,17 +149,8 @@ export function SquareRowsEditor({ square, editable, onPatch, source, onOpenChan
       kind: 'todo',
       render:
         open === 'todo'
-          ? listEditor('todo', steps)
+          ? listEditor(steps)
           : tappable('todo', '할 일', <BulletRead items={steps} tone={BrandColors.good} />),
-    });
-  }
-  if (editable || scripts.length > 0) {
-    rows.push({
-      kind: 'script',
-      render:
-        open === 'script'
-          ? listEditor('script', scripts)
-          : tappable('script', '멘트', <BulletRead items={scripts} tone={BrandColors.mention} quoted />),
     });
   }
   if (editable || dont.trim()) {
@@ -188,14 +177,14 @@ export function SquareRowsEditor({ square, editable, onPatch, source, onOpenChan
 }
 
 /** 읽기용 불릿 — KnowhowRows 의 것과 같은 모양이지만, 여기선 render 슬롯 안이라 직접 그린다. */
-function BulletRead({ items, tone, quoted }: { items: string[]; tone: string; quoted?: boolean }) {
+function BulletRead({ items, tone }: { items: string[]; tone: string }) {
   if (items.length === 0) return <Text style={styles.readText}>눌러서 적어요</Text>;
   return (
     <View>
       {items.map((it, i) => (
         <View key={i} style={[styles.lineRead, i > 0 && styles.lineGap]}>
           <View style={[styles.bulletDot, { backgroundColor: tone }]} />
-          <Text style={[styles.readText, quoted && styles.script]}>{quoted ? `“${it}”` : it}</Text>
+          <Text style={styles.readText}>{it}</Text>
         </View>
       ))}
     </View>
@@ -204,7 +193,6 @@ function BulletRead({ items, tone, quoted }: { items: string[]; tone: string; qu
 
 const styles = StyleSheet.create({
   readText: { flex: 1, fontSize: 15, lineHeight: 22, color: InkColors.ink },
-  script: { fontStyle: 'italic' },
 
   lineRead: { flexDirection: 'row', gap: Space.sm, alignItems: 'flex-start' },
   lineRow: { flexDirection: 'row', gap: Space.sm, alignItems: 'center' },

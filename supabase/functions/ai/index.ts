@@ -149,7 +149,7 @@ const QUIZ_SCHEMA = {
 };
 
 // ── 양식: SQUARE 엔트리 1개 + 다중(entries) 래퍼 ─────────────
-// 슬림화(2026-06-28): 사용자 표면 3핵심(상황/할일/금지)+멘트+척도+메타만. 안 쓰는 칸
+// 슬림화(2026-06-28): 사용자 표면 3핵심(상황/할일/금지)+척도+메타만. 안 쓰는 칸
 // (quagmire/uncover/before/after/metric/do/template) 제거 → 입력·출력 토큰 절감.
 // scale_prompt의 min/max 제거 — flash-lite가 number를 0.0000…로 뱉어 JSON을 깨뜨림(토큰 폭발).
 // min/max는 항상 0~100이라 서버에서 고정(mapEntry). 빠진 칸은 mapEntry가 빈 값으로 보정.
@@ -160,7 +160,6 @@ const SQUARE_ENTRY_SCHEMA = {
     title: { type: 'string' },
     situation: { type: 'string' },
     steps: { type: 'array', items: { type: 'string' }, maxItems: 5 },
-    scripts: { type: 'array', items: { type: 'string' }, maxItems: 3 },
     dont: { type: 'string' },
     keywords: { type: 'array', items: { type: 'string' }, maxItems: 8 },
     // 주관적 기준일 때만 채움. kind=spectrum(양끝 ends 사이) / count(단위 unit 개수).
@@ -183,7 +182,7 @@ const SQUARE_ENTRY_SCHEMA = {
       items: {
         type: 'object',
         properties: {
-          cell: { type: 'string', enum: ['situation', 'steps', 'scripts', 'dont'] },
+          cell: { type: 'string', enum: ['situation', 'steps', 'dont'] },
           ask: { type: 'string' },
         },
         required: ['ask'],
@@ -212,7 +211,7 @@ const VALID_CATS = ['Routine', 'Event', 'Context', 'Know-how'];
 
 // 모든 태스크 공통 — 출력은 반드시 한국어. flash-lite가 영어성 입력에 영어로 새는 것 방지.
 const KOREAN_RULE =
-  '⚠️ 모든 출력 텍스트는 반드시 한국어로 쓴다. 원문이 영어·외국어·혼용이어도 결과(제목·상황·할 일·멘트·금지·질문·키워드 등)는 한국어로 정리한다. (메뉴명·브랜드 등 고유명사는 원형 유지 가능)';
+  '⚠️ 모든 출력 텍스트는 반드시 한국어로 쓴다. 원문이 영어·외국어·혼용이어도 결과(제목·상황·할 일·금지·질문·키워드 등)는 한국어로 정리한다. (메뉴명·브랜드 등 고유명사는 원형 유지 가능)';
 
 // 엔트리 1개(모델 출력) → 클라 segment 형태로 정규화.
 function mapEntry(r: any, fallbackCategory: string) {
@@ -229,7 +228,7 @@ function mapEntry(r: any, fallbackCategory: string) {
       }
     : undefined;
   // 꼬리질문 정규화 — ask 없는 건 버리고, cell은 허용값만(아니면 미지정).
-  const FU_CELLS = ['situation', 'steps', 'scripts', 'dont'];
+  const FU_CELLS = ['situation', 'steps', 'dont'];
   const followups = Array.isArray(r?.followups)
     ? r.followups
         .map((f: any) => ({
@@ -247,7 +246,7 @@ function mapEntry(r: any, fallbackCategory: string) {
       situation: r?.situation ?? '',
       quagmire: r?.quagmire ?? '',
       uncover: r?.uncover ?? '',
-      action: { steps: r?.steps ?? [], scripts: r?.scripts ?? [] },
+      action: { steps: r?.steps ?? [] },
       result: { before: r?.before ?? '', after: r?.after ?? '', metric: r?.metric ?? '' },
       extract: { do: r?.do ?? '', dont: r?.dont ?? '' },
     },
@@ -534,7 +533,7 @@ ${sopText}`;
 }
 
 // ── 훈련 퀴즈 v2 — 형태별 문항 생성(task:'quiz_item') ────────
-// 요청: { task:'quiz_item', payload:{ format, kind, sops:[{id,title,situation,steps,donts,scripts}], count?, terms? } }
+// 요청: { task:'quiz_item', payload:{ format, kind, sops:[{id,title,situation,steps,donts}], count?, terms? } }
 // 응답: { items:[{ format, kind, entry_ids, payload }], usage }
 //
 // 기존 handleQuiz 와의 차이: 형태(format)를 요청이 지정하고, 결과가 DB(quiz_items)에 **저장**된다.
@@ -555,7 +554,6 @@ async function handleQuizItem(payload: any) {
     .map((s, i) => `[노하우 ${i + 1}] 제목: ${fence(s.title).slice(0, MAX_SOP_FIELD)}
 상황: ${fence(s.situation).slice(0, MAX_SOP_FIELD)}
 단계: ${(s.steps ?? []).map((x: string) => fence(x)).join(' / ').slice(0, MAX_SOP_FIELD)}
-멘트: ${(s.scripts ?? []).map((x: string) => fence(x)).join(' / ').slice(0, MAX_SOP_FIELD)}
 금지: ${(s.donts ?? []).map((x: string) => fence(x)).join(' / ').slice(0, MAX_SOP_FIELD)}`)
     .join('\n\n');
   // 노하우가 비면 낼 문제가 없다. 위와 같은 이유로 미차감.
@@ -712,7 +710,6 @@ async function handlePatch(payload: any) {
     `제목: ${fence(cur.title ?? '').slice(0, 200)}`,
     `상황: ${fence(cur.situation ?? '').slice(0, MAX_SOP_FIELD)}`,
     `할 일: ${(Array.isArray(cur.steps) ? cur.steps : []).map((x: string) => fence(x)).join(' / ').slice(0, MAX_SOP_FIELD)}`,
-    `멘트: ${(Array.isArray(cur.scripts) ? cur.scripts : []).map((x: string) => fence(x)).join(' / ').slice(0, MAX_SOP_FIELD)}`,
     `금지: ${fence(cur.dont ?? '').slice(0, MAX_SOP_FIELD)}`,
   ].join('\n');
   const guideBlock = guide ? `\n[지침]\n"""\n${guide}\n"""\n` : '';

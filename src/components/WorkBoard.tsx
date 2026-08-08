@@ -443,7 +443,7 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
         const square: SquareBlock = {
           situation: text,
           quagmire: '', uncover: '',
-          action: { steps: [], scripts: [] },
+          action: { steps: [] },
           result: { before: '', after: '', metric: '' },
           extract: { do: '', dont: '' },
         };

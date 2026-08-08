@@ -6,9 +6,8 @@ import { qs } from './quizStyles';
 import type { QuizRendererProps } from './types';
 
 /**
- * 선택지 하나를 탭하는 8개 형태.
+ * 선택지 하나를 탭하는 7개 형태.
  * 설계 07-29 §03: 조작은 전부 동일(선택지 탭 하나)이고, 위에 얹히는 전제만 형태별로 다르다.
- *   pair_pick  → 왼쪽 항목을 위에 크게
  *   case_pick  → 상황 한 줄을 위에
  *   chosung    → 초성을 크게
  *   나머지     → 전제 없음
@@ -57,23 +56,6 @@ export function ValuePick(p: QuizRendererProps) {
 /** t3 함정 찾기 — 행동 넷 중 하지 말아야 할 것 하나. */
 export function TrapPick(p: QuizRendererProps) {
   return <SinglePick {...p} />;
-}
-
-/** t4 짝 고르기 — 왼쪽 항목이 위에 크게. */
-export function PairPick(p: QuizRendererProps) {
-  const left = typeof p.payload.left === 'string' ? p.payload.left : '';
-  return (
-    <SinglePick
-      {...p}
-      prelude={
-        left ? (
-          <View style={qs.prelude}>
-            <Text style={qs.preludeText}>{left}</Text>
-          </View>
-        ) : null
-      }
-    />
-  );
 }
 
 /** t5 상황 고르기 — 상황 한 줄이 위에. */

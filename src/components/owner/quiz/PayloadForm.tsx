@@ -4,12 +4,11 @@
  * ★ 여기는 "입력 UI"만 담당한다. 저장 가능 여부의 판정은 **항상** FORMATS[f].validate(payload) 다
  *   (src/lib/quiz/formats). 이 파일에 검증 규칙을 복제하지 않는다 — 두 곳에 두면 서로 어긋난다.
  *
- * 13개 형태를 6가지 모양으로 묶어 재사용한다(계약 §2 payload 스키마 표 기준):
- *   choices   — mc4 / order_pick / value_pick / trap_pick / pair_pick / case_pick / name_pick / chosung
+ * 11개 형태를 5가지 모양으로 묶어 재사용한다(계약 §2 payload 스키마 표 기준):
+ *   choices   — mc4 / order_pick / value_pick / trap_pick / case_pick / name_pick / chosung
  *   sequence  — wrong_spot
  *   count     — fill_count
  *   cards     — mine_tap
- *   pairs     — match_line
  *   judge     — quick_judge
  * 형태가 늘면 shapeOf 에 한 줄만 더한다.
  */
@@ -23,14 +22,13 @@ import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
 import { Field, TextField, IntField, qst } from './kit';
 
-type Shape = 'choices' | 'sequence' | 'count' | 'cards' | 'pairs' | 'judge';
+type Shape = 'choices' | 'sequence' | 'count' | 'cards' | 'judge';
 
 function shapeOf(f: QuizFormat): Shape {
   switch (f) {
     case 'wrong_spot': return 'sequence';
     case 'fill_count': return 'count';
     case 'mine_tap': return 'cards';
-    case 'match_line': return 'pairs';
     case 'quick_judge': return 'judge';
     default: return 'choices';
   }
@@ -43,12 +41,10 @@ export function emptyPayload(f: QuizFormat): Record<string, any> {
     case 'sequence': return { ...base, sequence: ['', '', ''], wrong_index: 0 };
     case 'count': return { ...base, target: 3, unit: '' };
     case 'cards': return { ...base, cards: [{ text: '', is_mine: true }, { text: '', is_mine: false }, { text: '', is_mine: false }, { text: '', is_mine: false }] };
-    case 'pairs': return { ...base, pairs: [{ left: '', right: '' }, { left: '', right: '' }, { left: '', right: '' }] };
     case 'judge': return { ...base, labels: ['맞다', '아니다'], seconds: 20, cards: [{ text: '', answer: 0 }, { text: '', answer: 1 }, { text: '', answer: 0 }, { text: '', answer: 1 }] };
     default: {
       const p: Record<string, any> = { ...base, choices: ['', '', '', ''], answer_index: 0 };
       if (f === 'value_pick') p.unit = '';
-      if (f === 'pair_pick') p.left = '';
       if (f === 'case_pick') p.situation = '';
       if (f === 'chosung') p.chosung = '';
       return p;
@@ -62,7 +58,6 @@ export function answerTextOf(f: QuizFormat, p: Record<string, any>): string {
     case 'sequence': return (p.sequence ?? []).join(' → ');
     case 'count': return `${p.target ?? ''}${p.unit ? ` ${p.unit}` : ''}`;
     case 'cards': return (p.cards ?? []).filter((c: any) => c?.is_mine).map((c: any) => c.text).filter(Boolean).join(' · ');
-    case 'pairs': return (p.pairs ?? []).filter((x: any) => x?.left && x?.right).map((x: any) => `${x.left} - ${x.right}`).join(' · ');
     case 'judge': return (p.cards ?? []).filter((c: any) => c?.answer === 0).map((c: any) => c.text).filter(Boolean).join(' · ');
     default: return (p.choices ?? [])[p.answer_index ?? 0] ?? '';
   }
@@ -122,11 +117,6 @@ export function PayloadForm({
       {format === 'case_pick' && (
         <Field label="상황">
           <TextField value={p.situation ?? ''} onChange={(v) => set({ situation: v })} placeholder="예) 포장 손님이 쿠폰을 내밀었어요" multiline />
-        </Field>
-      )}
-      {format === 'pair_pick' && (
-        <Field label="왼쪽(짝을 찾을 것)">
-          <TextField value={p.left ?? ''} onChange={(v) => set({ left: v })} placeholder="예) 컵홀더" />
         </Field>
       )}
       {format === 'chosung' && (
@@ -198,38 +188,6 @@ export function PayloadForm({
             />
           ))}
           <AddRow label="행동 추가" disabled={(p.cards ?? []).length >= 8} onPress={() => addAt('cards', { text: '', is_mine: false }, 8)} />
-        </Field>
-      )}
-
-      {shape === 'pairs' && (
-        <Field label="짝" hint="왼쪽과 오른쪽이 한 쌍이에요">
-          {(p.pairs ?? []).map((x: any, i: number) => (
-            <View key={i} style={fst.pairRow}>
-              <TextInput
-                style={[qst.input, fst.pairInput]}
-                value={x?.left ?? ''}
-                onChangeText={(v) => setAt('pairs', i, { ...x, left: v })}
-                placeholder="예) 컵홀더"
-                placeholderTextColor={InkColors.ink3}
-                accessibilityLabel={`${i + 1}번째 짝 왼쪽`}
-              />
-              <Ionicons name="arrow-forward" size={15} color={InkColors.ink3} />
-              <TextInput
-                style={[qst.input, fst.pairInput]}
-                value={x?.right ?? ''}
-                onChangeText={(v) => setAt('pairs', i, { ...x, right: v })}
-                placeholder="예) 카운터 아래 서랍"
-                placeholderTextColor={InkColors.ink3}
-                accessibilityLabel={`${i + 1}번째 짝 오른쪽`}
-              />
-              {(p.pairs ?? []).length > 3 ? (
-                <Pressable onPress={() => removeAt('pairs', i, 3)} hitSlop={8} accessibilityRole="button" accessibilityLabel={`${i + 1}번째 짝 삭제`}>
-                  <Ionicons name="close-circle-outline" size={19} color={InkColors.ink3} />
-                </Pressable>
-              ) : null}
-            </View>
-          ))}
-          <AddRow label="짝 추가" disabled={(p.pairs ?? []).length >= 5} onPress={() => addAt('pairs', { left: '', right: '' }, 5)} />
         </Field>
       )}
 

@@ -12,52 +12,11 @@
 
 import type { QuizFormat } from './types';
 
-/** 문자열 → 32bit 정수(FNV-1a). 같은 문항이면 언제 열어도 같은 값이 나와야 한다. */
-function hash(s: string): number {
-  let h = 0x811c9dc5;
-  for (let i = 0; i < s.length; i += 1) {
-    h ^= s.charCodeAt(i);
-    h = Math.imul(h, 0x01000193);
-  }
-  return h >>> 0;
-}
-
-/**
- * seed 로 정해지는 순열. ★ Math.random() 금지 —
- * 같은 문항을 다시 열었는데 좌우 배치가 바뀌면 사장이 자기 문제를 못 알아본다.
- * 서버 셔플과 같을 필요는 없다(사장이 자기 문제를 시험해 보는 것뿐이라 채점이 이 배열 안에서 닫힌다).
- */
-function shuffled(arr: string[], seed: string): string[] {
-  return arr
-    .map((v, i) => ({ v, k: hash(`${seed}#${i}`) }))
-    .sort((a, b) => a.k - b.k)
-    .map((x) => x.v);
-}
-
-/**
- * 원본 payload → 렌더러가 읽는 모양.
- * 13개 형태 중 match_line 하나만 어긋난다 — 원본은 pairs[{left,right}] 인데
- * 렌더러(MatchLine)는 서버가 분해해 준 lefts[]/rights[] 를 읽기 때문이다.
- * pairs 는 지우지 않는다: matchLine.grade() 가 pairs 로 채점하고 rights 가 있으면 그 자리를 기준으로 삼는다.
- */
-export function previewPayload(
-  format: QuizFormat,
-  payload: Record<string, any>,
-  seed: string,
-): Record<string, any> {
-  if (format !== 'match_line') return payload;
-  const pairs: any[] = Array.isArray(payload?.pairs) ? payload.pairs : [];
-  return {
-    ...payload,
-    lefts: pairs.map((p) => String(p?.left ?? '')),
-    rights: shuffled(pairs.map((p) => String(p?.right ?? '')), seed),
-  };
-}
-
 /**
  * 틀렸을 때 렌더러에 넘길 정답 — 서버 grade_quiz 가 돌려주는 것과 **같은 좌표계**여야 한다
  * (렌더러는 서버 답인지 미리보기 답인지 구분하지 않는다).
- * payload 는 previewPayload() 를 통과한 것을 넣는다 — match_line 이 화면에 보이는 rights 자리를 쓴다.
+ * ★ 저장된 payload 를 그대로 넣는다. 표시 모양을 손보는 단계(previewPayload)가 있었지만
+ *   그건 match_line 하나 때문이었고, 2026-08-08 t4 폐기와 함께 없앴다.
  */
 export function previewAnswer(format: QuizFormat, payload: Record<string, any>): any {
   switch (format) {
@@ -71,17 +30,7 @@ export function previewAnswer(format: QuizFormat, payload: Record<string, any>):
         .filter((i: number) => i >= 0);
     case 'quick_judge':
       return (Array.isArray(payload?.cards) ? payload.cards : []).map((c: any) => Number(c?.answer));
-    case 'match_line': {
-      const pairs: any[] = Array.isArray(payload?.pairs) ? payload.pairs : [];
-      const rights: string[] = Array.isArray(payload?.rights) ? payload.rights.map(String) : [];
-      const map: Record<number, number> = {};
-      pairs.forEach((p, i) => {
-        const at = rights.indexOf(String(p?.right ?? ''));
-        if (at >= 0) map[i] = at;
-      });
-      return map;
-    }
-    // 선택형 8종(mc4·order_pick·value_pick·trap_pick·pair_pick·case_pick·name_pick·chosung)
+    // 선택형 7종(mc4·order_pick·value_pick·trap_pick·case_pick·name_pick·chosung)
     default:
       return payload?.answer_index ?? null;
   }

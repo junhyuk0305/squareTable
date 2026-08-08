@@ -12,14 +12,13 @@
 //     1) ...
 //     2) ...
 //   - 금지: ...
-//   - 멘트: ...
 //   - 실행: 타이밍 / 채널 / 톤
 //   - 검색어: a, b, c
 //   - 교정포인트: ...
 //   - 추천: true
 //
 // 매핑: 섹션→section(사용자 표면 분류, 표준 세트 강제), 상황→square.situation,
-//       할 일→square.action.steps, 멘트→square.action.scripts,
+//       할 일→square.action.steps,
 //       금지→square.extract.dont, 검색어→search_keywords, 실행→execution{timing,channel,tone}.
 // 빈 square 칸(quagmire/uncover/result)은 마스터지침 §원칙대로 공란으로 둔다(날조 금지).
 
@@ -55,6 +54,9 @@ const KNOWN_SECTIONS = new Set([
   '음료 제조', // 카페·디저트 전용
 ]);
 
+// '멘트'는 2026-08-08 폐기됐지만 키 목록에는 남긴다 — 옛 팩 문서에 `- 멘트:` 줄이 남아 있어도
+// 필드로 인식되어 버려지게 하기 위해서다. 목록에서 빼면 그 줄이 **직전 필드(금지)의 이어진 줄**로
+// 흡수돼 금지 칸에 손님 응대 문장이 조용히 섞인다. 버킷은 만들되 아무도 읽지 않는다.
 const FIELD_KEYS = ['섹션', '태그', '상황', '할 일', '할일', '금지', '멘트', '실행', '검색어', '교정포인트', '추천'];
 
 const clean = (s) =>
@@ -87,7 +89,6 @@ function parseBlock(catLabel, title, lines, packId, seq) {
     .filter(Boolean);
   const situation = clean((buckets['상황'] ?? []).join(' '));
   const steps = (buckets['할 일'] ?? []).map(clean).filter(Boolean);
-  const scripts = (buckets['멘트'] ?? []).map(clean).filter(Boolean);
   const dont = clean((buckets['금지'] ?? []).join(' '));
   const keywords = (buckets['검색어']?.[0] ?? '')
     .split(',')
@@ -121,7 +122,7 @@ function parseBlock(catLabel, title, lines, packId, seq) {
       situation,
       quagmire: '',
       uncover: '',
-      action: { steps, scripts },
+      action: { steps },
       result: { before: '', after: '', metric: '' },
       extract: { do: '', dont, template: '' },
     },

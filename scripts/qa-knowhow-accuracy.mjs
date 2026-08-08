@@ -13,8 +13,8 @@ const EMAIL = process.env.QA_EMAIL, PASSWORD = process.env.QA_PASSWORD;
 if (!URL_ || !ANON) { console.error('env(.env) 누락'); process.exit(1); }
 if (!EMAIL || !PASSWORD) { console.error('QA_EMAIL / QA_PASSWORD 환경변수 필요(파일럿 계정).'); process.exit(1); }
 const MAX_SPLIT_PUBLISH = 5;
-// SSOT 미러(buildEntry.isSquarePublishable): 할 일·멘트, 또는 사실형 상황(≥4자)이면 발행 가능.
-const isPub = (s) => ((s?.square?.action?.steps?.length || 0) >= 1) || ((s?.square?.action?.scripts?.length || 0) >= 1) || ((s?.square?.situation || '').trim().length >= 4);
+// SSOT 미러(buildEntry.isSquarePublishable): 할 일, 또는 사실형 상황(≥4자)이면 발행 가능.
+const isPub = (s) => ((s?.square?.action?.steps?.length || 0) >= 1) || ((s?.square?.situation || '').trim().length >= 4);
 
 function loadGuide() { const s = readFileSync(here('../src/data/extraction-master.ts'), 'utf8'); return s.match(/export const EXTRACTION_MASTER = `([\s\S]*?)`;/)?.[1] ?? ''; }
 async function signIn() {

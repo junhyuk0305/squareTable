@@ -34,7 +34,7 @@ function matchesQuery(t: PlaybookTemplate, q: string): boolean {
   return false;
 }
 
-/** 펼쳐지는 템플릿 카드 — 닫힘=제목/소분류, 탭하면 아래로 상황·단계·멘트·가져오기가 펼쳐진다. */
+/** 펼쳐지는 템플릿 카드 — 닫힘=제목/소분류, 탭하면 아래로 상황·단계·가져오기가 펼쳐진다. */
 function TemplateCard({
   t,
   open,
@@ -50,7 +50,6 @@ function TemplateCard({
 }) {
   const m = getCategoryMeta(t.category); // 액센트 색 전용 — 종류 라벨은 비노출(07-31 단일화)
   const steps = t.square?.action?.steps ?? [];
-  const scripts = t.square?.action?.scripts ?? [];
   const dont = t.square?.extract?.dont?.trim();
 
   return (
@@ -94,17 +93,6 @@ function TemplateCard({
               {steps.map((s, i) => (
                 <Text key={i} style={styles.stepText}>
                   {s}
-                </Text>
-              ))}
-            </View>
-          ) : null}
-
-          {scripts.length > 0 ? (
-            <View style={styles.field}>
-              <Text style={styles.fieldLabel}>이렇게 말하세요</Text>
-              {scripts.map((s, i) => (
-                <Text key={i} style={styles.scriptText}>
-                  “{s.replace(/^"|"$/g, '')}”
                 </Text>
               ))}
             </View>

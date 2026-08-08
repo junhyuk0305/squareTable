@@ -25,8 +25,6 @@ export function isCellEmpty(square: SquareBlock, cell: CellPath): boolean {
   switch (cell) {
     case 'action.steps':
       return square.action.steps.length === 0;
-    case 'action.scripts':
-      return square.action.scripts.length === 0;
     case 'result':
       return !square.result.before && !square.result.after && !square.result.metric;
     case 'extract.do':

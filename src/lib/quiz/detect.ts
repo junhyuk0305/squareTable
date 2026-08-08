@@ -16,7 +16,6 @@ function bodyOf(entry: PlaybookEntry): string {
     entry?.title,
     sq?.situation,
     ...(sq?.action?.steps ?? []),
-    ...(sq?.action?.scripts ?? []),
     sq?.extract?.do,
     sq?.extract?.dont,
   ]
@@ -150,7 +149,6 @@ export function storeTerms(entry: PlaybookEntry): string[] {
 export function detectKinds(entry: PlaybookEntry): QuizKind[] {
   const sq = entry?.square;
   const steps = sq?.action?.steps ?? [];
-  const scripts = sq?.action?.scripts ?? [];
   const dont = String(sq?.extract?.dont ?? '').trim();
   const situation = String(sq?.situation ?? '').trim();
   const body = bodyOf(entry);
@@ -175,11 +173,6 @@ export function detectKinds(entry: PlaybookEntry): QuizKind[] {
   // t5 갈래 — situation 의 조건 표지 + 결과 분기.
   const branch = branchScore(situation);
   if (branch > 0) scored.push({ kind: 't5', score: branch });
-
-  // t4 짝 — 상황↔말. scripts 2개 이상이면 좌우 대응이 실제로 있다.
-  if (scripts.filter((s) => String(s ?? '').trim()).length >= 2) {
-    scored.push({ kind: 't4', score: 60 });
-  }
 
   // t6 이름 — 용어가 2개 이상일 때만. 하나뿐이면 오답 후보가 없어 문항이 성립하지 않는다
   //   (일반 명사를 오답으로 쓰면 정답이 바로 티가 난다) → 억지 출제가 되므로 아예 넣지 않는다.

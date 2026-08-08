@@ -256,7 +256,7 @@ export function QuizEditorSheet({
       situation: ask,
       quagmire: '',
       uncover: explain,
-      action: { steps, scripts: [] },
+      action: { steps },
       result: { before: '', after: '', metric: '' },
       extract: isDontFormat(format) ? { do: '', dont: answer } : { do: answer, dont: '' },
     };

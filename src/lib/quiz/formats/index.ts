@@ -1,7 +1,7 @@
 // 훈련 퀴즈 v2 — 출제 형태 레지스트리 (클라 SSOT)
 //
 // 설계 근거: 산출물/퀴즈시스템_설계_2026-07-29.html §03 출제 형태
-// 계약: .../training-v2-contract.md §2(형태 13종) · §4(FormatSpec · stripKeys 표)
+// 계약: .../training-v2-contract.md §2(형태 목록) · §4(FormatSpec · stripKeys 표)
 //
 // ★ 형태를 하나 더 붙이는 일 = "formats/새파일.ts 추가 + 아래 import 한 줄 + FORMATS 한 줄".
 //   그 외 어디에도 형태 목록을 복제하지 않는다. 화면·생성기는 전부 여기만 본다.
@@ -24,8 +24,6 @@ import { valuePick } from './valuePick';
 import { fillCount } from './fillCount';
 import { trapPick } from './trapPick';
 import { mineTap } from './mineTap';
-import { pairPick } from './pairPick';
-import { matchLine } from './matchLine';
 import { casePick } from './casePick';
 import { quickJudge } from './quickJudge';
 import { namePick } from './namePick';
@@ -34,7 +32,7 @@ import { chosung } from './chosung';
 export type { FormatSpec } from './spec';
 
 /**
- * 형태 13종. ★ 나열 순서에 의미가 있다 — 유형(kind)마다 일반형이 먼저, 게임형이 다음이다.
+ * 형태 11종. ★ 나열 순서에 의미가 있다 — 유형(kind)마다 일반형이 먼저, 게임형이 다음이다.
  * formatsForKind() 가 이 순서를 그대로 돌려주므로 생성기가 "게임이 안 되면 일반형으로"를
  * 별도 표 없이 판단할 수 있다(07-29 §03 "왜 두 갈래인가" — 일반형은 안전판).
  */
@@ -46,8 +44,6 @@ export const FORMATS: Record<QuizFormat, FormatSpec> = {
   fill_count: fillCount,    // t2 게임
   trap_pick: trapPick,      // t3 일반
   mine_tap: mineTap,        // t3 게임
-  pair_pick: pairPick,      // t4 일반
-  match_line: matchLine,    // t4 게임
   case_pick: casePick,      // t5 일반
   quick_judge: quickJudge,  // t5 게임
   name_pick: namePick,      // t6 일반

@@ -75,7 +75,7 @@ async function main() {
     tags: ['#제조', '#아아'], search_keywords: ['아메리카노', '아아', '샷', '얼음'],
     square: {
       situation: '아이스 아메리카노 주문이 들어왔을 때',
-      action: { steps: ['얼음을 가득 채운다', '에스프레소 2샷을 내린다', '물 200ml를 붓는다'], scripts: ['시원한 아이스 아메리카노 나왔습니다'] },
+      action: { steps: ['얼음을 가득 채운다', '에스프레소 2샷을 내린다', '물 200ml를 붓는다'] },
       extract: { do: '샷은 항상 2샷 고정', dont: '얼음을 반만 채우지 않는다', template: '[얼음]→[2샷]→[물200]' },
       result: { before: '농도 편차 큼', after: '균일', metric: '재요청 0' },
       uncover: '농도의 핵심은 물 200ml 고정', quagmire: '얼음이 적으면 금방 미지근',
@@ -161,7 +161,7 @@ async function flow2({ owner, ownerId, jA, jAId, UNIT, TMPL }) {
   check('②-3 제안에 origin 업무 저장', sugRow?.source_template_id === TMPL);
   // 사장 승인 → 새 노하우 발행 + 자동 attach (finishPublish 재현)
   const NEW = `pb2_${s}`; const now = new Date().toISOString();
-  await owner.from('playbook_entries').insert({ id: NEW, unit_id: UNIT, creator_id: ownerId, creator_name: 'QA사장', category: 'Routine', subcategory: '음료 제조', title: '아아 캡처 노하우', tags: [], search_keywords: ['아아'], square: { situation: '아아 만들 때', action: { steps: ['얼음', '2샷'], scripts: [] }, extract: { do: '', dont: '', template: '' }, result: { before: '', after: '', metric: '' }, uncover: '', quagmire: '' }, execution: { tone: '', timing: '', channel: '', stakeholders: [] }, stats: { thumbs_up: 0, thumbs_down: 0, last_used_at: null, query_hits_30d: 0, resolution_rate: 0 }, photos: [], version: 1, status: 'published', quality_score: 0.7, created_at: now, updated_at: now, is_template: false, pack_id: null, needs_review: false, correction_points: [], section: null, order_index: 0 });
+  await owner.from('playbook_entries').insert({ id: NEW, unit_id: UNIT, creator_id: ownerId, creator_name: 'QA사장', category: 'Routine', subcategory: '음료 제조', title: '아아 캡처 노하우', tags: [], search_keywords: ['아아'], square: { situation: '아아 만들 때', action: { steps: ['얼음', '2샷'] }, extract: { do: '', dont: '', template: '' }, result: { before: '', after: '', metric: '' }, uncover: '', quagmire: '' }, execution: { tone: '', timing: '', channel: '', stakeholders: [] }, stats: { thumbs_up: 0, thumbs_down: 0, last_used_at: null, query_hits_30d: 0, resolution_rate: 0 }, photos: [], version: 1, status: 'published', quality_score: 0.7, created_at: now, updated_at: now, is_template: false, pack_id: null, needs_review: false, correction_points: [], section: null, order_index: 0 });
   const { data: appr } = await owner.from('playbook_suggestions').update({ status: 'approved', reviewed_at: now, reviewed_by: ownerId, resulting_entry_id: NEW }).eq('id', SUG).select('id');
   check('②-4 사장 승인(status=approved)', (appr?.length ?? 0) === 1);
   // 자동 attach: 승인 시 srcTemplate에 새 entry 연결

@@ -39,7 +39,7 @@ const phone = () => '010' + String(Math.floor(1e7 + Math.random() * 8e7));
 const SQUARE = {
   situation: '여분 시럽 위치: 창고 맨 위 칸',
   quagmire: '', uncover: '',
-  action: { steps: [], scripts: [] },
+  action: { steps: [] },
   result: { before: '', after: '', metric: '' },
   extract: { do: '', dont: '' },
 };

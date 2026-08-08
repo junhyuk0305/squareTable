@@ -120,9 +120,9 @@ export function scoreFor(preset: QuizPresetKey, ctx: TemplateQuizContext, now: n
       return dontCount * 4 - heavy;
     }
 
-    // 자리가 바뀔 때 막히는 건 절차가 아니라 판단이다 — 갈래(t5)·대응(t4)이 있는 업무 우선.
+    // 자리가 바뀔 때 막히는 건 절차가 아니라 판단이다 — 갈래(t5)가 있는 업무 우선.
     case 'position':
-      return base + (kinds.has('t5') ? 3 : 0) + (kinds.has('t4') ? 3 : 0);
+      return base + (kinds.has('t5') ? 3 : 0);
   }
 }
 

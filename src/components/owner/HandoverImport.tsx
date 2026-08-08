@@ -508,15 +508,14 @@ function DraftCard({
   const [newSection, setNewSection] = useState('');
   const meta = getSectionMeta(view.section); // 사용자 표면 분류 = 카테고리(section) — 종류는 비노출(07-31 단일화)
   const steps = view.square.action.steps;
-  const scripts = view.square.action.scripts;
   const publishable = isSquarePublishable(view.square);
 
-  const patchSquare = (p: Partial<{ situation: string; dont: string; steps: string[]; scripts: string[] }>) =>
+  const patchSquare = (p: Partial<{ situation: string; dont: string; steps: string[] }>) =>
     onPatch({
       square: {
         ...view.square,
         situation: p.situation ?? view.square.situation,
-        action: { ...view.square.action, steps: p.steps ?? steps, scripts: p.scripts ?? scripts },
+        action: { ...view.square.action, steps: p.steps ?? steps },
         extract: { ...view.square.extract, dont: p.dont ?? view.square.extract.dont },
       },
     });
@@ -658,28 +657,6 @@ function DraftCard({
             <Text style={styles.addBtnText}>할 일 추가</Text>
           </PressableScale>
 
-          <FieldLabel text="멘트 (손님에게 할 말)" />
-          {scripts.map((sc, j) => (
-            <View key={`script-${j}`} style={styles.listRow}>
-              <Ionicons name="chatbubble-ellipses-outline" size={14} color={InkColors.ink3} style={styles.listBulletIcon} />
-              <TextInput
-                style={[styles.fieldInput, styles.listInput]}
-                value={sc}
-                onChangeText={(t) => patchSquare({ scripts: scripts.map((v, k) => (k === j ? t : v)) })}
-                placeholder="예) 맛있게 드세요"
-                placeholderTextColor={InkColors.ink3}
-                maxLength={200}
-              />
-              <PressableScale onPress={() => patchSquare({ scripts: scripts.filter((_, k) => k !== j) })} scaleTo={0.9} hitSlop={8} style={styles.removeBtn} accessibilityRole="button" accessibilityLabel={`멘트 ${j + 1} 삭제`}>
-                <Ionicons name="close" size={16} color={InkColors.ink3} />
-              </PressableScale>
-            </View>
-          ))}
-          <PressableScale onPress={() => patchSquare({ scripts: [...scripts, ''] })} scaleTo={0.98} style={styles.addBtn} accessibilityRole="button" accessibilityLabel="멘트 추가">
-            <Ionicons name="add" size={16} color={InkColors.ink2} />
-            <Text style={styles.addBtnText}>멘트 추가</Text>
-          </PressableScale>
-
           <FieldLabel text="금지 (하면 안 되는 것)" />
           <TextInput
             style={styles.fieldInput}
@@ -690,7 +667,7 @@ function DraftCard({
             maxLength={200}
           />
 
-          {!publishable && <Text style={styles.editorWarn}>상황·할 일·멘트 중 하나는 채워야 추가할 수 있어요.</Text>}
+          {!publishable && <Text style={styles.editorWarn}>상황·할 일 중 하나는 채워야 추가할 수 있어요.</Text>}
 
           <PressableScale onPress={onRemove} scaleTo={0.97} style={styles.deleteLink} accessibilityRole="button" accessibilityLabel="이 항목 삭제">
             <Ionicons name="trash-outline" size={14} color={BrandColors.bad} />

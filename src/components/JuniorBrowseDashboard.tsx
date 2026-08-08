@@ -35,7 +35,7 @@ type ViewKey = 'dashboard' | 'list';
  * 카드는 공용 BrowseCard를 그대로 재사용(검증배지·DO/DON'T·해결률·출처 동일).
  * 프레임 v2 — 직원 화면이라 카테고리 라벨은 숨기고 색 점만 노출(showCategory=false).
  *
- * 카드를 탭하면 원본 노하우(단계·멘트·기준·사진·출처 전체)를 읽기 전용 시트(EntryDetailModal)로 연다.
+ * 카드를 탭하면 원본 노하우(단계·기준·사진·출처 전체)를 읽기 전용 시트(EntryDetailModal)로 연다.
  * 사장 화면과 달리 '수정/검증/추가' 같은 관리 액션은 없다 — 직원은 읽기 전용(둘러보기=읽기, 물어보기=질문).
  */
 export function JuniorBrowseDashboard({ entries, emptyHint }: JuniorBrowseDashboardProps) {

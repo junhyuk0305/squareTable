@@ -33,7 +33,7 @@ async function call(token, task, payload) {
     await new Promise((r) => setTimeout(r, 500));
   }
 }
-const sop = (o) => ({ id: o.id, title: o.title, category: o.category || 'Routine', situation: o.situation || '', steps: o.steps || [], donts: o.donts || [], scripts: o.scripts || [], creatorName: '사장님', version: 1, updatedAt: '2026-07-01T00:00:00Z' });
+const sop = (o) => ({ id: o.id, title: o.title, category: o.category || 'Routine', situation: o.situation || '', steps: o.steps || [], donts: o.donts || [], creatorName: '사장님', version: 1, updatedAt: '2026-07-01T00:00:00Z' });
 
 let pass = 0, fail = 0;
 const chk = (c, n, d) => { if (c) { pass++; console.log(`    ✓ ${n}`); } else { fail++; console.log(`    ✗ ${n}${d ? ' → ' + d : ''}`); } };
@@ -41,15 +41,14 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // ── 노하우 수정(patch): 요청 반영 + 기존 보존 + 칸 정확 ──
 const PATCH = [
-  { id: 'P1', label: '단계 추가', cur: { title: '아이스 아메리카노 제조', category: 'Routine', situation: '아이스 아메리카노 주문 시', steps: ['얼음을 가득 채운다', '에스프레소 2샷을 넣는다', '물 200ml를 붓는다'], scripts: [], dont: '' },
+  { id: 'P1', label: '단계 추가', cur: { title: '아이스 아메리카노 제조', category: 'Routine', situation: '아이스 아메리카노 주문 시', steps: ['얼음을 가득 채운다', '에스프레소 2샷을 넣는다', '물 200ml를 붓는다'], dont: '' },
     instr: '마지막에 시럽은 손님이 요청할 때만 넣으라는 걸 추가해줘', add: ['시럽'], keep: ['얼음', '200'] },
-  { id: 'P2', label: '멘트 추가', cur: { title: '진동벨 응대', category: 'Routine', situation: '진동벨이 울릴 때', steps: ['음료를 손님에게 전달한다'], scripts: [], dont: '' },
-    instr: '손님한테 "맛있게 드세요"라고 인사하는 멘트 넣어줘', add: ['맛있게'], keep: ['전달'], where: 'scripts' },
-  { id: 'P3', label: '금지 추가', cur: { title: '디카페인 제조', category: 'Routine', situation: '디카페인 주문 시', steps: ['디카페인 원두로 내린다'], scripts: [], dont: '' },
+  // P2(멘트 추가)는 2026-08-08 멘트 칸 폐기와 함께 삭제. 번호는 안 당긴다(로그 대조용 고정 id).
+  { id: 'P3', label: '금지 추가', cur: { title: '디카페인 제조', category: 'Routine', situation: '디카페인 주문 시', steps: ['디카페인 원두로 내린다'], dont: '' },
     instr: '일반 원두랑 절대 섞지 말라고 금지 추가해줘', add: ['섞'], keep: ['디카페인'], where: 'dont' },
-  { id: 'P4', label: '수치 수정', cur: { title: '아이스티 제조', category: 'Routine', situation: '아이스티 주문 시', steps: ['원액과 물을 1대 4로 섞는다'], scripts: [], dont: '' },
+  { id: 'P4', label: '수치 수정', cur: { title: '아이스티 제조', category: 'Routine', situation: '아이스티 주문 시', steps: ['원액과 물을 1대 4로 섞는다'], dont: '' },
     instr: '비율을 1대 5로 바꿔줘', add: ['5'], keep: ['원액'] },
-  { id: 'P5', label: '보존 확인(제목/상황 유지)', cur: { title: '마감 청소', category: 'Routine', situation: '영업 마감 후', steps: ['그라인더 원두를 비운다', '바닥을 청소한다'], scripts: [], dont: '' },
+  { id: 'P5', label: '보존 확인(제목/상황 유지)', cur: { title: '마감 청소', category: 'Routine', situation: '영업 마감 후', steps: ['그라인더 원두를 비운다', '바닥을 청소한다'], dont: '' },
     instr: '행주 삶는 단계 하나만 더 추가해줘', add: ['행주'], keep: ['그라인더', '바닥', '마감'] },
 ];
 // ── 노하우 질문(answer): 그라운딩 + 출처바인딩 + 환각금지 + 사실형 응답 ──
@@ -100,12 +99,11 @@ const main = async () => {
     await sleep(6500);
     if (!r.ok) { chk(false, `${c.id} ${c.label}`, `HTTP ${r.status}`); continue; }
     const sq = r.body.square || {};
-    const outText = norm([sq.situation, ...(sq.action?.steps || []), ...(sq.action?.scripts || []), sq.extract?.dont, r.body.title].join(' '));
+    const outText = norm([sq.situation, ...(sq.action?.steps || []), sq.extract?.dont, r.body.title].join(' '));
     console.log(`  ${c.id} · ${c.label} [${r.status} ${r.ms}ms]  "${c.instr}"`);
-    console.log(`     steps: ${JSON.stringify(sq.action?.steps)}  scripts:${JSON.stringify(sq.action?.scripts)}  dont:"${sq.extract?.dont || ''}"`);
+    console.log(`     steps: ${JSON.stringify(sq.action?.steps)}  dont:"${sq.extract?.dont || ''}"`);
     chk(c.add.every((t) => outText.includes(norm(t))), `${c.id} 요청 반영(${c.add.join(',')})`, `누락 ${c.add.filter(t => !outText.includes(norm(t)))}`);
     chk(c.keep.every((t) => outText.includes(norm(t))), `${c.id} 기존 보존(${c.keep.join(',')})`, `유실 ${c.keep.filter(t => !outText.includes(norm(t)))}`);
-    if (c.where === 'scripts') chk((sq.action?.scripts || []).length >= 1, `${c.id} 멘트 칸에 반영`);
     if (c.where === 'dont') chk(!!(sq.extract?.dont || '').trim(), `${c.id} 금지 칸에 반영`);
   }
 

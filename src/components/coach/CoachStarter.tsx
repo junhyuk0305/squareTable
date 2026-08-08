@@ -40,7 +40,7 @@ const PREVIEW_SQUARE: SquareBlock = {
   situation: '오픈 준비 — 커피머신 예열',
   quagmire: '',
   uncover: '',
-  action: { steps: ['전원 켜고 15분 예열한다', '포터필터를 뜨거운 물로 헹군다'], scripts: [] },
+  action: { steps: ['전원 켜고 15분 예열한다', '포터필터를 뜨거운 물로 헹군다'] },
   result: { before: '', after: '', metric: '' },
   extract: { do: '', dont: '예열 끝나기 전엔 추출하지 않기' },
 };

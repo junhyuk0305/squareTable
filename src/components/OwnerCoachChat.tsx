@@ -271,7 +271,7 @@ export function OwnerCoachChat({
         setKeywords(out.keywords || []);
 
         // 다중 노하우 감지(직접 등록에서만; 인박스 답변은 단일 유지) → 분리 제안.
-        // 발행 가능한(할 일·멘트가 있는) 세그먼트만 센다 — "각각 등록 (N개)"의 N과 실제 저장 수가
+        // 발행 가능한(할 일이 있는) 세그먼트만 센다 — "각각 등록 (N개)"의 N과 실제 저장 수가
         // 어긋나 빈 세그가 조용히 누락되는 걸 막는다(publishEach 도 같은 필터로 이중 방어).
         const pubSegs = (out.segments ?? []).filter((s) => isSquarePublishable(s.square));
         if (!isInboxAnswer && pubSegs.length >= 2) {
@@ -313,14 +313,13 @@ export function OwnerCoachChat({
         // 완결도 게이트(완성도 판정): 이미 원래 질문에 충분히 답한 입력은 AI 꼬리질문을 생략하고
         // 바로 확인 단계로 보낸다(완결 입력을 붙잡는 마찰 제거). edge가 "항상 followups" 성향이라 클라에서 끊는다.
         // 두 갈래로 완결을 인정한다:
-        //  (1) 절차형: 상황 + 할일/멘트 2개 이상 + 원문이 구체적(20자+)
+        //  (1) 절차형: 상황 + 할 일 2개 이상 + 원문이 구체적(20자+)
         //  (2) 사실·위치형: 인박스 답변이면서 상황이 채워졌고 단계가 없는 답(예: "앞치마 어디?"→"포스기 아래 서랍 2번째칸")
         //      — 답 한 줄이 곧 완결이라 되물을 게 없다. 단, 위에서 tooThin(초단답)으로 판정된 건 제외.
         const stepsN = (out.square?.action?.steps ?? []).filter((s) => s?.trim()).length;
-        const scriptsN = (out.square?.action?.scripts ?? []).filter((s) => s?.trim()).length;
         const hasSituation = !!out.square?.situation?.trim();
-        const proceduralComplete = hasSituation && stepsN + scriptsN >= 2 && rawText.trim().length >= 20;
-        const factComplete = !tooThin && isInboxAnswer && hasSituation && stepsN === 0 && scriptsN === 0;
+        const proceduralComplete = hasSituation && stepsN >= 2 && rawText.trim().length >= 20;
+        const factComplete = !tooThin && isInboxAnswer && hasSituation && stepsN === 0;
         const complete = proceduralComplete || factComplete;
         if (complete) followups = [];
         presentSingle(followups, { square: out.square, title: out.title || rawText.slice(0, 30), category: aiCat });
@@ -400,7 +399,6 @@ export function OwnerCoachChat({
             category,
             situation: square.situation,
             steps: square.action.steps,
-            scripts: square.action.scripts,
             dont: square.extract.dont,
           },
           categoryGuide: EXTRACTION_MASTER,
@@ -524,11 +522,10 @@ export function OwnerCoachChat({
     });
   }, [segments, uq, onPublishedMany, onPublished]);
 
-  // ── 분리 제안: 하나로 합치기(steps·멘트 결합 후 단일 흐름으로) ──
+  // ── 분리 제안: 하나로 합치기(steps 결합 후 단일 흐름으로) ──
   const mergeOne = useCallback(() => {
     if (!segments) return;
     const steps: string[] = [];
-    const scripts: string[] = [];
     const sits: string[] = [];
     const kw = new Set<string>();
     let dnt = '';
@@ -536,7 +533,6 @@ export function OwnerCoachChat({
     let unc = '';
     for (const s of segments) {
       steps.push(...s.square.action.steps);
-      scripts.push(...s.square.action.scripts);
       if (s.square.situation) sits.push(s.square.situation);
       if (!dnt && s.square.extract.dont) dnt = s.square.extract.dont;
       if (!dOk && s.square.extract.do) dOk = s.square.extract.do;
@@ -547,7 +543,7 @@ export function OwnerCoachChat({
       situation: sits.join(' / '),
       quagmire: '',
       uncover: unc,
-      action: { steps: steps.slice(0, 5), scripts: scripts.slice(0, 3) },
+      action: { steps: steps.slice(0, 5) },
       result: { before: '', after: '', metric: '' },
       extract: { do: dOk, dont: dnt },
     };
@@ -568,7 +564,7 @@ export function OwnerCoachChat({
   const handlePublish = useCallback(() => {
     if (publishedRef.current || !square) return;
     if (!isSquarePublishable(square)) {
-      setError('할 행동이나 멘트가 하나는 있어야 저장돼요. 카드에서 ‘할 일’ 칸을 눌러 한 줄만 더 채워주세요.');
+      setError('할 행동이 하나는 있어야 저장돼요. 카드에서 ‘할 일’ 칸을 눌러 한 줄만 더 채워주세요.');
       return;
     }
     // 수정 모드: 기존 노하우 갱신(새로 add 아님).

@@ -94,7 +94,7 @@ async function main() {
   const mkEntry = (id, title, situation) => ({
     id, unit_id: UNIT, creator_id: ownerId, creator_name: 'QA훈련사장',
     category: 'Know-how', subcategory: '일반', title, tags: [], search_keywords: [title],
-    square: { situation, action: { steps: [], scripts: [] }, extract: { do: '', dont: '' }, result: { before: '', after: '', metric: '' }, uncover: '', quagmire: '' },
+    square: { situation, action: { steps: [] }, extract: { do: '', dont: '' }, result: { before: '', after: '', metric: '' }, uncover: '', quagmire: '' },
     execution: { tone: '친절', timing: '필요할 때', channel: '구두', stakeholders: [] },
     stats: { thumbs_up: 0, thumbs_down: 0, last_used_at: now, query_hits_30d: 0, resolution_rate: 0 },
     photos: [], version: 1, status: 'published', quality_score: 0.6,

@@ -186,7 +186,7 @@ export default function OwnerQuizListScreen() {
     const square: SquareBlock = {
       situation: how.trim(),
       quagmire: '', uncover: '',
-      action: { steps: [], scripts: [] },
+      action: { steps: [] },
       result: { before: '', after: '', metric: '' },
       extract: { do: '', dont: '' },
     };

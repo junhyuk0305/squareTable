@@ -76,7 +76,7 @@ async function main() {
   const mkEntry = (id, title, situation) => ({
     id, unit_id: UNIT, creator_id: ownerId, creator_name: 'QA사장',
     category: 'Know-how', subcategory: '일반', title, tags: [], search_keywords: [title],
-    square: { situation, action: { steps: [], scripts: [] }, extract: { do: '', dont: '' }, result: { before: '', after: '', metric: '' }, uncover: '', quagmire: '' },
+    square: { situation, action: { steps: [] }, extract: { do: '', dont: '' }, result: { before: '', after: '', metric: '' }, uncover: '', quagmire: '' },
     execution: { tone: '친절', timing: '필요할 때', channel: '구두', stakeholders: [] },
     stats: { thumbs_up: 0, thumbs_down: 0, last_used_at: now, query_hits_30d: 0, resolution_rate: 0 },
     photos: [], version: 1, status: 'published', quality_score: 0.6,
@@ -260,7 +260,9 @@ async function main() {
   // 핵심 불변식 하나: **정답은 클라에 내려가지 않는다.** 직원은 테이블을 못 읽고, RPC 는 정답 키를
   // 제거한 사본만 주며, 맞았는지는 서버가 판정한다. 아래는 그 세 겹을 전부 실증한다.
   console.log('\n━━ ⑦ 문항·서버 채점(0107) ━━');
-  const QMC = `qi_mc_${s}`, QMN = `qi_mn_${s}`, QML = `qi_ml_${s}`, QBAD = `qi_bad_${s}`;
+  // match_line(t4)은 2026-08-08 멘트 폐기와 함께 삭제 — 형태·렌더러·판정이 전부 없어졌다.
+  // 서버(0107 quiz_items_for · grade_quiz)의 match_line 분기는 남아 있지만 만들 경로가 없어 도달 불가다.
+  const QMC = `qi_mc_${s}`, QMN = `qi_mn_${s}`, QBAD = `qi_bad_${s}`;
   { const { error } = await owner.from('quiz_items').insert([
       { id: QMC, unit_id: UNIT, entry_ids: [E[0]], kind: 't0', format: 'mc4',
         payload: { ask: '오픈 때 가장 먼저 할 일은?', choices: ['바닥 청소', '포스 켜기', '퇴근'], answer_index: 1, explain: '포스부터 켜요' } },
@@ -268,18 +270,15 @@ async function main() {
         payload: { ask: '하면 안 되는 것을 모두 누르세요', explain: '시재는 만지지 않아요',
           cards: [{ text: '시재 임의 사용', is_mine: true }, { text: '머신 예열', is_mine: false },
                   { text: '금고 열어두기', is_mine: true }, { text: '문 열기', is_mine: false }] } },
-      { id: QML, unit_id: UNIT, entry_ids: [E[0]], kind: 't4', format: 'match_line',
-        payload: { ask: '상황과 할 말을 이으세요', explain: '상황별 응대',
-          pairs: [{ left: 'L0', right: 'R0' }, { left: 'L1', right: 'R1' }, { left: 'L2', right: 'R2' }] } },
     ]);
-    check('⑦-1 사장 문항 3건 저장', !error, error?.message ?? ''); }
+    check('⑦-1 사장 문항 2건 저장', !error, error?.message ?? ''); }
   { const { data, error } = await jA.from('quiz_items').select('id, payload');
     check('⑦-2 직원 직접 SELECT 차단(정답 노출 0행)', !error && (data?.length ?? 0) === 0, `n=${data?.length ?? 0} ${error?.message ?? ''}`); }
   { const { data } = await owner.from('quiz_items').select('id');
-    check('⑦-3 사장은 문항 열람(편집용)', (data?.length ?? 0) === 3, `n=${data?.length}`); }
+    check('⑦-3 사장은 문항 열람(편집용)', (data?.length ?? 0) === 2, `n=${data?.length}`); }
 
   const { data: forAttempt, error: fae } = await jA.rpc('quiz_items_for', { p_entry_ids: [E[0]], p_limit: 10 });
-  check('⑦-4 직원 응시 조회(quiz_items_for) 3문항', !fae && (forAttempt?.length ?? 0) === 3, `n=${forAttempt?.length} ${fae?.message ?? ''}`);
+  check('⑦-4 직원 응시 조회(quiz_items_for) 2문항', !fae && (forAttempt?.length ?? 0) === 2, `n=${forAttempt?.length} ${fae?.message ?? ''}`);
   const qById = Object.fromEntries((forAttempt ?? []).map((x) => [x.id, x]));
   const leakedIn = (rows) => (rows ?? []).filter((x) => {
     const p = x.payload ?? {};
@@ -288,14 +287,7 @@ async function main() {
   });
   { const leaked = leakedIn(forAttempt);
     check('⑦-5 응시 payload 에 정답 키 0개', leaked.length === 0, leaked.map((x) => `${x.id}:${JSON.stringify(x.payload)}`).join(' | ')); }
-  { const ml = qById[QML]?.payload ?? {};
-    check('⑦-6 match_line 은 lefts/rights 로 분해', Array.isArray(ml.lefts) && ml.lefts.length === 3 && Array.isArray(ml.rights) && ml.rights.length === 3,
-      `lefts=${JSON.stringify(ml.lefts)} rights=${JSON.stringify(ml.rights)}`); }
-  { const { data: again } = await jA.rpc('quiz_items_for', { p_entry_ids: [E[0]], p_limit: 10 });
-    const r2 = (again ?? []).find((x) => x.id === QML);
-    check('⑦-7 rights 순서 재조회 안정(결정적 셔플 — 채점 가능성의 전제)',
-      JSON.stringify(r2?.payload?.rights) === JSON.stringify(qById[QML]?.payload?.rights),
-      `${JSON.stringify(qById[QML]?.payload?.rights)} vs ${JSON.stringify(r2?.payload?.rights)}`); }
+  // ⑦-6·⑦-7(match_line 분해·셔플 안정)은 t4 폐기와 함께 삭제.
 
   const grade = async (id, res) => {
     const { data, error } = await jA.rpc('grade_quiz', { p_item_id: id, p_response: res });
@@ -311,17 +303,7 @@ async function main() {
     check('⑦-11 mine_tap 부분 선택은 오답(부분점수 없음)', row?.correct === false, JSON.stringify(row)); }
   { const { row } = await grade(QMN, [0, 1, 2, 3]);
     check('⑦-12 mine_tap 전부 찍기도 오답', row?.correct === false, JSON.stringify(row)); }
-  {
-    // ★좌표계 실증: 클라는 원본 pairs index 를 모른다. 화면에 보이는 rights 배열의 **위치**를 돌려준다.
-    const rights = qById[QML]?.payload?.rights ?? [];
-    const good = {};
-    for (let i = 0; i < 3; i++) good[String(i)] = rights.findIndex((v) => v === `R${i}`);
-    const { row } = await grade(QML, good);
-    check('⑦-13 match_line 표시 위치 index 로 정답 판정', row?.correct === true, `res=${JSON.stringify(good)} rights=${JSON.stringify(rights)}`);
-    const bad = { 0: good['1'], 1: good['0'], 2: good['2'] };
-    const { row: r2 } = await grade(QML, bad);
-    check('⑦-14 match_line 잘못 이으면 오답 + 정답 매핑 공개', r2?.correct === false && !!r2?.answer, `res=${JSON.stringify(bad)} ans=${JSON.stringify(r2?.answer)}`);
-  }
+  // ⑦-13·⑦-14(match_line 좌표계 채점)는 t4 폐기와 함께 삭제.
   { await owner.from('quiz_items').insert({ id: QBAD, unit_id: UNIT, entry_ids: [E[0]], kind: 't0', format: 'bogus_format', payload: { ask: 'x' } });
     const { error } = await jA.rpc('grade_quiz', { p_item_id: QBAD, p_response: 0 });
     check('⑦-15 모르는 형태는 조용한 오답이 아니라 예외', !!error && /unknown_quiz_format/.test(error?.message ?? ''), error?.message ?? '(예외 없음!)'); }
@@ -331,7 +313,7 @@ async function main() {
   { const { data } = await jA.rpc('quiz_item_counts');
     const row = (data ?? []).find((x) => x.entry_id === E[0]);
     // bogus_format 은 quiz_known_formats 밖이라 세지 않는다(응시에서도 fail-closed 로 빠진다).
-    check('⑦-17 문항 개수 RPC 는 아는 형태만 센다(0109)', row?.n === 3, `n=${row?.n}`); }
+    check('⑦-17 문항 개수 RPC 는 아는 형태만 센다(0109)', row?.n === 2, `n=${row?.n}`); }
 
   // ── ⑧ 문항 낡음 스냅샷(0114) ─────────────────────────────────────────────
   console.log('\n━━ ⑧ 문항 낡음(0114) ━━');

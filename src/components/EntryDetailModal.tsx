@@ -13,7 +13,7 @@ import type { PlaybookEntry } from '@/types';
 
 /**
  * EntryDetailModal — '물어보기' 답변의 [출처]를 누르면 원본 노하우 전체를 읽기 전용으로 본다.
- * 답변 카드는 요약(상황/할 일/금지 3핵심)만 보여주므로, 여기선 단계·멘트·기준·사진·검증까지 전부 노출.
+ * 답변 카드는 요약(상황/할 일/금지 3핵심)만 보여주므로, 여기선 단계·기준·사진·검증까지 전부 노출.
  * 프레임 v2 준수 — 카테고리·SQUARE 라벨은 노출하지 않는다.
  *
  * ★ 본문 형태는 `KnowhowRows`(D10) 하나다(2026-08-08 통일) — 노하우 추가·상세·답변 카드와 같은 모습이어야
@@ -40,7 +40,6 @@ export function EntryDetailModal({
   const rows: KnowhowRow[] = [];
   if (sq.situation?.trim()) rows.push({ kind: 'situation', text: sq.situation });
   if (sq.action.steps.length > 0) rows.push({ kind: 'todo', items: sq.action.steps });
-  if (sq.action.scripts.length > 0) rows.push({ kind: 'script', items: sq.action.scripts });
   if (sq.extract.dont?.trim()) rows.push({ kind: 'dont', text: sq.extract.dont });
 
   return (
@@ -66,7 +65,7 @@ export function EntryDetailModal({
               )}
             </View>
 
-            {/* 본문 — 상황 · 할 일 · 멘트 · 금지 */}
+            {/* 본문 — 상황 · 할 일 · 금지 */}
             <KnowhowRows rows={rows} />
 
             {/* 정도 기준 게이지 — 표로 못 담는 도형이라 행 밖에 따로 그린다. */}
