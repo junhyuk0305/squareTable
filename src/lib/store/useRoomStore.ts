@@ -48,9 +48,11 @@ type State = {
   setCurrentRoom: (id: string) => void;
   /** 기본방('전체')이 없으면 만들어 둔다(mock 신규 매장에서 메시지가 고아 되는 것 방지). */
   ensureDefaultRoom: () => void;
-  createRoom: (name: string, memberIds?: string[]) => void;
+  /** 서버 확인까지 기다린 결과를 돌려준다 — 화면이 이 값을 보고 성공 토스트를 띄운다(낙관적 토스트 금지). */
+  createRoom: (name: string, memberIds?: string[]) => Promise<boolean>;
   renameRoom: (id: string, name: string) => void;
-  removeRoom: (id: string) => void;
+  /** 위와 같음. 실패면 false — 화면은 "삭제했어요"를 띄우면 안 된다. */
+  removeRoom: (id: string) => Promise<boolean>;
   addMember: (roomId: string, userId: string) => void;
   removeMember: (roomId: string, userId: string) => void;
   /** 그 사용자가 볼 수 있는 방 목록(사장=전체, 알바=기본방+소속방). */
@@ -94,7 +96,7 @@ export const useRoomStore = create<State>((set, get) => ({
     void insertRoom(def); // Supabase면 영속(고정 id + 충돌무시), mock이면 no-op
   },
 
-  createRoom: (name, memberIds = []) => {
+  createRoom: async (name, memberIds = []) => {
     const session = useSessionStore.getState();
     const room: Room = {
       id: genId('room'),
@@ -106,7 +108,7 @@ export const useRoomStore = create<State>((set, get) => ({
     };
     const newMembers: RoomMember[] = memberIds.map((userId) => ({ roomId: room.id, userId }));
     set((s) => ({ rooms: [...s.rooms, room], members: [...s.members, ...newMembers], currentRoomId: room.id }));
-    void guardWrite(
+    return guardWrite(
       insertRoom(room).then(async (ok) => {
         if (!ok) return false;
         const rs = await Promise.all(newMembers.map((m) => addRoomMember(m.roomId, m.userId)));
@@ -128,9 +130,9 @@ export const useRoomStore = create<State>((set, get) => ({
     );
   },
 
-  removeRoom: (id) => {
+  removeRoom: async (id) => {
     const room = get().rooms.find((r) => r.id === id);
-    if (!room || room.isDefault) return; // 기본방은 삭제 불가
+    if (!room || room.isDefault) return false; // 기본방은 삭제 불가
     const prevRooms = get().rooms;
     const prevMembers = get().members;
     set((s) => {
@@ -142,7 +144,7 @@ export const useRoomStore = create<State>((set, get) => ({
         currentRoomId: s.currentRoomId === id ? fallback : s.currentRoomId,
       };
     });
-    void guardWrite(
+    return guardWrite(
       dbDeleteRoom(id),
       () => set({ rooms: prevRooms, members: prevMembers }),
       '채팅방 삭제에 실패했어요.',

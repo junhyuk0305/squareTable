@@ -36,9 +36,17 @@ export default function OwnerRoomsScreen() {
     setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
   }
 
-  function create() {
-    if (!canCreate) return;
-    createRoom(name, picked);
+  const [creating, setCreating] = useState(false);
+
+  // ★서버가 받아들인 뒤에 성공을 말한다. 예전엔 결과를 안 보고 토스트를 띄워, 오프라인에서
+  //   "채팅방을 만들었어요"가 뜨는데 서버엔 0건인 상태가 됐다(2026-08-11 P5 실증).
+  //   실패 문구는 guardWrite 가 낸다 — 여기서 또 말하면 같은 실패를 두 번 말하게 된다.
+  async function create() {
+    if (!canCreate || creating) return;
+    setCreating(true);
+    const ok = await createRoom(name, picked);
+    setCreating(false);
+    if (!ok) return; // 입력은 남긴다 — 다시 시도할 수 있어야 한다
     showToast('채팅방을 만들었어요', 'good');
     setName('');
     setPicked([]);
@@ -78,9 +86,9 @@ export default function OwnerRoomsScreen() {
             <Text style={styles.noStaff}>아직 직원이 없어요. 직원이 합류하면 방에 초대할 수 있어요.</Text>
           )}
           <Text style={styles.ownerNote}>사장님은 모든 방에 자동으로 들어가요.</Text>
-          <Pressable onPress={create} disabled={!canCreate} style={({ pressed }) => [styles.createBtn, !canCreate && { opacity: 0.4 }, pressed && { opacity: 0.85 }]}>
+          <Pressable onPress={create} disabled={!canCreate || creating} style={({ pressed }) => [styles.createBtn, (!canCreate || creating) && { opacity: 0.4 }, pressed && { opacity: 0.85 }]}>
             <Ionicons name="add" size={17} color="#FFFFFF" />
-            <Text style={styles.createBtnText}>채팅방 만들기</Text>
+            <Text style={styles.createBtnText}>{creating ? '만드는 중…' : '채팅방 만들기'}</Text>
           </Pressable>
         </View>
         </Appear>
@@ -165,7 +173,8 @@ function RoomRow({ roomId }: { roomId: string }) {
                 <Pressable onPress={() => setConfirmDel(false)} style={styles.delCancel}>
                   <Text style={styles.delCancelText}>취소</Text>
                 </Pressable>
-                <Pressable onPress={() => { removeRoom(room.id); showToast('채팅방을 삭제했어요', 'info'); }} style={styles.delGo}>
+                {/* 생성과 같은 규칙 — 서버가 지운 뒤에 지웠다고 말한다. */}
+                <Pressable onPress={async () => { if (await removeRoom(room.id)) showToast('채팅방을 삭제했어요', 'info'); }} style={styles.delGo}>
                   <Text style={styles.delGoText}>삭제</Text>
                 </Pressable>
               </View>

@@ -1,7 +1,9 @@
 // 채팅방 전환 바 — 업무 채팅 상단. 방 칩을 탭하면 그 방의 대화/공지/할일로 전환된다.
-// 관리자(사장·매니저)는 모든 방 + '방 관리' 진입, 직원은 자기가 속한 방만 본다(기본방 '전체' 포함).
-// ★가시성 판정은 서버 can_see_room()(0122)·wr_select(0093)과 같은 기준이어야 한다 — 좁으면 매니저가
-//   볼 수 있는 방을 못 열고, 넓으면 빈 방이 열린다. 그래서 화면 세트가 아니라 **역할**을 받는다.
+// 사장은 모든 방, 매니저·직원은 기본방 '전체' + 자기가 속한 방만 본다. '방 관리' 진입은 관리자(사장·매니저).
+// ★가시성 판정은 서버 can_see_room()·wr_select(0126)와 같은 기준이어야 한다 — 좁으면 볼 수 있는 방을
+//   못 열고, 넓으면 빈 방이 열린다(0122 이전 매니저가 그랬다). 그래서 화면 세트가 아니라 **역할**을 받는다.
+// ★0126: 매니저를 '모든 방'에서 뺐다. 방을 만들 수는 있고(만든 방엔 서버 트리거가 자동으로 넣어 준다),
+//   자기가 들어간 방만 보인다.
 import { useMemo } from 'react';
 import { View, Text, Pressable, ScrollView, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -17,11 +19,12 @@ export function RoomBar({ role, me }: { role: string; me: string }) {
   const members = useRoomStore((s) => s.members);
   const currentRoomId = useRoomStore((s) => s.currentRoomId);
   const setCurrentRoom = useRoomStore((s) => s.setCurrentRoom);
-  const manages = canManage(role);
+  const manages = canManage(role); // '방 관리' 진입 권한(방 만들기)은 매니저도 가진다
+  const isOwner = role === 'owner'; // 모든 방을 보는 것은 사장뿐 — 서버 can_see_room 과 같은 기준
 
   const visible = useMemo(
-    () => (manages ? rooms : rooms.filter((r) => r.isDefault || members.some((m) => m.roomId === r.id && m.userId === me))),
-    [rooms, members, manages, me],
+    () => (isOwner ? rooms : rooms.filter((r) => r.isDefault || members.some((m) => m.roomId === r.id && m.userId === me))),
+    [rooms, members, isOwner, me],
   );
 
   // 직원인데 방이 '전체' 하나뿐이면 굳이 바를 띄우지 않는다(분리가 의미 없을 때 노이즈 제거).

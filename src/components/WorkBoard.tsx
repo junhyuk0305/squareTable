@@ -195,10 +195,11 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
   const [sendingPhoto, setSendingPhoto] = useState(false);
 
   // 이 방에 있는 사람인가 — 판정은 **기존 방 가시성 규칙 그대로**다. 새 규칙을 만들지 않는다.
-  //   서버: can_see_room()(0122 개정) = is_default or auth_can_manage() or 방 멤버
-  //   클라: RoomBar 의 visible(canManage or isDefault or 멤버) — 둘이 같은 판정이다.
-  // ★0122 이전엔 서버 can_see_room 만 auth_is_owner() 로 남아, 매니저는 방 목록(wr_select, 0093)은
-  //   보이는데 그 방 메시지는 0건인 "빈 방"이 됐다. 세 자리(함수·정책·클라)를 한 기준으로 맞췄다.
+  //   서버: can_see_room()/user_can_see_room()(0126) = is_default or 사장 or 방 멤버
+  //   클라: RoomBar 의 visible(isDefault or 사장 or 멤버) — 둘이 같은 판정이다.
+  // ★0126: 매니저도 **본인이 멤버인 방만** 본다. 0122 가 매니저를 모든 방에 통과시켰는데 그 결과
+  //   못 들어간 방을 읽고 전체방으로 승격까지 할 수 있었다. 여기서 canManage 로 통과시키면 서버는
+  //   막는데 화면은 "배정 가능"이라고 말하는 어긋남이 된다.
   // 방이 없으면(레거시/degraded) 전부 통과 — inRoom() 폴백과 같다.
   const roomMemberRows = useRoomStore((s) => s.members);
   const memberRoles = useStaffStore((s) => s.roles);
@@ -207,7 +208,7 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
     [roomMemberRows, currentRoomId],
   );
   const inThisRoom = useCallback(
-    (uid: string, memberRole: string) => !currentRoomId || isDefaultRoom || canManage(memberRole) || roomMemberIds.has(uid),
+    (uid: string, memberRole: string) => !currentRoomId || isDefaultRoom || memberRole === 'owner' || roomMemberIds.has(uid),
     [currentRoomId, isDefaultRoom, roomMemberIds],
   );
 
@@ -566,7 +567,17 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
           ),
         }
       : {
-          title: view === 'notice' ? '공지' : view === 'assign' ? '루틴 업무 설정' : '할일',
+          // ★채팅 루트가 설정한 headerTitle(컴포넌트)·headerRight 를 **명시적으로 되돌린다.**
+          //   setOptions 는 얕은 병합이라 키를 생략하면 이전 값이 남고, headerTitle 은 title 보다 우선한다
+          //   → title 만 넘기면 패널 헤더가 계속 "업무 채팅"으로 보인다(2026-08-11 P5 실측).
+          //   위 채팅 루트 분기가 headerLeft 에 대해 하고 있는 초기화를, 나머지 두 키에도 똑같이 한다.
+          headerTitleAlign: 'left' as const,
+          headerTitle: () => (
+            <Text style={st.headerTitle}>
+              {view === 'notice' ? '공지' : view === 'assign' ? '루틴 업무 설정' : '할일'}
+            </Text>
+          ),
+          headerRight: () => null,
           headerLeft: () => (
             <Pressable onPress={closePanel} hitSlop={8} style={({ pressed }) => [{ paddingLeft: HEADER_EDGE_GUTTER, paddingRight: 14, paddingVertical: 4 }, pressed && { opacity: 0.6 }]}>
               <Ionicons name="arrow-back" size={24} color={InkColors.ink} />
