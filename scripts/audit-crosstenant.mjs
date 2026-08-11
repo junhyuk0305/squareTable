@@ -1,6 +1,7 @@
 // audit-crosstenant.mjs — 두 매장 실계정으로 크로스테넌트 격리 실증 + 자가정리(service_role sweep)
 // 실행: node --env-file=.env.seed scripts/audit-crosstenant.mjs
 import { createClient } from '@supabase/supabase-js';
+import { seedVerifiedPhones, cleanupSeededPhones } from './qa-otp-seed.mjs';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -29,8 +30,12 @@ const rid = Math.random().toString(36).slice(2, 8) + Date.now().toString(36).sli
 let pass = 0, fail = 0;
 const ok = (c, m, x='') => { console.log(`  ${c?'PASS':'FAIL'} ${m} ${x}`); c ? pass++ : fail++; };
 
+const seededPhones = [];
+
 async function makeOwner(tag, phone) {
   const c = mk();
+  await seedVerifiedPhones(URL, SRV, [phone]); // 0088 게이트 라이브 — 미인증 번호는 create_store가 차단
+  seededPhones.push(phone);
   const email = `xt_${tag}_${rid}@example.com`;
   const { data: su, error: se } = await c.auth.signUp({
     email, password: 'Test!2345',
@@ -156,6 +161,7 @@ const TENANT_TABLES = ['playbook_entries','chat_queries','unknown_queries','work
     for(const u of (xu||[])) await admin.from('units').delete().eq('id',u.id);
     console.log(`  · sweep: xt_ authUser ${killed} 삭제, XT_ 매장 ${(xu||[]).length} 삭제`);
   }
+  await cleanupSeededPhones(URL, SRV, seededPhones);
 
   console.log(`\nRESULT: ${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);

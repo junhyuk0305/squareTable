@@ -214,8 +214,10 @@ export function OwnerStatusView() {
             return (
               <Pressable
                 key={r.unit_id}
-                // 명단은 직원 관리(로스터 상태칩: 근무중/퇴근)가 담당 — 허브는 카운트+이동까지.
-                onPress={() => goStore(r.unit_id, '/owner/staff')}
+                // 이 행이 말하는 것은 '근무중 n · 예정 n' = 출퇴근+근무표다. 착지도 근무표여야 한다
+                // (2026-08-11 P2: 직원 관리에는 스케줄이 없어 "예정 N"이 가리키는 곳에 그게 없었다).
+                // 지금 누가 근무중인지의 명단은 직원 관리 로스터가 계속 담당한다(staff에 근무표 진입점 행을 둠).
+                onPress={() => goStore(r.unit_id, '/owner/schedule')}
                 disabled={!!switching}
                 style={({ pressed }) => [styles.row, styles.rowTop, pressed && { opacity: 0.85 }]}
               >

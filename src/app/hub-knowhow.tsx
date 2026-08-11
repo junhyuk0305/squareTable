@@ -74,7 +74,21 @@ export default function HubKnowhowScreen() {
     );
   }, [rows, query]);
 
-  /** 매장별 묶음 — RPC 는 표현을 정하지 않는다(행이 unit_id 를 들고 온다). 순서는 매장 목록 순. */
+  /**
+   * 소유 매장 — `owner_knowhow_entries()` 가 `units.owner_id = auth.uid()` 로 좁히므로 목록도 같은 범위여야 한다.
+   * `stores`(=`my_units`)는 **멤버십** 기준이라 매니저·직원으로 속한 남의 매장까지 들고 있다 —
+   * 그걸 그대로 세면 "노하우 0개"라고 말할 자격이 없는 매장까지 0개로 단정하게 된다(0093 역할 분리).
+   */
+  const ownedStores = useMemo(() => stores.filter((s) => s.role === 'owner'), [stores]);
+
+  /**
+   * 매장별 묶음 — RPC 는 표현을 정하지 않는다(행이 unit_id 를 들고 온다). 순서는 매장 목록 순.
+   *
+   * ★2026-08-11(P2-#5): **노하우 0개인 매장도 센다.** 예전엔 항목이 있는 매장만 묶어서
+   *   머리말이 "매장 1곳"이라 말했는데 사장은 2곳을 갖고 있었다(`/hub-growth` 는 둘 다 세고 있어 화면끼리 어긋났다).
+   *   새 매장은 **항상 0개로 시작**하므로, 정작 노하우를 채워야 할 매장이 노하우 화면에서 사라지는 게 옛 동작이었다.
+   *   단 **검색 중에는 0건 매장을 끼우지 않는다** — 적중하지 않은 것이 결과처럼 보이면 안 된다.
+   */
   const groups = useMemo(() => {
     const by = new Map<string, PlaybookEntry[]>();
     for (const e of visible) {
@@ -82,10 +96,11 @@ export default function HubKnowhowScreen() {
       if (!by.has(uid)) by.set(uid, []);
       by.get(uid)!.push(e);
     }
-    const order = stores.map((s) => s.unit_id).filter((uid) => by.has(uid));
+    const order = filtering ? [] : ownedStores.map((s) => s.unit_id);
+    // 항목이 있는데 소유 목록에 없는 매장(목록 미도착 등)은 절대 감추지 않는다 — 뒤에 붙인다.
     for (const uid of by.keys()) if (!order.includes(uid)) order.push(uid);
-    return order.map((uid) => ({ uid, name: storeNameOf(uid), items: by.get(uid)! }));
-  }, [visible, stores, storeNameOf]);
+    return order.map((uid) => ({ uid, name: storeNameOf(uid), items: by.get(uid) ?? [] }));
+  }, [visible, ownedStores, storeNameOf, filtering]);
 
   const total = rows?.length ?? 0;
 
@@ -146,9 +161,25 @@ export default function HubKnowhowScreen() {
           ) : (
             groups.map((g) => (
               <View key={g.uid} style={st.group}>
-                <SectionLabel title={g.name} hint={`${g.items.length}개`} />
+                {/* 0은 "0개"가 아니라 "없어요" (워딩 §5). */}
+                <SectionLabel title={g.name} hint={g.items.length === 0 ? '없어요' : `${g.items.length}개`} />
                 <View style={st.card}>
-                  {g.items.map((e, i) => (
+                  {g.items.length === 0 ? (
+                    // 빈 매장을 이름만 세워 두면 막다른 길이 된다 — 채우러 갈 곳을 준다(복잡도 §4 빈 화면 규칙).
+                    <Pressable
+                      onPress={() => goStore(g.uid, '/owner/knowledge')}
+                      disabled={!!switching}
+                      style={({ pressed }) => [st.row, pressed && { opacity: 0.85 }]}
+                      accessibilityRole="button"
+                      accessibilityLabel={`${g.name} 첫 노하우 추가하러 가기`}
+                    >
+                      <View style={{ flex: 1, minWidth: 0 }}>
+                        <Text style={st.emptyTitle}>아직 노하우가 없어요</Text>
+                        <Text style={st.rowSub} numberOfLines={1}>이 매장에 첫 노하우를 적어 보세요</Text>
+                      </View>
+                      <Ionicons name="chevron-forward" size={16} color={InkColors.ink3} />
+                    </Pressable>
+                  ) : g.items.map((e, i) => (
                     <Pressable
                       key={e.id}
                       // 고치는 것은 매장 앱에서 — 허브에 수정 경로를 새로 만들지 않는다.
@@ -202,4 +233,6 @@ const st = StyleSheet.create({
   rowTop: { borderTopWidth: 1, borderTopColor: InkColors.line },
   rowTitle: { fontSize: 15, fontWeight: '700', color: InkColors.ink },
   rowSub: { fontSize: 12, color: InkColors.ink3, marginTop: 1 },
+  // 0건 매장 행 — 제목이 안내문(본문)이라 15sp 하한 적용(복잡도 §4).
+  emptyTitle: { fontSize: 15, fontWeight: '700', color: InkColors.ink2 },
 });

@@ -209,6 +209,7 @@ export default function OwnerStaffScreen() {
         {/* ③ 퀴즈 — 흰 카드였지만 위 두 블록과 함께 '카드 3연속'을 만들던 자리라 행으로 낮춘다(2026-08-06).
             새 직원이 들어오기로 한 순간이 코스를 만들 순간(초대코드 바로 아래). */}
         <Appear delay={80}>
+        <View>
         <Pressable
           onPress={() => router.push('/owner/training')}
           style={({ pressed }) => [styles.quizRow, pressed && { opacity: 0.6 }]}
@@ -224,6 +225,27 @@ export default function OwnerStaffScreen() {
           </View>
           <Ionicons name="chevron-forward" size={16} color={InkColors.ink3} />
         </Pressable>
+
+        {/* ④ 근무표 — 허브 '현황'의 매장 행이 근무표로 착지하게 바뀌면서(2026-08-11 P2),
+            '지금 누가 근무중'을 보러 여기 온 사장이 한 단계 멀어졌다. 그 보상으로 반대 방향 진입점을 둔다.
+            이 화면은 이미 블록 예산 초과라 **새 블록을 세우지 않는다** — 위 퀴즈와 같은 Appear 안에
+            형제 행으로 넣어 '바로가기 행' 한 덩어리로 센다(별도 Appear 로 빼면 블록 8이 되어 래칫 초과). */}
+        <Pressable
+          onPress={() => router.push('/owner/schedule')}
+          style={({ pressed }) => [styles.quizRow, pressed && { opacity: 0.6 }]}
+          accessibilityRole="button"
+          accessibilityLabel="근무표 열기"
+        >
+          <View style={styles.quizIcon}>
+            <Ionicons name="calendar-outline" size={19} color={InkColors.ink} />
+          </View>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={styles.quizTitle}>근무표</Text>
+            <Text style={styles.quizDesc}>누가 언제 근무하는지 짜고, 교대 요청을 승인해요</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={16} color={InkColors.ink3} />
+        </Pressable>
+        </View>
         </Appear>
 
         {/* 합류 신청(승인 대기) — 남용 #2. 코드로 신청한 사람을 사장이 승인해야 소속된다. */}
