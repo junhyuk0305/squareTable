@@ -168,6 +168,33 @@ async function main() {
   const { data: bSlots } = await B.c.from('store_slots').select('id');
   check('★타 계정 슬롯 열람 0건(RLS)', (bSlots ?? []).length === 0, `rows=${(bSlots ?? []).length}`);
 
+  // ── ⑧ ★0137 다점포 무료 지급(관리 콘솔 버튼) ──────────────────────────────
+  // 결제 승인 말고 **돈 없이 여는 길**. 영업에서 "다점포 열어드릴게요"의 실체다.
+  // 이 가드가 없으면 기능이 죽어도 아무도 모른다(관리 콘솔은 QA가 안 돈다).
+  const G = await signUp('owner', 'QA무료다점포');
+  cleanup.push(G.c);
+  const { data: g1 } = await G.c.rpc('create_store', { p_store_name: 'QA무료 1호점', p_industry: '카페·디저트', p_biz_no: null });
+  const GS1 = g1?.[0]?.unit_id;
+  const gep0 = await svcRpc('effective_plan', { p_unit: GS1 });
+  check('⑧ 지급 전 1호점은 다점포가 아니다', gep0.data !== 'multi', `ep=${gep0.data}`);
+
+  // extra=1 → "2호점까지". 1호점을 올리는 몫은 서버가 알아서 더 적립한다(화면이 개수를 안 센다).
+  const grant = await svcRpc('grant_store_slots', { p_owner: G.uid, p_extra: 1, p_days: 30 });
+  check('⑧ 무료 지급 호출 성공', grant.ok, `status=${grant.status} ${JSON.stringify(grant.data)}`);
+  check('⑧ 기존 매장 1곳이 자동 배정됨', grant.data?.assigned === 1, `assigned=${grant.data?.assigned}`);
+
+  const gep1 = await svcRpc('effective_plan', { p_unit: GS1 });
+  check('⑧ ★1호점이 multi 로 올라간다(전환할 때마다 화면이 바뀌지 않게)', gep1.data === 'multi', `ep=${gep1.data}`);
+
+  const { data: g2, error: ge2 } = await G.c.rpc('create_store', { p_store_name: 'QA무료 2호점', p_industry: '카페·디저트', p_biz_no: null });
+  check('⑧ ★2호점 생성 OK(돈 없이 열렸다)', !ge2 && !!g2?.[0]?.unit_id, ge2?.message ?? g2?.[0]?.unit_id);
+  const { error: ge3 } = await G.c.rpc('create_store', { p_store_name: 'QA무료 3호점', p_industry: '카페·디저트', p_biz_no: null });
+  check('⑧ ★3호점은 차단(준 만큼만 열린다)', /no_store_slot/.test(ge3?.message ?? ''), ge3?.message ?? '생성돼버림');
+
+  // 돈의 출처가 행에서 읽혀야 한다 — 무료 지급분은 claim_id 가 null 이다.
+  const gSlots = await svcSel(`store_slots?select=claim_id&owner_id=eq.${G.uid}`);
+  check('⑧ 무료 지급분은 claim_id=null (결제분과 구분)', gSlots.length > 0 && gSlots.every((r) => r.claim_id === null), JSON.stringify(gSlots));
+
   console.log(`\nRESULT: ${pass} passed, ${fail} failed`);
 }
 
