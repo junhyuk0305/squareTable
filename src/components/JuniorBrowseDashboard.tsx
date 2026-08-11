@@ -9,6 +9,7 @@ import { EmptyState } from './EmptyState';
 import { EntryDetailModal } from './EntryDetailModal';
 import { Appear } from './Appear';
 import { matchesKnowhowQuery } from '@/lib/utils/knowhowSearch';
+import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { InkColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
@@ -42,6 +43,9 @@ export function JuniorBrowseDashboard({ entries, emptyHint }: JuniorBrowseDashbo
   const [detailEntry, setDetailEntry] = useState<PlaybookEntry | null>(null);
   const [query, setQuery] = useState('');
   const [view, setView] = useState<ViewKey>('dashboard');
+  // 읽기 실패 판정은 사장 쪽(OwnerKnowhowBrowse)과 같은 스토어를 본다 — 화면마다 복제하지 않는다.
+  const loadError = usePlaybookStore((s) => s.loadError);
+  const hydrate = usePlaybookStore((s) => s.hydrate);
 
   // 대시보드/목록 토글의 검정 pill을 세그먼트 사이로 부드럽게 슬라이드시킨다(색은 그대로).
   // 두 버튼의 폭이 다르므로(대시보드>목록) onLayout으로 각 버튼의 x·width를 재고, 그 사이를 보간한다.
@@ -127,7 +131,18 @@ export function JuniorBrowseDashboard({ entries, emptyHint }: JuniorBrowseDashbo
   );
 
   // 등록된 노하우 자체가 없을 때 — 검색/토글 없이 안내만.
+  // ★읽기 실패(loadError)를 "없음"으로 위장하지 않는다. 위장하면 직원은 백엔드 장애를
+  //   "사장님이 아직 아무것도 안 올렸다"로 읽는다(2026-08-11 QA P3-#3). 판정은 사장 쪽과 같은 SSOT.
   if (!entries || entries.length === 0) {
+    if (loadError) {
+      return (
+        <EmptyState
+          title="노하우를 불러오지 못했어요"
+          body="연결을 확인하고 다시 시도해 주세요."
+          cta={{ label: '다시 시도', onPress: () => hydrate() }}
+        />
+      );
+    }
     const hint = emptyHint ?? '아직 등록된 노하우가 없어요. 물어보기로 질문하면 사장님이 채워줘요.';
     return <EmptyState title="아직 보여줄 노하우가 없어요" body={hint} />;
   }

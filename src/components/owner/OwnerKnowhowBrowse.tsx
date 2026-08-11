@@ -283,6 +283,11 @@ export function OwnerKnowhowBrowse({
   // 목록이 길면 쓰임새 묶음(많이 쓰임 / 오래 확인 안 함 / 그 밖)이 "무엇부터 손볼까"에 답한다.
   const showUsageGroups = listFiltered.length >= GROUP_MIN;
 
+  // 끊어 그리기를 처음으로 되돌리는 조건 = 거르기 조건 전부.
+  // ★한 곳에서만 만든다 — 묶음 뷰와 평면 목록이 각자 조합하던 때 묶음 쪽에만 activeCat 이 빠져서,
+  //   거른 뒤에도 '더 보기'가 열린 채로 남았다(2026-08-11 QA P3-#5).
+  const listKey = `${seg}-${query}-${activeCat ?? ''}`;
+
   // 필터를 한 줄로 압축하면 "지금 걸려 있다"가 안 보인다 — 카운트가 그 신호를 대신 든다.
   const countLabel =
     query.trim() || effectiveCat
@@ -327,7 +332,7 @@ export function OwnerKnowhowBrowse({
   const groupBlock = (key: string, title: string, items: PlaybookEntry[]) => (
     <View key={key} style={styles.group}>
       <SectionLabel title={title} hint={`${items.length}건`} />
-      <PagedRows key={`${key}-${seg}-${query}`} items={items} render={entryItem} style={styles.list} />
+      <PagedRows key={`${key}-${listKey}`} items={items} render={entryItem} style={styles.list} />
     </View>
   );
 
@@ -509,7 +514,7 @@ export function OwnerKnowhowBrowse({
               //   2026-08-08 실측: 노하우 400건에서 DOM 5,776 노드 · 6.7초. 끊어 그리고 남은 수를 밝힌다.
               //   key = 거르기 조건 → 조건이 바뀌면 컴포넌트가 다시 서면서 '더 보기'가 처음으로 돌아간다.
               <PagedRows
-                key={`${seg}-${query}-${activeCat ?? ''}`}
+                key={listKey}
                 items={listFiltered}
                 render={entryItem}
                 style={styles.list}

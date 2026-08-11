@@ -136,8 +136,6 @@ export function ChatTurn({
             // AI 합성 답은 검증 배지를 달지 않는다(저장된 답이 아니므로) → 대신 '매칭 NN%'로 표시되고 위에 'AI 정리' 고지가 뜬다.
             verification={block?.mode === 'generated' ? undefined : matchedEntry?.verification?.state}
             resolutionRate={matchedEntry?.stats?.resolution_rate}
-            doText={matchedEntry?.square?.extract?.do}
-            dontText={matchedEntry?.square?.extract?.dont}
             standard={matchedEntry?.square?.standard}
             feedback={query.satisfaction}
             onThumbsUp={onThumbsUp}

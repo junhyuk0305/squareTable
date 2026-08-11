@@ -30,10 +30,10 @@ type Props = {
   verification?: VerifyState;
   /** 해결률(0~1). 정의되면 NN%로 표시. */
   resolutionRate?: number;
-  /** 핵심 DO 한 줄(긍정색). actions와 별개의 요약용. */
-  doText?: string;
-  /** 핵심 DON'T 한 줄(경고색). donts와 별개의 요약용. */
-  dontText?: string;
+  // ※ doText/dontText(DO·DON'T 좌측 컬러바 한 줄)는 2026-08-11에 삭제했다.
+  //    노하우 본문을 그리는 형태는 KnowhowRows 하나뿐인데 이 블록만 옛 형태로 남아 있었고,
+  //    재료가 extract.dont = donts 라 '금지'가 카드 안에 **두 번** 그려졌다(QA P3-#2).
+  //    보여야 할 내용이 생기면 KnowhowRows 에 행으로 넣는다 — 형태를 늘리지 않는다.
   /** 주관적 정도 기준(있을 때만) — 노란 게이지로 "기준 80/100" 표시. max 없으면 0~100. */
   standard?: { kind?: 'spectrum' | 'count'; label: string; value: number; max?: number; ends?: [string, string]; unit?: string };
   /** 출처 푸터 탭 → 원본 노하우 상세 열기(있을 때만 누를 수 있게). */
@@ -54,8 +54,6 @@ export function SquareCard({
   feedback,
   verification,
   resolutionRate,
-  doText,
-  dontText,
   standard,
   onSourcePress,
   hideSource,
@@ -67,8 +65,6 @@ export function SquareCard({
   const hasVerification = typeof verification !== 'undefined';
   const hasRate = typeof resolutionRate === 'number';
   const ratePct = hasRate ? Math.round((resolutionRate as number) * 100) : null;
-  const doLine = doText?.trim();
-  const dontLine = dontText?.trim();
 
   return (
     <View style={styles.card}>
@@ -131,20 +127,6 @@ export function SquareCard({
           ) : (
             <Text style={styles.gaugeVal}>{standard.value}/{stdMax}</Text>
           )}
-        </View>
-      ) : null}
-
-      {/* DO / DON'T 2색 한 줄 요약(보강 메타) — 있을 때만 */}
-      {doLine ? (
-        <View style={[styles.tagRow, { borderLeftColor: BrandColors.good }]}>
-          <Text style={[styles.tagLabel, { color: BrandColors.goodText }]}>DO</Text>
-          <Text style={styles.tagText}>{doLine}</Text>
-        </View>
-      ) : null}
-      {dontLine ? (
-        <View style={[styles.tagRow, { borderLeftColor: BrandColors.bad }]}>
-          <Text style={[styles.tagLabel, { color: BrandColors.badText }]}>DON&apos;T</Text>
-          <Text style={styles.tagText}>{dontLine}</Text>
         </View>
       ) : null}
 
@@ -242,16 +224,6 @@ const styles = StyleSheet.create({
   rateText: { fontSize: 11, fontWeight: '800', color: InkColors.ink2 },
   // 상황·할 일·금지 본문 스타일은 KnowhowRows(D10)로 옮겼다(2026-08-08 형태 통일).
   sparse: { fontSize: 14, color: InkColors.ink3, lineHeight: 21, paddingVertical: 4 },
-  // DO/DON'T 2색 한 줄 태그
-  tagRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 8,
-    borderLeftWidth: 3,
-    paddingLeft: 10,
-  },
-  tagLabel: { fontSize: 11, fontWeight: '800', letterSpacing: 0.5, width: 40, lineHeight: 19 },
-  tagText: { flex: 1, fontSize: 13, color: InkColors.ink2, lineHeight: 19 },
   // 정도 기준 게이지 (노란 바)
   gaugeBox: { gap: 6, paddingVertical: 2 },
   gaugeHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' },
