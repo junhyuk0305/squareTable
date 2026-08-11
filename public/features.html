@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>기능 — 매장의 정석</title>
-<meta name="description" content="노하우 AI 답변, 훈련 코스, 채팅 업무, 출퇴근·급여, 다점포 관리까지. 매장의 정석이 매장 운영에서 대신하는 일을 실제 화면으로 보여드려요.">
+<meta name="description" content="노하우 AI 답변, 퀴즈 묶음, 채팅 업무, 출퇴근·급여, 다점포 관리까지. 매장의 정석이 매장 운영에서 대신하는 일을 실제 화면으로 보여드려요.">
 <meta property="og:title" content="기능 — 매장의 정석">
 <meta property="og:description" content="한 번만 알려주면 그다음은 AI가. 매장의 정석이 매장 운영에서 대신하는 일들.">
 <link rel="canonical" href="https://dochackchack.com/features">
@@ -244,7 +244,7 @@
       <div class="mega-col">
         <div class="mgt">직원이 알아서 해요</div>
         <a class="mi" href="/features#ai"><span class="mic"><svg class="ic"><use href="#n-ai"/></svg></span><span class="mtx"><span class="mt">AI가 대신 답해요</span><span class="md">직원이 물으면 우리 가게 방식 그대로, 출처와 함께</span></span></a>
-        <a class="mi" href="/features#training"><span class="mic"><svg class="ic"><use href="#n-training"/></svg></span><span class="mtx"><span class="mt">신입 훈련 코스</span><span class="md">첫 출근부터 순서대로 배우고 퀴즈로 확인해요</span></span></a>
+        <a class="mi" href="/features#training"><span class="mic"><svg class="ic"><use href="#n-training"/></svg></span><span class="mtx"><span class="mt">신입 퀴즈 묶음</span><span class="md">첫 출근부터 순서대로 배우고 퀴즈로 확인해요</span></span></a>
       </div>
       <div class="mega-col">
         <div class="mgt">매장이 굴러가요</div>
@@ -324,8 +324,8 @@
           </div>
         </article>
         <article class="chapter" id="training">
-          <div class="no">04 · 훈련 코스</div>
-          <h3>신입 교육,<br>훈련 코스가 대신해요</h3>
+          <div class="no">04 · 퀴즈 묶음</div>
+          <h3>신입 교육,<br>퀴즈 묶음이 대신해요</h3>
           <p class="fp">문제는 설명을 안 해서가 아니라 설명한 게 남지 않아서예요. 한 번 만들어두면 다음 신입부터 그대로 돌아가요.</p>
           <div class="ex">
             <span class="exlb">이런 경우</span>
@@ -442,7 +442,10 @@
   var EMPTY = function (t) { return '<div class="empty">' + t + '</div>'; };
   var BAR = function (w) { return '<div class="bar2 din"><i style="width:' + w + '"></i></div>'; };
 
-  var OWNER_TABS = [['home', '홈'], ['bulb', '노하우'], ['tray', '받은질문'], ['case', '업무 채팅'], ['gear', '설정']];
+  // ★2026-08-07 앱 개편 반영: 받은질문 탭이 노하우 탭의 '할 일' 칸으로 흡수돼 사장은 4탭이다.
+  //   목업이 5탭으로 남아 있으면 앱을 열었을 때와 다른 화면을 판 것이 된다(2026-08-11 [P8-#2]).
+  //   아래 챕터의 tab 인덱스도 이 배열 기준이다 — 순서를 바꾸면 같이 고칠 것.
+  var OWNER_TABS = [['home', '홈'], ['bulb', '노하우'], ['case', '업무 채팅'], ['gear', '설정']];
   var JUNIOR_TABS = [['home', '홈'], ['bubble', '물어보기'], ['case', '업무 채팅'], ['clock', '출퇴근'], ['gear', '설정']];
   function tabHtml(set, active, badgeAt) {
     return set.map(function (t, k) {
@@ -470,7 +473,7 @@
       { c: '직원 화면에도 바로 보여요', o: L('인수인계서.pdf', '노하우 6개', 'g') + K('포장 주문 취소 절차') + K('마감 시재 점검') + K('원두 선입선출'),
         s: SEG(ASK, 1) + Q('마감 시재 어떻게 맞춰요?') + A('포스 정산표를 먼저 뽑고, 현금 시재와 <b>1,000원 이내</b>면 그대로 마감해요.', '사장님 가이드 · 마감') + INP(), sc: 'chat' },
     ] },
-    { el: 'inbox', o: { t: '받은 질문', tab: 2, badge: 2 }, s: { who: '직원', t: '물어보기', tab: 1 }, steps: [
+    { el: 'inbox', o: { t: '노하우 · 할 일', tab: 1, badge: 2 }, s: { who: '직원', t: '물어보기', tab: 1 }, steps: [
       { c: '노하우에 없으면 지어내지 않아요', o: SEG(['답할 질문', 'AI가 답함'], 0) + EMPTY('아직 새 질문이 없어요<br>직원이 모르는 걸 물으면 여기로 와요.'),
         s: SEG(ASK, 1) + Q('단체 주문도 선결제인가요?') + A('아직 등록되지 않은 내용이에요.') + BTN('이 경우 사장님께 물어보기'), sc: 'chat' },
       { c: '사장님 받은 질문함으로 바로 넘어가요', o: SEG(['답할 질문', 'AI가 답함'], 0) + K('"단체 주문도 선결제인가요?"', '김민재 · 방금 · 2명이 물었어요', 'hl') + BTN('답변하기  →'),
@@ -478,15 +481,15 @@
       { c: '답 한 번이 노하우로 남아, 다음부터는 AI가 답해요', o: SEG(['답할 질문', 'AI가 답함'], 1) + K('"단체 주문도 선결제인가요?"', '노하우로 저장됨 · AI가 답함', 'gd') + L('AI 자동응답률', '82%', 'g'),
         s: SEG(ASK, 1) + Q('단체 주문도 선결제인가요?') + A('10인 이상 단체는 <b>선결제</b>예요. 그 아래는 후결제도 돼요.', '사장님 가이드 · 결제') + INP(), sc: 'chat' },
     ] },
-    { el: 'training', o: { t: '훈련', tab: 1 }, s: { who: '직원', t: '업무 채팅', tab: 2 }, steps: [
-      { c: '사장님이 첫날 배울 것을 골라둬요', o: SEG(['첫 훈련', '정기 훈련'], 0) + K('1. 포스 마감 정산', '확인한 직원이 아직 없어요') + K('2. 우유 스팀 온도', '확인한 직원이 아직 없어요') + BTN('기존 노하우로 추가', true),
+    { el: 'training', o: { t: '노하우 · 퀴즈', tab: 1 }, s: { who: '직원', t: '업무 채팅', tab: 2 }, steps: [
+      { c: '사장님이 첫날 배울 것을 골라둬요', o: SEG(['첫 출근', '정기 점검'], 0) + K('1. 포스 마감 정산', '확인한 직원이 아직 없어요') + K('2. 우유 스팀 온도', '확인한 직원이 아직 없어요') + BTN('기존 노하우로 추가', true),
         s: EMPTY('첫 출근 전이에요') },
-      { c: '직원 업무 채팅 맨 위에 훈련 카드가 떠요', o: SEG(['첫 훈련', '정기 훈련'], 0) + L('첫 훈련', '직원 업무 채팅에 보여요', 'g') + K('1. 포스 마감 정산', '확인한 직원이 아직 없어요') + K('2. 우유 스팀 온도', '확인한 직원이 아직 없어요'),
-        s: K('오늘의 훈련 1/3', '포스 마감 정산 — 읽고 나면 이해 확인 문제가 나와요', 'hl') + BTN('다 읽었어요') + DPT('오늘 할 일', 1, 4) },
-      { c: '통과 기록이 사장님 화면에 남아요', o: SEG(['첫 훈련', '정기 훈련'], 0) + K('1. 포스 마감 정산', '이해 확인 · 김민재', 'gd') + K('2. 우유 스팀 온도', '이해 확인 · 김민재', 'gd'),
-        s: K('첫 훈련 완료', '3개 모두 이해 확인했어요', 'gd') + K('정기 훈련', '30일 뒤 다시 확인해요') + DPT('오늘 할 일', 1, 4) },
+      { c: '직원 업무 채팅 맨 위에 퀴즈 카드가 떠요', o: SEG(['첫 출근', '정기 점검'], 0) + L('첫 출근', '직원 업무 채팅에 보여요', 'g') + K('1. 포스 마감 정산', '확인한 직원이 아직 없어요') + K('2. 우유 스팀 온도', '확인한 직원이 아직 없어요'),
+        s: K('오늘의 퀴즈 1/3', '포스 마감 정산 — 읽고 나면 이해 확인 문제가 나와요', 'hl') + BTN('다 읽었어요') + DPT('오늘 할 일', 1, 4) },
+      { c: '통과 기록이 사장님 화면에 남아요', o: SEG(['첫 출근', '정기 점검'], 0) + K('1. 포스 마감 정산', '이해 확인 · 김민재', 'gd') + K('2. 우유 스팀 온도', '이해 확인 · 김민재', 'gd'),
+        s: K('첫 출근 완료', '3개 모두 이해 확인했어요', 'gd') + K('정기 점검', '30일 뒤 다시 확인해요') + DPT('오늘 할 일', 1, 4) },
     ] },
-    { el: 'chat', o: { t: '업무 채팅', tab: 3 }, s: { who: '직원', t: '업무 채팅', tab: 2 }, steps: [
+    { el: 'chat', o: { t: '업무 채팅', tab: 2 }, s: { who: '직원', t: '업무 채팅', tab: 2 }, steps: [
       { c: '사장님이 할 일을 배정하고 노하우를 붙여요', o: DPT('마감', 0, 2) + TODO('포스 시재 점검', false, '마감 시재 점검', '담당 김민재') + TODO('홀 청소', false, '', '루틴'),
         s: EMPTY('아직 오늘 할일이 없어요') },
       { c: '직원 오늘 할 일에 그대로 떠요 — 방법까지 같이', o: DPT('마감', 0, 2) + TODO('포스 시재 점검', false, '마감 시재 점검', '담당 김민재') + TODO('홀 청소', false, '', '루틴'),
@@ -527,7 +530,7 @@
   var pinned = matchMedia('(min-width:1001px)');
 
   /* 오른쪽 이동 레일 — 기능 이름 + 막대. 누르면 그 기능의 첫 단계로 스크롤. */
-  var RAIL_NAMES = ['노하우 AI', '노하우 만들기', '받은 질문', '훈련 코스', '업무 배정', '출퇴근·급여', '다점포·매니저'];
+  var RAIL_NAMES = ['노하우 AI', '노하우 만들기', '받은 질문', '퀴즈 묶음', '업무 배정', '출퇴근·급여', '다점포·매니저'];
   els.rail.innerHTML = CH.map(function (c, k) {
     return '<button type="button" data-i="' + k + '" title="' + RAIL_NAMES[k] + '" aria-label="' + RAIL_NAMES[k] + '으로 이동">' +
       '<span class="lb">' + RAIL_NAMES[k] + '</span><span class="bar"></span></button>';
