@@ -1,13 +1,10 @@
 import { StyleSheet } from 'react-native';
 import { InkColors } from '@/lib/theme/colors';
 import { Elevation, Radius } from '@/lib/theme/elevation';
-import { HEADER_EDGE_GUTTER, Space } from '@/lib/theme/layout';
+import { Space } from '@/lib/theme/layout';
 
 export const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: InkColors.cream },
-
-  // 헤더 우측 [벨][아바타] — 끝 여백은 이 행이 갖는다(벨은 edge=false로 자기 여백을 내려놓는다).
-  headerRight: { flexDirection: 'row', alignItems: 'center', gap: Space.md, paddingRight: HEADER_EDGE_GUTTER },
 
   scroll: { padding: 20, gap: 18 },
   greet: { fontSize: 16, fontWeight: '700', color: InkColors.ink2 },

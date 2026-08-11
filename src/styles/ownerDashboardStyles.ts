@@ -14,18 +14,7 @@ export const styles = StyleSheet.create({
 
   // 미검증 우선 배너는 공용 <AlertRow>(블록 X2)로 대체됨(2026-08-05).
 
-  // 상단 커스텀 헤더 — 좌측 로고 / 우측 매장명·사용자명
-  appHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingTop: 6,
-    paddingBottom: 10,
-    backgroundColor: InkColors.cream,
-  },
-  // 헤더: [2칸 토글(로고=허브 / 매장)][알림 벨][아바타] — 간격은 허브 상단바와 같게(12).
-  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  // 상단바 스타일은 공용 AppTopBar 가 갖는다(직원 홈과 같은 것을 쓴다 — 2026-08-08 통일).
 
   onboard: {
     backgroundColor: BrandColors.accentSoft,

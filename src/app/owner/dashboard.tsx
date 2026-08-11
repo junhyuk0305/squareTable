@@ -13,9 +13,7 @@ import { RoleTabBar, goToTab } from '@/components/RoleTabBar';
 import { SectionLabel } from '@/components/SectionLabel';
 import { AlertRow } from '@/components/blocks/AlertRow';
 import { HeroSubNav, type HeroSubNavItem } from '@/components/blocks/HeroSubNav';
-import { OwnerNotificationBell } from '@/components/NotificationBell';
-import { StoreToggle } from '@/components/StoreToggle';
-import { AccountAvatarButton } from '@/components/AccountAvatarButton';
+import { AppTopBar } from '@/components/AppTopBar';
 import { SEED_TEMPLATES } from '@/data/seed-templates';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { useOwnerDashboardData } from '@/lib/hooks/useOwnerDashboardData';
@@ -169,15 +167,8 @@ export default function OwnerDashboardScreen() {
 
       {/* 코치마크 오버레이가 덮을 영역(헤더·스크롤·탭바를 함께 감싼다) */}
       <View ref={containerRef} style={{ flex: 1 }}>
-      {/* 좌: 매장 토글(⌂ 허브 복귀 + 매장 전환) / 우: 알림 벨 */}
-      <View style={styles.appHeader}>
-        <StoreToggle />
-        {/* 우측은 두 층(허브·매장) 모두 [벨][아바타] — 2026-08-08 상단바 통일. */}
-        <View style={styles.headerRight}>
-          <OwnerNotificationBell edge={false} />
-          <AccountAvatarButton />
-        </View>
-      </View>
+      {/* 상단바는 직원 홈과 같은 공용 컴포넌트 — 두 층이 갈라지지 않게(2026-08-08 통일). */}
+      <AppTopBar />
 
       <ScrollView ref={scrollRef} contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         {/* 정적 콘텐츠 래퍼 — 진입 애니는 각 <Appear>가 담당. 코치마크 위치 측정 기준(scrollContentRef). */}

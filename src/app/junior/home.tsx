@@ -4,9 +4,7 @@ import { Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 import { RoleTabBar, goToTab } from '@/components/RoleTabBar';
-import { StoreToggle } from '@/components/StoreToggle';
-import { NotificationBell } from '@/components/NotificationBell';
-import { AccountAvatarButton } from '@/components/AccountAvatarButton';
+import { AppTopBar } from '@/components/AppTopBar';
 import { Appear } from '@/components/Appear';
 import { JuniorWelcomeCoach } from '@/components/junior/JuniorWelcomeCoach';
 import { SectionLabel } from '@/components/SectionLabel';
@@ -70,35 +68,12 @@ export default function JuniorHomeScreen() {
         : '아직 출근 전이에요';
 
   return (
-    <SafeAreaView style={styles.safe} edges={['bottom']}>
-      {/* 헤더는 다른 화면들과 동일한 네이티브 헤더 크롬을 사용한다(상단 여백·타이포 통일).
-          왼쪽=매장의 정석 로고, 오른쪽=알림 벨. 매장명·내 이름은 벨 → 알림 화면 맨 위에서 보여준다. */}
-      <Stack.Screen
-        options={{
-          headerShown: true,
-          headerTitleAlign: 'left',
-          // 홈은 탭 루트 — 하단 탭바로만 진입하므로 뒤로가기 화살표를 무조건 끈다.
-          // (탭 전환은 replace라 보통 history가 없지만, 온보딩/합류/딥링크 경로로 홈이 스택 위에
-          //  얹히면 react-navigation 기본 back 화살표가 새어나온다 → 막다른 컨트롤. owner dashboard와 동일 처리.)
-          headerLeft: () => null,
-          headerBackVisible: false,
-          // 네이티브 타이틀 컨테이너가 좌측 ~17px에 앵커 → paddingLeft로 콘텐츠 거터(20)에 맞춰
-          // 우측 벨(20)과 좌우 대칭을 만든다.
-          headerTitle: () => (
-            <View style={{ paddingLeft: 3 }}>
-              <StoreToggle />
-            </View>
-          ),
-          // 우측은 두 층(허브·매장) 모두 [벨][아바타] — 2026-08-08 상단바 통일.
-          // 벨은 네이티브 헤더 끝 여백을 스스로 갖고 있어(edge=true) 아바타는 그 안쪽에 둔다.
-          headerRight: () => (
-            <View style={styles.headerRight}>
-              <NotificationBell edge={false} />
-              <AccountAvatarButton />
-            </View>
-          ),
-        }}
-      />
+    <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
+      {/* 네이티브 헤더 → 커스텀 상단바(사장 홈과 같은 AppTopBar). 2026-08-08 상단바 통일.
+          네이티브 헤더는 화면 트리 밖이라 ① 두 홈의 구현이 갈라지고 ② 매장 목록을 pill 바로 아래로
+          펼칠 자리가 없었다. 홈은 탭 루트라 뒤로가기가 필요 없으므로 헤더 크롬 자체를 끈다. */}
+      <Stack.Screen options={{ headerShown: false }} />
+      <AppTopBar />
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <Text style={styles.greet}>{userName}님, 오늘도 화이팅이에요</Text>
