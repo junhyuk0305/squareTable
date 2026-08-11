@@ -135,7 +135,8 @@ async function main() {
    *   그래서 "링크가 보이면 누르고, 안 보이면 폼부터 연다"로 화면 상태에 무관하게 만든다.
    */
   const openPicker = async (page) => {
-    if (!(await see(page, '이미 적어둔 노하우에서 고르기'))) await tap(page, '새로 만들기');
+    // ★2026-08-07 구조 이관으로 폼을 여는 버튼이 '새로 만들기' → **'노하우 담기'**(2층)가 됐다.
+    if (!(await see(page, '이미 적어둔 노하우에서 고르기'))) await tapLabel(page, '노하우 담기');
     await wait(page, '이미 적어둔 노하우에서 고르기');
     await tap(page, '이미 적어둔 노하우에서 고르기');
   };
@@ -148,8 +149,17 @@ async function main() {
     const hasEntryCard = await wait(po, '첫 출근(신입 첫날)과 정기 점검', 30000);
     check('T1a 직원·급여에 퀴즈 카드', hasEntryCard);
     await tap(po, '첫 출근(신입 첫날)과 정기 점검');
-    const onTraining = await wait(po, '어떤 퀴즈부터 만들까요');
-    check('T1b 퀴즈 화면 진입(코스 0개 → 프리셋 고르기)', onTraining);
+    // ★2026-08-07 개편: 1층(/owner/training)은 **업무 목록**이 됐고 묶음(코스) 만들기·설정·공유 링크는
+    //   2층(/owner/quiz-list)으로 내려갔다(quiz-list.tsx:73). 옛 기대값("1층에 프리셋 고르기")으로 두면
+    //   여기서 하니스가 통째로 멈춘다 — 제품이 아니라 기대값이 낡은 것이다.
+    const onTraining = await wait(po, '퀴즈 목록에서 노하우 담기');
+    check('T1b 1층 퀴즈 화면 진입(업무 목록 + 2층 링크)', onTraining);
+    await shot(po, '01-training-floor1');
+    await tapLabel(po, '퀴즈 목록 열기');
+    check('T1b2 2층 진입(코스 0개 빈 상태)', await wait(po, '퀴즈 묶음이 없어요'));
+    // ※ EmptyState 의 CTA 는 accessibilityLabel 이 없다 → getByLabel 이 아니라 텍스트로 누른다.
+    await tap(po, '묶음 만들기');
+    check('T1b3 프리셋 고르기 시트', await wait(po, '어떤 퀴즈부터 만들까요'));
     await shot(po, '01-preset-onboarding');
     // 프리셋 '첫 출근' 만들기 → 코스 행만 생기고 담을 업무는 추천 시트에서 사장이 고른다(계약 §3).
     await tapLabel(po, '첫 출근 만들기');
@@ -157,11 +167,17 @@ async function main() {
     check('T1d 추천 노하우 담기 시트', await wait(po, '담을 노하우 고르기'));
     await shot(po, '01b-recommend');
     await tapLabel(po, '닫기'); // 추천은 건너뛰고 아래 T2·T3 경로로 담는다
-    check('T1e 미달 안내(3개부터 공개)', await wait(po, '비어 있음 · 3개부터 공개'));
-    await shot(po, '01c-training-empty');
+    // 만든 직후 그 묶음이 선택된 채로 남는다(applyCourse) → 빈 상태 문구가 묶음 이름을 그대로 쓴다.
+    const emptyTitle = await wait(po, '담긴 노하우가 없어요', 25000);
+    // ★getByText 는 부분일치라 조상 div 까지 걸려 판정이 흔들린다 → 담기 진입점은 **aria-label**로 집는다
+    //   (EmptyState 의 CTA 는 label 이 없고, 머리줄 '노하우 담기' 버튼이 label 을 갖는다).
+    const emptyCta = await po.getByLabel('노하우 담기', { exact: true }).first()
+      .waitFor({ state: 'visible', timeout: 15000 }).then(() => true).catch(() => false);
+    check('T1e 빈 묶음 안내 + 다음 행동', emptyTitle && emptyCta, `title=${emptyTitle} cta=${emptyCta}`);
+    await shot(po, '01c-course-empty');
 
     console.log('\n[사장] 새 문답 추가 + 글자수 힌트');
-    await tap(po, '새로 만들기');
+    await tapLabel(po, '노하우 담기');
     await wait(po, '어떤 노하우인가요');
     // 스택 내비 특성상 이전 화면(직원·급여 시급 input 등)이 DOM에 남는다 → placeholder 로만 집는다.
     const nameInput = po.getByPlaceholder('예) 오픈 청소');
@@ -174,7 +190,7 @@ async function main() {
     await howInput.pressSequentially(' 포스 켜고 시재 5만원 확인, 머신 예열 순서로 해요. 시재가 안 맞으면 바로 알려 주세요.', { delay: 3 });
     check('T2b 충족 → 안내 문구 전환', await wait(po, '자세할수록 이해 확인 문제가'));
     await shot(po, '02-form-filled');
-    await tap(po, '퀴즈에 추가');
+    await tapLabel(po, '퀴즈에 담기');
     check('T2c 추가 토스트', await wait(po, '첫 출근에 담았어요'));
     check('T2d 목록 1행(오픈 청소)', await wait(po, '오픈 청소'));
 
@@ -188,16 +204,21 @@ async function main() {
     await shot(po, '03-picker');
     await tap(po, '원두 채우기');
     check('T3c 추가 토스트', await wait(po, '첫 출근에 담았어요'));
-    check('T3d 문항 0개 안내(2개)', await wait(po, '문제 없는 노하우 2개 · 문제부터 만들어 주세요'));
+    check('T3d 담긴 개수 2개(countLabel)', await wait(po, '첫 출근 · 2개'));
 
     console.log('\n[사장] 3개째 → 항목은 찼지만 문항 0개');
     await openPicker(po);
     await wait(po, '가스 밸브 잠그기');
     await tap(po, '가스 밸브 잠그기');
     await wait(po, '첫 출근에 담았어요');
-    // ★ 항목 수만 보던 옛 판정은 문항이 0개인데도 '준비됨'을 띄웠다. 지금은 문항까지 봐야 초록이다.
-    check('T4 문항 0개면 준비됨 아님', await wait(po, '문제 없는 노하우 3개 · 문제부터 만들어 주세요'));
+    check('T4a 담긴 개수 3개', await wait(po, '첫 출근 · 3개'));
+    // ★ 항목 수만 보던 옛 판정은 문항이 0개인데도 '준비됨'을 띄웠다. 지금은 문항까지 봐야 내보낼 수 있다.
+    //   옛 문구('문제 없는 노하우 N개 · 문제부터 만들어 주세요')는 08-07 개편에서 사라졌고,
+    //   같은 판정이 살아 있는 자리는 **공유 링크 가드**다 — 항목 3개라도 문항이 0이면 링크를 못 만든다.
+    await tapLabel(po, '링크로 보내기');
+    check('T4b 항목만 차고 문항 0개면 링크 불가', await wait(po, '더 있으면 링크를 만들 수 있어요'));
     await shot(po, '04-ready');
+    // 안내 토스트라 닫을 것이 없다 — 다음 단계로 그대로 간다.
 
     console.log('\n[사장] 항목 액션: 이동·빼기');
     await tap(po, '오픈 청소'); // 1번 항목 → 액션 시트
@@ -220,30 +241,37 @@ async function main() {
     await wait(po, '퀴즈에서 빼기');
     await tap(po, '퀴즈에서 빼기');
     check('T5c 빼기 토스트(노하우 보존 안내)', await wait(po, '노하우는 남아요'));
-    check('T5d 미달 안내 복귀(2개)', await wait(po, '문제 없는 노하우 2개 · 문제부터 만들어 주세요'));
+    check('T5d 담긴 개수 2개로 복귀', await wait(po, '첫 출근 · 2개'));
     // 직원 카드 검증을 위해 3개로 복구 — 픽커에서 방금 뺀 항목의 노하우(오픈 청소)를 재선택.
     await openPicker(po);
     await wait(po, '오픈 청소');
     await tap(po, '오픈 청소');
     await wait(po, '첫 출근에 담았어요');
-    await wait(po, '문제 없는 노하우 3개 · 문제부터 만들어 주세요');
+    await wait(po, '첫 출근 · 3개');
 
-    console.log('\n[사장] 종류 추가 → 정기 점검');
+    console.log('\n[사장] 묶음 추가 → 정기 점검');
     // v2 부터 '정기 점검'은 기본 제공이 아니라 사장이 프리셋에서 만든다.
-    await tapLabel(po, '퀴즈 종류 추가');
+    // ★2026-08-07: 진입점이 '퀴즈 종류 추가' → **'묶음 만들기'**(목록 아래 링크 줄)로 바뀌었다.
+    await tapLabel(po, '묶음 만들기');
     await wait(po, '어떤 퀴즈부터 만들까요');
     await tapLabel(po, '정기 점검 만들기');
     check('T6a 정기 점검 만들기', await wait(po, '정기 점검을(를) 만들었어요'));
     await wait(po, '담을 노하우 고르기');
     await tapLabel(po, '닫기');
-    check('T6b 주기 안내(1달마다)', await wait(po, '1달마다'));
-    check('T6c 비운영 상태(빈 코스는 담으라고 말한다)', await see(po, '아래에서 노하우를 담아 주세요'));
+    check('T6b 빈 묶음 안내(만든 묶음이 선택된 채)', await wait(po, '정기 점검에 담긴 노하우가 없어요'));
+    // 주기(1달)는 2층 목록이 아니라 **묶음 설정 시트**가 보여준다(dueLabel 은 CourseSetup 소유).
+    await tapLabel(po, '정기 점검 설정');
+    check('T6c 주기 안내(1달)', await wait(po, '1달'));
     await shot(po, '06-regular-empty');
+    await tapLabel(po, '닫기');
 
-    console.log('\n[사장] 허브 현황 진입점');
-    await po.goto(`${ORIGIN}/hub`, { waitUntil: 'domcontentloaded' });
-    const hubTraining = await wait(po, '첫 출근(신입 첫날)과 정기 점검(주기 재확인)', 30000);
-    check('T7 허브 현황 "퀴즈" 섹션', hubTraining);
+    console.log('\n[사장] 허브 노하우 탭 진입점');
+    // ★2026-08-07: 퀴즈 진입점이 허브 **현황 탭 → 노하우 탭**(/hub-growth · OwnerKnowhowHubView)으로
+    //   옮겨졌다(OwnerStatusView.tsx:264 주석). 퀴즈 = 노하우 이해도의 계측기라는 축 이동의 연장이다.
+    await po.goto(`${ORIGIN}/hub-growth`, { waitUntil: 'domcontentloaded' });
+    const hubTraining = await po.getByLabel('퀴즈', { exact: true }).first()
+      .waitFor({ state: 'visible', timeout: 30000 }).then(() => true).catch(() => false);
+    check('T7 허브 노하우 탭에 "퀴즈" 바로가기', hubTraining);
     await shot(po, '07-hub');
     await po.close();
 
