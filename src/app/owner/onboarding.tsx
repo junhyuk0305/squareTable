@@ -19,7 +19,7 @@ import { Space, SCREEN_GUTTER, CONTENT_MAX_WIDTH, frameCapStyle } from '@/lib/th
 import { Radius, Elevation } from '@/lib/theme/elevation';
 import { PLANS, VAT_NOTE } from '@/lib/config/tiers';
 import { formatKrw } from '@/lib/config/billing';
-import { SHOW_BILLING } from '@/lib/config/store-policy';
+import { showPaymentSurface } from '@/lib/config/store-policy';
 
 // 사장 온보딩 — 업종 표준 노하우 팩에서 '선택 → 자동등록'. 빈 매장(노하우 0건) 죽음의 나선 차단.
 // 레이아웃: ① 추천 묶음 한 번에 담기(결정 최소화) → ② '직접 고르기' 접이식 카테고리 섹션(미세조정)
@@ -35,6 +35,8 @@ export default function OwnerOnboardingScreen() {
   const unitId = useSessionStore((s) => s.unitId);
   const sessionIndustry = useSessionStore((s) => s.industry);
   const sessionInvite = useSessionStore((s) => s.inviteCode);
+  // 전면 무료 스위치 — 켜져 있으면 요금제 후킹을 안 띄운다([P8-#5]).
+  const freeMode = useSessionStore((s) => s.freeMode);
   const addEntry = usePlaybookStore((s) => s.add);
 
   const industry = (params.industry as string) || sessionIndustry;
@@ -176,8 +178,10 @@ export default function OwnerOnboardingScreen() {
 
           {/* 요금제 후킹 — 지금은 무료로 시작했음을 알리고, 직원·AI 무제한(단일 매장)으로
               업그레이드 경로를 연다. 가격은 tiers.ts(SSOT)에서 읽는다. 탭하면 요금제 선택 화면(/billing).
-              iOS 네이티브는 가격 노출 자체가 3.1.3(f) 상 구매 유도로 읽힐 수 있어 렌더하지 않는다. */}
-          {SHOW_BILLING && (
+              iOS 네이티브는 가격 노출 자체가 3.1.3(f) 상 구매 유도로 읽힐 수 있어 렌더하지 않는다.
+              ★전면 무료 모드(서버 스위치)에서도 렌더하지 않는다 — 무료라고 공지해 놓고 요금제로 유도하면
+                같은 앱이 두 말을 하게 된다(2026-08-11 [P8-#5]). 판정은 store-policy 한 곳. */}
+          {showPaymentSurface(freeMode) && (
             <Pressable
               onPress={() => router.push('/billing' as never)}
               style={({ pressed }) => [styles.planNudge, pressed && { opacity: 0.9 }]}

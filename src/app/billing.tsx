@@ -11,8 +11,8 @@ import { deriveSubscription, isPlanLapsed } from '@/lib/utils/subscription';
 import { canManage } from '@/lib/utils/roles';
 import { BILLING_INFO, formatKrw } from '@/lib/config/billing';
 import { TERMS_VERSION, PAYMENT_SLA_SENTENCE } from '@/lib/config/business';
-import { PLANS, PLAN_ORDER, planMonthlyPrice, withVat, VAT_NOTE_SENTENCE, type PlanId } from '@/lib/config/tiers';
-import { SHOW_BILLING } from '@/lib/config/store-policy';
+import { PLANS, PLAN_ORDER, planMonthlyPrice, withVat, VAT_NOTE_SENTENCE, FREE_PROMO, type PlanId } from '@/lib/config/tiers';
+import { SHOW_BILLING, showPaymentSurface } from '@/lib/config/store-policy';
 import { usePaymentClaimStore, CLAIM_ERROR_TEXT } from '@/lib/store/usePaymentClaimStore';
 import { redeemPromoCode, fetchUnitSeatStatus, type SeatStatus } from '@/lib/db';
 import { HeaderBackButton } from '@/components/HeaderBackButton';
@@ -65,6 +65,8 @@ function BillingBody() {
   const trialEndsAt = useSessionStore((s) => s.trialEndsAt);
   const paidUntil = useSessionStore((s) => s.paidUntil);
   const plan = useSessionStore((s) => s.plan);
+  // 전면 무료 스위치(app_config.billing_free_mode) — 켜져 있으면 결제 표면을 감춘다([P8-#5]).
+  const freeMode = useSessionStore((s) => s.freeMode);
   const stores = useSessionStore((s) => s.stores);
   const refreshMembership = useSessionStore((s) => s.refreshMembership);
   // 입금 신고(0083) — 신고 등록·상태 표시의 단일 축. 데이터 접근은 스토어 → db.ts 로만(계층 경계).
@@ -276,8 +278,13 @@ function BillingBody() {
   // call to action 에 해당하므로 넣지 않는다(3.1.1(a) — 한국 스토어프론트는 아웃링크도 금지).
   // 만료 시 owner/junior 레이아웃이 이 라우트로 강제 이동시키므로 라우트 자체는 살려두고,
   // 사실 고지 + 상태 새로고침 + 로그아웃만 남긴다.
-  if (!SHOW_BILLING) {
+  // ★2026-08-11 [P8-#5]: 전면 무료 모드(서버 스위치)일 때도 같은 자리를 쓴다.
+  //   예전엔 설정 화면만 "전면 무료"로 바뀌고 이 화면은 요금제 카드·계좌번호·입금 버튼을 그대로 띄웠다 —
+  //   무료라고 공지해 놓고 같은 앱에서 입금을 받는 상태였다. 판정은 store-policy 한 곳(showPaymentSurface).
+  if (!showPaymentSurface(freeMode)) {
     const expired = view.state === 'expired';
+    // 무료 모드는 "결제를 감춘 것"이지 "이용을 막은 것"이 아니다 — 만료 문구를 그대로 쓰면 겁을 준다.
+    const freeNow = SHOW_BILLING && freeMode;
     return (
       <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
         <Stack.Screen options={{ headerShown: false }} />
@@ -291,18 +298,22 @@ function BillingBody() {
                 color={expired ? BrandColors.warn : InkColors.ink}
               />
             </View>
-            <Text style={styles.title}>{expired ? '지금은 이용할 수 없어요' : '이용 중이에요'}</Text>
+            <Text style={styles.title}>
+              {freeNow ? FREE_PROMO.headline : expired ? '지금은 이용할 수 없어요' : '이용 중이에요'}
+            </Text>
             {!!storeName && <Text style={styles.store}>{storeName}</Text>}
           </View>
           </Appear>
           <Appear delay={60}>
           <View style={styles.card}>
             <Text style={styles.body}>
-              {expired
-                ? isOwner
-                  ? '이 매장의 이용 기간이 끝났어요. 이용 재개는 관리자에게 문의해 주세요.'
-                  : '매장의 이용 기간이 끝났어요. 사장님께 문의해 주세요.'
-                : '이 매장은 정상적으로 이용 중이에요.'}
+              {freeNow
+                ? `${FREE_PROMO.until}까지는 모든 기능을 무료로 쓰실 수 있어요. 매장 수·직원 수 제한도 없어요.\n지금은 결제하실 것이 없어요.`
+                : expired
+                  ? isOwner
+                    ? '이 매장의 이용 기간이 끝났어요. 이용 재개는 관리자에게 문의해 주세요.'
+                    : '매장의 이용 기간이 끝났어요. 사장님께 문의해 주세요.'
+                  : '이 매장은 정상적으로 이용 중이에요.'}
             </Text>
           </View>
           </Appear>

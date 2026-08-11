@@ -21,8 +21,22 @@ import { Platform } from 'react-native';
 
 export const IS_IOS_NATIVE = Platform.OS === 'ios';
 
-/** 결제·가격·요금제 표면을 노출해도 되는가. */
+/** 결제·가격·요금제 표면을 노출해도 되는가(플랫폼 축 — 빌드 시점에 고정). */
 export const SHOW_BILLING = !IS_IOS_NATIVE;
+
+/**
+ * 결제 표면을 지금 보여도 되는가 — **플랫폼 축 + 운영 축을 합친 최종 판정.**
+ *
+ * `freeMode` = 서버 스위치 `app_config.billing_free_mode`(세션의 `freeMode`).
+ * 전면 무료를 켜 둔 동안 "무료입니다"라고 공지하면서 같은 앱에서 계좌번호와 입금 버튼을 띄우면
+ * 사장은 내야 하는 줄 알고 돈을 보낸다 — 받을 이유가 없는 돈이라 환불 응대가 남는다.
+ *
+ * ★화면마다 `freeMode ? … : …`를 새로 적지 말 것. 2026-08-11 실측 QA [P8-#5]가 잡은 것이
+ * 정확히 그 상태였다 — 설정 화면에만 분기가 있고 `/billing` 에는 없어 두 화면이 다른 말을 했다.
+ */
+export function showPaymentSurface(freeMode: boolean): boolean {
+  return SHOW_BILLING && !freeMode;
+}
 
 /** 소셜 로그인 버튼을 노출해도 되는가. */
 export const SHOW_SOCIAL_LOGIN = !IS_IOS_NATIVE;

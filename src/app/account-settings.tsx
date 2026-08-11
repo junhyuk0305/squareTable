@@ -15,7 +15,7 @@ import { Radius } from '@/lib/theme/elevation';
 import { SettingsSection, SettingsRow, SettingsToggle } from '@/components/settings/SettingsKit';
 import { SectionLabel } from '@/components/SectionLabel';
 import { PricingTable } from '@/components/PricingTable';
-import { SHOW_BILLING } from '@/lib/config/store-policy';
+import { SHOW_BILLING, showPaymentSurface } from '@/lib/config/store-policy';
 import { TextScaleModal } from '@/components/settings/TextScaleModal';
 import { ContactModal } from '@/components/ContactModal';
 import { HeaderBackButton } from '@/components/HeaderBackButton';
@@ -131,7 +131,7 @@ export default function AccountSettings() {
             iOS 네이티브에서는 섹션 전체를 렌더하지 않는다 — 가격표(PricingTable)·요금제 CTA 모두
             App Review 3.1.3(f) 위반. 판정은 store-policy.ts 하나에만 둔다. */}
         {SHOW_BILLING && isOwner &&
-          (freeMode ? (
+          (!showPaymentSurface(freeMode) ? (
             <SettingsSection icon="card-outline" title="구독 및 결제">
               <SettingsRow
                 first
