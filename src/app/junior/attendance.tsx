@@ -33,6 +33,10 @@ export function AttendancePanel() {
   //   예전엔 wages[userId] 가 없으면 최저시급(DEFAULT_HOURLY_WAGE)으로 계산해 **그럴듯한 금액**을 띄웠다 —
   //   ①시급 미설정 ②읽기 실패 ③본인 행 없음 이 셋이 화면에서 구분되지 않았다.
   //   0이나 빈칸은 "아직 없다"로 읽히지만 틀린 금액은 사실로 읽힌다(금액은 분쟁 대상).
+  // ★2026-08-11 후속: ②읽기 실패를 스토어가 신호하게 됐다(usePayrollStore.wagesLoadError).
+  //   금액을 안 보여주는 건 같지만 **이유가 다르므로 안내가 달라야 한다** —
+  //   "사장님께 말씀하세요"와 "연결을 확인하세요"는 사용자가 할 행동이 전혀 다르다.
+  const wagesLoadError = usePayrollStore((s) => s.wagesLoadError);
   const wageSet = Object.prototype.hasOwnProperty.call(wages, userId);
   const wage = wages[userId] ?? DEFAULT_HOURLY_WAGE;
   const router = useRouter();
@@ -130,10 +134,15 @@ export function AttendancePanel() {
                     title: '예상 급여는 어떻게 계산돼요?',
                     body: `시급 ${won(wage)} 기준으로 계산한 세전 예상액이에요.\n세금·4대보험·수당에 따라 실제 받는 금액과 다를 수 있어요.`,
                   }
-                : {
-                    title: '왜 금액이 안 보여요?',
-                    body: '아직 시급이 정해지지 않았어요.\n사장님께 시급을 정해 달라고 말씀해 주세요.',
-                  },
+                : wagesLoadError
+                  ? {
+                      title: '왜 금액이 안 보여요?',
+                      body: '시급을 불러오지 못했어요.\n인터넷 연결을 확인하고 다시 들어와 주세요.',
+                    }
+                  : {
+                      title: '왜 금액이 안 보여요?',
+                      body: '아직 시급이 정해지지 않았어요.\n사장님께 시급을 정해 달라고 말씀해 주세요.',
+                    },
             },
           ]}
         />

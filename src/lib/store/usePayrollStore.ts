@@ -49,6 +49,10 @@ function persistSettings(s: PayrollSettings): void {
 type State = {
   settings: PayrollSettings;
   wages: Record<string, number>;
+  /** 시급을 한 번이라도 받아왔나. false면 아직 모른다 — "안 정했다"가 아니다. */
+  wagesLoaded: boolean;
+  /** 마지막 시급 읽기가 실패했나. true면 화면은 금액을 만들면 안 된다([P7-#5]). */
+  wagesLoadError: boolean;
   hydrate: () => Promise<void>;
   setSetting: <K extends keyof PayrollSettings>(k: K, v: PayrollSettings[K]) => void;
   setWage: (staffId: string, wage: number) => void;
@@ -59,14 +63,21 @@ export const usePayrollStore = create<State>((set, get) => ({
   // 설정은 로컬 영속에서 복원(새로고침해도 유지). 시급은 DB(wages 테이블).
   settings: loadSettings(),
   wages: HAS_SUPABASE ? {} : { ...HOURLY_WAGE },
+  // mock 은 시급이 상수로 주어지므로 처음부터 '읽어온 상태'다.
+  wagesLoaded: !HAS_SUPABASE,
+  wagesLoadError: false,
   hydrate: async () => {
     if (!HAS_SUPABASE) return;
-    const [wages, dbSettings] = await Promise.all([fetchWages(), fetchPayrollSettings()]);
+    const [wageRes, dbSettings] = await Promise.all([fetchWages(), fetchPayrollSettings()]);
     // DB에 저장된 규칙이 있으면 그것이 진실원천(기본값 위에 병합). 없으면(초기 매장) 로컬 캐시 유지.
     set((s) => {
       const settings = dbSettings ? { ...DEFAULT_SETTINGS, ...(dbSettings as Partial<PayrollSettings>) } : s.settings;
       persistSettings(settings);
-      return { wages, settings };
+      // ★읽기 실패면 이전에 받아 둔 시급을 **덮어쓰지 않는다** — 빈 값으로 갈아치우면
+      //   "안 정했다"로 보이고, 화면이 그걸 근거로 금액을 만든다([P7-#5]).
+      return wageRes.error
+        ? { settings, wagesLoadError: true }
+        : { wages: wageRes.data, settings, wagesLoaded: true, wagesLoadError: false };
     });
   },
   setSetting: (k, v) => {

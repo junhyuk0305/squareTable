@@ -75,7 +75,11 @@ async function writeStrict(
 function readFail(label: string, error: unknown): void {
   console.warn(`[db] ${label}:`, (error as any)?.message ?? String(error));
   reportError(`db.read:${label}`, error);
-  useSyncStore.getState().noteError('일부 정보를 불러오지 못했어요. 연결을 확인하고 새로고침해 주세요.');
+  // ★2026-08-11: 쓰기 축(noteError, 3초 자동 소거) → 읽기 축(noteReadFail, 자동 소거 없음).
+  //   읽기 실패는 사건이 아니라 **상태**다 — 연결이 돌아올 때까지 "지금 보이는 게 전부가 아니다"가 참이다.
+  //   예전엔 배너가 3초 뒤 사라져, 백엔드가 죽었는데 화면이 "아직 없어요"를 말하는 상태가
+  //   아무 표시 없이 유지됐다([P2-#3]·[P5-#5]).
+  useSyncStore.getState().noteReadFail();
 }
 
 // 읽기 실패를 "빈 결과"와 구분하기 위한 반환형(리포트 P0-1의 핵심 수정): 예전엔 fetch가 실패해도
@@ -1960,16 +1964,19 @@ export async function deleteAttendance(id: string): Promise<boolean> {
 }
 
 // ── 시급 ───────────────────────────────────────────────────
-export async function fetchWages(): Promise<Record<string, number>> {
-  if (!HAS_SUPABASE) return {};
+// ★2026-08-11 [P7-#5]: 빈 객체를 돌려주면 "시급을 아직 안 정했다"와 "못 읽었다"가 구분되지 않는다.
+//   화면이 `wages[uid] ?? 최저시급`으로 폴백해 **틀린 금액을 사실처럼** 보여줬다. 금액은 분쟁 대상이라
+//   0이나 빈칸("아직 없다")과 달리 틀린 값은 그대로 믿긴다. 그래서 실패를 신호로 돌려준다(ReadResult 선례).
+export async function fetchWages(): Promise<ReadResult<Record<string, number>>> {
+  if (!HAS_SUPABASE) return { data: {}, error: false };
   const { data, error } = await supabase.from('wages').select('staff_id, hourly_wage');
   if (error) {
     readFail('fetchWages', error);
-    return {};
+    return { data: {}, error: true };
   }
   const out: Record<string, number> = {};
   for (const r of (data ?? []) as any[]) out[r.staff_id] = r.hourly_wage;
-  return out;
+  return { data: out, error: false };
 }
 export async function setWageDb(staffId: string, wage: number): Promise<boolean> {
   if (!HAS_SUPABASE) return true;
