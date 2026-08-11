@@ -124,6 +124,15 @@ try {
   check('★매니저: 합류 승인 허용', !ka, ka?.message ?? '');
 
   // 좌석캡 — 무료 3좌석에 매니저 포함(M+J+K=3) → 4번째 승인은 staff_limit.
+  // ★0134(가입하면 N일): create_store 가 1호점을 **single·trialing** 으로 연다. 그 동안은 캡을 일부러
+  //   안 건다(0136 주석: "체험 중엔 캡을 안 건다"가 목적). 그래서 이 매장을 그대로 두고 재면
+  //   "캡 미작동"으로 보이는데 **의도된 동작**이다 — 재려는 것은 무료 매장의 캡이므로 체험을 끝내고 잰다.
+  //   (2026-08-11 P9: 0130 이 같은 이유로 게이트 5개를 깨뜨렸다. 모델을 바꾸면 게이트가 카운터파트다.)
+  {
+    const srv = createClient(URL, SRV, { auth: { persistSession: false, autoRefreshToken: false } });
+    const { error } = await srv.rpc('admin_expire_store', { p_unit_id: S1 });
+    if (error) throw new Error('좌석캡 전제(체험 종료): ' + error.message);
+  }
   const L = mk();
   await signUpSession(L, `qa_rol_l_${s}@example.com`, { name: 'QA직원L', role: 'junior', phone: qaPhones[5] });
   cleanup.push(L);

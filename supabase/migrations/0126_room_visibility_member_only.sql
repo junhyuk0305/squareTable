@@ -156,6 +156,11 @@ end $$;
 --   방 술어 3곳의 `my.role in ('owner','manager')` → `my.role = 'owner'` 뿐이다.
 --   여기만 넓게 두면 매니저에게 **못 여는 방의 공지·배정이 알림으로 새어 나간다**(위 ①과 같은 부류).
 --   관리 전용 분기(uq·sugg·join)는 방과 무관하므로 매니저 포함을 그대로 둔다.
+-- ★이 함수는 SECURITY DEFINER 라 RLS 가 안 걸린다 — **방 규칙을 본문이 직접 재현**해야 한다.
+--   그래서 feed·template·done 세 분기에 같은 방 술어가 반복된다(복제로 보이지만 한 함수 안의 같은 규칙이다).
+--   2026-08-08 이전엔 template 분기에만 이 술어가 빠져 있어 방 밖에서 꽂힌 할 일이 알림으로 새어 나갔다(0123).
+--   done(완료마크)까지 거르는 이유: 가려진 할일의 완료마크만 남으면 "무엇에 대한 것인지 알 수 없는 신호"가 되고,
+--   존재 자체가 그 방의 존재를 알린다.
 create or replace function public.my_units_notif_data()
 returns table(unit_id text, source text, payload jsonb)
 language sql stable security definer set search_path = public as $$
@@ -289,6 +294,9 @@ declare
   v_now   timestamp := (now() at time zone 'Asia/Seoul');
   v_day   text := to_char(v_now, 'YYYY-MM-DD');
   v_time  text := to_char(v_now, 'HH24:MI');
+  -- 크론이 멈췄다 복구했을 때 옛 알림이 한꺼번에 터지지 않게 "지난 1시간 내 도달분"만(0118).
+  -- ★자정 직후엔 하한이 '23:xx' 가 되어 뒤집히므로 그때는 하한을 적용하지 않는다 —
+  --   아래 `(v_floor >= v_time or ...)` 의 앞항이 그 예외다. 이유를 모르고 지우면 자정 알림이 전멸한다.
   v_floor text := to_char(v_now - interval '60 minutes', 'HH24:MI');
   t record;
   v_rec text[];
@@ -313,6 +321,8 @@ begin
     else
       select coalesce(array_agg(distinct x), '{}'::text[]) into v_rec
       from public.workers_at(t.unit_id, v_day, t.remind_at) x;
+      -- 근무표에 그 시각 근무자가 없으면 매장 전원(fail-open, 0118) — 근무표를 안 쓰는 매장이 다수라
+      -- 여기서 닫으면 '전체 할일' 알림이 그 매장에서 통째로 사라진다.
       if coalesce(array_length(v_rec, 1), 0) = 0 then
         select coalesce(array_agg(m.user_id::text), '{}'::text[]) into v_rec
         from public.unit_members m where m.unit_id = t.unit_id;
