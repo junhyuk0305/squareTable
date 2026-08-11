@@ -19,6 +19,29 @@ export const styles = StyleSheet.create({
   },
   similarText: { fontSize: 12.5, fontWeight: '700', color: InkColors.ink },
 
+  // 이미 있는 노하우 카드 — 새로 적기 전에 한 번 멈춰 세운다(중복 노하우 차단).
+  similarEntryCard: {
+    marginHorizontal: 12,
+    marginTop: 8,
+    padding: 12,
+    gap: 6,
+    borderRadius: Radius.md,
+    backgroundColor: InkColors.bg,
+    borderWidth: 1,
+    borderColor: InkColors.line,
+    ...Elevation.e1,
+  },
+  similarEntryHead: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  similarEntryLabel: { fontSize: 12, fontWeight: '800', color: InkColors.ink2 },
+  similarEntryTitle: { fontSize: 15, lineHeight: 21, fontWeight: '800', color: InkColors.ink },
+  similarEntryBody: { fontSize: 15, lineHeight: 21, color: InkColors.ink2 },
+  similarEntryActions: { flexDirection: 'row', gap: 8, marginTop: 2 },
+  similarEntryBtn: { flex: 1, alignItems: 'center', justifyContent: 'center', minHeight: 48, borderRadius: Radius.sm },
+  similarEntryGhost: { backgroundColor: InkColors.bgSoft, borderWidth: 1, borderColor: InkColors.line },
+  similarEntryGhostText: { fontSize: 15, fontWeight: '800', color: InkColors.ink2 },
+  similarEntrySolid: { backgroundColor: InkColors.ink },
+  similarEntrySolidText: { fontSize: 15, fontWeight: '800', color: InkColors.bubbleText },
+
   albaWrap: { gap: 4, alignItems: 'flex-start', maxWidth: '90%' },
   albaLabel: { fontSize: 11, fontWeight: '800', color: BrandColors.accentText, letterSpacing: 0.5 },
   albaBubble: {

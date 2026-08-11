@@ -16,7 +16,6 @@ import {
   insertShiftTemplate,
   updateShiftTemplate,
   deleteShiftTemplate,
-  saveStaffShifts,
   fetchSwaps,
   insertSwap,
   updateSwap,
@@ -44,10 +43,16 @@ export type StoreConfig = {
   dayparts?: Daypart[];
 };
 
+/**
+ * 근무 한 칸. 0138부터 **요일 반복이거나 날짜 지정이거나 둘 중 하나**다(DB CHECK가 강제).
+ *  · weekday=3, date=null        → 매주 수요일 반복
+ *  · weekday=null, date='2026-08-12' → 그 날짜 하루만(대타·행사·단기)
+ */
 export type ShiftTemplate = {
   id: string;
   staff_id: string;
-  weekday: number; // 0=일~6=토
+  weekday: number | null; // 0=일~6=토. 날짜 지정이면 null
+  date: string | null; // YYYY-MM-DD. 요일 반복이면 null
   start: string; // "12:00"
   end: string; // "18:00"
 };
@@ -86,8 +91,6 @@ type ScheduleState = {
   addTemplate: (t: Omit<ShiftTemplate, 'id'>) => void;
   updateTemplate: (id: string, patch: Partial<Omit<ShiftTemplate, 'id'>>) => void;
   removeTemplate: (id: string) => void;
-  /** 한 직원의 주간 시프트를 통째로 교체(근무표 편집 저장). */
-  replaceStaffTemplates: (staffId: string, shifts: Omit<ShiftTemplate, 'id' | 'staff_id'>[]) => void;
 
   requestSwap: (input: {
     kind: SwapKind;
@@ -145,6 +148,7 @@ function demoSeed(): { config: StoreConfig; templates: ShiftTemplate[]; swaps: S
       id: `tpl_sumin_${wd}`,
       staff_id: 'u_staff_002',
       weekday: wd,
+      date: null,
       start: '07:00',
       end: '13:00',
     })),
@@ -153,6 +157,7 @@ function demoSeed(): { config: StoreConfig; templates: ShiftTemplate[]; swaps: S
       id: `tpl_jiwon_${wd}`,
       staff_id: 'u_staff_001',
       weekday: wd,
+      date: null,
       start: '12:00',
       end: '18:00',
     })),
@@ -217,25 +222,6 @@ export const useScheduleStore = create<ScheduleState>((set, get) => ({
   removeTemplate: (id) => {
     optimisticRemove(set, get, 'templates', id, () => deleteShiftTemplate(id), '근무 삭제에 실패했어요.');
   },
-  replaceStaffTemplates: (staffId, shifts) => {
-    const prevAll = get().templates;
-    const prevForStaff = prevAll.filter((t) => t.staff_id === staffId);
-    // 같은 요일이 유지되면 기존 id 재사용 → 그 시프트를 참조하던 교대 요청이 깨지지 않는다.
-    const nextForStaff: ShiftTemplate[] = shifts.map((sh) => {
-      const keep = prevForStaff.find((p) => p.weekday === sh.weekday);
-      return { ...sh, staff_id: staffId, id: keep?.id ?? genId('tpl') };
-    });
-    const nextAll = [...prevAll.filter((t) => t.staff_id !== staffId), ...nextForStaff];
-    // 실제로 없어진 시프트만 삭제 대상(나머지는 id 재사용 upsert → 참조 중인 교대 요청 보존).
-    const removeIds = prevForStaff.filter((p) => !nextForStaff.some((n) => n.id === p.id)).map((p) => p.id);
-    set({ templates: nextAll });
-    void guardWrite(
-      saveStaffShifts(staffId, nextForStaff, removeIds),
-      () => set({ templates: prevAll }),
-      '근무표 저장에 실패했어요. 다시 시도해 주세요.',
-    );
-  },
-
   requestSwap: (input) => {
     // 같은 시프트(날짜+템플릿)에 이미 진행 중(open/accepted) 요청이 있으면 중복 생성 차단.
     const dup = get().swaps.some(
@@ -346,7 +332,8 @@ export function shiftsOn(
     .sort((a, b) => a.updated_at.localeCompare(b.updated_at));
   const live = swaps.filter((s) => s.status === 'open' || s.status === 'accepted');
   return templates
-    .filter((t) => t.weekday === wd)
+    // 날짜 지정 근무는 그 날짜에만, 요일 반복은 매주 그 요일에. 이 판정이 SSOT다(0138).
+    .filter((t) => (t.date ? t.date === date : t.weekday === wd))
     .map((t) => {
       let worker = t.staff_id;
       for (const s of approved) {

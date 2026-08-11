@@ -6,16 +6,13 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { RoleTabBar } from '@/components/RoleTabBar';
 import { Appear } from '@/components/Appear';
-import { Collapse } from '@/components/Collapse';
 import { EmptyState } from '@/components/EmptyState';
 import { SectionLabel } from '@/components/SectionLabel';
 import { WeekStrip, type WeekDay } from '@/components/blocks/WeekStrip';
-import { GutterRow } from '@/components/blocks/GutterRow';
-import { ScheduleWeek } from '@/components/schedule/ScheduleWeek';
-import { ShiftEditorModal } from '@/components/schedule/ShiftEditorModal';
+import { DayTimeline, type TimelineRow } from '@/components/schedule/DayTimeline';
+import { ShiftQuickSheet, type ShiftEditTarget } from '@/components/schedule/ShiftQuickSheet';
 import { useStaffStore } from '@/lib/store/useStaffStore';
 import { useScheduleStore, shiftsOn, type ShiftTemplate, type SwapRequest } from '@/lib/store/useScheduleStore';
-import type { Junior } from '@/types';
 import { todayStr } from '@/lib/utils/attendance';
 import {
   addDays,
@@ -25,6 +22,12 @@ import {
   dayOfMonth,
   fmtWeekRange,
   fmtDateKo,
+  fmtRange,
+  fmtMinutes,
+  shiftMinutes,
+  hoursLabel,
+  dayWindow,
+  spanIn,
   closedDaysLabel,
   WEEKDAY_LABELS,
 } from '@/lib/utils/schedule';
@@ -34,31 +37,6 @@ import { Space } from '@/lib/theme/layout';
 
 /** 주 이동 아이콘 버튼 한 변. */
 const NAV_BTN = 36;
-/** 자정을 넘기는 근무(22:00~02:00)를 음수로 만들지 않기 위한 하루 분(分). */
-const MINUTES_PER_DAY = 1440;
-
-function shiftMinutes(start: string, end: string): number {
-  const [sh, sm] = start.split(':').map(Number);
-  const [eh, em] = end.split(':').map(Number);
-  const diff = eh * 60 + em - (sh * 60 + sm);
-  return diff < 0 ? diff + MINUTES_PER_DAY : diff;
-}
-
-function hoursLabel(min: number): string {
-  return `${Math.round((min / 60) * 10) / 10}시간`;
-}
-
-/** 하루 목록의 한 줄 — 그날 근무하는 사람은 시각, 아닌 사람은 휴무로 같은 목록에 들어간다. */
-type DayRow = {
-  key: string;
-  staff?: Junior;
-  name: string;
-  start: string;
-  end: string;
-  working: boolean;
-  pending: boolean;
-  subtitle: string;
-};
 
 export default function OwnerScheduleScreen() {
   const router = useRouter();
@@ -70,11 +48,12 @@ export default function OwnerScheduleScreen() {
   const rejectSwap = useScheduleStore((s) => s.rejectSwap);
 
   const today = todayStr();
-  // 날짜 선택 UI는 주간 스트립 하나. 보이는 주는 선택일에서 파생된다(월요일 시작 — 기존 규칙 유지).
+  // 날짜 선택 UI는 주간 스트립 **하나뿐**이다. 보이는 주는 선택일에서 파생(월요일 시작 — 기존 규칙 유지).
+  //   ★2026-08-11: 스트립 + 7칼럼 주간 그리드가 같이 떠서 "달력이 두 개"로 읽혔다(실측 피드백).
+  //     누가 언제 나오는지는 아래 하루 타임라인이 바로 보여주므로 그리드는 뺐다.
   const [selected, setSelected] = useState(() => today);
-  // 스트립의 점은 "그날 근무가 있다"만 뜻한다 — 누가 언제 나오는지는 이 그리드를 펴야 보인다.
-  const [weekOpen, setWeekOpen] = useState(false);
-  const [editStaff, setEditStaff] = useState<Junior | null>(null);
+  // 근무 추가·고치기 시트. null이면 닫힘.
+  const [sheet, setSheet] = useState<null | { edit?: ShiftEditTarget }>(null);
   const monday = useMemo(() => mondayOf(selected), [selected]);
 
   const nameOf = (id: string) => staff.find((x) => x.id === id)?.name ?? '직원';
@@ -109,40 +88,54 @@ export default function OwnerScheduleScreen() {
   );
   const closedToday = config.closedDays.includes(weekdayOf(selected));
 
-  // 근무자 + 그날 쉬는 직원을 한 목록으로 합친다(예전 '직원 근무표'/'전체 근무표' 두 섹션을 대체).
-  const rows: DayRow[] = useMemo(() => {
-    const weeklyDays = (id: string) => templates.filter((t) => t.staff_id === id).length;
-    const subtitleOf = (id: string) => {
-      const n = weeklyDays(id);
-      return n > 0 ? `주 ${n}일 근무` : '근무표 미설정';
-    };
-    const working = dayShifts.map((sh) => ({
-      key: sh.template.id,
-      staff: staff.find((x) => x.id === sh.workerStaffId),
-      // nameOf 를 쓰지 않고 여기서 직접 찾는다 — 렌더마다 새로 만들어지는 클로저를
-      // useMemo 가 잡으면 staff 가 늦게 도착했을 때 '직원' 폴백이 굳는다.
-      name: staff.find((x) => x.id === sh.workerStaffId)?.name ?? '직원',
-      start: sh.template.start,
-      end: sh.template.end,
-      working: true,
-      pending: sh.pending,
-      subtitle: subtitleOf(sh.workerStaffId),
-    }));
+  // 하루 타임라인 행 — 운영시간 축 위에서 각자 차지하는 구간을 비율로 미리 계산해 넘긴다
+  // (DayTimeline은 표시 전용이라 시간 계산을 하지 않는다).
+  // 축이 덮는 시간 창 — 운영시간 + 그날 실제 근무(운영시간 밖 근무도 온전히 보이게).
+  const win = useMemo(
+    () => dayWindow(dayShifts.map((sh) => sh.template), config.open, config.close),
+    [dayShifts, config.open, config.close],
+  );
+
+  const timeline: (TimelineRow & { edit: ShiftEditTarget })[] = useMemo(
+    () =>
+      dayShifts.map((sh) => {
+        const { start, end } = sh.template;
+        const span = spanIn(win, start, end, config.open, config.close);
+        // nameOf 를 쓰지 않고 여기서 직접 찾는다 — 렌더마다 새로 만들어지는 클로저를
+        // useMemo 가 잡으면 staff 가 늦게 도착했을 때 '직원' 폴백이 굳는다.
+        const name = staff.find((x) => x.id === sh.workerStaffId)?.name ?? '직원';
+        return {
+          key: sh.template.id,
+          name,
+          timeText: fmtRange(start, end),
+          hoursText: hoursLabel(shiftMinutes(start, end)),
+          left: span.left,
+          width: span.width,
+          pending: sh.pending,
+          edit: {
+            templateId: sh.template.id,
+            name,
+            weekday: sh.template.weekday,
+            date: sh.template.date,
+            start,
+            end,
+          },
+        };
+      }),
+    [dayShifts, staff, win, config.open, config.close],
+  );
+
+  // 그날 쉬는 사람은 행으로 늘어놓지 않는다 — 바가 없는 빈 행이 절반이면 타임라인이 안 읽힌다.
+  const offNames = useMemo(() => {
     const busy = new Set(dayShifts.map((sh) => sh.workerStaffId));
-    const off = staff
-      .filter((st) => !busy.has(st.id))
-      .map((st) => ({
-        key: st.id,
-        staff: st,
-        name: st.name,
-        start: '—',
-        end: '휴무',
-        working: false,
-        pending: false,
-        subtitle: subtitleOf(st.id),
-      }));
-    return [...working, ...off];
-  }, [dayShifts, staff, templates]);
+    return staff.filter((st) => !busy.has(st.id)).map((st) => st.name);
+  }, [dayShifts, staff]);
+
+  // 축 눈금 3개 — 운영시간이 아니라 **창** 기준이다(운영시간 밖 근무가 있으면 창이 그만큼 넓어진다).
+  const axis: [string, string, string] = useMemo(
+    () => [fmtMinutes(win.from), fmtMinutes(Math.round((win.from + win.to) / 2)), fmtMinutes(win.to)],
+    [win],
+  );
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
@@ -181,29 +174,6 @@ export default function OwnerScheduleScreen() {
             </Pressable>
           </View>
           <WeekStrip days={days} selectedKey={selected} todayKey={today} onSelect={setSelected} />
-          {/* 주간 전체 — 스트립의 점만으로는 "누가 언제 나오나"를 볼 수 없다. 펴면 7칼럼 그리드. */}
-          <Pressable
-            onPress={() => setWeekOpen((v) => !v)}
-            accessibilityRole="button"
-            accessibilityState={{ expanded: weekOpen }}
-            style={({ pressed }) => [styles.weekMoreBtn, pressed && { opacity: 0.7 }]}
-          >
-            <Text style={styles.weekMoreText}>{weekOpen ? '주간 전체 접기' : '주간 전체 보기'}</Text>
-            <Ionicons name={weekOpen ? 'chevron-up' : 'chevron-down'} size={14} color={InkColors.ink2} />
-          </Pressable>
-          {weekOpen && (
-            <Collapse>
-              <ScheduleWeek
-                hideNav
-                monday={monday}
-                setMonday={setSelected}
-                templates={templates}
-                swaps={swaps}
-                staff={staff}
-                config={config}
-              />
-            </Collapse>
-          )}
         </View>
         </Appear>
 
@@ -243,7 +213,7 @@ export default function OwnerScheduleScreen() {
         </View>
         </Appear>
 
-        {/* ③ 하루 근무 — 시각을 좌측 거터로 뽑고, 근무·휴무를 한 목록으로 */}
+        {/* ③ 하루 근무 — 운영시간 축 하나 위에 사람마다 바. 추가는 이 카드 안에서 끝낸다 */}
         <Appear delay={120}>
         <View style={styles.section}>
           <SectionLabel
@@ -262,33 +232,28 @@ export default function OwnerScheduleScreen() {
               cta={{ label: '직원 초대하기', onPress: () => router.push('/owner/staff') }}
             />
           ) : (
-            <View style={styles.dayList}>
-              {rows.map((r, i) => {
-                const row = (
-                  <GutterRow
-                    timeStart={r.start}
-                    timeEnd={r.end}
-                    tone={r.working ? 'routine' : 'event'}
-                    title={r.name}
-                    subtitle={r.subtitle}
-                    tag={r.pending ? '변경 중' : undefined}
-                    last={i === rows.length - 1}
-                  />
-                );
-                const target = r.staff;
-                if (!target) return <View key={r.key}>{row}</View>;
-                return (
-                  <Pressable
-                    key={r.key}
-                    accessibilityRole="button"
-                    accessibilityLabel={`${r.name} 근무 시간 편집`}
-                    onPress={() => setEditStaff(target)}
-                    style={({ pressed }) => [pressed && styles.rowPressed]}
-                  >
-                    {row}
-                  </Pressable>
-                );
-              })}
+            <View style={styles.dayCard}>
+              {timeline.length > 0 ? (
+                <DayTimeline axis={axis} rows={timeline} onPressRow={(r) => {
+                  const hit = timeline.find((t) => t.key === r.key);
+                  if (hit) setSheet({ edit: hit.edit });
+                }} />
+              ) : (
+                <Text style={styles.dayNone}>이 날은 근무가 없어요.</Text>
+              )}
+
+              {offNames.length > 0 && <Text style={styles.offText}>휴무 · {offNames.join(', ')}</Text>}
+
+              {/* 근무 추가 — 예전엔 목록 행을 눌러야 편집이 열려서 "추가하는 법"이 안 보였다. */}
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`${fmtDateKo(selected)}에 근무 추가`}
+                onPress={() => setSheet({})}
+                style={({ pressed }) => [styles.addRow, pressed && { opacity: 0.6 }]}
+              >
+                <Ionicons name="add" size={18} color={InkColors.ink} />
+                <Text style={styles.addText}>근무 추가</Text>
+              </Pressable>
             </View>
           )}
         </View>
@@ -316,7 +281,15 @@ export default function OwnerScheduleScreen() {
         <View style={{ height: Space.md }} />
       </ScrollView>
 
-      {editStaff && <ShiftEditorModal staff={editStaff} onClose={() => setEditStaff(null)} />}
+      {sheet && (
+        <ShiftQuickSheet
+          date={selected}
+          weekday={weekdayOf(selected)}
+          staff={staff}
+          editing={sheet.edit}
+          onClose={() => setSheet(null)}
+        />
+      )}
 
       <RoleTabBar role="owner" />
     </SafeAreaView>
@@ -357,7 +330,7 @@ function PendingCard({
           <Text style={styles.flowWhen}>
             {fmtDateKo(r.date)}
             {'\n'}
-            {tpl ? `${tpl.start}~${tpl.end}` : ''}
+            {tpl ? fmtRange(tpl.start, tpl.end) : ''}
           </Text>
         </View>
         <Ionicons name="arrow-forward" size={18} color={InkColors.ink3} />
@@ -366,7 +339,7 @@ function PendingCard({
           <Text style={styles.flowName}>{r.accepted_by ? nameOf(r.accepted_by) : '—'}</Text>
           <Text style={styles.flowWhen}>
             {r.kind === 'swap' && r.target_date ? fmtDateKo(r.target_date) : '같은 시간 대타'}
-            {r.kind === 'swap' && tTpl ? `\n${tTpl.start}~${tTpl.end}` : ''}
+            {r.kind === 'swap' && tTpl ? `\n${fmtRange(tTpl.start, tTpl.end)}` : ''}
           </Text>
         </View>
       </View>
@@ -403,14 +376,14 @@ const styles = StyleSheet.create({
   weekNavCenter: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
   weekRange: { fontSize: 15, lineHeight: 21, fontWeight: '800', color: InkColors.ink },
   todayText: { fontSize: 12, fontWeight: '800', color: BrandColors.warnText },
-  // 주간 전체 펼침 토글 — 스트립 바로 아래. 카드가 아니라 스트립에 딸린 컨트롤이다.
-  weekMoreBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Space.xs, minHeight: 48 },
-  weekMoreText: { fontSize: 15, lineHeight: 21, fontWeight: '800', color: InkColors.ink2 },
 
-  // 하루 목록
+  // 하루 타임라인
   total: { fontSize: 12, fontWeight: '800', color: InkColors.ink2 },
-  dayList: { backgroundColor: InkColors.bg, borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, paddingHorizontal: Space.md },
-  rowPressed: { opacity: 0.7 },
+  dayCard: { backgroundColor: InkColors.bg, borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, padding: Space.md, ...Elevation.e1 },
+  dayNone: { fontSize: 15, lineHeight: 21, color: InkColors.ink2, textAlign: 'center', paddingVertical: Space.lg },
+  offText: { fontSize: 12, fontWeight: '700', color: InkColors.ink3, paddingTop: Space.sm },
+  addRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Space.xs, minHeight: 48, marginTop: Space.sm, borderRadius: Radius.sm, borderWidth: 1, borderStyle: 'dashed', borderColor: InkColors.line },
+  addText: { fontSize: 15, lineHeight: 21, fontWeight: '800', color: InkColors.ink },
 
   // 컨펌 카드
   card: { backgroundColor: InkColors.bg, borderRadius: Radius.md, borderWidth: 1, borderColor: BrandColors.yellowDeep, padding: Space.md, gap: Space.sm, ...Elevation.e1 },

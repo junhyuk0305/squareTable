@@ -71,6 +71,7 @@
     "qa:room-matrix": "node scripts/qa-room-matrix.mjs",
     "qa:room-cso": "node scripts/qa-room-cso.mjs",
     "qa:swap-guard": "node scripts/qa-swap-guard.mjs",
+    "qa:shift-dated": "node scripts/qa-shift-dated.mjs",
     "qa:store-slots": "node scripts/qa-store-slots.mjs",
     "qa:delete-store": "node scripts/qa-delete-store.mjs",
     "qa:billing-tiers": "node scripts/qa-billing-tiers.mjs",

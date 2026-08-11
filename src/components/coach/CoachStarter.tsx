@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { View, Text, StyleSheet, Pressable, ScrollView } from 'react-native';
+import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 import { Collapse } from '@/components/Collapse';
 import { getSectionMeta } from '@/lib/utils/category';
-import { InkColors } from '@/lib/theme/colors';
+import { BrandColors, InkColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
 
@@ -56,6 +57,7 @@ export function CoachStarter({
   onPickExample: (text: string) => void;
   onSelectEntry?: (id: string) => void;
 }) {
+  const router = useRouter();
   // 첫 사용(등록한 노하우 0건)이면 펼친 채로 시작한다 — 그때만 이 카드가 가르칠 게 있다.
   const [previewOpen, setPreviewOpen] = useState(recent.length === 0);
 
@@ -84,6 +86,23 @@ export function CoachStarter({
             </Pressable>
           ))}
         </ScrollView>
+
+        {/* 이미 문서로 갖고 있는 사장을 위한 두 번째 입구 — 노하우 목록 아래에만 있어서
+            '노하우 추가'로 들어온 사람은 못 만났다(2026-08-11 실측 피드백).
+            액센트 노랑으로 칩 줄과 확실히 갈라 놓는다. 한 줄에 언제·무엇을·어떻게가 다 있어야 눌린다. */}
+        <Pressable
+          onPress={() => router.push('/owner/handover' as never)}
+          accessibilityRole="button"
+          accessibilityLabel="한번에 올리기"
+          style={({ pressed }) => [styles.uploadRow, pressed && { opacity: 0.85 }]}
+        >
+          <Ionicons name="cloud-upload-outline" size={18} color={InkColors.ink} />
+          <View style={styles.uploadBody}>
+            <Text style={styles.uploadTitle}>한번에 올리기</Text>
+            <Text style={styles.uploadSub}>인수인계서·매뉴얼을 노하우로 쪼개 드려요</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={16} color={InkColors.ink} />
+        </Pressable>
       </View>
 
       {/* 2) 결과 프리뷰 — 접힌 한 줄. 처음 쓰는 사장에게만 펴진 채로 시작한다. */}
@@ -166,6 +185,18 @@ const styles = StyleSheet.create({
   },
   // 읽어서 판단하는 문장이라 본문 하한 15sp.
   chipText: { flexShrink: 1, fontSize: 15, fontWeight: '600', color: InkColors.ink2 },
+
+  // 브랜드 노랑 단색 + 검정 글자. 노랑 위에서 ink2(#6b6b6b)는 대비가 4.4로 아슬해서
+  // 제목·설명 모두 ink 로 두고 **굵기**로만 위계를 준다(색 규칙: 노랑 면 위 흰 글자 금지).
+  uploadRow: {
+    flexDirection: 'row', alignItems: 'center', gap: Space.md,
+    minHeight: 48, paddingHorizontal: 14, paddingVertical: Space.md,
+    borderRadius: Radius.md,
+    backgroundColor: BrandColors.yellow,
+  },
+  uploadBody: { flex: 1, gap: 1 },
+  uploadTitle: { fontSize: 15, lineHeight: 21, fontWeight: '800', color: InkColors.ink },
+  uploadSub: { fontSize: 15, lineHeight: 21, fontWeight: '600', color: InkColors.ink },
 
   toggle: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',

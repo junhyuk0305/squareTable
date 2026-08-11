@@ -228,7 +228,8 @@ export async function fetchOwnerToday(): Promise<DbResult<OwnerTodayRow[]>> {
   return { data: (data as OwnerTodayRow[]) ?? null, error: error as DbErr };
 }
 
-export type MyShiftRow = { id: string; weekday: number; start: string; end: string };
+/** 0138: weekday(요일 반복) 또는 date(그 날짜 하루) 중 하나만 값이 있다. */
+export type MyShiftRow = { id: string; weekday: number | null; date: string | null; start: string; end: string };
 export type MyCrossSummaryRow = {
   unit_id: string; store_name: string; shifts: MyShiftRow[]; month_minutes: number; hourly_wage: number;
 };
@@ -2121,12 +2122,15 @@ export async function upsertScheduleConfig(c: StoreConfig): Promise<boolean> {
   );
 }
 
+// 0138: 한 행은 요일 반복(weekday) **이거나** 날짜 지정(shift_date)이다 — DB CHECK가 강제한다.
+// 둘 다 보내되 쓰지 않는 쪽을 null로 명시한다(생략하면 update에서 옛 값이 남아 CHECK 위반).
 function shiftRow(t: ShiftTemplate) {
   return {
     id: t.id,
     unit_id: _unitId,
     staff_id: t.staff_id,
-    weekday: t.weekday,
+    weekday: t.date ? null : t.weekday,
+    shift_date: t.date ?? null,
     start_time: t.start,
     end_time: t.end,
   };
@@ -2136,7 +2140,7 @@ export async function fetchShiftTemplates(): Promise<ShiftTemplate[]> {
   if (!HAS_SUPABASE) return [];
   const { data, error } = await supabase
     .from('shift_templates')
-    .select('id, staff_id, weekday, start_time, end_time');
+    .select('id, staff_id, weekday, shift_date, start_time, end_time');
   if (error) {
     readFail('fetchShiftTemplates', error);
     return [];
@@ -2145,6 +2149,7 @@ export async function fetchShiftTemplates(): Promise<ShiftTemplate[]> {
     id: r.id,
     staff_id: r.staff_id,
     weekday: r.weekday,
+    date: r.shift_date ?? null,
     start: r.start_time,
     end: r.end_time,
   }));
@@ -2159,7 +2164,11 @@ export async function updateShiftTemplate(id: string, patch: Partial<ShiftTempla
   if (!HAS_SUPABASE) return true;
   const row: Record<string, unknown> = {};
   if (patch.staff_id !== undefined) row.staff_id = patch.staff_id;
-  if (patch.weekday !== undefined) row.weekday = patch.weekday;
+  // 요일↔날짜는 한 쌍이다 — 한쪽만 바꾸면 CHECK(둘 중 하나)에 걸린다. 항상 같이 쓴다.
+  if (patch.weekday !== undefined || patch.date !== undefined) {
+    row.weekday = patch.date ? null : (patch.weekday ?? null);
+    row.shift_date = patch.date ?? null;
+  }
   if (patch.start !== undefined) row.start_time = patch.start;
   if (patch.end !== undefined) row.end_time = patch.end;
   return writeStrict('updateShiftTemplate', supabase.from('shift_templates').update(row).eq('id', id).select('id'));
@@ -2170,32 +2179,8 @@ export async function deleteShiftTemplate(id: string): Promise<boolean> {
   return writeStrict('deleteShiftTemplate', supabase.from('shift_templates').delete().eq('id', id).select('id'));
 }
 
-/**
- * 한 직원의 주간 시프트를 교체. 실제로 없어진 시프트만 삭제(removeIds)하고 나머지는 upsert.
- * 유지되는 시프트는 id를 재사용하므로 그 시프트를 참조하던 교대 요청(FK)이 깨지지 않는다.
- * (전체 delete→insert는 ON DELETE CASCADE로 진행 중 교대까지 날려서 금지.) RLS가 매장·사장 권한을 강제.
- */
-export async function saveStaffShifts(
-  staffId: string,
-  rows: ShiftTemplate[],
-  removeIds: string[],
-): Promise<boolean> {
-  if (!HAS_SUPABASE) return true;
-  // 원자성 개선(비트랜잭션): upsert(유지·신규)를 먼저 커밋하고 그다음 remove 삭제한다.
-  //   - upsert 실패 시 삭제 전에 중단 → 편집 손실 없음(최악=변화 없음 + 배너로 재시도).
-  //   - 삭제가 뒤에서 실패해도 없어질 시프트가 잠깐 남을 뿐(과다)이라 편집이 사라지진 않는다(과소 방지).
-  //   - 둘 다 writeStrict — 0행(RLS 차단·동시성)을 성공으로 오판하지 않는다.
-  //   ※ 완전 원자성은 단일 트랜잭션 RPC 가 정답(후속). 지금은 실패 '방향'을 안전한 쪽으로 뒤집는다.
-  //   (rows 는 유지 id 재사용 + 신규, removeIds 는 사라진 id — 서로 겹치지 않아 순서 교체가 안전.)
-  if (rows.length > 0) {
-    const up = await writeStrict('saveStaffShifts.upsert', supabase.from('shift_templates').upsert(rows.map(shiftRow)).select('id'));
-    if (!up) return false;
-  }
-  if (removeIds.length > 0) {
-    return writeStrict('saveStaffShifts.delete', supabase.from('shift_templates').delete().in('id', removeIds).select('id'));
-  }
-  return true;
-}
+// (saveStaffShifts 삭제 — 2026-08-11. 주간 일괄 편집 모달을 근무 추가·고치기 시트로 바꾸면서
+//  유일한 호출자가 사라졌다. 근무는 이제 addTemplate/updateTemplate/removeTemplate 한 칸씩 쓴다.)
 
 // 행→SwapRequest 매핑 SSOT — fetchSwaps(활성 매장)와 fetchCrossStoreNotifData(0077)가 공유.
 function mapSwapRow(r: any): SwapRequest {

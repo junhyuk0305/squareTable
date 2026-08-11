@@ -152,6 +152,25 @@ export default function OwnerCoachScreen() {
     [answerable, realUq, resolve, sugId, approveSuggestion, srcTemplate, attachKnowhow, feedId, markPromoted, navAfter, nudgeTargets, targetUnitId],
   );
 
+  // 이미 있는 노하우로 답하기 — 새 노하우를 만들지 않고 질문만 그 노하우로 해결한다.
+  // (resolve 는 addEntry 와 독립이라 저장 경로가 늘지 않는다 — 노하우 원자성 규칙에 손대지 않는다.)
+  const answerWithExisting = useCallback(
+    async (entryId: string) => {
+      if (!answerable || !realUq) return;
+      setJustPublished(true);
+      const ok = await resolve(realUq.id, entryId);
+      if (!ok) {
+        setToastErr(true);
+        setToast('질문 반영에 실패했어요. 연결을 확인하고 다시 시도해 주세요.');
+        return;
+      }
+      setToastErr(false);
+      setToast('이미 있는 노하우로 답했어요.');
+      navAfter();
+    },
+    [answerable, realUq, resolve, navAfter],
+  );
+
   // ── 저장 전 확인(겹침·챕터) ──
   // 노하우가 창고에 들어가는 길목이 여기 하나뿐이라, 문지기도 여기 하나만 둔다.
   // 시트는 Promise로 답을 돌려준다: null=취소(발행 잠금 해제 → 재시도 가능), {section}=진행.
@@ -245,6 +264,7 @@ export default function OwnerCoachScreen() {
         seedText={typeof seed === 'string' ? seed : undefined}
         reviewProposal={!isInboxAnswer && sugId ? { name: reviewSug?.proposer_name ?? '직원' } : undefined}
         onPublished={onPublished}
+        onAnswerWithExisting={answerable ? answerWithExisting : undefined}
         onPublishedMany={onPublishedMany}
       />
 

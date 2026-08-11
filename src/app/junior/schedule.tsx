@@ -79,7 +79,8 @@ export default function JuniorScheduleScreen() {
     return templates.some(
       (t) =>
         t.staff_id === me &&
-        t.weekday === wd &&
+        // 0138: 날짜 지정 근무는 그 날짜에만 겹친다.
+        (t.date ? t.date === r.date : t.weekday === wd) &&
         t.id !== r.target_template_id && // 맞교환으로 내가 내주는 시프트는 제외
         t.start < tpl.end &&
         tpl.start < t.end,

@@ -20,6 +20,7 @@ import { isJunkInput, looksLikePromptLeak, knowhowGuidanceMessage } from '@/lib/
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { uploadPhoto } from '@/lib/db';
+import { GENERATE_THRESHOLD } from '@/lib/ai/config';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 
 import { InfoDot } from '@/components/InfoDot';
@@ -54,6 +55,9 @@ export type OwnerCoachChatProps = {
   reviewProposal?: { name: string };
   // 발행 성공 여부(boolean) 반환 — 실패면 이 컴포넌트가 발행 잠금(publishedRef)을 풀어 재시도 허용.
   onPublished: (entry: PlaybookEntry) => void | Promise<boolean>;
+  /** 인박스 답변 전용 — 새로 적지 않고 **이미 있는 노하우로** 질문을 해결한다.
+   *  없으면 "비슷한 노하우" 카드 자체를 띄우지 않는다(누를 데 없는 카드 금지). */
+  onAnswerWithExisting?: (entryId: string) => void;
   // 다중 분리 발행(없으면 첫 건만). 반환=엔트리별 성공여부(boolean[]) — 부분 실패 시 성공분만 잠금해
   // 재시도가 성공분을 중복 저장하지 않게 한다(F4). 레거시 boolean/void 반환도 허용(전체 동일 처리).
   onPublishedMany?: (entries: PlaybookEntry[]) => void | Promise<boolean | boolean[]>;
@@ -98,6 +102,7 @@ export function OwnerCoachChat({
   seedText,
   reviewProposal,
   onPublished,
+  onAnswerWithExisting,
   onPublishedMany,
   editEntry,
   onUpdated,
@@ -174,6 +179,18 @@ export function OwnerCoachChat({
         .slice(0, 3),
     [allEntries],
   );
+
+  // ── 이미 있는 노하우 먼저 보여주기(인박스 답변 전용) ─────────────────────────
+  // 질문이 올라올 때 하이브리드 검색이 고른 1등을 그 행(best_match_*)에 이미 적어 뒀는데
+  // 답변 화면이 안 썼다. 그래서 사장이 같은 내용을 또 적는 걸 막을 방법이 없었다(2026-08-11).
+  //  ★기준선은 GENERATE_THRESHOLD 를 그대로 쓴다 — AI 자신이 '무관한 노이즈'로 쳐내는 구간을
+  //    사장에게 "비슷한 노하우"라고 들이밀면 안 된다. 새 임계값을 발명하지 않는다.
+  const [similarDismissed, setSimilarDismissed] = useState(false);
+  const similarEntry = useMemo(() => {
+    if (!isInboxAnswer || !onAnswerWithExisting || similarDismissed) return undefined;
+    if (!uq.best_match_entry_id || uq.best_match_confidence < GENERATE_THRESHOLD) return undefined;
+    return allEntries.find((e) => e.id === uq.best_match_entry_id && e.status !== 'draft');
+  }, [isInboxAnswer, onAnswerWithExisting, similarDismissed, uq.best_match_entry_id, uq.best_match_confidence, allEntries]);
 
   // 받아쓰기 힌트 — 이 매장 노하우에 실제로 쓰인 단어(메뉴·기계·재료명)를 넘겨
   // 발음이 비슷한 고유명사가 엉뚱하게 적히는 걸 줄인다("아샷추"→"아사추" 류).
@@ -646,6 +663,36 @@ export function OwnerCoachChat({
           <Text style={styles.similarText}>
             {uq.similar_queries_count + 1}명이 같은 걸 물었어요 — 한 번만 답하면 모두에게 반영돼요
           </Text>
+        </View>
+      )}
+
+      {/* 이미 있는 노하우 — 새로 적기 전에 한 번 막아 준다. 중복 노하우가 쌓이는 걸 여기서 끊는다. */}
+      {similarEntry && (
+        <View style={styles.similarEntryCard}>
+          <View style={styles.similarEntryHead}>
+            <Ionicons name="albums-outline" size={15} color={InkColors.ink} />
+            <Text style={styles.similarEntryLabel}>비슷한 노하우가 이미 있어요</Text>
+          </View>
+          <Text style={styles.similarEntryTitle} numberOfLines={1}>{similarEntry.title}</Text>
+          {!!similarEntry.square?.situation && (
+            <Text style={styles.similarEntryBody} numberOfLines={2}>{similarEntry.square.situation}</Text>
+          )}
+          <View style={styles.similarEntryActions}>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => setSimilarDismissed(true)}
+              style={({ pressed }) => [styles.similarEntryBtn, styles.similarEntryGhost, pressed && { opacity: 0.7 }]}
+            >
+              <Text style={styles.similarEntryGhostText}>새로 적을게요</Text>
+            </Pressable>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => onAnswerWithExisting?.(similarEntry.id)}
+              style={({ pressed }) => [styles.similarEntryBtn, styles.similarEntrySolid, pressed && { opacity: 0.85 }]}
+            >
+              <Text style={styles.similarEntrySolidText}>이 노하우로 답하기</Text>
+            </Pressable>
+          </View>
         </View>
       )}
 

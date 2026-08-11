@@ -119,7 +119,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
           fallback_action: '사장님께 알림 전송됨',
           owner_notified_at: now,
           owner_will_answer: true,
-          similar_queries_count: 1,
+          // ★0으로 시작한다 — 이 값은 '물은 사람(1명)에 **더해진** 수'이고 화면은 +1 해서 쓴다.
+          //   1로 두면 방금 처음 올라온 질문이 전부 "2명이 같은 걸 물었어요"로 뜬다(2026-08-11 실측).
+          //   실제 중복은 useUnknownQueueStore.enqueue 가 올린다.
+          similar_queries_count: 0,
           ai_general_answer: '잠시만요, 사장님 답변을 기다리고 있어요.',
         };
         set((s) => ({ pendingDeflects: { ...s.pendingDeflects, [cqId]: uq } }));

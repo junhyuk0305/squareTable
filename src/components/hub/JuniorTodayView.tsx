@@ -49,24 +49,29 @@ export function JuniorTodayView() {
   const colorOf = (uid: string) => storeColor(uid, prefFor(uid).color);
 
   // ── 1) 오늘 근무(전 매장, 시작 시각순) + 다음 근무(오늘 없을 때) ──
+  // 0138: 근무 한 칸은 요일 반복이거나 날짜 지정이다. 판정은 shiftsOn(useScheduleStore)과 같은 모양.
+  const onDay = (s: { weekday: number | null; date: string | null }, date: string, wd: number) =>
+    s.date ? s.date === date : s.weekday === wd;
+
   const todayShifts = useMemo(
     () =>
       myCross
-        .flatMap((r) => r.shifts.filter((s) => s.weekday === dow).map((s) => ({ uid: r.unit_id, ...s })))
+        .flatMap((r) => r.shifts.filter((s) => onDay(s, today, dow)).map((s) => ({ uid: r.unit_id, ...s })))
         .sort((a, b) => a.start.localeCompare(b.start)),
-    [myCross, dow],
+    [myCross, dow, today],
   );
   const nextShift = useMemo(() => {
     if (todayShifts.length > 0) return null;
     for (let off = 1; off <= 7; off += 1) {
       const d2 = (dow + off) % 7;
+      const date2 = todayStr(new Date(new Date(`${today}T00:00:00`).getTime() + off * 86400000));
       const cands = myCross
-        .flatMap((r) => r.shifts.filter((s) => s.weekday === d2).map((s) => ({ uid: r.unit_id, ...s })))
+        .flatMap((r) => r.shifts.filter((s) => onDay(s, date2, d2)).map((s) => ({ uid: r.unit_id, dow: d2, ...s })))
         .sort((a, b) => a.start.localeCompare(b.start));
       if (cands.length > 0) return cands[0];
     }
     return null;
-  }, [myCross, dow, todayShifts.length]);
+  }, [myCross, dow, today, todayShifts.length]);
 
   // ── 2) 오늘 할 일 — 배정(미완료) + 안 읽은 멘션. 술어는 notifications.ts SSOT.
   //     멘션(사람이 기다림)을 위로, 매장은 그룹헤더 대신 행 보조줄로 — 근무 행과 같은 해부구조.
@@ -143,7 +148,7 @@ export function JuniorTodayView() {
               <Text style={styles.emptyText}>오늘은 근무가 없어요</Text>
               {nextShift && (
                 <Text style={styles.caption}>
-                  다음 근무 · {WEEKDAYS[nextShift.weekday]}요일 {nextShift.start} {labelOf(nextShift.uid)}
+                  다음 근무 · {WEEKDAYS[nextShift.dow]}요일 {nextShift.start} {labelOf(nextShift.uid)}
                 </Text>
               )}
             </View>
