@@ -105,9 +105,14 @@ function BillingBody() {
   useEffect(() => {
     if (!planTouched.current) setSelectedPlan(plan);
   }, [plan]);
-  const ownedCount = Math.max(1, stores.filter((st) => st.role === 'owner').length);
-  const monthlyTotal = planMonthlyPrice(selectedPlan, ownedCount); // 공급가액(표시가)
-  const monthlyBilled = withVat(monthlyTotal); // 실제 입금 요청액 — 서버 payment_claim_amount(0106)와 같은 값
+  // ★0130: 금액은 '소유 매장 수'가 아니라 **살 매장 수**로 곱한다. 예전엔 소유 수를 세서
+  //   곱했기 때문에 "이 결제가 몇 개분인지"가 시스템에 없었고, 매장을 하나 추가할 때마다
+  //   전 매장 요금이 한꺼번에 청구됐다. 이제 개수가 결제의 입력이다(payment_claims.store_count).
+  const ownedCount = stores.filter((st) => st.role === 'owner').length;
+  const [storeCount, setStoreCount] = useState(1);
+  const buyCount = selectedPlan === 'multi' ? storeCount : 1;
+  const monthlyTotal = planMonthlyPrice(selectedPlan, buyCount); // 공급가액(표시가)
+  const monthlyBilled = withVat(monthlyTotal); // 실제 입금 요청액 — 서버 payment_claim_amount(0130)와 같은 값
 
   // 자동 재확인: /billing 은 top-level 라우트라 owner/junior 레이아웃의 refreshMembership 폴이 여기선 안 돈다.
   //   → 이 화면 자체에서 30초마다 상태를 당겨, 계좌이체 활성화가 반영되면 새로고침 탭 없이 자동으로 앱에 진입.
@@ -199,6 +204,7 @@ function BillingBody() {
       termsVersion: TERMS_VERSION,
       bizNo: biz || null,
       bizEmail: bizEmail.trim() || null,
+      storeCount: buyCount,
     });
     setClaiming(false);
     if (!res.ok) {
@@ -462,9 +468,42 @@ function BillingBody() {
                       {formatKrw(monthlyTotal)} + 부가세 {formatKrw(monthlyBilled - monthlyTotal)}이에요.
                     </Text>
                     {selectedPlan === 'multi' && (
-                      <Text style={styles.hint}>
-                        매장 {ownedCount}개 × {formatKrw(PLANS.multi.monthlyKrw)} 기준이에요. 매장을 추가하면 매장수만큼 계산돼요.
-                      </Text>
+                      <>
+                        <Text style={styles.hint}>
+                          매장 {buyCount}개 × {formatKrw(PLANS.multi.monthlyKrw)} 기준이에요.
+                        </Text>
+
+                        <View style={styles.payDivider} />
+
+                        {/* 몇 개분을 살지 — 이게 결제의 입력이다(0130 store_count).
+                            한 번에 여러 개를 사도 되고, 나중에 하나씩 더 사도 된다. */}
+                        <Text style={styles.payFieldLabel}>매장 개수</Text>
+                        <View style={styles.stepper}>
+                          <Pressable
+                            onPress={() => setStoreCount((n) => Math.max(1, n - 1))}
+                            disabled={storeCount <= 1}
+                            style={({ pressed }) => [styles.stepBtn, pressed && { opacity: 0.6 }, storeCount <= 1 && { opacity: 0.4 }]}
+                            accessibilityRole="button"
+                            accessibilityLabel="매장 개수 줄이기"
+                          >
+                            <Ionicons name="remove" size={20} color={InkColors.ink} />
+                          </Pressable>
+                          <Text style={styles.stepValue}>{storeCount}개</Text>
+                          <Pressable
+                            onPress={() => setStoreCount((n) => Math.min(15, n + 1))}
+                            disabled={storeCount >= 15}
+                            style={({ pressed }) => [styles.stepBtn, pressed && { opacity: 0.6 }, storeCount >= 15 && { opacity: 0.4 }]}
+                            accessibilityRole="button"
+                            accessibilityLabel="매장 개수 늘리기"
+                          >
+                            <Ionicons name="add" size={20} color={InkColors.ink} />
+                          </Pressable>
+                        </View>
+                        <Text style={styles.hint}>
+                          입금이 확인되면 {storeCount}개만큼 열려요. 아직 무료인 내 매장이 먼저 열리고, 남는 건 새 매장을 만들 때 쓰여요.
+                          {ownedCount > 0 ? ` 지금 매장 ${ownedCount}개를 갖고 계세요.` : ''}
+                        </Text>
+                      </>
                     )}
 
                     <View style={styles.payDivider} />
@@ -748,6 +787,20 @@ const styles = StyleSheet.create({
     color: InkColors.ink,
     backgroundColor: InkColors.bgSoft,
   },
+
+  // 매장 개수 스테퍼(0130) — 버튼 48dp, 값은 가운데.
+  stepper: { flexDirection: 'row', alignItems: 'center', gap: Space.md },
+  stepBtn: {
+    width: 48,
+    height: 48,
+    borderRadius: Radius.sm,
+    borderWidth: 1,
+    borderColor: InkColors.line,
+    backgroundColor: InkColors.bgSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stepValue: { fontSize: 16, fontWeight: '900', color: InkColors.ink, minWidth: 56, textAlign: 'center' },
 
   // 주문 시점 동의 체크 — 48dp 터치 타깃(체크박스 단독이 아니라 행 전체가 눌린다).
   consentRow: { flexDirection: 'row', alignItems: 'center', gap: Space.md, minHeight: 48, paddingHorizontal: 2 },

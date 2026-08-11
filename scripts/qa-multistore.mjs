@@ -49,9 +49,19 @@ async function main() {
   const store1 = c1?.[0]?.unit_id;
   check('1호점 create_store 성공', !e1 && !!store1, store1 ?? e1?.message);
 
-  // 1.5) 유료 경로: 1호점을 multi 로 승격해야 2호점 생성 허용(0062 게이트 — 기존 소유 매장 전부 multi).
+  // 1.5) 유료 경로: 1호점을 multi 로 승격.
   const { error: actErr } = await admin.rpc('admin_activate_store', { p_unit_id: store1, p_days: 1, p_plan: 'multi' });
   check('1호점 multi 승격(admin_activate_store)', !actErr, actErr?.message ?? '');
+
+  // 1.6) ★0130: multi 플랜만으로는 매장을 못 늘린다 — **매장 슬롯**을 사야 한다.
+  //      운영자 승인(review_payment_claim)이 만드는 행과 같은 것을 여기서 직접 적립한다.
+  const { data: me } = await owner.auth.getUser();
+  const slotRes = await fetch(`${URL}/rest/v1/store_slots`, {
+    method: 'POST',
+    headers: { apikey: SRV, Authorization: `Bearer ${SRV}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ owner_id: me?.user?.id, paid_until: new Date(Date.now() + 30 * 864e5).toISOString() }),
+  });
+  check('2호점용 매장 슬롯 적립(0130)', slotRes.ok, `status=${slotRes.status}`);
 
   // 2) 2호점 생성 — 오너 다점포 완화가 already_in_store로 막지 않아야 함(+multi 게이트 통과)
   const { data: c2, error: e2 } = await owner.rpc('create_store', { p_store_name: 'QA 2호점', p_industry: '헬스·피트니스', p_biz_no: null });

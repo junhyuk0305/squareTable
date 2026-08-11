@@ -43,6 +43,8 @@ if (!URL || !ANON || !SERVICE) { console.error('FAIL: URL/ANON/SERVICE_ROLE env 
 // ★청구액은 부가세 포함(0106) — 공급가액 19,000/29,000 에 10% 를 더한 값이다.
 const SINGLE_KRW = 20900;
 const MULTI_KRW = 31900;
+// 주문 시점 동의(0116) — 없으면 서버가 consent_required 로 거부한다. SSOT = business.ts TERMS_VERSION.
+const TERMS = '2026-08-07';
 
 const mk = () => createClient(URL, ANON, { auth: { persistSession: false, autoRefreshToken: false } });
 const s = String(Date.now()).slice(-9);
@@ -107,7 +109,7 @@ async function main() {
 
   // ── 1) 신고 → pending 행. 금액은 서버가 계산한다 ───────────────────────────
   const { data: r1, error: e1 } = await A.c.rpc('submit_payment_claim', {
-    p_plan: 'single', p_amount: SINGLE_KRW, p_depositor: '장준혁', p_months: 1, p_memo: null,
+    p_plan: 'single', p_amount: SINGLE_KRW, p_depositor: '장준혁', p_months: 1, p_memo: null, p_terms_version: TERMS, p_store_count: 1,
   });
   check('① 사장 신고 → pending 생성', !e1 && r1?.status === 'pending' && r1?.unit_id === unitA, e1?.message ?? `status=${r1?.status}`);
   check('① 금액을 서버가 계산(single)', r1?.amount_krw === SINGLE_KRW, `amount=${r1?.amount_krw}`);
@@ -116,13 +118,13 @@ async function main() {
 
   // 금액 위조 시도(클라가 1원이라고 우겨도 서버 값이 저장돼야 한다)
   const { data: r1b } = await A.c.rpc('submit_payment_claim', {
-    p_plan: 'single', p_amount: 1, p_depositor: '장준혁', p_months: 1, p_memo: '금액위조시도',
+    p_plan: 'single', p_amount: 1, p_depositor: '장준혁', p_months: 1, p_memo: '금액위조시도', p_terms_version: TERMS, p_store_count: 1,
   });
   check('① 클라 금액 불신(p_amount=1 → 서버값 유지)', r1b?.amount_krw === SINGLE_KRW, `amount=${r1b?.amount_krw}`);
 
   // ── 2) 중복 신고가 새 행을 만들지 않는다 ───────────────────────────────────
   const { data: r2 } = await A.c.rpc('submit_payment_claim', {
-    p_plan: 'multi', p_amount: MULTI_KRW, p_depositor: '장준혁2', p_months: 1, p_memo: null,
+    p_plan: 'multi', p_amount: MULTI_KRW, p_depositor: '장준혁2', p_months: 1, p_memo: null, p_terms_version: TERMS, p_store_count: 1,
   });
   const { data: listA } = await A.c.from('payment_claims').select('id, status, plan, depositor_name, amount_krw');
   check('② 중복 신고가 새 행을 만들지 않음(id 동일)', r2?.id === claim1, `${r2?.id} vs ${claim1}`);
@@ -131,7 +133,7 @@ async function main() {
   check('② multi 금액 = 매장당 × 소유매장수(1)', r2?.amount_krw === MULTI_KRW * 1, `amount=${r2?.amount_krw}`);
 
   // single 로 되돌려 뒤 검사를 단순화
-  await A.c.rpc('submit_payment_claim', { p_plan: 'single', p_amount: SINGLE_KRW, p_depositor: '장준혁', p_months: 1, p_memo: null });
+  await A.c.rpc('submit_payment_claim', { p_plan: 'single', p_amount: SINGLE_KRW, p_depositor: '장준혁', p_months: 1, p_memo: null, p_terms_version: TERMS, p_store_count: 1 });
 
   // ── 3) 크로스테넌트: 다른 매장 사장에게 안 보인다 ──────────────────────────
   const { data: seenByB } = await B.c.from('payment_claims').select('id').eq('id', claim1);
@@ -174,11 +176,15 @@ async function main() {
   check('④-e 직접 delete 차단', !!delErr || (del ?? []).length === 0, delErr?.message?.slice(0, 60) ?? `rows=${(del ?? []).length}`);
 
   // 4-f) 로그인 사용자가 검토 RPC 직접 호출
-  const { error: revErr } = await A.c.rpc('review_payment_claim', { p_id: claim1, p_approve: true, p_reason: null });
-  check('④-f authenticated 의 review_payment_claim 호출 차단', !!revErr, revErr?.message?.slice(0, 70) ?? '호출돼버림');
+  const { error: revErr } = await A.c.rpc('review_payment_claim', { p_id: claim1, p_approve: true, p_reason: null, p_reviewer: null });
+  // ★에러가 났다는 것만 보면 안 된다 — p_id 가 undefined 라 PostgREST 가 '함수를 못 찾음(PGRST202)'을
+  //   내도 통과해 버린다(2026-08-11 P8 에서 실제로 이 거짓양성이 잡혔다). **권한 거부인지**까지 본다.
+  const revDenied = !!revErr && !/PGRST202|Could not find the function/i.test(revErr.message ?? '');
+  check('④-f authenticated 의 review_payment_claim 호출 차단(권한 거부인지까지)', revDenied,
+    revErr?.message?.slice(0, 70) ?? '호출돼버림');
 
   // 4-g) 직원은 신고 자체가 불가
-  const { error: jErr } = await J.c.rpc('submit_payment_claim', { p_plan: 'single', p_amount: SINGLE_KRW, p_depositor: '알바', p_months: 1, p_memo: null });
+  const { error: jErr } = await J.c.rpc('submit_payment_claim', { p_plan: 'single', p_amount: SINGLE_KRW, p_depositor: '알바', p_months: 1, p_memo: null, p_terms_version: TERMS, p_store_count: 1 });
   check('④-g 직원(junior) 신고 차단(not_owner)', /not_owner/.test(jErr?.message ?? ''), jErr?.message?.slice(0, 60) ?? '신고돼버림');
 
   // ── 5) 승인 → 실제 활성화 + 사장에게 결과 도달 ─────────────────────────────
@@ -205,7 +211,7 @@ async function main() {
 
   // ── 6) 반려 → 사유가 사장에게 도달 ─────────────────────────────────────────
   const { data: r3, error: e3 } = await A.c.rpc('submit_payment_claim', {
-    p_plan: 'single', p_amount: SINGLE_KRW, p_depositor: '장준혁', p_months: 1, p_memo: null,
+    p_plan: 'single', p_amount: SINGLE_KRW, p_depositor: '장준혁', p_months: 1, p_memo: null, p_terms_version: TERMS, p_store_count: 1,
   });
   check('⑥ 검토 후 새 신고는 새 행으로 생성', !e3 && !!r3?.id && r3.id !== claim1, e3?.message ?? r3?.id);
 
@@ -220,14 +226,14 @@ async function main() {
 
   // 반려 뒤에도 다시 신고할 수 있다(막다른 길 방지)
   const { data: r4, error: e4 } = await A.c.rpc('submit_payment_claim', {
-    p_plan: 'single', p_amount: SINGLE_KRW, p_depositor: '장준혁(정정)', p_months: 1, p_memo: null,
+    p_plan: 'single', p_amount: SINGLE_KRW, p_depositor: '장준혁(정정)', p_months: 1, p_memo: null, p_terms_version: TERMS, p_store_count: 1,
   });
   check('⑥ 반려 후 재신고 가능', !e4 && r4?.status === 'pending' && r4?.id !== r3?.id, e4?.message ?? `id=${r4?.id}`);
 
   // ── 7) 입력 검증 ───────────────────────────────────────────────────────────
-  const { error: eDep } = await B.c.rpc('submit_payment_claim', { p_plan: 'single', p_amount: SINGLE_KRW, p_depositor: '  ', p_months: 1, p_memo: null });
+  const { error: eDep } = await B.c.rpc('submit_payment_claim', { p_plan: 'single', p_amount: SINGLE_KRW, p_depositor: '  ', p_months: 1, p_memo: null, p_terms_version: TERMS, p_store_count: 1 });
   check('⑦ 입금자명 없으면 거부(depositor_required)', /depositor_required/.test(eDep?.message ?? ''), eDep?.message?.slice(0, 60) ?? '통과돼버림');
-  const { error: ePlan } = await B.c.rpc('submit_payment_claim', { p_plan: 'free', p_amount: 0, p_depositor: '무료', p_months: 1, p_memo: null });
+  const { error: ePlan } = await B.c.rpc('submit_payment_claim', { p_plan: 'free', p_amount: 0, p_depositor: '무료', p_months: 1, p_memo: null, p_terms_version: TERMS, p_store_count: 1 });
   check('⑦ free 플랜 신고 거부(bad_plan)', /bad_plan/.test(ePlan?.message ?? ''), ePlan?.message?.slice(0, 60) ?? '통과돼버림');
 
   // ★main 이 process.exit 로 끝나 .finally(cleanupAll)는 도달하지 않는다 — 시드 정리는 여기서.

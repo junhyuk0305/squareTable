@@ -52,6 +52,8 @@ type State = {
     termsVersion: string;
     bizNo?: string | null;
     bizEmail?: string | null;
+    // 몇 매장분인가(0130). multi 전용 — 이 수만큼 매장 슬롯이 적립된다.
+    storeCount?: number;
   }) => Promise<{ ok: true } | { ok: false; reason: ClaimError }>;
   /** 가장 최근 신고 1건(없으면 null) — /billing 이 이걸로 상태 문구를 고른다. */
   latest: () => PaymentClaim | null;
@@ -77,6 +79,7 @@ export const usePaymentClaimStore = create<State>((set, get) => ({
       termsVersion: args.termsVersion,
       bizNo: args.bizNo ?? null,
       bizEmail: args.bizEmail ?? null,
+      storeCount: args.storeCount ?? 1,
     });
     if (error) return { ok: false, reason: toClaimError(error.message) };
     // 서버가 돌려준 행(금액·상태는 서버 값이 정본)을 그대로 반영 — 낙관적 추정 금지.

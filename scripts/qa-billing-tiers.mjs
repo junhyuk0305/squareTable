@@ -6,8 +6,10 @@
 //   ① 좌석 캡: 무료 매장 직원 3명 승인 OK → 4번째 승인 staff_limit
 //   ② AI 캡(0082 플랜별): free 150 / 유료 매장당 1500. 캡 직전 200 → 캡 도달 402 로 경계를 양쪽에서 찍는다.
 //      ★ 유료 "무제한"은 폐기됐다(행사장형 무한호출 구멍). 유료도 1500 에서 402 가 나는지 회귀 가드한다.
-//   ③ 매장 캡: 무료·단일 2번째 매장 plan_limit_store → multi 활성화 후 생성 OK
-//   + 업그레이드 해제: single 활성화로 좌석 무제한·AI 캡 상향, multi 로 매장 추가 허용
+//   ③ 매장 캡(★0130 슬롯 선구매로 규칙이 바뀜): 2번째 매장부터는 **매장 슬롯**이 있어야 한다.
+//      플랜만으로는 못 늘린다 — multi 라도 슬롯 0개면 no_store_slot. 슬롯을 적립하면 그때 열리고,
+//      그 매장은 바로 multi·active 로 시작한다(결제 뒤 추가분이 무료로 열리던 구멍을 닫은 것).
+//   + 업그레이드 해제: single 활성화로 좌석 무제한·AI 캡 상향
 //   + 원복 후: 새 무료 사장이 2매장 생성 가능(파일럿 우회 복원 실증)
 //
 // 실행: node scripts/qa-billing-tiers.mjs
@@ -177,7 +179,8 @@ async function main() {
 
     // ④ 매장 캡: free 2호점 차단
     const { error: e2 } = await F.c.rpc('create_store', { p_store_name: 'QA 과금 2호점', p_industry: '헬스·피트니스', p_biz_no: null });
-    check('free: 2호점 차단(plan_limit_store)', /plan_limit_store/.test(e2?.message ?? ''), e2?.message ?? '생성돼버림');
+    // ★0130: 매장 캡 판정이 '플랜'에서 **매장 슬롯**으로 바뀌었다 → 거절 사유도 no_store_slot 이다.
+    check('free: 2호점 차단(no_store_slot)', /no_store_slot/.test(e2?.message ?? ''), e2?.message ?? '생성돼버림');
 
     // ⑤ single 활성화 → 좌석·AI 해제, 매장은 여전히 차단
     const act1 = await adminActivate(store1, 30, 'single');
@@ -201,13 +204,28 @@ async function main() {
     check(`single: 402 응답이 캡 ${PAID_CAP} 을 실어보냄`, a3c.body?.cap === PAID_CAP, `cap=${a3c.body?.cap}`);
     await seedAiUsage(store1, 0); // 뒤 검사(multi 2호점 등)가 캡에 걸리지 않게 원복
     const { error: e2b } = await F.c.rpc('create_store', { p_store_name: 'QA 과금 2호점', p_industry: '헬스·피트니스', p_biz_no: null });
-    check('single: 2호점 여전히 차단', /plan_limit_store/.test(e2b?.message ?? ''), e2b?.message ?? '생성돼버림');
+    check('single: 2호점 여전히 차단(no_store_slot)', /no_store_slot/.test(e2b?.message ?? ''), e2b?.message ?? '생성돼버림');
 
-    // ⑥ multi 활성화 → 2호점 생성 OK
+    // ⑥ ★0130: multi 플랜만으로는 매장을 못 늘린다 — **매장 슬롯**을 사야 한다.
+    //    (옛 규칙은 "소유 매장이 전부 유효 multi 면 추가 허용"이라 결제 뒤 추가분이 무료로 열렸다.)
     const act2 = await adminActivate(store1, 30, 'multi');
     check('admin_activate_store(multi)', act2?.plan === 'multi', `plan=${act2?.plan}`);
-    const { data: c2, error: e2c } = await F.c.rpc('create_store', { p_store_name: 'QA 과금 2호점', p_industry: '헬스·피트니스', p_biz_no: null });
-    check('multi: 2호점 생성 OK', !e2c && !!c2?.[0]?.unit_id, c2?.[0]?.unit_id ?? e2c?.message);
+    const { error: e2c } = await F.c.rpc('create_store', { p_store_name: 'QA 과금 2호점', p_industry: '헬스·피트니스', p_biz_no: null });
+    check('★multi 라도 슬롯 없으면 2호점 차단(무료 추가 봉쇄)', /no_store_slot/.test(e2c?.message ?? ''), e2c?.message ?? '생성돼버림');
+
+    // 슬롯 1개 적립(운영자 승인이 하는 일과 동일 — review_payment_claim 이 이 행을 만든다)
+    const slotRes = await fetch(`${URL}/rest/v1/store_slots`, {
+      method: 'POST', headers: { ...SH, Prefer: 'return=representation' },
+      body: JSON.stringify({ owner_id: F.uid, paid_until: new Date(Date.now() + 30 * 864e5).toISOString() }),
+    });
+    check('슬롯 1개 적립(service_role)', slotRes.ok, `status=${slotRes.status}`);
+    const { data: c2, error: e2d } = await F.c.rpc('create_store', { p_store_name: 'QA 과금 2호점', p_industry: '헬스·피트니스', p_biz_no: null });
+    const store2 = c2?.[0]?.unit_id;
+    check('★슬롯 적립 후 2호점 생성 OK', !e2d && !!store2, store2 ?? e2d?.message);
+    const { data: ep2 } = await F.c.rpc('effective_plan', { p_unit: store2 });
+    check('★슬롯으로 연 매장은 바로 multi(무료 아님)', ep2 === 'multi', `ep=${ep2}`);
+    const { data: sl } = await F.c.rpc('my_store_slots');
+    check('★슬롯 소진 → 남은 0개', (Array.isArray(sl) ? sl[0] : sl)?.open_count === 0, JSON.stringify(sl));
   } finally {
     // ── 3) 스위치 원복(무조건) — 테스트 시작 시점 값으로 ─────────────────────
     const restored = await setFreeMode(originalFreeMode === true);

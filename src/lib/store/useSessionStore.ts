@@ -6,6 +6,7 @@ import {
   fetchUnitInfo,
   fetchUnitSubscription,
   fetchMySeatLocked,
+  fetchBillingFreeMode,
   checkPhoneInUse,
   rpcCreateStore,
   rpcCompleteProfile,
@@ -58,6 +59,10 @@ type SessionState = {
   plan: PlanId;
   // 좌석 잠금(0115) — 무료 강등으로 직원 수가 한도를 넘어 내 자리가 잠겼는가(직원 전용 판정).
   seatLocked: boolean;
+  // 전면 무료 모드(0062 app_config) — 프로모션 기간엔 매장수·좌석·다점포 게이팅이 전부 열린다.
+  // ★매장이 아니라 서비스 전체 속성이라 로그아웃 시 초기화하지 않는다(계정 간 누수 대상이 아님).
+  //   프로필을 로드할 때마다 서버에서 다시 읽으므로 관리 콘솔에서 끄면 다음 로드에 반영된다.
+  freeMode: boolean;
   inviteCode: string; // 내 매장 초대코드(사장 화면에서 직원에게 공유)
   email: string;
   bio: string; // 한줄 소개
@@ -136,6 +141,7 @@ const DEMO = {
   paidUntil: '',
   plan: 'free' as PlanId,
   seatLocked: false,
+  freeMode: false, // 서버에서 읽기 전 기본값 — 읽기 전엔 평시 규칙(과금 게이팅 유지)
   inviteCode: '482913',
   email: '',
   bio: '',
@@ -351,6 +357,14 @@ async function loadProfile(
         else seatLocked = locked === true;
       }
     }
+    // 전면 무료 모드(0062) — 매장이 아니라 서비스 전체 스위치라 unitId 유무와 무관하게 읽는다.
+    // 읽기 실패는 이전에 알던 값을 유지한다(무료 기간 중 일시 오류로 게이팅이 갑자기 닫히지 않게).
+    let freeMode = useSessionStore.getState().freeMode;
+    {
+      const { data: fm, error: fmErr } = await fetchBillingFreeMode();
+      if (fmErr) reportError('session.fetchBillingFreeMode', fmErr);
+      else freeMode = fm === true;
+    }
     // 다점포(0055): 내가 속한 매장 목록 — '내 매장' 허브/헤더 토글용. 오너(소유)·직원(알바 소속) 모두 로드한다
     // (Phase 0: 직원 다매장). my_units 는 auth.uid() 소속만 반환하므로 크로스테넌트 노출 없음.
     let stores: MyUnitRow[] = [];
@@ -404,6 +418,7 @@ async function loadProfile(
       paidUntil,
       plan,
       seatLocked,
+      freeMode,
       bio: profile?.bio ?? '',
       phone: profile?.phone ?? '',
     });
@@ -619,6 +634,8 @@ export const useSessionStore = create<SessionState>((set, get) => ({
         track('store_created_failed', { reason: (error.message || '').slice(0, 60), code: (error as any).code ?? null });
         const msg = /duplicate_biz_no/.test(error.message)
           ? '이미 등록된 사업자등록번호예요.'
+          : /no_store_slot/.test(error.message)
+          ? '매장을 더 열려면 먼저 결제해 주세요. 요금제 화면에서 매장 개수를 고르면 그만큼 열려요.'
           : /plan_limit_store/.test(error.message)
           ? '2번째 매장부터는 다점포 요금제가 필요해요. 요금제 화면에서 변경할 수 있어요.'
           : /store_limit_reached/.test(error.message)

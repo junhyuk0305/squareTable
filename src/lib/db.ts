@@ -352,6 +352,8 @@ export async function submitPaymentClaim(args: {
   // 세금계산서 — 요청하는 사장만(선택).
   bizNo?: string | null;
   bizEmail?: string | null;
+  // 몇 매장분인가(0130 슬롯 선구매). multi 전용 — single 은 서버가 1로 눕힌다.
+  storeCount?: number;
 }): Promise<DbResult<PaymentClaim>> {
   if (!HAS_SUPABASE) return { data: null, error: null };
   const { data, error } = await supabase.rpc('submit_payment_claim', {
@@ -364,6 +366,7 @@ export async function submitPaymentClaim(args: {
     p_terms_version: args.termsVersion,
     p_biz_no: args.bizNo ?? null,
     p_biz_email: args.bizEmail ?? null,
+    p_store_count: args.storeCount ?? 1,
   });
   return { data: (data as PaymentClaim) ?? null, error: error as DbErr };
 }
@@ -373,6 +376,15 @@ export async function submitPaymentClaim(args: {
 export async function fetchMySeatLocked(): Promise<DbResult<boolean>> {
   if (!HAS_SUPABASE) return { data: false, error: null };
   const { data, error } = await supabase.rpc('my_seat_locked');
+  return { data: (data as boolean) ?? false, error: error as DbErr };
+}
+
+// ── 전면 무료 스위치(0062 app_config) — 프로모션 기간의 유일한 진실 ───────────────
+// 서버 캡(매장수·좌석·AI 쿼터)이 이미 이 값을 보고 우회한다. 화면도 같은 값을 읽어야
+// "서버는 허용하는데 버튼이 막는" 불일치가 안 생긴다. 관리 콘솔에서 행 하나로 뒤집는다.
+export async function fetchBillingFreeMode(): Promise<DbResult<boolean>> {
+  if (!HAS_SUPABASE) return { data: false, error: null };
+  const { data, error } = await supabase.rpc('billing_free_mode');
   return { data: (data as boolean) ?? false, error: error as DbErr };
 }
 
