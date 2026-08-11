@@ -79,15 +79,15 @@ export function AssignBoard({
           오늘 업무 {total}건
           {total > 0 && (remain > 0 ? <Text style={st.rest}> · 남음 {remain}</Text> : <Text style={st.donec}> · 모두 완료</Text>)}
         </Text>
-        <Pressable onPress={() => onAssign(undefined)} style={({ pressed }) => [st.assignBtn, pressed && { opacity: 0.85 }]} accessibilityRole="button" accessibilityLabel="일 맡기기">
+        <Pressable onPress={() => onAssign(undefined)} style={({ pressed }) => [st.assignBtn, pressed && { opacity: 0.85 }]} accessibilityRole="button" accessibilityLabel="업무 배정">
           <Ionicons name="add" size={15} color={InkColors.ink} />
-          <Text style={st.assignBtnText}>일 맡기기</Text>
+          <Text style={st.assignBtnText}>업무 배정</Text>
         </Pressable>
       </View>
 
       <ScrollView contentContainerStyle={st.scroll} showsVerticalScrollIndicator={false}>
         {groups.length === 0 && (
-          <Text style={st.empty}>오늘 맡긴 일이 없어요. ‘일 맡기기’로 담당을 정해보세요.</Text>
+          <Text style={st.empty}>오늘 배정한 업무가 없어요. ‘업무 배정’으로 담당을 정해보세요.</Text>
         )}
         {groups.map((g, gi) => (
           <Appear key={g.key} delay={gi * 70} style={st.group}>
@@ -104,7 +104,7 @@ export function AssignBoard({
                 hitSlop={6}
                 style={({ pressed }) => [st.addMini, pressed && { opacity: 0.7 }]}
                 accessibilityRole="button"
-                accessibilityLabel={`${g.name}에게 일 맡기기`}
+                accessibilityLabel={`${g.name}에게 업무 배정`}
               >
                 <Ionicons name="add" size={16} color={InkColors.ink} />
               </Pressable>
