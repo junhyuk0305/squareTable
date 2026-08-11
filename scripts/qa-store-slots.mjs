@@ -81,8 +81,16 @@ async function main() {
   const { data: c1 } = await O.c.rpc('create_store', { p_store_name: 'QA슬롯 1호점', p_industry: '카페·디저트', p_biz_no: null });
   const S1 = c1?.[0]?.unit_id;
   check('셋업 1호점 생성(첫 매장은 슬롯 불필요)', !!S1, S1);
+  // ★0134: 가입 프로모션이 켜져 있으면 1호점은 free 가 아니라 **가입 체험(single·trialing)** 으로 열린다.
+  //   이 하니스는 프로모션을 끄지 않는다 — 켠 상태여야 0136 의 '체험 매장도 슬롯을 먹는다'가 검증된다.
+  //   (끄면 "3개를 사면 매장이 4개 열리는" 구멍이 다시 나도 게이트가 green 이다. 실제로 그렇게 났다.)
   const ep0 = await svcRpc('effective_plan', { p_unit: S1 });
-  check('1호점은 free 로 시작', ep0.data === 'free', `ep=${ep0.data}`);
+  const trial0 = await svcRpc('is_signup_trial', { p_unit: S1 });
+  check(
+    '1호점은 무료 또는 가입 체험으로 시작(둘 다 슬롯 배정 대상)',
+    ep0.data === 'free' || trial0.data === true,
+    `ep=${ep0.data} signupTrial=${trial0.data}`,
+  );
 
   // ── ① 슬롯 없이 2호점 생성 불가 ───────────────────────────────────────────
   const { error: eNo } = await O.c.rpc('create_store', { p_store_name: 'QA슬롯 2호점(불가)', p_industry: '카페·디저트', p_biz_no: null });

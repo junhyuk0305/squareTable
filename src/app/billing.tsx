@@ -257,15 +257,19 @@ function BillingBody() {
     }
   };
 
-  // 상태 문구 — 제품 모델은 freemium(무료 영구 + 유료 single/multi)라 '무료체험' 개념이 없다.
+  // 상태 문구.
   // ★2026-08-06: 유료 기간이 끝나도 앱이 잠기지 않는다(무료 강등). '만료' 문구를 쓰지 않고,
   //   처음부터 무료인 매장과 구분해 "무료로 바뀌었다"고 말한다(isPlanLapsed).
+  // ★2026-08-11(0134): 가입하면 N일 요금제를 얹는 기간제 체험이 **생겼다**. 남은 날짜를 반드시
+  //   말해준다 — 체험이 끝나는 시점이 곧 결제를 요청하는 시점이라, 그날 처음 알게 하면 안 된다.
   const lapsed = isPlanLapsed({ plan, subStatus, paidUntil, trialEndsAt });
   const headline = lapsed
     ? '무료 요금제로 바뀌었어요'
     : plan === 'free'
       ? '무료 요금제로 이용 중이에요'
-      : '이용 중이에요';
+      : view.state === 'trialing' && view.daysLeft > 0
+        ? `무료로 쓰는 기간이 ${view.daysLeft}일 남았어요`
+        : '이용 중이에요';
 
   // ── iOS 네이티브: 결제 표면 전면 차단 (App Review 3.1.3(f)) ────────────────────────
   // 계좌·금액·요금제 선택·입금 버튼을 모두 제거한다. "웹에서 결제하세요" 같은 안내도

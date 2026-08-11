@@ -66,6 +66,25 @@ async function setFreeMode(on) {
   if (!res.ok || rows.length !== 1) throw new Error(`setFreeMode(${on}) 실패: ${res.status}`);
   return rows[0].value;
 }
+// ★0134: 가입 프로모션(가입하면 N일 single)을 이 하니스 동안 꺼 둔다.
+//   캡 3종은 **진짜 무료 매장**이 있어야 검증된다. 프로모션이 켜진 채로 돌리면 신규 매장이
+//   전부 single 이라 좌석·AI 캡이 애초에 적용되지 않고, 게이트가 조용히 무의미해진다.
+//   (프로모션이 실제로 부여되는지는 아래 6)에서 따로 켜서 검증한다.)
+// 원복 기준 — **설정 원시값**을 읽는다(RPC 는 창구 마감을 반영해 0을 돌려주므로 원복에 쓰면 안 된다).
+async function getSignupTrialDaysRaw() {
+  const res = await fetch(`${URL}/rest/v1/app_config?key=eq.signup_trial_days&select=value`, { headers: SH });
+  const rows = res.ok ? await res.json() : [];
+  return rows[0]?.value ?? '0';
+}
+async function setSignupTrialDays(days) {
+  const res = await fetch(`${URL}/rest/v1/app_config?key=eq.signup_trial_days`, {
+    method: 'PATCH', headers: { ...SH, Prefer: 'return=representation' },
+    body: JSON.stringify({ value: String(days), updated_at: new Date().toISOString() }),
+  });
+  const rows = res.ok ? await res.json() : [];
+  if (!res.ok || rows.length !== 1) throw new Error(`setSignupTrialDays(${days}) 실패: ${res.status}`);
+  return rows[0].value;
+}
 async function seedAiUsage(unitId, used) {
   const res = await fetch(`${URL}/rest/v1/ai_usage_monthly?on_conflict=unit_id,month`, {
     method: 'POST', headers: { ...SH, Prefer: 'resolution=merge-duplicates,return=representation' },
@@ -117,6 +136,7 @@ async function cleanupAll() {
 // ★스위치 복구는 "테스트 시작 시점의 원래 값"으로 — 유료화 전환(2026-07-10) 후 프로덕션 기본값은
 //   false 다. true 하드코딩 복구는 실서비스 페이월을 꺼버리는 사고가 된다.
 let originalFreeMode = null;
+let originalTrialDays = null; // ★0134 — 가입 프로모션 일수(원복 기준)
 
 async function main() {
   // ── 0) 현재 서버 스위치 값 기록(원복 기준) ─────────────────────────────────
@@ -125,6 +145,13 @@ async function main() {
   const { data: fm0 } = await probe.c.rpc('billing_free_mode');
   originalFreeMode = fm0 === true;
   console.log(`  … 시작 시 billing_free_mode=${fm0} (테스트 후 이 값으로 원복)`);
+
+  // ★0134: 캡 검증에는 진짜 무료 매장이 필요하다 → **첫 create_store 전에** 프로모션을 끈다.
+  //   ★원복 기준은 RPC 결과가 아니라 **app_config 원시 행**이다. signup_trial_days() 는
+  //   창구가 닫혔으면 설정이 30이어도 0을 돌려주므로, 그 값으로 원복하면 설정이 영구히 0이 된다.
+  originalTrialDays = await getSignupTrialDaysRaw();
+  await setSignupTrialDays(0);
+  console.log(`  … 시작 시 signup_trial_days(설정값)=${originalTrialDays} → 0으로 내림(테스트 후 원복)`);
 
   // ── 1) 무료 사장 F + 1호점 (스위치 켜기 전 준비) ──────────────────────────
   const F = await signUp('owner', 'QA과금사장');
@@ -232,6 +259,30 @@ async function main() {
     console.log(`  … 서버 스위치 원복: billing_free_mode=${restored}`);
   }
 
+  // ── 5) ★0134 가입 프로모션이 실제로 부여되는가 ─────────────────────────────
+  // 위 캡 검증은 프로모션을 꺼 놓고 돌았다. 그래서 "켜면 진짜 붙는지"를 여기서 따로 켜서 본다
+  // (끈 상태만 검증하면 프로모션이 통째로 죽어도 게이트가 green 이다).
+  await setSignupTrialDays(30);
+  try {
+    const T = await signUp('owner', 'QA체험사장');
+    cleanup.push(T.c);
+    const { data: t1, error: te1 } = await T.c.rpc('create_store', { p_store_name: 'QA 체험 1호점', p_industry: '카페·디저트', p_biz_no: null });
+    const tUnit = t1?.[0]?.unit_id;
+    check('가입 프로모션 켠 뒤 매장 생성 OK', !te1 && !!tUnit, tUnit ?? te1?.message);
+    const { data: tsub } = await T.c.from('unit_subscriptions').select('plan, status, trial_ends_at').eq('unit_id', tUnit).maybeSingle();
+    check('★가입 매장 = single/trialing', tsub?.plan === 'single' && tsub?.status === 'trialing', `plan=${tsub?.plan} status=${tsub?.status}`);
+    const days = tsub?.trial_ends_at ? Math.round((Date.parse(tsub.trial_ends_at) - Date.now()) / 86400000) : -1;
+    check('★체험 기간 = 30일', days === 30, `${days}일`);
+    const { data: tep } = await T.c.rpc('effective_plan', { p_unit: tUnit });
+    check('★서버 유효 플랜도 single (좌석·AI 캡이 실제로 풀린다)', tep === 'single', `ep=${tep}`);
+    // 프로모션 코드가 이 매장에서 막히지 않는가 — 0133 판정이 그대로였다면 여기서 already_paid 가 난다.
+    const { data: tuntil } = await T.c.rpc('effective_until', { p_unit: tUnit });
+    check('effective_until 이 체험 만료일을 돌려준다', !!tuntil && Date.parse(tuntil) > Date.now(), String(tuntil));
+  } finally {
+    const back = await setSignupTrialDays(originalTrialDays);
+    console.log(`  … 가입 프로모션 원복: signup_trial_days=${back}`);
+  }
+
   // ── 4) 원복 실증 — 원래 무료 모드였을 때만(유료화 후엔 2매장 생성이 정상 차단) ──
   if (originalFreeMode === true) {
     const G = await signUp('owner', 'QA과금사장2');
@@ -259,6 +310,10 @@ main()
       if (originalFreeMode !== null) {
         await setFreeMode(originalFreeMode === true);
         console.error(`  … 서버 스위치 원복(${originalFreeMode}) 완료`);
+      }
+      if (originalTrialDays !== null) {
+        await setSignupTrialDays(originalTrialDays);
+        console.error(`  … 가입 프로모션 원복(${originalTrialDays}) 완료`);
       }
     } catch { console.error('  !! 스위치 원복 실패 — 수동 확인 필요'); }
     process.exitCode = 1;

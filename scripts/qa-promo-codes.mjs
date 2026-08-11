@@ -100,7 +100,34 @@ async function cleanupAll() {
 
 const errOf = (e) => e?.message ?? '';
 
+// ★0134: 가입 프로모션(가입하면 N일 single)을 이 하니스 동안 꺼 둔다.
+//   이 파일의 시나리오는 전부 "무료 매장에 코드를 넣는다"를 전제로 한다. 프로모션이 켜져 있으면
+//   갓 만든 매장이 이미 single 30일이라, 7일 코드는 **기간을 깎으므로 정당하게 거부된다**
+//   (0134 의 '나빠지느냐' 규칙). 규칙이 맞고 전제가 낡은 것이라, 전제를 여기서 세운다.
+//   ★원복 기준은 RPC 가 아니라 app_config 원시값 — signup_trial_days() 는 창구가 닫히면
+//   설정이 30이어도 0을 돌려주므로, 그 값으로 원복하면 설정이 영구히 0이 된다.
+let originalTrialDays = null;
+async function getSignupTrialDaysRaw() {
+  const res = await fetch(`${URL}/rest/v1/app_config?key=eq.signup_trial_days&select=value`, { headers: SH });
+  const rows = res.ok ? await res.json() : [];
+  return rows[0]?.value ?? '0';
+}
+async function setSignupTrialDays(days) {
+  const res = await fetch(`${URL}/rest/v1/app_config?key=eq.signup_trial_days`, {
+    method: 'PATCH', headers: { ...SH, Prefer: 'return=representation' },
+    body: JSON.stringify({ value: String(days), updated_at: new Date().toISOString() }),
+  });
+  const rows = res.ok ? await res.json() : [];
+  if (!res.ok || rows.length !== 1) throw new Error(`setSignupTrialDays(${days}) 실패: ${res.status}`);
+  return rows[0].value;
+}
+
 async function main() {
+  // ★첫 create_store 전에 꺼야 한다 — 이미 만들어진 매장에는 소급 적용되지 않는다.
+  originalTrialDays = await getSignupTrialDaysRaw();
+  await setSignupTrialDays(0);
+  console.log(`  … 가입 프로모션 끔(설정값 ${originalTrialDays} → 0, 끝나면 원복)`);
+
   // ── 0) 사장 A·B·C(각 무료 1매장) · A매장 직원 J · 코드 4종 발급(service) ────
   const A = await signUp('owner', 'QA코드사장A'); cleanup.push(A.c);
   const storeA = await makeStore(A, 'QA 코드 A점');
@@ -181,6 +208,38 @@ async function main() {
   const { data: updCode, error: updErr } = await A.c.from('promo_codes').update({ days: 365 }).eq('code', C_OK).select('code');
   check('⑦ promo_codes 클라 update(기간 위조) 차단', !!updErr || (updCode ?? []).length === 0, updErr?.message?.slice(0, 60) ?? `rows=${(updCode ?? []).length}`);
 
+  // ── 8) ★0134 가입 체험 ↔ 코드 — '나빠지느냐' 규칙 ──────────────────────────
+  // 0133 은 "유료면 무조건 거부"였고, 0134 가 신규 매장에 가입 체험(single 30일)을 얹으면서
+  // 그 규칙이 **모든 신규 매장의 코드를 막게** 됐다. 그래서 판정을 '나빠지느냐'로 바꿨다.
+  // 여기가 그 회귀 가드다 — 이 두 줄이 없으면 규칙이 되돌아가도 아무도 모른다.
+  await setSignupTrialDays(30);
+  try {
+    const C_SHORT = `QA${s}SHORT`; // single 7일 — 30일 체험보다 나쁘다
+    const C_UP    = `QA${s}UP`;    // multi 30일 — 기간 같고 플랜만 올라간다
+    await svcInsert('promo_codes', [
+      { code: C_SHORT, plan: 'single', days: 7,  max_redemptions: null, note: 'QA 0134 짧은 코드' },
+      { code: C_UP,    plan: 'multi',  days: 30, max_redemptions: null, note: 'QA 0134 업그레이드 코드' },
+    ]);
+
+    const D = await signUp('owner', 'QA체험사장D'); cleanup.push(D.c);
+    const storeD = await makeStore(D, 'QA 체험 D점');
+    const { data: dep } = await D.c.rpc('effective_plan', { p_unit: storeD.unit_id });
+    check('⑧ 가입 매장이 체험 single 로 열린다', dep === 'single', `ep=${dep}`);
+
+    const { error: eShort } = await D.c.rpc('redeem_promo_code', { p_code: C_SHORT });
+    check('⑧ 체험 30일 > 코드 7일 → 거부(already_paid)', /already_paid/.test(eShort?.message ?? ''), eShort?.message ?? '통과돼버림');
+
+    const { error: eUp } = await D.c.rpc('redeem_promo_code', { p_code: C_UP });
+    check('⑧ ★체험 single → multi 코드는 허용(영업 경로 생존)', !eUp, eUp?.message ?? 'ok');
+    const { data: dep2 } = await D.c.rpc('effective_plan', { p_unit: storeD.unit_id });
+    check('⑧ 업그레이드 후 유효 플랜 multi', dep2 === 'multi', `ep=${dep2}`);
+
+    await svcPatch(`promo_codes?code=in.(${C_SHORT},${C_UP})`, { active: false });
+  } finally {
+    const back = await setSignupTrialDays(originalTrialDays);
+    console.log(`  … 가입 프로모션 원복: signup_trial_days=${back}`);
+  }
+
   // ★main 이 process.exit 로 끝나 .finally(cleanupAll)는 도달하지 않는다 — 정리는 여기서.
   await cleanupAll();
   await cleanupSeededPhones(URL, SERVICE, seededPhones);
@@ -191,6 +250,13 @@ async function main() {
 
 main().catch(async (e) => {
   console.error('FATAL:', e?.message ?? e);
+  // 어떤 실패에서도 가입 프로모션 설정은 시작 시점 값으로 되돌린다(라이브 설정을 하니스가 망가뜨리지 않게).
+  try {
+    if (originalTrialDays !== null) {
+      await setSignupTrialDays(originalTrialDays);
+      console.error(`  … 가입 프로모션 원복(${originalTrialDays}) 완료`);
+    }
+  } catch { console.error('  !! 가입 프로모션 원복 실패 — app_config.signup_trial_days 수동 확인 필요'); }
   await cleanupAll();
   await cleanupSeededPhones(URL, SERVICE, seededPhones).catch(() => {});
   process.exit(1);

@@ -86,10 +86,12 @@ export function deriveSubscription(s: SubscriptionFields, now: number = Date.now
     return { state: 'expired', entitled: false, daysLeft: 0 };
   }
 
-  // ⚠️ legacy: 신규 매장 구독행은 status='trialing'+3일로 생기지만(0036~0065 create_store), 위의
-  //   plan==='free' 단락이 항상 먼저 잡아 이 분기까지 오지 않는다(무료=영구). 제품 모델엔 기간제
-  //   '무료체험'이 없으므로 UI는 이 state 를 '무료체험 N일'로 라벨링하지 말 것(개념 혼선). 이 분기는
-  //   plan!=free 인데 status=trialing 인 이상상태의 안전 fallback(entitled)일 뿐이다.
+  // ★2026-08-11(0134): 이 분기는 더 이상 '이상상태 fallback'이 아니라 **정상 경로**다.
+  //   create_store 가 가입 프로모션 기간에 plan='single' + status='trialing' + N일로 매장을 연다.
+  //   (옛 주석은 "제품 모델엔 기간제 무료체험이 없으니 N일로 라벨링하지 말 것"이었다 — 이제 있다.
+  //    화면은 daysLeft 를 반드시 보여준다. 체험 종료일이 곧 결제를 요청하는 날이기 때문이다.)
+  //   프로모션이 꺼져 있으면 예전처럼 trialing+3일·plan='free' 로 생기고, 위의 plan==='free'
+  //   단락이 먼저 잡아 여기 오지 않는다(무료=영구).
   if (s.subStatus === 'trialing') {
     if (Number.isFinite(trialEnd) && trialEnd > now) {
       return { state: 'trialing', entitled: true, daysLeft: ceilDays(trialEnd - now) };

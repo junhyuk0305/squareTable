@@ -1,4 +1,9 @@
-/* promo.js — 8월 전면 무료 고지. 마케팅 정적 페이지 전용(앱 SPA·법무 페이지 제외).
+/* promo.js — 가입 프로모션 고지. 마케팅 정적 페이지 전용(앱 SPA·법무 페이지 제외).
+ *
+ * ★2026-08-11 약속이 바뀌었다: "8월 한 달 전면 무료"(달력 기준) → **"가입일부터 30일"**(계정 기준).
+ *   달력 기준이면 8/29 가입자가 3일만 쓰고 끝난다 — 가장 늦게, 가장 힘들게 확보한 리드가
+ *   가장 짧게 쓰는 구조였다. 여기서 파는 것은 기간이 아니라 **가입 창구 마감(8/31)** 이다.
+ *   실제 부여는 서버(create_store)가 한다 — 이 파일은 말만 한다. 둘이 어긋나면 거짓말이 된다.
  *
  * 왜 JS 주입인가: 정적 HTML 8장에 nav 가 각각 복사돼 있어, 마크업을 넣으면 8곳에 같은 문구가
  *   흩어진다. 문구·기한을 한 곳에서만 고치려고 이 파일이 마크업까지 만든다.
@@ -10,10 +15,13 @@
  *   관리 콘솔의 전면 무료 스위치를 **함께** 옮긴다(셋이 어긋나면 말과 실제가 다르다).
  */
 (function () {
-  var ENDS_AT = new Date('2026-09-01T00:00:00+09:00'); // KST 9/1 00:00 이후 노출 중단
+  // ★서버 카운터파트: app_config.signup_trial_until / signup_trial_days (관리 콘솔에서 조절).
+  //   기간을 바꾸면 **여기와 서버 설정을 함께** 옮긴다. 안 그러면 광고와 실제가 달라진다.
+  var ENDS_AT = new Date('2026-09-01T00:00:00+09:00'); // 가입 창구 마감(8/31 KST) 다음 순간
   var SEEN_KEY = 'sqt.promo.aug2026.seen';
-  var HEADLINE = '8월 한 달 전면 무료';
+  var HEADLINE = '지금 가입하면 30일 무료';
   var UNTIL = '8월 31일';
+  var DAYS = '30일';
 
   if (Date.now() >= ENDS_AT.getTime()) return;
 
@@ -28,8 +36,9 @@
   var strip = document.createElement('div');
   strip.className = 'promoStrip';
   strip.innerHTML =
-    '<div class="in"><b>' + HEADLINE + '</b>' +
-    '<span>매장 수·직원 수 제한 없이 모든 기능을 ' + UNTIL + '까지 무료로 쓰실 수 있어요.</span>' +
+    // 띠의 배지는 짧게 — 팝업 제목을 그대로 넣으면 뒤 문장과 "가입"·"30일"이 두 번 겹친다.
+    '<div class="in"><b>' + DAYS + ' 무료</b>' +
+    '<span>' + UNTIL + '까지 가입하시면 직원 수 제한 없이 ' + DAYS + ' 동안 쓰실 수 있어요.</span>' +
     '<a href="/signup">무료로 시작하기</a></div>';
   document.body.insertBefore(strip, document.body.firstChild);
 
@@ -44,19 +53,19 @@
   back.innerHTML =
     '<div class="promoCard">' +
       '<button type="button" class="x" aria-label="닫기">&times;</button>' +
-      '<p class="eyebrow"><span class="pin"></span>지금 가입하면</p>' +
+      '<p class="eyebrow"><span class="pin"></span>' + UNTIL + '까지 가입하시면</p>' +
       '<h2 id="promoTitle">' + HEADLINE + '</h2>' +
-      '<p class="sub">서비스가 실제로 매장에 맞는지 먼저 써 보시라고, ' + UNTIL + '까지 요금제를 열어 둡니다.</p>' +
+      '<p class="sub">서비스가 실제로 매장에 맞는지 먼저 써 보시라고, 가입하신 날부터 ' + DAYS + ' 동안 요금제를 열어 둡니다.</p>' +
       '<ul>' +
-        '<li>모든 기능 — 노하우·질문 응답·퀴즈·업무 채팅</li>' +
-        '<li>매장 수 제한 없음 — 다점포 기능까지</li>' +
-        '<li>직원 수 제한 없음</li>' +
+        '<li>직원 수 제한 없음 — 무료 요금제는 3명까지예요</li>' +
+        '<li>AI 답변 월 1,500건</li>' +
+        '<li>노하우·질문 제한 없음</li>' +
       '</ul>' +
       '<a class="p" href="/signup">무료로 시작하기</a>' +
       '<button type="button" class="s">다음에 볼게요</button>' +
       // ★클래스명 주의: 사이트에 이미 .foot(검정 배경 CTA 섹션)이 있다 — 겹치면 흰 카드 안에
       //   검정 덩어리가 생긴다(브라우저 확인에서 실제로 재현됨). 프로모션 전용 이름을 쓴다.
-      '<p class="promoNote">9월부터는 무료 요금제(매장 1개·직원 3명)로 계속 쓰거나 요금제를 고르시면 돼요.</p>' +
+      '<p class="promoNote">' + DAYS + '이 지나면 무료 요금제(매장 1개·직원 3명)로 계속 쓰시면 돼요. 자동으로 결제되는 것은 없어요.</p>' +
     '</div>';
 
   function close() {
