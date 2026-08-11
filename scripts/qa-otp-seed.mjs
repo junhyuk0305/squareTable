@@ -8,6 +8,14 @@
 //
 // 사용: import { seedVerifiedPhones, cleanupSeededPhones } from './qa-otp-seed.mjs';
 //   시작 시 seedVerifiedPhones(URL, SERVICE, phones) → finally 에서 cleanupSeededPhones(...).
+//
+// ★ 잔존 방어(2026-08-11 P1-#2): cleanup 은 finally 의 best-effort라 스크립트가 예외·강제종료로 죽으면
+//   '인증됨' 행이 그대로 남는다. 게이트(0088 phone_verified_ok)는 **번호만** 보고 QA행/실사용행을
+//   구분하지 않으므로, 남은 행은 그 번호 소유자가 SMS 없이 가입 게이트를 통과하는 구멍이 된다
+//   (실측: 최고 11일 경과분 포함 18건 잔존). 그래서 시드할 때마다 **오래된 qa-seed 행을 먼저 청소**한다
+//   — 다음 QA 실행이 이전 실행의 잔해를 반드시 걷어가므로 구멍이 누적되지 않는다.
+//   게이트 함수에서 'qa-seed' 를 통째로 제외하는 안은 **기각**: 이 헬퍼에 의존하는 하니스 35개가 전부 죽는다.
+const STALE_MS = 60 * 60 * 1000; // 1시간 — QA 실행은 분 단위라 진행 중인 시드를 건드리지 않는다
 
 const headers = (serviceKey) => ({
   apikey: serviceKey,
@@ -15,8 +23,20 @@ const headers = (serviceKey) => ({
   'Content-Type': 'application/json',
 });
 
+// 이전 실행이 남긴 qa-seed 행 청소. 실패해도 시드는 진행한다(청소는 부수 작업).
+async function pruneStaleSeeds(url, serviceKey) {
+  const cutoff = new Date(Date.now() - STALE_MS).toISOString();
+  try {
+    await fetch(`${url}/rest/v1/phone_otps?code_hash=eq.qa-seed&verified_at=lt.${cutoff}`, {
+      method: 'DELETE',
+      headers: headers(serviceKey),
+    });
+  } catch { /* best-effort */ }
+}
+
 export async function seedVerifiedPhones(url, serviceKey, phones) {
   if (!serviceKey) return { skipped: 'no-service-key' };
+  await pruneStaleSeeds(url, serviceKey);
   const now = new Date().toISOString();
   const rows = phones.map((phone) => ({ phone, code_hash: 'qa-seed', expires_at: now, verified_at: now }));
   const res = await fetch(`${url}/rest/v1/phone_otps`, {

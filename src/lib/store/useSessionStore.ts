@@ -142,6 +142,12 @@ const DEMO = {
   phone: '',
 };
 
+// 초대코드 거부 문구(SSOT) — join_by_invite 는 '없는 코드'와 '기한 지난 코드'를 **둘 다 0행**으로 돌려주므로
+// (0031: 감사기록 보존을 위해 raise 대신 빈 반환) 화면에서 구분할 수 없다. 두 경우 모두에서 맞는
+// 다음 행동을 말한다 — 코드를 다시 보는 것이 아니라 사장님께 새 코드를 받는 것이다.
+const INVALID_OR_EXPIRED_CODE_MSG =
+  '초대코드가 올바르지 않아요. 기한이 지났을 수도 있으니 사장님께 코드를 다시 받아주세요.';
+
 // 가게 이름 변경 제한 — 14일 이내 2회. 이력(타임스탬프)은 기기 로컬에 unit별로 보관.
 const RENAME_LIMIT = 2;
 const RENAME_WINDOW_MS = 14 * 24 * 60 * 60 * 1000;
@@ -656,7 +662,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
         : 'error';
       track('join_requested', { result: reason, code: (error as any).code ?? null });
       const msg = reason === 'invalid_code'
-        ? '초대코드가 올바르지 않아요.'
+        ? INVALID_OR_EXPIRED_CODE_MSG
         : reason === 'too_many_attempts'
         ? '시도가 많아 잠시 잠겼어요. 10분 후 다시 시도해 주세요.'
         : /birth_date_required|birth_date_invalid/.test(error.message)
@@ -665,9 +671,12 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       return { error: msg, storeName: null };
     }
     // 0행 반환 = invalid_code 신호(0031: 감사기록 보존을 위해 raise 대신 빈 반환).
+    // ★ 만료된 코드도 같은 0행으로 온다 — 서버가 둘을 구분하지 않으므로 문구가 두 경우를 함께 덮어야 한다.
+    //   "올바르지 않다"만 말하면 직원은 코드를 다시 확인하려 들지만, 실제로 필요한 행동은
+    //   '사장님께 새 코드를 받는 것'이다(사장이 재발급해야 풀린다). 2026-08-11 P1-#5.
     if (!row?.unit_id) {
       track('join_requested', { result: 'invalid_code' });
-      return { error: '초대코드가 올바르지 않아요.', storeName: null };
+      return { error: INVALID_OR_EXPIRED_CODE_MSG, storeName: null };
     }
     // 0032: 즉시 합류가 아니라 '승인 대기' 신청. row.unit_id=신청 대상, unit_id는 아직 안 붙는다.
     // 대기 화면에 보여줄 매장 이름을 세션에 심고, 프로필 재로드로 pendingUnitId를 반영한다.

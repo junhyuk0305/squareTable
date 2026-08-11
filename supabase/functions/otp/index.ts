@@ -6,7 +6,7 @@
 //   - 이 함수는 "가입 전(무세션)" 사용자가 호출한다 → JWT 검증이 없다(config.toml verify_jwt=false).
 //   - 따라서 유일한 방어선은 아래 레이트리밋이다. SMS는 건당 과금(약 9원)이라 뚫리면 바로 돈이 샌다.
 //       · 같은 번호 재발송 쿨다운 60초 + 일일 5건 (phone_otps 행 기반 — 인스턴스 재시작과 무관)
-//       · IP당 분당 3건 (인메모리 — 베스트에포트)
+//       · IP당 분당 3건 (★0124: DB 기반 — 예전 인메모리 Map 은 isolate 로컬이라 실측 24발 전부 통과했다)
 //       · 코드 3분 만료 · 오답 5회면 코드 무효(온라인 브루트포스 차단: 6자리×5회)
 //   - 코드는 평문 저장하지 않는다(sha256). 응답에 코드·해시를 절대 싣지 않는다.
 //
@@ -32,16 +32,16 @@ const CODE_TTL_MIN = 3;
 const MAX_ATTEMPTS = 5;
 const IP_RATE_PER_MIN = 3;
 
-const ipHits = new Map<string, { n: number; resetAt: number }>();
-function ipLimited(ip: string): boolean {
-  const now = Date.now();
-  const cur = ipHits.get(ip);
-  if (!cur || now > cur.resetAt) {
-    ipHits.set(ip, { n: 1, resetAt: now + 60_000 });
-    return false;
+// IP 레이트리밋 — 판정·카운트는 DB(0124 otp_ip_hit)에서 원자적으로. 인스턴스가 갈려도 유효하다.
+// ★ 실패 시 fail-closed(막는다): 여기가 뚫리면 곧바로 과금이므로 "DB가 아프면 통과"는 선택지가 아니다.
+// deno-lint-ignore no-explicit-any
+async function ipLimited(admin: any, ip: string): Promise<boolean> {
+  const { data, error } = await admin.rpc('otp_ip_hit', { p_ip: ip, p_per_min: IP_RATE_PER_MIN });
+  if (error) {
+    console.error('otp: ip rate check failed:', error.message);
+    return true;
   }
-  cur.n += 1;
-  return cur.n > IP_RATE_PER_MIN;
+  return data === true;
 }
 
 function corsFor(origin: string | null) {
@@ -115,8 +115,16 @@ Deno.serve(async (req) => {
   const admin = createClient(SUPABASE_URL, SERVICE_ROLE, { auth: { persistSession: false } });
 
   if (body.action === 'send') {
-    const ip = (req.headers.get('x-forwarded-for') ?? 'unknown').split(',')[0].trim();
-    if (ipLimited(ip)) return json(429, { ok: false, reason: 'rate_limited' }, cors);
+    // ★ IP 를 못 알아내면 이 축은 **건너뛴다**. 예전 인메모리판은 'unknown' 이라는 공용 버킷으로 셌는데,
+    //   그때는 리밋 자체가 안 걸려 무해했다. DB 로 옮기면 그 순간부터 실제로 걸리므로,
+    //   헤더가 없는 환경에서는 **모든 사용자가 분당 3건을 나눠 쓰는** 전면 장애가 된다.
+    //   귀속할 수 없는 요청은 IP 축으로 막지 않는다 — 번호별 쿨다운·일일캡은 그대로 적용된다.
+    const ip = (req.headers.get('x-forwarded-for') ?? '').split(',')[0].trim();
+    // retry_after_sec 를 함께 싣는다 — 없으면 화면이 "잠시 후"밖에 말할 수 없고,
+    // 사용자는 얼마나 기다릴지 몰라 계속 누른다(2026-08-11 QA P1-#3). 창은 고정 1분.
+    if (ip && (await ipLimited(admin, ip))) {
+      return json(429, { ok: false, reason: 'rate_limited', retry_after_sec: 60 }, cors);
+    }
     if (!SOLAPI_KEY || !SOLAPI_SECRET || !SOLAPI_FROM) {
       return json(500, { ok: false, reason: 'not_configured' }, cors);
     }
@@ -129,11 +137,23 @@ Deno.serve(async (req) => {
     let sentCount = 1;
     let sentResetAt = new Date(now + 86_400_000).toISOString();
     if (row) {
-      if (now - new Date(row.last_sent_at).getTime() < COOLDOWN_SEC * 1000) {
-        return json(429, { ok: false, reason: 'cooldown' }, cors);
+      const sinceLast = now - new Date(row.last_sent_at).getTime();
+      if (sinceLast < COOLDOWN_SEC * 1000) {
+        return json(429, {
+          ok: false,
+          reason: 'cooldown',
+          retry_after_sec: Math.ceil((COOLDOWN_SEC * 1000 - sinceLast) / 1000),
+        }, cors);
       }
-      if (now < new Date(row.sent_reset_at).getTime()) {
-        if (row.sent_count >= DAILY_CAP) return json(429, { ok: false, reason: 'daily_cap' }, cors);
+      const resetAt = new Date(row.sent_reset_at).getTime();
+      if (now < resetAt) {
+        if (row.sent_count >= DAILY_CAP) {
+          return json(429, {
+            ok: false,
+            reason: 'daily_cap',
+            retry_after_sec: Math.ceil((resetAt - now) / 1000),
+          }, cors);
+        }
         sentCount = row.sent_count + 1;
         sentResetAt = row.sent_reset_at;
       }
