@@ -51,7 +51,8 @@ export function DaypartSettingsSheet({ onClose }: { onClose: () => void }) {
     setItems((p) => p.map((d, idx) => (idx === i ? { ...d, routines: d.routines.filter((_, k) => k !== ri) } : d)));
 
   const save = () => {
-    setConfig({ dayparts: sanitizeDayparts(items) });
+    // setConfig 는 결과를 돌려주지만 여기선 시트를 바로 닫는다 — 실패 시 배너·롤백은 guardWrite 가 처리한다.
+    void setConfig({ dayparts: sanitizeDayparts(items) });
     onClose();
   };
   // 로컬만 기본 4개로 되돌린다(저장을 눌러야 실제 반영 — 실수로 날아가지 않게).

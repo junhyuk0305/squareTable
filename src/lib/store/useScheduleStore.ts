@@ -81,7 +81,8 @@ type ScheduleState = {
   hydrate: () => Promise<void>;
   subscribe: () => () => void;
 
-  setConfig: (patch: Partial<StoreConfig>) => void;
+  /** 매장 운영 설정 저장. **서버 반영 성공 여부를 돌려준다** — 호출부가 성공 토스트를 확인 뒤로 미룰 수 있게. */
+  setConfig: (patch: Partial<StoreConfig>) => Promise<boolean>;
   addTemplate: (t: Omit<ShiftTemplate, 'id'>) => void;
   updateTemplate: (id: string, patch: Partial<Omit<ShiftTemplate, 'id'>>) => void;
   removeTemplate: (id: string) => void;
@@ -198,7 +199,8 @@ export const useScheduleStore = create<ScheduleState>((set, get) => ({
     const before = get().config;
     const next = { ...before, ...patch };
     set({ config: next });
-    void guardWrite(
+    // 낙관적 반영은 그대로 두되 결과를 돌려준다 — 화면이 "저장됐어요"를 서버 확인 뒤에 띄우게 하기 위함.
+    return guardWrite(
       upsertScheduleConfig(next),
       () => set({ config: before }),
       '매장 정보 저장에 실패했어요. 다시 시도해 주세요.',

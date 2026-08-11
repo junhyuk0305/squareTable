@@ -24,10 +24,16 @@ export function AttendancePanel() {
   const userId = useSessionStore((s) => s.userId);
   const userName = useSessionStore((s) => s.userName);
   const records = useAttendanceStore((s) => s.records);
+  const attendanceLoaded = useAttendanceStore((s) => s.loaded);
   const checkIn = useAttendanceStore((s) => s.checkIn);
   const checkOut = useAttendanceStore((s) => s.checkOut);
   const wages = usePayrollStore((s) => s.wages);
   const settings = usePayrollStore((s) => s.settings);
+  // ★금액은 "시급이 실제로 정해진 경우"에만 보여준다(P7 실측).
+  //   예전엔 wages[userId] 가 없으면 최저시급(DEFAULT_HOURLY_WAGE)으로 계산해 **그럴듯한 금액**을 띄웠다 —
+  //   ①시급 미설정 ②읽기 실패 ③본인 행 없음 이 셋이 화면에서 구분되지 않았다.
+  //   0이나 빈칸은 "아직 없다"로 읽히지만 틀린 금액은 사실로 읽힌다(금액은 분쟁 대상).
+  const wageSet = Object.prototype.hasOwnProperty.call(wages, userId);
   const wage = wages[userId] ?? DEFAULT_HOURLY_WAGE;
   const router = useRouter();
 
@@ -77,9 +83,9 @@ export function AttendancePanel() {
         <Text style={styles.bigTime}>{fmtDuration(todayMin)}</Text>
         <Text style={styles.bigSub}>
           {working
-            ? `${hhmm(openRec!.check_in!)} 출근 · 오늘 ${won(todayPay)}`
+            ? `${hhmm(openRec!.check_in!)} 출근${wageSet ? ` · 오늘 ${won(todayPay)}` : ''}`
             : todayRecs.length > 0
-              ? `오늘 ${todayRecs.length}회 근무 · ${won(todayPay)}`
+              ? `오늘 ${todayRecs.length}회 근무${wageSet ? ` · ${won(todayPay)}` : ''}`
               : '아직 출근 전이에요'}
         </Text>
 
@@ -91,11 +97,16 @@ export function AttendancePanel() {
             <Text style={styles.btnText}>퇴근하기</Text>
           </Pressable>
         ) : (
+          // ★불러오기 전에는 누를 수 없다 — 그 사이엔 records 가 비어 있어 "근무 중"인지 알 수 없고,
+          //   그대로 누르면 이중 출근이 찍힌다(판정은 useAttendanceStore.checkIn 이 SSOT, 여기선 표시만).
           <Pressable
             onPress={() => checkIn(userId)}
-            style={({ pressed }) => [styles.btn, styles.btnIn, pressed && { opacity: 0.85 }]}
+            disabled={!attendanceLoaded}
+            style={({ pressed }) => [styles.btn, styles.btnIn, !attendanceLoaded && { opacity: 0.4 }, pressed && attendanceLoaded && { opacity: 0.85 }]}
           >
-            <Text style={styles.btnText}>{todayRecs.length > 0 ? '다시 출근하기' : '출근하기'}</Text>
+            <Text style={styles.btnText}>
+              {!attendanceLoaded ? '불러오는 중이에요' : todayRecs.length > 0 ? '다시 출근하기' : '출근하기'}
+            </Text>
           </Pressable>
         )}
       </View>
@@ -112,12 +123,17 @@ export function AttendancePanel() {
             { key: 'month', value: fmtDuration(monthMin), label: '이번 달 근무' },
             {
               key: 'pay',
-              value: won(monthPay),
+              value: wageSet ? won(monthPay) : '—',
               label: '예상 급여',
-              info: {
-                title: '예상 급여는 어떻게 계산돼요?',
-                body: `시급 ${won(wage)} 기준으로 계산한 세전 예상액이에요.\n세금·4대보험·수당에 따라 실제 받는 금액과 다를 수 있어요.`,
-              },
+              info: wageSet
+                ? {
+                    title: '예상 급여는 어떻게 계산돼요?',
+                    body: `시급 ${won(wage)} 기준으로 계산한 세전 예상액이에요.\n세금·4대보험·수당에 따라 실제 받는 금액과 다를 수 있어요.`,
+                  }
+                : {
+                    title: '왜 금액이 안 보여요?',
+                    body: '아직 시급이 정해지지 않았어요.\n사장님께 시급을 정해 달라고 말씀해 주세요.',
+                  },
             },
           ]}
         />

@@ -3,7 +3,7 @@ import { coalesce, subscribeDebounced } from '@/lib/store/realtimeSync';
 import { todayStr, minutesBetween, nowISO, MAX_SHIFT_MIN, tsMs } from '@/lib/utils/attendance';
 import { HAS_SUPABASE } from '@/lib/supabase';
 import { fetchAttendance, upsertAttendance, deleteAttendance, subscribeAttendance } from '@/lib/db';
-import { guardWrite } from '@/lib/store/useSyncStore';
+import { guardWrite, useSyncStore } from '@/lib/store/useSyncStore';
 import { genId } from '@/lib/utils/id';
 
 export type AttendanceRecord = {
@@ -77,13 +77,24 @@ export const useAttendanceStore = create<State>((set, get) => ({
 
   checkIn: (staffId) => {
     const date = todayStr();
+    // ★하이드레이션 전 중복 출근 방지(P7 실측): 아래 중복 검사는 인메모리 records 만 본다.
+    //    HAS_SUPABASE 일 때 초기값은 records=[] 이라 **하이드레이션 전에는 검사가 무조건 통과**한다 —
+    //    근무 중인 직원이 새로고침 직후 누르면 이중 오픈이 찍히고 work_minutes 가 부풀어 급여가 왜곡된다.
+    //    판정할 수 없는 상태에서는 쓰지 않는다. 무음 no-op 금지 — 왜 안 되는지 말한다.
+    if (!get().loaded) {
+      useSyncStore.getState().noteError('출근 기록을 불러오는 중이에요. 잠시 후 다시 눌러 주세요.');
+      return;
+    }
     // 다회 출퇴근: 열린(미퇴근) 기록이 없을 때만 새 출근 생성.
     // ⚠️ 날짜 무관하게 검사한다 — 어제 퇴근을 깜빡한 열린 기록이 있는데 오늘 또 출근을 찍으면
     //    이중 오픈(둘 다 미퇴근)이 되어 어제 기록이 24h로 부풀고 급여가 왜곡된다(F7). 먼저 퇴근시켜야.
     const hasOpen = get().records.some(
       (r) => r.staff_id === staffId && r.check_in && !r.check_out,
     );
-    if (hasOpen) return;
+    if (hasOpen) {
+      useSyncStore.getState().noteError('이미 출근 중이에요. 먼저 퇴근을 눌러 주세요.');
+      return;
+    }
     const now = new Date().toISOString();
     const rec: AttendanceRecord = { id: genId(`att_${staffId}`), staff_id: staffId, date, check_in: now, check_out: null, work_minutes: 0 };
     set((s) => ({ records: [rec, ...s.records] }));

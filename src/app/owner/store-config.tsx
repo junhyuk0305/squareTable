@@ -36,9 +36,16 @@ export default function OwnerStoreConfigScreen() {
   const toggleDay = (wd: number) =>
     setClosedDays((p) => (p.includes(wd) ? p.filter((x) => x !== wd) : [...p, wd]));
 
-  const save = () => {
-    if (!valid) return;
-    setConfig({ open, close, closedDays, note: note.trim() });
+  // ★"저장됐어요 ✓"는 서버 확인 뒤에만 뜬다(조용한 오류 D). 예전엔 쓰기를 기다리지 않고 성공을 말한 뒤
+  //   450ms 만에 화면을 떠나, 사장이 성공 메시지를 본 다음 **다른 화면에서** 실패 배너를 받았다.
+  //   실패 시 배너·롤백은 setConfig(guardWrite)가 이미 처리한다 — 여기선 성공했을 때만 착지시킨다.
+  const [saving, setSaving] = useState(false);
+  const save = async () => {
+    if (!valid || saving) return;
+    setSaving(true);
+    const ok = await setConfig({ open, close, closedDays, note: note.trim() });
+    setSaving(false);
+    if (!ok) return;
     setSaved(true);
     setTimeout(() => router.back(), 450);
   };
@@ -143,8 +150,8 @@ export default function OwnerStoreConfigScreen() {
           </View>
         </View>
 
-        <Pressable onPress={save} disabled={!valid} style={({ pressed }) => [styles.saveBtn, !valid && { opacity: 0.4 }, pressed && valid && { opacity: 0.85 }]}>
-          <Text style={styles.saveText}>{saved ? '저장됐어요 ✓' : '저장'}</Text>
+        <Pressable onPress={() => { void save(); }} disabled={!valid || saving} style={({ pressed }) => [styles.saveBtn, (!valid || saving) && { opacity: 0.4 }, pressed && valid && !saving && { opacity: 0.85 }]}>
+          <Text style={styles.saveText}>{saved ? '저장됐어요 ✓' : saving ? '저장 중이에요' : '저장'}</Text>
         </Pressable>
 
         {/* 다점포 전용 위험 구역 — 이 매장 삭제(사장 전용 + 매장 2개 이상일 때만) */}

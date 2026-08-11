@@ -7,9 +7,9 @@
 //
 //  ① wages      : 직원=본인 행만 / 매니저·사장=전량
 //  ② attendance : 직원=본인 기록만 / 매니저·사장=전량
-//  ③ 방 격리    : 비공개 방(비멤버) — 매니저=읽힘(can_see_room, 0122) / 직원=0건(회귀)
+//  ③ 방 격리    : 비공개 방 — **비멤버는 매니저도 0건**(0126 으로 매니저 특권 제거) / 멤버면 목록·메시지 둘 다 보임
 //
-// 실행: node scripts/qa-role-read-boundary.mjs (.env + .env.seed 필요). 전제 = 0122 push.
+// 실행: node scripts/qa-role-read-boundary.mjs (.env + .env.seed 필요). 전제 = 0122 + **0126** push.
 import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -121,10 +121,22 @@ try {
   const jFeed = await J.from('work_feed').select('id').eq('id', feedId);
   check('★회귀: 직원은 비공개 방 메시지 0건', (jFeed.data?.length ?? 0) === 0, `rows=${jFeed.data?.length}`);
 
+  // ★2026-08-11(0126): 매니저 특권이 **제거됐다.** 0122 는 매니저에게 전 방을 열어줬지만,
+  //   그 결과 매니저가 자기가 안 들어간 방을 읽고 자기를 멤버로 넣고 전체방으로 승격까지 할 수 있었다(P5).
+  //   확정 규칙 = 사장은 모든 방 / **매니저·직원은 기본방 + 본인이 멤버인 방만.** 정본은 0126.
+  //   그래서 이 방(사장이 만들고 매니저는 비멤버)은 매니저에게도 0건이어야 한다.
   const mRooms = await M.from('work_rooms').select('id').eq('id', roomId);
-  check('매니저: 비공개 방 목록에 보임(0093 wr_select)', (mRooms.data?.length ?? 0) === 1, `rows=${mRooms.data?.length}`);
+  check('★매니저: 비멤버 비공개 방은 목록에서 안 보임(0126)', (mRooms.data?.length ?? 0) === 0, `rows=${mRooms.data?.length}`);
   const mFeed = await M.from('work_feed').select('id').eq('id', feedId);
-  check('★매니저: 그 방 메시지도 읽힘(0122 can_see_room)', (mFeed.data?.length ?? 0) === 1, `rows=${mFeed.data?.length}`);
+  check('★매니저: 비멤버 비공개 방 메시지 0건(0126)', (mFeed.data?.length ?? 0) === 0, `rows=${mFeed.data?.length}`);
+
+  // 반대 방향 — 좁히기만 검사하면 **과잉 수정**(매니저가 자기 방도 못 봄)을 놓친다.
+  // 0122 가 고치려던 증상("목록은 보이는데 메시지 0건")이 멤버인 방에서 재발하지 않는지 함께 고정한다.
+  await O.from('work_room_members').insert({ room_id: roomId, user_id: mId });
+  const mRooms2 = await M.from('work_rooms').select('id').eq('id', roomId);
+  check('매니저: 멤버로 넣으면 그 방이 보인다', (mRooms2.data?.length ?? 0) === 1, `rows=${mRooms2.data?.length}`);
+  const mFeed2 = await M.from('work_feed').select('id').eq('id', feedId);
+  check('★매니저: 멤버인 방은 메시지도 읽힌다(빈 방 회귀 방지)', (mFeed2.data?.length ?? 0) === 1, `rows=${mFeed2.data?.length}`);
 } catch (e) {
   fail++; console.log('  FAIL exception:', e.message);
 } finally {
