@@ -4,9 +4,11 @@
     "여기 있는 경로로는 앱(SPA)이 절대 뜨면 안 된다 — 로그인 여부와 무관하게 정적 .html로 보낸다.",
     "이 파일을 읽는 곳: ① src/lib/web/marketingGuard.web.ts(런타임 가드, 개발서버 포함)",
     "                  ② scripts/inject-landing-redirect.mjs(빌드 산출물 주입)",
-    "★ vercel.json 의 rewrites 는 정적 설정이라 이 파일을 못 읽는다 — 페이지를 추가하면 거기도 같이 고칠 것."
+    "★ vercel.json 의 rewrites 는 정적 설정이라 이 파일을 못 읽는다 — 페이지를 추가하면 거기도 같이 고칠 것.",
+    "★ aliases 는 vercel.json 에 넣지 말 것. rewrite 는 서버측이라 해시(#faq)를 못 살려 요금제 맨 위로 착지한다.",
+    "   /(.*) 폴백 → index.html → head 주입 스크립트가 여기 aliases 를 읽어 해시까지 살려 보낸다(2026-08-11 P8-#7)."
   ],
-  "pages": ["features", "pricing", "inquiry", "cafe", "restaurant", "gym", "academy"],
+  "pages": ["welcome", "features", "pricing", "inquiry", "cafe", "restaurant", "gym", "academy"],
   "aliases": {
     "faq": "/pricing.html#faq"
   }

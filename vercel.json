@@ -15,7 +15,7 @@
     { "source": "/restaurant", "destination": "/restaurant.html" },
     { "source": "/gym", "destination": "/gym.html" },
     { "source": "/academy", "destination": "/academy.html" },
-    { "source": "/faq", "destination": "/pricing.html" },
+    { "source": "/welcome", "destination": "/welcome.html" },
     { "source": "/(.*)", "destination": "/" }
   ],
   "headers": [
