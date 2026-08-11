@@ -18,7 +18,6 @@ export type SimilarGroupRowProps = {
  * 받은 질문 한 줄 + "유사 질문 묶음" 배지.
  * - 질문 텍스트(2줄 truncate) · 카테고리 칩(presumed_category) · 메타(이름·시각).
  * - similar_queries_count > 0 이면 "비슷한 질문 N건" 묶음 배지(노랑 액센트).
- * - anonymous면 이름 대신 🔒 익명.
  * - onAnswer가 오면 작은 인라인 '답변하기' 버튼을 보여준다(사장 직접 입력 — AI 대리응답 없음).
  * 모두 프레임 내부 일반 흐름 — 별도 캡 불필요.
  */
@@ -30,7 +29,7 @@ export function SimilarGroupRow({ uq, onPress, onAnswer }: SimilarGroupRowProps)
 
   const a11yParts = [
     uq.query_text,
-    uq.anonymous ? '익명' : uq.junior_name,
+    uq.junior_name,
     n > 0 ? `비슷한 질문 ${n}건` : '',
   ].filter(Boolean);
 
@@ -53,7 +52,7 @@ export function SimilarGroupRow({ uq, onPress, onAnswer }: SimilarGroupRowProps)
 
           <View style={styles.metaRow}>
             <Text style={styles.meta} numberOfLines={1}>
-              {uq.anonymous ? '익명' : uq.junior_name} · {formatAsked(uq.asked_at, '방금')}
+              {uq.junior_name} · {formatAsked(uq.asked_at, '방금')}
             </Text>
             {groupLabel && (
               <View style={styles.groupBadge}>

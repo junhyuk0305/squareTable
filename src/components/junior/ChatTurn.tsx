@@ -175,32 +175,37 @@ export function ChatTurn({
               </View>
             </View>
           )}
-          {/* 조건 커버리지 partial — 질문의 조건·예외를 등록 노하우가 안 다룸. 위 답은 일반 절차일 뿐임을
-              정직하게 고지하고, 1탭으로 사장님 인박스에 올려 예외 노하우가 쌓이게 한다(데이터 루프). */}
-          {!!block.caveat && (
-            <View style={turnStyles.caveatNote}>
+          {/* ★답을 줬어도 묻는 길은 항상 열어 둔다 — 예외 노하우가 인박스로 쌓이는 유일한 입구다.
+              caveat(조건 미커버 고지)이 있으면 그 문장을 먼저 보여주고, 없어도 버튼은 그대로 남긴다.
+              2026-08-11 P4 실측: 커버리지 판정이 생성 경로에만 있어서, 검색 신뢰도가 높아 저장된 답을
+              그대로 주는 경로로 빠지면 질문의 예외("포스기가 안 켜지면")를 아무도 안 봤고 되물을 수단도
+              없었다 — 노하우가 잘 갖춰진 매장일수록 예외가 덜 쌓이는 구조였다. */}
+          <View style={turnStyles.caveatNote}>
+            {!!block.caveat && (
               <View style={turnStyles.caveatRow}>
                 <Ionicons name="alert-circle-outline" size={14} color={InkColors.ink2} />
                 <Text style={turnStyles.caveatText}>{block.caveat}</Text>
               </View>
-              {deflectState === 'registered' ? (
-                <View style={turnStyles.caveatDone}>
-                  <Ionicons name="checkmark-circle" size={13} color={InkColors.ink3} />
-                  <Text style={turnStyles.caveatDoneText}>사장님께 전달했어요. 답변이 오면 알려드릴게요.</Text>
-                </View>
-              ) : (
-                <Pressable
-                  onPress={onRegister}
-                  style={({ pressed }) => [turnStyles.caveatBtn, pressed && { opacity: 0.7 }]}
-                  accessibilityRole="button"
-                  accessibilityLabel="이 경우를 사장님께 물어보기"
-                >
-                  <Ionicons name="paper-plane-outline" size={13} color={InkColors.ink} />
-                  <Text style={turnStyles.caveatBtnText}>이 경우 사장님께 물어보기</Text>
-                </Pressable>
-              )}
-            </View>
-          )}
+            )}
+            {deflectState === 'registered' ? (
+              <View style={turnStyles.caveatDone}>
+                <Ionicons name="checkmark-circle" size={13} color={InkColors.ink3} />
+                <Text style={turnStyles.caveatDoneText}>사장님께 전달했어요. 답변이 오면 알려드릴게요.</Text>
+              </View>
+            ) : (
+              <Pressable
+                onPress={onRegister}
+                style={({ pressed }) => [turnStyles.caveatBtn, pressed && { opacity: 0.7 }]}
+                accessibilityRole="button"
+                accessibilityLabel={block.caveat ? '이 경우를 사장님께 물어보기' : '내 경우가 다르면 사장님께 물어보기'}
+              >
+                <Ionicons name="paper-plane-outline" size={13} color={InkColors.ink} />
+                <Text style={turnStyles.caveatBtnText}>
+                  {block.caveat ? '이 경우 사장님께 물어보기' : '내 경우가 다르면 사장님께 물어보기'}
+                </Text>
+              </Pressable>
+            )}
+          </View>
           </>
         ) : candidateEntries.length > 0 && deflectState === 'asking' ? (
           // 매칭 애매 → 후보 노하우 먼저 제시. '사장님께 물어보기'를 누르면 등록(deflectState=registered)으로 전환.
@@ -238,15 +243,8 @@ export function ChatTurn({
           </Pressable>
         )}
 
-        {/* 👎 직후 데드엔드 방지 — 다음 행동(재질문·직접 문의)을 안내 */}
-        {block && query.satisfaction === 'down' && (
-          <View style={turnStyles.downHelp}>
-            <Ionicons name="bulb-outline" size={14} color={InkColors.ink3} />
-            <Text style={turnStyles.downHelpText}>
-              알려줘서 고마워요. 답이 안 맞으면 다르게 한 번 더 물어보거나, 사장님께 직접 여쭤보면 정확해요.
-            </Text>
-          </View>
-        )}
+        {/* (👎 직후 안내문은 2026-08-11에 삭제 — 답변 카드에 '사장님께 물어보기'가 상시로 붙어
+            데드엔드가 없어졌다. 안내문은 "직접 여쭤보세요"라고 앱 밖으로 내보내기만 했다.) */}
       </AssistantWrap>
 
       {/* 출처·후보 → 원본 노하우 상세(읽기 전용) */}
@@ -345,19 +343,6 @@ const turnStyles = StyleSheet.create({
   },
   srcChipText: { fontSize: 11.5, fontWeight: '700', color: InkColors.ink2, flexShrink: 1 },
   srcChipGone: { opacity: 0.6, backgroundColor: InkColors.paper },
-  downHelp: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 6,
-    marginTop: 8,
-    paddingVertical: 8,
-    paddingHorizontal: 11,
-    borderRadius: Radius.sm,
-    backgroundColor: InkColors.bgSoft,
-    borderWidth: 1,
-    borderColor: InkColors.line,
-  },
-  downHelpText: { flex: 1, fontSize: 12, color: InkColors.ink2, fontWeight: '600', lineHeight: 17 },
   improveLink: {
     flexDirection: 'row',
     alignItems: 'center',

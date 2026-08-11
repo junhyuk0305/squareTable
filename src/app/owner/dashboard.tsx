@@ -194,7 +194,7 @@ export default function OwnerDashboardScreen() {
               !loaded
                 ? '직원이 물어본 것을 가져오는 중이에요'
                 : heroQuery
-                  ? `“${heroQuery.query_text}”\n${heroQuery.anonymous ? '익명 질문' : heroQuery.junior_name} · ${formatAsked(heroQuery.asked_at)}`
+                  ? `“${heroQuery.query_text}”\n${heroQuery.junior_name} · ${formatAsked(heroQuery.asked_at)}`
                   : '직원이 모르는 걸 물으면 여기로 와요.'
             }
             // 로딩 중에도 CTA는 남긴다(빼면 히어로 높이가 튄다). 다만 "답할 질문이 없다"는 뜻의

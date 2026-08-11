@@ -30,9 +30,9 @@ export function InboxHeroCard({ uq, careerDays, onPress, moreCount = 0, onMore }
       {/* 질문 본문 */}
       <Text style={styles.query} numberOfLines={4}>“{uq.query_text}”</Text>
 
-      {/* 메타: 누가, 입사 N일차 (익명이면 신원 숨김) */}
+      {/* 메타: 누가, 입사 N일차 */}
       <Text style={styles.meta}>
-        {uq.anonymous ? '익명 질문' : uq.junior_name}
+        {uq.junior_name}
         {typeof careerDays === 'number' ? ` · 입사 ${careerDays}일차` : ''}
       </Text>
 

@@ -114,7 +114,7 @@ export function OwnerCoachChat({
       init.push({ id: nextId(), kind: 'alba', text: seedText, meta: `${reviewProposal.name}님의 제안` });
       init.push({ id: nextId(), kind: 'ai', text: '제안을 노하우 초안으로 정리하고 있어요. 초안이 뜨면 고칠 부분만 말씀하시거나, 이대로 좋으면 바로 저장해 주세요.' });
     } else if (isInboxAnswer) {
-      const who = uq.anonymous ? '익명' : uq.junior_name;
+      const who = uq.junior_name;
       init.push({
         id: nextId(),
         kind: 'alba',

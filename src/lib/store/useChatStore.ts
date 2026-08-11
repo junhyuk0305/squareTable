@@ -39,13 +39,13 @@ type ChatState = {
   loaded: boolean;
   lastSubmittedId: string | null;
   error: string | null; // 전송 실패 시 사용자에게 보일 메시지
-  lastFailed: { text: string; anonymous: boolean } | null; // '다시 시도'용 마지막 실패 입력
+  lastFailed: { text: string } | null; // '다시 시도'용 마지막 실패 입력
   // 매칭 실패 질문은 곧장 사장님 인박스에 쌓지 않는다. 등록 대기(준비된 UnknownQuery)로 보관하고
   // 알바가 '등록' 버튼을 누를 때만 인박스로 보낸다 → 오타·장난성 질문이 사장에게 그대로 가는 걸 막는다.
   pendingDeflects: Record<string, UnknownQuery>;
   deflectStatus: Record<string, 'registered' | 'declined'>;
   hydrate: (juniorId: string) => Promise<void>;
-  submit: (text: string, opts?: { anonymous?: boolean }) => Promise<void>;
+  submit: (text: string) => Promise<void>;
   registerToOwner: (queryId: string) => void;
   declineDeflect: (queryId: string) => void;
   rate: (id: string, vote: 'up' | 'down') => void;
@@ -71,12 +71,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
     set({ history: await fetchChatQueries(juniorId), loaded: true });
   },
 
-  submit: async (text, opts) => {
+  submit: async (text) => {
     if (!text.trim()) return;
     set({ isLoading: true, error: null });
-
-    // 익명이면 사장 인박스에 노출될 이름을 '익명'으로 가린다. junior_id는 라우팅용으로만 유지.
-    const anon = !!opts?.anonymous;
 
     // 답변을 history에 꽂았는지. 꽂은 뒤에 넘어진 것은 '전송 실패'가 아니다 — 아래 catch 참조.
     let answered = false;
@@ -94,6 +91,42 @@ export const useChatStore = create<ChatState>((set, get) => ({
       const writeP = insertChatQuery(cq);
       void guardWrite(writeP, () => {}, '대화 기록 저장에 실패했어요. (답변은 그대로 보여요)');
       void writeP.then((ok) => { if (ok && entryIds.length) void recomputePlaybookStats(entryIds); });
+    };
+
+    // 1탭 에스컬 준비물 — "이 답이 내 경우와 다르다"를 사장 인박스로 보낼 UnknownQuery를 미리 만들어 둔다.
+    // ★답을 준 뒤에도 묻는 길은 항상 열어 둔다. 2026-08-11 P4 실측: 조건 미커버 판정(coverage)이
+    //   생성 경로에만 있어서, 검색 신뢰도가 높아 SERVE로 빠지면 질문의 예외("포스기가 안 켜지면")를
+    //   아무도 안 봤고 되물을 버튼도 없었다 — 노하우가 잘 갖춰진 매장일수록 예외가 안 쌓였다.
+    // ★여기서 던지지 않는다(내부 try/catch). 답은 이미 화면에 나갔고, 바깥 catch로 새면 전송 실패로 오인된다.
+    const prepareDeflect = (
+      cqId: string,
+      now: string,
+      meta: { category: string; confidence: number; bestEntryId: string | null },
+    ) => {
+      try {
+        const uq: UnknownQuery = {
+          id: genId('uq'),
+          junior_id: session.userId,
+          junior_name: session.userName,
+          query_text: text,
+          asked_at: now,
+          presumed_category: meta.category,
+          presumed_subcategory: '',
+          match_attempted: true,
+          best_match_confidence: meta.confidence,
+          best_match_entry_id: meta.bestEntryId,
+          status: 'pending_owner_answer',
+          fallback_action: '사장님께 알림 전송됨',
+          owner_notified_at: now,
+          owner_will_answer: true,
+          similar_queries_count: 1,
+          ai_general_answer: '잠시만요, 사장님 답변을 기다리고 있어요.',
+        };
+        set((s) => ({ pendingDeflects: { ...s.pendingDeflects, [cqId]: uq } }));
+      } catch (e) {
+        // 에스컬 버튼만 안 뜬다. 답변·저장은 그대로 — 화면에 실패를 알리지 않는다.
+        console.warn('[chat] deflect prep failed:', e);
+      }
     };
 
     // 저장된 답 그대로 서빙(매칭 확정) — LLM 0콜.
@@ -122,6 +155,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
       answered = true;
       set((s) => ({ history: [...s.history, cq], isLoading: false, lastSubmittedId: id }));
       persistAndCount(cq, [entry.id]);
+      // 저장된 답을 그대로 줬어도 "내 경우는 다르다"를 물을 길은 연다(위 prepareDeflect 주석).
+      prepareDeflect(id, now, {
+        category: inferCategoryFromQuery(text, [{ entry: { category: entry.category }, score: confidence }]),
+        confidence,
+        bestEntryId: entry.id,
+      });
     };
 
     // 그라운딩 생성 시도(중간 밴드) — 근거 찾으면 서빙하고 true, 아니면 false.
@@ -171,37 +210,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
       answered = true;
       set((s) => ({ history: [...s.history, cq], isLoading: false, lastSubmittedId: id }));
       persistAndCount(cq, ai.usedSopIds);
-      // partial 은 예외 노하우가 없다는 신호 — 미매칭 경로와 동일하게 UnknownQuery 를 준비해
-      // 알바가 1탭으로 사장 인박스에 올릴 수 있게 한다(예외 커버리지가 쌓이는 데이터 루프).
-      // 답은 위에서 이미 화면에 나갔다 — 여기부터는 '1탭 에스컬' 준비물이라 실패해도 답변은 유효하다.
-      // 바깥 catch로 새면 전송 실패로 오인돼 재시도 → 이중 표시가 된다. 그래서 여기서 닫는다.
-      if (partial) {
-        try {
-          const uq: UnknownQuery = {
-            id: genId('uq'),
-            junior_id: session.userId,
-            junior_name: anon ? '익명' : session.userName,
-            anonymous: anon,
-            query_text: text,
-            asked_at: now,
-            presumed_category: inferCategoryFromQuery(text, r.candidates),
-            presumed_subcategory: '',
-            match_attempted: true,
-            best_match_confidence: r.confidence,
-            best_match_entry_id: r.candidates[0]?.entry?.id ?? null,
-            status: 'pending_owner_answer',
-            fallback_action: '사장님께 알림 전송됨',
-            owner_notified_at: now,
-            owner_will_answer: true,
-            similar_queries_count: 1,
-            ai_general_answer: '잠시만요, 사장님 답변을 기다리고 있어요.',
-          };
-          set((s) => ({ pendingDeflects: { ...s.pendingDeflects, [id]: uq } }));
-        } catch (e) {
-          // 에스컬 버튼만 안 뜬다. 답변·저장은 그대로 — 화면에 실패를 알리지 않는다.
-          console.warn('[chat] partial deflect prep failed:', e);
-        }
-      }
+      // 예외 커버리지가 쌓이는 데이터 루프 — partial(조건 미커버)이든 아니든 1탭 에스컬은 항상 연다.
+      prepareDeflect(id, now, {
+        category: inferCategoryFromQuery(text, r.candidates),
+        confidence: r.confidence,
+        bestEntryId: r.candidates[0]?.entry?.id ?? null,
+      });
       return true;
     };
 
@@ -282,32 +296,12 @@ export const useChatStore = create<ChatState>((set, get) => ({
       // 답변은 이미 보여줬으니 화면에선 유지하고, 영속 실패만 배너로 알린다(롤백 없음).
       void guardWrite(insertChatQuery(cq), () => {}, '대화 기록 저장에 실패했어요. (답변은 그대로 보여요)');
 
-      // 후보 카드는 이미 화면에 나갔다 — 아래 준비물 실패를 바깥 catch로 흘리지 않는다(위와 같은 이유).
-      try {
-        const uq: UnknownQuery = {
-          id: genId('uq'),
-          junior_id: session.userId,
-          junior_name: anon ? '익명' : session.userName,
-          anonymous: anon,
-          query_text: text,
-          asked_at: now,
-          presumed_category: presumed,
-          presumed_subcategory: '',
-          match_attempted: true,
-          best_match_confidence: result.confidence,
-          best_match_entry_id: result.candidates[0]?.entry?.id ?? null,
-          status: 'pending_owner_answer',
-          fallback_action: '사장님께 알림 전송됨',
-          owner_notified_at: now,
-          owner_will_answer: true,
-          similar_queries_count: 1,
-          ai_general_answer: '잠시만요, 사장님 답변을 기다리고 있어요.',
-        };
-        // 곧장 enqueue 하지 않는다 — 알바가 카드에서 '등록'을 눌러야 사장님 인박스로 보낸다.
-        set((s) => ({ pendingDeflects: { ...s.pendingDeflects, [id]: uq } }));
-      } catch (e) {
-        console.warn('[chat] deflect prep failed:', e);
-      }
+      // 곧장 enqueue 하지 않는다 — 직원이 카드에서 '사장님께 물어보기'를 눌러야 인박스로 간다.
+      prepareDeflect(id, now, {
+        category: presumed,
+        confidence: result.confidence,
+        bestEntryId: result.candidates[0]?.entry?.id ?? null,
+      });
     }
     } catch (e) {
       // 조용히 삼키지 않는다 — 질문이 흔적 없이 사라지는 데드엔드 방지.
@@ -323,7 +317,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
           : {
               isLoading: false,
               error: '질문을 보내지 못했어요. 잠시 후 다시 시도해 주세요.',
-              lastFailed: { text, anonymous: anon },
+              lastFailed: { text },
             },
       );
     } finally {
@@ -368,7 +362,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const failed = get().lastFailed;
     if (!failed) return;
     set({ lastFailed: null });
-    await get().submit(failed.text, { anonymous: failed.anonymous });
+    await get().submit(failed.text);
   },
 
   reset: () => set({ history: [...seed], isLoading: false, lastSubmittedId: null, error: null, lastFailed: null, pendingDeflects: {}, deflectStatus: {} }),

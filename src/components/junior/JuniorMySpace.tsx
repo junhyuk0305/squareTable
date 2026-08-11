@@ -115,7 +115,7 @@ export function JuniorMySpace({ me }: { me: string }) {
               <Pressable onPress={() => setAnswerFor(u)} style={({ pressed }) => [s.qCard, pressed && { opacity: 0.85 }]}>
                 <View style={{ flex: 1 }}>
                   <Text style={s.qText} numberOfLines={2}>{u.query_text}</Text>
-                  <Text style={s.qMeta}>{u.anonymous ? '익명' : u.junior_name}님이 물었어요{u.similar_queries_count > 0 ? ` · 같은 질문 ${u.similar_queries_count + 1}회` : ''}</Text>
+                  <Text style={s.qMeta}>{u.junior_name}님이 물었어요{u.similar_queries_count > 0 ? ` · 같은 질문 ${u.similar_queries_count + 1}회` : ''}</Text>
                 </View>
                 <View style={s.qCta}><Text style={s.qCtaText}>답하기</Text></View>
               </Pressable>

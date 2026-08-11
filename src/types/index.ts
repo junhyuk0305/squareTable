@@ -195,7 +195,6 @@ export type ChatQuery = {
   response_block: ResponseBlock | null;
   satisfaction: 'up' | 'down' | null;
   resolved_at: string | null;
-  anonymous?: boolean;
   // 매칭 애매 시 제시할 후보 노하우 id들(클라 UI 전용·비영속). 사장 라우팅 전에 "혹시 이거?"로 보여준다.
   candidate_entry_ids?: string[];
 };
@@ -219,8 +218,6 @@ export type UnknownQuery = {
   similar_queries_count: number;
   ai_general_answer: string;
   resolved_with_entry_id?: string;
-  // 알바가 익명으로 물은 질문 — 사장 인박스에서 이름·입사일차를 가린다(심리적 진입장벽 ↓).
-  anonymous?: boolean;
   /** S1 ③(D4) 이 질문을 해결한 사람(직원이 기존 노하우로 즉시 해결 시 기록, 0071). */
   answered_by?: string;
 };

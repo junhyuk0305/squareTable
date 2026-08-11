@@ -68,6 +68,16 @@ const ANSWER = [
   // 예외상황 정확도(2026-07-10) — 질문의 조건("영수증 없이")을 SOP가 다루는가.
   { id: 'A5', label: '예외 미커버 → partial 고지', q: '영수증 없이 환불해 달라는데 어떻게 해요?', sops: [SOPS.refund, SOPS.clean], grounded: true, cite: 'sop_refund', cov: 'partial' },
   { id: 'A6', label: '예외 SOP 존재 → 그걸로 full', q: '영수증 없이 환불해 달라는데 어떻게 해요?', sops: [SOPS.refund, SOPS.refundNr], grounded: true, cite: 'sop_refund_nr', must: ['사장'], cov: 'full' },
+  // 출처 바인딩(2026-08-11 P4) — 근거를 **검색 1위가 아닌 자리**에 둔다. 옛 판본은 block.source 를
+  // sops[0] 로 고정해, 답 본문은 A에서 왔는데 '원문 보기'는 B를 여는 오지목이 났다(실측 재현).
+  { id: 'A7', label: '출처는 검색 1위가 아니라 실제 쓴 노하우', q: '여분 컵 어디 있어요?', sops: [SOPS.clean, SOPS.aa, SOPS.cup], grounded: true, cite: 'sop_cup', must: ['창고'] },
+];
+// ── 인박스 답변(square + questionText): 사장이 답한 '값'이 화면 칸에 남는가 ──
+// ★2026-08-11 P4 실측: 값 보존이 20회 중 1회였다(위치 1/5 · 비번·금고·연락처 0/15).
+//   keywords 에만 남는 건 보존이 아니다 — 어느 화면에도 안 그려진다. 그래서 **화면 칸만** 잰다.
+const FACT = [
+  { id: 'F1', label: '위치 답의 값 보존', q: '앞치마 어디 있어요?', a: '포스기 아래 서랍 두 번째 칸에 있어', must: ['서랍'] },
+  { id: 'F2', label: '비번 답의 값 보존', q: '와이파이 비밀번호 뭐예요?', a: '와이파이 비번은 cafe2026! 이야', must: ['cafe2026'] },
 ];
 const INTENT = [
   { id: 'I1', label: '장황한 질문 핵심추출', q: '아 그 왜 아침에 커피 기계 있잖아요 그거 뭐 어떻게 하더라', kw: ['청소', '그라인더', '커피', '기계', '아침'] },
@@ -120,12 +130,28 @@ const main = async () => {
     console.log(`     grounded=${b.grounded}  block=${b.block ? '있음' : 'null'}  cite=${JSON.stringify(cited)}  degraded=${b.degraded || false}`);
     chk(grounded === c.grounded, `${c.id} 그라운딩 판정=${c.grounded}`, `실제 grounded=${b.grounded}/block=${b.block ? '있음' : 'null'}`);
     if (c.grounded && c.cite) chk(cited.includes(c.cite), `${c.id} 출처 정확(${c.cite})`, `실제 ${JSON.stringify(cited)}`);
+    // 화면 푸터('원문 보기')가 여는 노하우 = 실제로 쓴 노하우여야 한다. 검색 1위로 고정하면 오지목이 난다.
+    if (c.grounded) chk(b.block?.source?.entry_id === cited[0], `${c.id} 화면 출처 == 실제 쓴 노하우`, `source=${b.block?.source?.entry_id} vs used=${cited[0]}`);
     if (c.must) chk(c.must.every((t) => bt.includes(norm(t))), `${c.id} 내용 포함(${c.must.join(',')})`, '답변에 핵심정보 누락');
     if (!c.grounded) chk(!cited.length || b.block == null, `${c.id} 환각 안 함(빈 출처/null)`, `cite=${JSON.stringify(cited)}`);
     if (c.cov) {
       chk(b.coverage === c.cov, `${c.id} coverage=${c.cov}`, `실제 ${b.coverage} caveat="${b.caveat || ''}"`);
       if (c.cov === 'partial') chk(!!(b.caveat || '').trim(), `${c.id} caveat(미커버 조건) 고지`, 'caveat 비어있음');
     }
+  }
+
+  console.log('\n━━━━━━━━━━ [2-B] 인박스 답변 — 답의 값이 화면 칸에 남는가 (square) ━━━━━━━━━━');
+  for (const c of FACT) {
+    const r = await call(token, 'square', { rawText: c.a, category: 'Context', categoryGuide: guide, questionText: c.q });
+    await sleep(6500);
+    if (!r.ok) { chk(false, `${c.id} ${c.label}`, `HTTP ${r.status}`); continue; }
+    const seg = (Array.isArray(r.body.segments) && r.body.segments[0]) || (r.body.square ? { title: r.body.title, square: r.body.square } : null);
+    const sq = seg?.square ?? {};
+    // ★keywords 는 세지 않는다 — 검색 색인이라 사장·직원 어느 화면에도 안 나온다.
+    const shown = norm([seg?.title, sq.situation, ...(sq.action?.steps || []), sq.extract?.dont].filter(Boolean).join(' '));
+    console.log(`  ${c.id} · ${c.label} [${r.status} ${r.ms}ms]  Q"${c.q}" A"${c.a}"`);
+    console.log(`     화면 칸: title="${seg?.title}" situation="${sq.situation}" steps=${JSON.stringify(sq.action?.steps ?? [])}`);
+    chk(c.must.every((t) => shown.includes(norm(t))), `${c.id} 사장이 쓴 값이 화면 칸에 남는다(${c.must.join(',')})`, '값 유실 — 껍데기 카드');
   }
 
   console.log('\n━━━━━━━━━━ [3] 의도추출 (intent) ━━━━━━━━━━');
