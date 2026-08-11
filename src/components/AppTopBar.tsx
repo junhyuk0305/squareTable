@@ -16,6 +16,7 @@ import { useSessionStore } from '@/lib/store/useSessionStore';
 import { StoreToggle } from '@/components/StoreToggle';
 import { NotificationBell, OwnerNotificationBell } from '@/components/NotificationBell';
 import { AccountAvatarButton } from '@/components/AccountAvatarButton';
+import { Appear } from '@/components/Appear';
 import { InkColors } from '@/lib/theme/colors';
 import { SCREEN_GUTTER, Space } from '@/lib/theme/layout';
 
@@ -24,17 +25,23 @@ export function AppTopBar() {
   const ownerAxis = role === 'owner' || role === 'manager';
 
   return (
-    <View style={styles.bar}>
-      <StoreToggle />
-      <View style={styles.right}>
-        {ownerAxis ? <OwnerNotificationBell edge={false} /> : <NotificationBell edge={false} />}
-        <AccountAvatarButton />
+    // A11(2026-08-08) — 틀이 먼저, 내용이 나중. 상단바가 화면보다 먼저 앉는다(내용은 각 화면의 Appear).
+    // 둘이 동시에 뜨면 화면이 통째로 깜빡인 것처럼 보인다.
+    <Appear offsetY={6} duration={340} style={styles.barWrap}>
+      <View style={styles.bar}>
+        <StoreToggle />
+        <View style={styles.right}>
+          {ownerAxis ? <OwnerNotificationBell edge={false} /> : <NotificationBell edge={false} />}
+          <AccountAvatarButton />
+        </View>
       </View>
-    </View>
+    </Appear>
   );
 }
 
 const styles = StyleSheet.create({
+  // 매장 드롭다운이 아래 콘텐츠 위로 겹쳐 열린다 — 상단바(=Appear 래퍼)가 형제보다 위에 그려져야 한다.
+  barWrap: { zIndex: 20 },
   bar: {
     flexDirection: 'row',
     alignItems: 'center',

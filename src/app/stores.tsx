@@ -7,18 +7,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useMemberPrefsStore } from '@/lib/store/useMemberPrefsStore';
 import { useCrossNotifStore } from '@/lib/store/useCrossNotifStore';
-import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
-import { useUnknownQueueStore } from '@/lib/store/useUnknownQueueStore';
-import { useWorkStore } from '@/lib/store/useWorkStore';
-import { useAttendanceStore } from '@/lib/store/useAttendanceStore';
-import { useScheduleStore } from '@/lib/store/useScheduleStore';
 import { showToast } from '@/lib/store/useToastStore';
 import { needsProfileSetup } from '@/lib/store/profileSetup';
 import { HAS_SUPABASE } from '@/lib/supabase';
 import { storeColor } from '@/lib/utils/storeColor';
 import { useCrossNotifRows } from '@/lib/hooks/useCrossNotifRows';
 import { assignedTodayCount } from '@/lib/utils/crossStoreNotifs';
-import { canManage, roleNoun } from '@/lib/utils/roles';
+import { roleNoun } from '@/lib/utils/roles';
 import { todayStr } from '@/lib/utils/attendance';
 import { fetchOwnerOverview, type MyUnitRow, type OwnerOverviewRow } from '@/lib/db';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
@@ -30,69 +25,10 @@ import { HubTopBar } from '@/components/hub/HubTopBar';
 import { HubTabBar } from '@/components/HubTabBar';
 import { Appear } from '@/components/Appear';
 import { SectionLabel } from '@/components/SectionLabel';
-import { TransitionCover } from '@/components/blocks/TransitionCover';
+import { useStoreEntryStore } from '@/lib/store/useStoreEntryStore';
 
-/**
- * 진입 커버가 **각 단계**(① 활성 매장 전환 ② 착지 데이터 선반입)마다 최대 이만큼만 기다린다.
- *
- * ⚠️ 이 값이 이 화면에서 가장 위험한 부분이다 — 읽기가 끝내 안 오면(오프라인 등) 스토어의 loaded 가
- * 영원히 false 라, 타임아웃이 없으면 사용자가 커버에 갇힌다. **무음 실패를 로딩으로 위장하는 것이
- * 지금보다 나쁘다.** 시간이 지나면 덜 채워진 채로라도 매장 화면(다음 행동이 있는 화면)으로 내보내고,
- * 실패 자체는 전역 SyncBanner(db.ts readFail)가 말한다.
- *
- * ①에는 예외가 있다 — 전환이 안 끝난 채로 진입하면 **이전 매장**이 보이므로, ①의 타임아웃은
- * 진입이 아니라 매장 목록으로의 복귀다(아래 enterStore 참고).
- */
-const ENTER_TIMEOUT_MS = 6000;
-
-/**
- * 정해진 시간 안에 안 끝나면 'timeout'.
- *
- * fetch 는 취소하지 못하므로 **기다림만 포기**한다. settle 되지 않는 네트워크(캡티브 포털·
- * TCP 블랙홀)에서 await 이 영원히 안 풀리는 것을 막는 유일한 수단이다.
- */
-function withTimeout<T>(p: Promise<T>, ms: number): Promise<T | 'timeout'> {
-  return Promise.race([p, new Promise<'timeout'>((resolve) => setTimeout(() => resolve('timeout'), ms))]);
-}
-
-/**
- * 착지 화면(사장 홈 / 직원 홈)이 그리기 전에 필요한 것만 미리 채운다.
- *
- * 왜 여기서 당기는가: 스토어는 매장이 바뀌어도 비워지지 않는다(loaded 는 true 로 남는다).
- * 그래서 전환 직후 그냥 넘어가면 ① 빈 상태가 스치거나 ② 잠깐 **이전 매장 데이터**가 보인다.
- * 하이드레이트 함수는 owner/junior _layout 이 부르는 것과 **같은 것**이라 새 경로가 아니다.
- */
-async function prefetchStoreData(manage: boolean): Promise<void> {
-  const jobs = manage
-    ? [
-        usePlaybookStore.getState().hydrate(),
-        useUnknownQueueStore.getState().hydrate(),
-        useWorkStore.getState().hydrate(),
-        useAttendanceStore.getState().hydrate(),
-      ]
-    : [
-        useWorkStore.getState().hydrate(),
-        useAttendanceStore.getState().hydrate(),
-        useScheduleStore.getState().hydrate(),
-      ];
-  // allSettled: 한 스토어가 던져도(오프라인) 나머지를 기다린다. race: 그래도 안 끝나면 놓아준다.
-  await Promise.race([
-    Promise.allSettled(jobs),
-    new Promise<void>((resolve) => setTimeout(resolve, ENTER_TIMEOUT_MS)),
-  ]);
-}
-
-/**
- * 매장 이름 뒤의 '으로/로' — 매장 이름은 사장이 자유 입력이라 조사를 하드코딩할 수 없다.
- * 받침 없음·ㄹ 받침이면 '로'. 한글이 아니면(영문 상호 등) '으로'로 둔다.
- */
-function euroRo(name: string): string {
-  const last = name.trim().slice(-1);
-  const code = last.charCodeAt(0);
-  if (!(code >= 0xac00 && code <= 0xd7a3)) return '으로';
-  const jong = (code - 0xac00) % 28;
-  return jong === 0 || jong === 8 ? '로' : '으로';
-}
+// 진입 순서·타임아웃·커버는 useStoreEntryStore(+ 전역 StoreEnterCover)로 옮겼다 —
+// 상단바의 매장 칸도 같은 동작을 하기 때문이다(2026-08-08). 이 화면은 부르기만 한다.
 
 // ── 내 매장 (허브) ──────────────────────────────────────────────────────────
 // 로그인 후 사장·직원이 공통으로 착지하는 매장 선택 화면. 매장 카드를 탭하면
@@ -110,7 +46,6 @@ export default function StoresHub() {
   const plan = useSessionStore((s) => s.plan);
   const freeMode = useSessionStore((s) => s.freeMode);
   const sessionStores = useSessionStore((s) => s.stores);
-  const switchUnit = useSessionStore((s) => s.switchUnit);
   const status = useSessionStore((s) => s.status);
   const phone = useSessionStore((s) => s.phone);
   const pendingUnitId = useSessionStore((s) => s.pendingUnitId);
@@ -133,7 +68,7 @@ export default function StoresHub() {
 
   const [overview, setOverview] = useState<Record<string, OwnerOverviewRow>>({});
   // 매장을 고른 순간부터 그 매장 화면이 그릴 준비가 될 때까지 — 이 값이 있으면 화면 전체를 커버가 덮는다.
-  const [entering, setEntering] = useState<{ uid: string; name: string } | null>(null);
+  const enter = useStoreEntryStore((s) => s.enter);
 
   // 매장별 개인 설정(닉네임·색) — 카드에 반영. 로그인 후 내 전 매장 한 번에.
   const prefFor = useMemberPrefsStore((s) => s.prefFor);
@@ -173,36 +108,8 @@ export default function StoresHub() {
     return () => { alive = false; };
   }, [isOwner]);
 
-  const enterStore = async (u: MyUnitRow) => {
-    if (entering) return;
-    setEntering({ uid: u.unit_id, name: prefFor(u.unit_id).nickname || u.store_name || '내 매장' });
-    // 이미 활성 매장이면 전환 없이 바로 진입. 다른 매장이면 활성 전환 후 진입.
-    if (u.unit_id !== unitId) {
-      // ★switchUnit(RPC + loadProfile)도 타임아웃 안에 둔다 — 예전엔 이 await 만 무기한이라,
-      //   응답이 끝내 안 오는 네트워크에서 entering 이 영원히 true 로 남았다. 커버엔 뒤로가기가 없고
-      //   위 `if (entering) return` 이 재시도까지 막아 앱 재시작 말고는 빠져나갈 길이 없었다.
-      const res = await withTimeout(switchUnit(u.unit_id), ENTER_TIMEOUT_MS);
-      // 전환이 안 끝났으면 진입하지 않는다 — 덜 채워진 화면은 괜찮지만 **다른 매장** 화면은 안 된다.
-      // 커버를 걷고 매장 목록으로 돌려보낸다(무음으로 넘기지 않는다).
-      if (res === 'timeout') {
-        setEntering(null);
-        showToast('연결이 느려서 매장을 열지 못했어요. 잠시 후 다시 눌러 주세요', 'warn');
-        return;
-      }
-      // 전환 실패 시 진입하지 않는다 — 이전 매장을 "선택한 매장인 줄 알고" 보게 되는 무음 오류 방지.
-      // 커버를 걷고 매장 목록으로 돌려보낸다(갇히지 않는다).
-      if (res.error) {
-        setEntering(null);
-        showToast(res.error, 'warn');
-        return;
-      }
-    }
-    // 착지 화면이 그릴 준비가 될 때까지 커버 아래에서 채운다. 실패·지연이면 타임아웃으로 빠져나온다.
-    await prefetchStoreData(canManage(useSessionStore.getState().role));
-    // 0093: 역할은 매장별(A매장 매니저·B매장 직원 가능) — 전환 '후'의 세션 역할로 착지 화면을 정한다.
-    // replace 로 이 화면이 사라지며 커버도 함께 걷힌다(entering 을 되돌릴 필요가 없다).
-    router.replace(canManage(useSessionStore.getState().role) ? '/owner/dashboard' : '/junior/home');
-  };
+  const enterStore = (u: MyUnitRow) =>
+    void enter({ uid: u.unit_id, name: prefFor(u.unit_id).nickname || u.store_name || '내 매장' });
 
   const addStore = () => {
     if (canUseMultistore(plan, freeMode)) return router.push('/owner/create-store');
@@ -222,19 +129,7 @@ export default function StoresHub() {
     return <Redirect href="/complete-profile" />;
   }
 
-  // 매장 진입 커버 — 고른 순간부터 그 매장 화면이 그릴 준비가 될 때까지 화면 전체를 덮는다.
-  // 빈 상태·이전 매장 데이터가 스치는 구간이 여기 통째로 들어간다.
-  if (entering) {
-    return (
-      <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
-        <Stack.Screen options={{ headerShown: false }} />
-        <TransitionCover
-          title={`${entering.name}${euroRo(entering.name)} 가고 있어요`}
-          caption="노하우와 오늘 업무를 가져오는 중"
-        />
-      </SafeAreaView>
-    );
-  }
+  // 진입 커버는 전역 <StoreEnterCover/>(_layout)가 덮는다 — 상단바에서 눌러도 같은 커버여야 하므로.
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>

@@ -8,6 +8,7 @@ import { ResponsiveShell } from '@/components/ResponsiveShell';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { SplashAnimation } from '@/components/SplashAnimation';
 import { SyncBanner } from '@/components/SyncBanner';
+import { StoreEnterCover } from '@/components/StoreEnterCover';
 import { Toast } from '@/components/Toast';
 import { DialogHost } from '@/components/DialogHost';
 import { TextScaleTransition } from '@/components/settings/TextScaleTransition';
@@ -77,6 +78,8 @@ export default function RootLayout() {
       <ResponsiveShell>
         {!splashDone && <SplashAnimation onDone={() => setSplashDone(true)} />}
         <SyncBanner />
+        {/* 매장 진입 커버 — 어느 자리에서 눌렀든(허브 카드·상단바 매장 칸) 같은 커버를 여기서 그린다. */}
+        <StoreEnterCover />
         {/* 네이티브 음성 녹음 인스턴스 주입(웹에선 .web 구현이 null 을 렌더). 화면은 안 그린다. */}
         <VoiceRecorderBinder />
         <Toast />
@@ -98,7 +101,9 @@ export default function RootLayout() {
             <Stack.Screen name="index" />
             <Stack.Screen name="login" />
             <Stack.Screen name="signup" />
-            <Stack.Screen name="stores" />
+            {/* 허브는 매장보다 **상위 층**이다. 들어갈 땐 오른쪽에서(기본), 나올 땐 왼쪽에서 —
+                방향이 층을 말해준다(2026-08-08 A2). 셋 다 똑같이 움직이던 것이 "유기적이지 않음"의 원인이었다. */}
+            <Stack.Screen name="stores" options={{ animation: 'slide_from_left' }} />
             <Stack.Screen name="privacy" />
             <Stack.Screen name="terms" />
             <Stack.Screen name="legal/[doc]" />
