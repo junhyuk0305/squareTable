@@ -3,7 +3,8 @@
 //
 // 축이 둘이고 **사라지는 규칙이 다르다**(useSyncStore 주석 참조).
 //   쓰기 실패  = 사건 → 3초 뒤 페이드아웃(기존 동작)
-//   읽기 실패  = 상태 → **자동으로 안 사라진다.** 연결이 돌아오거나(online) 사용자가 닫을 때만.
+//   읽기 실패  = 상태 → **자동으로 안 사라진다.** 연결 실패(offline)는 연결이 돌아오면,
+//                서버 응답 실패(server)는 사용자가 닫을 때만 사라진다.
 // ★2026-08-11: 예전엔 읽기 실패도 3초 배너라, 백엔드가 죽었는데 화면이 "아직 없어요"를
 //   말하는 상태가 아무 표시 없이 유지됐다([P2-#3]·[P5-#5]·기존-14).
 // 둘이 동시에 있으면 **읽기(상태)를 우선**한다 — 저장 실패는 방금 누른 것이라 사용자가 알지만,
@@ -25,16 +26,17 @@ export function SyncBanner() {
   const readError = useSyncStore((s) => s.readError);
   const clear = useSyncStore((s) => s.clear);
   const clearRead = useSyncStore((s) => s.clearRead);
+  const clearOffline = useSyncStore((s) => s.clearOffline);
   const opacity = useMemo(() => new Animated.Value(1), []); // RoleTabBar와 동일 패턴(렌더 중 ref 접근 금지)
 
-  // 연결이 돌아오면 읽기 실패는 저절로 사라진다 — 사용자가 배너를 닫아 없애야 하는 물건이 아니다.
-  // 웹에만 있는 신호다(네이티브는 NetInfo 미설치 — 닫기·다음 성공 쓰기로만 사라진다. 주석 없는 무음 no-op 금지).
+  // 연결이 돌아오면 연결 실패 배너는 저절로 사라진다 — 사용자가 닫아 없애야 하는 물건이 아니다.
+  // 웹에만 있는 신호이나(네이티브는 NetInfo 미설치), 네이티브도 다음 성공 왕복에서 supabase.ts 래퍼가 해제한다.
   useEffect(() => {
     if (Platform.OS !== 'web' || typeof window === 'undefined') return;
-    const onOnline = () => clearRead();
+    const onOnline = () => clearOffline();
     window.addEventListener('online', onOnline);
     return () => window.removeEventListener('online', onOnline);
-  }, [clearRead]);
+  }, [clearOffline]);
 
   // 새 쓰기 오류(seq 증가)마다 완전 불투명으로 리셋 → 3초 뒤 페이드아웃 후 제거.
   // ★읽기 실패가 떠 있는 동안엔 타이머를 걸지 않는다 — 읽기는 자동 소거 대상이 아니다.
@@ -49,12 +51,14 @@ export function SyncBanner() {
 
   // 읽기(상태)가 쓰기(사건)를 이긴다. 읽기가 떠 있는 동안은 항상 불투명이다.
   const isRead = !!readError;
-  const message = readError ?? error;
+  const message = readError?.msg ?? error;
   if (!message) return null;
+  // 아이콘도 문구와 같은 것을 말해야 한다 — 연결이 멀쩡한데 '오프라인' 구름을 띄우면 원인을 잘못 짚게 만든다.
+  const icon = readError?.kind === 'server' ? 'alert-circle-outline' : 'cloud-offline-outline';
   return (
     <Animated.View style={[styles.wrap, isRead ? undefined : { opacity }]} pointerEvents="box-none">
       <Animated.View style={styles.banner}>
-        <Ionicons name="cloud-offline-outline" size={17} color="#FFFFFF" />
+        <Ionicons name={icon} size={17} color="#FFFFFF" />
         <Text style={styles.text} numberOfLines={3}>
           {message}
         </Text>

@@ -79,7 +79,8 @@ function readFail(label: string, error: unknown): void {
   //   읽기 실패는 사건이 아니라 **상태**다 — 연결이 돌아올 때까지 "지금 보이는 게 전부가 아니다"가 참이다.
   //   예전엔 배너가 3초 뒤 사라져, 백엔드가 죽었는데 화면이 "아직 없어요"를 말하는 상태가
   //   아무 표시 없이 유지됐다([P2-#3]·[P5-#5]).
-  useSyncStore.getState().noteReadFail();
+  // 오류 객체를 그대로 넘긴다 — 연결 실패인지 서버 응답 실패인지의 판정은 useSyncStore 한 곳에 있다.
+  useSyncStore.getState().noteReadFail(error);
 }
 
 // 읽기 실패를 "빈 결과"와 구분하기 위한 반환형(리포트 P0-1의 핵심 수정): 예전엔 fetch가 실패해도
