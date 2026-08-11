@@ -11,6 +11,8 @@
 //   ⑤ 예약일이 미래면 안 나간다. 내보낸 직원(멤버십 없음)에게도 안 나간다.
 //   ⑥ claim_quiz_send 선점: 첫 호출만 true, due_on = 받은 날 + answer_days.
 //   ⑦ 크론이 부르는 엣지 엔드포인트를 그대로 쳐서 퀴즈 갈래까지 실증한다.
+//   ⑧ 열었다/다 풀었다(0140): 직원 직접 UPDATE 는 막히고 definer RPC 만 통한다. 남의 것·안 나간 것은 false.
+//   ⑨ 완료·열기가 실제로 자동 정지를 푸는가 — ④에서 막힌 사람이 다시 대상이 되는지.
 //
 // ★ ④ 의 기대값은 schedule.ts 를 읽어서 만든다 — 상수를 한쪽만 고치면 이 게이트가 red 가 된다.
 //   (schedule.ts 머리말: "서버가 같은 판정을 해야 할 때는 상수를 마이그레이션에 옮겨 적고 양쪽을 같이 고친다")
@@ -293,6 +295,46 @@ async function main() {
   const { data: cRow } = await admin.from('quiz_assignments').select('sent_at').eq('id', C1).maybeSingle();
   check('스윕이 선점까지 마쳤다', before === 1 && !!cRow?.sent_at, `before=${before} sent_at=${cRow?.sent_at}`);
   check('선점된 건은 다음 스윕 대상에서 빠짐', (await dueFor(cId)).length === 0);
+
+  // ── ⑧ 열었다/다 풀었다 기록(0140) ───────────────────────────────────────
+  // ★이 경로가 없으면 시스템이 "아무도 안 푼다"고 판단해 연속 2회 뒤 영영 안 보낸다(④의 자동 정지).
+  //   RLS 는 직원 UPDATE 를 막아 뒀으므로 definer RPC 만이 유일한 쓰기 경로다.
+  console.log('— ⑧ 열었다 / 다 풀었다 (0140) —');
+  const { data: juUp2 } = await jC.from('quiz_assignments').update({ opened_at: new Date().toISOString() }).eq('id', C1).select();
+  check('직원이 직접 opened_at 을 못 쓴다(RLS)', (juUp2 ?? []).length === 0, `updated=${juUp2?.length}`);
+
+  const { data: op1, error: opErr } = await jC.rpc('mark_quiz_opened', { p_id: C1 });
+  check('본인 발송 열기 true', !opErr && op1 === true, opErr?.message ?? `got=${op1}`);
+  const { data: openedRow } = await admin.from('quiz_assignments').select('opened_at').eq('id', C1).maybeSingle();
+  check('opened_at 채워짐', !!openedRow?.opened_at);
+
+  const firstOpened = openedRow?.opened_at;
+  await jC.rpc('mark_quiz_opened', { p_id: C1 });
+  const { data: again } = await admin.from('quiz_assignments').select('opened_at').eq('id', C1).maybeSingle();
+  check('다시 열어도 처음 시각 유지', again?.opened_at === firstOpened, `${again?.opened_at}`);
+
+  const { data: other } = await jA.rpc('mark_quiz_opened', { p_id: C1 });
+  check('남의 발송은 못 연다 false', other === false, `got=${other}`);
+
+  // 아직 안 나간 행(sent_at null)은 열 수도 끝낼 수도 없다 — 열렸다고 우기면 자동 정지가 무력화된다.
+  const PEND = `qz_pend_${s}`;
+  await admin.from('quiz_assignments').insert(asg(PEND, cId, TOMORROW));
+  const { data: notSent } = await jC.rpc('mark_quiz_opened', { p_id: PEND });
+  check('안 나간 발송은 못 연다 false', notSent === false, `got=${notSent}`);
+
+  const { data: done1 } = await jC.rpc('mark_quiz_completed', { p_id: C1 });
+  const { data: doneRow } = await admin.from('quiz_assignments').select('opened_at, completed_at').eq('id', C1).maybeSingle();
+  check('본인 발송 완료 true', done1 === true, `got=${done1}`);
+  check('completed_at 채워짐', !!doneRow?.completed_at);
+
+  // ⑨ 완료가 자동 정지를 실제로 푸는가 — ④에서 막혔던 사람이 다시 대상이 되는지 본다.
+  console.log('— ⑨ 완료가 자동 정지를 푼다 —');
+  await admin.from('quiz_assignments').delete().eq('id', PEND);
+  for (const r of wk) await admin.from('quiz_assignments').update({ opened_at: null }).eq('id', r.id);
+  await admin.from('quiz_assignments').update({ sent_at: null, due_on: null, opened_at: null, completed_at: null }).eq('id', C1);
+  check('다시 연속 무시 상태 → 정지', (await dueFor(cId)).length === 0);
+  await admin.from('quiz_assignments').update({ opened_at: daysAgo(9) }).eq('id', wk[0].id);
+  check('가장 최근 것을 열면 해제', (await dueFor(cId)).length === 1);
 }
 
 async function cleanup() {

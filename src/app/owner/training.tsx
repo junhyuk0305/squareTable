@@ -4,301 +4,227 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
-import {
-  useWorkStore,
-  knowhowIdsForTask,
-  staffWhoUnderstandTask,
-} from '@/lib/store/useWorkStore';
-import { useStaffStore } from '@/lib/store/useStaffStore';
-import { gradableTasks } from '@/lib/utils/taskProgress';
-import { useQuizBoard } from '@/lib/quiz/useQuizBoard';
+import { useQuizBoard, type QuizListRow } from '@/lib/quiz/useQuizBoard';
 import { Appear } from '@/components/Appear';
 import { EmptyState } from '@/components/EmptyState';
-import { SegmentTabs, type SegmentItem } from '@/components/SegmentTabs';
+import { BottomSheet } from '@/components/BottomSheet';
 import { AlertRow } from '@/components/blocks/AlertRow';
 import { ProgressPill, type ProgressTone } from '@/components/blocks/ProgressPill';
-import { ShellTaskCleanupSheet } from '@/components/owner/quiz/ShellTaskCleanupSheet';
-import { QuizMakerSheet } from '@/components/owner/quiz/QuizMakerSheet';
-import { goToTab } from '@/components/RoleTabBar';
-import { InkColors } from '@/lib/theme/colors';
+import { SheetHead } from '@/components/owner/quiz/kit';
+import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
-import { Space } from '@/lib/theme/layout';
-
-/** 거르기 갈래 — 세그먼트 3칸. */
-type Seg = 'all' | 'behind' | 'noquiz';
+import { Space, HEADER_EDGE_GUTTER } from '@/lib/theme/layout';
 
 /**
- * 업무 한 줄의 상태. 색이 곧 판정이라 여기서 한 번만 정하고 화면은 그리기만 한다.
- *  · noquiz  = 문항이 아직 없다. **결함이 아니라 안 만든 것**이라 회색이다(빨강 금지).
- *  · nostaff = 잴 사람이 없다. 0/0 을 초록으로 두면 "다 통과"로 읽힌다.
- */
-type RowState = 'behind' | 'noquiz' | 'nostaff' | 'done';
-
-type TaskRow = {
-  id: string;
-  text: string;
-  knowhowCount: number;
-  passed: number;
-  total: number;
-  state: RowState;
-};
-
-/** 밀린 것부터 — 사장이 볼 것은 남은 일이다. 통과한 업무는 맨 뒤. */
-const STATE_ORDER: Record<RowState, number> = { behind: 0, noquiz: 1, nostaff: 1, done: 2 };
-
-/**
- * 퀴즈 현황(2026-08-07 축 이동) — **업무 목록 + 진도**.
+ * 퀴즈 홈(1층) — 2026-08-11 재설계 3단계.
  *
- * 코스를 가로 탭으로 세워 두던 자리다. 코스는 늘어날수록 탭이 옆으로 계속 늘어나서
- * 탭으로 다룰 것이 아니었고, 사장이 궁금한 것도 "제빙기 노하우를 아나"가 아니라
- * **"마감 청소를 할 줄 아나"** 였다 — 그래서 목록의 단위를 노하우에서 **업무**로 옮겼다.
+ * 이 화면의 축은 **퀴즈**다. 08-07 개편 때는 업무 목록이었는데, 그러면 퀴즈를 하나 만들기까지
+ * `코스 만들기 → 담기 → 업무에 붙이기` 세 관문을 먼저 통과해야 해서 사장이 **첫 문제 하나를
+ * 못 만들었다**. 순서를 뒤집었다 — 노하우만 고르면 퀴즈가 만들어지고, 업무 연결은 만든 **뒤**의
+ * 선택으로 내려갔다(C3 ⋯ → 이 업무에 붙이기).
  *
- * ★ 진도 판정은 `useWorkStore` 의 파생 규칙(SSOT)만 부른다 — 이 화면은 다시 세지 않는다.
- *   · 어떤 업무를 잴 수 있나 = `gradableTasks`
- *   · 이 업무를 할 줄 아는 사람 = `staffWhoUnderstandTask`
- *   · 오답 잦은 노하우 = `useQuizBoard.buildRows(null)`
- * ★ `n/m` 표기는 **업무**에만 쓴다. 직원 이름 옆 점수는 줄세우기라 금지다(감시원칙 D1~D5).
- * ★ 코스(묶음) 관리·담기·순서는 전부 2층 `/owner/quiz-list` 다. 이 화면에 코스 편집 UI를 두지 않는다.
+ * ★ 화면 어휘에 "코스"가 없다. 퀴즈 1건 = 코스 1건으로 접었다(DB `training_courses` 는 그대로).
+ * ★ 집계·상태 판정은 `useQuizBoard.buildQuizzes()` 한 곳이다 — 이 화면은 그리기만 한다(AGENTS.md ②).
+ * ★ 화면당 Primary 1개 — 만들기는 헤더로 올렸다. 행 우측 알약은 **상태만** 말하고 버튼이 아니다.
  */
 export default function OwnerTrainingScreen() {
   const router = useRouter();
-  const { bumpQuiz, buildRows } = useQuizBoard();
+  const { entries, coursesLoaded, buildQuizzes, buildRows } = useQuizBoard();
 
-  const templates = useWorkStore((s) => s.templates);
-  const knowhowLinks = useWorkStore((s) => s.knowhowLinks);
-  const quizCounts = useWorkStore((s) => s.quizCounts);
-  const understanding = useWorkStore((s) => s.understanding);
-  const training = useWorkStore((s) => s.training);
-  const done = useWorkStore((s) => s.done);
-  const staffList = useStaffStore((s) => s.staff);
+  const quizzes = useMemo(() => buildQuizzes(), [buildQuizzes]);
+  const [missOpen, setMissOpen] = useState(false);
 
-  const [seg, setSeg] = useState<Seg>('all');
-  /** 문제 만들기 시트를 연 업무 — 후보는 그 업무에 붙은 노하우로만 좁힌다. */
-  const [makerTaskId, setMakerTaskId] = useState<string | null>(null);
-  const [cleanupOpen, setCleanupOpen] = useState(false);
+  /** 오답이 잦은 노하우 — 직원이 못 외운 게 아니라 **노하우 글이 헷갈린다**는 신호다(0103). */
+  const missRows = useMemo(() => buildRows(null).filter((r) => r.missPct > 0), [buildRows]);
 
-  /** 문항이 실제로 있는 업무(= 진도를 잴 수 있는 업무). 게이트는 taskProgress 가 SSOT. */
-  const gradableIds = useMemo(
-    () => new Set(gradableTasks(templates, knowhowLinks, quizCounts).map((t) => t.id)),
-    [templates, knowhowLinks, quizCounts],
-  );
+  /** 낼 수 있는 재료. 발행된 노하우가 0이면 만들기 자체가 성립하지 않는다(A3). */
+  const usable = entries.length;
 
-  /**
-   * 목록에 서는 업무 = 노하우가 붙은 업무 전부.
-   * 노하우가 하나도 없는 업무는 뺀다 — 낼 문제의 근거가 없어서 "만들기"조차 할 수 없다.
-   */
-  const rows = useMemo<TaskRow[]>(() => {
-    const total = staffList.length;
-    return templates
-      .filter((t) => !t.hidden && knowhowIdsForTask(knowhowLinks, t.id).length > 0)
-      .map((t) => {
-        const hasQuiz = gradableIds.has(t.id);
-        const passed = hasQuiz ? staffWhoUnderstandTask(understanding, knowhowLinks, t.id).length : 0;
-        const state: RowState = !hasQuiz
-          ? 'noquiz'
-          : total === 0
-            ? 'nostaff'
-            : passed >= total
-              ? 'done'
-              : 'behind';
-        return {
-          id: t.id,
-          text: t.text,
-          knowhowCount: knowhowIdsForTask(knowhowLinks, t.id).length,
-          passed,
-          total,
-          state,
-        };
-      })
-      .sort((a, b) => STATE_ORDER[a.state] - STATE_ORDER[b.state] || a.text.localeCompare(b.text, 'ko'));
-  }, [templates, knowhowLinks, understanding, gradableIds, staffList]);
-
-  const behindCount = useMemo(() => rows.filter((r) => r.state === 'behind').length, [rows]);
-  const noQuizCount = useMemo(() => rows.filter((r) => r.state === 'noquiz').length, [rows]);
-
-  const visible = useMemo(() => {
-    if (seg === 'behind') return rows.filter((r) => r.state === 'behind');
-    if (seg === 'noquiz') return rows.filter((r) => r.state === 'noquiz');
-    return rows;
-  }, [rows, seg]);
-
-  const segItems: SegmentItem[] = [
-    { key: 'all', label: '전체', count: rows.length },
-    { key: 'behind', label: '밀림', count: behindCount },
-    { key: 'noquiz', label: '문제 없음', count: noQuizCount },
-  ];
-
-  /** 오답이 잦은 노하우 — 직원이 못 외운 게 아니라 **노하우 글이 헷갈린다**는 신호다. */
-  const allRows = useMemo(() => buildRows(null), [buildRows]);
-  const missCount = useMemo(() => allRows.filter((r) => r.missPct > 0).length, [allRows]);
-
-  /** 만들기 후보 — 이 업무에 붙은 노하우 중 아직 문항이 없는 것. */
-  const makerCandidates = useMemo(() => {
-    if (!makerTaskId) return [];
-    const need = new Set(knowhowIdsForTask(knowhowLinks, makerTaskId));
-    return allRows.filter((r) => need.has(r.entryId) && r.quizCount === 0);
-  }, [makerTaskId, knowhowLinks, allRows]);
-
-  /**
-   * 1단계 정리 대상(0110) — 퀴즈가 만들어 낸 껍데기 업무. 판별은 두 조건의 교집합이다:
-   *   ① 코스에 담겨 있었다(레거시 training_items 에 남아 있다)
-   *   ② 할일로 체크된 적이 한 번도 없다(work_done 에 흔적이 없다)
-   * ②를 넣는 이유: 사장이 실제로 쓰던 업무를 코스에도 넣어 뒀을 수 있고, 그건 껍데기가 아니다.
-   */
-  const shellTasks = useMemo(() => {
-    const everDone = new Set<string>();
-    for (const day of Object.values(done)) for (const id of Object.keys(day)) everDone.add(id);
-    const inCourse = new Set(training.map((f) => f.templateId));
-    return templates
-      .filter((t) => inCourse.has(t.id) && !everDone.has(t.id))
-      .map((t) => ({ id: t.id, text: t.text, hidden: !!t.hidden }));
-  }, [templates, training, done]);
-  const shellLeft = useMemo(() => shellTasks.filter((t) => !t.hidden).length, [shellTasks]);
-
-  /** `as never` = 새 라우트라 expo-router 타입 생성분에 아직 없다(코드베이스의 기존 관용). */
-  const goList = (status?: 'missed') =>
-    router.push((status ? `/owner/quiz-list?status=${status}` : '/owner/quiz-list') as never);
+  const goMake = () => router.push('/owner/quiz-new' as never);
+  const goDetail = (id: string) => router.push(`/owner/quiz/${id}` as never);
 
   return (
     <SafeAreaView style={st.safe} edges={['bottom']}>
-      <Stack.Screen options={{ title: '퀴즈' }} />
+      <Stack.Screen
+        options={{
+          title: '퀴즈',
+          // 만들 재료가 없으면 헤더 액션도 두지 않는다 — 눌러서 막다른 길로 보내지 않는다(죽은 컨트롤 금지).
+          headerRight: () =>
+            quizzes.length > 0 && usable > 0 ? (
+              <Pressable
+                onPress={goMake}
+                hitSlop={10}
+                style={({ pressed }) => [st.headerAction, pressed && { opacity: 0.6 }]}
+                accessibilityRole="button"
+                accessibilityLabel="퀴즈 만들기"
+              >
+                <Text style={st.headerActionText}>＋ 만들기</Text>
+              </Pressable>
+            ) : null,
+        }}
+      />
       <ScrollView contentContainerStyle={st.scroll} showsVerticalScrollIndicator={false}>
-        {/* ── 거르기 3칸 — 코스 가로 탭을 걷어낸 자리. 늘어나는 건 코스가 아니라 업무다 ── */}
-        <SegmentTabs style={{ margin: 0 }} items={segItems} value={seg} onChange={(k) => setSeg(k as Seg)} />
-
-        {/* ── 오답 경고(블록 X2) — 0건이면 스스로 안 그린다 ── */}
-        <AlertRow
-          label="퀴즈에서 자꾸 틀리는 노하우"
-          count={missCount}
-          unit="건"
-          onPress={() => goList('missed')}
-        />
-
-        {/* ── 업무 목록 + 진도 ── */}
-        {visible.length === 0 ? (
-          <EmptyState
-            title={rows.length === 0 ? '퀴즈를 낼 업무가 없어요' : '해당하는 업무가 없어요'}
-            body={
-              rows.length === 0
-                ? '업무에 노하우를 붙이면 그 업무로 문제를 낼 수 있어요.'
-                : '다른 갈래에는 업무가 있어요.'
-            }
-            cta={
-              rows.length === 0
-                ? { label: '업무 채팅 열기', onPress: () => goToTab('/owner/work') }
-                : { label: '전체 보기', onPress: () => setSeg('all') }
-            }
-          />
+        {!coursesLoaded ? null : quizzes.length === 0 ? (
+          usable === 0 ? (
+            /* A3 — 재료가 없다. 막다른 길을 만들지 않고 두 갈래 모두 준다.
+               ★"업무 채팅 열기"로 보내지 않는다 — 업무는 노하우를 만들어 주지 않는다. */
+            <>
+              <EmptyState
+                title="먼저 노하우가 필요해요"
+                body={'퀴즈 문제는 사장님이 적어 둔 노하우에서 나와요.\n노하우가 하나도 없으면 낼 문제가 없어요.'}
+                cta={{ label: '노하우 추가하기', onPress: () => router.push('/owner/coach' as never) }}
+              />
+              <Pressable
+                onPress={() => router.push('/owner/import-knowhow' as never)}
+                style={({ pressed }) => [st.subLink, pressed && { opacity: 0.6 }]}
+                accessibilityRole="button"
+                accessibilityLabel="인수인계서로 한번에 올리기"
+              >
+                <Text style={st.subLinkText}>한번에 올리기 · 인수인계서가 있으면</Text>
+              </Pressable>
+            </>
+          ) : (
+            /* A1 — 재료는 있는데 아직 안 만들었다. 필터·경고·정리 링크를 전부 감춘다:
+               전부 "문항이 생긴 뒤"에 의미가 생기는 것들이다. 남는 건 원리 3칸과 눌릴 것 하나. */
+            <>
+              <Appear>
+                <View style={st.introCard}>
+                  <Text style={st.introLabel}>퀴즈가 뭐예요</Text>
+                  <View style={st.introFlow}>
+                    <Text style={st.introChip}>노하우</Text>
+                    <Ionicons name="arrow-forward" size={13} color={InkColors.ink3} />
+                    <Text style={st.introChip}>문제</Text>
+                    <Ionicons name="arrow-forward" size={13} color={InkColors.ink3} />
+                    <Text style={st.introChip}>직원이 앎</Text>
+                  </View>
+                  <Text style={st.introBody}>사장님이 적어 둔 노하우를 직원이 실제로 아는지 확인해요.</Text>
+                </View>
+              </Appear>
+              <EmptyState
+                title="아직 만든 퀴즈가 없어요"
+                body="노하우를 고르기만 하면 문제는 저희가 만들어요."
+                cta={{ label: '퀴즈 만들기', onPress: goMake }}
+              />
+              <Text style={st.footNote}>쓸 수 있는 노하우 {usable}개</Text>
+            </>
+          )
         ) : (
-          <Appear delay={30}>
-            <View style={st.listCard}>
-              {visible.map((r, i) => (
-                <TaskProgressRow
-                  key={r.id}
-                  row={r}
-                  divider={i > 0}
-                  onMake={r.state === 'noquiz' ? () => setMakerTaskId(r.id) : null}
-                />
-              ))}
-            </View>
-          </Appear>
-        )}
-
-        {/* ── 코스(묶음)는 여기서 다루지 않는다 — 링크 한 줄로만 남긴다 ── */}
-        <Pressable
-          onPress={() => goList()}
-          style={({ pressed }) => [st.linkRow, pressed && { opacity: 0.6 }]}
-          accessibilityRole="button"
-          accessibilityLabel="퀴즈 목록 열기"
-        >
-          <Text style={st.linkText}>퀴즈 목록에서 노하우 담기</Text>
-          <Ionicons name="chevron-forward" size={15} color={InkColors.ink2} />
-        </Pressable>
-
-        {/* ── 1단계 정리 도구(0110) — 치울 게 있을 때만 한 줄. 다 치우면 통째로 사라진다 ── */}
-        {shellLeft > 0 && (
-          <Pressable
-            onPress={() => setCleanupOpen(true)}
-            style={({ pressed }) => [st.cleanupRow, pressed && { opacity: 0.85 }]}
-            accessibilityRole="button"
-            accessibilityLabel="퀴즈 때문에 생긴 할일 정리하기"
-          >
-            <Ionicons name="file-tray-outline" size={16} color={InkColors.ink2} />
-            <Text style={st.cleanupText} numberOfLines={2}>
-              퀴즈 때문에 생긴 할일 {shellLeft}개 · 눌러서 정리해요
-            </Text>
-            <Ionicons name="chevron-forward" size={15} color={InkColors.ink3} />
-          </Pressable>
+          /* A2 — 평상시. 한 줄 = 퀴즈 하나. */
+          <>
+            <AlertRow
+              label="자꾸 틀리는 문항 · 노하우가 헷갈릴 수 있어요"
+              count={missRows.length}
+              unit="건"
+              onPress={() => setMissOpen(true)}
+            />
+            <Appear delay={30}>
+              <View style={st.listCard}>
+                {quizzes.map((q, i) => (
+                  <QuizRowView key={q.course.id} row={q} divider={i > 0} onPress={() => goDetail(q.course.id)} />
+                ))}
+              </View>
+            </Appear>
+            <Text style={st.footNote}>누르면 결과와 문항을 봐요</Text>
+          </>
         )}
       </ScrollView>
 
-      {/* ── 단계형 만들기(3층) — 노하우 하나 = 문항 하나. 끝내면 다음 후보가 바로 뜬다 ── */}
-      {makerTaskId && (
-        <QuizMakerSheet
-          candidates={makerCandidates}
-          onClose={() => {
-            setMakerTaskId(null);
-            bumpQuiz();
-            // 문항 수는 useWorkStore 가 들고 있다 — 다시 읽어야 '만들기'가 진도로 바뀐다.
-            void useWorkStore.getState().hydrate();
-          }}
-        />
+      {/* 자꾸 틀리는 노하우 — 새 화면을 만들지 않는다(IA 증식 금지). 목적은 "어느 글을 고칠까" 하나다. */}
+      {missOpen && (
+        <BottomSheet visible onClose={() => setMissOpen(false)}>
+          <SheetHead title="자꾸 틀리는 문항" onClose={() => setMissOpen(false)} />
+          <Text style={st.missIntro}>
+            직원이 못 외운 게 아니라 노하우 글이 헷갈릴 수 있어요. 아래 노하우를 다시 보세요.
+          </Text>
+          <View style={st.listCard}>
+            {missRows.map((r, i) => (
+              <Pressable
+                key={r.entryId}
+                onPress={() => {
+                  setMissOpen(false);
+                  router.push(`/owner/edit/${r.entryId}` as never);
+                }}
+                style={({ pressed }) => [st.row, i > 0 && st.rowDivider, pressed && { opacity: 0.6 }]}
+                accessibilityRole="button"
+                accessibilityLabel={`${r.text} 고치러 가기`}
+              >
+                <View style={st.rowText}>
+                  <Text style={st.rowTitle} numberOfLines={1}>{r.text}</Text>
+                  <Text style={st.rowSub} numberOfLines={1}>{r.attempts}명 품 · {r.missPct}% 틀림</Text>
+                </View>
+                <ProgressPill text="고치기" tone="behind" />
+              </Pressable>
+            ))}
+          </View>
+        </BottomSheet>
       )}
-
-      {/* ── 1단계 정리 시트(0110) — 껍데기 업무를 체크해서 할일에서 숨긴다(되돌리기 가능) ── */}
-      {cleanupOpen && <ShellTaskCleanupSheet tasks={shellTasks} onClose={() => setCleanupOpen(false)} />}
     </SafeAreaView>
   );
 }
 
 /**
- * 업무 한 줄 — 이름 + 노하우 수, 우측에 진도 알약.
- * 문항이 없을 때만 눌린다(만들기). 다 만든 줄은 읽는 줄이라 죽은 컨트롤을 만들지 않는다.
+ * 퀴즈 한 줄 — 이름 + 일정, 우측에 상태 알약.
+ *
+ * 알약 우선순위: 낡음 > 진행. 근거가 바뀐 문항이 있으면 그게 먼저 손볼 것이다.
+ * ★사람 옆 점수가 아니라 **퀴즈의 진행**이라 `n/m명` 표기가 허용된다(감시원칙은 개인 줄세우기 금지).
  */
-function TaskProgressRow({
-  row,
-  divider,
-  onMake,
-}: {
-  row: TaskRow;
-  divider: boolean;
-  onMake: (() => void) | null;
-}) {
-  const tone: ProgressTone =
-    row.state === 'done' ? 'done' : row.state === 'behind' ? 'behind' : 'neutral';
-  const pillText =
-    row.state === 'noquiz' ? '만들기' : row.state === 'nostaff' ? '직원 없음' : `${row.passed}/${row.total}`;
-  const sub = row.state === 'noquiz' ? `노하우 ${row.knowhowCount}개 · 문제 없음` : `노하우 ${row.knowhowCount}개`;
-
-  const body = (
-    <>
-      <View style={st.rowText}>
-        <Text style={st.rowTitle} numberOfLines={1}>{row.text}</Text>
-        <Text style={st.rowSub} numberOfLines={1}>{sub}</Text>
-      </View>
-      <ProgressPill text={pillText} tone={tone} />
-    </>
-  );
-
-  if (!onMake) return <View style={[st.row, divider && st.rowDivider]}>{body}</View>;
+function QuizRowView({ row, divider, onPress }: { row: QuizListRow; divider: boolean; onPress: () => void }) {
+  let pill = '초안';
+  let tone: ProgressTone = 'neutral';
+  if (row.staleCount > 0) {
+    pill = `낡음 ${row.staleCount}`;
+    tone = 'behind';
+  } else if (row.status === 'scheduled') {
+    pill = '예약';
+    tone = 'progress';
+  } else if (row.status === 'sent') {
+    pill = `${row.passed}/${row.recipients}명`;
+    tone = row.recipients > 0 && row.passed >= row.recipients ? 'done' : 'progress';
+  }
 
   return (
     <Pressable
-      onPress={onMake}
+      onPress={onPress}
       style={({ pressed }) => [st.row, divider && st.rowDivider, pressed && { opacity: 0.6 }]}
       accessibilityRole="button"
-      accessibilityLabel={`${row.text} 문제 만들기`}
+      accessibilityLabel={`${row.course.name} 열기`}
     >
-      {body}
+      <View style={st.rowText}>
+        <Text style={st.rowTitle} numberOfLines={1}>{row.course.name}</Text>
+        <Text style={st.rowSub} numberOfLines={1}>{row.caption}</Text>
+      </View>
+      <ProgressPill text={pill} tone={tone} />
     </Pressable>
   );
 }
 
 const st = StyleSheet.create({
   safe: { flex: 1, backgroundColor: InkColors.paper },
-  scroll: { padding: Space.gutter, paddingBottom: Space.xl * 2, gap: Space.md },
+  scroll: { padding: Space.gutter, paddingBottom: Space.xl * 2, gap: Space.md, flexGrow: 1 },
 
-  // 업무 목록 — 이 화면에 남는 유일한 카드(배치규칙 ⑤ "카드를 없애지 않는다").
+  headerAction: { paddingLeft: Space.sm, paddingRight: HEADER_EDGE_GUTTER, paddingVertical: 4 },
+  headerActionText: { fontSize: 15, fontWeight: '800', color: InkColors.ink },
+
+  // A1 원리 카드 — 이 화면에 남는 유일한 색면(배치규칙 ② 히어로는 화면당 1개).
+  // ★노랑은 yellowSoft/gold 다. accent 는 레드(= bad)라 여기 쓰면 경고로 읽힌다.
+  introCard: {
+    backgroundColor: BrandColors.yellowSoft,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: BrandColors.gold,
+    padding: Space.lg,
+    gap: Space.sm,
+  },
+  introLabel: { fontSize: 13, fontWeight: '800', color: BrandColors.warnText },
+  introFlow: { flexDirection: 'row', alignItems: 'center', gap: Space.xs, flexWrap: 'wrap' },
+  introChip: {
+    backgroundColor: '#FFFFFF', borderRadius: Radius.sm,
+    paddingHorizontal: Space.sm, paddingVertical: 6,
+    fontSize: 13, fontWeight: '800', color: InkColors.ink,
+  },
+  introBody: { fontSize: 15, lineHeight: 22, color: InkColors.ink },
+
+  // 퀴즈 목록 — 이 화면의 카드(배치규칙 ⑤ "카드를 없애지 않는다").
   listCard: {
     backgroundColor: InkColors.bg,
     borderRadius: Radius.md,
@@ -312,18 +238,9 @@ const st = StyleSheet.create({
   rowTitle: { fontSize: 15, lineHeight: 21, fontWeight: '800', color: InkColors.ink },
   rowSub: { fontSize: 13, lineHeight: 18, fontWeight: '600', color: InkColors.ink3 },
 
-  // 묶음으로 가는 링크 한 줄 — 카드로 세우지 않는다(코스 관리는 이 화면의 일이 아니다).
-  linkRow: {
-    flexDirection: 'row', alignItems: 'center', gap: Space.xs,
-    alignSelf: 'flex-start', minHeight: 44, paddingHorizontal: Space.xs,
-  },
-  linkText: { fontSize: 15, lineHeight: 21, fontWeight: '800', color: InkColors.ink2 },
+  footNote: { fontSize: 13, fontWeight: '600', color: InkColors.ink3, textAlign: 'center' },
+  missIntro: { fontSize: 15, lineHeight: 22, color: InkColors.ink2, marginBottom: Space.md },
 
-  // 정리 도구 한 줄 — 목록과 같은 흰 카드 계열. 새 배경색 블록을 만들지 않는다.
-  cleanupRow: {
-    flexDirection: 'row', alignItems: 'center', gap: Space.sm, minHeight: 48,
-    borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line,
-    backgroundColor: '#FFFFFF', paddingHorizontal: Space.md, paddingVertical: Space.sm,
-  },
-  cleanupText: { flex: 1, minWidth: 0, fontSize: 15, fontWeight: '700', color: InkColors.ink2, lineHeight: 21 },
+  subLink: { alignSelf: 'center', minHeight: 44, justifyContent: 'center', paddingHorizontal: Space.sm },
+  subLinkText: { fontSize: 15, fontWeight: '800', color: InkColors.ink2 },
 });

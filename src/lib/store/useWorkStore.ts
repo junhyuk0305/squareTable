@@ -33,13 +33,16 @@ import {
   deleteTrainingRequest,
   fetchTrainingCourses,
   fetchQuizItemCounts,
+  fetchQuizAssignments,
+  markQuizOpened,
+  markQuizCompleted,
   type TrainingItemRow,
   type CourseEntryRow,
   type TrainingCourse,
   type TrainingRequestRow,
 } from '@/lib/db';
 // 코스 행(0108 training_courses). db.ts 의 TrainingCourse 는 코스 **key** 문자열이라 이름이 겹친다 → 행은 Row 로 별칭.
-import type { TrainingCourse as TrainingCourseRow } from '@/lib/quiz/types';
+import type { QuizAssignment, TrainingCourse as TrainingCourseRow } from '@/lib/quiz/types';
 import { guardWrite, useSyncStore } from '@/lib/store/useSyncStore';
 import { coalesce, subscribeDebounced } from '@/lib/store/realtimeSync';
 import { genId } from '@/lib/utils/id';
@@ -104,6 +107,23 @@ export function trainingCourseViews(courses: TrainingCourseRow[]): TrainingCours
 /** 코스별 항목(position 순) — 화면 파생 셀렉터. 담기는 것은 노하우다(0111). */
 export function courseEntriesOf(entries: CourseEntryRow[], courseId: string): CourseEntryRow[] {
   return entries.filter((e) => e.courseId === courseId).sort((a, b) => a.position - b.position);
+}
+
+/**
+ * 이 노하우들이 담긴 퀴즈 중, 나에게 **이미 나갔고 아직 안 끝난** 발송의 id 들(0139).
+ *
+ * ★자동 정지(연속 2회 무시)를 푸는 신호를 어디에 찍을지 정하는 유일한 자리다.
+ *  아직 안 나간 행(sentAt null)은 열 수도 끝낼 수도 없다 — 0140 RPC 도 같은 조건으로 막는다.
+ */
+function pendingAssignmentIds(
+  s: { assignments: QuizAssignment[]; courseEntries: CourseEntryRow[] },
+  entryIds: string[],
+): string[] {
+  if (entryIds.length === 0) return [];
+  const want = new Set(entryIds);
+  const courses = new Set(s.courseEntries.filter((e) => want.has(e.entryId)).map((e) => e.courseId));
+  if (courses.size === 0) return [];
+  return s.assignments.filter((a) => courses.has(a.courseId) && !!a.sentAt && !a.completedAt).map((a) => a.id);
 }
 /** 정기 훈련 due 판정 — 통과 기록이 없거나 마지막 통과가 매장 주기(dueDays)보다 오래됐으면 다시 확인할 때. */
 export function isRegularDue(verifiedAt: string | undefined, now: number, dueDays: number): boolean {
@@ -325,7 +345,21 @@ export function staffWhoUnderstandTask(
   templateId: string,
   opts?: { now: number; dueDays: number | null },
 ): { staffId: string; staffName: string; verifiedAt: string }[] {
-  const need = new Set(knowhowIdsForTask(links, templateId));
+  return staffWhoUnderstandEntries(rows, knowhowIdsForTask(links, templateId), opts);
+}
+
+/**
+ * ★규칙 본체 — "이 노하우 묶음을 전부 아는 사람". 업무 통과(위)와 퀴즈 통과(0139 발송 단위)가
+ * 같은 규칙이라 여기 한 곳에만 둔다. 묶음이 무엇이냐만 다르다:
+ *   업무 = 그 업무가 참조하는 노하우 / 퀴즈 = 그 퀴즈에 담긴 노하우(course_entries).
+ * 빈 묶음은 판정 대상이 아니다(빈 배열) — 참으로 두면 근거 없이 "안다"가 켜진다.
+ */
+export function staffWhoUnderstandEntries(
+  rows: UnderstandingRow[],
+  entryIds: string[],
+  opts?: { now: number; dueDays: number | null },
+): { staffId: string; staffName: string; verifiedAt: string }[] {
+  const need = new Set(entryIds);
   if (need.size === 0) return [];
   const acc = new Map<string, { staffName: string; entries: Set<string>; oldest: string }>();
   for (const r of liveRows(rows, opts)) {
@@ -515,6 +549,8 @@ type State = {
   understanding: UnderstandingRow[];
   /** 코스 항목(0111) — 전 코스 합본(코스 분리는 courseEntriesOf 셀렉터). 담기는 것은 노하우다. */
   courseEntries: CourseEntryRow[];
+  /** 나에게 온 퀴즈 발송 원장(0139). 직원은 RLS 로 본인 것만 내려온다. */
+  assignments: QuizAssignment[];
   /** ⚠️레거시(0099 training_items) — 1단계 '껍데기 업무 정리'가 대상을 찾는 데만 읽는다. */
   training: TrainingItemRow[];
   /** 퀴즈 코스 행(0108) — 활성 코스만, position 순. 개수 상한·재확인 주기의 SSOT. */
@@ -540,6 +576,8 @@ type State = {
   noteCaptureNudge: (kind: 'submit' | 'skip') => void;
   /** 이해 확인(④) 통과 기록 — 푼 문항의 근거 노하우 전부. 낙관적 추가 + 실패 롤백(멱등). */
   markUnderstood: (entryIds: string[], staffId: string, staffName: string) => Promise<void>;
+  /** 사장이 보낸 퀴즈를 열었다(0140). 자동 정지를 푸는 유일한 신호 — 응시 시작 시점에 부른다. */
+  noteQuizOpened: (entryIds: string[]) => void;
   /** 코스에 노하우 담기(0111) — 껍데기 업무를 만들지 않는다. 성공 여부 반환. */
   addCourseEntry: (courseId: string, entryId: string) => Promise<boolean>;
   /** 코스에서 노하우 빼기 — 노하우·통과 기록·다른 코스 소속은 남는다. */
@@ -577,6 +615,7 @@ export const useWorkStore = create<State>((set, get) => ({
   knowhowLinks: [],
   understanding: [],
   courseEntries: [],
+  assignments: [],
   training: [],
   courses: [],
   trainingRequests: [],
@@ -589,7 +628,7 @@ export const useWorkStore = create<State>((set, get) => ({
   // coalesce: 빠른 연속 체크로 realtime 이벤트가 몰려도 풀리페치가 병렬로 쌓이지 않게 합친다.
   hydrate: coalesce(async () => {
     if (!HAS_SUPABASE) return;
-    const [templates, done, feed, knowhowLinks, understanding, courseEntries, training, courses, trainingRequests, quizCounts] = await Promise.all([
+    const [templates, done, feed, knowhowLinks, understanding, courseEntries, training, courses, trainingRequests, quizCounts, assignments] = await Promise.all([
       fetchTemplates(),
       fetchDone(),
       fetchFeed(),
@@ -600,9 +639,10 @@ export const useWorkStore = create<State>((set, get) => ({
       fetchTrainingCourses(),
       fetchTrainingRequests(),
       fetchQuizItemCounts(),
+      fetchQuizAssignments(),
     ]);
     set({
-      templates, done, feed, knowhowLinks, understanding, courseEntries, training, trainingRequests,
+      templates, done, feed, knowhowLinks, understanding, courseEntries, training, trainingRequests, assignments,
       // 직원에게 보일 코스만(비활성 제외) 사장 화면과 같은 순서로 — 카드 순서 = 사장이 정한 순서.
       courses: (courses.data ?? []).filter((c) => c.active).sort((a, b) => a.position - b.position),
       // 읽기 실패(null)면 빈 맵 = 문항 0건 취급이다. 퀴즈가 잠깐 안 뜨는 쪽이 검수 안 된 문제가
@@ -750,8 +790,21 @@ export const useWorkStore = create<State>((set, get) => ({
   // 왜 "이 업무"가 아니라 노하우 목록인가: 한 응시가 노하우 여러 건에 걸칠 수 있고(할일 자청·코스 응시),
   // 실제로 다룬 노하우만 인정해야 "3건짜리 업무를 3문항 풀고 3건 다 안다"가 되지 않는다.
   // 첫 통과는 추가, 재통과는 verified_at 갱신(재확인 주기의 근거). 낙관적 반영 + 실패 시 원복.
+  /**
+   * 사장이 보낸 퀴즈를 **열었다**(0139·0140).
+   *
+   * ★이 신호가 없으면 시스템은 "아무도 안 푼다"고 판단해 연속 2회 뒤 그 사람에게 영영 안 보낸다
+   *  (due_quiz_sends 의 자동 정지는 opened_at 이 유일한 해제 신호다). 응시 화면이 반드시 부른다.
+   * 기록 실패가 응시를 막으면 안 되므로 결과를 기다리지 않는다.
+   */
+  noteQuizOpened: (entryIds) => {
+    for (const id of pendingAssignmentIds(get(), entryIds)) void markQuizOpened(id);
+  },
+
   markUnderstood: async (entryIds, staffId, staffName) => {
     if (entryIds.length === 0) return;
+    // 통과 = 그 퀴즈를 다 푼 것. 열었다는 뜻이기도 하다(RPC 가 opened_at 도 같이 채운다).
+    for (const id of pendingAssignmentIds(get(), entryIds)) void markQuizCompleted(id);
     const mine = (u: UnderstandingRow) => u.staffId === staffId && entryIds.includes(u.entryId);
     const prev = get().understanding.filter(mine);
     const at = new Date().toISOString();

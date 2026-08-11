@@ -10,10 +10,15 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
-import { fetchQuizItems, fetchQuizStats, fetchTrainingCourses } from '@/lib/db';
-import { useWorkStore, courseEntriesOf, understandingOf } from '@/lib/store/useWorkStore';
+import { fetchQuizAssignments, fetchQuizItems, fetchQuizStats, fetchTrainingCourses } from '@/lib/db';
+import {
+  useWorkStore,
+  courseEntriesOf,
+  understandingOf,
+  staffWhoUnderstandEntries,
+} from '@/lib/store/useWorkStore';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
-import type { QuizItem, TrainingCourse } from '@/lib/quiz/types';
+import type { QuizAssignment, QuizItem, TrainingCourse } from '@/lib/quiz/types';
 
 /** 오답 잦음 판정(0103) — 표본이 이만큼 쌓이고 오답률이 이 선을 넘으면 노하우 결함 신호. */
 export const QUIZ_MISS_MIN_ATTEMPTS = 5;
@@ -38,6 +43,49 @@ export type QuizRow = {
   /** 그 노하우에 '하면 안 되는 것'이 적혀 있다 — 사장이 정하는 게 아니라 글에서 읽는다. */
   risky: boolean;
 };
+
+/**
+ * 퀴즈 한 건의 상태(1층 목록). **화면 어휘로 코스는 없다** — 퀴즈 1건 = 코스 1건이다.
+ *  · draft     = 아직 안 보냄(예약일도 없음)
+ *  · scheduled = 예약해 뒀고 아직 아무에게도 안 나감
+ *  · sent      = 한 명이라도 받았다
+ */
+export type QuizStatus = 'draft' | 'scheduled' | 'sent';
+
+export type QuizListRow = {
+  course: TrainingCourse;
+  status: QuizStatus;
+  /** 담긴 노하우 수. 0이면 아직 재료가 없다. */
+  entryCount: number;
+  /** 실제로 나가는 활성 문항 수(보관 제외). 0이면 눌러도 낼 게 없다. */
+  itemCount: number;
+  /** 근거가 바뀐 뒤 다시 안 만든 문항 수(0114). */
+  staleCount: number;
+  /** 받는 사람 수 = 발송 원장의 사람 수. 아직 발행 전이면 0. */
+  recipients: number;
+  /** 담긴 노하우를 **전부** 아는 사람 수(업무 통과와 같은 규칙). */
+  passed: number;
+  /** 목록 한 줄의 부제 — 재고 수가 아니라 **일정**을 말한다. */
+  caption: string;
+};
+
+/** 재확인 주기 라벨. 사장이 직접 정한 값(due_days)만 말한다 — 맡긴 경우는 날짜를 주장하지 않는다. */
+function cycleLabel(dueDays: number | null | undefined): string | null {
+  if (!dueDays || dueDays <= 0) return null;
+  if (dueDays % 30 === 0) {
+    const m = dueDays / 30;
+    return m === 1 ? '한 달마다' : `${m}개월마다`;
+  }
+  if (dueDays % 7 === 0) return `${dueDays / 7}주마다`;
+  return `${dueDays}일마다`;
+}
+
+/** "2026-08-12" → "8월 12일". 잘못된 값은 조용히 통째로 돌려준다(날짜를 지어내지 않는다). */
+function dayLabel(ymd: string | null | undefined): string {
+  if (!ymd) return '';
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(ymd);
+  return m ? `${Number(m[2])}월 ${Number(m[3])}일` : ymd;
+}
 
 export function useQuizBoard() {
   const courseEntries = useWorkStore((s) => s.courseEntries);
@@ -85,6 +133,17 @@ export function useQuizBoard() {
     void fetchQuizStats().then((s) => { if (alive) setQuizStats(s); });
     return () => { alive = false; };
   }, []);
+
+  // ── 발송 원장(0139) ───────────────────────────────────────────────────
+  // 사장은 매장 전체, 직원은 본인 것만 내려온다(RLS qz_select) — 화면이 다시 거르지 않는다.
+  const [assignments, setAssignments] = useState<QuizAssignment[]>([]);
+  const [sendReload, setSendReload] = useState(0);
+  const bumpSends = useCallback(() => setSendReload((v) => v + 1), []);
+  useEffect(() => {
+    let alive = true;
+    void fetchQuizAssignments().then((rows) => { if (alive) setAssignments(rows); });
+    return () => { alive = false; };
+  }, [sendReload]);
 
   const entryById = useMemo(() => new Map(entries.map((e) => [e.id, e])), [entries]);
 
@@ -164,6 +223,64 @@ export function useQuizBoard() {
     [courseEntries, entryById, understanding, now, quizStats, quizCountOf, staleCountOf, courseNameById],
   );
 
+  const sendsByCourse = useMemo(() => {
+    const m = new Map<string, QuizAssignment[]>();
+    for (const a of assignments) {
+      const list = m.get(a.courseId);
+      if (list) list.push(a);
+      else m.set(a.courseId, [a]);
+    }
+    return m;
+  }, [assignments]);
+
+  /**
+   * 1층 목록 한 줄 = 퀴즈 하나.
+   *
+   * ★부제는 **일정**이다(데모 A2). 재고 수("노하우 n개·문항 n개")는 만들 때나 궁금하고,
+   *   평상시 사장이 알고 싶은 건 다음이 언제인가다.
+   * ★"다음 확인 ○월 ○일"은 쓰지 않는다 — 재확인 시점은 사람마다 다르고(간격 확대는
+   *   knowhow_understanding.interval_step 이 사람별로 벌어진다) 목록 한 줄이 대표할 수 없다.
+   *   사장이 직접 정한 고정 주기(due_days)만 "N개월마다"로 말한다.
+   */
+  const buildQuizzes = useCallback((): QuizListRow[] => {
+    return courses.map((c) => {
+      const entryIds = courseEntriesOf(courseEntries, c.id).map((r) => r.entryId);
+      const sends = sendsByCourse.get(c.id) ?? [];
+      const sent = sends.filter((a) => !!a.sentAt);
+      const status: QuizStatus = sent.length > 0 ? 'sent' : c.start_at ? 'scheduled' : 'draft';
+
+      const cycle = cycleLabel(c.due_days);
+      let caption: string;
+      if (status === 'draft') {
+        caption = '아직 안 보냄';
+      } else if (status === 'scheduled') {
+        caption = `${dayLabel(c.start_at)}에 보내요`;
+      } else {
+        // 가장 최근 발송일. sentAt 은 timestamptz 라 앞 10자가 UTC 날짜다 → 한국 날짜로 옮겨 읽는다.
+        const last = sent
+          .map((a) => a.sentAt as string)
+          .sort()
+          .at(-1) as string;
+        const d = new Date(Date.parse(last));
+        const kst = new Date(d.getTime() + 9 * 3600_000);
+        const sentDay = `${kst.getUTCMonth() + 1}월 ${kst.getUTCDate()}일`;
+        caption = c.answer_days ? `${sentDay} 보냄 · ${c.answer_days}일 안에` : `${sentDay} 보냄`;
+        if (cycle) caption = `${cycle} · ${caption}`;
+      }
+
+      return {
+        course: c,
+        status,
+        entryCount: entryIds.length,
+        itemCount: entryIds.reduce((n, id) => n + quizCountOf(id), 0),
+        staleCount: entryIds.reduce((n, id) => n + staleCountOf(id), 0),
+        recipients: new Set(sends.map((a) => a.userId)).size,
+        passed: staffWhoUnderstandEntries(understanding, entryIds, { now, dueDays: c.due_days ?? null }).length,
+        caption,
+      };
+    });
+  }, [courses, courseEntries, sendsByCourse, understanding, now, quizCountOf, staleCountOf]);
+
   return {
     now,
     entries,
@@ -178,5 +295,9 @@ export function useQuizBoard() {
     quizCountOf,
     staleCountOf,
     buildRows,
+    assignments,
+    sendsByCourse,
+    bumpSends,
+    buildQuizzes,
   };
 }

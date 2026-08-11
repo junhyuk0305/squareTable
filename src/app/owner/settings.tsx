@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useMemberPrefsStore } from '@/lib/store/useMemberPrefsStore';
+import { useWorkStore } from '@/lib/store/useWorkStore';
 import { storeColor } from '@/lib/utils/storeColor';
 import { notifyAction } from '@/lib/utils/confirm';
 import { useCopyToClipboard } from '@/lib/utils/useCopyToClipboard';
@@ -13,6 +14,7 @@ import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { SettingsSection, SettingsRow, SettingsToggle } from '@/components/settings/SettingsKit';
 import { QuietHoursModal } from '@/components/settings/QuietHoursModal';
+import { ShellTaskCleanupSheet } from '@/components/owner/quiz/ShellTaskCleanupSheet';
 import { PersonalizeSheet } from '@/components/settings/PersonalizeSheet';
 import { RoleTabBar } from '@/components/RoleTabBar';
 
@@ -38,6 +40,25 @@ export default function OwnerSettings() {
   }, [hydratePrefs]);
   const pref = prefFor(unitId ?? '');
   const color = storeColor(unitId ?? '', pref.color);
+
+  /**
+   * 옛 퀴즈 구조(0110)가 만들어 낸 껍데기 업무 — 판별은 두 조건의 교집합이다:
+   *   ① 코스에 담겨 있었다(레거시 training_items) ② 할일로 체크된 적이 한 번도 없다(work_done)
+   * ②를 넣는 이유: 사장이 실제로 쓰던 업무를 코스에도 넣어 뒀을 수 있고, 그건 껍데기가 아니다.
+   */
+  const templates = useWorkStore((s) => s.templates);
+  const training = useWorkStore((s) => s.training);
+  const done = useWorkStore((s) => s.done);
+  const [cleanupOpen, setCleanupOpen] = useState(false);
+  const shellTasks = useMemo(() => {
+    const everDone = new Set<string>();
+    for (const day of Object.values(done)) for (const id of Object.keys(day)) everDone.add(id);
+    const inCourse = new Set(training.map((f) => f.templateId));
+    return templates
+      .filter((t) => inCourse.has(t.id) && !everDone.has(t.id))
+      .map((t) => ({ id: t.id, text: t.text, hidden: !!t.hidden }));
+  }, [templates, training, done]);
+  const shellLeft = useMemo(() => shellTasks.filter((t) => !t.hidden).length, [shellTasks]);
 
   const [quietModal, setQuietModal] = useState(false);
   // 개인화 시트 draft — 부모 소유(제어형, junior/settings 와 동일 패턴).
@@ -103,6 +124,16 @@ export default function OwnerSettings() {
         <SettingsSection icon="storefront-outline" title="매장 관리">
           <SettingsRow first icon="people-outline" label="직원·초대코드 관리" onPress={() => router.push('/owner/staff')} />
           <SettingsRow icon="cash-outline" label="급여 설정" onPress={() => router.push('/owner/payroll')} />
+          {/* 옛 퀴즈 구조(0110)가 만들어 둔 껍데기 할일 치우기. 한 번 쓰고 마는 도구라
+              매일 보는 퀴즈 홈이 아니라 여기에 둔다(2026-08-11 결정). 치울 게 없으면 줄 자체가 없다. */}
+          {shellLeft > 0 && (
+            <SettingsRow
+              icon="file-tray-outline"
+              label="퀴즈 때문에 생긴 할일 정리"
+              value={`${shellLeft}개`}
+              onPress={() => setCleanupOpen(true)}
+            />
+          )}
         </SettingsSection>
 
         {/* 이 매장 알림 — 매장별(unit_member_prefs). 계정 전역 푸시 on/off 는 전체 계정 설정에. */}
@@ -145,6 +176,7 @@ export default function OwnerSettings() {
         <Text style={styles.foot}>매장의 정석 · 스퀘어테이블</Text>
         <View style={{ height: 16 }} />
       </ScrollView>
+      {cleanupOpen && <ShellTaskCleanupSheet tasks={shellTasks} onClose={() => setCleanupOpen(false)} />}
       <QuietHoursModal
         visible={quietModal}
         start={pref.quiet_start}

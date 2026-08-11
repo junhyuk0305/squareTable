@@ -87,7 +87,32 @@ export type TrainingCourse = {
   max_items: number;
   /** null = 1회성(한 번 통과하면 끝). N = N일마다 다시 확인 */
   due_days?: number | null;
+  /**
+   * 예약 발송일 "YYYY-MM-DD"(KST, 0139). null = 아직 안 보낼 것(초안).
+   * 시각은 담지 않는다 — 실제 도착 시각은 근무표가 정한다.
+   */
+  start_at?: string | null;
+  /** 마감(며칠 안에, 0139). null = 마감 없음. 기준일은 만든 날이 아니라 받은 날. */
+  answer_days?: number | null;
   position: number;
   active: boolean;
   created_at?: string;
+};
+
+/**
+ * 발송 1건 = 수신자 1명(0139). 사장이 발행할 때 만들어지고, 크론이 근무일·빈도 상한을
+ * 통과시킬 때 `sentAt` 을 채운다. 수신자 명단과 발송 원장이 같은 행이다.
+ */
+export type QuizAssignment = {
+  id: string;
+  courseId: string;
+  userId: string;
+  /** 이 날짜부터 발송 후보(코스 start_at 의 스냅샷). */
+  scheduledOn: string;
+  /** null = 아직 안 나감. 크론만 채운다. */
+  sentAt: string | null;
+  /** 받은 날 + answer_days. null = 마감 없음. */
+  dueOn: string | null;
+  openedAt: string | null;
+  completedAt: string | null;
 };

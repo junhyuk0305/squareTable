@@ -285,7 +285,8 @@ function KnowhowDoc({ entry }: { entry: PlaybookEntry }) {
       {quizCount === 0 ? (
         // 누를 수 있는 것은 이 행 하나뿐 — 문서 블록 자체는 누를 수 없다(중첩 버튼 금지).
         <Pressable
-          onPress={() => router.push('/owner/quiz-list?status=no_items' as never)}
+          // 2026-08-11: 코스 목록(?status=no_items)이 사라졌다 → 만들기로 바로 보낸다.
+          onPress={() => router.push('/owner/quiz-new' as never)}
           style={({ pressed }) => [styles.quizEmpty, pressed && { opacity: 0.7 }]}
           accessibilityRole="button"
           accessibilityLabel="아직 문제가 없어요, 만들기"

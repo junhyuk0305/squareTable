@@ -20,6 +20,7 @@ import type {
   QuizItem,
   QuizResponse,
   QuizGrade,
+  QuizAssignment,
   TrainingCourse as TrainingCourseRow,
 } from '@/lib/quiz/types';
 
@@ -1643,7 +1644,7 @@ export async function deleteQuizItem(id: string): Promise<boolean> {
 // ── 훈련 코스(0108) — 0099 의 'first_day'|'regular' 문자열을 대체하는 매장 소유 코스 ──────
 // 읽기는 매장 전원(직원 훈련 카드가 코스 이름을 쓴다), 쓰기는 관리 권한(RLS tc_*).
 const TRAINING_COURSE_COLS =
-  'id, unit_id, key, name, description, preset, min_items, max_items, due_days, position, active, created_at';
+  'id, unit_id, key, name, description, preset, min_items, max_items, due_days, start_at, answer_days, position, active, created_at';
 
 export async function fetchTrainingCourses(): Promise<DbResult<TrainingCourseRow[]>> {
   if (!HAS_SUPABASE) return { data: [], error: null };
@@ -1672,6 +1673,10 @@ export async function upsertTrainingCourse(c: TrainingCourseRow): Promise<boolea
           min_items: c.min_items,
           max_items: c.max_items,
           due_days: c.due_days ?? null,
+          // 0139 일정. ★여기 목록에서 빠지면 화면이 값을 실어도 **조용히 버려진다**(에러도 안 난다) —
+          //   새 컬럼을 늘릴 때 이 두 곳(COLS·upsert)을 같이 고친다.
+          start_at: c.start_at ?? null,
+          answer_days: c.answer_days ?? null,
           position: c.position,
           active: c.active,
         },
@@ -1737,6 +1742,101 @@ export async function insertQuizAttempts(rows: { entryId: string; total: number;
       usable.map((r) => ({ unit_id: _unitId, entry_id: r.entryId, staff_id: uid, total: r.total, correct: r.correct })),
     ),
   );
+}
+
+// ── 발송 원장(0139) — "이 퀴즈를 이 사람에게 언제부터 보낸다" ─────────────────
+// 수신자 명단과 발송 기록이 같은 행이다. 나누면 "보냈는데 명단에 없다"가 따로 생긴다.
+// ★sent_at·due_on 은 **크론만** 채운다(claim_quiz_send). 앱은 절대 쓰지 않는다 —
+//   앱이 쓰면 빈도 상한 판정의 근거가 화면에서 흔들린다.
+const QUIZ_ASSIGNMENT_COLS = 'id, course_id, user_id, scheduled_on, sent_at, due_on, opened_at, completed_at';
+
+const toAssignment = (r: any): QuizAssignment => ({
+  id: r.id,
+  courseId: r.course_id,
+  userId: r.user_id,
+  scheduledOn: r.scheduled_on,
+  sentAt: r.sent_at ?? null,
+  dueOn: r.due_on ?? null,
+  openedAt: r.opened_at ?? null,
+  completedAt: r.completed_at ?? null,
+});
+
+/** 활성 매장의 발송 원장 — 관리 권한은 전체, 직원은 본인 것만(RLS qz_select). */
+export async function fetchQuizAssignments(): Promise<QuizAssignment[]> {
+  if (!HAS_SUPABASE) return [];
+  const { data, error } = await supabase
+    .from('quiz_assignments')
+    .select(QUIZ_ASSIGNMENT_COLS)
+    .order('scheduled_on', { ascending: false })
+    .limit(500);
+  if (error) {
+    readFail('fetchQuizAssignments', error);
+    return [];
+  }
+  return (data ?? []).map(toAssignment);
+}
+
+/**
+ * 발행 — 고른 직원 수만큼 행을 만든다. 이미 같은 (퀴즈, 사람, 예약일) 행이 있으면 그대로 둔다
+ * (발행을 두 번 눌러도 두 번 안 간다 — unique 제약이 잠금이다).
+ */
+export async function insertQuizAssignments(
+  courseId: string,
+  userIds: string[],
+  scheduledOn: string,
+): Promise<boolean> {
+  if (!HAS_SUPABASE) return true;
+  if (userIds.length === 0) return true;
+  return writeStrict(
+    'insertQuizAssignments',
+    supabase
+      .from('quiz_assignments')
+      .upsert(
+        userIds.map((uid) => ({
+          unit_id: _unitId,
+          course_id: courseId,
+          user_id: uid,
+          scheduled_on: scheduledOn,
+        })),
+        { onConflict: 'course_id,user_id,scheduled_on', ignoreDuplicates: true },
+      )
+      .select('id'),
+  );
+}
+
+/**
+ * 예약 취소 — **아직 안 나간 것만** 지운다. 이미 나간 건은 남긴다(발송 기록이자 빈도 상한의 근거라
+ * 지우면 "오늘 안 보냈다"가 되어 하루 1회 상한이 깨진다).
+ */
+export async function cancelPendingQuizAssignments(courseId: string): Promise<boolean> {
+  if (!HAS_SUPABASE) return true;
+  return write(
+    'cancelPendingQuizAssignments',
+    supabase.from('quiz_assignments').delete().eq('course_id', courseId).is('sent_at', null),
+  );
+}
+
+/**
+ * 직원이 퀴즈를 열었다 / 다 풀었다.
+ *
+ * ★RLS 로 열지 않고 definer RPC 로만 쓴다(0140) — 직원에게 UPDATE 를 주면 컬럼 단위 제한이
+ *   불가능해 sent_at·due_on 을 되돌려 마감을 무력화할 수 있다.
+ * ★`opened_at` 은 자동 정지(연속 2회 무시) 판정의 유일한 해제 신호다. 이 호출이 빠지면
+ *   시스템이 "아무도 안 푼다"고 판단해 3번째 발송부터 그 사람에게 영영 안 나간다.
+ *   기록 실패가 응시를 막으면 안 되므로 호출부는 fire-and-forget 으로 쓴다.
+ */
+export async function markQuizOpened(assignmentId: string): Promise<boolean> {
+  if (!HAS_SUPABASE) return true;
+  const { error } = await supabase.rpc('mark_quiz_opened', { p_id: assignmentId });
+  if (error) reportError('db.write:markQuizOpened', error);
+  return !error;
+}
+
+export async function markQuizCompleted(assignmentId: string): Promise<boolean> {
+  if (!HAS_SUPABASE) return true;
+  const { error } = await supabase.rpc('mark_quiz_completed', { p_id: assignmentId });
+  if (error) reportError('db.write:markQuizCompleted', error);
+  return !error;
 }
 
 // ── 외부 공유 링크(0113) — 단기 직원용. 로그인 없이 도는 유일한 경로 ────────────

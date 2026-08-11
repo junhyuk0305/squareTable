@@ -305,7 +305,11 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
   );
   // 자청 → 그 업무의 첨부 노하우 전체를 소스로 시트 오픈(푼 노하우만 통과 처리된다).
   const openSelfCheck = useCallback(
-    (t: TaskTemplate) => setSelfCheck({ title: t.text, sops: sopsOf(knowhowIdsForTask(knowhowLinks, t.id)) }),
+    (t: TaskTemplate) => {
+      const ids = knowhowIdsForTask(knowhowLinks, t.id);
+      useWorkStore.getState().noteQuizOpened(ids);
+      setSelfCheck({ title: t.text, sops: sopsOf(ids) });
+    },
     [knowhowLinks, sopsOf],
   );
 
@@ -376,10 +380,14 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
   }, [isOwner, courses, courseEntries, understanding, entryById, quizCounts, userId, trainingNow, trainingRequests]);
 
   // 카드의 퀴즈 시작 — 항목이 노하우 하나라 그 노하우만 소스로 넣는다(푼 만큼만 통과 처리).
+  // ★열었다는 신호를 여기서 찍는다(0140). 이게 빠지면 사장이 보낸 퀴즈가 "무시됐다"로 세어져
+  //   연속 2회 뒤 그 사람에게 영영 안 나간다(0139 자동 정지).
   const startTrainingCheck = useCallback(
     (entryId: string) => {
       const title = entryById.get(entryId)?.title;
-      if (title) setSelfCheck({ title, sops: sopsOf([entryId]) });
+      if (!title) return;
+      useWorkStore.getState().noteQuizOpened([entryId]);
+      setSelfCheck({ title, sops: sopsOf([entryId]) });
     },
     [entryById, sopsOf],
   );
