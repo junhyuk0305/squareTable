@@ -23,11 +23,15 @@ async function store(c, n) { const { data, error } = await c.rpc('create_store',
 // 유료화(0062) 후 2호점+ 생성은 기존 소유 매장 전부 multi 여야 한다 — 전역 스위치 토글 대신
 // 실제 유료 경로(admin_activate_store)로 테스트 매장만 승격한다(프로덕션 페이월 무접촉).
 async function promoteMulti(unit) { const { error } = await admin.rpc('admin_activate_store', { p_unit_id: unit, p_days: 1, p_plan: 'multi' }); if (error) throw new Error(`multi 승격(${unit}): ${error.message}`); }
+// ★0130: 2번째+ 매장은 **매장 슬롯**을 소비한다(플랜만으론 안 열린다 → no_store_slot).
+// 운영자 승인(review_payment_claim)이 적립하는 행과 같은 것을 셋업에서 직접 넣는다.
+async function grantSlot(uid) { const { error } = await admin.from('store_slots').insert({ owner_id: uid, paid_until: new Date(Date.now() + 30 * 864e5).toISOString() }); if (error) throw new Error(`store_slot 적립: ${error.message}`); }
 
 async function main() {
   const O = await mkOwner('O');
   const A = await store(O.c, `DS_A_${rid}`);
   await promoteMulti(A);
+  await grantSlot(O.uid);
   const B = await store(O.c, `DS_B_${rid}`); // 활성=B
   // A에 노하우 1건(cascade 검증용)
   const eid = `pb_${rid}_ds`;
@@ -60,6 +64,7 @@ async function main() {
 
   // 4) 직원 있는 매장 삭제 금지
   await promoteMulti(B); // A 삭제 후 O 소유=B뿐 — D 생성 전 B도 multi 필요
+  await grantSlot(O.uid);
   const D = await store(O.c, `DS_D_${rid}`); // O: B, D
   const J = await mkOwner('J'); // 실유저(주니어로 멤버십만 부여)
   await admin.from('unit_members').insert({ user_id: J.uid, unit_id: D, role: 'junior' });

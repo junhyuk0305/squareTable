@@ -26,11 +26,13 @@
     "src/components/work/WorkChat.tsx": 3,
     "src/lib/config/store-policy.ts": 3,
     "src/lib/theme/elevation.ts": 1,
-    "src/lib/voice/recorder.ts": 5
+    "src/lib/voice/recorder.ts": 5,
+    "src/components/owner/quiz/QuizLinkSheet.tsx": 1
   },
   "extensionSplit": [
     "src/components/VoiceRecorderBinder.web.tsx",
     "src/lib/import/pickPdf.web.ts",
-    "src/lib/voice/recorder.web.ts"
+    "src/lib/voice/recorder.web.ts",
+    "src/lib/web/marketingGuard.web.ts"
   ]
 }

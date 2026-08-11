@@ -58,7 +58,8 @@ function normalizeSegs(b) {
   if (segs.length === 0 && b.square) segs = [{ category: b.category || 'Routine', title: b.title, keywords: b.keywords || [], square: b.square }];
   return segs;
 }
-function segText(s) { const sq = s.square || {}; return [s.title, sq.situation, ...(sq.action?.steps || []), ...(sq.action?.scripts || []), sq.extract?.dont].filter(Boolean).join(' '); }
+// action.scripts('멘트')는 2026-08-08에 폐기됐다 — 죽은 참조라 뺀다(있어도 항상 undefined).
+function segText(s) { const sq = s.square || {}; return [s.title, sq.situation, ...(sq.action?.steps || []), sq.extract?.dont].filter(Boolean).join(' '); }
 
 const main = async () => {
   const guide = loadGuide();
@@ -129,9 +130,14 @@ const main = async () => {
   console.log('─────────────────────────────────────────────────────');
   console.log('오차 케이스:', done.filter(x => !x.countExact).map(x => `${x.c.id}(기대${x.c.count}→${x.published})`).join('  ') || '없음');
   // 게이트: 완전일치 ≥80% AND 근접 100% AND 재현율 ≥85% AND 특수 전부 통과(있는 것만)
+  // ★못 돈 케이스는 통과가 아니다. 예전엔 비율을 **성공한 것들끼리만** 계산해서, 세션이 만료돼
+  //   뒤 6케이스가 통째로 401 로 죽어도 "6/6 100% ✅PASS" 가 찍혔다(2026-08-11 P3 실측).
+  //   비율은 실행된 것으로 재되, 하나라도 못 돌았으면 게이트는 red 다.
+  const errs = results.filter((x) => x.err);
   const specials = [...done.map(x => x.noiseOk), ...done.map(x => x.overflowOk), ...done.map(x => x.dontOk), ...done.map(x => x.noFabOk)].filter(x => x !== null && x !== undefined);
-  const gate = (exact / N >= 0.8) && (close === N) && (recallAvg >= 0.85) && specials.every(Boolean);
-  console.log(`\n${gate ? '✅ PASS' : '❌ FAIL'} — 게이트(정확≥80% · 근접100% · 재현≥85% · 특수전부통과)\n`);
+  const gate = errs.length === 0 && N > 0 && (exact / N >= 0.8) && (close === N) && (recallAvg >= 0.85) && specials.every(Boolean);
+  if (errs.length) console.log(`\n🔴 실행 못 한 케이스 ${errs.length}건: ${errs.map(x => x.c.id).join(', ')} — 통과로 세지 않는다(세션 만료/네트워크 확인).`);
+  console.log(`\n${gate ? '✅ PASS' : '❌ FAIL'} — 게이트(전 케이스 실행 · 정확≥80% · 근접100% · 재현≥85% · 특수전부통과)\n`);
   process.exit(gate ? 0 : 1);
 };
 main().catch((e) => { console.error('실패:', e.message); process.exit(1); });

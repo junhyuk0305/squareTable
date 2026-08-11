@@ -70,8 +70,17 @@ try {
   }
 
   // 방 2개: 기본방(매장 전원) + 비기본방 R(멤버 = A 만).
+  // ★기본방은 서버가 안 만든다 — 클라(useRoomStore.hydrate, 사장 첫 진입)가 만든다. 이 하니스는
+  //   create_store RPC 로만 매장을 세우고 앱을 열지 않으므로 기본방이 없었고, A4 가 **매번 조용히
+  //   건너뛰어져** "6 통과"가 전수를 뜻하지 않았다(2026-08-11 P5-#7). 클라와 같은 id 규칙으로 직접 심는다.
   const { data: defRoom } = await admin.from('work_rooms').select('id').eq('unit_id', UNIT).eq('is_default', true).maybeSingle();
-  const DEFAULT_ROOM = defRoom?.id ?? null;
+  let DEFAULT_ROOM = defRoom?.id ?? null;
+  if (!DEFAULT_ROOM) {
+    const id = `room_main_${UNIT}`;
+    const { error } = await admin.from('work_rooms').insert([{ id, unit_id: UNIT, name: '전체', is_default: true, created_by: ownerId }]);
+    if (error) throw new Error('기본방 시드: ' + error.message);
+    DEFAULT_ROOM = id;
+  }
   const ROOM = `wr_qa_${s}`;
   {
     const { error } = await admin.from('work_rooms').insert([{ id: ROOM, unit_id: UNIT, name: 'QA비밀방', is_default: false, created_by: ownerId }]);
@@ -116,7 +125,9 @@ try {
     const { error } = await owner.from('work_templates').insert([task(`wt_a4_${s}`, { room_id: DEFAULT_ROOM, owner_id: bId })]);
     check('A4 기본방에 아무에게나 배정 = 통과', !error, error?.message ?? '');
   } else {
-    console.log('  - A4 건너뜀(기본방 없음)');
+    // 위 셋업이 기본방을 보장하므로 여기 오면 셋업이 깨진 것이다. 조용히 넘기지 않는다 —
+    // 건너뛴 항목을 통과로 세면 게이트가 자기 항목의 일부를 안 재고 green 을 보고한다.
+    check('A4 기본방에 아무에게나 배정 = 통과', false, '기본방 셋업 실패 — 건너뛴 것을 통과로 세지 않는다');
   }
 
   // A5 ★우회로: 담당자 없이 넣고 UPDATE 로 방 밖 직원에게 넘긴다 → 거부되어야 한다.

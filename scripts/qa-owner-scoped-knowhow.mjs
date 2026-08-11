@@ -68,6 +68,13 @@ async function main() {
   const A1 = a1?.[0]?.unit_id;
   const A1CODE = a1?.[0]?.invite_code;
   await admin.rpc('admin_activate_store', { p_unit_id: A1, p_days: 1, p_plan: 'multi' });
+  // ★0130: 2번째+ 매장은 **매장 슬롯**을 소비한다(없으면 no_store_slot).
+  //   승인(review_payment_claim)이 적립하는 것과 같은 행을 셋업에서 직접 넣는다.
+  {
+    const { data: me } = await A.auth.getUser();
+    const { error } = await admin.from('store_slots').insert({ owner_id: me?.user?.id, paid_until: new Date(Date.now() + 30 * 864e5).toISOString() });
+    if (error) throw new Error('store_slot 적립: ' + error.message);
+  }
   const { data: a2, error: e2 } = await A.rpc('create_store', { p_store_name: 'OSK 2호점', p_industry: '카페·디저트', p_biz_no: null });
   if (e2) throw new Error('create_store A2: ' + e2.message);
   const A2 = a2?.[0]?.unit_id;

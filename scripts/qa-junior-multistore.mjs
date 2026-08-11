@@ -41,6 +41,16 @@ const check = (n, ok, extra = '') => { ok ? (pass++, console.log('  PASS', n, ex
 const denied = async (client, unit) => /not_a_member/.test((await client.rpc('switch_active_unit', { p_unit_id: unit })).error?.message ?? '');
 const ok = async (client, unit) => !(await client.rpc('switch_active_unit', { p_unit_id: unit })).error;
 
+// ★0130 매장 슬롯 — 2번째+ 매장 생성의 전제. 승인(review_payment_claim)이 적립하는 행을 셋업에서 직접 넣는다.
+async function grantSlot(client) {
+  const { data } = await client.auth.getUser();
+  const { error } = await admin.from('store_slots').insert({
+    owner_id: data?.user?.id,
+    paid_until: new Date(Date.now() + 30 * 864e5).toISOString(),
+  });
+  if (error) throw new Error(`store_slot 적립 실패: ${error.message}`);
+}
+
 async function signUpSession(client, email, meta) {
   const { data, error } = await client.auth.signUp({ email, password: pw, options: { data: { birth_date: '1990-01-15', ...meta } } });
   if (error || !data.session) throw new Error(`signUp failed (${email}): ${error?.message ?? 'no session'}`);
@@ -61,6 +71,9 @@ try {
   const { data: c1 } = await owner.rpc('create_store', { p_store_name: 'JMS 1호점', p_industry: '카페·디저트', p_biz_no: null });
   const S1 = c1?.[0]?.unit_id, code1 = c1?.[0]?.invite_code;
   await admin.rpc('admin_activate_store', { p_unit_id: S1, p_days: 1, p_plan: 'multi' });
+  // ★0130: multi 플랜만으로는 2호점을 못 만든다 — **매장 슬롯 선구매**가 입구다.
+  //   운영자 승인(review_payment_claim)이 적립하는 것과 같은 행을 여기서 직접 넣는다(qa-multistore.mjs 와 같은 패턴).
+  await grantSlot(owner);
   const { data: c2 } = await owner.rpc('create_store', { p_store_name: 'JMS 2호점', p_industry: '헬스·피트니스', p_biz_no: null });
   const S2 = c2?.[0]?.unit_id, code2 = c2?.[0]?.invite_code;
   check('setup: S1·S2 생성 + 초대코드', !!S1 && !!S2 && S1 !== S2 && !!code1 && !!code2, `S1=${S1} S2=${S2}`);

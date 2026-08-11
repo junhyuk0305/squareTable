@@ -103,6 +103,13 @@ async function main() {
   await flow4(ctx);
 
   // ── S3: 사장 2번째 매장 생성(넛지·통합뷰·다중공지에 필요). 활성은 A로 복귀(flow5~7은 A 기준). ─────
+  // ★0130: 2번째+ 매장은 **매장 슬롯**을 소비한다(없으면 no_store_slot). 승인(review_payment_claim)이
+  //   적립하는 것과 같은 행을 셋업에서 직접 넣는다 — 안 넣으면 S3 전체가 연쇄로 무너진다.
+  {
+    const { data: me } = await owner.auth.getUser();
+    const { error } = await admin.from('store_slots').insert({ owner_id: me?.user?.id, paid_until: new Date(Date.now() + 30 * 864e5).toISOString() });
+    if (error) throw new Error('store_slot 적립: ' + error.message);
+  }
   const { data: cB } = await owner.rpc('create_store', { p_store_name: 'TK 2호점', p_industry: '카페·디저트', p_biz_no: null });
   const UNIT_B = cB?.[0]?.unit_id;
   await admin.rpc('admin_activate_store', { p_unit_id: UNIT_B, p_days: 1, p_plan: 'multi' });

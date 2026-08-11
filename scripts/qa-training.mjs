@@ -445,6 +445,13 @@ async function main() {
   // 공격 모양: 내 unit_id 를 달고 **남의 매장 노하우/코스 id** 를 참조하는 행을 만든다.
   // 그대로 통과하면 definer 조인(my_training_history 등)이 그 행을 신뢰해 남의 제목이 새어 나간다.
   console.log('\n━━ ⑬ 크로스테넌트(참조 소유 검사) ━━');
+  // ★0130: 2번째+ 매장은 **매장 슬롯**을 소비한다(없으면 no_store_slot). 승인(review_payment_claim)이
+  //   적립하는 것과 같은 행을 셋업에서 직접 넣는다.
+  {
+    const { data: me } = await owner.auth.getUser();
+    const { error } = await admin.from('store_slots').insert({ owner_id: me?.user?.id, paid_until: new Date(Date.now() + 30 * 864e5).toISOString() });
+    if (error) throw new Error('store_slot 적립: ' + error.message);
+  }
   const { data: c2, error: c2e } = await owner.rpc('create_store', { p_store_name: 'TR 두번째매장', p_industry: '카페·디저트', p_biz_no: null });
   const UNIT_B = c2?.[0]?.unit_id;
   check('⑬-0 두 번째 매장 생성(격리 상대)', !c2e && !!UNIT_B, c2e?.message ?? `unit=${UNIT_B}`);
