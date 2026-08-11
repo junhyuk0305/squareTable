@@ -223,6 +223,45 @@ async function sweepTaskReminders(token: string): Promise<{ swept: number; sent:
   return { swept: rows.length, sent };
 }
 
+/**
+ * 퀴즈 예약 발송 스윕(0139) — 같은 크론 틱에서 할일 리마인더 다음으로 돈다.
+ * 새 크론을 만들지 않는 이유: 이 경로가 KST 시각·선점·workers_at 근무자 판정을 이미 갖고 있다.
+ *
+ * 0118 은 별도 원장(task_reminder_sent)에 insert 해 선점하지만, 여기는 **원장이 곧 대상 행**이라
+ * 조건부 UPDATE 가 선점이다(claim_quiz_send: `sent_at is null` 술어). false = 다른 실행이 가져감.
+ * 누구에게·무엇을 보낼지는 전부 due_quiz_sends() 가 정한다(수신자 규칙 SSOT = DB).
+ */
+async function sweepQuizSends(token: string): Promise<{ swept: number; sent: number; error?: string }> {
+  const admin = createClient(SUPABASE_URL, token);
+  const { data, error } = await admin.rpc('due_quiz_sends');
+  if (error) {
+    console.error('[push] due_quiz_sends failed:', error.message);
+    const denied = /permission denied|not exist/i.test(error.message);
+    return { swept: 0, sent: 0, error: denied ? 'forbidden' : 'rpc_failed' };
+  }
+  const rows = (data ?? []) as {
+    out_assignment_id: string; out_unit_id: string; out_user_id: string; out_course_name: string;
+  }[];
+  let sent = 0;
+  for (const r of rows) {
+    const { data: claimed, error: claimErr } = await admin.rpc('claim_quiz_send', { p_id: r.out_assignment_id });
+    if (claimErr) {
+      console.error('[push] claim_quiz_send failed:', claimErr.message);
+      continue;
+    }
+    if (claimed !== true) continue; // 이미 다른 실행이 가져갔다.
+    const res = await deliver(admin, r.out_unit_id, [r.out_user_id], {
+      title: '퀴즈가 왔어요',
+      // 퀴즈 이름은 사장이 지은 문구다(데모 B4). 문항 형태 이름은 절대 노출하지 않는다.
+      body: r.out_course_name,
+      url: '/junior/work',
+      tag: `quiz-${r.out_assignment_id}`,
+    });
+    sent += res.sent;
+  }
+  return { swept: rows.length, sent };
+}
+
 Deno.serve(async (req) => {
   const origin = req.headers.get('origin');
   const cors = corsFor(origin);
@@ -256,14 +295,21 @@ Deno.serve(async (req) => {
     return json(400, { error: 'bad_json' });
   }
 
-  // ── 크론 경로(0118 할일 시간대 알림) ──
+  // ── 크론 경로(0118 할일 시간대 알림 + 0139 퀴즈 예약 발송) ──
   // 사용자 JWT 가 아니라 service_role 키로 들어온다(pg_cron → net.http_post). 사용자 입력이 0이고
   // (mode 하나뿐) 제목·본문·수신자를 DB 가 정하므로, 아래의 "호출자 매장으로 제한" 검사가 필요 없다.
   // 인증은 sweepTaskReminders 안에서 RPC 실행 권한으로 판정한다.
+  //
+  // ★ mode 이름은 'task_reminders' 그대로 둔다 — 이 문자열은 pg_cron 잡 본문에 박혀 있고(0118 §6),
+  //   바꾸면 크론을 다시 등록할 때까지 **알림이 통째로 멈춘다**. 갈래를 늘리되 입구는 하나로 유지한다.
   if (payload.mode) {
     if (payload.mode !== 'task_reminders') return json(400, { error: 'unknown_mode' });
     const swept = await sweepTaskReminders(token);
-    return json(swept.error === 'forbidden' ? 403 : 200, swept);
+    if (swept.error === 'forbidden') return json(403, swept);
+    // 퀴즈 갈래가 실패해도 할일 리마인더 결과는 그대로 돌려준다(한쪽 장애가 다른 쪽을 삼키지 않는다).
+    const quiz = await sweepQuizSends(token);
+    if (quiz.error) console.error('[push] quiz sweep failed:', quiz.error);
+    return json(200, { ...swept, quizSwept: quiz.swept, quizSent: quiz.sent, quizError: quiz.error });
   }
 
   // 호출자 신원 확인용(anon 키 + 호출자 토큰)
