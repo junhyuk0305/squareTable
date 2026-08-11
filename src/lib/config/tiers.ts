@@ -4,10 +4,9 @@
 // ⚠️ 서버 카운터파트: 같은 한도가 supabase/migrations/0062_plan_tiers.sql 의
 //    create_store(매장 캡)·approve_member(직원 3명)·consume_ai_quota(월 300건)에 박혀 있다.
 //    한도를 바꾸면 반드시 양쪽을 함께 바꾼다(클라=표시·서버=강제).
-// ⚠️ FREE_MODE(파일럿 전면 무료) 동안엔 캡·게이팅 전부 우회된다 — 우회 판정은
-//    subscription.ts(클라)와 billing_free_mode()(서버, 0062)의 2스위치. 유료화 전환 시 함께 뒤집는다.
-
-import { FREE_MODE } from '@/lib/utils/subscription';
+// ⚠️ 전면 무료 모드(app_config.billing_free_mode) 동안엔 캡·게이팅이 전부 우회된다.
+//    서버는 billing_free_mode()로 스스로 읽고, 화면은 세션의 freeMode 를 이 파일 함수에 넘긴다
+//    — 스위치는 서버 행 하나뿐이다(클라 상수 없음).
 
 export type PlanId = 'free' | 'single' | 'multi';
 
@@ -64,6 +63,13 @@ export const PLANS: Record<PlanId, PlanDef> = {
 
 export const PLAN_ORDER: PlanId[] = ['free', 'single', 'multi'];
 
+// 전면 무료 프로모션 문구 — 기간이 바뀌면 여기만 고친다(화면 3곳이 이걸 참조).
+// ★기간을 늘리면 스위치(app_config.billing_free_mode)도 그만큼 켜 둬야 문구와 실제가 맞는다.
+export const FREE_PROMO = {
+  headline: '8월 한 달 전면 무료',
+  until: '8월 31일',
+} as const;
+
 // 부가세 — 일반과세자(2026-08-03 등록)라 매출의 10%가 부가세다.
 // PLANS.monthlyKrw 는 전부 **공급가액**이고, 화면 표시가도 공급가액 + "부가세 별도" 꼬리표다.
 // 실제로 받는 돈(입금 요청액)은 withVat() 를 통과한 값 — 19,000 → 20,900 / 29,000 → 31,900.
@@ -89,7 +95,8 @@ export function planMonthlyPrice(plan: PlanId, ownedStoreCount: number): number 
 }
 
 // 다점포 전용 기능(통합뷰·노하우 가져오기·매장 추가) 노출 판정 — 게이팅의 단일 진실.
-// FREE_MODE(파일럿) 동안엔 전부 열림. 유료화 후엔 multi 플랜만.
-export function canUseMultistore(plan: PlanId): boolean {
-  return FREE_MODE || plan === 'multi';
+// freeMode(=세션의 서버 스위치) 동안엔 전부 열림. 평시엔 multi 플랜만.
+// ★freeMode 는 호출부가 useSessionStore 에서 읽어 넘긴다 — 이 파일에 전역 상태를 두지 않는다.
+export function canUseMultistore(plan: PlanId, freeMode: boolean): boolean {
+  return freeMode || plan === 'multi';
 }

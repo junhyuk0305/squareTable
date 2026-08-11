@@ -194,3 +194,34 @@ svg.ic{width:1em;height:1em;stroke:currentColor;stroke-width:1.85;fill:none;stro
 .site ul a{font-size:13.5px;color:var(--ink2);font-weight:600}
 .site ul a:hover{color:var(--ink)}
 .site .base{max-width:1080px;margin:30px auto 0;padding-top:18px;border-top:1px solid var(--line);font-size:12px;color:var(--ink3)}
+
+/* ── 8월 전면 무료 고지(promo.js 가 주입) ─────────────────────────────────
+   마크업·문구·기한은 promo.js 한 곳에 있다. 여기는 모양만.
+   프로모션이 끝나면 promo.js 가 스스로 아무것도 그리지 않으므로 이 블록은 죽은 채 남는다
+   — 정리할 때 promo.js 와 각 페이지의 <script> 한 줄까지 같이 지운다. */
+.promoStrip{background:var(--ink);color:#fff}
+.promoStrip .in{max-width:1080px;margin:0 auto;padding:10px 24px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:13px}
+.promoStrip b{font-weight:900;background:var(--yellow);color:var(--ink);padding:3px 10px;border-radius:var(--r-pill);font-size:12.5px}
+.promoStrip span{color:rgba(255,255,255,.82);font-weight:600}
+.promoStrip a{margin-left:auto;font-weight:800;color:var(--yellow);text-decoration:underline;text-underline-offset:3px;white-space:nowrap}
+@media(max-width:640px){.promoStrip .in{padding:9px 20px;font-size:12.5px}.promoStrip a{margin-left:0}}
+
+.promoBack{position:fixed;inset:0;z-index:60;background:rgba(17,17,17,.46);display:flex;align-items:center;justify-content:center;padding:20px;opacity:0;transition:opacity .2s ease}
+.promoBack.on{opacity:1}
+.promoCard{position:relative;width:100%;max-width:420px;background:var(--bg);border-radius:var(--r-lg);box-shadow:var(--e3);padding:28px 26px 22px;transform:translateY(10px);transition:transform .24s cubic-bezier(.2,.7,.3,1)}
+.promoBack.on .promoCard{transform:none}
+.promoCard .x{position:absolute;top:10px;right:12px;background:none;border:0;font-size:24px;line-height:1;color:var(--ink3);cursor:pointer;padding:6px 8px}
+.promoCard .x:hover{color:var(--ink)}
+.promoCard .eyebrow{display:inline-flex;align-items:center;gap:8px;font-size:12.5px;font-weight:800;color:var(--ink2);margin:0}
+.promoCard .eyebrow .pin{width:8px;height:8px;border-radius:50%;background:var(--yellowDeep);box-shadow:0 0 0 4px var(--yellowSoft)}
+.promoCard h2{font-size:27px;font-weight:900;letter-spacing:-.04em;line-height:1.2;margin:12px 0 0}
+.promoCard .sub{font-size:14px;color:var(--ink2);font-weight:500;margin:10px 0 0;line-height:1.55}
+.promoCard ul{list-style:none;margin:18px 0 0;padding:0;display:flex;flex-direction:column;gap:9px}
+.promoCard li{font-size:13.5px;font-weight:600;color:var(--ink);padding-left:20px;position:relative}
+.promoCard li::before{content:"";position:absolute;left:2px;top:7px;width:7px;height:7px;border-radius:50%;background:var(--yellowDeep)}
+.promoCard .p{display:block;text-align:center;margin-top:22px;background:var(--yellow);color:var(--ink);font-weight:900;font-size:15px;padding:15px 24px;border-radius:var(--r-pill);box-shadow:var(--ey)}
+.promoCard .p:hover{background:var(--yellowDeep)}
+.promoCard .s{display:block;width:100%;margin-top:8px;background:none;border:0;font-family:inherit;font-size:13.5px;font-weight:700;color:var(--ink2);padding:11px;cursor:pointer}
+.promoCard .s:hover{color:var(--ink)}
+.promoCard .promoNote{font-size:12px;color:var(--ink3);font-weight:500;margin:10px 0 0;text-align:center;line-height:1.5}
+@media(prefers-reduced-motion:reduce){.promoBack,.promoCard{transition:none}}

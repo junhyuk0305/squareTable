@@ -7,7 +7,7 @@ import Constants from 'expo-constants';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { usePreferencesStore, type TextScale } from '@/lib/store/usePreferencesStore';
 import { HAS_SUPABASE } from '@/lib/supabase';
-import { FREE_MODE } from '@/lib/utils/subscription';
+import { FREE_PROMO } from '@/lib/config/tiers';
 import { logout } from '@/lib/auth';
 import { confirmAction, notifyAction } from '@/lib/utils/confirm';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
@@ -36,6 +36,7 @@ export default function AccountSettings() {
   const bio = useSessionStore((s) => s.bio);
   const role = useSessionStore((s) => s.role);
   const plan = useSessionStore((s) => s.plan);
+  const freeMode = useSessionStore((s) => s.freeMode);
   const storeName = useSessionStore((s) => s.storeName);
   const stores = useSessionStore((s) => s.stores);
   // 요금제는 매장 단위 — 다점포 사장은 지금 보는 플랜이 어느 매장 것인지 알아야 한다(1곳이면 소음이라 생략).
@@ -126,21 +127,24 @@ export default function AccountSettings() {
         </SettingsSection>
 
         {/* 구독 및 결제(사장만) — 계정 단위 항목이라 F6에서 owner/settings → 여기로 이동.
-            FREE_MODE(파일럿 전면 무료·출시 전 flag 숨김) 동안엔 단순 안내 행 유지.
+            전면 무료 모드(freeMode·서버 스위치) 동안엔 단순 안내 행 유지.
             iOS 네이티브에서는 섹션 전체를 렌더하지 않는다 — 가격표(PricingTable)·요금제 CTA 모두
             App Review 3.1.3(f) 위반. 판정은 store-policy.ts 하나에만 둔다. */}
         {SHOW_BILLING && isOwner &&
-          (FREE_MODE ? (
+          (freeMode ? (
             <SettingsSection icon="card-outline" title="구독 및 결제">
               <SettingsRow
                 first
                 icon="card-outline"
                 label="요금제"
-                value="파일럿 기간 무료"
+                value={FREE_PROMO.headline}
                 onPress={() =>
-                  notifyAction('구독 및 결제', '지금은 파일럿 기간이라 무료로 쓰실 수 있어요. 월 구독 결제는 준비 중이에요.', '확인', {
-                    icon: 'card-outline',
-                  })
+                  notifyAction(
+                    '구독 및 결제',
+                    `${FREE_PROMO.until}까지는 모든 기능을 무료로 쓰실 수 있어요. 매장 수·직원 수 제한도 없어요.`,
+                    '확인',
+                    { icon: 'card-outline' },
+                  )
                 }
               />
             </SettingsSection>

@@ -48,6 +48,7 @@ export function OwnerStatusView() {
   const crossData = useCrossNotifStore((s) => s.data);
   const hydrateCross = useCrossNotifStore((s) => s.hydrate);
   const plan = useSessionStore((s) => s.plan);
+  const freeMode = useSessionStore((s) => s.freeMode);
   const prefFor = useMemberPrefsStore((s) => s.prefFor);
   const hydratePrefs = useMemberPrefsStore((s) => s.hydrate);
   const { goStore, switching } = useStoreNav();
@@ -271,7 +272,7 @@ export function OwnerStatusView() {
       {multi && (
         <Appear delay={120}>
           <SectionLabel title="매장 비교" hint="항목을 누르면 정렬" />
-          {canUseMultistore(plan) ? (
+          {canUseMultistore(plan, freeMode) ? (
             <View style={styles.card}>
               <View style={styles.thRow}>
                 <Text style={[styles.th, styles.thName]}>매장</Text>

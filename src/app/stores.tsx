@@ -108,6 +108,7 @@ export default function StoresHub() {
   const unitId = useSessionStore((s) => s.unitId);
   const storeName = useSessionStore((s) => s.storeName);
   const plan = useSessionStore((s) => s.plan);
+  const freeMode = useSessionStore((s) => s.freeMode);
   const sessionStores = useSessionStore((s) => s.stores);
   const switchUnit = useSessionStore((s) => s.switchUnit);
   const status = useSessionStore((s) => s.status);
@@ -204,7 +205,7 @@ export default function StoresHub() {
   };
 
   const addStore = () => {
-    if (canUseMultistore(plan)) return router.push('/owner/create-store');
+    if (canUseMultistore(plan, freeMode)) return router.push('/owner/create-store');
     // iOS 네이티브: 결제 화면으로 유도하지 않는다(3.1.3(f)). 사실 고지만 남긴다.
     if (!SHOW_BILLING) return showToast('매장을 더 추가하려면 관리자에게 문의해 주세요.');
     router.push('/billing');

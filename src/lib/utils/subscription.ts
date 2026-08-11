@@ -4,7 +4,7 @@
 // 안전 기본값(fail-open): 구독 정보가 없으면('none') 막지 않는다. 소프트 페이월(수동 계좌이체)이라
 // 과금 로직 버그로 앱을 벽돌로 만드는 게 더 큰 사고 — 접근 차단은 명시적 만료일 때만.
 
-import type { PlanId } from '@/lib/config/tiers'; // type-only — 런타임 순환 없음(tiers가 FREE_MODE를 역참조)
+import type { PlanId } from '@/lib/config/tiers'; // type-only
 
 export type SubStatusRaw = '' | 'trialing' | 'active' | 'expired';
 export type SubState = 'none' | 'trialing' | 'active' | 'expired';
@@ -26,11 +26,11 @@ export type SubscriptionView = {
 const DAY = 24 * 60 * 60 * 1000;
 const ceilDays = (ms: number) => Math.max(0, Math.ceil(ms / DAY));
 
-// 전체 무료 모드 스위치 — 2026-07-10 유료화 전환(Phase 1)으로 false.
-// ⚠️ 서버 카운터파트와 한 쌍: app_config('billing_free_mode') 행(0062, DB 캡·AI 쿼터 강제).
-//    이 상수와 서버 행을 반드시 함께 뒤집는다(반쪽 전환 = UI/강제 불일치).
-// false 인 동안: 무료 티어는 영구 무료(캡만 적용), 유료 플랜은 paid_until 만료 시 /billing 페이월.
-export const FREE_MODE = false;
+// 전면 무료 모드 — ★2026-08-11 빌드 타임 상수에서 **런타임 값**으로 바뀌었다.
+// 진실은 서버 행 하나뿐이다: app_config('billing_free_mode') → RPC billing_free_mode()(0062).
+//   같은 행을 DB 캡(매장수·좌석·AI 쿼터)과 화면 게이팅이 함께 읽는다 → 반쪽 전환이 구조적으로 불가능.
+//   화면 쪽 보관처 = useSessionStore.freeMode(프로필 로드마다 갱신). 켜고 끄는 곳 = 관리 콘솔.
+// 옛 `FREE_MODE` 상수는 삭제됐다 — 되살리지 말 것(상수와 서버 행이 어긋나면 split-brain).
 
 /**
  * 유효 플랜 — 만료를 반영한 '지금' 기준 요금제. **과금 판정의 클라측 SSOT.**
@@ -67,9 +67,11 @@ export function isPlanLapsed(
   return !!s.paidUntil && Date.parse(s.paidUntil) <= now && effectivePlanOf(s, now) === 'free';
 }
 
+// ★전면 무료 모드 분기가 여기 없는 이유(2026-08-11): 호출부는 전부 세션의 plan을 넘기고,
+//   세션 plan 은 이미 effectivePlanOf 를 통과한 **유효 플랜**이다. 무료 모드에서도 유효 플랜은
+//   free 또는 유효한 유료 플랜뿐이고 둘 다 아래에서 entitled 로 떨어진다 — 결과가 같으므로
+//   이 순수 함수에 전역 스위치를 다시 끌어들이지 않는다(무료 모드는 캡·게이팅에만 작용한다).
 export function deriveSubscription(s: SubscriptionFields, now: number = Date.now()): SubscriptionView {
-  if (FREE_MODE) return { state: 'active', entitled: true, daysLeft: -1 };
-
   // ★무료 티어 = 영구 무료(3티어 freemium, 0062). 무료 매장은 체험 만료·admin_expire 와 무관하게
   // 항상 이용 가능하고, 제한은 캡(직원 3·AI 300/월·1매장)으로만 건다. 만료 페이월은 유료 플랜
   // (single/multi)의 paid_until 에만 적용된다. (악성 무료 매장 차단은 구독이 아니라 별도 수단으로.)

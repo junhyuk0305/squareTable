@@ -10,7 +10,7 @@ import { SHOW_BILLING } from '@/lib/config/store-policy';
 /**
  * 다점포 전용 화면의 요금제 가드(과금층 0062) — 무료·단일 요금제로 딥링크 진입 시
  * 빈 화면 대신 업그레이드 안내를 보여준다. 노출 판정은 canUseMultistore(tiers.ts) 한 곳,
- * 이 컴포넌트는 표시 전용. FREE_MODE(파일럿) 동안엔 판정이 항상 열려 있어 렌더되지 않는다.
+ * 이 컴포넌트는 표시 전용. 전면 무료 기간엔 판정이 항상 열려 있어 렌더되지 않는다.
  */
 export function PlanUpgradeNotice({ description }: { description: string }) {
   const router = useRouter();
