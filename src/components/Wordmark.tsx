@@ -1,7 +1,8 @@
 import { View, Text, StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
 import { BrandColors, InkColors } from '@/lib/theme/colors';
 
-type Size = 'lg' | 'md' | 'sm';
+// xs = 상단바 2칸 토글의 로고 칸(15sp, 2026-08-08 상단바 C안). 그 자리에서만 쓴다.
+type Size = 'lg' | 'md' | 'sm' | 'xs';
 
 /**
  * 매장의 정석 워드마크 = 앱 로고/아이콘. 검정 글씨 + 노란 마커 밑줄(필수).
@@ -17,7 +18,7 @@ export function Wordmark({
   size?: Size;
   style?: StyleProp<ViewStyle>;
 }) {
-  const font = size === 'lg' ? 36 : size === 'md' ? 26 : 18;
+  const font = size === 'lg' ? 36 : size === 'md' ? 26 : size === 'sm' ? 18 : 15;
   const underH = Math.round(font * 0.4);
   const underBottom = Math.round(font * 0.06);
   const underInset = Math.round(font * 0.13);

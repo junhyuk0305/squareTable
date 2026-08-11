@@ -24,8 +24,8 @@ export const styles = StyleSheet.create({
     paddingBottom: 10,
     backgroundColor: InkColors.cream,
   },
-  // 헤더: [매장 토글(⌂ 허브 복귀 + 전환)][알림 벨]
-  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  // 헤더: [2칸 토글(로고=허브 / 매장)][알림 벨][아바타] — 간격은 허브 상단바와 같게(12).
+  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 12 },
 
   onboard: {
     backgroundColor: BrandColors.accentSoft,

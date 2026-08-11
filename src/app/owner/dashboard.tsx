@@ -15,6 +15,7 @@ import { AlertRow } from '@/components/blocks/AlertRow';
 import { HeroSubNav, type HeroSubNavItem } from '@/components/blocks/HeroSubNav';
 import { OwnerNotificationBell } from '@/components/NotificationBell';
 import { StoreToggle } from '@/components/StoreToggle';
+import { AccountAvatarButton } from '@/components/AccountAvatarButton';
 import { SEED_TEMPLATES } from '@/data/seed-templates';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { useOwnerDashboardData } from '@/lib/hooks/useOwnerDashboardData';
@@ -171,8 +172,10 @@ export default function OwnerDashboardScreen() {
       {/* 좌: 매장 토글(⌂ 허브 복귀 + 매장 전환) / 우: 알림 벨 */}
       <View style={styles.appHeader}>
         <StoreToggle />
+        {/* 우측은 두 층(허브·매장) 모두 [벨][아바타] — 2026-08-08 상단바 통일. */}
         <View style={styles.headerRight}>
           <OwnerNotificationBell edge={false} />
+          <AccountAvatarButton />
         </View>
       </View>
 

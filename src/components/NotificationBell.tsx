@@ -41,7 +41,7 @@ export function BellButton({ count, onPress, edge = true }: { count: number; onP
 }
 
 /** 직원 알림 벨 — 배지 = 안 읽은 공지 + 받은 교대 요청 → /junior/notifications. */
-export function NotificationBell() {
+export function NotificationBell({ edge = true }: { edge?: boolean } = {}) {
   const router = useRouter();
   const userId = useSessionStore((s) => s.userId);
   const feed = useWorkStore((s) => s.feed);
@@ -58,7 +58,7 @@ export function NotificationBell() {
     [feed, swaps, userId, today, templates, done, ackAt, suggestions],
   );
 
-  return <BellButton count={count} onPress={() => router.push('/junior/notifications')} />;
+  return <BellButton count={count} edge={edge} onPress={() => router.push('/junior/notifications')} />;
 }
 
 /** 사장·매니저 알림 벨 — 배지 = 합류 승인대기 + 답변대기 질문 + 검토대기 제안 + 승인대기 교대

@@ -6,6 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { RoleTabBar, goToTab } from '@/components/RoleTabBar';
 import { StoreToggle } from '@/components/StoreToggle';
 import { NotificationBell } from '@/components/NotificationBell';
+import { AccountAvatarButton } from '@/components/AccountAvatarButton';
 import { Appear } from '@/components/Appear';
 import { JuniorWelcomeCoach } from '@/components/junior/JuniorWelcomeCoach';
 import { SectionLabel } from '@/components/SectionLabel';
@@ -88,7 +89,14 @@ export default function JuniorHomeScreen() {
               <StoreToggle />
             </View>
           ),
-          headerRight: () => <NotificationBell />,
+          // 우측은 두 층(허브·매장) 모두 [벨][아바타] — 2026-08-08 상단바 통일.
+          // 벨은 네이티브 헤더 끝 여백을 스스로 갖고 있어(edge=true) 아바타는 그 안쪽에 둔다.
+          headerRight: () => (
+            <View style={styles.headerRight}>
+              <NotificationBell edge={false} />
+              <AccountAvatarButton />
+            </View>
+          ),
         }}
       />
 
