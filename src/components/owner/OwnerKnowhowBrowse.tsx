@@ -57,10 +57,23 @@ const FAB_SIZE = 56;
 // 검증 nudge의 대상은 needs_review(사장이 우리 매장 기준으로 아직 안 다듬음)로 좁힌다.
 const needsVerify = (e: PlaybookEntry) => e.needs_review === true;
 
-// 안 쓰임 = 게시됐는데 최근 30일 인용 0회. 내용이 어렵거나 직원이 못 찾는다는 신호 → 다듬거나 정리.
+/** '안 쓰임' 판정 창(일). 라벨('한 달간 …')과 같은 값이어야 한다 — 바꾸면 라벨도 같이 바꾼다. */
+const UNUSED_WINDOW_DAYS = 30;
+
+// 안 쓰임 = 게시된 지 30일이 지났는데 그동안 인용 0회. 내용이 어렵거나 직원이 못 찾는다는 신호.
 // (미검증과 다른 개념: 미검증=아직 확인 안 함 / 안 쓰임=확인은 됐는데 아무도 안 물어봄)
-const isUnused = (e: PlaybookEntry) =>
-  e.status === 'published' && (e.stats?.query_hits_30d ?? 0) === 0;
+//
+// ★나이 조건이 반드시 필요하다: 인용 0회만 보면 **방금 만든 노하우가 즉시** '한 달간 아무도 안
+//   물어봤어요'로 들어간다(등록 직후엔 0회인 게 당연하다). 한 달이 지나지도 않았는데 화면이 지나갔다고
+//   말하는 것이라, 사장이 처음 템플릿을 등록하자마자 '손볼 노하우'가 쌓인 것처럼 보였다.
+const isUnused = (e: PlaybookEntry) => {
+  if (e.status !== 'published') return false;
+  if ((e.stats?.query_hits_30d ?? 0) > 0) return false;
+  const created = Date.parse(e.created_at ?? '');
+  // 만든 날짜를 모르면 단정하지 않는다 — 틀린 라벨을 붙이느니 묶음에서 빠지는 편이 낫다.
+  if (!Number.isFinite(created)) return false;
+  return Date.now() - created >= UNUSED_WINDOW_DAYS * 24 * 60 * 60 * 1000;
+};
 
 // 사용자 표면의 분류는 카테고리(= section) 하나 — 종류(루틴/돌발 등)는 AI 내부용이라 안 보여준다.
 const sectionOf = (e: PlaybookEntry) => e.section?.trim() || UNSECTIONED;
@@ -348,8 +361,8 @@ export function OwnerKnowhowBrowse({
     const rest = listFiltered.filter((e) => !seen.has(e.id));
     return [
       { key: 'hot', title: '많이 쓰임', items: hot },
-      // ★라벨은 판정(isUnused = 최근 30일 인용 0회)을 그대로 말한다. '3개월'이라고 쓰면 화면이
-      //   사실과 다른 말을 한다 — 기간을 바꾸려면 라벨이 아니라 isUnused 를 바꿔야 한다.
+      // ★라벨은 판정(isUnused = 만든 지 30일 경과 + 그동안 인용 0회)을 그대로 말한다. 다른 기간을
+      //   쓰면 화면이 사실과 다른 말을 한다 — 기간은 라벨이 아니라 UNUSED_WINDOW_DAYS 를 바꾼다.
       { key: 'cold', title: '한 달간 아무도 안 물어봤어요', items: cold },
       { key: 'rest', title: '그 밖', items: rest },
     ].filter((g) => g.items.length > 0);
@@ -583,7 +596,7 @@ export function OwnerKnowhowBrowse({
         ) : (
           <>
             {reviewList.length > 0 && groupBlock('review', '확인 안 한 것', reviewList)}
-            {/* 라벨=판정(isUnused = 최근 30일 인용 0회) 그대로. 위 usageGroups 의 'cold' 와 같은 말이어야 한다. */}
+            {/* 라벨=판정(isUnused = 만든 지 30일 경과 + 인용 0회) 그대로. 위 usageGroups 의 'cold' 와 같은 말이어야 한다. */}
             {unusedList.length > 0 && groupBlock('unused', '한 달간 아무도 안 물어봤어요', unusedList)}
           </>
         )}

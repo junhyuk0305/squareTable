@@ -11,7 +11,7 @@ import { deriveSubscription, isPlanLapsed } from '@/lib/utils/subscription';
 import { canManage } from '@/lib/utils/roles';
 import { BILLING_INFO, formatKrw } from '@/lib/config/billing';
 import { TERMS_VERSION, PAYMENT_SLA_SENTENCE } from '@/lib/config/business';
-import { PLANS, PLAN_ORDER, planMonthlyPrice, withVat, VAT_NOTE_SENTENCE, FREE_PROMO, type PlanId } from '@/lib/config/tiers';
+import { PLANS, PLAN_ORDER, planMonthlyPrice, withVat, VAT_NOTE_SENTENCE, FREE_PROMO, SIGNUP_PROMO, type PlanId } from '@/lib/config/tiers';
 import { SHOW_BILLING, showPaymentSurface } from '@/lib/config/store-policy';
 import { usePaymentClaimStore, CLAIM_ERROR_TEXT } from '@/lib/store/usePaymentClaimStore';
 import { redeemPromoCode, fetchUnitSeatStatus, type SeatStatus } from '@/lib/db';
@@ -361,6 +361,24 @@ function BillingBody() {
           {!!storeName && <Text style={styles.store}>{storeName}</Text>}
         </View>
         </Appear>
+
+        {/* 가입 체험(0134) 안내 — 체험 중인 사장에게만. 웹사이트 팝업(public/promo.js)이 이미
+            "다점포까지 — 가입 후 말씀만 주세요"를 약속하는데 앱 요금제 화면만 그 말을 안 해서,
+            체험 중인 사장이 여기서 '다점포 = 유료'만 보고 있었다(말과 말이 갈라진 자리).
+            ★남은 일수는 세션(trial_ends_at)에서 온다 — 기간 숫자를 이 파일에 복제하지 않는다. */}
+        {isOwner && view.state === 'trialing' && view.daysLeft > 0 && (
+          <Appear delay={40}>
+          <View style={styles.promoCard}>
+            {SIGNUP_PROMO.perks.map((p) => (
+              <View key={p} style={styles.promoRow}>
+                <Ionicons name="checkmark-circle" size={16} color={BrandColors.goodText} />
+                <Text style={styles.promoText}>{p}</Text>
+              </View>
+            ))}
+            <Text style={styles.promoNote}>{SIGNUP_PROMO.afterNote}</Text>
+          </View>
+          </Appear>
+        )}
 
         {/* 직원: 계좌 정보 대신 사장 결제 안내만 */}
         {!isOwner ? (
@@ -732,6 +750,19 @@ const styles = StyleSheet.create({
   scroll: { padding: Space.gutter, gap: Space.xl, paddingBottom: 40, flexGrow: 1 },
 
   hero: { alignItems: 'center', gap: Space.sm, marginTop: Space.lg },
+
+  // 가입 체험 안내 카드 — 요금제 카드보다 앞서므로 형태를 다르게 둔다(같은 카드면 목록으로 읽힌다).
+  promoCard: {
+    gap: Space.sm,
+    backgroundColor: BrandColors.goodSoft,
+    borderWidth: 1,
+    borderColor: InkColors.line,
+    borderRadius: Radius.lg,
+    padding: Space.lg,
+  },
+  promoRow: { flexDirection: 'row', alignItems: 'flex-start', gap: Space.sm },
+  promoText: { flex: 1, fontSize: 15, color: InkColors.ink, lineHeight: 22 },
+  promoNote: { fontSize: 15, color: InkColors.ink2, lineHeight: 22 },
   iconWrap: { width: 56, height: 56, borderRadius: 28, backgroundColor: '#FBF3E2', alignItems: 'center', justifyContent: 'center' },
   title: { fontSize: 21, fontWeight: '900', color: InkColors.ink, textAlign: 'center' },
   store: { fontSize: 14, color: InkColors.ink2, fontWeight: '600' },

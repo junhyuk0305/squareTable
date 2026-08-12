@@ -38,6 +38,12 @@ type Status = 'loading' | 'signed_in' | 'signed_out';
 type SessionState = {
   status: Status;
   role: Role;
+  // 가입할 때 스스로 고른 역할(user_metadata.role). profiles.role 과 다른 개념이다 —
+  // handle_new_user 가 보안상 신규 프로필을 **무조건 junior** 로 만들기 때문에(권한상승 차단),
+  // 매장을 만들기 전의 사장은 profiles.role 만 보면 직원과 구별되지 않는다.
+  // "사장 계정은 매장을 만들고 직원은 합류만 한다"는 화면 규칙은 이 값으로 가른다.
+  // ★권한이 아니라 '의도'다. 실제 권한 판정에는 절대 쓰지 않는다(서버 RPC·RLS 가 담당).
+  signupRole: Role | null;
   userId: string;
   userName: string;
   unitId: string;
@@ -90,7 +96,9 @@ type SessionState = {
   isPhoneTaken: (phone: string) => Promise<'taken' | 'free' | 'unknown'>;
   // opts.isOnboarding=true(가입/첫매장 경로)면 첫 매장 생성 중 뜨는 plan_limit_store 등은 레이스 산물로 보고
   // 이미 만들어진 매장으로 조용히 복구한다. '스위처 매장 추가'(false)에선 plan_limit_store가 진짜 요금제 거절.
-  createStore: (storeName: string, industry: string, bizNo?: string, birthDate?: string, opts?: { isOnboarding?: boolean }) => Promise<{ error: string | null; inviteCode: string | null }>;
+  // code = 화면이 분기해야 하는 실패만 화이트리스트로 돌려준다(원문 메시지는 계속 화면에 안 나간다).
+  //   'PHONE_NOT_VERIFIED' → 매장 만들기 화면이 그 자리에서 전화번호 인증 단계를 연다.
+  createStore: (storeName: string, industry: string, bizNo?: string, birthDate?: string, opts?: { isOnboarding?: boolean }) => Promise<{ error: string | null; inviteCode: string | null; code?: string }>;
   // 합류는 이제 '신청'(pending) — 성공 시 pending=true. 사장 승인 후에야 unitId가 붙는다(남용 #2).
   joinByInvite: (code: string) => Promise<{ error: string | null; storeName: string | null; pending?: boolean }>;
   // 승인 대기 중 본인 신청 철회. 다른 매장에 다시 신청 가능.
@@ -406,6 +414,8 @@ async function loadProfile(
       inviteCode,
       userName: profile?.name ?? '',
       role,
+      // 가입 때 고른 역할(권한 아님 — 화면 분기 전용). 메타데이터가 없는 옛 계정·소셜 가입은 null.
+      signupRole: meta?.role === 'owner' ? 'owner' : meta?.role === 'junior' ? 'junior' : null,
       unitId,
       storeName,
       // 승인 대기 상태 반영(남용 #2). 승인돼 unitId가 붙으면 pending은 비운다(pendingStoreName도 정리).
@@ -443,6 +453,8 @@ let _authSubscribed = false;
 
 export const useSessionStore = create<SessionState>((set, get) => ({
   ...(HAS_SUPABASE ? { ...DEMO, status: 'loading' } : DEMO),
+  // 로그인 전엔 '가입 때 고른 역할'을 알 수 없다 → null. loadProfile 이 메타데이터에서 채운다.
+  signupRole: null,
 
   init: async () => {
     if (!HAS_SUPABASE) {
@@ -642,8 +654,16 @@ export const useSessionStore = create<SessionState>((set, get) => ({
           ? '매장은 최대 15개까지 만들 수 있어요.'
           : /birth_date_required|birth_date_invalid/.test(error.message)
           ? '생년월일을 확인할 수 없어요. 생년월일 8자리를 다시 확인해주세요.'
+          // 0088 게이트. 재시도로는 절대 안 풀리는데 폴백 문구가 '잠시 후 다시 시도'라 무한 재시도로 유도됐다.
+          // 문구만으로는 빠져나갈 수 없어 code 를 같이 돌려주고, 화면이 그 자리에서 인증 단계를 연다.
+          : /PHONE_NOT_VERIFIED/.test(error.message)
+          ? '전화번호 인증이 필요해요. 아래에서 인증을 마치면 매장을 만들 수 있어요.'
           : friendlyError(error.message, '매장을 만들지 못했어요. 잠시 후 다시 시도해 주세요.');
-        return { error: msg, inviteCode: null };
+        return {
+          error: msg,
+          inviteCode: null,
+          code: /PHONE_NOT_VERIFIED/.test(error.message) ? 'PHONE_NOT_VERIFIED' : undefined,
+        };
       }
       // 프로필 unit_id가 바뀌었으니 세션 상태 갱신
       const uid = get().userId;

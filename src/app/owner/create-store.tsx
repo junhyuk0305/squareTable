@@ -8,6 +8,8 @@ import { HeaderBackButton } from '@/components/HeaderBackButton';
 import { Appear } from '@/components/Appear';
 import { logout } from '@/lib/auth';
 import { formatBizNo, isValidBizNo, bizDigits } from '@/lib/utils/bizno';
+import { normalizePhone, formatPhone } from '@/lib/utils/validation';
+import { usePhoneOtp } from '@/lib/otp';
 import { INDUSTRIES } from '@/lib/config/industry';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Space } from '@/lib/theme/layout';
@@ -30,6 +32,16 @@ export default function OwnerCreateStore() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
+  // ── 전화번호 인증(0088 게이트) ────────────────────────────────────────────
+  // 서버가 PHONE_NOT_VERIFIED 로 막았을 때만 연다. 미리 열지 않는 이유: 인증 여부는 서버만 알고
+  // (phone_otps 는 클라가 못 읽는다), 무조건 열면 가입 폼에서 이미 인증한 대다수 사장에게 실 SMS를
+  // 한 번 더 보내게 된다. 그래서 '막혔을 때 그 자리에서 푼다'로 둔다.
+  const sessionPhone = useSessionStore((s) => s.phone);
+  const [needPhone, setNeedPhone] = useState(false);
+  const [phone, setPhone] = useState(formatPhone(sessionPhone ?? ''));
+  const [otpCode, setOtpCode] = useState('');
+  const otp = usePhoneOtp(normalizePhone(phone));
+
   const valid = !!storeName.trim() && !!industry && (!bizNo.trim() || isValidBizNo(bizNo));
 
   const submit = async () => {
@@ -37,11 +49,14 @@ export default function OwnerCreateStore() {
     if (!storeName.trim()) return setErr('매장 이름을 입력해주세요.');
     if (!industry) return setErr('업종을 선택해주세요.');
     if (bizNo.trim() && !isValidBizNo(bizNo)) return setErr('사업자등록번호 형식(10자리)을 확인해주세요. 비워두면 나중에 등록할 수 있어요.');
+    if (needPhone && !otp.verified) return setErr('전화번호 인증을 완료해주세요.');
     setBusy(true);
     // 매장 0개 강제 온보딩(첫매장 복구)이면 isOnboarding=true → 레이스성 plan_limit_store 를 복구.
     // 스위처 '매장 추가'(isAddingStore)면 false → 무료플랜의 진짜 요금제 거절을 그대로 노출.
     const cs = await createStore(storeName.trim(), industry, bizDigits(bizNo) || undefined, undefined, { isOnboarding: !isAddingStore });
     setBusy(false);
+    // 인증이 없어서 막힌 것이면 화면을 떠나지 않고 인증 단계를 연다(문의 안내로 끝내지 않는다).
+    if (cs.code === 'PHONE_NOT_VERIFIED') setNeedPhone(true);
     if (cs.error) return setErr(cs.error);
     router.replace({ pathname: '/owner/onboarding', params: { code: cs.inviteCode ?? '------', industry } });
   };
@@ -118,6 +133,61 @@ export default function OwnerCreateStore() {
             </Text>
           )}
 
+          {/* 전화번호 인증 — 서버 게이트에 막혔을 때만 나타난다. 가입 폼의 OTP 한 벌과 같은 훅(usePhoneOtp)을
+              쓴다(판정 복제 금지). 번호를 고치면 훅이 정규화 번호 비교로 sent/verified 를 스스로 푼다. */}
+          {needPhone && (
+            <View style={styles.otpBox}>
+              <Text style={styles.label}>전화번호 인증<Text style={styles.req}> *</Text></Text>
+              <Text style={styles.otpGuide}>매장을 만들려면 본인 확인이 한 번 필요해요.</Text>
+              <View style={styles.otpRow}>
+                <TextInput
+                  value={phone}
+                  onChangeText={(v) => { setErr(null); setPhone(formatPhone(v)); }}
+                  placeholder="010-1234-5678"
+                  placeholderTextColor={InkColors.ink3}
+                  keyboardType="phone-pad"
+                  maxLength={13}
+                  style={[styles.input, styles.otpInput]}
+                />
+                {!otp.verified && (
+                  <Pressable
+                    onPress={() => void otp.send()}
+                    disabled={otp.busy === 'send' || otp.countdown > 0}
+                    style={[styles.otpBtn, (otp.busy === 'send' || otp.countdown > 0) && styles.otpBtnDim]}
+                  >
+                    {otp.busy === 'send'
+                      ? <ActivityIndicator size="small" color={InkColors.ink2} />
+                      : <Text style={styles.otpBtnText}>{otp.countdown > 0 ? `재발송 ${otp.countdown}초` : otp.sent ? '인증번호 재발송' : '인증번호 받기'}</Text>}
+                  </Pressable>
+                )}
+              </View>
+              {otp.sent && !otp.verified && (
+                <View style={styles.otpRow}>
+                  <TextInput
+                    value={otpCode}
+                    onChangeText={(v) => setOtpCode(v.replace(/\D/g, '').slice(0, 6))}
+                    placeholder="인증번호 6자리"
+                    placeholderTextColor={InkColors.ink3}
+                    keyboardType="number-pad"
+                    maxLength={6}
+                    style={[styles.input, styles.otpInput]}
+                  />
+                  <Pressable
+                    onPress={() => void otp.verify(otpCode)}
+                    disabled={otp.busy === 'verify' || otpCode.length !== 6}
+                    style={[styles.otpBtn, (otp.busy === 'verify' || otpCode.length !== 6) && styles.otpBtnDim]}
+                  >
+                    {otp.busy === 'verify'
+                      ? <ActivityIndicator size="small" color={InkColors.ink2} />
+                      : <Text style={styles.otpBtnText}>인증하기</Text>}
+                  </Pressable>
+                </View>
+              )}
+              {otp.verified && <Text style={[styles.bizHint, styles.bizOk]}>✓ 인증된 번호예요. 이제 매장을 만들 수 있어요.</Text>}
+              {otp.msg && <Text style={styles.otpMsg}>{otp.msg}</Text>}
+            </View>
+          )}
+
           {err && <Text style={styles.err}>{err}</Text>}
           <Pressable
             disabled={busy || !valid}
@@ -160,6 +230,23 @@ const styles = StyleSheet.create({
   bizHint: { fontSize: 12, fontWeight: '600', marginTop: -2 },
   bizOk: { color: BrandColors.goodText },
   bizBad: { color: InkColors.ink3 },
+
+  // 전화번호 인증 — 막혔을 때만 나타나는 단계라 카드 안에서 한 덩어리로 묶어 구분한다.
+  otpBox: {
+    gap: Space.sm, marginTop: Space.md, paddingTop: Space.md,
+    borderTopWidth: 1, borderTopColor: InkColors.line,
+  },
+  otpGuide: { fontSize: 15, color: InkColors.ink2, lineHeight: 22 },
+  otpRow: { flexDirection: 'row', gap: Space.sm },
+  otpInput: { flex: 1 },
+  otpBtn: {
+    minWidth: 116, minHeight: 48, paddingHorizontal: Space.md, borderRadius: Radius.md,
+    borderWidth: 1, borderColor: InkColors.line, backgroundColor: '#FFFFFF',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  otpBtnDim: { opacity: 0.5 },
+  otpBtnText: { fontSize: 14, fontWeight: '800', color: InkColors.ink2 },
+  otpMsg: { fontSize: 12, fontWeight: '600', color: BrandColors.accentText },
 
   err: { fontSize: 15, color: BrandColors.accentText, fontWeight: '600', marginTop: 4 },
   primary: { marginTop: 12, backgroundColor: BrandColors.brand, paddingVertical: 16, borderRadius: Radius.md, alignItems: 'center' },

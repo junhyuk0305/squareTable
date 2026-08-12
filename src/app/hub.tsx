@@ -9,6 +9,7 @@ import { HubTopBar } from '@/components/hub/HubTopBar';
 import { HubTabBar } from '@/components/HubTabBar';
 import { OwnerStatusView } from '@/components/hub/OwnerStatusView';
 import { JuniorTodayView } from '@/components/hub/JuniorTodayView';
+import { NoStoreView } from '@/components/hub/NoStoreView';
 import { Appear } from '@/components/Appear';
 import { todayStr } from '@/lib/utils/attendance';
 import { InkColors } from '@/lib/theme/colors';
@@ -36,8 +37,9 @@ export default function HubScreen() {
   if (HAS_SUPABASE && needsProfileSetup({ status, phone, unitId, pendingUnitId })) {
     return <Redirect href="/complete-profile" />;
   }
-  // 매장 0곳(신규 가입·합류 대기)은 매장 탭이 빈 상태 CTA 를 담당 — 대시보드는 그릴 게 없다.
-  if (sessionStores.length === 0 && !unitId) return <Redirect href="/stores" />;
+  // 매장 0곳이어도 이 탭을 막지 않는다 — 예전엔 /stores 로 되돌려서, 아직 합류하지 않은 직원은
+  // 탭이 보이는데 누르면 튕겨 나왔다. 본문만 빈 상태로 바꾸고 다음 행동을 준다(NoStoreView).
+  const hasStore = sessionStores.length > 0 || !!unitId;
 
   const today = todayStr();
   const dateLabel = `${Number(today.slice(5, 7))}월 ${Number(today.slice(8, 10))}일 (${WEEKDAYS[new Date(`${today}T00:00:00`).getDay()]})`;
@@ -53,7 +55,7 @@ export default function HubScreen() {
             <Text style={styles.subtitle}>{dateLabel}</Text>
           </View>
         </Appear>
-        {isOwner ? <OwnerStatusView /> : <JuniorTodayView />}
+        {!hasStore ? <NoStoreView what="오늘 할 일과 근무 기록" /> : isOwner ? <OwnerStatusView /> : <JuniorTodayView />}
       </ScrollView>
       <HubTabBar role={isOwner ? 'owner' : 'junior'} />
     </SafeAreaView>

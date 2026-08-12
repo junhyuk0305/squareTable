@@ -22,6 +22,7 @@ import { canManage } from '@/lib/utils/roles';
 export default function OwnerLayout() {
   const status = useSessionStore((s) => s.status);
   const role = useSessionStore((s) => s.role);
+  const signupRole = useSessionStore((s) => s.signupRole);
   const unitId = useSessionStore((s) => s.unitId);
   const phone = useSessionStore((s) => s.phone);
   const pendingUnitId = useSessionStore((s) => s.pendingUnitId);
@@ -81,6 +82,14 @@ export default function OwnerLayout() {
   // birth_date_required 로 막히기 전에 정보를 채우게 한다. (직접 진입 시의 안전망; 주경로는 index.)
   if (HAS_SUPABASE && needsProfileSetup({ status, phone, unitId, pendingUnitId })) {
     return <Redirect href="/complete-profile" />;
+  }
+  // ★직원으로 가입한 계정은 매장을 만들지 않는다 — 가입에서 사장/직원을 갈라놓았으므로 URL 직접입력으로
+  //   매장 생성 화면에 닿는 것도 막는다. 판정은 '가입 때 고른 역할'(signupRole) — 매장 생성 전의 사장은
+  //   profiles.role 이 junior 라 role 로는 둘을 구별할 수 없다.
+  //   ⚠️ signupRole 이 null(메타데이터 없는 옛 계정·소셜 가입)이면 막지 않는다 — 의도를 증명할 수 없는
+  //     계정을 가두면 사장이 매장을 못 만드는 데드엔드가 된다(fail-open).
+  if (HAS_SUPABASE && status === 'signed_in' && !unitId && signupRole === 'junior' && role !== 'owner') {
+    return <Redirect href="/stores" />;
   }
   // 가입은 됐지만 매장 미연결(가게 생성 미완료/연결 해제) → 빈 대시보드로 떨어뜨리지 않고
   // 가게 만들기로 강제 유도(junior/join 의 사장 버전). create-store/onboarding 자체는 통과시킨다.

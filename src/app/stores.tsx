@@ -51,6 +51,13 @@ export default function StoresHub() {
   const pendingUnitId = useSessionStore((s) => s.pendingUnitId);
 
   const isOwner = role === 'owner';
+  // ★'매장을 만들 수 있는 사람인가'는 role 로 못 가른다 — handle_new_user 가 신규 프로필을 무조건
+  //   junior 로 만들어(권한상승 차단), 매장 생성 전의 사장은 DB 상 직원과 똑같다. 그래서 가입할 때
+  //   스스로 고른 역할(signupRole)을 본다. 직원으로 가입한 사람에겐 매장 만들기를 노출하지 않는다
+  //   — 가입에서 역할을 갈라놓고 허브에서 아무나 매장을 만들 수 있으면 그 구분이 무의미해진다.
+  //   ⚠️ 이건 화면 규칙이다. 서버 강제가 아니다(create_store 자체엔 역할 검사가 없다).
+  const signupRole = useSessionStore((s) => s.signupRole);
+  const canCreateStore = isOwner || signupRole === 'owner';
 
   // 사장은 fetchMyUnits로 채워진 stores. 직원은 아직 단일매장이라 활성 매장 1개로 구성
   // (Phase 0에서 직원 다매장 로드가 열리면 sessionStores로 통일된다).
@@ -112,6 +119,11 @@ export default function StoresHub() {
     void enter({ uid: u.unit_id, name: prefFor(u.unit_id).nickname || u.store_name || '내 매장' });
 
   const addStore = () => {
+    // ★첫 매장(매장 0곳)은 항상 무료 — 다점포 게이트를 태우지 않는다.
+    //   서버 create_store 도 isOnboarding 으로 첫 매장을 허용하는데(owner/create-store.tsx),
+    //   클라만 canUseMultistore 를 먼저 봐서 '매장이 하나도 없는 사람'을 결제화면으로 보냈다.
+    //   "2번째 매장부터 유료" 규칙이 1번째에 걸리던 것 — 게이트의 대상이 아니다.
+    if (stores.length === 0) return router.push('/owner/create-store');
     if (canUseMultistore(plan, freeMode)) return router.push('/owner/create-store');
     // iOS 네이티브: 결제 화면으로 유도하지 않는다(3.1.3(f)). 사실 고지만 남긴다.
     if (!SHOW_BILLING) return showToast('매장을 더 추가하려면 관리자에게 문의해 주세요.');
@@ -155,13 +167,15 @@ export default function StoresHub() {
               </View>
               <Text style={styles.emptyTitle}>아직 매장이 없어요</Text>
               <Text style={styles.emptyBody}>
-                {isOwner
+                {canCreateStore
                   ? '업종만 고르면 그 업종 기본 노하우가 담긴 매장이 만들어져요.'
                   : '사장님께 받은 초대코드로 매장에 합류하세요.'}
               </Text>
-              <Pressable onPress={isOwner ? addStore : joinStore} style={({ pressed }) => [styles.emptyBtn, pressed && { opacity: 0.88 }]}>
-                <Ionicons name={isOwner ? 'add' : 'enter-outline'} size={18} color={InkColors.ink} />
-                <Text style={styles.emptyBtnText}>{isOwner ? '매장 만들기' : '매장 합류'}</Text>
+              {/* 사장 계정은 매장 만들기, 직원 계정은 합류 — 한 사람에게 한 경로만 준다.
+                  판정이 role 이 아니라 canCreateStore 인 이유는 위 정의 참고(매장 생성 전 사장 = role junior). */}
+              <Pressable onPress={canCreateStore ? addStore : joinStore} style={({ pressed }) => [styles.emptyBtn, pressed && { opacity: 0.88 }]}>
+                <Ionicons name={canCreateStore ? 'add' : 'enter-outline'} size={18} color={InkColors.ink} />
+                <Text style={styles.emptyBtnText}>{canCreateStore ? '매장 만들기' : '매장 합류'}</Text>
               </Pressable>
             </View>
           </Appear>

@@ -7,6 +7,7 @@ import { needsProfileSetup } from '@/lib/store/profileSetup';
 import { HAS_SUPABASE } from '@/lib/supabase';
 import { HubTopBar } from '@/components/hub/HubTopBar';
 import { HubTabBar } from '@/components/HubTabBar';
+import { NoStoreView } from '@/components/hub/NoStoreView';
 import { JuniorGrowthView } from '@/components/hub/JuniorGrowthView';
 import { OwnerKnowhowHubView } from '@/components/hub/OwnerKnowhowHubView';
 import { Appear } from '@/components/Appear';
@@ -33,7 +34,8 @@ export default function HubGrowthScreen() {
   if (HAS_SUPABASE && needsProfileSetup({ status, phone, unitId, pendingUnitId })) {
     return <Redirect href="/complete-profile" />;
   }
-  if (sessionStores.length === 0 && !unitId) return <Redirect href="/stores" />;
+  // 매장 0곳이어도 막지 않는다(hub.tsx 와 같은 규칙) — 본문만 빈 상태로.
+  const hasStore = sessionStores.length > 0 || !!unitId;
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
@@ -48,7 +50,7 @@ export default function HubGrowthScreen() {
             </Text>
           </View>
         </Appear>
-        {isOwner ? <OwnerKnowhowHubView /> : <JuniorGrowthView />}
+        {!hasStore ? <NoStoreView what={isOwner ? '매장 노하우' : '내가 남긴 기록'} /> : isOwner ? <OwnerKnowhowHubView /> : <JuniorGrowthView />}
       </ScrollView>
       <HubTabBar role={isOwner ? 'owner' : 'junior'} />
     </SafeAreaView>
