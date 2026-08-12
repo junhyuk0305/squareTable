@@ -135,6 +135,9 @@ async function main() {
   const bRows = await mineA(jB);
   check('받은 직원 A: 자기 발송 1건이 보인다', aRows.length === 1 && aRows[0].user_id === aId, `n=${aRows.length}`);
   check('A 는 남의 발송을 못 본다', aRows.every((r) => r.user_id === aId));
+  // ★마감을 직원이 읽을 수 있어야 카드에 "○월 ○일까지"를 띄울 수 있다(2026-08-12).
+  //   못 읽으면 사장이 정한 "3일 안에"가 사장만 아는 숫자가 된다.
+  check('A 가 마감(due_on)을 읽는다', aRows[0]?.due_on === TOMORROW, `${aRows[0]?.due_on} vs ${TOMORROW}`);
 
   // ── ② 안 받은 직원 ──────────────────────────────────────────────────────
   console.log('— ② 안 보낸 직원 —');

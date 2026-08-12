@@ -343,7 +343,11 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
       //   "8월 15일에 보내요"라고 예약해 둔 것이 오늘 바로 떠 버린다(발송 화면과 직원 화면의 불일치).
       //   원장 행이 아예 없는 코스 = 0139 이전에 만들어진 것 → 예전 규칙 그대로 보인다(하위 호환).
       const sends = assignments.filter((a) => a.courseId === c.id);
-      if (sends.length > 0 && !sends.some((a) => a.userId === userId && !!a.sentAt)) continue;
+      const mySent = sends
+        .filter((a) => a.userId === userId && !!a.sentAt)
+        .sort((x, y) => (x.sentAt ?? '').localeCompare(y.sentAt ?? ''))
+        .at(-1);
+      if (sends.length > 0 && !mySent) continue;
 
       const list = courseEntriesOf(courseEntries, c.id)
         .map((e) => ({ id: e.entryId, text: titleOf(e.entryId) }))
@@ -364,7 +368,8 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
       // 할 게 없으면 조용히 사라진다(1회성=전부 통과 · 주기=다시 확인할 것 없음).
       if (!items.some((it) => it.state === 'next' || it.state === 'due' || it.state === 'asked')) continue;
       items.forEach((it) => { if (it.state === 'asked') placedAsked.add(it.id); });
-      cards.push({ course: { key: c.key, name: c.name, dueDays }, items });
+      // dueOn = **내가 마지막으로 받은 발송**의 마감. 다시 알리기로 새 발송이 오면 그쪽이 이긴다.
+      cards.push({ course: { key: c.key, name: c.name, dueDays, dueOn: mySent?.dueOn ?? null }, items });
     }
 
     // 어느 카드에도 못 실린 요청(코스에서 빠졌거나 그 코스 카드가 안 뜨는 경우) — 사람이 기다리는

@@ -27,7 +27,24 @@ export type TrainingCardCourse = {
   name: string;
   /** null = 1회성(한 번 통과하면 끝) · N = N일마다 다시 확인. 카드의 말투가 이 값으로 갈린다. */
   dueDays: number | null;
+  /**
+   * 내가 받은 발송의 마감일 "YYYY-MM-DD"(0139 quiz_assignments.due_on). null = 마감 없음.
+   * ★사장이 "3일 안에"로 정해도 직원 화면에 안 보이면 그건 사장만 아는 숫자다(2026-08-12 수정).
+   */
+  dueOn?: string | null;
 };
+
+/**
+ * 마감 꼬리표. **색 단독으로 구분하지 않는다** — 문구 자체가 상태를 말한다(복잡도 §4).
+ * 재촉하지 않는다: 지난 것도 "안 했어요"가 아니라 사실만 적는다(워딩 §6 평가 금지).
+ */
+function deadlineLabel(dueOn: string | null | undefined, todayYmd: string): { text: string; tone: 'plain' | 'soon' | 'past' } | null {
+  if (!dueOn) return null;
+  if (dueOn < todayYmd) return { text: '기한이 지났어요', tone: 'past' };
+  if (dueOn === todayYmd) return { text: '오늘까지', tone: 'soon' };
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dueOn);
+  return { text: m ? `${Number(m[2])}월 ${Number(m[3])}일까지` : `${dueOn}까지`, tone: 'plain' };
+}
 
 const STATE_CHIP: Record<TrainingCardItem['state'], { label: string; color: string; bg: string }> = {
   passed: { label: '통과', color: BrandColors.goodText, bg: '#E6F1EA' },
@@ -55,6 +72,9 @@ export function TrainingCard({
   onStartCheck: (entryId: string) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
+  // KST 오늘 "YYYY-MM-DD". 마감은 날짜 비교라 시각이 필요 없다(서버 due_on 도 KST 날짜).
+  // 렌더 중 Date.now() 금지(컴파일러 순수성) → 마운트 1회. 날짜가 바뀌는 순간은 앱이 다시 뜬다.
+  const [kstToday] = useState(() => new Date(Date.now() + 9 * 3600_000).toISOString().slice(0, 10));
   // 요청(asked)이 주기(due)보다 먼저 — 사람이 기다리는 것부터.
   const next = items.find((it) => it.state === 'asked') ?? items.find((it) => it.state === 'next' || it.state === 'due');
   if (!next) return null;
@@ -69,6 +89,7 @@ export function TrainingCard({
   const leftCount = oneShot ? items.filter((it) => it.state !== 'passed').length : dueCount;
   const badge = `${leftCount}개 남았어요`;
   const ctaLabel = oneShot ? '혼자 할 수 있어요' : '다시 확인하기';
+  const deadline = deadlineLabel(course.dueOn, kstToday);
 
   return (
     <View style={st.card}>
@@ -81,6 +102,26 @@ export function TrainingCard({
       <Text style={st.next} numberOfLines={2}>
         {oneShot ? '다음 퀴즈' : next.state === 'asked' ? '사장님이 요청했어요' : '다시 확인할 노하우'} · {next.text}
       </Text>
+
+      {/* 마감 — 사장이 정한 "언제까지"를 직원도 안다. 없으면 줄 자체가 없다(마감 없는 퀴즈가 기본). */}
+      {deadline ? (
+        <View style={st.dueRow}>
+          <Ionicons
+            name={deadline.tone === 'past' ? 'alert-circle-outline' : 'time-outline'}
+            size={14}
+            color={deadline.tone === 'past' ? BrandColors.badText : deadline.tone === 'soon' ? '#8a5a12' : InkColors.ink3}
+          />
+          <Text
+            style={[
+              st.dueText,
+              deadline.tone === 'soon' && { color: '#8a5a12' },
+              deadline.tone === 'past' && { color: BrandColors.badText },
+            ]}
+          >
+            {deadline.text}
+          </Text>
+        </View>
+      ) : null}
 
       <View style={st.btnRow}>
         <Pressable
@@ -147,6 +188,9 @@ const st = StyleSheet.create({
   title: { flex: 1, fontSize: 13, fontWeight: '800', color: InkColors.ink },
   progress: { fontSize: 12, fontWeight: '800', color: BrandColors.goodText },
   next: { fontSize: 15, fontWeight: '700', color: InkColors.ink, lineHeight: 21 },
+  // 마감 꼬리표 — 상태 라벨이라 본문 15sp 하한 대상이 아니다(복잡도 §4 "보조").
+  dueRow: { flexDirection: 'row', alignItems: 'center', gap: Space.xs },
+  dueText: { fontSize: 13, fontWeight: '700', color: InkColors.ink3, lineHeight: 18 },
   btnRow: { flexDirection: 'row', gap: Space.sm, marginTop: Space.xs },
   softBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, minHeight: 48,
