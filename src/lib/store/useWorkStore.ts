@@ -120,10 +120,16 @@ function pendingAssignmentIds(
   entryIds: string[],
 ): string[] {
   if (entryIds.length === 0) return [];
+  // ★내 행만. 사장 계정에는 RLS 로 **매장 전체** 발송이 내려오므로(qz_select) 이 필터가 없으면
+  //   사장이 자청 퀴즈를 풀 때마다 남의 발송 수만큼 RPC 를 헛으로 두드린다(전부 false 로 튕기지만).
+  const me = useSessionStore.getState().userId;
+  if (!me) return [];
   const want = new Set(entryIds);
   const courses = new Set(s.courseEntries.filter((e) => want.has(e.entryId)).map((e) => e.courseId));
   if (courses.size === 0) return [];
-  return s.assignments.filter((a) => courses.has(a.courseId) && !!a.sentAt && !a.completedAt).map((a) => a.id);
+  return s.assignments
+    .filter((a) => a.userId === me && courses.has(a.courseId) && !!a.sentAt && !a.completedAt)
+    .map((a) => a.id);
 }
 /** 정기 훈련 due 판정 — 통과 기록이 없거나 마지막 통과가 매장 주기(dueDays)보다 오래됐으면 다시 확인할 때. */
 export function isRegularDue(verifiedAt: string | undefined, now: number, dueDays: number): boolean {

@@ -2119,6 +2119,9 @@ export function subscribeWork(onChange: () => void): () => void {
     .on('postgres_changes', { event: '*', schema: 'public', table: 'work_template_knowhow' }, onChange)
     // 0111 publication 멤버(AGENTS.md ⑤) — 직원이 통과하면 사장 배지가 즉시 바뀐다.
     .on('postgres_changes', { event: '*', schema: 'public', table: 'knowhow_understanding' }, onChange)
+    // 0139 발송 원장 — 크론이 sent_at 을 채우는 순간 직원 화면에 퀴즈 카드가 떠야 한다.
+    // 구독이 없으면 푸시는 가는데 앱은 그대로라 "알림은 왔는데 앱엔 없다"가 된다(재하이드레이트 전까지).
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'quiz_assignments' }, onChange)
     .subscribe();
   return () => {
     supabase.removeChannel(ch);

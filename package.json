@@ -62,6 +62,7 @@
     "qa:training": "node scripts/qa-training.mjs",
     "qa:training-browser": "node scripts/qa-training-browser.mjs",
     "qa:quiz-schedule": "node scripts/qa-quiz-schedule.mjs",
+    "qa:quiz-junior": "node scripts/qa-quiz-junior.mjs",
     "qa:multistore": "node scripts/qa-multistore.mjs",
     "qa:junior-multistore": "node scripts/qa-junior-multistore.mjs",
     "qa:roles": "node scripts/qa-roles.mjs",
