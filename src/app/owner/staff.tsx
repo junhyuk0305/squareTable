@@ -253,7 +253,7 @@ export default function OwnerStaffScreen() {
           <Appear delay={100}>
           <View style={styles.pendingWrap}>
             <SectionLabel title={`합류 신청 (${pending.length}명)`} hint="승인해야 합류돼요" />
-            <View style={styles.list}>
+            <View style={[styles.list, styles.pendingList]}>
               {pending.map((p) => (
                 <View key={p.id} style={styles.staffRow}>
                   <Avatar name={p.name} size={40} fontSize={15} />
@@ -479,6 +479,8 @@ const styles = StyleSheet.create({
   quizDesc: { fontSize: 12.5, color: InkColors.ink3, marginTop: 1 },
 
   pendingWrap: { gap: 8 },
+  // 흰 카드가 세로로 이어지면 "승인해야 진행되는 항목"이 나열 속에 묻힌다 → 옐로 틴트로 떼어놓는다.
+  pendingList: { backgroundColor: BrandColors.yellowSoft, borderColor: BrandColors.gold },
   rejectBtn: { paddingVertical: 7, paddingHorizontal: 12, borderRadius: Radius.sm, borderWidth: 1, borderColor: InkColors.line },
   rejectText: { fontSize: 13, fontWeight: '700', color: InkColors.ink3 },
   approveBtn: { paddingVertical: 7, paddingHorizontal: 14, borderRadius: Radius.sm, backgroundColor: BrandColors.brand },

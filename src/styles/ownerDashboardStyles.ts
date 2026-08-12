@@ -56,8 +56,15 @@ export const styles = StyleSheet.create({
   // InboxHeroCard(H4)·MiniStats(I3)·ActionRow(A1)와 '질문 0건 조용한 카드'가 홈에서 빠졌다.
   // 질문 0건 상태는 히어로가 직접 말한다("없어요" + 노하우 남기기 CTA) — 블록을 하나 더 쓰지 않는다.
 
-  // ② 오늘 업무 3건 — 섹션 라벨은 카드 밖, 목록은 카드 안.
+  // ② '오늘' 카드 — 섹션 라벨은 카드 밖, [근무 머리줄 + 업무 3건]이 카드 안.
   moreLink: { fontSize: 13, fontWeight: '700', color: InkColors.ink2 },
+  // 머리줄: 오늘 누가 나와 있나. 누르면 근무표(전체보기는 업무로 가므로 목적지가 겹치지 않는다).
+  // 보조 표기(위치·상태 꼬리표)라 본문 15sp 하한 대상이 아니다.
+  dutyRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, minHeight: 40, paddingVertical: Space.sm },
+  dutyRowDivider: { borderBottomWidth: 1, borderBottomColor: InkColors.line },
+  dutyText: { flex: 1, minWidth: 0, fontSize: 13, lineHeight: 18, fontWeight: '700', color: InkColors.ink2 },
+  // 완료 꼬리표(완료자·시각) — 감시원칙 D1이 드러내라고 정한 값. 역시 보조 표기.
+  taskDoneBy: { flexShrink: 0, fontSize: 12, fontWeight: '700', color: InkColors.ink3 },
   taskCard: {
     backgroundColor: InkColors.bg,
     borderRadius: Radius.md,

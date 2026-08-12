@@ -3,12 +3,13 @@ import { useMemo } from 'react';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useUnknownQueueStore } from '@/lib/store/useUnknownQueueStore';
 import { useAttendanceStore } from '@/lib/store/useAttendanceStore';
-import { useWorkStore, occursOn, taskVisibleTo } from '@/lib/store/useWorkStore';
+import { useWorkStore, useDayparts, daypartRoutineTemplates, occursOn, taskVisibleTo } from '@/lib/store/useWorkStore';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { useStaffStore } from '@/lib/store/useStaffStore';
 import { useSuggestionStore } from '@/lib/store/useSuggestionStore';
+import { useScheduleStore, shiftsOn, pendingApprovals } from '@/lib/store/useScheduleStore';
 import { useQuizBoard } from '@/lib/quiz/useQuizBoard';
-import { todayStr } from '@/lib/utils/attendance';
+import { todayStr, hhmm } from '@/lib/utils/attendance';
 import { gradableTasks, staffBehind, type StaffBehind } from '@/lib/utils/taskProgress';
 import { sortByUrgency } from '@/lib/utils/unknownQuery';
 import type { UnknownQuery } from '@/types';
@@ -27,8 +28,24 @@ export type OwnerDashboardData = {
   loaded: boolean;
   entriesCount: number;
   needsReviewCount: number;
-  /** 오늘 떠야 하는 업무 — 홈 목록(3건 + 전체보기)용. 완료 여부까지 붙여 표시 전용으로 내보낸다. */
-  todayTasks: { id: string; text: string; done: boolean }[];
+  /**
+   * 오늘 떠야 하는 업무 — 홈 목록(3건 + 전체보기)용. 완료 여부까지 붙여 표시 전용으로 내보낸다.
+   * ★완료자·완료시각을 같이 낸다 — 감시원칙 D1이 "완료 시각 노출은 감시 위반이 아니라 의도된 기능"으로
+   *   정한 값이다. 예전엔 `!!`로 boolean 으로 눌러 DoneMark 의 byName·at 을 버리고 있었다.
+   */
+  todayTasks: { id: string; text: string; done: boolean; doneBy?: string; doneAt?: string; assignee?: string }[];
+  /** 오늘 출근한 사람(출근 시각순) — 홈 '오늘' 카드 머리줄. */
+  duty: { staffId: string; name: string; at: string }[];
+  /**
+   * 오늘 근무 예정인데 아직 출근 전인 인원 **수**.
+   * ★이름을 내지 않는다 — 개인 근태 지적은 홈이 할 일이 아니다(D1이 연 것은 완료 시각까지다).
+   *   누가 안 왔는지는 근무표에서 본다.
+   */
+  dutyPlanned: number;
+  /** 근무표·출퇴근이 둘 다 도착했는가 — duty 줄을 그려도 되는지(0명 단정 방지). */
+  dutyLoaded: boolean;
+  /** 직원끼리 합의가 끝나 사장 승인만 남은 교대 — 홈 '다음 행동' 1순위. */
+  pendingSwaps: number;
   pending: number;
   /** 사장 홈 히어로 = 가장 오래 기다린 미답변 질문 1건. 받은질문 화면의 hero와 **같은 1건**(sortByUrgency SSOT). */
   heroQuery?: UnknownQuery;
@@ -65,17 +82,69 @@ export function useOwnerDashboardData(): OwnerDashboardData {
   // 2026-08-07: 같은 이유로 근무 중 인원(working)·userName·storeName·heroCareerDays도 제거했다 —
   // MiniStats가 사라진 뒤 사장 홈에서 읽는 곳이 하나도 없었다(출퇴근 현황은 /owner/attendance가 소유).
   // 매장 진행률: 오늘 떠야 하는 것 중 가게 전체(shared) + 내 private(대상=나 or 내가 배정). (직원 자가등록은 제외)
+  //
+  // ★2026-08-12: 홈이 `work_templates` 만 보고 있어 **매장 공통 루틴(schedule_config.dayparts)이 통째로
+  //   빠져 있었다.** 온보딩이 심어준 오픈·마감 루틴은 업무 탭에서만 보이고, 직접 만든 업무가 0건인
+  //   신규 매장은 홈 '오늘' 카드가 조건에 안 걸려 **섹션째로 사라졌다**(빈 화면으로 보이던 그 증상).
+  //   파생 함수는 업무 탭(boardTemplates)과 **같은 daypartRoutineTemplates 하나**를 쓴다 — 규칙을 두 벌로 만들지 않는다.
+  //   방(roomId) 필터는 걸지 않는다: 사장 홈이 말하는 것은 "오늘 이 매장의 업무 전부"다.
+  const dayparts = useDayparts();
+  const allTemplates = useMemo(() => [...daypartRoutineTemplates(dayparts), ...templates], [dayparts, templates]);
   const todaysTasks = useMemo(
-    () => templates.filter((t) => occursOn(t, today) && taskVisibleTo(t, userId)),
-    [templates, today, userId],
+    () => allTemplates.filter((t) => occursOn(t, today) && taskVisibleTo(t, userId)),
+    [allTemplates, today, userId],
   );
   // 홈 목록용 — 남은 일이 먼저 보이도록 미완료를 위로. todaysTasks(가시성 필터)를 그대로 재사용한다.
   const todayTasks = useMemo(() => {
     const doneToday = doneMap[today] ?? {};
+    // 담당자 이름 — 아직 아무도 안 끝낸 일이 "누구 몫인지"를 홈에서 바로 읽게 한다(완료 후엔 완료자가 그 자리를 쓴다).
+    const nameOfMember = (id: string) => (id === userId ? '나' : staff.find((x) => x.id === id)?.name ?? '직원');
     return todaysTasks
-      .map((t) => ({ id: t.id, text: t.text, done: !!doneToday[t.id] }))
+      .map((t) => {
+        const mark = doneToday[t.id];
+        return {
+          id: t.id,
+          text: t.text,
+          done: !!mark,
+          doneBy: mark?.byName,
+          doneAt: mark?.at ? hhmm(mark.at) : undefined,
+          assignee: t.ownerId ? nameOfMember(t.ownerId) : undefined,
+        };
+      })
       .sort((a, b) => Number(a.done) - Number(b.done));
-  }, [todaysTasks, doneMap, today]);
+  }, [todaysTasks, doneMap, today, staff, userId]);
+
+  // ── 오늘 근무 ──────────────────────────────────────────────────────────────
+  // 2026-08-12: 홈에서 '출근 현황'을 별도 블록으로 되살리지 않고 '오늘' 카드 머리줄로 흡수했다.
+  // (블록 수는 그대로, 정보만 는다. 08-07에 뺐던 것을 같은 형태로 되돌리지 않기 위한 선택.)
+  const shiftTemplates = useScheduleStore((s) => s.templates);
+  const swaps = useScheduleStore((s) => s.swaps);
+  const scheduleLoaded = useScheduleStore((s) => s.loaded);
+  const records = useAttendanceStore((s) => s.records);
+
+  // 오늘 실제 근무자 — 승인된 교대까지 반영된 shiftsOn 이 판정 SSOT다(근무표 화면과 같은 것).
+  const todayShifts = useMemo(
+    () => shiftsOn(shiftTemplates, swaps, today),
+    [shiftTemplates, swaps, today],
+  );
+
+  // 출근 = check_in 이 찍힌 오늘 기록. 퇴근한 사람도 포함한다("오늘 나온 사람"이 홈이 말하는 것).
+  const duty = useMemo(() => {
+    const nameOf = (id: string) => staff.find((x) => x.id === id)?.name ?? '직원';
+    return records
+      .filter((r) => r.date === today && r.check_in)
+      .sort((a, b) => a.check_in!.localeCompare(b.check_in!))
+      .map((r) => ({ staffId: r.staff_id, name: nameOf(r.staff_id), at: hhmm(r.check_in!) }));
+  }, [records, today, staff]);
+
+  // 근무 예정인데 아직 안 찍은 인원 수. 한 사람이 하루 두 타임이어도 1명으로 센다(Set).
+  const dutyPlanned = useMemo(() => {
+    const arrived = new Set(duty.map((d) => d.staffId));
+    return new Set(todayShifts.map((s) => s.workerStaffId).filter((id) => !arrived.has(id))).size;
+  }, [todayShifts, duty]);
+
+  // 사장 승인만 남은 교대 — 근무표 화면과 같은 판정(pendingApprovals).
+  const pendingSwaps = useMemo(() => pendingApprovals(swaps, today).length, [swaps, today]);
 
   // 2026-08-06: 담당자별 배정 요약(assign)은 홈에서 OwnerWorkValueCard가 사라지며 소비자가 없어져 제거했다.
   // "누가 무슨 일"은 /owner/work(AssignBoard)가 담당한다.
@@ -141,6 +210,11 @@ export function useOwnerDashboardData(): OwnerDashboardData {
     entriesCount: entries.filter((e) => e.status !== 'draft').length,
     needsReviewCount,
     todayTasks,
+    duty,
+    dutyPlanned,
+    // 두 축이 다 와야 "0명"이 참이 된다 — 위 loaded 에 섞지 않는다(섞으면 홈 전체가 근무표를 기다린다).
+    dutyLoaded: scheduleLoaded && attendanceLoaded,
+    pendingSwaps,
     pending,
     heroQuery,
     pendingSuggestions,

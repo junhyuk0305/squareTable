@@ -27,7 +27,7 @@ import { WorkChat } from '@/components/work/WorkChat';
 import { RoomBar } from '@/components/work/RoomBar';
 import { NoticePanel } from '@/components/work/NoticePanel';
 import { TodoScreen } from '@/components/work/TodoScreen';
-import { AssignBoard } from '@/components/work/AssignBoard';
+import { WorkSettingsPanel } from '@/components/work/WorkSettingsPanel';
 import { TaskComposerModal } from '@/components/work/TaskComposerModal';
 import { INVITE_FIRST, type Member } from '@/components/work/MentionInput';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
@@ -36,7 +36,7 @@ import { HEADER_EDGE_GUTTER } from '@/lib/theme/layout';
 import { todayStr, tsMs } from '@/lib/utils/attendance';
 import { asMemberRole, canManage } from '@/lib/utils/roles';
 
-type ViewKey = 'chat' | 'notice' | 'todo' | 'assign';
+type ViewKey = 'chat' | 'notice' | 'todo' | 'settings';
 
 // 채팅에 한 번에 보낼 수 있는 사진 최대 장수.
 const MAX_CHAT_PHOTOS = 10;
@@ -158,12 +158,12 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
     [currentRoomId, isDefaultRoom],
   );
 
-  // 다른 화면(홈 '오늘 할일'·'안 읽은 공지'·'오늘 일 배분' 등)에서 ?view=todo|notice|assign 로 들어오면 해당 패널을 연다.
-  // assign 은 세그먼트에서는 없어졌지만(§14) 화면은 그대로 살아 있다 — 기존 링크를 죽이지 않고
-  // '루틴 업무 설정'으로 착지시키고, 뒤로가기는 새 자리인 할일로 돌려보낸다. 사장 전용은 그대로.
+  // 다른 화면(홈 '오늘 할일'·'안 읽은 공지' 등)에서 ?view=todo|notice 로 들어오면 해당 패널을 연다.
+  // ?view=assign(담당자별 보드)은 2026-08-12에 없어졌다 — 루틴의 담당자를 '업무 설정'이 직접 갖게 되면서
+  // 같은 것을 두 번 만지는 자리가 사라졌다. 옛 링크는 죽이지 않고 할일로 착지시킨다.
   const { view: viewParam } = useLocalSearchParams<{ view?: string }>();
   const paramView: ViewKey | null =
-    viewParam === 'todo' || viewParam === 'notice' ? viewParam : viewParam === 'assign' && isOwner ? 'assign' : null;
+    viewParam === 'todo' || viewParam === 'notice' ? viewParam : viewParam === 'assign' ? 'todo' : null;
   const initialView: ViewKey = paramView ?? 'chat';
 
   const today = todayStr();
@@ -176,8 +176,8 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
   const [prevViewParam, setPrevViewParam] = useState(viewParam);
   if (viewParam !== prevViewParam) {
     setPrevViewParam(viewParam);
-    if (viewParam === 'todo' || viewParam === 'notice' || (viewParam === 'assign' && isOwner)) {
-      setView(viewParam as ViewKey);
+    if (paramView) {
+      setView(paramView);
       setOpenedExternally(true);
     }
   }
@@ -187,10 +187,10 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
     setView(v);
   }, []);
   // 패널 닫기 — 딥링크로 들어왔으면 진입 화면으로, 아니면 채팅으로.
-  // 담당자별 보드(assign)는 이제 할일 목록 아래 행으로만 들어오므로 뒤로가기도 할일로 돌아간다.
+  // 업무 설정(settings)은 할일 화면의 버튼으로만 들어오므로 뒤로가기도 할일로 돌아간다.
   const closePanel = useCallback(() => {
     if (openedExternally && router.canGoBack()) router.back();
-    else setView(view === 'assign' ? 'todo' : 'chat');
+    else setView(view === 'settings' ? 'todo' : 'chat');
   }, [openedExternally, view]);
   const [composer, setComposer] = useState<{ open: boolean; date?: string; text?: string; assigneeId?: string; editTemplate?: TaskTemplate }>({ open: false });
   const [uploadingId, setUploadingId] = useState<string | null>(null);
@@ -596,7 +596,7 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
           headerTitleAlign: 'left' as const,
           headerTitle: () => (
             <Text style={st.headerTitle}>
-              {view === 'notice' ? '공지' : view === 'assign' ? '루틴 업무 설정' : '할일'}
+              {view === 'notice' ? '공지' : view === 'settings' ? '업무 설정' : '할일'}
             </Text>
           ),
           headerRight: () => null,
@@ -611,7 +611,8 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
     <SafeAreaView style={st.safe} edges={['bottom']}>
       <Stack.Screen options={headerOptions} />
 
-      {(view === 'chat' || view === 'assign') && <RoomBar role={sessionRole} me={userId} />}
+      {/* 업무 설정은 매장 전체 공통 설정이라 방 바를 두지 않는다(방마다 다른 것으로 오해할 자리). */}
+      {view === 'chat' && <RoomBar role={sessionRole} me={userId} />}
 
       {/* 어떤 코스 카드가 몇 장 뜨는지는 trainingCards 메모가 판정(하한·주기·1회성 우선·요청 예외). */}
       {view === 'chat' &&
@@ -680,20 +681,9 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
         </Appear>
       )}
 
-      {view === 'assign' && isOwner && (
+      {view === 'settings' && isOwner && (
         <Appear delay={0} style={{ flex: 1 }}>
-        <AssignBoard
-          templates={boardTemplates}
-          done={done}
-          today={today}
-          me={userId}
-          nameOf={nameOf}
-          uploadingId={uploadingId}
-          onToggle={toggleBoardTask}
-          onAttachPhoto={(templateId, date) => attachPhoto(templateId, date)}
-          onAssign={(assigneeId) => setComposer({ open: true, date: today, assigneeId })}
-          onEditTask={(t) => setComposer({ open: true, editTemplate: t })}
-        />
+        <WorkSettingsPanel members={members} me={userId} onSaved={() => setView('todo')} />
         </Appear>
       )}
 
@@ -711,7 +701,7 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
           onAttachPhoto={(templateId, date) => attachPhoto(templateId, date)}
           onAddForDate={(date) => setComposer({ open: true, date })}
           onEditTask={(t) => setComposer({ open: true, editTemplate: t })}
-          onOpenRepeat={isOwner ? () => openPanel('assign') : undefined}
+          onOpenSettings={isOwner ? () => openPanel('settings') : undefined}
           knowhowOf={knowhowOf}
           onOpenKnowhow={openKnowhow}
           understoodNames={understoodNames}

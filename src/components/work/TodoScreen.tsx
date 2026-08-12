@@ -5,10 +5,10 @@ import { Ionicons } from '@expo/vector-icons';
 import { Appear } from '@/components/Appear';
 import { StoredImage } from '@/components/StoredImage';
 import { WeekStrip, type WeekDay } from '@/components/blocks/WeekStrip';
-import { DaypartSettingsSheet } from '@/components/work/DaypartSettingsSheet';
 import { useDayparts, isRoutineTaskId, occursOn, taskVisibleTo, type TaskTemplate, type DoneMark } from '@/lib/store/useWorkStore';
 import { InkColors, BrandColors, CategoryColors } from '@/lib/theme/colors';
 import { Elevation, Radius } from '@/lib/theme/elevation';
+import { Space } from '@/lib/theme/layout';
 import { hhmm } from '@/lib/utils/attendance';
 import { confirmAction } from '@/lib/utils/confirm';
 
@@ -17,6 +17,8 @@ const MINE = CategoryColors.Event; // 테라코타 = 내가 등록(나만)
 const WD = ['일', '월', '화', '수', '목', '금', '토'];
 /** 달력 접기·펴기 높이 애니메이션(ms). height는 네이티브 드라이버를 못 써서 JS 드라이버 고정 — 웹에서도 같은 코드로 돈다. */
 const FOLD_MS = 200;
+/** 우하단 할일 추가 FAB 지름 — 터치 타깃 하한(48dp) 정확히. 노하우 탭 FAB(56)보다 작게 둔다. */
+const FAB_SIZE = 48;
 
 function ymd(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -49,7 +51,7 @@ export function TodoScreen({
   onAttachPhoto,
   onAddForDate,
   onEditTask,
-  onOpenRepeat,
+  onOpenSettings,
   knowhowOf,
   onOpenKnowhow,
   understoodNames,
@@ -68,8 +70,8 @@ export function TodoScreen({
   onAddForDate: (date: string) => void;
   /** 연필 → 수정/삭제 시트. (X 즉시삭제를 대체 — 회의 반영) */
   onEditTask: (t: TaskTemplate) => void;
-  /** 목록 아래 '루틴 업무 설정' 행 → 담당자별 보드. 없으면 행이 안 뜬다(사장·매니저 전용). */
-  onOpenRepeat?: () => void;
+  /** 상단 '업무 설정' 버튼 → 카테고리·루틴 업무·담당자 화면. 없으면 버튼이 안 뜬다(사장·매니저 전용). */
+  onOpenSettings?: () => void;
   /** 이 업무에 붙은 노하우(제목) — 카드에 칩으로 노출. 없으면 칩 안 뜸(0069). */
   knowhowOf?: (templateId: string) => { id: string; title: string }[];
   /** 칩 탭 → 노하우 원문 열람(EntryDetailModal). */
@@ -87,9 +89,6 @@ export function TodoScreen({
   const [folded, setFolded] = useState(true);
   const [cursor, setCursor] = useState(() => new Date(`${today}T00:00:00`)); // 보고 있는 월
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
-  const [hideDone, setHideDone] = useState(false);
-  const [setMenu, setSetMenu] = useState(false);
-  const [daypartEditor, setDaypartEditor] = useState(false);
 
   // 내가 볼 수 있는 할일 — taskVisibleTo SSOT(0017 RLS 정합).
   const visible = useMemo(() => templates.filter((t) => taskVisibleTo(t, me)), [templates, me]);
@@ -166,9 +165,8 @@ export function TodoScreen({
   const dayDone = done[selected] ?? {};
   const knownIds = new Set(dayparts.map((d) => d.id));
   const mkGroup = (key: string, label: string, secTasks: TaskTemplate[]) => {
-    const tasks = secTasks.filter((t) => !hideDone || !dayDone[t.id]);
     const doneN = secTasks.filter((t) => dayDone[t.id]).length;
-    return { key, label, tasks, total: secTasks.length, doneN };
+    return { key, label, tasks: secTasks, total: secTasks.length, doneN };
   };
   const groups = [
     ...dayparts.map((d) => mkGroup(d.id, d.label, dayTasks.filter((t) => t.section === d.id))),
@@ -215,12 +213,18 @@ export function TodoScreen({
           <Pressable onPress={() => shiftBy(1)} hitSlop={8} accessibilityRole="button" accessibilityLabel={folded ? '다음 주' : '다음 달'}>
             <Ionicons name="chevron-forward" size={18} color={InkColors.ink2} />
           </Pressable>
-          <Pressable onPress={() => { setCursor(new Date(`${today}T00:00:00`)); setSelected(today); }} style={s.todayBtn}>
-            <Text style={s.todayText}>오늘</Text>
-          </Pressable>
-          <Pressable onPress={() => setSetMenu((v) => !v)} hitSlop={8} style={{ marginLeft: 4 }} accessibilityRole="button" accessibilityLabel="할일 화면 설정">
-            <Ionicons name="ellipsis-horizontal" size={18} color={InkColors.ink2} />
-          </Pressable>
+          <View style={s.calActions}>
+            {/* 업무 설정(사장·매니저) — 카테고리·루틴 업무·담당자를 한 화면에서 정한다.
+                옛 ⋯ 메뉴(안에 '업무 카테고리 설정'이 숨어 있었다)와 '루틴 업무 설정' 행을 함께 대체한다. */}
+            {onOpenSettings && (
+              <Pressable onPress={onOpenSettings} style={({ pressed }) => [s.setBtn, pressed && { opacity: 0.85 }]} accessibilityRole="button">
+                <Text style={s.setBtnText}>업무 설정</Text>
+              </Pressable>
+            )}
+            <Pressable onPress={() => { setCursor(new Date(`${today}T00:00:00`)); setSelected(today); }} style={s.todayBtn}>
+              <Text style={s.todayText}>오늘</Text>
+            </Pressable>
+          </View>
         </View>
 
         {/* 접힘 = 주간 스트립. 펼침 = 월 그리드. 둘 다 항상 마운트해 두고 높이만 서로 반대로 움직인다. */}
@@ -269,32 +273,6 @@ export function TodoScreen({
         </Pressable>
       </View>
 
-      {/* 설정 메뉴 */}
-      {setMenu && (
-        <>
-          <Pressable style={s.menuBackdrop} onPress={() => setSetMenu(false)} />
-          <View style={s.setMenu}>
-            <Pressable onPress={() => setHideDone((v) => !v)} style={({ pressed }) => [s.setMi, pressed && { backgroundColor: InkColors.paper }]}>
-              <Ionicons name={hideDone ? 'eye-off-outline' : 'checkmark-done-outline'} size={16} color={InkColors.ink2} />
-              <Text style={s.setMiText}>완료 항목 숨기기</Text>
-              <Text style={s.setMiTag}>{hideDone ? '켬' : '끔'}</Text>
-            </Pressable>
-            {isOwner && (
-              <Pressable onPress={() => { setSetMenu(false); setDaypartEditor(true); }} style={({ pressed }) => [s.setMi, pressed && { backgroundColor: InkColors.paper }]}>
-                <Ionicons name="pricetags-outline" size={16} color={InkColors.ink2} />
-                <Text style={s.setMiText}>업무 카테고리 설정</Text>
-                <Ionicons name="chevron-forward" size={14} color={InkColors.ink3} style={{ marginLeft: 'auto' }} />
-              </Pressable>
-            )}
-            <View style={s.setSep} />
-            <View style={s.legendRow}>
-              <View style={s.legendItem}><View style={[s.legendDot, { backgroundColor: SHARED }]} /><Text style={s.legendText}>매장 전체</Text></View>
-              <View style={s.legendItem}><View style={[s.legendDot, { backgroundColor: MINE }]} /><Text style={s.legendText}>내가 등록(나만)</Text></View>
-            </View>
-          </View>
-        </>
-      )}
-
       {/* 선택일 헤더 */}
       <View style={s.dayBar}>
         <Text style={s.dayTitle}>{selLabel}</Text>
@@ -331,8 +309,10 @@ export function TodoScreen({
                     const isMine = (t.scope ?? 'shared') === 'private';
                     // 매장 전체 공용 루틴(dpr_) — 수정/삭제는 '업무 카테고리 설정'에서(합성 항목이라 여기선 연필 숨김).
                     const isRoutine = isRoutineTaskId(t.id);
-                    // 배정된 할일(개인인데 주인이 내가 아님) → 사장 시점에서 "담당 ○○"로 표시.
-                    const assignedName = isMine && t.ownerId && t.ownerId !== me ? nameOf?.(t.ownerId) : undefined;
+                    // 담당자가 있는 할일 → "담당 ○○". 개인 할일(private)뿐 아니라 **담당자를 정해둔 루틴**도
+                    // 여기 걸린다(루틴은 shared 라 전원에게 보이고 꼬리표만 붙는다 — daypartRoutineTemplates).
+                    const assignedName = t.ownerId && t.ownerId !== me ? nameOf?.(t.ownerId) : undefined;
+                    const assignedToMe = !!t.ownerId && t.ownerId === me;
                     const photoUrl = (mark as (DoneMark & { photoUrl?: string }) | undefined)?.photoUrl;
                     // 수정/삭제 권한 = 사장 or 본인이 등록/배정받은 개인 할일. (X 즉시삭제 → 연필로 수정·삭제)
                     const canManage = (isOwner || (isMine && (t.ownerId === me || t.createdBy === me))) && !isRoutine;
@@ -391,7 +371,7 @@ export function TodoScreen({
                           )}
                         </View>
                         {photoUrl ? <StoredImage stored={photoUrl} style={s.thumb} viewOnPress accessibilityLabel="완료 사진 크게 보기" /> : null}
-                        {isRoutine ? <Text style={s.routineTag}>루틴</Text> : assignedName ? <Text style={s.assignTag}>담당 {assignedName}</Text> : isMine ? <Text style={s.mineTag}>내 할일</Text> : null}
+                        {assignedName ? <Text style={s.assignTag}>담당 {assignedName}</Text> : assignedToMe || isMine ? <Text style={s.mineTag}>내 할일</Text> : isRoutine ? <Text style={s.routineTag}>루틴</Text> : null}
                         {onAttachPhoto && !on && (
                           <Pressable onPress={() => onAttachPhoto(t.id, selected)} hitSlop={6} disabled={!!uploadingId} accessibilityRole="button" accessibilityLabel={`${t.text} 사진으로 완료`}>
                             <Ionicons name={uploadingId === t.id ? 'cloud-upload-outline' : 'camera-outline'} size={16} color={InkColors.ink3} />
@@ -410,29 +390,20 @@ export function TodoScreen({
             </Appear>
           );
         })}
-        <Pressable onPress={() => onAddForDate(selected)} style={({ pressed }) => [s.addBtn, pressed && { opacity: 0.7 }]}>
-          <Ionicons name="add" size={17} color={InkColors.ink} />
-          <Text style={s.addText}>이 날 할일 추가</Text>
-        </Pressable>
-        {/* 누가 어떤 루틴을 맡는지 정하는 자리 — 예전엔 별도 칸이었고, 지금은 목록 아래 행 하나다(§14).
-            ※ 열리는 화면은 담당자별 보드이고 **오늘 뜨는 것만**(occursOn) 보여준다. 전체 루틴 목록이 아니다.
-            ※ 반복 주기 자체(매주 어느 요일)는 위 '이 날 할일 추가' 컴포저의 '매주 반복'에서 정한다. */}
-        {onOpenRepeat && (
-          <Pressable
-            onPress={onOpenRepeat}
-            style={({ pressed }) => [s.repeatRow, pressed && { opacity: 0.7 }]}
-            accessibilityRole="button"
-            accessibilityLabel="루틴 업무 설정"
-          >
-            <Ionicons name="repeat" size={17} color={InkColors.ink} />
-            <Text style={s.repeatRowText}>루틴 업무 설정</Text>
-            <Ionicons name="chevron-forward" size={16} color={InkColors.ink3} style={{ marginLeft: 'auto' }} />
-          </Pressable>
-        )}
-        <View style={{ height: 20 }} />
+        <View style={{ height: FAB_SIZE + Space.gutter * 2 }} />
       </ScrollView>
 
-      {daypartEditor && <DaypartSettingsSheet onClose={() => setDaypartEditor(false)} />}
+      {/* 할일 추가 FAB — ★ScrollView '밖'(형제)이라 스크롤과 같이 움직이지 않는다.
+          목록 끝에 있던 '이 날 할일 추가' 버튼을 대체한다(같은 일을 하는 버튼이 둘이면 어느 걸 눌러야 하나가 생긴다).
+          누르면 **선택한 날짜**로 열린다 — 오늘이 아닐 수도 있어서 라벨을 접근성 이름에 그대로 싣는다. */}
+      <Pressable
+        onPress={() => onAddForDate(selected)}
+        accessibilityRole="button"
+        accessibilityLabel={`${selLabel} 할일 추가`}
+        style={({ pressed }) => [s.fab, pressed && { opacity: 0.85 }]}
+      >
+        <Ionicons name="add" size={24} color={InkColors.ink} />
+      </Pressable>
     </View>
   );
 }
@@ -441,7 +412,11 @@ const s = StyleSheet.create({
   calWrap: { backgroundColor: InkColors.cream, borderBottomWidth: 1, borderBottomColor: InkColors.line },
   calBar: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 8 },
   month: { fontSize: 15, fontWeight: '800', color: InkColors.ink },
-  todayBtn: { marginLeft: 'auto', borderWidth: 1, borderColor: InkColors.line, backgroundColor: InkColors.bg, borderRadius: Radius.pill, paddingHorizontal: 9, paddingVertical: 3 },
+  // 오른쪽 액션 묶음 — marginLeft:auto 를 **여기 하나만** 둔다(버튼마다 주면 auto 끼리 여백을 나눠 가져 벌어진다).
+  calActions: { marginLeft: 'auto', flexDirection: 'row', alignItems: 'center', gap: Space.xs },
+  setBtn: { borderWidth: 1, borderColor: BrandColors.gold, backgroundColor: BrandColors.yellowSoft, borderRadius: Radius.pill, paddingHorizontal: 9, paddingVertical: 3 },
+  setBtnText: { fontSize: 11, fontWeight: '800', color: InkColors.ink },
+  todayBtn: { borderWidth: 1, borderColor: InkColors.line, backgroundColor: InkColors.bg, borderRadius: Radius.pill, paddingHorizontal: 9, paddingVertical: 3 },
   todayText: { fontSize: 11, fontWeight: '700', color: InkColors.ink2 },
 
   calGrid: { paddingHorizontal: 10, paddingBottom: 8 },
@@ -461,16 +436,7 @@ const s = StyleSheet.create({
   foldHandle: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, minHeight: 32 },
   foldText: { fontSize: 13, fontWeight: '700', color: InkColors.ink3 },
 
-  menuBackdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 5 },
-  setMenu: { position: 'absolute', right: 12, top: 44, backgroundColor: InkColors.bg, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md, padding: 6, width: 220, zIndex: 6, ...Elevation.e3 },
-  setMi: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 10, borderRadius: Radius.sm },
-  setMiText: { fontSize: 13, fontWeight: '600', color: InkColors.ink },
-  setMiTag: { marginLeft: 'auto', fontSize: 11, color: InkColors.ink3 },
-  setSep: { height: 1, backgroundColor: InkColors.line, marginVertical: 4, marginHorizontal: 8 },
-  legendRow: { flexDirection: 'row', gap: 14, padding: 10 },
-  legendItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   legendDot: { width: 10, height: 10, borderRadius: 3 },
-  legendText: { fontSize: 11, fontWeight: '700', color: InkColors.ink2 },
 
   dayBar: { flexDirection: 'row', alignItems: 'baseline', gap: 8, paddingHorizontal: 15, paddingTop: 11, paddingBottom: 4, backgroundColor: InkColors.paper },
   dayTitle: { fontSize: 16, fontWeight: '800', color: InkColors.ink },
@@ -514,9 +480,20 @@ const s = StyleSheet.create({
   assignTag: { fontSize: 10, fontWeight: '800', color: SHARED, backgroundColor: CategoryColors.Routine + '1f', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 5 },
   routineTag: { fontSize: 10, fontWeight: '800', color: InkColors.ink2, backgroundColor: InkColors.bgSoft, paddingHorizontal: 6, paddingVertical: 1, borderRadius: 5 },
 
-  addBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, borderWidth: 1.5, borderStyle: 'dashed', borderColor: InkColors.ink3, borderRadius: Radius.md, paddingVertical: 13 },
-  addText: { fontSize: 13, fontWeight: '700', color: InkColors.ink },
+  // 할일 추가 FAB — 이 화면의 Primary. 노하우 탭 FAB와 같은 옐로 원형이되 지름만 작다.
+  fab: {
+    position: 'absolute',
+    right: Space.gutter,
+    bottom: Space.gutter,
+    width: FAB_SIZE,
+    height: FAB_SIZE,
+    borderRadius: Radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: BrandColors.yellow,
+    borderWidth: 1,
+    borderColor: BrandColors.yellowDeep,
+    ...Elevation.ey,
+  },
 
-  repeatRow: { flexDirection: 'row', alignItems: 'center', gap: 9, backgroundColor: InkColors.bg, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md, paddingHorizontal: 14, minHeight: 50, ...Elevation.e1 },
-  repeatRowText: { fontSize: 15, fontWeight: '700', color: InkColors.ink },
 });

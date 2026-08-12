@@ -22,7 +22,9 @@ import { formatAsked } from '@/lib/utils/time';
 import { styles } from '@/styles/ownerDashboardStyles';
 
 /** 홈 목록은 3건 + "전체보기 ›" — 전 화면 공통 배치 규칙(2026-08-05 블록 어휘). */
-const HOME_LIST_LIMIT = 3;
+// 홈 목록 상한. ui.md 배치 규칙 3의 기본값은 3이지만 2026-08-12에 **4**로 올렸다 —
+// 오픈 루틴만 4개인 매장이 흔해 3이면 한 카테고리도 다 못 보여줬다. 직원 홈(junior/home.tsx)과 같은 값을 쓴다.
+const HOME_LIST_LIMIT = 4;
 
 export default function OwnerDashboardScreen() {
   const router = useRouter();
@@ -33,10 +35,28 @@ export default function OwnerDashboardScreen() {
     pending,
     heroQuery,
     todayTasks,
+    duty,
+    dutyPlanned,
+    dutyLoaded,
+    pendingSwaps,
     pendingSuggestions,
     missedKnowhowCount,
     behindStaff,
   } = useOwnerDashboardData();
+
+  /**
+   * '오늘' 카드 머리줄 — "이수민 07:00 · 박지원 12:00 · 1명 예정".
+   * 이름은 2명까지만 쓰고 그 뒤는 수로 접는다(460px 한 줄 유지).
+   * ★출근 전 인원은 **수만** 쓴다("1명 예정"). "아직"·"미출근"으로 쓰지 않는다 —
+   *   근무 시작 전인 사람까지 지각처럼 읽히고, 개인 근태 지적은 홈이 할 일이 아니다.
+   */
+  const dutyText = useMemo(() => {
+    const parts = duty.slice(0, 2).map((d) => `${d.name} ${d.at}`);
+    if (duty.length > 2) parts.push(`외 ${duty.length - 2}명`);
+    if (dutyPlanned > 0) parts.push(`${dutyPlanned}명 예정`);
+    return parts.join(' · ');
+  }, [duty, dutyPlanned]);
+  const showDuty = dutyLoaded && (duty.length > 0 || dutyPlanned > 0);
 
   // 합류 승인 대기 인원 — 사장이 승인을 놓치면 직원이 합류 못 한 채 갇힌다.
   // A1 액션 로우가 사라지면서(ADR-004) 이 배지는 서브내비 '직원' 칸으로 옮겼다.
@@ -86,6 +106,17 @@ export default function OwnerDashboardScreen() {
    * 0건이면 AlertRow가 스스로 렌더하지 않으므로 마지막 항목은 count 0인 자리표시다.
    */
   const nextAction = useMemo(() => {
+    // 1순위 = 교대 승인. 직원 둘이 합의를 끝내고 사장 손만 남은 상태라 대기 비용이 가장 크다
+    // (2026-08-12 추가 전에는 이 신호가 홈에 아예 없어, 사장이 근무표를 열지 않으면 영영 몰랐다).
+    if (pendingSwaps > 0) {
+      return {
+        label: '승인을 기다리는 교대',
+        count: pendingSwaps,
+        unit: '건' as const,
+        icon: 'swap-horizontal' as const,
+        onPress: () => router.push('/owner/schedule'),
+      };
+    }
     if (pendingSuggestions > 0) {
       return {
         label: '답장 없는 직원 제안',
@@ -121,7 +152,7 @@ export default function OwnerDashboardScreen() {
       icon: 'person-circle' as const,
       onPress: () => router.push('/owner/staff'),
     };
-  }, [pendingSuggestions, needsReviewCount, missedKnowhowCount, behindStaff, router]);
+  }, [pendingSwaps, pendingSuggestions, needsReviewCount, missedKnowhowCount, behindStaff, router]);
 
   const tourSteps: TourStep[] = useMemo(
     () => [
@@ -241,23 +272,49 @@ export default function OwnerDashboardScreen() {
             (배치 규칙: 화면당 카드 1~2개는 남긴다 — 카드는 '이건 특별하다'는 신호다).
             ★노하우 건수로 게이트하지 않는다 — 업무와 노하우는 별개 축이라, 노하우 0건 매장이
             업무를 등록해도 홈에서 사라지는 버그였다. 뜨는 조건은 "오늘 업무가 있는가" 하나다. */}
-        {loaded && todayTasks.length > 0 && (
+        {loaded && (todayTasks.length > 0 || showDuty) && (
           <Appear style={styles.section}>
             <SectionLabel
               icon="today-outline"
-              title="오늘 업무"
+              title="오늘"
               trailing={
-                <Pressable
-                  onPress={() => goToTab('/owner/work')}
-                  accessibilityRole="button"
-                  accessibilityLabel="오늘 업무 전체보기"
-                  style={({ pressed }) => pressed && { opacity: 0.6 }}
-                >
-                  <Text style={styles.moreLink}>전체보기 ›</Text>
-                </Pressable>
+                // 전체보기는 **업무**로만 간다 — 업무가 0건이면 빈 화면에 착지하므로 그때는 걸지 않는다.
+                // 근무는 머리줄 자체가 근무표로 가는 별도 컨트롤이다(목적지가 겹치지 않게 나눴다).
+                todayTasks.length > 0 ? (
+                  <Pressable
+                    onPress={() => goToTab('/owner/work')}
+                    accessibilityRole="button"
+                    accessibilityLabel="오늘 업무 전체보기"
+                    style={({ pressed }) => pressed && { opacity: 0.6 }}
+                  >
+                    {/* 잘린 개수를 말한다 — "4개가 전부"와 "4개만 보여주는 중"은 화면만 봐선 구분이 안 된다. */}
+                    <Text style={styles.moreLink}>
+                      {todayTasks.length > HOME_LIST_LIMIT ? `전체보기 (${todayTasks.length - HOME_LIST_LIMIT}개 더) ›` : '전체보기 ›'}
+                    </Text>
+                  </Pressable>
+                ) : undefined
               }
             />
             <View style={styles.taskCard}>
+              {/* 머리줄: 오늘 누가 나와 있나. 출퇴근·근무표가 둘 다 도착했을 때만 그린다(0명 단정 방지). */}
+              {showDuty && (
+                <Pressable
+                  onPress={() => router.push('/owner/schedule')}
+                  accessibilityRole="button"
+                  accessibilityLabel="오늘 근무 보기"
+                  style={({ pressed }) => [
+                    styles.dutyRow,
+                    todayTasks.length > 0 && styles.dutyRowDivider,
+                    pressed && { opacity: 0.6 },
+                  ]}
+                >
+                  <Ionicons name="time-outline" size={16} color={InkColors.ink3} />
+                  <Text style={styles.dutyText} numberOfLines={1}>
+                    {dutyText}
+                  </Text>
+                  <Ionicons name="chevron-forward" size={14} color={InkColors.ink3} />
+                </Pressable>
+              )}
               {todayTasks.slice(0, HOME_LIST_LIMIT).map((t, i) => (
                 <View key={t.id} style={[styles.taskRow, i > 0 && styles.taskRowDivider]}>
                   <Ionicons
@@ -268,6 +325,16 @@ export default function OwnerDashboardScreen() {
                   <Text style={[styles.taskText, t.done && styles.taskTextDone]} numberOfLines={1}>
                     {t.text}
                   </Text>
+                  {/* 오른쪽 꼬리표 한 자리 — 끝났으면 '누가 언제'(D1: 완료 시각은 숨기지 않는다),
+                      아직이면 '담당 ○○'. 홈에서 누가 뭘 맡았고 어디까지 됐는지를 한 줄로 읽는다. */}
+                  {t.done && t.doneBy ? (
+                    <Text style={styles.taskDoneBy} numberOfLines={1}>
+                      {t.doneBy}
+                      {t.doneAt ? ` ${t.doneAt}` : ''}
+                    </Text>
+                  ) : !t.done && t.assignee ? (
+                    <Text style={styles.taskDoneBy} numberOfLines={1}>담당 {t.assignee}</Text>
+                  ) : null}
                 </View>
               ))}
             </View>

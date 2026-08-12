@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useAttendanceStore, type AttendanceRecord } from '@/lib/store/useAttendanceStore';
-import { useWorkStore, occursOn, trainingCourseViews, courseEntriesOf } from '@/lib/store/useWorkStore';
+import { useWorkStore, useDayparts, daypartRoutineTemplates, occursOn, taskVisibleTo, trainingCourseViews, courseEntriesOf } from '@/lib/store/useWorkStore';
 import { useScheduleStore } from '@/lib/store/useScheduleStore';
 import { todayStr } from '@/lib/utils/attendance';
 
@@ -60,10 +60,15 @@ export function useJuniorHomeData(): JuniorHomeData {
   const working = !!openRec;
 
   // 오늘 할일 진행 — 오늘 떠야 하는 것(occursOn) + 본인이 볼 수 있는 것(shared/내 private)만.
+  // ★2026-08-12: 사장 홈과 **같은 누락**이 여기에도 있었다 — work_templates 만 봐서 매장 공통 루틴
+  //   (schedule_config.dayparts)이 직원 홈에도 안 잡혔다. 파생은 daypartRoutineTemplates 하나로 통일한다.
+  //   가시성 판정도 인라인 복제를 걷고 taskVisibleTo(SSOT)를 부른다 — 같은 규칙이 두 벌이면 조용히 어긋난다.
   const dayDone = doneMap[today] ?? {};
+  const dayparts = useDayparts();
   const myTodaysTasks = useMemo(
-    () => templates.filter((t) => occursOn(t, today) && (t.scope !== 'private' || t.ownerId === userId || t.createdBy === userId)),
-    [templates, today, userId],
+    () =>
+      [...daypartRoutineTemplates(dayparts), ...templates].filter((t) => occursOn(t, today) && taskVisibleTo(t, userId)),
+    [dayparts, templates, today, userId],
   );
   const taskTotal = myTodaysTasks.length;
   // taskDone 은 taskRemain 을 만들려고만 쓴다 — 2026-08-07 정본 §12로 홈 섹션이 3개로 줄며

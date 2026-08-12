@@ -187,7 +187,8 @@ export type TaskTemplate = {
   sectionNote?: string;
   /** 'shared'=가게 전체(사장) / 'private'=나만 보기(주니어 강제). 미지정=shared(레거시). */
   scope?: TaskScope;
-  /** private 대상자(이 사람의 '내 할일'). 본인은 항상 조회 가능. */
+  /** private 대상자(이 사람의 '내 할일'). 본인은 항상 조회 가능.
+   *  shared 인데 ownerId 가 있으면 = **담당자만 정해둔 매장 공통 일**(루틴) — 전원에게 보이고 꼬리표만 붙는다. */
   ownerId?: string;
   /** 작성자 userId. private는 owner_id 또는 created_by가 본인일 때만 보인다(사장 자동조회 폐기). */
   createdBy?: string;
@@ -268,7 +269,10 @@ export function daypartRoutineTemplates(dayparts: Daypart[]): TaskTemplate[] {
         id: `${ROUTINE_ID_PREFIX}${r.id}`,
         section: dp.id,
         text: r.text,
+        // 담당자를 정해도 scope 는 'shared' 그대로 — 루틴은 매장 공통 일이라 전원에게 보여야 하고
+        // ownerId 는 '담당 ○○' 꼬리표에만 쓴다(private 로 바꾸면 담당자 외에는 아예 안 보인다).
         scope: 'shared',
+        ...(r.assigneeId ? { ownerId: r.assigneeId } : null),
         recurrence: { weekly: [0, 1, 2, 3, 4, 5, 6] },
       });
     }

@@ -10,6 +10,7 @@ import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { useWorkStore } from '@/lib/store/useWorkStore';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { Appear, stagger } from '@/components/Appear';
+import { Vanish } from '@/components/Vanish';
 import { EmptyState } from '@/components/EmptyState';
 import { InfoDot } from '@/components/InfoDot';
 import { VerifyBadge } from '@/components/VerifyBadge';
@@ -177,6 +178,9 @@ export function OwnerKnowhowBrowse({
   const [query, setQuery] = useState('');
   const [activeCat, setActiveCat] = useState<string | null>(null); // null = 전체(단일 선택). 카테고리(section) 이름.
   const [catSheet, setCatSheet] = useState(false); // 카테고리 편집 시트
+  // 확인 완료를 누르면 이 항목은 목록에서 빠진다 — 먼저 접히는 것을 보여주고(Vanish) 그 다음 검증을 쓴다.
+  // 데이터를 먼저 바꾸면 optimisticPatch가 같은 틱에 행을 지워 애니메이션이 아예 안 보인다.
+  const [leaving, setLeaving] = useState<string | null>(null);
 
   // 딥링크로 다시 들어오면(푸시 → /owner/inbox → ?seg=todo) 화면이 이미 떠 있어 useState 초기값이
   // 안 먹는다. prop이 **실제로 바뀐 렌더에서만** 칸을 옮긴다 — 값이 그대로면 사용자의 칸 선택을
@@ -311,7 +315,7 @@ export function OwnerKnowhowBrowse({
   // role=button 이 겹쳐 탭이 편집 진입으로 샌다.
   const verifyButton = (e: PlaybookEntry) => (
     <Pressable
-      onPress={() => verify(e)}
+      onPress={() => setLeaving(e.id)}
       accessibilityRole="button"
       accessibilityLabel={`${e.title} 확인 완료로 표시`}
       style={({ pressed }) => [styles.verifyBtn, pressed && { opacity: 0.85 }]}
@@ -327,10 +331,18 @@ export function OwnerKnowhowBrowse({
     return (
       <Appear key={e.id} delay={stagger(i)}>
         {needsVerify(e) ? (
-          <View style={styles.entryWrap}>
+          // 접힘이 끝나면 검증을 쓴다. leaving 해제는 실패해 되돌아온 행이 다시 접히는 것을 막는다.
+          <Vanish
+            hidden={leaving === e.id}
+            onDone={() => {
+              verify(e);
+              setLeaving(null);
+            }}
+            style={styles.entryWrap}
+          >
             <EntryRow e={e} usedBy={usedBy} onPress={() => onSelect(e.id)} divider={false} />
             {verifyButton(e)}
-          </View>
+          </Vanish>
         ) : (
           <EntryRow e={e} usedBy={usedBy} onPress={() => onSelect(e.id)} />
         )}

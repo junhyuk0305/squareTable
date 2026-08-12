@@ -11,7 +11,10 @@
 // ⚠️ 이 파일은 RN/zustand/alias(@/) 의존이 "없는" 순수함수만 둔다 — node 로 진리표를 직접 회귀
 //   테스트하기 때문(scripts/qa-daypart-labels.mjs · npm run qa:daypart). import 를 추가하지 말 것.
 
-export type DaypartRoutine = { id: string; text: string };
+// assigneeId = 이 루틴을 맡은 사람(userId). **가시성은 안 바꾼다** — 루틴은 매장 공통 일이라
+// 담당자가 있어도 전원에게 뜨고 '담당 ○○' 꼬리표만 붙는다(담당자가 빠지면 다른 사람이 대신 처리 가능).
+// 그래서 개인 할일(scope:'private' + ownerId)과 달리 scope 는 'shared' 로 유지한다.
+export type DaypartRoutine = { id: string; text: string; assigneeId?: string };
 export type Daypart = { id: string; label: string; routines: DaypartRoutine[] };
 
 /** 기본 시간대 id — 기존에 저장된 work_templates.section 값과 맞춘다(마이그레이션 불필요). */
@@ -58,10 +61,12 @@ function normalizeRoutines(raw: unknown, dpId: string): DaypartRoutine[] {
   const out: DaypartRoutine[] = [];
   raw.forEach((r, i) => {
     if (!r || typeof r !== 'object') return;
-    const rec = r as { id?: unknown; text?: unknown };
+    const rec = r as { id?: unknown; text?: unknown; assigneeId?: unknown };
     const text = typeof rec.text === 'string' ? rec.text : '';
     const id = typeof rec.id === 'string' && rec.id ? rec.id : `${dpId}_rt_${i}`;
-    out.push({ id, text });
+    const assigneeId = typeof rec.assigneeId === 'string' && rec.assigneeId ? rec.assigneeId : undefined;
+    // 담당자 없는 루틴에 키를 만들지 않는다 — 옛 저장본과 JSON 이 그대로 같아야 한다(qa:daypart 진리표).
+    out.push(assigneeId ? { id, text, assigneeId } : { id, text });
   });
   return out;
 }
@@ -115,7 +120,10 @@ export function sanitizeDayparts(items: Daypart[]): Daypart[] {
     let id = it.id && !seen.has(it.id) ? it.id : localId('dp');
     seen.add(id);
     const routines = (it.routines ?? [])
-      .map((r) => ({ id: r.id || localId('rt'), text: (r.text ?? '').trim() }))
+      .map((r) => {
+        const base = { id: r.id || localId('rt'), text: (r.text ?? '').trim() };
+        return r.assigneeId ? { ...base, assigneeId: r.assigneeId } : base;
+      })
       .filter((r) => r.text.length > 0);
     out.push({ id, label, routines });
   }
