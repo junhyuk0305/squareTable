@@ -6,7 +6,8 @@ import { Space } from '@/lib/theme/layout';
 export const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: InkColors.cream },
 
-  scroll: { padding: 20, gap: 18 },
+  // ★위 패딩은 주지 않는다 — 상단바(AppTopBar)가 스크롤 밖에서 자기 아래 여백을 이미 갖는다(사장 홈과 동일).
+  scroll: { paddingHorizontal: Space.gutter, paddingBottom: Space.gutter, gap: 18 },
   greet: { fontSize: 16, fontWeight: '700', color: InkColors.ink2 },
 
   // 섹션: [밖 라벨] + [안 카드] 묶음. scroll의 gap이 섹션 사이를 벌리고, 이 gap이 라벨↔카드를 붙인다.

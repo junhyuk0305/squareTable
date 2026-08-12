@@ -7,7 +7,9 @@ export const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: InkColors.cream },
   // 스크롤 컨테이너는 패딩만 — 섹션 간격(gap)은 단일 자식인 콘텐츠 래퍼(scrollInner)가 갖는다.
   // (contentContainer는 자식이 하나라 gap이 무효 → 래퍼로 일원화해 중복/혼동 제거)
-  scroll: { padding: 20 },
+  // ★위 패딩은 주지 않는다 — 상단바(AppTopBar)가 스크롤 밖에서 자기 아래 여백을 이미 갖는다.
+  // 여기서 또 주면 허브보다 콘텐츠가 20px 더 내려간다.
+  scroll: { paddingHorizontal: Space.gutter, paddingBottom: Space.gutter },
   scrollInner: { gap: 18 },
   // 섹션: [밖 라벨] + [안 카드] 묶음
   section: { gap: 8 },

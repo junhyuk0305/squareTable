@@ -47,8 +47,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: SCREEN_GUTTER,
-    paddingTop: 6,
-    paddingBottom: 10,
+    // 여백은 허브 상단바(HubTopBar)와 같은 자리다 — 허브에선 화면 scroll 의 padding(gutter)과
+    // gap(lg)이 그 값을 준다. 여기선 상단바가 스크롤 밖이라 **자기가** 들고 있어야 같은 높이에 앉는다.
+    // (매장에 들어갈 때 상단바가 위로 튀어 올라가 보이던 원인 — 08-08 통일 때 여백은 안 맞췄다.)
+    paddingTop: Space.gutter,
+    paddingBottom: Space.lg,
     backgroundColor: InkColors.cream,
   },
   // 간격은 허브 상단바(HubTopBar)와 같게 — 두 층이 같은 리듬을 갖는다.
