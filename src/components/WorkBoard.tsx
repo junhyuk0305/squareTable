@@ -109,6 +109,8 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
   const courses = useWorkStore((s) => s.courses);
   const trainingRequests = useWorkStore((s) => s.trainingRequests);
   const quizCounts = useWorkStore((s) => s.quizCounts);
+  // 발송 원장(0139) — 직원은 RLS 로 본인 것만 내려온다. 카드 노출 판정에 쓴다.
+  const assignments = useWorkStore((s) => s.assignments);
   // 노하우 첨부 검색·칩 제목 해석용 — 업무 화면에서도 노하우를 로드해 둔다(coalesce 로 중복 방지).
   const entries = usePlaybookStore((s) => s.entries);
   const addEntry = usePlaybookStore((s) => s.add);
@@ -336,6 +338,13 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
     const cards: { course: TrainingCardCourse; items: TrainingCardItem[] }[] = [];
     const placedAsked = new Set<string>();
     for (const c of trainingCourseViews(courses)) {
+      // ★발송 원장(0139)이 있는 퀴즈는 **나에게 실제로 나간 것만** 뜬다.
+      //   원장을 안 보면 사장이 2명만 골라 보낸 퀴즈가 3번째 직원에게도 보이고,
+      //   "8월 15일에 보내요"라고 예약해 둔 것이 오늘 바로 떠 버린다(발송 화면과 직원 화면의 불일치).
+      //   원장 행이 아예 없는 코스 = 0139 이전에 만들어진 것 → 예전 규칙 그대로 보인다(하위 호환).
+      const sends = assignments.filter((a) => a.courseId === c.id);
+      if (sends.length > 0 && !sends.some((a) => a.userId === userId && !!a.sentAt)) continue;
+
       const list = courseEntriesOf(courseEntries, c.id)
         .map((e) => ({ id: e.entryId, text: titleOf(e.entryId) }))
         .filter((x): x is { id: string; text: string } => !!x.text)
@@ -377,7 +386,7 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
     return cards.filter((c) =>
       c.course.dueDays === null ? c === firstOnce : !firstOnce || c.items.some((it) => it.state === 'asked'),
     );
-  }, [isOwner, courses, courseEntries, understanding, entryById, quizCounts, userId, trainingNow, trainingRequests]);
+  }, [isOwner, courses, courseEntries, understanding, entryById, quizCounts, userId, trainingNow, trainingRequests, assignments]);
 
   // 카드의 퀴즈 시작 — 항목이 노하우 하나라 그 노하우만 소스로 넣는다(푼 만큼만 통과 처리).
   // ★열었다는 신호를 여기서 찍는다(0140). 이게 빠지면 사장이 보낸 퀴즈가 "무시됐다"로 세어져
