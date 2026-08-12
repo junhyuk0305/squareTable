@@ -7,6 +7,15 @@
 //   ⑤ 슬롯 소진 후 다시 no_store_slot
 //   ⑥ 금액 = 산 개수 × 31,900 (소유 매장 수와 무관)
 //   ⑦ 금액·개수 위조 직접 insert 차단(RLS 재장착 확인)
+//   ⑧ 0137 무료 지급(관리 콘솔 버튼)
+//   ⑨ ★0141 가입 체험 구간 — 슬롯 면제 + 종료 후 재차단 + 체험 매장도 슬롯을 먹는다(0136)
+//
+// ★★①~⑧ 은 **가입 프로모션을 끄고** 돈다(2026-08-12).
+//   0141 이 "체험 중에는 슬롯을 면제한다"를 넣으면서, 프로모션이 켜진 채로 돌면 no_store_slot
+//   단언 4개가 전부 red 가 된다 — 잘못된 게 아니라 **그 구간에선 슬롯을 요구하지 않는 것이 맞다.**
+//   그래서 슬롯 강제 구간은 끄고 돌리고, 체험 구간은 ⑨ 에서 **켜서 따로** 검증한다.
+//   ⚠️ 통째로 끄면 안 된다 — 0136 이 잡은 매출 구멍(슬롯 3개=매장 4개)은 프로모션이 켜져야
+//      재현되므로 ⑨-b 가 그 자리를 대신 지킨다.
 import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -49,6 +58,27 @@ async function svcSel(path) {
   const res = await fetch(`${URL}/rest/v1/${path}`, { headers: SH });
   return await res.json().catch(() => []);
 }
+async function svcPatch(path, body) {
+  const res = await fetch(`${URL}/rest/v1/${path}`, {
+    method: 'PATCH', headers: { ...SH, Prefer: 'return=representation' }, body: JSON.stringify(body),
+  });
+  const rows = res.ok ? await res.json() : [];
+  if (!res.ok) throw new Error(`PATCH ${path} 실패: ${res.status}`);
+  return rows;
+}
+// ★가입 프로모션 스위치 — ①~⑧ 은 끄고, ⑨ 는 켜서 돈다.
+//   원복 기준은 RPC 가 아니라 **app_config 원시값**이다. signup_trial_days() 는 창구가 닫히면
+//   설정이 14여도 0을 돌려주므로, 그 값으로 원복하면 라이브 프로모션이 영구히 꺼진다.
+async function getSignupTrialDaysRaw() {
+  const rows = await svcSel('app_config?key=eq.signup_trial_days&select=value');
+  return rows[0]?.value ?? '0';
+}
+async function setSignupTrialDays(days) {
+  const rows = await svcPatch('app_config?key=eq.signup_trial_days', { value: String(days), updated_at: new Date().toISOString() });
+  if (rows.length !== 1) throw new Error(`setSignupTrialDays(${days}) 실패`);
+  return rows[0].value;
+}
+let originalTrialDays = null;
 
 let seq = 0;
 const seededPhones = [];
@@ -72,25 +102,23 @@ const cleanup = [];
 const MULTI_VAT = 31900;
 
 async function main() {
+  const { data: fm } = await svcRpc('billing_free_mode');
+  info(`billing_free_mode=${fm}`);
+  if (fm === true) { console.log('  ⚠ 무료 모드가 켜져 있어 슬롯 게이트가 우회된다 — 검증 불가'); fail++; return; }
+
+  // ★①~⑧ 은 슬롯 강제 구간이다 → **첫 create_store 전에** 가입 프로모션을 끈다(0141 면제 회피).
+  originalTrialDays = await getSignupTrialDaysRaw();
+  await setSignupTrialDays(0);
+  info(`signup_trial_days(설정값)=${originalTrialDays} → 0으로 내림(⑨ 에서 켜고, 끝나면 원복)`);
+
   const O = await signUp('owner', 'QA슬롯사장');
   cleanup.push(O.c);
-  const { data: fm } = await O.c.rpc('billing_free_mode');
-  info(`billing_free_mode=${fm}`);
-  if (fm === true) { console.log('  ⚠ 무료 모드가 켜져 있어 슬롯 게이트가 우회된다 — 검증 불가'); return; }
 
   const { data: c1 } = await O.c.rpc('create_store', { p_store_name: 'QA슬롯 1호점', p_industry: '카페·디저트', p_biz_no: null });
   const S1 = c1?.[0]?.unit_id;
   check('셋업 1호점 생성(첫 매장은 슬롯 불필요)', !!S1, S1);
-  // ★0134: 가입 프로모션이 켜져 있으면 1호점은 free 가 아니라 **가입 체험(single·trialing)** 으로 열린다.
-  //   이 하니스는 프로모션을 끄지 않는다 — 켠 상태여야 0136 의 '체험 매장도 슬롯을 먹는다'가 검증된다.
-  //   (끄면 "3개를 사면 매장이 4개 열리는" 구멍이 다시 나도 게이트가 green 이다. 실제로 그렇게 났다.)
   const ep0 = await svcRpc('effective_plan', { p_unit: S1 });
-  const trial0 = await svcRpc('is_signup_trial', { p_unit: S1 });
-  check(
-    '1호점은 무료 또는 가입 체험으로 시작(둘 다 슬롯 배정 대상)',
-    ep0.data === 'free' || trial0.data === true,
-    `ep=${ep0.data} signupTrial=${trial0.data}`,
-  );
+  check('프로모션을 껐으니 1호점은 진짜 무료로 열린다(슬롯 배정 대상)', ep0.data === 'free', `ep=${ep0.data}`);
 
   // ── ① 슬롯 없이 2호점 생성 불가 ───────────────────────────────────────────
   const { error: eNo } = await O.c.rpc('create_store', { p_store_name: 'QA슬롯 2호점(불가)', p_industry: '카페·디저트', p_biz_no: null });
@@ -195,6 +223,66 @@ async function main() {
   const gSlots = await svcSel(`store_slots?select=claim_id&owner_id=eq.${G.uid}`);
   check('⑧ 무료 지급분은 claim_id=null (결제분과 구분)', gSlots.length > 0 && gSlots.every((r) => r.claim_id === null), JSON.stringify(gSlots));
 
+  // ══════════════════════════════════════════════════════════════════════════
+  // ⑨ ★가입 체험 구간(0141) — 여기서만 프로모션을 켠다
+  // ══════════════════════════════════════════════════════════════════════════
+  // 위 ①~⑧ 은 "슬롯이 없으면 못 연다"를 지킨다. 이 구간은 그 규칙의 **예외**가 약속대로
+  // 열리고, 약속이 끝나면 **다시 닫히는지**를 지킨다. 둘 다 없으면 광고와 서버가 갈라진다.
+  await setSignupTrialDays(14);
+  try {
+    // ── ⑨-a 면제 + 종료 후 재차단 ────────────────────────────────────────────
+    const T = await signUp('owner', 'QA체험다점포');
+    cleanup.push(T.c);
+    const { data: t1 } = await T.c.rpc('create_store', { p_store_name: 'QA체험 1호점', p_industry: '카페·디저트', p_biz_no: null });
+    const TS1 = t1?.[0]?.unit_id;
+    const tep1 = await svcRpc('effective_plan', { p_unit: TS1 });
+    check('⑨-a 체험 1호점은 multi 로 열린다(0141 — 광고가 약속한 전 요금제 무료)', tep1.data === 'multi', `ep=${tep1.data}`);
+
+    const { data: t2, error: te2 } = await T.c.rpc('create_store', { p_store_name: 'QA체험 2호점', p_industry: '카페·디저트', p_biz_no: null });
+    const TS2 = t2?.[0]?.unit_id;
+    check('⑨-a ★체험 중에는 슬롯 없이 2호점이 열린다', !te2 && !!TS2, te2?.message ?? TS2);
+
+    const tslot = await T.c.rpc('my_store_slots');
+    const tsl = Array.isArray(tslot.data) ? tslot.data[0] : tslot.data;
+    check('⑨-a 면제로 열린 매장은 슬롯을 소비하지 않는다(장부가 어긋나지 않는다)', tsl?.open_count === 0, `open=${tsl?.open_count}`);
+
+    const tsubs = await svcSel(`unit_subscriptions?select=unit_id,plan,status,trial_ends_at&unit_id=in.(${TS1},${TS2})`);
+    const ends = tsubs.map((r) => r.trial_ends_at);
+    check('⑨-a ★2호점은 1호점 종료일을 승계한다(매장마다 새로 14일이면 체험이 무한 연장된다)',
+      tsubs.length === 2 && ends[0] === ends[1], JSON.stringify(ends));
+
+    // 체험 종료를 강제 → 면제가 사라지고 다시 슬롯을 요구해야 한다.
+    await svcPatch(`unit_subscriptions?unit_id=in.(${TS1},${TS2})`, { trial_ends_at: new Date(Date.now() - 86400000).toISOString() });
+    const { error: te3 } = await T.c.rpc('create_store', { p_store_name: 'QA체험 3호점(불가)', p_industry: '카페·디저트', p_biz_no: null });
+    check('⑨-a ★★체험이 끝나면 다시 슬롯을 요구한다(no_store_slot)', /no_store_slot/.test(te3?.message ?? ''), te3?.message ?? '생성돼버림');
+
+    // ── ⑨-b 0136 매출 구멍 회귀 — 체험 매장도 슬롯을 먹는다 ──────────────────
+    // 프로모션이 켜져야만 재현되는 구멍이다: 체험 매장이 배정 대상에서 빠지면
+    // **슬롯 3개를 사면 매장이 4개** 열린다(0130 이 닫은 구멍의 재개장).
+    const P = await signUp('owner', 'QA체험결제');
+    cleanup.push(P.c);
+    const { data: p1 } = await P.c.rpc('create_store', { p_store_name: 'QA체험결제 1호점', p_industry: '카페·디저트', p_biz_no: null });
+    const PS1 = p1?.[0]?.unit_id;
+    check('⑨-b 셋업: 체험 1호점', !!PS1, PS1);
+    check('⑨-b 이 매장은 가입 체험이다(무료가 아니다 — 그래서 빠뜨리기 쉽다)',
+      (await svcRpc('is_signup_trial', { p_unit: PS1 })).data === true, '');
+
+    const { data: pClaim } = await P.c.rpc('submit_payment_claim', {
+      p_plan: 'multi', p_amount: 1, p_depositor: 'QA입금자', p_months: 1, p_memo: null,
+      p_terms_version: '2026-08-07', p_biz_no: null, p_biz_email: null, p_store_count: 3,
+    });
+    await svcRpc('review_payment_claim', { p_id: pClaim?.id, p_approve: true, p_reason: null, p_reviewer: 'qa-slots' });
+
+    const pep = await svcRpc('effective_plan', { p_unit: PS1 });
+    check('⑨-b ★체험 중이던 1호점이 슬롯을 먹고 유료 multi 가 된다(0136)', pep.data === 'multi', `ep=${pep.data}`);
+    const pslot = await P.c.rpc('my_store_slots');
+    const psl = Array.isArray(pslot.data) ? pslot.data[0] : pslot.data;
+    check('⑨-b ★★3개를 사면 남는 건 2개다(3개 사서 매장 4개가 열리지 않는다)', psl?.open_count === 2, `open=${psl?.open_count}`);
+  } finally {
+    const back = await setSignupTrialDays(originalTrialDays);
+    console.log(`  … 가입 프로모션 원복: signup_trial_days=${back}`);
+  }
+
   console.log(`\nRESULT: ${pass} passed, ${fail} failed`);
 }
 
@@ -203,6 +291,12 @@ main()
   .finally(async () => {
     for (const c of cleanup) { try { await c.rpc('delete_my_account'); } catch { /* */ } }
     try { await cleanupSeededPhones(URL, SERVICE, seededPhones); } catch { /* */ }
+    // 중단(throw)으로 ⑨ 의 finally 를 못 탔을 수 있다 — 프로모션 설정을 반드시 되돌린다.
+    if (originalTrialDays !== null) {
+      try { await setSignupTrialDays(originalTrialDays); }
+      catch { console.error('  !! 원복 실패 — app_config.signup_trial_days 수동 확인 필요'); fail++; }
+    }
     console.log('  … 정리 완료');
+    console.log(`FINAL: ${pass} passed, ${fail} failed`);
     process.exitCode = fail > 0 ? 1 : 0;
   });

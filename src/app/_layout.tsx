@@ -112,6 +112,9 @@ export default function RootLayout() {
             <Stack.Screen name="junior" />
             <Stack.Screen name="owner" />
             <Stack.Screen name="billing" />
+            {/* 체험 종료 → 무엇을 남길지 고르는 가로막는 화면(0142). 허브·매장과 **같은 층**이다 —
+                owner/ 안에 두면 활성 매장이 잠긴 순간 진입 자체가 막혀 계정이 갇힌다. */}
+            <Stack.Screen name="downgrade" />
           </Stack>
         </ErrorBoundary>
       </ResponsiveShell>

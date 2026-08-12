@@ -7,6 +7,7 @@ import {
   fetchUnitSubscription,
   fetchMySeatLocked,
   fetchBillingFreeMode,
+  fetchDowngradeNeed,
   checkPhoneInUse,
   rpcCreateStore,
   rpcCompleteProfile,
@@ -65,6 +66,10 @@ type SessionState = {
   plan: PlanId;
   // 좌석 잠금(0115) — 무료 강등으로 직원 수가 한도를 넘어 내 자리가 잠겼는가(직원 전용 판정).
   seatLocked: boolean;
+  // 다운그레이드 선택 대기(0142) — 체험이 끝나 무료 한도를 넘긴 것이 있어 사장이 무엇을 남길지
+  // 골라야 하는 상태. 판정은 서버(needs_downgrade_choice)가 SSOT — 화면은 이 값만 보고
+  // /downgrade 로 보낸다(매장 수·직원 수를 클라가 다시 세지 않는다).
+  needsDowngradeChoice: boolean;
   // 전면 무료 모드(0062 app_config) — 프로모션 기간엔 매장수·좌석·다점포 게이팅이 전부 열린다.
   // ★매장이 아니라 서비스 전체 속성이라 로그아웃 시 초기화하지 않는다(계정 간 누수 대상이 아님).
   //   프로필을 로드할 때마다 서버에서 다시 읽으므로 관리 콘솔에서 끄면 다음 로드에 반영된다.
@@ -149,6 +154,7 @@ const DEMO = {
   paidUntil: '',
   plan: 'free' as PlanId,
   seatLocked: false,
+  needsDowngradeChoice: false,
   freeMode: false, // 서버에서 읽기 전 기본값 — 읽기 전엔 평시 규칙(과금 게이팅 유지)
   inviteCode: '482913',
   email: '',
@@ -266,7 +272,7 @@ async function loadProfile(
       _lastLoadFault = 'load_failed'; // 로그인 직후라면 signInWithPassword 가 '네트워크 오류' 문구로 노출(#17·#18)
       setUnitId(null);
       setAnalyticsContext({ userId: null, unitId: null, role: null });
-      set({ status: 'signed_out', unitId: '', userId: '', userName: '', storeName: '', pendingUnitId: '', pendingStoreName: '', rejectedJoinStoreName: '', industry: '', inviteCode: '', bio: '', phone: '', plan: 'free', seatLocked: false, subStatus: '', trialEndsAt: '', paidUntil: '' });
+      set({ status: 'signed_out', unitId: '', userId: '', userName: '', storeName: '', pendingUnitId: '', pendingStoreName: '', rejectedJoinStoreName: '', industry: '', inviteCode: '', bio: '', phone: '', plan: 'free', seatLocked: false, needsDowngradeChoice: false, subStatus: '', trialEndsAt: '', paidUntil: '' });
       return;
     }
 
@@ -276,7 +282,7 @@ async function loadProfile(
       _lastLoadFault = 'deleted'; // 로그인 직후라면 signInWithPassword 가 '탈퇴 처리된 계정' 문구로 노출(#16)
       setUnitId(null);
       setAnalyticsContext({ userId: null, unitId: null, role: null });
-      set({ status: 'signed_out', unitId: '', userId: '', userName: '', storeName: '', pendingUnitId: '', pendingStoreName: '', rejectedJoinStoreName: '', industry: '', inviteCode: '', bio: '', phone: '', plan: 'free', seatLocked: false, subStatus: '', trialEndsAt: '', paidUntil: '' });
+      set({ status: 'signed_out', unitId: '', userId: '', userName: '', storeName: '', pendingUnitId: '', pendingStoreName: '', rejectedJoinStoreName: '', industry: '', inviteCode: '', bio: '', phone: '', plan: 'free', seatLocked: false, needsDowngradeChoice: false, subStatus: '', trialEndsAt: '', paidUntil: '' });
       void supabase.auth.signOut().catch(() => {});
       return;
     }
@@ -373,6 +379,15 @@ async function loadProfile(
       if (fmErr) reportError('session.fetchBillingFreeMode', fmErr);
       else freeMode = fm === true;
     }
+    // 다운그레이드 선택 대기(0142) — 체험이 끝나 무료 한도를 넘긴 것이 있는가.
+    // 판정은 서버가 전부 갖는다(사장이 아니면 항상 false 라 역할로 분기하지 않는다).
+    // 읽기 실패는 '선택 필요'로 위장하지 않는다(fail-open) — 조회 오류로 앱을 가로막지 않는다.
+    let needsDowngradeChoice = false;
+    if (unitId) {
+      const { data: dg, error: dgErr } = await fetchDowngradeNeed();
+      if (dgErr) reportError('session.fetchDowngradeNeed', dgErr);
+      else needsDowngradeChoice = dg?.need_store === true || dg?.need_seats === true;
+    }
     // 다점포(0055): 내가 속한 매장 목록 — '내 매장' 허브/헤더 토글용. 오너(소유)·직원(알바 소속) 모두 로드한다
     // (Phase 0: 직원 다매장). my_units 는 auth.uid() 소속만 반환하므로 크로스테넌트 노출 없음.
     let stores: MyUnitRow[] = [];
@@ -428,6 +443,7 @@ async function loadProfile(
       paidUntil,
       plan,
       seatLocked,
+      needsDowngradeChoice,
       freeMode,
       bio: profile?.bio ?? '',
       phone: profile?.phone ?? '',
@@ -443,7 +459,7 @@ async function loadProfile(
     _lastLoadFault = 'load_failed'; // 로그인 직후라면 signInWithPassword 가 '네트워크 오류' 문구로 노출(#17)
     setUnitId(null);
     setAnalyticsContext({ userId: null, unitId: null, role: null });
-    set({ status: 'signed_out', unitId: '', userId: '', userName: '', storeName: '', stores: [], pendingUnitId: '', pendingStoreName: '', rejectedJoinStoreName: '', industry: '', inviteCode: '', bio: '', plan: 'free', seatLocked: false, subStatus: '', trialEndsAt: '', paidUntil: '' });
+    set({ status: 'signed_out', unitId: '', userId: '', userName: '', storeName: '', stores: [], pendingUnitId: '', pendingStoreName: '', rejectedJoinStoreName: '', industry: '', inviteCode: '', bio: '', plan: 'free', seatLocked: false, needsDowngradeChoice: false, subStatus: '', trialEndsAt: '', paidUntil: '' });
   }
 }
 
@@ -474,7 +490,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
         if (u) loadProfile(set, u.id, u.email ?? '', pendingOwnerMeta(u));
         else {
           setAnalyticsContext({ userId: null, unitId: null, role: null });
-          set({ status: 'signed_out', unitId: '', userId: '', userName: '', plan: 'free', seatLocked: false, subStatus: '', trialEndsAt: '', paidUntil: '' });
+          set({ status: 'signed_out', unitId: '', userId: '', userName: '', plan: 'free', seatLocked: false, needsDowngradeChoice: false, subStatus: '', trialEndsAt: '', paidUntil: '' });
         }
       });
     }
@@ -834,7 +850,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   deleteAccount: async () => {
     if (!HAS_SUPABASE) {
       // 데모 모드: 실제 삭제 대상 없음 → 세션만 종료.
-      set({ status: 'signed_out', unitId: '', userId: '', userName: '', pendingUnitId: '', pendingStoreName: '', rejectedJoinStoreName: '', industry: '', plan: 'free', seatLocked: false, subStatus: '', trialEndsAt: '', paidUntil: '' });
+      set({ status: 'signed_out', unitId: '', userId: '', userName: '', pendingUnitId: '', pendingStoreName: '', rejectedJoinStoreName: '', industry: '', plan: 'free', seatLocked: false, needsDowngradeChoice: false, subStatus: '', trialEndsAt: '', paidUntil: '' });
       return { error: null };
     }
     const { error } = await rpcDeleteMyAccount();
@@ -848,7 +864,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     } catch (e) {
       console.warn('[session] signOut after delete failed:', e);
     }
-    set({ status: 'signed_out', unitId: '', userId: '', userName: '', pendingUnitId: '', pendingStoreName: '', rejectedJoinStoreName: '', industry: '', plan: 'free', seatLocked: false, subStatus: '', trialEndsAt: '', paidUntil: '' });
+    set({ status: 'signed_out', unitId: '', userId: '', userName: '', pendingUnitId: '', pendingStoreName: '', rejectedJoinStoreName: '', industry: '', plan: 'free', seatLocked: false, needsDowngradeChoice: false, subStatus: '', trialEndsAt: '', paidUntil: '' });
     return { error: null };
   },
 
@@ -970,7 +986,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
         console.warn('[session] signOut failed:', e);
       }
     }
-    set({ status: 'signed_out', unitId: '', userId: '', userName: '', pendingUnitId: '', pendingStoreName: '', rejectedJoinStoreName: '', industry: '', plan: 'free', seatLocked: false, subStatus: '', trialEndsAt: '', paidUntil: '' });
+    set({ status: 'signed_out', unitId: '', userId: '', userName: '', pendingUnitId: '', pendingStoreName: '', rejectedJoinStoreName: '', industry: '', plan: 'free', seatLocked: false, needsDowngradeChoice: false, subStatus: '', trialEndsAt: '', paidUntil: '' });
   },
 
   switchTo: (role) => {

@@ -15,7 +15,7 @@ import { useCrossNotifRows } from '@/lib/hooks/useCrossNotifRows';
 import { assignedTodayCount } from '@/lib/utils/crossStoreNotifs';
 import { roleNoun } from '@/lib/utils/roles';
 import { todayStr } from '@/lib/utils/attendance';
-import { fetchOwnerOverview, type MyUnitRow, type OwnerOverviewRow } from '@/lib/db';
+import { fetchOwnerOverview, fetchMyLockedUnits, type MyUnitRow, type OwnerOverviewRow } from '@/lib/db';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
@@ -73,7 +73,11 @@ export default function StoresHub() {
   // 전 매장이 같은 역할인가 — 목록 전체를 한 단어로 부를 수 있을 때만 섹션 라벨에 역할을 쓴다(0093).
   const uniformRole = stores.length > 0 && stores.every((s) => s.role === stores[0].role) ? stores[0].role : null;
 
+  const needsDowngradeChoice = useSessionStore((s) => s.needsDowngradeChoice);
+
   const [overview, setOverview] = useState<Record<string, OwnerOverviewRow>>({});
+  // 무료 초과로 잠긴 매장(0142) — 판정은 서버(my_locked_units)가 SSOT. 카드마다 RPC 를 부르지 않는다.
+  const [lockedUnits, setLockedUnits] = useState<string[]>([]);
   // 매장을 고른 순간부터 그 매장 화면이 그릴 준비가 될 때까지 — 이 값이 있으면 화면 전체를 커버가 덮는다.
   const enter = useStoreEntryStore((s) => s.enter);
 
@@ -115,8 +119,26 @@ export default function StoresHub() {
     return () => { alive = false; };
   }, [isOwner]);
 
-  const enterStore = (u: MyUnitRow) =>
+  // 잠긴 매장 목록 — 전 사용자 대상(직원도 잠긴 매장 카드를 탭할 수 있다). 실패해도 카드는 그대로.
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      const { data } = await fetchMyLockedUnits();
+      if (alive && data) setLockedUnits(data);
+    })();
+    return () => { alive = false; };
+  }, []);
+
+  const enterStore = (u: MyUnitRow) => {
+    // ★잠긴 매장은 진입 자체를 막는다 — 서버(switch_active_unit)도 unit_locked 로 거부하므로,
+    //   여기서 안 막으면 커버만 뜨고 실패하는 죽은 탭이 된다. 안내는 다음 행동까지 말한다.
+    if (lockedUnits.includes(u.unit_id)) {
+      return showToast(isOwner
+        ? '지금은 잠긴 매장이에요. 요금제를 적용하면 그대로 다시 열려요.'
+        : '지금은 잠긴 매장이에요. 사장님께 문의해 주세요.');
+    }
     void enter({ uid: u.unit_id, name: prefFor(u.unit_id).nickname || u.store_name || '내 매장' });
+  };
 
   const addStore = () => {
     // ★첫 매장(매장 0곳)은 항상 무료 — 다점포 게이트를 태우지 않는다.
@@ -140,6 +162,8 @@ export default function StoresHub() {
   if (HAS_SUPABASE && needsProfileSetup({ status, phone, unitId, pendingUnitId })) {
     return <Redirect href="/complete-profile" />;
   }
+  // 다운그레이드 선택 대기(0142) — 허브 층 세 화면(index·hub·stores)이 같은 게이트를 가진다.
+  if (HAS_SUPABASE && needsDowngradeChoice) return <Redirect href="/downgrade" />;
 
   // 진입 커버는 전역 <StoreEnterCover/>(_layout)가 덮는다 — 상단바에서 눌러도 같은 커버여야 하므로.
 
@@ -191,29 +215,33 @@ export default function StoresHub() {
                 {stores.map((s) => {
                   const ov = overview[s.unit_id];
                   const isActive = s.unit_id === unitId;
+                  const isLocked = lockedUnits.includes(s.unit_id);
                   const pref = prefFor(s.unit_id);
                   const color = storeColor(s.unit_id, pref.color);
                   return (
                     <Pressable
                       key={s.unit_id}
                       onPress={() => enterStore(s)}
-                      style={({ pressed }) => [styles.card, isActive && styles.cardActive, { borderLeftWidth: 4, borderLeftColor: color }, pressed && { opacity: 0.92 }]}
+                      style={({ pressed }) => [styles.card, isActive && styles.cardActive, isLocked && styles.cardLocked, { borderLeftWidth: 4, borderLeftColor: color }, pressed && { opacity: 0.92 }]}
                     >
                       <View style={[styles.cardIcon, { backgroundColor: color + '22' }]}>
-                        <Ionicons name={industryIcon(s.industry)} size={22} color={color} />
+                        <Ionicons name={isLocked ? 'lock-closed-outline' : industryIcon(s.industry)} size={22} color={isLocked ? InkColors.ink3 : color} />
                       </View>
                       <View style={{ flex: 1, minWidth: 0 }}>
                         <View style={styles.cardTitleRow}>
                           <Text style={styles.storeName} numberOfLines={1}>{pref.nickname || s.store_name}</Text>
-                          {isActive && <Text style={styles.recentBadge}>최근</Text>}
+                          {/* ★색만으로 상태를 구분하지 않는다 — 라벨을 병기한다(ui.md). */}
+                          {isLocked ? <Text style={styles.lockBadge}>잠김</Text> : isActive && <Text style={styles.recentBadge}>최근</Text>}
                         </View>
                         {/* 역할이 섞인 사람에겐 이 줄이 "이 매장에서 나는 누구인가"를 말한다.
                             전 매장이 같은 역할이면 위 섹션 라벨이 이미 말했으므로 반복하지 않는다. */}
                         <Text style={styles.storeMeta} numberOfLines={1}>
-                          {(uniformRole ? '' : `${roleNoun(s.role)} · `) +
-                            (s.role === 'owner' && ov
-                              ? `직원 ${ov.staff} · 노하우 ${ov.knowhow}`
-                              : '탭하면 매장으로 들어가요')}
+                          {isLocked
+                            ? '요금제를 적용하면 그대로 다시 열려요'
+                            : (uniformRole ? '' : `${roleNoun(s.role)} · `) +
+                              (s.role === 'owner' && ov
+                                ? `직원 ${ov.staff} · 노하우 ${ov.knowhow}`
+                                : '탭하면 매장으로 들어가요')}
                         </Text>
                       </View>
                       <View style={styles.cardRight}>
@@ -283,10 +311,13 @@ const styles = StyleSheet.create({
     ...Elevation.e2,
   },
   cardActive: { borderColor: BrandColors.yellowDeep },
+  // 잠긴 매장 — 눌러도 안 들어가진다는 걸 면으로도 말한다(라벨은 lockBadge 가 병기).
+  cardLocked: { backgroundColor: InkColors.bgSoft },
   cardIcon: { width: 46, height: 46, borderRadius: Radius.md, backgroundColor: BrandColors.yellowSoft, alignItems: 'center', justifyContent: 'center' },
   cardTitleRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
   storeName: { flexShrink: 1, fontSize: 16, fontWeight: '900', color: InkColors.ink, letterSpacing: -0.3 },
   recentBadge: { fontSize: 10, fontWeight: '900', color: '#7a5f10', backgroundColor: BrandColors.yellow, paddingHorizontal: 8, paddingVertical: 2, borderRadius: Radius.pill, overflow: 'hidden' },
+  lockBadge: { fontSize: 10, fontWeight: '900', color: InkColors.bubbleText, backgroundColor: InkColors.ink2, paddingHorizontal: 8, paddingVertical: 2, borderRadius: Radius.pill, overflow: 'hidden' },
   storeMeta: { fontSize: 13, color: InkColors.ink2, marginTop: 4 },
   cardRight: { alignItems: 'flex-end', gap: Space.sm },
   needChip: {

@@ -215,22 +215,25 @@ async function main() {
   await setSignupTrialDays(30);
   try {
     const C_SHORT = `QA${s}SHORT`; // single 7일 — 30일 체험보다 나쁘다
-    const C_UP    = `QA${s}UP`;    // multi 30일 — 기간 같고 플랜만 올라간다
+    // ★0141 이후 가입 체험 자체가 multi 라, '플랜이 올라간다' 가지는 체험 매장에서 더 이상
+    //   재현되지 않는다(이미 최상위 플랜이다). 남은 축인 **기간이 늘어난다**로 검증한다.
+    const C_UP    = `QA${s}UP`;    // multi 60일 — 체험 30일보다 길다
     await svcInsert('promo_codes', [
       { code: C_SHORT, plan: 'single', days: 7,  max_redemptions: null, note: 'QA 0134 짧은 코드' },
-      { code: C_UP,    plan: 'multi',  days: 30, max_redemptions: null, note: 'QA 0134 업그레이드 코드' },
+      { code: C_UP,    plan: 'multi',  days: 60, max_redemptions: null, note: 'QA 0134 연장 코드' },
     ]);
 
     const D = await signUp('owner', 'QA체험사장D'); cleanup.push(D.c);
     const storeD = await makeStore(D, 'QA 체험 D점');
     const { data: dep } = await D.c.rpc('effective_plan', { p_unit: storeD.unit_id });
-    check('⑧ 가입 매장이 체험 single 로 열린다', dep === 'single', `ep=${dep}`);
+    // ★0141(2026-08-12): 가입 체험이 single → **multi** 로 올라갔다(광고와 서버 일치).
+    check('⑧ 가입 매장이 체험 multi 로 열린다', dep === 'multi', `ep=${dep}`);
 
     const { error: eShort } = await D.c.rpc('redeem_promo_code', { p_code: C_SHORT });
     check('⑧ 체험 30일 > 코드 7일 → 거부(already_paid)', /already_paid/.test(eShort?.message ?? ''), eShort?.message ?? '통과돼버림');
 
     const { error: eUp } = await D.c.rpc('redeem_promo_code', { p_code: C_UP });
-    check('⑧ ★체험 single → multi 코드는 허용(영업 경로 생존)', !eUp, eUp?.message ?? 'ok');
+    check('⑧ ★체험 30일 → 60일 코드는 허용(영업 경로 생존)', !eUp, eUp?.message ?? 'ok');
     const { data: dep2 } = await D.c.rpc('effective_plan', { p_unit: storeD.unit_id });
     check('⑧ 업그레이드 후 유효 플랜 multi', dep2 === 'multi', `ep=${dep2}`);
 

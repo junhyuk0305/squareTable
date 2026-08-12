@@ -270,11 +270,13 @@ async function main() {
     const tUnit = t1?.[0]?.unit_id;
     check('가입 프로모션 켠 뒤 매장 생성 OK', !te1 && !!tUnit, tUnit ?? te1?.message);
     const { data: tsub } = await T.c.from('unit_subscriptions').select('plan, status, trial_ends_at').eq('unit_id', tUnit).maybeSingle();
-    check('★가입 매장 = single/trialing', tsub?.plan === 'single' && tsub?.status === 'trialing', `plan=${tsub?.plan} status=${tsub?.status}`);
+    // ★0141(2026-08-12): single → **multi**. 광고("14일 동안 다점포까지 전면 무료")와 서버가
+    //   갈라져 있던 것을 맞춘 것이다 — single 은 매장 1개라 말과 실제가 달랐다.
+    check('★가입 매장 = multi/trialing', tsub?.plan === 'multi' && tsub?.status === 'trialing', `plan=${tsub?.plan} status=${tsub?.status}`);
     const days = tsub?.trial_ends_at ? Math.round((Date.parse(tsub.trial_ends_at) - Date.now()) / 86400000) : -1;
     check('★체험 기간 = 30일', days === 30, `${days}일`);
     const { data: tep } = await T.c.rpc('effective_plan', { p_unit: tUnit });
-    check('★서버 유효 플랜도 single (좌석·AI 캡이 실제로 풀린다)', tep === 'single', `ep=${tep}`);
+    check('★서버 유효 플랜도 multi (좌석·AI 캡·다점포가 실제로 풀린다)', tep === 'multi', `ep=${tep}`);
     // 프로모션 코드가 이 매장에서 막히지 않는가 — 0133 판정이 그대로였다면 여기서 already_paid 가 난다.
     const { data: tuntil } = await T.c.rpc('effective_until', { p_unit: tUnit });
     check('effective_until 이 체험 만료일을 돌려준다', !!tuntil && Date.parse(tuntil) > Date.now(), String(tuntil));

@@ -42,6 +42,7 @@ export default function LandingScreen() {
   const phone = useSessionStore((s) => s.phone);
   const unitId = useSessionStore((s) => s.unitId);
   const pendingUnitId = useSessionStore((s) => s.pendingUnitId);
+  const needsDowngradeChoice = useSessionStore((s) => s.needsDowngradeChoice);
 
   // 이미 로그인된 재방문자는 마케팅을 건너뛰고 각자 홈으로. (데모 빌드는 항상 랜딩을 보여준다)
   if (HAS_SUPABASE && status === 'signed_in') {
@@ -50,6 +51,9 @@ export default function LandingScreen() {
     if (needsProfileSetup({ status, phone, unitId, pendingUnitId })) {
       return <Redirect href="/complete-profile" />;
     }
+    // 체험이 끝나 무료 한도를 넘긴 것이 있으면 먼저 무엇을 남길지 고른다(0142).
+    // 판정은 서버가 갖고 세션이 실어온다 — 순서는 프로필 완성 **다음**이다.
+    if (needsDowngradeChoice) return <Redirect href="/downgrade" />;
     return <Redirect href="/hub" />;
   }
   if (HAS_SUPABASE && status === 'loading') return null; // 스플래시가 덮는 구간 — 깜빡임 방지

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, Linking, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Stack, useRouter, Redirect } from 'expo-router';
+import { Stack, useRouter, Redirect, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { HAS_SUPABASE } from '@/lib/supabase';
@@ -99,11 +99,19 @@ function BillingBody() {
   const [promoOpen, setPromoOpen] = useState(false);
   const [promoCode, setPromoCode] = useState('');
   const [redeeming, setRedeeming] = useState(false);
-  // 선택 요금제 — 초기값은 현재 요금제. 다점포 금액 = 소유 매장수 × 매장당 가격(tiers.ts).
-  const [selectedPlan, setSelectedPlan] = useState<PlanId>(plan);
+  // ★진입 파라미터(0142 /downgrade → 여기) — 앞 화면에서 이미 고른 요금제·매장수를 실어 온다.
+  //   여기서 다시 고르게 하면 그 화면에서 한 결정이 버려진다. 값 검증은 여기서 하고(위조 URL),
+  //   금액 재계산은 서버(payment_claim_amount)가 하므로 파라미터로 금액이 바뀌지는 않는다.
+  const params = useLocalSearchParams<{ plan?: string; stores?: string }>();
+  const paramPlan: PlanId | null = params.plan === 'single' || params.plan === 'multi' ? params.plan : null;
+  const paramStores = Math.min(Math.max(Number(params.stores) || 0, 0), 15);
+
+  // 선택 요금제 — 초기값은 파라미터가 있으면 그것, 없으면 현재 요금제.
+  const [selectedPlan, setSelectedPlan] = useState<PlanId>(paramPlan ?? plan);
   // 세션 plan이 마운트 뒤에 로드/변경되면(웹 새로고침 직진입, 30초 폴링 중 활성화 반영) 선택을
   // 재동기화한다. 단 사용자가 직접 고른 뒤에는 덮어쓰지 않는다(선택 유지).
-  const planTouched = useRef(false);
+  // 파라미터로 온 선택도 '이미 고른 것'이라 덮어쓰지 않는다.
+  const planTouched = useRef(paramPlan !== null);
   useEffect(() => {
     if (!planTouched.current) setSelectedPlan(plan);
   }, [plan]);
@@ -111,7 +119,7 @@ function BillingBody() {
   //   곱했기 때문에 "이 결제가 몇 개분인지"가 시스템에 없었고, 매장을 하나 추가할 때마다
   //   전 매장 요금이 한꺼번에 청구됐다. 이제 개수가 결제의 입력이다(payment_claims.store_count).
   const ownedCount = stores.filter((st) => st.role === 'owner').length;
-  const [storeCount, setStoreCount] = useState(1);
+  const [storeCount, setStoreCount] = useState(paramStores >= 1 ? paramStores : 1);
   const buyCount = selectedPlan === 'multi' ? storeCount : 1;
   const monthlyTotal = planMonthlyPrice(selectedPlan, buyCount); // 공급가액(표시가)
   const monthlyBilled = withVat(monthlyTotal); // 실제 입금 요청액 — 서버 payment_claim_amount(0130)와 같은 값

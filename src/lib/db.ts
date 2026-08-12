@@ -395,6 +395,47 @@ export async function fetchBillingFreeMode(): Promise<DbResult<boolean>> {
   return { data: (data as boolean) ?? false, error: error as DbErr };
 }
 
+// ── 체험 종료 → 다운그레이드 선택(0142) ──────────────────────────────────────
+// 판정은 전부 서버가 갖는다(unit_access_locked / needs_downgrade_choice). 화면은 결과만 그린다 —
+// "무료 매장이 몇 개고 몇 명이 넘치는가"를 클라가 다시 세면 서버와 갈라진다.
+export type DowngradeNeed = { need_store: boolean; free_units: number; need_seats: boolean; over_seats: number };
+
+export async function fetchDowngradeNeed(): Promise<DbResult<DowngradeNeed>> {
+  if (!HAS_SUPABASE) return { data: null, error: null };
+  const { data, error } = await supabase.rpc('needs_downgrade_choice');
+  const row = Array.isArray(data) ? (data[0] as DowngradeNeed) : (data as DowngradeNeed);
+  return { data: row ?? null, error: error as DbErr };
+}
+
+// setof text RPC 공통 — 드라이버가 문자열 배열로도, 컬럼 객체로도 줄 수 있어 둘 다 받는다.
+async function rpcTextList(fn: 'my_locked_units' | 'my_free_units'): Promise<DbResult<string[]>> {
+  if (!HAS_SUPABASE) return { data: [], error: null };
+  const { data, error } = await supabase.rpc(fn);
+  const rows = (data ?? []) as unknown[];
+  const ids = rows.map((r) => (typeof r === 'string' ? r : String((r as Record<string, string>)?.[fn] ?? '')));
+  return { data: ids.filter(Boolean), error: error as DbErr };
+}
+
+// 잠긴 매장 id 목록(매장 카드 배지). 카드마다 RPC 를 부르지 않게 서버가 한 번에 준다.
+export const fetchMyLockedUnits = () => rpcTextList('my_locked_units');
+
+// 무료 상태라 '남길 매장' 후보가 되는 내 매장(0144). 유료 매장은 잠길 위험이 없어 후보가 아니다.
+export const fetchMyFreeUnits = () => rpcTextList('my_free_units');
+
+// 남길 매장 선택. 서버가 소유 검증 + 활성 매장 이동까지 한다(잠긴 매장에 갇히지 않게).
+export async function rpcChooseKeptStore(unitId: string): Promise<{ error: DbErr }> {
+  if (!HAS_SUPABASE) return { error: null };
+  const { error } = await supabase.rpc('choose_kept_store', { p_unit: unitId });
+  return { error: error as DbErr };
+}
+
+// 계속 함께할 직원 선택(활성 매장 기준·최대 3명). named 에러는 화면이 분기한다.
+export async function rpcChooseKeptSeats(userIds: string[]): Promise<{ error: DbErr }> {
+  if (!HAS_SUPABASE) return { error: null };
+  const { error } = await supabase.rpc('choose_kept_seats', { p_uids: userIds });
+  return { error: error as DbErr };
+}
+
 export type SeatStatus = { total: number; cap: number; locked: number };
 
 export async function fetchUnitSeatStatus(): Promise<DbResult<SeatStatus>> {
