@@ -50,11 +50,11 @@ yarn-error.*
 *.pem
 
 # local env files
-.env
-.env*.local
-.env.seed
-.env.solapi
-!.env.example
+# ★.env 로 시작하면 예외 없이 전부 커밋 금지 — .example 템플릿도 포함한다(2026-08-12).
+#   템플릿을 예외로 열어두면 "빈 칸이니 괜찮겠지" 하고 실제 키를 적어 넣는 사고가 난다
+#   (실제로 두 번 났고, gitignore 는 추적 대상 파일을 못 막아서 커밋 직전에야 잡혔다).
+#   필요한 환경변수 목록은 문서로 남기고, 파일은 로컬에만 둔다.
+.env*
 
 # supabase
 supabase/.branches
