@@ -67,6 +67,14 @@ async function main() {
   //   전역 스위치는 건드리지 않고, 실제 유료 고객 경로 그대로 admin_activate_store 로 multi 승격(qa-multistore 패턴).
   const { error: actErr } = await admin.rpc('admin_activate_store', { p_unit_id: A, p_days: 1, p_plan: 'multi' });
   check('소스매장 multi 승격(admin_activate_store)', !actErr, actErr?.message ?? '');
+  // ★0130(2026-08-11): 2호점 판정이 **플랜에서 매장 슬롯으로** 바뀌었다 — plan='multi' 만으로는 안 열리고
+  //   미사용 store_slots 가 있어야 한다(없으면 no_store_slot). 위 승격만 남겨두면 이 하니스는 영구 red 다.
+  //   ※ 가입 체험(0141) 면제도 여기선 못 탄다 — admin_activate_store 가 trialing 을 active 로 덮어
+  //     is_signup_trial 이 false 가 되기 때문이다. 그래서 슬롯을 명시 적립한다(qa-delete-store 와 같은 패턴).
+  //   2026-08-15: 0130 이 카운터파트를 안 고쳐 08-11 부터 red 였던 것을 복구.
+  const { error: slotErr } = await admin.from('store_slots')
+    .insert({ owner_id: O.uid, paid_until: new Date(Date.now() + 30 * 864e5).toISOString() });
+  check('2호점용 매장 슬롯 적립(0130)', !slotErr, slotErr?.message ?? '');
   const B = await createStore(O.c, `KC대상_${rid}`);   // 대상매장(생성 → 활성으로 이동)
   // 이 시점 활성=B. A에 노하우를 넣으려면 A로 전환.
   await O.c.rpc('switch_active_unit', { p_unit_id: A });

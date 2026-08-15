@@ -117,6 +117,14 @@ try {
   const ids2 = (u ?? []).map((x) => x.unit_id).sort();
   check('★직원 my_units = S1+S2 둘', ids2.length === 2 && ids2.includes(S1) && ids2.includes(S2), `ids=[${ids2}]`);
   check('★직원: S2 전환 성공(승인됨)', await ok(J, S2));
+
+  // ★이미 들어가 있는 매장 코드를 또 넣으면 already_member 다(0067). 클라(useSessionStore.joinByInvite)가
+  //   이 **이름**을 보고 '이미 들어가 있는 매장이에요'로 안내한다 — 이름이 바뀌면 폴백 문구('코드를 확인하고
+  //   다시 시도')로 조용히 되돌아가고, 그 안내를 따른 직원은 5번 만에 join_attempts 5회로 10분 잠긴다.
+  //   서버 계약을 여기서 못 박아 그 회귀를 잡는다(2026-08-15).
+  const { error: dup } = await J.rpc('join_by_invite', { p_code: code2 });
+  check('★이미 합류한 매장 재합류 = already_member', /already_member/.test(dup?.message ?? ''), dup?.message ?? '(에러 없음!)');
+
   const jVis = (await J.from('units').select('id')).data;
   check('★직원: 활성 S2일 때 RLS로 S2만 열람', (jVis?.length ?? 0) === 1 && jVis?.[0]?.id === S2, `rows=${jVis?.length}`);
 

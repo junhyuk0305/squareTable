@@ -118,13 +118,36 @@ const main = async () => {
     chk(fu.length >= 1, 'IB2 빈약한 답→보강 되묻기 생성', `followups=${fu.length}`);
   }
 
-  console.log('\n━━━━ [4] 주관적 기준 scalePrompt 감지 ━━━━');
+  console.log('\n━━━━ [4] 주관적 기준 scalePrompt 감지(3회 반복 — 과반 판정) ━━━━');
   {
-    const r = await call(token, 'square', { rawText: '스테이크는 손님이 원하는 만큼 익혀서 내줘. 굽기 정도를 물어봐야 해.', category: 'Know-how', categoryGuide: guide }); await sleep(6500);
-    const sp = r.body.scalePrompt || segsOf(r.body)[0]?.scalePrompt;
-    console.log(`  SC1 익힘기준 [${r.status}] scalePrompt=${JSON.stringify(sp)}`);
-    chk(r.ok, 'SC1 크래시 없음');
-    chk(!!sp && !!sp.label, 'SC1 주관적 기준(scalePrompt) 감지', '미감지');
+    // ★2026-08-15: 여기는 **단발 호출에 확정 단언**이라 무작위 red 처럼 보였다. 실측해 보니 flaky 가
+    //   아니라 **감지율이 원래 낮은 것**이었다 — 무작위로 red 를 뱉는 게이트는 사람이 곧 무시하게 되므로
+    //   아래 [5] 와 같은 반복 판정으로 바꾸고, 적중률을 항상 찍어 드리프트를 눈에 보이게 둔다.
+    //   ★한 번이라도 나오면 통과가 아니라 **과반**을 요구한다 — 완화하면 실제 저하를 덮는다.
+    //
+    // ★★이 red 는 게이트 결함이 아니라 **실제 프로덕션 저하**다 (2026-08-15 A/B 실측, 같은 입력):
+    //     categoryGuide 있음(= 실앱 경로)  2/5      categoryGuide 없음  5/5
+    //     (다른 입력 포함 누적: guide 있음 4/11 ≈ 36% · guide 없음 17/17 = 100%)
+    //   원인 = **프롬프트 예시 두 개가 서로 모순**이고 주입된 guide 쪽이 이긴다:
+    //     · 엣지 기본 (functions/ai/index.ts 예3) "커피 적당히 넣어" → scale_prompt 를 내라
+    //     · 주입 guide (src/data/extraction-master.ts) "우유 거품 적당히 곱게" → 척도 없이 steps 로만
+    //   실앱은 categoryGuide 를 **항상** 주입한다(OwnerCoachChat.tsx·handover.tsx) → 사장이 주관적
+    //   기준을 수치로 정할 기회를 3번 중 2번 놓친다. 고치려면 두 예시를 한쪽으로 통일해야 하는데,
+    //   EXTRACTION_MASTER 는 추출 품질 전체를 지배하므로 **이 항목만 보고 건드리지 말 것**
+    //   (바꾸면 qa:knowhow-accuracy · qa:ai-core · benchmark-quality 를 같이 돌려 회귀를 봐야 한다).
+    const N = 3, HITS_REQUIRED = 2;
+    const hits = [];
+    let okAll = true;
+    for (let k = 0; k < N; k++) {
+      const r = await call(token, 'square', { rawText: '스테이크는 손님이 원하는 만큼 익혀서 내줘. 굽기 정도를 물어봐야 해.', category: 'Know-how', categoryGuide: guide }); await sleep(6500);
+      if (!r.ok) okAll = false;
+      const sp = r.body.scalePrompt || segsOf(r.body)[0]?.scalePrompt;
+      hits.push(!!sp && !!sp.label);
+    }
+    const n = hits.filter(Boolean).length;
+    console.log(`  SC1 익힘기준 ${N}회 감지: ${JSON.stringify(hits)} → 적중률 ${n}/${N}`);
+    chk(okAll, 'SC1 크래시 없음');
+    chk(n >= HITS_REQUIRED, `SC1 주관적 기준(scalePrompt) 과반 감지 ≥${HITS_REQUIRED}/${N}`, `${n}/${N}`);
   }
 
   console.log('\n━━━━ [5] 비결정성 안정성(경계 3회 반복) ━━━━');

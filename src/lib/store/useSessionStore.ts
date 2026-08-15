@@ -712,12 +712,20 @@ export const useSessionStore = create<SessionState>((set, get) => ({
         ? 'invalid_code'
         : /too_many_attempts/.test(error.message)
         ? 'too_many_attempts'
+        // 0067 already_member = 이미 그 매장 멤버인데 같은 코드를 또 넣은 것. 폴백 문구가 '코드를 확인하고
+        // 다시 시도'라 **맞는 코드를 계속 다시 넣게** 만들었다. 게다가 서버가 이 실패를 join_attempts 에
+        // 적립하므로 5번이면 too_many_attempts 로 10분 잠긴다 — 안내가 사용자를 잠금으로 몰고 갔다.
+        // 코드 입력줄은 이미 매장이 있는 직원에게도 열려 있어(junior/hub 의 '매장 추가') 흔한 오입력이다.
+        : /already_member/.test(error.message)
+        ? 'already_member'
         : 'error';
       track('join_requested', { result: reason, code: (error as any).code ?? null });
       const msg = reason === 'invalid_code'
         ? INVALID_OR_EXPIRED_CODE_MSG
         : reason === 'too_many_attempts'
         ? '시도가 많아 잠시 잠겼어요. 10분 후 다시 시도해 주세요.'
+        : reason === 'already_member'
+        ? '이미 들어가 있는 매장이에요. 매장 목록에서 바로 들어갈 수 있어요.'
         : /birth_date_required|birth_date_invalid/.test(error.message)
         ? '생년월일 정보가 없어요. 로그아웃 후 다시 가입하거나 문의해 주세요.'
         : friendlyError(error.message, '매장에 합류하지 못했어요. 코드를 확인하고 다시 시도해 주세요.');
