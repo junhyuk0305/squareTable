@@ -951,7 +951,20 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     // active_unit_id 는 RLS 로 동결돼 이 definer RPC 로만 바뀐다. (삭제는 여전히 오너 전용 — deleteStore 가드 유지.)
     if (!targetUnitId || targetUnitId === get().unitId) return { error: null };
     const { error } = await switchActiveUnit(targetUnitId);
-    if (error) return { error: friendlyError(error.message, '매장을 전환하지 못했어요. 잠시 후 다시 시도해 주세요.') };
+    if (error) {
+      // 0142 unit_locked = 무료 초과로 잠긴 매장. **재시도로는 절대 안 풀린다** — 폴백 문구('잠시 후 다시
+      // 시도')로 떨어지면 사장이 같은 탭을 무한 반복하게 된다(PHONE_NOT_VERIFIED 가 낸 것과 같은 종류의
+      // 무음 오류). /stores 는 자체 lockedUnits 로 미리 막지만 상단바 매장 드롭다운(StoreToggle)은
+      // 이 경로로 그대로 들어오므로, 판정이 아니라 **문구**를 여기 SSOT 한 곳에서 참으로 만든다.
+      // 문구는 **그 매장에서의 내 역할**로 가른다(세션 role 은 지금 보고 있는 매장 것이라 A사장·B직원이 섞인다).
+      const targetRole = get().stores.find((s) => s.unit_id === targetUnitId)?.role;
+      const msg = /unit_locked/.test(error.message)
+        ? targetRole === 'owner'
+          ? '지금은 잠긴 매장이에요. 요금제를 적용하면 그대로 다시 열려요.'
+          : '지금은 잠긴 매장이에요. 사장님께 문의해 주세요.'
+        : friendlyError(error.message, '매장을 전환하지 못했어요. 잠시 후 다시 시도해 주세요.');
+      return { error: msg };
+    }
     const uid = get().userId;
     if (uid) await loadProfile(set, uid, get().email);
     return { error: null };

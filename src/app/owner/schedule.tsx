@@ -12,7 +12,7 @@ import { WeekStrip, type WeekDay } from '@/components/blocks/WeekStrip';
 import { DayTimeline, type TimelineRow } from '@/components/schedule/DayTimeline';
 import { ShiftQuickSheet, type ShiftEditTarget } from '@/components/schedule/ShiftQuickSheet';
 import { useStaffStore } from '@/lib/store/useStaffStore';
-import { useScheduleStore, shiftsOn, type ShiftTemplate, type SwapRequest } from '@/lib/store/useScheduleStore';
+import { useScheduleStore, shiftsOn, pendingApprovals, type ShiftTemplate, type SwapRequest } from '@/lib/store/useScheduleStore';
 import { todayStr } from '@/lib/utils/attendance';
 import {
   addDays,
@@ -59,11 +59,8 @@ export default function OwnerScheduleScreen() {
   const nameOf = (id: string) => staff.find((x) => x.id === id)?.name ?? '직원';
   const tplById = (id: string) => templates.find((t) => t.id === id);
 
-  // 사장 컨펌 대기(직원이 수락 완료한) 요청. 이미 지난 날짜는 컨펌 의미가 없어 제외.
-  const pending = useMemo(
-    () => swaps.filter((r) => r.status === 'accepted' && r.date >= today),
-    [swaps, today],
-  );
+  // 사장 컨펌 대기(직원이 수락 완료한) 요청. 판정 SSOT는 pendingApprovals — 홈 '다음 행동'이 같은 수를 쓴다.
+  const pending = useMemo(() => pendingApprovals(swaps, today), [swaps, today]);
 
   // 점은 "그날 근무가 있다"만 뜻한다 — 건수는 표시하지 않는다(그룹 헤더 합계와 이중 계산이 된다).
   const days: WeekDay[] = useMemo(

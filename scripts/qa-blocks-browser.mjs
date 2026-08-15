@@ -3,7 +3,7 @@
 // 메가프롬프트 완료 정의의 "npm run web으로 눈으로 확인 — 사장 홈 / 노하우 / 퀴즈 / 직원 홈 4화면 최소"를 집행한다.
 // 목업이 아니라 실 백엔드 + 실 세션이다(AGENTS.md ⑥ 라이브 증명).
 //
-//   B1 사장 홈    — HeroSubNav(답을 기다리는 질문 + 퀴즈·직원·급여·근무표 4칸) · AlertRow(확인이 필요한 노하우) · 오늘 업무 3건
+//   B1 사장 홈    — HeroSubNav(답을 기다리는 질문 + 퀴즈·직원·급여·근무표 4칸) · AlertRow(확인이 필요한 노하우) · '오늘' 카드(근무 머리줄 + 업무 3건)
 //   B2 노하우      — AlertRow(상단 미검증) · VerifyBadge(파란 체크)
 //   B3 퀴즈        — ProgressRing(통과한 직원 n/m) · AlertRow(문항 없는 노하우) · 직원별 목록
 //   B4 직원 홈     — 오늘 할 일 히어로가 최상단 · Primary는 히어로 CTA '출근하기' 하나 · 오늘 업무 3건
@@ -396,7 +396,12 @@ async function main() {
       if (await see(po, t)) ownerRevived.push(t);
     }
     check('B1-6 삭제된 인사말·MiniStats가 되살아나지 않았다', ownerRevived.length === 0, ownerRevived.join(' '));
-    check('B1-7 오늘 업무 목록 + 전체보기', (await see(po, '오늘 업무')) && (await see(po, '전체보기')));
+    // ★2026-08-12: '오늘 업무' 카드가 '오늘' 카드로 바뀌었다 — 출근 머리줄이 같은 카드 안으로 들어오면서
+    //   제목이 업무만 가리키지 않게 됐다. 옛 단언은 '오늘 업무' 리터럴이라 개편과 함께 깨진다.
+    check('B1-7 오늘 카드 — 제목 + 업무 전체보기', (await see(po, '오늘')) && (await see(po, '전체보기')));
+    // 머리줄(출근 현황)은 **시드에 오늘 출퇴근·근무 예정이 있어야만** 뜬다(시드 직원은 오늘 기록 0 — B4 주석).
+    //  → 통과/실패로 세지 않고 실측만 기록한다. 없는 조건을 통과로 세지 않기 위한 것이다(AGENTS.md 게이트 3함정).
+    console.log(`    · [기록] '오늘' 카드 근무 머리줄 렌더 = ${(await see(po, '명 예정')) || (await see(po, '오늘 근무 보기'))}`);
     check('B1-8 옛 히어로("반복 질문을 AI가 대신 받았어요") 제거됨', !(await see(po, '반복 질문을 AI가 대신 받았어요')));
     await shot(po, '01-owner-home');
 

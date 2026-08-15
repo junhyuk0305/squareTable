@@ -319,6 +319,14 @@ export type ResolvedShift = {
   pending: boolean; // 진행 중인 교대 요청이 걸려 있나
 };
 
+/**
+ * 사장 승인만 남은 교대 요청 — 직원끼리 합의(accepted)가 끝난 것. 지난 날짜는 승인 의미가 없어 제외.
+ * ★근무표 화면과 사장 홈이 **같은 수**를 말해야 해서 판정은 여기 하나다(홈 '다음 행동' 1순위).
+ */
+export function pendingApprovals(swaps: SwapRequest[], today: string): SwapRequest[] {
+  return swaps.filter((r) => r.status === 'accepted' && r.date >= today);
+}
+
 /** 특정 날짜에 발생하는 시프트들 — 승인된 교대는 근무자를 치환, 진행 중 교대는 pending 표시. */
 export function shiftsOn(
   templates: ShiftTemplate[],
