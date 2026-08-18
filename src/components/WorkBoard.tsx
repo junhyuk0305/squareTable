@@ -28,6 +28,7 @@ import { Appear, stagger } from '@/components/Appear';
 import { useRoomStore } from '@/lib/store/useRoomStore';
 import { WorkChat } from '@/components/work/WorkChat';
 import { RoomList } from '@/components/work/RoomList';
+import { RoomSortSheet } from '@/components/work/RoomSortSheet';
 import { RoomDrawer } from '@/components/work/RoomDrawer';
 import { RoomComposer, type RoomLookDraft } from '@/components/work/RoomComposer';
 import { NoticePanel } from '@/components/work/NoticePanel';
@@ -205,9 +206,22 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
   // 방 목록에서 방을 연다 — 활성 방을 바꾸고 대화 화면으로. 되돌아오는 길은 뒤로가기 하나다(방 전환 UI 없음).
   const openRoom = useCallback((roomId: string) => {
     useRoomStore.getState().setCurrentRoom(roomId);
+    // 여는 순간 '여기까지 읽음' 기준을 옮긴다(0154) — 배지·정렬이 둘 다 이 값에서 나온다.
+    // 나올 때 한 번 더 찍는 것은 closePanel 이 아니라 WorkChat 의 뒤로가기(onBack)가 맡는다:
+    // 방을 보고 있는 동안 들어온 말까지 읽은 것으로 쳐야 목록으로 나갔을 때 배지가 안 남는다.
+    if (userId) useRoomStore.getState().markRead(roomId, userId);
     setOpenedExternally(false);
     setView('chat');
-  }, []);
+  }, [userId]);
+  // 채팅방 목록 정렬(기기 로컬) — 목록 화면 우상단 톱니.
+  const [sortSheet, setSortSheet] = useState(false);
+  // 대화방 → 목록. 나가는 순간 읽음 기준을 지금으로 옮긴다 — 보고 있는 동안 들어온 말까지 읽은 것으로
+  // 쳐야, 방금 읽은 대화가 목록에서 배지로 남지 않는다(열 때 한 번만 찍으면 그게 남는다).
+  const leaveRoomView = useCallback(() => {
+    const rid = useRoomStore.getState().currentRoomId;
+    if (rid && userId) useRoomStore.getState().markRead(rid, userId);
+    setView('rooms');
+  }, [userId]);
   const openRoomComposer = useCallback(() => setRoomComposer('create'), []);
   // 서버가 방을 만든 뒤에 목록으로 돌려보낸다(낙관적 이동 금지 — 실패했는데 새 방이 열려 있으면 안 된다).
   const createRoom = useCallback(async (draft: RoomLookDraft, memberIds: string[]) => {
@@ -679,8 +693,18 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
           // 여기서 매번 () => null + headerBackVisible:false 로 초기화한다(owner/_layout 주석의 그 함정).
           headerLeft: () => null,
           headerBackVisible: false,
-          // 공지·할일은 **방 안**(헤더의 할일 · 서랍의 공지)으로 옮겼다 — 목록 화면에는 두지 않는다.
-          headerRight: () => null,
+          // 공지·할일은 **방 안**(헤더의 할일 · 서랍의 공지)으로 옮겼다 — 목록 화면에 남는 건 정렬뿐이다.
+          headerRight: () => (
+            <Pressable
+              onPress={() => setSortSheet(true)}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="채팅방 정렬"
+              style={({ pressed }) => [{ paddingHorizontal: HEADER_EDGE_GUTTER, paddingVertical: 4 }, pressed && { opacity: 0.6 }]}
+            >
+              <Ionicons name="settings-outline" size={22} color={InkColors.ink} />
+            </Pressable>
+          ),
         }
       : {
           // ★채팅 루트가 설정한 headerTitle(컴포넌트)·headerRight 를 **명시적으로 되돌린다.**
@@ -703,6 +727,7 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
   return (
     <SafeAreaView style={st.safe} edges={['bottom']}>
       <Stack.Screen options={headerOptions} />
+      <RoomSortSheet visible={sortSheet} onClose={() => setSortSheet(false)} />
 
       {/* 탭 루트 = 채팅방 목록. 방 전환 칩바·드롭다운은 없다 — 방을 옮기려면 뒤로가기 → 목록(판정 ⑤). */}
       {view === 'rooms' && (
@@ -729,7 +754,7 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
         <Appear delay={0} style={{ flex: 1 }}>
         <WorkChat
           key={currentRoomId ?? 'all'}
-          onBack={() => setView('rooms')}
+          onBack={leaveRoomView}
           onOpenTodo={() => openPanel('todo')}
           onOpenDrawer={() => setView('drawer')}
           // 안 읽은 공지가 있으면 햄버거에 점 — 공지 진입이 서랍으로 들어가면서 신호를 잃지 않게.

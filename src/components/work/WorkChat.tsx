@@ -398,6 +398,7 @@ export function WorkChat({
       )}
 
       <View style={s.composer}>
+       <View style={s.composerBar}>
         <Pressable
           onPress={() => setMenu((v) => !v)}
           accessibilityRole="button"
@@ -406,7 +407,9 @@ export function WorkChat({
         >
           <Ionicons name={menu ? 'close' : 'add'} size={24} color={InkColors.bubbleText} />
         </Pressable>
-        <MentionInput value={draft} onChangeText={setDraft} onSubmit={send} members={members} me={me} onAssignTask={isOwner ? onAssignTask : undefined} />
+        {/* 입력칸은 알약 바 **안**에 들어가므로 자기 배경·테두리를 지운다 — 알약 안의 알약이 되면
+            테두리가 두 겹으로 보인다(style prop 이 MentionInput 의 s.input 을 덮어쓴다). */}
+        <MentionInput value={draft} onChangeText={setDraft} onSubmit={send} members={members} me={me} onAssignTask={isOwner ? onAssignTask : undefined} style={s.inputFlat} />
         {/* 말로 메시지 작성. 멤버 이름을 힌트로 넘겨 이름 오인식을 줄이되, @멘션은 자동으로 붙이지
             않는다 — 잘못 붙은 멘션은 엉뚱한 사람에게 알림이 가고 되돌릴 수 없다(사람이 직접 붙인다). */}
         <VoiceInputButton
@@ -417,6 +420,7 @@ export function WorkChat({
         <Pressable onPress={send} disabled={!draft.trim()} accessibilityRole="button" accessibilityLabel="메시지 전송" style={({ pressed }) => [s.send, !draft.trim() && { opacity: 0.4 }, pressed && { opacity: 0.85 }]}>
           <Ionicons name="arrow-up" size={20} color={InkColors.ink} />
         </Pressable>
+       </View>
       </View>
 
       {/* 메시지 롱프레스 액션 시트 — 프레임(460) 안에 가둔다(modalFrameStyle). */}
@@ -630,12 +634,22 @@ const s = StyleSheet.create({
   promotedTag: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 3 },
   promotedTagText: { fontSize: 10.5, fontWeight: '700', color: InkColors.ink3 },
 
-  composer: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 10, backgroundColor: InkColors.cream, borderTopWidth: 1, borderTopColor: InkColors.line },
-  plus: { width: 38, height: 38, borderRadius: Radius.md, backgroundColor: InkColors.ink, alignItems: 'center', justifyContent: 'center' },
+  // 입력창도 떠 있는 형태다 — 상단 헤더(floatHdr)와 같은 알약·같은 그림자. 화면 배경(paper) 위에
+  // 흰 알약이 떠 있는 그림이라, 가로로 꽉 찬 띠 + 윗줄(borderTop)로 화면을 잘라 놓던 것을 없앴다.
+  // ★붙박이(flow)로 둔다 — 절대배치하면 스트림 바닥이 입력창에 가려지고, 키보드가 올라올 때
+  //   KeyboardAvoidingView 가 밀어 줄 대상이 사라진다.
+  composer: { paddingHorizontal: Space.md, paddingTop: Space.sm, paddingBottom: Space.md },
+  composerBar: {
+    flexDirection: 'row', alignItems: 'center', gap: Space.xs,
+    paddingHorizontal: 6, paddingVertical: 6,
+    borderRadius: Radius.pill, backgroundColor: InkColors.bg, ...Elevation.e2,
+  },
+  inputFlat: { backgroundColor: 'transparent', borderColor: 'transparent', paddingHorizontal: Space.sm },
+  plus: { width: 38, height: 38, borderRadius: Radius.pill, backgroundColor: InkColors.ink, alignItems: 'center', justifyContent: 'center' },
   send: { width: 38, height: 38, borderRadius: Radius.pill, backgroundColor: BrandColors.yellow, borderWidth: 1, borderColor: BrandColors.yellowDeep, alignItems: 'center', justifyContent: 'center' },
 
   menuBackdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
-  menu: { position: 'absolute', left: 12, bottom: 64, backgroundColor: InkColors.bg, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md, padding: 6, width: 220, ...Elevation.e3 },
+  menu: { position: 'absolute', left: Space.md, bottom: 74, backgroundColor: InkColors.bg, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md, padding: 6, width: 220, ...Elevation.e3 },
   mi: { flexDirection: 'row', alignItems: 'center', gap: 11, padding: 11, borderRadius: Radius.sm },
   miTop: { borderTopWidth: 1, borderTopColor: InkColors.line, marginTop: 3, paddingTop: 12 },
   miIc: { width: 30, height: 30, borderRadius: Radius.sm, backgroundColor: BrandColors.yellowSoft, alignItems: 'center', justifyContent: 'center' },

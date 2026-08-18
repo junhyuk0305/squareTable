@@ -6,7 +6,8 @@ import { StoredImage } from '@/components/StoredImage';
 import { Appear, stagger } from '@/components/Appear';
 import { useRoomStore, visibleRooms } from '@/lib/store/useRoomStore';
 import { type FeedItem } from '@/lib/store/useWorkStore';
-import { roomLook } from '@/lib/utils/room';
+import { roomLook, unreadCount } from '@/lib/utils/room';
+import { usePreferencesStore } from '@/lib/store/usePreferencesStore';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Elevation, Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
@@ -19,8 +20,8 @@ const FAB_SIZE = 56;
  * RoomList — 업무 탭의 루트. **내가 들어간 방만** 보인다(0147: 사장 자동참여 폐지).
  * 방을 탭하면 그 방의 대화로 들어가고, 대화방에서 나오는 길은 뒤로가기 하나다(방 전환 UI 없음).
  *
- * ★안 읽음 배지는 아직 없다 — '내가 언제까지 읽었나'를 담는 자리가 스키마에 없어서,
- *   지금 배지를 그리면 근거 없는 숫자가 된다. 마지막 대화·시각만 정직하게 보여준다.
+ * 안 읽음 배지의 근거는 `work_room_prefs.last_read_at`(0154) 하나다 — 방을 열면 그 시각이 기준이 되고,
+ * 그 뒤 남이 쓴 대화만 센다. 정렬(최신순·안 읽은 순)도 같은 숫자에서 나온다(`unreadCount` 가 SSOT).
  */
 export function RoomList({
   me,
@@ -39,6 +40,7 @@ export function RoomList({
   const rooms = useRoomStore((s) => s.rooms);
   const memberRows = useRoomStore((s) => s.members);
   const prefs = useRoomStore((s) => s.prefs);
+  const roomSort = usePreferencesStore((s) => s.roomSort);
   // ★스토어 게터를 호출하지 않는다 — 구독 중인 값에서 파생한다(visibleRooms 주석의 그 함정).
   const visible = useMemo(() => visibleRooms(rooms, memberRows, me), [rooms, memberRows, me]);
 
@@ -55,15 +57,27 @@ export function RoomList({
     return map;
   }, [feed, rooms]);
 
+  // 방별 안 읽은 수 — 배지와 정렬이 같은 값을 봐야 한다(따로 세면 배지 3 · 정렬 0 인 상태가 생긴다).
+  const unreadBy = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const r of visible) map[r.id] = unreadCount(feed, r, me, prefs.find((p) => p.roomId === r.id));
+    return map;
+  }, [visible, feed, me, prefs]);
+
+  // '전체'를 맨 위로 고정하던 것은 뺐다 — 정렬을 고를 수 있게 된 이상, 고른 기준을 방 하나가 무시하면
+  // 안 읽은 방이 '전체' 아래로 밀려 정렬이 거짓말이 된다.
   const sorted = useMemo(
     () =>
       visible.slice().sort((a, b) => {
-        if (a.isDefault !== b.isDefault) return a.isDefault ? -1 : 1; // '전체'가 늘 맨 위
+        if (roomSort === 'unread') {
+          const d = (unreadBy[b.id] ?? 0) - (unreadBy[a.id] ?? 0);
+          if (d !== 0) return d; // 동수면 아래 최신순으로 떨어진다(안 읽은 게 없는 방들의 순서도 뜻이 있게)
+        }
         const av = lastByRoom[a.id] ? tsMs(lastByRoom[a.id].createdAt) : 0;
         const bv = lastByRoom[b.id] ? tsMs(lastByRoom[b.id].createdAt) : 0;
         return bv - av;
       }),
-    [visible, lastByRoom],
+    [visible, lastByRoom, roomSort, unreadBy],
   );
 
   return (
@@ -79,7 +93,9 @@ export function RoomList({
                 onPress={() => onOpen(room.id)}
                 style={({ pressed }) => [s.row, pressed && { backgroundColor: InkColors.paper }]}
                 accessibilityRole="button"
-                accessibilityLabel={`${look.name} 채팅방 열기`}
+                accessibilityLabel={
+                  unreadBy[room.id] > 0 ? `${look.name} 채팅방 열기 · 안 읽은 대화 ${unreadBy[room.id]}건` : `${look.name} 채팅방 열기`
+                }
               >
                 {look.imageUrl ? (
                   <StoredImage stored={look.imageUrl} style={s.avatar} />
@@ -97,7 +113,14 @@ export function RoomList({
                     {last ? (last.text.trim() || '사진') : '아직 대화가 없어요'}
                   </Text>
                 </View>
-                {last && <Text style={s.time}>{mdHHmm(last.createdAt)}</Text>}
+                <View style={s.tail}>
+                  {last && <Text style={s.time}>{mdHHmm(last.createdAt)}</Text>}
+                  {unreadBy[room.id] > 0 && (
+                    <View style={s.badge}>
+                      <Text style={s.badgeText}>{unreadBy[room.id] > 99 ? '99+' : unreadBy[room.id]}</Text>
+                    </View>
+                  )}
+                </View>
               </Pressable>
             </Appear>
           );
@@ -132,7 +155,11 @@ const s = StyleSheet.create({
   // 인원수·시각은 위치·상태 꼬리표(보조) — 15sp 하한 대상이 아니다.
   count: { fontSize: 12, fontWeight: '700', color: InkColors.ink3 },
   preview: { fontSize: 15, lineHeight: 21, color: InkColors.ink2, fontWeight: '600' },
+  tail: { alignItems: 'flex-end', gap: 4, minWidth: 40 },
   time: { fontSize: 12, color: InkColors.ink3, fontWeight: '600' },
+  // 안 읽음 배지 — 흰 글자를 얹는 면이라 500(bad)이 아니라 800 솔리드다(시맨틱 색 표).
+  badge: { minWidth: 20, height: 20, paddingHorizontal: 6, borderRadius: Radius.pill, backgroundColor: BrandColors.badSolid, alignItems: 'center', justifyContent: 'center' },
+  badgeText: { fontSize: 11.5, fontWeight: '800', color: InkColors.bg },
   empty: { paddingHorizontal: Space.gutter, paddingVertical: 40, fontSize: 15, lineHeight: 22, color: InkColors.ink3, fontWeight: '600', textAlign: 'center' },
   fab: {
     position: 'absolute', right: Space.gutter, bottom: Space.gutter,

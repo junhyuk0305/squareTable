@@ -1236,7 +1236,7 @@ export async function softDeleteRoom(id: string): Promise<boolean> {
 // 이름·사진·색의 개인 덮어쓰기 + 할일 완료 알림 표시 여부. 행이 없으면 전역 값 + show_task_done=true.
 export async function fetchRoomPrefs(): Promise<RoomPref[]> {
   if (!HAS_SUPABASE) return [];
-  const { data, error } = await supabase.from('work_room_prefs').select('room_id, name, image_url, color, show_task_done');
+  const { data, error } = await supabase.from('work_room_prefs').select('room_id, name, image_url, color, show_task_done, last_read_at');
   if (error) {
     readFail('fetchRoomPrefs', error);
     return [];
@@ -1246,6 +1246,7 @@ export async function fetchRoomPrefs(): Promise<RoomPref[]> {
     ...(r.name ? { name: r.name as string } : null),
     ...(r.image_url ? { imageUrl: r.image_url as string } : null),
     ...(r.color ? { color: r.color as string } : null),
+    ...(r.last_read_at ? { lastReadAt: r.last_read_at as string } : null),
     showTaskDone: r.show_task_done !== false,
   })) as RoomPref[];
 }
@@ -1263,6 +1264,18 @@ export async function upsertRoomPref(userId: string, pref: RoomPref): Promise<bo
       show_task_done: pref.showTaskDone,
       updated_at: new Date().toISOString(),
     }),
+  );
+}
+/**
+ * 이 방을 '여기까지 읽었다'로 표시(0154). **last_read_at 만** 보낸다 —
+ * on conflict 는 준 칼럼만 갱신하므로 개인 이름·사진·색·완료알림 설정은 그대로 남는다.
+ * (반대로 upsertRoomPref 는 last_read_at 을 안 보내므로 방 설정 저장이 읽음 위치를 되돌리지 않는다.)
+ */
+export async function markRoomRead(userId: string, roomId: string, atIso: string): Promise<boolean> {
+  if (!HAS_SUPABASE) return true;
+  return write(
+    'markRoomRead',
+    supabase.from('work_room_prefs').upsert({ room_id: roomId, user_id: userId, last_read_at: atIso }),
   );
 }
 export async function addRoomMember(roomId: string, userId: string): Promise<boolean> {

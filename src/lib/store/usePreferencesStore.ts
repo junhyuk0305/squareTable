@@ -10,6 +10,8 @@ import { create } from 'zustand';
 import { fetchNotificationPrefs, saveNotificationPrefs } from '@/lib/db';
 
 export type TextScale = 'small' | 'normal' | 'large';
+/** 채팅방 목록 정렬 — '이 기기에서의 보기 설정'이라 textScale 과 같은 로컬 축이다(서버 저장 없음). */
+export type RoomSort = 'recent' | 'unread';
 
 type Prefs = {
   pushEnabled: boolean;
@@ -18,6 +20,7 @@ type Prefs = {
   quietStart: string; // "HH:MM" — 방해 금지 시작 (사용자 직접 입력)
   quietEnd: string; // "HH:MM" — 방해 금지 종료
   textScale: TextScale;
+  roomSort: RoomSort;
 };
 
 const KEY = 'sqt.prefs.v1';
@@ -28,6 +31,7 @@ const DEFAULTS: Prefs = {
   quietStart: '22:00',
   quietEnd: '08:00',
   textScale: 'normal',
+  roomSort: 'recent',
 };
 
 const storage =
@@ -147,10 +151,10 @@ export const usePreferencesStore = create<PrefsState>((set, get) => ({
 
 function persist(state: PrefsState) {
   try {
-    const { pushEnabled, emailEnabled, quietHours, quietStart, quietEnd, textScale } = state;
+    const { pushEnabled, emailEnabled, quietHours, quietStart, quietEnd, textScale, roomSort } = state;
     storage?.setItem(
       KEY,
-      JSON.stringify({ pushEnabled, emailEnabled, quietHours, quietStart, quietEnd, textScale }),
+      JSON.stringify({ pushEnabled, emailEnabled, quietHours, quietStart, quietEnd, textScale, roomSort }),
     );
   } catch {
     /* noop */

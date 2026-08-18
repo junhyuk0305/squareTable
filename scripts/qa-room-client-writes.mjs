@@ -4,6 +4,7 @@
 // 왜 필요한가: 이번 개편에서 클라(db.ts)가 **새 컬럼·새 테이블·새 RPC**를 쓰기 시작했다.
 //   · work_rooms.image_url / color        (0149)
 //   · work_room_prefs                      (0149)
+//   · work_room_prefs.last_read_at         (0154 — 안 읽음 배지·정렬의 근거)
 //   · soft_delete_room()                   (0148)
 //   · scope='shared' + owner_id 조합의 할일 (0150·0152 — 배정 ≠ 비공개)
 //   이 프로젝트에서 실제로 났던 사고가 정확히 이 유형이다: db.ts 가 라이브에 없는 컬럼을 보내
@@ -108,6 +109,35 @@ try {
     // 남의 개인 설정은 0건이어야 한다 — 이게 새면 '나에게만'이 거짓말이 된다.
     const { data, error } = await jB.from('work_room_prefs').select('room_id').eq('room_id', ROOM);
     check('2-3 남의 개인 설정은 안 보인다', !error && (data ?? []).length === 0, error?.message ?? `실측 ${(data ?? []).length}건`);
+  }
+
+  // ═════════ 2b. 읽음 위치 (work_room_prefs.last_read_at · 0154) ═════════
+  // 두 쓰기 경로가 **서로를 덮지 않는 것**이 계약이다: 읽음 표시는 last_read_at 만 보내고,
+  // 방 설정 저장은 last_read_at 을 안 보낸다. 한쪽이 상대 칸을 null 로 밀면 배지가 조용히 틀린다.
+  console.log('\n[2b] 읽음 위치 (last_read_at · 0154)');
+  const READ_AT = new Date().toISOString();
+  {
+    // db.ts markRoomRead 와 같은 모양 — 이 컬럼 하나만 담은 upsert.
+    const { error } = await jA.from('work_room_prefs').upsert({ room_id: ROOM, user_id: aId, last_read_at: READ_AT });
+    check('2-4 읽음 표시 저장 = 통과', !error, error?.message ?? '');
+  }
+  {
+    const { data, error } = await jA.from('work_room_prefs').select('last_read_at, name, color').eq('room_id', ROOM).maybeSingle();
+    const same = data?.last_read_at && Math.abs(new Date(data.last_read_at).getTime() - new Date(READ_AT).getTime()) < 1000;
+    check('2-5 ★읽음 위치가 되읽힌다(컬럼 유실 없음)', !error && !!same, error?.message ?? `실측 ${JSON.stringify(data)}`);
+    check('2-6 ★읽음 표시가 개인 이름·색을 지우지 않는다', data?.name === 'A만 보는 이름' && data?.color === '#8A63D2',
+      `실측 ${JSON.stringify(data)}`);
+  }
+  {
+    // db.ts upsertRoomPref 와 같은 모양 — last_read_at 을 **안 보낸다**.
+    await jA.from('work_room_prefs').upsert({
+      room_id: ROOM, user_id: aId, name: 'A만 보는 이름2', image_url: null, color: '#8A63D2', show_task_done: true,
+      updated_at: new Date().toISOString(),
+    });
+    const { data } = await jA.from('work_room_prefs').select('last_read_at, name').eq('room_id', ROOM).maybeSingle();
+    const kept = data?.last_read_at && Math.abs(new Date(data.last_read_at).getTime() - new Date(READ_AT).getTime()) < 1000;
+    check('2-7 ★방 설정 저장이 읽음 위치를 되돌리지 않는다', !!kept && data?.name === 'A만 보는 이름2',
+      `실측 ${JSON.stringify(data)}`);
   }
 
   // ═════════ 3. 배정 ≠ 비공개 (0150·0152) ═════════
