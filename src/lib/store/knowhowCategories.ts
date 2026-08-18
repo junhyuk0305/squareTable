@@ -10,7 +10,13 @@
 // ⚠️ 이 파일은 RN/zustand/alias(@/) 의존이 "없는" 순수함수만 둔다 — node 로 진리표를 직접 회귀
 //   테스트하기 때문(scripts/qa-knowhow-categories.mjs · npm run qa:category). import 를 추가하지 말 것.
 
-export type CustomCategory = { id: string; label: string };
+export type CustomCategory = {
+  id: string;
+  label: string;
+  /** 색점 색(#RRGGBB). 만들 때 남는 색 중에서 골라 **저장한다**.
+   *  없으면(옛 저장본) 이름 해시로 폴백 — getSectionMeta 가 처리한다. */
+  color?: string;
+};
 
 /** 기본 4종 키 — playbook_entries.category 의 canonical 값. 여기 없으면 커스텀(또는 삭제된 커스텀). */
 export const DEFAULT_CATEGORY_KEYS = ['Routine', 'Event', 'Context', 'Know-how'] as const;
@@ -37,13 +43,15 @@ export function resolveCustomCategories(raw: unknown): CustomCategory[] {
   const seen = new Set<string>(DEFAULT_CATEGORY_KEYS);
   raw.forEach((it, i) => {
     if (!it || typeof it !== 'object') return;
-    const rec = it as { id?: unknown; label?: unknown };
+    const rec = it as { id?: unknown; label?: unknown; color?: unknown };
     const label = typeof rec.label === 'string' ? rec.label.trim() : '';
     if (!label) return; // 이름 없는 커스텀은 렌더하지 않음
     let id = typeof rec.id === 'string' && rec.id ? rec.id : `kc_${i}`;
     if (seen.has(id)) id = `${id}_${i}`;
     seen.add(id);
-    out.push({ id, label: label.slice(0, CUSTOM_LABEL_MAX) });
+    // 색은 저장된 것만 인정한다 — 이물질(숫자·객체)이면 키를 만들지 않고 이름 해시 폴백에 맡긴다.
+    const color = typeof rec.color === 'string' && /^#[0-9a-fA-F]{6}$/.test(rec.color) ? rec.color : undefined;
+    out.push(color ? { id, label: label.slice(0, CUSTOM_LABEL_MAX), color } : { id, label: label.slice(0, CUSTOM_LABEL_MAX) });
   });
   return out;
 }
@@ -57,9 +65,28 @@ export function sanitizeCustomCategories(items: CustomCategory[]): CustomCategor
     if (!label) continue;
     let id = it.id && !seen.has(it.id) ? it.id : localId();
     seen.add(id);
-    out.push({ id, label: label.slice(0, CUSTOM_LABEL_MAX) });
+    const color = typeof it.color === 'string' && /^#[0-9a-fA-F]{6}$/.test(it.color) ? it.color : undefined;
+    out.push(color ? { id, label: label.slice(0, CUSTOM_LABEL_MAX), color } : { id, label: label.slice(0, CUSTOM_LABEL_MAX) });
   }
   return out;
+}
+
+/**
+ * 새 카테고리에 줄 색 하나를 고른다 — **아직 안 쓰인 색 중에서 무작위로**.
+ *
+ * 이름 해시만 쓰던 옛 방식은 카테고리가 서넛만 돼도 같은 색이 겹쳤다(팔레트 8칸 · 생일 문제).
+ * 겹치면 색점이 분류를 구분하는 일을 못 한다.
+ *
+ * · 남는 색이 있으면 그중 무작위 — 매번 같은 순서로 주면 매장마다 색 배열이 똑같아진다.
+ * · 팔레트를 다 썼으면 전체에서 무작위(그때부터는 겹칠 수밖에 없다 — 조용히 실패하지 않고 그냥 준다).
+ * · `rand` 를 주입받아 순수하게 유지한다(테스트가 결정적으로 돌 수 있게).
+ */
+export function pickCategoryColor(palette: string[], taken: string[], rand: () => number = Math.random): string {
+  if (palette.length === 0) return '';
+  const used = new Set(taken.map((c) => c.toLowerCase()));
+  const free = palette.filter((c) => !used.has(c.toLowerCase()));
+  const pool = free.length > 0 ? free : palette;
+  return pool[Math.min(pool.length - 1, Math.floor(rand() * pool.length))];
 }
 
 // ── 런타임 레지스트리 ────────────────────────────────────────

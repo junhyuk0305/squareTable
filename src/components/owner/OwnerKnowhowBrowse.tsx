@@ -11,6 +11,7 @@ import { useWorkStore } from '@/lib/store/useWorkStore';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { Appear, stagger } from '@/components/Appear';
 import { Vanish } from '@/components/Vanish';
+import { Collapse } from '@/components/Collapse';
 import { EmptyState } from '@/components/EmptyState';
 import { InfoDot } from '@/components/InfoDot';
 import { VerifyBadge } from '@/components/VerifyBadge';
@@ -32,7 +33,9 @@ import type { PlaybookEntry } from '@/types';
 
 // ── 세그먼트(칸) ─────────────────────────────────────────────
 // 세 칸이 곧 노하우가 만들어지는 순서다: 손대야 나아가는 것 → 다듬어져 AI가 쓰는 것 → 낡아서 다시 볼 것.
-export type KnowhowSegKey = 'todo' | 'knowhow' | 'unused';
+// 'unused' 는 2026-08-19 에 '할 일'로 흡수됐다. 딥링크(?review=1 등)가 물고 있으니 키는 남기고
+// 진입 시 'todo' 로 착지시킨다 — 죽은 링크를 만들지 않는다.
+export type KnowhowSegKey = 'todo' | 'knowhow';
 
 /**
  * 찾기 바(검색·카테고리)를 띄우는 최소 노하우 수.
@@ -126,10 +129,13 @@ function EntryRow({ e, onPress, usedBy = 0, divider = true }: { e: PlaybookEntry
  * OwnerKnowhowBrowse — 사장 노하우 탭 본문(크롬리스). SafeAreaView/Stack.Screen/RoleTabBar 같은
  * 크롬은 상위(categories·knowledge)가 소유한다.
  *
- * 구성: 세그먼트 3칸(고정) → [할 일 | 노하우 | 안 쓰임] 본문 → 우하단 FAB(고정).
- *  · 할 일   = OwnerTodoSegment (구 '받은질문' 탭 본문 + 검토할 제안)
- *  · 노하우  = 검색·카테고리 칩·목록 + '여러 개 한 번에 추가'
- *  · 안 쓰임 = 확인 안 한 것 / 오래 확인 안 함 / 퀴즈 오답 링크
+ * 구성: 세그먼트 2칸(고정) → [할 일 | 노하우] 본문 → 우하단 FAB(고정).
+ *  · 할 일  = 받은 질문·검토할 제안(OwnerTodoSegment) + 확인 안 한 것 / 한 달간 안 물어본 것 / 퀴즈 오답 링크
+ *  · 노하우 = 검색·카테고리 칩·목록 (관리 액션은 상단 톱니 토글 뒤)
+ *
+ * (이력 2026-08-19) ① '안 쓰임' 칸을 '할 일'로 흡수 — 둘 다 "지금 손볼 것"이라 칸을 나눌 이유가 없었고,
+ *  배지가 갈려 남은 일이 몇 건인지 한눈에 안 보였다. ② 목록 아래 '여러 개 한 번에 추가' 카드 삭제.
+ *  ③ 카테고리 편집·내보내기를 개수 줄 오른쪽 톱니 토글로 접었다.
  *
  * (이력 2026-08-03) 뷰 3종[대시보드|목록|매뉴얼] → 목록 하나. 대시보드는 목록의 중복 투영이었고
  * (확인필요=상태칩·최근추가=최신순), 매뉴얼도 같은 EntryRow를 섹션으로 묶은 것뿐이라 '카테고리별'
@@ -178,6 +184,7 @@ export function OwnerKnowhowBrowse({
   const [query, setQuery] = useState('');
   const [activeCat, setActiveCat] = useState<string | null>(null); // null = 전체(단일 선택). 카테고리(section) 이름.
   const [catSheet, setCatSheet] = useState(false); // 카테고리 편집 시트
+  const [manageOpen, setManageOpen] = useState(false); // 톱니 토글(카테고리 편집·내보내기)
   // 확인 완료를 누르면 이 항목은 목록에서 빠진다 — 먼저 접히는 것을 보여주고(Vanish) 그 다음 검증을 쓴다.
   // 데이터를 먼저 바꾸면 optimisticPatch가 같은 틱에 행을 지워 애니메이션이 아예 안 보인다.
   const [leaving, setLeaving] = useState<string | null>(null);
@@ -211,7 +218,6 @@ export function OwnerKnowhowBrowse({
   const effectiveCat = activeCat && allCats.includes(activeCat) ? activeCat : null;
 
   const goAdd = () => router.push('/owner/coach' as never);
-  const goTemplates = () => router.push('/owner/templates' as never);
   const goHandover = () => router.push('/owner/handover' as never);
   const goTraining = () => router.push('/owner/training' as never);
   // 매니저 전용 물어보기(정본 §4 "AI 질문 매니저 ✅") — 검색으로 못 찾았을 때의 다음 행동.
@@ -380,10 +386,12 @@ export function OwnerKnowhowBrowse({
     ].filter((g) => g.items.length > 0);
   }, [listFiltered]);
 
+  // ★2026-08-19: '안 쓰임'을 '할 일'로 흡수해 2칸이 됐다.
+  //   둘 다 "지금 손볼 것"을 모으는 칸이라 따로 설 이유가 없었다 — 사장은 손볼 게 있나 보려고
+  //   두 칸을 번갈아 눌러야 했다. 배지도 두 군데로 갈려서 어느 쪽이 남은 일인지 안 보였다.
   const segItems: SegmentItem[] = [
-    { key: 'todo', label: '할 일', count: todo.total },
+    { key: 'todo', label: '할 일', count: todo.total + unusedSegCount },
     { key: 'knowhow', label: '노하우', count: visible.length },
-    { key: 'unused', label: '안 쓰임', count: unusedSegCount },
   ];
 
   // ── 칸 ② 노하우 ────────────────────────────────────────────
@@ -406,6 +414,20 @@ export function OwnerKnowhowBrowse({
               body={'여기 적어두면 직원이 물을 때 AI가 사장님 대신 답해줘요.\n많이 쌓일수록 같은 질문에 일일이 답할 일이 줄어요.'}
             />
           </View>
+          {/* 목록 관리(카테고리 편집·내보내기) — 매일 쓰는 게 아니라 이 톱니 뒤로 접었다.
+              ★노하우 0건이면 아래 본문이 빈 화면(EmptyState)이라 이 톱니도 같이 안 뜬다.
+                옛 판본의 '카테고리 편집' 버튼도 같은 자리·같은 조건이었다(이 개편으로 생긴 공백이 아니다). */}
+          {hasEntries && (
+            <Pressable
+              onPress={() => setManageOpen((v) => !v)}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 8 }}
+              accessibilityRole="button"
+              accessibilityLabel={manageOpen ? '목록 관리 닫기' : '목록 관리 열기'}
+              style={({ pressed }) => [styles.gearBtn, pressed && { opacity: 0.6 }]}
+            >
+              <Ionicons name={manageOpen ? 'close' : 'settings-outline'} size={17} color={InkColors.ink2} />
+            </Pressable>
+          )}
         </View>
 
         {/* 검토 대기(draft) — 인수인계서 파이프라인이 증분 저장한 항목. 발행 전이라 직원·AI에 안 보임. */}
@@ -442,35 +464,34 @@ export function OwnerKnowhowBrowse({
           )
         ) : (
           <>
-            {/* 목록 관리 액션 — 필터가 아니라 관리라서 칩 줄에서 내렸다(2026-08-06).
-                ★표시 조건은 찾기 바(showFindBar)와 **분리한다.** 안에 넣으면 노하우가 8건 미만인 매장에서
-                  카테고리 편집(CategoryEditSheet 의 유일한 진입점)과 내보내기에 아예 닿지 못한다
-                  — 이 프로젝트에서 세 번 재발한 '죽은 컨트롤' 유형이다.
-                ★시각 크기와 터치 타깃을 분리한다 — 작게 그리되 hitSlop 으로 48dp 하한을 지킨다. */}
-            <View style={styles.manageActions}>
-              <Pressable
-                onPress={() => setCatSheet(true)}
-                hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
-                style={({ pressed }) => [styles.manageBtn, pressed && { opacity: 0.7 }]}
-                accessibilityRole="button"
-                accessibilityLabel="카테고리 편집"
-              >
-                <Ionicons name="pricetags-outline" size={13} color={InkColors.ink2} />
-                <Text style={styles.manageBtnText}>카테고리 편집</Text>
-              </Pressable>
-              {canCopyToClipboard() && exportCount > 0 && (
+            {/* 톱니 토글로 펼쳐지는 목록 관리 — 카테고리 편집·내보내기.
+                한 줄이 통째로 버튼이라 터치 타깃은 행 높이(48)가 그대로 보장한다. */}
+            {manageOpen && (
+              <Collapse style={styles.manageActions}>
                 <Pressable
-                  onPress={() => copy(manualToText(exportGroups, { storeName, date: new Date().toLocaleDateString('ko-KR') }))}
-                  hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
-                  style={({ pressed }) => [styles.manageBtn, pressed && { opacity: 0.7 }]}
+                  onPress={() => { setManageOpen(false); setCatSheet(true); }}
+                  style={({ pressed }) => [styles.manageRow, pressed && { opacity: 0.7 }]}
                   accessibilityRole="button"
-                  accessibilityLabel={`지금 목록에 보이는 노하우 ${exportCount}개 내보내기`}
+                  accessibilityLabel="카테고리 편집"
                 >
-                  <Ionicons name={copied ? 'checkmark' : 'copy-outline'} size={13} color={InkColors.ink2} />
-                  <Text style={styles.manageBtnText} numberOfLines={1}>{copied ? '복사됐어요' : `내보내기 ${exportCount}개`}</Text>
+                  <Ionicons name="pricetags-outline" size={16} color={InkColors.ink2} />
+                  <Text style={styles.manageRowText}>카테고리 편집</Text>
+                  <Ionicons name="chevron-forward" size={15} color={InkColors.ink3} />
                 </Pressable>
-              )}
-            </View>
+                {canCopyToClipboard() && exportCount > 0 && (
+                  <Pressable
+                    onPress={() => copy(manualToText(exportGroups, { storeName, date: new Date().toLocaleDateString('ko-KR') }))}
+                    style={({ pressed }) => [styles.manageRow, styles.manageRowDivider, pressed && { opacity: 0.7 }]}
+                    accessibilityRole="button"
+                    accessibilityLabel={`지금 목록에 보이는 노하우 ${exportCount}개 내보내기`}
+                  >
+                    <Ionicons name={copied ? 'checkmark' : 'copy-outline'} size={16} color={InkColors.ink2} />
+                    <Text style={styles.manageRowText} numberOfLines={1}>{copied ? '복사됐어요' : `내보내기 ${exportCount}개`}</Text>
+                    <Ionicons name="chevron-forward" size={15} color={InkColors.ink3} />
+                  </Pressable>
+                )}
+              </Collapse>
+            )}
 
             {/* 찾기 바 — 검색·카테고리(+정렬은 SORT_MIN 이상에서만)를 한 블록으로. */}
             {showFindBar && (
@@ -548,91 +569,52 @@ export function OwnerKnowhowBrowse({
           </>
         )}
 
-        {/* 인수인계서 업로드 / 업종 템플릿 — 한 건씩 쓰지 않고 여러 건을 한꺼번에 만드는 두 경로.
-            ★2026-08-06: 같은 형태의 카드 2장이 나란히 서 있어(이번 개편이 없애려던 증상) **한 카드 안 2행**으로 묶었다.
-            ★2026-08-07: 목록 **아래**로 내렸다. 매일 보는 건 목록이지 이 카드가 아니다. */}
-        <View style={styles.growSection}>
-          <SectionLabel title="여러 개 한 번에 추가" />
-          <View style={styles.growCard}>
-            <Pressable
-              onPress={goHandover}
-              style={({ pressed }) => [styles.growRow, pressed && { opacity: 0.85 }]}
-              accessibilityRole="button"
-              accessibilityLabel="인수인계서 올리기"
-            >
-              <Ionicons name="cloud-upload-outline" size={16} color={InkColors.ink2} />
-              <View style={{ flex: 1 }}>
-                <Text style={styles.templateLinkTitle}>인수인계서 올리기</Text>
-                <Text style={styles.templateLinkSub}>오픈·마감·규칙 메모를 올리면 AI가 노하우로 정리해요</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={16} color={InkColors.ink3} />
-            </Pressable>
-
-            <Pressable
-              onPress={goTemplates}
-              style={({ pressed }) => [styles.growRow, styles.growRowDivider, pressed && { opacity: 0.85 }]}
-              accessibilityRole="button"
-              accessibilityLabel="노하우 템플릿 둘러보기"
-            >
-              <Ionicons name="albums-outline" size={16} color={InkColors.ink2} />
-              <View style={{ flex: 1 }}>
-                <Text style={styles.templateLinkTitle}>노하우 템플릿 둘러보기</Text>
-                <Text style={styles.templateLinkSub}>업종에서 자주 쓰는 노하우를 내 노하우로 바로 가져와요</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={16} color={InkColors.ink3} />
-            </Pressable>
-          </View>
-        </View>
+        {/* ★2026-08-19: '여러 개 한 번에 추가'(인수인계서 올리기 / 템플릿 둘러보기) 카드 삭제.
+            매일 보는 목록 아래에 상시 붙어 있을 무게가 아니었다. 두 경로 자체는 살아 있다 —
+            인수인계서=노하우 추가 채팅의 ＋메뉴·첫 출근 안내, 템플릿=허브 '노하우 담기'·시작 체크리스트. */}
       </>
     );
   };
 
-  // ── 칸 ③ 안 쓰임 ───────────────────────────────────────────
-  const unusedSegment = () => {
-    if (!loaded) {
-      return (
+  // ── 칸 ① 할 일 — 받은 질문·제안(OwnerTodoSegment) + 손볼 노하우(구 '안 쓰임' 칸) ───────
+  // 옛 '안 쓰임' 칸의 본문을 그대로 이어 붙인다. 판정(needsVerify·isUnused)도 그대로다 —
+  // 칸을 합친 것이지 기준을 바꾼 게 아니다.
+  const todoSegment = () => (
+    <>
+      <OwnerTodoSegment />
+
+      {!loaded ? (
         <View style={styles.center}>
           <ActivityIndicator color={InkColors.ink3} />
           <Text style={styles.loadingText}>노하우를 불러오는 중...</Text>
         </View>
-      );
-    }
-    return (
-      <>
-        {reviewList.length === 0 && unusedList.length === 0 ? (
-          <EmptyState
-            title="손볼 노하우가 없어요"
-            body="확인이 필요하거나 한 달간 아무도 안 물어본 노하우가 생기면 여기로 모아드릴게요."
-            cta={{ label: '노하우 추가하기', onPress: goAdd }}
-          />
-        ) : (
-          <>
-            {reviewList.length > 0 && groupBlock('review', '확인 안 한 것', reviewList)}
-            {/* 라벨=판정(isUnused = 만든 지 30일 경과 + 인용 0회) 그대로. 위 usageGroups 의 'cold' 와 같은 말이어야 한다. */}
-            {unusedList.length > 0 && groupBlock('unused', '한 달간 아무도 안 물어봤어요', unusedList)}
-          </>
-        )}
+      ) : (
+        <>
+          {reviewList.length > 0 && groupBlock('review', '확인 안 한 것', reviewList)}
+          {/* 라벨=판정(isUnused = 만든 지 30일 경과 + 인용 0회) 그대로. 위 usageGroups 의 'cold' 와 같은 말이어야 한다. */}
+          {unusedList.length > 0 && groupBlock('unused', '한 달간 아무도 안 물어봤어요', unusedList)}
 
-        {/* 오답이 몰린 노하우는 여기서 세지 않는다 — 퀴즈 결과가 이 화면에 없다.
-            수를 지어내는 대신 그 수를 아는 화면으로 보내는 링크 한 줄만 둔다. */}
-        <View style={styles.growCard}>
-          <Pressable
-            onPress={goTraining}
-            style={({ pressed }) => [styles.growRow, pressed && { opacity: 0.85 }]}
-            accessibilityRole="button"
-            accessibilityLabel="퀴즈에서 자주 틀리는 노하우 보기"
-          >
-            <Ionicons name="help-circle-outline" size={16} color={InkColors.ink2} />
-            <View style={{ flex: 1 }}>
-              <Text style={styles.templateLinkTitle}>퀴즈에서 자주 틀리는 노하우</Text>
-              <Text style={styles.templateLinkSub}>직원이 자꾸 틀리면 설명이 부족하다는 뜻이에요</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={16} color={InkColors.ink3} />
-          </Pressable>
-        </View>
-      </>
-    );
-  };
+          {/* 오답이 몰린 노하우는 여기서 세지 않는다 — 퀴즈 결과가 이 화면에 없다.
+              수를 지어내는 대신 그 수를 아는 화면으로 보내는 링크 한 줄만 둔다. */}
+          <View style={styles.growCard}>
+            <Pressable
+              onPress={goTraining}
+              style={({ pressed }) => [styles.growRow, pressed && { opacity: 0.85 }]}
+              accessibilityRole="button"
+              accessibilityLabel="퀴즈에서 자주 틀리는 노하우 보기"
+            >
+              <Ionicons name="help-circle-outline" size={16} color={InkColors.ink2} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.templateLinkTitle}>퀴즈에서 자주 틀리는 노하우</Text>
+                <Text style={styles.templateLinkSub}>직원이 자꾸 틀리면 설명이 부족하다는 뜻이에요</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color={InkColors.ink3} />
+            </Pressable>
+          </View>
+        </>
+      )}
+    </>
+  );
 
   return (
     <View style={styles.flex}>
@@ -640,7 +622,7 @@ export function OwnerKnowhowBrowse({
       <SegmentTabs items={segItems} value={seg} onChange={(k) => setSeg(k as KnowhowSegKey)} style={styles.segTabs} />
 
       <ScrollView style={styles.flex} contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-        {seg === 'todo' ? <OwnerTodoSegment /> : seg === 'unused' ? unusedSegment() : knowhowSegment()}
+        {seg === 'todo' ? todoSegment() : knowhowSegment()}
       </ScrollView>
 
       {/* FAB — ★ScrollView '밖'(형제)이라 스크롤과 같이 움직이지 않는다. 부모가 프레임 안이라 460px을 안 넘는다. */}
@@ -744,7 +726,6 @@ const styles = StyleSheet.create({
 
   // 템플릿 둘러보기 진입 링크(홈에서 이관)
   // '여러 개 한 번에 추가' — 두 진입을 한 카드 안 2행으로. 카드 1장 = 블록 1개(2026-08-06).
-  growSection: { gap: Space.sm },
   growCard: {
     backgroundColor: InkColors.bg, borderWidth: 1, borderColor: InkColors.line,
     borderRadius: Radius.md, ...Elevation.e1,
@@ -753,7 +734,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', gap: Space.sm,
     paddingVertical: Space.md, paddingHorizontal: Space.md,
   },
-  growRowDivider: { borderTopWidth: 1, borderTopColor: InkColors.line },
   templateLinkTitle: { fontSize: 15, fontWeight: '800', color: InkColors.ink },
   templateLinkSub: { fontSize: 12, color: InkColors.ink3, fontWeight: '600', marginTop: 1 },
 
@@ -812,13 +792,16 @@ const styles = StyleSheet.create({
   verifyBtnText: { fontSize: 12, fontWeight: '800', color: InkColors.ink },
 
   // 관리 액션 — 찾기 바 위 오른쪽의 작은 버튼. 시각은 칩 크기, 터치 타깃은 hitSlop 이 48dp까지 넓힌다.
-  manageActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: Space.sm },
-  manageBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 5, maxWidth: 180,
-    paddingVertical: 6, paddingHorizontal: 10, borderRadius: Radius.pill,
-    borderWidth: 1, borderColor: InkColors.line, backgroundColor: InkColors.bg,
+  // 톱니 토글 패널 — 목록 위에 펼쳐지는 관리 액션 묶음.
+  manageActions: {
+    borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md,
+    backgroundColor: InkColors.bg, overflow: 'hidden',
   },
-  manageBtnText: { flexShrink: 1, fontSize: 12.5, fontWeight: '700', color: InkColors.ink2 },
+  manageRow: { flexDirection: 'row', alignItems: 'center', gap: Space.md, minHeight: 48, paddingHorizontal: Space.md },
+  manageRowDivider: { borderTopWidth: 1, borderTopColor: InkColors.line },
+  manageRowText: { flex: 1, fontSize: 15, fontWeight: '700', color: InkColors.ink },
+  // 개수 줄 오른쪽 톱니 — 작게 그리되 hitSlop 으로 48dp 하한을 지킨다.
+  gearBtn: { width: 28, height: 28, alignItems: 'center', justifyContent: 'center' },
 
   // 묶음(쓰임새·안 쓰임) = 카드 밖 라벨 + 목록
   group: { gap: Space.sm },

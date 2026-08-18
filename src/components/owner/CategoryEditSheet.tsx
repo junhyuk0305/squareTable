@@ -5,9 +5,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { BottomSheet } from '@/components/BottomSheet';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { useSessionStore } from '@/lib/store/useSessionStore';
-import { getSectionMeta } from '@/lib/utils/category';
-import { UNSECTIONED, standardSections } from '@/lib/config/sections';
-import { newCustomCategory, type CustomCategory } from '@/lib/store/knowhowCategories';
+import { getSectionMeta, SECTION_PALETTE, FIXED_SECTION_COLORS } from '@/lib/utils/category';
+import { UNSECTIONED, standardSections, sectionOptions } from '@/lib/config/sections';
+import { newCustomCategory, pickCategoryColor, type CustomCategory } from '@/lib/store/knowhowCategories';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 
@@ -37,19 +37,40 @@ export function CategoryEditSheet({ onClose }: { onClose: () => void }) {
     ...new Set(visible.filter((e) => e.section?.trim() === name).map((e) => e.section as string)),
   ];
 
-  type Row = { key: string | null; label: string; count: number; deleted: boolean }; // key=원래 이름(null=신규)
+  // key=원래 이름(null=신규) / color=이 행의 색점(신규는 만들 때 고른 색)
+  type Row = { key: string | null; label: string; count: number; deleted: boolean; color?: string };
   const [rows, setRows] = useState<Row[]>(() => {
+    // ★노하우가 0개인 카테고리도 전부 보여준다(2026-08-19).
+    //   예전엔 '실제로 쓰이는 것 + 매장이 만든 것'만 실었다. 그래서 노하우 수정의 카테고리 변경에는
+    //   표준 챕터가 다 뜨는데 편집 시트에는 몇 개만 떠서, 같은 목록이 화면마다 다르게 보였다.
+    //   기준을 저쪽(sectionOptions)과 같은 '고를 수 있는 카테고리 전부'로 맞춘다.
     const used = [...new Set(visible.map((e) => e.section?.trim()).filter((s): s is string => !!s && s !== UNSECTIONED))];
-    const std = standardSections(industry);
-    const names = [...std.filter((s) => used.includes(s)), ...used.filter((s) => !std.includes(s)).sort((a, b) => a.localeCompare(b, 'ko'))];
-    for (const c of customs) if (!names.includes(c.label)) names.push(c.label);
-    return names.map((name) => ({ key: name, label: name, count: countFor(name), deleted: false }));
+    const names = sectionOptions(industry, [...used, ...customs.map((c) => c.label)]);
+    return names.map((name) => ({
+      key: name,
+      label: name,
+      count: countFor(name),
+      deleted: false,
+      color: customs.find((c) => c.label === name)?.color,
+    }));
   });
+  const stdSet = useMemo(() => new Set(standardSections(industry)), [industry]);
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
 
+  /** 이 시트에 지금 떠 있는 색 전부 — 새 카테고리가 이미 쓰인 색을 다시 고르지 않게 한다. */
+  const takenColors = (list: Row[]) => [
+    ...FIXED_SECTION_COLORS,
+    ...list.filter((r) => !r.deleted).map((r) => r.color ?? getSectionMeta(r.label.trim() || null).color),
+  ];
+
   const setLabel = (i: number, v: string) => setRows((p) => p.map((r, idx) => (idx === i ? { ...r, label: v } : r)));
-  const addRow = () => setRows((p) => [...p, { key: null, label: '', count: 0, deleted: false }]);
+  // 새 행은 만드는 순간 색을 받는다 — 이름을 적기 전부터 색점이 보여야 "이 색으로 생긴다"가 전달된다.
+  const addRow = () =>
+    setRows((p) => [...p, { key: null, label: '', count: 0, deleted: false, color: pickCategoryColor(SECTION_PALETTE, takenColors(p)) }]);
+  /** 색 다시 고르기 — 마음에 안 들면 남은 색 중 다른 것으로. */
+  const rerollColor = (i: number) =>
+    setRows((p) => p.map((r, idx) => (idx === i ? { ...r, color: pickCategoryColor(SECTION_PALETTE, takenColors(p)) } : r)));
   const markDelete = (i: number) => {
     setRows((p) => p.map((r, idx) => (idx === i ? { ...r, deleted: true } : r)));
     setConfirmDelete(null);
@@ -73,8 +94,12 @@ export function CategoryEditSheet({ onClose }: { onClose: () => void }) {
     const std = new Set(standardSections(industry));
     const finals = [...new Set(rows.filter((r) => !r.deleted).map((r) => r.label.trim()).filter((l) => l && l !== UNSECTIONED && !std.has(l)))];
     const nextCustoms: CustomCategory[] = finals.map((label) => {
+      const row = rows.find((r) => !r.deleted && r.label.trim() === label);
       const prev = customs.find((c) => c.label === label);
-      return prev ?? { ...newCustomCategory(), label };
+      // 색은 행이 들고 있는 것을 정본으로 — 새로 만든 행은 만들 때 고른 색, 기존 행은 저장돼 있던 색.
+      // 둘 다 없으면(이름만 바꾼 옛 항목) 남는 색 하나를 지금 배정한다.
+      const color = row?.color ?? prev?.color ?? pickCategoryColor(SECTION_PALETTE, takenColors(rows));
+      return { ...(prev ?? newCustomCategory()), label, color };
     });
     if (!(await saveCustomCategories(nextCustoms))) allOk = false;
     setSaving(false);
@@ -91,7 +116,19 @@ export function CategoryEditSheet({ onClose }: { onClose: () => void }) {
           r.deleted ? null : (
             <View key={r.key ?? `new_${i}`} style={s.card}>
               <View style={s.cardHead}>
-                <View style={[s.dot, { backgroundColor: getSectionMeta(r.label.trim() || null).color }]} />
+                {/* 색점 = 누르면 남은 색 중 다른 색으로. 표준 챕터는 고정색이라 바꾸지 않는다. */}
+                {stdSet.has(r.label.trim()) ? (
+                  <View style={[s.dot, { backgroundColor: getSectionMeta(r.label.trim() || null).color }]} />
+                ) : (
+                  <Pressable
+                    onPress={() => rerollColor(i)}
+                    hitSlop={12}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${r.label.trim() || '새 카테고리'} 색 다시 고르기`}
+                  >
+                    <View style={[s.dot, { backgroundColor: r.color ?? getSectionMeta(r.label.trim() || null).color }]} />
+                  </Pressable>
+                )}
                 <TextInput
                   value={r.label}
                   onChangeText={(v) => setLabel(i, v)}
@@ -102,9 +139,13 @@ export function CategoryEditSheet({ onClose }: { onClose: () => void }) {
                   accessibilityLabel={`카테고리 이름 ${r.key ?? '새 카테고리'}`}
                 />
                 {r.count > 0 && <Text style={s.count}>{r.count}개</Text>}
-                <Pressable onPress={() => setConfirmDelete(i)} hitSlop={6} style={s.iconBtn} accessibilityLabel={`${r.key ?? '새 카테고리'} 삭제`}>
-                  <Ionicons name="trash-outline" size={17} color={BrandColors.bad} />
-                </Pressable>
+                {/* 노하우 0개인 표준 챕터는 지울 것이 없다 — 눌러도 아무 일이 없는 버튼을 두지 않는다.
+                    (표준 이름은 코드가 들고 있어서 목록에서 사라지지도 않는다.) */}
+                {!(stdSet.has(r.label.trim()) && r.count === 0) && (
+                  <Pressable onPress={() => setConfirmDelete(i)} hitSlop={6} style={s.iconBtn} accessibilityLabel={`${r.key ?? '새 카테고리'} 삭제`}>
+                    <Ionicons name="trash-outline" size={17} color={BrandColors.bad} />
+                  </Pressable>
+                )}
               </View>
 
               {confirmDelete === i && (

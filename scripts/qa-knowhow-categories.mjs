@@ -13,6 +13,7 @@ import {
   getCustomCategoryRegistry,
   DEFAULT_CATEGORY_KEYS,
   CUSTOM_LABEL_MAX,
+  pickCategoryColor,
 } from '../src/lib/store/knowhowCategories.ts';
 
 let pass = 0, fail = 0;
@@ -58,9 +59,42 @@ check('id 없는 신규 항목에 id 발급', (() => {
   return out.length === 1 && out[0].id.length > 0;
 })());
 
+console.log('— 색 보존 · pickCategoryColor —');
+check('resolve: 저장된 색 보존', (() => {
+  const out = resolveCustomCategories([{ id: 'kc_a', label: '배달앱', color: '#3E92D9' }]);
+  return out.length === 1 && out[0].color === '#3E92D9';
+})());
+check('resolve: 이물질 색은 버린다(이름 해시 폴백에 맡김)', (() => {
+  const out = resolveCustomCategories([{ id: 'kc_a', label: '배달앱', color: 'red' }, { id: 'kc_b', label: '포장', color: 7 }]);
+  return out.every((c) => c.color === undefined);
+})());
+check('sanitize: 저장된 색 보존', (() => {
+  const out = sanitizeCustomCategories([{ id: 'kc_a', label: '배달앱', color: '#F26A50' }]);
+  return out[0].color === '#F26A50';
+})());
+check('pick: 안 쓰인 색만 고른다', (() => {
+  const palette = ['#111111', '#222222', '#333333'];
+  // 앞 둘이 이미 쓰였으면 남은 하나만 나와야 한다 — rand 를 어떻게 굴려도.
+  return [0, 0.5, 0.99].every((r) => pickCategoryColor(palette, ['#111111', '#222222'], () => r) === '#333333');
+})());
+check('pick: 대소문자 달라도 같은 색으로 본다', (() => {
+  const palette = ['#AABBCC', '#DDEEFF'];
+  return pickCategoryColor(palette, ['#aabbcc'], () => 0) === '#DDEEFF';
+})());
+check('pick: 팔레트를 다 쓰면 그래도 하나 준다(빈 문자열 금지)', (() => {
+  const palette = ['#111111', '#222222'];
+  const got = pickCategoryColor(palette, palette, () => 0.99);
+  return palette.includes(got);
+})());
+check('pick: rand=1 이어도 범위를 넘지 않는다', (() => {
+  const palette = ['#111111', '#222222'];
+  return palette.includes(pickCategoryColor(palette, [], () => 1));
+})());
+check('pick: 빈 팔레트는 빈 문자열', pickCategoryColor([], []) === '');
+
 console.log('— 레지스트리 —');
-setCustomCategoryRegistry([{ id: 'kc_a', label: '배달앱' }]);
-check('set → get 반영', eq(getCustomCategoryRegistry(), [{ id: 'kc_a', label: '배달앱' }]));
+setCustomCategoryRegistry([{ id: 'kc_a', label: '배달앱', color: '#3E92D9' }]);
+check('set → get 반영(색 포함)', eq(getCustomCategoryRegistry(), [{ id: 'kc_a', label: '배달앱', color: '#3E92D9' }]));
 setCustomCategoryRegistry([]);
 check('초기화(매장 전환)', eq(getCustomCategoryRegistry(), []));
 

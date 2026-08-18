@@ -81,8 +81,14 @@ const SECTION_FIXED_COLORS: Record<string, string> = {
   '비상 상황': '#c44b4b', // 레드 — 비상은 경고색
 };
 
-// 해시 폴백 팔레트(STORE_COLORS와 같은 가족 톤) — 같은 이름 = 항상 같은 색.
-const SECTION_PALETTE = ['#3E92D9', '#F26A50', '#2FAF6B', '#F2A83C', '#8A63D2', '#D2637F', '#2FA79B', '#C77D3A'];
+/**
+ * 매장이 만든 카테고리에 줄 수 있는 색 — 새 카테고리는 **여기서 안 쓰인 색을 골라 저장**한다
+ * (`pickCategoryColor`). 저장색이 없는 옛 항목만 이름 해시로 폴백한다.
+ */
+export const SECTION_PALETTE = ['#3E92D9', '#F26A50', '#2FAF6B', '#F2A83C', '#8A63D2', '#D2637F', '#2FA79B', '#C77D3A'];
+
+/** 표준 챕터가 이미 점유한 색 — 새 카테고리가 '오픈'의 파랑을 다시 쓰지 않게 taken 에 넣는다. */
+export const FIXED_SECTION_COLORS = Object.values(SECTION_FIXED_COLORS);
 
 export type SectionMeta = { label: string; color: string };
 
@@ -92,6 +98,11 @@ export function getSectionMeta(section: string | null | undefined): SectionMeta 
   if (!name || name === UNSECTIONED) return { label: UNSECTIONED, color: InkColors.ink3 };
   const fixed = SECTION_FIXED_COLORS[name];
   if (fixed) return { label: name, color: fixed };
+  // 매장이 만든 카테고리는 만들 때 고른 색이 레지스트리에 저장돼 있다 — 그게 우선이다.
+  // (이름 해시는 카테고리가 넷만 돼도 색이 겹쳐서, 색점이 분류를 구분하지 못했다.)
+  const saved = getCustomCategoryRegistry().find((c) => c.label === name)?.color;
+  if (saved) return { label: name, color: saved };
+  // 저장색이 없는 옛 항목 폴백 — 같은 이름이면 언제나 같은 색.
   let sum = 0;
   for (let i = 0; i < name.length; i++) sum = (sum + name.charCodeAt(i)) % SECTION_PALETTE.length;
   return { label: name, color: SECTION_PALETTE[sum] };
