@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { StoredImage } from '@/components/StoredImage';
 import { Appear, stagger } from '@/components/Appear';
-import { useRoomStore } from '@/lib/store/useRoomStore';
+import { useRoomStore, visibleRooms } from '@/lib/store/useRoomStore';
 import { type FeedItem } from '@/lib/store/useWorkStore';
 import { roomLook } from '@/lib/utils/room';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
@@ -39,7 +39,8 @@ export function RoomList({
   const rooms = useRoomStore((s) => s.rooms);
   const memberRows = useRoomStore((s) => s.members);
   const prefs = useRoomStore((s) => s.prefs);
-  const visible = useRoomStore((s) => s.roomsFor)(me);
+  // ★스토어 게터를 호출하지 않는다 — 구독 중인 값에서 파생한다(visibleRooms 주석의 그 함정).
+  const visible = useMemo(() => visibleRooms(rooms, memberRows, me), [rooms, memberRows, me]);
 
   // 방별 마지막 대화 — 완료 알림·공지가 아니라 '사람이 쓴 말'만 미리보기로 쓴다.
   const lastByRoom = useMemo(() => {

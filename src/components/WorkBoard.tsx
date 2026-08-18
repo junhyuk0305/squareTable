@@ -663,8 +663,9 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
   }
 
   const headerOptions =
-    view === 'chat'
-      ? // 대화방: 네이티브 헤더를 끈다. 떠 있는 헤더는 WorkChat 이 스트림 위에 직접 그린다(고정 요소 2개).
+    view === 'chat' || view === 'drawer'
+      ? // 대화방·서랍: 네이티브 헤더를 끈다. 대화방은 WorkChat 의 떠 있는 헤더(고정 요소 2개),
+        // 서랍은 RoomDrawer 의 자체 상단바가 그린다. 안 끄면 서랍 위에 '할일' 제목의 헤더가 하나 더 얹힌다.
         { headerShown: false }
       : view === 'rooms'
       ? {

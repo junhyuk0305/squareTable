@@ -98,7 +98,7 @@ export function RoomComposer({
   const initial1 = (name.trim() || '방').slice(0, 1);
 
   return (
-    <BottomSheet visible onClose={onClose} sheetStyle={{ height: '78%' }}>
+    <BottomSheet visible onClose={onClose} sheetStyle={s.sheet}>
       <Text style={s.title}>{isCreate ? '채팅방 만들기' : '이 방 모습 바꾸기'}</Text>
 
       <ScrollView style={s.scroll} contentContainerStyle={{ paddingBottom: 8 }} showsVerticalScrollIndicator={false}>
@@ -213,8 +213,11 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
 }
 
 const s = StyleSheet.create({
-  title: { fontSize: 17, fontWeight: '800', color: InkColors.ink, paddingBottom: Space.md },
-  scroll: { flex: 1 },
+  // ★BottomSheet 은 좌우 패딩을 주지 않는다 — 내용이 직접 넣는다(TaskComposerModal 과 같은 규칙).
+  //   안 넣으면 글자가 시트 모서리에 붙는다(2026-08-19 실측).
+  sheet: { maxHeight: '86%', paddingBottom: Space.lg },
+  title: { fontSize: 17, fontWeight: '800', color: InkColors.ink, paddingHorizontal: Space.gutter, paddingBottom: Space.md },
+  scroll: { flexGrow: 0, paddingHorizontal: Space.gutter },
 
   // 안내박스는 기존 형태(TaskComposerModal.infoNote)를 그대로 쓴다 — 새 색을 만들지 않는다.
   personalNote: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, backgroundColor: InkColors.bgSoft, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md, padding: Space.md, marginBottom: Space.lg },
@@ -245,6 +248,6 @@ const s = StyleSheet.create({
   reset: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingVertical: Space.md, minHeight: 48 },
   resetText: { fontSize: 14, fontWeight: '700', color: InkColors.ink2 },
 
-  cta: { backgroundColor: InkColors.ink, borderRadius: Radius.md, paddingVertical: Space.lg, alignItems: 'center', marginTop: Space.sm, minHeight: 56 },
+  cta: { backgroundColor: InkColors.ink, borderRadius: Radius.md, paddingVertical: Space.lg, alignItems: 'center', justifyContent: 'center', marginTop: Space.sm, marginHorizontal: Space.gutter, minHeight: 56 },
   ctaText: { fontSize: 15, fontWeight: '800', color: InkColors.bubbleText },
 });

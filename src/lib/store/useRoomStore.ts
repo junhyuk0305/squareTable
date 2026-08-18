@@ -53,6 +53,19 @@ const seedRooms: Room[] = [
 ];
 const seedMembers: RoomMember[] = [{ roomId: 'room_kitchen', userId: 'u_staff_002' }];
 
+/**
+ * 내가 볼 수 있는 방 = 기본방 + 내가 멤버인 방. **서버 `can_see_room()`(0147)과 같은 판정**이어야 한다 —
+ * 넓으면 열리지 않는 방이 목록에 뜨고, 좁으면 들어가 있는 방을 못 연다.
+ *
+ * ★인자를 받는 **순수 함수**로 둔다. 화면에서 `useRoomStore((s) => s.roomsFor)(me)` 처럼 게터를 꺼내
+ *   호출하면, 함수 참조와 `me` 가 둘 다 안 변하므로 **React Compiler 가 첫 렌더의 결과를 캐시하고
+ *   다시 계산하지 않는다** — 방이 도착해도 목록이 영원히 빈 채로 남는다(2026-08-19 실측).
+ *   화면은 구독 중인 `rooms`·`members` 를 인자로 넘겨 `useMemo` 로 파생한다.
+ */
+export function visibleRooms(rooms: Room[], members: RoomMember[], userId: string): Room[] {
+  return rooms.filter((r) => r.isDefault || members.some((m) => m.roomId === r.id && m.userId === userId));
+}
+
 type State = {
   rooms: Room[];
   members: RoomMember[]; // 비기본방 멤버십(기본방은 전원 → 멤버행 없음)
@@ -130,8 +143,12 @@ export const useRoomStore = create<State>((set, get) => ({
       createdBy: session.userId,
       createdAt: new Date().toISOString(),
     };
-    const newMembers: RoomMember[] = memberIds.map((userId) => ({ roomId: room.id, userId }));
-    set((s) => ({ rooms: [...s.rooms, room], members: [...s.members, ...newMembers], currentRoomId: room.id }));
+    // ★내 멤버 행을 **반드시 같이** 넣는다. 서버 트리거(wr_add_creator_member)가 만들어 주지만,
+    //   그건 다음 hydrate 때나 로컬에 도착한다. 목록은 이제 멤버십으로만 거르므로(0147) 그 사이
+    //   **내가 방금 만든 방이 내 목록에서 사라진다**(2026-08-19 실제 증상).
+    const mine: RoomMember = { roomId: room.id, userId: session.userId };
+    const newMembers: RoomMember[] = memberIds.filter((id) => id !== session.userId).map((userId) => ({ roomId: room.id, userId }));
+    set((s) => ({ rooms: [...s.rooms, room], members: [...s.members, mine, ...newMembers], currentRoomId: room.id }));
     return guardWrite(
       insertRoom(room).then(async (ok) => {
         if (!ok) return false;
@@ -221,12 +238,7 @@ export const useRoomStore = create<State>((set, get) => ({
     get().setPref(roomId, userId, { name: undefined, imageUrl: undefined, color: undefined });
   },
 
-  // ★서버 can_see_room()(0147)과 같은 판정이어야 한다 — 사장도 이제 예외가 아니다.
-  //   넓으면 열리지 않는 방이 목록에 뜨고, 좁으면 들어가 있는 방을 못 연다.
-  roomsFor: (userId) => {
-    const { rooms, members } = get();
-    return rooms.filter((r) => r.isDefault || members.some((m) => m.roomId === r.id && m.userId === userId));
-  },
+  roomsFor: (userId) => visibleRooms(get().rooms, get().members, userId),
   membersOf: (roomId) => get().members.filter((m) => m.roomId === roomId).map((m) => m.userId),
 
   applyMock: (demo) =>
