@@ -77,19 +77,20 @@ export default function OwnerDashboardScreen() {
   const markSeen = useTourStore((s) => s.markSeen);
   const [tourOn, setTourOn] = useState(false);
 
-  // 히어로 바닥에 붙는 바로가기 — 탭바가 못 덮는 진입점만. **4칸 고정**(5칸이면 라벨이 깨진다).
+  // 히어로 바닥에 붙는 바로가기 — 탭바가 못 덮는 진입점만. **3칸**(상한 4칸, 5칸이면 라벨이 깨진다).
+  // '급여' 칸은 2026-08-19에 뺐다 — staff 화면이 이미 '직원·급여'라 두 칸이 사실상 같은 화면이었다
+  // (급여 설정 자체는 그 화면 안 진입점과 설정 탭에 그대로 있다).
   const subnav: HeroSubNavItem[] = useMemo(
     () => [
       { key: 'quiz', icon: 'help-circle-outline', label: '퀴즈', onPress: () => router.push('/owner/training') },
       {
         key: 'staff',
         icon: 'people-outline',
-        label: '직원',
+        label: '직원·급여',
         onPress: () => router.push('/owner/staff'),
         badge: pendingJoin,
         badgeHint: '합류 승인 대기',
       },
-      { key: 'payroll', icon: 'cash-outline', label: '급여', onPress: () => router.push('/owner/payroll') },
       { key: 'schedule', icon: 'calendar-outline', label: '근무표', onPress: () => router.push('/owner/schedule') },
     ],
     [router, pendingJoin],
@@ -159,7 +160,7 @@ export default function OwnerDashboardScreen() {
       {
         targetRef: hubRef,
         title: '매장 운영부터 둘러보세요',
-        body: '직원이 물은 질문이 위에 뜨고, 퀴즈·직원·급여·근무표는 아래 네 칸에서 바로 열 수 있어요. 노하우가 없어도 지금 바로 쓸 수 있어요.',
+        body: '직원이 물은 질문이 위에 뜨고, 퀴즈·직원·급여·근무표는 아래 세 칸에서 바로 열 수 있어요. 노하우가 없어도 지금 바로 쓸 수 있어요.',
       },
       {
         targetRef: ctaRef,

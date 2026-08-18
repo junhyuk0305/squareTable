@@ -5,7 +5,8 @@ import { BrandColors, InkColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
 
-/** 서브내비 칸 수 — 4칸 고정. 5칸이면 460px에서 라벨이 두 줄로 깨진다(정본 배치규칙 ④). */
+/** 서브내비 칸 수 — **상한 4칸**. 5칸이면 460px에서 라벨이 두 줄로 깨진다(정본 배치규칙 ④).
+ *  칸은 flex:1 이라 3칸도 정상이다(2026-08-19 사장 홈이 '급여' 칸을 빼고 3칸이 됐다). */
 const SUBNAV_MAX = 4;
 /** 칸 구분선의 위아래 여백 — 전체 높이 선이 아니라 가운데만 긋는다. */
 const DIVIDER_INSET = Space.md;
@@ -25,7 +26,7 @@ export type HeroSubNavItem = {
 };
 
 /**
- * N2 · 히어로 직결 서브내비 — 검은 색면 히어로 + 바닥에 이어 붙은 4칸 바로가기.
+ * N2 · 히어로 직결 서브내비 — 검은 색면 히어로 + 바닥에 이어 붙은 바로가기(최대 4칸).
  *
  * 왜 카드가 아니라 색면인가: 카드 모서리에 서브내비를 붙이면 라운드에 잘려 지저분해진다.
  * 왜 붙여야 하는가: 떨어뜨리면 A1 원형 액션 로우와 중복돼 블록을 하나 더 먹는다.
@@ -51,7 +52,7 @@ export function HeroSubNav({
   /** 노란 CTA 문구. onCta와 함께 있을 때만 그린다. */
   ctaLabel?: string;
   onCta?: () => void;
-  /** 4칸 고정. 초과분은 그리지 않는다. */
+  /** 최대 4칸. 초과분은 그리지 않는다. */
   items?: HeroSubNavItem[];
 }) {
   const nav = items.slice(0, SUBNAV_MAX);

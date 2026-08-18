@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSessionStore } from '@/lib/store/useSessionStore';
-import { useMemberPrefsStore } from '@/lib/store/useMemberPrefsStore';
+import { useMemberPrefsStore, DEFAULT_MEMBER_PREF } from '@/lib/store/useMemberPrefsStore';
 import { useWorkStore } from '@/lib/store/useWorkStore';
 import { storeColor } from '@/lib/utils/storeColor';
 import { notifyAction } from '@/lib/utils/confirm';
@@ -32,13 +32,18 @@ export default function OwnerSettings() {
   const { copied, copy } = useCopyToClipboard();
 
   // 매장별 개인 설정(unit_member_prefs) — 닉네임·색·이 매장 음소거·방해금지(직원 매장 설정과 동일 레이어).
-  const prefFor = useMemberPrefsStore((s) => s.prefFor);
   const savePrefStore = useMemberPrefsStore((s) => s.save);
   const hydratePrefs = useMemberPrefsStore((s) => s.hydrate);
   useEffect(() => {
     void hydratePrefs();
   }, [hydratePrefs]);
-  const pref = prefFor(unitId ?? '');
+  /**
+   * ★ byUnit 을 직접 구독한다 — `prefFor` 를 구독하면 안 된다.
+   * `prefFor` 는 스토어가 만들어질 때 한 번 만들어진 함수라 참조가 영원히 안 바뀐다.
+   * 그 함수만 구독하면 save 의 낙관적 반영(byUnit 교체)에 이 화면이 리렌더되지 않아,
+   * 토글을 눌러도 스위치가 그대로 있고 방해금지 시간대 줄도 안 나타난다(2026-08-19 수정).
+   */
+  const pref = useMemberPrefsStore((s) => s.byUnit[unitId ?? ''] ?? DEFAULT_MEMBER_PREF);
   const color = storeColor(unitId ?? '', pref.color);
 
   /**
@@ -116,11 +121,8 @@ export default function OwnerSettings() {
             <Text style={styles.codeBtnText}>{copied ? '복사됨' : '복사'}</Text>
           </Pressable>
         </View>
-        <Pressable onPress={() => router.push('/owner/staff')} style={({ pressed }) => [styles.codeManage, pressed && { opacity: 0.6 }]}>
-          <Text style={styles.codeManageText}>직원 관리 · 합류 승인</Text>
-          <Ionicons name="chevron-forward" size={15} color={InkColors.ink3} />
-        </Pressable>
-
+        {/* 2026-08-19: 코드 카드 아래 '직원 관리 · 합류 승인' 줄을 뺐다 — 바로 아래 '직원·초대코드 관리'와
+            같은 화면(/owner/staff)으로 가는 중복 진입점이었다. 진입점은 매장 관리 섹션 한 곳으로 둔다. */}
         <SettingsSection icon="storefront-outline" title="매장 관리">
           <SettingsRow first icon="people-outline" label="직원·초대코드 관리" onPress={() => router.push('/owner/staff')} />
           <SettingsRow icon="cash-outline" label="급여 설정" onPress={() => router.push('/owner/payroll')} />
@@ -213,12 +215,11 @@ const styles = StyleSheet.create({
   storeName: { fontSize: 17, fontWeight: '800', color: InkColors.ink },
   storeSub: { fontSize: 13, color: InkColors.ink3, marginTop: 2 },
 
-  codeCard: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, backgroundColor: InkColors.bg, borderRadius: Radius.md, borderWidth: 1, borderColor: BrandColors.gold },
+  // marginBottom = 아래 섹션과의 간격(SettingsKit section 과 같은 18). 2026-08-19에 지운 '직원 관리' 줄이 갖고 있던 간격을 여기로 옮긴 것.
+  codeCard: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, backgroundColor: InkColors.bg, borderRadius: Radius.md, borderWidth: 1, borderColor: BrandColors.gold, marginBottom: 18 },
   codeLabel: { fontSize: 12, fontWeight: '700', color: InkColors.ink2 },
   codeValue: { fontSize: 26, fontWeight: '900', color: InkColors.ink, letterSpacing: 4, marginTop: 2 },
   codeBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: InkColors.bgSoft, borderRadius: Radius.pill, paddingVertical: 9, paddingHorizontal: 14, borderWidth: 1, borderColor: InkColors.line },
   codeBtnText: { fontSize: 13, fontWeight: '800', color: InkColors.ink },
-  codeManage: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 12, paddingHorizontal: 4, marginBottom: 14, marginTop: 6 },
-  codeManageText: { fontSize: 13, fontWeight: '700', color: InkColors.ink2 },
   foot: { fontSize: 11, color: InkColors.ink3, textAlign: 'center', marginTop: 6 },
 });

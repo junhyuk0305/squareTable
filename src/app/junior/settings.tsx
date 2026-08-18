@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
 import { useSessionStore } from '@/lib/store/useSessionStore';
-import { useMemberPrefsStore } from '@/lib/store/useMemberPrefsStore';
+import { useMemberPrefsStore, DEFAULT_MEMBER_PREF } from '@/lib/store/useMemberPrefsStore';
 import { usePayrollStore } from '@/lib/store/usePayrollStore';
 import { notifyAction } from '@/lib/utils/confirm';
 import { won } from '@/lib/utils/attendance';
@@ -31,7 +31,6 @@ export default function StoreSettings() {
   const leaveStore = useSessionStore((s) => s.leaveStore);
   const wages = usePayrollStore((s) => s.wages);
 
-  const prefFor = useMemberPrefsStore((s) => s.prefFor);
   const savePref = useMemberPrefsStore((s) => s.save);
   const hydratePrefs = useMemberPrefsStore((s) => s.hydrate);
 
@@ -48,7 +47,13 @@ export default function StoreSettings() {
     void hydratePrefs();
   }, [hydratePrefs]);
 
-  const pref = prefFor(unitId ?? '');
+  /**
+   * ★ byUnit 을 직접 구독한다 — `prefFor` 를 구독하면 안 된다.
+   * `prefFor` 는 스토어 생성 시 한 번 만들어진 함수라 참조가 영원히 안 바뀐다. 그 함수만 구독하면
+   * save 의 낙관적 반영(byUnit 교체)에 이 화면이 리렌더되지 않아, 토글을 눌러도 스위치가 그대로 있고
+   * 방해금지 시간대 줄도 안 나타난다(2026-08-19 수정 — 사장 매장 설정과 동일 함정).
+   */
+  const pref = useMemberPrefsStore((s) => s.byUnit[unitId ?? ''] ?? DEFAULT_MEMBER_PREF);
   const wage = userId ? wages[userId] : undefined;
   const color = storeColor(unitId ?? '', pref.color);
 
