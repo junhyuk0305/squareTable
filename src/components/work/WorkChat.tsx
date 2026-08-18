@@ -11,6 +11,7 @@ import { hhmm } from '@/lib/utils/attendance';
 import { ReactionBar } from './ReactionBar';
 import { MentionInput, extractMentions, type Member } from './MentionInput';
 import { Appear } from '@/components/Appear';
+import { ChatComposerBar, COMPOSER_BAR_H } from '@/components/ChatComposerBar';
 import { InfoDot } from '@/components/InfoDot';
 import { VoiceInputButton } from '@/components/VoiceInputButton';
 import { appendDictation, buildHints } from '@/lib/voice/text';
@@ -385,7 +386,8 @@ export function WorkChat({
       {menu && (
         <>
           <Pressable style={s.menuBackdrop} onPress={() => setMenu(false)} />
-          <View style={s.menu}>
+          {/* 열릴 때 공용 등장 애니메이션 — 앱의 다른 토글과 같은 프리미티브(Appear). 새로 만들지 않는다. */}
+          <Appear style={s.menu}>
             <MenuItem icon="checkmark-circle-outline" label="할일 추가" sub={isOwner ? '매장 전체 / 나만 보기' : '나만 보기'} onPress={() => { setMenu(false); onAddTask(); }} />
             <MenuItem icon="image-outline" label="사진 보내기" sub={sendingPhoto ? '올리는 중…' : '한 번에 최대 10장'} onPress={() => { setMenu(false); onSendPhoto(); }} />
             {isOwner && <MenuItem icon="megaphone-outline" label="공지 작성" sub="사장만" onPress={() => { setMenu(false); onWriteNotice(); }} top />}
@@ -393,12 +395,11 @@ export function WorkChat({
               <Text style={s.menuInfoText}>사진은 자동으로 압축돼서 올라가요</Text>
               <InfoDot title={PHOTO_UPLOAD_INFO.title} body={PHOTO_UPLOAD_INFO.body} size={14} accessibilityLabel="사진 업로드 규격 안내" />
             </View>
-          </View>
+          </Appear>
         </>
       )}
 
-      <View style={s.composer}>
-       <View style={s.composerBar}>
+      <ChatComposerBar>
         <Pressable
           onPress={() => setMenu((v) => !v)}
           accessibilityRole="button"
@@ -420,8 +421,7 @@ export function WorkChat({
         <Pressable onPress={send} disabled={!draft.trim()} accessibilityRole="button" accessibilityLabel="메시지 전송" style={({ pressed }) => [s.send, !draft.trim() && { opacity: 0.4 }, pressed && { opacity: 0.85 }]}>
           <Ionicons name="arrow-up" size={20} color={InkColors.ink} />
         </Pressable>
-       </View>
-      </View>
+      </ChatComposerBar>
 
       {/* 메시지 롱프레스 액션 시트 — 프레임(460) 안에 가둔다(modalFrameStyle). */}
       <Modal visible={!!actionItem} transparent animationType="slide" onRequestClose={() => setActionItem(null)}>
@@ -634,22 +634,13 @@ const s = StyleSheet.create({
   promotedTag: { flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 3 },
   promotedTagText: { fontSize: 10.5, fontWeight: '700', color: InkColors.ink3 },
 
-  // 입력창도 떠 있는 형태다 — 상단 헤더(floatHdr)와 같은 알약·같은 그림자. 화면 배경(paper) 위에
-  // 흰 알약이 떠 있는 그림이라, 가로로 꽉 찬 띠 + 윗줄(borderTop)로 화면을 잘라 놓던 것을 없앴다.
-  // ★붙박이(flow)로 둔다 — 절대배치하면 스트림 바닥이 입력창에 가려지고, 키보드가 올라올 때
-  //   KeyboardAvoidingView 가 밀어 줄 대상이 사라진다.
-  composer: { paddingHorizontal: Space.md, paddingTop: Space.sm, paddingBottom: Space.md },
-  composerBar: {
-    flexDirection: 'row', alignItems: 'center', gap: Space.xs,
-    paddingHorizontal: 6, paddingVertical: 6,
-    borderRadius: Radius.pill, backgroundColor: InkColors.bg, ...Elevation.e2,
-  },
+  // 입력바(떠 있는 알약)는 공용 ChatComposerBar 가 그린다 — 코치·물어보기와 같은 형태.
   inputFlat: { backgroundColor: 'transparent', borderColor: 'transparent', paddingHorizontal: Space.sm },
   plus: { width: 38, height: 38, borderRadius: Radius.pill, backgroundColor: InkColors.ink, alignItems: 'center', justifyContent: 'center' },
   send: { width: 38, height: 38, borderRadius: Radius.pill, backgroundColor: BrandColors.yellow, borderWidth: 1, borderColor: BrandColors.yellowDeep, alignItems: 'center', justifyContent: 'center' },
 
   menuBackdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
-  menu: { position: 'absolute', left: Space.md, bottom: 74, backgroundColor: InkColors.bg, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md, padding: 6, width: 220, ...Elevation.e3 },
+  menu: { position: 'absolute', left: Space.md, bottom: COMPOSER_BAR_H(38) + 4, backgroundColor: InkColors.bg, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md, padding: 6, width: 220, ...Elevation.e3 },
   mi: { flexDirection: 'row', alignItems: 'center', gap: 11, padding: 11, borderRadius: Radius.sm },
   miTop: { borderTopWidth: 1, borderTopColor: InkColors.line, marginTop: 3, paddingTop: 12 },
   miIc: { width: 30, height: 30, borderRadius: Radius.sm, backgroundColor: BrandColors.yellowSoft, alignItems: 'center', justifyContent: 'center' },

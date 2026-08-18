@@ -14,6 +14,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 import { Appear } from '@/components/Appear';
+import { ChatComposerBar } from '@/components/ChatComposerBar';
 import { ChatTurn } from '@/components/junior/ChatTurn';
 
 import { useChatStore } from '@/lib/store/useChatStore';
@@ -331,8 +332,8 @@ export function JuniorAsk({ suggestEntry = true, seed }: { suggestEntry?: boolea
         </ScrollView>
       )}
 
-      {/* 입력바 */}
-      <View style={styles.inputBar}>
+      {/* 입력바 — 떠 있는 알약(업무 채팅·노하우 코치와 같은 공용 형태) */}
+      <ChatComposerBar>
         <View style={[styles.inputWrap, focused && styles.inputWrapFocused]}>
           <TextInput
             value={input}
@@ -360,7 +361,7 @@ export function JuniorAsk({ suggestEntry = true, seed }: { suggestEntry?: boolea
         >
           <Text style={[styles.sendBtnIcon, !canSend && styles.sendBtnIconOff]}>↑</Text>
         </Pressable>
-      </View>
+      </ChatComposerBar>
     </KeyboardAvoidingView>
   );
 }

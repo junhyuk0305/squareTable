@@ -2,6 +2,8 @@ import { StyleSheet, Platform } from 'react-native';
 
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
+import { Space } from '@/lib/theme/layout';
+import { COMPOSER_BAR_H } from '@/components/ChatComposerBar';
 
 export const styles = StyleSheet.create({
   scroll: { flex: 1 },
@@ -112,26 +114,17 @@ export const styles = StyleSheet.create({
   },
   escapeText: { fontSize: 13.5, fontWeight: '700', color: InkColors.ink2 },
 
-  inputBar: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    backgroundColor: InkColors.bg,
-    borderTopWidth: 1,
-    borderTopColor: InkColors.line,
-  },
+  // 입력바(떠 있는 알약)는 공용 ChatComposerBar 가 그린다 — 업무 채팅·직원 물어보기와 같은 형태.
   // 입력바 좌측 ＋ — 업무 채팅(WorkChat)의 composer 와 같은 형태·같은 치수.
   // 사진·음성·한번에 올리기를 아이콘 3개로 늘어놓던 옛 판본을 이 한 칸으로 접었다.
-  plusBtn: { width: 38, height: 38, borderRadius: Radius.md, backgroundColor: InkColors.ink, alignItems: 'center', justifyContent: 'center' },
+  plusBtn: { width: 38, height: 38, borderRadius: Radius.pill, backgroundColor: InkColors.ink, alignItems: 'center', justifyContent: 'center' },
 
   // ＋ 토글 메뉴 — 입력바 위에 뜨는 팝업. 바깥을 누르면 닫힌다(menuBackdrop).
   menuBackdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
   menu: {
-    // bottom 은 입력바 실높이(패딩 10×2 + 44 + 위 테두리 = 65)보다 커야 한다 —
-    // 업무 채팅의 64를 그대로 베끼면 1px 겹쳐 마지막 안내 줄이 입력바에 잘린다(실측).
-    position: 'absolute', left: 12, bottom: 72, width: 232, padding: 6,
+    // bottom 은 입력바 실높이를 따라간다 — 자리마다 다른 숫자를 베끼다 1px 겹쳐 마지막 안내 줄이
+    // 잘린 이력이 있다. 내용 높이 44(입력칸·보내기 중 큰 쪽)를 공용 계산식에 넣는다.
+    position: 'absolute', left: Space.md, bottom: COMPOSER_BAR_H(44) + 4, width: 232, padding: 6,
     borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line,
     backgroundColor: InkColors.bg, ...Elevation.e3,
   },
@@ -148,19 +141,16 @@ export const styles = StyleSheet.create({
     borderTopWidth: 1, borderTopColor: InkColors.line, marginTop: 4,
   },
   menuInfoText: { flex: 1, fontSize: 11, color: InkColors.ink3, fontWeight: '600' },
+  // 알약(ChatComposerBar) 안에 들어가므로 자기 배경·테두리를 두지 않는다 — 두면 알약 속 알약이 된다.
   inputWrap: {
     flex: 1,
-    borderWidth: 1,
-    borderColor: InkColors.line,
-    borderRadius: Radius.lg,
-    paddingHorizontal: 14,
-    backgroundColor: InkColors.bg,
+    paddingHorizontal: Space.sm,
     minHeight: 44,
     maxHeight: 120,
     justifyContent: 'center',
   },
-  // 포커스(선택) 상태 — 브라우저 기본 아웃라인 대신 잉크 테두리로 일관 강조(직원 물어보기와 동일 규칙).
-  inputWrapFocused: { borderColor: InkColors.ink },
+  // 포커스(선택)는 알약이 통째로 받는다 — 입력칸에 따로 테두리를 그리면 알약 안에 두 번째 상자가 생긴다.
+  inputWrapFocused: {},
   // 한 줄일 때 placeholder·텍스트가 입력창(minHeight 44) 세로 중앙에 오도록 — 웹 textarea는
   // 위로 붙는 경향이 있어 상하 패딩을 대칭(10)으로 맞춘다(android는 textAlignVertical로 중앙).
   input: {

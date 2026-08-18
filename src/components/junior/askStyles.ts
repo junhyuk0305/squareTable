@@ -157,33 +157,17 @@ export const styles = StyleSheet.create({
   },
   chipText: { fontSize: 12.5, fontWeight: '700', color: InkColors.ink2 },
 
-  // 입력바
-  inputBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    backgroundColor: InkColors.bg,
-    borderTopWidth: 1,
-    borderTopColor: InkColors.line,
-  },
+  // 입력바(떠 있는 알약)는 공용 ChatComposerBar 가 그린다 — 업무 채팅·노하우 코치와 같은 형태.
+  // 알약 안에 들어가므로 입력칸은 자기 배경·테두리를 두지 않는다(두면 알약 속 알약이 된다).
   inputWrap: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: InkColors.line,
-    borderRadius: Radius.pill,
-    paddingLeft: 16,
-    paddingRight: 6,
-    backgroundColor: InkColors.bg,
-    minHeight: 46,
+    paddingLeft: 12,
+    minHeight: 44,
   },
-  // 포커스(선택) 상태 — 브라우저 기본 아웃라인 대신 잉크 테두리로 일관 강조.
-  inputWrapFocused: {
-    borderColor: InkColors.ink,
-  },
+  // 포커스(선택)는 알약이 통째로 받는다 — 입력칸에 따로 테두리를 그리면 두 번째 상자가 생긴다.
+  inputWrapFocused: {},
   input: {
     flex: 1,
     fontSize: 15,

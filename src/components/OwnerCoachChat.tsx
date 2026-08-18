@@ -14,6 +14,7 @@ import { useRouter } from 'expo-router';
 
 import { UserBubble } from '@/components/UserBubble';
 import { Appear } from '@/components/Appear';
+import { ChatComposerBar } from '@/components/ChatComposerBar';
 import { structureSquare, patchSquare, type StructuredSegment, type AiFollowup } from '@/lib/ai';
 import { EXTRACTION_MASTER } from '@/data/extraction-master';
 import { buildPlaybookEntryFromSquare, isSquarePublishable } from '@/lib/utils/buildEntry';
@@ -861,7 +862,8 @@ export function OwnerCoachChat({
             accessibilityRole="button"
             accessibilityLabel="추가 메뉴 닫기"
           />
-          <View style={styles.menu}>
+          {/* 열릴 때 공용 등장 애니메이션 — 앱의 다른 토글과 같은 프리미티브(Appear). */}
+          <Appear style={styles.menu}>
             <CoachMenuItem
               icon="image-outline"
               label="사진 첨부"
@@ -896,12 +898,12 @@ export function OwnerCoachChat({
                 accessibilityLabel="사진 업로드 규격 안내"
               />
             </View>
-          </View>
+          </Appear>
         </>
       )}
 
       {showInput && (
-        <View style={styles.inputBar}>
+        <ChatComposerBar align="flex-end">
           {/* 왼쪽 칸은 하나다 — 평소엔 ＋, 음성 입력을 고른 동안만 마이크(녹음 타이머·정지)로 바뀐다.
               말한 결과는 입력창에 채워지고 전송은 사장이 직접 한다(오인식 검토 여지를 남긴다). */}
           {voiceOpen ? (
@@ -959,7 +961,7 @@ export function OwnerCoachChat({
           >
             <Text style={styles.sendIcon}>↑</Text>
           </Pressable>
-        </View>
+        </ChatComposerBar>
       )}
     </KeyboardAvoidingView>
   );
