@@ -7,9 +7,10 @@ import { HAS_SUPABASE } from '@/lib/supabase';
 import {
   fetchRooms,
   fetchRoomMembers,
+  fetchRoomPrefs,
+  upsertRoomPref,
   insertRoom,
-  updateRoomName,
-  deleteRoom as dbDeleteRoom,
+  softDeleteRoom,
   addRoomMember,
   removeRoomMember,
   subscribeRooms,
@@ -26,10 +27,24 @@ export type Room = {
   unitId: string;
   name: string;
   isDefault: boolean;
+  /** 전역 외형 — **만들 때 한 번만** 정해진다(0149). 이후 변경은 전부 RoomPref 로 간다. */
+  imageUrl?: string;
+  color?: string;
   createdBy?: string;
   createdAt?: string;
 };
 export type RoomMember = { roomId: string; userId: string };
+/**
+ * (나 × 방) 개인 설정(0149). 이름·사진·색은 **나에게만** 적용되는 덮어쓰기고,
+ * showTaskDone 은 이 방 채팅에 '할일 완료' 줄을 띄울지다. 행이 없으면 전역 값 + true.
+ */
+export type RoomPref = {
+  roomId: string;
+  name?: string;
+  imageUrl?: string;
+  color?: string;
+  showTaskDone: boolean;
+};
 
 // 데모 시드 — 기본방 '전체' + 비기본방 '주방'(이수민만 멤버).
 const seedRooms: Room[] = [
@@ -41,6 +56,7 @@ const seedMembers: RoomMember[] = [{ roomId: 'room_kitchen', userId: 'u_staff_00
 type State = {
   rooms: Room[];
   members: RoomMember[]; // 비기본방 멤버십(기본방은 전원 → 멤버행 없음)
+  prefs: RoomPref[]; // 내 것만 내려온다(RLS: 본인 행)
   currentRoomId: string | null;
   loaded: boolean;
   hydrate: () => Promise<void>;
@@ -49,14 +65,19 @@ type State = {
   /** 기본방('전체')이 없으면 만들어 둔다(mock 신규 매장에서 메시지가 고아 되는 것 방지). */
   ensureDefaultRoom: () => void;
   /** 서버 확인까지 기다린 결과를 돌려준다 — 화면이 이 값을 보고 성공 토스트를 띄운다(낙관적 토스트 금지). */
-  createRoom: (name: string, memberIds?: string[]) => Promise<boolean>;
-  renameRoom: (id: string, name: string) => void;
-  /** 위와 같음. 실패면 false — 화면은 "삭제했어요"를 띄우면 안 된다. */
+  createRoom: (name: string, memberIds?: string[], look?: { imageUrl?: string; color?: string }) => Promise<boolean>;
+  /** 위와 같음. 실패면 false — 화면은 "삭제했어요"를 띄우면 안 된다. soft delete(대화는 남는다). */
   removeRoom: (id: string) => Promise<boolean>;
+  /** 방 나가기 = 내 멤버 행 삭제. 서버 확인까지 기다린다(나가지도 않았는데 목록에서 사라지면 안 된다). */
+  leaveRoom: (id: string, userId: string) => Promise<boolean>;
   addMember: (roomId: string, userId: string) => void;
   removeMember: (roomId: string, userId: string) => void;
-  /** 그 사용자가 볼 수 있는 방 목록(사장=전체, 알바=기본방+소속방). */
-  roomsFor: (userId: string, isOwner: boolean) => Room[];
+  /** 내 개인 설정 저장(부분 갱신). 안 넘긴 칸은 그대로 둔다. */
+  setPref: (roomId: string, userId: string, patch: Partial<Omit<RoomPref, 'roomId'>>) => void;
+  /** 개인이 바꾼 이름·사진·색을 지워 전역 값으로 되돌린다(showTaskDone 은 유지 — 다른 축이다). */
+  resetLook: (roomId: string, userId: string) => void;
+  /** 그 사용자가 볼 수 있는 방 목록 = 기본방 + 내가 멤버인 방. 사장도 예외가 아니다(0147). */
+  roomsFor: (userId: string) => Room[];
   membersOf: (roomId: string) => string[];
   applyMock: (demo: boolean) => void;
 };
@@ -64,13 +85,14 @@ type State = {
 export const useRoomStore = create<State>((set, get) => ({
   rooms: HAS_SUPABASE ? [] : seedRooms,
   members: HAS_SUPABASE ? [] : seedMembers,
+  prefs: [],
   currentRoomId: HAS_SUPABASE ? null : defaultRoomId(DEMO_UNIT_ID),
   loaded: !HAS_SUPABASE,
 
   hydrate: coalesce(async () => {
     if (!HAS_SUPABASE) return;
     const session = useSessionStore.getState();
-    let [rooms, members] = await Promise.all([fetchRooms(), fetchRoomMembers()]);
+    let [rooms, members, prefs] = await Promise.all([fetchRooms(), fetchRoomMembers(), fetchRoomPrefs()]);
     // 자가치유: 마이그레이션 backfill 이후 생성된 새 매장엔 기본방이 없을 수 있다.
     // 사장이 들어오면 기본방('전체')을 한 번 만들어 둔다(알바는 권한 없어 패스).
     if (session.role === 'owner' && session.unitId && !rooms.some((r) => r.isDefault)) {
@@ -79,7 +101,7 @@ export const useRoomStore = create<State>((set, get) => ({
     }
     const cur = get().currentRoomId;
     const fallback = rooms.find((r) => r.isDefault)?.id ?? rooms[0]?.id ?? null;
-    set({ rooms, members, loaded: true, currentRoomId: cur && rooms.some((r) => r.id === cur) ? cur : fallback });
+    set({ rooms, members, prefs, loaded: true, currentRoomId: cur && rooms.some((r) => r.id === cur) ? cur : fallback });
   }),
 
   subscribe: () => subscribeDebounced(subscribeRooms, () => get().hydrate()),
@@ -96,13 +118,15 @@ export const useRoomStore = create<State>((set, get) => ({
     void insertRoom(def); // Supabase면 영속(고정 id + 충돌무시), mock이면 no-op
   },
 
-  createRoom: async (name, memberIds = []) => {
+  createRoom: async (name, memberIds = [], look) => {
     const session = useSessionStore.getState();
     const room: Room = {
       id: genId('room'),
       unitId: session.unitId || DEMO_UNIT_ID,
       name: name.trim() || '새 채팅방',
       isDefault: false,
+      ...(look?.imageUrl ? { imageUrl: look.imageUrl } : null),
+      ...(look?.color ? { color: look.color } : null),
       createdBy: session.userId,
       createdAt: new Date().toISOString(),
     };
@@ -116,17 +140,6 @@ export const useRoomStore = create<State>((set, get) => ({
       }),
       () => set((s) => ({ rooms: s.rooms.filter((r) => r.id !== room.id), members: s.members.filter((m) => m.roomId !== room.id) })),
       '채팅방 만들기에 실패했어요.',
-    );
-  },
-
-  renameRoom: (id, name) => {
-    const before = get().rooms.find((r) => r.id === id);
-    if (!before) return;
-    set((s) => ({ rooms: s.rooms.map((r) => (r.id === id ? { ...r, name: name.trim() || r.name } : r)) }));
-    void guardWrite(
-      updateRoomName(id, name.trim() || before.name),
-      () => set((s) => ({ rooms: s.rooms.map((r) => (r.id === id ? before : r)) })),
-      '방 이름 변경에 실패했어요.',
     );
   },
 
@@ -145,9 +158,30 @@ export const useRoomStore = create<State>((set, get) => ({
       };
     });
     return guardWrite(
-      dbDeleteRoom(id),
+      softDeleteRoom(id),
       () => set({ rooms: prevRooms, members: prevMembers }),
       '채팅방 삭제에 실패했어요.',
+    );
+  },
+
+  leaveRoom: async (id, userId) => {
+    const room = get().rooms.find((r) => r.id === id);
+    if (!room || room.isDefault) return false; // 기본방('전체')은 나갈 수 없다
+    const prevRooms = get().rooms;
+    const prevMembers = get().members;
+    set((s) => {
+      const rooms = s.rooms.filter((r) => r.id !== id); // 나가면 그 방은 더 이상 안 보인다
+      const fallback = rooms.find((r) => r.isDefault)?.id ?? rooms[0]?.id ?? null;
+      return {
+        rooms,
+        members: s.members.filter((m) => !(m.roomId === id && m.userId === userId)),
+        currentRoomId: s.currentRoomId === id ? fallback : s.currentRoomId,
+      };
+    });
+    return guardWrite(
+      removeRoomMember(id, userId),
+      () => set({ rooms: prevRooms, members: prevMembers }),
+      '채팅방 나가기에 실패했어요.',
     );
   },
 
@@ -171,9 +205,26 @@ export const useRoomStore = create<State>((set, get) => ({
     );
   },
 
-  roomsFor: (userId, isOwner) => {
+  setPref: (roomId, userId, patch) => {
+    const before = get().prefs.find((p) => p.roomId === roomId);
+    const next: RoomPref = { showTaskDone: true, ...before, ...patch, roomId };
+    set((s) => ({ prefs: [...s.prefs.filter((p) => p.roomId !== roomId), next] }));
+    void guardWrite(
+      upsertRoomPref(userId, next),
+      () => set((s) => ({ prefs: before ? [...s.prefs.filter((p) => p.roomId !== roomId), before] : s.prefs.filter((p) => p.roomId !== roomId) })),
+      '방 설정 저장에 실패했어요.',
+    );
+  },
+
+  // 되돌리기 = 이름·사진·색만 비운다. 완료 알림 스위치는 외형과 다른 축이라 건드리지 않는다.
+  resetLook: (roomId, userId) => {
+    get().setPref(roomId, userId, { name: undefined, imageUrl: undefined, color: undefined });
+  },
+
+  // ★서버 can_see_room()(0147)과 같은 판정이어야 한다 — 사장도 이제 예외가 아니다.
+  //   넓으면 열리지 않는 방이 목록에 뜨고, 좁으면 들어가 있는 방을 못 연다.
+  roomsFor: (userId) => {
     const { rooms, members } = get();
-    if (isOwner) return rooms;
     return rooms.filter((r) => r.isDefault || members.some((m) => m.roomId === r.id && m.userId === userId));
   },
   membersOf: (roomId) => get().members.filter((m) => m.roomId === roomId).map((m) => m.userId),
@@ -181,7 +232,7 @@ export const useRoomStore = create<State>((set, get) => ({
   applyMock: (demo) =>
     set(
       demo
-        ? { rooms: seedRooms, members: seedMembers, currentRoomId: defaultRoomId(DEMO_UNIT_ID), loaded: true }
-        : { rooms: [], members: [], currentRoomId: null, loaded: true },
+        ? { rooms: seedRooms, members: seedMembers, prefs: [], currentRoomId: defaultRoomId(DEMO_UNIT_ID), loaded: true }
+        : { rooms: [], members: [], prefs: [], currentRoomId: null, loaded: true },
     ),
 }));

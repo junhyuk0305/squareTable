@@ -703,13 +703,13 @@ export const useWorkStore = create<State>((set, get) => ({
     const room = curRoom();
     // 반복(주간) 할일 상한(남용 #26): 활성 반복 템플릿이 과도하면 occursOn 전개로 캘린더·피드가 폭주.
     // 'once'(일회성)는 그 날만 떠 폭주 위험이 없으므로 제외 — 반복만 센다(방 단위).
+    // ★2026-08-19: 상한을 **매장 단위**로 센다(전엔 방마다 40개였다). 할일에 방 개념이 없어졌으니
+    //   방을 늘려 상한을 우회하는 자리도 같이 없어져야 한다.
     if (input.recurrence && input.recurrence !== 'once') {
-      const activeRecurring = get().templates.filter(
-        (t) => t.recurrence && t.recurrence !== 'once' && (t.roomId ?? '') === (room ?? ''),
-      ).length;
+      const activeRecurring = get().templates.filter((t) => t.recurrence && t.recurrence !== 'once').length;
       if (activeRecurring >= MAX_ACTIVE_RECURRING) {
         useSyncStore.getState().noteError(
-          `반복 할일은 채팅방마다 최대 ${MAX_ACTIVE_RECURRING}개까지예요. 기존 반복 할일을 정리한 뒤 추가해 주세요.`,
+          `반복 할일은 매장마다 최대 ${MAX_ACTIVE_RECURRING}개까지예요. 기존 반복 할일을 정리한 뒤 추가해 주세요.`,
         );
         return false; // 상한 초과 = 저장 안 됨 → 호출부가 성공 토스트를 띄우지 않게(팬텀 '추가했어요' 방지).
       }
@@ -1011,7 +1011,7 @@ export const useWorkStore = create<State>((set, get) => ({
       return;
     }
     const now = new Date().toISOString();
-    const room = task?.roomId ?? tpl?.roomId ?? curRoom(); // 완료마크·완료알림은 그 할일의 방(없으면 활성 방)에 묶인다.
+    const room = task?.roomId ?? tpl?.roomId ?? curRoom(); // 완료마크는 그 할일의 방(없으면 활성 방)에 묶인다.
     const mark: DoneMark = { by: staffId, byName: staffName, at: now, ...(photoUrl ? { photoUrl } : null) };
     dayMap[templateId] = mark;
     const doneItem: FeedItem = {
@@ -1024,7 +1024,10 @@ export const useWorkStore = create<State>((set, get) => ({
       authorRole: role,
       createdAt: now,
       refId: templateId,
-      ...(room ? { roomId: room } : null),
+      // ★완료 알림은 **매장 단위**다(roomId 없음, 2026-08-19 판정 Ⓐ). 할일에는 방 개념이 없으니
+      //   완료도 특정 방의 것이 아니다. 어느 방 스트림에 그릴지는 화면이 담당자 멤버십으로 판정한다
+      //   (담당자가 있으면 그 사람이 있는 방 · 없으면 기본방). 방마다 피드 행을 복제하지 않는다 —
+      //   복제하면 완료 해제·수정이 배로 복잡해진다.
       ...(photoUrl ? { photoUrl } : null),
     };
     set({ done: { ...s.done, [date]: dayMap }, feed: [...s.feed, doneItem] });

@@ -3,10 +3,8 @@ import { View, Text, Pressable, TextInput, ScrollView, StyleSheet } from 'react-
 import { Ionicons } from '@expo/vector-icons';
 
 import { BottomSheet } from '@/components/BottomSheet';
-import { ProgressPill } from '@/components/blocks/ProgressPill';
 import { useDayparts, useDaypartLabels, type NewTask, type TaskSection, type TaskTemplate, type Recurrence } from '@/lib/store/useWorkStore';
-import { INVITE_FIRST, type Member } from '@/components/work/MentionInput';
-import { showToast } from '@/lib/store/useToastStore';
+import { type Member } from '@/components/work/MentionInput';
 import { maskHHMM } from '@/lib/utils/attendance';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
@@ -124,14 +122,21 @@ export function TaskComposerModal({
   const [remindInfo, setRemindInfo] = useState(false); // ⓘ 인라인 펼침
   const remindValid = !remindOn || /^([01]\d|2[0-3]):[0-5]\d$/.test(remindAt);
 
-  // 담당: sharedMode(가게 전체) 또는 picked(개인 담당자 여러 명). 신규=다중 토글, 수정=단일 교체.
-  const deriveShared = isOwner && (editTemplate ? (editTemplate.scope ?? 'shared') === 'shared' : !(initialAssigneeId && others.some((o) => o.id === initialAssigneeId && o.inRoom !== false)));
-  const [sharedMode, setSharedMode] = useState(deriveShared);
+  // ★2026-08-19: **배정과 공개는 다른 축이다.**
+  //   · taskScope = 누가 볼 수 있나 — 'shared'(매장 전체 · 담당자를 정해도 전원이 본다) / 'private'(나만)
+  //   · picked    = 누가 맡나 — 담당자. 비어 있으면 '담당 없음'
+  //   전에는 담당자를 고르는 순간 scope 가 private 로 바뀌어, "매장 전체 할일에 담당자"를 표현할 수가 없었다.
+  //   개인 할일은 본인 것만 만든다(ownerId=me, createdBy=me) — 0017 RLS 가 지켜준다.
+  const [taskScope, setTaskScope] = useState<'shared' | 'private'>(
+    editTemplate ? ((editTemplate.scope ?? 'shared') === 'private' ? 'private' : 'shared') : 'shared',
+  );
+  const personalMode = taskScope === 'private';
   const [picked, setPicked] = useState<string[]>(() => {
-    if (!isOwner) return [me];
-    if (editTemplate) return (editTemplate.scope ?? 'shared') === 'shared' ? [] : editTemplate.ownerId ? [editTemplate.ownerId] : [me];
-    // 이 방에 없는 사람은 미리 골라두지 않는다 — 고를 수 없는 상태로 선택돼 있으면 등록이 막힌 채 이유가 안 보인다.
-    if (initialAssigneeId && others.some((o) => o.id === initialAssigneeId && o.inRoom !== false)) return [initialAssigneeId];
+    if (editTemplate) return editTemplate.ownerId ? [editTemplate.ownerId] : [];
+    // 직원은 본인 또는 담당 없음만 고를 수 있다 — 프리필도 그 범위 안에서만.
+    if (initialAssigneeId && (isOwner || initialAssigneeId === me) && [...others, { id: me }].some((o) => o.id === initialAssigneeId)) {
+      return [initialAssigneeId];
+    }
     return [];
   });
   const scrollRef = useRef<ScrollView>(null);
@@ -165,14 +170,9 @@ export function TaskComposerModal({
   const toggleKnowhow = (id: string) =>
     setKnowhowIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
 
-  // 담당자 칩 토글 — 신규는 여러 명(토글), 수정은 한 명(교체). '가게 전체'와는 상호배타.
-  // 이 방에 없는 사람은 고를 수 없다(§16-②) — 목록에서 지우지 않고 고르려 할 때 이유를 말한다.
+  // 담당자 칩 토글 — 신규는 여러 명(토글), 수정은 한 명(교체). '담당 없음'과는 상호배타.
+  // ★2026-08-19: 방 멤버십으로 담당자를 막지 않는다 — 할일에는 방 개념이 없다(판정 ⑩·0152).
   const pickAssignee = (id: string) => {
-    if (others.find((o) => o.id === id)?.inRoom === false) {
-      showToast(INVITE_FIRST);
-      return;
-    }
-    setSharedMode(false);
     setPicked((prev) => {
       // 루틴 담당은 '이 일을 맡은 사람' 꼬리표 하나라 여러 명이라는 개념이 없다 — 단일 교체.
       if (routineMode) return [id];
@@ -180,14 +180,14 @@ export function TaskComposerModal({
       return prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id];
     });
   };
-  const pickShared = () => { setSharedMode(true); setPicked([]); };
+  const pickNoAssignee = () => setPicked([]);
 
-  // 매주 반복인데 요일 0개면 유령 할일 → 막는다. 사장은 담당(전체/개인 1명 이상)도 정해야 한다.
-  const assigneeChosen = !isOwner || sharedMode || picked.length > 0;
+  // 매주 반복인데 요일 0개면 유령 할일 → 막는다.
+  // ★담당자는 이제 필수가 아니다 — '담당 없음'이 매장 전체 할일의 정상 상태다(전에는 사장이 반드시 골라야 했다).
   // 루틴은 매일 도는 매장 공통 일이라 '언제'가 없다 — 요일 미선택 같은 조건도 성립하지 않는다.
   const canSubmit = routineMode
     ? text.trim().length > 0 && remindValid
-    : text.trim().length > 0 && !(when === 'weekly' && dows.length === 0) && assigneeChosen && remindValid;
+    : text.trim().length > 0 && !(when === 'weekly' && dows.length === 0) && remindValid;
 
   const scheduleParts = () => {
     let recurrence: Recurrence | undefined;
@@ -214,54 +214,54 @@ export function TaskComposerModal({
   };
 
   // 신규 등록 입력(다중 배정이면 담당자 수만큼).
+  // ★배정 ≠ 비공개(2026-08-19): 담당자를 정해도 scope 는 'shared' 그대로다 — 매장 전원이 본다.
+  //   개인 할일만 'private' 이고 그건 항상 본인 것이다.
   function buildInputs(): NewTask[] {
     const v = text.trim();
-    if (!v || (when === 'weekly' && dows.length === 0) || !assigneeChosen || !remindValid) return [];
+    if (!v || (when === 'weekly' && dows.length === 0) || !remindValid) return [];
     const base = baseInput(v);
-    if (!isOwner) return [{ ...base, scope: 'private', ownerId: me }];
-    if (sharedMode) return [{ ...base, scope: 'shared' }];
-    return picked.map((id) => ({ ...base, scope: 'private', ownerId: id }));
+    if (personalMode) return [{ ...base, scope: 'private', ownerId: me }];
+    if (picked.length === 0) return [{ ...base, scope: 'shared' }];
+    return picked.map((id) => ({ ...base, scope: 'shared', ownerId: id }));
   }
 
   // 수정 입력(단일).
   function buildEditInput(): NewTask | null {
     const v = text.trim();
-    if (!v || (when === 'weekly' && dows.length === 0) || !assigneeChosen || !remindValid) return null;
+    if (!v || (when === 'weekly' && dows.length === 0) || !remindValid) return null;
     const base = baseInput(v);
-    if (!isOwner) return { ...base, scope: 'private', ownerId: me };
-    if (sharedMode) return { ...base, scope: 'shared' };
-    return { ...base, scope: 'private', ownerId: picked[0] };
+    if (personalMode) return { ...base, scope: 'private', ownerId: me };
+    return { ...base, scope: 'shared', ...(picked[0] ? { ownerId: picked[0] } : null) };
   }
 
   // 등록 대상 한 줄 요약 — "어디(언제·데이파트·범위) 할일로 들어가는지" 항상 보이게.
   const destLabel = useMemo(() => {
     if (routineMode) {
-      const who = sharedMode || picked.length === 0 ? '담당 없음' : `담당: ${nameById[picked[0]] ?? '직원'}`;
+      const who = picked.length === 0 ? '담당 없음' : `담당: ${nameById[picked[0]] ?? '직원'}`;
       const remindL = remindOn && remindValid && remindAt ? ` · ${remindAt}` : '';
       return `매일 · ${routineSectionLabel ?? '이 카테고리'} · ${who}${remindL}`;
     }
     const secL = DL[section] ?? '카테고리';
-    const scopeL = !isOwner
+    // 공개 범위와 담당을 **둘 다** 말한다 — 담당자가 있어도 매장 전체 할일은 전원이 본다.
+    const scopeL = personalMode
       ? '나만 보기'
-      : sharedMode
+      : picked.length === 0
         ? '매장 전체'
-        : picked.length === 0
-          ? '담당자 선택'
-          : `담당: ${picked.map((id) => nameById[id] ?? '직원').join('·')}`;
+        : `매장 전체 · 담당 ${picked.map((id) => nameById[id] ?? '직원').join('·')}`;
     let whenL: string;
     if (when === 'weekly') whenL = dows.length ? `매주 ${dows.slice().sort().map((d) => DOW[d]).join('·')}` : '매주(요일 미선택)';
     else if (when === 'date') whenL = fmtDate(pickedDate);
     else whenL = `오늘 (${fmtDate(today)})`;
     const remindL = remindOn && remindValid ? ` · ${remindAt}` : '';
     return `${whenL} · ${secL} · ${scopeL}${remindL}`;
-  }, [when, pickedDate, dows, section, sharedMode, picked, nameById, isOwner, today, DL, remindOn, remindValid, remindAt, routineMode, routineSectionLabel]);
+  }, [when, pickedDate, dows, section, personalMode, picked, nameById, today, DL, remindOn, remindValid, remindAt, routineMode, routineSectionLabel]);
 
   // 중복 검사 — 신규 등록에서만(수정은 자기 자신과 겹칠 수 있어 제외). 배정 대상 중 하나라도 중복이면 경고.
   const isDup = useMemo(() => {
     if (isEdit) return false;
     return buildInputs().some((input) => !!isDuplicate?.(input));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [text, when, pickedDate, dows, section, sharedMode, picked, isOwner, me, today, isDuplicate, isEdit]);
+  }, [text, when, pickedDate, dows, section, personalMode, picked, isOwner, me, today, isDuplicate, isEdit]);
 
   function submit() {
     if (!canSubmit) return;
@@ -271,7 +271,7 @@ export function TaskComposerModal({
         description: description.trim() || undefined,
         ...(remindOn && remindValid && remindAt ? { remindAt } : null),
         // 담당은 한 명만 — 루틴은 '이 일을 맡은 사람' 꼬리표라 여러 명이라는 개념이 없다.
-        ...(sharedMode ? null : { assigneeId: picked[0] }),
+        ...(picked[0] ? { assigneeId: picked[0] } : null),
       });
       onClose();
       return;
@@ -300,6 +300,23 @@ export function TaskComposerModal({
           </Text>
 
           <ScrollView ref={scrollRef} style={s.scroll} contentContainerStyle={{ paddingBottom: 8 }} showsVerticalScrollIndicator={false}>
+            {/* ★추가되는 칸은 이것 하나다 — 배정과 공개를 가르는 축. 큰 카드 버튼을 만들지 않는다.
+                루틴은 매장 공통 일이라 이 선택 자체가 없다. */}
+            {!routineMode && (
+              <Field label="어떤 할일인가요?">
+                <Seg
+                  options={[{ k: 'shared', l: '매장 전체' }, { k: 'private', l: '개인 할일' }]}
+                  value={taskScope}
+                  onChange={(k) => { setTaskScope(k as 'shared' | 'private'); if (k === 'private') setPicked([]); }}
+                />
+                <Text style={s.revealLabel}>
+                  {taskScope === 'shared'
+                    ? '모두가 봐요. 담당자를 정해도 다른 사람에게 보여요.'
+                    : '나만 봐요. 사장님도 볼 수 없어요.'}
+                </Text>
+              </Field>
+            )}
+
             <Field label={routineMode ? '루틴 업무' : '할 일'}>
               <TextInput value={text} onChangeText={setText} placeholder="예) 우유 재고 확인" placeholderTextColor={InkColors.ink3} style={s.inp} autoFocus />
             </Field>
@@ -408,56 +425,37 @@ export function TaskComposerModal({
             </Field>
             )}
 
-            <Field label={routineMode ? '누가 맡나요?' : isOwner && !isEdit ? '누구 할 일인가요? (여러 명 선택 가능)' : '누구 할 일인가요?'}>
-              {isOwner ? (
-                <>
-                  <View style={s.seg}>
-                    <Pressable onPress={pickShared} style={[s.segO, sharedMode && s.segOn]}>
-                      <Text style={[s.segText, sharedMode && { color: '#fff' }]}>매장 전체</Text>
+            {/* 개인 할일이면 담당은 늘 나라서 고를 게 없다 — 칸 자체를 감춘다. */}
+            {!personalMode && (
+            <Field label={routineMode ? '누가 맡나요?' : isOwner && !isEdit ? '누가 맡나요? (여러 명 선택 가능)' : '누가 맡나요?'}>
+              <View style={s.seg}>
+                <Pressable onPress={pickNoAssignee} style={[s.segO, picked.length === 0 && s.segOn]}>
+                  <Text style={[s.segText, picked.length === 0 && { color: '#fff' }]}>담당 없음</Text>
+                </Pressable>
+                {/* 배정 범위: 사장·매니저 = 전원 / 직원 = 나 하나(서버도 같은 결과가 되게 화면에서 좁힌다). */}
+                {(isOwner ? [{ id: me, name: '나' }, ...others] : [{ id: me, name: '나' }]).map((m) => {
+                  const on = picked.includes(m.id);
+                  return (
+                    <Pressable
+                      key={m.id}
+                      onPress={() => pickAssignee(m.id)}
+                      style={[s.segO, on && s.segOn]}
+                      accessibilityRole="button"
+                      accessibilityLabel={m.name}
+                    >
+                      {on && !isEdit && !routineMode && <Ionicons name="checkmark" size={13} color="#fff" style={{ marginRight: 3 }} />}
+                      <Text style={[s.segText, on && { color: '#fff' }]}>{m.name}</Text>
                     </Pressable>
-                    {[{ id: me, name: '나', inRoom: true }, ...others].map((m) => {
-                      const on = !sharedMode && picked.includes(m.id);
-                      const blocked = m.inRoom === false;
-                      return (
-                        <Pressable
-                          key={m.id}
-                          onPress={() => pickAssignee(m.id)}
-                          style={[s.segO, on && s.segOn, blocked && s.segBlocked]}
-                          accessibilityRole="button"
-                          accessibilityLabel={blocked ? `${m.name} — 이 방에 없어요` : m.name}
-                        >
-                          {on && !isEdit && !routineMode && <Ionicons name="checkmark" size={13} color="#fff" style={{ marginRight: 3 }} />}
-                          <Text style={[s.segText, on && { color: '#fff' }]}>{m.name}</Text>
-                          {blocked && <View style={s.segPill}><ProgressPill text="불가" tone="neutral" /></View>}
-                        </Pressable>
-                      );
-                    })}
-                  </View>
-                  {others.some((o) => o.inRoom === false) && (
-                    <Text style={s.assignHint}>‘불가’인 직원은 이 방에 없어요. 먼저 이 방에 초대해 주세요.</Text>
-                  )}
-                  {!sharedMode && picked.length > 0 && (
-                    routineMode ? (
-                      // 루틴은 담당자를 정해도 매장 전원에게 보인다 — '담당 ○○' 꼬리표만 붙는다.
-                      // 할일과 같은 문구('그 직원과 사장님만')를 쓰면 안 보이는 줄 알고 담당을 못 정한다.
-                      <Text style={s.assignHint}>
-                        ‘{nameById[picked[0]] ?? '직원'}’ 담당으로 표시돼요 — 루틴은 매장 전원에게 보여요
-                      </Text>
-                    ) : (
-                      <Text style={s.assignHint}>
-                        ‘{picked.map((id) => nameById[id] ?? '직원').join('·')}’{picked.length > 1 ? ' 각자에게 배정' : '에게 배정'} — 그 직원과 사장님만 볼 수 있어요
-                      </Text>
-                    )
-                  )}
-                  {!assigneeChosen && !routineMode && <Text style={s.dowWarn}>담당을 하나 이상 골라 주세요.</Text>}
-                </>
-              ) : (
-                <View style={s.lockedScope}>
-                  <Text style={s.lockedScopeText}>나만 보기</Text>
-                  <Text style={s.lockedScopeHint}>직원이 등록한 할일은 본인에게만 보여요</Text>
-                </View>
+                  );
+                })}
+              </View>
+              {picked.length > 0 && (
+                <Text style={s.assignHint}>
+                  ‘{picked.map((id) => nameById[id] ?? '직원').join('·')}’ 담당으로 표시돼요 — 매장 전원에게 보여요
+                </Text>
               )}
             </Field>
+            )}
 
             {isOwner && !routineMode && (
               <Field label="관련 노하우 (선택)">

@@ -13,7 +13,7 @@ import { hhmm } from '@/lib/utils/attendance';
 import { confirmAction } from '@/lib/utils/confirm';
 
 const SHARED = CategoryColors.Routine; // 슬레이트 = 가게 전체
-const MINE = CategoryColors.Event; // 테라코타 = 내가 등록(나만)
+const MINE = CategoryColors.Event; // 테라코타 = 개인 할일(나만 보기)
 const WD = ['일', '월', '화', '수', '목', '금', '토'];
 /** 달력 접기·펴기 높이 애니메이션(ms). height는 네이티브 드라이버를 못 써서 JS 드라이버 고정 — 웹에서도 같은 코드로 돈다. */
 const FOLD_MS = 200;
@@ -169,10 +169,17 @@ export function TodoScreen({
     const doneN = secTasks.filter((t) => dayDone[t.id]).length;
     return { key, label, tasks: secTasks, total: secTasks.length, doneN };
   };
+  // ★2026-08-19: **매장 전체 / 내 개인 할일** 두 갈래로 먼저 가른다.
+  //   담당자가 있어도 매장 전체 할일은 전원이 본다 — 담당은 꼬리표일 뿐 숨기는 장치가 아니다.
+  //   개인 할일(private)은 카테고리를 섞지 않고 맨 아래 한 덩어리로 모은다(본인만 보는 것이라 성격이 다르다).
+  const isPrivate = (t: TaskTemplate) => (t.scope ?? 'shared') === 'private';
+  const sharedTasks = dayTasks.filter((t) => !isPrivate(t));
+  const privateTasks = dayTasks.filter(isPrivate);
   const groups = [
-    ...dayparts.map((d) => mkGroup(d.id, d.label, dayTasks.filter((t) => t.section === d.id))),
+    ...dayparts.map((d) => mkGroup(d.id, d.label, sharedTasks.filter((t) => t.section === d.id))),
     // 알 수 없는 section(삭제된 카테고리)의 할일이 사라지지 않게 흡수.
-    mkGroup('__orphan__', '기타', dayTasks.filter((t) => !knownIds.has(t.section))),
+    mkGroup('__orphan__', '기타', sharedTasks.filter((t) => !knownIds.has(t.section))),
+    mkGroup('__private__', '내 개인 할일', privateTasks),
   ].filter((g) => g.total > 0);
 
   const monthLabel = `${cursor.getFullYear()}년 ${cursor.getMonth() + 1}월`;
@@ -285,7 +292,7 @@ export function TodoScreen({
           </View>
           <View style={s.legendChip}>
             <View style={[s.legendDot, { backgroundColor: MINE }]} />
-            <Text style={s.legendChipText}>내 할일</Text>
+            <Text style={s.legendChipText}>나만 보기</Text>
           </View>
         </View>
       </View>
@@ -375,7 +382,17 @@ export function TodoScreen({
                           )}
                         </View>
                         {photoUrl ? <StoredImage stored={photoUrl} style={s.thumb} viewOnPress accessibilityLabel="완료 사진 크게 보기" /> : null}
-                        {assignedName ? <Text style={s.assignTag}>담당 {assignedName}</Text> : assignedToMe || isMine ? <Text style={s.mineTag}>내 할일</Text> : isRoutine ? <Text style={s.routineTag}>루틴</Text> : null}
+                        {/* 꼬리표 = 공개 범위 또는 담당. 개인 할일이 최우선(본인만 보는 것이라 가장 중요한 사실),
+                            그 다음이 담당자, 담당 없는 매장 전체 할일은 꼬리표 없이 둔다(기본값이라 말할 게 없다). */}
+                        {isMine ? (
+                          <Text style={s.mineTag}>나만 보기</Text>
+                        ) : assignedName ? (
+                          <Text style={s.assignTag}>담당 {assignedName}</Text>
+                        ) : assignedToMe ? (
+                          <Text style={s.assignTag}>내 담당</Text>
+                        ) : isRoutine ? (
+                          <Text style={s.routineTag}>루틴</Text>
+                        ) : null}
                         {onAttachPhoto && !on && (
                           <Pressable onPress={() => onAttachPhoto(t.id, selected)} hitSlop={6} disabled={!!uploadingId} accessibilityRole="button" accessibilityLabel={`${t.text} 사진으로 완료`}>
                             <Ionicons name={uploadingId === t.id ? 'cloud-upload-outline' : 'camera-outline'} size={16} color={InkColors.ink3} />

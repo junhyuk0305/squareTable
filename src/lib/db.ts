@@ -9,7 +9,7 @@ import { reportError } from '@/lib/analytics/track';
 import { useSyncStore } from '@/lib/store/useSyncStore';
 import type { PlaybookEntry, PlaybookSuggestion, UnknownQuery, ChatQuery, Owner, Junior, PaymentClaim } from '@/types';
 import type { TaskTemplate, FeedItem, DoneMark, Recurrence } from '@/lib/store/useWorkStore';
-import type { Room, RoomMember } from '@/lib/store/useRoomStore';
+import type { Room, RoomMember, RoomPref } from '@/lib/store/useRoomStore';
 import type { AttendanceRecord } from '@/lib/store/useAttendanceStore';
 import type { StoreConfig, ShiftTemplate, SwapRequest } from '@/lib/store/useScheduleStore';
 import type { CustomCategory } from '@/lib/store/knowhowCategories';
@@ -1180,6 +1180,8 @@ export async function fetchRooms(): Promise<Room[]> {
     unitId: r.unit_id,
     name: r.name,
     isDefault: !!r.is_default,
+    ...(r.image_url ? { imageUrl: r.image_url as string } : null),
+    ...(r.color ? { color: r.color as string } : null),
     ...(r.created_by ? { createdBy: r.created_by as string } : null),
     ...(r.created_at ? { createdAt: r.created_at as string } : null),
   })) as Room[];
@@ -1202,17 +1204,66 @@ export async function insertRoom(room: Room): Promise<boolean> {
       unit_id: room.unitId || _unitId,
       name: room.name,
       is_default: room.isDefault,
+      // 사진·색은 **만들 때 한 번만** 전역으로 실린다(0149). 이후 변경은 work_room_prefs 로만 간다.
+      image_url: room.imageUrl ?? null,
+      color: room.color ?? null,
       created_by: room.createdBy ?? null,
     }),
   );
 }
-export async function updateRoomName(id: string, name: string): Promise<boolean> {
+/**
+ * 채팅방 삭제 = soft delete. 대화·공지·완료 기록은 남기고 UI 에서만 사라진다.
+ * ★반드시 RPC 로만 한다 — wr_update 가 방 멤버 전원에게 열려 있어(0148) 직접 UPDATE 로
+ *   deleted_at 을 찍게 두면 아무 멤버나 방을 지울 수 있다. RPC 가 '사장 AND 그 방 멤버'를 검사한다.
+ */
+export async function softDeleteRoom(id: string): Promise<boolean> {
   if (!HAS_SUPABASE) return true;
-  return writeStrict('updateRoomName', supabase.from('work_rooms').update({ name }).eq('id', id).select('id'));
+  const { data, error } = await supabase.rpc('soft_delete_room', { rid: id });
+  if (error) {
+    console.warn('[db] softDeleteRoom:', error.message);
+    reportError('db.write:softDeleteRoom', error);
+    return false;
+  }
+  // RPC 가 false 를 돌려주면 권한/상태가 안 맞아 한 행도 안 지워진 것 — 성공이라고 말하면 안 된다.
+  if (data === false) {
+    reportError('db.write.zero:softDeleteRoom', { message: 'rpc returned false' });
+    return false;
+  }
+  return true;
 }
-export async function deleteRoom(id: string): Promise<boolean> {
+
+// ── 방 개인 설정(work_room_prefs · 0149) ──────────────────
+// 이름·사진·색의 개인 덮어쓰기 + 할일 완료 알림 표시 여부. 행이 없으면 전역 값 + show_task_done=true.
+export async function fetchRoomPrefs(): Promise<RoomPref[]> {
+  if (!HAS_SUPABASE) return [];
+  const { data, error } = await supabase.from('work_room_prefs').select('room_id, name, image_url, color, show_task_done');
+  if (error) {
+    readFail('fetchRoomPrefs', error);
+    return [];
+  }
+  return (data ?? []).map((r: any) => ({
+    roomId: r.room_id,
+    ...(r.name ? { name: r.name as string } : null),
+    ...(r.image_url ? { imageUrl: r.image_url as string } : null),
+    ...(r.color ? { color: r.color as string } : null),
+    showTaskDone: r.show_task_done !== false,
+  })) as RoomPref[];
+}
+/** 개인 설정 upsert. null 을 넣은 칸은 전역 값으로 되돌아간다(되돌리기). */
+export async function upsertRoomPref(userId: string, pref: RoomPref): Promise<boolean> {
   if (!HAS_SUPABASE) return true;
-  return writeStrict('deleteRoom', supabase.from('work_rooms').delete().eq('id', id).select('id'));
+  return write(
+    'upsertRoomPref',
+    supabase.from('work_room_prefs').upsert({
+      room_id: pref.roomId,
+      user_id: userId,
+      name: pref.name ?? null,
+      image_url: pref.imageUrl ?? null,
+      color: pref.color ?? null,
+      show_task_done: pref.showTaskDone,
+      updated_at: new Date().toISOString(),
+    }),
+  );
 }
 export async function addRoomMember(roomId: string, userId: string): Promise<boolean> {
   if (!HAS_SUPABASE) return true;
@@ -1229,6 +1280,7 @@ export function subscribeRooms(onChange: () => void): () => void {
     .on('postgres_changes', { event: '*', schema: 'public', table: 'work_rooms' }, onChange)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'work_room_members' }, onChange)
     .subscribe();
+  // work_room_prefs 는 개인 설정이라 publication 에 없다(0149) — 내 변경은 스토어가 직접 반영한다.
   return () => {
     supabase.removeChannel(ch);
   };

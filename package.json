@@ -72,6 +72,7 @@
     "qa:room-isolation": "node scripts/qa-room-isolation.mjs",
     "qa:room-matrix": "node scripts/qa-room-matrix.mjs",
     "qa:room-cso": "node scripts/qa-room-cso.mjs",
+    "qa:room-writes": "node scripts/qa-room-client-writes.mjs",
     "qa:swap-guard": "node scripts/qa-swap-guard.mjs",
     "qa:shift-dated": "node scripts/qa-shift-dated.mjs",
     "qa:store-slots": "node scripts/qa-store-slots.mjs",

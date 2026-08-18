@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, Text, Pressable, Platform, StyleSheet } from 'react-native';
+import { Text, Pressable, Platform, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -8,7 +8,7 @@ import { uploadPhoto } from '@/lib/db';
 import { HAS_SUPABASE } from '@/lib/supabase';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useStaffStore } from '@/lib/store/useStaffStore';
-import { useWorkStore, useDayparts, useDaypartLabels, daypartRoutineTemplates, isRoutineTaskId, ROUTINE_ID_PREFIX, findDuplicateTask, knowhowIdsForTask, quizCountForTask, isCaptureEligible, courseEntriesOf, trainingCourseViews, staffWhoUnderstandTask, understandsTask, isRegularDue, isRequestDue, REGULAR_DUE_DAYS_DEFAULT, type NewTask, type TaskTemplate } from '@/lib/store/useWorkStore';
+import { useWorkStore, useDayparts, useDaypartLabels, daypartRoutineTemplates, isRoutineTaskId, ROUTINE_ID_PREFIX, findDuplicateTask, occursOn, knowhowIdsForTask, quizCountForTask, isCaptureEligible, courseEntriesOf, trainingCourseViews, staffWhoUnderstandTask, understandsTask, taskVisibleTo, isRegularDue, isRequestDue, REGULAR_DUE_DAYS_DEFAULT, type FeedItem, type NewTask, type TaskTemplate } from '@/lib/store/useWorkStore';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { useSuggestionStore } from '@/lib/store/useSuggestionStore';
 import { useSyncStore } from '@/lib/store/useSyncStore';
@@ -27,20 +27,21 @@ import { RoleTabBar } from '@/components/RoleTabBar';
 import { Appear, stagger } from '@/components/Appear';
 import { useRoomStore } from '@/lib/store/useRoomStore';
 import { WorkChat } from '@/components/work/WorkChat';
-import { RoomBar } from '@/components/work/RoomBar';
+import { RoomList } from '@/components/work/RoomList';
+import { RoomDrawer } from '@/components/work/RoomDrawer';
+import { RoomComposer, type RoomLookDraft } from '@/components/work/RoomComposer';
 import { NoticePanel } from '@/components/work/NoticePanel';
 import { TodoScreen } from '@/components/work/TodoScreen';
 import { RoutineScopeSheet } from '@/components/work/RoutineScopeSheet';
 import { WorkSettingsPanel } from '@/components/work/WorkSettingsPanel';
 import { TaskComposerModal } from '@/components/work/TaskComposerModal';
 import { INVITE_FIRST, type Member } from '@/components/work/MentionInput';
-import { InkColors, BrandColors } from '@/lib/theme/colors';
-import { Radius } from '@/lib/theme/elevation';
+import { InkColors } from '@/lib/theme/colors';
 import { HEADER_EDGE_GUTTER } from '@/lib/theme/layout';
 import { todayStr, tsMs } from '@/lib/utils/attendance';
 import { asMemberRole, canManage } from '@/lib/utils/roles';
 
-type ViewKey = 'chat' | 'notice' | 'todo' | 'settings';
+type ViewKey = 'rooms' | 'chat' | 'drawer' | 'notice' | 'todo' | 'settings';
 
 // 채팅에 한 번에 보낼 수 있는 사진 최대 장수.
 const MAX_CHAT_PHOTOS = 10;
@@ -155,7 +156,10 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
     if (!HAS_SUPABASE && isOwner) useRoomStore.getState().ensureDefaultRoom();
     return off;
   }, [isOwner]);
-  const isDefaultRoom = useMemo(() => !!rooms.find((r) => r.id === currentRoomId)?.isDefault, [rooms, currentRoomId]);
+  const roomPrefs = useRoomStore((s) => s.prefs);
+  const currentRoom = useMemo(() => rooms.find((r) => r.id === currentRoomId), [rooms, currentRoomId]);
+  const currentPref = useMemo(() => roomPrefs.find((p) => p.roomId === currentRoomId), [roomPrefs, currentRoomId]);
+  const isDefaultRoom = !!currentRoom?.isDefault;
   // 방이 없으면(레거시/신규 degraded) 전부 통과 = 단일 스트림. 기본방이면 미지정(레거시) 항목도 포함.
   const inRoom = useCallback(
     (rid?: string) => (!currentRoomId ? true : (rid ?? (isDefaultRoom ? currentRoomId : '__none')) === currentRoomId),
@@ -168,13 +172,13 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
   const { view: viewParam } = useLocalSearchParams<{ view?: string }>();
   const paramView: ViewKey | null =
     viewParam === 'todo' || viewParam === 'notice' ? viewParam : viewParam === 'assign' ? 'todo' : null;
-  const initialView: ViewKey = paramView ?? 'chat';
+  const initialView: ViewKey = paramView ?? 'rooms';
 
   const today = todayStr();
   const [view, setView] = useState<ViewKey>(initialView);
   // 패널(공지/할일)이 홈 등 다른 화면의 딥링크(?view=)로 열렸는지 추적.
   // true면 뒤로가기는 진입 화면(홈)으로 복귀(router.back), false(업무 내부 진입)면 채팅으로 복귀.
-  const [openedExternally, setOpenedExternally] = useState<boolean>(initialView !== 'chat');
+  const [openedExternally, setOpenedExternally] = useState<boolean>(initialView !== 'rooms');
   // 딥링크(?view=)가 마운트 후 바뀌면(홈 등에서 진입) 해당 패널로 동기화.
   // setState-in-effect(캐스케이드 렌더) 대신 "이전 param과 비교해 렌더 중 조정" — React 권장 패턴.
   const [prevViewParam, setPrevViewParam] = useState(viewParam);
@@ -194,8 +198,38 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
   // 업무 설정(settings)은 할일 화면의 버튼으로만 들어오므로 뒤로가기도 할일로 돌아간다.
   const closePanel = useCallback(() => {
     if (openedExternally && router.canGoBack()) router.back();
-    else setView(view === 'settings' ? 'todo' : 'chat');
+    else setView(view === 'settings' ? 'todo' : view === 'chat' ? 'rooms' : 'chat');
   }, [openedExternally, view]);
+  // 방 만들기(전역) / 방 모습 바꾸기(개인) — 같은 시트 두 모드.
+  const [roomComposer, setRoomComposer] = useState<'create' | 'look' | null>(null);
+  // 방 목록에서 방을 연다 — 활성 방을 바꾸고 대화 화면으로. 되돌아오는 길은 뒤로가기 하나다(방 전환 UI 없음).
+  const openRoom = useCallback((roomId: string) => {
+    useRoomStore.getState().setCurrentRoom(roomId);
+    setOpenedExternally(false);
+    setView('chat');
+  }, []);
+  const openRoomComposer = useCallback(() => setRoomComposer('create'), []);
+  // 서버가 방을 만든 뒤에 목록으로 돌려보낸다(낙관적 이동 금지 — 실패했는데 새 방이 열려 있으면 안 된다).
+  const createRoom = useCallback(async (draft: RoomLookDraft, memberIds: string[]) => {
+    const ok = await useRoomStore.getState().createRoom(draft.name, memberIds, { imageUrl: draft.imageUrl, color: draft.color });
+    return ok;
+  }, []);
+  const leaveCurrentRoom = useCallback(async () => {
+    if (!currentRoomId) return;
+    const ok = await useRoomStore.getState().leaveRoom(currentRoomId, userId);
+    if (ok) {
+      showToast('방에서 나왔어요', 'info');
+      setView('rooms');
+    }
+  }, [currentRoomId, userId]);
+  const deleteCurrentRoom = useCallback(async () => {
+    if (!currentRoomId) return;
+    const ok = await useRoomStore.getState().removeRoom(currentRoomId);
+    if (ok) {
+      showToast('채팅방을 삭제했어요', 'info');
+      setView('rooms');
+    }
+  }, [currentRoomId]);
   // routineScope — 루틴을 고칠 때만 실린다. 'single'=그 날짜만(대체 할일 1건 생성) / 'global'=매장 설정의 루틴 자체.
   const [composer, setComposer] = useState<{ open: boolean; date?: string; text?: string; assigneeId?: string; editTemplate?: TaskTemplate; routineScope?: 'single' | 'global'; routineDate?: string }>({ open: false });
   const [uploadingId, setUploadingId] = useState<string | null>(null);
@@ -205,8 +239,8 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
   const [sendingPhoto, setSendingPhoto] = useState(false);
 
   // 이 방에 있는 사람인가 — 판정은 **기존 방 가시성 규칙 그대로**다. 새 규칙을 만들지 않는다.
-  //   서버: can_see_room()/user_can_see_room()(0126) = is_default or 사장 or 방 멤버
-  //   클라: RoomBar 의 visible(isDefault or 사장 or 멤버) — 둘이 같은 판정이다.
+  //   서버: can_see_room()/user_can_see_room()(0147) = is_default or 방 멤버 (사장 예외 폐지)
+  //   클라: useRoomStore.roomsFor(isDefault or 멤버) — 둘이 같은 판정이다.
   // ★0126: 매니저도 **본인이 멤버인 방만** 본다. 0122 가 매니저를 모든 방에 통과시켰는데 그 결과
   //   못 들어간 방을 읽고 전체방으로 승격까지 할 수 있었다. 여기서 canManage 로 통과시키면 서버는
   //   막는데 화면은 "배정 가능"이라고 말하는 어긋남이 된다.
@@ -217,8 +251,10 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
     () => new Set(roomMemberRows.filter((m) => m.roomId === currentRoomId).map((m) => m.userId)),
     [roomMemberRows, currentRoomId],
   );
+  // ★2026-08-19(0147): `memberRole === 'owner'` 분기를 뺐다. 사장도 초대받은 방만 본다 —
+  //   남겨두면 서버는 막는데 화면은 "이 방 사람"이라고 말하는 어긋남이 된다.
   const inThisRoom = useCallback(
-    (uid: string, memberRole: string) => !currentRoomId || isDefaultRoom || memberRole === 'owner' || roomMemberIds.has(uid),
+    (uid: string) => !currentRoomId || isDefaultRoom || roomMemberIds.has(uid),
     [currentRoomId, isDefaultRoom, roomMemberIds],
   );
 
@@ -227,10 +263,11 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
   // 멘션 목록에서만 매니저가 직원으로 보이는 표기 드리프트가 난다(직원 명부 배지와 어긋남).
   const members: Member[] = useMemo(() => {
     const m: Member[] = [];
-    if (owner) m.push({ id: owner.id, name: owner.name, role: 'owner', inRoom: true });
+    // 사장도 방 멤버십으로 판정한다(0147) — 늘 true 로 두면 "사장은 어디에나 있다"는 옛 규칙이 화면에 남는다.
+    if (owner) m.push({ id: owner.id, name: owner.name, role: 'owner', inRoom: owner.id === userId ? true : inThisRoom(owner.id) });
     staff.forEach((s) => {
       const r = asMemberRole(memberRoles[s.id]);
-      m.push({ id: s.id, name: s.name, role: r, inRoom: inThisRoom(s.id, r) });
+      m.push({ id: s.id, name: s.name, role: r, inRoom: inThisRoom(s.id) });
     });
     if (userId && !m.some((x) => x.id === userId)) m.push({ id: userId, name: userName, role: asMemberRole(sessionRole), inRoom: true });
     return m;
@@ -416,10 +453,6 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
 
   const memberCount = Math.max(1, (owner ? 1 : 0) + staff.length);
 
-  const stream = useMemo(
-    () => feed.filter((f) => (f.kind === 'message' || f.kind === 'task_done') && inRoom(f.roomId)).sort((a, b) => tsMs(a.createdAt) - tsMs(b.createdAt)),
-    [feed, inRoom],
-  );
   const notices = useMemo(
     () =>
       feed
@@ -431,15 +464,49 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
     [feed, inRoom],
   );
   const comments = useMemo(() => feed.filter((f) => f.kind === 'comment'), [feed]);
-  // 현재 방의 할일 — 중복검사·컴포저는 방 단위(사용자 작성분).
-  const roomTemplates = useMemo(() => templates.filter((t) => inRoom(t.roomId)), [templates, inRoom]);
+  // 사용자가 만든 할일 — **방 필터를 걸지 않는다**(2026-08-19 판정 ⑩ · 0152).
+  //   할일에는 방 개념이 없다. 어느 방에서 만들었든 매장 전체 할일은 매장 전원에게 보인다.
+  //   가시성은 taskVisibleTo(개인/공유)가 하고, room_id 는 '어디서 만들어졌나' 흔적으로만 남는다.
+  //   중복검사도 이 목록으로 한다 — 방마다 따로 세면 같은 할일이 방 수만큼 생긴다.
+  const storeTemplates = useMemo(() => templates.filter((t) => taskVisibleTo(t, userId)), [templates, userId]);
   // 매장 전체 공용 "기본 루틴 업무"(schedule_config.dayparts) → 매일 반복 할일로 파생. 방 구분 없이 항상 노출.
   const dayparts = useDayparts();
   const DL = useDaypartLabels(); // 시간대 id → 이름. 루틴 수정 시트의 요약 줄에 쓴다.
   // templates 를 같이 넘긴다 — '오늘만 수정'이 만든 그날의 대체본이 있으면 원본 루틴은 그 날짜에 빠진다(0146).
   const routineTemplates = useMemo(() => daypartRoutineTemplates(dayparts, templates), [dayparts, templates]);
-  // 보드(할일·배정) 렌더용 = 루틴(매장 전체) + 현재 방 할일. 컴포저 중복검사엔 roomTemplates 만 쓴다.
-  const boardTemplates = useMemo(() => [...routineTemplates, ...roomTemplates], [routineTemplates, roomTemplates]);
+  // 보드(할일·배정) 렌더용 = 루틴(매장 전체) + 사용자 할일(매장 전체).
+  const boardTemplates = useMemo(() => [...routineTemplates, ...storeTemplates], [routineTemplates, storeTemplates]);
+
+  // 서랍 '이 방 할일' = **담당자가 이 방 멤버인 할일**만(판정 Ⓑ). 담당 없는 매장 전체 할일까지
+  // 넣으면 모든 방이 같은 목록이 되어 방마다 열어 볼 이유가 사라진다.
+  const roomTasks = useMemo(
+    () => boardTemplates.filter((t) => !!t.ownerId && roomMemberIds.has(t.ownerId) && occursOn(t, today)),
+    [boardTemplates, roomMemberIds, today],
+  );
+
+  // 완료 알림을 이 방 스트림에 그릴지 — 판정 Ⓐ. 피드 행은 매장 단위(roomId 없음)라 화면이 정한다.
+  //   담당자가 있으면 → 담당자가 이 방 멤버일 때 / 담당 없으면 → 기본방('전체')에만.
+  //   그 위에 개인 스위치(work_room_prefs.show_task_done)가 꺼져 있으면 아예 안 그린다.
+  //   ★서버는 계속 내려준다 — 다시 켜면 과거 것도 보여야 하니 클라 필터만이다.
+  const showsDoneHere = useCallback(
+    (f: FeedItem) => {
+      if (currentPref?.showTaskDone === false) return false;
+      const t = boardTemplates.find((x) => x.id === f.refId);
+      const ownerId = t?.ownerId;
+      if (!ownerId) return isDefaultRoom;
+      return isDefaultRoom || roomMemberIds.has(ownerId);
+    },
+    [currentPref?.showTaskDone, isDefaultRoom, roomMemberIds, boardTemplates],
+  );
+  const stream = useMemo(
+    () =>
+      feed
+        .filter((f) =>
+          f.kind === 'message' ? inRoom(f.roomId) : f.kind === 'task_done' ? showsDoneHere(f) : false,
+        )
+        .sort((a, b) => tsMs(a.createdAt) - tsMs(b.createdAt)),
+    [feed, inRoom, showsDoneHere],
+  );
 
   /** '이후 모든 루틴 수정' — 매장 설정(dayparts)의 그 루틴 자체를 고친다. 업무 설정 화면에도 그대로 반영된다. */
   const updateRoutineMaster = useCallback(
@@ -525,13 +592,14 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
   const unreadNotices = isOwner ? 0 : notices.filter((n) => !(n.read_by ?? []).includes(userId)).length;
 
   // 메시지를 할일로 — 멘션된 직원이 있으면(나 제외) 그 직원에게 배정한 채 컴포저를 연다.
-  // (사장만 배정 가능. 알바는 본인 개인 할일로.)
+  // (사장·매니저만 배정 가능. 직원은 본인 또는 담당 없음.)
+  // ★배정에는 canReach(방 멤버)를 쓰지 않는다(2026-08-19 판정 ⑩) — 할일은 방에 속하지 않으니
+  //   "이 방에 없어서 배정 못 함"이라는 제약 자체가 사라졌다. canReach 는 멘션·알림 전용이다.
   function messageToTask(text: string, mentions?: string[]) {
     const v = text.trim();
     if (!v) return;
-    // 이 방에 없는 사람은 담당자 후보에서 뺀다 — 컴포저에는 흐리게 남지만 자동 선택은 안 한다.
     const assigneeId = isOwner
-      ? (mentions ?? []).find((id) => id !== userId && canReach(id) && members.some((m) => m.id === id && m.id !== owner?.id))
+      ? (mentions ?? []).find((id) => id !== userId && members.some((m) => m.id === id && m.id !== owner?.id))
       : undefined;
     setComposer({ open: true, date: today, text: v, assigneeId });
   }
@@ -596,9 +664,13 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
 
   const headerOptions =
     view === 'chat'
+      ? // 대화방: 네이티브 헤더를 끈다. 떠 있는 헤더는 WorkChat 이 스트림 위에 직접 그린다(고정 요소 2개).
+        { headerShown: false }
+      : view === 'rooms'
       ? {
           // 탭 루트(뒤로가기 없음) — 네이티브 타이틀 앵커(~17px)를 콘텐츠 거터(20)로 맞춰
           // 우측 액션(공지/할일, 20)과 좌우 대칭. paddingLeft 3 = 20-17.
+          headerShown: true,
           headerTitleAlign: 'left' as const,
           headerTitle: () => <Text style={st.headerTitle}>업무 채팅</Text>,
           // 뒤로가기 명시적 제거 — 패널 뷰가 설정한 headerLeft(arrow-back)가 navigation.setOptions
@@ -606,31 +678,18 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
           // 여기서 매번 () => null + headerBackVisible:false 로 초기화한다(owner/_layout 주석의 그 함정).
           headerLeft: () => null,
           headerBackVisible: false,
-          headerRight: () => (
-            <View style={st.nav}>
-              {/* 세그먼트는 공지·할일 둘뿐. 담당자별 보드는 할일 목록 아래 '루틴 업무 설정' 행으로 들어간다(§14). */}
-              <Pressable onPress={() => openPanel('notice')} style={({ pressed }) => [st.navBtn, pressed && { opacity: 0.7 }]}>
-                <Ionicons name="megaphone-outline" size={15} color={InkColors.ink} />
-                <Text style={st.navText}>공지</Text>
-                {unreadNotices > 0 && <View style={st.dot} />}
-              </Pressable>
-              <Pressable onPress={() => openPanel('todo')} style={({ pressed }) => [st.navBtn, pressed && { opacity: 0.7 }]}>
-                <Ionicons name="checkbox-outline" size={15} color={InkColors.ink} />
-                <Text style={st.navText}>할일</Text>
-              </Pressable>
-            </View>
-          ),
+          // 공지·할일은 **방 안**(헤더의 할일 · 서랍의 공지)으로 옮겼다 — 목록 화면에는 두지 않는다.
+          headerRight: () => null,
         }
       : {
           // ★채팅 루트가 설정한 headerTitle(컴포넌트)·headerRight 를 **명시적으로 되돌린다.**
           //   setOptions 는 얕은 병합이라 키를 생략하면 이전 값이 남고, headerTitle 은 title 보다 우선한다
           //   → title 만 넘기면 패널 헤더가 계속 "업무 채팅"으로 보인다(2026-08-11 P5 실측).
           //   위 채팅 루트 분기가 headerLeft 에 대해 하고 있는 초기화를, 나머지 두 키에도 똑같이 한다.
+          headerShown: true,
           headerTitleAlign: 'left' as const,
           headerTitle: () => (
-            <Text style={st.headerTitle}>
-              {view === 'notice' ? '공지' : view === 'settings' ? '업무 설정' : '할일'}
-            </Text>
+            <Text style={st.headerTitle}>{view === 'notice' ? '공지' : view === 'settings' ? '업무 설정' : '할일'}</Text>
           ),
           headerRight: () => null,
           headerLeft: () => (
@@ -644,11 +703,16 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
     <SafeAreaView style={st.safe} edges={['bottom']}>
       <Stack.Screen options={headerOptions} />
 
-      {/* 업무 설정은 매장 전체 공통 설정이라 방 바를 두지 않는다(방마다 다른 것으로 오해할 자리). */}
-      {view === 'chat' && <RoomBar role={sessionRole} me={userId} />}
+      {/* 탭 루트 = 채팅방 목록. 방 전환 칩바·드롭다운은 없다 — 방을 옮기려면 뒤로가기 → 목록(판정 ⑤). */}
+      {view === 'rooms' && (
+        <Appear delay={0} style={{ flex: 1 }}>
+          <RoomList me={userId} memberCount={memberCount} feed={feed} onOpen={openRoom} onCreate={openRoomComposer} />
+        </Appear>
+      )}
 
-      {/* 어떤 코스 카드가 몇 장 뜨는지는 trainingCards 메모가 판정(하한·주기·1회성 우선·요청 예외). */}
-      {view === 'chat' &&
+      {/* 어떤 코스 카드가 몇 장 뜨는지는 trainingCards 메모가 판정(하한·주기·1회성 우선·요청 예외).
+          ★탭 루트(채팅방 목록)에 둔다 — 대화방은 떠 있는 헤더가 상단을 덮어 카드가 가려진다. */}
+      {view === 'rooms' &&
         trainingCards.map((c, i) => (
           <Appear key={c.course.key} delay={stagger(i)}>
             <TrainingCard
@@ -664,6 +728,11 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
         <Appear delay={0} style={{ flex: 1 }}>
         <WorkChat
           key={currentRoomId ?? 'all'}
+          onBack={() => setView('rooms')}
+          onOpenTodo={() => openPanel('todo')}
+          onOpenDrawer={() => setView('drawer')}
+          // 안 읽은 공지가 있으면 햄버거에 점 — 공지 진입이 서랍으로 들어가면서 신호를 잃지 않게.
+          drawerDot={unreadNotices > 0}
           stream={stream}
           today={today}
           me={userId}
@@ -686,6 +755,31 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
           onWriteNotice={() => openPanel('notice')}
         />
         </Appear>
+      )}
+
+      {view === 'drawer' && currentRoom && (
+        <RoomDrawer
+          room={currentRoom}
+          pref={currentPref}
+          members={members}
+          memberIds={isDefaultRoom ? members.map((m) => m.id) : members.filter((m) => roomMemberIds.has(m.id)).map((m) => m.id)}
+          notices={notices}
+          tasks={roomTasks}
+          done={done}
+          today={today}
+          me={userId}
+          isStoreOwner={isStoreOwner}
+          canKick={isOwner}
+          onBack={() => setView('chat')}
+          onEditLook={() => setRoomComposer('look')}
+          onInvite={(id) => useRoomStore.getState().addMember(currentRoom.id, id)}
+          onKick={(id) => useRoomStore.getState().removeMember(currentRoom.id, id)}
+          onToggleTaskDone={(next) => useRoomStore.getState().setPref(currentRoom.id, userId, { showTaskDone: next })}
+          onOpenNotices={() => openPanel('notice')}
+          onOpenTodo={() => openPanel('todo')}
+          onLeave={leaveCurrentRoom}
+          onDelete={deleteCurrentRoom}
+        />
       )}
 
       {view === 'notice' && (
@@ -784,7 +878,7 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
           routineSectionLabel={composer.editTemplate ? DL[composer.editTemplate.section] : undefined}
           onDelete={removeTemplate}
           editTemplate={composer.editTemplate}
-          isDuplicate={(input: NewTask) => !!findDuplicateTask(roomTemplates, input)}
+          isDuplicate={(input: NewTask) => !!findDuplicateTask(storeTemplates, input)}
           isOwner={isOwner}
           me={userId}
           today={today}
@@ -813,6 +907,26 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
         />
       )}
 
+      {roomComposer === 'create' && (
+        <RoomComposer
+          mode="create"
+          candidates={members.filter((m) => m.id !== userId)}
+          onClose={() => setRoomComposer(null)}
+          onCreate={createRoom}
+        />
+      )}
+
+      {roomComposer === 'look' && currentRoom && (
+        <RoomComposer
+          mode="look"
+          initial={{ name: currentPref?.name ?? currentRoom.name, imageUrl: currentPref?.imageUrl ?? currentRoom.imageUrl, color: currentPref?.color ?? currentRoom.color }}
+          hasPersonalLook={!!(currentPref?.name || currentPref?.imageUrl || currentPref?.color)}
+          onClose={() => setRoomComposer(null)}
+          onSaveLook={(draft) => useRoomStore.getState().setPref(currentRoom.id, userId, { name: draft.name, imageUrl: draft.imageUrl, color: draft.color })}
+          onResetLook={() => useRoomStore.getState().resetLook(currentRoom.id, userId)}
+        />
+      )}
+
       <EntryDetailModal entry={detailEntry} visible={!!detailEntry} onClose={() => setDetailEntry(null)} />
 
       {capture && (
@@ -828,7 +942,9 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
         />
       )}
 
-      <RoleTabBar role={role} />
+      {/* 하단 탭바: 채팅리스트(탭 루트)에는 있고 **대화방·서랍에는 없다**(판정 ⑧).
+          대화방은 목록 위에 쌓이는 화면이고, 고정 요소는 떠 있는 헤더 + 입력창 둘뿐이다. */}
+      {view !== 'chat' && view !== 'drawer' && <RoleTabBar role={role} />}
     </SafeAreaView>
   );
 }
@@ -836,9 +952,4 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
 const st = StyleSheet.create({
   safe: { flex: 1, backgroundColor: InkColors.paper },
   headerTitle: { paddingLeft: 3, fontSize: 16, fontWeight: '800', color: InkColors.ink },
-  nav: { flexDirection: 'row', gap: 6, paddingRight: HEADER_EDGE_GUTTER },
-  // 헤더 액션 칩 — 클린 헤더(벨·뒤로가기)와 같은 계열로 가볍게(무거운 보더 제거, 서브틀 필).
-  navBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, height: 32, paddingHorizontal: 11, borderRadius: Radius.pill, backgroundColor: InkColors.bgSoft },
-  navText: { fontSize: 12.5, fontWeight: '800', color: InkColors.ink },
-  dot: { position: 'absolute', top: -3, right: -3, width: 9, height: 9, borderRadius: Radius.pill, backgroundColor: BrandColors.bad },
 });

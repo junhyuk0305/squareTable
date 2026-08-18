@@ -1,12 +1,12 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, Pressable, ScrollView, KeyboardAvoidingView, Modal, Platform, StyleSheet, type NativeSyntheticEvent, type NativeScrollEvent } from 'react-native';
+import { View, Text, Pressable, ScrollView, TextInput, KeyboardAvoidingView, Modal, Platform, StyleSheet, type NativeSyntheticEvent, type NativeScrollEvent } from 'react-native';
 import { StoredImage } from '@/components/StoredImage';
 import { Ionicons } from '@expo/vector-icons';
 
 import { type FeedItem, REACTIONS } from '@/lib/store/useWorkStore';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Elevation, Radius } from '@/lib/theme/elevation';
-import { modalFrameStyle } from '@/lib/theme/layout';
+import { modalFrameStyle, Space } from '@/lib/theme/layout';
 import { hhmm } from '@/lib/utils/attendance';
 import { ReactionBar } from './ReactionBar';
 import { MentionInput, extractMentions, type Member } from './MentionInput';
@@ -19,6 +19,8 @@ import { PHOTO_UPLOAD_INFO } from '@/lib/copy/photoUploadInfo';
 // 채팅 윈도잉 — 스트림이 수백~수천 개여도 최근 것만 렌더하고, 위로 스크롤하면 이전 대화를
 // 한 페이지씩 붙인다(비가상 ScrollView라 전부 마운트하면 느려지고 @멘션 입력까지 버벅인다).
 const CHAT_WINDOW = 40; // 처음 렌더할 최근 말풍선 수
+/** 떠 있는 헤더 높이 — 스트림 상단 여백이 이 값을 따라간다. */
+const HDR_H = 44;
 const CHAT_PAGE = 40; // '이전 대화 더보기' 한 번에 늘리는 수
 
 // 받아쓰기 이어붙이기 상한. 타이핑 입력엔 예전부터 상한이 없어 그 동작은 그대로 두고,
@@ -35,7 +37,7 @@ function dateLabel(date: string, today: string): string {
 /** @멘션 토큰을 강조 렌더. mine이면 검정 말풍선이라 노랑으로.
  *  memo — 부모(FeedRow/스트림)가 무관한 이유로 재렌더돼도, props(text·members·mine) 불변이면
  *  멤버 수에 비례하는 정규식 재계산을 건너뛴다(채팅 길어질수록 효과). */
-const MentionText = memo(function MentionText({ text, members, mine }: { text: string; members: Member[]; mine: boolean }) {
+const MentionText = memo(function MentionText({ text, members, mine, query }: { text: string; members: Member[]; mine: boolean; query?: string }) {
   const names = useMemo(() => [...members.map((m) => m.name), '전체'].sort((a, b) => b.length - a.length), [members]);
   const parts = useMemo(() => {
     if (names.length === 0) return [{ t: text, m: false }];
@@ -53,6 +55,23 @@ const MentionText = memo(function MentionText({ text, members, mine }: { text: s
     return out;
   }, [text, names]);
 
+  // 검색 중이면 멘션이 아닌 조각을 한 번 더 쪼개 매칭 부분만 노랗게 칠한다(찾기 모드에서만 도는 비용).
+  const q = query?.trim().toLowerCase() ?? '';
+  const split = (t: string) => {
+    if (!q) return [{ t, hit: false }];
+    const out: { t: string; hit: boolean }[] = [];
+    let from = 0;
+    let at = t.toLowerCase().indexOf(q);
+    while (at >= 0) {
+      if (at > from) out.push({ t: t.slice(from, at), hit: false });
+      out.push({ t: t.slice(at, at + q.length), hit: true });
+      from = at + q.length;
+      at = t.toLowerCase().indexOf(q, from);
+    }
+    if (from < t.length) out.push({ t: t.slice(from), hit: false });
+    return out;
+  };
+
   return (
     <Text style={[s.msgText, mine && { color: InkColors.bubbleText }]}>
       {parts.map((p, i) =>
@@ -61,7 +80,9 @@ const MentionText = memo(function MentionText({ text, members, mine }: { text: s
             {p.t}
           </Text>
         ) : (
-          <Text key={i}>{p.t}</Text>
+          <Text key={i}>
+            {split(p.t).map((seg, j) => (seg.hit ? <Text key={j} style={s.hit}>{seg.t}</Text> : <Text key={j}>{seg.t}</Text>))}
+          </Text>
         ),
       )}
     </Text>
@@ -91,6 +112,10 @@ export function WorkChat({
   onAddTask,
   onAssignTask,
   onWriteNotice,
+  onBack,
+  onOpenTodo,
+  onOpenDrawer,
+  drawerDot,
 }: {
   stream: FeedItem[];
   today: string;
@@ -115,9 +140,21 @@ export function WorkChat({
   /** 사장: @리스트에서 직원에게 바로 할일 배정(그 직원 담당 모달 오픈). */
   onAssignTask?: (memberId: string) => void;
   onWriteNotice: () => void;
+  /** 떠 있는 헤더 — 뒤로(방 목록) · 찾기(이 방 안) · 할일 · 서랍. 방 전환 UI는 없다(판정 ⑤). */
+  onBack: () => void;
+  onOpenTodo: () => void;
+  onOpenDrawer: () => void;
+  /** 서랍 안에 안 읽은 것(공지)이 있으면 햄버거에 점을 찍는다. */
+  drawerDot?: boolean;
 }) {
   const [draft, setDraft] = useState('');
   const [menu, setMenu] = useState(false);
+  // 찾기 — 이 방의 **로드된 스트림**만 본다(서버 쿼리 추가 없음). 윈도잉 때문에 못 잡는 과거는
+  // 결과 줄에서 '이전 대화 더 불러오기'로 정직하게 알린다(무음 실패 금지).
+  const [searchOn, setSearchOn] = useState(false);
+  const [query, setQuery] = useState('');
+  const [matchAt, setMatchAt] = useState(0);
+  const rowY = useRef<Record<string, number>>({});
   // 롱프레스로 연 메시지 액션 시트(할일로/삭제). null이면 닫힘.
   const [actionItem, setActionItem] = useState<FeedItem | null>(null);
   const scrollRef = useRef<ScrollView>(null);
@@ -194,6 +231,31 @@ export function WorkChat({
     return () => clearTimeout(t);
   }, [stream.length]);
 
+  // 매칭 = 지금 렌더된 말풍선 중 본문에 검색어가 있는 것(순서 유지).
+  const matches = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return [] as string[];
+    return shown.filter((f) => f.kind === 'message' && f.text.toLowerCase().includes(q)).map((f) => f.id);
+  }, [shown, query]);
+  const activeMatchId = matches[matchAt] ?? matches[0];
+
+  const goMatch = useCallback(
+    (dir: 1 | -1) => {
+      if (matches.length === 0) return;
+      const next = (matchAt + dir + matches.length) % matches.length;
+      setMatchAt(next);
+      const y = rowY.current[matches[next]];
+      if (y !== undefined) scrollRef.current?.scrollTo({ y: Math.max(0, y - 80), animated: true });
+    },
+    [matches, matchAt],
+  );
+
+  function closeSearch() {
+    setSearchOn(false);
+    setQuery('');
+    setMatchAt(0);
+  }
+
   function send() {
     const v = draft.trim();
     if (!v) return;
@@ -204,6 +266,52 @@ export function WorkChat({
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      {/* 떠 있는 헤더 — 대화방의 고정 요소는 이것과 입력창 둘뿐이다. 방 이름·전환 드롭다운은 없다(판정 ⑤).
+          방을 옮기려면 뒤로가기 → 목록. */}
+      <View style={s.floatHdr}>
+        {searchOn ? (
+          <>
+            <Pressable onPress={closeSearch} hitSlop={10} accessibilityRole="button" accessibilityLabel="찾기 닫기" style={({ pressed }) => [s.hdrBtn, pressed && { opacity: 0.5 }]}>
+              <Ionicons name="arrow-back" size={22} color={InkColors.ink} />
+            </Pressable>
+            <TextInput
+              value={query}
+              onChangeText={(t) => { setQuery(t); setMatchAt(0); }}
+              placeholder="이 방에서 찾기"
+              placeholderTextColor={InkColors.ink3}
+              style={s.searchInp}
+              autoFocus
+              returnKeyType="search"
+              onSubmitEditing={() => goMatch(1)}
+            />
+            <Text style={s.matchCount}>{query.trim() ? `${matches.length ? matchAt + 1 : 0}/${matches.length}` : ''}</Text>
+            <Pressable onPress={() => goMatch(-1)} disabled={matches.length === 0} hitSlop={10} accessibilityRole="button" accessibilityLabel="이전 결과" style={({ pressed }) => [s.hdrBtn, matches.length === 0 && { opacity: 0.35 }, pressed && { opacity: 0.5 }]}>
+              <Ionicons name="chevron-up" size={20} color={InkColors.ink} />
+            </Pressable>
+            <Pressable onPress={() => goMatch(1)} disabled={matches.length === 0} hitSlop={10} accessibilityRole="button" accessibilityLabel="다음 결과" style={({ pressed }) => [s.hdrBtn, matches.length === 0 && { opacity: 0.35 }, pressed && { opacity: 0.5 }]}>
+              <Ionicons name="chevron-down" size={20} color={InkColors.ink} />
+            </Pressable>
+          </>
+        ) : (
+          <>
+            <Pressable onPress={onBack} hitSlop={10} accessibilityRole="button" accessibilityLabel="채팅방 목록으로" style={({ pressed }) => [s.hdrBtn, pressed && { opacity: 0.5 }]}>
+              <Ionicons name="arrow-back" size={22} color={InkColors.ink} />
+            </Pressable>
+            <View style={{ flex: 1 }} />
+            <Pressable onPress={() => setSearchOn(true)} hitSlop={10} accessibilityRole="button" accessibilityLabel="대화 찾기" style={({ pressed }) => [s.hdrBtn, pressed && { opacity: 0.5 }]}>
+              <Ionicons name="search" size={20} color={InkColors.ink} />
+            </Pressable>
+            <Pressable onPress={onOpenTodo} hitSlop={10} accessibilityRole="button" accessibilityLabel="할일" style={({ pressed }) => [s.hdrBtn, pressed && { opacity: 0.5 }]}>
+              <Ionicons name="checkbox-outline" size={20} color={InkColors.ink} />
+            </Pressable>
+            <Pressable onPress={onOpenDrawer} hitSlop={10} accessibilityRole="button" accessibilityLabel={drawerDot ? '방 관리 · 안 읽은 공지 있음' : '방 관리'} style={({ pressed }) => [s.hdrBtn, pressed && { opacity: 0.5 }]}>
+              <Ionicons name="menu" size={22} color={InkColors.ink} />
+              {drawerDot && <View style={s.hdrDot} />}
+            </Pressable>
+          </>
+        )}
+      </View>
+
       {/* 슬림 고정 공지 1줄 */}
       {pinnedNotice && (
         <Pressable onPress={onOpenNotice} style={({ pressed }) => [s.pinbar, pressed && { opacity: 0.7 }]}>
@@ -235,7 +343,7 @@ export function WorkChat({
           const prev = shown[i - 1];
           const showDivider = !prev || prev.date !== f.date;
           return (
-            <View key={f.id}>
+            <View key={f.id} onLayout={(e) => { rowY.current[f.id] = e.nativeEvent.layout.y; }}>
               {showDivider && (
                 <View style={s.divider}>
                   <Text style={s.dividerText}>{dateLabel(f.date, today)}</Text>
@@ -247,6 +355,8 @@ export function WorkChat({
                   me={me}
                   nameOf={nameOf}
                   members={members}
+                  query={searchOn ? query : undefined}
+                  active={f.id === activeMatchId}
                   onReact={(e) => onReact(f.id, e)}
                   onLongPress={f.kind === 'message' ? () => setActionItem(f) : undefined}
                   onPromote={onMessageToKnowhow ? () => onMessageToKnowhow(f.text, f.id) : undefined}
@@ -255,6 +365,19 @@ export function WorkChat({
             </View>
           );
         })}
+        {searchOn && query.trim().length > 0 && (
+          <View style={s.searchFoot}>
+            <Text style={s.searchFootText}>
+              {matches.length === 0 ? '불러온 대화에서는 못 찾았어요.' : `불러온 대화에서 ${matches.length}건 찾았어요.`}
+            </Text>
+            {hasMore && (
+              <Pressable onPress={loadMore} style={({ pressed }) => [s.searchMore, pressed && { opacity: 0.6 }]} accessibilityRole="button" accessibilityLabel="이전 대화 더 불러오기">
+                <Ionicons name="arrow-up" size={13} color={InkColors.ink2} />
+                <Text style={s.searchMoreText}>이전 대화 더 불러오기</Text>
+              </Pressable>
+            )}
+          </View>
+        )}
         <View style={{ height: 8 }} />
       </ScrollView>
 
@@ -371,7 +494,7 @@ function MenuItem({ icon, label, sub, onPress, top }: { icon: any; label: string
   );
 }
 
-function FeedRow({ item, me, nameOf, members, onReact, onLongPress, onPromote }: { item: FeedItem; me: string; nameOf: (id: string) => string; members: Member[]; onReact: (e: string) => void; onLongPress?: () => void; onPromote?: () => void }) {
+function FeedRow({ item, me, nameOf, members, query, active, onReact, onLongPress, onPromote }: { item: FeedItem; me: string; nameOf: (id: string) => string; members: Member[]; query?: string; active?: boolean; onReact: (e: string) => void; onLongPress?: () => void; onPromote?: () => void }) {
   if (item.kind === 'task_done') {
     return (
       <View style={s.doneRow}>
@@ -400,7 +523,7 @@ function FeedRow({ item, me, nameOf, members, onReact, onLongPress, onPromote }:
         <Pressable
           onLongPress={onLongPress}
           delayLongPress={350}
-          style={[s.bubble, mine && s.bubbleMine, photo && s.bubblePhoto]}
+          style={[s.bubble, mine && s.bubbleMine, photo && s.bubblePhoto, active && s.bubbleActive]}
         >
           {photo && (
             <StoredImage
@@ -413,7 +536,7 @@ function FeedRow({ item, me, nameOf, members, onReact, onLongPress, onPromote }:
           )}
           {hasText && (
             <View style={photo ? s.msgCaption : undefined}>
-              <MentionText text={item.text} members={members} mine={mine} />
+              <MentionText text={item.text} members={members} mine={mine} query={query} />
             </View>
           )}
         </Pressable>
@@ -451,7 +574,25 @@ const s = StyleSheet.create({
 
   // 웹: 말풍선 롱프레스로 액션시트를 여는데, 브라우저가 대신 드래그-선택을 시작해 화면 전체가
   // 선택되는 걸 막는다(스트림 전역 user-select:none). 단, 말풍선 '텍스트'(msgText)만 다시 선택 허용.
-  scroll: { padding: 12, gap: 11, ...(Platform.OS === 'web' ? ({ userSelect: 'none' } as object) : null) },
+  // 떠 있는 헤더가 스트림 위에 겹치므로 상단 여백을 헤더 높이만큼 준다(첫 말풍선이 가려지지 않게).
+  scroll: { padding: 12, paddingTop: HDR_H + 16, gap: 11, ...(Platform.OS === 'web' ? ({ userSelect: 'none' } as object) : null) },
+
+  floatHdr: {
+    position: 'absolute', top: 10, left: 10, right: 10, zIndex: 6,
+    height: HDR_H, borderRadius: Radius.pill, backgroundColor: InkColors.bg,
+    flexDirection: 'row', alignItems: 'center', gap: Space.xs, paddingHorizontal: Space.sm, ...Elevation.e2,
+  },
+  hdrBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
+  searchInp: { flex: 1, fontSize: 15, color: InkColors.ink, paddingVertical: Space.xs },
+  matchCount: { fontSize: 12, fontWeight: '700', color: InkColors.ink3 },
+  hdrDot: { position: 'absolute', top: 6, right: 6, width: 8, height: 8, borderRadius: Radius.pill, backgroundColor: BrandColors.bad },
+  // 검색어가 걸린 조각 — 노랑 형광. 말풍선이 검정(내 말)일 때도 글자는 검정으로 뒤집는다.
+  hit: { backgroundColor: BrandColors.yellow, color: InkColors.ink, fontWeight: '800' },
+  bubbleActive: { borderWidth: 2, borderColor: BrandColors.yellowDeep },
+  searchFoot: { alignItems: 'center', gap: Space.sm, paddingVertical: Space.md },
+  searchFootText: { fontSize: 15, color: InkColors.ink2, fontWeight: '600' },
+  searchMore: { flexDirection: 'row', alignItems: 'center', gap: 5, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.pill, paddingHorizontal: 13, paddingVertical: Space.sm, minHeight: 40 },
+  searchMoreText: { fontSize: 13, color: InkColors.ink2, fontWeight: '700' },
   empty: { textAlign: 'center', color: InkColors.ink2, fontSize: 15, marginTop: 40 },
   loadMore: { alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: InkColors.scrim, borderRadius: Radius.pill, paddingHorizontal: 13, paddingVertical: 6, marginBottom: 2 },
   loadMoreText: { fontSize: 11.5, color: InkColors.ink3, fontWeight: '700' },
