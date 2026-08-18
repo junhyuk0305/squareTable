@@ -1241,6 +1241,11 @@ function mapTemplateRow(r: any): TaskTemplate {
     id: r.id,
     section: r.section,
     text: r.text,
+    // 상세 설명(0145). 아래 insert/update 의 컬럼 목록과 **셋이 한 세트**다 — 하나만 빠뜨리면
+    // 화면엔 보이는데 새로고침하면 사라지는 무음 유실이 된다.
+    ...(r.description ? { description: r.description as string } : null),
+    // 루틴 하루 예외(0146) — 이 행이 대신하는 루틴 id.
+    ...(r.replaces_routine_id ? { replacesRoutineId: r.replaces_routine_id as string } : null),
     ...(r.room_id ? { roomId: r.room_id as string } : null),
     ...(r.section_note ? { sectionNote: r.section_note as string } : null),
     scope: (r.scope as 'shared' | 'private') ?? 'shared',
@@ -1275,6 +1280,8 @@ export async function insertTemplate(t: TaskTemplate): Promise<boolean> {
       id: t.id,
       section: t.section,
       text: t.text,
+      description: t.description ?? null,
+      replaces_routine_id: t.replacesRoutineId ?? null,
       room_id: t.roomId ?? null,
       section_note: t.sectionNote ?? null,
       scope: t.scope ?? 'shared',
@@ -1298,6 +1305,8 @@ export async function updateTemplate(t: TaskTemplate): Promise<boolean> {
       .update({
         section: t.section,
         text: t.text,
+        // 지우면 null 로 명시 — 조건부로 빼면 "설명을 비웠는데 옛 값이 남는다"가 된다.
+        description: t.description ?? null,
         section_note: t.sectionNote ?? null,
         scope: t.scope ?? 'shared',
         owner_id: t.ownerId ?? null,

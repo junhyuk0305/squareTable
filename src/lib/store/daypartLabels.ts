@@ -14,7 +14,7 @@
 // assigneeId = 이 루틴을 맡은 사람(userId). **가시성은 안 바꾼다** — 루틴은 매장 공통 일이라
 // 담당자가 있어도 전원에게 뜨고 '담당 ○○' 꼬리표만 붙는다(담당자가 빠지면 다른 사람이 대신 처리 가능).
 // 그래서 개인 할일(scope:'private' + ownerId)과 달리 scope 는 'shared' 로 유지한다.
-export type DaypartRoutine = { id: string; text: string; assigneeId?: string };
+export type DaypartRoutine = { id: string; text: string; description?: string; remindAt?: string; assigneeId?: string };
 export type Daypart = { id: string; label: string; routines: DaypartRoutine[] };
 
 /** 기본 시간대 id — 기존에 저장된 work_templates.section 값과 맞춘다(마이그레이션 불필요). */
@@ -47,7 +47,7 @@ export function newDaypart(): Daypart {
 }
 /** 새 빈 루틴 행(사장이 '＋ 루틴 추가'). */
 export function newRoutine(): DaypartRoutine {
-  return { id: localId('rt'), text: '' };
+  return { id: localId('rt'), text: '', description: '', remindAt: '' };
 }
 
 function labelFor(id: string, raw: unknown): string {
@@ -61,12 +61,16 @@ function normalizeRoutines(raw: unknown, dpId: string): DaypartRoutine[] {
   const out: DaypartRoutine[] = [];
   raw.forEach((r, i) => {
     if (!r || typeof r !== 'object') return;
-    const rec = r as { id?: unknown; text?: unknown; assigneeId?: unknown };
+    const rec = r as { id?: unknown; text?: unknown; description?: unknown; remindAt?: unknown; assigneeId?: unknown };
     const text = typeof rec.text === 'string' ? rec.text : '';
+    const description = typeof rec.description === 'string' && rec.description.trim() ? rec.description.trim() : undefined;
+    const remindAt = typeof rec.remindAt === 'string' && /^([01]\d|2[0-3]):[0-5]\d$/.test(rec.remindAt.trim()) ? rec.remindAt.trim() : undefined;
     const id = typeof rec.id === 'string' && rec.id ? rec.id : `${dpId}_rt_${i}`;
     const assigneeId = typeof rec.assigneeId === 'string' && rec.assigneeId ? rec.assigneeId : undefined;
     // 담당자 없는 루틴에 키를 만들지 않는다 — 옛 저장본과 JSON 이 그대로 같아야 한다(qa:daypart 진리표).
-    out.push(assigneeId ? { id, text, assigneeId } : { id, text });
+    const obj = assigneeId ? { id, text, assigneeId } : { id, text };
+    const withOptional = description ? { ...obj, description } : obj;
+    out.push(remindAt ? { ...withOptional, remindAt } : withOptional);
   });
   return out;
 }
@@ -121,8 +125,13 @@ export function sanitizeDayparts(items: Daypart[]): Daypart[] {
     seen.add(id);
     const routines = (it.routines ?? [])
       .map((r) => {
-        const base = { id: r.id || localId('rt'), text: (r.text ?? '').trim() };
-        return r.assigneeId ? { ...base, assigneeId: r.assigneeId } : base;
+        const text = (r.text ?? '').trim();
+        const description = (r.description ?? '').trim();
+        const remindAt = (r.remindAt ?? '').trim();
+        const base = { id: r.id || localId('rt'), text };
+        const withDescription = description ? { ...base, description } : base;
+        const withTime = remindAt && /^([01]\d|2[0-3]):[0-5]\d$/.test(remindAt) ? { ...withDescription, remindAt } : withDescription;
+        return r.assigneeId ? { ...withTime, assigneeId: r.assigneeId } : withTime;
       })
       .filter((r) => r.text.length > 0);
     out.push({ id, label, routines });

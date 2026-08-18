@@ -31,6 +31,7 @@ export type Junior = User & {
 
 // ── PlaybookEntry ─────────────────────────────────────
 export type SquareBlock = {
+  description?: string;
   situation: string;
   quagmire: string;
   uncover: string;
@@ -70,6 +71,8 @@ export type PlaybookEntry = {
   category: string; // 기본 4종(Category) 키 또는 매장 커스텀 카테고리 id(0096, 수동 지정 전용)
   subcategory: string;
   title: string;
+  /** 노하우 설명 전문 — 제목 외 추가 상세. 비워두면 표시하지 않는다. */
+  description?: string | null;
   tags: string[];
   square: SquareBlock;
   execution: {

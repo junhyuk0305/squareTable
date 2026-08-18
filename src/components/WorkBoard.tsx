@@ -8,10 +8,13 @@ import { uploadPhoto } from '@/lib/db';
 import { HAS_SUPABASE } from '@/lib/supabase';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useStaffStore } from '@/lib/store/useStaffStore';
-import { useWorkStore, useDayparts, daypartRoutineTemplates, findDuplicateTask, knowhowIdsForTask, quizCountForTask, isCaptureEligible, courseEntriesOf, trainingCourseViews, staffWhoUnderstandTask, understandsTask, isRegularDue, isRequestDue, REGULAR_DUE_DAYS_DEFAULT, type NewTask, type TaskTemplate } from '@/lib/store/useWorkStore';
+import { useWorkStore, useDayparts, useDaypartLabels, daypartRoutineTemplates, isRoutineTaskId, ROUTINE_ID_PREFIX, findDuplicateTask, knowhowIdsForTask, quizCountForTask, isCaptureEligible, courseEntriesOf, trainingCourseViews, staffWhoUnderstandTask, understandsTask, isRegularDue, isRequestDue, REGULAR_DUE_DAYS_DEFAULT, type NewTask, type TaskTemplate } from '@/lib/store/useWorkStore';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { useSuggestionStore } from '@/lib/store/useSuggestionStore';
 import { useSyncStore } from '@/lib/store/useSyncStore';
+import { useScheduleStore } from '@/lib/store/useScheduleStore';
+import { sanitizeDayparts } from '@/lib/store/daypartLabels';
+import { fmtDateKo } from '@/lib/utils/schedule';
 import { showToast } from '@/lib/store/useToastStore';
 import { EntryDetailModal } from '@/components/EntryDetailModal';
 import { CaptureKnowhowSheet } from '@/components/work/CaptureKnowhowSheet';
@@ -27,6 +30,7 @@ import { WorkChat } from '@/components/work/WorkChat';
 import { RoomBar } from '@/components/work/RoomBar';
 import { NoticePanel } from '@/components/work/NoticePanel';
 import { TodoScreen } from '@/components/work/TodoScreen';
+import { RoutineScopeSheet } from '@/components/work/RoutineScopeSheet';
 import { WorkSettingsPanel } from '@/components/work/WorkSettingsPanel';
 import { TaskComposerModal } from '@/components/work/TaskComposerModal';
 import { INVITE_FIRST, type Member } from '@/components/work/MentionInput';
@@ -192,8 +196,12 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
     if (openedExternally && router.canGoBack()) router.back();
     else setView(view === 'settings' ? 'todo' : 'chat');
   }, [openedExternally, view]);
-  const [composer, setComposer] = useState<{ open: boolean; date?: string; text?: string; assigneeId?: string; editTemplate?: TaskTemplate }>({ open: false });
+  // routineScope — 루틴을 고칠 때만 실린다. 'single'=그 날짜만(대체 할일 1건 생성) / 'global'=매장 설정의 루틴 자체.
+  const [composer, setComposer] = useState<{ open: boolean; date?: string; text?: string; assigneeId?: string; editTemplate?: TaskTemplate; routineScope?: 'single' | 'global'; routineDate?: string }>({ open: false });
   const [uploadingId, setUploadingId] = useState<string | null>(null);
+  // 범위 선택 시트 — 루틴 연필을 누르면 먼저 뜬다(오늘만 / 이후 모두).
+  const [scopeAsk, setScopeAsk] = useState<{ task: TaskTemplate; date: string } | null>(null);
+  const setConfig = useScheduleStore((s) => s.setConfig);
   const [sendingPhoto, setSendingPhoto] = useState(false);
 
   // 이 방에 있는 사람인가 — 판정은 **기존 방 가시성 규칙 그대로**다. 새 규칙을 만들지 않는다.
@@ -427,9 +435,34 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
   const roomTemplates = useMemo(() => templates.filter((t) => inRoom(t.roomId)), [templates, inRoom]);
   // 매장 전체 공용 "기본 루틴 업무"(schedule_config.dayparts) → 매일 반복 할일로 파생. 방 구분 없이 항상 노출.
   const dayparts = useDayparts();
-  const routineTemplates = useMemo(() => daypartRoutineTemplates(dayparts), [dayparts]);
+  const DL = useDaypartLabels(); // 시간대 id → 이름. 루틴 수정 시트의 요약 줄에 쓴다.
+  // templates 를 같이 넘긴다 — '오늘만 수정'이 만든 그날의 대체본이 있으면 원본 루틴은 그 날짜에 빠진다(0146).
+  const routineTemplates = useMemo(() => daypartRoutineTemplates(dayparts, templates), [dayparts, templates]);
   // 보드(할일·배정) 렌더용 = 루틴(매장 전체) + 현재 방 할일. 컴포저 중복검사엔 roomTemplates 만 쓴다.
   const boardTemplates = useMemo(() => [...routineTemplates, ...roomTemplates], [routineTemplates, roomTemplates]);
+
+  /** '이후 모든 루틴 수정' — 매장 설정(dayparts)의 그 루틴 자체를 고친다. 업무 설정 화면에도 그대로 반영된다. */
+  const updateRoutineMaster = useCallback(
+    (routineId: string, next: { text: string; description?: string; remindAt?: string; assigneeId?: string }) => {
+      const nextDayparts = dayparts.map((dp) => ({
+        ...dp,
+        routines: dp.routines.map((r) =>
+          r.id === routineId
+            ? {
+                id: r.id,
+                text: next.text,
+                // 빈 값이면 키를 남기지 않는다 — sanitizeDayparts 의 저장본 모양과 맞춘다.
+                ...(next.description ? { description: next.description } : null),
+                ...(next.remindAt ? { remindAt: next.remindAt } : null),
+                ...(next.assigneeId ? { assigneeId: next.assigneeId } : null),
+              }
+            : r,
+        ),
+      }));
+      return setConfig({ dayparts: sanitizeDayparts(nextDayparts) });
+    },
+    [dayparts, setConfig],
+  );
   // 완료 토글 — 합성 루틴(dpr_)은 store.templates 에 없으므로 보드 목록에서 문구/방을 찾아 넘긴다(무음 '할일' 폴백 방지).
   // 완료 직후 1턴 캡처(②) 자격 판정 → 시트 노출. 완료 UI가 둘(체크·사진인증)이라 공용 헬퍼로 둔다.
   // done 은 렌더 스냅샷(토글 전) — 방금 추가된 완료는 미포함이라 '첫 완료(everDone=false)' 판정이 정확.
@@ -700,7 +733,14 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
           onToggle={toggleBoardTask}
           onAttachPhoto={(templateId, date) => attachPhoto(templateId, date)}
           onAddForDate={(date) => setComposer({ open: true, date })}
-          onEditTask={(t) => setComposer({ open: true, editTemplate: t })}
+          onEditTask={(t, date) => {
+            // 루틴은 매장 설정에서 파생된 일이라 "어디까지 바꿀지"부터 묻는다(오늘만 / 이후 모두).
+            if (isRoutineTaskId(t.id)) {
+              setScopeAsk({ task: t, date });
+              return;
+            }
+            setComposer({ open: true, editTemplate: t });
+          }}
           onOpenSettings={isOwner ? () => openPanel('settings') : undefined}
           knowhowOf={knowhowOf}
           onOpenKnowhow={openKnowhow}
@@ -721,21 +761,55 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
             if (okCount > 0) showToast(okCount > 1 ? `할일 ${okCount}개를 추가했어요` : '할일에 추가했어요', 'good');
           }}
           onEdit={async (id, patch) => {
+            // 루틴의 '그 날짜만 수정' — 루틴 자체는 그대로 두고, 그날을 대신할 할일 1건을 만든다.
+            // (editTask 로는 못 고친다: dpr_ 은 store.templates 에 없는 합성 항목이라 즉시 false 로 떨어진다.)
+            if (composer.routineScope === 'single' && composer.editTemplate) {
+              const routineId = composer.editTemplate.id.replace(ROUTINE_ID_PREFIX, '');
+              const date = composer.routineDate ?? today;
+              const ok = await addTask({ ...patch, date, recurrence: 'once', replacesRoutineId: routineId });
+              if (ok) showToast(`${fmtDateKo(date)} 루틴만 바꿨어요`, 'good');
+              return;
+            }
             const ok = await editTask(id, patch);
             if (ok) showToast('할일을 수정했어요', 'good');
           }}
+          onSubmitRoutine={async (next) => {
+            // '이후 모든 루틴 수정' — 매장 설정을 고친다. 업무 설정 화면에도 같은 값이 뜬다.
+            if (!composer.editTemplate) return;
+            const routineId = composer.editTemplate.id.replace(ROUTINE_ID_PREFIX, '');
+            const ok = await updateRoutineMaster(routineId, next);
+            if (ok !== false) showToast('루틴 업무를 바꿨어요 · 업무 설정에도 반영됐어요', 'good');
+          }}
+          routineMode={composer.routineScope === 'global'}
+          routineSectionLabel={composer.editTemplate ? DL[composer.editTemplate.section] : undefined}
           onDelete={removeTemplate}
           editTemplate={composer.editTemplate}
           isDuplicate={(input: NewTask) => !!findDuplicateTask(roomTemplates, input)}
           isOwner={isOwner}
           me={userId}
           today={today}
-          initialDate={composer.date}
+          initialDate={composer.routineScope === 'single' ? composer.routineDate : composer.date}
           initialText={composer.text}
           initialAssigneeId={composer.assigneeId}
           members={members}
           knowhowEntries={entries}
           initialKnowhowIds={composer.editTemplate ? knowhowIdsForTask(knowhowLinks, composer.editTemplate.id) : undefined}
+        />
+      )}
+
+      {scopeAsk && (
+        <RoutineScopeSheet
+          title={scopeAsk.task.text}
+          dateLabel={fmtDateKo(scopeAsk.date)}
+          onClose={() => setScopeAsk(null)}
+          onPickToday={() => {
+            setComposer({ open: true, editTemplate: scopeAsk.task, routineScope: 'single', routineDate: scopeAsk.date });
+            setScopeAsk(null);
+          }}
+          onPickAll={() => {
+            setComposer({ open: true, editTemplate: scopeAsk.task, routineScope: 'global' });
+            setScopeAsk(null);
+          }}
         />
       )}
 

@@ -122,10 +122,32 @@ export const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: InkColors.line,
   },
-  attachBtn: { width: 36, height: 44, alignItems: 'center', justifyContent: 'center' },
-  // ⓘ 배지 앵커 — 사진 아이콘 우하단에 겹쳐 붙는다(입력바 한 칸을 따로 차지하지 않게).
-  attachWrap: { position: 'relative' },
-  attachInfo: { position: 'absolute', right: -3, bottom: 3 },
+  // 입력바 좌측 ＋ — 업무 채팅(WorkChat)의 composer 와 같은 형태·같은 치수.
+  // 사진·음성·한번에 올리기를 아이콘 3개로 늘어놓던 옛 판본을 이 한 칸으로 접었다.
+  plusBtn: { width: 38, height: 38, borderRadius: Radius.md, backgroundColor: InkColors.ink, alignItems: 'center', justifyContent: 'center' },
+
+  // ＋ 토글 메뉴 — 입력바 위에 뜨는 팝업. 바깥을 누르면 닫힌다(menuBackdrop).
+  menuBackdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
+  menu: {
+    // bottom 은 입력바 실높이(패딩 10×2 + 44 + 위 테두리 = 65)보다 커야 한다 —
+    // 업무 채팅의 64를 그대로 베끼면 1px 겹쳐 마지막 안내 줄이 입력바에 잘린다(실측).
+    position: 'absolute', left: 12, bottom: 72, width: 232, padding: 6,
+    borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line,
+    backgroundColor: InkColors.bg, ...Elevation.e3,
+  },
+  menuItem: { flexDirection: 'row', alignItems: 'center', gap: 11, padding: 11, borderRadius: Radius.sm },
+  // '한번에 올리기'만 강조 — 다른 두 항목이 한 건씩 넣는 길이라면 이건 통째로 넣는 길이다.
+  menuItemAccent: { backgroundColor: BrandColors.yellowSoft },
+  menuIcon: { width: 30, height: 30, borderRadius: Radius.sm, backgroundColor: BrandColors.yellowSoft, alignItems: 'center', justifyContent: 'center' },
+  menuIconAccent: { backgroundColor: BrandColors.yellow },
+  menuLabel: { fontSize: 15, fontWeight: '700', color: InkColors.ink },
+  menuSub: { fontSize: 11, color: InkColors.ink3, fontWeight: '600' },
+  menuInfoRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingHorizontal: 11, paddingTop: 8, paddingBottom: 2,
+    borderTopWidth: 1, borderTopColor: InkColors.line, marginTop: 4,
+  },
+  menuInfoText: { flex: 1, fontSize: 11, color: InkColors.ink3, fontWeight: '600' },
   inputWrap: {
     flex: 1,
     borderWidth: 1,

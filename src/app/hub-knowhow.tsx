@@ -7,6 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { fetchOwnerKnowhowEntries } from '@/lib/db';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useStoreNav } from '@/lib/hooks/useStoreNav';
+import { HeaderBackButton } from '@/components/HeaderBackButton';
 import { SectionLabel } from '@/components/SectionLabel';
 import { EmptyState } from '@/components/EmptyState';
 import { InkColors } from '@/lib/theme/colors';
@@ -106,7 +107,18 @@ export default function HubKnowhowScreen() {
 
   return (
     <SafeAreaView style={st.safe} edges={['bottom']}>
-      <Stack.Screen options={{ title: '노하우 목록' }} />
+      {/* 허브(/hub-growth)에서 눌러 들어오는 서브화면 — 루트가 headerShown:false 라 기본으로 헤더가 없다.
+          여기서만 켜서 뒤로가기를 보장(전역 규칙: HeaderBackButton.tsx). */}
+      <Stack.Screen
+        options={{
+          headerShown: true,
+          title: '노하우 목록',
+          headerStyle: { backgroundColor: '#FFFFFF' },
+          headerTitleStyle: { fontWeight: '800', color: InkColors.ink, fontSize: 16 },
+          headerTintColor: InkColors.ink,
+          headerLeft: () => <HeaderBackButton fallback="/hub-growth" />,
+        }}
+      />
       {rows === null ? (
         <View style={st.center}>
           <ActivityIndicator color={InkColors.ink3} />

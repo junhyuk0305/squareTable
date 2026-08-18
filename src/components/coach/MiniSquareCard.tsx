@@ -26,6 +26,8 @@ type MiniProps = {
   /** 제목을 감춘다 — 위 문서 머리말(노하우 상세의 docHeader)이 이미 제목을 들고 있을 때.
    *  ★본문은 감추지 않는다. 본문을 그리는 자리는 언제나 이 카드 하나다(2026-08-08). */
   hideTitle?: boolean;
+  /** 수정 모드에서만 주입 — 저장 바로 옆에서 지운다. 없으면 삭제 버튼 자체가 안 그려진다. */
+  onDelete?: () => void;
 };
 
 /**
@@ -50,6 +52,7 @@ export function MiniSquareCard({
   publishLabel,
   onEditingChange,
   hideTitle,
+  onDelete,
 }: MiniProps) {
   const publishable = isSquarePublishable(square);
   // 제목도 같은 방식(탭 → 그 자리에서 고침). 한 줄이라 별도 '다 고쳤어요' 없이 포커스가 빠지면 닫는다.
@@ -142,6 +145,18 @@ export function MiniSquareCard({
             {/* 기호 ✓ 만 쓴다 — 그림 이모지(✅)는 워딩 §1 금지. */}
             <Text style={cardStyles.okText}>✓ {publishLabel}</Text>
           </Pressable>
+          {/* 삭제는 저장 오른쪽 — 고치는 손과 지우는 손이 같은 자리에 있다.
+              Primary(노랑 저장)와 헷갈리지 않게 면 없는 고스트 + 빨강 글자로만 구분한다. */}
+          {onDelete && (
+            <Pressable
+              onPress={onDelete}
+              accessibilityRole="button"
+              accessibilityLabel="노하우 삭제"
+              style={({ pressed }) => [cardStyles.delBtn, pressed && { opacity: 0.7 }]}
+            >
+              <Text style={cardStyles.delText}>삭제</Text>
+            </Pressable>
+          )}
         </View>
       )}
     </View>
@@ -177,6 +192,12 @@ const cardStyles = StyleSheet.create({
   },
   // 옐로 면 위 글자는 검정이다(흰 글자는 대비가 안 나온다).
   okText: { fontSize: 14, fontWeight: '800', color: InkColors.ink },
+  delBtn: {
+    minHeight: 48, justifyContent: 'center', paddingHorizontal: Space.md, borderRadius: Radius.sm,
+    borderWidth: 1, borderColor: InkColors.line, backgroundColor: InkColors.bg,
+  },
+  // 글자는 800(badText) — 흰 배경에서 AA 를 통과하는 쪽이다(bad 는 3.x 라 안 읽힌다).
+  delText: { fontSize: 14, fontWeight: '800', color: BrandColors.badText },
 
   // 정도 기준 게이지(노란 바)
   gaugeBox: { gap: 6, paddingVertical: 2 },

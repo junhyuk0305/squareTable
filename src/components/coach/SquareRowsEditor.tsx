@@ -29,6 +29,7 @@ type Props = {
 };
 
 const ADD_LABEL: Partial<Record<KnowhowRowKind, string>> = {
+  summary: '설명 추가',
   todo: '할 일 추가',
 };
 
@@ -40,6 +41,7 @@ export function SquareRowsEditor({ square, editable, onPatch, source, onOpenChan
 
   const steps = square.action?.steps ?? [];
   const dont = square.extract?.dont ?? '';
+  const description = square.description ?? '';
   const situation = square.situation ?? '';
 
   const openCell = (kind: KnowhowRowKind) => {
@@ -117,13 +119,15 @@ export function SquareRowsEditor({ square, editable, onPatch, source, onOpenChan
     </View>
   );
 
-  const textEditor = (kind: 'situation' | 'dont', value: string, placeholder: string) => (
+  const textEditor = (kind: 'summary' | 'situation' | 'dont', value: string, placeholder: string) => (
     <View>
       <TextInput
         value={value}
-        onChangeText={(t) =>
-          onPatch(kind === 'situation' ? { ...square, situation: t } : { ...square, extract: { ...square.extract, dont: t } })
-        }
+        onChangeText={(t) => {
+          if (kind === 'summary') onPatch({ ...square, description: t });
+          else if (kind === 'situation') onPatch({ ...square, situation: t });
+          else onPatch({ ...square, extract: { ...square.extract, dont: t } });
+        }}
         style={styles.input}
         placeholder={placeholder}
         placeholderTextColor={InkColors.ink3}
@@ -134,6 +138,16 @@ export function SquareRowsEditor({ square, editable, onPatch, source, onOpenChan
   );
 
   const rows: KnowhowRow[] = [];
+
+  if (editable || description.trim()) {
+    rows.push({
+      kind: 'summary',
+      render:
+        open === 'summary'
+          ? textEditor('summary', description, '한 줄 설명을 적어 주세요 (선택)')
+          : tappable('summary', '설명', <Text style={styles.readText}>{description || '눌러서 적어요'}</Text>),
+    });
+  }
 
   if (editable || situation.trim()) {
     rows.push({

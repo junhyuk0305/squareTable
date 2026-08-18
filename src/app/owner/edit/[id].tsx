@@ -20,7 +20,7 @@ import { UNSECTIONED, sectionOptions } from '@/lib/config/sections';
 import { getSectionMeta } from '@/lib/utils/category';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
-import { HEADER_EDGE_GUTTER, Space } from '@/lib/theme/layout';
+import { Space } from '@/lib/theme/layout';
 import type { PlaybookEntry, SquareBlock, UnknownQuery } from '@/types';
 
 /**
@@ -149,36 +149,33 @@ function ConversationalEdit({ entry }: { entry: PlaybookEntry }) {
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
-      <Stack.Screen
-        options={{
-          title: '노하우 수정',
-          headerRight: () => (
-            // 우측 끝 여백은 헤더 표준(HEADER_EDGE_GUTTER) — 좌측 back 화살표와 좌우 대칭.
-            <Pressable
-              onPress={del}
-              hitSlop={10}
-              style={({ pressed }) => [{ paddingLeft: Space.sm, paddingRight: HEADER_EDGE_GUTTER, paddingVertical: 4 }, pressed && { opacity: 0.6 }]}
-              accessibilityRole="button"
-              accessibilityLabel="노하우 삭제"
-            >
-              <Ionicons name="trash-outline" size={20} color={BrandColors.warn} />
-            </Pressable>
-          ),
-        }}
-      />
+      {/* 삭제는 헤더가 아니라 카드의 '수정 저장' 옆에 있다(OwnerCoachChat → MiniSquareCard). */}
+      <Stack.Screen options={{ title: '노하우 수정' }} />
 
-      {/* 카테고리 바 — 매뉴얼에서 묶이는 분류를 여기서 바로 바꾼다. */}
-      <Pressable
-        onPress={() => setCatOpen(true)}
-        style={({ pressed }) => [styles.catBar, pressed && { opacity: 0.7 }]}
-        accessibilityRole="button"
-        accessibilityLabel={`카테고리 ${catMeta.label}, 변경`}
-      >
-        <Text style={styles.catBarLabel}>카테고리</Text>
-        <View style={[styles.catDot, { backgroundColor: catMeta.color }]} />
-        <Text style={styles.catBarValue}>{catMeta.label}</Text>
-        <Ionicons name="chevron-down" size={14} color={InkColors.ink3} />
-      </Pressable>
+      {/* 카테고리 + 문제 만들기 — 이 노하우를 '어디에 묶을지'와 '뭘 물어볼지'는 같은 결정 층이라
+          한 줄에 나란히 둔다. 문서 머리말에 있던 문제 만들기 행은 여기로 옮겼다(2026-08-18). */}
+      <View style={styles.catRow}>
+        <Pressable
+          onPress={() => setCatOpen(true)}
+          style={({ pressed }) => [styles.catBar, pressed && { opacity: 0.7 }]}
+          accessibilityRole="button"
+          accessibilityLabel={`카테고리 ${catMeta.label}, 변경`}
+        >
+          <Text style={styles.catBarLabel}>카테고리</Text>
+          <View style={[styles.catDot, { backgroundColor: catMeta.color }]} />
+          <Text style={styles.catBarValue}>{catMeta.label}</Text>
+          <Ionicons name="chevron-down" size={14} color={InkColors.ink3} />
+        </Pressable>
+        <Pressable
+          onPress={() => router.push('/owner/quiz-new' as never)}
+          style={({ pressed }) => [styles.quizBtn, pressed && { opacity: 0.7 }]}
+          accessibilityRole="button"
+          accessibilityLabel="문제 만들기"
+        >
+          <Ionicons name="help-circle-outline" size={15} color={InkColors.ink} />
+          <Text style={styles.quizBtnText}>문제 만들기</Text>
+        </Pressable>
+      </View>
 
       <OwnerCoachChat
         uq={syntheticUq}
@@ -186,6 +183,7 @@ function ConversationalEdit({ entry }: { entry: PlaybookEntry }) {
         initialCategory={entry.category}
         editEntry={entry}
         onUpdated={onUpdated}
+        onDeleteEntry={del}
         onPublished={() => {}}
         docHeader={<KnowhowDoc entry={entry} />}
       />
@@ -261,7 +259,6 @@ const PROGRESS_TRACK_H = 5;
  *   그 버그 종류를 없앴다. 제목만 이쪽이 들고, 카드는 hideTitle 로 양보한다.
  */
 function KnowhowDoc({ entry }: { entry: PlaybookEntry }) {
-  const router = useRouter();
   const staff = useStaffStore((s) => s.staff);
   const understanding = useWorkStore((s) => s.understanding);
   const { quizCountOf } = useQuizBoard();
@@ -282,20 +279,7 @@ function KnowhowDoc({ entry }: { entry: PlaybookEntry }) {
     <View style={styles.doc}>
       <Text style={styles.docTitle}>{entry.title}</Text>
 
-      {quizCount === 0 ? (
-        // 누를 수 있는 것은 이 행 하나뿐 — 문서 블록 자체는 누를 수 없다(중첩 버튼 금지).
-        <Pressable
-          // 2026-08-11: 코스 목록(?status=no_items)이 사라졌다 → 만들기로 바로 보낸다.
-          onPress={() => router.push('/owner/quiz-new' as never)}
-          style={({ pressed }) => [styles.quizEmpty, pressed && { opacity: 0.7 }]}
-          accessibilityRole="button"
-          accessibilityLabel="아직 문제가 없어요, 만들기"
-        >
-          <Text style={styles.quizEmptyText}>아직 문제가 없어요 ·</Text>
-          <Text style={styles.quizEmptyCta}>만들기</Text>
-          <Ionicons name="chevron-forward" size={14} color={InkColors.ink3} />
-        </Pressable>
-      ) : total > 0 ? (
+      {quizCount > 0 && total > 0 ? (
         <View style={styles.progressWrap}>
           <View style={styles.progressTrack}>
             <View style={[styles.progressFill, { width: `${pct}%` }]} />
@@ -330,14 +314,6 @@ const styles = StyleSheet.create({
   progressFill: { height: '100%', borderRadius: Radius.pill, backgroundColor: BrandColors.good },
   // 숫자만 있는 배지가 아니라 읽어서 판단하는 문장이라 본문 15sp 하한을 그대로 적용한다.
   progressText: { fontSize: 15, color: InkColors.ink2 },
-  quizEmpty: {
-    flexDirection: 'row', alignItems: 'center', gap: Space.xs, alignSelf: 'flex-start',
-    // 누를 수 있는 행이라 최소 터치 타깃 48.
-    minHeight: 48, paddingVertical: Space.sm, paddingHorizontal: Space.md,
-    borderRadius: Radius.pill, backgroundColor: InkColors.bgSoft,
-  },
-  quizEmptyText: { fontSize: 12.5, fontWeight: '700', color: InkColors.ink2 },
-  quizEmptyCta: { fontSize: 12.5, fontWeight: '800', color: InkColors.ink },
   metaRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: Space.xs },
   metaChip: {
     fontSize: 11, fontWeight: '800', color: InkColors.ink2,
@@ -346,14 +322,24 @@ const styles = StyleSheet.create({
   },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
 
-  // 카테고리 바(헤더 아래) + 변경 시트
+  // 카테고리 · 문제 만들기 행(헤더 아래) + 카테고리 변경 시트
+  catRow: {
+    flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: Space.sm,
+    marginHorizontal: Space.gutter, marginTop: Space.sm, marginBottom: Space.xs,
+  },
   catBar: {
     flexDirection: 'row', alignItems: 'center', gap: Space.sm,
-    marginHorizontal: Space.gutter, marginTop: Space.sm, marginBottom: Space.xs,
     paddingVertical: Space.sm, paddingHorizontal: Space.md, minHeight: 40,
     borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.pill, backgroundColor: InkColors.bg,
-    alignSelf: 'flex-start',
   },
+  // 카테고리 칩과 같은 알약 — 둘 다 이 노하우의 '틀'을 정하는 보조 액션이다.
+  // Primary(노랑)는 카드의 '수정 저장' 하나뿐이라 여기서는 면을 쓰지 않는다.
+  quizBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: Space.xs,
+    paddingVertical: Space.sm, paddingHorizontal: Space.md, minHeight: 40,
+    borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.pill, backgroundColor: InkColors.bg,
+  },
+  quizBtnText: { fontSize: 13.5, fontWeight: '800', color: InkColors.ink },
   catBarLabel: { fontSize: 12.5, fontWeight: '700', color: InkColors.ink3 },
   catBarValue: { fontSize: 13.5, fontWeight: '800', color: InkColors.ink },
   catDot: { width: 8, height: 8, borderRadius: Radius.pill },

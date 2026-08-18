@@ -37,6 +37,11 @@ export type VoiceInputButtonProps = {
   hints?: string[];
   /** 계측용 화면 이름(coach · work_chat …). */
   surface: string;
+  /** 마운트 즉시 녹음 시작. ＋메뉴에서 '음성 입력'을 고른 직후에 쓴다 —
+   *  메뉴 항목은 누르면 그 일이 일어나야 하고, 마이크를 한 번 더 누르게 하면 "눌렀는데 아무 일 없음"이 된다. */
+  autoStart?: boolean;
+  /** 녹음이 끝나 idle 로 돌아왔을 때(전사·취소·실패 무관). autoStart 호출부가 버튼을 접는 데 쓴다. */
+  onEnd?: () => void;
 };
 
 type Phase = 'idle' | 'recording' | 'transcribing';
@@ -63,7 +68,7 @@ function mmss(ms: number): string {
   return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
 }
 
-export function VoiceInputButton({ onText, disabled, hints, surface }: VoiceInputButtonProps) {
+export function VoiceInputButton({ onText, disabled, hints, surface, autoStart, onEnd }: VoiceInputButtonProps) {
   const [phase, setPhase] = useState<Phase>('idle');
   const [elapsed, setElapsed] = useState(0);
   // 언마운트 후 setState 방지 + 마이크 잔존 방지(화면을 닫아도 트랙은 반드시 놓는다).
@@ -92,6 +97,13 @@ export function VoiceInputButton({ onText, disabled, hints, surface }: VoiceInpu
     const t = setInterval(() => setElapsed(Date.now() - startedAtRef.current), 250);
     return () => clearInterval(t);
   }, [phase]);
+
+  // idle 복귀는 항상 여기를 지난다 — onEnd 를 부르는 자리가 여러 곳이면 하나를 빠뜨렸을 때
+  // 호출부(＋메뉴)의 음성 모드가 영영 안 닫힌다.
+  const toIdle = useCallback(() => {
+    setPhase('idle');
+    onEnd?.();
+  }, [onEnd]);
 
   const fail = useCallback((kind: string, e?: unknown) => {
     showToast(ERROR_MESSAGE[kind] ?? ERROR_MESSAGE.failed, 'warn');
@@ -133,17 +145,17 @@ export function VoiceInputButton({ onText, disabled, hints, surface }: VoiceInpu
       fail(e instanceof VoiceError ? e.kind : 'failed', e);
     } finally {
       finishingRef.current = false;
-      if (aliveRef.current) setPhase('idle');
+      if (aliveRef.current) toIdle();
     }
-  }, [hints, onText, surface, fail]);
+  }, [hints, onText, surface, fail, toIdle]);
 
   // 취소 — 사용자가 ✕ 를 눌렀거나(reason 없음), 말이 한 번도 안 잡혀 자동으로 접었을 때.
   const abort = useCallback(async (reason?: 'no_speech') => {
     await cancelRecording();
-    if (aliveRef.current) setPhase('idle');
+    if (aliveRef.current) toIdle();
     if (reason === 'no_speech') showToast('말소리가 안 들려서 멈췄어요. 마이크를 확인하고 다시 눌러 주세요.', 'warn');
     track('voice_input', { surface, result: reason ?? 'cancelled' });
-  }, [surface]);
+  }, [surface, toIdle]);
 
   const begin = useCallback(async () => {
     try {
@@ -166,9 +178,19 @@ export function VoiceInputButton({ onText, disabled, hints, surface }: VoiceInpu
       setElapsed(0);
       setPhase('recording');
     } catch (e) {
+      // 여긴 phase 가 이미 idle 이라 toIdle 을 안 탄다 — onEnd 는 직접 부른다.
       fail(e instanceof VoiceError ? e.kind : 'failed', e);
+      onEnd?.();
     }
-  }, [finish, fail, abort]);
+  }, [finish, fail, abort, onEnd]);
+
+  // autoStart — 마운트 1회만. onEnd 가 인라인 함수여도 재실행되지 않게 ref 로 잠근다.
+  const autoStartedRef = useRef(false);
+  useEffect(() => {
+    if (!autoStart || !enabled || autoStartedRef.current) return;
+    autoStartedRef.current = true;
+    void begin();
+  }, [autoStart, enabled, begin]);
 
   if (!enabled) return null;
 
@@ -223,7 +245,7 @@ export function VoiceInputButton({ onText, disabled, hints, surface }: VoiceInpu
 }
 
 const s = StyleSheet.create({
-  // 사진 첨부 버튼(coachStyles.attachBtn)과 같은 발자국 — 입력바 정렬이 흔들리지 않게.
+  // 입력바 좌측 ＋ 버튼과 같은 발자국 — 음성 모드로 바뀔 때 입력바 정렬이 흔들리지 않게.
   btn: { width: 40, height: 44, alignItems: 'center', justifyContent: 'center' },
   recRow: { flexDirection: 'row', alignItems: 'center', gap: Space.xs },
   cancelBtn: { width: 32, height: 44, alignItems: 'center', justifyContent: 'center' },

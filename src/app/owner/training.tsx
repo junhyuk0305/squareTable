@@ -75,7 +75,7 @@ export default function OwnerTrainingScreen() {
                 cta={{ label: '노하우 추가하기', onPress: () => router.push('/owner/coach' as never) }}
               />
               <Pressable
-                onPress={() => router.push('/owner/import-knowhow' as never)}
+                onPress={() => router.push('/owner/handover' as never)}
                 style={({ pressed }) => [st.subLink, pressed && { opacity: 0.6 }]}
                 accessibilityRole="button"
                 accessibilityLabel="인수인계서로 한번에 올리기"

@@ -10,6 +10,7 @@ import {
   Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 
 import { UserBubble } from '@/components/UserBubble';
 import { Appear } from '@/components/Appear';
@@ -25,6 +26,9 @@ import { InkColors, BrandColors } from '@/lib/theme/colors';
 
 import { InfoDot } from '@/components/InfoDot';
 import { VoiceInputButton } from '@/components/VoiceInputButton';
+// 지원 판정은 VoiceInputButton 과 같은 모듈에서 가져온다 — 안 되는 환경에서 메뉴에 '음성 입력'을
+// 띄우면 눌러도 아무 일이 없다(버튼 자신은 null 을 렌더하지만 메뉴 항목은 남는다).
+import { supportsVoice } from '@/lib/voice/recorder';
 import { appendDictation, buildHints } from '@/lib/voice/text';
 import { StoredImage } from '@/components/StoredImage';
 import { PHOTO_UPLOAD_INFO } from '@/lib/copy/photoUploadInfo';
@@ -66,6 +70,9 @@ export type OwnerCoachChatProps = {
   // 사장이 말로 고치면 patchSquare로 부분 패치. 저장은 onUpdated로(새 add 아님).
   editEntry?: PlaybookEntry;
   onUpdated?: (square: SquareBlock, extras: { title: string; keywords: string[] }) => void;
+  /** 수정 모드 전용 — 노하우 삭제. 주입하면 카드 액션행의 '수정 저장' 오른쪽에 삭제가 붙는다.
+   *  (헤더 휴지통 아이콘은 저장 버튼에서 멀어 "고치다 지우려면 눈이 위로" 가는 구조였다.) */
+  onDeleteEntry?: () => void;
   /** 대화 맨 위에 얹는 읽기 블록(노하우 상세의 문서 머리말·본문 표). 스크롤과 함께 올라간다. */
   docHeader?: ReactNode;
 };
@@ -106,8 +113,10 @@ export function OwnerCoachChat({
   onPublishedMany,
   editEntry,
   onUpdated,
+  onDeleteEntry,
   docHeader,
 }: OwnerCoachChatProps) {
+  const router = useRouter();
   const isEdit = !!editEntry;
   const [messages, setMessages] = useState<Msg[]>(() => {
     const init: Msg[] = [];
@@ -152,6 +161,11 @@ export function OwnerCoachChat({
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [reStructure, setReStructure] = useState(false); // "다시 말하기" — 다음 발화는 재정리
+  // 입력바 ＋ 토글 메뉴(업무 채팅과 같은 형태) / 음성 모드(＋메뉴에서 고르면 ＋ 자리가 마이크로 바뀐다)
+  const [menu, setMenu] = useState(false);
+  const [voiceOpen, setVoiceOpen] = useState(false);
+  // 환경 판정이라 렌더마다 바뀌지 않는다(VoiceInputButton 과 같은 패턴).
+  const [voiceSupported] = useState(() => supportsVoice());
 
   const lastRawRef = useRef('');     // 카테고리 변경 시 재정리에 쓸 원문
   const publishedRef = useRef(false);
@@ -446,6 +460,9 @@ export function OwnerCoachChat({
     (override?: string) => {
       const value = (override ?? input).trim();
       if (!value || busy || editing) return; // 편집 중엔 카드 인라인 입력만(전송으로 정리 덮어쓰기 방지)
+      // 정리 결과가 분리 제안·카드 편집으로 넘어가면 입력바가 사라진다 — 열려 있던 메뉴가
+      // 나중에 입력바가 돌아올 때 혼자 다시 뜨지 않게 여기서 접는다.
+      setMenu(false);
       setInput('');
       pushMsg({ kind: 'owner', text: value });
 
@@ -761,6 +778,7 @@ export function OwnerCoachChat({
                 onPublish={handlePublish}
                 onPatch={(sq) => setSquare(sq)}
                 onTitle={setTitle}
+                onDelete={canEdit ? onDeleteEntry : undefined}
                 publishLabel={isEdit ? '수정 저장' : isInboxAnswer ? '이 답변 보내기' : '노하우로 저장'}
               />
             </Appear>
@@ -834,40 +852,81 @@ export function OwnerCoachChat({
         </View>
       )}
 
-      {showInput && (
-        <View style={styles.inputBar}>
-          {/* ⓘ는 별도 칸을 차지하지 않고 사진 아이콘 우하단에 배지처럼 붙인다(사진↔음성 간격 축소). */}
-          <View style={styles.attachWrap}>
-            <Pressable
-              onPress={attachPhoto}
-              disabled={uploadingPhoto}
-              hitSlop={8}
-              style={({ pressed }) => [styles.attachBtn, pressed && { opacity: 0.6 }]}
-              accessibilityRole="button"
-              accessibilityLabel="사진 첨부"
-            >
-              {uploadingPhoto ? (
-                <ActivityIndicator size="small" color={InkColors.ink3} />
-              ) : (
-                <Ionicons name="image-outline" size={22} color={InkColors.ink2} />
-              )}
-            </Pressable>
-            <View style={styles.attachInfo} pointerEvents="box-none">
+      {/* ＋ 토글 메뉴 — 입력바 위에 뜬다. 바깥을 누르면 닫힌다. */}
+      {showInput && menu && (
+        <>
+          <Pressable
+            style={styles.menuBackdrop}
+            onPress={() => setMenu(false)}
+            accessibilityRole="button"
+            accessibilityLabel="추가 메뉴 닫기"
+          />
+          <View style={styles.menu}>
+            <CoachMenuItem
+              icon="image-outline"
+              label="사진 첨부"
+              sub={uploadingPhoto ? '올리는 중…' : `최대 ${MAX_PHOTOS}장`}
+              onPress={() => { setMenu(false); attachPhoto(); }}
+            />
+            {voiceSupported && (
+              <CoachMenuItem
+                icon="mic-outline"
+                label="음성 입력"
+                sub="말하면 글로 옮겨져요"
+                onPress={() => { setMenu(false); setVoiceOpen(true); }}
+              />
+            )}
+            {/* 한번에 올리기 — 아직 정리된 카드가 없을 때만. 카드가 뜬 뒤에 다른 화면으로 나가면
+                방금 정리한 내용이 조용히 사라진다(수정 모드는 처음부터 카드가 있어 자동으로 빠진다). */}
+            {!square && (
+              <CoachMenuItem
+                icon="cloud-upload-outline"
+                label="한번에 올리기"
+                sub="인수인계서·매뉴얼을 노하우로 쪼개 드려요"
+                onPress={() => { setMenu(false); router.push('/owner/handover' as never); }}
+                accent
+              />
+            )}
+            <View style={styles.menuInfoRow}>
+              <Text style={styles.menuInfoText}>사진은 자동으로 압축돼서 올라가요</Text>
               <InfoDot
                 title={PHOTO_UPLOAD_INFO.title}
                 body={PHOTO_UPLOAD_INFO.body}
-                size={13}
+                size={14}
                 accessibilityLabel="사진 업로드 규격 안내"
               />
             </View>
           </View>
-          {/* 말로 등록 — 결과는 입력창에 채워지고 전송은 사장이 직접(오인식 검토 여지를 남긴다). */}
-          <VoiceInputButton
-            surface="owner_coach"
-            hints={voiceHints}
-            disabled={busy}
-            onText={(t) => setInput((prev) => appendDictation(prev, t, INPUT_MAX_LEN))}
-          />
+        </>
+      )}
+
+      {showInput && (
+        <View style={styles.inputBar}>
+          {/* 왼쪽 칸은 하나다 — 평소엔 ＋, 음성 입력을 고른 동안만 마이크(녹음 타이머·정지)로 바뀐다.
+              말한 결과는 입력창에 채워지고 전송은 사장이 직접 한다(오인식 검토 여지를 남긴다). */}
+          {voiceOpen ? (
+            <VoiceInputButton
+              surface="owner_coach"
+              hints={voiceHints}
+              disabled={busy}
+              autoStart
+              onEnd={() => setVoiceOpen(false)}
+              onText={(t) => setInput((prev) => appendDictation(prev, t, INPUT_MAX_LEN))}
+            />
+          ) : (
+            <Pressable
+              onPress={() => setMenu((v) => !v)}
+              accessibilityRole="button"
+              accessibilityLabel={menu ? '추가 메뉴 닫기' : '추가 메뉴 열기'}
+              style={({ pressed }) => [styles.plusBtn, pressed && { opacity: 0.85 }]}
+            >
+              {uploadingPhoto ? (
+                <ActivityIndicator size="small" color={InkColors.bubbleText} />
+              ) : (
+                <Ionicons name={menu ? 'close' : 'add'} size={24} color={InkColors.bubbleText} />
+              )}
+            </Pressable>
+          )}
           <View style={[styles.inputWrap, inputFocused && styles.inputWrapFocused]}>
             <TextInput
               value={input}
@@ -903,5 +962,41 @@ export function OwnerCoachChat({
         </View>
       )}
     </KeyboardAvoidingView>
+  );
+}
+
+/** ＋ 메뉴 한 줄. accent = 강조 항목(한번에 올리기) — 옅은 옐로 면 + 진한 옐로 아이콘 칩. */
+function CoachMenuItem({
+  icon,
+  label,
+  sub,
+  onPress,
+  accent,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  sub: string;
+  onPress: () => void;
+  accent?: boolean;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      style={({ pressed }) => [
+        styles.menuItem,
+        accent && styles.menuItemAccent,
+        pressed && { opacity: 0.7 },
+      ]}
+    >
+      <View style={[styles.menuIcon, accent && styles.menuIconAccent]}>
+        <Ionicons name={icon} size={16} color={InkColors.ink} />
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={styles.menuLabel}>{label}</Text>
+        <Text style={styles.menuSub}>{sub}</Text>
+      </View>
+    </Pressable>
   );
 }

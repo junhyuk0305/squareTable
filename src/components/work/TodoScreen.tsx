@@ -68,8 +68,9 @@ export function TodoScreen({
   onToggle: (templateId: string, date: string) => void;
   onAttachPhoto?: (templateId: string, date: string) => void;
   onAddForDate: (date: string) => void;
-  /** 연필 → 수정/삭제 시트. (X 즉시삭제를 대체 — 회의 반영) */
-  onEditTask: (t: TaskTemplate) => void;
+  /** 연필 → 수정/삭제 시트. (X 즉시삭제를 대체 — 회의 반영)
+   *  date = 지금 보고 있는 날짜. 루틴의 '그날만 수정'이 어느 날 얘기인지 알아야 한다(0146). */
+  onEditTask: (t: TaskTemplate, date: string) => void;
   /** 상단 '업무 설정' 버튼 → 카테고리·루틴 업무·담당자 화면. 없으면 버튼이 안 뜬다(사장·매니저 전용). */
   onOpenSettings?: () => void;
   /** 이 업무에 붙은 노하우(제목) — 카드에 칩으로 노출. 없으면 칩 안 뜸(0069). */
@@ -315,7 +316,9 @@ export function TodoScreen({
                     const assignedToMe = !!t.ownerId && t.ownerId === me;
                     const photoUrl = (mark as (DoneMark & { photoUrl?: string }) | undefined)?.photoUrl;
                     // 수정/삭제 권한 = 사장 or 본인이 등록/배정받은 개인 할일. (X 즉시삭제 → 연필로 수정·삭제)
-                    const canManage = (isOwner || (isMine && (t.ownerId === me || t.createdBy === me))) && !isRoutine;
+                    // 루틴(dpr_)도 사장은 여기서 고칠 수 있다 — 누르면 '오늘만/이후 모두'를 먼저 묻는다(0146).
+                    // 예전엔 업무 설정에 들어가야만 고칠 수 있어서, 할일에서 발견한 오타를 그 자리에서 못 고쳤다.
+                    const canManage = isRoutine ? isOwner : isOwner || (isMine && (t.ownerId === me || t.createdBy === me));
                     const khs = knowhowOf?.(t.id) ?? [];
                     const uNames = understoodNames?.(t.id) ?? [];
                     const selfCheckable = !!onSelfCheck && !!canSelfCheck?.(t.id);
@@ -340,6 +343,7 @@ export function TodoScreen({
                             {t.remindAt ? <Text style={s.timeTag}>{t.remindAt} </Text> : null}
                             {t.sectionNote ? `${t.sectionNote} · ${t.text}` : t.text}
                           </Text>
+                          {t.description ? <Text style={[s.itemDesc, on && s.itemDescOn]} numberOfLines={2}>{t.description}</Text> : null}
                           {(mark || repeat) && (
                             <Text style={s.itemMeta}>
                               {mark ? `${mark.byName} 완료 · ${hhmm(mark.at)}` : ''}
@@ -378,7 +382,7 @@ export function TodoScreen({
                           </Pressable>
                         )}
                         {canManage && (
-                          <Pressable onPress={() => onEditTask(t)} hitSlop={6} accessibilityRole="button" accessibilityLabel={`${t.text} 수정`}>
+                          <Pressable onPress={() => onEditTask(t, selected)} hitSlop={6} accessibilityRole="button" accessibilityLabel={`${t.text} 수정`}>
                             <Ionicons name="create-outline" size={17} color={InkColors.ink3} />
                           </Pressable>
                         )}
@@ -460,6 +464,8 @@ const s = StyleSheet.create({
   boxOn: { backgroundColor: BrandColors.yellow, borderColor: BrandColors.yellowDeep },
   itemText: { fontSize: 15, fontWeight: '500', color: InkColors.ink },
   itemTextOn: { color: InkColors.ink3, textDecorationLine: 'line-through' },
+  itemDesc: { fontSize: 12.5, lineHeight: 18, color: InkColors.ink3, marginTop: 2 },
+  itemDescOn: { color: InkColors.ink3 },
   itemMeta: { fontSize: 11, color: InkColors.ink3, marginTop: 2 },
   // '매일 반복' — 반복이라는 사실만 알리는 부제. 경고가 아니라 정보라 파랑 계열.
   repeatTag: { fontWeight: '800', color: BrandColors.mentionText },

@@ -23,7 +23,7 @@ import { Space } from '@/lib/theme/layout';
  * ★ 표시 전용 — 판정·데이터 접근을 넣지 않는다. 편집 입력창은 호출부가 `render` 로 꽂는다.
  */
 
-export type KnowhowRowKind = 'situation' | 'todo' | 'dont' | 'source';
+export type KnowhowRowKind = 'summary' | 'situation' | 'todo' | 'dont' | 'source';
 
 export type KnowhowRow = {
   kind: KnowhowRowKind;
@@ -40,6 +40,7 @@ export type KnowhowRow = {
 };
 
 const LABEL: Record<KnowhowRowKind, string> = {
+  summary: '설명',
   situation: '상황',
   todo: '할 일',
   dont: '금지',
@@ -48,6 +49,7 @@ const LABEL: Record<KnowhowRowKind, string> = {
 
 /** 점 = 500 역할(점·인디케이터). 글자에는 쓰지 않는다. */
 const TONE: Record<KnowhowRowKind, string> = {
+  summary: BrandColors.gold,
   situation: InkColors.ink,
   todo: BrandColors.good,
   dont: BrandColors.bad,

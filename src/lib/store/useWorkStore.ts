@@ -181,6 +181,8 @@ export type TaskTemplate = {
   id: string;
   section: TaskSection;
   text: string;
+  /** 상세 설명(선택) — 제목 한 줄로 부족할 때. 빈 값이면 표시하지 않는다. */
+  description?: string;
   /** 채팅방 id — 이 할일이 속한 방('전부 방 단위'). 레거시는 미지정(기본방으로 간주). */
   roomId?: string;
   /** section==='etc'일 때 직접 입력 라벨(예: "14시 브레이크"). */
@@ -205,6 +207,12 @@ export type TaskTemplate = {
   createdAt?: string;
   /** 할일 목록에서 숨김(0110). 퀴즈가 만들어 낸 껍데기 업무를 사장이 정리한 표시 — occursOn 이 읽는다. */
   hidden?: boolean;
+  /** 루틴 하루 예외(0146) — 이 할일이 **대신하는** 루틴 id(dayparts 안의 routine.id, dpr_ 접두사 없음).
+   *  '오늘 하루만 수정'이 만드는 그날의 대체본에만 붙는다. 일반 할일은 undefined. */
+  replacesRoutineId?: string;
+  /** 이 날짜엔 뜨지 않는다(0146) — 대체본이 있는 날의 **원본 루틴**에 붙는 파생 필드.
+   *  DB 컬럼이 아니라 daypartRoutineTemplates 가 매번 계산한다(그래서 저장 경로가 늘지 않는다). */
+  skipDates?: string[];
 };
 export type DoneMark = { by: string; byName: string; at: string; photoUrl?: string };
 export type FeedKind = 'notice' | 'message' | 'task_done' | 'comment';
@@ -261,14 +269,34 @@ export const ROUTINE_ID_PREFIX = 'dpr_';
 export function isRoutineTaskId(id: string): boolean {
   return id.startsWith(ROUTINE_ID_PREFIX);
 }
-export function daypartRoutineTemplates(dayparts: Daypart[]): TaskTemplate[] {
+/**
+ * dayparts(매장 설정) → 매일 반복 할일로 파생.
+ *
+ * `templates` 를 같이 받는 이유는 **루틴 하루 예외(0146)** 하나 때문이다. '오늘 하루만 수정'은
+ * 그 날짜의 대체본을 work_templates 한 행으로 만드는데, 그러면 같은 날 원본 루틴까지 뜨면 두 줄이 된다.
+ * 그래서 여기서 대체본을 훑어 원본에 skipDates 를 붙인다 — 호출부(업무 보드·직원 홈·사장 홈)가
+ * 각자 걸러내면 규칙이 세 벌이 되고 한 곳만 고치는 순간 화면끼리 어긋난다(AGENTS.md ②).
+ */
+export function daypartRoutineTemplates(dayparts: Daypart[], templates: TaskTemplate[] = []): TaskTemplate[] {
+  // 루틴 id → 대체본이 있는 날짜들.
+  const skipByRoutine: Record<string, string[]> = {};
+  for (const t of templates) {
+    const rid = t.replacesRoutineId;
+    const d = t.date ?? t.dueDate;
+    if (!rid || !d) continue;
+    (skipByRoutine[rid] ??= []).push(d);
+  }
   const out: TaskTemplate[] = [];
   for (const dp of dayparts) {
     for (const r of dp.routines) {
+      const skip = skipByRoutine[r.id];
       out.push({
         id: `${ROUTINE_ID_PREFIX}${r.id}`,
         section: dp.id,
         text: r.text,
+        ...(r.description?.trim() ? { description: r.description.trim() } : null),
+        ...(r.remindAt ? { remindAt: r.remindAt } : null),
+        ...(skip?.length ? { skipDates: skip } : null),
         // 담당자를 정해도 scope 는 'shared' 그대로 — 루틴은 매장 공통 일이라 전원에게 보여야 하고
         // ownerId 는 '담당 ○○' 꼬리표에만 쓴다(private 로 바꾸면 담당자 외에는 아예 안 보인다).
         scope: 'shared',
@@ -295,6 +323,9 @@ export function occursOn(t: TaskTemplate, dateStr: string): boolean {
   // (보드·캘린더·배정·허브 2종·알림)이라 각자 필터하면 규칙이 6벌로 복제된다(AGENTS.md ②).
   // hidden 기본값이 false 라 기존 할일의 판정은 1mm도 안 바뀐다.
   if (t.hidden) return false;
+  // 루틴 하루 예외(0146) — 그날은 대체본이 대신 뜬다. hidden 과 같은 이유로 판정을 여기 한 줄로 둔다:
+  // 호출부 6곳이 각자 필터하면 "직원 홈엔 원본과 대체본이 둘 다"처럼 화면마다 다르게 어긋난다.
+  if (t.skipDates?.includes(dateStr)) return false;
   if (t.recurrence && t.recurrence !== 'once') {
     const dow = new Date(`${dateStr}T00:00:00`).getDay();
     return t.recurrence.weekly.includes(dow);
@@ -536,8 +567,11 @@ const seedFeed: FeedItem[] = [
 export type NewTask = {
   section: TaskSection;
   text: string;
+  description?: string;
   scope: TaskScope;
   ownerId?: string;
+  /** 루틴 하루 예외(0146) — 이 할일이 대신하는 루틴 id. '오늘 하루만 수정'에서만 실린다. */
+  replacesRoutineId?: string;
   /** 작성자 userId(=등록하는 본인). private 가시성 판정에 쓴다. */
   createdBy?: string;
   sectionNote?: string;
@@ -684,6 +718,8 @@ export const useWorkStore = create<State>((set, get) => ({
       id: genId('t'),
       section: input.section,
       text: input.text,
+      ...(input.description?.trim() ? { description: input.description.trim() } : null),
+      ...(input.replacesRoutineId ? { replacesRoutineId: input.replacesRoutineId } : null),
       scope: input.scope,
       ...(room ? { roomId: room } : null),
       ...(input.ownerId ? { ownerId: input.ownerId } : null),
@@ -718,6 +754,7 @@ export const useWorkStore = create<State>((set, get) => ({
       ...before,
       section: patch.section,
       text: patch.text,
+      ...(patch.description?.trim() ? { description: patch.description.trim() } : { description: undefined }),
       scope: patch.scope,
       // ownerId/date/sectionNote는 조건부 필드 — patch에 없으면 명시적으로 제거(가게전체로 바꾸면 담당 해제).
       ...(patch.ownerId ? { ownerId: patch.ownerId } : { ownerId: undefined }),

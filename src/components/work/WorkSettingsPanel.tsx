@@ -1,10 +1,13 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { Appear } from '@/components/Appear';
 import { Vanish } from '@/components/Vanish';
 import { resolveDayparts, sanitizeDayparts, newDaypart, newRoutine, type Daypart } from '@/lib/store/daypartLabels';
+import { TaskComposerModal } from '@/components/work/TaskComposerModal';
+import type { Member } from '@/components/work/MentionInput';
+import { todayStr } from '@/lib/utils/attendance';
 import { useScheduleStore } from '@/lib/store/useScheduleStore';
 import { useWorkStore } from '@/lib/store/useWorkStore';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
@@ -28,8 +31,8 @@ export function WorkSettingsPanel({
   me,
   onSaved,
 }: {
-  /** 담당자 후보(사장 포함 매장 명부). */
-  members: { id: string; name: string }[];
+  /** 담당자 후보(사장 포함 매장 명부). 루틴 편집 시트가 그대로 받으므로 Member 전체를 받는다. */
+  members: Member[];
   me: string;
   /** 저장 완료 → 할일 화면으로 복귀(시트 시절의 '저장하면 닫힌다'와 같은 심성모형). */
   onSaved: () => void;
@@ -72,34 +75,39 @@ export function WorkSettingsPanel({
 
   // ── 루틴 편집(2단) ──
   const patchOpen = (fn: (d: Daypart) => Daypart) => setItems((p) => p.map((d, idx) => (idx === openIdx ? fn(d) : d)));
-  const addRoutine = () => patchOpen((d) => ({ ...d, routines: [...d.routines, newRoutine()] }));
-  const setRoutine = (ri: number, v: string) =>
-    patchOpen((d) => ({ ...d, routines: d.routines.map((r, k) => (k === ri ? { ...r, text: v } : r)) }));
   const removeRoutine = (ri: number) => patchOpen((d) => ({ ...d, routines: d.routines.filter((_, k) => k !== ri) }));
-  // 같은 사람을 다시 누르면 담당 해제 — 별도 '없음' 칩 없이 한 동작으로 켜고 끈다.
-  const setAssignee = (ri: number, userId: string) =>
-    patchOpen((d) => ({
-      ...d,
-      routines: d.routines.map((r, k) => (k === ri ? { ...r, assigneeId: r.assigneeId === userId ? undefined : userId } : r)),
-    }));
+
+  /**
+   * 루틴 편집기 — null 이면 닫힘. `at: -1` = 새로 추가.
+   * 예전엔 제목만 인라인 한 줄이었고(설명·시간을 적을 자리가 없었다), 칸을 그냥 늘리면
+   * 루틴 4개짜리 카테고리에서 입력칸이 12개로 쏟아진다. 그래서 **할일 추가와 같은 시트**로 옮겼다.
+   */
+  const [routineEdit, setRoutineEdit] = useState<{ at: number } | null>(null);
+  const editingRoutine = routineEdit && routineEdit.at >= 0 ? open?.routines[routineEdit.at] : undefined;
+
+  const saveRoutine = (d: { text: string; description?: string; remindAt?: string; assigneeId?: string }) => {
+    if (!routineEdit) return;
+    // 빈 값은 키를 만들지 않는다 — sanitizeDayparts 가 저장하는 모양과 같게 유지한다(qa:daypart 진리표).
+    const next = {
+      text: d.text,
+      ...(d.description ? { description: d.description } : null),
+      ...(d.remindAt ? { remindAt: d.remindAt } : null),
+      ...(d.assigneeId ? { assigneeId: d.assigneeId } : null),
+    };
+    patchOpen((dp) =>
+      routineEdit.at < 0
+        ? { ...dp, routines: [...dp.routines, { ...newRoutine(), ...next }] }
+        : { ...dp, routines: dp.routines.map((r, k) => (k === routineEdit.at ? { id: r.id, ...next } : r)) },
+    );
+    setRoutineEdit(null);
+  };
 
   const save = () => {
     // setConfig 는 결과를 돌려주지만 실패 배너·롤백은 guardWrite 가 처리한다.
     void setConfig({ dayparts: sanitizeDayparts(items) });
     onSaved();
   };
-  // 로컬만 기본 4개로 되돌린다(저장을 눌러야 실제 반영 — 실수로 날아가지 않게).
-  const reset = () => {
-    setItems(resolveDayparts(undefined));
-    setConfirmDelete(null);
-    setOpenId(null);
-  };
-
-  const memberChips = useMemo(() => {
-    const mine = members.find((m) => m.id === me);
-    const rest = members.filter((m) => m.id !== me);
-    return mine ? [mine, ...rest] : rest; // 나를 맨 앞에 — 1인 매장에서 가장 자주 고르는 값이다.
-  }, [members, me]);
+  // 담당자 칩은 루틴 편집 시트(TaskComposerModal)가 그린다 — 여기서 다시 만들지 않는다.
 
   return (
     <View style={s.wrap}>
@@ -131,39 +139,33 @@ export function WorkSettingsPanel({
               <Vanish key={r.id} hidden={leaving === r.id} onDone={() => { removeRoutine(ri); setLeaving(null); }} style={s.routineCard}>
                 <View style={s.routineHead}>
                   <View style={s.bullet} />
-                  <TextInput
-                    value={r.text}
-                    onChangeText={(v) => setRoutine(ri, v)}
-                    placeholder="머신 예열"
-                    placeholderTextColor={InkColors.ink3}
-                    style={s.routineInp}
-                    maxLength={60}
-                  />
-                  <Pressable onPress={() => setLeaving(r.id)} hitSlop={6} style={s.iconBtn} accessibilityRole="button" accessibilityLabel="루틴 삭제">
+                  {/* 행 전체가 '고치기' 버튼 — 제목·설명·시간·담당을 시트에서 한 번에 짓는다. */}
+                  <Pressable
+                    onPress={() => setRoutineEdit({ at: ri })}
+                    style={({ pressed }) => [s.routineMain, pressed && { opacity: 0.7 }]}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${r.text || '이름 없는 루틴'} 수정`}
+                  >
+                    <Text style={[s.routineText, !r.text && s.routineTextEmpty]} numberOfLines={1}>
+                      {r.text || '이름 없는 루틴'}
+                    </Text>
+                    {/* 무엇이 설정돼 있는지 한 줄 요약 — 시트를 열지 않고도 보인다. */}
+                    <Text style={s.routineMeta} numberOfLines={1}>
+                      {[
+                        r.remindAt ?? null,
+                        r.assigneeId ? `담당 ${nameOf(r.assigneeId)}` : null,
+                        r.description?.trim() ? r.description.trim() : null,
+                      ].filter(Boolean).join(' · ') || '설명·시간 없음'}
+                    </Text>
+                  </Pressable>
+                  <Pressable onPress={() => setLeaving(r.id)} hitSlop={6} style={s.iconBtn} accessibilityRole="button" accessibilityLabel={`${r.text || '이름 없는 루틴'} 삭제`}>
                     <Ionicons name="close" size={16} color={InkColors.ink3} />
                   </Pressable>
                 </View>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.chipRow}>
-                  {memberChips.map((m) => {
-                    const on = r.assigneeId === m.id;
-                    return (
-                      <Pressable
-                        key={m.id}
-                        onPress={() => setAssignee(ri, m.id)}
-                        style={({ pressed }) => [s.chip, on && s.chipOn, pressed && { opacity: 0.8 }]}
-                        accessibilityRole="button"
-                        accessibilityState={{ selected: on }}
-                        accessibilityLabel={`${nameOf(m.id)} 담당으로 ${on ? '해제' : '지정'}`}
-                      >
-                        <Text style={[s.chipText, on && s.chipTextOn]}>{nameOf(m.id)}</Text>
-                      </Pressable>
-                    );
-                  })}
-                </ScrollView>
               </Vanish>
             ))}
 
-            <Pressable onPress={addRoutine} style={({ pressed }) => [s.addDashed, pressed && { opacity: 0.7 }]}>
+            <Pressable onPress={() => setRoutineEdit({ at: -1 })} style={({ pressed }) => [s.addDashed, pressed && { opacity: 0.7 }]}>
               <Ionicons name="add" size={16} color={InkColors.ink} />
               <Text style={s.addDashedText}>루틴 업무 추가</Text>
             </Pressable>
@@ -208,14 +210,13 @@ export function WorkSettingsPanel({
                         {d.routines.some((r) => r.assigneeId) ? ` · 담당 ${d.routines.filter((r) => r.assigneeId).length}개` : ''}
                       </Text>
                     </View>
-                    <Ionicons name="chevron-forward" size={16} color={InkColors.ink3} />
                   </Pressable>
                   <View style={s.orderBtns}>
                     <Pressable onPress={() => move(i, -1)} disabled={i === 0} hitSlop={6} style={s.iconBtn} accessibilityLabel="위로">
-                      <Ionicons name="chevron-up" size={17} color={i === 0 ? InkColors.line : InkColors.ink2} />
+                      <Ionicons name="chevron-up" size={20} color={i === 0 ? InkColors.line : InkColors.ink2} />
                     </Pressable>
                     <Pressable onPress={() => move(i, 1)} disabled={i === items.length - 1} hitSlop={6} style={s.iconBtn} accessibilityLabel="아래로">
-                      <Ionicons name="chevron-down" size={17} color={i === items.length - 1 ? InkColors.line : InkColors.ink2} />
+                      <Ionicons name="chevron-down" size={20} color={i === items.length - 1 ? InkColors.line : InkColors.ink2} />
                     </Pressable>
                   </View>
                 </View>
@@ -231,13 +232,40 @@ export function WorkSettingsPanel({
       )}
 
       <View style={s.foot}>
-        <Pressable onPress={reset} style={({ pressed }) => [s.resetBtn, pressed && { opacity: 0.85 }]}>
-          <Text style={s.resetText}>기본값으로</Text>
-        </Pressable>
         <Pressable onPress={save} style={({ pressed }) => [s.saveBtn, pressed && { opacity: 0.85 }]}>
           <Text style={s.saveText}>저장</Text>
         </Pressable>
       </View>
+
+      {/* 루틴 편집 — 할일 추가와 같은 시트를 '루틴 모드'로 쓴다. 루틴에 없는 칸(언제·카테고리·노하우)은 감춰진다. */}
+      {routineEdit && open && (
+        <TaskComposerModal
+          routineMode
+          routineSectionLabel={open.label.trim() || '이 카테고리'}
+          onSubmitRoutine={saveRoutine}
+          onClose={() => setRoutineEdit(null)}
+          // 루틴을 TaskTemplate 모양으로 싸서 넘긴다 — 컴포저의 프리필 경로를 그대로 재사용한다.
+          editTemplate={
+            editingRoutine
+              ? {
+                  id: editingRoutine.id,
+                  section: open.id,
+                  text: editingRoutine.text,
+                  ...(editingRoutine.description ? { description: editingRoutine.description } : null),
+                  ...(editingRoutine.remindAt ? { remindAt: editingRoutine.remindAt } : null),
+                  ...(editingRoutine.assigneeId ? { ownerId: editingRoutine.assigneeId } : null),
+                  scope: 'shared' as const,
+                }
+              : undefined
+          }
+          // 루틴 모드에선 안 쓰이는 경로들 — 시그니처를 채우기 위한 no-op.
+          onSubmit={() => {}}
+          isOwner
+          me={me}
+          today={todayStr()}
+          members={members}
+        />
+      )}
     </View>
   );
 }
@@ -285,8 +313,11 @@ const s = StyleSheet.create({
     marginBottom: Space.sm,
   },
   routineHead: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
+  routineMain: { flex: 1, minWidth: 0, minHeight: 48, justifyContent: 'center', gap: 1 },
+  routineText: { fontSize: 15, fontWeight: '700', color: InkColors.ink },
+  routineTextEmpty: { color: InkColors.ink3, fontWeight: '600' },
+  routineMeta: { fontSize: 12, color: InkColors.ink3, fontWeight: '600' },
   bullet: { width: 5, height: 5, borderRadius: Radius.pill, backgroundColor: InkColors.ink3 },
-  routineInp: { flex: 1, fontSize: 15, color: InkColors.ink, paddingVertical: Space.sm },
   iconBtn: { width: 30, height: 30, alignItems: 'center', justifyContent: 'center' },
   chipRow: { gap: Space.xs, paddingTop: Space.sm },
   chip: { paddingHorizontal: Space.md, paddingVertical: 6, borderRadius: Radius.pill, borderWidth: 1, borderColor: InkColors.line, backgroundColor: InkColors.bg },
@@ -318,9 +349,7 @@ const s = StyleSheet.create({
   cDel: { paddingHorizontal: Space.lg, paddingVertical: Space.sm, borderRadius: Radius.sm, backgroundColor: BrandColors.badSolid },
   cDelText: { fontSize: 12.5, fontWeight: '800', color: '#FFFFFF' },
 
-  foot: { flexDirection: 'row', gap: Space.sm, paddingHorizontal: Space.lg, paddingTop: Space.md, paddingBottom: Space.lg, borderTopWidth: 1, borderTopColor: InkColors.line, backgroundColor: InkColors.cream },
-  resetBtn: { paddingHorizontal: Space.lg, paddingVertical: Space.lg, borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, backgroundColor: InkColors.bg, alignItems: 'center', justifyContent: 'center' },
-  resetText: { fontSize: 14, fontWeight: '800', color: InkColors.ink2 },
-  saveBtn: { flex: 1, backgroundColor: InkColors.ink, borderRadius: Radius.md, paddingVertical: Space.lg, alignItems: 'center' },
+  foot: { paddingHorizontal: Space.lg, paddingTop: Space.md, paddingBottom: Space.lg, borderTopWidth: 1, borderTopColor: InkColors.line, backgroundColor: InkColors.cream },
+  saveBtn: { backgroundColor: InkColors.ink, borderRadius: Radius.md, paddingVertical: Space.lg, alignItems: 'center' },
   saveText: { color: '#FFFFFF', fontSize: 15, fontWeight: '800' },
 });

@@ -44,6 +44,9 @@ export function TaskComposerModal({
   members = [],
   knowhowEntries = [],
   initialKnowhowIds,
+  routineMode,
+  routineSectionLabel,
+  onSubmitRoutine,
 }: {
   onClose: () => void;
   /** 신규 등록 — 다중 배정이면 담당자 수만큼 NewTask 배열로 넘어온다. */
@@ -69,6 +72,17 @@ export function TaskComposerModal({
   knowhowEntries?: PlaybookEntry[];
   /** 수정 모드 프리필 — 이 업무에 이미 붙어 있는 노하우 id들. */
   initialKnowhowIds?: string[];
+  /**
+   * 루틴 업무 모드 — 매장 설정(schedule_config.dayparts)의 루틴을 **할일 추가와 같은 형태**로 짓는다.
+   * 루틴에 없는 칸(언제·업무 카테고리·관련 노하우)은 감추고 제목·설명·업무 시간·담당만 남긴다.
+   * 저장은 onSubmitRoutine 으로 나간다(할일 행을 만들지 않는다 — 루틴은 테이블 행이 아니라 매장 설정이다).
+   * 프리필은 editTemplate 을 그대로 쓴다(루틴을 TaskTemplate 모양으로 싸서 넘기면 된다).
+   */
+  routineMode?: boolean;
+  /** 루틴 모드의 요약 줄에 쓸 카테고리 이름(이 루틴이 속한 시간대). */
+  routineSectionLabel?: string;
+  /** 루틴 모드 저장 — 담당 없음이면 assigneeId 는 undefined. */
+  onSubmitRoutine?: (d: { text: string; description?: string; remindAt?: string; assigneeId?: string }) => void;
 }) {
   const isEdit = !!editTemplate;
   const dayparts = useDayparts();
@@ -82,9 +96,20 @@ export function TaskComposerModal({
   }, [others, me]);
 
   const [text, setText] = useState(initialText ?? editTemplate?.text ?? '');
+  const [description, setDescription] = useState(editTemplate?.description ?? '');
   const initWhen: When = editTemplate
-    ? (editTemplate.recurrence && editTemplate.recurrence !== 'once' ? 'weekly' : editTemplate.date && editTemplate.date !== today ? 'date' : 'today')
-    : (initialDate && initialDate !== today ? 'date' : 'today');
+    ? editTemplate.recurrence && editTemplate.recurrence !== 'once'
+      ? 'weekly'
+      : editTemplate.date && editTemplate.date !== today
+        ? 'date'
+        // 루틴을 '그날만 수정'할 때 — 루틴 자체는 일정 정보가 없고(매일), 어느 날 얘기인지는
+        // initialDate 가 들고 온다. 이걸 안 보면 내일 것을 고쳐도 요약 줄이 '오늘'이라고 말한다.
+        : !editTemplate.date && initialDate && initialDate !== today
+          ? 'date'
+          : 'today'
+    : initialDate && initialDate !== today
+      ? 'date'
+      : 'today';
   const [when, setWhen] = useState<When>(initWhen);
   const [pickedDate, setPickedDate] = useState(editTemplate?.date ?? initialDate ?? today);
   const [dows, setDows] = useState<number[]>(
@@ -149,6 +174,8 @@ export function TaskComposerModal({
     }
     setSharedMode(false);
     setPicked((prev) => {
+      // 루틴 담당은 '이 일을 맡은 사람' 꼬리표 하나라 여러 명이라는 개념이 없다 — 단일 교체.
+      if (routineMode) return [id];
       if (isEdit) return [id];
       return prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id];
     });
@@ -157,7 +184,10 @@ export function TaskComposerModal({
 
   // 매주 반복인데 요일 0개면 유령 할일 → 막는다. 사장은 담당(전체/개인 1명 이상)도 정해야 한다.
   const assigneeChosen = !isOwner || sharedMode || picked.length > 0;
-  const canSubmit = text.trim().length > 0 && !(when === 'weekly' && dows.length === 0) && assigneeChosen && remindValid;
+  // 루틴은 매일 도는 매장 공통 일이라 '언제'가 없다 — 요일 미선택 같은 조건도 성립하지 않는다.
+  const canSubmit = routineMode
+    ? text.trim().length > 0 && remindValid
+    : text.trim().length > 0 && !(when === 'weekly' && dows.length === 0) && assigneeChosen && remindValid;
 
   const scheduleParts = () => {
     let recurrence: Recurrence | undefined;
@@ -173,6 +203,7 @@ export function TaskComposerModal({
     return {
       section,
       text: v,
+      description: description.trim() || undefined,
       createdBy: me,
       recurrence,
       ...(date ? { date } : null),
@@ -204,6 +235,11 @@ export function TaskComposerModal({
 
   // 등록 대상 한 줄 요약 — "어디(언제·데이파트·범위) 할일로 들어가는지" 항상 보이게.
   const destLabel = useMemo(() => {
+    if (routineMode) {
+      const who = sharedMode || picked.length === 0 ? '담당 없음' : `담당: ${nameById[picked[0]] ?? '직원'}`;
+      const remindL = remindOn && remindValid && remindAt ? ` · ${remindAt}` : '';
+      return `매일 · ${routineSectionLabel ?? '이 카테고리'} · ${who}${remindL}`;
+    }
     const secL = DL[section] ?? '카테고리';
     const scopeL = !isOwner
       ? '나만 보기'
@@ -218,7 +254,7 @@ export function TaskComposerModal({
     else whenL = `오늘 (${fmtDate(today)})`;
     const remindL = remindOn && remindValid ? ` · ${remindAt}` : '';
     return `${whenL} · ${secL} · ${scopeL}${remindL}`;
-  }, [when, pickedDate, dows, section, sharedMode, picked, nameById, isOwner, today, DL, remindOn, remindValid, remindAt]);
+  }, [when, pickedDate, dows, section, sharedMode, picked, nameById, isOwner, today, DL, remindOn, remindValid, remindAt, routineMode, routineSectionLabel]);
 
   // 중복 검사 — 신규 등록에서만(수정은 자기 자신과 겹칠 수 있어 제외). 배정 대상 중 하나라도 중복이면 경고.
   const isDup = useMemo(() => {
@@ -229,6 +265,17 @@ export function TaskComposerModal({
 
   function submit() {
     if (!canSubmit) return;
+    if (routineMode) {
+      onSubmitRoutine?.({
+        text: text.trim(),
+        description: description.trim() || undefined,
+        ...(remindOn && remindValid && remindAt ? { remindAt } : null),
+        // 담당은 한 명만 — 루틴은 '이 일을 맡은 사람' 꼬리표라 여러 명이라는 개념이 없다.
+        ...(sharedMode ? null : { assigneeId: picked[0] }),
+      });
+      onClose();
+      return;
+    }
     if (isEdit && editTemplate && onEdit) {
       const input = buildEditInput();
       if (!input) return;
@@ -248,13 +295,29 @@ export function TaskComposerModal({
 
   return (
     <BottomSheet visible={true} onClose={onClose} sheetStyle={{ height: '86%' }}>
-          <Text style={s.title}>{isEdit ? '할일 수정' : '할일 추가'}</Text>
+          <Text style={s.title}>
+            {routineMode ? (isEdit ? '루틴 업무 수정' : '루틴 업무 추가') : isEdit ? '할일 수정' : '할일 추가'}
+          </Text>
 
           <ScrollView ref={scrollRef} style={s.scroll} contentContainerStyle={{ paddingBottom: 8 }} showsVerticalScrollIndicator={false}>
-            <Field label="할 일">
+            <Field label={routineMode ? '루틴 업무' : '할 일'}>
               <TextInput value={text} onChangeText={setText} placeholder="예) 우유 재고 확인" placeholderTextColor={InkColors.ink3} style={s.inp} autoFocus />
             </Field>
 
+            <Field label="설명 (선택)">
+              <TextInput
+                value={description}
+                onChangeText={setDescription}
+                placeholder="예) 오전 9시 전에 냉장고를 점검하고 초코를 깔아 두세요."
+                placeholderTextColor={InkColors.ink3}
+                style={[s.inp, s.textarea]}
+                multiline
+                numberOfLines={3}
+              />
+            </Field>
+ 
+            {/* 루틴은 매일 도는 일이라 '언제'와 '업무 카테고리'가 없다 — 카테고리는 지금 열어둔 시간대로 이미 정해져 있다. */}
+            {!routineMode && (
             <Field label="언제">
               <Seg
                 options={[{ k: 'today', l: '오늘' }, { k: 'date', l: '날짜 지정' }, { k: 'weekly', l: '매주 반복' }]}
@@ -285,6 +348,7 @@ export function TaskComposerModal({
                 </View>
               )}
             </Field>
+            )}
 
             <Field
               label="업무 시간 (선택)"
@@ -334,6 +398,7 @@ export function TaskComposerModal({
               )}
             </Field>
 
+            {!routineMode && (
             <Field label="업무 카테고리">
               <Seg
                 options={dayparts.map((d) => ({ k: d.id, l: d.label }))}
@@ -341,8 +406,9 @@ export function TaskComposerModal({
                 onChange={(k) => setSection(k as TaskSection)}
               />
             </Field>
+            )}
 
-            <Field label={isOwner && !isEdit ? '누구 할 일인가요? (여러 명 선택 가능)' : '누구 할 일인가요?'}>
+            <Field label={routineMode ? '누가 맡나요?' : isOwner && !isEdit ? '누구 할 일인가요? (여러 명 선택 가능)' : '누구 할 일인가요?'}>
               {isOwner ? (
                 <>
                   <View style={s.seg}>
@@ -360,7 +426,7 @@ export function TaskComposerModal({
                           accessibilityRole="button"
                           accessibilityLabel={blocked ? `${m.name} — 이 방에 없어요` : m.name}
                         >
-                          {on && !isEdit && <Ionicons name="checkmark" size={13} color="#fff" style={{ marginRight: 3 }} />}
+                          {on && !isEdit && !routineMode && <Ionicons name="checkmark" size={13} color="#fff" style={{ marginRight: 3 }} />}
                           <Text style={[s.segText, on && { color: '#fff' }]}>{m.name}</Text>
                           {blocked && <View style={s.segPill}><ProgressPill text="불가" tone="neutral" /></View>}
                         </Pressable>
@@ -371,11 +437,19 @@ export function TaskComposerModal({
                     <Text style={s.assignHint}>‘불가’인 직원은 이 방에 없어요. 먼저 이 방에 초대해 주세요.</Text>
                   )}
                   {!sharedMode && picked.length > 0 && (
-                    <Text style={s.assignHint}>
-                      ‘{picked.map((id) => nameById[id] ?? '직원').join('·')}’{picked.length > 1 ? ' 각자에게 배정' : '에게 배정'} — 그 직원과 사장님만 볼 수 있어요
-                    </Text>
+                    routineMode ? (
+                      // 루틴은 담당자를 정해도 매장 전원에게 보인다 — '담당 ○○' 꼬리표만 붙는다.
+                      // 할일과 같은 문구('그 직원과 사장님만')를 쓰면 안 보이는 줄 알고 담당을 못 정한다.
+                      <Text style={s.assignHint}>
+                        ‘{nameById[picked[0]] ?? '직원'}’ 담당으로 표시돼요 — 루틴은 매장 전원에게 보여요
+                      </Text>
+                    ) : (
+                      <Text style={s.assignHint}>
+                        ‘{picked.map((id) => nameById[id] ?? '직원').join('·')}’{picked.length > 1 ? ' 각자에게 배정' : '에게 배정'} — 그 직원과 사장님만 볼 수 있어요
+                      </Text>
+                    )
                   )}
-                  {!assigneeChosen && <Text style={s.dowWarn}>담당을 하나 이상 골라 주세요.</Text>}
+                  {!assigneeChosen && !routineMode && <Text style={s.dowWarn}>담당을 하나 이상 골라 주세요.</Text>}
                 </>
               ) : (
                 <View style={s.lockedScope}>
@@ -385,7 +459,7 @@ export function TaskComposerModal({
               )}
             </Field>
 
-            {isOwner && (
+            {isOwner && !routineMode && (
               <Field label="관련 노하우 (선택)">
                 {selectedEntries.length > 0 && (
                   <View style={s.khChips}>
@@ -481,7 +555,8 @@ export function TaskComposerModal({
               </View>
             )}
             <View style={s.footBtns}>
-              {isEdit && onDelete && editTemplate && (
+              {/* 루틴 삭제는 여기서 하지 않는다 — 루틴을 지우는 자리는 업무 설정 한 곳이다(지우는 문을 둘로 만들지 않는다). */}
+              {isEdit && !routineMode && onDelete && editTemplate && (
                 <Pressable
                   onPress={() => { onDelete(editTemplate.id); onClose(); }}
                   style={({ pressed }) => [s.delBtn, pressed && { opacity: 0.85 }]}
@@ -493,7 +568,9 @@ export function TaskComposerModal({
                 </Pressable>
               )}
               <Pressable onPress={submit} disabled={!canSubmit || isDup} style={({ pressed }) => [s.cta, { flex: 1 }, (!canSubmit || isDup) && { opacity: 0.4 }, pressed && { opacity: 0.85 }]}>
-                <Text style={s.ctaText}>{isEdit ? '수정 저장' : isDup ? '이미 등록됨' : '할일 등록'}</Text>
+                <Text style={s.ctaText}>
+                  {routineMode ? (isEdit ? '수정 저장' : '루틴 업무 추가') : isEdit ? '수정 저장' : isDup ? '이미 등록됨' : '할일 등록'}
+                </Text>
               </Pressable>
             </View>
           </View>
@@ -599,6 +676,7 @@ const s = StyleSheet.create({
   infoNote: { marginBottom: 6, padding: 11, backgroundColor: InkColors.cream, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md },
   infoText: { fontSize: 15, lineHeight: 22, color: InkColors.ink2 },
   inp: { borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.sm, paddingHorizontal: 13, paddingVertical: 11, fontSize: 15, color: InkColors.ink, backgroundColor: InkColors.cream },
+  textarea: { minHeight: 76, textAlignVertical: 'top' },
 
   seg: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   // 칩 내부는 반드시 가로 정렬 — 담당자 칩은 선택 시 체크마크 아이콘+이름을 나란히 둔다.
