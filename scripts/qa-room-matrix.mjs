@@ -106,8 +106,9 @@ try {
     return error;
   };
 
+  // ★0152: 할일에는 방 개념이 없다 — 같은 매장 사람이면 방과 무관하게 배정된다(아래 5건 전부 같은 이유).
   { const e = await ins(O, `p5_a1_${s}`, { room_id: ROOM, owner_id: bId });
-    M('비기본방 R에 방 밖 직원 B 배정 (INSERT)', '사장', '거부', !!e, errStr(e)); if (!e) await del(`p5_a1_${s}`); }
+    M('방과 무관하게 같은 매장 직원 B 배정 (INSERT)', '사장', '허용', !e, errStr(e)); if (!e) await del(`p5_a1_${s}`); }
 
   { const e = await ins(O, `p5_a2_${s}`, { room_id: ROOM, owner_id: aId });
     M('비기본방 R에 방 멤버 A 배정 (INSERT)', '사장', '허용', !e, errStr(e)); }
@@ -125,24 +126,24 @@ try {
   { const { error: e } = await O.from('work_templates').update({ owner_id: bId }).eq('id', `p5_a3_${s}`).select('id');
     const { data: after } = await admin.from('work_templates').select('owner_id').eq('id', `p5_a3_${s}`).maybeSingle();
     const changed = after?.owner_id === bId;
-    M('담당자 없이 넣고 UPDATE 로 B에게 넘기기', '사장', '거부', !changed, changed ? '바뀜(우회 성공)' : errStr(e));
-    if (changed) await admin.from('work_templates').update({ owner_id: null }).eq('id', `p5_a3_${s}`); }
+    M('UPDATE 로 담당자를 B에게 넘기기', '사장', '허용', changed, changed ? '' : `안 바뀜 ${errStr(e)}`);
+    await admin.from('work_templates').update({ owner_id: null }).eq('id', `p5_a3_${s}`); }
 
-  // ★ 방 이동 우회: 기본방에 B 배정으로 넣은 뒤 room_id 만 비밀방으로 옮긴다.
+  // ★0152: room_id 는 "어디서 만들어졌나" 흔적일 뿐 가시성 판정에 안 쓴다 — 옮겨도 무해하다.
   { const { error: e } = await O.from('work_templates').update({ room_id: ROOM }).eq('id', `p5_a4_${s}`).select('id');
     const { data: after } = await admin.from('work_templates').select('room_id').eq('id', `p5_a4_${s}`).maybeSingle();
     const moved = after?.room_id === ROOM;
-    M('★B 배정 할일을 기본방→비밀방으로 room_id 이동', '사장', '거부', !moved, moved ? '옮겨짐(우회 성공)' : errStr(e));
-    if (moved) await admin.from('work_templates').update({ room_id: DROOM }).eq('id', `p5_a4_${s}`); }
+    M('할일의 room_id 이동(가시성과 무관)', '사장', '허용', moved, moved ? '' : `안 옮겨짐 ${errStr(e)}`);
+    await admin.from('work_templates').update({ room_id: DROOM }).eq('id', `p5_a4_${s}`); }
 
   { const e = await ins(MG, `p5_a7_${s}`, { room_id: ROOM, owner_id: bId, created_by: mId });
-    M('비기본방 R에 방 밖 직원 B 배정 (INSERT)', '매니저', '거부', !!e, errStr(e)); if (!e) await del(`p5_a7_${s}`); }
+    M('방과 무관하게 같은 매장 직원 B 배정 (INSERT)', '매니저', '허용', !e, errStr(e)); if (!e) await del(`p5_a7_${s}`); }
 
   { const e = await ins(A, `p5_a8_${s}`, { room_id: ROOM, owner_id: bId, created_by: aId });
-    M('비기본방 R에 방 밖 직원 B 배정 (INSERT)', '직원A(방멤버)', '거부', !!e, errStr(e)); if (!e) await del(`p5_a8_${s}`); }
+    M('방과 무관하게 같은 매장 직원 B 배정 (INSERT)', '직원A(방멤버)', '허용', !e, errStr(e)); if (!e) await del(`p5_a8_${s}`); }
 
   { const e = await ins(B, `p5_a10_${s}`, { room_id: ROOM, owner_id: bId, created_by: bId });
-    M('자기가 못 보는 방 R에 자기 할일 밀어넣기 (INSERT)', '직원B(방밖)', '거부', !!e, errStr(e)); if (!e) await del(`p5_a10_${s}`); }
+    M('안 들어간 방 id 로 자기 할일 만들기(할일엔 방 개념 없음)', '직원B(방밖)', '허용', !e, errStr(e)); if (!e) await del(`p5_a10_${s}`); }
 
   // ★ room_id=null 경로 — 방 술어가 아예 안 걸리는 자리(0013 레거시). 의도인지 기록만.
   { const e = await ins(A, `p5_a11_${s}`, { room_id: null, owner_id: bId, created_by: aId });
@@ -170,8 +171,9 @@ try {
     M('★안 들어간 방에 자기를 멤버로 밀어넣기', '매니저', '거부', !joined, joined ? '들어감(우회 성공)' : errStr(error));
     if (joined) await admin.from('work_room_members').delete().eq('room_id', ROOM).eq('user_id', mId); }
   { const e = await ins(MG, `p5_a7b_${s}`, { room_id: ROOM, owner_id: mId, created_by: mId });
-    M('★안 들어간 방에 자기 할일 밀어넣기 (INSERT)', '매니저', '거부', !!e, errStr(e)); if (!e) await del(`p5_a7b_${s}`); }
-  { const r = await cnt(B, 'work_templates', 'room_id', ROOM); M('비밀방 할일 SELECT', '직원B(방밖)', '0행', r.n === 0, `${r.n}행 ${errStr(r.e)}`); }
+    M('안 들어간 방 id 로 자기 할일 만들기(할일엔 방 개념 없음)', '매니저', '허용', !e, errStr(e)); if (!e) await del(`p5_a7b_${s}`); }
+  // ★0152: 매장 전체 할일(shared)은 어느 방에서 만들었든 매장 전원에게 보인다.
+  { const r = await cnt(B, 'work_templates', 'room_id', ROOM); M('비밀방에서 만든 매장 전체 할일 SELECT', '직원B(방밖)', '≥1행', r.n >= 1, `${r.n}행 ${errStr(r.e)}`); }
   { const r = await cnt(B, 'work_rooms', 'id', ROOM); M('비밀방 자체 SELECT', '직원B(방밖)', '0행', r.n === 0, `${r.n}행 ${errStr(r.e)}`); }
   { const anon = mk();
     const r1 = await cnt(anon, 'work_feed', 'room_id', ROOM);
@@ -221,9 +223,10 @@ try {
     if (error) return { ids: [], e: error };
     return { ids: (data ?? []).filter((r) => r.source === src).map((r) => r.payload?.id ?? r.payload?.template_id).filter(Boolean), e: null };
   };
-  { const r = await notif(B, 'template'); M("방 밖 배정이 'template' 분기에 나오나", '직원B(방밖)', '안 나옴', !r.ids.includes(LEAK), r.ids.includes(LEAK) ? '나옴' : `없음(${r.ids.length}건)`); }
+  // ★0153: 배정받았으면 방과 무관하게 알림에 나온다 — 안 나오면 "할일은 보이는데 알림은 안 온다"가 된다.
+  { const r = await notif(B, 'template'); M("배정받은 할일이 'template' 분기에 나오나", '직원B(방밖)', '나옴', r.ids.includes(LEAK), r.ids.includes(LEAK) ? '나옴' : `없음(${r.ids.length}건)`); }
   { const r = await notif(A, 'template'); M("정상 배정이 'template' 분기에 나오나", '직원A(방멤버)', '나옴', r.ids.includes(OKROW), r.ids.includes(OKROW) ? '나옴' : `없음(${r.ids.length}건)`); }
-  { const r = await notif(B, 'done'); M("방 밖 할일 완료마크가 'done' 분기에 나오나", '직원B(방밖)', '안 나옴', !r.ids.includes(LEAK), r.ids.includes(LEAK) ? '나옴' : `없음(${r.ids.length}건)`); }
+  { const r = await notif(B, 'done'); M("내 할일 완료마크가 'done' 분기에 나오나", '직원B(방밖)', '나옴', r.ids.includes(LEAK), r.ids.includes(LEAK) ? '나옴' : `없음(${r.ids.length}건)`); }
   // ★알림 원천의 방 술어도 같은 규칙이어야 한다 — 여기만 넓으면 "못 여는 방의 공지"가 알림으로 샌다(P5-#1과 같은 부류).
   {
     const NOTICE = `wf_p5_notice_${s}`;
@@ -254,10 +257,25 @@ try {
     const { data, error } = await admin.rpc('due_task_reminders');
     const row = (data ?? []).find((r) => r.out_template_id === SEC);
     const recips = row?.out_recipients ?? [];
-    const leaked = recips.includes(bId);
-    M('비밀방 shared 할일의 푸시 수신자에 방 밖 직원 B 포함되나', '서버(크론 경로)', 'B 미포함',
-      !leaked, error ? errStr(error) : (row ? `수신자 ${recips.length}명 · B포함=${leaked} · 본문="${row.out_text}"` : '해당 행 없음'));
-    await admin.from('work_templates').delete().eq('id', SEC);
+    const included = recips.includes(bId);
+    // ★0152/0153: 매장 전체 할일이므로 그 시각 근무자(B)는 방과 무관하게 알림을 받아야 한다.
+    M('매장 전체 할일의 푸시가 근무 중인 직원 B에게 가나', '서버(크론 경로)', 'B 포함',
+      included, error ? errStr(error) : (row ? `수신자 ${recips.length}명 · B포함=${included}` : '해당 행 없음'));
+
+    // ★새 경계: 다른 매장 사람은 수신자에서 빠진다(0153 매장 소속 필터 · 0127 C1 방어).
+    const OUT = `p5_out_${s}`;
+    const outsider = '00000000-0000-4000-8000-0000000dead2';
+    await admin.from('work_templates').insert([task(OUT, {
+      room_id: DROOM, owner_id: outsider, scope: 'private', remind_at: hhmm,
+      text: '외부인에게 가면 안 되는 본문',
+    })]);
+    const { data: d2 } = await admin.rpc('due_task_reminders');
+    const row2 = (d2 ?? []).find((r) => r.out_template_id === OUT);
+    const leaked2 = (row2?.out_recipients ?? []).includes(outsider);
+    M('★다른 매장 사람이 푸시 수신자에 남나', '서버(크론 경로)', '안 남음',
+      !leaked2, leaked2 ? '남음 = 임의 사용자에게 푸시 가능(취약)' : `수신자=${JSON.stringify(row2?.out_recipients ?? [])}`);
+
+    await admin.from('work_templates').delete().in('id', [SEC, OUT]);
     await admin.from('shift_templates').delete().eq('id', `sh_p5_${s}`);
   }
 } catch (e) {

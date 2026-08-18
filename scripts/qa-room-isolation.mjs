@@ -1,13 +1,17 @@
-// qa-room-isolation.mjs — 방(room) 격리를 **서버 쪽에서** 실증한다 (0123).
+// qa-room-isolation.mjs — 할일의 경계를 **서버 쪽에서** 실증한다.
+//
+// ★2026-08-19(0152/0153) 규칙 변경: **할일에는 방 개념이 없다. 할일은 사람에게 배정된다.**
+//   방마다 할일을 나누면 사장 입장에서 복잡해진다는 판단으로, work_templates·work_done 에서
+//   방 격리를 걷어냈다(0152). 그래서 이 파일이 재던 것도 바뀐다:
+//     · 옛 단언 "방 밖 직원에게 배정 = 거부"  → 지금은 **통과가 정답**이다(같은 매장 사람이므로).
+//     · 새 경계는 **매장**이다 — 다른 매장 사람은 여전히 차단돼야 한다(0153).
+//   ⛔ 대화·공지(work_feed)의 방 격리는 그대로다. 이 파일은 **할일만** 다룬다.
 //
 // 무엇을 재나: 화면이 아니라 **서버가** 막는가. 그래서 전부 실 백엔드 · 실 세션으로 친다.
-//   A. work_templates 쓰기 — "방 밖 직원에게 그 방의 개인 할 일을 꽂기"가 거부되는가.
-//      ★정상 경로 4종(방 멤버 배정 · 담당자 없음 · 기본방 · 본인)이 그대로 통과하는지도 같이 잰다 —
-//        보안을 조인다면서 멀쩡한 길을 막으면 그건 고친 게 아니다.
-//   B. my_units_notif_data() — 이미 심어진(과거에 새어 들어온) 방 밖 배정이 알림에서 걸러지는가.
-//      ★service_role 로 심는다: RLS 를 우회해 "0123 이전에 만들어진 행"을 재현하려는 것이다.
-//
-// 0123 적용 전에 돌리면 A1·A5·B1 이 FAIL(=취약 실증), 적용 후 전부 PASS 여야 한다.
+//   A. work_templates 쓰기 — 같은 매장이면 방과 무관하게 배정되는가(정상 경로).
+//      그리고 **다른 매장 사람**에게는 알림이 안 가는가(0153 의 매장 소속 필터).
+//   B. my_units_notif_data() — 배정받은 사람의 알림에 방과 무관하게 나오는가.
+//      ★service_role 로 심는다: RLS 를 우회해 방 밖 배정 행을 재현하려는 것이다.
 // 실행: node scripts/qa-room-isolation.mjs   자가정리(계정·OTP 시드 정리).
 import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'node:fs';
@@ -99,12 +103,13 @@ try {
   });
 
   // ═════════ A. 쓰기 경계 ═════════
-  console.log('\n[A] work_templates 쓰기 — 담당자가 그 방을 볼 수 있어야 한다');
+  console.log('\n[A] work_templates 쓰기 — 경계는 방이 아니라 **매장**이다 (0152)');
 
-  // A1 ★핵심: 방 밖 직원(B)에게, 그 방(R)의 개인 할 일을 꽂는다 → 거부되어야 한다.
+  // A1 ★규칙 변경(0152): 방 밖 직원(B)에게 배정 → **통과가 정답**이다.
+  //    할일은 사람에게 배정되고, B 는 같은 매장 사람이다. 방은 배정과 무관하다.
   {
     const { error } = await owner.from('work_templates').insert([task(`wt_a1_${s}`, { room_id: ROOM, owner_id: bId })]);
-    check('A1 ★방 밖 직원에게 그 방 할 일 배정 = 거부', !!error, error ? '' : '통과됨 = 서버가 안 막는다(취약)');
+    check('A1 ★방과 무관하게 같은 매장 사람에게 배정 = 통과', !error, error?.message ?? '');
     if (!error) await admin.from('work_templates').delete().eq('id', `wt_a1_${s}`);
   }
 
@@ -130,20 +135,37 @@ try {
     check('A4 기본방에 아무에게나 배정 = 통과', false, '기본방 셋업 실패 — 건너뛴 것을 통과로 세지 않는다');
   }
 
-  // A5 ★우회로: 담당자 없이 넣고 UPDATE 로 방 밖 직원에게 넘긴다 → 거부되어야 한다.
-  //    INSERT 만 막으면 이 경로로 그대로 뚫린다 — 한쪽만 막은 것은 막은 게 아니다.
+  // A5 ★규칙 변경(0152): UPDATE 로 방 밖 직원에게 넘기기 → **통과가 정답**이다(A1 과 같은 이유).
   {
     const { error } = await owner.from('work_templates').update({ owner_id: bId }).eq('id', `wt_a3_${s}`).select('id');
     const { data: after } = await admin.from('work_templates').select('owner_id').eq('id', `wt_a3_${s}`).maybeSingle();
     const changed = after?.owner_id === bId;
-    check('A5 ★UPDATE 로 방 밖 직원에게 넘기기 = 거부', !changed, changed ? '바뀜 = 우회로가 열려 있다(취약)' : (error?.message ?? ''));
-    if (changed) await admin.from('work_templates').update({ owner_id: null }).eq('id', `wt_a3_${s}`);
+    check('A5 ★UPDATE 로 담당자 넘기기 = 통과', changed, changed ? '' : `안 바뀜 ${error?.message ?? ''}`);
+    await admin.from('work_templates').update({ owner_id: null }).eq('id', `wt_a3_${s}`);
+  }
+
+  // A6 ★새 경계: **다른 매장 사람**을 담당자로 꽂으면 푸시 수신자에서 빠져야 한다(0153).
+  //    wt_insert 는 owner_id 를 검사하지 않으므로(행은 들어간다) 방어선은 알림 쪽이다 —
+  //    이걸 안 재면 "임의 사용자에게 푸시" 벡터(0127 C1)가 조용히 다시 열린 것을 아무도 모른다.
+  {
+    const outsider = '00000000-0000-4000-8000-0000000dead1'; // 이 매장 멤버가 아닌 uuid
+    const ID = `wt_a6_${s}`;
+    await admin.from('work_templates').insert([task(ID, {
+      room_id: DEFAULT_ROOM ?? ROOM, owner_id: outsider, scope: 'private',
+      remind_at: '00:00', recurrence: { weekly: [0, 1, 2, 3, 4, 5, 6] },
+    })]);
+    const { data: rows, error } = await admin.rpc('due_task_reminders');
+    const mine = (rows ?? []).find((r) => r.out_template_id === ID);
+    const listed = !!mine && (mine.out_recipients ?? []).includes(outsider);
+    check('A6 ★다른 매장 사람은 푸시 수신자에서 빠진다', !listed,
+      error?.message ?? (listed ? '남음 = 임의 사용자에게 푸시 가능(취약)' : `수신자=${JSON.stringify(mine?.out_recipients ?? [])}`));
+    await admin.from('work_templates').delete().eq('id', ID);
   }
 
   // ═════════ B. 알림 원천 ═════════
-  console.log('\n[B] my_units_notif_data() — 방 밖 배정이 알림으로 새지 않는다');
+  console.log('\n[B] my_units_notif_data() — 배정받은 사람에게는 방과 무관하게 알림이 간다 (0153)');
 
-  // B0 과거에 새어 들어온 행을 재현: service_role 로 직접 심는다(RLS 우회 = 0123 이전 상태).
+  // B0 방 밖 배정 행: service_role 로 직접 심는다(RLS 우회).
   const LEAK = `wt_leak_${s}`;
   {
     const { error } = await admin.from('work_templates').insert([task(LEAK, { room_id: ROOM, owner_id: bId })]);
@@ -165,9 +187,11 @@ try {
       .filter(Boolean);
   };
 
+  // B1 ★규칙 변경(0153): 배정받았으면 그 방에 없어도 알림이 **나와야** 한다.
+  //    안 나오면 "할일은 보이는데 배정 알림은 안 온다"가 된다.
   const bIds = await notifTemplateIds(jB);
-  check('B1 ★방 밖 직원의 알림에 그 방 할 일이 안 나온다', !bIds.includes(LEAK),
-    bIds.includes(LEAK) ? '나옴 = 알림이 방 격리를 뚫는다(취약)' : '');
+  check('B1 ★방 밖 직원도 배정받으면 알림에 나온다', bIds.includes(LEAK),
+    bIds.includes(LEAK) ? '' : `안 나옴 — 실측 ${JSON.stringify(bIds)}`);
 
   const aIds = await notifTemplateIds(jA);
   check('B2 방 멤버의 알림에는 정상 배정이 나온다(과잉 차단 아님)', aIds.includes(OKROW),
