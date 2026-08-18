@@ -14,7 +14,7 @@ import { useRouter } from 'expo-router';
 
 import { UserBubble } from '@/components/UserBubble';
 import { Appear } from '@/components/Appear';
-import { ChatComposerBar } from '@/components/ChatComposerBar';
+import { ChatComposerBar, PlusToggleIcon } from '@/components/ChatComposerBar';
 import { structureSquare, patchSquare, type StructuredSegment, type AiFollowup } from '@/lib/ai';
 import { EXTRACTION_MASTER } from '@/data/extraction-master';
 import { buildPlaybookEntryFromSquare, isSquarePublishable } from '@/lib/utils/buildEntry';
@@ -925,7 +925,7 @@ export function OwnerCoachChat({
               {uploadingPhoto ? (
                 <ActivityIndicator size="small" color={InkColors.bubbleText} />
               ) : (
-                <Ionicons name={menu ? 'close' : 'add'} size={24} color={InkColors.bubbleText} />
+                <PlusToggleIcon open={menu} color={InkColors.bubbleText} />
               )}
             </Pressable>
           )}

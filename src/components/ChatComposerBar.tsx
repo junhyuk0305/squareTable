@@ -1,5 +1,8 @@
-import { View, StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
-import type { ReactNode } from 'react';
+import { useEffect, useMemo, type ReactNode } from 'react';
+import { Animated, Easing, View, StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+
+import { USE_NATIVE_DRIVER } from '@/lib/anim';
 
 import { InkColors } from '@/lib/theme/colors';
 import { Elevation, Radius } from '@/lib/theme/elevation';
@@ -52,3 +55,37 @@ const s = StyleSheet.create({
     ...Elevation.e2,
   },
 });
+
+/**
+ * ＋ ↔ ✕ 토글 아이콘 — **아이콘을 갈아 끼우지 않고 45° 돌린다.** 더하기를 45° 돌리면 그게 곧 ✕라,
+ * 두 상태 사이에 실제로 이어지는 동작이 있다(갈아 끼우면 그 자리에서 툭 바뀐다).
+ *
+ * 새 애니메이션 프리미티브가 아니다 — `Appear`·`Collapse` 옆에 세우지 않는다.
+ * 이건 '＋ 버튼 하나'의 내부 동작이고 쓰는 자리도 채팅 입력바 둘뿐이라, 이 파일(입력바 키트) 안에 둔다.
+ * 감속 곡선은 앱에 하나뿐인 그것(`.32,.72,0,1`)을 쓴다.
+ */
+export function PlusToggleIcon({ open, size = 24, color }: { open: boolean; size?: number; color: string }) {
+  // ★초기값에 `open` 을 넣지 않는다. `useMemo` 는 보장이 아니라 힌트라 **React Compiler 가
+  //   다시 계산할 수 있고**, 그러면 토글할 때마다 목표값으로 태어난 새 Value 가 생겨 회전이
+  //   그 자리에서 툭 끝난다(1.5초로 늘려 재 봐도 한 프레임 만에 0°→45°였다 — 2026-08-19 실측).
+  //   Appear 와 똑같이 **입력 없는 0** 으로 만들고, 목표는 아래 효과에서만 준다.
+  const v = useMemo(() => new Animated.Value(0), []);
+
+  useEffect(() => {
+    const anim = Animated.timing(v, {
+      toValue: open ? 1 : 0,
+      duration: 200,
+      easing: Easing.bezier(0.32, 0.72, 0, 1),
+      useNativeDriver: USE_NATIVE_DRIVER,
+    });
+    anim.start();
+    return () => anim.stop();
+  }, [open, v]);
+
+  const rotate = v.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '45deg'] });
+  return (
+    <Animated.View style={{ transform: [{ rotate }] }}>
+      <Ionicons name="add" size={size} color={color} />
+    </Animated.View>
+  );
+}

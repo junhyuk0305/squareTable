@@ -11,7 +11,7 @@ import { hhmm } from '@/lib/utils/attendance';
 import { ReactionBar } from './ReactionBar';
 import { MentionInput, extractMentions, type Member } from './MentionInput';
 import { Appear } from '@/components/Appear';
-import { ChatComposerBar, COMPOSER_BAR_H } from '@/components/ChatComposerBar';
+import { ChatComposerBar, COMPOSER_BAR_H, PlusToggleIcon } from '@/components/ChatComposerBar';
 import { InfoDot } from '@/components/InfoDot';
 import { VoiceInputButton } from '@/components/VoiceInputButton';
 import { appendDictation, buildHints } from '@/lib/voice/text';
@@ -406,7 +406,7 @@ export function WorkChat({
           accessibilityLabel={menu ? '추가 메뉴 닫기' : '추가 메뉴 열기'}
           style={({ pressed }) => [s.plus, pressed && { opacity: 0.85 }]}
         >
-          <Ionicons name={menu ? 'close' : 'add'} size={24} color={InkColors.bubbleText} />
+          <PlusToggleIcon open={menu} color={InkColors.bubbleText} />
         </Pressable>
         {/* 입력칸은 알약 바 **안**에 들어가므로 자기 배경·테두리를 지운다 — 알약 안의 알약이 되면
             테두리가 두 겹으로 보인다(style prop 이 MentionInput 의 s.input 을 덮어쓴다). */}
