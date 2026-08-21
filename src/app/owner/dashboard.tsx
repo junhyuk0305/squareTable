@@ -18,13 +18,18 @@ import { SEED_TEMPLATES } from '@/data/seed-templates';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { useOwnerDashboardData } from '@/lib/hooks/useOwnerDashboardData';
 import { useStaffStore } from '@/lib/store/useStaffStore';
+import { useSessionStore } from '@/lib/store/useSessionStore';
+import { useWorkStore } from '@/lib/store/useWorkStore';
+import { todayStr } from '@/lib/utils/attendance';
+import { confirmAction } from '@/lib/utils/confirm';
 import { formatAsked } from '@/lib/utils/time';
 import { styles } from '@/styles/ownerDashboardStyles';
 
 /** 홈 목록은 3건 + "전체보기 ›" — 전 화면 공통 배치 규칙(2026-08-05 블록 어휘). */
-// 홈 목록 상한. ui.md 배치 규칙 3의 기본값은 3이지만 2026-08-12에 **4**로 올렸다 —
-// 오픈 루틴만 4개인 매장이 흔해 3이면 한 카테고리도 다 못 보여줬다. 직원 홈(junior/home.tsx)과 같은 값을 쓴다.
-const HOME_LIST_LIMIT = 4;
+// 홈 목록 상한. ui.md 배치 규칙 3의 기본값은 3이지만 2026-08-12에 4, 2026-08-19에 **5**로 올렸다 —
+// 완료된 것도 목록에서 지우지 않기로 하면서(방금 누른 것이 사라지지 않게) 4로는 미완료가 밀려났다.
+// 5는 화면 예산의 '리스트 첫 노출 5±2' 안이다.
+const HOME_LIST_LIMIT = 5;
 
 export default function OwnerDashboardScreen() {
   const router = useRouter();
@@ -61,6 +66,33 @@ export default function OwnerDashboardScreen() {
   // 합류 승인 대기 인원 — 사장이 승인을 놓치면 직원이 합류 못 한 채 갇힌다.
   // A1 액션 로우가 사라지면서(ADR-004) 이 배지는 서브내비 '직원' 칸으로 옮겼다.
   const pendingJoin = useStaffStore((s) => s.pending.length);
+
+  // ── 오늘 할일: 홈에서 직접 완료 ────────────────────────────────────────────
+  // 2026-08-19: 홈의 '오늘'이 표시 전용이 아니게 됐다. 사장이 홈에서 체크하면 **진짜 완료**다
+  // (업무 탭 할일 화면과 같은 toggleTask 하나 — 판정을 두 벌로 만들지 않는다).
+  const userId = useSessionStore((s) => s.userId);
+  const userName = useSessionStore((s) => s.userName);
+  const toggleTask = useWorkStore((s) => s.toggleTask);
+  const today = todayStr();
+  const doneCount = useMemo(() => todayTasks.filter((t) => t.done).length, [todayTasks]);
+  const donePct = todayTasks.length > 0 ? Math.round((doneCount / todayTasks.length) * 100) : 0;
+  const onToggleTask = (t: (typeof todayTasks)[number]) => {
+    // 완료 해제 시 첨부한 완료 사진이 함께 삭제된다 — 할일 화면과 같은 확인을 먼저 띄운다.
+    if (t.done && t.photoUrl) {
+      void confirmAction(
+        '완료를 취소할까요?',
+        '체크를 풀면 이 업무에 첨부한 완료 사진도 함께 삭제돼요.',
+        '취소하고 사진 삭제',
+        { destructive: true, icon: 'image-outline' },
+      ).then((ok) => {
+        if (ok) toggleTask(today, t.id, userId, userName, 'owner', undefined, { text: t.text, roomId: t.roomId });
+      });
+      return;
+    }
+    // ★task 인자는 생략하지 않는다 — 합성 루틴(dpr_)은 templates 조회가 안 돼
+    //   완료 알림 문구가 '할일'로 뭉개지고 방(roomId)도 활성 방으로 잘못 잡힌다.
+    toggleTask(today, t.id, userId, userName, 'owner', undefined, { text: t.text, roomId: t.roomId });
+  };
 
   // 진입 애니는 각 섹션의 <Appear>가 단독으로 담당한다(디자인시스템 SSOT: Appear 단일 프리미티브).
   // 예전에는 콘텐츠 래퍼에도 translateY 스프링을 걸어 이중 수직 애니가 서로 다른 이징으로 충돌 →
@@ -279,11 +311,13 @@ export default function OwnerDashboardScreen() {
               icon="today-outline"
               title="오늘"
               trailing={
-                // 전체보기는 **업무**로만 간다 — 업무가 0건이면 빈 화면에 착지하므로 그때는 걸지 않는다.
+                // 전체보기는 **할일 화면**으로 간다 — 예전엔 '/owner/work'(채팅방 목록)로 보내
+                // "오늘 업무 전체보기"를 눌렀는데 채팅방 목록이 나왔다(2026-08-19 수정).
+                // 직원 홈(junior/home.tsx)이 이미 쓰던 `?view=todo` 경로와 같은 것을 쓴다.
                 // 근무는 머리줄 자체가 근무표로 가는 별도 컨트롤이다(목적지가 겹치지 않게 나눴다).
                 todayTasks.length > 0 ? (
                   <Pressable
-                    onPress={() => goToTab('/owner/work')}
+                    onPress={() => goToTab('/owner/work?view=todo')}
                     accessibilityRole="button"
                     accessibilityLabel="오늘 업무 전체보기"
                     style={({ pressed }) => pressed && { opacity: 0.6 }}
@@ -297,6 +331,18 @@ export default function OwnerDashboardScreen() {
               }
             />
             <View style={styles.taskCard}>
+              {/* 카드 맨 위 = 오늘 전체 진행. 잘라 보여주는 5건이 아니라 **오늘 할일 전부**를 센다
+                  (5건만 세면 "3/5 다 했다"고 말해 놓고 아래 전체보기에 8건이 남아 있는 거짓말이 된다). */}
+              {todayTasks.length > 0 && (
+                <View style={styles.progRow}>
+                  <View style={styles.progTrack}>
+                    <View style={[styles.progFill, { width: `${donePct}%` }]} />
+                  </View>
+                  <Text style={styles.progText}>
+                    {donePct}% · {doneCount}/{todayTasks.length}
+                  </Text>
+                </View>
+              )}
               {/* 머리줄: 오늘 누가 나와 있나. 출퇴근·근무표가 둘 다 도착했을 때만 그린다(0명 단정 방지). */}
               {showDuty && (
                 <Pressable
@@ -316,14 +362,25 @@ export default function OwnerDashboardScreen() {
                   <Ionicons name="chevron-forward" size={14} color={InkColors.ink3} />
                 </Pressable>
               )}
+              {/* 한 줄 = [체크] 시간 · 제목 ……… 담당자. 할일 화면의 행과 **같은 순서**로 읽히게 맞췄다.
+                  체크는 표시가 아니라 컨트롤이다 — 누르면 진짜 완료된다(업무 탭과 같은 toggleTask). */}
               {todayTasks.slice(0, HOME_LIST_LIMIT).map((t, i) => (
-                <View key={t.id} style={[styles.taskRow, i > 0 && styles.taskRowDivider]}>
+                <Pressable
+                  key={t.id}
+                  onPress={() => onToggleTask(t)}
+                  accessibilityRole="checkbox"
+                  accessibilityState={{ checked: t.done }}
+                  accessibilityLabel={`${t.text}${t.done ? ' 완료 해제' : ' 완료'}`}
+                  style={({ pressed }) => [styles.taskRow, i > 0 && styles.taskRowDivider, pressed && { opacity: 0.6 }]}
+                >
                   <Ionicons
                     name={t.done ? 'checkmark-circle' : 'ellipse-outline'}
-                    size={20}
+                    size={22}
                     color={t.done ? BrandColors.good : InkColors.ink3}
                   />
                   <Text style={[styles.taskText, t.done && styles.taskTextDone]} numberOfLines={1}>
+                    {/* 업무 시간(0118) — 할일 화면과 같은 자리·같은 형태로 제목 앞에 붙인다. */}
+                    {t.at ? <Text style={styles.taskTime}>{t.at} </Text> : null}
                     {t.text}
                   </Text>
                   {/* 오른쪽 꼬리표 한 자리 — 끝났으면 '누가 언제'(D1: 완료 시각은 숨기지 않는다),
@@ -336,7 +393,7 @@ export default function OwnerDashboardScreen() {
                   ) : !t.done && t.assignee ? (
                     <Text style={styles.taskDoneBy} numberOfLines={1}>담당 {t.assignee}</Text>
                   ) : null}
-                </View>
+                </Pressable>
               ))}
             </View>
           </Appear>

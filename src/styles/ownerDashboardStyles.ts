@@ -77,6 +77,21 @@ export const styles = StyleSheet.create({
   taskRowDivider: { borderTopWidth: 1, borderTopColor: InkColors.line },
   taskText: { flex: 1, minWidth: 0, fontSize: 15, lineHeight: 21, fontWeight: '600', color: InkColors.ink },
   taskTextDone: { color: InkColors.ink3, textDecorationLine: 'line-through' },
+  // 업무 시간 — 제목 앞에 붙는 꼬리표(보조 표기라 15sp 하한 대상 아님). 할일 화면 timeTag 와 같은 값.
+  taskTime: { fontSize: 13, fontWeight: '800', color: InkColors.ink2 },
+  // 카드 맨 위 진행 바 — 오늘 할일 전체 기준(잘라 보여주는 5건이 아니다).
+  progRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    minHeight: 40,
+    paddingVertical: Space.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: InkColors.line,
+  },
+  progTrack: { flex: 1, height: 6, borderRadius: Radius.pill, backgroundColor: InkColors.bgSoft, overflow: 'hidden' },
+  progFill: { height: '100%', borderRadius: Radius.pill, backgroundColor: BrandColors.yellow },
+  progText: { flexShrink: 0, fontSize: 12.5, fontWeight: '800', color: InkColors.ink2 },
 
   miniRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8 },
   miniLink: { fontSize: 13, color: InkColors.ink2, fontWeight: '700' },

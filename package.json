@@ -41,6 +41,7 @@
     "typecheck": "tsc --noEmit",
     "compile:packs": "node scripts/compile-pack.mjs",
     "platform:status": "node scripts/platform-status.mjs",
+    "native:gate": "node scripts/native-gate.mjs",
     "qa:coldstart": "node scripts/qa-coldstart.mjs",
     "qa:daypart": "node scripts/qa-daypart-labels.mjs",
     "qa:category": "node scripts/qa-knowhow-categories.mjs",

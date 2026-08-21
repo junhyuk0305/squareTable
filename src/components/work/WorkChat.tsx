@@ -113,10 +113,10 @@ export function WorkChat({
   onAddTask,
   onAssignTask,
   onWriteNotice,
-  onBack,
   onOpenTodo,
   onOpenDrawer,
   drawerDot,
+  topInset,
 }: {
   stream: FeedItem[];
   today: string;
@@ -141,12 +141,13 @@ export function WorkChat({
   /** 사장: @리스트에서 직원에게 바로 할일 배정(그 직원 담당 모달 오픈). */
   onAssignTask?: (memberId: string) => void;
   onWriteNotice: () => void;
-  /** 떠 있는 헤더 — 뒤로(방 목록) · 찾기(이 방 안) · 할일 · 서랍. 방 전환 UI는 없다(판정 ⑤). */
-  onBack: () => void;
+  /** 떠 있는 헤더 — 찾기(이 방 안) · 할일 · 서랍. 방 전환은 헤더 아래 떠 있는 방 칩바가 맡는다. */
   onOpenTodo: () => void;
   onOpenDrawer: () => void;
   /** 서랍 안에 안 읽은 것(공지)이 있으면 햄버거에 점을 찍는다. */
   drawerDot?: boolean;
+  /** 헤더 아래에 뜨는 것(방 칩바)의 높이 — 첫 말풍선이 그 아래에서 시작하게 스트림 상단 여백에 더한다. */
+  topInset?: number;
 }) {
   const [draft, setDraft] = useState('');
   const [menu, setMenu] = useState(false);
@@ -267,8 +268,7 @@ export function WorkChat({
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      {/* 떠 있는 헤더 — 대화방의 고정 요소는 이것과 입력창 둘뿐이다. 방 이름·전환 드롭다운은 없다(판정 ⑤).
-          방을 옮기려면 뒤로가기 → 목록. */}
+      {/* 떠 있는 헤더 — 찾기·할일·서랍. 이 아래에 방 칩바가 한 줄 더 뜨고, 방 전환은 거기서 한다. */}
       <View style={s.floatHdr}>
         {searchOn ? (
           <>
@@ -295,9 +295,6 @@ export function WorkChat({
           </>
         ) : (
           <>
-            <Pressable onPress={onBack} hitSlop={10} accessibilityRole="button" accessibilityLabel="채팅방 목록으로" style={({ pressed }) => [s.hdrBtn, pressed && { opacity: 0.5 }]}>
-              <Ionicons name="arrow-back" size={22} color={InkColors.ink} />
-            </Pressable>
             <View style={{ flex: 1 }} />
             <Pressable onPress={() => setSearchOn(true)} hitSlop={10} accessibilityRole="button" accessibilityLabel="대화 찾기" style={({ pressed }) => [s.hdrBtn, pressed && { opacity: 0.5 }]}>
               <Ionicons name="search" size={20} color={InkColors.ink} />
@@ -327,7 +324,7 @@ export function WorkChat({
 
       <ScrollView
         ref={scrollRef}
-        contentContainerStyle={s.scroll}
+        contentContainerStyle={[s.scroll, topInset ? { paddingTop: HDR_H + 16 + topInset } : null]}
         showsVerticalScrollIndicator={false}
         scrollEventThrottle={16}
         onScroll={onScroll}

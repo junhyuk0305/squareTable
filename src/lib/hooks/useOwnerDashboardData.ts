@@ -29,11 +29,25 @@ export type OwnerDashboardData = {
   entriesCount: number;
   needsReviewCount: number;
   /**
-   * 오늘 떠야 하는 업무 — 홈 목록(3건 + 전체보기)용. 완료 여부까지 붙여 표시 전용으로 내보낸다.
+   * 오늘 떠야 하는 업무 — 홈 목록용. 완료 여부까지 붙여 내보낸다.
    * ★완료자·완료시각을 같이 낸다 — 감시원칙 D1이 "완료 시각 노출은 감시 위반이 아니라 의도된 기능"으로
    *   정한 값이다. 예전엔 `!!`로 boolean 으로 눌러 DoneMark 의 byName·at 을 버리고 있었다.
+   * ★2026-08-19: 표시 전용이 아니다 — 홈에서 **직접 완료 체크**를 하게 되면서 쓰기에 필요한 것까지 낸다.
+   *   `roomId`= 합성 루틴(dpr_)은 templates 조회가 안 돼 toggleTask 가 문구/방을 못 찾는다(호출부가 넘겨야 함).
+   *   `photoUrl`= 완료 사진이 붙은 건 해제 시 사진도 함께 지워지므로 확인을 먼저 띄운다(할일 화면과 같은 규칙).
    */
-  todayTasks: { id: string; text: string; done: boolean; doneBy?: string; doneAt?: string; assignee?: string }[];
+  todayTasks: {
+    id: string;
+    text: string;
+    done: boolean;
+    doneBy?: string;
+    doneAt?: string;
+    assignee?: string;
+    /** 업무 시간 "HH:MM"(0118). 없으면 시간 미지정. */
+    at?: string;
+    roomId?: string;
+    photoUrl?: string;
+  }[];
   /** 오늘 출근한 사람(출근 시각순) — 홈 '오늘' 카드 머리줄. */
   duty: { staffId: string; name: string; at: string }[];
   /**
@@ -95,6 +109,10 @@ export function useOwnerDashboardData(): OwnerDashboardData {
     [allTemplates, today, userId],
   );
   // 홈 목록용 — 남은 일이 먼저 보이도록 미완료를 위로. todaysTasks(가시성 필터)를 그대로 재사용한다.
+  // 정렬(2026-08-19) = ① 미완료 먼저 ② 그 안에서 **업무 시간순**. 시간이 없는 할일은 있는 것들 뒤로 보낸다
+  //   ('시간 미정'을 07:00 자리에 끼워 넣으면 오늘의 순서가 거짓이 된다).
+  //   완료된 것도 목록에서 지우지 않는다 — 홈에서 바로 체크·해제를 하므로 방금 누른 것이 사라지면
+  //   "눌린 게 맞나"를 확인할 방법이 없다.
   const todayTasks = useMemo(() => {
     const doneToday = doneMap[today] ?? {};
     // 담당자 이름 — 아직 아무도 안 끝낸 일이 "누구 몫인지"를 홈에서 바로 읽게 한다(완료 후엔 완료자가 그 자리를 쓴다).
@@ -102,6 +120,7 @@ export function useOwnerDashboardData(): OwnerDashboardData {
     return todaysTasks
       .map((t) => {
         const mark = doneToday[t.id];
+        const photoUrl = (mark as (typeof mark & { photoUrl?: string }) | undefined)?.photoUrl;
         return {
           id: t.id,
           text: t.text,
@@ -109,9 +128,19 @@ export function useOwnerDashboardData(): OwnerDashboardData {
           doneBy: mark?.byName,
           doneAt: mark?.at ? hhmm(mark.at) : undefined,
           assignee: t.ownerId ? nameOfMember(t.ownerId) : undefined,
+          ...(t.remindAt ? { at: t.remindAt } : null),
+          ...(t.roomId ? { roomId: t.roomId } : null),
+          ...(photoUrl ? { photoUrl } : null),
         };
       })
-      .sort((a, b) => Number(a.done) - Number(b.done));
+      .sort((a, b) => {
+        if (a.done !== b.done) return Number(a.done) - Number(b.done);
+        // 시간 미지정은 뒤로. 둘 다 없으면 원래 순서(데이파트 순)를 유지한다.
+        if (a.at && b.at) return a.at.localeCompare(b.at);
+        if (a.at) return -1;
+        if (b.at) return 1;
+        return 0;
+      });
   }, [todaysTasks, doneMap, today, staff, userId]);
 
   // ── 오늘 근무 ──────────────────────────────────────────────────────────────

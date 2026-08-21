@@ -27,8 +27,7 @@ import { RoleTabBar } from '@/components/RoleTabBar';
 import { Appear, stagger } from '@/components/Appear';
 import { useRoomStore } from '@/lib/store/useRoomStore';
 import { WorkChat } from '@/components/work/WorkChat';
-import { RoomList } from '@/components/work/RoomList';
-import { RoomSortSheet } from '@/components/work/RoomSortSheet';
+import { RoomBar, ROOMBAR_INSET } from '@/components/work/RoomBar';
 import { RoomDrawer } from '@/components/work/RoomDrawer';
 import { RoomComposer, type RoomLookDraft } from '@/components/work/RoomComposer';
 import { NoticePanel } from '@/components/work/NoticePanel';
@@ -42,7 +41,7 @@ import { HEADER_EDGE_GUTTER } from '@/lib/theme/layout';
 import { todayStr, tsMs } from '@/lib/utils/attendance';
 import { asMemberRole, canManage } from '@/lib/utils/roles';
 
-type ViewKey = 'rooms' | 'chat' | 'drawer' | 'notice' | 'todo' | 'settings';
+type ViewKey = 'chat' | 'drawer' | 'notice' | 'todo' | 'settings';
 
 // 채팅에 한 번에 보낼 수 있는 사진 최대 장수.
 const MAX_CHAT_PHOTOS = 10;
@@ -173,13 +172,13 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
   const { view: viewParam } = useLocalSearchParams<{ view?: string }>();
   const paramView: ViewKey | null =
     viewParam === 'todo' || viewParam === 'notice' ? viewParam : viewParam === 'assign' ? 'todo' : null;
-  const initialView: ViewKey = paramView ?? 'rooms';
+  const initialView: ViewKey = paramView ?? 'chat';
 
   const today = todayStr();
   const [view, setView] = useState<ViewKey>(initialView);
   // 패널(공지/할일)이 홈 등 다른 화면의 딥링크(?view=)로 열렸는지 추적.
   // true면 뒤로가기는 진입 화면(홈)으로 복귀(router.back), false(업무 내부 진입)면 채팅으로 복귀.
-  const [openedExternally, setOpenedExternally] = useState<boolean>(initialView !== 'rooms');
+  const [openedExternally, setOpenedExternally] = useState<boolean>(initialView !== 'chat');
   // 딥링크(?view=)가 마운트 후 바뀌면(홈 등에서 진입) 해당 패널로 동기화.
   // setState-in-effect(캐스케이드 렌더) 대신 "이전 param과 비교해 렌더 중 조정" — React 권장 패턴.
   const [prevViewParam, setPrevViewParam] = useState(viewParam);
@@ -199,28 +198,15 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
   // 업무 설정(settings)은 할일 화면의 버튼으로만 들어오므로 뒤로가기도 할일로 돌아간다.
   const closePanel = useCallback(() => {
     if (openedExternally && router.canGoBack()) router.back();
-    else setView(view === 'settings' ? 'todo' : view === 'chat' ? 'rooms' : 'chat');
+    else setView(view === 'settings' ? 'todo' : 'chat');
   }, [openedExternally, view]);
   // 방 만들기(전역) / 방 모습 바꾸기(개인) — 같은 시트 두 모드.
   const [roomComposer, setRoomComposer] = useState<'create' | 'look' | null>(null);
-  // 방 목록에서 방을 연다 — 활성 방을 바꾸고 대화 화면으로. 되돌아오는 길은 뒤로가기 하나다(방 전환 UI 없음).
-  const openRoom = useCallback((roomId: string) => {
-    useRoomStore.getState().setCurrentRoom(roomId);
-    // 여는 순간 '여기까지 읽음' 기준을 옮긴다(0154) — 배지·정렬이 둘 다 이 값에서 나온다.
-    // 나올 때 한 번 더 찍는 것은 closePanel 이 아니라 WorkChat 의 뒤로가기(onBack)가 맡는다:
-    // 방을 보고 있는 동안 들어온 말까지 읽은 것으로 쳐야 목록으로 나갔을 때 배지가 안 남는다.
-    if (userId) useRoomStore.getState().markRead(roomId, userId);
-    setOpenedExternally(false);
-    setView('chat');
-  }, [userId]);
-  // 채팅방 목록 정렬(기기 로컬) — 목록 화면 우상단 톱니.
-  const [sortSheet, setSortSheet] = useState(false);
-  // 대화방 → 목록. 나가는 순간 읽음 기준을 지금으로 옮긴다 — 보고 있는 동안 들어온 말까지 읽은 것으로
-  // 쳐야, 방금 읽은 대화가 목록에서 배지로 남지 않는다(열 때 한 번만 찍으면 그게 남는다).
-  const leaveRoomView = useCallback(() => {
+  // 지금 보고 있는 방의 '여기까지 읽음' 기준(0154)을 마운트 때 한 번 찍는다. 방을 옮길 때 찍는 것은
+  // RoomBar 가 맡는다(나가는 방·들어가는 방 둘 다). 이 둘이 배지와 정렬의 유일한 근거다.
+  useEffect(() => {
     const rid = useRoomStore.getState().currentRoomId;
     if (rid && userId) useRoomStore.getState().markRead(rid, userId);
-    setView('rooms');
   }, [userId]);
   const openRoomComposer = useCallback(() => setRoomComposer('create'), []);
   // 서버가 방을 만든 뒤에 목록으로 돌려보낸다(낙관적 이동 금지 — 실패했는데 새 방이 열려 있으면 안 된다).
@@ -233,7 +219,8 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
     const ok = await useRoomStore.getState().leaveRoom(currentRoomId, userId);
     if (ok) {
       showToast('방에서 나왔어요', 'info');
-      setView('rooms');
+      // 목록 화면이 없다 — 스토어가 currentRoomId 를 남은 방(기본방)으로 옮기므로 그 방의 대화로 착지한다.
+      setView('chat');
     }
   }, [currentRoomId, userId]);
   const deleteCurrentRoom = useCallback(async () => {
@@ -241,7 +228,7 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
     const ok = await useRoomStore.getState().removeRoom(currentRoomId);
     if (ok) {
       showToast('채팅방을 삭제했어요', 'info');
-      setView('rooms');
+      setView('chat');
     }
   }, [currentRoomId]);
   // routineScope — 루틴을 고칠 때만 실린다. 'single'=그 날짜만(대체 할일 1건 생성) / 'global'=매장 설정의 루틴 자체.
@@ -678,34 +665,10 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
 
   const headerOptions =
     view === 'chat' || view === 'drawer'
-      ? // 대화방·서랍: 네이티브 헤더를 끈다. 대화방은 WorkChat 의 떠 있는 헤더(고정 요소 2개),
-        // 서랍은 RoomDrawer 의 자체 상단바가 그린다. 안 끄면 서랍 위에 '할일' 제목의 헤더가 하나 더 얹힌다.
+      ? // 대화방(탭 루트)·서랍: 네이티브 헤더를 끈다. 대화방은 WorkChat 의 떠 있는 헤더 + 그 아래 방 칩바를,
+        // 서랍은 RoomDrawer 의 자체 상단바를 직접 그린다. 안 끄면 그 위에 '할일' 제목의 헤더가 하나 더 얹힌다.
+        // ★패널에서 돌아올 때 반드시 false 를 **명시**한다 — setOptions 는 얕은 병합이라 키를 빼면 true 가 남는다.
         { headerShown: false }
-      : view === 'rooms'
-      ? {
-          // 탭 루트(뒤로가기 없음) — 네이티브 타이틀 앵커(~17px)를 콘텐츠 거터(20)로 맞춰
-          // 우측 액션(공지/할일, 20)과 좌우 대칭. paddingLeft 3 = 20-17.
-          headerShown: true,
-          headerTitleAlign: 'left' as const,
-          headerTitle: () => <Text style={st.headerTitle}>업무 채팅</Text>,
-          // 뒤로가기 명시적 제거 — 패널 뷰가 설정한 headerLeft(arrow-back)가 navigation.setOptions
-          // 얕은 병합으로 남는다(키 생략=이전 값 유지). 채팅 루트로 돌아오면 뒤로가기가 새어나오므로
-          // 여기서 매번 () => null + headerBackVisible:false 로 초기화한다(owner/_layout 주석의 그 함정).
-          headerLeft: () => null,
-          headerBackVisible: false,
-          // 공지·할일은 **방 안**(헤더의 할일 · 서랍의 공지)으로 옮겼다 — 목록 화면에 남는 건 정렬뿐이다.
-          headerRight: () => (
-            <Pressable
-              onPress={() => setSortSheet(true)}
-              hitSlop={8}
-              accessibilityRole="button"
-              accessibilityLabel="채팅방 정렬"
-              style={({ pressed }) => [{ paddingHorizontal: HEADER_EDGE_GUTTER, paddingVertical: 4 }, pressed && { opacity: 0.6 }]}
-            >
-              <Ionicons name="settings-outline" size={22} color={InkColors.ink} />
-            </Pressable>
-          ),
-        }
       : {
           // ★채팅 루트가 설정한 headerTitle(컴포넌트)·headerRight 를 **명시적으로 되돌린다.**
           //   setOptions 는 얕은 병합이라 키를 생략하면 이전 값이 남고, headerTitle 은 title 보다 우선한다
@@ -727,18 +690,9 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
   return (
     <SafeAreaView style={st.safe} edges={['bottom']}>
       <Stack.Screen options={headerOptions} />
-      <RoomSortSheet visible={sortSheet} onClose={() => setSortSheet(false)} />
-
-      {/* 탭 루트 = 채팅방 목록. 방 전환 칩바·드롭다운은 없다 — 방을 옮기려면 뒤로가기 → 목록(판정 ⑤). */}
-      {view === 'rooms' && (
-        <Appear delay={0} style={{ flex: 1 }}>
-          <RoomList me={userId} memberCount={memberCount} feed={feed} onOpen={openRoom} onCreate={openRoomComposer} />
-        </Appear>
-      )}
-
       {/* 어떤 코스 카드가 몇 장 뜨는지는 trainingCards 메모가 판정(하한·주기·1회성 우선·요청 예외).
-          ★탭 루트(채팅방 목록)에 둔다 — 대화방은 떠 있는 헤더가 상단을 덮어 카드가 가려진다. */}
-      {view === 'rooms' &&
+          ★대화방 **위쪽 흐름**에 둔다 — 떠 있는 헤더·칩바는 WorkChat 안에서 뜨므로 카드를 덮지 않는다. */}
+      {view === 'chat' &&
         trainingCards.map((c, i) => (
           <Appear key={c.course.key} delay={stagger(i)}>
             <TrainingCard
@@ -752,9 +706,11 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
 
       {view === 'chat' && (
         <Appear delay={0} style={{ flex: 1 }}>
+        {/* ★방 칩바는 WorkChat **밖**에 둔다 — WorkChat 은 key={currentRoomId} 로 방마다 새로 마운트돼서,
+            안에 넣으면 방을 옮길 때마다 칩바까지 통째로 다시 그려진다(탭한 칩이 깜빡인다). */}
         <WorkChat
           key={currentRoomId ?? 'all'}
-          onBack={leaveRoomView}
+          topInset={ROOMBAR_INSET}
           onOpenTodo={() => openPanel('todo')}
           onOpenDrawer={() => setView('drawer')}
           // 안 읽은 공지가 있으면 햄버거에 점 — 공지 진입이 서랍으로 들어가면서 신호를 잃지 않게.
@@ -780,6 +736,7 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
           onAssignTask={(id) => setComposer({ open: true, date: today, assigneeId: id })}
           onWriteNotice={() => openPanel('notice')}
         />
+        <RoomBar me={userId} feed={feed} onCreate={openRoomComposer} />
         </Appear>
       )}
 
@@ -968,9 +925,8 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
         />
       )}
 
-      {/* 하단 탭바: 채팅리스트(탭 루트)에는 있고 **대화방·서랍에는 없다**(판정 ⑧).
-          대화방은 목록 위에 쌓이는 화면이고, 고정 요소는 떠 있는 헤더 + 입력창 둘뿐이다. */}
-      {view !== 'chat' && view !== 'drawer' && <RoleTabBar role={role} />}
+      {/* 하단 탭바: 대화방이 다시 탭 루트라 여기에도 있다. **서랍에만 없다** — 서랍은 방 위에 쌓이는 화면이다. */}
+      {view !== 'drawer' && <RoleTabBar role={role} />}
     </SafeAreaView>
   );
 }
