@@ -37,15 +37,6 @@ import type { PlaybookEntry } from '@/types';
 // 진입 시 'todo' 로 착지시킨다 — 죽은 링크를 만들지 않는다.
 export type KnowhowSegKey = 'todo' | 'knowhow';
 
-/**
- * 찾기 바(검색·카테고리)를 띄우는 최소 노하우 수.
- * ① 복잡도 원칙 §4 "리스트 첫 노출 5±2" — 7건까지는 스크롤 한 번이면 다 훑힌다.
- * ② JuniorBrowseDashboard 의 SECTION_LIMIT*2(=8)와 같은 수 — "잘라 보여줄 만큼 쌓였나"라는 같은 판정.
- * 이 수 미만에서는 거르는 장치가 목록보다 커진다(실측: 데모 매장 4~5건에 필터 4종).
- * ★세그먼트(3칸)는 이 게이트에 걸지 않는다 — 받은질문 탭이 사라진 뒤로 '할 일' 칸이 유일한 진입점이라,
- *   숨기면 노하우 8건 미만 매장에서 받은 질문에 아예 닿지 못한다.
- */
-const FILTER_MIN = 8;
 
 /**
  * 목록을 묶음(그룹 헤더 + 집계)으로 나누기 시작하는 수.
@@ -296,12 +287,9 @@ export function OwnerKnowhowBrowse({
 
   const hasEntries = visible.length > 0;
 
-  // 찾기 바 노출 — FILTER_MIN 미만이면 목록이 곧 전부라 거를 게 없다(필터가 목록보다 커진다).
-  // 뒤 절은 "잠김 방지"다. 빠지면 끌 수 없는 필터가 생긴다:
-  //  8건에서 필터를 건 뒤 노하우를 지워 7건이 되는 경로 — 바가 사라지면 그 필터를 풀 방법이 없다.
-  //  (2026-08-08 정렬 삭제로 '정렬만 바꾼 뒤 잠김' 경로는 사라졌다 — 남은 것은 검색·카테고리 둘뿐이다.)
-  const viewAltered = query.trim() !== '' || effectiveCat !== null;
-  const showFindBar = visible.length >= FILTER_MIN || viewAltered;
+  // 찾기 바(검색·카테고리 칩)는 개수와 무관하게 **항상** 띄운다 — 2026-08-19 결정.
+  //  옛 FILTER_MIN(8건) 게이트를 폐기한 것이다. 자리가 개수에 따라 나타났다 사라지면 "여기 검색이 있다"를
+  //  익힐 수 없고, 게이트가 만들던 '필터 걸어둔 채 7건이 되면 못 푸는' 잠김 예외도 같이 사라진다.
 
   // 목록이 길면 쓰임새 묶음(많이 쓰임 / 오래 확인 안 함 / 그 밖)이 "무엇부터 손볼까"에 답한다.
   const showUsageGroups = listFiltered.length >= GROUP_MIN;
@@ -406,45 +394,141 @@ export function OwnerKnowhowBrowse({
     }
     return (
       <>
-        <View style={styles.headRow}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, flexShrink: 1, minWidth: 0 }}>
-            <Text style={styles.subline}>{countLabel}</Text>
-            <InfoDot
-              title="노하우가 뭐예요?"
-              body={'여기 적어두면 직원이 물을 때 AI가 사장님 대신 답해줘요.\n많이 쌓일수록 같은 질문에 일일이 답할 일이 줄어요.'}
-            />
+        {/* 개수 줄 + 톱니. 톱니 패널이 이 줄 아래에 **떠서** 열리므로(밀어내지 않는다) 이 블록이 그 앵커다. */}
+        <View style={styles.headBlock}>
+          <View style={styles.headRow}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, flexShrink: 1, minWidth: 0 }}>
+              <Text style={styles.subline}>{countLabel}</Text>
+              <InfoDot
+                title="노하우가 뭐예요?"
+                body={'여기 적어두면 직원이 물을 때 AI가 사장님 대신 답해줘요.\n많이 쌓일수록 같은 질문에 일일이 답할 일이 줄어요.'}
+              />
+            </View>
+            {/* 목록 관리(카테고리 편집·내보내기) — 매일 쓰는 게 아니라 이 톱니 뒤로 접었다.
+                ★노하우 0건이면 아래 본문이 빈 화면(EmptyState)이라 이 톱니도 같이 안 뜬다.
+                  옛 판본의 '카테고리 편집' 버튼도 같은 자리·같은 조건이었다(이 개편으로 생긴 공백이 아니다). */}
+            {hasEntries && (
+              <Pressable
+                onPress={() => setManageOpen((v) => !v)}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 8 }}
+                accessibilityRole="button"
+                accessibilityLabel={manageOpen ? '목록 관리 닫기' : '목록 관리 열기'}
+                style={({ pressed }) => [styles.gearBtn, pressed && { opacity: 0.6 }]}
+              >
+                <Ionicons name={manageOpen ? 'close' : 'settings-outline'} size={17} color={InkColors.ink2} />
+              </Pressable>
+            )}
           </View>
-          {/* 목록 관리(카테고리 편집·내보내기) — 매일 쓰는 게 아니라 이 톱니 뒤로 접었다.
-              ★노하우 0건이면 아래 본문이 빈 화면(EmptyState)이라 이 톱니도 같이 안 뜬다.
-                옛 판본의 '카테고리 편집' 버튼도 같은 자리·같은 조건이었다(이 개편으로 생긴 공백이 아니다). */}
-          {hasEntries && (
-            <Pressable
-              onPress={() => setManageOpen((v) => !v)}
-              hitSlop={{ top: 12, bottom: 12, left: 12, right: 8 }}
-              accessibilityRole="button"
-              accessibilityLabel={manageOpen ? '목록 관리 닫기' : '목록 관리 열기'}
-              style={({ pressed }) => [styles.gearBtn, pressed && { opacity: 0.6 }]}
-            >
-              <Ionicons name={manageOpen ? 'close' : 'settings-outline'} size={17} color={InkColors.ink2} />
-            </Pressable>
+
+          {/* 톱니 패널 — StoreToggle 매장 드롭다운과 같은 A7 규격이다(2026-08-19에 밀어내기→띄우기로 바꿈):
+              누른 자리 바로 아래 absolute 앵커 + Collapse(높이 애니) + Appear(행 스태거).
+              밀어내면 열 때마다 목록이 통째로 내려가 "어디를 보고 있었는지"가 흔들린다. 닫기는 톱니(✕)가 맡는다. */}
+          {hasEntries && manageOpen && (
+            <View style={styles.manageAnchor}>
+              <Collapse style={styles.manageActions}>
+                <Appear delay={stagger(0)} offsetY={7}>
+                  <Pressable
+                    onPress={() => { setManageOpen(false); setCatSheet(true); }}
+                    style={({ pressed }) => [styles.manageRow, pressed && { opacity: 0.7 }]}
+                    accessibilityRole="button"
+                    accessibilityLabel="카테고리 편집"
+                  >
+                    <Ionicons name="pricetags-outline" size={16} color={InkColors.ink2} />
+                    <Text style={styles.manageRowText}>카테고리 편집</Text>
+                    <Ionicons name="chevron-forward" size={15} color={InkColors.ink3} />
+                  </Pressable>
+                </Appear>
+                {canCopyToClipboard() && exportCount > 0 && (
+                  <Appear delay={stagger(1)} offsetY={7}>
+                    <Pressable
+                      onPress={() => copy(manualToText(exportGroups, { storeName, date: new Date().toLocaleDateString('ko-KR') }))}
+                      style={({ pressed }) => [styles.manageRow, styles.manageRowDivider, pressed && { opacity: 0.7 }]}
+                      accessibilityRole="button"
+                      accessibilityLabel={`지금 목록에 보이는 노하우 ${exportCount}개 내보내기`}
+                    >
+                      <Ionicons name={copied ? 'checkmark' : 'copy-outline'} size={16} color={InkColors.ink2} />
+                      <Text style={styles.manageRowText} numberOfLines={1}>{copied ? '복사됐어요' : `내보내기 ${exportCount}개`}</Text>
+                      <Ionicons name="chevron-forward" size={15} color={InkColors.ink3} />
+                    </Pressable>
+                  </Appear>
+                )}
+              </Collapse>
+            </View>
           )}
         </View>
 
-        {/* 검토 대기(draft) — 인수인계서 파이프라인이 증분 저장한 항목. 발행 전이라 직원·AI에 안 보임. */}
-        {draftCount > 0 && (
-          <Pressable
-            onPress={goHandover}
-            style={({ pressed }) => [styles.draftBanner, pressed && { opacity: 0.9 }]}
-            accessibilityRole="button"
-            accessibilityLabel={`검토 대기 노하우 ${draftCount}개 검수하기`}
-          >
-            <Ionicons name="file-tray-full" size={18} color={InkColors.ink} />
-            <View style={{ flex: 1 }}>
-              <Text style={styles.bannerTitle}>검토 대기 노하우 {draftCount}개</Text>
-              <Text style={styles.bannerBody}>인수인계서에서 정리한 항목이에요. 확인 후 추가해 주세요.</Text>
+        {/* 찾기 바 — 검색·카테고리. 톱니 줄 바로 아래 고정이다(2026-08-19). */}
+        {hasEntries && (
+          <View style={styles.findBar}>
+            {/* 행1 — 검색 */}
+            <View style={styles.search}>
+              <Ionicons name="search" size={16} color={InkColors.ink3} />
+              <TextInput
+                value={query}
+                onChangeText={setQuery}
+                placeholder="제목·키워드로 검색"
+                placeholderTextColor={InkColors.ink3}
+                style={styles.searchInput}
+                returnKeyType="search"
+              />
+              {query.length > 0 ? (
+                <Pressable onPress={() => setQuery('')} hitSlop={8}>
+                  <Ionicons name="close-circle" size={16} color={InkColors.ink3} />
+                </Pressable>
+              ) : null}
             </View>
-            <Text style={styles.draftBannerCta}>검수하기 ›</Text>
-          </Pressable>
+
+            {/* 행2 — 카테고리 가로 스크롤. */}
+            <View style={styles.findRow}>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={styles.findScroll}
+                contentContainerStyle={styles.chipRow}
+              >
+                <Pressable
+                  onPress={() => setActiveCat(null)}
+                  hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+                  style={[styles.chip, effectiveCat === null && styles.chipOn]}
+                >
+                  <Text style={[styles.chipText, effectiveCat === null && styles.chipTextOn]}>전체</Text>
+                </Pressable>
+                {allCats.map((c) => {
+                  const on = effectiveCat === c;
+                  const m = getSectionMeta(c);
+                  return (
+                    <Pressable
+                      key={c}
+                      onPress={() => selectCat(c)}
+                      hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+                      style={[styles.chip, on && styles.chipOn]}
+                    >
+                      <View style={[styles.chipDot, { backgroundColor: m.color }]} />
+                      <Text style={[styles.chipText, on && styles.chipTextOn]}>{m.label}</Text>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+            </View>
+
+          </View>
+        )}
+
+      {/* 검토 대기(draft) — 인수인계서 파이프라인이 증분 저장한 항목. 발행 전이라 직원·AI에 안 보임. */}
+      {draftCount > 0 && (
+        <Pressable
+          onPress={goHandover}
+          style={({ pressed }) => [styles.draftBanner, pressed && { opacity: 0.9 }]}
+          accessibilityRole="button"
+          accessibilityLabel={`검토 대기 노하우 ${draftCount}개 검수하기`}
+        >
+          <Ionicons name="file-tray-full" size={18} color={InkColors.ink} />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.bannerTitle}>검토 대기 노하우 {draftCount}개</Text>
+            <Text style={styles.bannerBody}>인수인계서에서 정리한 항목이에요. 확인 후 추가해 주세요.</Text>
+          </View>
+          <Text style={styles.draftBannerCta}>검수하기 ›</Text>
+        </Pressable>
         )}
 
         {!hasEntries ? (
@@ -464,92 +548,6 @@ export function OwnerKnowhowBrowse({
           )
         ) : (
           <>
-            {/* 톱니 토글로 펼쳐지는 목록 관리 — 카테고리 편집·내보내기.
-                한 줄이 통째로 버튼이라 터치 타깃은 행 높이(48)가 그대로 보장한다. */}
-            {manageOpen && (
-              <Collapse style={styles.manageActions}>
-                <Pressable
-                  onPress={() => { setManageOpen(false); setCatSheet(true); }}
-                  style={({ pressed }) => [styles.manageRow, pressed && { opacity: 0.7 }]}
-                  accessibilityRole="button"
-                  accessibilityLabel="카테고리 편집"
-                >
-                  <Ionicons name="pricetags-outline" size={16} color={InkColors.ink2} />
-                  <Text style={styles.manageRowText}>카테고리 편집</Text>
-                  <Ionicons name="chevron-forward" size={15} color={InkColors.ink3} />
-                </Pressable>
-                {canCopyToClipboard() && exportCount > 0 && (
-                  <Pressable
-                    onPress={() => copy(manualToText(exportGroups, { storeName, date: new Date().toLocaleDateString('ko-KR') }))}
-                    style={({ pressed }) => [styles.manageRow, styles.manageRowDivider, pressed && { opacity: 0.7 }]}
-                    accessibilityRole="button"
-                    accessibilityLabel={`지금 목록에 보이는 노하우 ${exportCount}개 내보내기`}
-                  >
-                    <Ionicons name={copied ? 'checkmark' : 'copy-outline'} size={16} color={InkColors.ink2} />
-                    <Text style={styles.manageRowText} numberOfLines={1}>{copied ? '복사됐어요' : `내보내기 ${exportCount}개`}</Text>
-                    <Ionicons name="chevron-forward" size={15} color={InkColors.ink3} />
-                  </Pressable>
-                )}
-              </Collapse>
-            )}
-
-            {/* 찾기 바 — 검색·카테고리(+정렬은 SORT_MIN 이상에서만)를 한 블록으로. */}
-            {showFindBar && (
-              <View style={styles.findBar}>
-                {/* 행1 — 검색 */}
-                <View style={styles.search}>
-                  <Ionicons name="search" size={16} color={InkColors.ink3} />
-                  <TextInput
-                    value={query}
-                    onChangeText={setQuery}
-                    placeholder="제목·키워드로 검색"
-                    placeholderTextColor={InkColors.ink3}
-                    style={styles.searchInput}
-                    returnKeyType="search"
-                  />
-                  {query.length > 0 ? (
-                    <Pressable onPress={() => setQuery('')} hitSlop={8}>
-                      <Ionicons name="close-circle" size={16} color={InkColors.ink3} />
-                    </Pressable>
-                  ) : null}
-                </View>
-
-                {/* 행2 — 카테고리 가로 스크롤. */}
-                <View style={styles.findRow}>
-                  <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    style={styles.findScroll}
-                    contentContainerStyle={styles.chipRow}
-                  >
-                    <Pressable
-                      onPress={() => setActiveCat(null)}
-                      hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
-                      style={[styles.chip, effectiveCat === null && styles.chipOn]}
-                    >
-                      <Text style={[styles.chipText, effectiveCat === null && styles.chipTextOn]}>전체</Text>
-                    </Pressable>
-                    {allCats.map((c) => {
-                      const on = effectiveCat === c;
-                      const m = getSectionMeta(c);
-                      return (
-                        <Pressable
-                          key={c}
-                          onPress={() => selectCat(c)}
-                          hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
-                          style={[styles.chip, on && styles.chipOn]}
-                        >
-                          <View style={[styles.chipDot, { backgroundColor: m.color }]} />
-                          <Text style={[styles.chipText, on && styles.chipTextOn]}>{m.label}</Text>
-                        </Pressable>
-                      );
-                    })}
-                  </ScrollView>
-                </View>
-
-              </View>
-            )}
-
             {/* 목록 */}
             {listFiltered.length === 0 ? (
               <EmptyResult onReset={() => { setQuery(''); setActiveCat(null); }} onAsk={goAsk} />
@@ -702,6 +700,8 @@ const styles = StyleSheet.create({
   // 세그먼트 — 공용 SegmentTabs 의 margin(16)을 화면 거터(20)에 맞춘다.
   segTabs: { marginHorizontal: Space.gutter, marginTop: Space.md, marginBottom: 0 },
 
+  // 톱니 패널의 앵커. zIndex 가 없으면 뒤에 오는 형제(찾기 바·목록)가 위에 그려져 패널이 가려진다.
+  headBlock: { position: 'relative', zIndex: 20 },
   headRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
   // "총 N개 · 탭하면 수정" = 카운트+힌트라 **보조**다(본문 아님).
   // 15sp였던 건 크기가 틀린 것이지 색이 틀린 게 아니다 — ink3는 보조의 정당한 색이고,
@@ -791,11 +791,13 @@ const styles = StyleSheet.create({
   },
   verifyBtnText: { fontSize: 12, fontWeight: '800', color: InkColors.ink },
 
-  // 관리 액션 — 찾기 바 위 오른쪽의 작은 버튼. 시각은 칩 크기, 터치 타깃은 hitSlop 이 48dp까지 넓힌다.
-  // 톱니 토글 패널 — 목록 위에 펼쳐지는 관리 액션 묶음.
+  // 톱니 패널 — 개수 줄 **아래에 떠서** 열린다(목록을 밀어내지 않는다).
+  // Collapse 의 style 은 안쪽 내용 View 로 가고 바깥은 높이를 재는 클리핑 박스라, '띄우기'는 이 앵커가 맡는다
+  // (StoreToggle.menuAnchor 와 같은 구조 — 그쪽 주석이 정본이다).
+  manageAnchor: { position: 'absolute', top: '100%', right: 0, minWidth: 220, zIndex: 30, marginTop: Space.xs },
   manageActions: {
     borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md,
-    backgroundColor: InkColors.bg, overflow: 'hidden',
+    backgroundColor: '#FFFFFF', overflow: 'hidden', ...Elevation.e2,
   },
   manageRow: { flexDirection: 'row', alignItems: 'center', gap: Space.md, minHeight: 48, paddingHorizontal: Space.md },
   manageRowDivider: { borderTopWidth: 1, borderTopColor: InkColors.line },

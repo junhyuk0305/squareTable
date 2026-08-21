@@ -940,6 +940,11 @@ export function OwnerCoachChat({
               onFocus={() => setInputFocused(true)}
               onBlur={() => setInputFocused(false)}
               multiline
+              // ★웹 전용 1줄 시작 — RNW 는 multiline 을 textarea 로 그리는데 기본이 2줄(60px)이라,
+              //   빈 입력바가 업무 채팅(41px)보다 혼자 16px 높았다(2026-08-19 실측). rows=1 로 맞춘다.
+              //   네이티브는 건드리지 않는다 — 거기선 내용에 따라 알아서 자라고, Android 에서
+              //   numberOfLines 를 주면 줄 수가 그대로 묶인다.
+              numberOfLines={Platform.OS === 'web' ? 1 : undefined}
               // 긴 텍스트(인수인계서·메모)를 한 번에 붙여넣을 수 있게. 입력창은 maxHeight(120)로
               // 커지다 내부 스크롤(프레임 불변식 유지). 등록 상한(5개)은 그대로라 초과분은 경고로 안내.
               maxLength={INPUT_MAX_LEN}

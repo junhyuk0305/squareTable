@@ -145,7 +145,8 @@ export const styles = StyleSheet.create({
   inputWrap: {
     flex: 1,
     paddingHorizontal: Space.sm,
-    minHeight: 44,
+    // 41 = 업무 채팅 입력칸과 같은 높이(MentionInput: 폰트 14 + 상하 패딩 10 + 테두리 1).
+    minHeight: 41,
     maxHeight: 120,
     justifyContent: 'center',
   },
@@ -160,7 +161,9 @@ export const styles = StyleSheet.create({
     textAlignVertical: 'center',
     ...(Platform.OS === 'web' ? ({ outlineStyle: 'none' } as object) : null),
   },
-  sendBtn: { width: 44, height: 44, borderRadius: Radius.pill, backgroundColor: BrandColors.brand, alignItems: 'center', justifyContent: 'center' },
+  // ＋ 와 같은 38 — 업무 채팅(WorkChat s.plus/s.send)과 같은 치수다. 44였을 때 두 버튼 크기가
+  // 서로 달라 알약 안에서 어긋나 보였다(2026-08-19 실측 후 통일).
+  sendBtn: { width: 38, height: 38, borderRadius: Radius.pill, backgroundColor: BrandColors.brand, alignItems: 'center', justifyContent: 'center' },
   sendBtnDisabled: { backgroundColor: InkColors.line },
   sendIcon: { fontSize: 22, color: InkColors.bubbleText, fontWeight: '900', lineHeight: 24 },
 });
