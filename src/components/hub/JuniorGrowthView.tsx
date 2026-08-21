@@ -135,22 +135,51 @@ export function JuniorGrowthView() {
 
   return (
     <View style={{ gap: Space.md }}>
-      {/* ── 가르침 실적(있을 때만) — 최고 역량 = 남을 도운 기록 ── */}
-      {totals.taught > 0 && (
-        <Appear delay={40}>
-          <View style={[styles.card, styles.taughtCard]}>
-            <View style={styles.taughtHead}>
-              <Ionicons name="school-outline" size={18} color={InkColors.ink} />
-              <Text style={styles.taughtTitle}>내 답이 매장 노하우가 됐어요</Text>
-            </View>
-            <Text style={styles.taughtCount}>{totals.taught}건</Text>
-            <Text style={styles.caption}>그만둬도 매장에 남아, 다음 사람을 도와요</Text>
+      {/* ── 가르침 실적 — 최고 역량 = 남을 도운 기록.
+             ★2026-08-19: 0건에서도 **그린다**(옛 조건 `totals.taught > 0` 해제).
+             위 `empty` 분기는 "아무것도 안 한 신규 직원"만 잡는다. 일은 해봤는데(doneKinds>0) 아직
+             가르친 적 없는 직원은 그 분기에 안 걸려 화면은 뜨는데 이 카드만 사라졌고, 그래서
+             **"내 답이 매장에 남을 수 있다"는 것 자체를 알 경로가 없었다.** 이 앱을 쓸 이유를 말하는
+             자리라 0건일 때 오히려 보여줄 값어치가 크다.
+             ★0건에는 큰 숫자를 쓰지 않는다 — 28sp '0건'은 성과 없음을 크게 외치는 꼴이다.
+             문구도 과거형("됐어요")을 쓰지 않는다: 0건에 과거형은 거짓말이다. ── */}
+      <Appear delay={40}>
+        <View style={[styles.card, styles.taughtCard]}>
+          <View style={styles.taughtHead}>
+            <Ionicons name="school-outline" size={18} color={InkColors.ink} />
+            <Text style={styles.taughtTitle}>
+              {totals.taught > 0 ? '내 답이 매장 노하우가 됐어요' : '내 답이 매장 노하우가 돼요'}
+            </Text>
           </View>
-        </Appear>
-      )}
+          {totals.taught > 0 ? (
+            <>
+              <Text style={styles.taughtCount}>{totals.taught}건</Text>
+              <Text style={styles.caption}>그만둬도 매장에 남아, 다음 사람을 도와요</Text>
+            </>
+          ) : (
+            <>
+              <Text style={styles.emptyBody}>
+                내가 아는 것을 제안하면 사장님 확인을 거쳐 매장 노하우로 남아요. 그만둬도 남아서 다음 사람을 도와요.
+              </Text>
+              {growth[0] && (
+                <Pressable
+                  onPress={() => goStore(growth[0].unit_id, '/junior/suggest')}
+                  disabled={!!switching}
+                  style={({ pressed }) => [styles.emptyBtn, styles.taughtBtn, pressed && { opacity: 0.9 }]}
+                  accessibilityRole="button"
+                  accessibilityLabel="노하우 제안하러 가기"
+                >
+                  <Ionicons name="bulb-outline" size={15} color={InkColors.ink} />
+                  <Text style={styles.emptyBtnText}>노하우 제안하기</Text>
+                </Pressable>
+              )}
+            </>
+          )}
+        </View>
+      </Appear>
 
       {/* ── 내가 남긴 것 ── */}
-      <Appear delay={totals.taught > 0 ? 80 : 40}>
+      <Appear delay={80}>
         <SectionLabel title="내가 남긴 것" hint="나만 볼 수 있어요" />
         {/* 블록 I3 — 카드가 아니다. 2026-08-06: '내가 남긴 것'·'해본 업무'가 각각 stat을 품은 카드라
             이 화면이 '제목 → 카드' 반복이었다. 세 숫자를 한 줄로 올리고 아래 목록만 카드로 남긴다.
@@ -217,7 +246,7 @@ export function JuniorGrowthView() {
              **다매장 직원에게만** 그린다. 단일 매장이면 위 숫자가 곧 그 매장의 값이라 섹션 자체가 사라진다.
              숙련 주장 없음(완료 ≠ 숙련). ── */}
       {growth.length > 1 && (
-      <Appear delay={totals.taught > 0 ? 120 : 80}>
+      <Appear delay={120}>
         <SectionLabel title="해본 업무" hint="매장별" />
         <View style={styles.card}>
           {/* 행 탭 = 그 매장 업무 화면 */}
@@ -240,7 +269,7 @@ export function JuniorGrowthView() {
 
       {/* ── 훈련 통과 이력(0104) — 있을 때만. 통과 사실만 말하고 점수·등급을 만들지 않는다 ── */}
       {trainingHistory.length > 0 && (
-        <Appear delay={totals.taught > 0 ? 160 : 120}>
+        <Appear delay={160}>
           <SectionLabel title="퀴즈" hint="통과한 퀴즈" />
           <View style={styles.card}>
             {(showAllTraining ? trainingHistory : trainingHistory.slice(0, ENTRY_LIST_FIRST)).map((h) => (
@@ -300,6 +329,9 @@ const styles = StyleSheet.create({
     marginBottom: Space.xs,
   },
   emptyBtnText: { fontSize: 14, fontWeight: '800', color: InkColors.ink },
+  // 가르침 카드(yellowSoft 면) 안에 놓이는 버튼 — emptyBtn 의 기본 면도 yellowSoft 라 같은 색끼리 겹쳐
+  // 버튼이 안 보인다. 이 자리에서만 흰 면 + 테두리로 띄운다.
+  taughtBtn: { backgroundColor: InkColors.bg, borderWidth: 1, borderColor: BrandColors.yellowDeep },
   // 스켈레톤 카드 — 가짜 수치가 없으므로 opacity 로 흐리지 않는다(흐림 = 가짜 표시였다).
   ghostCard: {
     backgroundColor: '#FFFFFF',

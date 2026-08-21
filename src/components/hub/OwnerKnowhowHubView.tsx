@@ -173,19 +173,48 @@ export function OwnerKnowhowHubView() {
              ★분모 = 발행 노하우 전체 × 직원(사용자 확정). 노하우를 추가하면 비율이 내려가므로
              절대 수(노하우 n개 · 직원 m명)를 함께 보여 "분모가 늘어난 것"이 실패로 안 읽히게 한다.
              ★로드 전에는 그리지 않는다 — 0%가 잠깐 스쳐 지나가면 사실이 아닌 것을 말한 것이다. ── */}
-      {statsLoaded && understanding.cells > 0 && (
+      {/* ★2026-08-19: 0이어도 **그린다**(옛 조건 `understanding.cells > 0` 해제).
+             분모가 0이면 링이 통째로 사라졌는데, 그 상태가 정확히 "직원이 없거나 노하우가 없는" 신규
+             매장이다 — 사장이 이 기능의 **존재 자체**를 알 다른 경로가 없다. 직원을 넣어야 링이 나타나는데
+             넣을 이유를 그 링이 알려주는 순환이었다.
+             ProgressRing 은 total===0 을 이미 처리한다(ratio 0 = 빈 트랙) — 블록은 손대지 않는다.
+             ★statsLoaded 게이트는 유지: 도착 전 0/0 은 "정말 0"이 아니라 "아직 안 옴"이다. */}
+      {statsLoaded && (
         <Appear delay={10}>
           <ProgressRing
             value={understanding.known}
             total={understanding.cells}
             label="직원이 확인한 노하우"
-            sub={`노하우 ${understanding.entries}개 × 직원 ${understanding.staff}명`}
+            sub={
+              understanding.cells > 0
+                ? `노하우 ${understanding.entries}개 × 직원 ${understanding.staff}명`
+                : understanding.staff === 0
+                  ? '직원이 들어오면 우리 매장 노하우를 얼마나 아는지 여기서 보여드려요'
+                  : '노하우를 담으면 직원이 얼마나 아는지 여기서 보여드려요'
+            }
           />
-        </Appear>
-      )}
-      {statsLoaded && understanding.cells === 0 && understanding.entries > 0 && (
-        <Appear delay={10}>
-          <Text style={styles.allClearText}>직원이 들어오면 노하우를 얼마나 아는지 보여드려요</Text>
+          {/* 빈 상태엔 다음 행동 하나 — 어느 쪽이 0인지에 따라 목적지가 다르다(둘 다 0이면 직원부터:
+              노하우 담기는 바로 위 '노하우가 없어요' 카드가 이미 말하고 있다). */}
+          {understanding.cells === 0 && (
+            <Pressable
+              onPress={
+                understanding.staff === 0
+                  ? act('직원 초대', '어느 매장에 초대할지 골라 주세요', '/owner/staff')
+                  : act('노하우 담기', '어느 매장에 담을지 골라 주세요', '/owner/templates')
+              }
+              disabled={!!switching}
+              style={({ pressed }) => [styles.emptyBtn, pressed && { opacity: 0.9 }]}
+              accessibilityRole="button"
+              accessibilityLabel={understanding.staff === 0 ? '직원 초대하기' : '노하우 담기'}
+            >
+              <Ionicons
+                name={understanding.staff === 0 ? 'person-add-outline' : 'add-circle-outline'}
+                size={15}
+                color={InkColors.ink}
+              />
+              <Text style={styles.emptyBtnText}>{understanding.staff === 0 ? '직원 초대하기' : '노하우 담기'}</Text>
+            </Pressable>
+          )}
         </Appear>
       )}
 
