@@ -284,6 +284,9 @@ async function main() {
     const p = x.payload ?? {};
     if ('answer_index' in p || 'wrong_index' in p || 'target' in p || 'explain' in p || 'pairs' in p) return true;
     if ('answer_seq' in p || 'answer_path' in p) return true;   // 0158 신규 형태의 정답 키
+    if ('answer_value' in p) return true;                       // 0168 numeric_entry
+    // 0168 mark_paragraph — tap 은 남아야 하고(점선 밑줄) is_wrong 만 지워져야 한다.
+    if (Array.isArray(p.parts) && p.parts.some((x) => 'is_wrong' in x)) return true;
     return Array.isArray(p.cards) && p.cards.some((c) => 'is_mine' in c || 'answer' in c);
   });
   { const leaked = leakedIn(forAttempt);
@@ -432,6 +435,64 @@ async function main() {
     check('⑦C-13 카드를 두 번 쓰면 오답(순열 검사)', row?.correct === false, JSON.stringify(row)); }
   { const { row } = await grade(QFM, 1);
     check('⑦C-14 배열이 아닌 응답도 예외 없이 오답', row?.correct === false, JSON.stringify(row)); }
+
+  // ── ⑦D 0168 신규 형태 2종(numeric_entry · mark_paragraph) ────────────────
+  // numeric_entry 는 보기가 없어 answer_value 가 새면 문제가 통째로 무의미해지고,
+  // mark_paragraph 는 is_wrong 이 새면 어디가 틀렸는지가 그대로 화면에 나온다.
+  // 반대로 unit·tap 은 **남아야** 한다 — 지워지면 문항이 성립하지 않는다.
+  console.log('\n━━ ⑦D 신규 형태 2종(0168) ━━');
+  const QNE = `qi_ne_${s}`, QMP = `qi_mp_${s}`;
+  // parts index:      0(맞음)        1(잇는 글)   2(틀림)          3(틀림)
+  const MP_PARTS = [
+    { text: '포스 정산부터 하고', tap: true, is_wrong: false },
+    { text: ' 그다음 ', tap: false, is_wrong: false },
+    { text: '바닥부터 쓸었어요', tap: true, is_wrong: true },
+    { text: '원두는 그대로 뒀고요', tap: true, is_wrong: true },
+  ];
+  { const { error } = await owner.from('quiz_items').insert([
+      { id: QNE, unit_id: UNIT, entry_ids: [E[3]], kind: 't2', format: 'numeric_entry',
+        payload: { ask: '우유 스팀은 몇 도까지 올리나요?', answer_value: 62, unit: '도', explain: '62도예요' } },
+      { id: QMP, unit_id: UNIT, entry_ids: [E[3]], kind: 't3', format: 'mark_paragraph',
+        payload: { ask: '규정과 다른 곳을 짚어 주세요', parts: MP_PARTS, explain: '바닥은 마지막이에요' } },
+    ]);
+    check('⑦D-1 0168 형태 2건 저장', !error, error?.message ?? ''); }
+
+  { const { data, error } = await jA.rpc('quiz_items_for', { p_entry_ids: [E[3]], p_limit: 10 });
+    const mine = (data ?? []).filter((x) => x.id === QNE || x.id === QMP);
+    check('⑦D-2 0168 형태가 응시 조회에 나온다(화이트리스트 18종)', !error && mine.length === 2,
+      `n=${mine.length} ${error?.message ?? ''}`);
+    const leaked = leakedIn(mine);
+    check('⑦D-3 ★0168 응시 payload 에 정답 키 0개', leaked.length === 0,
+      leaked.map((x) => `${x.id}:${JSON.stringify(x.payload)}`).join(' | '));
+    const byId = Object.fromEntries(mine.map((x) => [x.id, x.payload ?? {}]));
+    check('⑦D-4 numeric_entry 는 unit 이 남는다(정답 아님 · 없으면 문제가 성립 안 함)',
+      byId[QNE]?.unit === '도', JSON.stringify(byId[QNE]));
+    const parts = byId[QMP]?.parts ?? [];
+    check('⑦D-5 mark_paragraph 는 조각 수·순서가 그대로다(섞으면 문장이 아니다)',
+      parts.length === 4 && parts[0]?.text === MP_PARTS[0].text && parts[3]?.text === MP_PARTS[3].text,
+      JSON.stringify(parts));
+    check('⑦D-6 ★mark_paragraph 는 tap 이 남는다(점선 밑줄을 그릴 근거)',
+      parts.filter((x) => x?.tap === true).length === 3 && parts[1]?.tap === false, JSON.stringify(parts)); }
+
+  { const { row } = await grade(QNE, 62);
+    check('⑦D-7 numeric_entry 정답', row?.correct === true, JSON.stringify(row)); }
+  { const { row } = await grade(QNE, 60);
+    check('⑦D-8 numeric_entry 오답이면 정답을 알려준다', row?.correct === false && row?.answer === 62, JSON.stringify(row)); }
+  { const { row } = await grade(QNE, '62');
+    check('⑦D-9 문자열 응답도 예외 없이 오답(캐스팅으로 죽지 않는다)', row?.correct === false, JSON.stringify(row)); }
+
+  { const { row } = await grade(QMP, [2, 3]);
+    check('⑦D-10 mark_paragraph 정답(틀린 곳 전부 짚기)', row?.correct === true, JSON.stringify(row)); }
+  { const { row } = await grade(QMP, [3, 2]);
+    check('⑦D-11 ★집합이라 순서가 달라도 정답(mine_tap 과 같은 기준)', row?.correct === true, JSON.stringify(row)); }
+  { const { row } = await grade(QMP, [2]);
+    check('⑦D-12 하나만 짚으면 오답(부분점수 없음)', row?.correct === false, JSON.stringify(row)); }
+  { const { row } = await grade(QMP, [0, 2, 3]);
+    check('⑦D-13 맞게 적힌 문구까지 짚으면 오답', row?.correct === false, JSON.stringify(row)); }
+  { const { row } = await grade(QMP, [0, 1, 2, 3, 4, 5]);
+    check('⑦D-14 조각 수보다 긴 응답은 길이에서 걸린다', row?.correct === false, JSON.stringify(row)); }
+  { const { row } = await grade(QMP, 2);
+    check('⑦D-15 배열이 아닌 응답도 예외 없이 오답', row?.correct === false, JSON.stringify(row)); }
 
   // ── ⑧ 문항 낡음 스냅샷(0114) ─────────────────────────────────────────────
   console.log('\n━━ ⑧ 문항 낡음(0114) ━━');

@@ -43,9 +43,10 @@ export type { FormatSpec } from './spec';
  * formatsForKind() 가 이 순서를 그대로 돌려주므로 생성기가 "게임이 안 되면 일반형으로"를
  * 별도 표 없이 판단할 수 있다(07-29 §03 "왜 두 갈래인가" — 일반형은 안전판).
  *
- * ★ t4 는 게임형 둘뿐이다(일반형 안전판이 없다). 폐기된 pair_pick(t4 일반형)을 되살리지 않았기
- *   때문인데, 지금은 detectKinds 가 t4 를 뽑지 않아 자동 출제 경로에 t4 가 아예 들어오지 않는다.
- *   t4 판정을 붙이는 쪽에서 "게임이 안 되면 갈 곳이 없다"를 함께 다뤄야 한다.
+ * ★ t4 는 게임형 둘뿐이다(일반형 안전판이 없다) — 폐기된 pair_pick(t4 일반형)을 되살리지 않았다.
+ *   그래서 t4 는 **재료가 맞을 때만** 출제된다: detectKinds(노하우 한 건)가 아니라 generate.ts 가
+ *   pool 단위로 pairing.findPairSet 을 돌려 짝이 서 있을 때만 kinds 에 t4 를 얹는다. 못 만들면
+ *   t4 자체가 후보에서 빠지므로 "게임이 안 되면 갈 곳이 없다"가 생기지 않는다.
  */
 export const FORMATS: Record<QuizFormat, FormatSpec> = {
   mc4,                      // t0 안전망
