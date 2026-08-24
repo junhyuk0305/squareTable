@@ -9,7 +9,7 @@ import { pickImagesNative } from '@/lib/media/pickImage';
 import { HAS_SUPABASE } from '@/lib/supabase';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useStaffStore } from '@/lib/store/useStaffStore';
-import { useWorkStore, useDayparts, useDaypartLabels, daypartRoutineTemplates, isRoutineTaskId, ROUTINE_ID_PREFIX, findDuplicateTask, occursOn, knowhowIdsForTask, quizCountForTask, isCaptureEligible, courseEntriesOf, trainingCourseViews, staffWhoUnderstandTask, understandsTask, taskVisibleTo, isRegularDue, isRequestDue, REGULAR_DUE_DAYS_DEFAULT, type FeedItem, type NewTask, type TaskTemplate } from '@/lib/store/useWorkStore';
+import { useWorkStore, useDayparts, useDaypartLabels, daypartRoutineTemplates, isRoutineTaskId, ROUTINE_ID_PREFIX, findDuplicateTask, occursOn, knowhowIdsForTask, quizCountForTask, isCaptureEligible, courseEntriesOf, trainingCourseViews, staffWhoUnderstandTask, understandsTask, taskVisibleTo, isRegularDue, isRequestDue, lastQuizAttemptOf, REGULAR_DUE_DAYS_DEFAULT, type FeedItem, type NewTask, type TaskTemplate } from '@/lib/store/useWorkStore';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { useSuggestionStore } from '@/lib/store/useSuggestionStore';
 import { useSyncStore } from '@/lib/store/useSyncStore';
@@ -43,6 +43,13 @@ import { todayStr, tsMs } from '@/lib/utils/attendance';
 import { asMemberRole, canManage } from '@/lib/utils/roles';
 
 type ViewKey = 'chat' | 'drawer' | 'notice' | 'todo' | 'settings';
+
+/** 직원 퀴즈 카드 한 장에 필요한 것 전부 — 코스·항목·지난번 결과(0112). */
+type TrainingCardView = {
+  course: TrainingCardCourse;
+  items: TrainingCardItem[];
+  lastResult: { total: number; correct: number } | null;
+};
 
 // 채팅에 한 번에 보낼 수 있는 사진 최대 장수.
 const MAX_CHAT_PHOTOS = 10;
@@ -115,6 +122,7 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
   const courses = useWorkStore((s) => s.courses);
   const trainingRequests = useWorkStore((s) => s.trainingRequests);
   const quizCounts = useWorkStore((s) => s.quizCounts);
+  const quizAttempts = useWorkStore((s) => s.quizAttempts);
   // 발송 원장(0139) — 직원은 RLS 로 본인 것만 내려온다. 카드 노출 판정에 쓴다.
   const assignments = useWorkStore((s) => s.assignments);
   // 노하우 첨부 검색·칩 제목 해석용 — 업무 화면에서도 노하우를 로드해 둔다(coalesce 로 중복 방지).
@@ -366,7 +374,7 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
   // 개수 하한·재확인 주기는 코스 행(training_courses)이 SSOT(사장 화면과 같은 값).
   // 상태는 항목 단위(통과/다음/대기/다시 확인/요청).
   const trainingCards = useMemo(() => {
-    if (isOwner) return [] as { course: TrainingCardCourse; items: TrainingCardItem[] }[];
+    if (isOwner) return [] as TrainingCardView[];
     const myRow = (entryId: string) => understanding.find((u) => u.entryId === entryId && u.staffId === userId);
     // 낼 문항이 없는 노하우는 카드에 띄워도 시작할 수가 없다(0109 · 문항 0건 = 의도된 미노출).
     const hasEntryQuiz = (entryId: string) => (quizCounts[entryId] ?? 0) > 0;
@@ -435,10 +443,16 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
     // 카드가 여러 장 쌓이지 않게 — 1회성 코스는 앞선 하나만(먼저 배울 것이 먼저).
     // 주기 카드는 1회성이 진행 중이면 숨기되, 명시적 요청(asked)은 사람이 기다리는 것이라 예외.
     const firstOnce = cards.find((c) => c.course.dueDays === null);
-    return cards.filter((c) =>
-      c.course.dueDays === null ? c === firstOnce : !firstOnce || c.items.some((it) => it.state === 'asked'),
-    );
-  }, [isOwner, courses, courseEntries, understanding, entryById, quizCounts, userId, trainingNow, trainingRequests, assignments]);
+    return cards
+      .filter((c) =>
+        c.course.dueDays === null ? c === firstOnce : !firstOnce || c.items.some((it) => it.state === 'asked'),
+      )
+      // 지난번 결과(0112) — 집계는 스토어 셀렉터가 한다(판정을 화면에 복제하지 않는다).
+      .map((c) => {
+        const last = lastQuizAttemptOf(quizAttempts, c.items.map((it) => it.id), userId);
+        return { ...c, lastResult: last ? { total: last.total, correct: last.correct } : null };
+      });
+  }, [isOwner, courses, courseEntries, understanding, entryById, quizCounts, quizAttempts, userId, trainingNow, trainingRequests, assignments]);
 
   // 카드의 퀴즈 시작 — 항목이 노하우 하나라 그 노하우만 소스로 넣는다(푼 만큼만 통과 처리).
   // ★열었다는 신호를 여기서 찍는다(0140). 이게 빠지면 사장이 보낸 퀴즈가 "무시됐다"로 세어져
@@ -748,6 +762,7 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
             <TrainingCard
               course={c.course}
               items={c.items}
+              lastResult={c.lastResult}
               onOpenKnowhow={openKnowhow}
               onStartCheck={startTrainingCheck}
             />
@@ -971,7 +986,10 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
           title={selfCheck.title}
           sops={selfCheck.sops}
           onPass={(entryIds) => void markUnderstood(entryIds, userId, userName)}
-          onClose={() => setSelfCheck(null)}
+          // ★닫을 때 다시 읽는다 — 응시 기록(0112)은 realtime publication 멤버가 아니라서
+          //   틀리고 닫으면 카드의 "지난번 …" 한 줄이 방금 푼 것 이전 값을 계속 말한다.
+          //   통과했을 때는 knowhow_understanding 구독이 재조회를 걸지만 오답에는 그 신호가 없다.
+          onClose={() => { setSelfCheck(null); void useWorkStore.getState().hydrate(); }}
           onAsk={askAboutMissed}
         />
       )}

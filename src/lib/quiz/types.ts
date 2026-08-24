@@ -1,14 +1,20 @@
 // 훈련 퀴즈 v2 — 공용 타입 (SSOT)
 //
 // 설계 근거: 산출물/퀴즈시스템_설계_2026-07-29.html
-//   축 = "정답이 어떤 모양인가" — 나열(t1) / 값(t2) / 배제(t3) / 갈래(t5) / 이름(t6), t0=안전망
-//   ※ 대응(t4)은 2026-08-08 멘트(action.scripts) 삭제로 재료가 사라져 함께 폐기했다.
+//   축 = "정답이 어떤 모양인가" — 나열(t1) / 값(t2) / 배제(t3) / 대응(t4) / 갈래(t5) / 이름(t6), t0=안전망
+//   ※ 대응(t4)은 2026-08-08 멘트(action.scripts) 삭제로 재료가 사라져 폐기했다가,
+//     2026-08-24 에 되살렸다 — 재료가 멘트가 아니라 **노하우가 직접 적는 짝**(물건↔자리, 용어↔뜻)이면
+//     성립하기 때문이다. 그때 폐기한 pair_pick·match_line 은 되살리지 않는다(0125 그대로 닫혀 있다).
 //
 // 이 파일은 순수 타입만 둔다. db.ts / 레지스트리 / 화면이 전부 여기를 import 하므로
 // 런타임 의존(supabase, store 등)을 절대 넣지 않는다(순환 참조 방지).
 
-/** 지식 유형 6종. 노하우 본문 구조로 코드가 판정한다(AI 아님). */
-export type QuizKind = 't0' | 't1' | 't2' | 't3' | 't5' | 't6';
+/**
+ * 지식 유형 7종. 노하우 본문 구조로 코드가 판정한다(AI 아님).
+ * ★ t4 는 아직 detectKinds(src/lib/quiz/detect.ts)가 뽑지 않는다 — 형태·채점은 다 붙어 있지만
+ *   자동 출제·사장 형태 고르기에 t4 가 뜨려면 그쪽 판정이 먼저 생겨야 한다.
+ */
+export type QuizKind = 't0' | 't1' | 't2' | 't3' | 't4' | 't5' | 't6';
 
 /**
  * 출제 형태. DB는 자유 text로 받는다(형태 추가에 마이그레이션이 필요 없게).
@@ -24,6 +30,8 @@ export type QuizFormat =
   | 'scale_pick'   // t2 더 큰 쪽 고르기(혼동쌍 둘 중 하나)
   | 'trap_pick'    // t3 함정 찾기
   | 'mine_tap'     // t3 지뢰 밟기(금지 행동만 탭)
+  | 'flip_match'   // t4 뒤집어 짝 찾기(★이 형태만 짝 정보가 응시 화면에 내려간다 — formats/flipMatch.ts)
+  | 'link_match'   // t4 줄 잇기(왼쪽 탭 → 오른쪽 탭, 선이 그어진다)
   | 'case_pick'    // t5 상황 고르기
   | 'quick_judge'  // t5 빠른 판별(둘 중 하나, 연속)
   | 'branch_path'  // t5 갈래 따라가기(조건 분기 트리)
@@ -35,9 +43,11 @@ export type QuizFormat =
  *   number                  — 선택지 하나 고르는 형태 / fill_count의 누른 횟수
  *   number[]                — mine_tap(탭한 index들) / quick_judge(카드별 선택)
  *                             / order_build(탭한 순서대로의 항목 index) / branch_path(예=0·아니요=1 경로)
- *                             ★ 앞의 둘은 집합이고 뒤의 둘은 **순서가 곧 답**이다 — 정렬하면 안 된다.
+ *                             / flip_match(짝으로 고정한 순서대로의 카드 index — a1,b1,a2,b2,…)
+ *                             ★ mine_tap 만 집합이고 나머지는 **순서가 곧 답**이다 — 정렬하면 안 된다.
+ *   Record<string, number>  — link_match(왼쪽 원본 index → 오른쪽이 놓인 섞인 자리)
  */
-export type QuizResponse = number | number[];
+export type QuizResponse = number | number[] | Record<string, number>;
 
 /**
  * 저장되는 문항 하나.

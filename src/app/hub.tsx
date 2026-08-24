@@ -59,7 +59,9 @@ export default function HubScreen() {
             <Text style={styles.subtitle}>{dateLabel}</Text>
           </View>
         </Appear>
-        {!hasStore ? <NoStoreView what="오늘 할 일과 근무 기록" /> : isOwner ? <OwnerStatusView /> : <JuniorTodayView />}
+        {/* ★게스트 퀴즈 이력은 랜딩(이 탭)에서만 병기한다 — 성장 탭에도 켜면 같은 카드가 두 탭에
+            겹쳐 보인다. 여기가 로그인 직후 실제 착지 화면이라 한 번만 보여주면 그 자리가 맞다. */}
+        {!hasStore ? <NoStoreView what="오늘 할 일과 근무 기록" withQuizHistory /> : isOwner ? <OwnerStatusView /> : <JuniorTodayView />}
       </ScrollView>
       <HubTabBar role={isOwner ? 'owner' : 'junior'} />
     </SafeAreaView>

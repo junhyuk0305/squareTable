@@ -1,13 +1,16 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { View, Text, Pressable, ScrollView, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Stack, useRouter } from 'expo-router';
+import { Stack, useFocusEffect, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 import { useQuizBoard, type QuizListRow } from '@/lib/quiz/useQuizBoard';
+import { fetchGuestQuizSubmissions, type GuestSubmissionRow } from '@/lib/db';
+import { maskTail4, scoreText, takenDayLabel } from '@/lib/quiz/guestResult';
 import { Appear } from '@/components/Appear';
 import { EmptyState } from '@/components/EmptyState';
 import { BottomSheet } from '@/components/BottomSheet';
+import { SectionLabel } from '@/components/SectionLabel';
 import { AlertRow } from '@/components/blocks/AlertRow';
 import { ProgressPill, type ProgressTone } from '@/components/blocks/ProgressPill';
 import { SheetHead } from '@/components/owner/quiz/kit';
@@ -29,10 +32,28 @@ import { Space, HEADER_EDGE_GUTTER } from '@/lib/theme/layout';
  */
 export default function OwnerTrainingScreen() {
   const router = useRouter();
-  const { entries, coursesLoaded, buildQuizzes, buildRows } = useQuizBoard();
+  const { entries, entryById, coursesLoaded, buildQuizzes, buildRows } = useQuizBoard();
 
   const quizzes = useMemo(() => buildQuizzes(), [buildQuizzes]);
   const [missOpen, setMissOpen] = useState(false);
+
+  /**
+   * 링크(/q/[token])로 푼 사람들 — 0160·0163. 아직 정리하지 않은 것만 내려온다.
+   * ★화면에 들어올 때마다 다시 읽는다 — 상세에서 "정리하기"를 누르고 돌아오면 그 자리에서 빠져야 한다.
+   * ★직원 응시와 섞지 않는다. 여기는 아직 이 매장 사람이 아닌 사람들의 결과다.
+   */
+  const [guests, setGuests] = useState<GuestSubmissionRow[]>([]);
+  useFocusEffect(
+    useCallback(() => {
+      let alive = true;
+      void fetchGuestQuizSubmissions().then((rows) => {
+        if (alive) setGuests(rows);
+      });
+      return () => {
+        alive = false;
+      };
+    }, []),
+  );
 
   /** 오답이 잦은 노하우 — 직원이 못 외운 게 아니라 **노하우 글이 헷갈린다**는 신호다(0103). */
   const missRows = useMemo(() => buildRows(null).filter((r) => r.missPct > 0), [buildRows]);
@@ -125,6 +146,28 @@ export default function OwnerTrainingScreen() {
               </View>
             </Appear>
             <Text style={st.footNote}>누르면 결과와 문항을 봐요</Text>
+
+            {/* 링크 응시 결과 — 0건이면 구획째로 안 그린다(빈 카드 한 장도 사장 화면에서는 요소 하나다).
+                ⛔ "이 사람 준비됐어요" 같은 판단 문구를 넣지 않는다. 판단은 사장이 한다.
+                ⛔ 합류 초대·채용 전환 액션 없음 — 명시적으로 스코프 밖이다. */}
+            {guests.length > 0 && (
+              <Appear delay={60}>
+                <View style={st.guestWrap}>
+                  <SectionLabel title="링크 응시 결과" hint={`${guests.length}건`} />
+                  <View style={st.listCard}>
+                    {guests.map((g, i) => (
+                      <GuestRowView
+                        key={g.submissionId}
+                        row={g}
+                        divider={i > 0}
+                        titleOf={(id) => entryById.get(id)?.title ?? ''}
+                        onPress={() => router.push(`/owner/quiz/guest/${g.submissionId}` as never)}
+                      />
+                    ))}
+                  </View>
+                </View>
+              </Appear>
+            )}
           </>
         )}
       </ScrollView>
@@ -198,6 +241,62 @@ function QuizRowView({ row, divider, onPress }: { row: QuizListRow; divider: boo
   );
 }
 
+/**
+ * 링크 응시 한 줄 = 응시 1회(제출 1건). 여러 노하우에 걸친 제출도 카드 하나다(submission_id 로 묶임).
+ *
+ * ★전화번호는 뒤 4자리만 보인다 — 사장이 같은 사람인지 알아보는 데 그거면 된다.
+ * ★"총 N번"은 같은 번호로 이 매장에서 푼 횟수다. 사람을 줄 세우는 값이 아니라
+ *   "이 결과가 처음이 아니다"를 알리는 꼬리표라 작게 붙인다.
+ */
+function GuestRowView({
+  row,
+  divider,
+  titleOf,
+  onPress,
+}: {
+  row: GuestSubmissionRow;
+  divider: boolean;
+  titleOf: (entryId: string) => string;
+  onPress: () => void;
+}) {
+  // 틀린 문항이 있는 노하우 = 다시 알려줘야 할 곳. 제목이 없는(지워진) 노하우는 말하지 않는다.
+  const weak = row.entries
+    .filter((e) => e.correct < e.total)
+    .map((e) => titleOf(e.entryId))
+    .filter(Boolean);
+
+  const rate = row.total > 0 ? row.correct / row.total : 0;
+  const tone: ProgressTone = row.total === 0 ? 'neutral' : rate >= 1 ? 'done' : rate >= 0.6 ? 'progress' : 'behind';
+
+  const meta = [
+    takenDayLabel(row.takenAt),
+    row.attemptCount > 1 ? `총 ${row.attemptCount}번` : '',
+    row.reviewedAt ? '확인함' : '',
+  ]
+    .filter(Boolean)
+    .join(' · ');
+
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [st.row, divider && st.rowDivider, pressed && { opacity: 0.6 }]}
+      accessibilityRole="button"
+      accessibilityLabel={`${row.guestName} 응시 결과 열기`}
+    >
+      <View style={st.rowText}>
+        <Text style={st.rowTitle} numberOfLines={1}>
+          {row.guestName} · {maskTail4(row.guestPhone)}
+        </Text>
+        <Text style={st.rowSub} numberOfLines={1}>{scoreText(row.correct, row.total)} · {meta}</Text>
+        {weak.length > 0 ? (
+          <Text style={st.rowSub} numberOfLines={1}>틀린 노하우 · {weak.join(', ')}</Text>
+        ) : null}
+      </View>
+      <ProgressPill text={`${row.correct}/${row.total}`} tone={tone} />
+    </Pressable>
+  );
+}
+
 const st = StyleSheet.create({
   safe: { flex: 1, backgroundColor: InkColors.paper },
   scroll: { padding: Space.gutter, paddingBottom: Space.xl * 2, gap: Space.md, flexGrow: 1 },
@@ -237,6 +336,9 @@ const st = StyleSheet.create({
   rowText: { flex: 1, minWidth: 0, gap: 2 },
   rowTitle: { fontSize: 15, lineHeight: 21, fontWeight: '800', color: InkColors.ink },
   rowSub: { fontSize: 13, lineHeight: 18, fontWeight: '600', color: InkColors.ink3 },
+
+  // 섹션 제목은 카드 밖 — 라벨과 카드를 한 덩어리로 묶는 wrap(제목만 따로 떠 보이지 않게).
+  guestWrap: { gap: Space.sm },
 
   footNote: { fontSize: 13, fontWeight: '600', color: InkColors.ink3, textAlign: 'center' },
   missIntro: { fontSize: 15, lineHeight: 22, color: InkColors.ink2, marginBottom: Space.md },

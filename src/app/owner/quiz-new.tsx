@@ -16,7 +16,12 @@ import {
   insertQuizItem,
   deleteQuizItem,
   insertQuizAssignments,
+  fetchStoreParts,
+  createStorePart,
+  setCoursePart,
+  type StorePart,
 } from '@/lib/db';
+import { findSimilarSection } from '@/lib/utils/knowhowSimilarity';
 import { generateQuizItems, QuizQuotaError } from '@/lib/quiz/generate';
 import { FORMATS } from '@/lib/quiz/formats';
 import { detectKinds } from '@/lib/quiz/detect';
@@ -96,6 +101,14 @@ export default function QuizNewScreen() {
   // 1단계
   const [q, setQ] = useState('');
   const [picked, setPicked] = useState<string[]>([]);
+  // 1단계 파트(0164) — 누구를 위한 퀴즈인가. null = 공통(고르지 않음).
+  const [parts, setParts] = useState<StorePart[]>([]);
+  const [partId, setPartId] = useState<string | null>(null);
+  const [partAdding, setPartAdding] = useState(false);
+  const [partName, setPartName] = useState('');
+  const [dupPart, setDupPart] = useState<string | null>(null);
+  const [partBusy, setPartBusy] = useState(false);
+  const [partFailed, setPartFailed] = useState(false);
 
   // 2·3단계
   const [courseId, setCourseId] = useState<string | null>(null);
@@ -129,7 +142,44 @@ export default function QuizNewScreen() {
     return pool.filter((e) => e.title.toLowerCase().includes(k));
   }, [pool, q]);
 
+  /**
+   * ★파트는 **거르는 축이 아니라 순서만 올리는 추천 축**이다(0164).
+   * 고른 파트의 노하우가 위로 올라올 뿐, 나머지 노하우는 그대로 다 보인다 —
+   * 파트는 지연 생성이라 초기엔 대부분 노하우에 파트가 없고, 그때 교집합으로 거르면
+   * 목록이 통째로 비어 아무 일도 안 하는 기능이 된다. 교집합(AND) 필터를 여기 만들지 말 것.
+   * (sort 는 ES2019부터 안정 정렬이라 같은 무리 안의 기존 순서는 그대로다.)
+   */
+  const ranked = useMemo(() => {
+    if (!partId) return filtered;
+    return [...filtered].sort((a, b) => Number(b.part_id === partId) - Number(a.part_id === partId));
+  }, [filtered, partId]);
+
   const toggle = (id: string) => setPicked((v) => (v.includes(id) ? v.filter((x) => x !== id) : [...v, id]));
+
+  // 파트 후보 = 이 매장이 실제로 쓴 값. 표준 세트를 우리가 정해 주지 않는다(0164 ②).
+  useEffect(() => {
+    let alive = true;
+    void fetchStoreParts().then((rows) => { if (alive) setParts(rows); });
+    return () => { alive = false; };
+  }, [unitId]);
+
+  /** 파트 직접 추가 — 카테고리(PublishConfirmSheet)와 같은 되묻기 패턴(knowhowSimilarity SSOT). */
+  const addPart = async () => {
+    const nm = partName.trim();
+    if (!nm || partBusy) return;
+    const twin = findSimilarSection(nm, parts.map((p) => p.name));
+    if (twin && twin !== dupPart) { setDupPart(twin); return; } // 1회 되묻고, 재확인이면 통과
+    setPartBusy(true);
+    const made = await createStorePart(nm); // 서버 unique 충돌이면 기존 파트가 그대로 돌아온다
+    setPartBusy(false);
+    if (!made) { setPartFailed(true); return; }
+    setParts((v) => (v.some((p) => p.id === made.id) ? v : [...v, made]));
+    setPartId(made.id);
+    setPartAdding(false);
+    setPartName('');
+    setDupPart(null);
+    setPartFailed(false);
+  };
 
   // ── 1 → 2 : 퀴즈 만들고 문항 생성 ────────────────────────────────────────
   const start = async () => {
@@ -165,6 +215,9 @@ export default function QuizNewScreen() {
       setBusy(false);
       return;
     }
+    // 파트는 코스 행의 컬럼(0164)이지만 코스 행 타입(@/lib/quiz/types)에는 없는 부가 축이라 따로 쓴다.
+    // 실패해도 퀴즈 만들기를 막지 않는다 — 파트는 추천 순서일 뿐이고, db 계층이 실패를 관측에 남긴다.
+    if (partId) await setCoursePart(id, partId);
     setCourseId(id);
     setCourseKey(key);
     setName(draftName);
@@ -191,6 +244,11 @@ export default function QuizNewScreen() {
   const runGenerate = useCallback(
     async (cid: string, rows: Made[]) => {
       const out: Made[] = [...rows];
+      // 혼동쌍(더 큰 쪽 고르기)의 짝을 찾을 후보 — **이 코스에 담은 노하우**로 한정한다.
+      // 매장 전체를 넘기면 코스에 없는 노하우가 문항 근거로 붙는다(generate.ts opts.pool 주석).
+      const pool = out
+        .map((r) => entryById.get(r.entryId))
+        .filter((e): e is PlaybookEntry => !!e);
       for (let i = 0; i < out.length; i++) {
         const entry = entryById.get(out[i].entryId);
         if (!entry) {
@@ -201,7 +259,7 @@ export default function QuizNewScreen() {
         await addCourseEntry(cid, entry.id);
         let items: QuizItem[] = [];
         try {
-          items = await generateQuizItems([entry], undefined, { unitId, createdBy: userId, max: 1 });
+          items = await generateQuizItems([entry], undefined, { unitId, createdBy: userId, max: 1, pool });
         } catch (e) {
           // "낼 게 부족해서 안 낸 것"(빈 배열)과 한도·장애를 섞지 않는다.
           if (e instanceof QuizQuotaError) setQuota(true);
@@ -315,6 +373,52 @@ export default function QuizNewScreen() {
           ) : (
             <>
               <Text style={st.lead}>고른 노하우에서 문제를 만들어요</Text>
+
+              {/* 파트(0164) — 고르면 그 파트 노하우가 아래 목록에서 위로 올라온다. 거르지 않는다. */}
+              <Text style={st.label}>이 퀴즈는 누구를 위한 건가요?</Text>
+              <View style={st.chips}>
+                <Chip label="공통" on={!partId} onPress={() => setPartId(null)} />
+                {parts.map((p) => (
+                  <Chip key={p.id} label={p.name} on={partId === p.id} onPress={() => setPartId(p.id)} />
+                ))}
+                {!partAdding && <Chip label="+ 직접 추가" on={false} onPress={() => setPartAdding(true)} />}
+              </View>
+              {partAdding && (
+                <View style={st.addBox}>
+                  <TextInput
+                    value={partName}
+                    onChangeText={(t) => { setPartName(t); setDupPart(null); setPartFailed(false); }}
+                    placeholder="홀"
+                    placeholderTextColor={InkColors.ink3}
+                    style={st.input}
+                    onSubmitEditing={() => void addPart()}
+                    returnKeyType="done"
+                    accessibilityLabel="새 파트 이름"
+                  />
+                  {dupPart ? (
+                    <Text style={st.addWarn}>
+                      이미 «{dupPart}» 파트가 있어요. 같은 뜻이면 그쪽에 넣어 주세요 — 한 번 더 누르면 새로 만들어요.
+                    </Text>
+                  ) : null}
+                  {partFailed ? (
+                    <Text style={st.addWarn}>파트를 만들지 못했어요. 연결을 확인하고 다시 시도해 주세요.</Text>
+                  ) : null}
+                  <View style={st.chips}>
+                    {dupPart ? (
+                      <SmallAction
+                        label={`«${dupPart}»로 하기`}
+                        onPress={() => {
+                          const hit = parts.find((p) => p.name === dupPart);
+                          if (hit) setPartId(hit.id);
+                          setPartAdding(false); setPartName(''); setDupPart(null); setPartFailed(false);
+                        }}
+                      />
+                    ) : null}
+                    <SmallAction label={dupPart ? '그래도 만들기' : '추가'} onPress={() => void addPart()} />
+                  </View>
+                </View>
+              )}
+
               <View style={st.search}>
                 <Ionicons name="search" size={16} color={InkColors.ink3} />
                 <TextInput
@@ -326,7 +430,7 @@ export default function QuizNewScreen() {
                 />
               </View>
               <View style={st.listCard}>
-                {filtered.map((e, i) => (
+                {ranked.map((e, i) => (
                   <Pressable
                     key={e.id}
                     onPress={() => toggle(e.id)}
@@ -344,7 +448,7 @@ export default function QuizNewScreen() {
                     </View>
                   </Pressable>
                 ))}
-                {filtered.length === 0 ? <Text style={st.emptyLine}>찾는 노하우가 없어요</Text> : null}
+                {ranked.length === 0 ? <Text style={st.emptyLine}>찾는 노하우가 없어요</Text> : null}
               </View>
             </>
           )
@@ -751,6 +855,9 @@ const st = StyleSheet.create({
   thinBody: { fontSize: 15, fontWeight: '600', color: InkColors.ink2, lineHeight: 22 },
   thinRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
   thinName: { flex: 1, minWidth: 0, fontSize: 15, fontWeight: '700', color: InkColors.ink },
+
+  addBox: { gap: Space.sm },
+  addWarn: { fontSize: 13, fontWeight: '600', color: BrandColors.warnText, lineHeight: 18 },
 
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.xs },
   chip: {

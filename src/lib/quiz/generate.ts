@@ -15,6 +15,7 @@ import { reportError, track } from '@/lib/analytics/track';
 import { supabase } from '@/lib/supabase';
 import { genId } from '@/lib/utils/id';
 import type { PlaybookEntry } from '@/types';
+import { findConfusionPair, type ConfusionPair } from './confusion';
 import { detectKinds, storeTerms } from './detect';
 import { FORMATS, formatsForKind } from './formats';
 import type { QuizFormat, QuizItem, QuizKind } from './types';
@@ -73,7 +74,15 @@ async function callQuizItemEdge(payload: QuizItemGenInput): Promise<QuizItemGenO
 }
 
 // ── 형태 선택 ──────────────────────────────────────────────
-export type QuizItemPlan = { kind: QuizKind; format: QuizFormat };
+export type QuizItemPlan = {
+  kind: QuizKind;
+  format: QuizFormat;
+  /**
+   * 이 형태에만 실을 노하우. 생략하면 호출에 실린 노하우 전부다.
+   * 지금은 혼동쌍(scale_pick)만 쓴다 — 짝 둘만 보여 줘야 모델이 그 둘을 비교한다.
+   */
+  entries?: PlaybookEntry[];
+};
 
 /** 여러 노하우의 유형을 합친다. 각 노하우에서 앞에 나온(=신뢰도 높은) 유형이 앞으로 온다. */
 function unionKinds(entries: PlaybookEntry[]): QuizKind[] {
@@ -118,16 +127,31 @@ function rotationSeed(entries: PlaybookEntry[]): number {
  * ★ 레지스트리 나열 순서 규약에 기댄다: 유형마다 specs[0] 이 일반형(안전판), 그 뒤가 전부 게임형.
  *   formats/index.ts 에 새 형태를 끼워 넣을 때 이 순서를 깨면 여기가 조용히 틀린다.
  */
-export function pickFormats(entries: PlaybookEntry[], max = 3): QuizItemPlan[] {
+export function pickFormats(
+  entries: PlaybookEntry[],
+  max = 3,
+  pool: PlaybookEntry[] = entries,
+): QuizItemPlan[] {
   const out: QuizItemPlan[] = [];
   const seed = rotationSeed(entries);
+  // 혼동쌍이 없으면 scale_pick 은 후보가 아니다(아래 games 필터). null 이 정상값이다.
+  const pair: ConfusionPair | null = findConfusionPair(entries, pool);
   for (const kind of unionKinds(entries)) {
     const specs = formatsForKind(kind);
     if (specs.length === 0) continue;
-    // 묶음형은 노하우가 모자라면 한 판이 안 된다 — 후보에서 먼저 뺀다.
-    const games = specs.slice(1).filter((f) => !f.bundled || entries.length >= BUNDLE_MIN_ENTRIES);
+    const games = specs.slice(1).filter((f) => {
+      // ★ scale_pick 은 "비슷한데 값이 다른" 노하우 두 건이 있어야 성립한다. 쌍이 없는데 뽑으면
+      //   모델이 낼 게 없어 빈 배열을 돌려주고, 사장 화면에는 이유 없이 "만들지 못했어요"만 남는다.
+      if (f.key === 'scale_pick') return pair !== null;
+      // 묶음형은 노하우가 모자라면 한 판이 안 된다 — 후보에서 먼저 뺀다.
+      return !f.bundled || entries.length >= BUNDLE_MIN_ENTRIES;
+    });
     const chosen = games.length > 0 ? games[seed % games.length] : specs[0];
-    out.push({ kind, format: chosen.key });
+    out.push({
+      kind,
+      format: chosen.key,
+      ...(chosen.key === 'scale_pick' && pair ? { entries: pair } : {}),
+    });
     if (out.length >= max) break;
   }
   return out;
@@ -141,6 +165,12 @@ export type GenerateQuizItemsOptions = {
   createdBy?: string;
   /** 형태를 자동 선택할 때 만들 형태 수 상한. 형태 하나당 엣지 1회 = AI 캡 1회 차감. 기본 3. */
   max?: number;
+  /**
+   * 혼동쌍(scale_pick)의 짝을 찾을 후보 풀. 생략하면 entries 안에서만 찾는다.
+   * ★ **이번 코스에 함께 담긴 노하우**를 넘겨라. 코스 밖 노하우를 짝으로 쓰면 문항의 근거
+   *   노하우가 코스에 없는 상태가 되어 오답 귀속(0103)·복습 연결이 어긋난다.
+   */
+  pool?: PlaybookEntry[];
 };
 
 /**
@@ -169,18 +199,20 @@ export async function generateQuizItems(
   // (transcribe·doc_extract 와 같은 이유로 mock 폴백 금지).
   if (USE_MOCK) throw new Error('quiz_item: mock mode');
 
-  const plans = formats?.length
+  const plans: QuizItemPlan[] = formats?.length
     ? formats.filter((f) => FORMATS[f]).map((f) => ({ kind: FORMATS[f].kind, format: f }))
-    : pickFormats(list, opts.max ?? 3);
+    : pickFormats(list, opts.max ?? 3, opts.pool?.length ? opts.pool : list);
   if (plans.length === 0) return [];
 
-  const sops = list.map((e) => {
-    const s = toSopSlice(e);
-    return { id: s.id, title: s.title, situation: s.situation, steps: s.steps, donts: s.donts };
-  });
+  const sopsOf = (es: PlaybookEntry[]) =>
+    es.map((e) => {
+      const s = toSopSlice(e);
+      return { id: s.id, title: s.title, situation: s.situation, steps: s.steps, donts: s.donts };
+    });
   // 매장 고유 용어 — 이름·초성 형태의 재료. 중복 제거해서 한 번만 싣는다.
   const terms = [...new Set(list.flatMap(storeTerms))].slice(0, 12);
-  const known = new Set(list.map((e) => e.id));
+  // 혼동쌍은 짝 한쪽이 list 밖(같은 코스의 다른 노하우)일 수 있다 — 그것도 아는 노하우로 친다.
+  const known = new Set([...list, ...plans.flatMap((p) => p.entries ?? [])].map((e) => e.id));
 
   const items: QuizItem[] = [];
   let lastErr: unknown;
@@ -192,7 +224,7 @@ export async function generateQuizItems(
       const out = await callQuizItemEdge({
         format: plan.format,
         kind: plan.kind,
-        sops,
+        sops: sopsOf(plan.entries?.length ? plan.entries : list),
         count: 1,
         ...(terms.length ? { terms } : {}),
       });
@@ -201,7 +233,11 @@ export async function generateQuizItems(
         // 레지스트리가 최종 관문 — 엣지 정규화를 통과했어도 여기서 다시 본다(클라가 채점·표시 SSOT).
         if (!spec || spec.validate(raw.payload)) continue;
         // 근거 노하우는 이번에 보낸 것만 남긴다(엣지가 잘못 환원해도 남의 노하우에 오답이 귀속되지 않게).
-        const ids = (raw.entry_ids ?? []).filter((id) => known.has(id));
+        // ★ 혼동쌍은 두 노하우가 있어야 성립하므로 근거를 둘 다에 귀속시킨다. 엣지 quizFormats 는
+        //   scale_pick 을 bundled 로 표시하지 않아 source_index 로 한쪽만 찍어 온다 — 여기서 바로잡는다.
+        const ids = plan.entries?.length
+          ? plan.entries.map((e) => e.id)
+          : (raw.entry_ids ?? []).filter((id) => known.has(id));
         if (ids.length === 0) continue;
         items.push({
           id: genId('qi'),

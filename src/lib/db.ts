@@ -1893,6 +1893,218 @@ export async function insertQuizAttempts(rows: { entryId: string; total: number;
   );
 }
 
+// ── 게스트 응시 결과(0160·0163) — 사장이 "링크로 푼 사람"을 보는 자리 ──────────────
+// ★직원 응시와 섞지 않는다. 문항별 상세(quiz_attempt_items)는 **게스트 전용**이고, 직원 쪽은
+//   0103·0112 의 "개인 오답 이력을 만들지 않는다"가 그대로다.
+// ★행 단위는 (응시 1회, 노하우 1건)이라 한 번의 제출이 여러 행으로 나뉜다(0112). 화면은 응시 1회를
+//   카드 1장으로 봐야 하므로 여기서 submission_id 로 묶어 돌려준다 — 화면이 다시 묶지 않는다.
+
+/** 한 번의 제출 = 카드 하나. total·correct 는 그 제출에 속한 행들의 합이다. */
+export type GuestSubmissionRow = {
+  submissionId: string;
+  guestName: string;
+  /** 정규화된 숫자만(0160). 화면은 뒤 4자리만 보여준다. */
+  guestPhone: string | null;
+  phoneVerified: boolean;
+  /** 그 제출의 가장 이른 시각. */
+  takenAt: string;
+  total: number;
+  correct: number;
+  reviewedAt: string | null;
+  /** 노하우별 내역 — 어디가 약한지 표시하는 재료. 제목은 화면이 붙인다(여기는 id 만 안다). */
+  entries: { entryId: string; total: number; correct: number }[];
+  /** 같은 전화번호로 이 매장에서 푼 총 횟수(정리한 것 포함). 번호가 없으면 1. */
+  attemptCount: number;
+};
+
+/**
+ * 아직 정리하지 않은 게스트 응시 목록(최신순). 관리 권한만 남의 행을 본다(RLS qa_select).
+ *
+ * ★submission_id 가 없는 옛 행(0160 이전 링크 응시)은 빼고 돌려준다 — 묶을 열쇠도 없고
+ *   문항별 상세도 없어서 카드로 세울 수 없다. 점수만 남은 그 행들은 이 화면의 대상이 아니다.
+ */
+export async function fetchGuestQuizSubmissions(): Promise<GuestSubmissionRow[]> {
+  if (!HAS_SUPABASE) return [];
+  const { data, error } = await supabase
+    .from('quiz_attempts')
+    .select('entry_id, guest_name, guest_phone, guest_phone_verified, submission_id, total, correct, taken_at, reviewed_at, cleared_at')
+    .not('guest_name', 'is', null)
+    .not('submission_id', 'is', null)
+    .order('taken_at', { ascending: false })
+    .limit(500);
+  if (error) {
+    readFail('fetchGuestQuizSubmissions', error);
+    return [];
+  }
+
+  // ① 총 응시 횟수는 **정리한 것까지** 세어야 "이 사람 세 번째예요"가 참이 된다 → 거르기 전에 센다.
+  const subsByPhone = new Map<string, Set<string>>();
+  for (const r of data ?? []) {
+    const phone = (r as any).guest_phone as string | null;
+    if (!phone) continue;
+    const set = subsByPhone.get(phone) ?? new Set<string>();
+    set.add((r as any).submission_id as string);
+    subsByPhone.set(phone, set);
+  }
+
+  // ② 카드로 세울 것만 묶는다.
+  const bySub = new Map<string, GuestSubmissionRow>();
+  for (const r of data ?? []) {
+    const row = r as any;
+    if (row.cleared_at) continue;
+    const sub = row.submission_id as string;
+    const cur = bySub.get(sub);
+    if (cur) {
+      cur.total += row.total ?? 0;
+      cur.correct += row.correct ?? 0;
+      cur.entries.push({ entryId: row.entry_id, total: row.total ?? 0, correct: row.correct ?? 0 });
+      if (row.taken_at && row.taken_at < cur.takenAt) cur.takenAt = row.taken_at;
+    } else {
+      bySub.set(sub, {
+        submissionId: sub,
+        guestName: row.guest_name ?? '',
+        guestPhone: row.guest_phone ?? null,
+        phoneVerified: row.guest_phone_verified === true,
+        takenAt: row.taken_at ?? '',
+        total: row.total ?? 0,
+        correct: row.correct ?? 0,
+        reviewedAt: row.reviewed_at ?? null,
+        entries: [{ entryId: row.entry_id, total: row.total ?? 0, correct: row.correct ?? 0 }],
+        attemptCount: row.guest_phone ? (subsByPhone.get(row.guest_phone)?.size ?? 1) : 1,
+      });
+    }
+  }
+  const cards = [...bySub.values()].sort((a, b) => b.takenAt.localeCompare(a.takenAt));
+  if (cards.length === 0) return cards;
+
+  // ③ 점수는 **문항 수**로 말한다. quiz_attempts 의 합은 노하우별 귀속이라 한 문항이 노하우 두 건에
+  //    걸리면 2로 세어진다(0160 §집계) — 그러면 목록의 "5/7"과 상세 화면의 문항 5개가 어긋난다.
+  //    문항별 상세가 있으면 그쪽을 정본으로 덮는다. 없으면(읽기 실패·권한 밖) 위 합을 그대로 둔다.
+  const { data: items, error: itemErr } = await supabase
+    .from('quiz_attempt_items')
+    .select('submission_id, correct')
+    .in('submission_id', cards.map((c) => c.submissionId));
+  if (itemErr) {
+    readFail('fetchGuestQuizSubmissions.items', itemErr);
+    return cards;
+  }
+  const tally = new Map<string, { total: number; correct: number }>();
+  for (const it of items ?? []) {
+    const row = it as any;
+    const cur = tally.get(row.submission_id) ?? { total: 0, correct: 0 };
+    cur.total += 1;
+    if (row.correct === true) cur.correct += 1;
+    tally.set(row.submission_id, cur);
+  }
+  for (const c of cards) {
+    const t = tally.get(c.submissionId);
+    if (t && t.total > 0) {
+      c.total = t.total;
+      c.correct = t.correct;
+    }
+  }
+  return cards;
+}
+
+/** 문항 하나의 응시 결과. payload 는 **응시 시점 스냅샷**이라 quiz_items 를 조인하지 않는다(0160 §2). */
+export type GuestAttemptItemRow = {
+  id: string;
+  itemId: string;
+  ord: number;
+  format: string;
+  payload: Record<string, any>;
+  /** 응시자가 낸 답. 안 풀었으면 null. */
+  response: QuizResponse | null;
+  correct: boolean;
+};
+
+/** 한 번의 제출을 문항 순서대로. RLS 상 관리 권한만 읽는다(qai_select) — 직원·게스트는 0행이다. */
+export async function fetchGuestAttemptItems(submissionId: string): Promise<GuestAttemptItemRow[]> {
+  if (!HAS_SUPABASE || !submissionId) return [];
+  const { data, error } = await supabase
+    .from('quiz_attempt_items')
+    .select('id, item_id, ord, format, payload, response, correct')
+    .eq('submission_id', submissionId)
+    .order('ord');
+  if (error) {
+    readFail('fetchGuestAttemptItems', error);
+    return [];
+  }
+  return (data ?? []).map((r: any) => ({
+    id: r.id,
+    itemId: r.item_id,
+    ord: r.ord ?? 0,
+    format: r.format ?? '',
+    payload: (r.payload ?? {}) as Record<string, any>,
+    response: (r.response ?? null) as QuizResponse | null,
+    correct: r.correct === true,
+  }));
+}
+
+/**
+ * "확인했어요"·"정리하기" — 0163 의 definer RPC. **이 두 컬럼 말고는 아무것도 못 바꾼다.**
+ * quiz_attempts 에는 UPDATE 정책이 없다(0112: 응시 기록은 고치는 것이 아니다) — 그래서 RPC 다.
+ */
+export async function markGuestQuizSubmission(
+  submissionId: string,
+  action: 'reviewed' | 'cleared',
+): Promise<boolean> {
+  if (!HAS_SUPABASE) return true;
+  const { data, error } = await supabase.rpc('quiz_guest_mark', {
+    p_submission_id: submissionId,
+    p_action: action,
+  });
+  if (error) {
+    console.warn('[db] markGuestQuizSubmission:', error.message);
+    reportError('db.rpc:markGuestQuizSubmission', error);
+    return false;
+  }
+  // 0행 = 남의 매장·없는 제출·권한 밖. 조용히 성공으로 넘기면 화면에서만 사라진다.
+  if (!Number(data)) {
+    reportError('db.rpc.zero:markGuestQuizSubmission', { message: '0 rows affected' });
+    return false;
+  }
+  return true;
+}
+
+/** 내가 링크로 푼 퀴즈 결과 1건(= 제출 1회). 점수와 취약영역까지만 — 문항·정답은 없다(0165 §2). */
+export type MyGuestQuizRow = {
+  unitId: string;
+  storeName: string;
+  submissionId: string;
+  total: number;
+  correct: number;
+  takenAt: string;
+  /** 다 못 맞힌 노하우 제목. 다 맞혔으면 빈 배열. */
+  weakTitles: string[];
+};
+
+/**
+ * 매장이 0곳인 회원이 자기 게스트 응시 이력을 보는 유일한 경로(RPC my_guest_quiz_history, 0165).
+ *
+ * ★RLS(qa_select, 0112)로는 한 행도 안 내려온다 — 매장 없는 회원은 auth_unit_id() 가 null 이고
+ *   게스트 행은 staff_id 도 null 이다. 그래서 definer RPC 다.
+ * ★인자가 없다. 전화번호는 서버가 auth.uid() → profiles.phone_norm 으로 직접 읽는다 —
+ *   클라가 번호를 넘기면 아무 번호나 넣어 남의 이력을 조회할 수 있다.
+ */
+export async function fetchMyGuestQuizHistory(): Promise<MyGuestQuizRow[]> {
+  if (!HAS_SUPABASE) return [];
+  const { data, error } = await supabase.rpc('my_guest_quiz_history');
+  if (error) {
+    readFail('fetchMyGuestQuizHistory', error);
+    return [];
+  }
+  return (data ?? []).map((r: any) => ({
+    unitId: r.unit_id ?? '',
+    storeName: r.store_name ?? '',
+    submissionId: r.submission_id ?? '',
+    total: r.total ?? 0,
+    correct: r.correct ?? 0,
+    takenAt: r.taken_at ?? '',
+    weakTitles: (r.weak_titles ?? []) as string[],
+  }));
+}
+
 // ── 발송 원장(0139) — "이 퀴즈를 이 사람에게 언제부터 보낸다" ─────────────────
 // 수신자 명단과 발송 기록이 같은 행이다. 나누면 "보냈는데 명단에 없다"가 따로 생긴다.
 // ★sent_at·due_on 은 **크론만** 채운다(claim_quiz_send). 앱은 절대 쓰지 않는다 —
@@ -2530,4 +2742,64 @@ export function subscribeStaff(onChange: () => void): () => void {
   return () => {
     supabase.removeChannel(ch);
   };
+}
+
+// ── 파트(홀·주방 같은 담당) — 0164 ────────────────────────────────────────────
+// 파트는 **거르는 축이 아니라 순서만 올리는 추천 축**이다(0164 주석 ①). 표준 세트를 주지 않으므로
+// **이 매장이 실제로 쓴 값 = store_parts 행**이 곧 후보 목록이고, 쓰기 시작할 때 지연 생성된다.
+// 붙는 자리는 두 곳뿐 — 코스(training_courses.part_id)와 노하우(playbook_entries.part_id).
+// 직원에게는 붙지 않는다.
+
+export type StorePart = { id: string; unit_id: string; name: string; created_at: string };
+
+/** 이 매장의 파트 목록(RLS가 매장으로 좁힌다). 빈 배열 = 아직 아무도 안 나눴다 = 전부 공통. */
+export async function fetchStoreParts(): Promise<StorePart[]> {
+  if (!HAS_SUPABASE) return [];
+  const { data, error } = await supabase
+    .from('store_parts')
+    .select('*')
+    .order('created_at', { ascending: true });
+  if (error) {
+    readFail('fetchStoreParts', error);
+    return [];
+  }
+  return (data ?? []) as StorePart[];
+}
+
+/**
+ * 파트 지연 생성. 이름 중복은 서버 unique 인덱스(`lower(btrim(name))`)가 막는다 —
+ * **충돌은 에러가 아니다.** 사장이 같은 이름을 두 번 만들 이유가 없으므로 이미 있는 그 파트를 돌려준다.
+ * (화면에서 되묻는 유사 이름 판정은 knowhowSimilarity 가 하고, 여기는 서버가 잡는 완전 충돌만 본다.)
+ */
+export async function createStorePart(name: string): Promise<StorePart | null> {
+  const clean = name.trim();
+  if (!clean || !HAS_SUPABASE) return null;
+  const { data, error } = await supabase
+    .from('store_parts')
+    .insert({ unit_id: _unitId, name: clean })
+    .select('*')
+    .single();
+  if (!error && data) return data as StorePart;
+  if (error?.code === '23505') {
+    // 대소문자·앞뒤 공백만 다른 같은 이름이 이미 있다. 목록에서 그것을 찾아 쓴다
+    // (ilike 로 재조회하면 이름에 든 `%`·`_` 가 패턴으로 해석된다 — 목록이 작으니 여기서 고른다).
+    const hit = (await fetchStoreParts()).find((p) => p.name.trim().toLowerCase() === clean.toLowerCase());
+    if (hit) return hit;
+  }
+  console.warn('[db] createStorePart:', error?.message);
+  reportError('db.write:createStorePart', error);
+  return null;
+}
+
+/**
+ * 코스에 파트 붙이기(0164).
+ * `upsertTrainingCourse` 의 컬럼 목록을 늘리지 않고 따로 쓴다 — 코스 행 타입(`@/lib/quiz/types`)에
+ * 없는 부가 축이고, 파트는 추천 순서일 뿐이라 실패해도 그 퀴즈는 그대로 쓸 수 있다.
+ */
+export async function setCoursePart(courseId: string, partId: string | null): Promise<boolean> {
+  if (!HAS_SUPABASE) return true;
+  return writeStrict(
+    'setCoursePart',
+    supabase.from('training_courses').update({ part_id: partId }).eq('id', courseId).select('id'),
+  );
 }

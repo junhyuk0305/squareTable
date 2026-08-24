@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { View, Text, TextInput, ScrollView, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -9,6 +9,7 @@ import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { sectionOptions } from '@/lib/config/sections';
 import { getSectionMeta } from '@/lib/utils/category';
+import { fetchStoreParts, createStorePart, type StorePart } from '@/lib/db';
 import {
   findSimilarEntry,
   findSimilarSection,
@@ -28,8 +29,11 @@ import type { PlaybookEntry } from '@/types';
  *     (막지는 않는다 — 사장이 "그래도 새로"를 고르면 그대로 저장. 판정은 렉시컬이라 오검출이 있다.)
  *  ② 카테고리(section) 배정: 표준 세트에서 고르게 해 '기타' 몰림과 표기 난립(응대/진상응대/클레임)을 막는다.
  *     사용자 표면의 분류는 이것 하나다(종류 4종은 AI 내부용 — 2026-07-31 단일화).
+ *  ③ 파트(홀·주방 같은 담당) 배정(0164): 카테고리와 **다른 축**이다 — 카테고리는 "무엇에 관한 것인가",
+ *     파트는 "누구 담당인가". 표준 세트를 줄 수 없어(업종마다 다르다) 매장이 쓴 값이 곧 후보고,
+ *     쓰기 시작할 때 지연 생성된다. 안 고르면 공통이다.
  *
- * 판정 규칙은 여기서 만들지 않고 knowhowSimilarity(SSOT)를 부른다.
+ * 판정 규칙은 여기서 만들지 않고 knowhowSimilarity(SSOT)를 부른다 — 카테고리도 파트도 같은 함수다.
  */
 export function PublishConfirmSheet({
   visible,
@@ -37,15 +41,22 @@ export function PublishConfirmSheet({
   onCancel,
   onConfirm,
   onEditExisting,
+  partsEnabled = true,
 }: {
   visible: boolean;
   /** 저장하려는 노하우(단건 발행=1개, 분리 발행=N개). */
   entries: PlaybookEntry[];
   onCancel: () => void;
-  /** 사장이 고른 카테고리로 저장 진행. null=미분류(기타). */
-  onConfirm: (section: string | null) => void;
+  /** 사장이 고른 카테고리·파트로 저장 진행. section null=미분류(기타), partId null=공통. */
+  onConfirm: (section: string | null, partId: string | null) => void;
   /** "기존 것 수정하기" — 겹치는 기존 노하우 수정 화면으로. */
   onEditExisting: (entryId: string) => void;
+  /**
+   * 파트 행을 보여줄지. **다른 매장에 저장하는 경로(0121)에서는 false** —
+   * 여기 파트 목록은 지금 보고 있는 매장 것이라, 그대로 붙이면 0164 §3 크로스테넌트 트리거가
+   * 저장을 통째로 막는다. 고를 수 없는 것을 보여주지 않는 편이 맞다.
+   */
+  partsEnabled?: boolean;
 }) {
   const allEntries = usePlaybookStore((s) => s.entries);
   const industry = useSessionStore((s) => s.industry);
@@ -82,6 +93,43 @@ export function PublishConfirmSheet({
     setAdding(false);
     setNewName('');
     setDupSection(null);
+  };
+
+  // ── 파트(0164) — 카테고리와 같은 되묻기 패턴을 그대로 쓴다 ──────────────────
+  // 다른 점은 저장 시점뿐이다: 카테고리는 문자열이라 노하우와 같이 저장되지만,
+  // 파트는 표라서 **고른 그 자리에서** 행이 만들어진다(id 를 노하우에 붙여야 하므로).
+  const [parts, setParts] = useState<StorePart[]>([]);
+  const [partId, setPartId] = useState<string | null>(null);
+  const [partAdding, setPartAdding] = useState(false);
+  const [partName, setPartName] = useState('');
+  const [dupPart, setDupPart] = useState<string | null>(null);
+  const [partBusy, setPartBusy] = useState(false);
+  const [partFailed, setPartFailed] = useState(false);
+
+  useEffect(() => {
+    if (!visible || !partsEnabled) return;
+    let alive = true;
+    void fetchStoreParts().then((rows) => { if (alive) setParts(rows); });
+    return () => { alive = false; };
+  }, [visible, partsEnabled]);
+
+  const partNames = useMemo(() => parts.map((p) => p.name), [parts]);
+
+  const pickNewPart = async () => {
+    const name = partName.trim();
+    if (!name || partBusy) return;
+    const twin = findSimilarSection(name, partNames);
+    if (twin && twin !== dupPart) { setDupPart(twin); return; } // 1회 되묻고, 재확인이면 통과
+    setPartBusy(true);
+    const made = await createStorePart(name); // 서버 unique 충돌이면 기존 파트가 그대로 돌아온다
+    setPartBusy(false);
+    if (!made) { setPartFailed(true); return; }
+    setParts((v) => (v.some((p) => p.id === made.id) ? v : [...v, made]));
+    setPartId(made.id);
+    setPartAdding(false);
+    setPartName('');
+    setDupPart(null);
+    setPartFailed(false);
   };
 
   const single = entries.length === 1;
@@ -196,6 +244,87 @@ export function PublishConfirmSheet({
           </View>
         )}
 
+        {partsEnabled && (
+          <>
+            <SectionLabel title="파트" hint="안 고르면 전원이 보는 공통이에요" />
+            <View style={styles.chips}>
+              {parts.map((p) => {
+                const on = partId === p.id;
+                return (
+                  <PressableScale
+                    key={p.id}
+                    onPress={() => setPartId(on ? null : p.id)}
+                    style={[styles.chip, on && styles.chipOn]}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: on }}
+                    accessibilityLabel={`파트 ${p.name}`}
+                  >
+                    <Text style={[styles.chipText, on && styles.chipTextOn]}>{p.name}</Text>
+                  </PressableScale>
+                );
+              })}
+              {!partAdding && (
+                <PressableScale
+                  onPress={() => setPartAdding(true)}
+                  style={styles.chipAdd}
+                  accessibilityRole="button"
+                  accessibilityLabel="파트 직접 추가"
+                >
+                  <Ionicons name="add" size={14} color={InkColors.ink3} />
+                  <Text style={styles.chipAddText}>직접 추가</Text>
+                </PressableScale>
+              )}
+            </View>
+
+            {partAdding && (
+              <View style={styles.addBox}>
+                <TextInput
+                  value={partName}
+                  onChangeText={(t) => { setPartName(t); setDupPart(null); setPartFailed(false); }}
+                  placeholder="새 파트 이름 (예: 홀)"
+                  placeholderTextColor={InkColors.ink3}
+                  style={styles.addInput}
+                  onSubmitEditing={() => void pickNewPart()}
+                  returnKeyType="done"
+                  accessibilityLabel="새 파트 이름"
+                />
+                {dupPart && (
+                  <Text style={styles.addWarn}>
+                    이미 «{dupPart}» 파트가 있어요. 같은 뜻이면 그쪽에 넣어 주세요 — 한 번 더 누르면 새로 만들어요.
+                  </Text>
+                )}
+                {partFailed && (
+                  <Text style={styles.addWarn}>파트를 만들지 못했어요. 연결을 확인하고 다시 시도해 주세요.</Text>
+                )}
+                <View style={styles.addRow}>
+                  {dupPart && (
+                    <PressableScale
+                      onPress={() => {
+                        const hit = parts.find((p) => p.name === dupPart);
+                        if (hit) setPartId(hit.id);
+                        setPartAdding(false); setPartName(''); setDupPart(null); setPartFailed(false);
+                      }}
+                      style={styles.addUse}
+                      accessibilityRole="button"
+                      accessibilityLabel={`${dupPart}에 넣기`}
+                    >
+                      <Text style={styles.addUseText}>«{dupPart}»에 넣기</Text>
+                    </PressableScale>
+                  )}
+                  <PressableScale
+                    onPress={() => void pickNewPart()}
+                    style={styles.addOk}
+                    accessibilityRole="button"
+                    accessibilityLabel="파트 만들기"
+                  >
+                    <Text style={styles.addOkText}>{dupPart ? '그래도 만들기' : '추가'}</Text>
+                  </PressableScale>
+                </View>
+              </View>
+            )}
+          </>
+        )}
+
         {/* 딤 탭만으로는 "저장 안 함"이 안 보인다 → 취소를 명시(ShiftEditorModal과 같은 푸터 패턴).
             여기만 PressableScale이 아니라 Pressable인 이유: PressableScale은 style을 안쪽
             Animated.View에 넘겨서 바깥 Pressable이 내용 크기로 잡힌다 → flex가 먹지 않는다. */}
@@ -209,7 +338,7 @@ export function PublishConfirmSheet({
             <Text style={styles.cancelText}>취소</Text>
           </Pressable>
           <Pressable
-            onPress={() => onConfirm(section)}
+            onPress={() => onConfirm(section, partId)}
             style={({ pressed }) => [styles.footBtn, styles.save, pressed && { opacity: 0.85 }]}
             accessibilityRole="button"
             accessibilityLabel="노하우 저장"

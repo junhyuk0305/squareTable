@@ -30,6 +30,19 @@ export function previewAnswer(format: QuizFormat, payload: Record<string, any>):
         .filter((i: number) => i >= 0);
     case 'quick_judge':
       return (Array.isArray(payload?.cards) ? payload.cards : []).map((c: any) => Number(c?.answer));
+    // ── t4 두 형태 ──────────────────────────────────────────────────────
+    // ★ 서버는 **자기가 섞은 자리**로 정답을 말한다. 미리보기는 저장 payload 를 섞지 않고 그대로
+    //   넘기므로(렌더러가 pairs 에서 직접 좌우를 만든다) 여기서의 정답은 **항등 사상**이다.
+    //   두 좌표계가 다른 게 아니라, 미리보기 쪽 순열이 항등일 뿐이다.
+    case 'flip_match': {
+      // 카드 원본 번호 c 는 c/2 가 짝 번호다 → 0,1,2,3,… 이 그대로 "짝끼리 묶은 순서"가 된다.
+      const n = (Array.isArray(payload?.pairs) ? payload.pairs.length : 0) * 2;
+      return Array.from({ length: n }, (_, i) => i);
+    }
+    case 'link_match': {
+      const n = Array.isArray(payload?.pairs) ? payload.pairs.length : 0;
+      return Object.fromEntries(Array.from({ length: n }, (_, i) => [String(i), i]));
+    }
     // 선택형 7종(mc4·order_pick·value_pick·trap_pick·case_pick·name_pick·chosung)
     default:
       return payload?.answer_index ?? null;

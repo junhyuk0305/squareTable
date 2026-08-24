@@ -22,6 +22,9 @@ import type { Category, PlaybookEntry } from '@/types';
 
 const VALID: Category[] = ['Routine', 'Event', 'Context', 'Know-how'];
 
+/** 저장 전 확인 시트가 돌려주는 답. section=카테고리(null=미분류) · partId=파트(null=공통, 0164). */
+type PublishDecision = { section: string | null; partId: string | null };
+
 /**
  * owner/coach — 대화형 노하우 입력 단일 화면.
  *  · ?uqId=…      → 인박스 답변 모드(알바 질문 컨텍스트, 발행 시 resolve)
@@ -171,38 +174,47 @@ export default function OwnerCoachScreen() {
     [answerable, realUq, resolve, navAfter],
   );
 
-  // ── 저장 전 확인(겹침·챕터) ──
+  // ── 저장 전 확인(겹침·챕터·파트) ──
   // 노하우가 창고에 들어가는 길목이 여기 하나뿐이라, 문지기도 여기 하나만 둔다.
-  // 시트는 Promise로 답을 돌려준다: null=취소(발행 잠금 해제 → 재시도 가능), {section}=진행.
+  // 시트는 Promise로 답을 돌려준다: null=취소(발행 잠금 해제 → 재시도 가능), {section,partId}=진행.
   const [pending, setPending] = useState<{
     entries: PlaybookEntry[];
-    resolve: (r: { section: string | null } | null) => void;
+    resolve: (r: PublishDecision | null) => void;
   } | null>(null);
 
   const askBeforePublish = useCallback(
     (entries: PlaybookEntry[]) =>
-      new Promise<{ section: string | null } | null>((resolve) => setPending({ entries, resolve })),
+      new Promise<PublishDecision | null>((resolve) => setPending({ entries, resolve })),
     [],
   );
 
   // 시트가 닫히는 세 경로(취소·저장·기존 수정)가 전부 여기를 지나 pending을 비운다 —
   // resolve를 빠뜨리면 발행 잠금이 걸린 채 영영 안 풀린다(사장이 저장을 못 하게 됨).
   const settle = useCallback(
-    (r: { section: string | null } | null) => {
+    (r: PublishDecision | null) => {
       pending?.resolve(r);
       setPending(null);
     },
     [pending],
   );
 
+  // 고른 파트를 저장할 노하우에 얹는다. **공통(null)이면 키 자체를 넣지 않는다** — 삽입 경로라
+  // null 을 명시하는 것과 안 넣는 것이 결과가 같고(컬럼 기본값도 null), 안 넣으면 0164 미적용
+  // 환경에서 파트 없는 저장까지 PGRST204 로 죽는 것을 피한다(db.ts spread → 컬럼부재 선례).
+  const withPart = useCallback(
+    (e: PlaybookEntry, d: PublishDecision): PlaybookEntry =>
+      d.partId ? { ...e, section: d.section, part_id: d.partId } : { ...e, section: d.section },
+    [],
+  );
+
   const onPublished = useCallback(
     async (entry: PlaybookEntry): Promise<boolean> => {
       const decision = await askBeforePublish([entry]);
       if (!decision) return false; // 취소 — 저장 안 함(잠금 해제되어 다시 시도 가능)
-      const ok = await saveEntry({ ...entry, section: decision.section });
+      const ok = await saveEntry(withPart(entry, decision));
       return finishPublish([entry.id], ok, isInboxAnswer ? '답변이 직원 챗봇에 반영됐어요' : '새 노하우가 저장됐어요');
     },
-    [saveEntry, finishPublish, isInboxAnswer, askBeforePublish],
+    [saveEntry, finishPublish, isInboxAnswer, askBeforePublish, withPart],
   );
 
   // 다중 분리 발행 — 각 노하우를 저장. 엔트리별 성공여부(boolean[])를 반환해 호출부(publishEach)가
@@ -210,11 +222,11 @@ export default function OwnerCoachScreen() {
   const onPublishedMany = useCallback(
     async (entries: PlaybookEntry[]): Promise<boolean[]> => {
       if (entries.length === 0) return [];
-      // 분리 발행은 한 대화에서 나온 묶음이라 챕터를 한 번만 묻고 전부에 같이 적용한다.
+      // 분리 발행은 한 대화에서 나온 묶음이라 챕터·파트를 한 번만 묻고 전부에 같이 적용한다.
       const decision = await askBeforePublish(entries);
       // 취소는 실패가 아니다 — 실패 토스트 없이 조용히 잠금만 풀어 다시 시도할 수 있게 둔다.
       if (!decision) return entries.map(() => false);
-      const results = await Promise.all(entries.map((e) => saveEntry({ ...e, section: decision.section })));
+      const results = await Promise.all(entries.map((e) => saveEntry(withPart(e, decision))));
       const okCount = results.filter(Boolean).length;
       if (results.every(Boolean)) {
         // 전체 성공 — 성공 토스트 + (인박스면) resolve + 네비.
@@ -229,7 +241,7 @@ export default function OwnerCoachScreen() {
       }
       return results;
     },
-    [saveEntry, finishPublish, askBeforePublish],
+    [saveEntry, finishPublish, askBeforePublish, withPart],
   );
 
   // 인박스 모드인데 질문이 이미 처리/삭제/보관됨 → 빈 상태(데드엔드·중복 답변 방지).
@@ -272,7 +284,10 @@ export default function OwnerCoachScreen() {
         visible={!!pending}
         entries={pending?.entries ?? []}
         onCancel={() => settle(null)}
-        onConfirm={(section) => settle({ section })}
+        onConfirm={(section, partId) => settle({ section, partId })}
+        // 다른 매장에 쓰는 경로(0121)에서는 파트를 묻지 않는다 — 시트가 읽는 파트 목록은
+        // 지금 보고 있는 매장 것이라, 그대로 붙이면 0164 §3 트리거가 저장을 통째로 막는다.
+        partsEnabled={!targetUnitId}
         onEditExisting={(entryId) => {
           settle(null); // 저장은 접고 기존 노하우 수정으로 — 중복이 안 생긴다.
           router.push(`/owner/edit/${entryId}`);

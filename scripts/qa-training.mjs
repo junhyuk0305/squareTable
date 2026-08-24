@@ -335,7 +335,7 @@ async function main() {
     check('⑦B-1 신규 형태 3건 저장', !error, error?.message ?? ''); }
 
   { const { data, error } = await jA.rpc('quiz_items_for', { p_entry_ids: [E[2]], p_limit: 10 });
-    check('⑦B-2 신규 형태가 응시 조회에 나온다(화이트리스트 14종)', !error && (data?.length ?? 0) === 3, `n=${data?.length} ${error?.message ?? ''}`);
+    check('⑦B-2 신규 형태가 응시 조회에 나온다(화이트리스트 안)', !error && (data?.length ?? 0) === 3, `n=${data?.length} ${error?.message ?? ''}`);
     const leaked = leakedIn(data);
     check('⑦B-3 ★신규 형태 응시 payload 에 정답 키 0개', leaked.length === 0, leaked.map((x) => `${x.id}:${JSON.stringify(x.payload)}`).join(' | '));
     const byId = Object.fromEntries((data ?? []).map((x) => [x.id, x.payload ?? {}]));
@@ -363,6 +363,75 @@ async function main() {
     check('⑦B-14 첫 갈래부터 틀리면 오답 + 정답 경로 공개', row?.correct === false && JSON.stringify(row?.answer) === '[0,0]', JSON.stringify(row)); }
   { const { row } = await grade(QBP, [0, 1]);
     check('⑦B-15 마지막 갈래만 틀려도 오답', row?.correct === false, JSON.stringify(row)); }
+
+  // ── ⑦C 0161 신규 형태 2종(flip_match · link_match, 둘 다 t4 대응) ────────
+  // ★ 여기서 지키는 것 둘:
+  //   ① link_match 의 좌표계 — 응답은 {왼쪽 원본 index: **오른쪽이 놓인 섞인 자리**} 다.
+  //      원본 자리로 답하면 오답이어야 한다(그게 맞으면 셔플이 아무 의미가 없다).
+  //   ② flip_match 는 **의도적으로 group 을 남긴다.** 매칭 게임이 성립하려면 화면이 그 자리에서
+  //      짝을 판정해야 해서다(0161 상단 주석). 이 사실을 감추지 않고 여기서 그대로 실증한다.
+  console.log('\n━━ ⑦C 신규 형태 2종(0161) ━━');
+  const QFM = `qi_fm_${s}`, QLM = `qi_lm_${s}`;
+  const PAIRS = [
+    { left: '컵홀더', right: '2번 서랍' },
+    { left: '빨대', right: '포장대' },
+    { left: '우유', right: '냉장고 2단' },
+  ];
+  { const { error } = await owner.from('quiz_items').insert([
+      { id: QFM, unit_id: UNIT, entry_ids: [E[3]], kind: 't4', format: 'flip_match',
+        payload: { ask: '물건과 두는 자리를 맞춰 주세요', pairs: PAIRS, explain: '자리는 정해져 있어요' } },
+      { id: QLM, unit_id: UNIT, entry_ids: [E[3]], kind: 't4', format: 'link_match',
+        payload: { ask: '물건과 두는 자리를 이어 주세요', pairs: PAIRS, explain: '자리는 정해져 있어요' } },
+    ]);
+    check('⑦C-1 t4 형태 2건 저장', !error, error?.message ?? ''); }
+
+  let fmCards = [], lmLefts = [], lmRights = [];
+  { const { data, error } = await jA.rpc('quiz_items_for', { p_entry_ids: [E[3]], p_limit: 10 });
+    check('⑦C-2 t4 형태가 응시 조회에 나온다(화이트리스트 16종)', !error && (data?.length ?? 0) === 2,
+      `n=${data?.length} ${error?.message ?? ''}`);
+    const leaked = leakedIn(data);
+    check('⑦C-3 ★t4 응시 payload 에 정답 키 0개(pairs 가 분해된다)', leaked.length === 0,
+      leaked.map((x) => `${x.id}:${JSON.stringify(x.payload)}`).join(' | '));
+    const byId = Object.fromEntries((data ?? []).map((x) => [x.id, x.payload ?? {}]));
+    fmCards = byId[QFM]?.cards ?? [];
+    lmLefts = byId[QLM]?.lefts ?? [];
+    lmRights = byId[QLM]?.rights ?? [];
+    check('⑦C-4 flip_match 는 카드 6장으로 분해된다', fmCards.length === 6, JSON.stringify(byId[QFM]));
+    // ★ 의도된 예외다 — 이게 사라지면 화면이 짝을 판정할 수 없어 게임 자체가 성립하지 않는다.
+    const grouped = fmCards.every((c) => Number.isInteger(c?.group)) && new Set(fmCards.map((c) => c.group)).size === 3;
+    check('⑦C-5 ★flip_match 만 group 을 남긴다(매칭 게임 성립 조건 · 의도된 예외)', grouped, JSON.stringify(fmCards));
+    check('⑦C-6 link_match 는 lefts/rights 로 분해된다', lmLefts.length === 3 && lmRights.length === 3, JSON.stringify(byId[QLM])); }
+
+  { const { data } = await jA.rpc('quiz_items_for', { p_entry_ids: [E[3]], p_limit: 10 });
+    const again = (data ?? []).find((x) => x.id === QLM)?.payload?.rights ?? [];
+    // 재조회마다 순서가 바뀌면 그 사이 제출된 답을 채점할 수 없다(0107 §2 결정적 셔플).
+    check('⑦C-7 link_match 오른쪽 순서는 재조회에도 그대로', JSON.stringify(again) === JSON.stringify(lmRights),
+      `${JSON.stringify(lmRights)} vs ${JSON.stringify(again)}`); }
+
+  // 왼쪽 원본 i 의 짝(PAIRS[i].right)이 **섞여서 놓인 자리**가 정답이다.
+  const lmRight = Object.fromEntries(PAIRS.map((p, i) => [String(i), lmRights.indexOf(p.right)]));
+  { const { row } = await grade(QLM, lmRight);
+    check('⑦C-8 link_match 정답 매핑 → correct · answer 안 알려줌',
+      row?.correct === true && (row?.answer ?? null) === null, `${JSON.stringify(lmRight)} → ${JSON.stringify(row)}`); }
+  { const swapped = { ...lmRight, 0: lmRight['1'], 1: lmRight['0'] };
+    const { row } = await grade(QLM, swapped);
+    check('⑦C-9 두 줄만 바꿔 이어도 오답 + 정답 공개',
+      row?.correct === false && JSON.stringify(row?.answer) === JSON.stringify(lmRight), JSON.stringify(row)); }
+  { const { row } = await grade(QLM, [0, 1, 2]);
+    check('⑦C-10 객체가 아닌 응답도 예외 없이 오답', row?.correct === false, JSON.stringify(row)); }
+
+  // 같은 group 끼리 붙여 놓은 카드 index 나열 = 판을 정직하게 끝낸 응답.
+  const fmRight = [0, 1, 2].flatMap((g) => fmCards.map((c, i) => (c.group === g ? i : -1)).filter((i) => i >= 0));
+  { const { row } = await grade(QFM, fmRight);
+    check('⑦C-11 flip_match 짝끼리 묶으면 correct', row?.correct === true, `${JSON.stringify(fmRight)} → ${JSON.stringify(row)}`); }
+  { const mixed = [fmRight[0], fmRight[3], fmRight[2], fmRight[1], fmRight[4], fmRight[5]];
+    const { row } = await grade(QFM, mixed);
+    check('⑦C-12 ★다른 짝끼리 묶으면 오답(카드는 다 썼어도)', row?.correct === false, `${JSON.stringify(mixed)} → ${JSON.stringify(row)}`); }
+  { const dup = [...fmRight.slice(0, 5), fmRight[0]];
+    const { row } = await grade(QFM, dup);
+    check('⑦C-13 카드를 두 번 쓰면 오답(순열 검사)', row?.correct === false, JSON.stringify(row)); }
+  { const { row } = await grade(QFM, 1);
+    check('⑦C-14 배열이 아닌 응답도 예외 없이 오답', row?.correct === false, JSON.stringify(row)); }
 
   // ── ⑧ 문항 낡음 스냅샷(0114) ─────────────────────────────────────────────
   console.log('\n━━ ⑧ 문항 낡음(0114) ━━');
@@ -493,6 +562,27 @@ async function main() {
   { const { error } = await owner.from('quiz_links').update({ revoked_at: new Date().toISOString() }).eq('token', TOK).select('id');
     const { data } = await g.rpc('quiz_link_items', { p_token: TOK, p_limit: 10 });
     check('⑩-17 회수하면 즉시 닫힌다', !error && (data ?? []).length === 0, `n=${data?.length}`); }
+
+  // 0163 — 사장이 게스트 결과를 처리한 상태(확인했어요·정리하기).
+  // ★quiz_attempts 에는 UPDATE 정책이 없다(0112: 응시 기록은 고치는 것이 아니다) — definer RPC 가
+  //   유일한 쓰기 경로이고, 그 RPC 는 reviewed_at·cleared_at 두 컬럼만 만진다. 아래가 그것을 실증한다.
+  { const { data, error } = await owner.rpc('quiz_guest_mark', { p_submission_id: SUB, p_action: 'reviewed' });
+    check('⑩-18 사장이 확인 표시(그 제출의 모든 행)', !error && data >= 1, `n=${data} ${error?.message ?? ''}`); }
+  { const { data } = await owner.from('quiz_attempts').select('reviewed_at, cleared_at, total, correct').eq('submission_id', SUB);
+    const row = (data ?? [])[0];
+    check('⑩-19 ★두 컬럼만 바뀐다(점수는 그대로)',
+      !!row?.reviewed_at && row?.cleared_at === null && row?.total === 1 && row?.correct === 1, JSON.stringify(row)); }
+  { const { error } = await jA.rpc('quiz_guest_mark', { p_submission_id: SUB, p_action: 'reviewed' });
+    check('⑩-20 ★직원은 손님 결과를 처리하지 못한다', !!error && /not_allowed/.test(error?.message ?? ''), error?.message ?? '(차단 안됨!)'); }
+  { const { error } = await g.rpc('quiz_guest_mark', { p_submission_id: SUB, p_action: 'cleared' });
+    check('⑩-21 ★로그인 없는 손님은 아예 부르지 못한다(EXECUTE 회수)', !!error, error?.message ?? '(차단 안됨!)'); }
+  { const { error } = await owner.rpc('quiz_guest_mark', { p_submission_id: SUB, p_action: 'delete' });
+    check('⑩-22 정해진 두 동작 밖은 거부', !!error && /bad_action/.test(error?.message ?? ''), error?.message ?? '(차단 안됨!)'); }
+  { const { data, error } = await owner.from('quiz_attempts').update({ correct: 99 }).eq('submission_id', SUB).select('id');
+    check('⑩-23 ★사장도 점수는 못 고친다(UPDATE 정책 없음 → 0행)', !error && (data ?? []).length === 0, `n=${data?.length} ${error?.message ?? ''}`); }
+  { await owner.rpc('quiz_guest_mark', { p_submission_id: SUB, p_action: 'cleared' });
+    const { data } = await owner.from('quiz_attempts').select('cleared_at').eq('submission_id', SUB);
+    check('⑩-24 정리하면 목록에서 빠질 표시가 남는다', !!(data ?? [])[0]?.cleared_at, JSON.stringify((data ?? [])[0])); }
 
   // ── ⑪ 껍데기 업무 숨김(0110) ─────────────────────────────────────────────
   console.log('\n━━ ⑪ 껍데기 업무 숨김(0110) ━━');

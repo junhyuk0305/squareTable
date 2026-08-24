@@ -115,6 +115,10 @@ export type PlaybookEntry = {
   section?: string | null;
   order_index?: number;
   source_id?: string | null;
+  // ── 파트(홀·주방 같은 담당) — 0164 컬럼 ──
+  // 이 노하우가 누구 담당인지. null/undefined = 공통(전원). 카테고리와 다른 축이라 함께 붙는다.
+  // ★거르는 축이 아니다 — 목록에서 **위로 올릴 뿐** 다른 노하우를 가리지 않는다.
+  part_id?: string | null;
   // ── 업종 표준 노하우 팩(온보딩 자동등록) 메타 — 0024 마이그레이션 컬럼 ──
   // is_template: 아직 매장에 바인딩 안 된 순수 템플릿(번들 JSON에서만 true). fork되면 false.
   // needs_review: 사장이 교정 안 한 '매장 기본값(미확인)'. 알바/관리화면에 배지로 표시.

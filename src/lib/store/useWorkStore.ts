@@ -34,12 +34,14 @@ import {
   fetchTrainingCourses,
   fetchQuizItemCounts,
   fetchQuizAssignments,
+  fetchQuizAttempts,
   markQuizOpened,
   markQuizCompleted,
   type TrainingItemRow,
   type CourseEntryRow,
   type TrainingCourse,
   type TrainingRequestRow,
+  type QuizAttemptRow,
 } from '@/lib/db';
 // 코스 행(0108 training_courses). db.ts 의 TrainingCourse 는 코스 **key** 문자열이라 이름이 겹친다 → 행은 Row 로 별칭.
 import type { QuizAssignment, TrainingCourse as TrainingCourseRow } from '@/lib/quiz/types';
@@ -440,6 +442,30 @@ export function quizCountForTask(
   return knowhowIdsForTask(knowhowLinks, templateId).reduce((n, id) => n + (quizCounts[id] ?? 0), 0);
 }
 
+/**
+ * 내가 마지막으로 푼 결과 한 건(0112 quiz_attempts). 직원 퀴즈 카드의 "지난번 …" 한 줄이 쓴다.
+ *
+ * ★행 단위 = (응시 1회, 노하우 1건)이라 여러 노하우를 한 번에 푼 응시는 여러 행이 된다.
+ *   카드는 "지난번에 어땠나"만 말하므로 **가장 최근 1행**만 본다 — 같은 응시의 다른 행까지
+ *   합치면 카드가 문항 총합을 주장하게 되고, 그건 이 화면이 책임질 수 있는 숫자가 아니다.
+ * ★남의 행은 애초에 RLS(qa_select)로 안 내려오지만, 관리 권한 계정은 매장 전체가 내려오므로
+ *   여기서 본인 것만 다시 거른다(카드는 직원 화면이다).
+ */
+export function lastQuizAttemptOf(
+  attempts: QuizAttemptRow[],
+  entryIds: string[],
+  staffId: string,
+): QuizAttemptRow | null {
+  const want = new Set(entryIds);
+  let last: QuizAttemptRow | null = null;
+  for (const a of attempts) {
+    if (a.staffId !== staffId || !want.has(a.entryId)) continue;
+    // taken_at 은 ISO 문자열이라 사전순 비교 = 시간순 비교다.
+    if (!last || a.takenAt > last.takenAt) last = a;
+  }
+  return last;
+}
+
 /** 완료 직후 1턴 캡처(S1 ②) 넛지 피로 상태 — 인메모리(리로드 시 리셋=양호한 degradation, 네이티브 지속성 회피). */
 export type CaptureNudge = { date?: string; skips: number };
 /**
@@ -603,6 +629,8 @@ type State = {
   trainingRequests: TrainingRequestRow[];
   /** 노하우별 저장 문항 수(0109) — 직원도 읽는 개수만. 업무 단위 판정은 quizCountForTask. */
   quizCounts: Record<string, number>;
+  /** 응시 기록(0112) — 직원은 RLS 로 본인 것만. 카드의 "지난번 …" 한 줄이 유일한 소비처. */
+  quizAttempts: QuizAttemptRow[];
   /** 완료 캡처(②) 넛지 피로 상태(인메모리). */
   captureNudge: CaptureNudge;
   loaded: boolean;
@@ -664,15 +692,16 @@ export const useWorkStore = create<State>((set, get) => ({
   courses: [],
   trainingRequests: [],
   quizCounts: {},
+  quizAttempts: [],
   captureNudge: { skips: 0 },
   loaded: !HAS_SUPABASE,
 
-  // 전체 재조회(templates·done·feed·링크·이해확인·코스항목·레거시항목·코스·요청·문항수 10쿼리)로
+  // 전체 재조회(templates·done·feed·링크·이해확인·코스항목·레거시항목·코스·요청·문항수·발송원장·응시기록 12쿼리)로
   // 스토어를 통째로 교체한다.
   // coalesce: 빠른 연속 체크로 realtime 이벤트가 몰려도 풀리페치가 병렬로 쌓이지 않게 합친다.
   hydrate: coalesce(async () => {
     if (!HAS_SUPABASE) return;
-    const [templates, done, feed, knowhowLinks, understanding, courseEntries, training, courses, trainingRequests, quizCounts, assignments] = await Promise.all([
+    const [templates, done, feed, knowhowLinks, understanding, courseEntries, training, courses, trainingRequests, quizCounts, assignments, quizAttempts] = await Promise.all([
       fetchTemplates(),
       fetchDone(),
       fetchFeed(),
@@ -684,9 +713,10 @@ export const useWorkStore = create<State>((set, get) => ({
       fetchTrainingRequests(),
       fetchQuizItemCounts(),
       fetchQuizAssignments(),
+      fetchQuizAttempts(),
     ]);
     set({
-      templates, done, feed, knowhowLinks, understanding, courseEntries, training, trainingRequests, assignments,
+      templates, done, feed, knowhowLinks, understanding, courseEntries, training, trainingRequests, assignments, quizAttempts,
       // 직원에게 보일 코스만(비활성 제외) 사장 화면과 같은 순서로 — 카드 순서 = 사장이 정한 순서.
       courses: (courses.data ?? []).filter((c) => c.active).sort((a, b) => a.position - b.position),
       // 읽기 실패(null)면 빈 맵 = 문항 0건 취급이다. 퀴즈가 잠깐 안 뜨는 쪽이 검수 안 된 문제가

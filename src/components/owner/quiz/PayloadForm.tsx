@@ -4,7 +4,7 @@
  * ★ 여기는 "입력 UI"만 담당한다. 저장 가능 여부의 판정은 **항상** FORMATS[f].validate(payload) 다
  *   (src/lib/quiz/formats). 이 파일에 검증 규칙을 복제하지 않는다 — 두 곳에 두면 서로 어긋난다.
  *
- * 14개 형태를 7가지 모양으로 묶어 재사용한다(계약 §2 payload 스키마 표 기준):
+ * 16개 형태를 8가지 모양으로 묶어 재사용한다(계약 §2 payload 스키마 표 기준):
  *   choices   — mc4 / order_pick / value_pick / trap_pick / case_pick / name_pick / chosung / scale_pick
  *   sequence  — wrong_spot
  *   order     — order_build
@@ -12,6 +12,7 @@
  *   cards     — mine_tap
  *   judge     — quick_judge
  *   branch    — branch_path
+ *   pairs     — flip_match / link_match
  * 형태가 늘면 shapeOf 에 한 줄만 더한다.
  *
  * ★★ shapeOf 의 default 는 'choices' 다 — 새 형태를 여기 안 적으면 **에러 없이** 4지선다 폼이 뜨고,
@@ -24,13 +25,15 @@ import { View, Text, TextInput, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { parseBranchNext } from '@/lib/quiz/formats/branchPath';
+import { FLIP_MAX_PAIRS } from '@/lib/quiz/formats/flipMatch';
+import { LINK_MAX_PAIRS } from '@/lib/quiz/formats/linkMatch';
 import type { QuizFormat } from '@/lib/quiz/types';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
 import { Field, TextField, IntField, qst } from './kit';
 
-type Shape = 'choices' | 'sequence' | 'order' | 'count' | 'cards' | 'judge' | 'branch';
+type Shape = 'choices' | 'sequence' | 'order' | 'count' | 'cards' | 'judge' | 'branch' | 'pairs';
 
 function shapeOf(f: QuizFormat): Shape {
   switch (f) {
@@ -40,6 +43,8 @@ function shapeOf(f: QuizFormat): Shape {
     case 'mine_tap': return 'cards';
     case 'quick_judge': return 'judge';
     case 'branch_path': return 'branch';
+    case 'flip_match': return 'pairs';
+    case 'link_match': return 'pairs';
     default: return 'choices';
   }
 }
@@ -47,6 +52,12 @@ function shapeOf(f: QuizFormat): Shape {
 /** 선택지 개수 상한 — 형태 파일의 maxChoices 와 같아야 한다(저울은 정확히 둘). */
 function choiceMaxOf(f: QuizFormat): number {
   return f === 'scale_pick' ? 2 : 4;
+}
+
+/** 짝 개수 하한·상한 — 형태 파일(flipMatch.ts · linkMatch.ts)의 값과 같아야 한다. */
+const PAIR_MIN = 3;
+function pairMaxOf(f: QuizFormat): number {
+  return f === 'flip_match' ? FLIP_MAX_PAIRS : LINK_MAX_PAIRS;
 }
 
 /** order_build 의 "맞는 순서" 보기 — items 는 섞여 저장되고 answer_seq 가 순서를 가리킨다. */
@@ -111,6 +122,8 @@ export function emptyPayload(f: QuizFormat): Record<string, any> {
       results: ['', ''],
       answer_path: [0, 0],
     };
+    // 짝은 저장 순서 그대로 나가고, 섞는 것은 서버가 한다(0161 quiz_strip_payload).
+    case 'pairs': return { ...base, pairs: [{ left: '', right: '' }, { left: '', right: '' }, { left: '', right: '' }] };
     case 'count': return { ...base, target: 3, unit: '' };
     case 'cards': return { ...base, cards: [{ text: '', is_mine: true }, { text: '', is_mine: false }, { text: '', is_mine: false }, { text: '', is_mine: false }] };
     case 'judge': return { ...base, labels: ['맞다', '아니다'], seconds: 20, cards: [{ text: '', answer: 0 }, { text: '', answer: 1 }, { text: '', answer: 0 }, { text: '', answer: 1 }] };
@@ -143,6 +156,10 @@ export function answerTextOf(f: QuizFormat, p: Record<string, any>): string {
       }
       return '';
     }
+    case 'pairs': return (p.pairs ?? [])
+      .map((x: any) => `${String(x?.left ?? '').trim()} – ${String(x?.right ?? '').trim()}`)
+      .filter((s: string) => s.trim() !== '–')
+      .join(' · ');
     case 'count': return `${p.target ?? ''}${p.unit ? ` ${p.unit}` : ''}`;
     case 'cards': return (p.cards ?? []).filter((c: any) => c?.is_mine).map((c: any) => c.text).filter(Boolean).join(' · ');
     case 'judge': return (p.cards ?? []).filter((c: any) => c?.answer === 0).map((c: any) => c.text).filter(Boolean).join(' · ');
@@ -433,6 +450,51 @@ export function PayloadForm({
             />
           </Field>
         </>
+      )}
+
+      {shape === 'pairs' && (
+        <Field
+          label="짝"
+          hint={format === 'flip_match'
+            ? '카드를 뒤집어 맞추는 짝이에요 · 같은 말이 두 번 나오면 안 돼요'
+            : '왼쪽과 오른쪽을 잇는 짝이에요 · 오른쪽은 직원에게 섞어서 보여줘요'}
+        >
+          {(p.pairs ?? []).map((pair: any, i: number) => (
+            <View key={i} style={fst.pairRow}>
+              <TextInput
+                style={[qst.input, fst.pairInput]}
+                value={pair?.left ?? ''}
+                onChangeText={(v) => setAt('pairs', i, { ...pair, left: v })}
+                placeholder={`왼쪽 ${i + 1}`}
+                placeholderTextColor={InkColors.ink3}
+                accessibilityLabel={`${i + 1}번째 짝 왼쪽`}
+              />
+              <TextInput
+                style={[qst.input, fst.pairInput]}
+                value={pair?.right ?? ''}
+                onChangeText={(v) => setAt('pairs', i, { ...pair, right: v })}
+                placeholder={`오른쪽 ${i + 1}`}
+                placeholderTextColor={InkColors.ink3}
+                accessibilityLabel={`${i + 1}번째 짝 오른쪽`}
+              />
+              {(p.pairs ?? []).length > PAIR_MIN ? (
+                <Pressable
+                  onPress={() => removeAt('pairs', i, PAIR_MIN)}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${i + 1}번째 짝 삭제`}
+                >
+                  <Ionicons name="close-circle-outline" size={19} color={InkColors.ink3} />
+                </Pressable>
+              ) : null}
+            </View>
+          ))}
+          <AddRow
+            label="짝 추가"
+            disabled={(p.pairs ?? []).length >= pairMaxOf(format)}
+            onPress={() => addAt('pairs', { left: '', right: '' }, pairMaxOf(format))}
+          />
+        </Field>
       )}
 
       {shape === 'count' && (

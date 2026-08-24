@@ -7,6 +7,8 @@ import { OrderBuild } from './OrderBuild';
 import { FillCount } from './FillCount';
 import { ScalePick } from './ScalePick';
 import { MineTap } from './MineTap';
+import { FlipMatch } from './FlipMatch';
+import { LinkMatch } from './LinkMatch';
 import { QuickJudge } from './QuickJudge';
 import { BranchPath } from './BranchPath';
 import type { QuizRendererProps } from './types';
@@ -26,6 +28,8 @@ export const QUIZ_RENDERERS: Record<QuizFormat, ComponentType<QuizRendererProps>
   scale_pick: ScalePick,
   trap_pick: TrapPick,
   mine_tap: MineTap,
+  flip_match: FlipMatch,
+  link_match: LinkMatch,
   case_pick: CasePick,
   quick_judge: QuickJudge,
   branch_path: BranchPath,

@@ -94,7 +94,42 @@ function choicePickSpec(
   };
 }
 
-// ── 형태 14종 ──────────────────────────────────────────────
+/**
+ * "짝 목록" 형태 둘(flip_match · link_match) 공용 정규화.
+ * ★ 양쪽 칸의 글자가 전부 서로 달라야 한다 — 같은 글자가 두 장 있으면 어느 것이 짝인지 알 수 없고
+ *   (뒤집기), 선을 어디에 그어도 맞는 문항이 된다(짝짓기). 고치지 말고 버린다.
+ *   짝: src/lib/quiz/formats/flipMatch.ts checkPairs
+ */
+function normPairs(raw: any, maxPairs: number): Record<string, unknown> | null {
+  const ask = normAsk(raw);
+  if (!ask) return null;
+  const src = Array.isArray(raw?.pairs) ? raw.pairs : [];
+  if (src.length < 3 || src.length > maxPairs) return null;
+  const pairs = src.map((p: any) => ({ left: text(p?.left), right: text(p?.right) }));
+  if (pairs.some((p: any) => !p.left || !p.right)) return null;
+  const flat = pairs.flatMap((p: any) => [p.left, p.right]);
+  if (new Set(flat).size !== flat.length) return null;
+  return { ask, pairs, explain: text(raw?.explain) };
+}
+
+function pairsSchema(maxPairs: number) {
+  return {
+    type: 'object',
+    properties: {
+      ask: STR,
+      pairs: {
+        type: 'array',
+        maxItems: maxPairs,
+        items: { type: 'object', properties: { left: STR, right: STR }, required: ['left', 'right'] },
+      },
+      explain: STR,
+      source_index: INT,
+    },
+    required: ['ask', 'pairs'],
+  };
+}
+
+// ── 형태 16종 ──────────────────────────────────────────────
 export const QUIZ_FORMATS: Record<string, QuizFormatSpec> = {
   // t0 안전망 — 기존 task:'quiz' 가 만들던 모양 그대로.
   mc4: choicePickSpec(
@@ -244,6 +279,33 @@ export const QUIZ_FORMATS: Record<string, QuizFormatSpec> = {
       if (mines === 0 || mines === cards.length) return null;
       return { ask, cards, explain: text(raw?.explain) };
     },
+  },
+
+  // t4 대응 — 노하우가 직접 적는 짝(물건↔자리, 용어↔뜻)이 재료다.
+  // ★ flip_match 는 짝 정보가 응시 화면까지 내려가는 **유일한 형태**다(매칭 게임이라 그렇다).
+  //   이유와 대가는 src/lib/quiz/formats/flipMatch.ts 맨 위 주석에 있다.
+  flip_match: {
+    bundled: true,
+    hint:
+      '노하우에서 **서로 짝인 것 둘**을 뽑아 pairs 에 담아라(예: 물건 ↔ 두는 자리, 용어 ↔ 뜻, 상황 ↔ 대응). '
+      + '짝은 3~6쌍이고, left·right 는 카드에 들어갈 짧은 말이다(10자 안쪽이 좋다). '
+      + 'ask 에는 무엇끼리 맞추는 판인지 한 줄로 쓴다(예: "물건과 두는 자리를 맞춰 주세요"). '
+      + '같은 말이 두 번 나오면 안 된다. 대응 관계가 노하우에 없으면 출제하지 마라.',
+    schema: pairsSchema(6),
+    normalize: (raw) => normPairs(raw, 6),
+  },
+
+  link_match: {
+    bundled: true,
+    hint:
+      '왼쪽 항목과 오른쪽 항목을 선으로 잇는 문제다. pairs 에 **서로 짝인 것**을 담아라'
+      + '(예: 물건 ↔ 두는 자리, 용어 ↔ 뜻, 상황 ↔ 대응). '
+      + '짝은 3~5쌍이고, left·right 는 한 줄에 들어갈 짧은 말이다. '
+      + 'ask 에는 무엇끼리 잇는지 한 줄로 쓴다(예: "물건과 두는 자리를 이어 주세요"). '
+      + '같은 말이 두 번 나오면 안 되고, 오른쪽 항목 여러 개에 동시에 해당하는 왼쪽 항목을 만들지 마라. '
+      + '대응 관계가 노하우에 없으면 출제하지 마라.',
+    schema: pairsSchema(5),
+    normalize: (raw) => normPairs(raw, 5),
   },
 
   // t5 갈래

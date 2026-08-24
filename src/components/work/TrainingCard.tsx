@@ -3,6 +3,7 @@ import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { Collapse } from '@/components/Collapse';
+import { ProgressPill, type ProgressTone } from '@/components/blocks/ProgressPill';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
@@ -46,27 +47,41 @@ function deadlineLabel(dueOn: string | null | undefined, todayYmd: string): { te
   return { text: m ? `${Number(m[2])}월 ${Number(m[3])}일까지` : `${dueOn}까지`, tone: 'plain' };
 }
 
-const STATE_CHIP: Record<TrainingCardItem['state'], { label: string; color: string; bg: string }> = {
-  passed: { label: '통과', color: BrandColors.goodText, bg: '#E6F1EA' },
-  next: { label: '다음', color: InkColors.ink, bg: InkColors.cream },
-  todo: { label: '대기', color: InkColors.ink3, bg: InkColors.bgSoft },
-  due: { label: '다시 확인', color: '#8a5a12', bg: BrandColors.warnSoft },
-  asked: { label: '사장님 요청', color: '#8a5a12', bg: BrandColors.warnSoft },
-};
+/**
+ * 펼친 목록의 갈래 — **한 줄씩 상태칩이 붙던 평평한 목록을 갈래로 나눈 것**(데모 §12).
+ * 예전에는 '처음 배우는 것'과 '다시 확인할 것'과 '사장님이 콕 집어 보낸 것'이 한 줄 간격으로
+ * 섞여 있어서 칩 색을 하나하나 읽어야 구분이 됐다. 갈래를 제목으로 올리면 색 없이도 읽힌다
+ * (색 단독으로 상태를 구분하지 않는다 — 여기서는 **제목이 그 라벨**이라 행에 칩을 다시 붙이지 않는다).
+ *
+ * ★상태값은 호출부(WorkBoard.trainingCards)가 정한 것을 그대로 담기만 한다 — 여기서 다시 판정하지 않는다.
+ */
+const ITEM_GROUPS: { label: string; states: TrainingCardItem['state'][] }[] = [
+  // 사람이 기다리는 것이 맨 위 — 카드 위쪽의 '다음 한 개' 우선순위와 같은 순서다.
+  { label: '사장님 요청', states: ['asked'] },
+  { label: '새로 배정됨', states: ['next', 'todo'] },
+  { label: '다시 확인할 노하우', states: ['due'] },
+  { label: '통과', states: ['passed'] },
+];
 
 /**
  * TrainingCard — 직원 업무 채팅 상단의 퀴즈 카드(코스 1개 = 카드 1장).
- * 위에는 "다음 한 개"(순서의 외부화), 펼치면 전체 항목과 상태가 보인다(색+텍스트 병기).
+ * 위에는 "다음 한 개"(순서의 외부화) + 진행 알약 + 지난번 결과 한 줄, 펼치면 전체 항목이 **갈래별로** 보인다.
  * 문제 풀이는 자발 — 페널티 없음. 1회성 코스는 전부 통과하면, 주기 코스는 다시 확인할 게 없으면 사라진다.
  */
 export function TrainingCard({
   course,
   items,
+  lastResult,
   onOpenKnowhow,
   onStartCheck,
 }: {
   course: TrainingCardCourse;
   items: TrainingCardItem[];
+  /**
+   * 이 카드의 노하우들 중 **내가 마지막으로 푼 응시 1건**(0112). 없으면 줄 자체가 없다.
+   * 집계는 `lastQuizAttemptOf`(useWorkStore) 가 한다 — 카드는 받은 값을 그리기만 한다.
+   */
+  lastResult?: { total: number; correct: number } | null;
   /** 항목 id = 노하우 id(0111). */
   onOpenKnowhow: (entryId: string) => void;
   onStartCheck: (entryId: string) => void;
@@ -81,13 +96,20 @@ export function TrainingCard({
 
   // 1회성(due_days 없음)이면 "처음 배우는 중", 주기가 있으면 "다시 확인하는 중" — 코스 행 하나로 갈린다.
   const oneShot = course.dueDays === null;
-  const dueCount = items.filter((it) => it.state === 'due' || it.state === 'asked').length;
   // 제목은 코스 이름 그대로 — 종류가 여러 개라 '첫 출근'/'포지션 바뀔 때'가 구분돼야 한다.
   const title = course.name;
-  // ★완료가 아니라 **잔여**를 센다(뤼이드 튜터 레퍼런스 leveltest_05). 잔여는 0이 되는 순간
-  //   카드가 사라지므로 "0/5 통과" 같은 0 전시가 구조적으로 생기지 않는다(R1-1의 상위 해법).
-  const leftCount = oneShot ? items.filter((it) => it.state !== 'passed').length : dueCount;
-  const badge = `${leftCount}개 남았어요`;
+  /*
+   * 진행 표기 — **배정받은 것 중 몇 개를 했나**(데모 §12). 예전엔 잔여("3개 남았어요")만 말해서
+   * 전체가 몇 개인지가 카드에 없었다(뤼이드 잔여 카운터는 응시 화면에 그대로 남아 있다 —
+   * `UnderstandingCheckSheet` 의 "N문제 남았어요").
+   *  · 알약은 새로 그리지 않고 `ProgressPill`(D7) 을 그대로 쓴다.
+   *  · ★한 개도 안 했으면 `0/5` 가 아니라 상태어다(R1-1 · 진행·통과의 0은 숫자로 쓰지 않는다).
+   *  · ★빨강(behind)을 쓰지 않는다 — 주기가 돌아온 것은 직원이 잘못한 게 아니다(재촉 금지).
+   *    이 카드가 여러 장 뜨는 것도 아니라 색으로 급함을 다툴 자리가 아니다.
+   */
+  const passedCount = items.filter((it) => it.state === 'passed').length;
+  const progressText = passedCount > 0 ? `${passedCount}/${items.length} 통과` : '아직 시작 전';
+  const progressTone: ProgressTone = passedCount > 0 ? 'progress' : 'neutral';
   const ctaLabel = oneShot ? '혼자 할 수 있어요' : '다시 확인하기';
   const deadline = deadlineLabel(course.dueOn, kstToday);
 
@@ -96,7 +118,7 @@ export function TrainingCard({
       <View style={st.head}>
         <Ionicons name={oneShot ? 'school-outline' : 'refresh-outline'} size={16} color={InkColors.ink} />
         <Text style={st.title}>{title}</Text>
-        <Text style={[st.progress, !oneShot && { color: '#8a5a12' }]}>{badge}</Text>
+        <ProgressPill text={progressText} tone={progressTone} />
       </View>
 
       <Text style={st.next} numberOfLines={2}>
@@ -121,6 +143,15 @@ export function TrainingCard({
             {deadline.text}
           </Text>
         </View>
+      ) : null}
+
+      {/* 지난번 결과 — 사실만 한 줄(평가 금지). 푼 적이 없으면 줄 자체가 없다. */}
+      {lastResult ? (
+        <Text style={st.lastText} numberOfLines={1}>
+          {lastResult.correct === lastResult.total
+            ? '지난번 퀴즈 · 통과했어요'
+            : `지난번 퀴즈 · ${lastResult.total}개 중 ${lastResult.correct}개 맞았어요`}
+        </Text>
       ) : null}
 
       <View style={st.btnRow}>
@@ -156,20 +187,26 @@ export function TrainingCard({
       </Pressable>
       {expanded && (
         <Collapse style={st.itemList}>
-          {items.map((it, i) => {
-            const chip = STATE_CHIP[it.state];
+          {ITEM_GROUPS.map((g) => {
+            // 번호는 **코스 순서**(배우는 순서)라 갈래로 나눠도 원래 자리 번호를 그대로 들고 간다.
+            const rows = items.map((it, i) => ({ it, no: i + 1 })).filter((r) => g.states.includes(r.it.state));
+            if (rows.length === 0) return null; // 빈 갈래는 제목도 안 뜬다
             return (
-              <Pressable
-                key={it.id}
-                onPress={() => onOpenKnowhow(it.id)}
-                style={({ pressed }) => [st.itemRow, pressed && { opacity: 0.7 }]}
-                accessibilityRole="button"
-                accessibilityLabel={`${it.text} 노하우 읽기`}
-              >
-                <Text style={st.itemNum}>{i + 1}</Text>
-                <Text style={st.itemText} numberOfLines={1}>{it.text}</Text>
-                <Text style={[st.chip, { color: chip.color, backgroundColor: chip.bg }]}>{chip.label}</Text>
-              </Pressable>
+              <View key={g.label} style={st.group}>
+                <Text style={st.groupLabel}>{g.label} · {rows.length}개</Text>
+                {rows.map(({ it, no }) => (
+                  <Pressable
+                    key={it.id}
+                    onPress={() => onOpenKnowhow(it.id)}
+                    style={({ pressed }) => [st.itemRow, pressed && { opacity: 0.7 }]}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${it.text} 노하우 읽기`}
+                  >
+                    <Text style={st.itemNum}>{no}</Text>
+                    <Text style={st.itemText} numberOfLines={1}>{it.text}</Text>
+                  </Pressable>
+                ))}
+              </View>
             );
           })}
         </Collapse>
@@ -186,11 +223,12 @@ const st = StyleSheet.create({
   },
   head: { flexDirection: 'row', alignItems: 'center', gap: Space.xs },
   title: { flex: 1, fontSize: 13, fontWeight: '800', color: InkColors.ink },
-  progress: { fontSize: 12, fontWeight: '800', color: BrandColors.goodText },
   next: { fontSize: 15, fontWeight: '700', color: InkColors.ink, lineHeight: 21 },
   // 마감 꼬리표 — 상태 라벨이라 본문 15sp 하한 대상이 아니다(복잡도 §4 "보조").
   dueRow: { flexDirection: 'row', alignItems: 'center', gap: Space.xs },
   dueText: { fontSize: 13, fontWeight: '700', color: InkColors.ink3, lineHeight: 18 },
+  // 지난번 결과 — 마감 꼬리표와 같은 급의 보조 표기(본문 15sp 하한 대상 아님).
+  lastText: { fontSize: 13, fontWeight: '600', color: InkColors.ink3, lineHeight: 18 },
   btnRow: { flexDirection: 'row', gap: Space.sm, marginTop: Space.xs },
   softBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, minHeight: 48,
@@ -208,13 +246,11 @@ const st = StyleSheet.create({
     borderTopWidth: 1, borderTopColor: InkColors.line, marginTop: Space.xs, paddingVertical: Space.sm, minHeight: 40,
   },
   expandText: { fontSize: 12.5, fontWeight: '700', color: InkColors.ink2 },
-  // 카드가 gap 으로 벌리던 항목 간격 — Collapse 로 한 겹 감싸면서 이 안쪽으로 옮겨 온다(간격 유지).
-  itemList: { gap: Space.xs },
+  // 갈래 사이 간격. 행 간격은 group 이 갖는다(예전엔 여기 하나가 행 간격이었다).
+  itemList: { gap: Space.md },
+  group: { gap: Space.xs },
+  groupLabel: { fontSize: 12, fontWeight: '900', color: InkColors.ink3 },
   itemRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingVertical: Space.xs + 2, minHeight: 36 },
   itemNum: { width: 18, fontSize: 12, fontWeight: '800', color: InkColors.ink3, textAlign: 'center' },
   itemText: { flex: 1, fontSize: 13.5, fontWeight: '600', color: InkColors.ink, minWidth: 0 },
-  chip: {
-    fontSize: 11, fontWeight: '900', paddingHorizontal: Space.xs + 2, paddingVertical: 2,
-    borderRadius: Radius.pill, overflow: 'hidden',
-  },
 });

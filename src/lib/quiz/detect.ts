@@ -54,6 +54,55 @@ function hasNumericValue(text: string): boolean {
   return T2_RE.test(clean) || T2_FRACTION.test(clean);
 }
 
+// ── t2 수치 값 추출 ────────────────────────────────────────
+// 판정(hasNumericValue)이 "값이 있나"만 보는 데 비해, 여기는 **그 값이 얼마인가**를 꺼낸다.
+// 혼동쌍 탐지(confusion.ts)가 "같은 단위인데 값이 다른 두 노하우"를 찾을 때 쓰는 재료다.
+// ★ 같은 규칙을 두 벌 두지 않으려고 위 T2_* 조각을 그대로 재조립한다 — 단위 화이트리스트가
+//   바뀌면 판정과 추출이 함께 바뀐다.
+const T2_CAPTURE = new RegExp(
+  `(?:^|[^0-9A-Za-z가-힣])(${T2_NUM})\s?(${T2_UNIT})${T2_ORDINAL_NOUN}${T2_TAIL}(?![가-힣A-Za-z0-9])`,
+  'g',
+);
+/** T2_NUM 이 허용하는 한글 수 — 숫자로 바꿔야 크기를 비교할 수 있다. */
+const KO_NUM: Record<string, number> = {
+  한: 1, 두: 2, 세: 3, 네: 4, 다섯: 5, 여섯: 6, 일곱: 7, 여덟: 8, 아홉: 9, 열: 10,
+};
+/** 같은 것을 다르게 적은 단위. 이걸 안 맞추면 "3도 vs 5℃"가 서로 다른 단위로 보여 쌍을 놓친다. */
+const UNIT_ALIAS: Record<string, string> = {
+  '℃': '도', '%': '퍼센트', '㎖': 'ml', 'mL': 'ml', 'L': '리터', 'g': '그램',
+};
+
+/** 노하우 하나에서 읽어 낸 수치. unit 은 위 별칭으로 정규화된 값이다. */
+export type NumericValue = { value: number; unit: string };
+
+/**
+ * 이 노하우가 말하는 "값들". standard(등록 화면에서 구조로 받은 값)가 가장 정확하므로 맨 앞에 둔다.
+ * 그다음이 본문 패턴이다.
+ *
+ * ★ 이 결과는 **문항 내용이 아니라 후보 판정용**이다. 실제 문항은 노하우 원문을 본 AI가 만든다
+ *   → 여기서 엉뚱한 숫자를 집어도 최악이 "문항이 안 만들어짐"이지 틀린 문항이 나가지는 않는다.
+ * ★ 분수(1/2 컵)는 빼 둔다 — T2_FRACTION 이 단위를 같이 잡지 않아 비교 대상을 특정할 수 없다.
+ */
+export function numericValues(entry: PlaybookEntry): NumericValue[] {
+  const out: NumericValue[] = [];
+  const push = (value: number, rawUnit: string) => {
+    const unit = UNIT_ALIAS[rawUnit] ?? rawUnit;
+    if (!unit || !Number.isFinite(value) || value <= 0) return;
+    if (out.some((v) => v.unit === unit && v.value === value)) return;
+    out.push({ value, unit });
+  };
+
+  const st = entry?.square?.standard;
+  if (st?.kind === 'count' && st.unit) push(Number(st.value), String(st.unit).trim());
+
+  const clean = bodyOf(entry).replace(T2_NOISE, ' ');
+  T2_CAPTURE.lastIndex = 0;
+  for (let m = T2_CAPTURE.exec(clean); m; m = T2_CAPTURE.exec(clean)) {
+    push(KO_NUM[m[1]] ?? Number(m[1]), m[2]);
+  }
+  return out;
+}
+
 // ── t5 갈래 ────────────────────────────────────────────────
 // 조건 표지가 **먼저** 있어야 갈래다. 그 위에 분기 신호를 본다.
 // (분기 신호만으로 판정하면 "청소하고, 정리한다" 같은 단순 나열이 갈래로 잡힌다.)

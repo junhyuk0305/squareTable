@@ -26,6 +26,8 @@ import { fillCount } from './fillCount';
 import { scalePick } from './scalePick';
 import { trapPick } from './trapPick';
 import { mineTap } from './mineTap';
+import { flipMatch } from './flipMatch';
+import { linkMatch } from './linkMatch';
 import { casePick } from './casePick';
 import { quickJudge } from './quickJudge';
 import { branchPath } from './branchPath';
@@ -35,9 +37,13 @@ import { chosung } from './chosung';
 export type { FormatSpec } from './spec';
 
 /**
- * 형태 14종. ★ 나열 순서에 의미가 있다 — 유형(kind)마다 일반형이 먼저, 게임형이 다음이다.
+ * 형태 16종. ★ 나열 순서에 의미가 있다 — 유형(kind)마다 일반형이 먼저, 게임형이 다음이다.
  * formatsForKind() 가 이 순서를 그대로 돌려주므로 생성기가 "게임이 안 되면 일반형으로"를
  * 별도 표 없이 판단할 수 있다(07-29 §03 "왜 두 갈래인가" — 일반형은 안전판).
+ *
+ * ★ t4 는 게임형 둘뿐이다(일반형 안전판이 없다). 폐기된 pair_pick(t4 일반형)을 되살리지 않았기
+ *   때문인데, 지금은 detectKinds 가 t4 를 뽑지 않아 자동 출제 경로에 t4 가 아예 들어오지 않는다.
+ *   t4 판정을 붙이는 쪽에서 "게임이 안 되면 갈 곳이 없다"를 함께 다뤄야 한다.
  */
 export const FORMATS: Record<QuizFormat, FormatSpec> = {
   mc4,                      // t0 안전망
@@ -49,6 +55,8 @@ export const FORMATS: Record<QuizFormat, FormatSpec> = {
   scale_pick: scalePick,    // t2 게임 ★수동 전용(혼동쌍 재료가 필요 — 아래 주석)
   trap_pick: trapPick,      // t3 일반
   mine_tap: mineTap,        // t3 게임
+  flip_match: flipMatch,    // t4 게임 ★유일하게 짝 정보가 응시 payload 에 남는다(flipMatch.ts 주석)
+  link_match: linkMatch,    // t4 게임
   case_pick: casePick,      // t5 일반
   quick_judge: quickJudge,  // t5 게임
   branch_path: branchPath,  // t5 게임
