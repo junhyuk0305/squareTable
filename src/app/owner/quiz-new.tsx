@@ -154,18 +154,6 @@ export default function QuizNewScreen() {
     return pool.filter((e) => e.title.toLowerCase().includes(k));
   }, [pool, q]);
 
-  /**
-   * ★파트는 **거르는 축이 아니라 순서만 올리는 추천 축**이다(0164).
-   * 고른 파트의 노하우가 위로 올라올 뿐, 나머지 노하우는 그대로 다 보인다 —
-   * 파트는 지연 생성이라 초기엔 대부분 노하우에 파트가 없고, 그때 교집합으로 거르면
-   * 목록이 통째로 비어 아무 일도 안 하는 기능이 된다. 교집합(AND) 필터를 여기 만들지 말 것.
-   * (sort 는 ES2019부터 안정 정렬이라 같은 무리 안의 기존 순서는 그대로다.)
-   */
-  const ranked = useMemo(() => {
-    if (!partId) return filtered;
-    return [...filtered].sort((a, b) => Number(b.part_id === partId) - Number(a.part_id === partId));
-  }, [filtered, partId]);
-
   const toggle = (id: string) => setPicked((v) => (v.includes(id) ? v.filter((x) => x !== id) : [...v, id]));
 
   // 파트 후보 = 이 매장이 실제로 쓴 값. 표준 세트를 우리가 정해 주지 않는다(0164 ②).
@@ -202,6 +190,28 @@ export default function QuizNewScreen() {
     () => new Map(essential.picks.map((p) => [p.entryId, p.reason])),
     [essential],
   );
+
+  /**
+   * 목록 순서 — 두 추천 축을 순서로만 반영한다. **거르지 않는다.**
+   *
+   * ① 자동 선정분(essential)이 먼저다. 바로 위 줄이 "꼭 알아야 하는 것 N개를 미리 골라 뒀어요"라고
+   *    말하는데, 그 N개가 목록 아래쪽에 흩어져 있으면 첫 화면에는 **빈 체크박스만 보인다**
+   *    (2026-08-25 실측: 8건이 전부 스크롤 아래 top=1243~2925 에 있었다 = 문장이 거짓말로 읽힌다).
+   *    ★기준은 `picked`(사장이 지금 체크한 것)가 아니라 `essential.picks`(자동 선정 결과)다 —
+   *    picked 로 정렬하면 체크를 누를 때마다 줄이 튀어 올라 다음 줄을 잘못 누르게 된다.
+   * ② 그 안에서 고른 파트의 노하우가 먼저다(0164).
+   *
+   * ★파트도 필수도 **거르는 축이 아니다.** 파트는 지연 생성이라 초기엔 대부분 노하우에 파트가
+   *   없고, 그때 교집합으로 거르면 목록이 통째로 비어 아무 일도 안 하는 기능이 된다.
+   *   교집합(AND) 필터를 여기 만들지 말 것.
+   * (sort 는 ES2019부터 안정 정렬이라 같은 무리 안의 기존 순서는 그대로다.)
+   */
+  const ranked = useMemo(() => {
+    const ess = new Set(essential.picks.map((p) => p.entryId));
+    if (ess.size === 0 && !partId) return filtered;
+    const rank = (e: (typeof filtered)[number]) => (ess.has(e.id) ? 2 : 0) + (partId && e.part_id === partId ? 1 : 0);
+    return [...filtered].sort((a, b) => rank(b) - rank(a));
+  }, [filtered, partId, essential]);
 
   // 스코프가 바뀔 때 **한 번씩만** 미리 체크를 덮어쓴다. 매 렌더 덮어쓰면 사장이 뺀 체크가 되살아난다.
   // ★이펙트가 아니라 **렌더 중에** 맞춘다. 이펙트에서 동기 setState 를 하면 커밋한 화면을 그린 뒤

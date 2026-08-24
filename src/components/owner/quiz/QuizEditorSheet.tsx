@@ -17,6 +17,7 @@ import { FORMATS, formatsForKind } from '@/lib/quiz/formats';
 import { detectKinds } from '@/lib/quiz/detect';
 import { findPairSet } from '@/lib/quiz/pairing';
 import { generateQuizItems, QuizQuotaError } from '@/lib/quiz/generate';
+import { changedKinds } from '@/lib/quiz/delta';
 import { insertQuizItem, updateQuizItem } from '@/lib/db';
 import { guardWrite } from '@/lib/store/useSyncStore';
 import { useSessionStore } from '@/lib/store/useSessionStore';
@@ -153,15 +154,33 @@ export function QuizEditorSheet({
     setStep('form');
   };
 
+  /**
+   * ★델타 출제가 켜지는 자리 — [다시 만들기](0114)에서 **형태를 고르지 않았을 때**만이다.
+   *
+   * 07-29 원설계 "노하우가 바뀌면 바뀐 칸만 1문항"을 화면에 잇는다. 조건이 이렇게 좁은 이유:
+   *   · 형태를 고른 경우는 사장이 "이 형태로 내 달라"고 말한 것이다 — 델타가 그걸 덮으면 안 된다.
+   *   · 새 문항 만들기(replacing 없음)는 애초에 "다시 물을 것"이 없다. 델타는 옛 문항이 있어야 성립한다.
+   * 델타 판정(changedKinds)은 순수 함수라 **여기서 먼저 돌린다** — 다시 낼 칸이 없으면 AI 를
+   * 아예 부르지 않고, "만들지 못했어요"(재료 부족)와 "그대로예요"(바뀐 게 없음)를 갈라 말한다.
+   * 그 둘을 같은 문구로 말하면 사장은 노하우를 고쳤는데도 무엇이 잘못됐는지 알 수 없다.
+   */
   const runGenerate = async (formats: QuizFormat[]) => {
     if (linkedEntries.length === 0 || busy) return;
+    const useDelta = !!replacing && formats.length === 0;
+    if (useDelta && changedKinds(linkedEntries, [replacing]).length === 0) {
+      setAiNote('노하우가 그대로라 다시 낼 게 없어요. 형태를 골라 주시면 그 형태로 새로 만들어요.');
+      return;
+    }
     setBusy(true);
     setAiNote(null);
     let made: QuizItem[] = [];
     try {
       // 여러 건을 넘기면 묶음형(줄 잇기·빠른 판별)도 후보가 된다.
       // pool = 짝 후보(t4). 형태 고르개와 같은 풀을 써야 "고를 수 있었는데 못 만든다"가 안 생긴다.
-      made = await generateQuizItems(linkedEntries, formats, { unitId, createdBy: userId, pool: pairPool });
+      made = await generateQuizItems(linkedEntries, formats, {
+        unitId, createdBy: userId, pool: pairPool,
+        ...(useDelta ? { existing: [replacing] } : {}),
+      });
     } catch (e) {
       setBusy(false);
       // "낼 게 부족해서 안 낸 것"과 "장애·한도"를 섞지 않는다(generate.ts 주석).
@@ -353,7 +372,11 @@ export function QuizEditorSheet({
                 {/* 문항 만들기는 AI 사용량을 쓰지 않는다(엣지 denylist) — 캡을 물리면 사장이 아껴서
                     문항이 안 만들어지고, 그러면 퀴즈가 아예 안 나간다. 옛 문구는 "1회 써요"였는데
                     실제로는 형태 개수만큼 썼다(최대 6회) — 숫자도 틀렸고 이제 차감 자체가 없다. */}
-                <Text style={est.note}>고르지 않으면 노하우에 맞는 형태로 알아서 만들어요</Text>
+                <Text style={est.note}>
+                  {replacing
+                    ? '고르지 않으면 노하우에서 바뀐 것만 골라 다시 내요'
+                    : '고르지 않으면 노하우에 맞는 형태로 알아서 만들어요'}
+                </Text>
                 {aiNote ? <ErrorNote text={aiNote} /> : null}
               </>
             )}
@@ -444,9 +467,14 @@ export function QuizEditorSheet({
       <View style={qst.foot}>
         {step === 'pick' && startMode === 'ai' && (
           <PrimaryButton
-            label={busy ? '만드는 중…' : aiFormats.size > 0 ? `고른 ${aiFormats.size}가지로 만들기` : '알아서 만들어 줘'}
+            label={busy ? '만드는 중…' : aiFormats.size > 0 ? `고른 ${aiFormats.size}가지로 만들기` : replacing ? '바뀐 것만 다시 내기' : '알아서 만들어 줘'}
             disabled={busy || linkedEntries.length === 0}
-            onPress={() => void runGenerate(aiFormats.size > 0 ? [...aiFormats] : availableFormats.map((s) => s.key))}
+            /* ★[다시 만들기]에서 형태를 안 고르면 **빈 배열**을 넘긴다 — generateQuizItems 의 델타
+               분기 조건이 `형태 목록이 비었을 때`라서, 여기서 전체 형태를 채우면 영영 도달하지 않는다
+               (0114 흐름에 델타가 안 물려 있던 이유가 정확히 이 한 줄이었다). */
+            onPress={() => void runGenerate(
+              aiFormats.size > 0 ? [...aiFormats] : replacing ? [] : availableFormats.map((s) => s.key),
+            )}
           />
         )}
         {step === 'form' && (

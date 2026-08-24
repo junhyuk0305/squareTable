@@ -18,7 +18,7 @@ import type { PlaybookEntry } from '@/types';
 import { findConfusionPair, type ConfusionPair } from './confusion';
 import { changedKinds } from './delta';
 import { detectKinds, numericValues, storeTerms } from './detect';
-import { FORMATS, formatsForKind } from './formats';
+import { FORMATS, formatsForKind, safetyNetFor } from './formats';
 import { MAX_TARGET as FILL_COUNT_MAX } from './formats/fillCount';
 import { pairPlan, pairPlanFor } from './pairing';
 import type { QuizFormat, QuizItem, QuizKind } from './types';
@@ -282,13 +282,15 @@ export async function generateQuizItems(
   const items: QuizItem[] = [];
   let lastErr: unknown;
 
-  // 순차 호출 — 엣지 레이트리밋이 사용자당 분당 10회다(index.ts RATE_PER_MIN_USER).
-  // 병렬로 쏘면 형태 몇 개만 만들어도 429가 난다.
-  for (const plan of plans) {
+  /**
+   * 계획 하나를 실제 문항으로 바꾼다. 만든 것은 items 에 쌓는다.
+   * ★루프 밖으로 뺀 이유는 아래 **안전판**이 같은 몸통을 한 번 더 쓰기 때문이다.
+   */
+  const runPlan = async (plan: QuizItemPlan): Promise<void> => {
     // 우리가 만든 payload(t4 짝짓기)는 엣지를 부르지 않는다 — 짝을 이미 다 알아서 물어볼 게 없다.
     // 레지스트리 검증은 AI 결과와 똑같이 통과해야 한다(우리가 만들었다고 봐주지 않는다).
     if (plan.payload) {
-      if (FORMATS[plan.format].validate(plan.payload)) continue;
+      if (FORMATS[plan.format].validate(plan.payload)) return;
       items.push({
         id: genId('qi'),
         unit_id: opts.unitId ?? '',
@@ -300,7 +302,7 @@ export async function generateQuizItems(
         status: 'active',
         ...(opts.createdBy ? { created_by: opts.createdBy } : {}),
       });
-      continue;
+      return;
     }
     try {
       const out = await callQuizItemEdge({
@@ -339,6 +341,36 @@ export async function generateQuizItems(
       console.warn('[quiz] generateQuizItems failed:', plan.format, e);
       reportError('quiz.generateQuizItems.failed', e, { format: plan.format });
     }
+  };
+
+  // 순차 호출 — 엣지 레이트리밋이 사용자당 분당 10회다(index.ts RATE_PER_MIN_USER).
+  // 병렬로 쏘면 형태 몇 개만 만들어도 429가 난다.
+  for (const plan of plans) await runPlan(plan);
+
+  /**
+   * ── 안전판(일반형) — 게임형이 아무것도 못 냈으면 그 유형의 일반형으로 **한 번만** 더 묻는다.
+   *
+   * ★왜 필요한가(2026-08-25 실측):
+   *   레지스트리 나열 순서 규약은 "유형마다 specs[0] 이 일반형(안전판)"이고, pickFormats 는
+   *   `게임형 후보가 비면 일반형`으로 떨어진다. 그런데 0158·0168 이 t1·t3·t5 에 **재료 게이트가
+   *   없는** 게임형(order_build·mark_paragraph·branch_path)을 넣으면서 후보가 영영 비지 않게 됐고,
+   *   그 순간 일반형은 자동 출제에서 **도달 불가능한 코드**가 됐다.
+   *   그 뒤 mark_paragraph 가 실제로 생성에 실패하자, dont 가 적힌 노하우(= 07-29 출제 1순위)는
+   *   통째로 "문제를 못 만들었어요"가 됐다 — 사장이 미리 골라 준 8건이 전부 0문항이었다.
+   *
+   * ★재료 게이트로는 못 막는다. "모델이 이 노하우로 이 형태를 만들 수 있는가"는 불러 봐야 안다.
+   *   그래서 예측이 아니라 **결과**로 떨어진다.
+   *
+   * 조건이 좁다 — 한 번의 호출을 더 쓰는 일이라 함부로 켜지 않는다:
+   *   · 사장이 형태를 직접 고른 경로(formats 인자)에서는 안 한다. 고른 것과 다른 형태를 만들어
+   *     주는 것은 요청을 바꿔치기하는 것이다.
+   *   · 장애(lastErr)였으면 안 한다 — 같은 이유로 또 실패하고, 아래에서 throw 로 구분해 알린다.
+   *   · 이미 일반형을 시도했거나 안전판이 없는 유형(t4)이면 안 한다.
+   */
+  if (items.length === 0 && !lastErr && !formats?.length && plans.length > 0) {
+    const tried = new Set(plans.map((p) => p.format));
+    const net = plans.map((p) => safetyNetFor(p.kind)).find((f) => f && !tried.has(f.key));
+    if (net) await runPlan(planFor(net.key, list, pool));
   }
 
   // 하나도 못 만들었는데 호출이 실패했다면 "낼 게 없었다"가 아니라 장애다 — 구분해서 알린다.

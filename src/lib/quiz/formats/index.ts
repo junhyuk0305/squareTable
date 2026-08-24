@@ -76,3 +76,17 @@ export const FORMAT_KEYS = Object.keys(FORMATS) as QuizFormat[];
 export function formatsForKind(kind: QuizKind): FormatSpec[] {
   return FORMAT_KEYS.map((k) => FORMATS[k]).filter((f) => f.kind === kind);
 }
+
+/**
+ * 이 유형의 **안전판(일반형)**. 없으면 null.
+ *
+ * 위 나열 순서 규약(유형마다 specs[0] 이 일반형)을 읽는 유일한 창구다 — `specs[0]` 을 여기저기서
+ * 직접 집으면 t4 처럼 일반형이 없는 유형에서 게임형을 안전판으로 착각한다.
+ *
+ * ★t4 는 게임형 둘뿐이라 안전판이 없다(폐기된 pair_pick 을 되살리지 않았다 — 위 FORMATS 주석).
+ *   대신 t4 는 재료가 맞을 때만 kinds 에 얹히므로 "게임이 안 되면 갈 곳이 없다"가 생기지 않는다.
+ */
+export function safetyNetFor(kind: QuizKind): FormatSpec | null {
+  if (kind === 't4') return null;
+  return formatsForKind(kind)[0] ?? null;
+}

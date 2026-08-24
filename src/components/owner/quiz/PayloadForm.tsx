@@ -30,6 +30,7 @@ import { parseBranchNext } from '@/lib/quiz/formats/branchPath';
 import { FLIP_MAX_PAIRS } from '@/lib/quiz/formats/flipMatch';
 import { LINK_MAX_PAIRS } from '@/lib/quiz/formats/linkMatch';
 import { NUMERIC_MAX } from '@/lib/quiz/formats/numericEntry';
+import { QJ_MIN_SECONDS, QJ_MAX_SECONDS, QJ_DEFAULT_SECONDS } from '@/lib/quiz/formats/quickJudge';
 import type { QuizFormat } from '@/lib/quiz/types';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
@@ -144,7 +145,7 @@ export function emptyPayload(f: QuizFormat): Record<string, any> {
         { text: '', tap: true, is_wrong: false },
       ],
     };
-    case 'judge': return { ...base, labels: ['맞다', '아니다'], seconds: 20, cards: [{ text: '', answer: 0 }, { text: '', answer: 1 }, { text: '', answer: 0 }, { text: '', answer: 1 }] };
+    case 'judge': return { ...base, labels: ['맞다', '아니다'], seconds: QJ_DEFAULT_SECONDS, cards: [{ text: '', answer: 0 }, { text: '', answer: 1 }, { text: '', answer: 0 }, { text: '', answer: 1 }] };
     default: {
       const n = choiceMaxOf(f);
       const p: Record<string, any> = { ...base, choices: new Array(n).fill(''), answer_index: 0 };
@@ -619,8 +620,16 @@ export function PayloadForm({
               />
             </View>
           </Field>
-          <Field label="제한 시간">
-            <IntField value={p.seconds ?? 20} onChange={(v) => set({ seconds: v })} min={5} max={60} unit="초" />
+          {/* ★범위는 quickJudge.ts 가 SSOT 다. 폼이 더 넓으면 사장이 채운 값이 validate 에 걸려
+              저장이 막히는 막다른 길이 된다(옛 폼은 5~60·기본 20 이라 기본값으로도 저장이 안 됐다). */}
+          <Field label="카드 하나에 주는 시간">
+            <IntField
+              value={p.seconds ?? QJ_DEFAULT_SECONDS}
+              onChange={(v) => set({ seconds: v })}
+              min={QJ_MIN_SECONDS}
+              max={QJ_MAX_SECONDS}
+              unit="초"
+            />
           </Field>
           <Field label="카드" hint={`누르면 정답이 ${(p.labels ?? [])[0] || '첫 번째'}·${(p.labels ?? [])[1] || '두 번째'} 사이에서 바뀌어요`}>
             {(p.cards ?? []).map((c: any, i: number) => (

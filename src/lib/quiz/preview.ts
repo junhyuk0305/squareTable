@@ -26,6 +26,13 @@ export function previewAnswer(format: QuizFormat, payload: Record<string, any>):
       return payload?.target ?? null;
     case 'numeric_entry':
       return payload?.answer_value ?? null;
+    // ★ 이 둘은 answer_index 가 없다 — default 로 떨어지면 undefined 가 나가고, 렌더러의
+    //   `Array.isArray(result.answer)` 분기가 null 로 죽어 **틀렸을 때 정답이 안 보인다.**
+    //   서버(0168 quiz_grade_item)도 정답으로 이 두 칸을 그대로 돌려준다 — 좌표계가 같다.
+    case 'order_build':
+      return Array.isArray(payload?.answer_seq) ? payload.answer_seq : null;
+    case 'branch_path':
+      return Array.isArray(payload?.answer_path) ? payload.answer_path : null;
     case 'mine_tap':
       return (Array.isArray(payload?.cards) ? payload.cards : [])
         .map((c: any, i: number) => (c?.is_mine === true ? i : -1))
@@ -50,7 +57,9 @@ export function previewAnswer(format: QuizFormat, payload: Record<string, any>):
       const n = Array.isArray(payload?.pairs) ? payload.pairs.length : 0;
       return Object.fromEntries(Array.from({ length: n }, (_, i) => [String(i), i]));
     }
-    // 선택형 7종(mc4·order_pick·value_pick·trap_pick·case_pick·name_pick·chosung)
+    // 선택형 8종(mc4·order_pick·value_pick·scale_pick·trap_pick·case_pick·name_pick·chosung)
+    // ⚠️ default 로 떨어뜨려도 되는 것은 **answer_index 를 가진 형태뿐**이다.
+    //    새 형태를 붙일 때 그게 아니면 위에 case 를 추가한다(안 하면 정답이 조용히 undefined 가 된다).
     default:
       return payload?.answer_index ?? null;
   }

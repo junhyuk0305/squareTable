@@ -12,9 +12,17 @@ import { INT, STR, checkTexts, strArray } from './spec';
 
 const MIN_CARDS = 4;
 const MAX_CARDS = 8;
-/** 카드 1장당 제한 시간(초). 07-29 난이도 표의 3.0 → 2.5 → 2.0 범위. */
-const MIN_SECONDS = 2;
-const MAX_SECONDS = 5;
+/**
+ * 카드 1장당 제한 시간(초). 07-29 난이도 표의 3.0 → 2.5 → 2.0 범위.
+ * ★사장 입력 폼(PayloadForm)이 이 범위를 그대로 써야 한다 — 폼이 더 넓으면 사장이 채운 값이
+ *   validate 에 걸려 저장이 막히는 막다른 길이 된다(실제로 폼은 5~60, 기본 20 이었다).
+ */
+export const QJ_MIN_SECONDS = 2;
+export const QJ_MAX_SECONDS = 5;
+/** 기본값 — aiHint 가 모델에게 말하는 값과 같아야 한다. */
+export const QJ_DEFAULT_SECONDS = 3;
+const MIN_SECONDS = QJ_MIN_SECONDS;
+const MAX_SECONDS = QJ_MAX_SECONDS;
 
 export const quickJudge: FormatSpec = {
   key: 'quick_judge',

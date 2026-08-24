@@ -150,10 +150,18 @@ function ItemBlock({ item, no, divider }: { item: GuestAttemptItemRow; no: numbe
         </View>
       ) : (
         <View style={st.lines}>
-          <Text style={st.pairText}>
-            <Text style={st.pairLabel}>고른 답 · </Text>
-            {view.picked || '안 골랐어요'}
-          </Text>
+          {/* 짝 맞추기처럼 "고른 답"을 되살릴 수 없는 형태는 지어내지 않고 이유를 말한다. */}
+          {view.note ? (
+            <Text style={st.pairText}>
+              <Text style={st.pairLabel}>고른 답 · </Text>
+              {view.note}
+            </Text>
+          ) : (
+            <Text style={st.pairText}>
+              <Text style={st.pairLabel}>고른 답 · </Text>
+              {view.picked || '안 골랐어요'}
+            </Text>
+          )}
           <Text style={st.pairText}>
             <Text style={[st.pairLabel, { color: BrandColors.goodText }]}>정답 · </Text>
             {view.answer || '표시할 수 없어요'}
@@ -165,15 +173,25 @@ function ItemBlock({ item, no, divider }: { item: GuestAttemptItemRow; no: numbe
 }
 
 // ── 스냅샷 payload → 사람이 읽는 모양 ────────────────────────────────────────
-// ★14종을 전부 그리지 않는다. 선택지형(payload.choices + answer_index)이 8종이라 그것을 제대로
+// ★18종을 전부 그리지 않는다. 선택지형(payload.choices + answer_index)이 8종이라 그것을 제대로
 //   그리고, 나머지는 "고른 답 / 정답"을 **이름으로** 옮겨 적는다. index 숫자를 그대로 두지 않는다 —
 //   사장은 "2"가 무슨 답이었는지 알 방법이 없다.
 // ★형태를 늘려도 여기는 안 깨진다(DB format 은 자유 text). 모르는 형태는 맞음/틀림만 남는다.
+//
+// ★★ 여기는 **형태 추가 시 같이 고쳐야 하는 자리**다(2026-08-25 실측에서 드러났다).
+//   0168 이 numeric_entry·mark_paragraph 를 넣고 이 파일을 안 고쳐서, 맞힌 문항인데도 사장 화면에
+//   "고른 답 · 안 골랐어요 / 정답 · 표시할 수 없어요"가 떴다. flip_match·link_match 도 같은 상태였다.
+//
+// ★응답 좌표계에 주의한다. 응시자가 보낸 index 가 **무엇의 index 인지**가 형태마다 다르다:
+//   · 스냅샷 payload 와 좌표계가 같은 것 — choices·sequence·cards·parts·items (그대로 이름을 붙일 수 있다)
+//   · **서버가 섞은 배열**의 좌표계인 것 — flip_match(cards)·link_match(오른쪽 자리).
+//     그 순열은 quiz_shuffle_seed(문항id, created_at) 로만 복원되고 클라에는 없다.
+//     → 고른 답을 지어내지 않고 "왜 못 보여주는지"를 말한다(note).
 
 type Line = { text: string; picked: boolean; answer: boolean };
 type ItemView =
   | { mode: 'choices'; ask: string; lines: Line[] }
-  | { mode: 'text'; ask: string; picked: string; answer: string };
+  | { mode: 'text'; ask: string; picked: string; answer: string; note?: string };
 
 const txt = (v: any) => String(v ?? '').trim();
 const list = (v: any): string[] => (Array.isArray(v) ? v.map((x) => txt(x)) : []);
@@ -256,6 +274,45 @@ function readItem(item: GuestAttemptItemRow): ItemView {
       ask,
       picked: line(p.cards as any[], (_c, i) => got[i]),
       answer: line(p.cards as any[], (c) => c?.answer),
+    };
+  }
+
+  // ── 숫자로 답하기 — 친 숫자 하나. 단위를 붙여야 "62"가 무엇인지 읽힌다 ──
+  if (item.format === 'numeric_entry') {
+    const unit = txt(p.unit);
+    const n = (v: any) => (Number.isFinite(Number(v)) && v !== null && v !== '' ? `${Number(v)}${unit ? ` ${unit}` : ''}` : '');
+    return { mode: 'text', ask, picked: n(res), answer: n(p.answer_value) };
+  }
+
+  // ── 잘못된 곳 짚기 — 누른 조각 집합이 답이다. parts 는 섞이지 않아 좌표계가 그대로다 ──
+  //    누를 수 있는 조각(tap)만 줄로 세운다. 잇는 글까지 세우면 문단이 목록으로 흩어진다.
+  if (item.format === 'mark_paragraph' && Array.isArray(p.parts)) {
+    const tapped = new Set(nums(res));
+    return {
+      mode: 'choices',
+      ask,
+      lines: (p.parts as any[])
+        .map((part, i) => ({ part, i }))
+        .filter(({ part }) => part?.tap === true)
+        .map(({ part, i }) => ({
+          text: txt(part?.text),
+          picked: tapped.has(i),
+          answer: part?.is_wrong === true,
+        })),
+    };
+  }
+
+  // ── 짝 맞추기 두 형태 — 응답이 **서버가 섞은 자리**라 이름으로 못 되돌린다 ──
+  //    (섞는 순열은 quiz_shuffle_seed 로만 복원되고 클라에는 없다.)
+  //    맞았는지는 위 "맞음/틀림"이 이미 말한다. 여기서는 **정답 짝**만 정직하게 보여준다.
+  if ((item.format === 'flip_match' || item.format === 'link_match') && Array.isArray(p.pairs)) {
+    const pairs = (p.pairs as any[]).map((x) => `${txt(x?.left)} ↔ ${txt(x?.right)}`).filter((s) => s !== ' ↔ ');
+    return {
+      mode: 'text',
+      ask,
+      picked: '',
+      answer: pairs.join('\n'),
+      note: item.correct ? '짝을 다 맞췄어요' : '짝을 다 맞추지 못했어요',
     };
   }
 
