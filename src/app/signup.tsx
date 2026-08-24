@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { View, Text, Pressable, StyleSheet, TextInput, ScrollView, ActivityIndicator } from 'react-native';
-import { useRouter, Stack } from 'expo-router';
+import { useRouter, Stack, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useSessionStore } from '@/lib/store/useSessionStore';
@@ -24,10 +24,15 @@ export default function SignupScreen() {
   const createStore = useSessionStore((s) => s.createStore);
   const isPhoneTaken = useSessionStore((s) => s.isPhoneTaken);
 
-  const [role, setRole] = useState<Role>('owner');
+  // 게스트 응시(/q/[token])에서 넘어오는 경우에만 채워진다 — 그쪽은 직원 가입으로만 보낸다(0160).
+  // 역할 카드는 그대로 두고 **초기값만** 바꾼다: 잘못 눌러 들어온 사람이 사장으로 못 바꾸면 막힌다.
+  const params = useLocalSearchParams<{ role?: string; phone?: string }>();
+  const fromLink = params.role === 'junior';
+
+  const [role, setRole] = useState<Role>(fromLink ? 'junior' : 'owner');
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
-  const [phone, setPhone] = useState('');
+  const [phone, setPhone] = useState(typeof params.phone === 'string' ? formatPhone(params.phone) : '');
   const [birth, setBirth] = useState(''); // YYYYMMDD 8자리(숫자만) — 서버 SSOT는 profiles.birth_date(0065)
   const [pw, setPw] = useState('');
   // 전화번호 SMS 인증 — 번호를 고치면 훅이 정규화 번호 비교로 sent/verified 를 자동으로 푼다.

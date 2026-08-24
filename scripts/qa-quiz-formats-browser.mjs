@@ -149,6 +149,10 @@ async function main() {
   const errors = [];
   const ctx = await browser.newContext({ viewport: { width: 460, height: 900 } });
   const page = await ctx.newPage();
+  // ★개발 번들은 10MB 짜리 **동기** 스크립트라 domcontentloaded 가 그 다운로드+실행을 다 기다린다.
+  //   새 브라우저마다 캐시가 비어 있어 이 머신에서 32초쯤 걸린다 — 기본 30초면 매번 아슬하게 터진다.
+  //   느린 건 앱이 아니라 dev 서버라, 여기서 넉넉히 잡는다(실패를 늦게 말할 뿐 감추지 않는다).
+  page.setDefaultNavigationTimeout(120000);
   page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
   page.on('pageerror', (e) => errors.push(String(e?.message ?? e)));
 
@@ -199,6 +203,8 @@ async function main() {
     const opened = await wait('시작');
     check(`[${tag}] 게스트 링크가 열린다`, opened, opened ? '' : '시작 화면 안 뜸');
     await page.getByLabel('이름 입력', { exact: true }).first().pressSequentially('QA응시자', { delay: 20 });
+    // 0160 — 전화번호가 식별키라 필수다. 안 채우면 시작 버튼이 안 열린다(인증은 선택이라 건너뛴다).
+    await page.getByLabel('전화번호 입력', { exact: true }).first().pressSequentially('01044445555', { delay: 20 });
     await tapLabel('퀴즈 시작하기');
     const started = await wait('문제 남았어요');
     check(`[${tag}] 응시 시작`, started, started ? '' : '문항 화면 안 뜸');
@@ -220,6 +226,14 @@ async function main() {
       await page.waitForTimeout(500);
     }
     check(`[${tag}] 세 형태가 모두 나왔다`, new Set(seen).size === 3, seen.join(' · '));
+
+    // 0160 — 마지막 CTA 는 제출까지 태운다. 여기까지 와야 새 배선(이름·전화번호·응답 원문 →
+    // 서버 재채점)이 **브라우저에서** 산 것이 증명된다. 서버 단독 검증은 qa:training ⑩ 이 한다.
+    check(`[${tag}] 결과 화면까지 도달`, await wait('개 맞았어요', 25000), '');
+    const sent = await see('결과는 사장님께 전달됐어요');
+    check(`[${tag}] ★결과가 실제로 저장됐다(제출 RPC 성공)`, sent, sent ? '' : '"보내지 못했어요" 상태');
+    check(`[${tag}] 직원 가입 CTA 가 뜬다`, await see('직원으로 가입하고 점수 보기'), '');
+    await shot(`${tag}-done`);
   };
 
   console.log('\n━━ ① 정답 경로 ━━');
@@ -227,7 +241,30 @@ async function main() {
   console.log('\n━━ ② 오답 경로(정답 표시가 그려지는가) ━━');
   await runOnce(false, 'wrong');
 
-  console.log('\n━━ ③ 콘솔 ━━');
+  // 화면이 "전달됐어요"라고 말한 것과 **실제로 적힌 것**을 따로 본다 — 화면 문구만 믿으면
+  // 저장 실패를 성공으로 읽는다(그 사고를 막으려고 done 화면이 두 문구로 갈리는 것이다).
+  console.log('\n━━ ③ 저장된 결과(서버) ━━');
+  {
+    const { data } = await admin.from('quiz_attempts')
+      .select('guest_name, guest_phone, guest_phone_verified, submission_id, total, correct').eq('unit_id', UNIT);
+    const rows = data ?? [];
+    check('응시 2회가 이름·전화번호로 남았다',
+      rows.length === 2 && rows.every((r) => r.guest_name === 'QA응시자' && r.guest_phone === '01044445555'
+        && r.guest_phone_verified === false && !!r.submission_id),
+      JSON.stringify(rows));
+    // 인증을 건너뛰었으니 verified=false 여야 한다(인증은 선택 — 안 해도 응시는 된다).
+    check('★서버 재채점이 회차별로 갈린다(정답 3/3 · 오답 0/3)',
+      rows.some((r) => r.total === 3 && r.correct === 3) && rows.some((r) => r.total === 3 && r.correct === 0),
+      JSON.stringify(rows.map((r) => `${r.correct}/${r.total}`)));
+  }
+  { const { data } = await admin.from('quiz_attempt_items').select('format, correct, response').eq('unit_id', UNIT);
+    const rows = data ?? [];
+    check('문항별 상세 6건(2회차 × 3문항)', rows.length === 6, `n=${rows.length}`);
+    check('세 형태의 상세가 다 남았다',
+      new Set(rows.map((r) => r.format)).size === 3 && rows.filter((r) => r.correct).length === 3,
+      JSON.stringify(rows.map((r) => `${r.format}:${r.correct}`))); }
+
+  console.log('\n━━ ④ 콘솔 ━━');
   // Expo 웹 개발 서버가 늘 뱉는 소음은 제외하고, 렌더러가 터졌는지만 본다.
   const real = errors.filter((e) => !/favicon|Download the React DevTools|source-?map|websocket/i.test(e));
   check('콘솔 에러 0', real.length === 0, real.slice(0, 3).join(' | '));

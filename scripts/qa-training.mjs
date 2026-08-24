@@ -450,14 +450,46 @@ async function main() {
     const { error } = await g.rpc('quiz_link_grade', { p_token: TOK, p_item_id: OUT, p_response: 0 });
     check('⑩-12 ★그 코스에 없는 문항은 토큰으로 채점 불가', !!error && /item_not_found/.test(error?.message ?? ''), error?.message ?? '(뚫림!)');
   }
-  { const { data, error } = await g.rpc('quiz_link_submit', { p_token: TOK, p_guest_name: '단기김', p_rows: [{ entry_id: E[0], total: 3, correct: 2 }] });
-    check('⑩-13 손님 결과 기록(guest_name)', !error && data === 1, `n=${data} ${error?.message ?? ''}`); }
-  { const { data } = await owner.from('quiz_attempts').select('guest_name, staff_id, total, correct').eq('entry_id', E[0]);
-    check('⑩-14 사장 화면에 이름으로 보인다(staff_id=null)', (data ?? []).some((a) => a.guest_name === '단기김' && a.staff_id === null && a.total === 3 && a.correct === 2), JSON.stringify(data)); }
-  { const { error } = await g.rpc('quiz_link_submit', { p_token: TOK, p_guest_name: '  ', p_rows: [{ entry_id: E[0], total: 1, correct: 1 }] });
+  // 0160 — 제출은 이름+전화번호를 받고, 응답 원문만 넘긴다(정오답·집계는 서버가 만든다).
+  const PHONE = '01012345678';
+  let SUB = null;
+  { const { data, error } = await g.rpc('quiz_link_submit', {
+      p_token: TOK, p_guest_name: '단기김', p_guest_phone: '010-1234-5678', p_phone_verified: false,
+      p_answers: [{ item_id: QMC, response: 1 }] });
+    check('⑩-13 손님 결과 기록(이름+전화번호)', !error && data === 1, `n=${data} ${error?.message ?? ''}`); }
+  { const { data } = await owner.from('quiz_attempts')
+      .select('guest_name, guest_phone, guest_phone_verified, submission_id, staff_id, total, correct').eq('entry_id', E[0]);
+    const row = (data ?? []).find((a) => a.guest_name === '단기김');
+    SUB = row?.submission_id ?? null;
+    check('⑩-14 사장 화면에 이름·전화번호로 보인다(staff_id=null·번호는 정규화)',
+      !!row && row.staff_id === null && row.guest_phone === PHONE && row.guest_phone_verified === false
+        && row.total === 1 && row.correct === 1 && !!row.submission_id,
+      JSON.stringify(row)); }
+  { const { error } = await g.rpc('quiz_link_submit', { p_token: TOK, p_guest_name: '  ', p_guest_phone: PHONE, p_phone_verified: false, p_answers: [{ item_id: QMC, response: 1 }] });
     check('⑩-15 이름 없이 제출 차단', !!error && /name_required/.test(error?.message ?? ''), error?.message ?? '(차단 안됨!)'); }
-  { const { data } = await g.rpc('quiz_link_submit', { p_token: TOK, p_guest_name: '침입자', p_rows: [{ entry_id: E[3], total: 1, correct: 1 }] });
-    check('⑩-16 ★코스 밖 노하우에 점수 심기 차단(0행)', data === 0, `n=${data}`); }
+  { const { error } = await g.rpc('quiz_link_submit', { p_token: TOK, p_guest_name: '번호없음', p_guest_phone: '', p_phone_verified: false, p_answers: [{ item_id: QMC, response: 1 }] });
+    check('⑩-15b ★전화번호 없이 제출 차단(식별키라 필수)', !!error && /phone_required/.test(error?.message ?? ''), error?.message ?? '(차단 안됨!)'); }
+  { const { error } = await g.rpc('quiz_link_submit', { p_token: TOK, p_guest_name: '집전화', p_guest_phone: '02-123-4567', p_phone_verified: false, p_answers: [{ item_id: QMC, response: 1 }] });
+    check('⑩-15c 휴대폰이 아닌 번호 차단', !!error && /bad_phone/.test(error?.message ?? ''), error?.message ?? '(차단 안됨!)'); }
+  { const { data } = await g.rpc('quiz_link_submit', { p_token: TOK, p_guest_name: '침입자', p_guest_phone: PHONE, p_phone_verified: false, p_answers: [{ item_id: `qi_out_${s}`, response: 0 }] });
+    check('⑩-16 ★코스 밖 문항으로 점수 심기 차단(0행)', data === 0, `n=${data}`); }
+  {
+    // ★클라가 정오답을 정하지 못한다 — 오답 응답을 보내면 서버 재채점으로 correct=0 이 된다.
+    await g.rpc('quiz_link_submit', { p_token: TOK, p_guest_name: '오답박', p_guest_phone: '01098765432', p_phone_verified: true, p_answers: [{ item_id: QMC, response: 0 }] });
+    const { data } = await owner.from('quiz_attempts').select('guest_name, guest_phone_verified, total, correct').eq('entry_id', E[0]);
+    const row = (data ?? []).find((a) => a.guest_name === '오답박');
+    check('⑩-16b ★정오답은 서버가 정한다(오답 응답 → correct=0)', !!row && row.total === 1 && row.correct === 0 && row.guest_phone_verified === true, JSON.stringify(row));
+  }
+  { const { data, error } = await owner.from('quiz_attempt_items').select('item_id, ord, format, payload, response, correct').eq('submission_id', SUB);
+    const row = (data ?? [])[0];
+    check('⑩-16c 문항별 상세가 스냅샷으로 남는다(사장만)',
+      !error && (data ?? []).length === 1 && row?.item_id === QMC && row?.format === 'mc4'
+        && row?.correct === true && row?.response === 1 && row?.payload?.answer_index === 1,
+      `${error?.message ?? ''} ${JSON.stringify(data)}`); }
+  { const { data } = await g.from('quiz_attempt_items').select('id');
+    check('⑩-16d ★손님은 문항별 상세 0행', (data ?? []).length === 0, `n=${data?.length}`); }
+  { const { data } = await jA.from('quiz_attempt_items').select('id');
+    check('⑩-16e ★직원도 문항별 상세 0행(관리 권한만)', (data ?? []).length === 0, `n=${data?.length}`); }
   { const { error } = await owner.from('quiz_links').update({ revoked_at: new Date().toISOString() }).eq('token', TOK).select('id');
     const { data } = await g.rpc('quiz_link_items', { p_token: TOK, p_limit: 10 });
     check('⑩-17 회수하면 즉시 닫힌다', !error && (data ?? []).length === 0, `n=${data?.length}`); }

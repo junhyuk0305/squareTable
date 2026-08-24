@@ -2092,21 +2092,27 @@ export async function gradeQuizLink(token: string, itemId: string, response: Qui
   if (!row) return { data: null, error: { message: 'grade_quiz_empty' } };
   return { data: { correct: !!row.correct, explain: row.explain ?? '', answer: row.answer ?? null }, error: null };
 }
-/** 결과 기록(손님) — quiz_attempts 에 guest_name 으로. 노하우별로 나눠 적는다. */
+/**
+ * 결과 기록(손님) — 이름+전화번호로 남긴다(0160). 노하우별 집계는 **서버가** 한다.
+ *
+ * ★여기서 정오답을 계산해 보내지 않는다. 응답 원문만 넘기면 서버가 quiz_grade_item(로그인 경로와
+ *  같은 판정 함수)으로 다시 채점한다 — 클라가 점수를 정하면 그건 기록이 아니라 신고다.
+ */
 export async function submitQuizLink(
   token: string,
-  guestName: string,
-  rows: { entryId: string; total: number; correct: number }[],
+  guest: { name: string; phone: string; phoneVerified: boolean },
+  answers: { itemId: string; response: QuizResponse }[],
 ): Promise<boolean> {
   if (!HAS_SUPABASE) return true;
-  const usable = rows.filter((r) => r.total > 0);
-  if (usable.length === 0) return true;
+  if (answers.length === 0) return true;
   return write(
     'submitQuizLink',
     supabase.rpc('quiz_link_submit', {
       p_token: token,
-      p_guest_name: guestName,
-      p_rows: usable.map((r) => ({ entry_id: r.entryId, total: r.total, correct: r.correct })),
+      p_guest_name: guest.name,
+      p_guest_phone: guest.phone,
+      p_phone_verified: guest.phoneVerified,
+      p_answers: answers.map((a) => ({ item_id: a.itemId, response: a.response })),
     }),
   );
 }
