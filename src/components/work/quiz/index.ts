@@ -3,9 +3,12 @@ import type { ComponentType } from 'react';
 import type { QuizFormat } from '@/lib/quiz/types';
 import { Mc4, OrderPick, ValuePick, TrapPick, CasePick, NamePick, Chosung } from './PickFormats';
 import { WrongSpot } from './WrongSpot';
+import { OrderBuild } from './OrderBuild';
 import { FillCount } from './FillCount';
+import { ScalePick } from './ScalePick';
 import { MineTap } from './MineTap';
 import { QuickJudge } from './QuickJudge';
+import { BranchPath } from './BranchPath';
 import type { QuizRendererProps } from './types';
 
 /**
@@ -17,12 +20,15 @@ export const QUIZ_RENDERERS: Record<QuizFormat, ComponentType<QuizRendererProps>
   mc4: Mc4,
   order_pick: OrderPick,
   wrong_spot: WrongSpot,
+  order_build: OrderBuild,
   value_pick: ValuePick,
   fill_count: FillCount,
+  scale_pick: ScalePick,
   trap_pick: TrapPick,
   mine_tap: MineTap,
   case_pick: CasePick,
   quick_judge: QuickJudge,
+  branch_path: BranchPath,
   name_pick: NamePick,
   chosung: Chosung,
 };

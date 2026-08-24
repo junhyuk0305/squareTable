@@ -18,12 +18,15 @@ export type QuizFormat =
   | 'mc4'          // t0 4지선다 (안전망 · 기존 generateQuiz 호환)
   | 'order_pick'   // t1 순서 고르기
   | 'wrong_spot'   // t1 틀린 자리 찾기
+  | 'order_build'  // t1 순서대로 누르기(탭한 자리에 번호가 붙는다)
   | 'value_pick'   // t2 값 고르기
   | 'fill_count'   // t2 채워 넣기(탭할 때마다 +1)
+  | 'scale_pick'   // t2 더 큰 쪽 고르기(혼동쌍 둘 중 하나)
   | 'trap_pick'    // t3 함정 찾기
   | 'mine_tap'     // t3 지뢰 밟기(금지 행동만 탭)
   | 'case_pick'    // t5 상황 고르기
   | 'quick_judge'  // t5 빠른 판별(둘 중 하나, 연속)
+  | 'branch_path'  // t5 갈래 따라가기(조건 분기 트리)
   | 'name_pick'    // t6 이름 고르기
   | 'chosung';     // t6 초성
 
@@ -31,6 +34,8 @@ export type QuizFormat =
  * 응시자의 답. 형태마다 모양이 다르다.
  *   number                  — 선택지 하나 고르는 형태 / fill_count의 누른 횟수
  *   number[]                — mine_tap(탭한 index들) / quick_judge(카드별 선택)
+ *                             / order_build(탭한 순서대로의 항목 index) / branch_path(예=0·아니요=1 경로)
+ *                             ★ 앞의 둘은 집합이고 뒤의 둘은 **순서가 곧 답**이다 — 정렬하면 안 된다.
  */
 export type QuizResponse = number | number[];
 

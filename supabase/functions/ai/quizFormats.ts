@@ -94,7 +94,7 @@ function choicePickSpec(
   };
 }
 
-// ── 형태 13종 ──────────────────────────────────────────────
+// ── 형태 14종 ──────────────────────────────────────────────
 export const QUIZ_FORMATS: Record<string, QuizFormatSpec> = {
   // t0 안전망 — 기존 task:'quiz' 가 만들던 모양 그대로.
   mc4: choicePickSpec(
@@ -131,12 +131,58 @@ export const QUIZ_FORMATS: Record<string, QuizFormatSpec> = {
     },
   },
 
+  order_build: {
+    hint:
+      '노하우의 단계를 items 에 **순서를 섞어서** 담고, answer_seq 에는 올바른 순서대로 그 항목의 '
+      + '위치(0부터)를 담아라. 예: items 가 ["바닥 청소","POS 정산"] 이고 POS 정산이 먼저면 answer_seq 는 [1,0] 이다. '
+      + '단계는 3~6개, 노하우에 있는 것만 쓴다. '
+      + '"마지막에 하는 것부터" 같이 거꾸로 묻고 싶으면 ask 를 그렇게 쓰고 answer_seq 자체를 역순으로 담아라. '
+      + '순서가 중요하지 않은 나열이면 출제하지 마라.',
+    schema: {
+      type: 'object',
+      properties: {
+        ask: STR,
+        items: strArray(6),
+        answer_seq: { type: 'array', items: INT, maxItems: 6 },
+        explain: STR,
+        source_index: INT,
+      },
+      required: ['ask', 'items', 'answer_seq'],
+    },
+    normalize: (raw) => {
+      const ask = normAsk(raw);
+      if (!ask) return null;
+      const items = Array.isArray(raw?.items) ? raw.items.map(text) : [];
+      if (items.length < 3 || items.length > 6) return null;
+      if (items.some((v: string) => !v)) return null;
+      // 같은 이름이 둘이면 응시자가 어느 쪽을 먼저 눌러야 할지 알 수 없다 — 고치지 말고 버린다.
+      if (new Set(items).size !== items.length) return null;
+      const seq = Array.isArray(raw?.answer_seq) ? raw.answer_seq : [];
+      if (seq.length !== items.length) return null;
+      const seen = new Set<number>();
+      for (const v of seq) {
+        if (!Number.isInteger(v) || v < 0 || v >= items.length) return null;
+        if (seen.has(v)) return null;
+        seen.add(v);
+      }
+      return { ask, items, answer_seq: seq, explain: text(raw?.explain) };
+    },
+  },
+
   // t2 수치
   value_pick: choicePickSpec(
     '노하우에 적힌 수치 하나를 정답으로 두고, 헷갈릴 만한 값 3개를 오답으로 붙여라. '
     + 'unit 에는 그 단위(펌프·도·분·개 등)를 적는다. '
     + '노하우에 없는 수치를 새로 만들지 마라. 적힌 수치가 없으면 출제하지 마라.',
     { optionalExtras: ['unit'] },
+  ),
+
+  scale_pick: choicePickSpec(
+    '값이 다른데 서로 헷갈리기 쉬운 항목 **둘**을 골라 choices 에 이름만 담고(예: ["레귤러","라지"]), '
+    + 'answer_index 로 값이 더 큰 쪽을 가리켜라. ask 는 무엇을 비교하는지 한 줄로 쓴다'
+    + '(예: "시럽이 더 많이 들어가는 쪽은?"). unit 에는 비교하는 단위를 적는다. '
+    + '두 항목의 값이 같거나, 노하우에 값이 하나만 있으면 출제하지 마라.',
+    { maxChoices: 2, optionalExtras: ['unit'] },
   ),
 
   fill_count: {
@@ -244,6 +290,70 @@ export const QUIZ_FORMATS: Record<string, QuizFormatSpec> = {
       const s = raw?.seconds;
       const seconds = Number.isInteger(s) && s >= 2 && s <= 5 ? s : 3;
       return { ask, labels, cards, seconds, explain: text(raw?.explain) };
+    },
+  },
+
+  branch_path: {
+    hint:
+      'ask 에는 판단해야 할 **구체적인 상황**을 한 줄로 쓴다(예: "포장 주문으로 음료 3잔이 나왔어요"). '
+      + 'steps 는 그 상황에서 실제로 거치는 예/아니요 갈래 2~4개다. '
+      + '각 갈래의 yes·no 에는 다음에 갈 곳을 "s1"(steps[1] 로) 또는 "r0"(results[0] 에서 끝) 처럼 적는다. '
+      + 'results 는 갈래 끝에서 직원이 실제로 하게 될 행동이다. '
+      + 'answer_path 는 ask 의 상황에서 **올바르게 답했을 때 밟는 순서**를 예=0·아니요=1 로 담고, '
+      + '반드시 결과 칸에 닿는 지점에서 끝나야 한다. '
+      + '조건에 따라 대응이 갈리는 내용이 노하우에 없으면 출제하지 마라.',
+    schema: {
+      type: 'object',
+      properties: {
+        ask: STR,
+        steps: {
+          type: 'array',
+          items: { type: 'object', properties: { ask: STR, yes: STR, no: STR }, required: ['ask', 'yes', 'no'] },
+          maxItems: 4,
+        },
+        results: strArray(4),
+        answer_path: { type: 'array', items: INT, maxItems: 4 },
+        explain: STR,
+        source_index: INT,
+      },
+      required: ['ask', 'steps', 'results', 'answer_path'],
+    },
+    normalize: (raw) => {
+      const ask = normAsk(raw);
+      if (!ask) return null;
+      const results = Array.isArray(raw?.results) ? raw.results.map(text) : [];
+      if (results.length < 2 || results.length > 4) return null;
+      if (results.some((v: string) => !v)) return null;
+
+      const src = Array.isArray(raw?.steps) ? raw.steps : [];
+      if (src.length < 2 || src.length > 4) return null;
+      const steps = src.map((v: any) => ({ ask: text(v?.ask), yes: text(v?.yes), no: text(v?.no) }));
+      // 다음 칸 표기 — 짝: src/lib/quiz/formats/branchPath.ts parseBranchNext
+      const next = (v: string) => {
+        const m = /^([sr])(\d+)$/.exec(v);
+        if (!m) return null;
+        const i = Number(m[2]);
+        const limit = m[1] === 's' ? steps.length : results.length;
+        return i < limit ? { kind: m[1], i } : null;
+      };
+      if (steps.some((st: any) => !st.ask || !next(st.yes) || !next(st.no))) return null;
+
+      // 정답 경로를 실제로 걸어 본다. 결과에 닿는 지점에서 정확히 끝나야 한다.
+      const path = Array.isArray(raw?.answer_path) ? raw.answer_path : [];
+      if (path.length === 0 || path.length > steps.length) return null;
+      let at = 0;
+      for (let k = 0; k < path.length; k++) {
+        const pick = path[k];
+        if (pick !== 0 && pick !== 1) return null;
+        const n = next(pick === 0 ? steps[at].yes : steps[at].no);
+        if (!n) return null;
+        if (n.kind === 'r') {
+          if (k !== path.length - 1) return null;   // 결과에 닿았는데 경로가 남았다 = 어긋난 문항
+          return { ask, steps, results, answer_path: path, explain: text(raw?.explain) };
+        }
+        at = n.i;
+      }
+      return null;                                   // 결과까지 못 닿았다
     },
   },
 

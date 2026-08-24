@@ -96,7 +96,8 @@
     "qa:join-reject": "node scripts/qa-join-reject-browser.mjs",
     "qa:publish-sheet": "node scripts/qa-publish-sheet-browser.mjs",
     "ia": "node scripts/ia-snapshot.mjs",
-    "qa:blocks": "node scripts/qa-blocks-browser.mjs"
+    "qa:blocks": "node scripts/qa-blocks-browser.mjs",
+    "qa:quiz-formats": "node scripts/qa-quiz-formats-browser.mjs"
   },
   "private": true
 }

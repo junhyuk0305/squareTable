@@ -283,6 +283,7 @@ async function main() {
   const leakedIn = (rows) => (rows ?? []).filter((x) => {
     const p = x.payload ?? {};
     if ('answer_index' in p || 'wrong_index' in p || 'target' in p || 'explain' in p || 'pairs' in p) return true;
+    if ('answer_seq' in p || 'answer_path' in p) return true;   // 0158 신규 형태의 정답 키
     return Array.isArray(p.cards) && p.cards.some((c) => 'is_mine' in c || 'answer' in c);
   });
   { const leaked = leakedIn(forAttempt);
@@ -314,6 +315,54 @@ async function main() {
     const row = (data ?? []).find((x) => x.entry_id === E[0]);
     // bogus_format 은 quiz_known_formats 밖이라 세지 않는다(응시에서도 fail-closed 로 빠진다).
     check('⑦-17 문항 개수 RPC 는 아는 형태만 센다(0109)', row?.n === 2, `n=${row?.n}`); }
+
+  // ── ⑦B 0158 신규 형태 3종(order_build · scale_pick · branch_path) ────────
+  // ★ 여기서 지키는 것은 하나다: **순서 있는 배열 형태를 mine_tap 처럼 집합으로 채점하지 않는 것.**
+  //   같은 항목을 순서만 바꿔 낸 응답이 정답이 되면 "줄 세우기"가 통째로 무의미해진다.
+  console.log('\n━━ ⑦B 신규 형태 3종(0158) ━━');
+  const QOB = `qi_ob_${s}`, QSP = `qi_sp_${s}`, QBP = `qi_bp_${s}`;
+  { const { error } = await owner.from('quiz_items').insert([
+      // items 는 섞인 채로 저장되고 answer_seq 가 맞는 순서를 가리킨다(맞는 순서 = A → B → C).
+      { id: QOB, unit_id: UNIT, entry_ids: [E[2]], kind: 't1', format: 'order_build',
+        payload: { ask: '순서대로 눌러 주세요', items: ['B', 'C', 'A'], answer_seq: [2, 0, 1], explain: 'A 부터예요' } },
+      { id: QSP, unit_id: UNIT, entry_ids: [E[2]], kind: 't2', format: 'scale_pick',
+        payload: { ask: '시럽이 더 많이 들어가는 쪽은?', choices: ['레귤러', '라지'], unit: '펌프', answer_index: 1, explain: '라지가 한 펌프 더예요' } },
+      { id: QBP, unit_id: UNIT, entry_ids: [E[2]], kind: 't5', format: 'branch_path',
+        payload: { ask: '포장 주문으로 음료 3잔이 나왔어요', explain: '3잔부터는 캐리어예요',
+          steps: [{ ask: '포장인가요?', yes: 's1', no: 'r0' }, { ask: '3잔 이상인가요?', yes: 'r1', no: 'r0' }],
+          results: ['그냥 드리면 돼요', '캐리어를 드려요'], answer_path: [0, 0] } },
+    ]);
+    check('⑦B-1 신규 형태 3건 저장', !error, error?.message ?? ''); }
+
+  { const { data, error } = await jA.rpc('quiz_items_for', { p_entry_ids: [E[2]], p_limit: 10 });
+    check('⑦B-2 신규 형태가 응시 조회에 나온다(화이트리스트 14종)', !error && (data?.length ?? 0) === 3, `n=${data?.length} ${error?.message ?? ''}`);
+    const leaked = leakedIn(data);
+    check('⑦B-3 ★신규 형태 응시 payload 에 정답 키 0개', leaked.length === 0, leaked.map((x) => `${x.id}:${JSON.stringify(x.payload)}`).join(' | '));
+    const byId = Object.fromEntries((data ?? []).map((x) => [x.id, x.payload ?? {}]));
+    check('⑦B-4 order_build 는 items 가 남는다(지워지면 화면이 빈다)', (byId[QOB]?.items ?? []).length === 3, JSON.stringify(byId[QOB]));
+    check('⑦B-5 branch_path 는 트리가 남는다', (byId[QBP]?.steps ?? []).length === 2 && (byId[QBP]?.results ?? []).length === 2, JSON.stringify(byId[QBP]));
+    check('⑦B-6 scale_pick 은 unit 이 남는다(정답 아님)', byId[QSP]?.unit === '펌프', JSON.stringify(byId[QSP])); }
+
+  { const { row } = await grade(QOB, [2, 0, 1]);
+    check('⑦B-7 order_build 정답 순서 → correct', row?.correct === true, JSON.stringify(row)); }
+  { const { row } = await grade(QOB, [0, 2, 1]);
+    check('⑦B-8 ★같은 항목·다른 순서는 오답(집합 채점 금지)', row?.correct === false && JSON.stringify(row?.answer) === '[2,0,1]', JSON.stringify(row)); }
+  { const { row } = await grade(QOB, [2, 0]);
+    check('⑦B-9 order_build 길이가 모자라면 오답', row?.correct === false, JSON.stringify(row)); }
+  { const { row } = await grade(QOB, 1);
+    check('⑦B-10 배열이 아닌 응답도 예외 없이 오답', row?.correct === false, JSON.stringify(row)); }
+
+  { const { row } = await grade(QSP, 1);
+    check('⑦B-11 scale_pick 정답 → correct · answer 안 알려줌', row?.correct === true && (row?.answer ?? null) === null, JSON.stringify(row)); }
+  { const { row } = await grade(QSP, 0);
+    check('⑦B-12 scale_pick 오답 → 정답 공개', row?.correct === false && Number(row?.answer) === 1, JSON.stringify(row)); }
+
+  { const { row } = await grade(QBP, [0, 0]);
+    check('⑦B-13 branch_path 정답 경로 → correct', row?.correct === true, JSON.stringify(row)); }
+  { const { row } = await grade(QBP, [1]);
+    check('⑦B-14 첫 갈래부터 틀리면 오답 + 정답 경로 공개', row?.correct === false && JSON.stringify(row?.answer) === '[0,0]', JSON.stringify(row)); }
+  { const { row } = await grade(QBP, [0, 1]);
+    check('⑦B-15 마지막 갈래만 틀려도 오답', row?.correct === false, JSON.stringify(row)); }
 
   // ── ⑧ 문항 낡음 스냅샷(0114) ─────────────────────────────────────────────
   console.log('\n━━ ⑧ 문항 낡음(0114) ━━');
@@ -360,7 +409,10 @@ async function main() {
   const plus = (ms) => new Date(Date.now() + ms).toISOString();
   { const { error } = await owner.from('quiz_links').insert([
       { id: `ql1_${s}`, unit_id: UNIT, course_id: CF, token: TOK, expires_at: plus(3 * 24 * 3600 * 1000) },
-      { id: `ql2_${s}`, unit_id: UNIT, course_id: CF, token: TOK_EXP, expires_at: plus(-1000) },
+      // ★ 만료 여유를 넉넉히 둔다. 판정은 서버 now() 로 하는데 이 값은 **로컬 시계**로 만들어서,
+      //   로컬이 서버보다 몇 초라도 빠르면 "1초 전"이 서버 기준으론 아직 미래다(2026-08-24 실측 4.4초 앞섬
+      //   → ⑩-5·7·11 이 동시에 거짓 실패했다). 여기서 필요한 건 "확실히 지난 링크"뿐이다.
+      { id: `ql2_${s}`, unit_id: UNIT, course_id: CF, token: TOK_EXP, expires_at: plus(-3600 * 1000) },
       { id: `ql3_${s}`, unit_id: UNIT, course_id: CF, token: TOK_REV, expires_at: plus(3 * 24 * 3600 * 1000), revoked_at: new Date().toISOString() },
     ]);
     check('⑩-1 사장 링크 3건 생성(정상·만료·회수)', !error, error?.message ?? ''); }

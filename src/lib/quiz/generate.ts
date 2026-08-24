@@ -88,20 +88,46 @@ function unionKinds(entries: PlaybookEntry[]): QuizKind[] {
 }
 
 /**
+ * 노하우 id 로 만드는 안정 해시(FNV-1a). 같은 노하우면 언제나 같은 값이 나온다.
+ * ★ Math.random 을 쓰지 않는 이유: 사장이 같은 노하우로 문제를 다시 만들었을 때 형태가 바뀌면
+ *   "아까 그거 어디 갔지"가 된다. 노하우가 다르면 형태도 다르고, 같으면 늘 같아야 한다.
+ */
+function rotationSeed(entries: PlaybookEntry[]): number {
+  let h = 2166136261;
+  for (const e of entries) {
+    for (let i = 0; i < e.id.length; i++) {
+      h ^= e.id.charCodeAt(i);
+      h = Math.imul(h, 16777619);
+    }
+  }
+  return h >>> 0;
+}
+
+/**
  * 이 노하우들로 만들 형태를 신뢰도 순으로 고른다.
  *
  * 유형마다 게임형을 먼저 쓴다 — 같은 노하우가 세 번째 나올 때 형태가 달라야 복습이 견딘다(07-29 §03).
  * 다만 게임형 중 묶음형은 노하우가 3건 이상 쌓여야 한 판이 되므로, 안 되면 일반형(안전판)으로 떨어진다.
  * 같은 형태를 두 번 넣지 않는다(07-29 §03 "한 판의 구성").
+ *
+ * ★2026-08-24 — 유형당 게임형이 **여럿**이 됐다(t1·t2·t5). 예전에는 `specs[마지막]` 하나만 써서
+ *   같은 유형이면 늘 같은 형태가 나왔다 — 그 상태로 형태를 늘리면 렌더러만 늘고 화면은 그대로다.
+ *   이제 게임형 후보 중에서 **노하우 id 로 돌려 쓴다**. 호출부(quiz-new)가 노하우 하나씩 max:1 로
+ *   부르므로, 회전축이 노하우여야 한 번에 여러 개를 만들 때 형태가 갈린다.
+ *
+ * ★ 레지스트리 나열 순서 규약에 기댄다: 유형마다 specs[0] 이 일반형(안전판), 그 뒤가 전부 게임형.
+ *   formats/index.ts 에 새 형태를 끼워 넣을 때 이 순서를 깨면 여기가 조용히 틀린다.
  */
 export function pickFormats(entries: PlaybookEntry[], max = 3): QuizItemPlan[] {
   const out: QuizItemPlan[] = [];
+  const seed = rotationSeed(entries);
   for (const kind of unionKinds(entries)) {
     const specs = formatsForKind(kind);
     if (specs.length === 0) continue;
-    const game = specs[specs.length - 1];                       // 레지스트리 순서: 일반형 → 게임형
-    const usable = specs.length > 1 && (!game.bundled || entries.length >= BUNDLE_MIN_ENTRIES);
-    out.push({ kind, format: (usable ? game : specs[0]).key });
+    // 묶음형은 노하우가 모자라면 한 판이 안 된다 — 후보에서 먼저 뺀다.
+    const games = specs.slice(1).filter((f) => !f.bundled || entries.length >= BUNDLE_MIN_ENTRIES);
+    const chosen = games.length > 0 ? games[seed % games.length] : specs[0];
+    out.push({ kind, format: chosen.key });
     if (out.length >= max) break;
   }
   return out;
