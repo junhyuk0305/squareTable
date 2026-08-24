@@ -1,0 +1,16 @@
+{
+  "//": "qa-training.mjs 의 ⓪ 델타 절 전용 — 순수 함수(delta.ts)를 노드에서 태우려고 CommonJS 로만 옮긴다. 앱 빌드와 무관.",
+  "compilerOptions": {
+    "module": "commonjs",
+    "target": "es2022",
+    "moduleResolution": "node",
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "noEmitOnError": false,
+    "ignoreDeprecations": "6.0",
+    "baseUrl": "..",
+    "paths": { "@/*": ["src/*"] },
+    "rootDir": "../src"
+  },
+  "files": ["../src/lib/quiz/delta.ts"]
+}

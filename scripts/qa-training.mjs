@@ -6,10 +6,16 @@
 //   여기서는 파생의 재료(원시 행)가 맞는지와 RLS 경계만 실증한다.
 //
 // 커버: 0107 문항·서버 채점 / 0108 코스 / 0110 껍데기 업무 숨김 / 0111 축 이동·요청 /
-//       0112 응시 점수 / 0113 외부 링크(토큰 4종 RPC) / 0114 문항 낡음 스냅샷
+//       0112 응시 점수 / 0113 외부 링크(토큰 4종 RPC) / 0114 문항 낡음 스냅샷 /
+//       델타 출제(src/lib/quiz/delta.ts — ⓪절, 백엔드 없이 도는 순수 함수)
 // 실 백엔드 대상·자가정리(@example.com → cleanup-orphan-stores.mjs 수거). 사용: node scripts/qa-training.mjs
 import { createClient } from '@supabase/supabase-js';
-import { readFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import Module from 'node:module';
+import { tmpdir } from 'node:os';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { seedVerifiedPhones, cleanupSeededPhones } from './qa-otp-seed.mjs';
 
@@ -50,7 +56,145 @@ async function edgeAi(token, task, payload) {
 const qaPhones = [`0106${s.slice(0, 7)}`, `0108${s.slice(0, 7)}`];
 const REGULAR_DUE_DAYS = 30; // 클라 상수 미러(useWorkStore.REGULAR_DUE_DAYS_DEFAULT)
 
+// ══════════════════════════════════════════════════════════════════════════
+// ⓪ 델타 출제 판정(src/lib/quiz/delta.ts) — **백엔드를 안 쓴다**(순수 함수)
+// ══════════════════════════════════════════════════════════════════════════
+// 왜 맨 앞인가: 계정을 만들지 않으므로 가입 레이트리밋에 죽지 않는다. 뒤에 두면 셋업이 막힌 날
+// 이 절이 통째로 안 돌아 "델타가 검증됐는지"조차 알 수 없다.
+//
+// 무엇을 지키나(원설계 07-29 §06 "변경"):
+//   ① 바뀐 게 없으면 아무것도 안 낸다 — 섹션 이름 바꾸기 한 번에 updated_at 만 밀린 경우
+//   ② 통째보다 적게 낸다          — 낡은 문항 3건 중 실제로 달라진 칸만
+//
+// ★ delta.ts 는 TypeScript 라 노드가 바로 못 읽는다 → tsc 로 임시 폴더에 CommonJS 로 옮겨 부른다
+//   (qa-pairing.mjs 와 같은 방식). 판정을 여기 **복제하지 않는다** — 복제하면 게이트가 거짓말한다.
+function deltaSection() {
+  const here = dirname(fileURLToPath(import.meta.url));
+  const root = join(here, '..');
+  const out = mkdtempSync(join(tmpdir(), 'qa-delta-'));
+  try {
+    // npx 를 거치지 않는다 — 윈도우에서 .cmd 를 spawn 하면 EINVAL 이 난다.
+    execFileSync(
+      process.execPath,
+      [join(root, 'node_modules', 'typescript', 'bin', 'tsc'),
+       '-p', join(here, 'tsconfig.qa-delta.json'), '--outDir', out],
+      { cwd: root, stdio: 'pipe' },
+    );
+  } catch (e) {
+    const msg = String(e?.stdout ?? e?.message ?? e);
+    if (!msg.includes('error TS')) { console.error('트랜스파일 실패:', msg.slice(0, 400)); process.exit(2); }
+  }
+  const origResolve = Module._resolveFilename;
+  Module._resolveFilename = function (request, ...rest) {
+    if (request.startsWith('@/')) return origResolve.call(this, join(out, request.slice(2)), ...rest);
+    return origResolve.call(this, request, ...rest);
+  };
+  const require_ = createRequire(import.meta.url);
+  const { quizDelta, changedKinds, isSupported } = require_(join(out, 'lib', 'quiz', 'delta.js'));
+
+  console.log('\n━━ ⓪ 델타 출제 판정(순수 함수 · 백엔드 없음) ━━');
+
+  const EDITED = '2026-08-20T00:00:00.000Z';   // 노하우를 고친 시각
+  const MADE   = '2026-08-10T00:00:00.000Z';   // 문항을 만든 시각(그때 본 노하우)
+
+  /** 세 칸(순서·수치·금지)이 다 있는 노하우 한 건. `over` 로 한 칸씩만 갈아 끼운다. */
+  const entry = (over = {}) => ({
+    id: 'e1', unit_id: 'u1', title: '아메리카노 만들기', description: '', tags: [], search_keywords: [],
+    square: {
+      situation: '손님이 아메리카노를 주문하면',
+      quagmire: '', uncover: '',
+      action: { steps: ['잔을 데운다', '에스프레소 2샷을 내린다', '뜨거운 물을 붓는다'] },
+      result: { before: '', after: '', metric: '' },
+      extract: { do: '샷을 먼저 내린다', dont: '뜨거운 물을 먼저 붓지 마세요' },
+      ...(over.square ?? {}),
+    },
+    updated_at: EDITED,
+    ...over,
+  });
+  const item = (id, format, payload) => ({
+    id, unit_id: 'u1', entry_ids: ['e1'], format, payload,
+    kind: 't0', source: 'ai', status: 'active', source_updated_at: MADE,
+  });
+
+  // 만들 때 본 노하우 그대로를 담은 문항 3건 — 칸마다 하나씩.
+  const ITEMS = [
+    item('q1', 'order_build', { ask: '순서대로 눌러 주세요', items: ['잔을 데운다', '에스프레소 2샷을 내린다', '뜨거운 물을 붓는다'], answer_seq: [0, 1, 2] }),
+    item('q2', 'value_pick', { ask: '몇 샷인가요', unit: '샷', choices: ['1', '2', '3', '4'], answer_index: 1 }),
+    item('q3', 'trap_pick', { ask: '하면 안 되는 것은', choices: ['뜨거운 물을 먼저 붓는다', '잔을 데운다', '샷을 내린다', '컵을 닦는다'], answer_index: 0 }),
+  ];
+
+  // ── ⓪-1 아무 칸도 안 바뀌었다(섹션 이름 바꾸기 → updated_at 만 밀림) ─────
+  {
+    const d = quizDelta([entry()], ITEMS);
+    check('⓪-1 시각은 셋 다 낡음(0114 관문이 열린다 = 아래 판정이 의미 있다)',
+      d.changed.length + d.intact.length === 3, `stale=${d.changed.length + d.intact.length}`);
+    check('⓪-2 ★바뀐 게 없으면 아무것도 안 낸다(빈 결과)',
+      d.changed.length === 0 && changedKinds([entry()], ITEMS).length === 0,
+      `changed=${d.changed.map((q) => q.id).join(',') || '없음'}`);
+  }
+
+  // ── ⓪-3 '하지 말 것'만 새로 썼다 ────────────────────────────────────────
+  {
+    const e = entry({ square: { ...entry().square, extract: { do: '샷을 먼저 내린다', dont: '얼음을 먼저 넣지 마세요' } } });
+    const d = quizDelta([e], ITEMS);
+    const stale = d.changed.length + d.intact.length;
+    const kinds = changedKinds([e], ITEMS);
+    check('⓪-3 달라진 문항은 금지 칸 하나뿐(순서·수치는 그대로라 안 묻는다)',
+      d.changed.length === 1 && d.changed[0].id === 'q3', `changed=${d.changed.map((q) => q.id).join(',')}`);
+    check('⓪-4 ★통째(3)보다 적게 낸다 — 다시 낼 칸 1개',
+      stale === 3 && kinds.length === 1 && kinds[0] === 't3', `stale=${stale} kinds=${kinds.join(',')}`);
+  }
+
+  // ── ⓪-5 수치만 바꿨다(2샷 → 3샷) ───────────────────────────────────────
+  {
+    const base = entry().square;
+    const e = entry({ square: { ...base, action: { steps: ['잔을 데운다', '에스프레소 3샷을 내린다', '뜨거운 물을 붓는다'] } } });
+    const d = quizDelta([e], ITEMS);
+    check('⓪-5 수치는 정확 비교 — 2샷 문항이 달라진 것으로 잡힌다(글자로는 거의 같다)',
+      d.changed.some((q) => q.id === 'q2'), `changed=${d.changed.map((q) => q.id).join(',')}`);
+    check('⓪-6 금지 칸은 안 건드렸으니 그대로 둔다',
+      d.intact.some((q) => q.id === 'q3'), `intact=${d.intact.map((q) => q.id).join(',')}`);
+  }
+
+  // ── ⓪-7 관문·보수성 ─────────────────────────────────────────────────────
+  {
+    const old = ITEMS.map((q) => ({ ...q, source_updated_at: '2026-08-25T00:00:00.000Z' }));
+    check('⓪-7 시각이 안 낡았으면 아예 후보가 아니다(0114 관문 재사용)',
+      quizDelta([entry()], old).changed.length + quizDelta([entry()], old).intact.length === 0);
+  }
+  {
+    const nul = ITEMS.map((q) => ({ ...q, source_updated_at: null }));
+    check('⓪-8 스냅샷 이전 행(null)은 "바뀌었다"고 말하지 않는다',
+      quizDelta([entry()], nul).changed.length === 0);
+  }
+  {
+    const byId = new Map([['e1', entry()]]);
+    check('⓪-9 근거 노하우가 사라지면 확인 불가 → 바뀐 것으로 본다(보수적)',
+      isSupported({ ...ITEMS[0], entry_ids: ['없는id'] }, byId) === false);
+    check('⓪-10 모르는 형태도 확인 불가 → 바뀐 것으로 본다',
+      isSupported({ ...ITEMS[0], format: 'no_such_format' }, byId) === false);
+  }
+  {
+    const arch = ITEMS.map((q) => ({ ...q, status: 'archived' }));
+    const e = entry({ square: { ...entry().square, extract: { do: '', dont: '얼음을 먼저 넣지 마세요' } } });
+    check('⓪-11 보관된 문항은 다시 내지 않는다', quizDelta([e], arch).changed.length === 0);
+  }
+  {
+    const e = entry({ square: { ...entry().square, extract: { do: '샷을 먼저 내린다', dont: '얼음을 먼저 넣지 마세요' } } });
+    const a = JSON.stringify(changedKinds([e], ITEMS));
+    const b = JSON.stringify(changedKinds([e], ITEMS));
+    check('⓪-12 같은 재료면 같은 결과(Math.random 없음)', a === b, a);
+  }
+
+  Module._resolveFilename = origResolve;
+  // ⛔ 여기서 임시 폴더를 지우지 않는다. 방금 require 한 .js 를 물고 있는 채로 rmSync 를 부르면
+  //    노드가 **조용히 죽는다**(exit 이벤트도 안 뜬다). 이 절 뒤에 백엔드 절이 통째로 이어지는데
+  //    그게 통으로 사라져도 요약 줄이 안 찍혀 눈에 안 띈다. OS 임시 폴더라 남겨 두는 편이 안전하다.
+}
+
 async function main() {
+  deltaSection();
+
   // ── 셋업: 격리 매장 + 사장 + 직원1 ────────────────────────────────────────
   await seedVerifiedPhones(URL_, SRV, qaPhones);
   const owner = mk();

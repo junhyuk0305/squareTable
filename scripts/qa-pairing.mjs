@@ -12,7 +12,7 @@
 //
 // 사용: node scripts/qa-pairing.mjs   (실행마다 트랜스파일 — 몇 초)
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -106,6 +106,9 @@ console.log('\n━━ t4 짝 재료 게이트(pairing.ts) ━━');
   check('같은 재료면 같은 짝 세트가 나온다(Math.random 금지)',
     JSON.stringify(a) === JSON.stringify(b), ''); }
 
-rmSync(out, { recursive: true, force: true });
+// ⛔ 임시 폴더를 지우지 않는다. 방금 require 한 .js 를 물고 있는 채로 rmSync 를 부르면 노드가
+//    **조용히 죽는다**(exit 이벤트도 안 뜬다). 여기서는 직후가 끝이라 지금까지 안 드러났을 뿐이고,
+//    같은 코드를 qa-training 의 델타 절에 옮겼을 때 그 뒤 백엔드 절이 통째로 사라졌다(2026-08-25 실측).
+//    OS 임시 폴더라 남겨 두는 편이 안전하다.
 console.log(`\n${fail === 0 ? '✅ PASS' : '❌ FAIL'} — t4 짝 재료 게이트 · 통과 ${pass} / 실패 ${fail}`);
 process.exit(fail === 0 ? 0 : 1);

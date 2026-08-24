@@ -16,6 +16,7 @@ import { supabase } from '@/lib/supabase';
 import { genId } from '@/lib/utils/id';
 import type { PlaybookEntry } from '@/types';
 import { findConfusionPair, type ConfusionPair } from './confusion';
+import { changedKinds } from './delta';
 import { detectKinds, numericValues, storeTerms } from './detect';
 import { FORMATS, formatsForKind } from './formats';
 import { MAX_TARGET as FILL_COUNT_MAX } from './formats/fillCount';
@@ -139,6 +140,7 @@ export function pickFormats(
   entries: PlaybookEntry[],
   max = 3,
   pool: PlaybookEntry[] = entries,
+  onlyKinds?: QuizKind[],
 ): QuizItemPlan[] {
   const out: QuizItemPlan[] = [];
   const seed = rotationSeed(entries);
@@ -155,7 +157,11 @@ export function pickFormats(
   const kinds = unionKinds(entries);
   if (t4) kinds.unshift('t4');
 
-  for (const kind of kinds) {
+  // 델타 출제 — 바뀐 칸만 남긴다. 걸러 낸 뒤가 비면 계획도 비고, 그러면 아무것도 안 낸다.
+  // ★ 신뢰도 순서(unionKinds)는 그대로 둔다 — 무엇을 낼지만 좁히지, 어떤 형태로 낼지는 안 바꾼다.
+  const wanted = onlyKinds?.length ? kinds.filter((k) => onlyKinds.includes(k)) : kinds;
+
+  for (const kind of wanted) {
     if (t4 && kind === 't4') {
       out.push({ kind, ...t4 });
       if (out.length >= max) break;
@@ -215,6 +221,14 @@ export type GenerateQuizItemsOptions = {
    *   노하우가 코스에 없는 상태가 되어 오답 귀속(0103)·복습 연결이 어긋난다.
    */
   pool?: PlaybookEntry[];
+  /**
+   * **델타 출제** — 이 노하우로 이미 만들어 둔 문항들. 주면 통째로 다시 만들지 않고
+   * **근거가 실제로 달라진 칸만** 만든다(delta.ts · 07-29 §06 "변경").
+   *
+   * ★ 형태를 직접 지정한 경로(사장이 고른 것)에는 적용하지 않는다 — 사장이 고른 것을
+   *   코드가 지우면 "눌렀는데 아무것도 안 나온다"가 된다. 자동 선택일 때만 좁힌다.
+   */
+  existing?: QuizItem[];
 };
 
 /**
@@ -230,6 +244,9 @@ export type GenerateQuizItemsOptions = {
  *
  * @param entries 근거 노하우. 여러 건이면 묶음형(줄 잇기·빠른 판별·지뢰 밟기)도 후보가 된다.
  * @param formats 형태 직접 지정. 생략하면 detectKinds 로 판정해 자동 선택(pickFormats).
+ *
+ * ★ `opts.existing` 을 주면 **델타 출제**가 켜진다 — 기존 문항 중 근거가 실제로 달라진 것의
+ *   칸만 다시 만든다. 달라진 칸이 없으면 빈 배열이다(= 다시 물을 게 없다).
  */
 export async function generateQuizItems(
   entries: PlaybookEntry | PlaybookEntry[],
@@ -244,9 +261,12 @@ export async function generateQuizItems(
   if (USE_MOCK) throw new Error('quiz_item: mock mode');
 
   const pool = opts.pool?.length ? opts.pool : list;
+  // 델타 출제 — 바뀐 칸이 없으면 **여기서 조용히 끝난다**(빈 결과 = 낼 게 없다, 실패가 아니다).
+  const delta = !formats?.length && opts.existing?.length ? changedKinds(list, opts.existing) : null;
+  if (delta && delta.length === 0) return [];
   const plans: QuizItemPlan[] = formats?.length
     ? formats.filter((f) => FORMATS[f]).map((f) => planFor(f, list, pool))
-    : pickFormats(list, opts.max ?? 3, pool);
+    : pickFormats(list, Math.min(opts.max ?? 3, delta?.length ?? Infinity), pool, delta ?? undefined);
   if (plans.length === 0) return [];
 
   const sopsOf = (es: PlaybookEntry[]) =>
