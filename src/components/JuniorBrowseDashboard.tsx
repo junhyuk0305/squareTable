@@ -206,7 +206,7 @@ export function JuniorBrowseDashboard({ entries, emptyHint }: JuniorBrowseDashbo
             </View>
           )}
 
-          {/* 매장 용어 연습 진입 — 검색 중에는 숨긴다(검색은 "찾기"에만 집중).
+          {/* 매장 기준 값 연습 진입 — 검색 중에는 숨긴다(검색은 "찾기"에만 집중).
               읽기(둘러보기) 옆에 "외웠는지 스스로 확인"을 둔다. 새 탭을 만들지 않고 서브화면으로 push
               한다(탭 이동이 아니므로 goToTab 이 아니라 router.push — 뒤로가기가 필요하다).
               ★기록이 남지 않는 연습이라 퀴즈 옆(업무 채팅)이 아니라 노하우 옆에 둔다. */}
@@ -215,10 +215,10 @@ export function JuniorBrowseDashboard({ entries, emptyHint }: JuniorBrowseDashbo
               onPress={() => router.push('/junior/practice')}
               style={({ pressed }) => [styles.practice, pressed && { opacity: 0.85 }]}
               accessibilityRole="button"
-              accessibilityLabel="매장 용어 연습 열기"
+              accessibilityLabel="매장 기준 값 연습 열기"
             >
               <Ionicons name="albums-outline" size={16} color={InkColors.ink} />
-              <Text style={styles.practiceLabel}>매장 용어 연습</Text>
+              <Text style={styles.practiceLabel}>매장 기준 값 연습</Text>
               <Text style={styles.practiceHint}>기록 안 남아요</Text>
               <Ionicons name="chevron-forward" size={15} color={InkColors.ink3} />
             </Pressable>
@@ -297,7 +297,7 @@ const styles = StyleSheet.create({
   viewToggleText: { fontSize: 12.5, fontWeight: '800', color: InkColors.ink3 },
   viewToggleTextOn: { color: InkColors.bubbleText },
 
-  // 매장 용어 연습 진입 행 — 터치 타깃 ≥48dp(패딩 16+16 + 행 높이).
+  // 매장 기준 값 연습 진입 행 — 터치 타깃 ≥48dp(패딩 16+16 + 행 높이).
   practice: {
     flexDirection: 'row', alignItems: 'center', gap: Space.sm,
     backgroundColor: InkColors.bg, borderWidth: 1, borderColor: InkColors.line,

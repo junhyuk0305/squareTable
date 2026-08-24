@@ -13,7 +13,12 @@ import { Space } from '@/lib/theme/layout';
 import type { PlaybookEntry } from '@/types';
 
 /**
- * 매장 용어 연습 — 탭해서 답을 보고 스스로 채점하는 **비공식 연습**.
+ * 매장 기준 값 연습 — 탭해서 답을 보고 스스로 채점하는 **비공식 연습**.
+ *
+ * ★이름을 08-25 에 고쳤다: '매장 용어 연습' → '매장 기준 값 연습'.
+ *   08-24 기획(⑮ 플래시카드)은 '용어 ↔ 뜻'을 상상했지만, 뜻을 어디에도 저장하지 않아 만들 수 없다.
+ *   실제로 만들 수 있는 건 '무엇이 몇 개인가'(기준 값)뿐이라 이름을 하는 일에 맞췄다.
+ *   '기준 값'은 퀴즈 만들기(t2 라벨)에서 이미 쓰는 말이라 새 단어가 아니다(승인 어휘 §2).
  *
  * ★★이 화면은 퀴즈가 아니다. 채점 파이프라인 **밖**이다.
  *   · `FORMATS`(lib/quiz/formats)·`QUIZ_RENDERERS`(components/work/quiz)에 등록하지 않는다.
@@ -56,7 +61,7 @@ type TermCard = {
  *   숫자가 하나뿐이라는 사실은 그 숫자가 그 노하우의 **핵심 값**이라는 뜻이 아니다.
  *
  *   재료가 이렇게 얇으면 화면은 빈 상태로 떨어지고, 그 빈 상태가 이유를 말한다 —
- *   억지 카드를 내는 것보다 "아직 연습할 용어가 없어요"가 정직하다.
+ *   억지 카드를 내는 것보다 "아직 연습할 값이 없어요"가 정직하다.
  */
 function buildCards(entries: PlaybookEntry[]): TermCard[] {
   const out: TermCard[] = [];
@@ -199,7 +204,7 @@ export default function JuniorTermPracticeScreen() {
         <StepProgress
           step={idx + 1}
           total={deck.length}
-          title={reviewDeck ? '헷갈린 것 다시 보기' : '매장 용어 연습'}
+          title={reviewDeck ? '헷갈린 것 다시 보기' : '매장 기준 값 연습'}
         />
 
         {/* 2) 카드 — 탭 한 번에 답이 열린다. 열린 뒤로는 탭이 아무 일도 하지 않는다. */}

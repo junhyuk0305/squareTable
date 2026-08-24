@@ -110,8 +110,8 @@ export default function JuniorLayout() {
       <Stack.Screen name="timesheet" options={{ title: '내 출퇴근 내역', headerLeft: () => <HeaderBackButton fallback="/junior/attendance" /> }} />
       <Stack.Screen name="schedule" options={{ title: '근무표', headerLeft: () => <HeaderBackButton fallback="/junior/home" /> }} />
       <Stack.Screen name="notifications" options={{ title: '알림', headerLeft: () => <HeaderBackButton fallback="/junior/home" /> }} />
-      {/* 매장 용어 연습 — 물어보기(둘러보기)의 서브화면. 퀴즈가 아니라 기록이 남지 않는 연습이다. */}
-      <Stack.Screen name="practice" options={{ title: '매장 용어 연습', headerLeft: () => <HeaderBackButton fallback="/junior/chat" /> }} />
+      {/* 매장 기준 값 연습 — 물어보기(둘러보기)의 서브화면. 퀴즈가 아니라 기록이 남지 않는 연습이다. */}
+      <Stack.Screen name="practice" options={{ title: '매장 기준 값 연습', headerLeft: () => <HeaderBackButton fallback="/junior/chat" /> }} />
       <Stack.Screen name="hub" options={{ headerShown: false }} />
       <Stack.Screen name="join" options={{ title: '매장 연결' }} />
       <Stack.Screen name="onboarding" options={{ headerShown: false }} />
