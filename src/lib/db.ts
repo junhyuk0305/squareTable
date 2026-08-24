@@ -1915,6 +1915,12 @@ export type GuestSubmissionRow = {
   entries: { entryId: string; total: number; correct: number }[];
   /** 같은 전화번호로 이 매장에서 푼 총 횟수(정리한 것 포함). 번호가 없으면 1. */
   attemptCount: number;
+  /**
+   * 이 응시가 어느 파트를 위한 것이었나(0164). 못 좁히면 null — **지어내지 않는다.**
+   * ★quiz_attempts 에는 코스가 안 실린다(0112·0160). 그래서 응시한 노하우가 담긴 코스에서
+   *   되짚는다. 그 노하우가 파트가 다른 코스 여러 개에 담겨 있으면 답이 하나가 아니므로 null 이다.
+   */
+  partName: string | null;
 };
 
 /**
@@ -1971,6 +1977,7 @@ export async function fetchGuestQuizSubmissions(): Promise<GuestSubmissionRow[]>
         reviewedAt: row.reviewed_at ?? null,
         entries: [{ entryId: row.entry_id, total: row.total ?? 0, correct: row.correct ?? 0 }],
         attemptCount: row.guest_phone ? (subsByPhone.get(row.guest_phone)?.size ?? 1) : 1,
+        partName: null,   // ④ 에서 채운다(못 좁히면 null 그대로).
       });
     }
   }
@@ -2001,6 +2008,37 @@ export async function fetchGuestQuizSubmissions(): Promise<GuestSubmissionRow[]>
     if (t && t.total > 0) {
       c.total = t.total;
       c.correct = t.correct;
+    }
+  }
+
+  // ④ 파트 — 사장이 카드만 보고 "어느 자리 지원자인가"를 알아야 한다(기획 §9-A).
+  //    ★quiz_attempts 에는 코스가 안 실려 있다(0112 가 정한 행 단위는 "응시 1회 × 노하우 1건"이고
+  //      0160 도 코스를 더하지 않았다). 그래서 **응시한 노하우가 담긴 코스**로 되짚는다.
+  //    ★답이 하나로 안 좁혀지면(그 노하우가 파트 다른 코스 여러 개에 담김) null 로 둔다 —
+  //      틀린 파트를 보여 주는 것이 안 보여 주는 것보다 나쁘다. 파트가 없는 매장도 그냥 null 이다.
+  const entryIds = [...new Set(cards.flatMap((c) => c.entries.map((e) => e.entryId)))];
+  if (entryIds.length > 0) {
+    const { data: ce, error: ceErr } = await supabase
+      .from('course_entries')
+      .select('entry_id, training_courses(part_id, store_parts(name))')
+      .in('entry_id', entryIds);
+    if (ceErr) {
+      readFail('fetchGuestQuizSubmissions.parts', ceErr);   // 파트는 곁가지다 — 카드는 그대로 돌려준다
+    } else {
+      const partsOf = new Map<string, Set<string>>();
+      for (const r of ce ?? []) {
+        const row = r as any;
+        const name = row.training_courses?.store_parts?.name;
+        if (!name) continue;
+        const set = partsOf.get(row.entry_id) ?? new Set<string>();
+        set.add(String(name));
+        partsOf.set(row.entry_id, set);
+      }
+      for (const c of cards) {
+        const names = new Set<string>();
+        for (const e of c.entries) for (const n of partsOf.get(e.entryId) ?? []) names.add(n);
+        c.partName = names.size === 1 ? [...names][0] : null;
+      }
     }
   }
   return cards;

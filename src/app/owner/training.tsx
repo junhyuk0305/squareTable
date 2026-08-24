@@ -268,7 +268,10 @@ function GuestRowView({
   const rate = row.total > 0 ? row.correct / row.total : 0;
   const tone: ProgressTone = row.total === 0 ? 'neutral' : rate >= 1 ? 'done' : rate >= 0.6 ? 'progress' : 'behind';
 
+  // 파트는 "어느 자리 지원자인가"라 시각·횟수보다 먼저 읽혀야 한다(기획 §9-A).
+  // 못 좁혔으면(파트 없는 매장·코스가 여럿) 자리 자체를 비운다 — 빈 칸이 틀린 파트보다 낫다.
   const meta = [
+    row.partName ? `${row.partName} 파트` : '',
     takenDayLabel(row.takenAt),
     row.attemptCount > 1 ? `총 ${row.attemptCount}번` : '',
     row.reviewedAt ? '확인함' : '',

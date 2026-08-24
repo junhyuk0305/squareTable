@@ -110,6 +110,13 @@ function GuestQuizHistory() {
             ) : null}
           </View>
         ))}
+        {/* 왜 점수만 보이는지, 언제까지 보이는지를 말한다(기획 §8 각주).
+            ★"사장님이 정리하기 전까지"가 실제 동작과 같은 말이다 — my_guest_quiz_history 는
+            cleared_at 이 비어 있는 것만 준다(0165). 만료일(quiz_links.expires_at)은 응시를 닫을 뿐
+            이 목록을 닫지 않는다. 그 규칙이 바뀌면 이 문구도 같이 고칠 것. */}
+        <Text style={styles.note}>
+          문항과 정답은 볼 수 없어요 · 사장님이 정리하기 전까지 보여요
+        </Text>
       </View>
     </Appear>
   );
@@ -131,4 +138,6 @@ const styles = StyleSheet.create({
   score: { fontSize: 15, color: InkColors.ink2 },
   scoreNum: { color: InkColors.ink, fontWeight: '800' },
   weak: { fontSize: 15, lineHeight: 22, color: BrandColors.warnText },
+  // 카드 밖 각주 — 목록 전체에 걸리는 말이라 카드 안에 넣지 않는다.
+  note: { fontSize: 13, lineHeight: 20, color: InkColors.ink3, fontWeight: '600' },
 });

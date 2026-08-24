@@ -7,7 +7,6 @@ import { EmptyState } from '@/components/EmptyState';
 import { Appear } from '@/components/Appear';
 import { StepProgress } from '@/components/blocks/StepProgress';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
-import { numericValues } from '@/lib/quiz/detect';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
@@ -45,17 +44,19 @@ type TermCard = {
  * 발행된 노하우에서 카드를 뽑는다.
  *
  * 앞/뒷면을 가르는 규칙은 하나다 — **제목 ↔ 그 노하우가 말하는 값 하나**.
- * 값 추출은 `numericValues`(lib/quiz/detect) 를 **그대로 재사용**한다. 같은 규칙을 두 벌 두면
- * 단위 화이트리스트가 바뀔 때 한쪽만 따라가 조용히 어긋난다. (읽기만 한다 — 고치지 않는다.)
  *
- * ★★카드의 답은 **반드시 하나**여야 한다. 자가 채점("알았어요")은 답이 하나일 때만 뜻이 있다 —
- *   뒷면이 "30분 · 45분 · 15분"이면 무엇을 알았다는 건지 스스로도 판정할 수 없다. 그래서
- *   값이 여럿인 노하우는 **뽑지 않는다**(어느 숫자가 무엇인지는 본문을 봐야 알 수 있고,
- *   그걸 추측해 붙이면 틀린 카드가 나간다). 순위:
- *     1) `standard`(사장이 등록 화면에서 구조로 넣은 값) — "무슨 값인지"가 라벨로 같이 온다. 가장 정확.
- *     2) 본문에서 뽑힌 값이 정확히 하나일 때 그 값.
- *     3) 그 밖(값 0개 · 2개 이상)은 **조용히 건너뛴다.**
- *   재료가 이렇게 얇으면 화면은 빈 상태로 떨어지고, 그 빈 상태가 이유를 말한다.
+ * ★★카드의 답은 **반드시 하나**여야 하고, **무엇에 대한 값인지 말할 수 있어야** 한다.
+ *   자가 채점("알았어요")은 그 둘이 다 될 때만 뜻이 있다 — 뒷면이 "30분 · 45분 · 15분"이면
+ *   무엇을 알았다는 건지 스스로도 판정할 수 없고, 뒷면이 그냥 "1회"면 **무엇이 1회인지**를 모른다.
+ *   그래서 `standard`(사장이 등록 화면에서 구조로 넣은 값)만 카드로 만든다 — 그것만이
+ *   "무슨 값인지"를 라벨로 같이 들고 온다. 그 밖은 **조용히 건너뛴다.**
+ *
+ *   ⛔본문에서 숫자 하나를 뽑아 쓰던 갈래를 지웠다(2026-08-25 실측). 제목이 곧 질문인데 본문
+ *   숫자에는 이름이 없어서 `취객·고성·난동 → 1회` 같은 뜻 없는 카드가 실제로 나왔다.
+ *   숫자가 하나뿐이라는 사실은 그 숫자가 그 노하우의 **핵심 값**이라는 뜻이 아니다.
+ *
+ *   재료가 이렇게 얇으면 화면은 빈 상태로 떨어지고, 그 빈 상태가 이유를 말한다 —
+ *   억지 카드를 내는 것보다 "아직 연습할 용어가 없어요"가 정직하다.
  */
 function buildCards(entries: PlaybookEntry[]): TermCard[] {
   const out: TermCard[] = [];
@@ -76,11 +77,7 @@ function buildCards(entries: PlaybookEntry[]): TermCard[] {
       });
       continue;
     }
-
-    // 2) 본문 값이 정확히 하나일 때만.
-    const values = numericValues(e);
-    if (values.length !== 1) continue;
-    out.push({ id: e.id, clue, label: null, answer: `${values[0].value}${values[0].unit}` });
+    // 라벨 없는 값은 카드가 되지 않는다 — 위 주석의 ⛔ 참조.
   }
   return out;
 }
@@ -148,7 +145,7 @@ export default function JuniorTermPracticeScreen() {
         ) : (
           <EmptyState
             title="아직 연습할 값이 없어요"
-            body="노하우에 개수·시간 같은 값이 적혀 있어야 카드를 만들 수 있어요. 지금은 값이 적힌 노하우가 없어요."
+            body="노하우에 '무엇이 몇 개인지' 같은 기준 값이 적혀 있어야 카드를 만들 수 있어요. 지금은 그런 노하우가 없어요."
             cta={{ label: '노하우 둘러보기', onPress: () => router.replace('/junior/chat') }}
           />
         )}
