@@ -1120,6 +1120,39 @@ export async function uploadPhoto(file: File): Promise<string | null> {
   return path;
 }
 
+// 네이티브(expo-image-picker) 자산 업로드 — uploadPhoto(File)와 같은 버킷·경로 규칙을 쓰지만
+// 입력이 File 이 아니라 { uri, mimeType }(로컬 파일 경로) 라 별도 함수다. 압축은 이미 끝난 상태로
+// 들어온다 — lib/media/pickImage.ts(선택 직후, 네이티브 전용 파일 안)가 처리한다. document/canvas 가
+// 없는 네이티브에선 이 파일의 compressImage(웹 전용)를 못 태우고, 이 파일에 네이티브 압축 모듈을
+// 넣으면 웹 번들이 오염된다(platform.md) — 그래서 압축 지점을 파일째로 나눴다.
+export async function uploadPhotoNative(asset: {
+  uri: string;
+  mimeType?: string | null;
+  fileName?: string | null;
+}): Promise<string | null> {
+  if (!HAS_SUPABASE) return asset.uri; // mock 모드 — 로컬 file:// 경로를 그대로 미리보기로 반환
+  const contentType = asset.mimeType || 'image/jpeg';
+  const ext = (asset.fileName?.split('.').pop() || contentType.split('/').pop() || 'jpg').toLowerCase();
+  const path = `${_unitId ?? 'unknown'}/${Date.now()}-${Math.round(Math.random() * 1e6)}.${ext}`;
+  try {
+    const res = await fetch(asset.uri);
+    const blob = await res.blob();
+    const { error } = await supabase.storage.from(PHOTO_BUCKET).upload(path, blob, {
+      contentType,
+      cacheControl: '31536000',
+      upsert: false,
+    });
+    if (error) {
+      console.warn('[db] uploadPhotoNative:', error.message); reportError('db:uploadPhotoNative', error);
+      return null;
+    }
+  } catch (e) {
+    console.warn('[db] uploadPhotoNative:', e); reportError('db:uploadPhotoNative', e);
+    return null;
+  }
+  return path;
+}
+
 // 저장된 사진 참조를 표시용 단기 서명URL로 변환.
 //  - 신규 저장값 = 오브젝트 경로('<unit_id>/<ts>-<rand>.ext')
 //  - 레거시 저장값 = 공개URL('.../playbook-photos/<path>') → path 추출해 동일하게 서명(버킷 비공개 후에도 표시됨)

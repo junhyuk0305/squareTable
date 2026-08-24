@@ -1,11 +1,12 @@
 import { useState, type ReactNode } from 'react';
-import { View, Text, Pressable, TextInput, ScrollView, StyleSheet } from 'react-native';
+import { View, Text, Pressable, TextInput, ScrollView, StyleSheet, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { BottomSheet } from '@/components/BottomSheet';
 import { StoredImage } from '@/components/StoredImage';
 import { pickImageWeb } from '@/components/coach/coachUtils';
-import { uploadPhoto } from '@/lib/db';
+import { pickImageNative } from '@/lib/media/pickImage';
+import { uploadPhoto, uploadPhotoNative } from '@/lib/db';
 import { showToast } from '@/lib/store/useToastStore';
 import { useSyncStore } from '@/lib/store/useSyncStore';
 import { InkColors } from '@/lib/theme/colors';
@@ -60,6 +61,23 @@ export function RoomComposer({
 
   function pickPhoto() {
     if (uploading) return;
+    if (Platform.OS !== 'web') {
+      void (async () => {
+        setUploading(true);
+        try {
+          const asset = await pickImageNative();
+          if (!asset) return; // 선택창을 닫음 — 조용히 원상태
+          const url = await uploadPhotoNative(asset);
+          if (url) setImageUrl(url);
+          else noteError('사진을 올리지 못했어요. 인터넷 연결을 확인하고 다시 시도해 주세요.');
+        } catch {
+          noteError('사진을 올리지 못했어요. 인터넷 연결을 확인하고 다시 시도해 주세요.');
+        } finally {
+          setUploading(false);
+        }
+      })();
+      return;
+    }
     pickImageWeb(async (file) => {
       setUploading(true);
       try {

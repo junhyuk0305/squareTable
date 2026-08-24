@@ -1,6 +1,7 @@
 // supabase/functions/push/index.ts  (Deno / Supabase Edge Function)
-// 웹푸시(브라우저 Push API) 발송 — 인앱 이벤트가 발생하면 클라이언트가 이걸 호출해
-// 대상 사용자의 구독(push_subscriptions)으로 실제 OS 알림을 쏜다.
+// 웹푸시(브라우저 Push API)·네이티브 푸시(Expo Push API) 발송 — 인앱 이벤트가 발생하면
+// 클라이언트가 이걸 호출해 대상 사용자의 구독(push_subscriptions/push_device_tokens)으로
+// 실제 OS 알림을 쏜다. 두 경로는 deliver() 한 곳에서 같이 나간다(AGENTS.md ② SSOT).
 //
 // 보안 (ai 함수와 동일 정책):
 //   - 호출자 JWT 필수(anon 단독 거부). 발송자는 실제 로그인 유저여야 한다.
@@ -39,6 +40,12 @@ const hits = new Map<string, { n: number; resetAt: number }>();
 const MAX_TITLE = 120;
 const MAX_BODY = 300;
 const MAX_URL = 300;
+
+// Expo Push API — 네이티브(Android·iOS) 발송. 토큰 하나 → APNs/FCM 라우팅은 Expo 가 대신 한다.
+// 인증 불필요(Expo Access Token 은 rate-limit 상향용 선택사항, 지금 트래픽 규모엔 불필요).
+const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
+const EXPO_PUSH_CHUNK = 100; // Expo 문서 권장 상한
+
 
 function corsFor(origin: string | null) {
   const allow = ALLOWED_ORIGINS.includes('*')
@@ -83,6 +90,63 @@ function inQuietWindow(now: string, start?: string | null, end?: string | null):
 }
 
 type Admin = ReturnType<typeof createClient>;
+
+/**
+ * 네이티브 발송(Expo Push API) — push_device_tokens 의 각 토큰으로 쏜다.
+ * 응답의 각 항목이 입력과 같은 순서로 온다(Expo 문서 보장) → 인덱스로 토큰行에 매칭해 죽은 토큰을 가른다.
+ * 'DeviceNotRegistered' = 기기에서 앱 삭제/토큰 폐기 → 웹푸시의 404/410 prune 과 같은 취급.
+ */
+async function deliverExpoPush(
+  admin: Admin,
+  tokens: { id: string; token: string }[],
+  notifIn: { title: string; body: string; url: string; tag?: string },
+): Promise<{ sent: number; pruned: number }> {
+  if (tokens.length === 0) return { sent: 0, pruned: 0 };
+  let sent = 0;
+  const dead: string[] = [];
+
+  for (let i = 0; i < tokens.length; i += EXPO_PUSH_CHUNK) {
+    const chunk = tokens.slice(i, i + EXPO_PUSH_CHUNK);
+    const messages = chunk.map((t) => ({
+      to: t.token,
+      title: notifIn.title,
+      body: notifIn.body,
+      data: { url: notifIn.url || '/' },
+      ...(notifIn.tag ? { categoryId: notifIn.tag } : {}),
+      priority: 'high',
+    }));
+    try {
+      const res = await fetch(EXPO_PUSH_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify(messages),
+      });
+      if (!res.ok) {
+        console.error('push(expo): batch failed:', res.status);
+        continue; // 이 청크만 실패 — 무음 드롭 대신 로그로 관측 가능하게.
+      }
+      const json = (await res.json()) as { data?: { status: string; details?: { error?: string } }[] };
+      (json.data ?? []).forEach((r, idx) => {
+        const row = chunk[idx];
+        if (!row) return;
+        if (r.status === 'ok') {
+          sent += 1;
+        } else if (r.details?.error === 'DeviceNotRegistered') {
+          dead.push(row.id);
+        } else {
+          console.error('push(expo): send failed:', r.details?.error ?? 'unknown');
+        }
+      });
+    } catch (e) {
+      console.error('push(expo): request threw:', (e as Error)?.message ?? String(e));
+    }
+  }
+
+  if (dead.length > 0) {
+    await admin.from('push_device_tokens').delete().in('id', dead);
+  }
+  return { sent, pruned: dead.length };
+}
 
 /**
  * 실제 배달 — 수신자 선호 적용 → 구독 조회 → 웹푸시 발송 → 죽은 구독 정리.
@@ -145,6 +209,12 @@ async function deliver(
   // 조회 실패를 삼키면 "구독 없음(sent:0)"으로 위장된다 — 원인 규명을 위해 로그는 남긴다.
   if (subsErr) console.error('push: subscriptions read failed:', subsErr.message);
 
+  const { data: deviceTokens, error: tokensErr } = await admin
+    .from('push_device_tokens')
+    .select('id, token')
+    .in('user_id', recipientIds);
+  if (tokensErr) console.error('push: device_tokens read failed:', tokensErr.message);
+
   const list = subs ?? [];
   const notif = JSON.stringify({ title: notifIn.title, body: notifIn.body, url: notifIn.url || '/', tag: notifIn.tag });
 
@@ -179,7 +249,14 @@ async function deliver(
     await admin.from('push_subscriptions').delete().in('id', dead);
   }
 
-  return { sent, recipients: recipientIds.length, suppressed: suppressed.length, pruned: dead.length };
+  const expo = await deliverExpoPush(admin, deviceTokens ?? [], notifIn);
+
+  return {
+    sent: sent + expo.sent,
+    recipients: recipientIds.length,
+    suppressed: suppressed.length,
+    pruned: dead.length + expo.pruned,
+  };
 }
 
 /**

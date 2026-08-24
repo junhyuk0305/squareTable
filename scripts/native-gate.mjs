@@ -60,17 +60,29 @@ console.log('══ 네이티브 출고 게이트 (SSOT: 00_핵심/플랫폼_배
 
 // ── 1. 작업트리 청결 ──────────────────────────────────────────────
 // 더러운 트리 = 아래 모든 검사가 "커밋되지 않은 파일 덕에 통과"할 수 있는 상태.
-const dirty = sh('git status --porcelain');
+// **빌드 산출물을 바꾸는 경로**만 본다. scripts/tmp-*.mjs 같은 QA 잔해는 번들에도 tsc 에도
+// 안 들어가므로 막을 이유가 없다 — 그런 걸로 막으면 게이트가 늑대소년이 되고, 그 순간 아무도 안 본다.
+const BUILD_PATHS = ['src/', 'assets/', 'app.json', 'eas.json', 'package.json', 'package-lock.json', 'tsconfig.json'];
+const affectsBuild = (line) => BUILD_PATHS.some((p) => line.slice(3).startsWith(p));
+
+const porcelain = (sh('git status --porcelain') ?? '').split('\n').filter(Boolean);
+const blocking = porcelain.filter(affectsBuild);
+const nonBlocking = porcelain.length - blocking.length;
+const dirty = blocking.length > 0;
+
 if (dirty) {
-  const lines = dirty.split('\n').filter(Boolean);
-  console.log(`\n■ 작업트리: ❌ 미커밋 ${lines.length}건`);
+  const lines = blocking;
+  console.log(`\n■ 작업트리: ❌ 앱 코드에 미커밋 ${lines.length}건`);
   console.log(lines.slice(0, 10).map((l) => `    ${l}`).join('\n'));
   if (lines.length > 10) console.log(`    … 외 ${lines.length - 10}건`);
   problems.push(
-    '미커밋 변경이 있다. 이 상태의 typecheck·lint 는 커밋 내용을 보증하지 않는다(2026-08-15 사고). 커밋 후 다시 실행하라.',
+    '앱 코드에 미커밋 변경이 있다. 이 상태의 typecheck·lint 는 커밋 내용을 보증하지 않는다(2026-08-15 사고). 커밋 후 다시 실행하라.',
   );
 } else {
-  console.log('\n■ 작업트리: ✅ 깨끗함 — 검사 결과 = 커밋 내용');
+  console.log('\n■ 작업트리: ✅ 앱 코드 깨끗함 — 검사 결과 = 커밋 내용');
+}
+if (nonBlocking > 0) {
+  console.log(`    (빌드와 무관한 미커밋 ${nonBlocking}건 — 막지 않는다)`);
 }
 
 // ── 2. 재빌드 판정 ────────────────────────────────────────────────
@@ -141,6 +153,57 @@ function reportPlatform(label, prefix) {
 
 if (!PLATFORM || PLATFORM === 'android') reportPlatform('Android', 'android');
 if (!PLATFORM || PLATFORM === 'ios') reportPlatform('iOS', 'ios');
+
+// ── 2.5. EAS 클라우드 환경변수 ─────────────────────────────────────
+// EXPO_PUBLIC_* 는 로컬 .env 에만 있고 .env 는 gitignore 대상이라 EAS 클라우드 빌드 서버엔
+// 안 올라간다. eas.json 에도 env 블록이 없다 — 즉 EAS 프로젝트 환경변수(eas env:create)로
+// 등록해 두지 않으면 컴파일은 성공하고 **앱은 서버에 연결조차 못 한다**(HAS_SUPABASE=false,
+// 로그인·노하우 전부 무동작). 게이트가 못 잡으면 심사 제출까지 갔다가 통째로 리젝된다.
+// PostHog는 키가 없으면 코드 자체가 no-op으로 죽지 않게 설계돼 있다(posthog.ts:8 "무해하게 no-op").
+// 없어도 앱이 안 깨지는 것까지 "미등록=출고불가"로 막으면 진짜 구멍(Supabase)이 노이즈에 묻힌다.
+const OPTIONAL_ENV_VARS = new Set(['EXPO_PUBLIC_POSTHOG_KEY', 'EXPO_PUBLIC_POSTHOG_HOST']);
+
+const allEnvVars = [
+  ...new Set(
+    (sh(String.raw`git grep -ohE "EXPO_PUBLIC_[A-Z_]+" -- "src/**/*.ts" "src/**/*.tsx"`) ?? '')
+      .split('\n')
+      .filter(Boolean),
+  ),
+].sort();
+const requiredEnvVars = allEnvVars.filter((v) => !OPTIONAL_ENV_VARS.has(v));
+const optionalEnvVars = allEnvVars.filter((v) => OPTIONAL_ENV_VARS.has(v));
+
+console.log('\n■ EAS 클라우드 환경변수:');
+if (requiredEnvVars.length === 0) {
+  console.log('    (코드에서 EXPO_PUBLIC_* 참조 없음)');
+} else {
+  const listing = sh('npx eas-cli env:list --environment production');
+  if (listing === null) {
+    console.log('    ⚪ 확인 불가(eas-cli 로그인/네트워크). 수동 확인: npx eas-cli env:list --environment production');
+    warns.push('EAS 환경변수 자동 확인 실패 — 수동으로 npx eas-cli env:list 확인 필요');
+  } else {
+    const registered = new Set(
+      listing
+        .split('\n')
+        .map((l) => l.match(/^([A-Z0-9_]+)=/)?.[1])
+        .filter(Boolean),
+    );
+    const missing = requiredEnvVars.filter((v) => !registered.has(v));
+    const missingOptional = optionalEnvVars.filter((v) => !registered.has(v));
+    if (missing.length === 0) {
+      console.log(`    ✅ 필수 ${requiredEnvVars.length}개 전부 production 환경에 등록됨`);
+    } else {
+      console.log(`    ❌ 미등록 ${missing.length}건 — 이대로 빌드하면 앱이 서버에 연결 안 된다`);
+      console.log(missing.map((v) => `      · ${v}`).join('\n'));
+      console.log('      등록: npx eas-cli env:create --scope project --environment production --environment preview --environment development \\');
+      console.log('              --name <NAME> --value <VALUE> --type string --visibility plaintext');
+      problems.push(`EAS 환경변수 미등록: ${missing.join(', ')}`);
+    }
+    if (missingOptional.length > 0) {
+      console.log(`    ⚪ 미등록(선택) ${missingOptional.length}건 — 없어도 앱은 동작함(no-op): ${missingOptional.join(', ')}`);
+    }
+  }
+}
 
 // ── 3. iOS 심사 표면 — 결제 CTA 누수 ──────────────────────────────
 // 근거·판정 SSOT: src/lib/config/store-policy.ts (App Review 3.1.3(f)).

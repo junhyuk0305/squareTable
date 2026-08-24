@@ -4,7 +4,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
-import { uploadPhoto } from '@/lib/db';
+import { uploadPhoto, uploadPhotoNative } from '@/lib/db';
+import { pickImagesNative } from '@/lib/media/pickImage';
 import { HAS_SUPABASE } from '@/lib/supabase';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useStaffStore } from '@/lib/store/useStaffStore';
@@ -46,7 +47,7 @@ type ViewKey = 'chat' | 'drawer' | 'notice' | 'todo' | 'settings';
 // 채팅에 한 번에 보낼 수 있는 사진 최대 장수.
 const MAX_CHAT_PHOTOS = 10;
 
-/** 웹 파일 선택 → File[] 반환(네이티브는 추후 image-picker). multiple=true면 여러 장 선택 허용. */
+/** 웹 파일 선택 → File[] 반환(네이티브는 pickImagesNative, 반환 모양이 달라 별도 분기). multiple=true면 여러 장 선택 허용. */
 function pickImageFiles(onPick: (files: File[]) => void, opts?: { multiple?: boolean }) {
   if (Platform.OS !== 'web') return;
   const g = globalThis as unknown as { document?: Document };
@@ -615,22 +616,39 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
     router.push({ pathname: '/owner/coach', params: { seed: v, feedId } });
   }
 
+  function completeTaskWithPhotoUrl(templateId: string, date: string, url: string) {
+    if ((done[date] ?? {})[templateId]) return;
+    const t = boardTemplates.find((x) => x.id === templateId);
+    toggleTask(date, templateId, userId, userName, role, url, t ? { text: t.text, roomId: t.roomId } : undefined);
+    offerCaptureIfEligible(templateId); // 사진 인증 완료도 캡처 대상(체크 완료와 동일 경로)
+  }
+
   function attachPhoto(templateId: string, date: string) {
     if (uploadingId) return;
+    if (Platform.OS !== 'web') {
+      void (async () => {
+        setUploadingId(templateId);
+        try {
+          const [asset] = await pickImagesNative(); // 할일 인증 사진은 1장(1할일=1인증)
+          if (!asset) return; // 선택창을 닫음
+          const url = await uploadPhotoNative(asset);
+          if (url) completeTaskWithPhotoUrl(templateId, date, url);
+          else noteError('사진을 올리지 못했어요. 인터넷 연결을 확인하고 다시 시도해 주세요.');
+        } catch {
+          noteError('사진을 올리지 못했어요. 인터넷 연결을 확인하고 다시 시도해 주세요.');
+        } finally {
+          setUploadingId(null);
+        }
+      })();
+      return;
+    }
     pickImageFiles(async (files) => {
       const file = files[0]; // 할일 인증 사진은 1장(1할일=1인증)
       setUploadingId(templateId);
       try {
         const url = await uploadPhoto(file);
-        if (url) {
-          if (!(done[date] ?? {})[templateId]) {
-            const t = boardTemplates.find((x) => x.id === templateId);
-            toggleTask(date, templateId, userId, userName, role, url, t ? { text: t.text, roomId: t.roomId } : undefined);
-            offerCaptureIfEligible(templateId); // 사진 인증 완료도 캡처 대상(체크 완료와 동일 경로)
-          }
-        } else {
-          noteError('사진을 올리지 못했어요. 인터넷 연결을 확인하고 다시 시도해 주세요.');
-        }
+        if (url) completeTaskWithPhotoUrl(templateId, date, url);
+        else noteError('사진을 올리지 못했어요. 인터넷 연결을 확인하고 다시 시도해 주세요.');
       } catch {
         noteError('사진을 올리지 못했어요. 인터넷 연결을 확인하고 다시 시도해 주세요.');
       } finally {
@@ -643,6 +661,27 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
   // 선택 순서대로 발행한다(1메시지=1사진, 스키마 그대로). 실패한 장수만 모아 한 번 안내.
   function sendPhotoMessage() {
     if (sendingPhoto) return;
+    if (Platform.OS !== 'web') {
+      void (async () => {
+        const assets = await pickImagesNative({ multiple: true, limit: MAX_CHAT_PHOTOS });
+        if (assets.length === 0) return; // 선택창을 닫음(권한 거부 포함)
+        setSendingPhoto(true);
+        try {
+          let failed = 0;
+          for (const asset of assets) {
+            const url = await uploadPhotoNative(asset);
+            if (url) postMessage(today, '', userId, userName, role, undefined, url);
+            else failed += 1;
+          }
+          if (failed > 0) noteError(`사진 ${failed}장을 보내지 못했어요. 인터넷 연결을 확인하고 다시 시도해 주세요.`);
+        } catch {
+          noteError('사진을 보내지 못했어요. 인터넷 연결을 확인하고 다시 시도해 주세요.');
+        } finally {
+          setSendingPhoto(false);
+        }
+      })();
+      return;
+    }
     pickImageFiles(async (files) => {
       const picked = files.slice(0, MAX_CHAT_PHOTOS);
       if (files.length > MAX_CHAT_PHOTOS) showToast(`사진은 한 번에 ${MAX_CHAT_PHOTOS}장까지 보낼 수 있어요`);

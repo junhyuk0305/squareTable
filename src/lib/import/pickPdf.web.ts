@@ -1,6 +1,6 @@
 // lib/import/pickPdf.web.ts — 웹판: DOM 파일 선택창 → base64.
-// Android 는 TWA(웹 래핑)라 이 경로가 곧 Android 앱 경로다. 별도 라이브러리 없이
-// input[type=file] 만 쓴다(Expo 56 단일 번들 — 의존성 추가 금지).
+// 별도 라이브러리 없이 input[type=file] 만 쓴다(Expo 56 단일 번들 — 웹 경로에 네이티브 전용
+// 모듈을 넣지 않는다). 네이티브(Android·iOS)는 pickPdf.ts(expo-document-picker)가 담당.
 
 export type PickedPdf = { base64: string; name: string; size: number };
 

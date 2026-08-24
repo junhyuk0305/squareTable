@@ -21,7 +21,8 @@ import { buildPlaybookEntryFromSquare, isSquarePublishable } from '@/lib/utils/b
 import { isJunkInput, looksLikePromptLeak, knowhowGuidanceMessage } from '@/lib/utils/knowhowInput';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
-import { uploadPhoto } from '@/lib/db';
+import { uploadPhoto, uploadPhotoNative } from '@/lib/db';
+import { pickImageNative } from '@/lib/media/pickImage';
 import { GENERATE_THRESHOLD } from '@/lib/ai/config';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 
@@ -631,12 +632,26 @@ export function OwnerCoachChat({
   const MAX_PHOTOS = 4;
   const attachPhoto = useCallback(() => {
     if (uploadingPhoto) return;
-    if (Platform.OS !== 'web') {
-      pushMsg({ kind: 'ai', text: '사진 첨부는 앱을 홈 화면에 추가해 웹으로 열면 바로 쓸 수 있어요. 지금은 글로 적어 주셔도 돼요.' });
-      return;
-    }
     if (photos.length >= MAX_PHOTOS) {
       setError(`사진은 최대 ${MAX_PHOTOS}장까지 첨부할 수 있어요.`);
+      return;
+    }
+    if (Platform.OS !== 'web') {
+      void (async () => {
+        setUploadingPhoto(true);
+        setError(null);
+        try {
+          const asset = await pickImageNative();
+          if (!asset) return; // 선택창을 닫음 — 조용히 원상태
+          const url = await uploadPhotoNative(asset);
+          if (url) setPhotos((prev) => (prev.length >= MAX_PHOTOS ? prev : [...prev, url]));
+          else setError('사진을 올리지 못했어요. 인터넷 연결을 확인하고 다시 시도해 주세요.');
+        } catch {
+          setError('사진을 올리지 못했어요. 인터넷 연결을 확인하고 다시 시도해 주세요.');
+        } finally {
+          setUploadingPhoto(false);
+        }
+      })();
       return;
     }
     pickImageWeb(async (file) => {
@@ -652,7 +667,7 @@ export function OwnerCoachChat({
         setUploadingPhoto(false);
       }
     });
-  }, [uploadingPhoto, photos.length, pushMsg]);
+  }, [uploadingPhoto, photos.length]);
 
   const removePhoto = useCallback((url: string) => {
     setPhotos((prev) => prev.filter((p) => p !== url));

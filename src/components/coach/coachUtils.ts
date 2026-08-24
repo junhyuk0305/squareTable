@@ -14,7 +14,7 @@ export function formatRelative(iso: string): string {
   }
 }
 
-/** 웹 파일 선택 → File. 네이티브는 추후 image-picker. */
+/** 웹 파일 선택 → File. 네이티브는 lib/media/pickImage.ts(expo-image-picker, 반환 모양이 달라 별도). */
 export function pickImageWeb(onPick: (file: File) => void) {
   if (Platform.OS !== 'web') return;
   const doc = (globalThis as any).document;

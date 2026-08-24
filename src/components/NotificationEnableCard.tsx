@@ -1,14 +1,13 @@
-// 알림 켜기 카드 — 알림 화면 상단에 얹어, 아직 웹푸시 권한이 없을 때만 노출.
+// 알림 켜기 카드 — 알림 화면 상단에 얹어, 아직 푸시 권한이 없을 때만 노출.
+// 웹·네이티브 공용 카드다(형태를 플랫폼별로 나누지 않는다 — ui.md "같은 형태 하나로").
 //
 // 상태별:
 //   - granted / 미지원(iOS 설치 불필요 케이스 제외): 아무것도 안 그린다(클린).
-//   - default: "알림 켜기" 버튼 → 권한 요청 + 구독.
-//   - denied: 브라우저 설정에서 허용하라는 안내(앱에서 다시 못 띄움).
-//   - iOS 미설치: '홈 화면에 추가' 안내(설치해야 iOS가 푸시를 준다).
-//
-// 웹 전용 — 네이티브에서는 pushSupported()=false & needsIosInstall()=false 라 null 반환.
+//   - default: "알림 켜기" 버튼 → 권한 요청 + 구독/토큰등록.
+//   - denied: 설정에서 허용하라는 안내(앱에서 다시 못 띄움) — 웹은 브라우저, 네이티브는 OS 설정.
+//   - iOS 사파리 미설치(웹 전용): '홈 화면에 추가' 안내(설치해야 iOS 가 푸시를 준다).
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSessionStore } from '@/lib/store/useSessionStore';
@@ -19,6 +18,11 @@ import {
   enablePush,
   type PushPermission,
 } from '@/lib/push/webpush';
+import {
+  pushSupported as nativePushSupported,
+  nativePermissionState,
+  enableNativePush,
+} from '@/lib/push/nativepush';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Elevation, Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
@@ -26,14 +30,27 @@ import { Space } from '@/lib/theme/layout';
 export function NotificationEnableCard() {
   const userId = useSessionStore((s) => s.userId);
   const unitId = useSessionStore((s) => s.unitId);
+  const isNative = nativePushSupported();
   const [perm, setPerm] = useState<PushPermission>(() => permissionState());
   const [busy, setBusy] = useState(false);
+
+  // 네이티브는 권한 조회 자체가 비동기(expo-notifications) — 마운트 후 실제 상태로 교정한다.
+  useEffect(() => {
+    if (!isNative) return;
+    let alive = true;
+    void nativePermissionState().then((p) => {
+      if (alive) setPerm(p);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [isNative]);
 
   const iosInstall = needsIosInstall();
 
   // 이미 켜짐 → 숨김. 지원 안 하고 iOS 설치 안내도 아니면 숨김.
   if (perm === 'granted') return null;
-  if (!pushSupported() && !iosInstall) return null;
+  if (!pushSupported() && !isNative && !iosInstall) return null;
 
   // iOS 사파리 미설치 — 설치해야 알림을 받는다.
   if (iosInstall) {
@@ -57,7 +74,9 @@ export function NotificationEnableCard() {
         <View style={{ flex: 1 }}>
           <Text style={styles.title}>알림이 꺼져 있어요</Text>
           <Text style={styles.sub}>
-            브라우저 주소창의 자물쇠(사이트 설정) → 알림을 &lsquo;허용&rsquo;으로 바꾸면 받을 수 있어요.
+            {isNative
+              ? '휴대폰 설정에서 매장의 정석 알림을 허용으로 바꾸면 받을 수 있어요.'
+              : '브라우저 주소창의 자물쇠(사이트 설정) → 알림을 ‘허용’으로 바꾸면 받을 수 있어요.'}
           </Text>
         </View>
       </View>
@@ -69,7 +88,9 @@ export function NotificationEnableCard() {
     if (!userId || busy) return;
     setBusy(true);
     try {
-      const next = await enablePush(userId, unitId || null);
+      const next = isNative
+        ? await enableNativePush(unitId || null)
+        : await enablePush(userId, unitId || null);
       setPerm(next);
     } finally {
       setBusy(false);

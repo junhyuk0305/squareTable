@@ -49,6 +49,13 @@
           "recordAudioAndroid": true,
           "enableBackgroundRecording": false
         }
+      ],
+      "expo-notifications",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "노하우·업무 사진을 첨부할 때 사진 보관함을 사용해요."
+        }
       ]
     ],
     "experiments": {
