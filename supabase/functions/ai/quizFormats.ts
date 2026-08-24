@@ -240,6 +240,32 @@ export const QUIZ_FORMATS: Record<string, QuizFormatSpec> = {
     },
   },
 
+  // t2 수치(0168) — 보기 없이 텐키로 직접 친다. fill_count 와 나누는 기준은 **값의 크기**다.
+  numeric_entry: {
+    hint:
+      '보기 없이 숫자만 직접 눌러 답하는 문제다. answer_value 는 노하우에 적힌 값 그대로(1~999 정수), '
+      + 'unit 은 그 단위(도·분·초·ml·그램 등)다. '
+      + 'ask 는 무엇의 값을 묻는지 한 줄로 쓴다(예: "우유 스팀, 몇 도까지 올리나요?"). '
+      + '★ 탭으로 셀 수 있는 작은 개수(12 이하의 펌프·샷·장)는 이 형태로 내지 마라 — 그건 채워 넣기의 몫이다. '
+      + '온도·시간·용량처럼 값이 큰 것만 낸다. 노하우에 그런 값이 없으면 출제하지 마라.',
+    schema: {
+      type: 'object',
+      properties: { ask: STR, answer_value: INT, unit: STR, explain: STR, source_index: INT },
+      required: ['ask', 'answer_value', 'unit'],
+    },
+    normalize: (raw) => {
+      const ask = normAsk(raw);
+      const unit = text(raw?.unit);
+      const v = raw?.answer_value;
+      if (!ask || !unit) return null;
+      // 짝: src/lib/quiz/formats/numericEntry.ts 의 validate. 상한 999 는 텐키 칸 수이자 매장 값의 현실적 상한.
+      if (!Number.isInteger(v) || v < 1 || v > 999) return null;
+      // ★fill_count 의 몫을 뺏지 않는다 — 12 이하는 탭으로 올리는 형태가 손이 기억한다.
+      if (v <= 12) return null;
+      return { ask, answer_value: v, unit, explain: text(raw?.explain) };
+    },
+  },
+
   // t3 금지
   trap_pick: choicePickSpec(
     '행동 4개 중 하면 안 되는 것 하나를 고르는 문제다. 정답은 노하우의 금지(dont) 그대로 쓰고, '
@@ -278,6 +304,56 @@ export const QUIZ_FORMATS: Record<string, QuizFormatSpec> = {
       const mines = cards.filter((c: any) => c.is_mine).length;
       if (mines === 0 || mines === cards.length) return null;
       return { ask, cards, explain: text(raw?.explain) };
+    },
+  },
+
+  // t3 금지(0168) — 이어진 문장 안에서 어긋난 곳을 여러 곳 짚는다. mine_tap 과 나누는 기준은
+  // **재료의 모양**이다: 저쪽은 끊어진 카드가 하나씩, 이쪽은 한 덩어리 메시지를 읽고 맥락으로 짚는다.
+  mark_paragraph: {
+    hint:
+      '**직원이 남긴 인수인계 메시지**를 읽고 규정과 다른 곳을 짚는 문제다. '
+      + '"안내문·공지" 같은 딱딱한 글이 아니라, 마감을 끝낸 직원이 실제로 남길 법한 말투로 쓴다'
+      + '(예: "오늘 마감은 포스 정산부터 하고 원두 호퍼를 비운 뒤 바닥을 청소했어요"). '
+      + 'parts 는 그 메시지를 읽는 순서 그대로 조각낸 것이다. 순서를 섞지 마라 — 이어 붙이면 한 문단이 돼야 한다. '
+      + 'tap=true 는 누를 수 있는 문구(3~8개), tap=false 는 문장을 잇는 글이다. '
+      + 'is_wrong=true 는 그 문구가 노하우의 순서·금지와 어긋난다는 뜻이고, tap=true 인 조각에만 붙인다. '
+      + '틀린 문구와 맞는 문구가 각각 1개 이상 있어야 한다. '
+      + '틀린 문구는 노하우에 근거가 분명한 것만 쓰고, 맞는 문구는 같은 노하우의 정상 절차에서 뽑아라. '
+      + '규정과 대조할 순서나 금지가 노하우에 없으면 출제하지 마라.',
+    schema: {
+      type: 'object',
+      properties: {
+        ask: STR,
+        parts: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: { text: STR, tap: { type: 'boolean' }, is_wrong: { type: 'boolean' } },
+            required: ['text', 'tap', 'is_wrong'],
+          },
+          maxItems: 14,
+        },
+        explain: STR,
+        source_index: INT,
+      },
+      required: ['ask', 'parts'],
+    },
+    // 짝: src/lib/quiz/formats/markParagraph.ts 의 validate. 규칙이 벌어지면 사장이 저장할 수 없는
+    // 문항을 AI 가 만들어 놓고 조용히 버려진다 — 두 곳을 같이 고칠 것.
+    normalize: (raw) => {
+      const ask = normAsk(raw);
+      if (!ask || !Array.isArray(raw?.parts)) return null;
+      const parts = raw.parts
+        .map((p: any) => ({ text: text(p?.text), tap: p?.tap === true, is_wrong: p?.is_wrong === true }))
+        .filter((p: any) => p.text);
+      if (parts.length < 2 || parts.length > 14) return null;
+      // 누를 수 없는 조각에 정답을 숨기면 응시자가 영원히 못 맞힌다 — 조용히 폐기한다.
+      if (parts.some((p: any) => p.is_wrong && !p.tap)) return null;
+      const taps = parts.filter((p: any) => p.tap);
+      if (taps.length < 3 || taps.length > 8) return null;
+      const wrongs = taps.filter((p: any) => p.is_wrong).length;
+      if (wrongs === 0 || wrongs === taps.length) return null;
+      return { ask, parts, explain: text(raw?.explain) };
     },
   },
 

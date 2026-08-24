@@ -7,8 +7,12 @@
 import type { FormatSpec } from './spec';
 import { INT, STR } from './spec';
 
-/** 한 판 10초 안에 눌러야 하므로 상한을 둔다(07-29 §04 규칙 2). */
-const MAX_TARGET = 12;
+/**
+ * 한 판 10초 안에 눌러야 하므로 상한을 둔다(07-29 §04 규칙 2).
+ * ★이 값이 곧 **fill_count 와 numeric_entry 의 경계**다 — 여기까지는 탭으로 올리고(손이 기억한다),
+ *   넘으면 텐키로 친다. generate.ts 의 numeric_entry 재료 게이트가 이 상수를 가져다 쓴다.
+ */
+export const MAX_TARGET = 12;
 
 export const fillCount: FormatSpec = {
   key: 'fill_count',

@@ -16,8 +16,9 @@ import { supabase } from '@/lib/supabase';
 import { genId } from '@/lib/utils/id';
 import type { PlaybookEntry } from '@/types';
 import { findConfusionPair, type ConfusionPair } from './confusion';
-import { detectKinds, storeTerms } from './detect';
+import { detectKinds, numericValues, storeTerms } from './detect';
 import { FORMATS, formatsForKind } from './formats';
+import { MAX_TARGET as FILL_COUNT_MAX } from './formats/fillCount';
 import { pairPlan, pairPlanFor } from './pairing';
 import type { QuizFormat, QuizItem, QuizKind } from './types';
 
@@ -166,6 +167,11 @@ export function pickFormats(
       // ★ scale_pick 은 "비슷한데 값이 다른" 노하우 두 건이 있어야 성립한다. 쌍이 없는데 뽑으면
       //   모델이 낼 게 없어 빈 배열을 돌려주고, 사장 화면에는 이유 없이 "만들지 못했어요"만 남는다.
       if (f.key === 'scale_pick') return pair !== null;
+      // ★ numeric_entry 는 **탭으로 못 올리는 큰 값**이 노하우에 있어야 성립한다(fill_count 의 상한이 12).
+      //   없는데 뽑으면 엣지 normalize 가 전부 버려 빈 배열이 오고, 사장 화면에는 이유 없이
+      //   "만들지 못했어요"만 남는다 — scale_pick 이 같은 이유로 t2 노하우 절반을 조용히
+      //   실패시키던 함정과 **같은 것**이다. 형태를 늘릴 때마다 이 자리를 같이 본다.
+      if (f.key === 'numeric_entry') return entries.some((e) => numericValues(e).some((n) => n.value > FILL_COUNT_MAX));
       // 묶음형은 노하우가 모자라면 한 판이 안 된다 — 후보에서 먼저 뺀다.
       return !f.bundled || entries.length >= BUNDLE_MIN_ENTRIES;
     });

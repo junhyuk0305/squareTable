@@ -4,12 +4,14 @@
  * ★ 여기는 "입력 UI"만 담당한다. 저장 가능 여부의 판정은 **항상** FORMATS[f].validate(payload) 다
  *   (src/lib/quiz/formats). 이 파일에 검증 규칙을 복제하지 않는다 — 두 곳에 두면 서로 어긋난다.
  *
- * 16개 형태를 8가지 모양으로 묶어 재사용한다(계약 §2 payload 스키마 표 기준):
+ * 18개 형태를 10가지 모양으로 묶어 재사용한다(계약 §2 payload 스키마 표 기준):
  *   choices   — mc4 / order_pick / value_pick / trap_pick / case_pick / name_pick / chosung / scale_pick
  *   sequence  — wrong_spot
  *   order     — order_build
  *   count     — fill_count
+ *   number    — numeric_entry
  *   cards     — mine_tap
+ *   marks     — mark_paragraph
  *   judge     — quick_judge
  *   branch    — branch_path
  *   pairs     — flip_match / link_match
@@ -27,20 +29,23 @@ import { Ionicons } from '@expo/vector-icons';
 import { parseBranchNext } from '@/lib/quiz/formats/branchPath';
 import { FLIP_MAX_PAIRS } from '@/lib/quiz/formats/flipMatch';
 import { LINK_MAX_PAIRS } from '@/lib/quiz/formats/linkMatch';
+import { NUMERIC_MAX } from '@/lib/quiz/formats/numericEntry';
 import type { QuizFormat } from '@/lib/quiz/types';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
 import { Field, TextField, IntField, qst } from './kit';
 
-type Shape = 'choices' | 'sequence' | 'order' | 'count' | 'cards' | 'judge' | 'branch' | 'pairs';
+type Shape = 'choices' | 'sequence' | 'order' | 'count' | 'number' | 'cards' | 'marks' | 'judge' | 'branch' | 'pairs';
 
 function shapeOf(f: QuizFormat): Shape {
   switch (f) {
     case 'wrong_spot': return 'sequence';
     case 'order_build': return 'order';
     case 'fill_count': return 'count';
+    case 'numeric_entry': return 'number';
     case 'mine_tap': return 'cards';
+    case 'mark_paragraph': return 'marks';
     case 'quick_judge': return 'judge';
     case 'branch_path': return 'branch';
     case 'flip_match': return 'pairs';
@@ -125,7 +130,20 @@ export function emptyPayload(f: QuizFormat): Record<string, any> {
     // 짝은 저장 순서 그대로 나가고, 섞는 것은 서버가 한다(0161 quiz_strip_payload).
     case 'pairs': return { ...base, pairs: [{ left: '', right: '' }, { left: '', right: '' }, { left: '', right: '' }] };
     case 'count': return { ...base, target: 3, unit: '' };
+    case 'number': return { ...base, answer_value: 60, unit: '' };
     case 'cards': return { ...base, cards: [{ text: '', is_mine: true }, { text: '', is_mine: false }, { text: '', is_mine: false }, { text: '', is_mine: false }] };
+    // 문단은 "잇는 글 + 누를 수 있는 문구"가 번갈아 나오는 모양이 기본이다 — 처음부터 그 뼈대를 준다.
+    case 'marks': return {
+      ...base,
+      parts: [
+        { text: '', tap: false, is_wrong: false },
+        { text: '', tap: true, is_wrong: true },
+        { text: '', tap: false, is_wrong: false },
+        { text: '', tap: true, is_wrong: false },
+        { text: '', tap: false, is_wrong: false },
+        { text: '', tap: true, is_wrong: false },
+      ],
+    };
     case 'judge': return { ...base, labels: ['맞다', '아니다'], seconds: 20, cards: [{ text: '', answer: 0 }, { text: '', answer: 1 }, { text: '', answer: 0 }, { text: '', answer: 1 }] };
     default: {
       const n = choiceMaxOf(f);
@@ -161,15 +179,21 @@ export function answerTextOf(f: QuizFormat, p: Record<string, any>): string {
       .filter((s: string) => s.trim() !== '–')
       .join(' · ');
     case 'count': return `${p.target ?? ''}${p.unit ? ` ${p.unit}` : ''}`;
+    case 'number': return `${p.answer_value ?? ''}${p.unit ? ` ${p.unit}` : ''}`;
     case 'cards': return (p.cards ?? []).filter((c: any) => c?.is_mine).map((c: any) => c.text).filter(Boolean).join(' · ');
+    case 'marks': return (p.parts ?? []).filter((x: any) => x?.is_wrong).map((x: any) => x.text).filter(Boolean).join(' · ');
     case 'judge': return (p.cards ?? []).filter((c: any) => c?.answer === 0).map((c: any) => c.text).filter(Boolean).join(' · ');
     default: return (p.choices ?? [])[p.answer_index ?? 0] ?? '';
   }
 }
 
-/** 정답이 "하면 안 되는 것"인 형태 — 노하우 조립 시 extract.dont 로 간다. */
+/**
+ * 정답이 "하면 안 되는 것"인 형태 — 노하우 조립 시 extract.dont 로 간다.
+ * ★ mark_paragraph 의 정답은 **규정과 어긋난 문구**다. do 로 보내면 틀린 문장이 노하우의
+ *   "이렇게 하세요"로 굳는다 — 반드시 여기 있어야 한다.
+ */
 export function isDontFormat(f: QuizFormat): boolean {
-  return f === 'trap_pick' || f === 'mine_tap';
+  return f === 'trap_pick' || f === 'mine_tap' || f === 'mark_paragraph';
 }
 
 /** 순서가 정답인 형태 — 노하우 조립 시 action.steps 로 간다. */
@@ -287,9 +311,14 @@ export function PayloadForm({
           <TextField value={p.chosung ?? ''} onChange={(v) => set({ chosung: v })} placeholder="예) ㅂㅍㄹㅅ" maxLength={20} />
         </Field>
       )}
-      {(format === 'value_pick' || format === 'fill_count' || format === 'scale_pick') && (
-        <Field label="단위">
-          <TextField value={p.unit ?? ''} onChange={(v) => set({ unit: v })} placeholder="예) 펌프" maxLength={10} />
+      {(format === 'value_pick' || format === 'fill_count' || format === 'scale_pick' || format === 'numeric_entry') && (
+        <Field label="단위" hint={format === 'numeric_entry' ? '화면에 같이 보여줘요 · 직원은 숫자만 눌러요' : undefined}>
+          <TextField
+            value={p.unit ?? ''}
+            onChange={(v) => set({ unit: v })}
+            placeholder={format === 'numeric_entry' ? '예) 도' : '예) 펌프'}
+            maxLength={10}
+          />
         </Field>
       )}
 
@@ -500,6 +529,52 @@ export function PayloadForm({
       {shape === 'count' && (
         <Field label="정답 횟수" hint="직원이 이 횟수만큼 누르고 멈춰야 해요">
           <IntField value={p.target ?? 1} onChange={(v) => set({ target: v })} min={1} max={12} unit={p.unit || undefined} />
+        </Field>
+      )}
+
+      {/* 보기가 없다 — 직원이 텐키로 이 숫자를 그대로 쳐야 맞는다. 단위 칸은 위에 따로 있다. */}
+      {shape === 'number' && (
+        <Field label="정답 숫자" hint="보기 없이 직원이 직접 눌러요">
+          <IntField
+            value={p.answer_value ?? 1}
+            onChange={(v) => set({ answer_value: v })}
+            min={1}
+            max={NUMERIC_MAX}
+            unit={p.unit || undefined}
+          />
+        </Field>
+      )}
+
+      {/* 문단 마킹 — 조각을 읽는 순서대로 적고, 조각마다 역할을 눌러 바꾼다.
+          ★한 조각에 상태가 둘(누를 수 있나 · 규정과 다른가)이라 버튼 하나를 3단계로 돌린다.
+            잇는 글 → 맞게 적힘 → 규정과 다름 → 잇는 글. 색이 아니라 **글자**로 구분한다. */}
+      {shape === 'marks' && (
+        <Field label="메시지 조각" hint="읽는 순서 그대로 적어 주세요 · 누를 수 있는 문구는 3개 이상">
+          {(p.parts ?? []).map((c: any, i: number) => (
+            <ListRow
+              key={i}
+              value={c?.text ?? ''}
+              placeholder={`조각 ${i + 1}`}
+              onChange={(v) => setAt('parts', i, { ...c, text: v })}
+              marked={!!c?.tap}
+              markLabel={!c?.tap ? '잇는 글' : c?.is_wrong ? '규정과 다름' : '맞게 적힘'}
+              markRole="button"
+              onMark={() =>
+                setAt('parts', i, {
+                  ...c,
+                  // 잇는 글 → 맞게 적힘 → 규정과 다름 → 잇는 글
+                  tap: !c?.tap || !c?.is_wrong,
+                  is_wrong: !!c?.tap && !c?.is_wrong,
+                })
+              }
+              onRemove={(p.parts ?? []).length > 2 ? () => removeAt('parts', i, 2) : undefined}
+            />
+          ))}
+          <AddRow
+            label="조각 추가"
+            disabled={(p.parts ?? []).length >= 14}
+            onPress={() => addAt('parts', { text: '', tap: true, is_wrong: false }, 14)}
+          />
         </Field>
       )}
 

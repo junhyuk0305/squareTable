@@ -24,8 +24,10 @@ import { orderBuild } from './orderBuild';
 import { valuePick } from './valuePick';
 import { fillCount } from './fillCount';
 import { scalePick } from './scalePick';
+import { numericEntry } from './numericEntry';
 import { trapPick } from './trapPick';
 import { mineTap } from './mineTap';
+import { markParagraph } from './markParagraph';
 import { flipMatch } from './flipMatch';
 import { linkMatch } from './linkMatch';
 import { casePick } from './casePick';
@@ -37,7 +39,7 @@ import { chosung } from './chosung';
 export type { FormatSpec } from './spec';
 
 /**
- * 형태 16종. ★ 나열 순서에 의미가 있다 — 유형(kind)마다 일반형이 먼저, 게임형이 다음이다.
+ * 형태 18종. ★ 나열 순서에 의미가 있다 — 유형(kind)마다 일반형이 먼저, 게임형이 다음이다.
  * formatsForKind() 가 이 순서를 그대로 돌려주므로 생성기가 "게임이 안 되면 일반형으로"를
  * 별도 표 없이 판단할 수 있다(07-29 §03 "왜 두 갈래인가" — 일반형은 안전판).
  *
@@ -53,8 +55,10 @@ export const FORMATS: Record<QuizFormat, FormatSpec> = {
   value_pick: valuePick,    // t2 일반
   fill_count: fillCount,    // t2 게임
   scale_pick: scalePick,    // t2 게임 ★수동 전용(혼동쌍 재료가 필요 — 아래 주석)
+  numeric_entry: numericEntry, // t2 게임(0168) — 텐키 직접 입력, 온도·시간처럼 큰 값
   trap_pick: trapPick,      // t3 일반
   mine_tap: mineTap,        // t3 게임
+  mark_paragraph: markParagraph, // t3 게임(0168) — 이어진 인수인계 메시지 안에서 여러 곳 탭
   flip_match: flipMatch,    // t4 게임 ★유일하게 짝 정보가 응시 payload 에 남는다(flipMatch.ts 주석)
   link_match: linkMatch,    // t4 게임
   case_pick: casePick,      // t5 일반
