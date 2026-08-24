@@ -8,6 +8,7 @@ import { useWorkStore } from '@/lib/store/useWorkStore';
 import { useScheduleStore } from '@/lib/store/useScheduleStore';
 import { useStaffStore } from '@/lib/store/useStaffStore';
 import { useSuggestionStore } from '@/lib/store/useSuggestionStore';
+import { useUnknownQueueStore } from '@/lib/store/useUnknownQueueStore';
 import { useCrossNotifStore } from '@/lib/store/useCrossNotifStore';
 import { useCrossNotifRows } from '@/lib/hooks/useCrossNotifRows';
 import { useMemberPrefsStore } from '@/lib/store/useMemberPrefsStore';
@@ -49,6 +50,9 @@ export default function JuniorNotificationsScreen() {
   // 내 제안 검토 결과(반영/반려+사유) 알림용 — 이 화면 진입 시 당긴다(내공간 밖에선 미로드일 수 있음).
   const suggestions = useSuggestionStore((s) => s.suggestions);
   useEffect(() => { void useSuggestionStore.getState().hydrate(); }, []);
+  // '도와줄 수 있는 질문'(D4) — 같은 이유로 당긴다(벨에서 바로 들어오면 물어보기 탭을 안 거쳐 큐가 비어 있다).
+  const queue = useUnknownQueueStore((s) => s.queue);
+  useEffect(() => { void useUnknownQueueStore.getState().hydrate(); }, []);
   const today = todayStr();
   // '모두 읽기' 기준 시각(0078) — read 개념이 없는 배정·교대의 배지·강조 해제 축.
   const unitId = useSessionStore((s) => s.unitId);
@@ -80,8 +84,9 @@ export default function JuniorNotificationsScreen() {
         done,
         ackAt,
         suggestions,
+        queue,
       }),
-    [feed, swaps, templates, staff, me, today, taskTemplates, done, ackAt, suggestions],
+    [feed, swaps, templates, staff, me, today, taskTemplates, done, ackAt, suggestions, queue],
   );
 
   const initial = (userName ?? '나').trim().slice(0, 1) || '나';

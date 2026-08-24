@@ -37,6 +37,7 @@ export function UnderstandingCheckSheet({
   sops,
   onPass,
   onClose,
+  onAsk,
 }: {
   /** 무엇에 대한 확인인가 — 카드에서 오면 노하우 제목, 할일에서 오면 업무 이름. */
   title: string;
@@ -44,6 +45,8 @@ export function UnderstandingCheckSheet({
   /** 실제로 푼 문항이 근거한 **노하우 id 들**만 통과 처리한다(0111). */
   onPass: (entryIds: string[]) => void;
   onClose: () => void;
+  /** 틀린 뒤 "물어보기"로 나가는 길. 라우팅은 화면(WorkBoard)이 정한다 — 이 시트는 경로를 모른다. */
+  onAsk?: (seed: string) => void;
 }) {
   // 재시도 = QuizBody 리마운트(key) → 새 문제·초기상태. 이펙트에서 동기 리셋(set-state-in-effect) 회피.
   const [round, setRound] = useState(0);
@@ -53,7 +56,7 @@ export function UnderstandingCheckSheet({
         <Text style={s.kicker}>이해 확인 · {title}</Text>
         <Pressable onPress={onClose} hitSlop={8}><Ionicons name="close" size={20} color={InkColors.ink2} /></Pressable>
       </View>
-      <QuizBody key={round} taskText={title} sops={sops} onPass={onPass} onClose={onClose} onRetry={() => setRound((r) => r + 1)} />
+      <QuizBody key={round} taskText={title} sops={sops} onPass={onPass} onClose={onClose} onRetry={() => setRound((r) => r + 1)} onAsk={onAsk} />
     </BottomSheet>
   );
 }
@@ -71,6 +74,7 @@ function QuizBody(props: {
   onPass: (entryIds: string[]) => void;
   onClose: () => void;
   onRetry: () => void;
+  onAsk?: (seed: string) => void;
 }) {
   const { sops } = props;
   // 근거 노하우 id 가 하나도 없으면 조회할 게 없다 → 처음부터 폴백으로 시작(이펙트에서 동기 setState 회피).
@@ -127,7 +131,7 @@ function QuizBody(props: {
         </>
       );
     }
-    return <SavedQuizBody items={items} onPass={props.onPass} onClose={props.onClose} onRetry={props.onRetry} />;
+    return <SavedQuizBody items={items} sops={sops} onPass={props.onPass} onClose={props.onClose} onRetry={props.onRetry} onAsk={props.onAsk} />;
   }
   return ALLOW_AI_FALLBACK ? <LegacyQuizBody {...props} /> : <NotReadyBody onClose={props.onClose} />;
 }
@@ -149,14 +153,18 @@ function NotReadyBody({ onClose }: { onClose: () => void }) {
  */
 function SavedQuizBody({
   items,
+  sops,
   onPass,
   onClose,
   onRetry,
+  onAsk,
 }: {
   items: QuizItem[];
+  sops: QuizInput['sops'];
   onPass: (entryIds: string[]) => void;
   onClose: () => void;
   onRetry: () => void;
+  onAsk?: (seed: string) => void;
 }) {
   const [at, setAt] = useState(0);
   const [pending, setPending] = useState<QuizResponse | null>(null);
@@ -165,6 +173,8 @@ function SavedQuizBody({
   const [failed, setFailed] = useState(false);
   const [results, setResults] = useState<boolean[]>([]);
   const [done, setDone] = useState(false);
+  /** 틀린 문항이 근거한 노하우 제목들 — 결과 화면의 "무엇을 다시 볼까" + 물어보기 문구의 재료. */
+  const [missedTitles, setMissedTitles] = useState<string[]>([]);
 
   const item = items[at];
 
@@ -201,6 +211,13 @@ function SavedQuizBody({
       }
     });
     const perEntry = [...byEntry].map(([entryId, v]) => ({ entryId, ...v }));
+    // 틀린 노하우의 제목만 뽑아 둔다 — 결과 화면이 "무엇을 다시 볼지"를 말해줄 수 있게(지금까진 개수만 알려줬다).
+    setMissedTitles(
+      perEntry
+        .filter((e) => e.misses > 0)
+        .map((e) => sops.find((sop) => sop.id === e.entryId)?.title)
+        .filter((t): t is string => !!t),
+    );
     void recordQuizStats(perEntry);
     void insertQuizAttempts(perEntry.map((e) => ({ entryId: e.entryId, total: e.attempts, correct: e.attempts - e.misses })));
     // 통과 기준은 그대로 — 전부 맞아야 통과. 통과 처리 대상은 **실제로 푼 문항의 근거 노하우**뿐이다
@@ -232,15 +249,37 @@ function SavedQuizBody({
               {passed ? '이해 확인이 끝났어요. 사장님께 전달됐어요.' : `${items.length}개 중 ${correctCount}개 맞았어요. 다시 해볼까요?`}
             </Text>
           </View>
+          {/* 틀렸으면 무엇을 다시 볼지 알려준다 — 개수만 말하고 끝나면 직원은 어디를 봐야 할지 모른다. */}
+          {!passed && missedTitles.length > 0 && (
+            <View style={s.missBox}>
+              <Text style={s.missLead}>이건 다시 볼까요</Text>
+              {missedTitles.map((t) => (
+                <Text key={t} style={s.missItem} numberOfLines={2}>· {t}</Text>
+              ))}
+            </View>
+          )}
         </ScrollView>
         <View style={s.foot}>
           {passed ? (
             <Pressable onPress={onClose} style={({ pressed }) => [s.cta, pressed && { opacity: 0.85 }]}><Text style={s.ctaText}>닫기</Text></Pressable>
           ) : (
-            <View style={s.footRow}>
-              <Pressable onPress={onClose} style={({ pressed }) => [s.softBtnFlat, pressed && { opacity: 0.7 }]}><Text style={s.softBtnFlatText}>닫기</Text></Pressable>
-              <Pressable onPress={onRetry} style={({ pressed }) => [s.cta, { flex: 1 }, pressed && { opacity: 0.85 }]}><Text style={s.ctaText}>다시 하기</Text></Pressable>
-            </View>
+            <>
+              {/* 다시 풀어도 모르면 막다른 길이었다 — 틀린 노하우를 문구에 담아 물어보기로 넘긴다(전송은 본인이). */}
+              {onAsk && missedTitles.length > 0 && (
+                <Pressable
+                  onPress={() => onAsk(`${missedTitles[0]} 어떻게 해요?`)}
+                  style={({ pressed }) => [s.askLink, pressed && { opacity: 0.6 }]}
+                  accessibilityRole="button"
+                >
+                  <Ionicons name="chatbubble-ellipses-outline" size={15} color={InkColors.ink2} />
+                  <Text style={s.askLinkText}>아직 잘 모르겠어요 · 물어보기</Text>
+                </Pressable>
+              )}
+              <View style={s.footRow}>
+                <Pressable onPress={onClose} style={({ pressed }) => [s.softBtnFlat, pressed && { opacity: 0.7 }]}><Text style={s.softBtnFlatText}>닫기</Text></Pressable>
+                <Pressable onPress={onRetry} style={({ pressed }) => [s.cta, { flex: 1 }, pressed && { opacity: 0.85 }]}><Text style={s.ctaText}>다시 하기</Text></Pressable>
+              </View>
+            </>
           )}
         </View>
       </>
@@ -486,7 +525,14 @@ const s = StyleSheet.create({
   resultFail: { backgroundColor: BrandColors.warnSoft },
   resultText: { flex: 1, fontSize: 15, fontWeight: '800', color: InkColors.ink, lineHeight: 22 },
 
+  missBox: { marginTop: 12, paddingHorizontal: 2 },
+  missLead: { fontSize: 13, fontWeight: '800', color: InkColors.ink2, marginBottom: 6 },
+  missItem: { fontSize: 15, color: InkColors.ink, lineHeight: 23 },
+
   foot: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 18, borderTopWidth: 1, borderTopColor: InkColors.line },
+  // 물어보기는 부차 경로 — Primary('다시 하기')와 경쟁하지 않게 링크 형태로 둔다.
+  askLink: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 9, marginBottom: 2 },
+  askLinkText: { fontSize: 14, fontWeight: '700', color: InkColors.ink2 },
   footRow: { flexDirection: 'row', alignItems: 'stretch', gap: 8 },
   cta: { backgroundColor: InkColors.ink, borderRadius: Radius.md, paddingVertical: 14, alignItems: 'center' },
   ctaText: { color: '#fff', fontSize: 15, fontWeight: '800' },

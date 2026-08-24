@@ -6,6 +6,8 @@ import { occursOn } from '@/lib/store/useWorkStore';
 import type { SwapRequest, ShiftTemplate } from '@/lib/store/useScheduleStore';
 import type { PendingMember } from '@/lib/store/useStaffStore';
 import type { UnknownQuery, PlaybookSuggestion, PaymentClaim } from '@/types';
+// D4 '도와줄 수 있는 질문' 판정 SSOT — 벨 배지·알림 목록이 '내 공간' 리스트와 같은 축을 보게 재사용한다.
+import { answerableQuestions } from '@/lib/store/useUnknownQueueStore';
 import { fmtDateKo } from '@/lib/utils/schedule';
 // 요금제 표시명은 tiers.ts 가 SSOT — 알림 문구에서 이름을 재정의하지 않는다.
 import { PLANS } from '@/lib/config/tiers';
@@ -15,7 +17,7 @@ export const MAX_NOTIFS = 50;
 
 export type JuniorNotifKind =
   | 'notice' | 'mention' | 'assign' | 'swap' | 'swap_approved' | 'swap_rejected'
-  | 'suggestion_approved' | 'suggestion_rejected';
+  | 'suggestion_approved' | 'suggestion_rejected' | 'question';
 export type JuniorNotifRoute = '/junior/work' | '/junior/schedule' | '/junior/chat';
 
 export type JuniorNotif = {
@@ -67,7 +69,7 @@ export const isIncomingSwap = (r: SwapRequest, me: string, today: string): boole
   r.date >= today &&
   (r.kind === 'cover' || r.target_staff_id === me);
 
-/** 벨 뱃지 개수 = 안 읽은 공지 + 안 읽은 멘션 + 나에게 배정된(미완료) 할일 + 받은 교대 요청. */
+/** 벨 뱃지 개수 = 안 읽은 공지 + 안 읽은 멘션 + 나에게 배정된(미완료) 할일 + 받은 교대 요청 + 도와줄 수 있는 질문. */
 export function juniorUnreadCount(
   feed: FeedItem[],
   swaps: SwapRequest[],
@@ -77,8 +79,11 @@ export function juniorUnreadCount(
   done: Record<string, Record<string, DoneMark>> = {},
   ackAt?: string | null,
   suggestions: PlaybookSuggestion[] = [],
+  queue: UnknownQuery[] = [],
 ): number {
   return (
+    // 동료가 물었는데 아직 답이 없는 질문(D4) — 푸시를 놓치면 '내 공간'에 들어가야만 알 수 있었다.
+    answerableQuestions(queue, me, suggestions).filter((u) => isAfterAck(u.asked_at, ackAt)).length +
     feed.filter((f) => isUnreadNotice(f, me) && isAfterAck(f.createdAt, ackAt)).length +
     feed.filter((f) => isUnreadMention(f, me) && isAfterAck(f.createdAt, ackAt)).length +
     // 배정 시각 폴백은 목록(buildJuniorNotifications)과 동일하게 — 카운트·목록 강조가 어긋나지 않게.
@@ -105,8 +110,10 @@ export function buildJuniorNotifications(args: {
   ackAt?: string | null;
   /** 내 제안 검토 결과(반영/반려 + 반려 사유) 알림용. 없으면 해당 알림 없음. */
   suggestions?: PlaybookSuggestion[];
+  /** 매장 미답질문 큐(D4). 없으면 '도와줄 수 있는 질문' 알림 없음. */
+  queue?: UnknownQuery[];
 }): JuniorNotif[] {
-  const { feed, swaps, templates, nameOf, userId: me, today, taskTemplates = [], done = {}, ackAt, suggestions = [] } = args;
+  const { feed, swaps, templates, nameOf, userId: me, today, taskTemplates = [], done = {}, ackAt, suggestions = [], queue = [] } = args;
   const tplById = (id: string) => templates.find((t) => t.id === id);
   const out: JuniorNotif[] = [];
 
@@ -169,6 +176,20 @@ export function buildJuniorNotifications(args: {
       at: r.created_at,
       unread: isAfterAck(r.created_at, ackAt),
       route: '/junior/schedule',
+    });
+  }
+
+  // 도와줄 수 있는 질문(D4) — 동료가 물었는데 아직 답이 없는 것. 탭하면 물어보기 탭('내 공간'에 답하기 시트).
+  // 답을 아는 사람이 사장만은 아니다 — 이 알림이 없으면 직원은 푸시를 놓치는 순간 질문의 존재를 모른다.
+  for (const u of answerableQuestions(queue, me, suggestions)) {
+    out.push({
+      id: `q_${u.id}`,
+      kind: 'question',
+      title: `${u.junior_name}님의 질문에 답해줄 수 있어요`,
+      body: u.query_text,
+      at: u.asked_at,
+      unread: isAfterAck(u.asked_at, ackAt),
+      route: '/junior/chat',
     });
   }
 

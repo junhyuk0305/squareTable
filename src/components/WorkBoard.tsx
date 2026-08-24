@@ -453,6 +453,17 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
     [entryById, sopsOf],
   );
 
+  // 퀴즈를 틀린 뒤 "물어보기"로 나가는 길 — 시트를 닫고 물어보기 화면에 문구만 채운다(전송은 본인이).
+  // ★replace 로 간다: 탭 전환 SSOT(goToTab)와 같은 방식이어야 화면이 새로 마운트돼 seed 초기값이 먹는다.
+  // 매니저도 같은 시트를 쓰므로 착지 화면을 역할로 가른다(사장 화면엔 /junior/chat 이 없다).
+  const askAboutMissed = useCallback(
+    (seed: string) => {
+      setSelfCheck(null);
+      router.replace({ pathname: isOwner ? '/owner/ask' : '/junior/chat', params: { seed } });
+    },
+    [isOwner],
+  );
+
   const memberCount = Math.max(1, (owner ? 1 : 0) + staff.length);
 
   const notices = useMemo(
@@ -961,6 +972,7 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
           sops={selfCheck.sops}
           onPass={(entryIds) => void markUnderstood(entryIds, userId, userName)}
           onClose={() => setSelfCheck(null)}
+          onAsk={askAboutMissed}
         />
       )}
 

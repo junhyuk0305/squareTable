@@ -21,6 +21,8 @@ export const JUNIOR_KIND_UI: Record<JuniorNotifKind, { icon: IconName; tint: str
   swap_rejected: { icon: 'close-circle', tint: BrandColors.accentSoft },
   suggestion_approved: { icon: 'bulb', tint: '#E4F2E8' },
   suggestion_rejected: { icon: 'bulb', tint: BrandColors.accentSoft },
+  // 동료 질문(D4) — 사장 쪽 question 과 같은 모양을 쓴다(같은 대상이라 아이콘이 갈리면 안 된다).
+  question: { icon: 'chatbubble-ellipses', tint: BrandColors.yellowSoft },
 };
 export const OWNER_KIND_UI: Record<OwnerNotifKind, { icon: IconName; tint: string }> = {
   join_request: { icon: 'person-add', tint: BrandColors.yellowSoft },

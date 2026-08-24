@@ -1,11 +1,11 @@
 import { create } from 'zustand';
 import { coalesce, subscribeDebounced } from '@/lib/store/realtimeSync';
-import type { UnknownQuery } from '@/types';
+import type { UnknownQuery, PlaybookSuggestion } from '@/types';
 import seedData from '@/data/unknown-queries.json';
 import { HAS_SUPABASE } from '@/lib/supabase';
 import { fetchUnknownQueue, fetchPendingQuestionCount, insertUnknown, bumpUnknownSimilar, resolveUnknown, subscribeUnknownQueue } from '@/lib/db';
 import { guardWrite } from '@/lib/store/useSyncStore';
-import { notifyStoreQuestion } from '@/lib/push/notify';
+import { notifyStoreQuestion, notifyUserQuestionAnswered } from '@/lib/push/notify';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 
 const seed = seedData as unknown as UnknownQuery[];
@@ -29,10 +29,23 @@ type UnknownQueueState = {
 
 /**
  * D4(③) 이 직원이 도와줄 수 있는 매장 미답질문 — 대기 중 + 내가 물은 건 제외(내 질문에 내가 안 답함).
- * ★배지 카운트(junior/chat)와 리스트(JuniorMySpace)의 공용 판정 SSOT — 한 곳만 바뀌어 어긋나지 않게.
+ * ★배지 카운트(junior/chat)와 리스트(JuniorMySpace)와 알림 벨의 공용 판정 SSOT — 한 곳만 바뀌어 어긋나지 않게.
+ *
+ * suggestions 를 주면 **이미 누가 답을 올려 사장 승인을 기다리는 질문**을 뺀다. 안 빼면 B가 답한 뒤에도
+ * C·D 화면에 그대로 남아 같은 질문에 여러 명이 헛수고한다(질문 상태는 승인 전까지 pending 그대로라서).
+ * 반려되면 그 제안이 pending 을 벗어나므로 질문은 저절로 다시 나타난다 — 되돌리는 코드가 따로 필요 없다.
  */
-export function answerableQuestions(queue: UnknownQuery[], me: string): UnknownQuery[] {
-  return queue.filter((u) => u.status === 'pending_owner_answer' && u.junior_id !== me);
+export function answerableQuestions(
+  queue: UnknownQuery[],
+  me: string,
+  suggestions: PlaybookSuggestion[] = [],
+): UnknownQuery[] {
+  const claimed = new Set(
+    suggestions.filter((s) => s.status === 'pending' && s.source_uq_id).map((s) => s.source_uq_id),
+  );
+  return queue.filter(
+    (u) => u.status === 'pending_owner_answer' && u.junior_id !== me && !claimed.has(u.id),
+  );
 }
 
 export const useUnknownQueueStore = create<UnknownQueueState>((set, get) => ({
@@ -103,7 +116,13 @@ export const useUnknownQueueStore = create<UnknownQueueState>((set, get) => ({
       resolveUnknown(uqId, newEntryId, answeredBy),
       () => before && set((s) => ({ queue: s.queue.map((u) => (u.id === uqId ? before : u)) })),
       '답변 반영에 실패했어요.',
-    );
+    ).then((ok) => {
+      // 물어본 사람에게만 알린다 — 저장 성공 후에만(롤백 시 유령 알림 방지), 내가 내 질문에 답한 경우는 제외.
+      if (ok && before?.junior_id && before.junior_id !== answeredBy) {
+        notifyUserQuestionAnswered(before.junior_id, before.query_text);
+      }
+      return ok;
+    });
   },
   // (자동응답 전이 제거 — 2026-07-31 사용자 결정: 질문은 사장이 직접 답한다. auto_answered 는 과거 데이터 표시용으로만 남음.)
   getPending: () => get().queue.filter((u) => u.status === 'pending_owner_answer'),

@@ -49,13 +49,15 @@ export function NotificationBell({ edge = true }: { edge?: boolean } = {}) {
   const done = useWorkStore((s) => s.done);
   const swaps = useScheduleStore((s) => s.swaps);
   const suggestions = useSuggestionStore((s) => s.suggestions);
+  // 동료가 물었는데 아직 답이 없는 질문(D4)도 배지 축이다 — 큐는 사장 벨이 이미 쓰던 스토어를 그대로 읽는다.
+  const queue = useUnknownQueueStore((s) => s.queue);
   const unitId = useSessionStore((s) => s.unitId);
   const ackAt = useMemberPrefsStore((s) => (unitId ? (s.ackByUnit[unitId] ?? null) : null));
   const today = todayStr();
 
   const count = useMemo(
-    () => juniorUnreadCount(feed, swaps, userId, today, templates, done, ackAt, suggestions),
-    [feed, swaps, userId, today, templates, done, ackAt, suggestions],
+    () => juniorUnreadCount(feed, swaps, userId, today, templates, done, ackAt, suggestions, queue),
+    [feed, swaps, userId, today, templates, done, ackAt, suggestions, queue],
   );
 
   return <BellButton count={count} edge={edge} onPress={() => router.push('/junior/notifications')} />;

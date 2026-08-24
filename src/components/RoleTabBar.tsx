@@ -40,7 +40,9 @@ const TABS: Record<'junior' | 'owner', Tab[]> = {
     { label: '홈', path: '/owner/dashboard', icon: 'home-outline', iconActive: 'home' },
     // /owner/inbox 는 라우트로 남아 '할 일' 칸으로 리다이렉트된다(딥링크·푸시가 물고 있음).
     // 리다이렉트가 도는 찰나에 탭이 전부 꺼져 보이지 않게 이 탭의 계열로 선언한다.
-    { label: '노하우', path: OWNER_KNOWHOW_TAB, icon: 'bulb-outline', iconActive: 'bulb', alsoActiveFor: ['/owner/inbox'] },
+    // /owner/knowledge 는 같은 목록의 서브화면(뒤로가기 유지용) — 탭바를 렌더하므로 여기 없으면
+    // 그 화면에서 탭바는 보이는데 아무 탭도 안 켜진다.
+    { label: '노하우', path: OWNER_KNOWHOW_TAB, icon: 'bulb-outline', iconActive: 'bulb', alsoActiveFor: ['/owner/inbox', '/owner/knowledge'] },
     { label: '업무 채팅', path: '/owner/work', icon: 'briefcase-outline', iconActive: 'briefcase' },
     { label: '설정', path: '/owner/settings', icon: 'settings-outline', iconActive: 'settings' },
   ],

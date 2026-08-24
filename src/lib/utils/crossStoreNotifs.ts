@@ -32,7 +32,7 @@ const receivedArgsOf = (
  *  ackAt = 그 매장의 '모두 읽기' 기준 시각(0078, unit_member_prefs — 전 매장 행을 이미 당겨둠). */
 export function storeUnreadCount(d: UnitNotifData, role: string, me: string, today: string, ackAt?: string | null): number {
   const nameOf = nameOfFor(d, role, me);
-  if (!canManage(role)) return juniorUnreadCount(d.feed, d.swaps, me, today, d.taskTemplates, d.done, ackAt, d.suggestions);
+  if (!canManage(role)) return juniorUnreadCount(d.feed, d.swaps, me, today, d.taskTemplates, d.done, ackAt, d.suggestions, d.queue);
   // 0093: 매니저 매장은 사장 판(질문·제안·합류신청 포함 — RPC 가 manager 매장에도 해당 원천을 준다)
   //       + 매니저가 받는 쪽인 축(공지·배정·내 제안 결과).
   const base = ownerUnreadCount(d.queue, d.suggestions, d.swaps, d.pending, d.feed, me, ackAt);
@@ -50,7 +50,7 @@ export function buildStoreNotifs(d: UnitNotifData, role: string, me: string, tod
       ? buildManagerNotifications(ownerArgsOf(d, me, nameOf, ackAt), receivedArgsOf(d, me, today, nameOf, ackAt))
       : canManage(role)
         ? buildOwnerNotifications(ownerArgsOf(d, me, nameOf, ackAt))
-        : buildJuniorNotifications({ feed: d.feed, swaps: d.swaps, templates: [], nameOf, userId: me, today, taskTemplates: d.taskTemplates, done: d.done, ackAt, suggestions: d.suggestions });
+        : buildJuniorNotifications({ feed: d.feed, swaps: d.swaps, templates: [], nameOf, userId: me, today, taskTemplates: d.taskTemplates, done: d.done, ackAt, suggestions: d.suggestions, queue: d.queue });
   return rows.map((r) => ({ ...r, unitId: d.unitId }));
 }
 

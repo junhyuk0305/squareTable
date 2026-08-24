@@ -102,6 +102,12 @@ export function OwnerTodoSegment() {
     return (id: string) => m.get(id);
   }, [entries]);
 
+  // 'AI가 답이 아니라고 한 것'을 위로 올린다 — 직원이 👎를 눌러도 여태 '답한 질문' 50건 목록 안에
+  // 섞여 있어 사실상 아무도 못 봤다. "모른다"(답할 질문)보다 **틀린 답이 노하우로 굳는 쪽**이 더 위험하다.
+  // ★고칠 대상은 새 노하우가 아니라 **AI가 근거로 쓴 그 노하우**다 → 착지도 coach 가 아니라 edit/[id].
+  const badAnswers = useMemo(() => aiAnswers.filter((r) => r.satisfaction === 'down'), [aiAnswers]);
+  const okAnswers = useMemo(() => aiAnswers.filter((r) => r.satisfaction !== 'down'), [aiAnswers]);
+
   // 행/제안 탭 → 대화형 답변(coach) / 제안 검토 화면. 둘 다 서브화면이라 push.
   const goAnswer = (uq: UnknownQuery) => router.push({ pathname: '/owner/coach', params: { uqId: uq.id } });
   const goSuggestions = () => router.push('/owner/suggestions');
@@ -130,7 +136,8 @@ export function OwnerTodoSegment() {
 
   // 할 일이 0건이어도 조기 return 하지 않는다 — 그 순간이야말로 사장이 "AI가 대신 답하고 있다"를
   // 봐야 할 때다. 빈 안내를 먼저 두고 'AI가 답한 질문' 그룹은 그대로 아래에 남긴다.
-  const hasTodo = pending.length > 0 || pendingSuggestions.length > 0;
+  // 틀렸다고 표시된 답도 사장이 손볼 일이다 — 그게 남아 있는데 "깔끔하네요"라고 하면 화면이 거짓말을 한다.
+  const hasTodo = pending.length > 0 || pendingSuggestions.length > 0 || badAnswers.length > 0;
 
   return (
     <View style={styles.root}>
@@ -166,14 +173,25 @@ export function OwnerTodoSegment() {
       {/* 세그먼트 안에 세그먼트를 또 두지 않는다(구 InboxSubtabs 부활 금지) — 위 두 그룹과 나란히 세운다.
           ★힌트는 **상한에 걸렸는지**를 말해야 한다. 옛 판본은 slice(0,50) 한 길이를 그대로 써서
           300건 매장에서도 "50건"이라고 했다 — 그건 거짓이고, 51번째부터는 앱 어디에도 없다. */}
-      {aiLoaded && aiAnswers.length > 0 && (
+      {aiLoaded && badAnswers.length > 0 && (
+        <View style={styles.group}>
+          <SectionLabel title="답이 틀렸대요" hint={`${badAnswers.length}건`} />
+          <Text style={styles.groupHint}>노하우를 눌러 고치면 다음부터 제대로 답해요.</Text>
+          <PagedList
+            items={badAnswers}
+            render={(r) => <AiAnswerRow key={r.id} row={r} titleOf={entryTitleOf} onOpenEntry={goEntry} />}
+          />
+        </View>
+      )}
+
+      {aiLoaded && okAnswers.length > 0 && (
         <View style={styles.group}>
           <SectionLabel
             title="AI가 답한 질문"
-            hint={aiAnswers.length >= AI_ANSWER_LIMIT ? `최근 ${aiAnswers.length}건` : `${aiAnswers.length}건`}
+            hint={aiAnswers.length >= AI_ANSWER_LIMIT ? `최근 ${okAnswers.length}건` : `${okAnswers.length}건`}
           />
           <PagedList
-            items={aiAnswers}
+            items={okAnswers}
             render={(r) => <AiAnswerRow key={r.id} row={r} titleOf={entryTitleOf} onOpenEntry={goEntry} />}
           />
         </View>
@@ -242,6 +260,7 @@ function SuggestionRow({ s, onPress }: { s: PlaybookSuggestion; onPress: () => v
 const styles = StyleSheet.create({
   root: { gap: Space.lg },
   group: { gap: Space.sm },
+  groupHint: { fontSize: 13, color: InkColors.ink2, marginTop: -2 },
 
   center: { alignItems: 'center', justifyContent: 'center', gap: Space.sm, paddingVertical: 48 },
   loadingText: { fontSize: 15, color: InkColors.ink2, fontWeight: '600' },

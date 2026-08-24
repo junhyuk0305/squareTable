@@ -237,6 +237,17 @@ export const notifyUserSwapResult = (userId: string, ok: boolean, when: string) 
     tag: 'swap-result',
   });
 
+/** 내가 물은 질문이 노하우로 답이 됐다 — 물어본 본인에게만. 답을 기다리던 사람이 그걸 모르면 루프가 끊긴다. */
+export const notifyUserQuestionAnswered = (userId: string, question: string) =>
+  pushNotify({
+    audience: 'user',
+    userId,
+    title: '내 질문에 답이 왔어요',
+    body: question,
+    url: '/junior/chat',
+    tag: 'q-answered',
+  });
+
 export const notifyUserMention = (userId: string, author: string, text: string) =>
   pushNotify({
     audience: 'user',

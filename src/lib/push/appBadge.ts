@@ -88,7 +88,7 @@ export function useAppBadgeSync(): void {
   const templates = useWorkStore((s) => s.templates);
   const done = useWorkStore((s) => s.done);
   const swaps = useScheduleStore((s) => s.swaps);
-  // 사장 집계 입력
+  // 사장 집계 입력 — queue 는 직원 집계('도와줄 수 있는 질문', D4)에서도 함께 쓴다.
   const queue = useUnknownQueueStore((s) => s.queue);
   const suggestions = useSuggestionStore((s) => s.suggestions);
   const pending = useStaffStore((s) => s.pending);
@@ -104,7 +104,7 @@ export function useAppBadgeSync(): void {
     const count =
       canManage(role)
         ? ownerUnreadCount(queue, suggestions, swaps, pending, feed, me, ackAt, claims)
-        : juniorUnreadCount(feed, swaps, me, today, templates, done, ackAt, suggestions);
+        : juniorUnreadCount(feed, swaps, me, today, templates, done, ackAt, suggestions, queue);
     setAppBadge(count);
   }, [role, me, signedIn, feed, templates, done, swaps, queue, suggestions, pending, today, ackAt, claims]);
 }

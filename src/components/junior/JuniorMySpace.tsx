@@ -57,7 +57,8 @@ export function JuniorMySpace({ me }: { me: string }) {
   const publishedEntries = useMemo(() => entries.filter((e) => e.status === 'published'), [entries]);
 
   // 도와줄 수 있는 질문 — 배지와 동일한 SSOT 판정(answerableQuestions).
-  const answerable = useMemo(() => answerableQuestions(queue, me), [queue, me]);
+  // 제안을 함께 넘겨 이미 누가 답을 올린(승인 대기) 질문은 빠지게 한다 — 같은 질문 중복 답변 방지.
+  const answerable = useMemo(() => answerableQuestions(queue, me, suggestions), [queue, me, suggestions]);
   // 제안은 상태 변화가 있는 것(검토 중·반려)을 위로 — 등록된 건 기여 배너가 이미 말해준다.
   const myProposals = useMemo(() => {
     const weight = (st: PlaybookSuggestion['status']) => (st === 'pending' ? 0 : st === 'rejected' ? 1 : 2);

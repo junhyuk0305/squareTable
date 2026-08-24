@@ -10,6 +10,7 @@ import { JuniorMySpace } from '@/components/junior/JuniorMySpace';
 
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { useUnknownQueueStore, answerableQuestions } from '@/lib/store/useUnknownQueueStore';
+import { useSuggestionStore } from '@/lib/store/useSuggestionStore';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 
 import { styles } from '@/styles/juniorChatStyles';
@@ -42,7 +43,12 @@ export default function JuniorChatScreen() {
     [entries],
   );
   // '내 공간' 탭 배지 = 내가 도와줄 수 있는 매장 미답질문 수(SSOT: answerableQuestions).
-  const answerableCount = useMemo(() => answerableQuestions(queue, me).length, [queue, me]);
+  // 제안을 함께 넘겨 "이미 누가 답을 올려 승인 대기 중"인 질문은 배지에서도 빠지게 한다(리스트와 동일 축).
+  const suggestions = useSuggestionStore((s) => s.suggestions);
+  const answerableCount = useMemo(
+    () => answerableQuestions(queue, me, suggestions).length,
+    [queue, me, suggestions],
+  );
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>

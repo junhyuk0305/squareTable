@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { JuniorAsk } from '@/components/junior/JuniorAsk';
@@ -15,6 +16,8 @@ import { styles } from '@/styles/juniorChatStyles';
  */
 export default function OwnerAskScreen() {
   const unitId = useSessionStore((s) => s.unitId);
+  // 퀴즈를 틀린 뒤 넘어올 때 넘겨받는 문구 — 입력칸을 채우기만 한다(전송은 본인이, JuniorAsk 규약).
+  const { seed } = useLocalSearchParams<{ seed?: string }>();
 
   // owner 레이아웃은 챗 스토어를 hydrate하지 않는다(직원 레이아웃 담당) — 이 화면이 직접 당긴다.
   useEffect(() => {
@@ -25,7 +28,7 @@ export default function OwnerAskScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
       {/* 매니저는 제안 경로 대신 직접 발행(노하우 추가) 권한이 있으므로 제안 진입은 숨긴다. */}
-      <JuniorAsk suggestEntry={false} />
+      <JuniorAsk suggestEntry={false} seed={seed} />
     </SafeAreaView>
   );
 }
