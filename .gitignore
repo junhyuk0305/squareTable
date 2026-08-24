@@ -72,3 +72,14 @@ example
 
 # 급여 QA 임시 트랜스파일 산출물(로컬 전용)
 .paytest/
+
+# ── QA 잔해 (2026-08-24 정리) ────────────────────────────────
+# 전부 재실행하면 다시 생기는 것들이다. 저장소에 남을 이유가 없고,
+# .qa-room-account.json 은 테스트 계정 비밀번호를 평문으로 들고 있었다.
+.qa-out/
+.qa-room-account.json
+ph.js
+
+# 일회성 QA 스크립트. 한 번 쓰고 버리는 게 정상이라 이름을 tmp- 로 시작시킨다.
+# 계속 쓸 것이 되면 tmp- 를 떼고 제대로 이름을 붙여 커밋한다(예: scripts/example-browser-qa.mjs).
+scripts/tmp-*.mjs

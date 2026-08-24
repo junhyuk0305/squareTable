@@ -11,6 +11,7 @@
 //   B 필수 강제: birth_date 없이 complete_profile → birth_date_required
 //   C OAuth 직원: join_by_invite 트랩 → complete_profile → join_by_invite 성공(승인대기)
 //   D 전화 중복: 이미 쓰는 번호로 complete_profile → 예외 없이 phone=null 보류(계정 생존)
+//   F role 스코프(0157): 같은 번호로 owner 1개+junior 1개는 공존, 같은 role 재사용은 여전히 차단
 //
 // 자가정리: 만든 테스트 계정은 끝에 delete_my_account 로 삭제.
 // 실행: node scripts/qa-complete-profile.mjs
@@ -137,6 +138,33 @@ try {
   check('E1 결손 프로필에 create_store(생년월일 지정) 바로 성공(완성화면 순서)', !eCsErr && !!eRow?.invite_code, eCsErr?.message ?? `code=${eRow?.invite_code}`);
   const { error: eCpErr } = await eo.rpc('complete_profile', { p_name: 'CP순서', p_phone: `0105${s.slice(0, 7)}`, p_birth_date: '1988-08-08' });
   check('E2 이어서 complete_profile(이름/전화) 성공', !eCpErr, eCpErr?.message ?? '');
+
+  // ── F: 0157 role 스코프 — 같은 번호로 사장 계정 1개 + 직원 계정 1개는 충돌 없이 공존 ──
+  const rolePhone = `0110${s.slice(0, 7)}`;
+  const fOwner = mk();
+  const fOwnerId = await signUpOAuthLike(fOwner, `qa_cp_f1_${s}@example.com`, 'CProleO');
+  cleanup.push(fOwner);
+  const { error: fOwnerErr } = await fOwner.rpc('complete_profile', { p_name: 'CProleO', p_phone: rolePhone, p_birth_date: '1985-01-01', p_role: 'owner' });
+  check('F1 같은 번호로 사장(role=owner) complete_profile 성공', !fOwnerErr, fOwnerErr?.message ?? '');
+  const { data: pF1 } = await fOwner.from('profiles').select('phone').eq('id', fOwnerId).maybeSingle();
+  check('F2 사장 쪽 phone 정상 기록(null 보류 아님)', normalizePhone(pF1?.phone) === rolePhone, `phone=${pF1?.phone}`);
+
+  const fJunior = mk();
+  const fJuniorId = await signUpOAuthLike(fJunior, `qa_cp_f2_${s}@example.com`, 'CProleJ');
+  cleanup.push(fJunior);
+  const { error: fJuniorErr } = await fJunior.rpc('complete_profile', { p_name: 'CProleJ', p_phone: rolePhone, p_birth_date: '1986-02-02', p_role: 'junior' });
+  check('F3 같은 번호로 직원(role=junior) complete_profile도 충돌 없이 성공', !fJuniorErr, fJuniorErr?.message ?? '');
+  const { data: pF2 } = await fJunior.from('profiles').select('phone').eq('id', fJuniorId).maybeSingle();
+  check('F4 직원 쪽 phone도 정상 기록(사장과 공존, null 보류 아님)', normalizePhone(pF2?.phone) === rolePhone, `phone=${pF2?.phone}`);
+
+  // 같은 role(owner)로 세 번째 계정이 같은 번호를 또 쓰면 — 이건 여전히 막혀야 한다(무제한 중복은 아님).
+  const fOwner2 = mk();
+  const fOwner2Id = await signUpOAuthLike(fOwner2, `qa_cp_f3_${s}@example.com`, 'CProleO2');
+  cleanup.push(fOwner2);
+  const { error: fOwner2Err } = await fOwner2.rpc('complete_profile', { p_name: 'CProleO2', p_phone: rolePhone, p_birth_date: '1987-03-03', p_role: 'owner' });
+  check('F5 같은 role(owner) 재사용 시도는 예외 없이 phone=null 보류', !fOwner2Err, fOwner2Err?.message ?? '');
+  const { data: pF3 } = await fOwner2.from('profiles').select('phone').eq('id', fOwner2Id).maybeSingle();
+  check('F6 같은 role 중복은 여전히 차단(phone=null)', pF3?.phone == null, `phone=${pF3?.phone}`);
 } catch (e) {
   fail++; console.log('  FAIL exception:', e.message);
 } finally {

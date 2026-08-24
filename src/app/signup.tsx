@@ -132,10 +132,10 @@ export default function SignupScreen() {
         // 전화번호 중복 사전검사(주키). 'taken'=차단, 'unknown'=검사실패도 진행하지 않고 차단
         // (우회시키면 트리거로 떨어진다 — 트리거는 이제 500 대신 phone=null로 살리지만, 사용자가
         //  모르게 ‘번호 없는 반쪽 가입’이 되므로 여기서 막고 재시도를 유도하는 게 맞다).
-        const phoneCheck = await isPhoneTaken(normalizePhone(phone));
+        const phoneCheck = await isPhoneTaken(normalizePhone(phone), role);
         if (phoneCheck === 'taken') {
           setEmailMsg(null);
-          return setErr('이미 가입된 번호예요. 아래 ‘로그인’으로 들어와 주세요.');
+          return setErr(`이미 ${role === 'owner' ? '사장' : '직원'}으로 가입된 번호예요. 아래 ‘로그인’으로 들어와 주세요.`);
         }
         if (phoneCheck === 'unknown') {
           return setErr('번호 확인 중 문제가 생겼어요. 잠시 후 다시 시도해 주세요.');

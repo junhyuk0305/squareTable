@@ -59,10 +59,15 @@ export default function LandingScreen() {
   if (HAS_SUPABASE && status === 'loading') return null; // 스플래시가 덮는 구간 — 깜빡임 방지
 
   // 웹 미로그인 방문자는 정적 마케팅 페이지(/welcome.html)를 앞문으로 — 로그인/가입만 앱(SPA)으로 이어진다.
-  // 네이티브(스토어 앱)는 인앱 랜딩을 그대로 쓴다. welcome.html은 실제 정적 파일이라 SPA rewrite에 안 걸린다.
+  // welcome.html은 실제 정적 파일이라 SPA rewrite에 안 걸린다.
   if (HAS_SUPABASE && status === 'signed_out' && Platform.OS === 'web') {
     if (typeof window !== 'undefined') window.location.replace('/welcome.html');
     return null;
+  }
+  // 네이티브(스토어 앱)는 마케팅 스크롤(이 화면의 나머지)을 건너뛴다 — 스토어에서 이미 소개를 보고
+  // 설치했으므로, 앱을 열면 바로 로그인/가입으로 붙는다(2026-08-24, "앱 = 홈페이지 없이 바로 본문").
+  if (HAS_SUPABASE && status === 'signed_out' && Platform.OS !== 'web') {
+    return <Redirect href="/login" />;
   }
 
   const goSignup = () => router.push('/signup');

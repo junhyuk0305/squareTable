@@ -547,8 +547,9 @@ export async function saveMemberPrefs(p: UnitMemberPrefsRow): Promise<{ error: D
 }
 
 // 전화번호 중복 사전검사(주키). 비로그인 호출 가능. data=true/false, error=검사 실패.
-export async function checkPhoneInUse(phone: string): Promise<DbResult<boolean>> {
-  const { data, error } = await supabase.rpc('phone_in_use', { p_phone: phone });
+// role 스코프(0157) — 같은 번호라도 사장 계정 1개 + 직원 계정 1개는 서로 다른 것으로 취급한다.
+export async function checkPhoneInUse(phone: string, role: 'owner' | 'junior'): Promise<DbResult<boolean>> {
+  const { data, error } = await supabase.rpc('phone_in_use', { p_phone: phone, p_role: role });
   return { data: (data as boolean) ?? null, error: error as DbErr };
 }
 
@@ -561,10 +562,10 @@ export async function rpcCreateStore(storeName: string, industry: string | null,
   return { data: (row as CreateStoreRow) ?? null, error: error as DbErr };
 }
 
-// 소셜 로그인(구글 등) 사용자의 결손 프로필(phone/birth_date=null)을 본인이 채운다(0066).
-// role/unit_id 는 서버 함수가 건드리지 않는다(사장 승격은 create_store 만). 성공 시 void.
-export async function rpcCompleteProfile(name: string, phone: string | null, birthDate: string | null): Promise<{ error: DbErr }> {
-  const { error } = await supabase.rpc('complete_profile', { p_name: name, p_phone: phone, p_birth_date: birthDate });
+// 소셜 로그인(구글 등) 사용자의 결손 프로필(phone/birth_date=null)을 본인이 채운다(0066·0157).
+// role/unit_id 는 서버 함수가 건드리지 않는다(사장 승격은 create_store 만) — role 은 signup_role(dedup 라벨)만 최초 1회 기록. 성공 시 void.
+export async function rpcCompleteProfile(name: string, phone: string | null, birthDate: string | null, role: 'owner' | 'junior' | null = null): Promise<{ error: DbErr }> {
+  const { error } = await supabase.rpc('complete_profile', { p_name: name, p_phone: phone, p_birth_date: birthDate, p_role: role });
   return { error: error as DbErr };
 }
 

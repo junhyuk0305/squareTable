@@ -119,8 +119,11 @@ try {
   // staffPhone(01081234567)을 +82/하이픈 형식으로 줘도 phone_in_use가 true여야 클라·DB normalize가 일치.
   const reformatted = '+82 ' + staffPhone.slice(1, 3) + '-' + staffPhone.slice(3, 7) + '-' + staffPhone.slice(7);
   check('normalize parity(클라==DB): 같은 번호 다른 형식 모두 taken', normalizePhone(reformatted) === staffPhone, `norm=${normalizePhone(reformatted)}`);
-  const { data: inUse, error: puErr } = await staff.rpc('phone_in_use', { p_phone: reformatted });
-  check('phone_in_use(다른 형식의 같은 번호) === true', !puErr && inUse === true, puErr?.message ?? `got=${inUse}`);
+  // 0157: phone_in_use가 role 스코프를 탄다 — staff는 role='junior'로 가입했으니 같은 role로 조회해야 true.
+  const { data: inUse, error: puErr } = await staff.rpc('phone_in_use', { p_phone: reformatted, p_role: 'junior' });
+  check('phone_in_use(다른 형식의 같은 번호, 같은 role) === true', !puErr && inUse === true, puErr?.message ?? `got=${inUse}`);
+  const { data: inUseOwnerRole, error: puErr2 } = await staff.rpc('phone_in_use', { p_phone: reformatted, p_role: 'owner' });
+  check('phone_in_use(같은 번호, 다른 role=owner) === false — 사장 슬롯은 비어있음', !puErr2 && inUseOwnerRole === false, puErr2?.message ?? `got=${inUseOwnerRole}`);
 
   // ── P1 failure: 잘못된 코드 → invalid_code (함수 실행됨, 크래시/ambiguous 아님) ──
   const staff2 = mk();

@@ -86,7 +86,9 @@ type SessionState = {
   // 성공 시 페이지 이동이라 반환이 없을 수 있음 — 에러(미설정/차단)만 문자열로 돌려준다.
   signInWithGoogle: () => Promise<{ error: string | null }>;
   // 소셜 로그인 사용자의 결손 프로필(이름/전화/생년월일) 완성. 성공 시 프로필 재로드로 상태 반영.
-  completeProfile: (name: string, phone: string, birthDate: string) => Promise<{ error: string | null }>;
+  // role(0157) — signup_role dedup 라벨을 최초 1회만 기록. profiles.role(권한) 은 절대 안 건드린다.
+  // ⚠️ 가입 시점엔 manager 를 고를 수 없다(매니저는 사장이 나중에 승격하는 상태) — owner|junior만.
+  completeProfile: (name: string, phone: string, birthDate: string, role: 'owner' | 'junior') => Promise<{ error: string | null }>;
   signUp: (
     email: string,
     pw: string,
@@ -95,10 +97,10 @@ type SessionState = {
     meta: { name: string; role: Role; phone?: string; phone_last4?: string; birth_date?: string; store_name?: string; industry?: string; biz_no?: string },
     // emailTaken: 이미 가입된 이메일이면 true — 화면이 "로그인 유도" 안내로 분기(원문 파싱 대신 플래그로).
   ) => Promise<{ error: string | null; needsConfirm: boolean; emailTaken?: boolean }>;
-  // 전화번호 중복 사전검사(주키). 비로그인 호출 가능.
-  //   'taken'=이미 사용 / 'free'=사용 가능 / 'unknown'=검사 실패(네트워크/권한).
+  // 전화번호 중복 사전검사(주키, role 스코프 — 0157). 비로그인 호출 가능.
+  //   'taken'=이미 그 역할로 사용 / 'free'=사용 가능 / 'unknown'=검사 실패(네트워크/권한).
   //   ⚠️ 'unknown'을 'free'로 뭉뚱그리면 사전검사가 뚫려 트리거로 떨어진다 → 호출부가 'unknown'을 차단해야 함.
-  isPhoneTaken: (phone: string) => Promise<'taken' | 'free' | 'unknown'>;
+  isPhoneTaken: (phone: string, role: 'owner' | 'junior') => Promise<'taken' | 'free' | 'unknown'>;
   // opts.isOnboarding=true(가입/첫매장 경로)면 첫 매장 생성 중 뜨는 plan_limit_store 등은 레이스 산물로 보고
   // 이미 만들어진 매장으로 조용히 복구한다. '스위처 매장 추가'(false)에선 plan_limit_store가 진짜 요금제 거절.
   // code = 화면이 분기해야 하는 실패만 화이트리스트로 돌려준다(원문 메시지는 계속 화면에 안 나간다).
@@ -540,8 +542,8 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     return { error: null };
   },
 
-  completeProfile: async (name, phone, birthDate) => {
-    const { error } = await rpcCompleteProfile(name.trim(), phone.trim() || null, birthDate || null);
+  completeProfile: async (name, phone, birthDate, role) => {
+    const { error } = await rpcCompleteProfile(name.trim(), phone.trim() || null, birthDate || null, role);
     if (error) {
       const msg = /birth_date_required|birth_date_invalid/.test(error.message)
         ? '생년월일을 확인할 수 없어요. 생년월일 8자리를 다시 확인해주세요.'
@@ -598,9 +600,9 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     return { error: null, needsConfirm };
   },
 
-  isPhoneTaken: async (phone) => {
+  isPhoneTaken: async (phone, role) => {
     if (!HAS_SUPABASE) return 'free';
-    const { data, error } = await checkPhoneInUse(phone);
+    const { data, error } = await checkPhoneInUse(phone, role);
     if (error) return 'unknown'; // 검사 실패 — 우회 금지(호출부가 차단). unique 제약이 최종 방어선
     return data ? 'taken' : 'free';
   },

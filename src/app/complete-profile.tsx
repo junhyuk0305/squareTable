@@ -81,9 +81,9 @@ export default function CompleteProfileScreen() {
       // 전화번호 중복 사전검사(가입 폼과 동일). 'unknown'(검사실패)도 진행 차단 — 서버 유니크가 최종 방어선.
       // ★ storeRetry(매장만 재시도) 땐 건너뛴다 — phone 이 이미 내 프로필에 저장돼 'taken'이 나온다.
       if (!storeRetry) {
-        const phoneCheck = await isPhoneTaken(normalizePhone(phone));
+        const phoneCheck = await isPhoneTaken(normalizePhone(phone), role);
         if (phoneCheck === 'taken') {
-          return setErr('이미 사용 중인 번호예요. 다른 번호를 입력해 주세요.');
+          return setErr(`이미 ${role === 'owner' ? '사장' : '직원'}으로 가입된 번호예요. 다른 번호를 입력해 주세요.`);
         }
         if (phoneCheck === 'unknown') {
           return setErr('번호 확인 중 문제가 생겼어요. 잠시 후 다시 시도해 주세요.');
@@ -97,7 +97,7 @@ export default function CompleteProfileScreen() {
         //   (예전엔 create_store 먼저였다 — 실패 시 needsProfileSetup 유지로 이 화면에 남기 위해.
         //    그 붙잡는 역할은 이제 storeRetry 가 대신한다 — 위 가드 조건 참조.)
         if (!storeRetry) {
-          const cp = await completeProfile(name.trim(), phone.trim(), birthISO ?? '');
+          const cp = await completeProfile(name.trim(), phone.trim(), birthISO ?? '', role);
           if (cp.error) return setErr(cp.error);
         }
         const cs = await createStore(storeName.trim(), industry, bizDigits(bizNo) || undefined, birthISO, { isOnboarding: true });
@@ -108,7 +108,7 @@ export default function CompleteProfileScreen() {
         router.replace({ pathname: '/owner/onboarding', params: { code: cs.inviteCode ?? '------', industry } });
       } else {
         // 직원: 프로필만 채우고(생년월일 기록 → 이후 hub 에서 초대코드 입력 시 join 통과) 개인 허브로.
-        const cp = await completeProfile(name.trim(), phone.trim(), birthISO ?? '');
+        const cp = await completeProfile(name.trim(), phone.trim(), birthISO ?? '', role);
         if (cp.error) return setErr(cp.error);
         router.replace('/junior/hub');
       }
