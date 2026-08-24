@@ -2317,16 +2317,29 @@ export async function submitQuizLink(
 ): Promise<boolean> {
   if (!HAS_SUPABASE) return true;
   if (answers.length === 0) return true;
-  return write(
-    'submitQuizLink',
-    supabase.rpc('quiz_link_submit', {
-      p_token: token,
-      p_guest_name: guest.name,
-      p_guest_phone: guest.phone,
-      p_phone_verified: guest.phoneVerified,
-      p_answers: answers.map((a) => ({ item_id: a.itemId, response: a.response })),
-    }),
-  );
+  // ★write() 를 쓰지 않는다 — 0행 유령 성공 방지(위 writeStrict 주석의 P1-6 과 같은 문제).
+  //   quiz_link_submit 은 **적힌 행 수**를 돌려주고, 낸 답이 전부 버려져도(그 사이 문항이 지워졌거나
+  //   코스에서 빠진 경우) 예외 없이 0 을 준다. error 만 보면 "사장님께 전달됐어요"라고 말하게 되는데,
+  //   손님은 다시 풀 방법이 없고 사장은 영원히 모른다 — 이 화면이 문구를 둘로 가른 이유가 그것이다.
+  const { data, error } = await supabase.rpc('quiz_link_submit', {
+    p_token: token,
+    p_guest_name: guest.name,
+    p_guest_phone: guest.phone,
+    p_phone_verified: guest.phoneVerified,
+    p_answers: answers.map((a) => ({ item_id: a.itemId, response: a.response })),
+  });
+  if (error) {
+    console.warn('[db] submitQuizLink:', error.message);
+    reportError('db.write:submitQuizLink', error);
+    return false;
+  }
+  const rows = typeof data === 'number' ? data : Number(data ?? 0);
+  if (!(rows > 0)) {
+    // 예외가 아니라 "아무것도 안 적혔다"라서 error 가 null 이다. 여기서 잡지 않으면 무음 유실이다.
+    reportError('db.write:submitQuizLink', { message: `no_rows_written(${String(data)})` });
+    return false;
+  }
+  return true;
 }
 
 // ── 업무보드: 완료 체크 ────────────────────────────────────
@@ -2802,4 +2815,34 @@ export async function setCoursePart(courseId: string, partId: string | null): Pr
     'setCoursePart',
     supabase.from('training_courses').update({ part_id: partId }).eq('id', courseId).select('id'),
   );
+}
+
+// ── 필수 카테고리 스코프(매장 단위, units.essential_sections text[]) — 0167 ────────────────
+// "이 매장에서 꼭 알아야 하는 것"의 **스코프**다. 이 안에서 무엇을 미리 고를지는 코드가 정한다
+// (4기준 rubric SSOT = `src/lib/quiz/essential.ts`. 점수 계산을 여기나 화면에 복제하지 않는다).
+// null·빈 배열은 둘 다 "아직 안 골랐다 = 매장 전체가 스코프"다(0167 주석 ③).
+
+/** 이 매장이 고른 필수 카테고리. 읽기는 units_read(같은 매장 구성원)가 그대로 강제한다. */
+export async function fetchEssentialSections(): Promise<string[]> {
+  if (!HAS_SUPABASE) return [];
+  const { data, error } = await supabase
+    .from('units')
+    .select('essential_sections')
+    .eq('id', _unitId)
+    .maybeSingle();
+  if (error) {
+    readFail('fetchEssentialSections', error);
+    return [];
+  }
+  return (data?.essential_sections as string[] | null) ?? [];
+}
+
+/**
+ * 필수 카테고리 저장. units 직접 update(units_write=사장 전용)가 아니라
+ * save_essential_sections RPC(auth_can_manage 게이트·이 컬럼 하나만)로 쓴다 — 0093 payroll 과 같은 형태.
+ * RPC 는 권한 거부를 예외로 던지므로(0행 무음 없음) write 경유로 실패가 그대로 드러난다.
+ */
+export async function saveEssentialSections(sections: string[]): Promise<boolean> {
+  if (!HAS_SUPABASE) return true;
+  return write('saveEssentialSections', supabase.rpc('save_essential_sections', { p_sections: sections }));
 }

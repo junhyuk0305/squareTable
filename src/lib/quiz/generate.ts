@@ -18,6 +18,7 @@ import type { PlaybookEntry } from '@/types';
 import { findConfusionPair, type ConfusionPair } from './confusion';
 import { detectKinds, storeTerms } from './detect';
 import { FORMATS, formatsForKind } from './formats';
+import { pairPlan, pairPlanFor } from './pairing';
 import type { QuizFormat, QuizItem, QuizKind } from './types';
 
 const EDGE_TIMEOUT_MS = 15_000;   // 형태별 스키마가 커서 answer(12초)보다 조금 여유를 둔다
@@ -79,9 +80,15 @@ export type QuizItemPlan = {
   format: QuizFormat;
   /**
    * 이 형태에만 실을 노하우. 생략하면 호출에 실린 노하우 전부다.
-   * 지금은 혼동쌍(scale_pick)만 쓴다 — 짝 둘만 보여 줘야 모델이 그 둘을 비교한다.
+   * 혼동쌍(scale_pick)은 짝 둘만 보여 줘야 모델이 그 둘을 비교한다.
+   * 짝짓기(t4)는 판에 오른 노하우 전부가 근거다 — 오답이 그 전부에 귀속된다.
    */
   entries?: PlaybookEntry[];
+  /**
+   * 우리가 직접 만든 payload. 있으면 **엣지를 부르지 않는다**(AI 캡을 안 먹는다).
+   * 지금은 t4 짝짓기만 쓴다 — 짝을 이미 다 계산해서 모델에 물어볼 게 없다(pairing.ts).
+   */
+  payload?: Record<string, any>;
 };
 
 /** 여러 노하우의 유형을 합친다. 각 노하우에서 앞에 나온(=신뢰도 높은) 유형이 앞으로 온다. */
@@ -136,7 +143,23 @@ export function pickFormats(
   const seed = rotationSeed(entries);
   // 혼동쌍이 없으면 scale_pick 은 후보가 아니다(아래 games 필터). null 이 정상값이다.
   const pair: ConfusionPair | null = findConfusionPair(entries, pool);
-  for (const kind of unionKinds(entries)) {
+
+  // ★ t4 짝짓기의 판정은 여기서 한다 — detectKinds 는 노하우 **한 건**만 보는데 짝은 **여러 건**이
+  //   있어야 성립하기 때문이다(같은 카테고리·같은 단위·서로 다른 값 3건 이상). 그래서 detectKinds 를
+  //   여러 건 받는 함수로 바꾸지 않고, 노하우들과 pool 을 이미 손에 쥔 이 자리에서 유형 목록에 얹는다.
+  // ★ 맨 앞에 둔다. 재료 조건이 좁아 성립하는 일이 드물고, 한 판은 세트에서 id 가 가장 작은 노하우
+  //   **한 건**에서만 나오므로(pairing.ts) 뒤에 두면 max:1 인 호출부(quiz-new)에서 영영 안 나온다.
+  // ★ 노출 조건은 재료뿐이다 — "노하우 N건 이상" 같은 조건을 걸지 않는다(사용자 확정 08-24).
+  const t4 = pairPlan(entries, pool, seed);
+  const kinds = unionKinds(entries);
+  if (t4) kinds.unshift('t4');
+
+  for (const kind of kinds) {
+    if (t4 && kind === 't4') {
+      out.push({ kind, ...t4 });
+      if (out.length >= max) break;
+      continue;
+    }
     const specs = formatsForKind(kind);
     if (specs.length === 0) continue;
     const games = specs.slice(1).filter((f) => {
@@ -155,6 +178,21 @@ export function pickFormats(
     if (out.length >= max) break;
   }
   return out;
+}
+
+/**
+ * 사장이 형태를 직접 고른 경로(QuizEditorSheet)의 계획 1건.
+ *
+ * t4 는 재료가 맞으면 우리가 payload 까지 만들고, 안 맞으면 계획만 세워 엣지로 넘긴다 —
+ * 우리 추출기는 **수치 짝**만 보지만 모델은 수치가 아닌 짝(물건 ↔ 두는 자리, 용어 ↔ 뜻)도
+ * 찾을 수 있기 때문이다(flipMatch.aiHint). 자동 출제(pickFormats)는 그 반대로,
+ * 우리가 만들 수 있을 때만 t4 를 낸다.
+ */
+function planFor(format: QuizFormat, list: PlaybookEntry[], pool: PlaybookEntry[]): QuizItemPlan {
+  const kind = FORMATS[format].kind;
+  if (kind !== 't4') return { kind, format };
+  const made = pairPlanFor(format, list, pool);
+  return made ? { kind, ...made } : { kind, format };
 }
 
 // ── 생성 ───────────────────────────────────────────────────
@@ -199,9 +237,10 @@ export async function generateQuizItems(
   // (transcribe·doc_extract 와 같은 이유로 mock 폴백 금지).
   if (USE_MOCK) throw new Error('quiz_item: mock mode');
 
+  const pool = opts.pool?.length ? opts.pool : list;
   const plans: QuizItemPlan[] = formats?.length
-    ? formats.filter((f) => FORMATS[f]).map((f) => ({ kind: FORMATS[f].kind, format: f }))
-    : pickFormats(list, opts.max ?? 3, opts.pool?.length ? opts.pool : list);
+    ? formats.filter((f) => FORMATS[f]).map((f) => planFor(f, list, pool))
+    : pickFormats(list, opts.max ?? 3, pool);
   if (plans.length === 0) return [];
 
   const sopsOf = (es: PlaybookEntry[]) =>
@@ -220,6 +259,23 @@ export async function generateQuizItems(
   // 순차 호출 — 엣지 레이트리밋이 사용자당 분당 10회다(index.ts RATE_PER_MIN_USER).
   // 병렬로 쏘면 형태 몇 개만 만들어도 429가 난다.
   for (const plan of plans) {
+    // 우리가 만든 payload(t4 짝짓기)는 엣지를 부르지 않는다 — 짝을 이미 다 알아서 물어볼 게 없다.
+    // 레지스트리 검증은 AI 결과와 똑같이 통과해야 한다(우리가 만들었다고 봐주지 않는다).
+    if (plan.payload) {
+      if (FORMATS[plan.format].validate(plan.payload)) continue;
+      items.push({
+        id: genId('qi'),
+        unit_id: opts.unitId ?? '',
+        entry_ids: (plan.entries?.length ? plan.entries : list).map((e) => e.id),
+        kind: plan.kind,
+        format: plan.format,
+        payload: plan.payload,
+        source: 'ai',
+        status: 'active',
+        ...(opts.createdBy ? { created_by: opts.createdBy } : {}),
+      });
+      continue;
+    }
     try {
       const out = await callQuizItemEdge({
         format: plan.format,

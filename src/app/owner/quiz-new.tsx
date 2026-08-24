@@ -19,12 +19,17 @@ import {
   fetchStoreParts,
   createStorePart,
   setCoursePart,
+  fetchEssentialSections,
+  saveEssentialSections,
   type StorePart,
 } from '@/lib/db';
 import { findSimilarSection } from '@/lib/utils/knowhowSimilarity';
+import { sectionOptions } from '@/lib/config/sections';
 import { generateQuizItems, QuizQuotaError } from '@/lib/quiz/generate';
 import { FORMATS } from '@/lib/quiz/formats';
 import { detectKinds } from '@/lib/quiz/detect';
+import { pickEssential, sectionOf as sectionOfEntry } from '@/lib/quiz/essential';
+import { Collapse } from '@/components/Collapse';
 import { QuizEditorSheet } from '@/components/owner/quiz/QuizEditorSheet';
 import { QuizPreviewSheet } from '@/components/owner/quiz/QuizPreviewSheet';
 import { StepProgress } from '@/components/blocks/StepProgress';
@@ -84,6 +89,7 @@ export default function QuizNewScreen() {
   const router = useRouter();
   const unitId = useSessionStore((s) => s.unitId);
   const userId = useSessionStore((s) => s.userId);
+  const industry = useSessionStore((s) => s.industry);
   const entries = usePlaybookStore((s) => s.entries);
   const staff = useStaffStore((s) => s.staff);
   const hydrateStaff = useStaffStore((s) => s.hydrate);
@@ -109,6 +115,12 @@ export default function QuizNewScreen() {
   const [dupPart, setDupPart] = useState<string | null>(null);
   const [partBusy, setPartBusy] = useState(false);
   const [partFailed, setPartFailed] = useState(false);
+  // 1단계 필수 스코프(0167) — "이 매장에서 꼭 알아야 하는 것" 카테고리. 빈 배열 = 안 골랐다 = 전체.
+  const [essSections, setEssSections] = useState<string[]>([]);
+  const [essLoaded, setEssLoaded] = useState(false);
+  const [scopeOpen, setScopeOpen] = useState(false);
+  // 미리 체크를 이미 적용한 스코프. 사장이 손으로 뺀 체크를 매 렌더마다 되살리지 않기 위한 표식이다.
+  const [appliedScope, setAppliedScope] = useState<string | null>(null);
 
   // 2·3단계
   const [courseId, setCourseId] = useState<string | null>(null);
@@ -162,6 +174,52 @@ export default function QuizNewScreen() {
     void fetchStoreParts().then((rows) => { if (alive) setParts(rows); });
     return () => { alive = false; };
   }, [unitId]);
+
+  // ── 필수 스코프(0167) + 자동 미리 체크 ──────────────────────────────────
+  useEffect(() => {
+    let alive = true;
+    void fetchEssentialSections().then((rows) => {
+      if (!alive) return;
+      setEssSections(rows);
+      setEssLoaded(true);
+    });
+    return () => { alive = false; };
+  }, [unitId]);
+
+  /**
+   * 고를 수 있는 카테고리 = 표준 세트 + 이 매장이 실제로 쓰는 것 중 **노하우가 실제로 있는 것**.
+   * 비어 있는 카테고리를 칩으로 내면 눌러도 아무 일이 안 일어난다(죽은 컨트롤).
+   * 이미 저장된 값은 지금 노하우가 없어도 남긴다 — 안 그러면 사장이 껐던 것을 다시 못 끈다.
+   */
+  const catOptions = useMemo(() => {
+    const keep = new Set([...pool.map(sectionOfEntry), ...essSections]);
+    return sectionOptions(industry, [...pool.map((e) => e.section), ...essSections]).filter((s) => keep.has(s));
+  }, [pool, industry, essSections]);
+
+  /** 판정은 전부 `lib/quiz/essential.ts` 가 한다 — 이 화면은 점수를 계산하지 않고 결과만 그린다. */
+  const essential = useMemo(() => pickEssential(pool, essSections), [pool, essSections]);
+  const reasonById = useMemo(
+    () => new Map(essential.picks.map((p) => [p.entryId, p.reason])),
+    [essential],
+  );
+
+  // 스코프가 바뀔 때 **한 번씩만** 미리 체크를 덮어쓴다. 매 렌더 덮어쓰면 사장이 뺀 체크가 되살아난다.
+  // ★이펙트가 아니라 **렌더 중에** 맞춘다. 이펙트에서 동기 setState 를 하면 커밋한 화면을 그린 뒤
+  //   다시 렌더해서 체크가 한 박자 늦게 들어온다(lint 가 cascading renders 로 잡는 것이 이것이다).
+  //   렌더 중 조정은 React 가 "값이 바뀌면 state 를 맞춘다"로 문서화한 패턴이고, 커밋 전에 다시 돌아
+  //   중간 상태가 화면에 안 나간다.
+  const scopeKey = essLoaded && pool.length > 0 ? essSections.join('|') : null;
+  if (scopeKey !== null && scopeKey !== appliedScope) {
+    setAppliedScope(scopeKey);
+    setPicked(essential.picks.map((p) => p.entryId));
+  }
+
+  /** 카테고리는 매장 설정이라 누를 때 바로 저장한다(따로 저장 버튼을 두면 안 누르고 나간다). */
+  const toggleCat = (c: string) => {
+    const next = essSections.includes(c) ? essSections.filter((x) => x !== c) : [...essSections, c];
+    setEssSections(next);
+    void guardWrite(saveEssentialSections(next), () => setEssSections(essSections), '카테고리를 저장하지 못했어요.');
+  };
 
   /** 파트 직접 추가 — 카테고리(PublishConfirmSheet)와 같은 되묻기 패턴(knowhowSimilarity SSOT). */
   const addPart = async () => {
@@ -419,6 +477,40 @@ export default function QuizNewScreen() {
                 </View>
               )}
 
+              {/* 필수 스코프(0167) — 사장이 카테고리로 범위를 정하고, 그 안에서 코드가 상위를 미리 고른다.
+                  판정 근거(어느 기준에 걸렸는지)는 아래 목록 각 행의 부제에 붙는다. */}
+              <View style={st.essBox}>
+                <Text style={st.essTitle}>
+                  {essential.picks.length > 0
+                    ? `꼭 알아야 하는 것 ${essential.picks.length}개를 미리 골라 뒀어요`
+                    : '미리 골라 둔 노하우가 없어요'}
+                </Text>
+                <Text style={st.essBody}>
+                  손님 응대 · 안전 · 되돌릴 수 없는 손실 · 자주 일어나는 일 기준으로 골랐어요. 빼거나 더해도 돼요.
+                </Text>
+                <View style={st.essActs}>
+                  <SmallAction
+                    label={scopeOpen ? '카테고리 접기' : '카테고리 고르기'}
+                    onPress={() => setScopeOpen((v) => !v)}
+                  />
+                </View>
+                {scopeOpen && (
+                  <Collapse style={st.essPanel}>
+                    <Text style={st.label}>이 매장에서 꼭 알아야 하는 카테고리</Text>
+                    <View style={st.chips}>
+                      {catOptions.map((c) => (
+                        <Chip key={c} label={c} on={essSections.includes(c)} onPress={() => toggleCat(c)} />
+                      ))}
+                    </View>
+                    <Text style={st.hint}>
+                      {essSections.length > 0
+                        ? `이 카테고리 노하우 ${essential.scoped}개 중에서 골라요`
+                        : '안 고르면 매장 노하우 전체에서 골라요'}
+                    </Text>
+                  </Collapse>
+                )}
+              </View>
+
               <View style={st.search}>
                 <Ionicons name="search" size={16} color={InkColors.ink3} />
                 <TextInput
@@ -444,7 +536,8 @@ export default function QuizNewScreen() {
                     </View>
                     <View style={st.rowText}>
                       <Text style={st.rowTitle} numberOfLines={1}>{e.title}</Text>
-                      <Text style={st.rowSub} numberOfLines={1}>{hintOf(e)}</Text>
+                      {/* 미리 고른 것은 **왜 골랐는지**를 보여준다 — 사장이 못 뒤집으면 자동 선정은 신뢰를 잃는다. */}
+                      <Text style={st.rowSub} numberOfLines={1}>{reasonById.get(e.id) ?? hintOf(e)}</Text>
                     </View>
                   </Pressable>
                 ))}
@@ -855,6 +948,12 @@ const st = StyleSheet.create({
   thinBody: { fontSize: 15, fontWeight: '600', color: InkColors.ink2, lineHeight: 22 },
   thinRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
   thinName: { flex: 1, minWidth: 0, fontSize: 15, fontWeight: '700', color: InkColors.ink },
+
+  essBox: { backgroundColor: InkColors.bgSoft, borderRadius: Radius.md, padding: Space.lg, gap: Space.xs },
+  essTitle: { fontSize: 15, fontWeight: '800', color: InkColors.ink, lineHeight: 22 },
+  essBody: { fontSize: 15, fontWeight: '600', color: InkColors.ink2, lineHeight: 22 },
+  essActs: { flexDirection: 'row', marginTop: Space.xs },
+  essPanel: { gap: Space.xs, paddingTop: Space.sm },
 
   addBox: { gap: Space.sm },
   addWarn: { fontSize: 13, fontWeight: '600', color: BrandColors.warnText, lineHeight: 18 },

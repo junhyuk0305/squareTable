@@ -15,12 +15,13 @@ import { View, Text, Pressable, ScrollView, StyleSheet } from 'react-native';
 import type { QuizFormat, QuizItem, QuizKind } from '@/lib/quiz/types';
 import { FORMATS, formatsForKind } from '@/lib/quiz/formats';
 import { detectKinds } from '@/lib/quiz/detect';
+import { findPairSet } from '@/lib/quiz/pairing';
 import { generateQuizItems, QuizQuotaError } from '@/lib/quiz/generate';
 import { insertQuizItem, updateQuizItem } from '@/lib/db';
 import { guardWrite } from '@/lib/store/useSyncStore';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
-import { useWorkStore } from '@/lib/store/useWorkStore';
+import { useWorkStore, courseEntriesOf } from '@/lib/store/useWorkStore';
 import { showToast } from '@/lib/store/useToastStore';
 import { buildDirectUq, buildPlaybookEntryFromSquare } from '@/lib/utils/buildEntry';
 import { genId } from '@/lib/utils/id';
@@ -82,6 +83,7 @@ export function QuizEditorSheet({
   const userId = useSessionStore((s) => s.userId);
   const addEntry = usePlaybookStore((s) => s.add);
   const addCourseEntry = useWorkStore((s) => s.addCourseEntry);
+  const courseEntries = useWorkStore((s) => s.courseEntries);
 
   // 근거 노하우는 저장 중에 늘어날 수 있다(원클릭 추가) — 로컬로 들고 간다.
   const [linkedIds, setLinkedIds] = useState<string[]>([subject.entryId]);
@@ -90,15 +92,28 @@ export function QuizEditorSheet({
     [linkedIds, entries],
   );
 
+  /**
+   * t4(짝짓기)의 짝 후보 — **이 코스에 담긴 노하우**로 한정한다. 매장 전체를 쓰면 코스에 없는
+   * 노하우가 문항 근거로 붙어 오답 귀속(0103)·복습 연결이 어긋난다(generate.ts opts.pool 주석).
+   * 방금 원클릭으로 붙인 노하우는 코스 목록에 아직 없을 수 있어 linkedIds 를 함께 넣는다.
+   */
+  const pairPool = useMemo(() => {
+    const ids = new Set([...linkedIds, ...courseEntriesOf(courseEntries, courseId).map((r) => r.entryId)]);
+    return entries.filter((e) => ids.has(e.id));
+  }, [linkedIds, courseEntries, courseId, entries]);
+
   // 이 업무의 노하우로 만들 수 있는 형태 — 판정은 코드(detectKinds)가 한다. AI 아님.
   const availableFormats = useMemo(() => {
     if (linkedEntries.length === 0) return Object.values(FORMATS);
     const kinds = new Set<QuizKind>();
     linkedEntries.forEach((e) => detectKinds(e).forEach((k) => kinds.add(k)));
+    // t4 는 detectKinds 가 못 뽑는다 — 짝은 노하우 **여러 건**이 있어야 성립하기 때문이다.
+    // 코스 안에 짝 세트가 서면 그때만 뒤집기·줄 잇기를 고를 수 있게 한다(pairing.ts).
+    if (findPairSet(linkedEntries, pairPool)) kinds.add('t4');
     const out = new Map<QuizFormat, ReturnType<typeof formatsForKind>[number]>();
     [...kinds].forEach((k) => formatsForKind(k).forEach((spec) => out.set(spec.key, spec)));
     return [...out.values()];
-  }, [linkedEntries]);
+  }, [linkedEntries, pairPool]);
 
   // ── 화면 상태: pick(형태 고르기) → form(폼) / review(AI 결과 검수) ──
   const [step, setStep] = useState<'pick' | 'form' | 'review'>(editing ? 'form' : 'pick');
@@ -145,7 +160,8 @@ export function QuizEditorSheet({
     let made: QuizItem[] = [];
     try {
       // 여러 건을 넘기면 묶음형(줄 잇기·빠른 판별)도 후보가 된다.
-      made = await generateQuizItems(linkedEntries, formats, { unitId, createdBy: userId });
+      // pool = 짝 후보(t4). 형태 고르개와 같은 풀을 써야 "고를 수 있었는데 못 만든다"가 안 생긴다.
+      made = await generateQuizItems(linkedEntries, formats, { unitId, createdBy: userId, pool: pairPool });
     } catch (e) {
       setBusy(false);
       // "낼 게 부족해서 안 낸 것"과 "장애·한도"를 섞지 않는다(generate.ts 주석).

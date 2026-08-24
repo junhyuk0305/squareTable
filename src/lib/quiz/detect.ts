@@ -10,7 +10,13 @@ import type { PlaybookEntry } from '@/types';
 import type { QuizKind } from './types';
 
 // ── 본문 모으기 ────────────────────────────────────────────
-function bodyOf(entry: PlaybookEntry): string {
+/**
+ * 본문·값 추출의 입력. 노하우 한 건이 정상이지만 **그 일부**여도 된다 —
+ * pairing.ts 가 "제목에 이미 값이 적혀 있나"를 볼 때 제목만 넣어 같은 추출기를 돌린다.
+ */
+type EntryLike = Pick<PlaybookEntry, 'title'> & Partial<Pick<PlaybookEntry, 'square'>>;
+
+function bodyOf(entry: EntryLike): string {
   const sq = entry?.square;
   return [
     entry?.title,
@@ -83,7 +89,7 @@ export type NumericValue = { value: number; unit: string };
  *   → 여기서 엉뚱한 숫자를 집어도 최악이 "문항이 안 만들어짐"이지 틀린 문항이 나가지는 않는다.
  * ★ 분수(1/2 컵)는 빼 둔다 — T2_FRACTION 이 단위를 같이 잡지 않아 비교 대상을 특정할 수 없다.
  */
-export function numericValues(entry: PlaybookEntry): NumericValue[] {
+export function numericValues(entry: EntryLike): NumericValue[] {
   const out: NumericValue[] = [];
   const push = (value: number, rawUnit: string) => {
     const unit = UNIT_ALIAS[rawUnit] ?? rawUnit;
