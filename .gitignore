@@ -83,3 +83,6 @@ ph.js
 # 일회성 QA 스크립트. 한 번 쓰고 버리는 게 정상이라 이름을 tmp- 로 시작시킨다.
 # 계속 쓸 것이 되면 tmp- 를 떼고 제대로 이름을 붙여 커밋한다(예: scripts/example-browser-qa.mjs).
 scripts/tmp-*.mjs
+
+# 로컬 테스트용 다운로드 빌드 산출물(APK 등) — 커밋 대상 아님
+.local-builds/
