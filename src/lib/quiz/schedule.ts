@@ -74,6 +74,28 @@ export const MAX_ITEMS_PER_ROUND = 3;
 /** 연속으로 이만큼 무시하면 자동으로 멈춘다. 다시 시작은 **그 사람이 열었을 때**. */
 export const AUTO_STOP_AFTER_IGNORED = 2;
 
+// ── 자동 출제 계기의 생성 상한 (0169 입사·변경 트리거) ──────────────────────
+/**
+ * 노하우가 바뀌어서 **시스템이 스스로** 만드는 재확인 발송의 상한(매장·직원당 7일).
+ *
+ * 위 `MAX_SENDS_PER_WEEK`(=2)가 "실제로 몇 번 도착하나"의 상한이라면 이 값은
+ * "시스템이 스스로 몇 번 만드나"의 상한이다. 재확인은 사람이 누르지 않는 유일한 갈래라
+ * 상한이 없으면 주 2칸을 재확인이 다 먹고 **사장이 직접 보낸 퀴즈가 영영 밀린다**.
+ * 절반만 쓴다. 사장이 노하우 10건을 한 번에 고쳐도 직원이 받는 재확인은 그 주에 1건이다.
+ *
+ * ★SQL 사본: `supabase/migrations/0169_quiz_triggers_join_change.sql`
+ *   enqueue_knowhow_rechecks() 의 `interval '7 days'`. 바꿀 때 양쪽을 같이 고친다.
+ */
+export const MAX_AUTO_RECHECKS_PER_WEEK = 1;
+
+/**
+ * 입사 즉시 배정하는 코스 수. **첫날 퀴즈는 압축돼야 한다** — 전부 쏟으면 그날 앱을 끈다.
+ * 나머지는 사장 발행과 주기가 이어받는다.
+ *
+ * ★SQL 사본: 0169 approve_member 의 `limit 1`. 바꿀 때 양쪽을 같이 고친다.
+ */
+export const JOIN_FIRST_QUIZ_COURSES = 1;
+
 /** 발송 상한에 걸린 이유. null = 보내도 된다. */
 export type SendBlockReason = 'day_cap' | 'week_cap' | 'auto_stopped' | 'not_working';
 

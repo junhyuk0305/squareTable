@@ -13,6 +13,12 @@
 //   ⑦ 크론이 부르는 엣지 엔드포인트를 그대로 쳐서 퀴즈 갈래까지 실증한다.
 //   ⑧ 열었다/다 풀었다(0140): 직원 직접 UPDATE 는 막히고 definer RPC 만 통한다. 남의 것·안 나간 것은 false.
 //   ⑨ 완료·열기가 실제로 자동 정지를 푸는가 — ④에서 막힌 사람이 다시 대상이 되는지.
+//   ⑩ 입사 트리거(0169): 승인(approve_member)에서 첫 퀴즈 **코스 1개**만 배정된다. 신청(pending)
+//      단계에는 안 생기고, 담긴 노하우가 없는 코스는 고르지 않으며, 신입용 코스가 position 을 이긴다.
+//   ⑪ 변경 트리거(0169): 사장이 노하우를 고치면 **이미 통과한 직원**에게 재확인이 생긴다.
+//      ★문항 스냅샷(0114 source_updated_at)이 낡은 동안은 안 나간다 — 옛 정답을 다시 묻지 않는다.
+//      ★폭주 방지: 3건을 한 번에 고쳐도 1건 · 대기 중이면 더 안 만듦 · (매장,직원)당 7일 1건 ·
+//        통과 기록 없는 직원과 사장 본인은 제외. 만들어진 뒤는 0139 의 발송 상한을 그대로 탄다.
 //
 // ★ ④ 의 기대값은 schedule.ts 를 읽어서 만든다 — 상수를 한쪽만 고치면 이 게이트가 red 가 된다.
 //   (schedule.ts 머리말: "서버가 같은 판정을 해야 할 때는 상수를 마이그레이션에 옮겨 적고 양쪽을 같이 고친다")
@@ -52,6 +58,9 @@ const constOf = (name) => {
 const MAX_PER_DAY = constOf('MAX_SENDS_PER_DAY');
 const MAX_PER_WEEK = constOf('MAX_SENDS_PER_WEEK');
 const AUTO_STOP = constOf('AUTO_STOP_AFTER_IGNORED');
+// 0169 입사·변경 트리거의 생성 상한도 같은 SSOT 에서 온다(한쪽만 고치면 이 게이트가 red).
+const RECHECK_WEEK = constOf('MAX_AUTO_RECHECKS_PER_WEEK');
+const JOIN_COURSES = constOf('JOIN_FIRST_QUIZ_COURSES');
 const INTERVALS = JSON.parse(
   SCHED.match(/export const REVIEW_INTERVALS_DAYS\s*=\s*(\[[^\]]*\])/)[1],
 );
@@ -81,7 +90,8 @@ const ANSWER_DAYS = 3;
 const DUE_EXPECT = ymd(new Date(kst.getFullYear(), kst.getMonth(), kst.getDate() + ANSWER_DAYS));
 
 const daysAgo = (n) => new Date(Date.now() - n * 864e5).toISOString();
-const qaPhones = [`0106${s.slice(0,7)}`, `0108${s.slice(0,7)}`, `0109${s.slice(0,7)}`, `0107${s.slice(0,7)}`];
+const qaPhones = [`0106${s.slice(0,7)}`, `0108${s.slice(0,7)}`, `0109${s.slice(0,7)}`, `0107${s.slice(0,7)}`,
+                  `0102${s.slice(0,7)}`, `0105${s.slice(0,7)}`];
 
 let UNIT = null, UNIT2 = null;
 const made = { entries: [] };
@@ -335,11 +345,146 @@ async function main() {
   check('다시 연속 무시 상태 → 정지', (await dueFor(cId)).length === 0);
   await admin.from('quiz_assignments').update({ opened_at: daysAgo(9) }).eq('id', wk[0].id);
   check('가장 최근 것을 열면 해제', (await dueFor(cId)).length === 1);
+
+  // ══════════════════════════════════════════════════════════════════════
+  // ⑩ 입사 트리거 (0169)
+  // ══════════════════════════════════════════════════════════════════════
+  // 합류가 확정되는 곳은 approve_member 하나다(join_by_invite 는 신청까지). 거기서 첫 퀴즈
+  // **코스 1개**가 자동 배정된다 — 첫날에 전부 쏟지 않는다.
+  console.log('— ⑩ 입사 트리거 —');
+
+  // 노하우가 담긴 코스 2개를 만든다. 하나는 신입용(key='first_day'), 하나는 position 이 더 앞.
+  // ★어느 쪽이 뽑히는지가 곧 "신입용이 position 을 이긴다"의 증명이다.
+  const CJ = `tc_qsj_${s}`, CJ2 = `tc_qsj2_${s}`;
+  await owner.from('training_courses').insert([
+    { id: CJ,  unit_id: UNIT, key: 'first_day',      name: '첫 출근 확인', position: 5, active: true },
+    { id: CJ2, unit_id: UNIT, key: `qsj2_${s}`,      name: '정기 확인',     position: 0, active: true },
+  ]);
+  const { error: ceErr } = await owner.from('course_entries').insert([
+    { course_id: CJ,  entry_id: ENTRY, unit_id: UNIT, position: 0 },
+    { course_id: CJ2, entry_id: ENTRY, unit_id: UNIT, position: 0 },
+  ]);
+  check('코스 2개 + 담긴 노하우 준비', !ceErr, ceErr?.message ?? '');
+
+  // 신청만 한 사람(pending)에게는 배정되지 않는다 — 승인 안 된 사람에게 매장 문항이 나가면 안 된다.
+  const jE = mk();
+  const eId = await signUpSession(jE, `qa_qs_e_${s}@example.com`, { name: 'QA직원E', role: 'junior', phone: `0105${s.slice(0,7)}` });
+  await jE.rpc('join_by_invite', { p_code: CODE });
+  const { data: eRows } = await admin.from('quiz_assignments').select('id').eq('unit_id', UNIT).eq('user_id', eId);
+  check('신청(pending)만으로는 배정 없음', (eRows ?? []).length === 0, `n=${eRows?.length}`);
+
+  // 승인 = 합류 확정 → 첫 퀴즈 1건.
+  const jD = mk();
+  const dId = await signUpSession(jD, `qa_qs_d_${s}@example.com`, { name: 'QA직원D', role: 'junior', phone: `0102${s.slice(0,7)}` });
+  await jD.rpc('join_by_invite', { p_code: CODE });
+  const { error: apErr } = await owner.rpc('approve_member', { p_uid: dId });
+  check('합류 승인 성공(입사 트리거가 승인을 깨지 않는다)', !apErr, apErr?.message ?? '');
+  const { data: dRows } = await admin.from('quiz_assignments')
+    .select('course_id, origin, scheduled_on, sent_at, created_by').eq('unit_id', UNIT).eq('user_id', dId);
+  check(`입사 즉시 코스 ${JOIN_COURSES}개만 배정(첫날에 전부 쏟지 않는다)`, (dRows ?? []).length === JOIN_COURSES, `n=${dRows?.length}`);
+  check('origin=join', dRows?.[0]?.origin === 'join', `${dRows?.[0]?.origin}`);
+  check('신입용 코스가 뽑힌다(position 보다 우선)', dRows?.[0]?.course_id === CJ, `${dRows?.[0]?.course_id}`);
+  check('예약일=오늘 · 아직 안 나감(도착은 근무표가 정한다)', dRows?.[0]?.scheduled_on === DAY && !dRows?.[0]?.sent_at, `${dRows?.[0]?.scheduled_on}`);
+  check('담긴 노하우가 없는 코스는 안 고른다(빈 퀴즈 방지)', dRows?.[0]?.course_id !== QUIZ && dRows?.[0]?.course_id !== QUIZ_B, `${dRows?.[0]?.course_id}`);
+  check('사장 발행 행은 origin=manual 그대로', (await admin.from('quiz_assignments').select('origin').eq('id', A1).maybeSingle()).data?.origin === 'manual');
+  const { error: ogErr } = await admin.from('quiz_assignments').insert({ ...asg(`qz_og_${s}`, cId, TOMORROW), origin: 'bogus' });
+  check('origin 은 아는 값만(제약)', !!ogErr, ogErr?.code ?? '거부 안 됨');
+
+  // ══════════════════════════════════════════════════════════════════════
+  // ⑪ 변경 트리거 (0169)
+  // ══════════════════════════════════════════════════════════════════════
+  // 사장이 노하우를 고치면 **이미 통과한 직원**에게 다시 확인이 나간다.
+  // 감지는 새로 만들지 않는다: playbook_entries.updated_at > knowhow_understanding.verified_at,
+  // 그리고 quiz_items.source_updated_at(0114 스냅샷)이 최신일 때만 = 사장이 검수를 마친 뒤에만.
+  console.log('— ⑪ 변경 트리거 —');
+  const enqueue = async () => { const { error } = await admin.rpc('enqueue_knowhow_rechecks'); if (error) throw new Error('enqueue: ' + error.message); };
+  const rechecks = async (uid) => (await admin.from('quiz_assignments')
+    .select('id, course_id, origin, created_by, scheduled_on, created_at')
+    .eq('unit_id', UNIT).eq('user_id', uid).eq('origin', 'recheck')).data ?? [];
+
+  // 노하우 3건을 A 가 전부 통과한 상태로 만든다(ENTRY 는 ① 에서 이미 통과).
+  const mkEntry = async (id, title) => {
+    made.entries.push(id);
+    const t = new Date().toISOString();
+    const { error } = await owner.from('playbook_entries').insert({
+      id, unit_id: UNIT, creator_id: ownerId, creator_name: 'QA사장', category: 'Routine',
+      subcategory: '마감', title, tags: [], search_keywords: [title],
+      square: { situation: '마감', action: { steps: ['닦는다'] }, extract: { do: '', dont: '', template: '' }, result: { before: '', after: '', metric: '' }, uncover: '', quagmire: '' },
+      execution: { tone: '', timing: '', channel: '', stakeholders: [] },
+      stats: { thumbs_up: 0, thumbs_down: 0, last_used_at: null, query_hits_30d: 0, resolution_rate: 0 },
+      photos: [], version: 1, status: 'published', quality_score: 0.7, created_at: t, updated_at: t,
+      is_template: false, pack_id: null, needs_review: false, correction_points: [], section: null, order_index: 0,
+    });
+    if (error) throw new Error(`playbook_entries(${id}): ` + error.message);
+    // ★노하우가 **통과보다 먼저** 있었던 상태를 만든다. 방금 만든 노하우(updated_at=지금)에
+    //   과거 통과를 붙이면 그 자체가 "통과 뒤에 바뀌었다"가 되어 아래 셋업 검사가 무너진다.
+    await admin.from('playbook_entries').update({ updated_at: daysAgo(5) }).eq('id', id);
+    await owner.from('course_entries').insert({ course_id: CJ, entry_id: id, unit_id: UNIT, position: 1 });
+    await admin.from('knowhow_understanding').insert({ unit_id: UNIT, entry_id: id, staff_id: aId, staff_name: 'QA직원A', verified_at: daysAgo(3) });
+    return id;
+  };
+  const E2 = await mkEntry(`pb_qs2_${s}`, '오픈 준비');
+  const E3 = await mkEntry(`pb_qs3_${s}`, '재고 확인');
+  const ENTRIES3 = [ENTRY, E2, E3];
+
+  // 문항을 만든다 — 트리거(0114)가 지금 노하우 판을 스냅샷한다.
+  const { error: qiErr } = await owner.from('quiz_items').insert(ENTRIES3.map((e, i) => ({
+    id: `qi_qs${i}_${s}`, unit_id: UNIT, entry_ids: [e], kind: 't0', format: 'mc4',
+    payload: { ask: '오픈 때 가장 먼저 할 일은?', choices: ['바닥 청소', '포스 켜기'], answer_index: 1, explain: '포스부터' },
+  })));
+  check('근거 문항 3건 준비', !qiErr, qiErr?.message ?? '');
+
+  await enqueue();
+  check('안 바뀐 노하우로는 재확인이 안 생긴다', (await rechecks(aId)).length === 0, `n=${(await rechecks(aId)).length}`);
+
+  // 사장이 노하우 3건을 한 번에 고친다(= 섹션 이름 바꾸기 한 번이면 실제로 이렇게 된다).
+  await admin.from('playbook_entries').update({ updated_at: new Date().toISOString() }).in('id', ENTRIES3);
+  await enqueue();
+  check('★문항이 낡은 동안은 안 보낸다(옛 정답 출제 방지 · 0114)', (await rechecks(aId)).length === 0, `n=${(await rechecks(aId)).length}`);
+
+  // 사장이 문항을 검수(수정)하면 스냅샷이 갱신된다 → 이제 다시 물어봐도 되는 순간.
+  await owner.from('quiz_items').update({ payload: { ask: '오픈 때 가장 먼저 할 일은?', choices: ['바닥 청소', '포스 켜기'], answer_index: 1, explain: '포스부터요' } })
+    .in('id', ENTRIES3.map((_, i) => `qi_qs${i}_${s}`));
+  await enqueue();
+  const r1 = await rechecks(aId);
+  check(`★노하우 3건을 한 번에 고쳐도 재확인은 ${RECHECK_WEEK}건(폭주 방지)`, r1.length === RECHECK_WEEK, `n=${r1.length}`);
+  check('origin=recheck · 시스템 생성(created_by null)', r1[0]?.origin === 'recheck' && r1[0]?.created_by === null, JSON.stringify(r1[0]));
+  check('재확인도 그 노하우가 담긴 코스로 나간다', r1[0]?.course_id === CJ, `${r1[0]?.course_id}`);
+
+  await enqueue();
+  check('대기 중인 재확인이 있으면 더 안 만든다', (await rechecks(aId)).length === RECHECK_WEEK);
+
+  check('통과 기록이 없는 직원에게는 안 만든다(새로 배우는 것은 재확인이 아니다)', (await rechecks(bId)).length === 0);
+  await admin.from('knowhow_understanding').insert({ unit_id: UNIT, entry_id: ENTRY, staff_id: ownerId, staff_name: 'QA사장', verified_at: daysAgo(3) });
+  await enqueue();
+  check('사장 본인에게는 안 만든다', (await rechecks(ownerId)).length === 0);
+
+  // 대기 건이 나가도 7일 안에는 새로 안 만든다 — 주 상한 2회를 재확인이 다 먹지 않게.
+  await admin.from('quiz_assignments').update({ sent_at: daysAgo(1), opened_at: daysAgo(1) }).eq('id', r1[0].id);
+  await enqueue();
+  check(`이미 나갔어도 7일 안에는 새로 안 만든다(주 ${RECHECK_WEEK}건)`, (await rechecks(aId)).length === RECHECK_WEEK);
+
+  // 창 밖으로 밀면 다시 만든다(영영 멈추는 것이 아니다).
+  await admin.from('quiz_assignments')
+    .update({ created_at: daysAgo(8), scheduled_on: ymd(new Date(kst.getFullYear(), kst.getMonth(), kst.getDate() - 8)) })
+    .eq('id', r1[0].id);
+  await enqueue();
+  check('7일 창 밖이면 다시 만든다', (await rechecks(aId)).length === RECHECK_WEEK + 1);
+
+  // 재확인도 결국 0139 의 발송 경로를 그대로 탄다 — 상한·근무일 판정이 따로 놀지 않는다.
+  await admin.from('quiz_assignments').update({ opened_at: daysAgo(1) }).eq('id', r1[0].id);
+  const aDue = await dueFor(aId);
+  check('재확인이 발송 후보에 들어온다(A는 오늘 이미 받아 하루 상한에 걸린다)', aDue.length === 0, `n=${aDue.length}`);
+  await admin.from('quiz_assignments').update({ sent_at: daysAgo(8) }).eq('id', A1);
+  await admin.from('quiz_assignments').update({ sent_at: daysAgo(9) }).eq('id', A3);
+  const aDue2 = await dueFor(aId);
+  check('하루 상한이 풀리면 재확인이 후보가 된다', aDue2.length === 1, `n=${aDue2.length}`);
 }
 
 async function cleanup() {
   for (const unit of [UNIT, UNIT2].filter(Boolean)) {
     await admin.from('quiz_assignments').delete().eq('unit_id', unit);
+    await admin.from('quiz_items').delete().eq('unit_id', unit);
     await admin.from('shift_templates').delete().eq('unit_id', unit);
     await admin.from('knowhow_understanding').delete().eq('unit_id', unit);
     await admin.from('training_courses').delete().eq('unit_id', unit);

@@ -108,7 +108,15 @@ try {
 
   // ── ③ 방 격리: 비공개 방(둘 다 비멤버) ───────────────────────────────────
   const roomId = `room_${s}`;
-  const { error: re } = await O.from('work_rooms').insert({ id: roomId, unit_id: S1, name: 'QA 비공개방', is_default: false });
+  // ★created_by 를 반드시 싣는다. 2026-08-19(0147)에 can_see_room 에서 `or auth_is_owner()` 가
+  //   **의도적으로 제거**됐다("사장도 멤버여야 본다"). 그래서 새 비공개 방은 멤버가 0명이라 아무도
+  //   첫 멤버를 못 넣는 교착이 되는데, 0147 의 트리거 trg_wr_add_creator_member 가 **created_by 를
+  //   보고** 작성자를 자동으로 멤버에 넣어 그 교착을 푼다. created_by 가 null 이면 트리거가 건너뛴다.
+  //   ⚠️ 이 인자가 빠져 있어서 이 하니스는 0147 이후로 계속 RED 였다(셋업 1건 → 뒤 2건 연쇄 실패).
+  //   앱(db.ts insertRoom)은 created_by 를 싣는다 — 하니스만 그 전 세계관에 남아 있었다.
+  const { error: re } = await O.from('work_rooms').insert({
+    id: roomId, unit_id: S1, name: 'QA 비공개방', is_default: false, created_by: oId,
+  });
   const feedId = `wf_${s}`;
   const { error: fe } = await O.from('work_feed').insert({
     id: feedId, unit_id: S1, room_id: roomId, feed_date: day,
