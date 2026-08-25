@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, Text, TextInput, Pressable, ScrollView, StyleSheet } from 'react-native';
+import { View, Text, TextInput, Pressable, ScrollView, ActivityIndicator, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -19,20 +19,25 @@ import {
   fetchStoreParts,
   createStorePart,
   setCoursePart,
-  fetchEssentialSections,
-  saveEssentialSections,
+  insertQuizLink,
+  type QuizLinkRow,
   type StorePart,
 } from '@/lib/db';
 import { findSimilarSection } from '@/lib/utils/knowhowSimilarity';
-import { sectionOptions } from '@/lib/config/sections';
 import { generateQuizItems, QuizQuotaError } from '@/lib/quiz/generate';
+import { getSectionMeta } from '@/lib/utils/category';
+import { UNSECTIONED } from '@/lib/config/sections';
 import { FORMATS } from '@/lib/quiz/formats';
-import { detectKinds } from '@/lib/quiz/detect';
-import { pickEssential, sectionOf as sectionOfEntry } from '@/lib/quiz/essential';
+import { copyQuizLink, makeQuizToken, quizLinkUrl } from '@/lib/quiz/link';
+import { Appear, stagger } from '@/components/Appear';
 import { Collapse } from '@/components/Collapse';
+import { BottomSheet } from '@/components/BottomSheet';
+import { SheetHead } from '@/components/owner/quiz/kit';
 import { QuizEditorSheet } from '@/components/owner/quiz/QuizEditorSheet';
 import { QuizPreviewSheet } from '@/components/owner/quiz/QuizPreviewSheet';
 import { StepProgress } from '@/components/blocks/StepProgress';
+import { ProgressRing } from '@/components/blocks/ProgressRing';
+import { MiniCalendar } from '@/components/blocks/MiniCalendar';
 import { EmptyState } from '@/components/EmptyState';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
@@ -41,32 +46,32 @@ import type { QuizItem } from '@/lib/quiz/types';
 import type { PlaybookEntry } from '@/types';
 
 const TOTAL = 5;
-const STEP_TITLES = ['무엇을 확인할까요', '문제를 만들고 있어요', '문항 검토', '이름과 받는 사람', '일정'] as const;
 
-/** 마감 후보 — 자유 입력을 주지 않는다(복잡도 §4 "칩 선택으로 못 바꾸나"를 먼저 묻는다). */
-const DEADLINES: { label: string; days: number | null }[] = [
-  { label: '마감 없음', days: null },
-  { label: '3일 안에', days: 3 },
-  { label: '7일 안에', days: 7 },
-  { label: '14일 안에', days: 14 },
-];
+/**
+ * 받는 쪽 — 1단계에서 고른다. 이 값이 4·5단계의 내용을 가른다.
+ *  · staff = 우리 직원. 받는 사람을 고르고 근무 시간에 맞춰 나간다(0139 빈도 상한).
+ *  · guest = 외부 사람(지원자·단기). 보낼 계정이 없으니 **링크**가 나가고, 마지막에 주소를 준다.
+ * ★코스 행에 이 값을 저장하지 않는다 — 링크가 있으면 외부, 발송원장이 있으면 내부다(이미 있는 사실).
+ */
+type Audience = 'staff' | 'guest';
 
-/** "직접 정할래요"를 골랐을 때의 고정 주기. 간격 확대(맡김)를 안 쓰겠다는 뜻이다. */
-const CYCLES: { label: string; days: number }[] = [
-  { label: '한 달마다', days: 30 },
-  { label: '3개월마다', days: 90 },
-  { label: '6개월마다', days: 180 },
-];
-
-/** 노하우 한 줄의 부제 — `detectKinds` 결과를 사장 말로. 새로 판정하지 않는다. */
-const KIND_HINT: Record<string, string> = {
-  t1: '할 일 여러 단계',
-  t2: '기준 값 있음',
-  t3: '금지 있음',
-  t5: '상황이 갈림',
-  t6: '이름·용어 있음',
-  t0: '내용 있음',
+/**
+ * 2026-08-26 재배치 — **기본 설정을 1단계로 앞세우고 노하우 고르기를 독립 단계로 뺐다.**
+ * 옛 판본은 1단계 한 화면에 받는 쪽·파트·검색·목록이 전부 있어서, 정작 이 화면의 본 일인
+ * '노하우 고르기'가 설정들 아래로 밀려 있었다. 이름도 4단계에 있어 다 만든 뒤에야 물었다.
+ * 받는 사람과 일정은 **한 단계로 합쳐** 단계 수를 5로 유지한다(늘리면 이탈한다).
+ */
+const STEP_TITLES: Record<Audience, readonly string[]> = {
+  staff: ['기본 설정', '노하우 고르기', '문제를 만들고 있어요', '문항 검토', '받는 사람과 일정'],
+  guest: ['기본 설정', '노하우 고르기', '문제를 만들고 있어요', '문항 검토', '링크 여는 기간'],
 };
+
+/** 날짜를 고를 수 있는 최대 앞날(일). 더 먼 날은 지금 정할 이유가 없다 — 그때 다시 만들면 된다. */
+const HORIZON_DAYS = 30;
+/** 마감일 기본값 — 발송일로부터 며칠. */
+const DEADLINE_DEFAULT_DAYS = 3;
+/** 링크 만료 기본값 — 오늘로부터 며칠. */
+const LINK_DEFAULT_DAYS = 7;
 
 type Made = { entryId: string; title: string; item: QuizItem | null; formatLabel: string; state: 'wait' | 'ok' | 'thin' };
 
@@ -89,9 +94,10 @@ export default function QuizNewScreen() {
   const router = useRouter();
   const unitId = useSessionStore((s) => s.unitId);
   const userId = useSessionStore((s) => s.userId);
-  const industry = useSessionStore((s) => s.industry);
   const entries = usePlaybookStore((s) => s.entries);
+  const entriesLoaded = usePlaybookStore((s) => s.loaded);
   const staff = useStaffStore((s) => s.staff);
+  const staffLoaded = useStaffStore((s) => s.loaded);
   const hydrateStaff = useStaffStore((s) => s.hydrate);
   const addCourseEntry = useWorkStore((s) => s.addCourseEntry);
 
@@ -105,22 +111,20 @@ export default function QuizNewScreen() {
   const [quota, setQuota] = useState(false);
 
   // 1단계
+  const [audience, setAudience] = useState<Audience>('staff');
   const [q, setQ] = useState('');
+  /** 카테고리 필터 — null = 전체. 노하우 화면과 같은 축(= section)이다. */
+  const [cat, setCat] = useState<string | null>(null);
   const [picked, setPicked] = useState<string[]>([]);
-  // 1단계 파트(0164) — 누구를 위한 퀴즈인가. null = 공통(고르지 않음).
+  // 1단계 파트(0164) — 어느 자리인가. null = 공통(고르지 않음).
   const [parts, setParts] = useState<StorePart[]>([]);
+  const [partsLoaded, setPartsLoaded] = useState(false);
   const [partId, setPartId] = useState<string | null>(null);
   const [partAdding, setPartAdding] = useState(false);
   const [partName, setPartName] = useState('');
   const [dupPart, setDupPart] = useState<string | null>(null);
   const [partBusy, setPartBusy] = useState(false);
   const [partFailed, setPartFailed] = useState(false);
-  // 1단계 필수 스코프(0167) — "이 매장에서 꼭 알아야 하는 것" 카테고리. 빈 배열 = 안 골랐다 = 전체.
-  const [essSections, setEssSections] = useState<string[]>([]);
-  const [essLoaded, setEssLoaded] = useState(false);
-  const [scopeOpen, setScopeOpen] = useState(false);
-  // 미리 체크를 이미 적용한 스코프. 사장이 손으로 뺀 체크를 매 렌더마다 되살리지 않기 위한 표식이다.
-  const [appliedScope, setAppliedScope] = useState<string | null>(null);
 
   // 2·3단계
   const [courseId, setCourseId] = useState<string | null>(null);
@@ -134,12 +138,15 @@ export default function QuizNewScreen() {
   const [name, setName] = useState('');
   const [to, setTo] = useState<string[]>([]);
 
-  // 5단계
+  // 5단계 — 날짜는 전부 "YYYY-MM-DD"(KST). 칩으로 며칠 뒤를 제시하지 않고 달력에서 고른다.
   const [sendNow, setSendNow] = useState(true);
   const [startAt, setStartAt] = useState<string>(() => addDays(todayKst(), 1));
-  const [deadline, setDeadline] = useState<number | null>(3);
-  const [autoCycle, setAutoCycle] = useState(true);
-  const [cycleDays, setCycleDays] = useState(90);
+  /** 마감일. null = 마감 없이 열어 둔다. */
+  const [dueAt, setDueAt] = useState<string | null>(() => addDays(todayKst(), DEADLINE_DEFAULT_DAYS));
+  /** 외부용 — 링크를 이 날까지 연다. 게스트에게는 이 날이 곧 마감이라 날짜가 하나뿐이다. */
+  const [linkUntil, setLinkUntil] = useState<string>(() => addDays(todayKst(), LINK_DEFAULT_DAYS));
+  /** 발행이 끝난 뒤 손에 쥐어 주는 링크(외부 경로) — 있으면 완료 화면이다. */
+  const [madeToken, setMadeToken] = useState<string | null>(null);
 
   const entryById = useMemo(() => new Map(entries.map((e) => [e.id, e])), [entries]);
 
@@ -148,88 +155,52 @@ export default function QuizNewScreen() {
     () => entries.filter((e) => e.status !== 'draft'),
     [entries],
   );
+  /**
+   * 칩으로 낼 카테고리 = 이 매장 노하우에 **실제로 있는** 것. 빈 칩은 죽은 컨트롤이다.
+   * ★분류가 없는 노하우는 노하우 화면과 같이 '기타'(UNSECTIONED) 한 칸으로 묶는다 —
+   *   목록 행은 '기타'라고 말하는데 그 칩이 없으면 눌러서 좁힐 수가 없다(2026-08-26 실측).
+   */
+  const cats = useMemo(() => {
+    const seen = new Set<string>();
+    for (const e of pool) seen.add(e.section?.trim() || UNSECTIONED);
+    return [...seen].sort((a, b) => (a === UNSECTIONED ? 1 : b === UNSECTIONED ? -1 : a.localeCompare(b)));
+  }, [pool]);
+
   const filtered = useMemo(() => {
     const k = q.trim().toLowerCase();
-    if (!k) return pool;
-    return pool.filter((e) => e.title.toLowerCase().includes(k));
-  }, [pool, q]);
+    return pool.filter((e) => {
+      if (cat && (e.section?.trim() || UNSECTIONED) !== cat) return false;
+      if (!k) return true;
+      return e.title.toLowerCase().includes(k);
+    });
+  }, [pool, q, cat]);
 
   const toggle = (id: string) => setPicked((v) => (v.includes(id) ? v.filter((x) => x !== id) : [...v, id]));
 
   // 파트 후보 = 이 매장이 실제로 쓴 값. 표준 세트를 우리가 정해 주지 않는다(0164 ②).
   useEffect(() => {
     let alive = true;
-    void fetchStoreParts().then((rows) => { if (alive) setParts(rows); });
-    return () => { alive = false; };
-  }, [unitId]);
-
-  // ── 필수 스코프(0167) + 자동 미리 체크 ──────────────────────────────────
-  useEffect(() => {
-    let alive = true;
-    void fetchEssentialSections().then((rows) => {
-      if (!alive) return;
-      setEssSections(rows);
-      setEssLoaded(true);
-    });
+    void fetchStoreParts().then((rows) => { if (alive) { setParts(rows); setPartsLoaded(true); } });
     return () => { alive = false; };
   }, [unitId]);
 
   /**
-   * 고를 수 있는 카테고리 = 표준 세트 + 이 매장이 실제로 쓰는 것 중 **노하우가 실제로 있는 것**.
-   * 비어 있는 카테고리를 칩으로 내면 눌러도 아무 일이 안 일어난다(죽은 컨트롤).
-   * 이미 저장된 값은 지금 노하우가 없어도 남긴다 — 안 그러면 사장이 껐던 것을 다시 못 끈다.
-   */
-  const catOptions = useMemo(() => {
-    const keep = new Set([...pool.map(sectionOfEntry), ...essSections]);
-    return sectionOptions(industry, [...pool.map((e) => e.section), ...essSections]).filter((s) => keep.has(s));
-  }, [pool, industry, essSections]);
-
-  /** 판정은 전부 `lib/quiz/essential.ts` 가 한다 — 이 화면은 점수를 계산하지 않고 결과만 그린다. */
-  const essential = useMemo(() => pickEssential(pool, essSections), [pool, essSections]);
-  const reasonById = useMemo(
-    () => new Map(essential.picks.map((p) => [p.entryId, p.reason])),
-    [essential],
-  );
-
-  /**
-   * 목록 순서 — 두 추천 축을 순서로만 반영한다. **거르지 않는다.**
+   * 목록 순서 — 고른 파트의 노하우가 먼저 온다(0164). **거르지 않는다.**
    *
-   * ① 자동 선정분(essential)이 먼저다. 바로 위 줄이 "꼭 알아야 하는 것 N개를 미리 골라 뒀어요"라고
-   *    말하는데, 그 N개가 목록 아래쪽에 흩어져 있으면 첫 화면에는 **빈 체크박스만 보인다**
-   *    (2026-08-25 실측: 8건이 전부 스크롤 아래 top=1243~2925 에 있었다 = 문장이 거짓말로 읽힌다).
-   *    ★기준은 `picked`(사장이 지금 체크한 것)가 아니라 `essential.picks`(자동 선정 결과)다 —
-   *    picked 로 정렬하면 체크를 누를 때마다 줄이 튀어 올라 다음 줄을 잘못 누르게 된다.
-   * ② 그 안에서 고른 파트의 노하우가 먼저다(0164).
-   *
-   * ★파트도 필수도 **거르는 축이 아니다.** 파트는 지연 생성이라 초기엔 대부분 노하우에 파트가
-   *   없고, 그때 교집합으로 거르면 목록이 통째로 비어 아무 일도 안 하는 기능이 된다.
+   * ★파트는 거르는 축이 아니다. 파트는 지연 생성이라 초기엔 대부분 노하우에 파트가 없고,
+   *   그때 교집합으로 거르면 목록이 통째로 비어 아무 일도 안 하는 기능이 된다.
    *   교집합(AND) 필터를 여기 만들지 말 것.
    * (sort 는 ES2019부터 안정 정렬이라 같은 무리 안의 기존 순서는 그대로다.)
+   *
+   * ★2026-08-26: "꼭 알아야 하는 것 N개를 미리 골라 뒀어요"(0167 필수 카테고리)를 **화면에서 뺐다** —
+   *   사장이 직접 고르는 자리라 자동 체크와 선정 이유가 오히려 방해였다. 판정 코드
+   *   (`lib/quiz/essential.ts` · `units.essential_sections`)는 지우지 않고 남겨 뒀다.
    */
   const ranked = useMemo(() => {
-    const ess = new Set(essential.picks.map((p) => p.entryId));
-    if (ess.size === 0 && !partId) return filtered;
-    const rank = (e: (typeof filtered)[number]) => (ess.has(e.id) ? 2 : 0) + (partId && e.part_id === partId ? 1 : 0);
+    if (!partId) return filtered;
+    const rank = (e: (typeof filtered)[number]) => (e.part_id === partId ? 1 : 0);
     return [...filtered].sort((a, b) => rank(b) - rank(a));
-  }, [filtered, partId, essential]);
-
-  // 스코프가 바뀔 때 **한 번씩만** 미리 체크를 덮어쓴다. 매 렌더 덮어쓰면 사장이 뺀 체크가 되살아난다.
-  // ★이펙트가 아니라 **렌더 중에** 맞춘다. 이펙트에서 동기 setState 를 하면 커밋한 화면을 그린 뒤
-  //   다시 렌더해서 체크가 한 박자 늦게 들어온다(lint 가 cascading renders 로 잡는 것이 이것이다).
-  //   렌더 중 조정은 React 가 "값이 바뀌면 state 를 맞춘다"로 문서화한 패턴이고, 커밋 전에 다시 돌아
-  //   중간 상태가 화면에 안 나간다.
-  const scopeKey = essLoaded && pool.length > 0 ? essSections.join('|') : null;
-  if (scopeKey !== null && scopeKey !== appliedScope) {
-    setAppliedScope(scopeKey);
-    setPicked(essential.picks.map((p) => p.entryId));
-  }
-
-  /** 카테고리는 매장 설정이라 누를 때 바로 저장한다(따로 저장 버튼을 두면 안 누르고 나간다). */
-  const toggleCat = (c: string) => {
-    const next = essSections.includes(c) ? essSections.filter((x) => x !== c) : [...essSections, c];
-    setEssSections(next);
-    void guardWrite(saveEssentialSections(next), () => setEssSections(essSections), '카테고리를 저장하지 못했어요.');
-  };
+  }, [filtered, partId]);
 
   /** 파트 직접 추가 — 카테고리(PublishConfirmSheet)와 같은 되묻기 패턴(knowhowSimilarity SSOT). */
   const addPart = async () => {
@@ -300,7 +271,7 @@ export default function QuizNewScreen() {
       state: 'wait',
     }));
     setMade(rows);
-    setStep(2);
+    setStep(3);
     setBusy(false);
     void runGenerate(id, rows);
   };
@@ -337,7 +308,7 @@ export default function QuizNewScreen() {
           // 한도·장애는 다음 노하우에서도 같은 결과다 — 남은 것을 계속 두드리지 않는다.
           for (let j = i + 1; j < out.length; j++) out[j] = { ...out[j], state: 'thin' };
           setMade([...out]);
-          setStep(3);
+          setStep(4);
           return;
         }
         const d = items[0];
@@ -361,13 +332,28 @@ export default function QuizNewScreen() {
           : { ...out[i], state: 'thin' };
         setMade([...out]);
       }
-      setStep(3);
+      setStep(4);
     },
     [entryById, unitId, userId, addCourseEntry],
   );
 
   const okItems = made.filter((m) => m.state === 'ok' && m.item);
   const thin = made.filter((m) => m.state === 'thin');
+  /** 2단계 진행 — 지나온 줄 수. 못 만든 줄도 지나온 것이라 링이 멈추지 않는다. */
+  const processedCount = made.filter((m) => m.state !== 'wait').length;
+  /** 지금 만들고 있는 줄 = 아직 안 끝난 첫 줄(생성 루프가 위에서부터 순서대로 돈다). */
+  const runningIndex = made.findIndex((m) => m.state === 'wait');
+
+  /** 오늘(KST) — 렌더 중 Date.now() 금지(React 컴파일러). 달력 기준일이라 마운트 1회면 충분하다. */
+  const [today] = useState(() => todayKst());
+  /** 실제로 나가는 날. 마감일 달력의 하한이 이것이다(마감이 발송보다 빠를 수 없다). */
+  const sendOn = sendNow ? today : startAt;
+
+  /**
+   * 1단계를 그릴 준비가 됐는가 — 노하우·파트가 전부 도착한 뒤에만 그린다.
+   * ★`entriesLoaded` 를 빼면 노하우가 있는 매장에서도 "먼저 노하우가 필요해요"가 먼저 스친다.
+   */
+  const step1Ready = entriesLoaded && partsLoaded;
 
   const dropItem = async (m: Made) => {
     if (!m.item) return;
@@ -376,10 +362,17 @@ export default function QuizNewScreen() {
   };
 
   // ── 5 → 발행 ─────────────────────────────────────────────────────────────
+  /**
+   * 내부: 코스 일정 저장 + 발송원장 기록 → 상세로.
+   * 외부: 코스 일정 저장 + **링크 생성** → 완료 화면(6)에서 주소를 준다. 발송원장은 안 만든다
+   *       (보낼 계정이 없다 — 여기서 assignments 를 쓰면 '0명에게 보냄'이 남는다).
+   */
   const publish = async () => {
     if (!courseId || !courseKey || busy) return;
     setBusy(true);
-    const scheduledOn = sendNow ? todayKst() : startAt;
+    const scheduledOn = audience === 'guest' ? todayKst() : sendOn;
+    // DB 는 여전히 '며칠 안에'(answer_days)로 센다 — 화면만 달력으로 바꿨고 스키마는 그대로다.
+    const answerDays = audience === 'guest' ? daysBetween(scheduledOn, linkUntil) : dueAt ? daysBetween(scheduledOn, dueAt) : null;
     const ok = await guardWrite(
       upsertTrainingCourse({
         id: courseId,
@@ -390,10 +383,10 @@ export default function QuizNewScreen() {
         preset: null,
         min_items: 1,
         max_items: 10,
-        // "맡길래요" = 간격 확대(3일→2주→8주→6개월)를 시스템이 쓴다 → 고정 주기를 두지 않는다.
-        due_days: autoCycle ? null : cycleDays,
+        // 주기 재확인은 이 화면에서 안 묻는다(2026-08-26) — 만드는 자리에서 정할 일이 아니다.
+        due_days: null,
         start_at: scheduledOn,
-        answer_days: deadline,
+        answer_days: answerDays,
         position: 0,
         active: true,
       }),
@@ -404,6 +397,26 @@ export default function QuizNewScreen() {
       setBusy(false);
       return;
     }
+
+    if (audience === 'guest') {
+      const token = makeQuizToken();
+      const row: QuizLinkRow = {
+        id: genId('ql'),
+        courseId,
+        token,
+        // 만료는 고른 날의 끝(다음 날 0시)이다 — 그 날 낮에 열었더니 이미 닫혀 있으면 안 된다.
+        expiresAt: new Date(`${addDays(linkUntil, 1)}T00:00:00+09:00`).toISOString(),
+        revokedAt: null,
+        createdAt: new Date().toISOString(),
+      };
+      const linked = await guardWrite(insertQuizLink(row), () => {}, '링크를 만들지 못했어요.');
+      setBusy(false);
+      if (!linked) return;
+      setMadeToken(token);
+      setStep(6);
+      return;
+    }
+
     const sent = await guardWrite(
       insertQuizAssignments(courseId, to, scheduledOn),
       () => {},
@@ -428,159 +441,233 @@ export default function QuizNewScreen() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        <StepProgress step={step} total={TOTAL} title={STEP_TITLES[step - 1]} />
+        <StepProgress step={step} total={TOTAL} title={STEP_TITLES[audience][step - 1]} />
 
-        {/* ── 1/5 노하우 고르기 — 이 화면이 "내용 입력"을 대체한다. 타이핑이 0이다 ── */}
+        {/* ── 1/5 기본 설정 — 누가 · 무슨 이름 · 어느 자리. 여기서 정해야 뒤 단계가 갈린다 ── */}
         {step === 1 && (
-          pool.length === 0 ? (
+          !step1Ready ? (
+            <View style={st.waiting}>
+              <ActivityIndicator color={InkColors.ink3} />
+              <Text style={st.waitingText}>불러오는 중...</Text>
+            </View>
+          ) : (
+            <Appear>
+              <View style={st.stepBody}>
+                {/* 받는 쪽 — 여기서 갈려야 뒤 단계가 헛돌지 않는다. 외부는 보낼 계정이 없어 링크로 나간다. */}
+                <Text style={st.label}>누가 풀 건가요?</Text>
+                <View style={st.chips}>
+                  <Chip label="우리 직원" on={audience === 'staff'} onPress={() => setAudience('staff')} />
+                  <Chip label="외부 사람" on={audience === 'guest'} onPress={() => setAudience('guest')} />
+                </View>
+                <Text style={st.hint}>
+                  {audience === 'staff'
+                    ? '합류한 직원에게 근무 시간에 맞춰 보내요.'
+                    : '지원자·단기 직원처럼 계정이 없는 사람은 링크로 풀어요. 링크는 마지막에 만들어 드려요.'}
+                </Text>
+
+                <Text style={st.label}>퀴즈 이름</Text>
+                <TextInput
+                  value={name}
+                  onChangeText={setName}
+                  style={st.input}
+                  placeholder="마감 청소 확인"
+                  placeholderTextColor={InkColors.ink3}
+                  accessibilityLabel="퀴즈 이름"
+                />
+                <Text style={st.hint}>
+                  {audience === 'guest'
+                    ? '링크를 연 사람에게 이 이름이 보여요. 비워 두면 고른 노하우로 지어 드려요.'
+                    : '직원에게 이 이름이 보여요. 비워 두면 고른 노하우로 지어 드려요.'}
+                </Text>
+
+                {/* 파트(0164) — 고르면 다음 단계 목록에서 그 파트 노하우가 위로 온다. 거르지 않는다. */}
+                <Text style={st.label}>{audience === 'guest' ? '어느 자리인가요?' : '누구를 위한 퀴즈인가요?'}</Text>
+                <View style={st.chips}>
+                  <Chip label="공통" on={!partId} onPress={() => setPartId(null)} />
+                  {parts.map((p) => (
+                    <Chip key={p.id} label={p.name} on={partId === p.id} onPress={() => setPartId(p.id)} />
+                  ))}
+                  {/* ★인라인 입력칸을 칩 아래 펼치던 옛 방식은 폐기(2026-08-26) — 칩 줄 안에 입력·경고·버튼이
+                      끼어들어 줄이 무너졌다. 이름 짓기는 시트에서 한다(채팅방 이름 정하듯). */}
+                  <Chip label="+ 직접 추가" on={false} onPress={() => setPartAdding(true)} />
+                </View>
+                <Text style={st.hint}>홀·주방처럼 자리가 나뉘어 있으면 골라 주세요. 안 골라도 돼요.</Text>
+              </View>
+            </Appear>
+          )
+        )}
+
+        {/* ── 2/5 노하우 고르기 — 이 화면이 "내용 입력"을 대체한다. 타이핑이 0이다 ── */}
+        {step === 2 && (
+          /* ★재료가 다 오기 전엔 아무 판정도 하지 않는다. 안 그러면 노하우가 100개인 매장에서도
+             "먼저 노하우가 필요해요"가 먼저 스쳤다가 목록으로 뒤바뀐다(= 없는 것처럼 말한 셈). */
+          !step1Ready ? (
+            <View style={st.waiting}>
+              <ActivityIndicator color={InkColors.ink3} />
+              <Text style={st.waitingText}>노하우를 불러오는 중...</Text>
+            </View>
+          ) : pool.length === 0 ? (
             <EmptyState
               title="먼저 노하우가 필요해요"
               body="퀴즈 문제는 사장님이 적어 둔 노하우에서 나와요."
               cta={{ label: '노하우 추가하기', onPress: () => router.replace('/owner/coach' as never) }}
             />
           ) : (
-            <>
-              <Text style={st.lead}>고른 노하우에서 문제를 만들어요</Text>
+            <Appear>
+              <View style={st.stepBody}>
+                <Text style={st.lead}>고른 노하우에서 문제를 만들어요</Text>
 
-              {/* 파트(0164) — 고르면 그 파트 노하우가 아래 목록에서 위로 올라온다. 거르지 않는다. */}
-              <Text style={st.label}>이 퀴즈는 누구를 위한 건가요?</Text>
-              <View style={st.chips}>
-                <Chip label="공통" on={!partId} onPress={() => setPartId(null)} />
-                {parts.map((p) => (
-                  <Chip key={p.id} label={p.name} on={partId === p.id} onPress={() => setPartId(p.id)} />
-                ))}
-                {!partAdding && <Chip label="+ 직접 추가" on={false} onPress={() => setPartAdding(true)} />}
-              </View>
-              {partAdding && (
-                <View style={st.addBox}>
-                  <TextInput
-                    value={partName}
-                    onChangeText={(t) => { setPartName(t); setDupPart(null); setPartFailed(false); }}
-                    placeholder="홀"
-                    placeholderTextColor={InkColors.ink3}
-                    style={st.input}
-                    onSubmitEditing={() => void addPart()}
-                    returnKeyType="done"
-                    accessibilityLabel="새 파트 이름"
-                  />
-                  {dupPart ? (
-                    <Text style={st.addWarn}>
-                      이미 «{dupPart}» 파트가 있어요. 같은 뜻이면 그쪽에 넣어 주세요 — 한 번 더 누르면 새로 만들어요.
-                    </Text>
-                  ) : null}
-                  {partFailed ? (
-                    <Text style={st.addWarn}>파트를 만들지 못했어요. 연결을 확인하고 다시 시도해 주세요.</Text>
-                  ) : null}
-                  <View style={st.chips}>
-                    {dupPart ? (
-                      <SmallAction
-                        label={`«${dupPart}»로 하기`}
-                        onPress={() => {
-                          const hit = parts.find((p) => p.name === dupPart);
-                          if (hit) setPartId(hit.id);
-                          setPartAdding(false); setPartName(''); setDupPart(null); setPartFailed(false);
-                        }}
-                      />
+                {/* 찾기 바 — 노하우 화면(OwnerKnowhowBrowse)과 **같은 형태**다: 검색 한 줄 + 카테고리 칩
+                    가로 스크롤(색 점). 자리마다 다른 찾기 UI를 만들면 같은 노하우를 찾는 법이 화면마다 달라진다. */}
+                <View style={st.findBar}>
+                  <View style={st.search}>
+                    <Ionicons name="search" size={16} color={InkColors.ink3} />
+                    <TextInput
+                      value={q}
+                      onChangeText={setQ}
+                      placeholder="제목·키워드로 검색"
+                      placeholderTextColor={InkColors.ink3}
+                      style={st.searchInput}
+                      returnKeyType="search"
+                      accessibilityLabel="노하우 검색"
+                    />
+                    {q.length > 0 ? (
+                      <Pressable onPress={() => setQ('')} hitSlop={8} accessibilityRole="button" accessibilityLabel="검색어 지우기">
+                        <Ionicons name="close-circle" size={16} color={InkColors.ink3} />
+                      </Pressable>
                     ) : null}
-                    <SmallAction label={dupPart ? '그래도 만들기' : '추가'} onPress={() => void addPart()} />
                   </View>
-                </View>
-              )}
-
-              {/* 필수 스코프(0167) — 사장이 카테고리로 범위를 정하고, 그 안에서 코드가 상위를 미리 고른다.
-                  판정 근거(어느 기준에 걸렸는지)는 아래 목록 각 행의 부제에 붙는다. */}
-              <View style={st.essBox}>
-                <Text style={st.essTitle}>
-                  {essential.picks.length > 0
-                    ? `꼭 알아야 하는 것 ${essential.picks.length}개를 미리 골라 뒀어요`
-                    : '미리 골라 둔 노하우가 없어요'}
-                </Text>
-                <Text style={st.essBody}>
-                  손님 응대 · 안전 · 되돌릴 수 없는 손실 · 자주 일어나는 일 기준으로 골랐어요. 빼거나 더해도 돼요.
-                </Text>
-                <View style={st.essActs}>
-                  <SmallAction
-                    label={scopeOpen ? '카테고리 접기' : '카테고리 고르기'}
-                    onPress={() => setScopeOpen((v) => !v)}
-                  />
-                </View>
-                {scopeOpen && (
-                  <Collapse style={st.essPanel}>
-                    <Text style={st.label}>이 매장에서 꼭 알아야 하는 카테고리</Text>
-                    <View style={st.chips}>
-                      {catOptions.map((c) => (
-                        <Chip key={c} label={c} on={essSections.includes(c)} onPress={() => toggleCat(c)} />
-                      ))}
-                    </View>
-                    <Text style={st.hint}>
-                      {essSections.length > 0
-                        ? `이 카테고리 노하우 ${essential.scoped}개 중에서 골라요`
-                        : '안 고르면 매장 노하우 전체에서 골라요'}
-                    </Text>
-                  </Collapse>
-                )}
-              </View>
-
-              <View style={st.search}>
-                <Ionicons name="search" size={16} color={InkColors.ink3} />
-                <TextInput
-                  value={q}
-                  onChangeText={setQ}
-                  placeholder="노하우 찾기"
-                  placeholderTextColor={InkColors.ink3}
-                  style={st.searchInput}
-                />
-              </View>
-              <View style={st.listCard}>
-                {ranked.map((e, i) => (
-                  <Pressable
-                    key={e.id}
-                    onPress={() => toggle(e.id)}
-                    style={({ pressed }) => [st.chk, i > 0 && st.rowDivider, pressed && { opacity: 0.6 }]}
-                    accessibilityRole="checkbox"
-                    accessibilityState={{ checked: picked.includes(e.id) }}
-                    accessibilityLabel={e.title}
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={st.chipRow}
                   >
-                    <View style={[st.box, picked.includes(e.id) && st.boxOn]}>
-                      {picked.includes(e.id) ? <Ionicons name="checkmark" size={13} color="#FFFFFF" /> : null}
-                    </View>
-                    <View style={st.rowText}>
-                      <Text style={st.rowTitle} numberOfLines={1}>{e.title}</Text>
-                      {/* 미리 고른 것은 **왜 골랐는지**를 보여준다 — 사장이 못 뒤집으면 자동 선정은 신뢰를 잃는다. */}
-                      <Text style={st.rowSub} numberOfLines={1}>{reasonById.get(e.id) ?? hintOf(e)}</Text>
-                    </View>
-                  </Pressable>
-                ))}
-                {ranked.length === 0 ? <Text style={st.emptyLine}>찾는 노하우가 없어요</Text> : null}
+                    <Pressable
+                      onPress={() => setCat(null)}
+                      hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+                      style={[st.catChip, cat === null && st.catChipOn]}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: cat === null }}
+                      accessibilityLabel="전체 카테고리"
+                    >
+                      <Text style={[st.catChipText, cat === null && st.catChipTextOn]}>전체</Text>
+                    </Pressable>
+                    {cats.map((c) => {
+                      const m = getSectionMeta(c);
+                      const on = cat === c;
+                      return (
+                        <Pressable
+                          key={c}
+                          onPress={() => setCat(on ? null : c)}
+                          hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+                          style={[st.catChip, on && st.catChipOn]}
+                          accessibilityRole="button"
+                          accessibilityState={{ selected: on }}
+                          accessibilityLabel={`${m.label} 카테고리`}
+                        >
+                          <View style={[st.catDot, { backgroundColor: m.color }]} />
+                          <Text style={[st.catChipText, on && st.catChipTextOn]}>{m.label}</Text>
+                        </Pressable>
+                      );
+                    })}
+                  </ScrollView>
+                </View>
+
+                <View style={st.listCard}>
+                  {ranked.map((e, i) => {
+                    const m = getSectionMeta(e.section);
+                    const on = picked.includes(e.id);
+                    return (
+                      <Pressable
+                        key={e.id}
+                        onPress={() => toggle(e.id)}
+                        style={({ pressed }) => [st.chk, i > 0 && st.rowDivider, pressed && { opacity: 0.6 }]}
+                        accessibilityRole="checkbox"
+                        accessibilityState={{ checked: on }}
+                        accessibilityLabel={e.title}
+                      >
+                        <View style={[st.box, on && st.boxOn]}>
+                          {on ? <Ionicons name="checkmark" size={13} color="#FFFFFF" /> : null}
+                        </View>
+                        {/* 색 점 + 카테고리 — 노하우 화면의 한 줄과 같은 어휘라 같은 것으로 읽힌다.
+                            ⛔ 원본 노하우에 없는 설명(자동 판정 문구)은 붙이지 않는다(2026-08-26). */}
+                        <View style={[st.catDot, { backgroundColor: m.color }]} />
+                        <View style={st.rowText}>
+                          <Text style={st.rowTitle} numberOfLines={1}>{e.title}</Text>
+                          <Text style={st.rowSub} numberOfLines={1}>{m.label}</Text>
+                        </View>
+                      </Pressable>
+                    );
+                  })}
+                  {ranked.length === 0 ? <Text style={st.emptyLine}>찾는 노하우가 없어요</Text> : null}
+                </View>
               </View>
-            </>
+            </Appear>
           )
         )}
 
-        {/* ── 2/5 만드는 중 — 형태 이름을 여기서 처음 보여줘 다음 화면의 낯선 단어를 미리 익히게 한다 ── */}
-        {step === 2 && (
+        {/* ── 3/5 만드는 중 — 형태 이름을 여기서 처음 보여줘 다음 화면의 낯선 단어를 미리 익히게 한다 ──
+            ★기다림이 20~30초다. "됨"이라는 글자만 조용히 바뀌면 멈춘 화면으로 읽힌다. 그래서
+              ① 지금 만들고 있는 줄에 스피너를 돌리고 ② 끝난 줄은 Appear 로 올라오게 하고
+              ③ 위에서 개수가 차오르는 진행 링을 돌린다. 프리미티브는 그대로 2개(Appear·Collapse)다. */}
+        {step === 3 && (
           <>
+            <View style={st.makingHead}>
+              <ProgressRing
+                value={processedCount}
+                total={made.length}
+                label={`${made.length}개 중 ${processedCount}개`}
+                sub={okItems.length > 0 ? `문제 ${okItems.length}개 만들었어요` : '아직 만들어진 문제가 없어요'}
+              />
+            </View>
             <Text style={st.lead}>20~30초 걸려요. 이 화면을 켜 두세요</Text>
             <View style={st.listCard}>
-              {made.map((m, i) => (
-                <View key={m.entryId} style={[st.row, i > 0 && st.rowDivider]}>
-                  <View style={st.rowText}>
-                    <Text style={st.rowTitle} numberOfLines={1}>{m.title}</Text>
-                    <Text style={st.rowSub} numberOfLines={1}>
-                      {m.state === 'ok' ? m.formatLabel : m.state === 'thin' ? '못 만들었어요' : '만드는 중'}
-                    </Text>
+              {made.map((m, i) => {
+                const running = m.state === 'wait' && i === runningIndex;
+                return (
+                  <View key={m.entryId} style={[st.row, i > 0 && st.rowDivider]}>
+                    <View style={st.rowText}>
+                      <Text
+                        style={[st.rowTitle, m.state === 'wait' && !running && st.rowTitleWaiting]}
+                        numberOfLines={1}
+                      >
+                        {m.title}
+                      </Text>
+                      {/* 끝난 줄만 부제가 바뀐다 — 그때 Appear 로 한 번 올라오게 해서 "방금 됐다"가 보이게 한다. */}
+                      {m.state === 'wait' ? (
+                        <Text style={st.rowSub} numberOfLines={1}>{running ? '만드는 중' : '기다리는 중'}</Text>
+                      ) : (
+                        <Appear key={m.state} offsetY={6}>
+                          <Text style={st.rowSub} numberOfLines={1}>
+                            {m.state === 'ok' ? m.formatLabel : '못 만들었어요'}
+                          </Text>
+                        </Appear>
+                      )}
+                    </View>
+                    {m.state === 'wait' ? (
+                      running ? (
+                        <ActivityIndicator size="small" color={InkColors.ink3} />
+                      ) : (
+                        <Text style={st.tick}>…</Text>
+                      )
+                    ) : (
+                      <Appear key={m.state} offsetY={6}>
+                        <Ionicons
+                          name={m.state === 'ok' ? 'checkmark-circle' : 'remove-circle-outline'}
+                          size={20}
+                          color={m.state === 'ok' ? BrandColors.good : InkColors.ink3}
+                        />
+                      </Appear>
+                    )}
                   </View>
-                  <Text style={[st.tick, m.state === 'ok' && st.tickOk]}>
-                    {m.state === 'ok' ? '됨' : m.state === 'thin' ? '—' : '…'}
-                  </Text>
-                </View>
-              ))}
+                );
+              })}
             </View>
           </>
         )}
 
-        {/* ── 3/5 문항 검토 — AI가 만든 것을 사장이 승인하는 지점. 생략할 수 없다 ── */}
-        {step === 3 && (
+        {/* ── 4/5 문항 검토 — AI가 만든 것을 사장이 승인하는 지점. 생략할 수 없다 ── */}
+        {step === 4 && (
           <>
             {quota ? (
               /* D2 — 한도. "실패"가 아니라 한도라고 정확히 말하고 우회로를 남긴다. */
@@ -601,8 +688,9 @@ export default function QuizNewScreen() {
             </Text>
             <Text style={st.leadSub}>그대로 보내도 되고, 고쳐도 돼요</Text>
 
-            {okItems.map((m) => (
-              <View key={m.entryId} style={st.qcard}>
+            {okItems.map((m, i) => (
+              <Appear key={m.entryId} delay={stagger(i)}>
+              <View style={st.qcard}>
                 <Text style={st.qFormat}>{m.formatLabel}</Text>
                 <Text style={st.qAsk}>{String(m.item?.payload?.ask ?? '')}</Text>
                 <Text style={st.qSource} numberOfLines={1}>근거 · {m.title}</Text>
@@ -618,6 +706,7 @@ export default function QuizNewScreen() {
                   <SmallAction label="빼기" onPress={() => void dropItem(m)} />
                 </View>
               </View>
+              </Appear>
             ))}
 
             {/* D1 — 낼 게 부족함. "실패"가 아니라 재료 부족이라 말하고 **어느 노하우**인지 지목한다. */}
@@ -642,123 +731,204 @@ export default function QuizNewScreen() {
           </>
         )}
 
-        {/* ── 4/5 이름과 받는 사람 ── */}
-        {step === 4 && (
-          <>
-            <Text style={st.label}>퀴즈 이름</Text>
-            <TextInput value={name} onChangeText={setName} style={st.input} placeholder="마감 청소 확인" placeholderTextColor={InkColors.ink3} />
-            <Text style={st.hint}>고른 노하우로 지어 봤어요. 직원에게 이 이름이 보여요</Text>
-
-            <Text style={st.label}>누구에게</Text>
-            {staff.length === 0 ? (
-              /* D5 — 보낼 직원이 없다. 0/0 을 통과로 읽히게 두지 않고 초대 경로를 준다. */
-              <EmptyState
-                title="아직 합류한 직원이 없어요"
-                body="퀴즈는 저장해 둘게요. 직원이 들어오면 그때 보낼 수 있어요."
-                cta={{ label: '직원 초대하기', onPress: () => router.push('/owner/staff' as never) }}
-              />
-            ) : (
-              <View style={st.listCard}>
-                {staff.map((s, i) => (
-                  <Pressable
-                    key={s.id}
-                    onPress={() => setTo((v) => (v.includes(s.id) ? v.filter((x) => x !== s.id) : [...v, s.id]))}
-                    style={({ pressed }) => [st.chk, i > 0 && st.rowDivider, pressed && { opacity: 0.6 }]}
-                    accessibilityRole="checkbox"
-                    accessibilityState={{ checked: to.includes(s.id) }}
-                    accessibilityLabel={s.name}
-                  >
-                    <View style={[st.box, to.includes(s.id) && st.boxOn]}>
-                      {to.includes(s.id) ? <Ionicons name="checkmark" size={13} color="#FFFFFF" /> : null}
-                    </View>
-                    <View style={st.rowText}>
-                      <Text style={st.rowTitle} numberOfLines={1}>{s.name}</Text>
-                    </View>
-                  </Pressable>
-                ))}
-              </View>
-            )}
-          </>
-        )}
-
-        {/* ── 5/5 일정 ── */}
+        {/* ── 5/5 받는 사람과 일정 — 한 단계다(2026-08-26 합침).
+            이름은 1단계로 올라갔고, 외부용은 보낼 계정이 없어 '누구에게'가 아예 없다.
+            날짜는 달력에서 직접 고른다: 옛 판본은 "8월 26일 / 8월 27일 / 9월 1일" 같은 **며칠 뒤 칩**을
+            늘어놨는데 사장이 원하는 날이 그 넷에 없으면 방법이 없었다. 범위는 오늘부터 한 달이다.
+            ★마감일은 보내는 날보다 빠를 수 없다 — 달력의 `min` 이 막는다(문구로 부탁하지 않는다). ── */}
         {step === 5 && (
-          <>
-            <Text style={st.label}>언제 보낼까요</Text>
-            <Radio label="지금 바로" on={sendNow} onPress={() => setSendNow(true)} />
-            <Radio label="예약해서 보내기" on={!sendNow} onPress={() => setSendNow(false)} />
-            {!sendNow && (
-              <View style={st.chips}>
-                {[1, 2, 3, 7].map((d) => {
-                  const day = addDays(todayKst(), d);
-                  return <Chip key={d} label={dayLabel(day)} on={startAt === day} onPress={() => setStartAt(day)} />;
-                })}
-              </View>
+          <Appear>
+            <View style={st.stepBody}>
+            {audience === 'staff' ? (
+              !staffLoaded ? (
+                /* 직원 목록이 오기 전에 그리면 "합류한 직원이 없어요"가 먼저 스친다 — 없는 게 아니라 안 온 것이다. */
+                <View style={st.waiting}>
+                  <ActivityIndicator color={InkColors.ink3} />
+                  <Text style={st.waitingText}>직원 목록을 불러오는 중...</Text>
+                </View>
+              ) : staff.length === 0 ? (
+                /* D5 — 보낼 직원이 없다. 0/0 을 통과로 읽히게 두지 않고 초대 경로를 준다. */
+                <EmptyState
+                  title="아직 합류한 직원이 없어요"
+                  body="퀴즈는 저장해 둘게요. 직원이 들어오면 그때 보낼 수 있어요."
+                  cta={{ label: '직원 초대하기', onPress: () => router.push('/owner/staff' as never) }}
+                />
+              ) : (
+                <>
+                  <Text style={st.label}>누구에게</Text>
+                  <View style={st.listCard}>
+                    {staff.map((m, i) => (
+                      <Pressable
+                        key={m.id}
+                        onPress={() => setTo((v) => (v.includes(m.id) ? v.filter((x) => x !== m.id) : [...v, m.id]))}
+                        style={({ pressed }) => [st.chk, i > 0 && st.rowDivider, pressed && { opacity: 0.6 }]}
+                        accessibilityRole="checkbox"
+                        accessibilityState={{ checked: to.includes(m.id) }}
+                        accessibilityLabel={m.name}
+                      >
+                        <View style={[st.box, to.includes(m.id) && st.boxOn]}>
+                          {to.includes(m.id) ? <Ionicons name="checkmark" size={13} color="#FFFFFF" /> : null}
+                        </View>
+                        <View style={st.rowText}>
+                          <Text style={st.rowTitle} numberOfLines={1}>{m.name}</Text>
+                        </View>
+                      </Pressable>
+                    ))}
+                  </View>
+                </>
+              )
+            ) : null}
+
+            {audience === 'guest' ? (
+              <>
+                <Text style={st.label}>링크를 언제까지 열어 둘까요</Text>
+                <Text style={st.hint}>이 날까지 들어와서 풀 수 있어요. 지나면 링크가 안 열려요.</Text>
+                <MiniCalendar
+                  value={linkUntil}
+                  today={today}
+                  min={addDays(today, 1)}
+                  max={addDays(today, HORIZON_DAYS)}
+                  onChange={setLinkUntil}
+                />
+                <View style={st.noteBox}>
+                  <Ionicons name="alert-circle-outline" size={17} color={BrandColors.warn} />
+                  <Text style={st.noteText}>
+                    링크를 받은 사람은 문제 안에서 매장 노하우를 보게 돼요. 필요한 기간만 열어 두세요.
+                  </Text>
+                </View>
+              </>
+            ) : (
+              <>
+                <Text style={st.label}>언제 보낼까요</Text>
+                <View style={st.chips}>
+                  <Chip label="지금 바로" on={sendNow} onPress={() => setSendNow(true)} />
+                  <Chip label="예약해서 보내기" on={!sendNow} onPress={() => setSendNow(false)} />
+                </View>
+                {!sendNow && (
+                  <Collapse style={st.calWrap}>
+                    <MiniCalendar
+                      value={startAt}
+                      today={today}
+                      min={addDays(today, 1)}
+                      max={addDays(today, HORIZON_DAYS)}
+                      onChange={(d) => {
+                        setStartAt(d);
+                        // 마감이 발송보다 앞서 버리면 조용히 뒤로 민다 — 고를 수 없는 상태로 두지 않는다.
+                        setDueAt((cur) => (cur && cur < d ? addDays(d, DEADLINE_DEFAULT_DAYS) : cur));
+                      }}
+                    />
+                  </Collapse>
+                )}
+
+                <Text style={st.label}>언제까지 풀까요</Text>
+                {dueAt ? (
+                  <>
+                    <MiniCalendar
+                      value={dueAt}
+                      today={today}
+                      min={sendOn}
+                      max={addDays(sendOn, HORIZON_DAYS)}
+                      onChange={setDueAt}
+                    />
+                    <Pressable
+                      onPress={() => setDueAt(null)}
+                      style={({ pressed }) => [st.textAction, pressed && { opacity: 0.6 }]}
+                      accessibilityRole="button"
+                      accessibilityLabel="마감 없이 두기"
+                    >
+                      <Text style={st.textActionText}>마감 없이 둘래요</Text>
+                    </Pressable>
+                  </>
+                ) : (
+                  <Pressable
+                    onPress={() => setDueAt(addDays(sendOn, DEADLINE_DEFAULT_DAYS))}
+                    style={({ pressed }) => [st.textAction, pressed && { opacity: 0.6 }]}
+                    accessibilityRole="button"
+                    accessibilityLabel="마감일 정하기"
+                  >
+                    <Text style={st.textActionText}>마감 없음 · 날짜를 정할래요</Text>
+                  </Pressable>
+                )}
+              </>
             )}
-
-            <Text style={st.label}>언제까지 풀까요</Text>
-            <View style={st.chips}>
-              {DEADLINES.map((d) => (
-                <Chip key={d.label} label={d.label} on={deadline === d.days} onPress={() => setDeadline(d.days)} />
-              ))}
-            </View>
-
-            <Text style={st.label}>다시 확인</Text>
-            <Radio label="맡길래요" badge="권함" on={autoCycle} onPress={() => setAutoCycle(true)} />
-            <Radio label="직접 정할래요" on={!autoCycle} onPress={() => setAutoCycle(false)} />
-            {!autoCycle && (
-              <View style={st.chips}>
-                {CYCLES.map((c) => (
-                  <Chip key={c.days} label={c.label} on={cycleDays === c.days} onPress={() => setCycleDays(c.days)} />
-                ))}
-              </View>
-            )}
-
-            <View style={st.summary}>
-              <Text style={st.summaryLabel}>이렇게 돌아가요</Text>
-              <Text style={st.summaryBody}>
-                {sendNow ? '오늘' : dayLabel(startAt)}부터 {to.length}명에게 보내요.{'\n'}
-                {deadline ? `받은 날부터 ${deadline}일 안에 풀어야 해요.` : '마감은 없어요.'}{'\n'}
-                {autoCycle ? '다시 확인은 저희가 알아서 챙길게요.' : `${CYCLES.find((c) => c.days === cycleDays)?.label ?? ''} 다시 확인해요.`}
-              </Text>
-            </View>
 
             {/* 사장이 못 정하는 것을 미리 말해 준다 — 안 적으면 "왜 오늘 안 왔지"가 문의가 된다. */}
-            <Text style={st.capNote}>근무일에만 · 하루 1번 · 주 2번까지만 보내요</Text>
-          </>
+            {audience === 'staff' ? (
+              <Text style={st.capNote}>근무일에만 · 하루 1번 · 주 2번까지만 보내요</Text>
+            ) : null}
+            </View>
+          </Appear>
         )}
+
+        {/* ── 완료(외부) — 링크를 손에 쥐어 주는 자리. 여기까지 와서 "만들어졌어요"로 끝내면
+            사장이 링크를 찾으러 상세 화면의 ⋯ 를 다시 뒤져야 한다. ── */}
+        {step === 6 && madeToken && (
+          <Appear>
+            <View style={st.stepBody}>
+              <View style={st.doneHead}>
+                <Ionicons name="link" size={26} color={InkColors.ink} />
+                <Text style={st.doneTitle}>링크가 만들어졌어요</Text>
+                <Text style={st.doneSub}>{dayLabel(linkUntil)}까지 열려 있어요</Text>
+              </View>
+              <View style={st.linkBox}>
+                <Text style={st.linkText} selectable numberOfLines={2}>{quizLinkUrl(madeToken)}</Text>
+              </View>
+              <Text style={st.hint}>이 주소를 보내면 상대가 이름과 전화번호만 적고 바로 풀어요.</Text>
+            </View>
+          </Appear>
+        )}
+
       </ScrollView>
 
       {/* ── 바닥 액션 — 화면당 Primary 1개 ── */}
       <View style={st.foot}>
         {step === 1 && (
+          /* 이름은 비워 둬도 넘어간다 — 고른 노하우로 지어 준다(빈 칸 때문에 막지 않는다). */
+          <Primary label="다음" disabled={!step1Ready} onPress={() => setStep(2)} />
+        )}
+        {step === 2 && (
           <Primary
             label={picked.length > 0 ? `${picked.length}개로 문제 만들기` : '노하우를 골라 주세요'}
             disabled={busy || picked.length === 0}
             onPress={() => void start()}
           />
         )}
-        {step === 3 && (
+        {step === 4 && (
           <>
             {okItems.length === 0 ? (
               <Ghost label="나중에 하기 · 초안으로 저장" onPress={saveDraftAndLeave} />
             ) : null}
-            <Primary label="다음" disabled={okItems.length === 0} onPress={() => setStep(4)} />
+            <Primary label="다음" disabled={okItems.length === 0} onPress={() => setStep(5)} />
           </>
-        )}
-        {step === 4 && (
-          <Primary
-            label="다음"
-            disabled={!name.trim() || to.length === 0}
-            onPress={() => setStep(5)}
-          />
         )}
         {step === 5 && (
           <Primary
-            label={busy ? '보내는 중…' : sendNow ? `${to.length}명에게 보내기` : `${to.length}명에게 예약하기`}
-            disabled={busy}
+            label={
+              busy
+                ? audience === 'guest' ? '링크 만드는 중…' : '보내는 중…'
+                : audience === 'guest'
+                  ? '링크 만들기'
+                  : sendNow ? `${to.length}명에게 보내기` : `${to.length}명에게 예약하기`
+            }
+            disabled={busy || (audience === 'staff' && to.length === 0)}
             onPress={() => void publish()}
           />
+        )}
+        {step === 6 && madeToken && (
+          <>
+            <Ghost
+              label="링크 복사"
+              onPress={() => {
+                void copyQuizLink(madeToken).then((done) =>
+                  showToast(
+                    done ? '링크를 복사했어요' : '복사가 안 됐어요. 주소를 길게 눌러 복사해 주세요',
+                    done ? 'good' : undefined,
+                  ),
+                );
+              }}
+            />
+            <Primary label="끝내기" onPress={() => router.replace(`/owner/quiz/${courseId}` as never)} />
+          </>
         )}
       </View>
 
@@ -789,15 +959,68 @@ export default function QuizNewScreen() {
           }}
         />
       )}
+      {/* 파트 이름 짓기 — 칩 줄 안에서 입력받던 것을 시트로 옮겼다(2026-08-26).
+          이름 하나를 받는 일이라 화면을 새로 만들지 않고 시트 한 장이다. 되묻기(비슷한 이름)는
+          카테고리 만들기와 같은 규칙을 쓴다(knowhowSimilarity SSOT). */}
+      {partAdding && (
+        <BottomSheet
+          visible
+          onClose={() => { setPartAdding(false); setPartName(''); setDupPart(null); setPartFailed(false); }}
+        >
+          <SheetHead
+            title="파트 추가"
+            onClose={() => { setPartAdding(false); setPartName(''); setDupPart(null); setPartFailed(false); }}
+          />
+          <Text style={st.sheetLead}>홀·주방처럼 자리 이름을 적어 주세요. 이 매장에서만 써요.</Text>
+          <TextInput
+            value={partName}
+            onChangeText={(t) => { setPartName(t); setDupPart(null); setPartFailed(false); }}
+            placeholder="파트 이름"
+            placeholderTextColor={InkColors.ink3}
+            style={st.input}
+            onSubmitEditing={() => void addPart()}
+            returnKeyType="done"
+            autoFocus
+            accessibilityLabel="새 파트 이름"
+          />
+          {dupPart ? (
+            <Text style={st.addWarn}>
+              이미 «{dupPart}» 파트가 있어요. 같은 뜻이면 그쪽에 넣어 주세요 — 한 번 더 누르면 새로 만들어요.
+            </Text>
+          ) : null}
+          {partFailed ? (
+            <Text style={st.addWarn}>파트를 만들지 못했어요. 연결을 확인하고 다시 시도해 주세요.</Text>
+          ) : null}
+          <View style={st.sheetFoot}>
+            {dupPart ? (
+              <Ghost
+                label={`«${dupPart}»로 하기`}
+                onPress={() => {
+                  const hit = parts.find((x) => x.name === dupPart);
+                  if (hit) setPartId(hit.id);
+                  setPartAdding(false); setPartName(''); setDupPart(null); setPartFailed(false);
+                }}
+              />
+            ) : null}
+            <Primary
+              label={dupPart ? '그래도 만들기' : '추가하기'}
+              disabled={partBusy || !partName.trim()}
+              onPress={() => void addPart()}
+            />
+          </View>
+        </BottomSheet>
+      )}
       {preview && <QuizPreviewSheet quiz={preview} onClose={() => setPreview(null)} />}
     </SafeAreaView>
   );
 }
 
-/** 노하우 한 줄의 부제 — 판정은 `detectKinds` 가 한다(사장이 고르는 것이 아니다). */
-function hintOf(e: PlaybookEntry): string {
-  const kinds = detectKinds(e);
-  return KIND_HINT[kinds[0] ?? 't0'] ?? '내용 있음';
+/** 두 날짜(YYYY-MM-DD) 사이 일수. DB 는 '며칠 안에'(answer_days)로 세므로 달력 값을 여기서 되돌린다. */
+function daysBetween(from: string, to: string): number {
+  const a = Date.parse(`${from}T00:00:00+09:00`);
+  const b = Date.parse(`${to}T00:00:00+09:00`);
+  if (!Number.isFinite(a) || !Number.isFinite(b)) return 0;
+  return Math.max(0, Math.round((b - a) / 86_400_000));
 }
 
 /** KST 오늘 "YYYY-MM-DD". 서버(due_quiz_sends)도 KST 고정이라 같은 축으로 만든다. */
@@ -841,22 +1064,6 @@ function Chip({ label, on, onPress }: { label: string; on: boolean; onPress: () 
       accessibilityLabel={label}
     >
       <Text style={[st.chipText, on && st.chipTextOn]}>{label}</Text>
-    </Pressable>
-  );
-}
-
-function Radio({ label, on, badge, onPress }: { label: string; on: boolean; badge?: string; onPress: () => void }) {
-  return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => [st.radio, pressed && { opacity: 0.6 }]}
-      accessibilityRole="radio"
-      accessibilityState={{ selected: on }}
-      accessibilityLabel={label}
-    >
-      <View style={[st.dot, on && st.dotOn]} />
-      <Text style={[st.radioText, on && st.radioTextOn]}>{label}</Text>
-      {badge ? <Text style={st.radioBadge}>{badge}</Text> : null}
     </Pressable>
   );
 }
@@ -922,7 +1129,6 @@ const st = StyleSheet.create({
   rowTitle: { fontSize: 15, lineHeight: 21, fontWeight: '800', color: InkColors.ink },
   rowSub: { fontSize: 13, lineHeight: 18, fontWeight: '600', color: InkColors.ink3 },
   tick: { fontSize: 13, fontWeight: '800', color: InkColors.ink3 },
-  tickOk: { color: BrandColors.goodText },
 
   box: {
     width: 22, height: 22, borderRadius: 6, borderWidth: 1.5, borderColor: InkColors.line,
@@ -959,12 +1165,6 @@ const st = StyleSheet.create({
   thinRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
   thinName: { flex: 1, minWidth: 0, fontSize: 15, fontWeight: '700', color: InkColors.ink },
 
-  essBox: { backgroundColor: InkColors.bgSoft, borderRadius: Radius.md, padding: Space.lg, gap: Space.xs },
-  essTitle: { fontSize: 15, fontWeight: '800', color: InkColors.ink, lineHeight: 22 },
-  essBody: { fontSize: 15, fontWeight: '600', color: InkColors.ink2, lineHeight: 22 },
-  essActs: { flexDirection: 'row', marginTop: Space.xs },
-  essPanel: { gap: Space.xs, paddingTop: Space.sm },
-
   addBox: { gap: Space.sm },
   addWarn: { fontSize: 13, fontWeight: '600', color: BrandColors.warnText, lineHeight: 18 },
 
@@ -977,23 +1177,54 @@ const st = StyleSheet.create({
   chipText: { fontSize: 13, fontWeight: '700', color: InkColors.ink2 },
   chipTextOn: { color: '#FFFFFF', fontWeight: '800' },
 
-  radio: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, minHeight: 48 },
-  dot: { width: 18, height: 18, borderRadius: 9, borderWidth: 1.5, borderColor: InkColors.line },
-  dotOn: { borderWidth: 5.5, borderColor: InkColors.ink },
-  radioText: { fontSize: 15, fontWeight: '700', color: InkColors.ink2 },
-  radioTextOn: { color: InkColors.ink, fontWeight: '800' },
-  radioBadge: {
-    fontSize: 12, fontWeight: '800', color: InkColors.ink,
-    backgroundColor: BrandColors.yellowSoft, borderRadius: Radius.pill, paddingHorizontal: Space.sm, paddingVertical: 3,
-  },
 
-  summary: {
-    backgroundColor: BrandColors.yellowSoft, borderRadius: Radius.md, borderWidth: 1, borderColor: BrandColors.gold,
-    padding: Space.lg, gap: Space.xs,
-  },
-  summaryLabel: { fontSize: 13, fontWeight: '800', color: BrandColors.warnText },
-  summaryBody: { fontSize: 15, fontWeight: '600', color: InkColors.ink, lineHeight: 23 },
   capNote: { fontSize: 13, fontWeight: '600', color: BrandColors.mentionText, textAlign: 'center' },
+
+  // 단계 본문을 Appear 로 한 번에 감싸므로 단계 안의 간격은 여기서 준다(스크롤 gap 이 래퍼 밖으로 밀린다).
+  stepBody: { gap: Space.md },
+
+  // 찾기 바 — 노하우 화면과 같은 형태(검색 한 줄 + 카테고리 칩 가로 스크롤).
+  findBar: { gap: Space.sm },
+  chipRow: { flexDirection: 'row', gap: Space.xs, paddingRight: Space.lg },
+  catChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    // ★48dp — 이 화면의 다른 칩(st.chip)과 같은 값이다. 노하우 화면의 칩은 34라 형태만 맞추고
+    //   크기는 안 베꼈다(hitSlop 은 RN-web 에서 안 먹어 34면 실제로 34다).
+    minHeight: 48, paddingHorizontal: Space.md, borderRadius: Radius.pill,
+    borderWidth: 1, borderColor: InkColors.line, backgroundColor: '#FFFFFF',
+  },
+  catChipOn: { backgroundColor: InkColors.ink, borderColor: InkColors.ink },
+  catChipText: { fontSize: 13, fontWeight: '700', color: InkColors.ink2 },
+  catChipTextOn: { color: '#FFFFFF', fontWeight: '800' },
+  catDot: { width: 8, height: 8, borderRadius: 4 },
+
+  sheetLead: { fontSize: 15, fontWeight: '600', color: InkColors.ink2, lineHeight: 22, marginBottom: Space.md },
+  sheetFoot: { flexDirection: 'row', gap: Space.sm, marginTop: Space.lg },
+
+  // 도착 전 자리 — 빈 상태가 스치지 않게 덮는다(전체 화면을 바꾸는 것이 아니라 이 구획만).
+  waiting: { alignItems: 'center', justifyContent: 'center', gap: Space.sm, paddingVertical: Space.xl * 2 },
+  waitingText: { fontSize: 13, fontWeight: '600', color: InkColors.ink3 },
+
+  makingHead: { alignItems: 'center', paddingVertical: Space.sm },
+  rowTitleWaiting: { color: InkColors.ink3 },
+
+  calWrap: { gap: Space.md },
+  textAction: { alignSelf: 'flex-start', minHeight: 44, justifyContent: 'center' },
+  textActionText: { fontSize: 13, fontWeight: '800', color: InkColors.ink2, textDecorationLine: 'underline' },
+  noteBox: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: Space.sm,
+    backgroundColor: BrandColors.warnSoft, borderRadius: Radius.md, padding: Space.md,
+  },
+  noteText: { flex: 1, minWidth: 0, fontSize: 15, fontWeight: '600', color: InkColors.ink2, lineHeight: 22 },
+
+  doneHead: { alignItems: 'center', gap: Space.xs, paddingVertical: Space.lg },
+  doneTitle: { fontSize: 17, fontWeight: '900', color: InkColors.ink },
+  doneSub: { fontSize: 13, fontWeight: '600', color: InkColors.ink3 },
+  linkBox: {
+    backgroundColor: InkColors.bg, borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line,
+    padding: Space.lg,
+  },
+  linkText: { fontSize: 15, fontWeight: '700', color: InkColors.ink, lineHeight: 22 },
 
   foot: {
     flexDirection: 'row', gap: Space.sm,

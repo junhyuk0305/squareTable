@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { View, Text, Pressable, ScrollView, ActivityIndicator, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
+import { Appear, stagger } from '@/components/Appear';
 import { BottomSheet } from '@/components/BottomSheet';
 import { QUIZ_RENDERERS } from '@/components/work/quiz';
 import { generateQuiz } from '@/lib/ai/client';
@@ -426,7 +427,9 @@ function LegacyQuizBody({
             const picked = picks[qi];
             const revealed = phase === 'result';
             return (
-              <View key={qi} style={s.qBlock}>
+              /* 문항이 한꺼번에 쏟아지지 않게 한 줄씩 올린다 — 앱의 다른 목록과 같은 프리미티브(Appear). */
+              <Appear key={qi} delay={stagger(qi)}>
+              <View style={s.qBlock}>
                 <Text style={s.qAsk}>{qi + 1}. {q.ask}</Text>
                 {q.choices.map((c, ci) => {
                   const isPicked = picked === ci;
@@ -453,16 +456,20 @@ function LegacyQuizBody({
                 })}
                 {revealed && q.explain ? <Text style={s.explain}>{q.explain}</Text> : null}
               </View>
+              </Appear>
             );
           })}
 
+          {/* 결과는 답을 다 낸 뒤 나타난다 — 이 화면에서 제일 중요한 변화라 한 번 올라오게 한다. */}
           {phase === 'result' && (
+            <Appear offsetY={6}>
             <View style={[s.resultBox, passed ? s.resultPass : s.resultFail]}>
               <Ionicons name={passed ? 'ribbon' : 'refresh-circle'} size={22} color={passed ? BrandColors.good : BrandColors.warn} />
               <Text style={s.resultText}>
                 {passed ? '이해 확인이 끝났어요. 사장님께 전달됐어요.' : `${questions.length}개 중 ${correctCount}개 맞았어요. 다시 해볼까요?`}
               </Text>
             </View>
+            </Appear>
           )}
         </ScrollView>
       )}

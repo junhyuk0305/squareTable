@@ -19,7 +19,8 @@ export function SheetHead({ title, onClose }: { title: string; onClose: () => vo
   return (
     <View style={qst.sheetHead}>
       <Text style={qst.sheetTitle} numberOfLines={1}>{title}</Text>
-      <Pressable onPress={onClose} hitSlop={8} accessibilityRole="button" accessibilityLabel="닫기">
+      {/* ★상자 크기로 48dp 를 지킨다 — hitSlop 은 RN-web 에서 안 먹어 실측 23dp 였다(2026-08-26). */}
+      <Pressable onPress={onClose} style={qst.sheetClose} accessibilityRole="button" accessibilityLabel="닫기">
         <Ionicons name="close" size={20} color={InkColors.ink2} />
       </Pressable>
     </View>
@@ -226,6 +227,7 @@ export const qst = StyleSheet.create({
 
   answerRow: { flexDirection: 'row', alignItems: 'center', gap: Space.xs, minHeight: 32, paddingVertical: Space.xs },
   answerText: { flex: 1, fontSize: 15, fontWeight: '700', color: BrandColors.goodText, lineHeight: 21 },
+  sheetClose: { minWidth: 48, minHeight: 48, alignItems: 'flex-end', justifyContent: 'center' },
   sheetTitle: { flex: 1, fontSize: 15, fontWeight: '800', color: InkColors.ink },
 
   body: { paddingHorizontal: 16, paddingBottom: 20, gap: Space.sm },

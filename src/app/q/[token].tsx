@@ -22,6 +22,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
+import { Appear } from '@/components/Appear';
 import { QUIZ_RENDERERS } from '@/components/work/quiz';
 import { openQuizLink, fetchQuizLinkItems, gradeQuizLink, submitQuizLink, type QuizLinkInfo } from '@/lib/db';
 import { usePhoneOtp } from '@/lib/otp';
@@ -325,21 +326,26 @@ function LinkQuizBody({
       <ScrollView style={{ flex: 1 }} contentContainerStyle={st.body} showsVerticalScrollIndicator={false}>
         {/* 완료가 아니라 잔여를 센다(레퍼런스 leveltest_05). */}
         <Text style={st.step}>{items.length - at}문제 남았어요</Text>
-        {ask ? <Text style={st.ask}>{ask}</Text> : null}
+        {/* 문항이 넘어갈 때 통째로 한 번 올라온다 — key={item.id} 라 문항당 1회만 재생된다.
+            ⛔ 넘김 전용 애니메이션(슬라이드·플립)을 새로 만들지 않는다(프리미티브 2개 규칙). */}
+        <Appear key={item.id} style={st.qWrap}>
+          {ask ? <Text style={st.ask}>{ask}</Text> : null}
+          <Renderer
+            payload={item.payload ?? {}}
+            disabled={grading || pending !== null}
+            result={grade ? { correct: grade.correct, answer: grade.answer } : null}
+            onAnswer={(res) => { setPending(res); void send(item.id, res); }}
+          />
+        </Appear>
 
-        <Renderer
-          key={item.id}
-          payload={item.payload ?? {}}
-          disabled={grading || pending !== null}
-          result={grade ? { correct: grade.correct, answer: grade.answer } : null}
-          onAnswer={(res) => { setPending(res); void send(item.id, res); }}
-        />
-
+        {/* 채점 결과는 답을 낸 **뒤에** 나타난다 — 그 순간이 이 화면에서 제일 중요한 변화다. */}
         {grade ? (
-          <View style={[st.gradeBox, grade.correct ? st.gradePass : st.gradeFail]}>
-            <Text style={st.gradeTitle}>{grade.correct ? '맞았어요' : '이건 이렇게 해요'}</Text>
-            {grade.explain ? <Text style={st.gradeText}>{grade.explain}</Text> : null}
-          </View>
+          <Appear offsetY={6}>
+            <View style={[st.gradeBox, grade.correct ? st.gradePass : st.gradeFail]}>
+              <Text style={st.gradeTitle}>{grade.correct ? '맞았어요' : '이건 이렇게 해요'}</Text>
+              {grade.explain ? <Text style={st.gradeText}>{grade.explain}</Text> : null}
+            </View>
+          </Appear>
         ) : null}
 
         {failed ? (
@@ -377,6 +383,8 @@ function LinkQuizBody({
 const st = StyleSheet.create({
   safe: { flex: 1, backgroundColor: InkColors.paper },
   body: { padding: Space.gutter, paddingBottom: Space.xl, gap: Space.sm },
+  // Appear 로 감싼 문항 묶음 — 바깥 gap 은 래퍼 하나에만 걸리므로 안쪽 간격을 여기서 준다.
+  qWrap: { gap: Space.sm },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Space.md, paddingHorizontal: Space.xl },
   centerText: { fontSize: 15, color: InkColors.ink2, fontWeight: '600', textAlign: 'center', lineHeight: 23 },
   doneText: { fontSize: 17, fontWeight: '800', color: InkColors.ink, textAlign: 'center', lineHeight: 25 },

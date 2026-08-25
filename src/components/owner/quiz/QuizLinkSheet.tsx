@@ -4,12 +4,16 @@
  * 단기 직원용. 링크를 열면 이름만 적고 바로 푼다(로그인·가입 없음). 결과는 사장이 이름으로 본다.
  *
  * ⚠️ 링크를 받은 사람은 **매장 노하우를 보게 된다**(문항 안에 절차·수치가 들어간다).
- *    그래서 만드는 자리에서 그 사실을 먼저 말하고, 만료를 고르게 하고(만료 없는 링크는 못 만든다),
- *    회수를 항상 곁에 둔다. 이건 안내 문구가 아니라 이 화면의 존재 이유다.
+ *    그래서 만드는 자리에서 그 사실을 먼저 말하고, 만료일을 고르게 하고(만료 없는 링크는 못 만든다),
+ *    삭제를 항상 곁에 둔다. 이건 안내 문구가 아니라 이 화면의 존재 이유다.
+ *
+ * ★'삭제'는 링크를 못 열게 하는 것이다(revoke). **응시 기록은 지우지 않는다** — 이미 푼 사람의
+ *   결과가 사라지면 사장이 본 것이 없어진다. 2026-08-26 에 어휘만 '회수'→'삭제'로 바꿨다:
+ *   회수는 사장이 쓰는 말이 아니었다.
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, Text, Pressable, ScrollView, Platform, StyleSheet } from 'react-native';
+import { View, Text, Pressable, ScrollView, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import type { TrainingCourse } from '@/lib/quiz/types';
@@ -18,42 +22,38 @@ import { guardWrite } from '@/lib/store/useSyncStore';
 import { showToast } from '@/lib/store/useToastStore';
 import { genId } from '@/lib/utils/id';
 import { BottomSheet } from '@/components/BottomSheet';
+import { MiniCalendar } from '@/components/blocks/MiniCalendar';
+import { copyQuizLink, makeQuizToken, quizLinkUrl } from '@/lib/quiz/link';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
 
-import { SheetHead, Chip, PrimaryButton, qst } from './kit';
+import { SheetHead, PrimaryButton, qst } from './kit';
 
-/** 유효기간 선택지 — 자유 입력 대신 칩(복잡도 원칙). 만료 없음은 없다. */
-const EXPIRY_OPTIONS = [
-  { days: 1, label: '하루' },
-  { days: 3, label: '3일' },
-  { days: 7, label: '1주' },
-] as const;
+/** 링크를 열어 둘 수 있는 최대 앞날(일). 만료 없는 링크는 못 만든다 — 상한도 둔다. */
+const MAX_OPEN_DAYS = 30;
+/** 새 링크의 기본 만료일 — 오늘로부터 며칠. */
+const DEFAULT_OPEN_DAYS = 7;
 
-/** 공유 URL 의 앞부분. 웹은 지금 열려 있는 주소, 네이티브는 서비스 도메인(딥링크 아님 — 브라우저로 연다). */
-function siteOrigin(): string {
-  if (Platform.OS === 'web') {
-    const g = globalThis as unknown as { location?: { origin?: string } };
-    if (g.location?.origin) return g.location.origin;
-  }
-  return 'https://dochackchack.com';
+/** Date(ms) → KST "YYYY-MM-DD". 달력이 고르는 축과 만료 판정 축을 같게 맞춘다. */
+function kstDay(ms: number): string {
+  const k = new Date(ms + 9 * 3600_000);
+  return `${k.getUTCFullYear()}-${String(k.getUTCMonth() + 1).padStart(2, '0')}-${String(k.getUTCDate()).padStart(2, '0')}`;
 }
 
-/** 추측할 수 없는 토큰. crypto 가 있으면 그걸 쓰고, 없으면 genId 를 두 번 이어 붙인다. */
-function makeToken(): string {
-  const g = globalThis as unknown as { crypto?: { randomUUID?: () => string } };
-  const uuid = g.crypto?.randomUUID?.();
-  if (uuid) return uuid.replace(/-/g, '');
-  return `${genId('q')}${genId('z')}`.replace(/[^a-zA-Z0-9]/g, '');
+function addDays(day: string, n: number): string {
+  const t = Date.parse(`${day}T00:00:00+09:00`);
+  return kstDay(t + n * 86_400_000 - 9 * 3600_000);
 }
 
 export function QuizLinkSheet({ course, onClose }: { course: TrainingCourse; onClose: () => void }) {
   const [links, setLinks] = useState<QuizLinkRow[]>([]);
-  const [days, setDays] = useState<number>(7);
   const [busy, setBusy] = useState(false);
   // 렌더 중 Date.now() 금지(React 컴파일러) — 마운트 시 1회면 만료 판정에 충분하다.
   const [now] = useState(() => Date.now());
+  const [today] = useState(() => kstDay(Date.now()));
+  /** 새로 만들 링크를 이 날까지 연다. 칩("하루·3일·1주") 대신 달력에서 직접 고른다(2026-08-26). */
+  const [openUntil, setOpenUntil] = useState(() => addDays(kstDay(Date.now()), DEFAULT_OPEN_DAYS));
 
   const reload = useCallback(async () => {
     const rows = await fetchQuizLinks();
@@ -73,14 +73,13 @@ export function QuizLinkSheet({ course, onClose }: { course: TrainingCourse; onC
     [links, now],
   );
 
-  const urlOf = (token: string) => `${siteOrigin()}/q/${token}`;
-
   const create = async () => {
     if (busy) return;
     setBusy(true);
-    const expiresAt = new Date(now + days * 24 * 60 * 60 * 1000).toISOString();
+    // 만료는 고른 날의 **끝**이다 — 그 날 낮에 열었더니 이미 닫혀 있으면 안 된다.
+    const expiresAt = new Date(`${addDays(openUntil, 1)}T00:00:00+09:00`).toISOString();
     const row: QuizLinkRow = {
-      id: genId('ql'), courseId: course.id, token: makeToken(),
+      id: genId('ql'), courseId: course.id, token: makeQuizToken(),
       expiresAt, revokedAt: null, createdAt: new Date().toISOString(),
     };
     const ok = await guardWrite(insertQuizLink(row), () => {}, '링크를 만들지 못했어요.');
@@ -92,25 +91,20 @@ export function QuizLinkSheet({ course, onClose }: { course: TrainingCourse; onC
   };
 
   const copy = async (token: string) => {
-    const url = urlOf(token);
-    const g = globalThis as unknown as { navigator?: { clipboard?: { writeText?: (t: string) => Promise<void> } } };
-    try {
-      await g.navigator?.clipboard?.writeText?.(url);
-      showToast('링크를 복사했어요', 'good');
-    } catch {
-      // 복사가 막힌 브라우저에서도 주소는 화면에 그대로 있다 — 실패를 조용히 넘기지 않고 말해 준다.
-      showToast('복사가 안 됐어요. 주소를 길게 눌러 복사해 주세요');
-    }
+    // 복사가 막힌 브라우저에서도 주소는 화면에 그대로 있다 — 실패를 조용히 넘기지 않고 말해 준다.
+    const done = await copyQuizLink(token);
+    showToast(done ? '링크를 복사했어요' : '복사가 안 됐어요. 주소를 길게 눌러 복사해 주세요', done ? 'good' : undefined);
   };
 
-  const revoke = async (id: string) => {
+  /** 링크만 못 열게 한다 — 이미 푼 사람의 결과는 그대로 남는다(어휘만 '삭제', 기록은 보존). */
+  const remove = async (id: string) => {
     if (busy) return;
     setBusy(true);
-    const ok = await guardWrite(revokeQuizLink(id), () => {}, '링크 회수에 실패했어요.');
+    const ok = await guardWrite(revokeQuizLink(id), () => {}, '링크를 지우지 못했어요.');
     setBusy(false);
     if (ok) {
       await reload();
-      showToast('링크를 회수했어요 · 이제 열리지 않아요', 'good');
+      showToast('링크를 지웠어요 · 이제 열리지 않아요', 'good');
     }
   };
 
@@ -123,16 +117,18 @@ export function QuizLinkSheet({ course, onClose }: { course: TrainingCourse; onC
           <Ionicons name="alert-circle-outline" size={17} color={BrandColors.warn} />
           <Text style={lst.warnText}>
             링크를 받은 사람은 문제 안에서 매장 노하우를 보게 돼요.
-            필요한 기간만 열어 두고, 끝나면 회수해 주세요.
+            필요한 기간만 열어 두고, 끝나면 지워 주세요.
           </Text>
         </View>
 
-        <Text style={lst.label}>얼마 동안 열어 둘까요?</Text>
-        <View style={qst.chipWrap}>
-          {EXPIRY_OPTIONS.map((o) => (
-            <Chip key={o.days} label={o.label} on={days === o.days} onPress={() => setDays(o.days)} />
-          ))}
-        </View>
+        <Text style={lst.label}>언제까지 열어 둘까요?</Text>
+        <MiniCalendar
+          value={openUntil}
+          today={today}
+          min={today}
+          max={addDays(today, MAX_OPEN_DAYS)}
+          onChange={setOpenUntil}
+        />
 
         {live.length > 0 && (
           <>
@@ -142,7 +138,7 @@ export function QuizLinkSheet({ course, onClose }: { course: TrainingCourse; onC
               {live.map((l, i) => (
                 <View key={l.id} style={[lst.row, i > 0 && lst.rowTop]}>
                   <View style={{ flex: 1, minWidth: 0 }}>
-                    <Text style={lst.url} numberOfLines={1} selectable>{urlOf(l.token)}</Text>
+                    <Text style={lst.url} numberOfLines={1} selectable>{quizLinkUrl(l.token)}</Text>
                     <Text style={lst.meta}>{shortDate(l.expiresAt)}까지</Text>
                   </View>
                   {/* role=button Pressable 중첩 금지 — 행은 View 이고 액션만 형제 버튼이다. */}
@@ -156,14 +152,14 @@ export function QuizLinkSheet({ course, onClose }: { course: TrainingCourse; onC
                     <Text style={lst.actionText}>복사</Text>
                   </Pressable>
                   <Pressable
-                    onPress={() => void revoke(l.id)}
+                    onPress={() => void remove(l.id)}
                     disabled={busy}
                     hitSlop={8}
                     style={({ pressed }) => [lst.action, pressed && { opacity: 0.7 }]}
                     accessibilityRole="button"
-                    accessibilityLabel="링크 회수"
+                    accessibilityLabel="링크 삭제"
                   >
-                    <Text style={[lst.actionText, { color: BrandColors.badText }]}>회수</Text>
+                    <Text style={[lst.actionText, { color: BrandColors.badText }]}>삭제</Text>
                   </Pressable>
                 </View>
               ))}

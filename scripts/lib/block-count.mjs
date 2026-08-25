@@ -27,6 +27,9 @@ const BLOCK_LEAF = new Set([
   //   ProgressPill·GutterRow 는 행 안의 원자(칩·행)라 블록이 아니다 —
   //   넣으면 목록 한 줄이 블록 1개로 세어져 상한이 터진다.
   'HeroSubNav', 'KvTable', 'WeekStrip',
+  // 2026-08-26 추가 — 월 달력. TaskComposerModal 안에 있던 것을 올렸다(퀴즈 일정·링크 만료가 같이 쓴다).
+  //   WeekStrip(요일 7칸 스트립)과 다른 물건이다 — 이건 달 전체를 펼쳐 하루를 고르는 한 덩어리다.
+  'MiniCalendar',
   // 2026-08-08 추가 — 노하우 본문(상황·할 일·멘트·금지)을 그리는 **유일한** 형태.
   //   KnowhowRows = 표시 전용 / SquareRowsEditor = 그것에 칸 편집(E2)을 얹은 래퍼.
   //   둘은 서로 다른 파일에 있어 한 화면에서 겹쳐 세지 않는다.

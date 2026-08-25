@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, Text, ScrollView, StyleSheet } from 'react-native';
+import { View, Text, ScrollView, ActivityIndicator, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
 
@@ -12,7 +12,7 @@ import {
 } from '@/lib/db';
 import { showToast } from '@/lib/store/useToastStore';
 import { guardWrite } from '@/lib/store/useSyncStore';
-import { Appear } from '@/components/Appear';
+import { Appear, stagger } from '@/components/Appear';
 import { SectionLabel } from '@/components/SectionLabel';
 import { PrimaryButton, GhostButton, qst } from '@/components/owner/quiz/kit';
 import { maskTail4, scoreText, takenDayLabel } from '@/lib/quiz/guestResult';
@@ -79,7 +79,13 @@ export default function GuestQuizResultScreen() {
       <Stack.Screen options={{ title: '링크 응시 결과' }} />
 
       <ScrollView contentContainerStyle={st.scroll} showsVerticalScrollIndicator={false}>
-        {!loaded ? null : (
+        {!loaded ? (
+          /* 빈 판을 먼저 내보내지 않는다 — 기다리는 중이라고 말한다(08-07 정본 §0-1). */
+          <View style={st.loadingWrap}>
+            <ActivityIndicator color={InkColors.ink3} />
+            <Text style={st.loadingText}>결과를 불러오는 중...</Text>
+          </View>
+        ) : (
           <>
             <Appear>
               <View style={st.head}>
@@ -102,7 +108,9 @@ export default function GuestQuizResultScreen() {
                 <SectionLabel title="문항별" hint={`${items.length}문제`} />
                 <View style={st.list}>
                   {items.map((it, i) => (
-                    <ItemBlock key={it.id} item={it} no={i + 1} divider={i > 0} />
+                    <Appear key={it.id} delay={stagger(i)}>
+                      <ItemBlock item={it} no={i + 1} divider={i > 0} />
+                    </Appear>
                   ))}
                 </View>
               </>
@@ -322,6 +330,8 @@ function readItem(item: GuestAttemptItemRow): ItemView {
 
 const st = StyleSheet.create({
   safe: { flex: 1, backgroundColor: InkColors.paper },
+  loadingWrap: { alignItems: 'center', justifyContent: 'center', gap: Space.sm, paddingVertical: Space.xl * 2 },
+  loadingText: { fontSize: 13, fontWeight: '600', color: InkColors.ink3 },
   scroll: { padding: Space.gutter, paddingBottom: Space.xl, gap: Space.md, flexGrow: 1 },
 
   head: {

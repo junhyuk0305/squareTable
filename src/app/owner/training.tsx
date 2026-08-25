@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
-import { View, Text, Pressable, ScrollView, StyleSheet } from 'react-native';
+import { View, Text, Pressable, ScrollView, ActivityIndicator, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useFocusEffect, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -7,11 +7,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { useQuizBoard, type QuizListRow } from '@/lib/quiz/useQuizBoard';
 import { fetchGuestQuizSubmissions, type GuestSubmissionRow } from '@/lib/db';
 import { maskTail4, scoreText, takenDayLabel } from '@/lib/quiz/guestResult';
-import { Appear } from '@/components/Appear';
+import { Appear, stagger } from '@/components/Appear';
 import { EmptyState } from '@/components/EmptyState';
 import { BottomSheet } from '@/components/BottomSheet';
+import { Collapse } from '@/components/Collapse';
 import { SectionLabel } from '@/components/SectionLabel';
 import { AlertRow } from '@/components/blocks/AlertRow';
+import { MiniStats } from '@/components/blocks/MiniStats';
 import { ProgressPill, type ProgressTone } from '@/components/blocks/ProgressPill';
 import { SheetHead } from '@/components/owner/quiz/kit';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
@@ -32,10 +34,24 @@ import { Space, HEADER_EDGE_GUTTER } from '@/lib/theme/layout';
  */
 export default function OwnerTrainingScreen() {
   const router = useRouter();
-  const { entries, entryById, coursesLoaded, buildQuizzes, buildRows } = useQuizBoard();
+  const { entries, entryById, boardLoaded, buildQuizzes, buildStats, buildRows, openLinkCourseIds, linkedCourseIds } =
+    useQuizBoard();
 
   const quizzes = useMemo(() => buildQuizzes(), [buildQuizzes]);
-  const [missOpen, setMissOpen] = useState(false);
+  const stats = useMemo(() => buildStats(quizzes), [buildStats, quizzes]);
+  const [fixOpen, setFixOpen] = useState(false);
+  const [draftOpen, setDraftOpen] = useState(false);
+
+  /**
+   * 손 볼 것이 먼저 온다 — 낡음 > 아직 통과 못 한 사람이 있음 > 나머지.
+   * ★만든 순(position)으로 두면 오늘 손봐야 할 퀴즈가 아홉 번째 줄에 앉는다(2026-08-26 실측 화면).
+   */
+  const live = useMemo(() => {
+    const rank = (r: QuizListRow) => (r.staleCount > 0 ? 2 : r.recipients > r.passed ? 1 : 0);
+    return [...quizzes].filter((r) => r.status !== 'draft').sort((a, b) => rank(b) - rank(a));
+  }, [quizzes]);
+  const drafts = useMemo(() => quizzes.filter((r) => r.status === 'draft'), [quizzes]);
+  const staleQuizzes = useMemo(() => quizzes.filter((r) => r.staleCount > 0), [quizzes]);
 
   /**
    * 링크(/q/[token])로 푼 사람들 — 0160·0163. 아직 정리하지 않은 것만 내려온다.
@@ -43,11 +59,12 @@ export default function OwnerTrainingScreen() {
    * ★직원 응시와 섞지 않는다. 여기는 아직 이 매장 사람이 아닌 사람들의 결과다.
    */
   const [guests, setGuests] = useState<GuestSubmissionRow[]>([]);
+  const [guestsLoaded, setGuestsLoaded] = useState(false);
   useFocusEffect(
     useCallback(() => {
       let alive = true;
       void fetchGuestQuizSubmissions().then((rows) => {
-        if (alive) setGuests(rows);
+        if (alive) { setGuests(rows); setGuestsLoaded(true); }
       });
       return () => {
         alive = false;
@@ -60,6 +77,13 @@ export default function OwnerTrainingScreen() {
 
   /** 낼 수 있는 재료. 발행된 노하우가 0이면 만들기 자체가 성립하지 않는다(A3). */
   const usable = entries.length;
+
+  /** 그릴 준비 — 퀴즈 판(boardLoaded)과 링크 응시 결과가 **둘 다** 와야 한다. */
+  const ready = boardLoaded && guestsLoaded;
+
+  /** 이 퀴즈가 링크로도 나가는가 — 있으면 열림/닫힘까지. 없으면 꼬리표를 안 붙인다. */
+  const linkStateOf = (courseId: string): 'open' | 'closed' | null =>
+    linkedCourseIds.has(courseId) ? (openLinkCourseIds.has(courseId) ? 'open' : 'closed') : null;
 
   const goMake = () => router.push('/owner/quiz-new' as never);
   const goDetail = (id: string) => router.push(`/owner/quiz/${id}` as never);
@@ -85,7 +109,14 @@ export default function OwnerTrainingScreen() {
         }}
       />
       <ScrollView contentContainerStyle={st.scroll} showsVerticalScrollIndicator={false}>
-        {!coursesLoaded ? null : quizzes.length === 0 ? (
+        {/* ★전부 도착 전엔 로딩이다. 코스만 기다리면 "초안"이 먼저 떴다가 "3/5명"으로 뒤바뀐다
+            (아직 안 온 것을 없는 것처럼 말하는 것 = 08-07 정본 §0-1 이 금지한 바로 그것). */}
+        {!ready ? (
+          <View style={st.loadingWrap}>
+            <ActivityIndicator color={InkColors.ink3} />
+            <Text style={st.loadingText}>퀴즈를 불러오는 중...</Text>
+          </View>
+        ) : quizzes.length === 0 ? (
           usable === 0 ? (
             /* A3 — 재료가 없다. 막다른 길을 만들지 않고 두 갈래 모두 준다.
                ★"업무 채팅 열기"로 보내지 않는다 — 업무는 노하우를 만들어 주지 않는다. */
@@ -105,7 +136,7 @@ export default function OwnerTrainingScreen() {
               </Pressable>
             </>
           ) : (
-            /* A1 — 재료는 있는데 아직 안 만들었다. 필터·경고·정리 링크를 전부 감춘다:
+            /* A1 — 재료는 있는데 아직 안 만들었다. 지표·경고·정리 링크를 전부 감춘다:
                전부 "문항이 생긴 뒤"에 의미가 생기는 것들이다. 남는 건 원리 3칸과 눌릴 것 하나. */
             <>
               <Appear>
@@ -130,29 +161,114 @@ export default function OwnerTrainingScreen() {
             </>
           )
         ) : (
-          /* A2 — 평상시. 한 줄 = 퀴즈 하나. */
+          /* A2 — 평상시. 위는 **지금 상태 세 칸**, 아래는 손 볼 것 → 나가는 중 → 초안 순. */
           <>
-            <AlertRow
-              label="자꾸 틀리는 문항 · 노하우가 헷갈릴 수 있어요"
-              count={missRows.length}
-              unit="건"
-              onPress={() => setMissOpen(true)}
-            />
-            <Appear delay={30}>
-              <View style={st.listCard}>
-                {quizzes.map((q, i) => (
-                  <QuizRowView key={q.course.id} row={q} divider={i > 0} onPress={() => goDetail(q.course.id)} />
-                ))}
-              </View>
+            {/* 지표 3칸(I3) — 카드가 아니다. 고르는 기준은 "사장이 다음 행동을 정하는 데 쓰는 값"이다.
+                ⛔ 사람 이름 옆에 붙는 숫자는 여기 오지 않는다(감시원칙 D1~D5). */}
+            <Appear>
+              <MiniStats
+                items={[
+                  {
+                    key: 'live',
+                    value: stats.live,
+                    label: '나가는 퀴즈',
+                    info: {
+                      title: '나가는 퀴즈',
+                      body: '보냈거나 예약된 퀴즈예요. 아직 안 보낸 초안은 빼고 셌어요.',
+                    },
+                  },
+                  {
+                    key: 'passed',
+                    value: stats.recipients > 0 ? `${stats.passed}/${stats.recipients}` : '—',
+                    label: '통과한 사람',
+                    info: {
+                      title: '통과',
+                      body: '그 퀴즈에 담긴 노하우를 전부 아는 사람이에요. 퀴즈별 진행이라 사람을 줄 세우지 않아요.',
+                    },
+                  },
+                  {
+                    key: 'covered',
+                    value: `${stats.covered}/${stats.publishedEntries}`,
+                    label: '문제 있는 노하우',
+                    onPress: goMake,
+                    info: {
+                      title: '문제 있는 노하우',
+                      body: '적어 둔 노하우 중 실제로 문제가 나가는 것이에요. 나머지는 아직 아무도 확인받지 않았어요.',
+                    },
+                  },
+                ]}
+              />
             </Appear>
-            <Text style={st.footNote}>누르면 결과와 문항을 봐요</Text>
+
+            {/* 손 볼 것 — 경고행은 **하나**다(A 조합형 블록 ≤5 · 같은 형태 연속 금지).
+                갈래(낡음 / 자꾸 틀림)는 시트 안에서 나눈다. 0건이면 줄째로 안 그린다. */}
+            <AlertRow
+              label="손 볼 것 · 문항을 다시 만들거나 노하우를 고쳐야 해요"
+              count={stats.staleQuizzes + missRows.length}
+              unit="건"
+              onPress={() => setFixOpen(true)}
+            />
+
+            {live.length > 0 && (
+              <Appear delay={30}>
+                <View style={st.group}>
+                  <SectionLabel title="진행 중" hint={`${live.length}건`} />
+                  <View style={st.listCard}>
+                    {live.map((q, i) => (
+                      <QuizRowView
+                        key={q.course.id}
+                        row={q}
+                        divider={i > 0}
+                        link={linkStateOf(q.course.id)}
+                        onPress={() => goDetail(q.course.id)}
+                      />
+                    ))}
+                  </View>
+                </View>
+              </Appear>
+            )}
+
+            {/* 초안 — 진행 중인 것과 섞으면 "만들다 만 것"이 손 볼 것처럼 보인다.
+                ★구획을 하나 더 만들지 않고 **접어 둔다**: 목록 카드가 셋 연속이면 화면이 다시
+                  "카드의 나열"이 된다(블록 어휘 §같은 형태 연속 3회 금지). 평소엔 한 줄이다. */}
+            {drafts.length > 0 && (
+              <Appear delay={stagger(2)}>
+                <View style={st.group}>
+                  <Pressable
+                    onPress={() => setDraftOpen((v) => !v)}
+                    style={({ pressed }) => [st.foldRow, pressed && { opacity: 0.6 }]}
+                    accessibilityRole="button"
+                    accessibilityState={{ expanded: draftOpen }}
+                    accessibilityLabel={`초안 ${drafts.length}개 ${draftOpen ? '접기' : '펼치기'}`}
+                  >
+                    <Text style={st.foldText}>초안 {drafts.length}개</Text>
+                    <Ionicons name={draftOpen ? 'chevron-up' : 'chevron-down'} size={15} color={InkColors.ink3} />
+                  </Pressable>
+                  {draftOpen && (
+                    <Collapse>
+                      <View style={st.listCard}>
+                        {drafts.map((q, i) => (
+                          <QuizRowView
+                            key={q.course.id}
+                            row={q}
+                            divider={i > 0}
+                            link={linkStateOf(q.course.id)}
+                            onPress={() => goDetail(q.course.id)}
+                          />
+                        ))}
+                      </View>
+                    </Collapse>
+                  )}
+                </View>
+              </Appear>
+            )}
 
             {/* 링크 응시 결과 — 0건이면 구획째로 안 그린다(빈 카드 한 장도 사장 화면에서는 요소 하나다).
                 ⛔ "이 사람 준비됐어요" 같은 판단 문구를 넣지 않는다. 판단은 사장이 한다.
                 ⛔ 합류 초대·채용 전환 액션 없음 — 명시적으로 스코프 밖이다. */}
             {guests.length > 0 && (
-              <Appear delay={60}>
-                <View style={st.guestWrap}>
+              <Appear delay={stagger(3)}>
+                <View style={st.group}>
                   <SectionLabel title="링크 응시 결과" hint={`${guests.length}건`} />
                   <View style={st.listCard}>
                     {guests.map((g, i) => (
@@ -168,39 +284,81 @@ export default function OwnerTrainingScreen() {
                 </View>
               </Appear>
             )}
+
+            {/* 각주는 **눌릴 것이 보일 때만** — 초안만 있고 접혀 있으면 누를 게 화면에 없다. */}
+            {live.length > 0 ? <Text style={st.footNote}>누르면 결과와 문항을 봐요</Text> : null}
           </>
         )}
       </ScrollView>
 
-      {/* 자꾸 틀리는 노하우 — 새 화면을 만들지 않는다(IA 증식 금지). 목적은 "어느 글을 고칠까" 하나다. */}
-      {missOpen && (
-        <BottomSheet visible onClose={() => setMissOpen(false)}>
-          <SheetHead title="자꾸 틀리는 문항" onClose={() => setMissOpen(false)} />
-          <Text style={st.missIntro}>
-            직원이 못 외운 게 아니라 노하우 글이 헷갈릴 수 있어요. 아래 노하우를 다시 보세요.
-          </Text>
-          <View style={st.listCard}>
-            {missRows.map((r, i) => (
-              <Pressable
-                key={r.entryId}
-                onPress={() => {
-                  setMissOpen(false);
-                  router.push(`/owner/edit/${r.entryId}` as never);
-                }}
-                style={({ pressed }) => [st.row, i > 0 && st.rowDivider, pressed && { opacity: 0.6 }]}
-                accessibilityRole="button"
-                accessibilityLabel={`${r.text} 고치러 가기`}
-              >
-                <View style={st.rowText}>
-                  <Text style={st.rowTitle} numberOfLines={1}>{r.text}</Text>
-                  <Text style={st.rowSub} numberOfLines={1}>{r.attempts}명 품 · {r.missPct}% 틀림</Text>
+      {/* 손 볼 것 — 새 화면을 만들지 않는다(IA 증식 금지). 갈래가 둘이라 **한 시트 안에서** 나눈다:
+          ① 옛 정답이 나가는 퀴즈 → 문항을 다시 만든다  ② 자꾸 틀리는 노하우 → 글을 고친다.
+          다음 행동이 다르므로 문구도 섞지 않는다. */}
+      {fixOpen && (
+        <BottomSheet visible onClose={() => setFixOpen(false)}>
+          <SheetHead title="손 볼 것" onClose={() => setFixOpen(false)} />
+          <ScrollView style={st.sheetScroll} showsVerticalScrollIndicator={false}>
+            {staleQuizzes.length > 0 && (
+              <View style={st.group}>
+                <SectionLabel title="옛 정답이 나가요" hint={`${staleQuizzes.length}건`} />
+                <Text style={st.missIntro}>
+                  근거가 된 노하우를 고친 뒤 문항을 다시 안 만들었어요. 퀴즈를 열어 새로 만들어 주세요.
+                </Text>
+                <View style={st.listCard}>
+                  {staleQuizzes.map((r, i) => (
+                    <Pressable
+                      key={r.course.id}
+                      onPress={() => {
+                        setFixOpen(false);
+                        goDetail(r.course.id);
+                      }}
+                      style={({ pressed }) => [st.row, i > 0 && st.rowDivider, pressed && { opacity: 0.6 }]}
+                      accessibilityRole="button"
+                      accessibilityLabel={`${r.course.name} 열기`}
+                    >
+                      <View style={st.rowText}>
+                        <Text style={st.rowTitle} numberOfLines={1}>{r.course.name}</Text>
+                        <Text style={st.rowSub} numberOfLines={1}>문항 {r.staleCount}개가 낡았어요</Text>
+                      </View>
+                      <ProgressPill text="새로 만들기" tone="behind" />
+                    </Pressable>
+                  ))}
                 </View>
-                <ProgressPill text="고치기" tone="behind" />
-              </Pressable>
-            ))}
-          </View>
+              </View>
+            )}
+
+            {missRows.length > 0 && (
+              <View style={st.group}>
+                <SectionLabel title="자꾸 틀려요" hint={`${missRows.length}건`} />
+                <Text style={st.missIntro}>
+                  직원이 못 외운 게 아니라 노하우 글이 헷갈릴 수 있어요. 아래 노하우를 다시 보세요.
+                </Text>
+                <View style={st.listCard}>
+                  {missRows.map((r, i) => (
+                    <Pressable
+                      key={r.entryId}
+                      onPress={() => {
+                        setFixOpen(false);
+                        router.push(`/owner/edit/${r.entryId}` as never);
+                      }}
+                      style={({ pressed }) => [st.row, i > 0 && st.rowDivider, pressed && { opacity: 0.6 }]}
+                      accessibilityRole="button"
+                      accessibilityLabel={`${r.text} 고치러 가기`}
+                    >
+                      <View style={st.rowText}>
+                        <Text style={st.rowTitle} numberOfLines={1}>{r.text}</Text>
+                        <Text style={st.rowSub} numberOfLines={1}>{r.attempts}명 품 · {r.missPct}% 틀림</Text>
+                      </View>
+                      <ProgressPill text="고치기" tone="behind" />
+                    </Pressable>
+                  ))}
+                </View>
+              </View>
+            )}
+          </ScrollView>
         </BottomSheet>
       )}
+
     </SafeAreaView>
   );
 }
@@ -211,7 +369,18 @@ export default function OwnerTrainingScreen() {
  * 알약 우선순위: 낡음 > 진행. 근거가 바뀐 문항이 있으면 그게 먼저 손볼 것이다.
  * ★사람 옆 점수가 아니라 **퀴즈의 진행**이라 `n/m명` 표기가 허용된다(감시원칙은 개인 줄세우기 금지).
  */
-function QuizRowView({ row, divider, onPress }: { row: QuizListRow; divider: boolean; onPress: () => void }) {
+function QuizRowView({
+  row,
+  divider,
+  link,
+  onPress,
+}: {
+  row: QuizListRow;
+  divider: boolean;
+  /** 링크로도 나가는 퀴즈인가(외부용). null = 직원용. */
+  link: 'open' | 'closed' | null;
+  onPress: () => void;
+}) {
   let pill = '초안';
   let tone: ProgressTone = 'neutral';
   if (row.staleCount > 0) {
@@ -225,6 +394,19 @@ function QuizRowView({ row, divider, onPress }: { row: QuizListRow; divider: boo
     tone = row.recipients > 0 && row.passed >= row.recipients ? 'done' : 'progress';
   }
 
+  /**
+   * 둘째 줄 = 재고(문항·노하우), 셋째 줄 = 일정. 옛 판본은 일정 한 줄뿐이라 같은 이름의 퀴즈 둘을
+   * 구별할 방법이 없었다(2026-08-26 실측: "마감 청소" 두 줄이 글자까지 똑같았다).
+   * ★문항 0개면 눌러도 낼 게 없다 — 그 사실을 목록에서 바로 말한다(열어 보고 알게 하지 않는다).
+   */
+  const meta = [
+    row.itemCount > 0 ? `문제 ${row.itemCount}개` : '문제 없음',
+    row.entryCount > 0 ? `노하우 ${row.entryCount}개` : '',
+    link === 'open' ? '링크 열림' : link === 'closed' ? '링크 닫힘' : '',
+  ]
+    .filter(Boolean)
+    .join(' · ');
+
   return (
     <Pressable
       onPress={onPress}
@@ -234,6 +416,7 @@ function QuizRowView({ row, divider, onPress }: { row: QuizListRow; divider: boo
     >
       <View style={st.rowText}>
         <Text style={st.rowTitle} numberOfLines={1}>{row.course.name}</Text>
+        <Text style={[st.rowSub, row.itemCount === 0 && st.rowSubWarn]} numberOfLines={1}>{meta}</Text>
         <Text style={st.rowSub} numberOfLines={1}>{row.caption}</Text>
       </View>
       <ProgressPill text={pill} tone={tone} />
@@ -304,7 +487,12 @@ const st = StyleSheet.create({
   safe: { flex: 1, backgroundColor: InkColors.paper },
   scroll: { padding: Space.gutter, paddingBottom: Space.xl * 2, gap: Space.md, flexGrow: 1 },
 
-  headerAction: { paddingLeft: Space.sm, paddingRight: HEADER_EDGE_GUTTER, paddingVertical: 4 },
+  // ★hitSlop 은 RN-web 에서 안 먹는다 — 실측 높이가 곧 누를 수 있는 크기다(2026-08-26 실측 29·31dp).
+  //   48dp 하한(복잡도 §4)은 상자 크기로 지켜야 한다.
+  headerAction: {
+    minHeight: 48, justifyContent: 'center',
+    paddingLeft: Space.sm, paddingRight: HEADER_EDGE_GUTTER,
+  },
   headerActionText: { fontSize: 15, fontWeight: '800', color: InkColors.ink },
 
   // A1 원리 카드 — 이 화면에 남는 유일한 색면(배치규칙 ② 히어로는 화면당 1개).
@@ -341,7 +529,16 @@ const st = StyleSheet.create({
   rowSub: { fontSize: 13, lineHeight: 18, fontWeight: '600', color: InkColors.ink3 },
 
   // 섹션 제목은 카드 밖 — 라벨과 카드를 한 덩어리로 묶는 wrap(제목만 따로 떠 보이지 않게).
-  guestWrap: { gap: Space.sm },
+  group: { gap: Space.sm },
+
+  loadingWrap: { alignItems: 'center', justifyContent: 'center', gap: Space.sm, paddingVertical: Space.xl * 2 },
+  loadingText: { fontSize: 13, fontWeight: '600', color: InkColors.ink3 },
+  rowSubWarn: { color: BrandColors.warnText },
+
+  // 접히는 요약행 — 카드가 아니다(카드로 만들면 목록 카드 옆에서 또 하나의 카드로 읽힌다).
+  foldRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, minHeight: 48 },
+  foldText: { flex: 1, minWidth: 0, fontSize: 15, fontWeight: '800', color: InkColors.ink2 },
+  sheetScroll: { maxHeight: 420 },
 
   footNote: { fontSize: 13, fontWeight: '600', color: InkColors.ink3, textAlign: 'center' },
   missIntro: { fontSize: 15, lineHeight: 22, color: InkColors.ink2, marginBottom: Space.md },

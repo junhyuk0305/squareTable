@@ -3,6 +3,7 @@ import { View, Text, Pressable, TextInput, ScrollView, StyleSheet } from 'react-
 import { Ionicons } from '@expo/vector-icons';
 
 import { BottomSheet } from '@/components/BottomSheet';
+import { MiniCalendar } from '@/components/blocks/MiniCalendar';
 import { useDayparts, useDaypartLabels, type NewTask, type TaskSection, type TaskTemplate, type Recurrence } from '@/lib/store/useWorkStore';
 import { type Member } from '@/components/work/MentionInput';
 import { maskHHMM } from '@/lib/utils/attendance';
@@ -13,10 +14,6 @@ import type { PlaybookEntry } from '@/types';
 
 type When = 'today' | 'date' | 'weekly';
 const DOW = ['일', '월', '화', '수', '목', '금', '토'];
-
-function ymd(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
 
 /**
  * TaskComposerModal — 할일 추가. 시트 높이 고정 + 내부 스크롤(펼침은 아래로, 위로 안 몰림).
@@ -576,57 +573,6 @@ export function TaskComposerModal({
   );
 }
 
-/** 모달 내장 미니 월 달력 — 날짜 지정용. 가벼운 그리드 + 월 이동. */
-function MiniCalendar({ value, today, onChange }: { value: string; today: string; onChange: (d: string) => void }) {
-  const [cursor, setCursor] = useState(() => new Date(`${value}T00:00:00`));
-  const grid = useMemo(() => {
-    const y = cursor.getFullYear();
-    const m = cursor.getMonth();
-    const lead = new Date(y, m, 1).getDay();
-    const daysInMonth = new Date(y, m + 1, 0).getDate();
-    const cells: { date: string; day: number; inMonth: boolean }[] = [];
-    for (let i = 0; i < lead; i++) {
-      const d = new Date(y, m, 1 - (lead - i));
-      cells.push({ date: ymd(d), day: d.getDate(), inMonth: false });
-    }
-    for (let d = 1; d <= daysInMonth; d++) cells.push({ date: ymd(new Date(y, m, d)), day: d, inMonth: true });
-    while (cells.length % 7 !== 0) {
-      const last = new Date(`${cells[cells.length - 1].date}T00:00:00`);
-      last.setDate(last.getDate() + 1);
-      cells.push({ date: ymd(last), day: last.getDate(), inMonth: false });
-    }
-    return cells;
-  }, [cursor]);
-  const monthLabel = `${cursor.getFullYear()}년 ${cursor.getMonth() + 1}월`;
-  const shift = (delta: number) => setCursor((c) => new Date(c.getFullYear(), c.getMonth() + delta, 1));
-
-  return (
-    <View style={s.cal}>
-      <View style={s.calBar}>
-        <Pressable onPress={() => shift(-1)} hitSlop={8}><Ionicons name="chevron-back" size={18} color={InkColors.ink2} /></Pressable>
-        <Text style={s.calMonth}>{monthLabel}</Text>
-        <Pressable onPress={() => shift(1)} hitSlop={8}><Ionicons name="chevron-forward" size={18} color={InkColors.ink2} /></Pressable>
-      </View>
-      <View style={s.weekRow}>
-        {DOW.map((w, i) => (
-          <Text key={w} style={[s.weekCell, i === 0 && { color: BrandColors.badText }]}>{w}</Text>
-        ))}
-      </View>
-      <View style={s.daysWrap}>
-        {grid.map((c) => {
-          const isSel = c.date === value;
-          const isToday = c.date === today;
-          return (
-            <Pressable key={c.date} onPress={() => onChange(c.date)} style={[s.cell, isToday && !isSel && s.cellToday, isSel && s.cellSel]}>
-              <Text style={[s.cellNum, !c.inMonth && s.cellMute, isSel && { color: '#fff' }]}>{c.day}</Text>
-            </Pressable>
-          );
-        })}
-      </View>
-    </View>
-  );
-}
-
 function Field({ label, info, children }: { label: string; info?: React.ReactNode; children: React.ReactNode }) {
   return (
     <View style={s.fld}>
@@ -691,17 +637,6 @@ const s = StyleSheet.create({
   dateText: { fontSize: 14, fontWeight: '700', color: InkColors.ink, marginTop: 8, textAlign: 'center' },
 
   // 미니 달력
-  cal: { backgroundColor: InkColors.bg, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md, padding: 8 },
-  calBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 6, paddingBottom: 6 },
-  calMonth: { fontSize: 14, fontWeight: '800', color: InkColors.ink },
-  weekRow: { flexDirection: 'row' },
-  weekCell: { flex: 1, textAlign: 'center', fontSize: 10.5, fontWeight: '800', color: InkColors.ink3, paddingVertical: 3 },
-  daysWrap: { flexDirection: 'row', flexWrap: 'wrap' },
-  cell: { width: `${100 / 7}%`, height: 36, alignItems: 'center', justifyContent: 'center', borderRadius: Radius.sm },
-  cellToday: { backgroundColor: InkColors.cream, borderWidth: 1, borderColor: InkColors.line },
-  cellSel: { backgroundColor: InkColors.ink },
-  cellNum: { fontSize: 13, fontWeight: '600', color: InkColors.ink },
-  cellMute: { color: InkColors.ink3, opacity: 0.45 },
   dowRow: { flexDirection: 'row', gap: 5 },
   dow: { width: 34, height: 34, borderRadius: Radius.pill, borderWidth: 1, borderColor: InkColors.line, backgroundColor: InkColors.bg, alignItems: 'center', justifyContent: 'center' },
   dowOn: { backgroundColor: InkColors.ink, borderColor: InkColors.ink },

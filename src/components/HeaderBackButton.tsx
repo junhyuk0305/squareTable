@@ -22,12 +22,17 @@ export function HeaderBackButton({ fallback }: { fallback?: Href }) {
   return (
     <Pressable
       onPress={() => (navigation.canGoBack() ? navigation.goBack() : router.replace(home))}
-      hitSlop={12}
       accessibilityRole="button"
       accessibilityLabel="뒤로"
       // 좌측 여백을 버튼 자체에 둔다(native-stack은 headerLeftContainerStyle 미지원).
       // 화살표가 콘텐츠 거터(HEADER_EDGE_GUTTER)에 맞게 떨어지도록 — 우측 액션과 좌우 대칭.
-      style={({ pressed }) => [{ paddingLeft: HEADER_EDGE_GUTTER, paddingRight: 14, paddingVertical: 4, opacity: pressed ? 0.5 : 1 }]}
+      // ★크기는 hitSlop 이 아니라 **상자**로 만든다 — RN-web 은 hitSlop 을 무시해서 실측 34dp 였다
+      //   (2026-08-26 퀴즈 UI 실측에서 잡혔지만 이 버튼은 앱 공용이라 모든 화면이 같이 고쳐진다).
+      style={({ pressed }) => [{
+        minHeight: 48, justifyContent: 'center',
+        paddingLeft: HEADER_EDGE_GUTTER, paddingRight: 14,
+        opacity: pressed ? 0.5 : 1,
+      }]}
     >
       <Ionicons name="arrow-back" size={24} color={InkColors.ink} />
     </Pressable>

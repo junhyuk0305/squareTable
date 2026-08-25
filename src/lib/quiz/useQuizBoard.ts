@@ -10,7 +10,7 @@
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
-import { fetchQuizAssignments, fetchQuizItems, fetchQuizStats, fetchTrainingCourses } from '@/lib/db';
+import { fetchQuizAssignments, fetchQuizItems, fetchQuizLinks, fetchQuizStats, fetchTrainingCourses } from '@/lib/db';
 import {
   useWorkStore,
   courseEntriesOf,
@@ -69,6 +69,29 @@ export type QuizListRow = {
   caption: string;
 };
 
+/**
+ * 퀴즈 홈 상단 지표(2026-08-26). 목록만 있던 화면이 "만든 것의 나열"로만 읽혀 다음에 뭘 할지가 안 보였다.
+ *
+ * ★고르는 기준: **사장이 다음 행동을 정하는 데 쓰는 값**만 넣는다. 보기 좋은 숫자는 넣지 않는다.
+ * ★개인 지표는 없다(감시원칙 D1~D5). `passed/recipients` 는 사람이 아니라 **퀴즈의 진행**이라
+ *   n/m명 표기가 허용되는 자리다 — 이름과 붙여 놓지 않는다.
+ */
+export type QuizBoardStats = {
+  /** 나가고 있는 퀴즈 = 보냈거나 예약된 것. 초안은 아직 아무 일도 안 한다. */
+  live: number;
+  /** 초안 = 만들다 만 것. 이 값이 크면 "만들기는 되는데 못 내보내고 있다"는 뜻이다. */
+  drafts: number;
+  /** 나가고 있는 퀴즈들의 통과 인원 합 / 받은 사람 합. */
+  passed: number;
+  recipients: number;
+  /** 문제로 나가는 노하우 수 / 발행된 노하우 수 — "다음에 뭘 퀴즈로 만들까"의 근거다. */
+  covered: number;
+  publishedEntries: number;
+  /** 근거가 바뀐 뒤 안 고친 문항 수 · 그런 문항을 가진 퀴즈 수. */
+  staleItems: number;
+  staleQuizzes: number;
+};
+
 /** 재확인 주기 라벨. 사장이 직접 정한 값(due_days)만 말한다 — 맡긴 경우는 날짜를 주장하지 않는다. */
 function cycleLabel(dueDays: number | null | undefined): string | null {
   if (!dueDays || dueDays <= 0) return null;
@@ -90,7 +113,9 @@ function dayLabel(ymd: string | null | undefined): string {
 export function useQuizBoard() {
   const courseEntries = useWorkStore((s) => s.courseEntries);
   const understanding = useWorkStore((s) => s.understanding);
+  const workLoaded = useWorkStore((s) => s.loaded);
   const entries = usePlaybookStore((s) => s.entries);
+  const playbookLoaded = usePlaybookStore((s) => s.loaded);
 
   useEffect(() => {
     void useWorkStore.getState().hydrate();
@@ -118,32 +143,55 @@ export function useQuizBoard() {
   // ── 문항(0107)·오답 집계(0103) ────────────────────────────────────────
   const trainedEntryIds = useMemo(() => [...new Set(courseEntries.map((e) => e.entryId))], [courseEntries]);
   const [quizItems, setQuizItems] = useState<QuizItem[]>([]);
+  const [quizItemsLoaded, setQuizItemsLoaded] = useState(false);
   const [quizReload, setQuizReload] = useState(0);
   const bumpQuiz = useCallback(() => setQuizReload((v) => v + 1), []);
   useEffect(() => {
     if (trainedEntryIds.length === 0) return; // 담긴 게 없으면 읽을 것도 없다
     let alive = true;
-    void fetchQuizItems(trainedEntryIds).then(({ data }) => { if (alive) setQuizItems(data ?? []); });
+    void fetchQuizItems(trainedEntryIds).then(({ data }) => {
+      if (alive) { setQuizItems(data ?? []); setQuizItemsLoaded(true); }
+    });
     return () => { alive = false; };
   }, [trainedEntryIds, quizReload]);
 
   const [quizStats, setQuizStats] = useState<Record<string, { attempts: number; misses: number }>>({});
+  const [statsLoaded, setStatsLoaded] = useState(false);
   useEffect(() => {
     let alive = true;
-    void fetchQuizStats().then((s) => { if (alive) setQuizStats(s); });
+    void fetchQuizStats().then((s) => { if (alive) { setQuizStats(s); setStatsLoaded(true); } });
     return () => { alive = false; };
   }, []);
 
   // ── 발송 원장(0139) ───────────────────────────────────────────────────
   // 사장은 매장 전체, 직원은 본인 것만 내려온다(RLS qz_select) — 화면이 다시 거르지 않는다.
   const [assignments, setAssignments] = useState<QuizAssignment[]>([]);
+  const [sendsLoaded, setSendsLoaded] = useState(false);
   const [sendReload, setSendReload] = useState(0);
   const bumpSends = useCallback(() => setSendReload((v) => v + 1), []);
   useEffect(() => {
     let alive = true;
-    void fetchQuizAssignments().then((rows) => { if (alive) setAssignments(rows); });
+    void fetchQuizAssignments().then((rows) => { if (alive) { setAssignments(rows); setSendsLoaded(true); } });
     return () => { alive = false; };
   }, [sendReload]);
+
+  // ── 링크 원장(0113) ───────────────────────────────────────────────────
+  // 어느 퀴즈가 '외부용'인지는 **링크가 있느냐**로 안다 — 코스에 새 플래그를 두지 않는다(이미 있는 사실).
+  const [linkedCourseIds, setLinkedCourseIds] = useState<Set<string>>(new Set());
+  const [openLinkCourseIds, setOpenLinkCourseIds] = useState<Set<string>>(new Set());
+  const [linksLoaded, setLinksLoaded] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    void fetchQuizLinks().then((rows) => {
+      if (!alive) return;
+      setLinkedCourseIds(new Set(rows.map((l) => l.courseId)));
+      setOpenLinkCourseIds(
+        new Set(rows.filter((l) => !l.revokedAt && Date.parse(l.expiresAt) > now).map((l) => l.courseId)),
+      );
+      setLinksLoaded(true);
+    });
+    return () => { alive = false; };
+  }, [now]);
 
   const entryById = useMemo(() => new Map(entries.map((e) => [e.id, e])), [entries]);
 
@@ -281,6 +329,46 @@ export function useQuizBoard() {
     });
   }, [courses, courseEntries, sendsByCourse, understanding, now, quizCountOf, staleCountOf]);
 
+  /**
+   * 홈 상단 지표 — `buildQuizzes()` 결과에서만 센다. 화면이 다시 세지 않는다(판정 복제 금지).
+   * ★'덮인 노하우'는 **문항이 실제로 있는** 노하우다. 코스에 담기만 하고 문항이 0이면 안 나간다.
+   */
+  const buildStats = useCallback(
+    (rows: QuizListRow[]): QuizBoardStats => {
+      const live = rows.filter((r) => r.status !== 'draft');
+      const published = entries.filter((e) => e.status !== 'draft');
+      const covered = published.filter((e) => quizCountOf(e.id) > 0).length;
+      return {
+        live: live.length,
+        drafts: rows.length - live.length,
+        passed: live.reduce((n, r) => n + r.passed, 0),
+        recipients: live.reduce((n, r) => n + r.recipients, 0),
+        covered,
+        publishedEntries: published.length,
+        staleItems: rows.reduce((n, r) => n + r.staleCount, 0),
+        staleQuizzes: rows.filter((r) => r.staleCount > 0).length,
+      };
+    },
+    [entries, quizCountOf],
+  );
+
+  /**
+   * 이 훅이 내놓는 **모든** 값이 확정됐는가 — 화면은 이것 하나만 보고 로딩을 건다.
+   *
+   * ★`coursesLoaded` 만으로 그리면 안 된다. 한 줄의 알약("초안"/"3/5명"/"낡음 2")은 코스가 아니라
+   *   발송원장·이해기록·노하우·문항까지 다 있어야 정해진다. 코스만 기다리면 사장이 **"초안"을 먼저
+   *   보고 잠시 뒤 "3/5명"으로 뒤바뀌는 것**을 본다(= 아직 안 온 것을 없는 것처럼 말한 셈이다).
+   * ★문항은 담긴 노하우가 없으면 읽을 것도 없어서 fetch 자체를 안 한다 — 그 경우는 도착한 것으로 친다.
+   */
+  const boardLoaded =
+    coursesLoaded &&
+    sendsLoaded &&
+    linksLoaded &&
+    statsLoaded &&
+    workLoaded &&
+    playbookLoaded &&
+    (trainedEntryIds.length === 0 || quizItemsLoaded);
+
   return {
     now,
     entries,
@@ -288,6 +376,7 @@ export function useQuizBoard() {
     courses,
     setCourses,
     coursesLoaded,
+    boardLoaded,
     reloadCourses,
     quizReload,
     bumpQuiz,
@@ -299,5 +388,8 @@ export function useQuizBoard() {
     sendsByCourse,
     bumpSends,
     buildQuizzes,
+    buildStats,
+    linkedCourseIds,
+    openLinkCourseIds,
   };
 }

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { View, Text, TextInput, Pressable, ScrollView, StyleSheet } from 'react-native';
+import { View, Text, TextInput, Pressable, ScrollView, ActivityIndicator, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -13,6 +13,7 @@ import { guardWrite } from '@/lib/store/useSyncStore';
 import { showToast } from '@/lib/store/useToastStore';
 import { fetchQuizItems, upsertTrainingCourse, insertQuizAssignments } from '@/lib/db';
 import { FORMATS } from '@/lib/quiz/formats';
+import { Appear, stagger } from '@/components/Appear';
 import { BottomSheet } from '@/components/BottomSheet';
 import { SegmentTabs, type SegmentItem } from '@/components/SegmentTabs';
 import { EmptyState } from '@/components/EmptyState';
@@ -50,13 +51,14 @@ export default function QuizDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const unitId = useSessionStore((s) => s.unitId);
 
-  const { courses, coursesLoaded, quizStats, sendsByCourse, bumpSends, reloadCourses } = useQuizBoard();
+  const { courses, boardLoaded, quizStats, sendsByCourse, bumpSends, reloadCourses } = useQuizBoard();
   const courseEntries = useWorkStore((s) => s.courseEntries);
   const understanding = useWorkStore((s) => s.understanding);
   const templates = useWorkStore((s) => s.templates);
   const attachKnowhow = useWorkStore((s) => s.attachKnowhow);
   const entries = usePlaybookStore((s) => s.entries);
   const staff = useStaffStore((s) => s.staff);
+  const staffLoaded = useStaffStore((s) => s.loaded);
   const hydrateStaff = useStaffStore((s) => s.hydrate);
   useEffect(() => {
     void hydrateStaff();
@@ -81,13 +83,16 @@ export default function QuizDetailScreen() {
   const [draftCycle, setDraftCycle] = useState<number | null>(null);
 
   const [items, setItems] = useState<QuizItem[]>([]);
+  const [itemsLoaded, setItemsLoaded] = useState(false);
   const [itemsReload, setItemsReload] = useState(0);
   useEffect(() => {
     let alive = true;
     // 담긴 노하우가 없으면 읽을 것도 없다 — 조회 없이 빈 목록으로 되돌린다(이펙트 안 동기 set 회피).
     const p = entryIds.length === 0 ? Promise.resolve({ data: [] as QuizItem[] }) : fetchQuizItems(entryIds);
     void p.then(({ data }) => {
-      if (alive) setItems((data ?? []).filter((q) => q.status === 'active'));
+      if (!alive) return;
+      setItems((data ?? []).filter((q) => q.status === 'active'));
+      setItemsLoaded(true);
     });
     return () => {
       alive = false;
@@ -145,6 +150,9 @@ export default function QuizDetailScreen() {
     [items, entryById],
   );
 
+  /** 붙일 수 있는 업무 = 숨기지 않은 템플릿. 시트가 열릴 때마다 다시 거르지 않는다. */
+  const attachable = useMemo(() => templates.filter((t) => !t.hidden), [templates]);
+
   const segItems: SegmentItem[] = [
     { key: 'people', label: '결과', count: people.length },
     { key: 'items', label: '문항', count: items.length },
@@ -183,7 +191,22 @@ export default function QuizDetailScreen() {
     }
   };
 
-  if (!coursesLoaded) return <SafeAreaView style={st.safe} edges={['bottom']} />;
+  /**
+   * 전부 도착 전엔 로딩이다 — 빈 화면(흰 판)도, 반쯤 채운 화면도 내보내지 않는다.
+   * ★`coursesLoaded` 만 보면 문항 세그먼트가 "아직 문항이 없어요"로 먼저 떴다가 채워지고,
+   *   결과 세그먼트의 이름이 "나간 직원"으로 스쳤다가 진짜 이름으로 바뀐다(2026-08-26).
+   */
+  if (!boardLoaded || !itemsLoaded || !staffLoaded) {
+    return (
+      <SafeAreaView style={st.safe} edges={['bottom']}>
+        <Stack.Screen options={{ title: '퀴즈' }} />
+        <View style={st.loadingWrap}>
+          <ActivityIndicator color={InkColors.ink3} />
+          <Text style={st.loadingText}>퀴즈를 불러오는 중...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
   if (!course) {
     return (
       <SafeAreaView style={st.safe} edges={['bottom']}>
@@ -232,6 +255,8 @@ export default function QuizDetailScreen() {
 
         <SegmentTabs style={{ margin: 0 }} items={segItems} value={seg} onChange={(k) => setSeg(k as Seg)} />
 
+        {/* 세그먼트를 바꾸면 내용이 통째로 갈린다 — key={seg} 로 그때마다 한 번 올라오게 한다. */}
+        <Appear key={seg} style={st.segBody}>
         {seg === 'people' ? (
           people.length === 0 ? (
             <EmptyState
@@ -282,8 +307,8 @@ export default function QuizDetailScreen() {
                 const s = statOf(quizStats, q);
                 const stale = staleItems.some((x) => x.id === q.id);
                 return (
+                  <Appear key={q.id} delay={stagger(i)}>
                   <Pressable
-                    key={q.id}
                     onPress={() => setPreview(q)}
                     style={({ pressed }) => [st.row, i > 0 && st.rowDivider, pressed && { opacity: 0.6 }]}
                     accessibilityRole="button"
@@ -309,6 +334,7 @@ export default function QuizDetailScreen() {
                       <ProgressPill text={s.attempts === 0 ? '—' : '괜찮음'} tone={s.attempts === 0 ? 'neutral' : 'done'} />
                     )}
                   </Pressable>
+                  </Appear>
                 );
               })}
             </View>
@@ -369,6 +395,7 @@ export default function QuizDetailScreen() {
             )}
           </>
         )}
+        </Appear>
       </ScrollView>
 
       {/* ── C3 더보기 ── */}
@@ -432,18 +459,22 @@ export default function QuizDetailScreen() {
       )}
 
       {/* ── D10 이 업무에 붙이기 — 관문이 아니라 **만든 뒤의 선택**이다 ── */}
+      {/* ★시트 높이를 72%로 못 박고 그 안에 maxHeight 320 스크롤을 또 넣어 두어서, 업무가 적으면
+          아래가 텅 비고 많으면 시트 안에 스크롤이 두 겹으로 겹쳤다(2026-08-26 수정).
+          높이는 내용에 맡기고 스크롤은 한 겹만 둔다. 목록이 길면 시트 자체가 늘어난다. */}
       {attachOpen && (
-        <BottomSheet visible onClose={() => setAttachOpen(false)} sheetStyle={{ height: '72%' }}>
+        <BottomSheet visible onClose={() => setAttachOpen(false)}>
           <SheetHead title="이 업무에 붙이기" onClose={() => setAttachOpen(false)} />
           <Text style={st.sheetLead}>
             붙이면 그 업무를 <Text style={st.bold}>할 줄 아는 사람</Text>이 업무 화면에 표시돼요.
             안 붙여도 퀴즈는 잘 돌아가요.
           </Text>
-          <ScrollView style={{ maxHeight: 320 }}>
-            <View style={st.listCard}>
-              {templates
-                .filter((t) => !t.hidden)
-                .map((t, i) => (
+          {attachable.length === 0 ? (
+            <Text style={st.sheetEmpty}>붙일 업무가 아직 없어요. 업무를 만들면 여기에 나와요.</Text>
+          ) : (
+            <ScrollView style={st.sheetScroll} showsVerticalScrollIndicator={false}>
+              <View style={st.listCard}>
+                {attachable.map((t, i) => (
                   <Pressable
                     key={t.id}
                     onPress={async () => {
@@ -455,12 +486,16 @@ export default function QuizDetailScreen() {
                     accessibilityRole="button"
                     accessibilityLabel={`${t.text}에 붙이기`}
                   >
-                    <Text style={st.rowTitle} numberOfLines={1}>{t.text}</Text>
+                    {/* ★제목에 flex 를 안 주면 긴 업무 이름이 화살표를 시트 밖으로 밀어낸다. */}
+                    <View style={st.rowText}>
+                      <Text style={st.rowTitle} numberOfLines={1}>{t.text}</Text>
+                    </View>
                     <Ionicons name="chevron-forward" size={15} color={InkColors.ink3} />
                   </Pressable>
                 ))}
-            </View>
-          </ScrollView>
+              </View>
+            </ScrollView>
+          )}
         </BottomSheet>
       )}
 
@@ -557,8 +592,18 @@ function todayKst(): string {
 
 const st = StyleSheet.create({
   safe: { flex: 1, backgroundColor: InkColors.paper },
+  loadingWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Space.sm },
+  loadingText: { fontSize: 13, fontWeight: '600', color: InkColors.ink3 },
+  segBody: { gap: Space.md },
+  sheetScroll: { maxHeight: 360 },
+  sheetEmpty: { fontSize: 15, fontWeight: '600', color: InkColors.ink3, paddingVertical: Space.lg, textAlign: 'center' },
   scroll: { padding: Space.gutter, paddingBottom: Space.xl * 2, gap: Space.md },
-  headerAction: { paddingLeft: Space.sm, paddingRight: HEADER_EDGE_GUTTER, paddingVertical: 4 },
+  // ★hitSlop 은 RN-web 에서 안 먹는다 — 실측 높이가 곧 누를 수 있는 크기다(2026-08-26 실측 29·31dp).
+  //   48dp 하한(복잡도 §4)은 상자 크기로 지켜야 한다.
+  headerAction: {
+    minHeight: 48, justifyContent: 'center',
+    paddingLeft: Space.sm, paddingRight: HEADER_EDGE_GUTTER,
+  },
   bold: { fontWeight: '800', color: InkColors.ink },
 
   staleBar: {
