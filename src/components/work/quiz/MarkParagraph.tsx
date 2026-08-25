@@ -45,12 +45,27 @@ export function MarkParagraph({ payload, disabled, result, onAnswer }: QuizRende
     setTapped(tapped.includes(i) ? tapped.filter((x) => x !== i) : [...tapped, i]);
   };
 
-  /** 판정 뒤 이 문구의 색. 표시 여부가 정답과 같으면 초록, 다르면 빨강. */
+  /**
+   * 판정 뒤 이 문구의 모양 — **축이 둘**이다. 하나로 합치면 정답을 알 수 없다.
+   *   · 색     = 내 판단이 맞았나 (초록/빨강)
+   *   · 취소선 = 그 문구가 규정과 어긋나나 (= 정답. 내가 짚었든 안 짚었든)
+   *
+   * ★옛 판본은 색 하나에 둘을 겹쳤다(2026-08-26 실측). 그래서 **놓친 정답**과 **잘못 짚은 멀쩡한
+   *   문구**가 똑같이 빨강+취소선으로 그려져 어느 쪽이 답인지 알 수 없었고, 멀쩡한 문장에 취소선이
+   *   그어져 "이 말이 틀렸다"로 읽히기까지 했다 — 오답을 되짚어 주는 화면이 오정보를 준 셈이다.
+   *   형제 형태는 전부 정답을 말한다(MineTap='하면 안 되는 것' · LinkMatch='맞는 짝: …' ·
+   *   NumericKeypad='맞는 값 · N'). 이 형태만 예외였다.
+   */
   const markStyle = (i: number) => {
     if (!wrongs) return tapped.includes(i) ? st.on : null;
-    const shouldBeOn = wrongs.includes(i);
-    return shouldBeOn === tapped.includes(i) ? st.good : st.bad;
+    const isAnswer = wrongs.includes(i);
+    return [isAnswer === tapped.includes(i) ? st.good : st.bad, isAnswer && st.strike];
   };
+
+  /** 규정과 어긋난 문구 = 정답. 색만으로 상태를 구분하지 않는다(ui.md) → 글자로 한 번 더 적는다. */
+  const answerTexts = wrongs && result && !result.correct
+    ? wrongs.map((i) => parts[i]?.text).filter(Boolean)
+    : [];
 
   return (
     <View style={qs.wrap}>
@@ -73,6 +88,10 @@ export function MarkParagraph({ payload, disabled, result, onAnswer }: QuizRende
             ))}
         </Text>
       </View>
+
+      {answerTexts.length > 0 ? (
+        <Text style={st.answerLine}>규정과 다른 곳 · {answerTexts.join(' · ')}</Text>
+      ) : null}
 
       {result ? null : (
         <>
@@ -130,6 +149,9 @@ const st = StyleSheet.create({
     color: BrandColors.badText,
     backgroundColor: BrandColors.badSoft,
     fontWeight: '800',
-    textDecorationLine: 'line-through',
+    textDecorationLine: 'none',
   },
+  /** 규정과 어긋난 문구에만 붙는다 — 색(맞았나)과 다른 축이다. markStyle 주석 참고. */
+  strike: { textDecorationLine: 'line-through' },
+  answerLine: { fontSize: 15, fontWeight: '800', color: BrandColors.badText, lineHeight: 22 },
 });
