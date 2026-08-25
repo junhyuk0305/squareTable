@@ -19,7 +19,8 @@ import { formatKrw } from '@/lib/config/billing';
 import { PAYMENT_SLA_SENTENCE } from '@/lib/config/business';
 import { SHOW_BILLING } from '@/lib/config/store-policy';
 import { StepProgress } from '@/components/blocks/StepProgress';
-import { Appear } from '@/components/Appear';
+import { Appear, stagger } from '@/components/Appear';
+import { ScreenLoading } from '@/components/ScreenLoading';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
 import { Space, SCREEN_GUTTER } from '@/lib/theme/layout';
@@ -165,7 +166,7 @@ function DowngradeBody() {
     return (
       <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
         <Stack.Screen options={{ headerShown: false }} />
-        <View style={styles.center}><ActivityIndicator color={InkColors.ink} /></View>
+        <ScreenLoading label="매장과 직원을 불러오고 있어요…" />
       </SafeAreaView>
     );
   }
@@ -192,10 +193,10 @@ function DowngradeBody() {
           />
         ) : step === 'store' ? (
           <>
-            <Appear delay={0}>
+            <Appear delay={stagger(0)}>
               <StepProgress step={1} total={storeStepTotal} title="남길 매장" />
             </Appear>
-            <Appear delay={60}>
+            <Appear delay={stagger(1)}>
               <View style={styles.head}>
                 <Text style={styles.h1}>무료로 남길 매장을 골라주세요</Text>
                 <Text style={styles.sub}>
@@ -204,17 +205,18 @@ function DowngradeBody() {
                 </Text>
               </View>
             </Appear>
-            <Appear delay={120}>
+            <Appear delay={stagger(2)}>
               <View style={styles.list}>
-                {freeStores.map((s) => (
-                  <PickRow
-                    key={s.unit_id}
-                    icon="storefront-outline"
-                    title={s.store_name || '내 매장'}
-                    meta={s.unit_id === activeUnitId ? '지금 보고 있는 매장' : undefined}
-                    selected={pickedStore === s.unit_id}
-                    onPress={() => setPickedStore(s.unit_id)}
-                  />
+                {freeStores.map((s, i) => (
+                  <Appear key={s.unit_id} delay={stagger(i)}>
+                    <PickRow
+                      icon="storefront-outline"
+                      title={s.store_name || '내 매장'}
+                      meta={s.unit_id === activeUnitId ? '지금 보고 있는 매장' : undefined}
+                      selected={pickedStore === s.unit_id}
+                      onPress={() => setPickedStore(s.unit_id)}
+                    />
+                  </Appear>
                 ))}
               </View>
             </Appear>
@@ -228,10 +230,10 @@ function DowngradeBody() {
           </>
         ) : (
           <>
-            <Appear delay={0}>
+            <Appear delay={stagger(0)}>
               <StepProgress step={seatStepNo} total={seatStepNo} title="계속 함께할 직원" />
             </Appear>
-            <Appear delay={60}>
+            <Appear delay={stagger(1)}>
               <View style={styles.head}>
                 <Text style={styles.h1}>계속 함께할 직원을 골라주세요</Text>
                 <Text style={styles.sub}>
@@ -240,16 +242,17 @@ function DowngradeBody() {
                 </Text>
               </View>
             </Appear>
-            <Appear delay={120}>
+            <Appear delay={stagger(2)}>
               <View style={styles.list}>
-                {staff.map((p) => (
-                  <PickRow
-                    key={p.id}
-                    icon="person-outline"
-                    title={p.name}
-                    selected={pickedSeats.includes(p.id)}
-                    onPress={() => toggleSeat(p.id)}
-                  />
+                {staff.map((p, i) => (
+                  <Appear key={p.id} delay={stagger(i)}>
+                    <PickRow
+                      icon="person-outline"
+                      title={p.name}
+                      selected={pickedSeats.includes(p.id)}
+                      onPress={() => toggleSeat(p.id)}
+                    />
+                  </Appear>
                 ))}
               </View>
             </Appear>
@@ -286,7 +289,7 @@ function ForkView({
 
   return (
     <>
-      <Appear delay={0}>
+      <Appear delay={stagger(0)}>
         <View style={styles.head}>
           <Text style={styles.h1}>무료 기간이 끝났어요</Text>
           <Text style={styles.sub}>
@@ -297,7 +300,7 @@ function ForkView({
       </Appear>
 
       {/* 세 갈래는 동등한 선택지다 — 하나를 Primary 로 올리지 않는다(D6). */}
-      <Appear delay={80}>
+      <Appear delay={stagger(1)}>
         <View style={styles.list}>
           <OptionRow
             title="무료로 계속하기"
@@ -324,7 +327,7 @@ function ForkView({
         </View>
       </Appear>
 
-      <Appear delay={160}>
+      <Appear delay={stagger(2)}>
         <View style={styles.noteBox}>
           <Text style={styles.noteText}>{VAT_NOTE_SENTENCE}</Text>
           {SHOW_BILLING && <Text style={styles.noteText}>{PAYMENT_SLA_SENTENCE}</Text>}
@@ -387,7 +390,7 @@ function FooterActions({
   label, disabled, busy, onPress, onPlan,
 }: { label: string; disabled: boolean; busy: boolean; onPress: () => void; onPlan: () => void }) {
   return (
-    <Appear delay={180}>
+    <Appear delay={stagger(3)}>
       <View style={styles.footer}>
         <Pressable
           onPress={onPress}
@@ -407,7 +410,6 @@ function FooterActions({
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: InkColors.cream },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   scroll: { padding: SCREEN_GUTTER, gap: Space.xl, paddingBottom: 40 },
 
   head: { gap: Space.sm },

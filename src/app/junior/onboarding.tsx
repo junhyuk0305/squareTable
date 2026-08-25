@@ -5,7 +5,7 @@ import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { logout } from '@/lib/auth';
-import { Appear } from '@/components/Appear';
+import { Appear, stagger } from '@/components/Appear';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 
@@ -35,7 +35,7 @@ export default function JuniorOnboarding() {
     <SafeAreaView style={styles.safe}>
       <Stack.Screen options={{ headerShown: false }} />
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-        <Appear delay={0}>
+        <Appear delay={stagger(0)}>
         <View style={styles.hero}>
           <View style={styles.iconWrap}>
             <Ionicons name="storefront-outline" size={30} color={BrandColors.brand} />
@@ -47,7 +47,7 @@ export default function JuniorOnboarding() {
         </View>
         </Appear>
 
-        <Appear delay={60}>
+        <Appear delay={stagger(1)}>
         <View style={styles.card}>
           <Text style={styles.label}>매장 초대코드</Text>
           <TextInput
@@ -66,7 +66,7 @@ export default function JuniorOnboarding() {
         </View>
         </Appear>
 
-        <Appear delay={120}>
+        <Appear delay={stagger(2)}>
         <View style={styles.helpBox}>
           <Text style={styles.helpTitle}>코드가 없으신가요?</Text>
           <Text style={styles.helpBody}>
@@ -75,7 +75,7 @@ export default function JuniorOnboarding() {
         </View>
         </Appear>
 
-        <Appear delay={180}>
+        <Appear delay={stagger(3)}>
         <Pressable onPress={() => void logout()} style={styles.logoutRow}>
           <Text style={styles.logoutText}>다른 계정으로 로그인</Text>
         </Pressable>

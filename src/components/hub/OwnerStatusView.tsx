@@ -4,8 +4,8 @@
 //  3) 매장 비교 표: 손 필요 순 기본·헤더 탭 정렬(★이 블록만 multi 게이팅, 매장 1곳=단일 요약)
 //  4) 이번달: 인건비 합계 + AI 사용(무료 캡 대비 표기)
 // 원칙: 전부 매장 단위(개인별 지표 산출 금지) · 허브는 읽기·이동까지(실행 UI 없음).
-import { useEffect, useMemo, useState } from 'react';
-import { View, Text, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { useHubStore } from '@/lib/store/useHubStore';
@@ -22,7 +22,8 @@ import { StorePickerSheet, type StorePickerRow } from '@/components/hub/StorePic
 import { SectionLabel } from '@/components/SectionLabel';
 import { AlertRow } from '@/components/blocks/AlertRow';
 import { MiniStats } from '@/components/blocks/MiniStats';
-import { Appear } from '@/components/Appear';
+import { ScreenLoading } from '@/components/ScreenLoading';
+import { Appear, stagger } from '@/components/Appear';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
@@ -39,17 +40,19 @@ const LOADING_MIN_HEIGHT = 360;
 /** 표 셀용 축약 금액 — 1만 미만은 그대로, 이상은 만 단위(표 폭 보호). */
 const fmtWonShort = (n: number) => (n >= 10000 ? `${Math.round(n / 10000)}만` : n.toLocaleString());
 
-export function OwnerStatusView() {
+export function OwnerStatusView({ header }: { header: ReactNode }) {
   const overview = useHubStore((s) => s.overview);
   const today = useHubStore((s) => s.today);
   const ownerLoaded = useHubStore((s) => s.ownerLoaded);
   const todayLoaded = useHubStore((s) => s.todayLoaded);
   const hydrateOwner = useHubStore((s) => s.hydrateOwner);
   const crossData = useCrossNotifStore((s) => s.data);
+  const crossLoaded = useCrossNotifStore((s) => s.loaded);
   const hydrateCross = useCrossNotifStore((s) => s.hydrate);
   const plan = useSessionStore((s) => s.plan);
   const freeMode = useSessionStore((s) => s.freeMode);
   const prefFor = useMemberPrefsStore((s) => s.prefFor);
+  const prefsLoaded = useMemberPrefsStore((s) => s.loaded);
   const hydratePrefs = useMemberPrefsStore((s) => s.hydrate);
   const { goStore, switching } = useStoreNav();
   // 현재 플랜의 월 AI 캡(무료 150 / 유료 매장당 1500). null 이면 캡 없음 = 분모를 그리지 않는다.
@@ -122,11 +125,14 @@ export function OwnerStatusView() {
   const multi = overview.length > 1;
 
   // 전부 도착 전엔 무조건 로딩 — 스냅샷 '—' 채움부터 그리지 않는다(부분 렌더 금지, 2026-07-31).
+  // ★위 effect 가 같이 당기는 cross·prefs 도 게이트에 넣는다(2026-08-25). 빠져 있던 동안
+  //   ① '확인 필요'가 "지금 확인할 일이 없어요"로 떴다가 합류 신청 행이 끼어들며 카드가 뒤바뀌었고
+  //      (inboxEmpty 가 crossData 의 joins 를 센다) ② 매장 별명·색이 뒤늦게 갈아끼워졌다.
   // 부분 실패 시 재시도는 hydrateOwner TTL 리셋이 맡고, 표면화는 db.ts readFail(SyncBanner).
-  if (!ownerLoaded || !todayLoaded) {
+  if (!ownerLoaded || !todayLoaded || !crossLoaded || !prefsLoaded) {
     return (
       <View style={styles.loading}>
-        <ActivityIndicator color={InkColors.ink3} />
+        <ScreenLoading label="매장 현황을 불러오고 있어요…" />
       </View>
     );
   }
@@ -168,9 +174,12 @@ export function OwnerStatusView() {
   const starterRow = overview.length === 1 && !starterGraduated(overview[0]) ? overview[0] : null;
 
   return (
-    <View style={{ gap: Space.md }}>
+    <>
+      {/* 화면 제목 — 게이트 안이다. 밖에 두면 제목만 먼저 등장하고 본문이 수 백 ms 뒤에 갈아끼워진다. */}
+      {header}
+      <View style={{ gap: Space.md }}>
       {starterRow && (
-        <Appear delay={0}>
+        <Appear delay={stagger(0)}>
           <StarterChecklist row={starterRow} />
         </Appear>
       )}
@@ -178,7 +187,7 @@ export function OwnerStatusView() {
       {/* ── 1) 답 기다리는 질문(블록 X2) — 사장이 오늘 손대야 할 유일한 '막힌 것'.
              2026-08-06: '확인 필요' 카드 안 한 행이던 것을 맨 위 경고행으로 승격했다.
              0건이면 AlertRow가 스스로 숨는다. 아래 '확인 필요'에서는 뺐다(같은 사실 두 번 금지). ── */}
-      <Appear delay={20}>
+      <Appear delay={stagger(1)}>
         <AlertRow
           label="답 기다리는 질문"
           count={inbox.questions}
@@ -194,13 +203,13 @@ export function OwnerStatusView() {
       {/* ── 2) 오늘 근무(블록 I3) — 카드가 아니다.
              옛 판본은 '오늘'·'이번달'이 각각 stat 2칸을 품은 카드였고, 그래서 이 화면이
              제목→카드 5연속이 됐다(개편 전 사장 홈과 같은 증상). 통계는 MiniStats로 내린다. ── */}
-      <Appear delay={40}>
+      <Appear delay={stagger(2)}>
         <SectionLabel title="오늘" />
         <MiniStats
           items={[
-            // 부분 실패 시 "0명"으로 위장하지 않는다 — todayLoaded 전엔 '—' (빈화면 위장 금지).
-            { key: 'working', value: todayLoaded ? `${workingTotal}명` : '—', label: '지금 근무중' },
-            { key: 'scheduled', value: todayLoaded ? `${scheduledTotal}명` : '—', label: '오늘 근무 예정' },
+            // '—' 자리표는 걷어냈다 — 게이트가 todayLoaded 를 이미 보장한다(여기 오면 도착한 값이다).
+            { key: 'working', value: `${workingTotal}명`, label: '지금 근무중' },
+            { key: 'scheduled', value: `${scheduledTotal}명`, label: '오늘 근무 예정' },
           ]}
         />
       </Appear>
@@ -208,7 +217,7 @@ export function OwnerStatusView() {
       {/* 매장별 근무 현황 — 단일 매장이면 위 MiniStats가 이미 같은 숫자를 말하므로 그리지 않는다.
           다점포에서만 '어느 매장이 비었나'가 새 정보가 된다. */}
       {multi && (
-      <Appear delay={60}>
+      <Appear delay={stagger(3)}>
         <View style={styles.card}>
           {overview.map((r) => {
             const t = todayByUnit[r.unit_id];
@@ -225,9 +234,7 @@ export function OwnerStatusView() {
                 <View style={[styles.dot, { backgroundColor: colorOf(r.unit_id) }]} />
                 <Text style={styles.rowTitle} numberOfLines={1}>{labelOf(r.unit_id)}</Text>
                 <Text style={[styles.rowSub, (t?.working_now ?? 0) > 0 && styles.onair]}>
-                  {!todayLoaded
-                    ? '확인 중'
-                    : `${(t?.working_now ?? 0) > 0 ? `${t!.working_now}명 근무중` : '출근 전'} · 예정 ${t?.scheduled ?? 0}`}
+                  {`${(t?.working_now ?? 0) > 0 ? `${t!.working_now}명 근무중` : '출근 전'} · 예정 ${t?.scheduled ?? 0}`}
                 </Text>
                 <Ionicons name="chevron-forward" size={15} color={InkColors.ink3} />
               </Pressable>
@@ -238,7 +245,7 @@ export function OwnerStatusView() {
       )}
 
       {/* ── 3) 확인 필요 ── */}
-      <Appear delay={80}>
+      <Appear delay={stagger(4)}>
         <SectionLabel title="확인 필요" />
         <View style={styles.card}>
           {inboxEmpty ? (
@@ -270,7 +277,7 @@ export function OwnerStatusView() {
 
       {/* ── 3) 매장 비교(다점포) / 단일 매장 요약 ── */}
       {multi && (
-        <Appear delay={120}>
+        <Appear delay={stagger(5)}>
           <SectionLabel title="매장 비교" hint="항목을 누르면 정렬" />
           {canUseMultistore(plan, freeMode) ? (
             <View style={styles.card}>
@@ -295,7 +302,7 @@ export function OwnerStatusView() {
                       <Text style={styles.tdNameText} numberOfLines={1}>{labelOf(r.unit_id)}</Text>
                     </View>
                     <Text style={[styles.td, r.pending_q > 0 && styles.tdHot]}>{r.pending_q}</Text>
-                    <Text style={styles.td}>{todayLoaded ? `${t?.working_now ?? 0}/${t?.scheduled ?? 0}` : '—'}</Text>
+                    <Text style={styles.td}>{`${t?.working_now ?? 0}/${t?.scheduled ?? 0}`}</Text>
                     <Text style={styles.td}>{r.uncovered}</Text>
                     <Text style={styles.td}>{fmtWonShort(r.labor_month)}</Text>
                   </Pressable>
@@ -310,7 +317,7 @@ export function OwnerStatusView() {
 
       {/* ── 4) 이번달(블록 I3) — 여기도 카드가 아니다. 위 '오늘'과 형태는 같지만 사이에
              카드 2장이 끼어 있어 연속이 아니다(배치 규칙 ①). ── */}
-      <Appear delay={multi ? 160 : 120}>
+      <Appear delay={stagger(6)}>
         <SectionLabel title="이번달" />
         <MiniStats
           items={[
@@ -371,7 +378,8 @@ export function OwnerStatusView() {
         }}
         onClose={() => setPicker(null)}
       />
-    </View>
+      </View>
+    </>
   );
 }
 

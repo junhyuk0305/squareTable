@@ -54,6 +54,9 @@ const CHROME = new Set([
   'ResponsiveShell', 'InfoDot',
   // TransitionCover 는 화면을 '대체하는' 로딩 커버다 — 화면의 내용 블록이 아니다.
   'TransitionCover',
+  // ScreenLoading 도 같은 이유다 — 화면 본문 자리를 '대체하는' 로딩이라 내용 블록으로 세지 않는다.
+  //   (세면 `{!ready ? <ScreenLoading/> : <본문>}` 이 상한을 +1 시켜 래칫이 거짓으로 터진다.)
+  'ScreenLoading',
   // Appear 는 래퍼다 — starts() 로 잡지 않고 A-3의 전용 규칙으로 처리한다.
   'Appear',
 ]);

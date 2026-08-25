@@ -3,6 +3,7 @@ import { View, Text, TextInput, ScrollView, StyleSheet, Pressable } from 'react-
 import { Ionicons } from '@expo/vector-icons';
 
 import { BottomSheet } from '@/components/BottomSheet';
+import { ScreenLoading } from '@/components/ScreenLoading';
 import { SectionLabel } from '@/components/SectionLabel';
 import { PressableScale } from '@/components/PressableScale';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
@@ -105,11 +106,17 @@ export function PublishConfirmSheet({
   const [dupPart, setDupPart] = useState<string | null>(null);
   const [partBusy, setPartBusy] = useState(false);
   const [partFailed, setPartFailed] = useState(false);
+  // 파트 칩이 시트가 열린 뒤 늦게 채워지는 것을 막는 게이트. 실패해도 true 로 확정한다(영영 로딩 금지).
+  const [partsLoaded, setPartsLoaded] = useState(false);
 
   useEffect(() => {
     if (!visible || !partsEnabled) return;
     let alive = true;
-    void fetchStoreParts().then((rows) => { if (alive) setParts(rows); });
+    void fetchStoreParts().then((rows) => {
+      if (!alive) return;
+      setParts(rows);
+      setPartsLoaded(true);
+    });
     return () => { alive = false; };
   }, [visible, partsEnabled]);
 
@@ -244,7 +251,9 @@ export function PublishConfirmSheet({
           </View>
         )}
 
-        {partsEnabled && (
+        {/* 파트 블록만 게이트한다 — 카테고리 칩은 로컬 상수라 기다릴 것이 없다. */}
+        {partsEnabled && !partsLoaded && <ScreenLoading label="파트를 불러오고 있어요…" />}
+        {partsEnabled && partsLoaded && (
           <>
             <SectionLabel title="파트" hint="안 고르면 전원이 보는 공통이에요" />
             <View style={styles.chips}>

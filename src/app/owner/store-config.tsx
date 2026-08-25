@@ -5,6 +5,7 @@ import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 import { RoleTabBar } from '@/components/RoleTabBar';
+import { ScreenLoading } from '@/components/ScreenLoading';
 import { SectionLabel } from '@/components/SectionLabel';
 import { useScheduleStore } from '@/lib/store/useScheduleStore';
 import { useSessionStore } from '@/lib/store/useSessionStore';
@@ -18,7 +19,27 @@ import { Space } from '@/lib/theme/layout';
 
 const TIME_RE = /^([01]?\d|2[0-3]):[0-5]\d$/;
 
+/**
+ * 게이트 껍데기 — 폼 본체를 **자식으로 분리한 이유**가 여기에 있다.
+ * `StoreConfigForm`은 `useState(config.open)` 처럼 스토어 값을 **마운트 시 한 번** 로컬 state로 복사한다.
+ * 하이드레이트 전에 마운트되면 `DEFAULT_CONFIG`(09:00~22:00·연중무휴·빈 비고)가 그대로 얼어붙고,
+ * 나중에 도착한 DB 값이 반영되지 않은 채 저장되면 **실제 운영시간·휴무·비고가 기본값으로 덮인다.**
+ * 게이트만 두고 폼을 같은 컴포넌트에 남기면 useState가 이미 실행된 뒤라 안 고쳐진다 — 분리가 곧 수정이다.
+ * (설정 성격 화면이라 등장 애니메이션은 의도적으로 넣지 않는다.)
+ */
 export default function OwnerStoreConfigScreen() {
+  const loaded = useScheduleStore((s) => s.loaded);
+
+  return (
+    <SafeAreaView style={styles.safe} edges={['bottom']}>
+      <Stack.Screen options={{ title: '매장 기본 정보' }} />
+      {!loaded ? <ScreenLoading label="매장 정보를 불러오고 있어요…" /> : <StoreConfigForm />}
+      <RoleTabBar role="owner" />
+    </SafeAreaView>
+  );
+}
+
+function StoreConfigForm() {
   const router = useRouter();
   const config = useScheduleStore((s) => s.config);
   const setConfig = useScheduleStore((s) => s.setConfig);
@@ -75,107 +96,103 @@ export default function OwnerStoreConfigScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safe} edges={['bottom']}>
-      <Stack.Screen options={{ title: '매장 기본 정보' }} />
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        <Text style={styles.lead}>운영시간과 정기 휴무를 정해두면 근무표에 반영돼요.</Text>
+    <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      <Text style={styles.lead}>운영시간과 정기 휴무를 정해두면 근무표에 반영돼요.</Text>
 
-        {/* 운영시간 — 이 화면의 최우선. 2026-08-06: 카드 껍데기를 벗겨 시각 자체가 화면에서 가장 큰
-            요소가 되게 했다(세 섹션이 전부 '제목→카드'라 한 종류의 나열로 읽히던 것을 여기서 끊는다). */}
-        <View style={styles.section}>
-          <SectionLabel title="운영시간" />
-          <View style={styles.timeRow}>
-            <View style={styles.timeField}>
-              <Text style={styles.timeLabel}>오픈</Text>
-              <TextInput
-                value={open}
-                onChangeText={(t) => setOpen(maskHHMM(t))}
-                keyboardType="number-pad"
-                maxLength={5}
-                placeholder="09:00"
-                placeholderTextColor={InkColors.ink3}
-                style={[styles.timeInp, !TIME_RE.test(open) && open.length > 0 && styles.bad]}
-              />
-            </View>
-            <Ionicons name="arrow-forward" size={16} color={InkColors.ink3} style={styles.timeArrow} />
-            <View style={styles.timeField}>
-              <Text style={styles.timeLabel}>마감</Text>
-              <TextInput
-                value={close}
-                onChangeText={(t) => setClose(maskHHMM(t))}
-                keyboardType="number-pad"
-                maxLength={5}
-                placeholder="22:00"
-                placeholderTextColor={InkColors.ink3}
-                style={[styles.timeInp, !TIME_RE.test(close) && close.length > 0 && styles.bad]}
-              />
-            </View>
-          </View>
-          {!valid && <Text style={styles.warn}>HH:MM 형식으로, 오픈이 마감보다 빠르게 입력해 주세요.</Text>}
-        </View>
-
-        {/* 정기 휴무 — 카드 없이 칩 줄. 선택 상태 요약(연중무휴·월·화)은 라벨 우측 hint 로 올렸다. */}
-        <View style={styles.section}>
-          <SectionLabel title="정기 휴무" hint={closedDaysLabel(closedDays)} />
-          <View style={styles.dows}>
-            {WEEKDAY_ORDER.map((wd) => {
-              const on = closedDays.includes(wd);
-              return (
-                <Pressable
-                  key={wd}
-                  onPress={() => toggleDay(wd)}
-                  style={[styles.dow, on && styles.dowOn, wd === 0 && on && styles.dowSun]}
-                >
-                  <Text style={[styles.dowText, on && { color: '#fff' }]}>{WEEKDAY_LABELS[wd]}</Text>
-                </Pressable>
-              );
-            })}
-          </View>
-          <Text style={styles.hint}>쉬는 요일을 누르세요. 연중무휴면 모두 끄면 돼요.</Text>
-        </View>
-
-        {/* 비고 — 이 화면에서 유일하게 카드로 남긴 블록(배치규칙⑤: 화면당 카드 1~2개는 남긴다).
-            여러 줄 자유 입력이라 경계면이 있어야 어디까지 쓰는 칸인지 보인다. */}
-        <View style={styles.section}>
-          <SectionLabel title="비고" hint="선택" />
-          <View style={styles.card}>
+      {/* 운영시간 — 이 화면의 최우선. 2026-08-06: 카드 껍데기를 벗겨 시각 자체가 화면에서 가장 큰
+          요소가 되게 했다(세 섹션이 전부 '제목→카드'라 한 종류의 나열로 읽히던 것을 여기서 끊는다). */}
+      <View style={styles.section}>
+        <SectionLabel title="운영시간" />
+        <View style={styles.timeRow}>
+          <View style={styles.timeField}>
+            <Text style={styles.timeLabel}>오픈</Text>
             <TextInput
-              value={note}
-              onChangeText={setNote}
-              placeholder="예) 14~15시 브레이크타임 · 명절 당일 휴무"
+              value={open}
+              onChangeText={(t) => setOpen(maskHHMM(t))}
+              keyboardType="number-pad"
+              maxLength={5}
+              placeholder="09:00"
               placeholderTextColor={InkColors.ink3}
-              style={styles.noteInp}
-              multiline
+              style={[styles.timeInp, !TIME_RE.test(open) && open.length > 0 && styles.bad]}
+            />
+          </View>
+          <Ionicons name="arrow-forward" size={16} color={InkColors.ink3} style={styles.timeArrow} />
+          <View style={styles.timeField}>
+            <Text style={styles.timeLabel}>마감</Text>
+            <TextInput
+              value={close}
+              onChangeText={(t) => setClose(maskHHMM(t))}
+              keyboardType="number-pad"
+              maxLength={5}
+              placeholder="22:00"
+              placeholderTextColor={InkColors.ink3}
+              style={[styles.timeInp, !TIME_RE.test(close) && close.length > 0 && styles.bad]}
             />
           </View>
         </View>
+        {!valid && <Text style={styles.warn}>HH:MM 형식으로, 오픈이 마감보다 빠르게 입력해 주세요.</Text>}
+      </View>
 
-        <Pressable onPress={() => { void save(); }} disabled={!valid || saving} style={({ pressed }) => [styles.saveBtn, (!valid || saving) && { opacity: 0.4 }, pressed && valid && !saving && { opacity: 0.85 }]}>
-          <Text style={styles.saveText}>{saved ? '저장됐어요 ✓' : saving ? '저장 중이에요' : '저장'}</Text>
-        </Pressable>
+      {/* 정기 휴무 — 카드 없이 칩 줄. 선택 상태 요약(연중무휴·월·화)은 라벨 우측 hint 로 올렸다. */}
+      <View style={styles.section}>
+        <SectionLabel title="정기 휴무" hint={closedDaysLabel(closedDays)} />
+        <View style={styles.dows}>
+          {WEEKDAY_ORDER.map((wd) => {
+            const on = closedDays.includes(wd);
+            return (
+              <Pressable
+                key={wd}
+                onPress={() => toggleDay(wd)}
+                style={[styles.dow, on && styles.dowOn, wd === 0 && on && styles.dowSun]}
+              >
+                <Text style={[styles.dowText, on && { color: '#fff' }]}>{WEEKDAY_LABELS[wd]}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+        <Text style={styles.hint}>쉬는 요일을 누르세요. 연중무휴면 모두 끄면 돼요.</Text>
+      </View>
 
-        {/* 다점포 전용 위험 구역 — 이 매장 삭제(사장 전용 + 매장 2개 이상일 때만) */}
-        {isOwner && stores.length > 1 ? (
-          <View style={styles.dangerBox}>
-            <Text style={styles.dangerLabel}>위험 구역</Text>
-            <Text style={styles.dangerDesc}>이 매장(“{storeName}”)을 완전히 삭제해요. 노하우·근무·급여 등 모든 데이터가 사라지고 되돌릴 수 없어요. (직원이 있으면 먼저 내보내야 해요.)</Text>
-            <Pressable
-              onPress={onDelete}
-              disabled={deleting}
-              style={({ pressed }) => [styles.dangerBtn, (pressed || deleting) && { opacity: 0.65 }]}
-              accessibilityRole="button"
-              accessibilityLabel="이 매장 삭제"
-            >
-              <Ionicons name="trash-outline" size={16} color={BrandColors.bad} />
-              <Text style={styles.dangerBtnText}>{deleting ? '삭제 중…' : '이 매장 삭제'}</Text>
-            </Pressable>
-          </View>
-        ) : null}
+      {/* 비고 — 이 화면에서 유일하게 카드로 남긴 블록(배치규칙⑤: 화면당 카드 1~2개는 남긴다).
+          여러 줄 자유 입력이라 경계면이 있어야 어디까지 쓰는 칸인지 보인다. */}
+      <View style={styles.section}>
+        <SectionLabel title="비고" hint="선택" />
+        <View style={styles.card}>
+          <TextInput
+            value={note}
+            onChangeText={setNote}
+            placeholder="예) 14~15시 브레이크타임 · 명절 당일 휴무"
+            placeholderTextColor={InkColors.ink3}
+            style={styles.noteInp}
+            multiline
+          />
+        </View>
+      </View>
 
-        <View style={{ height: 12 }} />
-      </ScrollView>
-      <RoleTabBar role="owner" />
-    </SafeAreaView>
+      <Pressable onPress={() => { void save(); }} disabled={!valid || saving} style={({ pressed }) => [styles.saveBtn, (!valid || saving) && { opacity: 0.4 }, pressed && valid && !saving && { opacity: 0.85 }]}>
+        <Text style={styles.saveText}>{saved ? '저장됐어요 ✓' : saving ? '저장 중이에요' : '저장'}</Text>
+      </Pressable>
+
+      {/* 다점포 전용 위험 구역 — 이 매장 삭제(사장 전용 + 매장 2개 이상일 때만) */}
+      {isOwner && stores.length > 1 ? (
+        <View style={styles.dangerBox}>
+          <Text style={styles.dangerLabel}>위험 구역</Text>
+          <Text style={styles.dangerDesc}>이 매장(“{storeName}”)을 완전히 삭제해요. 노하우·근무·급여 등 모든 데이터가 사라지고 되돌릴 수 없어요. (직원이 있으면 먼저 내보내야 해요.)</Text>
+          <Pressable
+            onPress={onDelete}
+            disabled={deleting}
+            style={({ pressed }) => [styles.dangerBtn, (pressed || deleting) && { opacity: 0.65 }]}
+            accessibilityRole="button"
+            accessibilityLabel="이 매장 삭제"
+          >
+            <Ionicons name="trash-outline" size={16} color={BrandColors.bad} />
+            <Text style={styles.dangerBtnText}>{deleting ? '삭제 중…' : '이 매장 삭제'}</Text>
+          </Pressable>
+        </View>
+      ) : null}
+
+      <View style={{ height: 12 }} />
+    </ScrollView>
   );
 }
 

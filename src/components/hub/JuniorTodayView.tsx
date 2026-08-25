@@ -1,8 +1,8 @@
 // 직원 허브 '오늘' 탭 본문 — 3블록(기획 v2 §04): 오늘 근무 · 오늘 할 일 · 이번달 근무/예상 급여.
 // 전부 본인 데이터(my_cross_summary 는 본인 행만, 할일은 0077 원시 행 + isPendingAssignment SSOT).
 // 사장 지표는 이 화면에 없다(시장 표준: 직원에게 관리자 위젯 숨김 — When I Work 명문화).
-import { useEffect, useMemo, useState } from 'react';
-import { View, Text, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { useHubStore } from '@/lib/store/useHubStore';
@@ -15,14 +15,15 @@ import { todayStr } from '@/lib/utils/attendance';
 import { isPendingAssignment, isUnreadMention } from '@/lib/utils/notifications';
 import { SectionLabel } from '@/components/SectionLabel';
 import { MiniStats } from '@/components/blocks/MiniStats';
-import { Appear } from '@/components/Appear';
+import { ScreenLoading } from '@/components/ScreenLoading';
+import { Appear, stagger } from '@/components/Appear';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
 
 const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'] as const;
 
-export function JuniorTodayView() {
+export function JuniorTodayView({ header }: { header: ReactNode }) {
   const myCross = useHubStore((s) => s.myCross);
   const juniorLoaded = useHubStore((s) => s.juniorLoaded);
   const hydrateJunior = useHubStore((s) => s.hydrateJunior);
@@ -31,6 +32,7 @@ export function JuniorTodayView() {
   const hydrateCross = useCrossNotifStore((s) => s.hydrate);
   const me = useSessionStore((s) => s.userId);
   const prefFor = useMemberPrefsStore((s) => s.prefFor);
+  const prefsLoaded = useMemberPrefsStore((s) => s.loaded);
   const hydratePrefs = useMemberPrefsStore((s) => s.hydrate);
   const { goStore, switching } = useStoreNav();
 
@@ -109,18 +111,23 @@ export function JuniorTodayView() {
   const fmtHours = (min: number) => (min >= 60 ? `${Math.floor(min / 60)}시간` : `${min}분`);
 
   // 전부 도착 전엔 무조건 로딩 — 근무 카드만 먼저 그리고 할일이 나중에 튀어나오는 부분 렌더 금지.
-  if (!juniorLoaded || !crossLoaded) {
+  // ★prefs(매장 별명·색)도 게이트에 넣는다(2026-08-25) — 빠져 있던 동안 근무 행·할일 행·매장별 행의
+  //   이름과 점 색이 화면이 뜬 뒤에 갈아끼워졌다.
+  if (!juniorLoaded || !crossLoaded || !prefsLoaded) {
     return (
       <View style={styles.loading}>
-        <ActivityIndicator color={InkColors.ink3} />
+        <ScreenLoading label="오늘 일정을 불러오고 있어요…" />
       </View>
     );
   }
 
   return (
-    <View style={{ gap: Space.md }}>
+    <>
+      {/* 화면 제목 — 게이트 안이다. 밖에 두면 제목만 먼저 등장하고 본문이 수 백 ms 뒤에 갈아끼워진다. */}
+      {header}
+      <View style={{ gap: Space.md }}>
       {/* ── 1) 오늘 근무 ── */}
-      <Appear delay={40}>
+      <Appear delay={stagger(0)}>
         <SectionLabel title="오늘 근무" />
         <View style={styles.card}>
           {todayShifts.length > 0 ? (
@@ -158,7 +165,7 @@ export function JuniorTodayView() {
       </Appear>
 
       {/* ── 2) 오늘 할 일 ── */}
-      <Appear delay={80}>
+      <Appear delay={stagger(1)}>
         <SectionLabel title="오늘 할 일" hint={todoItems.length > 0 ? `${todoItems.length}건` : undefined} />
         <View style={styles.card}>
           {todoItems.length === 0 ? (
@@ -215,7 +222,7 @@ export function JuniorTodayView() {
       {/* ── 3) 이번달(블록 I3) — 카드가 아니다.
              2026-08-06: 위 두 블록이 이미 카드라 여기까지 카드면 '제목 → 카드' 3연속이 된다(배치 규칙 ①).
              통계는 MiniStats로 내리고, 급여 계산 방식 안내는 그 칸의 ⓘ로 옮긴다. ── */}
-      <Appear delay={120}>
+      <Appear delay={stagger(2)}>
         <SectionLabel title="이번달" />
         <MiniStats
           items={[
@@ -248,7 +255,8 @@ export function JuniorTodayView() {
           </View>
         )}
       </Appear>
-    </View>
+      </View>
+    </>
   );
 }
 

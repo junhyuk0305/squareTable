@@ -51,6 +51,12 @@ type State = {
   wages: Record<string, number>;
   /** 시급을 한 번이라도 받아왔나. false면 아직 모른다 — "안 정했다"가 아니다. */
   wagesLoaded: boolean;
+  /**
+   * 급여 설정을 DB에서 한 번이라도 확인했나. false면 지금 `settings` 는 **localStorage 캐시**다.
+   * 이 플래그가 없어서 급여 설정 화면이 캐시 값으로 토글 4개와 정산일을 먼저 확정 표시한 뒤,
+   * DB 값이 오면 스스로 뒤집혔다(사장이 그 사이 누르면 반대로 저장된다).
+   */
+  settingsLoaded: boolean;
   /** 마지막 시급 읽기가 실패했나. true면 화면은 금액을 만들면 안 된다([P7-#5]). */
   wagesLoadError: boolean;
   hydrate: () => Promise<void>;
@@ -65,6 +71,7 @@ export const usePayrollStore = create<State>((set, get) => ({
   wages: HAS_SUPABASE ? {} : { ...HOURLY_WAGE },
   // mock 은 시급이 상수로 주어지므로 처음부터 '읽어온 상태'다.
   wagesLoaded: !HAS_SUPABASE,
+  settingsLoaded: !HAS_SUPABASE,
   wagesLoadError: false,
   hydrate: async () => {
     if (!HAS_SUPABASE) return;
@@ -75,9 +82,10 @@ export const usePayrollStore = create<State>((set, get) => ({
       persistSettings(settings);
       // ★읽기 실패면 이전에 받아 둔 시급을 **덮어쓰지 않는다** — 빈 값으로 갈아치우면
       //   "안 정했다"로 보이고, 화면이 그걸 근거로 금액을 만든다([P7-#5]).
+      // settingsLoaded 는 시급 읽기 성패와 무관하다 — 여기 왔다는 건 급여 설정 조회가 끝났다는 뜻이다.
       return wageRes.error
-        ? { settings, wagesLoadError: true }
-        : { wages: wageRes.data, settings, wagesLoaded: true, wagesLoadError: false };
+        ? { settings, settingsLoaded: true, wagesLoadError: true }
+        : { wages: wageRes.data, settings, settingsLoaded: true, wagesLoaded: true, wagesLoadError: false };
     });
   },
   setSetting: (k, v) => {
@@ -112,3 +120,14 @@ export const usePayrollStore = create<State>((set, get) => ({
   },
   applyMock: (demo) => set({ wages: demo ? { ...HOURLY_WAGE } : {} }),
 }));
+
+/**
+ * 시급 조회가 **끝났는가**(성공·실패 무관) — 화면의 로딩 게이트는 `wagesLoaded` 가 아니라 이걸 본다.
+ *
+ * ★`wagesLoaded` 는 "실제 시급을 손에 넣었나"라서 읽기 실패면 영영 false다([P7-#5] 의 의도 —
+ *   실패했는데 금액을 만들면 안 된다). 그 플래그를 게이트에 그대로 쓰면 읽기 한 번 실패에
+ *   **화면이 영영 스피너에 갇히고**, 정작 그 화면이 가진 "시급을 못 불러왔어요" 안내 분기는
+ *   렌더될 기회를 잃는다. 기다리기의 끝(게이트)과 값의 유무(표시)는 다른 축이다.
+ * 판정을 한 곳에만 둔다 — 화면마다 `wagesLoaded || wagesLoadError` 를 복제하지 않는다.
+ */
+export const useWagesSettled = () => usePayrollStore((s) => s.wagesLoaded || s.wagesLoadError);

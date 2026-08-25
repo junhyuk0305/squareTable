@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { Platform, ScrollView, StyleSheet, type ViewStyle } from 'react-native';
 import { BrowseCard } from './BrowseList';
+import { Appear, stagger } from './Appear';
 import { Space } from '@/lib/theme/layout';
 import type { PlaybookEntry } from '@/types';
 
@@ -51,21 +52,25 @@ export function KnowhowCarousel({ entries, onSelect, showCategory, renderExtra }
       // 부모(세로 ScrollView)의 좌우 패딩을 상쇄해 카드가 가장자리까지 자연스럽게 흐르도록.
       style={styles.scroll}
     >
-      {entries.map((e) => (
-        <BrowseCard
-          key={e.id}
-          entry={e}
-          onSelect={onSelect}
-          showCategory={showCategory}
-          style={cardStyle}
-          renderExtra={renderExtra}
-        />
+      {entries.map((e, i) => (
+        // 카드도 순서대로 등장한다. 래퍼는 고정폭 + row — row 라야 안쪽 카드가 세로로 stretch 돼
+        // 예전(카드가 직접 자식일 때)과 같은 "카드 높이 일치"가 유지된다.
+        <Appear key={e.id} delay={stagger(i)} style={cardWrapStyle}>
+          <BrowseCard
+            entry={e}
+            onSelect={onSelect}
+            showCategory={showCategory}
+            style={cardStyle}
+            renderExtra={renderExtra}
+          />
+        </Appear>
       ))}
     </ScrollView>
   );
 }
 
 const cardStyle: ViewStyle = { width: CARD_W };
+const cardWrapStyle: ViewStyle = { width: CARD_W, flexDirection: 'row' };
 
 const styles = StyleSheet.create({
   scroll: { marginHorizontal: -Space.gutter },

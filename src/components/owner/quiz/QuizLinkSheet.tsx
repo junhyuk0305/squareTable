@@ -22,6 +22,7 @@ import { guardWrite } from '@/lib/store/useSyncStore';
 import { showToast } from '@/lib/store/useToastStore';
 import { genId } from '@/lib/utils/id';
 import { BottomSheet } from '@/components/BottomSheet';
+import { ScreenLoading } from '@/components/ScreenLoading';
 import { MiniCalendar } from '@/components/blocks/MiniCalendar';
 import { copyQuizLink, makeQuizToken, quizLinkUrl } from '@/lib/quiz/link';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
@@ -48,6 +49,10 @@ function addDays(day: string, n: number): string {
 
 export function QuizLinkSheet({ course, onClose }: { course: TrainingCourse; onClose: () => void }) {
   const [links, setLinks] = useState<QuizLinkRow[]>([]);
+  // ★목록이 오기 전에 시트를 그리면 이미 열려 있는 링크가 있어도 '열려 있는 링크'가 없는 것처럼 보인다
+  //   — 사장은 "링크가 없네" 하고 같은 퀴즈의 링크를 한 번 더 발급한다.
+  //   실패해도 true 로 확정한다(영영 로딩 금지 — 그때는 '열려 있는 링크'가 정말 안 그려진다).
+  const [linksLoaded, setLinksLoaded] = useState(false);
   const [busy, setBusy] = useState(false);
   // 렌더 중 Date.now() 금지(React 컴파일러) — 마운트 시 1회면 만료 판정에 충분하다.
   const [now] = useState(() => Date.now());
@@ -58,12 +63,15 @@ export function QuizLinkSheet({ course, onClose }: { course: TrainingCourse; onC
   const reload = useCallback(async () => {
     const rows = await fetchQuizLinks();
     setLinks(rows.filter((l) => l.courseId === course.id));
+    setLinksLoaded(true);
   }, [course.id]);
 
   useEffect(() => {
     let alive = true;
     void fetchQuizLinks().then((rows) => {
-      if (alive) setLinks(rows.filter((l) => l.courseId === course.id));
+      if (!alive) return;
+      setLinks(rows.filter((l) => l.courseId === course.id));
+      setLinksLoaded(true);
     });
     return () => { alive = false; };
   }, [course.id]);
@@ -111,6 +119,10 @@ export function QuizLinkSheet({ course, onClose }: { course: TrainingCourse; onC
   return (
     <BottomSheet visible={true} onClose={onClose} sheetStyle={{ height: '82%' }}>
       <SheetHead title={`링크로 내보내기 · ${course.name}`} onClose={onClose} />
+      {!linksLoaded ? (
+        <ScreenLoading label="링크를 불러오고 있어요…" />
+      ) : (
+      <>
       <ScrollView style={{ flex: 1 }} contentContainerStyle={qst.body} showsVerticalScrollIndicator={false}>
         {/* 경고를 안내 카드 하나로 묶는다 — 배경색 블록은 이 시트에서 이것 하나(R4-4). */}
         <View style={lst.warnBox}>
@@ -168,9 +180,12 @@ export function QuizLinkSheet({ course, onClose }: { course: TrainingCourse; onC
         )}
       </ScrollView>
 
+      {/* 게이트 안이다 — 목록이 오기 전에 '링크 만들기'를 누를 수 있으면 중복 발급을 막는 뜻이 없다. */}
       <View style={qst.foot}>
         <PrimaryButton label={busy ? '만드는 중…' : '링크 만들기'} disabled={busy} onPress={() => void create()} />
       </View>
+      </>
+      )}
     </BottomSheet>
   );
 }

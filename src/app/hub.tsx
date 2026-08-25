@@ -10,7 +10,7 @@ import { HubTabBar } from '@/components/HubTabBar';
 import { OwnerStatusView } from '@/components/hub/OwnerStatusView';
 import { JuniorTodayView } from '@/components/hub/JuniorTodayView';
 import { NoStoreView } from '@/components/hub/NoStoreView';
-import { Appear } from '@/components/Appear';
+import { Appear, stagger } from '@/components/Appear';
 import { todayStr } from '@/lib/utils/attendance';
 import { InkColors } from '@/lib/theme/colors';
 import { Space } from '@/lib/theme/layout';
@@ -48,20 +48,37 @@ export default function HubScreen() {
   const today = todayStr();
   const dateLabel = `${Number(today.slice(5, 7))}월 ${Number(today.slice(8, 10))}일 (${WEEKDAYS[new Date(`${today}T00:00:00`).getDay()]})`;
 
+  // 제목은 본문 뷰에 **넘겨서** 그 뷰의 로딩 게이트 안에서 그리게 한다(2026-08-25).
+  // 여기서 직접 그리면 제목만 먼저 등장 애니를 소진하고 수 백 ms 뒤에 본문이 통째로 교체된다
+  // ("다 오면 한 번에 등장"이 아니다). 도착 판정은 뷰가 하나씩만 갖는다 — 화면에 복제하지 않는다.
+  // 상단바·탭바는 화면 골격이라 게이트 밖에 그대로 둔다.
+  const header = (
+    <Appear delay={stagger(0)}>
+      <View style={styles.titleBlock}>
+        <Text style={styles.title}>{isOwner ? '현황' : '오늘'}</Text>
+        <Text style={styles.subtitle}>{dateLabel}</Text>
+      </View>
+    </Appear>
+  );
+
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
       <Stack.Screen options={{ headerShown: false }} />
       <ScrollView contentContainerStyle={styles.scroll}>
         <HubTopBar />
-        <Appear delay={0}>
-          <View style={styles.titleBlock}>
-            <Text style={styles.title}>{isOwner ? '현황' : '오늘'}</Text>
-            <Text style={styles.subtitle}>{dateLabel}</Text>
-          </View>
-        </Appear>
         {/* ★게스트 퀴즈 이력은 랜딩(이 탭)에서만 병기한다 — 성장 탭에도 켜면 같은 카드가 두 탭에
             겹쳐 보인다. 여기가 로그인 직후 실제 착지 화면이라 한 번만 보여주면 그 자리가 맞다. */}
-        {!hasStore ? <NoStoreView what="오늘 할 일과 근무 기록" withQuizHistory /> : isOwner ? <OwnerStatusView /> : <JuniorTodayView />}
+        {!hasStore ? (
+          // 매장 0곳 = 원격 데이터 게이트가 없다(세션만으로 그린다) — 제목을 여기서 바로 그린다.
+          <>
+            {header}
+            <NoStoreView what="오늘 할 일과 근무 기록" withQuizHistory />
+          </>
+        ) : isOwner ? (
+          <OwnerStatusView header={header} />
+        ) : (
+          <JuniorTodayView header={header} />
+        )}
       </ScrollView>
       <HubTabBar role={isOwner ? 'owner' : 'junior'} />
     </SafeAreaView>

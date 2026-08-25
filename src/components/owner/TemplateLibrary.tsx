@@ -4,7 +4,8 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { useSessionStore } from '@/lib/store/useSessionStore';
-import { Appear } from '@/components/Appear';
+import { Appear, stagger } from '@/components/Appear';
+import { ScreenLoading } from '@/components/ScreenLoading';
 import { Collapse } from '@/components/Collapse';
 import { SectionLabel } from '@/components/SectionLabel';
 import { InfoDot } from '@/components/InfoDot';
@@ -135,6 +136,7 @@ function TemplateCard({
  */
 export function TemplateLibrary() {
   const entries = usePlaybookStore((s) => s.entries);
+  const loaded = usePlaybookStore((s) => s.loaded);
   const add = usePlaybookStore((s) => s.add);
   const unitId = useSessionStore((s) => s.unitId);
   const userId = useSessionStore((s) => s.userId);
@@ -209,16 +211,27 @@ export function TemplateLibrary() {
     );
   };
 
-  const renderCard = (t: PlaybookTemplate) => (
-    <TemplateCard
-      key={t.id}
-      t={t}
-      open={openId === t.id}
-      onToggle={() => toggleCard(t.id)}
-      imported={isImported(t)}
-      onImport={() => doImport(t)}
-    />
+  const renderCard = (t: PlaybookTemplate, i: number) => (
+    <Appear key={t.id} delay={stagger(i)}>
+      <TemplateCard
+        t={t}
+        open={openId === t.id}
+        onToggle={() => toggleCard(t.id)}
+        imported={isImported(t)}
+        onImport={() => doImport(t)}
+      />
+    </Appear>
   );
+
+  // 내 노하우 목록이 도착해야 '추가됨' 배지(isImported)가 사실을 말한다. 그 전에 그리면
+  // 이미 가져온 템플릿도 '추가 가능'으로 보이고, 그 사이 다시 누르면 중복 추가된다.
+  if (!loaded) {
+    return (
+      <View style={styles.flex}>
+        <ScreenLoading label="템플릿을 불러오고 있어요…" />
+      </View>
+    );
+  }
 
   return (
     <ScrollView
@@ -228,7 +241,7 @@ export function TemplateLibrary() {
       keyboardShouldPersistTaps="handled"
     >
       {/* 안내 한 줄 */}
-      <Appear delay={0}>
+      <Appear delay={stagger(0)}>
       <View style={styles.lead}>
         <Text style={styles.leadText}>업종에서 자주 쓰는 노하우 예시예요</Text>
         <InfoDot
@@ -239,7 +252,7 @@ export function TemplateLibrary() {
       </Appear>
 
       {/* 검색창 — 주인공 */}
-      <Appear delay={40}>
+      <Appear delay={stagger(1)}>
       <View style={styles.search}>
         <Ionicons name="search" size={18} color={InkColors.ink3} />
         <TextInput
@@ -260,7 +273,7 @@ export function TemplateLibrary() {
 
       {/* 업종 범위 토글 — 전체 팩에만 있는 템플릿이 있을 때만 */}
       {hasOtherIndustry ? (
-        <Appear delay={80}>
+        <Appear delay={stagger(2)}>
         <View style={styles.scopeRow}>
           <Pressable
             onPress={() => setScope('mine')}
@@ -286,7 +299,7 @@ export function TemplateLibrary() {
       {!searching ? (
         <>
           {topTags.length > 0 ? (
-            <Appear delay={120}>
+            <Appear delay={stagger(3)}>
             <View style={styles.block}>
               <SectionLabel icon="pricetags-outline" title="빠른 검색" />
               <View style={styles.tagWrap}>
@@ -301,7 +314,7 @@ export function TemplateLibrary() {
           ) : null}
 
           {recommended.length > 0 ? (
-            <Appear delay={160} style={styles.block}>
+            <Appear delay={stagger(4)} style={styles.block}>
               <SectionLabel icon="star-outline" title="추천 템플릿" hint="많이 쓰는 순" />
               <View style={styles.list}>{recommended.map(renderCard)}</View>
             </Appear>
@@ -312,7 +325,7 @@ export function TemplateLibrary() {
           </View>
         </>
       ) : filtered.length === 0 ? (
-        <Appear delay={120}>
+        <Appear delay={stagger(3)}>
         <View style={styles.empty}>
           <Text style={styles.emptyEmoji}>🔍</Text>
           <Text style={styles.emptyText}>조건에 맞는 템플릿이 없어요</Text>
@@ -322,7 +335,7 @@ export function TemplateLibrary() {
         </View>
         </Appear>
       ) : (
-        <Appear delay={120}>
+        <Appear delay={stagger(3)}>
         <View style={styles.block}>
           <Text style={styles.resultCount}>{filtered.length}개</Text>
           <View style={styles.list}>{filtered.map(renderCard)}</View>

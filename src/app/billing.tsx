@@ -16,7 +16,9 @@ import { SHOW_BILLING, showPaymentSurface } from '@/lib/config/store-policy';
 import { usePaymentClaimStore, CLAIM_ERROR_TEXT } from '@/lib/store/usePaymentClaimStore';
 import { redeemPromoCode, fetchUnitSeatStatus, type SeatStatus } from '@/lib/db';
 import { HeaderBackButton } from '@/components/HeaderBackButton';
-import { Appear } from '@/components/Appear';
+import { Appear, stagger } from '@/components/Appear';
+import { Collapse } from '@/components/Collapse';
+import { ScreenLoading } from '@/components/ScreenLoading';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
@@ -73,6 +75,10 @@ function BillingBody() {
   const hydrateClaims = usePaymentClaimStore((s) => s.hydrate);
   const submitPaymentClaim = usePaymentClaimStore((s) => s.submit);
   const claims = usePaymentClaimStore((s) => s.claims);
+  // 신고 도착 여부 — 여태 한 번도 안 읽고 있었다. 그래서 '확인 중' 배너와 버튼 문구
+  // ('입금 완료했어요' ↔ '입금 정보 다시 보내기')가 도착 후에 바뀌었고, 이미 신고한 사장이
+  // 잘못된 버튼을 잠깐 보고 눌렀다. 도착 전에는 본문을 아예 안 그린다(아래 ready).
+  const claimsLoaded = usePaymentClaimStore((s) => s.loaded);
   const latestClaim = claims[0] ?? null;
 
   const view = deriveSubscription({ subStatus, trialEndsAt, paidUntil, plan });
@@ -95,6 +101,8 @@ function BillingBody() {
   const [bizEmail, setBizEmail] = useState('');
   // 좌석 현황(0115) — 무료 강등으로 잠긴 직원이 있으면 사장에게 알린다.
   const [seat, setSeat] = useState<SeatStatus | null>(null);
+  // ★실패해도 true — 좌석 조회 한 번 실패로 요금제 화면이 영영 로딩이 되면 안 된다.
+  const [seatLoaded, setSeatLoaded] = useState(false);
   // 무료 이용 코드(0092) — 기본 접힘(화면 요소 예산). 검증·기록·활성화는 전부 서버 RPC.
   const [promoOpen, setPromoOpen] = useState(false);
   const [promoCode, setPromoCode] = useState('');
@@ -155,8 +163,15 @@ function BillingBody() {
   // 좌석 현황 — 사장에게 "몇 명이 잠겼는지"를 보여주는 자리. 판정은 서버(unit_seat_status)가 SSOT.
   useEffect(() => {
     if (!manages) return;
-    void fetchUnitSeatStatus().then(({ data }) => setSeat(data));
+    void fetchUnitSeatStatus()
+      .then(({ data }) => setSeat(data))
+      .finally(() => setSeatLoaded(true));
   }, [manages, plan]);
+
+  // 화면 단일 게이트 — 이 화면이 읽는 원격 소스는 둘(입금 신고·좌석 현황)이고, 둘 다 자기 담당
+  // 역할에서만 조회한다. 안 부르는 소스를 기다리면 영영 로딩이므로 필요한 쪽만 AND 한다.
+  const needsClaims = isOwner && SHOW_BILLING;
+  const ready = (!needsClaims || claimsLoaded) && (!manages || seatLoaded);
 
   const recheck = async () => {
     setBusy(true);
@@ -297,7 +312,7 @@ function BillingBody() {
       <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
         <Stack.Screen options={{ headerShown: false }} />
         <ScrollView contentContainerStyle={styles.scroll}>
-          <Appear delay={0}>
+          <Appear delay={stagger(0)}>
           <View style={styles.hero}>
             <View style={styles.iconWrap}>
               <Ionicons
@@ -312,7 +327,7 @@ function BillingBody() {
             {!!storeName && <Text style={styles.store}>{storeName}</Text>}
           </View>
           </Appear>
-          <Appear delay={60}>
+          <Appear delay={stagger(1)}>
           <View style={styles.card}>
             <Text style={styles.body}>
               {freeNow
@@ -325,7 +340,7 @@ function BillingBody() {
             </Text>
           </View>
           </Appear>
-          <Appear delay={120}>
+          <Appear delay={stagger(2)}>
           <Pressable
             disabled={busy}
             onPress={recheck}
@@ -334,7 +349,7 @@ function BillingBody() {
             {busy ? <ActivityIndicator color={InkColors.ink2} /> : <Text style={styles.ghostText}>이용 상태 새로고침</Text>}
           </Pressable>
           </Appear>
-          <Appear delay={120}>
+          <Appear delay={stagger(3)}>
           <Pressable onPress={() => void logout()} style={styles.logoutRow}>
             <Text style={styles.logoutText}>로그아웃</Text>
           </Pressable>
@@ -356,7 +371,11 @@ function BillingBody() {
         }
       />
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-        <Appear delay={0}>
+        {!ready ? (
+          <ScreenLoading label="결제 상태를 불러오고 있어요…" />
+        ) : (
+          <>
+        <Appear delay={stagger(0)}>
         <View style={styles.hero}>
           <View style={styles.iconWrap}>
             <Ionicons
@@ -375,7 +394,7 @@ function BillingBody() {
             체험 중인 사장이 여기서 '다점포 = 유료'만 보고 있었다(말과 말이 갈라진 자리).
             ★남은 일수는 세션(trial_ends_at)에서 온다 — 기간 숫자를 이 파일에 복제하지 않는다. */}
         {isOwner && view.state === 'trialing' && view.daysLeft > 0 && (
-          <Appear delay={40}>
+          <Appear delay={stagger(1)}>
           <View style={styles.promoCard}>
             {SIGNUP_PROMO.perks.map((p) => (
               <View key={p} style={styles.promoRow}>
@@ -390,7 +409,7 @@ function BillingBody() {
 
         {/* 직원: 계좌 정보 대신 사장 결제 안내만 */}
         {!isOwner ? (
-          <Appear delay={60}>
+          <Appear delay={stagger(2)}>
           <View style={styles.card}>
             {/* 좌석 잠금(0115) — 직원에게는 금액·계좌를 보여주지 않는다. 무슨 일이 있었는지와
                 누구에게 말하면 되는지만 남긴다(사용자 탓 금지·다음 행동 명시). */}
@@ -405,7 +424,7 @@ function BillingBody() {
           <>
             {/* 좌석 잠금 알림(0115) — 잠긴 직원이 있을 때만. 0명이면 렌더하지 않는다(AlertRow 규칙). */}
             {!!seat && seat.locked > 0 && (
-              <Appear delay={60}>
+              <Appear delay={stagger(2)}>
                 <View style={[styles.card, styles.claimRejected]}>
                   <View style={styles.claimHead}>
                     <Ionicons name="lock-closed-outline" size={18} color={BrandColors.warn} />
@@ -421,7 +440,7 @@ function BillingBody() {
             )}
 
             {/* 요금제 선택(3티어, SSOT=tiers.ts). 선택에 따라 아래 금액이 계산된다. */}
-            <Appear delay={60}>
+            <Appear delay={stagger(2)}>
             <View style={styles.section}>
               <Text style={styles.sectionLabel}>요금제</Text>
               <View style={styles.planList}>
@@ -473,7 +492,7 @@ function BillingBody() {
 
             {selectedPlan === 'free' ? (
               /* 무료 선택 — 입금 절차 없음 */
-              <Appear delay={120}>
+              <Appear delay={stagger(3)}>
               <View style={styles.card}>
                 <Text style={styles.body}>무료 요금제는 입금 없이 쓸 수 있어요. 직원 {PLANS.free.maxStaff}명, AI 답변 월 {PLANS.free.aiMonthly}건까지 제공돼요.</Text>
               </View>
@@ -483,7 +502,7 @@ function BillingBody() {
                 {/* ★2026-08-06: 안내 문구 · 입금 계좌 · 입금자명이 각각 카드라 **카드 3연속**이었다
                     (배치규칙① 위반 · 실브라우저 실측 카드런 3). 셋은 "입금하기" 한 동작이라
                     — 계좌를 보고 이체한 뒤 그 이름을 적는다 — 한 카드로 합친다. 행은 하나도 안 없앴다. */}
-                <Appear delay={120}>
+                <Appear delay={stagger(3)}>
                 <View style={styles.section}>
                   <Text style={styles.sectionLabel}>입금하기</Text>
                   <View style={styles.card}>
@@ -604,7 +623,8 @@ function BillingBody() {
                     <Text style={styles.promoToggleText}>세금계산서가 필요하신가요?</Text>
                   </Pressable>
                 ) : (
-                  <Appear delay={0}>
+                  // 펼침의 정본은 Collapse 다 — Appear(등장)로 펼치면 아래 내용이 순간이동한다.
+                  <Collapse>
                   <View style={styles.section}>
                     <Text style={styles.sectionLabel}>세금계산서</Text>
                     <View style={styles.card}>
@@ -633,11 +653,11 @@ function BillingBody() {
                       <Text style={styles.hint}>입금 확인 후 적어주신 주소로 보내드려요.</Text>
                     </View>
                   </View>
-                  </Appear>
+                  </Collapse>
                 )}
 
                 {/* 주문 시점 동의(0116) — 이 기록이 계약서를 대신한다. 서버도 없으면 거부한다. */}
-                <Appear delay={120}>
+                <Appear delay={stagger(4)}>
                 <Pressable
                   onPress={() => setAgreed((v) => !v)}
                   style={({ pressed }) => [styles.consentRow, pressed && { opacity: 0.7 }]}
@@ -656,7 +676,7 @@ function BillingBody() {
                 </Pressable>
                 </Appear>
 
-                <Appear delay={120}>
+                <Appear delay={stagger(5)}>
                 <Pressable
                   disabled={claiming}
                   onPress={() => void submitClaim()}
@@ -671,7 +691,7 @@ function BillingBody() {
                 </Appear>
 
                 {/* 보조 경로 — 신고는 이미 저장됐고, 급할 때 사람을 직접 부르는 창구(설계문서 B-1). */}
-                <Appear delay={120}>
+                <Appear delay={stagger(6)}>
                 <Pressable onPress={() => void notifyPaid()} style={({ pressed }) => [styles.mailRow, pressed && { opacity: 0.6 }]}>
                   <Text style={styles.mailText}>메일로도 알리기 ({BILLING_INFO.contactValue})</Text>
                 </Pressable>
@@ -721,17 +741,19 @@ function BillingBody() {
           </>
         )}
 
-        <Appear delay={180}>
+        <Appear delay={stagger(7)}>
         <Pressable disabled={busy} onPress={recheck} style={({ pressed }) => [styles.ghost, pressed && { opacity: 0.7 }, busy && { opacity: 0.6 }]}>
           {busy ? <ActivityIndicator color={InkColors.ink2} /> : <Text style={styles.ghostText}>이용 상태 새로고침</Text>}
         </Pressable>
         </Appear>
 
-        <Appear delay={180}>
+        <Appear delay={stagger(7)}>
         <Pressable onPress={() => void logout()} style={styles.logoutRow}>
           <Text style={styles.logoutText}>로그아웃</Text>
         </Pressable>
         </Appear>
+          </>
+        )}
       </ScrollView>
     </SafeAreaView>
   );

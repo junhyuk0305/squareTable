@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -30,6 +30,12 @@ guardMarketingRoutes();
 
 // 전역 글자 크기 패치는 앱 모듈 로드 시 1회만.
 patchTextScaling();
+
+/**
+ * 세션이 확정되기를 기다리는 상한(ms). 스플래시 모션이 끝나도 세션이 안 오면 이만큼 더 붙잡는다.
+ * 상한이 없으면 세션 복원이 멈춰 선 순간 스플래시가 영영 안 걷혀 **앱 전체가 잠긴다** — 그때만 풀어 준다.
+ */
+const BOOT_HOLD_MAX_MS = 5000;
 
 export default function RootLayout() {
   // 아이콘 폰트를 앱 렌더 전에 로드. 빠지면 웹에서 모든 글리프가 깨진 글자로 보임.
@@ -68,7 +74,21 @@ export default function RootLayout() {
   useAppBadgeSync();
 
   // 진입 스플래시 모션(~1.9s). 이 구간에 폰트/세션 체크 시간을 숨긴다.
+  //
+  // ★모션이 끝났다고 걷지 않는다 — **세션이 확정된 뒤에** 걷는다.
+  //   예전엔 고정 타이머라 세션이 1.9초를 넘기면 스플래시가 먼저 사라졌고, 그 아래 화면들은
+  //   `status==='loading'` 이라 null 을 반환해 **빈 크림 화면**이 드러났다(반대로 세션이 0.3초에
+  //   끝나도 1.6초를 더 기다렸다). 화면은 다 준비된 뒤에 나온다 = 스플래시도 그때 걷힌다.
   const [splashDone, setSplashDone] = useState(false);
+  const booted = useSessionStore((s) => s.status !== 'loading');
+  const [bootTimedOut, setBootTimedOut] = useState(false);
+  useEffect(() => {
+    if (booted) return;
+    const t = setTimeout(() => setBootTimedOut(true), BOOT_HOLD_MAX_MS);
+    return () => clearTimeout(t);
+  }, [booted]);
+  // onDone 은 신원이 고정돼야 한다 — 인라인 화살표면 ready 가 바뀔 때마다 페이드가 다시 시작돼 안 끝난다.
+  const handleSplashDone = useCallback(() => setSplashDone(true), []);
 
   if (!fontsLoaded && !fontError) return null;
 
@@ -76,7 +96,7 @@ export default function RootLayout() {
     <SafeAreaProvider>
       <StatusBar style="dark" />
       <ResponsiveShell>
-        {!splashDone && <SplashAnimation onDone={() => setSplashDone(true)} />}
+        {!splashDone && <SplashAnimation ready={booted || bootTimedOut} onDone={handleSplashDone} />}
         <SyncBanner />
         {/* 매장 진입 커버 — 어느 자리에서 눌렀든(허브 카드·상단바 매장 칸) 같은 커버를 여기서 그린다. */}
         <StoreEnterCover />

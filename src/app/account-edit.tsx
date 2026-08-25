@@ -13,7 +13,9 @@ import { isValidPhone, normalizePhone, formatPhone, passwordError } from '@/lib/
 import { INDUSTRIES } from '@/lib/config/industry';
 import { HeaderBackButton } from '@/components/HeaderBackButton';
 import { SectionLabel } from '@/components/SectionLabel';
-import { Appear } from '@/components/Appear';
+import { Appear, stagger } from '@/components/Appear';
+import { Collapse } from '@/components/Collapse';
+import { ScreenLoading } from '@/components/ScreenLoading';
 
 // 프로필 편집 + 비밀번호 변경 (오너·주니어 공용).
 export default function AccountEdit() {
@@ -27,9 +29,7 @@ export default function AccountEdit() {
     return (
       <SafeAreaView style={styles.safe} edges={['bottom']}>
         <Stack.Screen options={{ headerShown: true, title: '프로필 편집', headerLeft: () => <HeaderBackButton /> }} />
-        <View style={styles.loading}>
-          <ActivityIndicator color={InkColors.ink3} />
-        </View>
+        <ScreenLoading label="계정 정보를 불러오고 있어요…" />
       </SafeAreaView>
     );
   }
@@ -151,10 +151,10 @@ function AccountEditForm() {
     <SafeAreaView style={styles.safe} edges={['bottom']}>
       <Stack.Screen options={{ headerShown: true, title: '프로필 편집', headerLeft: () => <HeaderBackButton /> }} />
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-        <Appear delay={0}>
+        <Appear delay={stagger(0)}>
           <SectionLabel title="기본 정보" />
         </Appear>
-        <Appear delay={0}>
+        <Appear delay={stagger(1)}>
         <View style={styles.card}>
           <Text style={styles.label}>이름<Text style={styles.req}> *</Text></Text>
           <TextInput value={name} onChangeText={setName} placeholder="이름" placeholderTextColor={InkColors.ink3} autoComplete="name" textContentType="name" style={styles.input} />
@@ -191,10 +191,10 @@ function AccountEditForm() {
 
         {role === 'owner' && (
           <>
-            <Appear delay={60}>
+            <Appear delay={stagger(2)}>
               <SectionLabel title="매장 정보" hint="사장님만 바꿀 수 있어요" />
             </Appear>
-            <Appear delay={60}>
+            <Appear delay={stagger(3)}>
             {/* 매장 이름과 업종은 같은 매장 속성이라 한 카드 안 두 행으로 둔다 — 카드가 나뉘어 있으면
                 저장 버튼도 나뉘고, 사장 화면에 주 액션이 세 개가 된다(2026-08-06). */}
             <View style={[styles.card, styles.storeCard]}>
@@ -233,7 +233,7 @@ function AccountEditForm() {
 
         {/* 비밀번호 변경은 카드가 아니라 접힌 한 줄 — 이 화면에서 가장 드문 작업이고,
             카드가 계속 이어지면 전부 같은 무게로 읽힌다(배치 규칙 ①). 2026-08-06 */}
-        <Appear delay={120}>
+        <Appear delay={stagger(4)}>
           <Pressable
             onPress={togglePw}
             accessibilityRole="button"
@@ -248,7 +248,8 @@ function AccountEditForm() {
         </Appear>
 
         {pwOpen && (
-          <Appear delay={0}>
+          // 펼침의 정본은 Collapse 다 — Appear(등장)로 열면 아래 내용이 밀려나는 것이 순간이동한다.
+          <Collapse>
           <View style={styles.pwPanel}>
             <Text style={styles.label}>새 비밀번호<Text style={styles.req}> *</Text></Text>
             {/* autoComplete="new-password": 브라우저/비번 매니저가 '기존 비밀번호'를 자동완성하지 못하게 막는다.
@@ -289,7 +290,7 @@ function AccountEditForm() {
               <Text style={styles.secondaryText}>새 비밀번호 저장</Text>
             </Pressable>
           </View>
-          </Appear>
+          </Collapse>
         )}
 
         <View style={{ height: 24 }} />
@@ -300,7 +301,6 @@ function AccountEditForm() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: InkColors.cream },
-  loading: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   scroll: { padding: 20, gap: 8 },
   card: { backgroundColor: '#FFFFFF', borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, padding: 16, gap: 8, marginBottom: 8 },
   rowDivider: { height: 1, backgroundColor: InkColors.line, marginVertical: Space.xs },

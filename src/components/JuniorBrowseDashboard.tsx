@@ -8,7 +8,8 @@ import { KnowhowCarousel } from './KnowhowCarousel';
 import { BrowseList } from './BrowseList';
 import { EmptyState } from './EmptyState';
 import { EntryDetailModal } from './EntryDetailModal';
-import { Appear } from './Appear';
+import { Appear, stagger } from './Appear';
+import { ScreenLoading } from './ScreenLoading';
 import { matchesKnowhowQuery } from '@/lib/utils/knowhowSearch';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { InkColors } from '@/lib/theme/colors';
@@ -47,6 +48,7 @@ export function JuniorBrowseDashboard({ entries, emptyHint }: JuniorBrowseDashbo
   const [view, setView] = useState<ViewKey>('dashboard');
   // 읽기 실패 판정은 사장 쪽(OwnerKnowhowBrowse)과 같은 스토어를 본다 — 화면마다 복제하지 않는다.
   const loadError = usePlaybookStore((s) => s.loadError);
+  const loaded = usePlaybookStore((s) => s.loaded);
   const hydrate = usePlaybookStore((s) => s.hydrate);
 
   // 대시보드/목록 토글의 검정 pill을 세그먼트 사이로 부드럽게 슬라이드시킨다(색은 그대로).
@@ -131,6 +133,13 @@ export function JuniorBrowseDashboard({ entries, emptyHint }: JuniorBrowseDashbo
         .slice(0, SECTION_LIMIT),
     [entries],
   );
+
+  // ★"아직 안 온 것"을 "없는 것"으로도 "실패한 것"으로도 말하지 않는다 — 로드 전 판정이 **맨 앞**이다.
+  //   loadError 만 챙기고 loaded 를 안 보면, 노하우가 있는 매장에서도 "아직 등록된 노하우가 없어요"가
+  //   먼저 뜬다. 부분 도착 중엔 enoughForLenses 도 false라 목록 → 대시보드로 레이아웃이 통째로 바뀐다.
+  if (!loaded) {
+    return <ScreenLoading label="노하우를 불러오고 있어요…" />;
+  }
 
   // 등록된 노하우 자체가 없을 때 — 검색/토글 없이 안내만.
   // ★읽기 실패(loadError)를 "없음"으로 위장하지 않는다. 위장하면 직원은 백엔드 장애를
@@ -240,21 +249,21 @@ export function JuniorBrowseDashboard({ entries, emptyHint }: JuniorBrowseDashbo
         ) : (
           <ScrollView style={styles.scroll} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
             {popular.length > 0 && (
-              <Appear delay={0} style={styles.block}>
+              <Appear delay={stagger(0)} style={styles.block}>
                 <SectionLabel icon="flame-outline" title="인기 노하우" hint="많이 물어본 순" />
                 <KnowhowCarousel entries={popular} onSelect={setDetailEntry} showCategory={false} />
               </Appear>
             )}
 
             {recent.length > 0 && (
-              <Appear delay={60} style={styles.block}>
+              <Appear delay={stagger(1)} style={styles.block}>
                 <SectionLabel icon="time-outline" title="최근 추가됨" hint="새로 올라온 순" />
                 <KnowhowCarousel entries={recent} onSelect={setDetailEntry} showCategory={false} />
               </Appear>
             )}
 
             {resolved.length > 0 && (
-              <Appear delay={120} style={styles.block}>
+              <Appear delay={stagger(2)} style={styles.block}>
                 <SectionLabel icon="checkmark-circle-outline" title="잘 통하는 노하우" hint="해결률 순" />
                 <KnowhowCarousel entries={resolved} onSelect={setDetailEntry} showCategory={false} />
               </Appear>

@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
-import { Appear } from '@/components/Appear';
+import { Appear, stagger } from '@/components/Appear';
+import { ScreenLoading } from '@/components/ScreenLoading';
 import { Vanish } from '@/components/Vanish';
 import { resolveDayparts, sanitizeDayparts, newDaypart, newRoutine, type Daypart } from '@/lib/store/daypartLabels';
 import { TaskComposerModal } from '@/components/work/TaskComposerModal';
@@ -13,6 +14,14 @@ import { useWorkStore } from '@/lib/store/useWorkStore';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
+
+type WorkSettingsPanelProps = {
+  /** 담당자 후보(사장 포함 매장 명부). 루틴 편집 시트가 그대로 받으므로 Member 전체를 받는다. */
+  members: Member[];
+  me: string;
+  /** 저장 완료 → 할일 화면으로 복귀(시트 시절의 '저장하면 닫힌다'와 같은 심성모형). */
+  onSaved: () => void;
+};
 
 /**
  * 업무 설정 — 업무 카테고리(데이파트) + 카테고리별 루틴 업무 + 루틴 담당자. 사장·매니저 전용.
@@ -25,18 +34,25 @@ import { Space } from '@/lib/theme/layout';
  *
  * 로컬 편집(items) → '저장'에서 sanitizeDayparts(이름 없는 카테고리·빈 루틴 정리) 후 한 번에 반영.
  * 카테고리를 지워도 그 카테고리의 기존 할일은 사라지지 않는다 — 할일 화면의 '기타' 그룹이 흡수한다.
+ *
+ * ★게이트가 **seed 스냅샷보다 앞**에 있어야 한다 — 그래서 폼을 자식(WorkSettingsForm)으로 분리했다.
+ *
+ * 아래 폼은 마운트할 때 dayparts 를 딱 한 번 베껴 로컬 상태로 들고(재동기화 없음), '저장'에서
+ * 그 사본을 매장 설정에 통째로 쓴다. 스케줄이 아직 안 온 상태로 마운트되면 베끼는 대상이
+ * `DEFAULT_CONFIG` → `defaultDayparts()` 폴백이라, 저장하는 순간 **매장의 실제 카테고리·루틴이
+ * 기본값으로 덮어써진다**(데이터 유실). 같은 컴포넌트 안의 early return 으로는 못 막는다 —
+ * useState 이니셜라이저는 이미 첫 렌더에서 실행되기 때문이다.
+ *
+ * ※ 훅은 각각 먼저 부르고 그 다음에 AND 한다(`&&` 안에서 훅 호출 금지).
  */
-export function WorkSettingsPanel({
-  members,
-  me,
-  onSaved,
-}: {
-  /** 담당자 후보(사장 포함 매장 명부). 루틴 편집 시트가 그대로 받으므로 Member 전체를 받는다. */
-  members: Member[];
-  me: string;
-  /** 저장 완료 → 할일 화면으로 복귀(시트 시절의 '저장하면 닫힌다'와 같은 심성모형). */
-  onSaved: () => void;
-}) {
+export function WorkSettingsPanel(props: WorkSettingsPanelProps) {
+  const scheduleLoaded = useScheduleStore((s) => s.loaded);
+  const workLoaded = useWorkStore((s) => s.loaded);
+  if (!scheduleLoaded || !workLoaded) return <ScreenLoading label="업무 설정을 불러오고 있어요…" />;
+  return <WorkSettingsForm {...props} />;
+}
+
+function WorkSettingsForm({ members, me, onSaved }: WorkSettingsPanelProps) {
   const dayparts = useScheduleStore((s) => s.config.dayparts);
   const setConfig = useScheduleStore((s) => s.setConfig);
   const templates = useWorkStore((s) => s.templates);
@@ -200,7 +216,7 @@ export function WorkSettingsPanel({
 
           <View style={s.list}>
             {items.map((d, i) => (
-              <Appear key={d.id} delay={i * 30}>
+              <Appear key={d.id} delay={stagger(i)}>
                 <View style={[s.row, i === items.length - 1 && { borderBottomWidth: 0 }]}>
                   <Pressable onPress={() => setOpenId(d.id)} style={({ pressed }) => [s.rowMain, pressed && { opacity: 0.7 }]} accessibilityRole="button">
                     <View style={{ flex: 1, minWidth: 0 }}>

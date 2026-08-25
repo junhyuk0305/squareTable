@@ -8,6 +8,7 @@ import { PublishConfirmSheet } from '@/components/owner/PublishConfirmSheet';
 import { PublishCrossStoreNudge } from '@/components/owner/PublishCrossStoreNudge';
 import { Appear } from '@/components/Appear';
 import { EmptyState } from '@/components/EmptyState';
+import { ScreenLoading } from '@/components/ScreenLoading';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { useUnknownQueueStore } from '@/lib/store/useUnknownQueueStore';
 import { useSuggestionStore } from '@/lib/store/useSuggestionStore';
@@ -47,6 +48,9 @@ export default function OwnerCoachScreen() {
   // 제안 검토 모드(신규 제안 승인) — 제안자 이름을 말풍선 메타로. 인박스 답변(③ uqId 동반)은 질문 컨텍스트 우선.
   const reviewSug = useSuggestionStore((s) => (sugId ? s.suggestions.find((x) => x.id === sugId) : undefined));
   const realUq = useUnknownQueueStore((s) => (uqId ? s.getById(uqId) : undefined));
+  // ★큐가 도착하기 전에는 realUq 가 undefined라 아래 데드엔드 가드가 **"이미 처리된 질문이에요"를 먼저 그린다**
+  //   (푸시 딥링크로 바로 들어오는 경로). 아래 hydrate 는 비동기라 첫 프레임을 막지 못한다 — 게이트가 막는다.
+  const queueLoaded = useUnknownQueueStore((s) => s.loaded);
   // uqId 진입(인박스 답변·③ 제안→질문 자동해결)인데 큐가 아직 로드 안 됐으면 여기서 당긴다
   // — 제안 화면에서 바로 넘어오면 인박스를 안 거쳐 realUq 가 비어 "이미 처리됨" 데드엔드가 뜰 수 있다.
   useEffect(() => {
@@ -56,6 +60,8 @@ export default function OwnerCoachScreen() {
   const isInboxAnswer = typeof uqId === 'string' && uqId.length > 0;
   // 답변 가능 = 인박스 모드 + 질문이 여전히 '대기' 상태. (이미 해결/보관됐으면 답변 막아 중복 resolve 방지)
   const answerable = isInboxAnswer && !!realUq && realUq.status === 'pending_owner_answer';
+  // 직접 등록(uqId 없음)은 원격 데이터를 안 읽으므로 기다릴 것이 없다.
+  const ready = !isInboxAnswer || queueLoaded;
 
   const [toast, setToast] = useState<string | null>(null);
   const [toastErr, setToastErr] = useState(false); // 실패 토스트(성공과 시각 구분·네비 안 함)
@@ -243,6 +249,16 @@ export default function OwnerCoachScreen() {
     },
     [saveEntry, finishPublish, askBeforePublish, withPart],
   );
+
+  // ★데드엔드 가드보다 **먼저** — 큐가 아직 안 왔을 뿐인 상태를 "처리됨"으로 단정하지 않는다.
+  if (!ready) {
+    return (
+      <SafeAreaView style={styles.container} edges={['bottom']}>
+        <Stack.Screen options={{ title: '질문 답변' }} />
+        <ScreenLoading label="질문을 불러오고 있어요…" />
+      </SafeAreaView>
+    );
+  }
 
   // 인박스 모드인데 질문이 이미 처리/삭제/보관됨 → 빈 상태(데드엔드·중복 답변 방지).
   // 단, 방금 내가 발행해서 resolve된 경우는 제외(토스트 노출 후 정상 네비게이션).

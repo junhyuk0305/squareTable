@@ -5,12 +5,13 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 import { RoleTabBar } from '@/components/RoleTabBar';
-import { Appear } from '@/components/Appear';
+import { Appear, stagger } from '@/components/Appear';
+import { ScreenLoading } from '@/components/ScreenLoading';
 import { InfoDot } from '@/components/InfoDot';
 import { MiniStats } from '@/components/blocks/MiniStats';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useAttendanceStore } from '@/lib/store/useAttendanceStore';
-import { usePayrollStore } from '@/lib/store/usePayrollStore';
+import { usePayrollStore, useWagesSettled } from '@/lib/store/usePayrollStore';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { fmtDuration, won, hhmm, todayStr, liveMinutes, DEFAULT_HOURLY_WAGE } from '@/lib/utils/attendance';
@@ -37,6 +38,8 @@ export function AttendancePanel() {
   //   금액을 안 보여주는 건 같지만 **이유가 다르므로 안내가 달라야 한다** —
   //   "사장님께 말씀하세요"와 "연결을 확인하세요"는 사용자가 할 행동이 전혀 다르다.
   const wagesLoadError = usePayrollStore((s) => s.wagesLoadError);
+  // 게이트는 "조회가 끝났나"를 본다 — wagesLoaded 만 보면 읽기 실패 시 영영 스피너다(아래 안내 분기도 못 뜬다).
+  const wagesSettled = useWagesSettled();
   const wageSet = Object.prototype.hasOwnProperty.call(wages, userId);
   const wage = wages[userId] ?? DEFAULT_HOURLY_WAGE;
   const router = useRouter();
@@ -74,14 +77,23 @@ export function AttendancePanel() {
     return () => clearInterval(t);
   }, [working]);
 
+  // ★이 화면이 그리는 원격 소스는 둘이다 — 출퇴근 기록과 시급.
+  //   시급을 안 기다리면 "아직 시급이 정해지지 않았어요"가 **거짓으로** 먼저 뜬다(도착 후 금액으로 바뀐다).
+  //   기록을 안 기다리면 "아직 출근 전"이 먼저 뜨고 이중 출근이 찍힌다.
+  const ready = attendanceLoaded && wagesSettled;
+
   return (
     <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-      <Appear delay={0}>
+      {!ready ? (
+        <ScreenLoading label="출퇴근 기록을 불러오고 있어요…" />
+      ) : (
+        <>
+      <Appear delay={stagger(0)}>
         <Text style={styles.hello}>{userName}님, 오늘도 화이팅이에요</Text>
       </Appear>
 
       {/* 메인 액션 카드 */}
-      <Appear delay={60}>
+      <Appear delay={stagger(1)}>
       <View style={styles.mainCard}>
         {working && <Text style={styles.workingTag}>● 근무 중</Text>}
         <Text style={styles.bigTime}>{fmtDuration(todayMin)}</Text>
@@ -103,14 +115,12 @@ export function AttendancePanel() {
         ) : (
           // ★불러오기 전에는 누를 수 없다 — 그 사이엔 records 가 비어 있어 "근무 중"인지 알 수 없고,
           //   그대로 누르면 이중 출근이 찍힌다(판정은 useAttendanceStore.checkIn 이 SSOT, 여기선 표시만).
+          //   이제 위 ready 게이트가 그 사이를 통째로 막으므로 버튼에 별도 disabled 를 두지 않는다.
           <Pressable
             onPress={() => checkIn(userId)}
-            disabled={!attendanceLoaded}
-            style={({ pressed }) => [styles.btn, styles.btnIn, !attendanceLoaded && { opacity: 0.4 }, pressed && attendanceLoaded && { opacity: 0.85 }]}
+            style={({ pressed }) => [styles.btn, styles.btnIn, pressed && { opacity: 0.85 }]}
           >
-            <Text style={styles.btnText}>
-              {!attendanceLoaded ? '불러오는 중이에요' : todayRecs.length > 0 ? '다시 출근하기' : '출근하기'}
-            </Text>
+            <Text style={styles.btnText}>{todayRecs.length > 0 ? '다시 출근하기' : '출근하기'}</Text>
           </Pressable>
         )}
       </View>
@@ -121,7 +131,7 @@ export function AttendancePanel() {
           그게 이번 개편이 없애려던 증상이다. 숫자 두 개에 카드를 세울 이유가 없어 I3(MiniStats,
           카드 아님)로 내렸다 — 기능은 하나도 자르지 않는다(정본 §3-2: 숫자를 맞추려고 기능을 자르지 않는다).
           아래 '시급 X 기준 · 세전 예상액' 한 줄은 MiniStats 의 ⓘ 슬롯으로 흡수했다(블록도 하나 준다). */}
-      <Appear delay={120}>
+      <Appear delay={stagger(2)}>
         <MiniStats
           items={[
             { key: 'month', value: fmtDuration(monthMin), label: '이번 달 근무' },
@@ -149,7 +159,7 @@ export function AttendancePanel() {
       </Appear>
 
       {/* 근무표 진입 — 내 시프트 확인 + 대타/맞교환 요청 */}
-      <Appear delay={160}>
+      <Appear delay={stagger(3)}>
       <Pressable onPress={() => router.push('/junior/schedule')} style={({ pressed }) => [styles.schedLink, pressed && { opacity: 0.85 }]}>
         <Ionicons name="calendar-outline" size={18} color={InkColors.ink} />
         <View style={{ flex: 1 }}>
@@ -161,7 +171,7 @@ export function AttendancePanel() {
       </Appear>
 
       {/* 최근 기록 */}
-      <Appear delay={200}>
+      <Appear delay={stagger(4)}>
       <View style={styles.recHeader}>
         <View style={styles.recTitleWrap}>
           <Text style={styles.sectionTitle}>최근 기록</Text>
@@ -176,7 +186,7 @@ export function AttendancePanel() {
         </Pressable>
       </View>
       </Appear>
-      <Appear delay={200} style={styles.list}>
+      <Appear delay={stagger(5)} style={styles.list}>
         {recentRecs.length === 0 && (
           <Text style={styles.empty}>아직 출근 기록이 없어요.{'\n'}위 출근하기 버튼을 누르면 첫 기록이 남아요.</Text>
         )}
@@ -192,6 +202,8 @@ export function AttendancePanel() {
         ))}
       </Appear>
       <View style={{ height: 8 }} />
+        </>
+      )}
     </ScrollView>
   );
 }

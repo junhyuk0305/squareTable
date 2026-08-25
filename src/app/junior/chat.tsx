@@ -3,6 +3,7 @@ import { Stack, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { RoleTabBar } from '@/components/RoleTabBar';
+import { ScreenLoading } from '@/components/ScreenLoading';
 import { KnowhowSegment } from '@/components/KnowhowSegment';
 import { JuniorBrowseDashboard } from '@/components/JuniorBrowseDashboard';
 import { JuniorAsk } from '@/components/junior/JuniorAsk';
@@ -11,6 +12,7 @@ import { JuniorMySpace } from '@/components/junior/JuniorMySpace';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { useUnknownQueueStore, answerableQuestions } from '@/lib/store/useUnknownQueueStore';
 import { useSuggestionStore } from '@/lib/store/useSuggestionStore';
+import { useChatStore } from '@/lib/store/useChatStore';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 
 import { styles } from '@/styles/juniorChatStyles';
@@ -50,22 +52,35 @@ export default function JuniorChatScreen() {
     [queue, me, suggestions],
   );
 
+  // ★세 뷰가 읽는 소스가 **전부** 와야 세그먼트를 세운다 — 하나라도 늦으면 '내 공간' 배지가
+  //   0 이었다가 n 으로 튀고, 둘러보기가 "아직 등록된 노하우가 없어요"로 먼저 뜬다.
+  //   훅은 각각 부른 뒤 AND 한다(&& 안에서 훅 호출 금지 — 렌더마다 훅 개수가 달라진다).
+  const playbookLoaded = usePlaybookStore((s) => s.loaded);
+  const queueLoaded = useUnknownQueueStore((s) => s.loaded);
+  const suggestionLoaded = useSuggestionStore((s) => s.loaded);
+  const chatLoaded = useChatStore((s) => s.loaded);
+  const ready = playbookLoaded && queueLoaded && suggestionLoaded && chatLoaded;
+
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
       <Stack.Screen options={{ title: '물어보기' }} />
-      <KnowhowSegment
-        role="junior"
-        initial="ask"
-        browse={
-          <JuniorBrowseDashboard
-            entries={publishedEntries}
-            emptyHint="아직 등록된 노하우가 없어요. 물어보기로 질문하면 사장님이 채워줘요."
-          />
-        }
-        ask={<JuniorAsk seed={seed} />}
-        mine={<JuniorMySpace me={me} />}
-        mineCount={answerableCount}
-      />
+      {!ready ? (
+        <ScreenLoading label="노하우를 불러오고 있어요…" />
+      ) : (
+        <KnowhowSegment
+          role="junior"
+          initial="ask"
+          browse={
+            <JuniorBrowseDashboard
+              entries={publishedEntries}
+              emptyHint="아직 등록된 노하우가 없어요. 물어보기로 질문하면 사장님이 채워줘요."
+            />
+          }
+          ask={<JuniorAsk seed={seed} />}
+          mine={<JuniorMySpace me={me} />}
+          mineCount={answerableCount}
+        />
+      )}
       <RoleTabBar role="junior" />
     </SafeAreaView>
   );

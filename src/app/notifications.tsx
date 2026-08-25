@@ -7,9 +7,11 @@ import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useCrossNotifStore } from '@/lib/store/useCrossNotifStore';
 import { useCrossNotifRows } from '@/lib/hooks/useCrossNotifRows';
 import { HAS_SUPABASE } from '@/lib/supabase';
+import { useStoreDisplay } from '@/components/StoreHeaderTitle';
 import { NotificationList, ALL_KIND_UI } from '@/components/NotificationList';
 import { HeaderBackButton } from '@/components/HeaderBackButton';
-import { Appear } from '@/components/Appear';
+import { Appear, stagger } from '@/components/Appear';
+import { ScreenLoading } from '@/components/ScreenLoading';
 import { InkColors } from '@/lib/theme/colors';
 
 /**
@@ -21,10 +23,15 @@ export default function HubNotificationsScreen() {
   const status = useSessionStore((s) => s.status);
   const hydrateCross = useCrossNotifStore((s) => s.hydrate);
   const crossLoaded = useCrossNotifStore((s) => s.loaded);
+  // 매장 닉네임·색(unit_member_prefs)도 이 화면이 그리는 원격 소스다 — 딥링크로 여기 직진입하면
+  // 아무도 안 당겨서 원본명·자동색으로 한 번 그렸다가 바뀐다. 훅이 hydrate 까지 맡는다(판정 SSOT).
+  const { prefsLoaded } = useStoreDisplay();
   useEffect(() => {
     void hydrateCross();
   }, [hydrateCross]);
   const { listRows, openRow } = useCrossNotifRows();
+  // ⛔`&&` 안에서 훅을 부르지 않는다 — 훅을 각각 받은 뒤 AND 한다.
+  const ready = crossLoaded && prefsLoaded;
 
   // 게이트(stores.tsx 와 동일 규칙): 루트 레벨 라우트라 그룹 게이트 밖 — 미로그인 직진입 차단.
   if (HAS_SUPABASE && status === 'signed_out') return <Redirect href="/" />;
@@ -35,26 +42,27 @@ export default function HubNotificationsScreen() {
       <Stack.Screen
         options={{ headerShown: true, title: '알림', headerLeft: () => <HeaderBackButton fallback="/stores" /> }}
       />
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        <Appear delay={0}>
-          <NotificationList
-            rows={listRows}
-            kindUI={ALL_KIND_UI}
-            onPress={(r) => void openRow(r)}
-            // 로드 전엔 "없음"으로 위장하지 않는다(로드 실패는 db.ts readFail 배너가 표면화).
-            empty={
-              crossLoaded
-                ? {
-                    icon: 'notifications-off-outline',
-                    text: '새 알림이 없어요.',
-                    sub: '내 모든 매장의 공지·질문·교대 알림을 여기에 모아서 보여드려요.',
-                  }
-                : { icon: 'notifications-outline', text: '알림을 불러오는 중이에요.' }
-            }
-          />
-        </Appear>
-        <View style={{ height: 12 }} />
-      </ScrollView>
+      {!ready ? (
+        <ScreenLoading label="알림을 불러오고 있어요…" />
+      ) : (
+        <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+          <Appear delay={stagger(0)}>
+            <NotificationList
+              rows={listRows}
+              kindUI={ALL_KIND_UI}
+              onPress={(r) => void openRow(r)}
+              // 게이트가 로드 전을 대신 막는다 — 여기는 **진짜 빈 상태**만 말한다
+              // (로드 중을 빈 상태로 위장하지 않는다. 로드 실패는 db.ts readFail 배너가 표면화).
+              empty={{
+                icon: 'notifications-off-outline',
+                text: '새 알림이 없어요.',
+                sub: '내 모든 매장의 공지·질문·교대 알림을 여기에 모아서 보여드려요.',
+              }}
+            />
+          </Appear>
+          <View style={{ height: 12 }} />
+        </ScrollView>
+      )}
     </SafeAreaView>
   );
 }

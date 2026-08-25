@@ -8,8 +8,14 @@ import { HAS_SUPABASE } from '@/lib/supabase';
 import { BrandColors, InkColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
 import { Space, SCREEN_GUTTER } from '@/lib/theme/layout';
-import { Appear } from '@/components/Appear';
+import { Appear, stagger } from '@/components/Appear';
 import { Wordmark } from '@/components/Wordmark';
+
+/**
+ * 랜딩 목록의 초기 지연(ms) — 섹션 제목이 먼저 서고 카드가 뒤따르게 하는 한 박자.
+ * 줄 간격은 `stagger(i)` 가 정한다(SSOT). 자리마다 다른 숫자를 흩뿌리지 않기 위해 여기 한 곳에만 둔다.
+ */
+const LANDING_LEAD = 80;
 
 /**
  * 랜딩(홈) — 기존 로그인 화면을 대체한다.
@@ -118,7 +124,7 @@ export default function LandingScreen() {
           </Appear>
           <View style={styles.stack}>
             {PAINS.map((p, i) => (
-              <Appear key={p.title} delay={80 + i * 70}>
+              <Appear key={p.title} delay={LANDING_LEAD + stagger(i)}>
                 <View style={styles.painCard}>
                   <View style={styles.painChip}>
                     <Ionicons name={p.icon} size={20} color={InkColors.ink2} />
@@ -141,7 +147,7 @@ export default function LandingScreen() {
           </Appear>
           <View style={styles.stack}>
             {FEATURES.map((f, i) => (
-              <Appear key={f.title} delay={80 + i * 80}>
+              <Appear key={f.title} delay={LANDING_LEAD + stagger(i)}>
                 <View style={styles.featCard}>
                   <View style={styles.featChip}>
                     <Ionicons name={f.icon} size={22} color={BrandColors.yellow} />
@@ -158,7 +164,7 @@ export default function LandingScreen() {
 
         {/* ── OFFER ── */}
         <View style={styles.section}>
-          <Appear delay={60}>
+          <Appear delay={LANDING_LEAD}>
             <View style={styles.offerCard}>
               <View style={styles.badge}>
                 <View style={styles.badgeDot} />
@@ -193,7 +199,7 @@ export default function LandingScreen() {
       </ScrollView>
 
       {/* ── 우하단 고정 CTA (FAB) — 스크롤 위치와 무관하게 항상 노출 ── */}
-      <Appear delay={280} offsetY={16} style={[styles.fabWrap, { bottom: insets.bottom + 24 }]}>
+      <Appear delay={LANDING_LEAD + stagger(7)} offsetY={16} style={[styles.fabWrap, { bottom: insets.bottom + 24 }]}>
         <Pressable onPress={goSignup} style={({ pressed }) => [styles.fab, pressed && { transform: [{ scale: 0.97 }] }]}>
           <Text style={styles.fabText}>무료로 시작하기</Text>
           <Ionicons name="arrow-forward" size={18} color={InkColors.ink} />

@@ -4,9 +4,8 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 import { useSessionStore } from '@/lib/store/useSessionStore';
-import { useMemberPrefsStore } from '@/lib/store/useMemberPrefsStore';
 import { useStoreEntryStore } from '@/lib/store/useStoreEntryStore';
-import { storeColor } from '@/lib/utils/storeColor';
+import { useStoreDisplay } from '@/components/StoreHeaderTitle';
 import { Wordmark } from '@/components/Wordmark';
 import { Appear, stagger } from '@/components/Appear';
 import { Collapse } from '@/components/Collapse';
@@ -39,18 +38,13 @@ export function StoreToggle({ scope = 'store' }: { scope?: 'hub' | 'store' }) {
   const unitId = useSessionStore((s) => s.unitId);
   const storeName = useSessionStore((s) => s.storeName);
   const switchUnit = useSessionStore((s) => s.switchUnit);
-  const prefFor = useMemberPrefsStore((s) => s.prefFor);
-  const hydratePrefs = useMemberPrefsStore((s) => s.hydrate);
+  // 이름·색 판정과 prefs hydrate 는 StoreHeaderTitle 과 같은 헬퍼를 쓴다(복제 금지).
+  const { nameOf, nameNow, dotColorOf } = useStoreDisplay();
   const enterStore = useStoreEntryStore((s) => s.enter);
   const [busy, setBusy] = useState(false);
   const [open, setOpen] = useState(false);
   // 두 칸의 실제 폭·위치(onLayout) — 흰 면이 그 자리로 미끄러진다.
   const [cells, setCells] = useState<{ x: number; w: number }[]>([]);
-
-  // 시트의 매장 색·닉네임을 허브와 일치시킨다(TTL 내 재호출은 스킵).
-  useEffect(() => {
-    void hydratePrefs();
-  }, [hydratePrefs]);
 
   // 목록이 비면(직원·로드 중) 활성 매장 1개로. Phase 0에서 직원 다매장이 열리면 stores로 통일.
   const list =
@@ -59,12 +53,14 @@ export function StoreToggle({ scope = 'store' }: { scope?: 'hub' | 'store' }) {
       : unitId
         ? [{ id: unitId, name: storeName || '내 매장' }]
         : [];
-  const labelOf = (id: string, name: string) => prefFor(id).nickname || name;
   const current = list.find((s) => s.id === unitId);
   const other = list.find((s) => s.id !== unitId); // 2곳일 때의 '다른 한 곳'
   const onHub = scope === 'hub';
   // 허브에선 스코프가 '전체 매장'이다 — 지금 보고 있는 범위를 그대로 쓴다.
-  const scopeLabel = onHub ? '전체 매장' : current ? shortName(labelOf(current.id, current.name)) : '내 매장';
+  // 매장 층 라벨은 **확정된 뒤에만** 적는다(nameOf 가 null 이면 빈칸) — 원본명을 먼저 적으면
+  // `내 매장 → 신촌점 → 본점`으로 라벨이 두 번 바뀐다. 상시 노출이라 가장 많이 보이는 깜빡임이었다.
+  const currentName = current ? nameOf(current.id, current.name) : null;
+  const scopeLabel = onHub ? '전체 매장' : currentName ? shortName(currentName) : '';
   // 매장 층에서 1곳이면 갈 데가 없다(C안 동작표). 허브에선 1곳이어도 '들어가기'가 있다.
   const hasMove = onHub ? list.length >= 1 : list.length >= 2;
 
@@ -107,8 +103,9 @@ export function StoreToggle({ scope = 'store' }: { scope?: 'hub' | 'store' }) {
     setOpen(false);
     if (busy) return;
     if (onHub) {
+      // 전환 커버에 넘기는 건 표시 지연과 무관한 **데이터**다 — 지금 아는 최선값을 쓴다.
       const row = list.find((s) => s.id === id);
-      return void enterStore({ uid: id, name: row ? labelOf(row.id, row.name) : '내 매장' });
+      return void enterStore({ uid: id, name: row ? nameNow(row.id, row.name) : '내 매장' });
     }
     if (id === unitId) return;
     setBusy(true);
@@ -179,17 +176,18 @@ export function StoreToggle({ scope = 'store' }: { scope?: 'hub' | 'store' }) {
         <Collapse style={styles.menu}>
           {list.map((s, i) => {
             const isCurrent = s.id === unitId;
+            const rowName = nameOf(s.id, s.name);
             return (
               <Appear key={s.id} delay={stagger(i)} offsetY={7}>
                 <Pressable
                   onPress={() => void pick(s.id)}
                   style={({ pressed }) => [styles.row, pressed && { backgroundColor: InkColors.bgSoft }]}
                   accessibilityRole="button"
-                  accessibilityLabel={`${labelOf(s.id, s.name)}${isCurrent ? ' (현재 매장)' : ''}`}
+                  accessibilityLabel={`${rowName ?? '매장'}${isCurrent ? ' (현재 매장)' : ''}`}
                 >
-                  <View style={[styles.dot, { backgroundColor: storeColor(s.id, prefFor(s.id).color) }]} />
+                  <View style={[styles.dot, { backgroundColor: dotColorOf(s.id) }]} />
                   <Text style={styles.rowText} numberOfLines={1}>
-                    {labelOf(s.id, s.name)}
+                    {rowName ?? ' '}
                   </Text>
                   {/* 색만으로 구분하지 않는다 — 지금 매장은 글자로도 말한다. */}
                   {isCurrent && <Text style={styles.rowNow}>현재 매장</Text>}

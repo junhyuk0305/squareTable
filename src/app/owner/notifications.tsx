@@ -14,7 +14,8 @@ import { useCrossNotifStore } from '@/lib/store/useCrossNotifStore';
 import { useCrossNotifRows } from '@/lib/hooks/useCrossNotifRows';
 import { useMemberPrefsStore } from '@/lib/store/useMemberPrefsStore';
 import { showToast } from '@/lib/store/useToastStore';
-import { Appear } from '@/components/Appear';
+import { Appear, stagger } from '@/components/Appear';
+import { ScreenLoading } from '@/components/ScreenLoading';
 import { MarkAllReadButton } from '@/components/MarkAllReadButton';
 import { NotificationList, ALL_KIND_UI } from '@/components/NotificationList';
 import { NotificationEnableCard } from '@/components/NotificationEnableCard';
@@ -56,6 +57,21 @@ export default function OwnerNotificationsScreen() {
   const unitId = useSessionStore((s) => s.unitId);
   const ackNotifs = useMemberPrefsStore((s) => s.ackNotifs);
   const ackAt = useMemberPrefsStore((s) => (unitId ? (s.ackByUnit[unitId] ?? null) : null));
+
+  // ★'전체 매장' 탭에만 crossLoaded 게이트가 있고 '이 매장' 탭은 게이트가 없었다 — 그래서
+  //   "지금 처리할 알림이 없어요"가 먼저 떴다. 이 목록은 7개 축을 합성해 만든다(rows) — 하나라도
+  //   덜 왔으면 "없어요"는 거짓이다. ackAt(memberPrefs)까지 넣는 이유: 읽음 기준 시각이 늦게 오면
+  //   이미 읽은 항목이 잠깐 안 읽음(강조)으로 뜬다.
+  //   훅은 `&&` 안에서 부르지 않는다 — 각각 받은 뒤 AND 한다.
+  const queueLoaded = useUnknownQueueStore((s) => s.loaded);
+  const suggestionLoaded = useSuggestionStore((s) => s.loaded);
+  const scheduleLoaded = useScheduleStore((s) => s.loaded);
+  const staffLoaded = useStaffStore((s) => s.loaded);
+  const workLoaded = useWorkStore((s) => s.loaded);
+  const claimLoaded = usePaymentClaimStore((s) => s.loaded);
+  const prefsLoaded = useMemberPrefsStore((s) => s.loaded);
+  const ready =
+    queueLoaded && suggestionLoaded && scheduleLoaded && staffLoaded && workLoaded && claimLoaded && prefsLoaded;
 
   // 화면에 들어올 때마다 명부·합류신청을 다시 당겨온다. profiles 실시간이 없어도(또는 앱을 켜둔 채로
   // 신청이 들어와도) 사장이 이 화면을 열면 최신 합류 신청이 반드시 보이게 하는 안전장치.
@@ -120,11 +136,14 @@ export default function OwnerNotificationsScreen() {
         // 전체 읽음은 활성 매장 것만 가능(다른 매장 read_by 는 RLS 스코프 밖) → '이 매장' 탭에서만.
         options={{ headerRight: () => (seg === 'store' && hasUnread ? <MarkAllReadButton onPress={markAll} /> : null) }}
       />
+      {!ready ? (
+        <ScreenLoading label="알림을 불러오고 있어요…" />
+      ) : (
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         {/* 맨 위 — 매장명 · 내 이름(정체성). 직원 알림 화면과 동일 구조.
             호칭은 세션 역할에서 파생한다(roles.honorific) — 매니저도 이 화면을 쓰기 때문에
             "사장님"을 하드코딩하면 매니저가 자기를 사장으로 부르게 된다(2026-08-08 수정). */}
-        <Appear delay={0}>
+        <Appear delay={stagger(0)}>
         <View style={styles.idCard}>
           <View style={styles.avatar}>
             <Text style={styles.avatarText}>{initial}</Text>
@@ -155,7 +174,7 @@ export default function OwnerNotificationsScreen() {
           />
         )}
 
-        <Appear delay={80}>
+        <Appear delay={stagger(1)}>
         {seg === 'all' && multiStore ? (
           <NotificationList
             rows={allRows}
@@ -188,6 +207,7 @@ export default function OwnerNotificationsScreen() {
         </Appear>
         <View style={{ height: 12 }} />
       </ScrollView>
+      )}
     </SafeAreaView>
   );
 }

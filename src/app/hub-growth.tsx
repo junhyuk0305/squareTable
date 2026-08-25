@@ -10,7 +10,7 @@ import { HubTabBar } from '@/components/HubTabBar';
 import { NoStoreView } from '@/components/hub/NoStoreView';
 import { JuniorGrowthView } from '@/components/hub/JuniorGrowthView';
 import { OwnerKnowhowHubView } from '@/components/hub/OwnerKnowhowHubView';
-import { Appear } from '@/components/Appear';
+import { Appear, stagger } from '@/components/Appear';
 import { InkColors } from '@/lib/theme/colors';
 import { Space } from '@/lib/theme/layout';
 
@@ -37,20 +37,34 @@ export default function HubGrowthScreen() {
   // 매장 0곳이어도 막지 않는다(hub.tsx 와 같은 규칙) — 본문만 빈 상태로.
   const hasStore = sessionStores.length > 0 || !!unitId;
 
+  // 제목은 본문 뷰에 넘겨 그 뷰의 로딩 게이트 안에서 그린다(hub.tsx 와 같은 규칙, 2026-08-25).
+  const header = (
+    <Appear delay={stagger(0)}>
+      <View style={styles.titleBlock}>
+        <Text style={styles.title}>{isOwner ? '노하우' : '성장'}</Text>
+        <Text style={styles.subtitle}>
+          {isOwner ? '매장 지식이 지금도 맞는지 챙기는 곳이에요' : '내가 남긴 것이 쌓이는 곳이에요'}
+        </Text>
+      </View>
+    </Appear>
+  );
+
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
       <Stack.Screen options={{ headerShown: false }} />
       <ScrollView contentContainerStyle={styles.scroll}>
         <HubTopBar />
-        <Appear delay={0}>
-          <View style={styles.titleBlock}>
-            <Text style={styles.title}>{isOwner ? '노하우' : '성장'}</Text>
-            <Text style={styles.subtitle}>
-              {isOwner ? '매장 지식이 지금도 맞는지 챙기는 곳이에요' : '내가 남긴 것이 쌓이는 곳이에요'}
-            </Text>
-          </View>
-        </Appear>
-        {!hasStore ? <NoStoreView what={isOwner ? '매장 노하우' : '내가 남긴 기록'} /> : isOwner ? <OwnerKnowhowHubView /> : <JuniorGrowthView />}
+        {!hasStore ? (
+          // 매장 0곳 = 원격 데이터 게이트가 없다(세션만으로 그린다) — 제목을 여기서 바로 그린다.
+          <>
+            {header}
+            <NoStoreView what={isOwner ? '매장 노하우' : '내가 남긴 기록'} />
+          </>
+        ) : isOwner ? (
+          <OwnerKnowhowHubView header={header} />
+        ) : (
+          <JuniorGrowthView header={header} />
+        )}
       </ScrollView>
       <HubTabBar role={isOwner ? 'owner' : 'junior'} />
     </SafeAreaView>

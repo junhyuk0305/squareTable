@@ -1,5 +1,6 @@
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { Appear, stagger } from '@/components/Appear';
 import { formatAsked } from '@/lib/utils/time';
 import type { JuniorNotifKind, OwnerNotifKind } from '@/lib/utils/notifications';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
@@ -79,11 +80,13 @@ export function NotificationList({
   }
   return (
     <View style={styles.list}>
-      {rows.map((r) => {
+      {/* 항목별 등장 — 부모가 목록 전체를 Appear 하나로 감싸면 그 애니메이션은 대개
+          "아직 비어 있는 상태" 위에서 소진되고, 정작 행이 도착할 때는 통째로 한 번에 붙는다. */}
+      {rows.map((r, i) => {
         const ui = kindUI[r.kind] ?? { icon: 'ellipse', tint: InkColors.bgSoft };
         return (
+          <Appear key={r.id} delay={stagger(i)}>
           <Pressable
-            key={r.id}
             onPress={() => onPress(r)}
             style={({ pressed }) => [styles.row, r.unread && styles.rowUnread, pressed && { opacity: 0.7 }]}
           >
@@ -111,6 +114,7 @@ export function NotificationList({
             </View>
             {r.unread && <View style={styles.unreadDot} />}
           </Pressable>
+          </Appear>
         );
       })}
     </View>

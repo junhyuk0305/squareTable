@@ -6,8 +6,8 @@
 //   · 오래 손 안 댄 노하우(stale, 90일+) — 메뉴·가격이 변했는데 노하우만 옛날일 위험
 // 원칙: 허브는 읽기·이동까지(실행은 매장 화면) · 매장 단위만 · 0은 위험이 아니라 좋은 소식
 //   ("지금은 손볼 노하우가 없어요") · 노하우 0인 매장은 행동 버튼(노하우 담기)이 먼저.
-import { useEffect, useMemo, useState } from 'react';
-import { View, Text, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -21,13 +21,14 @@ import { MiniStats } from '@/components/blocks/MiniStats';
 import { ActionRow } from '@/components/blocks/ActionRow';
 import { ProgressRing } from '@/components/blocks/ProgressRing';
 import { AlertRow } from '@/components/blocks/AlertRow';
-import { Appear } from '@/components/Appear';
+import { ScreenLoading } from '@/components/ScreenLoading';
+import { Appear, stagger } from '@/components/Appear';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
 import type { Href } from 'expo-router';
 
-export function OwnerKnowhowHubView() {
+export function OwnerKnowhowHubView({ header }: { header: ReactNode }) {
   const overview = useHubStore((s) => s.overview);
   const ownerLoaded = useHubStore((s) => s.ownerLoaded);
   const hydrateOwner = useHubStore((s) => s.hydrateOwner);
@@ -35,6 +36,7 @@ export function OwnerKnowhowHubView() {
   const statsLoaded = useHubStore((s) => s.knowhowStatsLoaded);
   const hydrateStats = useHubStore((s) => s.hydrateKnowhowStats);
   const prefFor = useMemberPrefsStore((s) => s.prefFor);
+  const prefsLoaded = useMemberPrefsStore((s) => s.loaded);
   const hydratePrefs = useMemberPrefsStore((s) => s.hydrate);
   const { goStore, switching } = useStoreNav();
   const router = useRouter();
@@ -133,10 +135,15 @@ export function OwnerKnowhowHubView() {
     else if (overview[0]) void goStore(overview[0].unit_id, path);
   };
 
-  if (!ownerLoaded && overview.length === 0) {
+  // 전부 도착 전엔 무조건 로딩 — 화면 단일 게이트 하나로 판정한다(2026-08-25).
+  // ★옛 판본은 `!ownerLoaded && overview.length === 0` 이라 **캐시된 overview 가 있으면 로딩 없이
+  //   옛 값으로 그렸다**(`&&` → `||`). statsLoaded 는 게이트가 아니라 섹션 조건이어서 히어로 링과
+  //   경고행이 화면이 뜬 뒤에 밀고 들어왔고, prefs 는 아예 빠져 매장 별명·색이 갈아끼워졌다.
+  // 실패 표면화는 db.ts readFail(SyncBanner), 재시도는 각 hydrate 의 TTL 리셋이 맡는다.
+  if (!ownerLoaded || !statsLoaded || !prefsLoaded) {
     return (
       <View style={styles.loading}>
-        <ActivityIndicator color={InkColors.ink3} />
+        <ScreenLoading label="매장 노하우 현황을 불러오고 있어요…" />
       </View>
     );
   }
@@ -145,12 +152,15 @@ export function OwnerKnowhowHubView() {
   // 매장별 분해는 이제 매장 선택 시트의 count 배지가 맡는다.
 
   return (
+    <>
+    {/* 화면 제목 — 게이트 안이다. 밖에 두면 제목만 먼저 등장하고 본문이 수 백 ms 뒤에 갈아끼워진다. */}
+    {header}
     <View style={{ gap: Space.md }}>
       {/* ── 노하우 0 매장 = 담기가 먼저(빈 화면 행동 버튼).
              2026-08-07: **단일 매장에서만** 그린다. 다점포에서는 아래 '매장별 노하우' 카드가
              0개인 매장까지 전부 행으로 보여주므로, 여기에 또 세우면 같은 매장이 두 번 나온다. ── */}
       {overview.length === 1 && emptyStores.map((r) => (
-        <Appear key={r.unit_id} delay={0}>
+        <Appear key={r.unit_id} delay={stagger(0)}>
           <View style={styles.card}>
             <Text style={styles.emptyTitle}>{labelOf(r.unit_id)}에 아직 노하우가 없어요</Text>
             <Text style={styles.emptyBody}>업종 추천 노하우를 담으면 직원이 물을 때 AI가 대신 답해요.</Text>
@@ -178,45 +188,44 @@ export function OwnerKnowhowHubView() {
              매장이다 — 사장이 이 기능의 **존재 자체**를 알 다른 경로가 없다. 직원을 넣어야 링이 나타나는데
              넣을 이유를 그 링이 알려주는 순환이었다.
              ProgressRing 은 total===0 을 이미 처리한다(ratio 0 = 빈 트랙) — 블록은 손대지 않는다.
-             ★statsLoaded 게이트는 유지: 도착 전 0/0 은 "정말 0"이 아니라 "아직 안 옴"이다. */}
-      {statsLoaded && (
-        <Appear delay={10}>
-          <ProgressRing
-            value={understanding.known}
-            total={understanding.cells}
-            label="직원이 확인한 노하우"
-            sub={
-              understanding.cells > 0
-                ? `노하우 ${understanding.entries}개 × 직원 ${understanding.staff}명`
-                : understanding.staff === 0
-                  ? '직원이 들어오면 우리 매장 노하우를 얼마나 아는지 여기서 보여드려요'
-                  : '노하우를 담으면 직원이 얼마나 아는지 여기서 보여드려요'
+             ★도착 전 0/0 은 "정말 0"이 아니라 "아직 안 옴"이다 — 그 판정은 이제 화면 게이트가 한다
+             (옛 판본의 `statsLoaded &&` 섹션 조건은 링을 뒤늦게 밀어 넣어 레이아웃이 튀었다). */}
+      <Appear delay={stagger(1)}>
+        <ProgressRing
+          value={understanding.known}
+          total={understanding.cells}
+          label="직원이 확인한 노하우"
+          sub={
+            understanding.cells > 0
+              ? `노하우 ${understanding.entries}개 × 직원 ${understanding.staff}명`
+              : understanding.staff === 0
+                ? '직원이 들어오면 우리 매장 노하우를 얼마나 아는지 여기서 보여드려요'
+                : '노하우를 담으면 직원이 얼마나 아는지 여기서 보여드려요'
+          }
+        />
+        {/* 빈 상태엔 다음 행동 하나 — 어느 쪽이 0인지에 따라 목적지가 다르다(둘 다 0이면 직원부터:
+            노하우 담기는 바로 위 '노하우가 없어요' 카드가 이미 말하고 있다). */}
+        {understanding.cells === 0 && (
+          <Pressable
+            onPress={
+              understanding.staff === 0
+                ? act('직원 초대', '어느 매장에 초대할지 골라 주세요', '/owner/staff')
+                : act('노하우 담기', '어느 매장에 담을지 골라 주세요', '/owner/templates')
             }
-          />
-          {/* 빈 상태엔 다음 행동 하나 — 어느 쪽이 0인지에 따라 목적지가 다르다(둘 다 0이면 직원부터:
-              노하우 담기는 바로 위 '노하우가 없어요' 카드가 이미 말하고 있다). */}
-          {understanding.cells === 0 && (
-            <Pressable
-              onPress={
-                understanding.staff === 0
-                  ? act('직원 초대', '어느 매장에 초대할지 골라 주세요', '/owner/staff')
-                  : act('노하우 담기', '어느 매장에 담을지 골라 주세요', '/owner/templates')
-              }
-              disabled={!!switching}
-              style={({ pressed }) => [styles.emptyBtn, pressed && { opacity: 0.9 }]}
-              accessibilityRole="button"
-              accessibilityLabel={understanding.staff === 0 ? '직원 초대하기' : '노하우 담기'}
-            >
-              <Ionicons
-                name={understanding.staff === 0 ? 'person-add-outline' : 'add-circle-outline'}
-                size={15}
-                color={InkColors.ink}
-              />
-              <Text style={styles.emptyBtnText}>{understanding.staff === 0 ? '직원 초대하기' : '노하우 담기'}</Text>
-            </Pressable>
-          )}
-        </Appear>
-      )}
+            disabled={!!switching}
+            style={({ pressed }) => [styles.emptyBtn, pressed && { opacity: 0.9 }]}
+            accessibilityRole="button"
+            accessibilityLabel={understanding.staff === 0 ? '직원 초대하기' : '노하우 담기'}
+          >
+            <Ionicons
+              name={understanding.staff === 0 ? 'person-add-outline' : 'add-circle-outline'}
+              size={15}
+              color={InkColors.ink}
+            />
+            <Text style={styles.emptyBtnText}>{understanding.staff === 0 ? '직원 초대하기' : '노하우 담기'}</Text>
+          </Pressable>
+        )}
+      </Appear>
 
       {/* ── 경고행(블록 X2) — 퀴즈로 안 쓰인 노하우. 0건이면 AlertRow 가 스스로 숨는다.
              ★2026-08-07: '아무도 모르는 노하우'(통과자 0)가 아니라 **문항이 없는 노하우**(no_items)를
@@ -226,8 +235,8 @@ export function OwnerKnowhowHubView() {
       {/* ★직원이 0명이면 그리지 않는다(cells === 0). 1인 매장에서는 모든 노하우가 정의상
              '아무도 모르는' 것이 되어 "24개가 위험"이라고 겁을 주는데, 직원이 없으니 사실은
              위험이 아니다. 지표가 참이어도 그 상태에서 할 수 있는 일이 없으면 경고가 아니다. */}
-      {statsLoaded && understanding.cells > 0 && (
-        <Appear delay={20}>
+      {understanding.cells > 0 && (
+        <Appear delay={stagger(2)}>
           <AlertRow
             label="퀴즈로 안 쓰인 노하우"
             count={understanding.noItems}
@@ -242,7 +251,7 @@ export function OwnerKnowhowHubView() {
              아래(매장 앱 노하우 탭)로 내려가야 했다. 진입점을 여기로 끌어올린다.
              ★ 새 입력 경로를 만들지 않는다 — '노하우 추가'는 매장 앱과 같은 /owner/coach 로 보낸다.
              퀴즈는 현황 탭에서 옮겨 온 것이다(퀴즈 = 노하우 이해도의 계측기). ── */}
-      <Appear delay={20}>
+      <Appear delay={stagger(3)}>
         <ActionRow
           items={[
             {
@@ -278,7 +287,7 @@ export function OwnerKnowhowHubView() {
              바로 위 히어로가 이미 말한다(현황 탭이 매장별 행에 쓰는 규칙과 같다).
              목록으로 가는 길은 위 ActionRow '노하우 목록'이 대신한다 — 도달 경로 손실 0. ── */}
       {overview.length > 1 && (
-        <Appear delay={40}>
+        <Appear delay={stagger(4)}>
           <SectionLabel title="매장별 노하우" />
           <View style={styles.card}>
             {/* 0개인 매장도 뺴지 않는다 — "어느 매장이 비었나"가 이 카드의 존재 이유다.
@@ -321,7 +330,7 @@ export function OwnerKnowhowHubView() {
              셋 다 "N건 남았다" 하나만 말하는데 카드를 3장 세우니 이 화면이 카드 나열이 됐다.
              숫자는 MiniStats 한 줄로 내리고, 매장별 분해는 탭했을 때 매장 선택 시트의 배지가 맡는다
              (StatusView가 이미 쓰는 패턴). 섹션 힌트는 각 칸의 ⓘ로 옮겼다. ── */}
-      <Appear delay={60}>
+      <Appear delay={stagger(5)}>
         <SectionLabel title="챙길 것" />
         <MiniStats
           items={[
@@ -370,7 +379,7 @@ export function OwnerKnowhowHubView() {
       </Appear>
 
       {allClear && totals.knowhow > 0 && (
-        <Appear delay={160}>
+        <Appear delay={stagger(6)}>
           <Text style={styles.allClearText}>지금은 손볼 노하우가 없어요</Text>
         </Appear>
       )}
@@ -392,6 +401,7 @@ export function OwnerKnowhowHubView() {
         onClose={() => setPicker(null)}
       />
     </View>
+    </>
   );
 }
 

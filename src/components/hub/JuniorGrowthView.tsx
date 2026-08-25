@@ -7,8 +7,8 @@
 // 원칙: 전부 본인 전용(my_growth RPC 내부 강제·사장 화면에 개인별 뷰 없음) · 남과 비교 없음 ·
 //   빈 상태는 "예시" 라벨 카드(실데이터 1건 들어오면 자동 교체 — 조건 렌더) + 행동 버튼.
 //   내 노하우는 원문까지 본인이 직접 본다(0094 — 행 탭 = EntryDetailModal 재사용).
-import { useEffect, useMemo, useState } from 'react';
-import { View, Text, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { useHubStore } from '@/lib/store/useHubStore';
@@ -19,7 +19,8 @@ import { storeColor } from '@/lib/utils/storeColor';
 import { SectionLabel } from '@/components/SectionLabel';
 import { MiniStats } from '@/components/blocks/MiniStats';
 import { EntryDetailModal } from '@/components/EntryDetailModal';
-import { Appear } from '@/components/Appear';
+import { ScreenLoading } from '@/components/ScreenLoading';
+import { Appear, stagger } from '@/components/Appear';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
@@ -33,7 +34,7 @@ const fmtMonthDay = (iso: string) => {
   return Number.isNaN(d.getTime()) ? '' : `${d.getMonth() + 1}월 ${d.getDate()}일`;
 };
 
-export function JuniorGrowthView() {
+export function JuniorGrowthView({ header }: { header: ReactNode }) {
   const growth = useHubStore((s) => s.growth);
   const growthLoaded = useHubStore((s) => s.growthLoaded);
   const hydrateGrowth = useHubStore((s) => s.hydrateGrowth);
@@ -41,6 +42,7 @@ export function JuniorGrowthView() {
   const myEntriesLoaded = useHubStore((s) => s.myEntriesLoaded);
   const hydrateMyEntries = useHubStore((s) => s.hydrateMyEntries);
   const prefFor = useMemberPrefsStore((s) => s.prefFor);
+  const prefsLoaded = useMemberPrefsStore((s) => s.loaded);
   const hydratePrefs = useMemberPrefsStore((s) => s.hydrate);
   const { goStore, switching } = useStoreNav();
   const [openEntry, setOpenEntry] = useState<PlaybookEntry | null>(null);
@@ -83,10 +85,11 @@ export function JuniorGrowthView() {
   const labelOf = (uid: string, fallback: string) => prefFor(uid).nickname || fallback;
 
   // 전부 도착 전엔 무조건 로딩 — 집계만 먼저 그리고 목록이 나중에 튀어나오는 부분 렌더 금지.
-  if (!growthLoaded || !myEntriesLoaded || !trainingLoaded) {
+  // ★prefs(매장 별명·색)도 게이트에 넣는다(2026-08-25) — 매장별 행의 이름·점 색이 뒤늦게 바뀌었다.
+  if (!growthLoaded || !myEntriesLoaded || !trainingLoaded || !prefsLoaded) {
     return (
       <View style={styles.loading}>
-        <ActivityIndicator color={InkColors.ink3} />
+        <ScreenLoading label="내가 남긴 기록을 불러오고 있어요…" />
       </View>
     );
   }
@@ -95,8 +98,11 @@ export function JuniorGrowthView() {
   if (empty) {
     const firstUnit = growth[0]?.unit_id;
     return (
+      <>
+      {/* 화면 제목 — 게이트 안이다. 밖에 두면 제목만 먼저 등장하고 본문이 수 백 ms 뒤에 갈아끼워진다. */}
+      {header}
       <View style={{ gap: Space.md }}>
-        <Appear delay={40}>
+        <Appear delay={stagger(0)}>
           <View style={styles.card}>
             <Text style={styles.emptyTitle}>여기에 내가 남긴 것이 쌓여요</Text>
             <Text style={styles.emptyBody}>
@@ -122,7 +128,7 @@ export function JuniorGrowthView() {
             대비만 올리면 가짜가 실데이터처럼 읽히고, 흐리게 두면 딱지가 안 읽히는 딜레마라
             "무엇이 쌓이는지"만 남기고 수치 자체를 없앤다 — 그러면 흐릴 이유도, '예시' 딱지도 없다.
             (자동 검사는 조상 opacity를 색에 합성하지 않아 이 자리를 앞으로도 못 잡는다.) */}
-        <Appear delay={80}>
+        <Appear delay={stagger(1)}>
           <View style={styles.ghostCard}>
             <Text style={styles.ghostTitle}>최근 30일 도움 된 횟수</Text>
             <View style={styles.ghostBar} />
@@ -130,10 +136,14 @@ export function JuniorGrowthView() {
           </View>
         </Appear>
       </View>
+      </>
     );
   }
 
   return (
+    <>
+    {/* 화면 제목 — 게이트 안이다. 밖에 두면 제목만 먼저 등장하고 본문이 수 백 ms 뒤에 갈아끼워진다. */}
+    {header}
     <View style={{ gap: Space.md }}>
       {/* ── 가르침 실적 — 최고 역량 = 남을 도운 기록.
              ★2026-08-19: 0건에서도 **그린다**(옛 조건 `totals.taught > 0` 해제).
@@ -143,7 +153,7 @@ export function JuniorGrowthView() {
              자리라 0건일 때 오히려 보여줄 값어치가 크다.
              ★0건에는 큰 숫자를 쓰지 않는다 — 28sp '0건'은 성과 없음을 크게 외치는 꼴이다.
              문구도 과거형("됐어요")을 쓰지 않는다: 0건에 과거형은 거짓말이다. ── */}
-      <Appear delay={40}>
+      <Appear delay={stagger(0)}>
         <View style={[styles.card, styles.taughtCard]}>
           <View style={styles.taughtHead}>
             <Ionicons name="school-outline" size={18} color={InkColors.ink} />
@@ -179,7 +189,7 @@ export function JuniorGrowthView() {
       </Appear>
 
       {/* ── 내가 남긴 것 ── */}
-      <Appear delay={80}>
+      <Appear delay={stagger(1)}>
         <SectionLabel title="내가 남긴 것" hint="나만 볼 수 있어요" />
         {/* 블록 I3 — 카드가 아니다. 2026-08-06: '내가 남긴 것'·'해본 업무'가 각각 stat을 품은 카드라
             이 화면이 '제목 → 카드' 반복이었다. 세 숫자를 한 줄로 올리고 아래 목록만 카드로 남긴다.
@@ -246,7 +256,7 @@ export function JuniorGrowthView() {
              **다매장 직원에게만** 그린다. 단일 매장이면 위 숫자가 곧 그 매장의 값이라 섹션 자체가 사라진다.
              숙련 주장 없음(완료 ≠ 숙련). ── */}
       {growth.length > 1 && (
-      <Appear delay={120}>
+      <Appear delay={stagger(2)}>
         <SectionLabel title="해본 업무" hint="매장별" />
         <View style={styles.card}>
           {/* 행 탭 = 그 매장 업무 화면 */}
@@ -269,7 +279,7 @@ export function JuniorGrowthView() {
 
       {/* ── 훈련 통과 이력(0104) — 있을 때만. 통과 사실만 말하고 점수·등급을 만들지 않는다 ── */}
       {trainingHistory.length > 0 && (
-        <Appear delay={160}>
+        <Appear delay={stagger(3)}>
           <SectionLabel title="퀴즈" hint="통과한 퀴즈" />
           <View style={styles.card}>
             {(showAllTraining ? trainingHistory : trainingHistory.slice(0, ENTRY_LIST_FIRST)).map((h) => (
@@ -298,6 +308,7 @@ export function JuniorGrowthView() {
       {/* 노하우 원문 시트 — 물어보기 [출처]와 동일 컴포넌트(읽기 전용) 재사용 */}
       <EntryDetailModal entry={openEntry} visible={!!openEntry} onClose={() => setOpenEntry(null)} />
     </View>
+    </>
   );
 }
 

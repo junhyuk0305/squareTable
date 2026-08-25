@@ -77,7 +77,9 @@ const fmtMonthDay = (iso: string) => {
  * ⛔행동 버튼을 두지 않는다. "이 매장에 합류하기" 류의 전환은 이 화면의 일이 아니다.
  */
 function GuestQuizHistory() {
-  const [rows, setRows] = useState<MyGuestQuizRow[]>([]);
+  // null = 아직 안 옴. []로 시작하면 "0건"과 구분이 안 돼서, 이력이 있는 계정은 빈 상태를 보다가
+  // 이 섹션이 통째로 아래에 붙었다(2026-08-25). 에러여도 fetch 가 []를 주므로 로딩에 갇히지 않는다.
+  const [rows, setRows] = useState<MyGuestQuizRow[] | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -87,8 +89,8 @@ function GuestQuizHistory() {
     return () => { alive = false; };
   }, []);
 
-  // 없으면 아무것도 그리지 않는다 — 대부분의 계정은 게스트 응시 이력이 없다(빈 카드 금지).
-  if (rows.length === 0) return null;
+  // 로드 전에는 그리지 않는다. 0건도 마찬가지 — 대부분의 계정은 게스트 응시 이력이 없다(빈 카드 금지).
+  if (rows === null || rows.length === 0) return null;
 
   return (
     <Appear>

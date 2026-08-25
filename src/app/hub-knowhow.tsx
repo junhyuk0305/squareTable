@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { View, Text, TextInput, Pressable, ScrollView, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, TextInput, Pressable, ScrollView, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -10,6 +10,8 @@ import { useStoreNav } from '@/lib/hooks/useStoreNav';
 import { HeaderBackButton } from '@/components/HeaderBackButton';
 import { SectionLabel } from '@/components/SectionLabel';
 import { EmptyState } from '@/components/EmptyState';
+import { Appear, stagger } from '@/components/Appear';
+import { ScreenLoading } from '@/components/ScreenLoading';
 import { InkColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
@@ -120,10 +122,7 @@ export default function HubKnowhowScreen() {
         }}
       />
       {rows === null ? (
-        <View style={st.center}>
-          <ActivityIndicator color={InkColors.ink3} />
-          <Text style={st.centerText}>노하우를 불러오는 중...</Text>
-        </View>
+        <ScreenLoading label="노하우를 불러오고 있어요…" />
       ) : loadErr ? (
         // 읽기 실패를 "노하우 없음"으로 위장하지 않는다(무음 실패 방지).
         <EmptyState
@@ -138,13 +137,16 @@ export default function HubKnowhowScreen() {
         />
       ) : (
         <ScrollView contentContainerStyle={st.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-          <Text style={st.countLabel}>
-            {filtering ? `${total}개 중 ${visible.length}개 보임` : `매장 ${groups.length}곳 · 노하우 ${total}개`}
-          </Text>
+          <Appear delay={stagger(0)}>
+            <Text style={st.countLabel}>
+              {filtering ? `${total}개 중 ${visible.length}개 보임` : `매장 ${groups.length}곳 · 노하우 ${total}개`}
+            </Text>
+          </Appear>
 
           {/* 찾기 — 매장을 가로지르는 검색이 이 화면의 핵심 기능이다.
               검색어가 남아 있으면 8건 미만이어도 바를 띄운다(끌 수 없는 거르기 금지). */}
           {total >= FILTER_MIN || filtering ? (
+            <Appear delay={stagger(1)}>
             <View style={st.search}>
               <Ionicons name="search" size={16} color={InkColors.ink3} />
               <TextInput
@@ -161,6 +163,7 @@ export default function HubKnowhowScreen() {
                 </Pressable>
               ) : null}
             </View>
+            </Appear>
           ) : null}
 
           {visible.length === 0 ? (
@@ -171,8 +174,9 @@ export default function HubKnowhowScreen() {
               </Pressable>
             </View>
           ) : (
-            groups.map((g) => (
-              <View key={g.uid} style={st.group}>
+            groups.map((g, gi) => (
+              <Appear key={g.uid} delay={stagger(gi + 2)}>
+              <View style={st.group}>
                 {/* 0은 "0개"가 아니라 "없어요" (워딩 §5). */}
                 <SectionLabel title={g.name} hint={g.items.length === 0 ? '없어요' : `${g.items.length}개`} />
                 <View style={st.card}>
@@ -212,6 +216,7 @@ export default function HubKnowhowScreen() {
                   ))}
                 </View>
               </View>
+              </Appear>
             ))
           )}
           <View style={{ height: Space.xl }} />

@@ -5,8 +5,9 @@ import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 import { RoleTabBar } from '@/components/RoleTabBar';
-import { Appear } from '@/components/Appear';
+import { Appear, stagger } from '@/components/Appear';
 import { EmptyState } from '@/components/EmptyState';
+import { ScreenLoading } from '@/components/ScreenLoading';
 import { SectionLabel } from '@/components/SectionLabel';
 import { WeekStrip, type WeekDay } from '@/components/blocks/WeekStrip';
 import { DayTimeline, type TimelineRow } from '@/components/schedule/DayTimeline';
@@ -46,6 +47,13 @@ export default function OwnerScheduleScreen() {
   const swaps = useScheduleStore((s) => s.swaps);
   const approveSwap = useScheduleStore((s) => s.approveSwap);
   const rejectSwap = useScheduleStore((s) => s.rejectSwap);
+
+  // ★두 스토어 다 loaded 가 있는데 하나도 안 보고 있었다 — 그래서 도착 전에 "승인할 교대 요청이 없어요"·
+  //   "합류한 직원이 없어요"(＋초대 CTA)·"이 날은 근무가 없어요"·DEFAULT_CONFIG 운영시간(09:00~22:00·연중무휴)이
+  //   **전부 사실처럼** 먼저 떴다. 훅은 각각 받은 뒤 AND 한다(`&&` 안에서 부르면 훅 개수가 달라져 크래시).
+  const staffLoaded = useStaffStore((s) => s.loaded);
+  const scheduleLoaded = useScheduleStore((s) => s.loaded);
+  const ready = staffLoaded && scheduleLoaded;
 
   const today = todayStr();
   // 날짜 선택 UI는 주간 스트립 **하나뿐**이다. 보이는 주는 선택일에서 파생(월요일 시작 — 기존 규칙 유지).
@@ -134,13 +142,24 @@ export default function OwnerScheduleScreen() {
     [win],
   );
 
+  // 훅을 전부 부른 뒤의 early return — 헤더·탭바는 게이트 밖(화면 골격은 즉시 선다).
+  if (!ready) {
+    return (
+      <SafeAreaView style={styles.safe} edges={['bottom']}>
+        <Stack.Screen options={{ title: '근무표' }} />
+        <ScreenLoading label="근무표를 불러오고 있어요…" />
+        <RoleTabBar role="owner" />
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
       <Stack.Screen options={{ title: '근무표' }} />
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         {/* ① 주간 날짜 스트립 — 하루 이동을 이 화면 안에서 끝낸다 */}
-        <Appear delay={0}>
+        <Appear delay={stagger(0)}>
         <View style={styles.section}>
           <View style={styles.weekNav}>
             <Pressable
@@ -175,7 +194,7 @@ export default function OwnerScheduleScreen() {
         </Appear>
 
         {/* ② 컨펌 대기 — 사장의 핵심 액션. 제목은 카드 밖, 대기 건수는 우측 뱃지 */}
-        <Appear delay={60}>
+        <Appear delay={stagger(1)}>
         <View style={styles.section}>
           <SectionLabel
             icon="swap-horizontal-outline"
@@ -195,15 +214,16 @@ export default function OwnerScheduleScreen() {
             </View>
           ) : (
             <View style={{ gap: Space.sm }}>
-              {pending.map((r) => (
-                <PendingCard
-                  key={r.id}
-                  r={r}
-                  nameOf={nameOf}
-                  tplById={tplById}
-                  onApprove={() => approveSwap(r.id)}
-                  onReject={() => rejectSwap(r.id)}
-                />
+              {pending.map((r, i) => (
+                <Appear key={r.id} delay={stagger(i)}>
+                  <PendingCard
+                    r={r}
+                    nameOf={nameOf}
+                    tplById={tplById}
+                    onApprove={() => approveSwap(r.id)}
+                    onReject={() => rejectSwap(r.id)}
+                  />
+                </Appear>
               ))}
             </View>
           )}
@@ -211,7 +231,7 @@ export default function OwnerScheduleScreen() {
         </Appear>
 
         {/* ③ 하루 근무 — 운영시간 축 하나 위에 사람마다 바. 추가는 이 카드 안에서 끝낸다 */}
-        <Appear delay={120}>
+        <Appear delay={stagger(2)}>
         <View style={styles.section}>
           <SectionLabel
             title={fmtDateKo(selected)}
@@ -257,7 +277,7 @@ export default function OwnerScheduleScreen() {
         </Appear>
 
         {/* ④ 가게 기본 정보 */}
-        <Appear delay={160}>
+        <Appear delay={stagger(3)}>
         <Pressable
           onPress={() => router.push('/owner/store-config')}
           style={({ pressed }) => [styles.infoCard, pressed && { opacity: 0.85 }]}

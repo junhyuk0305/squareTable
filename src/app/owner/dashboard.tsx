@@ -5,7 +5,8 @@ import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 import { PressableScale } from '@/components/PressableScale';
-import { Appear } from '@/components/Appear';
+import { Appear, stagger } from '@/components/Appear';
+import { ScreenLoading } from '@/components/ScreenLoading';
 import { CoachmarkTour, type TourStep } from '@/components/CoachmarkTour';
 import { useTourStore } from '@/lib/store/useTourStore';
 
@@ -42,7 +43,6 @@ export default function OwnerDashboardScreen() {
     todayTasks,
     duty,
     dutyPlanned,
-    dutyLoaded,
     pendingSwaps,
     pendingSuggestions,
     missedKnowhowCount,
@@ -61,7 +61,8 @@ export default function OwnerDashboardScreen() {
     if (dutyPlanned > 0) parts.push(`${dutyPlanned}명 예정`);
     return parts.join(' · ');
   }, [duty, dutyPlanned]);
-  const showDuty = dutyLoaded && (duty.length > 0 || dutyPlanned > 0);
+  // 게이트는 화면에 하나뿐이다(loaded) — 여기서 도착 여부를 또 묻지 않는다. 본문은 loaded 뒤에만 마운트된다.
+  const showDuty = duty.length > 0 || dutyPlanned > 0;
 
   // 합류 승인 대기 인원 — 사장이 승인을 놓치면 직원이 합류 못 한 채 갇힌다.
   // A1 액션 로우가 사라지면서(ADR-004) 이 배지는 서브내비 '직원' 칸으로 옮겼다.
@@ -234,6 +235,12 @@ export default function OwnerDashboardScreen() {
       {/* 상단바는 직원 홈과 같은 공용 컴포넌트 — 두 층이 갈라지지 않게(2026-08-08 통일). */}
       <AppTopBar />
 
+      {/* 상단바·탭바는 게이트 밖 — 화면 골격은 즉시 서고 본문만 기다린다.
+          본문을 마운트하지 않는 것이 핵심이다: 도착 전에 그리면 '다음 행동' 한 줄의 라벨과 목적지가
+          나중에 통째로 바뀐다(교대 승인 → 제안 검토처럼). */}
+      {!loaded ? (
+        <ScreenLoading label="매장 현황을 불러오고 있어요…" />
+      ) : (
       <ScrollView ref={scrollRef} contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         {/* 정적 콘텐츠 래퍼 — 진입 애니는 각 <Appear>가 담당. 코치마크 위치 측정 기준(scrollContentRef). */}
         <View ref={scrollContentRef} style={styles.scrollInner}>
@@ -241,23 +248,18 @@ export default function OwnerDashboardScreen() {
             히어로는 **조건 없이** 그린다. 노하우가 없을수록 AI가 답할 근거가 없어 질문은 오히려
             전부 사장에게 쌓이는데, 예전엔 그 구간에서 아래 온보딩 블록이 히어로를 통째로 가렸다(08-06).
             서브내비를 히어로 바닥에 **붙이는** 이유: 떼면 A1 원형 액션 로우와 중복돼 블록을 하나 더 먹는다. */}
-        <Appear>
+        <Appear delay={stagger(0)}>
           <View ref={hubRef}>
-          {/* ★로딩 중엔 값을 단정하지 않는다 — 블록은 그대로 두고(자리 유지) 내용만 중립 표기로 채운다.
-              '없어요'는 "질문이 0건"이라는 단정인데, 도착 전엔 pending 이 항상 0이라 거짓말이 된다. */}
+          {/* 로딩 중 '—' 중립 표기는 걷어냈다 — 게이트가 그 일을 대신한다(본문 자체가 도착 뒤에 마운트된다). */}
           <HeroSubNav
             label="답을 기다리는 질문"
-            value={!loaded ? '—' : pending > 0 ? `${pending}건` : '없어요'}
+            value={pending > 0 ? `${pending}건` : '없어요'}
             caption={
-              !loaded
-                ? '직원이 물어본 것을 가져오는 중이에요'
-                : heroQuery
-                  ? `“${heroQuery.query_text}”\n${heroQuery.junior_name} · ${formatAsked(heroQuery.asked_at)}`
-                  : '직원이 모르는 걸 물으면 여기로 와요.'
+              heroQuery
+                ? `“${heroQuery.query_text}”\n${heroQuery.junior_name} · ${formatAsked(heroQuery.asked_at)}`
+                : '직원이 모르는 걸 물으면 여기로 와요.'
             }
-            // 로딩 중에도 CTA는 남긴다(빼면 히어로 높이가 튄다). 다만 "답할 질문이 없다"는 뜻의
-            // 문구 대신 어느 상태에서나 참인 행동으로 — 눌리면 실제로 노하우 입력으로 간다(죽은 컨트롤 아님).
-            ctaLabel={!loaded ? '노하우 남기기 →' : heroQuery ? '답하러 가기 →' : '오늘 한 줄 노하우 남기기 →'}
+            ctaLabel={heroQuery ? '답하러 가기 →' : '오늘 한 줄 노하우 남기기 →'}
             onCta={() =>
               heroQuery
                 ? router.push({ pathname: '/owner/coach', params: { uqId: heroQuery.id } })
@@ -269,10 +271,9 @@ export default function OwnerDashboardScreen() {
         </Appear>
 
         {/* 신규 매장 온보딩 — 노하우 0건이면 가장 먼저 첫 입력을 유도(빈 매장 = 직원 답변 0 → 이탈 방지)
-            ★loaded 게이트: 도착 전엔 entriesCount 가 항상 0이라, 이 블록이 노하우 18개인 매장에서도
-            0.3초 떴다가 사라졌다("매장을 막 시작하셨네요" 스침). "0건"과 "아직 안 옴"을 구분한다. */}
-        {loaded && entriesCount === 0 && (
-          <Appear style={styles.onboard}>
+            "0건"과 "아직 안 옴"의 구분은 화면 게이트가 맡는다(도착 전엔 이 블록 자체가 마운트되지 않는다). */}
+        {entriesCount === 0 && (
+          <Appear delay={stagger(1)} style={styles.onboard}>
             <Text style={styles.onboardTitle}>매장을 막 시작하셨네요</Text>
             <Text style={styles.onboardBody}>
               아직 등록된 노하우가 없어요. 사장님이 알려주신 내용이 있어야 직원이 물었을 때 AI가 대신 답할 수 있어요.
@@ -305,8 +306,8 @@ export default function OwnerDashboardScreen() {
             (배치 규칙: 화면당 카드 1~2개는 남긴다 — 카드는 '이건 특별하다'는 신호다).
             ★노하우 건수로 게이트하지 않는다 — 업무와 노하우는 별개 축이라, 노하우 0건 매장이
             업무를 등록해도 홈에서 사라지는 버그였다. 뜨는 조건은 "오늘 업무가 있는가" 하나다. */}
-        {loaded && (todayTasks.length > 0 || showDuty) && (
-          <Appear style={styles.section}>
+        {(todayTasks.length > 0 || showDuty) && (
+          <Appear delay={stagger(2)} style={styles.section}>
             <SectionLabel
               icon="today-outline"
               title="오늘"
@@ -401,20 +402,25 @@ export default function OwnerDashboardScreen() {
 
         {/* ③ X2 다음 행동 — 화면에 한 자리다. 우선순위는 nextAction이 정하고,
             0건이면 AlertRow가 스스로 렌더하지 않는다. */}
-        {/* 도착 전엔 count 를 0으로 눌러 아무것도 그리지 않는다 — 로딩 중 0을 "할 일 없음"으로 읽히게
-            두면 잠깐 사라졌다 나타나는 행이 된다(AlertRow 는 0건이면 스스로 null). */}
-        <AlertRow
-          label={nextAction.label}
-          count={loaded ? nextAction.count : 0}
-          unit={nextAction.unit}
-          icon={nextAction.icon}
-          onPress={nextAction.onPress}
-        />
+        {/* ★count>0 을 **바깥에서** 한 번 더 가드하는 이유: AlertRow 는 0건이면 스스로 null 을 돌려주는데,
+            그걸 그냥 <Appear>로 감싸면 내용 없는 Animated.View 만 남아 ScrollView gap 이 한 칸 더 벌어진다. */}
+        {nextAction.count > 0 && (
+          <Appear delay={stagger(3)}>
+            <AlertRow
+              label={nextAction.label}
+              count={nextAction.count}
+              unit={nextAction.unit}
+              icon={nextAction.icon}
+              onPress={nextAction.onPress}
+            />
+          </Appear>
+        )}
 
         {/* 오늘의 제안·핵심 기능 캐러셀은 홈에서 제거(회의 반영):
             기능을 이미 아는 사장에겐 중복 노출 → 템플릿 둘러보기는 노하우 탭으로 이관했다. */}
         </View>
       </ScrollView>
+      )}
       <RoleTabBar role="owner" />
 
       {/* 신규 사장 코치마크 투어 — 매장 운영 허브 → 첫 노하우 깔기까지 순차 안내.

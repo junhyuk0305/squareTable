@@ -5,7 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useMemberPrefsStore, DEFAULT_MEMBER_PREF } from '@/lib/store/useMemberPrefsStore';
-import { usePayrollStore } from '@/lib/store/usePayrollStore';
+import { usePayrollStore, useWagesSettled } from '@/lib/store/usePayrollStore';
 import { notifyAction } from '@/lib/utils/confirm';
 import { won } from '@/lib/utils/attendance';
 import { storeColor } from '@/lib/utils/storeColor';
@@ -16,6 +16,7 @@ import { QuietHoursModal } from '@/components/settings/QuietHoursModal';
 import { PersonalizeSheet } from '@/components/settings/PersonalizeSheet';
 import { ConfirmModal } from '@/components/ConfirmModal';
 import { RoleTabBar } from '@/components/RoleTabBar';
+import { ScreenLoading } from '@/components/ScreenLoading';
 
 /**
  * 매장 설정 — 직원 5탭의 설정 탭. "이 매장에서만" 갈리는 개인 설정을 담는다(직원×매장 레이어).
@@ -30,9 +31,11 @@ export default function StoreSettings() {
   const userName = useSessionStore((s) => s.userName);
   const leaveStore = useSessionStore((s) => s.leaveStore);
   const wages = usePayrollStore((s) => s.wages);
+  const wagesSettled = useWagesSettled();
 
   const savePref = useMemberPrefsStore((s) => s.save);
   const hydratePrefs = useMemberPrefsStore((s) => s.hydrate);
+  const prefsLoaded = useMemberPrefsStore((s) => s.loaded);
 
   const [busy, setBusy] = useState(false);
   const [quietModal, setQuietModal] = useState(false);
@@ -56,6 +59,14 @@ export default function StoreSettings() {
   const pref = useMemberPrefsStore((s) => s.byUnit[unitId ?? ''] ?? DEFAULT_MEMBER_PREF);
   const wage = userId ? wages[userId] : undefined;
   const color = storeColor(unitId ?? '', pref.color);
+
+  /**
+   * ★도착 전에는 설정 값을 그리지 않는다 — `DEFAULT_MEMBER_PREF` 로 먼저 그리면 음소거·방해금지
+   * 토글이 **꺼짐으로 보였다가 켜짐으로 뒤바뀐다**(설정 화면에서 이건 오조작을 부른다).
+   * 시급도 같은 문제 — `wagesLoaded` 전에는 "사장님이 정해요"가 거짓으로 먼저 뜬다.
+   * ※ 설정 성격 화면이라 **등장 애니메이션은 넣지 않는다**(의도적으로 정적).
+   */
+  const ready = prefsLoaded && wagesSettled;
 
   const openPersonalize = () => {
     setDraftName(pref.nickname ?? '');
@@ -89,6 +100,10 @@ export default function StoreSettings() {
         {/* 매장 헤더 + '이 매장' 두 행을 한 카드로 합쳤다 — 원래 헤더 카드와 '이 매장' 카드가 따로였고
             그래서 흰 카드 면이 4연속이었다(배치규칙① 위반, 2026-08-06). 매장명이 곧 이 묶음의 제목이라
             '이 매장' 라벨은 없애도 방향을 잃지 않는다. 카드는 SettingsSection(=SettingsKit) 것을 그대로 쓴다. */}
+        {!ready ? (
+          <ScreenLoading label="매장 설정을 불러오고 있어요…" />
+        ) : (
+          <>
         <SettingsSection>
           {/* 색 점 + 매장명 + (있으면) 내 별칭. 탭하면 개인화 시트.
               카드 안 첫 행이므로 카드 크롬(배경·보더·라운드)은 SettingsSection이 이고 여기는 여백만 갖는다. */}
@@ -131,9 +146,12 @@ export default function StoreSettings() {
             <SettingsRow icon="time-outline" label="시간대 설정" value={`${pref.quiet_start} ~ ${pref.quiet_end}`} onPress={() => setQuietModal(true)} />
           ) : null}
         </SettingsSection>
+          </>
+        )}
 
         {/* 카드 밖 행 — 위 두 카드와 형태를 갈라 흰 카드 연속을 끊는다(배치규칙①).
-            둘 다 '이 매장' 설정이 아니라 화면을 떠나는 동작이라, 카드에서 내려도 위계가 맞다. */}
+            둘 다 '이 매장' 설정이 아니라 화면을 떠나는 동작이라, 카드에서 내려도 위계가 맞다.
+            ★게이트 밖에 둔다 — 원격 값에 기대지 않는 이동 수단이라, 설정이 안 와도 나갈 길은 열려 있어야 한다. */}
         <Pressable
           onPress={() => router.push('/account-settings')}
           style={({ pressed }) => [styles.outRow, pressed && { opacity: 0.6 }]}

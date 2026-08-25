@@ -5,8 +5,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { BottomSheet } from '@/components/BottomSheet';
 import { EntryDetailModal } from '@/components/EntryDetailModal';
 import { SectionLabel } from '@/components/SectionLabel';
+import { ScreenLoading } from '@/components/ScreenLoading';
 import { MiniStats } from '@/components/blocks/MiniStats';
-import { Appear } from '@/components/Appear';
+import { Appear, stagger } from '@/components/Appear';
 import { useUnknownQueueStore, answerableQuestions } from '@/lib/store/useUnknownQueueStore';
 import { useSuggestionStore } from '@/lib/store/useSuggestionStore';
 import { useSessionStore } from '@/lib/store/useSessionStore';
@@ -33,6 +34,12 @@ export function JuniorMySpace({ me }: { me: string }) {
   const submitSuggestion = useSuggestionStore((s) => s.submit);
   const history = useChatStore((s) => s.history);
   const entries = usePlaybookStore((s) => s.entries);
+  // 이 뷰가 그리는 원격 소스 넷 — 하나라도 안 왔으면 본문을 마운트하지 않는다.
+  // ★훅은 각각 먼저 부르고 그 다음에 AND 한다(&& 안에서 훅 호출 = 렌더마다 훅 개수가 달라짐).
+  const queueLoaded = useUnknownQueueStore((s) => s.loaded);
+  const suggestionsLoaded = useSuggestionStore((s) => s.loaded);
+  const historyLoaded = useChatStore((s) => s.loaded);
+  const entriesLoaded = usePlaybookStore((s) => s.loaded);
   const userName = useSessionStore((s) => s.userName);
   const storeName = useSessionStore((s) => s.storeName);
   const { copied, copy } = useCopyToClipboard();
@@ -103,6 +110,17 @@ export function JuniorMySpace({ me }: { me: string }) {
     );
   };
 
+  // 전부 도착 전엔 로딩만 — "지금은 도와줄 질문이 없어요"가 먼저 스치거나 기록 섹션이
+  // 없음→있음으로 하나씩 튀어나오는 것을 막는다(08-07 정본 §0-1). 훅은 위에서 전부 호출한 뒤다.
+  const ready = queueLoaded && suggestionsLoaded && historyLoaded && entriesLoaded;
+  if (!ready) {
+    return (
+      <View style={s.flex}>
+        <ScreenLoading label="내 공간을 불러오고 있어요…" />
+      </View>
+    );
+  }
+
   return (
     <ScrollView style={s.flex} contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
       {/* ① 도와줄 수 있는 질문 (D4) */}
@@ -112,7 +130,7 @@ export function JuniorMySpace({ me }: { me: string }) {
       ) : (
         <View style={s.list}>
           {answerable.map((u, i) => (
-            <Appear key={u.id} delay={i * 50}>
+            <Appear key={u.id} delay={stagger(i)}>
               <Pressable onPress={() => setAnswerFor(u)} style={({ pressed }) => [s.qCard, pressed && { opacity: 0.85 }]}>
                 <View style={{ flex: 1 }}>
                   <Text style={s.qText} numberOfLines={2}>{u.query_text}</Text>
@@ -146,16 +164,17 @@ export function JuniorMySpace({ me }: { me: string }) {
             {(showAllAnswered ? myAnswered : myAnswered.slice(0, 3)).map((u, i) => {
               const e = u.resolved_with_entry_id ? entryById.get(u.resolved_with_entry_id) : undefined;
               return (
-                <Pressable
-                  key={u.id}
-                  disabled={!e}
-                  onPress={() => e && setDetailEntry(e)}
-                  style={({ pressed }) => [s.groupRow, i > 0 && s.rowDivider, pressed && e && { opacity: 0.7 }]}
-                >
-                  <Ionicons name="checkmark-circle" size={16} color={BrandColors.good} />
-                  <Text style={s.rowText} numberOfLines={1}>{u.query_text}</Text>
-                  {e ? <Ionicons name="chevron-forward" size={15} color={InkColors.ink3} /> : null}
-                </Pressable>
+                <Appear key={u.id} delay={stagger(i)}>
+                  <Pressable
+                    disabled={!e}
+                    onPress={() => e && setDetailEntry(e)}
+                    style={({ pressed }) => [s.groupRow, i > 0 && s.rowDivider, pressed && e && { opacity: 0.7 }]}
+                  >
+                    <Ionicons name="checkmark-circle" size={16} color={BrandColors.good} />
+                    <Text style={s.rowText} numberOfLines={1}>{u.query_text}</Text>
+                    {e ? <Ionicons name="chevron-forward" size={15} color={InkColors.ink3} /> : null}
+                  </Pressable>
+                </Appear>
               );
             })}
             {!showAllAnswered && myAnswered.length > 3 && (
@@ -186,18 +205,20 @@ export function JuniorMySpace({ me }: { me: string }) {
           <SectionLabel icon="paper-plane-outline" title="내가 보낸 제안" hint={`${myProposals.length}건`} />
           <View style={s.groupCard}>
             {(showAllProposals ? myProposals : myProposals.slice(0, 3)).map((sug, i) => (
-              <View key={sug.id} style={i > 0 ? s.rowDivider : undefined}>
-                <View style={s.groupRow}>
-                  <Ionicons name={sug.status === 'approved' ? 'checkmark-circle' : sug.status === 'rejected' ? 'close-circle' : 'time-outline'} size={16} color={sug.status === 'approved' ? BrandColors.good : sug.status === 'rejected' ? BrandColors.bad : InkColors.ink3} />
-                  <Text style={s.rowText} numberOfLines={1}>{sug.text}</Text>
-                  <Text style={[s.statusTag, sug.status === 'approved' && { color: BrandColors.goodText }, sug.status === 'rejected' && { color: BrandColors.badText }]}>
-                    {sug.status === 'approved' ? '반영됨' : sug.status === 'rejected' ? '반려' : '검토 중'}
-                  </Text>
+              <Appear key={sug.id} delay={stagger(i)}>
+                <View style={i > 0 ? s.rowDivider : undefined}>
+                  <View style={s.groupRow}>
+                    <Ionicons name={sug.status === 'approved' ? 'checkmark-circle' : sug.status === 'rejected' ? 'close-circle' : 'time-outline'} size={16} color={sug.status === 'approved' ? BrandColors.good : sug.status === 'rejected' ? BrandColors.bad : InkColors.ink3} />
+                    <Text style={s.rowText} numberOfLines={1}>{sug.text}</Text>
+                    <Text style={[s.statusTag, sug.status === 'approved' && { color: BrandColors.goodText }, sug.status === 'rejected' && { color: BrandColors.badText }]}>
+                      {sug.status === 'approved' ? '반영됨' : sug.status === 'rejected' ? '반려' : '검토 중'}
+                    </Text>
+                  </View>
+                  {sug.status === 'rejected' && !!sug.owner_note && (
+                    <Text style={s.rejectNote}>사장님 메모 · {sug.owner_note}</Text>
+                  )}
                 </View>
-                {sug.status === 'rejected' && !!sug.owner_note && (
-                  <Text style={s.rejectNote}>사장님 메모 · {sug.owner_note}</Text>
-                )}
-              </View>
+              </Appear>
             ))}
             {!showAllProposals && myProposals.length > 3 && (
               <MoreRow count={myProposals.length - 3} onPress={() => setShowAllProposals(true)} />
@@ -214,11 +235,13 @@ export function JuniorMySpace({ me }: { me: string }) {
             {(showAllQuestions ? myQuestions.slice(0, 20) : myQuestions.slice(0, 5)).map((q, i) => {
               const answered = !!q.resolved_at || (q.matched_entry_ids?.length ?? 0) > 0;
               return (
-                <View key={q.id} style={[s.groupRow, i > 0 && s.rowDivider]}>
-                  <Ionicons name="help-circle-outline" size={16} color={InkColors.ink3} />
-                  <Text style={s.rowText} numberOfLines={1}>{q.query_text}</Text>
-                  {answered ? <Text style={s.doneMeta}>답 받음</Text> : <Text style={s.waitTag}>답 기다리는 중</Text>}
-                </View>
+                <Appear key={q.id} delay={stagger(i)}>
+                  <View style={[s.groupRow, i > 0 && s.rowDivider]}>
+                    <Ionicons name="help-circle-outline" size={16} color={InkColors.ink3} />
+                    <Text style={s.rowText} numberOfLines={1}>{q.query_text}</Text>
+                    {answered ? <Text style={s.doneMeta}>답 받음</Text> : <Text style={s.waitTag}>답 기다리는 중</Text>}
+                  </View>
+                </Appear>
               );
             })}
             {!showAllQuestions && myQuestions.length > 5 && (

@@ -24,6 +24,9 @@ export type OwnerDashboardData = {
    *
    * 읽기 '실패'는 여기서 로딩으로 위장하지 않는다 — 실패해도 loaded 는 true 가 되고(스토어 계약),
    * 표면화는 전역 SyncBanner(db.ts readFail)와 화면별 loadError 가 맡는다.
+   *
+   * ★이 값 하나가 홈의 **유일한** 게이트다. 화면이 다른 loaded 를 따로 보지 않는다 —
+   *   게이트가 둘이면 반쯤 채워진 화면이 다시 생긴다(예전 dutyLoaded 이중 게이트가 그랬다).
    */
   loaded: boolean;
   entriesCount: number;
@@ -56,8 +59,6 @@ export type OwnerDashboardData = {
    *   누가 안 왔는지는 근무표에서 본다.
    */
   dutyPlanned: number;
-  /** 근무표·출퇴근이 둘 다 도착했는가 — duty 줄을 그려도 되는지(0명 단정 방지). */
-  dutyLoaded: boolean;
   /** 직원끼리 합의가 끝나 사장 승인만 남은 교대 — 홈 '다음 행동' 1순위. */
   pendingSwaps: number;
   pending: number;
@@ -81,13 +82,20 @@ export function useOwnerDashboardData(): OwnerDashboardData {
   const entries = usePlaybookStore((s) => s.entries);
   const staff = useStaffStore((s) => s.staff);
 
-  // 빈 상태 판정의 전제 — 이 화면이 읽는 스토어 4개가 전부 도착했는가.
-  // (staff·suggestion·quiz 는 이 화면에서 "0건"을 단정하는 자리가 없어 게이트에 넣지 않는다.)
+  // 빈 상태 판정의 전제 — 이 화면이 읽는 원격 소스가 **전부** 도착했는가.
+  //
+  // ★2026-08-25: 예전엔 playbook·queue·work·attendance **4개만** AND 했다. 그런데 홈이 그리는
+  //   `pendingSwaps`(schedule)·`pendingSuggestions`(suggestion)·`missedKnowhowCount`(useQuizBoard)·
+  //   `behindStaff`/`pendingJoin`(staff)이 전부 게이트 밖이라, '다음 행동' 한 줄의 **라벨과 목적지가
+  //   나중에 통째로 바뀌었다**(교대 승인 → 제안 검토처럼). 사장이 누르려던 순간에 버튼이 바뀌는 셈이다.
+  //   게이트는 화면이 읽는 것과 같은 범위여야 한다 — 하나라도 빠지면 그 값이 거짓말을 한다.
+  // ★훅은 `&&` 안에서 부르지 않는다 — 각각 변수로 받은 뒤 AND 한다(단락 평가로 훅 개수가 달라지면 크래시).
   const playbookLoaded = usePlaybookStore((s) => s.loaded);
   const queueLoaded = useUnknownQueueStore((s) => s.loaded);
   const workLoaded = useWorkStore((s) => s.loaded);
   const attendanceLoaded = useAttendanceStore((s) => s.loaded);
-  const loaded = playbookLoaded && queueLoaded && workLoaded && attendanceLoaded;
+  const staffLoaded = useStaffStore((s) => s.loaded);
+  const suggestionLoaded = useSuggestionStore((s) => s.loaded);
 
   const today = todayStr();
 
@@ -210,7 +218,7 @@ export function useOwnerDashboardData(): OwnerDashboardData {
   // 오답 판정(표본 5회·오답률 40%)은 useQuizBoard가 SSOT다 — 여기서 다시 정의하면
   // 홈과 퀴즈 화면이 같은 노하우를 두고 다른 말을 하게 된다.
   // ⚠️ 비용: 이 훅은 마운트 시 코스·문항·오답집계 3쿼리를 스스로 친다(홈 진입마다).
-  const { buildRows } = useQuizBoard();
+  const { buildRows, boardLoaded } = useQuizBoard();
   const missedKnowhowCount = useMemo(
     () => buildRows(null).filter((r) => r.missPct > 0).length,
     [buildRows],
@@ -232,6 +240,17 @@ export function useOwnerDashboardData(): OwnerDashboardData {
     [staff, templates, knowhowLinks, quizCounts, understanding],
   );
 
+  // 위에서 모은 loaded 플래그를 여기서 하나로 합친다 — schedule·quiz 는 선언 순서상 여기서야 다 모인다.
+  const loaded =
+    playbookLoaded &&
+    queueLoaded &&
+    workLoaded &&
+    attendanceLoaded &&
+    staffLoaded &&
+    suggestionLoaded &&
+    scheduleLoaded &&
+    boardLoaded;
+
   return {
     loaded,
     // 검토 대기(draft·인수인계서 파이프라인 초안)는 자산 카운트에서 제외 —
@@ -241,8 +260,6 @@ export function useOwnerDashboardData(): OwnerDashboardData {
     todayTasks,
     duty,
     dutyPlanned,
-    // 두 축이 다 와야 "0명"이 참이 된다 — 위 loaded 에 섞지 않는다(섞으면 홈 전체가 근무표를 기다린다).
-    dutyLoaded: scheduleLoaded && attendanceLoaded,
     pendingSwaps,
     pending,
     heroQuery,

@@ -7,7 +7,8 @@ import { useAttendanceStore, type AttendanceRecord } from '@/lib/store/useAttend
 import { usePayrollStore } from '@/lib/store/usePayrollStore';
 import { computePay } from '@/lib/utils/payroll';
 import { RoleTabBar } from '@/components/RoleTabBar';
-import { Appear } from '@/components/Appear';
+import { Appear, stagger } from '@/components/Appear';
+import { ScreenLoading } from '@/components/ScreenLoading';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { fmtDuration, won, hhmm, todayStr, normalizeTime, shiftMonth, daysInMonth, maskHHMM } from '@/lib/utils/attendance';
@@ -17,7 +18,14 @@ const WD = ['일', '월', '화', '수', '목', '금', '토'];
 type Props = {
   /** 대상 직원 id(점주는 [staffId], 직원은 본인 userId) */
   staffId: string;
-  wage: number;
+  /**
+   * 이 직원의 시급. **정해지지 않았으면 `null`** — 최저시급으로 대신 계산하지 않는다.
+   * 예전엔 미설정이면 `DEFAULT_HOURLY_WAGE`(최저시급)를 넣어 **그럴듯한 금액**을 띄웠고,
+   * 그걸 본 사람은 "사장이 최저시급으로 정해 뒀다"로 읽었다. 금액은 분쟁 대상이라
+   * 빈칸("아직 없다")은 괜찮아도 틀린 숫자는 사실로 읽힌다 — `junior/attendance` 가 먼저 없앤 규칙(P7)을 여기도 맞춘다.
+   * 왜 안 보이는지(미설정/읽기 실패)는 호출부가 `belowSummary`·`topHeader` 에서 말한다.
+   */
+  wage: number | null;
   /** 이 화면에서 보정 시 기록될 주체 */
   editedBy: 'owner' | 'staff';
   /** edited_by==='staff'인 기록에 붙는 배지 라벨('직원 수정' | '수정됨') */
@@ -37,6 +45,12 @@ export function TimesheetView({ staffId, wage, editedBy, badgeLabel, badgeTone =
   const upsertManual = useAttendanceStore((s) => s.upsertManual);
   const removeRecord = useAttendanceStore((s) => s.removeRecord);
   const settings = usePayrollStore((s) => s.settings);
+  // ★게이트는 **두 소스 다** 본다. 기록만 먼저 오고 급여규칙이 늦으면 computePay 가
+  //   주휴·야간·연장이 빠진 **틀린 금액**을 한 번 보여준다 — 0원보다 나쁘다(급여는 분쟁 대상 데이터).
+  //   ⛔`&&` 안에서 훅을 부르지 않는다 — 렌더마다 훅 개수가 달라져 크래시한다.
+  const attendanceLoaded = useAttendanceStore((s) => s.loaded);
+  const settingsLoaded = usePayrollStore((s) => s.settingsLoaded);
+  const ready = attendanceLoaded && settingsLoaded;
 
   const [ym, setYm] = useState(() => todayStr().slice(0, 7));
   const [editing, setEditing] = useState<string | null>(null); // record id 또는 'new'
@@ -52,7 +66,8 @@ export function TimesheetView({ staffId, wage, editedBy, badgeLabel, badgeTone =
 
   const totalMin = monthRecs.reduce((a, r) => a + r.work_minutes, 0);
   // 예상급여 — 급여규칙(주휴·휴게·야간·연장·추가수당) 반영 SSOT=computePay(F1). totalMin 은 근무시간 표시용.
-  const monthPay = computePay(monthRecs, wage, settings).total;
+  // 시급이 없으면 **계산 자체를 하지 않는다** — 없는 시급으로 만든 금액은 0원이든 최저시급이든 거짓말이다.
+  const monthPay = wage == null ? null : computePay(monthRecs, wage, settings).total;
   const month = Number(ym.slice(5));
 
   function openEdit(r: AttendanceRecord) {
@@ -114,13 +129,23 @@ export function TimesheetView({ staffId, wage, editedBy, badgeLabel, badgeTone =
   const badgeStyle = badgeTone === 'accent' ? styles.badgeAccent : styles.badgeInk;
   const badgeTextStyle = badgeTone === 'accent' ? styles.badgeAccentText : styles.badgeInkText;
 
+  // 화면 골격(SafeArea·탭바)은 즉시 서고 본문만 로딩 — 훅을 전부 부른 뒤의 early return.
+  if (!ready) {
+    return (
+      <SafeAreaView style={styles.safe} edges={['bottom']}>
+        <ScreenLoading label="출퇴근 기록을 불러오고 있어요…" />
+        <RoleTabBar role={role} />
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        {topHeader && <Appear delay={0}>{topHeader}</Appear>}
+        {topHeader && <Appear delay={stagger(0)}>{topHeader}</Appear>}
 
         {/* 월 네비 */}
-        <Appear delay={40}>
+        <Appear delay={stagger(1)}>
         <View style={styles.monthBar}>
           <Pressable onPress={() => setYm((v) => shiftMonth(v, -1))} hitSlop={8} style={styles.monthArrow}>
             <Ionicons name="chevron-back" size={20} color={InkColors.ink2} />
@@ -133,7 +158,7 @@ export function TimesheetView({ staffId, wage, editedBy, badgeLabel, badgeTone =
         </Appear>
 
         {/* 요약 */}
-        <Appear delay={80}>
+        <Appear delay={stagger(2)}>
         <View style={styles.summary}>
           <View style={styles.sumCol}>
             <Text style={styles.sumLabel}>근무일</Text>
@@ -147,14 +172,14 @@ export function TimesheetView({ staffId, wage, editedBy, badgeLabel, badgeTone =
           <View style={styles.sumDivider} />
           <View style={styles.sumCol}>
             <Text style={styles.sumLabel}>예상급여</Text>
-            <Text style={styles.sumValue}>{won(monthPay)}</Text>
+            <Text style={styles.sumValue}>{monthPay == null ? '—' : won(monthPay)}</Text>
           </View>
         </View>
         </Appear>
-        {belowSummary && <Appear delay={100}>{belowSummary}</Appear>}
+        {belowSummary && <Appear delay={stagger(3)}>{belowSummary}</Appear>}
 
         {/* 기록 추가 */}
-        <Appear delay={120}>
+        <Appear delay={stagger(4)}>
         {editing === 'new' ? (
           <View style={styles.editCard}>
             <Text style={styles.editTitle}>출근 기록 추가</Text>
@@ -190,19 +215,19 @@ export function TimesheetView({ staffId, wage, editedBy, badgeLabel, badgeTone =
         </Appear>
 
         {/* 날짜별 기록 */}
-        <Appear delay={160}>
+        <Appear delay={stagger(5)}>
         <Text style={styles.sectionTitle}>
           날짜별 기록 <Text style={styles.sectionHint}>· 탭하면 수정</Text>
         </Text>
         </Appear>
-        <Appear delay={180}>
+        <Appear delay={stagger(6)}>
         <View style={styles.list}>
           {monthRecs.length === 0 && <Text style={styles.empty}>이 달 출퇴근 기록이 없어요.</Text>}
-          {monthRecs.map((r) => {
+          {monthRecs.map((r, i) => {
             const d = new Date(`${r.date}T00:00:00`);
             const open = !r.check_out;
             return (
-              <View key={r.id} style={styles.recWrap}>
+              <Appear key={r.id} delay={stagger(i)} style={styles.recWrap}>
                 <Pressable onPress={() => (editing === r.id ? cancel() : openEdit(r))} style={styles.recRow}>
                   <View style={styles.dateBadge}>
                     <Text style={styles.dateNum}>{d.getDate()}</Text>
@@ -249,13 +274,13 @@ export function TimesheetView({ staffId, wage, editedBy, badgeLabel, badgeTone =
                     </View>
                   </View>
                 )}
-              </View>
+              </Appear>
             );
           })}
         </View>
         </Appear>
 
-        <Appear delay={200}>
+        <Appear delay={stagger(7)}>
         <Text style={styles.demoNote}>{footerNote}</Text>
         </Appear>
         <View style={{ height: 8 }} />

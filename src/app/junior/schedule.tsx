@@ -5,7 +5,8 @@ import { Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 import { RoleTabBar } from '@/components/RoleTabBar';
-import { Appear } from '@/components/Appear';
+import { Appear, stagger } from '@/components/Appear';
+import { ScreenLoading } from '@/components/ScreenLoading';
 import { SectionLabel } from '@/components/SectionLabel';
 import { SegmentTabs } from '@/components/SegmentTabs';
 import { ScheduleWeek } from '@/components/schedule/ScheduleWeek';
@@ -41,6 +42,8 @@ const STATUS_META: Record<
 export default function JuniorScheduleScreen() {
   const me = useSessionStore((s) => s.userId);
   const staff = useStaffStore((s) => s.staff);
+  const staffLoaded = useStaffStore((s) => s.loaded);
+  const scheduleLoaded = useScheduleStore((s) => s.loaded);
   const config = useScheduleStore((s) => s.config);
   const templates = useScheduleStore((s) => s.templates);
   const swaps = useScheduleStore((s) => s.swaps);
@@ -111,6 +114,11 @@ export default function JuniorScheduleScreen() {
   const nowHM = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
   const myNext = nextShiftOf(templates, swaps, me, today, staff, nowHM);
 
+  // ★근무표(config·templates·swaps)와 직원 명부가 **둘 다** 와야 그린다.
+  //   근무표가 없으면 config가 DEFAULT_CONFIG라 운영시간·휴무일이 **실제 설정인 것처럼** 보였다가 바뀌고,
+  //   명부가 없으면 nameOf()가 동료를 '직원'으로 부르다가 실명으로 바뀐다.
+  const ready = scheduleLoaded && staffLoaded;
+
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
       <Stack.Screen options={{ title: '근무표' }} />
@@ -125,10 +133,14 @@ export default function JuniorScheduleScreen() {
       />
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+        {!ready ? (
+          <ScreenLoading label="근무표를 불러오고 있어요…" />
+        ) : (
+          <>
         {tab === 'week' ? (
           <>
             {/* 내 다음 근무 — 직원이 가장 알고싶은 ‘언제·누구와’를 격자보다 먼저 */}
-            <Appear delay={0}>
+            <Appear delay={stagger(0)}>
             {myNext ? (
               <View style={styles.hero}>
                 <Text style={styles.heroTitle}>{myNext.ongoing ? '지금 근무 중' : '내 다음 근무'}</Text>
@@ -157,7 +169,7 @@ export default function JuniorScheduleScreen() {
               </View>
             )}
             </Appear>
-            <Appear delay={60}>
+            <Appear delay={stagger(1)}>
             <ScheduleWeek
               monday={monday}
               setMonday={setMonday}
@@ -170,14 +182,14 @@ export default function JuniorScheduleScreen() {
               canPress={(date, sh) => sh.workerStaffId === me && date >= today && !sh.pending}
             />
             </Appear>
-            <Appear delay={100}>
+            <Appear delay={stagger(2)}>
             <Text style={styles.tip}>내 근무(노랑)를 누르거나 ‘교대 요청’ 탭에서 대타·맞교환을 올릴 수 있어요.</Text>
             </Appear>
           </>
         ) : (
           <View style={{ gap: 18 }}>
             {/* 교대 요청 올리기 — 이 탭의 유일한 Primary(카드 안 수락 버튼은 보조 형태로 내렸다) */}
-            <Appear delay={0}>
+            <Appear delay={stagger(0)}>
             <Pressable
               onPress={() => setPicking(true)}
               accessibilityRole="button"
@@ -190,15 +202,16 @@ export default function JuniorScheduleScreen() {
             </Appear>
 
             {/* 내가 대응할 수 있는 요청 — 읽고 판단해서 수락까지 하는 유일한 목록이라 카드로 남긴다(배치⑤) */}
-            <Appear delay={60}>
+            <Appear delay={stagger(1)}>
             <Section icon="people-outline" title="동료가 올린 요청" hint="수락하면 사장님 승인으로 넘어가요">
               {incoming.length === 0 ? (
                 <Empty text="지금 대응할 교대 요청이 없어요." />
               ) : (
-                incoming.map((r) => {
+                incoming.map((r, i) => {
                   const conflict = conflictOf(r);
                   return (
-                    <SwapCard key={r.id} r={r} nameOf={nameOf} tplById={tplById}>
+                    <Appear key={r.id} delay={stagger(i)}>
+                    <SwapCard r={r} nameOf={nameOf} tplById={tplById}>
                       {conflict && (
                         <View style={styles.conflict}>
                           <Ionicons name="alert-circle-outline" size={14} color={BrandColors.bad} />
@@ -217,6 +230,7 @@ export default function JuniorScheduleScreen() {
                         </Text>
                       </Pressable>
                     </SwapCard>
+                    </Appear>
                   );
                 })
               )}
@@ -224,7 +238,7 @@ export default function JuniorScheduleScreen() {
             </Appear>
 
             {/* 내가 올린 요청 — 상태만 확인하고 넘기는 목록이라 카드가 아니라 구분선 행으로 내린다(배치①) */}
-            <Appear delay={120}>
+            <Appear delay={stagger(2)}>
             <Section icon="paper-plane-outline" title="내가 올린 요청">
               {myOpen.length === 0 ? (
                 <Empty text="진행 중인 요청이 없어요. 위 ‘교대 요청하기’로 올려보세요." />
@@ -256,7 +270,7 @@ export default function JuniorScheduleScreen() {
 
             {/* 처리 결과 — 세 번째 목록. 접기 행 하나로 강등하고, 토글은 펼친 뒤에도 자리에 남는다 */}
             {history.length > 0 && (
-              <Appear delay={180}>
+              <Appear delay={stagger(3)}>
               <View>
                 <Pressable
                   onPress={() => setShowHistory((v) => !v)}
@@ -309,6 +323,8 @@ export default function JuniorScheduleScreen() {
         {!!config.note && <Text style={styles.infoNote}>{config.note}</Text>}
 
         <View style={{ height: 12 }} />
+          </>
+        )}
       </ScrollView>
 
       {picking && (

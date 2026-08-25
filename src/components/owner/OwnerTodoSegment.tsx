@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { View, Text, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
+import { useMemo, useState, type ReactNode } from 'react';
+import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
+import { Appear, stagger } from '@/components/Appear';
 import { EmptyState } from '@/components/EmptyState';
 import { SectionLabel } from '@/components/SectionLabel';
 import { SimilarGroupRow } from '@/components/SimilarGroupRow';
@@ -15,7 +16,7 @@ import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { isTodoQuestion, isTodoSuggestion } from '@/lib/hooks/useOwnerTodoCount';
 import { sortByUrgency } from '@/lib/utils/unknownQuery';
 import { formatAsked } from '@/lib/utils/time';
-import { fetchAiAnswers, AI_ANSWER_LIMIT, type AiAnswerRow as AiAnswer } from '@/lib/db';
+import { AI_ANSWER_LIMIT, type AiAnswerRow as AiAnswer } from '@/lib/db';
 
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Space } from '@/lib/theme/layout';
@@ -58,11 +59,10 @@ const daysWaiting = (iso: string) => {
  *   홈의 'AI 답변 사용' 숫자를 걷어낼 때의 근거가 이 목록이었으므로, 여기서 또 빠지면 앱에 아예 없어진다.
  *   숫자가 아니라 목록인 이유 = "무엇으로 답했는지"가 보여야 증명이다(AiAnswerRow 주석).
  */
-export function OwnerTodoSegment() {
+export function OwnerTodoSegment({ aiAnswers }: { aiAnswers: AiAnswer[] }) {
   const router = useRouter();
 
   const queue = useUnknownQueueStore((s) => s.queue);
-  const loaded = useUnknownQueueStore((s) => s.loaded);
   const loadError = useUnknownQueueStore((s) => s.loadError);
   const hydrate = useUnknownQueueStore((s) => s.hydrate);
   const pendingTotal = useUnknownQueueStore((s) => s.pendingTotal);
@@ -85,18 +85,9 @@ export function OwnerTodoSegment() {
 
   // ── 'AI가 답한 질문' — 원천은 unknown_queries 가 아니라 chat_queries(무엇으로 답했는지를 아는 쪽).
   // 최근 창·건수 규칙은 fetchAiAnswers 의 기본값(최근 30일 · 최대 50건 · 최신순)을 그대로 따른다.
-  // ★aiLoaded 를 따로 든다 — 아직 안 온 상태를 "0건"으로 위장하면 "AI가 아무것도 못 했다"로 읽힌다.
-  //   실패(data=null)해도 aiLoaded 는 false 로 남아 그룹이 안 그려진다(빈 목록 위장 금지).
+  // ★목록은 부모(OwnerKnowhowBrowse)가 fetch 해 넘긴다 — 도착 여부는 부모의 화면 단일 게이트가 든다.
+  //   여기까지 왔다는 것은 이미 도착했다는 뜻이라, "아직 안 온 것"을 0건으로 위장할 자리가 없다.
   const entries = usePlaybookStore((s) => s.entries);
-  const [aiAnswers, setAiAnswers] = useState<AiAnswer[]>([]);
-  const [aiLoaded, setAiLoaded] = useState(false);
-  useEffect(() => {
-    let alive = true;
-    void fetchAiAnswers().then(({ data }) => {
-      if (alive && data) { setAiAnswers(data); setAiLoaded(true); }
-    });
-    return () => { alive = false; };
-  }, []);
   const entryTitleOf = useMemo(() => {
     const m = new Map(entries.map((e) => [e.id, e.title]));
     return (id: string) => m.get(id);
@@ -113,15 +104,6 @@ export function OwnerTodoSegment() {
   const goSuggestions = () => router.push('/owner/suggestions');
   const goAdd = () => router.push('/owner/coach');
   const goEntry = (id: string) => router.push({ pathname: '/owner/edit/[id]', params: { id } });
-
-  if (!loaded) {
-    return (
-      <View style={styles.center}>
-        <ActivityIndicator color={InkColors.ink3} />
-        <Text style={styles.loadingText}>질문을 불러오는 중...</Text>
-      </View>
-    );
-  }
 
   // 로드 실패 + 빈 큐 → "질문 없음"으로 위장하지 않고 재시도를 띄운다(무음 실패 방지).
   if (loadError && queue.length === 0) {
@@ -155,7 +137,11 @@ export function OwnerTodoSegment() {
           <SectionLabel title="답할 질문" hint={`${pendingTotal ?? pending.length}건`} />
           <PagedList
             items={pending}
-            render={(uq) => <SimilarGroupRow key={uq.id} uq={uq} onPress={goAnswer} onAnswer={goAnswer} />}
+            render={(uq, i) => (
+              <Appear key={uq.id} delay={stagger(i)}>
+                <SimilarGroupRow uq={uq} onPress={goAnswer} onAnswer={goAnswer} />
+              </Appear>
+            )}
           />
         </View>
       )}
@@ -165,7 +151,11 @@ export function OwnerTodoSegment() {
           <SectionLabel title="검토할 제안" hint={`${pendingSuggestions.length}건`} />
           <PagedList
             items={pendingSuggestions}
-            render={(s) => <SuggestionRow key={s.id} s={s} onPress={goSuggestions} />}
+            render={(s, i) => (
+              <Appear key={s.id} delay={stagger(i)}>
+                <SuggestionRow s={s} onPress={goSuggestions} />
+              </Appear>
+            )}
           />
         </View>
       )}
@@ -173,18 +163,22 @@ export function OwnerTodoSegment() {
       {/* 세그먼트 안에 세그먼트를 또 두지 않는다(구 InboxSubtabs 부활 금지) — 위 두 그룹과 나란히 세운다.
           ★힌트는 **상한에 걸렸는지**를 말해야 한다. 옛 판본은 slice(0,50) 한 길이를 그대로 써서
           300건 매장에서도 "50건"이라고 했다 — 그건 거짓이고, 51번째부터는 앱 어디에도 없다. */}
-      {aiLoaded && badAnswers.length > 0 && (
+      {badAnswers.length > 0 && (
         <View style={styles.group}>
           <SectionLabel title="답이 틀렸대요" hint={`${badAnswers.length}건`} />
           <Text style={styles.groupHint}>노하우를 눌러 고치면 다음부터 제대로 답해요.</Text>
           <PagedList
             items={badAnswers}
-            render={(r) => <AiAnswerRow key={r.id} row={r} titleOf={entryTitleOf} onOpenEntry={goEntry} />}
+            render={(r, i) => (
+              <Appear key={r.id} delay={stagger(i)}>
+                <AiAnswerRow row={r} titleOf={entryTitleOf} onOpenEntry={goEntry} />
+              </Appear>
+            )}
           />
         </View>
       )}
 
-      {aiLoaded && okAnswers.length > 0 && (
+      {okAnswers.length > 0 && (
         <View style={styles.group}>
           <SectionLabel
             title="AI가 답한 질문"
@@ -192,7 +186,11 @@ export function OwnerTodoSegment() {
           />
           <PagedList
             items={okAnswers}
-            render={(r) => <AiAnswerRow key={r.id} row={r} titleOf={entryTitleOf} onOpenEntry={goEntry} />}
+            render={(r, i) => (
+              <Appear key={r.id} delay={stagger(i)}>
+                <AiAnswerRow row={r} titleOf={entryTitleOf} onOpenEntry={goEntry} />
+              </Appear>
+            )}
           />
         </View>
       )}
@@ -211,7 +209,7 @@ export function OwnerTodoSegment() {
  *   고칠 때는 상한 도달 시 마지막 '더 보기' 자리에 "여기까지 1,000건" 한 줄을 붙인다.
  *   (대기 1,000건이 쌓인 매장은 현실에 없어 우선순위를 뒤로 뒀다.)
  */
-function PagedList<T>({ items, render }: { items: T[]; render: (it: T) => ReactNode }) {
+function PagedList<T>({ items, render }: { items: T[]; render: (it: T, i: number) => ReactNode }) {
   const [shown, setShown] = useState(PAGE);
   const rest = items.length - shown;
   return (
@@ -261,9 +259,6 @@ const styles = StyleSheet.create({
   root: { gap: Space.lg },
   group: { gap: Space.sm },
   groupHint: { fontSize: 13, color: InkColors.ink2, marginTop: -2 },
-
-  center: { alignItems: 'center', justifyContent: 'center', gap: Space.sm, paddingVertical: 48 },
-  loadingText: { fontSize: 15, color: InkColors.ink2, fontWeight: '600' },
 
   // 질문 행(SimilarGroupRow)과 같은 좌우 인셋·하단 구분선으로 맞춘다.
   sugRow: {

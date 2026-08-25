@@ -15,6 +15,7 @@ import { useUnknownQueueStore } from '@/lib/store/useUnknownQueueStore';
 import { useWorkStore } from '@/lib/store/useWorkStore';
 import { useAttendanceStore } from '@/lib/store/useAttendanceStore';
 import { useScheduleStore } from '@/lib/store/useScheduleStore';
+import { useRoomStore } from '@/lib/store/useRoomStore';
 import { showToast } from '@/lib/store/useToastStore';
 import { canManage } from '@/lib/utils/roles';
 
@@ -47,6 +48,9 @@ function withTimeout<T>(p: Promise<T>, ms: number): Promise<T | 'timeout'> {
  * 왜 여기서 당기는가: 스토어는 매장이 바뀌어도 비워지지 않는다(loaded 는 true 로 남는다).
  * 그래서 전환 직후 그냥 넘어가면 ① 빈 상태가 스치거나 ② 잠깐 **이전 매장 데이터**가 보인다.
  * 하이드레이트 함수는 owner/junior _layout 이 부르는 것과 **같은 것**이라 새 경로가 아니다.
+ *
+ * ★채팅방(useRoomStore)은 어느 레이아웃도 당기지 않는다 — 업무 탭이 자기 안에서만 hydrate 한다.
+ *   여기 없으면 커버가 걷힌 **뒤에** 방 칩이 하나씩 나타난다. 진입에서 같이 채워 둔다.
  */
 async function prefetchStoreData(manage: boolean): Promise<void> {
   const jobs = manage
@@ -55,11 +59,16 @@ async function prefetchStoreData(manage: boolean): Promise<void> {
         useUnknownQueueStore.getState().hydrate(),
         useWorkStore.getState().hydrate(),
         useAttendanceStore.getState().hydrate(),
+        useRoomStore.getState().hydrate(),
       ]
     : [
+        // ★노하우(playbook)도 여기서 당긴다 — 빠져 있던 동안 직원은 커버가 걷힌 직후
+        //   "아직 등록된 노하우가 없어요"라는 **거짓 문구**를 실제로 봤다(아직 안 온 것을 없다고 말한 것).
+        usePlaybookStore.getState().hydrate(),
         useWorkStore.getState().hydrate(),
         useAttendanceStore.getState().hydrate(),
         useScheduleStore.getState().hydrate(),
+        useRoomStore.getState().hydrate(),
       ];
   // allSettled: 한 스토어가 던져도(오프라인) 나머지를 기다린다. race: 그래도 안 끝나면 놓아준다.
   await Promise.race([

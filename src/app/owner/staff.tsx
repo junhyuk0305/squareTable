@@ -1,16 +1,17 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, Text, Pressable, StyleSheet, ScrollView, TextInput, ActivityIndicator } from 'react-native';
+import { View, Text, Pressable, StyleSheet, ScrollView, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useFocusEffect, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
-import { usePayrollStore } from '@/lib/store/usePayrollStore';
+import { usePayrollStore, useWagesSettled } from '@/lib/store/usePayrollStore';
 import { useStaffStore } from '@/lib/store/useStaffStore';
 import { useAttendanceStore } from '@/lib/store/useAttendanceStore';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useWorkStore } from '@/lib/store/useWorkStore';
 import { RoleTabBar } from '@/components/RoleTabBar';
-import { Appear } from '@/components/Appear';
+import { Appear, stagger } from '@/components/Appear';
+import { ScreenLoading } from '@/components/ScreenLoading';
 import { ConfirmModal } from '@/components/ConfirmModal';
 import { Avatar } from '@/components/Avatar';
 import { SectionLabel } from '@/components/SectionLabel';
@@ -42,6 +43,14 @@ export default function OwnerStaffScreen() {
   const reject = useStaffStore((s) => s.reject);
   const roles = useStaffStore((s) => s.roles);
   const setRole = useStaffStore((s) => s.setRole);
+  // ★게이트가 staffLoaded 하나였다 — 그래서 히어로 "이번 달 예상 인건비"가 **₩0을 먼저 확정 표시**하고,
+  //   시급 입력칸이 DEFAULT_HOURLY_WAGE 를 보여주다 실제 시급으로 바뀌었다(입력칸이라 그 사이 사용자가 만질 수 있다).
+  //   총액은 wages·records·settings 에서 나오고 진도줄은 work 에서 나온다 — 그 넷이 다 와야 참이다.
+  //   훅은 `&&` 안에서 부르지 않는다(단락 평가로 훅 개수가 달라지면 크래시).
+  const wagesSettled = useWagesSettled();
+  const attendanceLoaded = useAttendanceStore((s) => s.loaded);
+  const workLoaded = useWorkStore((s) => s.loaded);
+  const ready = staffLoaded && wagesSettled && attendanceLoaded && workLoaded;
   const INVITE_CODE = useSessionStore((s) => s.inviteCode) || '------';
   // 0093: 이 화면은 매니저도 쓴다(승인·시급·급여). 사장 전용 = 내보내기·코드 변경·매니저 지정.
   const isOwner = useSessionStore((s) => s.role) === 'owner';
@@ -133,17 +142,14 @@ export default function OwnerStaffScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
       <Stack.Screen options={{ title: '직원·급여' }} />
-      {/* 전부 도착 전엔 무조건 로딩 — "직원 0명" 기본 화면이 먼저 떴다가 채워지는 부분 렌더 금지. */}
-      {!staffLoaded ? (
-        <View style={styles.loadingWrap}>
-          <ActivityIndicator color={InkColors.ink3} />
-          <Text style={styles.loadingText}>직원 목록을 불러오는 중...</Text>
-        </View>
+      {/* 전부 도착 전엔 무조건 로딩 — "직원 0명"·"₩0" 기본 화면이 먼저 떴다가 채워지는 부분 렌더 금지. */}
+      {!ready ? (
+        <ScreenLoading label="직원·급여를 불러오고 있어요…" />
       ) : (
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         {/* ① 급여 — 이번 달 인건비 총액 + 급여 설정 진입(상단). 구 '근무·급여'·'급여 설정' 카드를 흡수.
             이 화면의 히어로는 여기 하나다(2026-08-06) — 아래 초대코드가 같은 다크·30sp 규격이라 히어로가 둘이었다. */}
-        <Appear delay={0}>
+        <Appear delay={stagger(0)}>
         <View style={styles.payCard}>
           <Text style={styles.payLabel}>이번 달 예상 인건비</Text>
           <Text style={styles.payValue}>{won(totalPay)}</Text>
@@ -166,7 +172,7 @@ export default function OwnerStaffScreen() {
         {/* ② 초대코드 — 카드가 아니라 상하 보더 한 줄(2026-08-06).
             같은 코드를 /owner/settings 에서도 상시 보고 복사할 수 있어, 여기서까지 히어로 규격을 쓸 이유가 없다.
             안내 문장은 ⓘ 로 옮겼다 — 접었을 뿐 도달은 그대로다. */}
-        <Appear delay={60}>
+        <Appear delay={stagger(1)}>
         <View style={styles.inviteRow}>
           <View style={styles.inviteCol}>
             <View style={styles.inviteLabelRow}>
@@ -208,7 +214,7 @@ export default function OwnerStaffScreen() {
 
         {/* ③ 퀴즈 — 흰 카드였지만 위 두 블록과 함께 '카드 3연속'을 만들던 자리라 행으로 낮춘다(2026-08-06).
             새 직원이 들어오기로 한 순간이 코스를 만들 순간(초대코드 바로 아래). */}
-        <Appear delay={80}>
+        <Appear delay={stagger(2)}>
         <View>
         <Pressable
           onPress={() => router.push('/owner/training')}
@@ -250,12 +256,12 @@ export default function OwnerStaffScreen() {
 
         {/* 합류 신청(승인 대기) — 남용 #2. 코드로 신청한 사람을 사장이 승인해야 소속된다. */}
         {pending.length > 0 && (
-          <Appear delay={100}>
+          <Appear delay={stagger(3)}>
           <View style={styles.pendingWrap}>
             <SectionLabel title={`합류 신청 (${pending.length}명)`} hint="승인해야 합류돼요" />
             <View style={[styles.list, styles.pendingList]}>
-              {pending.map((p) => (
-                <View key={p.id} style={styles.staffRow}>
+              {pending.map((p, i) => (
+                <Appear key={p.id} delay={stagger(i)} style={styles.staffRow}>
                   <Avatar name={p.name} size={40} fontSize={15} />
                   <View style={styles.nameCol}>
                     <Text style={styles.staffName} numberOfLines={1}>{p.name || '이름 미입력'}</Text>
@@ -267,7 +273,7 @@ export default function OwnerStaffScreen() {
                   <Pressable onPress={() => approve(p.id)} hitSlop={6} style={({ pressed }) => [styles.approveBtn, pressed && { opacity: 0.85 }]}>
                     <Text style={styles.approveText}>승인</Text>
                   </Pressable>
-                </View>
+                </Appear>
               ))}
             </View>
           </View>
@@ -275,10 +281,10 @@ export default function OwnerStaffScreen() {
         )}
 
         {/* 직원 목록 — 시급 편집 + 이번 달 시간·급여·근무상태(구 근무·급여 화면 흡수) */}
-        <Appear delay={140}>
+        <Appear delay={stagger(4)}>
         <SectionLabel title={`합류한 직원 (${staff.length}명)`} hint="탭 → 출근기록" />
         </Appear>
-        <Appear delay={160}>
+        <Appear delay={stagger(5)}>
         {staff.length === 0 ? (
           loadError ? (
             // 로드 실패를 "직원 0명"으로 위장하지 않고 재시도를 띄운다(무음 실패 방지).
@@ -301,12 +307,12 @@ export default function OwnerStaffScreen() {
           )
         ) : (
         <View style={styles.list}>
-          {staff.map((s) => {
+          {staff.map((s, i) => {
             const agg = perStaff[s.id];
             const isManager = roles[s.id] === 'manager';
             const behind = behindOf[s.id];
             return (
-            <View key={s.id} style={styles.staffItem}>
+            <Appear key={s.id} delay={stagger(i)} style={styles.staffItem}>
             <View style={[styles.staffRow, styles.staffRowFlat]}>
               <Pressable onPress={() => router.push(`/owner/timesheet/${s.id}`)} style={({ pressed }) => [styles.staffTap, pressed && { opacity: 0.6 }]}>
                 <Avatar name={s.name} size={40} fontSize={15} />
@@ -384,13 +390,13 @@ export default function OwnerStaffScreen() {
                 <Text style={styles.roleBtnText}>{isManager ? '매니저 해제' : '매니저로 지정'}</Text>
               </Pressable>
             )}
-            </View>
+            </Appear>
             );
           })}
         </View>
         )}
         </Appear>
-        <Appear delay={200}>
+        <Appear delay={stagger(6)}>
         <Text style={styles.demoNote}>* 직원을 누르면 출근 기록을 보고 시간을 수정할 수 있어요. 시급을 바꾸면 인건비에 바로 반영돼요.</Text>
         </Appear>
         <View style={{ height: 12 }} />
@@ -449,8 +455,6 @@ function StatusChip({ status }: { status: 'out' | 'working' | 'done' }) {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: InkColors.cream },
   scroll: { padding: 20, gap: 12 },
-  loadingWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
-  loadingText: { fontSize: 13, color: InkColors.ink3 },
 
   // 급여 요약 카드(구 근무·급여 totalCard + 급여 설정 진입)
   payCard: { backgroundColor: InkColors.ink, borderRadius: Radius.lg, padding: 20, gap: 4 },

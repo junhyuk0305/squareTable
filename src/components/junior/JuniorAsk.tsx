@@ -13,8 +13,9 @@ import {
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
-import { Appear } from '@/components/Appear';
+import { Appear, stagger } from '@/components/Appear';
 import { ChatComposerBar } from '@/components/ChatComposerBar';
+import { ScreenLoading } from '@/components/ScreenLoading';
 import { ChatTurn } from '@/components/junior/ChatTurn';
 
 import { useChatStore } from '@/lib/store/useChatStore';
@@ -62,6 +63,10 @@ export function JuniorAsk({ suggestEntry = true, seed }: { suggestEntry?: boolea
   const pendingDeflects = useChatStore((s) => s.pendingDeflects);
   const registerToOwner = useChatStore((s) => s.registerToOwner);
   const declineDeflect = useChatStore((s) => s.declineDeflect);
+  // ★본문이 읽는 원격 소스 둘 — 지난 대화(chat)와 그라운딩 노하우(playbook).
+  //  ★훅을 각각 먼저 부르고 그 다음에 AND 한다(&& 안에서 훅 호출 금지).
+  //  이 컴포넌트는 부모가 둘(junior/chat·owner/ask)이라 자기 게이트를 스스로 갖는다.
+  const historyLoaded = useChatStore((s) => s.loaded);
 
   const userId = useSessionStore((s) => s.userId);
   const userName = useSessionStore((s) => s.userName);
@@ -69,6 +74,7 @@ export function JuniorAsk({ suggestEntry = true, seed }: { suggestEntry?: boolea
   const getStaff = useStaffStore((s) => s.getStaff);
   const getEntryById = usePlaybookStore((s) => s.getById);
   const entries = usePlaybookStore((s) => s.entries);
+  const entriesLoaded = usePlaybookStore((s) => s.loaded);
   // ★그라운딩 범위 — **AI가 실제로 보는 것과 같은 집합**을 센다.
   //  match_playbook(0012_pgvector_search.sql)의 조건은 이 매장의 `status='published'` 하나뿐이다.
   //  needs_review·is_template 로 더 좁혀 세면 화면의 'n개'와 AI가 쓰는 노하우가 어긋난다 —
@@ -174,6 +180,11 @@ export function JuniorAsk({ suggestEntry = true, seed }: { suggestEntry?: boolea
     handleSend(text);
   }
 
+  // 지난 대화와 노하우가 **둘 다** 와야 본문을 그린다. 하나라도 기다리면
+  //  ① 기존 대화가 있는 사람도 "무엇이든 물어보세요" 빈 화면을 먼저 보고
+  //  ② "우리 매장 노하우 0개를 보고 답해요"라고 아직 안 온 것을 없는 것처럼 말한다.
+  const ready = historyLoaded && entriesLoaded;
+
   return (
     <KeyboardAvoidingView
       style={{ flex: 1 }}
@@ -195,7 +206,12 @@ export function JuniorAsk({ suggestEntry = true, seed }: { suggestEntry?: boolea
         )}
       </View>
 
-      {/* 대화 히스토리 */}
+      {/* 대화 히스토리 — 게이트 밖은 identityBar·입력바(세션값)뿐이다. */}
+      {!ready ? (
+        <View style={styles.scroll}>
+          <ScreenLoading label="지난 대화를 불러오고 있어요…" />
+        </View>
+      ) : (
       <ScrollView
         ref={scrollRef}
         style={styles.scroll}
@@ -232,7 +248,7 @@ export function JuniorAsk({ suggestEntry = true, seed }: { suggestEntry?: boolea
                 </Text>
                 <View style={styles.suggestList}>
                   {emptySuggestions.map((text, i) => (
-                    <Appear key={`${i}-${text}`} delay={120 + i * 70}>
+                    <Appear key={`${i}-${text}`} delay={stagger(i)}>
                       <Pressable
                         onPress={() => handleSeedTap(text)}
                         accessibilityRole="button"
@@ -295,6 +311,7 @@ export function JuniorAsk({ suggestEntry = true, seed }: { suggestEntry?: boolea
 
         <View style={{ height: 8 }} />
       </ScrollView>
+      )}
 
       {/* 전송 실패 알림 — 조용히 사라지지 않게, 다시 시도 경로 제공 */}
       {error && (

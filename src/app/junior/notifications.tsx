@@ -15,7 +15,8 @@ import { useMemberPrefsStore } from '@/lib/store/useMemberPrefsStore';
 import { showToast } from '@/lib/store/useToastStore';
 import { HeaderBackButton } from '@/components/HeaderBackButton';
 import { MarkAllReadButton } from '@/components/MarkAllReadButton';
-import { Appear } from '@/components/Appear';
+import { Appear, stagger } from '@/components/Appear';
+import { ScreenLoading } from '@/components/ScreenLoading';
 import { NotificationList, JUNIOR_KIND_UI } from '@/components/NotificationList';
 import { NotificationEnableCard } from '@/components/NotificationEnableCard';
 import { SegmentTabs } from '@/components/SegmentTabs';
@@ -41,17 +42,22 @@ export default function JuniorNotificationsScreen() {
 
   const feed = useWorkStore((s) => s.feed);
   const taskTemplates = useWorkStore((s) => s.templates);
+  const workLoaded = useWorkStore((s) => s.loaded);
   const done = useWorkStore((s) => s.done);
   const markNoticeRead = useWorkStore((s) => s.markNoticeRead);
   const markAllRead = useWorkStore((s) => s.markAllRead);
   const swaps = useScheduleStore((s) => s.swaps);
   const templates = useScheduleStore((s) => s.templates);
+  const scheduleLoaded = useScheduleStore((s) => s.loaded);
   const staff = useStaffStore((s) => s.staff);
+  const staffLoaded = useStaffStore((s) => s.loaded);
   // 내 제안 검토 결과(반영/반려+사유) 알림용 — 이 화면 진입 시 당긴다(내공간 밖에선 미로드일 수 있음).
   const suggestions = useSuggestionStore((s) => s.suggestions);
+  const suggestionLoaded = useSuggestionStore((s) => s.loaded);
   useEffect(() => { void useSuggestionStore.getState().hydrate(); }, []);
   // '도와줄 수 있는 질문'(D4) — 같은 이유로 당긴다(벨에서 바로 들어오면 물어보기 탭을 안 거쳐 큐가 비어 있다).
   const queue = useUnknownQueueStore((s) => s.queue);
+  const queueLoaded = useUnknownQueueStore((s) => s.loaded);
   useEffect(() => { void useUnknownQueueStore.getState().hydrate(); }, []);
   const today = todayStr();
   // '모두 읽기' 기준 시각(0078) — read 개념이 없는 배정·교대의 배지·강조 해제 축.
@@ -98,6 +104,13 @@ export default function JuniorNotificationsScreen() {
   );
   const hasUnread = useMemo(() => rows.some((r) => r.unread), [rows]);
 
+  // ★이 화면이 읽는 소스가 **전부** 와야 그린다 — 하나라도 늦으면 "아직 새 알림이 없어요"가
+  //   거짓으로 먼저 뜬다("정말 없는 것"과 "아직 안 온 것"을 구분한다). suggestions·queue 는
+  //   이 화면이 직접 당기는 것이라 진입 직후엔 확실히 비어 있다.
+  //   통합 알림(cross)은 다점포일 때만 hydrate 하므로 그때만 AND 한다.
+  const ready =
+    workLoaded && scheduleLoaded && staffLoaded && suggestionLoaded && queueLoaded && (!multiStore || crossLoaded);
+
   function markAll() {
     if (!hasUnread) return;
     if (unreadReadIds.length > 0) markAllRead(unreadReadIds, me);
@@ -119,7 +132,7 @@ export default function JuniorNotificationsScreen() {
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         {/* 맨 위 — 매장명 · 내 이름(정체성). 홈 헤더에서 옮겨온 정보 */}
         {/* 카드 자체가 '내 계정' 진입점 — 누르면 프로필 편집 화면으로(설정 탭 프로필 카드와 동일 목적지). */}
-        <Appear delay={0}>
+        <Appear delay={stagger(0)}>
         <Pressable
           onPress={() => router.push('/account-edit')}
           style={({ pressed }) => [styles.idCard, pressed && { opacity: 0.7 }]}
@@ -156,22 +169,22 @@ export default function JuniorNotificationsScreen() {
         )}
 
         {/* 알림 목록 — 직원·사장 공유 NotificationList */}
-        <Appear delay={80}>
+        {!ready ? (
+          <ScreenLoading label="알림을 불러오고 있어요…" />
+        ) : (
+        <Appear delay={stagger(1)}>
         {seg === 'all' && multiStore ? (
           <NotificationList
             rows={allRows}
             kindUI={KIND_UI}
             onPress={(r) => void openRow(r)}
-            // 로드 전엔 "없음"으로 위장하지 않는다(로드 실패는 readFail 배너가 표면화).
-            empty={
-              crossLoaded
-                ? {
-                    icon: 'notifications-off-outline',
-                    text: '전체 매장에 새 알림이 없어요.',
-                    sub: '소속된 모든 매장의 공지·교대 요청을 여기에 모아서 보여드려요.',
-                  }
-                : { icon: 'notifications-outline', text: '알림을 불러오는 중이에요.' }
-            }
+            // 로드 전엔 "없음"으로 위장하지 않는다 — 이제 위 ready 게이트가 그 사이를 통째로 막는다
+            // (로드 실패는 readFail 배너가 표면화).
+            empty={{
+              icon: 'notifications-off-outline',
+              text: '전체 매장에 새 알림이 없어요.',
+              sub: '소속된 모든 매장의 공지·교대 요청을 여기에 모아서 보여드려요.',
+            }}
           />
         ) : (
           <NotificationList
@@ -189,6 +202,7 @@ export default function JuniorNotificationsScreen() {
           />
         )}
         </Appear>
+        )}
 
         <View style={{ height: 12 }} />
       </ScrollView>

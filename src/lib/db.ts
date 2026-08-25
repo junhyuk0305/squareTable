@@ -196,6 +196,7 @@ export type OwnerOverviewRow = {
 export async function fetchOwnerOverview(): Promise<DbResult<OwnerOverviewRow[]>> {
   if (!HAS_SUPABASE) return { data: [], error: null };
   const { data, error } = await supabase.rpc('owner_overview');
+  if (error) readFail('fetchOwnerOverview', error); // 허브 현황의 원천 — 실패가 무음이면 게이트가 영구 스피너가 된다
   return { data: (data as OwnerOverviewRow[]) ?? null, error: error as DbErr };
 }
 
@@ -525,6 +526,7 @@ export async function fetchMemberPrefs(): Promise<DbResult<UnitMemberPrefsRow[]>
   const { data, error } = await supabase
     .from('unit_member_prefs')
     .select('unit_id, nickname, color, muted, quiet_enabled, quiet_start, quiet_end, notif_ack_at');
+  if (error) readFail('fetchMemberPrefs', error); // 실패가 무음이면 "전부 꺼짐"으로 위장되고, 토글 한 번에 서버 값이 기본값으로 덮인다
   return { data: (data as UnitMemberPrefsRow[]) ?? null, error: error as DbErr };
 }
 /** 알림 '모두 읽기'(0078) — 내 (user, unit) 행의 notif_ack_at 을 지금으로. */
@@ -1318,7 +1320,13 @@ export async function addRoomMember(roomId: string, userId: string): Promise<boo
 }
 export async function removeRoomMember(roomId: string, userId: string): Promise<boolean> {
   if (!HAS_SUPABASE) return true;
-  return write('removeRoomMember', supabase.from('work_room_members').delete().eq('room_id', roomId).eq('user_id', userId));
+  // 0행이면 "내보냈다/나갔다"가 거짓말이 된다 — 화면에선 사라지는데 서버엔 남아 그 사람이 계속 방을
+  // 읽는다(권한 오인). 자기 행은 wrm_select 1번 분기(user_id = auth.uid())로, 남의 행은 관리자
+  // 가시성으로 각각 SELECT 되므로 .select() 오탐 위험이 없다.
+  return writeStrict(
+    'removeRoomMember',
+    supabase.from('work_room_members').delete().eq('room_id', roomId).eq('user_id', userId).select('room_id'),
+  );
 }
 export function subscribeRooms(onChange: () => void): () => void {
   if (!HAS_SUPABASE) return () => {};
@@ -1669,7 +1677,8 @@ export async function insertTrainingRequests(rows: TrainingRequestRow[]): Promis
 }
 export async function deleteTrainingRequest(id: string): Promise<boolean> {
   if (!HAS_SUPABASE) return true;
-  return write('deleteTrainingRequest', supabase.from('training_requests').delete().eq('id', id));
+  // 0행이면 취소가 안 된 것인데 화면에선 사라진다 → 다음 조회에 되살아나고 직원에겐 계속 뜬다.
+  return writeStrict('deleteTrainingRequest', supabase.from('training_requests').delete().eq('id', id).select('id'));
 }
 
 // ── 훈련 문항(0107) — 저장된 퀴즈 문항 + 서버 채점 ──────────────────────────
@@ -2416,13 +2425,18 @@ export async function fetchFeed(): Promise<FeedItem[]> {
     .from('work_feed')
     .select('data')
     .gte('feed_date', sinceDate(FEED_WINDOW_DAYS))
-    .order('created_at')
+    // ★내림차순으로 잘라야 "최근 PAGE_LIMIT건"이 온다(2026-08-25 감사).
+    //   오름차순 + limit 이면 상한을 넘는 순간 **가장 오래된** PAGE_LIMIT건만 내려와,
+    //   그 뒤 새 메시지는 재조회 때마다 사라진다 = 채팅이 과거 시점에 멈춘다(오류 표시 0).
+    //   work_feed 는 메시지·공지·댓글에 더해 완료알림(task_done)까지 담아 상한에 먼저 닿는다.
+    //   소비자(WorkChat·RoomBar)는 오름차순 배열을 기대하므로 받은 뒤 뒤집는다.
+    .order('created_at', { ascending: false })
     .limit(PAGE_LIMIT);
   if (error) {
     readFail('fetchFeed', error);
     return [];
   }
-  return (data ?? []).map((r: any) => r.data as FeedItem);
+  return (data ?? []).map((r: any) => r.data as FeedItem).reverse();
 }
 export async function upsertFeed(item: FeedItem): Promise<boolean> {
   if (!HAS_SUPABASE) return true;
@@ -2629,17 +2643,22 @@ export async function saveRegularDueDays(days: number): Promise<boolean> {
 
 export async function upsertScheduleConfig(c: StoreConfig): Promise<boolean> {
   if (!HAS_SUPABASE) return true;
-  return write(
+  // 운영시간·정기휴무는 근무표·dayparts 계산의 원천이다. 0행(RLS 차단·_unitId 드리프트)이면
+  // 화면은 "저장됐어요 ✓" 후 나가는데 F5 하면 원래 값 — 유령 성공 금지(2026-08-25 감사).
+  return writeStrict(
     'upsertScheduleConfig',
-    supabase.from('schedule_config').upsert({
-      unit_id: _unitId,
-      open: c.open,
-      close: c.close,
-      closed_days: c.closedDays,
-      note: c.note,
-      dayparts: c.dayparts ?? null,
-      updated_at: new Date().toISOString(),
-    }),
+    supabase
+      .from('schedule_config')
+      .upsert({
+        unit_id: _unitId,
+        open: c.open,
+        close: c.close,
+        closed_days: c.closedDays,
+        note: c.note,
+        dayparts: c.dayparts ?? null,
+        updated_at: new Date().toISOString(),
+      })
+      .select('unit_id'),
   );
 }
 

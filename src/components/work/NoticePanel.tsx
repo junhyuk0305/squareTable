@@ -9,7 +9,7 @@ import { Elevation, Radius } from '@/lib/theme/elevation';
 import { mdHHmm } from '@/lib/utils/attendance';
 import { ReactionBar } from './ReactionBar';
 import { MentionInput, extractMentions, type Member } from './MentionInput';
-import { Appear } from '@/components/Appear';
+import { Appear, stagger } from '@/components/Appear';
 import { confirmAction } from '@/lib/utils/confirm';
 
 /**
@@ -89,7 +89,7 @@ export function NoticePanel({
           <Text style={s.empty}>{isOwner ? '아직 공지가 없어요. 아래에 첫 공지를 적어보세요.' : '아직 공지가 없어요. 사장님이 공지를 올리면 여기에 보여요.'}</Text>
         )}
         {notices.map((n, i) => (
-          <Appear key={n.id} delay={Math.min(i * 60, 240)}>
+          <Appear key={n.id} delay={stagger(i)}>
           <NoticeCard
             notice={n}
             comments={comments.filter((c) => c.refId === n.id)}
@@ -201,6 +201,9 @@ function NoticeCard({
   const read = readBy.includes(me);
   // 다중발송 공지면 매장 단위 읽음("N/M 매장")을 사장에게. 소유 매장만 집계(definer RPC).
   const [bcast, setBcast] = useState<{ total: number; read_count: number } | null>(null);
+  // 조회가 끝내 실패했는가 — **'아직 안 옴'과 '못 가져옴'을 구분**한다. 못 가져온 것을 계속 빈 줄로
+  // 두면 무음 실패다. 그땐 아는 것(발송한 매장 수)만이라도 말한다.
+  const [bcastFailed, setBcastFailed] = useState(false);
 
   // 알바가 카드를 보면 읽음 처리(한 번).
   useEffect(() => {
@@ -212,7 +215,11 @@ function NoticeCard({
   useEffect(() => {
     if (!isOwner || !n.broadcast_id) return;
     let alive = true;
-    fetchBroadcastReadStatus(n.broadcast_id).then(({ data }) => { if (alive && data) setBcast(data); });
+    fetchBroadcastReadStatus(n.broadcast_id).then(({ data }) => {
+      if (!alive) return;
+      if (data) setBcast(data);
+      else setBcastFailed(true);
+    });
     return () => { alive = false; };
   }, [n.broadcast_id, isOwner]);
 
@@ -257,13 +264,29 @@ function NoticeCard({
 
       <View style={s.foot2}>
         {isOwner ? (
+          // ★다중발송 공지의 읽음 수(bcast)는 이 카드가 따로 하는 **원격 읽기**다. 도착 전에 무언가를
+          //   먼저 그리면 "3개 매장에 발송"(또는 "?개 매장에 발송")이 잠시 뒤 "1/3 매장 읽음"으로
+          //   **뜻이 다른 문장으로** 바뀐다 — 아직 안 온 것을 확정된 것처럼 말한 셈이다.
+          //   그래서 도착할 때까지 이 줄만 비워 둔다. 자리(행 높이)는 오른쪽 acts 가 잡고 있어 그대로다.
           <View style={s.readRow}>
-            <Ionicons name={n.broadcast_id ? 'megaphone-outline' : 'checkmark-done'} size={13} color={InkColors.ink3} />
-            <Text style={s.readText}>
-              {n.broadcast_id
-                ? (bcast ? `${bcast.read_count}/${bcast.total} 매장 읽음` : `${n.broadcast_total ?? '?'}개 매장에 발송`)
-                : `${readCount}/${memberCount}명 읽음`}
-            </Text>
+            {n.broadcast_id ? (
+              bcast ? (
+                <>
+                  <Ionicons name="megaphone-outline" size={13} color={InkColors.ink3} />
+                  <Text style={s.readText}>{`${bcast.read_count}/${bcast.total} 매장 읽음`}</Text>
+                </>
+              ) : bcastFailed && n.broadcast_total ? (
+                <>
+                  <Ionicons name="megaphone-outline" size={13} color={InkColors.ink3} />
+                  <Text style={s.readText}>{`${n.broadcast_total}개 매장에 발송`}</Text>
+                </>
+              ) : null
+            ) : (
+              <>
+                <Ionicons name="checkmark-done" size={13} color={InkColors.ink3} />
+                <Text style={s.readText}>{`${readCount}/${memberCount}명 읽음`}</Text>
+              </>
+            )}
           </View>
         ) : read ? (
           <View style={s.readRow}>

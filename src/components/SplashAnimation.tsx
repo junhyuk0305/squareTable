@@ -8,28 +8,45 @@ import { USE_NATIVE_DRIVER } from '@/lib/anim';
  * 매장의(1)→정석(2)→노란 밑줄 좌→우→카피 페이드업 → 로그인으로 페이드.
  * 이 구간(~1.9s)에 세션 체크/로딩 시간을 숨긴다. 라이트(크림) 배경.
  * RN core Animated + native driver. 밑줄은 transformOrigin:left 로 좌→우 scaleX.
+ *
+ * ★모션이 끝나도 `ready` 가 아니면 **걷지 않는다.** 예전엔 고정 타이머라 세션이 1.9초를 넘기면
+ *   스플래시가 먼저 사라지고 그 아래 빈 화면이 드러났다. 커버가 걷히는 시점 = 화면이 다 준비된 시점이다.
  */
-export function SplashAnimation({ onDone }: { onDone: () => void }) {
+export function SplashAnimation({ ready = true, onDone }: { ready?: boolean; onDone: () => void }) {
   // 렌더 중 ref.current 접근을 피하려 lazy useState 로 안정 값 생성.
   const [c1] = useState(() => new Animated.Value(0));
   const [c2] = useState(() => new Animated.Value(0));
   const [under] = useState(() => new Animated.Value(0));
   const [copy] = useState(() => new Animated.Value(0));
   const [fade] = useState(() => new Animated.Value(1));
+  // 로고 모션이 끝났는가. 걷는 조건은 이것 **그리고** ready 둘 다다.
+  const [introDone, setIntroDone] = useState(false);
 
   useEffect(() => {
     const reveal = (v: Animated.Value, delay: number) =>
       Animated.timing(v, { toValue: 1, duration: 320, delay, easing: Easing.out(Easing.cubic), useNativeDriver: USE_NATIVE_DRIVER });
 
-    Animated.parallel([
+    const intro = Animated.parallel([
       reveal(c1, 140),
       reveal(c2, 380),
       Animated.timing(under, { toValue: 1, duration: 420, delay: 700, easing: Easing.out(Easing.cubic), useNativeDriver: USE_NATIVE_DRIVER }),
       reveal(copy, 1040),
-    ]).start(() => {
-      Animated.timing(fade, { toValue: 0, duration: 340, delay: 360, useNativeDriver: USE_NATIVE_DRIVER }).start(() => onDone());
+    ]);
+    intro.start(({ finished }) => {
+      if (finished) setIntroDone(true);
     });
-  }, [c1, c2, under, copy, fade, onDone]);
+    return () => intro.stop();
+  }, [c1, c2, under, copy]);
+
+  // 페이드아웃 = 화면을 넘기는 순간. 모션이 끝났고 **데이터도 도착했을 때만** 시작한다.
+  useEffect(() => {
+    if (!introDone || !ready) return;
+    const out = Animated.timing(fade, { toValue: 0, duration: 340, delay: 360, useNativeDriver: USE_NATIVE_DRIVER });
+    out.start(({ finished }) => {
+      if (finished) onDone();
+    });
+    return () => out.stop();
+  }, [introDone, ready, fade, onDone]);
 
   const charStyle = (v: Animated.Value) => ({
     opacity: v,

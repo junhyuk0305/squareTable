@@ -11,7 +11,8 @@ import { INDUSTRIES } from '@/lib/config/industry';
 import { formatBizNo, isValidBizNo, bizDigits } from '@/lib/utils/bizno';
 import { isValidPhone, normalizePhone, formatPhone, formatBirthDate8, birthDateISO } from '@/lib/utils/validation';
 import { usePhoneOtp } from '@/lib/otp';
-import { Appear } from '@/components/Appear';
+import { Appear, stagger } from '@/components/Appear';
+import { ScreenLoading } from '@/components/ScreenLoading';
 import { BrandColors, InkColors } from '@/lib/theme/colors';
 import { Space } from '@/lib/theme/layout';
 import { Radius, Elevation } from '@/lib/theme/elevation';
@@ -26,6 +27,29 @@ import type { Role } from '@/types';
  * 이 화면 자체는 index/역할 레이아웃의 needsProfileSetup 게이트가 강제 라우팅한다.
  */
 export default function CompleteProfileScreen() {
+  const status = useSessionStore((s) => s.status);
+
+  // 로그인 안 됐으면 랜딩으로.
+  if (HAS_SUPABASE && status === 'signed_out') return <Redirect href="/" />;
+
+  // ★세션 복원(새로고침·URL 직진입) 중에는 폼을 **마운트하지 않는다**.
+  //   폼의 useState(userName || '') 는 마운트 1회로 시드되므로, 로딩 중에 마운트되면 이름 칸이
+  //   빈 문자열로 굳고 세션이 나중에 와도 채워지지 않는다(useState 는 갱신되지 않는다).
+  //   게이트만 두고 폼을 그대로 두면 이 문제가 안 고쳐진다 — account-edit.tsx 와 같은 구조로 나눈다.
+  if (HAS_SUPABASE && status === 'loading') {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <Stack.Screen options={{ headerShown: true, title: '프로필 완성', headerStyle: { backgroundColor: '#FFFFFF' }, headerTintColor: InkColors.ink }} />
+        <ScreenLoading label="계정 정보를 불러오고 있어요…" />
+      </SafeAreaView>
+    );
+  }
+
+  // status 확정 후에만 폼을 마운트 → useState 가 실제 프로필 값으로 시드된다.
+  return <CompleteProfileForm />;
+}
+
+function CompleteProfileForm() {
   const router = useRouter();
   const status = useSessionStore((s) => s.status);
   const userName = useSessionStore((s) => s.userName);
@@ -52,11 +76,10 @@ export default function CompleteProfileScreen() {
   // 않게 붙잡고, 재시도 시 completeProfile/중복검사를 건너뛰고 매장 생성만 다시 돈다.
   const [storeRetry, setStoreRetry] = useState(false);
 
-  // 로그인 안 됐으면 랜딩으로, 이미 프로필이 완성됐으면(이 화면 불필요) 역할 홈으로 — 오유입/재방문 차단.
+  // 이미 프로필이 완성됐으면(이 화면 불필요) 역할 홈으로 — 오유입/재방문 차단.
   // ★ !busy 필수: 제출 중엔 completeProfile 이 phone 을 먼저 채워 needsProfileSetup 이 false 로 바뀌는데,
   //   그 순간 이 가드가 발동하면 createStore 전에 홈으로 튕겨 사장 온보딩이 깨진다. 제출은 submit()이 끝에서
   //   명시적으로 라우팅하므로, 제출 중(busy)엔 가드를 쉰다.
-  if (HAS_SUPABASE && status === 'signed_out') return <Redirect href="/" />;
   if (!busy && !storeRetry && HAS_SUPABASE && status === 'signed_in' && !needsProfileSetup({ status, phone: phone0, unitId, pendingUnitId })) {
     return <Redirect href="/hub" />;
   }
@@ -123,7 +146,7 @@ export default function CompleteProfileScreen() {
     <SafeAreaView style={styles.safe}>
       <Stack.Screen options={{ headerShown: true, title: '프로필 완성', headerStyle: { backgroundColor: '#FFFFFF' }, headerTintColor: InkColors.ink }} />
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-        <Appear delay={0}>
+        <Appear delay={stagger(0)}>
         <View style={styles.intro}>
           <Text style={styles.introTitle}>거의 다 왔어요</Text>
           <Text style={styles.introSub}>매장의 정석을 시작하려면 몇 가지만 알려주세요.</Text>
@@ -131,10 +154,10 @@ export default function CompleteProfileScreen() {
         </Appear>
 
         {/* 역할 — 소셜 로그인은 역할 정보가 없으니 여기서 고른다(트리거는 항상 직원으로 시작). */}
-        <Appear delay={40}>
+        <Appear delay={stagger(1)}>
         <Text style={styles.roleQ}>어떤 분이세요?</Text>
         </Appear>
-        <Appear delay={40}>
+        <Appear delay={stagger(2)}>
         <View style={styles.roleRow}>
           {(
             [
@@ -156,12 +179,12 @@ export default function CompleteProfileScreen() {
         </View>
         </Appear>
 
-        <Appear delay={80}>
+        <Appear delay={stagger(3)}>
         <Field label="이름" value={name} onChange={setName} placeholder="홍길동" required />
         </Appear>
 
         {/* 전화번호 + SMS 인증(솔라피) — 가입 폼(signup)과 동일한 흐름. 데모는 입력만. */}
-        <Appear delay={80}>
+        <Appear delay={stagger(4)}>
         <View style={styles.field}>
           <Text style={styles.label}>전화번호<Text style={styles.req}> *</Text></Text>
           <View style={styles.otpRow}>
@@ -223,7 +246,7 @@ export default function CompleteProfileScreen() {
         </View>
         </Appear>
 
-        <Appear delay={80}>
+        <Appear delay={stagger(5)}>
         <View style={styles.field}>
           <Text style={styles.label}>생년월일<Text style={styles.req}> *</Text></Text>
           <TextInput
@@ -247,10 +270,10 @@ export default function CompleteProfileScreen() {
 
         {role === 'owner' ? (
           <>
-            <Appear delay={120}>
+            <Appear delay={stagger(6)}>
             <Field label="매장 이름" value={storeName} onChange={setStoreName} placeholder="예: 우리 카페 신촌점" required />
             </Appear>
-            <Appear delay={120}>
+            <Appear delay={stagger(7)}>
             <View style={styles.field}>
               <Text style={styles.label}>업종<Text style={styles.req}> *</Text></Text>
               <View style={styles.chipWrap}>
@@ -262,7 +285,7 @@ export default function CompleteProfileScreen() {
               </View>
             </View>
             </Appear>
-            <Appear delay={120}>
+            <Appear delay={stagger(8)}>
             <View style={styles.field}>
               <Text style={styles.label}>사업자등록번호 (선택)</Text>
               <TextInput
@@ -282,7 +305,7 @@ export default function CompleteProfileScreen() {
             </Appear>
           </>
         ) : (
-          <Appear delay={120}>
+          <Appear delay={stagger(6)}>
           <View style={styles.joinNote}>
             <Ionicons name="information-circle-outline" size={18} color={InkColors.ink2} />
             <Text style={styles.joinNoteText}>
@@ -294,13 +317,13 @@ export default function CompleteProfileScreen() {
 
         {err && <Text style={styles.err}>{err}</Text>}
 
-        <Appear delay={160}>
+        <Appear delay={stagger(9)}>
         <Pressable onPress={submit} disabled={busy} style={({ pressed }) => [styles.primary, busy && styles.primaryDisabled, pressed && !busy && { opacity: 0.88 }]}>
           {busy ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.primaryText}>{role === 'owner' ? (storeRetry ? '매장 다시 만들기' : '매장 만들고 시작하기') : '저장하고 시작하기'}</Text>}
         </Pressable>
         </Appear>
 
-        <Appear delay={160}>
+        <Appear delay={stagger(10)}>
         <Pressable onPress={() => void logout()} style={styles.logoutRow}>
           <Text style={styles.logoutText}>다른 계정으로 <Text style={styles.logoutStrong}>로그인</Text></Text>
         </Pressable>

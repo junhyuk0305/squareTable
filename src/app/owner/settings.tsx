@@ -17,6 +17,7 @@ import { QuietHoursModal } from '@/components/settings/QuietHoursModal';
 import { ShellTaskCleanupSheet } from '@/components/owner/quiz/ShellTaskCleanupSheet';
 import { PersonalizeSheet } from '@/components/settings/PersonalizeSheet';
 import { RoleTabBar } from '@/components/RoleTabBar';
+import { ScreenLoading } from '@/components/ScreenLoading';
 
 /**
  * 매장 설정(사장) — 사장 5탭의 설정 탭. "이 매장" 단위 설정만 담는다(2레이어 IA — F6 대칭 분리).
@@ -45,6 +46,11 @@ export default function OwnerSettings() {
    */
   const pref = useMemberPrefsStore((s) => s.byUnit[unitId ?? ''] ?? DEFAULT_MEMBER_PREF);
   const color = storeColor(unitId ?? '', pref.color);
+  // ★도착 전엔 pref 가 DEFAULT_MEMBER_PREF 라 음소거·방해금지 스위치가 **꺼짐으로 확정 표시**된 뒤
+  //   실제 값이 오면 스스로 뒤집힌다(사장이 그 사이 누르면 반대로 저장된다).
+  //   '퀴즈 때문에 생긴 할일 정리' 줄도 work 가 와야 개수가 참이 된다.
+  //   훅은 `&&` 안에서 부르지 않는다 — 각각 받은 뒤 AND 한다.
+  const prefsLoaded = useMemberPrefsStore((s) => s.loaded);
 
   /**
    * 옛 퀴즈 구조(0110)가 만들어 낸 껍데기 업무 — 판별은 두 조건의 교집합이다:
@@ -54,6 +60,8 @@ export default function OwnerSettings() {
   const templates = useWorkStore((s) => s.templates);
   const training = useWorkStore((s) => s.training);
   const done = useWorkStore((s) => s.done);
+  const workLoaded = useWorkStore((s) => s.loaded);
+  const ready = prefsLoaded && workLoaded;
   const [cleanupOpen, setCleanupOpen] = useState(false);
   const shellTasks = useMemo(() => {
     const everDone = new Set<string>();
@@ -89,7 +97,11 @@ export default function OwnerSettings() {
     <SafeAreaView style={styles.safe} edges={['bottom']}>
       <Stack.Screen options={{ headerShown: true, title: '매장 설정' }} />
       {/* 설정탭은 의도적으로 등장 애니메이션을 쓰지 않는다 — 자주 드나드는 관리 화면이라
-          매번 카드가 떠오르면 번잡함. 카드 등장 모션은 홈·물어보기·출퇴근·업무 등 콘텐츠 탭에만(Appear). */}
+          매번 카드가 떠오르면 번잡함. 카드 등장 모션은 홈·물어보기·출퇴근·업무 등 콘텐츠 탭에만(Appear).
+          로딩 게이트는 애니메이션과 별개다 — 스위치가 뒤집히는 것은 번잡함이 아니라 거짓 표시다. */}
+      {!ready ? (
+        <ScreenLoading label="매장 설정을 불러오고 있어요…" />
+      ) : (
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         {/* 매장 헤더 — 색 점 + 매장명 + (있으면) 내 별칭. 탭하면 개인화 시트(직원 매장 설정과 동일). */}
         <Pressable
@@ -178,6 +190,7 @@ export default function OwnerSettings() {
         <Text style={styles.foot}>매장의 정석 · 스퀘어테이블</Text>
         <View style={{ height: 16 }} />
       </ScrollView>
+      )}
       {cleanupOpen && <ShellTaskCleanupSheet tasks={shellTasks} onClose={() => setCleanupOpen(false)} />}
       <QuietHoursModal
         visible={quietModal}

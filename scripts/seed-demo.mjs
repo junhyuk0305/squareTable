@@ -180,6 +180,22 @@ async function main() {
   await step('work_templates', db.from('work_templates').upsert(templates));
 
   // ════════════════════════════════════════════════════════
+  // 할일을 누르면 "이 업무에 걸린 노하우"가 따라 나오는 연결(0069). 이게 비면 업무 상세가 콜드스타트다.
+  // work_templates 를 위에서 purge 했으므로 링크도 cascade 로 지워졌다 → 여기서 다시 건다.
+  console.log('10-b) 업무↔노하우 링크(work_template_knowhow)');
+  const link = (template_id, entry_id) => ({ unit_id: UNIT, template_id, entry_id, added_by: OWNER });
+  await step('work_template_knowhow', db.from('work_template_knowhow').upsert([
+    link('demo_t_open_1', 'pb_routine_001'),                    // 오픈 루틴 — 7시 30분
+    link('demo_t_open_1', 'pb_knowhow_001'),                    // 에스프레소 추출 — 손목 회전 한 번
+    link('demo_t_open_3', 'pb_routine_1785477969221_0'),        // 포스 마감 정산 순서
+    link('demo_t_mid_2', 'pb_routine_1782886957696_0'),         // 마감 시 원두 그라인더 관리
+    link('demo_t_close_1', 'pb_routine_003'),                   // 마감 청소 — 매트 뒷면 포함
+    link('demo_t_close_1', 'pb_knowhow_1785470277654_4'),       // 마감 청소
+    link('demo_t_close_2', 'pb_routine_1783177827478_0'),       // 바닥 청소 시 베이킹소다 활용
+    link('demo_t_close_3', 'pb_routine_1785477969221_0'),       // 포스 마감 정산 순서
+  ], { onConflict: 'template_id,entry_id' }));
+
+  // ════════════════════════════════════════════════════════
   console.log('11) 오늘 완료 체크(work_done) — 오픈 항목은 이수민이 완료, 마감은 미완료');
   const doneMark = (by, byName) => ({ by, byName, at: new Date().toISOString() });
   const doneRows = [

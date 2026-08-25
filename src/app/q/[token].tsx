@@ -22,7 +22,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
-import { Appear } from '@/components/Appear';
+import { Appear, stagger } from '@/components/Appear';
+import { ScreenLoading } from '@/components/ScreenLoading';
 import { QUIZ_RENDERERS } from '@/components/work/quiz';
 import { openQuizLink, fetchQuizLinkItems, gradeQuizLink, submitQuizLink, type QuizLinkInfo } from '@/lib/db';
 import { usePhoneOtp } from '@/lib/otp';
@@ -115,38 +116,44 @@ export default function QuizLinkScreen() {
       <Stack.Screen options={{ headerShown: false }} />
 
       {(phase === 'loading' || phase === 'saving') && (
-        <View style={st.center}>
-          <ActivityIndicator color={InkColors.ink3} />
-          <Text style={st.centerText}>{phase === 'saving' ? '결과를 보내는 중...' : '불러오는 중...'}</Text>
-        </View>
+        <ScreenLoading label={phase === 'saving' ? '결과를 보내고 있어요…' : '퀴즈를 불러오고 있어요…'} />
       )}
 
       {/* 만료·회수·오타는 서로 구분해 말하지 않는다 — 토큰이 있는지 떠보는 걸 막는다. */}
       {phase === 'closed' && (
-        <View style={st.center}>
-          <Ionicons name="lock-closed-outline" size={26} color={InkColors.ink3} />
-          <Text style={st.centerText}>지금은 열 수 없는 링크예요.{'\n'}보내 주신 분께 다시 받아 주세요.</Text>
-        </View>
+        <Appear style={st.fill}>
+          <View style={st.center}>
+            <Ionicons name="lock-closed-outline" size={26} color={InkColors.ink3} />
+            <Text style={st.centerText}>지금은 열 수 없는 링크예요.{'\n'}보내 주신 분께 다시 받아 주세요.</Text>
+          </View>
+        </Appear>
       )}
 
       {/* 우리 쪽 문제일 때는 링크 탓을 하지 않는다 — 손님이 멀쩡한 링크를 버리게 된다. */}
       {phase === 'failed' && (
-        <View style={st.center}>
-          <Ionicons name="cloud-offline-outline" size={26} color={InkColors.ink3} />
-          <Text style={st.centerText}>지금은 불러오지 못했어요.{'\n'}연결을 확인하고 잠시 후 다시 열어 주세요.</Text>
-        </View>
+        <Appear style={st.fill}>
+          <View style={st.center}>
+            <Ionicons name="cloud-offline-outline" size={26} color={InkColors.ink3} />
+            <Text style={st.centerText}>지금은 불러오지 못했어요.{'\n'}연결을 확인하고 잠시 후 다시 열어 주세요.</Text>
+          </View>
+        </Appear>
       )}
 
       {phase === 'name' && info && (
         <>
           <ScrollView contentContainerStyle={st.body} keyboardShouldPersistTaps="handled">
-            <Text style={st.kicker}>{info.storeName}</Text>
-            <Text style={st.title}>{info.courseName}</Text>
-            {/* 시작 전에 분량과 걸리는 시간을 말한다(레퍼런스 home_05). */}
-            <Text style={st.lead}>
-              문제 {Math.min(info.itemCount, ITEM_LIMIT)}개 · {minutesFor(Math.min(info.itemCount, ITEM_LIMIT))}분 정도
-            </Text>
-            <Text style={st.sub}>이름과 전화번호만 적으면 바로 시작해요. 가입은 없어요.</Text>
+            {/* 등장은 **섹션 단위**다 — 문단·입력칸마다 감싸면 한 화면이 블록 8개로 읽힌다(C형 몰입형은 ≤3).
+                안쪽 간격은 st.qWrap 의 gap 이 body 의 gap 을 대신한다(레이아웃 불변). */}
+            <Appear delay={stagger(0)} style={st.qWrap}>
+              <Text style={st.kicker}>{info.storeName}</Text>
+              <Text style={st.title}>{info.courseName}</Text>
+              {/* 시작 전에 분량과 걸리는 시간을 말한다(레퍼런스 home_05). */}
+              <Text style={st.lead}>
+                문제 {Math.min(info.itemCount, ITEM_LIMIT)}개 · {minutesFor(Math.min(info.itemCount, ITEM_LIMIT))}분 정도
+              </Text>
+              <Text style={st.sub}>이름과 전화번호만 적으면 바로 시작해요. 가입은 없어요.</Text>
+            </Appear>
+            <Appear delay={stagger(1)} style={st.qWrap}>
             <TextInput
               style={st.input}
               value={name}
@@ -171,6 +178,7 @@ export default function QuizLinkScreen() {
             />
             {/* 전화번호를 왜 받는지 말한다 — 안 말하면 "가입 없다면서 번호는 왜"가 된다. */}
             <Text style={st.hint}>사장님이 결과를 확인할 때 쓰고, 나중에 같은 곳에서 일하게 되면 이 결과가 이어져요.</Text>
+            </Appear>
 
             {/* 인증은 선택이다(기획 §6-B-8). 안 해도 시작 버튼은 열려 있다. */}
             {HAS_SUPABASE && phoneOk && !otp.verified && (
@@ -215,6 +223,7 @@ export default function QuizLinkScreen() {
             {HAS_SUPABASE && otp.verified && <Text style={st.otpOk}>확인된 번호예요</Text>}
           </ScrollView>
           <View style={st.foot}>
+            <Appear delay={stagger(2)}>
             <Pressable
               onPress={() => void start()}
               disabled={!canStart}
@@ -224,6 +233,7 @@ export default function QuizLinkScreen() {
             >
               <Text style={st.ctaText}>퀴즈 시작하기</Text>
             </Pressable>
+            </Appear>
           </View>
         </>
       )}
@@ -232,25 +242,29 @@ export default function QuizLinkScreen() {
 
       {phase === 'done' && (
         <>
-          <View style={st.center}>
-            <Ionicons
-              name={saved ? 'ribbon-outline' : 'alert-circle-outline'}
-              size={26}
-              color={saved ? BrandColors.good : BrandColors.warn}
-            />
-            <Text style={st.doneText}>{items.length}문제 중 {marks.filter(Boolean).length}개 맞았어요</Text>
-            {/* 저장이 실패했으면 "전달됐어요"라고 말하지 않는다 — 손님은 다시 풀 방법이 없고
-                사장은 영원히 모른다. 무엇이 됐고 무엇이 안 됐는지 그대로 말한다. */}
-            <Text style={st.centerText}>
-              {saved
-                ? '결과는 사장님께 전달됐어요. 이 창은 닫으셔도 돼요.'
-                : '결과를 보내지 못했어요. 이 화면을 사장님께 보여 주세요.'}
-            </Text>
-          </View>
+          {/* 결과는 한 덩어리로 등장한다 — 아이콘·점수·안내를 따로 띄우면 읽는 순서가 셋으로 쪼개진다. */}
+          <Appear delay={stagger(0)} style={st.fill}>
+            <View style={st.center}>
+              <Ionicons
+                name={saved ? 'ribbon-outline' : 'alert-circle-outline'}
+                size={26}
+                color={saved ? BrandColors.good : BrandColors.warn}
+              />
+              <Text style={st.doneText}>{items.length}문제 중 {marks.filter(Boolean).length}개 맞았어요</Text>
+              {/* 저장이 실패했으면 "전달됐어요"라고 말하지 않는다 — 손님은 다시 풀 방법이 없고
+                  사장은 영원히 모른다. 무엇이 됐고 무엇이 안 됐는지 그대로 말한다. */}
+              <Text style={st.centerText}>
+                {saved
+                  ? '결과는 사장님께 전달됐어요. 이 창은 닫으셔도 돼요.'
+                  : '결과를 보내지 못했어요. 이 화면을 사장님께 보여 주세요.'}
+              </Text>
+            </View>
+          </Appear>
           {/* 저장된 경우에만 권한다 — 못 보낸 결과를 "보러 가자"고 하면 빈손으로 보낸다.
               ★가입은 **직원 계정**으로만 연다(0157 로 같은 번호의 사장/직원 계정 분리가 가능해졌다). */}
           {saved && (
             <View style={st.foot}>
+              <Appear delay={stagger(1)}>
               <Pressable
                 onPress={() =>
                   router.push({ pathname: '/signup', params: { role: 'junior', phone: normalizePhone(phone) } })
@@ -261,7 +275,8 @@ export default function QuizLinkScreen() {
               >
                 <Text style={st.ctaText}>직원으로 가입하고 점수 보기</Text>
               </Pressable>
-              <Text style={st.footHint}>가입하면 내가 푼 결과를 계속 볼 수 있어요.</Text>
+                <Text style={st.footHint}>가입하면 내가 푼 결과를 계속 볼 수 있어요.</Text>
+              </Appear>
             </View>
           )}
         </>
@@ -385,6 +400,8 @@ const st = StyleSheet.create({
   body: { padding: Space.gutter, paddingBottom: Space.xl, gap: Space.sm },
   // Appear 로 감싼 문항 묶음 — 바깥 gap 은 래퍼 하나에만 걸리므로 안쪽 간격을 여기서 준다.
   qWrap: { gap: Space.sm },
+  // Appear 가 flex:1 자식(st.center)을 감쌀 때 높이를 넘겨주는 래퍼 — 도형·간격 값이 아니다.
+  fill: { flex: 1 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Space.md, paddingHorizontal: Space.xl },
   centerText: { fontSize: 15, color: InkColors.ink2, fontWeight: '600', textAlign: 'center', lineHeight: 23 },
   doneText: { fontSize: 17, fontWeight: '800', color: InkColors.ink, textAlign: 'center', lineHeight: 25 },

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
-  View, Text, Pressable, StyleSheet, ScrollView, ActivityIndicator, TextInput,
+  View, Text, Pressable, StyleSheet, ScrollView, TextInput,
   type StyleProp, type ViewStyle,
 } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -9,7 +9,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { useWorkStore } from '@/lib/store/useWorkStore';
 import { useSessionStore } from '@/lib/store/useSessionStore';
+import { useUnknownQueueStore } from '@/lib/store/useUnknownQueueStore';
+import { useSuggestionStore } from '@/lib/store/useSuggestionStore';
+import { fetchAiAnswers, type AiAnswerRow } from '@/lib/db';
 import { Appear, stagger } from '@/components/Appear';
+import { ScreenLoading } from '@/components/ScreenLoading';
 import { Vanish } from '@/components/Vanish';
 import { Collapse } from '@/components/Collapse';
 import { EmptyState } from '@/components/EmptyState';
@@ -154,9 +158,28 @@ export function OwnerKnowhowBrowse({
   // 노하우 임팩트 = 이 노하우를 첨부한 업무 수(0069 역조회). 카운트가 실제이려면 업무 링크가 로드돼 있어야
   // 하므로 이 화면에서도 업무 스토어를 hydrate 한다(coalesce 로 중복 방지). 미로드로 인한 '0 위장' 방지.
   const knowhowLinks = useWorkStore((s) => s.knowhowLinks);
+  const workLoaded = useWorkStore((s) => s.loaded);
   useEffect(() => {
     useWorkStore.getState().hydrate();
     return useWorkStore.getState().subscribe();
+  }, []);
+  // '할 일' 칸(OwnerTodoSegment)이 그리는 원격 소스도 이 화면의 게이트가 함께 든다 —
+  // 한 화면에 스피너 둘이 따로 돌면 '할 일'이 먼저 서고 노하우가 나중에 붙는다.
+  // ★훅은 각각 먼저 부르고 그 다음에 AND 한다(&& 안에서 훅 호출 금지).
+  const queueLoaded = useUnknownQueueStore((s) => s.loaded);
+  const suggestionsLoaded = useSuggestionStore((s) => s.loaded);
+  // 'AI가 답한 질문'의 원천(chat_queries)은 스토어가 아니라 이 화면의 로컬 fetch다.
+  // ★실패해도 []로 확정한다 — data 가 있을 때만 aiLoaded 를 세우면 실패한 매장은 영영 로딩에 갇힌다.
+  const [aiAnswers, setAiAnswers] = useState<AiAnswerRow[]>([]);
+  const [aiLoaded, setAiLoaded] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    void fetchAiAnswers().then(({ data }) => {
+      if (!alive) return;
+      setAiAnswers(data ?? []);
+      setAiLoaded(true);
+    });
+    return () => { alive = false; };
   }, []);
   const usedCountByEntry = useMemo(() => {
     const m = new Map<string, number>();
@@ -384,14 +407,6 @@ export function OwnerKnowhowBrowse({
 
   // ── 칸 ② 노하우 ────────────────────────────────────────────
   const knowhowSegment = () => {
-    if (!loaded) {
-      return (
-        <View style={styles.center}>
-          <ActivityIndicator color={InkColors.ink3} />
-          <Text style={styles.loadingText}>노하우를 불러오는 중...</Text>
-        </View>
-      );
-    }
     return (
       <>
         {/* 개수 줄 + 톱니. 톱니 패널이 이 줄 아래에 **떠서** 열리므로(밀어내지 않는다) 이 블록이 그 앵커다. */}
@@ -579,40 +594,43 @@ export function OwnerKnowhowBrowse({
   // 칸을 합친 것이지 기준을 바꾼 게 아니다.
   const todoSegment = () => (
     <>
-      <OwnerTodoSegment />
+      <OwnerTodoSegment aiAnswers={aiAnswers} />
 
-      {!loaded ? (
-        <View style={styles.center}>
-          <ActivityIndicator color={InkColors.ink3} />
-          <Text style={styles.loadingText}>노하우를 불러오는 중...</Text>
-        </View>
-      ) : (
-        <>
-          {reviewList.length > 0 && groupBlock('review', '확인 안 한 것', reviewList)}
-          {/* 라벨=판정(isUnused = 만든 지 30일 경과 + 인용 0회) 그대로. 위 usageGroups 의 'cold' 와 같은 말이어야 한다. */}
-          {unusedList.length > 0 && groupBlock('unused', '한 달간 아무도 안 물어봤어요', unusedList)}
+      {reviewList.length > 0 && groupBlock('review', '확인 안 한 것', reviewList)}
+      {/* 라벨=판정(isUnused = 만든 지 30일 경과 + 인용 0회) 그대로. 위 usageGroups 의 'cold' 와 같은 말이어야 한다. */}
+      {unusedList.length > 0 && groupBlock('unused', '한 달간 아무도 안 물어봤어요', unusedList)}
 
-          {/* 오답이 몰린 노하우는 여기서 세지 않는다 — 퀴즈 결과가 이 화면에 없다.
-              수를 지어내는 대신 그 수를 아는 화면으로 보내는 링크 한 줄만 둔다. */}
-          <View style={styles.growCard}>
-            <Pressable
-              onPress={goTraining}
-              style={({ pressed }) => [styles.growRow, pressed && { opacity: 0.85 }]}
-              accessibilityRole="button"
-              accessibilityLabel="퀴즈에서 자주 틀리는 노하우 보기"
-            >
-              <Ionicons name="help-circle-outline" size={16} color={InkColors.ink2} />
-              <View style={{ flex: 1 }}>
-                <Text style={styles.templateLinkTitle}>퀴즈에서 자주 틀리는 노하우</Text>
-                <Text style={styles.templateLinkSub}>직원이 자꾸 틀리면 설명이 부족하다는 뜻이에요</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={16} color={InkColors.ink3} />
-            </Pressable>
+      {/* 오답이 몰린 노하우는 여기서 세지 않는다 — 퀴즈 결과가 이 화면에 없다.
+          수를 지어내는 대신 그 수를 아는 화면으로 보내는 링크 한 줄만 둔다. */}
+      <View style={styles.growCard}>
+        <Pressable
+          onPress={goTraining}
+          style={({ pressed }) => [styles.growRow, pressed && { opacity: 0.85 }]}
+          accessibilityRole="button"
+          accessibilityLabel="퀴즈에서 자주 틀리는 노하우 보기"
+        >
+          <Ionicons name="help-circle-outline" size={16} color={InkColors.ink2} />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.templateLinkTitle}>퀴즈에서 자주 틀리는 노하우</Text>
+            <Text style={styles.templateLinkSub}>직원이 자꾸 틀리면 설명이 부족하다는 뜻이에요</Text>
           </View>
-        </>
-      )}
+          <Ionicons name="chevron-forward" size={16} color={InkColors.ink3} />
+        </Pressable>
+      </View>
     </>
   );
+
+  // ★두 칸이 읽는 것이 **전부** 도착해야 그린다. 세그먼트 배지(할 일 n건·노하우 n개)도
+  //   이 게이트 안이라 0건으로 먼저 그려지지 않는다 — 그래서 게이트가 SegmentTabs 위에 있다.
+  //   (행마다 '업무 n개에 쓰임'이 0→N으로 바뀌던 것도 workLoaded 가 게이트에 들어와 사라진다.)
+  const ready = loaded && workLoaded && queueLoaded && suggestionsLoaded && aiLoaded;
+  if (!ready) {
+    return (
+      <View style={styles.flex}>
+        <ScreenLoading label="노하우를 불러오고 있어요…" />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.flex}>
@@ -694,8 +712,6 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   // 하단 여백 = FAB 지름 + 위아래 거터. 마지막 행이 FAB 밑에 깔리지 않게.
   scroll: { padding: Space.gutter, paddingBottom: FAB_SIZE + Space.gutter * 2, gap: Space.md },
-  center: { alignItems: 'center', justifyContent: 'center', gap: 10, paddingVertical: 48 },
-  loadingText: { fontSize: 15, color: InkColors.ink2, fontWeight: '600' },
 
   // 세그먼트 — 공용 SegmentTabs 의 margin(16)을 화면 거터(20)에 맞춘다.
   segTabs: { marginHorizontal: Space.gutter, marginTop: Space.md, marginBottom: 0 },

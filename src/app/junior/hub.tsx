@@ -8,7 +8,7 @@ import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
 import { Wordmark } from '@/components/Wordmark';
-import { Appear } from '@/components/Appear';
+import { Appear, stagger } from '@/components/Appear';
 
 const CODE_LEN = 6;
 
@@ -148,7 +148,7 @@ export default function JuniorHub() {
         </View>
 
         {/* 인사 */}
-        <Appear delay={0}>
+        <Appear delay={stagger(0)}>
         <View style={styles.greet}>
           <Text style={styles.hello}>
             안녕하세요{userName ? `, ${userName}님` : ''}
@@ -165,7 +165,7 @@ export default function JuniorHub() {
 
         {/* 합류 미승인 안내(#미아 방지) — 승인 대기가 조용히 사라지던 것을 기기 마커로 감지해 알린다. */}
         {!pendingUnitId && !!rejectedJoinStoreName && (
-          <Appear delay={90}>
+          <Appear delay={stagger(1)}>
           <View style={styles.pendingCard}>
             <View style={styles.pendingHead}>
               <View style={styles.pendingIcon}>
@@ -194,7 +194,7 @@ export default function JuniorHub() {
             옛 판본은 셋을 한 레이아웃으로 그려서 ①에 "코드를 넣어라"가 세 번(히어로 배너·빈 카드·
             입력 섹션) 나왔고, 그중 히어로의 [코드 입력]은 화면 이동이 아니라 포커스만 주는 가짜 버튼이었다.
             ③에서는 이미 연결된 직원에게 코드 입력이 상시 노출됐다. */}
-        <Appear delay={60}>
+        <Appear delay={stagger(2)}>
         <View style={styles.section}>
           {(pendingUnitId || hasStore) && <Text style={styles.sectionLabel}>내 매장</Text>}
 
@@ -272,7 +272,7 @@ export default function JuniorHub() {
             ★통째로 옮기지 않은 이유: hub는 자체 상단바를 써서 HubTopBar의 계정 진입점이 없다. 카드를 없애면
               미합류 직원에게 로그아웃 경로가 사라진다. 대신 프로필편집·로그아웃·탈퇴를 모두 가진
               상위 화면(/account-settings) 한 줄로 합쳤다 — 요소 2개 → 1개, 기능은 오히려 늘어난다. */}
-        <Appear delay={240}>
+        <Appear delay={stagger(3)}>
         <View style={styles.section}>
           <Pressable
             onPress={() => router.push('/account-settings')}

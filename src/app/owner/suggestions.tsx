@@ -5,7 +5,8 @@ import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 import { RoleTabBar } from '@/components/RoleTabBar';
-import { Appear } from '@/components/Appear';
+import { Appear, stagger } from '@/components/Appear';
+import { ScreenLoading } from '@/components/ScreenLoading';
 import { BottomSheet } from '@/components/BottomSheet';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useSuggestionStore } from '@/lib/store/useSuggestionStore';
@@ -36,6 +37,9 @@ export default function OwnerSuggestionsScreen() {
   const subscribe = useSuggestionStore((s) => s.subscribe);
   const approve = useSuggestionStore((s) => s.approve);
   const reject = useSuggestionStore((s) => s.reject);
+  // ★loaded 를 안 봐서 "🤝 대기 중인 제안이 없어요"가 먼저 떴다 — 알림 배지를 보고 들어오는 자리라
+  //   "없어요"가 스치면 사장이 그대로 나가버린다.
+  const ready = useSuggestionStore((s) => s.loaded);
 
   useEffect(() => {
     hydrate();
@@ -93,13 +97,16 @@ export default function OwnerSuggestionsScreen() {
   return (
     <SafeAreaView edges={['bottom']} style={styles.safe}>
       <Stack.Screen options={{ title: '노하우 제안함' }} />
+      {!ready ? (
+        <ScreenLoading label="직원 제안을 불러오고 있어요…" />
+      ) : (
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        <Appear delay={0}>
+        <Appear delay={stagger(0)}>
           <Text style={styles.subline}>직원이 올린 노하우 제안을 확인하고 반영하세요</Text>
         </Appear>
 
         {pending.length === 0 ? (
-          <Appear delay={60}>
+          <Appear delay={stagger(1)}>
           <View style={styles.empty}>
             <Text style={styles.emptyEmoji}>🤝</Text>
             <Text style={styles.emptyTitle}>대기 중인 제안이 없어요</Text>
@@ -107,17 +114,17 @@ export default function OwnerSuggestionsScreen() {
           </View>
           </Appear>
         ) : (
-          <Appear delay={60}>
           <View style={styles.list}>
-            {pending.map((s) => (
-              <SuggestionCard key={s.id} s={s} onApprove={() => reflect(s)} onReject={() => setDeclineFor(s)} />
+            {pending.map((s, i) => (
+              <Appear key={s.id} delay={stagger(i + 1)}>
+                <SuggestionCard s={s} onApprove={() => reflect(s)} onReject={() => setDeclineFor(s)} />
+              </Appear>
             ))}
           </View>
-          </Appear>
         )}
 
         {handled.length > 0 && (
-          <Appear delay={120}>
+          <Appear delay={stagger(2)}>
           <View style={styles.handledWrap}>
             <Text style={styles.handledHeader}>처리됨</Text>
             {handled.map((s) => (
@@ -138,6 +145,7 @@ export default function OwnerSuggestionsScreen() {
 
         <View style={{ height: 16 }} />
       </ScrollView>
+      )}
       <RoleTabBar role="owner" />
 
       {/* 반려 사유 시트 — 건너뛰기 가능. 사유는 직원 제안 카드·알림에 표시된다. */}

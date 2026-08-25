@@ -25,6 +25,7 @@ import { buildDirectUq, buildPlaybookEntryFromSquare } from '@/lib/utils/buildEn
 import type { PlaybookEntry, SquareBlock } from '@/types';
 import type { QuizInput } from '@/lib/ai/types';
 import { RoleTabBar } from '@/components/RoleTabBar';
+import { ScreenLoading } from '@/components/ScreenLoading';
 import { Appear, stagger } from '@/components/Appear';
 import { useRoomStore } from '@/lib/store/useRoomStore';
 import { WorkChat } from '@/components/work/WorkChat';
@@ -154,6 +155,26 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
   const togglePin = useWorkStore((s) => s.togglePin);
   const markNoticeRead = useWorkStore((s) => s.markNoticeRead);
   const noteError = useSyncStore((s) => s.noteError);
+
+  /**
+   * 이 탭이 그리는 **모든** 원격 소스가 도착했는가 — 화면은 이것 하나만 보고 로딩을 건다.
+   *
+   * 대화·공지·할일·서랍은 스토어 다섯 개를 섞어 그린다. 하나라도 늦으면 "아직 없는 것"과
+   * "아직 안 온 것"을 구분하지 못한 화면이 먼저 뜬다 — 실제로 넷이 났다:
+   *   ① "아직 대화가 없어요"가 먼저 뜬다(work) ② 말풍선 이름이 전부 '직원'이었다가 바뀐다(staff)
+   *   ③ "이 날 할일이 없어요"가 먼저 뜬다(schedule 의 루틴이 늦게 합쳐진다)
+   *   ④ 퀴즈 카드가 뒤늦게 채팅 **위**에 끼어들어 대화가 통째로 아래로 밀린다(work·playbook)
+   *
+   * ★훅은 각각 먼저 부르고 **그 다음에** AND 한다. `useA(...) && useB(...)` 로 쓰면 앞이 false 일 때
+   *   뒤 훅이 호출되지 않아 렌더마다 훅 개수가 달라진다(Rules of Hooks 위반 = 크래시).
+   * ※ useSuggestionStore 는 여기 없다 — 이 화면은 submit(쓰기)만 쓰고 그리는 값이 없다.
+   */
+  const workLoaded = useWorkStore((s) => s.loaded);
+  const roomLoaded = useRoomStore((s) => s.loaded);
+  const playbookLoaded = usePlaybookStore((s) => s.loaded);
+  const staffLoaded = useStaffStore((s) => s.loaded);
+  const scheduleLoaded = useScheduleStore((s) => s.loaded);
+  const boardLoaded = workLoaded && roomLoaded && playbookLoaded && staffLoaded && scheduleLoaded;
 
   // 채팅방('전부 방 단위') — 활성 방 기준으로 대화·공지·할일을 거른다.
   const currentRoomId = useRoomStore((s) => s.currentRoomId);
@@ -751,6 +772,18 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
           ),
         };
 
+  // ★게이트는 훅을 **전부 부른 뒤**에 온다(위 headerOptions 까지 훅이 없다). 화면 골격(헤더·탭바)은
+  //   게이트 밖에 그대로 두고 **본문만** 로딩으로 대체한다 — 골격이 늦게 서면 그것도 레이아웃 점프다.
+  if (!boardLoaded) {
+    return (
+      <SafeAreaView style={st.safe} edges={['bottom']}>
+        <Stack.Screen options={headerOptions} />
+        <ScreenLoading label="업무를 불러오고 있어요…" />
+        <RoleTabBar role={role} />
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={st.safe} edges={['bottom']}>
       <Stack.Screen options={headerOptions} />
@@ -770,7 +803,7 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
         ))}
 
       {view === 'chat' && (
-        <Appear delay={0} style={{ flex: 1 }}>
+        <Appear delay={stagger(0)} style={{ flex: 1 }}>
         {/* ★방 칩바는 WorkChat **밖**에 둔다 — WorkChat 은 key={currentRoomId} 로 방마다 새로 마운트돼서,
             안에 넣으면 방을 옮길 때마다 칩바까지 통째로 다시 그려진다(탭한 칩이 깜빡인다). */}
         <WorkChat
@@ -831,7 +864,7 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
       )}
 
       {view === 'notice' && (
-        <Appear delay={0} style={{ flex: 1 }}>
+        <Appear delay={stagger(0)} style={{ flex: 1 }}>
         <NoticePanel
           notices={notices}
           comments={comments}
@@ -857,13 +890,13 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
       )}
 
       {view === 'settings' && isOwner && (
-        <Appear delay={0} style={{ flex: 1 }}>
+        <Appear delay={stagger(0)} style={{ flex: 1 }}>
         <WorkSettingsPanel members={members} me={userId} onSaved={() => setView('todo')} />
         </Appear>
       )}
 
       {view === 'todo' && (
-        <Appear delay={0} style={{ flex: 1 }}>
+        <Appear delay={stagger(0)} style={{ flex: 1 }}>
         <TodoScreen
           templates={boardTemplates}
           done={done}

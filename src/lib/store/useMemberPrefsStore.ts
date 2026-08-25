@@ -4,6 +4,7 @@
 import { create } from 'zustand';
 import { fetchMemberPrefs, saveMemberPrefs, ackNotifications, type UnitMemberPrefsRow } from '@/lib/db';
 import { guardWrite } from '@/lib/store/useSyncStore';
+import { HAS_SUPABASE } from '@/lib/supabase';
 
 // 연속 진입(허브→설정 등) 순간 이중 fetch 방지 — 이 간격 안의 재호출은 스킵(useCrossNotifStore 와 동일 패턴).
 // 저장/ack 는 낙관적 로컬 반영이라 TTL 과 무관하게 즉시 보인다.
@@ -48,7 +49,8 @@ type State = {
 export const useMemberPrefsStore = create<State>((set, get) => ({
   byUnit: {},
   ackByUnit: {},
-  loaded: false,
+  // 다른 스토어와 같은 관례 — 백엔드가 없으면(데모) 기다릴 것이 없으므로 처음부터 도착으로 친다.
+  loaded: !HAS_SUPABASE,
 
   hydrate: async () => {
     const now = Date.now();
@@ -57,6 +59,9 @@ export const useMemberPrefsStore = create<State>((set, get) => ({
     const { data, error } = await fetchMemberPrefs();
     if (error || !data) {
       _lastHydrateAt = 0; // 실패는 TTL 미적용 — 다음 진입에서 즉시 재시도
+      // ★못 불러왔어도 '기다리기'는 끝났다. 여기서 loaded 를 안 세우면 이 플래그를 게이트에 넣은
+      //   화면이 **영영 스피너에 갇힌다**(데모 모드는 error 없이 data=null 이라 항상 이 경로다).
+      set({ loaded: true });
       return;
     }
     const byUnit: Record<string, MemberPref> = {};

@@ -23,7 +23,8 @@ import { canUseMultistore } from '@/lib/config/tiers';
 import { SHOW_BILLING } from '@/lib/config/store-policy';
 import { HubTopBar } from '@/components/hub/HubTopBar';
 import { HubTabBar } from '@/components/HubTabBar';
-import { Appear } from '@/components/Appear';
+import { Appear, stagger } from '@/components/Appear';
+import { ScreenLoading } from '@/components/ScreenLoading';
 import { SectionLabel } from '@/components/SectionLabel';
 import { useStoreEntryStore } from '@/lib/store/useStoreEntryStore';
 
@@ -78,6 +79,16 @@ export default function StoresHub() {
   const [overview, setOverview] = useState<Record<string, OwnerOverviewRow>>({});
   // 무료 초과로 잠긴 매장(0142) — 판정은 서버(my_locked_units)가 SSOT. 카드마다 RPC 를 부르지 않는다.
   const [lockedUnits, setLockedUnits] = useState<string[]>([]);
+  // ── 도착 플래그 4개 ──
+  // 이 카드 한 장이 네 소스를 동시에 그린다(지표·잠김·알림·매장별 설정). 하나라도 늦으면 글자가
+  // 통째로 바뀌거나(‘탭하면 들어가요’ → ‘직원 n · 노하우 n’), **잠긴 매장이 정상 매장처럼 눌린다**.
+  // 그래서 표시가 아니라 판정의 문제다 — 넷이 다 도착한 뒤에 본문을 처음 마운트한다.
+  // ★넷 다 "시도가 끝났으면" true 다(실패 포함). 스토어의 loaded 는 실패 시 false 로 남으므로
+  //   그것만 보고 게이트를 걸면 읽기 실패 한 번에 영영 로딩이 된다. 실패 고지는 db.ts(readFail) 배너가 한다.
+  const [ovLoaded, setOvLoaded] = useState(false);
+  const [lockLoaded, setLockLoaded] = useState(false);
+  const [prefsLoaded, setPrefsLoaded] = useState(false);
+  const [crossLoaded, setCrossLoaded] = useState(false);
   // 매장을 고른 순간부터 그 매장 화면이 그릴 준비가 될 때까지 — 이 값이 있으면 화면 전체를 커버가 덮는다.
   const enter = useStoreEntryStore((s) => s.enter);
 
@@ -85,16 +96,18 @@ export default function StoresHub() {
   const prefFor = useMemberPrefsStore((s) => s.prefFor);
   const hydratePrefs = useMemberPrefsStore((s) => s.hydrate);
   useEffect(() => {
-    void hydratePrefs();
+    let alive = true;
+    void hydratePrefs().finally(() => { if (alive) setPrefsLoaded(true); });
+    return () => { alive = false; };
   }, [hydratePrefs]);
 
   // 통합 알림(0077) — 카드 뱃지·허브 알림 섹션. 판정·매핑·탭 동작은 공용 훅(useCrossNotifRows) SSOT.
   const hydrateCross = useCrossNotifStore((s) => s.hydrate);
   useEffect(() => {
-    void hydrateCross();
+    let alive = true;
+    void hydrateCross().finally(() => { if (alive) setCrossLoaded(true); });
+    return () => { alive = false; };
   }, [hydrateCross]);
-  // 도착 전엔 전부 0이라 뱃지·칩이 "없음"으로 보였다가 뒤늦게 튀어나온다 — loaded 전엔 아예 안 그린다.
-  const crossLoaded = useCrossNotifStore((s) => s.loaded);
   const { unreadByUnit } = useCrossNotifRows();
   // 직원 '오늘 할일' 칩 — 카운트는 assignedTodayCount SSOT(오늘 탭·허브 탭바 뱃지와 동일 술어).
   const crossData = useCrossNotifStore((s) => s.data);
@@ -111,10 +124,13 @@ export default function StoresHub() {
     if (!isOwner) return;
     (async () => {
       const { data } = await fetchOwnerOverview();
-      if (!alive || !data) return;
-      const map: Record<string, OwnerOverviewRow> = {};
-      for (const r of data) map[r.unit_id] = r;
-      setOverview(map);
+      if (!alive) return;
+      if (data) {
+        const map: Record<string, OwnerOverviewRow> = {};
+        for (const r of data) map[r.unit_id] = r;
+        setOverview(map);
+      }
+      setOvLoaded(true);
     })();
     return () => { alive = false; };
   }, [isOwner]);
@@ -124,7 +140,9 @@ export default function StoresHub() {
     let alive = true;
     (async () => {
       const { data } = await fetchMyLockedUnits();
-      if (alive && data) setLockedUnits(data);
+      if (!alive) return;
+      if (data) setLockedUnits(data);
+      setLockLoaded(true);
     })();
     return () => { alive = false; };
   }, []);
@@ -155,6 +173,9 @@ export default function StoresHub() {
 
   const storeCount = stores.length;
 
+  // 화면 단일 게이트 — 사장 지표는 사장일 때만 기다린다(직원은 애초에 안 부른다).
+  const ready = (!isOwner || ovLoaded) && lockLoaded && crossLoaded && prefsLoaded;
+
   // 게이트(index.tsx와 동일 규칙): 미로그인 → 랜딩, 프로필 미완성 → 완성화면.
   // 루트 레벨이라 owner/junior 그룹 게이트를 안 타므로 여기서 직접 지킨다.
   if (HAS_SUPABASE && status === 'signed_out') return <Redirect href="/" />;
@@ -174,8 +195,12 @@ export default function StoresHub() {
         {/* 상단 바(HubTopBar 공용) — 알림 벨은 여기 고정(탭 금지 — 07-24 사용자 확정) + 프로필(계정 설정) */}
         <HubTopBar />
 
+        {!ready ? (
+          <ScreenLoading label="매장 목록을 불러오고 있어요…" />
+        ) : (
+          <>
         {/* 제목 */}
-        <Appear delay={0}>
+        <Appear delay={stagger(0)}>
           <View style={styles.titleBlock}>
             <Text style={styles.title}>내 매장</Text>
             <Text style={styles.subtitle}>{isOwner ? '들어갈 매장을 선택하세요' : '근무할 매장을 선택하세요'}</Text>
@@ -184,7 +209,7 @@ export default function StoresHub() {
 
         {stores.length === 0 ? (
           // ── 빈 상태(매장 0곳): 마법사로 튕기지 않고 허브에서 시작 ──
-          <Appear delay={60}>
+          <Appear delay={stagger(1)}>
             <View style={styles.empty}>
               <View style={styles.emptyIcon}>
                 <Ionicons name="storefront-outline" size={30} color="#7a5f10" />
@@ -206,21 +231,21 @@ export default function StoresHub() {
         ) : (
           <>
             {/* ── 매장 목록 ── */}
-            <Appear delay={60}>
+            <Appear delay={stagger(1)}>
               <View style={styles.section}>
                 {/* 역할은 매장별(0093)이라 목록 전체를 한 단어로 부를 수 없다 — 전 매장이 같은 역할일
                     때만 표기하고, 섞여 있으면(사장 매장 + 매니저 매장) 각 매장 줄에서 말한다.
                     예전엔 "매니저 매장이 하나라도 있으면 매니저"라 사장 매장까지 매니저로 불렀다. */}
                 <SectionLabel title={`매장 ${storeCount}곳`} hint={uniformRole ? roleNoun(uniformRole) : undefined} />
-                {stores.map((s) => {
+                {stores.map((s, i) => {
                   const ov = overview[s.unit_id];
                   const isActive = s.unit_id === unitId;
                   const isLocked = lockedUnits.includes(s.unit_id);
                   const pref = prefFor(s.unit_id);
                   const color = storeColor(s.unit_id, pref.color);
                   return (
+                    <Appear key={s.unit_id} delay={stagger(i)}>
                     <Pressable
-                      key={s.unit_id}
                       onPress={() => enterStore(s)}
                       style={({ pressed }) => [styles.card, isActive && styles.cardActive, isLocked && styles.cardLocked, { borderLeftWidth: 4, borderLeftColor: color }, pressed && { opacity: 0.92 }]}
                     >
@@ -249,14 +274,15 @@ export default function StoresHub() {
                             직원 = 오늘 할일 칩(오늘 배정·미완료, assignedTodayCount SSOT). */}
                         {isOwner
                           ? (ov?.pending_q ?? 0) > 0 && <Text style={styles.qChip}>받은질문 {ov!.pending_q}</Text>
-                          : crossLoaded && (todoByUnit[s.unit_id] ?? 0) > 0 && <Text style={styles.qChip}>오늘 할일 {todoByUnit[s.unit_id]}</Text>}
+                          : (todoByUnit[s.unit_id] ?? 0) > 0 && <Text style={styles.qChip}>오늘 할일 {todoByUnit[s.unit_id]}</Text>}
                         {/* 통합 안읽음 뱃지(0077) — 기존 '확인필요(pending_q만)' 칩을 매장별 전체 안읽음으로 확장(지표 병존 금지). */}
-                        {crossLoaded && (unreadByUnit[s.unit_id] ?? 0) > 0 && (
+                        {(unreadByUnit[s.unit_id] ?? 0) > 0 && (
                           <Text style={styles.needChip}>알림 {unreadByUnit[s.unit_id]}</Text>
                         )}
                         <Ionicons name="chevron-forward" size={18} color={InkColors.ink3} />
                       </View>
                     </Pressable>
+                    </Appear>
                   );
                 })}
 
@@ -274,6 +300,8 @@ export default function StoresHub() {
             </Appear>
 
             {/* 요금제는 허브에 노출하지 않는다 — 확인·변경은 전체 계정 설정(구독 및 결제)에서. */}
+          </>
+        )}
           </>
         )}
       </ScrollView>

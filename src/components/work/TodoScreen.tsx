@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { View, Text, Pressable, ScrollView, StyleSheet, Animated, Easing } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
-import { Appear } from '@/components/Appear';
+import { Appear, stagger } from '@/components/Appear';
+import { Collapse } from '@/components/Collapse';
 import { StoredImage } from '@/components/StoredImage';
 import { WeekStrip, type WeekDay } from '@/components/blocks/WeekStrip';
 import { useDayparts, isRoutineTaskId, occursOn, taskVisibleTo, type TaskTemplate, type DoneMark } from '@/lib/store/useWorkStore';
@@ -303,14 +304,14 @@ export function TodoScreen({
         {groups.map((g, gi) => {
           const isCol = collapsed[`${selected}:${g.key}`];
           return (
-            <Appear key={g.key} delay={gi * 70} style={s.group}>
+            <Appear key={g.key} delay={stagger(gi)} style={s.group}>
               <Pressable onPress={() => setCollapsed((c) => ({ ...c, [`${selected}:${g.key}`]: !isCol }))} style={s.groupHead}>
                 <Text style={s.groupName}>{g.label}</Text>
                 <Text style={s.groupCnt}>{g.doneN}/{g.total}</Text>
                 <Ionicons name={isCol ? 'chevron-down' : 'chevron-up'} size={14} color={InkColors.ink3} style={{ marginLeft: 'auto' }} />
               </Pressable>
               {!isCol && (
-                <View style={s.groupList}>
+                <Collapse style={s.groupList}>
                   {g.tasks.map((t, i) => {
                     const mark = dayDone[t.id];
                     const on = !!mark;
@@ -332,7 +333,8 @@ export function TodoScreen({
                     // '반복 업무'라는 사실은 별도 칸이 아니라 여기 한 줄로만 알린다(§14).
                     const repeat = repeatLabel(t);
                     return (
-                      <View key={t.id} style={[s.item, isMine && s.itemMine, i === g.tasks.length - 1 && { borderBottomWidth: 0 }]}>
+                      <Appear key={t.id} delay={stagger(i)}>
+                      <View style={[s.item, isMine && s.itemMine, i === g.tasks.length - 1 && { borderBottomWidth: 0 }]}>
                         <View style={[s.scopeBar, { backgroundColor: isMine ? MINE : SHARED }]} />
                         <Pressable onPress={() => {
                           // 완료 취소 시 첨부한 완료 사진이 함께 삭제되므로 미리 경고(파괴적 동작).
@@ -404,9 +406,10 @@ export function TodoScreen({
                           </Pressable>
                         )}
                       </View>
+                      </Appear>
                     );
                   })}
-                </View>
+                </Collapse>
               )}
             </Appear>
           );

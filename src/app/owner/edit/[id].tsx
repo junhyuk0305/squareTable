@@ -1,13 +1,14 @@
 import { useCallback, useId, useMemo, useRef, useState } from 'react';
-import { View, Text, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 import { OwnerCoachChat } from '@/components/OwnerCoachChat';
-import { Appear } from '@/components/Appear';
+import { Appear, stagger } from '@/components/Appear';
 import { BottomSheet } from '@/components/BottomSheet';
 import { EmptyState } from '@/components/EmptyState';
+import { ScreenLoading } from '@/components/ScreenLoading';
 import { VerifyBadge } from '@/components/VerifyBadge';
 import { formatRelative } from '@/components/coach/coachUtils';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
@@ -36,14 +37,21 @@ export default function EditKnowledgeScreen() {
   const loaded = usePlaybookStore((s) => s.loaded);
   const entry = usePlaybookStore((s) => (id ? s.getById(id) : undefined));
 
+  // ★게이트는 playbook 하나로 부족하다 — 문서 머리말 진도바가 읽는 **staff·understanding(work)·퀴즈 문항**이
+  //   게이트 밖이면 "직원 N명 중 M명이 통과했어요" 한 줄이 본문이 다 그려진 뒤에 끼어들어 화면이 밀린다.
+  //   useQuizBoard 는 인스턴스마다 자기 쿼리를 치므로 **여기서 한 번만** 부르고 아래로 내려보낸다.
+  //   훅은 `&&` 안에서 부르지 않는다 — 각각 받은 뒤 AND 한다.
+  const staffLoaded = useStaffStore((s) => s.loaded);
+  const workLoaded = useWorkStore((s) => s.loaded);
+  const { quizCountOf, boardLoaded } = useQuizBoard();
+  const ready = loaded && staffLoaded && workLoaded && boardLoaded;
+
   // 스토어 hydrate 전(콜드 진입/새로고침)엔 '삭제됨' 대신 로딩 표시 — 데이터 도착 후 판단.
-  if (!loaded) {
+  if (!ready) {
     return (
       <SafeAreaView style={styles.safe}>
         <Stack.Screen options={{ title: '노하우 수정' }} />
-        <View style={styles.empty}>
-          <ActivityIndicator color={InkColors.ink3} />
-        </View>
+        <ScreenLoading label="노하우를 불러오고 있어요…" />
       </SafeAreaView>
     );
   }
@@ -61,10 +69,10 @@ export default function EditKnowledgeScreen() {
   }
 
   // key=id로 다른 노하우로 파라미터가 바뀌면 채팅이 새 엔트리로 재마운트된다.
-  return <ConversationalEdit key={entry.id} entry={entry} />;
+  return <ConversationalEdit key={entry.id} entry={entry} quizCountOf={quizCountOf} />;
 }
 
-function ConversationalEdit({ entry }: { entry: PlaybookEntry }) {
+function ConversationalEdit({ entry, quizCountOf }: { entry: PlaybookEntry; quizCountOf: (entryId: string) => number }) {
   const router = useRouter();
   const update = usePlaybookStore((s) => s.update);
   const remove = usePlaybookStore((s) => s.remove);
@@ -154,7 +162,7 @@ function ConversationalEdit({ entry }: { entry: PlaybookEntry }) {
 
       {/* 카테고리 + 문제 만들기 — 이 노하우를 '어디에 묶을지'와 '뭘 물어볼지'는 같은 결정 층이라
           한 줄에 나란히 둔다. 문서 머리말에 있던 문제 만들기 행은 여기로 옮겼다(2026-08-18). */}
-      <View style={styles.catRow}>
+      <Appear delay={stagger(0)} style={styles.catRow}>
         <Pressable
           onPress={() => setCatOpen(true)}
           style={({ pressed }) => [styles.catBar, pressed && { opacity: 0.7 }]}
@@ -175,7 +183,7 @@ function ConversationalEdit({ entry }: { entry: PlaybookEntry }) {
           <Ionicons name="help-circle-outline" size={15} color={InkColors.ink} />
           <Text style={styles.quizBtnText}>문제 만들기</Text>
         </Pressable>
-      </View>
+      </Appear>
 
       <OwnerCoachChat
         uq={syntheticUq}
@@ -185,7 +193,11 @@ function ConversationalEdit({ entry }: { entry: PlaybookEntry }) {
         onUpdated={onUpdated}
         onDeleteEntry={del}
         onPublished={() => {}}
-        docHeader={<KnowhowDoc entry={entry} />}
+        docHeader={
+          <Appear delay={stagger(1)}>
+            <KnowhowDoc entry={entry} quizCountOf={quizCountOf} />
+          </Appear>
+        }
       />
 
       {catOpen && (
@@ -258,10 +270,9 @@ const PROGRESS_TRACK_H = 5;
  *   그 판정이 어긋나면 본문이 화면 어디에도 안 남았다(08-07 [치명]). 그릴 수 있는 자리를 하나로 줄여
  *   그 버그 종류를 없앴다. 제목만 이쪽이 들고, 카드는 hideTitle 로 양보한다.
  */
-function KnowhowDoc({ entry }: { entry: PlaybookEntry }) {
+function KnowhowDoc({ entry, quizCountOf }: { entry: PlaybookEntry; quizCountOf: (entryId: string) => number }) {
   const staff = useStaffStore((s) => s.staff);
   const understanding = useWorkStore((s) => s.understanding);
-  const { quizCountOf } = useQuizBoard();
 
   const quizCount = quizCountOf(entry.id);
   const total = staff.length;
@@ -320,7 +331,6 @@ const styles = StyleSheet.create({
     backgroundColor: InkColors.bgSoft, borderRadius: Radius.pill, overflow: 'hidden',
     paddingVertical: Space.xs, paddingHorizontal: Space.sm,
   },
-  empty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
 
   // 카테고리 · 문제 만들기 행(헤더 아래) + 카테고리 변경 시트
   catRow: {

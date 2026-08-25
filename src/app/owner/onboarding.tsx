@@ -11,7 +11,8 @@ import { showToast } from '@/lib/store/useToastStore';
 import { OwnerFirstAsk } from '@/components/owner/OwnerFirstAsk';
 import { templatesForIndustry, forkTemplate, type PlaybookTemplate } from '@/data/knowhowPacks';
 import { standardSections, UNSECTIONED } from '@/lib/config/sections';
-import { Appear } from '@/components/Appear';
+import { Appear, stagger } from '@/components/Appear';
+import { Collapse } from '@/components/Collapse';
 import { SectionLabel } from '@/components/SectionLabel';
 import { PressableScale } from '@/components/PressableScale';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
@@ -151,30 +152,38 @@ export default function OwnerOnboardingScreen() {
       <SafeAreaView style={styles.safe}>
         <Stack.Screen options={{ headerShown: false }} />
         <View style={[styles.doneWrap, frameCapStyle]}>
-          <Text style={styles.doneEmoji}>🎉</Text>
-          {registeredCount > 0 ? (
-            <>
-              <Text style={styles.doneTitle}>노하우 {registeredCount}개로 시작해요</Text>
-              <Text style={styles.doneSub}>
-                이제 직원이 물어보면 AI가 이 노하우로 대신 답해줘요.{'\n'}
-                <Text style={styles.doneStrong}>‘확인 필요’ 표시</Text>가 붙은 건 나중에 우리 매장에 맞게 다듬어 주세요.
-              </Text>
-            </>
-          ) : (
-            <>
-              <Text style={styles.doneTitle}>매장이 만들어졌어요</Text>
-              <Text style={styles.doneSub}>
-                지금은 건너뛰었어요. 대시보드의 <Text style={styles.doneStrong}>‘추천 노하우 깔기’</Text>로{'\n'}
-                언제든 노하우를 한 번에 추가할 수 있어요.
-              </Text>
-            </>
-          )}
+          {/* ★Appear 래퍼는 doneWrap(alignItems:center)의 flex 자식이 된다 — 안쪽이 기대하던
+              gap/alignSelf 를 래퍼에 그대로 얹어야 레이아웃이 안 바뀐다(빈 래퍼는 만들지 않는다). */}
+          <Appear delay={stagger(0)}>
+            <Text style={styles.doneEmoji}>🎉</Text>
+          </Appear>
+          <Appear delay={stagger(1)} style={styles.doneHead}>
+            {registeredCount > 0 ? (
+              <>
+                <Text style={styles.doneTitle}>노하우 {registeredCount}개로 시작해요</Text>
+                <Text style={styles.doneSub}>
+                  이제 직원이 물어보면 AI가 이 노하우로 대신 답해줘요.{'\n'}
+                  <Text style={styles.doneStrong}>‘확인 필요’ 표시</Text>가 붙은 건 나중에 우리 매장에 맞게 다듬어 주세요.
+                </Text>
+              </>
+            ) : (
+              <>
+                <Text style={styles.doneTitle}>매장이 만들어졌어요</Text>
+                <Text style={styles.doneSub}>
+                  지금은 건너뛰었어요. 대시보드의 <Text style={styles.doneStrong}>‘추천 노하우 깔기’</Text>로{'\n'}
+                  언제든 노하우를 한 번에 추가할 수 있어요.
+                </Text>
+              </>
+            )}
+          </Appear>
 
+          <Appear delay={stagger(2)}>
           <View style={styles.codeCard}>
             <Text style={styles.codeLabel}>직원 초대코드</Text>
             <Text style={styles.codeText}>{inviteCode}</Text>
             <Text style={styles.codeHint}>직원이 개인 홈에서 이 코드로 신청하면, 사장님이 승인해야 합류돼요.</Text>
           </View>
+          </Appear>
 
           {/* 요금제 후킹 — 지금은 무료로 시작했음을 알리고, 직원·AI 무제한(단일 매장)으로
               업그레이드 경로를 연다. 가격은 tiers.ts(SSOT)에서 읽는다. 탭하면 요금제 선택 화면(/billing).
@@ -182,6 +191,7 @@ export default function OwnerOnboardingScreen() {
               ★전면 무료 모드(서버 스위치)에서도 렌더하지 않는다 — 무료라고 공지해 놓고 요금제로 유도하면
                 같은 앱이 두 말을 하게 된다(2026-08-11 [P8-#5]). 판정은 store-policy 한 곳. */}
           {showPaymentSurface(freeMode) && (
+            <Appear delay={stagger(3)} style={styles.doneStretch}>
             <Pressable
               onPress={() => router.push('/billing' as never)}
               style={({ pressed }) => [styles.planNudge, pressed && { opacity: 0.9 }]}
@@ -199,11 +209,14 @@ export default function OwnerOnboardingScreen() {
               </View>
               <Ionicons name="chevron-forward" size={16} color={InkColors.ink3} />
             </Pressable>
+            </Appear>
           )}
 
-          <PressableScale onPress={goDashboard} scaleTo={0.97} style={styles.primary}>
-            <Text style={styles.primaryText}>대시보드로 들어가기</Text>
-          </PressableScale>
+          <Appear delay={stagger(4)} style={styles.doneStretch}>
+            <PressableScale onPress={goDashboard} scaleTo={0.97} style={styles.primary}>
+              <Text style={styles.primaryText}>대시보드로 들어가기</Text>
+            </PressableScale>
+          </Appear>
         </View>
       </SafeAreaView>
     );
@@ -214,7 +227,7 @@ export default function OwnerOnboardingScreen() {
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
       <Stack.Screen options={{ headerShown: false }} />
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        <Appear delay={0} style={styles.intro}>
+        <Appear delay={stagger(0)} style={styles.intro}>
           <Text style={styles.introEmoji}>👋</Text>
           <Text style={styles.introTitle}>직원이 물어볼 걸,{'\n'}미리 답을 깔아둘게요</Text>
           <Text style={styles.introBody}>
@@ -225,7 +238,7 @@ export default function OwnerOnboardingScreen() {
 
         {/* ① 추천 묶음 — 결정 최소화. 한 번에 담기(추천 전체 토글) */}
         {recommended.length > 0 && (
-          <Appear delay={60}>
+          <Appear delay={stagger(1)}>
             <Pressable
               onPress={toggleBundle}
               style={({ pressed }) => [styles.bundle, allRecommendedOn && styles.bundleOn, pressed && { opacity: 0.95 }]}
@@ -258,7 +271,7 @@ export default function OwnerOnboardingScreen() {
         )}
 
         {/* ② 직접 고르기 — 접이식 카테고리 섹션(미세조정) */}
-        <Appear delay={120} style={styles.pickerWrap}>
+        <Appear delay={stagger(2)} style={styles.pickerWrap}>
           <Pressable
             onPress={() => setExpanded((v) => !v)}
             style={({ pressed }) => [styles.discloseRow, pressed && { opacity: 0.7 }]}
@@ -272,8 +285,9 @@ export default function OwnerOnboardingScreen() {
             <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={18} color={InkColors.ink3} />
           </Pressable>
 
+          {/* 펼침은 Collapse가 정본이다 — Appear(등장)로 열면 아래 내용이 밀려나는 것이 같이 안 움직인다. */}
           {expanded && (
-            <Appear delay={0} style={styles.groups}>
+            <Collapse style={styles.groups}>
               {bySection.map(({ sec, items }) => {
                 const allOn = items.every((t) => checked[t.id]);
                 return (
@@ -294,12 +308,12 @@ export default function OwnerOnboardingScreen() {
                   </View>
                 );
               })}
-            </Appear>
+            </Collapse>
           )}
         </Appear>
 
         {/* ③ 기존 매뉴얼 경로 — 뒤로가기로 이 화면에 복귀할 수 있게 push. */}
-        <Appear delay={180}>
+        <Appear delay={stagger(3)}>
           <Pressable
             onPress={() => router.push('/owner/handover')}
             style={({ pressed }) => [styles.manualCard, pressed && { opacity: 0.9 }]}
@@ -536,6 +550,9 @@ const styles = StyleSheet.create({
 
   // 완료 화면
   doneWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: Space.xl, gap: Space.md },
+  // Appear 래퍼용 — 안쪽이 doneWrap 에 직접 붙어 있을 때 갖던 간격·폭을 래퍼가 대신 든다(레이아웃 불변).
+  doneHead: { alignItems: 'center', gap: Space.md },
+  doneStretch: { alignSelf: 'stretch' },
   doneEmoji: { fontSize: 52 },
   doneTitle: { fontSize: 23, fontWeight: '900', color: InkColors.ink, textAlign: 'center' },
   doneSub: { fontSize: 15, color: InkColors.ink2, textAlign: 'center', lineHeight: 22 },

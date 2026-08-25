@@ -3,6 +3,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack } from 'expo-router';
 import { usePayrollStore } from '@/lib/store/usePayrollStore';
 import { RoleTabBar } from '@/components/RoleTabBar';
+import { ScreenLoading } from '@/components/ScreenLoading';
 import { ChachakSwitch } from '@/components/ChachakSwitch';
 import { SectionLabel } from '@/components/SectionLabel';
 import { InkColors } from '@/lib/theme/colors';
@@ -18,10 +19,17 @@ import { Space } from '@/lib/theme/layout';
 export default function OwnerPayrollScreen() {
   const settings = usePayrollStore((s) => s.settings);
   const setSetting = usePayrollStore((s) => s.setSetting);
+  // ★DB 확인 전의 `settings` 는 localStorage 캐시다 — 그걸로 그리면 토글 4개와 정산일이
+  //   DB 값 도착 후 스스로 뒤집힌다(그 사이 누른 값은 반대로 저장된다).
+  //   설정 성격 화면이라 등장 애니메이션은 의도적으로 넣지 않는다 — 게이트만 둔다.
+  const ready = usePayrollStore((s) => s.settingsLoaded);
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
       <Stack.Screen options={{ title: '급여 설정' }} />
+      {!ready ? (
+        <ScreenLoading label="급여 설정을 불러오고 있어요…" />
+      ) : (
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <View style={styles.block}>
           <SectionLabel title="수당·공제" />
@@ -57,6 +65,7 @@ export default function OwnerPayrollScreen() {
         </View>
         <View style={{ height: 12 }} />
       </ScrollView>
+      )}
       <RoleTabBar role="owner" />
     </SafeAreaView>
   );

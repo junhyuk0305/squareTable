@@ -14,6 +14,7 @@ import { useRouter } from 'expo-router';
 
 import { UserBubble } from '@/components/UserBubble';
 import { Appear } from '@/components/Appear';
+import { ScreenLoading } from '@/components/ScreenLoading';
 import { ChatComposerBar, PlusToggleIcon } from '@/components/ChatComposerBar';
 import { structureSquare, patchSquare, type StructuredSegment, type AiFollowup } from '@/lib/ai';
 import { EXTRACTION_MASTER } from '@/data/extraction-master';
@@ -182,6 +183,10 @@ export function OwnerCoachChat({
   // 시드/데모 픽스처(source 없음)와 온보딩 팩 템플릿(is_template·needs_review)은 제외 —
   // 안 그러면 남이 만든/기본 제공 노하우를 "알려주셨어요"로 잘못 표기하게 된다.
   const allEntries = usePlaybookStore((s) => s.entries);
+  // ★노하우가 도착하기 전에는 입력을 열지 않는다. "비슷한 노하우가 있어요" 카드(similarEntry)는
+  //   사장이 같은 내용을 또 적는 걸 **적기 전에** 막으려고 만든 것인데, entries 가 늦게 오면
+  //   이미 다 적은 뒤에 나타나 기능 목적 자체가 무력화된다. 빈 상태 스타터(recent=[])도 같은 구간이다.
+  const playbookLoaded = usePlaybookStore((s) => s.loaded);
   const recentEntries = useMemo(
     () =>
       allEntries
@@ -682,6 +687,11 @@ export function OwnerCoachChat({
   let lastCardId: string | null = null;
   for (let i = messages.length - 1; i >= 0; i--) {
     if (messages[i].kind === 'card') { lastCardId = messages[i].id; break; }
+  }
+
+  // 훅을 전부 부른 뒤의 early return — 화면 크롬(헤더·카테고리 행)은 호출부가 이미 세워 뒀다.
+  if (!playbookLoaded) {
+    return <ScreenLoading label="노하우를 불러오고 있어요…" />;
   }
 
   return (

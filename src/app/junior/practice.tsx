@@ -1,10 +1,11 @@
 import { useMemo, useState } from 'react';
-import { View, Text, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 
 import { EmptyState } from '@/components/EmptyState';
-import { Appear } from '@/components/Appear';
+import { Appear, stagger } from '@/components/Appear';
+import { ScreenLoading } from '@/components/ScreenLoading';
 import { StepProgress } from '@/components/blocks/StepProgress';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
@@ -130,9 +131,8 @@ export default function JuniorTermPracticeScreen() {
   if (!loaded) {
     return (
       <SafeAreaView style={styles.safe} edges={['bottom']}>
-        <View style={styles.center}>
-          <ActivityIndicator color={InkColors.ink3} />
-        </View>
+        {/* 스피너만 두지 않는다 — 무엇을 하는 중인지 말한다(공용 ScreenLoading). */}
+        <ScreenLoading label="연습할 값을 불러오고 있어요…" />
       </SafeAreaView>
     );
   }
@@ -201,13 +201,18 @@ export default function JuniorTermPracticeScreen() {
     <SafeAreaView style={styles.safe} edges={['bottom']}>
       <View style={styles.body}>
         {/* 1) 진행 표시 — C형 필수. 제목은 지금 몇 번째 판인지를 말한다. */}
+        <Appear delay={stagger(0)}>
         <StepProgress
           step={idx + 1}
           total={deck.length}
           title={reviewDeck ? '헷갈린 것 다시 보기' : '매장 기준 값 연습'}
         />
+        </Appear>
 
-        {/* 2) 카드 — 탭 한 번에 답이 열린다. 열린 뒤로는 탭이 아무 일도 하지 않는다. */}
+        {/* 2) 카드 — 탭 한 번에 답이 열린다. 열린 뒤로는 탭이 아무 일도 하지 않는다.
+            ★이 Appear 에는 key 를 주지 않는다 — 장을 넘길 때마다 카드가 다시 등장하면 산만하다.
+              (안쪽 답 텍스트만 card.id key 로 매 장 재생된다.) */}
+        <Appear delay={stagger(1)}>
         <Pressable
           onPress={() => setFlipped(true)}
           disabled={flipped}
@@ -232,10 +237,11 @@ export default function JuniorTermPracticeScreen() {
             </>
           )}
         </Pressable>
+        </Appear>
 
         {/* 3) 자가 채점 — 답을 본 뒤에만 나온다. 어느 쪽이든 다음 장으로 간다. */}
         {flipped ? (
-          <View style={styles.selfRow}>
+          <Appear delay={stagger(2)} style={styles.selfRow}>
             <Pressable
               onPress={() => grade(false)}
               style={({ pressed }) => [styles.softBtn, styles.selfBtn, pressed && styles.pressed]}
@@ -252,7 +258,7 @@ export default function JuniorTermPracticeScreen() {
             >
               <Text style={styles.primaryText}>알았어요</Text>
             </Pressable>
-          </View>
+          </Appear>
         ) : null}
       </View>
     </SafeAreaView>
@@ -261,7 +267,6 @@ export default function JuniorTermPracticeScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: InkColors.bg },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   body: { flex: 1, paddingHorizontal: Space.gutter, paddingTop: Space.lg, gap: Space.lg },
 
   card: {

@@ -6,6 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { PressableScale } from '@/components/PressableScale';
 import { Appear } from '@/components/Appear';
+import { ScreenLoading } from '@/components/ScreenLoading';
 import { structureDoc, extractDocText, type DocProgress } from '@/lib/ai';
 import type { StructuredSegment } from '@/lib/ai/types';
 import { chunkDocument, MAX_IMPORT_CHARS, type DocChunk } from '@/lib/import/chunk';
@@ -55,6 +56,22 @@ const viewOf = (e: PlaybookEntry, edits: Record<string, DraftEdit>): DraftEdit =
  * draft는 직원 비노출(RLS 0064)·답변 corpus 제외(isServable)·색인 제외 — 발행 시에만 살아난다.
  */
 export function HandoverImport() {
+  // ★게이트가 **본문 밖**에 있어야 한다. 아래 phase 초기값은 lazy initializer라 **마운트 순간 1회**만
+  //   돌아서, 같은 컴포넌트 안에 게이트를 두면 이미 계산이 끝난 뒤다(게이트만으로는 안 고쳐진다).
+  //   딥링크·새로고침이면 hydrate 전이라 entries 가 비어 검토 대기 draft 가 있어도 '붙여넣기'로 착지했다
+  //   — 체크포인트 재개가 조용히 빗나가는 자리. 로드 전엔 본문을 아예 마운트하지 않는다.
+  const loaded = usePlaybookStore((s) => s.loaded);
+  if (!loaded) {
+    return (
+      <SafeAreaView style={styles.safe} edges={['bottom']}>
+        <ScreenLoading label="검토 대기 노하우를 불러오고 있어요…" />
+      </SafeAreaView>
+    );
+  }
+  return <HandoverImportBody />;
+}
+
+function HandoverImportBody() {
   const router = useRouter();
   const entries = usePlaybookStore((s) => s.entries);
   const addEntry = usePlaybookStore((s) => s.add);
