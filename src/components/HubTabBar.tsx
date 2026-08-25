@@ -8,8 +8,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { TabButton, goToTab, type Tab } from '@/components/RoleTabBar';
 import { useSessionStore } from '@/lib/store/useSessionStore';
+import { useMemberPrefsStore } from '@/lib/store/useMemberPrefsStore';
 import { useCrossNotifStore } from '@/lib/store/useCrossNotifStore';
-import { assignedTodayCount } from '@/lib/utils/crossStoreNotifs';
+import { assignedTodayCount, storeUnreadCount } from '@/lib/utils/crossStoreNotifs';
 import { todayStr } from '@/lib/utils/attendance';
 import { InkColors } from '@/lib/theme/colors';
 
@@ -35,12 +36,17 @@ function useFirstTabBadge(role: 'junior' | 'owner'): number {
   const me = useSessionStore((s) => s.userId);
   const sessionStores = useSessionStore((s) => s.stores);
   const crossData = useCrossNotifStore((s) => s.data);
+  const ackByUnit = useMemberPrefsStore((s) => s.ackByUnit);
   const today = todayStr();
   if (role === 'owner') {
     const ownerUnits = new Set(sessionStores.filter((u) => u.role === 'owner').map((u) => u.unit_id));
+    // ★'전체 읽음'(0078 ackByUnit)을 반영한다(2026-08-25 감사 #11). 예전엔 원본 길이를 그냥
+    //   합산해, 사장이 '모두 읽음'을 눌러도 **이 배지만 그대로 남았다** — 같은 데이터를 쓰는
+    //   벨(useCrossNotifRows)은 ack 를 보므로 두 숫자가 서로 달랐다.
+    //   판정은 storeUnreadCount 하나(SSOT) — 여기서 다시 세지 않는다.
     return crossData
       .filter((d) => ownerUnits.has(d.unitId))
-      .reduce((n, d) => n + d.pending.length + d.queue.length + d.suggestions.length, 0);
+      .reduce((n, d) => n + storeUnreadCount(d, 'owner', me, today, ackByUnit[d.unitId] ?? null), 0);
   }
   return crossData.reduce((n, d) => n + assignedTodayCount(d, me, today), 0);
 }

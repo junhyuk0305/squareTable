@@ -9,6 +9,7 @@ import { Radius, Elevation } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
 import { Wordmark } from '@/components/Wordmark';
 import { Appear, stagger } from '@/components/Appear';
+import { PhoneVerifyBlock } from '@/components/PhoneVerifyBlock';
 
 const CODE_LEN = 6;
 
@@ -33,6 +34,14 @@ export default function JuniorHub() {
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  // ★서버가 PHONE_NOT_VERIFIED 로 막았을 때만 연다(#2). 예전엔 이 코드가 화이트리스트에 없어
+  //   '코드를 확인하고 다시 시도해 주세요' 폴백으로 떨어졌고, 직원은 **정확한 코드를 무한 재입력**했다.
+  //   그 시도가 join_attempts 에 적립돼 5번이면 10분 잠긴다 — 안내가 사용자를 잠금으로 몰고 갔다.
+  const [needPhone, setNeedPhone] = useState(false);
+  /** 인증 + profiles.phone 반영이 둘 다 끝났는가. PhoneVerifyBlock 이 올려준다. */
+  const [phoneReady, setPhoneReady] = useState(false);
+  const sessionPhone = useSessionStore((s) => s.phone);
+  const updateProfile = useSessionStore((s) => s.updateProfile);
   /** 매장이 이미 있을 때 코드 입력을 접어두는 상태. 매장 0개면 이 값과 무관하게 항상 펼쳐진다. */
   const [addOpen, setAddOpen] = useState(false);
 
@@ -62,14 +71,21 @@ export default function JuniorHub() {
       setErr('6자리 초대코드를 모두 입력해주세요.');
       return;
     }
+    if (needPhone && !phoneReady) {
+      setErr('전화번호 인증을 완료해주세요.');
+      return;
+    }
     setBusy(true);
     setErr(null);
-    const { error, pending } = await joinByInvite(code.trim());
+    const { error, pending, code: failCode } = await joinByInvite(code.trim());
     setBusy(false);
+    // 전화 미인증이면 화면을 떠나지 않고 그 자리에서 인증 단계를 연다(막다른 화면 금지).
+    if (failCode === 'PHONE_NOT_VERIFIED') setNeedPhone(true);
     if (error) {
       setErr(error);
       return;
     }
+    setNeedPhone(false);
     setCode('');
     // 승인제: 성공은 '승인 대기' 신청(pendingUnitId 세팅 → 아래 대기 카드로 전환).
     // 혹시 즉시 합류(레거시)면 바로 가게로 진입.
@@ -111,6 +127,16 @@ export default function JuniorHub() {
           onSubmitEditing={join}
         />
       </Pressable>
+      {/* 전화번호 인증 — 서버가 막았을 때만 나타난다. 사장 축(owner/create-store)과 같은 한 벌. */}
+      {needPhone && (
+        <PhoneVerifyBlock
+          guide="매장에 합류하려면 본인 확인이 한 번 필요해요."
+          okText="이제 합류를 신청할 수 있어요."
+          initialPhone={sessionPhone}
+          updateProfile={updateProfile}
+          onVerifiedChange={setPhoneReady}
+        />
+      )}
       {err && <Text style={styles.err}>{err}</Text>}
       <Pressable
         disabled={busy}

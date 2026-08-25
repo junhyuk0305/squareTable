@@ -7,7 +7,7 @@
 import { create } from 'zustand';
 import { newRoutine, resolveDayparts, type Daypart } from '@/lib/store/daypartLabels';
 import { routineSeedForIndustry } from '@/data/industryRoutines';
-import { coalesce, subscribeDebounced } from '@/lib/store/realtimeSync';
+import { coalesce, subscribeDebounced, settleWithin, HYDRATE_TIMEOUT_MS } from '@/lib/store/realtimeSync';
 import { HAS_SUPABASE } from '@/lib/supabase';
 import {
   fetchScheduleConfig,
@@ -21,7 +21,7 @@ import {
   updateSwap,
   subscribeSchedule,
 } from '@/lib/db';
-import { guardWrite } from '@/lib/store/useSyncStore';
+import { guardWrite, useSyncStore } from '@/lib/store/useSyncStore';
 import { optimisticAdd, optimisticPatch, optimisticRemove } from '@/lib/store/crudHelpers';
 import { genId } from '@/lib/utils/id';
 import { todayStr } from '@/lib/utils/attendance';
@@ -81,9 +81,18 @@ type ScheduleState = {
   config: StoreConfig;
   templates: ShiftTemplate[];
   swaps: SwapRequest[];
+  /** true = 조회 **시도가 끝남**(성공·실패 무관). 실패 여부는 loadError 로 본다. */
   loaded: boolean;
+  /** 마지막 hydrate 가 실패했는가 — 화면이 "예정된 근무 없음"과 "못 불러옴"을 구분한다(#44). */
+  loadError: boolean;
+  /** ★운영설정(config) **전용** 실패 플래그(#48). 조회 실패와 "행 없음(신규 매장)"이 둘 다 null 이던 탓에
+   *  폼이 09:00~22:00·연중무휴를 사실인 양 띄우고 저장 버튼까지 살아 있었고, 누르면 **서버의 실제
+   *  운영시간·정기휴무·비고가 기본값으로 덮여 사라졌다.** true 면 화면이 폼을 아예 띄우지 않는다. */
+  configLoadError: boolean;
 
   hydrate: () => Promise<void>;
+  /** 재시도 — 실패 화면의 '다시 시도' 버튼이 부르는 경로. */
+  retry: () => Promise<void>;
   subscribe: () => () => void;
 
   /** 매장 운영 설정 저장. **서버 반영 성공 여부를 돌려준다** — 호출부가 성공 토스트를 확인 뒤로 미룰 수 있게. */
@@ -125,7 +134,9 @@ export async function seedDaypartRoutines(industry: string | undefined): Promise
   if (!HAS_SUPABASE) return false;
   const seed = routineSeedForIndustry(industry);
   if (!seed) return false;
-  const config = await fetchScheduleConfig();
+  const { data: config, error } = await fetchScheduleConfig();
+  // 조회 실패면 시드하지 않는다 — 기존 설정을 못 본 채로 upsert 하면 실제 운영시간을 기본값으로 덮는다(#48).
+  if (error) return false;
   const dayparts = resolveDayparts(config?.dayparts);
   if (dayparts.some((d) => d.routines.length > 0)) return false;
   const filled = dayparts.map((d) =>
@@ -188,19 +199,51 @@ export const useScheduleStore = create<ScheduleState>((set, get) => ({
   templates: SEED?.templates ?? [],
   swaps: SEED?.swaps ?? [],
   loaded: !HAS_SUPABASE,
+  loadError: false,
+  configLoadError: false,
 
   hydrate: coalesce(async () => {
     if (!HAS_SUPABASE) return;
-    const [config, templates, swaps] = await Promise.all([
-      fetchScheduleConfig(),
-      fetchShiftTemplates(),
-      fetchSwaps(),
-    ]);
-    set({ config: config ?? DEFAULT_CONFIG, templates, swaps, loaded: true });
+    // ★throw 도 "시도가 끝났다"에 포함된다(2026-08-26 브라우저 실측). 아래 fetch 중 **하나라도**
+    //   예외를 던지면 Promise.all 이 reject 되고 set 이 영영 실행되지 않아 loaded 가 false 로 남는다
+    //   → 게이트가 **영구 스피너**가 된다. 계약을 값 반환 경로에만 걸면 계약이 아니다.
+    try {
+    // 정지(hang) 방지 — 위 try/catch 는 예외만 잡는다. 끝나지 않는 fetch 는 여기서 끊는다.
+    const trio = await settleWithin(
+      HYDRATE_TIMEOUT_MS,
+      Promise.all([fetchScheduleConfig(), fetchShiftTemplates(), fetchSwaps()]),
+      () => null,
+    );
+    if (trio === null) { set({ loaded: true, loadError: true, configLoadError: true }); return; }
+    const [config, templates, swaps] = trio;
+    // ★config 조회가 실패했으면 DEFAULT_CONFIG 로 덮지 않는다 — 직전 값을 유지하고 configLoadError 로
+    //   말한다. 기본값을 실제 운영시간인 양 보여주는 것이 이 화면의 가장 비싼 거짓말이다(#48).
+    //   config.data === null 이면서 error 가 아닌 경우만 "신규 매장"이라 기본값이 정당하다.
+    set((s) => ({
+      config: config.error ? s.config : (config.data ?? DEFAULT_CONFIG),
+      templates: templates.error ? s.templates : templates.data,
+      swaps: swaps.error ? s.swaps : swaps.data,
+      loaded: true,
+      loadError: config.error || templates.error || swaps.error,
+      configLoadError: config.error,
+    }));
+    } catch (e) {
+      console.warn('[schedule] hydrate threw:', e);
+      set({ loaded: true, loadError: true, configLoadError: true });
+    }
   }),
+  retry: async () => {
+    await get().hydrate();
+  },
   subscribe: () => subscribeDebounced(subscribeSchedule, () => get().hydrate()),
 
   setConfig: (patch) => {
+    // ★조회가 실패한 상태에서는 저장을 거부한다(#48). 이 upsert 는 config 전체를 쓰므로,
+    //   못 불러온 값(=기본값)을 그대로 올리면 **서버의 실제 운영시간·정기휴무·비고가 지워진다.**
+    if (get().configLoadError) {
+      useSyncStore.getState().noteError('매장 정보를 불러오지 못해 저장할 수 없어요. 새로고침 후 다시 시도해 주세요.');
+      return Promise.resolve(false);
+    }
     const before = get().config;
     const next = { ...before, ...patch };
     set({ config: next });

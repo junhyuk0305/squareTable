@@ -45,11 +45,15 @@ export function optimisticPatch<S>(
   patch: Record<string, unknown>,
   db: () => Promise<boolean>,
   failMsg: string,
-): void {
+  // ★서버 반영 결과를 돌려준다(2026-08-25 감사 #17·#18). 기존 호출부는 값을 무시하면 그만이라
+  //   호환이 깨지지 않지만, 결과를 봐야 하는 화면은 이제 볼 수 있다 —
+  //   예전엔 이 헬퍼가 void 라 "수정 저장됨 (v3)" 토스트와 1초 뒤 뒤로가기가 **서버 결과와 무관하게**
+  //   실행됐고, 하부 updateEntry 가 writeStrict 로 0행을 제대로 잡아도 그 판정이 화면까지 못 올라왔다.
+): Promise<boolean> {
   const before = (get()[key] as unknown as WithId[]).find((x) => x.id === id);
-  if (!before) return;
+  if (!before) return Promise.resolve(false); // 대상 없음 = 쓸 수 없었다(성공이 아니다)
   set((s) => ({ [key]: (s[key] as unknown as WithId[]).map((x) => (x.id === id ? { ...x, ...patch } : x)) } as unknown as Partial<S>));
-  void guardWrite(
+  return guardWrite(
     db(),
     () => set((s) => ({ [key]: (s[key] as unknown as WithId[]).map((x) => (x.id === id ? before : x)) } as unknown as Partial<S>)),
     failMsg,

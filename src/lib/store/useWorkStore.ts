@@ -46,7 +46,7 @@ import {
 // 코스 행(0108 training_courses). db.ts 의 TrainingCourse 는 코스 **key** 문자열이라 이름이 겹친다 → 행은 Row 로 별칭.
 import type { QuizAssignment, TrainingCourse as TrainingCourseRow } from '@/lib/quiz/types';
 import { guardWrite, useSyncStore } from '@/lib/store/useSyncStore';
-import { coalesce, subscribeDebounced } from '@/lib/store/realtimeSync';
+import { coalesce, subscribeDebounced, settleWithin, HYDRATE_TIMEOUT_MS } from '@/lib/store/realtimeSync';
 import { genId } from '@/lib/utils/id';
 import { useRoomStore } from '@/lib/store/useRoomStore';
 import { useScheduleStore } from '@/lib/store/useScheduleStore';
@@ -633,8 +633,14 @@ type State = {
   quizAttempts: QuizAttemptRow[];
   /** 완료 캡처(②) 넛지 피로 상태(인메모리). */
   captureNudge: CaptureNudge;
+  /** true = 조회 **시도가 끝남**(성공·실패 무관). 실패 여부는 loadError 로 본다. */
   loaded: boolean;
+  /** 마지막 hydrate 가 실패했는가 — 화면이 "할 일 없음"과 "못 불러옴"을 구분해 재시도 UI를 띄운다.
+   *  특히 fetchDone 실패는 **완료 체크가 전부 미완료로 보여** 직원이 이미 끝낸 일을 다시 하게 만든다(#56). */
+  loadError: boolean;
   hydrate: () => Promise<void>;
+  /** 재시도 — 실패 화면의 '다시 시도' 버튼이 부르는 경로. */
+  retry: () => Promise<void>;
   subscribe: () => () => void;
   // 저장 성공 여부를 반환(false=상한초과/미존재/쓰기실패) — 호출부가 성공 토스트·배정 푸시를 게이팅.
   addTask: (input: NewTask) => Promise<boolean>;
@@ -695,13 +701,21 @@ export const useWorkStore = create<State>((set, get) => ({
   quizAttempts: [],
   captureNudge: { skips: 0 },
   loaded: !HAS_SUPABASE,
+  loadError: false,
 
   // 전체 재조회(templates·done·feed·링크·이해확인·코스항목·레거시항목·코스·요청·문항수·발송원장·응시기록 12쿼리)로
   // 스토어를 통째로 교체한다.
   // coalesce: 빠른 연속 체크로 realtime 이벤트가 몰려도 풀리페치가 병렬로 쌓이지 않게 합친다.
   hydrate: coalesce(async () => {
     if (!HAS_SUPABASE) return;
-    const [templates, done, feed, knowhowLinks, understanding, courseEntries, training, courses, trainingRequests, quizCounts, assignments, quizAttempts] = await Promise.all([
+    // ★throw 도 "시도가 끝났다"에 포함된다(2026-08-26 브라우저 실측). 아래 fetch 중 **하나라도**
+    //   예외를 던지면 Promise.all 이 reject 되고 set 이 영영 실행되지 않아 loaded 가 false 로 남는다
+    //   → 게이트가 **영구 스피너**가 된다. 계약을 값 반환 경로에만 걸면 계약이 아니다.
+    try {
+    // 정지(hang) 방지 — 실패·예외는 막았어도 **끝나지 않는 것**은 못 막는다(2026-08-26 실측).
+    const all = await settleWithin(
+      HYDRATE_TIMEOUT_MS,
+      Promise.all([
       fetchTemplates(),
       fetchDone(),
       fetchFeed(),
@@ -714,17 +728,33 @@ export const useWorkStore = create<State>((set, get) => ({
       fetchQuizItemCounts(),
       fetchQuizAssignments(),
       fetchQuizAttempts(),
-    ]);
+      ]),
+      () => null,
+    );
+    if (all === null) { set({ loaded: true, loadError: true }); return; }
+    const [templates, done, feed, knowhowLinks, understanding, courseEntries, training, courses, trainingRequests, quizCounts, assignments, quizAttempts] = all;
     set({
-      templates, done, feed, knowhowLinks, understanding, courseEntries, training, trainingRequests, assignments, quizAttempts,
+      templates: templates.data, done: done.data, feed: feed.data,
+      knowhowLinks, understanding, courseEntries, training, trainingRequests, assignments, quizAttempts,
       // 직원에게 보일 코스만(비활성 제외) 사장 화면과 같은 순서로 — 카드 순서 = 사장이 정한 순서.
       courses: (courses.data ?? []).filter((c) => c.active).sort((a, b) => a.position - b.position),
       // 읽기 실패(null)면 빈 맵 = 문항 0건 취급이다. 퀴즈가 잠깐 안 뜨는 쪽이 검수 안 된 문제가
       // 나가는 쪽보다 낫다(fail-closed). 실패 자체는 readFail 이 이미 보고한다.
       quizCounts: quizCounts.data ?? {},
       loaded: true,
+      // ★업무보드의 뼈대 3축(할일·완료·피드) 중 하나라도 실패하면 화면은 "없음"을 말하면 안 된다.
+      //   나머지 축(노하우 링크·훈련 등)은 이 화면의 본문이 아니라 부가 정보라 게이트에 넣지 않는다.
+      loadError: templates.error || done.error || feed.error,
     });
+    } catch (e) {
+      console.warn('[work] hydrate threw:', e);
+      set({ loaded: true, loadError: true });
+    }
   }),
+
+  retry: async () => {
+    await get().hydrate();
+  },
   // realtime 변경마다 즉시 풀리페치하면 체크 한 번(work_done+work_feed 2쓰기)이 매번 3쿼리+전체
   // 리렌더가 된다 → 트레일링 디바운스로 이벤트 버스트를 1회 재조회에 합친다.
   subscribe: () => subscribeDebounced(subscribeWork, () => get().hydrate()),
@@ -1121,7 +1151,9 @@ export const useWorkStore = create<State>((set, get) => ({
       return { ok: false, sent: 0 };
     }
     const fresh = await fetchFeed();
-    set({ feed: fresh });
+    // 재조회 실패는 발송 성공을 뒤집지 않는다 — 기존 피드를 유지하고 실패는 loadError 로 남긴다.
+    if (!fresh.error) set({ feed: fresh.data });
+    else set({ loadError: true });
     notifyStaffNotice(authorName, text.trim());
     return { ok: true, sent: data.sent };
   },
@@ -1329,7 +1361,7 @@ export const useWorkStore = create<State>((set, get) => ({
   applyMock: (demo) =>
     set(
       demo
-        ? { templates: seedTemplates, done: seedDone, feed: seedFeed, knowhowLinks: [], understanding: [], loaded: true }
-        : { templates: [], done: {}, feed: [], knowhowLinks: [], understanding: [], loaded: true },
+        ? { templates: seedTemplates, done: seedDone, feed: seedFeed, knowhowLinks: [], understanding: [], loaded: true, loadError: false }
+        : { templates: [], done: {}, feed: [], knowhowLinks: [], understanding: [], loaded: true, loadError: false },
     ),
 }));

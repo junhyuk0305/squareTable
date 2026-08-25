@@ -107,7 +107,11 @@ type SessionState = {
   //   'PHONE_NOT_VERIFIED' → 매장 만들기 화면이 그 자리에서 전화번호 인증 단계를 연다.
   createStore: (storeName: string, industry: string, bizNo?: string, birthDate?: string, opts?: { isOnboarding?: boolean }) => Promise<{ error: string | null; inviteCode: string | null; code?: string }>;
   // 합류는 이제 '신청'(pending) — 성공 시 pending=true. 사장 승인 후에야 unitId가 붙는다(남용 #2).
-  joinByInvite: (code: string) => Promise<{ error: string | null; storeName: string | null; pending?: boolean }>;
+  // code = createStore 와 **같은 화이트리스트 규약**. 'PHONE_NOT_VERIFIED' 면 화면이 그 자리에서
+  //   전화번호 인증 단계를 연다. 이게 없던 동안 서버가 전화 미인증으로 막은 것이 폴백 문구
+  //   ('코드를 확인하고 다시 시도해 주세요')로 떨어져, 직원은 **정확한 코드를 무한 재입력**했고
+  //   화면 어디에도 전화 인증으로 가는 길이 없었다(2026-08-25 감사 #2).
+  joinByInvite: (code: string) => Promise<{ error: string | null; storeName: string | null; pending?: boolean; code?: string }>;
   // 승인 대기 중 본인 신청 철회. 다른 매장에 다시 신청 가능.
   cancelJoinRequest: () => Promise<{ error: string | null }>;
   // '합류 신청 미승인' 안내 닫기 — 기기 마커까지 지워 재시작 후에도 다시 뜨지 않는다.
@@ -396,8 +400,15 @@ async function loadProfile(
     let storesReadFailed = false; // 거절 감지의 오판 방지 — 목록 읽기 실패를 "소속 없음"으로 위장하지 않는다
     if (unitId) {
       const { data: us, error: usErr } = await fetchMyUnits();
-      stores = us ?? [];
       storesReadFailed = !!usErr;
+      // ★읽기 실패를 빈 목록으로 덮지 않는다(2026-08-25 감사 #7). 이 배열이 비면
+      //   벨 배지가 0, /notifications 가 "새 알림이 없어요", 상단 매장 전환 UI 자체가 사라져
+      //   **다점포 사장이 나머지 매장으로 갈 길이 없어진다.** 잠긴 매장 판정(#12)·크로스 알림(#13·#14)도
+      //   전부 이 배열에서 파생하므로, 여기 한 번의 실패가 하위 기능 전체를 연쇄로 오작동시킨다.
+      //   바로 위 fetchUnitSubscription 이 쓰는 것과 같은 보존 패턴 — 단 '같은 사용자'일 때만
+      //   유지한다(계정이 바뀌었는데 이전 계정 매장 목록이 승계되면 크로스 계정 누수다).
+      const prevSession = useSessionStore.getState();
+      stores = us ?? (usErr && prevSession.userId === userId ? prevSession.stores : []);
     }
     // 매장별 역할(0093): 정본 = unit_members.role(my_units 로 로드). 전역 junior 계정이라도
     // 활성 매장에서 매니저로 승격됐으면 세션 유효 역할은 manager(사장 화면 표면).
@@ -709,6 +720,17 @@ export const useSessionStore = create<SessionState>((set, get) => ({
         if (uid0) await loadProfile(set, uid0, get().email);
         track('join_requested', { result: 'already_pending' });
         return { error: null, storeName: get().pendingStoreName || null, pending: true };
+      }
+      // ★전화 미인증은 '코드 문제'가 아니다 — 코드를 다시 확인하라는 폴백으로 떨어뜨리면
+      //   직원이 맞는 코드를 계속 재입력하고, 서버는 그 시도를 join_attempts 에 적립해
+      //   5번이면 10분 잠긴다(already_member 와 같은 종류의 사고). 화면이 인증 단계를 열게 한다.
+      if (/PHONE_NOT_VERIFIED/.test(error.message)) {
+        track('join_requested', { result: 'phone_not_verified' });
+        return {
+          error: '전화번호 인증이 필요해요. 인증을 마치면 바로 신청할 수 있어요.',
+          storeName: null,
+          code: 'PHONE_NOT_VERIFIED',
+        };
       }
       const reason = /invalid_code/.test(error.message)
         ? 'invalid_code'

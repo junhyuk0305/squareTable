@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { RoleTabBar } from '@/components/RoleTabBar';
 import { ScreenLoading } from '@/components/ScreenLoading';
+import { LoadErrorState } from '@/components/LoadErrorState';
 import { KnowhowSegment } from '@/components/KnowhowSegment';
 import { JuniorBrowseDashboard } from '@/components/JuniorBrowseDashboard';
 import { JuniorAsk } from '@/components/junior/JuniorAsk';
@@ -56,6 +57,8 @@ export default function JuniorChatScreen() {
   //   0 이었다가 n 으로 튀고, 둘러보기가 "아직 등록된 노하우가 없어요"로 먼저 뜬다.
   //   훅은 각각 부른 뒤 AND 한다(&& 안에서 훅 호출 금지 — 렌더마다 훅 개수가 달라진다).
   const playbookLoaded = usePlaybookStore((s) => s.loaded);
+  const playbookLoadError = usePlaybookStore((s) => s.loadError);
+  const hydratePlaybook = usePlaybookStore((s) => s.hydrate);
   const queueLoaded = useUnknownQueueStore((s) => s.loaded);
   const suggestionLoaded = useSuggestionStore((s) => s.loaded);
   const chatLoaded = useChatStore((s) => s.loaded);
@@ -66,6 +69,10 @@ export default function JuniorChatScreen() {
       <Stack.Screen options={{ title: '물어보기' }} />
       {!ready ? (
         <ScreenLoading label="노하우를 불러오고 있어요…" />
+      ) : playbookLoadError ? (
+        // ★노하우 목록 읽기 실패를 "아직 매장에 없는 질문이에요"라는 **거짓 단정**으로 바꾸지 않는다(#23).
+        //   그 문구는 사장이 답을 안 올려놨다는 뜻이라, 실제로는 있는 답을 없다고 말하는 셈이 된다.
+        <LoadErrorState title="노하우를 불러오지 못했어요" onRetry={() => void hydratePlaybook()} />
       ) : (
         <KnowhowSegment
           role="junior"

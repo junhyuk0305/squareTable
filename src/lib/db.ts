@@ -147,6 +147,10 @@ export type MyUnitRow = { unit_id: string; store_name: string; role: string; ind
 /** 내가 속한(소유/직원) 매장 목록 — 매장 선택 홈/헤더 스위처용. units RLS는 활성 매장만 보이므로 definer RPC 필요. */
 export async function fetchMyUnits(): Promise<DbResult<MyUnitRow[]>> {
   const { data, error } = await supabase.rpc('my_units');
+  // ★readFail 추가(#7): 이 목록이 비면 벨 배지가 0, /notifications 가 "새 알림이 없어요",
+  //   매장 전환 UI 자체가 사라진다 — **다점포 사장이 나머지 매장으로 갈 길이 없어진다.**
+  //   무음이면 사용자는 매장이 사라졌다고 믿는다. 기존 stores 보존은 호출부(useSessionStore)에서.
+  if (error) readFail('fetchMyUnits', error);
   return { data: (data as MyUnitRow[]) ?? null, error: error as DbErr };
 }
 /** 활성 매장 전환(멤버십 검증은 RPC 내부). 성공 시 호출부가 loadProfile+재hydrate로 컨텍스트를 맞춘다. */
@@ -412,9 +416,15 @@ export async function fetchDowngradeNeed(): Promise<DbResult<DowngradeNeed>> {
 async function rpcTextList(fn: 'my_locked_units' | 'my_free_units'): Promise<DbResult<string[]>> {
   if (!HAS_SUPABASE) return { data: [], error: null };
   const { data, error } = await supabase.rpc(fn);
+  // ★실패 시 data=null 로 준다(#12). 예전엔 error 가 있어도 [] 를 돌려줘, [] 가 truthy 인 탓에
+  //   호출부의 `if (data)` 가 통과하고 **"잠긴 매장 없음"으로 위장**됐다 — 잠긴 매장이 평범한 카드로 보인다.
+  if (error) {
+    readFail(`rpcTextList:${fn}`, error);
+    return { data: null, error: error as DbErr };
+  }
   const rows = (data ?? []) as unknown[];
   const ids = rows.map((r) => (typeof r === 'string' ? r : String((r as Record<string, string>)?.[fn] ?? '')));
-  return { data: ids.filter(Boolean), error: error as DbErr };
+  return { data: ids.filter(Boolean), error: null };
 }
 
 // 잠긴 매장 id 목록(매장 카드 배지). 카드마다 RPC 를 부르지 않게 서버가 한 번에 준다.
@@ -839,8 +849,8 @@ export async function renameEntrySection(from: string, to: string | null): Promi
 }
 
 // ── 노하우 제안/신청(알바 → 사장) ─────────────────────────
-export async function fetchSuggestions(): Promise<PlaybookSuggestion[]> {
-  if (!HAS_SUPABASE) return [];
+export async function fetchSuggestions(): Promise<ReadResult<PlaybookSuggestion[]>> {
+  if (!HAS_SUPABASE) return { data: [], error: false };
   const { data, error } = await supabase
     .from('playbook_suggestions')
     .select('*')
@@ -849,9 +859,9 @@ export async function fetchSuggestions(): Promise<PlaybookSuggestion[]> {
     .limit(PAGE_LIMIT);
   if (error) {
     readFail('fetchSuggestions', error);
-    return [];
+    return { data: [], error: true };
   }
-  return (data ?? []) as PlaybookSuggestion[];
+  return { data: (data ?? []) as PlaybookSuggestion[], error: false };
 }
 
 export async function insertSuggestion(s: PlaybookSuggestion): Promise<boolean> {
@@ -1204,14 +1214,16 @@ export function subscribePlaybook(onChange: () => void): () => void {
 }
 
 // ── 업무 채팅방 ────────────────────────────────────────────
-export async function fetchRooms(): Promise<Room[]> {
-  if (!HAS_SUPABASE) return [];
+// ★ReadResult 로 올린 이유: 실패를 빈배열로 돌려주면 "방 없음"이 되고, 그 상태에서 사장 계정은
+//   기본방 자가치유 insert 를 시도해 duplicate key 를 낸다(useRoomStore.hydrate). 실패와 0건은 달라야 한다.
+export async function fetchRooms(): Promise<ReadResult<Room[]>> {
+  if (!HAS_SUPABASE) return { data: [], error: false };
   const { data, error } = await supabase.from('work_rooms').select('*').order('created_at');
   if (error) {
     readFail('fetchRooms', error);
-    return [];
+    return { data: [], error: true };
   }
-  return (data ?? []).map((r: any) => ({
+  const rows = (data ?? []).map((r: any) => ({
     id: r.id,
     unitId: r.unit_id,
     name: r.name,
@@ -1221,15 +1233,16 @@ export async function fetchRooms(): Promise<Room[]> {
     ...(r.created_by ? { createdBy: r.created_by as string } : null),
     ...(r.created_at ? { createdAt: r.created_at as string } : null),
   })) as Room[];
+  return { data: rows, error: false };
 }
-export async function fetchRoomMembers(): Promise<RoomMember[]> {
-  if (!HAS_SUPABASE) return [];
+export async function fetchRoomMembers(): Promise<ReadResult<RoomMember[]>> {
+  if (!HAS_SUPABASE) return { data: [], error: false };
   const { data, error } = await supabase.from('work_room_members').select('room_id, user_id');
   if (error) {
     readFail('fetchRoomMembers', error);
-    return [];
+    return { data: [], error: true };
   }
-  return (data ?? []).map((r: any) => ({ roomId: r.room_id, userId: r.user_id })) as RoomMember[];
+  return { data: (data ?? []).map((r: any) => ({ roomId: r.room_id, userId: r.user_id })) as RoomMember[], error: false };
 }
 export async function insertRoom(room: Room): Promise<boolean> {
   if (!HAS_SUPABASE) return true;
@@ -1270,14 +1283,14 @@ export async function softDeleteRoom(id: string): Promise<boolean> {
 
 // ── 방 개인 설정(work_room_prefs · 0149) ──────────────────
 // 이름·사진·색의 개인 덮어쓰기 + 할일 완료 알림 표시 여부. 행이 없으면 전역 값 + show_task_done=true.
-export async function fetchRoomPrefs(): Promise<RoomPref[]> {
-  if (!HAS_SUPABASE) return [];
+export async function fetchRoomPrefs(): Promise<ReadResult<RoomPref[]>> {
+  if (!HAS_SUPABASE) return { data: [], error: false };
   const { data, error } = await supabase.from('work_room_prefs').select('room_id, name, image_url, color, show_task_done, last_read_at');
   if (error) {
     readFail('fetchRoomPrefs', error);
-    return [];
+    return { data: [], error: true };
   }
-  return (data ?? []).map((r: any) => ({
+  const rows = (data ?? []).map((r: any) => ({
     roomId: r.room_id,
     ...(r.name ? { name: r.name as string } : null),
     ...(r.image_url ? { imageUrl: r.image_url as string } : null),
@@ -1285,6 +1298,7 @@ export async function fetchRoomPrefs(): Promise<RoomPref[]> {
     ...(r.last_read_at ? { lastReadAt: r.last_read_at as string } : null),
     showTaskDone: r.show_task_done !== false,
   })) as RoomPref[];
+  return { data: rows, error: false };
 }
 /** 개인 설정 upsert. null 을 넣은 칸은 전역 값으로 되돌아간다(되돌리기). */
 export async function upsertRoomPref(userId: string, pref: RoomPref): Promise<boolean> {
@@ -1316,7 +1330,17 @@ export async function markRoomRead(userId: string, roomId: string, atIso: string
 }
 export async function addRoomMember(roomId: string, userId: string): Promise<boolean> {
   if (!HAS_SUPABASE) return true;
-  return write('addRoomMember', supabase.from('work_room_members').upsert({ room_id: roomId, user_id: userId }));
+  // ★upsert 를 쓰지 않는다(2026-08-25 감사 #35). 0148 이 `wrm_write` 를 drop 하고 insert·delete 만
+  //   다시 만들어 **UPDATE 정책이 없다** → upsert 는 충돌 시 ON CONFLICT DO UPDATE 를 타면서
+  //   반드시 42501 이 된다. 즉 "이미 초대된 사람을 다시 초대"가 항상 "실패했어요"로 떴다.
+  //   AGENTS ④ 와 같은 결론: 남이 만든 행의 제자리 수정은 update 만, 신규는 insert 만.
+  //   이미 멤버인 경우(23505)는 **원하는 상태에 이미 도달한 것**이므로 성공으로 친다(멱등).
+  const { error } = await supabase.from('work_room_members').insert({ room_id: roomId, user_id: userId });
+  if (!error) return true;
+  if ((error as { code?: string }).code === '23505') return true;
+  console.warn('[db] addRoomMember:', error.message);
+  reportError('db.write:addRoomMember', error);
+  return false;
 }
 export async function removeRoomMember(roomId: string, userId: string): Promise<boolean> {
   if (!HAS_SUPABASE) return true;
@@ -1369,15 +1393,15 @@ function mapTemplateRow(r: any): TaskTemplate {
     ...(r.hidden ? { hidden: true } : null),
   } as TaskTemplate;
 }
-export async function fetchTemplates(): Promise<TaskTemplate[]> {
-  if (!HAS_SUPABASE) return [];
+export async function fetchTemplates(): Promise<ReadResult<TaskTemplate[]>> {
+  if (!HAS_SUPABASE) return { data: [], error: false };
   // select('*') — 0013 마이그레이션 적용 전후 모두 안전(없는 컬럼은 undefined).
   const { data, error } = await supabase.from('work_templates').select('*').order('created_at');
   if (error) {
     readFail('fetchTemplates', error);
-    return [];
+    return { data: [], error: true };
   }
-  return (data ?? []).map(mapTemplateRow);
+  return { data: (data ?? []).map(mapTemplateRow), error: false };
 }
 export async function insertTemplate(t: TaskTemplate): Promise<boolean> {
   if (!HAS_SUPABASE) return true;
@@ -2390,18 +2414,20 @@ export async function submitQuizLink(
 }
 
 // ── 업무보드: 완료 체크 ────────────────────────────────────
-export async function fetchDone(): Promise<Record<string, Record<string, DoneMark>>> {
-  if (!HAS_SUPABASE) return {};
+// ★ReadResult 로 올린 이유: 실패를 빈 맵으로 돌려주면 **완료 체크가 전부 미완료로 보여**
+//   직원이 이미 끝낸 일을 다시 한다(2026-08-25 감사 #56). "0건"과 "못 불러옴"은 달라야 한다.
+export async function fetchDone(): Promise<ReadResult<Record<string, Record<string, DoneMark>>>> {
+  if (!HAS_SUPABASE) return { data: {}, error: false };
   const { data, error } = await supabase.from('work_done').select('work_date, template_id, data');
   if (error) {
     readFail('fetchDone', error);
-    return {};
+    return { data: {}, error: true };
   }
   const out: Record<string, Record<string, DoneMark>> = {};
   for (const r of (data ?? []) as any[]) {
     (out[r.work_date] ??= {})[r.template_id] = r.data as DoneMark;
   }
-  return out;
+  return { data: out, error: false };
 }
 export async function setDone(date: string, templateId: string, mark: DoneMark, roomId?: string): Promise<boolean> {
   if (!HAS_SUPABASE) return true;
@@ -2419,8 +2445,8 @@ export async function clearDone(date: string, templateId: string): Promise<boole
 }
 
 // ── 업무보드: 피드(공지/메시지/완료) ──────────────────────
-export async function fetchFeed(): Promise<FeedItem[]> {
-  if (!HAS_SUPABASE) return [];
+export async function fetchFeed(): Promise<ReadResult<FeedItem[]>> {
+  if (!HAS_SUPABASE) return { data: [], error: false };
   const { data, error } = await supabase
     .from('work_feed')
     .select('data')
@@ -2434,9 +2460,9 @@ export async function fetchFeed(): Promise<FeedItem[]> {
     .limit(PAGE_LIMIT);
   if (error) {
     readFail('fetchFeed', error);
-    return [];
+    return { data: [], error: true };
   }
-  return (data ?? []).map((r: any) => r.data as FeedItem).reverse();
+  return { data: (data ?? []).map((r: any) => r.data as FeedItem).reverse(), error: false };
 }
 export async function upsertFeed(item: FeedItem): Promise<boolean> {
   if (!HAS_SUPABASE) return true;
@@ -2472,8 +2498,10 @@ export async function fetchBroadcastReadStatus(broadcastId: string): Promise<DbR
 }
 
 // ── 출퇴근 ─────────────────────────────────────────────────
-export async function fetchAttendance(): Promise<AttendanceRecord[]> {
-  if (!HAS_SUPABASE) return [];
+// ★ReadResult 로 올린 이유: 실패를 빈배열로 돌려주면 hasOpen 이 항상 false 가 되어 화면이
+//   "아직 출근 전이에요"를 말하고, **근무 중인 직원이 이중 출근을 찍어** 급여가 부풀어 오른다(#40).
+export async function fetchAttendance(): Promise<ReadResult<AttendanceRecord[]>> {
+  if (!HAS_SUPABASE) return { data: [], error: false };
   const { data, error } = await supabase
     .from('attendance')
     .select('id, staff_id, date, check_in, check_out, work_minutes, edited_by')
@@ -2481,9 +2509,9 @@ export async function fetchAttendance(): Promise<AttendanceRecord[]> {
     .limit(PAGE_LIMIT);
   if (error) {
     readFail('fetchAttendance', error);
-    return [];
+    return { data: [], error: true };
   }
-  return (data ?? []) as AttendanceRecord[];
+  return { data: (data ?? []) as AttendanceRecord[], error: false };
 }
 export async function upsertAttendance(rec: AttendanceRecord): Promise<boolean> {
   if (!HAS_SUPABASE) return true;
@@ -2572,39 +2600,49 @@ export function subscribeAttendance(onChange: () => void): () => void {
 
 // ── 근무표(운영설정 · 시프트 템플릿 · 교대 요청) ───────────────
 // 컬럼 매핑: closed_days(jsonb)↔closedDays, start_time/end_time↔start/end. unit_id는 RLS가 막지만 INSERT 시 채운다.
-export async function fetchScheduleConfig(): Promise<StoreConfig | null> {
-  if (!HAS_SUPABASE) return null;
+// ★ReadResult 로 올린 이유(#48): 조회 실패와 "행 없음(신규 매장)"이 둘 다 null 이라 구별이 불가능했다.
+//   화면은 실패를 신규 매장으로 오인해 폼을 09:00~22:00·연중무휴로 채우고 저장 버튼을 살려 뒀고,
+//   사장이 누르면 **서버의 실제 운영시간·정기휴무·비고가 기본값으로 덮여 사라졌다.**
+//   error=true 면 화면이 폼 자체를 띄우지 않는다(useScheduleStore.configLoadError).
+export async function fetchScheduleConfig(): Promise<ReadResult<StoreConfig | null>> {
+  if (!HAS_SUPABASE) return { data: null, error: false };
   const { data, error } = await supabase
     .from('schedule_config')
     .select('open, close, closed_days, note, dayparts')
     .maybeSingle();
   if (error) {
     readFail('fetchScheduleConfig', error);
-    return null;
+    return { data: null, error: true };
   }
-  if (!data) return null;
+  if (!data) return { data: null, error: false }; // 행 없음 = 신규 매장(정상)
   return {
-    open: data.open ?? '09:00',
-    close: data.close ?? '22:00',
-    closedDays: Array.isArray(data.closed_days) ? (data.closed_days as number[]) : [],
-    note: data.note ?? '',
-    ...(data.dayparts && typeof data.dayparts === 'object' ? { dayparts: data.dayparts as StoreConfig['dayparts'] } : null),
+    data: {
+      open: data.open ?? '09:00',
+      close: data.close ?? '22:00',
+      closedDays: Array.isArray(data.closed_days) ? (data.closed_days as number[]) : [],
+      note: data.note ?? '',
+      ...(data.dayparts && typeof data.dayparts === 'object' ? { dayparts: data.dayparts as StoreConfig['dayparts'] } : null),
+    },
+    error: false,
   };
 }
 
 // ── 노하우 커스텀 카테고리(0096) — 매장 공유 설정 schedule_config.knowhow_categories(jsonb) ──
 // 해석/정리는 knowhowCategories.ts(resolve/sanitize)가 SSOT — 여기서는 원시 jsonb만 나른다.
-export async function fetchKnowhowCategories(): Promise<unknown> {
-  if (!HAS_SUPABASE) return [];
+// ★ReadResult 로 올린 이유(#21): 레지스트리 읽기 실패가 customCategories=[] 로 위장되고,
+//   그 상태에서 카테고리 편집을 저장하면 **레지스트리를 통째로 덮어써 커스텀 카테고리가 영구 삭제**된다.
+//   error=true 면 스토어가 customCategories 를 건드리지 않고 편집 진입을 막는다.
+export async function fetchKnowhowCategories(): Promise<ReadResult<unknown>> {
+  if (!HAS_SUPABASE) return { data: [], error: false };
   const { data, error } = await supabase
     .from('schedule_config')
     .select('knowhow_categories')
     .maybeSingle();
   if (error) {
     readFail('fetchKnowhowCategories', error);
-    return [];
+    return { data: [], error: true };
   }
-  return data?.knowhow_categories ?? [];
+  return { data: data?.knowhow_categories ?? [], error: false };
 }
 
 export async function saveKnowhowCategories(cats: CustomCategory[]): Promise<boolean> {
@@ -2676,16 +2714,16 @@ function shiftRow(t: ShiftTemplate) {
   };
 }
 
-export async function fetchShiftTemplates(): Promise<ShiftTemplate[]> {
-  if (!HAS_SUPABASE) return [];
+export async function fetchShiftTemplates(): Promise<ReadResult<ShiftTemplate[]>> {
+  if (!HAS_SUPABASE) return { data: [], error: false };
   const { data, error } = await supabase
     .from('shift_templates')
     .select('id, staff_id, weekday, shift_date, start_time, end_time');
   if (error) {
     readFail('fetchShiftTemplates', error);
-    return [];
+    return { data: [], error: true };
   }
-  return (data ?? []).map((r: any) => ({
+  const rows = (data ?? []).map((r: any) => ({
     id: r.id,
     staff_id: r.staff_id,
     weekday: r.weekday,
@@ -2693,6 +2731,7 @@ export async function fetchShiftTemplates(): Promise<ShiftTemplate[]> {
     start: r.start_time,
     end: r.end_time,
   }));
+  return { data: rows, error: false };
 }
 
 export async function insertShiftTemplate(t: ShiftTemplate): Promise<boolean> {
@@ -2740,17 +2779,17 @@ function mapSwapRow(r: any): SwapRequest {
     updated_at: r.updated_at,
   } as SwapRequest;
 }
-export async function fetchSwaps(): Promise<SwapRequest[]> {
-  if (!HAS_SUPABASE) return [];
+export async function fetchSwaps(): Promise<ReadResult<SwapRequest[]>> {
+  if (!HAS_SUPABASE) return { data: [], error: false };
   const { data, error } = await supabase
     .from('swap_requests')
     .select('*')
     .order('created_at', { ascending: false });
   if (error) {
     readFail('fetchSwaps', error);
-    return [];
+    return { data: [], error: true };
   }
-  return (data ?? []).map(mapSwapRow);
+  return { data: (data ?? []).map(mapSwapRow), error: false };
 }
 
 export async function insertSwap(r: SwapRequest): Promise<boolean> {

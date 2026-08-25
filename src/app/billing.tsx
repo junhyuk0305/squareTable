@@ -631,7 +631,9 @@ function BillingBody() {
                       <TextInput
                         value={bizNo}
                         onChangeText={setBizNo}
-                        placeholder="466-03-04380"
+                        // ★자사 번호를 사장 입력칸 placeholder 로 두지 않는다(#53) — 그대로 따라 적으면
+            //   사장이 **자기 자신에게 계산서를 끊는다**. 형식만 보여주는 마스크로 바꾼다.
+            placeholder="000-00-00000"
                         placeholderTextColor={InkColors.ink3}
                         style={styles.input}
                         keyboardType="number-pad"

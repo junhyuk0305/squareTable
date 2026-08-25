@@ -2,7 +2,7 @@
 // 메시지/공지/할일 자체는 useWorkStore가 보관하고 roomId로 묶인다. 이 스토어는 '어떤 방들이 있고
 // 누가 속하며 지금 어느 방을 보는가'만 관리한다.
 import { create } from 'zustand';
-import { coalesce, subscribeDebounced } from '@/lib/store/realtimeSync';
+import { coalesce, subscribeDebounced, settleWithin, HYDRATE_TIMEOUT_MS } from '@/lib/store/realtimeSync';
 import { HAS_SUPABASE } from '@/lib/supabase';
 import {
   fetchRooms,
@@ -74,8 +74,13 @@ type State = {
   members: RoomMember[]; // 비기본방 멤버십(기본방은 전원 → 멤버행 없음)
   prefs: RoomPref[]; // 내 것만 내려온다(RLS: 본인 행)
   currentRoomId: string | null;
+  /** true = 조회 **시도가 끝남**(성공·실패 무관). 실패 여부는 loadError 로 본다. */
   loaded: boolean;
+  /** 마지막 hydrate 가 실패했는가 — 화면이 "방 없음"과 "못 불러옴"을 구분해 재시도 UI를 띄운다. */
+  loadError: boolean;
   hydrate: () => Promise<void>;
+  /** 재시도 — 실패 화면의 '다시 시도' 버튼이 부르는 경로. */
+  retry: () => Promise<void>;
   subscribe: () => () => void;
   setCurrentRoom: (id: string) => void;
   /** 기본방('전체')이 없으면 만들어 둔다(mock 신규 매장에서 메시지가 고아 되는 것 방지). */
@@ -106,21 +111,48 @@ export const useRoomStore = create<State>((set, get) => ({
   prefs: [],
   currentRoomId: HAS_SUPABASE ? null : defaultRoomId(DEMO_UNIT_ID),
   loaded: !HAS_SUPABASE,
+  loadError: false,
 
   hydrate: coalesce(async () => {
     if (!HAS_SUPABASE) return;
+    // ★throw 도 "시도가 끝났다"에 포함된다(2026-08-26 브라우저 실측). 아래 fetch 중 **하나라도**
+    //   예외를 던지면 Promise.all 이 reject 되고 set 이 영영 실행되지 않아 loaded 가 false 로 남는다
+    //   → 게이트가 **영구 스피너**가 된다. 계약을 값 반환 경로에만 걸면 계약이 아니다.
+    try {
     const session = useSessionStore.getState();
-    let [rooms, members, prefs] = await Promise.all([fetchRooms(), fetchRoomMembers(), fetchRoomPrefs()]);
+    // 정지(hang) 방지 — 백엔드 블랙아웃 때 supabase 클라가 토큰 갱신을 기다리며 매달리면
+    // Promise.all 이 영영 안 끝나 게이트가 영구 스피너가 된다(2026-08-26 실측).
+    const FAILED = { data: [] as never[], error: true };
+    const [roomsRes, membersRes, prefsRes] = await settleWithin(
+      HYDRATE_TIMEOUT_MS,
+      Promise.all([fetchRooms(), fetchRoomMembers(), fetchRoomPrefs()]),
+      () => [FAILED, FAILED, FAILED] as unknown as [Awaited<ReturnType<typeof fetchRooms>>, Awaited<ReturnType<typeof fetchRoomMembers>>, Awaited<ReturnType<typeof fetchRoomPrefs>>],
+    );
+    const loadError = roomsRes.error || membersRes.error || prefsRes.error;
+    let rooms = roomsRes.data;
     // 자가치유: 마이그레이션 backfill 이후 생성된 새 매장엔 기본방이 없을 수 있다.
     // 사장이 들어오면 기본방('전체')을 한 번 만들어 둔다(알바는 권한 없어 패스).
-    if (session.role === 'owner' && session.unitId && !rooms.some((r) => r.isDefault)) {
+    // ★단, 방 목록 **조회가 실패했을 땐 건너뛴다**(#34). 실패를 "기본방 없음"으로 오인해 insert 하면
+    //   고정 id 라 duplicate key 가 나고, 이후 inRoom() 이 전부 통과해 방 칩 없는 단일 스트림처럼 보인다.
+    if (!roomsRes.error && session.role === 'owner' && session.unitId && !rooms.some((r) => r.isDefault)) {
       const def: Room = { id: defaultRoomId(session.unitId), unitId: session.unitId, name: '전체', isDefault: true, createdBy: session.userId };
       if (await insertRoom(def)) rooms = [def, ...rooms];
     }
     const cur = get().currentRoomId;
     const fallback = rooms.find((r) => r.isDefault)?.id ?? rooms[0]?.id ?? null;
-    set({ rooms, members, prefs, loaded: true, currentRoomId: cur && rooms.some((r) => r.id === cur) ? cur : fallback });
+    set({
+      rooms, members: membersRes.data, prefs: prefsRes.data, loaded: true, loadError,
+      currentRoomId: cur && rooms.some((r) => r.id === cur) ? cur : fallback,
+    });
+    } catch (e) {
+      console.warn('[room] hydrate threw:', e);
+      set({ loaded: true, loadError: true });
+    }
   }),
+
+  retry: async () => {
+    await get().hydrate();
+  },
 
   subscribe: () => subscribeDebounced(subscribeRooms, () => get().hydrate()),
 
@@ -261,7 +293,7 @@ export const useRoomStore = create<State>((set, get) => ({
   applyMock: (demo) =>
     set(
       demo
-        ? { rooms: seedRooms, members: seedMembers, prefs: [], currentRoomId: defaultRoomId(DEMO_UNIT_ID), loaded: true }
-        : { rooms: [], members: [], prefs: [], currentRoomId: null, loaded: true },
+        ? { rooms: seedRooms, members: seedMembers, prefs: [], currentRoomId: defaultRoomId(DEMO_UNIT_ID), loaded: true, loadError: false }
+        : { rooms: [], members: [], prefs: [], currentRoomId: null, loaded: true, loadError: false },
     ),
 }));

@@ -21,6 +21,7 @@ import { SHOW_BILLING } from '@/lib/config/store-policy';
 import { StepProgress } from '@/components/blocks/StepProgress';
 import { Appear, stagger } from '@/components/Appear';
 import { ScreenLoading } from '@/components/ScreenLoading';
+import { LoadErrorState } from '@/components/LoadErrorState';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
 import { Space, SCREEN_GUTTER } from '@/lib/theme/layout';
@@ -91,13 +92,26 @@ function DowngradeBody() {
   const [pickedStore, setPickedStore] = useState<string | null>(null);
   const [pickedSeats, setPickedSeats] = useState<string[]>([]);
 
+  // ★★조회 실패를 "고를 것이 없음"과 구분한다(#46). 예전엔 RPC 가 한 번만 실패해도 need=null 이 되고,
+  //   아래 게이트가 그걸 "이 화면은 존재 이유가 없다"로 읽어 /hub 로 Redirect 했다. 그런데 세션은
+  //   여전히 needsDowngradeChoice=true 라 /hub 가 즉시 /downgrade 로 되돌린다 → **무한 왕복.**
+  //   어느 쪽도 refreshMembership() 을 부르지 않아 앱을 재시작하기 전엔 빠져나올 수 없었고,
+  //   체험 종료 직후 사장 **전원**이 이 게이트를 지난다.
+  const [loadError, setLoadError] = useState(false);
+
   // 서버 판정 재조회 — 단계가 끝날 때마다 부른다(무엇이 남았는지 클라가 추측하지 않는다).
   const reload = useCallback(async () => {
-    const [{ data: n }, { data: free }] = await Promise.all([fetchDowngradeNeed(), fetchMyFreeUnits()]);
-    setNeed(n);
-    setFirstNeed((prev) => prev ?? n);
-    setFreeUnitIds(free ?? []);
-    return n;
+    const [needRes, freeRes] = await Promise.all([fetchDowngradeNeed(), fetchMyFreeUnits()]);
+    // 판정 RPC 가 실패하면 need 를 덮지 않는다 — null 로 덮는 순간 위 왕복이 시작된다.
+    if (needRes.error) {
+      setLoadError(true);
+      return null;
+    }
+    setLoadError(false);
+    setNeed(needRes.data);
+    setFirstNeed((prev) => prev ?? needRes.data);
+    setFreeUnitIds(freeRes.data ?? []);
+    return needRes.data;
   }, []);
 
   useEffect(() => {
@@ -157,7 +171,11 @@ function DowngradeBody() {
   const toggleSeat = (id: string) => {
     setPickedSeats((prev) => {
       if (prev.includes(id)) return prev.filter((x) => x !== id);
-      if (prev.length >= 3) { showToast('무료 요금제는 직원 3명까지예요.'); return prev; }
+      // ★같은 파일 안에서 이 값만 하드코딩이었다(#50) — 아래 갈림길 카드는 PLANS.free.maxStaff 를 쓴다.
+      //   값이 지금 우연히 같을 뿐, tiers.ts 를 바꾸면 여기만 드리프트한다.
+      // maxStaff=null 은 '무제한' 이라 상한이 없다(무료 플랜은 현재 3).
+      const cap = PLANS.free.maxStaff;
+      if (cap !== null && prev.length >= cap) { showToast(`무료 요금제는 직원 ${cap}명까지예요.`); return prev; }
       return [...prev, id];
     });
   };
@@ -170,8 +188,29 @@ function DowngradeBody() {
       </SafeAreaView>
     );
   }
+  // ★조회 실패는 "고를 것이 없음"이 아니다 — Redirect 하면 /hub 와 무한 왕복한다(#46).
+  //   여기서 멈추고 재시도를 준다. 이 화면이 유일한 탈출로이므로 막다른 화면을 만들면 안 된다.
+  if (loadError) {
+    return (
+      <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
+        <Stack.Screen options={{ headerShown: false }} />
+        <LoadErrorState
+          title="요금제 정보를 불러오지 못했어요"
+          onRetry={() => {
+            setLoading(true);
+            void reload().finally(() => setLoading(false));
+          }}
+        />
+      </SafeAreaView>
+    );
+  }
   // 고를 것이 없으면 이 화면은 존재 이유가 없다 — 가로막지 않는다.
-  if (!need || (!need.need_store && !need.need_seats)) return <Redirect href="/hub" />;
+  // ★세션 플래그도 같이 갱신하고 나간다 — 서버는 "고를 것 없음"인데 세션이 아직 true 면
+  //   /hub 가 다시 여기로 보낸다(위 왕복의 나머지 절반).
+  if (!need || (!need.need_store && !need.need_seats)) {
+    void refreshMembership();
+    return <Redirect href="/hub" />;
+  }
 
   // 매장 단계를 지나온 사람에게 직원 단계는 2번째다. 직원 단계만 있는 사람에겐 1번째다.
   // 마지막 단계에서는 n == m 이 되게 둔다 — 실제로 몇 단계였는지는 그때 확정된다.

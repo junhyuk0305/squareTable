@@ -172,10 +172,21 @@ export function OwnerKnowhowBrowse({
   // ★실패해도 []로 확정한다 — data 가 있을 때만 aiLoaded 를 세우면 실패한 매장은 영영 로딩에 갇힌다.
   const [aiAnswers, setAiAnswers] = useState<AiAnswerRow[]>([]);
   const [aiLoaded, setAiLoaded] = useState(false);
+  /** AI 답변 목록 읽기 실패 — '없음'과 구분해 교정 루프를 감추지 않는다(#27). */
+  const [aiError, setAiError] = useState(false);
   useEffect(() => {
     let alive = true;
-    void fetchAiAnswers().then(({ data }) => {
+    void fetchAiAnswers().then(({ data, error }) => {
       if (!alive) return;
+      // ★실패를 "AI가 답한 질문 없음"으로 위장하지 않는다(2026-08-25 감사 #27).
+      //   이 축이 사라지면 👎 교정 루프('답이 틀렸대요')가 통째로 안 보이고, **틀린 답이 그대로
+      //   노하우로 굳는다.** 실패면 목록을 비우지 말고(직전 값 유지) 실패 플래그를 올린다.
+      if (error) {
+        setAiError(true);
+        setAiLoaded(true);
+        return;
+      }
+      setAiError(false);
       setAiAnswers(data ?? []);
       setAiLoaded(true);
     });
@@ -594,7 +605,7 @@ export function OwnerKnowhowBrowse({
   // 칸을 합친 것이지 기준을 바꾼 게 아니다.
   const todoSegment = () => (
     <>
-      <OwnerTodoSegment aiAnswers={aiAnswers} />
+      <OwnerTodoSegment aiAnswers={aiAnswers} aiError={aiError} />
 
       {reviewList.length > 0 && groupBlock('review', '확인 안 한 것', reviewList)}
       {/* 라벨=판정(isUnused = 만든 지 30일 경과 + 인용 0회) 그대로. 위 usageGroups 의 'cold' 와 같은 말이어야 한다. */}

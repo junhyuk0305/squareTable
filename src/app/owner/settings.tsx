@@ -18,6 +18,7 @@ import { ShellTaskCleanupSheet } from '@/components/owner/quiz/ShellTaskCleanupS
 import { PersonalizeSheet } from '@/components/settings/PersonalizeSheet';
 import { RoleTabBar } from '@/components/RoleTabBar';
 import { ScreenLoading } from '@/components/ScreenLoading';
+import { LoadErrorState } from '@/components/LoadErrorState';
 
 /**
  * 매장 설정(사장) — 사장 5탭의 설정 탭. "이 매장" 단위 설정만 담는다(2레이어 IA — F6 대칭 분리).
@@ -51,6 +52,8 @@ export default function OwnerSettings() {
   //   '퀴즈 때문에 생긴 할일 정리' 줄도 work 가 와야 개수가 참이 된다.
   //   훅은 `&&` 안에서 부르지 않는다 — 각각 받은 뒤 AND 한다.
   const prefsLoaded = useMemberPrefsStore((s) => s.loaded);
+  const prefsLoadError = useMemberPrefsStore((s) => s.loadError);
+  const retryPrefs = useMemberPrefsStore((s) => s.retry);
 
   /**
    * 옛 퀴즈 구조(0110)가 만들어 낸 껍데기 업무 — 판별은 두 조건의 교집합이다:
@@ -99,8 +102,14 @@ export default function OwnerSettings() {
       {/* 설정탭은 의도적으로 등장 애니메이션을 쓰지 않는다 — 자주 드나드는 관리 화면이라
           매번 카드가 떠오르면 번잡함. 카드 등장 모션은 홈·물어보기·출퇴근·업무 등 콘텐츠 탭에만(Appear).
           로딩 게이트는 애니메이션과 별개다 — 스위치가 뒤집히는 것은 번잡함이 아니라 거짓 표시다. */}
+      {/* ★설정 읽기 실패를 "전부 꺼짐"으로 위장하지 않는다(#47). 스토어는 실패해도 loaded=true 라
+          이 분기가 없으면 기본값(DEFAULT_MEMBER_PREF)이 **사용자가 정한 값인 양** 그려지고,
+          토글 하나만 눌러도 nickname·color·quiet_* 6개 필드가 전부 기본값으로 서버에 덮인다.
+          (스토어의 save 도 loadError 면 거부하지만, 화면이 먼저 말해줘야 사용자가 뭘 할지 안다.) */}
       {!ready ? (
         <ScreenLoading label="매장 설정을 불러오고 있어요…" />
+      ) : prefsLoadError ? (
+        <LoadErrorState title="매장 설정을 불러오지 못했어요" onRetry={() => void retryPrefs()} />
       ) : (
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         {/* 매장 헤더 — 색 점 + 매장명 + (있으면) 내 별칭. 탭하면 개인화 시트(직원 매장 설정과 동일). */}

@@ -81,7 +81,9 @@ export async function nativePermissionState(): Promise<PushPermission> {
   return mapStatus(perm.status);
 }
 
-async function registerToken(unitId: string | null): Promise<void> {
+// ★성공 여부를 돌려준다(2026-08-25 감사 #9) — 예전엔 void 라 호출부가 저장 실패와 무관하게
+//   'granted' 를 확정 반환했고, 토큰 행이 없어 **푸시가 영영 안 오는데 카드는 사라졌다**.
+async function registerToken(unitId: string | null): Promise<boolean> {
   try {
     const projectId = Constants.expoConfig?.extra?.eas?.projectId as string | undefined;
     const { data: token } = await Notifications.getExpoPushTokenAsync(
@@ -93,10 +95,15 @@ async function registerToken(unitId: string | null): Promise<void> {
       p_platform: platform,
       p_unit_id: unitId,
     });
-    if (error) reportError('push.native.saveToken', error);
+    if (error) {
+      reportError('push.native.saveToken', error);
+      return false;
+    }
+    return true;
   } catch (e) {
     // 시뮬레이터/에뮬레이터(물리 기기 아님)거나 네트워크 문제 — 실기기에선 다음 부팅에 재시도된다.
     reportError('push.native.getToken', e);
+    return false;
   }
 }
 
@@ -106,7 +113,8 @@ export async function enableNativePush(unitId: string | null): Promise<PushPermi
   const perm = await Notifications.requestPermissionsAsync();
   const status = mapStatus(perm.status);
   if (status !== 'granted') return status;
-  await registerToken(unitId);
+  // OS 권한은 받았지만 우리 쪽 토큰 등록이 실패하면 켜진 게 아니다 — 카드를 남겨 재시도를 열어둔다.
+  if (!(await registerToken(unitId))) return 'default';
   return 'granted';
 }
 

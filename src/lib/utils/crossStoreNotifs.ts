@@ -32,6 +32,16 @@ const receivedArgsOf = (
  *  ackAt = 그 매장의 '모두 읽기' 기준 시각(0078, unit_member_prefs — 전 매장 행을 이미 당겨둠). */
 export function storeUnreadCount(d: UnitNotifData, role: string, me: string, today: string, ackAt?: string | null): number {
   const nameOf = nameOfFor(d, role, me);
+  // ★[미해결 · #14] 직원 매장의 `d.queue`(동료 질문 D4)는 **서버가 아예 안 채운다** —
+  //   `my_units_notif_data`(0153)가 `my.role in ('owner','manager')` 인 매장에만 queue 를 준다.
+  //   그래서 **매장 안 벨(로컬 unknownQueue 경로)은 "3건"인데 허브 벨은 0건**이다.
+  //   여기서 `d.queue` 를 빼도 값은 이미 0이라 **아무것도 안 바뀐다** — 불일치의 원인은 클라가
+  //   아니라 서버 술어다. 진짜 수정은 둘 중 하나이고 **제품 결정이 필요하다**:
+  //     (a) 0153 술어를 직원까지 열어 허브도 매장 안과 같은 수를 말하게 한다(권고 — 직원은 이미
+  //         그 매장 멤버라 매장 안에서 같은 질문을 보고 있으므로 새로운 노출이 아니다), 또는
+  //     (b) 매장 안 벨에서도 그 축을 빼서 양쪽 다 0으로 맞춘다.
+  //   지금은 (a)를 권고안으로 남기고 코드는 건드리지 않는다 — 값이 안 바뀌는 수정으로
+  //   "고쳤다"고 표시하면 다음 사람이 이 불일치를 다시 찾아야 한다.
   if (!canManage(role)) return juniorUnreadCount(d.feed, d.swaps, me, today, d.taskTemplates, d.done, ackAt, d.suggestions, d.queue);
   // 0093: 매니저 매장은 사장 판(질문·제안·합류신청 포함 — RPC 가 manager 매장에도 해당 원천을 준다)
   //       + 매니저가 받는 쪽인 축(공지·배정·내 제안 결과).
@@ -57,6 +67,13 @@ export function buildStoreNotifs(d: UnitNotifData, role: string, me: string, tod
 /** 전 매장 병합 목록(시간 역순, 단일 매장과 동일 상한). */
 export function mergeCrossNotifs(perStore: CrossNotifRow[][]): CrossNotifRow[] {
   return perStore.flat().sort((a, b) => b.at.localeCompare(a.at)).slice(0, MAX_NOTIFS);
+}
+
+/** 자르기 **전** 총 개수 — 배지와 목록이 어긋나는지 화면이 알 수 있게 한다(2026-08-25 감사 #13).
+ *  배지는 원본을 세는데 목록은 MAX_NOTIFS 로 잘려, "안 읽음 23"인데 목록엔 없어
+ *  **손으로 지울 수 없는 배지**가 남던 경로. 숫자를 낮추는 대신 잘렸다는 사실을 말한다. */
+export function crossNotifTotal(perStore: CrossNotifRow[][]): number {
+  return perStore.reduce((n, rows) => n + rows.length, 0);
 }
 
 /** 매장 하나의 "오늘 내 일" 수 — 나에게 배정됐고 오늘 떠야 하는데 아직 완료 안 한 할일.

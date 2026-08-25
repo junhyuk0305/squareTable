@@ -63,10 +63,14 @@ export default function JuniorSuggestScreen() {
   const targetTitle = presetImprove ? (typeof title === 'string' ? title : undefined) : picked?.title;
 
   // 검색어로 거른 노하우 목록(개선 대상 선택용).
-  const filtered = useMemo(() => {
+  const PICK_CAP = 30;
+  const { filtered, hiddenPicks } = useMemo(() => {
     const q = pickQuery.trim().toLowerCase();
     const list = q ? entries.filter((e) => e.title.toLowerCase().includes(q)) : entries;
-    return list.slice(0, 30);
+    // ★조용히 자르지 않는다(2026-08-25 감사 #22). 노하우 100건 매장의 직원은 31번째 이후
+    //   노하우에 대한 개선 제안을 **경로 자체가 없어서** 못 올렸다 — 몇 건이 가려졌는지 말하고
+    //   검색으로 좁힐 수 있다는 것을 알려준다.
+    return { filtered: list.slice(0, PICK_CAP), hiddenPicks: Math.max(0, list.length - PICK_CAP) };
   }, [entries, pickQuery]);
 
   // 개선 모드인데 대상이 아직 안 정해졌으면 본문 입력 전에 노하우부터 골라야 한다.
@@ -179,6 +183,11 @@ export default function JuniorSuggestScreen() {
                     </Pressable>
                     </Appear>
                   ))}
+                  {hiddenPicks > 0 && (
+                    <Text style={styles.pickMore}>
+                      {hiddenPicks}건이 더 있어요. 위에서 검색해 찾아 주세요.
+                    </Text>
+                  )}
                 </View>
               )}
             </View>
@@ -251,6 +260,7 @@ export default function JuniorSuggestScreen() {
 }
 
 const styles = StyleSheet.create({
+  pickMore: { fontSize: 15, color: InkColors.ink3, paddingVertical: 8, paddingHorizontal: 4 },
   safe: { flex: 1, backgroundColor: InkColors.cream },
   scroll: { padding: 20, gap: 14 },
   lead: { fontSize: 15, color: InkColors.ink2, lineHeight: 22 },

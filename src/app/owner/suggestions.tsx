@@ -7,6 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { RoleTabBar } from '@/components/RoleTabBar';
 import { Appear, stagger } from '@/components/Appear';
 import { ScreenLoading } from '@/components/ScreenLoading';
+import { LoadErrorState } from '@/components/LoadErrorState';
 import { BottomSheet } from '@/components/BottomSheet';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useSuggestionStore } from '@/lib/store/useSuggestionStore';
@@ -40,6 +41,8 @@ export default function OwnerSuggestionsScreen() {
   // ★loaded 를 안 봐서 "🤝 대기 중인 제안이 없어요"가 먼저 떴다 — 알림 배지를 보고 들어오는 자리라
   //   "없어요"가 스치면 사장이 그대로 나가버린다.
   const ready = useSuggestionStore((s) => s.loaded);
+  const loadError = useSuggestionStore((s) => s.loadError);
+  const retry = useSuggestionStore((s) => s.retry);
 
   useEffect(() => {
     hydrate();
@@ -63,7 +66,10 @@ export default function OwnerSuggestionsScreen() {
     if (s.kind === 'improve' && s.target_entry_id) {
       approve(s.id);
       showToast('승인했어요 · 노하우를 수정해 주세요', 'good');
-      router.push({ pathname: '/owner/edit/[id]', params: { id: s.target_entry_id } });
+      // ★제안 본문을 들고 간다(2026-08-25 감사 #20). 승인과 동시에 제안이 목록에서 사라지므로
+      //   본문을 안 넘기면 사장은 **뭘 고치라는 건지 다시 볼 수 없다.** 신규 제안 분기(아래)는
+      //   seed 를 정상적으로 넘기는데 개선 분기만 비대칭이었다.
+      router.push({ pathname: '/owner/edit/[id]', params: { id: s.target_entry_id, seed: s.text } });
     } else {
       showToast('제안을 초안으로 정리해 드려요 · 확인 후 추가하세요', 'info');
       // source_template_id(②)=발행 시 업무 자동 첨부 · source_uq_id(③/D4)=uqId로 넘겨 발행 시 그 질문 자동 resolve.
@@ -99,6 +105,9 @@ export default function OwnerSuggestionsScreen() {
       <Stack.Screen options={{ title: '노하우 제안함' }} />
       {!ready ? (
         <ScreenLoading label="직원 제안을 불러오고 있어요…" />
+      ) : loadError ? (
+        // 읽기 실패를 "대기 중인 제안이 없어요 🤝"로 위장하지 않는다(#19) — 사장이 제안을 놓친다.
+        <LoadErrorState title="직원 제안을 불러오지 못했어요" onRetry={() => void retry()} />
       ) : (
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <Appear delay={stagger(0)}>

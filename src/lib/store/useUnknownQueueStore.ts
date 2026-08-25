@@ -19,7 +19,9 @@ type UnknownQueueState = {
   pendingTotal: number | null;
   hydrate: () => Promise<void>;
   subscribe: () => () => void;
-  enqueue: (uq: UnknownQuery) => void;
+  /** 미답질문 등록 — **서버 반영 성공 여부**를 돌려준다(#24). 호출부가 "사장님께 보냈어요" 표시를
+   *  성공했을 때만 남기고, 실패하면 되돌려 재시도를 열어주기 위함(질문이 조용히 증발하던 경로). */
+  enqueue: (uq: UnknownQuery) => Promise<boolean>;
   resolve: (uqId: string, newEntryId: string) => Promise<boolean>;
   getPending: () => UnknownQuery[];
   getById: (id: string) => UnknownQuery | undefined;
@@ -77,7 +79,7 @@ export const useUnknownQueueStore = create<UnknownQueueState>((set, get) => ({
       set((st) => ({
         queue: st.queue.map((u) => (u.id === target.id ? { ...u, similar_queries_count: bumped } : u)),
       }));
-      void guardWrite(
+      return guardWrite(
         bumpUnknownSimilar(target.id, bumped),
         () =>
           set((st) => ({
@@ -85,19 +87,21 @@ export const useUnknownQueueStore = create<UnknownQueueState>((set, get) => ({
           })),
         '유사 질문 반영에 실패했어요.',
       );
-      return;
     }
     set((st) => ({ queue: [uq, ...st.queue] }));
     // 저장 성공 후에만 사장에게 웹푸시(답변 대기 질문 유입). 실패(롤백)·상한 초과 시 유령 알림 방지.
     //   중복 유사질문(위 bump 경로)은 알리지 않는다.
-    void guardWrite(
+    return guardWrite(
       insertUnknown(uq),
       () => set((st) => ({ queue: st.queue.filter((u) => u.id !== uq.id) })),
       // 일반 저장 실패 + 미해결 질문 상한(남용 #18, 0033 트리거 too_many_pending)을 한 메시지로 포괄.
       // (insertUnknown이 boolean만 반환해 사유 구분 불가 → 양쪽에 자연스러운 안내로 통합.)
       '질문을 등록하지 못했어요. 대기 중인 질문이 많으면 사장님 답변을 받은 뒤 다시 등록해 주세요.',
     // 저장 성공 후에만 웹푸시 — D4(③): 사장 + 같은 매장 직원 전체에게(누가 답하든 됨). 발송자 제외는 서버.
-    ).then((ok) => { if (ok && uq.status === 'pending_owner_answer') notifyStoreQuestion(uq.query_text); });
+    ).then((ok) => {
+      if (ok && uq.status === 'pending_owner_answer') notifyStoreQuestion(uq.query_text);
+      return ok;
+    });
   },
   // 질문 해결 — resolved_with_entry 로 전이 + answered_by 기록(누가 답했나, 0071).
   // 직원 즉시해결(기존 노하우 지정)·사장 발행(coach) 공통 경로. 답변자=현재 세션.

@@ -50,7 +50,11 @@ export default function OwnerPayrollScreen() {
             />
           </View>
           {/* 무엇이 계산에 반영되는지의 단서 — 화면 맨 끝이 아니라 토글 바로 아래에 둔다(켤지 말지 정하는 자리). */}
-          <Text style={styles.note}>* 지금은 기본 시급으로 급여를 계산해요. 야간·주휴 등 추가 수당 자동 반영은 준비 중이에요.</Text>
+          {/* ★2026-08-25: 이 자리에 "야간·주휴 자동 반영은 준비 중"이라는 문구가 남아 있었다.
+              2026-07-06 F1 수정 이후로는 **실제로 반영된다**(payroll.ts 의 nightPay·weeklyHolidayPay).
+              그래서 사장이 화면 숫자를 믿지 않고 주휴수당을 손으로 한 번 더 지급했다 — 이중 지급이다.
+              계산 로직이 아니라 문구가 틀렸으므로 문구를 사실로 바꾼다. */}
+          <Text style={styles.note}>* 켠 항목은 바로 급여 계산에 반영돼요.</Text>
         </View>
 
         <View style={styles.block}>

@@ -7,6 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { RoleTabBar } from '@/components/RoleTabBar';
 import { Appear, stagger } from '@/components/Appear';
 import { ScreenLoading } from '@/components/ScreenLoading';
+import { LoadErrorState } from '@/components/LoadErrorState';
 import { SectionLabel } from '@/components/SectionLabel';
 import { SegmentTabs } from '@/components/SegmentTabs';
 import { ScheduleWeek } from '@/components/schedule/ScheduleWeek';
@@ -44,6 +45,8 @@ export default function JuniorScheduleScreen() {
   const staff = useStaffStore((s) => s.staff);
   const staffLoaded = useStaffStore((s) => s.loaded);
   const scheduleLoaded = useScheduleStore((s) => s.loaded);
+  const scheduleLoadError = useScheduleStore((s) => s.loadError);
+  const retrySchedule = useScheduleStore((s) => s.retry);
   const config = useScheduleStore((s) => s.config);
   const templates = useScheduleStore((s) => s.templates);
   const swaps = useScheduleStore((s) => s.swaps);
@@ -135,6 +138,10 @@ export default function JuniorScheduleScreen() {
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         {!ready ? (
           <ScreenLoading label="근무표를 불러오고 있어요…" />
+        ) : scheduleLoadError ? (
+          // 실패를 "예정된 내 근무가 없어요"로 위장하지 않는다 — 운영시간이 기본값(09:00~22:00·
+          // 연중무휴)으로 사실인 양 표시되던 경로도 같이 닫힌다(#44).
+          <LoadErrorState title="근무표를 불러오지 못했어요" onRetry={() => void retrySchedule()} />
         ) : (
           <>
         {tab === 'week' ? (

@@ -75,7 +75,7 @@ export default function JuniorNotificationsScreen() {
   useEffect(() => {
     if (multiStore) void hydrateCross();
   }, [multiStore, hydrateCross]);
-  const { listRows: allRows, totalUnread: allUnread, openRow } = useCrossNotifRows();
+  const { listRows: allRows, totalUnread: allUnread, hiddenCount, openRow } = useCrossNotifRows();
 
   const rows = useMemo(
     () =>
@@ -174,6 +174,12 @@ export default function JuniorNotificationsScreen() {
         ) : (
         <Appear delay={stagger(1)}>
         {seg === 'all' && multiStore ? (
+          <>
+          {/* ★잘렸다는 사실을 숨기지 않는다(2026-08-25 감사 #13) — 배지는 원본을 세는데 목록은
+              상한에서 잘려, "안 읽음 N"인데 목록엔 그 항목이 없어 손으로 지울 수가 없었다. */}
+          {hiddenCount > 0 && (
+            <Text style={styles.truncNote}>오래된 알림 {hiddenCount}건은 목록에 표시되지 않았어요.</Text>
+          )}
           <NotificationList
             rows={allRows}
             kindUI={KIND_UI}
@@ -186,6 +192,7 @@ export default function JuniorNotificationsScreen() {
               sub: '소속된 모든 매장의 공지·교대 요청을 여기에 모아서 보여드려요.',
             }}
           />
+          </>
         ) : (
           <NotificationList
             rows={rows}
@@ -211,6 +218,7 @@ export default function JuniorNotificationsScreen() {
 }
 
 const styles = StyleSheet.create({
+  truncNote: { textAlign: 'center', color: InkColors.ink3, fontSize: 15, paddingVertical: 8 },
   safe: { flex: 1, backgroundColor: InkColors.cream },
   scroll: { padding: 20, gap: 16 },
 

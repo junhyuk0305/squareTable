@@ -34,7 +34,11 @@ export const MAX_DONTS = 2;     // 금지사항 최대 2개
 
 // 생성 파라미터 — 결정적으로(창의성 죽임)
 export const TEMPERATURE = 0.2;
-export const MODEL = 'gemini-2.5-flash-lite';
+// ★모델 id 는 여기 없다(2026-08-25 감사 #29). 정본은 **엣지 함수**다 —
+//   `supabase/functions/ai/index.ts` 의 `MODEL`. 비밀키가 클라에 없어 실호출이 전부 엣지를 거치므로
+//   클라가 모델 id 를 아는 것은 무의미하고, 실제로 사용처가 0곳이었다.
+//   그런데도 여기 남아 있던 값이 **이미 퇴역한 gemini-2.5-flash-lite** 라(2026-07-10 404 사고의 그 id),
+//   "현재 모델"을 찾는 사람이 정본보다 이 낡은 값을 먼저 만났다. 런타임 무해 ≠ 무해.
 
 // ── 공급자 라우팅 ────────────────────────────────────────────
 // 비밀키(GEMINI)는 클라이언트에 없음 → 실호출은 Supabase Edge Function 경유.

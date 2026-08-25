@@ -59,7 +59,7 @@ const daysWaiting = (iso: string) => {
  *   홈의 'AI 답변 사용' 숫자를 걷어낼 때의 근거가 이 목록이었으므로, 여기서 또 빠지면 앱에 아예 없어진다.
  *   숫자가 아니라 목록인 이유 = "무엇으로 답했는지"가 보여야 증명이다(AiAnswerRow 주석).
  */
-export function OwnerTodoSegment({ aiAnswers }: { aiAnswers: AiAnswer[] }) {
+export function OwnerTodoSegment({ aiAnswers, aiError = false }: { aiAnswers: AiAnswer[]; aiError?: boolean }) {
   const router = useRouter();
 
   const queue = useUnknownQueueStore((s) => s.queue);
@@ -178,7 +178,15 @@ export function OwnerTodoSegment({ aiAnswers }: { aiAnswers: AiAnswer[] }) {
         </View>
       )}
 
-      {okAnswers.length > 0 && (
+      {/* ★AI 답변 목록 읽기 실패를 "없음"으로 위장하지 않는다(#27) — 이 축이 사라지면
+          👎 교정 루프가 통째로 안 보이고 **틀린 답이 그대로 노하우로 굳는다.** */}
+      {aiError && (
+        <View style={styles.group}>
+          <SectionLabel title="AI가 답한 질문" />
+          <Text style={styles.aiErr}>목록을 불러오지 못했어요. 연결을 확인하고 다시 들어와 주세요.</Text>
+        </View>
+      )}
+      {!aiError && okAnswers.length > 0 && (
         <View style={styles.group}>
           <SectionLabel
             title="AI가 답한 질문"
@@ -256,6 +264,7 @@ function SuggestionRow({ s, onPress }: { s: PlaybookSuggestion; onPress: () => v
 }
 
 const styles = StyleSheet.create({
+  aiErr: { fontSize: 15, color: InkColors.ink2, paddingVertical: 8 },
   root: { gap: Space.lg },
   group: { gap: Space.sm },
   groupHint: { fontSize: 13, color: InkColors.ink2, marginTop: -2 },

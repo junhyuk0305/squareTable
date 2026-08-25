@@ -116,6 +116,12 @@ export function JuniorAsk({ suggestEntry = true, seed }: { suggestEntry?: boolea
     return `${userName}${career}${store}`;
   }, [userId, userName, sessionStore, getStaff]);
   const unknownQueue = useUnknownQueueStore((s) => s.queue);
+  // 실제로 사장에게 등록된 질문 문장 집합 — 재기동 후 '보냈음' 표시의 **유일한 근거**(#25).
+  // enqueue 의 중복 판정과 같은 잣대(trim 비교)를 쓴다 — 두 곳이 다르면 표시와 실제가 또 어긋난다.
+  const registeredTexts = useMemo(
+    () => new Set(unknownQueue.map((u) => u.query_text.trim())),
+    [unknownQueue],
+  );
 
   const router = useRouter();
   // 홈 예시 칩이 넘긴 문구로 입력칸을 시작한다. effect가 아니라 **초기값**인 이유 —
@@ -286,8 +292,13 @@ export function JuniorAsk({ suggestEntry = true, seed }: { suggestEntry?: boolea
             onThumbsUp={() => rate(q.id, 'up')}
             onThumbsDown={() => rate(q.id, 'down')}
             deflectState={
-              // 명시적 선택이 우선 → 등록 대기(pending) 있으면 물어봄 → 둘 다 없으면(과거 라우팅된 질문) 안내만
-              deflectStatus[q.id] ?? (pendingDeflects[q.id] ? 'asking' : 'registered')
+              // 명시적 선택이 우선 → 등록 대기(pending) 있으면 물어봄 →
+              // 둘 다 없으면(앱을 다시 켠 뒤) **실제로 등록됐는지**를 보고 판정한다.
+              // ★2026-08-25 감사 #25: 예전엔 이 자리의 폴백이 무조건 'registered' 였다.
+              //   deflectStatus·pendingDeflects 는 메모리라 재기동 시 비는데 history 는 DB 에서
+              //   되살아난다 → **보낸 적 없는 질문까지 전부 "사장님께 보냈어요"** 로 보였다.
+              //   실재 판정은 미답질문 큐에 같은 문장이 있는지로 한다(enqueue 의 중복 판정과 같은 잣대).
+              deflectStatus[q.id] ?? (pendingDeflects[q.id] ? 'asking' : (registeredTexts.has(q.query_text.trim()) ? 'registered' : 'asking'))
             }
             onRegister={() => registerToOwner(q.id)}
             onDecline={() => declineDeflect(q.id)}

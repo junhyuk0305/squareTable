@@ -59,7 +59,18 @@ export const useSyncStore = create<SyncState>((set) => ({
   error: null,
   seq: 0,
   readError: null,
-  noteError: (msg) => set((s) => ({ error: msg ?? DEFAULT_MSG, seq: s.seq + 1 })),
+  // ★동시에 두 개가 실패하면 **둘 다 말한다**(2026-08-25 감사 #58). 예전엔 단순 set 이라
+  //   나중 문구가 이전 문구를 덮어써 첫 실패는 화면에 한 번도 안 뜨고 사라졌다.
+  //   완료 체크는 쓰기가 2개(work_done + work_feed)라, 무엇이 안 저장됐는지 특정할 수 없었다.
+  //   같은 문구가 겹치는 건 합친다(같은 실패가 두 번 보이면 그게 더 헷갈린다).
+  noteError: (msg) =>
+    set((s) => {
+      const next = msg ?? DEFAULT_MSG;
+      if (!s.error) return { error: next, seq: s.seq + 1 };
+      if (s.error === next || s.error.includes(next)) return { error: s.error, seq: s.seq + 1 };
+      return { error: `${s.error}
+${next}`, seq: s.seq + 1 };
+    }),
   // 같은 종류면 상태를 다시 쓰지 않는다 — 읽기 실패는 여러 fetch 에서 동시에 쏟아지므로
   // 매번 set 하면 배너가 계속 리렌더된다(자동 소거가 없어 타이머 리셋 목적의 seq 도 필요 없다).
   // 종류가 바뀌면 덮어쓴다: 마지막 왕복이 말해주는 게 지금 상태다.

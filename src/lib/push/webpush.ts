@@ -122,7 +122,11 @@ export async function enablePush(userId: string, unitId: string | null): Promise
         userVisibleOnly: true,
         applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
       }));
-    await saveSubscription(sub, userId, unitId);
+    // ★저장 실패를 'granted' 로 말하지 않는다(2026-08-25 감사 #9). 구독 행이 없으면
+    //   **푸시가 영영 안 온다** — 그런데 카드는 "켜짐"으로 바뀌어 사라지므로 사용자는
+    //   다시 켤 방법조차 못 찾는다. 권한(OS)은 받았지만 우리 쪽 등록이 안 된 상태다.
+    const saved = await saveSubscription(sub, userId, unitId);
+    if (!saved) return 'default';
     return 'granted';
   } catch (e) {
     console.warn('[push] 구독 실패:', e);

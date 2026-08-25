@@ -272,6 +272,22 @@ async function main() {
   check('★⑩ 화면에 금액 숫자 사본이 없다', dg.length > 0 && !/\b(19000|29000|20900|31900|87000)\b/.test(dg), '');
   check('★⑩ 부가세 문구도 SSOT 에서 가져온다', /VAT_NOTE_SENTENCE/.test(dg), '');
 
+  // ── ⑪ 실패 경로 — 이 하니스가 **해피패스만 덮어서** #46 이 살아남았다 (2026-08-25 감사) ──
+  //   증상: 세션은 needsDowngradeChoice=true 인데 /downgrade 의 판정 RPC 가 한 번 실패하면
+  //         need=null → "고를 것이 없다"로 읽혀 /hub 로 Redirect → /hub 가 다시 /downgrade 로.
+  //         어느 쪽도 refreshMembership() 을 안 불러 **앱 재시작 전까지 무한 왕복**한다.
+  //         체험 종료 직후 사장 전원이 이 게이트를 지난다.
+  //   서버로는 못 재는 클라 분기라 본문 텍스트로 고정한다(개수가 아니라 본문 — AGENTS 자가점검 규율).
+  check('★⑪ 판정 RPC 실패를 "고를 것이 없음"과 구분한다(loadError 상태가 있다)',
+    /loadError/.test(dg), 'downgrade.tsx 에 loadError 분기가 없다 → 실패가 곧 Redirect 가 된다');
+  check('★⑪ 실패 시 Redirect 대신 재시도 화면을 띄운다',
+    /loadError[\s\S]{0,400}LoadErrorState/.test(dg), '실패 분기가 재시도 UI로 착지하지 않는다');
+  check('★⑪ 조회 실패가 need 를 null 로 덮지 않는다',
+    /needRes\.error[\s\S]{0,200}return null/.test(dg), '실패 시에도 setNeed 가 호출되면 왕복이 시작된다');
+  check('★⑪ "고를 것 없음"으로 빠져나갈 때 세션 플래그도 갱신한다',
+    /need_seats\)\)\s*\{[\s\S]{0,200}refreshMembership/.test(dg),
+    'refreshMembership 없이 Redirect 하면 /hub 가 다시 여기로 보낸다(왕복의 나머지 절반)');
+
   console.log(`\nRESULT: ${pass} passed, ${fail} failed`);
 }
 

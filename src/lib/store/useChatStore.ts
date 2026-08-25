@@ -46,7 +46,8 @@ type ChatState = {
   deflectStatus: Record<string, 'registered' | 'declined'>;
   hydrate: (juniorId: string) => Promise<void>;
   submit: (text: string) => Promise<void>;
-  registerToOwner: (queryId: string) => void;
+  /** '사장님께 보내기' — 서버 반영 성공 시에만 'registered' 표시가 남는다(#24). */
+  registerToOwner: (queryId: string) => Promise<void>;
   declineDeflect: (queryId: string) => void;
   rate: (id: string, vote: 'up' | 'down') => void;
   dismissError: () => void;
@@ -331,11 +332,22 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   // 알바가 '사장님께 등록'을 누르면 보관해둔 질문을 인박스로 보낸다. 중복(같은 질문 대기중)은 enqueue가 합친다.
-  registerToOwner: (queryId) => {
+  registerToOwner: async (queryId) => {
     const uq = get().pendingDeflects[queryId];
     if (!uq || get().deflectStatus[queryId] === 'registered') return;
+    // 낙관적 표시는 그대로 두되(누른 즉시 반응), **실패하면 되돌린다**(2026-08-25 감사 #24).
+    // 예전엔 쓰기 **전에** 'registered' 를 찍고 끝이라, 저장이 실패해도 "사장님께 보냈어요"가
+    // 영구히 남고 위 가드(=== 'registered')가 재시도까지 즉시 막았다. guardWrite 는 queue 배열만
+    // 롤백하므로 이 표시는 되돌려주는 사람이 없었다 → **질문이 조용히 증발한다.**
     set((s) => ({ deflectStatus: { ...s.deflectStatus, [queryId]: 'registered' } }));
-    useUnknownQueueStore.getState().enqueue(uq);
+    const ok = await useUnknownQueueStore.getState().enqueue(uq);
+    if (!ok) {
+      set((s) => {
+        const next = { ...s.deflectStatus };
+        delete next[queryId];
+        return { deflectStatus: next };
+      });
+    }
   },
 
   // '괜찮아요' — 등록하지 않고 카드를 접는다. 보관해둔 질문은 그대로 둬서 나중에 다시 등록할 수 있다.

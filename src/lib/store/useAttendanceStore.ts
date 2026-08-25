@@ -51,8 +51,14 @@ const seed: AttendanceRecord[] = [
 
 type State = {
   records: AttendanceRecord[];
+  /** true = 조회 **시도가 끝남**(성공·실패 무관). 실패 여부는 loadError 로 본다. */
   loaded: boolean;
+  /** 마지막 hydrate 가 실패했는가 — 화면이 "아직 출근 전"과 "못 불러옴"을 구분한다.
+   *  실패 상태에서는 출근/퇴근 쓰기를 막는다(판정 불가 상태에서 쓰면 이중 출근이 찍힌다). */
+  loadError: boolean;
   hydrate: () => Promise<void>;
+  /** 재시도 — 실패 화면의 '다시 시도' 버튼이 부르는 경로. */
+  retry: () => Promise<void>;
   subscribe: () => () => void;
   checkIn: (staffId: string) => void;
   checkOut: (staffId: string) => void;
@@ -69,10 +75,18 @@ type State = {
 export const useAttendanceStore = create<State>((set, get) => ({
   records: HAS_SUPABASE ? [] : seed,
   loaded: !HAS_SUPABASE,
+  loadError: false,
   hydrate: coalesce(async () => {
     if (!HAS_SUPABASE) return;
-    set({ records: await fetchAttendance(), loaded: true });
+    const { data, error } = await fetchAttendance();
+    // ★실패해도 loaded 는 올린다(시도는 끝났다). 대신 loadError 로 말한다 — 예전엔 실패가
+    //   records=[] 로 위장돼 hasOpen 이 항상 false 였고, 화면이 "아직 출근 전이에요"를 말했다(#40).
+    //   기존 records 는 유지한다 — 실패 때문에 근무 중 기록이 화면에서 사라지면 더 위험하다.
+    set((s) => ({ records: error ? s.records : data, loaded: true, loadError: error }));
   }),
+  retry: async () => {
+    await get().hydrate();
+  },
   subscribe: () => subscribeDebounced(subscribeAttendance, () => get().hydrate()),
 
   checkIn: (staffId) => {
@@ -83,6 +97,13 @@ export const useAttendanceStore = create<State>((set, get) => ({
     //    판정할 수 없는 상태에서는 쓰지 않는다. 무음 no-op 금지 — 왜 안 되는지 말한다.
     if (!get().loaded) {
       useSyncStore.getState().noteError('출근 기록을 불러오는 중이에요. 잠시 후 다시 눌러 주세요.');
+      return;
+    }
+    // ★loaded 계약이 "시도가 끝났다"로 바뀌면서(2026-08-25) 위 게이트만으로는 **조회 실패**를 못 막는다.
+    //   실패 시 records 가 낡았거나 비어 있어 아래 hasOpen 검사가 무의미해진다 — 판정할 수 없는
+    //   상태에서는 쓰지 않는다는 원칙은 그대로다. 무음 no-op 금지.
+    if (get().loadError) {
+      useSyncStore.getState().noteError('출근 기록을 불러오지 못했어요. 연결을 확인하고 다시 눌러 주세요.');
       return;
     }
     // 다회 출퇴근: 열린(미퇴근) 기록이 없을 때만 새 출근 생성.
@@ -108,6 +129,12 @@ export const useAttendanceStore = create<State>((set, get) => ({
     // ⚠️ 열린 기록을 '오늘' 로 찾지 않는다 — 야간근무(예: 23:00 출근)가 자정을 넘기면 기록 date 는
     //    어제라, today 로 찾으면 퇴근이 조용히 무효화되고 기록이 영영 열린 채 24h 로 부푼다(F2).
     //    staff 의 '열린 기록'을 날짜 무관하게(가장 최근 출근 1건) 찾아 닫는다.
+    // ★조회 실패 상태에서는 "열린 기록 없음"이 사실이 아니다 — 무음 return 하면 근무 중인 직원의
+    //   퇴근이 조용히 삼켜지고 기록이 열린 채 24h 로 부푼다. 왜 안 되는지 말한다.
+    if (get().loadError) {
+      useSyncStore.getState().noteError('근태 기록을 불러오지 못했어요. 연결을 확인하고 다시 눌러 주세요.');
+      return;
+    }
     const open = get()
       .records.filter((r) => r.staff_id === staffId && r.check_in && !r.check_out)
       .sort((a, b) => tsMs(b.check_in!) - tsMs(a.check_in!))[0];
@@ -172,5 +199,5 @@ export const useAttendanceStore = create<State>((set, get) => ({
       '기록 삭제에 실패했어요.',
     );
   },
-  applyMock: (demo) => set({ records: demo ? seed : [], loaded: true }),
+  applyMock: (demo) => set({ records: demo ? seed : [], loaded: true, loadError: false }),
 }));

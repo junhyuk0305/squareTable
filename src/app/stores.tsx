@@ -79,6 +79,8 @@ export default function StoresHub() {
   const [overview, setOverview] = useState<Record<string, OwnerOverviewRow>>({});
   // 무료 초과로 잠긴 매장(0142) — 판정은 서버(my_locked_units)가 SSOT. 카드마다 RPC 를 부르지 않는다.
   const [lockedUnits, setLockedUnits] = useState<string[]>([]);
+  /** 잠금 목록을 못 읽었는가 — 못 읽었으면 '안 잠김'이라고 단정하지 않는다(#12). */
+  const [lockReadFailed, setLockReadFailed] = useState(false);
   // ── 도착 플래그 4개 ──
   // 이 카드 한 장이 네 소스를 동시에 그린다(지표·잠김·알림·매장별 설정). 하나라도 늦으면 글자가
   // 통째로 바뀌거나(‘탭하면 들어가요’ → ‘직원 n · 노하우 n’), **잠긴 매장이 정상 매장처럼 눌린다**.
@@ -142,6 +144,11 @@ export default function StoresHub() {
       const { data } = await fetchMyLockedUnits();
       if (!alive) return;
       if (data) setLockedUnits(data);
+      // ★data===null = 읽기 실패다(2026-08-25 감사 #12). 예전엔 여기서 아무것도 안 해
+      //   lockedUnits 가 초기값 [] 로 남았고, 아래 enterStore 가 그걸 "잠긴 매장 없음"으로
+      //   **오판해 진입을 허용**했다 — 서버(switch_active_unit)는 unit_locked 로 거부하므로
+      //   커버만 뜨고 실패하는 죽은 탭이 된다(바로 아래 주석이 막으려던 그 시나리오).
+      else setLockReadFailed(true);
       setLockLoaded(true);
     })();
     return () => { alive = false; };
@@ -154,6 +161,10 @@ export default function StoresHub() {
       return showToast(isOwner
         ? '지금은 잠긴 매장이에요. 요금제를 적용하면 그대로 다시 열려요.'
         : '지금은 잠긴 매장이에요. 사장님께 문의해 주세요.');
+    }
+    // 잠금 여부를 **모르는** 상태에서 진입시키면 죽은 탭이 된다 — 왜 안 되는지 말하고 멈춘다.
+    if (lockReadFailed) {
+      return showToast('매장 상태를 확인하지 못했어요. 연결을 확인하고 다시 시도해 주세요.');
     }
     void enter({ uid: u.unit_id, name: prefFor(u.unit_id).nickname || u.store_name || '내 매장' });
   };

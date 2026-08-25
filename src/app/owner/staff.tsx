@@ -20,7 +20,7 @@ import { ProgressPill } from '@/components/blocks/ProgressPill';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
-import { DEFAULT_HOURLY_WAGE, fmtDuration, won, todayStr, liveMinutes } from '@/lib/utils/attendance';
+import { fmtDuration, won, todayStr, liveMinutes } from '@/lib/utils/attendance';
 import { computePay } from '@/lib/utils/payroll';
 import { gradableTasks, staffBehind, type StaffBehind } from '@/lib/utils/taskProgress';
 import { useCopyToClipboard } from '@/lib/utils/useCopyToClipboard';
@@ -78,15 +78,20 @@ export default function OwnerStaffScreen() {
   const today = todayStr();
   const ym = today.slice(0, 7);
   const perStaff = useMemo(() => {
-    const map: Record<string, { min: number; pay: number; status: 'out' | 'working' | 'done' }> = {};
+    // pay=null = 시급 미설정(계산 불가). 0원과 구별해야 한다 — 0원은 '무급'이라는 사실 주장이다.
+    const map: Record<string, { min: number; pay: number | null; status: 'out' | 'working' | 'done' }> = {};
     for (const s of staff) {
       const monthRecs = records.filter((r) => r.staff_id === s.id && r.date.startsWith(ym));
       const min = monthRecs.reduce((sum, r) => sum + liveMinutes(r), 0);
-      const wage = wages[s.id] ?? DEFAULT_HOURLY_WAGE;
+      // ★시급 미설정을 최저시급으로 대신 계산하지 않는다(#38). 예전엔 `?? DEFAULT_HOURLY_WAGE` 라
+      //   **그럴듯한 금액**이 떠서 사장이 "최저시급으로 정해 뒀다"고 읽고 그대로 지나갔다.
+      //   같은 데이터인데 화면마다 규칙이 다르면 세 화면이 서로 다른 금액을 말한다 —
+      //   `junior/attendance`·`junior/timesheet`·`owner/timesheet/[staffId]` 가 이미 쓰는 규칙에 맞춘다.
+      const wageSet = Object.prototype.hasOwnProperty.call(wages, s.id);
       const todayRec = records.find((r) => r.staff_id === s.id && r.date === today);
       const status: 'out' | 'working' | 'done' = !todayRec ? 'out' : !todayRec.check_out ? 'working' : 'done';
       // 급여 규칙(주휴·휴게·야간·연장·추가수당) 반영 예상 인건비 — computePay SSOT(F1). min 은 근무시간 표시용.
-      map[s.id] = { min, pay: computePay(monthRecs, wage, settings).total, status };
+      map[s.id] = { min, pay: wageSet ? computePay(monthRecs, wages[s.id], settings).total : null, status };
     }
     return map;
   }, [records, wages, settings, staff, ym, today]);
@@ -330,24 +335,12 @@ export default function OwnerStaffScreen() {
                       </View>
                     )}
                     <Text style={styles.staffMeta} numberOfLines={1}>
-                      이번 달 {fmtDuration(agg?.min ?? 0)} · {won(agg?.pay ?? 0)}
+                      이번 달 {fmtDuration(agg?.min ?? 0)} · {agg?.pay === null || agg?.pay === undefined ? '시급 미설정' : won(agg.pay)}
                     </Text>
                   </View>
                 </View>
               </Pressable>
-              <View style={styles.wageBox}>
-                <Text style={styles.wageLabel}>시급</Text>
-                <View style={styles.wageInputRow}>
-                  <TextInput
-                    value={String(wages[s.id] ?? DEFAULT_HOURLY_WAGE)}
-                    onChangeText={(t) => setWage(s.id, Math.min(Number(t.replace(/[^0-9]/g, '').slice(0, 7)) || 0, 1000000))}
-                    keyboardType="number-pad"
-                    maxLength={7}
-                    style={styles.wageInput}
-                  />
-                  <Text style={styles.wageWon}>원</Text>
-                </View>
-              </View>
+              <WageCell staffId={s.id} wages={wages} setWage={setWage} />
               {/* 내보내기 — 사장 전용(remove_staff RPC 소유자만). 오탭 방지로 빨강 모달 확인 후 실행 */}
               {isOwner && (
                 <Pressable
@@ -448,6 +441,62 @@ function StatusChip({ status }: { status: 'out' | 'working' | 'done' }) {
   return (
     <View style={[chip.wrap, { backgroundColor: m.bg }]}>
       <Text style={[chip.text, { color: m.color }]}>{m.label}</Text>
+    </View>
+  );
+}
+
+/**
+ * 시급 입력 한 칸 — **입력 중에는 서버에 쓰지 않는다**(2026-08-25 감사 #39).
+ *
+ * 예전엔 `onChangeText` 가 곧바로 `setWage` 를 불러 **키 입력마다 DB 쓰기**가 나갔다.
+ * 그래서 "12000"을 지우고 다시 치려고 칸을 비우는 순간 `Number('') || 0` 이 0 으로 평가돼
+ * **hourly_wage=0 이 서버에 확정 저장**됐고, 직원 화면이 "시급 0원 · 예상급여 0원"이 됐다.
+ * 0 저장은 정상 성공이라 실패 배너도 뜨지 않는다 — 완전한 무음 데이터 손상이었다.
+ *
+ * 규칙 두 가지:
+ *  ① 타이핑은 로컬 state 만 바꾼다. 서버 반영은 **칸을 벗어날 때 1회**(onBlur).
+ *  ② 빈칸·0 은 저장하지 않는다. "아직 안 정했다"와 "0원으로 정했다"는 다른 말이고,
+ *     후자는 사장이 의도적으로 고를 일이 거의 없다 — 되돌리고 원래 값을 유지한다.
+ */
+function WageCell({
+  staffId,
+  wages,
+  setWage,
+}: {
+  staffId: string;
+  wages: Record<string, number>;
+  setWage: (id: string, n: number) => void;
+}) {
+  const saved = Object.prototype.hasOwnProperty.call(wages, staffId) ? wages[staffId] : null;
+  const [draft, setDraft] = useState<string | null>(null);
+  const shown = draft ?? (saved === null ? '' : String(saved));
+
+  const commit = () => {
+    if (draft === null) return;
+    const n = Number(draft.replace(/[^0-9]/g, ''));
+    setDraft(null);
+    // 빈칸·0·값 그대로면 쓰지 않는다(무의미한 쓰기 + 0원 확정 저장 방지).
+    if (!Number.isFinite(n) || n <= 0 || n === saved) return;
+    setWage(staffId, Math.min(n, 1000000));
+  };
+
+  return (
+    <View style={styles.wageBox}>
+      <Text style={styles.wageLabel}>시급</Text>
+      <View style={styles.wageInputRow}>
+        <TextInput
+          value={shown}
+          onChangeText={(t) => setDraft(t.replace(/[^0-9]/g, '').slice(0, 7))}
+          onBlur={commit}
+          onSubmitEditing={commit}
+          keyboardType="number-pad"
+          maxLength={7}
+          placeholder="미설정"
+          placeholderTextColor={InkColors.ink3}
+          style={styles.wageInput}
+        />
+        <Text style={styles.wageWon}>원</Text>
+      </View>
     </View>
   );
 }

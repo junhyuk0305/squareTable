@@ -6,6 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { RoleTabBar } from '@/components/RoleTabBar';
 import { ScreenLoading } from '@/components/ScreenLoading';
+import { LoadErrorState } from '@/components/LoadErrorState';
 import { SectionLabel } from '@/components/SectionLabel';
 import { useScheduleStore } from '@/lib/store/useScheduleStore';
 import { useSessionStore } from '@/lib/store/useSessionStore';
@@ -29,11 +30,24 @@ const TIME_RE = /^([01]?\d|2[0-3]):[0-5]\d$/;
  */
 export default function OwnerStoreConfigScreen() {
   const loaded = useScheduleStore((s) => s.loaded);
+  // ★★2026-08-25 `loaded` 계약 통일과 **한 세트로** 들어와야 하는 가드다(#48).
+  //   예전엔 "조회 실패 = loaded 안 올림"이라 이 폼이 아예 안 떠서 **우연히** 안전했다.
+  //   loaded 가 "시도가 끝났다"로 바뀐 지금, 이 분기가 없으면 조회 실패 시 폼이 DEFAULT_CONFIG
+  //   (09:00~22:00·연중무휴·빈 비고)로 마운트되고 저장 버튼까지 살아 있다 —
+  //   누르는 순간 **서버의 실제 운영시간·정기휴무·비고가 지워진다.** 위 주석이 막으려던 바로 그 사고다.
+  const configLoadError = useScheduleStore((s) => s.configLoadError);
+  const retry = useScheduleStore((s) => s.retry);
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
       <Stack.Screen options={{ title: '매장 기본 정보' }} />
-      {!loaded ? <ScreenLoading label="매장 정보를 불러오고 있어요…" /> : <StoreConfigForm />}
+      {!loaded ? (
+        <ScreenLoading label="매장 정보를 불러오고 있어요…" />
+      ) : configLoadError ? (
+        <LoadErrorState title="매장 정보를 불러오지 못했어요" onRetry={() => void retry()} />
+      ) : (
+        <StoreConfigForm />
+      )}
       <RoleTabBar role="owner" />
     </SafeAreaView>
   );

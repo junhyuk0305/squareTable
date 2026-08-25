@@ -10,7 +10,7 @@ import { useCrossNotifStore } from '@/lib/store/useCrossNotifStore';
 import { useMemberPrefsStore } from '@/lib/store/useMemberPrefsStore';
 import { useWorkStore } from '@/lib/store/useWorkStore';
 import { showToast } from '@/lib/store/useToastStore';
-import { buildStoreNotifs, mergeCrossNotifs, storeUnreadCount } from '@/lib/utils/crossStoreNotifs';
+import { buildStoreNotifs, mergeCrossNotifs, crossNotifTotal, storeUnreadCount } from '@/lib/utils/crossStoreNotifs';
 import { storeColor } from '@/lib/utils/storeColor';
 import { todayStr } from '@/lib/utils/attendance';
 import type { NotifRow } from '@/components/NotificationList';
@@ -33,20 +33,24 @@ export function useCrossNotifRows() {
     prefFor(uid).nickname || sessionStores.find((u) => u.unit_id === uid)?.store_name || '매장';
 
   const ackByUnit = useMemberPrefsStore((s) => s.ackByUnit);
-  const { rows, unreadByUnit, totalUnread } = useMemo(() => {
+  const { rows, unreadByUnit, totalUnread, hiddenCount } = useMemo(() => {
     // 매장 목록(my_units) 도착 전엔 계산하지 않는다 — 매장별 역할을 모른 채 전역 role 로 세면
     // 찰나에 틀린 뱃지가 떴다 바뀌는 레이스가 생긴다. 목록이 오면(수 초 내) 자동 재계산돼 표시.
     if (sessionStores.length === 0) {
-      return { rows: mergeCrossNotifs([]), unreadByUnit: {} as Record<string, number>, totalUnread: 0 };
+      return { rows: mergeCrossNotifs([]), unreadByUnit: {} as Record<string, number>, totalUnread: 0, hiddenCount: 0 };
     }
     const rOf = (uid: string) => sessionStores.find((u) => u.unit_id === uid)?.role ?? role;
     const ackOf = (uid: string) => ackByUnit[uid] ?? null; // 매장별 '모두 읽기' 기준(0078)
     const unreadByUnit: Record<string, number> = {};
     for (const d of crossData) unreadByUnit[d.unitId] = storeUnreadCount(d, rOf(d.unitId), me, today, ackOf(d.unitId));
+    const perStore = crossData.map((d) => buildStoreNotifs(d, rOf(d.unitId), me, today, ackOf(d.unitId)));
+    const merged = mergeCrossNotifs(perStore);
     return {
-      rows: mergeCrossNotifs(crossData.map((d) => buildStoreNotifs(d, rOf(d.unitId), me, today, ackOf(d.unitId)))),
+      rows: merged,
       unreadByUnit,
       totalUnread: Object.values(unreadByUnit).reduce((a, b) => a + b, 0),
+      // 목록에서 잘려나간 개수 — 0 이 아니면 화면이 "N건 더 있어요"를 말해야 한다(#13).
+      hiddenCount: Math.max(0, crossNotifTotal(perStore) - merged.length),
     };
   }, [crossData, sessionStores, role, me, today, ackByUnit]);
 
@@ -83,5 +87,5 @@ export function useCrossNotifRows() {
   };
 
   // 반환 = 소비처(4화면)가 실제 쓰는 것만(죽은 export 금지 — 2026-07-24 효율 리뷰).
-  return { listRows, unreadByUnit, totalUnread, openRow };
+  return { listRows, unreadByUnit, totalUnread, hiddenCount, openRow };
 }

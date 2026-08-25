@@ -17,6 +17,7 @@ import { PersonalizeSheet } from '@/components/settings/PersonalizeSheet';
 import { ConfirmModal } from '@/components/ConfirmModal';
 import { RoleTabBar } from '@/components/RoleTabBar';
 import { ScreenLoading } from '@/components/ScreenLoading';
+import { LoadErrorState } from '@/components/LoadErrorState';
 
 /**
  * 매장 설정 — 직원 5탭의 설정 탭. "이 매장에서만" 갈리는 개인 설정을 담는다(직원×매장 레이어).
@@ -36,6 +37,8 @@ export default function StoreSettings() {
   const savePref = useMemberPrefsStore((s) => s.save);
   const hydratePrefs = useMemberPrefsStore((s) => s.hydrate);
   const prefsLoaded = useMemberPrefsStore((s) => s.loaded);
+  const prefsLoadError = useMemberPrefsStore((s) => s.loadError);
+  const retryPrefs = useMemberPrefsStore((s) => s.retry);
 
   const [busy, setBusy] = useState(false);
   const [quietModal, setQuietModal] = useState(false);
@@ -100,8 +103,14 @@ export default function StoreSettings() {
         {/* 매장 헤더 + '이 매장' 두 행을 한 카드로 합쳤다 — 원래 헤더 카드와 '이 매장' 카드가 따로였고
             그래서 흰 카드 면이 4연속이었다(배치규칙① 위반, 2026-08-06). 매장명이 곧 이 묶음의 제목이라
             '이 매장' 라벨은 없애도 방향을 잃지 않는다. 카드는 SettingsSection(=SettingsKit) 것을 그대로 쓴다. */}
+      {/* ★설정 읽기 실패를 "전부 꺼짐"으로 위장하지 않는다(#47). 스토어는 실패해도 loaded=true 라
+          이 분기가 없으면 기본값(DEFAULT_MEMBER_PREF)이 **사용자가 정한 값인 양** 그려지고,
+          토글 하나만 눌러도 nickname·color·quiet_* 6개 필드가 전부 기본값으로 서버에 덮인다.
+          (스토어의 save 도 loadError 면 거부하지만, 화면이 먼저 말해줘야 사용자가 뭘 할지 안다.) */}
         {!ready ? (
           <ScreenLoading label="매장 설정을 불러오고 있어요…" />
+        ) : prefsLoadError ? (
+          <LoadErrorState title="매장 설정을 불러오지 못했어요" onRetry={() => void retryPrefs()} />
         ) : (
           <>
         <SettingsSection>

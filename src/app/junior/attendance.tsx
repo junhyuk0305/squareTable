@@ -7,6 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { RoleTabBar } from '@/components/RoleTabBar';
 import { Appear, stagger } from '@/components/Appear';
 import { ScreenLoading } from '@/components/ScreenLoading';
+import { LoadErrorState } from '@/components/LoadErrorState';
 import { InfoDot } from '@/components/InfoDot';
 import { MiniStats } from '@/components/blocks/MiniStats';
 import { useSessionStore } from '@/lib/store/useSessionStore';
@@ -26,6 +27,8 @@ export function AttendancePanel() {
   const userName = useSessionStore((s) => s.userName);
   const records = useAttendanceStore((s) => s.records);
   const attendanceLoaded = useAttendanceStore((s) => s.loaded);
+  const attendanceLoadError = useAttendanceStore((s) => s.loadError);
+  const retryAttendance = useAttendanceStore((s) => s.retry);
   const checkIn = useAttendanceStore((s) => s.checkIn);
   const checkOut = useAttendanceStore((s) => s.checkOut);
   const wages = usePayrollStore((s) => s.wages);
@@ -86,6 +89,9 @@ export function AttendancePanel() {
     <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
       {!ready ? (
         <ScreenLoading label="출퇴근 기록을 불러오고 있어요…" />
+      ) : attendanceLoadError ? (
+        // 실패를 "아직 출근 전이에요"로 위장하지 않는다 — 그 위장이 근무 중인 직원의 이중 출근을 부른다(#40).
+        <LoadErrorState title="출퇴근 기록을 불러오지 못했어요" onRetry={() => void retryAttendance()} />
       ) : (
         <>
       <Appear delay={stagger(0)}>

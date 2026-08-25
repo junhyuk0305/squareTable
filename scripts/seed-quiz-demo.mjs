@@ -307,6 +307,9 @@ async function main() {
     '이전 시드 정리: 통과 기록',
     db.from('knowhow_understanding').delete().eq('unit_id', UNIT).in('entry_id', entryIds).in('staff_id', [JIWON, SUMIN]),
   );
+  await step('이전 시드 정리: 훈련 요청', db.from('training_requests').delete().like('id', `${P}%`));
+  // 오답 집계는 entry_id 가 PK 라 접두를 못 단다 — 이 시드가 쓰는 노하우만 지운다.
+  await step('이전 시드 정리: 오답 집계', db.from('knowhow_quiz_stats').delete().eq('unit_id', UNIT).in('entry_id', entryIds));
   if (PURGE_ONLY) { console.log('✓ --purge 완료 (되돌림만 하고 끝)'); return; }
 
   // ── 2) 노하우 존재 확인 ─────────────────────────────────────
@@ -381,6 +384,29 @@ async function main() {
       verified_at: agoTs(ago), interval_step: stepN ?? 0,
     })),
   ));
+
+  // ── 오답 집계(0103) — 사장·매니저 화면의 "오답률 높은 노하우" 근거. 응시 기록과 같은 수치에서 뽑는다.
+  //    개인 귀속이 아니라 노하우 귀속이라 staff_id 컬럼 자체가 없다(0072 "실패는 저장하지 않는다").
+  const agg = new Map();
+  for (const [entryId, , , total, correct, ago] of results) {
+    const a = agg.get(entryId) ?? { attempt_count: 0, miss_count: 0, last_missed_at: null };
+    a.attempt_count += total;
+    a.miss_count += total - correct;
+    if (total > correct) a.last_missed_at = a.last_missed_at ?? agoTs(ago);
+    agg.set(entryId, a);
+  }
+  await step(`오답 집계 ${agg.size}건`, db.from('knowhow_quiz_stats').insert(
+    [...agg].map(([entry_id, a]) => ({ entry_id, unit_id: UNIT, ...a })),
+  ));
+
+  // ── 훈련 요청(0102/0111) — 사장이 "이 노하우 이해했는지 확인해줘"를 직원에게 건다.
+  //    즉시형(recurrence=null) 1건 + 매주형 1건. 완료는 knowhow_understanding.verified_at 으로 파생된다.
+  const reqs = [
+    { id: `${P}r01`, unit_id: UNIT, entry_id: 'pb_routine_1782886957696_0', staff_id: SUMIN, recurrence: null, created_by: OWNER },
+    { id: `${P}r02`, unit_id: UNIT, entry_id: 'pb_event_004', staff_id: SUMIN, recurrence: { weekly: [1] }, created_by: OWNER },
+    { id: `${P}r03`, unit_id: UNIT, entry_id: 'pb_context_002', staff_id: JIWON, recurrence: null, created_by: OWNER },
+  ].filter((r) => alive.has(r.entry_id));
+  await step(`훈련 요청 ${reqs.length}건`, db.from('training_requests').insert(reqs));
 
   console.log('\n✓ 완료');
   console.log(`  사장   ${OWNER_EMAIL} / pilot1234`);

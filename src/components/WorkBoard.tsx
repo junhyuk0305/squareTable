@@ -26,6 +26,7 @@ import type { PlaybookEntry, SquareBlock } from '@/types';
 import type { QuizInput } from '@/lib/ai/types';
 import { RoleTabBar } from '@/components/RoleTabBar';
 import { ScreenLoading } from '@/components/ScreenLoading';
+import { LoadErrorState } from '@/components/LoadErrorState';
 import { Appear, stagger } from '@/components/Appear';
 import { useRoomStore } from '@/lib/store/useRoomStore';
 import { WorkChat } from '@/components/work/WorkChat';
@@ -175,6 +176,14 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
   const staffLoaded = useStaffStore((s) => s.loaded);
   const scheduleLoaded = useScheduleStore((s) => s.loaded);
   const boardLoaded = workLoaded && roomLoaded && playbookLoaded && staffLoaded && scheduleLoaded;
+  // ★이 화면의 **본문 두 축**(업무·방)이 실패하면 "할 일이 없어요"·"방이 없어요"로 위장된다(#56·#34).
+  //   특히 fetchDone 실패는 완료 체크를 전부 미완료로 보이게 해 **직원이 이미 끝낸 일을 다시 한다.**
+  //   노하우·직원·근무표는 이 화면의 부가 정보라 게이트에 넣지 않는다(배너가 맡는다).
+  const workLoadError = useWorkStore((s) => s.loadError);
+  const roomLoadError = useRoomStore((s) => s.loadError);
+  const retryWork = useWorkStore((s) => s.retry);
+  const retryRoom = useRoomStore((s) => s.retry);
+  const boardLoadError = workLoadError || roomLoadError;
 
   // 채팅방('전부 방 단위') — 활성 방 기준으로 대화·공지·할일을 거른다.
   const currentRoomId = useRoomStore((s) => s.currentRoomId);
@@ -779,6 +788,22 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
       <SafeAreaView style={st.safe} edges={['bottom']}>
         <Stack.Screen options={headerOptions} />
         <ScreenLoading label="업무를 불러오고 있어요…" />
+        <RoleTabBar role={role} />
+      </SafeAreaView>
+    );
+  }
+
+  if (boardLoadError) {
+    return (
+      <SafeAreaView style={st.safe} edges={['bottom']}>
+        <Stack.Screen options={headerOptions} />
+        <LoadErrorState
+          title="업무를 불러오지 못했어요"
+          onRetry={() => {
+            void retryWork();
+            void retryRoom();
+          }}
+        />
         <RoleTabBar role={role} />
       </SafeAreaView>
     );

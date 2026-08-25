@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 import { useSessionStore } from '@/lib/store/useSessionStore';
+import { showToast } from '@/lib/store/useToastStore';
 import { useStoreEntryStore } from '@/lib/store/useStoreEntryStore';
 import { useStoreDisplay } from '@/components/StoreHeaderTitle';
 import { Wordmark } from '@/components/Wordmark';
@@ -109,8 +110,13 @@ export function StoreToggle({ scope = 'store' }: { scope?: 'hub' | 'store' }) {
     }
     if (id === unitId) return;
     setBusy(true);
-    await switchUnit(id);
+    // ★결과를 버리지 않는다(2026-08-25 감사 #8). 같은 동작의 다른 두 경로(useStoreNav.goStore·
+    //   useCrossNotifRows.openRow)는 전부 실패 시 토스트를 띄운다 — 이 경로만 조용했다.
+    //   useSessionStore 의 주석이 이 문구를 "SSOT 한 곳에서 참으로 만든다"고 적어 뒀는데,
+    //   정작 그 문구가 화면에 도달하지 못하고 있었다.
+    const { error } = await switchUnit(id);
     setBusy(false);
+    if (error) return showToast(error, 'warn');
   };
   // 2곳이면 1탭, 3곳↑이면 드롭다운. 허브에서 1곳이면 그 매장으로 바로 들어간다.
   const onScope = () => {

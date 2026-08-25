@@ -8,6 +8,7 @@ import { RoleTabBar } from '@/components/RoleTabBar';
 import { Appear, stagger } from '@/components/Appear';
 import { EmptyState } from '@/components/EmptyState';
 import { ScreenLoading } from '@/components/ScreenLoading';
+import { LoadErrorState } from '@/components/LoadErrorState';
 import { SectionLabel } from '@/components/SectionLabel';
 import { WeekStrip, type WeekDay } from '@/components/blocks/WeekStrip';
 import { DayTimeline, type TimelineRow } from '@/components/schedule/DayTimeline';
@@ -53,6 +54,8 @@ export default function OwnerScheduleScreen() {
   //   **전부 사실처럼** 먼저 떴다. 훅은 각각 받은 뒤 AND 한다(`&&` 안에서 부르면 훅 개수가 달라져 크래시).
   const staffLoaded = useStaffStore((s) => s.loaded);
   const scheduleLoaded = useScheduleStore((s) => s.loaded);
+  const scheduleLoadError = useScheduleStore((s) => s.loadError);
+  const retrySchedule = useScheduleStore((s) => s.retry);
   const ready = staffLoaded && scheduleLoaded;
 
   const today = todayStr();
@@ -148,6 +151,17 @@ export default function OwnerScheduleScreen() {
       <SafeAreaView style={styles.safe} edges={['bottom']}>
         <Stack.Screen options={{ title: '근무표' }} />
         <ScreenLoading label="근무표를 불러오고 있어요…" />
+        <RoleTabBar role="owner" />
+      </SafeAreaView>
+    );
+  }
+
+  // 실패를 "승인할 교대 요청이 없어요"·빈 근무표로 위장하지 않는다(#44).
+  if (scheduleLoadError) {
+    return (
+      <SafeAreaView style={styles.safe} edges={['bottom']}>
+        <Stack.Screen options={{ title: '근무표' }} />
+        <LoadErrorState title="근무표를 불러오지 못했어요" onRetry={() => void retrySchedule()} />
         <RoleTabBar role="owner" />
       </SafeAreaView>
     );

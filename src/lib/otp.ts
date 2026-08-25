@@ -114,14 +114,17 @@ export function usePhoneOtp(normalizedPhone: string) {
     }
   };
 
-  const verify = async (code: string) => {
-    if (busy || !sentTo) return;
+  // ★성공 여부를 돌려준다 — 호출부가 인증 직후 이어서 해야 할 일(예: profiles.phone 반영)을
+  //   상태 반영을 기다리지 않고 그 자리에서 할 수 있게. setVerifiedTo 는 다음 렌더에야 보인다.
+  const verify = async (code: string): Promise<boolean> => {
+    if (busy || !sentTo) return false;
     setMsg(null);
     setBusy('verify');
     const r = await callOtp({ action: 'verify', phone: sentTo, code });
     setBusy(null);
     if (r.ok) setVerifiedTo(sentTo);
     else setMsg(reasonMsg(r.reason ?? 'network', r.retryAfterSec));
+    return r.ok;
   };
 
   return {

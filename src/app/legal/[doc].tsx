@@ -1,6 +1,7 @@
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useLocalSearchParams } from 'expo-router';
+import { TERMS_VERSION } from '@/lib/config/business';
 import { InkColors } from '@/lib/theme/colors';
 import { HeaderBackButton } from '@/components/HeaderBackButton';
 
@@ -49,14 +50,31 @@ const DOCS: Record<string, Doc> = {
 
 export default function LegalDocScreen() {
   const { doc } = useLocalSearchParams<{ doc: string }>();
-  const data = DOCS[doc ?? ''] ?? DOCS.collect;
+  // ★모르는 슬러그를 '개인정보 수집·이용 동의'로 **제목까지 바꿔** 보여주지 않는다(#54).
+  //   이 화면은 동의 화면에서 링크로 들어오는 자리라, 엉뚱한 문서가 뜨면 사용자가
+  //   "내가 동의한 문서"를 오인한다. 없는 문서는 없다고 말한다.
+  const data = DOCS[doc ?? ''] ?? null;
+  if (!data) {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <Stack.Screen options={{ headerShown: true, title: '문서', headerStyle: { backgroundColor: '#FFFFFF' }, headerTintColor: InkColors.ink, headerLeft: () => <HeaderBackButton /> }} />
+        <ScrollView contentContainerStyle={styles.scroll}>
+          <Text style={styles.h1}>문서를 찾지 못했습니다</Text>
+          <Text style={styles.body}>주소를 다시 확인해 주세요.</Text>
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.safe}>
       <Stack.Screen options={{ headerShown: true, title: data.title, headerStyle: { backgroundColor: '#FFFFFF' }, headerTintColor: InkColors.ink, headerLeft: () => <HeaderBackButton /> }} />
       <ScrollView contentContainerStyle={styles.scroll}>
         <Text style={styles.h1}>{data.h1}</Text>
-        <Text style={styles.updated}>시행일: 2026-07-10 · 운영: 스퀘어테이블</Text>
+        {/* ★시행일을 여기서 다시 적지 않는다(#54) — business.ts 의 TERMS_VERSION 이 정본이고,
+            legal-content.mjs(웹 5종)도 같은 값을 쓴다. 이 화면만 2026-07-10 로 굳어 있어
+            **결제 시 기록되는 약관 버전과 사용자가 읽는 시행일이 달랐다.** */}
+        <Text style={styles.updated}>시행일: {TERMS_VERSION} · 운영: 스퀘어테이블</Text>
         {data.sections.map((s) => (
           <View key={s.h} style={styles.section}>
             <Text style={styles.h2}>{s.h}</Text>

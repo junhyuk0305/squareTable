@@ -8,8 +8,7 @@ import { HeaderBackButton } from '@/components/HeaderBackButton';
 import { Appear } from '@/components/Appear';
 import { logout } from '@/lib/auth';
 import { formatBizNo, isValidBizNo, bizDigits } from '@/lib/utils/bizno';
-import { normalizePhone, formatPhone } from '@/lib/utils/validation';
-import { usePhoneOtp } from '@/lib/otp';
+import { PhoneVerifyBlock } from '@/components/PhoneVerifyBlock';
 import { INDUSTRIES } from '@/lib/config/industry';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Space } from '@/lib/theme/layout';
@@ -22,6 +21,7 @@ export default function OwnerCreateStore() {
   const router = useRouter();
   const userName = useSessionStore((s) => s.userName);
   const createStore = useSessionStore((s) => s.createStore);
+  const updateProfile = useSessionStore((s) => s.updateProfile);
   // 이미 매장이 있는 사장이 스위처 '매장 추가'로 온 경우 = 추가 흐름 → 뒤로가기(취소) 허용 + 문구 교체.
   // 매장 0개(강제 온보딩)면 돌아갈 곳이 없어 뒤로가기를 막는다(기존 동작 유지).
   const isAddingStore = useSessionStore((s) => s.stores.length > 0);
@@ -38,9 +38,8 @@ export default function OwnerCreateStore() {
   // 한 번 더 보내게 된다. 그래서 '막혔을 때 그 자리에서 푼다'로 둔다.
   const sessionPhone = useSessionStore((s) => s.phone);
   const [needPhone, setNeedPhone] = useState(false);
-  const [phone, setPhone] = useState(formatPhone(sessionPhone ?? ''));
-  const [otpCode, setOtpCode] = useState('');
-  const otp = usePhoneOtp(normalizePhone(phone));
+  /** 인증 + profiles.phone 반영이 **둘 다** 끝났는가. PhoneVerifyBlock 이 올려준다. */
+  const [phoneReady, setPhoneReady] = useState(false);
 
   const valid = !!storeName.trim() && !!industry && (!bizNo.trim() || isValidBizNo(bizNo));
 
@@ -49,7 +48,10 @@ export default function OwnerCreateStore() {
     if (!storeName.trim()) return setErr('매장 이름을 입력해주세요.');
     if (!industry) return setErr('업종을 선택해주세요.');
     if (bizNo.trim() && !isValidBizNo(bizNo)) return setErr('사업자등록번호 형식(10자리)을 확인해주세요. 비워두면 나중에 등록할 수 있어요.');
-    if (needPhone && !otp.verified) return setErr('전화번호 인증을 완료해주세요.');
+    // ★phoneReady = 인증 + profiles.phone 반영이 **둘 다** 끝났다는 뜻이다(#3).
+    //   예전엔 otp.verified 만 봤는데, 그건 phone_otps 에만 남는 흔적이라 0088 게이트
+    //   (profiles.phone 로 조인)는 그대로 닫혀 있었다 — SMS 비용만 나가고 결과는 같았다.
+    if (needPhone && !phoneReady) return setErr('전화번호 인증을 완료해주세요.');
     setBusy(true);
     // 매장 0개 강제 온보딩(첫매장 복구)이면 isOnboarding=true → 레이스성 plan_limit_store 를 복구.
     // 스위처 '매장 추가'(isAddingStore)면 false → 무료플랜의 진짜 요금제 거절을 그대로 노출.
@@ -133,59 +135,16 @@ export default function OwnerCreateStore() {
             </Text>
           )}
 
-          {/* 전화번호 인증 — 서버 게이트에 막혔을 때만 나타난다. 가입 폼의 OTP 한 벌과 같은 훅(usePhoneOtp)을
-              쓴다(판정 복제 금지). 번호를 고치면 훅이 정규화 번호 비교로 sent/verified 를 스스로 푼다. */}
+          {/* 전화번호 인증 — 서버 게이트에 막혔을 때만 나타난다. 합류 축(junior/hub)과 **같은 한 벌**을
+              공용 컴포넌트로 쓴다(판정 복제 금지). profiles.phone 반영까지 그 안에서 끝난다. */}
           {needPhone && (
-            <View style={styles.otpBox}>
-              <Text style={styles.label}>전화번호 인증<Text style={styles.req}> *</Text></Text>
-              <Text style={styles.otpGuide}>매장을 만들려면 본인 확인이 한 번 필요해요.</Text>
-              <View style={styles.otpRow}>
-                <TextInput
-                  value={phone}
-                  onChangeText={(v) => { setErr(null); setPhone(formatPhone(v)); }}
-                  placeholder="010-1234-5678"
-                  placeholderTextColor={InkColors.ink3}
-                  keyboardType="phone-pad"
-                  maxLength={13}
-                  style={[styles.input, styles.otpInput]}
-                />
-                {!otp.verified && (
-                  <Pressable
-                    onPress={() => void otp.send()}
-                    disabled={otp.busy === 'send' || otp.countdown > 0}
-                    style={[styles.otpBtn, (otp.busy === 'send' || otp.countdown > 0) && styles.otpBtnDim]}
-                  >
-                    {otp.busy === 'send'
-                      ? <ActivityIndicator size="small" color={InkColors.ink2} />
-                      : <Text style={styles.otpBtnText}>{otp.countdown > 0 ? `재발송 ${otp.countdown}초` : otp.sent ? '인증번호 재발송' : '인증번호 받기'}</Text>}
-                  </Pressable>
-                )}
-              </View>
-              {otp.sent && !otp.verified && (
-                <View style={styles.otpRow}>
-                  <TextInput
-                    value={otpCode}
-                    onChangeText={(v) => setOtpCode(v.replace(/\D/g, '').slice(0, 6))}
-                    placeholder="인증번호 6자리"
-                    placeholderTextColor={InkColors.ink3}
-                    keyboardType="number-pad"
-                    maxLength={6}
-                    style={[styles.input, styles.otpInput]}
-                  />
-                  <Pressable
-                    onPress={() => void otp.verify(otpCode)}
-                    disabled={otp.busy === 'verify' || otpCode.length !== 6}
-                    style={[styles.otpBtn, (otp.busy === 'verify' || otpCode.length !== 6) && styles.otpBtnDim]}
-                  >
-                    {otp.busy === 'verify'
-                      ? <ActivityIndicator size="small" color={InkColors.ink2} />
-                      : <Text style={styles.otpBtnText}>인증하기</Text>}
-                  </Pressable>
-                </View>
-              )}
-              {otp.verified && <Text style={[styles.bizHint, styles.bizOk]}>✓ 인증된 번호예요. 이제 매장을 만들 수 있어요.</Text>}
-              {otp.msg && <Text style={styles.otpMsg}>{otp.msg}</Text>}
-            </View>
+            <PhoneVerifyBlock
+              guide="매장을 만들려면 본인 확인이 한 번 필요해요."
+              okText="이제 매장을 만들 수 있어요."
+              initialPhone={sessionPhone}
+              updateProfile={updateProfile}
+              onVerifiedChange={setPhoneReady}
+            />
           )}
 
           {err && <Text style={styles.err}>{err}</Text>}

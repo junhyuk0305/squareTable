@@ -31,11 +31,20 @@ type VecResponse = { candidates: VecHit[]; topSimilarity: number };
 // Edge 호출 공통 헤더(실 로그인 세션 토큰 필요 — anon 단독 거부됨).
 // 계약: 소프트 no-go(엔드포인트/토큰 없음·!res.ok)면 null, 네트워크/타임아웃(abort)이면 throw
 // → 호출부(hybridSearch·embedEntry)가 각각 렉시컬 폴백/재시도로 처리한다.
+// ★소프트 실패도 **왜** 실패했는지 남긴다(2026-08-25 감사 #15·#28).
+//   예전엔 이 세 경로(엔드포인트 없음·토큰 없음·!res.ok)가 전부 말없이 null 이었고,
+//   reportError 는 catch(네트워크) 안에만 있었다. 그래서 엣지의 forbidden·embed_read·embed_write 와
+//   **모델 퇴역 404 가 통째로 이 구멍으로 빠져나갔다** — 의미검색이 꺼져도 신호가 0이었다.
+//   실측(2026-08-25): 발행 노하우 321건 대비 색인 124건 = **197건(61%)이 미색인**이었는데
+//   그 사실을 알려주는 신호가 어디에도 없었다. 반환 계약(null=소프트)은 그대로 두고 계측만 붙인다.
 async function edgePost<T>(task: 'search' | 'embed', payload: unknown): Promise<T | null> {
-  if (!AI_ENDPOINT) return null;
+  if (!AI_ENDPOINT) return null; // 설정상 비활성 — 장애가 아니므로 계측 대상 아님
   const { data } = await supabase.auth.getSession();
   const token = data.session?.access_token;
-  if (!token) return null;
+  if (!token) {
+    reportError(`search.${task}.noToken`, { message: '세션 토큰 없음 — 엣지 호출 불가' });
+    return null;
+  }
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), EDGE_TIMEOUT_MS);
   try {
@@ -45,7 +54,12 @@ async function edgePost<T>(task: 'search' | 'embed', payload: unknown): Promise<
       body: JSON.stringify({ task, payload }),
       signal: ctrl.signal,
     });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      // 본문에 엣지의 사유(forbidden·embed_read·embed_write·모델 404)가 담겨 온다 — 그걸 남긴다.
+      const body = await res.text().catch(() => '');
+      reportError(`search.${task}.notOk`, { message: `HTTP ${res.status} ${body.slice(0, 200)}` });
+      return null;
+    }
     return (await res.json()) as T;
   } finally {
     clearTimeout(timer);
@@ -153,6 +167,13 @@ export async function embedEntry(e: PlaybookEntry): Promise<void> {
     try {
       const res = await edgePost('embed', payload);
       if (res !== null) return; // 색인 성공
+      // ★가장 흔한 실패 경로가 여기였다(#15): 소프트 실패(null)는 throw 를 안 하므로 아래 catch 를
+      //   타지 않고, 3회를 다 돌고 **아무 것도 안 한 채 반환**했다. 그래서 미색인 노하우가 쌓여도
+      //   계측이 0건이었다. 마지막 시도까지 null 이면 실패로 보고한다.
+      if (attempt === 3) {
+        reportError('search.embed.failed', { message: '3회 모두 소프트 실패(null)' }, { entryId: e.id });
+        return;
+      }
     } catch (err) {
       if (attempt === 3) {
         // ★S1: 색인 실패 시 이 노하우는 의미검색에서 영영 빠진다(렉시컬만 커버) — 사장은 검색되는 줄 안다.

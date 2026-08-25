@@ -53,12 +53,19 @@ const seed: PlaybookSuggestion[] = [
 
 type State = {
   suggestions: PlaybookSuggestion[];
+  /** true = 조회 **시도가 끝남**(성공·실패 무관). 실패 여부는 loadError 로 본다. */
   loaded: boolean;
+  /** 마지막 hydrate 가 실패했는가 — 화면이 "대기 중인 제안이 없어요"와 "못 불러옴"을 구분한다(#19). */
+  loadError: boolean;
   hydrate: () => Promise<void>;
+  /** 재시도 — 실패 화면의 '다시 시도' 버튼이 부르는 경로. */
+  retry: () => Promise<void>;
   subscribe: () => () => void;
   submit: (input: SuggestionInput) => Promise<boolean>;
-  approve: (id: string, resultingEntryId?: string) => void;
-  reject: (id: string, note?: string) => void;
+  /** 승인 — **서버 반영 성공 여부**를 돌려준다(#18). 조용히 롤백되면 제안은 pending 으로 돌아오는데
+   *  노하우는 이미 저장돼 있어, 사장이 다시 승인하면 **같은 노하우가 2건**이 된다. */
+  approve: (id: string, resultingEntryId?: string) => Promise<boolean>;
+  reject: (id: string, note?: string) => Promise<boolean>;
   getPending: () => PlaybookSuggestion[];
   mineFor: (userId: string) => PlaybookSuggestion[];
   applyMock: (demo: boolean) => void;
@@ -67,11 +74,17 @@ type State = {
 export const useSuggestionStore = create<State>((set, get) => ({
   suggestions: HAS_SUPABASE ? [] : [...seed],
   loaded: !HAS_SUPABASE,
+  loadError: false,
 
   hydrate: coalesce(async () => {
     if (!HAS_SUPABASE) return;
-    set({ suggestions: await fetchSuggestions(), loaded: true });
+    const { data, error } = await fetchSuggestions();
+    // 실패 시 기존 목록 유지 — 빈 배열로 덮으면 "제안 없음"이 사실인 양 굳는다.
+    set((s) => ({ suggestions: error ? s.suggestions : data, loaded: true, loadError: error }));
   }),
+  retry: async () => {
+    await get().hydrate();
+  },
   subscribe: () => subscribeDebounced(subscribeSuggestions, () => get().hydrate()),
 
   submit: (input) => {
@@ -106,7 +119,7 @@ export const useSuggestionStore = create<State>((set, get) => ({
       reviewed_by: s.userId,
       ...(resultingEntryId ? { resulting_entry_id: resultingEntryId } : null),
     };
-    optimisticPatch(set, get, 'suggestions', id, patch, () => reviewSuggestion(id, patch), '승인 처리에 실패했어요.');
+    return optimisticPatch(set, get, 'suggestions', id, patch, () => reviewSuggestion(id, patch), '승인 처리에 실패했어요.');
   },
 
   reject: (id, note) => {
@@ -117,10 +130,10 @@ export const useSuggestionStore = create<State>((set, get) => ({
       reviewed_by: s.userId,
       ...(note ? { owner_note: note } : null),
     };
-    optimisticPatch(set, get, 'suggestions', id, patch, () => reviewSuggestion(id, patch), '반려 처리에 실패했어요.');
+    return optimisticPatch(set, get, 'suggestions', id, patch, () => reviewSuggestion(id, patch), '반려 처리에 실패했어요.');
   },
 
   getPending: () => get().suggestions.filter((x) => x.status === 'pending'),
   mineFor: (userId) => get().suggestions.filter((x) => x.proposer_id === userId),
-  applyMock: (demo) => set({ suggestions: demo ? [...seed] : [], loaded: true }),
+  applyMock: (demo) => set({ suggestions: demo ? [...seed] : [], loaded: true, loadError: false }),
 }));

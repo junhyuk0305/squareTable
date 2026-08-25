@@ -123,7 +123,7 @@ function ConversationalEdit({ entry, quizCountOf }: { entry: PlaybookEntry; quiz
 
   // 대화형 수정 결과 저장 — patch가 다루지 않는 내부 칸(quagmire/uncover/result/do/template)은 보존.
   const onUpdated = useCallback(
-    (square: SquareBlock, extras: { title: string; keywords: string[] }) => {
+    async (square: SquareBlock, extras: { title: string; keywords: string[] }) => {
       const mergedSquare: SquareBlock = {
         ...entry.square, // 보존: quagmire·uncover·result·extract.do·template
         situation: square.situation,
@@ -131,7 +131,7 @@ function ConversationalEdit({ entry, quizCountOf }: { entry: PlaybookEntry; quiz
         extract: { ...entry.square.extract, dont: square.extract.dont },
         ...(square.standard ? { standard: square.standard } : {}),
       };
-      update(entry.id, {
+      const ok = await update(entry.id, {
         title: extras.title.trim() || entry.title,
         square: mergedSquare,
         search_keywords: extras.keywords.length ? extras.keywords.slice(0, 8) : entry.search_keywords,
@@ -141,6 +141,10 @@ function ConversationalEdit({ entry, quizCountOf }: { entry: PlaybookEntry; quiz
         needs_review: false,
         verification: { state: 'owner_verified', verified_by: userName, verified_at: new Date().toISOString() },
       });
+      // ★서버 반영을 확인한 뒤에만 성공을 말하고 화면을 뜬다(#17). 예전엔 update 가 void 라
+      //   0행(RLS·id 드리프트)이어도 "수정 저장됨 (v3)"을 띄우고 1초 뒤 뒤로 갔다 —
+      //   사장은 저장됐다고 믿고 나가고, 실패 배너는 **다른 화면에서** 뒤늦게 떴다.
+      if (!ok) return; // 실패 문구·롤백은 optimisticPatch(guardWrite)가 이미 처리한다
       setToast('수정 저장됨 (v' + (entry.version + 1) + ')');
       navTimer.current = setTimeout(() => router.back(), 1000);
     },

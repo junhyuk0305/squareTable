@@ -23,6 +23,7 @@ import { SectionLabel } from '@/components/SectionLabel';
 import { AlertRow } from '@/components/blocks/AlertRow';
 import { MiniStats } from '@/components/blocks/MiniStats';
 import { ScreenLoading } from '@/components/ScreenLoading';
+import { LoadErrorState } from '@/components/LoadErrorState';
 import { Appear, stagger } from '@/components/Appear';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
@@ -45,7 +46,9 @@ export function OwnerStatusView({ header }: { header: ReactNode }) {
   const today = useHubStore((s) => s.today);
   const ownerLoaded = useHubStore((s) => s.ownerLoaded);
   const todayLoaded = useHubStore((s) => s.todayLoaded);
+  const ownerLoadError = useHubStore((s) => s.ownerLoadError);
   const hydrateOwner = useHubStore((s) => s.hydrateOwner);
+  const retryOwner = useHubStore((s) => s.retryOwner);
   const crossData = useCrossNotifStore((s) => s.data);
   const crossLoaded = useCrossNotifStore((s) => s.loaded);
   const hydrateCross = useCrossNotifStore((s) => s.hydrate);
@@ -128,11 +131,24 @@ export function OwnerStatusView({ header }: { header: ReactNode }) {
   // ★위 effect 가 같이 당기는 cross·prefs 도 게이트에 넣는다(2026-08-25). 빠져 있던 동안
   //   ① '확인 필요'가 "지금 확인할 일이 없어요"로 떴다가 합류 신청 행이 끼어들며 카드가 뒤바뀌었고
   //      (inboxEmpty 가 crossData 의 joins 를 센다) ② 매장 별명·색이 뒤늦게 갈아끼워졌다.
-  // 부분 실패 시 재시도는 hydrateOwner TTL 리셋이 맡고, 표면화는 db.ts readFail(SyncBanner).
+  // ★2026-08-25: `loaded` 계약이 "시도가 끝났다"로 통일되면서 이 게이트는 더 이상 영구 스피너가
+  //   되지 않는다(#6). 예전엔 넷 다 "실패하면 loaded 를 안 올림" 계약이라 **하나만 실패해도
+  //   사장이 로그인 직후 착지하는 이 화면이 영원히 "매장 현황을 불러오고 있어요…"** 였고,
+  //   마운트 1회 fetch 라 재시도 버튼도 트리거도 없었다.
   if (!ownerLoaded || !todayLoaded || !crossLoaded || !prefsLoaded) {
     return (
       <View style={styles.loading}>
         <ScreenLoading label="매장 현황을 불러오고 있어요…" />
+      </View>
+    );
+  }
+
+  // 실패는 "0건"으로 위장하지 않는다 — 현황 본문(overview)이 없으면 그릴 수 있는 게 없으므로
+  // 재시도 화면으로 갈음한다. cross·prefs 만 실패한 경우는 본문이 유효하니 배너(readFail)에 맡긴다.
+  if (ownerLoadError) {
+    return (
+      <View style={styles.loading}>
+        <LoadErrorState title="매장 현황을 불러오지 못했어요" onRetry={() => void retryOwner()} />
       </View>
     );
   }

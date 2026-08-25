@@ -266,7 +266,7 @@ async function deliver(
  * 충돌이 곧 잠금이라, 크론이 겹쳐 돌거나 재시도해도 같은 할일이 두 번 나가지 않는다.
  * (발송 후 기록으로 하면 그 사이에 두 번째 실행이 끼어들어 중복 발송된다.)
  */
-async function sweepTaskReminders(token: string): Promise<{ swept: number; sent: number; error?: string }> {
+async function sweepTaskReminders(token: string): Promise<{ swept: number; sent: number; zeroSent?: number; error?: string }> {
   // 인증 = "이 토큰으로 due_task_reminders 를 실행할 수 있는가". 0118 에서 anon/authenticated 에게
   // revoke 했으므로 service_role 만 통과한다. SERVICE_ROLE 문자열 비교로 하면 프로젝트가 새 API 키
   // 체계로 바뀌었을 때 조용히 어긋난다(2026-08-06 실측: 유효한 키인데 401).
@@ -281,6 +281,7 @@ async function sweepTaskReminders(token: string): Promise<{ swept: number; sent:
     out_template_id: string; out_unit_id: string; out_text: string; out_date: string; out_recipients: string[];
   }[];
   let sent = 0;
+  let zeroSent = 0; // 선점은 했는데 실제 발송이 0건이었던 건수(#32 관측 축)
   for (const r of rows) {
     const { error: claimErr } = await admin.from('task_reminder_sent').insert({
       template_id: r.out_template_id,
@@ -296,8 +297,22 @@ async function sweepTaskReminders(token: string): Promise<{ swept: number; sent:
       tag: `task-${r.out_template_id}`,
     });
     sent += res.sent;
+    // ★0건 발송을 조용히 넘기지 않는다(2026-08-25 감사 #32). 선점(insert)이 발송보다 **먼저**
+    //   확정되고 PK 가 (template_id, remind_date) 라, 여기서 0건이면 **그날 그 할일은 영영
+    //   재시도되지 않는다.** 구독 행이 하나도 없거나 발송이 전부 실패한 경우가 여기다.
+    //   선점을 되돌리면 크론이 매 틱마다 같은 실패를 반복하므로(구독이 없는 매장은 영구 반복),
+    //   되돌리는 대신 **관측 가능하게** 만든다 — 원장에 실제 발송 수를 남기고 로그로 올린다.
+    if (res.sent === 0) {
+      console.error(`[push] task reminder delivered 0 — unit=${r.out_unit_id} template=${r.out_template_id} date=${r.out_date} recipients=${r.out_recipients.length}`);
+      zeroSent += 1;
+    }
+    // 원장에 실제 발송 수를 기록 — "보냈다고 표시됐는데 아무도 못 받았다"를 사후에 구별할 수 있게.
+    await admin.from('task_reminder_sent')
+      .update({ delivered: res.sent })
+      .eq('template_id', r.out_template_id)
+      .eq('remind_date', r.out_date);
   }
-  return { swept: rows.length, sent };
+  return { swept: rows.length, sent, zeroSent };
 }
 
 /**

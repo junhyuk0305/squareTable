@@ -8,6 +8,7 @@ import { PublishConfirmSheet } from '@/components/owner/PublishConfirmSheet';
 import { PublishCrossStoreNudge } from '@/components/owner/PublishCrossStoreNudge';
 import { Appear } from '@/components/Appear';
 import { EmptyState } from '@/components/EmptyState';
+import { LoadErrorState } from '@/components/LoadErrorState';
 import { ScreenLoading } from '@/components/ScreenLoading';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { useUnknownQueueStore } from '@/lib/store/useUnknownQueueStore';
@@ -51,6 +52,8 @@ export default function OwnerCoachScreen() {
   // ★큐가 도착하기 전에는 realUq 가 undefined라 아래 데드엔드 가드가 **"이미 처리된 질문이에요"를 먼저 그린다**
   //   (푸시 딥링크로 바로 들어오는 경로). 아래 hydrate 는 비동기라 첫 프레임을 막지 못한다 — 게이트가 막는다.
   const queueLoaded = useUnknownQueueStore((s) => s.loaded);
+  const queueLoadError = useUnknownQueueStore((s) => s.loadError);
+  const retryQueue = useUnknownQueueStore((s) => s.hydrate);
   // uqId 진입(인박스 답변·③ 제안→질문 자동해결)인데 큐가 아직 로드 안 됐으면 여기서 당긴다
   // — 제안 화면에서 바로 넘어오면 인박스를 안 거쳐 realUq 가 비어 "이미 처리됨" 데드엔드가 뜰 수 있다.
   useEffect(() => {
@@ -139,7 +142,11 @@ export default function OwnerCoachScreen() {
       setJustPublished(true);
       let resolveOk = true;
       if (answerable && realUq) resolveOk = await resolve(realUq.id, entryIds[0]);
-      if (sugId) approveSuggestion(sugId, entryIds[0]);
+      // ★승인 결과를 본다(#18). 예전엔 반환을 버려, 승인이 조용히 롤백되면 제안은 pending 으로
+      //   되돌아오는데 **노하우는 이미 저장돼 있었다** → 사장이 목록에서 다시 승인 → 같은 노하우 2건.
+      //   노하우 저장 자체는 성공했으므로 실패로 되돌리지 않고, 무엇이 안 됐는지만 정확히 말한다.
+      let approveOk = true;
+      if (sugId) approveOk = await approveSuggestion(sugId, entryIds[0]);
       // 완료 캡처(②) 출처 업무가 있으면 그 업무에 자동 첨부 — 업무→노하우 루프를 닫는다(발행 성공 시에만).
       if (srcTemplate) void attachKnowhow(srcTemplate, [entryIds[0]]);
       // 채팅 승격이면 원본 메시지에 흔적(promotedEntryId) → 칩/시트가 다시 안 뜬다(발행 성공한 경우만).
@@ -147,6 +154,12 @@ export default function OwnerCoachScreen() {
       if (!resolveOk) {
         setToastErr(true);
         setToast('노하우는 저장됐어요. 다만 질문 반영에 실패했어요 — 받은 질문에서 다시 시도해 주세요.');
+        return false;
+      }
+      if (!approveOk) {
+        setToastErr(true);
+        // 다시 승인하면 노하우가 2건이 되므로 "다시 승인"을 권하지 않는다 — 제안함에서 상태만 정리하게 한다.
+        setToast('노하우는 저장됐어요. 다만 제안 승인 표시에 실패했어요 — 제안함에서 상태를 확인해 주세요.');
         return false;
       }
       setToastErr(false);
@@ -256,6 +269,20 @@ export default function OwnerCoachScreen() {
       <SafeAreaView style={styles.container} edges={['bottom']}>
         <Stack.Screen options={{ title: '질문 답변' }} />
         <ScreenLoading label="질문을 불러오고 있어요…" />
+      </SafeAreaView>
+    );
+  }
+
+  // ★★읽기 실패를 "이미 처리된 질문이에요"라는 **확정적 문구**로 바꾸지 않는다(2026-08-25 감사 #26).
+  //   hydrate 는 실패해도 loaded:true 라 위 ready 게이트를 통과하고, realUq 는 undefined 로 남아
+  //   answerable=false → 아래 데드엔드로 떨어졌다. 사장은 **살아 있는 미답 질문**을 처리된 것으로
+  //   믿고 재시도 없이 이탈한다. 푸시 딥링크가 이 화면으로 직행하므로 진입 경로도 흔하다.
+  //   (OwnerTodoSegment 에는 이 가드가 이미 있는데 coach 에만 없었다.)
+  if (isInboxAnswer && queueLoadError && !justPublished) {
+    return (
+      <SafeAreaView style={styles.container} edges={['bottom']}>
+        <Stack.Screen options={{ title: '질문 답변' }} />
+        <LoadErrorState title="질문을 불러오지 못했어요" onRetry={() => void retryQueue()} />
       </SafeAreaView>
     );
   }
