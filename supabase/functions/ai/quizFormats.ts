@@ -59,6 +59,22 @@ function normChoicePick(raw: any, maxChoices: number, extras: string[] = []): Re
   return out;
 }
 
+// ── 초성 추출 ──────────────────────────────────────────────
+// 짝: src/lib/quiz/formats/chosung.ts 의 chosungTokens/chosungOf. 엣지는 클라를 import 할 수 없어
+// 복제돼 있다(이 파일의 스키마·힌트가 전부 그렇다). **공백을 뺀 글자 수와 개수가 반드시 같아야 한다** —
+// 그게 이 함수의 유일한 계약이고, 클라 validate 가 그 개수를 다시 검사한다.
+const CHO = ['ㄱ', 'ㄲ', 'ㄴ', 'ㄷ', 'ㄸ', 'ㄹ', 'ㅁ', 'ㅂ', 'ㅃ', 'ㅅ', 'ㅆ', 'ㅇ', 'ㅈ', 'ㅉ', 'ㅊ', 'ㅋ', 'ㅌ', 'ㅍ', 'ㅎ'];
+function chosungOf(word: string): string {
+  return [...String(word ?? '')]
+    .filter((ch) => ch.trim())
+    .map((ch) => {
+      const code = ch.charCodeAt(0);
+      // 한글 음절이면 초성으로, 아니면(영문·숫자) 그대로 — "POS 정산" 같은 용어가 실제로 있다.
+      return code >= 0xac00 && code <= 0xd7a3 ? CHO[Math.floor((code - 0xac00) / 588)] : ch;
+    })
+    .join(' ');
+}
+
 function choicePickSpec(
   hint: string,
   opts: { maxChoices?: number; extras?: string[]; optionalExtras?: string[] } = {},
@@ -452,10 +468,26 @@ export const QUIZ_FORMATS: Record<string, QuizFormatSpec> = {
     + '일반 명사(청소·마감처럼 아무 매장에서나 쓰는 말)는 출제하지 마라.',
   ),
 
-  chosung: choicePickSpec(
-    '매장 용어의 초성만 보여주고 맞히는 문제다. chosung 에는 정답 용어의 초성을 띄어서 적고'
-    + '(예: 백플러시 → "ㅂ ㅍ ㄹ ㅅ"), ask 에는 그 용어가 무엇인지 한 줄 설명을 쓴다. '
-    + '선택지는 3~5개이고 정답은 노하우에 실제로 나오는 용어여야 한다. 일반 명사는 출제하지 마라.',
-    { maxChoices: 5, extras: ['chosung'] },
-  ),
+  // ★★ 초성은 **우리가 정답에서 계산한다** — 모델이 적은 값은 버린다.
+  //   2026-08-27 실측: 모델이 "손목 회전 한 번"(6자)에 초성을 7개 붙여 **풀 수 없는 문항**이 나갔다.
+  //   글자 수 세기는 결정적이라 모델에게 시킬 이유가 없다. extras(필수) 가 아니라 optionalExtras 로
+  //   내려 모델이 못 채워도 문항이 버려지지 않게 하고, normalize 에서 덮어쓴다.
+  //   짝: src/lib/quiz/formats/chosung.ts 의 chosungOf + validateExtra(개수 검사).
+  chosung: (() => {
+    const base = choicePickSpec(
+      '매장 용어의 초성만 보여주고 맞히는 문제다. ask 에는 그 용어가 무엇인지 한 줄 설명을 쓴다. '
+      + '선택지는 3~5개이고 정답은 노하우에 실제로 나오는 용어여야 한다. 일반 명사는 출제하지 마라. '
+      + 'chosung 칸은 비워 두거나 대충 적어도 된다. 서버가 정답에서 다시 만든다.',
+      { maxChoices: 5, optionalExtras: ['chosung'] },
+    );
+    return {
+      ...base,
+      normalize: (raw: any) => {
+        const out = base.normalize(raw);
+        if (!out) return null;
+        out.chosung = chosungOf(String((out.choices as string[])?.[out.answer_index as number] ?? ''));
+        return out;
+      },
+    };
+  })(),
 };

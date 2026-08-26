@@ -26,6 +26,7 @@ import { View, Text, TextInput, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { parseBranchNext } from '@/lib/quiz/formats/branchPath';
+import { chosungOf } from '@/lib/quiz/formats/chosung';
 import { FLIP_MAX_PAIRS } from '@/lib/quiz/formats/flipMatch';
 import { LINK_MAX_PAIRS } from '@/lib/quiz/formats/linkMatch';
 import { NUMERIC_MAX } from '@/lib/quiz/formats/numericEntry';
@@ -199,7 +200,16 @@ export function PayloadForm({
   onChange: (next: Record<string, any>) => void;
 }) {
   const p = payload;
-  const set = (patch: Record<string, any>) => onChange({ ...p, ...patch });
+  /**
+   * ★초성은 **정답에서 파생되는 값**이라 사장이 고르거나 고치는 값이 아니다.
+   *   보기 글자나 정답이 바뀔 때마다 여기서 다시 만든다 — 한 곳에서만 만들어야 어긋나지 않는다
+   *   (엣지도 AI 결과에 같은 계산을 덮어쓴다: supabase/functions/ai/quizFormats.ts).
+   */
+  const set = (patch: Record<string, any>) => {
+    const next = { ...p, ...patch };
+    if (format === 'chosung') next.chosung = chosungOf(String(next.choices?.[next.answer_index] ?? ''));
+    onChange(next);
+  };
   const shape = shapeOf(format);
 
   // 갈래 표시는 payload 에 넣지 않는다(walkPath 주석) — 폼이 열려 있는 동안만 산다.
@@ -292,9 +302,12 @@ export function PayloadForm({
           <TextField value={p.situation ?? ''} onChange={(v) => set({ situation: v })} placeholder="예) 포장 손님이 쿠폰을 내밀었어요" multiline />
         </Field>
       )}
+      {/* 초성은 정답에서 그대로 나오는 값이라 **손으로 적지 않는다** — 손으로 적으면 글자 수가 어긋나
+          풀 수 없는 문항이 된다(2026-08-27 실측: 6글자 정답에 초성 7개). 정답을 고르면 아래 set 이
+          자동으로 채우고, 여기서는 무엇이 나갈지 보여주기만 한다. */}
       {format === 'chosung' && (
-        <Field label="초성">
-          <TextField value={p.chosung ?? ''} onChange={(v) => set({ chosung: v })} placeholder="예) ㅂㅍㄹㅅ" maxLength={20} />
+        <Field label="초성" hint="정답을 고르면 자동으로 만들어져요">
+          <Text style={fst.derived}>{p.chosung || '정답을 골라 주세요'}</Text>
         </Field>
       )}
       {(format === 'value_pick' || format === 'fill_count' || format === 'scale_pick' || format === 'numeric_entry') && (
@@ -728,6 +741,12 @@ function AddRow({ label, onPress, disabled }: { label: string; onPress: () => vo
 }
 
 const fst = StyleSheet.create({
+  // 파생 값 표시(초성) — 입력칸이 아니라는 것이 보여야 한다. 글자 사이를 띄워 몇 글자인지 세게 한다.
+  derived: {
+    minHeight: 48, paddingHorizontal: Space.md, paddingVertical: Space.md,
+    borderRadius: Radius.md, backgroundColor: InkColors.bgSoft,
+    fontSize: 16, fontWeight: '800', letterSpacing: 2, color: InkColors.ink,
+  },
   row: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, marginTop: Space.xs },
   pairRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, marginTop: Space.xs },
   pairInput: { flex: 1, minWidth: 0 },

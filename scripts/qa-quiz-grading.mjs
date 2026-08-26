@@ -101,7 +101,17 @@ const FIXTURES = {
   trap_pick: { payload: choice(), ...choicePair },
   case_pick: { payload: choice({ situation: '포장 손님이 음료 3잔을 시켰어요' }), ...choicePair },
   name_pick: { payload: choice(), ...choicePair },
-  chosung: { payload: choice({ chosung: 'ㅍ ㅅ' }), ...choicePair },
+  // 정답은 choice() 의 answer_index 1 = '포스 켜기'(공백 빼고 4글자) → 초성도 4개여야 한다.
+  chosung: {
+    payload: choice({ chosung: 'ㅍ ㅅ ㅋ ㄱ' }),
+    ...choicePair,
+    // ★2026-08-27 실측 회귀: 모델이 6글자 정답에 초성을 7개 붙여 **풀 수 없는 문항**이 나갔다.
+    //   validate 가 개수를 안 봐서 저장도 출제도 안 막혔다. 이 두 줄이 그 자리를 지킨다.
+    invalid: [
+      { why: '초성이 정답보다 많다', payload: choice({ chosung: 'ㅍ ㅅ ㅋ ㄱ ㄱ' }) },
+      { why: '초성이 정답보다 적다', payload: choice({ chosung: 'ㅍ ㅅ' }) },
+    ],
+  },
   scale_pick: {
     payload: { ask: '시럽이 더 많이 들어가는 쪽은?', choices: ['레귤러', '라지'], answer_index: 1, unit: '펌프', explain: '라지가 한 펌프 더' },
     correct: 1, wrongs: [0, '1', null, [1], 2, -1],
@@ -205,9 +215,17 @@ const made = [];
     console.log(`\n── ${key} (${spec.label} · ${spec.kind})`);
     if (!fx) { console.log('  ✗ 고정물 없음 — 건너뛰지 않고 실패로 센다'); fail++; row.validate = '고정물없음'; continue; }
 
-    // (1) 합법 문항인가
+    // (1) 합법 문항인가 — 그리고 **못 푸는 문항은 막는가**
+    //   ★통과만 재면 반쪽이다. validate 가 아무것도 안 막아도 초록이 나온다 —
+    //     chosung 이 정확히 그 상태였다(초성 개수를 안 봐서 풀 수 없는 문항이 그대로 저장·출제됐다).
     const vErr = spec.validate(fx.payload);
-    row.validate = check(`(1) ${key} 고정물이 validate 통과`, vErr === null, vErr ?? '') ? 'OK' : 'RED';
+    let vOk = check(`(1) ${key} 고정물이 validate 통과`, vErr === null, vErr ?? '');
+    for (const bad of fx.invalid ?? []) {
+      const got = spec.validate(bad.payload);
+      if (!check(`(1-x) ${key} 막아야 할 문항을 막는다 — ${bad.why}`, typeof got === 'string' && got.length > 0,
+        got === null ? '통과시켰다(사장이 못 푸는 문항을 저장할 수 있다)' : '')) vOk = false;
+    }
+    row.validate = vOk ? 'OK' : 'RED';
 
     // 문항 저장 — 서버 채점은 저장된 행에만 걸 수 있다
     const id = `${PREFIX}_${key}`;
