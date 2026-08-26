@@ -646,7 +646,11 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
   }, [noteCaptureNudge]);
 
   const pinnedNotice = useMemo(() => notices.find((n) => n.pinned), [notices]);
-  const unreadNotices = isOwner ? 0 : notices.filter((n) => !(n.read_by ?? []).includes(userId)).length;
+  // ★안 읽은 공지는 역할이 아니라 **작성자** 기준이다(0177: 공지는 누구나 쓴다). 예전엔 사장은 항상 0
+  //   이라 직원이 올린 공지가 사장에게 안 보였고, 직원은 자기가 쓴 공지도 '안 읽음'으로 셌다.
+  const unreadNotices = notices.filter(
+    (n) => n.authorId !== userId && !(n.read_by ?? []).includes(userId),
+  ).length;
 
   // 메시지를 할일로 — 멘션된 직원이 있으면(나 제외) 그 직원에게 배정한 채 컴포저를 연다.
   // (사장·매니저만 배정 가능. 직원은 본인 또는 담당 없음.)
@@ -899,7 +903,7 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
           nameOf={nameOf}
           members={members}
           onBack={closePanel}
-          onPost={(text) => postNotice(today, text, userId, userName, false)}
+          onPost={(text) => postNotice(today, text, userId, userName, role, false)}
           currentStore={isStoreOwner ? currentStore : undefined}
           targetStores={isStoreOwner ? broadcastTargets : undefined}
           onBroadcast={isStoreOwner ? (text, unitIds) => { void broadcastNotice(unitIds, text, false, userName); } : undefined}

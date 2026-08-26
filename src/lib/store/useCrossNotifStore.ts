@@ -2,7 +2,7 @@
 // 원시 묶음(UnitNotifData)만 보관하고 판정·목록은 화면이 crossStoreNotifs 유틸로 파생한다.
 // RLS 는 활성 매장만 노출하므로 realtime 불가 — 허브/알림 화면 진입 시점 fetch 로 갱신(폴링 온 포커스).
 import { create } from 'zustand';
-import { fetchCrossStoreNotifData, updateFeed, type UnitNotifData } from '@/lib/db';
+import { fetchCrossStoreNotifData, markFeedRead as dbMarkFeedRead, type UnitNotifData } from '@/lib/db';
 import { guardWrite } from '@/lib/store/useSyncStore';
 import { HAS_SUPABASE } from '@/lib/supabase';
 
@@ -66,6 +66,7 @@ export const useCrossNotifStore = create<State>((set, get) => ({
       ),
     });
     // 실패 = 롤백 + 배너 고지(guardWrite 관례 — markNoticeRead 등 기존 읽음처리 경로와 동일).
-    if (writeDb) void guardWrite(updateFeed(updated), () => set({ data: prev }), '읽음 처리에 실패했어요.');
+    // ★read_by 키만 원자 갱신하는 RPC(0176) — 통째 UPDATE 는 그 사이 바뀐 본문을 되돌린다(#31).
+    if (writeDb) void guardWrite(dbMarkFeedRead(feedId), () => set({ data: prev }), '읽음 처리에 실패했어요.');
   },
 }));

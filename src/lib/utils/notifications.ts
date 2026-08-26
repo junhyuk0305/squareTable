@@ -117,9 +117,11 @@ export function buildJuniorNotifications(args: {
   const tplById = (id: string) => templates.find((t) => t.id === id);
   const out: JuniorNotif[] = [];
 
-  // 공지 — 안 읽은 건 강조, 읽은 건 이력으로 함께
+  // 공지 — 안 읽은 건 강조, 읽은 건 이력으로 함께.
+  // ★내가 쓴 공지는 제외한다(0177 이후 직원도 공지를 쓴다) — 자기 글이 자기 알림에 뜨는 건 메아리다.
+  //   관리자 목록(buildManagerNotifs)이 먼저 쓰던 규칙과 같은 축.
   for (const f of feed) {
-    if (f.kind !== 'notice') continue;
+    if (f.kind !== 'notice' || f.authorId === me) continue;
     out.push({
       id: `notice_${f.id}`,
       kind: 'notice',

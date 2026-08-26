@@ -2471,14 +2471,75 @@ export async function upsertFeed(item: FeedItem): Promise<boolean> {
     supabase.from('work_feed').upsert({ id: item.id, unit_id: _unitId, feed_date: item.date, room_id: item.roomId ?? null, data: item }),
   );
 }
-// 이미 존재하는 피드 행의 data 를 "제자리 수정(UPDATE)". insert 판정을 타지 않는 게 핵심.
-// ⚠️ 직원이 공지를 읽음표시(read_by 추가)할 때 upsertFeed(=upsert)를 쓰면, upsert 의 INSERT 경로가
-//    wf_insert 정책(`notice 는 사장만 insert`)에 걸려 42501(RLS 위반)로 저장이 조용히 실패했다
-//    → 읽음이 영구 반영 안 되고 안읽음 배지도 안 지워졌다. UPDATE 는 wf_update(같은 매장 허용)만
-//    평가하므로 남이 만든 공지 행이라도 같은 매장이면 정상 저장된다. (테넌트 격리는 USING 절이 유지.)
-export async function updateFeed(item: FeedItem): Promise<boolean> {
+/**
+ * 피드 행의 **표시 한 칸만** 원자 갱신하는 RPC 묶음(0176).
+ *
+ * 왜 UPDATE 가 아니라 RPC 인가:
+ *  ① 예전 updateFeed 는 data 를 **통째로** 덮었다 → '전체 읽음'이 여러 행을 덮는 사이 사장이 고친
+ *     공지 본문이 옛 내용으로 되돌아갔다(#31). RPC 는 jsonb_set 으로 그 키만 바꾼다.
+ *     (그 함수는 호출부가 전부 여기로 옮겨오면서 사라졌다 — 행 통째 쓰기 경로를 남겨두지 않는다.)
+ *  ② 0177 이 wf_update 를 "작성자만"으로 좁힌다 → 남의 행에 남기는 표시는 UPDATE 로는 더 이상 못 한다.
+ *     권한 재검사(매장·방·관리자)는 RPC 안에 있다.
+ * 반환 false = 권한 없음/대상 없음. 호출부는 롤백하고 사용자에게 말한다(유령 성공 금지).
+ */
+async function rpcBool(label: string, fn: string, args: Record<string, unknown>): Promise<boolean> {
+  const { data, error } = await supabase.rpc(fn, args);
+  if (error) {
+    console.warn(`[db] ${label}:`, error.message);
+    reportError(`db.write:${label}`, error);
+    return false;
+  }
+  if (data !== true) {
+    console.warn(`[db] ${label}: 거부됨(권한 없음 또는 대상 없음)`);
+    reportError(`db.write.denied:${label}`, { message: 'rpc returned false' });
+    return false;
+  }
+  return true;
+}
+
+export async function markFeedRead(feedId: string): Promise<boolean> {
   if (!HAS_SUPABASE) return true;
-  return writeStrict('updateFeed', supabase.from('work_feed').update({ data: item }).eq('id', item.id).select('id'));
+  return rpcBool('markFeedRead', 'mark_feed_read', { p_feed_id: feedId });
+}
+/** 알림함 '전체 읽음' — 여러 행을 한 문장으로. 요청한 만큼 안 찍히면 실패다(부분 성공 은폐 금지). */
+export async function markAllFeedRead(feedIds: string[]): Promise<boolean> {
+  if (!HAS_SUPABASE) return true;
+  const { data, error } = await supabase.rpc('mark_all_feed_read', { p_feed_ids: feedIds });
+  if (error) {
+    console.warn('[db] markAllFeedRead:', error.message);
+    reportError('db.write:markAllFeedRead', error);
+    return false;
+  }
+  const n = typeof data === 'number' ? data : 0;
+  if (n !== feedIds.length) {
+    console.warn(`[db] markAllFeedRead: ${n}/${feedIds.length} 건만 반영됨`);
+    reportError('db.write.partial:markAllFeedRead', { message: `${n}/${feedIds.length}` });
+    return false;
+  }
+  return true;
+}
+export async function toggleFeedReaction(feedId: string, emoji: string): Promise<boolean> {
+  if (!HAS_SUPABASE) return true;
+  return rpcBool('toggleFeedReaction', 'toggle_feed_reaction', { p_feed_id: feedId, p_emoji: emoji });
+}
+/** 공지 고정 — 관리자만(RPC 안에서 auth_can_manage 검사). 상한 판정은 화면이 SSOT. */
+export async function toggleFeedPin(feedId: string): Promise<boolean> {
+  if (!HAS_SUPABASE) return true;
+  return rpcBool('toggleFeedPin', 'toggle_feed_pin', { p_feed_id: feedId });
+}
+/** 메시지→노하우 승격 흔적 — 관리자만. 남의 메시지에 남기는 표시라 RPC 여야 한다. */
+export async function markFeedPromoted(feedId: string, entryId: string): Promise<boolean> {
+  if (!HAS_SUPABASE) return true;
+  return rpcBool('markFeedPromoted', 'mark_feed_promoted', { p_feed_id: feedId, p_entry_id: entryId });
+}
+/**
+ * 공지·메시지 본문 수정 — text 키만 바꾼다(0177).
+ * ★security **invoker** 라 wf_update 정책("본인이 쓴 것만")이 그대로 판정한다. 0행 = 남의 글이거나
+ *   대상이 없다 → false(유령 성공 금지).
+ */
+export async function editFeedText(feedId: string, text: string): Promise<boolean> {
+  if (!HAS_SUPABASE) return true;
+  return rpcBool('editFeedText', 'edit_feed_text', { p_feed_id: feedId, p_text: text });
 }
 export async function deleteFeed(id: string): Promise<boolean> {
   if (!HAS_SUPABASE) return true;

@@ -84,9 +84,10 @@ export function NoticePanel({
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
-        {/* 빈 상태는 다음 행동을 알려준다(복잡도 원칙 P6). 직원은 공지를 못 쓰므로 '누가 올리는지'를 알려준다. */}
+        {/* 빈 상태는 다음 행동을 알려준다(복잡도 원칙 P6).
+            ★2026-08-26: 공지는 누구나 쓴다(0177) — 직원에게도 같은 다음 행동을 준다. */}
         {notices.length === 0 && (
-          <Text style={s.empty}>{isOwner ? '아직 공지가 없어요. 아래에 첫 공지를 적어보세요.' : '아직 공지가 없어요. 사장님이 공지를 올리면 여기에 보여요.'}</Text>
+          <Text style={s.empty}>아직 공지가 없어요. 아래에 첫 공지를 적어보세요.</Text>
         )}
         {notices.map((n, i) => (
           <Appear key={n.id} delay={stagger(i)}>
@@ -111,53 +112,52 @@ export function NoticePanel({
         <View style={{ height: 8 }} />
       </ScrollView>
 
-      {isOwner && (
-        <View style={s.footWrap}>
-          {canBroadcast && (
-            <View style={s.targetRow}>
-              <Text style={s.targetLead}>보낼 매장</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.targetChips}>
-                <View style={[s.tChip, s.tChipLocked]}>
-                  <Ionicons name="checkmark" size={12} color={InkColors.bubbleText} />
-                  <Text style={[s.tChipText, s.tChipTextOn]} numberOfLines={1}>{currentStore?.store_name} (지금)</Text>
-                </View>
-                {targetStores?.map((st) => {
-                  const on = targets.has(st.unit_id);
-                  return (
-                    <Pressable
-                      key={st.unit_id}
-                      onPress={() => toggleTarget(st.unit_id)}
-                      style={[s.tChip, on && s.tChipOn]}
-                      accessibilityRole="checkbox"
-                      accessibilityState={{ checked: on }}
-                      accessibilityLabel={`${st.store_name}에도 보내기`}
-                    >
-                      {on ? <Ionicons name="checkmark" size={12} color={InkColors.bubbleText} /> : <Ionicons name="storefront-outline" size={12} color={InkColors.ink2} />}
-                      <Text style={[s.tChipText, on && s.tChipTextOn]} numberOfLines={1}>{st.store_name}</Text>
-                    </Pressable>
-                  );
-                })}
-              </ScrollView>
-            </View>
-          )}
-          <View style={s.foot}>
-            <Ionicons name="megaphone-outline" size={18} color={InkColors.ink2} style={{ marginLeft: 4 }} />
-            <TextInput
-              value={draft}
-              onChangeText={setDraft}
-              placeholder={targets.size > 0 ? `${targets.size + 1}개 매장에 공지…` : '새 공지 작성…'}
-              placeholderTextColor={InkColors.ink3}
-              style={s.footInput}
-              onSubmitEditing={post}
-              returnKeyType="send"
-              blurOnSubmit={false}
-            />
-            <Pressable onPress={post} disabled={!draft.trim()} style={({ pressed }) => [s.footBtn, !draft.trim() && { opacity: 0.4 }, pressed && { opacity: 0.85 }]}>
-              <Text style={s.footBtnText}>{targets.size > 0 ? '전송' : '올리기'}</Text>
-            </Pressable>
+      {/* ★공지 작성은 누구나(0177). 전 매장 동시발송(targetRow)만 canBroadcast 로 사장에 남는다. */}
+      <View style={s.footWrap}>
+        {canBroadcast && (
+          <View style={s.targetRow}>
+            <Text style={s.targetLead}>보낼 매장</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.targetChips}>
+              <View style={[s.tChip, s.tChipLocked]}>
+                <Ionicons name="checkmark" size={12} color={InkColors.bubbleText} />
+                <Text style={[s.tChipText, s.tChipTextOn]} numberOfLines={1}>{currentStore?.store_name} (지금)</Text>
+              </View>
+              {targetStores?.map((st) => {
+                const on = targets.has(st.unit_id);
+                return (
+                  <Pressable
+                    key={st.unit_id}
+                    onPress={() => toggleTarget(st.unit_id)}
+                    style={[s.tChip, on && s.tChipOn]}
+                    accessibilityRole="checkbox"
+                    accessibilityState={{ checked: on }}
+                    accessibilityLabel={`${st.store_name}에도 보내기`}
+                  >
+                    {on ? <Ionicons name="checkmark" size={12} color={InkColors.bubbleText} /> : <Ionicons name="storefront-outline" size={12} color={InkColors.ink2} />}
+                    <Text style={[s.tChipText, on && s.tChipTextOn]} numberOfLines={1}>{st.store_name}</Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
           </View>
+        )}
+        <View style={s.foot}>
+          <Ionicons name="megaphone-outline" size={18} color={InkColors.ink2} style={{ marginLeft: 4 }} />
+          <TextInput
+            value={draft}
+            onChangeText={setDraft}
+            placeholder={targets.size > 0 ? `${targets.size + 1}개 매장에 공지…` : '새 공지 작성…'}
+            placeholderTextColor={InkColors.ink3}
+            style={s.footInput}
+            onSubmitEditing={post}
+            returnKeyType="send"
+            blurOnSubmit={false}
+          />
+          <Pressable onPress={post} disabled={!draft.trim()} style={({ pressed }) => [s.footBtn, !draft.trim() && { opacity: 0.4 }, pressed && { opacity: 0.85 }]}>
+            <Text style={s.footBtnText}>{targets.size > 0 ? '전송' : '올리기'}</Text>
+          </Pressable>
         </View>
-      )}
+      </View>
     </KeyboardAvoidingView>
   );
 }
@@ -205,9 +205,11 @@ function NoticeCard({
   // 두면 무음 실패다. 그땐 아는 것(발송한 매장 수)만이라도 말한다.
   const [bcastFailed, setBcastFailed] = useState(false);
 
-  // 알바가 카드를 보면 읽음 처리(한 번).
+  // 카드를 보면 읽음 처리(한 번). ★판정 축이 역할이 아니라 **작성자**다(0177: 공지는 누구나 쓴다) —
+  // 예전엔 `!isOwner` 라, 직원이 올린 공지를 사장이 읽어도 읽음이 안 찍혔다(직원은 읽혔는지 못 봄).
+  const mine = n.authorId === me;
   useEffect(() => {
-    if (!isOwner && !read) onRead(n.id);
+    if (!mine && !read) onRead(n.id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [n.id]);
 
@@ -297,14 +299,20 @@ function NoticeCard({
           <View style={{ flex: 1 }} />
         )}
 
-        {isOwner && (
+        {/* 화면에 보이는 것과 서버가 허용하는 것을 맞춘다(0177) — 안 그러면 누르면 항상 실패하는 버튼이 남는다.
+            · 고정 = 관리자(모더레이션)  · 수정 = 본인만(사장도 남의 글은 못 고친다)  · 삭제 = 본인 + 관리자 */}
+        {(isOwner || mine) && (
           <View style={s.acts}>
-            <Pressable onPress={() => onTogglePin(n.id)} style={({ pressed }) => [s.act, n.pinned && s.actOn, pressed && { opacity: 0.6 }]}>
-              <Text style={[s.actText, n.pinned && { color: '#fff' }]}>{n.pinned ? '고정해제' : '고정'}</Text>
-            </Pressable>
-            <Pressable onPress={() => { setEditText(n.text); setEditing(true); }} style={({ pressed }) => [s.act, pressed && { opacity: 0.6 }]}>
-              <Text style={s.actText}>수정</Text>
-            </Pressable>
+            {isOwner && (
+              <Pressable onPress={() => onTogglePin(n.id)} style={({ pressed }) => [s.act, n.pinned && s.actOn, pressed && { opacity: 0.6 }]}>
+                <Text style={[s.actText, n.pinned && { color: '#fff' }]}>{n.pinned ? '고정해제' : '고정'}</Text>
+              </Pressable>
+            )}
+            {mine && (
+              <Pressable onPress={() => { setEditText(n.text); setEditing(true); }} style={({ pressed }) => [s.act, pressed && { opacity: 0.6 }]}>
+                <Text style={s.actText}>수정</Text>
+              </Pressable>
+            )}
             <Pressable onPress={confirmDelete} style={({ pressed }) => [s.act, pressed && { opacity: 0.6 }]}>
               <Text style={[s.actText, { color: BrandColors.badText }]}>삭제</Text>
             </Pressable>

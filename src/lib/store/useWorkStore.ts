@@ -12,8 +12,13 @@ import {
   clearDone,
   fetchFeed,
   upsertFeed,
-  updateFeed,
   deleteFeed,
+  markFeedRead as dbMarkFeedRead,
+  markAllFeedRead as dbMarkAllFeedRead,
+  toggleFeedReaction as dbToggleFeedReaction,
+  toggleFeedPin as dbToggleFeedPin,
+  markFeedPromoted as dbMarkFeedPromoted,
+  editFeedText as dbEditFeedText,
   broadcastNotice as dbBroadcastNotice,
   subscribeWork,
   fetchTemplateKnowhow,
@@ -670,7 +675,9 @@ type State = {
   cancelTrainingRequest: (id: string) => Promise<void>;
   // task: 합성 루틴 할일(dpr_)은 s.templates 에 없으므로 완료 피드 문구/방을 호출부가 넘긴다(없으면 lookup).
   toggleTask: (date: string, templateId: string, staffId: string, staffName: string, role: 'owner' | 'junior', photoUrl?: string, task?: { text: string; roomId?: string }) => void;
-  postNotice: (date: string, text: string, authorId: string, authorName: string, important: boolean) => void;
+  /** 공지 등록. ★2026-08-26: 공지는 **누구나** 쓴다(0177) — 그래서 작성자 역할을 받는다.
+   *  예전엔 사장만 쓸 수 있어 authorRole 을 'owner' 로 박아 뒀다. */
+  postNotice: (date: string, text: string, authorId: string, authorName: string, role: 'owner' | 'junior', important: boolean) => void;
   broadcastNotice: (unitIds: string[], text: string, important: boolean, authorName: string) => Promise<{ ok: boolean; sent: number }>;
   postMessage: (date: string, text: string, authorId: string, authorName: string, role: 'owner' | 'junior', mentions?: string[], photoUrl?: string) => void;
   postComment: (noticeId: string, date: string, text: string, authorId: string, authorName: string, role: 'owner' | 'junior', mentions?: string[]) => void;
@@ -1097,7 +1104,7 @@ export const useWorkStore = create<State>((set, get) => ({
     void guardWrite(ok, () => set({ done: prevDone, feed: prevFeed }), '완료 체크 저장에 실패했어요.');
   },
 
-  postNotice: (date, text, authorId, authorName, important) => {
+  postNotice: (date, text, authorId, authorName, role, important) => {
     const room = curRoom();
     // 동일 공지 묶음(남용 #8): 같은 날·같은 방에 같은 문구 공지가 이미 있으면 중복 카드로 쌓지 않고
     // 기존 공지를 끌어올려(createdAt 갱신) 재알림(읽음 초기화)한다 → 도배 방지 + '재공지' 자연스러움.
@@ -1125,7 +1132,7 @@ export const useWorkStore = create<State>((set, get) => ({
       text,
       authorId,
       authorName,
-      authorRole: 'owner',
+      authorRole: role,
       createdAt: new Date().toISOString(),
       reactions: {},
       important,
@@ -1225,7 +1232,10 @@ export const useWorkStore = create<State>((set, get) => ({
     }));
     if (updated)
       void guardWrite(
-        upsertFeed(updated),
+        // ⚠️ 행 통째로 쓰지 않는다 — text 키만 바꾸는 RPC(0177). 통째 upsert 였을 땐 사장이 공지를
+        //    고치는 순간, 그 사이 쌓인 읽음·반응이 사장 화면의 옛 스냅샷으로 사라졌다(#31 의 반대 방향).
+        //    권한("본인 것만")은 wf_update 정책이 판정한다 — 함수는 invoker 라 RLS 를 그대로 탄다.
+        dbEditFeedText(id, text),
         () => set((s) => ({ feed: s.feed.map((f) => (f.id === id ? before : f)) })),
         '수정 저장에 실패했어요.',
       );
@@ -1262,10 +1272,10 @@ export const useWorkStore = create<State>((set, get) => ({
     }));
     if (updated)
       void guardWrite(
-        // ⚠️ upsert 금지 — 직원이 남(사장)의 공지 행에 반응하면 wf_insert(notice=사장전용)에 걸려
-        //    42501 로 실패·롤백된다(직원의 공지 '확인' 반응이 통째로 죽음). 이미 존재하는 행의
-        //    제자리 UPDATE 라 updateFeed 를 쓴다(wf_update 는 같은 매장이면 허용). markNoticeRead 와 동일.
-        updateFeed(updated),
+        // ⚠️ 행을 통째로 쓰지 않는다 — 남의 메시지 행의 reactions 키 하나만 원자 갱신하는 RPC(0176).
+        //    통째 UPDATE 였을 땐 그 사이 바뀐 본문을 옛 내용으로 되돌렸고(#31), 0177 이 본문 수정을
+        //    작성자로 좁힌 뒤로는 남의 행 UPDATE 자체가 42501 이다.
+        dbToggleFeedReaction(feedId, emoji),
         () => before && set((s) => ({ feed: s.feed.map((f) => (f.id === feedId ? before : f)) })),
         '반응 저장에 실패했어요.',
       );
@@ -1276,10 +1286,10 @@ export const useWorkStore = create<State>((set, get) => ({
     if (!before || before.promotedEntryId === entryId) return; // 없거나 이미 같은 노하우로 표시됨=무동작(멱등).
     const updated: FeedItem = { ...before, promotedEntryId: entryId };
     set((s) => ({ feed: s.feed.map((f) => (f.id === feedId ? updated : f)) }));
-    // ⚠️ toggleReaction/markNoticeRead 와 동일 — 이미 존재하는 행의 제자리 UPDATE(updateFeed).
-    //    upsert 금지(남의 메시지 승격 시 wf_insert 42501). 실패하면 낙관적 표시를 롤백.
+    // ⚠️ 남의 메시지에 남기는 표시다 — promotedEntryId 키만 바꾸는 관리자 전용 RPC(0176).
+    //    실패하면 낙관적 표시를 롤백한다.
     void guardWrite(
-      updateFeed(updated),
+      dbMarkFeedPromoted(feedId, entryId),
       () => set((s) => ({ feed: s.feed.map((f) => (f.id === feedId ? before : f)) })),
       '노하우 저장 표시에 실패했어요.',
     );
@@ -1311,7 +1321,9 @@ export const useWorkStore = create<State>((set, get) => ({
     }));
     if (updated)
       void guardWrite(
-        upsertFeed(updated),
+        // ⚠️ upsert 였다 — 남의 공지를 고정하면 wf_insert 를 타 42501 이었다. pinned 키만 바꾸는
+        //    관리자 전용 RPC(0176)로 옮기면서 그것도 같이 닫힌다.
+        dbToggleFeedPin(feedId),
         () => before && set((s) => ({ feed: s.feed.map((f) => (f.id === feedId ? before : f)) })),
         '고정 저장에 실패했어요.',
       );
@@ -1330,9 +1342,9 @@ export const useWorkStore = create<State>((set, get) => ({
     }));
     if (updated)
       void guardWrite(
-        // ⚠️ upsert 금지 — 직원이 남(사장)의 공지 행을 upsert 하면 wf_insert(notice=사장전용)에 걸려
-        //    42501 로 실패한다. 이미 존재하는 행의 제자리 UPDATE 라 updateFeed 를 쓴다.
-        updateFeed(updated),
+        // ⚠️ read_by 키만 원자 갱신(0176). 통째 UPDATE 였을 때 '전체 읽음'이 사장이 방금 고친
+        //    공지 본문을 옛 내용으로 되돌렸다(#31).
+        dbMarkFeedRead(feedId),
         () => before && set((s) => ({ feed: s.feed.map((f) => (f.id === feedId ? before : f)) })),
         '읽음 표시 저장에 실패했어요.',
       );
@@ -1340,7 +1352,7 @@ export const useWorkStore = create<State>((set, get) => ({
 
   // 알림함 '전체 읽음' — 대상 피드행(읽음 가능한 공지·멘션) 여럿을 한 번에 read_by 추가.
   // 대상 판정(무엇이 '읽을 수 있는 안 읽은 알림'인가)은 화면이 SSOT(utils/notifications)로 골라 id만 넘긴다.
-  // 이미 읽은 건 건너뛰고(멱등), 낙관적 반영 후 각 행을 제자리 UPDATE(markNoticeRead와 동일 — upsert 금지).
+  // 이미 읽은 건 건너뛰고(멱등), 낙관적 반영 후 mark_all_feed_read RPC 한 번(0176).
   markAllRead: (feedIds, userId) => {
     const ids = new Set(feedIds);
     const targets = get().feed.filter((f) => ids.has(f.id) && !(f.read_by ?? []).includes(userId));
@@ -1351,8 +1363,10 @@ export const useWorkStore = create<State>((set, get) => ({
       targets.map((f) => [f.id, { ...f, read_by: [...(f.read_by ?? []), userId] }]),
     );
     set((s) => ({ feed: s.feed.map((f) => updatedById.get(f.id) ?? f) }));
+    // ★행마다 부르지 않는다 — 한 문장으로 처리하는 RPC(0176). 행별 호출이면 통째 UPDATE 시절과
+    //   같은 경쟁이 다시 생긴다.
     void guardWrite(
-      Promise.all([...updatedById.values()].map((u) => updateFeed(u))).then((rs) => rs.every(Boolean)),
+      dbMarkAllFeedRead([...updatedById.keys()]),
       () => set((s) => ({ feed: s.feed.map((f) => beforeById.get(f.id) ?? f) })),
       '읽음 표시 저장에 실패했어요.',
     );

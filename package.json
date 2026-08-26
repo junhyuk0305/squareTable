@@ -84,6 +84,7 @@
     "qa:room-matrix": "node scripts/qa-room-matrix.mjs",
     "qa:room-cso": "node scripts/qa-room-cso.mjs",
     "qa:room-writes": "node scripts/qa-room-client-writes.mjs",
+    "qa:feed-boundary": "node scripts/qa-feed-boundary.mjs",
     "qa:swap-guard": "node scripts/qa-swap-guard.mjs",
     "qa:shift-dated": "node scripts/qa-shift-dated.mjs",
     "qa:shift-time": "node scripts/qa-shift-time.mjs",
