@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { View, Text, Pressable, StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
+import { InfoDot } from '@/components/InfoDot';
 import { BrandColors, InkColors } from '@/lib/theme/colors';
 import { Elevation, Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
@@ -25,6 +26,13 @@ export type StatCardItem = {
    * 장식용 그림을 넣지 않는다 — 그런 칸은 visual 없이 sub 로 끝낸다.
    */
   visual?: ReactNode;
+  /**
+   * 라벨 옆 ⓘ — "이 숫자가 어떻게 나왔나"를 탭으로 연다(`MiniStats.info` 와 같은 슬롯).
+   * ★금액 칸에는 사실상 필수다: 예상 급여는 분쟁 대상이라 계산 근거·공제 사유를 화면에서
+   *   지울 수 없다(2026-08-26 근무표 기준 전환). MiniStats → L4 로 갈아탈 때 이 슬롯이 없으면
+   *   그 설명이 조용히 사라진다.
+   */
+  info?: { title: string; body: string };
   /** 눌러서 갈 곳. 없으면 › 를 그리지 않는다. */
   onPress?: () => void;
   /** hot = 손봐야 할 값(주황 틴트) · dim = 아직 아무 일도 아닌 것(초안). */
@@ -68,7 +76,20 @@ export function StatCard({ item, style }: { item: StatCardItem; style?: StylePro
   const body = (
     <>
       <View style={styles.labelRow}>
-        <Text style={[styles.label, hot && styles.hotText]} numberOfLines={1}>{item.label}</Text>
+        <Text
+          style={[styles.label, item.info && styles.labelShrink, hot && styles.hotText]}
+          numberOfLines={1}
+        >
+          {item.label}
+        </Text>
+        {/* ⓘ 는 라벨 **바로 옆**이다 — 오른쪽 끝(›)에 붙이면 무엇에 대한 설명인지 안 읽힌다.
+            그래서 info 가 있을 때만 라벨이 flex 를 놓고 뒤에 빈 칸이 남는 자리를 만든다. */}
+        {item.info ? (
+          <>
+            <InfoDot size={13} title={item.info.title} body={item.info.body} />
+            <View style={styles.spacer} />
+          </>
+        ) : null}
         {item.onPress ? <Ionicons name="chevron-forward" size={13} color={hot ? BrandColors.warnText : InkColors.ink3} /> : null}
       </View>
       <Text style={[styles.value, hot && styles.hotText]} numberOfLines={1}>
@@ -123,6 +144,12 @@ const styles = StyleSheet.create({
   label: { flex: 1, minWidth: 0, fontSize: 12.5, lineHeight: 17, fontWeight: '800', color: InkColors.ink2 },
   value: { marginTop: Space.xs, fontSize: 26, lineHeight: 31, fontWeight: '900', color: InkColors.ink, letterSpacing: -1 },
   unit: { fontSize: 14, fontWeight: '800', color: InkColors.ink3, letterSpacing: 0 },
+  // info 가 있을 때만 — 라벨이 자리를 다 먹지 않고 ⓘ 를 바로 옆에 붙인다.
+  // ★`flex: 0` 를 쓰면 안 된다: RN 의 flex 단축은 basis 를 **0%** 로 잡아서 grow 0 과 겹치면
+  //   라벨 폭이 그대로 0 이 된다 — 2026-08-27 브라우저 실측에서 '내가 만든 노하우' 글자가
+  //   통째로 사라졌다(ⓘ만 남았다). 세 값을 따로 준다.
+  labelShrink: { flexGrow: 0, flexShrink: 1, flexBasis: 'auto' },
+  spacer: { flex: 1 },
   sub: { fontSize: 11.5, lineHeight: 16, color: InkColors.ink3 },
   visual: { marginTop: 'auto', paddingTop: Space.sm },
   hotText: { color: BrandColors.warnText },

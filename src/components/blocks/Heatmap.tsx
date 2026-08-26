@@ -86,6 +86,9 @@ export function Heatmap({
   const total = groups.reduce((n, g) => n + g.cells.length, 0);
   const stage = STAGE.find((s) => total <= s.max) ?? STAGE[STAGE.length - 1];
   const collapse = total > STAGE[1].max;
+  // 테두리 범례는 그 표시가 실제로 그려진 화면에서만 낸다(아래 범례 주석).
+  const hasStale = groups.some((g) => g.cells.some((c) => c.stale));
+  const hasMiss = groups.some((g) => g.cells.some((c) => c.miss && !c.stale));
   const [peek, setPeek] = useState<HeatCell | null>(null);
 
   return (
@@ -182,12 +185,23 @@ export function Heatmap({
         <View style={[styles.legendBox, { backgroundColor: BrandColors.heat3 }]} />
         <View style={[styles.legendBox, { backgroundColor: BrandColors.heat4 }]} />
         <Text style={styles.legendText}>{legend.scale[1]}</Text>
-        <View style={styles.legendGap} />
-        <View style={[styles.legendBox, styles.cellStale]} />
-        <Text style={styles.legendText}>{legend.stale}</Text>
-        <View style={styles.legendGap} />
-        <View style={[styles.legendBox, styles.cellMiss]} />
-        <Text style={styles.legendText}>{legend.miss}</Text>
+        {/* ★테두리 두 종류는 **그 축을 실제로 쓰는 화면에서만** 범례에 나온다(2026-08-27).
+            셀에 하나도 없는데 범례에 남으면 "빨간 테두리가 어딘가 있나 보다"라고 읽는다 —
+            없는 상태를 설명하는 범례는 거짓말이다. 축이 셋뿐인 화면(직원 마이스페이스)이 이 경우다. */}
+        {hasStale ? (
+          <>
+            <View style={styles.legendGap} />
+            <View style={[styles.legendBox, styles.cellStale]} />
+            <Text style={styles.legendText}>{legend.stale}</Text>
+          </>
+        ) : null}
+        {hasMiss ? (
+          <>
+            <View style={styles.legendGap} />
+            <View style={[styles.legendBox, styles.cellMiss]} />
+            <Text style={styles.legendText}>{legend.miss}</Text>
+          </>
+        ) : null}
       </View>
     </View>
   );

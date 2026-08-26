@@ -9,7 +9,10 @@ import { Appear, stagger } from '@/components/Appear';
 import { ScreenLoading } from '@/components/ScreenLoading';
 import { LoadErrorState } from '@/components/LoadErrorState';
 import { InfoDot } from '@/components/InfoDot';
-import { MiniStats } from '@/components/blocks/MiniStats';
+import { ActionRow } from '@/components/blocks/ActionRow';
+import { Sparkline } from '@/components/blocks/Sparkline';
+import { StackBar } from '@/components/blocks/StackBar';
+import { StatCardGrid } from '@/components/blocks/StatCardGrid';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useAttendanceStore } from '@/lib/store/useAttendanceStore';
 import { usePayrollStore, useWagesSettled } from '@/lib/store/usePayrollStore';
@@ -83,6 +86,22 @@ export function AttendancePanel() {
     shiftsToPayRecords(todayShifts), wage, { ...settings, weeklyHolidayPay: false, extraAllowance: 0 },
   ).total;
   const monthMin = monthRecs.reduce((sum, r) => sum + liveMinutes(r), 0);
+  // ── 이번 주 일별 근무분(월~일) — L4 스파크라인의 **실제 원장**(R4).
+  //    막대 하나 = 그날 실제로 찍힌 출퇴근 기록의 분이다. 근무가 없는 요일은 0 이고, 0 을 지어내
+  //    채우지 않는다(수·목·금·토·일 근무인 직원은 월·화가 비는 게 정상이다).
+  //    순수 계산이라 수동 메모이즈하지 않는다 — React Compiler 가 한다(위 recentRecs 와 같은 이유).
+  const weekDates = (() => {
+    const base = new Date(`${today}T00:00:00`);
+    const shift = (base.getDay() + 6) % 7; // 월요일 시작
+    return Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(base.getTime() + (i - shift) * 86400000);
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    });
+  })();
+  const weekMinutes = weekDates.map((d) =>
+    mine.filter((r) => r.date === d).reduce((sum, r) => sum + liveMinutes(r), 0),
+  );
+  const weekMin = weekMinutes.reduce((a, b) => a + b, 0);
   const monthBreakdown = computePay(shiftsToPayRecords(monthShifts), wage, settings);
   const monthPay = monthBreakdown.total;
   // 금액이 근무시간 × 시급보다 적으면 **왜 빠졌는지**를 말한다 — 안 말하면 계산이 틀린 것으로 읽힌다.
@@ -153,19 +172,49 @@ export function AttendancePanel() {
       </View>
       </Appear>
 
-      {/* 이번 달 합계 — ★2026-08-06: 흰 카드 2장(statCard)이었다.
-          이 화면은 위아래가 전부 카드(메인 액션·근무표 링크·최근 기록)라 카드가 4~5연속이었고,
-          그게 이번 개편이 없애려던 증상이다. 숫자 두 개에 카드를 세울 이유가 없어 I3(MiniStats,
-          카드 아님)로 내렸다 — 기능은 하나도 자르지 않는다(정본 §3-2: 숫자를 맞추려고 기능을 자르지 않는다).
-          아래 '시급 X 기준 · 세전 예상액' 한 줄은 MiniStats 의 ⓘ 슬롯으로 흡수했다(블록도 하나 준다). */}
+      {/* ── 이번 달 — 블록 L4(§7-2 · 형태 E "큰 값 1 + 보조 2"의 보조 2칸).
+             2026-08-27: MiniStats(숫자 2칸 나열) → 2열 지표 카드. 두 칸의 막대는 **둘 다 실제 원장**이다(R4):
+               · 왼쪽 = 이번 주 일별 근무분(출퇴근 기록). 막대 7개 = 월~일.
+               · 오른쪽 = 이번 달 급여의 **구성**(기본급·주휴·연장·야간·수당). 이력이 아니라 지금 값을 쪼갠 것.
+             ★왼쪽은 출퇴근 기록, 오른쪽은 **근무표** 기준이다(0176~0180) — 원장이 서로 달라 두 값이
+               안 맞아 보일 수 있으므로 오른쪽 보조줄에 "근무표 기준"을 박아 둔다.
+             ★금액 ⓘ 는 그대로 살린다. 예상 급여는 분쟁 대상이라 계산 근거·휴게 공제 사유를 화면에서
+               지울 수 없다(그래서 StatCard 에 info 슬롯을 뒀다). ── */}
       <Appear delay={stagger(2)}>
-        <MiniStats
+        <StatCardGrid
           items={[
-            { key: 'month', value: fmtDuration(monthMin), label: '이번 달 근무' },
+            {
+              key: 'month',
+              label: '이번 달 근무',
+              value: fmtDuration(monthMin),
+              sub: `이번 주 ${fmtDuration(weekMin)}`,
+              visual: (
+                <Sparkline
+                  values={weekMinutes}
+                  tones={weekMinutes.map((m) => (m > 0 ? 'on' : 'muted'))}
+                  accessibilityLabel={`이번 주 일별 근무, 합계 ${fmtDuration(weekMin)}`}
+                />
+              ),
+            },
             {
               key: 'pay',
-              value: wageSet ? won(monthPay) : '—',
               label: '예상 급여',
+              value: wageSet ? won(monthPay) : '—',
+              sub: wageSet ? '근무표 기준 · 세전' : undefined,
+              visual: wageSet ? (
+                <StackBar
+                  parts={[
+                    { n: monthBreakdown.base, label: '기본', color: InkColors.ink },
+                    { n: monthBreakdown.weeklyHolidayPay, label: '주휴', color: BrandColors.good },
+                    { n: monthBreakdown.overtimePay, label: '연장', color: BrandColors.warn },
+                    { n: monthBreakdown.nightPay, label: '야간', color: BrandColors.mention },
+                    { n: monthBreakdown.extra, label: '수당', color: InkColors.ink3 },
+                  ]}
+                  // 금액은 만원으로 줄여 적는다 — 캡션이 10px 이라 원 단위는 안 읽힌다(실측).
+                  // 1만원 미만 항목은 '1만 미만'으로 — 0만이라고 쓰면 없는 것처럼 읽힌다.
+                  fmt={(n) => (n >= 10000 ? `${Math.round(n / 10000)}만` : '1만 미만')}
+                />
+              ) : undefined,
               info: wageSet
                 ? {
                     title: '예상 급여는 어떻게 계산돼요?',
@@ -185,16 +234,30 @@ export function AttendancePanel() {
         />
       </Appear>
 
-      {/* 근무표 진입 — 내 시프트 확인 + 대타/맞교환 요청 */}
+      {/* ── 이 화면에서 갈 곳 — 블록 A1′(ActionRow `card` · §7-4 AR 배정).
+             ★2026-08-27: 맨바닥 링크 카드 1장과 아래 '내역 전체보기' 링크로 흩어져 있던 두 진입점을
+               **한 상자 안 형제 액션**으로 묶었다. 근무표와 내역은 같은 층(내 근무 기록을 보는 곳)이다.
+             ★노랑(주 액션)은 이 화면에 **출근 버튼 하나뿐**이라 여기엔 primary 를 주지 않는다
+               (Primary 는 화면당 1개). ── */}
       <Appear delay={stagger(3)}>
-      <Pressable onPress={() => router.push('/junior/schedule')} style={({ pressed }) => [styles.schedLink, pressed && { opacity: 0.85 }]}>
-        <Ionicons name="calendar-outline" size={18} color={InkColors.ink} />
-        <View style={{ flex: 1 }}>
-          <Text style={styles.schedLinkTitle}>근무표 · 교대 요청</Text>
-          <Text style={styles.schedLinkSub}>내 근무를 확인하고 대타·맞교환을 신청해요</Text>
-        </View>
-        <Ionicons name="chevron-forward" size={16} color={InkColors.ink3} />
-      </Pressable>
+        <ActionRow
+          items={[
+            {
+              key: 'schedule',
+              icon: 'calendar-outline',
+              label: '근무표',
+              hint: '대타 · 맞교환 신청',
+              onPress: () => router.push('/junior/schedule'),
+            },
+            {
+              key: 'timesheet',
+              icon: 'receipt-outline',
+              label: '내역',
+              hint: monthRecs.length > 0 ? `이번 달 ${monthRecs.length}건` : undefined,
+              onPress: () => router.push('/junior/timesheet'),
+            },
+          ]}
+        />
       </Appear>
 
       {/* 최근 기록 */}
@@ -207,10 +270,7 @@ export function AttendancePanel() {
             body={'시간이 틀리면 본인이 직접 수정할 수 있어요.\n기록을 눌러 출근·퇴근 시각을 고치면 돼요.\n수정하면 사장님에게 ‘수정됨’으로 표시돼요.'}
           />
         </View>
-        <Pressable onPress={() => router.push('/junior/timesheet')} hitSlop={6} style={({ pressed }) => [styles.viewAllBtn, pressed && { opacity: 0.6 }]}>
-          <Text style={styles.viewAllText}>내역 전체보기</Text>
-          <Ionicons name="chevron-forward" size={14} color={BrandColors.brand} />
-        </Pressable>
+        {/* '내역 전체보기'는 위 ActionRow 의 '내역' 칸이 가져갔다 — 같은 목적지를 한 화면에 두 번 그리지 않는다. */}
       </View>
       </Appear>
       <Appear delay={stagger(5)} style={styles.list}>
@@ -269,15 +329,10 @@ const styles = StyleSheet.create({
 
   // 이번 달 합계는 공용 <MiniStats>(I3)로 대체됨 — 로컬 statCard·wageNote 폐기(2026-08-06).
 
-  schedLink: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#FFFFFF', borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, paddingVertical: 14, paddingHorizontal: 16 },
-  schedLinkTitle: { fontSize: 15, fontWeight: '800', color: InkColors.ink },
-  schedLinkSub: { fontSize: 12, color: InkColors.ink3, marginTop: 2 },
 
   sectionTitle: { fontSize: 16, fontWeight: '700', color: InkColors.ink2 },
   recHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 },
   recTitleWrap: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  viewAllBtn: { flexDirection: 'row', alignItems: 'center', gap: 2 },
-  viewAllText: { fontSize: 13, fontWeight: '700', color: BrandColors.brand },
   list: {
     backgroundColor: '#FFFFFF',
     borderRadius: Radius.md,

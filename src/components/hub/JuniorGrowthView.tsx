@@ -17,7 +17,9 @@ import { useMemberPrefsStore } from '@/lib/store/useMemberPrefsStore';
 import { useStoreNav } from '@/lib/hooks/useStoreNav';
 import { storeColor } from '@/lib/utils/storeColor';
 import { SectionLabel } from '@/components/SectionLabel';
-import { MiniStats } from '@/components/blocks/MiniStats';
+import { ProgressRing } from '@/components/blocks/ProgressRing';
+import { RollupRows } from '@/components/blocks/RollupRows';
+import { StatCard, StatCardGrid } from '@/components/blocks/StatCardGrid';
 import { EntryDetailModal } from '@/components/EntryDetailModal';
 import { ScreenLoading } from '@/components/ScreenLoading';
 import { Appear, stagger } from '@/components/Appear';
@@ -75,11 +77,29 @@ export function JuniorGrowthView({ header }: { header: ReactNode }) {
           hits: a.hits + r.my_hits,
           taught: a.taught + r.taught,
           doneKinds: a.doneKinds + r.done_kinds,
+          // ★분모(0184). 마이그레이션 적용 전에는 이 칸이 안 와서 0 이 된다 — 그때는 링을 안 그린다.
+          entriesTotal: a.entriesTotal + (r.entries_total ?? 0),
         }),
-        { knowhow: 0, hits: 0, taught: 0, doneKinds: 0 },
+        { knowhow: 0, hits: 0, taught: 0, doneKinds: 0, entriesTotal: 0 },
       ),
     [growth],
   );
+  // 히어로(H3′) 분자 = 퀴즈로 통과한 노하우 수. 통과만 저장되는 테이블이라 행 수가 곧 "아는 노하우"다.
+  const knownCount = trainingHistory.length;
+  // 최근 통과 2건 — 링 오른쪽 뒷면(V2 대상형)이 쓴다. 원장에 제목이 있으므로 대상을 말할 수 있다(R2).
+  const recentPassed = useMemo(
+    () => [...trainingHistory].sort((a, b) => (b.verifiedAt ?? '').localeCompare(a.verifiedAt ?? '')).slice(0, 2),
+    [trainingHistory],
+  );
+  // 매장별 롤업(L5) 대표 대상 — 그 매장에서 가장 최근에 통과한 노하우 1개.
+  const latestByUnit = useMemo(() => {
+    const m = new Map<string, TrainingHistoryRow>();
+    for (const h of trainingHistory) {
+      const prev = m.get(h.unitId);
+      if (!prev || (h.verifiedAt ?? '') > (prev.verifiedAt ?? '')) m.set(h.unitId, h);
+    }
+    return m;
+  }, [trainingHistory]);
   // 훈련 통과만 있는 신입(업무 완료·노하우 0)도 실화면을 봐야 한다 — 이력이 있으면 빈 상태가 아니다.
   const empty = totals.knowhow === 0 && totals.taught === 0 && totals.doneKinds === 0 && trainingHistory.length === 0;
   const labelOf = (uid: string, fallback: string) => prefFor(uid).nickname || fallback;
@@ -145,66 +165,87 @@ export function JuniorGrowthView({ header }: { header: ReactNode }) {
     {/* 화면 제목 — 게이트 안이다. 밖에 두면 제목만 먼저 등장하고 본문이 수 백 ms 뒤에 갈아끼워진다. */}
     {header}
     <View style={{ gap: Space.md }}>
-      {/* ── 가르침 실적 — 최고 역량 = 남을 도운 기록.
-             ★2026-08-19: 0건에서도 **그린다**(옛 조건 `totals.taught > 0` 해제).
-             위 `empty` 분기는 "아무것도 안 한 신규 직원"만 잡는다. 일은 해봤는데(doneKinds>0) 아직
-             가르친 적 없는 직원은 그 분기에 안 걸려 화면은 뜨는데 이 카드만 사라졌고, 그래서
-             **"내 답이 매장에 남을 수 있다"는 것 자체를 알 경로가 없었다.** 이 앱을 쓸 이유를 말하는
-             자리라 0건일 때 오히려 보여줄 값어치가 크다.
-             ★0건에는 큰 숫자를 쓰지 않는다 — 28sp '0건'은 성과 없음을 크게 외치는 꼴이다.
-             문구도 과거형("됐어요")을 쓰지 않는다: 0건에 과거형은 거짓말이다. ── */}
+      {/* ── 히어로(H3′ · 블록어휘 §7-2) — "우리 매장 노하우 중 내가 아는 것".
+             ★2026-08-27 오밀조밀 확산 6-1 B안. 옛 판본은 노랑 '가르침' 카드가 맨 위였는데,
+             taught 는 대부분 0이라 화면 첫인상이 "아직 없음"이었다. 히어로는 신입 첫날에도
+             말이 되는 값이어야 한다 — 0%도 "이제부터 채운다"로 읽힌다.
+             ★분모(entries_total)는 0184 로 서버에서 온다. **안 오면 링을 그리지 않는다** —
+               분모 없이 링을 그리면 4/4 = 100% 처럼 거짓으로 가득 찬다(R4 가짜 금지).
+             ★감시원칙 D1~D5: 분모가 "매장 노하우 수"라 사람 비교가 아니다. 전부 본인 값이다. ── */}
       <Appear delay={stagger(0)}>
-        <View style={[styles.card, styles.taughtCard]}>
-          <View style={styles.taughtHead}>
-            <Ionicons name="school-outline" size={18} color={InkColors.ink} />
-            <Text style={styles.taughtTitle}>
-              {totals.taught > 0 ? '내 답이 매장 노하우가 됐어요' : '내 답이 매장 노하우가 돼요'}
-            </Text>
+        {totals.entriesTotal > 0 ? (
+          <View style={styles.heroCard}>
+            <ProgressRing
+              value={knownCount}
+              total={totals.entriesTotal}
+              center={`${Math.round((knownCount / totals.entriesTotal) * 100)}%`}
+              label="내가 아는 노하우"
+              swap={{
+                faces: [
+                  <View key="legend">
+                    {[
+                      { color: BrandColors.good, text: '퀴즈로 확인함', value: knownCount },
+                      { color: InkColors.bgSoft, border: true, text: '아직 안 본 노하우', value: Math.max(0, totals.entriesTotal - knownCount) },
+                    ].map((r, i) => (
+                      <View key={r.text} style={[styles.lgRow, i > 0 && styles.lgDivider]}>
+                        <View style={[styles.lgDot, { backgroundColor: r.color }, r.border && styles.lgDotBorder]} />
+                        <Text style={styles.lgText} numberOfLines={1}>{r.text}</Text>
+                        <Text style={styles.lgValue}>{r.value}</Text>
+                      </View>
+                    ))}
+                  </View>,
+                  <View key="targets">
+                    <Text style={styles.faceLabel}>가장 최근에 안 것</Text>
+                    {recentPassed.length > 0 ? (
+                      recentPassed.map((h, i) => (
+                        <View key={`${h.unitId}_${h.entryId}`} style={[styles.tgRow, i > 0 && styles.lgDivider]}>
+                          <Text style={styles.tgTitle} numberOfLines={1}>{h.entryTitle}</Text>
+                          <Text style={styles.tgSub}>{`${fmtMonthDay(h.verifiedAt)} 통과`}</Text>
+                        </View>
+                      ))
+                    ) : (
+                      <Text style={styles.tgSub}>아직 통과한 퀴즈가 없어요</Text>
+                    )}
+                  </View>,
+                ],
+                captions: [
+                  `우리 매장 노하우 ${totals.entriesTotal}개 중 ${knownCount}개를 퀴즈로 확인했어요.`,
+                  '이 화면은 나만 볼 수 있어요 — 다른 사람과 비교하지 않아요.',
+                ],
+              }}
+            />
           </View>
-          {totals.taught > 0 ? (
-            <>
-              <Text style={styles.taughtCount}>{totals.taught}건</Text>
-              <Text style={styles.caption}>그만둬도 매장에 남아, 다음 사람을 도와요</Text>
-            </>
-          ) : (
-            <>
-              <Text style={styles.emptyBody}>
-                내가 아는 것을 제안하면 사장님 확인을 거쳐 매장 노하우로 남아요. 그만둬도 남아서 다음 사람을 도와요.
-              </Text>
-              {growth[0] && (
-                <Pressable
-                  onPress={() => goStore(growth[0].unit_id, '/junior/suggest')}
-                  disabled={!!switching}
-                  style={({ pressed }) => [styles.emptyBtn, styles.taughtBtn, pressed && { opacity: 0.9 }]}
-                  accessibilityRole="button"
-                  accessibilityLabel="노하우 제안하러 가기"
-                >
-                  <Ionicons name="bulb-outline" size={15} color={InkColors.ink} />
-                  <Text style={styles.emptyBtnText}>노하우 제안하기</Text>
-                </Pressable>
-              )}
-            </>
-          )}
-        </View>
+        ) : (
+          // 분모가 없을 때(매장에 발행 노하우가 0개이거나 0184 미적용) — 링 대신 분자만 말한다.
+          <StatCard
+            item={{
+              key: 'known',
+              label: '퀴즈로 확인한 노하우',
+              value: knownCount,
+              unit: '개',
+              sub: recentPassed[0] ? `가장 최근 · ${recentPassed[0].entryTitle}` : '아직 통과한 퀴즈가 없어요',
+            }}
+          />
+        )}
       </Appear>
 
       {/* ── 내가 남긴 것 ── */}
       <Appear delay={stagger(1)}>
         <SectionLabel title="내가 남긴 것" hint="나만 볼 수 있어요" />
-        {/* 블록 I3 — 카드가 아니다. 2026-08-06: '내가 남긴 것'·'해본 업무'가 각각 stat을 품은 카드라
-            이 화면이 '제목 → 카드' 반복이었다. 세 숫자를 한 줄로 올리고 아래 목록만 카드로 남긴다.
-            '해본 업무'의 단독 1칸도 여기로 끌어올렸다 — 1칸짜리 통계에 카드를 세울 이유가 없다. */}
-        <MiniStats
+        {/* 블록 L4(§7-2) — MiniStats(숫자 3칸 나열)를 2열 지표 카드로 갈아탔다(2026-08-27).
+            숫자 옆에 대상·근거가 붙는다(R2): '내가 만든 노하우'는 참조 횟수를 보조줄로 데리고 오고,
+            0건일 때 큰 숫자를 세우던 '최근 30일 참조' 칸은 사라진다.
+            가르침 실적(taught)은 **0건이면 칸을 만들지 않고** 아래 한 줄 링크가 대신 말한다 —
+            28sp '0건'은 성과 없음을 크게 외치는 꼴이다(2026-08-19 판정 유지).
+            ★막대(visual)를 주지 않는다: 이 세 값에는 이력 원장도, 쪼갤 구성도 없다(R4). */}
+        <StatCardGrid
           items={[
             {
               key: 'knowhow',
-              value: `${totals.knowhow}개`,
               label: '내가 만든 노하우',
-            },
-            {
-              key: 'hits',
-              value: `${totals.hits}번`,
-              label: '최근 30일 참조',
+              value: totals.knowhow,
+              unit: '개',
+              sub: `최근 30일 참조 ${totals.hits}번`,
               info:
                 totals.knowhow > 0 && totals.hits === 0
                   ? {
@@ -213,7 +254,16 @@ export function JuniorGrowthView({ header }: { header: ReactNode }) {
                     }
                   : undefined,
             },
-            { key: 'done', value: `${totals.doneKinds}종`, label: '해본 업무' },
+            { key: 'done', label: '해본 업무', value: totals.doneKinds, unit: '종' },
+            ...(totals.taught > 0
+              ? [{
+                  key: 'taught',
+                  label: '매장 노하우가 된 내 답',
+                  value: totals.taught,
+                  unit: '건',
+                  sub: '그만둬도 매장에 남아요',
+                }]
+              : []),
           ]}
         />
         {/* 노하우 0개면 카드를 세우지 않는다 — 옛 판본은 테두리·그림자만 있는 빈 상자가 남았다(2026-08-06). */}
@@ -252,35 +302,41 @@ export function JuniorGrowthView({ header }: { header: ReactNode }) {
         )}
       </Appear>
 
-      {/* ── 해본 업무 — 합계는 위 MiniStats로 올라갔다(2026-08-06). 여기 남는 건 매장별 분해뿐이라
+      {/* ── 매장별 축적 — 합계는 위 L4로 올라갔다. 여기 남는 건 매장별 분해뿐이라
              **다매장 직원에게만** 그린다. 단일 매장이면 위 숫자가 곧 그 매장의 값이라 섹션 자체가 사라진다.
+             ★2026-08-27: 행 리스트 → **RollupRows(L5)**. 지표가 매장별로 대등하고 각자 대표 대상을
+               가질 수 있는 모양이라(그 매장에서 가장 최근에 통과한 노하우) §7-4 B 그대로다.
              숙련 주장 없음(완료 ≠ 숙련). ── */}
       {growth.length > 1 && (
       <Appear delay={stagger(2)}>
-        <SectionLabel title="해본 업무" hint="매장별" />
-        <View style={styles.card}>
-          {/* 행 탭 = 그 매장 업무 화면 */}
-          {growth.map((r) => (
-              <Pressable
-                key={r.unit_id}
-                onPress={() => goStore(r.unit_id, '/junior/work')}
-                disabled={!!switching}
-                style={({ pressed }) => [styles.row, pressed && { opacity: 0.85 }]}
-              >
-                <View style={[styles.dot, { backgroundColor: storeColor(r.unit_id, prefFor(r.unit_id).color) }]} />
-                <Text style={styles.rowTitle} numberOfLines={1}>{labelOf(r.unit_id, r.store_name)}</Text>
-                <Text style={styles.rowSub}>{`노하우 ${r.my_knowhow} · 해본 업무 ${r.done_kinds}종`}</Text>
-                <Ionicons name="chevron-forward" size={15} color={InkColors.ink3} />
-              </Pressable>
-            ))}
-        </View>
+        <SectionLabel title="매장별" hint="탭하면 그 매장 업무로 가요" />
+        <RollupRows
+          rows={growth.map((r) => {
+            const last = latestByUnit.get(r.unit_id);
+            return {
+              key: r.unit_id,
+              title: labelOf(r.unit_id, r.store_name),
+              // 건수는 히어로와 **같은 축**이다 — 그 매장에서 내가 아는(통과한) 노하우 수.
+              // 다른 축을 세우면 위 링과 아래 행이 서로 다른 말을 한다.
+              count: trainingHistory.filter((h) => h.unitId === r.unit_id).length,
+              unit: '개' as const,
+              // 대표 대상 1줄(R2) — 통과 이력이 있으면 그 노하우, 없으면 해본 업무로 대신 말한다.
+              target: last
+                ? `가장 최근 · ${last.entryTitle}`
+                : `해본 업무 ${r.done_kinds}종 · 내가 만든 노하우 ${r.my_knowhow}개`,
+              onPress: () => { if (!switching) goStore(r.unit_id, '/junior/work'); },
+            };
+          })}
+        />
       </Appear>
       )}
 
       {/* ── 훈련 통과 이력(0104) — 있을 때만. 통과 사실만 말하고 점수·등급을 만들지 않는다 ── */}
       {trainingHistory.length > 0 && (
         <Appear delay={stagger(3)}>
-          <SectionLabel title="퀴즈" hint="통과한 퀴즈" />
+          {/* 제목이 히어로와 같은 말을 쓴다 — 위 링의 분자가 곧 이 목록이다(되물음 테스트: "퀴즈"만으론
+              뭘 통과했는지 안 읽힌다). */}
+          <SectionLabel title="퀴즈로 확인한 노하우" hint={`${trainingHistory.length}개`} />
           <View style={styles.card}>
             {(showAllTraining ? trainingHistory : trainingHistory.slice(0, ENTRY_LIST_FIRST)).map((h) => (
               <View key={`${h.unitId}_${h.entryId}`} style={styles.row}>
@@ -302,6 +358,26 @@ export function JuniorGrowthView({ header }: { header: ReactNode }) {
               </Pressable>
             )}
           </View>
+        </Appear>
+      )}
+
+      {/* ── 제안 진입점 — 가르침 실적이 0건일 때만.
+             ★2026-08-19 판정("0건에도 이 존재를 알려야 한다")은 그대로 지키되, 자리를 맨 위 노랑 카드에서
+               맨 아래 한 줄로 내렸다(2026-08-27). 카드가 아니므로 블록 예산에 세지 않는다.
+               1건 이상이면 위 L4 '매장 노하우가 된 내 답' 칸이 같은 말을 이미 한다. ── */}
+      {totals.taught === 0 && growth[0] && (
+        <Appear delay={stagger(4)}>
+          <Pressable
+            onPress={() => goStore(growth[0].unit_id, '/junior/suggest')}
+            disabled={!!switching}
+            style={({ pressed }) => [styles.suggestLink, pressed && { opacity: 0.7 }]}
+            accessibilityRole="button"
+            accessibilityLabel="노하우 제안하러 가기"
+          >
+            <Ionicons name="bulb-outline" size={15} color={InkColors.ink2} />
+            <Text style={styles.suggestText}>내가 아는 것을 제안하면 매장 노하우로 남아요 · 제안하기</Text>
+            <Ionicons name="chevron-forward" size={14} color={InkColors.ink3} />
+          </Pressable>
         </Appear>
       )}
 
@@ -340,9 +416,6 @@ const styles = StyleSheet.create({
     marginBottom: Space.xs,
   },
   emptyBtnText: { fontSize: 14, fontWeight: '800', color: InkColors.ink },
-  // 가르침 카드(yellowSoft 면) 안에 놓이는 버튼 — emptyBtn 의 기본 면도 yellowSoft 라 같은 색끼리 겹쳐
-  // 버튼이 안 보인다. 이 자리에서만 흰 면 + 테두리로 띄운다.
-  taughtBtn: { backgroundColor: InkColors.bg, borderWidth: 1, borderColor: BrandColors.yellowDeep },
   // 스켈레톤 카드 — 가짜 수치가 없으므로 opacity 로 흐리지 않는다(흐림 = 가짜 표시였다).
   ghostCard: {
     backgroundColor: '#FFFFFF',
@@ -358,12 +431,38 @@ const styles = StyleSheet.create({
   ghostBar: { width: 64, height: 22, borderRadius: Radius.sm, backgroundColor: InkColors.bgSoft },
   ghostBody: { fontSize: 12.5, color: InkColors.ink2 },
 
-  // 가르침 실적
-  taughtCard: { backgroundColor: BrandColors.yellowSoft, borderColor: BrandColors.yellowDeep },
-  taughtHead: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingTop: Space.xs },
-  taughtTitle: { fontSize: 15, fontWeight: '900', color: InkColors.ink },
-  taughtCount: { fontSize: 28, fontWeight: '900', color: InkColors.ink, letterSpacing: -0.5, marginTop: 2 },
-  caption: { fontSize: 11.5, color: InkColors.ink3, marginTop: Space.xs, marginBottom: Space.xs },
+  // 히어로 카드(H3′) — 링 + 우측 슬롯. 노하우 허브 heroCard 와 같은 여백(데모 §4 `card.hero` 20/20/16).
+  heroCard: {
+    backgroundColor: InkColors.bg,
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    borderColor: InkColors.line,
+    paddingHorizontal: Space.gutter,
+    paddingTop: Space.gutter,
+    paddingBottom: Space.lg,
+    ...Elevation.e2,
+  },
+  // 앞면(V1 범례) — 꼬리표라 본문 15sp 하한 대상이 아니다.
+  lgRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingVertical: Space.sm + 1 },
+  lgDivider: { borderTopWidth: 1, borderTopColor: InkColors.line },
+  lgDot: { width: 9, height: 9, borderRadius: Radius.pill },
+  lgDotBorder: { borderWidth: 1, borderColor: InkColors.line },
+  lgText: { flex: 1, minWidth: 0, fontSize: 12.5, lineHeight: 17, fontWeight: '700', color: InkColors.ink2 },
+  lgValue: { fontSize: 17, lineHeight: 22, fontWeight: '900', color: InkColors.ink, letterSpacing: -0.4 },
+  // 뒷면(V2 대상형) — 최근 통과 노하우 제목. 원장에 제목이 있어 대상을 말할 수 있다(R2).
+  faceLabel: { fontSize: 11.5, lineHeight: 16, fontWeight: '800', color: InkColors.ink3, marginBottom: 2 },
+  tgRow: { paddingVertical: Space.sm, minWidth: 0 },
+  tgTitle: { fontSize: 13, lineHeight: 18, fontWeight: '800', color: InkColors.ink },
+  tgSub: { fontSize: 11.5, lineHeight: 16, color: InkColors.ink3, marginTop: 1 },
+  // 제안 진입점 한 줄 — 카드가 아니다(블록 예산 밖).
+  suggestLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Space.sm,
+    minHeight: 48,
+    paddingHorizontal: Space.sm,
+  },
+  suggestText: { flex: 1, minWidth: 0, fontSize: 13, lineHeight: 18, fontWeight: '700', color: InkColors.ink2 },
 
   statRow: { flexDirection: 'row', paddingVertical: Space.xs },
   statCell: { flex: 1, alignItems: 'center', gap: 2 },

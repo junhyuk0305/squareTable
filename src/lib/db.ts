@@ -258,6 +258,12 @@ export type MyGrowthRow = {
   my_hits: number; // 그 노하우들의 최근 30일 참조 합
   taught: number; // 내 제안이 노하우로 채택된 수(실적)
   done_kinds: number; // 내 완료 기록의 업무 종류 수(경험 — 완료≠숙련)
+  /**
+   * 그 매장의 발행 노하우 총수(0184) — 성장 탭 진행 링의 **분모**.
+   * ★optional 이다: 마이그레이션이 원격에 적용되기 전에는 이 칸이 아예 안 온다. 화면은 값이
+   *   없으면 링을 그리지 않고 큰 숫자로 떨어진다 — 분모 없이 링을 그리면 100%가 거짓으로 찬다.
+   */
+  entries_total?: number;
 };
 /** 본인의 매장별 축적(노하우·참조·채택·해본 업무) — 직원 허브 '성장' 탭. 전부 본인 데이터만(RPC 내부 강제). */
 export async function fetchMyGrowth(): Promise<DbResult<MyGrowthRow[]>> {

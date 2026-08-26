@@ -23,14 +23,26 @@ export type StackPart = {
  * 조각 폭 = 건수 비율. 0건인 조각은 그리지 않고 캡션에서도 뺀다(0은 "없어요"다 — 워딩 §5).
  * 표시 전용: 건수·라벨·색은 호출부가 정한다.
  */
-export function StackBar({ parts }: { parts: StackPart[] }) {
+export function StackBar({
+  parts,
+  fmt,
+}: {
+  parts: StackPart[];
+  /**
+   * 캡션 숫자 표기. 기본은 값 그대로(건수 지표) — **금액처럼 자릿수가 큰 값은 반드시 넘긴다**.
+   * 10px 캡션에 "1333500"이 그대로 찍히면 읽을 수 없다(2026-08-27 브라우저 실측에서 나온 것).
+   * 막대 폭은 원래 값(p.n)이 정하므로 표기를 줄여도 비율은 안 틀어진다.
+   */
+  fmt?: (n: number) => string;
+}) {
   const shown = parts.filter((p) => p.n > 0);
   if (shown.length === 0) return null;
+  const text = (n: number) => (fmt ? fmt(n) : `${n}`);
 
   return (
     <View
       accessible
-      accessibilityLabel={shown.map((p) => `${p.label} ${p.n}`).join(', ')}
+      accessibilityLabel={shown.map((p) => `${p.label} ${text(p.n)}`).join(', ')}
     >
       <View style={styles.bar}>
         {shown.map((p, i) => (
@@ -40,7 +52,7 @@ export function StackBar({ parts }: { parts: StackPart[] }) {
       <View style={styles.cap}>
         {shown.map((p, i) => (
           <Text key={i} style={styles.capText} numberOfLines={1}>
-            <Text style={styles.capN}>{p.n}</Text> {p.label}
+            <Text style={styles.capN}>{text(p.n)}</Text> {p.label}
           </Text>
         ))}
       </View>
