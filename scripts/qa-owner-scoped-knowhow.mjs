@@ -12,6 +12,7 @@
 //   ⑤ 저자 위조 불가: p_entry.creator_id 를 남으로 적어도 auth.uid() 로 덮인다
 //   ⑥ 직원(사장 아님)은 자기 매장에도 이 RPC 로 못 쓴다(소유 검사는 멤버십이 아니다)
 //   ⑦ not null 컬럼 기본값: 최소 필드만 보내도 저장된다(defaults 병합이 살아 있나)
+//   ⑧ 색인 대기 등록(0181·#16): 이 경로로 쓴 노하우가 playbook_embeddings 에 대기로 잡히는가
 //
 // 실 백엔드 대상·자가정리(@example.com → cleanup-orphan-stores.mjs 수거).
 // 사용: node scripts/qa-owner-scoped-knowhow.mjs
@@ -112,6 +113,17 @@ async function main() {
       && rowA2.version === 1 && rowA2.needs_review === false && rowA2.order_index === 0,
     JSON.stringify(rowA2));
   check('⑤ 저자 = 호출자(auth.uid())', rowA2?.creator_id === aId);
+
+  // ⑧ 0181/#16 — 이 경로로 만든 노하우가 **색인 대기로 등록되는가**.
+  //   예전엔 이 RPC 가 playbook_embeddings 를 아예 안 건드려서, 허브에서 다른 매장에 쓴 노하우는
+  //   100% 미색인이었다(의미검색에서 영영 빠지는데 사장은 검색되는 줄 안다). 대기만 남기면
+  //   앱 진입 때 embedBacklog 러너가 소진한다 — RPC 안에서 임베딩을 직접 만들 수는 없다.
+  const { data: embA2 } = await admin
+    .from('playbook_embeddings').select('unit_id, next_attempt_at, attempts').eq('entry_id', idA2).maybeSingle();
+  check('⑧ 서버 경로도 색인 대기로 등록된다(#16)', !!embA2 && embA2.next_attempt_at !== null,
+    embA2 ? `next_attempt_at=${embA2.next_attempt_at}` : '대기 행 없음 — #16 미해결');
+  // 대기 행의 매장도 **인자가 정한다** — 본문 unit_id 를 따라가면 남의 매장에 임베딩 행이 생긴다.
+  check('  └ 대기 행의 매장 = p_unit_id', embA2?.unit_id === A2, `unit=${embA2?.unit_id}`);
 
   // 활성 매장(1호점)에도 같은 RPC 가 통한다 — 다만 앱은 이 경로를 안 쓴다(RLS 경로가 정본).
   const idA1 = `pb_osk_a1_${s}`;

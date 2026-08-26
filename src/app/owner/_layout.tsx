@@ -16,6 +16,7 @@ import { useSuggestionStore } from '@/lib/store/useSuggestionStore';
 import { useMemberPrefsStore } from '@/lib/store/useMemberPrefsStore';
 import { usePaymentClaimStore } from '@/lib/store/usePaymentClaimStore';
 import { purgeExpiredFormerStaff } from '@/lib/db';
+import { retryPendingEmbeddings } from '@/lib/ai/embedBacklog';
 import { HAS_SUPABASE } from '@/lib/supabase';
 import { canManage } from '@/lib/utils/roles';
 
@@ -31,7 +32,14 @@ export default function OwnerLayout() {
   // 로그인되면 DB에서 당겨오고 실시간 구독(인박스·업무보드·출퇴근이 다른 기기 변경에 즉시 반응).
   useEffect(() => {
     if (status !== 'signed_in') return;
-    usePlaybookStore.getState().hydrate();
+    // 노하우를 받아온 다음 **색인 대기분을 소진한다**(0181). 색인은 예전엔 한 번 실패하면 영영
+    // 끝이었고(감사 #15), 허브에서 다른 매장에 쓴 노하우는 색인이 아예 안 붙었다(#16).
+    // 대기를 남기는 쪽은 embedEntry·owner_insert_knowhow 이고, 소진하는 쪽이 여기다.
+    // 본문이 필요하므로 hydrate 뒤에 돈다. 실패해도 앱 동작에 영향 없음(부수 작업).
+    void usePlaybookStore
+      .getState()
+      .hydrate()
+      .then(() => retryPendingEmbeddings(usePlaybookStore.getState().entries));
     useUnknownQueueStore.getState().hydrate();
     useWorkStore.getState().hydrate();
     useAttendanceStore.getState().hydrate();

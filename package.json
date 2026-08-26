@@ -66,6 +66,8 @@
     "qa:session": "node scripts/qa-session-readfail.mjs",
     "qa:split": "node scripts/qa-knowhow-split.mjs",
     "qa:knowhow-accuracy": "node scripts/qa-knowhow-accuracy.mjs",
+    "qa:embedding-queue": "node scripts/qa-embedding-queue.mjs",
+    "reconcile:embeddings": "node scripts/reconcile-embeddings.mjs",
     "qa:ai-core": "node scripts/qa-ai-core.mjs",
     "qa:ai-adversarial": "node scripts/qa-ai-adversarial.mjs",
     "qa:task-knowhow": "node scripts/qa-task-knowhow.mjs",

@@ -157,33 +157,56 @@ export function buildEmbedText(e: PlaybookEntry): string {
 
 /** 노하우 발행/수정 후 임베딩 색인(파이어앤포겟). 실패해도 발행은 성공·렉시컬로 검색됨.
  *  색인은 의미검색 품질에 직결 → 일시적 실패(Edge 콜드스타트·네트워크 순단)면 짧게 백오프 후 재시도.
- *  3회 모두 실패해도 조용히 포기(발행 성공·렉시컬 폴백 유지). */
-export async function embedEntry(e: PlaybookEntry): Promise<void> {
-  if (USE_MOCK) return;
+ *
+ *  ★0181: 3회가 다 실패해도 **끝이 아니다.** 시도 전에 playbook_embeddings 에 "색인 대기"를 먼저
+ *  남기고(next_attempt_at), 성공하면 엣지가 그 표시를 지운다. 실패해서 표시가 남으면 다음 앱 진입 때
+ *  embedBacklog.retryPendingEmbeddings() 가 주워서 다시 시도한다 — 이게 없던 게 프로세스 결함이었다
+ *  (감사 #15: 실패한 노하우는 의미검색에서 영영 빠지는데 사장은 검색되는 줄 알았다).
+ *
+ *  @param markPending 대기 표시를 새로 남길지. 재시도 러너는 이미 대기 행을 들고 있으므로 false —
+ *         true 로 부르면 백오프 계산에 쓰는 next_attempt_at 을 매번 now() 로 되돌려 백오프가 안 늘어난다.
+ *  @returns 색인 성공 여부(러너가 이걸로 실패 백오프를 갱신한다).
+ */
+export async function embedEntry(e: PlaybookEntry, markPending = true): Promise<boolean> {
+  if (USE_MOCK) return true;
   // 발행 상태만 색인(초안은 검색에서 제외되므로 불필요).
-  if (e.status !== 'published') return;
+  if (e.status !== 'published') return true;
+
+  if (markPending) await markEmbedPending(e);
+
   const payload = { entryId: e.id, text: buildEmbedText(e) };
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
       const res = await edgePost('embed', payload);
-      if (res !== null) return; // 색인 성공
+      if (res !== null) return true; // 색인 성공 — 대기 표시는 엣지가 지웠다
       // ★가장 흔한 실패 경로가 여기였다(#15): 소프트 실패(null)는 throw 를 안 하므로 아래 catch 를
       //   타지 않고, 3회를 다 돌고 **아무 것도 안 한 채 반환**했다. 그래서 미색인 노하우가 쌓여도
-      //   계측이 0건이었다. 마지막 시도까지 null 이면 실패로 보고한다.
+      //   계측이 0건이었다. 마지막 시도까지 null 이면 실패로 보고한다(대기 표시는 남는다).
       if (attempt === 3) {
         reportError('search.embed.failed', { message: '3회 모두 소프트 실패(null)' }, { entryId: e.id });
-        return;
+        return false;
       }
     } catch (err) {
       if (attempt === 3) {
-        // ★S1: 색인 실패 시 이 노하우는 의미검색에서 영영 빠진다(렉시컬만 커버) — 사장은 검색되는 줄 안다.
-        //   조용히 사라지던 걸 원격 계측(어느 노하우가 미색인인지 팀이 추적 가능).
-        console.warn('[search] embed failed after 3 tries (non-fatal):', err);
+        console.warn('[search] embed failed after 3 tries (대기로 남김):', err);
         reportError('search.embed.failed', err, { entryId: e.id });
-        return;
+        return false;
       }
     }
     // 마지막 시도가 아니면 백오프(0.6s → 1.2s) 후 재시도.
     if (attempt < 3) await new Promise((r) => setTimeout(r, 600 * attempt));
   }
+  return false;
+}
+
+/** 색인 대기 표시. 성공하면 엣지(handleEmbed)가 next_attempt_at 을 지운다.
+ *  ★embedding 컬럼은 건드리지 않는다 — 수정 재색인 때 낡은 벡터라도 남아 있어야
+ *  재색인이 끝날 때까지 그 노하우가 의미검색에서 사라지지 않는다(0181 헤더 참조).
+ *  ★attempts 도 건드리지 않는다 — 러너의 백오프 누적이 초기화되면 안 된다.
+ *  실패해도 조용히 넘어간다: 대기 등록에 실패했다고 발행이 막히면 안 된다. */
+async function markEmbedPending(e: PlaybookEntry): Promise<void> {
+  const { error } = await supabase
+    .from('playbook_embeddings')
+    .upsert({ entry_id: e.id, unit_id: e.unit_id, next_attempt_at: new Date().toISOString() }, { onConflict: 'entry_id' });
+  if (error) reportError('search.embed.pendingMarkFailed', error, { entryId: e.id });
 }

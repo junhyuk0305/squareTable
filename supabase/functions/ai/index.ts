@@ -365,11 +365,17 @@ async function handleEmbed(payload: any, user: { unitId: string | null }, authz:
   if (!row || row.unit_id !== user.unitId) throw new Error('forbidden');
 
   const vec = await callEmbed(text, 'RETRIEVAL_DOCUMENT');
+  // ★0181: 색인 성공 = 대기 해제. next_attempt_at 을 여기서 지우지 않으면 재시도 러너
+  //   (embedBacklog.ts)가 이미 색인된 건을 계속 다시 집어 배치를 낭비한다 — 대기를 남기는 쪽과
+  //   지우는 쪽이 짝이 맞아야 프로세스가 닫힌다.
   const { error } = await sb.from('playbook_embeddings').upsert({
     entry_id: entryId,
     unit_id: user.unitId,
     embedding: toVecLiteral(vec),
     embedded_at: new Date().toISOString(),
+    attempts: 0,
+    last_error: null,
+    next_attempt_at: null,
   });
   if (error) {
     console.error('embed upsert:', error);

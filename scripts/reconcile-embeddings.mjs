@@ -69,6 +69,9 @@ const EMBED_DIM = 768;
 const CAT_LABEL = { Routine: '루틴', Event: '돌발', Context: '원칙', 'Know-how': '꿀팁' };
 
 // --fix 재색인 시 외부 임베딩 API 호출 간 페이싱(ms). 매장 분당 캡·Gemini 레이트리밋 보호용 보수값.
+// 이 횟수 이상 재시도하고도 실패 중이면 자동 복구로 안 풀리는 것 — 사람이 봐야 한다.
+const STUCK_ATTEMPTS = 3;
+
 const PACE_MS = 250;
 const MAX_RETRY = 3;
 
@@ -172,7 +175,10 @@ async function detect() {
     log('   ⚠ --stale 무시: playbook_embeddings.content_hash 컬럼이 없습니다(0034 미적용).');
     log('     stale(내용 drift) 감지는 content_hash 도입 후에만 가능. 누락(row 없음)만 점검합니다.');
   }
-  const cols = hashAvailable ? 'entry_id, embedding, content_hash' : 'entry_id, embedding';
+  // 0181: 대기 메타(next_attempt_at·attempts)도 함께 본다 — "누락이 몇 건인가"만으로는
+  //   자동 복구가 돌고 있는지 알 수 없다. **재시도가 계속 실패 중인 건(stuck)이 진짜 경보다.**
+  const base = hashAvailable ? 'entry_id, embedding, content_hash' : 'entry_id, embedding';
+  const cols = `${base}, next_attempt_at, attempts`;
   const embByEntry = new Map();
   for (let from = 0; ; from += PAGE) {
     const { data, error } = await db
@@ -207,13 +213,19 @@ function summarize(entries, embByEntry, targets, hashAvailable) {
   // 매장별 발행 총수 / 임베딩 보유수 / 누락수 / stale수.
   const byUnit = new Map();
   const ensure = (u) =>
-    byUnit.get(u) ?? byUnit.set(u, { unitId: u, publishedTotal: 0, embeddedTotal: 0, missing: 0, stale: 0 }).get(u);
+    byUnit.get(u) ?? byUnit.set(u, { unitId: u, publishedTotal: 0, embeddedTotal: 0, missing: 0, stale: 0, pending: 0, stuck: 0 }).get(u);
 
   for (const e of entries) {
     const s = ensure(e.unit_id);
     s.publishedTotal++;
     const emb = embByEntry.get(e.id);
     if (emb && emb.embedding != null) s.embeddedTotal++;
+    // 대기 = 앱이 다음 진입 때 소진할 예정. stuck = 재시도를 STUCK_ATTEMPTS 회 넘게 하고도 실패 중
+    //   → 자동 복구로 안 풀리는 것이므로 사람이 봐야 한다(모델 퇴역·권한 등 구조적 실패).
+    if (emb && emb.next_attempt_at != null) {
+      s.pending++;
+      if ((emb.attempts ?? 0) >= STUCK_ATTEMPTS) s.stuck++;
+    }
   }
   for (const t of targets) {
     const s = ensure(t.entry.unit_id);
@@ -231,9 +243,11 @@ function summarize(entries, embByEntry, targets, hashAvailable) {
       acc.embeddedTotal += u.embeddedTotal;
       acc.missing += u.missing;
       acc.stale += u.stale;
+      acc.pending += u.pending;
+      acc.stuck += u.stuck;
       return acc;
     },
-    { publishedTotal: 0, embeddedTotal: 0, missing: 0, stale: 0 },
+    { publishedTotal: 0, embeddedTotal: 0, missing: 0, stale: 0, pending: 0, stuck: 0 },
   );
   totals.needsReindex = totals.missing + totals.stale;
   totals.coverage =
@@ -279,6 +293,10 @@ function printReport({ units, totals, hashAvailable }) {
     `합계  발행 ${totals.publishedTotal} · 임베딩 ${totals.embeddedTotal} · 누락 ${totals.missing}` +
       (hashAvailable ? ` · stale ${totals.stale}` : '') +
       ` · 커버리지 ${(totals.coverage * 100).toFixed(1)}%`,
+  );
+  log(
+    `대기  ${totals.pending}건(앱 진입 때 자동 소진)` +
+      (totals.stuck > 0 ? ` · ★막힘 ${totals.stuck}건(재시도 ${STUCK_ATTEMPTS}회 이상 실패 — 사람이 봐야 함)` : ' · 막힘 0건'),
   );
   if (totals.needsReindex === 0) log('✓ 모든 매장 색인 정합 — 재색인 대상 없음.');
   else log(`→ 재색인 대상 ${totals.needsReindex}건. --fix 로 맞출 수 있습니다.`);
