@@ -34,8 +34,12 @@ const BLOCK_LEAF = new Set([
   //   KnowhowRows = 표시 전용 / SquareRowsEditor = 그것에 칸 편집(E2)을 얹은 래퍼.
   //   둘은 서로 다른 파일에 있어 한 화면에서 겹쳐 세지 않는다.
   'KnowhowRows', 'SquareRowsEditor',
+  // 2026-08-27 추가 — "오밀조밀" v2(블록어휘 §7-2). 한 덩어리로 서는 것만:
+  //   StatCardGrid(L4 2열 지표) · FocusCard(H4, 옛 InboxHeroCard 개명) · RollupRows(L5) · PickRow(L6) · Heatmap(H5).
+  //   Sparkline·StackBar 는 지표 칸 **안의** 시각요소(원자)라 블록이 아니다 — 넣으면 칸마다 +1 이 된다.
+  'StatCardGrid', 'FocusCard', 'RollupRows', 'PickRow', 'Heatmap',
   // 이미 있어서 재구현 금지인 표시 블록들(ui.md "이미 있는 것도 재구현 금지")
-  'InboxHeroCard', 'StarterChecklist', 'PlanUpgradeNotice', 'EmptyState',
+  'StarterChecklist', 'PlanUpgradeNotice', 'EmptyState',
   'KnowhowCarousel', 'FeatureCarousel', 'BrowseList', 'NotificationList',
   'NudgeCard', 'SegmentTabs', 'PricingTable', 'NotificationEnableCard',
   'FreeUntilNotice', 'DeflectCard', 'TimesheetView',

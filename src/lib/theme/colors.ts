@@ -79,6 +79,14 @@ export const BrandColors = {
   badSoft:     '#FFEFEE',
   goodSoft:    '#EBFBF4',
   mentionSoft: '#E9F3FF',
+  // 히트맵 4단계(2026-08-27 블록어휘 §7-2 H5) — 면 전용. 색 = **아는 직원 비율**(옅음→전원).
+  // 0단계(문항 없음)는 흰 면 + 점선이라 토큰이 없다.
+  // ★heat1 은 goodSoft(#EBFBF4)보다 한 단계 진하다 — 점선 칸(문항 없음)과 구분돼야 한다.
+  // heat4 = goodSolid 와 같은 값(전원이 안다). 글자를 얹지 않는 면이라 대비 제약이 없다.
+  heat1: '#D7F5E6',
+  heat2: '#8EE3BD',
+  heat3: '#2ECB8E',
+  heat4: '#04794B',
   // 주의/확인필요 표면 — 브랜드 노랑(긍정 액센트)과 **색상(hue)** 을 벌려
   // '미검증·확인 필요' 배너/뱃지가 노랑 CTA로 오인되지 않게 한다. (2026-07-07 의도 유지)
   // 오인 방지는 채도가 아니라 hue가 담당한다: warnSoft=주황 계열, yellowSoft=레몬크림.
