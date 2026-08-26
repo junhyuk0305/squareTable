@@ -32,6 +32,8 @@
 //   --fix 없이는 어떤 쓰기/외부호출도 하지 않는다(읽기 전용 점검이 기본).
 
 import { createClient } from '@supabase/supabase-js';
+import { dirname, join } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 // ── 인자 파싱 ────────────────────────────────────────────────
 const ARGS = process.argv.slice(2);
@@ -63,10 +65,6 @@ if (FIX && !GEMINI) {
 
 const EMBED_MODEL = 'gemini-embedding-001';
 const EMBED_DIM = 768;
-// searchClient.getCategoryMeta(label) 과 backfill 의 CAT_LABEL 과 동일해야 해시·텍스트가 일치한다.
-// (SSOT 주의: 이 라벨맵/필드순서/구분자/slice 길이가 searchClient.buildEmbedText 와 어긋나면
-//  hash 가 영구 불일치 → --stale 가 전건을 재색인 대상으로 본다. 변경 시 세 곳을 함께 맞출 것.)
-const CAT_LABEL = { Routine: '루틴', Event: '돌발', Context: '원칙', 'Know-how': '꿀팁' };
 
 // --fix 재색인 시 외부 임베딩 API 호출 간 페이싱(ms). 매장 분당 캡·Gemini 레이트리밋 보호용 보수값.
 // 이 횟수 이상 재시도하고도 실패 중이면 자동 복구로 안 풀리는 것 — 사람이 봐야 한다.
@@ -77,29 +75,26 @@ const MAX_RETRY = 3;
 
 const db = createClient(URL, KEY, { auth: { persistSession: false } });
 
-// ── 임베딩 입력 텍스트 — searchClient.buildEmbedText / backfill 과 동일 구성 ──
-function buildEmbedText(e) {
-  const sq = e.square ?? {};
-  return [
-    e.title,
-    CAT_LABEL[e.category] ?? e.category,
-    sq.situation,
-    (sq.action?.steps ?? []).join(' '),
-    sq.extract?.dont,
-    (e.search_keywords ?? []).join(' '),
-  ]
-    .filter(Boolean)
-    .join('\n')
-    .slice(0, 4000);
-}
+// ── 임베딩 입력 텍스트 — 조립 규칙은 앱과 **같은 파일**을 부른다(SSOT, 2026-08-27) ──
+// 예전엔 이 스크립트가 자기 복사본을 갖고 있었고 섹션 프리펜드가 빠져 있어서, 같은 노하우도
+// 앱이 색인하면 `[음료 제조] 자몽에이드…`, 이 스크립트가 색인하면 `자몽에이드…` 로 서로
+// 다른 텍스트가 됐다(실측: 섹션 있는 색인 25건 중 24건이 스크립트판). 복사본을 지우고
+// src/lib/ai/embedText.ts 를 직접 부른다 — 그 파일은 alias/RN 의존이 없어 node 가 읽을 수 있다.
+const { buildEmbedText: buildEmbedTextSSOT, embedTextHash } = await import(
+  pathToFileURL(join(dirname(fileURLToPath(import.meta.url)), '..', 'src', 'lib', 'ai', 'embedText.ts')).href
+);
 
-// 임베딩 입력 텍스트의 안정 해시(djb2). content_hash 로 stale(수정 후 미재색인) 감지에 쓴다.
-// 클라(searchClient.embedTextHash)·Edge·이 스크립트가 동일 알고리즘이어야 일관(SSOT 주의 동일).
-function embedTextHash(text) {
-  let h = 5381;
-  for (let i = 0; i < text.length; i++) h = ((h << 5) + h + text.charCodeAt(i)) | 0;
-  return (h >>> 0).toString(16);
+// 매장별 커스텀 카테고리(0096, schedule_config.knowhow_categories) 캐시.
+// 앱은 hydrate 로 이걸 들고 있으므로, 스크립트도 같은 값을 넣어야 카테고리 라벨이 일치한다.
+const customsByUnit = new Map();
+async function customsFor(unitId) {
+  if (customsByUnit.has(unitId)) return customsByUnit.get(unitId);
+  const { data } = await db.from('schedule_config').select('knowhow_categories').eq('unit_id', unitId).maybeSingle();
+  const list = Array.isArray(data?.knowhow_categories) ? data.knowhow_categories : [];
+  customsByUnit.set(unitId, list);
+  return list;
 }
+const buildEmbedText = async (e) => buildEmbedTextSSOT(e, await customsFor(e.unit_id));
 
 // ── Gemini 임베딩(백오프 재시도) — backfill.embed 과 동일, 재시도만 추가 ──
 async function embed(text) {
@@ -159,7 +154,9 @@ async function detect() {
     const to = Math.min(from + PAGE, LIMIT) - 1;
     const { data, error } = await db
       .from('playbook_entries')
-      .select('id, unit_id, category, title, square, search_keywords, created_at')
+      // ★section 필수 — 색인 텍스트의 맨 앞 프리펜드(`[음료 제조] …`)에 쓰인다. 2026-08-27 이전에는
+      //   이 컬럼을 아예 안 읽어서, 조립 함수를 고쳐도 섹션이 도착하지 않아 프리펜드가 빠졌다.
+      .select('id, unit_id, category, section, title, square, search_keywords, created_at')
       .eq('status', 'published')
       .order('created_at', { ascending: false })
       .range(from, to);
@@ -168,6 +165,20 @@ async function detect() {
     if (!data || data.length < PAGE) break;
   }
   log(`   발행 노하우 ${entries.length}건`);
+
+  // ★색인 텍스트가 읽는 필드가 실제로 도착했는지 확인한다(2026-08-27).
+  //   조립 함수를 SSOT 로 합쳐도 **select 에서 컬럼이 빠지면** 같은 드리프트가 그대로 재발한다 —
+  //   실제로 그렇게 섹션 프리펜드가 빠져 있었다. 값이 null 인 것과 키가 아예 없는 것은 다르다.
+  const REQUIRED = ['title', 'category', 'section', 'square', 'search_keywords'];
+  const sample = entries[0];
+  if (sample) {
+    const absent = REQUIRED.filter((k) => !(k in sample));
+    if (absent.length) {
+      log(`✗ select 에서 색인 텍스트 필드가 빠졌습니다: ${absent.join(', ')}`);
+      log('  이대로 두면 앱이 만드는 색인 텍스트와 달라집니다. 위 .select(...) 를 고치세요.');
+      process.exit(1);
+    }
+  }
 
   // 임베딩 현황 — content_hash 가 있으면 함께(stale 판정용).
   const hashAvailable = STALE ? await hasContentHashColumn() : false;
@@ -199,7 +210,7 @@ async function detect() {
     let stale = false;
     if (!missing && hashAvailable) {
       // (c) 내용 drift: 현재 텍스트 해시와 저장된 content_hash 불일치.
-      const curHash = embedTextHash(buildEmbedText(e));
+      const curHash = embedTextHash(await buildEmbedText(e));
       stale = emb.content_hash == null || emb.content_hash !== curHash;
     }
     if (missing || stale) targets.push({ entry: e, reason: missing ? 'missing' : 'stale' });
@@ -311,7 +322,7 @@ async function fix(targets) {
   for (const t of targets) {
     const e = t.entry;
     try {
-      const text = buildEmbedText(e);
+      const text = await buildEmbedText(e);
       const embedding = await embed(text);
       const row = {
         entry_id: e.id,

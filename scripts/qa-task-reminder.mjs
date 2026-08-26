@@ -56,12 +56,29 @@ const minsNow = kst.getHours() * 60 + kst.getMinutes();
 const tMin = Math.max(0, minsNow - 5);
 const hhmm = (m) => `${pad(Math.floor((m % 1440) / 60))}:${pad(m % 60)}`;
 const T = hhmm(tMin);
-// T 를 감싸는 근무 구간(±10분). 자정을 넘는 구간은 서버가 심야 시프트로 올바르게 해석한다.
-// 좁게 잡는 이유: "근무자 0명" 케이스도 **1시간 발송 창 안**(T-30분)에서 검사해야 실제로 실행된다.
-const SHIFT_START = hhmm((tMin - 10 + 1440) % 1440);
-const SHIFT_END = hhmm((tMin + 10) % 1440);
 // 발송 창(직전 1시간) 안이면서 근무 구간 밖인 시각.
-const OUTSIDE = hhmm((tMin - 30 + 1440) % 1440);
+// ★T 보다 이른 시각은 **오늘(KST) 안에서만** 만든다 — 전날로 감아 돌리면 안 된다(2026-08-27).
+//   서버 due_task_reminders 는 `w.remind_at <= 지금(HH24:MI)` 로 대상을 고른다. 예전처럼
+//   `(tMin - 30 + 1440) % 1440` 로 감으면 KST 00:00~00:34 에 OUTSIDE 가 '23:xx' 가 되고
+//   '23:40' <= '00:15' 가 **거짓**이라 그 할일이 대상에서 통째로 빠진다. 그러면 ④ '근무자 0명
+//   → 매장 전원' 과 ⑥ '발송 원장에 선점 기록' 두 검사가 제품과 무관하게 RED 가 된다(22/2).
+//   뿌리는 하나다 — ④에서 안 잡히니 ⑥의 발송 기록도 없는 것이다.
+const outsideMin = Math.max(0, tMin - 30);
+// T 를 감싸는 근무 구간. 자정을 넘는 구간은 서버가 심야 시프트로 올바르게 해석한다.
+// 좁게 잡는 이유: "근무자 0명" 케이스도 **1시간 발송 창 안**(T-30분)에서 검사해야 실제로 실행된다.
+// ★시작은 반드시 OUTSIDE **뒤**여야 한다(그래야 OUTSIDE 가 '근무 시간 밖'이 된다). 자정 직후엔
+//   tMin-10 이 0 밑으로 내려가 OUTSIDE 와 겹치므로 여기서 끌어올린다. 낮 시간대 값은 안 바뀐다.
+const shiftStartMin = Math.min(tMin, Math.max(outsideMin + 1, tMin - 10));
+const SHIFT_START = hhmm(shiftStartMin);
+const SHIFT_END = hhmm(tMin + 10);
+const OUTSIDE = hhmm(outsideMin);
+// KST 00:00~00:05 에는 T 자체가 00:00 이라 "T 보다 이르면서 오늘 안"인 시각이 존재하지 않는다.
+// 시나리오를 만들 수 없는 것이므로 거짓 실패도 거짓 통과도 내지 않고 셋업 오류(2)로 끊는다.
+if (outsideMin >= shiftStartMin) {
+  console.error(`✗ KST ${T} 에는 이 시나리오를 만들 수 없습니다 — 오늘 안에 '근무 시간 밖' 시각이 없습니다.`);
+  console.error(`  제품 결함이 아닙니다. KST 00:06 이후(약 ${6 - minsNow}분 뒤)에 다시 실행하세요.`);
+  process.exit(2);
+}
 
 const qaPhones = [`0106${s.slice(0,7)}`, `0108${s.slice(0,7)}`, `0109${s.slice(0,7)}`];
 const made = { templates: [], shifts: [], swaps: [], done: [], sent: [] };

@@ -45,6 +45,12 @@ const __dir = dirname(fileURLToPath(import.meta.url));
 // ── CLI 플래그 ──────────────────────────────────────────────────────────────
 const argv = process.argv.slice(2);
 const JSON_OUT = argv.includes('--json');
+// --no-vector: 벡터(색인) 경로를 끄고 렉시컬 단독으로 돈다. Edge 'search' 를 아예 안 부르므로
+//   이 모드의 검색 호출 비용은 0이다(verbose 재작성 'intent' 는 벡터와 무관해 그대로 둔다 —
+//   두 조건에서 그것까지 달라지면 "벡터의 기여"가 아니라 "벡터+재작성의 기여"를 재게 된다).
+//   재현 대상은 라이브의 실제 폴백 경로다: searchClient.hybridSearch 는 벡터가 없으면
+//   렉시컬 결과를 그대로 반환한다 → 즉 이 모드는 "의미검색이 죽었을 때의 서비스"와 동형이다.
+const NO_VECTOR = argv.includes('--no-vector');
 const flagVal = (name) => { const i = argv.indexOf(name); return i >= 0 ? argv[i + 1] : undefined; };
 if (argv.includes('--synthetic')) {
   // 합성 distractor 규모 시뮬은 service_role 쓰기 + 전용 테스트 매장이 필요해 기본 모드에서 막는다.
@@ -114,7 +120,7 @@ function loadLabelset() {
           ? [...new Set([...(c.expected_entry_ids || []), ...(c.expected_entry_id ? [c.expected_entry_id] : [])])]
           : (c.expected_entry_id != null ? [c.expected_entry_id] : []);
         const shouldServe = typeof c.should_serve === 'boolean' ? c.should_serve : expIds.length > 0;
-        return { id: c.id, query: c.query, expectedIds: expIds, expectedKeywords: c.expected_keywords || [], shouldServe, note: c.note || '' };
+        return { id: c.id, group: c.group ?? null, query: c.query, expectedIds: expIds, expectedKeywords: c.expected_keywords || [], shouldServe, note: c.note || '' };
       });
       return { path: p, version: raw.version ?? null, notes: raw.notes ?? '', cases: norm };
     } catch { /* 다음 후보 */ }
@@ -274,13 +280,23 @@ async function embeddingCoverage(entryIds) {
 // searchClient.hybridSearch + useChatStore 후보 게이트(CANDIDATE_FLOOR/MAX_CANDIDATES)를 동형 재현.
 async function hybridReproduce(query, entries, byId) {
   const lex = lexicalSearch(query, entries, { topK: TOPK });
-  const v = await ai('search', { query }); // { candidates:[{id,similarity}], topSimilarity } 또는 error
-  let calls = 1;
+  // --no-vector 면 Edge를 아예 안 부른다(호출 0). 아래 !vecCands 분기가 곧 라이브의 렉시컬 폴백이다.
+  // checkIds 는 searchClient.hybridSearch 와 동일하게 렉시컬 상위 후보를 넘긴다(미색인 식별용).
+  const v = NO_VECTOR
+    ? null
+    : await ai('search', { query, checkIds: (lex.candidates ?? []).map((c) => c.entry.id) });
+  let calls = NO_VECTOR ? 0 : 1;
   const lexRank = new Map();
   (lex.candidates || []).forEach((c, i) => lexRank.set(c.entry.id, i));
   const vecCands = (v && Array.isArray(v.candidates)) ? v.candidates : null;
   const vecRank = new Map();
   if (vecCands) vecCands.forEach((c, i) => vecRank.set(c.id, i));
+
+  // ★미색인 보정 — searchClient.hybridSearch 와 동일 로직(반드시 동기).
+  //   색인이 없어 벡터 후보가 될 수 없었던 노하우는 "벡터가 낮게 봤다"가 아니라 "증거 없음"이다.
+  //   벌주지도 상주지도 않도록 벡터 순위를 렉시컬 순위와 같다고 본다.
+  //   (아래 SERVE 게이트에서도 쓰므로 분기 밖에 둔다 — 렉시컬 폴백일 때는 빈 집합이라 무해하다.)
+  const unindexed = new Set(v?.unindexedIds ?? []);
 
   // 서버 실패 시 렉시컬 폴백(searchClient와 동일: vec 없으면 lexical 그대로).
   let ranked, confidence;
@@ -290,7 +306,8 @@ async function hybridReproduce(query, entries, byId) {
   } else {
     const ids = new Set([...lexRank.keys(), ...vecRank.keys()]);
     const fused = [...ids].map((id) => {
-      let s = 0; const lr = lexRank.get(id), vr = vecRank.get(id);
+      let s = 0; const lr = lexRank.get(id);
+      const vr = vecRank.get(id) ?? (lr !== undefined && unindexed.has(id) ? lr : undefined);
       if (lr !== undefined) s += 1 / (RRF_K + lr);
       if (vr !== undefined) s += 1 / (RRF_K + vr);
       return { id, s };
@@ -313,7 +330,11 @@ async function hybridReproduce(query, entries, byId) {
     !GATE_ON ||
     (topId != null && topId === lexTopId && lexScoreOfTop >= SERVE_LEX_MIN && lexMargin >= SERVE_LEX_MARGIN) ||
     vecMargin >= SERVE_VEC_OVERRIDE;
-  const matched = confidence >= SERVE && grounded ? (ranked[0] ?? null) : null;
+  // ★확신의 근거는 서빙되는 그 노하우의 것이어야 한다 — searchClient 와 동일(반드시 동기).
+  //   벡터 근거가 없는(미색인) 후보는 렉시컬만으로 문턱을 넘을 때만 확정한다.
+  const topLacksVectorEvidence = topId != null && unindexed.has(topId);
+  const selfEvidenced = !topLacksVectorEvidence || lex.confidence >= SERVE;
+  const matched = confidence >= SERVE && grounded && selfEvidenced ? (ranked[0] ?? null) : null;
   return { ranked, confidence, matched, shownCandidates, vecMissing: !vecCands, calls, lexConf: lex.confidence, vecTop1, vecTop2 };
 }
 
@@ -374,7 +395,7 @@ async function measureCase(c, entries, byId) {
   }
   // 색인 미커버 진단: 정답이 벡터 후보에서 빠질 수 있음(searchClient: published+embedding non-null만).
   return {
-    id: c.id, query: c.query, route, served, confidence,
+    id: c.id, group: c.group, query: c.query, route, served, confidence,
     top1, top1Title: top1 ? (byId.get(top1)?.title ?? top1) : null,
     expectedIds: c.expectedIds, isPositive, shouldServe: c.shouldServe,
     top1Correct, rankOfExpected, ranked: usedRanked.slice(0, 5), calls: totalCalls,
@@ -434,6 +455,7 @@ function sweep(results) {
 // ════════════════════════════════════════════════════════════════════════════
 log('═══════ 노하우 운영 평가 하니스 (출시 게이트) ═══════');
 log(`계정: ${EMAIL} · 라벨셋: ${labelset.path} (v${labelset.version}, ${labelset.cases.length}케이스)`);
+log(`검색 경로: ${NO_VECTOR ? '렉시컬 단독(--no-vector · 벡터 OFF · Edge search 호출 0)' : '하이브리드(렉시컬+벡터 RRF)'}`);
 log(`렉시컬: ${searchPlaybookImported ? 'rag.ts import(SSOT 단일)' : '인라인 복제(rag.ts 동기 주석)'}`);
 
 const beforeEntries = await loadEntries();
@@ -478,6 +500,22 @@ log(`  거짓 SERVE율    : ${(M.falseServeRate * 100).toFixed(1)}%  (${M.falseS
 log(`  Recall@1/3/5   : ${(M.recallAt1 * 100).toFixed(1)}% / ${(M.recallAt3 * 100).toFixed(1)}% / ${(M.recallAt5 * 100).toFixed(1)}%  (positive ${M.posCount}건)`);
 log(`  MRR            : ${M.mrr.toFixed(3)}`);
 
+// 군(group)별 분해 — 라벨셋이 group 을 달았을 때만. 벡터 기여도는 전체 평균이 아니라
+// "바꿔 말한 질문(B)"에서 갈리므로, 군을 섞어 놓으면 A의 쉬운 점수가 B의 실패를 가린다.
+const groups = [...new Set(results.map((r) => r.group).filter(Boolean))].sort();
+if (groups.length) {
+  log('\n── 군별 분해 (A=단어 그대로 · B=바꿔 말함 · C=없는 것) ──');
+  log('  군   건수  recall@1  recall@3   MRR   SERVE  정답SERVE  거짓SERVE');
+  for (const g of groups) {
+    const G = computeMetrics(results.filter((r) => r.group === g));
+    // 음성 전용 군(C)은 recall/MRR 이 정의되지 않는다 — 0% 로 찍으면 "다 놓쳤다"로 오독된다.
+    const pct = (v) => (G.posCount ? `${(v * 100).toFixed(1)}%`.padStart(6) : '     —');
+    log(
+      `  ${g}    ${String(G.total).padStart(3)}    ${pct(G.recallAt1)}    ${pct(G.recallAt3)}  ${G.posCount ? G.mrr.toFixed(3) : '  —  '}   ${String(G.servedCount).padStart(3)}     ${String(G.servedCorrect).padStart(3)}       ${String(G.falseServeCount).padStart(3)}`,
+    );
+  }
+}
+
 log('\n── 임계값 스윕 (0.50~0.85) ──');
 log('  thr   served  coverage  precision  falseServe');
 for (const s of SW) {
@@ -501,6 +539,7 @@ if (JSON_OUT) {
   // CI 파이프·추세 저장용: 깨끗한 JSON만 stdout.
   process.stdout.write(JSON.stringify({
     ok: pass,
+    mode: NO_VECTOR ? 'lexical-only' : 'hybrid',
     account: EMAIL,
     labelset: { path: labelset.path, version: labelset.version, count: labelset.cases.length },
     boundUnit,
@@ -510,7 +549,7 @@ if (JSON_OUT) {
     sweep: SW,
     checks: checks.map(([name, ok]) => ({ name, ok })),
     results: results.map((r) => ({
-      id: r.id, query: r.query, route: r.route, served: r.served, confidence: r.confidence,
+      id: r.id, group: r.group, query: r.query, route: r.route, served: r.served, confidence: r.confidence,
       top1: r.top1, top1Correct: r.top1Correct, rankOfExpected: r.rankOfExpected,
       expectedIds: r.expectedIds, isPositive: r.isPositive, ranked: r.ranked, calls: r.calls,
       lexConf: r.lexConf, vecTop1: r.vecTop1, vecTop2: r.vecTop2, vecMargin: r.vecMargin,

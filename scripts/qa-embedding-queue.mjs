@@ -12,6 +12,8 @@
 // ★수정 전 RED 확인용: 0181 적용 전에 돌리면 ①②③이 전부 실패해야 한다(실측: 통과 0 / 실패 5).
 
 import { createClient } from '@supabase/supabase-js';
+import { dirname, join } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const URL = process.env.SUPABASE_URL;
 const KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -79,6 +81,38 @@ async function main() {
         .update({ next_attempt_at: before.data?.next_attempt_at ?? null }).eq('entry_id', entry.id);
       if (e2) no('해제(원상복구)', e2.message); else ok('해제(원상복구)');
       if (!before.data) await db.from('playbook_embeddings').delete().eq('entry_id', entry.id);
+    }
+  }
+
+  // ④ 지문(content_hash) — 0182. **엣지의 djb2 복사본이 정본과 같은 값을 내는지**를 실물로 본다.
+  //    엣지(Deno)는 src/lib/ai/embedText.ts 를 못 부르므로 구현이 두 벌 존재한다. 두 벌이 어긋나면
+  //    저장된 지문이 늘 불일치로 보여 **전건이 stale 로 잡히고 재색인이 끝없이 돈다**(Gemini 비용).
+  //    개수가 아니라 값을 비교한다 — 컬럼이 있다는 사실만 확인하면 이 사고를 못 잡는다.
+  console.log('\n④ 색인 지문(0182) — 엣지가 저장한 값 == 정본 계산값');
+  const { error: hashColErr } = await db.from('playbook_embeddings').select('content_hash').limit(1);
+  if (hashColErr) {
+    no('content_hash 컬럼', `${hashColErr.message} (0182 미적용)`);
+  } else {
+    ok('content_hash 컬럼 존재');
+    const { buildEmbedText, embedTextHash } = await import(
+      pathToFileURL(join(dirname(fileURLToPath(import.meta.url)), '..', 'src', 'lib', 'ai', 'embedText.ts')).href
+    );
+    // 지문이 실제로 채워진 행 하나를 골라, 그 노하우 본문으로 정본 지문을 다시 계산해 대조한다.
+    const { data: rows } = await db.from('playbook_embeddings')
+      .select('entry_id, content_hash').not('content_hash', 'is', null).limit(1);
+    const row = rows?.[0];
+    if (!row) {
+      no('대조할 행 없음 — 지문이 채워진 색인이 아직 0건(엣지 배포·재색인 전이면 정상, 그 뒤라면 결함)');
+    } else {
+      const { data: ent } = await db.from('playbook_entries')
+        .select('id, unit_id, category, section, title, square, search_keywords')
+        .eq('id', row.entry_id).maybeSingle();
+      const { data: cfg } = await db.from('schedule_config')
+        .select('knowhow_categories').eq('unit_id', ent?.unit_id ?? '').maybeSingle();
+      const customs = Array.isArray(cfg?.knowhow_categories) ? cfg.knowhow_categories : [];
+      const mine = ent ? embedTextHash(buildEmbedText(ent, customs)) : null;
+      if (mine === row.content_hash) ok('지문 일치', `${row.entry_id} = ${mine}`);
+      else no('★지문 불일치 — 엣지 복사본과 정본이 갈라졌다(전건 재색인 위험)', `저장 ${row.content_hash} vs 정본 ${mine}`);
     }
   }
 

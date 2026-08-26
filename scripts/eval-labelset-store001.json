@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "notes": "store_001(파일럿 운영 매장, 발행 40건) 바인딩. 벡터(색인) 기여도 A/B 측정용 — 2026-08-27. 목적은 '벡터를 켠 상태 / 끈 상태(렉시컬 단독)'에서 같은 질문 세트를 돌려 색인이 검색 품질에 실제로 얼마나 기여하는지 재는 것. group: A=노하우에 적힌 단어를 그대로 쓴 질문, B=바꿔 말한 질문, C=매장에 없는 것을 묻는 질문(정답=못 찾아야 함). ★expected_entry_ids 가 집합인 이유: store_001 에는 같은 주제 노하우가 중복 등록돼 있다(초코프라페 3건, 진상 손님 3건, 이물질 2건, 마감 관련 5건). 정답을 하나로 못 박으면 사람이 봐도 맞는 답을 하니스가 오답으로 센다.",
+  "cases": [
+    { "id": "A01", "group": "A", "query": "머리카락 나왔다고 클레임 들어왔어요", "expected_entry_ids": ["pb_event_001", "pb_1782815307593_0"], "should_serve": true },
+    { "id": "A02", "group": "A", "query": "POS 결제 오류 났어요", "expected_entry_ids": ["pb_event_005"], "should_serve": true },
+    { "id": "A03", "group": "A", "query": "우유 떨어졌어요", "expected_entry_ids": ["pb_event_003"], "should_serve": true },
+    { "id": "A04", "group": "A", "query": "에스프레소 추출할 때 크레마 예쁘게 하는 법", "expected_entry_ids": ["pb_knowhow_001"], "should_serve": true },
+    { "id": "A05", "group": "A", "query": "피크타임 1인 운영 어떻게 해요", "expected_entry_ids": ["pb_routine_002"], "should_serve": true },
+    { "id": "A06", "group": "A", "query": "오픈 루틴 알려주세요", "expected_entry_ids": ["pb_routine_001"], "should_serve": true },
+    { "id": "A07", "group": "A", "query": "사장 부재 시 결정 권한이 어디까지예요", "expected_entry_ids": ["pb_context_002"], "should_serve": true },
+    { "id": "A08", "group": "A", "query": "자몽에이드 표준 레시피", "expected_entry_ids": ["hub_pb_staff_jiwon"], "should_serve": true, "note": "색인됨. 단 백필 경로라 섹션 프리펜드가 빠진 벡터(§2-5 드리프트)." },
+    { "id": "A09", "group": "A", "query": "단체 주문 20잔 들어왔을 때 처리 순서", "expected_entry_ids": ["hub_pb_staff_sumin"], "should_serve": true, "note": "★미색인 엔트리 — 벡터 후보에 원천적으로 안 뜬다. 색인 누락의 실제 증상 대조군." },
+
+    { "id": "B01", "group": "B", "query": "컵 안에 뭔가 떠다닌다고 손님이 화났어요", "expected_entry_ids": ["pb_event_001", "pb_1782815307593_0"], "should_serve": true },
+    { "id": "B02", "group": "B", "query": "카드가 안 긁혀요", "expected_entry_ids": ["pb_event_005"], "should_serve": true },
+    { "id": "B03", "group": "B", "query": "라떼 만들 게 없는데 어떡하죠", "expected_entry_ids": ["pb_event_003"], "should_serve": true },
+    { "id": "B04", "group": "B", "query": "샷이 안 예쁘게 나와요", "expected_entry_ids": ["pb_knowhow_001"], "should_serve": true },
+    { "id": "B05", "group": "B", "query": "혼자 일할 때 바쁘면 어떻게 해요", "expected_entry_ids": ["pb_routine_002"], "should_serve": true },
+    { "id": "B06", "group": "B", "query": "아침에 문 열면 뭐부터 해요", "expected_entry_ids": ["pb_routine_001"], "should_serve": true },
+    { "id": "B07", "group": "B", "query": "제가 얼마까지 돌려드려도 되나요", "expected_entry_ids": ["pb_context_002"], "should_serve": true },
+    { "id": "B08", "group": "B", "query": "여름 음료 만드는 순서가 사람마다 달라요", "expected_entry_ids": ["hub_pb_staff_jiwon"], "should_serve": true },
+    { "id": "B09", "group": "B", "query": "적립 얼마나 쌓이는지 물어보면 뭐라고 해요", "expected_entry_ids": ["hub_pb_stale_1"], "should_serve": true, "note": "★미색인 엔트리 + 바꿔 말한 질문 — 색인 누락이 가장 아프게 나타나야 하는 조합." },
+
+    { "id": "C01", "group": "C", "query": "화장실 청소 세제 뭐 써요?", "should_serve": false },
+    { "id": "C02", "group": "C", "query": "주차장 어디에 대요?", "should_serve": false },
+    { "id": "C03", "group": "C", "query": "배달앱 정산 언제 들어와요?", "should_serve": false },
+    { "id": "C04", "group": "C", "query": "직원 유니폼 세탁은 누가 해요?", "should_serve": false },
+    { "id": "C05", "group": "C", "query": "연차는 며칠까지 쓸 수 있어요?", "should_serve": false },
+    { "id": "C06", "group": "C", "query": "매장 화재보험 청구 어떻게 해요?", "should_serve": false }
+  ]
+}
