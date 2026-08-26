@@ -117,8 +117,6 @@ const ANSWER_TEXTS: Record<QuizFormat, (payload: any) => string[]> = {
   trap_pick: choiceAnswer,
   // 지뢰 = 하지 말 것. 지뢰가 아닌 카드는 미끼라 재료가 아니다.
   mine_tap: (p) => (Array.isArray(p?.cards) ? p.cards : []).filter((c: any) => c?.is_mine).map((c: any) => String(c?.text ?? '')),
-  mark_paragraph: (p) =>
-    (Array.isArray(p?.parts) ? p.parts : []).filter((c: any) => c?.is_wrong).map((c: any) => String(c?.text ?? '')),
   flip_match: pairsAnswer,
   link_match: pairsAnswer,
   case_pick: choiceAnswer,

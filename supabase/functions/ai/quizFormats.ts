@@ -307,56 +307,6 @@ export const QUIZ_FORMATS: Record<string, QuizFormatSpec> = {
     },
   },
 
-  // t3 금지(0168) — 이어진 문장 안에서 어긋난 곳을 여러 곳 짚는다. mine_tap 과 나누는 기준은
-  // **재료의 모양**이다: 저쪽은 끊어진 카드가 하나씩, 이쪽은 한 덩어리 메시지를 읽고 맥락으로 짚는다.
-  mark_paragraph: {
-    hint:
-      '**직원이 남긴 인수인계 메시지**를 읽고 규정과 다른 곳을 짚는 문제다. '
-      + '"안내문·공지" 같은 딱딱한 글이 아니라, 마감을 끝낸 직원이 실제로 남길 법한 말투로 쓴다'
-      + '(예: "오늘 마감은 포스 정산부터 하고 원두 호퍼를 비운 뒤 바닥을 청소했어요"). '
-      + 'parts 는 그 메시지를 읽는 순서 그대로 조각낸 것이다. 순서를 섞지 마라 — 이어 붙이면 한 문단이 돼야 한다. '
-      + 'tap=true 는 누를 수 있는 문구(3~8개), tap=false 는 문장을 잇는 글이다. '
-      + 'is_wrong=true 는 그 문구가 노하우의 순서·금지와 어긋난다는 뜻이고, tap=true 인 조각에만 붙인다. '
-      + '틀린 문구와 맞는 문구가 각각 1개 이상 있어야 한다. '
-      + '틀린 문구는 노하우에 근거가 분명한 것만 쓰고, 맞는 문구는 같은 노하우의 정상 절차에서 뽑아라. '
-      + '규정과 대조할 순서나 금지가 노하우에 없으면 출제하지 마라.',
-    schema: {
-      type: 'object',
-      properties: {
-        ask: STR,
-        parts: {
-          type: 'array',
-          items: {
-            type: 'object',
-            properties: { text: STR, tap: { type: 'boolean' }, is_wrong: { type: 'boolean' } },
-            required: ['text', 'tap', 'is_wrong'],
-          },
-          maxItems: 14,
-        },
-        explain: STR,
-        source_index: INT,
-      },
-      required: ['ask', 'parts'],
-    },
-    // 짝: src/lib/quiz/formats/markParagraph.ts 의 validate. 규칙이 벌어지면 사장이 저장할 수 없는
-    // 문항을 AI 가 만들어 놓고 조용히 버려진다 — 두 곳을 같이 고칠 것.
-    normalize: (raw) => {
-      const ask = normAsk(raw);
-      if (!ask || !Array.isArray(raw?.parts)) return null;
-      const parts = raw.parts
-        .map((p: any) => ({ text: text(p?.text), tap: p?.tap === true, is_wrong: p?.is_wrong === true }))
-        .filter((p: any) => p.text);
-      if (parts.length < 2 || parts.length > 14) return null;
-      // 누를 수 없는 조각에 정답을 숨기면 응시자가 영원히 못 맞힌다 — 조용히 폐기한다.
-      if (parts.some((p: any) => p.is_wrong && !p.tap)) return null;
-      const taps = parts.filter((p: any) => p.tap);
-      if (taps.length < 3 || taps.length > 8) return null;
-      const wrongs = taps.filter((p: any) => p.is_wrong).length;
-      if (wrongs === 0 || wrongs === taps.length) return null;
-      return { ask, parts, explain: text(raw?.explain) };
-    },
-  },
-
   // t4 대응 — 노하우가 직접 적는 짝(물건↔자리, 용어↔뜻)이 재료다.
   // ★ flip_match 는 짝 정보가 응시 화면까지 내려가는 **유일한 형태**다(매칭 게임이라 그렇다).
   //   이유와 대가는 src/lib/quiz/formats/flipMatch.ts 맨 위 주석에 있다.

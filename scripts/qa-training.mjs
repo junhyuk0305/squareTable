@@ -580,11 +580,18 @@ async function main() {
   { const { row } = await grade(QFM, 1);
     check('⑦C-14 배열이 아닌 응답도 예외 없이 오답', row?.correct === false, JSON.stringify(row)); }
 
-  // ── ⑦D 0168 신규 형태 2종(numeric_entry · mark_paragraph) ────────────────
-  // numeric_entry 는 보기가 없어 answer_value 가 새면 문제가 통째로 무의미해지고,
-  // mark_paragraph 는 is_wrong 이 새면 어디가 틀렸는지가 그대로 화면에 나온다.
-  // 반대로 unit·tap 은 **남아야** 한다 — 지워지면 문항이 성립하지 않는다.
-  console.log('\n━━ ⑦D 신규 형태 2종(0168) ━━');
+  // ── ⑦D numeric_entry(0168) + **출제에서 뺀 형태**(0183) ──────────────────
+  // numeric_entry 는 보기가 없어 answer_value 가 새면 문제가 통째로 무의미해진다.
+  // 반대로 unit 은 **남아야** 한다 — 지워지면 문항이 성립하지 않는다.
+  //
+  // ★★ mark_paragraph 는 2026-08-27(0183)에 **출제에서 빠졌다** — 모델이 3/3 빈 배열을 돌려줬고
+  //   pickFormats 가 노하우의 60%를 거기 배정하느라 AI 캡을 계속 버렸다. 여기서 지키는 불변식은
+  //   **"빼되 반쪽만 뺀다"** 이다:
+  //     · 응시 조회(quiz_items_for·quiz_link_items)에서는 **사라져야** 한다 — 화이트리스트 fail-closed
+  //     · 채점(grade_quiz)은 **계속 돌아야** 한다 — 이미 배포된 앱·발송된 게스트 링크·지난 응시 기록
+  //   둘 중 하나라도 뒤집히면 0161 이 quick_judge 에서 낸 사고("목록엔 있는데 채점만 죽는다")를
+  //   방향만 바꿔 재현한다. 그래서 **양쪽 다** 잰다.
+  console.log('\n━━ ⑦D numeric_entry(0168) · 출제에서 뺀 형태(0183) ━━');
   const QNE = `qi_ne_${s}`, QMP = `qi_mp_${s}`;
   // parts index:      0(맞음)        1(잇는 글)   2(틀림)          3(틀림)
   const MP_PARTS = [
@@ -599,44 +606,42 @@ async function main() {
       { id: QMP, unit_id: UNIT, entry_ids: [E[3]], kind: 't3', format: 'mark_paragraph',
         payload: { ask: '규정과 다른 곳을 짚어 주세요', parts: MP_PARTS, explain: '바닥은 마지막이에요' } },
     ]);
-    check('⑦D-1 0168 형태 2건 저장', !error, error?.message ?? ''); }
+    check('⑦D-1 문항 2건 저장(numeric_entry · 뺀 형태)', !error, error?.message ?? ''); }
 
   { const { data, error } = await jA.rpc('quiz_items_for', { p_entry_ids: [E[3]], p_limit: 10 });
     const mine = (data ?? []).filter((x) => x.id === QNE || x.id === QMP);
-    check('⑦D-2 0168 형태가 응시 조회에 나온다(화이트리스트 18종)', !error && mine.length === 2,
-      `n=${mine.length} ${error?.message ?? ''}`);
+    check('⑦D-2 numeric_entry 는 응시 조회에 나온다(화이트리스트 17종)',
+      !error && mine.some((x) => x.id === QNE), `n=${mine.length} ${error?.message ?? ''}`);
+    // ★0183 의 스위치. 화이트리스트에서 빠졌으면 응시 조회에서 **사라져야** 한다(fail-closed).
+    check('⑦D-3 ★출제에서 뺀 형태는 응시 조회에서 사라진다(0183 fail-closed)',
+      !mine.some((x) => x.id === QMP), `mark_paragraph 가 아직 나온다: ${mine.map((x) => x.id).join(',')}`);
     const leaked = leakedIn(mine);
-    check('⑦D-3 ★0168 응시 payload 에 정답 키 0개', leaked.length === 0,
+    check('⑦D-4 ★응시 payload 에 정답 키 0개', leaked.length === 0,
       leaked.map((x) => `${x.id}:${JSON.stringify(x.payload)}`).join(' | '));
     const byId = Object.fromEntries(mine.map((x) => [x.id, x.payload ?? {}]));
-    check('⑦D-4 numeric_entry 는 unit 이 남는다(정답 아님 · 없으면 문제가 성립 안 함)',
-      byId[QNE]?.unit === '도', JSON.stringify(byId[QNE]));
-    const parts = byId[QMP]?.parts ?? [];
-    check('⑦D-5 mark_paragraph 는 조각 수·순서가 그대로다(섞으면 문장이 아니다)',
-      parts.length === 4 && parts[0]?.text === MP_PARTS[0].text && parts[3]?.text === MP_PARTS[3].text,
-      JSON.stringify(parts));
-    check('⑦D-6 ★mark_paragraph 는 tap 이 남는다(점선 밑줄을 그릴 근거)',
-      parts.filter((x) => x?.tap === true).length === 3 && parts[1]?.tap === false, JSON.stringify(parts)); }
+    check('⑦D-5 numeric_entry 는 unit 이 남는다(정답 아님 · 없으면 문제가 성립 안 함)',
+      byId[QNE]?.unit === '도', JSON.stringify(byId[QNE])); }
 
   { const { row } = await grade(QNE, 62);
-    check('⑦D-7 numeric_entry 정답', row?.correct === true, JSON.stringify(row)); }
+    check('⑦D-6 numeric_entry 정답', row?.correct === true, JSON.stringify(row)); }
   { const { row } = await grade(QNE, 60);
-    check('⑦D-8 numeric_entry 오답이면 정답을 알려준다', row?.correct === false && row?.answer === 62, JSON.stringify(row)); }
+    check('⑦D-7 numeric_entry 오답이면 정답을 알려준다', row?.correct === false && row?.answer === 62, JSON.stringify(row)); }
   { const { row } = await grade(QNE, '62');
-    check('⑦D-9 문자열 응답도 예외 없이 오답(캐스팅으로 죽지 않는다)', row?.correct === false, JSON.stringify(row)); }
+    check('⑦D-8 문자열 응답도 예외 없이 오답(캐스팅으로 죽지 않는다)', row?.correct === false, JSON.stringify(row)); }
 
-  { const { row } = await grade(QMP, [2, 3]);
-    check('⑦D-10 mark_paragraph 정답(틀린 곳 전부 짚기)', row?.correct === true, JSON.stringify(row)); }
+  // ★★ 여기가 0183 의 나머지 반쪽이다 — **뺀 형태의 채점은 계속 돌아야 한다.**
+  //   이미 배포된 네이티브 앱과 이미 발송된 게스트 링크가 그 형태의 채점을 요청할 수 있고,
+  //   사장 문항별 상세는 지난 응시 기록을 다시 그린다. 채점 분기를 "안 쓰니까" 하고 지우면
+  //   응시자가 "지금은 채점이 안 됐어요 / 다시 보내기"에 갇힌다(0161 quick_judge 사고).
+  { const { row, error } = await grade(QMP, [2, 3]);
+    check('⑦D-9 ★뺀 형태도 채점은 계속 된다 — 정답(지난 기록·배포된 앱 보호)',
+      !error && row?.correct === true, `${error?.message ?? ''} ${JSON.stringify(row)}`); }
   { const { row } = await grade(QMP, [3, 2]);
-    check('⑦D-11 ★집합이라 순서가 달라도 정답(mine_tap 과 같은 기준)', row?.correct === true, JSON.stringify(row)); }
+    check('⑦D-10 ★집합이라 순서가 달라도 정답(mine_tap 과 같은 기준)', row?.correct === true, JSON.stringify(row)); }
   { const { row } = await grade(QMP, [2]);
-    check('⑦D-12 하나만 짚으면 오답(부분점수 없음)', row?.correct === false, JSON.stringify(row)); }
-  { const { row } = await grade(QMP, [0, 2, 3]);
-    check('⑦D-13 맞게 적힌 문구까지 짚으면 오답', row?.correct === false, JSON.stringify(row)); }
-  { const { row } = await grade(QMP, [0, 1, 2, 3, 4, 5]);
-    check('⑦D-14 조각 수보다 긴 응답은 길이에서 걸린다', row?.correct === false, JSON.stringify(row)); }
+    check('⑦D-11 하나만 짚으면 오답(부분점수 없음)', row?.correct === false, JSON.stringify(row)); }
   { const { row } = await grade(QMP, 2);
-    check('⑦D-15 배열이 아닌 응답도 예외 없이 오답', row?.correct === false, JSON.stringify(row)); }
+    check('⑦D-12 배열이 아닌 응답도 예외 없이 오답', row?.correct === false, JSON.stringify(row)); }
 
   // ── ⑧ 문항 낡음 스냅샷(0114) ─────────────────────────────────────────────
   console.log('\n━━ ⑧ 문항 낡음(0114) ━━');

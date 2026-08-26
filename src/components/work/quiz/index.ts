@@ -8,7 +8,6 @@ import { FillCount } from './FillCount';
 import { ScalePick } from './ScalePick';
 import { NumericKeypad } from './NumericKeypad';
 import { MineTap } from './MineTap';
-import { MarkParagraph } from './MarkParagraph';
 import { FlipMatch } from './FlipMatch';
 import { LinkMatch } from './LinkMatch';
 import { QuickJudge } from './QuickJudge';
@@ -31,7 +30,6 @@ export const QUIZ_RENDERERS: Record<QuizFormat, ComponentType<QuizRendererProps>
   numeric_entry: NumericKeypad,
   trap_pick: TrapPick,
   mine_tap: MineTap,
-  mark_paragraph: MarkParagraph,
   flip_match: FlipMatch,
   link_match: LinkMatch,
   case_pick: CasePick,
