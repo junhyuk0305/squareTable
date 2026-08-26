@@ -333,7 +333,7 @@ export default function QuizDetailScreen() {
           ) : (
             <>
               <View style={st.ringCard}>
-                <ProgressRing value={passedCount} total={people.length} label="다 맞힌 사람" />
+                <ProgressRing value={passedCount} total={people.length} label="통과" />
                 <Text style={st.ringSub}>{captionOf(course.answer_days, course.due_days)}</Text>
               </View>
               <View style={st.listCard}>
@@ -342,7 +342,7 @@ export default function QuizDetailScreen() {
                     <View style={st.rowText}>
                       <Text style={st.rowTitle} numberOfLines={1}>{p.name}</Text>
                       <Text style={st.rowSub} numberOfLines={1}>
-                        {p.passed ? '다 맞혔어요' : p.sent ? '아직 안 풀었어요' : '보내는 중이에요'}
+                        {p.passed ? '통과' : p.sent ? '미응시' : '발송 중'}
                       </Text>
                     </View>
                     <ProgressPill text={p.passed ? '다 맞힘' : '아직 안 풂'} tone={p.passed ? 'done' : 'neutral'} />
@@ -386,14 +386,14 @@ export default function QuizDetailScreen() {
                       </Text>
                       <Text style={st.rowSub} numberOfLines={1}>
                         {s.attempts === 0
-                          ? '아직 아무도 안 풀었어요'
+                          ? '미응시'
                           : s.attempts < QUIZ_MISS_MIN_ATTEMPTS
-                            ? '아직 표본이 적어요'
-                            : `${s.attempts}명 품 · ${Math.round(s.rate * 100)}% 틀림`}
+                            ? '표본 부족'
+                            : `응시 ${s.attempts}명 · 오답 ${Math.round(s.rate * 100)}%`}
                       </Text>
                     </View>
                     {stale ? (
-                      <ProgressPill text="노하우가 바뀜" tone="behind" />
+                      <ProgressPill text="노하우 변경됨" tone="behind" />
                     ) : s.attempts >= QUIZ_MISS_MIN_ATTEMPTS && s.rate >= QUIZ_MISS_RATE ? (
                       <ProgressPill text={`${Math.round(s.rate * 100)}%`} tone="behind" />
                     ) : (
@@ -439,7 +439,7 @@ export default function QuizDetailScreen() {
             {/* D4 — 낡은 문항을 새로 만들기. 자동 재생성하지 않는다(검수 없이 나가면 안 된다). */}
             {staleItems.length > 0 && (
               <View style={st.thinBox}>
-                <Text style={st.thinTitle}>옛 정답이 그대로 나가고 있어요</Text>
+                <Text style={st.thinTitle}>옛 정답 나가는 문항</Text>
                 {staleItems.map((q) => {
                   const eid = (q.entry_ids ?? [])[0];
                   const e = eid ? entryById.get(eid) : null;
@@ -505,7 +505,7 @@ export default function QuizDetailScreen() {
           </View>
           <View style={st.noteCard}>
             <Text style={st.noteText}>
-              이미 다 맞힌 사람은 그대로예요. <Text style={st.bold}>다음 확인부터</Text> 바뀐 일정으로 돌아가요.
+              이미 통과한 사람은 그대로예요. <Text style={st.bold}>다음 응시부터</Text> 바뀐 일정으로 돌아가요.
             </Text>
           </View>
           <Pressable

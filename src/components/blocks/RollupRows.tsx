@@ -5,8 +5,11 @@ import { BrandColors, InkColors } from '@/lib/theme/colors';
 import { Elevation, Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
 
-/** 행 최소 높이 — 2줄(제목+대상)이 들어가고 터치 타깃 48dp 를 넘긴다. */
-const ROW_MIN_H = 56;
+/**
+ * 행 최소 높이 = 터치 타깃 48dp. 56 으로 두면 대상 줄이 없는 행(제목 한 줄)이 위아래로 붕 떠서
+ * 옆 행과 여백이 달라 보였다(2026-08-27 실측) — 한 줄 행은 48, 두 줄 행은 내용만큼 자란다.
+ */
+const ROW_MIN_H = 48;
 
 export type RollupRow = {
   key: string;
@@ -66,7 +69,7 @@ const styles = StyleSheet.create({
     backgroundColor: InkColors.bg,
     ...Elevation.e1,
   },
-  row: { minHeight: ROW_MIN_H, paddingVertical: Space.md, justifyContent: 'center' },
+  row: { minHeight: ROW_MIN_H, paddingVertical: Space.sm + 2, justifyContent: 'center' },
   divider: { borderTopWidth: 1, borderTopColor: InkColors.line },
   pressed: { opacity: 0.7 },
   top: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
@@ -74,5 +77,6 @@ const styles = StyleSheet.create({
   count: { fontSize: 15, lineHeight: 21, fontWeight: '900', color: InkColors.ink, letterSpacing: -0.3 },
   countHot: { color: BrandColors.warnText },
   // 대상 줄은 꼬리표(보조)라 본문 15sp 하한 대상이 아니다.
-  target: { marginTop: Space.xs, fontSize: 12.5, lineHeight: 17, color: InkColors.ink3 },
+  // 제목 바로 아래 붙인다(2px) — xs(4)면 제목·대상이 따로 노는 두 줄로 읽혔다(2026-08-27 실측).
+  target: { marginTop: 2, fontSize: 12, lineHeight: 16, color: InkColors.ink3 },
 });

@@ -101,7 +101,7 @@ type Made = { entryId: string; title: string; item: QuizItem | null; formatLabel
  */
 export default function QuizNewScreen() {
   const router = useRouter();
-  const { course: resumeId, only } = useLocalSearchParams<{ course?: string; only?: string }>();
+  const { course: resumeId, only, entries: entriesParam } = useLocalSearchParams<{ course?: string; only?: string; entries?: string }>();
   const unitId = useSessionStore((s) => s.unitId);
   const userId = useSessionStore((s) => s.userId);
   const entries = usePlaybookStore((s) => s.entries);
@@ -196,6 +196,27 @@ export default function QuizNewScreen() {
   }, [pool, q, cat]);
 
   const toggle = (id: string) => setPicked((v) => (v.includes(id) ? v.filter((x) => x !== id) : [...v, id]));
+
+  /**
+   * `?entries=a,b,c`(2026-08-27 §10-10) — 퀴즈 홈 A1 PickRow 에서 고른 노하우를 **고른 상태로**
+   * 2단계에 착지한다. 나머지 단계(형태·문항수·일정)는 그대로. 한 번만 적용한다(사장이 2단계에서
+   * 빼거나 더한 뒤 이 이펙트가 다시 돌면 되돌아간다). 없어진 노하우 id 는 조용히 버린다.
+   */
+  const [prefilled, setPrefilled] = useState(false);
+  useEffect(() => {
+    if (!entriesParam || prefilled || !entriesLoaded) return;
+    const ids = entriesParam.split(',').filter((id) => entryById.has(id));
+    let alive = true;
+    // 이어서 만들기와 같은 이유로 **콜백에서** 상태를 바꾼다 — 이펙트 본문의 동기 setState 는 연쇄 렌더를 부른다.
+    void Promise.resolve().then(() => {
+      if (!alive) return;
+      setPrefilled(true);
+      if (ids.length === 0) return;
+      setPicked(ids);
+      setStep(2);
+    });
+    return () => { alive = false; };
+  }, [entriesParam, prefilled, entriesLoaded, entryById]);
 
   // 파트 후보 = 이 매장이 실제로 쓴 값. 표준 세트를 우리가 정해 주지 않는다(0164 ②).
   useEffect(() => {

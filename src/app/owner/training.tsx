@@ -8,6 +8,9 @@ import { useQuizBoard, type QuizListRow } from '@/lib/quiz/useQuizBoard';
 import { fetchGuestQuizSubmissions, upsertTrainingCourse, type GuestSubmissionRow } from '@/lib/db';
 import { guardWrite } from '@/lib/store/useSyncStore';
 import { showToast } from '@/lib/store/useToastStore';
+import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
+import { useWorkStore } from '@/lib/store/useWorkStore';
+import { getSectionMeta } from '@/lib/utils/category';
 import { maskTail4, scoreText, takenDayLabel } from '@/lib/quiz/guestResult';
 import { Appear, stagger } from '@/components/Appear';
 import { EmptyState } from '@/components/EmptyState';
@@ -15,7 +18,11 @@ import { BottomSheet } from '@/components/BottomSheet';
 import { Collapse } from '@/components/Collapse';
 import { SectionLabel } from '@/components/SectionLabel';
 import { AlertRow } from '@/components/blocks/AlertRow';
-import { ProgressRing } from '@/components/blocks/ProgressRing';
+import { Heatmap } from '@/components/blocks/Heatmap';
+import { PickRow } from '@/components/blocks/PickRow';
+import { RollupRows } from '@/components/blocks/RollupRows';
+import { Sparkline } from '@/components/blocks/Sparkline';
+import { StatCard, type StatCardItem } from '@/components/blocks/StatCardGrid';
 import { ProgressPill, type ProgressTone } from '@/components/blocks/ProgressPill';
 import { SheetHead, PrimaryButton } from '@/components/owner/quiz/kit';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
@@ -40,12 +47,30 @@ import { Space, HEADER_EDGE_GUTTER } from '@/lib/theme/layout';
 export default function OwnerTrainingScreen() {
   const router = useRouter();
   const {
-    entries, entryById, boardLoaded, buildQuizzes, buildStats, buildRows,
-    openLinkCourseIds, linkedCourseIds, archived, reloadCourses,
+    entries, entryById, boardLoaded, buildQuizzes, buildStats, buildHeatmap, heatHead, buildFixQueue,
+    staffCount, bumpQuiz, missPctOf, openLinkCourseIds, linkedCourseIds, archived, reloadCourses,
   } = useQuizBoard();
 
   const quizzes = useMemo(() => buildQuizzes(), [buildQuizzes]);
   const stats = useMemo(() => buildStats(quizzes), [buildStats, quizzes]);
+  /** 히어로(§10-1) — 노하우 1개 = 상자 1개, 색 = 아는 직원 비율. 의존성은 배열 자체(컴파일러 캐시 함정). */
+  const heatGroups = useMemo(() => buildHeatmap(), [buildHeatmap]);
+  /** 경고행·롤업(§10-2·10-4) — 응시 중인 퀴즈만 경고, 나머지 낡음은 롤업 '손볼 것'. */
+  const fix = useMemo(() => buildFixQueue(quizzes), [buildFixQueue, quizzes]);
+  /** A1 첫 진입 — 여기서 고른 노하우로 만들기 2단계를 건너뛴다(`?entries=`). */
+  const [picked, setPicked] = useState<string[]>([]);
+
+  /**
+   * 히트맵 상자 → 노하우 고치기 → 뒤로. 고친 노하우는 낡음(주황)으로 바뀌어야 하므로
+   * 화면에 들어올 때마다 노하우·이해 기록·문항을 다시 읽는다(스토어 TTL 안이면 즉시 돌아온다).
+   */
+  useFocusEffect(
+    useCallback(() => {
+      void usePlaybookStore.getState().hydrate();
+      void useWorkStore.getState().hydrate();
+      bumpQuiz();
+    }, [bumpQuiz]),
+  );
   const [fixOpen, setFixOpen] = useState(false);
   const [draftOpen, setDraftOpen] = useState(false);
   const [guestOpen, setGuestOpen] = useState(false);
@@ -61,7 +86,6 @@ export default function OwnerTrainingScreen() {
     return [...quizzes].filter((r) => r.status !== 'draft').sort((a, b) => rank(b) - rank(a));
   }, [quizzes]);
   const drafts = useMemo(() => quizzes.filter((r) => r.status === 'draft'), [quizzes]);
-  const staleQuizzes = useMemo(() => quizzes.filter((r) => r.staleCount > 0), [quizzes]);
 
   /**
    * 링크(/q/[token])로 푼 사람들 — 0160·0163. 아직 정리하지 않은 것만 내려온다.
@@ -82,11 +106,13 @@ export default function OwnerTrainingScreen() {
     }, []),
   );
 
-  /** 오답이 잦은 노하우 — 직원이 못 외운 게 아니라 **노하우 글이 헷갈린다**는 신호다(0103). */
-  const missRows = useMemo(() => buildRows(null).filter((r) => r.missPct > 0), [buildRows]);
-
   /** 낼 수 있는 재료. 발행된 노하우가 0이면 만들기 자체가 성립하지 않는다(A3). */
   const usable = entries.length;
+  /**
+   * A1 "먼저 물어볼 만한 것"(§10-10) — 발행 노하우 앞 5개. 칩 = 카테고리.
+   * ★"n명이 물어봤음" 근거(질문↔노하우 연결 원장)는 없어서 붙이지 않는다(R4 가짜 금지).
+   */
+  const pickPool = useMemo(() => entries.filter((e) => e.status !== 'draft').slice(0, 5), [entries]);
 
   /** 그릴 준비 — 퀴즈 판(boardLoaded)과 링크 응시 결과가 **둘 다** 와야 한다. */
   const ready = boardLoaded && guestsLoaded;
@@ -97,9 +123,12 @@ export default function OwnerTrainingScreen() {
    */
   const uncovered = Math.max(0, stats.publishedEntries - stats.covered);
 
-  /** 보관을 되돌린다 — active 를 다시 켜는 것이 전부다(퀴즈 내용은 그대로 남아 있었다). */
+  /**
+   * 보관을 되돌린다 — active 를 다시 켜는 것이 전부다(퀴즈 내용은 그대로 남아 있었다).
+   * `remake` 면 되돌린 뒤 곧장 만들기 4단계(문항 검토)로 — 근거 노하우가 바뀐 보관 퀴즈(§10-3)의 길.
+   */
   const unarchive = useCallback(
-    async (course: QuizListRow['course']) => {
+    async (course: QuizListRow['course'], remake = false) => {
       // 눌린 동안만 막는다 — "이미 busy 면 return" 은 두지 않는다(토스트 쪽 닫힘값에 걸린다).
       // 같은 행을 두 번 눌러도 active=true 를 두 번 쓰는 것뿐이라 결과가 같다.
       setBusy(true);
@@ -111,10 +140,15 @@ export default function OwnerTrainingScreen() {
       setBusy(false);
       if (ok) {
         reloadCourses();
-        showToast('다시 보내요', 'good');
+        if (remake) {
+          setBoxOpen(false);
+          router.push(`/owner/quiz-new?course=${course.id}` as never);
+        } else {
+          showToast('다시 보내요', 'good');
+        }
       }
     },
-    [reloadCourses],
+    [reloadCourses, router],
   );
 
   /**
@@ -142,6 +176,8 @@ export default function OwnerTrainingScreen() {
     linkedCourseIds.has(courseId) ? (openLinkCourseIds.has(courseId) ? 'open' : 'closed') : null;
 
   const goMake = () => router.push('/owner/quiz-new' as never);
+  /** A1 에서 고른 노하우로 — 만들기 2단계(고르기)를 고른 상태로 건너뛴다. */
+  const goMakePicked = () => router.push(`/owner/quiz-new?entries=${picked.join(',')}` as never);
   /** 아직 문제를 안 낸 노하우만 놓고 고르게 한다 — 히어로가 가리킨 그 노하우들이다. */
   const goMakeUncovered = () => router.push('/owner/quiz-new?only=uncovered' as never);
   const goDetail = (id: string) => router.push(`/owner/quiz/${id}` as never);
@@ -196,8 +232,8 @@ export default function OwnerTrainingScreen() {
               </Pressable>
             </>
           ) : (
-            /* A1 — 재료는 있는데 아직 안 만들었다. 지표·경고·정리 링크를 전부 감춘다:
-               전부 "문항이 생긴 뒤"에 의미가 생기는 것들이다. 남는 건 원리 3칸과 눌릴 것 하나. */
+            /* A1 — 재료는 있는데 아직 안 만들었다(§10-10). 지표·경고는 전부 "문항이 생긴 뒤"의 것이라 감춘다.
+               인트로 카드 + PickRow "먼저 물어볼 만한 것" + "고른 n개로 만들기" — 첫 화면에서 고르기까지. */
             <>
               <Appear>
                 <View style={st.introCard}>
@@ -212,46 +248,68 @@ export default function OwnerTrainingScreen() {
                   <Text style={st.introBody}>사장님이 적어 둔 노하우를 직원이 실제로 아는지 확인해요.</Text>
                 </View>
               </Appear>
-              <EmptyState
-                title="아직 만든 퀴즈가 없어요"
-                body="노하우를 고르기만 하면 문제는 저희가 만들어요."
-                cta={{ label: '퀴즈 만들기', onPress: goMake }}
-              />
-              <Text style={st.footNote}>쓸 수 있는 노하우 {usable}개</Text>
+              <Appear delay={stagger(1)}>
+                <View style={st.group}>
+                  <SectionLabel title="먼저 물어볼 만한 것" hint={`노하우 ${usable}개`} />
+                  <PickRow
+                    rows={pickPool.map((e) => ({
+                      key: e.id,
+                      title: e.title,
+                      chips: [{ text: getSectionMeta(e.section).label }],
+                      picked: picked.includes(e.id),
+                      onToggle: () => setPicked((v) => (v.includes(e.id) ? v.filter((x) => x !== e.id) : [...v, e.id])),
+                    }))}
+                    more={usable > pickPool.length ? { label: `${usable - pickPool.length}개 더 보기`, onPress: goMake } : undefined}
+                  />
+                </View>
+              </Appear>
+              <Appear delay={stagger(2)}>
+                <View style={st.actions}>
+                  <PrimaryButton
+                    label={picked.length > 0 ? `고른 ${picked.length}개로 퀴즈 만들기` : '노하우를 골라 주세요'}
+                    disabled={picked.length === 0}
+                    onPress={goMakePicked}
+                  />
+                  <Pressable
+                    onPress={goMake}
+                    style={({ pressed }) => [st.subLink, pressed && { opacity: 0.6 }]}
+                    accessibilityRole="button"
+                    accessibilityLabel="노하우를 직접 고르기"
+                  >
+                    <Text style={st.subLinkText}>직접 고르기</Text>
+                  </Pressable>
+                </View>
+              </Appear>
             </>
           )
         ) : (
           /* A2 — 평상시(B안). 주인공은 **노하우가 얼마나 확인됐나**이고, 바로 아래가 만들기다.
              그 다음이 고쳐야 할 퀴즈 → 직원이 푸는 중. 초안·링크 결과는 한 줄로 내려간다. */
           <>
-            {/* 히어로 — 화면당 1개(배치규칙②). 링은 비율만 말하고 뜻은 문장이 말한다.
-                ⛔ "아무도 확인받지 않았어요"라고 쓰지 않는다 — 누가 뭘 확인받는지가 빠져 되물음이 생긴다.
-                ★발행된 노하우가 0이면 링을 그리지 않는다 — `0/0` 은 100%도 0%도 아니라 아무 뜻이 없다.
-                  (퀴즈는 남았는데 근거 노하우가 다 지워졌거나 초안뿐인 상태. 목록은 그대로 두고 위만 바꾼다.) */}
+            {/* 히어로 — 화면당 1개(배치규칙②). **히트맵(H5 · §10-1)**: 노하우 1개 = 상자 1개, 색 = 아는 직원 비율.
+                옛 링(문제 낸 노하우 n/m)은 전부 한 번 내면 영구 100%라 히어로 자격이 없었다.
+                ★발행 노하우 0 → 상자가 없다 · 직원 0명 → 비율이 없다. 둘 다 히트맵 대신 문장으로 말한다. */}
             <Appear>
-              <View style={st.hero}>
-                {stats.publishedEntries > 0 ? (
-                  <ProgressRing
-                    hero
-                    value={stats.covered}
-                    total={stats.publishedEntries}
-                    label={
-                      uncovered > 0
-                        ? `노하우 ${uncovered}개는 직원이 아는지 아직 안 물어봤어요`
-                        : '적어 둔 노하우는 전부 문제로 냈어요'
-                    }
-                    sub={
-                      uncovered > 0
-                        ? '문제를 내면 직원이 아는지 확인할 수 있어요.'
-                        : '노하우를 새로 적으면 여기에 다시 쌓여요.'
-                    }
-                  />
-                ) : (
+              {stats.publishedEntries > 0 && staffCount > 0 ? (
+                <Heatmap
+                  head={{
+                    value: String(heatHead.pct),
+                    unit: '%',
+                    title: '직원이 아는 노하우',
+                    aside: heatHead.weekUp > 0 ? `이번 주 ↑${heatHead.weekUp}칸` : `${stats.publishedEntries}개`,
+                  }}
+                  groups={heatGroups}
+                  onPressCell={(id) => router.push(`/owner/edit/${id}` as never)}
+                />
+              ) : (
+                <View style={st.hero}>
                   <Text style={st.heroEmpty}>
-                    문제를 낼 노하우가 없어요.{'\n'}노하우를 적으면 직원이 아는지 확인할 수 있어요.
+                    {stats.publishedEntries === 0
+                      ? '문제를 낼 노하우가 없어요.\n노하우를 적으면 직원이 아는지 확인할 수 있어요.'
+                      : '아직 직원이 없어요.\n직원이 합류하면 누가 어떤 노하우를 아는지 여기서 보여요.'}
                   </Text>
-                )}
-              </View>
+                </View>
+              )}
             </Appear>
 
             {/* Primary 는 화면당 1개다 — 여기 하나뿐이고 아래 목록 행에는 두지 않는다. */}
@@ -308,51 +366,52 @@ export default function OwnerTrainingScreen() {
               </View>
             </Appear>
 
-            {/* 고쳐야 할 퀴즈 — 경고행은 **하나**다(A 조합형 블록 ≤5 · 같은 형태 연속 금지).
-                갈래(노하우가 바뀜 / 다들 틀려요)는 시트 안에서 나눈다. 0건이면 줄째로 안 그린다. */}
+            {/* 고칠 것 — 경고행은 **응시 중인 퀴즈만**(§10-2). 미리보기형(§7-3: 낡음+오답 두 갈래, 행동이 다름)
+                이 화면의 미리보기형은 이것 하나. 갈래는 시트 안에서 나눈다. 0건이면 줄째로 안 그린다. */}
             <AlertRow
-              label="고쳐야 할 퀴즈 · 문항을 다시 만들거나 노하우를 고쳐야 해요"
-              count={stats.staleQuizzes + missRows.length}
+              label="응시 중인 퀴즈 중 고칠 것"
+              count={fix.count}
               unit="건"
+              preview={fix.preview}
               onPress={() => setFixOpen(true)}
             />
 
-            {live.length > 0 && (
+            {/* 롤업 '손볼 것' — 경고에서 빠진 낡은 문항(초안·보관 = 안 나가는 중)은 사라지지 않고 여기로. */}
+            {fix.staleIdle.length > 0 ? (
+              <RollupRows
+                rows={[{
+                  key: 'idle-stale',
+                  title: '낡은 문항 있는 퀴즈',
+                  count: fix.staleIdle.length,
+                  unit: '건',
+                  target: `안 나가는 중 · ${fix.staleIdle.map((x) => x.course.name).slice(0, 2).join(', ')}${fix.staleIdle.length > 2 ? ' 외' : ''}`,
+                  onPress: () => (fix.staleIdle.every((x) => x.archived) ? setBoxOpen(true) : setDraftOpen(true)),
+                }]}
+              />
+            ) : null}
+
+            {/* 응시 중 — D 가로 스크롤(§10-8). 카드 1장 = 퀴즈 1건, 막대 1개 = 사람 1명(통과/미통과).
+                맨 끝 점선 카드 = **합류 전 응시**(게스트 링크). ⛔ 채용 전환 액션 없음 — 명시적으로 스코프 밖.
+                ⛔ "이 사람 준비됐어요" 같은 판단 문구를 넣지 않는다. 판단은 사장이 한다. */}
+            {(live.length > 0 || guests.length > 0) && (
               <Appear delay={stagger(2)}>
                 <View style={st.group}>
-                  <SectionLabel title="직원이 푸는 중" hint={`${live.length}건`} />
-                  <View style={st.listCard}>
-                    {live.map((q, i) => (
-                      <QuizRowView
-                        key={q.course.id}
-                        row={q}
-                        divider={i > 0}
-                        link={linkStateOf(q.course.id)}
-                        onPress={() => goDetail(q.course.id)}
-                      />
+                  <SectionLabel
+                    title="응시 중"
+                    hint={[live.length > 0 ? `직원 ${live.length}건` : '', guests.length > 0 ? `합류 전 ${guests.length}명` : ''].filter(Boolean).join(' · ')}
+                  />
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={st.hscroll} contentContainerStyle={st.hscrollInner}>
+                    {live.map((q) => (
+                      <StatCard key={q.course.id} style={st.hcard} item={liveCardOf(q, linkStateOf(q.course.id), () => goDetail(q.course.id))} />
                     ))}
-                  </View>
+                    {guests.length > 0 ? (
+                      <StatCard style={[st.hcard, st.hcardGuest]} item={guestCardOf(guests, () => setGuestOpen(true))} />
+                    ) : null}
+                  </ScrollView>
+                  <Text style={st.footNote}>막대 1개 = 사람 1명 · 검정 = 통과</Text>
                 </View>
               </Appear>
             )}
-
-            {/* 링크 응시 결과 — 목록 카드를 셋 연속으로 세우면 화면이 다시 "카드의 나열"이 된다
-                (배치규칙① 같은 형태 연속 3회 금지). 한 줄로 내리고 내용은 시트에서 본다.
-                ⛔ "이 사람 준비됐어요" 같은 판단 문구를 넣지 않는다. 판단은 사장이 한다.
-                ⛔ 합류 초대·채용 전환 액션 없음 — 명시적으로 스코프 밖이다. */}
-            {guests.length > 0 ? (
-              <Pressable
-                onPress={() => setGuestOpen(true)}
-                style={({ pressed }) => [st.subLink, pressed && { opacity: 0.6 }]}
-                accessibilityRole="button"
-                accessibilityLabel={`링크 응시 결과 ${guests.length}건 보기`}
-              >
-                <Text style={st.subLinkText}>링크로 푼 사람 {guests.length}명 보기</Text>
-              </Pressable>
-            ) : null}
-
-            {/* 각주는 **눌릴 것이 보일 때만** — 초안만 있고 접혀 있으면 누를 게 화면에 없다. */}
-            {live.length > 0 ? <Text style={st.footNote}>누르면 결과와 문항을 봐요</Text> : null}
           </>
         )}
       </ScrollView>
@@ -362,16 +421,16 @@ export default function OwnerTrainingScreen() {
           다음 행동이 다르므로 문구도 섞지 않는다. */}
       {fixOpen && (
         <BottomSheet visible onClose={() => setFixOpen(false)}>
-          <SheetHead title="고쳐야 할 퀴즈" onClose={() => setFixOpen(false)} />
+          <SheetHead title="고칠 퀴즈" onClose={() => setFixOpen(false)} />
           <ScrollView style={st.sheetScroll} showsVerticalScrollIndicator={false}>
-            {staleQuizzes.length > 0 && (
+            {fix.staleLive.length > 0 && (
               <View style={st.group}>
-                <SectionLabel title="바뀐 노하우인데 옛 정답이 나가요" hint={`${staleQuizzes.length}건`} />
+                <SectionLabel title="옛 정답 나가는 퀴즈" hint={`${fix.staleLive.length}건`} />
                 <Text style={st.missIntro}>
                   근거가 된 노하우를 고친 뒤 문항을 다시 안 만들었어요. 퀴즈를 열어 새로 만들어 주세요.
                 </Text>
                 <View style={st.listCard}>
-                  {staleQuizzes.map((r, i) => (
+                  {fix.staleLive.map((r, i) => (
                     <Pressable
                       key={r.course.id}
                       onPress={() => {
@@ -393,14 +452,14 @@ export default function OwnerTrainingScreen() {
               </View>
             )}
 
-            {missRows.length > 0 && (
+            {fix.missLive.length > 0 && (
               <View style={st.group}>
-                <SectionLabel title="다들 틀려요" hint={`${missRows.length}건`} />
+                <SectionLabel title="높은 오답률" hint={`${fix.missLive.length}건`} />
                 <Text style={st.missIntro}>
                   직원이 못 외운 게 아니라 노하우 글이 헷갈릴 수 있어요. 아래 노하우를 다시 보세요.
                 </Text>
                 <View style={st.listCard}>
-                  {missRows.map((r, i) => (
+                  {fix.missLive.map((r, i) => (
                     <Pressable
                       key={r.entryId}
                       onPress={() => {
@@ -413,7 +472,7 @@ export default function OwnerTrainingScreen() {
                     >
                       <View style={st.rowText}>
                         <Text style={st.rowTitle} numberOfLines={1}>{r.text}</Text>
-                        <Text style={st.rowSub} numberOfLines={1}>{r.attempts}명 품 · {r.missPct}% 틀림</Text>
+                        <Text style={st.rowSub} numberOfLines={1}>응시 {r.attempts}명 · 오답 {missPctOf(r.entryId)}%</Text>
                       </View>
                       <ProgressPill text="고치기" tone="behind" />
                     </Pressable>
@@ -429,7 +488,7 @@ export default function OwnerTrainingScreen() {
           새 화면을 만들지 않는다(IA 증식 금지) — 한 줄 눌러 여기서 보고, 자세한 건 결과 화면으로 간다. */}
       {guestOpen && (
         <BottomSheet visible onClose={() => setGuestOpen(false)}>
-          <SheetHead title="링크로 푼 사람" onClose={() => setGuestOpen(false)} />
+          <SheetHead title="합류 전 응시" onClose={() => setGuestOpen(false)} />
           <ScrollView style={st.sheetScroll} showsVerticalScrollIndicator={false}>
             <View style={st.listCard}>
               {guests.map((g, i) => (
@@ -457,24 +516,42 @@ export default function OwnerTrainingScreen() {
           <Text style={st.missIntro}>보관한 퀴즈는 직원에게 안 나가요. 다시 보내면 그대로 살아나요.</Text>
           <ScrollView style={st.sheetScroll} showsVerticalScrollIndicator={false}>
             <View style={st.listCard}>
-              {archived.map((c, i) => (
-                /* 행 자체는 누르는 것이 아니다 — 안의 버튼과 role=button 이 중첩되면 RN-web 에서 깨진다. */
-                <View key={c.id} style={[st.row, i > 0 && st.rowDivider]}>
-                  <View style={st.rowText}>
-                    <Text style={st.rowTitle} numberOfLines={1}>{c.name}</Text>
-                    <Text style={st.rowSub} numberOfLines={1}>보관 중이에요</Text>
+              {archived.map((c, i) => {
+                /* §10-3 재배포 고지 — 근거 노하우가 바뀐 보관 퀴즈는 그대로 보내면 옛 정답이 나간다.
+                   판정은 staleCountOf(delta·0114) 재사용, 새 판정 없음. 두 갈래를 여기서 나눈다. */
+                const stale = fix.staleIdle.find((x) => x.archived && x.course.id === c.id)?.staleCount ?? 0;
+                return (
+                  /* 행 자체는 누르는 것이 아니다 — 안의 버튼과 role=button 이 중첩되면 RN-web 에서 깨진다. */
+                  <View key={c.id} style={[st.row, i > 0 && st.rowDivider]}>
+                    <View style={st.rowText}>
+                      <Text style={st.rowTitle} numberOfLines={1}>{c.name}</Text>
+                      <Text style={[st.rowSub, stale > 0 && st.rowSubWarn]} numberOfLines={2}>
+                        {stale > 0 ? `노하우가 바뀌어 문항 ${stale}개가 낡았어요. 새로 만들까요?` : '보관 중이에요'}
+                      </Text>
+                    </View>
+                    {stale > 0 ? (
+                      <Pressable
+                        onPress={() => void unarchive(c, true)}
+                        disabled={busy}
+                        style={({ pressed }) => [st.rowAction, busy && { opacity: 0.4 }, pressed && { opacity: 0.6 }]}
+                        accessibilityRole="button"
+                        accessibilityLabel={`${c.name} 문항 새로 만들기`}
+                      >
+                        <Text style={st.rowActionText}>새로 만들기</Text>
+                      </Pressable>
+                    ) : null}
+                    <Pressable
+                      onPress={() => void unarchive(c)}
+                      disabled={busy}
+                      style={({ pressed }) => [st.rowAction, busy && { opacity: 0.4 }, pressed && { opacity: 0.6 }]}
+                      accessibilityRole="button"
+                      accessibilityLabel={`${c.name} ${stale > 0 ? '그대로 다시 보내기' : '다시 보내기'}`}
+                    >
+                      <Text style={st.rowActionText}>{stale > 0 ? '그대로 보내기' : '다시 보내기'}</Text>
+                    </Pressable>
                   </View>
-                  <Pressable
-                    onPress={() => void unarchive(c)}
-                    disabled={busy}
-                    style={({ pressed }) => [st.rowAction, busy && { opacity: 0.4 }, pressed && { opacity: 0.6 }]}
-                    accessibilityRole="button"
-                    accessibilityLabel={`${c.name} 다시 보내기`}
-                  >
-                    <Text style={st.rowActionText}>다시 보내기</Text>
-                  </Pressable>
-                </View>
-              ))}
+                );
+              })}
             </View>
           </ScrollView>
         </BottomSheet>
@@ -482,6 +559,55 @@ export default function OwnerTrainingScreen() {
 
     </SafeAreaView>
   );
+}
+
+/**
+ * 응시 중 카드 1장 = 퀴즈 1건(D 가로 스크롤). 막대 1개 = 받은 사람 1명 — 통과는 검정, 아직은 주황(R4 실측값).
+ * ★사람 옆 점수가 아니라 **퀴즈의 진행**이라 `n/m명` 표기가 허용된다(감시원칙은 개인 줄세우기 금지).
+ */
+function liveCardOf(q: QuizListRow, link: 'open' | 'closed' | null, onPress: () => void): StatCardItem {
+  const linkTag = link === 'open' ? ' · 링크 열림' : link === 'closed' ? ' · 링크 닫힘' : '';
+  if (q.status === 'scheduled' || q.recipients === 0) {
+    return { key: q.course.id, label: q.course.name, value: '발송 예정', sub: q.caption + linkTag, onPress };
+  }
+  const left = q.recipients - q.passed;
+  return {
+    key: q.course.id,
+    label: q.course.name,
+    value: q.passed,
+    unit: `/${q.recipients}명`,
+    sub: q.staleCount > 0 ? `문항 ${q.staleCount}개 낡음${linkTag}` : left > 0 ? `${left}명이 아직${linkTag}` : `전원 통과${linkTag}`,
+    tone: q.staleCount > 0 || left > 0 ? 'hot' : undefined,
+    onPress,
+    visual: (
+      <Sparkline
+        values={Array.from({ length: q.recipients }, (_, i) => (i < q.passed ? 100 : 30))}
+        tones={Array.from({ length: q.recipients }, (_, i) => (i < q.passed ? 'on' : 'warn'))}
+        accessibilityLabel={`${q.recipients}명 중 ${q.passed}명 통과`}
+      />
+    ),
+  };
+}
+
+/** 합류 전 응시(게스트 링크) 점선 카드 — 막대 1개 = 응시 1건(맞힌 비율). 판단 문구 없음. */
+function guestCardOf(guests: GuestSubmissionRow[], onPress: () => void): StatCardItem {
+  const rates = guests.map((g) => (g.total > 0 ? g.correct / g.total : 0));
+  const best = guests.reduce((a, g) => (g.total > 0 && g.correct / g.total > (a.total > 0 ? a.correct / a.total : -1) ? g : a), guests[0]);
+  return {
+    key: 'guests',
+    label: '합류 전 응시',
+    value: guests.length,
+    unit: '명',
+    sub: `링크로 풂 · 최고 ${best.correct}/${best.total}`,
+    onPress,
+    visual: (
+      <Sparkline
+        values={rates.map((r) => Math.max(10, Math.round(r * 100)))}
+        tones={rates.map((r) => (r >= 0.6 ? 'on' : 'warn'))}
+        accessibilityLabel={`합류 전 응시 ${guests.length}명`}
+      />
+    ),
+  };
 }
 
 /**
@@ -502,17 +628,17 @@ function QuizRowView({
   link: 'open' | 'closed' | null;
   onPress: () => void;
 }) {
-  let pill = '만들다 만 것';
+  let pill = '초안';
   let tone: ProgressTone = 'neutral';
   if (row.staleCount > 0) {
-    pill = '노하우가 바뀜';
+    pill = '노하우 변경됨';
     tone = 'behind';
   } else if (row.status === 'scheduled') {
-    pill = '보낼 예정';
+    pill = '발송 예정';
     tone = 'progress';
   } else if (row.status === 'sent') {
     const all = row.recipients > 0 && row.passed >= row.recipients;
-    pill = all ? '다 맞혔어요' : `${row.passed}/${row.recipients}명`;
+    pill = all ? '전원 통과' : `${row.passed}/${row.recipients}명`;
     tone = all ? 'done' : 'progress';
   }
 
@@ -658,6 +784,12 @@ const st = StyleSheet.create({
 
   // 섹션 제목은 카드 밖 — 라벨과 카드를 한 덩어리로 묶는 wrap(제목만 따로 떠 보이지 않게).
   group: { gap: Space.sm },
+  // D 가로 스크롤 — 옆 카드를 잘라서 노출(배치규칙④). 거터를 뚫고 나가 프레임 끝까지 흐른다.
+  hscroll: { marginHorizontal: -Space.gutter },
+  hscrollInner: { paddingHorizontal: Space.gutter, gap: Space.sm, paddingBottom: Space.xs },
+  hcard: { width: 168 },
+  // 합류 전 응시 = 아직 직원이 아닌 사람 → 점선.
+  hcardGuest: { borderStyle: 'dashed' },
 
   loadingWrap: { alignItems: 'center', justifyContent: 'center', gap: Space.sm, paddingVertical: Space.xl * 2 },
   loadingText: { fontSize: 13, fontWeight: '600', color: InkColors.ink3 },

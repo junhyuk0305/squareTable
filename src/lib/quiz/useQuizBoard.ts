@@ -18,11 +18,38 @@ import {
   staffWhoUnderstandEntries,
 } from '@/lib/store/useWorkStore';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
+import { useStaffStore } from '@/lib/store/useStaffStore';
+import { useHubStore } from '@/lib/store/useHubStore';
+import { useSessionStore } from '@/lib/store/useSessionStore';
+import { getSectionMeta } from '@/lib/utils/category';
+import type { HeatCell, HeatGroup, HeatLevel } from '@/components/blocks/Heatmap';
 import type { QuizAssignment, QuizItem, TrainingCourse } from '@/lib/quiz/types';
 
 /** 오답 잦음 판정(0103) — 표본이 이만큼 쌓이고 오답률이 이 선을 넘으면 노하우 결함 신호. */
 export const QUIZ_MISS_MIN_ATTEMPTS = 5;
 export const QUIZ_MISS_RATE = 0.4;
+/**
+ * "높은 오답률"(퀴즈 개발계획 §10-4 · 2026-08-27 확정) — **낸 퀴즈에서 절반 넘게 오답**.
+ * 인원 하한·최근 발송 기준 없음. 옛 홈의 `missPct > 0`(한 명이 한 번 틀려도 경고)은 오류였다.
+ * 위 0103 기준(표본 5·40%)은 노하우 행의 오답률 **표기**용이라 그대로 두고, 경고행·히트맵 테두리는 이걸 쓴다.
+ */
+export const QUIZ_MISS_HALF_PCT = 50;
+/** 히트맵 머리줄 "이번 주 ↑n칸" — 최근 7일에 확인된 칸 수(knowhow_understanding.verified_at 실측, R4). */
+const WEEK_MS = 7 * 86_400_000;
+
+/** 퀴즈 홈 경고행·롤업의 재료 — 판정은 전부 여기(§10-2·10-4). 화면은 그리기만 한다. */
+export type QuizFixQueue = {
+  /** 응시 중(sent·scheduled)인 퀴즈 중 낡은 문항이 있는 것 → 문항을 새로 만든다. */
+  staleLive: QuizListRow[];
+  /** 응시 중인 퀴즈에 담긴 노하우 중 절반 넘게 틀리는 것 → 노하우 글을 고친다. */
+  missLive: QuizRow[];
+  /** 경고행 건수 = 위 둘의 합. */
+  count: number;
+  /** 경고행 미리보기 2줄(갈래별 1건씩 — 블록어휘 §7-3). */
+  preview: string[];
+  /** 초안·보관 퀴즈의 낡은 문항 — 경고가 아니라 롤업 '손볼 것'(안 나가는 중). */
+  staleIdle: { course: TrainingCourse; archived: boolean; staleCount: number }[];
+};
 
 /** 목록·대시보드가 공통으로 쓰는 노하우 한 줄. 화면 문구는 여기 값에서 파생된다. */
 export type QuizRow = {
@@ -116,10 +143,18 @@ export function useQuizBoard() {
   const workLoaded = useWorkStore((s) => s.loaded);
   const entries = usePlaybookStore((s) => s.entries);
   const playbookLoaded = usePlaybookStore((s) => s.loaded);
+  // 히트맵(§10-1) — 칸의 분모는 직원 수, 머리줄 비율은 허브 링과 **같은 값**(owner_knowhow_stats).
+  const staff = useStaffStore((s) => s.staff);
+  const staffLoaded = useStaffStore((s) => s.loaded);
+  const knowhowStats = useHubStore((s) => s.knowhowStats);
+  const knowhowStatsLoaded = useHubStore((s) => s.knowhowStatsLoaded);
+  const unitId = useSessionStore((s) => s.unitId);
 
   useEffect(() => {
     void useWorkStore.getState().hydrate();
     void usePlaybookStore.getState().hydrate();
+    void useStaffStore.getState().hydrate();
+    void useHubStore.getState().hydrateKnowhowStats();
   }, []);
 
   // "최근 30일 확인" 판정 기준 시각 — 렌더 중 Date.now() 금지(컴파일러 순수성), 마운트 시 1회로 충분.
@@ -225,6 +260,15 @@ export function useQuizBoard() {
       ).length;
     },
     [quizItems, entryById],
+  );
+
+  /** 원시 오답률 % (표본 하한 없음). "높은 오답률" 판정(§10-4)은 `> QUIZ_MISS_HALF_PCT` 하나다. */
+  const missPctOf = useCallback(
+    (entryId: string) => {
+      const qs = quizStats[entryId];
+      return qs && qs.attempts > 0 ? Math.round((qs.misses / qs.attempts) * 100) : 0;
+    },
+    [quizStats],
   );
 
   const courseNameById = useMemo(() => new Map(courses.map((c) => [c.id, c.name])), [courses]);
@@ -361,6 +405,72 @@ export function useQuizBoard() {
   );
 
   /**
+   * 히트맵(H5 · §10-1) — 발행 노하우 1개 = 상자 1개, 카테고리(section)별 그룹.
+   * 색 = **아는 직원 비율**(understandingOf / staff) · 0 = 문항 없음 · stale = 낡은 문항 · miss = 절반 넘게 오답.
+   * 그룹 순서 = 옅은 칸(0~1단계) 비율 높은 순 — 손볼 곳이 위로.
+   * ★직원 0명이면 비율이 없다 — 화면이 히트맵 대신 빈 상태 문구를 그린다(호출부 판단).
+   */
+  const buildHeatmap = useCallback((): HeatGroup[] => {
+    const n = staff.length;
+    const by = new Map<string, HeatCell[]>();
+    for (const e of entries) {
+      if (e.status === 'draft') continue;
+      const known = understandingOf(understanding, e.id, { now, dueDays: null }).length;
+      const items = quizCountOf(e.id);
+      let level: HeatLevel = 0;
+      if (items > 0) {
+        const r = n > 0 ? known / n : 0;
+        level = r >= 1 ? 4 : r >= 0.67 ? 3 : r >= 0.34 ? 2 : 1;
+      }
+      const stale = items > 0 && staleCountOf(e.id) > 0;
+      const miss = items > 0 && missPctOf(e.id) > QUIZ_MISS_HALF_PCT;
+      const status =
+        items === 0 ? '문항 없음' : `${n}명 중 ${known}명 앎${stale ? ' · 노하우 변경됨' : miss ? ' · 높은 오답률' : ''}`;
+      const name = getSectionMeta(e.section).label;
+      const list = by.get(name) ?? [];
+      list.push({ id: e.id, title: e.title, level, status, stale, miss });
+      by.set(name, list);
+    }
+    const pale = (cells: HeatCell[]) => cells.filter((c) => c.level <= 1).length / Math.max(1, cells.length);
+    return [...by]
+      .map(([name, cells]) => ({ name, cells }))
+      .sort((a, b) => pale(b.cells) - pale(a.cells) || a.name.localeCompare(b.name, 'ko'));
+  }, [entries, staff.length, understanding, now, quizCountOf, staleCountOf, missPctOf]);
+
+  /** 머리줄 값 — 허브 링과 같은 원장(owner_knowhow_stats). 이번 주 ↑n = 최근 7일 확인 기록 수. */
+  const heatHead = useMemo(() => {
+    const row = knowhowStats.find((s) => s.unit_id === unitId);
+    const cells = row ? row.entries * row.staff : 0;
+    const known = row ? row.understood : 0;
+    const weekUp = understanding.filter((u) => now - Date.parse(u.verifiedAt) < WEEK_MS).length;
+    return { cells, known, pct: cells > 0 ? Math.round((known / cells) * 100) : 0, weekUp };
+  }, [knowhowStats, unitId, understanding, now]);
+
+  /**
+   * 경고행·롤업 재료(§10-2 · §10-4). **응시 중(sent·scheduled)인 퀴즈만** 경고다 —
+   * 안 나가는 퀴즈의 낡은 문항은 급하지 않다(롤업 '손볼 것'으로 내린다).
+   */
+  const buildFixQueue = useCallback(
+    (rows: QuizListRow[]): QuizFixQueue => {
+      const live = rows.filter((r) => r.status !== 'draft');
+      const staleLive = live.filter((r) => r.staleCount > 0);
+      const liveEntryIds = new Set(live.flatMap((r) => courseEntriesOf(courseEntries, r.course.id).map((x) => x.entryId)));
+      const missLive = buildRows(null).filter((r) => liveEntryIds.has(r.entryId) && missPctOf(r.entryId) > QUIZ_MISS_HALF_PCT);
+      const preview: string[] = [];
+      if (staleLive[0]) preview.push(`${staleLive[0].course.name} — 옛 정답이 나가는 중`);
+      if (missLive[0]) preview.push(`${missLive[0].text} — 오답 ${missPctOf(missLive[0].entryId)}%`);
+      const staleOf = (c: TrainingCourse) =>
+        courseEntriesOf(courseEntries, c.id).reduce((k, x) => k + staleCountOf(x.entryId), 0);
+      const staleIdle = [
+        ...rows.filter((r) => r.status === 'draft' && r.staleCount > 0).map((r) => ({ course: r.course, archived: false, staleCount: r.staleCount })),
+        ...archived.map((c) => ({ course: c, archived: true, staleCount: staleOf(c) })).filter((x) => x.staleCount > 0),
+      ];
+      return { staleLive, missLive, count: staleLive.length + missLive.length, preview, staleIdle };
+    },
+    [courseEntries, buildRows, missPctOf, staleCountOf, archived],
+  );
+
+  /**
    * 이 훅이 내놓는 **모든** 값이 확정됐는가 — 화면은 이것 하나만 보고 로딩을 건다.
    *
    * ★`coursesLoaded` 만으로 그리면 안 된다. 한 줄의 알약("초안"/"3/5명"/"낡음 2")은 코스가 아니라
@@ -375,6 +485,9 @@ export function useQuizBoard() {
     statsLoaded &&
     workLoaded &&
     playbookLoaded &&
+    // 히트맵은 직원 수·이해 기록·문항이 **셋 다** 와야 그린다 — 하나만 오면 0%가 잠깐 스친다.
+    staffLoaded &&
+    knowhowStatsLoaded &&
     (trainedEntryIds.length === 0 || quizItemsLoaded);
 
   return {
@@ -398,6 +511,11 @@ export function useQuizBoard() {
     bumpSends,
     buildQuizzes,
     buildStats,
+    buildHeatmap,
+    heatHead,
+    buildFixQueue,
+    missPctOf,
+    staffCount: staff.length,
     linkedCourseIds,
     openLinkCourseIds,
   };

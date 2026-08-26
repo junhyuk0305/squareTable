@@ -20,8 +20,12 @@ import { PlanUpgradeNotice } from '@/components/PlanUpgradeNotice';
 import { StarterChecklist } from '@/components/hub/StarterChecklist';
 import { StorePickerSheet, type StorePickerRow } from '@/components/hub/StorePickerSheet';
 import { SectionLabel } from '@/components/SectionLabel';
+import { BottomSheet } from '@/components/BottomSheet';
+import { SheetHead } from '@/components/owner/quiz/kit';
 import { AlertRow } from '@/components/blocks/AlertRow';
 import { MiniStats } from '@/components/blocks/MiniStats';
+import { StackBar } from '@/components/blocks/StackBar';
+import { StatCardGrid, type StatCardItem } from '@/components/blocks/StatCardGrid';
 import { ScreenLoading } from '@/components/ScreenLoading';
 import { LoadErrorState } from '@/components/LoadErrorState';
 import { Appear, stagger } from '@/components/Appear';
@@ -49,6 +53,10 @@ export function OwnerStatusView({ header }: { header: ReactNode }) {
   const ownerLoadError = useHubStore((s) => s.ownerLoadError);
   const hydrateOwner = useHubStore((s) => s.hydrateOwner);
   const retryOwner = useHubStore((s) => s.retryOwner);
+  // L4 '직원이 아는 노하우' 칸(D6 · 2026-08-27) — 노하우 탭 링·퀴즈 홈 히트맵과 **같은 원장**(owner_knowhow_stats).
+  const knowhowStats = useHubStore((s) => s.knowhowStats);
+  const knowhowStatsLoaded = useHubStore((s) => s.knowhowStatsLoaded);
+  const hydrateKnowhowStats = useHubStore((s) => s.hydrateKnowhowStats);
   const crossData = useCrossNotifStore((s) => s.data);
   const crossLoaded = useCrossNotifStore((s) => s.loaded);
   const hydrateCross = useCrossNotifStore((s) => s.hydrate);
@@ -65,9 +73,19 @@ export function OwnerStatusView({ header }: { header: ReactNode }) {
     void hydrateOwner();
     void hydrateCross();
     void hydratePrefs();
-  }, [hydrateOwner, hydrateCross, hydratePrefs]);
+    void hydrateKnowhowStats();
+  }, [hydrateOwner, hydrateCross, hydratePrefs, hydrateKnowhowStats]);
 
   const [sortKey, setSortKey] = useState<SortKey>('pending_q');
+  /** '확인 필요' 칸을 눌렀는데 갈래가 둘 이상일 때 — 갈래 3행을 시트로(목적지가 제각각이라 한 칸이 못 고른다). */
+  const [inboxOpen, setInboxOpen] = useState(false);
+
+  /** 노하우 이해도 합계 — 매장마다 (노하우 × 직원)을 곱한 뒤 더한다(노하우 탭과 같은 계산). */
+  const knowing = useMemo(() => {
+    let cells = 0; let known = 0; let entries = 0; let staff = 0;
+    for (const s of knowhowStats) { cells += s.entries * s.staff; known += s.understood; entries += s.entries; staff += s.staff; }
+    return { cells, known, entries, staff, pct: cells > 0 ? Math.round((known / cells) * 100) : 0 };
+  }, [knowhowStats]);
 
   const todayByUnit = useMemo(() => {
     const m: Record<string, { working_now: number; scheduled: number }> = {};
@@ -105,10 +123,6 @@ export function OwnerStatusView({ header }: { header: ReactNode }) {
     };
   }, [crossData, ownedIds, overview]);
   const [picker, setPicker] = useState<{ title: string; path: Href; units: { uid: string; count: number }[] } | null>(null);
-  // '확인 필요' 카드가 비었는가 — 받은질문(questions)은 2026-08-06에 맨 위 AlertRow로 빠졌으므로
-  // 여기 세지 않는다. 세면 질문만 있을 때 카드가 "확인할 일이 있다"고 하고선 아무 행도 못 그린다.
-  const inboxEmpty =
-    inbox.joins.length === 0 && inbox.suggestions === 0 && inbox.needsReview === 0;
 
   // ── 매장 비교 정렬(손 필요 순 기본) — 정렬은 표 전용, 스냅샷·이번달은 매장 생성순 유지 ──
   const sorted = useMemo(() => {
@@ -135,7 +149,7 @@ export function OwnerStatusView({ header }: { header: ReactNode }) {
   //   되지 않는다(#6). 예전엔 넷 다 "실패하면 loaded 를 안 올림" 계약이라 **하나만 실패해도
   //   사장이 로그인 직후 착지하는 이 화면이 영원히 "매장 현황을 불러오고 있어요…"** 였고,
   //   마운트 1회 fetch 라 재시도 버튼도 트리거도 없었다.
-  if (!ownerLoaded || !todayLoaded || !crossLoaded || !prefsLoaded) {
+  if (!ownerLoaded || !todayLoaded || !crossLoaded || !prefsLoaded || !knowhowStatsLoaded) {
     return (
       <View style={styles.loading}>
         <ScreenLoading label="매장 현황을 불러오고 있어요…" />
@@ -166,6 +180,7 @@ export function OwnerStatusView({ header }: { header: ReactNode }) {
       <Pressable
         key={title}
         onPress={() => {
+          setInboxOpen(false);
           if (multi) setPicker({ title, path, units });
           else if (units[0]) void goStore(units[0].uid, path);
         }}
@@ -184,6 +199,69 @@ export function OwnerStatusView({ header }: { header: ReactNode }) {
       </Pressable>
     );
   };
+
+  /** 확인 필요 갈래 3행 — 시트와 (갈래가 하나뿐일 때) 칸 탭이 같은 것을 쓴다. */
+  const inboxKinds = [
+    { key: 'join', n: inbox.joins.length, label: '합류', color: BrandColors.mention, path: '/owner/staff' as Href, units: inbox.joinUnits, title: '합류 신청' },
+    { key: 'sugg', n: inbox.suggestions, label: '제안', color: BrandColors.good, path: '/owner/suggestions' as Href, units: inbox.suggestionUnits, title: '검토할 제안' },
+    { key: 'review', n: inbox.needsReview, label: '노하우', color: BrandColors.warn, path: '/owner/knowledge?review=1' as Href, units: inbox.needsReviewUnits, title: '확인이 필요한 노하우' },
+  ];
+  const inboxTotal = inboxKinds.reduce((n, k) => n + k.n, 0);
+  const inboxLive = inboxKinds.filter((k) => k.n > 0);
+  const goKind = (k: (typeof inboxKinds)[number]) => {
+    if (multi) setPicker({ title: k.title, path: k.path, units: k.units });
+    else { const u = k.units.find((x) => x.count > 0) ?? k.units[0]; if (u) void goStore(u.uid, k.path); }
+  };
+
+  /**
+   * L4 매장 상태 그리드(§7-2 · 2026-08-27). 칸 = [라벨+›][큰 값][시각요소]. R4: 원장 있는 것만 그림 —
+   *  · 직원이 아는 노하우 = 스냅샷(구성 원장 없음) → 시각요소 없이 절대 수 한 줄
+   *  · 확인 필요 = 지금 값의 **구성**(합류/제안/노하우) → StackBar
+   *  · 이번달 인건비·AI 답변 = 월 이력 원장을 클라가 안 갖고 있어 막대 없음(가짜 추세 금지)
+   * ★'이번 주 퀴즈' 칸은 넣지 않았다 — 허브 RPC 에 발송·응시 집계가 없다. 퀴즈 홈이 담당한다.
+   * ★퀴즈 관리 진입은 2026-08-07 결정대로 노하우 탭이다(D6). 여기 칸은 **읽기 진입**(/owner/training).
+   */
+  const gridItems: StatCardItem[] = [
+    {
+      key: 'knowing',
+      label: '직원이 아는 노하우',
+      value: knowing.cells > 0 ? knowing.pct : '없어요',
+      unit: knowing.cells > 0 ? '%' : undefined,
+      sub: knowing.cells > 0 ? `노하우 ${knowing.entries}개 × 직원 ${knowing.staff}명` : knowing.staff === 0 ? '직원이 들어오면 보여요' : '노하우를 담으면 보여요',
+      onPress: () => {
+        if (multi) setPicker({ title: '퀴즈', path: '/owner/training', units: overview.map((r) => ({ uid: r.unit_id, count: 0 })) });
+        else if (overview[0]) void goStore(overview[0].unit_id, '/owner/training');
+      },
+    },
+    {
+      key: 'inbox',
+      label: '확인 필요',
+      value: inboxTotal > 0 ? inboxTotal : '없어요',
+      unit: inboxTotal > 0 ? '건' : undefined,
+      tone: inboxTotal > 0 ? 'hot' : undefined,
+      visual: inboxTotal > 0 ? <StackBar parts={inboxKinds.map((k) => ({ n: k.n, label: k.label, color: k.color }))} /> : undefined,
+      onPress: inboxTotal === 0 ? undefined : inboxLive.length === 1 ? () => goKind(inboxLive[0]) : () => setInboxOpen(true),
+    },
+    {
+      key: 'labor',
+      label: '이번달 인건비',
+      value: laborTotal >= 10000 ? Math.round(laborTotal / 10000).toLocaleString() : laborTotal.toLocaleString(),
+      unit: laborTotal >= 10000 ? '만원' : '원',
+      sub: multi ? `매장 ${overview.length}곳 합계` : undefined,
+      onPress: () => {
+        if (multi) setPicker({ title: '급여', path: '/owner/payroll', units: overview.map((r) => ({ uid: r.unit_id, count: 0 })) });
+        else if (overview[0]) void goStore(overview[0].unit_id, '/owner/payroll');
+      },
+    },
+    {
+      // 0082 부터 유료 플랜에도 캡(매장당 1500)이 있다 — free 만 분모를 보여주면 유료 사장은 한도를 모른 채 402를 맞는다.
+      key: 'ai',
+      label: 'AI 답변 사용',
+      value: aiTotal.toLocaleString(),
+      unit: aiCap != null ? ` / ${(aiCap * Math.max(overview.length, 1)).toLocaleString()}` : '건',
+      sub: aiCap != null ? `매장당 월 ${aiCap.toLocaleString()}건까지 · 다음 달에 다시 채워져요` : '직원이 물었을 때 AI가 답한 횟수',
+    },
+  ];
 
   // 시작 체크리스트(콜드스타트) — 매장 1곳 사장만(신규 단일 매장이 타깃, 다점포는 이미 루프를 앎).
   // ownerLoaded 게이트로 "로드 전"을 "새 매장"으로 위장하지 않는다. 4단계 완료 시 영구 소멸.
@@ -260,34 +338,15 @@ export function OwnerStatusView({ header }: { header: ReactNode }) {
       </Appear>
       )}
 
-      {/* ── 3) 확인 필요 ── */}
+      {/* ── 3) 매장 상태 — L4 2열 지표 그리드(2026-08-27 §7-2).
+             옛 '확인 필요' 카드 3행 → 스택바 1칸(구성 = 합류/제안/노하우), 옛 '이번달' MiniStats 2칸 → 그리드 칸.
+             퀴즈 관리 진입점은 2026-08-07 결정대로 노하우 탭(OwnerKnowhowHubView)이다 — 되돌리는 게 아니다.
+             '직원이 아는 노하우' 칸은 **읽기 진입**(D6 확정: 현황엔 지표 칸만, 관리는 노하우 탭).
+             받은질문은 맨 위 AlertRow(2026-08-06) — 여기서 다시 세지 않는다. ── */}
       <Appear delay={stagger(4)}>
-        <SectionLabel title="확인 필요" />
-        <View style={styles.card}>
-          {inboxEmpty ? (
-            <Text style={styles.emptyText}>지금 확인할 일이 없어요</Text>
-          ) : (
-            <>
-              {inboxRow(
-                'person-add-outline',
-                '합류 신청',
-                inbox.joins.length,
-                inbox.joinUnits,
-                '/owner/staff',
-                inbox.joins[0] ? `${labelOf(inbox.joins[0].uid)} · ${inbox.joins[0].name}님` : undefined,
-              )}
-              {/* 받은질문은 맨 위 AlertRow로 승격됐다(2026-08-06) — 여기서 다시 세지 않는다. */}
-              {inboxRow('bulb-outline', '검토할 제안', inbox.suggestions, inbox.suggestionUnits, '/owner/suggestions')}
-              {/* ★2026-08-06: '검증' → '확인'(승인 어휘 8개 밖 신조어였다. 매장 앱은 전부 '확인 필요').
-                  착지도 매장 앱과 맞춘다 — ?review=1 = '확인 필요만' 필터가 걸린 목록.
-                  옛 /owner/categories 는 필터 없는 전체라 "N건"을 눌러도 그 N건이 안 보였다. */}
-              {inboxRow('search-outline', '확인이 필요한 노하우', inbox.needsReview, inbox.needsReviewUnits, '/owner/knowledge?review=1')}
-            </>
-          )}
-
-          {/* 퀴즈 진입점은 2026-08-07에 노하우 탭(OwnerKnowhowHubView)으로 옮겼다.
-              퀴즈가 남기는 기록은 점수가 아니라 knowhow_understanding = "누가 어떤 노하우를 아는가"라
-              노하우의 계측기다. 현황 탭은 '지금 막힌 것'을 말하는 자리이고, 퀴즈는 축적·순환 레이어다. */}
+        <SectionLabel title="매장 상태" hint="누르면 그 화면으로" />
+        <View style={{ marginTop: Space.sm }}>
+          <StatCardGrid items={gridItems} />
         </View>
       </Appear>
 
@@ -331,40 +390,10 @@ export function OwnerStatusView({ header }: { header: ReactNode }) {
         </Appear>
       )}
 
-      {/* ── 4) 이번달(블록 I3) — 여기도 카드가 아니다. 위 '오늘'과 형태는 같지만 사이에
-             카드 2장이 끼어 있어 연속이 아니다(배치 규칙 ①). ── */}
+      {/* ── 4) 이번달 매장별 내역 — 다점포에서만. 합계는 위 그리드 칸(인건비·AI)이 말한다. ── */}
+      {multi && (
       <Appear delay={stagger(6)}>
-        <SectionLabel title="이번달" />
-        <MiniStats
-          items={[
-            { key: 'labor', value: `${laborTotal.toLocaleString()}원`, label: '인건비 합계' },
-            {
-              // 0082 부터 유료 플랜에도 캡(매장당 1500)이 있다 — free 만 분모를 보여주면
-              // 유료 사장은 자기 한도를 모른 채 402를 맞는다. 캡은 매장당이므로 합산 분모 = 캡 × 매장 수.
-              key: 'ai',
-              value:
-                aiCap != null
-                  ? `${aiTotal.toLocaleString()} / ${(aiCap * Math.max(overview.length, 1)).toLocaleString()}`
-                  : aiTotal.toLocaleString(),
-              label: 'AI 답변 사용',
-              // 카드 하단 캡션이던 한도 안내를 ⓘ로 옮긴다(카드가 사라졌으므로 붙을 자리가 없다).
-              info:
-                aiCap != null
-                  ? {
-                      title: 'AI 답변 사용이 뭐예요?',
-                      body:
-                        (plan === 'free'
-                          ? `무료 요금제는 매장당 월 ${aiCap.toLocaleString()}건까지예요.`
-                          : `매장당 월 ${aiCap.toLocaleString()}건까지 쓸 수 있어요.`) +
-                        '\n직원이 물었을 때 AI가 답한 횟수예요. 한도를 넘으면 다음 달에 다시 채워져요.',
-                    }
-                  : undefined,
-            },
-          ]}
-        />
-        {/* 매장별 내역은 다점포에서만 — 단일 매장이면 위 두 칸이 곧 그 매장의 값이다.
-            한도 안내 캡션은 'AI 답변 사용'의 ⓘ로 옮겼다. */}
-        {multi && (
+        <SectionLabel title="이번달 매장별" />
           <View style={[styles.card, { marginTop: Space.sm }]}>
             {overview.map((r) => (
               <View key={r.unit_id} style={[styles.row, styles.rowTop]}>
@@ -376,8 +405,23 @@ export function OwnerStatusView({ header }: { header: ReactNode }) {
               </View>
             ))}
           </View>
-        )}
       </Appear>
+      )}
+
+      {/* 확인 필요 갈래 시트 — 갈래가 둘 이상일 때만 열린다(하나면 칸 탭이 바로 그리로 간다). */}
+      {inboxOpen && (
+        <BottomSheet visible onClose={() => setInboxOpen(false)}>
+          <SheetHead title="확인 필요" onClose={() => setInboxOpen(false)} />
+          <View style={[styles.card, { marginHorizontal: Space.lg, marginBottom: Space.lg }]}>
+            {inboxRow(
+              'person-add-outline', '합류 신청', inbox.joins.length, inbox.joinUnits, '/owner/staff',
+              inbox.joins[0] ? `${labelOf(inbox.joins[0].uid)} · ${inbox.joins[0].name}님` : undefined,
+            )}
+            {inboxRow('bulb-outline', '검토할 제안', inbox.suggestions, inbox.suggestionUnits, '/owner/suggestions')}
+            {inboxRow('search-outline', '확인이 필요한 노하우', inbox.needsReview, inbox.needsReviewUnits, '/owner/knowledge?review=1')}
+          </View>
+        </BottomSheet>
+      )}
 
       <StorePickerSheet
         visible={!!picker}
