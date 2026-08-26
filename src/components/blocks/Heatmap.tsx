@@ -37,6 +37,14 @@ export type HeatCell = {
 
 export type HeatGroup = { name: string; cells: HeatCell[] };
 
+/**
+ * 범례 문구 — 격자는 같고 **축이 다른** 두 화면이 쓴다(2026-08-27):
+ *  · 퀴즈 홈(기본값): 색 = 아는 직원 비율 · 점선 = 문항 없음 · 주황 = 노하우 변경됨 · 빨강 = 높은 오답률
+ *  · 매장 노하우 탭: 색 = 한 달간 물어본 횟수 · 점선 = 안 물어봄 · 주황 = 확인 필요 · 빨강 = 오래 손 안 댐
+ */
+export type HeatLegend = { empty: string; scale: [string, string]; stale: string; miss: string };
+const QUIZ_LEGEND: HeatLegend = { empty: '문항 없음', scale: ['아는 직원', '전원'], stale: '노하우 변경됨', miss: '높은 오답률' };
+
 /** 0단계는 흰 면(점선은 cellEmpty 가 얹는다). */
 const LEVEL_BG: Record<HeatLevel, string> = {
   0: InkColors.bg,
@@ -62,13 +70,18 @@ export function Heatmap({
   groups,
   onPressCell,
   onPressGroup,
+  legend = QUIZ_LEGEND,
+  hint = '상자 하나 = 노하우 하나 · 길게 누르면 이름이 보여요',
 }: {
   /** 머리줄 — 큰 값("41" + "%") · 제목("직원이 아는 노하우") · 우측 보조("58개"·"이번 주 ↑14칸"). */
   head: { value: string; unit?: string; title: string; aside?: string };
   groups: HeatGroup[];
   onPressCell: (id: string) => void;
-  /** 3단계(접힘)에서 "+n개 더 · 이 카테고리 보기 ›" — 없으면 글자만 남는다. */
+  /** 카테고리 이름 탭 + 3단계(접힘)의 "+n개 더 · 이 카테고리 보기 ›". 없으면 글자만 남는다. */
   onPressGroup?: (name: string) => void;
+  legend?: HeatLegend;
+  /** 피크 줄의 평소 안내문. */
+  hint?: string;
 }) {
   const total = groups.reduce((n, g) => n + g.cells.length, 0);
   const stage = STAGE.find((s) => total <= s.max) ?? STAGE[STAGE.length - 1];
@@ -86,17 +99,31 @@ export function Heatmap({
         {head.aside ? <Text style={styles.aside} numberOfLines={1}>{head.aside}</Text> : null}
       </View>
       <Text style={styles.peek} numberOfLines={1}>
-        {peek ? `${peek.title} — ${peek.status}` : '상자 하나 = 노하우 하나 · 길게 누르면 이름이 보여요'}
+        {peek ? `${peek.title} — ${peek.status}` : hint}
       </Text>
 
       {groups.map((g) => {
         const shown = collapse ? g.cells.slice(0, stage.cols) : g.cells;
         const rest = g.cells.length - shown.length;
         return (
-          <View key={g.name} style={styles.group}>
-            <Text style={styles.groupLabel}>
-              {g.name}<Text style={styles.groupCount}>  {g.cells.length}개</Text>
-            </Text>
+          <View key={g.name} style={[styles.group, onPressGroup && styles.groupTight]}>
+            {onPressGroup ? (
+              // 카테고리 이름 = 그 카테고리로 가는 길(노하우 탭에서는 목록 필터). 48dp 는 상자 크기로.
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`${g.name} ${g.cells.length}개`}
+                onPress={() => onPressGroup(g.name)}
+                style={({ pressed }) => [styles.groupBtn, pressed && styles.cellPressed]}
+              >
+                <Text style={styles.groupLabel}>
+                  {g.name}<Text style={styles.groupCount}>  {g.cells.length}개</Text> ›
+                </Text>
+              </Pressable>
+            ) : (
+              <Text style={styles.groupLabel}>
+                {g.name}<Text style={styles.groupCount}>  {g.cells.length}개</Text>
+              </Text>
+            )}
             <View style={[styles.grid, { marginHorizontal: -stage.gap / 2 }]}>
               {shown.map((c) => {
                 const border = c.stale
@@ -146,21 +173,21 @@ export function Heatmap({
 
       {/* 범례 — 색 단독으로 상태를 말하지 않는다(글자 병기). */}
       <View style={styles.legend}>
-        <Text style={styles.legendText}>문항 없음</Text>
+        <Text style={styles.legendText}>{legend.empty}</Text>
         <View style={[styles.legendBox, styles.cellEmpty]} />
         <View style={styles.legendGap} />
-        <Text style={styles.legendText}>아는 직원</Text>
+        <Text style={styles.legendText}>{legend.scale[0]}</Text>
         <View style={[styles.legendBox, { backgroundColor: BrandColors.heat1 }]} />
         <View style={[styles.legendBox, { backgroundColor: BrandColors.heat2 }]} />
         <View style={[styles.legendBox, { backgroundColor: BrandColors.heat3 }]} />
         <View style={[styles.legendBox, { backgroundColor: BrandColors.heat4 }]} />
-        <Text style={styles.legendText}>전원</Text>
+        <Text style={styles.legendText}>{legend.scale[1]}</Text>
         <View style={styles.legendGap} />
         <View style={[styles.legendBox, styles.cellStale]} />
-        <Text style={styles.legendText}>노하우 변경됨</Text>
+        <Text style={styles.legendText}>{legend.stale}</Text>
         <View style={styles.legendGap} />
         <View style={[styles.legendBox, styles.cellMiss]} />
-        <Text style={styles.legendText}>높은 오답률</Text>
+        <Text style={styles.legendText}>{legend.miss}</Text>
       </View>
     </View>
   );
@@ -186,6 +213,10 @@ const styles = StyleSheet.create({
   peek: { marginTop: Space.xs, minHeight: PEEK_MIN_H, fontSize: 11, lineHeight: PEEK_MIN_H, fontWeight: '700', color: InkColors.ink2 },
   group: { marginTop: Space.md },
   groupLabel: { fontSize: 11, lineHeight: 15, fontWeight: '800', color: InkColors.ink3, marginBottom: Space.xs },
+  // 눌리는 라벨 — 글자는 작아도 상자는 48dp(hitSlop 은 RN-web 에서 안 먹는다). 아래 여백은 라벨이 갖는다.
+  groupBtn: { minHeight: 48, justifyContent: 'flex-end', alignSelf: 'flex-start' },
+  // 라벨이 48dp 상자를 가지면 그룹 위 여백은 그 상자가 대신한다.
+  groupTight: { marginTop: 0 },
   groupCount: { color: InkColors.ink2 },
   grid: { flexDirection: 'row', flexWrap: 'wrap' },
   cell: { aspectRatio: 1, backgroundColor: InkColors.bgSoft },

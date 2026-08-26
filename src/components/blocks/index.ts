@@ -35,7 +35,7 @@ export { ActionRow, type ActionRowItem } from './ActionRow';
 export { AlertRow } from './AlertRow';
 export { FocusCard } from './FocusCard';
 export { GutterRow } from './GutterRow';
-export { Heatmap, type HeatCell, type HeatGroup, type HeatLevel } from './Heatmap';
+export { Heatmap, type HeatCell, type HeatGroup, type HeatLegend, type HeatLevel } from './Heatmap';
 export { HeroSubNav } from './HeroSubNav';
 export { KnowhowRows, type KnowhowRow, type KnowhowRowKind } from './KnowhowRows';
 export { KvTable } from './KvTable';

@@ -21,6 +21,7 @@ import { InfoDot } from '@/components/InfoDot';
 import { VerifyBadge } from '@/components/VerifyBadge';
 import { SectionLabel } from '@/components/SectionLabel';
 import { SegmentTabs, type SegmentItem } from '@/components/SegmentTabs';
+import { Heatmap, type HeatCell, type HeatGroup, type HeatLegend, type HeatLevel } from '@/components/blocks/Heatmap';
 import { CategoryEditSheet } from '@/components/owner/CategoryEditSheet';
 import { OwnerTodoSegment } from '@/components/owner/OwnerTodoSegment';
 import { useOwnerTodoCount } from '@/lib/hooks/useOwnerTodoCount';
@@ -76,6 +77,41 @@ const isUnused = (e: PlaybookEntry) => {
 
 // 사용자 표면의 분류는 카테고리(= section) 하나 — 종류(루틴/돌발 등)는 AI 내부용이라 안 보여준다.
 const sectionOf = (e: PlaybookEntry) => e.section?.trim() || UNSECTIONED;
+
+/** '오래 손 안 댐' 판정 창(일) — 허브 overview.stale(0091, 90일)과 같은 값이어야 한다. */
+const OLD_DAYS = 90;
+const isOld = (e: PlaybookEntry) => {
+  const t = Date.parse(e.updated_at ?? '');
+  return Number.isFinite(t) && Date.now() - t >= OLD_DAYS * 86_400_000;
+};
+
+/**
+ * 노하우 탭 히트맵(H5 · 2026-08-27) — 퀴즈 홈과 **같은 격자, 다른 축**.
+ *  색 = 최근 한 달 직원이 물어본 횟수(`stats.query_hits_30d`: 0 / 1 / 2~3 / 4~7 / 8+) —
+ *      "많이 쓰이는 노하우"가 진하다. 점선 = 한 번도 안 물어봄(isUnused 와 같은 원장, 나이 조건 없이 그림만).
+ *  주황 테두리 = 확인 필요(needs_review) · 빨강 테두리 = 90일 넘게 손 안 댐(isOld).
+ *  카테고리 순서 = 손볼 것(점선+테두리) 비율 높은 순.
+ * ★판정은 전부 이 파일의 기존 규칙(needsVerify·isUnused·query_hits_30d)이다 — 새 판정 없음.
+ */
+const KNOWHOW_LEGEND: HeatLegend = { empty: '안 물어봄', scale: ['물어본 횟수', '많음'], stale: '확인 필요', miss: '오래 손 안 댐' };
+const hitLevel = (n: number): HeatLevel => (n <= 0 ? 0 : n === 1 ? 1 : n <= 3 ? 2 : n <= 7 ? 3 : 4);
+function buildKnowhowHeatmap(list: PlaybookEntry[]): HeatGroup[] {
+  const by = new Map<string, HeatCell[]>();
+  for (const e of list) {
+    const hits = e.stats?.query_hits_30d ?? 0;
+    const stale = needsVerify(e);
+    const miss = !stale && isOld(e);
+    const status = `${hits > 0 ? `한 달간 ${hits}번 물어봄` : '한 달간 안 물어봄'}${stale ? ' · 확인 필요' : miss ? ' · 오래 손 안 댐' : ''}`;
+    const name = getSectionMeta(e.section).label;
+    const cells = by.get(name) ?? [];
+    cells.push({ id: e.id, title: e.title, level: hitLevel(hits), status, stale, miss });
+    by.set(name, cells);
+  }
+  const todo = (cells: HeatCell[]) => cells.filter((c) => c.level === 0 || c.stale || c.miss).length / Math.max(1, cells.length);
+  return [...by]
+    .map(([name, cells]) => ({ name, cells }))
+    .sort((a, b) => todo(b.cells) - todo(a.cells) || a.name.localeCompare(b.name, 'ko'));
+}
 
 /**
  * 한 노하우 행(목록) — 탭하면 수정. usedBy=이 노하우를 첨부한 업무 수(0069 역조회, 임팩트).
@@ -321,6 +357,14 @@ export function OwnerKnowhowBrowse({
 
   const hasEntries = visible.length > 0;
 
+  /** 히트맵은 검색·카테고리 필터를 타지 않는다 — 전체 지도다. 카테고리 이름을 누르면 아래 목록이 걸러진다. */
+  const heatGroups = useMemo(() => buildKnowhowHeatmap(visible), [visible]);
+  const heatHead = useMemo(() => {
+    const asked = visible.filter((e) => (e.stats?.query_hits_30d ?? 0) > 0).length;
+    const todo = visible.filter((e) => needsVerify(e) || isOld(e)).length;
+    return { asked, todo };
+  }, [visible]);
+
   // 찾기 바(검색·카테고리 칩)는 개수와 무관하게 **항상** 띄운다 — 2026-08-19 결정.
   //  옛 FILTER_MIN(8건) 게이트를 폐기한 것이다. 자리가 개수에 따라 나타났다 사라지면 "여기 검색이 있다"를
   //  익힐 수 없고, 게이트가 만들던 '필터 걸어둔 채 7건이 되면 못 푸는' 잠김 예외도 같이 사라진다.
@@ -420,6 +464,27 @@ export function OwnerKnowhowBrowse({
   const knowhowSegment = () => {
     return (
       <>
+        {/* ── 히어로(H5) — 노하우 1개 = 상자 1개. 색 = 한 달간 물어본 횟수(쓰임) · 점선 = 안 물어봄 ·
+               주황 = 확인 필요 · 빨강 = 오래 손 안 댐. 카테고리 이름 탭 = 아래 목록 필터, 상자 탭 = 고치기.
+               화면당 히어로 1개(배치규칙②) — 이 칸의 다른 블록은 찾기 바와 목록뿐이다. ── */}
+        {hasEntries && (
+          <Appear>
+            <Heatmap
+              head={{
+                value: String(heatHead.asked),
+                unit: `/${visible.length}개`,
+                title: '한 달간 직원이 물어본 노하우',
+                aside: heatHead.todo > 0 ? `손볼 것 ${heatHead.todo}개` : undefined,
+              }}
+              groups={heatGroups}
+              legend={KNOWHOW_LEGEND}
+              hint="상자 하나 = 노하우 하나 · 카테고리를 누르면 아래 목록이 걸러져요"
+              onPressCell={onSelect}
+              onPressGroup={(name) => selectCat(name === getSectionMeta(UNSECTIONED).label ? UNSECTIONED : name)}
+            />
+          </Appear>
+        )}
+
         {/* 개수 줄 + 톱니. 톱니 패널이 이 줄 아래에 **떠서** 열리므로(밀어내지 않는다) 이 블록이 그 앵커다. */}
         <View style={styles.headBlock}>
           <View style={styles.headRow}>
