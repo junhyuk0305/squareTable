@@ -69,7 +69,13 @@ export function AttendancePanel() {
   // 예상급여 — 급여규칙(주휴·휴게·야간·연장·추가수당) 반영 SSOT=computePay(F1). 하루치는 주휴·월정액 제외.
   const todayPay = computePay(todayRecs, wage, { ...settings, weeklyHolidayPay: false, extraAllowance: 0 }).total;
   const monthMin = monthRecs.reduce((sum, r) => sum + liveMinutes(r), 0);
-  const monthPay = computePay(monthRecs, wage, settings).total;
+  const monthBreakdown = computePay(monthRecs, wage, settings);
+  const monthPay = monthBreakdown.total;
+  // 금액이 근무시간 × 시급보다 적으면 **왜 빠졌는지**를 말한다 — 안 말하면 계산이 틀린 것으로 읽힌다.
+  // 휴게는 **하루 합계** 기준이라(§54), 하루에 두 번 찍으면 예전보다 금액이 줄어든다.
+  const breakNote = monthBreakdown.breakMin
+    ? `\n무급 휴게 ${fmtDuration(monthBreakdown.breakMin)}이 빠졌어요 — 하루 4시간 이상 근무는 30분, 8시간 이상은 60분이에요.`
+    : '';
 
   const working = !!openRec;
 
@@ -148,7 +154,7 @@ export function AttendancePanel() {
               info: wageSet
                 ? {
                     title: '예상 급여는 어떻게 계산돼요?',
-                    body: `시급 ${won(wage)} 기준으로 계산한 세전 예상액이에요.\n세금·4대보험·수당에 따라 실제 받는 금액과 다를 수 있어요.`,
+                    body: `시급 ${won(wage)} 기준으로 계산한 세전 예상액이에요.\n세금·4대보험·수당에 따라 실제 받는 금액과 다를 수 있어요.${breakNote}`,
                   }
                 : wagesLoadError
                   ? {

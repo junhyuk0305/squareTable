@@ -4,7 +4,10 @@
  * 화면들은 각자 raw 공식을 쓰지 말고 반드시 computePay()를 호출한다(단일 진실원천).
  *
  * 규칙(2026-07-06 확정 · 토글 ON일 때만 각 항목 적용 — 사장이 사업장 규모/관행에 맞게 On/Off):
- *  - 휴게공제(§54): 한 번 근무가 8h↑이면 60분, 4h↑이면 30분 무급 공제(유급분에서 제외).
+ *  - 휴게공제(§54): **하루 합계** 근로가 8h↑이면 60분, 4h↑이면 30분 무급 공제(유급분에서 제외).
+ *    ★2026-08-26 변경: 예전엔 **근무 1건마다** 계산해, 같은 하루 6시간인데 기록이 1건이면 휴게 30분이
+ *    빠지고 3+3 두 건이면 0 분이 빠져 **지급액이 달라졌다**. 근로기준법 §54 는 "1일 근로시간" 기준이다.
+ *    → 하루에 출퇴근을 두 번 이상 찍는 직원의 지급액이 **줄어든다**. 화면이 그 이유를 말해야 한다.
  *  - 야간수당: 22:00–06:00(KST)에 겹치는 근로분에 +0.5배 가산.
  *  - 연장수당: 하루 유급 8h 초과분에 +0.5배 가산(일 단위 집계).
  *  - 주휴수당: 한 주 유급 15h↑이면 (min(주근로,40)/40)×8×시급. ※개근 요건은 근무기록만으론 판정 불가라
@@ -33,6 +36,7 @@ export type PayRecord = {
 export type PayBreakdown = {
   workedMin: number;         // 총 근로(분, 24h 절상 후)
   paidMin: number;           // 휴게공제 후 유급(분)
+  breakMin: number;          // 무급 휴게 공제(분) — 금액이 줄면 화면이 이유를 말할 수 있게 밖으로 낸다
   nightMin: number;          // 야간 겹침(분)
   overtimeMin: number;       // 연장(일 8h 초과, 분)
   base: number;              // 기본급(30분 절삭)
@@ -59,7 +63,7 @@ function shiftWorkedMin(r: PayRecord, nowISO: string): number {
   return Math.min(MAX_SHIFT_MIN, min);
 }
 
-/** 휴게 공제(무급) 분 — §54: 8h↑ 60분, 4h↑ 30분. */
+/** 휴게 공제(무급) 분 — §54: **하루 합계** 8h↑ 60분, 4h↑ 30분. */
 function breakMinFor(workedMin: number): number {
   if (workedMin >= 8 * H) return 60;
   if (workedMin >= 4 * H) return 30;
@@ -99,20 +103,31 @@ export function computePay(records: PayRecord[], wage: number, rules: PayrollRul
   const now = nowISO ?? new Date().toISOString();
   let workedMin = 0;
   let paidMin = 0;
+  let breakMin = 0;
   let nightMin = 0;
-  const dayPaid: Record<string, number> = {};   // 일별 유급분(연장 집계)
+  const dayWorked: Record<string, number> = {};  // 일별 **근로**분 — 휴게는 여기서 한 번만 뗀다
+  const dayPaid: Record<string, number> = {};    // 일별 유급분(연장 집계)
   const weekPaid: Record<string, number> = {};   // 주별 유급분(주휴 집계)
 
+  // ── 1차: 근무 건별 집계 ──────────────────────────────────────────────
+  // 야간(nightMin)만 건별로 정확히 센다 — 22:00–06:00 과의 **구간 겹침**이라 하루 합계로는 못 바꾼다.
   for (const r of records) {
     const worked = shiftWorkedMin(r, now);
     if (worked <= 0) continue;
+    workedMin += worked;
+    if (rules.nightAllowance) nightMin += nightMinFor(r, now);
+    dayWorked[r.date] = (dayWorked[r.date] ?? 0) + worked;
+  }
+
+  // ── 2차: 날짜마다 **한 번만** 휴게를 뗀다(§54 = 1일 근로시간 기준) ────
+  // ⚠️ 자정을 넘는 근무를 어느 날에 넣을지는 r.date 기준 그대로다 — 여기서 바꾸지 않는다.
+  for (const [date, worked] of Object.entries(dayWorked)) {
     const brk = rules.breakDeduction ? breakMinFor(worked) : 0;
     const paid = Math.max(0, worked - brk);
-    workedMin += worked;
+    breakMin += brk;
     paidMin += paid;
-    if (rules.nightAllowance) nightMin += nightMinFor(r, now);
-    dayPaid[r.date] = (dayPaid[r.date] ?? 0) + paid;
-    weekPaid[kstWeekKey(r.date)] = (weekPaid[kstWeekKey(r.date)] ?? 0) + paid;
+    dayPaid[date] = paid;
+    weekPaid[kstWeekKey(date)] = (weekPaid[kstWeekKey(date)] ?? 0) + paid;
   }
 
   // 연장: 하루 유급 8h 초과분 합.
@@ -136,5 +151,5 @@ export function computePay(records: PayRecord[], wage: number, rules: PayrollRul
 
   const extra = Math.max(0, Math.round(rules.extraAllowance || 0));
   const total = base + nightPay + overtimePay + weeklyHolidayPay + extra;
-  return { workedMin, paidMin, nightMin, overtimeMin, base, nightPay, overtimePay, weeklyHolidayPay, extra, total };
+  return { workedMin, paidMin, breakMin, nightMin, overtimeMin, base, nightPay, overtimePay, weeklyHolidayPay, extra, total };
 }

@@ -68,7 +68,8 @@ export function TimesheetView({ staffId, wage, editedBy, badgeLabel, badgeTone =
   const totalMin = monthRecs.reduce((a, r) => a + r.work_minutes, 0);
   // 예상급여 — 급여규칙(주휴·휴게·야간·연장·추가수당) 반영 SSOT=computePay(F1). totalMin 은 근무시간 표시용.
   // 시급이 없으면 **계산 자체를 하지 않는다** — 없는 시급으로 만든 금액은 0원이든 최저시급이든 거짓말이다.
-  const monthPay = wage == null ? null : computePay(monthRecs, wage, settings).total;
+  const monthBreakdown = wage == null ? null : computePay(monthRecs, wage, settings);
+  const monthPay = monthBreakdown?.total ?? null;
   const month = Number(ym.slice(5));
 
   function openEdit(r: AttendanceRecord) {
@@ -181,6 +182,12 @@ export function TimesheetView({ staffId, wage, editedBy, badgeLabel, badgeTone =
             <Text style={styles.sumValue}>{monthPay == null ? '—' : won(monthPay)}</Text>
           </View>
         </View>
+        {/* 금액이 근무시간 × 시급보다 적으면 **왜 빠졌는지**를 말한다. 안 말하면 계산이 틀린 것으로 읽힌다. */}
+        {!!monthBreakdown?.breakMin && (
+          <Text style={styles.sumNote}>
+            무급 휴게 {fmtDuration(monthBreakdown.breakMin)}을 뺀 금액이에요 · 하루 4시간 이상 30분, 8시간 이상 60분
+          </Text>
+        )}
         </Appear>
         {belowSummary && <Appear delay={stagger(3)}>{belowSummary}</Appear>}
 
@@ -324,6 +331,7 @@ const styles = StyleSheet.create({
   sumDivider: { width: 1, backgroundColor: InkColors.line, marginVertical: 4 },
   sumLabel: { fontSize: 12, color: InkColors.ink3, fontWeight: '600' },
   sumValue: { fontSize: 16, color: InkColors.ink, fontWeight: '800' },
+  sumNote: { fontSize: 12, color: InkColors.ink3, fontWeight: '600', marginTop: 8, textAlign: 'center', lineHeight: 17 },
 
   addBtn: {
     flexDirection: 'row',
