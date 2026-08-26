@@ -210,12 +210,19 @@ export default function OwnerDashboardScreen() {
   //    entriesCount가 0으로 보인다. loaded 전에 시작하면 노하우 있는 기존 사장에게도 잠깐 떴다 닫힌다.
   //    게이트는 아래 온보딩 블록과 **같은 것**을 써야 한다 — 투어 2단계가 그 블록 안의 ctaRef를 비추므로
   //    투어가 먼저 켜지면 타깃이 아직 없는 상태에서 코치마크가 뜬다.
+  //    ★'본 적 있음'도 같은 축이다 — 네이티브는 AsyncStorage 라 비동기로 온다. tourLoaded 전에는
+  //    "안 봤다"가 사실이 아니라, 이미 끝낸 사장에게도 투어가 잠깐 떴다 닫힌다.
   const seenTour = useTourStore((s) => !!s.seen[TOUR_ID]);
+  const tourLoaded = useTourStore((s) => s.loaded);
+  const hydrateTour = useTourStore((s) => s.hydrate);
   useEffect(() => {
-    if (!loaded || entriesCount !== 0 || seenTour) return;
+    void hydrateTour();
+  }, [hydrateTour]);
+  useEffect(() => {
+    if (!loaded || !tourLoaded || entriesCount !== 0 || seenTour) return;
     const t = setTimeout(() => setTourOn(true), 520);
     return () => clearTimeout(t);
-  }, [loaded, entriesCount, seenTour]);
+  }, [loaded, tourLoaded, entriesCount, seenTour]);
 
   const endTour = () => {
     setTourOn(false);

@@ -94,11 +94,32 @@ export function hoursLabel(min: number): string {
   return `${Math.round((min / 60) * 10) / 10}시간`;
 }
 
-/** HH:MM 입력 검사 — 근무 시각 유효성의 SSOT(근무표 편집 시트가 공유한다). */
+/** HH:MM 입력 검사 — 근무 시각 유효성의 SSOT(근무표 편집 시트·출퇴근 기록 보정이 공유한다). */
 export const TIME_RE = /^([01]?\d|2[0-3]):[0-5]\d$/;
 
+/** 퇴근 시각이 자정을 넘겨 **다음 날**인가. 심야 근무(22:00~02:00) 판정의 SSOT. */
+export function isOvernight(start: string, end: string): boolean {
+  return toMinutes(end) < toMinutes(start);
+}
+
+/**
+ * 근무 시각 검증의 SSOT — 유효하면 null, 아니면 화면에 그대로 띄울 사유.
+ *
+ * ★퇴근<출근은 오류가 아니라 **다음 날**이다(심야 매장). `shiftMinutes`·`dayWindow`·
+ *   `workers_at`(0138)은 처음부터 자정 넘김을 계산하고 있었고 **입력 검사만 막고 있었다**(감사 #43).
+ *   그래서 밤 10시~새벽 2시 근무를 아예 넣을 수 없었다.
+ * 무효는 **근무 0분(start === end)** 뿐이다 — 길이 상한은 자정 넘김 해석상 구조적으로
+ *   최대 1439분이라(`shiftMinutes`) 따로 검사하지 않는다.
+ */
+export function checkShiftTime(start: string, end: string): string | null {
+  if (!TIME_RE.test(start)) return '출근 시간을 09:00 처럼 넣어 주세요.';
+  if (!TIME_RE.test(end)) return '퇴근 시간을 18:00 처럼 넣어 주세요.';
+  if (toMinutes(start) === toMinutes(end)) return '출근과 퇴근 시간이 같아요. 근무 시간이 0분이에요.';
+  return null;
+}
+
 export function isValidShiftTime(start: string, end: string): boolean {
-  return TIME_RE.test(start) && TIME_RE.test(end) && start < end;
+  return checkShiftTime(start, end) === null;
 }
 
 /** 하루 타임라인의 시간 창(분). 자정을 넘겨 닫는 매장은 close에 하루를 더해 편다. */

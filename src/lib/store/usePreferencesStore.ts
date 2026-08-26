@@ -1,5 +1,9 @@
 // 사용자 환경설정.
-// - textScale/emailEnabled 는 "이 기기에서의 보기 설정" → localStorage 로컬 영속(네이티브=메모리 폴백).
+// - textScale/emailEnabled 는 "이 기기에서의 보기 설정" → 기기 로컬 영속.
+//   ★웹=localStorage / 네이티브=AsyncStorage. 예전엔 `window.localStorage` 만 봐서 네이티브에선
+//   storage 가 undefined 라 load()/persist() 가 **조용히 아무 일도 안 했다** — 글자 크기를 바꿔도
+//   앱을 껐다 켜면 원래대로 돌아갔다(감사 #51). 접근성 설정이라 그게 필요한 사람이 매번 다시 해야 했다.
+//   플랫폼 분기는 storage/authStorage(.web).ts **한 곳**에만 있다 — 여기서 다시 분기하지 않는다.
 // - pushEnabled(계정 전역 푸시 수신 동의)는 서버(엣지 push)가 발송 직전에 읽으므로 DB(notification_prefs)가
 //   SSOT다. localStorage 는 즉시 렌더용 캐시일 뿐이고, 진실은 DB다.
 // - ⚠️ quietHours/quietStart/quietEnd(전역 방해금지)는 **레거시 미러**: 1b(0076)에서 방해금지 판정이
@@ -8,6 +12,8 @@
 //   덮어쓴다 → 라운드트립 보존용으로만 유지한다. 새 소비처 추가 금지(매장별은 useMemberPrefsStore).
 import { create } from 'zustand';
 import { fetchNotificationPrefs, saveNotificationPrefs } from '@/lib/db';
+import { authStorage } from '@/lib/storage/authStorage';
+import { settleWithin } from '@/lib/store/realtimeSync';
 
 export type TextScale = 'small' | 'normal' | 'large';
 
@@ -30,9 +36,6 @@ const DEFAULTS: Prefs = {
   textScale: 'normal',
 };
 
-const storage =
-  typeof window !== 'undefined' && window.localStorage ? window.localStorage : undefined;
-
 // 예전엔 4단계('아주 크게'=xlarge)였다 → 3단계(작게/보통/크게)로 축소. 기기에 xlarge가 저장돼
 // 있으면 없는 배율을 참조해 NaN이 되므로, 폐기 값은 안전하게 'large'로 접어 마이그레이션한다.
 function normalizeScale(v: unknown): TextScale {
@@ -40,9 +43,10 @@ function normalizeScale(v: unknown): TextScale {
   return v === 'xlarge' ? 'large' : 'normal';
 }
 
-function load(): Prefs {
+/** 기기에 저장된 설정을 읽는다. 네이티브(AsyncStorage)는 비동기라 await 로 통일한다. */
+async function load(): Promise<Prefs> {
   try {
-    const raw = storage?.getItem(KEY);
+    const raw = await authStorage.getItem(KEY);
     const merged = raw ? { ...DEFAULTS, ...JSON.parse(raw) } : DEFAULTS;
     return { ...merged, textScale: normalizeScale(merged.textScale) };
   } catch {
@@ -51,6 +55,11 @@ function load(): Prefs {
 }
 
 type PrefsState = Prefs & {
+  /** true = 기기 저장소 읽기 **시도가 끝남**(성공·실패 무관). 화면은 이게 true 가 된 뒤에 그린다 —
+   *  아니면 기본 배율로 한 번 그렸다가 저장된 배율로 튄다(AsyncStorage 는 비동기다). */
+  loaded: boolean;
+  /** 부팅 1회 — 기기에 저장된 설정을 당긴다. */
+  hydrateLocal: () => Promise<void>;
   // 글자 크기 전환 중 상태(영속 X) — 로딩 오버레이 표시/커밋 타이밍 제어.
   applyingScale: boolean;
   pendingScale: TextScale | null;
@@ -73,10 +82,29 @@ type PrefsState = Prefs & {
 // '아주 크게'(1.34)는 고정폭 카드 오버플로 위험이 커 폐기 → 3단계만 유지(회의 요청).
 export const TEXT_SCALE_FACTOR: Record<TextScale, number> = { small: 0.9, normal: 1, large: 1.18 };
 
+/**
+ * 기기 저장소 읽기 상한(ms). 네트워크용 HYDRATE_TIMEOUT_MS(15s)보다 훨씬 짧게 잡는다 —
+ * 로컬 디스크 한 키 읽기고, 무엇보다 **스플래시의 탈출 타이머(BOOT_HOLD_MAX_MS=5s)보다 먼저**
+ * 결판나야 한다. 늦게 결판나면 기본 배율로 화면이 뜬 뒤 저장된 배율로 튄다.
+ */
+const PREFS_HYDRATE_MAX_MS = 3000;
+
+/** hydrateNotify(DB) 가 먼저 끝났는가 — 늦게 도착한 기기 캐시가 DB 값을 되돌리지 않게 하는 표식. */
+let notifyHydrated = false;
+
 export const usePreferencesStore = create<PrefsState>((set, get) => ({
-  ...load(),
+  ...DEFAULTS,
+  loaded: false,
   applyingScale: false,
   pendingScale: null,
+  hydrateLocal: async () => {
+    if (get().loaded) return;
+    // 끝나지 않는 읽기가 부팅을 영영 붙잡지 않게 상한을 둔다(loaded 계약: 시도가 끝났다).
+    const stored = await settleWithin(PREFS_HYDRATE_MAX_MS, load(), () => DEFAULTS);
+    // push/quiet 는 DB 가 SSOT 다. DB 하이드레이트가 먼저 끝났으면 그 값을 기기 캐시로 덮지 않는다.
+    const { pushEnabled, quietHours, quietStart, quietEnd, ...local } = stored;
+    set(notifyHydrated ? { ...local, loaded: true } : { ...stored, loaded: true });
+  },
   set: (key, value) => {
     set({ [key]: value } as Partial<Prefs>);
     persist(get());
@@ -104,6 +132,7 @@ export const usePreferencesStore = create<PrefsState>((set, get) => ({
   hydrateNotify: async () => {
     const { data, error } = await fetchNotificationPrefs();
     if (error || !data) return;
+    notifyHydrated = true;
     set({
       pushEnabled: data.push_enabled,
       quietHours: data.quiet_enabled,
@@ -146,13 +175,12 @@ export const usePreferencesStore = create<PrefsState>((set, get) => ({
 }));
 
 function persist(state: PrefsState) {
-  try {
-    const { pushEnabled, emailEnabled, quietHours, quietStart, quietEnd, textScale } = state;
-    storage?.setItem(
-      KEY,
-      JSON.stringify({ pushEnabled, emailEnabled, quietHours, quietStart, quietEnd, textScale }),
-    );
-  } catch {
-    /* noop */
-  }
+  // ★읽기 전에는 쓰지 않는다 — 하이드레이트가 끝나기 전 저장하면 기본값이 저장된 설정을 덮는다.
+  if (!state.loaded) return;
+  const { pushEnabled, emailEnabled, quietHours, quietStart, quietEnd, textScale } = state;
+  const json = JSON.stringify({ pushEnabled, emailEnabled, quietHours, quietStart, quietEnd, textScale });
+  // 웹 구현은 동기(void), 네이티브는 Promise — Promise.resolve 로 감싸 한 경로로 다룬다.
+  void Promise.resolve(authStorage.setItem(KEY, json)).catch(() => {
+    /* 기기 저장 실패는 이번 세션 값만 잃는다 — 화면을 막지 않는다. */
+  });
 }

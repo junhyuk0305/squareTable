@@ -44,12 +44,17 @@ export default function RootLayout() {
   // 글자 크기 설정 → 전역 배율에 반영. 렌더 중 동기로 적용해 자식이 새 배율로 그려진다.
   const textScale = usePreferencesStore((s) => s.textScale);
   setTextScaleFactor(TEXT_SCALE_FACTOR[textScale]);
+  // 기기에 저장된 설정(글자 크기 등)은 네이티브에서 **비동기**로 온다 — 오기 전에 그리면
+  // 기본 배율로 한 번 그렸다가 튄다. 스플래시를 이것까지 기다리게 해 통째로 등장시킨다.
+  const prefsLoaded = usePreferencesStore((s) => s.loaded);
+  const hydrateLocalPrefs = usePreferencesStore((s) => s.hydrateLocal);
 
   // 부팅 1회: 저장된 세션 복원 + 프로필 로드 + auth 변화 구독.
   const init = useSessionStore((s) => s.init);
   // 무료 공지 팝업은 로그인 화면이 아니라 로그인 후(홈 진입)에만 띄운다.
   const signedIn = useSessionStore((s) => s.status === 'signed_in');
   useEffect(() => {
+    void hydrateLocalPrefs();
     init();
     // 웹: '홈 화면에 추가'/푸시용 PWA 헤드 태그 주입 (output=single 이라 +html 미반영)
     injectPwaHead();
@@ -57,7 +62,7 @@ export default function RootLayout() {
     installGlobalErrorHandlers();
     // PostHog(웹 전용, 키 없으면 no-op) — autocapture/pageview 를 위해 부팅 시 초기화.
     initAnalytics();
-  }, [init]);
+  }, [init, hydrateLocalPrefs]);
 
   // 리텐션/DAU 측정 — 로그인 세션이 열릴 때 1회 기록(계측 컨텍스트가 채워진 뒤).
   const sessionLogged = useRef(false);
@@ -80,7 +85,7 @@ export default function RootLayout() {
   //   `status==='loading'` 이라 null 을 반환해 **빈 크림 화면**이 드러났다(반대로 세션이 0.3초에
   //   끝나도 1.6초를 더 기다렸다). 화면은 다 준비된 뒤에 나온다 = 스플래시도 그때 걷힌다.
   const [splashDone, setSplashDone] = useState(false);
-  const booted = useSessionStore((s) => s.status !== 'loading');
+  const booted = useSessionStore((s) => s.status !== 'loading') && prefsLoaded;
   const [bootTimedOut, setBootTimedOut] = useState(false);
   useEffect(() => {
     if (booted) return;

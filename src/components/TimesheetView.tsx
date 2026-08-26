@@ -12,6 +12,7 @@ import { ScreenLoading } from '@/components/ScreenLoading';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { fmtDuration, won, hhmm, todayStr, normalizeTime, shiftMonth, daysInMonth, maskHHMM } from '@/lib/utils/attendance';
+import { checkShiftTime, isOvernight } from '@/lib/utils/schedule';
 
 const WD = ['일', '월', '화', '수', '목', '금', '토'];
 
@@ -91,6 +92,8 @@ export function TimesheetView({ staffId, wage, editedBy, badgeLabel, badgeTone =
     setNewDay('');
   }
 
+  // 판정은 근무표와 **같은 함수**를 쓴다(schedule.checkShiftTime) — 심야 근무(22:00~02:00)를
+  // 근무표에선 넣을 수 있는데 기록 보정에선 못 넣는 어긋남을 만들지 않는다(감사 #43).
   function validateTimes(): { ci: string; co: string | null } | null {
     const ci = normalizeTime(cin);
     if (!ci) {
@@ -98,9 +101,12 @@ export function TimesheetView({ staffId, wage, editedBy, badgeLabel, badgeTone =
       return null;
     }
     const co = normalizeTime(cout);
-    if (co && co <= ci) {
-      setErr('퇴근 시간이 출근 시간보다 빠르거나 같아요.');
-      return null;
+    if (co) {
+      const bad = checkShiftTime(ci, co);
+      if (bad) {
+        setErr(bad);
+        return null;
+      }
     }
     return { ci, co };
   }
@@ -226,6 +232,8 @@ export function TimesheetView({ staffId, wage, editedBy, badgeLabel, badgeTone =
           {monthRecs.map((r, i) => {
             const d = new Date(`${r.date}T00:00:00`);
             const open = !r.check_out;
+            // 자정을 넘긴 기록은 퇴근 시각만 보면 "02:00 퇴근"이 그날 새벽으로 읽힌다 — 다음날임을 말한다.
+            const crossesMidnight = !!r.check_in && !!r.check_out && isOvernight(hhmm(r.check_in), hhmm(r.check_out));
             return (
               <Appear key={r.id} delay={stagger(i)} style={styles.recWrap}>
                 <Pressable onPress={() => (editing === r.id ? cancel() : openEdit(r))} style={styles.recRow}>
@@ -236,7 +244,8 @@ export function TimesheetView({ staffId, wage, editedBy, badgeLabel, badgeTone =
                   <View style={{ flex: 1 }}>
                     <View style={styles.recTimeRow}>
                       <Text style={styles.recTime}>
-                        {r.check_in ? hhmm(r.check_in) : '—'} ~ {r.check_out ? hhmm(r.check_out) : '근무 중'}
+                        {r.check_in ? hhmm(r.check_in) : '—'} ~{' '}
+                        {r.check_out ? `${crossesMidnight ? '다음날 ' : ''}${hhmm(r.check_out)}` : '근무 중'}
                       </Text>
                       {r.edited_by === 'staff' && (
                         <View style={badgeStyle}>

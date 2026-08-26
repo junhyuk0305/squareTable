@@ -12,7 +12,7 @@ import { BottomSheet } from '@/components/BottomSheet';
 import { useScheduleStore } from '@/lib/store/useScheduleStore';
 import type { Junior } from '@/types';
 import { maskHHMM } from '@/lib/utils/attendance';
-import { WEEKDAY_LABELS, WEEKDAY_ORDER, isValidShiftTime, weekdayOf, fmtDateKo } from '@/lib/utils/schedule';
+import { WEEKDAY_LABELS, WEEKDAY_ORDER, checkShiftTime, isOvernight, weekdayOf, fmtDateKo } from '@/lib/utils/schedule';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
@@ -61,7 +61,10 @@ export function ShiftQuickSheet({
   const [end, setEnd] = useState(() => editing?.end ?? config.close);
 
   const isEdit = !!editing;
-  const timeOk = isValidShiftTime(start, end);
+  const timeErr = checkShiftTime(start, end);
+  const timeOk = timeErr === null;
+  // 자정을 넘기면 화면이 그렇게 해석했다고 말한다 — 안 말하면 사장이 오타로 넣은 건지 알 수 없다.
+  const overnight = timeOk && isOvernight(start, end);
   const canSave = timeOk && (isEdit || (!!staffId && (!repeat || days.length > 0)));
 
   // 소프트 경고(저장은 막지 않는다) — 정기휴무일뿐이다.
@@ -200,7 +203,13 @@ export function ShiftQuickSheet({
             style={[s.timeInp, !timeOk && s.timeInpBad]}
           />
         </View>
-        {!timeOk && <Text style={s.warn}>시작·종료를 09:00 처럼 넣고, 시작이 종료보다 빠르게 해주세요.</Text>}
+        {timeErr && <Text style={s.warn}>{timeErr}</Text>}
+        {overnight && (
+          <View style={s.noteRow}>
+            <Ionicons name="moon-outline" size={14} color={InkColors.ink2} />
+            <Text style={s.infoText}>자정을 넘겨 다음 날 {end}에 끝나는 근무예요.</Text>
+          </View>
+        )}
         {closedNote && (
           <View style={s.noteRow}>
             <Ionicons name="information-circle-outline" size={14} color={BrandColors.warn} />
@@ -283,6 +292,8 @@ const s = StyleSheet.create({
   warn: { fontSize: 12.5, color: BrandColors.badText, fontWeight: '700', marginTop: Space.sm, lineHeight: 18 },
   noteRow: { flexDirection: 'row', alignItems: 'center', gap: Space.xs, marginTop: Space.sm },
   noteText: { fontSize: 12, color: BrandColors.warnText, fontWeight: '700' },
+  // 자정 넘김은 경고가 아니라 해석 안내라 경고색을 쓰지 않는다.
+  infoText: { fontSize: 12, color: InkColors.ink2, fontWeight: '700' },
 
   delBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Space.xs, minHeight: TAP, marginTop: Space.md },
   delText: { fontSize: 15, fontWeight: '800', color: BrandColors.badText },

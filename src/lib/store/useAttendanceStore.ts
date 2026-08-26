@@ -5,6 +5,7 @@ import { HAS_SUPABASE } from '@/lib/supabase';
 import { fetchAttendance, upsertAttendance, deleteAttendance, subscribeAttendance } from '@/lib/db';
 import { guardWrite, useSyncStore } from '@/lib/store/useSyncStore';
 import { genId } from '@/lib/utils/id';
+import { addDays, isOvernight } from '@/lib/utils/schedule';
 
 export type AttendanceRecord = {
   id: string;
@@ -151,7 +152,10 @@ export const useAttendanceStore = create<State>((set, get) => ({
   },
   upsertManual: (staffId, date, cin, cout, editedBy = 'owner', recordId) => {
     const check_in = iso(date, cin);
-    const check_out = cout ? iso(date, cout) : null;
+    // ★심야 근무(22:00 출근 → 02:00 퇴근)의 퇴근은 **다음 날**이다. 같은 날짜로 조립하면
+    //   minutesBetween 이 음수를 0 으로 깎아 **근무 0분**이 조용히 저장된다(감사 #43).
+    //   기록의 date(=근무일)는 출근일 그대로 둔다 — 급여의 날짜 귀속 규칙은 여기서 바꾸지 않는다.
+    const check_out = cout ? iso(isOvernight(cin, cout) ? addDays(date, 1) : date, cout) : null;
     const work_minutes = check_out ? minutesBetween(check_in, check_out) : 0;
     let saved: AttendanceRecord | undefined;
     let before: AttendanceRecord | undefined;
