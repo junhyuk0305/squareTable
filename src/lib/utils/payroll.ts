@@ -15,7 +15,8 @@
  *  - 추가수당: 월 정액 그대로 합산. 기본급은 30분 단위 절삭(payableMinutes) — 기존 정산 관행 유지.
  *  - 가산(야간/연장)은 정밀분으로 계산(절삭 안 함). 5인 미만 의무 아님 → 토글로 사장이 결정.
  */
-import { minutesBetween, payableMinutes, MAX_SHIFT_MIN } from './attendance';
+import { minutesBetween, payableMinutes, nowISO, MAX_SHIFT_MIN } from './attendance';
+import { addDays, fmtDateKo, fmtMinutes, isOvernight, shiftMinutes, toMinutes } from './schedule';
 
 export type PayrollRules = {
   breakDeduction: boolean;
@@ -93,6 +94,120 @@ function kstWeekKey(dateStr: string): string {
   const dow = (k.getUTCDay() + 6) % 7; // 월=0
   k.setUTCDate(k.getUTCDate() - dow);
   return `${k.getUTCFullYear()}-${String(k.getUTCMonth() + 1).padStart(2, '0')}-${String(k.getUTCDate()).padStart(2, '0')}`;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 급여의 **기준은 근무표**다 (2026-08-26 사용자 확정)
+//
+// 사용자 원문: "출퇴근 찍는 것은 그것의 확인용임 … 최종은 근무표에 입력한 내용대로 계산되도록."
+// → 출퇴근 기록은 **급여 계산에 직접 들어가지 않는다.** 대조(확인)에만 쓴다.
+//
+// ★규칙 자체(30분 절삭·휴게·야간·연장·주휴)는 computePay 그대로 재사용한다. 바뀌는 것은 **입력 소스**뿐이다.
+//   규칙을 여기에 다시 쓰면 두 벌이 되고, 한쪽만 고치는 순간 금액이 갈라진다.
+// ═══════════════════════════════════════════════════════════════════════════
+
+/** 근무표 한 칸 — 그 날짜에 그 사람이 서기로 된 근무. */
+export type ScheduledShift = { date: string; start: string; end: string };
+
+/**
+ * 근무표 시프트 → computePay 입력.
+ * 자정을 넘기면 **퇴근을 다음 날로** 붙인다(감사 #43 에서 합친 규칙) — 안 그러면 근무가 0분이 된다.
+ * 급여의 날짜 귀속은 **출근일**이다(작업 7 과 같은 축).
+ */
+export function shiftsToPayRecords(shifts: ScheduledShift[]): PayRecord[] {
+  return shifts.map((sh) => {
+    const outDate = isOvernight(sh.start, sh.end) ? addDays(sh.date, 1) : sh.date;
+    return {
+      date: sh.date,
+      check_in: nowISO(sh.date, sh.start),
+      check_out: nowISO(outDate, sh.end),
+      work_minutes: shiftMinutes(sh.start, sh.end),
+    };
+  });
+}
+
+/** 근무표와 출퇴근 기록이 이만큼(분) 넘게 어긋나면 화면이 말한다. 이 제품은 30분 단위로 절삭한다. */
+export const RECONCILE_THRESHOLD_MIN = 30;
+
+export type ShiftMismatch = {
+  date: string;
+  kind: 'no_schedule' | 'no_record' | 'time_diff';
+  /** 화면에 그대로 띄우는 문장. */
+  message: string;
+};
+
+/** ISO → 그날 KST 벽시계 분(자정 넘김이면 1440 이상). 대조 전용. */
+function kstMinOfDay(iso: string, baseDate: string): number {
+  const base = new Date(`${baseDate}T00:00:00+09:00`).getTime();
+  return Math.round((new Date(iso).getTime() - base) / 60000);
+}
+
+/**
+ * 근무표 vs 출퇴근 기록 대조 — **어긋난 것만** 돌려준다.
+ *
+ * 경계 케이스(2026-08-26 사용자 확정):
+ *  · 근무표에 **없는 날** 출근을 찍음 → 급여에 **안 들어간다**. 근무표에 추가하라고 말한다.
+ *  · 근무표엔 **있는데** 출근을 안 찍음 → 급여에 **들어간다**(근무표가 기준, 출퇴근은 참고용).
+ * 같은 날 근무가 여러 개면 시작 시각 순으로 짝지어 비교한다.
+ */
+export function reconcileSchedule(
+  shifts: ScheduledShift[],
+  records: PayRecord[],
+): ShiftMismatch[] {
+  const byDate = new Map<string, { sh: ScheduledShift[]; rec: PayRecord[] }>();
+  for (const sh of shifts) {
+    const e = byDate.get(sh.date) ?? { sh: [], rec: [] };
+    e.sh.push(sh);
+    byDate.set(sh.date, e);
+  }
+  for (const r of records) {
+    if (!r.check_in) continue;
+    const e = byDate.get(r.date) ?? { sh: [], rec: [] };
+    e.rec.push(r);
+    byDate.set(r.date, e);
+  }
+
+  const out: ShiftMismatch[] = [];
+  for (const [date, { sh, rec }] of [...byDate.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
+    const shifts_ = [...sh].sort((a, b) => a.start.localeCompare(b.start));
+    const recs = [...rec].sort((a, b) => (a.check_in ?? '').localeCompare(b.check_in ?? ''));
+    if (shifts_.length === 0) {
+      out.push({ date, kind: 'no_schedule', message: `${fmtDateKo(date)}은 근무표에 없는 근무예요. 근무표에 추가해 주세요.` });
+      continue;
+    }
+    if (recs.length === 0) {
+      out.push({ date, kind: 'no_record', message: `${fmtDateKo(date)} 근무는 출퇴근을 안 찍었어요. 급여는 근무표 기준으로 계산돼요.` });
+      continue;
+    }
+    for (let i = 0; i < Math.min(shifts_.length, recs.length); i++) {
+      const s = shifts_[i];
+      const r = recs[i];
+      const planIn = toMinutes(s.start);
+      const planOut = planIn + shiftMinutes(s.start, s.end);
+      const realIn = kstMinOfDay(r.check_in!, date);
+      if (Math.abs(realIn - planIn) >= RECONCILE_THRESHOLD_MIN) {
+        out.push({
+          date,
+          kind: 'time_diff',
+          message: `${fmtDateKo(date)} 근무표는 ${s.start} 출근인데 ${fmtMinutes(realIn)}에 출근을 찍었어요. 근무표를 고쳐 주세요.`,
+        });
+      }
+      if (r.check_out) {
+        const realOut = kstMinOfDay(r.check_out, date);
+        if (Math.abs(realOut - planOut) >= RECONCILE_THRESHOLD_MIN) {
+          out.push({
+            date,
+            kind: 'time_diff',
+            message: `${fmtDateKo(date)} 근무표는 ${s.end} 퇴근인데 ${fmtMinutes(realOut)}에 퇴근을 찍었어요. 근무표를 고쳐 주세요.`,
+          });
+        }
+      }
+    }
+    if (recs.length > shifts_.length) {
+      out.push({ date, kind: 'no_schedule', message: `${fmtDateKo(date)}에 근무표보다 출퇴근 기록이 많아요. 근무표를 확인해 주세요.` });
+    }
+  }
+  return out;
 }
 
 /**

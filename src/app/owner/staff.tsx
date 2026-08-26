@@ -5,6 +5,8 @@ import { Stack, useFocusEffect, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 import { usePayrollStore, useWagesSettled } from '@/lib/store/usePayrollStore';
+import { useScheduleStore, scheduledShiftsFor } from '@/lib/store/useScheduleStore';
+import { monthDates } from '@/lib/utils/schedule';
 import { useStaffStore } from '@/lib/store/useStaffStore';
 import { useAttendanceStore } from '@/lib/store/useAttendanceStore';
 import { useSessionStore } from '@/lib/store/useSessionStore';
@@ -21,7 +23,7 @@ import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
 import { fmtDuration, won, todayStr, liveMinutes } from '@/lib/utils/attendance';
-import { computePay } from '@/lib/utils/payroll';
+import { computePay, shiftsToPayRecords } from '@/lib/utils/payroll';
 import { gradableTasks, staffBehind, type StaffBehind } from '@/lib/utils/taskProgress';
 import { useCopyToClipboard } from '@/lib/utils/useCopyToClipboard';
 import { track } from '@/lib/analytics/track';
@@ -50,7 +52,13 @@ export default function OwnerStaffScreen() {
   const wagesSettled = useWagesSettled();
   const attendanceLoaded = useAttendanceStore((s) => s.loaded);
   const workLoaded = useWorkStore((s) => s.loaded);
-  const ready = staffLoaded && wagesSettled && attendanceLoaded && workLoaded;
+  // ★급여 기준이 근무표로 바뀌었다(2026-08-26) — 근무표가 오기 전에 그리면 **금액이 0원부터 시작**한다.
+  //   금액은 분쟁 대상이라 "아직 안 옴"과 "0원"을 섞으면 안 된다. 게이트에 같이 넣는다.
+  const shiftTemplates = useScheduleStore((s) => s.templates);
+  const swaps = useScheduleStore((s) => s.swaps);
+  const shiftExceptions = useScheduleStore((s) => s.exceptions);
+  const scheduleLoaded = useScheduleStore((s) => s.loaded);
+  const ready = staffLoaded && wagesSettled && attendanceLoaded && workLoaded && scheduleLoaded;
   const INVITE_CODE = useSessionStore((s) => s.inviteCode) || '------';
   // 0093: 이 화면은 매니저도 쓴다(승인·시급·급여). 사장 전용 = 내보내기·코드 변경·매니저 지정.
   const isOwner = useSessionStore((s) => s.role) === 'owner';
@@ -80,9 +88,17 @@ export default function OwnerStaffScreen() {
   const perStaff = useMemo(() => {
     // pay=null = 시급 미설정(계산 불가). 0원과 구별해야 한다 — 0원은 '무급'이라는 사실 주장이다.
     const map: Record<string, { min: number; pay: number | null; status: 'out' | 'working' | 'done' }> = {};
+    const dates = monthDates(ym);
     for (const s of staff) {
       const monthRecs = records.filter((r) => r.staff_id === s.id && r.date.startsWith(ym));
+      // 근무시간 표시는 실제 출퇴근 그대로(확인용). 금액만 근무표 기준이다.
       const min = monthRecs.reduce((sum, r) => sum + liveMinutes(r), 0);
+      // ★급여의 기준은 **근무표**다(2026-08-26 확정). 출퇴근 기록은 확인용이라 금액에 직접 안 들어간다.
+      //   교대로 넘어간 근무는 shiftsOn 을 거친 scheduledShiftsFor 가 이미 반영한다 —
+      //   여기서 templates 를 직접 훑으면 대타 뛴 사람이 못 받는다.
+      const shiftRecs = shiftsToPayRecords(
+        scheduledShiftsFor(shiftTemplates, swaps, shiftExceptions, s.id, dates),
+      );
       // ★시급 미설정을 최저시급으로 대신 계산하지 않는다(#38). 예전엔 `?? DEFAULT_HOURLY_WAGE` 라
       //   **그럴듯한 금액**이 떠서 사장이 "최저시급으로 정해 뒀다"고 읽고 그대로 지나갔다.
       //   같은 데이터인데 화면마다 규칙이 다르면 세 화면이 서로 다른 금액을 말한다 —
@@ -91,10 +107,10 @@ export default function OwnerStaffScreen() {
       const todayRec = records.find((r) => r.staff_id === s.id && r.date === today);
       const status: 'out' | 'working' | 'done' = !todayRec ? 'out' : !todayRec.check_out ? 'working' : 'done';
       // 급여 규칙(주휴·휴게·야간·연장·추가수당) 반영 예상 인건비 — computePay SSOT(F1). min 은 근무시간 표시용.
-      map[s.id] = { min, pay: wageSet ? computePay(monthRecs, wages[s.id], settings).total : null, status };
+      map[s.id] = { min, pay: wageSet ? computePay(shiftRecs, wages[s.id], settings).total : null, status };
     }
     return map;
-  }, [records, wages, settings, staff, ym, today]);
+  }, [records, wages, settings, staff, ym, today, shiftTemplates, swaps, shiftExceptions]);
 
   // 직원별 퀴즈 진도 — 판정 본체는 taskProgress(사장 홈과 같은 잣대). 여기서 다시 세지 않는다.
   // hydrate 는 owner/_layout 이 이미 돌린다.
@@ -158,8 +174,10 @@ export default function OwnerStaffScreen() {
         <View style={styles.payCard}>
           <Text style={styles.payLabel}>이번 달 예상 인건비</Text>
           <Text style={styles.payValue}>{won(totalPay)}</Text>
+          {/* ★금액이 무엇으로 계산됐는지 말한다 — 출퇴근이 아니라 **근무표**다(2026-08-26).
+              안 적으면 사장이 출퇴근 시간과 안 맞는 금액을 보고 계산이 틀렸다고 읽는다. */}
           <Text style={styles.payNote}>
-            {month}월 · 세전 · 시급 기준 · 직원 {staff.length}명{workingCount > 0 ? ` · 근무 중 ${workingCount}명` : ''}
+            {month}월 · 세전 · 근무표 기준 · 직원 {staff.length}명{workingCount > 0 ? ` · 근무 중 ${workingCount}명` : ''}
           </Text>
           <Pressable
             onPress={() => router.push('/owner/payroll')}

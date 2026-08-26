@@ -11,6 +11,7 @@ import {
   type SwapRequest,
   type StoreConfig,
   type ResolvedShift,
+  type ShiftException,
 } from '@/lib/store/useScheduleStore';
 import type { Junior } from '@/types';
 import { todayStr } from '@/lib/utils/attendance';
@@ -32,6 +33,7 @@ export function ScheduleWeek({
   setMonday,
   templates,
   swaps,
+  exceptions,
   staff,
   config,
   meId,
@@ -43,6 +45,8 @@ export function ScheduleWeek({
   setMonday: (m: string) => void;
   templates: ShiftTemplate[];
   swaps: SwapRequest[];
+  /** 그날 빠진 반복 근무(0178). 안 넘기면 교대로 옮긴 날의 근무가 **두 벌**로 보인다. */
+  exceptions: ShiftException[];
   staff: Junior[];
   config: StoreConfig;
   meId?: string;
@@ -58,8 +62,8 @@ export function ScheduleWeek({
 
   // 이번 주에 진행 중(변경 중) 교대가 하나라도 있으면 범례에 점을 노출.
   const hasPending = useMemo(
-    () => days.some((d) => shiftsOn(templates, swaps, d).some((sh) => sh.pending)),
-    [days, templates, swaps],
+    () => days.some((d) => shiftsOn(templates, swaps, d, exceptions).some((sh) => sh.pending)),
+    [days, templates, swaps, exceptions],
   );
 
   return (
@@ -91,7 +95,7 @@ export function ScheduleWeek({
         {days.map((date) => {
           const wd = weekdayOf(date);
           const closed = config.closedDays.includes(wd);
-          const shifts = shiftsOn(templates, swaps, date);
+          const shifts = shiftsOn(templates, swaps, date, exceptions);
           const isToday = date === today;
           const isSun = wd === 0;
           return (

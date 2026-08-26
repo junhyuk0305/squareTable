@@ -6,7 +6,7 @@ import { View, Text, Pressable, ScrollView, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { BottomSheet } from '@/components/BottomSheet';
-import { shiftsOn, type ShiftTemplate, type SwapRequest } from '@/lib/store/useScheduleStore';
+import { shiftsOn, type ShiftTemplate, type SwapRequest, type ShiftException } from '@/lib/store/useScheduleStore';
 import { todayStr } from '@/lib/utils/attendance';
 import { addDays, fmtDateKo } from '@/lib/utils/schedule';
 import { InkColors } from '@/lib/theme/colors';
@@ -16,27 +16,30 @@ export function MyShiftPicker({
   me,
   templates,
   swaps,
+  exceptions,
   onPick,
   onClose,
 }: {
   me: string;
   templates: ShiftTemplate[];
   swaps: SwapRequest[];
+  /** 그날 빠진 반복 근무(0178) — 안 넘기면 이미 남에게 넘긴 근무가 목록에 다시 뜬다. */
+  exceptions: ShiftException[];
   onPick: (date: string, template: ShiftTemplate) => void;
   onClose: () => void;
 }) {
-  // 앞으로 약 2달(60일) 중 내가 실제 근무하는(승인 교대 반영) 시프트. 이미 교대 걸린 건 제외.
+  // 앞으로 약 2달(60일) 중 내 근무. 이미 교대가 걸린 건 제외.
   const myShifts = useMemo(() => {
     const today = todayStr();
     const out: { date: string; template: ShiftTemplate }[] = [];
     for (let i = 0; i < 60; i++) {
       const d = addDays(today, i);
-      shiftsOn(templates, swaps, d)
+      shiftsOn(templates, swaps, d, exceptions)
         .filter((sh) => sh.workerStaffId === me && !sh.pending)
         .forEach((sh) => out.push({ date: d, template: sh.template }));
     }
     return out;
-  }, [me, templates, swaps]);
+  }, [me, templates, swaps, exceptions]);
 
   return (
     <BottomSheet visible={true} onClose={onClose} sheetStyle={{ maxHeight: '75%', paddingBottom: 8 }}>

@@ -136,8 +136,23 @@ const TENANT_TABLES = ['playbook_entries','chat_queries','unknown_queries','work
     ok(!error && (data?.length||0)===0, `anon→owner_today 0행`, error?`(err ${error.message.slice(0,40)})`:`rows=${data?.length}`); }
   { const { data, error } = await B.c.rpc('my_cross_summary');
     const mine=(data||[]).filter(r=>r.unit_id===B.unit);
-    ok(!error && mine.length===1 && mine[0].shifts!==undefined && mine[0].month_minutes!==undefined,
-      `B→my_cross_summary 자기매장 반환(양성 대조)`, error?`(err ${error.message.slice(0,40)})`:`rows=${mine.length}`); }
+    ok(!error && mine.length===1 && mine[0].shifts!==undefined && mine[0].month_minutes!==undefined
+       && mine[0].exceptions!==undefined,
+      `B→my_cross_summary 자기매장 반환(양성 대조 · exceptions 포함 0180)`, error?`(err ${error.message.slice(0,40)})`:`rows=${mine.length} exc=${JSON.stringify(mine[0]?.exceptions)}`); }
+
+  // ── shift_exceptions(0178) — 새 테이블도 매장 격리가 유일한 방어선이다 ──
+  { const tplId = `xt_sh_${Date.now().toString().slice(-8)}`;
+    await A.c.from('shift_templates').insert({ id: tplId, unit_id: A.unit, staff_id: A.uid, weekday: 1, shift_date: null, start_time: '09:00', end_time: '18:00' });
+    const today = new Date(Date.now()+9*3600000).toISOString().slice(0,10);
+    const ins = await A.c.from('shift_exceptions').insert({ template_id: tplId, unit_id: A.unit, date: today }).select('template_id');
+    ok(!ins.error && (ins.data||[]).length===1, `A 자기매장 근무 예외 저장(양성 대조)`, ins.error?`(err ${ins.error.message.slice(0,40)})`:`rows=${(ins.data||[]).length}`);
+    { const { data, error } = await B.c.from('shift_exceptions').select('template_id').eq('unit_id', A.unit);
+      ok(!error && (data?.length||0)===0, `B→A매장 근무 예외 0행(격리)`, error?`(err ${error.message.slice(0,40)})`:`rows=${data?.length}`); }
+    { const { data, error } = await B.c.from('shift_exceptions').insert({ template_id: tplId, unit_id: A.unit, date: today }).select('template_id');
+      ok(!!error || (data||[]).length===0, `B→A매장 근무 예외 심기 거부`, error?`(err ${error.code})`:`rows=${(data||[]).length}`); }
+    { const { data, error } = await mk().from('shift_exceptions').select('template_id');
+      ok(!error ? (data?.length||0)===0 : true, `anon→근무 예외 0행`, error?`(err ${error.code})`:`rows=${data?.length}`); }
+    await A.c.from('shift_templates').delete().eq('id', tplId); }
   { const { data, error } = await A.c.rpc('my_cross_summary');
     const leaked=(data||[]).filter(r=>r.unit_id===B.unit);
     ok(!error && leaked.length===0, `A→my_cross_summary B매장 행 0(비소속 격리)`, error?`(err ${error.message.slice(0,40)})`:`B행 ${leaked.length}`); }

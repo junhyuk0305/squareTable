@@ -12,12 +12,16 @@ import { SectionLabel } from '@/components/SectionLabel';
 import { SegmentTabs } from '@/components/SegmentTabs';
 import { ScheduleWeek } from '@/components/schedule/ScheduleWeek';
 import { SwapRequestModal } from '@/components/schedule/SwapRequestModal';
+import { MyShiftSheet } from '@/components/schedule/MyShiftSheet';
 import { MyShiftPicker } from '@/components/schedule/MyShiftPicker';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useStaffStore } from '@/lib/store/useStaffStore';
 import {
   useScheduleStore,
   shiftsOn,
+  canAcceptSwap,
+  swapTargets,
+  type ShiftException,
   type ShiftTemplate,
   type SwapRequest,
 } from '@/lib/store/useScheduleStore';
@@ -50,6 +54,8 @@ export default function JuniorScheduleScreen() {
   const config = useScheduleStore((s) => s.config);
   const templates = useScheduleStore((s) => s.templates);
   const swaps = useScheduleStore((s) => s.swaps);
+  // 그날 빠진 반복 근무(0178) — 교대로 넘긴 날의 근무가 두 벌로 보이지 않게 판정에 같이 넣는다.
+  const exceptions = useScheduleStore((s) => s.exceptions);
   const acceptSwap = useScheduleStore((s) => s.acceptSwap);
   const cancelSwap = useScheduleStore((s) => s.cancelSwap);
 
@@ -57,6 +63,8 @@ export default function JuniorScheduleScreen() {
   const [tab, setTab] = useState<'week' | 'swap'>('week');
   const [monday, setMonday] = useState(() => mondayOf(today));
   const [composer, setComposer] = useState<{ date: string; template: ShiftTemplate } | null>(null);
+  // 근무표에서 내 근무를 눌렀을 때 먼저 뜨는 시트 — 시간 고치기 / 교대 요청 중에서 고른다.
+  const [picked, setPicked] = useState<{ date: string; template: ShiftTemplate } | null>(null);
   const [picking, setPicking] = useState(false);
   // 지난 요청은 기본 접힘 — 목록 세 덩어리가 연달아 같은 형태로 쌓이던 걸 끊는다(2026-08-06).
   const [showHistory, setShowHistory] = useState(false);
@@ -64,17 +72,19 @@ export default function JuniorScheduleScreen() {
   const nameOf = (id: string) => (id === me ? '나' : staff.find((x) => x.id === id)?.name ?? '직원');
   const tplById = (id: string) => templates.find((t) => t.id === id);
 
-  // 내가 대응할 수 있는 열린 요청(대타 전체 + 나에게 온 맞교환). 지난 날짜는 자동 제외.
+  // 내가 대응할 수 있는 열린 요청. 판정 SSOT = canAcceptSwap(서버 accept_swap 과 같은 규칙).
+  // ★지정 발송(0178)이면 목록에 든 사람에게만 보인다 — 안 그러면 수락 버튼이 있는데 눌러도 안 된다.
   const incoming = useMemo(
-    () =>
-      swaps.filter(
-        (r) =>
-          r.status === 'open' &&
-          r.requester_id !== me &&
-          r.date >= today &&
-          (r.kind === 'cover' || r.target_staff_id === me),
-      ),
+    () => swaps.filter((r) => canAcceptSwap(r, me, today)),
     [swaps, me, today],
+  );
+  /** 나를 콕 집어 보낸 요청인가 — 전체 공개 대타와 구분해 먼저 보여준다. */
+  const isForMe = (r: SwapRequest) => (swapTargets(r)?.includes(me) ?? false);
+  // 나에게 지정된 요청을 위로. 여러 명에게 갔으면 **먼저 수락한 사람**이 가져가므로 눈에 먼저 띄어야 한다.
+  const incomingSorted = useMemo(
+    () => [...incoming].sort((a, b) => Number(isForMe(b)) - Number(isForMe(a))),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [incoming, me],
   );
 
   // 수락 시 내 기존 근무와 시간이 겹치는지(더블부킹) — 막지는 않고 경고만, 최종은 사장 컨펌.
@@ -115,7 +125,7 @@ export default function JuniorScheduleScreen() {
   // 부르면 비순수라 React Compiler가 메모이즈를 못 한다(컴파일러가 헬퍼 호출 결과를 자동 메모이즈).
   const now = new Date();
   const nowHM = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-  const myNext = nextShiftOf(templates, swaps, me, today, staff, nowHM);
+  const myNext = nextShiftOf(templates, swaps, exceptions, me, today, staff, nowHM);
 
   // ★근무표(config·templates·swaps)와 직원 명부가 **둘 다** 와야 그린다.
   //   근무표가 없으면 config가 DEFAULT_CONFIG라 운영시간·휴무일이 **실제 설정인 것처럼** 보였다가 바뀌고,
@@ -182,10 +192,11 @@ export default function JuniorScheduleScreen() {
               setMonday={setMonday}
               templates={templates}
               swaps={swaps}
+              exceptions={exceptions}
               staff={staff}
               config={config}
               meId={me}
-              onShiftPress={(date, sh) => setComposer({ date, template: sh.template })}
+              onShiftPress={(date, sh) => setPicked({ date, template: sh.template })}
               canPress={(date, sh) => sh.workerStaffId === me && date >= today && !sh.pending}
             />
             </Appear>
@@ -214,11 +225,11 @@ export default function JuniorScheduleScreen() {
               {incoming.length === 0 ? (
                 <Empty text="지금 대응할 교대 요청이 없어요." />
               ) : (
-                incoming.map((r, i) => {
+                incomingSorted.map((r, i) => {
                   const conflict = conflictOf(r);
                   return (
                     <Appear key={r.id} delay={stagger(i)}>
-                    <SwapCard r={r} nameOf={nameOf} tplById={tplById}>
+                    <SwapCard r={r} nameOf={nameOf} tplById={tplById} forMe={isForMe(r)}>
                       {conflict && (
                         <View style={styles.conflict}>
                           <Ionicons name="alert-circle-outline" size={14} color={BrandColors.bad} />
@@ -339,11 +350,25 @@ export default function JuniorScheduleScreen() {
           me={me}
           templates={templates}
           swaps={swaps}
+          exceptions={exceptions}
           onPick={(date, template) => {
             setPicking(false);
             setComposer({ date, template });
           }}
           onClose={() => setPicking(false)}
+        />
+      )}
+
+      {/* 내 근무를 누르면 할 수 있는 일부터 고른다 — 시간 고치기(0178) / 교대 요청. */}
+      {picked && (
+        <MyShiftSheet
+          date={picked.date}
+          template={picked.template}
+          onSwap={() => {
+            setComposer(picked);
+            setPicked(null);
+          }}
+          onClose={() => setPicked(null)}
         />
       )}
 
@@ -393,6 +418,7 @@ function Empty({ text }: { text: string }) {
 function nextShiftOf(
   templates: ShiftTemplate[],
   swaps: SwapRequest[],
+  exceptions: ShiftException[],
   me: string,
   today: string,
   staff: Junior[],
@@ -400,7 +426,7 @@ function nextShiftOf(
 ) {
   for (let i = 0; i < 14; i++) {
     const date = addDays(today, i);
-    const all = shiftsOn(templates, swaps, date);
+    const all = shiftsOn(templates, swaps, date, exceptions);
     const mineShifts = all
       .filter((sh) => sh.workerStaffId === me)
       .sort((a, b) => a.template.start.localeCompare(b.template.start));
@@ -441,11 +467,14 @@ function SwapCard({
   r,
   nameOf,
   tplById,
+  forMe,
   children,
 }: {
   r: SwapRequest;
   nameOf: (id: string) => string;
   tplById: (id: string) => ShiftTemplate | undefined;
+  /** 나를 지정해 보낸 요청인가(0178 지정 발송). 전체 공개 대타와 구분해 말한다. */
+  forMe?: boolean;
   children?: React.ReactNode;
 }) {
   const meta = STATUS_META[r.status];
@@ -465,10 +494,19 @@ function SwapCard({
         <Text style={styles.cardTime}>{formatAsked(r.created_at)}</Text>
       </View>
 
+      {forMe && (
+        <Text style={styles.forMe}>
+          나에게 온 요청이에요{(swapTargets(r)?.length ?? 0) > 1 ? ' · 먼저 수락한 분이 맡아요' : ''}
+        </Text>
+      )}
       <Text style={styles.cardLine}>
         <Text style={styles.cardStrong}>{nameOf(r.requester_id)}</Text>님 ·{' '}
         {fmtDateKo(r.date)} {tpl ? `${tpl.start}~${tpl.end}` : ''}
       </Text>
+      {/* 부분 교대(0178) — 근무 전체가 아니라 이 구간만 넘어온다. 안 적으면 통째로 받는 줄 안다. */}
+      {r.part_start && r.part_end && (
+        <Text style={styles.cardPart}>이 중 {r.part_start}~{r.part_end} 구간만 넘겨요</Text>
+      )}
       {r.kind === 'swap' && r.target_date && (
         <Text style={styles.cardLine}>
           ↔ <Text style={styles.cardStrong}>{nameOf(r.target_staff_id ?? '')}</Text>님 ·{' '}
@@ -582,6 +620,8 @@ const styles = StyleSheet.create({
   cardLine: { fontSize: 15, color: InkColors.ink2, lineHeight: 22 },
   cardStrong: { fontWeight: '800', color: InkColors.ink },
   cardAccepted: { fontSize: 12.5, fontWeight: '700', color: BrandColors.goodText },
+  forMe: { fontSize: 12.5, fontWeight: '800', color: BrandColors.goodText },
+  cardPart: { fontSize: 13, fontWeight: '700', color: InkColors.ink2 },
   cardNote: { fontSize: 15, color: InkColors.ink2, fontStyle: 'italic', backgroundColor: InkColors.cream, borderRadius: Radius.sm, paddingHorizontal: 10, paddingVertical: 8 },
 
   conflict: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: BrandColors.accentSoft, borderRadius: Radius.sm, paddingHorizontal: 10, paddingVertical: 8, marginTop: 2 },

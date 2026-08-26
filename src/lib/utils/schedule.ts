@@ -122,6 +122,37 @@ export function isValidShiftTime(start: string, end: string): boolean {
   return checkShiftTime(start, end) === null;
 }
 
+/** 근무를 조각으로 쪼갠 결과 한 칸. mine=true 면 원래 담당자 몫, false 면 넘겨받는 사람 몫. */
+export type ShiftPiece = { start: string; end: string; mine: boolean };
+
+/**
+ * 근무의 **일부 구간만** 넘길 때 생기는 조각들. 구간이 근무 밖이거나 0분이면 null.
+ *
+ * ★조각은 2개가 아니라 **3개**가 될 수 있다 — 가운데를 떼면 앞(원래)·가운데(받는 사람)·뒤(원래).
+ *   가운데를 빠뜨리면 근무가 통째로 사라지거나 겹친다.
+ * 자정 넘김은 `shiftMinutes` 규칙을 그대로 따른다(끝이 시작보다 이르면 다음 날).
+ *
+ * ⚠️ 서버에도 같은 판정이 있다(`transfer_shift`/`shift_span_min`, 0179). 규칙을 두 벌 두려는 게 아니라
+ *    **서버가 무결성 경계**라서다 — 클라가 보낸 구간이 근무 안에 있는지는 클라 말을 믿을 수 없다.
+ *    여기 것은 화면 미리보기와 저장 전 차단용이고, 최종 판정은 서버가 한다.
+ */
+export function splitShift(
+  baseStart: string,
+  baseEnd: string,
+  partStart: string,
+  partEnd: string,
+): ShiftPiece[] | null {
+  const total = shiftMinutes(baseStart, baseEnd);
+  const offset = shiftMinutes(baseStart, partStart);
+  const length = shiftMinutes(partStart, partEnd);
+  if (length === 0 || offset + length > total) return null; // 0분이거나 근무 밖
+  const out: ShiftPiece[] = [];
+  if (offset > 0) out.push({ start: baseStart, end: partStart, mine: true });
+  out.push({ start: partStart, end: partEnd, mine: false });
+  if (offset + length < total) out.push({ start: partEnd, end: baseEnd, mine: true });
+  return out;
+}
+
 /** 하루 타임라인의 시간 창(분). 자정을 넘겨 닫는 매장은 close에 하루를 더해 편다. */
 export type DayWindow = { from: number; to: number };
 
@@ -172,6 +203,13 @@ export function spanIn(
   const s = startMinutes(start, openMin, closeMin > MINUTES_PER_DAY);
   const len = Math.max(win.to - win.from, 1);
   return { left: (s - win.from) / len, width: shiftMinutes(start, end) / len };
+}
+
+/** "YYYY-MM" 의 모든 날짜(YYYY-MM-DD). 급여·근무표 월 집계의 날짜 축. */
+export function monthDates(ym: string): string[] {
+  const [y, m] = ym.split('-').map(Number);
+  const last = new Date(Date.UTC(y, m, 0)).getUTCDate(); // 다음 달 0일 = 이번 달 마지막 날
+  return Array.from({ length: last }, (_, i) => `${ym}-${String(i + 1).padStart(2, '0')}`);
 }
 
 /** YYYY-MM-DD의 '일(day-of-month)' 숫자. */

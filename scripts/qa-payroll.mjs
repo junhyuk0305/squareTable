@@ -7,24 +7,34 @@
 import { execFileSync } from 'node:child_process';
 import { writeFileSync, readFileSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, join } from 'node:path';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = join(root, '.paytest');
 try {
   execFileSync('npx', ['tsc',
-    'src/lib/utils/attendance.ts', 'src/lib/utils/payroll.ts',
+    'src/lib/utils/attendance.ts', 'src/lib/utils/schedule.ts', 'src/lib/utils/payroll.ts',
     '--outDir', '.paytest', '--module', 'es2022', '--target', 'es2022',
     '--moduleResolution', 'node', '--skipLibCheck', '--ignoreConfig', '--ignoreDeprecations', '6.0',
   ], { cwd: root, stdio: 'pipe', shell: process.platform === 'win32' });
 } catch (e) { /* tsc 는 성공해도 종종 비-0 경고 — 산출물 존재로 판정 */ }
 
-const payPath = join(OUT, 'payroll.js');
-writeFileSync(payPath, readFileSync(payPath, 'utf8').replace(/'\.\/attendance'/g, "'./attendance.js'"), 'utf8');
+// tsc 가 남긴 확장자 없는 상대 import 를 ESM 이 읽을 수 있게 고친다(payroll → attendance·schedule).
+const OUTF = (f) => join(OUT, f);
+const fixRel = (f) => {
+  const fp = OUTF(f);
+  writeFileSync(fp, readFileSync(fp, 'utf8')
+    .split("'./attendance'").join("'./attendance.js'")
+    .split("'./schedule'").join("'./schedule.js'")
+    .split("'@/lib/utils/attendance'").join("'./attendance.js'"), 'utf8');
+};
+fixRel('payroll.js');
+fixRel('schedule.js');
 writeFileSync(join(OUT, 'package.json'), '{"type":"module"}');
 
-const { computePay } = await import('file://' + payPath.replace(/\\/g, '/'));
+const { computePay, shiftsToPayRecords, reconcileSchedule, RECONCILE_THRESHOLD_MIN } =
+  await import(pathToFileURL(OUTF('payroll.js')));
 
 const W = 10000, NOW = '2026-07-01T05:00:00Z'; // 고정 now(=KST 14:00) — 진행중 근무 결정성
 const ALL = { breakDeduction: true, nightAllowance: true, overtimeAllowance: true, weeklyHolidayPay: true, extraAllowance: 0 };
@@ -36,6 +46,7 @@ const R = (date, ci, co, coD = date) => ({
 });
 let pass = 0, fail = 0;
 const eq = (m, g, e) => { const ok = g === e; console.log(`  ${ok ? 'PASS' : 'FAIL'} ${m}: got=${g} exp=${e}`); ok ? pass++ : fail++; };
+const ok2 = (m, cond, extra = '') => { cond ? (pass++, console.log('  PASS', m)) : (fail++, console.log('  FAIL', m, extra)); };
 
 let r = computePay([R('2026-07-01', '10:00', '15:00')], W, ALL, NOW);
 eq('5h주간 base(휴게30→4.5h)', r.base, 45000);
@@ -85,6 +96,53 @@ eq('회귀: 자정 넘김 nightMin', r.nightMin, 480);
 
 // rmSync 재귀삭제는 Windows Node 24.x에서 네이티브 크래시(0xC0000409)로 15/15 PASS 후 exit 127 —
 // 비동기 rm은 정상이라 이것만 사용(결과 출력을 정리보다 먼저).
+
+// ── 급여의 기준은 **근무표**다 (2026-08-26 사용자 확정 · 작업 2) ──────────────
+// 출퇴근 기록은 확인용이라 금액에 직접 들어가지 않는다. 규칙(30분 절삭·휴게·야간·연장·주휴)은
+// computePay 그대로 재사용하고 **입력 소스만** 바뀐다.
+const S = (date, start, end) => ({ date, start, end });
+
+r = computePay(shiftsToPayRecords([S('2026-07-01', '12:00', '18:00')]), W, ALL, NOW);
+eq('★근무표 6h → base(휴게 30 → 5.5h)', r.base, 55000);
+eq('★근무표 6h → 휴게 30분', r.breakMin, 30);
+r = computePay(shiftsToPayRecords([S('2026-07-01', '22:00', '02:00')]), W, ALL, NOW);
+eq('★근무표 자정 넘김 22:00~02:00 → 240분(0분 아님)', r.workedMin, 240);
+eq('★근무표 자정 넘김 → 야간 240분', r.nightMin, 240);
+
+// 경계 ① 근무표에 **없는 날** 출근 → 급여에 **안 들어간다**(입력이 근무표뿐이라 구조적으로 그렇다)
+r = computePay(shiftsToPayRecords([]), W, ALL, NOW);
+eq('★근무표에 없는 날은 급여 0(출퇴근을 찍었어도)', r.total, 0);
+{
+  const ms = reconcileSchedule([], [R('2026-07-05', '09:00', '18:00')]);
+  ok2('★근무표에 없는 날 출근 → 화면이 말한다', ms.length === 1 && ms[0].kind === 'no_schedule', JSON.stringify(ms));
+}
+// 경계 ② 근무표엔 **있는데** 출근을 안 찍음 → 급여에 **들어간다**(근무표가 기준)
+{
+  const sh = [S('2026-07-06', '12:00', '18:00')];
+  r = computePay(shiftsToPayRecords(sh), W, ALL, NOW);
+  eq('★출근을 안 찍어도 근무표대로 계산된다', r.base, 55000);
+  const ms = reconcileSchedule(sh, []);
+  ok2('★출근 미기록 → 화면이 말한다', ms.length === 1 && ms[0].kind === 'no_record', JSON.stringify(ms));
+}
+// 대조 임계값 — 30분. 미만이면 조용하고 이상이면 말한다.
+{
+  const sh = [S('2026-07-07', '12:00', '18:00')];
+  const near = reconcileSchedule(sh, [R('2026-07-07', '12:00', '18:29')]);
+  ok2(`대조: ${RECONCILE_THRESHOLD_MIN}분 미만(29분) 차이는 조용하다`, near.length === 0, JSON.stringify(near));
+  const far = reconcileSchedule(sh, [R('2026-07-07', '12:00', '19:10')]);
+  ok2('★대조: 30분 이상(70분) 차이는 말한다', far.length === 1 && far[0].kind === 'time_diff', JSON.stringify(far));
+}
+// ★부분 교대 — 근무를 쪼개도 **그날 지급액 합이 원본과 같다**(작업 7 의 하루 합계 휴게가 카운터파트다)
+{
+  const whole = computePay(shiftsToPayRecords([S('2026-07-08', '12:00', '18:00')]), W, ALL, NOW);
+  const split3 = computePay(shiftsToPayRecords([
+    S('2026-07-08', '12:00', '14:00'), S('2026-07-08', '14:00', '16:00'), S('2026-07-08', '16:00', '18:00'),
+  ]), W, ALL, NOW);
+  eq('★부분 교대: 조각 3개로 쪼개도 그날 유급분이 같다', split3.paidMin, whole.paidMin);
+  eq('★부분 교대: 조각 3개로 쪼개도 지급액이 같다', split3.total, whole.total);
+  eq('★부분 교대: 휴게도 하루 한 번만(건별이면 0 이었다)', split3.breakMin, 30);
+}
+
 console.log(`\nRESULT: ${pass} passed, ${fail} failed`);
 await rm(OUT, { recursive: true, force: true }).catch(() => {});
 process.exit(fail ? 1 : 0);

@@ -46,8 +46,11 @@ export default function OwnerScheduleScreen() {
   const config = useScheduleStore((s) => s.config);
   const templates = useScheduleStore((s) => s.templates);
   const swaps = useScheduleStore((s) => s.swaps);
+  // 그날 빠진 반복 근무(0178). 안 넣으면 교대로 넘긴 날에 근무가 두 벌로 잡힌다.
+  const exceptions = useScheduleStore((s) => s.exceptions);
   const approveSwap = useScheduleStore((s) => s.approveSwap);
   const rejectSwap = useScheduleStore((s) => s.rejectSwap);
+  const restoreException = useScheduleStore((s) => s.restoreException);
 
   // ★두 스토어 다 loaded 가 있는데 하나도 안 보고 있었다 — 그래서 도착 전에 "승인할 교대 요청이 없어요"·
   //   "합류한 직원이 없어요"(＋초대 CTA)·"이 날은 근무가 없어요"·DEFAULT_CONFIG 운영시간(09:00~22:00·연중무휴)이
@@ -82,14 +85,17 @@ export default function OwnerScheduleScreen() {
           key: d,
           dow: WEEKDAY_LABELS[wd],
           date: String(dayOfMonth(d)).padStart(2, '0'),
-          hasEvent: shiftsOn(templates, swaps, d).length > 0,
+          hasEvent: shiftsOn(templates, swaps, d, exceptions).length > 0,
           dimmed: config.closedDays.includes(wd),
         };
       }),
-    [monday, templates, swaps, config.closedDays],
+    [monday, templates, swaps, exceptions, config.closedDays],
   );
 
-  const dayShifts = useMemo(() => shiftsOn(templates, swaps, selected), [templates, swaps, selected]);
+  const dayShifts = useMemo(
+    () => shiftsOn(templates, swaps, selected, exceptions),
+    [templates, swaps, selected, exceptions],
+  );
   const totalMin = useMemo(
     () => dayShifts.reduce((sum, sh) => sum + shiftMinutes(sh.template.start, sh.template.end), 0),
     [dayShifts],
@@ -132,6 +138,13 @@ export default function OwnerScheduleScreen() {
       }),
     [dayShifts, staff, win, config.open, config.close],
   );
+
+  // 이 날 **빠져 있는** 반복 근무 — 교대로 넘겼거나 쪼개면서 그날만 제외된 것들(0178).
+  // ★안 보여주면 "왜 이 날만 근무가 없지?"의 답이 화면 어디에도 없고, 되돌릴 길도 없다.
+  const excludedToday = useMemo(() => {
+    const ids = new Set(exceptions.filter((e) => e.date === selected).map((e) => e.template_id));
+    return templates.filter((t) => ids.has(t.id));
+  }, [exceptions, templates, selected]);
 
   // 그날 쉬는 사람은 행으로 늘어놓지 않는다 — 바가 없는 빈 행이 절반이면 타임라인이 안 읽힌다.
   const offNames = useMemo(() => {
@@ -275,6 +288,25 @@ export default function OwnerScheduleScreen() {
 
               {offNames.length > 0 && <Text style={styles.offText}>휴무 · {offNames.join(', ')}</Text>}
 
+              {/* 그날만 빠진 반복 근무 — 교대로 넘긴 흔적이다. 되돌리면 원래 반복이 이 날에도 돌아온다.
+                  (넘어간 조각은 위 목록에 보이므로, 필요하면 눌러서 지운다.) */}
+              {excludedToday.map((t) => (
+                <View key={`exc_${t.id}`} style={styles.excRow}>
+                  <Ionicons name="git-branch-outline" size={14} color={InkColors.ink3} />
+                  <Text style={styles.excText}>
+                    {staff.find((x) => x.id === t.staff_id)?.name ?? '직원'}님의 매주 {WEEKDAY_LABELS[t.weekday ?? 0]}요일 {t.start}~{t.end} 근무는 이 날만 빠져 있어요
+                  </Text>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="이 날 반복 근무 되돌리기"
+                    onPress={() => restoreException(t.id, selected)}
+                    style={({ pressed }) => [styles.excBtn, pressed && { opacity: 0.6 }]}
+                  >
+                    <Text style={styles.excBtnText}>되돌리기</Text>
+                  </Pressable>
+                </View>
+              ))}
+
               {/* 근무 추가 — 예전엔 목록 행을 눌러야 편집이 열려서 "추가하는 법"이 안 보였다. */}
               <Pressable
                 accessibilityRole="button"
@@ -413,6 +445,10 @@ const styles = StyleSheet.create({
   dayCard: { backgroundColor: InkColors.bg, borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, padding: Space.md, ...Elevation.e1 },
   dayNone: { fontSize: 15, lineHeight: 21, color: InkColors.ink2, textAlign: 'center', paddingVertical: Space.lg },
   offText: { fontSize: 12, fontWeight: '700', color: InkColors.ink3, paddingTop: Space.sm },
+  excRow: { flexDirection: 'row', alignItems: 'center', gap: Space.xs, paddingTop: Space.sm },
+  excText: { flex: 1, fontSize: 12, fontWeight: '700', color: InkColors.ink3, lineHeight: 17 },
+  excBtn: { minHeight: 34, justifyContent: 'center', paddingHorizontal: 10, borderRadius: Radius.pill, borderWidth: 1, borderColor: InkColors.line },
+  excBtnText: { fontSize: 12, fontWeight: '800', color: InkColors.ink2 },
   addRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Space.xs, minHeight: 48, marginTop: Space.sm, borderRadius: Radius.sm, borderWidth: 1, borderStyle: 'dashed', borderColor: InkColors.line },
   addText: { fontSize: 15, lineHeight: 21, fontWeight: '800', color: InkColors.ink },
 

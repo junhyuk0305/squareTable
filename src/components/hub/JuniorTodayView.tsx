@@ -52,13 +52,23 @@ export function JuniorTodayView({ header }: { header: ReactNode }) {
 
   // ── 1) 오늘 근무(전 매장, 시작 시각순) + 다음 근무(오늘 없을 때) ──
   // 0138: 근무 한 칸은 요일 반복이거나 날짜 지정이다. 판정은 shiftsOn(useScheduleStore)과 같은 모양.
-  const onDay = (s: { weekday: number | null; date: string | null }, date: string, wd: number) =>
-    s.date ? s.date === date : s.weekday === wd;
+  // ★0178·0180: 그날 예외로 빠진 반복은 없는 것으로 친다 — 안 빼면 이미 남에게 넘긴 근무가
+  //   허브에 '오늘 근무'로 그대로 남는다(shiftsOn 이 매장 앱에서 하는 것과 같은 규칙).
+  const onDay = (
+    s: { id: string; weekday: number | null; date: string | null },
+    date: string,
+    wd: number,
+    excluded: { template_id: string; date: string }[],
+  ) => {
+    if (s.date) return s.date === date;
+    if (s.weekday !== wd) return false;
+    return !excluded.some((e) => e.template_id === s.id && e.date === date);
+  };
 
   const todayShifts = useMemo(
     () =>
       myCross
-        .flatMap((r) => r.shifts.filter((s) => onDay(s, today, dow)).map((s) => ({ uid: r.unit_id, ...s })))
+        .flatMap((r) => r.shifts.filter((s) => onDay(s, today, dow, r.exceptions ?? [])).map((s) => ({ uid: r.unit_id, ...s })))
         .sort((a, b) => a.start.localeCompare(b.start)),
     [myCross, dow, today],
   );
@@ -68,7 +78,7 @@ export function JuniorTodayView({ header }: { header: ReactNode }) {
       const d2 = (dow + off) % 7;
       const date2 = todayStr(new Date(new Date(`${today}T00:00:00`).getTime() + off * 86400000));
       const cands = myCross
-        .flatMap((r) => r.shifts.filter((s) => onDay(s, date2, d2)).map((s) => ({ uid: r.unit_id, dow: d2, ...s })))
+        .flatMap((r) => r.shifts.filter((s) => onDay(s, date2, d2, r.exceptions ?? [])).map((s) => ({ uid: r.unit_id, dow: d2, ...s })))
         .sort((a, b) => a.start.localeCompare(b.start));
       if (cands.length > 0) return cands[0];
     }

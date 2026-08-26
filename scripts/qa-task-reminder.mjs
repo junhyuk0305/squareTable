@@ -3,7 +3,9 @@
 // 무엇을 증명하나:
 //   ① 클라 경로: 사장 실세션이 remind_at 을 붙여 할일을 저장하고 되읽을 수 있다(PGRST204 드리프트 검출).
 //   ② task_occurs_on = occursOn(useWorkStore.ts:260) 진리표와 같다 — 어긋나면 "보이는데 알림이 안 오는" 버그.
-//   ③ workers_at = shiftsOn(useScheduleStore.ts:335) + 시각 필터. 승인된 교대가 근무자를 치환한다.
+//   ③ workers_at = shiftsOn(useScheduleStore) + 시각 필터.
+//      ★2026-08-26(0179): 승인된 교대는 **파생 치환이 아니라 실제 이전**이다. 승인 행을 꽂는 것만으로는
+//        근무자가 안 바뀌는 게 정상이고, transfer_shift 가 돌아야 바뀐다(둘 다면 이중 적용).
 //   ④ due_task_reminders 수신자 규칙: private→담당자 / shared→그 시각 근무자 / 근무자 0명→매장 전원.
 //   ⑤ 이미 완료(work_done)한 할일은 대상에서 빠진다.
 //   ⑥ 크론이 부르는 엣지 엔드포인트를 그대로 쳐서 선점(중복 발송 방지)까지 실증한다.
@@ -136,6 +138,11 @@ async function main() {
   check('근무 시간 안 → A', JSON.stringify(await at(T)) === JSON.stringify([aId]));
   check('근무 시간 밖 → 없음', (await at(OUTSIDE)).length === 0, `at ${OUTSIDE}`);
 
+  // ★2026-08-26 모델 변경(0179): 승인된 교대는 더 이상 **파생으로 치환**되지 않는다.
+  //   승인이 근무 행 자체를 수락자에게 옮긴다(transfer_shift). 그래서 여기서도
+  //   swap_requests 행을 approved 로 꽂아 두는 것만으로는 아무 일도 안 일어난다 — 그게 맞다.
+  //   (파생 치환과 실제 이전이 둘 다 살아 있으면 담당자가 두 번 바뀐다.)
+  //   대타 결과가 수신자에 반영되는지는 **실제 이전 결과**로 잰다.
   const swapId = `swap_tr_${s}`;
   made.swaps.push(swapId);
   const nowIso = new Date().toISOString();
@@ -144,7 +151,13 @@ async function main() {
     note: 'QA', status: 'approved', accepted_by: bId, created_at: nowIso, updated_at: nowIso,
   });
   if (swErr) throw new Error('swap insert: ' + swErr.message);
-  check('승인된 대타 → 근무자가 B로 치환', JSON.stringify(await at(T)) === JSON.stringify([bId]));
+  check('★승인 행만 꽂아도 근무자는 안 바뀐다(파생 치환 제거 = 이중 적용 없음)',
+    JSON.stringify(await at(T)) === JSON.stringify([aId]), '치환이 남아 있다');
+  // 실제 이전(0179) — 이게 승인이 하는 일이다. 이 뒤에야 근무자가 B 가 된다.
+  const { error: trErr } = await admin.rpc('transfer_shift', {
+    p_template_id: shA, p_date: DAY, p_to: bId, p_part_start: null, p_part_end: null,
+  });
+  check('★실제 이전 후 근무자가 B 로 바뀐다', !trErr && JSON.stringify(await at(T)) === JSON.stringify([bId]), trErr?.message ?? '');
 
   // ── ④⑤ due_task_reminders ─────────────────────────────────────────────
   console.log('— ④ 수신자 규칙 —');

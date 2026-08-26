@@ -16,7 +16,9 @@ import { usePayrollStore, useWagesSettled } from '@/lib/store/usePayrollStore';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { fmtDuration, won, hhmm, todayStr, liveMinutes, DEFAULT_HOURLY_WAGE } from '@/lib/utils/attendance';
-import { computePay } from '@/lib/utils/payroll';
+import { computePay, shiftsToPayRecords } from '@/lib/utils/payroll';
+import { useScheduleStore, scheduledShiftsFor } from '@/lib/store/useScheduleStore';
+import { monthDates } from '@/lib/utils/schedule';
 
 /**
  * 출퇴근 패널 — 화면 크롬(SafeAreaView·탭바·헤더) 없이 콘텐츠만.
@@ -47,6 +49,11 @@ export function AttendancePanel() {
   const wage = wages[userId] ?? DEFAULT_HOURLY_WAGE;
   const router = useRouter();
 
+  const shiftTemplates = useScheduleStore((s) => s.templates);
+  const swaps = useScheduleStore((s) => s.swaps);
+  const shiftExceptions = useScheduleStore((s) => s.exceptions);
+  const scheduleLoaded = useScheduleStore((s) => s.loaded);
+
   const [, setTick] = useState(0);
 
   const today = todayStr();
@@ -57,19 +64,26 @@ export function AttendancePanel() {
   const openRec = todayRecs.find((r) => r.check_in && !r.check_out);
   const monthRecs = mine.filter((r) => r.date.startsWith(ym));
   // 최근 기록은 날짜·출근시각 내림차순(최신 우선)으로 표시.
-  const recentRecs = useMemo(
-    () =>
-      [...monthRecs].sort(
-        (a, b) => b.date.localeCompare(a.date) || (b.check_in ?? '').localeCompare(a.check_in ?? ''),
-      ),
-    [monthRecs],
+  // ★수동 useMemo 를 뺐다 — 급여 기준을 근무표로 바꾸면서 React Compiler 가 이 컴포넌트의 메모이즈를
+  //   재구성했고, 수동 메모와 충돌해 **컴파일 자체를 건너뛰었다**(react-hooks/preserve-manual-memoization).
+  //   순수 정렬이라 컴파일러가 알아서 메모이즈한다.
+  const recentRecs = [...monthRecs].sort(
+    (a, b) => b.date.localeCompare(a.date) || (b.check_in ?? '').localeCompare(a.check_in ?? ''),
   );
 
   const todayMin = todayRecs.reduce((sum, r) => sum + liveMinutes(r), 0);
-  // 예상급여 — 급여규칙(주휴·휴게·야간·연장·추가수당) 반영 SSOT=computePay(F1). 하루치는 주휴·월정액 제외.
-  const todayPay = computePay(todayRecs, wage, { ...settings, weeklyHolidayPay: false, extraAllowance: 0 }).total;
+  // ★급여의 기준은 **근무표**다(2026-08-26 사용자 확정). 출퇴근 기록은 확인용이라 금액에 안 들어간다.
+  //   교대로 넘어온 근무도 shiftsOn 을 거친 scheduledShiftsFor 가 그대로 반영한다.
+  // 순수 계산이라 수동 메모이즈하지 않는다 — React Compiler 가 자동으로 한다
+  // (수동 useMemo 를 겹치면 "Existing memoization could not be preserved" 로 컴파일이 건너뛰어진다).
+  const monthShifts = scheduledShiftsFor(shiftTemplates, swaps, shiftExceptions, userId, monthDates(ym));
+  const todayShifts = monthShifts.filter((sh) => sh.date === today);
+  // 하루치는 주휴·월정액 제외(월 단위 항목이라 하루에 얹으면 거짓 금액이 된다).
+  const todayPay = computePay(
+    shiftsToPayRecords(todayShifts), wage, { ...settings, weeklyHolidayPay: false, extraAllowance: 0 },
+  ).total;
   const monthMin = monthRecs.reduce((sum, r) => sum + liveMinutes(r), 0);
-  const monthBreakdown = computePay(monthRecs, wage, settings);
+  const monthBreakdown = computePay(shiftsToPayRecords(monthShifts), wage, settings);
   const monthPay = monthBreakdown.total;
   // 금액이 근무시간 × 시급보다 적으면 **왜 빠졌는지**를 말한다 — 안 말하면 계산이 틀린 것으로 읽힌다.
   // 휴게는 **하루 합계** 기준이라(§54), 하루에 두 번 찍으면 예전보다 금액이 줄어든다.
@@ -89,7 +103,8 @@ export function AttendancePanel() {
   // ★이 화면이 그리는 원격 소스는 둘이다 — 출퇴근 기록과 시급.
   //   시급을 안 기다리면 "아직 시급이 정해지지 않았어요"가 **거짓으로** 먼저 뜬다(도착 후 금액으로 바뀐다).
   //   기록을 안 기다리면 "아직 출근 전"이 먼저 뜨고 이중 출근이 찍힌다.
-  const ready = attendanceLoaded && wagesSettled;
+  // ★급여 기준이 근무표로 바뀌었다(2026-08-26) — 근무표가 오기 전에 그리면 금액이 0원부터 시작한다.
+  const ready = attendanceLoaded && wagesSettled && scheduleLoaded;
 
   return (
     <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
@@ -154,7 +169,7 @@ export function AttendancePanel() {
               info: wageSet
                 ? {
                     title: '예상 급여는 어떻게 계산돼요?',
-                    body: `시급 ${won(wage)} 기준으로 계산한 세전 예상액이에요.\n세금·4대보험·수당에 따라 실제 받는 금액과 다를 수 있어요.${breakNote}`,
+                    body: `근무표에 잡힌 근무를 시급 ${won(wage)}로 계산한 세전 예상액이에요.\n출퇴근 기록은 확인용이라 금액에 직접 들어가지 않아요.\n세금·4대보험·수당에 따라 실제 받는 금액과 다를 수 있어요.${breakNote}`,
                   }
                 : wagesLoadError
                   ? {

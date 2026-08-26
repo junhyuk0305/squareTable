@@ -11,7 +11,7 @@ import type { PlaybookEntry, PlaybookSuggestion, UnknownQuery, ChatQuery, Owner,
 import type { TaskTemplate, FeedItem, DoneMark, Recurrence } from '@/lib/store/useWorkStore';
 import type { Room, RoomMember, RoomPref } from '@/lib/store/useRoomStore';
 import type { AttendanceRecord } from '@/lib/store/useAttendanceStore';
-import type { StoreConfig, ShiftTemplate, SwapRequest } from '@/lib/store/useScheduleStore';
+import type { StoreConfig, ShiftTemplate, ShiftException, SwapRequest } from '@/lib/store/useScheduleStore';
 import type { CustomCategory } from '@/lib/store/knowhowCategories';
 // 훈련 v2(0107·0108). ★TrainingCourse 는 이 파일이 이미 0099 의 문자열 유니온으로 쓰고 있어(아래)
 // 이름이 겹친다 → 코스 테이블 행 타입은 TrainingCourseRow 로 별칭한다. 구조는 동일하므로
@@ -237,10 +237,14 @@ export async function fetchOwnerToday(): Promise<DbResult<OwnerTodayRow[]>> {
 /** 0138: weekday(요일 반복) 또는 date(그 날짜 하루) 중 하나만 값이 있다. */
 export type MyShiftRow = { id: string; weekday: number | null; date: string | null; start: string; end: string };
 export type MyCrossSummaryRow = {
-  unit_id: string; store_name: string; shifts: MyShiftRow[]; month_minutes: number; hourly_wage: number;
+  unit_id: string; store_name: string; shifts: MyShiftRow[];
+  /** 그날은 없는 것으로 치는 반복(0178·0180). 교대로 남에게 넘긴 근무가 여기에 걸린다. */
+  exceptions: { template_id: string; date: string }[];
+  month_minutes: number; hourly_wage: number;
 };
 /** 본인의 소속 매장별 근무표·이번달 근무분·시급 — 직원 오늘 탭. 본인 행만(RPC 내부 강제).
- *  "오늘/다음 근무" 판정은 클라가 weekday 로 파생 — 승인된 교대 반영은 매장 근무표 화면이 정본(v1 미반영). */
+ *  "오늘/다음 근무" 판정은 클라가 weekday 로 파생한다. ★교대로 넘긴 근무를 빼려면 exceptions 를
+ *  **반드시** 같이 봐야 한다 — 안 보면 이미 남에게 넘긴 근무가 '오늘 근무'로 남는다(0180). */
 export async function fetchMyCrossSummary(): Promise<DbResult<MyCrossSummaryRow[]>> {
   if (!HAS_SUPABASE) return { data: [], error: null };
   const { data, error } = await supabase.rpc('my_cross_summary');
@@ -2822,6 +2826,50 @@ export async function deleteShiftTemplate(id: string): Promise<boolean> {
 // (saveStaffShifts 삭제 — 2026-08-11. 주간 일괄 편집 모달을 근무 추가·고치기 시트로 바꾸면서
 //  유일한 호출자가 사라졌다. 근무는 이제 addTemplate/updateTemplate/removeTemplate 한 칸씩 쓴다.)
 
+/**
+ * 그날은 없는 것으로 치는 예외(0178) — 요일 반복 근무를 **하루만** 빼는 유일한 수단.
+ * ★shiftsOn 이 이걸 안 보면 그날 근무가 **두 벌**로 보인다(원본 반복 + 교대로 만든 조각).
+ */
+export async function fetchShiftExceptions(): Promise<ReadResult<ShiftException[]>> {
+  if (!HAS_SUPABASE) return { data: [], error: false };
+  const { data, error } = await supabase.from('shift_exceptions').select('template_id, date');
+  if (error) {
+    readFail('fetchShiftExceptions', error);
+    return { data: [], error: true };
+  }
+  return { data: (data ?? []).map((r: any) => ({ template_id: r.template_id, date: r.date })), error: false };
+}
+
+/**
+ * 그날 빼둔 반복 근무를 **되돌린다**(0178). 부분 교대로 쪼갠 근무표를 다시 합치는 유일한 길이다 —
+ * 이게 없으면 한 번 쪼개진 날은 영영 그대로 남는다. 남은 조각은 사장이 근무 시트에서 지운다.
+ */
+export async function deleteShiftException(templateId: string, date: string): Promise<boolean> {
+  if (!HAS_SUPABASE) return true;
+  return writeStrict(
+    'deleteShiftException',
+    supabase.from('shift_exceptions').delete().eq('template_id', templateId).eq('date', date).select('template_id'),
+  );
+}
+
+/** 직원이 **자기 근무의 시각만** 고친다(0178). 요일·날짜·담당자는 못 바꾼다. false = 거부. */
+export async function updateMyShiftTime(id: string, start: string, end: string): Promise<boolean> {
+  if (!HAS_SUPABASE) return true;
+  return rpcBool('updateMyShiftTime', 'update_my_shift_time', { p_id: id, p_start: start, p_end: end });
+}
+
+/** 교대 수락 — **선착순 선점**(0179). false = 이미 다른 사람이 가져갔거나 지정 대상이 아니다. */
+export async function acceptSwapRpc(id: string): Promise<boolean> {
+  if (!HAS_SUPABASE) return true;
+  return rpcBool('acceptSwap', 'accept_swap', { p_id: id });
+}
+
+/** 교대 승인 — 상태 변경 + 근무 **실제 이전**을 한 트랜잭션으로(0179). false = 거부/근무 없음. */
+export async function approveSwapRpc(id: string): Promise<boolean> {
+  if (!HAS_SUPABASE) return true;
+  return rpcBool('approveSwap', 'approve_swap', { p_id: id });
+}
+
 // 행→SwapRequest 매핑 SSOT — fetchSwaps(활성 매장)와 fetchCrossStoreNotifData(0077)가 공유.
 function mapSwapRow(r: any): SwapRequest {
   return {
@@ -2831,6 +2879,9 @@ function mapSwapRow(r: any): SwapRequest {
     date: r.date,
     template_id: r.template_id,
     target_staff_id: r.target_staff_id ?? undefined,
+    target_staff_ids: r.target_staff_ids ?? undefined,
+    part_start: r.part_start ?? undefined,
+    part_end: r.part_end ?? undefined,
     target_date: r.target_date ?? undefined,
     target_template_id: r.target_template_id ?? undefined,
     note: r.note ?? '',
@@ -2865,8 +2916,13 @@ export async function insertSwap(r: SwapRequest): Promise<boolean> {
       date: r.date,
       template_id: r.template_id,
       target_staff_id: r.target_staff_id ?? null,
+      // 지정 수신자 **목록**(0178) — 선착순. 단수 컬럼은 호환용으로 같이 남긴다.
+      target_staff_ids: r.target_staff_ids ?? null,
       target_date: r.target_date ?? null,
       target_template_id: r.target_template_id ?? null,
+      // 부분 교대 구간(0178) — 둘 다 null 이면 근무 전체(기존 동작).
+      part_start: r.part_start ?? null,
+      part_end: r.part_end ?? null,
       note: r.note,
       status: r.status,
       accepted_by: r.accepted_by ?? null,
@@ -2894,6 +2950,8 @@ export function subscribeSchedule(onChange: () => void): () => void {
     .on('postgres_changes', { event: '*', schema: 'public', table: 'schedule_config' }, onChange)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'shift_templates' }, onChange)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'swap_requests' }, onChange)
+    // 0178 신설. publication 멤버로 넣어 뒀다(AGENTS ⑤) — 안 넣으면 교대 승인이 남의 화면에 안 뜬다.
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'shift_exceptions' }, onChange)
     .subscribe();
   return () => {
     supabase.removeChannel(ch);

@@ -5,16 +5,20 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { useAttendanceStore, type AttendanceRecord } from '@/lib/store/useAttendanceStore';
 import { usePayrollStore } from '@/lib/store/usePayrollStore';
-import { computePay } from '@/lib/utils/payroll';
+import { computePay, shiftsToPayRecords, reconcileSchedule } from '@/lib/utils/payroll';
+import { useScheduleStore, scheduledShiftsFor } from '@/lib/store/useScheduleStore';
 import { RoleTabBar } from '@/components/RoleTabBar';
 import { Appear, stagger } from '@/components/Appear';
 import { ScreenLoading } from '@/components/ScreenLoading';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { fmtDuration, won, hhmm, todayStr, normalizeTime, shiftMonth, daysInMonth, maskHHMM } from '@/lib/utils/attendance';
-import { checkShiftTime, isOvernight } from '@/lib/utils/schedule';
+import { checkShiftTime, isOvernight, monthDates } from '@/lib/utils/schedule';
 
 const WD = ['일', '월', '화', '수', '목', '금', '토'];
+
+/** 대조 결과를 몇 줄까지 펼쳐 보여줄지. 넘치면 "외 N건"으로 접는다(화면 복잡도 예산). */
+const MISMATCH_SHOWN = 3;
 
 type Props = {
   /** 대상 직원 id(점주는 [staffId], 직원은 본인 userId) */
@@ -51,7 +55,12 @@ export function TimesheetView({ staffId, wage, editedBy, badgeLabel, badgeTone =
   //   ⛔`&&` 안에서 훅을 부르지 않는다 — 렌더마다 훅 개수가 달라져 크래시한다.
   const attendanceLoaded = useAttendanceStore((s) => s.loaded);
   const settingsLoaded = usePayrollStore((s) => s.settingsLoaded);
-  const ready = attendanceLoaded && settingsLoaded;
+  // ★급여 기준이 근무표로 바뀌었다(2026-08-26) — 근무표가 오기 전에 그리면 금액이 0원부터 시작한다.
+  const shiftTemplates = useScheduleStore((s) => s.templates);
+  const swaps = useScheduleStore((s) => s.swaps);
+  const shiftExceptions = useScheduleStore((s) => s.exceptions);
+  const scheduleLoaded = useScheduleStore((s) => s.loaded);
+  const ready = attendanceLoaded && settingsLoaded && scheduleLoaded;
 
   const [ym, setYm] = useState(() => todayStr().slice(0, 7));
   const [editing, setEditing] = useState<string | null>(null); // record id 또는 'new'
@@ -66,10 +75,18 @@ export function TimesheetView({ staffId, wage, editedBy, badgeLabel, badgeTone =
   );
 
   const totalMin = monthRecs.reduce((a, r) => a + r.work_minutes, 0);
-  // 예상급여 — 급여규칙(주휴·휴게·야간·연장·추가수당) 반영 SSOT=computePay(F1). totalMin 은 근무시간 표시용.
+  // ★급여의 기준은 **근무표**다(2026-08-26 사용자 확정). 출퇴근 기록은 확인용이라 금액에 안 들어간다.
+  //   규칙(30분 절삭·휴게·야간·연장·주휴)은 computePay 그대로 — 바뀐 것은 입력 소스뿐이다.
+  const monthShifts = useMemo(
+    () => scheduledShiftsFor(shiftTemplates, swaps, shiftExceptions, staffId, monthDates(ym)),
+    [shiftTemplates, swaps, shiftExceptions, staffId, ym],
+  );
   // 시급이 없으면 **계산 자체를 하지 않는다** — 없는 시급으로 만든 금액은 0원이든 최저시급이든 거짓말이다.
-  const monthBreakdown = wage == null ? null : computePay(monthRecs, wage, settings);
+  const monthBreakdown = wage == null ? null : computePay(shiftsToPayRecords(monthShifts), wage, settings);
   const monthPay = monthBreakdown?.total ?? null;
+  // 대조(확인) 층 — 근무표와 출퇴근이 30분 넘게 어긋난 것만. 급여는 근무표대로 나가므로
+  // "다르다"를 말하지 않으면 잘못된 근무표가 그대로 지급된다.
+  const mismatches = useMemo(() => reconcileSchedule(monthShifts, monthRecs), [monthShifts, monthRecs]);
   const month = Number(ym.slice(5));
 
   function openEdit(r: AttendanceRecord) {
@@ -182,13 +199,37 @@ export function TimesheetView({ staffId, wage, editedBy, badgeLabel, badgeTone =
             <Text style={styles.sumValue}>{monthPay == null ? '—' : won(monthPay)}</Text>
           </View>
         </View>
-        {/* 금액이 근무시간 × 시급보다 적으면 **왜 빠졌는지**를 말한다. 안 말하면 계산이 틀린 것으로 읽힌다. */}
+        {/* ★이 금액이 무엇으로 계산됐는지 말한다 — 근무시간(출퇴근)과 안 맞는 게 정상이다. */}
+        {monthPay != null && (
+          <Text style={styles.sumNote}>
+            예상급여는 근무표 기준이에요. 근무시간은 실제 출퇴근 기록이라 다를 수 있어요.
+          </Text>
+        )}
+        {/* 금액이 근무표 시간 × 시급보다 적으면 **왜 빠졌는지**를 말한다. 안 말하면 계산이 틀린 것으로 읽힌다. */}
         {!!monthBreakdown?.breakMin && (
           <Text style={styles.sumNote}>
             무급 휴게 {fmtDuration(monthBreakdown.breakMin)}을 뺀 금액이에요 · 하루 4시간 이상 30분, 8시간 이상 60분
           </Text>
         )}
         </Appear>
+
+        {/* 대조 — 근무표와 출퇴근이 어긋난 날. 급여는 근무표대로 나가므로 여기서 말해야 고칠 수 있다. */}
+        {mismatches.length > 0 && (
+          <Appear delay={stagger(3)}>
+            <View style={styles.mismatch}>
+              <View style={styles.mismatchHead}>
+                <Ionicons name="alert-circle-outline" size={15} color={BrandColors.warn} />
+                <Text style={styles.mismatchTitle}>근무표와 다른 날 {mismatches.length}건</Text>
+              </View>
+              {mismatches.slice(0, MISMATCH_SHOWN).map((m, i) => (
+                <Text key={`${m.date}_${i}`} style={styles.mismatchLine}>{m.message}</Text>
+              ))}
+              {mismatches.length > MISMATCH_SHOWN && (
+                <Text style={styles.mismatchMore}>외 {mismatches.length - MISMATCH_SHOWN}건 · 아래 기록에서 확인해 주세요</Text>
+              )}
+            </View>
+          </Appear>
+        )}
         {belowSummary && <Appear delay={stagger(3)}>{belowSummary}</Appear>}
 
         {/* 기록 추가 */}
@@ -332,6 +373,11 @@ const styles = StyleSheet.create({
   sumLabel: { fontSize: 12, color: InkColors.ink3, fontWeight: '600' },
   sumValue: { fontSize: 16, color: InkColors.ink, fontWeight: '800' },
   sumNote: { fontSize: 12, color: InkColors.ink3, fontWeight: '600', marginTop: 8, textAlign: 'center', lineHeight: 17 },
+  mismatch: { marginTop: 12, gap: 6, padding: 13, borderRadius: Radius.md, borderWidth: 1, borderColor: BrandColors.warnBorder, backgroundColor: BrandColors.warnSoft },
+  mismatchHead: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  mismatchTitle: { fontSize: 13, fontWeight: '800', color: BrandColors.warnText },
+  mismatchLine: { fontSize: 13, color: InkColors.ink2, fontWeight: '600', lineHeight: 19 },
+  mismatchMore: { fontSize: 12, color: InkColors.ink3, fontWeight: '700' },
 
   addBtn: {
     flexDirection: 'row',

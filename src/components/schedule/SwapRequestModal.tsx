@@ -7,9 +7,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { BottomSheet } from '@/components/BottomSheet';
 import { useScheduleStore, shiftsOn, type ShiftTemplate, type SwapKind } from '@/lib/store/useScheduleStore';
 import type { Junior } from '@/types';
-import { todayStr } from '@/lib/utils/attendance';
-import { addDays, fmtDateKo } from '@/lib/utils/schedule';
-import { InkColors } from '@/lib/theme/colors';
+import { todayStr, maskHHMM } from '@/lib/utils/attendance';
+import { addDays, fmtDateKo, splitShift } from '@/lib/utils/schedule';
+import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 
 type Candidate = { date: string; template: ShiftTemplate };
@@ -31,11 +31,23 @@ export function SwapRequestModal({
 }) {
   const requestSwap = useScheduleStore((s) => s.requestSwap);
   const allSwaps = useScheduleStore((s) => s.swaps);
+  const exceptions = useScheduleStore((s) => s.exceptions);
 
   const [kind, setKind] = useState<SwapKind>('cover');
   const [targetStaff, setTargetStaff] = useState<string | null>(null);
   const [targetKey, setTargetKey] = useState<string | null>(null); // `${date}__${templateId}`
   const [note, setNote] = useState('');
+  // 대타를 **특정 동료들에게만** 보낼 때의 수신자. 비어 있으면 지금까지처럼 누구나 수락할 수 있다.
+  // 여러 명에게 보내면 **먼저 수락한 사람**이 가져간다(선착순 — 서버가 선점한다, 0179).
+  const [targets, setTargets] = useState<string[]>([]);
+  // 근무의 **일부 구간만** 넘기기. 기본은 꺼짐 = 근무 전체(기존 동작 그대로).
+  const [partial, setPartial] = useState(false);
+  const [pStart, setPStart] = useState(template.start);
+  const [pEnd, setPEnd] = useState(template.end);
+
+  // 쪼갠 결과 — 앞(나)·가운데(받는 사람)·뒤(나) 최대 3조각. null 이면 구간이 근무 밖이거나 0분이다.
+  const pieces = partial ? splitShift(template.start, template.end, pStart, pEnd) : null;
+  const partOk = !partial || pieces !== null;
 
   // 나를 제외한 동료(맞교환 상대).
   const peers = useMemo(() => staff.filter((s) => s.id !== me), [staff, me]);
@@ -49,20 +61,32 @@ export function SwapRequestModal({
     for (let i = 0; i < 60; i++) {
       const d = addDays(today, i);
       if (d === date) continue; // 내가 빠지는 날과 같은 날은 제외
-      shiftsOn(templates, allSwaps, d)
+      shiftsOn(templates, allSwaps, d, exceptions)
         .filter((sh) => sh.workerStaffId === targetStaff && !sh.pending)
         .forEach((sh) => out.push({ date: d, template: sh.template }));
     }
     return out;
-  }, [targetStaff, templates, allSwaps, date]);
+  }, [targetStaff, templates, allSwaps, exceptions, date]);
 
   const canSubmit =
-    kind === 'cover' ? true : Boolean(targetStaff && targetKey);
+    (kind === 'cover' ? true : Boolean(targetStaff && targetKey)) && partOk;
+
+  const toggleTarget = (id: string) =>
+    setTargets((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]));
 
   function submit() {
     if (!canSubmit) return;
     if (kind === 'cover') {
-      requestSwap({ kind: 'cover', requester_id: me, date, template_id: template.id, note: note.trim() });
+      requestSwap({
+        kind: 'cover',
+        requester_id: me,
+        date,
+        template_id: template.id,
+        // 비우면 누구나(기존 동작). 고른 사람이 있으면 그 사람들에게만 — 먼저 수락한 사람이 가져간다.
+        target_staff_ids: targets.length ? targets : undefined,
+        ...(partial ? { part_start: pStart, part_end: pEnd } : null),
+        note: note.trim(),
+      });
     } else {
       const [tDate, tTpl] = (targetKey as string).split('__');
       requestSwap({
@@ -110,10 +134,92 @@ export function SwapRequestModal({
               </View>
               <Text style={s.hint}>
                 {kind === 'cover'
-                  ? '동료 누구나 “내가 대신할게요”로 수락할 수 있어요. 수락되면 사장님 승인 후 확정돼요.'
+                  ? targets.length
+                    ? `고른 ${targets.length}명에게만 보내요. 먼저 수락한 한 분이 맡고, 사장님 승인 후 확정돼요.`
+                    : '동료 누구나 “내가 대신할게요”로 수락할 수 있어요. 수락되면 사장님 승인 후 확정돼요.'
                   : '지정한 동료의 근무와 1:1로 맞바꿔요. 상대가 수락하고 사장님이 승인하면 확정돼요.'}
               </Text>
             </Field>
+
+            {/* 대타를 특정 동료들에게만 — 비우면 지금까지처럼 누구나. 여러 명이면 선착순이다. */}
+            {kind === 'cover' && peers.length > 0 && (
+              <Field label="누구에게 보낼까요? (안 고르면 모두에게)">
+                <View style={s.chips}>
+                  {peers.map((p) => {
+                    const on = targets.includes(p.id);
+                    return (
+                      <Pressable
+                        key={p.id}
+                        accessibilityRole="checkbox"
+                        accessibilityState={{ checked: on }}
+                        onPress={() => toggleTarget(p.id)}
+                        style={[s.chip, on && s.chipOn]}
+                      >
+                        <Text style={[s.chipText, on && { color: '#fff' }]}>{p.name}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </Field>
+            )}
+
+            {/* 근무의 일부만 넘기기 — 기본은 꺼짐(근무 전체). 맞교환에는 붙이지 않는다. */}
+            {kind === 'cover' && (
+              <Field label="얼마나 넘길까요?">
+                <Pressable
+                  accessibilityRole="checkbox"
+                  accessibilityState={{ checked: partial }}
+                  onPress={() => {
+                    setPartial((v) => !v);
+                    setPStart(template.start);
+                    setPEnd(template.end);
+                  }}
+                  style={({ pressed }) => [s.checkRow, pressed && { opacity: 0.7 }]}
+                >
+                  <View style={[s.check, partial && s.checkOn]}>
+                    {partial && <Ionicons name="checkmark" size={14} color="#fff" />}
+                  </View>
+                  <Text style={s.checkLabel}>일부 시간만 넘기기</Text>
+                </Pressable>
+
+                {partial && (
+                  <>
+                    <View style={s.timeRow}>
+                      <TextInput
+                        value={pStart}
+                        onChangeText={(t) => setPStart(maskHHMM(t))}
+                        keyboardType="number-pad"
+                        maxLength={5}
+                        accessibilityLabel="넘길 구간 시작"
+                        style={[s.timeInp, !partOk && s.timeInpBad]}
+                      />
+                      <Text style={s.tilde}>~</Text>
+                      <TextInput
+                        value={pEnd}
+                        onChangeText={(t) => setPEnd(maskHHMM(t))}
+                        keyboardType="number-pad"
+                        maxLength={5}
+                        accessibilityLabel="넘길 구간 끝"
+                        style={[s.timeInp, !partOk && s.timeInpBad]}
+                      />
+                    </View>
+                    {pieces ? (
+                      /* 미리보기 — 조각이 3개면 3개를 다 보여준다. 안 보여주면 근무가 어떻게
+                         쪼개지는지 알 수 없고, 넘긴 뒤에야 알게 된다. */
+                      <View style={s.preview}>
+                        {pieces.map((pc, i) => (
+                          <Text key={i} style={s.previewLine}>
+                            {pc.start}~{pc.end} · {pc.mine ? '내가 계속 근무' : '넘길 구간'}
+                          </Text>
+                        ))}
+                      </View>
+                    ) : (
+                      <Text style={s.warn}>{template.start}~{template.end} 안에서, 0분이 아니게 골라 주세요.</Text>
+                    )}
+                  </>
+                )}
+              </Field>
+            )}
 
             {kind === 'swap' && (
               <>
@@ -221,6 +327,18 @@ const s = StyleSheet.create({
   chip: { borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.pill, paddingHorizontal: 15, paddingVertical: 9, backgroundColor: InkColors.bg },
   chipOn: { backgroundColor: InkColors.ink, borderColor: InkColors.ink },
   chipText: { fontSize: 13, fontWeight: '700', color: InkColors.ink2 },
+
+  checkRow: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 44 },
+  check: { width: 22, height: 22, borderRadius: 6, borderWidth: 1.5, borderColor: InkColors.line, alignItems: 'center', justifyContent: 'center', backgroundColor: InkColors.bg },
+  checkOn: { backgroundColor: InkColors.ink, borderColor: InkColors.ink },
+  checkLabel: { fontSize: 14, fontWeight: '700', color: InkColors.ink },
+  timeRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 8 },
+  timeInp: { flex: 1, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.sm, paddingHorizontal: 13, minHeight: 44, fontSize: 15, fontWeight: '700', color: InkColors.ink, backgroundColor: InkColors.cream, textAlign: 'center', ...(Platform.OS === 'web' ? ({ outlineStyle: 'none' } as object) : null) },
+  timeInpBad: { borderColor: BrandColors.badText },
+  tilde: { fontSize: 15, color: InkColors.ink3, fontWeight: '700' },
+  preview: { marginTop: 10, gap: 4, paddingVertical: 10, paddingHorizontal: 13, backgroundColor: InkColors.cream, borderRadius: Radius.sm, borderWidth: 1, borderColor: InkColors.line },
+  previewLine: { fontSize: 13, color: InkColors.ink2, fontWeight: '700' },
+  warn: { fontSize: 12, color: BrandColors.badText, fontWeight: '700', marginTop: 8 },
 
   candList: { gap: 8 },
   candRow: { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md, paddingVertical: 12, paddingHorizontal: 13, backgroundColor: InkColors.bg },

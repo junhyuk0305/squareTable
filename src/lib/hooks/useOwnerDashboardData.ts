@@ -156,13 +156,15 @@ export function useOwnerDashboardData(): OwnerDashboardData {
   // (블록 수는 그대로, 정보만 는다. 08-07에 뺐던 것을 같은 형태로 되돌리지 않기 위한 선택.)
   const shiftTemplates = useScheduleStore((s) => s.templates);
   const swaps = useScheduleStore((s) => s.swaps);
+  const shiftExceptions = useScheduleStore((s) => s.exceptions);
   const scheduleLoaded = useScheduleStore((s) => s.loaded);
   const records = useAttendanceStore((s) => s.records);
 
-  // 오늘 실제 근무자 — 승인된 교대까지 반영된 shiftsOn 이 판정 SSOT다(근무표 화면과 같은 것).
+  // 오늘 실제 근무자 — shiftsOn 이 판정 SSOT다(근무표 화면과 같은 것).
+  // ★승인된 교대는 이제 근무 행 자체가 옮겨져 있다(0179) — 여기서 다시 치환하지 않는다.
   const todayShifts = useMemo(
-    () => shiftsOn(shiftTemplates, swaps, today),
-    [shiftTemplates, swaps, today],
+    () => shiftsOn(shiftTemplates, swaps, today, shiftExceptions),
+    [shiftTemplates, swaps, today, shiftExceptions],
   );
 
   // 출근 = check_in 이 찍힌 오늘 기록. 퇴근한 사람도 포함한다("오늘 나온 사람"이 홈이 말하는 것).
