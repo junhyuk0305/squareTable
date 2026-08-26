@@ -127,6 +127,12 @@ export function useQuizBoard() {
 
   // ── 코스(0108) ───────────────────────────────────────────────────────
   const [courses, setCourses] = useState<TrainingCourse[]>([]);
+  /**
+   * 보관한 퀴즈(active=false) — 2026-08-26 신설.
+   * 그 전에는 보관하면 여기서 걸러지기만 하고 **다시 볼 자리가 코드에 없어** 사실상 삭제였다.
+   * 목록·되돌리기가 쓰는 값이라 여기서 같이 내준다(화면이 fetch 를 다시 조립하지 않는다).
+   */
+  const [archived, setArchived] = useState<TrainingCourse[]>([]);
   const [coursesLoaded, setCoursesLoaded] = useState(false);
   const [courseReload, setCourseReload] = useState(0);
   const reloadCourses = useCallback(() => setCourseReload((v) => v + 1), []);
@@ -134,7 +140,9 @@ export function useQuizBoard() {
     let alive = true;
     void fetchTrainingCourses().then(({ data }) => {
       if (!alive) return;
-      setCourses((data ?? []).filter((c) => c.active).sort((a, b) => a.position - b.position));
+      const all = data ?? [];
+      setCourses(all.filter((c) => c.active).sort((a, b) => a.position - b.position));
+      setArchived(all.filter((c) => !c.active).sort((a, b) => a.position - b.position));
       setCoursesLoaded(true);
     });
     return () => { alive = false; };
@@ -374,6 +382,7 @@ export function useQuizBoard() {
     entries,
     entryById,
     courses,
+    archived,
     setCourses,
     coursesLoaded,
     boardLoaded,

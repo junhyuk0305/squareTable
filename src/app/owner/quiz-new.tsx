@@ -1,18 +1,20 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, ActivityIndicator, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Stack, useRouter } from 'expo-router';
+import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { useStaffStore } from '@/lib/store/useStaffStore';
 import { useSessionStore } from '@/lib/store/useSessionStore';
-import { useWorkStore } from '@/lib/store/useWorkStore';
+import { useWorkStore, courseEntriesOf } from '@/lib/store/useWorkStore';
+import { useQuizBoard } from '@/lib/quiz/useQuizBoard';
 import { guardWrite } from '@/lib/store/useSyncStore';
 import { showToast } from '@/lib/store/useToastStore';
 import { genId } from '@/lib/utils/id';
 import {
   upsertTrainingCourse,
+  fetchQuizItems,
   insertQuizItem,
   deleteQuizItem,
   insertQuizAssignments,
@@ -39,6 +41,7 @@ import { StepProgress } from '@/components/blocks/StepProgress';
 import { ProgressRing } from '@/components/blocks/ProgressRing';
 import { MiniCalendar } from '@/components/blocks/MiniCalendar';
 import { EmptyState } from '@/components/EmptyState';
+import { ScreenLoading } from '@/components/ScreenLoading';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
@@ -89,9 +92,16 @@ type Made = { entryId: string; title: string; item: QuizItem | null; formatLabel
  * ★ 재확인 간격(3일→2주→8주→6개월)도 설명하지 않는다. 설명하면 설정처럼 보인다.
  *
  * 퀴즈(코스) 행은 **1단계를 넘길 때 만들어진다** — 중간에 나가도 초안으로 남는다(A2 '초안' 알약).
+ *
+ * 파라미터 2개(2026-08-26):
+ *  · `?course=<id>` — **만들다 만 퀴즈를 이어서 만든다.** 4단계(문항 검토)부터 시작한다.
+ *    상세 화면에는 보내는 길이 없어서 초안이 막다른 길이었다 — 발송 경로를 두 벌로 만들지 않고
+ *    이 화면 하나로 되돌린다(복제 "이걸로 다시 만들기"도 여기로 온다).
+ *  · `?only=uncovered` — **아직 문제를 안 낸 노하우만** 2단계 목록에 올린다(퀴즈 홈 히어로가 가리킨 것).
  */
 export default function QuizNewScreen() {
   const router = useRouter();
+  const { course: resumeId, only } = useLocalSearchParams<{ course?: string; only?: string }>();
   const unitId = useSessionStore((s) => s.unitId);
   const userId = useSessionStore((s) => s.userId);
   const entries = usePlaybookStore((s) => s.entries);
@@ -100,6 +110,9 @@ export default function QuizNewScreen() {
   const staffLoaded = useStaffStore((s) => s.loaded);
   const hydrateStaff = useStaffStore((s) => s.hydrate);
   const addCourseEntry = useWorkStore((s) => s.addCourseEntry);
+  const courseEntries = useWorkStore((s) => s.courseEntries);
+  /** 이어서 만들기·"안 물어본 노하우만"이 쓰는 값. 판정은 여기(useQuizBoard)에만 있다(복제 금지). */
+  const { courses, quizCountOf, boardLoaded } = useQuizBoard();
 
   useEffect(() => {
     void hydrateStaff();
@@ -150,10 +163,17 @@ export default function QuizNewScreen() {
 
   const entryById = useMemo(() => new Map(entries.map((e) => [e.id, e])), [entries]);
 
-  /** 낼 수 있는 재료 = 발행된 노하우. 초안(draft)은 문항 근거가 못 된다. */
+  /**
+   * 낼 수 있는 재료 = 발행된 노하우. 초안(draft)은 문항 근거가 못 된다.
+   * `?only=uncovered` 면 **아직 문제를 안 낸 것만** 남긴다 — 퀴즈 홈 히어로가 가리킨 그 노하우다.
+   */
+  const onlyUncovered = only === 'uncovered';
   const pool = useMemo(
-    () => entries.filter((e) => e.status !== 'draft'),
-    [entries],
+    () => {
+      const published = entries.filter((e) => e.status !== 'draft');
+      return onlyUncovered ? published.filter((e) => quizCountOf(e.id) === 0) : published;
+    },
+    [entries, onlyUncovered, quizCountOf],
   );
   /**
    * 칩으로 낼 카테고리 = 이 매장 노하우에 **실제로 있는** 것. 빈 칩은 죽은 컨트롤이다.
@@ -352,8 +372,53 @@ export default function QuizNewScreen() {
   /**
    * 1단계를 그릴 준비가 됐는가 — 노하우·파트가 전부 도착한 뒤에만 그린다.
    * ★`entriesLoaded` 를 빼면 노하우가 있는 매장에서도 "먼저 노하우가 필요해요"가 먼저 스친다.
+   * ★두 파라미터(`only`·`course`)는 **퀴즈 판(boardLoaded)까지** 있어야 판정이 선다 —
+   *   덜 온 상태로 그리면 "안 물어본 노하우"가 통째로 비었다가 채워지고, 이어서 만들기는
+   *   1단계가 스쳤다가 4단계로 튄다(= 아직 안 온 것을 없는 것처럼 말한 셈).
    */
-  const step1Ready = entriesLoaded && partsLoaded;
+  const step1Ready = entriesLoaded && partsLoaded && (!onlyUncovered || boardLoaded);
+
+  /**
+   * 이어서 만들기 — 이미 있는 퀴즈(초안·복제본)를 4단계(문항 검토)로 실어 온다.
+   * ★한 번만 한다. 사장이 4단계에서 문항을 빼거나 고친 뒤 이 이펙트가 다시 돌면 되돌아간다.
+   * ★검토는 **노하우 한 줄에 문항 하나**다(이 화면의 원래 모양). 한 노하우에 문항이 여럿이면
+   *   그중 하나만 줄로 보이지만, 보낼 때는 코스의 활성 문항이 전부 나간다.
+   */
+  const [resumed, setResumed] = useState(false);
+  useEffect(() => {
+    if (!resumeId || resumed || !boardLoaded || !entriesLoaded || !staffLoaded) return;
+    // 없어진(보관·삭제된) 퀴즈면 조용히 새로 만들기로 둔다 — 빈 4단계로 데려가지 않는다.
+    const c = courses.find((x) => x.id === resumeId) ?? null;
+    const eids = c ? courseEntriesOf(courseEntries, c.id).map((r) => r.entryId) : [];
+    let alive = true;
+    // 읽을 것이 없어도 **콜백에서** 상태를 바꾼다 — 이펙트 본문의 동기 setState 는 연쇄 렌더를 부른다.
+    const p = eids.length === 0 ? Promise.resolve({ data: [] as QuizItem[] }) : fetchQuizItems(eids);
+    void p.then(({ data }) => {
+      if (!alive) return;
+      if (!c) { setResumed(true); return; }
+      const active = (data ?? []).filter((q) => q.status === 'active');
+      setCourseId(c.id);
+      setCourseKey(c.key);
+      setName(c.name);
+      setPicked(eids);
+      setTo(staff.map((s) => s.id));
+      setMade(
+        eids.map((eid) => {
+          const item = active.find((q) => (q.entry_ids ?? []).includes(eid)) ?? null;
+          return {
+            entryId: eid,
+            title: entryById.get(eid)?.title ?? '노하우',
+            item,
+            formatLabel: item ? FORMATS[item.format]?.label ?? item.format : '',
+            state: item ? ('ok' as const) : ('thin' as const),
+          };
+        }),
+      );
+      setStep(4);
+      setResumed(true);
+    });
+    return () => { alive = false; };
+  }, [resumeId, resumed, boardLoaded, entriesLoaded, staffLoaded, courses, courseEntries, staff, entryById]);
 
   const dropItem = async (m: Made) => {
     if (!m.item) return;
@@ -433,6 +498,17 @@ export default function QuizNewScreen() {
     router.replace('/owner/training' as never);
   };
 
+  // 이어서 만들기 — 실어 오기 전에는 1단계를 그리지 않는다. 안 그러면 "누가 풀 건가요"가
+  // 스쳤다가 4단계로 튄다(게이트 없이 화면을 먼저 마운트하는 것이 금지된 바로 그것이다).
+  if (resumeId && !resumed) {
+    return (
+      <SafeAreaView style={st.safe} edges={['bottom']}>
+        <Stack.Screen options={{ title: '퀴즈 만들기' }} />
+        <ScreenLoading label="만들다 만 퀴즈를 가져오는 중이에요…" />
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={st.safe} edges={['bottom']}>
       <Stack.Screen options={{ title: '퀴즈 만들기', headerRight: () => <Text style={st.stepBadge}>{step}/{TOTAL}</Text> }} />
@@ -507,11 +583,21 @@ export default function QuizNewScreen() {
               <Text style={st.waitingText}>노하우를 불러오는 중...</Text>
             </View>
           ) : pool.length === 0 ? (
-            <EmptyState
-              title="먼저 노하우가 필요해요"
-              body="퀴즈 문제는 사장님이 적어 둔 노하우에서 나와요."
-              cta={{ label: '노하우 추가하기', onPress: () => router.replace('/owner/coach' as never) }}
-            />
+            /* 재료가 없는 이유가 둘이라 문구도 둘이다 — 노하우가 아예 없는 것과,
+               "안 물어본 것만" 걸러 놓고 보니 남은 게 없는 것은 다음 행동이 다르다. */
+            onlyUncovered ? (
+              <EmptyState
+                title="안 물어본 노하우가 없어요"
+                body="적어 둔 노하우는 전부 문제로 냈어요. 그래도 만들려면 노하우를 직접 고르면 돼요."
+                cta={{ label: '노하우 직접 고르기', onPress: () => router.replace('/owner/quiz-new' as never) }}
+              />
+            ) : (
+              <EmptyState
+                title="먼저 노하우가 필요해요"
+                body="퀴즈 문제는 사장님이 적어 둔 노하우에서 나와요."
+                cta={{ label: '노하우 추가하기', onPress: () => router.replace('/owner/coach' as never) }}
+              />
+            )
           ) : (
             <Appear>
               <View style={st.stepBody}>
@@ -593,7 +679,11 @@ export default function QuizNewScreen() {
                             ⛔ 원본 노하우에 없는 설명(자동 판정 문구)은 붙이지 않는다(2026-08-26). */}
                         <View style={[st.catDot, { backgroundColor: m.color }]} />
                         <View style={st.rowText}>
-                          <Text style={st.rowTitle} numberOfLines={1}>{e.title}</Text>
+                          {/* ★2줄까지 편다. 한 줄로 자르면 "사장 부재 시 결정 권한 — 직원이 결정 가능한 …"
+                              처럼 뒤가 사라져 **무엇을 고르는지 모른 채** 체크하게 된다(2026-08-26 실측
+                              need 379 · has 330). 여기는 읽고 고르는 자리라 제목이 곧 판단 근거다.
+                              부모(st.chk)가 minHeight 라 줄이 늘어도 상자가 터지지 않는다. */}
+                          <Text style={st.rowTitle} numberOfLines={2}>{e.title}</Text>
                           <Text style={st.rowSub} numberOfLines={1}>{m.label}</Text>
                         </View>
                       </Pressable>
@@ -883,8 +973,9 @@ export default function QuizNewScreen() {
       {/* ── 바닥 액션 — 화면당 Primary 1개 ── */}
       <View style={st.foot}>
         {step === 1 && (
-          /* 이름은 비워 둬도 넘어간다 — 고른 노하우로 지어 준다(빈 칸 때문에 막지 않는다). */
-          <Primary label="다음" disabled={!step1Ready} onPress={() => setStep(2)} />
+          /* 이름은 비워 둬도 넘어간다 — 고른 노하우로 지어 준다(빈 칸 때문에 막지 않는다).
+             라벨은 다음 단계가 **무엇을 하는 자리인지**로 쓴다(워딩 §3: "다음"은 버튼명 금지). */
+          <Primary label="노하우 고르기" disabled={!step1Ready} onPress={() => setStep(2)} />
         )}
         {step === 2 && (
           <Primary
@@ -898,7 +989,11 @@ export default function QuizNewScreen() {
             {okItems.length === 0 ? (
               <Ghost label="나중에 하기 · 초안으로 저장" onPress={saveDraftAndLeave} />
             ) : null}
-            <Primary label="다음" disabled={okItems.length === 0} onPress={() => setStep(5)} />
+            <Primary
+              label={audience === 'guest' ? '링크 기간 정하기' : '받는 사람 고르기'}
+              disabled={okItems.length === 0}
+              onPress={() => setStep(5)}
+            />
           </>
         )}
         {step === 5 && (

@@ -18,6 +18,7 @@ const TONE: Record<ToastTone, { bg: string; icon: keyof typeof Ionicons.glyphMap
 export function Toast() {
   const message = useToastStore((s) => s.message);
   const tone = useToastStore((s) => s.tone);
+  const action = useToastStore((s) => s.action);
   const clear = useToastStore((s) => s.clear);
   const anim = useMemo(() => new Animated.Value(0), []);
 
@@ -45,6 +46,17 @@ export function Toast() {
         <Text style={styles.text} numberOfLines={2}>
           {message}
         </Text>
+        {/* 되돌리기 — 누르면 되돌린 뒤 토스트를 닫는다. 토스트 본체(닫기)와 겹치지 않게 안쪽에서 멈춘다. */}
+        {action ? (
+          <Pressable
+            onPress={() => { clear(); action.onPress(); }}
+            style={({ pressed }) => [styles.action, pressed && { opacity: 0.7 }]}
+            accessibilityRole="button"
+            accessibilityLabel={action.label}
+          >
+            <Text style={styles.actionText}>{action.label}</Text>
+          </Pressable>
+        ) : null}
       </Pressable>
     </Animated.View>
   );
@@ -74,4 +86,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 5 },
   },
   text: { color: '#FFFFFF', fontSize: 15, fontWeight: '700', lineHeight: 22, flexShrink: 1 },
+  // 48dp 하한은 상자 크기로 지킨다(hitSlop 은 RN-web 에서 안 먹는다).
+  action: { flexShrink: 0, minHeight: 48, justifyContent: 'center', paddingLeft: Space.md },
+  actionText: { color: '#FFFFFF', fontSize: 15, fontWeight: '900', textDecorationLine: 'underline' },
 });

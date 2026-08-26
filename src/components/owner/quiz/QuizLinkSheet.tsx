@@ -118,7 +118,9 @@ export function QuizLinkSheet({ course, onClose }: { course: TrainingCourse; onC
 
   return (
     <BottomSheet visible={true} onClose={onClose} sheetStyle={{ height: '82%' }}>
-      <SheetHead title={`링크로 내보내기 · ${course.name}`} onClose={onClose} />
+      {/* 여는 자리(더보기 메뉴·만들기 마지막 단계)가 둘 다 "링크 만들기"다 — 시트 제목만 다르면
+          같은 기능이 두 이름을 갖는다. 소수를 다수에 맞춘다. */}
+      <SheetHead title={`링크 만들기 · ${course.name}`} onClose={onClose} />
       {!linksLoaded ? (
         <ScreenLoading label="링크를 불러오고 있어요…" />
       ) : (

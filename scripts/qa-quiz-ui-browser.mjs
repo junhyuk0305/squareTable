@@ -3,7 +3,8 @@
 // 기능 검증(qa:training·qa:quiz-*)이 아니라 "UI가 깨졌는가"만 본다. 사장이 지적한 증상이 그것이다:
 // 좌우 여백이 들쭉날쭉하고, 무언가가 프레임 밖으로 나가고, 시트 안이 텅 비거나 겹친다.
 //
-//   L1 가로 넘침      — 문서·요소가 460px 프레임 밖으로 나가는가(scrollWidth > clientWidth)
+//   L1 가로 넘침      — 문서·요소가 460px 프레임 밖으로 나가는가(scrollWidth > clientWidth).
+//                       ★스크롤 조상이 프레임 안에서 잘라 주는 것은 세지 않는다 — 가로 스크롤은 정상 형태다.
 //   L2 좌우 여백      — 같은 화면 안의 최상위 블록들이 **같은 x**에서 시작·끝나는가
 //   L3 터치 타깃      — 누를 수 있는 것이 48dp 미만인가(사장 주 액션은 56)
 //   L4 겹침           — 형제 요소끼리 실제로 겹치는가(isVisible 은 겹침을 못 본다 — 08-05 함정)
@@ -81,10 +82,30 @@ const MEASURE = () => {
 
   const all = [...document.querySelectorAll('body *')].filter(vis);
 
+  /**
+   * 이 요소를 **실제로 잘라 주는** 조상이 프레임 안에 있는가.
+   * ★가로 스크롤은 이 앱의 정상 형태다(ui.md 배치규칙④ "가로 스크롤은 옆 카드를 잘라서 노출").
+   *   스크롤 줄의 내용은 당연히 컨테이너보다 넓고, 컨테이너가 프레임 안에서 잘라 준다 —
+   *   그걸 "프레임 밖으로 나갔다"고 세면 **고칠 수 없는 실패**가 매번 남는다(2026-08-26:
+   *   카테고리 칩 줄이 right 670 으로 잡혔는데 스크린샷에서는 프레임 안에서 잘려 있었다).
+   *   진짜 프레임 파손은 docOverflow(문서 자체가 옆으로 흐름)가 따로 잡는다.
+   */
+  const clipper = (el) => {
+    for (let p = el.parentElement; p && p !== document.body; p = p.parentElement) {
+      const ox = getComputedStyle(p).overflowX;
+      if (ox === 'auto' || ox === 'scroll' || ox === 'hidden') {
+        if (p.getBoundingClientRect().right <= vw + 1) return true;
+      }
+    }
+    return false;
+  };
+
   for (const el of all) {
     const r = el.getBoundingClientRect();
-    // L1 — 프레임 밖으로 삐져나간 요소(1px 반올림 여유)
-    if (r.right > vw + 1 || r.left < -1) out.wide.push({ t: label(el), left: Math.round(r.left), right: Math.round(r.right) });
+    // L1 — 프레임 밖으로 삐져나간 요소(1px 반올림 여유). 잘려 있는 것은 나간 것이 아니다.
+    if ((r.right > vw + 1 || r.left < -1) && !clipper(el)) {
+      out.wide.push({ t: label(el), left: Math.round(r.left), right: Math.round(r.right) });
+    }
     // L5 — 글자가 상자 밖으로(가로만 본다; 세로는 스크롤 컨테이너가 많아 오탐)
     if (el.scrollWidth > el.clientWidth + 1 && getComputedStyle(el).overflowX === 'hidden') {
       out.clipped.push({ t: label(el), need: el.scrollWidth, has: el.clientWidth });
@@ -152,7 +173,20 @@ const report = (name, m) => {
  * 실측용 퀴즈 한 건을 심는다 — 상세·붙이기 시트·링크 시트는 **퀴즈가 있어야** 열린다.
  * ★format 은 서버의 `quiz_known_formats()` 에 있는 이름이어야 한다('choices' 는 없다 — fail-closed
  *   로 손님에게 한 건도 안 나간다). 끝나면 지운다.
+ *
+ * ★★2026-08-26: 노하우를 **여러 분류로 여러 건** 심는다. 그 전에는 짧은 제목 하나뿐이라
+ *   만들기 2단계의 카테고리 칩이 두 개밖에 안 서고 제목도 안 넘쳐서, 실제로 났던 실패
+ *   (칩 줄이 프레임 밖 657px · 긴 제목 잘림)를 **하니스가 만들어 내지 못했다**. 조건을 못 만드는
+ *   하니스는 초록이어도 아무것도 보증하지 않는다 — 최악을 심고 재는 것이 이 파일의 일이다.
  */
+const SEED_KNOWHOW = [
+  { section: '오픈 준비', title: '오픈 청소 순서' },
+  { section: '마감 정리', title: '마감 시재 정산' },
+  { section: '손님 응대', title: '사장 부재 시 결정 권한 — 직원이 결정 가능한 것/아닌 것' },
+  { section: '재료 관리', title: '냉장고 온도 점검' },
+  { section: '위생 점검', title: '주방 바닥 배수구 청소' },
+  { section: '기계 다루기', title: '에스프레소 머신 청소' },
+];
 async function seedQuiz(accessToken) {
   const db = createClient(URL_, ANON, {
     auth: { persistSession: false, autoRefreshToken: false },
@@ -164,18 +198,22 @@ async function seedQuiz(accessToken) {
   const UNIT = prof?.unit_id;
   if (!UNIT) return null;
   const sfx = String(Date.now()).slice(-8);
-  const entryId = `pb_ui${sfx}`, courseId = `tc_ui${sfx}`, itemId = `qz_ui${sfx}`;
+  const courseId = `tc_ui${sfx}`, itemId = `qz_ui${sfx}`;
   const now = new Date().toISOString();
-  await db.from('playbook_entries').insert({
-    id: entryId, unit_id: UNIT, creator_id: uid, creator_name: 'QA사장',
-    category: 'Know-how', subcategory: '일반', title: 'UI 실측용 노하우', tags: [], search_keywords: ['UI실측'],
-    square: { situation: '마감 때 가스 밸브를 잠가요.', action: { steps: [] }, extract: { do: '', dont: '' }, result: { before: '', after: '', metric: '' }, uncover: '', quagmire: '' },
-    execution: { tone: '친절', timing: '필요할 때', channel: '구두', stakeholders: [] },
-    stats: { thumbs_up: 0, thumbs_down: 0, last_used_at: now, query_hits_30d: 0, resolution_rate: 0 },
-    photos: [], version: 1, status: 'published', quality_score: 0.6,
-    created_at: now, updated_at: now, is_template: false, pack_id: null,
-    needs_review: false, correction_points: [], section: null, order_index: 0,
-  });
+  const entryIds = SEED_KNOWHOW.map((_, i) => `pb_ui${sfx}_${i}`);
+  const entryId = entryIds[0];   // 퀴즈에 담는 것은 첫 건 하나면 된다
+  for (let i = 0; i < SEED_KNOWHOW.length; i++) {
+    await db.from('playbook_entries').insert({
+      id: entryIds[i], unit_id: UNIT, creator_id: uid, creator_name: 'QA사장',
+      category: 'Know-how', subcategory: '일반', title: SEED_KNOWHOW[i].title, tags: [], search_keywords: ['UI실측'],
+      square: { situation: '마감 때 가스 밸브를 잠가요.', action: { steps: [] }, extract: { do: '', dont: '' }, result: { before: '', after: '', metric: '' }, uncover: '', quagmire: '' },
+      execution: { tone: '친절', timing: '필요할 때', channel: '구두', stakeholders: [] },
+      stats: { thumbs_up: 0, thumbs_down: 0, last_used_at: now, query_hits_30d: 0, resolution_rate: 0 },
+      photos: [], version: 1, status: 'published', quality_score: 0.6,
+      created_at: now, updated_at: now, is_template: false, pack_id: null,
+      needs_review: false, correction_points: [], section: SEED_KNOWHOW[i].section, order_index: i,
+    });
+  }
   await db.from('training_courses').insert({
     id: courseId, unit_id: UNIT, key: `q_${courseId}`, name: 'UI 실측 퀴즈',
     description: null, preset: null, min_items: 1, max_items: 10,
@@ -187,13 +225,22 @@ async function seedQuiz(accessToken) {
     payload: { ask: '마감 때 무엇을 잠그나요?', choices: ['가스 밸브', '창문', '냉장고', '에어컨'], answer_index: 0, explain: '가스 밸브를 잠가요.' },
     status: 'active', source: 'owner', created_by: uid, created_at: now, source_updated_at: now,
   });
+  // 보관함(2026-08-26) — 보관한 퀴즈가 0건이면 상단바 진입로 자체가 안 선다. 한 건 심어 실제로 연다.
+  const archivedId = `tc_ar${sfx}`;
+  await db.from('training_courses').insert({
+    id: archivedId, unit_id: UNIT, key: `q_${archivedId}`, name: 'UI 실측 보관 퀴즈',
+    description: null, preset: null, min_items: 1, max_items: 10,
+    due_days: null, start_at: null, answer_days: null, position: 1, active: false,
+  });
+
   return {
     courseId,
     cleanup: async () => {
       await db.from('quiz_items').delete().eq('id', itemId);
       await db.from('course_entries').delete().eq('course_id', courseId);
       await db.from('training_courses').delete().eq('id', courseId);
-      await db.from('playbook_entries').delete().eq('id', entryId);
+      await db.from('training_courses').delete().eq('id', archivedId);
+      for (const id of entryIds) await db.from('playbook_entries').delete().eq('id', id);
     },
   };
 }
@@ -249,15 +296,24 @@ async function main() {
       await settled();
       await scan('퀴즈 홈', '01-training');
 
-      if (await see('초안')) {
-        await tapText('초안');
-        await scan('퀴즈 홈(초안 펼침)', '02-training-drafts');
+      if (await see('만들다 만 퀴즈')) {
+        await tapText('만들다 만 퀴즈');
+        await scan('퀴즈 홈(만들다 만 것 펼침)', '02-training-drafts');
+      }
+      // 보관함 — 보관한 퀴즈가 있을 때만 상단바에 선다(0건이면 진입로 자체가 없다).
+      if (await see('보관함')) {
+        await tapText('보관함');
+        if (await wait('보관한 퀴즈는', 15000)) await scan('보관함 시트', '02b-archive-sheet');
+        await tapLabel('닫기');
+        await settle();
       }
     }
 
     // ── 2. 퀴즈 만들기 — **앱 안에서** 이동한다(다시 번들을 파싱하지 않게) ──
+    //     ★만들기는 헤더가 아니라 히어로 아래 Primary 다(2026-08-26 B안). 두 문구 중 하나가 선다.
     console.log('\n[2] 퀴즈 만들기 /owner/quiz-new');
-    await tapLabel('퀴즈 만들기');
+    if (await see('아직 안 물어본 노하우로 만들기')) await tapLabel('아직 안 물어본 노하우로 만들기');
+    else await tapLabel('퀴즈 만들기');
     const onNew = await wait('누가 풀 건가요', 60000);
     check('만들기 진입', onNew);
     if (onNew) {
@@ -276,7 +332,7 @@ async function main() {
       check('파트 시트가 닫힘', !(await see('파트 추가')));
 
       // 2단계 — 노하우 고르기(찾기 바가 노하우 화면과 같은 형태인지)
-      await tapLabel('다음');
+      await tapLabel('노하우 고르기');
       // ★placeholder 는 텍스트 노드가 아니라 getByText 로 안 잡힌다(2026-08-26에 이걸로 헛짚었다).
       //   화면에 **글자로 있는** 것을 기다린다.
       const onStep2 = await wait('고른 노하우에서 문제를 만들어요', 60000);

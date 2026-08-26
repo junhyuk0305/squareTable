@@ -11,7 +11,8 @@ import { useWorkStore, courseEntriesOf, staffWhoUnderstandEntries } from '@/lib/
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { guardWrite } from '@/lib/store/useSyncStore';
 import { showToast } from '@/lib/store/useToastStore';
-import { fetchQuizItems, upsertTrainingCourse, insertQuizAssignments } from '@/lib/db';
+import { fetchQuizItems, upsertTrainingCourse, insertQuizAssignments, insertQuizItem } from '@/lib/db';
+import { genId } from '@/lib/utils/id';
 import { FORMATS } from '@/lib/quiz/formats';
 import { Appear, stagger } from '@/components/Appear';
 import { BottomSheet } from '@/components/BottomSheet';
@@ -56,6 +57,7 @@ export default function QuizDetailScreen() {
   const understanding = useWorkStore((s) => s.understanding);
   const templates = useWorkStore((s) => s.templates);
   const attachKnowhow = useWorkStore((s) => s.attachKnowhow);
+  const addCourseEntry = useWorkStore((s) => s.addCourseEntry);
   const entries = usePlaybookStore((s) => s.entries);
   const staff = useStaffStore((s) => s.staff);
   const staffLoaded = useStaffStore((s) => s.loaded);
@@ -69,7 +71,6 @@ export default function QuizDetailScreen() {
   const [editOpen, setEditOpen] = useState(false);
   const [attachOpen, setAttachOpen] = useState(false);
   const [linkOpen, setLinkOpen] = useState(false);
-  const [archiveOpen, setArchiveOpen] = useState(false);
   const [preview, setPreview] = useState<QuizItem | null>(null);
   const [remaking, setRemaking] = useState<{ item: QuizItem; entryId: string; title: string } | null>(null);
   const [busy, setBusy] = useState(false);
@@ -177,6 +178,71 @@ export default function QuizDetailScreen() {
     return ok;
   };
 
+  /**
+   * 보관 — 되돌릴 수 있는 동작이라 확인 시트를 세우지 않는다(워딩 §4: 실행 + 실행취소 토스트).
+   * ★2026-08-26까지는 보관하면 목록에서 사라지고 **다시 볼 자리가 코드에 없어** 사실상 삭제였다.
+   *   지금은 퀴즈 홈 상단바의 보관함에서 되돌린다. 여기 토스트는 그 자리까지 안 가고 무르는 길이다.
+   */
+  const archive = async () => {
+    if (!course) return;
+    const ok = await saveCourse({ active: false });
+    if (!ok) return;
+    /* ★토스트는 **퀴즈 홈이** 띄운다(`?undo=`). 여기서 띄우면 이 화면은 곧 사라지므로,
+       사장이 실행취소를 눌러도 되살아난 퀴즈를 **홈이 다시 읽지 않아** 화면에 안 돌아온다
+       (되돌렸다고 말해 놓고 안 돌아오는 것이 제일 나쁘다). */
+    router.replace(`/owner/training?undo=${course.id}` as never);
+  };
+
+  /**
+   * 이걸로 다시 만들기(2026-08-26) — 문항을 그대로 복사한 **새 초안**을 만들고 만들기 화면으로 보낸다.
+   *
+   * ★복사하지 않는 것: 발송 이력·응시 결과·링크 토큰·예약 일정. 같이 복사하면 "이미 푼 사람"이
+   *   새 퀴즈에 딸려와 결과가 오염되고, 옛 링크로 새 퀴즈가 열려 회수가 무의미해진다.
+   * ★`source_updated_at` 은 **우리가 정하지 않는다** — 0114 의 `trg_quiz_items_stamp` 가
+   *   insert 때 지금 노하우 값으로 덮어쓴다. 그래서 낡은 퀴즈를 복사하면 사본은 '안 낡음'으로 선다.
+   *   그게 맞는 이유: 복사본은 곧바로 **4단계(문항 검토)** 로 가서 사장이 보고 넘긴다 —
+   *   트리거가 전제하는 "insert = 검수 시점"이 실제로 성립한다. 검토 없이 바로 보내는 길은 없다.
+   */
+  const duplicate = async () => {
+    if (!course || busy) return;
+    setBusy(true);
+    // 같은 이름이 둘이면 사장이 목록에서 못 고른다 — 비어 있는 번호를 찾아 붙인다.
+    const base = course.name.replace(/\s*\(\d+\)$/, '');
+    const taken = new Set(courses.map((c) => c.name));
+    let n = 2;
+    while (taken.has(`${base} (${n})`)) n++;
+    const newId = genId('tc');
+    const ok = await guardWrite(
+      upsertTrainingCourse({
+        ...course,
+        id: newId,
+        key: `q_${newId}`,
+        name: `${base} (${n})`,
+        // 일정·마감은 **안 가져온다** — 보낼 때 다시 정한다.
+        start_at: null,
+        answer_days: null,
+        position: 0,
+        active: true,
+      }),
+      () => {},
+      '복사하지 못했어요.',
+    );
+    if (!ok) { setBusy(false); return; }
+
+    for (const eid of entryIds) await addCourseEntry(newId, eid);
+    for (const it of items) {
+      await guardWrite(
+        insertQuizItem({ ...it, id: genId('qz'), created_at: new Date().toISOString() }),
+        () => {},
+        '문제를 복사하지 못했어요.',
+      );
+    }
+    setBusy(false);
+    reloadCourses();
+    showToast('문제를 그대로 복사했어요', 'good');
+    router.replace(`/owner/quiz-new?course=${newId}` as never);
+  };
+
   /** 아직 안 푼 사람에게 한 번 더. 새 발송 1건이라 **빈도 상한을 그대로 탄다**(오늘 이미 받았으면 안 간다). */
   const remind = async () => {
     if (!id || notDone.length === 0) return;
@@ -267,7 +333,7 @@ export default function QuizDetailScreen() {
           ) : (
             <>
               <View style={st.ringCard}>
-                <ProgressRing value={passedCount} total={people.length} label="통과" />
+                <ProgressRing value={passedCount} total={people.length} label="다 맞힌 사람" />
                 <Text style={st.ringSub}>{captionOf(course.answer_days, course.due_days)}</Text>
               </View>
               <View style={st.listCard}>
@@ -276,10 +342,10 @@ export default function QuizDetailScreen() {
                     <View style={st.rowText}>
                       <Text style={st.rowTitle} numberOfLines={1}>{p.name}</Text>
                       <Text style={st.rowSub} numberOfLines={1}>
-                        {p.passed ? '통과했어요' : p.sent ? '아직 안 풀었어요' : '보내는 중이에요'}
+                        {p.passed ? '다 맞혔어요' : p.sent ? '아직 안 풀었어요' : '보내는 중이에요'}
                       </Text>
                     </View>
-                    <ProgressPill text={p.passed ? '통과' : '대기'} tone={p.passed ? 'done' : 'neutral'} />
+                    <ProgressPill text={p.passed ? '다 맞힘' : '아직 안 풂'} tone={p.passed ? 'done' : 'neutral'} />
                   </View>
                 ))}
               </View>
@@ -327,7 +393,7 @@ export default function QuizDetailScreen() {
                       </Text>
                     </View>
                     {stale ? (
-                      <ProgressPill text="낡음" tone="behind" />
+                      <ProgressPill text="노하우가 바뀜" tone="behind" />
                     ) : s.attempts >= QUIZ_MISS_MIN_ATTEMPTS && s.rate >= QUIZ_MISS_RATE ? (
                       <ProgressPill text={`${Math.round(s.rate * 100)}%`} tone="behind" />
                     ) : (
@@ -406,7 +472,8 @@ export default function QuizDetailScreen() {
           <SheetOption label="문항 다시 보기" onPress={() => { setMoreOpen(false); setSeg('items'); }} />
           <SheetOption label="이 업무에 붙이기" badge="선택" onPress={() => { setMoreOpen(false); setAttachOpen(true); }} />
           <SheetOption label="링크 만들기" onPress={() => { setMoreOpen(false); setLinkOpen(true); }} />
-          <SheetOption label="보관하기" danger onPress={() => { setMoreOpen(false); setArchiveOpen(true); }} />
+          <SheetOption label="이걸로 다시 만들기" onPress={() => { setMoreOpen(false); void duplicate(); }} />
+          <SheetOption label="보관하기" danger onPress={() => { setMoreOpen(false); void archive(); }} />
         </BottomSheet>
       )}
 
@@ -438,7 +505,7 @@ export default function QuizDetailScreen() {
           </View>
           <View style={st.noteCard}>
             <Text style={st.noteText}>
-              이미 통과한 사람은 그대로예요. <Text style={st.bold}>다음 확인부터</Text> 바뀐 일정으로 돌아가요.
+              이미 다 맞힌 사람은 그대로예요. <Text style={st.bold}>다음 확인부터</Text> 바뀐 일정으로 돌아가요.
             </Text>
           </View>
           <Pressable
@@ -499,37 +566,8 @@ export default function QuizDetailScreen() {
         </BottomSheet>
       )}
 
-      {/* ── D8 보관 — 삭제가 아니라 보관이다. 통과 기록이 남는다는 사실을 미리 말한다 ── */}
-      {archiveOpen && (
-        <BottomSheet visible onClose={() => setArchiveOpen(false)}>
-          <SheetHead title="이 퀴즈를 보관할까요" onClose={() => setArchiveOpen(false)} />
-          <Text style={st.sheetLead}>직원에게 더 안 나가요. 통과 기록은 그대로 남아요.</Text>
-          <View style={st.sheetFoot}>
-            <Pressable
-              onPress={() => setArchiveOpen(false)}
-              style={({ pressed }) => [st.ghost, pressed && { opacity: 0.7 }]}
-              accessibilityRole="button"
-              accessibilityLabel="그대로 두기"
-            >
-              <Text style={st.ghostText}>그대로 두기</Text>
-            </Pressable>
-            <Pressable
-              onPress={async () => {
-                const ok = await saveCourse({ active: false });
-                if (ok) {
-                  showToast('보관했어요', 'good');
-                  router.replace('/owner/training' as never);
-                }
-              }}
-              style={({ pressed }) => [st.primary, { flex: 1 }, pressed && { opacity: 0.85 }]}
-              accessibilityRole="button"
-              accessibilityLabel="보관하기"
-            >
-              <Text style={st.primaryText}>보관하기</Text>
-            </Pressable>
-          </View>
-        </BottomSheet>
-      )}
+      {/* ── D8 보관 — 확인 시트가 없다. 되돌릴 수 있는 동작이라 실행 + 실행취소 토스트다(워딩 §4).
+             퀴즈 홈 상단바의 보관함에서도 되돌릴 수 있다. ── */}
 
       {linkOpen && <QuizLinkSheet course={course} onClose={() => setLinkOpen(false)} />}
       {preview && <QuizPreviewSheet quiz={preview} onClose={() => setPreview(null)} />}
