@@ -1,0 +1,16 @@
+{
+  "//": "qa-quiz-pick.mjs 전용 — pickFormats(순수 함수)를 노드에서 태우려고 CommonJS 로만 옮긴다. 앱 빌드와 무관.",
+  "compilerOptions": {
+    "module": "commonjs",
+    "target": "es2020",
+    "moduleResolution": "node",
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "noEmitOnError": false,
+    "ignoreDeprecations": "6.0",
+    "baseUrl": "..",
+    "paths": { "@/*": ["src/*"] },
+    "rootDir": "../src"
+  },
+  "files": ["../src/lib/quiz/generate.ts"]
+}
