@@ -10,6 +10,8 @@
 // 멱등: 다시 돌려도 안전(entry_id PK upsert). --force 없으면 이미 임베딩된 건 건너뜀.
 
 import { createClient } from '@supabase/supabase-js';
+import { dirname, join } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const URL = process.env.SUPABASE_URL;
 const KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -22,25 +24,25 @@ const FORCE = process.argv.includes('--force');
 
 const EMBED_MODEL = 'gemini-embedding-001';
 const EMBED_DIM = 768;
-const CAT_LABEL = { Routine: '루틴', Event: '돌발', Context: '원칙', 'Know-how': '꿀팁' };
-
 const db = createClient(URL, KEY, { auth: { persistSession: false } });
 
-// searchClient.buildEmbedText 와 동일 구성(한국어 일관: 제목·카테고리·상황·단계·금지·키워드).
-function buildEmbedText(e) {
-  const sq = e.square ?? {};
-  return [
-    e.title,
-    CAT_LABEL[e.category] ?? e.category,
-    sq.situation,
-    (sq.action?.steps ?? []).join(' '),
-    sq.extract?.dont,
-    (e.search_keywords ?? []).join(' '),
-  ]
-    .filter(Boolean)
-    .join('\n')
-    .slice(0, 4000);
+// ── 임베딩 입력 텍스트 — 앱과 **같은 파일**을 부른다(SSOT, 2026-08-27) ──
+// 자기 복사본을 갖고 있던 탓에 섹션 프리펜드가 빠져 앱과 다른 텍스트로 색인해 왔다.
+// src/lib/ai/embedText.ts 는 alias/RN 의존이 없어 node 가 그대로 읽는다.
+const { buildEmbedText: buildEmbedTextSSOT } = await import(
+  pathToFileURL(join(dirname(fileURLToPath(import.meta.url)), '..', 'src', 'lib', 'ai', 'embedText.ts')).href
+);
+
+// 매장별 커스텀 카테고리(0096) — 앱이 들고 있는 값과 같아야 라벨이 일치한다.
+const customsByUnit = new Map();
+async function customsFor(unitId) {
+  if (customsByUnit.has(unitId)) return customsByUnit.get(unitId);
+  const { data } = await db.from('schedule_config').select('knowhow_categories').eq('unit_id', unitId).maybeSingle();
+  const list = Array.isArray(data?.knowhow_categories) ? data.knowhow_categories : [];
+  customsByUnit.set(unitId, list);
+  return list;
 }
+const buildEmbedText = async (e) => buildEmbedTextSSOT(e, await customsFor(e.unit_id));
 
 async function embed(text) {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${EMBED_MODEL}:embedContent?key=${GEMINI}`;
@@ -65,7 +67,8 @@ async function main() {
   console.log('1) 발행 노하우 조회');
   const { data: entries, error } = await db
     .from('playbook_entries')
-    .select('id, unit_id, category, title, square, search_keywords')
+    // ★section 필수 — 색인 텍스트 맨 앞 프리펜드에 쓰인다(2026-08-27 이전엔 안 읽어서 빠졌다).
+    .select('id, unit_id, category, section, title, square, search_keywords')
     .eq('status', 'published');
   if (error) throw error;
   console.log(`   ${entries.length}건`);
@@ -82,7 +85,7 @@ async function main() {
   for (const e of entries) {
     if (already.has(e.id)) continue;
     try {
-      const embedding = await embed(buildEmbedText(e));
+      const embedding = await embed(await buildEmbedText(e));
       const { error: upErr } = await db.from('playbook_embeddings').upsert({
         entry_id: e.id,
         unit_id: e.unit_id,

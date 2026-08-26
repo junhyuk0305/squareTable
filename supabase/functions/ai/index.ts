@@ -348,6 +348,16 @@ async function aiQuotaBlocked(authz: string): Promise<{ blocked: boolean; used: 
   return { blocked: row.exceeded === true, used: row.used_count ?? 0, cap: row.cap_count ?? 0 };
 }
 
+// 색인 텍스트 지문(djb2). ★정본은 src/lib/ai/embedText.ts 의 embedTextHash 다 —
+// Deno 는 그 파일을 못 부르므로 복사본이 불가피하다. 두 구현이 어긋나면 전건이 stale 로 잡혀
+// 재색인이 계속 돌고 Gemini 비용이 샌다. 그래서 `qa:embedding-queue` 가 라운드트립으로
+// "엣지가 저장한 지문 == 클라가 계산한 지문" 을 실증한다. 한쪽만 고치지 말 것.
+function embedTextHash(text: string): string {
+  let h = 5381;
+  for (let i = 0; i < text.length; i++) h = ((h << 5) + h + text.charCodeAt(i)) | 0;
+  return (h >>> 0).toString(16);
+}
+
 // 노하우 1건 색인 — 텍스트를 임베딩해 playbook_embeddings 에 upsert.
 // 보안: entryId 가 내 매장 노하우인지 RLS select 로 먼저 검증(타 매장 id 스푸핑 차단).
 async function handleEmbed(payload: any, user: { unitId: string | null }, authz: string) {
@@ -373,6 +383,11 @@ async function handleEmbed(payload: any, user: { unitId: string | null }, authz:
     unit_id: user.unitId,
     embedding: toVecLiteral(vec),
     embedded_at: new Date().toISOString(),
+    // ★0182: 실제로 임베딩한 그 텍스트의 지문을 남긴다. 클라가 보내온 값을 믿지 않고 여기서
+    //   계산하는 이유는, 이 지문이 "저장된 벡터가 무엇으로 만들어졌는가"의 유일한 증거이기
+    //   때문이다. 노하우를 고쳤는데 재색인이 안 되면(=stale) 검색이 **옛 답을 자신 있게** 준다 —
+    //   못 찾는 것보다 나쁘다. 그걸 감지할 근거가 이 한 칸이다.
+    content_hash: embedTextHash(text),
     attempts: 0,
     last_error: null,
     next_attempt_at: null,
@@ -388,7 +403,15 @@ async function handleEmbed(payload: any, user: { unitId: string | null }, authz:
 // 본문(SQUARE)은 안 싣는다(클라가 이미 보유). 렉시컬 융합은 클라에서.
 async function handleSearch(payload: any, user: { unitId: string | null }, authz: string) {
   const query = fence(payload.query).slice(0, MAX_QUERY_LEN);
-  if (!query || !user.unitId) return { candidates: [], topSimilarity: 0 };
+  // ★checkIds: 클라의 렉시컬 상위 후보 id 들. "이 중 색인이 없는 게 무엇인지" 를 되돌려준다(2026-08-27).
+  //   왜 필요한가 — 벡터 후보에 없는 노하우는 두 가지가 뒤섞여 있다. (a) 색인은 됐는데 유사도가
+  //   낮은 것, (b) **색인 자체가 없어 애초에 후보가 될 수 없었던 것**. 클라는 둘을 구별할 수 없어
+  //   RRF 가 (b)까지 "벡터가 낮게 봤다"로 취급해 점수를 깎았고, 그 결과 렉시컬이 1등으로 찾아낸
+  //   정답이 3등으로 밀려났다(실측 A09·B09). 구별 근거를 여기서 준다. 상한은 렉시컬 TOPK 라 작다.
+  const checkIds = Array.isArray(payload.checkIds)
+    ? payload.checkIds.slice(0, 16).map((x: unknown) => String(x).slice(0, 128))
+    : [];
+  if (!query || !user.unitId) return { candidates: [], topSimilarity: 0, unindexedIds: [] };
 
   const vec = await callEmbed(query, 'RETRIEVAL_QUERY');
   const sb = userClient(authz);
@@ -405,7 +428,24 @@ async function handleSearch(payload: any, user: { unitId: string | null }, authz
     id: String(r.id),
     similarity: Math.max(0, Math.min(1, Number(r.similarity) || 0)),
   }));
-  return { candidates, topSimilarity: candidates[0]?.similarity ?? 0 };
+
+  // checkIds 중 "쓸 수 있는 벡터가 없는" 것들. RLS 로 내 매장 행만 보이므로 타 매장 id 를 물어도
+  // 색인 유무가 새지 않는다(안 보이면 그냥 미색인으로 답한다 — 그 id 는 클라의 것도 아니다).
+  let unindexedIds: string[] = [];
+  if (checkIds.length) {
+    const { data: rows, error: covErr } = await sb
+      .from('playbook_embeddings')
+      .select('entry_id')
+      .in('entry_id', checkIds)
+      .not('embedding', 'is', null);
+    // 조회 실패는 검색을 막을 일이 아니다 — 빈 배열이면 클라는 예전 동작(전부 융합)으로 돌아간다.
+    if (covErr) console.error('search coverage:', covErr.message);
+    else {
+      const has = new Set((rows ?? []).map((r: any) => String(r.entry_id)));
+      unindexedIds = checkIds.filter((id: string) => !has.has(id));
+    }
+  }
+  return { candidates, topSimilarity: candidates[0]?.similarity ?? 0, unindexedIds };
 }
 
 // 주니어 답변 — 제공된 SOP만 근거로(그라운딩), 없으면 grounded=false 로 회신.

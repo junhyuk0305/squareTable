@@ -15,7 +15,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 import { readFileSync, writeFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, join } from 'node:path';
 
 const __dir = dirname(fileURLToPath(import.meta.url));
@@ -68,14 +68,11 @@ async function ensureUser(email, meta) {
   return data.user;
 }
 
-// ── 임베딩 텍스트(searchClient.buildEmbedText / backfill 과 동일 구성) ──
-const CAT_LABEL = { Routine: '루틴', Event: '돌발', Context: '원칙', 'Know-how': '꿀팁' };
-function buildEmbedText(e) {
-  const sq = e.square ?? {};
-  return [e.title, CAT_LABEL[e.category] ?? e.category, sq.situation,
-    (sq.action?.steps ?? []).join(' '), sq.extract?.dont, (e.search_keywords ?? []).join(' ')]
-    .filter(Boolean).join('\n').slice(0, 4000);
-}
+// ── 임베딩 텍스트 — 앱과 **같은 파일**을 부른다(SSOT, 2026-08-27) ──
+// 평가 매장은 커스텀 카테고리를 쓰지 않으므로 customs 는 넘기지 않는다(기본 4종 라벨).
+const { buildEmbedText } = await import(
+  pathToFileURL(join(__dir, '..', 'src', 'lib', 'ai', 'embedText.ts')).href
+);
 
 async function main() {
   const ctx = readJson('context-pack.json');

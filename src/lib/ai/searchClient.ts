@@ -10,7 +10,8 @@
 
 import type { PlaybookEntry, SearchResult } from '@/types';
 import { searchPlaybook } from '@/lib/rag';
-import { getCategoryMeta } from '@/lib/utils/category';
+import { buildEmbedText as buildEmbedTextSSOT } from './embedText';
+import { getCustomCategoryRegistry } from '@/lib/store/knowhowCategories';
 import {
   SERVE_THRESHOLD, USE_MOCK, AI_ENDPOINT, ANON,
   SERVE_REQUIRE_LEXICAL_AGREEMENT, SERVE_LEX_MIN, SERVE_LEX_MARGIN, SERVE_VEC_OVERRIDE,
@@ -26,7 +27,9 @@ const TOPK = 8;
 const EDGE_TIMEOUT_MS = 12_000;
 
 type VecHit = { id: string; similarity: number };
-type VecResponse = { candidates: VecHit[]; topSimilarity: number };
+/** unindexedIds — 우리가 물어본 후보(checkIds) 중 **색인이 없어 벡터 후보가 될 수 없었던** 것들.
+ *  엣지 구버전은 이 필드를 안 준다(undefined) → 융합은 예전 그대로 동작한다(하위호환). */
+type VecResponse = { candidates: VecHit[]; topSimilarity: number; unindexedIds?: string[] };
 
 // Edge 호출 공통 헤더(실 로그인 세션 토큰 필요 — anon 단독 거부됨).
 // 계약: 소프트 no-go(엔드포인트/토큰 없음·!res.ok)면 null, 네트워크/타임아웃(abort)이면 throw
@@ -80,7 +83,11 @@ export async function hybridSearch(query: string, entries: PlaybookEntry[]): Pro
 
   let vec: VecResponse | null = null;
   try {
-    vec = await edgePost<VecResponse>('search', { query });
+    // checkIds = 렉시컬 상위 후보. "이 중 색인이 없는 게 뭔지" 를 같이 받아온다(아래 융합에서 씀).
+    vec = await edgePost<VecResponse>('search', {
+      query,
+      checkIds: lexical.candidates.map((c) => c.entry.id),
+    });
   } catch (e) {
     // 의미검색(pgvector) 다운 → 렉시컬로 조용히 열화되던 걸 계측(팀이 의미검색 장애를 볼 수 있게).
     console.warn('[search] vector path failed, lexical fallback:', e);
@@ -95,12 +102,21 @@ export async function hybridSearch(query: string, entries: PlaybookEntry[]): Pro
   const vecRank = new Map<string, number>();
   vec.candidates.forEach((c, i) => vecRank.set(c.id, i));
 
+  // ★색인이 없는 노하우에는 벡터 순위를 "없음"으로 두지 않는다(2026-08-27 실측으로 들어온 규칙).
+  //   RRF 는 두 검색기가 **같은 후보 집합**을 매길 때만 성립한다. 그런데 색인이 없는 노하우는
+  //   벡터 후보가 될 수 없으므로, 그 부재는 "벡터가 무관하다고 봤다"는 증거가 아니라 **증거 없음**이다.
+  //   예전엔 이걸 구별 못 해 점수를 깎았고, 그래서 렉시컬이 1등으로 찾아낸 정답이 3등으로 밀렸다:
+  //     "단체 주문 20잔 들어왔을 때 처리 순서" → 정답 대신 "우유 떨어졌을 때" 가 1등
+  //   증거가 없을 땐 벌주지도 상주지도 않는다 = 그 노하우의 벡터 순위를 **렉시컬 순위와 같다고 본다**
+  //   (두 검색기가 이견이 없다고 가정). 색인이 채워지면 실제 순위가 들어와 이 보정은 자연히 사라진다.
+  const unindexed = new Set(vec.unindexedIds ?? []);
+
   const ids = new Set<string>([...lexRank.keys(), ...vecRank.keys()]);
   const fused = [...ids]
     .map((id) => {
       let s = 0;
       const lr = lexRank.get(id);
-      const vr = vecRank.get(id);
+      const vr = vecRank.get(id) ?? (lr !== undefined && unindexed.has(id) ? lr : undefined);
       if (lr !== undefined) s += 1 / (RRF_K + lr);
       if (vr !== undefined) s += 1 / (RRF_K + vr);
       return { id, s };
@@ -132,27 +148,30 @@ export async function hybridSearch(query: string, entries: PlaybookEntry[]): Pro
     (topId != null && topId === lexTopEntryId && lexScoreOfTop >= SERVE_LEX_MIN && lexMargin >= SERVE_LEX_MARGIN) ||
     vecMargin >= SERVE_VEC_OVERRIDE;
 
-  const matched = confidence >= SERVE_THRESHOLD && grounded ? candidates[0]?.entry ?? null : null;
+  // ★확신의 근거는 **서빙되는 그 노하우의 것**이어야 한다 (2026-08-27 실측으로 들어온 불변식).
+  //   confidence 는 max(렉시컬, 벡터 1등 유사도)라 **다른 노하우의 벡터 점수**로 부풀 수 있다.
+  //   색인이 없는 노하우는 자기 벡터 점수가 아예 0인데, 그 부푼 숫자를 근거로 자동 확정하면
+  //   "틀린 답을 자신 있게" 내놓게 된다 — 실측:
+  //     "여름 음료 만드는 순서가 사람마다 달라요" → 렉시컬 근거는 0.509뿐인데 confidence 0.726
+  //     (그 0.726은 초코 프라페의 벡터 유사도였다) 으로 엉뚱한 노하우를 SERVE 했다.
+  //   → 벡터 근거가 없는 후보는 **렉시컬만으로** 문턱을 넘을 때만 확정한다. 넘지 못하면 확정 대신
+  //     GENERATE(여러 노하우 종합)로 흘러 헤지된 답이 나간다 — 순위 이득은 그대로 두고 확신만 뺀다.
+  const topLacksVectorEvidence = topId != null && unindexed.has(topId);
+  const selfEvidenced = !topLacksVectorEvidence || lexical.confidence >= SERVE_THRESHOLD;
+
+  const matched =
+    confidence >= SERVE_THRESHOLD && grounded && selfEvidenced ? candidates[0]?.entry ?? null : null;
   return { matched, confidence, candidates, fallbackToUnknown: !matched };
 }
 
 // ── 색인(임베딩) ────────────────────────────────────────────
-/** 임베딩 대상 텍스트 — 제목·카테고리·상황·단계·금지·키워드를 합친다(한국어 일관).
- *  섹션이 있으면 맨 앞에 "[오픈]"처럼 프리펜드(Contextual Retrieval, 설계 §5d) —
- *  원자 노하우의 유일한 약점(문서 맥락 상실)을 색인 텍스트에 되살려 검색 실패를 줄인다. */
+/** 임베딩 대상 텍스트 — 조립 규칙 자체는 `./embedText` 가 SSOT 다(스크립트도 같은 걸 부른다).
+ *  여기서 하는 일은 **매장 커스텀 카테고리 라벨을 주입**하는 것뿐이다. 앱은 hydrate 때 채워둔
+ *  레지스트리를 갖고 있고, 스크립트는 schedule_config 에서 직접 읽어 넘긴다 — 그래야 두 경로가
+ *  같은 텍스트를 만든다(2026-08-27 이전에는 네 곳이 각자 복사본을 갖고 있었고, 섹션 프리펜드가
+ *  스크립트 쪽에만 빠져 색인 25건 중 24건이 다른 텍스트로 색인돼 있었다). */
 export function buildEmbedText(e: PlaybookEntry): string {
-  const sq = e.square;
-  return [
-    e.section ? `[${e.section}] ${e.title}` : e.title,
-    getCategoryMeta(e.category).label,
-    sq.situation,
-    sq.action?.steps?.join(' '),
-    sq.extract?.dont,
-    (e.search_keywords ?? []).join(' '),
-  ]
-    .filter(Boolean)
-    .join('\n')
-    .slice(0, 4000);
+  return buildEmbedTextSSOT(e, getCustomCategoryRegistry());
 }
 
 /** 노하우 발행/수정 후 임베딩 색인(파이어앤포겟). 실패해도 발행은 성공·렉시컬로 검색됨.
