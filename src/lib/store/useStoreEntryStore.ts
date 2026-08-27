@@ -113,7 +113,8 @@ export const useStoreEntryStore = create<StoreEntryState>((set, get) => ({
     // 착지 화면이 그릴 준비가 될 때까지 커버 아래에서 채운다. 실패·지연이면 타임아웃으로 빠져나온다.
     await prefetchStoreData(canManage(useSessionStore.getState().role));
     // 0093: 역할은 매장별(A매장 매니저·B매장 직원 가능) — 전환 '후'의 세션 역할로 착지 화면을 정한다.
-    router.replace(canManage(useSessionStore.getState().role) ? '/owner/dashboard' : '/junior/home');
+    // 매니저는 직원 세트로 착지한다(2026-08-27 절충안 ② — 사장 홈은 허용 목록 밖).
+    router.replace(useSessionStore.getState().role === 'owner' ? '/owner/dashboard' : '/junior/home');
     // 착지 화면이 그려진 뒤 커버를 걷는다(먼저 걷으면 빈 상태가 한 프레임 스친다).
     set({ entering: null });
   },

@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Stack, Redirect, usePathname } from 'expo-router';
+import { Stack, Redirect, usePathname, useRouter } from 'expo-router';
 import { InkColors } from '@/lib/theme/colors';
 import { HeaderBackButton } from '@/components/HeaderBackButton';
 import { StoreHeaderTitle } from '@/components/StoreHeaderTitle';
@@ -18,7 +18,7 @@ import { usePaymentClaimStore } from '@/lib/store/usePaymentClaimStore';
 import { purgeExpiredFormerStaff } from '@/lib/db';
 import { retryPendingEmbeddings } from '@/lib/ai/embedBacklog';
 import { HAS_SUPABASE } from '@/lib/supabase';
-import { canManage } from '@/lib/utils/roles';
+import { canManage, managerMayOpen } from '@/lib/utils/roles';
 
 export default function OwnerLayout() {
   const status = useSessionStore((s) => s.status);
@@ -28,6 +28,7 @@ export default function OwnerLayout() {
   const phone = useSessionStore((s) => s.phone);
   const pendingUnitId = useSessionStore((s) => s.pendingUnitId);
   const pathname = usePathname();
+  const router = useRouter();
 
   // 로그인되면 DB에서 당겨오고 실시간 구독(인박스·업무보드·출퇴근이 다른 기기 변경에 즉시 반응).
   useEffect(() => {
@@ -84,6 +85,17 @@ export default function OwnerLayout() {
     return () => clearInterval(id);
   }, [status]);
 
+  // 매니저는 직원 세트를 쓰고, 사장 화면은 허용 목록(MANAGER_OWNER_ROUTES)만 연다 — 나머지는 직원 홈으로.
+  // ★render-time <Redirect> 로 하면 안 된다 — 웹 콜드 로드에서 이 스택은 목표 경로 전에 첫 라우트(`/owner/ask`)를
+  //   한 프레임 스친다(2026-08-27 history 추적 실측: schedule → ask → schedule). 그 찰나에 발화하면 매니저가
+  //   근무표를 영영 못 연다(anchor·initialRouteName 으로도 안 잡혔다). 그래서 잠깐 기다렸다가 아직도 허용 밖이면 보낸다.
+  const managerBlocked = HAS_SUPABASE && status === 'signed_in' && !!unitId && role === 'manager' && !managerMayOpen(pathname);
+  useEffect(() => {
+    if (!managerBlocked) return;
+    const id = setTimeout(() => router.replace('/junior/home'), 150);
+    return () => clearTimeout(id);
+  }, [managerBlocked, pathname, router]);
+
   if (HAS_SUPABASE && status === 'loading') return null;
   if (HAS_SUPABASE && status === 'signed_out') return <Redirect href="/" />;
   // 소셜 로그인 결손 프로필(전화/생년월일 없음)은 매장 생성 전에 완성화면으로 — create_store 가
@@ -137,7 +149,7 @@ export default function OwnerLayout() {
       <Stack.Screen name="dashboard" options={{ title: '홈', headerLeft: () => null, headerBackVisible: false }} />
       {/* 탭 루트 헤더엔 "어느 매장의 화면인가"를 상시 표시(StoreHeaderTitle) — 홈은 StoreToggle 이 담당. */}
       <Stack.Screen name="categories" options={{ title: '노하우 추가', headerTitle: () => <StoreHeaderTitle title="노하우 추가" />, headerLeft: () => null, headerBackVisible: false }} />
-      <Stack.Screen name="inbox" options={{ title: '받은 질문', headerTitle: () => <StoreHeaderTitle title="받은 질문" />, headerLeft: () => null, headerBackVisible: false }} />
+      <Stack.Screen name="inbox" options={{ title: '답 기다리는 질문', headerTitle: () => <StoreHeaderTitle title="답 기다리는 질문" />, headerLeft: () => null, headerBackVisible: false }} />
       <Stack.Screen name="work" options={{ title: '업무 채팅', headerTitle: () => <StoreHeaderTitle title="업무 채팅" />, headerLeft: () => null, headerBackVisible: false }} />
       <Stack.Screen name="settings" options={{ title: '설정', headerTitle: () => <StoreHeaderTitle title="설정" />, headerLeft: () => null, headerBackVisible: false }} />
       {/* 서브화면 — 전역 headerLeft(HeaderBackButton) 사용 */}

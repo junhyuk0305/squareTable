@@ -4,6 +4,21 @@
 export const canManage = (role: string): boolean => role === 'owner' || role === 'manager';
 
 /**
+ * 매니저가 열 수 있는 사장 화면(2026-08-27 절충안 ②: 직원 세트 + '매장 관리' 진입 1곳 + 허용 목록).
+ * 매니저는 직원 탭바를 쓰고, 여기 있는 `/owner/*` 만 연다 — 급여·시급·초대코드·요금제·매장 설정·직원 관리·
+ * 노하우 편집·퀴즈는 제외. 판정은 `managerMayOpen`(owner/_layout 가드) 하나만 쓴다.
+ */
+export const MANAGER_OWNER_ROUTES = [
+  '/owner/schedule', // 근무표
+  '/owner/work', // 업무 채팅·할일 배정
+  '/owner/rooms', // 방 → /owner/work 로 replace
+  '/owner/timesheet', // /owner/timesheet/[staffId] 출근기록
+  '/owner/notifications', // 공지·알림
+] as const;
+export const managerMayOpen = (pathname: string): boolean =>
+  MANAGER_OWNER_ROUTES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
+
+/**
  * 역할 호칭 SSOT — 사람 이름 뒤에 붙는 말. "○○ 사장님 / ○○ 매니저 / ○○님".
  *
  * ★왜 필요한가: 매니저는 사장 화면 세트를 그대로 쓰기 때문에, 화면에 "사장님"을 하드코딩하면

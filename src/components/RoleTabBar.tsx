@@ -7,6 +7,7 @@ import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { USE_NATIVE_DRIVER } from '@/lib/anim';
 import { useOwnerTodoCount } from '@/lib/hooks/useOwnerTodoCount';
+import { useSessionStore } from '@/lib/store/useSessionStore';
 
 type IconName = keyof typeof Ionicons.glyphMap;
 export type Tab = { label: string; path: Href; icon: IconName; iconActive: IconName; alsoActiveFor?: Href[] };
@@ -62,7 +63,9 @@ export function goToTab(path: Href) {
 export function RoleTabBar({ role }: { role: 'junior' | 'owner' }) {
   const pathname = usePathname();
   const insets = useSafeAreaInsets();
-  const tabs = TABS[role];
+  // 매니저는 사장 화면(근무표 등)을 열어도 직원 탭바를 쓴다 — 사장 탭은 허용 목록 밖으로 튕기는 길뿐이다.
+  const sessionRole = useSessionStore((s) => s.role);
+  const tabs = TABS[role === 'owner' && sessionRole !== 'owner' ? 'junior' : role];
   // '할 일'(답할 질문 + 검토할 제안) 배지 — 받은질문 탭이 사라진 자리를 대신하는 신호.
   //  판정 SSOT = useOwnerTodoCount. 훅은 조건부 호출이 안 되므로 junior 에서도 부르되 배지는 안 붙인다.
   const todo = useOwnerTodoCount();

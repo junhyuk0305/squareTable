@@ -30,6 +30,7 @@ export default function StoreSettings() {
   const storeName = useSessionStore((s) => s.storeName) || '내 매장';
   const userId = useSessionStore((s) => s.userId);
   const userName = useSessionStore((s) => s.userName);
+  const role = useSessionStore((s) => s.role);
   const leaveStore = useSessionStore((s) => s.leaveStore);
   const wages = usePayrollStore((s) => s.wages);
   const wagesSettled = useWagesSettled();
@@ -133,6 +134,10 @@ export default function StoreSettings() {
           <SettingsRow icon="person-outline" label="내 이름" value={userName || ''} onPress={() => router.push('/account-edit')} />
           {/* 내 시급 = 읽기 표시만(사장이 정하는 값). */}
           <SettingsRow icon="cash-outline" label="내 시급" value={wage ? `${won(wage)}/시간` : '사장님이 정해요'} />
+          {/* 매니저만 — 사장 화면으로 가는 진입은 이 행 하나뿐(허용 목록 = roles.ts MANAGER_OWNER_ROUTES). */}
+          {role === 'manager' ? (
+            <SettingsRow icon="storefront-outline" label="매장 관리" hint="근무표 · 할일 배정 · 공지 · 출근기록" onPress={() => router.push('/owner/schedule')} />
+          ) : null}
         </SettingsSection>
 
         <SettingsSection icon="notifications-outline" title="이 매장 알림">
