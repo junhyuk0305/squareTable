@@ -14,7 +14,8 @@ import { storeColor } from '@/lib/utils/storeColor';
 import { todayStr } from '@/lib/utils/attendance';
 import { isPendingAssignment, isUnreadMention } from '@/lib/utils/notifications';
 import { SectionLabel } from '@/components/SectionLabel';
-import { MiniStats } from '@/components/blocks/MiniStats';
+import { FocusCard } from '@/components/blocks/FocusCard';
+import { StatCardGrid } from '@/components/blocks/StatCardGrid';
 import { ScreenLoading } from '@/components/ScreenLoading';
 import { Appear, stagger } from '@/components/Appear';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
@@ -103,6 +104,21 @@ export function JuniorTodayView({ header }: { header: ReactNode }) {
   const [showAllTodos, setShowAllTodos] = useState(false);
   const TODO_CAP = 5;
 
+  // ── 히어로(H4 FocusCard · §7-4 A) — 가장 급한 1건.
+  //    ★우선순위 = **멘션 먼저**(2026-08-27 사용자 확정). 사람이 답을 기다리는 것이 지연 비용이 크고,
+  //      FocusCard 는 따옴표 인용 블록이라 사람 말이 들어가야 문법이 맞는다.
+  //      todoItems 가 이미 [멘션…, 배정…] 순서라 맨 앞이 곧 그 판정이다 — 새 정렬을 만들지 않는다.
+  //    ★0건이면 카드를 비워 두지 않는다(빈 카드 금지) — 아래 '오늘 근무' 카드만 남는다.
+  const hero = todoItems[0] ?? null;
+  const restTodos = todoItems.slice(1);
+  // 히어로 위 맥락 한 줄 — 오늘 근무를 여기서 말한다. 아래 '오늘 근무' 카드는 그대로 둔다:
+  // 근무가 2건 이상이면 행마다 출퇴근 화면으로 가는 진입점이 필요하다.
+  const heroKicker = todayShifts.length > 0
+    ? `오늘 ${labelOf(todayShifts[0].uid)} ${todayShifts[0].start} – ${todayShifts[0].end} 근무`
+    : nextShift
+      ? `오늘은 근무가 없어요 · 다음 근무 ${WEEKDAYS[nextShift.dow]}요일 ${nextShift.start}`
+      : '오늘은 근무가 없어요';
+
   // ── 3) 이번달 — 근무시간·예상 급여(근무분 × 시급 / 60, 기존 급여 집계식과 동일 계산) ──
   const month = useMemo(() => {
     const perStore = myCross.map((r) => ({
@@ -136,8 +152,23 @@ export function JuniorTodayView({ header }: { header: ReactNode }) {
       {/* 화면 제목 — 게이트 안이다. 밖에 두면 제목만 먼저 등장하고 본문이 수 백 ms 뒤에 갈아끼워진다. */}
       {header}
       <View style={{ gap: Space.md }}>
+      {/* ── 0) 히어로 — 가장 급한 1건(§7-4 A). 없으면 안 그린다. ── */}
+      {hero && (
+        <Appear delay={stagger(0)}>
+          <FocusCard
+            kicker={heroKicker}
+            quote={hero.text}
+            meta={`${labelOf(hero.uid)} · ${hero.kind === 'mention' ? '나를 불렀어요' : '내 담당'}`}
+            cta={{
+              label: hero.kind === 'mention' ? '업무 채팅에서 보기' : '업무 화면에서 보기',
+              onPress: () => { if (!switching) goStore(hero.uid, '/junior/work'); },
+            }}
+          />
+        </Appear>
+      )}
+
       {/* ── 1) 오늘 근무 ── */}
-      <Appear delay={stagger(0)}>
+      <Appear delay={stagger(1)}>
         <SectionLabel title="오늘 근무" />
         <View style={styles.card}>
           {todayShifts.length > 0 ? (
@@ -174,15 +205,21 @@ export function JuniorTodayView({ header }: { header: ReactNode }) {
         </View>
       </Appear>
 
-      {/* ── 2) 오늘 할 일 ── */}
-      <Appear delay={stagger(1)}>
-        <SectionLabel title="오늘 할 일" hint={todoItems.length > 0 ? `${todoItems.length}건` : undefined} />
+      {/* ── 2) 남은 할 일 — 히어로로 올라간 1건은 여기서 뺀다(같은 것을 두 번 그리지 않는다).
+             ★히어로가 있고 나머지가 0건이면 이 섹션 자체를 그리지 않는다 — "오늘 처리할 일이 없어요"가
+               바로 위 히어로와 정면으로 모순된다. ── */}
+      {(!hero || restTodos.length > 0) && (
+      <Appear delay={stagger(2)}>
+        <SectionLabel
+          title={hero ? '남은 할 일' : '오늘 할 일'}
+          hint={restTodos.length > 0 ? `${restTodos.length}건` : undefined}
+        />
         <View style={styles.card}>
-          {todoItems.length === 0 ? (
+          {restTodos.length === 0 ? (
             <Text style={styles.emptyText}>오늘 처리할 일이 없어요</Text>
           ) : (
             <>
-              {(showAllTodos ? todoItems : todoItems.slice(0, TODO_CAP)).map((it) => (
+              {(showAllTodos ? restTodos : restTodos.slice(0, TODO_CAP)).map((it) => (
                 <Pressable
                   key={it.key}
                   onPress={() => goStore(it.uid, '/junior/work')}
@@ -213,14 +250,14 @@ export function JuniorTodayView({ header }: { header: ReactNode }) {
                   <Ionicons name="chevron-forward" size={16} color={InkColors.ink3} />
                 </Pressable>
               ))}
-              {!showAllTodos && todoItems.length > TODO_CAP && (
+              {!showAllTodos && restTodos.length > TODO_CAP && (
                 <Pressable
                   onPress={() => setShowAllTodos(true)}
                   style={({ pressed }) => [styles.moreRow, pressed && { opacity: 0.7 }]}
                   accessibilityRole="button"
-                  accessibilityLabel={`남은 할 일 ${todoItems.length - TODO_CAP}건 더 보기`}
+                  accessibilityLabel={`남은 할 일 ${restTodos.length - TODO_CAP}건 더 보기`}
                 >
-                  <Text style={styles.moreText}>{todoItems.length - TODO_CAP}건 더 보기</Text>
+                  <Text style={styles.moreText}>{restTodos.length - TODO_CAP}건 더 보기</Text>
                   <Ionicons name="chevron-down" size={14} color={InkColors.ink2} />
                 </Pressable>
               )}
@@ -228,20 +265,29 @@ export function JuniorTodayView({ header }: { header: ReactNode }) {
           )}
         </View>
       </Appear>
+      )}
 
-      {/* ── 3) 이번달(블록 I3) — 카드가 아니다.
-             2026-08-06: 위 두 블록이 이미 카드라 여기까지 카드면 '제목 → 카드' 3연속이 된다(배치 규칙 ①).
-             통계는 MiniStats로 내리고, 급여 계산 방식 안내는 그 칸의 ⓘ로 옮긴다. ── */}
-      <Appear delay={stagger(2)}>
+      {/* ── 3) 이번달 — 블록 L4(§7-2). 2026-08-27: MiniStats(숫자 나열) → 2열 지표 카드.
+             ★R4 — **여기엔 막대를 그리지 않는다.** `my_cross_summary` 가 주는 건 `month_minutes`
+               **합계 하나**뿐이라 일별 이력이 없다. 시간축 막대를 그리면 지어낸 그림이 된다.
+               일별 원장은 매장 앱 출퇴근 화면이 갖고 있으므로 그쪽으로 보낸다(보조줄).
+               매장이 2곳↑이면 매장별 분해가 실제 구성이지만 그건 바로 아래 카드가 이미 말한다. ── */}
+      <Appear delay={stagger(3)}>
         <SectionLabel title="이번달" />
-        <MiniStats
+        <StatCardGrid
           items={[
-            { key: 'hours', value: fmtHours(month.minutes), label: '근무시간' },
+            {
+              key: 'hours',
+              label: '근무시간',
+              value: fmtHours(month.minutes),
+              sub: myCross.length > 1 ? `매장 ${myCross.length}곳 합계` : '일별 기록은 출퇴근 화면에서 봐요',
+            },
             ...(month.anyWage
               ? [{
                   key: 'pay',
-                  value: `${month.pay.toLocaleString()}원`,
                   label: '예상 급여',
+                  value: `${month.pay.toLocaleString()}원`,
+                  sub: '세전 예상액',
                   info: {
                     title: '예상 급여가 어떻게 나온 거예요?',
                     body: '근무 기록 × 시급으로 계산한 값이에요.\n실제 지급액은 매장 정산 기준에 따라 달라질 수 있어요.',

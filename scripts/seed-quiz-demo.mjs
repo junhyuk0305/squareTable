@@ -368,6 +368,9 @@ async function main() {
     ['pb_context_001', JIWON, '박지원', 1, 1, 6, 1],
     ['pb_event_001', SUMIN, '이수민', 1, 1, 1, 0],
     ['pb_event_004', SUMIN, '이수민', 1, 0, 1, null],
+    // 2026-08-27 §10-4 "높은 오답률 = 절반 넘게 오답(>50%)" 케이스 — 이 노하우는 위 두 줄과 합쳐
+    // 응시 5 · 오답 3 = 60%. 옛 기준(>0%)과 새 기준을 가르는 표본이라 QA 시드에 하나는 있어야 한다.
+    ['pb_routine_1782886957696_0', SUMIN, '이수민', 3, 1, 2, null],
   ].filter(([e]) => alive.has(e));
 
   await step(`응시 기록 ${results.length}건`, db.from('quiz_attempts').insert(

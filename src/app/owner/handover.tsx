@@ -8,7 +8,7 @@ import { PressableScale } from '@/components/PressableScale';
 import { Appear } from '@/components/Appear';
 import { MAX_SPLIT_PUBLISH } from '@/components/OwnerCoachChat';
 import { HandoverImport } from '@/components/owner/HandoverImport';
-import { structureSquare, BULK_IMPORT_PIPELINE } from '@/lib/ai';
+import { structureSquareStrict, BULK_IMPORT_PIPELINE } from '@/lib/ai';
 import type { StructuredSegment } from '@/lib/ai/types';
 import { isSquarePublishable, buildPlaybookEntryFromSquare, buildDirectUq } from '@/lib/utils/buildEntry';
 import { EXTRACTION_MASTER } from '@/data/extraction-master';
@@ -72,7 +72,10 @@ function LegacyHandover() {
     setPhase('processing');
     try {
       const clipped = trimmed.slice(0, MAX_RAWTEXT);
-      const out = await structureSquare({ storeId, rawText: clipped, categoryGuide: EXTRACTION_MASTER });
+      // ★mock 폴백이 없는 strict 판을 쓴다(structureDoc 과 같은 이유). 여기서 나온 것은 사장이
+      //   검토 후 **저장하는 물건**이라, AI 가 죽었을 때 가짜 정리본을 보여 주면 그대로 매장 노하우가
+      //   된다(무음 오염). 실패는 아래 catch 가 "정리 중 문제가 생겼어요"로 정직하게 말한다.
+      const out = await structureSquareStrict({ storeId, rawText: clipped, categoryGuide: EXTRACTION_MASTER });
 
       if (out.usable === false) {
         setError('매장 운영 내용을 못 알아봤어요. 오픈·마감·레시피·규칙처럼 직원이 따라 할 내용을 올려주세요.');

@@ -207,7 +207,7 @@ export default function OwnerNotificationsScreen() {
             }}
             empty={{
               text: '지금 처리할 알림이 없어요.',
-              sub: '합류 신청 · 받은 질문 · 제안 · 승인 대기 교대가 생기면 여기에 모아서 보여드려요.',
+              sub: '합류 신청 · 답 기다리는 질문 · 제안 · 승인 대기 교대가 생기면 여기에 모아서 보여드려요.',
             }}
           />
         )}

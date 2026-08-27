@@ -396,6 +396,11 @@ export function OwnerCoachChat({
         categoryGuide: EXTRACTION_MASTER,
         skipFollowups: true,
       });
+      // 첫 정리(위 268행)와 같은 고지 — 재정리도 mock 으로 떨어질 수 있는데 여기만 조용하면
+      // 사장은 같은 화면에서 어떤 답이 진짜인지 구별할 수 없다.
+      if (out.degraded) {
+        pushMsg({ kind: 'ai', text: '지금은 AI 정리가 어려워 기본 형태로 정리했어요. 내용을 확인하고 고쳐서 저장해 주세요.' });
+      }
       const sq0 = out.square;
       const ok = out.title || sq0?.situation || sq0?.action?.steps?.length;
       const nextSq = ok ? out.square : square;

@@ -5,17 +5,48 @@ import { create } from 'zustand';
 import {
   fetchOwnerOverview,
   fetchOwnerToday,
+  fetchOwnerLaborInputs,
   fetchOwnerKnowhowStats,
   fetchMyCrossSummary,
   fetchMyGrowth,
   fetchMyKnowhowEntries,
   type OwnerOverviewRow,
   type OwnerTodayRow,
+  type OwnerLaborInputRow,
   type OwnerKnowhowStatRow,
   type MyCrossSummaryRow,
   type MyGrowthRow,
 } from '@/lib/db';
 import type { PlaybookEntry } from '@/types';
+import { computePay, shiftsToPayRecords } from '@/lib/utils/payroll';
+import { scheduledShiftsFor } from '@/lib/store/useScheduleStore';
+import { DEFAULT_SETTINGS } from '@/lib/store/usePayrollStore';
+import { monthDates } from '@/lib/utils/schedule';
+import { todayStr } from '@/lib/utils/attendance';
+
+/**
+ * 매장별 이번달 예상 인건비(원) — **직원 관리(owner/staff) 히어로와 같은 계산**이다.
+ * 급여 기준 = 근무표(2026-08-26 확정): scheduledShiftsFor → shiftsToPayRecords → computePay.
+ * 규칙(주휴·야간·휴게·30분 절삭)은 computePay 하나가 정본이라 여기서 다시 쓰지 않는다 — 입력만 0185 RPC 로 받는다.
+ * ★시급 미설정 직원은 0원으로 대신 계산하지 않고 뺀다(#38, staff.tsx 와 동일).
+ * ★swaps 는 빈 배열이다 — shiftsOn 에서 swaps 는 pending 표시에만 쓰이고(0179 부터 승인은 행을 옮긴다)
+ *   급여 입력(날짜·시작·끝)에는 영향이 없다.
+ */
+function laborByUnit(rows: OwnerLaborInputRow[]): Record<string, number> {
+  const dates = monthDates(todayStr().slice(0, 7));
+  const out: Record<string, number> = {};
+  for (const r of rows) {
+    const rules = { ...DEFAULT_SETTINGS, ...(r.payroll_settings ?? {}) };
+    let sum = 0;
+    for (const sid of r.staff_ids) {
+      if (!Object.prototype.hasOwnProperty.call(r.wages, sid)) continue;
+      const recs = shiftsToPayRecords(scheduledShiftsFor(r.shifts, [], r.exceptions, sid, dates));
+      sum += computePay(recs, r.wages[sid], rules).total;
+    }
+    out[r.unit_id] = sum;
+  }
+  return out;
+}
 
 const HYDRATE_TTL_MS = 5_000;
 let _ownerAt = 0;
@@ -40,6 +71,10 @@ type State = {
   ownerLoadError: boolean;
   /** 마지막 owner_today 조회가 실패했는가. */
   todayLoadError: boolean;
+  /** 매장별 이번달 인건비(원, 근무표 기준·computePay) — 0185. 키 = unit_id. */
+  labor: Record<string, number>;
+  laborLoaded: boolean;
+  laborLoadError: boolean;
   myCross: MyCrossSummaryRow[];
   juniorLoaded: boolean;
   juniorLoadError: boolean;
@@ -71,6 +106,9 @@ export const useHubStore = create<State>((set, get) => ({
   todayLoaded: false,
   ownerLoadError: false,
   todayLoadError: false,
+  labor: {},
+  laborLoaded: false,
+  laborLoadError: false,
   myCross: [],
   juniorLoaded: false,
   juniorLoadError: false,
@@ -102,21 +140,25 @@ export const useHubStore = create<State>((set, get) => ({
     const now = Date.now();
     if (now - _ownerAt < HYDRATE_TTL_MS) return;
     _ownerAt = now;
-    const [ov, td] = await Promise.all([fetchOwnerOverview(), fetchOwnerToday()]);
+    const [ov, td, lb] = await Promise.all([fetchOwnerOverview(), fetchOwnerToday(), fetchOwnerLaborInputs()]);
     const okOv = !ov.error && !!ov.data;
     const okTd = !td.error && !!td.data;
+    const okLb = !lb.error && !!lb.data;
     // 하나라도 실패 = TTL 미적용(다음 진입 즉시 재시도).
-    if (!okOv || !okTd) _ownerAt = 0;
+    if (!okOv || !okTd || !okLb) _ownerAt = 0;
     // ★성공분만 반영하되 loaded 는 **양쪽 다** 올린다 — 실패는 LoadError 로 전달한다.
     //   예전엔 여기서 early return 하고 loaded 를 안 올려, 이 플래그를 AND 로 묶은 현황 화면이
     //   영구 스피너가 됐다(#6). 데이터는 직전 성공분을 유지해 화면이 갑자기 비지 않게 한다.
     set((s) => ({
       overview: okOv ? ov.data! : s.overview,
       today: okTd ? td.data! : s.today,
+      labor: okLb ? laborByUnit(lb.data!) : s.labor,
       ownerLoaded: true,
       todayLoaded: true,
+      laborLoaded: true,
       ownerLoadError: !okOv,
       todayLoadError: !okTd,
+      laborLoadError: !okLb,
     }));
   },
 

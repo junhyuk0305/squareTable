@@ -205,9 +205,10 @@ if (requiredEnvVars.length === 0) {
   }
 }
 
-// ── 3. iOS 심사 표면 — 결제 CTA 누수 ──────────────────────────────
+// ── 3. 네이티브 심사 표면 — 결제 CTA 누수 (iOS 3.1.3f · Play 결제정책) ──────────────────────────────
 // 근거·판정 SSOT: src/lib/config/store-policy.ts (App Review 3.1.3(f)).
-// iOS 빌드에 결제·요금제 CTA 가 한 군데라도 남아 있으면 앱이 깨지는 게 아니라 **심사에서 거부**된다.
+// 네이티브 빌드(iOS·Android 둘 다 — 2026-08-27부터 SHOW_BILLING 은 웹 전용)에 결제·요금제 CTA 가
+// 한 군데라도 남아 있으면 앱이 깨지는 게 아니라 **심사에서 거부**된다.
 // 정적 검사라 호출처까지는 못 본다 — 그래서 '차단'이 아니라 '사람이 확인할 목록'으로 낸다.
 const PAY_TOKENS = ['요금제', '업그레이드', '결제하', '입금', '계좌', 'formatKrw', 'planMonthlyPrice'];
 // 면제: 판정 SSOT 자신 · 순수 데이터/계산 · 법률 고지 텍스트(구매 유도가 아니다) · 웹 전용 파일.
@@ -233,7 +234,7 @@ function uiText(body) {
     .join('\n');
 }
 
-if (!PLATFORM || PLATFORM === 'ios') {
+{
   // 화면(.tsx)만 본다 — db.ts·store·types 는 렌더되지 않으므로 심사 표면이 아니다.
   const tracked = (sh('git ls-files "src/app/**/*.tsx" "src/components/**/*.tsx"') ?? '')
     .split('\n')
@@ -247,14 +248,14 @@ if (!PLATFORM || PLATFORM === 'ios') {
     const hit = PAY_TOKENS.filter((t) => uiText(body).includes(t));
     if (hit.length > 0) leaks.push(`${f} — ${hit.join(', ')}`);
   }
-  console.log('\n■ iOS 결제 표면(3.1.3f):');
+  console.log('\n■ 네이티브 결제 표면(iOS 3.1.3f · Play 결제정책):');
   if (leaks.length === 0) {
     console.log('    ✅ store-policy 게이트를 안 거치는 결제·요금제 표면 없음');
   } else {
     console.log(leaks.map((l) => `    ⚠ ${l}`).join('\n'));
-    console.log('    → 각각 확인: iOS에서 실제로 렌더되나? 렌더되면 showPaymentSurface 로 막아라.');
+    console.log('    → 각각 확인: 네이티브에서 실제로 렌더되나? 렌더되면 showPaymentSurface 로 막아라.');
     console.log('      (호출처가 이미 막고 있다면 그대로 두되, 호출처가 늘면 조용히 샌다)');
-    warns.push(`iOS 결제 표면 확인 대상 ${leaks.length}건`);
+    warns.push(`네이티브 결제 표면 확인 대상 ${leaks.length}건`);
   }
 }
 

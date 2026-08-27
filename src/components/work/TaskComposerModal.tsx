@@ -371,10 +371,10 @@ export function TaskComposerModal({
                 // 인라인 펼침이 규칙에도 맞고, 시간을 고르는 동안 설명이 가려지지 않는다.
                 <Pressable
                   onPress={() => { setRemindInfo((v) => !v); if (!remindInfo) revealScroll(); }}
-                  hitSlop={10}
                   accessibilityRole="button"
                   accessibilityLabel="업무 시간 설명 보기"
-                  style={({ pressed }) => pressed && { opacity: 0.6 }}
+                  // RN-web 은 hitSlop 을 무시한다 — 상자 자체를 44 로.
+                  style={({ pressed }) => [s.infoBtn, pressed && { opacity: 0.6 }]}
                 >
                   <Ionicons name="information-circle-outline" size={15} color={InkColors.ink3} />
                 </Pressable>
@@ -621,6 +621,7 @@ const s = StyleSheet.create({
   infoText: { fontSize: 15, lineHeight: 22, color: InkColors.ink2 },
   inp: { borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.sm, paddingHorizontal: 13, paddingVertical: 11, fontSize: 15, color: InkColors.ink, backgroundColor: InkColors.cream },
   textarea: { minHeight: 76, textAlignVertical: 'top' },
+  infoBtn: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
 
   seg: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   // 칩 내부는 반드시 가로 정렬 — 담당자 칩은 선택 시 체크마크 아이콘+이름을 나란히 둔다.

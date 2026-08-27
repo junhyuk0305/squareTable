@@ -31,7 +31,6 @@ export type QuizFormat =
   | 'numeric_entry'// t2 숫자로 답하기(텐키 직접 입력 — 온도·시간처럼 큰 값)
   | 'trap_pick'    // t3 함정 찾기
   | 'mine_tap'     // t3 지뢰 밟기(금지 행동만 탭)
-  | 'mark_paragraph' // t3 잘못된 곳 짚기(이어진 인수인계 메시지 안에서 여러 곳 탭)
   | 'flip_match'   // t4 뒤집어 짝 찾기(★이 형태만 짝 정보가 응시 화면에 내려간다 — formats/flipMatch.ts)
   | 'link_match'   // t4 줄 잇기(왼쪽 탭 → 오른쪽 탭, 선이 그어진다)
   | 'case_pick'    // t5 상황 고르기
@@ -44,10 +43,9 @@ export type QuizFormat =
  * 응시자의 답. 형태마다 모양이 다르다.
  *   number                  — 선택지 하나 고르는 형태 / fill_count의 누른 횟수 / numeric_entry의 친 숫자
  *   number[]                — mine_tap(탭한 index들) / quick_judge(카드별 선택)
- *                             / mark_paragraph(탭한 파트의 parts index들)
  *                             / order_build(탭한 순서대로의 항목 index) / branch_path(예=0·아니요=1 경로)
  *                             / flip_match(짝으로 고정한 순서대로의 카드 index — a1,b1,a2,b2,…)
- *                             ★ mine_tap·mark_paragraph 만 집합이고 나머지는 **순서가 곧 답**이다 — 정렬하면 안 된다.
+ *                             ★ mine_tap 만 집합이고 나머지는 **순서가 곧 답**이다 — 정렬하면 안 된다.
  *   Record<string, number>  — link_match(왼쪽 원본 index → 오른쪽이 놓인 섞인 자리)
  */
 export type QuizResponse = number | number[] | Record<string, number>;

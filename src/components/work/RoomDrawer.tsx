@@ -266,7 +266,7 @@ function Block({
         title={title}
         trailing={
           moreLabel && onMore ? (
-            <Pressable onPress={onMore} hitSlop={8} accessibilityRole="button" accessibilityLabel={`${title} ${moreLabel}`} style={({ pressed }) => pressed && { opacity: 0.6 }}>
+            <Pressable onPress={onMore} accessibilityRole="button" accessibilityLabel={`${title} ${moreLabel}`} style={({ pressed }) => [s.tapBox, pressed && { opacity: 0.6 }]}>
               <Text style={s.blockMore}>{moreLabel}</Text>
             </Pressable>
           ) : undefined
@@ -309,7 +309,7 @@ function Row({
       </View>
       {right && <Text style={[s.rowRight, rightGood && { color: BrandColors.goodText }]}>{right}</Text>}
       {onRemove && (
-        <Pressable onPress={onRemove} hitSlop={12} accessibilityRole="button" accessibilityLabel={`${title} 내보내기`} style={({ pressed }) => pressed && { opacity: 0.6 }}>
+        <Pressable onPress={onRemove} accessibilityRole="button" accessibilityLabel={`${title} 내보내기`} style={({ pressed }) => [s.tapBox, pressed && { opacity: 0.6 }]}>
           <Ionicons name="close" size={19} color={InkColors.ink3} />
         </Pressable>
       )}
@@ -319,7 +319,9 @@ function Row({
 
 const s = StyleSheet.create({
   topbar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: HEADER_EDGE_GUTTER, paddingVertical: Space.sm },
-  topBtn: { paddingVertical: Space.xs },
+  // RN-web 은 hitSlop 을 무시한다 — 상자 자체를 44 로.
+  topBtn: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
+  tapBox: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   scroll: { paddingHorizontal: Space.gutter, gap: Space.lg },
 
   identity: { alignItems: 'center', gap: Space.xs, paddingVertical: Space.md },

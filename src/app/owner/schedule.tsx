@@ -14,6 +14,7 @@ import { WeekStrip, type WeekDay } from '@/components/blocks/WeekStrip';
 import { DayTimeline, type TimelineRow } from '@/components/schedule/DayTimeline';
 import { ShiftQuickSheet, type ShiftEditTarget } from '@/components/schedule/ShiftQuickSheet';
 import { useStaffStore } from '@/lib/store/useStaffStore';
+import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useScheduleStore, shiftsOn, pendingApprovals, type ShiftTemplate, type SwapRequest } from '@/lib/store/useScheduleStore';
 import { todayStr } from '@/lib/utils/attendance';
 import {
@@ -43,6 +44,8 @@ const NAV_BTN = 36;
 export default function OwnerScheduleScreen() {
   const router = useRouter();
   const staff = useStaffStore((s) => s.staff);
+  // 직원 관리·매장 설정은 사장 전용 — 매니저에겐 그리로 가는 버튼을 그리지 않는다.
+  const isOwner = useSessionStore((s) => s.role) === 'owner';
   const config = useScheduleStore((s) => s.config);
   const templates = useScheduleStore((s) => s.templates);
   const swaps = useScheduleStore((s) => s.swaps);
@@ -273,7 +276,7 @@ export default function OwnerScheduleScreen() {
             <EmptyState
               title="합류한 직원이 없어요"
               body="먼저 직원을 초대하면 근무 시간을 넣을 수 있어요."
-              cta={{ label: '직원 초대하기', onPress: () => router.push('/owner/staff') }}
+              cta={isOwner ? { label: '직원 초대하기', onPress: () => router.push('/owner/staff') } : undefined}
             />
           ) : (
             <View style={styles.dayCard}>
@@ -322,7 +325,8 @@ export default function OwnerScheduleScreen() {
         </View>
         </Appear>
 
-        {/* ④ 가게 기본 정보 */}
+        {/* ④ 가게 기본 정보 (사장만) */}
+        {isOwner ? (
         <Appear delay={stagger(3)}>
         <Pressable
           onPress={() => router.push('/owner/store-config')}
@@ -340,6 +344,7 @@ export default function OwnerScheduleScreen() {
           <Ionicons name="chevron-forward" size={16} color={InkColors.ink3} />
         </Pressable>
         </Appear>
+        ) : null}
 
         <View style={{ height: Space.md }} />
       </ScrollView>

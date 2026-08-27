@@ -111,7 +111,7 @@ export default function OwnerSuggestionsScreen() {
       ) : (
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <Appear delay={stagger(0)}>
-          <Text style={styles.subline}>직원이 올린 노하우 제안을 확인하고 반영하세요</Text>
+          <Text style={styles.subline}>직원이 올린 제안이에요. 승인하면 노하우에 반영돼요</Text>
         </Appear>
 
         {pending.length === 0 ? (

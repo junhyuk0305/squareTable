@@ -234,6 +234,24 @@ export async function fetchOwnerToday(): Promise<DbResult<OwnerTodayRow[]>> {
   return { data: (data as OwnerTodayRow[]) ?? null, error: error as DbErr };
 }
 
+// ── 이번달 인건비 입력(0185) — 허브 현황 '이번달 인건비'·매장 비교표 ────────────────────────
+// 금액은 서버가 내지 않는다 — 규칙(주휴·야간·휴게)의 정본은 computePay 하나라, 허브도 직원 관리와
+// **같은 함수**로 계산한다. 이 RPC 는 활성 매장 RLS 밖의 소유 매장 원자료만 definer 로 넘긴다.
+export type OwnerLaborInputRow = {
+  unit_id: string;
+  staff_ids: string[];
+  shifts: ShiftTemplate[];
+  exceptions: ShiftException[];
+  wages: Record<string, number>;
+  payroll_settings: Record<string, unknown> | null;
+};
+export async function fetchOwnerLaborInputs(): Promise<DbResult<OwnerLaborInputRow[]>> {
+  if (!HAS_SUPABASE) return { data: [], error: null };
+  const { data, error } = await supabase.rpc('owner_labor_inputs');
+  if (error) readFail('fetchOwnerLaborInputs', error);
+  return { data: (data as OwnerLaborInputRow[]) ?? null, error: error as DbErr };
+}
+
 /** 0138: weekday(요일 반복) 또는 date(그 날짜 하루) 중 하나만 값이 있다. */
 export type MyShiftRow = { id: string; weekday: number | null; date: string | null; start: string; end: string };
 export type MyCrossSummaryRow = {
@@ -258,6 +276,12 @@ export type MyGrowthRow = {
   my_hits: number; // 그 노하우들의 최근 30일 참조 합
   taught: number; // 내 제안이 노하우로 채택된 수(실적)
   done_kinds: number; // 내 완료 기록의 업무 종류 수(경험 — 완료≠숙련)
+  /**
+   * 그 매장의 발행 노하우 총수(0184) — 성장 탭 진행 링의 **분모**.
+   * ★optional 이다: 마이그레이션이 원격에 적용되기 전에는 이 칸이 아예 안 온다. 화면은 값이
+   *   없으면 링을 그리지 않고 큰 숫자로 떨어진다 — 분모 없이 링을 그리면 100%가 거짓으로 찬다.
+   */
+  entries_total?: number;
 };
 /** 본인의 매장별 축적(노하우·참조·채택·해본 업무) — 직원 허브 '성장' 탭. 전부 본인 데이터만(RPC 내부 강제). */
 export async function fetchMyGrowth(): Promise<DbResult<MyGrowthRow[]>> {

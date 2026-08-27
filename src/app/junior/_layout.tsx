@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Stack, Redirect, usePathname } from 'expo-router';
+import { Stack, Redirect, usePathname, type Href } from 'expo-router';
 import { InkColors } from '@/lib/theme/colors';
 import { HeaderBackButton } from '@/components/HeaderBackButton';
 import { StoreHeaderTitle } from '@/components/StoreHeaderTitle';
@@ -16,9 +16,19 @@ import { useMemberPrefsStore } from '@/lib/store/useMemberPrefsStore';
 import { useSuggestionStore } from '@/lib/store/useSuggestionStore';
 import { HAS_SUPABASE } from '@/lib/supabase';
 
+/** 사장이 `/junior/*` 로 오면 착지시킬 사장 경로 — 대응이 분명한 것만. 없으면 사장 홈. */
+const OWNER_PATH: Record<string, Href> = {
+  '/junior/home': '/owner/dashboard',
+  '/junior/work': '/owner/work',
+  '/junior/settings': '/owner/settings',
+  '/junior/schedule': '/owner/schedule',
+  '/junior/notifications': '/owner/notifications',
+};
+
 export default function JuniorLayout() {
   const status = useSessionStore((s) => s.status);
   const unitId = useSessionStore((s) => s.unitId);
+  const role = useSessionStore((s) => s.role);
   const phone = useSessionStore((s) => s.phone);
   const pendingUnitId = useSessionStore((s) => s.pendingUnitId);
   const seatLocked = useSessionStore((s) => s.seatLocked);
@@ -81,6 +91,11 @@ export default function JuniorLayout() {
     pathname !== '/junior/onboarding'
   ) {
     return <Redirect href="/junior/hub" />;
+  }
+  // 역할 가드(owner/_layout 의 `!canManage(role)` 가드와 대칭): 사장이 딥링크·푸시로 `/junior/*` 에 오면
+  // 직원 크롬(직원 5탭·TrainingCard)이 떴다(2026-08-27 실측). 매니저는 직원 세트도 쓰므로 'owner' 만 돌려보낸다.
+  if (HAS_SUPABASE && status === 'signed_in' && unitId && role === 'owner') {
+    return <Redirect href={OWNER_PATH[pathname] ?? '/owner/dashboard'} />;
   }
   // 좌석 잠금(0115) → 직원은 계좌 정보 없이 '자리가 잠겼다' 고지(/billing 이 역할별로 렌더).
   // ★2026-08-06 전까지 여기는 '구독 만료 → 페이월'이었다. 만료가 무료 강등으로 바뀌면서

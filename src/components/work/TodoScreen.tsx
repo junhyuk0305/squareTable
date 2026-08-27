@@ -4,7 +4,9 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { Appear, stagger } from '@/components/Appear';
 import { Collapse } from '@/components/Collapse';
+import { SectionLabel } from '@/components/SectionLabel';
 import { StoredImage } from '@/components/StoredImage';
+import { StackBar } from '@/components/blocks/StackBar';
 import { WeekStrip, type WeekDay } from '@/components/blocks/WeekStrip';
 import { useDayparts, isRoutineTaskId, occursOn, taskVisibleTo, type TaskTemplate, type DoneMark } from '@/lib/store/useWorkStore';
 import { InkColors, BrandColors, CategoryColors } from '@/lib/theme/colors';
@@ -214,12 +216,13 @@ export function TodoScreen({
       {/* 접이식 캘린더 */}
       <View style={s.calWrap}>
         <View style={s.calBar}>
-          <Pressable onPress={() => shiftBy(-1)} hitSlop={8} accessibilityRole="button" accessibilityLabel={folded ? '지난 주' : '지난 달'}>
+          {/* RN-web 은 hitSlop 을 무시한다 — 눌리는 상자 자체를 44 로(아이콘 크기는 그대로). */}
+          <Pressable onPress={() => shiftBy(-1)} style={s.navBtn} accessibilityRole="button" accessibilityLabel={folded ? '지난 주' : '지난 달'}>
             <Ionicons name="chevron-back" size={18} color={InkColors.ink2} />
           </Pressable>
           {/* 라벨은 표시 전용 — 접기 버튼은 아래 핸들 하나뿐이다(어느 걸 눌러야 하나가 없게). */}
           <Text style={s.month}>{monthLabel}</Text>
-          <Pressable onPress={() => shiftBy(1)} hitSlop={8} accessibilityRole="button" accessibilityLabel={folded ? '다음 주' : '다음 달'}>
+          <Pressable onPress={() => shiftBy(1)} style={s.navBtn} accessibilityRole="button" accessibilityLabel={folded ? '다음 주' : '다음 달'}>
             <Ionicons name="chevron-forward" size={18} color={InkColors.ink2} />
           </Pressable>
           <View style={s.calActions}>
@@ -272,13 +275,11 @@ export function TodoScreen({
         {/* 접기·펴기는 이 핸들 하나뿐. */}
         <Pressable
           onPress={() => setFolded((v) => !v)}
-          hitSlop={{ top: 8, bottom: 8 }}
           style={({ pressed }) => [s.foldHandle, pressed && { opacity: 0.6 }]}
           accessibilityRole="button"
           accessibilityLabel={folded ? '달력 펴기' : '달력 접기'}
         >
           <Ionicons name={folded ? 'chevron-down' : 'chevron-up'} size={16} color={InkColors.ink3} />
-          <Text style={s.foldText}>{folded ? '달력 펴기' : '달력 접기'}</Text>
         </Pressable>
       </View>
 
@@ -297,6 +298,20 @@ export function TodoScreen({
           </View>
         </View>
       </View>
+
+      {/* 사장 게이지 — 선택일 할일을 done 유무로 쪼갠 구성 스택바 1개(시간축 아님·이력 원장 없음).
+          그룹 헤더 doneN/total 과 같은 원장(done[selected]). 카드로 감싸지 않는다. */}
+      {isOwner && dayTasks.length > 0 && (
+        <Appear style={s.gauge}>
+          <StackBar
+            parts={[
+              { n: dayTasks.filter((t) => dayDone[t.id]).length, label: '완료', color: BrandColors.good },
+              { n: dayTasks.filter((t) => !dayDone[t.id]).length, label: '남음', color: BrandColors.warnSoft },
+            ]}
+          />
+          <SectionLabel title={selected === today ? '오늘 업무 배정' : '업무 배정'} />
+        </Appear>
+      )}
 
       {/* 데이파트 그룹 */}
       <ScrollView contentContainerStyle={s.listScroll} showsVerticalScrollIndicator={false}>
@@ -396,12 +411,12 @@ export function TodoScreen({
                           <Text style={s.routineTag}>루틴</Text>
                         ) : null}
                         {onAttachPhoto && !on && (
-                          <Pressable onPress={() => onAttachPhoto(t.id, selected)} hitSlop={6} disabled={!!uploadingId} accessibilityRole="button" accessibilityLabel={`${t.text} 사진으로 완료`}>
+                          <Pressable onPress={() => onAttachPhoto(t.id, selected)} style={s.iconBtn} disabled={!!uploadingId} accessibilityRole="button" accessibilityLabel={`${t.text} 사진으로 완료`}>
                             <Ionicons name={uploadingId === t.id ? 'cloud-upload-outline' : 'camera-outline'} size={16} color={InkColors.ink3} />
                           </Pressable>
                         )}
                         {canManage && (
-                          <Pressable onPress={() => onEditTask(t, selected)} hitSlop={6} accessibilityRole="button" accessibilityLabel={`${t.text} 수정`}>
+                          <Pressable onPress={() => onEditTask(t, selected)} style={s.iconBtn} accessibilityRole="button" accessibilityLabel={`${t.text} 수정`}>
                             <Ionicons name="create-outline" size={17} color={InkColors.ink3} />
                           </Pressable>
                         )}
@@ -434,11 +449,14 @@ export function TodoScreen({
 
 const s = StyleSheet.create({
   calWrap: { backgroundColor: InkColors.cream, borderBottomWidth: 1, borderBottomColor: InkColors.line },
-  calBar: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 8 },
+  calBar: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 0 },
+  // RN-web 은 hitSlop 을 무시한다 — 눌리는 상자를 44 로 만든다(아이콘은 그대로).
+  navBtn: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
+  iconBtn: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   month: { fontSize: 15, fontWeight: '800', color: InkColors.ink },
   // 오른쪽 액션 묶음 — marginLeft:auto 를 **여기 하나만** 둔다(버튼마다 주면 auto 끼리 여백을 나눠 가져 벌어진다).
   calActions: { marginLeft: 'auto', flexDirection: 'row', alignItems: 'center', gap: Space.xs },
-  setBtn: { borderWidth: 1, borderColor: BrandColors.gold, backgroundColor: BrandColors.yellowSoft, borderRadius: Radius.pill, paddingHorizontal: 9, paddingVertical: 3 },
+  setBtn: { borderWidth: 1, borderColor: BrandColors.gold, backgroundColor: BrandColors.yellowSoft, borderRadius: Radius.pill, paddingHorizontal: Space.md, minHeight: 40, justifyContent: 'center' },
   setBtnText: { fontSize: 11, fontWeight: '800', color: InkColors.ink },
   todayBtn: { borderWidth: 1, borderColor: InkColors.line, backgroundColor: InkColors.bg, borderRadius: Radius.pill, paddingHorizontal: 9, paddingVertical: 3 },
   todayText: { fontSize: 11, fontWeight: '700', color: InkColors.ink2 },
@@ -456,13 +474,14 @@ const s = StyleSheet.create({
   dot: { width: 5, height: 5, borderRadius: Radius.pill },
   // 높이만 애니메이션하는 상자 — 안쪽은 자기 키를 그대로 재고(onLayout), 바깥이 잘라낸다.
   foldBox: { overflow: 'hidden' },
-  weekStripWrap: { paddingHorizontal: 10, paddingBottom: 4 },
-  foldHandle: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, minHeight: 32 },
-  foldText: { fontSize: 13, fontWeight: '700', color: InkColors.ink3 },
+  weekStripWrap: { paddingHorizontal: 10, paddingBottom: 2 },
+  // 2026-08-27 사용자 판정: 달력↔날짜 여백이 48dp 규칙보다 우선 — 핸들은 24 로 되돌리고 위로 8 당긴다.
+  foldHandle: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', minHeight: 24, marginTop: -8 },
 
   legendDot: { width: 10, height: 10, borderRadius: 3 },
 
-  dayBar: { flexDirection: 'row', alignItems: 'baseline', gap: 8, paddingHorizontal: 15, paddingTop: 11, paddingBottom: 4, backgroundColor: InkColors.paper },
+  dayBar: { flexDirection: 'row', alignItems: 'baseline', gap: 8, paddingHorizontal: 15, paddingTop: 6, paddingBottom: 4, backgroundColor: InkColors.paper },
+  gauge: { paddingHorizontal: 15, paddingTop: Space.xs, paddingBottom: Space.xs, gap: Space.sm, backgroundColor: InkColors.paper },
   dayTitle: { fontSize: 16, fontWeight: '800', color: InkColors.ink },
   dayCount: { fontSize: 12, fontWeight: '700', color: InkColors.ink2 },
   legendInline: { flexDirection: 'row', alignItems: 'center', gap: 10, marginLeft: 'auto' },
@@ -493,7 +512,7 @@ const s = StyleSheet.create({
   timeTag: { fontWeight: '800', color: InkColors.ink2 },
   // 첨부 노하우 칩 — 카드 본문 아래, 탭하면 원문 열람. 옅은 크림 필로 업무 텍스트와 구분.
   khRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 5, marginTop: 5 },
-  khChip: { flexDirection: 'row', alignItems: 'center', gap: 4, maxWidth: '100%', borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.pill, paddingHorizontal: 8, paddingVertical: 3, backgroundColor: InkColors.cream },
+  khChip: { flexDirection: 'row', alignItems: 'center', gap: 4, maxWidth: '100%', borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.pill, paddingHorizontal: Space.sm, minHeight: 40, backgroundColor: InkColors.cream },
   khChipText: { flexShrink: 1, fontSize: 11, fontWeight: '700', color: InkColors.ink2 },
   // ④ 이해 확인 배지(통과자) — 초록 톤, 카드 본문 아래. 노하우 칩과 구분.
   uBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start', marginTop: 5, borderRadius: Radius.pill, paddingHorizontal: 8, paddingVertical: 3, backgroundColor: '#E6F1EA' },

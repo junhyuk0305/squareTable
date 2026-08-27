@@ -31,7 +31,12 @@ export function EntryDetailModal({
 }) {
   if (!entry) return null;
   const sq = entry.square;
-  const ratePct = typeof entry.stats?.resolution_rate === 'number' ? Math.round(entry.stats.resolution_rate * 100) : null;
+  // 피드백 표본(thumbs_up+thumbs_down) 0이면 배지 숨김 — "해결률 0%"는 실패처럼 읽힌다.
+  const rateSamples = (entry.stats?.thumbs_up ?? 0) + (entry.stats?.thumbs_down ?? 0);
+  const ratePct =
+    rateSamples > 0 && typeof entry.stats?.resolution_rate === 'number'
+      ? Math.round(entry.stats.resolution_rate * 100)
+      : null;
   const std = sq.standard;
   const stdMax = std?.max && std.max > 0 ? std.max : 100;
   const stdPct = std ? Math.max(0, Math.min(100, Math.round((std.value / stdMax) * 100))) : null;

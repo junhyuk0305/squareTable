@@ -179,13 +179,13 @@ function ConversationalEdit({ entry, quizCountOf }: { entry: PlaybookEntry; quiz
           <Ionicons name="chevron-down" size={14} color={InkColors.ink3} />
         </Pressable>
         <Pressable
-          onPress={() => router.push('/owner/quiz-new' as never)}
+          onPress={() => router.push({ pathname: '/owner/quiz-new', params: { entries: entry.id } } as never)}
           style={({ pressed }) => [styles.quizBtn, pressed && { opacity: 0.7 }]}
           accessibilityRole="button"
-          accessibilityLabel="문제 만들기"
+          accessibilityLabel="퀴즈 만들기"
         >
           <Ionicons name="help-circle-outline" size={15} color={InkColors.ink} />
-          <Text style={styles.quizBtnText}>문제 만들기</Text>
+          <Text style={styles.quizBtnText}>퀴즈 만들기</Text>
         </Pressable>
       </Appear>
 

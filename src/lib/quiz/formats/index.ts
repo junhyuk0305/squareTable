@@ -40,6 +40,27 @@
 //        `rejected:no_generation`(모델 호출조차 안 함)을 돌려줬다 → t3·t5 자동 출제가 항상 0문항이었다.
 //        pickFormats 회전에는 들어가 있어 **뽑히는 순간 그 노하우는 문항 0개**가 된다(2026-08-25 실측).
 //
+//   ════════════════════════════════════════════════════════════════════════
+//   ★★ 형태 하나 **제거** = 위 목록의 역순이되, ⑨~⑪ 만 규칙이 다르다(2026-08-27 mark_paragraph).
+//
+//   ⑨ quiz_known_formats 에서 **뺀다** → 신규 출제·응시 배포가 fail-closed 로 막힌다. 여기가 스위치다.
+//   ⑩⑪ quiz_strip_payload · quiz_grade_item 분기는 **남긴다.** 지우면 안 된다 —
+//      · 이미 배포된 네이티브 앱·발송된 게스트 링크가 그 형태의 채점을 요청할 수 있다
+//      · quiz_attempt_items(지난 응시 기록)를 사장 화면이 다시 그릴 때 strip 을 탄다
+//      지우면 0161 이 quick_judge 에서 낸 사고("목록엔 있는데 채점만 죽는다")를 방향만 바꿔 재현한다.
+//      남겨 두는 비용은 0이고, 0170 자가점검은 "화이트리스트의 형태가 채점에 있는가"만 보므로
+//      화이트리스트에 없는 분기가 남아 있어도 통과한다.
+//   ★ 기존 문항은 마이그레이션에서 status='archived' 로 내린다. 그냥 두면 화이트리스트에서만
+//     빠져 **이유 없이 사라진 문항**이 되고, 사장은 왜 없어졌는지 알 길이 없다.
+//
+//   ■ 왜 mark_paragraph 를 뺐나(2026-08-27 실측)
+//     서로 다른 재료로 3번 물어 3번 다 모델이 빈 배열을 돌려줬다(usage 는 찍혔다 = 호출은 됐다).
+//     지시에 조건이 7개인데 "없으면 출제하지 마라"는 퇴로까지 있어 모델이 늘 그리로 갔다.
+//     그런데 pickFormats 는 노하우 40건 중 24건(60%)을 이 형태에 배정하고 있었다 —
+//     안전판이 덮어 사장이 빈손이 되지는 않았지만, 그때마다 AI 캡을 1회 버렸다(무료 월 150회).
+//     → 살리는 쪽(프롬프트 수정)이 아니라 **빼는 쪽**을 택했다(사용자 확정).
+//   ════════════════════════════════════════════════════════════════════════
+//
 //   그 밖에 형태 목록을 복제하지 않는다. 화면·생성기는 전부 여기만 본다.
 //   (DB format 컬럼에 check 제약을 걸지 않은 것도 같은 이유다 — 형태 추가에 마이그레이션이 필요 없게.)
 // ════════════════════════════════════════════════════════════════════════════
@@ -57,7 +78,6 @@ import { scalePick } from './scalePick';
 import { numericEntry } from './numericEntry';
 import { trapPick } from './trapPick';
 import { mineTap } from './mineTap';
-import { markParagraph } from './markParagraph';
 import { flipMatch } from './flipMatch';
 import { linkMatch } from './linkMatch';
 import { casePick } from './casePick';
@@ -69,7 +89,7 @@ import { chosung } from './chosung';
 export type { FormatSpec } from './spec';
 
 /**
- * 형태 18종. ★ 나열 순서에 의미가 있다 — 유형(kind)마다 일반형이 먼저, 게임형이 다음이다.
+ * 형태 17종. ★ 나열 순서에 의미가 있다 — 유형(kind)마다 일반형이 먼저, 게임형이 다음이다.
  * formatsForKind() 가 이 순서를 그대로 돌려주므로 생성기가 "게임이 안 되면 일반형으로"를
  * 별도 표 없이 판단할 수 있다(07-29 §03 "왜 두 갈래인가" — 일반형은 안전판).
  *
@@ -89,7 +109,6 @@ export const FORMATS: Record<QuizFormat, FormatSpec> = {
   numeric_entry: numericEntry, // t2 게임(0168) — 텐키 직접 입력, 온도·시간처럼 큰 값
   trap_pick: trapPick,      // t3 일반
   mine_tap: mineTap,        // t3 게임
-  mark_paragraph: markParagraph, // t3 게임(0168) — 이어진 인수인계 메시지 안에서 여러 곳 탭
   flip_match: flipMatch,    // t4 게임 ★유일하게 짝 정보가 응시 payload 에 남는다(flipMatch.ts 주석)
   link_match: linkMatch,    // t4 게임
   case_pick: casePick,      // t5 일반

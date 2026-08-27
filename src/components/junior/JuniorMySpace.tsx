@@ -6,13 +6,16 @@ import { BottomSheet } from '@/components/BottomSheet';
 import { EntryDetailModal } from '@/components/EntryDetailModal';
 import { SectionLabel } from '@/components/SectionLabel';
 import { ScreenLoading } from '@/components/ScreenLoading';
-import { MiniStats } from '@/components/blocks/MiniStats';
+import { Heatmap, type HeatCell, type HeatGroup, type HeatLegend } from '@/components/blocks/Heatmap';
+import { RollupRows, type RollupRow } from '@/components/blocks/RollupRows';
 import { Appear, stagger } from '@/components/Appear';
 import { useUnknownQueueStore, answerableQuestions } from '@/lib/store/useUnknownQueueStore';
 import { useSuggestionStore } from '@/lib/store/useSuggestionStore';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useChatStore } from '@/lib/store/useChatStore';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
+import { useWorkStore } from '@/lib/store/useWorkStore';
+import { getSectionMeta } from '@/lib/utils/category';
 import { showToast } from '@/lib/store/useToastStore';
 import { searchPlaybook } from '@/lib/rag';
 import { useCopyToClipboard, canCopyToClipboard } from '@/lib/utils/useCopyToClipboard';
@@ -22,10 +25,22 @@ import { Space } from '@/lib/theme/layout';
 import type { PlaybookEntry, PlaybookSuggestion, UnknownQuery } from '@/types';
 
 /**
+ * 히트맵 범례 — **직원 축**(§7-8 표의 세 번째 열). 색은 "내가 아는가" 하나뿐이고, 사장 축의
+ * '다들 틀림'(빨강)은 여기 없다. 없는 축은 범례에도 안 나온다(Heatmap 이 셀을 보고 정한다).
+ */
+const MY_HEAT_LEGEND: HeatLegend = {
+  empty: '아직 안 풀었다',
+  scale: ['내가 아는 노하우', '앎'],
+  stale: '통과 뒤 바뀜',
+  miss: '',
+};
+
+/**
  * JuniorMySpace — 노하우 탭 '내 공간'(직원 전용, S1 ③).
- * ① 도와줄 수 있는 매장 질문(D4: 누가 답하든 됨) → 답하기 시트(기존 노하우 지정=즉시 해결 / 새 답=사장 승인)
- * ② 내가 보낸 제안 · ③ 내가 답한 질문 · ④ 내 질문 이력 · ⑤ 내 기여 요약(자기 목록, 랭킹 아님=D5).
- * 사장 화면엔 세그먼트가 없으므로 직원 전용. 크레딧/기여는 '스스로 쌓는' 자기 뷰로만.
+ * 히어로 = 내가 아는 노하우 히트맵(H5, 2026-08-27) · ① 도와줄 수 있는 매장 질문(D4: 누가 답하든 됨)
+ * → 답하기 시트(기존 노하우 지정=즉시 해결 / 새 답=사장 승인) · '내 기록' 롤업 3행(답한 질문 · 보낸 제안 ·
+ * 물어본 것)을 눌러 아래로 펼친다. 전부 자기 목록이고 랭킹이 아니다(D5).
+ * 사장 화면엔 세그먼트가 없으므로 직원 전용.
  */
 export function JuniorMySpace({ me }: { me: string }) {
   const queue = useUnknownQueueStore((s) => s.queue);
@@ -40,6 +55,10 @@ export function JuniorMySpace({ me }: { me: string }) {
   const suggestionsLoaded = useSuggestionStore((s) => s.loaded);
   const historyLoaded = useChatStore((s) => s.loaded);
   const entriesLoaded = usePlaybookStore((s) => s.loaded);
+  // ★히트맵의 색 원장(2026-08-27) — 내 퀴즈 통과 기록. 이 화면의 **다섯 번째** 원격 소스가 됐다.
+  //   게이트에 안 넣으면 히트맵이 "전부 안 풀었음"(점선 격자)으로 먼저 뜬 뒤 색이 채워진다.
+  const understanding = useWorkStore((s) => s.understanding);
+  const workLoaded = useWorkStore((s) => s.loaded);
   const userName = useSessionStore((s) => s.userName);
   const storeName = useSessionStore((s) => s.storeName);
   const { copied, copy } = useCopyToClipboard();
@@ -50,6 +69,8 @@ export function JuniorMySpace({ me }: { me: string }) {
     void sg.hydrate();
     const offSg = sg.subscribe();
     if (me) void useChatStore.getState().hydrate(me);
+    // 퀴즈 통과 기록(히트맵 색) — 업무 탭이 이미 채워 뒀으면 coalesce 가 재요청을 삼킨다.
+    void useWorkStore.getState().hydrate();
     return offSg;
   }, [me]);
 
@@ -81,8 +102,51 @@ export function JuniorMySpace({ me }: { me: string }) {
     () => [...history].sort((a, b) => (b.asked_at ?? '').localeCompare(a.asked_at ?? '')),
     [history],
   );
-  const approvedCount = myProposals.filter((s) => s.status === 'approved').length;
-  const contribCount = approvedCount + myAnswered.length;
+
+  // ── 히트맵(H5 · §7-8의 **세 번째 축**) — 색 = 내가 아는 노하우.
+  //    상자 = 발행 노하우 1개 · 그룹 = 카테고리(section) · 색은 2단계뿐이다(안다 / 아직).
+  //    "몇 명이 아는가"는 사장 축이라 여기 없다 — 이 화면은 **본인 것만** 본다(감시원칙 D1~D5).
+  //    주황 테두리 = 내가 통과한 **뒤에** 노하우가 바뀐 것. 원장은 updated_at 과 내 verified_at 비교라
+  //    지어낸 판정이 아니다(R4). 빨강(다들 틀림)은 사장 지표라 여기서는 아예 안 쓴다 —
+  //    쓰지 않는 축은 범례에도 안 나온다(Heatmap 이 셀을 보고 정한다).
+  const myPassedAt = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const u of understanding) {
+      if (u.staffId !== me) continue;
+      const prev = m.get(u.entryId);
+      if (!prev || (u.verifiedAt ?? '') > prev) m.set(u.entryId, u.verifiedAt ?? '');
+    }
+    return m;
+  }, [understanding, me]);
+  const knownCount = useMemo(
+    () => publishedEntries.filter((e) => myPassedAt.has(e.id)).length,
+    [publishedEntries, myPassedAt],
+  );
+  const heatGroups: HeatGroup[] = useMemo(() => {
+    const by = new Map<string, HeatCell[]>();
+    for (const e of publishedEntries) {
+      const passedAt = myPassedAt.get(e.id);
+      const changed = !!passedAt && !!e.updated_at && e.updated_at > passedAt;
+      const name = getSectionMeta(e.section).label;
+      const cells = by.get(name) ?? [];
+      cells.push({
+        id: e.id,
+        title: e.title,
+        level: passedAt ? 4 : 0,
+        status: passedAt ? (changed ? '통과한 뒤 내용이 바뀌었어요' : '퀴즈로 확인함') : '아직 안 풀었어요',
+        stale: changed,
+      });
+      by.set(name, cells);
+    }
+    // 아직 안 푼 비율이 높은 카테고리부터 — 다음에 볼 곳이 위로 온다.
+    const todo = (cells: HeatCell[]) => cells.filter((c) => c.level === 0).length / Math.max(1, cells.length);
+    return [...by]
+      .map(([name, cells]) => ({ name, cells }))
+      .sort((a, b) => todo(b.cells) - todo(a.cells) || a.name.localeCompare(b.name, 'ko'));
+  }, [publishedEntries, myPassedAt]);
+
+  // 내 기록 롤업(L5) — 어느 줄을 펼쳤나. 기본은 접힘(펼침은 아래로).
+  const [openRecord, setOpenRecord] = useState<'answered' | 'proposals' | 'questions' | null>(null);
 
   const onResolveWith = async (uqId: string, entryId: string) => {
     setAnswerFor(null);
@@ -112,7 +176,7 @@ export function JuniorMySpace({ me }: { me: string }) {
 
   // 전부 도착 전엔 로딩만 — "지금은 도와줄 질문이 없어요"가 먼저 스치거나 기록 섹션이
   // 없음→있음으로 하나씩 튀어나오는 것을 막는다(08-07 정본 §0-1). 훅은 위에서 전부 호출한 뒤다.
-  const ready = queueLoaded && suggestionsLoaded && historyLoaded && entriesLoaded;
+  const ready = queueLoaded && suggestionsLoaded && historyLoaded && entriesLoaded && workLoaded;
   if (!ready) {
     return (
       <View style={s.flex}>
@@ -123,6 +187,30 @@ export function JuniorMySpace({ me }: { me: string }) {
 
   return (
     <ScrollView style={s.flex} contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
+      {/* ── 히어로 — 내가 아는 노하우 히트맵(H5). 노하우가 0개면 그리지 않는다(빈 격자 금지).
+             ★2026-08-27 오밀조밀 확산 6-4. 옛 판본은 히어로가 없고 groupCard 4장이 연달아 있었고,
+               그 사이를 MiniStats 숫자 3칸이 끊고 있었다 — 숫자 3개는 대상이 없어 아무 말도 못 했다.
+               머리줄(n/m)이 '내가 쌓은 노하우'를 대신하고, 나머지 둘은 아래 롤업이 대상과 함께 말한다. ── */}
+      {publishedEntries.length > 0 && (
+        <Appear delay={stagger(0)}>
+          <Heatmap
+            head={{
+              value: `${knownCount}`,
+              unit: `/${publishedEntries.length}`,
+              title: '내가 아는 노하우',
+              aside: '나만 볼 수 있어요',
+            }}
+            groups={heatGroups}
+            legend={MY_HEAT_LEGEND}
+            hint="상자 하나 = 노하우 하나 · 길게 누르면 이름이 보여요"
+            onPressCell={(id) => {
+              const e = entryById.get(id);
+              if (e) setDetailEntry(e);
+            }}
+          />
+        </Appear>
+      )}
+
       {/* ① 도와줄 수 있는 질문 (D4) */}
       <SectionLabel icon="hand-left-outline" title="도와줄 수 있는 질문" hint={answerable.length ? `${answerable.length}건` : undefined} />
       {answerable.length === 0 ? (
@@ -156,10 +244,57 @@ export function JuniorMySpace({ me }: { me: string }) {
         </Pressable>
       )}
 
-      {/* ③ 내가 답한 질문 — 섹션당 카드 1장 + 헤어라인 행(낱개 보더 카드 반복 = 시각 소음) */}
-      {myAnswered.length > 0 && (
+      {/* ── 내 기록 — 블록 L5(RollupRows). 2026-08-27: 섹션 3개(답한 질문·보낸 제안·물어본 것)가
+             각자 제목+카드였다(같은 형태 3연속). 셋은 **대등한 지표**라 §7-4 B 그대로 롤업 행으로 묶고,
+             행을 누르면 그 목록이 **아래로 펼쳐진다**(시트·모달 아님).
+             각 행은 대표 대상 1줄을 갖는다(R2) — 숫자 1은 대상 없이는 아무 말도 안 한다. ── */}
+      {(myAnswered.length > 0 || myProposals.length > 0 || myQuestions.length > 0) && (
         <>
-          <SectionLabel icon="checkmark-done-outline" title="내가 답한 질문" hint={`${myAnswered.length}건`} />
+          <SectionLabel icon="albums-outline" title="내 기록" />
+          <RollupRows
+            rows={[
+              ...(myAnswered.length > 0
+                ? [{
+                    key: 'answered',
+                    title: '내가 답한 질문',
+                    count: myAnswered.length,
+                    unit: '건' as const,
+                    target: myAnswered[0]?.query_text,
+                    onPress: () => setOpenRecord((v) => (v === 'answered' ? null : 'answered')),
+                  } satisfies RollupRow]
+                : []),
+              ...(myProposals.length > 0
+                ? [{
+                    key: 'proposals',
+                    title: '보낸 제안',
+                    count: myProposals.length,
+                    unit: '건' as const,
+                    // 검토 중·반려가 위로 정렬돼 있으므로 첫 줄이 곧 "지금 신경 쓸 것"이다.
+                    hot: myProposals.some((p) => p.status === 'rejected'),
+                    target: myProposals[0]
+                      ? `${myProposals[0].text} · ${myProposals[0].status === 'approved' ? '반영됨' : myProposals[0].status === 'rejected' ? '반려' : '검토 중'}`
+                      : undefined,
+                    onPress: () => setOpenRecord((v) => (v === 'proposals' ? null : 'proposals')),
+                  } satisfies RollupRow]
+                : []),
+              ...(myQuestions.length > 0
+                ? [{
+                    key: 'questions',
+                    title: '내가 물어본 것',
+                    count: myQuestions.length,
+                    unit: '건' as const,
+                    target: myQuestions[0]?.query_text,
+                    onPress: () => setOpenRecord((v) => (v === 'questions' ? null : 'questions')),
+                  } satisfies RollupRow]
+                : []),
+            ]}
+          />
+        </>
+      )}
+
+      {/* ③ 내가 답한 질문 — 롤업에서 펼쳤을 때만. 카드 1장 + 헤어라인 행(낱개 보더 카드 반복 = 시각 소음) */}
+      {openRecord === 'answered' && myAnswered.length > 0 && (
+        <>
           <View style={s.groupCard}>
             {(showAllAnswered ? myAnswered : myAnswered.slice(0, 3)).map((u, i) => {
               const e = u.resolved_with_entry_id ? entryById.get(u.resolved_with_entry_id) : undefined;
@@ -184,25 +319,9 @@ export function JuniorMySpace({ me }: { me: string }) {
         </>
       )}
 
-      {/* ⑤ 내 기여 요약 (자기 뷰 — 랭킹 아님)
-          2026-08-06: 숫자 둘을 문장 안에 섞어 쓰던 한 줄을 MiniStats(I3)로 올렸다.
-          ★같은 날 2차: 이 블록의 목적은 "세 섹션이 전부 '제목 → 목록 카드'라 형태를 한 번 끊는 것"인데,
-            정작 위치가 세 섹션 **위**여서 groupCard 3연속(배치규칙①)이 그대로였다 → 섹션 사이로 내렸다.
-            (주석은 의도를 적어뒀지만 코드가 그 의도를 이행하지 않은 자리였다) */}
-      {contribCount > 0 && (
-        <MiniStats
-          items={[
-            { key: 'knowhow', value: approvedCount, label: '내가 쌓은 노하우' },
-            { key: 'answered', value: myAnswered.length, label: '답한 질문' },
-            { key: 'proposed', value: myProposals.length, label: '보낸 제안' },
-          ]}
-        />
-      )}
-
-      {/* ② 내가 보낸 제안 — 검토 중·반려가 위(정렬은 myProposals에서) */}
-      {myProposals.length > 0 && (
+      {/* ② 내가 보낸 제안 — 롤업에서 펼쳤을 때만. 검토 중·반려가 위(정렬은 myProposals에서) */}
+      {openRecord === 'proposals' && myProposals.length > 0 && (
         <>
-          <SectionLabel icon="paper-plane-outline" title="내가 보낸 제안" hint={`${myProposals.length}건`} />
           <View style={s.groupCard}>
             {(showAllProposals ? myProposals : myProposals.slice(0, 3)).map((sug, i) => (
               <Appear key={sug.id} delay={stagger(i)}>
@@ -227,10 +346,9 @@ export function JuniorMySpace({ me }: { me: string }) {
         </>
       )}
 
-      {/* ④ 내 질문 이력 — 예외(답 기다리는 중)만 강조, 답 받음은 흐린 메타로 */}
-      {myQuestions.length > 0 && (
+      {/* ④ 내 질문 이력 — 롤업에서 펼쳤을 때만. 예외(답 기다리는 중)만 강조, 답 받음은 흐린 메타로 */}
+      {openRecord === 'questions' && myQuestions.length > 0 && (
         <>
-          <SectionLabel icon="chatbubble-ellipses-outline" title="내가 물어본 것" hint={`${myQuestions.length}건`} />
           <View style={s.groupCard}>
             {(showAllQuestions ? myQuestions.slice(0, 20) : myQuestions.slice(0, 5)).map((q, i) => {
               const answered = !!q.resolved_at || (q.matched_entry_ids?.length ?? 0) > 0;

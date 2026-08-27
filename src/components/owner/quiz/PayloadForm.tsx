@@ -11,7 +11,6 @@
  *   count     — fill_count
  *   number    — numeric_entry
  *   cards     — mine_tap
- *   marks     — mark_paragraph
  *   judge     — quick_judge
  *   branch    — branch_path
  *   pairs     — flip_match / link_match
@@ -27,6 +26,7 @@ import { View, Text, TextInput, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { parseBranchNext } from '@/lib/quiz/formats/branchPath';
+import { chosungOf } from '@/lib/quiz/formats/chosung';
 import { FLIP_MAX_PAIRS } from '@/lib/quiz/formats/flipMatch';
 import { LINK_MAX_PAIRS } from '@/lib/quiz/formats/linkMatch';
 import { NUMERIC_MAX } from '@/lib/quiz/formats/numericEntry';
@@ -37,7 +37,7 @@ import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
 import { Field, TextField, IntField, qst } from './kit';
 
-type Shape = 'choices' | 'sequence' | 'order' | 'count' | 'number' | 'cards' | 'marks' | 'judge' | 'branch' | 'pairs';
+type Shape = 'choices' | 'sequence' | 'order' | 'count' | 'number' | 'cards' | 'judge' | 'branch' | 'pairs';
 
 function shapeOf(f: QuizFormat): Shape {
   switch (f) {
@@ -46,7 +46,6 @@ function shapeOf(f: QuizFormat): Shape {
     case 'fill_count': return 'count';
     case 'numeric_entry': return 'number';
     case 'mine_tap': return 'cards';
-    case 'mark_paragraph': return 'marks';
     case 'quick_judge': return 'judge';
     case 'branch_path': return 'branch';
     case 'flip_match': return 'pairs';
@@ -133,18 +132,6 @@ export function emptyPayload(f: QuizFormat): Record<string, any> {
     case 'count': return { ...base, target: 3, unit: '' };
     case 'number': return { ...base, answer_value: 60, unit: '' };
     case 'cards': return { ...base, cards: [{ text: '', is_mine: true }, { text: '', is_mine: false }, { text: '', is_mine: false }, { text: '', is_mine: false }] };
-    // 문단은 "잇는 글 + 누를 수 있는 문구"가 번갈아 나오는 모양이 기본이다 — 처음부터 그 뼈대를 준다.
-    case 'marks': return {
-      ...base,
-      parts: [
-        { text: '', tap: false, is_wrong: false },
-        { text: '', tap: true, is_wrong: true },
-        { text: '', tap: false, is_wrong: false },
-        { text: '', tap: true, is_wrong: false },
-        { text: '', tap: false, is_wrong: false },
-        { text: '', tap: true, is_wrong: false },
-      ],
-    };
     case 'judge': return { ...base, labels: ['맞다', '아니다'], seconds: QJ_DEFAULT_SECONDS, cards: [{ text: '', answer: 0 }, { text: '', answer: 1 }, { text: '', answer: 0 }, { text: '', answer: 1 }] };
     default: {
       const n = choiceMaxOf(f);
@@ -182,7 +169,6 @@ export function answerTextOf(f: QuizFormat, p: Record<string, any>): string {
     case 'count': return `${p.target ?? ''}${p.unit ? ` ${p.unit}` : ''}`;
     case 'number': return `${p.answer_value ?? ''}${p.unit ? ` ${p.unit}` : ''}`;
     case 'cards': return (p.cards ?? []).filter((c: any) => c?.is_mine).map((c: any) => c.text).filter(Boolean).join(' · ');
-    case 'marks': return (p.parts ?? []).filter((x: any) => x?.is_wrong).map((x: any) => x.text).filter(Boolean).join(' · ');
     case 'judge': return (p.cards ?? []).filter((c: any) => c?.answer === 0).map((c: any) => c.text).filter(Boolean).join(' · ');
     default: return (p.choices ?? [])[p.answer_index ?? 0] ?? '';
   }
@@ -190,11 +176,11 @@ export function answerTextOf(f: QuizFormat, p: Record<string, any>): string {
 
 /**
  * 정답이 "하면 안 되는 것"인 형태 — 노하우 조립 시 extract.dont 로 간다.
- * ★ mark_paragraph 의 정답은 **규정과 어긋난 문구**다. do 로 보내면 틀린 문장이 노하우의
- *   "이렇게 하세요"로 굳는다 — 반드시 여기 있어야 한다.
+ * ★ 정답을 do 로 보내면 **하면 안 되는 행동이 노하우의 "이렇게 하세요"로 굳는다.**
+ *   금지가 정답인 형태를 새로 만들면 반드시 여기 추가한다.
  */
 export function isDontFormat(f: QuizFormat): boolean {
-  return f === 'trap_pick' || f === 'mine_tap' || f === 'mark_paragraph';
+  return f === 'trap_pick' || f === 'mine_tap';
 }
 
 /** 순서가 정답인 형태 — 노하우 조립 시 action.steps 로 간다. */
@@ -214,7 +200,16 @@ export function PayloadForm({
   onChange: (next: Record<string, any>) => void;
 }) {
   const p = payload;
-  const set = (patch: Record<string, any>) => onChange({ ...p, ...patch });
+  /**
+   * ★초성은 **정답에서 파생되는 값**이라 사장이 고르거나 고치는 값이 아니다.
+   *   보기 글자나 정답이 바뀔 때마다 여기서 다시 만든다 — 한 곳에서만 만들어야 어긋나지 않는다
+   *   (엣지도 AI 결과에 같은 계산을 덮어쓴다: supabase/functions/ai/quizFormats.ts).
+   */
+  const set = (patch: Record<string, any>) => {
+    const next = { ...p, ...patch };
+    if (format === 'chosung') next.chosung = chosungOf(String(next.choices?.[next.answer_index] ?? ''));
+    onChange(next);
+  };
   const shape = shapeOf(format);
 
   // 갈래 표시는 payload 에 넣지 않는다(walkPath 주석) — 폼이 열려 있는 동안만 산다.
@@ -307,9 +302,12 @@ export function PayloadForm({
           <TextField value={p.situation ?? ''} onChange={(v) => set({ situation: v })} placeholder="예) 포장 손님이 쿠폰을 내밀었어요" multiline />
         </Field>
       )}
+      {/* 초성은 정답에서 그대로 나오는 값이라 **손으로 적지 않는다** — 손으로 적으면 글자 수가 어긋나
+          풀 수 없는 문항이 된다(2026-08-27 실측: 6글자 정답에 초성 7개). 정답을 고르면 아래 set 이
+          자동으로 채우고, 여기서는 무엇이 나갈지 보여주기만 한다. */}
       {format === 'chosung' && (
-        <Field label="초성">
-          <TextField value={p.chosung ?? ''} onChange={(v) => set({ chosung: v })} placeholder="예) ㅂㅍㄹㅅ" maxLength={20} />
+        <Field label="초성" hint="정답을 고르면 자동으로 만들어져요">
+          <Text style={fst.derived}>{p.chosung || '정답을 골라 주세요'}</Text>
         </Field>
       )}
       {(format === 'value_pick' || format === 'fill_count' || format === 'scale_pick' || format === 'numeric_entry') && (
@@ -546,39 +544,6 @@ export function PayloadForm({
         </Field>
       )}
 
-      {/* 문단 마킹 — 조각을 읽는 순서대로 적고, 조각마다 역할을 눌러 바꾼다.
-          ★한 조각에 상태가 둘(누를 수 있나 · 규정과 다른가)이라 버튼 하나를 3단계로 돌린다.
-            잇는 글 → 맞게 적힘 → 규정과 다름 → 잇는 글. 색이 아니라 **글자**로 구분한다. */}
-      {shape === 'marks' && (
-        <Field label="메시지 조각" hint="읽는 순서 그대로 적어 주세요 · 누를 수 있는 문구는 3개 이상">
-          {(p.parts ?? []).map((c: any, i: number) => (
-            <ListRow
-              key={i}
-              value={c?.text ?? ''}
-              placeholder={`조각 ${i + 1}`}
-              onChange={(v) => setAt('parts', i, { ...c, text: v })}
-              marked={!!c?.tap}
-              markLabel={!c?.tap ? '잇는 글' : c?.is_wrong ? '규정과 다름' : '맞게 적힘'}
-              markRole="button"
-              onMark={() =>
-                setAt('parts', i, {
-                  ...c,
-                  // 잇는 글 → 맞게 적힘 → 규정과 다름 → 잇는 글
-                  tap: !c?.tap || !c?.is_wrong,
-                  is_wrong: !!c?.tap && !c?.is_wrong,
-                })
-              }
-              onRemove={(p.parts ?? []).length > 2 ? () => removeAt('parts', i, 2) : undefined}
-            />
-          ))}
-          <AddRow
-            label="조각 추가"
-            disabled={(p.parts ?? []).length >= 14}
-            onPress={() => addAt('parts', { text: '', tap: true, is_wrong: false }, 14)}
-          />
-        </Field>
-      )}
-
       {shape === 'cards' && (
         <Field label="행동 카드" hint="하면 안 되는 것을 눌러 표시해 주세요 · 여러 개 가능">
           {(p.cards ?? []).map((c: any, i: number) => (
@@ -776,6 +741,12 @@ function AddRow({ label, onPress, disabled }: { label: string; onPress: () => vo
 }
 
 const fst = StyleSheet.create({
+  // 파생 값 표시(초성) — 입력칸이 아니라는 것이 보여야 한다. 글자 사이를 띄워 몇 글자인지 세게 한다.
+  derived: {
+    minHeight: 48, paddingHorizontal: Space.md, paddingVertical: Space.md,
+    borderRadius: Radius.md, backgroundColor: InkColors.bgSoft,
+    fontSize: 16, fontWeight: '800', letterSpacing: 2, color: InkColors.ink,
+  },
   row: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, marginTop: Space.xs },
   pairRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, marginTop: Space.xs },
   pairInput: { flex: 1, minWidth: 0 },

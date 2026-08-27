@@ -20,8 +20,11 @@ import { PlanUpgradeNotice } from '@/components/PlanUpgradeNotice';
 import { StarterChecklist } from '@/components/hub/StarterChecklist';
 import { StorePickerSheet, type StorePickerRow } from '@/components/hub/StorePickerSheet';
 import { SectionLabel } from '@/components/SectionLabel';
+import { BottomSheet } from '@/components/BottomSheet';
+import { SheetHead } from '@/components/owner/quiz/kit';
 import { AlertRow } from '@/components/blocks/AlertRow';
-import { MiniStats } from '@/components/blocks/MiniStats';
+import { StackBar } from '@/components/blocks/StackBar';
+import { StatCardGrid, type StatCardItem } from '@/components/blocks/StatCardGrid';
 import { ScreenLoading } from '@/components/ScreenLoading';
 import { LoadErrorState } from '@/components/LoadErrorState';
 import { Appear, stagger } from '@/components/Appear';
@@ -47,8 +50,16 @@ export function OwnerStatusView({ header }: { header: ReactNode }) {
   const ownerLoaded = useHubStore((s) => s.ownerLoaded);
   const todayLoaded = useHubStore((s) => s.todayLoaded);
   const ownerLoadError = useHubStore((s) => s.ownerLoadError);
+  // 이번달 인건비 원장 = 근무표 기준·computePay(0185) — 직원 관리 히어로와 **같은 계산**. overview.labor_month(출퇴근×시급)는 안 읽는다.
+  const labor = useHubStore((s) => s.labor);
+  const laborLoaded = useHubStore((s) => s.laborLoaded);
+  const laborLoadError = useHubStore((s) => s.laborLoadError);
   const hydrateOwner = useHubStore((s) => s.hydrateOwner);
   const retryOwner = useHubStore((s) => s.retryOwner);
+  // L4 '직원이 아는 노하우' 칸(D6 · 2026-08-27) — 노하우 탭 링·퀴즈 홈 히트맵과 **같은 원장**(owner_knowhow_stats).
+  const knowhowStats = useHubStore((s) => s.knowhowStats);
+  const knowhowStatsLoaded = useHubStore((s) => s.knowhowStatsLoaded);
+  const hydrateKnowhowStats = useHubStore((s) => s.hydrateKnowhowStats);
   const crossData = useCrossNotifStore((s) => s.data);
   const crossLoaded = useCrossNotifStore((s) => s.loaded);
   const hydrateCross = useCrossNotifStore((s) => s.hydrate);
@@ -65,9 +76,19 @@ export function OwnerStatusView({ header }: { header: ReactNode }) {
     void hydrateOwner();
     void hydrateCross();
     void hydratePrefs();
-  }, [hydrateOwner, hydrateCross, hydratePrefs]);
+    void hydrateKnowhowStats();
+  }, [hydrateOwner, hydrateCross, hydratePrefs, hydrateKnowhowStats]);
 
   const [sortKey, setSortKey] = useState<SortKey>('pending_q');
+  /** '확인 필요' 칸을 눌렀는데 갈래가 둘 이상일 때 — 갈래 3행을 시트로(목적지가 제각각이라 한 칸이 못 고른다). */
+  const [inboxOpen, setInboxOpen] = useState(false);
+
+  /** 노하우 이해도 합계 — 매장마다 (노하우 × 직원)을 곱한 뒤 더한다(노하우 탭과 같은 계산). */
+  const knowing = useMemo(() => {
+    let cells = 0; let known = 0; let entries = 0; let staff = 0;
+    for (const s of knowhowStats) { cells += s.entries * s.staff; known += s.understood; entries += s.entries; staff += s.staff; }
+    return { cells, known, entries, staff, pct: cells > 0 ? Math.round((known / cells) * 100) : 0 };
+  }, [knowhowStats]);
 
   const todayByUnit = useMemo(() => {
     const m: Record<string, { working_now: number; scheduled: number }> = {};
@@ -105,10 +126,6 @@ export function OwnerStatusView({ header }: { header: ReactNode }) {
     };
   }, [crossData, ownedIds, overview]);
   const [picker, setPicker] = useState<{ title: string; path: Href; units: { uid: string; count: number }[] } | null>(null);
-  // '확인 필요' 카드가 비었는가 — 받은질문(questions)은 2026-08-06에 맨 위 AlertRow로 빠졌으므로
-  // 여기 세지 않는다. 세면 질문만 있을 때 카드가 "확인할 일이 있다"고 하고선 아무 행도 못 그린다.
-  const inboxEmpty =
-    inbox.joins.length === 0 && inbox.suggestions === 0 && inbox.needsReview === 0;
 
   // ── 매장 비교 정렬(손 필요 순 기본) — 정렬은 표 전용, 스냅샷·이번달은 매장 생성순 유지 ──
   const sorted = useMemo(() => {
@@ -116,13 +133,13 @@ export function OwnerStatusView({ header }: { header: ReactNode }) {
       const r = overview.find((x) => x.unit_id === uid);
       if (!r) return 0;
       if (sortKey === 'working') return todayByUnit[uid]?.working_now ?? 0;
+      if (sortKey === 'labor_month') return labor[uid] ?? 0;
       return r[sortKey];
     };
     return [...overview].sort((a, b) => val(b.unit_id) - val(a.unit_id));
-  }, [overview, sortKey, todayByUnit]);
+  }, [overview, sortKey, todayByUnit, labor]);
 
-  const laborTotal = overview.reduce((n, r) => n + r.labor_month, 0);
-  const aiTotal = overview.reduce((n, r) => n + r.ai_used, 0);
+  const laborTotal = overview.reduce((n, r) => n + (labor[r.unit_id] ?? 0), 0);
   const workingTotal = today.reduce((n, r) => n + r.working_now, 0);
   const scheduledTotal = today.reduce((n, r) => n + r.scheduled, 0);
   const multi = overview.length > 1;
@@ -135,7 +152,7 @@ export function OwnerStatusView({ header }: { header: ReactNode }) {
   //   되지 않는다(#6). 예전엔 넷 다 "실패하면 loaded 를 안 올림" 계약이라 **하나만 실패해도
   //   사장이 로그인 직후 착지하는 이 화면이 영원히 "매장 현황을 불러오고 있어요…"** 였고,
   //   마운트 1회 fetch 라 재시도 버튼도 트리거도 없었다.
-  if (!ownerLoaded || !todayLoaded || !crossLoaded || !prefsLoaded) {
+  if (!ownerLoaded || !todayLoaded || !laborLoaded || !crossLoaded || !prefsLoaded || !knowhowStatsLoaded) {
     return (
       <View style={styles.loading}>
         <ScreenLoading label="매장 현황을 불러오고 있어요…" />
@@ -166,6 +183,7 @@ export function OwnerStatusView({ header }: { header: ReactNode }) {
       <Pressable
         key={title}
         onPress={() => {
+          setInboxOpen(false);
           if (multi) setPicker({ title, path, units });
           else if (units[0]) void goStore(units[0].uid, path);
         }}
@@ -184,6 +202,80 @@ export function OwnerStatusView({ header }: { header: ReactNode }) {
       </Pressable>
     );
   };
+
+  /** 확인 필요 갈래 3행 — 시트와 (갈래가 하나뿐일 때) 칸 탭이 같은 것을 쓴다. */
+  const inboxKinds = [
+    { key: 'join', n: inbox.joins.length, label: '합류', color: BrandColors.mention, path: '/owner/staff' as Href, units: inbox.joinUnits, title: '합류 신청' },
+    { key: 'sugg', n: inbox.suggestions, label: '제안', color: BrandColors.good, path: '/owner/suggestions' as Href, units: inbox.suggestionUnits, title: '승인 기다리는 제안' },
+    { key: 'review', n: inbox.needsReview, label: '노하우', color: BrandColors.warn, path: '/owner/knowledge?review=1' as Href, units: inbox.needsReviewUnits, title: '점검할 노하우' },
+  ];
+  const inboxTotal = inboxKinds.reduce((n, k) => n + k.n, 0);
+  const inboxLive = inboxKinds.filter((k) => k.n > 0);
+  const goKind = (k: (typeof inboxKinds)[number]) => {
+    if (multi) setPicker({ title: k.title, path: k.path, units: k.units });
+    else { const u = k.units.find((x) => x.count > 0) ?? k.units[0]; if (u) void goStore(u.uid, k.path); }
+  };
+
+  /**
+   * L4 매장 상태 그리드(§7-2 · 2026-08-27). 칸 = [라벨+›][큰 값][시각요소]. R4: 원장 있는 것만 그림 —
+   *  · 직원이 아는 노하우 = 스냅샷(구성 원장 없음) → 시각요소 없이 절대 수 한 줄
+   *  · 확인 필요 = 지금 값의 **구성**(합류/제안/노하우) → StackBar
+   *  · 이번달 인건비·AI 답변 = 월 이력 원장을 클라가 안 갖고 있어 막대 없음(가짜 추세 금지)
+   * ★'이번 주 퀴즈' 칸은 넣지 않았다 — 허브 RPC 에 발송·응시 집계가 없다. 퀴즈 홈이 담당한다.
+   * ★퀴즈 관리 진입은 2026-08-07 결정대로 노하우 탭이다(D6). 여기 칸은 **읽기 진입**(/owner/training).
+   */
+  const gridItems: StatCardItem[] = [
+    {
+      // 옛 '오늘' MiniStats 2칸(근무중·예정)을 한 칸으로. 막대 없음(R4): working_now(출퇴근 기록)와
+      // scheduled(근무 편성)는 서로 부분집합이 아니라 `scheduled − working_now` 로 구성을 그릴 수 없다.
+      key: 'today',
+      label: '오늘 근무',
+      value: scheduledTotal,
+      unit: '명 예정',
+      sub: workingTotal > 0 ? `지금 ${workingTotal}명 근무중` : '지금은 출근 전이에요',
+      onPress: () => {
+        if (multi) setPicker({ title: '근무표', path: '/owner/schedule', units: overview.map((r) => ({ uid: r.unit_id, count: 0 })) });
+        else if (overview[0]) void goStore(overview[0].unit_id, '/owner/schedule');
+      },
+    },
+    {
+      key: 'knowing',
+      label: '직원이 아는 노하우',
+      value: knowing.cells > 0 ? knowing.pct : '없어요',
+      unit: knowing.cells > 0 ? '%' : undefined,
+      // ★다점포는 곱식을 쓰지 않는다 — 칸은 매장별 곱의 합이라 "전체 노하우 × 전체 직원"과 안 맞는다.
+      sub: knowing.cells > 0 ? (multi ? `${knowing.cells}칸 중 ${knowing.known}칸` : `노하우 ${knowing.entries}개 × 직원 ${knowing.staff}명`) : knowing.staff === 0 ? '직원이 들어오면 보여요' : '노하우를 담으면 보여요',
+      onPress: () => {
+        if (multi) setPicker({ title: '퀴즈', path: '/owner/training', units: overview.map((r) => ({ uid: r.unit_id, count: 0 })) });
+        else if (overview[0]) void goStore(overview[0].unit_id, '/owner/training');
+      },
+    },
+    {
+      key: 'inbox',
+      // 2026-08-27 어휘 분리: 점검(노하우 다시 보기) ≠ 승인(제안·합류). 한 줄 "확인 필요 4건"으로 합치지 않고
+      // 위 줄 = 점검할 노하우 수, 아래 줄 = 승인 기다리는 것(제안·합류). 칸은 그대로 1장, 구성은 StackBar.
+      label: '점검할 노하우',
+      value: inbox.needsReview > 0 ? inbox.needsReview : '없어요',
+      unit: inbox.needsReview > 0 ? '개' : undefined,
+      sub: inboxLive.filter((k) => k.key !== 'review').map((k) => `${k.key === 'sugg' ? '승인 기다리는 제안' : k.title} ${k.n}건`).join(' · ') || undefined,
+      tone: inboxTotal > 0 ? 'hot' : undefined,
+      visual: inboxTotal > 0 ? <StackBar parts={inboxKinds.map((k) => ({ n: k.n, label: k.label, color: k.color }))} /> : undefined,
+      onPress: inboxTotal === 0 ? undefined : inboxLive.length === 1 ? () => goKind(inboxLive[0]) : () => setInboxOpen(true),
+    },
+    {
+      key: 'labor',
+      label: '이번달 인건비',
+      // 근무표 기준·computePay(0185) = 직원 관리 히어로와 같은 숫자. 못 읽었으면 0원으로 위장하지 않는다.
+      value: laborLoadError ? '—' : laborTotal >= 10000 ? Math.round(laborTotal / 10000).toLocaleString() : laborTotal.toLocaleString(),
+      unit: laborLoadError ? undefined : laborTotal >= 10000 ? '만원' : '원',
+      sub: laborLoadError ? '불러오지 못했어요' : multi ? `매장 ${overview.length}곳 합계 · 근무표 기준` : '근무표 기준',
+      onPress: () => {
+        if (multi) setPicker({ title: '급여', path: '/owner/payroll', units: overview.map((r) => ({ uid: r.unit_id, count: 0 })) });
+        else if (overview[0]) void goStore(overview[0].unit_id, '/owner/payroll');
+      },
+    },
+    // 'AI 답변 사용' 칸은 2026-08-27 §7-6 판정으로 뺐다 — 월 사용/캡은 매장 설정(owner/settings)의 한 행으로 옮김.
+  ];
 
   // 시작 체크리스트(콜드스타트) — 매장 1곳 사장만(신규 단일 매장이 타깃, 다점포는 이미 루프를 앎).
   // ownerLoaded 게이트로 "로드 전"을 "새 매장"으로 위장하지 않는다. 4단계 완료 시 영구 소멸.
@@ -210,30 +302,19 @@ export function OwnerStatusView({ header }: { header: ReactNode }) {
           unit="건"
           icon="chatbubble"
           onPress={() => {
-            if (multi) setPicker({ title: '받은질문', path: '/owner/inbox', units: inbox.questionUnits });
+            if (multi) setPicker({ title: '답 기다리는 질문', path: '/owner/inbox', units: inbox.questionUnits });
             else if (inbox.questionUnits[0]) void goStore(inbox.questionUnits[0].uid, '/owner/inbox');
           }}
         />
       </Appear>
 
-      {/* ── 2) 오늘 근무(블록 I3) — 카드가 아니다.
-             옛 판본은 '오늘'·'이번달'이 각각 stat 2칸을 품은 카드였고, 그래서 이 화면이
-             제목→카드 5연속이 됐다(개편 전 사장 홈과 같은 증상). 통계는 MiniStats로 내린다. ── */}
-      <Appear delay={stagger(2)}>
-        <SectionLabel title="오늘" />
-        <MiniStats
-          items={[
-            // '—' 자리표는 걷어냈다 — 게이트가 todayLoaded 를 이미 보장한다(여기 오면 도착한 값이다).
-            { key: 'working', value: `${workingTotal}명`, label: '지금 근무중' },
-            { key: 'scheduled', value: `${scheduledTotal}명`, label: '오늘 근무 예정' },
-          ]}
-        />
-      </Appear>
+      {/* ── 2) '오늘' 섹션(MiniStats 2칸)은 2026-08-27 §7-6 판정으로 아래 L4 첫 칸('오늘 근무')에 흡수했다.
+             MiniStats 2칸이 바로 아래 그리드와 형태가 겹치고 숫자 옆에 대상이 없었다(R2). ── */}
 
-      {/* 매장별 근무 현황 — 단일 매장이면 위 MiniStats가 이미 같은 숫자를 말하므로 그리지 않는다.
+      {/* 매장별 근무 현황 — 단일 매장이면 아래 '오늘 근무' 칸이 이미 같은 숫자를 말하므로 그리지 않는다.
           다점포에서만 '어느 매장이 비었나'가 새 정보가 된다. */}
       {multi && (
-      <Appear delay={stagger(3)}>
+      <Appear delay={stagger(2)}>
         <View style={styles.card}>
           {overview.map((r) => {
             const t = todayByUnit[r.unit_id];
@@ -260,40 +341,21 @@ export function OwnerStatusView({ header }: { header: ReactNode }) {
       </Appear>
       )}
 
-      {/* ── 3) 확인 필요 ── */}
-      <Appear delay={stagger(4)}>
-        <SectionLabel title="확인 필요" />
-        <View style={styles.card}>
-          {inboxEmpty ? (
-            <Text style={styles.emptyText}>지금 확인할 일이 없어요</Text>
-          ) : (
-            <>
-              {inboxRow(
-                'person-add-outline',
-                '합류 신청',
-                inbox.joins.length,
-                inbox.joinUnits,
-                '/owner/staff',
-                inbox.joins[0] ? `${labelOf(inbox.joins[0].uid)} · ${inbox.joins[0].name}님` : undefined,
-              )}
-              {/* 받은질문은 맨 위 AlertRow로 승격됐다(2026-08-06) — 여기서 다시 세지 않는다. */}
-              {inboxRow('bulb-outline', '검토할 제안', inbox.suggestions, inbox.suggestionUnits, '/owner/suggestions')}
-              {/* ★2026-08-06: '검증' → '확인'(승인 어휘 8개 밖 신조어였다. 매장 앱은 전부 '확인 필요').
-                  착지도 매장 앱과 맞춘다 — ?review=1 = '확인 필요만' 필터가 걸린 목록.
-                  옛 /owner/categories 는 필터 없는 전체라 "N건"을 눌러도 그 N건이 안 보였다. */}
-              {inboxRow('search-outline', '확인이 필요한 노하우', inbox.needsReview, inbox.needsReviewUnits, '/owner/knowledge?review=1')}
-            </>
-          )}
-
-          {/* 퀴즈 진입점은 2026-08-07에 노하우 탭(OwnerKnowhowHubView)으로 옮겼다.
-              퀴즈가 남기는 기록은 점수가 아니라 knowhow_understanding = "누가 어떤 노하우를 아는가"라
-              노하우의 계측기다. 현황 탭은 '지금 막힌 것'을 말하는 자리이고, 퀴즈는 축적·순환 레이어다. */}
+      {/* ── 3) 매장 상태 — L4 2열 지표 그리드(2026-08-27 §7-2).
+             옛 '확인 필요' 카드 3행 → 스택바 1칸(구성 = 합류/제안/노하우), 옛 '이번달' MiniStats 2칸 → 그리드 칸.
+             퀴즈 관리 진입점은 2026-08-07 결정대로 노하우 탭(OwnerKnowhowHubView)이다 — 되돌리는 게 아니다.
+             '직원이 아는 노하우' 칸은 **읽기 진입**(D6 확정: 현황엔 지표 칸만, 관리는 노하우 탭).
+             받은질문은 맨 위 AlertRow(2026-08-06) — 여기서 다시 세지 않는다. ── */}
+      <Appear delay={stagger(3)}>
+        <SectionLabel title="매장 상태" hint="누르면 그 화면으로" />
+        <View style={{ marginTop: Space.sm }}>
+          <StatCardGrid items={gridItems} />
         </View>
       </Appear>
 
       {/* ── 3) 매장 비교(다점포) / 단일 매장 요약 ── */}
       {multi && (
-        <Appear delay={stagger(5)}>
+        <Appear delay={stagger(4)}>
           <SectionLabel title="매장 비교" hint="항목을 누르면 정렬" />
           {canUseMultistore(plan, freeMode) ? (
             <View style={styles.card}>
@@ -320,7 +382,7 @@ export function OwnerStatusView({ header }: { header: ReactNode }) {
                     <Text style={[styles.td, r.pending_q > 0 && styles.tdHot]}>{r.pending_q}</Text>
                     <Text style={styles.td}>{`${t?.working_now ?? 0}/${t?.scheduled ?? 0}`}</Text>
                     <Text style={styles.td}>{r.uncovered}</Text>
-                    <Text style={styles.td}>{fmtWonShort(r.labor_month)}</Text>
+                    <Text style={styles.td}>{laborLoadError ? '—' : fmtWonShort(labor[r.unit_id] ?? 0)}</Text>
                   </Pressable>
                 );
               })}
@@ -331,58 +393,43 @@ export function OwnerStatusView({ header }: { header: ReactNode }) {
         </Appear>
       )}
 
-      {/* ── 4) 이번달(블록 I3) — 여기도 카드가 아니다. 위 '오늘'과 형태는 같지만 사이에
-             카드 2장이 끼어 있어 연속이 아니다(배치 규칙 ①). ── */}
-      <Appear delay={stagger(6)}>
-        <SectionLabel title="이번달" />
-        <MiniStats
-          items={[
-            { key: 'labor', value: `${laborTotal.toLocaleString()}원`, label: '인건비 합계' },
-            {
-              // 0082 부터 유료 플랜에도 캡(매장당 1500)이 있다 — free 만 분모를 보여주면
-              // 유료 사장은 자기 한도를 모른 채 402를 맞는다. 캡은 매장당이므로 합산 분모 = 캡 × 매장 수.
-              key: 'ai',
-              value:
-                aiCap != null
-                  ? `${aiTotal.toLocaleString()} / ${(aiCap * Math.max(overview.length, 1)).toLocaleString()}`
-                  : aiTotal.toLocaleString(),
-              label: 'AI 답변 사용',
-              // 카드 하단 캡션이던 한도 안내를 ⓘ로 옮긴다(카드가 사라졌으므로 붙을 자리가 없다).
-              info:
-                aiCap != null
-                  ? {
-                      title: 'AI 답변 사용이 뭐예요?',
-                      body:
-                        (plan === 'free'
-                          ? `무료 요금제는 매장당 월 ${aiCap.toLocaleString()}건까지예요.`
-                          : `매장당 월 ${aiCap.toLocaleString()}건까지 쓸 수 있어요.`) +
-                        '\n직원이 물었을 때 AI가 답한 횟수예요. 한도를 넘으면 다음 달에 다시 채워져요.',
-                    }
-                  : undefined,
-            },
-          ]}
-        />
-        {/* 매장별 내역은 다점포에서만 — 단일 매장이면 위 두 칸이 곧 그 매장의 값이다.
-            한도 안내 캡션은 'AI 답변 사용'의 ⓘ로 옮겼다. */}
-        {multi && (
+      {/* ── 4) 이번달 매장별 내역 — 다점포에서만. 합계는 위 그리드 칸(인건비)이 말한다. ── */}
+      {multi && (
+      <Appear delay={stagger(5)}>
+        <SectionLabel title="이번달 매장별" />
           <View style={[styles.card, { marginTop: Space.sm }]}>
             {overview.map((r) => (
               <View key={r.unit_id} style={[styles.row, styles.rowTop]}>
                 <View style={[styles.dot, { backgroundColor: colorOf(r.unit_id) }]} />
                 <Text style={styles.rowTitle} numberOfLines={1}>{labelOf(r.unit_id)}</Text>
                 <Text style={styles.rowSub}>
-                  {`${r.labor_month.toLocaleString()}원 · AI ${r.ai_used}${aiCap != null ? `/${aiCap.toLocaleString()}` : ''}건`}
+                  {`${laborLoadError ? '—' : `${(labor[r.unit_id] ?? 0).toLocaleString()}원`} · AI ${r.ai_used}${aiCap != null ? `/${aiCap.toLocaleString()}` : ''}건`}
                 </Text>
               </View>
             ))}
           </View>
-        )}
       </Appear>
+      )}
+
+      {/* 확인 필요 갈래 시트 — 갈래가 둘 이상일 때만 열린다(하나면 칸 탭이 바로 그리로 간다). */}
+      {inboxOpen && (
+        <BottomSheet visible onClose={() => setInboxOpen(false)}>
+          <SheetHead title="점검·승인" onClose={() => setInboxOpen(false)} />
+          <View style={[styles.card, { marginHorizontal: Space.lg, marginBottom: Space.lg }]}>
+            {inboxRow(
+              'person-add-outline', '합류 신청', inbox.joins.length, inbox.joinUnits, '/owner/staff',
+              inbox.joins[0] ? `${labelOf(inbox.joins[0].uid)} · ${inbox.joins[0].name}님` : undefined,
+            )}
+            {inboxRow('bulb-outline', '승인 기다리는 제안', inbox.suggestions, inbox.suggestionUnits, '/owner/suggestions')}
+            {inboxRow('search-outline', '점검할 노하우', inbox.needsReview, inbox.needsReviewUnits, '/owner/knowledge?review=1')}
+          </View>
+        </BottomSheet>
+      )}
 
       <StorePickerSheet
         visible={!!picker}
         title={picker?.title ?? ''}
-        hint="확인할 매장을 골라 주세요"
+        hint="매장을 골라 주세요"
         rows={(picker?.units ?? []).map(
           // 0건 매장은 배지를 그리지 않는다(배지 없음 = 없음) — "0" 경고 배지는 오독을 부른다.
           (u): StorePickerRow => ({ uid: u.uid, label: labelOf(u.uid), color: colorOf(u.uid), count: u.count > 0 ? u.count : undefined }),

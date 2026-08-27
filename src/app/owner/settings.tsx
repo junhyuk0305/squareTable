@@ -6,6 +6,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useMemberPrefsStore, DEFAULT_MEMBER_PREF } from '@/lib/store/useMemberPrefsStore';
 import { useWorkStore } from '@/lib/store/useWorkStore';
+import { useHubStore } from '@/lib/store/useHubStore';
+import { PLANS } from '@/lib/config/tiers';
 import { storeColor } from '@/lib/utils/storeColor';
 import { notifyAction } from '@/lib/utils/confirm';
 import { useCopyToClipboard } from '@/lib/utils/useCopyToClipboard';
@@ -30,6 +32,7 @@ export default function OwnerSettings() {
   const router = useRouter();
   const storeName = useSessionStore((s) => s.storeName);
   const unitId = useSessionStore((s) => s.unitId);
+  const plan = useSessionStore((s) => s.plan);
   const inviteCode = useSessionStore((s) => s.inviteCode) || '------';
   const { copied, copy } = useCopyToClipboard();
 
@@ -64,7 +67,17 @@ export default function OwnerSettings() {
   const training = useWorkStore((s) => s.training);
   const done = useWorkStore((s) => s.done);
   const workLoaded = useWorkStore((s) => s.loaded);
-  const ready = prefsLoaded && workLoaded;
+  // AI 답변 월 사용량 — 2026-08-27 §7-6 판정으로 허브 현황 L4 칸에서 여기로 옮김. 원장은 그대로
+  // owner_overview.ai_used(이 매장 행) / PLANS[plan].aiMonthly. 실패하면 행 자체를 그리지 않는다(0건 위장 금지).
+  const overview = useHubStore((s) => s.overview);
+  const ownerLoaded = useHubStore((s) => s.ownerLoaded);
+  const hydrateOwner = useHubStore((s) => s.hydrateOwner);
+  useEffect(() => {
+    void hydrateOwner();
+  }, [hydrateOwner]);
+  const aiUsed = overview.find((r) => r.unit_id === unitId)?.ai_used;
+  const aiCap = PLANS[plan].aiMonthly;
+  const ready = prefsLoaded && workLoaded && ownerLoaded;
   const [cleanupOpen, setCleanupOpen] = useState(false);
   const shellTasks = useMemo(() => {
     const everDone = new Set<string>();
@@ -187,8 +200,17 @@ export default function OwnerSettings() {
         </SettingsSection>
 
         <SettingsSection>
+          {aiUsed != null && (
+            <SettingsRow
+              first
+              icon="sparkles-outline"
+              label="AI 답변 사용"
+              hint={aiCap != null ? `이번 달 · 월 ${aiCap.toLocaleString()}건까지 · 다음 달에 다시 채워져요` : '이번 달 · 직원이 물었을 때 AI가 답한 횟수'}
+              value={aiCap != null ? `${aiUsed.toLocaleString()} / ${aiCap.toLocaleString()}건` : `${aiUsed.toLocaleString()}건`}
+            />
+          )}
           <SettingsRow
-            first
+            first={aiUsed == null}
             icon="settings-outline"
             label="전체 계정 설정"
             hint="프로필·푸시 수신·요금제·글자 크기·약관·로그아웃"

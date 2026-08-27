@@ -37,11 +37,6 @@ export function previewAnswer(format: QuizFormat, payload: Record<string, any>):
       return (Array.isArray(payload?.cards) ? payload.cards : [])
         .map((c: any, i: number) => (c?.is_mine === true ? i : -1))
         .filter((i: number) => i >= 0);
-    // 문단은 섞이지 않는다(순서가 곧 문장이다) → 서버 정답과 좌표계가 애초에 같다.
-    case 'mark_paragraph':
-      return (Array.isArray(payload?.parts) ? payload.parts : [])
-        .map((p: any, i: number) => (p?.is_wrong === true ? i : -1))
-        .filter((i: number) => i >= 0);
     case 'quick_judge':
       return (Array.isArray(payload?.cards) ? payload.cards : []).map((c: any) => Number(c?.answer));
     // ── t4 두 형태 ──────────────────────────────────────────────────────

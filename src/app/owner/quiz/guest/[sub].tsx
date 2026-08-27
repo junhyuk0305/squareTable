@@ -294,6 +294,11 @@ function readItem(item: GuestAttemptItemRow): ItemView {
 
   // ── 잘못된 곳 짚기 — 누른 조각 집합이 답이다. parts 는 섞이지 않아 좌표계가 그대로다 ──
   //    누를 수 있는 조각(tap)만 줄로 세운다. 잇는 글까지 세우면 문단이 목록으로 흩어진다.
+  //
+  // ★ mark_paragraph 는 2026-08-27 에 **출제에서 제거**됐다(formats/index.ts 헤더의 "형태 제거" 절).
+  //   그래도 이 분기는 남긴다 — 여기가 그리는 것은 새 문항이 아니라 **이미 응시한 기록**
+  //   (quiz_attempt_items 의 스냅샷 payload)이고, 지우면 지난 기록이 "표시할 수 없어요"가 된다.
+  //   item.format 은 자유 text 라 타입 결합이 없어 남겨 두는 비용도 0이다.
   if (item.format === 'mark_paragraph' && Array.isArray(p.parts)) {
     const tapped = new Set(nums(res));
     return {

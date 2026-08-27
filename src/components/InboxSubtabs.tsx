@@ -31,7 +31,7 @@ const STATUS_OF: Record<SubtabKey, UnknownQuery['status']> = {
 const EMPTY_TEXT: Record<SubtabKey, { title: string; body: string }> = {
   pending: {
     title: '깔끔하네요',
-    body: '답할 질문이 하나도 없어요. 새 질문이 오면 여기로 알려드릴게요.',
+    body: '답 기다리는 질문이 없어요. 새 질문이 오면 여기로 알려드릴게요.',
   },
   auto: {
     title: 'AI가 답한 질문이 아직 없어요',

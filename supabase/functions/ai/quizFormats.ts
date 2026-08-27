@@ -59,6 +59,22 @@ function normChoicePick(raw: any, maxChoices: number, extras: string[] = []): Re
   return out;
 }
 
+// ── 초성 추출 ──────────────────────────────────────────────
+// 짝: src/lib/quiz/formats/chosung.ts 의 chosungTokens/chosungOf. 엣지는 클라를 import 할 수 없어
+// 복제돼 있다(이 파일의 스키마·힌트가 전부 그렇다). **공백을 뺀 글자 수와 개수가 반드시 같아야 한다** —
+// 그게 이 함수의 유일한 계약이고, 클라 validate 가 그 개수를 다시 검사한다.
+const CHO = ['ㄱ', 'ㄲ', 'ㄴ', 'ㄷ', 'ㄸ', 'ㄹ', 'ㅁ', 'ㅂ', 'ㅃ', 'ㅅ', 'ㅆ', 'ㅇ', 'ㅈ', 'ㅉ', 'ㅊ', 'ㅋ', 'ㅌ', 'ㅍ', 'ㅎ'];
+function chosungOf(word: string): string {
+  return [...String(word ?? '')]
+    .filter((ch) => ch.trim())
+    .map((ch) => {
+      const code = ch.charCodeAt(0);
+      // 한글 음절이면 초성으로, 아니면(영문·숫자) 그대로 — "POS 정산" 같은 용어가 실제로 있다.
+      return code >= 0xac00 && code <= 0xd7a3 ? CHO[Math.floor((code - 0xac00) / 588)] : ch;
+    })
+    .join(' ');
+}
+
 function choicePickSpec(
   hint: string,
   opts: { maxChoices?: number; extras?: string[]; optionalExtras?: string[] } = {},
@@ -307,56 +323,6 @@ export const QUIZ_FORMATS: Record<string, QuizFormatSpec> = {
     },
   },
 
-  // t3 금지(0168) — 이어진 문장 안에서 어긋난 곳을 여러 곳 짚는다. mine_tap 과 나누는 기준은
-  // **재료의 모양**이다: 저쪽은 끊어진 카드가 하나씩, 이쪽은 한 덩어리 메시지를 읽고 맥락으로 짚는다.
-  mark_paragraph: {
-    hint:
-      '**직원이 남긴 인수인계 메시지**를 읽고 규정과 다른 곳을 짚는 문제다. '
-      + '"안내문·공지" 같은 딱딱한 글이 아니라, 마감을 끝낸 직원이 실제로 남길 법한 말투로 쓴다'
-      + '(예: "오늘 마감은 포스 정산부터 하고 원두 호퍼를 비운 뒤 바닥을 청소했어요"). '
-      + 'parts 는 그 메시지를 읽는 순서 그대로 조각낸 것이다. 순서를 섞지 마라 — 이어 붙이면 한 문단이 돼야 한다. '
-      + 'tap=true 는 누를 수 있는 문구(3~8개), tap=false 는 문장을 잇는 글이다. '
-      + 'is_wrong=true 는 그 문구가 노하우의 순서·금지와 어긋난다는 뜻이고, tap=true 인 조각에만 붙인다. '
-      + '틀린 문구와 맞는 문구가 각각 1개 이상 있어야 한다. '
-      + '틀린 문구는 노하우에 근거가 분명한 것만 쓰고, 맞는 문구는 같은 노하우의 정상 절차에서 뽑아라. '
-      + '규정과 대조할 순서나 금지가 노하우에 없으면 출제하지 마라.',
-    schema: {
-      type: 'object',
-      properties: {
-        ask: STR,
-        parts: {
-          type: 'array',
-          items: {
-            type: 'object',
-            properties: { text: STR, tap: { type: 'boolean' }, is_wrong: { type: 'boolean' } },
-            required: ['text', 'tap', 'is_wrong'],
-          },
-          maxItems: 14,
-        },
-        explain: STR,
-        source_index: INT,
-      },
-      required: ['ask', 'parts'],
-    },
-    // 짝: src/lib/quiz/formats/markParagraph.ts 의 validate. 규칙이 벌어지면 사장이 저장할 수 없는
-    // 문항을 AI 가 만들어 놓고 조용히 버려진다 — 두 곳을 같이 고칠 것.
-    normalize: (raw) => {
-      const ask = normAsk(raw);
-      if (!ask || !Array.isArray(raw?.parts)) return null;
-      const parts = raw.parts
-        .map((p: any) => ({ text: text(p?.text), tap: p?.tap === true, is_wrong: p?.is_wrong === true }))
-        .filter((p: any) => p.text);
-      if (parts.length < 2 || parts.length > 14) return null;
-      // 누를 수 없는 조각에 정답을 숨기면 응시자가 영원히 못 맞힌다 — 조용히 폐기한다.
-      if (parts.some((p: any) => p.is_wrong && !p.tap)) return null;
-      const taps = parts.filter((p: any) => p.tap);
-      if (taps.length < 3 || taps.length > 8) return null;
-      const wrongs = taps.filter((p: any) => p.is_wrong).length;
-      if (wrongs === 0 || wrongs === taps.length) return null;
-      return { ask, parts, explain: text(raw?.explain) };
-    },
-  },
-
   // t4 대응 — 노하우가 직접 적는 짝(물건↔자리, 용어↔뜻)이 재료다.
   // ★ flip_match 는 짝 정보가 응시 화면까지 내려가는 **유일한 형태**다(매칭 게임이라 그렇다).
   //   이유와 대가는 src/lib/quiz/formats/flipMatch.ts 맨 위 주석에 있다.
@@ -502,10 +468,26 @@ export const QUIZ_FORMATS: Record<string, QuizFormatSpec> = {
     + '일반 명사(청소·마감처럼 아무 매장에서나 쓰는 말)는 출제하지 마라.',
   ),
 
-  chosung: choicePickSpec(
-    '매장 용어의 초성만 보여주고 맞히는 문제다. chosung 에는 정답 용어의 초성을 띄어서 적고'
-    + '(예: 백플러시 → "ㅂ ㅍ ㄹ ㅅ"), ask 에는 그 용어가 무엇인지 한 줄 설명을 쓴다. '
-    + '선택지는 3~5개이고 정답은 노하우에 실제로 나오는 용어여야 한다. 일반 명사는 출제하지 마라.',
-    { maxChoices: 5, extras: ['chosung'] },
-  ),
+  // ★★ 초성은 **우리가 정답에서 계산한다** — 모델이 적은 값은 버린다.
+  //   2026-08-27 실측: 모델이 "손목 회전 한 번"(6자)에 초성을 7개 붙여 **풀 수 없는 문항**이 나갔다.
+  //   글자 수 세기는 결정적이라 모델에게 시킬 이유가 없다. extras(필수) 가 아니라 optionalExtras 로
+  //   내려 모델이 못 채워도 문항이 버려지지 않게 하고, normalize 에서 덮어쓴다.
+  //   짝: src/lib/quiz/formats/chosung.ts 의 chosungOf + validateExtra(개수 검사).
+  chosung: (() => {
+    const base = choicePickSpec(
+      '매장 용어의 초성만 보여주고 맞히는 문제다. ask 에는 그 용어가 무엇인지 한 줄 설명을 쓴다. '
+      + '선택지는 3~5개이고 정답은 노하우에 실제로 나오는 용어여야 한다. 일반 명사는 출제하지 마라. '
+      + 'chosung 칸은 비워 두거나 대충 적어도 된다. 서버가 정답에서 다시 만든다.',
+      { maxChoices: 5, optionalExtras: ['chosung'] },
+    );
+    return {
+      ...base,
+      normalize: (raw: any) => {
+        const out = base.normalize(raw);
+        if (!out) return null;
+        out.chosung = chosungOf(String((out.choices as string[])?.[out.answer_index as number] ?? ''));
+        return out;
+      },
+    };
+  })(),
 };

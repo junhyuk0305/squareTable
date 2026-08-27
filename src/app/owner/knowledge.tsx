@@ -19,9 +19,13 @@ export default function OwnerKnowledgeScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
-      {/* ?review=1 = 홈 '확인이 필요한 노하우' 착지점. 그 목록은 2026-08-19 에 '안 쓰임' 칸이
-          '할 일'로 흡수되면서 그쪽으로 옮겨갔다 — 링크가 죽지 않게 '할 일'로 보낸다. */}
-      <OwnerKnowhowBrowse onSelect={openEntry} initialSegment={review === '1' ? 'todo' : undefined} />
+      {/* ?review=1 = 홈 '점검할 노하우' 착지점 → '노하우' 칸 + '점검 필요' 탭(2026-08-27 §7-2).
+          (2026-08-19~08-27 사이엔 '할 일' 칸으로 보냈다.) */}
+      <OwnerKnowhowBrowse
+        onSelect={openEntry}
+        initialSegment={review === '1' ? 'knowhow' : undefined}
+        initialListTab={review === '1' ? 'review' : undefined}
+      />
       <RoleTabBar role="owner" />
     </SafeAreaView>
   );

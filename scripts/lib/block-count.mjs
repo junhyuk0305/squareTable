@@ -24,9 +24,10 @@ const BLOCK_LEAF = new Set([
   // src/components/blocks/ 8종 — ui.md와 정확히 같아야 한다
   'ProgressRing', 'StepProgress', 'ActionRow', 'MiniStats', 'AlertRow',
   // 2026-08-07 추가 3종 — 화면에서 '한 덩어리'로 서는 것만 여기 넣는다.
-  //   ProgressPill·GutterRow 는 행 안의 원자(칩·행)라 블록이 아니다 —
+  //   ProgressPill 은 행 안의 원자(칩)라 블록이 아니다 —
   //   넣으면 목록 한 줄이 블록 1개로 세어져 상한이 터진다.
-  'HeroSubNav', 'KvTable', 'WeekStrip',
+  //   KvTable·GutterRow 는 2026-08-27 D10 판정으로 삭제(실 import 0건).
+  'HeroSubNav', 'WeekStrip',
   // 2026-08-26 추가 — 월 달력. TaskComposerModal 안에 있던 것을 올렸다(퀴즈 일정·링크 만료가 같이 쓴다).
   //   WeekStrip(요일 7칸 스트립)과 다른 물건이다 — 이건 달 전체를 펼쳐 하루를 고르는 한 덩어리다.
   'MiniCalendar',
@@ -34,8 +35,12 @@ const BLOCK_LEAF = new Set([
   //   KnowhowRows = 표시 전용 / SquareRowsEditor = 그것에 칸 편집(E2)을 얹은 래퍼.
   //   둘은 서로 다른 파일에 있어 한 화면에서 겹쳐 세지 않는다.
   'KnowhowRows', 'SquareRowsEditor',
+  // 2026-08-27 추가 — "오밀조밀" v2(블록어휘 §7-2). 한 덩어리로 서는 것만:
+  //   StatCardGrid(L4 2열 지표) · FocusCard(H4, 옛 InboxHeroCard 개명) · RollupRows(L5) · PickRow(L6) · Heatmap(H5).
+  //   Sparkline·StackBar 는 지표 칸 **안의** 시각요소(원자)라 블록이 아니다 — 넣으면 칸마다 +1 이 된다.
+  'StatCardGrid', 'FocusCard', 'RollupRows', 'PickRow', 'Heatmap',
   // 이미 있어서 재구현 금지인 표시 블록들(ui.md "이미 있는 것도 재구현 금지")
-  'InboxHeroCard', 'StarterChecklist', 'PlanUpgradeNotice', 'EmptyState',
+  'StarterChecklist', 'PlanUpgradeNotice', 'EmptyState',
   'KnowhowCarousel', 'FeatureCarousel', 'BrowseList', 'NotificationList',
   'NudgeCard', 'SegmentTabs', 'PricingTable', 'NotificationEnableCard',
   'FreeUntilNotice', 'DeflectCard', 'TimesheetView',

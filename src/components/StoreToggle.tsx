@@ -97,7 +97,7 @@ export function StoreToggle({ scope = 'store' }: { scope?: 'hub' | 'store' }) {
   const goHub = () => {
     setOpen(false);
     if (onHub) return; // 이미 허브다 — 같은 곳으로 다시 보내지 않는다.
-    router.replace('/stores');
+    router.replace('/hub');
   };
   /** 매장을 골랐다. 허브에선 '들어가기'(전역 커버), 매장 층에선 '전환'이다. */
   const pick = async (id: string) => {

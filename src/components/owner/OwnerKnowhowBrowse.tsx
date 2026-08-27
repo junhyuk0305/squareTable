@@ -21,6 +21,7 @@ import { InfoDot } from '@/components/InfoDot';
 import { VerifyBadge } from '@/components/VerifyBadge';
 import { SectionLabel } from '@/components/SectionLabel';
 import { SegmentTabs, type SegmentItem } from '@/components/SegmentTabs';
+import { Heatmap, type HeatCell, type HeatGroup, type HeatLegend, type HeatLevel } from '@/components/blocks/Heatmap';
 import { CategoryEditSheet } from '@/components/owner/CategoryEditSheet';
 import { OwnerTodoSegment } from '@/components/owner/OwnerTodoSegment';
 import { useOwnerTodoCount } from '@/lib/hooks/useOwnerTodoCount';
@@ -40,6 +41,9 @@ import type { PlaybookEntry } from '@/types';
 // 'unused' 는 2026-08-19 에 '할 일'로 흡수됐다. 딥링크(?review=1 등)가 물고 있으니 키는 남기고
 // 진입 시 'todo' 로 착지시킨다 — 죽은 링크를 만들지 않는다.
 export type KnowhowSegKey = 'todo' | 'knowhow';
+
+/** '노하우' 칸 목록 위 탭(§7-2 · 2026-08-27): 전체 / 확인 필요(needsVerify) / 오래됨(isOld, 확인 필요와 겹치면 그쪽). */
+export type KnowhowListTab = 'all' | 'review' | 'old';
 
 
 /**
@@ -77,6 +81,43 @@ const isUnused = (e: PlaybookEntry) => {
 // 사용자 표면의 분류는 카테고리(= section) 하나 — 종류(루틴/돌발 등)는 AI 내부용이라 안 보여준다.
 const sectionOf = (e: PlaybookEntry) => e.section?.trim() || UNSECTIONED;
 
+/** '오래 손 안 댐' 판정 창(일) — 허브 overview.stale(0091, 90일)과 같은 값이어야 한다. */
+const OLD_DAYS = 90;
+const isOld = (e: PlaybookEntry) => {
+  const t = Date.parse(e.updated_at ?? '');
+  return Number.isFinite(t) && Date.now() - t >= OLD_DAYS * 86_400_000;
+};
+/** '오래됨' 탭 판정 = 히트맵 빨강과 같은 것(확인 필요와 겹치면 주황이 이긴다 — 한 건이 두 탭에 들어가지 않는다). */
+const isOldOnly = (e: PlaybookEntry) => !needsVerify(e) && isOld(e);
+
+/**
+ * 노하우 탭 히트맵(H5 · 2026-08-27) — 퀴즈 홈과 **같은 격자, 다른 축**.
+ *  색 = 최근 한 달 직원이 물어본 횟수(`stats.query_hits_30d`: 0 / 1 / 2~3 / 4~7 / 8+) —
+ *      "많이 쓰이는 노하우"가 진하다. 점선 = 한 번도 안 물어봄(isUnused 와 같은 원장, 나이 조건 없이 그림만).
+ *  주황 테두리 = 확인 필요(needs_review) · 빨강 테두리 = 90일 넘게 손 안 댐(isOld).
+ *  카테고리 순서 = 손볼 것(점선+테두리) 비율 높은 순.
+ * ★판정은 전부 이 파일의 기존 규칙(needsVerify·isUnused·query_hits_30d)이다 — 새 판정 없음.
+ */
+const KNOWHOW_LEGEND: HeatLegend = { empty: '안 물어봄', scale: ['물어본 횟수', '많음'], stale: '점검 필요', miss: '오래 손 안 댐' };
+const hitLevel = (n: number): HeatLevel => (n <= 0 ? 0 : n === 1 ? 1 : n <= 3 ? 2 : n <= 7 ? 3 : 4);
+function buildKnowhowHeatmap(list: PlaybookEntry[]): HeatGroup[] {
+  const by = new Map<string, HeatCell[]>();
+  for (const e of list) {
+    const hits = e.stats?.query_hits_30d ?? 0;
+    const stale = needsVerify(e);
+    const miss = !stale && isOld(e);
+    const status = `${hits > 0 ? `한 달간 ${hits}번 물어봄` : '한 달간 안 물어봄'}${stale ? ' · 점검 필요' : miss ? ' · 오래 손 안 댐' : ''}`;
+    const name = getSectionMeta(e.section).label;
+    const cells = by.get(name) ?? [];
+    cells.push({ id: e.id, title: e.title, level: hitLevel(hits), status, stale, miss });
+    by.set(name, cells);
+  }
+  const todo = (cells: HeatCell[]) => cells.filter((c) => c.level === 0 || c.stale || c.miss).length / Math.max(1, cells.length);
+  return [...by]
+    .map(([name, cells]) => ({ name, cells }))
+    .sort((a, b) => todo(b.cells) - todo(a.cells) || a.name.localeCompare(b.name, 'ko'));
+}
+
 /**
  * 한 노하우 행(목록) — 탭하면 수정. usedBy=이 노하우를 첨부한 업무 수(0069 역조회, 임팩트).
  * divider=false 는 아래에 1탭 검증 버튼이 붙는 경우 — 구분선을 래퍼가 대신 갖는다.
@@ -105,7 +146,7 @@ function EntryRow({ e, onPress, usedBy = 0, divider = true }: { e: PlaybookEntry
           ) : null}
           {e.needs_review ? (
             <View style={styles.badgeReview}>
-              <Text style={styles.badgeReviewText}>확인 필요</Text>
+              <Text style={styles.badgeReviewText}>점검 필요</Text>
             </View>
           ) : isUnused(e) ? (
             <View style={styles.badgeUnused}>
@@ -145,10 +186,13 @@ function EntryRow({ e, onPress, usedBy = 0, divider = true }: { e: PlaybookEntry
 export function OwnerKnowhowBrowse({
   onSelect,
   initialSegment,
+  initialListTab,
 }: {
   onSelect: (id: string) => void;
-  /** 진입 즉시 열 칸(딥링크). `/owner/categories?seg=todo` · `/owner/knowledge?review=1`. 없으면 '노하우'. */
+  /** 진입 즉시 열 칸(딥링크). `/owner/categories?seg=todo`. 없으면 '노하우'. */
   initialSegment?: KnowhowSegKey;
+  /** '노하우' 칸 목록 탭(딥링크). `/owner/knowledge?review=1` → 'review'. 없으면 '전체'. */
+  initialListTab?: KnowhowListTab;
 }) {
   const router = useRouter();
   const entries = usePlaybookStore((s) => s.entries);
@@ -206,6 +250,7 @@ export function OwnerKnowhowBrowse({
   const todo = useOwnerTodoCount();
 
   const [seg, setSeg] = useState<KnowhowSegKey>(initialSegment ?? 'knowhow');
+  const [listTab, setListTab] = useState<KnowhowListTab>(initialListTab ?? 'all');
   const [query, setQuery] = useState('');
   const [activeCat, setActiveCat] = useState<string | null>(null); // null = 전체(단일 선택). 카테고리(section) 이름.
   const [catSheet, setCatSheet] = useState(false); // 카테고리 편집 시트
@@ -258,13 +303,23 @@ export function OwnerKnowhowBrowse({
       verification: { state: 'owner_verified', verified_by: userName, verified_at: new Date().toISOString() },
     });
 
-  // 검색 + 카테고리 필터(목록·내보내기 공통 베이스).
+  // 목록 탭 → 검색 + 카테고리 필터(목록·내보내기 공통 베이스). 탭이 묶음을 정하고 그 안에서 다시 거른다.
   const baseFiltered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    let list = visible.filter((e) => matchesKnowhowQuery(e, q));
+    let list = visible;
+    if (listTab === 'review') list = list.filter(needsVerify);
+    else if (listTab === 'old') list = list.filter(isOldOnly);
+    list = list.filter((e) => matchesKnowhowQuery(e, q));
     if (effectiveCat) list = list.filter((e) => sectionOf(e) === effectiveCat);
     return list;
-  }, [visible, query, effectiveCat]);
+  }, [visible, listTab, query, effectiveCat]);
+
+  // 목록 탭 배지 — 검색·카테고리를 타지 않는 전체 기준(히트맵 주황·빨강과 같은 수).
+  const listTabItems: SegmentItem[] = useMemo(() => [
+    { key: 'all', label: '전체', count: visible.length },
+    { key: 'review', label: '점검 필요', count: visible.filter(needsVerify).length },
+    { key: 'old', label: '오래됨', count: visible.filter(isOldOnly).length },
+  ], [visible]);
 
   // 검색 실패 로그(O8, 슬라이스 D) — "찾다 못 찾은 주제"가 노하우 공백 신호다.
   // 타자 중 스팸 방지로 800ms 정지 후 1회만 기록. 노하우 0개 매장은 제외(공백 신호가 아니라 빈 매장).
@@ -321,6 +376,14 @@ export function OwnerKnowhowBrowse({
 
   const hasEntries = visible.length > 0;
 
+  /** 히트맵은 검색·카테고리 필터를 타지 않는다 — 전체 지도다. 카테고리 이름을 누르면 아래 목록이 걸러진다. */
+  const heatGroups = useMemo(() => buildKnowhowHeatmap(visible), [visible]);
+  const heatHead = useMemo(() => {
+    const asked = visible.filter((e) => (e.stats?.query_hits_30d ?? 0) > 0).length;
+    const todo = visible.filter((e) => needsVerify(e) || isOld(e)).length;
+    return { asked, todo };
+  }, [visible]);
+
   // 찾기 바(검색·카테고리 칩)는 개수와 무관하게 **항상** 띄운다 — 2026-08-19 결정.
   //  옛 FILTER_MIN(8건) 게이트를 폐기한 것이다. 자리가 개수에 따라 나타났다 사라지면 "여기 검색이 있다"를
   //  익힐 수 없고, 게이트가 만들던 '필터 걸어둔 채 7건이 되면 못 푸는' 잠김 예외도 같이 사라진다.
@@ -331,11 +394,11 @@ export function OwnerKnowhowBrowse({
   // 끊어 그리기를 처음으로 되돌리는 조건 = 거르기 조건 전부.
   // ★한 곳에서만 만든다 — 묶음 뷰와 평면 목록이 각자 조합하던 때 묶음 쪽에만 activeCat 이 빠져서,
   //   거른 뒤에도 '더 보기'가 열린 채로 남았다(2026-08-11 QA P3-#5).
-  const listKey = `${seg}-${query}-${activeCat ?? ''}`;
+  const listKey = `${seg}-${listTab}-${query}-${activeCat ?? ''}`;
 
   // 필터를 한 줄로 압축하면 "지금 걸려 있다"가 안 보인다 — 카운트가 그 신호를 대신 든다.
   const countLabel =
-    query.trim() || effectiveCat
+    query.trim() || effectiveCat || listTab !== 'all'
       ? `${visible.length}개 중 ${listFiltered.length}개`
       : `총 ${visible.length}개${hasEntries ? ' · 탭하면 수정' : ''}`;
 
@@ -345,11 +408,11 @@ export function OwnerKnowhowBrowse({
     <Pressable
       onPress={() => setLeaving(e.id)}
       accessibilityRole="button"
-      accessibilityLabel={`${e.title} 확인 완료로 표시`}
+      accessibilityLabel={`${e.title} 점검 완료로 표시`}
       style={({ pressed }) => [styles.verifyBtn, pressed && { opacity: 0.85 }]}
     >
       <Ionicons name="checkmark-circle" size={15} color={InkColors.ink} />
-      <Text style={styles.verifyBtnText}>확인 완료 (우리 매장 기준 맞아요)</Text>
+      <Text style={styles.verifyBtnText}>점검 완료 (우리 매장 기준 맞아요)</Text>
     </Pressable>
   );
 
@@ -420,6 +483,36 @@ export function OwnerKnowhowBrowse({
   const knowhowSegment = () => {
     return (
       <>
+        {/* ── 히어로(H5) — 노하우 1개 = 상자 1개. 색 = 한 달간 물어본 횟수(쓰임) · 점선 = 안 물어봄 ·
+               주황 = 확인 필요 · 빨강 = 오래 손 안 댐. 카테고리 이름 탭 = 아래 목록 필터, 상자 탭 = 고치기.
+               화면당 히어로 1개(배치규칙②) — 이 칸의 다른 블록은 찾기 바와 목록뿐이다. ── */}
+        {hasEntries && (
+          <Appear>
+            <Heatmap
+              head={{
+                value: String(heatHead.asked),
+                unit: `/${visible.length}개`,
+                title: '한 달간 직원이 물어본 노하우',
+                aside: heatHead.todo > 0 ? `손볼 것 ${heatHead.todo}개` : undefined,
+              }}
+              groups={heatGroups}
+              legend={KNOWHOW_LEGEND}
+              hint="상자 하나 = 노하우 하나 · 카테고리를 누르면 아래 목록이 걸러져요"
+              onPressCell={onSelect}
+              onPressGroup={(name) => selectCat(name === getSectionMeta(UNSECTIONED).label ? UNSECTIONED : name)}
+            />
+          </Appear>
+        )}
+
+        {/* 목록 탭(F) — 전체 / 확인 필요 / 오래됨. 행 안 상태 칩이 말하던 것을 탭으로 올린다(§7-2).
+            카테고리 칩은 아래 찾기 바에 그대로 — 탭이 묶음을 정하고 칩이 그 안에서 거른다. */}
+        {hasEntries && (
+          <Appear delay={stagger(1)}>
+            <SectionLabel title="목록" />
+            <SegmentTabs items={listTabItems} value={listTab} onChange={(k) => setListTab(k as KnowhowListTab)} style={styles.listTabs} />
+          </Appear>
+        )}
+
         {/* 개수 줄 + 톱니. 톱니 패널이 이 줄 아래에 **떠서** 열리므로(밀어내지 않는다) 이 블록이 그 앵커다. */}
         <View style={styles.headBlock}>
           <View style={styles.headRow}>
@@ -576,7 +669,7 @@ export function OwnerKnowhowBrowse({
           <>
             {/* 목록 */}
             {listFiltered.length === 0 ? (
-              <EmptyResult onReset={() => { setQuery(''); setActiveCat(null); }} onAsk={goAsk} />
+              <EmptyResult onReset={() => { setQuery(''); setActiveCat(null); setListTab('all'); }} onAsk={goAsk} />
             ) : showUsageGroups ? (
               usageGroups.map((g) => groupBlock(g.key, g.title, g.items))
             ) : (
@@ -607,7 +700,7 @@ export function OwnerKnowhowBrowse({
     <>
       <OwnerTodoSegment aiAnswers={aiAnswers} aiError={aiError} />
 
-      {reviewList.length > 0 && groupBlock('review', '확인 안 한 것', reviewList)}
+      {reviewList.length > 0 && groupBlock('review', '점검할 노하우', reviewList)}
       {/* 라벨=판정(isUnused = 만든 지 30일 경과 + 인용 0회) 그대로. 위 usageGroups 의 'cold' 와 같은 말이어야 한다. */}
       {unusedList.length > 0 && groupBlock('unused', '한 달간 아무도 안 물어봤어요', unusedList)}
 
@@ -726,6 +819,8 @@ const styles = StyleSheet.create({
 
   // 세그먼트 — 공용 SegmentTabs 의 margin(16)을 화면 거터(20)에 맞춘다.
   segTabs: { marginHorizontal: Space.gutter, marginTop: Space.md, marginBottom: 0 },
+  // 목록 탭 — 스크롤 본문 안이라 거터는 부모가 갖는다. 라벨과의 간격만 남긴다.
+  listTabs: { marginHorizontal: 0, marginTop: Space.sm, marginBottom: 0 },
 
   // 톱니 패널의 앵커. zIndex 가 없으면 뒤에 오는 형제(찾기 바·목록)가 위에 그려져 패널이 가려진다.
   headBlock: { position: 'relative', zIndex: 20 },

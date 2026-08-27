@@ -387,7 +387,8 @@ export function WorkChat({
           <Appear style={s.menu}>
             <MenuItem icon="checkmark-circle-outline" label="할일 추가" sub={isOwner ? '매장 전체 / 나만 보기' : '나만 보기'} onPress={() => { setMenu(false); onAddTask(); }} />
             <MenuItem icon="image-outline" label="사진 보내기" sub={sendingPhoto ? '올리는 중…' : '한 번에 최대 10장'} onPress={() => { setMenu(false); onSendPhoto(); }} />
-            {isOwner && <MenuItem icon="megaphone-outline" label="공지 작성" sub="사장만" onPress={() => { setMenu(false); onWriteNotice(); }} top />}
+            {/* 공지 작성은 누구나(0177) — NoticePanel 의 작성칸과 같은 규칙. 역할로 가리지 않는다. */}
+            <MenuItem icon="megaphone-outline" label="공지 작성" sub="이 방 사람 모두에게" onPress={() => { setMenu(false); onWriteNotice(); }} top />
             <View style={s.menuInfoRow}>
               <Text style={s.menuInfoText}>사진은 자동으로 압축돼서 올라가요</Text>
               <InfoDot title={PHOTO_UPLOAD_INFO.title} body={PHOTO_UPLOAD_INFO.body} size={14} accessibilityLabel="사진 업로드 규격 안내" />
@@ -583,7 +584,8 @@ const s = StyleSheet.create({
     height: HDR_H, borderRadius: Radius.pill, backgroundColor: InkColors.bg,
     flexDirection: 'row', alignItems: 'center', gap: Space.xs, paddingHorizontal: Space.sm, ...Elevation.e2,
   },
-  hdrBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
+  // RN-web 은 hitSlop 을 무시한다 — 상자 자체를 44 로.
+  hdrBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   searchInp: { flex: 1, fontSize: 15, color: InkColors.ink, paddingVertical: Space.xs },
   matchCount: { fontSize: 12, fontWeight: '700', color: InkColors.ink3 },
   hdrDot: { position: 'absolute', top: 6, right: 6, width: 8, height: 8, borderRadius: Radius.pill, backgroundColor: BrandColors.bad },
@@ -633,11 +635,11 @@ const s = StyleSheet.create({
 
   // 입력바(떠 있는 알약)는 공용 ChatComposerBar 가 그린다 — 코치·물어보기와 같은 형태.
   inputFlat: { backgroundColor: 'transparent', borderColor: 'transparent', paddingHorizontal: Space.sm },
-  plus: { width: 38, height: 38, borderRadius: Radius.pill, backgroundColor: InkColors.ink, alignItems: 'center', justifyContent: 'center' },
-  send: { width: 38, height: 38, borderRadius: Radius.pill, backgroundColor: BrandColors.yellow, borderWidth: 1, borderColor: BrandColors.yellowDeep, alignItems: 'center', justifyContent: 'center' },
+  plus: { width: 44, height: 44, borderRadius: Radius.pill, backgroundColor: InkColors.ink, alignItems: 'center', justifyContent: 'center' },
+  send: { width: 44, height: 44, borderRadius: Radius.pill, backgroundColor: BrandColors.yellow, borderWidth: 1, borderColor: BrandColors.yellowDeep, alignItems: 'center', justifyContent: 'center' },
 
   menuBackdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
-  menu: { position: 'absolute', left: Space.md, bottom: COMPOSER_BAR_H(38) + 4, backgroundColor: InkColors.bg, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md, padding: 6, width: 220, ...Elevation.e3 },
+  menu: { position: 'absolute', left: Space.md, bottom: COMPOSER_BAR_H(44) + 4, backgroundColor: InkColors.bg, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md, padding: 6, width: 220, ...Elevation.e3 },
   mi: { flexDirection: 'row', alignItems: 'center', gap: 11, padding: 11, borderRadius: Radius.sm },
   miTop: { borderTopWidth: 1, borderTopColor: InkColors.line, marginTop: 3, paddingTop: 12 },
   miIc: { width: 30, height: 30, borderRadius: Radius.sm, backgroundColor: BrandColors.yellowSoft, alignItems: 'center', justifyContent: 'center' },
