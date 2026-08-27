@@ -2,6 +2,7 @@ import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { KnowhowRows } from '@/components/blocks/KnowhowRows';
 import { InkColors } from '@/lib/theme/colors';
 import { Space } from '@/lib/theme/layout';
+import { fmtDateKo } from '@/lib/utils/schedule';
 
 type Props = {
   /** 존칭 포함 완성 라벨("김영자 사장님"/"박지원 매니저") — 판정은 knowhowSourceLabel SSOT가 담당. */
@@ -31,7 +32,7 @@ export function SourceFooter({ creatorName, title, version, updatedAt, onPress }
             <Text style={styles.creator}>{creatorName} 가이드</Text>
             <Text style={styles.title} numberOfLines={2}>{title}</Text>
             <View style={styles.metaRow}>
-              <Text style={styles.meta}>v{version} · {updatedAt} 갱신</Text>
+              <Text style={styles.meta}>v{version} · {fmtDateKo(updatedAt.slice(0, 10))} 갱신</Text>
               {onPress ? <Text style={styles.openHint}>원문 보기 ›</Text> : null}
             </View>
           </View>
@@ -59,8 +60,8 @@ const styles = StyleSheet.create({
   creator: { fontSize: 15, fontWeight: '700', color: InkColors.ink },
   title: { fontSize: 15, color: InkColors.ink2, fontWeight: '600' },
   metaRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Space.sm },
-  meta: { fontSize: 12.5, color: InkColors.ink3 },
+  meta: { fontSize: 13, color: InkColors.ink3 },
   // ★골드(#F0D000)를 글자색으로 쓰지 않는다 — 크림 면이 사라진 흰 배경에서는 대비가 1.6 수준이다.
   //   색 규칙("color: 에 500을 쓰지 않는다")대로 중립 800으로 내린다.
-  openHint: { fontSize: 12.5, fontWeight: '800', color: InkColors.ink2 },
+  openHint: { fontSize: 13, fontWeight: '800', color: InkColors.ink2 },
 });

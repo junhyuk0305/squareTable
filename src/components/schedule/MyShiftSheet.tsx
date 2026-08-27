@@ -121,7 +121,8 @@ const s = StyleSheet.create({
   editBox: { padding: 16, gap: Space.sm },
   label: { fontSize: 11.5, fontWeight: '800', color: InkColors.ink2 },
   timeRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  timeInp: { flex: 1, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.sm, paddingHorizontal: 13, minHeight: 48, fontSize: 15, fontWeight: '700', color: InkColors.ink, backgroundColor: InkColors.cream, textAlign: 'center', ...(Platform.OS === 'web' ? ({ outlineStyle: 'none' } as object) : null) },
+  // ★minWidth:0 — RN-web TextInput 은 브라우저 고유 폭(size=20)이 flex-basis 라 두 칸이 안 줄어 뷰포트 밖(497px)으로 나갔다.
+  timeInp: { flex: 1, minWidth: 0, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.sm, paddingHorizontal: 13, minHeight: 48, fontSize: 15, fontWeight: '700', color: InkColors.ink, backgroundColor: InkColors.cream, textAlign: 'center', ...(Platform.OS === 'web' ? ({ outlineStyle: 'none' } as object) : null) },
   timeInpBad: { borderColor: BrandColors.badText },
   tilde: { fontSize: 15, color: InkColors.ink3, fontWeight: '700' },
   warn: { fontSize: 12, color: BrandColors.badText, fontWeight: '700' },

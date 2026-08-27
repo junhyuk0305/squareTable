@@ -249,7 +249,7 @@ const s = StyleSheet.create({
   colors: { flex: 1, gap: Space.sm },
   colorLabel: { fontSize: 12, fontWeight: '800', color: InkColors.ink2 },
   colorRow: { flexDirection: 'row', gap: Space.sm },
-  swatch: { width: 28, height: 28, borderRadius: Radius.pill, borderWidth: 2, borderColor: 'transparent' },
+  swatch: { width: 36, height: 36, borderRadius: Radius.pill, borderWidth: 2, borderColor: 'transparent' },
   swatchOn: { borderColor: InkColors.ink },
   clearPhoto: { fontSize: 12.5, fontWeight: '700', color: InkColors.ink3, paddingVertical: Space.xs },
 

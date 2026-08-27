@@ -81,7 +81,7 @@ export default function JuniorHomeScreen() {
           // ★업무·출퇴근·근무표가 **전부** 도착하기 전에는 본문을 마운트하지 않는다.
           //   값마다 '—'·"가져오는 중이에요"를 박으면 반쯤 채워진 화면이 먼저 서고,
           //   중복 출근 방지도 버튼 안에서 따로 막아야 했다(도착 전엔 records가 [] 라 검사가 그냥 통과한다).
-          <ScreenLoading label="오늘 할 일을 불러오고 있어요…" />
+          <ScreenLoading label="오늘 할일을 불러오고 있어요…" />
         ) : (
           <>
         {/* 1) 오늘 할 일 히어로 — items를 비워 서브내비 없이 히어로만 전체 라운드로 그린다.
@@ -90,7 +90,7 @@ export default function JuniorHomeScreen() {
             같은 액션이라 중복 출근 방지도 스토어 쪽 로직을 그대로 탄다. */}
         <Appear delay={stagger(0)}>
           <HeroSubNav
-            label="오늘 할 일"
+            label="남은 할일"
             value={heroValue}
             caption={nextTask ? `지금은 ${nextTask.text} · ${clockLine}` : clockLine}
             ctaLabel={working ? '퇴근하기' : todayRecs.length > 0 ? '다시 출근하기' : '출근하기'}
@@ -124,7 +124,7 @@ export default function JuniorHomeScreen() {
           />
           <View style={styles.todoCard}>
             {taskTotal === 0 ? (
-              <Text style={styles.todoEmpty}>오늘 할 일이 없어요</Text>
+              <Text style={styles.todoEmpty}>오늘 할일이 없어요</Text>
             ) : (
               todayTasks.slice(0, HOME_LIST_LIMIT).map((t, i) => (
                 <View key={t.id} style={[styles.todoRow, i > 0 && styles.todoRowDivider]}>

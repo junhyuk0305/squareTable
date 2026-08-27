@@ -5,6 +5,7 @@ import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useAttendanceStore } from '@/lib/store/useAttendanceStore';
 import { usePayrollStore, useWagesSettled } from '@/lib/store/usePayrollStore';
 import { useStaffStore } from '@/lib/store/useStaffStore';
+import { useSessionStore } from '@/lib/store/useSessionStore';
 import { TimesheetView } from '@/components/TimesheetView';
 import { RoleTabBar } from '@/components/RoleTabBar';
 import { ScreenLoading } from '@/components/ScreenLoading';
@@ -21,6 +22,7 @@ export default function OwnerTimesheetScreen() {
   const { staffId } = useLocalSearchParams<{ staffId: string }>();
   const wages = usePayrollStore((s) => s.wages);
   const getStaff = useStaffStore((s) => s.getStaff);
+  const isOwner = useSessionStore((s) => s.role) === 'owner';
 
   // ★게이트가 `if (!staff)` 보다 **먼저** 있어야 한다 — 직원 목록이 도착하기 전에는 getStaff가 항상 undefined라
   //   "직원을 찾을 수 없어요"라는 **사실과 반대되는 막다른 화면**이 먼저 그려진다(웹 새로고침·푸시 딥링크로 재현).
@@ -51,6 +53,8 @@ export default function OwnerTimesheetScreen() {
         <Stack.Screen options={{ title: '출근 기록' }} />
         {/* 막다른 길 금지 — 빈/오류 상태에도 다음 행동 하나를 준다(복잡도 원칙 P6). */}
         <Text style={styles.empty}>직원을 찾을 수 없어요.{'\n'}내보냈거나 아직 합류하지 않은 직원이에요.</Text>
+        {/* 직원 관리는 사장 전용 — 매니저에겐 이 버튼을 그리지 않는다. */}
+        {isOwner ? (
         <Pressable
           onPress={() => router.replace('/owner/staff')}
           style={({ pressed }) => [styles.backBtn, pressed && { opacity: 0.85 }]}
@@ -58,6 +62,7 @@ export default function OwnerTimesheetScreen() {
         >
           <Text style={styles.backBtnText}>직원 목록 보기</Text>
         </Pressable>
+        ) : null}
         <RoleTabBar role="owner" />
       </SafeAreaView>
     );
@@ -85,7 +90,7 @@ export default function OwnerTimesheetScreen() {
             </View>
           </View>
         }
-        footerNote="* 수정한 시간은 근무·급여 화면 인건비에 바로 반영돼요."
+        footerNote="* 출퇴근 기록은 확인용이에요. 급여는 근무표 기준으로 계산돼요."
       />
     </>
   );

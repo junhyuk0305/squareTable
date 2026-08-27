@@ -127,7 +127,10 @@ function BillingBody() {
   //   곱했기 때문에 "이 결제가 몇 개분인지"가 시스템에 없었고, 매장을 하나 추가할 때마다
   //   전 매장 요금이 한꺼번에 청구됐다. 이제 개수가 결제의 입력이다(payment_claims.store_count).
   const ownedCount = stores.filter((st) => st.role === 'owner').length;
-  const [storeCount, setStoreCount] = useState(paramStores >= 1 ? paramStores : 1);
+  // 다점포는 "매장 2개부터"다 — 파라미터가 없으면 소유 매장 수(최소 2)로 시작한다. 예전엔 1로 시작해
+  //   "매장 1개 × 29,000원 / 지금 매장 2개를 갖고 계세요"가 한 화면에 공존했다. 이 값은 multi 에서만 쓰인다.
+  const MULTI_MIN_STORES = 2;
+  const [storeCount, setStoreCount] = useState(paramStores >= 1 ? paramStores : Math.max(ownedCount, MULTI_MIN_STORES));
   const buyCount = selectedPlan === 'multi' ? storeCount : 1;
   const monthlyTotal = planMonthlyPrice(selectedPlan, buyCount); // 공급가액(표시가)
   const monthlyBilled = withVat(monthlyTotal); // 실제 입금 요청액 — 서버 payment_claim_amount(0130)와 같은 값
@@ -540,9 +543,9 @@ function BillingBody() {
                         <Text style={styles.payFieldLabel}>매장 개수</Text>
                         <View style={styles.stepper}>
                           <Pressable
-                            onPress={() => setStoreCount((n) => Math.max(1, n - 1))}
-                            disabled={storeCount <= 1}
-                            style={({ pressed }) => [styles.stepBtn, pressed && { opacity: 0.6 }, storeCount <= 1 && { opacity: 0.4 }]}
+                            onPress={() => setStoreCount((n) => Math.max(MULTI_MIN_STORES, n - 1))}
+                            disabled={storeCount <= MULTI_MIN_STORES}
+                            style={({ pressed }) => [styles.stepBtn, pressed && { opacity: 0.6 }, storeCount <= MULTI_MIN_STORES && { opacity: 0.4 }]}
                             accessibilityRole="button"
                             accessibilityLabel="매장 개수 줄이기"
                           >

@@ -40,7 +40,7 @@ export default function HubNotificationsScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
       <Stack.Screen
-        options={{ headerShown: true, title: '알림', headerLeft: () => <HeaderBackButton fallback="/stores" /> }}
+        options={{ headerShown: true, title: '알림', headerLeft: () => <HeaderBackButton fallback="/hub" /> }}
       />
       {!ready ? (
         <ScreenLoading label="알림을 불러오고 있어요…" />

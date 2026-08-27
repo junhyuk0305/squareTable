@@ -88,7 +88,9 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
   //   `role === 'owner'` 가 매니저에게도 true 였고, 0093 이 막으려던 케이스가 그대로 뚫려 있었다(2026-08-08).
   const sessionRole = useSessionStore((s) => s.role);
   // 0093: 업무보드의 관리 표면(배정 뷰·전원 이름 등)은 매니저 포함 — 사장 전용 요소는 이 화면에 없다.
-  const isOwner = canManage(role);
+  // ★세션 역할로 판정한다 — prop `role` 로 판정하면 매니저가 `/junior/work`(직원 세트)로 들어올 때
+  //   업무 설정·수정 버튼이 사라졌다(2026-08-27 실측). 화면 세트는 탭바·라우팅에만 쓴다.
+  const isOwner = canManage(sessionRole);
 
   // 전 매장 동시 공지(S3 #3) — 사장이 매장 2개 이상이면 공지 작성 시 대상 매장 선택 제공.
   const stores = useSessionStore((s) => s.stores);
@@ -503,9 +505,9 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
   const askAboutMissed = useCallback(
     (seed: string) => {
       setSelfCheck(null);
-      router.replace({ pathname: isOwner ? '/owner/ask' : '/junior/chat', params: { seed } });
+      router.replace({ pathname: sessionRole === 'owner' ? '/owner/ask' : '/junior/chat', params: { seed } });
     },
-    [isOwner],
+    [sessionRole],
   );
 
   const memberCount = Math.max(1, (owner ? 1 : 0) + staff.length);
@@ -857,7 +859,7 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
           sendingPhoto={sendingPhoto}
           onReact={(id, emoji) => toggleReaction(id, userId, emoji)}
           onMessageToTask={messageToTask}
-          onMessageToKnowhow={isOwner ? messageToKnowhow : undefined}
+          onMessageToKnowhow={sessionRole === 'owner' ? messageToKnowhow : undefined}
           onDelete={deleteFeedItem}
           onAddTask={() => setComposer({ open: true, date: today })}
           onAssignTask={(id) => setComposer({ open: true, date: today, assigneeId: id })}

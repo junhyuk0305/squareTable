@@ -40,7 +40,12 @@ export function BrowseCard({
   renderExtra?: (entry: PlaybookEntry) => React.ReactNode;
 }) {
   const v = verifyMeta(entry.verification?.state);
-  const ratePct = Math.round((entry.stats?.resolution_rate ?? 0) * 100);
+  // 해결률은 피드백 표본(thumbs_up+thumbs_down)이 있을 때만 — 표본 0이면 "0%"가 아니라 숨긴다.
+  const rateSamples = (entry.stats?.thumbs_up ?? 0) + (entry.stats?.thumbs_down ?? 0);
+  const ratePct =
+    rateSamples > 0 && typeof entry.stats?.resolution_rate === 'number'
+      ? Math.round(entry.stats.resolution_rate * 100)
+      : null;
   const hits = entry.stats?.query_hits_30d ?? 0;
   const doText = entry.square?.extract?.do?.trim();
   const dontText = entry.square?.extract?.dont?.trim();
@@ -53,7 +58,7 @@ export function BrowseCard({
       <Pressable
         onPress={() => onSelect(entry)}
         accessibilityRole="button"
-        accessibilityLabel={`${entry.title}, ${v.label}, 해결률 ${ratePct}%${hits > 0 ? `, ${hits}명이 물어봄` : ''}`}
+        accessibilityLabel={`${entry.title}, ${v.label}${ratePct !== null ? `, 해결률 ${ratePct}%` : ''}${hits > 0 ? `, ${hits}명이 물어봄` : ''}`}
         style={({ pressed }) => [styles.cardBody, pressed && styles.pressed]}
       >
         {/* 헤더: 카테고리(색점+이름) + 검증배지. 노출은 showCategory로 제어. */}
@@ -75,15 +80,17 @@ export function BrowseCard({
         </Text>
 
         {/* 해결률 · 물어본 수 — 있는 것만 */}
-        <View style={styles.statRow}>
-          <Text style={styles.rate}>해결률 {ratePct}%</Text>
-          {hits > 0 ? <Text style={styles.hits}>{hits}명이 물어봤어요</Text> : null}
-        </View>
+        {ratePct !== null || hits > 0 ? (
+          <View style={styles.statRow}>
+            {ratePct !== null ? <Text style={styles.rate}>해결률 {ratePct}%</Text> : null}
+            {hits > 0 ? <Text style={styles.hits}>{hits}명이 물어봤어요</Text> : null}
+          </View>
+        ) : null}
 
         {/* DO / DON'T 1줄 미리보기 — 있는 것만 */}
         {doText ? (
           <View style={[styles.preview, { borderLeftColor: BrandColors.good }]}>
-            <Text style={[styles.previewTag, { color: BrandColors.goodText }]}>DO</Text>
+            <Text style={[styles.previewTag, { color: BrandColors.goodText }]}>할 일</Text>
             <Text style={styles.previewText} numberOfLines={1}>
               {doText}
             </Text>
@@ -91,7 +98,7 @@ export function BrowseCard({
         ) : null}
         {dontText ? (
           <View style={[styles.preview, { borderLeftColor: BrandColors.warn }]}>
-            <Text style={[styles.previewTag, { color: BrandColors.warnText }]}>{"DON'T"}</Text>
+            <Text style={[styles.previewTag, { color: BrandColors.warnText }]}>금지</Text>
             <Text style={styles.previewText} numberOfLines={1}>
               {dontText}
             </Text>

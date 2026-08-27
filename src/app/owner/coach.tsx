@@ -267,7 +267,7 @@ export default function OwnerCoachScreen() {
   if (!ready) {
     return (
       <SafeAreaView style={styles.container} edges={['bottom']}>
-        <Stack.Screen options={{ title: '질문 답변' }} />
+        <Stack.Screen options={{ title: '답 쓰기' }} />
         <ScreenLoading label="질문을 불러오고 있어요…" />
       </SafeAreaView>
     );
@@ -281,7 +281,7 @@ export default function OwnerCoachScreen() {
   if (isInboxAnswer && queueLoadError && !justPublished) {
     return (
       <SafeAreaView style={styles.container} edges={['bottom']}>
-        <Stack.Screen options={{ title: '질문 답변' }} />
+        <Stack.Screen options={{ title: '답 쓰기' }} />
         <LoadErrorState title="질문을 불러오지 못했어요" onRetry={() => void retryQueue()} />
       </SafeAreaView>
     );
@@ -292,7 +292,7 @@ export default function OwnerCoachScreen() {
   if (isInboxAnswer && !answerable && !justPublished) {
     return (
       <SafeAreaView style={styles.container} edges={['bottom']}>
-        <Stack.Screen options={{ title: '질문 답변' }} />
+        <Stack.Screen options={{ title: '답 쓰기' }} />
         <EmptyState
           emoji="📭"
           title="이미 처리된 질문이에요"
@@ -310,7 +310,7 @@ export default function OwnerCoachScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
-      <Stack.Screen options={{ title: isInboxAnswer ? '질문 답변' : sugId ? '제안 검토' : '노하우 추가' }} />
+      <Stack.Screen options={{ title: isInboxAnswer ? '답 쓰기' : sugId ? '제안 검토' : '노하우 추가' }} />
 
       <OwnerCoachChat
         uq={uq}

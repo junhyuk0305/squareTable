@@ -16,7 +16,8 @@ import { tsMs } from '@/lib/utils/attendance';
 
 /** 떠 있는 헤더(top 10 + 높이 44) 아래로 8 띄운 자리. */
 const BAR_TOP = 62;
-const BAR_H = 40;
+// 칩 40 + 위아래 여백. RN-web 은 hitSlop 을 무시하므로 칩 상자 자체를 40 으로 만든다.
+const BAR_H = 48;
 /** 대화 스트림이 이 바에 가리지 않도록 WorkChat 이 더해야 할 상단 여백. */
 export const ROOMBAR_INSET = BAR_TOP + BAR_H - 44;
 
@@ -118,12 +119,12 @@ const s = StyleSheet.create({
     height: BAR_H, borderRadius: Radius.pill, backgroundColor: InkColors.bg, ...Elevation.e2,
   },
   row: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: Space.xs, height: BAR_H },
-  chip: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, paddingVertical: 6, borderRadius: Radius.pill, borderWidth: 1, borderColor: InkColors.line, backgroundColor: InkColors.bg, maxWidth: 150 },
+  chip: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, paddingVertical: 6, minHeight: 40, borderRadius: Radius.pill, borderWidth: 1, borderColor: InkColors.line, backgroundColor: InkColors.bg, maxWidth: 150 },
   chipOn: { backgroundColor: InkColors.ink, borderColor: InkColors.ink },
   chipText: { flexShrink: 1, fontSize: 13, fontWeight: '700', color: InkColors.ink2 },
   chipTextOn: { color: InkColors.bubbleText },
   // 안 읽음 배지 — 흰 글자를 얹는 면이라 500(bad)이 아니라 800 솔리드다(시맨틱 색 표).
   badge: { minWidth: 17, height: 17, paddingHorizontal: 4, borderRadius: Radius.pill, backgroundColor: BrandColors.badSolid, alignItems: 'center', justifyContent: 'center' },
   badgeText: { fontSize: 10.5, fontWeight: '800', color: InkColors.bg },
-  add: { width: 32, height: 32, alignItems: 'center', justifyContent: 'center', borderRadius: Radius.pill, borderWidth: 1, borderStyle: 'dashed', borderColor: InkColors.line, backgroundColor: InkColors.bg },
+  add: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', borderRadius: Radius.pill, borderWidth: 1, borderStyle: 'dashed', borderColor: InkColors.line, backgroundColor: InkColors.bg },
 });

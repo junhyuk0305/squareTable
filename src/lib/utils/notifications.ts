@@ -344,7 +344,7 @@ export function buildOwnerNotifications(args: {
     out.push({
       id: `q_${u.id}`,
       kind: 'question',
-      title: '답변을 기다리는 질문이 있어요',
+      title: '답 기다리는 질문이 있어요',
       body: u.query_text,
       at: u.asked_at,
       unread: isAfterAck(u.asked_at, ackAt),
