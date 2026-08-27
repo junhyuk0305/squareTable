@@ -365,6 +365,8 @@ function LegacyQuizBody({
 
   useEffect(() => {
     let alive = true;
+    // qa:ai-degraded-exempt: 이 경로는 ALLOW_AI_FALLBACK=false 로 꺼져 있어 실행되지 않는다(2026-08-27 확인).
+    // 되살릴 땐 이 줄을 지우고 degraded 고지를 먼저 붙일 것 — 검수 안 된 가짜 문항이 직원에게 나간다.
     generateQuiz({ taskText, sops }).then((out) => {
       if (!alive) return;
       if (out.quotaExceeded) { setPhase('quota'); return; }

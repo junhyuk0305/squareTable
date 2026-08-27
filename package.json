@@ -78,6 +78,8 @@
     "qa:quiz-grading": "node scripts/qa-quiz-grading.mjs",
     "qa:quiz-pick": "node scripts/qa-quiz-pick.mjs",
     "qa:quiz-gen": "node scripts/qa-quiz-gen.mjs",
+    "qa:quiz-flow": "node scripts/qa-quiz-create-flow.mjs",
+    "qa:ai-degraded": "node scripts/qa-ai-degraded.mjs",
     "qa:quiz-junior": "node scripts/qa-quiz-junior.mjs",
     "qa:multistore": "node scripts/qa-multistore.mjs",
     "qa:junior-multistore": "node scripts/qa-junior-multistore.mjs",
