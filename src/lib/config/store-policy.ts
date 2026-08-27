@@ -15,14 +15,18 @@
 //   "앱이 오로지 자사 계정 시스템만 사용" 예외에 해당해 면제된다.
 //   Sign in with Apple 추가는 9월 1.1 과제.
 //
-// 웹(Platform.OS==='web')과 Android 는 둘 다 true — 기존 동작이 그대로 유지된다.
+// ★ 2026-08-27: Android 네이티브도 SHOW_BILLING=false.
+//   근거: Google Play 결제 정책 — 앱 안에서 쓰는 구독은 Play 결제만 허용, 계좌이체 안내·외부결제 유도는 위반.
+//   1차 스토어 제출은 양 플랫폼 모두 결제 표면 없이 나가고, 인앱결제(IAP)는 2차에서 붙인다.
+//   결제 표면은 웹(dochackchack.com)에서만 보인다.
 
 import { Platform } from 'react-native';
 
 export const IS_IOS_NATIVE = Platform.OS === 'ios';
+const IS_NATIVE = Platform.OS !== 'web';
 
-/** 결제·가격·요금제 표면을 노출해도 되는가(플랫폼 축 — 빌드 시점에 고정). */
-export const SHOW_BILLING = !IS_IOS_NATIVE;
+/** 결제·가격·요금제 표면을 노출해도 되는가(플랫폼 축 — 빌드 시점에 고정). 웹에서만 true. */
+export const SHOW_BILLING = !IS_NATIVE;
 
 /**
  * 결제 표면을 지금 보여도 되는가 — **플랫폼 축 + 운영 축을 합친 최종 판정.**
