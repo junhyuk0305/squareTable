@@ -248,7 +248,7 @@ function uiText(body) {
     const hit = PAY_TOKENS.filter((t) => uiText(body).includes(t));
     if (hit.length > 0) leaks.push(`${f} — ${hit.join(', ')}`);
   }
-  console.log('\n■ iOS 결제 표면(3.1.3f):');
+  console.log('\n■ 네이티브 결제 표면(iOS 3.1.3f · Play 결제정책):');
   if (leaks.length === 0) {
     console.log('    ✅ store-policy 게이트를 안 거치는 결제·요금제 표면 없음');
   } else {
