@@ -234,6 +234,24 @@ export async function fetchOwnerToday(): Promise<DbResult<OwnerTodayRow[]>> {
   return { data: (data as OwnerTodayRow[]) ?? null, error: error as DbErr };
 }
 
+// ── 이번달 인건비 입력(0185) — 허브 현황 '이번달 인건비'·매장 비교표 ────────────────────────
+// 금액은 서버가 내지 않는다 — 규칙(주휴·야간·휴게)의 정본은 computePay 하나라, 허브도 직원 관리와
+// **같은 함수**로 계산한다. 이 RPC 는 활성 매장 RLS 밖의 소유 매장 원자료만 definer 로 넘긴다.
+export type OwnerLaborInputRow = {
+  unit_id: string;
+  staff_ids: string[];
+  shifts: ShiftTemplate[];
+  exceptions: ShiftException[];
+  wages: Record<string, number>;
+  payroll_settings: Record<string, unknown> | null;
+};
+export async function fetchOwnerLaborInputs(): Promise<DbResult<OwnerLaborInputRow[]>> {
+  if (!HAS_SUPABASE) return { data: [], error: null };
+  const { data, error } = await supabase.rpc('owner_labor_inputs');
+  if (error) readFail('fetchOwnerLaborInputs', error);
+  return { data: (data as OwnerLaborInputRow[]) ?? null, error: error as DbErr };
+}
+
 /** 0138: weekday(요일 반복) 또는 date(그 날짜 하루) 중 하나만 값이 있다. */
 export type MyShiftRow = { id: string; weekday: number | null; date: string | null; start: string; end: string };
 export type MyCrossSummaryRow = {

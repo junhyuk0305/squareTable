@@ -19,7 +19,8 @@ export type PayrollSettings = {
 //   localStorage는 오프라인/부팅 시 즉시 복원용 빠른 캐시(하이드레이트가 DB로 덮어씀).
 //   (예전엔 localStorage에만 저장 → 기기별 상이·무음 불일치. setWage와 달리 setSetting만 DB 미승격이었음.)
 const SETTINGS_KEY = 'sqt.payroll_settings.v1';
-const DEFAULT_SETTINGS: PayrollSettings = {
+// export: 허브 인건비(useHubStore)가 매장별 units.payroll_settings 를 **같은 기본값 위에** 병합한다(0185).
+export const DEFAULT_SETTINGS: PayrollSettings = {
   breakDeduction: true,
   nightAllowance: true,
   overtimeAllowance: false,
