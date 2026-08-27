@@ -258,10 +258,10 @@ export default function StoresHub() {
                     <Appear key={s.unit_id} delay={stagger(i)}>
                     <Pressable
                       onPress={() => enterStore(s)}
-                      style={({ pressed }) => [styles.card, isActive && styles.cardActive, isLocked && styles.cardLocked, { borderLeftWidth: 4, borderLeftColor: color }, pressed && { opacity: 0.92 }]}
+                      style={({ pressed }) => [styles.card, isActive && styles.cardActive, isLocked && styles.cardLocked, pressed && styles.pressed]}
                     >
                       <View style={[styles.cardIcon, { backgroundColor: color + '22' }]}>
-                        <Ionicons name={isLocked ? 'lock-closed-outline' : industryIcon(s.industry)} size={22} color={isLocked ? InkColors.ink3 : color} />
+                        <Ionicons name={isLocked ? 'lock-closed-outline' : industryIcon(s.industry)} size={20} color={isLocked ? InkColors.ink3 : color} />
                       </View>
                       <View style={{ flex: 1, minWidth: 0 }}>
                         <View style={styles.cardTitleRow}>
@@ -298,7 +298,7 @@ export default function StoresHub() {
                 })}
 
                 {/* 매장 추가(사장) / 매장 합류(직원) */}
-                <Pressable onPress={isOwner ? addStore : joinStore} style={({ pressed }) => [styles.addCard, pressed && { opacity: 0.85 }]}>
+                <Pressable onPress={isOwner ? addStore : joinStore} style={({ pressed }) => [styles.addCard, pressed && styles.pressed]}>
                   <View style={styles.addIcon}>
                     <Ionicons name={isOwner ? 'add' : 'enter-outline'} size={20} color={InkColors.ink} />
                   </View>
@@ -338,26 +338,29 @@ const styles = StyleSheet.create({
 
   section: { gap: Space.md },
 
+  // 카드 문법은 블록 v2(PickRow·RollupRows)와 같다 — Radius.md · 1px line · e1 · 좌우 lg/상하 md · 눌림 0.7.
   card: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.md,
-    backgroundColor: '#FFFFFF',
-    borderRadius: Radius.lg,
+    backgroundColor: InkColors.bg,
+    borderRadius: Radius.md,
     borderWidth: 1,
     borderColor: InkColors.line,
-    padding: Space.lg,
-    ...Elevation.e2,
+    paddingHorizontal: Space.lg,
+    paddingVertical: Space.md,
+    ...Elevation.e1,
   },
+  pressed: { opacity: 0.7 },
   cardActive: { borderColor: BrandColors.yellowDeep },
   // 잠긴 매장 — 눌러도 안 들어가진다는 걸 면으로도 말한다(라벨은 lockBadge 가 병기).
   cardLocked: { backgroundColor: InkColors.bgSoft },
-  cardIcon: { width: 46, height: 46, borderRadius: Radius.md, backgroundColor: BrandColors.yellowSoft, alignItems: 'center', justifyContent: 'center' },
+  cardIcon: { width: 40, height: 40, borderRadius: Radius.sm, backgroundColor: BrandColors.yellowSoft, alignItems: 'center', justifyContent: 'center' },
   cardTitleRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
-  storeName: { flexShrink: 1, fontSize: 16, fontWeight: '900', color: InkColors.ink, letterSpacing: -0.3 },
+  storeName: { flexShrink: 1, fontSize: 15, lineHeight: 21, fontWeight: '800', color: InkColors.ink },
   recentBadge: { fontSize: 10, fontWeight: '900', color: '#7a5f10', backgroundColor: BrandColors.yellow, paddingHorizontal: 8, paddingVertical: 2, borderRadius: Radius.pill, overflow: 'hidden' },
   lockBadge: { fontSize: 10, fontWeight: '900', color: InkColors.bubbleText, backgroundColor: InkColors.ink2, paddingHorizontal: 8, paddingVertical: 2, borderRadius: Radius.pill, overflow: 'hidden' },
-  storeMeta: { fontSize: 13, color: InkColors.ink2, marginTop: 4 },
+  storeMeta: { fontSize: 13, color: InkColors.ink2, marginTop: 2 },
   cardRight: { alignItems: 'flex-end', gap: Space.sm },
   needChip: {
     fontSize: 11, fontWeight: '900', color: '#8a5a12',
@@ -375,15 +378,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Space.md,
-    backgroundColor: '#FFFFFF',
-    borderRadius: Radius.lg,
-    borderWidth: 1.5,
+    backgroundColor: InkColors.bg,
+    borderRadius: Radius.md,
+    borderWidth: 1,
     borderColor: InkColors.ink3,
     borderStyle: 'dashed',
-    padding: Space.lg,
+    paddingHorizontal: Space.lg,
+    paddingVertical: Space.md,
   },
-  addIcon: { width: 46, height: 46, borderRadius: Radius.md, backgroundColor: InkColors.bgSoft, alignItems: 'center', justifyContent: 'center' },
-  addTitle: { fontSize: 15, fontWeight: '900', color: InkColors.ink },
+  addIcon: { width: 40, height: 40, borderRadius: Radius.sm, backgroundColor: InkColors.bgSoft, alignItems: 'center', justifyContent: 'center' },
+  addTitle: { fontSize: 15, lineHeight: 21, fontWeight: '800', color: InkColors.ink },
   addSub: { fontSize: 12, color: InkColors.ink2, marginTop: 2 },
 
   empty: { alignItems: 'center', paddingVertical: Space.xl, gap: Space.md },

@@ -12,6 +12,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 import { useHubStore } from '@/lib/store/useHubStore';
+import { useCrossNotifStore } from '@/lib/store/useCrossNotifStore';
 import { useMemberPrefsStore } from '@/lib/store/useMemberPrefsStore';
 import { useUnknownQueueStore } from '@/lib/store/useUnknownQueueStore';
 import { useStoreNav } from '@/lib/hooks/useStoreNav';
@@ -51,13 +52,17 @@ export function OwnerKnowhowHubView({ header }: { header: ReactNode }) {
   const uqQueue = useUnknownQueueStore((s) => s.queue);
   const uqLoaded = useUnknownQueueStore((s) => s.loaded);
   const hydrateUq = useUnknownQueueStore((s) => s.hydrate);
+  // 벨·탭 배지의 원천(cross) — /hub-growth 직진입 시 현황 탭을 안 거치면 아무도 안 당겨 배지가 0이었다.
+  const crossLoaded = useCrossNotifStore((s) => s.loaded);
+  const hydrateCross = useCrossNotifStore((s) => s.hydrate);
 
   useEffect(() => {
     void hydrateOwner();
     void hydrateStats();
     void hydratePrefs();
     void hydrateUq();
-  }, [hydrateOwner, hydrateStats, hydratePrefs, hydrateUq]);
+    void hydrateCross();
+  }, [hydrateOwner, hydrateStats, hydratePrefs, hydrateUq, hydrateCross]);
 
   /**
    * 이해도 합계 — ★매장마다 (노하우 × 직원)을 곱한 뒤 더한다.
@@ -120,12 +125,6 @@ export function OwnerKnowhowHubView({ header }: { header: ReactNode }) {
   const [picker, setPicker] = useState<Picker | null>(null);
   const allRows = (): StorePickerRow[] =>
     overview.map((r) => ({ uid: r.unit_id, label: labelOf(r.unit_id), color: colorOf(r.unit_id) }));
-  const startTemplates = (uid: string) => {
-    if (overview.length > 1) {
-      setPicker({ title: '노하우 담기', hint: '어느 매장에 담을지 골라 주세요', path: '/owner/templates', rows: allRows() });
-    } else void goStore(uid, '/owner/templates');
-  };
-
   /**
    * 관리 액션(A1) — 다점포면 "어느 매장에서 할지"를 먼저 고른다. 건수 배지는 없다:
    * 챙길 것 3지표와 달리 이건 "밀린 일"이 아니라 어느 매장에서든 시작할 수 있는 행동이다.
@@ -137,6 +136,8 @@ export function OwnerKnowhowHubView({ header }: { header: ReactNode }) {
       else void goStore(overview[0].unit_id, path);
     }
   };
+  /** 노하우 담기(업종 추천 팩) 진입 — 빈 매장 카드·빈 히어로 CTA 가 같은 곳으로 간다. */
+  const startTemplates = act('노하우 담기', '어느 매장에 담을지 골라 주세요', '/owner/templates');
 
   /** 챙길 것 한 칸을 눌렀을 때 — 다점포면 매장 선택(건수 배지 포함), 단일이면 바로 이동. */
   const jump = (title: string, val: (r: (typeof overview)[number]) => number, path: Href) => () => {
@@ -159,7 +160,7 @@ export function OwnerKnowhowHubView({ header }: { header: ReactNode }) {
   //   경고행이 화면이 뜬 뒤에 밀고 들어왔고, prefs 는 아예 빠져 매장 별명·색이 갈아끼워졌다.
   // 실패 표면화는 db.ts readFail(SyncBanner), 재시도는 각 hydrate 의 TTL 리셋이 맡는다.
   // ★단일 매장은 질문 큐(FocusCard 인용)까지 와야 한다 — 먼저 그리면 롤업이 떴다가 카드로 갈아끼워진다.
-  if (!ownerLoaded || !statsLoaded || !prefsLoaded || (overview.length === 1 && !uqLoaded)) {
+  if (!ownerLoaded || !statsLoaded || !prefsLoaded || !crossLoaded || (overview.length === 1 && !uqLoaded)) {
     return (
       <View style={styles.loading}>
         <ScreenLoading label="매장 노하우 현황을 불러오고 있어요…" />
@@ -184,7 +185,7 @@ export function OwnerKnowhowHubView({ header }: { header: ReactNode }) {
             <Text style={styles.emptyTitle}>{labelOf(r.unit_id)}에 아직 노하우가 없어요</Text>
             <Text style={styles.emptyBody}>업종 추천 노하우를 담으면 직원이 물을 때 AI가 대신 답해요.</Text>
             <Pressable
-              onPress={() => startTemplates(r.unit_id)}
+              onPress={startTemplates}
               disabled={!!switching}
               style={({ pressed }) => [styles.emptyBtn, pressed && { opacity: 0.9 }]}
               accessibilityRole="button"
@@ -225,9 +226,9 @@ export function OwnerKnowhowHubView({ header }: { header: ReactNode }) {
                 faces: [
                   <View key="legend">
                     {[
-                      { color: BrandColors.good, text: '직원이 앎', value: understanding.known },
-                      { color: InkColors.bgSoft, border: true, text: '아직 모름', value: understanding.cells - understanding.known, hot: true },
-                      { color: BrandColors.warn, text: '문항 없음', value: understanding.noItems, hot: understanding.noItems > 0 },
+                      { color: BrandColors.good, text: '아는 칸', value: understanding.known },
+                      { color: InkColors.bgSoft, border: true, text: '모르는 칸', value: understanding.cells - understanding.known, hot: true },
+                      { color: BrandColors.warn, text: '문항 없는 노하우', value: understanding.noItems, hot: understanding.noItems > 0 },
                     ].map((r, i) => (
                       <View key={r.text} style={[styles.lgRow, i > 0 && styles.lgDivider]}>
                         <View style={[styles.lgDot, { backgroundColor: r.color }, r.border && styles.lgDotBorder]} />
@@ -249,7 +250,10 @@ export function OwnerKnowhowHubView({ header }: { header: ReactNode }) {
                   </View>,
                 ],
                 captions: [
-                  `노하우 ${understanding.entries}개 × 직원 ${understanding.staff}명 = ${understanding.cells}칸 중 ${understanding.known}칸을 알아요.`,
+                  // ★다점포는 곱식을 쓰지 않는다 — 칸은 매장별 곱의 합이라 "전체 노하우 × 전체 직원"과 안 맞는다.
+                  overview.length > 1
+                    ? `${understanding.cells}칸 중 ${understanding.known}칸을 알아요.`
+                    : `노하우 ${understanding.entries}개 × 직원 ${understanding.staff}명 = ${understanding.cells}칸 중 ${understanding.known}칸을 알아요.`,
                   understanding.noItems > 0
                     ? `문항이 없는 노하우 ${understanding.noItems}개부터 퀴즈로 내 보세요.`
                     : '모든 노하우에 문항이 있어요. 직원이 풀면 칸이 채워져요.',
@@ -276,7 +280,7 @@ export function OwnerKnowhowHubView({ header }: { header: ReactNode }) {
             onPress={
               understanding.staff === 0
                 ? act('직원 초대', '어느 매장에 초대할지 골라 주세요', '/owner/staff')
-                : act('노하우 담기', '어느 매장에 담을지 골라 주세요', '/owner/templates')
+                : startTemplates
             }
             disabled={!!switching}
             style={({ pressed }) => [styles.emptyBtn, pressed && { opacity: 0.9 }]}
@@ -404,18 +408,18 @@ export function OwnerKnowhowHubView({ header }: { header: ReactNode }) {
              '직원 질문'은 현황 탭의 '답 기다리는 질문'과 같은 수(pending_q)다 — 같은 이름으로 부른다. ── */}
       {!(allClear && totals.knowhow > 0) && (
         <Appear delay={stagger(5)}>
-          <SectionLabel title="오늘 손볼 것" hint={`${totals.pending + totals.review + totals.stale}건`} />
+          <SectionLabel title="고칠 노하우" hint={`${totals.pending + totals.review + totals.stale}건`} />
           {/* 제목과 카드 사이 = 다른 섹션 카드의 marginTop(Space.sm)과 같게 — 블록 자체엔 바깥 여백이 없다. */}
           <View style={{ marginTop: Space.sm }}>
           {(() => {
             const reviewRow: RollupRow = {
               key: 'review',
-              title: '확인 필요한 노하우',
+              title: '점검할 노하우',
               count: totals.review,
               unit: '개',
               hot: totals.review > 0,
-              // ★'검증'은 승인 어휘 밖 — 매장 앱과 같은 '확인 필요'. 착지 = ?review=1 필터 목록.
-              onPress: jump('확인이 필요한 노하우', (r) => r.needs_review, '/owner/knowledge?review=1'),
+              // ★'검증'은 승인 어휘 밖 — 2026-08-27부터 이 축은 '점검'(업무 검수 '확인'과 분리). 착지 = ?review=1 필터 목록.
+              onPress: jump('점검할 노하우', (r) => r.needs_review, '/owner/knowledge?review=1'),
             };
             const staleRow: RollupRow = {
               key: 'stale',
@@ -460,7 +464,7 @@ export function OwnerKnowhowHubView({ header }: { header: ReactNode }) {
 
       {allClear && totals.knowhow > 0 && (
         <Appear delay={stagger(6)}>
-          <Text style={styles.allClearText}>지금은 손볼 노하우가 없어요</Text>
+          <Text style={styles.allClearText}>지금은 고칠 노하우가 없어요</Text>
         </Appear>
       )}
 

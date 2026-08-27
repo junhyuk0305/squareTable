@@ -24,9 +24,10 @@ const BLOCK_LEAF = new Set([
   // src/components/blocks/ 8종 — ui.md와 정확히 같아야 한다
   'ProgressRing', 'StepProgress', 'ActionRow', 'MiniStats', 'AlertRow',
   // 2026-08-07 추가 3종 — 화면에서 '한 덩어리'로 서는 것만 여기 넣는다.
-  //   ProgressPill·GutterRow 는 행 안의 원자(칩·행)라 블록이 아니다 —
+  //   ProgressPill 은 행 안의 원자(칩)라 블록이 아니다 —
   //   넣으면 목록 한 줄이 블록 1개로 세어져 상한이 터진다.
-  'HeroSubNav', 'KvTable', 'WeekStrip',
+  //   KvTable·GutterRow 는 2026-08-27 D10 판정으로 삭제(실 import 0건).
+  'HeroSubNav', 'WeekStrip',
   // 2026-08-26 추가 — 월 달력. TaskComposerModal 안에 있던 것을 올렸다(퀴즈 일정·링크 만료가 같이 쓴다).
   //   WeekStrip(요일 7칸 스트립)과 다른 물건이다 — 이건 달 전체를 펼쳐 하루를 고르는 한 덩어리다.
   'MiniCalendar',

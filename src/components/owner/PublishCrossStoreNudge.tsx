@@ -87,7 +87,7 @@ export function PublishCrossStoreNudge({
           })}
         </View>
 
-        <Text style={s.hint}>가져간 노하우는 “확인 필요”로 표시돼요. 사진은 함께 옮겨지지 않아요.</Text>
+        <Text style={s.hint}>가져간 노하우는 “점검 필요”로 표시돼요. 사진은 함께 옮겨지지 않아요.</Text>
 
         <View style={s.foot}>
           <Pressable onPress={onClose} style={({ pressed }) => [s.skip, pressed && { opacity: 0.7 }]} accessibilityRole="button" accessibilityLabel="안 할게요">

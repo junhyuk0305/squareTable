@@ -163,7 +163,7 @@ export default function OwnerOnboardingScreen() {
                 <Text style={styles.doneTitle}>노하우 {registeredCount}개로 시작해요</Text>
                 <Text style={styles.doneSub}>
                   이제 직원이 물어보면 AI가 이 노하우로 대신 답해줘요.{'\n'}
-                  <Text style={styles.doneStrong}>‘확인 필요’ 표시</Text>가 붙은 건 나중에 우리 매장에 맞게 다듬어 주세요.
+                  <Text style={styles.doneStrong}>‘점검 필요’ 표시</Text>가 붙은 건 나중에 우리 매장에 맞게 다듬어 주세요.
                 </Text>
               </>
             ) : (

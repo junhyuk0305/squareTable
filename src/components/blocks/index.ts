@@ -26,19 +26,16 @@
  * | D9      | `WeekStrip`         | 유지 | |
  * | (문서 없음)| `MiniCalendar`    | 유지 | 월 달력(WeekStrip 과 다른 물건) |
  * | D7      | `ProgressPill`      | 유지 | 행 안의 원자 — 블록 아님 |
- * | D4      | `GutterRow`         | 0곳  | D10 삭제 판정 대기 |
- * | I2      | `KvTable`           | 0곳  | D10 삭제 판정 대기 |
+ * | D4·I2   | GutterRow · KvTable | 삭제 | 2026-08-27 D10 판정 — 실 import 0건 (NudgeCard 는 blocks 아님·유지) |
  * | —       | `TransitionCover`   | 유지 | 화면을 대체하는 커버(CHROME) |
  * | (폐기)  | SpotlightCard · '챙길 것' MiniStats 3칸 · AR1 | — | §7-2 |
  */
 export { ActionRow, type ActionRowItem } from './ActionRow';
 export { AlertRow } from './AlertRow';
 export { FocusCard } from './FocusCard';
-export { GutterRow } from './GutterRow';
 export { Heatmap, type HeatCell, type HeatGroup, type HeatLegend, type HeatLevel } from './Heatmap';
 export { HeroSubNav } from './HeroSubNav';
 export { KnowhowRows, type KnowhowRow, type KnowhowRowKind } from './KnowhowRows';
-export { KvTable } from './KvTable';
 export { MiniCalendar } from './MiniCalendar';
 export { MiniStats, type MiniStatsItem } from './MiniStats';
 export { PickRow, type PickChip, type PickChipTone, type PickRowItem } from './PickRow';

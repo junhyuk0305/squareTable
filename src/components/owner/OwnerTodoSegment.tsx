@@ -1,13 +1,13 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
 
 import { Appear, stagger } from '@/components/Appear';
 import { EmptyState } from '@/components/EmptyState';
 import { SectionLabel } from '@/components/SectionLabel';
 import { SimilarGroupRow } from '@/components/SimilarGroupRow';
 import { AiAnswerRow } from '@/components/AiAnswerRow';
+import { FocusCard, RollupRows, type RollupRow } from '@/components/blocks';
 
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useUnknownQueueStore } from '@/lib/store/useUnknownQueueStore';
@@ -18,9 +18,9 @@ import { sortByUrgency } from '@/lib/utils/unknownQuery';
 import { formatAsked } from '@/lib/utils/time';
 import { AI_ANSWER_LIMIT, type AiAnswerRow as AiAnswer } from '@/lib/db';
 
-import { InkColors, BrandColors } from '@/lib/theme/colors';
+import { InkColors } from '@/lib/theme/colors';
 import { Space } from '@/lib/theme/layout';
-import type { PlaybookSuggestion, UnknownQuery } from '@/types';
+import type { UnknownQuery } from '@/types';
 
 /**
  * '얼마나 기다리면 밀린 것인가' — 부제를 빨갛게 칠하는 기준(일).
@@ -52,7 +52,10 @@ const daysWaiting = (iso: string) => {
  * 옮기지 않은 것 = 크롬(SafeAreaView·Stack.Screen·RoleTabBar)과 홈과 중복되던 히어로·요약 숫자판.
  * 정렬은 옛 화면과 같은 SSOT(sortByUrgency)를 그대로 쓴다 — 사장 홈 히어로와 1번 항목이 같아야 한다.
  *
- * 구성: [답할 질문 n건] → [검토할 제안 n건] → [AI가 답한 질문 n건]. 0건인 그룹은 아예 안 그린다.
+ * 구성(2026-08-27 §7-1): [FocusCard = 가장 오래 기다린 질문 1건] → [RollupRows = 검토할 제안 · 답이 틀렸대요]
+ *  → [답할 질문 남은 n건] → [AI가 답한 질문 n건]. 0건인 블록은 아예 안 그린다.
+ *  히어로 1건은 아래 목록에서 뺀다(중복 노출 안 함). Primary 는 히어로의 [답변 쓰기] 하나뿐이다.
+ *  ★'답이 틀렸대요' 롤업은 착지 화면이 없다(고칠 대상이 건마다 다른 노하우) → 누르면 그 자리 아래로 목록을 편다.
  *
  * ★맨 아래 'AI가 답한 질문'이 이 화면의 **가치 증명**이다. 위 두 그룹은 "노하우가 없어서 막힌 것"만
  *   보여준다 — 노하우가 일을 해낸 쪽이 안 보이면 사장은 "이게 도움이 되긴 하나"를 확인할 데가 없다.
@@ -98,12 +101,44 @@ export function OwnerTodoSegment({ aiAnswers, aiError = false }: { aiAnswers: Ai
   // ★고칠 대상은 새 노하우가 아니라 **AI가 근거로 쓴 그 노하우**다 → 착지도 coach 가 아니라 edit/[id].
   const badAnswers = useMemo(() => aiAnswers.filter((r) => r.satisfaction === 'down'), [aiAnswers]);
   const okAnswers = useMemo(() => aiAnswers.filter((r) => r.satisfaction !== 'down'), [aiAnswers]);
+  const [badOpen, setBadOpen] = useState(false);
+
+  // 히어로 = 가장 오래 기다린 질문(sortByUrgency 의 1번 — 사장 홈 히어로와 같은 건). 나머지가 아래 목록.
+  const hero = pending[0];
+  const restPending = useMemo(() => pending.slice(1), [pending]);
 
   // 행/제안 탭 → 대화형 답변(coach) / 제안 검토 화면. 둘 다 서브화면이라 push.
   const goAnswer = (uq: UnknownQuery) => router.push({ pathname: '/owner/coach', params: { uqId: uq.id } });
   const goSuggestions = () => router.push('/owner/suggestions');
   const goAdd = () => router.push('/owner/coach');
   const goEntry = (id: string) => router.push({ pathname: '/owner/edit/[id]', params: { id } });
+
+  // 롤업 행 — 대표 대상 = 첫 항목(제안은 오래된 순, 틀린 답은 최신순 그대로).
+  const rollupRows: RollupRow[] = [];
+  if (pendingSuggestions.length > 0) {
+    const first = pendingSuggestions[0];
+    rollupRows.push({
+      key: 'suggestions',
+      title: '검토할 제안',
+      count: pendingSuggestions.length,
+      unit: '건',
+      target: `${first.proposer_name} · ${first.text}`,
+      onPress: goSuggestions,
+    });
+  }
+  if (badAnswers.length > 0) {
+    const first = badAnswers[0];
+    const entryTitle = first.matched_entry_ids.map(entryTitleOf).find(Boolean);
+    rollupRows.push({
+      key: 'bad',
+      title: '답이 틀렸대요',
+      count: badAnswers.length,
+      unit: '건',
+      hot: true,
+      target: entryTitle ? `${first.junior_name} · ${entryTitle}` : first.junior_name,
+      onPress: () => setBadOpen((v) => !v),
+    });
+  }
 
   // 로드 실패 + 빈 큐 → "질문 없음"으로 위장하지 않고 재시도를 띄운다(무음 실패 방지).
   if (loadError && queue.length === 0) {
@@ -131,39 +166,30 @@ export function OwnerTodoSegment({ aiAnswers, aiError = false }: { aiAnswers: Ai
         />
       )}
 
-      {pending.length > 0 && (
-        <View style={styles.group}>
-          {/* ★수는 서버 집계(pendingTotal)를 쓴다 — 목록은 상한까지만 오므로 길이로 세면 거짓이 된다. */}
-          <SectionLabel title="답할 질문" hint={`${pendingTotal ?? pending.length}건`} />
-          <PagedList
-            items={pending}
-            render={(uq, i) => (
-              <Appear key={uq.id} delay={stagger(i)}>
-                <SimilarGroupRow uq={uq} onPress={goAnswer} onAnswer={goAnswer} />
-              </Appear>
-            )}
+      {/* 히어로(H4) — 가장 오래 기다린 질문 1건. 메타 = 이름 · 기다린 날수(DELAY_DAYS 이상이면 'n일째 답 없음') · 몇 명이 물었나. */}
+      {hero && (
+        <Appear delay={stagger(0)}>
+          <FocusCard
+            kicker="가장 오래 기다린 질문"
+            quote={hero.query_text}
+            meta={heroMeta(hero)}
+            cta={{ label: '답변 쓰기', onPress: () => goAnswer(hero) }}
           />
-        </View>
+        </Appear>
       )}
 
-      {pendingSuggestions.length > 0 && (
-        <View style={styles.group}>
-          <SectionLabel title="검토할 제안" hint={`${pendingSuggestions.length}건`} />
-          <PagedList
-            items={pendingSuggestions}
-            render={(s, i) => (
-              <Appear key={s.id} delay={stagger(i)}>
-                <SuggestionRow s={s} onPress={goSuggestions} />
-              </Appear>
-            )}
-          />
-        </View>
+      {/* 롤업(L5) — 대등한 두 갈래(제안 · 틀린 답). 각 행에 대표 대상 1줄(R2). 0건인 행은 안 그린다.
+          세그먼트 안에 세그먼트를 또 두지 않는다(구 InboxSubtabs 부활 금지). */}
+      {rollupRows.length > 0 && (
+        <Appear delay={stagger(1)}>
+          <RollupRows rows={rollupRows} />
+        </Appear>
       )}
 
-      {/* 세그먼트 안에 세그먼트를 또 두지 않는다(구 InboxSubtabs 부활 금지) — 위 두 그룹과 나란히 세운다.
+      {/* '답이 틀렸대요' 롤업 행을 누르면 그 자리 아래로 목록이 펼쳐진다(펼침=아래로).
           ★힌트는 **상한에 걸렸는지**를 말해야 한다. 옛 판본은 slice(0,50) 한 길이를 그대로 써서
           300건 매장에서도 "50건"이라고 했다 — 그건 거짓이고, 51번째부터는 앱 어디에도 없다. */}
-      {badAnswers.length > 0 && (
+      {badOpen && badAnswers.length > 0 && (
         <View style={styles.group}>
           <SectionLabel title="답이 틀렸대요" hint={`${badAnswers.length}건`} />
           <Text style={styles.groupHint}>노하우를 눌러 고치면 다음부터 제대로 답해요.</Text>
@@ -172,6 +198,22 @@ export function OwnerTodoSegment({ aiAnswers, aiError = false }: { aiAnswers: Ai
             render={(r, i) => (
               <Appear key={r.id} delay={stagger(i)}>
                 <AiAnswerRow row={r} titleOf={entryTitleOf} onOpenEntry={goEntry} />
+              </Appear>
+            )}
+          />
+        </View>
+      )}
+
+      {restPending.length > 0 && (
+        <View style={styles.group}>
+          {/* ★수는 서버 집계(pendingTotal)를 쓴다 — 목록은 상한까지만 오므로 길이로 세면 거짓이 된다.
+              히어로 1건을 뺀 '남은' 수로 말한다. */}
+          <SectionLabel title="답할 질문" hint={`남은 ${Math.max(0, (pendingTotal ?? pending.length) - 1)}건`} />
+          <PagedList
+            items={restPending}
+            render={(uq, i) => (
+              <Appear key={uq.id} delay={stagger(i)}>
+                <SimilarGroupRow uq={uq} onPress={goAnswer} />
               </Appear>
             )}
           />
@@ -237,30 +279,12 @@ function PagedList<T>({ items, render }: { items: T[]; render: (it: T, i: number
   );
 }
 
-/** 검토 대기 제안 한 줄 — 제목=제안 내용, 부제=제안한 직원 · 얼마나 기다렸나. */
-function SuggestionRow({ s, onPress }: { s: PlaybookSuggestion; onPress: () => void }) {
-  const days = daysWaiting(s.created_at);
-  const late = days >= DELAY_DAYS;
-  const when = late ? `${days}일째 답장 없음` : formatAsked(s.created_at, '방금 전');
-
-  return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={`${s.proposer_name}님의 제안, ${when}, 검토하기`}
-      style={({ pressed }) => [styles.sugRow, pressed && styles.sugRowPressed]}
-    >
-      <View style={styles.sugBody}>
-        <Text style={styles.sugTitle} numberOfLines={2}>
-          {s.text}
-        </Text>
-        <Text style={styles.sugMeta} numberOfLines={1}>
-          {s.proposer_name} · <Text style={late ? styles.sugMetaLate : undefined}>{when}</Text>
-        </Text>
-      </View>
-      <Ionicons name="chevron-forward" size={16} color={InkColors.ink3} />
-    </Pressable>
-  );
+/** 히어로 메타 — "박지원 · 2일째 답 없음 · 2명이 물었어요". 인원 표기는 SimilarGroupRow 와 같은 규칙(n+1). */
+function heroMeta(uq: UnknownQuery) {
+  const days = daysWaiting(uq.asked_at);
+  const when = days >= DELAY_DAYS ? `${days}일째 답 없음` : formatAsked(uq.asked_at, '방금 전');
+  const n = uq.similar_queries_count;
+  return `${uq.junior_name} · ${when}${n > 0 ? ` · ${n + 1}명이 물었어요` : ''}`;
 }
 
 const styles = StyleSheet.create({
@@ -268,24 +292,6 @@ const styles = StyleSheet.create({
   root: { gap: Space.lg },
   group: { gap: Space.sm },
   groupHint: { fontSize: 13, color: InkColors.ink2, marginTop: -2 },
-
-  // 질문 행(SimilarGroupRow)과 같은 좌우 인셋·하단 구분선으로 맞춘다.
-  sugRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Space.md,
-    minHeight: 48,
-    paddingVertical: Space.lg,
-    paddingHorizontal: Space.lg,
-    borderBottomWidth: 1,
-    borderBottomColor: InkColors.line,
-  },
-  sugRowPressed: { backgroundColor: InkColors.bgSoft },
-  sugBody: { flex: 1, minWidth: 0, gap: Space.sm },
-  sugTitle: { fontSize: 15, lineHeight: 21, fontWeight: '600', color: InkColors.ink },
-  sugMeta: { fontSize: 12, fontWeight: '600', color: InkColors.ink3 },
-  // 밀린 항목만 눈에 걸리게 — 500이 아니라 800(글자는 전부 800).
-  sugMetaLate: { color: BrandColors.badText, fontWeight: '700' },
 
   // '더 보기' — 행들과 같은 좌우 인셋. 누를 수 있는 행이라 최소 터치 타깃 48.
   moreRow: {

@@ -153,7 +153,7 @@ export default function OwnerDashboardScreen() {
     }
     if (pendingSuggestions > 0) {
       return {
-        label: '답장 없는 직원 제안',
+        label: '승인 기다리는 제안',
         count: pendingSuggestions,
         unit: '건' as const,
         icon: 'chatbubble-ellipses' as const,
@@ -162,7 +162,7 @@ export default function OwnerDashboardScreen() {
     }
     if (needsReviewCount > 0) {
       return {
-        label: '확인이 필요한 노하우',
+        label: '점검할 노하우',
         count: needsReviewCount,
         unit: '개' as const,
         icon: 'alert-circle' as const,
@@ -259,7 +259,7 @@ export default function OwnerDashboardScreen() {
           <View ref={hubRef}>
           {/* 로딩 중 '—' 중립 표기는 걷어냈다 — 게이트가 그 일을 대신한다(본문 자체가 도착 뒤에 마운트된다). */}
           <HeroSubNav
-            label="답을 기다리는 질문"
+            label="답 기다리는 질문"
             value={pending > 0 ? `${pending}건` : '없어요'}
             caption={
               heroQuery

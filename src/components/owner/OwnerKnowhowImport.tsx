@@ -160,7 +160,7 @@ export function OwnerKnowhowImport() {
           <Text style={styles.leadText}>다른 내 매장의 노하우를 “{activeName || '현재 매장'}”으로 가져와요</Text>
           <InfoDot
             title="어떻게 되나요?"
-            body={'선택한 노하우가 현재 매장으로 복사돼요.\n· 사진은 함께 옮겨지지 않아요.\n· 가져온 노하우는 “확인 필요”로 표시돼요 — 새 매장 기준(주소·연락처 등)이 맞는지 확인하세요.'}
+            body={'선택한 노하우가 현재 매장으로 복사돼요.\n· 사진은 함께 옮겨지지 않아요.\n· 가져온 노하우는 “점검 필요”로 표시돼요 — 새 매장 기준(주소·연락처 등)이 맞는지 점검해 주세요.'}
           />
         </View>
         </Appear>
@@ -168,7 +168,7 @@ export function OwnerKnowhowImport() {
         {/* 소스 매장 선택 */}
         <Appear delay={60}>
         <View style={styles.block}>
-          <SectionLabel icon="storefront-outline" title="어느 매장에서 가져올까요?" />
+          <SectionLabel icon="storefront-outline" title={sources.length === 1 ? '가져올 매장' : '어느 매장에서 가져올까요?'} />
           <View style={styles.sourceWrap}>
             {sources.map((s) => {
               const on = sourceId === s.unit_id;

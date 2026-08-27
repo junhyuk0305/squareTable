@@ -19,6 +19,7 @@ import { Avatar } from '@/components/Avatar';
 import { SectionLabel } from '@/components/SectionLabel';
 import { InfoDot } from '@/components/InfoDot';
 import { ProgressPill } from '@/components/blocks/ProgressPill';
+import { ActionRow } from '@/components/blocks/ActionRow';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
@@ -235,45 +236,21 @@ export default function OwnerStaffScreen() {
         </View>
         </Appear>
 
-        {/* ③ 퀴즈 — 흰 카드였지만 위 두 블록과 함께 '카드 3연속'을 만들던 자리라 행으로 낮춘다(2026-08-06).
-            새 직원이 들어오기로 한 순간이 코스를 만들 순간(초대코드 바로 아래). */}
+        {/* ③④ 바로 가기 — 퀴즈·근무표 진입 2칸. 블록 A2′ ActionRow `tile`(데모 §7-7 · 2026-08-27).
+            맨바닥 행 2개(AR1, 폐기)를 타일 한 덩어리로 접었다 — 목적지가 /owner/training·/owner/schedule 로
+            제각각이라 card(형제 액션)가 아니라 tile. 새 직원이 들어오기로 한 순간이 코스를 만들 순간(초대코드 바로 아래).
+            근무표 칸은 허브 '현황'이 근무표로 착지하게 바뀐(2026-08-11 P2) 보상으로 둔 반대 방향 진입점.
+            상태 한 줄 없음 — 이 화면은 퀴즈·근무표 건수를 읽지 않는다(새 쿼리 금지). */}
         <Appear delay={stagger(2)}>
         <View>
-        <Pressable
-          onPress={() => router.push('/owner/training')}
-          style={({ pressed }) => [styles.quizRow, pressed && { opacity: 0.6 }]}
-          accessibilityRole="button"
-          accessibilityLabel="퀴즈 열기"
-        >
-          <View style={styles.quizIcon}>
-            <Ionicons name="school-outline" size={19} color={InkColors.ink} />
-          </View>
-          <View style={{ flex: 1, minWidth: 0 }}>
-            <Text style={styles.quizTitle}>퀴즈</Text>
-            <Text style={styles.quizDesc}>첫 출근(신입 첫날)과 정기 점검(주기 재확인)을 준비해요</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={16} color={InkColors.ink3} />
-        </Pressable>
-
-        {/* ④ 근무표 — 허브 '현황'의 매장 행이 근무표로 착지하게 바뀌면서(2026-08-11 P2),
-            '지금 누가 근무중'을 보러 여기 온 사장이 한 단계 멀어졌다. 그 보상으로 반대 방향 진입점을 둔다.
-            이 화면은 이미 블록 예산 초과라 **새 블록을 세우지 않는다** — 위 퀴즈와 같은 Appear 안에
-            형제 행으로 넣어 '바로가기 행' 한 덩어리로 센다(별도 Appear 로 빼면 블록 8이 되어 래칫 초과). */}
-        <Pressable
-          onPress={() => router.push('/owner/schedule')}
-          style={({ pressed }) => [styles.quizRow, pressed && { opacity: 0.6 }]}
-          accessibilityRole="button"
-          accessibilityLabel="근무표 열기"
-        >
-          <View style={styles.quizIcon}>
-            <Ionicons name="calendar-outline" size={19} color={InkColors.ink} />
-          </View>
-          <View style={{ flex: 1, minWidth: 0 }}>
-            <Text style={styles.quizTitle}>근무표</Text>
-            <Text style={styles.quizDesc}>누가 언제 근무하는지 짜고, 교대 요청을 승인해요</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={16} color={InkColors.ink3} />
-        </Pressable>
+          <SectionLabel title="바로 가기" />
+          <ActionRow
+            variant="tile"
+            items={[
+              { key: 'quiz', icon: 'school-outline', label: '퀴즈', onPress: () => router.push('/owner/training') },
+              { key: 'schedule', icon: 'calendar-outline', label: '근무표', onPress: () => router.push('/owner/schedule') },
+            ]}
+          />
         </View>
         </Appear>
 
@@ -543,11 +520,6 @@ const styles = StyleSheet.create({
   rotateBtn: { alignItems: 'center', justifyContent: 'center', minHeight: 48, paddingHorizontal: Space.md, borderRadius: Radius.pill, borderWidth: 1, borderColor: InkColors.line },
   rotateText: { fontSize: 13, fontWeight: '700', color: InkColors.ink2 },
 
-  // 퀴즈 진입 — 카드 아님(행). 아이콘 칩 배경은 bgSoft: 화면 배경이 흰색이라 cream(=#FFFFFF)이면 칩이 사라진다.
-  quizRow: { flexDirection: 'row', alignItems: 'center', gap: Space.md, minHeight: 56, paddingVertical: Space.sm },
-  quizIcon: { width: 38, height: 38, borderRadius: Radius.md, backgroundColor: InkColors.bgSoft, alignItems: 'center', justifyContent: 'center' },
-  quizTitle: { fontSize: 15, fontWeight: '800', color: InkColors.ink },
-  quizDesc: { fontSize: 12.5, color: InkColors.ink3, marginTop: 1 },
 
   pendingWrap: { gap: 8 },
   // 흰 카드가 세로로 이어지면 "승인해야 진행되는 항목"이 나열 속에 묻힌다 → 옐로 틴트로 떼어놓는다.
