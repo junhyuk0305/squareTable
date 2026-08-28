@@ -37,6 +37,11 @@
     "production": {
       "android": {
         "track": "internal"
+      },
+      "ios": {
+        "appleId": "junhyeok0305@icloud.com",
+        "ascAppId": "6806148337",
+        "appleTeamId": "9KUAY5H56Y"
       }
     }
   }
