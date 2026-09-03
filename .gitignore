@@ -86,3 +86,8 @@ scripts/tmp-*.mjs
 
 # 로컬 테스트용 다운로드 빌드 산출물(APK 등) — 커밋 대상 아님
 .local-builds/
+
+# 로컬 서명 크리덴셜 — 저장소가 PUBLIC 이다. 절대 커밋 금지.
+credentials.json
+*.keystore
+*.jks
