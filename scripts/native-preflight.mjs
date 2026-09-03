@@ -6,8 +6,8 @@
 //   Q1. 웹 전용 API(window·document·localStorage…)가 네이티브 경로에 **새로** 새지 않았나. (래칫)
 //       → 기존 사용처는 baseline에 있고, 새 위반만 RED. 가드했거나 의도한 것이면 --update-baseline.
 //   Q2. `.web.ts(x)` 분기마다 네이티브 짝 파일이 있나. (짝 없으면 웹은 되고 앱은 import에서 죽는다)
-//   Q3. Android JS 번들이 실제로 만들어지는가. (`expo export -p android` — 모듈 해석·웹 전용 import
-//       누출·문법 오류를 기기 없이 잡는 가장 강한 로컬 검사. 수 분 걸림, --skip-bundle로 생략 가능)
+//   Q3. Android·iOS JS 번들이 실제로 만들어지는가. (`expo export -p android` / `-p ios` — 모듈 해석·
+//       웹 전용 import 누출·문법 오류를 기기 없이 잡는 가장 강한 로컬 검사. 수 분 걸림, --skip-bundle로 생략 가능)
 //
 // 이 게이트가 **못** 잡는 것(런북의 수동 체크리스트로): 런타임 크래시, 터치/키보드 체감,
 // 푸시·사진·음성 등 네이티브 모듈의 실동작. "preflight green"은 "번들이 뜬다"까지만 보증한다.
@@ -17,7 +17,8 @@
 //   npm run native:preflight -- --skip-bundle    빠른 판정(Q1·Q2만)
 //   npm run native:preflight -- --update-baseline  새 위반을 판단 후 baseline에 등록
 import { execSync } from 'node:child_process';
-import { readFileSync, writeFileSync, readdirSync, existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { readFileSync, writeFileSync, readdirSync, existsSync, mkdtempSync } from 'node:fs';
+import { rm } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import os from 'node:os';
 import path from 'node:path';
@@ -99,21 +100,25 @@ if (UPDATE) {
   if (stale.length) warns.push(`baseline에 있으나 사라진 항목 ${stale.length}건 — --update-baseline 으로 청소 권장.`);
 }
 
-// ── Q3. Android 번들 실증 ────────────────────────────────────────
+// ── Q3. Android·iOS 번들 실증 ───────────────────────────────────
 if (SKIP_BUNDLE) {
   warns.push('번들 검사 생략(--skip-bundle) — "앱 JS가 뜬다"는 보증 없음. 빌드 전엔 전체 실행 필수.');
 } else if (problems.length) {
-  console.log('■ Android 번들: 앞 단계 RED로 생략');
+  console.log('■ Android·iOS 번들: 앞 단계 RED로 생략');
 } else {
-  const out = mkdtempSync(path.join(os.tmpdir(), 'st-preflight-'));
-  console.log('■ Android 번들 실증(expo export -p android, 수 분 소요)…');
-  try {
-    execSync(`npx expo export --platform android --output-dir "${out}"`, { cwd: ROOT, stdio: 'inherit' });
-    console.log('  ✅ 번들 생성 성공');
-  } catch {
-    problems.push('Android 번들 생성 실패 — 위 Metro 로그의 첫 오류가 원인이다. 이 상태로 빌드하면 APK도 같은 지점에서 죽는다.');
-  } finally {
-    rmSync(out, { recursive: true, force: true });
+  for (const platform of ['android', 'ios']) {
+    const out = mkdtempSync(path.join(os.tmpdir(), 'st-preflight-'));
+    console.log(`■ ${platform} 번들 실증(expo export -p ${platform}, 수 분 소요)…`);
+    try {
+      execSync(`npx expo export --platform ${platform} --output-dir "${out}"`, { cwd: ROOT, stdio: 'inherit' });
+      console.log('  ✅ 번들 생성 성공');
+    } catch {
+      problems.push(`${platform} 번들 생성 실패 — 위 Metro 로그의 첫 오류가 원인이다. 이 상태로 빌드하면 앱도 같은 지점에서 죽는다.`);
+      break;
+    } finally {
+      // ★Windows Node24 rmSync({recursive}) = 네이티브 크래시(0xC0000409) → 비동기 rm 사용
+      await rm(out, { recursive: true, force: true });
+    }
   }
 }
 
