@@ -134,7 +134,6 @@ export function OwnerTodoSegment({ aiAnswers, aiError = false }: { aiAnswers: Ai
       title: '답이 틀렸대요',
       count: badAnswers.length,
       unit: '건',
-      hot: true,
       target: entryTitle ? `${first.junior_name} · ${entryTitle}` : first.junior_name,
       onPress: () => setBadOpen((v) => !v),
     });

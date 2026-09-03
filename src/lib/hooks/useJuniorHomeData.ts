@@ -27,7 +27,8 @@ export type JuniorHomeData = {
   taskTotal: number;
   taskRemain: number;
   /** 오늘 내가 해야 하는 업무 — 홈 히어로 목록(3건 + 전체보기)용. 미완료가 먼저. */
-  todayTasks: { id: string; text: string; done: boolean }[];
+  todayTasks: { id: string; text: string; done: boolean; roomId?: string; photoUrl?: string }[];
+  today: string;
   /** 아직 통과 못 한 퀴즈(노하우) 수 — 홈 경고행(AlertRow)용. 0이면 행이 안 그려진다. */
   openQuizCount: number;
 };
@@ -80,7 +81,16 @@ export function useJuniorHomeData(): JuniorHomeData {
   const todayTasks = useMemo(
     () =>
       myTodaysTasks
-        .map((t) => ({ id: t.id, text: t.text, done: !!dayDone[t.id] }))
+        .map((t) => {
+          const mark = dayDone[t.id] as { photoUrl?: string } | undefined;
+          return {
+            id: t.id,
+            text: t.text,
+            done: !!mark,
+            ...(t.roomId ? { roomId: t.roomId } : null),
+            ...(mark?.photoUrl ? { photoUrl: mark.photoUrl } : null),
+          };
+        })
         .sort((a, b) => Number(a.done) - Number(b.done)),
     // dayDone은 doneMap[today]의 파생이라 doneMap·today를 의존성으로 든다(객체 신원 불안정 회피).
     [myTodaysTasks, doneMap, today], // eslint-disable-line react-hooks/exhaustive-deps
@@ -125,6 +135,7 @@ export function useJuniorHomeData(): JuniorHomeData {
     taskTotal,
     taskRemain,
     todayTasks,
+    today,
     openQuizCount,
   };
 }

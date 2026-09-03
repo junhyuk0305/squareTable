@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { View, Text, Pressable, ScrollView, TextInput, KeyboardAvoidingView, Platform, StyleSheet } from 'react-native';
+import { View, Text, Pressable, ScrollView, TextInput, StyleSheet } from 'react-native';
+import { KeyboardShift } from '@/components/KeyboardShift';
 import { Ionicons } from '@expo/vector-icons';
 
 import { type FeedItem } from '@/lib/store/useWorkStore';
@@ -82,8 +83,8 @@ export function NoticePanel({
     });
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
+    <KeyboardShift>
+      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
         {/* 빈 상태는 다음 행동을 알려준다(복잡도 원칙 P6).
             ★2026-08-26: 공지는 누구나 쓴다(0177) — 직원에게도 같은 다음 행동을 준다. */}
         {notices.length === 0 && (
@@ -158,7 +159,7 @@ export function NoticePanel({
           </Pressable>
         </View>
       </View>
-    </KeyboardAvoidingView>
+    </KeyboardShift>
   );
 }
 

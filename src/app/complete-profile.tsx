@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { View, Text, StyleSheet, TextInput, Pressable, ScrollView, ActivityIndicator } from 'react-native';
+import { KeyboardShift } from '@/components/KeyboardShift';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter, Redirect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -145,6 +146,7 @@ function CompleteProfileForm() {
   return (
     <SafeAreaView style={styles.safe}>
       <Stack.Screen options={{ headerShown: true, title: '프로필 완성', headerStyle: { backgroundColor: '#FFFFFF' }, headerTintColor: InkColors.ink }} />
+      <KeyboardShift>
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
         <Appear delay={stagger(0)}>
         <View style={styles.intro}>
@@ -329,6 +331,7 @@ function CompleteProfileForm() {
         </Pressable>
         </Appear>
       </ScrollView>
+      </KeyboardShift>
     </SafeAreaView>
   );
 }

@@ -12,6 +12,7 @@
 import { useEffect, useMemo } from 'react';
 import { Animated, Text, Pressable, StyleSheet, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useSyncStore } from '@/lib/store/useSyncStore';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { CONTENT_MAX_WIDTH, SCREEN_GUTTER, Space } from '@/lib/theme/layout';
@@ -28,6 +29,8 @@ export function SyncBanner() {
   const clearRead = useSyncStore((s) => s.clearRead);
   const clearOffline = useSyncStore((s) => s.clearOffline);
   const opacity = useMemo(() => new Animated.Value(1), []); // RoleTabBar와 동일 패턴(렌더 중 ref 접근 금지)
+  // 상단 여백은 상태바 높이에서 출발한다(Toast 와 같은 규칙) — 고정 48 은 상태바가 높은 기기에서 겹쳤다.
+  const insets = useSafeAreaInsets();
 
   // 연결이 돌아오면 연결 실패 배너는 저절로 사라진다 — 사용자가 닫아 없애야 하는 물건이 아니다.
   // 웹에만 있는 신호이나(네이티브는 NetInfo 미설치), 네이티브도 다음 성공 왕복에서 supabase.ts 래퍼가 해제한다.
@@ -56,7 +59,7 @@ export function SyncBanner() {
   // 아이콘도 문구와 같은 것을 말해야 한다 — 연결이 멀쩡한데 '오프라인' 구름을 띄우면 원인을 잘못 짚게 만든다.
   const icon = readError?.kind === 'server' ? 'alert-circle-outline' : 'cloud-offline-outline';
   return (
-    <Animated.View style={[styles.wrap, isRead ? undefined : { opacity }]} pointerEvents="box-none">
+    <Animated.View style={[styles.wrap, { top: insets.top + Space.sm }, isRead ? undefined : { opacity }]} pointerEvents="box-none">
       <Animated.View style={styles.banner}>
         <Ionicons name={icon} size={17} color="#FFFFFF" />
         <Text style={styles.text} numberOfLines={3}>
@@ -79,7 +82,6 @@ export function SyncBanner() {
 const styles = StyleSheet.create({
   wrap: {
     position: 'absolute',
-    top: Platform.OS === 'web' ? 8 : 48,
     left: 0,
     right: 0,
     alignItems: 'center',

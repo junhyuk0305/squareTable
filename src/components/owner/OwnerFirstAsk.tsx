@@ -8,7 +8,8 @@
 //   "직원이 물으면 이렇게 사장님께 도착해요"를 보여주고 registerToOwner(기존 파이프)로
 //   받은질문에 담아 캡처 루프의 첫 경험으로 반전시킨다.
 import { useMemo, useState } from 'react';
-import { View, Text, TextInput, Pressable, ScrollView, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, TextInput, Pressable, ScrollView, StyleSheet } from 'react-native';
+import { KeyboardShift } from '@/components/KeyboardShift';
 import { Ionicons } from '@expo/vector-icons';
 
 import { ChatTurn } from '@/components/junior/ChatTurn';
@@ -58,7 +59,7 @@ export function OwnerFirstAsk({ onNext, nextLabel }: { onNext: () => void; nextL
   };
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <KeyboardShift>
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
         <Appear delay={0} style={styles.intro}>
           <Text style={styles.introTitle}>방금 담은 노하우로{'\n'}어떻게 답하는지 확인해 보세요</Text>
@@ -180,7 +181,7 @@ export function OwnerFirstAsk({ onNext, nextLabel }: { onNext: () => void; nextL
         )}
         </View>
       </View>
-    </KeyboardAvoidingView>
+    </KeyboardShift>
   );
 }
 

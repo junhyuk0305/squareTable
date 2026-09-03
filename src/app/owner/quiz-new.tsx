@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, ActivityIndicator, StyleSheet } from 'react-native';
+import { KeyboardShift } from '@/components/KeyboardShift';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -43,7 +44,7 @@ import { MiniCalendar } from '@/components/blocks/MiniCalendar';
 import { EmptyState } from '@/components/EmptyState';
 import { ScreenLoading } from '@/components/ScreenLoading';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
-import { Radius } from '@/lib/theme/elevation';
+import { Radius, Elevation } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
 import type { QuizItem } from '@/lib/quiz/types';
 import type { PlaybookEntry } from '@/types';
@@ -271,7 +272,9 @@ export default function QuizNewScreen() {
     const id = genId('tc');
     const key = `q_${id}`;
     const first = entryById.get(picked[0]);
-    const draftName = first ? `${first.title} 확인` : '새 퀴즈';
+    // ★사장이 1단계에서 적은 이름이 먼저다(2026-09-03 버그): 예전엔 여기서 무조건 "<첫 노하우> 확인"을
+    //   만들어 DB 에 쓰고 `setName` 으로 화면 상태까지 덮어써서, 적어 둔 제목이 2단계로 넘어가는 순간 사라졌다.
+    const draftName = name.trim() || (first ? `${first.title} 확인` : '새 퀴즈');
     const ok = await guardWrite(
       upsertTrainingCourse({
         id,
@@ -533,6 +536,7 @@ export default function QuizNewScreen() {
   return (
     <SafeAreaView style={st.safe} edges={['bottom']}>
       <Stack.Screen options={{ title: '퀴즈 만들기', headerRight: () => <Text style={st.stepBadge}>{step}/{TOTAL}</Text> }} />
+      <KeyboardShift>
       <ScrollView
         contentContainerStyle={st.scroll}
         keyboardShouldPersistTaps="handled"
@@ -990,6 +994,7 @@ export default function QuizNewScreen() {
         )}
 
       </ScrollView>
+      </KeyboardShift>
 
       {/* ── 바닥 액션 — 화면당 Primary 1개 ── */}
       <View style={st.foot}>
@@ -1234,9 +1239,10 @@ const st = StyleSheet.create({
     backgroundColor: '#FFFFFF',
   },
 
+  // 그림자(2026-09-03): 카드=e2 · 버튼·패널=e1. 그림자 없는 상자는 배경면과 구분이 안 됐다.
   listCard: {
     backgroundColor: InkColors.bg, borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line,
-    paddingHorizontal: Space.lg,
+    paddingHorizontal: Space.lg, ...Elevation.e2,
   },
   row: { flexDirection: 'row', alignItems: 'center', gap: Space.md, minHeight: 56, paddingVertical: Space.sm },
   chk: { flexDirection: 'row', alignItems: 'center', gap: Space.md, minHeight: 56, paddingVertical: Space.sm },
@@ -1254,7 +1260,7 @@ const st = StyleSheet.create({
 
   qcard: {
     backgroundColor: '#FFFFFF', borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line,
-    padding: Space.lg, gap: Space.xs,
+    padding: Space.lg, gap: Space.xs, ...Elevation.e2,
   },
   qFormat: { fontSize: 12, fontWeight: '800', color: BrandColors.mentionText },
   qAsk: { fontSize: 15, fontWeight: '700', color: InkColors.ink, lineHeight: 22 },
@@ -1262,19 +1268,19 @@ const st = StyleSheet.create({
   qActs: { flexDirection: 'row', gap: Space.xs, marginTop: Space.xs },
   smallAct: {
     minHeight: 48, justifyContent: 'center', paddingHorizontal: Space.md,
-    borderRadius: Radius.sm, borderWidth: 1, borderColor: InkColors.line, backgroundColor: '#FFFFFF',
+    borderRadius: Radius.sm, borderWidth: 1, borderColor: InkColors.line, backgroundColor: '#FFFFFF', ...Elevation.e1,
   },
   smallActText: { fontSize: 13, fontWeight: '800', color: InkColors.ink2 },
 
   warnBox: {
     backgroundColor: BrandColors.warnSoft, borderRadius: Radius.md, borderWidth: 1, borderColor: BrandColors.warnBorder,
-    padding: Space.lg, gap: Space.xs,
+    padding: Space.lg, gap: Space.xs, ...Elevation.e1,
   },
   warnTitle: { fontSize: 15, fontWeight: '800', color: BrandColors.warnText, lineHeight: 22 },
   warnBody: { fontSize: 15, fontWeight: '600', color: InkColors.ink, lineHeight: 22 },
 
   thinBox: {
-    backgroundColor: InkColors.bgSoft, borderRadius: Radius.md, padding: Space.lg, gap: Space.sm,
+    backgroundColor: InkColors.bgSoft, borderRadius: Radius.md, padding: Space.lg, gap: Space.sm, ...Elevation.e1,
   },
   thinTitle: { fontSize: 15, fontWeight: '800', color: InkColors.ink, lineHeight: 22 },
   thinBody: { fontSize: 15, fontWeight: '600', color: InkColors.ink2, lineHeight: 22 },
@@ -1329,7 +1335,7 @@ const st = StyleSheet.create({
   textActionText: { fontSize: 13, fontWeight: '800', color: InkColors.ink2, textDecorationLine: 'underline' },
   noteBox: {
     flexDirection: 'row', alignItems: 'flex-start', gap: Space.sm,
-    backgroundColor: BrandColors.warnSoft, borderRadius: Radius.md, padding: Space.md,
+    backgroundColor: BrandColors.warnSoft, borderRadius: Radius.md, padding: Space.md, ...Elevation.e1,
   },
   noteText: { flex: 1, minWidth: 0, fontSize: 15, fontWeight: '600', color: InkColors.ink2, lineHeight: 22 },
 
@@ -1338,7 +1344,7 @@ const st = StyleSheet.create({
   doneSub: { fontSize: 13, fontWeight: '600', color: InkColors.ink3 },
   linkBox: {
     backgroundColor: InkColors.bg, borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line,
-    padding: Space.lg,
+    padding: Space.lg, ...Elevation.e2,
   },
   linkText: { fontSize: 15, fontWeight: '700', color: InkColors.ink, lineHeight: 22 },
 
@@ -1349,14 +1355,14 @@ const st = StyleSheet.create({
   },
   primary: {
     flex: 1, minHeight: 56, alignItems: 'center', justifyContent: 'center',
-    borderRadius: Radius.md, backgroundColor: InkColors.ink,
+    borderRadius: Radius.md, backgroundColor: InkColors.ink, ...Elevation.e1,
   },
   primaryOff: { backgroundColor: InkColors.bgSoft },
   primaryText: { fontSize: 15, fontWeight: '800', color: '#FFFFFF' },
   primaryTextOff: { color: InkColors.ink3 },
   ghost: {
     flex: 1, minHeight: 56, alignItems: 'center', justifyContent: 'center',
-    borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, backgroundColor: '#FFFFFF',
+    borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, backgroundColor: '#FFFFFF', ...Elevation.e1,
   },
   ghostText: { fontSize: 15, fontWeight: '800', color: InkColors.ink2 },
 });

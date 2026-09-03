@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, Linking, TextInput } from 'react-native';
+import { KeyboardShift } from '@/components/KeyboardShift';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter, Redirect, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -314,7 +315,7 @@ function BillingBody() {
     return (
       <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
         <Stack.Screen options={{ headerShown: false }} />
-        <ScrollView contentContainerStyle={styles.scroll}>
+        <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.scroll}>
           <Appear delay={stagger(0)}>
           <View style={styles.hero}>
             <View style={styles.iconWrap}>
@@ -373,6 +374,7 @@ function BillingBody() {
             : { headerShown: false }
         }
       />
+      <KeyboardShift>
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
         {!ready ? (
           <ScreenLoading label="결제 상태를 불러오고 있어요…" />
@@ -760,6 +762,7 @@ function BillingBody() {
           </>
         )}
       </ScrollView>
+      </KeyboardShift>
     </SafeAreaView>
   );
 }

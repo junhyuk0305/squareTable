@@ -1,5 +1,7 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, Pressable, ScrollView, TextInput, KeyboardAvoidingView, Modal, Platform, StyleSheet, type NativeSyntheticEvent, type NativeScrollEvent } from 'react-native';
+import { View, Text, Pressable, ScrollView, TextInput, Modal, Platform, StyleSheet, type NativeSyntheticEvent, type NativeScrollEvent } from 'react-native';
+import { KeyboardShift } from '@/components/KeyboardShift';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StoredImage } from '@/components/StoredImage';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -101,8 +103,6 @@ export function WorkChat({
   nameOf,
   members,
   isOwner,
-  pinnedNotice,
-  onOpenNotice,
   onSend,
   onSendPhoto,
   sendingPhoto,
@@ -124,8 +124,6 @@ export function WorkChat({
   nameOf: (id: string) => string;
   members: Member[];
   isOwner: boolean;
-  pinnedNotice?: FeedItem;
-  onOpenNotice: () => void;
   onSend: (text: string, mentions: string[]) => void;
   /** ＋메뉴 '사진 보내기' — 픽·업로드·발행은 부모(WorkBoard)가 처리. */
   onSendPhoto: () => void;
@@ -160,6 +158,8 @@ export function WorkChat({
   // 롱프레스로 연 메시지 액션 시트(할일로/삭제). null이면 닫힘.
   const [actionItem, setActionItem] = useState<FeedItem | null>(null);
   const scrollRef = useRef<ScrollView>(null);
+  // 롱프레스 액션 시트 하단 안전영역(Android 네비게이션 바 · iOS 홈 인디케이터).
+  const insets = useSafeAreaInsets();
 
   // 받아쓰기 힌트 — 멤버 이름. 사람 이름은 사전에 없는 고유명사라 가장 자주 틀린다.
   const voiceHints = useMemo(() => buildHints(members.map((m) => m.name)), [members]);
@@ -267,7 +267,8 @@ export function WorkChat({
   }
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    // 키보드 회피는 공용 KeyboardShift(behavior 'padding' + 창 기준 오프셋 자동 측정 — 근거는 그 파일 주석).
+    <KeyboardShift>
       {/* 떠 있는 헤더 — 찾기·할일·서랍. 이 아래에 방 칩바가 한 줄 더 뜨고, 방 전환은 거기서 한다. */}
       <View style={s.floatHdr}>
         {searchOn ? (
@@ -310,19 +311,7 @@ export function WorkChat({
         )}
       </View>
 
-      {/* 슬림 고정 공지 1줄 */}
-      {pinnedNotice && (
-        <Pressable onPress={onOpenNotice} style={({ pressed }) => [s.pinbar, pressed && { opacity: 0.7 }]}>
-          <Ionicons name="pin" size={13} color={InkColors.ink2} />
-          <Text style={s.pinTag}>공지</Text>
-          <Text style={s.pinTxt} numberOfLines={1}>
-            {pinnedNotice.text}
-          </Text>
-          <Ionicons name="chevron-forward" size={14} color={InkColors.ink3} />
-        </Pressable>
-      )}
-
-      <ScrollView
+      <ScrollView keyboardShouldPersistTaps="handled"
         ref={scrollRef}
         contentContainerStyle={[s.scroll, topInset ? { paddingTop: HDR_H + 16 + topInset } : null]}
         showsVerticalScrollIndicator={false}
@@ -421,11 +410,12 @@ export function WorkChat({
         </Pressable>
       </ChatComposerBar>
 
-      {/* 메시지 롱프레스 액션 시트 — 프레임(460) 안에 가둔다(modalFrameStyle). */}
-      <Modal visible={!!actionItem} transparent animationType="slide" onRequestClose={() => setActionItem(null)}>
+      {/* 메시지 롱프레스 액션 시트 — 프레임(460) 안에 가둔다(modalFrameStyle).
+          하단 insets: Android edge-to-edge 에서 시트가 네비게이션 바에 가려진다(BottomSheet 와 같은 규칙). */}
+      <Modal visible={!!actionItem} transparent animationType="slide" statusBarTranslucent navigationBarTranslucent onRequestClose={() => setActionItem(null)}>
         <View style={modalFrameStyle}>
           <Pressable style={s.sheetBackdrop} onPress={() => setActionItem(null)} />
-          <View style={s.sheet}>
+          <View style={[s.sheet, { paddingBottom: 24 + insets.bottom }]}>
             <View style={s.sheetHandle} />
             {/* 리액션 빠른 선택 — 카톡식으로 시트 상단에 이모지 행. 누르면 반영하고 닫힌다. */}
             <View style={s.sheetReactRow}>
@@ -478,7 +468,7 @@ export function WorkChat({
           </View>
         </View>
       </Modal>
-    </KeyboardAvoidingView>
+    </KeyboardShift>
   );
 }
 
@@ -570,9 +560,6 @@ function FeedRow({ item, me, nameOf, members, query, active, onReact, onLongPres
 }
 
 const s = StyleSheet.create({
-  pinbar: { flexDirection: 'row', alignItems: 'center', gap: 7, paddingHorizontal: 13, paddingVertical: 8, backgroundColor: InkColors.bg, borderBottomWidth: 1, borderBottomColor: InkColors.line },
-  pinTag: { backgroundColor: InkColors.paper, color: InkColors.ink2, fontSize: 10, fontWeight: '800', paddingHorizontal: 6, paddingVertical: 1, borderRadius: Radius.tail },
-  pinTxt: { flex: 1, fontSize: 12, fontWeight: '600', color: InkColors.ink },
 
   // 웹: 말풍선 롱프레스로 액션시트를 여는데, 브라우저가 대신 드래그-선택을 시작해 화면 전체가
   // 선택되는 걸 막는다(스트림 전역 user-select:none). 단, 말풍선 '텍스트'(msgText)만 다시 선택 허용.

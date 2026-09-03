@@ -298,7 +298,7 @@ export function AttendancePanel() {
 /** 출퇴근 탭 — IA 개편으로 '업무' 탭에서 분리된 독립 탭. 콘텐츠(AttendancePanel) + 탭바 크롬을 입힌다. */
 export default function JuniorAttendanceRoute() {
   return (
-    <SafeAreaView edges={['bottom']} style={styles.routeSafe}>
+    <SafeAreaView edges={[]} style={styles.routeSafe}>
       <AttendancePanel />
       <RoleTabBar role="junior" />
     </SafeAreaView>

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Text, Pressable, StyleSheet, ScrollView, TextInput } from 'react-native';
+import { KeyboardShift } from '@/components/KeyboardShift';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useFocusEffect, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -162,13 +163,14 @@ export default function OwnerStaffScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safe} edges={['bottom']}>
+    <SafeAreaView style={styles.safe} edges={[]}>
       <Stack.Screen options={{ title: '직원·급여' }} />
       {/* 전부 도착 전엔 무조건 로딩 — "직원 0명"·"₩0" 기본 화면이 먼저 떴다가 채워지는 부분 렌더 금지. */}
       {!ready ? (
         <ScreenLoading label="직원·급여를 불러오고 있어요…" />
       ) : (
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      <KeyboardShift>
+      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         {/* ① 급여 — 이번 달 인건비 총액 + 급여 설정 진입(상단). 구 '근무·급여'·'급여 설정' 카드를 흡수.
             이 화면의 히어로는 여기 하나다(2026-08-06) — 아래 초대코드가 같은 다크·30sp 규격이라 히어로가 둘이었다. */}
         <Appear delay={stagger(0)}>
@@ -242,7 +244,7 @@ export default function OwnerStaffScreen() {
             근무표 칸은 허브 '현황'이 근무표로 착지하게 바뀐(2026-08-11 P2) 보상으로 둔 반대 방향 진입점.
             상태 한 줄 없음 — 이 화면은 퀴즈·근무표 건수를 읽지 않는다(새 쿼리 금지). */}
         <Appear delay={stagger(2)}>
-        <View>
+        <View style={{ gap: Space.sm }}>
           <SectionLabel title="바로 가기" />
           <ActionRow
             variant="tile"
@@ -258,7 +260,7 @@ export default function OwnerStaffScreen() {
         {pending.length > 0 && (
           <Appear delay={stagger(3)}>
           <View style={styles.pendingWrap}>
-            <SectionLabel title={`합류 신청 (${pending.length}명)`} hint="승인해야 합류돼요" />
+            <SectionLabel title={`합류 신청 (${pending.length}명)`} />
             <View style={[styles.list, styles.pendingList]}>
               {pending.map((p, i) => (
                 <Appear key={p.id} delay={stagger(i)} style={styles.staffRow}>
@@ -282,7 +284,7 @@ export default function OwnerStaffScreen() {
 
         {/* 직원 목록 — 시급 편집 + 이번 달 시간·급여·근무상태(구 근무·급여 화면 흡수) */}
         <Appear delay={stagger(4)}>
-        <SectionLabel title={`합류한 직원 (${staff.length}명)`} hint="탭 → 출근기록" />
+        <SectionLabel title={`합류한 직원 (${staff.length}명)`} />
         </Appear>
         <Appear delay={stagger(5)}>
         {staff.length === 0 ? (
@@ -389,6 +391,7 @@ export default function OwnerStaffScreen() {
         </Appear>
         <View style={{ height: 12 }} />
       </ScrollView>
+      </KeyboardShift>
       )}
       <ConfirmModal
         visible={!!removeTarget}

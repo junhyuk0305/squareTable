@@ -1,15 +1,17 @@
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
-import { BrandColors, InkColors } from '@/lib/theme/colors';
+import { ProgressPill } from '@/components/blocks/ProgressPill';
+import { InkColors } from '@/lib/theme/colors';
 import { Elevation, Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
 
 /**
- * 행 최소 높이 = 터치 타깃 48dp. 56 으로 두면 대상 줄이 없는 행(제목 한 줄)이 위아래로 붕 떠서
- * 옆 행과 여백이 달라 보였다(2026-08-27 실측) — 한 줄 행은 48, 두 줄 행은 내용만큼 자란다.
+ * 행 최소 높이 — **모든 행이 같은 높이**다(2026-09-03 웹 실측 피드백: 대상 줄 있는 행과 없는 행의
+ * 높이가 달라 칸이 들쭉날쭉했다). 56 = 두 줄 행(제목 21 + 2 + 대상 16 + 패딩 16)이 꼭 들어가는 값이고
+ * 한 줄 행은 가운데 정렬로 같은 높이를 채운다. 터치 타깃 48dp 도 넘긴다. 고정 height 가 아니라 minHeight.
  */
-const ROW_MIN_H = 48;
+const ROW_MIN_H = 56;
 
 export type RollupRow = {
   key: string;
@@ -17,8 +19,6 @@ export type RollupRow = {
   count: number;
   /** 개수 단위 — 스크린리더 낭독용(워딩 §5: 요청·질문=건, 항목=개, 사람=명). */
   unit?: '개' | '건' | '명';
-  /** 손봐야 할 값이면 건수를 주황으로. */
-  hot?: boolean;
   /**
    * 대표 대상 1줄(R2 "숫자 옆에는 대상이 붙는다") — "'마감 청소 순서' 142일 전 수정이 가장 오래".
    * 없으면 그 줄을 그리지 않는다(빈 줄 금지).
@@ -28,10 +28,12 @@ export type RollupRow = {
 };
 
 /**
- * L5 · 롤업 행(블록어휘 §7-2) — 2~3개 지표가 **대등**할 때. 행 = [제목 + 건수 + ›] / [대표 대상 1줄].
+ * L5 · 롤업 행(블록어휘 §7-2) — 2~3개 지표가 **대등**할 때. 행 = [제목 / 대표 대상 1줄] [건수 알약] [›].
  *
  * 옛 '챙길 것' MiniStats 3칸(숫자만 나열)의 대체. 지표마다 자기 행과 자기 대상을 갖는다.
  * 쓸 곳(§7-4 B): 노하우 허브(평시) · 현황 '확인 필요' · 퀴즈 홈 '손볼 것'.
+ * ★건수는 `ProgressPill`(중립 알약)이다 — 2026-09-03: 주황 글자(hot)를 폐기하고, "들어가면 알 수 있는
+ *   숫자를 미리 보여주는" 자리는 전부 같은 알약으로 통일했다. 건수·› 는 행 세로 가운데에 선다.
  * ★행 자체가 Pressable 이고 안에 다른 버튼을 두지 않는다(RN-web 중첩 button 금지).
  * 표시 전용: 건수·대상 문구는 호출부가 정한다.
  */
@@ -48,12 +50,12 @@ export function RollupRows({ rows }: { rows: RollupRow[] }) {
           onPress={r.onPress}
           style={({ pressed }) => [styles.row, i > 0 && styles.divider, pressed && styles.pressed]}
         >
-          <View style={styles.top}>
+          <View style={styles.text}>
             <Text style={styles.title} numberOfLines={1}>{r.title}</Text>
-            <Text style={[styles.count, r.hot && styles.countHot]}>{r.count}</Text>
-            <Ionicons name="chevron-forward" size={14} color={InkColors.ink3} />
+            {r.target ? <Text style={styles.target} numberOfLines={1}>{r.target}</Text> : null}
           </View>
-          {r.target ? <Text style={styles.target} numberOfLines={1}>{r.target}</Text> : null}
+          <ProgressPill text={String(r.count)} tone="neutral" />
+          <Ionicons name="chevron-forward" size={14} color={InkColors.ink3} />
         </Pressable>
       ))}
     </View>
@@ -69,13 +71,11 @@ const styles = StyleSheet.create({
     backgroundColor: InkColors.bg,
     ...Elevation.e1,
   },
-  row: { minHeight: ROW_MIN_H, paddingVertical: Space.sm + 2, justifyContent: 'center' },
+  row: { minHeight: ROW_MIN_H, paddingVertical: Space.sm, flexDirection: 'row', alignItems: 'center', gap: Space.sm },
   divider: { borderTopWidth: 1, borderTopColor: InkColors.line },
   pressed: { opacity: 0.7 },
-  top: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
-  title: { flex: 1, minWidth: 0, fontSize: 15, lineHeight: 21, fontWeight: '800', color: InkColors.ink },
-  count: { fontSize: 15, lineHeight: 21, fontWeight: '900', color: InkColors.ink, letterSpacing: -0.3 },
-  countHot: { color: BrandColors.warnText },
+  text: { flex: 1, minWidth: 0 },
+  title: { fontSize: 15, lineHeight: 21, fontWeight: '800', color: InkColors.ink },
   // 대상 줄은 꼬리표(보조)라 본문 15sp 하한 대상이 아니다.
   // 제목 바로 아래 붙인다(2px) — xs(4)면 제목·대상이 따로 노는 두 줄로 읽혔다(2026-08-27 실측).
   target: { marginTop: 2, fontSize: 12, lineHeight: 16, color: InkColors.ink3 },

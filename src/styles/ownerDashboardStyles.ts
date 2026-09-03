@@ -73,10 +73,35 @@ export const styles = StyleSheet.create({
     paddingHorizontal: Space.lg,
     ...Elevation.e1,
   },
+  // 할일 0건 — 첫 할일 등록으로 안내(새 매장은 기본 할일이 없다).
+  taskEmpty: { alignItems: 'flex-start', gap: Space.sm, paddingVertical: Space.sm },
+  taskEmptyText: { fontSize: 15, lineHeight: 22, fontWeight: '600', color: InkColors.ink2 },
+  taskEmptyCta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: BrandColors.brand,
+    paddingVertical: 12,
+    paddingHorizontal: 18,
+    borderRadius: Radius.pill,
+  },
+  taskEmptyCtaText: { color: InkColors.bubbleText, fontSize: 14, fontWeight: '800' },
   taskRow: { flexDirection: 'row', alignItems: 'center', gap: Space.md, minHeight: 48, paddingVertical: Space.sm },
   taskRowDivider: { borderTopWidth: 1, borderTopColor: InkColors.line },
-  taskText: { flex: 1, minWidth: 0, fontSize: 15, lineHeight: 21, fontWeight: '600', color: InkColors.ink },
+  // 제목 한 줄 + 그 아래 담당자 알약. 알약은 문장 시작에 맞춰 왼쪽으로 붙는다.
+  taskBody: { flex: 1, minWidth: 0, alignItems: 'flex-start', gap: Space.xs },
+  taskText: { alignSelf: 'stretch', fontSize: 15, lineHeight: 21, fontWeight: '600', color: InkColors.ink },
   taskTextDone: { color: InkColors.ink3, textDecorationLine: 'line-through' },
+  // 담당자 알약 — 보조 표기(상태 꼬리표)라 15sp 하한 대상 아님.
+  taskAssignee: {
+    paddingHorizontal: Space.sm,
+    paddingVertical: 2,
+    borderRadius: Radius.pill,
+    borderWidth: 1,
+    borderColor: InkColors.line,
+    backgroundColor: InkColors.bgSoft,
+  },
+  taskAssigneeText: { fontSize: 12, fontWeight: '700', color: InkColors.ink2 },
   // 업무 시간 — 제목 앞에 붙는 꼬리표(보조 표기라 15sp 하한 대상 아님). 할일 화면 timeTag 와 같은 값.
   taskTime: { fontSize: 13, fontWeight: '800', color: InkColors.ink2 },
   // 카드 맨 위 진행 바 — 오늘 할일 전체 기준(잘라 보여주는 5건이 아니다).

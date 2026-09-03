@@ -135,7 +135,7 @@ function WorkSettingsForm({ members, me, onSaved }: WorkSettingsPanelProps) {
             <Text style={s.backText}>업무 카테고리</Text>
           </Pressable>
 
-          <ScrollView style={s.scroll} contentContainerStyle={s.scrollPad} showsVerticalScrollIndicator={false}>
+          <ScrollView keyboardShouldPersistTaps="handled" style={s.scroll} contentContainerStyle={s.scrollPad} showsVerticalScrollIndicator={false}>
             <Text style={s.fieldLabel}>카테고리 이름</Text>
             <TextInput
               value={open.label}
@@ -211,7 +211,7 @@ function WorkSettingsForm({ members, me, onSaved }: WorkSettingsPanelProps) {
         </>
       ) : (
         // ── 1단: 카테고리 목록 ────────────────────────────────────
-        <ScrollView style={s.scroll} contentContainerStyle={s.scrollPad} showsVerticalScrollIndicator={false}>
+        <ScrollView keyboardShouldPersistTaps="handled" style={s.scroll} contentContainerStyle={s.scrollPad} showsVerticalScrollIndicator={false}>
           <Text style={s.lead}>매장 흐름에 맞게 업무 카테고리를 짜고, 카테고리마다 매일 하는 루틴 업무와 담당자를 정해요. 매장 전체에 공통 적용돼요.</Text>
 
           <View style={s.list}>

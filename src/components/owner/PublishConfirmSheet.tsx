@@ -173,7 +173,7 @@ export function PublishConfirmSheet({
           </View>
         )}
 
-        <SectionLabel title="카테고리" hint="매뉴얼에서 묶이는 단위예요" />
+        <SectionLabel title="카테고리" />
         <View style={styles.chips}>
           {options.map((name) => {
             const on = section === name;
@@ -255,7 +255,7 @@ export function PublishConfirmSheet({
         {partsEnabled && !partsLoaded && <ScreenLoading label="파트를 불러오고 있어요…" />}
         {partsEnabled && partsLoaded && (
           <>
-            <SectionLabel title="파트" hint="안 고르면 전원이 보는 공통이에요" />
+            <SectionLabel title="파트" />
             <View style={styles.chips}>
               {parts.map((p) => {
                 const on = partId === p.id;

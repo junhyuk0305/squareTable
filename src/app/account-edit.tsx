@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TextInput, Pressable, ActivityIndicator } from 'react-native';
+import { KeyboardShift } from '@/components/KeyboardShift';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, Redirect } from 'expo-router';
@@ -150,6 +151,7 @@ function AccountEditForm() {
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
       <Stack.Screen options={{ headerShown: true, title: '프로필 편집', headerLeft: () => <HeaderBackButton /> }} />
+      <KeyboardShift>
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
         <Appear delay={stagger(0)}>
           <SectionLabel title="기본 정보" />
@@ -192,7 +194,7 @@ function AccountEditForm() {
         {role === 'owner' && (
           <>
             <Appear delay={stagger(2)}>
-              <SectionLabel title="매장 정보" hint="사장님만 바꿀 수 있어요" />
+              <SectionLabel title="매장 정보" />
             </Appear>
             <Appear delay={stagger(3)}>
             {/* 매장 이름과 업종은 같은 매장 속성이라 한 카드 안 두 행으로 둔다 — 카드가 나뉘어 있으면
@@ -295,6 +297,7 @@ function AccountEditForm() {
 
         <View style={{ height: 24 }} />
       </ScrollView>
+      </KeyboardShift>
     </SafeAreaView>
   );
 }

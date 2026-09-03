@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { View, Text, Pressable, TextInput, StyleSheet, ScrollView, Platform } from 'react-native';
+import { KeyboardShift } from '@/components/KeyboardShift';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -39,7 +40,7 @@ export default function OwnerStoreConfigScreen() {
   const retry = useScheduleStore((s) => s.retry);
 
   return (
-    <SafeAreaView style={styles.safe} edges={['bottom']}>
+    <SafeAreaView style={styles.safe} edges={[]}>
       <Stack.Screen options={{ title: '매장 기본 정보' }} />
       {!loaded ? (
         <ScreenLoading label="매장 정보를 불러오고 있어요…" />
@@ -110,7 +111,8 @@ function StoreConfigForm() {
   };
 
   return (
-    <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+    <KeyboardShift>
+    <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
       <Text style={styles.lead}>운영시간과 정기 휴무를 정해두면 근무표에 반영돼요.</Text>
 
       {/* 운영시간 — 이 화면의 최우선. 2026-08-06: 카드 껍데기를 벗겨 시각 자체가 화면에서 가장 큰
@@ -170,7 +172,7 @@ function StoreConfigForm() {
       {/* 비고 — 이 화면에서 유일하게 카드로 남긴 블록(배치규칙⑤: 화면당 카드 1~2개는 남긴다).
           여러 줄 자유 입력이라 경계면이 있어야 어디까지 쓰는 칸인지 보인다. */}
       <View style={styles.section}>
-        <SectionLabel title="비고" hint="선택" />
+        <SectionLabel title="비고" />
         <View style={styles.card}>
           <TextInput
             value={note}
@@ -207,6 +209,7 @@ function StoreConfigForm() {
 
       <View style={{ height: 12 }} />
     </ScrollView>
+    </KeyboardShift>
   );
 }
 

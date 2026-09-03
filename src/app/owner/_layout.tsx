@@ -145,13 +145,16 @@ export default function OwnerLayout() {
     >
       {/* 탭 루트 5개는 하단 탭바로만 이동 → 뒤로가기 화살표를 무조건 끈다.
           ⚠️ headerLeft: undefined 는 "제거"가 아니라 위 screenOptions 의 HeaderBackButton 을 "상속"한다(=화살표가 붙음).
-             확실히 없애려면 headerLeft: () => null + headerBackVisible: false 로 명시한다. */}
-      <Stack.Screen name="dashboard" options={{ title: '홈', headerLeft: () => null, headerBackVisible: false }} />
+             확실히 없애려면 headerLeft: () => null + headerBackVisible: false 로 명시한다.
+          ★animation: 'none' — 탭 전환(goToTab=replace)은 '이동'이 아니라 '전환'이다. 네이티브에서
+             replace 도 스택 기본 슬라이드를 타서 화면·탭바가 통째로 좌우로 밀렸다(2026-09-02 실기기).
+             서브화면 push/pop 은 각자 화면의 애니메이션을 타므로 그대로 슬라이드된다. */}
+      <Stack.Screen name="dashboard" options={{ title: '홈', headerLeft: () => null, headerBackVisible: false, animation: 'none' }} />
       {/* 탭 루트 헤더엔 "어느 매장의 화면인가"를 상시 표시(StoreHeaderTitle) — 홈은 StoreToggle 이 담당. */}
-      <Stack.Screen name="categories" options={{ title: '노하우 추가', headerTitle: () => <StoreHeaderTitle title="노하우 추가" />, headerLeft: () => null, headerBackVisible: false }} />
-      <Stack.Screen name="inbox" options={{ title: '답 기다리는 질문', headerTitle: () => <StoreHeaderTitle title="답 기다리는 질문" />, headerLeft: () => null, headerBackVisible: false }} />
-      <Stack.Screen name="work" options={{ title: '업무 채팅', headerTitle: () => <StoreHeaderTitle title="업무 채팅" />, headerLeft: () => null, headerBackVisible: false }} />
-      <Stack.Screen name="settings" options={{ title: '설정', headerTitle: () => <StoreHeaderTitle title="설정" />, headerLeft: () => null, headerBackVisible: false }} />
+      <Stack.Screen name="categories" options={{ title: '노하우 추가', headerTitle: () => <StoreHeaderTitle title="노하우 추가" />, headerLeft: () => null, headerBackVisible: false, animation: 'none' }} />
+      <Stack.Screen name="inbox" options={{ title: '답 기다리는 질문', headerTitle: () => <StoreHeaderTitle title="답 기다리는 질문" />, headerLeft: () => null, headerBackVisible: false, animation: 'none' }} />
+      <Stack.Screen name="work" options={{ title: '업무 채팅', headerTitle: () => <StoreHeaderTitle title="업무 채팅" />, headerLeft: () => null, headerBackVisible: false, animation: 'none' }} />
+      <Stack.Screen name="settings" options={{ title: '설정', headerTitle: () => <StoreHeaderTitle title="설정" />, headerLeft: () => null, headerBackVisible: false, animation: 'none' }} />
       {/* 서브화면 — 전역 headerLeft(HeaderBackButton) 사용 */}
       <Stack.Screen name="staff" options={{ title: '직원·급여' }} />
       <Stack.Screen name="training" options={{ title: '퀴즈' }} />

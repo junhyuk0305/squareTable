@@ -5,8 +5,6 @@ import {
   Pressable,
   ScrollView,
   TextInput,
-  KeyboardAvoidingView,
-  Platform,
   type NativeSyntheticEvent,
   type NativeScrollEvent,
 } from 'react-native';
@@ -14,26 +12,23 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 import { Appear, stagger } from '@/components/Appear';
-import { ChatComposerBar } from '@/components/ChatComposerBar';
+import { KeyboardShift } from '@/components/KeyboardShift';
+import { ChatComposerBar, PlusToggleIcon } from '@/components/ChatComposerBar';
 import { ScreenLoading } from '@/components/ScreenLoading';
 import { ChatTurn } from '@/components/junior/ChatTurn';
 
 import { useChatStore } from '@/lib/store/useChatStore';
-import { useSessionStore } from '@/lib/store/useSessionStore';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { useUnknownQueueStore } from '@/lib/store/useUnknownQueueStore';
 
-import { useStaffStore } from '@/lib/store/useStaffStore';
-
-import { BrandColors, InkColors } from '@/lib/theme/colors';
+import { InkColors } from '@/lib/theme/colors';
 
 import type { Category } from '@/types';
 
 import { styles } from './askStyles';
 
-// 빈 상태에서 보여줄 추천 수 / 대화 중 상단 스트립 최대 수.
+// 빈 상태에서 보여줄 추천 수. (대화 중 상단 추천 칩 스트립은 2026-09-03 사용자 결정으로 뺐다.)
 const EMPTY_SUGGEST_COUNT = 3;
-const STRIP_SUGGEST_COUNT = 6;
 
 // 히스토리 윈도잉 — 처음엔 최근 CHAT_WINDOW개만 렌더하고, 위로 스크롤하면 이전 대화를 CHAT_PAGE개씩 더 붙인다.
 //  (질문이 많이 쌓여도 전부 렌더/스크롤하지 않게. 맨위→맨아래로 번쩍 이동하던 문제 해소.)
@@ -68,10 +63,6 @@ export function JuniorAsk({ suggestEntry = true, seed }: { suggestEntry?: boolea
   //  이 컴포넌트는 부모가 둘(junior/chat·owner/ask)이라 자기 게이트를 스스로 갖는다.
   const historyLoaded = useChatStore((s) => s.loaded);
 
-  const userId = useSessionStore((s) => s.userId);
-  const userName = useSessionStore((s) => s.userName);
-  const sessionStore = useSessionStore((s) => s.storeName);
-  const getStaff = useStaffStore((s) => s.getStaff);
   const getEntryById = usePlaybookStore((s) => s.getById);
   const entries = usePlaybookStore((s) => s.entries);
   const entriesLoaded = usePlaybookStore((s) => s.loaded);
@@ -99,22 +90,8 @@ export function JuniorAsk({ suggestEntry = true, seed }: { suggestEntry?: boolea
   );
   // 칩 문구 = 노하우 제목 그대로. 문장을 지어내면 원문과 어긋나 매칭이 빗나간다.
   const pool = useMemo(() => askable.map((e) => e.title).filter(Boolean), [askable]);
-  // 이미 물어본 질문은 추천에서 제외 → 같은 추천 칩이 매번 반복되지 않고, 답할 때마다 다음 질문이 드러난다.
-  const asked = useMemo(() => new Set(history.map((h) => h.query_text.trim())), [history]);
-  // 빈 상태: 풀 앞쪽 몇 개(첫인상). 대화 중 스트립: 아직 안 물어본 것만, 상한까지.
+  // 빈 상태: 풀 앞쪽 몇 개(첫인상).
   const emptySuggestions = useMemo(() => pool.slice(0, EMPTY_SUGGEST_COUNT), [pool]);
-  const stripSuggestions = useMemo(
-    () => pool.filter((t) => !asked.has(t.trim())).slice(0, STRIP_SUGGEST_COUNT),
-    [pool, asked],
-  );
-
-  const identity = useMemo(() => {
-    // 매장 이름은 세션에서. 입사일차는 명부에 있을 때만 표시(신규 사용자엔 없음).
-    const me = getStaff(userId);
-    const career = me?.career_days ? ` · 입사 ${me.career_days}일차` : '';
-    const store = sessionStore ? ` · ${sessionStore}` : '';
-    return `${userName}${career}${store}`;
-  }, [userId, userName, sessionStore, getStaff]);
   const unknownQueue = useUnknownQueueStore((s) => s.queue);
   // 실제로 사장에게 등록된 질문 문장 집합 — 재기동 후 '보냈음' 표시의 **유일한 근거**(#25).
   // enqueue 의 중복 판정과 같은 잣대(trim 비교)를 쓴다 — 두 곳이 다르면 표시와 실제가 또 어긋난다.
@@ -128,7 +105,8 @@ export function JuniorAsk({ suggestEntry = true, seed }: { suggestEntry?: boolea
   // 홈 칩 → goToTab(replace)은 이 화면을 새로 마운트하므로 초기값이면 충분하고,
   // effect로 하면 사용자가 타이핑한 뒤 리렌더에서 덮어쓸 위험만 생긴다.
   const [input, setInput] = useState(seed ?? '');
-  const [focused, setFocused] = useState(false);
+  // ＋ 메뉴(노하우 제안) — 업무 채팅 입력바와 같은 형태.
+  const [menu, setMenu] = useState(false);
   const scrollRef = useRef<ScrollView | null>(null);
   // 첫 진입(마운트·기존 기록 hydrate)은 애니 없이 바닥으로 '점프' → 히스토리를 위에서부터 스크롤해 내려오는
   // 잔상 없이 최신 대화가 바로 보인다. 이후 새 메시지부터만 부드럽게 스크롤한다.
@@ -192,27 +170,12 @@ export function JuniorAsk({ suggestEntry = true, seed }: { suggestEntry?: boolea
   const ready = historyLoaded && entriesLoaded;
 
   return (
-    <KeyboardAvoidingView
-      style={{ flex: 1 }}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 0}
-    >
-      {/* 상단 안내 + 노하우 제안 진입(새 노하우 등록 신청) */}
-      <View style={styles.identityBar}>
-        <Text style={styles.identityText} numberOfLines={1}>{identity}</Text>
-        {suggestEntry && (
-          <Pressable
-            onPress={() => router.push('/junior/suggest')}
-            hitSlop={6}
-            style={({ pressed }) => [styles.suggestEntry, pressed && { opacity: 0.7 }]}
-          >
-            <Ionicons name="bulb" size={13} color={BrandColors.yellowDeep} />
-            <Text style={styles.suggestEntryText}>노하우 제안</Text>
-          </Pressable>
-        )}
-      </View>
+    // 키보드 회피는 공용 KeyboardShift — 헤더·세그먼트 아래에 놓여도 창 기준 오프셋을 스스로 잰다.
+    <KeyboardShift>
+      {/* 옛 상단 신원 줄(이름·입사일차·매장 + '노하우 제안' 칩)은 2026-09-03 뺐다 —
+          노하우 제안 진입은 아래 입력바 ＋ 메뉴로 옮겼다. */}
 
-      {/* 대화 히스토리 — 게이트 밖은 identityBar·입력바(세션값)뿐이다. */}
+      {/* 대화 히스토리 — 게이트 밖은 입력바(세션값)뿐이다. */}
       {!ready ? (
         <View style={styles.scroll}>
           <ScreenLoading label="지난 대화를 불러오고 있어요…" />
@@ -337,59 +300,63 @@ export function JuniorAsk({ suggestEntry = true, seed }: { suggestEntry?: boolea
         </View>
       )}
 
-      {/* 추천 질문 상시 노출 — 대화 시작 후에도 '다음 질문'을 한 탭으로. 이미 물어본 건 빠지므로
-          같은 추천이 반복되지 않는다. 물어볼 게 다 떨어지면 스트립 자체를 감춘다. */}
-      {history.length > 0 && stripSuggestions.length > 0 && (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.chipStrip}
-          contentContainerStyle={styles.chipStripContent}
-          keyboardShouldPersistTaps="handled"
-        >
-          {stripSuggestions.map((text) => (
+      {/* ＋ 메뉴 — 업무 채팅(WorkChat)과 같은 형태·같은 위치. 항목은 '노하우 제안' 하나다. */}
+      {menu && (
+        <>
+          <Pressable style={styles.menuBackdrop} onPress={() => setMenu(false)} accessibilityLabel="메뉴 닫기" />
+          <Appear style={styles.menu}>
             <Pressable
-              key={`chip-${text}`}
-              onPress={() => handleSeedTap(text)}
-              disabled={isLoading}
-              style={({ pressed }) => [styles.chip, pressed && { opacity: 0.7 }, isLoading && { opacity: 0.5 }]}
+              onPress={() => { setMenu(false); router.push('/junior/suggest'); }}
+              accessibilityRole="button"
+              accessibilityLabel="노하우 제안"
+              style={({ pressed }) => [styles.mi, pressed && { backgroundColor: InkColors.paper }]}
             >
-              <Text style={styles.chipText} numberOfLines={1}>{text}</Text>
+              <View style={styles.miIc}>
+                <Ionicons name="bulb-outline" size={16} color={InkColors.ink} />
+              </View>
+              <View>
+                <Text style={styles.miLabel}>노하우 제안</Text>
+                <Text style={styles.miSub}>사장님 확인 뒤 매장 노하우가 돼요</Text>
+              </View>
             </Pressable>
-          ))}
-        </ScrollView>
+          </Appear>
+        </>
       )}
 
-      {/* 입력바 — 떠 있는 알약(업무 채팅·노하우 코치와 같은 공용 형태) */}
+      {/* 입력바 — 떠 있는 알약. ＋ · 입력칸 · 보내기 = 업무 채팅 입력바와 같은 구성(2026-09-03). */}
       <ChatComposerBar>
-        <View style={[styles.inputWrap, focused && styles.inputWrapFocused]}>
-          <TextInput
-            value={input}
-            onChangeText={setInput}
-            placeholder="궁금한 걸 물어보세요"
-            placeholderTextColor={InkColors.ink3}
-            style={styles.input}
-            editable={!isLoading}
-            maxLength={500}
-            returnKeyType="send"
-            onSubmitEditing={() => handleSend()}
-            onFocus={() => setFocused(true)}
-            onBlur={() => setFocused(false)}
-            blurOnSubmit={false}
-          />
-        </View>
+        {suggestEntry && (
+          <Pressable
+            onPress={() => setMenu((v) => !v)}
+            accessibilityRole="button"
+            accessibilityLabel={menu ? '추가 메뉴 닫기' : '추가 메뉴 열기'}
+            style={({ pressed }) => [styles.plus, pressed && { opacity: 0.85 }]}
+          >
+            <PlusToggleIcon open={menu} color={InkColors.bubbleText} />
+          </Pressable>
+        )}
+        <TextInput
+          value={input}
+          onChangeText={setInput}
+          placeholder="궁금한 걸 물어보세요"
+          placeholderTextColor={InkColors.ink3}
+          style={styles.input}
+          editable={!isLoading}
+          maxLength={500}
+          returnKeyType="send"
+          onSubmitEditing={() => handleSend()}
+          blurOnSubmit={false}
+        />
         <Pressable
           onPress={() => handleSend()}
           disabled={!canSend}
-          style={({ pressed }) => [
-            styles.sendBtn,
-            canSend ? styles.sendBtnOn : styles.sendBtnDisabled,
-            pressed && { opacity: 0.85 },
-          ]}
+          accessibilityRole="button"
+          accessibilityLabel="질문 보내기"
+          style={({ pressed }) => [styles.send, !canSend && { opacity: 0.4 }, pressed && { opacity: 0.85 }]}
         >
-          <Text style={[styles.sendBtnIcon, !canSend && styles.sendBtnIconOff]}>↑</Text>
+          <Ionicons name="arrow-up" size={20} color={InkColors.ink} />
         </Pressable>
       </ChatComposerBar>
-    </KeyboardAvoidingView>
+    </KeyboardShift>
   );
 }

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, Image, Linking, Modal, Platform, Pressable, StyleSheet, View } from 'react-native';
 import type { ImageStyle, StyleProp, ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { resolvePhotoUri } from '@/lib/db';
 import { HEADER_EDGE_GUTTER, modalFrameStyle, Space } from '@/lib/theme/layout';
 
@@ -78,6 +79,8 @@ export function StoredImage({ stored, style, resizeMode, viewOnPress, openOnPres
  */
 export function PhotoViewerModal({ stored, onClose }: { stored?: string | null; onClose: () => void }) {
   const uri = useStoredPhotoUri(stored);
+  // ★Android 15 edge-to-edge 는 Modal 창도 상태바 밑까지 그린다 — 닫기·원본 버튼이 상태바에 가려졌다(2026-09-03 실기기).
+  const insets = useSafeAreaInsets();
   const openOriginal = () => {
     if (!uri) return;
     if (Platform.OS === 'web' && typeof window !== 'undefined') window.open(uri, '_blank');
@@ -86,7 +89,7 @@ export function PhotoViewerModal({ stored, onClose }: { stored?: string | null; 
   return (
     <Modal visible transparent animationType="fade" onRequestClose={onClose}>
       <View style={[modalFrameStyle, vs.frame]}>
-        <View style={vs.topBar}>
+        <View style={[vs.topBar, { paddingTop: Space.md + insets.top }]}>
           <Pressable onPress={onClose} hitSlop={8} accessibilityRole="button" accessibilityLabel="닫기">
             <Ionicons name="close" size={26} color="#fff" />
           </Pressable>

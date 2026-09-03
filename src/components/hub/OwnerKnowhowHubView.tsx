@@ -23,6 +23,7 @@ import { StorePickerSheet, type StorePickerRow } from '@/components/hub/StorePic
 import { SectionLabel } from '@/components/SectionLabel';
 import { ActionRow } from '@/components/blocks/ActionRow';
 import { FocusCard } from '@/components/blocks/FocusCard';
+import { ProgressPill } from '@/components/blocks/ProgressPill';
 import { ProgressRing } from '@/components/blocks/ProgressRing';
 import { RollupRows, type RollupRow } from '@/components/blocks/RollupRows';
 import { AlertRow } from '@/components/blocks/AlertRow';
@@ -175,6 +176,7 @@ export function OwnerKnowhowHubView({ header }: { header: ReactNode }) {
     <>
     {/* 화면 제목 — 게이트 안이다. 밖에 두면 제목만 먼저 등장하고 본문이 수 백 ms 뒤에 갈아끼워진다. */}
     {header}
+    {/* 카드↔카드 = md(12). 제목 달린 섹션 앞의 추가 여백은 SectionLabel 자신이 든다(2026-09-03). */}
     <View style={{ gap: Space.md }}>
       {/* ── 노하우 0 매장 = 담기가 먼저(빈 화면 행동 버튼).
              2026-08-07: **단일 매장에서만** 그린다. 다점포에서는 아래 '매장별 노하우' 카드가
@@ -227,13 +229,13 @@ export function OwnerKnowhowHubView({ header }: { header: ReactNode }) {
                   <View key="legend">
                     {[
                       { color: BrandColors.good, text: '아는 칸', value: understanding.known },
-                      { color: InkColors.bgSoft, border: true, text: '모르는 칸', value: understanding.cells - understanding.known, hot: true },
-                      { color: BrandColors.warn, text: '문항 없는 노하우', value: understanding.noItems, hot: understanding.noItems > 0 },
+                      { color: InkColors.bgSoft, border: true, text: '모르는 칸', value: understanding.cells - understanding.known },
+                      { color: BrandColors.warn, text: '문항 없는 노하우', value: understanding.noItems },
                     ].map((r, i) => (
                       <View key={r.text} style={[styles.lgRow, i > 0 && styles.lgDivider]}>
                         <View style={[styles.lgDot, { backgroundColor: r.color }, r.border && styles.lgDotBorder]} />
                         <Text style={styles.lgText} numberOfLines={1}>{r.text}</Text>
-                        <Text style={[styles.lgValue, r.hot && styles.lgHot]}>{r.value}</Text>
+                        <Text style={styles.lgValue}>{r.value}</Text>
                       </View>
                     ))}
                   </View>,
@@ -243,7 +245,7 @@ export function OwnerKnowhowHubView({ header }: { header: ReactNode }) {
                       { n: understanding.cells - understanding.known, text: '아직 모르는 칸' },
                     ].map((r, i) => (
                       <View key={r.text} style={[styles.bnRow, i > 0 && styles.lgDivider]}>
-                        <Text style={[styles.bnValue, r.n > 0 && styles.lgHot]}>{r.n}</Text>
+                        <Text style={styles.bnValue}>{r.n}</Text>
                         <Text style={styles.lgText} numberOfLines={1}>{r.text}</Text>
                       </View>
                     ))}
@@ -330,7 +332,6 @@ export function OwnerKnowhowHubView({ header }: { header: ReactNode }) {
               key: 'add',
               icon: 'add',
               label: '노하우 추가',
-              hint: '말로 · 사진으로',
               primary: true,
               // ★2026-08-07(0121): 매장을 골라도 **전환하지 않는다**. 고른 매장은 대상(입력 항목)일
               // 뿐이고, 쓰기는 definer RPC 가 `units.owner_id = auth.uid()` 를 검사해 처리한다.
@@ -342,7 +343,6 @@ export function OwnerKnowhowHubView({ header }: { header: ReactNode }) {
               key: 'list',
               icon: 'list-outline',
               label: '노하우 목록',
-              hint: totals.knowhow > 0 ? `${totals.knowhow}개` : undefined,
               // ★2026-08-07(0121): 매장을 먼저 고르게 하지 않는다. 허브 층 목록이 소유 매장 전체를
               // 매장별로 묶어 보여주고 **매장을 가로질러 검색**한다 — 전환해서 내려가면 그게 불가능했다.
               onPress: () => router.push('/hub-knowhow' as never),
@@ -379,7 +379,7 @@ export function OwnerKnowhowHubView({ header }: { header: ReactNode }) {
                 >
                   <View style={[styles.dot, { backgroundColor: colorOf(r.unit_id) }]} />
                   <Text style={styles.rowTitle} numberOfLines={1}>{labelOf(r.unit_id)}</Text>
-                  <Text style={styles.cntNeutral}>{r.knowhow}</Text>
+                  <ProgressPill text={String(r.knowhow)} tone="neutral" />
                   <Ionicons name="chevron-forward" size={15} color={InkColors.ink3} />
                 </Pressable>
               ))}
@@ -417,7 +417,6 @@ export function OwnerKnowhowHubView({ header }: { header: ReactNode }) {
               title: '점검할 노하우',
               count: totals.review,
               unit: '개',
-              hot: totals.review > 0,
               // ★'검증'은 승인 어휘 밖 — 2026-08-27부터 이 축은 '점검'(업무 검수 '확인'과 분리). 착지 = ?review=1 필터 목록.
               onPress: jump('점검할 노하우', (r) => r.needs_review, '/owner/knowledge?review=1'),
             };
@@ -426,7 +425,6 @@ export function OwnerKnowhowHubView({ header }: { header: ReactNode }) {
               title: '오래 손 안 댄 노하우',
               count: totals.stale,
               unit: '개',
-              hot: totals.stale > 0,
               target: totals.stale > 0 ? '90일 넘게 수정이 없어요' : undefined,
               onPress: jump('오래 손 안 댄 노하우', (r) => r.stale, '/owner/knowledge'),
             };
@@ -452,7 +450,6 @@ export function OwnerKnowhowHubView({ header }: { header: ReactNode }) {
               title: '답 기다리는 질문',
               count: totals.pending,
               unit: '건',
-              hot: totals.pending > 0,
               target: totals.pending > 0 ? '답 하나가 노하우 하나가 돼요' : undefined,
               onPress: jump('답 기다리는 질문', (r) => r.pending_q, '/owner/inbox'),
             };
@@ -510,7 +507,8 @@ const styles = StyleSheet.create({
     borderColor: InkColors.line,
     paddingHorizontal: Space.gutter,
     paddingTop: Space.gutter,
-    paddingBottom: Space.lg,
+    // 하단 여백은 점 인디케이터 상자(48dp 터치 타깃)가 겸한다 — lg(16)를 더 두면 점 아래가 붕 떴다(2026-09-03).
+    paddingBottom: 0,
     ...Elevation.e2,
   },
   lgRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingVertical: Space.sm + 1 },
@@ -519,8 +517,8 @@ const styles = StyleSheet.create({
   lgDotBorder: { borderWidth: 1, borderColor: InkColors.line },
   // 범례는 꼬리표(보조)라 본문 15sp 하한 대상이 아니다.
   lgText: { flex: 1, minWidth: 0, fontSize: 12.5, lineHeight: 17, fontWeight: '700', color: InkColors.ink2 },
+  // 급한 값의 주황 글자색(lgHot)은 2026-09-03 폐기 — 값은 전부 ink.
   lgValue: { fontSize: 17, lineHeight: 22, fontWeight: '900', color: InkColors.ink, letterSpacing: -0.4 },
-  lgHot: { color: BrandColors.warnText },
   // 뒷면(V4 큰숫자형) — 급한 값 두 개만 크게.
   bnRow: { flexDirection: 'row', alignItems: 'baseline', gap: Space.sm + 2, paddingVertical: Space.sm + 2 },
   bnValue: { minWidth: 52, textAlign: 'right', fontSize: 30, lineHeight: 36, fontWeight: '900', color: InkColors.ink, letterSpacing: -1.2 },
@@ -545,12 +543,6 @@ const styles = StyleSheet.create({
 
   row: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingVertical: Space.sm + 2 },
   rowTitle: { flex: 1, fontSize: 13.5, fontWeight: '700', color: InkColors.ink, minWidth: 0 },
-  // 매장별 노하우 개수 — 경고가 아닌 중립 정보라 warn 배지 대신 무채색.
-  cntNeutral: {
-    minWidth: 24, textAlign: 'center', fontSize: 11.5, fontWeight: '900', color: InkColors.ink2,
-    backgroundColor: InkColors.bgSoft, borderWidth: 1, borderColor: InkColors.line,
-    paddingHorizontal: Space.xs + 2, paddingVertical: 1, borderRadius: Radius.pill, overflow: 'hidden',
-  },
   importRow: { borderTopWidth: 1, borderTopColor: InkColors.line, marginTop: Space.xs },
   importText: { flex: 1, fontSize: 13.5, fontWeight: '700', color: InkColors.ink2, minWidth: 0 },
   dot: { width: 8, height: 8, borderRadius: 4 },

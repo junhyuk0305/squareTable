@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { View, Text, Pressable, StyleSheet, TextInput, ScrollView, ActivityIndicator } from 'react-native';
+import { KeyboardShift } from '@/components/KeyboardShift';
 import { useRouter, Stack, useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -204,6 +205,7 @@ export default function SignupScreen() {
   return (
     <SafeAreaView style={styles.safe}>
       <Stack.Screen options={{ headerShown: true, title: '회원가입', headerStyle: { backgroundColor: '#FFFFFF' }, headerTintColor: InkColors.ink }} />
+      <KeyboardShift>
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
         {/* 역할 — 가입 첫 단계에서 어떤 사용자인지 분명히 고른다 */}
         <Appear delay={0}>
@@ -472,6 +474,7 @@ export default function SignupScreen() {
         </Pressable>
         </Appear>
       </ScrollView>
+      </KeyboardShift>
     </SafeAreaView>
   );
 }

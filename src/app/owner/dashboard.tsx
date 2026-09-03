@@ -234,7 +234,7 @@ export default function OwnerDashboardScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
+    <SafeAreaView style={styles.safe} edges={['top']}>
       <Stack.Screen options={{ headerShown: false }} />
 
       {/* 코치마크 오버레이가 덮을 영역(헤더·스크롤·탭바를 함께 감싼다) */}
@@ -313,8 +313,8 @@ export default function OwnerDashboardScreen() {
             (배치 규칙: 화면당 카드 1~2개는 남긴다 — 카드는 '이건 특별하다'는 신호다).
             ★노하우 건수로 게이트하지 않는다 — 업무와 노하우는 별개 축이라, 노하우 0건 매장이
             업무를 등록해도 홈에서 사라지는 버그였다. 뜨는 조건은 "오늘 업무가 있는가" 하나다. */}
-        {(todayTasks.length > 0 || showDuty) && (
-          <Appear delay={stagger(2)} style={styles.section}>
+        {/* 할일이 0건이어도 섹션은 남긴다 — 새 매장은 기본 할일이 없으므로(2026-09-03 시드 제거) 여기서 첫 할일을 등록한다. */}
+        <Appear delay={stagger(2)} style={styles.section}>
             <SectionLabel
               icon="today-outline"
               title="오늘"
@@ -351,17 +351,27 @@ export default function OwnerDashboardScreen() {
                   </Text>
                 </View>
               )}
+              {todayTasks.length === 0 && (
+                <View style={styles.taskEmpty}>
+                  <Text style={styles.taskEmptyText}>아직 등록한 할일이 없어요</Text>
+                  <Pressable
+                    onPress={() => goToTab({ pathname: '/owner/work', params: { view: 'todo', compose: String(Date.now()) } })}
+                    accessibilityRole="button"
+                    accessibilityLabel="할일 등록하기"
+                    style={({ pressed }) => [styles.taskEmptyCta, pressed && { opacity: 0.6 }]}
+                  >
+                    <Ionicons name="add" size={16} color={InkColors.bubbleText} />
+                    <Text style={styles.taskEmptyCtaText}>할일 등록하기</Text>
+                  </Pressable>
+                </View>
+              )}
               {/* 머리줄: 오늘 누가 나와 있나. 출퇴근·근무표가 둘 다 도착했을 때만 그린다(0명 단정 방지). */}
               {showDuty && (
                 <Pressable
                   onPress={() => router.push('/owner/schedule')}
                   accessibilityRole="button"
                   accessibilityLabel="오늘 근무 보기"
-                  style={({ pressed }) => [
-                    styles.dutyRow,
-                    todayTasks.length > 0 && styles.dutyRowDivider,
-                    pressed && { opacity: 0.6 },
-                  ]}
+                  style={({ pressed }) => [styles.dutyRow, styles.dutyRowDivider, pressed && { opacity: 0.6 }]}
                 >
                   <Ionicons name="time-outline" size={16} color={InkColors.ink3} />
                   <Text style={styles.dutyText} numberOfLines={1}>
@@ -386,26 +396,30 @@ export default function OwnerDashboardScreen() {
                     size={22}
                     color={t.done ? BrandColors.good : InkColors.ink3}
                   />
-                  <Text style={[styles.taskText, t.done && styles.taskTextDone]} numberOfLines={1}>
-                    {/* 업무 시간(0118) — 할일 화면과 같은 자리·같은 형태로 제목 앞에 붙인다. */}
-                    {t.at ? <Text style={styles.taskTime}>{t.at} </Text> : null}
-                    {t.text}
-                  </Text>
-                  {/* 오른쪽 꼬리표 한 자리 — 끝났으면 '누가 언제'(D1: 완료 시각은 숨기지 않는다),
-                      아직이면 '담당 ○○'. 홈에서 누가 뭘 맡았고 어디까지 됐는지를 한 줄로 읽는다. */}
+                  <View style={styles.taskBody}>
+                    <Text style={[styles.taskText, t.done && styles.taskTextDone]} numberOfLines={1}>
+                      {/* 업무 시간(0118) — 할일 화면과 같은 자리·같은 형태로 제목 앞에 붙인다. */}
+                      {t.at ? <Text style={styles.taskTime}>{t.at} </Text> : null}
+                      {t.text}
+                    </Text>
+                    {/* 담당자 알약 — 문장 시작 바로 아래(2026-09-03 사용자 요청). 오른쪽 꼬리표에 있을 땐 긴 제목에 밀려 잘렸다. */}
+                    {t.assignee ? (
+                      <View style={styles.taskAssignee}>
+                        <Text style={styles.taskAssigneeText} numberOfLines={1}>담당 {t.assignee}</Text>
+                      </View>
+                    ) : null}
+                  </View>
+                  {/* 오른쪽 꼬리표 — 끝났으면 '누가 언제'(D1: 완료 시각은 숨기지 않는다). */}
                   {t.done && t.doneBy ? (
                     <Text style={styles.taskDoneBy} numberOfLines={1}>
                       {t.doneBy}
                       {t.doneAt ? ` ${t.doneAt}` : ''}
                     </Text>
-                  ) : !t.done && t.assignee ? (
-                    <Text style={styles.taskDoneBy} numberOfLines={1}>담당 {t.assignee}</Text>
                   ) : null}
                 </Pressable>
               ))}
             </View>
           </Appear>
-        )}
 
         {/* ③ X2 다음 행동 — 화면에 한 자리다. 우선순위는 nextAction이 정하고,
             0건이면 AlertRow가 스스로 렌더하지 않는다. */}

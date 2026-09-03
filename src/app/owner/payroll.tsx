@@ -1,4 +1,5 @@
 import { View, Text, StyleSheet, ScrollView, TextInput } from 'react-native';
+import { KeyboardShift } from '@/components/KeyboardShift';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack } from 'expo-router';
 import { usePayrollStore } from '@/lib/store/usePayrollStore';
@@ -25,12 +26,13 @@ export default function OwnerPayrollScreen() {
   const ready = usePayrollStore((s) => s.settingsLoaded);
 
   return (
-    <SafeAreaView style={styles.safe} edges={['bottom']}>
+    <SafeAreaView style={styles.safe} edges={[]}>
       <Stack.Screen options={{ title: '급여 설정' }} />
       {!ready ? (
         <ScreenLoading label="급여 설정을 불러오고 있어요…" />
       ) : (
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      <KeyboardShift>
+      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <View style={styles.block}>
           <SectionLabel title="수당·공제" />
           <View style={styles.card}>
@@ -69,6 +71,7 @@ export default function OwnerPayrollScreen() {
         </View>
         <View style={{ height: 12 }} />
       </ScrollView>
+      </KeyboardShift>
       )}
       <RoleTabBar role="owner" />
     </SafeAreaView>

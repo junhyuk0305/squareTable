@@ -28,6 +28,7 @@ import { RoleTabBar } from '@/components/RoleTabBar';
 import { ScreenLoading } from '@/components/ScreenLoading';
 import { LoadErrorState } from '@/components/LoadErrorState';
 import { Appear, stagger } from '@/components/Appear';
+import { KeyboardShift } from '@/components/KeyboardShift';
 import { useRoomStore } from '@/lib/store/useRoomStore';
 import { WorkChat } from '@/components/work/WorkChat';
 import { RoomBar, ROOMBAR_INSET } from '@/components/work/RoomBar';
@@ -210,7 +211,8 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
   // 다른 화면(홈 '오늘 할일'·'안 읽은 공지' 등)에서 ?view=todo|notice 로 들어오면 해당 패널을 연다.
   // ?view=assign(담당자별 보드)은 2026-08-12에 없어졌다 — 루틴의 담당자를 '업무 설정'이 직접 갖게 되면서
   // 같은 것을 두 번 만지는 자리가 사라졌다. 옛 링크는 죽이지 않고 할일로 착지시킨다.
-  const { view: viewParam } = useLocalSearchParams<{ view?: string }>();
+  // ?compose=<nonce> — 홈 '할일 등록하기'에서 들어오면 할일 작성 시트까지 연다(값은 매번 달라야 재진입에도 열린다).
+  const { view: viewParam, compose: composeParam } = useLocalSearchParams<{ view?: string; compose?: string }>();
   const paramView: ViewKey | null =
     viewParam === 'todo' || viewParam === 'notice' ? viewParam : viewParam === 'assign' ? 'todo' : null;
   const initialView: ViewKey = paramView ?? 'chat';
@@ -273,7 +275,15 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
     }
   }, [currentRoomId]);
   // routineScope — 루틴을 고칠 때만 실린다. 'single'=그 날짜만(대체 할일 1건 생성) / 'global'=매장 설정의 루틴 자체.
-  const [composer, setComposer] = useState<{ open: boolean; date?: string; text?: string; assigneeId?: string; editTemplate?: TaskTemplate; routineScope?: 'single' | 'global'; routineDate?: string }>({ open: false });
+  const [composer, setComposer] = useState<{ open: boolean; date?: string; text?: string; assigneeId?: string; editTemplate?: TaskTemplate; routineScope?: 'single' | 'global'; routineDate?: string }>(
+    composeParam ? { open: true, date: today } : { open: false },
+  );
+  // 딥링크 nonce 가 바뀌면(홈에서 다시 진입) 작성 시트를 다시 연다 — view 파라미터와 같은 "이전 값 비교" 패턴.
+  const [prevCompose, setPrevCompose] = useState(composeParam);
+  if (composeParam !== prevCompose) {
+    setPrevCompose(composeParam);
+    if (composeParam) setComposer({ open: true, date: today });
+  }
   const [uploadingId, setUploadingId] = useState<string | null>(null);
   // 범위 선택 시트 — 루틴 연필을 누르면 먼저 뜬다(오늘만 / 이후 모두).
   const [scopeAsk, setScopeAsk] = useState<{ task: TaskTemplate; date: string } | null>(null);
@@ -538,9 +548,11 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
 
   // 서랍 '이 방 할일' = **담당자가 이 방 멤버인 할일**만(판정 Ⓑ). 담당 없는 매장 전체 할일까지
   // 넣으면 모든 방이 같은 목록이 되어 방마다 열어 볼 이유가 사라진다.
+  // ★멤버 판정은 inThisRoom 하나다(2026-09-03). 기본방('전체')은 멤버 행이 없어(멤버십이 암묵) roomMemberIds 로
+  //   직접 보면 **항상 빈 목록**이었다 — 서랍의 '참여 인원'은 전원을 보여주는데 할일만 "없어요"라고 말했다.
   const roomTasks = useMemo(
-    () => boardTemplates.filter((t) => !!t.ownerId && roomMemberIds.has(t.ownerId) && occursOn(t, today)),
-    [boardTemplates, roomMemberIds, today],
+    () => boardTemplates.filter((t) => !!t.ownerId && inThisRoom(t.ownerId) && occursOn(t, today)),
+    [boardTemplates, inThisRoom, today],
   );
 
   // 완료 알림을 이 방 스트림에 그릴지 — 판정 Ⓐ. 피드 행은 매장 단위(roomId 없음)라 화면이 정한다.
@@ -647,7 +659,6 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
     noteCaptureNudge('skip');
   }, [noteCaptureNudge]);
 
-  const pinnedNotice = useMemo(() => notices.find((n) => n.pinned), [notices]);
   // ★안 읽은 공지는 역할이 아니라 **작성자** 기준이다(0177: 공지는 누구나 쓴다). 예전엔 사장은 항상 0
   //   이라 직원이 올린 공지가 사장에게 안 보였고, 직원은 자기가 쓴 공지도 '안 읽음'으로 셌다.
   const unreadNotices = notices.filter(
@@ -791,7 +802,7 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
   //   게이트 밖에 그대로 두고 **본문만** 로딩으로 대체한다 — 골격이 늦게 서면 그것도 레이아웃 점프다.
   if (!boardLoaded) {
     return (
-      <SafeAreaView style={st.safe} edges={['bottom']}>
+      <SafeAreaView style={st.safe} edges={[]}>
         <Stack.Screen options={headerOptions} />
         <ScreenLoading label="업무를 불러오고 있어요…" />
         <RoleTabBar role={role} />
@@ -801,7 +812,7 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
 
   if (boardLoadError) {
     return (
-      <SafeAreaView style={st.safe} edges={['bottom']}>
+      <SafeAreaView style={st.safe} edges={[]}>
         <Stack.Screen options={headerOptions} />
         <LoadErrorState
           title="업무를 불러오지 못했어요"
@@ -816,7 +827,9 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
   }
 
   return (
-    <SafeAreaView style={st.safe} edges={['bottom']}>
+    // ★bottom 인셋은 RoleTabBar 가 자체로 갖는다(insets.bottom) — 여기서 또 주면 이중 적용돼
+    //   탭바가 화면마다 다른 높이에 떴다(2026-09-02 실기기). 탭바가 없는 서랍 뷰만 bottom 을 유지한다. native-audit: ok
+    <SafeAreaView style={st.safe} edges={view === 'drawer' ? ['bottom'] : []}>
       <Stack.Screen options={headerOptions} />
       {/* 어떤 코스 카드가 몇 장 뜨는지는 trainingCards 메모가 판정(하한·주기·1회성 우선·요청 예외).
           ★대화방 **위쪽 흐름**에 둔다 — 떠 있는 헤더·칩바는 WorkChat 안에서 뜨므로 카드를 덮지 않는다. */}
@@ -850,8 +863,6 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
           nameOf={nameOf}
           members={members}
           isOwner={isOwner}
-          pinnedNotice={pinnedNotice}
-          onOpenNotice={() => openPanel('notice')}
           // @전체·직접 타이핑으로 비멤버가 섞여 들어와도 알림은 이 방 사람에게만 간다(§16-①).
           // 빠진 사람이 있으면 토스트로 알린다(reachableMentions).
           onSend={(text, mentions) => postMessage(today, text, userId, userName, role, reachableMentions(mentions))}
@@ -922,7 +933,9 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
 
       {view === 'settings' && isOwner && (
         <Appear delay={stagger(0)} style={{ flex: 1 }}>
+        <KeyboardShift>
         <WorkSettingsPanel members={members} me={userId} onSaved={() => setView('todo')} />
+        </KeyboardShift>
         </Appear>
       )}
 

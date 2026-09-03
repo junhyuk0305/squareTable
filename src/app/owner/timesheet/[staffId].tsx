@@ -39,7 +39,7 @@ export default function OwnerTimesheetScreen() {
 
   if (!ready) {
     return (
-      <SafeAreaView style={styles.safe} edges={['bottom']}>
+      <SafeAreaView style={styles.safe} edges={[]}>
         <Stack.Screen options={{ title: '출근 기록' }} />
         <ScreenLoading label="출근 기록을 불러오고 있어요…" />
         <RoleTabBar role="owner" />
@@ -49,7 +49,7 @@ export default function OwnerTimesheetScreen() {
 
   if (!staff) {
     return (
-      <SafeAreaView style={styles.safe} edges={['bottom']}>
+      <SafeAreaView style={styles.safe} edges={[]}>
         <Stack.Screen options={{ title: '출근 기록' }} />
         {/* 막다른 길 금지 — 빈/오류 상태에도 다음 행동 하나를 준다(복잡도 원칙 P6). */}
         <Text style={styles.empty}>직원을 찾을 수 없어요.{'\n'}내보냈거나 아직 합류하지 않은 직원이에요.</Text>

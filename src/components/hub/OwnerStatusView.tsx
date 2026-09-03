@@ -23,6 +23,7 @@ import { SectionLabel } from '@/components/SectionLabel';
 import { BottomSheet } from '@/components/BottomSheet';
 import { SheetHead } from '@/components/owner/quiz/kit';
 import { AlertRow } from '@/components/blocks/AlertRow';
+import { ProgressPill } from '@/components/blocks/ProgressPill';
 import { StackBar } from '@/components/blocks/StackBar';
 import { StatCardGrid, type StatCardItem } from '@/components/blocks/StatCardGrid';
 import { ScreenLoading } from '@/components/ScreenLoading';
@@ -197,7 +198,7 @@ export function OwnerStatusView({ header }: { header: ReactNode }) {
           <Text style={styles.rowTitle} numberOfLines={1}>{title}</Text>
           {!!sub && <Text style={styles.rowSub} numberOfLines={1}>{sub}</Text>}
         </View>
-        <Text style={styles.cnt}>{count}</Text>
+        <ProgressPill text={String(count)} tone="neutral" />
         <Ionicons name="chevron-forward" size={15} color={InkColors.ink3} />
       </Pressable>
     );
@@ -258,7 +259,6 @@ export function OwnerStatusView({ header }: { header: ReactNode }) {
       value: inbox.needsReview > 0 ? inbox.needsReview : '없어요',
       unit: inbox.needsReview > 0 ? '개' : undefined,
       sub: inboxLive.filter((k) => k.key !== 'review').map((k) => `${k.key === 'sugg' ? '승인 기다리는 제안' : k.title} ${k.n}건`).join(' · ') || undefined,
-      tone: inboxTotal > 0 ? 'hot' : undefined,
       visual: inboxTotal > 0 ? <StackBar parts={inboxKinds.map((k) => ({ n: k.n, label: k.label, color: k.color }))} /> : undefined,
       onPress: inboxTotal === 0 ? undefined : inboxLive.length === 1 ? () => goKind(inboxLive[0]) : () => setInboxOpen(true),
     },
@@ -285,6 +285,7 @@ export function OwnerStatusView({ header }: { header: ReactNode }) {
     <>
       {/* 화면 제목 — 게이트 안이다. 밖에 두면 제목만 먼저 등장하고 본문이 수 백 ms 뒤에 갈아끼워진다. */}
       {header}
+      {/* 카드↔카드 = md(12). 제목 달린 섹션 앞의 추가 여백은 SectionLabel 자신이 든다(2026-09-03). */}
       <View style={{ gap: Space.md }}>
       {starterRow && (
         <Appear delay={stagger(0)}>
@@ -347,7 +348,7 @@ export function OwnerStatusView({ header }: { header: ReactNode }) {
              '직원이 아는 노하우' 칸은 **읽기 진입**(D6 확정: 현황엔 지표 칸만, 관리는 노하우 탭).
              받은질문은 맨 위 AlertRow(2026-08-06) — 여기서 다시 세지 않는다. ── */}
       <Appear delay={stagger(3)}>
-        <SectionLabel title="매장 상태" hint="누르면 그 화면으로" />
+        <SectionLabel title="매장 상태" />
         <View style={{ marginTop: Space.sm }}>
           <StatCardGrid items={gridItems} />
         </View>
@@ -356,7 +357,7 @@ export function OwnerStatusView({ header }: { header: ReactNode }) {
       {/* ── 3) 매장 비교(다점포) / 단일 매장 요약 ── */}
       {multi && (
         <Appear delay={stagger(4)}>
-          <SectionLabel title="매장 비교" hint="항목을 누르면 정렬" />
+          <SectionLabel title="매장 비교" />
           {canUseMultistore(plan, freeMode) ? (
             <View style={styles.card}>
               <View style={styles.thRow}>
@@ -414,8 +415,9 @@ export function OwnerStatusView({ header }: { header: ReactNode }) {
       {/* 확인 필요 갈래 시트 — 갈래가 둘 이상일 때만 열린다(하나면 칸 탭이 바로 그리로 간다). */}
       {inboxOpen && (
         <BottomSheet visible onClose={() => setInboxOpen(false)}>
-          <SheetHead title="점검·승인" onClose={() => setInboxOpen(false)} />
-          <View style={[styles.card, { marginHorizontal: Space.lg, marginBottom: Space.lg }]}>
+          {/* X 없음 — 바깥 탭·아래로 드래그로 닫힌다(BottomSheet). 카드는 제목에 바싹(marginTop 0). */}
+          <SheetHead title="점검·승인" />
+          <View style={[styles.card, { marginTop: 0, marginHorizontal: Space.lg, marginBottom: Space.lg }]}>
             {inboxRow(
               'person-add-outline', '합류 신청', inbox.joins.length, inbox.joinUnits, '/owner/staff',
               inbox.joins[0] ? `${labelOf(inbox.joins[0].uid)} · ${inbox.joins[0].name}님` : undefined,
@@ -484,11 +486,6 @@ const styles = StyleSheet.create({
   rowSub: { fontSize: 12, color: InkColors.ink3 },
   onair: { color: BrandColors.goodText, fontWeight: '800' },
   dot: { width: 8, height: 8, borderRadius: 4 },
-  cnt: {
-    minWidth: 24, textAlign: 'center', fontSize: 11.5, fontWeight: '900', color: '#8a5a12',
-    backgroundColor: BrandColors.warnSoft, borderWidth: 1, borderColor: BrandColors.warnBorder,
-    paddingHorizontal: Space.xs + 2, paddingVertical: 1, borderRadius: Radius.pill, overflow: 'hidden',
-  },
   emptyText: { fontSize: 15, color: InkColors.ink2, textAlign: 'center', paddingVertical: Space.sm },
   caption: { fontSize: 11.5, color: InkColors.ink3, marginTop: Space.sm, textAlign: 'center' },
 
@@ -505,5 +502,6 @@ const styles = StyleSheet.create({
   tdName: { flex: 1, minWidth: 0 },
   tdNameText: { fontSize: 13, fontWeight: '700', color: InkColors.ink, flexShrink: 1 },
   td: { width: 52, textAlign: 'right', fontSize: 12.5, fontWeight: '600', color: InkColors.ink2 },
-  tdHot: { color: '#8a5a12', fontWeight: '900' },
+  // 주황 글자색은 2026-09-03 폐기 — 굵기만으로 강조한다.
+  tdHot: { color: InkColors.ink, fontWeight: '900' },
 });

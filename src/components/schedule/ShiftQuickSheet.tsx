@@ -120,7 +120,7 @@ export function ShiftQuickSheet({
       </Text>
       <Text style={s.sub}>{repeatText}</Text>
 
-      <ScrollView style={s.scroll} contentContainerStyle={{ paddingBottom: Space.sm }} showsVerticalScrollIndicator={false}>
+      <ScrollView keyboardShouldPersistTaps="handled" style={s.scroll} contentContainerStyle={{ paddingBottom: Space.sm }} showsVerticalScrollIndicator={false}>
         {!isEdit && (
           <>
             <Text style={s.label}>누구의 근무인가요</Text>

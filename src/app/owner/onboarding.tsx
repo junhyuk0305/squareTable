@@ -6,7 +6,6 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
-import { seedDaypartRoutines } from '@/lib/store/useScheduleStore';
 import { showToast } from '@/lib/store/useToastStore';
 import { OwnerFirstAsk } from '@/components/owner/OwnerFirstAsk';
 import { templatesForIndustry, forkTemplate, type PlaybookTemplate } from '@/data/knowhowPacks';
@@ -98,8 +97,6 @@ export default function OwnerOnboardingScreen() {
     if (picks.length === 0) return;
     committed.current = true;
     setRegistering(true);
-    // 업종 기본 루틴 선주입(콜드스타트) — 기존 루틴 있으면 no-op(멱등). 실패해도 온보딩은 진행.
-    void seedDaypartRoutines(industry);
     // 각 노하우가 서버에 실제로 저장됐는지 확인 — 저장 안 된 개수를 정직하게 반영(예전엔 실패해도
     // "N개 등록했어요"를 띄우고 완료 화면으로 넘어가 무음 유실됐음).
     const results = await Promise.all(
@@ -126,7 +123,6 @@ export default function OwnerOnboardingScreen() {
   // 건너뛰기도 완료 화면을 거친다 — 초대코드를 한 번은 보여주기 위함(0건으로 done 진입).
   // 노하우 0건이면 ask 스텝도 건너뛴다(빈 검색 대상에 질문 = 보장된 실패 경험 차단).
   const onSkip = () => {
-    void seedDaypartRoutines(industry);
     setStep('done');
   };
   const goDashboard = () => router.replace('/owner/dashboard');

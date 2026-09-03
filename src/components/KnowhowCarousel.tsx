@@ -29,7 +29,7 @@ export function KnowhowCarousel({ entries, onSelect, showCategory, renderExtra }
     if (Platform.OS !== 'web') return;
     const node = (ref.current as unknown as { getScrollableNode?: () => HTMLElement } | null)?.getScrollableNode?.();
     if (!node) return;
-    const onWheel = (e: WheelEvent) => {
+    const onWheel = (e: WheelEvent) => { // native-audit: ok 웹 전용 보강(위 Platform 가드) — 앱은 터치 스크롤
       if (!e.deltaY) return;
       const max = node.scrollWidth - node.clientWidth;
       if (max <= 0) return; // 넘길 게 없으면 그대로 세로 스크롤
@@ -39,7 +39,7 @@ export function KnowhowCarousel({ entries, onSelect, showCategory, renderExtra }
       node.scrollLeft += e.deltaY;
       e.preventDefault();
     };
-    node.addEventListener('wheel', onWheel, { passive: false });
+    node.addEventListener('wheel', onWheel, { passive: false }); // native-audit: ok 웹 전용(위 가드)
     return () => node.removeEventListener('wheel', onWheel);
   }, []);
 

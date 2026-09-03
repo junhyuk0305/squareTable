@@ -117,7 +117,7 @@ export function SwapRequestModal({
             </Text>
           </View>
 
-          <ScrollView style={s.scroll} contentContainerStyle={{ paddingBottom: 8 }} showsVerticalScrollIndicator={false}>
+          <ScrollView keyboardShouldPersistTaps="handled" style={s.scroll} contentContainerStyle={{ paddingBottom: 8 }} showsVerticalScrollIndicator={false}>
             <Field label="어떻게 바꿀까요?">
               <View style={s.seg}>
                 {([

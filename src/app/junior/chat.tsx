@@ -65,7 +65,7 @@ export default function JuniorChatScreen() {
   const ready = playbookLoaded && queueLoaded && suggestionLoaded && chatLoaded;
 
   return (
-    <SafeAreaView style={styles.safe} edges={['bottom']}>
+    <SafeAreaView style={styles.safe} edges={[]}>
       <Stack.Screen options={{ title: '물어보기' }} />
       {!ready ? (
         <ScreenLoading label="노하우를 불러오고 있어요…" />

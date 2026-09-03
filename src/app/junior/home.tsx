@@ -14,6 +14,8 @@ import { AlertRow } from '@/components/blocks/AlertRow';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { hhmm } from '@/lib/utils/attendance';
 import { useJuniorHomeData } from '@/lib/hooks/useJuniorHomeData';
+import { useWorkStore } from '@/lib/store/useWorkStore';
+import { confirmAction } from '@/lib/utils/confirm';
 import { styles } from '@/styles/juniorHomeStyles';
 
 /** 홈 목록은 3건 + "전체보기 ›" — 전 화면 공통 배치 규칙(2026-08-05 블록 어휘). */
@@ -51,8 +53,28 @@ export default function JuniorHomeScreen() {
     taskTotal,
     taskRemain,
     todayTasks,
+    today,
     openQuizCount,
   } = useJuniorHomeData();
+
+  // 오늘 업무: 홈에서 직접 완료(2026-09-03) — 사장 홈과 같은 toggleTask 하나(판정을 두 벌로 만들지 않는다).
+  const toggleTask = useWorkStore((s) => s.toggleTask);
+  const onToggleTask = (t: (typeof todayTasks)[number]) => {
+    const task = { text: t.text, roomId: t.roomId };
+    // 완료 해제 시 첨부한 완료 사진이 함께 삭제된다 — 할일 화면과 같은 확인을 먼저 띄운다.
+    if (t.done && t.photoUrl) {
+      void confirmAction(
+        '완료를 취소할까요?',
+        '체크를 풀면 이 업무에 첨부한 완료 사진도 함께 삭제돼요.',
+        '취소하고 사진 삭제',
+        { destructive: true, icon: 'image-outline' },
+      ).then((ok) => {
+        if (ok) toggleTask(today, t.id, userId, userName, 'junior', undefined, task);
+      });
+      return;
+    }
+    toggleTask(today, t.id, userId, userName, 'junior', undefined, task);
+  };
 
   // 히어로 큰 수 — 0을 전시하지 않는다(할 일이 없거나 다 끝난 상태는 숫자가 아니라 말로).
   const heroValue = taskTotal === 0 ? '없어요' : taskRemain === 0 ? '다 했어요' : `${taskRemain}개`;
@@ -67,7 +89,7 @@ export default function JuniorHomeScreen() {
       : '아직 출근 전이에요';
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
+    <SafeAreaView style={styles.safe} edges={['top']}>
       {/* 네이티브 헤더 → 커스텀 상단바(사장 홈과 같은 AppTopBar). 2026-08-08 상단바 통일.
           네이티브 헤더는 화면 트리 밖이라 ① 두 홈의 구현이 갈라지고 ② 매장 목록을 pill 바로 아래로
           펼칠 자리가 없었다. 홈은 탭 루트라 뒤로가기가 필요 없으므로 헤더 크롬 자체를 끈다. */}
@@ -101,7 +123,7 @@ export default function JuniorHomeScreen() {
           />
         </Appear>
 
-        {/* 2) 오늘 업무 — 목록 3건 + 전체보기 ›. 상세·완료 처리는 업무 탭이 소유한다. */}
+        {/* 2) 오늘 업무 — 목록 3건 + 전체보기 ›. 체크는 컨트롤이다 — 누르면 진짜 완료된다(업무 탭과 같은 toggleTask). */}
         <Appear delay={stagger(1)} style={styles.section}>
           <SectionLabel
             icon="checkbox-outline"
@@ -127,7 +149,14 @@ export default function JuniorHomeScreen() {
               <Text style={styles.todoEmpty}>오늘 할일이 없어요</Text>
             ) : (
               todayTasks.slice(0, HOME_LIST_LIMIT).map((t, i) => (
-                <View key={t.id} style={[styles.todoRow, i > 0 && styles.todoRowDivider]}>
+                <Pressable
+                  key={t.id}
+                  onPress={() => onToggleTask(t)}
+                  accessibilityRole="checkbox"
+                  accessibilityState={{ checked: t.done }}
+                  accessibilityLabel={`${t.text}${t.done ? ' 완료 해제' : ' 완료'}`}
+                  style={({ pressed }) => [styles.todoRow, i > 0 && styles.todoRowDivider, pressed && { opacity: 0.6 }]}
+                >
                   <Ionicons
                     name={t.done ? 'checkmark-circle' : 'ellipse-outline'}
                     size={20}
@@ -136,7 +165,7 @@ export default function JuniorHomeScreen() {
                   <Text style={[styles.todoText, t.done && styles.todoTextDone]} numberOfLines={1}>
                     {t.text}
                   </Text>
-                </View>
+                </Pressable>
               ))
             )}
           </View>

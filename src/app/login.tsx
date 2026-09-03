@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { View, Text, Pressable, StyleSheet, TextInput, ScrollView, ActivityIndicator } from 'react-native';
+import { View, Text, Pressable, StyleSheet, TextInput, ScrollView, ActivityIndicator, Platform } from 'react-native';
+import { KeyboardShift } from '@/components/KeyboardShift';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useSessionStore } from '@/lib/store/useSessionStore';
@@ -73,10 +74,15 @@ export default function LoginScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
-      <View style={styles.topbar}>
-        <HeaderBackButton fallback="/" />
-      </View>
+      {/* 뒤로가기는 웹에서만 — 웹은 랜딩(welcome)에서 들어오니 돌아갈 곳이 있지만,
+          네이티브는 index 가 곧장 여기로 Redirect 하는 **첫 화면**이라 뒤로 갈 곳이 없다(2026-09-03 실기기). */}
+      {Platform.OS === 'web' && (
+        <View style={styles.topbar}>
+          <HeaderBackButton fallback="/" />
+        </View>
+      )}
 
+      <KeyboardShift>
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
         <Appear delay={0}>
           <View style={styles.header}>
@@ -146,6 +152,7 @@ export default function LoginScreen() {
           </Text>
         </Appear>
       </ScrollView>
+      </KeyboardShift>
     </SafeAreaView>
   );
 }

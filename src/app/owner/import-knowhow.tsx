@@ -1,6 +1,7 @@
 import { StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { KeyboardShift } from '@/components/KeyboardShift';
 import { OwnerKnowhowImport } from '@/components/owner/OwnerKnowhowImport';
 import { PlanUpgradeNotice } from '@/components/PlanUpgradeNotice';
 import { RoleTabBar } from '@/components/RoleTabBar';
@@ -17,9 +18,11 @@ export default function OwnerImportKnowhowScreen() {
   const plan = useSessionStore((s) => s.plan);
   const freeMode = useSessionStore((s) => s.freeMode);
   return (
-    <SafeAreaView style={styles.safe} edges={['bottom']}>
+    <SafeAreaView style={styles.safe} edges={[]}>
       {canUseMultistore(plan, freeMode) ? (
-        <OwnerKnowhowImport />
+        <KeyboardShift>
+          <OwnerKnowhowImport />
+        </KeyboardShift>
       ) : (
         <PlanUpgradeNotice description="다른 매장의 노하우를 이 매장으로 가져오는 기능은 다점포 요금제 기능이에요." />
       )}

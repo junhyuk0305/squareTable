@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { View, Text, Pressable, ScrollView, TextInput, StyleSheet } from 'react-native';
+import { KeyboardShift } from '@/components/KeyboardShift';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -101,7 +102,7 @@ export default function OwnerSuggestionsScreen() {
   }
 
   return (
-    <SafeAreaView edges={['bottom']} style={styles.safe}>
+    <SafeAreaView edges={[]} style={styles.safe}>
       <Stack.Screen options={{ title: '노하우 제안함' }} />
       {!ready ? (
         <ScreenLoading label="직원 제안을 불러오고 있어요…" />
@@ -109,7 +110,8 @@ export default function OwnerSuggestionsScreen() {
         // 읽기 실패를 "대기 중인 제안이 없어요 🤝"로 위장하지 않는다(#19) — 사장이 제안을 놓친다.
         <LoadErrorState title="직원 제안을 불러오지 못했어요" onRetry={() => void retry()} />
       ) : (
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      <KeyboardShift>
+      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <Appear delay={stagger(0)}>
           <Text style={styles.subline}>직원이 올린 제안이에요. 승인하면 노하우에 반영돼요</Text>
         </Appear>
@@ -154,6 +156,7 @@ export default function OwnerSuggestionsScreen() {
 
         <View style={{ height: 16 }} />
       </ScrollView>
+      </KeyboardShift>
       )}
       <RoleTabBar role="owner" />
 

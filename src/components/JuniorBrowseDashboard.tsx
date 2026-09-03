@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
 import { View, Text, Pressable, ScrollView, StyleSheet, TextInput, Animated, Easing, type LayoutChangeEvent } from 'react-native';
-import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 import { SectionLabel } from './SectionLabel';
@@ -42,7 +41,6 @@ type ViewKey = 'dashboard' | 'list';
  * 사장 화면과 달리 '수정/검증/추가' 같은 관리 액션은 없다 — 직원은 읽기 전용(둘러보기=읽기, 물어보기=질문).
  */
 export function JuniorBrowseDashboard({ entries, emptyHint }: JuniorBrowseDashboardProps) {
-  const router = useRouter();
   const [detailEntry, setDetailEntry] = useState<PlaybookEntry | null>(null);
   const [query, setQuery] = useState('');
   const [view, setView] = useState<ViewKey>('dashboard');
@@ -215,23 +213,8 @@ export function JuniorBrowseDashboard({ entries, emptyHint }: JuniorBrowseDashbo
             </View>
           )}
 
-          {/* 매장 기준 값 연습 진입 — 검색 중에는 숨긴다(검색은 "찾기"에만 집중).
-              읽기(둘러보기) 옆에 "외웠는지 스스로 확인"을 둔다. 새 탭을 만들지 않고 서브화면으로 push
-              한다(탭 이동이 아니므로 goToTab 이 아니라 router.push — 뒤로가기가 필요하다).
-              ★기록이 남지 않는 연습이라 퀴즈 옆(업무 채팅)이 아니라 노하우 옆에 둔다. */}
-          {!searching ? (
-            <Pressable
-              onPress={() => router.push('/junior/practice')}
-              style={({ pressed }) => [styles.practice, pressed && { opacity: 0.85 }]}
-              accessibilityRole="button"
-              accessibilityLabel="매장 기준 값 연습 열기"
-            >
-              <Ionicons name="albums-outline" size={16} color={InkColors.ink} />
-              <Text style={styles.practiceLabel}>매장 기준 값 연습</Text>
-              <Text style={styles.practiceHint}>기록 안 남아요</Text>
-              <Ionicons name="chevron-forward" size={15} color={InkColors.ink3} />
-            </Pressable>
-          ) : null}
+          {/* '매장 기준 값 연습' 진입 행은 2026-09-03 사용자 결정으로 뺐다. 라우트(/junior/practice)는
+              남겨 둔다(딥링크·되살릴 때 대비) — 지금 이 화면에서 가는 길은 없다. */}
         </View>
 
         {/* 본문 — 목록(BrowseList) ↔ 대시보드(렌즈 캐러셀) */}
@@ -247,24 +230,24 @@ export function JuniorBrowseDashboard({ entries, emptyHint }: JuniorBrowseDashbo
             }
           />
         ) : (
-          <ScrollView style={styles.scroll} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+          <ScrollView keyboardShouldPersistTaps="handled" style={styles.scroll} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
             {popular.length > 0 && (
               <Appear delay={stagger(0)} style={styles.block}>
-                <SectionLabel icon="flame-outline" title="인기 노하우" hint="많이 물어본 순" />
+                <SectionLabel icon="flame-outline" title="인기 노하우" />
                 <KnowhowCarousel entries={popular} onSelect={setDetailEntry} showCategory={false} />
               </Appear>
             )}
 
             {recent.length > 0 && (
               <Appear delay={stagger(1)} style={styles.block}>
-                <SectionLabel icon="time-outline" title="최근 추가됨" hint="새로 올라온 순" />
+                <SectionLabel icon="time-outline" title="최근 추가됨" />
                 <KnowhowCarousel entries={recent} onSelect={setDetailEntry} showCategory={false} />
               </Appear>
             )}
 
             {resolved.length > 0 && (
               <Appear delay={stagger(2)} style={styles.block}>
-                <SectionLabel icon="checkmark-circle-outline" title="잘 통하는 노하우" hint="해결률 순" />
+                <SectionLabel icon="checkmark-circle-outline" title="잘 통하는 노하우" />
                 <KnowhowCarousel entries={resolved} onSelect={setDetailEntry} showCategory={false} />
               </Appear>
             )}
@@ -306,14 +289,6 @@ const styles = StyleSheet.create({
   viewToggleText: { fontSize: 12.5, fontWeight: '800', color: InkColors.ink3 },
   viewToggleTextOn: { color: InkColors.bubbleText },
 
-  // 매장 기준 값 연습 진입 행 — 터치 타깃 ≥48dp(패딩 16+16 + 행 높이).
-  practice: {
-    flexDirection: 'row', alignItems: 'center', gap: Space.sm,
-    backgroundColor: InkColors.bg, borderWidth: 1, borderColor: InkColors.line,
-    borderRadius: Radius.md, paddingHorizontal: 14, paddingVertical: Space.lg, ...Elevation.e1,
-  },
-  practiceLabel: { flex: 1, minWidth: 0, fontSize: 15, fontWeight: '800', color: InkColors.ink },
-  practiceHint: { fontSize: 12.5, color: InkColors.ink3 },
 
   scroll: { flex: 1 },
   // 가로 패딩은 Space.gutter(20)로 — KnowhowCarousel이 -Space.gutter로 가장자리까지 흘리므로

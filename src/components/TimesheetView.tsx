@@ -9,6 +9,7 @@ import { computePay, shiftsToPayRecords, reconcileSchedule } from '@/lib/utils/p
 import { useScheduleStore, scheduledShiftsFor } from '@/lib/store/useScheduleStore';
 import { RoleTabBar } from '@/components/RoleTabBar';
 import { Appear, stagger } from '@/components/Appear';
+import { KeyboardShift } from '@/components/KeyboardShift';
 import { ScreenLoading } from '@/components/ScreenLoading';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
@@ -156,7 +157,7 @@ export function TimesheetView({ staffId, wage, editedBy, badgeLabel, badgeTone =
   // 화면 골격(SafeArea·탭바)은 즉시 서고 본문만 로딩 — 훅을 전부 부른 뒤의 early return.
   if (!ready) {
     return (
-      <SafeAreaView style={styles.safe} edges={['bottom']}>
+      <SafeAreaView style={styles.safe} edges={[]}>
         <ScreenLoading label="출퇴근 기록을 불러오고 있어요…" />
         <RoleTabBar role={role} />
       </SafeAreaView>
@@ -164,8 +165,9 @@ export function TimesheetView({ staffId, wage, editedBy, badgeLabel, badgeTone =
   }
 
   return (
-    <SafeAreaView style={styles.safe} edges={['bottom']}>
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+    <SafeAreaView style={styles.safe} edges={[]}>
+      <KeyboardShift>
+      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         {topHeader && <Appear delay={stagger(0)}>{topHeader}</Appear>}
 
         {/* 월 네비 */}
@@ -342,6 +344,7 @@ export function TimesheetView({ staffId, wage, editedBy, badgeLabel, badgeTone =
         </Appear>
         <View style={{ height: 8 }} />
       </ScrollView>
+      </KeyboardShift>
       <RoleTabBar role={role} />
     </SafeAreaView>
   );

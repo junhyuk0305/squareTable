@@ -3,7 +3,7 @@ import { View, Text, Pressable, StyleSheet, type StyleProp, type ViewStyle } fro
 import { Ionicons } from '@expo/vector-icons';
 
 import { InfoDot } from '@/components/InfoDot';
-import { BrandColors, InkColors } from '@/lib/theme/colors';
+import { InkColors } from '@/lib/theme/colors';
 import { Elevation, Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
 
@@ -35,8 +35,8 @@ export type StatCardItem = {
   info?: { title: string; body: string };
   /** 눌러서 갈 곳. 없으면 › 를 그리지 않는다. */
   onPress?: () => void;
-  /** hot = 손봐야 할 값(주황 틴트) · dim = 아직 아무 일도 아닌 것(초안). */
-  tone?: 'hot' | 'dim';
+  /** dim = 아직 아무 일도 아닌 것(초안). (hot 주황 틴트는 2026-09-03 폐기 — 칸 색으로 급함을 말하지 않는다.) */
+  tone?: 'dim';
 };
 
 /**
@@ -71,13 +71,12 @@ export function StatCardGrid({ items }: { items: StatCardItem[] }) {
  * 그리드와 스크롤이 서로 다른 카드를 그리면 같은 지표가 다르게 보인다.
  */
 export function StatCard({ item, style }: { item: StatCardItem; style?: StyleProp<ViewStyle> }) {
-  const hot = item.tone === 'hot';
   const dim = item.tone === 'dim';
   const body = (
     <>
       <View style={styles.labelRow}>
         <Text
-          style={[styles.label, item.info && styles.labelShrink, hot && styles.hotText]}
+          style={[styles.label, item.info && styles.labelShrink]}
           numberOfLines={1}
         >
           {item.label}
@@ -90,19 +89,23 @@ export function StatCard({ item, style }: { item: StatCardItem; style?: StylePro
             <View style={styles.spacer} />
           </>
         ) : null}
-        {item.onPress ? <Ionicons name="chevron-forward" size={13} color={hot ? BrandColors.warnText : InkColors.ink3} /> : null}
+        {item.onPress ? <Ionicons name="chevron-forward" size={13} color={InkColors.ink3} /> : null}
       </View>
-      <Text style={[styles.value, hot && styles.hotText]} numberOfLines={1}>
+      <Text style={styles.value} numberOfLines={1}>
         {item.value}
-        {item.unit ? <Text style={[styles.unit, hot && styles.hotSub]}>{item.unit}</Text> : null}
+        {item.unit ? <Text style={styles.unit}>{item.unit}</Text> : null}
       </Text>
-      {item.sub ? <Text style={[styles.sub, hot && styles.hotSub]} numberOfLines={1}>{item.sub}</Text> : null}
-      {item.visual ? <View style={styles.visual}>{item.visual}</View> : null}
+      {/* 부제·시각요소는 칸 **바닥**에 붙는다(2026-09-03) — 값 바로 아래 두면 칸마다 높이가 달라 아래 여백이 들쭉날쭉했다. */}
+      {item.sub || item.visual ? (
+        <View style={styles.bottom}>
+          {item.sub ? <Text style={styles.sub} numberOfLines={1}>{item.sub}</Text> : null}
+          {item.visual ? <View style={styles.visual}>{item.visual}</View> : null}
+        </View>
+      ) : null}
     </>
   );
   const cardStyle = [
     dim ? styles.cardDim : styles.card,
-    hot && styles.cardHot,
     style,
   ];
 
@@ -137,12 +140,12 @@ const styles = StyleSheet.create({
   card: { ...cardBase, ...Elevation.e1 },
   // 초안 칸 — 아직 아무 일도 아닌 것이라 떠 보이지 않게(그림자 없음·회색 면).
   cardDim: { ...cardBase, backgroundColor: InkColors.bgSoft },
-  cardHot: { borderColor: BrandColors.warnBorder, backgroundColor: BrandColors.warnSoft },
   pressed: { opacity: 0.75 },
   labelRow: { flexDirection: 'row', alignItems: 'center', gap: Space.xs },
   // 라벨·단위·부제는 위치·상태 꼬리표라 본문 15sp 하한 대상이 아니다(simplicity-voice §4 '보조').
   label: { flex: 1, minWidth: 0, fontSize: 12.5, lineHeight: 17, fontWeight: '800', color: InkColors.ink2 },
-  value: { marginTop: Space.xs, fontSize: 26, lineHeight: 31, fontWeight: '900', color: InkColors.ink, letterSpacing: -1 },
+  // 26 → 22: "498만원"처럼 단위 붙은 값이 칸을 압도했다(2026-09-03 웹 실측 피드백).
+  value: { marginTop: Space.xs, fontSize: 22, lineHeight: 27, fontWeight: '900', color: InkColors.ink, letterSpacing: -0.8 },
   unit: { fontSize: 14, fontWeight: '800', color: InkColors.ink3, letterSpacing: 0 },
   // info 가 있을 때만 — 라벨이 자리를 다 먹지 않고 ⓘ 를 바로 옆에 붙인다.
   // ★`flex: 0` 를 쓰면 안 된다: RN 의 flex 단축은 basis 를 **0%** 로 잡아서 grow 0 과 겹치면
@@ -150,8 +153,8 @@ const styles = StyleSheet.create({
   //   통째로 사라졌다(ⓘ만 남았다). 세 값을 따로 준다.
   labelShrink: { flexGrow: 0, flexShrink: 1, flexBasis: 'auto' },
   spacer: { flex: 1 },
+  // 바닥 묶음(부제 + 시각요소) — 값과의 사이가 남는 공간을 다 먹는다.
+  bottom: { marginTop: 'auto', paddingTop: Space.xs },
   sub: { fontSize: 11.5, lineHeight: 16, color: InkColors.ink3 },
-  visual: { marginTop: 'auto', paddingTop: Space.sm },
-  hotText: { color: BrandColors.warnText },
-  hotSub: { color: BrandColors.warnText, opacity: 0.8 },
+  visual: { paddingTop: Space.sm },
 });

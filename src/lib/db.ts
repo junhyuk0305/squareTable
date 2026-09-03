@@ -2996,6 +2996,19 @@ export function subscribeStaff(onChange: () => void): () => void {
   };
 }
 
+// 내 profiles 행 실시간 — 사장이 합류를 승인(approve_member → unit_id 부여)하거나 내보내면(unit_id=null)
+// 직원 앱이 20초 폴링을 기다리지 않고 바로 소속을 다시 읽게. (RLS profiles_read 가 본인 행을 흘려보낸다.)
+export function subscribeMyProfile(userId: string, onChange: () => void): () => void {
+  if (!HAS_SUPABASE) return () => {};
+  const ch = supabase
+    .channel(uniqueChannel('my-profile'))
+    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'profiles', filter: `id=eq.${userId}` }, onChange)
+    .subscribe();
+  return () => {
+    supabase.removeChannel(ch);
+  };
+}
+
 // ── 파트(홀·주방 같은 담당) — 0164 ────────────────────────────────────────────
 // 파트는 **거르는 축이 아니라 순서만 올리는 추천 축**이다(0164 주석 ①). 표준 세트를 주지 않으므로
 // **이 매장이 실제로 쓴 값 = store_parts 행**이 곧 후보 목록이고, 쓰기 시작할 때 지연 생성된다.

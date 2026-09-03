@@ -6,6 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFonts } from 'expo-font';
 import { ResponsiveShell } from '@/components/ResponsiveShell';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { SwipeBack } from '@/components/SwipeBack';
 import { SplashAnimation } from '@/components/SplashAnimation';
 import { SyncBanner } from '@/components/SyncBanner';
 import { StoreEnterCover } from '@/components/StoreEnterCover';
@@ -113,6 +114,8 @@ export default function RootLayout() {
         <TextScaleTransition />
         {splashDone && signedIn && <FreeUntilNotice />}
         <ErrorBoundary>
+          {/* 왼쪽 가장자리 스와이프 → 이전 화면(Android). 제스처 루트도 여기서 제공한다. */}
+          <SwipeBack>
           <Stack
             key={textScale}
             screenOptions={{
@@ -126,21 +129,29 @@ export default function RootLayout() {
             <Stack.Screen name="index" />
             <Stack.Screen name="login" />
             <Stack.Screen name="signup" />
-            {/* 허브는 매장보다 **상위 층**이다. 들어갈 땐 오른쪽에서(기본), 나올 땐 왼쪽에서 —
-                방향이 층을 말해준다(2026-08-08 A2). 셋 다 똑같이 움직이던 것이 "유기적이지 않음"의 원인이었다. */}
-            <Stack.Screen name="stores" options={{ animation: 'slide_from_left' }} />
+            {/* 허브 탭 루트 3개(현황·노하우·매장) — 탭 전환(replace)은 슬라이드하지 않는다(owner/junior 탭 루트와 같은 규칙).
+                ★stores 는 08-08 A2 때 '층 이동' 신호로 slide_from_left 를 줬으나, 실기기(2026-09-03)에선
+                매장 탭 전환이 옆으로 밀리는 것으로만 보였다 → 웹과 같이 화면 교체 + Appear 등장으로 통일. */}
+            <Stack.Screen name="stores" options={{ animation: 'none' }} />
+            <Stack.Screen name="hub" options={{ animation: 'none' }} />
+            <Stack.Screen name="hub-growth" options={{ animation: 'none' }} />
+
             <Stack.Screen name="privacy" />
             <Stack.Screen name="terms" />
             <Stack.Screen name="legal/[doc]" />
             <Stack.Screen name="business-info" />
             <Stack.Screen name="account-edit" />
-            <Stack.Screen name="junior" />
-            <Stack.Screen name="owner" />
+            {/* 매장 진입(stores → 역할 홈 replace)도 슬라이드 없이 — 커버(StoreEnterCover)가 걷히고
+                화면이 Appear 로 등장하는 것이 전환이다(2026-09-03 실기기). 매장 안 서브화면은 owner/junior
+                _layout 의 자체 Stack 이 슬라이드를 맡으므로 여기 값과 무관하다. */}
+            <Stack.Screen name="junior" options={{ animation: 'none' }} />
+            <Stack.Screen name="owner" options={{ animation: 'none' }} />
             <Stack.Screen name="billing" />
             {/* 체험 종료 → 무엇을 남길지 고르는 가로막는 화면(0142). 허브·매장과 **같은 층**이다 —
                 owner/ 안에 두면 활성 매장이 잠긴 순간 진입 자체가 막혀 계정이 갇힌다. */}
             <Stack.Screen name="downgrade" />
           </Stack>
+          </SwipeBack>
         </ErrorBoundary>
       </ResponsiveShell>
     </SafeAreaProvider>

@@ -1,7 +1,8 @@
 // 전역 토스트 — 화면 상단 중앙에 잠깐 떴다 사라지는 안내(성공/경고/안내).
 // _layout 최상단(프레임 안)에 1회 마운트. SyncBanner(저장 실패=빨강)와 별개.
 import { useEffect, useMemo } from 'react';
-import { Animated, Text, StyleSheet, Platform, Pressable } from 'react-native';
+import { Animated, Text, StyleSheet, Pressable } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useToastStore, type ToastTone } from '@/lib/store/useToastStore';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
@@ -21,6 +22,8 @@ export function Toast() {
   const action = useToastStore((s) => s.action);
   const clear = useToastStore((s) => s.clear);
   const anim = useMemo(() => new Animated.Value(0), []);
+  // 상단 여백은 상태바 높이에서 출발한다 — 고정 48 은 상태바가 높은 기기(펀치홀)에서 겹쳤다(2026-09-03 실기기).
+  const insets = useSafeAreaInsets();
 
   useEffect(() => {
     if (message) {
@@ -38,6 +41,7 @@ export function Toast() {
       style={[
         styles.wrap,
         frameCapStyle,
+        { top: insets.top + Space.sm },
         { opacity: anim, transform: [{ translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [-10, 0] }) }] },
       ]}
     >
@@ -65,7 +69,6 @@ export function Toast() {
 const styles = StyleSheet.create({
   wrap: {
     position: 'absolute',
-    top: Platform.OS === 'web' ? 8 : 48,
     left: 0,
     right: 0,
     alignItems: 'center',

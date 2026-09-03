@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   View, Text, Pressable, StyleSheet, ScrollView, TextInput,
   type StyleProp, type ViewStyle,
@@ -268,6 +268,13 @@ export function OwnerKnowhowBrowse({
     setSeg(initialSegment);
   }
 
+  // 두 칸이 ScrollView 하나를 같이 쓴다 — 칸을 바꾸면 이전 칸의 스크롤 위치가 그대로 남아
+  // 목록 중간부터 보인다. 칸이 바뀔 때마다 맨 위로 되돌린다(딥링크로 바뀐 경우 포함).
+  const scrollRef = useRef<ScrollView>(null);
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ y: 0, animated: false });
+  }, [seg]);
+
   // 검토 대기(draft·인수인계서 파이프라인 증분저장분)는 둘러보기에서 제외 — 검수는 handover 화면이 담당.
   // (직원은 RLS 0064로 애초에 draft를 못 받지만, 사장 화면도 발행본과 섞이면 자산 목록이 오염된다.)
   const visible = useMemo(() => entries.filter((e) => e.status !== 'draft'), [entries]);
@@ -508,7 +515,7 @@ export function OwnerKnowhowBrowse({
             카테고리 칩은 아래 찾기 바에 그대로 — 탭이 묶음을 정하고 칩이 그 안에서 거른다. */}
         {hasEntries && (
           <Appear delay={stagger(1)}>
-            <SectionLabel title="목록" />
+            {/* '목록' 제목은 2026-09-03 삭제 — 탭 자체가 목록임을 말한다. */}
             <SegmentTabs items={listTabItems} value={listTab} onChange={(k) => setListTab(k as KnowhowListTab)} style={styles.listTabs} />
           </Appear>
         )}
@@ -741,7 +748,7 @@ export function OwnerKnowhowBrowse({
       {/* 세그먼트는 스크롤과 무관하게 항상 손 닿는 곳에 — 이게 사라지면 '할 일' 칸이 잠긴다. */}
       <SegmentTabs items={segItems} value={seg} onChange={(k) => setSeg(k as KnowhowSegKey)} style={styles.segTabs} />
 
-      <ScrollView style={styles.flex} contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+      <ScrollView ref={scrollRef} style={styles.flex} contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
         {seg === 'todo' ? todoSegment() : knowhowSegment()}
       </ScrollView>
 
@@ -820,10 +827,11 @@ const styles = StyleSheet.create({
   // 세그먼트 — 공용 SegmentTabs 의 margin(16)을 화면 거터(20)에 맞춘다.
   segTabs: { marginHorizontal: Space.gutter, marginTop: Space.md, marginBottom: 0 },
   // 목록 탭 — 스크롤 본문 안이라 거터는 부모가 갖는다. 라벨과의 간격만 남긴다.
-  listTabs: { marginHorizontal: 0, marginTop: Space.sm, marginBottom: 0 },
+  listTabs: { marginHorizontal: 0, marginTop: 0, marginBottom: 0 },
 
   // 톱니 패널의 앵커. zIndex 가 없으면 뒤에 오는 형제(찾기 바·목록)가 위에 그려져 패널이 가려진다.
-  headBlock: { position: 'relative', zIndex: 20 },
+  // 위아래 -xs: 부모 gap(md) 12 를 8 로 — 개수 한 줄이 탭·찾기 바 사이에서 붕 떠 보였다(2026-09-03).
+  headBlock: { position: 'relative', zIndex: 20, marginVertical: -Space.xs },
   headRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
   // "총 N개 · 탭하면 수정" = 카운트+힌트라 **보조**다(본문 아님).
   // 15sp였던 건 크기가 틀린 것이지 색이 틀린 게 아니다 — ink3는 보조의 정당한 색이고,

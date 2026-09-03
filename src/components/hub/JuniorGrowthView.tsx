@@ -230,8 +230,8 @@ export function JuniorGrowthView({ header }: { header: ReactNode }) {
       </Appear>
 
       {/* ── 내가 남긴 것 ── */}
-      <Appear delay={stagger(1)}>
-        <SectionLabel title="내가 남긴 것" hint="나만 볼 수 있어요" />
+      <Appear delay={stagger(1)} style={{ gap: Space.sm }}>
+        <SectionLabel title="내가 남긴 것" />
         {/* 블록 L4(§7-2) — MiniStats(숫자 3칸 나열)를 2열 지표 카드로 갈아탔다(2026-08-27).
             숫자 옆에 대상·근거가 붙는다(R2): '내가 만든 노하우'는 참조 횟수를 보조줄로 데리고 오고,
             0건일 때 큰 숫자를 세우던 '최근 30일 참조' 칸은 사라진다.
@@ -308,8 +308,8 @@ export function JuniorGrowthView({ header }: { header: ReactNode }) {
                가질 수 있는 모양이라(그 매장에서 가장 최근에 통과한 노하우) §7-4 B 그대로다.
              숙련 주장 없음(완료 ≠ 숙련). ── */}
       {growth.length > 1 && (
-      <Appear delay={stagger(2)}>
-        <SectionLabel title="매장별" hint="탭하면 그 매장 업무로 가요" />
+      <Appear delay={stagger(2)} style={{ gap: Space.sm }}>
+        <SectionLabel title="매장별" />
         <RollupRows
           rows={growth.map((r) => {
             const last = latestByUnit.get(r.unit_id);
@@ -439,7 +439,8 @@ const styles = StyleSheet.create({
     borderColor: InkColors.line,
     paddingHorizontal: Space.gutter,
     paddingTop: Space.gutter,
-    paddingBottom: Space.lg,
+    // 하단 여백은 점 인디케이터 상자(48dp)가 겸한다 — 사장 노하우 탭 히어로와 같은 값(2026-09-03).
+    paddingBottom: 0,
     ...Elevation.e2,
   },
   // 앞면(V1 범례) — 꼬리표라 본문 15sp 하한 대상이 아니다.

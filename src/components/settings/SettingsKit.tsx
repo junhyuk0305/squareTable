@@ -96,7 +96,8 @@ export function SettingsToggle({
 }
 
 const styles = StyleSheet.create({
-  section: { gap: 8, marginBottom: 18 },
+  // 섹션 사이 = 이 12 + SectionLabel 의 위 여백 12 = 24(앱 공통, 2026-09-03). 옛 18은 라벨 여백이 없던 때 값.
+  section: { gap: 8, marginBottom: 12 },
   card: {
     backgroundColor: '#FFFFFF',
     borderRadius: Radius.md,

@@ -18,7 +18,7 @@ export default function OwnerKnowledgeScreen() {
   const openEntry = (id: string) => router.push({ pathname: '/owner/edit/[id]', params: { id } });
 
   return (
-    <SafeAreaView style={styles.safe} edges={['bottom']}>
+    <SafeAreaView style={styles.safe} edges={[]}>
       {/* ?review=1 = 홈 '점검할 노하우' 착지점 → '노하우' 칸 + '점검 필요' 탭(2026-08-27 §7-2).
           (2026-08-19~08-27 사이엔 '할 일' 칸으로 보냈다.) */}
       <OwnerKnowhowBrowse

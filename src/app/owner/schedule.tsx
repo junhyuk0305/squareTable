@@ -164,7 +164,7 @@ export default function OwnerScheduleScreen() {
   // 훅을 전부 부른 뒤의 early return — 헤더·탭바는 게이트 밖(화면 골격은 즉시 선다).
   if (!ready) {
     return (
-      <SafeAreaView style={styles.safe} edges={['bottom']}>
+      <SafeAreaView style={styles.safe} edges={[]}>
         <Stack.Screen options={{ title: '근무표' }} />
         <ScreenLoading label="근무표를 불러오고 있어요…" />
         <RoleTabBar role="owner" />
@@ -175,7 +175,7 @@ export default function OwnerScheduleScreen() {
   // 실패를 "승인할 교대 요청이 없어요"·빈 근무표로 위장하지 않는다(#44).
   if (scheduleLoadError) {
     return (
-      <SafeAreaView style={styles.safe} edges={['bottom']}>
+      <SafeAreaView style={styles.safe} edges={[]}>
         <Stack.Screen options={{ title: '근무표' }} />
         <LoadErrorState title="근무표를 불러오지 못했어요" onRetry={() => void retrySchedule()} />
         <RoleTabBar role="owner" />
@@ -184,7 +184,7 @@ export default function OwnerScheduleScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.safe} edges={['bottom']}>
+    <SafeAreaView style={styles.safe} edges={[]}>
       <Stack.Screen options={{ title: '근무표' }} />
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>

@@ -18,6 +18,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, ActivityIndicator, StyleSheet } from 'react-native';
+import { KeyboardShift } from '@/components/KeyboardShift';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -140,7 +141,7 @@ export default function QuizLinkScreen() {
       )}
 
       {phase === 'name' && info && (
-        <>
+        <KeyboardShift>
           <ScrollView contentContainerStyle={st.body} keyboardShouldPersistTaps="handled">
             {/* 등장은 **섹션 단위**다 — 문단·입력칸마다 감싸면 한 화면이 블록 8개로 읽힌다(C형 몰입형은 ≤3).
                 안쪽 간격은 st.qWrap 의 gap 이 body 의 gap 을 대신한다(레이아웃 불변). */}
@@ -235,10 +236,10 @@ export default function QuizLinkScreen() {
             </Pressable>
             </Appear>
           </View>
-        </>
+        </KeyboardShift>
       )}
 
-      {phase === 'quiz' && <LinkQuizBody token={tk} items={items} onFinish={finish} />}
+      {phase === 'quiz' &&<LinkQuizBody token={tk} items={items} onFinish={finish} />}
 
       {phase === 'done' && (
         <>
@@ -338,7 +339,8 @@ function LinkQuizBody({
 
   return (
     <>
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={st.body} showsVerticalScrollIndicator={false}>
+      <KeyboardShift>
+      <ScrollView keyboardShouldPersistTaps="handled" style={{ flex: 1 }} contentContainerStyle={st.body}showsVerticalScrollIndicator={false}>
         {/* 완료가 아니라 잔여를 센다(레퍼런스 leveltest_05). */}
         <Text style={st.step}>{items.length - at}문제 남았어요</Text>
         {/* 문항이 넘어갈 때 통째로 한 번 올라온다 — key={item.id} 라 문항당 1회만 재생된다.
@@ -370,6 +372,7 @@ function LinkQuizBody({
           </View>
         ) : null}
       </ScrollView>
+      </KeyboardShift>
 
       <View style={st.foot}>
         {grading ? (

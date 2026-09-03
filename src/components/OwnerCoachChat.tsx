@@ -6,12 +6,12 @@ import {
   TextInput,
   ScrollView,
   ActivityIndicator,
-  KeyboardAvoidingView,
   Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 
+import { KeyboardShift } from '@/components/KeyboardShift';
 import { UserBubble } from '@/components/UserBubble';
 import { Appear } from '@/components/Appear';
 import { ScreenLoading } from '@/components/ScreenLoading';
@@ -700,11 +700,8 @@ export function OwnerCoachChat({
   }
 
   return (
-    <KeyboardAvoidingView
-      style={{ flex: 1 }}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 0}
-    >
+    // 키보드 회피는 공용 KeyboardShift — 이 화면은 네이티브 헤더 아래라 창 기준 오프셋이 필요하다(KeyboardShift 주석).
+    <KeyboardShift>
       {/* N명이 같은 질문 — 한 번 답하면 모두에게 반영(사회적 증거 + 효율) */}
       {isInboxAnswer && uq.similar_queries_count > 0 && (
         <View style={styles.similarBanner}>
@@ -998,7 +995,7 @@ export function OwnerCoachChat({
           </Pressable>
         </ChatComposerBar>
       )}
-    </KeyboardAvoidingView>
+    </KeyboardShift>
   );
 }
 

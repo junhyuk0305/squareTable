@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import { View, Text, StyleSheet, TextInput, Pressable, ScrollView, ActivityIndicator } from 'react-native';
+import { KeyboardShift } from '@/components/KeyboardShift';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -152,6 +153,7 @@ export default function JuniorHub() {
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
       <Stack.Screen options={{ headerShown: false }} />
+      <KeyboardShift>
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
         {/* 상단 바: 매장 선택으로(뒤로) + 워드마크.
             ★마이페이지 아이콘 버튼은 제거함(2026-07-29) — 같은 화면 아래 '마이페이지' 카드가 이미
@@ -315,6 +317,7 @@ export default function JuniorHub() {
         </View>
         </Appear>
       </ScrollView>
+      </KeyboardShift>
     </SafeAreaView>
   );
 }

@@ -200,7 +200,7 @@ export default function StoresHub() {
   // 진입 커버는 전역 <StoreEnterCover/>(_layout)가 덮는다 — 상단바에서 눌러도 같은 커버여야 하므로.
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
+    <SafeAreaView style={styles.safe} edges={['top']}>
       <Stack.Screen options={{ headerShown: false }} />
       <ScrollView contentContainerStyle={styles.scroll}>
         {/* 상단 바(HubTopBar 공용) — 알림 벨은 여기 고정(탭 금지 — 07-24 사용자 확정) + 프로필(계정 설정) */}

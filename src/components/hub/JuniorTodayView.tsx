@@ -272,7 +272,7 @@ export function JuniorTodayView({ header }: { header: ReactNode }) {
                **합계 하나**뿐이라 일별 이력이 없다. 시간축 막대를 그리면 지어낸 그림이 된다.
                일별 원장은 매장 앱 출퇴근 화면이 갖고 있으므로 그쪽으로 보낸다(보조줄).
                매장이 2곳↑이면 매장별 분해가 실제 구성이지만 그건 바로 아래 카드가 이미 말한다. ── */}
-      <Appear delay={stagger(3)}>
+      <Appear delay={stagger(3)} style={{ gap: Space.sm }}>
         <SectionLabel title="이번달" />
         <StatCardGrid
           items={[

@@ -108,6 +108,16 @@ export function injectPwaHead(): void {
     document.head.appendChild(bg);
   }
 
+  // 브라우저 가로 스와이프 내비게이션 차단(2026-09-03) — 크롬 가장자리 스와이프·트랙패드 두 손가락이
+  // 브라우저 히스토리 뒤로/앞으로를 타서 앱 안에서 화면이 엉뚱하게 바뀌었다. 앱의 가장자리 뒤로가기는
+  // 네이티브(SwipeBack)만 갖고, 웹은 아무 동작도 하지 않는다. 세로 당겨서 새로고침은 그대로 둔다.
+  if (!document.head.querySelector('#st-no-swipe-nav')) {
+    const nav = document.createElement('style');
+    nav.id = 'st-no-swipe-nav';
+    nav.textContent = 'html,body{overscroll-behavior-x:none;}';
+    document.head.appendChild(nav);
+  }
+
   // 전역 폰트 — Pretendard + 폴백 스택. output=single 빌드엔 +html 의 FONT_CSS 가 안 실려
   // 프로덕션이 브라우저 기본 세리프(Times New Roman)로 렌더됐고, 굵은 한글은 브라우저가
   // 가짜볼드(글자를 살짝 겹쳐 찍어 굵기 흉내)로 합성해 잔상/깨짐이 생겼다.

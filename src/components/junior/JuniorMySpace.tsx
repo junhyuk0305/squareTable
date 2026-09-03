@@ -186,7 +186,7 @@ export function JuniorMySpace({ me }: { me: string }) {
   }
 
   return (
-    <ScrollView style={s.flex} contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
+    <ScrollView keyboardShouldPersistTaps="handled" style={s.flex} contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
       {/* ── 히어로 — 내가 아는 노하우 히트맵(H5). 노하우가 0개면 그리지 않는다(빈 격자 금지).
              ★2026-08-27 오밀조밀 확산 6-4. 옛 판본은 히어로가 없고 groupCard 4장이 연달아 있었고,
                그 사이를 MiniStats 숫자 3칸이 끊고 있었다 — 숫자 3개는 대상이 없어 아무 말도 못 했다.
@@ -270,7 +270,6 @@ export function JuniorMySpace({ me }: { me: string }) {
                     count: myProposals.length,
                     unit: '건' as const,
                     // 검토 중·반려가 위로 정렬돼 있으므로 첫 줄이 곧 "지금 신경 쓸 것"이다.
-                    hot: myProposals.some((p) => p.status === 'rejected'),
                     target: myProposals[0]
                       ? `${myProposals[0].text} · ${myProposals[0].status === 'approved' ? '반영됨' : myProposals[0].status === 'rejected' ? '반려' : '검토 중'}`
                       : undefined,

@@ -24,9 +24,9 @@ import { RollupRows } from '@/components/blocks/RollupRows';
 import { Sparkline } from '@/components/blocks/Sparkline';
 import { StatCard, type StatCardItem } from '@/components/blocks/StatCardGrid';
 import { ProgressPill, type ProgressTone } from '@/components/blocks/ProgressPill';
-import { SheetHead, PrimaryButton } from '@/components/owner/quiz/kit';
+import { SheetHead, PrimaryButton, GhostButton } from '@/components/owner/quiz/kit';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
-import { Radius } from '@/lib/theme/elevation';
+import { Radius, Elevation } from '@/lib/theme/elevation';
 import { Space, HEADER_EDGE_GUTTER } from '@/lib/theme/layout';
 
 /**
@@ -222,14 +222,7 @@ export default function OwnerTrainingScreen() {
                 body={'퀴즈 문제는 사장님이 적어 둔 노하우에서 나와요.\n노하우가 하나도 없으면 낼 문제가 없어요.'}
                 cta={{ label: '노하우 추가하기', onPress: () => router.push('/owner/coach' as never) }}
               />
-              <Pressable
-                onPress={() => router.push('/owner/handover' as never)}
-                style={({ pressed }) => [st.subLink, pressed && { opacity: 0.6 }]}
-                accessibilityRole="button"
-                accessibilityLabel="인수인계서로 한번에 올리기"
-              >
-                <Text style={st.subLinkText}>한번에 올리기 · 인수인계서가 있으면</Text>
-              </Pressable>
+              <GhostButton icon="document-text-outline" label="한번에 올리기 · 인수인계서가 있으면" onPress={() => router.push('/owner/handover' as never)} />
             </>
           ) : (
             /* A1 — 재료는 있는데 아직 안 만들었다(§10-10). 지표·경고는 전부 "문항이 생긴 뒤"의 것이라 감춘다.
@@ -270,14 +263,8 @@ export default function OwnerTrainingScreen() {
                     disabled={picked.length === 0}
                     onPress={goMakePicked}
                   />
-                  <Pressable
-                    onPress={goMake}
-                    style={({ pressed }) => [st.subLink, pressed && { opacity: 0.6 }]}
-                    accessibilityRole="button"
-                    accessibilityLabel="노하우를 직접 고르기"
-                  >
-                    <Text style={st.subLinkText}>직접 고르기</Text>
-                  </Pressable>
+                  {/* 글자만 있던 링크 → 흰 버튼(GhostButton). 2026-09-03: 글씨만 있는 버튼 금지. */}
+                  <GhostButton icon="list-outline" label="직접 고르기" onPress={goMake} />
                 </View>
               </Appear>
             </>
@@ -324,14 +311,7 @@ export default function OwnerTrainingScreen() {
                   />
                 )}
                 {uncovered > 0 ? (
-                  <Pressable
-                    onPress={goMake}
-                    style={({ pressed }) => [st.subLink, pressed && { opacity: 0.6 }]}
-                    accessibilityRole="button"
-                    accessibilityLabel="노하우를 직접 고르기"
-                  >
-                    <Text style={st.subLinkText}>직접 고르기</Text>
-                  </Pressable>
+                  <GhostButton icon="list-outline" label="직접 고르기" onPress={goMake} />
                 ) : null}
 
                 {/* 만들다 만 퀴즈 — 있을 때만 여기서 눈에 띈다(0건이면 줄째로 안 그린다).
@@ -577,7 +557,6 @@ function liveCardOf(q: QuizListRow, link: 'open' | 'closed' | null, onPress: () 
     value: q.passed,
     unit: `/${q.recipients}명`,
     sub: q.staleCount > 0 ? `문항 ${q.staleCount}개 낡음${linkTag}` : left > 0 ? `${left}명이 아직${linkTag}` : `전원 통과${linkTag}`,
-    tone: q.staleCount > 0 || left > 0 ? 'hot' : undefined,
     onPress,
     visual: (
       <Sparkline
@@ -756,6 +735,7 @@ const st = StyleSheet.create({
     borderRadius: Radius.md,
     borderWidth: 1,
     borderColor: BrandColors.gold,
+    ...Elevation.e2,
     padding: Space.lg,
     gap: Space.sm,
   },
@@ -774,6 +754,7 @@ const st = StyleSheet.create({
     borderRadius: Radius.md,
     borderWidth: 1,
     borderColor: InkColors.line,
+    ...Elevation.e2,
     paddingHorizontal: Space.lg,
   },
   row: { flexDirection: 'row', alignItems: 'center', gap: Space.md, minHeight: 56, paddingVertical: Space.sm },
@@ -798,7 +779,9 @@ const st = StyleSheet.create({
   // 접히는 요약행 — 카드가 아니다(카드로 만들면 목록 카드 옆에서 또 하나의 카드로 읽힌다).
   foldRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, minHeight: 48 },
   foldText: { flex: 1, minWidth: 0, fontSize: 15, fontWeight: '800', color: InkColors.ink2 },
-  sheetScroll: { maxHeight: 420 },
+  // 좌우 여백 = 시트 머리말(SheetHead 16)과 같은 lg. 없으면 목록 카드가 시트 양끝에 붙고
+  // 섹션 제목(자체 패딩 4)과 카드의 왼쪽 선이 어긋났다(2026-09-03 웹 실측 피드백). 세 시트가 같이 쓴다.
+  sheetScroll: { maxHeight: 420, paddingHorizontal: Space.lg },
 
   footNote: { fontSize: 13, fontWeight: '600', color: InkColors.ink3, textAlign: 'center' },
   missIntro: { fontSize: 15, lineHeight: 22, color: InkColors.ink2, marginBottom: Space.md },
@@ -807,6 +790,4 @@ const st = StyleSheet.create({
   rowAction: { flexShrink: 0, minHeight: 48, justifyContent: 'center', paddingLeft: Space.md },
   rowActionText: { fontSize: 13, fontWeight: '800', color: InkColors.ink, textDecorationLine: 'underline' },
 
-  subLink: { alignSelf: 'center', minHeight: 48, justifyContent: 'center', paddingHorizontal: Space.sm },
-  subLinkText: { fontSize: 15, fontWeight: '800', color: InkColors.ink2 },
 });

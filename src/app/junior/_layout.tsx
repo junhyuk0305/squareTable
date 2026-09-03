@@ -15,6 +15,7 @@ import { useScheduleStore } from '@/lib/store/useScheduleStore';
 import { useMemberPrefsStore } from '@/lib/store/useMemberPrefsStore';
 import { useSuggestionStore } from '@/lib/store/useSuggestionStore';
 import { HAS_SUPABASE } from '@/lib/supabase';
+import { subscribeMyProfile } from '@/lib/db';
 
 /** 사장이 `/junior/*` 로 오면 착지시킬 사장 경로 — 대응이 분명한 것만. 없으면 사장 홈. */
 const OWNER_PATH: Record<string, Href> = {
@@ -27,6 +28,7 @@ const OWNER_PATH: Record<string, Href> = {
 
 export default function JuniorLayout() {
   const status = useSessionStore((s) => s.status);
+  const userId = useSessionStore((s) => s.userId);
   const unitId = useSessionStore((s) => s.unitId);
   const role = useSessionStore((s) => s.role);
   const phone = useSessionStore((s) => s.phone);
@@ -64,14 +66,19 @@ export default function JuniorLayout() {
     };
   }, [status, unitId]);
 
-  // 소속 상태를 주기적으로 서버와 재동기화(profiles는 realtime 미구독).
-  //  - 승인 대기 중이면 사장 승인이 반영돼 자동으로 홈으로 진입(#2).
+  // 소속 상태 동기화 — 내 profiles 행 realtime(승인·내보내기 즉시) + 20초 폴링(realtime 유실 대비 안전망).
+  //  - 승인 대기 중이면 사장 승인이 반영돼 자동으로 홈으로 진입(#2). 예전엔 폴링만이라 최대 20초 늦었다(2026-09-03 실기기).
   //  - 근무 중 사장이 내보내면(unit_id=null) 즉시 감지해 접근을 끊는다(#5).
   useEffect(() => {
     if (status !== 'signed_in') return;
-    const id = setInterval(() => void useSessionStore.getState().refreshMembership(), 20000);
-    return () => clearInterval(id);
-  }, [status]);
+    const refresh = () => void useSessionStore.getState().refreshMembership();
+    const off = userId ? subscribeMyProfile(userId, refresh) : () => {};
+    const id = setInterval(refresh, 20000);
+    return () => {
+      off();
+      clearInterval(id);
+    };
+  }, [status, userId]);
 
   if (HAS_SUPABASE && status === 'loading') return null;
   if (HAS_SUPABASE && status === 'signed_out') return <Redirect href="/" />;
@@ -112,16 +119,17 @@ export default function JuniorLayout() {
         headerTintColor: InkColors.ink,
       }}
     >
-      {/* 홈 헤더(로고+알림벨)는 home.tsx의 <Stack.Screen>이 단일 소스로 구성한다 — 여기선 등록만. */}
-      <Stack.Screen name="home" />
+      {/* 홈 헤더(로고+알림벨)는 home.tsx의 <Stack.Screen>이 단일 소스로 구성한다 — 여기선 등록만.
+          ★animation: 'none' — 탭 루트끼리는 전환(replace)이라 슬라이드를 끈다(owner/_layout 과 같은 규칙). */}
+      <Stack.Screen name="home" options={{ animation: 'none' }} />
       {/* 메인 탭 메뉴 — 좌상단 로고 없음(홈 화면에만 매장의 정석 로고 노출).
           탭 루트는 하단 탭바로만 이동하므로 뒤로가기 화살표를 무조건 끈다
           (headerLeft 미지정 시 react-navigation 기본 back 화살표가 history에 따라 노출됨 → 막다른 컨트롤). */}
       {/* 탭 루트 헤더엔 "어느 매장의 화면인가"를 상시 표시(StoreHeaderTitle) — 홈은 StoreToggle 이 담당. */}
-      <Stack.Screen name="chat" options={{ title: '물어보기', headerTitle: () => <StoreHeaderTitle title="물어보기" />, headerLeft: () => null, headerBackVisible: false }} />
-      <Stack.Screen name="attendance" options={{ title: '출퇴근', headerTitle: () => <StoreHeaderTitle title="출퇴근" />, headerLeft: () => null, headerBackVisible: false }} />
-      <Stack.Screen name="work" options={{ title: '업무 채팅', headerTitle: () => <StoreHeaderTitle title="업무 채팅" />, headerLeft: () => null, headerBackVisible: false }} />
-      <Stack.Screen name="settings" options={{ title: '설정', headerTitle: () => <StoreHeaderTitle title="설정" />, headerLeft: () => null, headerBackVisible: false }} />
+      <Stack.Screen name="chat" options={{ title: '물어보기', headerTitle: () => <StoreHeaderTitle title="물어보기" />, headerLeft: () => null, headerBackVisible: false, animation: 'none' }} />
+      <Stack.Screen name="attendance" options={{ title: '출퇴근', headerTitle: () => <StoreHeaderTitle title="출퇴근" />, headerLeft: () => null, headerBackVisible: false, animation: 'none' }} />
+      <Stack.Screen name="work" options={{ title: '업무 채팅', headerTitle: () => <StoreHeaderTitle title="업무 채팅" />, headerLeft: () => null, headerBackVisible: false, animation: 'none' }} />
+      <Stack.Screen name="settings" options={{ title: '설정', headerTitle: () => <StoreHeaderTitle title="설정" />, headerLeft: () => null, headerBackVisible: false, animation: 'none' }} />
       <Stack.Screen name="timesheet" options={{ title: '내 출퇴근 내역', headerLeft: () => <HeaderBackButton fallback="/junior/attendance" /> }} />
       <Stack.Screen name="schedule" options={{ title: '근무표', headerLeft: () => <HeaderBackButton fallback="/junior/home" /> }} />
       <Stack.Screen name="notifications" options={{ title: '알림', headerLeft: () => <HeaderBackButton fallback="/junior/home" /> }} />

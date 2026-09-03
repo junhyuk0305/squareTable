@@ -3,6 +3,7 @@
 // 사용처: 두뇌 점수·받은 질문·노하우·번 돈 배지 등 처음 보면 헷갈리는 지표 옆.
 import { useState } from 'react';
 import { Modal, View, Text, Pressable, Platform, StyleSheet } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 
 import { InkColors } from '@/lib/theme/colors';
@@ -24,6 +25,9 @@ export function InfoDot({
   accessibilityLabel?: string;
 }) {
   const [open, setOpen] = useState(false);
+  // Android 15 edge-to-edge 는 Modal 창도 네비게이션 바 밑까지 그린다 — 하단 버튼이 가려져
+  // 시트 paddingBottom 에 insets.bottom 을 더한다(BottomSheet 와 같은 규칙, 2026-09-02).
+  const insets = useSafeAreaInsets();
 
   return (
     <>
@@ -46,10 +50,10 @@ export function InfoDot({
         <Ionicons name="information-circle-outline" size={size} color={color} />
       </Pressable>
 
-      <Modal visible={open} transparent animationType="slide" onRequestClose={() => setOpen(false)}>
+      <Modal visible={open} transparent animationType="slide" statusBarTranslucent navigationBarTranslucent onRequestClose={() => setOpen(false)}>
         <View style={modalFrameStyle}>
           <Pressable style={styles.backdrop} onPress={() => setOpen(false)} />
-          <View style={styles.sheet}>
+          <View style={[styles.sheet, { paddingBottom: 28 + insets.bottom }]}>
             <View style={styles.handle} />
             <View style={styles.head}>
               <Ionicons name="information-circle" size={20} color={InkColors.ink} />

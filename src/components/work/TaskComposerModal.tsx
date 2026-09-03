@@ -296,7 +296,7 @@ export function TaskComposerModal({
             {routineMode ? (isEdit ? '루틴 업무 수정' : '루틴 업무 추가') : isEdit ? '할일 수정' : '할일 추가'}
           </Text>
 
-          <ScrollView ref={scrollRef} style={s.scroll} contentContainerStyle={{ paddingBottom: 8 }} showsVerticalScrollIndicator={false}>
+          <ScrollView keyboardShouldPersistTaps="handled" ref={scrollRef} style={s.scroll} contentContainerStyle={{ paddingBottom: 8 }} showsVerticalScrollIndicator={false}>
             {/* ★추가되는 칸은 이것 하나다 — 배정과 공개를 가르는 축. 큰 카드 버튼을 만들지 않는다.
                 루틴은 매장 공통 일이라 이 선택 자체가 없다. */}
             {!routineMode && (

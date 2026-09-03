@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { View, Text, Pressable, StyleSheet, TextInput, ScrollView, ActivityIndicator } from 'react-native';
+import { KeyboardShift } from '@/components/KeyboardShift';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -71,6 +72,7 @@ export default function InquiryScreen() {
         <HeaderBackButton fallback="/" />
       </View>
 
+      <KeyboardShift>
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
         <Appear delay={0}>
           <View style={styles.header}>
@@ -162,6 +164,7 @@ export default function InquiryScreen() {
           </Pressable>
         </Appear>
       </ScrollView>
+      </KeyboardShift>
     </SafeAreaView>
   );
 }

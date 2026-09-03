@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, ActivityIndicator, StyleSheet } from 'react-native';
+import { KeyboardShift } from '@/components/KeyboardShift';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -23,9 +24,9 @@ import { ProgressPill } from '@/components/blocks/ProgressPill';
 import { QuizEditorSheet } from '@/components/owner/quiz/QuizEditorSheet';
 import { QuizPreviewSheet } from '@/components/owner/quiz/QuizPreviewSheet';
 import { QuizLinkSheet } from '@/components/owner/quiz/QuizLinkSheet';
-import { SheetHead } from '@/components/owner/quiz/kit';
+import { SheetHead, GhostButton } from '@/components/owner/quiz/kit';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
-import { Radius } from '@/lib/theme/elevation';
+import { Radius, Elevation } from '@/lib/theme/elevation';
 import { Space, HEADER_EDGE_GUTTER } from '@/lib/theme/layout';
 import type { QuizItem } from '@/lib/quiz/types';
 
@@ -304,7 +305,8 @@ export default function QuizDetailScreen() {
           ),
         }}
       />
-      <ScrollView contentContainerStyle={st.scroll} showsVerticalScrollIndicator={false}>
+      <KeyboardShift>
+      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={st.scroll} showsVerticalScrollIndicator={false}>
         {/* D4 — 낡은 문항. 옛 정답이 그대로 나가는 상태라 결과보다 먼저 말한다. */}
         {staleItems.length > 0 && (
           <Pressable
@@ -349,15 +351,11 @@ export default function QuizDetailScreen() {
                   </View>
                 ))}
               </View>
+              {/* 글자만 있던 버튼 → 흰 버튼(GhostButton). 2026-09-03: 글씨만 있는 버튼 금지. */}
               {notDone.length > 0 && (
-                <Pressable
-                  onPress={() => void remind()}
-                  style={({ pressed }) => [st.ghostRow, pressed && { opacity: 0.7 }]}
-                  accessibilityRole="button"
-                  accessibilityLabel={`아직 안 푼 ${notDone.length}명에게 다시 알리기`}
-                >
-                  <Text style={st.ghostRowText}>아직 안 푼 {notDone.length}명에게 다시 알리기</Text>
-                </Pressable>
+                <View style={{ marginTop: Space.sm }}>
+                  <GhostButton icon="notifications-outline" label={`아직 안 푼 ${notDone.length}명에게 다시 알리기`} onPress={() => void remind()} />
+                </View>
               )}
             </>
           )
@@ -463,6 +461,7 @@ export default function QuizDetailScreen() {
         )}
         </Appear>
       </ScrollView>
+      </KeyboardShift>
 
       {/* ── C3 더보기 ── */}
       {moreOpen && (
@@ -539,7 +538,7 @@ export default function QuizDetailScreen() {
           {attachable.length === 0 ? (
             <Text style={st.sheetEmpty}>붙일 업무가 아직 없어요. 업무를 만들면 여기에 나와요.</Text>
           ) : (
-            <ScrollView style={st.sheetScroll} showsVerticalScrollIndicator={false}>
+            <ScrollView keyboardShouldPersistTaps="handled" style={st.sheetScroll} showsVerticalScrollIndicator={false}>
               <View style={st.listCard}>
                 {attachable.map((t, i) => (
                   <Pressable
@@ -651,15 +650,16 @@ const st = StyleSheet.create({
   },
   staleText: { flex: 1, minWidth: 0, fontSize: 15, fontWeight: '700', color: BrandColors.warnText, lineHeight: 21 },
 
+  // 그림자(2026-09-03): 카드=e2 · 버튼·패널=e1. 그림자 없는 상자는 배경면과 구분이 안 됐다.
   ringCard: {
     backgroundColor: InkColors.bg, borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line,
-    padding: Space.lg, alignItems: 'center', gap: Space.xs,
+    padding: Space.lg, alignItems: 'center', gap: Space.xs, ...Elevation.e2,
   },
   ringSub: { fontSize: 13, fontWeight: '600', color: InkColors.ink3, textAlign: 'center' },
 
   listCard: {
     backgroundColor: InkColors.bg, borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line,
-    paddingHorizontal: Space.lg,
+    paddingHorizontal: Space.lg, ...Elevation.e2,
   },
   row: { flexDirection: 'row', alignItems: 'center', gap: Space.md, minHeight: 56, paddingVertical: Space.sm },
   rowDivider: { borderTopWidth: 1, borderTopColor: InkColors.line },
@@ -667,35 +667,33 @@ const st = StyleSheet.create({
   rowTitle: { flex: 1, minWidth: 0, fontSize: 15, lineHeight: 21, fontWeight: '800', color: InkColors.ink },
   rowSub: { fontSize: 13, lineHeight: 18, fontWeight: '600', color: InkColors.ink3 },
 
-  ghostRow: { alignSelf: 'center', minHeight: 48, justifyContent: 'center', paddingHorizontal: Space.md },
-  ghostRowText: { fontSize: 15, fontWeight: '800', color: InkColors.ink2 },
 
   feedback: {
     backgroundColor: BrandColors.badSoft, borderRadius: Radius.md, borderWidth: 1, borderColor: '#F3C9C9',
-    padding: Space.lg, gap: Space.xs,
+    padding: Space.lg, gap: Space.xs, ...Elevation.e1,
   },
   feedbackLabel: { fontSize: 13, fontWeight: '800', color: BrandColors.badText },
   feedbackBody: { fontSize: 15, fontWeight: '600', color: InkColors.ink, lineHeight: 22 },
   feedbackCta: {
     marginTop: Space.sm, minHeight: 48, alignItems: 'center', justifyContent: 'center',
-    borderRadius: Radius.sm, backgroundColor: InkColors.ink,
+    borderRadius: Radius.sm, backgroundColor: InkColors.ink, ...Elevation.e1,
   },
   feedbackCtaText: { fontSize: 15, fontWeight: '800', color: '#FFFFFF' },
 
-  thinBox: { backgroundColor: InkColors.bgSoft, borderRadius: Radius.md, padding: Space.lg, gap: Space.sm },
+  thinBox: { backgroundColor: InkColors.bgSoft, borderRadius: Radius.md, padding: Space.lg, gap: Space.sm, ...Elevation.e1 },
   thinTitle: { fontSize: 15, fontWeight: '800', color: InkColors.ink, lineHeight: 22 },
   thinRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
   thinName: { flex: 1, minWidth: 0, fontSize: 15, fontWeight: '700', color: InkColors.ink },
   smallAct: {
     minHeight: 48, justifyContent: 'center', paddingHorizontal: Space.md,
-    borderRadius: Radius.sm, borderWidth: 1, borderColor: InkColors.line, backgroundColor: '#FFFFFF',
+    borderRadius: Radius.sm, borderWidth: 1, borderColor: InkColors.line, backgroundColor: '#FFFFFF', ...Elevation.e1,
   },
   smallActText: { fontSize: 13, fontWeight: '800', color: InkColors.ink2 },
 
   opt: {
     flexDirection: 'row', alignItems: 'center', gap: Space.sm,
     minHeight: 56, paddingHorizontal: Space.lg, marginTop: Space.sm,
-    borderRadius: Radius.sm, borderWidth: 1, borderColor: InkColors.line, backgroundColor: '#FFFFFF',
+    borderRadius: Radius.sm, borderWidth: 1, borderColor: InkColors.line, backgroundColor: '#FFFFFF', ...Elevation.e1,
   },
   optDanger: { borderColor: '#F3C9C9' },
   optText: { flex: 1, fontSize: 15, fontWeight: '700', color: InkColors.ink2 },
@@ -727,7 +725,7 @@ const st = StyleSheet.create({
 
   noteCard: {
     backgroundColor: BrandColors.yellowSoft, borderRadius: Radius.sm, borderWidth: 1, borderColor: BrandColors.gold,
-    padding: Space.md, marginTop: Space.md,
+    padding: Space.md, marginTop: Space.md, ...Elevation.e1,
   },
   noteText: { fontSize: 15, fontWeight: '600', color: InkColors.ink, lineHeight: 22 },
 
@@ -736,12 +734,12 @@ const st = StyleSheet.create({
 
   primary: {
     minHeight: 56, alignItems: 'center', justifyContent: 'center', marginTop: Space.lg,
-    borderRadius: Radius.md, backgroundColor: InkColors.ink,
+    borderRadius: Radius.md, backgroundColor: InkColors.ink, ...Elevation.e1,
   },
   primaryText: { fontSize: 15, fontWeight: '800', color: '#FFFFFF' },
   ghost: {
     flex: 1, minHeight: 56, alignItems: 'center', justifyContent: 'center',
-    borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, backgroundColor: '#FFFFFF',
+    borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, backgroundColor: '#FFFFFF', ...Elevation.e1,
   },
   ghostText: { fontSize: 15, fontWeight: '800', color: InkColors.ink2 },
 });

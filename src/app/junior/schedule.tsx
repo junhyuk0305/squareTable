@@ -133,7 +133,7 @@ export default function JuniorScheduleScreen() {
   const ready = scheduleLoaded && staffLoaded;
 
   return (
-    <SafeAreaView style={styles.safe} edges={['bottom']}>
+    <SafeAreaView style={styles.safe} edges={[]}>
       <Stack.Screen options={{ title: '근무표' }} />
 
       <SegmentTabs
@@ -221,7 +221,7 @@ export default function JuniorScheduleScreen() {
 
             {/* 내가 대응할 수 있는 요청 — 읽고 판단해서 수락까지 하는 유일한 목록이라 카드로 남긴다(배치⑤) */}
             <Appear delay={stagger(1)}>
-            <Section icon="people-outline" title="동료가 올린 요청" hint="수락하면 사장님 승인으로 넘어가요">
+            <Section icon="people-outline" title="동료가 올린 요청">
               {incoming.length === 0 ? (
                 <Empty text="지금 대응할 교대 요청이 없어요." />
               ) : (
@@ -391,17 +391,15 @@ export default function JuniorScheduleScreen() {
 function Section({
   icon,
   title,
-  hint,
   children,
 }: {
   icon?: React.ComponentProps<typeof Ionicons>['name'];
   title: string;
-  hint?: string;
   children: React.ReactNode;
 }) {
   return (
     <View style={{ gap: 10 }}>
-      <SectionLabel icon={icon} title={title} hint={hint} />
+      <SectionLabel icon={icon} title={title} />
       <View style={{ gap: 10 }}>{children}</View>
     </View>
   );

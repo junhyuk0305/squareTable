@@ -174,6 +174,59 @@ function chainDoneWrite(key: string, run: () => Promise<boolean>): Promise<boole
   return next;
 }
 
+/** 완료 토글 하나가 로컬 상태에 남기는 변화 — 완료마크(null=해제)와 그에 딸린 피드 행 추가/삭제. */
+type DonePatch = { date: string; templateId: string; mark: DoneMark | null; feedAdd?: FeedItem; feedRemoveId?: string };
+function applyDonePatch(done: State['done'], feed: FeedItem[], p: DonePatch): { done: State['done']; feed: FeedItem[] } {
+  const day = { ...(done[p.date] ?? {}) };
+  if (p.mark) day[p.templateId] = p.mark;
+  else delete day[p.templateId];
+  let nextFeed = p.feedRemoveId ? feed.filter((f) => f.id !== p.feedRemoveId) : feed;
+  if (p.feedAdd && !nextFeed.some((f) => f.id === p.feedAdd!.id)) nextFeed = [...nextFeed, p.feedAdd];
+  return { done: { ...done, [p.date]: day }, feed: nextFeed };
+}
+/**
+ * 서버 왕복이 아직 안 끝난 완료 토글의 **의도**. realtime → hydrate 가 서버 스냅샷으로 done/feed 를 통째로
+ * 교체할 때 이 의도를 다시 얹는다(overlayPendingDone).
+ * ★없으면(2026-09-03 실기기): 할일 A·B 를 빠르게 연속 체크 → A 의 realtime 재조회가 **B 가 아직 서버에 없는**
+ *   스냅샷을 가져와 B 체크를 지운다(B 는 자기 쓰기가 끝난 다음 재조회에서야 돌아온다).
+ */
+const pendingDone = new Map<string, { patch: DonePatch; settledAt?: number }>();
+/** 서버 스냅샷(fetchedAt 에 조회 시작) 위에 아직 반영이 보장되지 않은 토글을 다시 얹는다.
+ *  ★쓰기가 끝난 뒤에도 바로 지우지 않는다(2026-09-03 실기기): A·B 연속 체크 → A 의 재조회가 **B 쓰기 완료 직전**에
+ *    시작되면 스냅샷엔 B 가 없는데 B 는 이미 pending 에서 빠져 있어 B 체크가 잠깐 풀렸다가 다음 재조회에서 돌아왔다.
+ *    → 쓰기 완료 시각(settledAt)보다 **나중에 시작한** 재조회가 한 번 지나가야 그 패치를 버린다. */
+function overlayPendingDone(done: State['done'], feed: FeedItem[], fetchedAt: number): { done: State['done']; feed: FeedItem[] } {
+  let acc = { done, feed };
+  for (const [key, e] of pendingDone) {
+    if (e.settledAt !== undefined && e.settledAt <= fetchedAt) {
+      pendingDone.delete(key);
+      continue;
+    }
+    acc = applyDonePatch(acc.done, acc.feed, e.patch);
+  }
+  return acc;
+}
+/** 낙관 반영 → 직렬 쓰기 → 실패 시 **그 키만** 되돌린다(전체 스냅샷 복원은 사이에 체크한 다른 할일까지 지운다). */
+function commitDone(key: string, patch: DonePatch, undo: DonePatch, run: () => Promise<boolean>, failMsg: string) {
+  useWorkStore.setState((s) => applyDonePatch(s.done, s.feed, patch));
+  const entry = { patch } as { patch: DonePatch; settledAt?: number };
+  pendingDone.set(key, entry);
+  const ok = chainDoneWrite(key, run).then(
+    (r) => {
+      if (pendingDone.get(key) !== entry) return r;
+      // 성공: 이 쓰기 이후에 시작한 재조회가 지나갈 때까지 유지. 실패: 되돌리므로 즉시 버린다.
+      if (r) entry.settledAt = Date.now();
+      else pendingDone.delete(key);
+      return r;
+    },
+    (e) => {
+      if (pendingDone.get(key) === entry) pendingDone.delete(key);
+      throw e;
+    },
+  );
+  void guardWrite(ok, () => useWorkStore.setState((s) => applyDonePatch(s.done, s.feed, undo)), failMsg);
+}
+
 /** 데이파트(시간대) 카테고리 id. 기본은 open/mid/close/etc 지만 매장이 자유롭게 추가·삭제하므로 문자열. */
 export type TaskSection = string;
 export type TaskScope = 'shared' | 'private';
@@ -719,6 +772,7 @@ export const useWorkStore = create<State>((set, get) => ({
     //   예외를 던지면 Promise.all 이 reject 되고 set 이 영영 실행되지 않아 loaded 가 false 로 남는다
     //   → 게이트가 **영구 스피너**가 된다. 계약을 값 반환 경로에만 걸면 계약이 아니다.
     try {
+    const fetchedAt = Date.now();
     // 정지(hang) 방지 — 실패·예외는 막았어도 **끝나지 않는 것**은 못 막는다(2026-08-26 실측).
     const all = await settleWithin(
       HYDRATE_TIMEOUT_MS,
@@ -740,8 +794,10 @@ export const useWorkStore = create<State>((set, get) => ({
     );
     if (all === null) { set({ loaded: true, loadError: true }); return; }
     const [templates, done, feed, knowhowLinks, understanding, courseEntries, training, courses, trainingRequests, quizCounts, assignments, quizAttempts] = all;
+    // 아직 서버에 안 닿은 체크는 스냅샷 위에 다시 얹는다 — 안 그러면 빠른 연속 체크가 되돌아간다.
+    const live = overlayPendingDone(done.data, feed.data, fetchedAt);
     set({
-      templates: templates.data, done: done.data, feed: feed.data,
+      templates: templates.data, done: live.done, feed: live.feed,
       knowhowLinks, understanding, courseEntries, training, trainingRequests, assignments, quizAttempts,
       // 직원에게 보일 코스만(비활성 제외) 사장 화면과 같은 순서로 — 카드 순서 = 사장이 정한 순서.
       courses: (courses.data ?? []).filter((c) => c.active).sort((a, b) => a.position - b.position),
@@ -1051,36 +1107,34 @@ export const useWorkStore = create<State>((set, get) => ({
     );
   },
 
+  // 낙관 반영·직렬 쓰기·키 단위 롤백·hydrate 덮어쓰기 방지는 전부 commitDone(위 pendingDone 주석)이 맡는다.
   // 체크→해제 레이스: 완료 INSERT가 서버에 닿기 전에 해제 DELETE가 먼저 도착하면 0행 삭제
   // (writeStrict가 실패로 판정 → 가짜 '해제 실패' 배너)에 뒤늦게 INSERT가 도착해 DB엔 완료가
   // 잔존한다. 같은 (날짜·할일)의 완료 쓰기는 chainDoneWrite로 직전 쓰기가 끝난 뒤 실행한다.
   toggleTask: (date, templateId, staffId, staffName, role, photoUrl, task) => {
     const s = get();
-    const prevDone = s.done;
-    const prevFeed = s.feed;
-    const dayMap = { ...(s.done[date] ?? {}) };
+    const key = `${date}:${templateId}`;
+    const current = s.done[date]?.[templateId];
     const tpl = s.templates.find((t) => t.id === templateId);
     // 합성 루틴(dpr_)은 tpl 조회가 안 되므로 호출부가 넘긴 task 로 문구/방을 채운다('할일' 폴백 회피).
     const taskText = task?.text ?? (tpl ? tpl.text : '할일');
-    if (dayMap[templateId]) {
-      delete dayMap[templateId];
+    if (current) {
       const removed = s.feed.find((f) => f.kind === 'task_done' && f.date === date && f.refId === templateId);
-      set({
-        done: { ...s.done, [date]: dayMap },
-        feed: s.feed.filter((f) => !(f.kind === 'task_done' && f.date === date && f.refId === templateId)),
-      });
-      const ok = chainDoneWrite(`${date}:${templateId}`, () =>
-        Promise.all([clearDone(date, templateId), removed ? deleteFeed(removed.id) : Promise.resolve(true)]).then(
-          ([a, b]) => a && b,
-        ),
+      commitDone(
+        key,
+        { date, templateId, mark: null, feedRemoveId: removed?.id },
+        { date, templateId, mark: current, feedAdd: removed },
+        () =>
+          Promise.all([clearDone(date, templateId), removed ? deleteFeed(removed.id) : Promise.resolve(true)]).then(
+            ([a, b]) => a && b,
+          ),
+        '완료 해제 저장에 실패했어요.',
       );
-      void guardWrite(ok, () => set({ done: prevDone, feed: prevFeed }), '완료 해제 저장에 실패했어요.');
       return;
     }
     const now = new Date().toISOString();
     const room = task?.roomId ?? tpl?.roomId ?? curRoom(); // 완료마크는 그 할일의 방(없으면 활성 방)에 묶인다.
     const mark: DoneMark = { by: staffId, byName: staffName, at: now, ...(photoUrl ? { photoUrl } : null) };
-    dayMap[templateId] = mark;
     const doneItem: FeedItem = {
       id: genId('f'),
       date,
@@ -1097,11 +1151,13 @@ export const useWorkStore = create<State>((set, get) => ({
       //   복제하면 완료 해제·수정이 배로 복잡해진다.
       ...(photoUrl ? { photoUrl } : null),
     };
-    set({ done: { ...s.done, [date]: dayMap }, feed: [...s.feed, doneItem] });
-    const ok = chainDoneWrite(`${date}:${templateId}`, () =>
-      Promise.all([setDone(date, templateId, mark, room), upsertFeed(doneItem)]).then(([a, b]) => a && b),
+    commitDone(
+      key,
+      { date, templateId, mark, feedAdd: doneItem },
+      { date, templateId, mark: null, feedRemoveId: doneItem.id },
+      () => Promise.all([setDone(date, templateId, mark, room), upsertFeed(doneItem)]).then(([a, b]) => a && b),
+      '완료 체크 저장에 실패했어요.',
     );
-    void guardWrite(ok, () => set({ done: prevDone, feed: prevFeed }), '완료 체크 저장에 실패했어요.');
   },
 
   postNotice: (date, text, authorId, authorName, role, important) => {

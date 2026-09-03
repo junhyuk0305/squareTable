@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
 import { View, Text, TextInput, ScrollView, StyleSheet, ActivityIndicator } from 'react-native';
+import { KeyboardShift } from '@/components/KeyboardShift';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -178,6 +179,7 @@ function LegacyHandover() {
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
       <Stack.Screen options={{ title: '인수인계서 올리기' }} />
+      <KeyboardShift>
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
         {phase === 'review' ? (
           <ReviewList
@@ -263,6 +265,7 @@ function LegacyHandover() {
           </PressableScale>
         </View>
       )}
+      </KeyboardShift>
     </SafeAreaView>
   );
 }

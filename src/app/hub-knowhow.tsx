@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, StyleSheet } from 'react-native';
+import { KeyboardShift } from '@/components/KeyboardShift';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -136,6 +137,7 @@ export default function HubKnowhowScreen() {
           body="노하우 탭의 '노하우 추가'로 첫 노하우를 적어 보세요."
         />
       ) : (
+        <KeyboardShift>
         <ScrollView contentContainerStyle={st.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
           <Appear delay={stagger(0)}>
             <Text style={st.countLabel}>
@@ -221,6 +223,7 @@ export default function HubKnowhowScreen() {
           )}
           <View style={{ height: Space.xl }} />
         </ScrollView>
+        </KeyboardShift>
       )}
     </SafeAreaView>
   );

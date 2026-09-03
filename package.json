@@ -9,6 +9,7 @@
     "expo": "~56.0.6",
     "expo-audio": "~56.0.12",
     "expo-constants": "~56.0.16",
+    "expo-dev-client": "~56.0.26",
     "expo-document-picker": "~56.0.4",
     "expo-file-system": "~56.0.8",
     "expo-font": "~56.0.5",
@@ -32,6 +33,7 @@
     "zustand": "^5.0.14"
   },
   "devDependencies": {
+    "@expo/ngrok": "^4.1.3",
     "@types/react": "~19.2.2",
     "eslint": "^9.0.0",
     "eslint-config-expo": "~56.0.4",
@@ -40,6 +42,7 @@
   "scripts": {
     "start": "expo start",
     "android": "expo start --android",
+    "device": "expo start --dev-client",
     "ios": "expo start --ios",
     "web": "expo start --web",
     "lint": "expo lint",
@@ -47,6 +50,7 @@
     "compile:packs": "node scripts/compile-pack.mjs",
     "platform:status": "node scripts/platform-status.mjs",
     "native:gate": "node scripts/native-gate.mjs",
+    "native:preflight": "node scripts/native-preflight.mjs",
     "qa:seed": "node scripts/seed-demo.mjs && node scripts/seed-quiz-demo.mjs",
     "qa:fresh": "node --env-file=.env.seed scripts/qa-fresh-accounts.mjs",
     "qa:coldstart": "node scripts/qa-coldstart.mjs",

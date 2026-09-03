@@ -2,6 +2,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { InkColors } from '@/lib/theme/colors';
+import { Space } from '@/lib/theme/layout';
 
 /**
  * 섹션 라벨 — 제목은 카드 '밖'(위)에, 내용은 카드 '안'에 두는 공용 IA.
@@ -34,7 +35,9 @@ export function SectionLabel({
 }
 
 const styles = StyleSheet.create({
-  row: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 4 },
+  // 제목 달린 섹션 앞은 카드↔카드보다 한 단(md) 더 띈다(2026-09-03 웹 실측 피드백) — 화면마다 gap 을
+  // 고치지 않고 라벨이 스스로 위 여백을 든다. 부모 gap(대개 md)과 합쳐 24 안팎이 된다.
+  row: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 4, marginTop: Space.md },
   title: { fontSize: 15, lineHeight: 21, fontWeight: '800', color: InkColors.ink, letterSpacing: -0.2 },
   hint: { marginLeft: 'auto', fontSize: 12, color: InkColors.ink3, fontWeight: '600' },
   trailing: { marginLeft: 'auto' },

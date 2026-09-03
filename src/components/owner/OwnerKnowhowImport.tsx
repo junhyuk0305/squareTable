@@ -154,7 +154,7 @@ export function OwnerKnowhowImport() {
 
   return (
     <View style={styles.flex}>
-      <ScrollView style={styles.flex} contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView keyboardShouldPersistTaps="handled" style={styles.flex} contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <Appear delay={0}>
         <View style={styles.lead}>
           <Text style={styles.leadText}>다른 내 매장의 노하우를 “{activeName || '현재 매장'}”으로 가져와요</Text>

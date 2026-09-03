@@ -1,6 +1,7 @@
 import { StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { KeyboardShift } from '@/components/KeyboardShift';
 import { TemplateLibrary } from '@/components/owner/TemplateLibrary';
 import { RoleTabBar } from '@/components/RoleTabBar';
 import { InkColors } from '@/lib/theme/colors';
@@ -12,8 +13,10 @@ import { InkColors } from '@/lib/theme/colors';
  */
 export default function OwnerTemplatesScreen() {
   return (
-    <SafeAreaView style={styles.safe} edges={['bottom']}>
-      <TemplateLibrary />
+    <SafeAreaView style={styles.safe} edges={[]}>
+      <KeyboardShift>
+        <TemplateLibrary />
+      </KeyboardShift>
       <RoleTabBar role="owner" />
     </SafeAreaView>
   );

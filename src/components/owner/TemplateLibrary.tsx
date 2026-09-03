@@ -318,7 +318,7 @@ export function TemplateLibrary() {
 
           {recommended.length > 0 ? (
             <Appear delay={stagger(4)} style={styles.block}>
-              <SectionLabel icon="star-outline" title="추천 템플릿" hint="많이 쓰는 순" />
+              <SectionLabel icon="star-outline" title="추천 템플릿" />
               <View style={styles.list}>{recommended.map(renderCard)}</View>
             </Appear>
           ) : null}

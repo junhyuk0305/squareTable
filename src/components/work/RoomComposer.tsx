@@ -119,7 +119,7 @@ export function RoomComposer({
     <BottomSheet visible onClose={onClose} sheetStyle={s.sheet}>
       <Text style={s.title}>{isCreate ? '채팅방 만들기' : '이 방 모습 바꾸기'}</Text>
 
-      <ScrollView style={s.scroll} contentContainerStyle={{ paddingBottom: 8 }} showsVerticalScrollIndicator={false}>
+      <ScrollView keyboardShouldPersistTaps="handled" style={s.scroll} contentContainerStyle={{ paddingBottom: 8 }} showsVerticalScrollIndicator={false}>
         {!isCreate && (
           <View style={s.personalNote}>
             <Ionicons name="information-circle" size={17} color={InkColors.ink2} />

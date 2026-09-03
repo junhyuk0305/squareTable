@@ -14,15 +14,20 @@ import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
 
-/** 시트 머리말 — 제목 + 닫기. 모든 시트가 같은 모양을 갖도록 강제한다. */
-export function SheetHead({ title, onClose }: { title: string; onClose: () => void }) {
+/**
+ * 시트 머리말 — 제목 (+ 닫기). 모든 시트가 같은 모양을 갖도록 강제한다.
+ * `onClose` 를 안 주면 X 가 없다(2026-09-03) — 바깥 탭·아래로 드래그로 닫히는 짧은 시트는 X 가 군더더기다.
+ */
+export function SheetHead({ title, onClose }: { title: string; onClose?: () => void }) {
   return (
-    <View style={qst.sheetHead}>
+    <View style={[qst.sheetHead, !onClose && qst.sheetHeadPlain]}>
       <Text style={qst.sheetTitle} numberOfLines={1}>{title}</Text>
       {/* ★상자 크기로 48dp 를 지킨다 — hitSlop 은 RN-web 에서 안 먹어 실측 23dp 였다(2026-08-26). */}
-      <Pressable onPress={onClose} style={qst.sheetClose} accessibilityRole="button" accessibilityLabel="닫기">
-        <Ionicons name="close" size={20} color={InkColors.ink2} />
-      </Pressable>
+      {onClose ? (
+        <Pressable onPress={onClose} style={qst.sheetClose} accessibilityRole="button" accessibilityLabel="닫기">
+          <Ionicons name="close" size={20} color={InkColors.ink2} />
+        </Pressable>
+      ) : null}
     </View>
   );
 }
@@ -165,7 +170,8 @@ export function GhostButton({
   danger,
   fill,
 }: {
-  icon: keyof typeof Ionicons.glyphMap;
+  /** 없으면 글자만 — 2026-09-03: "글씨만 있는 버튼 금지"라 글자 링크 자리도 이 흰 버튼을 쓴다. */
+  icon?: keyof typeof Ionicons.glyphMap;
   label: string;
   onPress: () => void;
   disabled?: boolean;
@@ -182,7 +188,7 @@ export function GhostButton({
       accessibilityRole="button"
       accessibilityLabel={label}
     >
-      <Ionicons name={icon} size={16} color={color} />
+      {icon ? <Ionicons name={icon} size={16} color={color} /> : null}
       <Text style={[qst.ghostText, danger && { color: BrandColors.badText }]}>{label}</Text>
     </Pressable>
   );
@@ -224,6 +230,8 @@ export function AnswerReveal({ text }: { text: string }) {
 
 export const qst = StyleSheet.create({
   sheetHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingBottom: 10, gap: Space.sm },
+  // X 없는 머리말 — 48dp 버튼이 빠지면 제목이 그립에 붙으므로 위 여백을 주고, 아래는 카드에 바싹.
+  sheetHeadPlain: { paddingTop: Space.sm, paddingBottom: Space.xs },
 
   answerRow: { flexDirection: 'row', alignItems: 'center', gap: Space.xs, minHeight: 32, paddingVertical: Space.xs },
   answerText: { flex: 1, fontSize: 15, fontWeight: '700', color: BrandColors.goodText, lineHeight: 21 },
@@ -258,18 +266,20 @@ export const qst = StyleSheet.create({
   },
   stepValue: { fontSize: 15, fontWeight: '800', color: InkColors.ink, minWidth: 64, textAlign: 'center' },
 
-  cta: { backgroundColor: InkColors.ink, borderRadius: Radius.md, paddingVertical: 15, alignItems: 'center', minHeight: 48 },
+  cta: { backgroundColor: InkColors.ink, borderRadius: Radius.md, paddingVertical: 15, alignItems: 'center', minHeight: 48, ...Elevation.e1 },
   ctaText: { color: '#FFFFFF', fontSize: 15, fontWeight: '800' },
 
   ghost: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, minHeight: 44,
     paddingHorizontal: Space.md, borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, backgroundColor: InkColors.bg,
+    // 흰 버튼도 살짝 뜬다(2026-09-03) — 그림자 없는 상자는 눌리는 것으로 안 읽혔다.
+    ...Elevation.e1,
   },
   ghostText: { fontSize: 13.5, fontWeight: '800', color: InkColors.ink },
 
   errBox: {
     flexDirection: 'row', alignItems: 'flex-start', gap: Space.sm, marginTop: Space.sm,
-    backgroundColor: BrandColors.accentSoft, borderRadius: Radius.md, padding: Space.md,
+    backgroundColor: BrandColors.accentSoft, borderRadius: Radius.md, padding: Space.md, ...Elevation.e1,
   },
   errText: { flex: 1, fontSize: 15, color: BrandColors.badText, fontWeight: '700', lineHeight: 21 },
 

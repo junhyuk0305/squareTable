@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { View, Text, Pressable, Animated, AccessibilityInfo, StyleSheet } from 'react-native';
+import { View, Text, Pressable, Animated, AccessibilityInfo, PanResponder, StyleSheet } from 'react-native';
 
 import { USE_NATIVE_DRIVER } from '@/lib/anim';
 import { BrandColors, InkColors } from '@/lib/theme/colors';
@@ -138,7 +138,7 @@ export function ProgressRing({
     </View>
   );
 
-  if (swap) return <SwapLayout ring={ring} size={size} label={label} swap={swap} />;
+  if (swap) return <SwapLayout ring={ring} label={label} swap={swap} />;
 
   if (right) {
     return (
@@ -175,21 +175,16 @@ export function ProgressRing({
  */
 function SwapLayout({
   ring,
-  size,
   label,
   swap,
 }: {
   ring: ReactNode;
-  size: number;
   label: string;
   swap: { faces: [ReactNode, ReactNode]; captions: [string, string] };
 }) {
   const [face, setFace] = useState<0 | 1>(0);
   const [turns, setTurns] = useState(0);
   const [reduce, setReduce] = useState(false);
-  // 긴 면을 잰 값 — 두 면·두 캡션을 절대 배치로 겹쳐 두고 minHeight 만 이 값으로 잡는다.
-  const [faceH, setFaceH] = useState<[number, number]>([0, 0]);
-  const [capH, setCapH] = useState<[number, number]>([0, 0]);
   // Animated.Value는 ref가 아니라 안정 객체로 메모이즈 — render 중 ref.current 접근(react-hooks/refs) 회피.
   const fade = useMemo(() => new Animated.Value(0), []);
 
@@ -218,44 +213,52 @@ function SwapLayout({
     setFace(i);
     setTurns(SWAP_TURNS); // 손으로 고르면 자동 전환은 끝난 것으로 친다
   };
-  const opacity1 = fade.interpolate({ inputRange: [0, 1], outputRange: [1, 0] });
-  const slotMinH = Math.max(size, faceH[0], faceH[1]);
-  const capMinH = Math.max(capH[0], capH[1]);
+  // 손가락 좌우 슬라이드로도 면을 넘긴다(2026-09-02 실기기 요청 — 점 탭만으로는 넘길 수 있다는
+  // 것이 안 보였다). 세로 스크롤(부모 ScrollView)을 뺏지 않게 **가로 이동이 우세할 때만** 응답을
+  // 가져오고, 넘기면 pick 과 같이 자동 전환을 멈춘다. 왼쪽으로 밀면 다음 면, 오른쪽이면 첫 면.
+  const pan = useMemo(
+    () =>
+      PanResponder.create({
+        onMoveShouldSetPanResponder: (_e, g) => Math.abs(g.dx) > 12 && Math.abs(g.dx) > Math.abs(g.dy) * 1.5,
+        onPanResponderRelease: (_e, g) => {
+          if (Math.abs(g.dx) < 24) return;
+          setFace(g.dx < 0 ? 1 : 0);
+          setTurns(SWAP_TURNS);
+        },
+      }),
+    [],
+  );
+  // 면 전환 = **페이지 통째 슬라이드**(2026-09-03 사용자 결정). 페이지 = [링 + 면] + 캡션 한 벌이고,
+  // 두 페이지를 나란히 두고(폭 2W) 트랙을 -W 만큼 민다. 링은 페이지마다 하나씩 그린다(같은 값).
+  // 절대 배치·높이 재기를 쓰지 않는다 — 페이지는 보통 흐름이라 글이 길어져도 스스로 자라고,
+  // 트랙 높이는 긴 페이지를 따라간다(캡션이 잘리던 원인이 절대 배치 + minHeight 추정이었다).
+  // 폭을 재기 전(0)엔 두 페이지가 겹치므로 첫 레이아웃 전까지 뒷페이지를 숨긴다.
+  const [trackW, setTrackW] = useState(0);
+  const tx = fade.interpolate({ inputRange: [0, 1], outputRange: [0, -trackW] });
 
   return (
-    <View accessible accessibilityLabel={`${label}. ${swap.captions[0]} ${swap.captions[1]}`}>
-      <View style={styles.rowRight}>
-        {ring}
-        <View style={[styles.slot, { minHeight: slotMinH }]}>
+    <View accessible accessibilityLabel={`${label}. ${swap.captions[0]} ${swap.captions[1]}`} {...pan.panHandlers}>
+      <View
+        style={styles.viewport}
+        onLayout={(e) => { const w = e.nativeEvent.layout.width; setTrackW((p) => (p === w ? p : w)); }}
+      >
+        <Animated.View style={[styles.pages, { transform: [{ translateX: tx }] }]}>
           {swap.faces.map((node, i) => (
-            <Animated.View
+            <View
               key={i}
               pointerEvents={face === i ? 'auto' : 'none'}
-              style={[styles.face, { opacity: i === 0 ? opacity1 : fade }]}
+              style={[styles.page, { width: trackW || '100%', opacity: trackW === 0 && i === 1 ? 0 : 1 }]}
             >
-              <View onLayout={(e) => {
-                const h = e.nativeEvent.layout.height;
-                setFaceH((prev) => (prev[i] === h ? prev : (i === 0 ? [h, prev[1]] : [prev[0], h])));
-              }}>
-                {node}
+              <View style={styles.rowRight}>
+                {ring}
+                <View style={styles.slot}>{node}</View>
               </View>
-            </Animated.View>
+              <View style={styles.capBox}>
+                <Text style={styles.capText}>{swap.captions[i]}</Text>
+              </View>
+            </View>
           ))}
-        </View>
-      </View>
-      <View style={[styles.capBox, { minHeight: capMinH }]}>
-        {swap.captions.map((text, i) => (
-          <Animated.Text
-            key={i}
-            style={[styles.capText, styles.capFace, { opacity: i === 0 ? opacity1 : fade }]}
-            onLayout={(e) => {
-              const h = e.nativeEvent.layout.height;
-              setCapH((prev) => (prev[i] === h ? prev : (i === 0 ? [h, prev[1]] : [prev[0], h])));
-            }}
-          >
-            {text}
-          </Animated.Text>
-        ))}
+        </Animated.View>
       </View>
       {/* 점 2개 = 면 2개. 상자 전체가 48dp 버튼이다 — RN-web 은 hitSlop 을 무시한다(2026-08-26). */}
       <Pressable
@@ -293,11 +296,14 @@ const styles = StyleSheet.create({
   sub: { fontSize: 14, lineHeight: 20, fontWeight: '600', color: InkColors.ink2 },
   // 우측 슬롯 — 세로 가운데. 두 면은 절대 배치로 겹치고 minHeight 가 긴 면을 받는다.
   slot: { flex: 1, minWidth: 0, justifyContent: 'center' },
-  face: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, justifyContent: 'center' },
+  // 페이지 슬라이드 — viewport 가 폭을 재고 자르며, track(가로 행)이 두 페이지를 나란히 든다.
+  viewport: { overflow: 'hidden' },
+  pages: { flexDirection: 'row', alignItems: 'stretch' },
+  page: { flexShrink: 0 },
   capBox: { marginTop: Space.lg, paddingTop: Space.md, borderTopWidth: 1, borderTopColor: InkColors.line },
   capText: { fontSize: 13, lineHeight: 19, color: InkColors.ink2 },
-  capFace: { position: 'absolute', left: 0, right: 0, top: Space.md },
-  dots: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: Space.xs + 1, minHeight: 48, marginTop: Space.xs },
+  // 위 여백 0 — 캡션과 점 사이·점 아래(48dp 상자의 남는 높이)가 합쳐져 너무 넓었다(2026-09-03, 절반으로).
+  dots: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: Space.xs + 1, minHeight: 48 },
   dotsPressed: { opacity: 0.6 },
   dot: { width: DOT, height: DOT, borderRadius: DOT / 2, backgroundColor: InkColors.line },
   dotOn: { backgroundColor: InkColors.ink },

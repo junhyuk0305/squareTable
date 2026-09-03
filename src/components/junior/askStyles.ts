@@ -1,37 +1,11 @@
 import { StyleSheet, Platform } from 'react-native';
 import { BrandColors, InkColors } from '@/lib/theme/colors';
 import { Elevation, Radius } from '@/lib/theme/elevation';
+import { Space } from '@/lib/theme/layout';
+import { COMPOSER_BAR_H } from '@/components/ChatComposerBar';
 
 /** '물어보기'(JuniorAsk) 챗 UI 스타일. */
 export const styles = StyleSheet.create({
-  // 상단 신원 바
-  identityBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 16,
-    paddingTop: 10,
-    paddingBottom: 6,
-  },
-  identityText: {
-    flex: 1,
-    fontSize: 13,
-    color: InkColors.ink3,
-    fontWeight: '500',
-  },
-  suggestEntry: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingVertical: 6,
-    paddingHorizontal: 11,
-    borderRadius: Radius.pill,
-    borderWidth: 1,
-    borderColor: InkColors.line,
-    backgroundColor: InkColors.bg,
-  },
-  suggestEntryText: { fontSize: 12, fontWeight: '700', color: InkColors.ink2 },
-
   // 대화 영역
   scroll: { flex: 1 },
   scrollContent: {
@@ -144,57 +118,25 @@ export const styles = StyleSheet.create({
   retryText: { fontSize: 12, fontWeight: '800', color: InkColors.bubbleText },
   errorClose: { fontSize: 14, fontWeight: '800', color: BrandColors.accentText },
 
-  // 추천 질문 상시 스트립 (대화 시작 후)
-  chipStrip: { maxHeight: 44, backgroundColor: InkColors.bg },
-  chipStripContent: { paddingHorizontal: 12, paddingTop: 8, gap: 8, alignItems: 'center' },
-  chip: {
-    backgroundColor: InkColors.bgSoft,
-    borderWidth: 1,
-    borderColor: InkColors.line,
-    borderRadius: Radius.pill,
-    paddingVertical: 7,
-    paddingHorizontal: 13,
-  },
-  chipText: { fontSize: 12.5, fontWeight: '700', color: InkColors.ink2 },
-
-  // 입력바(떠 있는 알약)는 공용 ChatComposerBar 가 그린다 — 업무 채팅·노하우 코치와 같은 형태.
-  // 알약 안에 들어가므로 입력칸은 자기 배경·테두리를 두지 않는다(두면 알약 속 알약이 된다).
-  inputWrap: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingLeft: 12,
-    minHeight: 44,
-  },
-  // 포커스(선택)는 알약이 통째로 받는다 — 입력칸에 따로 테두리를 그리면 두 번째 상자가 생긴다.
-  inputWrapFocused: {},
+  // 입력바(떠 있는 알약)는 공용 ChatComposerBar 가 그린다 — ＋·입력칸·보내기 = 업무 채팅(WorkChat)과
+  // 같은 치수·색(2026-09-03). 알약 안에 들어가므로 입력칸은 자기 배경·테두리를 두지 않는다.
   input: {
     flex: 1,
+    minHeight: 44,
     fontSize: 15,
     color: InkColors.ink,
+    paddingHorizontal: Space.sm,
     paddingVertical: Platform.OS === 'ios' ? 10 : 6,
     ...(Platform.OS === 'web' ? ({ outlineStyle: 'none' } as object) : null),
   },
-  sendBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: Radius.pill,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  // 켜짐 = 브랜드 옐로 + 옐로 글로우(보낼 준비됨). 검정 화살표로 대비 확보.
-  sendBtnOn: {
-    backgroundColor: BrandColors.yellow,
-    ...Elevation.ey,
-  },
-  sendBtnDisabled: {
-    backgroundColor: InkColors.bgSoft,
-  },
-  sendBtnIcon: {
-    fontSize: 22,
-    color: InkColors.ink,
-    fontWeight: '900',
-    lineHeight: 24,
-  },
-  sendBtnIconOff: { color: InkColors.ink3 },
+  plus: { width: 44, height: 44, borderRadius: Radius.pill, backgroundColor: InkColors.ink, alignItems: 'center', justifyContent: 'center' },
+  send: { width: 44, height: 44, borderRadius: Radius.pill, backgroundColor: BrandColors.yellow, borderWidth: 1, borderColor: BrandColors.yellowDeep, alignItems: 'center', justifyContent: 'center' },
+
+  // ＋ 메뉴 — WorkChat 의 menu/mi 와 같은 값. bottom 은 입력바 실높이(COMPOSER_BAR_H)를 따른다.
+  menuBackdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
+  menu: { position: 'absolute', left: Space.md, bottom: COMPOSER_BAR_H(44) + 4, backgroundColor: InkColors.bg, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md, padding: 6, width: 220, ...Elevation.e3 },
+  mi: { flexDirection: 'row', alignItems: 'center', gap: 11, padding: 11, borderRadius: Radius.sm },
+  miIc: { width: 30, height: 30, borderRadius: Radius.sm, backgroundColor: BrandColors.yellowSoft, alignItems: 'center', justifyContent: 'center' },
+  miLabel: { fontSize: 14, fontWeight: '700', color: InkColors.ink },
+  miSub: { fontSize: 10.5, color: InkColors.ink3 },
 });

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { View, Text, Pressable, TextInput, ScrollView, StyleSheet, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, Pressable, TextInput, ScrollView, StyleSheet } from 'react-native';
+import { KeyboardShift } from '@/components/KeyboardShift';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -103,9 +104,9 @@ export default function JuniorSuggestScreen() {
   }
 
   return (
-    <SafeAreaView edges={['bottom']} style={styles.safe}>
+    <SafeAreaView edges={[]} style={styles.safe}>
       <Stack.Screen options={{ title: '노하우 제안' }} />
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <KeyboardShift>
         <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
           {!ready ? (
             <ScreenLoading label="노하우를 불러오고 있어요…" />
@@ -253,7 +254,7 @@ export default function JuniorSuggestScreen() {
 
           <View style={{ height: 16 }} />
         </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardShift>
       <RoleTabBar role="junior" />
     </SafeAreaView>
   );
