@@ -799,9 +799,10 @@ export default function QuizNewScreen() {
             ) : null}
 
             <Text style={st.lead}>
-              {okItems.length > 0 ? `문항 ${okItems.length}개가 만들어졌어요` : '아직 만들어진 문항이 없어요'}
+              {okItems.length > 0 ? `AI가 노하우로 문항 ${okItems.length}개를 만들었어요` : '아직 만들어진 문항이 없어요'}
             </Text>
-            <Text style={st.leadSub}>그대로 보내도 되고, 고쳐도 돼요</Text>
+            {/* AI 기본법 제31조 제2항 — 생성형 AI 결과물임을 사람이 알 수 있게 표시한다(AI 이용정책 §1 표와 1:1). */}
+            <Text style={st.leadSub}>AI가 만든 초안이에요. 그대로 보내도 되고, 고쳐도 돼요</Text>
 
             {okItems.map((m, i) => (
               <Appear key={m.entryId} delay={stagger(i)}>
