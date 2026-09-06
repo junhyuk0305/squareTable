@@ -66,8 +66,11 @@ export function SplashAnimation({ ready = true, onDone }: { ready?: boolean; onD
               { transform: [{ scaleX: under }] },
             ]}
           />
-          <Animated.Text style={[styles.char, charStyle(c1)]} allowFontScaling={false}>
-            매장의{' '}
+          {/* ★띄어쓰기를 글자와 같은 Text 에 넣지 않는다 — 공백은 한글 폴백 폰트가 아니라 시스템 폰트로
+              그려져서, 그 Text 의 줄 상자(ascent/descent)만 커진다. 두 Text 의 기준선이 어긋나
+              '정석'이 살짝 올라가 보였다(2026-09-06 iOS 실기기). 간격은 마진으로 준다. */}
+          <Animated.Text style={[styles.char, styles.charGap, charStyle(c1)]} allowFontScaling={false}>
+            매장의
           </Animated.Text>
           <Animated.Text style={[styles.char, charStyle(c2)]} allowFontScaling={false}>
             정석
@@ -99,7 +102,7 @@ const styles = StyleSheet.create({
     zIndex: 50,
   },
   center: { alignItems: 'center', gap: 18 },
-  markRow: { position: 'relative', flexDirection: 'row' },
+  markRow: { position: 'relative', flexDirection: 'row', alignItems: 'baseline' },
   underline: {
     position: 'absolute',
     left: -5,
@@ -118,6 +121,8 @@ const styles = StyleSheet.create({
     color: InkColors.ink,
     zIndex: 1,
   },
+  // 지웠던 공백(38px 기준 ≈9px)에서 letterSpacing(-2)을 뺀 만큼.
+  charGap: { marginRight: 7 },
   copy: {
     fontSize: 15,
     fontWeight: '600',

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Text, Pressable, Platform, StyleSheet } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, type Edge } from 'react-native-safe-area-context';
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -798,11 +798,16 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
           ),
         };
 
+  // ★top 인셋은 **네이티브 헤더를 끈 뷰에서만** 우리가 준다(headerOptions 참고). 대화방의 떠 있는 헤더도
+  //   서랍의 자체 상단바도 고정 좌표라, 안 주면 상태바·노치 밑으로 파고든다(2026-09-06 iOS 실기기).
+  //   패널 뷰는 네이티브 헤더가 이미 그만큼 내려 주므로 주면 이중이다.
+  const safeEdges: Edge[] = view === 'chat' ? ['top'] : view === 'drawer' ? ['top', 'bottom'] : [];
+
   // ★게이트는 훅을 **전부 부른 뒤**에 온다(위 headerOptions 까지 훅이 없다). 화면 골격(헤더·탭바)은
   //   게이트 밖에 그대로 두고 **본문만** 로딩으로 대체한다 — 골격이 늦게 서면 그것도 레이아웃 점프다.
   if (!boardLoaded) {
     return (
-      <SafeAreaView style={st.safe} edges={[]}>
+      <SafeAreaView style={st.safe} edges={safeEdges}>
         <Stack.Screen options={headerOptions} />
         <ScreenLoading label="업무를 불러오고 있어요…" />
         <RoleTabBar role={role} />
@@ -812,7 +817,7 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
 
   if (boardLoadError) {
     return (
-      <SafeAreaView style={st.safe} edges={[]}>
+      <SafeAreaView style={st.safe} edges={safeEdges}>
         <Stack.Screen options={headerOptions} />
         <LoadErrorState
           title="업무를 불러오지 못했어요"
@@ -829,7 +834,7 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
   return (
     // ★bottom 인셋은 RoleTabBar 가 자체로 갖는다(insets.bottom) — 여기서 또 주면 이중 적용돼
     //   탭바가 화면마다 다른 높이에 떴다(2026-09-02 실기기). 탭바가 없는 서랍 뷰만 bottom 을 유지한다. native-audit: ok
-    <SafeAreaView style={st.safe} edges={view === 'drawer' ? ['bottom'] : []}>
+    <SafeAreaView style={st.safe} edges={safeEdges}>
       <Stack.Screen options={headerOptions} />
       {/* 어떤 코스 카드가 몇 장 뜨는지는 trainingCards 메모가 판정(하한·주기·1회성 우선·요청 예외).
           ★대화방 **위쪽 흐름**에 둔다 — 떠 있는 헤더·칩바는 WorkChat 안에서 뜨므로 카드를 덮지 않는다. */}

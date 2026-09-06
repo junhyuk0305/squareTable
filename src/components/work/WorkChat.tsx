@@ -313,6 +313,8 @@ export function WorkChat({
 
       <ScrollView keyboardShouldPersistTaps="handled"
         ref={scrollRef}
+        // 이 화면은 네이티브 헤더를 끄고(headerShown:false) 바깥 SafeAreaView 가 top 인셋을 이미 먹으므로,
+        // ios-preflight: ok iOS 자동 contentInset('automatic')이 더할 몫이 0 이다 — 이중 여백이 생기지 않는다.
         contentContainerStyle={[s.scroll, topInset ? { paddingTop: HDR_H + 16 + topInset } : null]}
         showsVerticalScrollIndicator={false}
         scrollEventThrottle={16}
