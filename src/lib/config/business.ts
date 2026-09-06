@@ -28,7 +28,7 @@ export const BUSINESS_INFO = {
  * ★SSOT 는 scripts/legal-content.mjs 의 EFFECTIVE_DATE 다(.ts 에서 .mjs 를 import 할 수 없어 복제).
  *   약관을 개정하면 **두 곳을 함께** 고친다 — 어긋나면 실제로 동의한 조건을 특정할 수 없게 된다.
  */
-export const TERMS_VERSION = '2026-08-07';
+export const TERMS_VERSION = '2026-09-13';
 
 /**
  * 입금 확인 약속(SLA) — 계좌이체는 사람이 통장을 보고 승인하는 구조라, 이 문장이 없으면

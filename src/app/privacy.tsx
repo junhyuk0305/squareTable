@@ -7,6 +7,7 @@ import { HeaderBackButton } from '@/components/HeaderBackButton';
 import { RoleTabBar } from '@/components/RoleTabBar';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { canManage } from '@/lib/utils/roles';
+import { TERMS_VERSION } from '@/lib/config/business';
 
 // 개인정보처리방침 요약. 전문의 SSOT 는 웹 정적 페이지(scripts/legal-content.mjs → /privacy)이고
 // 이 화면은 요약 + 전문 링크만 둔다 — 전문을 앱과 웹에 이중 유지하면 반드시 어긋난다.
@@ -18,22 +19,22 @@ export default function PrivacyScreen() {
       <Stack.Screen options={{ headerShown: true, title: '개인정보 처리방침', headerStyle: { backgroundColor: '#FFFFFF' }, headerTintColor: InkColors.ink, headerLeft: () => <HeaderBackButton /> }} />
       <ScrollView contentContainerStyle={styles.scroll}>
         <Text style={styles.h1}>개인정보 수집·이용 안내</Text>
-        <Text style={styles.updated}>시행일: 2026-08-07 · 운영: 스퀘어테이블</Text>
+        <Text style={styles.updated}>시행일: {TERMS_VERSION} · 운영: 스퀘어테이블</Text>
 
         <Section title="1. 수집 항목">
-          이름, 이메일, 휴대전화번호, 생년월일, 매장 정보, 사용자가 입력한 매장 운영 노하우·질문 내용, 음성 입력 시 음성(변환 즉시 파기), 서비스 이용·오류 기록, 유료 이용 시 입금자명 등 결제 신고 정보.
+          이름, 이메일, 비밀번호, 휴대전화번호(본인 확인 기록 포함), 생년월일, 매장 정보, 사장님이 입력하는 직원 근로정보(근무표·출퇴근·시급), 노하우·사진·질문·채팅·업무·퀴즈 등 콘텐츠, 음성·PDF(변환·추출 즉시 파기), 서비스 이용·오류 기록, 푸시 알림 수신 주소, 유료 이용 시 입금자명 등 결제 신고 정보. 카메라·위치·주민등록번호·광고 식별자는 수집하지 않습니다.
         </Section>
         <Section title="2. 수집·이용 목적">
-          매장 단위 계정 식별, 노하우 저장·검색·답변 제공, 직원-사장님 간 질문 전달 등 서비스 핵심 기능 제공, 유료 이용권 관리, 서비스 이용 통계·품질 개선 분석 및 세대 간 지식 교류 분석.
+          매장 단위 계정 식별과 휴대전화 본인 확인, 노하우 저장·검색·AI 답변 제공, 직원-사장님 간 질문 전달, 근무·급여 관리 지원, 유료 이용권 관리, 문의 응대와 업무 알림, 서비스 이용 통계·품질 개선 분석 및 세대 간 지식 교류 분석.
         </Section>
         <Section title="3. 보유·이용 기간">
-          회원 탈퇴 또는 매장 계약 종료 시까지. 탈퇴 신청 즉시 이용이 차단되고 30일간 분리 보관 후 영구 파기합니다. 질문·채팅 기록은 6개월, 내부 이용·오류 기록은 12개월 경과분을 정기 파기하며, 관계 법령에 따라 보존이 필요한 경우 해당 기간 동안 보관합니다.
+          탈퇴 신청 즉시 이용이 차단되고 30일간 분리 보관 후 영구 파기합니다. 질문·채팅 기록은 6개월, 내부 이용·오류 기록은 12개월 경과분을 자동 파기하며, 결제 기록 등 관계 법령에 따라 보존이 필요한 정보는 해당 기간 동안만 분리 보관합니다.
         </Section>
-        <Section title="4. 처리 위탁">
-          서비스 운영을 위해 클라우드 인프라(Supabase), 웹 호스팅(Vercel), AI 처리 제공자(Google), 이용 분석 도구(PostHog)에 데이터 처리를 위탁하며, 이들은 국외 사업자입니다. 위탁·국외이전의 상세와 이전 거부 방법은 전문 제5조·제6조에 있습니다.
+        <Section title="4. 처리 위탁·국외 이전">
+          인증 문자 발송은 솔라피(국내)에 위탁합니다. 데이터 보관(Supabase, 싱가포르), AI 처리(Google, 미국), 푸시 알림 전달(Expo·Google·Apple, 미국), 웹 이용 분석(PostHog, 미국), 웹 호스팅(Vercel, 미국)은 국외 사업자가 처리합니다. 휴대전화번호·시급·출퇴근 등 개인 식별·근로 정보는 AI로 보내지 않습니다. 항목·보유기간·거부 방법은 전문 제5조·제6조에 있습니다.
         </Section>
-        <Section title="5. 이용자 권리">
-          본인의 개인정보 열람·정정·삭제·처리정지를 요청할 수 있으며, 아래 연락처로 문의하면 지체 없이 처리합니다.
+        <Section title="5. 이용자 권리와 앱 권한">
+          본인의 개인정보 열람·정정·삭제·처리정지·동의 철회를 앱(설정 → 전체 계정 설정) 또는 아래 연락처로 요청할 수 있으며, 접수 후 10일 이내에 처리합니다. 마이크·사진·알림 권한은 모두 선택이며 기기 설정에서 언제든 끌 수 있습니다.
         </Section>
         <Section title="6. 문의처">
           개인정보 보호책임자 장준혁 · cristianojun@naver.com

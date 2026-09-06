@@ -18,7 +18,7 @@
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
-import { LEGAL_PAGES, EFFECTIVE_DATE, OPERATOR } from './legal-content.mjs';
+import { LEGAL_PAGES, EFFECTIVE_DATE, OPERATOR, businessLine } from './legal-content.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DIST = resolve(__dirname, '..', 'dist');
@@ -226,6 +226,23 @@ function writeRobots() {
 // 읽을 수 있어야 하므로 JS 의존 0인 페이지를 따로 낸다.
 // vercel.json 이 /privacy → /privacy.html 로 rewrite 하므로 확장자 없는 주소로도 열린다.
 // 본문 SSOT = scripts/legal-content.mjs.
+//
+// 표는 좁은 화면(≤640px)에서 CSS 로 행마다 세로 카드로 펼친다. 그때 열 이름이 사라지므로,
+// 각 <td> 에 헤더 행의 <th> 텍스트를 data-label 로 심어 ::before 로 다시 보여 준다.
+// legal-content.mjs 의 표는 전부 "첫 <tr> = <th> 헤더 행" 규약이라 이 변환으로 충분하다.
+function labelTables(html) {
+  return html.replace(/<table>([\s\S]*?)<\/table>/g, (whole, inner) => {
+    const heads = [...inner.matchAll(/<th>([\s\S]*?)<\/th>/g)].map((m) => m[1].replace(/<[^>]+>/g, '').trim());
+    if (heads.length === 0) return whole;
+    const body = inner.replace(/<tr>([\s\S]*?)<\/tr>/g, (row, cells) => {
+      if (/<th>/.test(cells)) return row;
+      let i = 0;
+      return `<tr>${cells.replace(/<td>/g, () => `<td data-label="${esc(heads[i++] ?? '')}">`)}</tr>`;
+    });
+    return `<table>${body}</table>`;
+  });
+}
+
 function writeLegalPages() {
   for (const page of LEGAL_PAGES) {
     // 푸터의 다른 문서 링크 — 심사원이 한 페이지에서 나머지 고지에 도달할 수 있어야 한다.
@@ -252,10 +269,26 @@ function writeLegalPages() {
       body{max-width:720px;margin:0 auto;padding:40px 20px 80px;font-family:-apple-system,BlinkMacSystemFont,'Malgun Gothic',sans-serif;line-height:1.75;color:#1A1A1A;background:#FFF;word-break:keep-all}
       h1{font-size:26px;margin:0 0 8px}
       h2{font-size:17px;margin:32px 0 8px}
+      h3{font-size:15px;margin:20px 0 6px}
       p,li{font-size:15px;color:#333}
       ul{padding-left:20px;margin:8px 0}
       li{margin:4px 0}
       a{color:#1A1A1A}
+      .tbl{overflow-x:auto;margin:8px 0 12px}
+      table{border-collapse:collapse;width:100%;font-size:14px;line-height:1.5}
+      th,td{border:1px solid #DDD;padding:6px 8px;text-align:left;vertical-align:top;color:#333}
+      th{background:#F5F5F5;font-weight:700;white-space:nowrap}
+      .box{border:1px solid #DDD;border-radius:8px;padding:12px 16px;margin:12px 0;background:#FAFAFA}
+      .box p,.box li{font-size:14px}
+      @media (max-width:640px){
+        .tbl table,.tbl tbody,.tbl tr,.tbl td{display:block;width:100%;box-sizing:border-box}
+        .tbl th{display:none}
+        .tbl tr:first-child{display:none}
+        .tbl tr{border:1px solid #DDD;border-radius:8px;margin:0 0 10px;padding:6px 12px;background:#FFF}
+        .tbl td{border:0;padding:4px 0}
+        .tbl td::before{content:attr(data-label);display:block;font-size:12px;color:#888;font-weight:700}
+        .tbl td:first-child{font-weight:700}
+      }
       .meta{font-size:13px;color:#888;margin:0 0 32px}
       .foot{margin-top:56px;padding-top:20px;border-top:1px solid #E5E5E5;font-size:14px;color:#666}
     </style>
@@ -263,8 +296,9 @@ function writeLegalPages() {
   <body>
     <h1>${esc(page.title)}</h1>
     <p class="meta">${BRAND} · ${esc(OPERATOR)} · 시행일 ${EFFECTIVE_DATE}</p>
-${page.html}
+${labelTables(page.html)}
     <p class="foot">${siblings} · <a href="${SITE_URL}/">${BRAND} 홈으로</a></p>
+    <p class="foot" style="margin-top:12px;padding-top:0;border-top:0;font-size:13px">${esc(businessLine())}</p>
   </body>
 </html>
 `;
