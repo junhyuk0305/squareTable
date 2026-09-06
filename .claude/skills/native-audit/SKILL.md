@@ -57,6 +57,7 @@ mouse-only · modal-autofocus · overflow · hover-only · persist-taps · **fad
 | .web 분기 짝·번들 생성 | `native:preflight` | EAS 빌드 전 1회 |
 | 460px 레이아웃·터치 48dp | `qa:quiz-ui` (웹 브라우저) | 웹 쪽 보증으로 인정 |
 | **KAV·inset·Modal·제스처·애니·층 갈림길** | **이 감사** | 1·2단계 |
+| **의도한** 플랫폼 차이의 설계·배치·예외표 등록 | `/platform-split` | 이 감사 범위 아님 — 새 분기를 만드는 작업이면 그쪽 |
 
 ### 4단계 — 보고
 
@@ -124,7 +125,10 @@ JS만 바꿨으면 재빌드 불필요. **보고 끝에 항상 적는다**: Metr
 
 - **키보드**: 화면의 키보드 회피는 **공용 `KeyboardShift`**(`src/components/KeyboardShift.tsx`) 하나로 — KAV 직접 사용 금지
   (스캐너 `kav-shared` 🔴). 안에는 RN KAV 도 `measureInWindow` 도 없다(09-03 6회차 실기기 확정) — 키보드 이벤트 순간에
-  **안쪽 `SafeAreaProvider` 의 `useSafeAreaFrame()`(네이티브 뷰 계층 실측·창 기준)** 으로 상자 바닥을 재서 겹침만큼 `paddingBottom`.
+  **안쪽 `SafeAreaProvider` 의 `useSafeAreaFrame()`(네이티브 뷰 계층 실측)** 으로 상자 바닥을 재서 겹침만큼 `paddingBottom`.
+  ⚠️**그 프레임은 "창 기준"이 아니다**(09-06 iOS 실기기 정정): Android 만 창 기준이고 **iOS 는 화면 UIViewController 뷰 기준**이라
+  불투명 헤더가 있으면 헤더 높이만큼 어긋난다 → KeyboardShift 가 iOS 에서만 `HeaderHeightContext` 를 더해 보정한다.
+  iOS 축 전반은 `/ios-preflight` 담당.
   ⛔`measureInWindow`·KAV `frame.y` 로 위치를 재지 말 것: 새 아키텍처의 measureInWindow 는 **shadow tree 좌표**라, 네이티브 헤더가
   있는 화면은 react-native-screens 의 헤더 높이 **추정치**만큼 어긋난다(업무 채팅만 멀쩡했던 이유 = headerShown:false).
   자식에겐 바깥 insets/frame 컨텍스트를 되돌려 준다(안쪽 시트의 `insets.bottom` 이 0 이 되는 것 방지).
