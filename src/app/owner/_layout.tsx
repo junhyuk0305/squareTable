@@ -150,15 +150,16 @@ export default function OwnerLayout() {
              replace 도 스택 기본 슬라이드를 타서 화면·탭바가 통째로 좌우로 밀렸다(2026-09-02 실기기).
              서브화면 push/pop 은 각자 화면의 애니메이션을 타므로 그대로 슬라이드된다. */}
       <Stack.Screen name="dashboard" options={{ title: '홈', headerLeft: () => null, headerBackVisible: false, animation: 'none' }} />
-      {/* 탭 루트 헤더엔 "어느 매장의 화면인가"를 상시 표시(StoreHeaderTitle) — 홈은 StoreToggle 이 담당.
-          ★타이틀은 **headerLeft(왼쪽 슬롯)** 에 넣는다(2026-09-07 iOS 실기기). native-stack 의
-            `headerTitleAlign` 은 iOS 에서 **존재하지 않는 옵션이라 조용히 무시된다** — 네이티브 내비바가
-            타이틀 슬롯을 항상 가운데 두기 때문이다. 안드로이드만 왼쪽이라 같은 코드가 두 모습이었다.
-            왼쪽 슬롯은 양 플랫폼 모두 왼쪽 정렬이라, 분기 없이 한 경로로 맞춘다. */}
-      <Stack.Screen name="categories" options={{ title: '노하우 추가', headerTitle: () => <StoreHeaderTitle title="노하우 추가" />, headerLeft: () => null, headerBackVisible: false, animation: 'none' }} />
-      <Stack.Screen name="inbox" options={{ title: '답 기다리는 질문', headerTitle: () => null, headerLeft: () => <StoreHeaderTitle title="답 기다리는 질문" />, headerBackVisible: false, animation: 'none' }} />
+      {/* ★탭 루트는 **네이티브 헤더를 끄고** 화면이 `ScreenTitleHeader` 를 직접 그린다(2026-09-07 iOS 실기기).
+            왼쪽 정렬 평문 제목은 네이티브 헤더로 낼 수 없다 — ①iOS 는 타이틀 슬롯이 항상 가운데이고
+            (`headerTitleAlign` 은 안드로이드 전용이라 무시된다), ②제목을 headerLeft 로 옮기면 iOS 26 이
+            좌/우 슬롯 항목을 '바 버튼'으로 취급해 유리 캡슐 배경을 씌워 **버튼처럼 보인다.**
+            홈이 이미 같은 판단으로 AppTopBar 를 쓴다. 자세한 근거는 ScreenTitleHeader 주석. */}
+      <Stack.Screen name="categories" options={{ title: '노하우 추가', headerShown: false, animation: 'none' }} />
+      {/* 받은 질문은 노하우 탭으로 흡수돼 화면이 없다(리다이렉트 전용) — 헤더가 스칠 일도 없게 끈다. */}
+      <Stack.Screen name="inbox" options={{ title: '답 기다리는 질문', headerShown: false, animation: 'none' }} />
       <Stack.Screen name="work" options={{ title: '업무 채팅', headerTitle: () => <StoreHeaderTitle title="업무 채팅" />, headerLeft: () => null, headerBackVisible: false, animation: 'none' }} />
-      <Stack.Screen name="settings" options={{ title: '설정', headerTitle: () => null, headerLeft: () => <StoreHeaderTitle title="설정" />, headerBackVisible: false, animation: 'none' }} />
+      <Stack.Screen name="settings" options={{ title: '설정', headerShown: false, animation: 'none' }} />
       {/* 서브화면 — 전역 headerLeft(HeaderBackButton) 사용 */}
       <Stack.Screen name="staff" options={{ title: '직원·급여' }} />
       <Stack.Screen name="training" options={{ title: '퀴즈' }} />

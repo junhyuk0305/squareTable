@@ -99,6 +99,13 @@ iOS는 한글을 Apple SD Gothic Neo 로, ASCII(공백·영문·숫자)를 San F
 | `navigationBarColor` · `navigationBarHidden` | iOS엔 해당 개념이 없다(홈 인디케이터는 `autoHideHomeIndicator`) |
 | `sheetElevation` · `sheetResizeAnimationEnabled` · `sheetShouldOverflowTopInset` | iOS 시트 옵션(`sheetGrabberVisible` 등)으로 따로 낸다 |
 
+**★그리고 왼쪽 정렬은 `headerLeft` 로도 못 낸다**(09-07 2회차에서 확인). iOS 26 은 헤더 좌/우 슬롯의
+항목을 **'바 버튼'으로 취급해 유리 캡슐 배경**을 씌운다 — 제목을 거기 넣으면 **버튼처럼 보인다.**
+(단서는 이미 있었다: 뒤로가기 화살표에 흰 알약 배경이 붙어 있었다.)
+→ **왼쪽 정렬 평문 제목은 네이티브 헤더로 낼 수 없다.** 웹과 같은 모습이 필요하면
+`headerShown: false` + 화면이 직접 그리는 상단바(`ScreenTitleHeader`)로 간다. 상단 인셋은 그 컴포넌트가 갖는다.
+**교훈: 플랫폼 옵션이 막히면 우회로도 같은 플랫폼 규칙에 막힐 수 있다 — 우회로를 쓰기 전에 그것도 확인한다.**
+
 컴포넌트 prop 에도 같은 부류가 있다. 대표는 접근성 쌍이다:
 `importantForAccessibility`(안드로이드) ↔ `accessibilityElementsHidden`(iOS) — **한쪽만 쓰면 다른 쪽은 무방비다.**
 화면으로는 절대 안 보이고 VoiceOver 를 켜야만 드러난다.

@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, Text, Pressable, Platform, StyleSheet } from 'react-native';
+import { Platform, StyleSheet } from 'react-native';
 import { SafeAreaView, type Edge } from 'react-native-safe-area-context';
 import { Stack, router, useLocalSearchParams } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
 
 import { uploadPhoto, uploadPhotoNative } from '@/lib/db';
 import { pickImagesNative } from '@/lib/media/pickImage';
@@ -35,6 +34,7 @@ import { WorkChat } from '@/components/work/WorkChat';
 import { RoomBar, ROOMBAR_INSET } from '@/components/work/RoomBar';
 import { RoomDrawer } from '@/components/work/RoomDrawer';
 import { RoomComposer, type RoomLookDraft } from '@/components/work/RoomComposer';
+import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { NoticePanel } from '@/components/work/NoticePanel';
 import { TodoScreen } from '@/components/work/TodoScreen';
 import { RoutineScopeSheet } from '@/components/work/RoutineScopeSheet';
@@ -42,7 +42,6 @@ import { WorkSettingsPanel } from '@/components/work/WorkSettingsPanel';
 import { TaskComposerModal } from '@/components/work/TaskComposerModal';
 import { INVITE_FIRST, type Member } from '@/components/work/MentionInput';
 import { InkColors } from '@/lib/theme/colors';
-import { HEADER_EDGE_GUTTER } from '@/lib/theme/layout';
 import { todayStr, tsMs } from '@/lib/utils/attendance';
 import { asMemberRole, canManage } from '@/lib/utils/roles';
 
@@ -779,32 +778,15 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
     }, { multiple: true });
   }
 
-  const headerOptions =
-    view === 'chat' || view === 'drawer'
-      ? // 대화방(탭 루트)·서랍: 네이티브 헤더를 끈다. 대화방은 WorkChat 의 떠 있는 헤더 + 그 아래 방 칩바를,
-        // 서랍은 RoomDrawer 의 자체 상단바를 직접 그린다. 안 끄면 그 위에 '할일' 제목의 헤더가 하나 더 얹힌다.
-        // ★패널에서 돌아올 때 반드시 false 를 **명시**한다 — setOptions 는 얕은 병합이라 키를 빼면 true 가 남는다.
-        { headerShown: false }
-      : {
-          // ★채팅 루트가 설정한 headerTitle(컴포넌트)·headerRight 를 **명시적으로 되돌린다.**
-          //   setOptions 는 얕은 병합이라 키를 생략하면 이전 값이 남고, headerTitle 은 title 보다 우선한다
-          //   → title 만 넘기면 패널 헤더가 계속 "업무 채팅"으로 보인다(2026-08-11 P5 실측).
-          //   위 채팅 루트 분기가 headerLeft 에 대해 하고 있는 초기화를, 나머지 두 키에도 똑같이 한다.
-          headerShown: true,
-          // ★뒤로가기와 제목을 **왼쪽 슬롯 하나**에 같이 넣는다(2026-09-07 iOS 실기기).
-          //   `headerTitleAlign: 'left'` 는 native-stack 의 iOS 에 **없는 옵션이라 조용히 무시**된다 —
-          //   네이티브 내비바가 타이틀 슬롯을 항상 가운데 두기 때문에, 왼쪽 정렬은 슬롯을 바꿔야만 된다.
-          headerTitle: () => null,
-          headerRight: () => null,
-          headerLeft: () => (
-            <View style={st.headerLeftRow}>
-              <Pressable onPress={closePanel} hitSlop={8} style={({ pressed }) => [{ paddingLeft: HEADER_EDGE_GUTTER, paddingRight: 14, paddingVertical: 4 }, pressed && { opacity: 0.6 }]}>
-                <Ionicons name="arrow-back" size={24} color={InkColors.ink} />
-              </Pressable>
-              <Text style={st.headerTitle}>{view === 'notice' ? '공지' : view === 'settings' ? '업무 설정' : '할일'}</Text>
-            </View>
-          ),
-        };
+  // 이 화면은 **어느 뷰에서도 네이티브 헤더를 쓰지 않는다.** 상단은 전부 직접 그린다 —
+  //   대화방 = WorkChat 의 떠 있는 헤더 + 방 칩바 / 서랍 = RoomDrawer 자체 상단바 /
+  //   패널(할일·공지·업무 설정) = ScreenTitleHeader.
+  // ★패널도 자체 헤더로 바꾼 이유(2026-09-07 iOS 실기기): 왼쪽 정렬 평문 제목은 네이티브 헤더로 못 낸다.
+  //   iOS 는 타이틀 슬롯이 항상 가운데이고(headerTitleAlign 은 안드로이드 전용), headerLeft 로 옮기면
+  //   iOS 26 이 좌/우 슬롯 항목을 '바 버튼'으로 취급해 유리 캡슐을 씌워 **제목이 버튼처럼 보인다.**
+  //   근거는 ScreenTitleHeader 주석.
+  // ★false 를 **명시**한다 — setOptions 는 얕은 병합이라 키를 빼면 이전 값(true)이 남는다.
+  const headerOptions = { headerShown: false } as const;
 
   // ★top 인셋은 **네이티브 헤더를 끈 뷰에서만** 우리가 준다(headerOptions 참고). 대화방의 떠 있는 헤더도
   //   서랍의 자체 상단바도 고정 좌표라, 안 주면 상태바·노치 밑으로 파고든다(2026-09-06 iOS 실기기).
@@ -915,6 +897,14 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
           onOpenTodo={() => openPanel('todo')}
           onLeave={leaveCurrentRoom}
           onDelete={deleteCurrentRoom}
+        />
+      )}
+
+      {/* 패널 상단바 — 뒤로가기 + 왼쪽 정렬 평문 제목(웹과 같은 모습). insets.top 은 이 컴포넌트가 갖는다. */}
+      {(view === 'todo' || view === 'notice' || view === 'settings') && (
+        <ScreenTitleHeader
+          title={view === 'notice' ? '공지' : view === 'settings' ? '업무 설정' : '할일'}
+          onBack={closePanel}
         />
       )}
 
@@ -1092,6 +1082,4 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
 
 const st = StyleSheet.create({
   safe: { flex: 1, backgroundColor: InkColors.paper },
-  headerLeftRow: { flexDirection: 'row', alignItems: 'center' },
-  headerTitle: { paddingLeft: 3, fontSize: 16, fontWeight: '800', color: InkColors.ink },
 });

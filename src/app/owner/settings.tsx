@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSessionStore } from '@/lib/store/useSessionStore';
@@ -117,7 +118,10 @@ export default function OwnerSettings() {
 
   return (
     <SafeAreaView style={styles.safe} edges={[]}>
-      <Stack.Screen options={{ headerShown: true, title: '매장 설정' }} />
+      {/* 네이티브 헤더를 끄고 제목을 직접 그린다 — 왼쪽 정렬 평문 제목은 네이티브 헤더로 못 낸다
+          (iOS 는 타이틀이 항상 가운데, headerLeft 로 옮기면 iOS 26 이 버튼처럼 그린다). 근거=ScreenTitleHeader 주석. */}
+      <Stack.Screen options={{ headerShown: false }} />
+      <ScreenTitleHeader title="설정" storeLine />
       {/* 설정탭은 의도적으로 등장 애니메이션을 쓰지 않는다 — 자주 드나드는 관리 화면이라
           매번 카드가 떠오르면 번잡함. 카드 등장 모션은 홈·물어보기·출퇴근·업무 등 콘텐츠 탭에만(Appear).
           로딩 게이트는 애니메이션과 별개다 — 스위치가 뒤집히는 것은 번잡함이 아니라 거짓 표시다. */}

@@ -1,7 +1,8 @@
-import { View, Text, StyleSheet } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
 
 import { RoleTabBar } from '@/components/RoleTabBar';
+import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { OwnerKnowhowBrowse, type KnowhowSegKey } from '@/components/owner/OwnerKnowhowBrowse';
 import { InkColors } from '@/lib/theme/colors';
 
@@ -28,15 +29,9 @@ export default function OwnerCategoriesScreen() {
 
   return (
     <View style={styles.root}>
-      <Stack.Screen
-        options={{
-          // 탭 루트(뒤로가기 없음) — 네이티브 타이틀 앵커(~17px)를 콘텐츠 거터(20)로 맞춰
-          // paddingLeft 3 = 20-17.
-          // ★왼쪽 슬롯에 넣는다 — `headerTitleAlign` 은 iOS native-stack 에 없는 옵션이라 무시된다(_layout 주석).
-          headerTitle: () => null,
-          headerLeft: () => <Text style={styles.headerTitle}>노하우</Text>,
-        }}
-      />
+      {/* 네이티브 헤더를 끄고 제목을 직접 그린다 — 근거는 ScreenTitleHeader 주석(iOS 는 왼쪽 정렬 평문 제목이 불가). */}
+      <Stack.Screen options={{ headerShown: false }} />
+      <ScreenTitleHeader title="노하우" />
 
       <OwnerKnowhowBrowse onSelect={openEntry} initialSegment={initialSegment} />
       <RoleTabBar role="owner" />
@@ -46,5 +41,4 @@ export default function OwnerCategoriesScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: InkColors.cream },
-  headerTitle: { paddingLeft: 3, fontSize: 16, fontWeight: '800', color: InkColors.ink },
 });
