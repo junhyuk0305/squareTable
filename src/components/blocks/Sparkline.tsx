@@ -51,6 +51,9 @@ export function Sparkline({
       accessible={!!accessibilityLabel}
       accessibilityLabel={accessibilityLabel}
       importantForAccessibility={accessibilityLabel ? 'yes' : 'no-hide-descendants'}
+      // ★importantForAccessibility 는 **안드로이드 전용**이다 — iOS 에서 짝은 이것 하나뿐이라,
+      //   빠뜨리면 라벨 없는 장식 그래프의 막대 하나하나가 VoiceOver 에 그대로 읽힌다(2026-09-07 전수 점검).
+      accessibilityElementsHidden={!accessibilityLabel}
     >
       {values.map((v, i) => {
         const tone: SparkTone = tones?.[i] ?? (hotLast && i === values.length - 1 ? 'on' : 'muted');

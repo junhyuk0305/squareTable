@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Text, Pressable, Platform, StyleSheet } from 'react-native';
+import { View, Text, Pressable, Platform, StyleSheet } from 'react-native';
 import { SafeAreaView, type Edge } from 'react-native-safe-area-context';
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -791,15 +791,18 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
           //   → title 만 넘기면 패널 헤더가 계속 "업무 채팅"으로 보인다(2026-08-11 P5 실측).
           //   위 채팅 루트 분기가 headerLeft 에 대해 하고 있는 초기화를, 나머지 두 키에도 똑같이 한다.
           headerShown: true,
-          headerTitleAlign: 'left' as const,
-          headerTitle: () => (
-            <Text style={st.headerTitle}>{view === 'notice' ? '공지' : view === 'settings' ? '업무 설정' : '할일'}</Text>
-          ),
+          // ★뒤로가기와 제목을 **왼쪽 슬롯 하나**에 같이 넣는다(2026-09-07 iOS 실기기).
+          //   `headerTitleAlign: 'left'` 는 native-stack 의 iOS 에 **없는 옵션이라 조용히 무시**된다 —
+          //   네이티브 내비바가 타이틀 슬롯을 항상 가운데 두기 때문에, 왼쪽 정렬은 슬롯을 바꿔야만 된다.
+          headerTitle: () => null,
           headerRight: () => null,
           headerLeft: () => (
-            <Pressable onPress={closePanel} hitSlop={8} style={({ pressed }) => [{ paddingLeft: HEADER_EDGE_GUTTER, paddingRight: 14, paddingVertical: 4 }, pressed && { opacity: 0.6 }]}>
-              <Ionicons name="arrow-back" size={24} color={InkColors.ink} />
-            </Pressable>
+            <View style={st.headerLeftRow}>
+              <Pressable onPress={closePanel} hitSlop={8} style={({ pressed }) => [{ paddingLeft: HEADER_EDGE_GUTTER, paddingRight: 14, paddingVertical: 4 }, pressed && { opacity: 0.6 }]}>
+                <Ionicons name="arrow-back" size={24} color={InkColors.ink} />
+              </Pressable>
+              <Text style={st.headerTitle}>{view === 'notice' ? '공지' : view === 'settings' ? '업무 설정' : '할일'}</Text>
+            </View>
           ),
         };
 
@@ -1089,5 +1092,6 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
 
 const st = StyleSheet.create({
   safe: { flex: 1, backgroundColor: InkColors.paper },
+  headerLeftRow: { flexDirection: 'row', alignItems: 'center' },
   headerTitle: { paddingLeft: 3, fontSize: 16, fontWeight: '800', color: InkColors.ink },
 });

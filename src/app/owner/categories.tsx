@@ -32,8 +32,9 @@ export default function OwnerCategoriesScreen() {
         options={{
           // 탭 루트(뒤로가기 없음) — 네이티브 타이틀 앵커(~17px)를 콘텐츠 거터(20)로 맞춰
           // paddingLeft 3 = 20-17.
-          headerTitleAlign: 'left',
-          headerTitle: () => <Text style={styles.headerTitle}>노하우</Text>,
+          // ★왼쪽 슬롯에 넣는다 — `headerTitleAlign` 은 iOS native-stack 에 없는 옵션이라 무시된다(_layout 주석).
+          headerTitle: () => null,
+          headerLeft: () => <Text style={styles.headerTitle}>노하우</Text>,
         }}
       />
 
