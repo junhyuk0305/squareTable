@@ -34,6 +34,7 @@ import {
   closedDaysLabel,
   WEEKDAY_LABELS,
 } from '@/lib/utils/schedule';
+import { useGuideOnce } from '@/lib/store/useGuideStore';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Elevation, Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
@@ -63,6 +64,9 @@ export default function OwnerScheduleScreen() {
   const scheduleLoadError = useScheduleStore((s) => s.loadError);
   const retrySchedule = useScheduleStore((s) => s.retry);
   const ready = staffLoaded && scheduleLoaded;
+
+  // 근무표 사용 안내.
+  useGuideOnce('owner_schedule_v1', ready);
 
   const today = todayStr();
   // 날짜 선택 UI는 주간 스트립 **하나뿐**이다. 보이는 주는 선택일에서 파생(월요일 시작 — 기존 규칙 유지).

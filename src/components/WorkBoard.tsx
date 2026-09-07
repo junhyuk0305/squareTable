@@ -30,6 +30,7 @@ import { LoadErrorState } from '@/components/LoadErrorState';
 import { Appear, stagger } from '@/components/Appear';
 import { KeyboardShift } from '@/components/KeyboardShift';
 import { useRoomStore } from '@/lib/store/useRoomStore';
+import { useGuideOnce } from '@/lib/store/useGuideStore';
 import { WorkChat } from '@/components/work/WorkChat';
 import { RoomBar, ROOMBAR_INSET } from '@/components/work/RoomBar';
 import { RoomDrawer } from '@/components/work/RoomDrawer';
@@ -179,6 +180,10 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
   const staffLoaded = useStaffStore((s) => s.loaded);
   const scheduleLoaded = useScheduleStore((s) => s.loaded);
   const boardLoaded = workLoaded && roomLoaded && playbookLoaded && staffLoaded && scheduleLoaded;
+
+  // 업무 사용 안내 — **직원에게만**. 이 컴포넌트는 사장도 쓰므로 세션 역할로 가른다
+  // (prop `role` 은 화면 세트라 매니저가 직원 세트로 들어오면 직원으로 잘못 잡힌다 — 위 주석과 같은 이유).
+  useGuideOnce('junior_work_v1', boardLoaded && !isOwner);
   // ★이 화면의 **본문 두 축**(업무·방)이 실패하면 "할 일이 없어요"·"방이 없어요"로 위장된다(#56·#34).
   //   특히 fetchDone 실패는 완료 체크를 전부 미완료로 보이게 해 **직원이 이미 끝낸 일을 다시 한다.**
   //   노하우·직원·근무표는 이 화면의 부가 정보라 게이트에 넣지 않는다(배너가 맡는다).

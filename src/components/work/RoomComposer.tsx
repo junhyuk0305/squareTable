@@ -234,8 +234,9 @@ const s = StyleSheet.create({
   // ★BottomSheet 은 좌우 패딩을 주지 않는다 — 내용이 직접 넣는다(TaskComposerModal 과 같은 규칙).
   //   안 넣으면 글자가 시트 모서리에 붙는다(2026-08-19 실측).
   sheet: { maxHeight: '86%', paddingBottom: Space.lg },
-  title: { fontSize: 17, fontWeight: '800', color: InkColors.ink, paddingHorizontal: Space.gutter, paddingBottom: Space.md },
-  scroll: { flexGrow: 0, paddingHorizontal: Space.gutter },
+  // 시트 좌우 여백은 lg(16) — 화면 거터(gutter 20)가 아니라 시트 표준을 따른다(kit 의 qst.body).
+  title: { fontSize: 17, fontWeight: '800', color: InkColors.ink, paddingHorizontal: Space.lg, paddingBottom: Space.md },
+  scroll: { flexGrow: 0, paddingHorizontal: Space.lg },
 
   // 안내박스는 기존 형태(TaskComposerModal.infoNote)를 그대로 쓴다 — 새 색을 만들지 않는다.
   personalNote: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, backgroundColor: InkColors.bgSoft, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md, padding: Space.md, marginBottom: Space.lg },

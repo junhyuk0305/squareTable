@@ -71,10 +71,11 @@ const styles = StyleSheet.create({
   sheet: { maxHeight: '70%', paddingBottom: Space.xl },
   title: {
     fontSize: 16, fontWeight: '900', color: InkColors.ink,
-    paddingHorizontal: Space.gutter, paddingTop: Space.sm,
+    // 시트 좌우 여백은 lg(16) — 화면 거터(gutter 20)가 아니라 시트 표준을 따른다(kit 의 qst.body).
+    paddingHorizontal: Space.lg, paddingTop: Space.sm,
   },
-  hint: { fontSize: 12.5, color: InkColors.ink3, paddingHorizontal: Space.gutter, marginTop: 2 },
-  list: { paddingHorizontal: Space.gutter, marginTop: Space.sm },
+  hint: { fontSize: 12.5, color: InkColors.ink3, paddingHorizontal: Space.lg, marginTop: 2 },
+  list: { paddingHorizontal: Space.lg, marginTop: Space.sm },
   row: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, minHeight: 48 },
   rowTop: { borderTopWidth: 1, borderTopColor: InkColors.line },
   rowTitle: { flex: 1, fontSize: 15, fontWeight: '700', color: InkColors.ink, minWidth: 0 },

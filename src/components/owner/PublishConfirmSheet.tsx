@@ -364,7 +364,8 @@ export function PublishConfirmSheet({
 
 const styles = StyleSheet.create({
   sheet: { maxHeight: '85%' },
-  body: { paddingHorizontal: Space.gutter, paddingTop: Space.sm, paddingBottom: Space.xl, gap: Space.md },
+  // 시트 좌우 여백은 lg(16) — 화면 거터(gutter 20)가 아니라 시트 표준을 따른다(kit 의 qst.body).
+  body: { paddingHorizontal: Space.lg, paddingTop: Space.sm, paddingBottom: Space.xl, gap: Space.md },
   title: { fontSize: 17, fontWeight: '800', color: InkColors.ink },
 
   warnCard: { backgroundColor: InkColors.bgSoft, borderRadius: Radius.md, padding: Space.md, gap: Space.sm },

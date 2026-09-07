@@ -1093,6 +1093,7 @@ export default function QuizNewScreen() {
             title="파트 추가"
             onClose={() => { setPartAdding(false); setPartName(''); setDupPart(null); setPartFailed(false); }}
           />
+          <View style={st.sheetBody}>
           <Text style={st.sheetLead}>홀·주방처럼 자리 이름을 적어 주세요. 이 매장에서만 써요.</Text>
           <TextInput
             value={partName}
@@ -1129,6 +1130,7 @@ export default function QuizNewScreen() {
               disabled={partBusy || !partName.trim()}
               onPress={() => void addPart()}
             />
+          </View>
           </View>
         </BottomSheet>
       )}
@@ -1321,6 +1323,9 @@ const st = StyleSheet.create({
   catChipTextOn: { color: '#FFFFFF', fontWeight: '800' },
   catDot: { width: 8, height: 8, borderRadius: 4 },
 
+  // 시트 본문 여백 — 값은 kit 의 `qst.body`(좌우 16 · 아래 20)와 같다. 없으면 입력칸·버튼이
+  // 시트 좌우 끝에 붙어 SheetHead(16)와 왼쪽 선이 어긋난다.
+  sheetBody: { paddingHorizontal: Space.lg, paddingBottom: Space.gutter },
   sheetLead: { fontSize: 15, fontWeight: '600', color: InkColors.ink2, lineHeight: 22, marginBottom: Space.md },
   sheetFoot: { flexDirection: 'row', gap: Space.sm, marginTop: Space.lg },
 

@@ -277,7 +277,8 @@ const styles = StyleSheet.create({
   btnPrimaryText: { fontSize: 13.5, fontWeight: '800', color: '#FFFFFF' },
 
   // 반려 사유 시트
-  declineSheet: { paddingHorizontal: 20, paddingBottom: 20, gap: 10 },
+  // 시트 좌우 여백 16 — 화면 거터(20)가 아니라 시트 표준을 따른다(kit 의 qst.body).
+  declineSheet: { paddingHorizontal: 16, paddingBottom: 20, gap: 10 },
   declineTitle: { fontSize: 16, fontWeight: '800', color: InkColors.ink },
   declineSub: { fontSize: 12.5, color: InkColors.ink3, fontWeight: '600' },
   declineInput: { borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.sm, paddingHorizontal: 13, paddingVertical: 11, fontSize: 15, color: InkColors.ink, backgroundColor: InkColors.cream, minHeight: 72, textAlignVertical: 'top' },

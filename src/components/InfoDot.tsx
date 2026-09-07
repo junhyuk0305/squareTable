@@ -81,7 +81,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderTopLeftRadius: Radius.sheet,
     borderTopRightRadius: Radius.sheet,
-    paddingHorizontal: 22,
+    // 시트 좌우 여백 16 — 시트 표준을 따른다(kit 의 qst.body). 22 는 이 시트만 쓰던 값이었다.
+    paddingHorizontal: 16,
     paddingTop: 12,
     paddingBottom: 28,
     gap: 12,

@@ -3,6 +3,7 @@ import { KeyboardShift } from '@/components/KeyboardShift';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack } from 'expo-router';
 import { usePayrollStore } from '@/lib/store/usePayrollStore';
+import { useGuideOnce } from '@/lib/store/useGuideStore';
 import { RoleTabBar } from '@/components/RoleTabBar';
 import { ScreenLoading } from '@/components/ScreenLoading';
 import { ChachakSwitch } from '@/components/ChachakSwitch';
@@ -24,6 +25,9 @@ export default function OwnerPayrollScreen() {
   //   DB 값 도착 후 스스로 뒤집힌다(그 사이 누른 값은 반대로 저장된다).
   //   설정 성격 화면이라 등장 애니메이션은 의도적으로 넣지 않는다 — 게이트만 둔다.
   const ready = usePayrollStore((s) => s.settingsLoaded);
+
+  // 급여 설정 사용 안내.
+  useGuideOnce('owner_payroll_v1', ready);
 
   return (
     <SafeAreaView style={styles.safe} edges={[]}>

@@ -25,6 +25,7 @@ import { Sparkline } from '@/components/blocks/Sparkline';
 import { StatCard, type StatCardItem } from '@/components/blocks/StatCardGrid';
 import { ProgressPill, type ProgressTone } from '@/components/blocks/ProgressPill';
 import { SheetHead, PrimaryButton, GhostButton } from '@/components/owner/quiz/kit';
+import { useGuideOnce } from '@/lib/store/useGuideStore';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
 import { Space, HEADER_EDGE_GUTTER } from '@/lib/theme/layout';
@@ -116,6 +117,9 @@ export default function OwnerTrainingScreen() {
 
   /** 그릴 준비 — 퀴즈 판(boardLoaded)과 링크 응시 결과가 **둘 다** 와야 한다. */
   const ready = boardLoaded && guestsLoaded;
+
+  // 퀴즈 화면 사용 안내.
+  useGuideOnce('owner_quiz_v1', ready);
 
   /**
    * 히어로가 말하는 값 — 적어 둔 노하우 중 **문제를 낸 것**이 몇 개인가.
@@ -493,8 +497,10 @@ export default function OwnerTrainingScreen() {
       {boxOpen && (
         <BottomSheet visible onClose={() => setBoxOpen(false)}>
           <SheetHead title="보관함" onClose={() => setBoxOpen(false)} />
-          <Text style={st.missIntro}>보관한 퀴즈는 직원에게 안 나가요. 다시 보내면 그대로 살아나요.</Text>
           <ScrollView style={st.sheetScroll} showsVerticalScrollIndicator={false}>
+            {/* 안내문은 스크롤 **안**에 둔다 — 밖에 두면 좌우 여백(sheetScroll)을 못 받아
+                시트 양끝에 붙는다. 위 두 시트(고칠 퀴즈·합류 전 응시)와 같은 자리다. */}
+            <Text style={st.missIntro}>보관한 퀴즈는 직원에게 안 나가요. 다시 보내면 그대로 살아나요.</Text>
             <View style={st.listCard}>
               {archived.map((c, i) => {
                 /* §10-3 재배포 고지 — 근거 노하우가 바뀐 보관 퀴즈는 그대로 보내면 옛 정답이 나간다.
@@ -781,7 +787,10 @@ const st = StyleSheet.create({
   foldText: { flex: 1, minWidth: 0, fontSize: 15, fontWeight: '800', color: InkColors.ink2 },
   // 좌우 여백 = 시트 머리말(SheetHead 16)과 같은 lg. 없으면 목록 카드가 시트 양끝에 붙고
   // 섹션 제목(자체 패딩 4)과 카드의 왼쪽 선이 어긋났다(2026-09-03 웹 실측 피드백). 세 시트가 같이 쓴다.
-  sheetScroll: { maxHeight: 420, paddingHorizontal: Space.lg },
+  // paddingBottom — 없으면 목록 카드 마지막 줄이 시트 바닥선에 그대로 붙는다(웹은 insets.bottom 이 0
+  // 이라 BottomSheet 의 안전영역 스페이서도 안 생긴다). 값은 새로 정하지 않고 같은 계열의 정본인
+  // kit 의 `qst.body`(좌우 16 · 아래 20)를 따른다 — 퀴즈 시트 4개가 이미 그 값이다.
+  sheetScroll: { maxHeight: 420, paddingHorizontal: Space.lg, paddingBottom: Space.gutter },
 
   footNote: { fontSize: 13, fontWeight: '600', color: InkColors.ink3, textAlign: 'center' },
   missIntro: { fontSize: 15, lineHeight: 22, color: InkColors.ink2, marginBottom: Space.md },

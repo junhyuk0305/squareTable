@@ -6,6 +6,8 @@ import { Stack, useRouter } from 'expo-router';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useMemberPrefsStore, DEFAULT_MEMBER_PREF } from '@/lib/store/useMemberPrefsStore';
 import { usePayrollStore, useWagesSettled } from '@/lib/store/usePayrollStore';
+import { replayGuides as replayGuidesFor } from '@/lib/store/useGuideStore';
+import { showToast } from '@/lib/store/useToastStore';
 import { notifyAction } from '@/lib/utils/confirm';
 import { won } from '@/lib/utils/attendance';
 import { storeColor } from '@/lib/utils/storeColor';
@@ -176,6 +178,23 @@ export default function StoreSettings() {
           <View style={{ flex: 1 }}>
             <Text style={styles.outLabel}>전체 계정 설정</Text>
             <Text style={styles.outHint}>프로필·글자 크기·약관·로그아웃</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={17} color={InkColors.ink3} />
+        </Pressable>
+        {/* 한 번 건너뛴 안내는 이것 말고는 다시 볼 방법이 없다(기기 저장소를 직접 지워야 한다). */}
+        <Pressable
+          onPress={() => {
+            replayGuidesFor('junior');
+            showToast('사용 안내를 다시 켰어요. 각 화면에 들어가면 나와요.');
+          }}
+          style={({ pressed }) => [styles.outRow, pressed && { opacity: 0.6 }]}
+          accessibilityRole="button"
+          accessibilityLabel="사용 안내 다시 보기"
+        >
+          <Ionicons name="help-circle-outline" size={19} color={InkColors.ink2} style={styles.outIcon} />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.outLabel}>사용 안내 다시 보기</Text>
+            <Text style={styles.outHint}>화면에 처음 들어갈 때 뜨는 안내를 다시 켜요</Text>
           </View>
           <Ionicons name="chevron-forward" size={17} color={InkColors.ink3} />
         </Pressable>

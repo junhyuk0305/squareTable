@@ -7,6 +7,8 @@ import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useMemberPrefsStore, DEFAULT_MEMBER_PREF } from '@/lib/store/useMemberPrefsStore';
 import { useWorkStore } from '@/lib/store/useWorkStore';
 import { useHubStore } from '@/lib/store/useHubStore';
+import { replayGuides as replayGuidesFor } from '@/lib/store/useGuideStore';
+import { showToast } from '@/lib/store/useToastStore';
 import { PLANS } from '@/lib/config/tiers';
 import { storeColor } from '@/lib/utils/storeColor';
 import { notifyAction } from '@/lib/utils/confirm';
@@ -98,6 +100,10 @@ export default function OwnerSettings() {
     setDraftName(pref.nickname ?? '');
     setDraftColor(pref.color);
     setPersonalize(true);
+  };
+  const replayGuides = () => {
+    replayGuidesFor('owner');
+    showToast('사용 안내를 다시 켰어요. 각 화면에 들어가면 나와요.');
   };
   const savePref = async (patch: Parameters<typeof savePrefStore>[1]) => {
     if (!unitId) return;
@@ -215,6 +221,13 @@ export default function OwnerSettings() {
             label="전체 계정 설정"
             hint="프로필·푸시 수신·요금제·글자 크기·약관·로그아웃"
             onPress={() => router.push('/account-settings')}
+          />
+          {/* 한 번 건너뛴 안내는 이것 말고는 다시 볼 방법이 없다(기기 저장소를 직접 지워야 한다). */}
+          <SettingsRow
+            icon="help-circle-outline"
+            label="사용 안내 다시 보기"
+            hint="화면에 처음 들어갈 때 뜨는 안내를 다시 켜요"
+            onPress={replayGuides}
           />
         </SettingsSection>
 

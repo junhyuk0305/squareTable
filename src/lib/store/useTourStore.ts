@@ -29,6 +29,8 @@ type TourState = {
   loaded: boolean;
   hydrate: () => Promise<void>;
   markSeen: (id: string) => void;
+  /** '본 적 있음'을 지운다(설정의 '사용 안내 다시 보기'). 넘긴 id만 지운다. */
+  forget: (ids: readonly string[]) => void;
 };
 
 export const useTourStore = create<TourState>((set, get) => ({
@@ -41,11 +43,21 @@ export const useTourStore = create<TourState>((set, get) => ({
   markSeen: (id) => {
     const seen = { ...get().seen, [id]: true };
     set({ seen });
-    void Promise.resolve(authStorage.setItem(KEY, JSON.stringify(seen))).catch(() => {
-      /* 기기 저장 실패는 이번 세션만 잃는다 — 화면을 막지 않는다. */
-    });
+    persist(seen);
+  },
+  forget: (ids) => {
+    const seen = { ...get().seen };
+    for (const id of ids) delete seen[id];
+    set({ seen });
+    persist(seen);
   },
 }));
+
+function persist(seen: Seen) {
+  void Promise.resolve(authStorage.setItem(KEY, JSON.stringify(seen))).catch(() => {
+    /* 기기 저장 실패는 이번 세션만 잃는다 — 화면을 막지 않는다. */
+  });
+}
 
 /** 특정 투어를 이미 봤는지(셀렉터). */
 export const useTourSeen = (id: string) => useTourStore((s) => !!s.seen[id]);

@@ -12,6 +12,7 @@ import { SyncBanner } from '@/components/SyncBanner';
 import { StoreEnterCover } from '@/components/StoreEnterCover';
 import { Toast } from '@/components/Toast';
 import { DialogHost } from '@/components/DialogHost';
+import { GuideHost } from '@/components/GuideHost';
 import { TextScaleTransition } from '@/components/settings/TextScaleTransition';
 import { FreeUntilNotice } from '@/components/FreeUntilNotice';
 import { VoiceRecorderBinder } from '@/components/VoiceRecorderBinder';
@@ -110,6 +111,8 @@ export default function RootLayout() {
         <VoiceRecorderBinder />
         <Toast />
         <DialogHost />
+        {/* 사용 안내 팝업 — DialogHost 와 같은 자리(프레임 안, 1회 마운트). */}
+        <GuideHost />
         {/* 글자 크기 전환 로딩 오버레이 — Stack 바깥이라 key 리마운트에도 살아남아 깜빡임을 가린다. */}
         <TextScaleTransition />
         {splashDone && signedIn && <FreeUntilNotice />}

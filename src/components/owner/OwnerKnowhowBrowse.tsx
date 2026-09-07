@@ -9,6 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { useWorkStore } from '@/lib/store/useWorkStore';
 import { useSessionStore } from '@/lib/store/useSessionStore';
+import { useGuideOnce } from '@/lib/store/useGuideStore';
 import { useUnknownQueueStore } from '@/lib/store/useUnknownQueueStore';
 import { useSuggestionStore } from '@/lib/store/useSuggestionStore';
 import { fetchAiAnswers, type AiAnswerRow } from '@/lib/db';
@@ -735,6 +736,11 @@ export function OwnerKnowhowBrowse({
   //   이 게이트 안이라 0건으로 먼저 그려지지 않는다 — 그래서 게이트가 SegmentTabs 위에 있다.
   //   (행마다 '업무 n개에 쓰임'이 0→N으로 바뀌던 것도 workLoaded 가 게이트에 들어와 사라진다.)
   const ready = loaded && workLoaded && queueLoaded && suggestionsLoaded && aiLoaded;
+
+  // 노하우 사용 안내 — 이 컴포넌트에 붙인다. 진입점이 둘이라(노하우 탭 /owner/categories,
+  // 서브화면 /owner/knowledge) 화면 파일에 붙이면 한쪽으로 들어온 사장은 못 본다.
+  useGuideOnce('owner_knowhow_v1', ready);
+
   if (!ready) {
     return (
       <View style={styles.flex}>

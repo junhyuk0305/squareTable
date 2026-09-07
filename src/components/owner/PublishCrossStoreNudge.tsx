@@ -110,7 +110,8 @@ export function PublishCrossStoreNudge({
 }
 
 const s = StyleSheet.create({
-  body: { paddingHorizontal: Space.md, paddingTop: 4, paddingBottom: 18 },
+  // 시트 좌우 여백은 lg(16) — 시트 표준을 따른다(kit 의 qst.body). md(12)는 이 시트만 좁았다.
+  body: { paddingHorizontal: Space.lg, paddingTop: 4, paddingBottom: 18 },
   title: { fontSize: 16, lineHeight: 23, fontWeight: '800', color: InkColors.ink },
   sub: { fontSize: 12.5, lineHeight: 18, color: InkColors.ink3, fontWeight: '600', marginTop: 4 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.sm, marginTop: 14 },

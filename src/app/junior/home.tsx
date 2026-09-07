@@ -14,6 +14,7 @@ import { AlertRow } from '@/components/blocks/AlertRow';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { hhmm } from '@/lib/utils/attendance';
 import { useJuniorHomeData } from '@/lib/hooks/useJuniorHomeData';
+import { useGuideOnce } from '@/lib/store/useGuideStore';
 import { useWorkStore } from '@/lib/store/useWorkStore';
 import { confirmAction } from '@/lib/utils/confirm';
 import { styles } from '@/styles/juniorHomeStyles';
@@ -56,6 +57,9 @@ export default function JuniorHomeScreen() {
     today,
     openQuizCount,
   } = useJuniorHomeData();
+
+  // 첫 진입 사용 안내 — 본문이 다 선 뒤에만(loaded 전엔 빈 화면 위에 뜬다).
+  useGuideOnce('junior_home_v1', loaded);
 
   // 오늘 업무: 홈에서 직접 완료(2026-09-03) — 사장 홈과 같은 toggleTask 하나(판정을 두 벌로 만들지 않는다).
   const toggleTask = useWorkStore((s) => s.toggleTask);

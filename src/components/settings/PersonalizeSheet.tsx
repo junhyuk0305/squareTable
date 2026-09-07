@@ -73,9 +73,10 @@ export function PersonalizeSheet({
 }
 
 const styles = StyleSheet.create({
-  sheetHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingBottom: 8 },
+  // 시트 좌우 여백 16 — 화면 거터(20)가 아니라 시트 표준을 따른다(kit 의 qst.body).
+  sheetHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingBottom: 8 },
   sheetTitle: { fontSize: 16, fontWeight: '900', color: InkColors.ink },
-  sheetBody: { paddingHorizontal: 20, paddingTop: 6 },
+  sheetBody: { paddingHorizontal: 16, paddingTop: 6 },
   fieldLabel: { fontSize: 12.5, fontWeight: '800', color: InkColors.ink2, marginBottom: 8 },
   fieldHint: { fontSize: 12, color: InkColors.ink3, marginTop: 6 },
   input: { borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, color: InkColors.ink, backgroundColor: InkColors.bg },

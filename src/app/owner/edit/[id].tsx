@@ -358,9 +358,10 @@ const styles = StyleSheet.create({
   catBarValue: { fontSize: 13.5, fontWeight: '800', color: InkColors.ink },
   catDot: { width: 8, height: 8, borderRadius: Radius.pill },
   catSheet: { maxHeight: '70%', paddingBottom: Space.xl },
-  catSheetTitle: { fontSize: 16, fontWeight: '800', color: InkColors.ink, paddingHorizontal: Space.gutter, paddingTop: Space.sm },
-  catSheetHint: { fontSize: 12.5, color: InkColors.ink3, paddingHorizontal: Space.gutter, marginTop: 2, marginBottom: Space.md },
-  catChips: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.sm, paddingHorizontal: Space.gutter },
+  // 시트 좌우 여백은 lg(16) — 화면 거터(gutter 20)가 아니라 시트 표준을 따른다(kit 의 qst.body).
+  catSheetTitle: { fontSize: 16, fontWeight: '800', color: InkColors.ink, paddingHorizontal: Space.lg, paddingTop: Space.sm },
+  catSheetHint: { fontSize: 12.5, color: InkColors.ink3, paddingHorizontal: Space.lg, marginTop: 2, marginBottom: Space.md },
+  catChips: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.sm, paddingHorizontal: Space.lg },
   catChip: {
     flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 40,
     paddingVertical: Space.sm, paddingHorizontal: Space.md,

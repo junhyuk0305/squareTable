@@ -1,5 +1,8 @@
-// 스토어 심사 규칙 때문에 플랫폼별로 감춰야 하는 표면의 판정 SSOT.
+// 플랫폼 **정책 차이**(스토어 규정·법·사업 판단으로 "보이나/안 보이나·어느 채널인가"가 갈리는 것)의 판정 SSOT.
 // 화면은 이 파일의 상수만 읽는다 — Platform.OS 를 화면에서 직접 보지 않는다(2곳 복제 금지).
+// 상수 이름은 플랫폼이 아니라 이유로 짓는다(IS_IOS ✗ → SHOW_BILLING ✓). 각 상수 위에 근거를 남긴다.
+// 플랫폼 API 가 달라 코드가 갈리는 **구현 차이**는 여기가 아니라 확장자 쌍(.web/.ios/.android)으로 —
+// 절차: .claude/rules/platform.md · /platform-split.
 //
 // ★ SHOW_BILLING=false (iOS 네이티브)
 //   근거: App Review Guideline 3.1.3(f) Free Stand-alone Apps —
@@ -44,3 +47,13 @@ export function showPaymentSurface(freeMode: boolean): boolean {
 
 /** 소셜 로그인 버튼을 노출해도 되는가. */
 export const SHOW_SOCIAL_LOGIN = !IS_IOS_NATIVE;
+
+/**
+ * 사용 안내 팝업 가이드(GuideHost)를 띄워도 되는가 — **단계적 적용 축**.
+ *
+ * 코드 자체는 플랫폼을 가리지 않는다(ConfirmModal 과 같은 Modal + frameCapStyle).
+ * 다만 네이티브는 edge-to-edge 에서 Modal 이 translucent 로 강제되는 자리가 있어
+ * 딤이 상태바·내비바까지 제대로 덮는지 **실기기로 봐야** 판정이 선다.
+ * → 웹에서 먼저 검증하고, 실기기 확인이 끝나면 이 상수만 지운다(화면 코드는 안 건드린다).
+ */
+export const SHOW_GUIDE_POPUP = !IS_NATIVE;

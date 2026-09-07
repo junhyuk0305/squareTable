@@ -467,12 +467,14 @@ export default function QuizDetailScreen() {
       {moreOpen && (
         <BottomSheet visible onClose={() => setMoreOpen(false)}>
           <SheetHead title={course.name} onClose={() => setMoreOpen(false)} />
-          <SheetOption label="이름·설정 고치기" onPress={() => { setMoreOpen(false); setEditOpen(true); }} />
-          <SheetOption label="문항 다시 보기" onPress={() => { setMoreOpen(false); setSeg('items'); }} />
-          <SheetOption label="이 업무에 붙이기" badge="선택" onPress={() => { setMoreOpen(false); setAttachOpen(true); }} />
-          <SheetOption label="링크 만들기" onPress={() => { setMoreOpen(false); setLinkOpen(true); }} />
-          <SheetOption label="이걸로 다시 만들기" onPress={() => { setMoreOpen(false); void duplicate(); }} />
-          <SheetOption label="보관하기" danger onPress={() => { setMoreOpen(false); void archive(); }} />
+          <View style={st.sheetBody}>
+            <SheetOption label="이름·설정 고치기" onPress={() => { setMoreOpen(false); setEditOpen(true); }} />
+            <SheetOption label="문항 다시 보기" onPress={() => { setMoreOpen(false); setSeg('items'); }} />
+            <SheetOption label="이 업무에 붙이기" badge="선택" onPress={() => { setMoreOpen(false); setAttachOpen(true); }} />
+            <SheetOption label="링크 만들기" onPress={() => { setMoreOpen(false); setLinkOpen(true); }} />
+            <SheetOption label="이걸로 다시 만들기" onPress={() => { setMoreOpen(false); void duplicate(); }} />
+            <SheetOption label="보관하기" danger onPress={() => { setMoreOpen(false); void archive(); }} />
+          </View>
         </BottomSheet>
       )}
 
@@ -480,6 +482,7 @@ export default function QuizDetailScreen() {
       {editOpen && (
         <BottomSheet visible onClose={() => setEditOpen(false)}>
           <SheetHead title="이름·설정 고치기" onClose={() => setEditOpen(false)} />
+          <View style={st.sheetBody}>
           {sentUserIds.length > 0 && (
             <View style={st.infoBar}>
               <Text style={st.infoBarText}>이미 {sentUserIds.length}명에게 보낸 퀴즈예요</Text>
@@ -521,6 +524,7 @@ export default function QuizDetailScreen() {
           >
             <Text style={st.primaryText}>저장</Text>
           </Pressable>
+          </View>
         </BottomSheet>
       )}
 
@@ -690,6 +694,9 @@ const st = StyleSheet.create({
   },
   smallActText: { fontSize: 13, fontWeight: '800', color: InkColors.ink2 },
 
+  // 시트 본문 여백 — 값은 kit 의 `qst.body`(좌우 16 · 아래 20)와 같다. 없으면 카드·입력칸이
+  // 시트 좌우 끝에 붙어 SheetHead(16)와 왼쪽 선이 어긋난다(2026-09-03 웹 실측과 같은 결함).
+  sheetBody: { paddingHorizontal: Space.lg, paddingBottom: Space.gutter },
   opt: {
     flexDirection: 'row', alignItems: 'center', gap: Space.sm,
     minHeight: 56, paddingHorizontal: Space.lg, marginTop: Space.sm,
