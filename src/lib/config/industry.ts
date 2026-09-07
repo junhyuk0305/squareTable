@@ -23,3 +23,17 @@ export const INDUSTRIES = [
 ] as const;
 
 export type Industry = (typeof INDUSTRIES)[number];
+
+/** 홀·주방이 있는 음식점 계열 — 음식점 전용 노하우팩(restaurant)과 '주방·조리' 챕터가 붙는 업종. 배달전문은 홀이 없어 제외. */
+export const RESTAURANT_INDUSTRIES: Industry[] = [
+  '브런치·양식',
+  '음식점·식당',
+  '한식·백반',
+  '고깃집·구이',
+  '치킨·호프',
+  '분식·패스트푸드',
+  '피자·버거',
+  '중식',
+  '일식·초밥',
+  '주점·바',
+];

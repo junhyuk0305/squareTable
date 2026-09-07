@@ -34,6 +34,7 @@ const OUT = join(__dirname, '..', 'src', 'data', 'knowhow-packs.json');
 const PACK_FILES = [
   { file: '_공통.md', pack_id: 'common' },
   { file: '카페.md', pack_id: 'cafe' },
+  { file: '음식점.md', pack_id: 'restaurant' },
 ];
 
 // 한글 카테고리 라벨 → 내부 Category 코드
@@ -52,6 +53,7 @@ const KNOWN_SECTIONS = new Set([
   '근무·인사',
   '비상 상황',
   '음료 제조', // 카페·디저트 전용
+  '주방·조리', // 음식점(홀+주방) 계열 전용 — sections.ts RESTAURANT_INDUSTRIES
 ]);
 
 // '멘트'는 2026-08-08 폐기됐지만 키 목록에는 남긴다 — 옛 팩 문서에 `- 멘트:` 줄이 남아 있어도

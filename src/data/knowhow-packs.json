@@ -241,7 +241,7 @@
         "steps": [
           "1) 카드 안되면 계좌이체/현금 안내, 주문은 수기 메모로 보존.",
           "2) 공유기/단말 재부팅 1회 시도.",
-          "3) 5분 내 복구 안 되면 사장 연락 + 대기 손님께 양해."
+          "3) 바로 복구 안 되면 사장 연락 + 대기 손님께 양해."
         ]
       },
       "result": {
@@ -450,7 +450,7 @@
         "steps": [
           "1) 현재 앞 팀 수와 예상 시간을 구체 숫자로 안내(막연한 \"곧\" 금지).",
           "2) 대기 명단·번호 순서를 손님이 보이게 관리, 새치기 방지.",
-          "3) 자리 나면 호명 후 일정 시간 미응답 시 다음 팀 안내 규칙대로."
+          "3) 자리 나면 호명하고, 응답 없으면 매장 기준대로 다음 팀을 안내한다."
         ]
       },
       "result": {
@@ -982,147 +982,6 @@
     "creator_id": "",
     "creator_name": "",
     "category": "Routine",
-    "section": "오픈",
-    "subcategory": "오픈",
-    "title": "오픈 준비 표준 순서",
-    "tags": [
-      "#오픈",
-      "#준비",
-      "#체크리스트"
-    ],
-    "search_keywords": [
-      "오픈",
-      "준비",
-      "시작",
-      "켜는거",
-      "순서"
-    ],
-    "square": {
-      "situation": "오픈조 첫 1시간.",
-      "quagmire": "",
-      "uncover": "",
-      "action": {
-        "steps": [
-          "1) 조명·간판·POS·결제단말 전원 → 정상 확인.",
-          "2) 위생(손세정·앞치마)·냉장 온도 체크.",
-          "3) 재료 선입선출 정렬, 부족분 메모.",
-          "4) 화장실·홀 청결 1차."
-        ]
-      },
-      "result": {
-        "before": "",
-        "after": "",
-        "metric": ""
-      },
-      "extract": {
-        "do": "",
-        "dont": "온도 체크 생략, 유통기한 미확인 진열.",
-        "template": ""
-      }
-    },
-    "execution": {
-      "timing": "오픈 1시간 전",
-      "channel": "",
-      "tone": "꼼꼼"
-    },
-    "stats": {
-      "query_hits_30d": 0,
-      "resolution_rate": 0,
-      "thumbs_up": 0,
-      "thumbs_down": 0,
-      "last_used_at": ""
-    },
-    "photos": [],
-    "version": 1,
-    "status": "published",
-    "quality_score": 0,
-    "created_at": "",
-    "updated_at": "",
-    "is_template": true,
-    "pack_id": "common",
-    "needs_review": true,
-    "correction_points": [
-      "기기 전원 위치, 냉장 적정온도, 오픈 시각"
-    ],
-    "recommended": true
-  },
-  {
-    "id": "tpl_common_016",
-    "unit_id": "",
-    "creator_id": "",
-    "creator_name": "",
-    "category": "Routine",
-    "section": "마감",
-    "subcategory": "마감",
-    "title": "마감 표준 순서",
-    "tags": [
-      "#마감",
-      "#정산",
-      "#청소"
-    ],
-    "search_keywords": [
-      "마감",
-      "정산",
-      "끄는거",
-      "문단속",
-      "시재",
-      "청소"
-    ],
-    "square": {
-      "situation": "마감조 종료 1시간.",
-      "quagmire": "",
-      "uncover": "",
-      "action": {
-        "steps": [
-          "1) 주문 마감 안내 → 홀 정리.",
-          "2) POS 정산(현금 시재 대조), 차액 발생 시 메모+사장 보고.",
-          "3) 식재 밀폐·냉장, 폐기 대상 분리.",
-          "4) 가스·전원·문단속, 마지막 사진 1장 사장 공유."
-        ]
-      },
-      "result": {
-        "before": "",
-        "after": "",
-        "metric": ""
-      },
-      "extract": {
-        "do": "",
-        "dont": "시재 차액 임의 보충/은폐, 가스 미점검.",
-        "template": ""
-      }
-    },
-    "execution": {
-      "timing": "마감 1시간",
-      "channel": "",
-      "tone": "꼼꼼"
-    },
-    "stats": {
-      "query_hits_30d": 0,
-      "resolution_rate": 0,
-      "thumbs_up": 0,
-      "thumbs_down": 0,
-      "last_used_at": ""
-    },
-    "photos": [],
-    "version": 1,
-    "status": "published",
-    "quality_score": 0,
-    "created_at": "",
-    "updated_at": "",
-    "is_template": true,
-    "pack_id": "common",
-    "needs_review": true,
-    "correction_points": [
-      "POS 정산법, 시재 차액 보고선, 가스밸브 위치"
-    ],
-    "recommended": true
-  },
-  {
-    "id": "tpl_common_017",
-    "unit_id": "",
-    "creator_id": "",
-    "creator_name": "",
-    "category": "Routine",
     "section": "재고·발주",
     "subcategory": "재고",
     "title": "재고 소진·발주 알림",
@@ -1188,7 +1047,7 @@
     "recommended": false
   },
   {
-    "id": "tpl_common_018",
+    "id": "tpl_common_016",
     "unit_id": "",
     "creator_id": "",
     "creator_name": "",
@@ -1257,7 +1116,7 @@
     "recommended": false
   },
   {
-    "id": "tpl_common_019",
+    "id": "tpl_common_017",
     "unit_id": "",
     "creator_id": "",
     "creator_name": "",
@@ -1327,7 +1186,7 @@
     "recommended": false
   },
   {
-    "id": "tpl_common_020",
+    "id": "tpl_common_018",
     "unit_id": "",
     "creator_id": "",
     "creator_name": "",
@@ -1396,7 +1255,7 @@
     "recommended": false
   },
   {
-    "id": "tpl_common_021",
+    "id": "tpl_common_019",
     "unit_id": "",
     "creator_id": "",
     "creator_name": "",
@@ -1465,7 +1324,7 @@
     "recommended": false
   },
   {
-    "id": "tpl_common_022",
+    "id": "tpl_common_020",
     "unit_id": "",
     "creator_id": "",
     "creator_name": "",
@@ -1535,76 +1394,7 @@
     "recommended": false
   },
   {
-    "id": "tpl_common_023",
-    "unit_id": "",
-    "creator_id": "",
-    "creator_name": "",
-    "category": "Routine",
-    "section": "근무·인사",
-    "subcategory": "교대",
-    "title": "교대 인수인계",
-    "tags": [
-      "#교대",
-      "#인수인계",
-      "#공유"
-    ],
-    "search_keywords": [
-      "교대",
-      "인수인계",
-      "넘겨",
-      "다음 사람",
-      "전달"
-    ],
-    "square": {
-      "situation": "오픈조→마감조 등 근무 교대 시점.",
-      "quagmire": "",
-      "uncover": "",
-      "action": {
-        "steps": [
-          "1) 시재·예약·대기·미처리 클레임을 다음 조에 구두+메모로 전달.",
-          "2) 부족 재고·고장 기기 등 특이사항 공유.",
-          "3) 인수인계 내용 공용 메모/앱에 남기기."
-        ]
-      },
-      "result": {
-        "before": "",
-        "after": "",
-        "metric": ""
-      },
-      "extract": {
-        "do": "",
-        "dont": "말로만 넘기고 기록 없이 퇴근, 문제 숨기기.",
-        "template": ""
-      }
-    },
-    "execution": {
-      "timing": "교대 시",
-      "channel": "대면·텍스트",
-      "tone": "중립"
-    },
-    "stats": {
-      "query_hits_30d": 0,
-      "resolution_rate": 0,
-      "thumbs_up": 0,
-      "thumbs_down": 0,
-      "last_used_at": ""
-    },
-    "photos": [],
-    "version": 1,
-    "status": "published",
-    "quality_score": 0,
-    "created_at": "",
-    "updated_at": "",
-    "is_template": true,
-    "pack_id": "common",
-    "needs_review": true,
-    "correction_points": [
-      "인수인계 항목 체크리스트, 공유 채널"
-    ],
-    "recommended": false
-  },
-  {
-    "id": "tpl_common_024",
+    "id": "tpl_common_021",
     "unit_id": "",
     "creator_id": "",
     "creator_name": "",
@@ -1673,7 +1463,7 @@
     "recommended": false
   },
   {
-    "id": "tpl_common_025",
+    "id": "tpl_common_022",
     "unit_id": "",
     "creator_id": "",
     "creator_name": "",
@@ -1743,7 +1533,7 @@
     "recommended": false
   },
   {
-    "id": "tpl_common_026",
+    "id": "tpl_common_023",
     "unit_id": "",
     "creator_id": "",
     "creator_name": "",
@@ -1813,7 +1603,7 @@
     "recommended": false
   },
   {
-    "id": "tpl_common_027",
+    "id": "tpl_common_024",
     "unit_id": "",
     "creator_id": "",
     "creator_name": "",
@@ -1882,7 +1672,7 @@
     "recommended": false
   },
   {
-    "id": "tpl_common_028",
+    "id": "tpl_common_025",
     "unit_id": "",
     "creator_id": "",
     "creator_name": "",
@@ -1951,7 +1741,7 @@
     "recommended": false
   },
   {
-    "id": "tpl_common_029",
+    "id": "tpl_common_026",
     "unit_id": "",
     "creator_id": "",
     "creator_name": "",
@@ -2021,7 +1811,7 @@
     "recommended": false
   },
   {
-    "id": "tpl_common_030",
+    "id": "tpl_common_027",
     "unit_id": "",
     "creator_id": "",
     "creator_name": "",
@@ -2090,7 +1880,7 @@
     "recommended": false
   },
   {
-    "id": "tpl_common_031",
+    "id": "tpl_common_028",
     "unit_id": "",
     "creator_id": "",
     "creator_name": "",
@@ -2159,7 +1949,7 @@
     "recommended": false
   },
   {
-    "id": "tpl_common_032",
+    "id": "tpl_common_029",
     "unit_id": "",
     "creator_id": "",
     "creator_name": "",
@@ -2229,7 +2019,7 @@
     "recommended": false
   },
   {
-    "id": "tpl_common_033",
+    "id": "tpl_common_030",
     "unit_id": "",
     "creator_id": "",
     "creator_name": "",
@@ -2299,7 +2089,7 @@
     "recommended": false
   },
   {
-    "id": "tpl_common_034",
+    "id": "tpl_common_031",
     "unit_id": "",
     "creator_id": "",
     "creator_name": "",
@@ -2366,7 +2156,7 @@
     "recommended": false
   },
   {
-    "id": "tpl_common_035",
+    "id": "tpl_common_032",
     "unit_id": "",
     "creator_id": "",
     "creator_name": "",
@@ -2435,7 +2225,7 @@
     "recommended": false
   },
   {
-    "id": "tpl_common_036",
+    "id": "tpl_common_033",
     "unit_id": "",
     "creator_id": "",
     "creator_name": "",
@@ -2505,7 +2295,7 @@
     "recommended": false
   },
   {
-    "id": "tpl_common_037",
+    "id": "tpl_common_034",
     "unit_id": "",
     "creator_id": "",
     "creator_name": "",
@@ -2575,7 +2365,7 @@
     "recommended": false
   },
   {
-    "id": "tpl_common_038",
+    "id": "tpl_common_035",
     "unit_id": "",
     "creator_id": "",
     "creator_name": "",
@@ -2645,76 +2435,7 @@
     "recommended": false
   },
   {
-    "id": "tpl_common_039",
-    "unit_id": "",
-    "creator_id": "",
-    "creator_name": "",
-    "category": "Know-how",
-    "section": "오픈",
-    "subcategory": "피크",
-    "title": "피크 전 미리 준비(밋업)",
-    "tags": [
-      "#피크",
-      "#준비",
-      "#밋업"
-    ],
-    "search_keywords": [
-      "미리 준비",
-      "피크 전",
-      "밑준비",
-      "소분",
-      "세팅"
-    ],
-    "square": {
-      "situation": "러시 시작 직전 30분~1시간.",
-      "quagmire": "",
-      "uncover": "",
-      "action": {
-        "steps": [
-          "1) 자주 나가는 메뉴 베이스·소스·재료를 미리 손질·소분.",
-          "2) 부족할 소모품(포장재·티슈)을 손 닿는 곳에 채워두기.",
-          "3) 동선·역할을 미리 분담해 러시 때 우왕좌왕 방지."
-        ]
-      },
-      "result": {
-        "before": "",
-        "after": "",
-        "metric": ""
-      },
-      "extract": {
-        "do": "",
-        "dont": "재료 떨어진 걸 러시 한복판에서 발견.",
-        "template": ""
-      }
-    },
-    "execution": {
-      "timing": "피크 30~60분 전",
-      "channel": "",
-      "tone": "꼼꼼"
-    },
-    "stats": {
-      "query_hits_30d": 0,
-      "resolution_rate": 0,
-      "thumbs_up": 0,
-      "thumbs_down": 0,
-      "last_used_at": ""
-    },
-    "photos": [],
-    "version": 1,
-    "status": "published",
-    "quality_score": 0,
-    "created_at": "",
-    "updated_at": "",
-    "is_template": true,
-    "pack_id": "common",
-    "needs_review": true,
-    "correction_points": [
-      "우리 매장 피크 시간대, 미리 깔 품목"
-    ],
-    "recommended": false
-  },
-  {
-    "id": "tpl_common_040",
+    "id": "tpl_common_036",
     "unit_id": "",
     "creator_id": "",
     "creator_name": "",
@@ -2790,421 +2511,6 @@
     "creator_name": "",
     "category": "Know-how",
     "section": "음료 제조",
-    "subcategory": "에스프레소",
-    "title": "아메리카노 농도 기준",
-    "tags": [
-      "#에스프레소",
-      "#농도",
-      "#레시피"
-    ],
-    "search_keywords": [
-      "농도",
-      "연하게",
-      "진하게",
-      "샷",
-      "아메리카노",
-      "물 많이"
-    ],
-    "square": {
-      "situation": "\"연하게/진하게 해달라\" 요청, 또는 신입이 기본 농도 모름.",
-      "quagmire": "",
-      "uncover": "",
-      "action": {
-        "steps": [
-          "1) 기본은 2샷. \"연하게\" = 물 더, \"진하게\" = 1샷 추가가 아니라 물 줄이기 우선.",
-          "2) ICE는 얼음 녹음 감안해 HOT보다 한 단계 진하게."
-        ]
-      },
-      "result": {
-        "before": "",
-        "after": "",
-        "metric": ""
-      },
-      "extract": {
-        "do": "",
-        "dont": "손님 요청 없이 임의 샷 추가(원가·맛 변동).",
-        "template": ""
-      }
-    },
-    "execution": {
-      "timing": "주문 시",
-      "channel": "대면",
-      "tone": "친절"
-    },
-    "stats": {
-      "query_hits_30d": 0,
-      "resolution_rate": 0,
-      "thumbs_up": 0,
-      "thumbs_down": 0,
-      "last_used_at": ""
-    },
-    "photos": [],
-    "version": 1,
-    "status": "published",
-    "quality_score": 0,
-    "created_at": "",
-    "updated_at": "",
-    "is_template": true,
-    "pack_id": "cafe",
-    "needs_review": true,
-    "correction_points": [
-      "기본 샷 수, 농도 스펙트럼 양끝(연함↔진함) — 주관 입력 ScaleBubble로 사장이 탭만"
-    ],
-    "recommended": true
-  },
-  {
-    "id": "tpl_cafe_002",
-    "unit_id": "",
-    "creator_id": "",
-    "creator_name": "",
-    "category": "Know-how",
-    "section": "음료 제조",
-    "subcategory": "라떼",
-    "title": "우유 스팀 온도·라떼 기준",
-    "tags": [
-      "#라떼",
-      "#스팀",
-      "#온도"
-    ],
-    "search_keywords": [
-      "라떼",
-      "우유",
-      "온도",
-      "뜨겁게",
-      "거품",
-      "스팀"
-    ],
-    "square": {
-      "situation": "라떼/카푸치노 온도·거품 기준.",
-      "quagmire": "",
-      "uncover": "",
-      "action": {
-        "steps": [
-          "1) 기본 스팀 온도대 유지(너무 뜨거우면 단맛 죽음).",
-          "2) \"뜨겁게\" 요청 시에만 상향, 아기/노약자는 살짝 낮게 확인."
-        ]
-      },
-      "result": {
-        "before": "",
-        "after": "",
-        "metric": ""
-      },
-      "extract": {
-        "do": "",
-        "dont": "재스팀한 우유 사용(비린내).",
-        "template": ""
-      }
-    },
-    "execution": {
-      "timing": "주문 시",
-      "channel": "",
-      "tone": "친절"
-    },
-    "stats": {
-      "query_hits_30d": 0,
-      "resolution_rate": 0,
-      "thumbs_up": 0,
-      "thumbs_down": 0,
-      "last_used_at": ""
-    },
-    "photos": [],
-    "version": 1,
-    "status": "published",
-    "quality_score": 0,
-    "created_at": "",
-    "updated_at": "",
-    "is_template": true,
-    "pack_id": "cafe",
-    "needs_review": true,
-    "correction_points": [
-      "온도 스펙트럼(미지근↔뜨겁게), 거품량"
-    ],
-    "recommended": true
-  },
-  {
-    "id": "tpl_cafe_003",
-    "unit_id": "",
-    "creator_id": "",
-    "creator_name": "",
-    "category": "Know-how",
-    "section": "음료 제조",
-    "subcategory": "시럽",
-    "title": "시럽·펌프 개수 기준",
-    "tags": [
-      "#시럽",
-      "#펌프",
-      "#레시피"
-    ],
-    "search_keywords": [
-      "시럽",
-      "펌프",
-      "달게",
-      "바닐라",
-      "단거",
-      "몇 번"
-    ],
-    "square": {
-      "situation": "바닐라/헤이즐넛 등 시럽 음료 제조.",
-      "quagmire": "",
-      "uncover": "",
-      "action": {
-        "steps": [
-          "1) 사이즈별 기본 펌프 수 준수.",
-          "2) \"덜 달게\" = 1펌프 감, \"더 달게\" = 1펌프 추가."
-        ]
-      },
-      "result": {
-        "before": "",
-        "after": "",
-        "metric": ""
-      },
-      "extract": {
-        "do": "",
-        "dont": "눈대중으로 들이붓기(맛 편차).",
-        "template": ""
-      }
-    },
-    "execution": {
-      "timing": "제조 시",
-      "channel": "",
-      "tone": "중립"
-    },
-    "stats": {
-      "query_hits_30d": 0,
-      "resolution_rate": 0,
-      "thumbs_up": 0,
-      "thumbs_down": 0,
-      "last_used_at": ""
-    },
-    "photos": [],
-    "version": 1,
-    "status": "published",
-    "quality_score": 0,
-    "created_at": "",
-    "updated_at": "",
-    "is_template": true,
-    "pack_id": "cafe",
-    "needs_review": true,
-    "correction_points": [
-      "사이즈별 기본 펌프 개수 — 개수 스테퍼로 사장이 입력"
-    ],
-    "recommended": true
-  },
-  {
-    "id": "tpl_cafe_004",
-    "unit_id": "",
-    "creator_id": "",
-    "creator_name": "",
-    "category": "Know-how",
-    "section": "음료 제조",
-    "subcategory": "에스프레소",
-    "title": "에스프레소 추출 시간",
-    "tags": [
-      "#에스프레소",
-      "#추출",
-      "#샷"
-    ],
-    "search_keywords": [
-      "샷",
-      "추출",
-      "시간",
-      "너무 빨라",
-      "너무 늦어",
-      "맛이 시어"
-    ],
-    "square": {
-      "situation": "샷이 너무 빨리/늦게 떨어져 맛이 시거나 쓸 때.",
-      "quagmire": "",
-      "uncover": "",
-      "action": {
-        "steps": [
-          "1) 1샷 기준 추출 시간대 안에 들어오는지 본다(너무 빠르면 시고, 느리면 탄맛).",
-          "2) 빠르면 분쇄를 곱게, 느리면 굵게 조정(한 칸씩만).",
-          "3) 색이 끊기며 연해지는 순간이 멈춤 신호."
-        ]
-      },
-      "result": {
-        "before": "",
-        "after": "",
-        "metric": ""
-      },
-      "extract": {
-        "do": "",
-        "dont": "시간 무시하고 정량만 받기(채널링 방치).",
-        "template": ""
-      }
-    },
-    "execution": {
-      "timing": "추출 시",
-      "channel": "",
-      "tone": "집중"
-    },
-    "stats": {
-      "query_hits_30d": 0,
-      "resolution_rate": 0,
-      "thumbs_up": 0,
-      "thumbs_down": 0,
-      "last_used_at": ""
-    },
-    "photos": [],
-    "version": 1,
-    "status": "published",
-    "quality_score": 0,
-    "created_at": "",
-    "updated_at": "",
-    "is_template": true,
-    "pack_id": "cafe",
-    "needs_review": true,
-    "correction_points": [
-      "적정 추출 시간대, 1샷 목표 추출량 — 사장이 스펙트럼으로 입력"
-    ],
-    "recommended": false
-  },
-  {
-    "id": "tpl_cafe_005",
-    "unit_id": "",
-    "creator_id": "",
-    "creator_name": "",
-    "category": "Know-how",
-    "section": "음료 제조",
-    "subcategory": "스팀",
-    "title": "우유 거품 곱기(라떼아트)",
-    "tags": [
-      "#스팀",
-      "#거품",
-      "#라떼아트"
-    ],
-    "search_keywords": [
-      "거품",
-      "곱게",
-      "라떼아트",
-      "우유",
-      "스팀",
-      "입자 커"
-    ],
-    "square": {
-      "situation": "거품이 거칠어 라떼아트가 안 되거나 입자가 크다.",
-      "quagmire": "",
-      "uncover": "",
-      "action": {
-        "steps": [
-          "1) 공기 주입은 초반 짧게만(치익 소리), 이후 표면 아래로 스팀팁 넣어 회전.",
-          "2) 잔 표면이 거울처럼 윤기 나면 곱게 된 것.",
-          "3) 거품 크면 스팀피처 바닥을 탁 쳐서 큰 기포 제거."
-        ]
-      },
-      "result": {
-        "before": "",
-        "after": "",
-        "metric": ""
-      },
-      "extract": {
-        "do": "",
-        "dont": "공기 주입을 끝까지 끌고 가기(거친 거품).",
-        "template": ""
-      }
-    },
-    "execution": {
-      "timing": "제조 시",
-      "channel": "",
-      "tone": "집중"
-    },
-    "stats": {
-      "query_hits_30d": 0,
-      "resolution_rate": 0,
-      "thumbs_up": 0,
-      "thumbs_down": 0,
-      "last_used_at": ""
-    },
-    "photos": [],
-    "version": 1,
-    "status": "published",
-    "quality_score": 0,
-    "created_at": "",
-    "updated_at": "",
-    "is_template": true,
-    "pack_id": "cafe",
-    "needs_review": true,
-    "correction_points": [
-      "거품 곱기 기준(곱게↔풍성하게) — 사장이 스펙트럼으로 입력"
-    ],
-    "recommended": false
-  },
-  {
-    "id": "tpl_cafe_006",
-    "unit_id": "",
-    "creator_id": "",
-    "creator_name": "",
-    "category": "Know-how",
-    "section": "음료 제조",
-    "subcategory": "아이스",
-    "title": "아이스 음료 얼음·물 비율",
-    "tags": [
-      "#아이스",
-      "#얼음",
-      "#희석"
-    ],
-    "search_keywords": [
-      "얼음",
-      "아이스",
-      "묽어",
-      "양 적어",
-      "물 같아"
-    ],
-    "square": {
-      "situation": "아이스 음료가 너무 묽거나 양이 적다는 말이 나올 때.",
-      "quagmire": "",
-      "uncover": "",
-      "action": {
-        "steps": [
-          "1) 컵 위까지 얼음 채운 뒤 음료 부어 기본 비율 유지.",
-          "2) 테이크아웃·배달은 녹음 감안해 얼음 살짝 더, 농도 한 단계 진하게."
-        ]
-      },
-      "result": {
-        "before": "",
-        "after": "",
-        "metric": ""
-      },
-      "extract": {
-        "do": "",
-        "dont": "얼음 줄여 양 많아 보이게 하기(금방 미지근).",
-        "template": ""
-      }
-    },
-    "execution": {
-      "timing": "제조 시",
-      "channel": "",
-      "tone": "중립"
-    },
-    "stats": {
-      "query_hits_30d": 0,
-      "resolution_rate": 0,
-      "thumbs_up": 0,
-      "thumbs_down": 0,
-      "last_used_at": ""
-    },
-    "photos": [],
-    "version": 1,
-    "status": "published",
-    "quality_score": 0,
-    "created_at": "",
-    "updated_at": "",
-    "is_template": true,
-    "pack_id": "cafe",
-    "needs_review": true,
-    "correction_points": [
-      "얼음 채움 기준, 테이크아웃 농도 보정"
-    ],
-    "recommended": false
-  },
-  {
-    "id": "tpl_cafe_007",
-    "unit_id": "",
-    "creator_id": "",
-    "creator_name": "",
-    "category": "Know-how",
-    "section": "음료 제조",
     "subcategory": "디카페인",
     "title": "디카페인·연하게 대응",
     "tags": [
@@ -3267,146 +2573,7 @@
     "recommended": false
   },
   {
-    "id": "tpl_cafe_008",
-    "unit_id": "",
-    "creator_id": "",
-    "creator_name": "",
-    "category": "Know-how",
-    "section": "음료 제조",
-    "subcategory": "휘핑",
-    "title": "휘핑·토핑 기준",
-    "tags": [
-      "#휘핑",
-      "#토핑",
-      "#모양"
-    ],
-    "search_keywords": [
-      "휘핑",
-      "토핑",
-      "드리즐",
-      "시나몬",
-      "모양",
-      "크림"
-    ],
-    "square": {
-      "situation": "휘핑 음료/시그니처 토핑 일관성.",
-      "quagmire": "",
-      "uncover": "",
-      "action": {
-        "steps": [
-          "1) 휘핑은 가운데서 한 바퀴 쌓아 봉우리 모양 통일.",
-          "2) 토핑(시나몬·드리즐·과자) 양은 정해진 한 스푼/한 바퀴로 고정."
-        ]
-      },
-      "result": {
-        "before": "",
-        "after": "",
-        "metric": ""
-      },
-      "extract": {
-        "do": "",
-        "dont": "사람마다 양 다르게 올리기(SNS 사진 편차).",
-        "template": ""
-      }
-    },
-    "execution": {
-      "timing": "제조 시",
-      "channel": "",
-      "tone": "중립"
-    },
-    "stats": {
-      "query_hits_30d": 0,
-      "resolution_rate": 0,
-      "thumbs_up": 0,
-      "thumbs_down": 0,
-      "last_used_at": ""
-    },
-    "photos": [],
-    "version": 1,
-    "status": "published",
-    "quality_score": 0,
-    "created_at": "",
-    "updated_at": "",
-    "is_template": true,
-    "pack_id": "cafe",
-    "needs_review": true,
-    "correction_points": [
-      "토핑 종류별 기본 양, 휘핑 높이"
-    ],
-    "recommended": false
-  },
-  {
-    "id": "tpl_cafe_009",
-    "unit_id": "",
-    "creator_id": "",
-    "creator_name": "",
-    "category": "Know-how",
-    "section": "음료 제조",
-    "subcategory": "티",
-    "title": "차·티 우림 시간",
-    "tags": [
-      "#티",
-      "#우림",
-      "#온도"
-    ],
-    "search_keywords": [
-      "티",
-      "차",
-      "우림",
-      "떫어",
-      "녹차",
-      "허브차",
-      "온도"
-    ],
-    "square": {
-      "situation": "티/허브차 우림 농도·시간 기준.",
-      "quagmire": "",
-      "uncover": "",
-      "action": {
-        "steps": [
-          "1) 차 종류별 물 온도와 우림 시간 지킨다(녹차는 끓는 물 직접 금지).",
-          "2) 너무 우리면 떫음 → 타이머로 건진다."
-        ]
-      },
-      "result": {
-        "before": "",
-        "after": "",
-        "metric": ""
-      },
-      "extract": {
-        "do": "",
-        "dont": "티백 오래 방치(떫고 쓴맛).",
-        "template": ""
-      }
-    },
-    "execution": {
-      "timing": "제조 시",
-      "channel": "",
-      "tone": "중립"
-    },
-    "stats": {
-      "query_hits_30d": 0,
-      "resolution_rate": 0,
-      "thumbs_up": 0,
-      "thumbs_down": 0,
-      "last_used_at": ""
-    },
-    "photos": [],
-    "version": 1,
-    "status": "published",
-    "quality_score": 0,
-    "created_at": "",
-    "updated_at": "",
-    "is_template": true,
-    "pack_id": "cafe",
-    "needs_review": true,
-    "correction_points": [
-      "차 종류별 물온도·우림시간"
-    ],
-    "recommended": false
-  },
-  {
-    "id": "tpl_cafe_010",
+    "id": "tpl_cafe_002",
     "unit_id": "",
     "creator_id": "",
     "creator_name": "",
@@ -3474,76 +2641,7 @@
     "recommended": false
   },
   {
-    "id": "tpl_cafe_011",
-    "unit_id": "",
-    "creator_id": "",
-    "creator_name": "",
-    "category": "Know-how",
-    "section": "음료 제조",
-    "subcategory": "픽업",
-    "title": "음료 픽업 순서·세팅",
-    "tags": [
-      "#픽업",
-      "#제조순서",
-      "#효율"
-    ],
-    "search_keywords": [
-      "순서",
-      "동시 주문",
-      "먼저",
-      "픽업",
-      "밀려"
-    ],
-    "square": {
-      "situation": "주문 여러 건 동시, 어떤 것부터 만들지 헷갈림.",
-      "quagmire": "",
-      "uncover": "",
-      "action": {
-        "steps": [
-          "1) HOT 먼저 or 묶음 주문은 식는 음료(아이스 휘핑) 마지막에.",
-          "2) 같은 베이스끼리 묶어 샷 한 번에 추출.",
-          "3) 완성 음료는 픽업대에 번호/이름 보이게 정렬."
-        ]
-      },
-      "result": {
-        "before": "",
-        "after": "",
-        "metric": ""
-      },
-      "extract": {
-        "do": "",
-        "dont": "식는 음료 먼저 만들어 방치.",
-        "template": ""
-      }
-    },
-    "execution": {
-      "timing": "피크 중",
-      "channel": "",
-      "tone": "신속"
-    },
-    "stats": {
-      "query_hits_30d": 0,
-      "resolution_rate": 0,
-      "thumbs_up": 0,
-      "thumbs_down": 0,
-      "last_used_at": ""
-    },
-    "photos": [],
-    "version": 1,
-    "status": "published",
-    "quality_score": 0,
-    "created_at": "",
-    "updated_at": "",
-    "is_template": true,
-    "pack_id": "cafe",
-    "needs_review": true,
-    "correction_points": [
-      "묶음 주문 제조 우선순위 기준"
-    ],
-    "recommended": false
-  },
-  {
-    "id": "tpl_cafe_012",
+    "id": "tpl_cafe_003",
     "unit_id": "",
     "creator_id": "",
     "creator_name": "",
@@ -3612,7 +2710,7 @@
     "recommended": false
   },
   {
-    "id": "tpl_cafe_013",
+    "id": "tpl_cafe_004",
     "unit_id": "",
     "creator_id": "",
     "creator_name": "",
@@ -3680,7 +2778,7 @@
     "recommended": false
   },
   {
-    "id": "tpl_cafe_014",
+    "id": "tpl_cafe_005",
     "unit_id": "",
     "creator_id": "",
     "creator_name": "",
@@ -3748,7 +2846,7 @@
     "recommended": false
   },
   {
-    "id": "tpl_cafe_015",
+    "id": "tpl_cafe_006",
     "unit_id": "",
     "creator_id": "",
     "creator_name": "",
@@ -3817,7 +2915,7 @@
     "recommended": false
   },
   {
-    "id": "tpl_cafe_016",
+    "id": "tpl_cafe_007",
     "unit_id": "",
     "creator_id": "",
     "creator_name": "",
@@ -3887,7 +2985,7 @@
     "recommended": false
   },
   {
-    "id": "tpl_cafe_017",
+    "id": "tpl_cafe_008",
     "unit_id": "",
     "creator_id": "",
     "creator_name": "",
@@ -3955,7 +3053,7 @@
     "recommended": false
   },
   {
-    "id": "tpl_cafe_018",
+    "id": "tpl_cafe_009",
     "unit_id": "",
     "creator_id": "",
     "creator_name": "",
@@ -4025,7 +3123,7 @@
     "recommended": false
   },
   {
-    "id": "tpl_cafe_019",
+    "id": "tpl_cafe_010",
     "unit_id": "",
     "creator_id": "",
     "creator_name": "",
@@ -4094,76 +3192,7 @@
     "recommended": false
   },
   {
-    "id": "tpl_cafe_020",
-    "unit_id": "",
-    "creator_id": "",
-    "creator_name": "",
-    "category": "Routine",
-    "section": "기기·설비",
-    "subcategory": "머신",
-    "title": "머신·그라인더 오픈/마감 관리",
-    "tags": [
-      "#머신",
-      "#그라인더",
-      "#청소"
-    ],
-    "search_keywords": [
-      "머신",
-      "그라인더",
-      "청소",
-      "백플러싱",
-      "예열",
-      "원두"
-    ],
-    "square": {
-      "situation": "에스프레소 머신·그라인더 일상 관리.",
-      "quagmire": "",
-      "uncover": "",
-      "action": {
-        "steps": [
-          "1) 오픈: 예열, 추출 1~2잔 버려 맛 확인(원두 디개싱).",
-          "2) 마감: 포터필터·샤워스크린 백플러싱, 그라인더 호퍼 정리."
-        ]
-      },
-      "result": {
-        "before": "",
-        "after": "",
-        "metric": ""
-      },
-      "extract": {
-        "do": "",
-        "dont": "마감 청소 생략(다음날 잡맛·고장).",
-        "template": ""
-      }
-    },
-    "execution": {
-      "timing": "오픈",
-      "channel": "마감",
-      "tone": ""
-    },
-    "stats": {
-      "query_hits_30d": 0,
-      "resolution_rate": 0,
-      "thumbs_up": 0,
-      "thumbs_down": 0,
-      "last_used_at": ""
-    },
-    "photos": [],
-    "version": 1,
-    "status": "published",
-    "quality_score": 0,
-    "created_at": "",
-    "updated_at": "",
-    "is_template": true,
-    "pack_id": "cafe",
-    "needs_review": true,
-    "correction_points": [
-      "머신 모델별 청소법, 약품 종류"
-    ],
-    "recommended": true
-  },
-  {
-    "id": "tpl_cafe_021",
+    "id": "tpl_cafe_011",
     "unit_id": "",
     "creator_id": "",
     "creator_name": "",
@@ -4232,76 +3261,7 @@
     "recommended": false
   },
   {
-    "id": "tpl_cafe_022",
-    "unit_id": "",
-    "creator_id": "",
-    "creator_name": "",
-    "category": "Routine",
-    "section": "기기·설비",
-    "subcategory": "그라인더",
-    "title": "그라인더 분쇄도 점검·보정",
-    "tags": [
-      "#그라인더",
-      "#분쇄도",
-      "#샷"
-    ],
-    "search_keywords": [
-      "분쇄도",
-      "그라인더",
-      "샷 빨라",
-      "샷 늦어",
-      "세팅",
-      "입자"
-    ],
-    "square": {
-      "situation": "날씨·습도·원두 상태로 샷 맛이 바뀔 때.",
-      "quagmire": "",
-      "uncover": "",
-      "action": {
-        "steps": [
-          "1) 오픈 첫 샷으로 추출 시간 체크, 벗어나면 분쇄도 한 칸씩 조정.",
-          "2) 원두 교체·로스팅 날짜 바뀌면 다시 점검."
-        ]
-      },
-      "result": {
-        "before": "",
-        "after": "",
-        "metric": ""
-      },
-      "extract": {
-        "do": "",
-        "dont": "어제 세팅 그대로 종일 방치.",
-        "template": ""
-      }
-    },
-    "execution": {
-      "timing": "오픈",
-      "channel": "원두교체 시",
-      "tone": ""
-    },
-    "stats": {
-      "query_hits_30d": 0,
-      "resolution_rate": 0,
-      "thumbs_up": 0,
-      "thumbs_down": 0,
-      "last_used_at": ""
-    },
-    "photos": [],
-    "version": 1,
-    "status": "published",
-    "quality_score": 0,
-    "created_at": "",
-    "updated_at": "",
-    "is_template": true,
-    "pack_id": "cafe",
-    "needs_review": true,
-    "correction_points": [
-      "목표 추출 시간대(점검 기준)"
-    ],
-    "recommended": false
-  },
-  {
-    "id": "tpl_cafe_023",
+    "id": "tpl_cafe_012",
     "unit_id": "",
     "creator_id": "",
     "creator_name": "",
@@ -4370,7 +3330,7 @@
     "recommended": false
   },
   {
-    "id": "tpl_cafe_024",
+    "id": "tpl_cafe_013",
     "unit_id": "",
     "creator_id": "",
     "creator_name": "",
@@ -4439,75 +3399,7 @@
     "recommended": false
   },
   {
-    "id": "tpl_cafe_025",
-    "unit_id": "",
-    "creator_id": "",
-    "creator_name": "",
-    "category": "Routine",
-    "section": "기기·설비",
-    "subcategory": "머신",
-    "title": "영업 중 머신 백플러싱·잔비움",
-    "tags": [
-      "#머신",
-      "#청결",
-      "#피크"
-    ],
-    "search_keywords": [
-      "백플러싱",
-      "스팀완드",
-      "퍼지",
-      "그룹헤드",
-      "닦아"
-    ],
-    "square": {
-      "situation": "영업 중 샷 맛 유지·머신 청결.",
-      "quagmire": "",
-      "uncover": "",
-      "action": {
-        "steps": [
-          "1) 일정 잔수마다 물 백플러싱으로 그룹헤드 헹굼.",
-          "2) 스팀완드는 사용 후 매번 행주로 닦고 퍼지."
-        ]
-      },
-      "result": {
-        "before": "",
-        "after": "",
-        "metric": ""
-      },
-      "extract": {
-        "do": "",
-        "dont": "스팀완드 우유 굳힌 채 방치(막힘·비린내).",
-        "template": ""
-      }
-    },
-    "execution": {
-      "timing": "영업 중",
-      "channel": "",
-      "tone": "습관"
-    },
-    "stats": {
-      "query_hits_30d": 0,
-      "resolution_rate": 0,
-      "thumbs_up": 0,
-      "thumbs_down": 0,
-      "last_used_at": ""
-    },
-    "photos": [],
-    "version": 1,
-    "status": "published",
-    "quality_score": 0,
-    "created_at": "",
-    "updated_at": "",
-    "is_template": true,
-    "pack_id": "cafe",
-    "needs_review": true,
-    "correction_points": [
-      "백플러싱 빈도 기준"
-    ],
-    "recommended": false
-  },
-  {
-    "id": "tpl_cafe_026",
+    "id": "tpl_cafe_014",
     "unit_id": "",
     "creator_id": "",
     "creator_name": "",
@@ -4577,7 +3469,7 @@
     "recommended": false
   },
   {
-    "id": "tpl_cafe_027",
+    "id": "tpl_cafe_015",
     "unit_id": "",
     "creator_id": "",
     "creator_name": "",
@@ -4647,76 +3539,7 @@
     "recommended": false
   },
   {
-    "id": "tpl_cafe_028",
-    "unit_id": "",
-    "creator_id": "",
-    "creator_name": "",
-    "category": "Context",
-    "section": "음료 제조",
-    "subcategory": "시즌",
-    "title": "시즌 한정 메뉴 운영",
-    "tags": [
-      "#시즌",
-      "#한정",
-      "#프로모션"
-    ],
-    "search_keywords": [
-      "시즌",
-      "한정",
-      "신메뉴",
-      "딸기",
-      "여름",
-      "이벤트"
-    ],
-    "square": {
-      "situation": "계절 한정 메뉴 도입/종료 시기.",
-      "quagmire": "",
-      "uncover": "",
-      "action": {
-        "steps": [
-          "1) 시즌 메뉴 레시피·가격·기간을 숙지하고 적극 추천.",
-          "2) 종료 임박 시 미리 안내, 재료 소진 관리."
-        ]
-      },
-      "result": {
-        "before": "",
-        "after": "",
-        "metric": ""
-      },
-      "extract": {
-        "do": "",
-        "dont": "종료된 시즌 메뉴 계속 받기.",
-        "template": ""
-      }
-    },
-    "execution": {
-      "timing": "시즌 중",
-      "channel": "대면",
-      "tone": "친절"
-    },
-    "stats": {
-      "query_hits_30d": 0,
-      "resolution_rate": 0,
-      "thumbs_up": 0,
-      "thumbs_down": 0,
-      "last_used_at": ""
-    },
-    "photos": [],
-    "version": 1,
-    "status": "published",
-    "quality_score": 0,
-    "created_at": "",
-    "updated_at": "",
-    "is_template": true,
-    "pack_id": "cafe",
-    "needs_review": true,
-    "correction_points": [
-      "현재 시즌 메뉴·기간·가격"
-    ],
-    "recommended": false
-  },
-  {
-    "id": "tpl_cafe_029",
+    "id": "tpl_cafe_016",
     "unit_id": "",
     "creator_id": "",
     "creator_name": "",
@@ -4786,7 +3609,7 @@
     "recommended": false
   },
   {
-    "id": "tpl_cafe_030",
+    "id": "tpl_cafe_017",
     "unit_id": "",
     "creator_id": "",
     "creator_name": "",
@@ -4851,6 +3674,3189 @@
     "needs_review": true,
     "correction_points": [
       "적립률·쿠폰 조건·할인 중복 규칙"
+    ],
+    "recommended": false
+  },
+  {
+    "id": "tpl_cafe_018",
+    "unit_id": "",
+    "creator_id": "",
+    "creator_name": "",
+    "category": "Context",
+    "section": "고객 응대",
+    "subcategory": "일회용컵",
+    "title": "매장 컵·일회용컵 구분",
+    "tags": [
+      "#일회용컵",
+      "#매장컵",
+      "#테이크아웃"
+    ],
+    "search_keywords": [
+      "매장",
+      "포장",
+      "일회용컵",
+      "머그",
+      "드시고 가세요",
+      "테이크아웃",
+      "옮겨"
+    ],
+    "square": {
+      "situation": "주문 시 매장 이용인지 포장인지 확인해야 함. 매장에서 일회용컵을 쓰면 안 되는 경우가 있음.",
+      "quagmire": "",
+      "uncover": "",
+      "action": {
+        "steps": [
+          "1) 주문받을 때 드시고 가는지 가져가는지를 먼저 묻고 포스에 구분 입력한다.",
+          "2) 매장 이용은 머그·유리컵, 포장은 일회용컵에 만든다.",
+          "3) 매장에서 마시다 나갈 때는 일회용컵으로 옮겨 드린다(매장 기준에 따라 용기값 안내).",
+          "4) 텀블러 할인·머그 반납 위치를 처음 온 손님에게 안내한다."
+        ]
+      },
+      "result": {
+        "before": "",
+        "after": "",
+        "metric": ""
+      },
+      "extract": {
+        "do": "",
+        "dont": "확인 없이 전부 일회용컵으로 만들기. 매장 컵을 들고 나가게 두기.",
+        "template": ""
+      }
+    },
+    "execution": {
+      "timing": "주문 시",
+      "channel": "대면",
+      "tone": "정확"
+    },
+    "stats": {
+      "query_hits_30d": 0,
+      "resolution_rate": 0,
+      "thumbs_up": 0,
+      "thumbs_down": 0,
+      "last_used_at": ""
+    },
+    "photos": [],
+    "version": 1,
+    "status": "published",
+    "quality_score": 0,
+    "created_at": "",
+    "updated_at": "",
+    "is_template": true,
+    "pack_id": "cafe",
+    "needs_review": true,
+    "correction_points": [
+      "매장 내 일회용컵 사용 규칙, 컵 교체 시 용기값"
+    ],
+    "recommended": true
+  },
+  {
+    "id": "tpl_cafe_019",
+    "unit_id": "",
+    "creator_id": "",
+    "creator_name": "",
+    "category": "Context",
+    "section": "고객 응대",
+    "subcategory": "화장실",
+    "title": "화장실·와이파이·비밀번호 안내",
+    "tags": [
+      "#화장실",
+      "#와이파이",
+      "#안내"
+    ],
+    "search_keywords": [
+      "화장실",
+      "비밀번호",
+      "와이파이",
+      "비번",
+      "어디예요",
+      "열쇠"
+    ],
+    "square": {
+      "situation": "손님이 화장실 위치·비밀번호·와이파이를 물음. 하루에도 여러 번 반복됨.",
+      "quagmire": "",
+      "uncover": "",
+      "action": {
+        "steps": [
+          "1) 화장실 위치·비밀번호·와이파이는 카운터 앞·영수증·테이블 안내판에 적어 둔다.",
+          "2) 물으면 안내판을 가리키며 한 번 말해 드린다.",
+          "3) 비밀번호가 바뀌면 안내판과 직원 모두에게 같은 날 공유한다.",
+          "4) 화장실 열쇠를 쓰는 매장은 반납 위치를 함께 안내한다."
+        ]
+      },
+      "result": {
+        "before": "",
+        "after": "",
+        "metric": ""
+      },
+      "extract": {
+        "do": "",
+        "dont": "비밀번호를 기억으로 잘못 알려주기. 안내판을 낡은 채 두기.",
+        "template": ""
+      }
+    },
+    "execution": {
+      "timing": "문의 시",
+      "channel": "대면",
+      "tone": "간단히"
+    },
+    "stats": {
+      "query_hits_30d": 0,
+      "resolution_rate": 0,
+      "thumbs_up": 0,
+      "thumbs_down": 0,
+      "last_used_at": ""
+    },
+    "photos": [],
+    "version": 1,
+    "status": "published",
+    "quality_score": 0,
+    "created_at": "",
+    "updated_at": "",
+    "is_template": true,
+    "pack_id": "cafe",
+    "needs_review": true,
+    "correction_points": [
+      "화장실 위치·비밀번호, 와이파이 이름·비밀번호"
+    ],
+    "recommended": false
+  },
+  {
+    "id": "tpl_cafe_020",
+    "unit_id": "",
+    "creator_id": "",
+    "creator_name": "",
+    "category": "Routine",
+    "section": "고객 응대",
+    "subcategory": "배달",
+    "title": "배달·픽업 주문 음료 포장",
+    "tags": [
+      "#배달",
+      "#픽업",
+      "#캐리어"
+    ],
+    "search_keywords": [
+      "배달",
+      "픽업",
+      "캐리어",
+      "포장",
+      "흘렀어요",
+      "뚜껑",
+      "빨대",
+      "주문번호"
+    ],
+    "square": {
+      "situation": "배달앱·픽업 주문 음료를 포장할 때. 흘림·얼음 녹음·누락이 잦음.",
+      "quagmire": "",
+      "uncover": "",
+      "action": {
+        "steps": [
+          "1) 주문서 옵션(샷·시럽·얼음 적게)을 확인하고 컵에 표시한다.",
+          "2) 아이스는 뚜껑을 꾹 눌러 닫고 빨대는 따로 넣는다. 핫은 홀더를 끼운다.",
+          "3) 캐리어에 넣고 빈 칸은 냅킨으로 채워 흔들리지 않게 한다.",
+          "4) 봉투 겉에 주문 번호를 적고 라이더·손님과 번호를 확인해 넘긴다."
+        ]
+      },
+      "result": {
+        "before": "",
+        "after": "",
+        "metric": ""
+      },
+      "extract": {
+        "do": "",
+        "dont": "뚜껑 확인 없이 봉투에 넣기. 핫·아이스를 같은 캐리어 칸에 붙여 넣기.",
+        "template": ""
+      }
+    },
+    "execution": {
+      "timing": "제조 직후",
+      "channel": "카운터",
+      "tone": "정확"
+    },
+    "stats": {
+      "query_hits_30d": 0,
+      "resolution_rate": 0,
+      "thumbs_up": 0,
+      "thumbs_down": 0,
+      "last_used_at": ""
+    },
+    "photos": [],
+    "version": 1,
+    "status": "published",
+    "quality_score": 0,
+    "created_at": "",
+    "updated_at": "",
+    "is_template": true,
+    "pack_id": "cafe",
+    "needs_review": true,
+    "correction_points": [
+      "캐리어·홀더·빨대 기본 제공 기준, 라이더 픽업 위치"
+    ],
+    "recommended": false
+  },
+  {
+    "id": "tpl_cafe_021",
+    "unit_id": "",
+    "creator_id": "",
+    "creator_name": "",
+    "category": "Routine",
+    "section": "재고·발주",
+    "subcategory": "쇼케이스",
+    "title": "쇼케이스 디저트·케이크 관리",
+    "tags": [
+      "#쇼케이스",
+      "#케이크",
+      "#유통기한"
+    ],
+    "search_keywords": [
+      "쇼케이스",
+      "케이크",
+      "디저트",
+      "예약",
+      "픽업",
+      "초",
+      "유통기한",
+      "남은 거"
+    ],
+    "square": {
+      "situation": "쇼케이스 디저트·케이크의 진열·보관·폐기와 예약 픽업 관리.",
+      "quagmire": "",
+      "uncover": "",
+      "action": {
+        "steps": [
+          "1) 오픈 때 쇼케이스 온도와 진열 상태를 확인하고 라벨(품명·날짜)을 붙인다.",
+          "2) 유통기한이 짧은 것을 앞에 두고 지난 것은 바로 뺀다.",
+          "3) 케이크 예약은 픽업 시간·이름·초 개수를 적고 픽업 시간 전에 박스 포장을 준비한다.",
+          "4) 마감 때 남은 수량을 기록해 사장에게 알린다."
+        ]
+      },
+      "result": {
+        "before": "",
+        "after": "",
+        "metric": ""
+      },
+      "extract": {
+        "do": "",
+        "dont": "라벨 없이 진열하기. 예약 케이크를 다른 손님에게 팔기.",
+        "template": ""
+      }
+    },
+    "execution": {
+      "timing": "오픈·마감",
+      "channel": "카운터",
+      "tone": "정확"
+    },
+    "stats": {
+      "query_hits_30d": 0,
+      "resolution_rate": 0,
+      "thumbs_up": 0,
+      "thumbs_down": 0,
+      "last_used_at": ""
+    },
+    "photos": [],
+    "version": 1,
+    "status": "published",
+    "quality_score": 0,
+    "created_at": "",
+    "updated_at": "",
+    "is_template": true,
+    "pack_id": "cafe",
+    "needs_review": true,
+    "correction_points": [
+      "디저트별 보관 기한, 케이크 예약 접수 방법"
+    ],
+    "recommended": false
+  },
+  {
+    "id": "tpl_cafe_022",
+    "unit_id": "",
+    "creator_id": "",
+    "creator_name": "",
+    "category": "Context",
+    "section": "고객 응대",
+    "subcategory": "원두판매",
+    "title": "원두·굿즈 판매와 홀빈 분쇄 요청",
+    "tags": [
+      "#원두판매",
+      "#홀빈",
+      "#굿즈"
+    ],
+    "search_keywords": [
+      "원두",
+      "홀빈",
+      "갈아주세요",
+      "분쇄",
+      "드립백",
+      "굿즈",
+      "텀블러 판매"
+    ],
+    "square": {
+      "situation": "손님이 원두·드립백·굿즈를 사거나 원두를 갈아 달라고 함.",
+      "quagmire": "",
+      "uncover": "",
+      "action": {
+        "steps": [
+          "1) 판매 원두 종류·가격·로스팅 날짜를 안내한다.",
+          "2) 분쇄 요청은 추출 도구(핸드드립·모카포트·에스프레소)를 물어 굵기를 맞춘다.",
+          "3) 분쇄 전 그라인더 안에 남은 원두를 비워 섞이지 않게 한다.",
+          "4) 굿즈·원두 재고가 떨어지면 사장에게 알린다."
+        ]
+      },
+      "result": {
+        "before": "",
+        "after": "",
+        "metric": ""
+      },
+      "extract": {
+        "do": "",
+        "dont": "도구 확인 없이 아무 굵기로 갈기. 판매 원두를 매장 추출용과 섞어 두기.",
+        "template": ""
+      }
+    },
+    "execution": {
+      "timing": "요청 시",
+      "channel": "대면",
+      "tone": "정확"
+    },
+    "stats": {
+      "query_hits_30d": 0,
+      "resolution_rate": 0,
+      "thumbs_up": 0,
+      "thumbs_down": 0,
+      "last_used_at": ""
+    },
+    "photos": [],
+    "version": 1,
+    "status": "published",
+    "quality_score": 0,
+    "created_at": "",
+    "updated_at": "",
+    "is_template": true,
+    "pack_id": "cafe",
+    "needs_review": true,
+    "correction_points": [
+      "판매 원두 목록·가격, 도구별 분쇄 굵기 기준"
+    ],
+    "recommended": false
+  },
+  {
+    "id": "tpl_cafe_023",
+    "unit_id": "",
+    "creator_id": "",
+    "creator_name": "",
+    "category": "Routine",
+    "section": "기기·설비",
+    "subcategory": "진동벨",
+    "title": "진동벨·픽업대·트레이 관리",
+    "tags": [
+      "#진동벨",
+      "#픽업대",
+      "#트레이"
+    ],
+    "search_keywords": [
+      "진동벨",
+      "벨",
+      "충전",
+      "픽업대",
+      "트레이",
+      "반납",
+      "분실"
+    ],
+    "square": {
+      "situation": "진동벨 배터리·분실, 픽업대 정리, 반납 트레이 처리.",
+      "quagmire": "",
+      "uncover": "",
+      "action": {
+        "steps": [
+          "1) 오픈 때 진동벨 개수와 충전 상태를 확인하고 순서대로 거치대에 둔다.",
+          "2) 음료를 낼 때 벨을 회수해 닦고 거치대에 돌려 놓는다.",
+          "3) 픽업대는 항상 빈 상태로 유지하고 흘린 음료는 바로 닦는다.",
+          "4) 반납대 트레이·컵은 쌓이기 전에 치우고 마감 때 개수를 확인한다."
+        ]
+      },
+      "result": {
+        "before": "",
+        "after": "",
+        "metric": ""
+      },
+      "extract": {
+        "do": "",
+        "dont": "벨 회수 없이 손님에게 그대로 두기. 픽업대에 완성 음료를 오래 방치하기.",
+        "template": ""
+      }
+    },
+    "execution": {
+      "timing": "오픈·영업 중·마감",
+      "channel": "카운터",
+      "tone": "정확"
+    },
+    "stats": {
+      "query_hits_30d": 0,
+      "resolution_rate": 0,
+      "thumbs_up": 0,
+      "thumbs_down": 0,
+      "last_used_at": ""
+    },
+    "photos": [],
+    "version": 1,
+    "status": "published",
+    "quality_score": 0,
+    "created_at": "",
+    "updated_at": "",
+    "is_template": true,
+    "pack_id": "cafe",
+    "needs_review": true,
+    "correction_points": [
+      "진동벨 총 개수, 벨 분실 시 처리"
+    ],
+    "recommended": false
+  },
+  {
+    "id": "tpl_cafe_024",
+    "unit_id": "",
+    "creator_id": "",
+    "creator_name": "",
+    "category": "Context",
+    "section": "기기·설비",
+    "subcategory": "에어컨",
+    "title": "매장 온도·음악·조명 기준",
+    "tags": [
+      "#에어컨",
+      "#음악",
+      "#조명"
+    ],
+    "search_keywords": [
+      "에어컨",
+      "온도",
+      "춥다",
+      "덥다",
+      "음악",
+      "볼륨",
+      "조명",
+      "간판"
+    ],
+    "square": {
+      "situation": "손님이 춥다·덥다·음악이 크다고 하거나 직원이 임의로 바꿈.",
+      "quagmire": "",
+      "uncover": "",
+      "action": {
+        "steps": [
+          "1) 에어컨·난방 설정 온도와 음악 볼륨 기준을 정해 두고 오픈 때 맞춘다.",
+          "2) 손님 요청이 있으면 매장이 정한 범위 안에서만 조절한다.",
+          "3) 해가 지면 조명·간판을 켜고 마감 때 정해진 순서로 끈다.",
+          "4) 기준 밖 요청(음악을 꺼 달라 등)은 다른 손님을 고려해 정중히 안내한다."
+        ]
+      },
+      "result": {
+        "before": "",
+        "after": "",
+        "metric": ""
+      },
+      "extract": {
+        "do": "",
+        "dont": "직원 취향으로 음악·온도 바꾸기. 손님 요청을 무시하기.",
+        "template": ""
+      }
+    },
+    "execution": {
+      "timing": "오픈·요청 시",
+      "channel": "매장",
+      "tone": "일정하게"
+    },
+    "stats": {
+      "query_hits_30d": 0,
+      "resolution_rate": 0,
+      "thumbs_up": 0,
+      "thumbs_down": 0,
+      "last_used_at": ""
+    },
+    "photos": [],
+    "version": 1,
+    "status": "published",
+    "quality_score": 0,
+    "created_at": "",
+    "updated_at": "",
+    "is_template": true,
+    "pack_id": "cafe",
+    "needs_review": true,
+    "correction_points": [
+      "계절별 설정 온도, 음악 플레이리스트·볼륨 기준"
+    ],
+    "recommended": false
+  },
+  {
+    "id": "tpl_cafe_025",
+    "unit_id": "",
+    "creator_id": "",
+    "creator_name": "",
+    "category": "Event",
+    "section": "고객 응대",
+    "subcategory": "얼음",
+    "title": "얼음·물·컵 추가 요청",
+    "tags": [
+      "#얼음",
+      "#물",
+      "#추가"
+    ],
+    "search_keywords": [
+      "얼음",
+      "물",
+      "컵",
+      "더 주세요",
+      "빈 컵",
+      "얼음 컵",
+      "무료"
+    ],
+    "square": {
+      "situation": "손님이 얼음·물·빈 컵을 더 달라고 함. 무료인지, 얼마나 주는지 모름.",
+      "quagmire": "",
+      "uncover": "",
+      "action": {
+        "steps": [
+          "1) 물·얼음 소량은 요청 즉시 무료로 드린다.",
+          "2) 빈 컵·얼음 컵 추가는 매장 기준(무료/1인 1잔 원칙)대로 안내한다.",
+          "3) 정수기·셀프 얼음이 있으면 위치를 안내한다.",
+          "4) 반복·대량 요청은 사장 기준을 따르고 그 자리에서 다투지 않는다."
+        ]
+      },
+      "result": {
+        "before": "",
+        "after": "",
+        "metric": ""
+      },
+      "extract": {
+        "do": "",
+        "dont": "기준 없이 어떤 손님은 주고 어떤 손님은 거절하기. 짜증 섞인 거절.",
+        "template": ""
+      }
+    },
+    "execution": {
+      "timing": "요청 시",
+      "channel": "대면",
+      "tone": "친절"
+    },
+    "stats": {
+      "query_hits_30d": 0,
+      "resolution_rate": 0,
+      "thumbs_up": 0,
+      "thumbs_down": 0,
+      "last_used_at": ""
+    },
+    "photos": [],
+    "version": 1,
+    "status": "published",
+    "quality_score": 0,
+    "created_at": "",
+    "updated_at": "",
+    "is_template": true,
+    "pack_id": "cafe",
+    "needs_review": true,
+    "correction_points": [
+      "빈 컵·얼음 추가 무료 여부, 1인 1음료 원칙"
+    ],
+    "recommended": false
+  },
+  {
+    "id": "tpl_cafe_026",
+    "unit_id": "",
+    "creator_id": "",
+    "creator_name": "",
+    "category": "Context",
+    "section": "고객 응대",
+    "subcategory": "대량주문",
+    "title": "단체·대량 음료 주문 사전 접수",
+    "tags": [
+      "#대량주문",
+      "#단체",
+      "#사전접수"
+    ],
+    "search_keywords": [
+      "대량",
+      "단체",
+      "20잔",
+      "사전 주문",
+      "픽업",
+      "캐리어",
+      "세금계산서"
+    ],
+    "square": {
+      "situation": "여러 잔 대량 주문이 전화·현장으로 들어옴. 피크와 겹치면 홀 주문이 밀림.",
+      "quagmire": "",
+      "uncover": "",
+      "action": {
+        "steps": [
+          "1) 메뉴·수량·핫/아이스 비율·픽업 시간·연락처를 적어 접수한다.",
+          "2) 픽업 시간은 피크를 피해 제안하고 소요 시간을 넉넉히 말한다.",
+          "3) 캐리어·홀더·빨대를 미리 준비하고 제조는 픽업 직전에 시작한다.",
+          "4) 결제·영수증 발행(현금영수증·세금계산서) 방법은 매장 기준대로 안내한다."
+        ]
+      },
+      "result": {
+        "before": "",
+        "after": "",
+        "metric": ""
+      },
+      "extract": {
+        "do": "",
+        "dont": "접수 없이 현장에서 바로 만들기 시작하기. 피크 중 홀 주문을 무기한 미루기.",
+        "template": ""
+      }
+    },
+    "execution": {
+      "timing": "접수 시",
+      "channel": "전화·대면",
+      "tone": "정확"
+    },
+    "stats": {
+      "query_hits_30d": 0,
+      "resolution_rate": 0,
+      "thumbs_up": 0,
+      "thumbs_down": 0,
+      "last_used_at": ""
+    },
+    "photos": [],
+    "version": 1,
+    "status": "published",
+    "quality_score": 0,
+    "created_at": "",
+    "updated_at": "",
+    "is_template": true,
+    "pack_id": "cafe",
+    "needs_review": true,
+    "correction_points": [
+      "대량 주문 최소 사전 접수 시간, 대량 할인 여부"
+    ],
+    "recommended": false
+  },
+  {
+    "id": "tpl_cafe_027",
+    "unit_id": "",
+    "creator_id": "",
+    "creator_name": "",
+    "category": "Routine",
+    "section": "위생·청소",
+    "subcategory": "펌프",
+    "title": "시럽·소스 펌프 세척과 교체",
+    "tags": [
+      "#펌프",
+      "#시럽",
+      "#세척"
+    ],
+    "search_keywords": [
+      "펌프",
+      "시럽",
+      "소스",
+      "끈적",
+      "세척",
+      "굳었어요",
+      "교체"
+    ],
+    "square": {
+      "situation": "시럽·소스 펌프가 끈적이거나 굳어 나오는 양이 달라짐.",
+      "quagmire": "",
+      "uncover": "",
+      "action": {
+        "steps": [
+          "1) 마감 때 펌프 입구를 닦고 뚜껑을 덮어 둔다.",
+          "2) 매장이 정한 주기에 펌프를 분리해 따뜻한 물로 씻고 완전히 말린다.",
+          "3) 시럽 병을 바꿀 때 펌프도 함께 세척하고 개봉일을 적는다.",
+          "4) 펌프가 막히거나 양이 안 맞으면 교체하고 사장에게 알린다."
+        ]
+      },
+      "result": {
+        "before": "",
+        "after": "",
+        "metric": ""
+      },
+      "extract": {
+        "do": "",
+        "dont": "젖은 펌프를 바로 시럽 병에 꽂기. 굳은 펌프를 힘으로 누르기.",
+        "template": ""
+      }
+    },
+    "execution": {
+      "timing": "마감·정기",
+      "channel": "바",
+      "tone": "정확"
+    },
+    "stats": {
+      "query_hits_30d": 0,
+      "resolution_rate": 0,
+      "thumbs_up": 0,
+      "thumbs_down": 0,
+      "last_used_at": ""
+    },
+    "photos": [],
+    "version": 1,
+    "status": "published",
+    "quality_score": 0,
+    "created_at": "",
+    "updated_at": "",
+    "is_template": true,
+    "pack_id": "cafe",
+    "needs_review": true,
+    "correction_points": [
+      "펌프 세척 주기, 시럽 개봉 후 보관 기한"
+    ],
+    "recommended": false
+  },
+  {
+    "id": "tpl_cafe_028",
+    "unit_id": "",
+    "creator_id": "",
+    "creator_name": "",
+    "category": "Know-how",
+    "section": "음료 제조",
+    "subcategory": "세팅",
+    "title": "아이스 음료 뚜껑·홀더·빨대 세팅 기준",
+    "tags": [
+      "#세팅",
+      "#뚜껑",
+      "#빨대"
+    ],
+    "search_keywords": [
+      "뚜껑",
+      "빨대",
+      "홀더",
+      "냅킨",
+      "세팅",
+      "돔 뚜껑",
+      "컵 닦기"
+    ],
+    "square": {
+      "situation": "음료를 낼 때 뚜껑·홀더·빨대·냅킨을 어떻게 붙여 내는지 사람마다 다름.",
+      "quagmire": "",
+      "uncover": "",
+      "action": {
+        "steps": [
+          "1) 매장 이용 아이스는 뚜껑 없이 빨대를 꽂거나 옆에 두고, 포장은 뚜껑을 닫고 빨대를 따로 준다.",
+          "2) 핫은 홀더와 뚜껑을 기본으로 하고 뚜껑 입구 방향을 손님 쪽으로 맞춘다.",
+          "3) 컵 겉면 물기·흘린 자국은 냅킨으로 닦은 뒤 낸다.",
+          "4) 휘핑·토핑 음료는 돔 뚜껑을 쓴다."
+        ]
+      },
+      "result": {
+        "before": "",
+        "after": "",
+        "metric": ""
+      },
+      "extract": {
+        "do": "",
+        "dont": "컵 입구 부분을 손으로 잡기. 흘린 채로 내기.",
+        "template": ""
+      }
+    },
+    "execution": {
+      "timing": "음료 완성 시",
+      "channel": "바",
+      "tone": "일정하게"
+    },
+    "stats": {
+      "query_hits_30d": 0,
+      "resolution_rate": 0,
+      "thumbs_up": 0,
+      "thumbs_down": 0,
+      "last_used_at": ""
+    },
+    "photos": [],
+    "version": 1,
+    "status": "published",
+    "quality_score": 0,
+    "created_at": "",
+    "updated_at": "",
+    "is_template": true,
+    "pack_id": "cafe",
+    "needs_review": true,
+    "correction_points": [
+      "매장/포장별 뚜껑·빨대 기본, 종이 빨대 제공 기준"
+    ],
+    "recommended": false
+  },
+  {
+    "id": "tpl_restaurant_001",
+    "unit_id": "",
+    "creator_id": "",
+    "creator_name": "",
+    "category": "Context",
+    "section": "고객 응대",
+    "subcategory": "세팅",
+    "title": "착석 직후 기본 세팅 (물·수저·물티슈)",
+    "tags": [
+      "#세팅",
+      "#착석",
+      "#기본"
+    ],
+    "search_keywords": [
+      "세팅",
+      "물",
+      "수저",
+      "물티슈",
+      "앉으면",
+      "처음",
+      "셀프바",
+      "메뉴판"
+    ],
+    "square": {
+      "situation": "손님이 자리에 앉은 직후. 주문 전에 무엇을 먼저 갖다 놓는지 신입이 모름.",
+      "quagmire": "",
+      "uncover": "",
+      "action": {
+        "steps": [
+          "1) 앉자마자 인원수만큼 물컵·물(또는 물통)·수저·물티슈를 놓는다.",
+          "2) 셀프바(물·수저·반찬)가 있으면 첫 방문 손님에게 위치를 한 번 알려 드린다.",
+          "3) 메뉴판을 펼쳐 드리고 주문 준비되면 벨을 눌러 달라고 안내한다.",
+          "4) 세팅이 끝난 테이블은 주문 대기 상태로 기억하고 오래 방치하지 않는다."
+        ]
+      },
+      "result": {
+        "before": "",
+        "after": "",
+        "metric": ""
+      },
+      "extract": {
+        "do": "",
+        "dont": "손님이 부를 때까지 아무것도 안 갖다 놓기. 수저를 맨손으로 집어 놓기.",
+        "template": ""
+      }
+    },
+    "execution": {
+      "timing": "착석 즉시",
+      "channel": "대면",
+      "tone": "밝게"
+    },
+    "stats": {
+      "query_hits_30d": 0,
+      "resolution_rate": 0,
+      "thumbs_up": 0,
+      "thumbs_down": 0,
+      "last_used_at": ""
+    },
+    "photos": [],
+    "version": 1,
+    "status": "published",
+    "quality_score": 0,
+    "created_at": "",
+    "updated_at": "",
+    "is_template": true,
+    "pack_id": "restaurant",
+    "needs_review": true,
+    "correction_points": [
+      "물·수저 셀프 여부, 기본 세팅 구성(앞접시·앞치마 포함 여부)"
+    ],
+    "recommended": true
+  },
+  {
+    "id": "tpl_restaurant_002",
+    "unit_id": "",
+    "creator_id": "",
+    "creator_name": "",
+    "category": "Context",
+    "section": "고객 응대",
+    "subcategory": "리필",
+    "title": "반찬·사이드 리필 기준",
+    "tags": [
+      "#리필",
+      "#반찬",
+      "#무료"
+    ],
+    "search_keywords": [
+      "리필",
+      "더 주세요",
+      "반찬",
+      "공깃밥",
+      "추가",
+      "무료",
+      "유료",
+      "셀프"
+    ],
+    "square": {
+      "situation": "손님이 반찬·밥·국·소스를 더 달라고 함. 무료인지, 몇 번까지인지 모름.",
+      "quagmire": "",
+      "uncover": "",
+      "action": {
+        "steps": [
+          "1) 리필 가능한 품목은 요청 즉시 새 그릇에 담아 드린다.",
+          "2) 유료 품목(공깃밥·추가 고기·특정 사이드)은 금액을 먼저 말하고 주문에 올린다.",
+          "3) 셀프바 품목은 위치를 안내하고, 거동이 불편한 손님은 직접 갖다 드린다.",
+          "4) 리필 요청이 잦은 반찬은 마감 때 사장에게 알려 준비량을 조정한다."
+        ]
+      },
+      "result": {
+        "before": "",
+        "after": "",
+        "metric": ""
+      },
+      "extract": {
+        "do": "",
+        "dont": "손님이 쓰던 그릇에 덧담기. 규정 확인 없이 \"원래 리필 안 돼요\"라고 거절하기.",
+        "template": ""
+      }
+    },
+    "execution": {
+      "timing": "요청 즉시",
+      "channel": "대면",
+      "tone": "친절"
+    },
+    "stats": {
+      "query_hits_30d": 0,
+      "resolution_rate": 0,
+      "thumbs_up": 0,
+      "thumbs_down": 0,
+      "last_used_at": ""
+    },
+    "photos": [],
+    "version": 1,
+    "status": "published",
+    "quality_score": 0,
+    "created_at": "",
+    "updated_at": "",
+    "is_template": true,
+    "pack_id": "restaurant",
+    "needs_review": true,
+    "correction_points": [
+      "무료 리필 품목·횟수, 유료 품목과 가격"
+    ],
+    "recommended": true
+  },
+  {
+    "id": "tpl_restaurant_003",
+    "unit_id": "",
+    "creator_id": "",
+    "creator_name": "",
+    "category": "Context",
+    "section": "고객 응대",
+    "subcategory": "포장",
+    "title": "포장 주문 기본 규정",
+    "tags": [
+      "#포장",
+      "#테이크아웃",
+      "#용기"
+    ],
+    "search_keywords": [
+      "포장",
+      "테이크아웃",
+      "싸주세요",
+      "용기",
+      "국물",
+      "젓가락",
+      "봉투"
+    ],
+    "square": {
+      "situation": "매장 방문 손님이 포장을 원함. 용기비·소요 시간·국물 처리 기준을 모름.",
+      "quagmire": "",
+      "uncover": "",
+      "action": {
+        "steps": [
+          "1) 메뉴와 수량을 확인하고 예상 소요 시간을 먼저 말한다.",
+          "2) 국물·소스는 새지 않게 따로 담고 뚜껑을 한 번 더 확인한다.",
+          "3) 수저·젓가락·물티슈는 매장 기준대로 넣는다(기본 제공인지 요청 시에만인지).",
+          "4) 봉투 겉면에 메뉴명·수량을 적거나 영수증을 붙여 다른 손님 것과 섞이지 않게 한다."
+        ]
+      },
+      "result": {
+        "before": "",
+        "after": "",
+        "metric": ""
+      },
+      "extract": {
+        "do": "",
+        "dont": "뜨거운 국물을 얇은 용기에 가득 담기. 포장 손님을 홀 손님 뒤로 계속 미루기.",
+        "template": ""
+      }
+    },
+    "execution": {
+      "timing": "주문 시",
+      "channel": "대면",
+      "tone": "정확"
+    },
+    "stats": {
+      "query_hits_30d": 0,
+      "resolution_rate": 0,
+      "thumbs_up": 0,
+      "thumbs_down": 0,
+      "last_used_at": ""
+    },
+    "photos": [],
+    "version": 1,
+    "status": "published",
+    "quality_score": 0,
+    "created_at": "",
+    "updated_at": "",
+    "is_template": true,
+    "pack_id": "restaurant",
+    "needs_review": true,
+    "correction_points": [
+      "포장 용기비 유무·금액, 일회용 수저 기본 제공 여부"
+    ],
+    "recommended": false
+  },
+  {
+    "id": "tpl_restaurant_004",
+    "unit_id": "",
+    "creator_id": "",
+    "creator_name": "",
+    "category": "Context",
+    "section": "고객 응대",
+    "subcategory": "주문변경",
+    "title": "주문 변경·취소 기준",
+    "tags": [
+      "#주문변경",
+      "#취소",
+      "#조리"
+    ],
+    "search_keywords": [
+      "취소",
+      "바꿔주세요",
+      "변경",
+      "주문 잘못",
+      "조리 시작",
+      "다른 걸로"
+    ],
+    "square": {
+      "situation": "주문 후 손님이 메뉴를 바꾸거나 취소하고 싶어 함. 이미 조리가 시작됐을 수도 있음.",
+      "quagmire": "",
+      "uncover": "",
+      "action": {
+        "steps": [
+          "1) 주방에 즉시 확인한다. 조리 전이면 바로 변경·취소한다.",
+          "2) 조리 중이면 그 사실을 말씀드리고 매장 기준(취소 불가·추가 주문으로 처리)대로 안내한다.",
+          "3) 변경된 내용은 포스와 주문서에 바로 반영하고 주방에 다시 알린다."
+        ]
+      },
+      "result": {
+        "before": "",
+        "after": "",
+        "metric": ""
+      },
+      "extract": {
+        "do": "",
+        "dont": "주방 확인 없이 \"됩니다\"라고 먼저 답하기. 변경 내용을 말로만 전달하고 기록 안 남기기.",
+        "template": ""
+      }
+    },
+    "execution": {
+      "timing": "즉시",
+      "channel": "대면→주방",
+      "tone": "침착"
+    },
+    "stats": {
+      "query_hits_30d": 0,
+      "resolution_rate": 0,
+      "thumbs_up": 0,
+      "thumbs_down": 0,
+      "last_used_at": ""
+    },
+    "photos": [],
+    "version": 1,
+    "status": "published",
+    "quality_score": 0,
+    "created_at": "",
+    "updated_at": "",
+    "is_template": true,
+    "pack_id": "restaurant",
+    "needs_review": true,
+    "correction_points": [
+      "조리 시작 후 취소 가능 여부, 변경 시 차액 처리"
+    ],
+    "recommended": false
+  },
+  {
+    "id": "tpl_restaurant_005",
+    "unit_id": "",
+    "creator_id": "",
+    "creator_name": "",
+    "category": "Context",
+    "section": "고객 응대",
+    "subcategory": "메뉴",
+    "title": "메뉴 설명·추천 기본",
+    "tags": [
+      "#메뉴",
+      "#추천",
+      "#설명"
+    ],
+    "search_keywords": [
+      "추천",
+      "맛있는",
+      "인기",
+      "매워요",
+      "양",
+      "얼마나 걸려",
+      "뭐가 좋아요",
+      "처음"
+    ],
+    "square": {
+      "situation": "손님이 \"뭐가 맛있어요\", \"이거 매워요\", \"양 많아요\" 같이 물음.",
+      "quagmire": "",
+      "uncover": "",
+      "action": {
+        "steps": [
+          "1) 대표 메뉴와 그 특징(맵기·양·조리 시간)을 미리 외워 둔다.",
+          "2) 맵기·양은 매장 기준 표현으로 답한다.",
+          "3) 조리 시간이 긴 메뉴는 주문 전에 걸리는 시간을 미리 알린다.",
+          "4) 모르는 재료·조리법은 추측하지 말고 주방에 확인한 뒤 답한다."
+        ]
+      },
+      "result": {
+        "before": "",
+        "after": "",
+        "metric": ""
+      },
+      "extract": {
+        "do": "",
+        "dont": "모든 메뉴를 \"다 맛있어요\"로 넘기기. 확인 없이 \"안 매워요\"라고 하기.",
+        "template": ""
+      }
+    },
+    "execution": {
+      "timing": "주문 전",
+      "channel": "대면",
+      "tone": "자신 있게"
+    },
+    "stats": {
+      "query_hits_30d": 0,
+      "resolution_rate": 0,
+      "thumbs_up": 0,
+      "thumbs_down": 0,
+      "last_used_at": ""
+    },
+    "photos": [],
+    "version": 1,
+    "status": "published",
+    "quality_score": 0,
+    "created_at": "",
+    "updated_at": "",
+    "is_template": true,
+    "pack_id": "restaurant",
+    "needs_review": true,
+    "correction_points": [
+      "대표 메뉴 3개와 한 줄 설명, 맵기 단계 표현"
+    ],
+    "recommended": false
+  },
+  {
+    "id": "tpl_restaurant_006",
+    "unit_id": "",
+    "creator_id": "",
+    "creator_name": "",
+    "category": "Context",
+    "section": "고객 응대",
+    "subcategory": "원산지",
+    "title": "원산지·성분·알레르기 문의 응대",
+    "tags": [
+      "#원산지",
+      "#성분",
+      "#알레르기"
+    ],
+    "search_keywords": [
+      "원산지",
+      "국산",
+      "어디 거",
+      "성분",
+      "알레르기",
+      "땅콩",
+      "들어가요",
+      "새우"
+    ],
+    "square": {
+      "situation": "손님이 고기·쌀·김치 원산지나 특정 재료 포함 여부를 물음.",
+      "quagmire": "",
+      "uncover": "",
+      "action": {
+        "steps": [
+          "1) 원산지는 메뉴판·원산지 표시판에 적힌 그대로 읽어 드린다.",
+          "2) 알레르기 재료(땅콩·갑각류·우유·밀 등)는 주방에 확인한 뒤 답한다.",
+          "3) 확인이 안 되면 \"확인해 드릴게요\"라고 하고 추측으로 답하지 않는다.",
+          "4) 조리 과정에서 섞일 수 있으면 그 가능성도 함께 말씀드린다."
+        ]
+      },
+      "result": {
+        "before": "",
+        "after": "",
+        "metric": ""
+      },
+      "extract": {
+        "do": "",
+        "dont": "원산지를 기억에 의존해 답하기. \"아마 없을 거예요\" 같은 확답.",
+        "template": ""
+      }
+    },
+    "execution": {
+      "timing": "문의 즉시",
+      "channel": "대면→주방",
+      "tone": "정확"
+    },
+    "stats": {
+      "query_hits_30d": 0,
+      "resolution_rate": 0,
+      "thumbs_up": 0,
+      "thumbs_down": 0,
+      "last_used_at": ""
+    },
+    "photos": [],
+    "version": 1,
+    "status": "published",
+    "quality_score": 0,
+    "created_at": "",
+    "updated_at": "",
+    "is_template": true,
+    "pack_id": "restaurant",
+    "needs_review": true,
+    "correction_points": [
+      "원산지 표시판 위치, 알레르기 주의 메뉴 목록"
+    ],
+    "recommended": false
+  },
+  {
+    "id": "tpl_restaurant_007",
+    "unit_id": "",
+    "creator_id": "",
+    "creator_name": "",
+    "category": "Context",
+    "section": "고객 응대",
+    "subcategory": "주류",
+    "title": "주류 판매·신분증 확인",
+    "tags": [
+      "#주류",
+      "#신분증",
+      "#미성년자"
+    ],
+    "search_keywords": [
+      "술",
+      "소주",
+      "맥주",
+      "신분증",
+      "민증",
+      "미성년자",
+      "나이",
+      "주류"
+    ],
+    "square": {
+      "situation": "술 주문이 들어옴. 손님이 어려 보이거나 일행 중 미성년자로 보이는 사람이 있음.",
+      "quagmire": "",
+      "uncover": "",
+      "action": {
+        "steps": [
+          "1) 어려 보이면 정중하게 신분증 확인을 요청한다. 일행 전원 확인이 원칙이다.",
+          "2) 신분증이 없거나 확인이 안 되면 주류는 판매하지 않는다.",
+          "3) 술만 주문하는 경우·포장 주류 요청은 매장 기준대로 안내한다.",
+          "4) 확인을 거부하거나 실랑이가 되면 혼자 대응하지 말고 사장에게 연락한다."
+        ]
+      },
+      "result": {
+        "before": "",
+        "after": "",
+        "metric": ""
+      },
+      "extract": {
+        "do": "",
+        "dont": "\"괜찮겠지\"로 넘기기. 휴대폰에 찍힌 신분증 사진만으로 확인 처리하기.",
+        "template": ""
+      }
+    },
+    "execution": {
+      "timing": "주문 시",
+      "channel": "대면",
+      "tone": "정중·단호"
+    },
+    "stats": {
+      "query_hits_30d": 0,
+      "resolution_rate": 0,
+      "thumbs_up": 0,
+      "thumbs_down": 0,
+      "last_used_at": ""
+    },
+    "photos": [],
+    "version": 1,
+    "status": "published",
+    "quality_score": 0,
+    "created_at": "",
+    "updated_at": "",
+    "is_template": true,
+    "pack_id": "restaurant",
+    "needs_review": true,
+    "correction_points": [
+      "신분증 확인 기준(전원/어려 보일 때), 주류만 주문 허용 여부"
+    ],
+    "recommended": true
+  },
+  {
+    "id": "tpl_restaurant_008",
+    "unit_id": "",
+    "creator_id": "",
+    "creator_name": "",
+    "category": "Context",
+    "section": "고객 응대",
+    "subcategory": "예약",
+    "title": "예약 접수 기본",
+    "tags": [
+      "#예약",
+      "#전화",
+      "#단체"
+    ],
+    "search_keywords": [
+      "예약",
+      "자리 있어요",
+      "몇 명",
+      "단체",
+      "전화",
+      "장부",
+      "예약금"
+    ],
+    "square": {
+      "situation": "전화나 매장에서 예약 요청이 들어옴. 무엇을 받아 적어야 하는지 모름.",
+      "quagmire": "",
+      "uncover": "",
+      "action": {
+        "steps": [
+          "1) 날짜·시간·인원·대표자 이름·연락처를 받아 예약 장부(또는 앱)에 바로 적는다.",
+          "2) 단체·코스·특정 메뉴 예약이면 메뉴와 수량도 함께 받는다.",
+          "3) 피크 시간대·정원 초과·예약금 필요 여부는 매장 기준대로 안내한다.",
+          "4) 접수 후 사장 또는 담당자에게 예약 내용을 공유한다."
+        ]
+      },
+      "result": {
+        "before": "",
+        "after": "",
+        "metric": ""
+      },
+      "extract": {
+        "do": "",
+        "dont": "메모 없이 기억으로 받기. 연락처 없이 예약 확정하기.",
+        "template": ""
+      }
+    },
+    "execution": {
+      "timing": "접수 즉시",
+      "channel": "전화·대면",
+      "tone": "정확"
+    },
+    "stats": {
+      "query_hits_30d": 0,
+      "resolution_rate": 0,
+      "thumbs_up": 0,
+      "thumbs_down": 0,
+      "last_used_at": ""
+    },
+    "photos": [],
+    "version": 1,
+    "status": "published",
+    "quality_score": 0,
+    "created_at": "",
+    "updated_at": "",
+    "is_template": true,
+    "pack_id": "restaurant",
+    "needs_review": true,
+    "correction_points": [
+      "예약 가능 시간대·최대 인원, 예약금 기준, 예약 장부 위치"
+    ],
+    "recommended": false
+  },
+  {
+    "id": "tpl_restaurant_009",
+    "unit_id": "",
+    "creator_id": "",
+    "creator_name": "",
+    "category": "Context",
+    "section": "주방·조리",
+    "subcategory": "익힘",
+    "title": "조리 익힘·중심 온도 기본",
+    "tags": [
+      "#익힘",
+      "#온도",
+      "#식중독"
+    ],
+    "search_keywords": [
+      "익힘",
+      "덜 익은",
+      "온도",
+      "중심온도",
+      "고기",
+      "해산물",
+      "식중독",
+      "레어"
+    ],
+    "square": {
+      "situation": "고기·해산물·계란 요리를 조리할 때 익힘 판단 기준이 없음.",
+      "quagmire": "",
+      "uncover": "",
+      "action": {
+        "steps": [
+          "1) 고기류는 중심까지 익힌다. 두꺼운 부위는 가장 두꺼운 곳을 잘라 색을 확인한다.",
+          "2) 매장이 정한 메뉴별 조리 시간을 지킨다. 시간이 지나도 속이 붉으면 더 익힌다.",
+          "3) 다 익은 음식은 실온에 오래 두지 않는다. 바로 내보내거나 보온·냉장한다.",
+          "4) 손님이 덜 익힘을 요청해도 매장 기준 밖이면 정중히 안내하고 기준대로 낸다."
+        ]
+      },
+      "result": {
+        "before": "",
+        "after": "",
+        "metric": ""
+      },
+      "extract": {
+        "do": "",
+        "dont": "겉 색만 보고 다 익었다고 판단하기. 미리 익혀 둔 음식을 실온에 방치하기.",
+        "template": ""
+      }
+    },
+    "execution": {
+      "timing": "조리 중",
+      "channel": "주방",
+      "tone": "정확"
+    },
+    "stats": {
+      "query_hits_30d": 0,
+      "resolution_rate": 0,
+      "thumbs_up": 0,
+      "thumbs_down": 0,
+      "last_used_at": ""
+    },
+    "photos": [],
+    "version": 1,
+    "status": "published",
+    "quality_score": 0,
+    "created_at": "",
+    "updated_at": "",
+    "is_template": true,
+    "pack_id": "restaurant",
+    "needs_review": true,
+    "correction_points": [
+      "메뉴별 조리 시간·온도 기준, 덜 익힘 요청 허용 메뉴"
+    ],
+    "recommended": true
+  },
+  {
+    "id": "tpl_restaurant_010",
+    "unit_id": "",
+    "creator_id": "",
+    "creator_name": "",
+    "category": "Context",
+    "section": "주방·조리",
+    "subcategory": "해동",
+    "title": "해동·냉장 보관 기본",
+    "tags": [
+      "#해동",
+      "#보관",
+      "#냉장"
+    ],
+    "search_keywords": [
+      "해동",
+      "녹이기",
+      "냉장",
+      "냉동",
+      "보관",
+      "라벨",
+      "다시 얼려",
+      "실온"
+    ],
+    "square": {
+      "situation": "냉동 재료를 꺼내 해동하거나 조리 후 남은 재료를 보관할 때.",
+      "quagmire": "",
+      "uncover": "",
+      "action": {
+        "steps": [
+          "1) 해동은 냉장고 안에서 하거나 흐르는 찬물에서 한다. 실온에 꺼내 두지 않는다.",
+          "2) 한 번 해동한 재료는 다시 얼리지 않는다.",
+          "3) 개봉·조리한 재료는 뚜껑을 덮고 날짜·품명 라벨을 붙여 냉장한다.",
+          "4) 냉장고·냉동고 문을 오래 열어 두지 않고, 온도 표시가 평소와 다르면 사장에게 알린다."
+        ]
+      },
+      "result": {
+        "before": "",
+        "after": "",
+        "metric": ""
+      },
+      "extract": {
+        "do": "",
+        "dont": "해동 중인 고기를 싱크대 위에 방치하기. 라벨 없이 통에 넣어 두기.",
+        "template": ""
+      }
+    },
+    "execution": {
+      "timing": "조리 전후",
+      "channel": "주방",
+      "tone": "정확"
+    },
+    "stats": {
+      "query_hits_30d": 0,
+      "resolution_rate": 0,
+      "thumbs_up": 0,
+      "thumbs_down": 0,
+      "last_used_at": ""
+    },
+    "photos": [],
+    "version": 1,
+    "status": "published",
+    "quality_score": 0,
+    "created_at": "",
+    "updated_at": "",
+    "is_template": true,
+    "pack_id": "restaurant",
+    "needs_review": true,
+    "correction_points": [
+      "재료별 해동 방법·소요 시간, 개봉 후 보관 기한"
+    ],
+    "recommended": false
+  },
+  {
+    "id": "tpl_restaurant_011",
+    "unit_id": "",
+    "creator_id": "",
+    "creator_name": "",
+    "category": "Context",
+    "section": "고객 응대",
+    "subcategory": "어린이",
+    "title": "어린이 손님 식기·의자 제공",
+    "tags": [
+      "#어린이",
+      "#아기의자",
+      "#식기"
+    ],
+    "search_keywords": [
+      "아기 의자",
+      "어린이",
+      "애기",
+      "앞치마",
+      "어린이 식기",
+      "유아",
+      "안 맵게"
+    ],
+    "square": {
+      "situation": "아이를 동반한 손님이 입장. 아기 의자·어린이 식기·앞치마가 필요함.",
+      "quagmire": "",
+      "uncover": "",
+      "action": {
+        "steps": [
+          "1) 아기 의자가 필요한지 먼저 묻고, 통로가 아닌 벽 쪽 자리에 놓는다.",
+          "2) 어린이용 그릇·포크·앞치마가 있으면 요청 전에 갖다 드린다.",
+          "3) 뜨거운 음식·뚝배기는 아이 손이 닿지 않는 쪽에 놓는다.",
+          "4) 어린이 메뉴나 덜 맵게 조리 가능한 메뉴가 있으면 알려 드린다."
+        ]
+      },
+      "result": {
+        "before": "",
+        "after": "",
+        "metric": ""
+      },
+      "extract": {
+        "do": "",
+        "dont": "아기 의자를 통로에 두기. 뜨거운 그릇을 아이 앞에 놓기.",
+        "template": ""
+      }
+    },
+    "execution": {
+      "timing": "착석 시",
+      "channel": "대면",
+      "tone": "친절"
+    },
+    "stats": {
+      "query_hits_30d": 0,
+      "resolution_rate": 0,
+      "thumbs_up": 0,
+      "thumbs_down": 0,
+      "last_used_at": ""
+    },
+    "photos": [],
+    "version": 1,
+    "status": "published",
+    "quality_score": 0,
+    "created_at": "",
+    "updated_at": "",
+    "is_template": true,
+    "pack_id": "restaurant",
+    "needs_review": true,
+    "correction_points": [
+      "아기 의자 개수·위치, 어린이 메뉴·서비스 기준"
+    ],
+    "recommended": false
+  },
+  {
+    "id": "tpl_restaurant_012",
+    "unit_id": "",
+    "creator_id": "",
+    "creator_name": "",
+    "category": "Routine",
+    "section": "주방·조리",
+    "subcategory": "반찬",
+    "title": "반찬 소분·보관·재사용 금지",
+    "tags": [
+      "#반찬",
+      "#소분",
+      "#재사용금지"
+    ],
+    "search_keywords": [
+      "반찬",
+      "남은 반찬",
+      "재사용",
+      "소분",
+      "보관",
+      "집게",
+      "버려요",
+      "다시 써"
+    ],
+    "square": {
+      "situation": "반찬을 만들어 두고 손님상에 내고 남은 것을 처리할 때.",
+      "quagmire": "",
+      "uncover": "",
+      "action": {
+        "steps": [
+          "1) 만든 반찬은 1회 제공량으로 소분해 뚜껑 덮어 냉장하고 날짜를 적는다.",
+          "2) 손님상에 나간 반찬은 남아도 다시 쓰지 않고 전량 폐기한다.",
+          "3) 상에 낼 때는 깨끗한 집게·국자를 쓰고 그릇 테두리를 닦아 낸다.",
+          "4) 남는 양이 많은 반찬은 담는 양을 줄여 낭비를 막고 사장에게 알린다."
+        ]
+      },
+      "result": {
+        "before": "",
+        "after": "",
+        "metric": ""
+      },
+      "extract": {
+        "do": "",
+        "dont": "남은 반찬을 통에 다시 붓기. 여러 반찬에 같은 집게 쓰기.",
+        "template": ""
+      }
+    },
+    "execution": {
+      "timing": "조리 후·서빙 시",
+      "channel": "주방",
+      "tone": "정확"
+    },
+    "stats": {
+      "query_hits_30d": 0,
+      "resolution_rate": 0,
+      "thumbs_up": 0,
+      "thumbs_down": 0,
+      "last_used_at": ""
+    },
+    "photos": [],
+    "version": 1,
+    "status": "published",
+    "quality_score": 0,
+    "created_at": "",
+    "updated_at": "",
+    "is_template": true,
+    "pack_id": "restaurant",
+    "needs_review": true,
+    "correction_points": [
+      "반찬별 냉장 보관 기한, 기본 제공 반찬 구성"
+    ],
+    "recommended": true
+  },
+  {
+    "id": "tpl_restaurant_013",
+    "unit_id": "",
+    "creator_id": "",
+    "creator_name": "",
+    "category": "Routine",
+    "section": "주방·조리",
+    "subcategory": "튀김",
+    "title": "튀김유 관리·교체",
+    "tags": [
+      "#튀김",
+      "#기름",
+      "#교체"
+    ],
+    "search_keywords": [
+      "튀김유",
+      "기름",
+      "교체",
+      "폐유",
+      "튀김기",
+      "기름 색",
+      "거품"
+    ],
+    "square": {
+      "situation": "튀김기 기름이 검게 변하거나 거품·냄새가 심해짐. 언제 갈아야 하는지 모름.",
+      "quagmire": "",
+      "uncover": "",
+      "action": {
+        "steps": [
+          "1) 영업 중 튀김 찌꺼기를 수시로 건져 내고 기름 온도를 기준대로 유지한다.",
+          "2) 색이 짙어지거나 거품이 꺼지지 않거나 탄 냄새가 나면 교체한다. 애매하면 사장에게 묻는다.",
+          "3) 교체는 기름이 완전히 식은 뒤 하고, 폐유는 정해진 통에 모아 수거 업체에 넘긴다.",
+          "4) 새 기름을 붓기 전 튀김기 바닥 찌꺼기를 닦아 낸다."
+        ]
+      },
+      "result": {
+        "before": "",
+        "after": "",
+        "metric": ""
+      },
+      "extract": {
+        "do": "",
+        "dont": "뜨거운 기름을 옮기거나 물이 닿게 하기. 폐유를 하수구에 버리기.",
+        "template": ""
+      }
+    },
+    "execution": {
+      "timing": "영업 중 점검·마감 교체",
+      "channel": "주방",
+      "tone": "안전"
+    },
+    "stats": {
+      "query_hits_30d": 0,
+      "resolution_rate": 0,
+      "thumbs_up": 0,
+      "thumbs_down": 0,
+      "last_used_at": ""
+    },
+    "photos": [],
+    "version": 1,
+    "status": "published",
+    "quality_score": 0,
+    "created_at": "",
+    "updated_at": "",
+    "is_template": true,
+    "pack_id": "restaurant",
+    "needs_review": true,
+    "correction_points": [
+      "기름 교체 주기, 폐유 수거 업체·통 위치"
+    ],
+    "recommended": false
+  },
+  {
+    "id": "tpl_restaurant_014",
+    "unit_id": "",
+    "creator_id": "",
+    "creator_name": "",
+    "category": "Routine",
+    "section": "기기·설비",
+    "subcategory": "식기세척기",
+    "title": "식기세척기·세척 관리",
+    "tags": [
+      "#식기세척기",
+      "#세척",
+      "#건조"
+    ],
+    "search_keywords": [
+      "식기세척기",
+      "세척",
+      "그릇",
+      "얼룩",
+      "세제",
+      "린스",
+      "거름망",
+      "건조"
+    ],
+    "square": {
+      "situation": "그릇이 밀리거나 세척 후 얼룩·기름기가 남음.",
+      "quagmire": "",
+      "uncover": "",
+      "action": {
+        "steps": [
+          "1) 음식물을 긁어 내고 애벌 헹굼을 한 뒤 랙에 넣는다. 겹쳐 넣지 않는다.",
+          "2) 세제·린스 잔량을 오픈 때 확인하고 부족하면 채운다.",
+          "3) 세척 후 그릇은 완전히 말린 뒤 수납한다. 물기 있는 채로 쌓지 않는다.",
+          "4) 마감 시 필터·거름망을 빼서 씻고 내부 물을 뺀다."
+        ]
+      },
+      "result": {
+        "before": "",
+        "after": "",
+        "metric": ""
+      },
+      "extract": {
+        "do": "",
+        "dont": "애벌 없이 통째로 넣기. 젖은 그릇을 바로 손님상에 쓰기.",
+        "template": ""
+      }
+    },
+    "execution": {
+      "timing": "영업 중·마감",
+      "channel": "주방",
+      "tone": "정확"
+    },
+    "stats": {
+      "query_hits_30d": 0,
+      "resolution_rate": 0,
+      "thumbs_up": 0,
+      "thumbs_down": 0,
+      "last_used_at": ""
+    },
+    "photos": [],
+    "version": 1,
+    "status": "published",
+    "quality_score": 0,
+    "created_at": "",
+    "updated_at": "",
+    "is_template": true,
+    "pack_id": "restaurant",
+    "needs_review": true,
+    "correction_points": [
+      "세제·린스 보관 위치, 세척기 필터 청소 주기"
+    ],
+    "recommended": false
+  },
+  {
+    "id": "tpl_restaurant_015",
+    "unit_id": "",
+    "creator_id": "",
+    "creator_name": "",
+    "category": "Routine",
+    "section": "위생·청소",
+    "subcategory": "셀프바",
+    "title": "셀프바·양념통·물통 채우기 순회",
+    "tags": [
+      "#셀프바",
+      "#양념통",
+      "#순회"
+    ],
+    "search_keywords": [
+      "셀프바",
+      "양념통",
+      "물통",
+      "수저통",
+      "채우기",
+      "비었어요",
+      "순회"
+    ],
+    "square": {
+      "situation": "영업 중 셀프바 반찬·물·수저·양념통이 비거나 지저분해짐.",
+      "quagmire": "",
+      "uncover": "",
+      "action": {
+        "steps": [
+          "1) 매장이 정한 간격으로 셀프바를 돌며 부족한 것을 채운다.",
+          "2) 반찬은 새 통으로 교체하고 남은 것에 덧붓지 않는다.",
+          "3) 양념통·소금통·수저통은 겉을 닦고 뚜껑을 닫아 둔다.",
+          "4) 물통·정수기 주변 물기를 닦고 컵을 채운다."
+        ]
+      },
+      "result": {
+        "before": "",
+        "after": "",
+        "metric": ""
+      },
+      "extract": {
+        "do": "",
+        "dont": "빈 통을 오래 방치하기. 쓰던 반찬 위에 새 반찬 덧담기.",
+        "template": ""
+      }
+    },
+    "execution": {
+      "timing": "영업 중 주기적",
+      "channel": "홀",
+      "tone": "신속"
+    },
+    "stats": {
+      "query_hits_30d": 0,
+      "resolution_rate": 0,
+      "thumbs_up": 0,
+      "thumbs_down": 0,
+      "last_used_at": ""
+    },
+    "photos": [],
+    "version": 1,
+    "status": "published",
+    "quality_score": 0,
+    "created_at": "",
+    "updated_at": "",
+    "is_template": true,
+    "pack_id": "restaurant",
+    "needs_review": true,
+    "correction_points": [
+      "셀프바 품목 목록, 순회 간격"
+    ],
+    "recommended": false
+  },
+  {
+    "id": "tpl_restaurant_016",
+    "unit_id": "",
+    "creator_id": "",
+    "creator_name": "",
+    "category": "Routine",
+    "section": "고객 응대",
+    "subcategory": "단체",
+    "title": "단체·예약 상차림 사전 준비",
+    "tags": [
+      "#단체",
+      "#예약",
+      "#상차림"
+    ],
+    "search_keywords": [
+      "단체",
+      "예약",
+      "테이블 붙이기",
+      "상차림",
+      "예약석",
+      "준비",
+      "인원"
+    ],
+    "square": {
+      "situation": "단체 예약이 잡혀 있음. 도착 전에 무엇을 준비해야 하는지 모름.",
+      "quagmire": "",
+      "uncover": "",
+      "action": {
+        "steps": [
+          "1) 예약 인원에 맞게 테이블을 붙이고 의자 수를 맞춘다.",
+          "2) 인원수만큼 물·수저·앞접시를 미리 세팅하고 예약석 표시를 둔다.",
+          "3) 예약 메뉴가 정해져 있으면 주방에 시간과 수량을 미리 알린다.",
+          "4) 도착 전에 주방에 재료 준비 상태를 확인한다."
+        ]
+      },
+      "result": {
+        "before": "",
+        "after": "",
+        "metric": ""
+      },
+      "extract": {
+        "do": "",
+        "dont": "도착 후에 테이블 붙이기 시작하기. 예약석에 다른 손님 앉히기.",
+        "template": ""
+      }
+    },
+    "execution": {
+      "timing": "예약 도착 전",
+      "channel": "홀·주방",
+      "tone": "계획적"
+    },
+    "stats": {
+      "query_hits_30d": 0,
+      "resolution_rate": 0,
+      "thumbs_up": 0,
+      "thumbs_down": 0,
+      "last_used_at": ""
+    },
+    "photos": [],
+    "version": 1,
+    "status": "published",
+    "quality_score": 0,
+    "created_at": "",
+    "updated_at": "",
+    "is_template": true,
+    "pack_id": "restaurant",
+    "needs_review": true,
+    "correction_points": [
+      "단체석 위치·최대 인원, 예약 메뉴 주방 통보 시점"
+    ],
+    "recommended": false
+  },
+  {
+    "id": "tpl_restaurant_017",
+    "unit_id": "",
+    "creator_id": "",
+    "creator_name": "",
+    "category": "Routine",
+    "section": "고객 응대",
+    "subcategory": "배달앱",
+    "title": "배달앱 주문 접수·조리시간 입력",
+    "tags": [
+      "#배달앱",
+      "#접수",
+      "#조리시간"
+    ],
+    "search_keywords": [
+      "배달앱",
+      "배민",
+      "쿠팡이츠",
+      "요기요",
+      "접수",
+      "조리시간",
+      "품절",
+      "요청사항"
+    ],
+    "square": {
+      "situation": "배달앱 주문 알림이 옴. 접수·조리시간·품절 처리를 누가 어떻게 하는지 모름.",
+      "quagmire": "",
+      "uncover": "",
+      "action": {
+        "steps": [
+          "1) 알림이 오면 바로 확인하고 접수한다. 오래 두면 자동 취소된다.",
+          "2) 조리 시간은 현재 주방 상황(밀린 주문 수)을 보고 정직하게 입력한다.",
+          "3) 요청사항(덜 맵게·수저 제외 등)을 주문서에 옮겨 주방에 전달한다.",
+          "4) 재료가 떨어진 메뉴는 앱에서 즉시 품절 처리한다.",
+          "5) 배달앱 단말·태블릿은 항상 충전 상태로 둔다."
+        ]
+      },
+      "result": {
+        "before": "",
+        "after": "",
+        "metric": ""
+      },
+      "extract": {
+        "do": "",
+        "dont": "알림을 확인 않고 방치하기. 조리 시간을 실제보다 짧게 입력하기.",
+        "template": ""
+      }
+    },
+    "execution": {
+      "timing": "알림 즉시",
+      "channel": "단말",
+      "tone": "신속"
+    },
+    "stats": {
+      "query_hits_30d": 0,
+      "resolution_rate": 0,
+      "thumbs_up": 0,
+      "thumbs_down": 0,
+      "last_used_at": ""
+    },
+    "photos": [],
+    "version": 1,
+    "status": "published",
+    "quality_score": 0,
+    "created_at": "",
+    "updated_at": "",
+    "is_template": true,
+    "pack_id": "restaurant",
+    "needs_review": true,
+    "correction_points": [
+      "배달앱 접수 담당자, 기본 조리 시간, 배달 가능 시간대"
+    ],
+    "recommended": false
+  },
+  {
+    "id": "tpl_restaurant_018",
+    "unit_id": "",
+    "creator_id": "",
+    "creator_name": "",
+    "category": "Routine",
+    "section": "고객 응대",
+    "subcategory": "배달",
+    "title": "배달·포장 출고 전 확인",
+    "tags": [
+      "#배달",
+      "#포장",
+      "#출고"
+    ],
+    "search_keywords": [
+      "배달",
+      "포장",
+      "출고",
+      "라이더",
+      "누락",
+      "국물 샘",
+      "수저",
+      "주문번호"
+    ],
+    "square": {
+      "situation": "배달·포장 음식을 봉투에 담아 라이더나 손님에게 넘기기 직전.",
+      "quagmire": "",
+      "uncover": "",
+      "action": {
+        "steps": [
+          "1) 주문서와 대조해 메뉴·수량·옵션(맵기·빼기)을 확인한다.",
+          "2) 국물·소스 뚜껑을 다시 눌러 닫고 비닐로 한 번 더 감싼다.",
+          "3) 수저·젓가락·물티슈·반찬 등 기본 구성을 매장 기준대로 넣는다.",
+          "4) 봉투를 묶고 주문 번호(또는 이름)를 적어 라이더 대기 위치에 둔다.",
+          "5) 라이더에게 넘길 때 주문 번호를 서로 확인한다."
+        ]
+      },
+      "result": {
+        "before": "",
+        "after": "",
+        "metric": ""
+      },
+      "extract": {
+        "do": "",
+        "dont": "확인 없이 봉투 묶기. 뜨거운 음식과 차가운 음식을 한 봉투에 겹쳐 담기.",
+        "template": ""
+      }
+    },
+    "execution": {
+      "timing": "출고 직전",
+      "channel": "주방·카운터",
+      "tone": "정확"
+    },
+    "stats": {
+      "query_hits_30d": 0,
+      "resolution_rate": 0,
+      "thumbs_up": 0,
+      "thumbs_down": 0,
+      "last_used_at": ""
+    },
+    "photos": [],
+    "version": 1,
+    "status": "published",
+    "quality_score": 0,
+    "created_at": "",
+    "updated_at": "",
+    "is_template": true,
+    "pack_id": "restaurant",
+    "needs_review": true,
+    "correction_points": [
+      "기본 포장 구성품, 라이더 대기·픽업 위치"
+    ],
+    "recommended": false
+  },
+  {
+    "id": "tpl_restaurant_019",
+    "unit_id": "",
+    "creator_id": "",
+    "creator_name": "",
+    "category": "Routine",
+    "section": "위생·청소",
+    "subcategory": "수저",
+    "title": "수저·컵 세척과 소독기 관리",
+    "tags": [
+      "#수저",
+      "#소독기",
+      "#컵"
+    ],
+    "search_keywords": [
+      "수저",
+      "젓가락",
+      "소독기",
+      "컵",
+      "수저통",
+      "세척",
+      "얼룩"
+    ],
+    "square": {
+      "situation": "수저통·컵이 비거나 소독기 관리를 누가 하는지 모름.",
+      "quagmire": "",
+      "uncover": "",
+      "action": {
+        "steps": [
+          "1) 수저·젓가락은 세척 후 완전히 말려 소독기에 넣는다.",
+          "2) 소독기는 오픈 때 켜고 마감 때 끄며, 내부를 주 1회 닦는다.",
+          "3) 테이블 수저통은 손님이 바뀔 때마다 점검하고 부족하면 채운다.",
+          "4) 컵은 물기와 얼룩을 확인하고 입 닿는 부분을 만지지 않고 나른다."
+        ]
+      },
+      "result": {
+        "before": "",
+        "after": "",
+        "metric": ""
+      },
+      "extract": {
+        "do": "",
+        "dont": "젖은 수저를 소독기에 넣기. 컵 안쪽에 손 넣어 잡기.",
+        "template": ""
+      }
+    },
+    "execution": {
+      "timing": "오픈·영업 중·마감",
+      "channel": "홀·주방",
+      "tone": "정확"
+    },
+    "stats": {
+      "query_hits_30d": 0,
+      "resolution_rate": 0,
+      "thumbs_up": 0,
+      "thumbs_down": 0,
+      "last_used_at": ""
+    },
+    "photos": [],
+    "version": 1,
+    "status": "published",
+    "quality_score": 0,
+    "created_at": "",
+    "updated_at": "",
+    "is_template": true,
+    "pack_id": "restaurant",
+    "needs_review": true,
+    "correction_points": [
+      "소독기 위치·청소 주기, 수저통 보충 기준"
+    ],
+    "recommended": false
+  },
+  {
+    "id": "tpl_restaurant_020",
+    "unit_id": "",
+    "creator_id": "",
+    "creator_name": "",
+    "category": "Routine",
+    "section": "재고·발주",
+    "subcategory": "입고",
+    "title": "식자재 입고 검수",
+    "tags": [
+      "#입고",
+      "#검수",
+      "#발주"
+    ],
+    "search_keywords": [
+      "입고",
+      "검수",
+      "발주",
+      "배송",
+      "수량",
+      "유통기한",
+      "상했어요",
+      "인수"
+    ],
+    "square": {
+      "situation": "발주한 식자재가 도착함. 확인 없이 받아 두면 수량 부족·상한 재료를 나중에 발견함.",
+      "quagmire": "",
+      "uncover": "",
+      "action": {
+        "steps": [
+          "1) 발주서와 품목·수량을 대조하고 빠진 것은 그 자리에서 기사에게 말한다.",
+          "2) 냉장·냉동품은 온도(차갑게 유지됐는지)와 포장 상태를 확인한다.",
+          "3) 유통기한을 확인하고 짧은 것은 앞쪽에 넣는다.",
+          "4) 확인 후 바로 냉장·냉동에 넣고 바닥에 두지 않는다.",
+          "5) 문제(부족·파손·상함)는 사진을 찍어 사장에게 보낸다."
+        ]
+      },
+      "result": {
+        "before": "",
+        "after": "",
+        "metric": ""
+      },
+      "extract": {
+        "do": "",
+        "dont": "박스째 바닥에 두고 나중에 정리하기. 확인 없이 인수증에 서명하기.",
+        "template": ""
+      }
+    },
+    "execution": {
+      "timing": "입고 즉시",
+      "channel": "주방",
+      "tone": "정확"
+    },
+    "stats": {
+      "query_hits_30d": 0,
+      "resolution_rate": 0,
+      "thumbs_up": 0,
+      "thumbs_down": 0,
+      "last_used_at": ""
+    },
+    "photos": [],
+    "version": 1,
+    "status": "published",
+    "quality_score": 0,
+    "created_at": "",
+    "updated_at": "",
+    "is_template": true,
+    "pack_id": "restaurant",
+    "needs_review": true,
+    "correction_points": [
+      "주요 거래처·배송 요일, 발주서 확인 방법"
+    ],
+    "recommended": false
+  },
+  {
+    "id": "tpl_restaurant_021",
+    "unit_id": "",
+    "creator_id": "",
+    "creator_name": "",
+    "category": "Routine",
+    "section": "주방·조리",
+    "subcategory": "위생",
+    "title": "주방 위생 복장·손 씻기",
+    "tags": [
+      "#위생",
+      "#손씻기",
+      "#복장"
+    ],
+    "search_keywords": [
+      "손 씻기",
+      "위생모",
+      "앞치마",
+      "장갑",
+      "보건증",
+      "머리망",
+      "위생"
+    ],
+    "square": {
+      "situation": "주방에 들어가 조리·세척을 시작하기 전.",
+      "quagmire": "",
+      "uncover": "",
+      "action": {
+        "steps": [
+          "1) 위생모(또는 머리망)·앞치마를 착용하고 긴 머리는 묶는다.",
+          "2) 조리 전·화장실 후·쓰레기 처리 후·날고기 만진 후에는 비누로 꼼꼼히 손을 씻는다.",
+          "3) 장갑은 작업이 바뀔 때마다 교체한다. 같은 장갑으로 돈과 음식을 만지지 않는다.",
+          "4) 손에 상처가 있으면 방수 밴드를 붙이고 장갑을 낀다.",
+          "5) 건강진단결과서(보건증)는 근무 시작 전 제출하고 기한을 관리한다."
+        ]
+      },
+      "result": {
+        "before": "",
+        "after": "",
+        "metric": ""
+      },
+      "extract": {
+        "do": "",
+        "dont": "장갑 낀 채 휴대폰 만지고 조리 계속하기. 반지·시계 차고 조리하기.",
+        "template": ""
+      }
+    },
+    "execution": {
+      "timing": "주방 입장 시",
+      "channel": "주방",
+      "tone": "습관"
+    },
+    "stats": {
+      "query_hits_30d": 0,
+      "resolution_rate": 0,
+      "thumbs_up": 0,
+      "thumbs_down": 0,
+      "last_used_at": ""
+    },
+    "photos": [],
+    "version": 1,
+    "status": "published",
+    "quality_score": 0,
+    "created_at": "",
+    "updated_at": "",
+    "is_template": true,
+    "pack_id": "restaurant",
+    "needs_review": true,
+    "correction_points": [
+      "위생 복장 구성, 보건증 보관 위치"
+    ],
+    "recommended": false
+  },
+  {
+    "id": "tpl_restaurant_022",
+    "unit_id": "",
+    "creator_id": "",
+    "creator_name": "",
+    "category": "Know-how",
+    "section": "고객 응대",
+    "subcategory": "서빙",
+    "title": "음식 나가는 순서·서빙 타이밍",
+    "tags": [
+      "#서빙",
+      "#순서",
+      "#타이밍"
+    ],
+    "search_keywords": [
+      "서빙",
+      "순서",
+      "나가는 순서",
+      "픽업",
+      "동시에",
+      "식어요",
+      "뜨거워요"
+    ],
+    "square": {
+      "situation": "여러 테이블 음식이 동시에 나옴. 무엇을 먼저 어떻게 내야 할지 헷갈림.",
+      "quagmire": "",
+      "uncover": "",
+      "action": {
+        "steps": [
+          "1) 같은 테이블 음식은 되도록 한 번에 나간다. 먼저 나온 것은 픽업대에서 보온한다.",
+          "2) 반찬·밑반찬을 먼저 놓고 메인을 낸다.",
+          "3) 주문서 순서대로 내되, 조리가 끝난 음식은 바로 픽업한다.",
+          "4) 테이블에 놓을 때 메뉴명을 말해 주문 착오를 그 자리에서 잡는다.",
+          "5) 뜨거운 그릇은 \"뜨겁습니다\"라고 말한 뒤 내려놓는다."
+        ]
+      },
+      "result": {
+        "before": "",
+        "after": "",
+        "metric": ""
+      },
+      "extract": {
+        "do": "",
+        "dont": "다 나올 때까지 픽업대에 오래 두기. 메뉴명 확인 없이 내려놓기.",
+        "template": ""
+      }
+    },
+    "execution": {
+      "timing": "조리 완료 즉시",
+      "channel": "홀",
+      "tone": "신속"
+    },
+    "stats": {
+      "query_hits_30d": 0,
+      "resolution_rate": 0,
+      "thumbs_up": 0,
+      "thumbs_down": 0,
+      "last_used_at": ""
+    },
+    "photos": [],
+    "version": 1,
+    "status": "published",
+    "quality_score": 0,
+    "created_at": "",
+    "updated_at": "",
+    "is_template": true,
+    "pack_id": "restaurant",
+    "needs_review": true,
+    "correction_points": [
+      "반찬 선제공 여부, 픽업대 위치·호출 방식"
+    ],
+    "recommended": true
+  },
+  {
+    "id": "tpl_restaurant_023",
+    "unit_id": "",
+    "creator_id": "",
+    "creator_name": "",
+    "category": "Know-how",
+    "section": "고객 응대",
+    "subcategory": "요청",
+    "title": "빼기·덜 맵게 등 특별 요청 처리",
+    "tags": [
+      "#요청",
+      "#빼기",
+      "#맵기"
+    ],
+    "search_keywords": [
+      "빼주세요",
+      "덜 맵게",
+      "안 맵게",
+      "고수",
+      "양파",
+      "요청",
+      "옵션",
+      "따로"
+    ],
+    "square": {
+      "situation": "\"고수 빼 주세요\", \"덜 맵게\", \"양파 빼고\" 같은 요청. 되는지 안 되는지 모름.",
+      "quagmire": "",
+      "uncover": "",
+      "action": {
+        "steps": [
+          "1) 요청을 그대로 주문서·포스 메모에 적고 주방에 소리 내어 확인한다.",
+          "2) 미리 조리된 소스·육수라 조절이 안 되는 것은 솔직히 \"그건 조절이 어렵다\"고 말한다.",
+          "3) 가능한 대안(다른 메뉴·소스 따로)을 제시한다.",
+          "4) 음식이 나갈 때 요청이 반영됐는지 한 번 더 확인한다."
+        ]
+      },
+      "result": {
+        "before": "",
+        "after": "",
+        "metric": ""
+      },
+      "extract": {
+        "do": "",
+        "dont": "주방 확인 없이 \"됩니다\"라고 하기. 요청을 기억으로만 전달하기.",
+        "template": ""
+      }
+    },
+    "execution": {
+      "timing": "주문 시",
+      "channel": "대면→주방",
+      "tone": "정확"
+    },
+    "stats": {
+      "query_hits_30d": 0,
+      "resolution_rate": 0,
+      "thumbs_up": 0,
+      "thumbs_down": 0,
+      "last_used_at": ""
+    },
+    "photos": [],
+    "version": 1,
+    "status": "published",
+    "quality_score": 0,
+    "created_at": "",
+    "updated_at": "",
+    "is_template": true,
+    "pack_id": "restaurant",
+    "needs_review": true,
+    "correction_points": [
+      "조절 가능한 요청 목록, 조절 불가 메뉴"
+    ],
+    "recommended": false
+  },
+  {
+    "id": "tpl_restaurant_024",
+    "unit_id": "",
+    "creator_id": "",
+    "creator_name": "",
+    "category": "Know-how",
+    "section": "고객 응대",
+    "subcategory": "뚝배기",
+    "title": "뜨거운 음식·뚝배기 안전 서빙",
+    "tags": [
+      "#뚝배기",
+      "#화상",
+      "#안전"
+    ],
+    "search_keywords": [
+      "뚝배기",
+      "뜨거워요",
+      "철판",
+      "화상",
+      "국물",
+      "받침",
+      "집게",
+      "안전"
+    ],
+    "square": {
+      "situation": "뚝배기·철판·국물 요리를 나를 때 직원·손님 화상 위험.",
+      "quagmire": "",
+      "uncover": "",
+      "action": {
+        "steps": [
+          "1) 뚝배기·철판은 전용 집게나 받침을 쓰고 한 번에 두 개 이상 들지 않는다.",
+          "2) 통로에서 \"지나갑니다, 뜨겁습니다\"라고 말하며 이동한다.",
+          "3) 테이블에 놓을 때 아이·손님 팔꿈치와 먼 쪽에 받침을 먼저 깔고 놓는다.",
+          "4) 국물이 넘칠 정도로 담지 않는다."
+        ]
+      },
+      "result": {
+        "before": "",
+        "after": "",
+        "metric": ""
+      },
+      "extract": {
+        "do": "",
+        "dont": "맨손이나 마른 행주 하나로 뚝배기 들기. 손님 머리 위로 뜨거운 음식 넘기기.",
+        "template": ""
+      }
+    },
+    "execution": {
+      "timing": "서빙 시",
+      "channel": "홀",
+      "tone": "안전"
+    },
+    "stats": {
+      "query_hits_30d": 0,
+      "resolution_rate": 0,
+      "thumbs_up": 0,
+      "thumbs_down": 0,
+      "last_used_at": ""
+    },
+    "photos": [],
+    "version": 1,
+    "status": "published",
+    "quality_score": 0,
+    "created_at": "",
+    "updated_at": "",
+    "is_template": true,
+    "pack_id": "restaurant",
+    "needs_review": true,
+    "correction_points": [
+      "뚝배기 집게·받침 위치, 화상 응급 처치 키트 위치"
+    ],
+    "recommended": false
+  },
+  {
+    "id": "tpl_restaurant_025",
+    "unit_id": "",
+    "creator_id": "",
+    "creator_name": "",
+    "category": "Know-how",
+    "section": "고객 응대",
+    "subcategory": "접시",
+    "title": "식사 중 접시 치우기·테이블 정리 타이밍",
+    "tags": [
+      "#접시",
+      "#치우기",
+      "#타이밍"
+    ],
+    "search_keywords": [
+      "접시",
+      "치워",
+      "정리",
+      "빈 그릇",
+      "타이밍",
+      "식사 중",
+      "물어보고"
+    ],
+    "square": {
+      "situation": "손님이 식사 중인데 빈 접시를 치워도 되는지, 언제 물어봐야 할지 모름.",
+      "quagmire": "",
+      "uncover": "",
+      "action": {
+        "steps": [
+          "1) 빈 접시는 \"치워 드릴까요\" 하고 물은 뒤 치운다.",
+          "2) 아직 먹고 있는 그릇 옆의 것은 손을 뻗어 치우지 않고 나중에 한 번에 한다.",
+          "3) 후식·물 리필이 필요해 보이면 그때 함께 챙긴다.",
+          "4) 손님이 일어나면 바로 정리해 다음 손님 대기를 줄인다."
+        ]
+      },
+      "result": {
+        "before": "",
+        "after": "",
+        "metric": ""
+      },
+      "extract": {
+        "do": "",
+        "dont": "말없이 손 뻗어 치우기. 식사 중인 손님을 재촉하듯 정리하기.",
+        "template": ""
+      }
+    },
+    "execution": {
+      "timing": "식사 중·후",
+      "channel": "홀",
+      "tone": "조용히"
+    },
+    "stats": {
+      "query_hits_30d": 0,
+      "resolution_rate": 0,
+      "thumbs_up": 0,
+      "thumbs_down": 0,
+      "last_used_at": ""
+    },
+    "photos": [],
+    "version": 1,
+    "status": "published",
+    "quality_score": 0,
+    "created_at": "",
+    "updated_at": "",
+    "is_template": true,
+    "pack_id": "restaurant",
+    "needs_review": true,
+    "correction_points": [
+      "식사 중 접시 회수 여부, 후식 제공 기준"
+    ],
+    "recommended": false
+  },
+  {
+    "id": "tpl_restaurant_026",
+    "unit_id": "",
+    "creator_id": "",
+    "creator_name": "",
+    "category": "Know-how",
+    "section": "결제·정산",
+    "subcategory": "더치페이",
+    "title": "여러 명 나눠 계산(더치페이) 요청",
+    "tags": [
+      "#더치페이",
+      "#나눠계산",
+      "#포스"
+    ],
+    "search_keywords": [
+      "더치페이",
+      "나눠서",
+      "각자",
+      "따로 계산",
+      "분할 결제",
+      "카드 여러 장"
+    ],
+    "square": {
+      "situation": "계산 시 각자 먹은 만큼 또는 N분의 1로 나눠 결제해 달라고 함.",
+      "quagmire": "",
+      "uncover": "",
+      "action": {
+        "steps": [
+          "1) 나눠 계산 가능 여부와 방식(메뉴별/금액 분할)을 매장 기준대로 안내한다.",
+          "2) 포스 분할 결제 기능으로 한 명씩 결제하고 영수증을 각각 준다.",
+          "3) 뒤에 대기가 길면 한 사람이 먼저 결제하고 나머지는 옆에서 기다리게 안내한다.",
+          "4) 결제가 다 끝난 뒤 총액이 주문 금액과 맞는지 확인한다."
+        ]
+      },
+      "result": {
+        "before": "",
+        "after": "",
+        "metric": ""
+      },
+      "extract": {
+        "do": "",
+        "dont": "분할 중 금액을 대충 잡아 두 번 결제하기. 대기 손님 앞에서 짜증 내기.",
+        "template": ""
+      }
+    },
+    "execution": {
+      "timing": "계산 시",
+      "channel": "카운터",
+      "tone": "침착"
+    },
+    "stats": {
+      "query_hits_30d": 0,
+      "resolution_rate": 0,
+      "thumbs_up": 0,
+      "thumbs_down": 0,
+      "last_used_at": ""
+    },
+    "photos": [],
+    "version": 1,
+    "status": "published",
+    "quality_score": 0,
+    "created_at": "",
+    "updated_at": "",
+    "is_template": true,
+    "pack_id": "restaurant",
+    "needs_review": true,
+    "correction_points": [
+      "분할 결제 허용 인원, 포스 분할 결제 방법"
+    ],
+    "recommended": false
+  },
+  {
+    "id": "tpl_restaurant_027",
+    "unit_id": "",
+    "creator_id": "",
+    "creator_name": "",
+    "category": "Know-how",
+    "section": "고객 응대",
+    "subcategory": "호출벨",
+    "title": "호출벨·손님 부름에 응답하기",
+    "tags": [
+      "#호출벨",
+      "#응답",
+      "#홀"
+    ],
+    "search_keywords": [
+      "호출벨",
+      "벨",
+      "불렀는데",
+      "안 와요",
+      "응답",
+      "저기요",
+      "테이블 번호"
+    ],
+    "square": {
+      "situation": "호출벨이 울리거나 손님이 손을 듦. 바쁠 때 응답이 늦어 항의가 나옴.",
+      "quagmire": "",
+      "uncover": "",
+      "action": {
+        "steps": [
+          "1) 벨이 울리면 손을 멈출 수 없어도 \"네, 가겠습니다\"라고 바로 대답한다.",
+          "2) 바로 테이블로 가고, 늦으면 \"죄송합니다, 기다리셨죠\"를 먼저 말한다.",
+          "3) 주문·리필·계산 중 무엇인지 듣고, 여러 테이블이면 순서를 정해 한 번에 처리한다.",
+          "4) 벨 번호와 테이블 번호가 다르면 사장에게 알려 고친다."
+        ]
+      },
+      "result": {
+        "before": "",
+        "after": "",
+        "metric": ""
+      },
+      "extract": {
+        "do": "",
+        "dont": "벨을 끄고 안 가기. 눈 마주치고도 모른 척하기.",
+        "template": ""
+      }
+    },
+    "execution": {
+      "timing": "벨 즉시",
+      "channel": "홀",
+      "tone": "신속"
+    },
+    "stats": {
+      "query_hits_30d": 0,
+      "resolution_rate": 0,
+      "thumbs_up": 0,
+      "thumbs_down": 0,
+      "last_used_at": ""
+    },
+    "photos": [],
+    "version": 1,
+    "status": "published",
+    "quality_score": 0,
+    "created_at": "",
+    "updated_at": "",
+    "is_template": true,
+    "pack_id": "restaurant",
+    "needs_review": true,
+    "correction_points": [
+      "벨 위치·테이블 번호 표, 응답 목표 시간"
+    ],
+    "recommended": false
+  },
+  {
+    "id": "tpl_restaurant_028",
+    "unit_id": "",
+    "creator_id": "",
+    "creator_name": "",
+    "category": "Event",
+    "section": "고객 응대",
+    "subcategory": "포장",
+    "title": "남은 음식 포장 요청",
+    "tags": [
+      "#포장",
+      "#남은음식",
+      "#용기"
+    ],
+    "search_keywords": [
+      "남은 거",
+      "싸주세요",
+      "포장",
+      "남은 음식",
+      "용기값",
+      "가져갈게요"
+    ],
+    "square": {
+      "situation": "식사 후 남은 음식을 싸 달라고 함. 되는 메뉴인지, 용기값을 받는지 모름.",
+      "quagmire": "",
+      "uncover": "",
+      "action": {
+        "steps": [
+          "1) 포장 가능한 메뉴인지 확인하고, 용기값이 있으면 먼저 안내한다.",
+          "2) 국물·생고기·회처럼 상하기 쉬운 것은 매장 기준대로 정중히 안내한다.",
+          "3) 손님이 직접 담게 하거나 주방에서 담아 드리는지 매장 기준대로 한다.",
+          "4) 봉투에 담아 드리며 빨리 드시는 게 좋다고 한마디 붙인다."
+        ]
+      },
+      "result": {
+        "before": "",
+        "after": "",
+        "metric": ""
+      },
+      "extract": {
+        "do": "",
+        "dont": "상하기 쉬운 음식을 아무 말 없이 싸 주기. 용기값을 나중에 청구하기.",
+        "template": ""
+      }
+    },
+    "execution": {
+      "timing": "요청 시",
+      "channel": "대면",
+      "tone": "친절"
+    },
+    "stats": {
+      "query_hits_30d": 0,
+      "resolution_rate": 0,
+      "thumbs_up": 0,
+      "thumbs_down": 0,
+      "last_used_at": ""
+    },
+    "photos": [],
+    "version": 1,
+    "status": "published",
+    "quality_score": 0,
+    "created_at": "",
+    "updated_at": "",
+    "is_template": true,
+    "pack_id": "restaurant",
+    "needs_review": true,
+    "correction_points": [
+      "남은 음식 포장 허용 메뉴, 용기값"
+    ],
+    "recommended": false
+  },
+  {
+    "id": "tpl_restaurant_029",
+    "unit_id": "",
+    "creator_id": "",
+    "creator_name": "",
+    "category": "Event",
+    "section": "고객 응대",
+    "subcategory": "브레이크타임",
+    "title": "브레이크타임 중 손님 방문",
+    "tags": [
+      "#브레이크타임",
+      "#휴식",
+      "#영업시간"
+    ],
+    "search_keywords": [
+      "브레이크타임",
+      "쉬는 시간",
+      "몇 시에",
+      "문 닫았어요",
+      "준비 중"
+    ],
+    "square": {
+      "situation": "브레이크타임에 손님이 들어오거나 문을 두드림.",
+      "quagmire": "",
+      "uncover": "",
+      "action": {
+        "steps": [
+          "1) 브레이크타임 시간과 다시 여는 시각을 알려 드린다.",
+          "2) 포장·예약 손님 응대 여부는 매장 기준대로 한다.",
+          "3) 입구에 브레이크타임 안내판을 세워 반복 문의를 줄인다.",
+          "4) 예외로 받은 경우 주방과 홀에 미리 알려 준비되게 한다."
+        ]
+      },
+      "result": {
+        "before": "",
+        "after": "",
+        "metric": ""
+      },
+      "extract": {
+        "do": "",
+        "dont": "불 꺼진 채 응답 없이 두기. 기준 없이 어떤 손님은 받고 어떤 손님은 거절하기.",
+        "template": ""
+      }
+    },
+    "execution": {
+      "timing": "방문 시",
+      "channel": "대면",
+      "tone": "정중"
+    },
+    "stats": {
+      "query_hits_30d": 0,
+      "resolution_rate": 0,
+      "thumbs_up": 0,
+      "thumbs_down": 0,
+      "last_used_at": ""
+    },
+    "photos": [],
+    "version": 1,
+    "status": "published",
+    "quality_score": 0,
+    "created_at": "",
+    "updated_at": "",
+    "is_template": true,
+    "pack_id": "restaurant",
+    "needs_review": true,
+    "correction_points": [
+      "브레이크타임 시간, 포장·예약 예외 여부"
+    ],
+    "recommended": false
+  },
+  {
+    "id": "tpl_restaurant_030",
+    "unit_id": "",
+    "creator_id": "",
+    "creator_name": "",
+    "category": "Event",
+    "section": "고객 응대",
+    "subcategory": "품절",
+    "title": "재료 소진·메뉴 품절 안내",
+    "tags": [
+      "#품절",
+      "#소진",
+      "#안내"
+    ],
+    "search_keywords": [
+      "품절",
+      "떨어졌어요",
+      "소진",
+      "없어요",
+      "대체",
+      "다른 메뉴",
+      "재료"
+    ],
+    "square": {
+      "situation": "특정 메뉴 재료가 떨어짐. 손님이 그 메뉴를 주문함.",
+      "quagmire": "",
+      "uncover": "",
+      "action": {
+        "steps": [
+          "1) 품절이 확인되면 포스·배달앱에 즉시 품절 처리하고 메뉴판에 표시한다.",
+          "2) 주문 손님에게는 사과 후 비슷한 대체 메뉴를 바로 제안한다.",
+          "3) 이미 주문을 받았다면 조리 전 바로 알리고 변경을 받는다.",
+          "4) 품절 메뉴와 시각을 사장에게 알려 발주에 반영한다."
+        ]
+      },
+      "result": {
+        "before": "",
+        "after": "",
+        "metric": ""
+      },
+      "extract": {
+        "do": "",
+        "dont": "품절인데 주문을 받아 두고 나중에 말하기. \"그거 없어요\"로 끝내기.",
+        "template": ""
+      }
+    },
+    "execution": {
+      "timing": "소진 확인 즉시",
+      "channel": "대면·단말",
+      "tone": "정중"
+    },
+    "stats": {
+      "query_hits_30d": 0,
+      "resolution_rate": 0,
+      "thumbs_up": 0,
+      "thumbs_down": 0,
+      "last_used_at": ""
+    },
+    "photos": [],
+    "version": 1,
+    "status": "published",
+    "quality_score": 0,
+    "created_at": "",
+    "updated_at": "",
+    "is_template": true,
+    "pack_id": "restaurant",
+    "needs_review": true,
+    "correction_points": [
+      "품절 처리 담당자, 자주 품절되는 메뉴와 대체 메뉴"
+    ],
+    "recommended": false
+  },
+  {
+    "id": "tpl_restaurant_031",
+    "unit_id": "",
+    "creator_id": "",
+    "creator_name": "",
+    "category": "Event",
+    "section": "결제·정산",
+    "subcategory": "키오스크",
+    "title": "키오스크·테이블오더 사용을 어려워하는 손님",
+    "tags": [
+      "#키오스크",
+      "#테이블오더",
+      "#도움"
+    ],
+    "search_keywords": [
+      "키오스크",
+      "테이블오더",
+      "태블릿",
+      "어려워요",
+      "못 하겠어요",
+      "어르신",
+      "도와주세요"
+    ],
+    "square": {
+      "situation": "어르신·처음 온 손님이 키오스크나 테이블 주문기 앞에서 멈춰 있음.",
+      "quagmire": "",
+      "uncover": "",
+      "action": {
+        "steps": [
+          "1) 먼저 다가가 \"도와드릴까요\"라고 말하고 옆에서 화면을 같이 본다.",
+          "2) 원하는 메뉴를 듣고 대신 눌러 주되 결제는 손님이 직접 하게 한다.",
+          "3) 기기 오류(먹통·결제 실패)면 카운터에서 직접 주문을 받는다.",
+          "4) 반복되는 오류는 사장에게 알린다."
+        ]
+      },
+      "result": {
+        "before": "",
+        "after": "",
+        "metric": ""
+      },
+      "extract": {
+        "do": "",
+        "dont": "뒤에서 지켜보기만 하기. 손님 카드를 대신 결제하기.",
+        "template": ""
+      }
+    },
+    "execution": {
+      "timing": "발견 즉시",
+      "channel": "대면",
+      "tone": "친절"
+    },
+    "stats": {
+      "query_hits_30d": 0,
+      "resolution_rate": 0,
+      "thumbs_up": 0,
+      "thumbs_down": 0,
+      "last_used_at": ""
+    },
+    "photos": [],
+    "version": 1,
+    "status": "published",
+    "quality_score": 0,
+    "created_at": "",
+    "updated_at": "",
+    "is_template": true,
+    "pack_id": "restaurant",
+    "needs_review": true,
+    "correction_points": [
+      "키오스크 오류 시 대체 주문 방법, 재부팅 방법"
+    ],
+    "recommended": false
+  },
+  {
+    "id": "tpl_restaurant_032",
+    "unit_id": "",
+    "creator_id": "",
+    "creator_name": "",
+    "category": "Event",
+    "section": "비상 상황",
+    "subcategory": "파손",
+    "title": "그릇·유리 파손 처리",
+    "tags": [
+      "#파손",
+      "#유리",
+      "#안전"
+    ],
+    "search_keywords": [
+      "깨졌어요",
+      "유리",
+      "그릇 깨짐",
+      "파편",
+      "소주병",
+      "다쳤어요",
+      "변상"
+    ],
+    "square": {
+      "situation": "그릇·컵·소주병이 깨짐. 손님 근처에 파편이 있음.",
+      "quagmire": "",
+      "uncover": "",
+      "action": {
+        "steps": [
+          "1) 손님이 다치지 않았는지 먼저 확인하고 자리를 옮겨 드린다.",
+          "2) 큰 조각은 집게·장갑으로, 작은 조각은 빗자루와 젖은 휴지로 모은다.",
+          "3) 파편은 신문지에 싸서 \"깨진 유리\"라고 적어 따로 버린다.",
+          "4) 음식에 파편이 튀었을 가능성이 있으면 새로 내드린다.",
+          "5) 손님 과실이어도 변상 요구는 직원이 하지 않고 사장 기준을 따른다."
+        ]
+      },
+      "result": {
+        "before": "",
+        "after": "",
+        "metric": ""
+      },
+      "extract": {
+        "do": "",
+        "dont": "맨손으로 줍기. 파편을 일반 쓰레기에 그냥 넣기.",
+        "template": ""
+      }
+    },
+    "execution": {
+      "timing": "즉시",
+      "channel": "홀",
+      "tone": "침착"
+    },
+    "stats": {
+      "query_hits_30d": 0,
+      "resolution_rate": 0,
+      "thumbs_up": 0,
+      "thumbs_down": 0,
+      "last_used_at": ""
+    },
+    "photos": [],
+    "version": 1,
+    "status": "published",
+    "quality_score": 0,
+    "created_at": "",
+    "updated_at": "",
+    "is_template": true,
+    "pack_id": "restaurant",
+    "needs_review": true,
+    "correction_points": [
+      "손님 파손 시 변상 기준, 빗자루·장갑 위치"
+    ],
+    "recommended": false
+  },
+  {
+    "id": "tpl_restaurant_033",
+    "unit_id": "",
+    "creator_id": "",
+    "creator_name": "",
+    "category": "Event",
+    "section": "고객 응대",
+    "subcategory": "재촉",
+    "title": "음식이 늦는다는 재촉",
+    "tags": [
+      "#재촉",
+      "#대기",
+      "#피크"
+    ],
+    "search_keywords": [
+      "언제 나와요",
+      "늦어요",
+      "재촉",
+      "얼마나",
+      "기다렸는데",
+      "안 나와요"
+    ],
+    "square": {
+      "situation": "피크에 주문이 밀려 손님이 \"언제 나와요\"라고 재촉함.",
+      "quagmire": "",
+      "uncover": "",
+      "action": {
+        "steps": [
+          "1) 주방에 해당 테이블 순서를 확인해 남은 시간을 구체적으로 말한다.",
+          "2) 반찬·물·서비스 가능한 것을 먼저 챙겨 드린다.",
+          "3) 주문이 누락된 것이면 즉시 사과하고 가장 먼저 조리하게 주방에 알린다.",
+          "4) 예상보다 더 늦어지면 다시 가서 알린다."
+        ]
+      },
+      "result": {
+        "before": "",
+        "after": "",
+        "metric": ""
+      },
+      "extract": {
+        "do": "",
+        "dont": "\"곧 나와요\"만 반복하기. 주방에 확인 없이 시간 말하기.",
+        "template": ""
+      }
+    },
+    "execution": {
+      "timing": "재촉 즉시",
+      "channel": "대면→주방",
+      "tone": "공감"
+    },
+    "stats": {
+      "query_hits_30d": 0,
+      "resolution_rate": 0,
+      "thumbs_up": 0,
+      "thumbs_down": 0,
+      "last_used_at": ""
+    },
+    "photos": [],
+    "version": 1,
+    "status": "published",
+    "quality_score": 0,
+    "created_at": "",
+    "updated_at": "",
+    "is_template": true,
+    "pack_id": "restaurant",
+    "needs_review": true,
+    "correction_points": [
+      "지연 시 서비스 제공 기준, 주방 순서 확인 방법"
     ],
     "recommended": false
   }

@@ -4,7 +4,8 @@
 // (실제로 시드 데이터의 subcategory에 '응대'·'진상응대'·'클레임'이 이미 따로 존재한다.)
 // 표준에서 고르게 하고, 직접 추가는 허용하되 유사 챕터가 있으면 되묻는다(findSimilarSection).
 //
-// 업종 매핑은 knowhowPacks.INDUSTRY_PACKS와 같은 모양 — 1차는 카페만 전용, 나머지는 공통 폴백.
+// 업종 매핑은 knowhowPacks.INDUSTRY_PACKS와 같은 모양 — 카페·음식점 계열만 전용, 나머지는 공통 폴백.
+import { RESTAURANT_INDUSTRIES } from './industry';
 
 /** 업종 무관 공통 챕터. 순서 = 매뉴얼에 실릴 기본 순서(오픈→운영→마감→관리). */
 const COMMON_SECTIONS = [
@@ -22,6 +23,7 @@ const COMMON_SECTIONS = [
 /** 업종 전용 추가 챕터(공통 뒤에 붙는다). */
 const INDUSTRY_SECTIONS: Record<string, string[]> = {
   '카페·디저트': ['음료 제조'],
+  ...Object.fromEntries(RESTAURANT_INDUSTRIES.map((i) => [i, ['주방·조리']])),
 };
 
 /** 미분류 노하우가 매뉴얼에서 묶이는 이름. 표준 목록에는 넣지 않는다(고를 수 있는 챕터가 아님). */

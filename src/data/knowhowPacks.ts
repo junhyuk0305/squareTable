@@ -5,6 +5,7 @@
 
 import type { PlaybookEntry } from '@/types';
 import { genId } from '@/lib/utils/id';
+import { RESTAURANT_INDUSTRIES } from '@/lib/config/industry';
 import packsJson from './knowhow-packs.json';
 
 // 번들 템플릿 = PlaybookEntry + 온보딩 전용 추천 플래그(추천 항목은 미리 체크됨, DB 컬럼 아님).
@@ -12,23 +13,14 @@ export type PlaybookTemplate = PlaybookEntry & { recommended?: boolean };
 
 export const KNOWHOW_TEMPLATES = packsJson as unknown as PlaybookTemplate[];
 
-// 가입 업종(signup.tsx INDUSTRIES) → 적용 팩. 1차 범위: 카페만 전용팩, 나머지는 공통으로 커버.
+// 가입 업종(signup.tsx INDUSTRIES) → 적용 팩. 카페·음식점(홀+주방) 전용팩, 나머지는 공통으로 커버.
 // (업종 전용팩은 추후 추가 — 매핑에 pack_id만 늘리면 자동 반영.)
 export const INDUSTRY_PACKS: Record<string, string[]> = {
-  // 카페 전용팩 보유. 나머지 F&B는 공통팩(클레임·환불·위생 등 업종 무관 표준)으로 커버.
+  // 카페·음식점 전용팩 보유. 나머지 F&B는 공통팩(클레임·환불·위생 등 업종 무관 표준)으로 커버.
   '카페·디저트': ['common', 'cafe'],
   베이커리: ['common'],
-  '브런치·양식': ['common'],
-  '음식점·식당': ['common'],
-  '한식·백반': ['common'],
-  '고깃집·구이': ['common'],
-  '치킨·호프': ['common'],
-  '분식·패스트푸드': ['common'],
-  '피자·버거': ['common'],
-  중식: ['common'],
-  '일식·초밥': ['common'],
-  '주점·바': ['common'],
-  배달전문: ['common'],
+  ...Object.fromEntries(RESTAURANT_INDUSTRIES.map((i) => [i, ['common', 'restaurant']])),
+  배달전문: ['common'], // 홀이 없어 음식점팩(세팅·리필·서빙)은 안 맞는다.
   '편의점·소매': ['common'],
   '미용·뷰티': ['common'],
   // TODO(pack): 헬스 전용팩(기구 사용법·회원 환불규정·청소 루틴) 추가 시 ['common','gym']으로. 지금은 공통 폴백.
