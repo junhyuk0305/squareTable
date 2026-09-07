@@ -36,9 +36,17 @@ node .claude/skills/native-audit/scripts/scan.mjs
 **🔴은 전건 열어 본다.** 🟡은 파일을 열어 맥락으로 판정한다(스캐너는 휴리스틱이라 오탐이 있다 —
 오탐이면 그 줄에 `// native-audit: ok <이유>` 를 달면 다음 스캔부터 제외된다).
 
-규칙 목록(2026-09-03 기준 11종): modal-back · kav-behavior · fixed · web-alert · double-inset ·
-mouse-only · modal-autofocus · overflow · hover-only · persist-taps · **fade-elevation**(신설) ·
-**replace-slide**(신설). 신설 2종의 근거는 `references/case_2026-09-03_android_fade_shadow.md`.
+규칙 목록(2026-09-07 기준 13종): modal-back · kav-behavior · fixed · web-alert · double-inset ·
+mouse-only · modal-autofocus · overflow · hover-only · persist-taps · fade-elevation ·
+replace-slide · **header-flash**(신설). fade-elevation·replace-slide 의 근거는
+`references/case_2026-09-03_android_fade_shadow.md`.
+
+**header-flash(2026-09-07 신설)** — 레이아웃의 `Stack.Screen` 에 `headerShown` 이 없는데 그 화면(또는
+화면이 통째로 위임하는 공용 컴포넌트)이 `headerShown:false` 를 켠다. 레이아웃 기본값이 true 라
+**마운트 전 한 프레임 동안 네이티브 헤더가 떴다 사라진다** — 탭을 빠르게 오가면 계속 깜빡인다.
+느린 조작으로는 재현이 안 되고 웹은 헤더를 다르게 그려 티가 안 나, 실기기 빠른 조작에서만 드러났다.
+→ **헤더를 끌 화면은 레이아웃에서부터 끈다**(켜진 창을 아예 만들지 않는다).
+그 Stack 의 `screenOptions` 가 이미 `headerShown:false` 면 대상이 아니다(규칙이 걸러낸다).
 
 ### 2단계 — 스캐너가 못 잡는 것 (references/checklist.md)
 

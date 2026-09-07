@@ -211,6 +211,42 @@ for (const f of files) {
   }
 }
 
+// ── 🔴 헤더 깜빡임: 레이아웃은 헤더를 켠 채 선언하고 화면이 마운트 후에 끈다 (2026-09-07 실기기) ──
+//    `_layout` 의 Stack.Screen 에 headerShown 이 없으면 기본값 true 로 먼저 서고, 화면의
+//    `<Stack.Screen options={{headerShown:false}}/>` 는 **마운트 뒤에야** 반영된다.
+//    그 사이 한 프레임 동안 네이티브 헤더가 보였다 사라진다 — 탭을 빠르게 오가면 계속 깜빡인다.
+//    웹은 Stack 헤더를 다르게 그려 티가 안 나고, 느린 조작으로도 재현이 안 돼 실기기에서만 드러난다.
+//    → 헤더를 끌 화면은 **레이아웃에서부터** headerShown:false 로 선언한다(켜진 창을 만들지 않는다).
+{
+  const all = files.map((f) => [f, stripComments(readFileSync(f, 'utf8'))]);
+  const srcOf = (relPath) => all.find(([f]) => rel(f) === relPath)?.[1];
+  for (const [lf, lsrc] of all) {
+    if (!/[\\/]_layout\.tsx$/.test(lf)) continue;
+    // 그 Stack 의 screenOptions 가 이미 헤더를 꺼 뒀으면 기본값부터 false 라 깜빡일 창이 없다.
+    const so = lsrc.match(/screenOptions=\{\{([\s\S]*?)\}\}/);
+    if (so && /headerShown:\s*false/.test(so[1])) continue;
+    const dir = rel(lf).replace(/\/_layout\.tsx$/, '');
+    for (const tag of openingTags(lsrc, 'Stack\\.Screen')) {
+      const nm = tag.tag.match(/name=["']([^"']+)["']/);
+      if (!nm || /headerShown/.test(tag.tag)) continue;
+      // 화면 파일과, 그 화면이 통째로 위임하는 공용 컴포넌트(얇은 래퍼)까지 한 단계 따라간다.
+      const screen = srcOf(`${dir}/${nm[1]}.tsx`) ?? srcOf(`${dir}/${nm[1]}/index.tsx`);
+      if (screen === undefined) continue; // 동적 세그먼트·미등록은 판정 불가
+      let off = /headerShown:\s*false/.test(screen);
+      if (!off)
+        for (const im of screen.matchAll(/from\s+['"]@\/(components\/[\w/\-.]+)['"]/g)) {
+          const dep = srcOf(`src/${im[1]}.tsx`);
+          if (dep && /headerShown:\s*false/.test(dep)) { off = true; break; }
+        }
+      if (!off) continue;
+      const rawLines = readFileSync(lf, 'utf8').split('\n');
+      if (makeSuppressed(rawLines)(tag.line)) continue;
+      findings.push({ level: 2, loc: `${rel(lf)}:${tag.line}`, rule: 'header-flash',
+        msg: `'${nm[1]}' 은 화면이 헤더를 끄는데 레이아웃 선언엔 headerShown 이 없다 — 마운트 전 한 프레임 동안 네이티브 헤더가 떴다 사라진다(탭 빠르게 오가면 계속 깜빡). 레이아웃에도 headerShown:false 를 명시하라` });
+    }
+  }
+}
+
 // ── 출력 ──
 const order = [2, 1, 0];
 const label = { 2: '🔴 기기에서 깨짐', 1: '🟡 판정 필요', 0: 'ℹ️ 확인 권장' };

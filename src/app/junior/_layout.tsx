@@ -121,14 +121,18 @@ export default function JuniorLayout() {
     >
       {/* 홈 헤더(로고+알림벨)는 home.tsx의 <Stack.Screen>이 단일 소스로 구성한다 — 여기선 등록만.
           ★animation: 'none' — 탭 루트끼리는 전환(replace)이라 슬라이드를 끈다(owner/_layout 과 같은 규칙). */}
-      <Stack.Screen name="home" options={{ animation: 'none' }} />
+      {/* ★헤더를 끌 화면은 **레이아웃에서부터** 끈다(2026-09-07 iOS 실기기). 화면 안의
+          `<Stack.Screen options={{headerShown:false}}/>` 는 마운트 뒤에야 반영돼, 그 사이 한 프레임 동안
+          네이티브 헤더가 떴다 사라진다 — 탭을 빠르게 오가면 계속 깜빡인다(native-audit 규칙 header-flash). */}
+      <Stack.Screen name="home" options={{ headerShown: false, animation: 'none' }} />
       {/* 메인 탭 메뉴 — 좌상단 로고 없음(홈 화면에만 매장의 정석 로고 노출).
           탭 루트는 하단 탭바로만 이동하므로 뒤로가기 화살표를 무조건 끈다
           (headerLeft 미지정 시 react-navigation 기본 back 화살표가 history에 따라 노출됨 → 막다른 컨트롤). */}
       {/* 탭 루트 헤더엔 "어느 매장의 화면인가"를 상시 표시(StoreHeaderTitle) — 홈은 StoreToggle 이 담당. */}
       <Stack.Screen name="chat" options={{ title: '물어보기', headerTitle: () => <StoreHeaderTitle title="물어보기" />, headerLeft: () => null, headerBackVisible: false, animation: 'none' }} />
       <Stack.Screen name="attendance" options={{ title: '출퇴근', headerTitle: () => <StoreHeaderTitle title="출퇴근" />, headerLeft: () => null, headerBackVisible: false, animation: 'none' }} />
-      <Stack.Screen name="work" options={{ title: '업무 채팅', headerTitle: () => <StoreHeaderTitle title="업무 채팅" />, headerLeft: () => null, headerBackVisible: false, animation: 'none' }} />
+      {/* 업무 채팅은 WorkBoard 가 상단을 통째로 소유한다(대화방=떠 있는 헤더 / 패널=ScreenTitleHeader). */}
+      <Stack.Screen name="work" options={{ title: '업무 채팅', headerShown: false, animation: 'none' }} />
       <Stack.Screen name="settings" options={{ title: '설정', headerTitle: () => <StoreHeaderTitle title="설정" />, headerLeft: () => null, headerBackVisible: false, animation: 'none' }} />
       <Stack.Screen name="timesheet" options={{ title: '내 출퇴근 내역', headerLeft: () => <HeaderBackButton fallback="/junior/attendance" /> }} />
       <Stack.Screen name="schedule" options={{ title: '근무표', headerLeft: () => <HeaderBackButton fallback="/junior/home" /> }} />
