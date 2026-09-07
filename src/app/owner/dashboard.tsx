@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { NotificationPermissionSheet } from '@/components/NotificationPermissionSheet';
 import { View, Text, Pressable, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
@@ -443,6 +444,10 @@ export default function OwnerDashboardScreen() {
       </ScrollView>
       )}
       <RoleTabBar role="owner" />
+
+      {/* 알림 켜기 안내 — 홈 첫 진입 1회. 왜 우리가 먼저 묻는지는 컴포넌트 주석 참고
+          (iOS 는 OS 팝업 기회가 한 번뿐이라, 켜겠다고 한 사람에게만 넘긴다). */}
+      <NotificationPermissionSheet />
 
       {/* 신규 사장 코치마크 투어 — 매장 운영 허브 → 첫 노하우 깔기까지 순차 안내.
           entriesCount===0 가드: 스토어 지연 로딩으로 기존 사장에게 잘못 뜨거나, 도중에 노하우가

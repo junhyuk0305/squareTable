@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from 'react';
+import { NotificationEnableCard } from '@/components/NotificationEnableCard';
 import { View, Text, Pressable, StyleSheet, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
@@ -173,7 +174,14 @@ export default function OwnerOnboardingScreen() {
             )}
           </Appear>
 
-          <Appear delay={stagger(2)}>
+          {/* 알림 켜기 — 매장을 막 만든 지금이 "직원이 물어보면 알려드려요"가 가장 잘 통하는 자리다.
+              카드가 스스로 판정한다(이미 켰거나 미지원이면 아무것도 안 그린다). 여기서 놓친 사람은
+              홈 첫 진입의 NotificationPermissionSheet 가 한 번 더 잡는다. */}
+          <Appear delay={stagger(2)} style={styles.doneNotify}>
+            <NotificationEnableCard />
+          </Appear>
+
+          <Appear delay={stagger(3)}>
           <View style={styles.codeCard}>
             <Text style={styles.codeLabel}>직원 초대코드</Text>
             <Text style={styles.codeText}>{inviteCode}</Text>
@@ -187,7 +195,7 @@ export default function OwnerOnboardingScreen() {
               ★전면 무료 모드(서버 스위치)에서도 렌더하지 않는다 — 무료라고 공지해 놓고 요금제로 유도하면
                 같은 앱이 두 말을 하게 된다(2026-08-11 [P8-#5]). 판정은 store-policy 한 곳. */}
           {showPaymentSurface(freeMode) && (
-            <Appear delay={stagger(3)} style={styles.doneStretch}>
+            <Appear delay={stagger(4)} style={styles.doneStretch}>
             <Pressable
               onPress={() => router.push('/billing' as never)}
               style={({ pressed }) => [styles.planNudge, pressed && { opacity: 0.9 }]}
@@ -553,6 +561,7 @@ const styles = StyleSheet.create({
   doneTitle: { fontSize: 23, fontWeight: '900', color: InkColors.ink, textAlign: 'center' },
   doneSub: { fontSize: 15, color: InkColors.ink2, textAlign: 'center', lineHeight: 22 },
   doneStrong: { fontWeight: '800', color: InkColors.ink },
+  doneNotify: { alignSelf: 'stretch' },
   codeCard: {
     backgroundColor: InkColors.bg,
     borderWidth: 1,

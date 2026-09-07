@@ -1,4 +1,5 @@
 import { View, Text, Pressable, ScrollView } from 'react-native';
+import { NotificationPermissionSheet } from '@/components/NotificationPermissionSheet';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -183,6 +184,9 @@ export default function JuniorHomeScreen() {
       </ScrollView>
 
       <RoleTabBar role="junior" />
+
+      {/* 알림 켜기 안내 — 홈 첫 진입 1회(컴포넌트 주석 참고). */}
+      <NotificationPermissionSheet />
       {/* 합류 직후 1회 — 물어보기/노하우 등록 인지 코치마크 */}
       <JuniorWelcomeCoach />
     </SafeAreaView>
