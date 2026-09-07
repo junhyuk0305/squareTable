@@ -1,6 +1,7 @@
 import { useEffect, useMemo } from 'react';
-import { Stack, useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 
 import { RoleTabBar } from '@/components/RoleTabBar';
 import { ScreenLoading } from '@/components/ScreenLoading';
@@ -66,7 +67,9 @@ export default function JuniorChatScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={[]}>
-      <Stack.Screen options={{ title: '물어보기' }} />
+      {/* 상단은 직접 그린다 — 왼쪽 정렬 평문 제목은 네이티브 헤더로 못 낸다(ScreenTitleHeader 주석).
+          헤더를 끄는 선언은 junior/_layout 에 있다(마운트 뒤에 끄면 한 프레임 깜빡인다). */}
+      <ScreenTitleHeader title="물어보기" storeLine />
       {!ready ? (
         <ScreenLoading label="노하우를 불러오고 있어요…" />
       ) : playbookLoadError ? (

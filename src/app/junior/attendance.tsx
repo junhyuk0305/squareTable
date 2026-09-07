@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { View, Text, Pressable, StyleSheet, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -299,6 +300,9 @@ export function AttendancePanel() {
 export default function JuniorAttendanceRoute() {
   return (
     <SafeAreaView edges={[]} style={styles.routeSafe}>
+      {/* 상단은 직접 그린다 — 왼쪽 정렬 평문 제목은 네이티브 헤더로 못 낸다(ScreenTitleHeader 주석).
+          헤더를 끄는 선언은 junior/_layout 에 있다(마운트 뒤에 끄면 한 프레임 깜빡인다). */}
+      <ScreenTitleHeader title="출퇴근" storeLine />
       <AttendancePanel />
       <RoleTabBar role="junior" />
     </SafeAreaView>

@@ -2,7 +2,6 @@ import { useEffect } from 'react';
 import { Stack, Redirect, usePathname, type Href } from 'expo-router';
 import { InkColors } from '@/lib/theme/colors';
 import { HeaderBackButton } from '@/components/HeaderBackButton';
-import { StoreHeaderTitle } from '@/components/StoreHeaderTitle';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { needsProfileSetup } from '@/lib/store/profileSetup';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
@@ -128,12 +127,12 @@ export default function JuniorLayout() {
       {/* 메인 탭 메뉴 — 좌상단 로고 없음(홈 화면에만 매장의 정석 로고 노출).
           탭 루트는 하단 탭바로만 이동하므로 뒤로가기 화살표를 무조건 끈다
           (headerLeft 미지정 시 react-navigation 기본 back 화살표가 history에 따라 노출됨 → 막다른 컨트롤). */}
-      {/* 탭 루트 헤더엔 "어느 매장의 화면인가"를 상시 표시(StoreHeaderTitle) — 홈은 StoreToggle 이 담당. */}
-      <Stack.Screen name="chat" options={{ title: '물어보기', headerTitle: () => <StoreHeaderTitle title="물어보기" />, headerLeft: () => null, headerBackVisible: false, animation: 'none' }} />
-      <Stack.Screen name="attendance" options={{ title: '출퇴근', headerTitle: () => <StoreHeaderTitle title="출퇴근" />, headerLeft: () => null, headerBackVisible: false, animation: 'none' }} />
+      {/* 탭 루트 상단은 각 화면이 ScreenTitleHeader 로 그린다 — "어느 매장의 화면인가"(storeLine)도 거기서. */}
+      <Stack.Screen name="chat" options={{ title: '물어보기', headerShown: false, animation: 'none' }} />
+      <Stack.Screen name="attendance" options={{ title: '출퇴근', headerShown: false, animation: 'none' }} />
       {/* 업무 채팅은 WorkBoard 가 상단을 통째로 소유한다(대화방=떠 있는 헤더 / 패널=ScreenTitleHeader). */}
       <Stack.Screen name="work" options={{ title: '업무 채팅', headerShown: false, animation: 'none' }} />
-      <Stack.Screen name="settings" options={{ title: '설정', headerTitle: () => <StoreHeaderTitle title="설정" />, headerLeft: () => null, headerBackVisible: false, animation: 'none' }} />
+      <Stack.Screen name="settings" options={{ title: '설정', headerShown: false, animation: 'none' }} />
       <Stack.Screen name="timesheet" options={{ title: '내 출퇴근 내역', headerLeft: () => <HeaderBackButton fallback="/junior/attendance" /> }} />
       <Stack.Screen name="schedule" options={{ title: '근무표', headerLeft: () => <HeaderBackButton fallback="/junior/home" /> }} />
       <Stack.Screen name="notifications" options={{ title: '알림', headerLeft: () => <HeaderBackButton fallback="/junior/home" /> }} />
