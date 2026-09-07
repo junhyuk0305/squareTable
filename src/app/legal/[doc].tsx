@@ -1,9 +1,9 @@
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { TERMS_VERSION } from '@/lib/config/business';
 import { InkColors } from '@/lib/theme/colors';
-import { HeaderBackButton } from '@/components/HeaderBackButton';
 
 // 회원가입 동의의 '보기' 링크가 여는 문서들 — 동의 항목별 요약 고지.
 // 기존 /terms(이용약관)·/privacy(처리방침)와 별도로, 동의 항목별 세부 문서를 제공.
@@ -58,8 +58,9 @@ export default function LegalDocScreen() {
   const data = DOCS[doc ?? ''] ?? null;
   if (!data) {
     return (
-      <SafeAreaView style={styles.safe}>
-        <Stack.Screen options={{ headerShown: true, title: '문서', headerStyle: { backgroundColor: '#FFFFFF' }, headerTintColor: InkColors.ink, headerLeft: () => <HeaderBackButton /> }} />
+      <SafeAreaView style={styles.safe} edges={['bottom']}>
+        <Stack.Screen options={{ headerShown: false, title: '문서', headerStyle: { backgroundColor: '#FFFFFF' }, headerTintColor: InkColors.ink }} />
+        <ScreenTitleHeader title="문서" backFallback />
         <ScrollView contentContainerStyle={styles.scroll}>
           <Text style={styles.h1}>문서를 찾지 못했습니다</Text>
           <Text style={styles.body}>주소를 다시 확인해 주세요.</Text>
@@ -69,8 +70,9 @@ export default function LegalDocScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.safe}>
-      <Stack.Screen options={{ headerShown: true, title: data.title, headerStyle: { backgroundColor: '#FFFFFF' }, headerTintColor: InkColors.ink, headerLeft: () => <HeaderBackButton /> }} />
+    <SafeAreaView style={styles.safe} edges={['bottom']}>
+      <Stack.Screen options={{ headerShown: false, title: data.title, headerStyle: { backgroundColor: '#FFFFFF' }, headerTintColor: InkColors.ink }} />
+      <ScreenTitleHeader title={data.title} backFallback />
       <ScrollView contentContainerStyle={styles.scroll}>
         <Text style={styles.h1}>{data.h1}</Text>
         {/* ★시행일을 여기서 다시 적지 않는다(#54) — business.ts 의 TERMS_VERSION 이 정본이고,

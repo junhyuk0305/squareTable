@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { View, Text, Pressable, StyleSheet, TextInput, ScrollView, ActivityIndicator } from 'react-native';
 import { KeyboardShift } from '@/components/KeyboardShift';
 import { useRouter, Stack, useLocalSearchParams } from 'expo-router';
@@ -203,8 +204,9 @@ export default function SignupScreen() {
 
 
   return (
-    <SafeAreaView style={styles.safe}>
-      <Stack.Screen options={{ headerShown: true, title: '회원가입', headerStyle: { backgroundColor: '#FFFFFF' }, headerTintColor: InkColors.ink }} />
+    <SafeAreaView style={styles.safe} edges={['bottom']}>
+      <Stack.Screen options={{ headerShown: false, title: '회원가입', headerStyle: { backgroundColor: '#FFFFFF' }, headerTintColor: InkColors.ink }} />
+      <ScreenTitleHeader title="회원가입" backFallback />
       <KeyboardShift>
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
         {/* 역할 — 가입 첫 단계에서 어떤 사용자인지 분명히 고른다 */}

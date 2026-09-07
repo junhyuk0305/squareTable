@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -27,6 +28,7 @@ export default function OwnerAskScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
+      <ScreenTitleHeader title="물어보기" backFallback />
       {/* 매니저는 제안 경로 대신 직접 발행(노하우 추가) 권한이 있으므로 제안 진입은 숨긴다. */}
       <JuniorAsk suggestEntry={false} seed={seed} />
     </SafeAreaView>

@@ -1,7 +1,5 @@
 import { useEffect } from 'react';
 import { Stack, Redirect, usePathname, type Href } from 'expo-router';
-import { InkColors } from '@/lib/theme/colors';
-import { HeaderBackButton } from '@/components/HeaderBackButton';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { needsProfileSetup } from '@/lib/store/profileSetup';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
@@ -113,9 +111,12 @@ export default function JuniorLayout() {
   return (
     <Stack
       screenOptions={{
-        headerStyle: { backgroundColor: '#FFFFFF' },
-        headerTitleStyle: { fontWeight: '800', color: InkColors.ink, fontSize: 16 },
-        headerTintColor: InkColors.ink,
+        // ★네이티브 헤더는 **이 앱 어디서도 쓰지 않는다**(2026-09-07 iOS 실기기 확정).
+        //   iOS 는 ①타이틀 슬롯이 항상 가운데이고(headerTitleAlign 은 안드로이드 전용) ②좌/우 슬롯의
+        //   항목을 iOS 26 이 '바 버튼'으로 취급해 유리 캡슐을 씌운다 → 웹과 같은 "왼쪽 정렬 평문 제목 +
+        //   담백한 뒤로가기"를 네이티브 헤더로는 낼 수 없다. 모든 화면이 `ScreenTitleHeader` 를 직접 그린다.
+        //   ★여기서 끄는 것이 핵심이다 — 화면에서 끄면 마운트 전 한 프레임 깜빡인다(native-audit: header-flash).
+        headerShown: false,
       }}
     >
       {/* 홈 헤더(로고+알림벨)는 home.tsx의 <Stack.Screen>이 단일 소스로 구성한다 — 여기선 등록만.
@@ -123,21 +124,18 @@ export default function JuniorLayout() {
       {/* ★헤더를 끌 화면은 **레이아웃에서부터** 끈다(2026-09-07 iOS 실기기). 화면 안의
           `<Stack.Screen options={{headerShown:false}}/>` 는 마운트 뒤에야 반영돼, 그 사이 한 프레임 동안
           네이티브 헤더가 떴다 사라진다 — 탭을 빠르게 오가면 계속 깜빡인다(native-audit 규칙 header-flash). */}
-      <Stack.Screen name="home" options={{ headerShown: false, animation: 'none' }} />
-      {/* 메인 탭 메뉴 — 좌상단 로고 없음(홈 화면에만 매장의 정석 로고 노출).
-          탭 루트는 하단 탭바로만 이동하므로 뒤로가기 화살표를 무조건 끈다
-          (headerLeft 미지정 시 react-navigation 기본 back 화살표가 history에 따라 노출됨 → 막다른 컨트롤). */}
+      <Stack.Screen name="home" options={{ animation: 'none' }} />
       {/* 탭 루트 상단은 각 화면이 ScreenTitleHeader 로 그린다 — "어느 매장의 화면인가"(storeLine)도 거기서. */}
-      <Stack.Screen name="chat" options={{ title: '물어보기', headerShown: false, animation: 'none' }} />
-      <Stack.Screen name="attendance" options={{ title: '출퇴근', headerShown: false, animation: 'none' }} />
+      <Stack.Screen name="chat" options={{ title: '물어보기', animation: 'none' }} />
+      <Stack.Screen name="attendance" options={{ title: '출퇴근', animation: 'none' }} />
       {/* 업무 채팅은 WorkBoard 가 상단을 통째로 소유한다(대화방=떠 있는 헤더 / 패널=ScreenTitleHeader). */}
-      <Stack.Screen name="work" options={{ title: '업무 채팅', headerShown: false, animation: 'none' }} />
-      <Stack.Screen name="settings" options={{ title: '설정', headerShown: false, animation: 'none' }} />
-      <Stack.Screen name="timesheet" options={{ title: '내 출퇴근 내역', headerLeft: () => <HeaderBackButton fallback="/junior/attendance" /> }} />
-      <Stack.Screen name="schedule" options={{ title: '근무표', headerLeft: () => <HeaderBackButton fallback="/junior/home" /> }} />
-      <Stack.Screen name="notifications" options={{ title: '알림', headerLeft: () => <HeaderBackButton fallback="/junior/home" /> }} />
+      <Stack.Screen name="work" options={{ title: '업무 채팅', animation: 'none' }} />
+      <Stack.Screen name="settings" options={{ title: '설정', animation: 'none' }} />
+      <Stack.Screen name="timesheet" options={{ title: '내 출퇴근 내역' }} />
+      <Stack.Screen name="schedule" options={{ title: '근무표' }} />
+      <Stack.Screen name="notifications" options={{ title: '알림' }} />
       {/* 매장 기준 값 연습 — 물어보기(둘러보기)의 서브화면. 퀴즈가 아니라 기록이 남지 않는 연습이다. */}
-      <Stack.Screen name="practice" options={{ title: '매장 기준 값 연습', headerLeft: () => <HeaderBackButton fallback="/junior/chat" /> }} />
+      <Stack.Screen name="practice" options={{ title: '매장 기준 값 연습' }} />
       <Stack.Screen name="hub" options={{ headerShown: false }} />
       <Stack.Screen name="join" options={{ title: '매장 연결' }} />
       <Stack.Screen name="onboarding" options={{ headerShown: false }} />

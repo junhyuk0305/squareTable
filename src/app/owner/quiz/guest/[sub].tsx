@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { View, Text, ScrollView, ActivityIndicator, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
@@ -77,6 +78,7 @@ export default function GuestQuizResultScreen() {
   return (
     <SafeAreaView style={st.safe} edges={['bottom']}>
       <Stack.Screen options={{ title: '링크 응시 결과' }} />
+      <ScreenTitleHeader title="링크 응시 결과" backFallback />
 
       <ScrollView contentContainerStyle={st.scroll} showsVerticalScrollIndicator={false}>
         {!loaded ? (

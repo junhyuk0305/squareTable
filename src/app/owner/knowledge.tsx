@@ -1,4 +1,5 @@
 import { StyleSheet } from 'react-native';
+import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 
@@ -19,6 +20,7 @@ export default function OwnerKnowledgeScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={[]}>
+      <ScreenTitleHeader title="내 노하우" backFallback />
       {/* ?review=1 = 홈 '점검할 노하우' 착지점 → '노하우' 칸 + '점검 필요' 탭(2026-08-27 §7-2).
           (2026-08-19~08-27 사이엔 '할 일' 칸으로 보냈다.) */}
       <OwnerKnowhowBrowse

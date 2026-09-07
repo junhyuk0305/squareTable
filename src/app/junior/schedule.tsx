@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { View, Text, Pressable, StyleSheet, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack } from 'expo-router';
@@ -135,6 +136,7 @@ export default function JuniorScheduleScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={[]}>
       <Stack.Screen options={{ title: '근무표' }} />
+      <ScreenTitleHeader title="근무표" backFallback />
 
       <SegmentTabs
         items={[

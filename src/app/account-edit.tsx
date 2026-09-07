@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { View, Text, StyleSheet, ScrollView, TextInput, Pressable, ActivityIndicator } from 'react-native';
 import { KeyboardShift } from '@/components/KeyboardShift';
 import { Ionicons } from '@expo/vector-icons';
@@ -12,7 +13,6 @@ import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
 import { isValidPhone, normalizePhone, formatPhone, passwordError } from '@/lib/utils/validation';
 import { INDUSTRIES } from '@/lib/config/industry';
-import { HeaderBackButton } from '@/components/HeaderBackButton';
 import { SectionLabel } from '@/components/SectionLabel';
 import { Appear, stagger } from '@/components/Appear';
 import { Collapse } from '@/components/Collapse';
@@ -29,7 +29,8 @@ export default function AccountEdit() {
   if (status === 'loading') {
     return (
       <SafeAreaView style={styles.safe} edges={['bottom']}>
-        <Stack.Screen options={{ headerShown: true, title: '프로필 편집', headerLeft: () => <HeaderBackButton /> }} />
+        <Stack.Screen options={{ headerShown: false, title: '프로필 편집' }} />
+        <ScreenTitleHeader title="프로필 편집" backFallback />
         <ScreenLoading label="계정 정보를 불러오고 있어요…" />
       </SafeAreaView>
     );
@@ -150,7 +151,8 @@ function AccountEditForm() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
-      <Stack.Screen options={{ headerShown: true, title: '프로필 편집', headerLeft: () => <HeaderBackButton /> }} />
+      <Stack.Screen options={{ headerShown: false, title: '프로필 편집' }} />
+      <ScreenTitleHeader title="프로필 편집" backFallback />
       <KeyboardShift>
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
         <Appear delay={stagger(0)}>

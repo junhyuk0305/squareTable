@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { View, Text, StyleSheet, ScrollView, Pressable, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -18,7 +19,6 @@ import { PricingTable } from '@/components/PricingTable';
 import { SHOW_BILLING, showPaymentSurface } from '@/lib/config/store-policy';
 import { TextScaleModal } from '@/components/settings/TextScaleModal';
 import { ContactModal } from '@/components/ContactModal';
-import { HeaderBackButton } from '@/components/HeaderBackButton';
 
 const SCALE_LABEL: Record<TextScale, string> = { small: '작게', normal: '보통', large: '크게' };
 
@@ -89,8 +89,9 @@ export default function AccountSettings() {
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
       <Stack.Screen
-        options={{ headerShown: true, title: '설정', headerLeft: () => <HeaderBackButton fallback="/stores" /> }}
+        options={{ headerShown: false, title: '설정' }}
       />
+      <ScreenTitleHeader title="설정" backFallback />
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         {/* 프로필 카드 = '내 계정' 진입점 — 누르면 프로필 편집·비밀번호 변경 화면으로. */}
         <Pressable

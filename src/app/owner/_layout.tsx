@@ -1,7 +1,5 @@
 import { useEffect } from 'react';
 import { Stack, Redirect, usePathname, useRouter } from 'expo-router';
-import { InkColors } from '@/lib/theme/colors';
-import { HeaderBackButton } from '@/components/HeaderBackButton';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { needsProfileSetup } from '@/lib/store/profileSetup';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
@@ -135,34 +133,29 @@ export default function OwnerLayout() {
   return (
     <Stack
       screenOptions={{
-        headerStyle: { backgroundColor: '#FFFFFF' },
-        headerTitleStyle: { fontWeight: '800', color: InkColors.ink, fontSize: 16 },
-        headerTintColor: InkColors.ink,
-        // 기본: 모든 서브화면에 항상 뒤로가기 보장(웹 새로고침/딥링크 포함).
-        headerLeft: () => <HeaderBackButton />,
+        // ★네이티브 헤더는 **이 앱 어디서도 쓰지 않는다**(2026-09-07 iOS 실기기 확정).
+        //   iOS 는 ①타이틀 슬롯이 항상 가운데이고(headerTitleAlign 은 안드로이드 전용) ②좌/우 슬롯의
+        //   항목을 iOS 26 이 '바 버튼'으로 취급해 유리 캡슐을 씌운다 → 웹과 같은 "왼쪽 정렬 평문 제목 +
+        //   담백한 뒤로가기"를 네이티브 헤더로는 낼 수 없다. 모든 화면이 `ScreenTitleHeader` 를 직접 그린다.
+        //   ★여기서 끄는 것이 핵심이다 — 화면에서 끄면 마운트 전 한 프레임 깜빡인다(native-audit: header-flash).
+        headerShown: false,
       }}
-    >
-      {/* 탭 루트 5개는 하단 탭바로만 이동 → 뒤로가기 화살표를 무조건 끈다.
-          ⚠️ headerLeft: undefined 는 "제거"가 아니라 위 screenOptions 의 HeaderBackButton 을 "상속"한다(=화살표가 붙음).
-             확실히 없애려면 headerLeft: () => null + headerBackVisible: false 로 명시한다.
-          ★animation: 'none' — 탭 전환(goToTab=replace)은 '이동'이 아니라 '전환'이다. 네이티브에서
-             replace 도 스택 기본 슬라이드를 타서 화면·탭바가 통째로 좌우로 밀렸다(2026-09-02 실기기).
-             서브화면 push/pop 은 각자 화면의 애니메이션을 타므로 그대로 슬라이드된다. */}
+    >
       {/* ★헤더를 끌 화면은 **레이아웃에서부터** 끈다(2026-09-07 iOS 실기기). 화면 안의
           `<Stack.Screen options={{headerShown:false}}/>` 는 마운트 뒤에야 반영돼, 그 사이 한 프레임 동안
           네이티브 헤더가 떴다 사라진다 — 탭을 빠르게 오가면 계속 깜빡인다(native-audit 규칙 header-flash). */}
-      <Stack.Screen name="dashboard" options={{ title: '홈', headerShown: false, animation: 'none' }} />
+      <Stack.Screen name="dashboard" options={{ title: '홈', animation: 'none' }} />
       {/* ★탭 루트는 **네이티브 헤더를 끄고** 화면이 `ScreenTitleHeader` 를 직접 그린다(2026-09-07 iOS 실기기).
             왼쪽 정렬 평문 제목은 네이티브 헤더로 낼 수 없다 — ①iOS 는 타이틀 슬롯이 항상 가운데이고
             (`headerTitleAlign` 은 안드로이드 전용이라 무시된다), ②제목을 headerLeft 로 옮기면 iOS 26 이
             좌/우 슬롯 항목을 '바 버튼'으로 취급해 유리 캡슐 배경을 씌워 **버튼처럼 보인다.**
             홈이 이미 같은 판단으로 AppTopBar 를 쓴다. 자세한 근거는 ScreenTitleHeader 주석. */}
-      <Stack.Screen name="categories" options={{ title: '노하우 추가', headerShown: false, animation: 'none' }} />
+      <Stack.Screen name="categories" options={{ title: '노하우 추가', animation: 'none' }} />
       {/* 받은 질문은 노하우 탭으로 흡수돼 화면이 없다(리다이렉트 전용) — 헤더가 스칠 일도 없게 끈다. */}
-      <Stack.Screen name="inbox" options={{ title: '답 기다리는 질문', headerShown: false, animation: 'none' }} />
+      <Stack.Screen name="inbox" options={{ title: '답 기다리는 질문', animation: 'none' }} />
       {/* 업무 채팅은 WorkBoard 가 상단을 통째로 소유한다(대화방=떠 있는 헤더 / 패널=ScreenTitleHeader). */}
-      <Stack.Screen name="work" options={{ title: '업무 채팅', headerShown: false, animation: 'none' }} />
-      <Stack.Screen name="settings" options={{ title: '설정', headerShown: false, animation: 'none' }} />
+      <Stack.Screen name="work" options={{ title: '업무 채팅', animation: 'none' }} />
+      <Stack.Screen name="settings" options={{ title: '설정', animation: 'none' }} />
       {/* 서브화면 — 전역 headerLeft(HeaderBackButton) 사용 */}
       <Stack.Screen name="staff" options={{ title: '직원·급여' }} />
       <Stack.Screen name="training" options={{ title: '퀴즈' }} />

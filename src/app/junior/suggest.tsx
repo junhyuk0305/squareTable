@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { View, Text, Pressable, TextInput, ScrollView, StyleSheet } from 'react-native';
 import { KeyboardShift } from '@/components/KeyboardShift';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -106,6 +107,7 @@ export default function JuniorSuggestScreen() {
   return (
     <SafeAreaView edges={[]} style={styles.safe}>
       <Stack.Screen options={{ title: '노하우 제안' }} />
+      <ScreenTitleHeader title="노하우 제안" backFallback />
       <KeyboardShift>
         <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
           {!ready ? (

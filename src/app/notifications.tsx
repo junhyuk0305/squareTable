@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { View, StyleSheet, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, Redirect } from 'expo-router';
@@ -9,7 +10,6 @@ import { useCrossNotifRows } from '@/lib/hooks/useCrossNotifRows';
 import { HAS_SUPABASE } from '@/lib/supabase';
 import { useStoreDisplay } from '@/components/StoreHeaderTitle';
 import { NotificationList, ALL_KIND_UI } from '@/components/NotificationList';
-import { HeaderBackButton } from '@/components/HeaderBackButton';
 import { Appear, stagger } from '@/components/Appear';
 import { ScreenLoading } from '@/components/ScreenLoading';
 import { InkColors } from '@/lib/theme/colors';
@@ -40,8 +40,9 @@ export default function HubNotificationsScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
       <Stack.Screen
-        options={{ headerShown: true, title: '알림', headerLeft: () => <HeaderBackButton fallback="/hub" /> }}
+        options={{ headerShown: false, title: '알림' }}
       />
+      <ScreenTitleHeader title="알림" backFallback />
       {!ready ? (
         <ScreenLoading label="알림을 불러오고 있어요…" />
       ) : (

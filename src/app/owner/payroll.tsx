@@ -1,4 +1,5 @@
 import { View, Text, StyleSheet, ScrollView, TextInput } from 'react-native';
+import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { KeyboardShift } from '@/components/KeyboardShift';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack } from 'expo-router';
@@ -31,6 +32,7 @@ export default function OwnerPayrollScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={[]}>
+      <ScreenTitleHeader title="급여 설정" backFallback />
       <Stack.Screen options={{ title: '급여 설정' }} />
       {!ready ? (
         <ScreenLoading label="급여 설정을 불러오고 있어요…" />

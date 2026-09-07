@@ -82,7 +82,8 @@ for (const f of files) {
   // ── 규칙 2: ios-header-inset 🟡 ───────────────────────────────────────────
   // 네이티브 헤더를 끈 화면(headerShown:false)인데 SafeAreaView 가 top 인셋을 안 주고,
   // 고정 좌표로 떠 있는 요소(position:absolute + top:숫자)가 있다 → 상태바·노치 밑으로 파고든다.
-  if (/headerShown:\s*false/.test(src)) {
+  // ScreenTitleHeader 를 그리는 화면은 그 컴포넌트가 insets.top 을 소유한다 → 대상 아님(2026-09-07).
+  if (/headerShown:\s*false/.test(src) && !/<ScreenTitleHeader/.test(src)) {
     const floats = /position:\s*'absolute'[^}]*\btop:\s*\d/.test(src) || /\btop:\s*\d+[\s,}][^]*position:\s*'absolute'/.test(src);
     const edgesEmptyOrNoTop = [...src.matchAll(/edges=\{(\[[^\]]*\])\}/g)].filter(
       (m) => !/['"]top['"]/.test(m[1]),

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator, Linking, TextInput } from 'react-native';
 import { KeyboardShift } from '@/components/KeyboardShift';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -16,7 +17,6 @@ import { PLANS, PLAN_ORDER, planMonthlyPrice, withVat, VAT_NOTE_SENTENCE, FREE_P
 import { SHOW_BILLING, showPaymentSurface } from '@/lib/config/store-policy';
 import { usePaymentClaimStore, CLAIM_ERROR_TEXT } from '@/lib/store/usePaymentClaimStore';
 import { redeemPromoCode, fetchUnitSeatStatus, type SeatStatus } from '@/lib/db';
-import { HeaderBackButton } from '@/components/HeaderBackButton';
 import { Appear, stagger } from '@/components/Appear';
 import { Collapse } from '@/components/Collapse';
 import { ScreenLoading } from '@/components/ScreenLoading';
@@ -313,7 +313,7 @@ function BillingBody() {
     // 무료 모드는 "결제를 감춘 것"이지 "이용을 막은 것"이 아니다 — 만료 문구를 그대로 쓰면 겁을 준다.
     const freeNow = SHOW_BILLING && freeMode;
     return (
-      <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
+      <SafeAreaView style={styles.safe} edges={['bottom']}>
         <Stack.Screen options={{ headerShown: false }} />
         <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.scroll}>
           <Appear delay={stagger(0)}>
@@ -367,13 +367,10 @@ function BillingBody() {
     <SafeAreaView style={styles.safe} edges={entitledAtMount ? ['bottom'] : ['top', 'bottom']}>
       {/* 자발 방문(업그레이드하러 옴)엔 뒤로가기 헤더 — 없으면 로그아웃 말곤 나갈 길이 없다.
           페이월 모드(만료 강제 라우팅)는 헤더 없음 유지 — 뒤로 갈 유효한 화면이 없다. */}
-      <Stack.Screen
-        options={
-          entitledAtMount
-            ? { headerShown: true, title: '요금제', headerLeft: () => <HeaderBackButton fallback="/stores" /> }
-            : { headerShown: false }
-        }
-      />
+      <Stack.Screen options={{ headerShown: false, title: '요금제' }} />
+      {/* ★페이월 모드(만료 강제 라우팅)에서는 상단바 자체를 안 그린다 — 뒤로 갈 유효한 화면이 없어서다.
+          네이티브 헤더를 쓰던 시절의 `entitledAtMount ? 헤더 : 없음` 분기를 그대로 옮긴 것이다. */}
+      {entitledAtMount && <ScreenTitleHeader title="요금제" backFallback="/stores" />}
       <KeyboardShift>
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
         {!ready ? (

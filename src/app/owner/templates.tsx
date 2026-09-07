@@ -1,4 +1,5 @@
 import { StyleSheet } from 'react-native';
+import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { KeyboardShift } from '@/components/KeyboardShift';
@@ -14,6 +15,7 @@ import { InkColors } from '@/lib/theme/colors';
 export default function OwnerTemplatesScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={[]}>
+      <ScreenTitleHeader title="노하우 템플릿" backFallback />
       <KeyboardShift>
         <TemplateLibrary />
       </KeyboardShift>

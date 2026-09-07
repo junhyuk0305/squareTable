@@ -1,4 +1,5 @@
 import { Text, StyleSheet } from 'react-native';
+import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { Stack } from 'expo-router';
 
 import { useSessionStore } from '@/lib/store/useSessionStore';
@@ -23,6 +24,7 @@ export default function JuniorTimesheetScreen() {
   return (
     <>
       <Stack.Screen options={{ title: '내 출퇴근 내역' }} />
+      <ScreenTitleHeader title="내 출퇴근 내역" backFallback />
       <TimesheetView
         staffId={userId}
         wage={wage}

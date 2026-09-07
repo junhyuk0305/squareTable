@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { View, Text, Pressable, TextInput, StyleSheet, ScrollView, Platform } from 'react-native';
 import { KeyboardShift } from '@/components/KeyboardShift';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -41,6 +42,7 @@ export default function OwnerStoreConfigScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={[]}>
+      <ScreenTitleHeader title="매장 기본 정보" backFallback />
       <Stack.Screen options={{ title: '매장 기본 정보' }} />
       {!loaded ? (
         <ScreenLoading label="매장 정보를 불러오고 있어요…" />

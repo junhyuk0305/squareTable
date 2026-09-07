@@ -1,4 +1,5 @@
 import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 
@@ -41,6 +42,7 @@ export default function OwnerTimesheetScreen() {
     return (
       <SafeAreaView style={styles.safe} edges={[]}>
         <Stack.Screen options={{ title: '출근 기록' }} />
+        <ScreenTitleHeader title="출근 기록" backFallback />
         <ScreenLoading label="출근 기록을 불러오고 있어요…" />
         <RoleTabBar role="owner" />
       </SafeAreaView>
@@ -51,6 +53,7 @@ export default function OwnerTimesheetScreen() {
     return (
       <SafeAreaView style={styles.safe} edges={[]}>
         <Stack.Screen options={{ title: '출근 기록' }} />
+        <ScreenTitleHeader title="출근 기록" backFallback />
         {/* 막다른 길 금지 — 빈/오류 상태에도 다음 행동 하나를 준다(복잡도 원칙 P6). */}
         <Text style={styles.empty}>직원을 찾을 수 없어요.{'\n'}내보냈거나 아직 합류하지 않은 직원이에요.</Text>
         {/* 직원 관리는 사장 전용 — 매니저에겐 이 버튼을 그리지 않는다. */}
@@ -71,6 +74,7 @@ export default function OwnerTimesheetScreen() {
   return (
     <>
       <Stack.Screen options={{ title: `${staff.name} 출근 기록` }} />
+      <ScreenTitleHeader title={`${staff.name} 출근 기록`} backFallback />
       <TimesheetView
         staffId={staffId!}
         wage={wage}

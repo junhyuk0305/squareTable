@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { View, Text, StyleSheet, TextInput, Pressable, ScrollView, ActivityIndicator } from 'react-native';
 import { KeyboardShift } from '@/components/KeyboardShift';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -65,17 +66,18 @@ export default function OwnerCreateStore() {
   };
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <SafeAreaView style={styles.safe} edges={['bottom']}>
       {/* 추가 흐름이면 뒤로가기 노출(headerLeft 미지정=owner/_layout의 HeaderBackButton 상속), 온보딩이면 차단. */}
       <Stack.Screen
         options={{
-          headerShown: true,
+          headerShown: false,
           title: isAddingStore ? '매장 추가' : '매장 만들기',
           ...(isAddingStore
             ? { headerLeft: () => <HeaderBackButton fallback="/stores" /> }
-            : { headerLeft: () => null, headerBackVisible: false }),
+            : { headerLeft: () => null }),
         }}
       />
+      <ScreenTitleHeader title={isAddingStore ? '매장 추가' : '매장 만들기'} backFallback />
       <KeyboardShift>
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
         <Appear delay={0}>

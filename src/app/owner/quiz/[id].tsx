@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { View, Text, TextInput, Pressable, ScrollView, ActivityIndicator, StyleSheet } from 'react-native';
 import { KeyboardShift } from '@/components/KeyboardShift';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -267,6 +268,7 @@ export default function QuizDetailScreen() {
     return (
       <SafeAreaView style={st.safe} edges={['bottom']}>
         <Stack.Screen options={{ title: '퀴즈' }} />
+        <ScreenTitleHeader title="퀴즈" backFallback />
         <View style={st.loadingWrap}>
           <ActivityIndicator color={InkColors.ink3} />
           <Text style={st.loadingText}>퀴즈를 불러오는 중...</Text>
@@ -278,6 +280,7 @@ export default function QuizDetailScreen() {
     return (
       <SafeAreaView style={st.safe} edges={['bottom']}>
         <Stack.Screen options={{ title: '퀴즈' }} />
+        <ScreenTitleHeader title="퀴즈" backFallback />
         <EmptyState
           title="이 퀴즈를 찾을 수 없어요"
           body="보관했거나 지워졌을 수 있어요."
@@ -305,6 +308,7 @@ export default function QuizDetailScreen() {
           ),
         }}
       />
+      <ScreenTitleHeader title={course.name} backFallback />
       <KeyboardShift>
       <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={st.scroll} showsVerticalScrollIndicator={false}>
         {/* D4 — 낡은 문항. 옛 정답이 그대로 나가는 상태라 결과보다 먼저 말한다. */}

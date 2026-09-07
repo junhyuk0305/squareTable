@@ -2,7 +2,9 @@ import { type ReactNode } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useRouter, useNavigation, type Href } from 'expo-router';
 
+import { canManage } from '@/lib/utils/roles';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useStoreDisplay } from '@/components/StoreHeaderTitle';
 import { InkColors } from '@/lib/theme/colors';
@@ -28,22 +30,46 @@ export function ScreenTitleHeader({
   title,
   storeLine = false,
   onBack,
+  backFallback,
   right,
 }: {
   title: string;
   /** 제목 아래 "어느 매장인가"(색점+매장명)를 함께 보인다 — 탭 루트용(StoreHeaderTitle 과 같은 규칙). */
   storeLine?: boolean;
-  /** 주면 왼쪽에 뒤로가기 화살표가 붙는다. */
+  /** 뒤로가기 동작을 직접 정할 때. 보통은 `backFallback` 만 주면 된다. */
   onBack?: () => void;
+  /**
+   * 뒤로가기 화살표를 붙이고, 뒤로 갈 곳이 없을 때(웹 새로고침·딥링크·푸시 진입) 갈 자리를 정한다.
+   * `true` 면 역할별 홈으로. 판정은 `HeaderBackButton` 과 **같은 규칙**이다 — 가장 가까운 네비게이터
+   * 기준으로만 canGoBack 을 본다(전역 router 로 보면 그룹 첫 화면에서 상위 라우트로 새어 나간다).
+   */
+  backFallback?: Href | true;
   /** 오른쪽 끝 액션. */
   right?: ReactNode;
 }) {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
+  const navigation = useNavigation();
+  const role = useSessionStore((s) => s.role);
+  const status = useSessionStore((s) => s.status);
+  const goBack = () => {
+    if (navigation.canGoBack()) return navigation.goBack();
+    const home: Href =
+      backFallback && backFallback !== true
+        ? backFallback
+        : status !== 'signed_in'
+          ? '/'
+          : canManage(role)
+            ? '/owner/dashboard'
+            : '/junior/home';
+    router.replace(home);
+  };
+  const back = onBack ?? (backFallback ? goBack : undefined);
   return (
     <View style={[styles.bar, { paddingTop: insets.top + Space.sm }]}>
-      {onBack && (
+      {back && (
         <Pressable
-          onPress={onBack}
+          onPress={back}
           hitSlop={8}
           accessibilityRole="button"
           accessibilityLabel="뒤로"

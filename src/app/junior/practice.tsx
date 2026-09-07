@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -199,6 +200,7 @@ export default function JuniorTermPracticeScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
+      <ScreenTitleHeader title="매장 기준 값 연습" backFallback />
       <View style={styles.body}>
         {/* 1) 진행 표시 — C형 필수. 제목은 지금 몇 번째 판인지를 말한다. */}
         <Appear delay={stagger(0)}>

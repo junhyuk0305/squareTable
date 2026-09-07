@@ -1,9 +1,9 @@
 import { View, Text, StyleSheet, ScrollView, Pressable, Linking } from 'react-native';
+import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack } from 'expo-router';
 import { InkColors } from '@/lib/theme/colors';
 import { Space } from '@/lib/theme/layout';
-import { HeaderBackButton } from '@/components/HeaderBackButton';
 import { RoleTabBar } from '@/components/RoleTabBar';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { canManage } from '@/lib/utils/roles';
@@ -16,7 +16,8 @@ export default function PrivacyScreen() {
   const role = useSessionStore((s) => s.role);
   return (
     <SafeAreaView style={styles.safe} edges={[]}>
-      <Stack.Screen options={{ headerShown: true, title: '개인정보 처리방침', headerStyle: { backgroundColor: '#FFFFFF' }, headerTintColor: InkColors.ink, headerLeft: () => <HeaderBackButton /> }} />
+      <Stack.Screen options={{ headerShown: false, title: '개인정보 처리방침', headerStyle: { backgroundColor: '#FFFFFF' }, headerTintColor: InkColors.ink }} />
+      <ScreenTitleHeader title="개인정보 처리방침" backFallback />
       <ScrollView contentContainerStyle={styles.scroll}>
         <Text style={styles.h1}>개인정보 수집·이용 안내</Text>
         <Text style={styles.updated}>시행일: {TERMS_VERSION} · 운영: 스퀘어테이블</Text>

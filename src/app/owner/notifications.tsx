@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useFocusEffect, useRouter, type Href } from 'expo-router';
@@ -132,6 +133,7 @@ export default function OwnerNotificationsScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
+      <ScreenTitleHeader title="알림" backFallback />
       <Stack.Screen
         // 전체 읽음은 활성 매장 것만 가능(다른 매장 read_by 는 RLS 스코프 밖) → '이 매장' 탭에서만.
         options={{ headerRight: () => (seg === 'store' && hasUnread ? <MarkAllReadButton onPress={markAll} /> : null) }}

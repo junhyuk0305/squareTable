@@ -1,9 +1,9 @@
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack } from 'expo-router';
 import { InkColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
-import { HeaderBackButton } from '@/components/HeaderBackButton';
 import { Appear } from '@/components/Appear';
 import { businessRows, BUSINESS_INFO_COMPLETE } from '@/lib/config/business';
 
@@ -14,8 +14,9 @@ import { businessRows, BUSINESS_INFO_COMPLETE } from '@/lib/config/business';
 export default function BusinessInfoScreen() {
   const rows = businessRows();
   return (
-    <SafeAreaView style={styles.safe}>
-      <Stack.Screen options={{ headerShown: true, title: '사업자 정보', headerStyle: { backgroundColor: '#FFFFFF' }, headerTintColor: InkColors.ink, headerLeft: () => <HeaderBackButton /> }} />
+    <SafeAreaView style={styles.safe} edges={['bottom']}>
+      <Stack.Screen options={{ headerShown: false, title: '사업자 정보', headerStyle: { backgroundColor: '#FFFFFF' }, headerTintColor: InkColors.ink }} />
+      <ScreenTitleHeader title="사업자 정보" backFallback />
       <ScrollView contentContainerStyle={styles.scroll}>
         <Appear delay={0}>
           <Text style={styles.h1}>판매자 정보</Text>

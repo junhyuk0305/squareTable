@@ -1,4 +1,5 @@
 import { StyleSheet } from 'react-native';
+import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { KeyboardShift } from '@/components/KeyboardShift';
@@ -19,6 +20,7 @@ export default function OwnerImportKnowhowScreen() {
   const freeMode = useSessionStore((s) => s.freeMode);
   return (
     <SafeAreaView style={styles.safe} edges={[]}>
+      <ScreenTitleHeader title="다른 매장에서 가져오기" backFallback />
       {canUseMultistore(plan, freeMode) ? (
         <KeyboardShift>
           <OwnerKnowhowImport />

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { View, Text, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
@@ -268,6 +269,7 @@ export default function OwnerCoachScreen() {
     return (
       <SafeAreaView style={styles.container} edges={['bottom']}>
         <Stack.Screen options={{ title: '답 쓰기' }} />
+        <ScreenTitleHeader title="답 쓰기" backFallback />
         <ScreenLoading label="질문을 불러오고 있어요…" />
       </SafeAreaView>
     );
@@ -282,6 +284,7 @@ export default function OwnerCoachScreen() {
     return (
       <SafeAreaView style={styles.container} edges={['bottom']}>
         <Stack.Screen options={{ title: '답 쓰기' }} />
+        <ScreenTitleHeader title="답 쓰기" backFallback />
         <LoadErrorState title="질문을 불러오지 못했어요" onRetry={() => void retryQueue()} />
       </SafeAreaView>
     );
@@ -293,6 +296,7 @@ export default function OwnerCoachScreen() {
     return (
       <SafeAreaView style={styles.container} edges={['bottom']}>
         <Stack.Screen options={{ title: '답 쓰기' }} />
+        <ScreenTitleHeader title="답 쓰기" backFallback />
         <EmptyState
           emoji="📭"
           title="이미 처리된 질문이에요"
@@ -311,6 +315,7 @@ export default function OwnerCoachScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
       <Stack.Screen options={{ title: isInboxAnswer ? '답 쓰기' : sugId ? '제안 검토' : '노하우 추가' }} />
+      <ScreenTitleHeader title={isInboxAnswer ? '답 쓰기' : sugId ? '제안 검토' : '노하우 추가'} backFallback />
 
       <OwnerCoachChat
         uq={uq}

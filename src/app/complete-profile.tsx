@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { View, Text, StyleSheet, TextInput, Pressable, ScrollView, ActivityIndicator } from 'react-native';
 import { KeyboardShift } from '@/components/KeyboardShift';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -39,8 +40,9 @@ export default function CompleteProfileScreen() {
   //   게이트만 두고 폼을 그대로 두면 이 문제가 안 고쳐진다 — account-edit.tsx 와 같은 구조로 나눈다.
   if (HAS_SUPABASE && status === 'loading') {
     return (
-      <SafeAreaView style={styles.safe}>
-        <Stack.Screen options={{ headerShown: true, title: '프로필 완성', headerStyle: { backgroundColor: '#FFFFFF' }, headerTintColor: InkColors.ink }} />
+      <SafeAreaView style={styles.safe} edges={['bottom']}>
+        <Stack.Screen options={{ headerShown: false, title: '프로필 완성', headerStyle: { backgroundColor: '#FFFFFF' }, headerTintColor: InkColors.ink }} />
+        <ScreenTitleHeader title="프로필 완성" backFallback />
         <ScreenLoading label="계정 정보를 불러오고 있어요…" />
       </SafeAreaView>
     );
@@ -144,8 +146,9 @@ function CompleteProfileForm() {
   };
 
   return (
-    <SafeAreaView style={styles.safe}>
-      <Stack.Screen options={{ headerShown: true, title: '프로필 완성', headerStyle: { backgroundColor: '#FFFFFF' }, headerTintColor: InkColors.ink }} />
+    <SafeAreaView style={styles.safe} edges={['bottom']}>
+      <Stack.Screen options={{ headerShown: false, title: '프로필 완성', headerStyle: { backgroundColor: '#FFFFFF' }, headerTintColor: InkColors.ink }} />
+      <ScreenTitleHeader title="프로필 완성" backFallback />
       <KeyboardShift>
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
         <Appear delay={stagger(0)}>

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { View, Text, TextInput, Pressable, ScrollView, ActivityIndicator, StyleSheet } from 'react-native';
 import { KeyboardShift } from '@/components/KeyboardShift';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -528,6 +529,7 @@ export default function QuizNewScreen() {
     return (
       <SafeAreaView style={st.safe} edges={['bottom']}>
         <Stack.Screen options={{ title: '퀴즈 만들기' }} />
+        <ScreenTitleHeader title="퀴즈 만들기" backFallback />
         <ScreenLoading label="만들다 만 퀴즈를 가져오는 중이에요…" />
       </SafeAreaView>
     );
@@ -536,6 +538,7 @@ export default function QuizNewScreen() {
   return (
     <SafeAreaView style={st.safe} edges={['bottom']}>
       <Stack.Screen options={{ title: '퀴즈 만들기', headerRight: () => <Text style={st.stepBadge}>{step}/{TOTAL}</Text> }} />
+      <ScreenTitleHeader title="퀴즈 만들기" backFallback />
       <KeyboardShift>
       <ScrollView
         contentContainerStyle={st.scroll}

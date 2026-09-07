@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter, type Href } from 'expo-router';
@@ -13,7 +14,6 @@ import { useCrossNotifStore } from '@/lib/store/useCrossNotifStore';
 import { useCrossNotifRows } from '@/lib/hooks/useCrossNotifRows';
 import { useMemberPrefsStore } from '@/lib/store/useMemberPrefsStore';
 import { showToast } from '@/lib/store/useToastStore';
-import { HeaderBackButton } from '@/components/HeaderBackButton';
 import { MarkAllReadButton } from '@/components/MarkAllReadButton';
 import { Appear, stagger } from '@/components/Appear';
 import { ScreenLoading } from '@/components/ScreenLoading';
@@ -120,10 +120,10 @@ export default function JuniorNotificationsScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
+      <ScreenTitleHeader title="알림" backFallback />
       <Stack.Screen
         options={{
           title: '알림',
-          headerLeft: () => <HeaderBackButton fallback="/junior/home" />,
           // 전체 읽음은 활성 매장 것만 가능(다른 매장 read_by 는 RLS 스코프 밖) → '이 매장' 탭에서만.
           headerRight: () => (seg === 'store' && hasUnread ? <MarkAllReadButton onPress={markAll} /> : null),
         }}

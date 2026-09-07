@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { View, Text, Pressable, ScrollView, TextInput, StyleSheet } from 'react-native';
 import { KeyboardShift } from '@/components/KeyboardShift';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -103,6 +104,7 @@ export default function OwnerSuggestionsScreen() {
 
   return (
     <SafeAreaView edges={[]} style={styles.safe}>
+      <ScreenTitleHeader title="노하우 제안함" backFallback />
       <Stack.Screen options={{ title: '노하우 제안함' }} />
       {!ready ? (
         <ScreenLoading label="직원 제안을 불러오고 있어요…" />

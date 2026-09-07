@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { View, Text, Pressable, StyleSheet, ScrollView, TextInput } from 'react-native';
 import { KeyboardShift } from '@/components/KeyboardShift';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -165,6 +166,7 @@ export default function OwnerStaffScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={[]}>
       <Stack.Screen options={{ title: '직원·급여' }} />
+      <ScreenTitleHeader title="직원·급여" backFallback />
       {/* 전부 도착 전엔 무조건 로딩 — "직원 0명"·"₩0" 기본 화면이 먼저 떴다가 채워지는 부분 렌더 금지. */}
       {!ready ? (
         <ScreenLoading label="직원·급여를 불러오고 있어요…" />

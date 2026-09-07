@@ -223,8 +223,18 @@ for (const f of files) {
   for (const [lf, lsrc] of all) {
     if (!/[\\/]_layout\.tsx$/.test(lf)) continue;
     // 그 Stack 의 screenOptions 가 이미 헤더를 꺼 뒀으면 기본값부터 false 라 깜빡일 창이 없다.
-    const so = lsrc.match(/screenOptions=\{\{([\s\S]*?)\}\}/);
-    if (so && /headerShown:\s*false/.test(so[1])) continue;
+    // ★원본을 본다 — stripComments 는 주석 속 경로 표기(`/owner/*`)의 `/*` 를 블록주석 시작으로 오인해
+    //   그 뒤 코드를 통째로 지운다. 그 사본으로 판정하면 screenOptions 가 통째로 안 보인다(2026-09-07).
+    const lraw = readFileSync(lf, 'utf8');
+    const soAt = lraw.indexOf('screenOptions={{');
+    if (soAt >= 0) {
+      let i = soAt + 'screenOptions={'.length, depth = 1;
+      for (; i < lraw.length && depth > 0; i++) {
+        if (lraw[i] === '{') depth++;
+        else if (lraw[i] === '}') depth--;
+      }
+      if (/headerShown:\s*false/.test(lraw.slice(soAt, i))) continue;
+    }
     const dir = rel(lf).replace(/\/_layout\.tsx$/, '');
     for (const tag of openingTags(lsrc, 'Stack\\.Screen')) {
       const nm = tag.tag.match(/name=["']([^"']+)["']/);

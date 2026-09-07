@@ -1,4 +1,5 @@
 import { useCallback, useId, useMemo, useRef, useState } from 'react';
+import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
@@ -49,8 +50,9 @@ export default function EditKnowledgeScreen() {
   // 스토어 hydrate 전(콜드 진입/새로고침)엔 '삭제됨' 대신 로딩 표시 — 데이터 도착 후 판단.
   if (!ready) {
     return (
-      <SafeAreaView style={styles.safe}>
+      <SafeAreaView style={styles.safe} edges={['bottom']}>
         <Stack.Screen options={{ title: '노하우 수정' }} />
+        <ScreenTitleHeader title="노하우 수정" backFallback />
         <ScreenLoading label="노하우를 불러오고 있어요…" />
       </SafeAreaView>
     );
@@ -58,8 +60,9 @@ export default function EditKnowledgeScreen() {
 
   if (!entry) {
     return (
-      <SafeAreaView style={styles.safe}>
+      <SafeAreaView style={styles.safe} edges={['bottom']}>
         <Stack.Screen options={{ title: '노하우 수정' }} />
+        <ScreenTitleHeader title="노하우 수정" backFallback />
         <EmptyState
           title="이미 삭제된 노하우예요."
           cta={{ label: '돌아가기', onPress: () => router.back() }}
@@ -163,6 +166,7 @@ function ConversationalEdit({ entry, quizCountOf }: { entry: PlaybookEntry; quiz
     <SafeAreaView style={styles.safe} edges={['bottom']}>
       {/* 삭제는 헤더가 아니라 카드의 '수정 저장' 옆에 있다(OwnerCoachChat → MiniSquareCard). */}
       <Stack.Screen options={{ title: '노하우 수정' }} />
+      <ScreenTitleHeader title="노하우 수정" backFallback />
 
       {/* 카테고리 + 문제 만들기 — 이 노하우를 '어디에 묶을지'와 '뭘 물어볼지'는 같은 결정 층이라
           한 줄에 나란히 둔다. 문서 머리말에 있던 문제 만들기 행은 여기로 옮겼다(2026-08-18). */}

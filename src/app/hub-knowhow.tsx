@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { View, Text, TextInput, Pressable, ScrollView, StyleSheet } from 'react-native';
 import { KeyboardShift } from '@/components/KeyboardShift';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -8,7 +9,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { fetchOwnerKnowhowEntries } from '@/lib/db';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useStoreNav } from '@/lib/hooks/useStoreNav';
-import { HeaderBackButton } from '@/components/HeaderBackButton';
 import { SectionLabel } from '@/components/SectionLabel';
 import { EmptyState } from '@/components/EmptyState';
 import { Appear, stagger } from '@/components/Appear';
@@ -114,14 +114,14 @@ export default function HubKnowhowScreen() {
           여기서만 켜서 뒤로가기를 보장(전역 규칙: HeaderBackButton.tsx). */}
       <Stack.Screen
         options={{
-          headerShown: true,
+          headerShown: false,
           title: '노하우 목록',
           headerStyle: { backgroundColor: '#FFFFFF' },
           headerTitleStyle: { fontWeight: '800', color: InkColors.ink, fontSize: 16 },
           headerTintColor: InkColors.ink,
-          headerLeft: () => <HeaderBackButton fallback="/hub-growth" />,
         }}
       />
+      <ScreenTitleHeader title="노하우 목록" backFallback />
       {rows === null ? (
         <ScreenLoading label="노하우를 불러오고 있어요…" />
       ) : loadErr ? (
