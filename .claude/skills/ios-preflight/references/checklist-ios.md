@@ -60,6 +60,29 @@
 - [ ] 시스템 글자 크기를 크게 했을 때 깨지는 고정 높이가 있는가
 - [ ] 로고·숫자처럼 커지면 안 되는 곳에 `allowFontScaling={false}` 가 있는가
 
+## §플랫폼 전용 옵션 (iOS에서 조용히 사라지는 것)
+
+정본은 reactnavigation.org/docs/native-stack-navigator 의 각 옵션 "Only supported on …" 표기다.
+**의심되면 여기를 먼저 열어 본다** — 타입도 통과하고 경고도 없으므로 코드만 봐서는 절대 모른다.
+
+- [ ] `headerTitleAlign` 을 쓰고 있는가 → **iOS는 항상 가운데**다(문서 명시). 왼쪽 정렬은 `headerLeft` 슬롯으로
+- [ ] `navigationBarColor` · `navigationBarHidden` → 안드로이드 전용
+- [ ] `sheetElevation` · `sheetResizeAnimationEnabled` · `sheetShouldOverflowTopInset` → 안드로이드 전용
+- [ ] 검색바 옵션 `inputType` · `hintTextColor` · `headerIconColor` · `shouldShowHintSearchIcon` → 안드로이드 전용
+- [ ] `importantForAccessibility` 만 쓰고 `accessibilityElementsHidden`(iOS 짝)을 빠뜨리지 않았는가
+- [ ] `textAlignVertical` → 안드로이드 전용. iOS 멀티라인 입력은 기본이 top 이라 보통 무해하지만,
+      `'center'` 로 세로 중앙을 노렸다면 iOS에서는 **안 먹는다**(패딩으로 따로 맞춰야 한다)
+- [ ] `android_ripple` 이 **유일한 누름 피드백**이 아닌가 → iOS엔 눌린 표시가 없다
+- [ ] 반대 방향(iOS 전용이라 안드로이드에서 사라짐): `gestureEnabled` · `fullScreenGestureEnabled` ·
+      `headerBackTitle` · `headerLargeTitle*` · `headerBlurEffect` · `autoHideHomeIndicator`
+
+## §펼침·접힘(아코디언)·측정 기반 레이아웃
+
+- [ ] `onLayout` 으로 잰 높이를 **영구히 씌우고 있지 않은가** → 측정이 한 번 낡으면 그대로 굳어 내용이 잘린다.
+      공용 `Collapse` 는 여는 애니메이션이 끝나면 높이 구속을 **놓는다**(2026-09-07 할일 잘림 사고)
+- [ ] 사진·비동기 콘텐츠가 나중에 들어오는 자리에 고정 높이가 있는가
+- [ ] 부모가 `overflow:'hidden'` + 고정 높이인데 자식이 그보다 커질 수 있는가
+
 ## §실기기에서만 알 수 있는 것 (사용자에게 넘길 후보)
 
 폰트 렌더링 · 키보드 애니메이션의 매끄러움 · 알림 실제 도착 · 권한 팝업 문구 ·

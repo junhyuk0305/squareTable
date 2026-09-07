@@ -21,14 +21,14 @@ description: iOS(아이폰)에서만 조용히 틀리는 지점을 실기기·�
 |---|---|
 | 웹 ↔ 네이티브 갈림길 일반(KAV 공용규칙·inset 이중적용·Modal back·hover·persist-taps) | `native-audit` |
 | **안드로이드 층(HWUI) 렌더링**(opacity+elevation·오프스크린 합성) | `native-audit` |
-| **iOS만의 축 6가지**(아래 §핵심) | **이 스킬** |
+| **iOS만의 축 7가지**(아래 §핵심) | **이 스킬** |
 | 의도한 플랫폼 분기의 설계·배치 | `/platform-split` |
 | 출고 가능 여부(태그·미커밋·EAS 환경변수) | `npm run native:gate` |
 
 증상이 안드로이드에도 같이 나면 이 스킬이 아니라 `native-audit` 이다.
 **"아이폰에서만 그렇다"가 확인됐거나, iOS 빌드/심사를 앞두고 있을 때** 이 스킬을 쓴다.
 
-## §핵심 — iOS만의 축 6가지 (조용한 오류의 뿌리)
+## §핵심 — iOS만의 축 7가지 (조용한 오류의 뿌리)
 
 ### 1. 좌표계가 다르다 — iOS 프레임은 "창"이 아니라 "화면 뷰컨트롤러" 기준
 `react-native-safe-area-context` 의 `useSafeAreaFrame()` 은 플랫폼마다 **기준점이 다르다.**
@@ -84,6 +84,29 @@ iOS는 한글을 Apple SD Gothic Neo 로, ASCII(공백·영문·숫자)를 San F
 
 코드로는 절대 알 수 없다. **사용자 터미널에서만** 확인된다(§절차 3단계).
 
+### 7. 안드로이드에만 있는 옵션은 iOS에서 **경고 없이 사라진다**
+`headerTitleAlign` 은 native-stack 공식 문서에 이렇게 적혀 있다 —
+> "Not supported on iOS. It's always `center` on iOS and cannot be changed."
+
+타입 오류도, 콘솔 경고도 없다. **안드로이드에서 의도대로 보이니 다 된 줄 안다.** 2026-09-07 실기기에서
+헤더 제목이 iOS에서만 가운데로 뜬 것이 이것이었다 — 코드에는 왼쪽 정렬 의도가 주석까지 달려 있었다.
+
+이 부류의 성질이 고약한 이유: **"안 되는 것"이 아니라 "다르게 되는 것"이라 스크린샷 없이는 못 잡는다.**
+
+| iOS에서 무시되는 내비 옵션(안드로이드 전용) | iOS에서 같은 결과를 내려면 |
+|---|---|
+| `headerTitleAlign` | 슬롯을 바꾼다 — `headerTitle: () => null` + `headerLeft: () => <제목/>` |
+| `navigationBarColor` · `navigationBarHidden` | iOS엔 해당 개념이 없다(홈 인디케이터는 `autoHideHomeIndicator`) |
+| `sheetElevation` · `sheetResizeAnimationEnabled` · `sheetShouldOverflowTopInset` | iOS 시트 옵션(`sheetGrabberVisible` 등)으로 따로 낸다 |
+
+컴포넌트 prop 에도 같은 부류가 있다. 대표는 접근성 쌍이다:
+`importantForAccessibility`(안드로이드) ↔ `accessibilityElementsHidden`(iOS) — **한쪽만 쓰면 다른 쪽은 무방비다.**
+화면으로는 절대 안 보이고 VoiceOver 를 켜야만 드러난다.
+
+**반대 방향도 있다**(iOS 전용이라 안드로이드에서 사라지는 것): `gestureEnabled` · `fullScreenGestureEnabled` ·
+`headerBackTitle` · `headerLargeTitle*` · `headerBlurEffect` · `autoHideHomeIndicator`.
+이쪽은 `native-audit` 담당이지만, 같은 함정이라는 것만 기억한다.
+
 ## 절차
 
 ### 1단계 — 자동 스캔 (2분)
@@ -96,8 +119,8 @@ node .claude/skills/ios-preflight/scripts/scan-ios.mjs
 🔴(iOS에서 깨짐 확실) · 🟡(결함 가능·사람이 판정) · ℹ️(확인 권장).
 **🔴은 전건 연다.** 오탐이면 그 줄이나 윗줄에 `// ios-preflight: ok <이유>` 를 달아 근거를 코드에 남긴다.
 
-규칙 7종: `ios-vc-frame` · `ios-header-inset` · `ios-shadow` · `ios-permission` · `ios-kb-event` ·
-`ios-mixed-run` · `ios-scroll-inset`.
+규칙 9종: `ios-vc-frame` · `ios-header-inset` · `ios-shadow` · `ios-permission` · `ios-kb-event` ·
+`ios-mixed-run` · `ios-scroll-inset` · `ios-ignored-nav-option` · `ios-a11y-pair`.
 
 ### 2단계 — 스캐너가 못 잡는 것 (`references/checklist-ios.md`)
 
@@ -132,7 +155,7 @@ node .claude/skills/ios-preflight/scripts/scan-ios.mjs
 🟡 판정 필요 N건: (오탐 판정 포함)
 🔑 사용자 터미널 필요 N건: 명령 + 결과를 어떻게 읽는지
 📱 실기기에서만 N건: 위 4단계 확인 요청서
-✅ 통과: 규칙 7종 / 체크리스트에서 본 항목
+✅ 통과: 규칙 9종 / 체크리스트에서 본 항목
 ```
 
 **증상은 개발 용어가 아니라 사용자가 겪을 일로 쓴다** — "safe-area top 미적용"이 아니라
@@ -144,7 +167,7 @@ node .claude/skills/ios-preflight/scripts/scan-ios.mjs
 메모리 기록)를 **그대로 따른다.** 여기서 더할 것은 하나뿐이다:
 
 > **"안드로이드에서도 그런가?"를 먼저 묻는다.**
-> 양쪽 다면 `native-audit` 축이다. iOS만이면 위 §핵심 6가지 중 어느 축인지 이름을 붙이고 시작한다.
+> 양쪽 다면 `native-audit` 축이다. iOS만이면 위 §핵심 7가지 중 어느 축인지 이름을 붙이고 시작한다.
 > 축 이름을 못 붙이면 아직 고치지 않는다.
 
 ## 심사 리스크 (제출 전 1회)
@@ -167,3 +190,5 @@ node .claude/skills/ios-preflight/scripts/scan-ios.mjs
 - Info.plist 권한 문구 누락 시 크래시: developer.apple.com — Protected resources / purpose strings
 - Expo Push ↔ APNs 크리덴셜: docs.expo.dev/push-notifications/push-notifications-setup
 - App Store Review Guidelines: developer.apple.com/app-store/review/guidelines
+- 플랫폼별 지원 옵션(무엇이 무시되는가): reactnavigation.org/docs/native-stack-navigator — 각 옵션의 "Only supported on …" 표기가 정본
+- 접근성 prop 의 플랫폼 쌍: reactnative.dev/docs/accessibility (importantForAccessibility=Android · accessibilityElementsHidden=iOS)

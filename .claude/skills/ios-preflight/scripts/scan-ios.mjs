@@ -159,6 +159,41 @@ for (const f of files) {
     );
   }
 
+  // ── 규칙 8: ios-ignored-nav-option 🟡 ─────────────────────────────────────
+  // native-stack 이 **안드로이드에서만** 지원하는 내비게이션 옵션. iOS 에서는 경고도 없이 무시된다.
+  // 대표: headerTitleAlign — 공식 문서 "Not supported on iOS. It's always center on iOS and cannot
+  // be changed." 왼쪽 정렬을 적어 두고 iOS 에서만 가운데로 뜨는 사고가 실제로 났다(2026-09-07).
+  // 왼쪽에 붙이려면 슬롯을 바꾼다: headerTitle: () => null + headerLeft: () => <제목/>.
+  for (const m of src.matchAll(
+    /\b(headerTitleAlign|navigationBarColor|navigationBarHidden|sheetElevation|sheetResizeAnimationEnabled|sheetShouldOverflowTopInset)\s*:/g,
+  )) {
+    report(
+      '🟡',
+      lineOf(src, m.index),
+      'ios-ignored-nav-option',
+      `\`${m[1]}\` 은 native-stack 의 **안드로이드 전용** 옵션이라 iOS 에서는 조용히 무시된다. ` +
+        '의도한 모습이 iOS 에서만 다르게 나온다 — 안드로이드로만 확인하면 영원히 안 잡힌다. ' +
+        (m[1] === 'headerTitleAlign'
+          ? "왼쪽 정렬은 슬롯을 바꿔서 낸다: headerTitle: () => null + headerLeft: () => <제목/>."
+          : 'iOS 에서 같은 결과를 낼 방법이 있는지 확인하거나, iOS 는 다르게 보인다는 것을 주석으로 남겨라.'),
+    )
+  }
+
+  // ── 규칙 9: ios-a11y-pair 🟡 ──────────────────────────────────────────────
+  // importantForAccessibility 는 **안드로이드 전용**이다. iOS 짝은 accessibilityElementsHidden 하나뿐이라,
+  // 빠뜨리면 숨겼다고 믿은 장식 요소가 VoiceOver 에 그대로 읽힌다(2026-09-07 Sparkline 실사례).
+  for (const m of src.matchAll(/importantForAccessibility/g)) {
+    const around = src.slice(Math.max(0, m.index - 400), m.index + 400)
+    if (/accessibilityElementsHidden/.test(around)) continue
+    report(
+      '🟡',
+      lineOf(src, m.index),
+      'ios-a11y-pair',
+      'importantForAccessibility(안드로이드 전용)만 있고 iOS 짝인 accessibilityElementsHidden 이 없다. ' +
+        'iOS VoiceOver 에서는 숨긴 게 아니라 그대로 읽힌다 — 화면으로는 확인이 안 되는 결함이다.',
+    )
+  }
+
   // 권한 사용처 수집(규칙 7에서 app.json 과 대조)
   for (const [name, useRe] of PERMISSIONS) {
     if (!permUsedIn.has(name) && useRe.test(src)) permUsedIn.set(name, `${rel(f)}:${lineOf(src, src.search(useRe))}`);
@@ -184,7 +219,7 @@ for (const [name, , declRe] of PERMISSIONS) {
 const order = { '🔴': 0, '🟡': 1, 'ℹ️': 2 };
 findings.sort((a, b) => order[a.level] - order[b.level] || a.loc.localeCompare(b.loc));
 
-console.log('══ iOS 사전 QA 스캔 (규칙 7종) ══\n');
+console.log('══ iOS 사전 QA 스캔 (규칙 9종) ══\n');
 if (findings.length === 0) {
   console.log('✅ 걸린 것 없음. 다음은 references/checklist-ios.md 와 사용자 터미널 확인(APNs).');
 } else {
