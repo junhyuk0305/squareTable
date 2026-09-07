@@ -8,7 +8,6 @@
     "scheme": "squaretable",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/expo.icon",
       "bundleIdentifier": "com.dochackchack.app",
       "buildNumber": "1",
       "supportsTablet": false,
