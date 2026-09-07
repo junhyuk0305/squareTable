@@ -39,15 +39,18 @@ for (const entry of readdirSync(path.join(ROOT, 'src'), { recursive: true, withF
   srcFiles.push(path.relative(ROOT, abs).replaceAll('\\', '/'));
 }
 
-// ── Q2. .web 짝 검사 ─────────────────────────────────────────────
-const webSplits = srcFiles.filter((f) => /\.web\.(ts|tsx)$/.test(f));
-for (const f of webSplits) {
-  const base = f.replace(/\.web\.(ts|tsx)$/, '');
+// ── Q2. 확장자 분기 짝 검사 ──────────────────────────────────────
+// 규칙(platform.md): 기본 파일 = 다수판, 확장자(.web/.ios/.android/.native) = 예외판. 기본 파일이 없으면
+// 그 확장자에 해당하지 않는 플랫폼은 import 에서 죽는다.
+const PLATFORM_EXT = /\.(web|ios|android|native)\.(ts|tsx)$/;
+const splits = srcFiles.filter((f) => PLATFORM_EXT.test(f));
+for (const f of splits) {
+  const base = f.replace(PLATFORM_EXT, '');
   if (!existsSync(path.join(ROOT, `${base}.ts`)) && !existsSync(path.join(ROOT, `${base}.tsx`))) {
-    problems.push(`${f} — 네이티브 짝 파일(${base}.ts/.tsx) 없음. 웹은 되고 앱은 import에서 죽는다.`);
+    problems.push(`${f} — 기본 파일(${base}.ts/.tsx) 없음. 이 확장자 밖의 플랫폼은 import에서 죽는다.`);
   }
 }
-console.log(`■ .web 분기 짝 검사: ${webSplits.length}쌍`);
+console.log(`■ 확장자 분기 짝 검사: ${splits.length}개 (.web/.ios/.android/.native)`);
 
 // ── Q1. 웹 전용 API 래칫 ─────────────────────────────────────────
 // .web.* 와 +html.tsx(웹 전용 셸)는 대상 아님. 같은 줄에 가드가 있으면 통과.
@@ -66,7 +69,7 @@ const GUARD = /Platform\.OS|typeof (window|document|navigator|localStorage)|@ts-
 
 const findings = [];
 for (const f of srcFiles) {
-  if (/\.web\.(ts|tsx)$/.test(f) || f.endsWith('+html.tsx')) continue;
+  if (/\.web\.(ts|tsx)$/.test(f) || f.endsWith('+html.tsx')) continue; // .ios/.android/.native 는 대상(네이티브 경로)
   const lines = readFileSync(path.join(ROOT, f), 'utf8').split('\n');
   lines.forEach((line, i) => {
     const t = line.trim();
