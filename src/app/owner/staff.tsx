@@ -19,7 +19,7 @@ import { ScreenLoading } from '@/components/ScreenLoading';
 import { ConfirmModal } from '@/components/ConfirmModal';
 import { Avatar } from '@/components/Avatar';
 import { SectionLabel } from '@/components/SectionLabel';
-import { InfoDot } from '@/components/InfoDot';
+import { InviteBlock } from '@/components/owner/InviteBlock';
 import { ProgressPill } from '@/components/blocks/ProgressPill';
 import { ActionRow } from '@/components/blocks/ActionRow';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
@@ -28,8 +28,6 @@ import { Space } from '@/lib/theme/layout';
 import { fmtDuration, won, todayStr, liveMinutes } from '@/lib/utils/attendance';
 import { computePay, shiftsToPayRecords } from '@/lib/utils/payroll';
 import { gradableTasks, staffBehind, type StaffBehind } from '@/lib/utils/taskProgress';
-import { useCopyToClipboard } from '@/lib/utils/useCopyToClipboard';
-import { track } from '@/lib/analytics/track';
 import { showToast } from '@/lib/store/useToastStore';
 import { rotateInviteCode } from '@/lib/db';
 
@@ -72,7 +70,6 @@ export default function OwnerStaffScreen() {
   const [rejectTarget, setRejectTarget] = useState<{ id: string; name: string } | null>(null);
   const [rotateOpen, setRotateOpen] = useState(false);
   const [rotating, setRotating] = useState(false);
-  const { copied, copy } = useCopyToClipboard();
 
   // 화면 진입/복귀 시마다 명부·합류신청을 다시 당겨온다. owner 레이아웃 hydrate는 로그인 시 1회뿐이라,
   // 앱을 켜둔 채로 새 합류 신청이 들어와도(profiles 실시간 미구독) 이 화면을 열면 반드시 최신으로 보인다.
@@ -197,47 +194,28 @@ export default function OwnerStaffScreen() {
         </View>
         </Appear>
 
-        {/* ② 초대코드 — 카드가 아니라 상하 보더 한 줄(2026-08-06).
-            같은 코드를 /owner/settings 에서도 상시 보고 복사할 수 있어, 여기서까지 히어로 규격을 쓸 이유가 없다.
-            안내 문장은 ⓘ 로 옮겼다 — 접었을 뿐 도달은 그대로다. */}
+        {/* ② 초대 — 코드 한 줄만 주던 자리를 공용 InviteBlock 으로 바꿨다(2026-09-08).
+            안내·코드 복사·초대 링크가 한 벌이라, 사장이 자리마다 다른 설명을 읽지 않는다.
+            '코드 변경'만 이 화면 고유라 action 슬롯으로 넘긴다. */}
         <Appear delay={stagger(1)}>
-        <View style={styles.inviteRow}>
-          <View style={styles.inviteCol}>
-            <View style={styles.inviteLabelRow}>
-              <Text style={styles.inviteLabel}>매장 초대코드</Text>
-              <InfoDot
-                size={14}
-                title="초대코드로 어떻게 합류해요?"
-                body={'직원이 코드를 입력해 신청하면 아래 ‘합류 신청’에서 승인해 주세요.\n승인 전에는 매장 정보에 접근할 수 없어요.'}
-              />
-            </View>
-            <Text style={styles.inviteCode}>{INVITE_CODE}</Text>
-          </View>
-          {/* 복사 = "사장이 초대코드를 실제로 뿌렸다"의 유일한 관측점. 이게 없으면 직원 합류율이
-              낮을 때 사장이 안 뿌린 건지, 뿌렸는데 직원이 안 들어온 건지 DB로 구분할 수 없다. */}
-          <Pressable
-            onPress={() => { track('invite_shared', { from: 'staff' }); copy(INVITE_CODE); }}
-            hitSlop={6}
-            accessibilityRole="button"
-            accessibilityLabel="초대코드 복사"
-            style={({ pressed }) => [styles.copyBtn, pressed && { opacity: 0.85 }]}
-          >
-            <Ionicons name={copied ? 'checkmark' : 'copy-outline'} size={15} color={InkColors.ink} />
-            <Text style={styles.copyText}>{copied ? '복사됨' : '복사'}</Text>
-          </Pressable>
-          {/* 코드 변경 = 사장 전용(rotate_invite_code RPC 가 소유자만 통과) — 매니저에겐 비노출. */}
-          {isOwner && (
-            <Pressable
-              onPress={() => setRotateOpen(true)}
-              hitSlop={6}
-              accessibilityRole="button"
-              accessibilityLabel="초대코드 변경"
-              style={({ pressed }) => [styles.rotateBtn, pressed && { opacity: 0.7 }]}
-            >
-              <Text style={styles.rotateText}>코드 변경</Text>
-            </Pressable>
-          )}
-        </View>
+        <InviteBlock
+          code={INVITE_CODE}
+          from="staff"
+          action={
+            // 코드 변경 = 사장 전용(rotate_invite_code RPC 가 소유자만 통과) — 매니저에겐 비노출.
+            isOwner ? (
+              <Pressable
+                onPress={() => setRotateOpen(true)}
+                hitSlop={6}
+                accessibilityRole="button"
+                accessibilityLabel="초대코드 변경"
+                style={({ pressed }) => [styles.rotateBtn, pressed && { opacity: 0.7 }]}
+              >
+                <Text style={styles.rotateText}>코드 변경</Text>
+              </Pressable>
+            ) : null
+          }
+        />
         </Appear>
 
         {/* ③④ 바로 가기 — 퀴즈·근무표 진입 2칸. 블록 A2′ ActionRow `tile`(데모 §7-7 · 2026-08-27).
@@ -513,15 +491,7 @@ const styles = StyleSheet.create({
   payrollBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12, backgroundColor: 'rgba(255,255,255,0.12)', paddingVertical: 11, paddingHorizontal: 14, borderRadius: Radius.md },
   payrollBtnText: { flex: 1, color: '#FFFFFF', fontWeight: '700', fontSize: 14 },
 
-  // 초대코드 — 카드가 아닌 상하 보더 스트립. 히어로(인건비)와 형태를 갈라 '카드 나열'을 끊는 자리다.
-  inviteRow: { flexDirection: 'row', alignItems: 'center', gap: Space.md, paddingVertical: Space.md, borderTopWidth: 1, borderBottomWidth: 1, borderColor: InkColors.line },
-  inviteCol: { flex: 1, minWidth: 0 },
-  inviteLabelRow: { flexDirection: 'row', alignItems: 'center', gap: Space.xs },
-  inviteLabel: { fontSize: 12, fontWeight: '700', color: InkColors.ink2 },
-  inviteCode: { fontSize: 22, lineHeight: 30, fontWeight: '900', color: InkColors.ink, letterSpacing: 3 },
-  // 복사·코드 변경은 보조 액션 — 화면 Primary(급여 설정)와 경쟁하지 않게 중립 면/고스트로 둔다.
-  copyBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, minHeight: 48, paddingHorizontal: Space.md, borderRadius: Radius.pill, backgroundColor: InkColors.bgSoft, borderWidth: 1, borderColor: InkColors.line },
-  copyText: { fontSize: 13, fontWeight: '800', color: InkColors.ink },
+  // 코드 변경은 보조 액션 — 화면 Primary(급여 설정)와 경쟁하지 않게 고스트로 둔다.
   rotateBtn: { alignItems: 'center', justifyContent: 'center', minHeight: 48, paddingHorizontal: Space.md, borderRadius: Radius.pill, borderWidth: 1, borderColor: InkColors.line },
   rotateText: { fontSize: 13, fontWeight: '700', color: InkColors.ink2 },
 

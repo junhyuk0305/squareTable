@@ -6,9 +6,9 @@ import type { Role } from '@/types';
 export type KnowhowSegmentKey = 'browse' | 'ask' | 'mine';
 
 export type KnowhowSegmentProps = {
-  /** owner·junior 모두 2칸: [둘러보기 | 물어보기] */
+  /** owner·junior 모두 2칸: [노하우 | 물어보기] */
   role: Role;
-  /** '둘러보기' 슬롯 (사장=OwnerKnowhowBrowse, 직원=JuniorBrowseDashboard) */
+  /** 'browse'(라벨 '노하우') 슬롯 (사장=OwnerKnowhowBrowse, 직원=JuniorBrowseDashboard) */
   browse: React.ReactNode;
   /** '물어보기' 슬롯 (챗봇/검색/안내) */
   ask: React.ReactNode;
@@ -21,14 +21,14 @@ export type KnowhowSegmentProps = {
 };
 
 const LABELS: Record<KnowhowSegmentKey, string> = {
-  browse: '둘러보기',
+  browse: '노하우',
   ask: '물어보기',
   mine: '내 공간',
 };
 
 /**
  * KnowhowSegment — 노하우 탭의 세그먼트 컨테이너.
- * owner·junior 모두 2칸(둘러보기/물어보기). 사장 '둘러보기'가 곧 매장 노하우 관리화면(=옛 내 노하우)이라
+ * owner·junior 모두 2칸(노하우/물어보기 — 코드 키는 browse/ask). 사장 browse 가 곧 매장 노하우 관리화면(=옛 내 노하우)이라
  * 별도 '내 노하우' 칸은 폐지됐다. 슬롯 기반으로 화면을 디커플링한다 — 활성 세그먼트만 렌더.
  * 모바일 프레임 안에서만 그린다(부모 폭 상속, flex:1).
  */

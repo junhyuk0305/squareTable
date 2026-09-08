@@ -26,7 +26,7 @@ type Props = {
 export function DeflectCard({ aiGeneralAnswer, similarCount, status, onRegister, onDecline }: Props) {
   const header =
     status === 'registered'
-      ? { icon: '🙋', title: '사장님께 보냈어요', sub: '사장님이 답을 정하면 ‘노하우’에서 확인할 수 있어요' }
+      ? { icon: '🙋', title: '사장님께 보냈어요', sub: '사장님이 답을 정하면 ‘내 공간’에서 확인할 수 있어요' }
       : status === 'declined'
         ? { icon: '🙂', title: '보내지 않았어요', sub: '필요하면 언제든 다시 사장님께 보낼 수 있어요' }
         : { icon: '🙋', title: '사장님께 보낼까요?', sub: '아직 매장에 없는 질문이에요 — 보내면 사장님이 답을 정해줘요' };

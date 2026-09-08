@@ -235,7 +235,7 @@ export default function StoresHub() {
                   판정이 role 이 아니라 canCreateStore 인 이유는 위 정의 참고(매장 생성 전 사장 = role junior). */}
               <Pressable onPress={canCreateStore ? addStore : joinStore} style={({ pressed }) => [styles.emptyBtn, pressed && { opacity: 0.88 }]}>
                 <Ionicons name={canCreateStore ? 'add' : 'enter-outline'} size={18} color={InkColors.ink} />
-                <Text style={styles.emptyBtnText}>{canCreateStore ? '매장 만들기' : '매장 합류'}</Text>
+                <Text style={styles.emptyBtnText}>{canCreateStore ? '매장 만들기' : '합류 신청'}</Text>
               </Pressable>
             </View>
           </Appear>
@@ -303,7 +303,7 @@ export default function StoresHub() {
                     <Ionicons name={isOwner ? 'add' : 'enter-outline'} size={20} color={InkColors.ink} />
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.addTitle}>{isOwner ? '매장 추가' : '매장 합류'}</Text>
+                    <Text style={styles.addTitle}>{isOwner ? '매장 추가' : '합류 신청'}</Text>
                     <Text style={styles.addSub}>{isOwner ? '2번째 매장부터는 매장당 요금' : '사장님께 받은 초대코드 입력'}</Text>
                   </View>
                 </Pressable>

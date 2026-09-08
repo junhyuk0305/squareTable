@@ -40,8 +40,8 @@ export default function OwnerHandoverScreen() {
   if (BULK_IMPORT_PIPELINE) {
     return (
       <>
-        <Stack.Screen options={{ title: '인수인계서 올리기' }} />
-        <ScreenTitleHeader title="인수인계서 올리기" backFallback />
+        <Stack.Screen options={{ title: '매뉴얼 올리기' }} />
+        <ScreenTitleHeader title="매뉴얼 올리기" backFallback />
         <HandoverImport />
       </>
     );
@@ -180,8 +180,8 @@ function LegacyHandover() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
-      <Stack.Screen options={{ title: '인수인계서 올리기' }} />
-      <ScreenTitleHeader title="인수인계서 올리기" backFallback />
+      <Stack.Screen options={{ title: '매뉴얼 올리기' }} />
+      <ScreenTitleHeader title="매뉴얼 올리기" backFallback />
       <KeyboardShift>
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
         {phase === 'review' ? (

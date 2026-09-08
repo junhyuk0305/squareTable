@@ -63,7 +63,7 @@ export default function JuniorOnboarding() {
           />
           {err && <Text style={styles.err}>{err}</Text>}
           <Pressable disabled={busy} onPress={join} style={({ pressed }) => [styles.primary, pressed && { opacity: 0.88 }, busy && { opacity: 0.6 }]}>
-            {busy ? <ActivityIndicator color="#FFF" /> : <Text style={styles.primaryText}>합류하기</Text>}
+            {busy ? <ActivityIndicator color="#FFF" /> : <Text style={styles.primaryText}>합류 신청</Text>}
           </Pressable>
         </View>
         </Appear>

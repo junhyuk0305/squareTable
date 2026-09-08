@@ -228,7 +228,7 @@ export default function OwnerTrainingScreen() {
                 body={'퀴즈 문제는 사장님이 적어 둔 노하우에서 나와요.\n노하우가 하나도 없으면 낼 문제가 없어요.'}
                 cta={{ label: '노하우 추가하기', onPress: () => router.push('/owner/coach' as never) }}
               />
-              <GhostButton icon="document-text-outline" label="한번에 올리기 · 인수인계서가 있으면" onPress={() => router.push('/owner/handover' as never)} />
+              <GhostButton icon="document-text-outline" label="매뉴얼 올리기 · 인수인계서가 있으면" onPress={() => router.push('/owner/handover' as never)} />
             </>
           ) : (
             /* A1 — 재료는 있는데 아직 안 만들었다(§10-10). 지표·경고는 전부 "문항이 생긴 뒤"의 것이라 감춘다.

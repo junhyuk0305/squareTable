@@ -384,7 +384,7 @@ function HandoverImportBody() {
           <Appear delay={0}>
             <View style={styles.uploadZone}>
               <Text style={styles.uploadEmoji}>📄</Text>
-              <Text style={styles.uploadTitle}>인수인계서·매뉴얼을 올리세요</Text>
+              <Text style={styles.uploadTitle}>매뉴얼 올리기</Text>
               <Text style={styles.uploadSub}>
                 {PDF_PICK_SUPPORTED
                   ? 'PDF 파일을 올리거나 내용을 붙여넣으세요. AI가 소제목별로 나눠 노하우 항목으로 정리해요.'

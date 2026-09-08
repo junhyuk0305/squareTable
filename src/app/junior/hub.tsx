@@ -2,7 +2,7 @@ import { useRef, useState } from 'react';
 import { View, Text, StyleSheet, TextInput, Pressable, ScrollView, ActivityIndicator } from 'react-native';
 import { KeyboardShift } from '@/components/KeyboardShift';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Stack, useRouter } from 'expo-router';
+import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
@@ -31,8 +31,11 @@ export default function JuniorHub() {
   const rejectedJoinStoreName = useSessionStore((s) => s.rejectedJoinStoreName);
   const dismissRejectedJoin = useSessionStore((s) => s.dismissRejectedJoin);
 
+  // 사장이 보낸 초대 링크로 가입해 들어온 경우에만 채워진다(signup 이 실어 보낸다).
+  // 채우기만 하고 **자동 제출은 하지 않는다** — 합류 신청은 직원이 누르는 것이다.
+  const params = useLocalSearchParams<{ code?: string }>();
   const inputRef = useRef<TextInput>(null);
-  const [code, setCode] = useState('');
+  const [code, setCode] = useState(typeof params.code === 'string' ? params.code.replace(/[^0-9]/g, '').slice(0, CODE_LEN) : '');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   // ★서버가 PHONE_NOT_VERIFIED 로 막았을 때만 연다(#2). 예전엔 이 코드가 화이트리스트에 없어
@@ -144,7 +147,7 @@ export default function JuniorHub() {
         onPress={join}
         style={({ pressed }) => [styles.primary, pressed && { opacity: 0.88 }, busy && { opacity: 0.6 }]}
       >
-        {busy ? <ActivityIndicator color="#FFF" /> : <Text style={styles.primaryText}>매장 추가하기</Text>}
+        {busy ? <ActivityIndicator color="#FFF" /> : <Text style={styles.primaryText}>합류 신청</Text>}
       </Pressable>
       <Text style={styles.codeHint}>코드가 없으신가요? 사장님께 요청하세요 (사장님: 설정 › 매장 관리).</Text>
     </View>
@@ -278,7 +281,7 @@ export default function JuniorHub() {
               accessibilityLabel="코드로 매장 추가 — 초대코드 입력"
             >
               <Ionicons name="add" size={18} color={InkColors.ink2} />
-              {/* 펼치면 나오는 Primary가 '매장 추가하기'라 라벨을 다르게 둔다 —
+              {/* 펼치면 나오는 Primary가 '합류 신청'이라 라벨을 다르게 둔다 —
                   같은 말이 위아래로 겹치면 어느 쪽을 눌러야 하는지 흐려진다. */}
               <Text style={styles.addRowText}>코드로 매장 추가</Text>
               <Ionicons name={addOpen ? 'chevron-up' : 'chevron-down'} size={16} color={InkColors.ink3} />

@@ -16,6 +16,7 @@ import { SectionLabel } from '@/components/SectionLabel';
 import { AlertRow } from '@/components/blocks/AlertRow';
 import { HeroSubNav, type HeroSubNavItem } from '@/components/blocks/HeroSubNav';
 import { AppTopBar } from '@/components/AppTopBar';
+import { InviteBlock } from '@/components/owner/InviteBlock';
 import { SEED_TEMPLATES } from '@/data/seed-templates';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { useOwnerDashboardData } from '@/lib/hooks/useOwnerDashboardData';
@@ -68,6 +69,10 @@ export default function OwnerDashboardScreen() {
   // 합류 승인 대기 인원 — 사장이 승인을 놓치면 직원이 합류 못 한 채 갇힌다.
   // A1 액션 로우가 사라지면서(ADR-004) 이 배지는 서브내비 '직원' 칸으로 옮겼다.
   const pendingJoin = useStaffStore((s) => s.pending.length);
+  // 직원 0명 판정 — 홈의 초대 블록 게이트. 도착 여부는 화면 게이트(loaded)가 이미 보므로
+  // 여기서 또 묻지 않는다(loaded 가 staffLoaded 를 포함한다).
+  const staffCount = useStaffStore((s) => s.staff.length);
+  const inviteCode = useSessionStore((s) => s.inviteCode) || '------';
 
   // ── 오늘 할일: 홈에서 직접 완료 ────────────────────────────────────────────
   // 2026-08-19: 홈의 '오늘'이 표시 전용이 아니게 됐다. 사장이 홈에서 체크하면 **진짜 완료**다
@@ -198,9 +203,9 @@ export default function OwnerDashboardScreen() {
       },
       {
         targetRef: ctaRef,
-        title: '마지막으로, 직원 답을 깔아요',
-        body: '사장님이 한 번 알려주면 직원이 물었을 때 AI가 대신 답해요. 업종 추천 노하우로 빠르게 시작해보세요.',
-        ctaLabel: '추천 노하우 깔기',
+        title: '마지막으로, 직원 답을 남겨요',
+        body: '사장님이 한 번 알려주면 직원이 물었을 때 AI가 대신 답해요. 한 줄만 적으면 AI가 노하우로 정리해줘요.',
+        ctaLabel: '노하우 하나 남기기',
       },
     ],
     [],
@@ -231,7 +236,9 @@ export default function OwnerDashboardScreen() {
   };
   const completeTour = () => {
     endTour();
-    router.push('/owner/onboarding');
+    // ★온보딩으로 되돌려보내지 않는다 — 투어를 보는 사장은 방금 온보딩을 끝내고 홈에 온 사람이다.
+    //   여기서 할 일은 '내 말로 노하우 하나 남기기'라서 coach 로 보낸다(첫 사용 워크스루 #7).
+    router.push('/owner/coach');
   };
 
   return (
@@ -285,12 +292,12 @@ export default function OwnerDashboardScreen() {
             <Text style={styles.onboardTitle}>매장을 막 시작하셨네요</Text>
             <Text style={styles.onboardBody}>
               아직 등록된 노하우가 없어요. 사장님이 알려주신 내용이 있어야 직원이 물었을 때 AI가 대신 답할 수 있어요.
-              {'\n'}업종 <Text style={{ fontWeight: '800' }}>추천 노하우</Text>를 한 번에 깔고 시작해보세요.
+              {'\n'}업종 <Text style={{ fontWeight: '800' }}>추천 노하우</Text>를 한 번에 담고 시작해보세요.
             </Text>
             <View ref={ctaRef} style={{ alignSelf: 'flex-start' }}>
               <PressableScale onPress={() => router.push('/owner/onboarding')} scaleTo={0.96} style={styles.onboardCta}>
                 <Ionicons name="download-outline" size={16} color={InkColors.bubbleText} />
-                <Text style={styles.onboardCtaText}>추천 노하우 깔기</Text>
+                <Text style={styles.onboardCtaText}>추천 노하우 담기</Text>
               </PressableScale>
             </View>
 
@@ -307,6 +314,15 @@ export default function OwnerDashboardScreen() {
                 </Pressable>
               ))}
             </View>
+          </Appear>
+        )}
+
+        {/* 직원 초대 — 아직 직원이 한 명도 없으면. 노하우를 아무리 담아도 물어볼 사람이 없으면
+            이 앱은 아무 일도 하지 않는다. 노하우 건수와 별개 축이라 entriesCount 로 묶지 않는다.
+            (온보딩 완료 화면·직원 관리·설정과 **같은 컴포넌트** — 자리마다 다른 설명을 읽게 하지 않는다.) */}
+        {staffCount === 0 && (
+          <Appear delay={stagger(2)} style={styles.section}>
+            <InviteBlock code={inviteCode} from="home" />
           </Appear>
         )}
 

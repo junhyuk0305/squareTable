@@ -5,7 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { BottomSheet } from '@/components/BottomSheet';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useTourStore } from '@/lib/store/useTourStore';
-import { useGuideStore } from '@/lib/store/useGuideStore';
+import { useOverlayFree, useOverlayStore } from '@/lib/store/useOverlayStore';
 import { pushSupported, permissionState, enablePush } from '@/lib/push/webpush';
 import {
   pushSupported as nativePushSupported,
@@ -32,7 +32,12 @@ import { Space, SCREEN_GUTTER } from '@/lib/theme/layout';
  * ★권한을 이미 정한 사람에게는 안 뜬다(granted·denied 둘 다). 거절한 사람을 다시 붙잡는 건
  *   알림 화면의 `NotificationEnableCard` 몫이다 — 거기선 "설정에서 켜세요"를 안내한다.
  */
-const SEEN_ID = 'notify_permission_v1';
+/**
+ * '알림을 이미 물어봤다' 플래그. 이 시트만의 것이 아니다 — 온보딩 완료 화면의
+ * `NotificationEnableCard` 로 먼저 물어본 경우에도 세워서, 홈에 들어오자마자 같은 질문이
+ * 두 번째로 뜨는 걸 막는다(첫 사용 워크스루 #6).
+ */
+export const NOTIFY_ASKED_ID = 'notify_permission_v1';
 /** 진입 애니메이션·기능 안내 팝업이 자리 잡은 뒤에 뜬다(가이드보다 늦게). */
 const OPEN_DELAY_MS = 1200;
 
@@ -43,6 +48,7 @@ export function NotificationPermissionSheet() {
   const seen = useTourStore((s) => s.seen);
   const tourLoaded = useTourStore((s) => s.loaded);
   const markSeen = useTourStore((s) => s.markSeen);
+  const overlayFree = useOverlayFree();
 
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -50,13 +56,14 @@ export function NotificationPermissionSheet() {
 
   useEffect(() => {
     // '본 적 있음'이 도착하기 전에 띄우면 이미 본 사람에게 또 뜬다 — 도착을 기다린다.
-    if (!tourLoaded || seen[SEEN_ID] || !userId) return;
+    if (!tourLoaded || seen[NOTIFY_ASKED_ID] || !userId) return;
     if (!isNative && !pushSupported()) return; // 웹 푸시 미지원 브라우저
+    // ★앞 장(직원 환영 코치·사용 안내 팝업)이 떠 있으면 기다린다 — 겹치면 둘 다 안 읽힌다.
+    //   markSeen 을 안 하므로, 앞 장이 닫히면 이 effect 가 다시 돌아 같은 진입에서 이어 뜬다.
+    //   (예전엔 타이머 안에서 가이드만 한 번 확인하고 그냥 접었다 — 다음 진입까지 밀렸다.)
+    if (!overlayFree) return;
     let alive = true;
     const t = setTimeout(async () => {
-      // 기능 안내 팝업이 떠 있으면 이번엔 양보한다 — 두 장이 겹치면 둘 다 안 읽힌다.
-      // markSeen 을 안 하므로 다음 진입에 다시 시도한다.
-      if (useGuideStore.getState().current) return;
       const perm = isNative ? await nativePermissionState() : permissionState();
       // 아직 아무것도 안 정한 사람에게만. granted·denied 는 물을 이유가 없다.
       if (alive && perm === 'default') setOpen(true);
@@ -65,10 +72,19 @@ export function NotificationPermissionSheet() {
       alive = false;
       clearTimeout(t);
     };
-  }, [tourLoaded, seen, userId, isNative]);
+  }, [tourLoaded, seen, userId, isNative, overlayFree]);
+
+  // 이 시트도 줄에 등록한다 — 지금은 마지막 장이지만, 규칙을 예외 없이 한 줄로 둔다.
+  const enter = useOverlayStore((s) => s.enter);
+  const exit = useOverlayStore((s) => s.exit);
+  useEffect(() => {
+    if (!open) return;
+    enter('notify');
+    return () => exit('notify');
+  }, [open, enter, exit]);
 
   const close = () => {
-    markSeen(SEEN_ID); // 켰든 미뤘든 한 번 보여줬으면 끝 — 다시 띄우는 건 방해다.
+    markSeen(NOTIFY_ASKED_ID); // 켰든 미뤘든 한 번 보여줬으면 끝 — 다시 띄우는 건 방해다.
     setOpen(false);
   };
 

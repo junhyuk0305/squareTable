@@ -50,7 +50,7 @@ export function NoStoreView({ what, withQuizHistory = false }: { what: string; w
     <EmptyState
       title="아직 매장이 없어요"
       body={`사장님께 받은 초대코드로 합류하면 ${what}이 여기에 보여요.`}
-      cta={{ label: '매장 합류', onPress: () => router.push('/junior/hub') }}
+      cta={{ label: '합류 신청', onPress: () => router.push('/junior/hub') }}
     />
   );
 

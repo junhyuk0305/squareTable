@@ -905,12 +905,12 @@ export function OwnerCoachChat({
                 onPress={() => { setMenu(false); setVoiceOpen(true); }}
               />
             )}
-            {/* 한번에 올리기 — 아직 정리된 카드가 없을 때만. 카드가 뜬 뒤에 다른 화면으로 나가면
+            {/* 매뉴얼 올리기 — 아직 정리된 카드가 없을 때만. 카드가 뜬 뒤에 다른 화면으로 나가면
                 방금 정리한 내용이 조용히 사라진다(수정 모드는 처음부터 카드가 있어 자동으로 빠진다). */}
             {!square && (
               <CoachMenuItem
                 icon="cloud-upload-outline"
-                label="한번에 올리기"
+                label="매뉴얼 올리기"
                 sub="인수인계서·매뉴얼을 노하우로 쪼개 드려요"
                 onPress={() => { setMenu(false); router.push('/owner/handover' as never); }}
                 accent

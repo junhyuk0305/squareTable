@@ -28,8 +28,11 @@ export default function SignupScreen() {
 
   // 게스트 응시(/q/[token])에서 넘어오는 경우에만 채워진다 — 그쪽은 직원 가입으로만 보낸다(0160).
   // 역할 카드는 그대로 두고 **초기값만** 바꾼다: 잘못 눌러 들어온 사람이 사장으로 못 바꾸면 막힌다.
-  const params = useLocalSearchParams<{ role?: string; phone?: string }>();
+  // ★code = 사장이 보낸 초대 링크(`/signup?role=junior&code=______`)의 초대코드. 여기서 쓰지 않고
+  //   가입이 끝나면 hub 로 그대로 넘겨 6칸을 채운다 — 코드칸을 두 화면에 두면 '두 번 입력' 혼선이 난다.
+  const params = useLocalSearchParams<{ role?: string; phone?: string; code?: string }>();
   const fromLink = params.role === 'junior';
+  const inviteFromLink = typeof params.code === 'string' ? params.code.replace(/[^0-9]/g, '').slice(0, 6) : '';
 
   const [role, setRole] = useState<Role>(fromLink ? 'junior' : 'owner');
   const [name, setName] = useState('');
@@ -191,7 +194,8 @@ export default function SignupScreen() {
       } else {
         // 직원은 계정만 만들고 개인 허브(junior/hub)로 — 초대코드 입력은 hub 한 곳에서만 한다
         // (6칸 입력 + 실시간 에러 + 승인 대기 카드). 가입화면엔 코드칸을 두지 않아 '두 번 입력' 혼선을 없앤다.
-        router.replace('/junior/hub');
+        // 초대 링크로 들어왔으면 코드를 실어 보낸다 — hub 가 6칸을 채운다(제출은 직원이 누른다).
+        router.replace(inviteFromLink ? { pathname: '/junior/hub', params: { code: inviteFromLink } } : '/junior/hub');
       }
     } catch {
       // 네트워크 등 예기치 못한 예외 — 여기서 안 잡으면 busy 가 안 풀려 버튼이 무한 스피너로 멈춘다(무음 행 방지).

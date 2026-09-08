@@ -11,6 +11,8 @@ import { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSessionStore } from '@/lib/store/useSessionStore';
+import { useTourStore } from '@/lib/store/useTourStore';
+import { NOTIFY_ASKED_ID } from '@/components/NotificationPermissionSheet';
 import {
   pushSupported,
   needsIosInstall,
@@ -31,6 +33,7 @@ export function NotificationEnableCard() {
   const userId = useSessionStore((s) => s.userId);
   const unitId = useSessionStore((s) => s.unitId);
   const isNative = nativePushSupported();
+  const markSeen = useTourStore((s) => s.markSeen);
   const [perm, setPerm] = useState<PushPermission>(() => permissionState());
   const [busy, setBusy] = useState(false);
 
@@ -87,6 +90,10 @@ export function NotificationEnableCard() {
   const onEnable = async () => {
     if (!userId || busy) return;
     setBusy(true);
+    // 여기서 한 번 물었으면 홈의 `NotificationPermissionSheet` 는 안 뜬다 — 온보딩 완료 화면에서
+    // 이 카드로 묻고 홈에 들어가자마자 같은 질문이 또 뜨던 것을 막는다(첫 사용 워크스루 #6).
+    // OS 팝업을 닫아버려 권한이 default 로 남는 경우까지 포함해 '물어봤음'으로 친다.
+    markSeen(NOTIFY_ASKED_ID);
     try {
       const next = isNative
         ? await enableNativePush(unitId || null)

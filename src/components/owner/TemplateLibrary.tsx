@@ -116,10 +116,10 @@ function TemplateCard({
               onPress={onImport}
               style={({ pressed }) => [styles.importBtn, pressed && { opacity: 0.85 }]}
               accessibilityRole="button"
-              accessibilityLabel={`${t.title} 내 노하우로 추가`}
+              accessibilityLabel={`${t.title} 내 노하우로 저장`}
             >
               <Ionicons name="add" size={16} color={InkColors.bubbleText} />
-              <Text style={styles.importBtnText}>내 노하우로 추가</Text>
+              <Text style={styles.importBtnText}>내 노하우로 저장</Text>
             </Pressable>
           )}
         </Collapse>

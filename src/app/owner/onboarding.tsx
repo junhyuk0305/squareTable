@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from 'react';
 import { NotificationEnableCard } from '@/components/NotificationEnableCard';
+import { InviteBlock } from '@/components/owner/InviteBlock';
 import { View, Text, Pressable, StyleSheet, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
@@ -25,8 +26,9 @@ import { showPaymentSurface } from '@/lib/config/store-policy';
 // 사장 온보딩 — 업종 표준 노하우 팩에서 '선택 → 자동등록'. 빈 매장(노하우 0건) 죽음의 나선 차단.
 // 레이아웃: ① 추천 묶음 한 번에 담기(결정 최소화) → ② '직접 고르기' 접이식 카테고리 섹션(미세조정)
 // → ③ 기존 매뉴얼 올리기(/owner/handover — 템플릿 대신 이미 쓰던 인수인계서로 시작하는 선택지).
-// 추천 항목 프리체크(기본 ≥5) → 매장 노하우로 fork(needs_review 배지). [[project_squaretable_onboarding]]
-const MIN_RECOMMENDED = 5;
+// 추천 항목 프리체크(기본 ≥4) → 매장 노하우로 fork(needs_review 배지). [[project_squaretable_onboarding]]
+// ★4인 이유: common 팩 추천이 4건이라 5로 두면 손대기 전부터 경고가 떠 있는 업종(음식점·기타)이 생긴다.
+const MIN_RECOMMENDED = 4;
 
 export default function OwnerOnboardingScreen() {
   const router = useRouter();
@@ -112,7 +114,7 @@ export default function OwnerOnboardingScreen() {
       return;
     }
     if (okCount < picks.length) {
-      showToast(`${okCount}/${picks.length}개만 저장됐어요. 나머지는 대시보드에서 다시 담아 주세요.`, 'warn');
+      showToast(`${okCount}/${picks.length}개만 저장됐어요. 나머지는 홈에서 다시 담아 주세요.`, 'warn');
     } else {
       showToast(`노하우 ${okCount}개를 담았어요`, 'good');
     }
@@ -167,7 +169,7 @@ export default function OwnerOnboardingScreen() {
               <>
                 <Text style={styles.doneTitle}>매장이 만들어졌어요</Text>
                 <Text style={styles.doneSub}>
-                  지금은 건너뛰었어요. 대시보드의 <Text style={styles.doneStrong}>‘추천 노하우 깔기’</Text>로{'\n'}
+                  지금은 건너뛰었어요. 홈의 <Text style={styles.doneStrong}>‘추천 노하우 담기’</Text>로{'\n'}
                   언제든 노하우를 한 번에 추가할 수 있어요.
                 </Text>
               </>
@@ -181,12 +183,8 @@ export default function OwnerOnboardingScreen() {
             <NotificationEnableCard />
           </Appear>
 
-          <Appear delay={stagger(3)}>
-          <View style={styles.codeCard}>
-            <Text style={styles.codeLabel}>직원 초대코드</Text>
-            <Text style={styles.codeText}>{inviteCode}</Text>
-            <Text style={styles.codeHint}>직원이 개인 홈에서 이 코드로 신청하면, 사장님이 승인해야 합류돼요.</Text>
-          </View>
+          <Appear delay={stagger(3)} style={styles.doneStretch}>
+            <InviteBlock code={inviteCode} from="onboarding" />
           </Appear>
 
           {/* 요금제 후킹 — 지금은 무료로 시작했음을 알리고, 직원·AI 무제한(단일 매장)으로
@@ -218,7 +216,7 @@ export default function OwnerOnboardingScreen() {
 
           <Appear delay={stagger(4)} style={styles.doneStretch}>
             <PressableScale onPress={goDashboard} scaleTo={0.97} style={styles.primary}>
-              <Text style={styles.primaryText}>대시보드로 들어가기</Text>
+              <Text style={styles.primaryText}>홈으로 들어가기</Text>
             </PressableScale>
           </Appear>
         </View>
@@ -233,7 +231,7 @@ export default function OwnerOnboardingScreen() {
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <Appear delay={stagger(0)} style={styles.intro}>
           <Text style={styles.introEmoji}>👋</Text>
-          <Text style={styles.introTitle}>직원이 물어볼 걸,{'\n'}미리 답을 깔아둘게요</Text>
+          <Text style={styles.introTitle}>직원이 물어볼 걸,{'\n'}미리 답을 담아둘게요</Text>
           <Text style={styles.introBody}>
             {industry ? `${industry} ` : ''}매장에서 자주 생기는 일을 모아뒀어요. 추천 묶음으로 바로 시작하거나,
             직접 골라 담을 수 있어요.
@@ -322,13 +320,13 @@ export default function OwnerOnboardingScreen() {
             onPress={() => router.push('/owner/handover')}
             style={({ pressed }) => [styles.manualCard, pressed && { opacity: 0.9 }]}
             accessibilityRole="button"
-            accessibilityLabel="기존 매뉴얼 올리기 — 붙여넣으면 AI가 노하우로 정리해요"
+            accessibilityLabel="매뉴얼 올리기 — 붙여넣으면 AI가 노하우로 정리해요"
           >
             <View style={styles.manualIcon}>
               <Ionicons name="document-text-outline" size={16} color={InkColors.ink} />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.manualTitle}>이미 쓰던 매뉴얼이 있다면</Text>
+              <Text style={styles.manualTitle}>매뉴얼 올리기</Text>
               <Text style={styles.manualSub}>인수인계서·매뉴얼을 붙여넣으면 AI가 노하우로 정리해요</Text>
             </View>
             <Ionicons name="chevron-forward" size={16} color={InkColors.ink3} />
@@ -562,22 +560,6 @@ const styles = StyleSheet.create({
   doneSub: { fontSize: 15, color: InkColors.ink2, textAlign: 'center', lineHeight: 22 },
   doneStrong: { fontWeight: '800', color: InkColors.ink },
   doneNotify: { alignSelf: 'stretch' },
-  codeCard: {
-    backgroundColor: InkColors.bg,
-    borderWidth: 1,
-    borderColor: InkColors.line,
-    borderRadius: Radius.lg,
-    paddingVertical: Space.lg,
-    paddingHorizontal: Space.xl,
-    alignItems: 'center',
-    gap: 4,
-    marginTop: Space.sm,
-    ...Elevation.e1,
-  },
-  codeLabel: { fontSize: 12, fontWeight: '700', color: InkColors.ink3 },
-  codeText: { fontSize: 32, fontWeight: '900', letterSpacing: 7, color: InkColors.ink },
-  codeHint: { fontSize: 12, color: InkColors.ink3, textAlign: 'center' },
-
   // 요금제 후킹 카드(완료 화면) — 좌 아이콘 · 중앙 카피 · 우 chevron 의 리스트형 CTA.
   planNudge: {
     flexDirection: 'row',

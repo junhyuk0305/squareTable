@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Modal, View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { PressableScale } from '@/components/PressableScale';
+import { useOverlayStore } from '@/lib/store/useOverlayStore';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Space, SCREEN_GUTTER, FRAME_MAX_WIDTH } from '@/lib/theme/layout';
 import { Radius, Elevation } from '@/lib/theme/elevation';
@@ -55,6 +56,15 @@ const POINTS: { icon: React.ComponentProps<typeof Ionicons>['name']; title: stri
 export function JuniorWelcomeCoach() {
   // 마운트 시점에 1회 판정(localStorage 동기 읽기) — effect 안 setState 회피.
   const [open, setOpen] = useState(() => !readSeen());
+
+  // 이 카드가 떠 있는 동안엔 뒤의 안내 팝업·알림 시트가 기다린다(오버레이 직렬화).
+  const enter = useOverlayStore((s) => s.enter);
+  const exit = useOverlayStore((s) => s.exit);
+  useEffect(() => {
+    if (!open) return;
+    enter('junior_welcome');
+    return () => exit('junior_welcome');
+  }, [open, enter, exit]);
 
   const dismiss = () => {
     markSeen();

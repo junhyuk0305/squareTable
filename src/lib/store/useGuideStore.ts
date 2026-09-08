@@ -7,6 +7,7 @@ import { create } from 'zustand';
 import { SHOW_GUIDE_POPUP } from '@/lib/config/store-policy';
 import { GUIDE_IDS_BY_ROLE, type GuideId } from '@/lib/guides/guideContent';
 import { useTourStore } from '@/lib/store/useTourStore';
+import { useOverlayFree } from '@/lib/store/useOverlayStore';
 
 /** 진입 애니메이션이 자리 잡은 뒤 띄운다(대시보드 코치마크와 같은 값). */
 const OPEN_DELAY_MS = 520;
@@ -56,6 +57,7 @@ export function useGuideOnce(id: GuideId, ready: boolean) {
   const tourLoaded = useTourStore((s) => s.loaded);
   const seen = useTourStore((s) => !!s.seen[id]);
   const request = useGuideStore((s) => s.request);
+  const overlayFree = useOverlayFree();
 
   useEffect(() => {
     void hydrate();
@@ -63,8 +65,10 @@ export function useGuideOnce(id: GuideId, ready: boolean) {
 
   useEffect(() => {
     // ★tourLoaded 전의 seen=false 는 사실이 아니다 — 네이티브는 AsyncStorage 라 비동기로 온다.
-    if (!SHOW_GUIDE_POPUP || !ready || !tourLoaded || seen) return;
+    // ★overlayFree: 앞 장(직원 환영 코치)이 떠 있으면 기다린다 — 겹치면 둘 다 안 읽힌다.
+    //   '본 적 있음'을 세우지 않고 기다리므로, 앞 장이 닫히면 이 effect 가 다시 돌아 그때 뜬다.
+    if (!SHOW_GUIDE_POPUP || !ready || !tourLoaded || seen || !overlayFree) return;
     const t = setTimeout(() => request(id), OPEN_DELAY_MS);
     return () => clearTimeout(t);
-  }, [id, ready, tourLoaded, seen, request]);
+  }, [id, ready, tourLoaded, seen, overlayFree, request]);
 }

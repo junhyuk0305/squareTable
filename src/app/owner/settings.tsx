@@ -13,15 +13,13 @@ import { showToast } from '@/lib/store/useToastStore';
 import { PLANS } from '@/lib/config/tiers';
 import { storeColor } from '@/lib/utils/storeColor';
 import { notifyAction } from '@/lib/utils/confirm';
-import { useCopyToClipboard } from '@/lib/utils/useCopyToClipboard';
-import { track } from '@/lib/analytics/track';
-import { InkColors, BrandColors } from '@/lib/theme/colors';
-import { Radius } from '@/lib/theme/elevation';
+import { InkColors } from '@/lib/theme/colors';
 import { SettingsSection, SettingsRow, SettingsToggle } from '@/components/settings/SettingsKit';
 import { QuietHoursModal } from '@/components/settings/QuietHoursModal';
 import { ShellTaskCleanupSheet } from '@/components/owner/quiz/ShellTaskCleanupSheet';
 import { PersonalizeSheet } from '@/components/settings/PersonalizeSheet';
 import { RoleTabBar } from '@/components/RoleTabBar';
+import { InviteBlock } from '@/components/owner/InviteBlock';
 import { ScreenLoading } from '@/components/ScreenLoading';
 import { LoadErrorState } from '@/components/LoadErrorState';
 
@@ -37,7 +35,6 @@ export default function OwnerSettings() {
   const unitId = useSessionStore((s) => s.unitId);
   const plan = useSessionStore((s) => s.plan);
   const inviteCode = useSessionStore((s) => s.inviteCode) || '------';
-  const { copied, copy } = useCopyToClipboard();
 
   // 매장별 개인 설정(unit_member_prefs) — 닉네임·색·이 매장 음소거·방해금지(직원 매장 설정과 동일 레이어).
   const savePrefStore = useMemberPrefsStore((s) => s.save);
@@ -150,21 +147,9 @@ export default function OwnerSettings() {
           <Ionicons name="chevron-forward" size={20} color={InkColors.ink3} />
         </Pressable>
 
-        {/* 가게 초대코드 — 직원 합류용. 상시 확인·복사 */}
-        <View style={styles.codeCard}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.codeLabel}>직원 합류용 초대코드</Text>
-            <Text style={styles.codeValue}>{inviteCode}</Text>
-          </View>
-          {/* 복사 = "사장이 초대코드를 실제로 뿌렸다"의 관측점 — staff.tsx 와 같은 이벤트를 쓴다. */}
-          <Pressable
-            onPress={() => { track('invite_shared', { from: 'settings' }); copy(inviteCode); }}
-            style={({ pressed }) => [styles.codeBtn, pressed && { opacity: 0.85 }]}
-          >
-            <Ionicons name={copied ? 'checkmark' : 'copy-outline'} size={15} color={InkColors.ink} />
-            <Text style={styles.codeBtnText}>{copied ? '복사됨' : '복사'}</Text>
-          </Pressable>
-        </View>
+        {/* 가게 초대코드 — 직원 합류용. 상시 확인·전달. 안내 3줄은 여기서 접는다(compact):
+            설정은 '다시 찾아오는' 자리라, 처음 배우는 자리(온보딩·홈)와 밀도가 달라야 한다. */}
+        <InviteBlock code={inviteCode} from="settings" compact style={styles.inviteGap} />
         {/* 2026-08-19: 코드 카드 아래 '직원 관리 · 합류 승인' 줄을 뺐다 — 바로 아래 '직원·초대코드 관리'와
             같은 화면(/owner/staff)으로 가는 중복 진입점이었다. 진입점은 매장 관리 섹션 한 곳으로 둔다. */}
         <SettingsSection icon="storefront-outline" title="매장 관리">
@@ -269,6 +254,7 @@ export default function OwnerSettings() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: InkColors.cream },
   scroll: { padding: 20, paddingTop: 16 },
+  inviteGap: { marginBottom: 18 },
 
   // 매장 헤더 — 직원 매장 설정(junior/settings)과 동일 규격
   storeHead: { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 16, backgroundColor: '#FFFFFF', borderRadius: 14, borderWidth: 1, borderColor: InkColors.line, marginBottom: 20 },
@@ -277,10 +263,5 @@ const styles = StyleSheet.create({
   storeSub: { fontSize: 13, color: InkColors.ink3, marginTop: 2 },
 
   // marginBottom = 아래 섹션과의 간격(SettingsKit section 과 같은 18). 2026-08-19에 지운 '직원 관리' 줄이 갖고 있던 간격을 여기로 옮긴 것.
-  codeCard: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, backgroundColor: InkColors.bg, borderRadius: Radius.md, borderWidth: 1, borderColor: BrandColors.gold, marginBottom: 18 },
-  codeLabel: { fontSize: 12, fontWeight: '700', color: InkColors.ink2 },
-  codeValue: { fontSize: 26, fontWeight: '900', color: InkColors.ink, letterSpacing: 4, marginTop: 2 },
-  codeBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: InkColors.bgSoft, borderRadius: Radius.pill, paddingVertical: 9, paddingHorizontal: 14, borderWidth: 1, borderColor: InkColors.line },
-  codeBtnText: { fontSize: 13, fontWeight: '800', color: InkColors.ink },
   foot: { fontSize: 11, color: InkColors.ink3, textAlign: 'center', marginTop: 6 },
 });

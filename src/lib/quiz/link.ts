@@ -4,18 +4,15 @@
  * 만드는 자리: `QuizLinkSheet`(이미 만든 퀴즈에서) · `quiz-new`(외부용으로 만들 때 자동 생성).
  * 토큰 만들기와 주소 조립을 두 곳에 복제하면 한쪽만 고쳐져 **열리지 않는 링크**가 나간다.
  */
-import { Platform, Share } from 'react-native';
+import { Platform } from 'react-native';
 
 import { genId } from '@/lib/utils/id';
+// 주소 앞부분은 초대 링크와 공용 SSOT(config/site) — 도메인이 두 벌이 되지 않게 한 곳에서 읽는다.
+import { siteOrigin } from '@/lib/config/site';
+// 웹 클립보드 / 네이티브 공유 시트 분기도 초대 블록과 공용(utils/shareText).
+import { shareText } from '@/lib/utils/shareText';
 
-/** 공유 URL 의 앞부분. 웹은 지금 열려 있는 주소, 네이티브는 서비스 도메인(딥링크 아님 — 브라우저로 연다). */
-export function siteOrigin(): string {
-  if (Platform.OS === 'web') {
-    const g = globalThis as unknown as { location?: { origin?: string } };
-    if (g.location?.origin) return g.location.origin;
-  }
-  return 'https://dochackchack.com';
-}
+export { siteOrigin };
 
 /** 추측할 수 없는 토큰. crypto 가 있으면 그걸 쓰고, 없으면 genId 를 두 번 이어 붙인다. */
 export function makeQuizToken(): string {
@@ -43,24 +40,7 @@ export const COPY_LINK_SHORT = Platform.OS === 'web' ? '복사' : '공유';
  * 그때 아무 말이 없으면 사장은 빈 주소를 붙여 넣는다). 문구는 `copyLinkToast` 가 정한다.
  */
 export async function copyQuizLink(token: string): Promise<CopyLinkResult> {
-  const url = quizLinkUrl(token);
-  if (Platform.OS !== 'web') {
-    try {
-      const r = await Share.share({ message: url });
-      return r.action === Share.dismissedAction ? 'dismissed' : 'shared';
-    } catch {
-      return 'failed';
-    }
-  }
-  const g = globalThis as unknown as { navigator?: { clipboard?: { writeText?: (t: string) => Promise<void> } } };
-  try {
-    const write = g.navigator?.clipboard?.writeText;
-    if (!write) return 'failed';
-    await write.call(g.navigator!.clipboard, url);
-    return 'copied';
-  } catch {
-    return 'failed';
-  }
+  return shareText(quizLinkUrl(token));
 }
 
 /** 결과 토스트 — 공유 시트는 그 자체가 피드백이라 열렸거나 닫은 경우엔 토스트를 띄우지 않는다(null). */
