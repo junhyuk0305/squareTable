@@ -52,16 +52,23 @@ export function ScreenTitleHeader({
   const navigation = useNavigation();
   const role = useSessionStore((s) => s.role);
   const status = useSessionStore((s) => s.status);
+  const signupRole = useSessionStore((s) => s.signupRole);
+  const unitId = useSessionStore((s) => s.unitId);
   const goBack = () => {
     if (navigation.canGoBack()) return navigation.goBack();
+    // 매장을 아직 안 만든 사장은 profiles.role 이 junior 라 canManage 로는 직원과 구별되지 않는다
+    // (role 분리 2026-08-12). 이 사람의 홈은 '매장 만들기'다 — 직원 홈으로 보내면 남의 화면에 떨어진다.
+    const ownerBeforeStore = status === 'signed_in' && !unitId && signupRole === 'owner';
     const home: Href =
       backFallback && backFallback !== true
         ? backFallback
         : status !== 'signed_in'
           ? '/'
-          : canManage(role)
-            ? '/owner/dashboard'
-            : '/junior/home';
+          : ownerBeforeStore
+            ? '/owner/create-store'
+            : canManage(role)
+              ? '/owner/dashboard'
+              : '/junior/home';
     router.replace(home);
   };
   const back = onBack ?? (backFallback ? goBack : undefined);

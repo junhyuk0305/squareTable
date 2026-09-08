@@ -42,7 +42,7 @@ export default function CompleteProfileScreen() {
     return (
       <SafeAreaView style={styles.safe} edges={['bottom']}>
         <Stack.Screen options={{ headerShown: false, title: '프로필 완성', headerStyle: { backgroundColor: '#FFFFFF' }, headerTintColor: InkColors.ink }} />
-        <ScreenTitleHeader title="프로필 완성" backFallback />
+        <ScreenTitleHeader title="프로필 완성" />
         <ScreenLoading label="계정 정보를 불러오고 있어요…" />
       </SafeAreaView>
     );
@@ -148,7 +148,9 @@ function CompleteProfileForm() {
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
       <Stack.Screen options={{ headerShown: false, title: '프로필 완성', headerStyle: { backgroundColor: '#FFFFFF' }, headerTintColor: InkColors.ink }} />
-      <ScreenTitleHeader title="프로필 완성" backFallback />
+      {/* ★뒤로가기 화살표를 안 그린다 — 프로필이 비어 있으면 어느 화면으로 나가도 owner/_layout 이
+          여기로 되돌려보내 화살표가 무한루프처럼 보인다. 이 화면의 탈출구는 아래 '다른 계정으로 로그인'. */}
+      <ScreenTitleHeader title="프로필 완성" />
       <KeyboardShift>
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
         <Appear delay={stagger(0)}>

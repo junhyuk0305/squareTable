@@ -6,7 +6,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSessionStore } from '@/lib/store/useSessionStore';
-import { HeaderBackButton } from '@/components/HeaderBackButton';
 import { Appear } from '@/components/Appear';
 import { logout } from '@/lib/auth';
 import { formatBizNo, isValidBizNo, bizDigits } from '@/lib/utils/bizno';
@@ -67,17 +66,12 @@ export default function OwnerCreateStore() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
-      {/* 추가 흐름이면 뒤로가기 노출(headerLeft 미지정=owner/_layout의 HeaderBackButton 상속), 온보딩이면 차단. */}
-      <Stack.Screen
-        options={{
-          headerShown: false,
-          title: isAddingStore ? '매장 추가' : '매장 만들기',
-          ...(isAddingStore
-            ? { headerLeft: () => <HeaderBackButton fallback="/stores" /> }
-            : { headerLeft: () => null }),
-        }}
+      <Stack.Screen options={{ headerShown: false, title: isAddingStore ? '매장 추가' : '매장 만들기' }} />
+      {/* 추가 흐름이면 뒤로가기(취소) 노출 → 매장 목록. 매장 0개면 돌아갈 곳이 없어 화살표를 안 그린다. */}
+      <ScreenTitleHeader
+        title={isAddingStore ? '매장 추가' : '매장 만들기'}
+        backFallback={isAddingStore ? '/stores' : undefined}
       />
-      <ScreenTitleHeader title={isAddingStore ? '매장 추가' : '매장 만들기'} backFallback />
       <KeyboardShift>
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
         <Appear delay={0}>
