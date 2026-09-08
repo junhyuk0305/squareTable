@@ -38,8 +38,6 @@ import type { QuizGrade, QuizItem, QuizResponse } from '@/lib/quiz/types';
 /** 응시자가 낸 답 한 건 — 서버가 이걸로 다시 채점한다(클라는 점수를 계산하지 않는다). */
 type GivenAnswer = { itemId: string; response: QuizResponse };
 
-/** 한 번에 내는 문항 수 — 코스 전체가 아니라 표본이다(단기 직원에게 30문제를 내지 않는다). */
-const ITEM_LIMIT = 5;
 /** 문항당 20초로 잡은 소요 시간(분). 응시 화면과 같은 기준. */
 const minutesFor = (n: number) => Math.max(1, Math.ceil((n * 20) / 60));
 
@@ -84,7 +82,8 @@ export default function QuizLinkScreen() {
   const start = useCallback(async () => {
     if (!canStart) return;
     setPhase('loading');
-    const { data, error } = await fetchQuizLinkItems(tk, ITEM_LIMIT);
+    // 표본이 아니라 **코스 문항 전부**를 받는다(0188) — 몇 개를 낼지는 퀴즈를 만든 사장이 정한 것이다.
+    const { data, error } = await fetchQuizLinkItems(tk);
     // 못 불러온 것(장애)과 낼 게 없는 것(닫힘)을 구분한다 — 뭉치면 장애가 "만료"로 보인다.
     if (error) { setPhase('failed'); return; }
     // 아직 렌더러가 없는 형태(레지스트리 미등록)는 거른다 — 빈 화면 대신 안 낸다.
@@ -150,7 +149,7 @@ export default function QuizLinkScreen() {
               <Text style={st.title}>{info.courseName}</Text>
               {/* 시작 전에 분량과 걸리는 시간을 말한다(레퍼런스 home_05). */}
               <Text style={st.lead}>
-                문제 {Math.min(info.itemCount, ITEM_LIMIT)}개 · {minutesFor(Math.min(info.itemCount, ITEM_LIMIT))}분 정도
+                문제 {info.itemCount}개 · {minutesFor(info.itemCount)}분 정도
               </Text>
               <Text style={st.sub}>이름과 전화번호만 적으면 바로 시작해요. 가입은 없어요.</Text>
             </Appear>

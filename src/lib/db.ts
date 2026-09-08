@@ -2369,10 +2369,13 @@ export async function openQuizLink(token: string): Promise<QuizLinkInfo> {
     itemCount: row?.item_count ?? 0,
   };
 }
-/** 응시용 문항(정답 제거본) — 그 링크의 코스에 담긴 노하우 문항만. */
-export async function fetchQuizLinkItems(token: string, limit = 5): Promise<DbResult<QuizItem[]>> {
+/**
+ * 응시용 문항(정답 제거본) — 그 링크의 코스에 담긴 노하우 문항만.
+ * `limit` 을 주지 않으면 **전부** 받는다(0188에서 옛 5개 표본·20개 상한을 폐기했다).
+ */
+export async function fetchQuizLinkItems(token: string, limit?: number): Promise<DbResult<QuizItem[]>> {
   if (!HAS_SUPABASE) return { data: [], error: null };
-  const { data, error } = await supabase.rpc('quiz_link_items', { p_token: token, p_limit: limit });
+  const { data, error } = await supabase.rpc('quiz_link_items', { p_token: token, p_limit: limit ?? null });
   if (error) {
     reportError('db.rpc:fetchQuizLinkItems', error);
     return { data: null, error: error as DbErr };

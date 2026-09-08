@@ -32,7 +32,7 @@ import { generateQuizItems, QuizQuotaError } from '@/lib/quiz/generate';
 import { getSectionMeta } from '@/lib/utils/category';
 import { UNSECTIONED } from '@/lib/config/sections';
 import { FORMATS } from '@/lib/quiz/formats';
-import { copyQuizLink, makeQuizToken, quizLinkUrl } from '@/lib/quiz/link';
+import { COPY_LINK_LABEL, copyLinkToast, copyQuizLink, makeQuizToken, quizLinkUrl } from '@/lib/quiz/link';
 import { Appear, stagger } from '@/components/Appear';
 import { Collapse } from '@/components/Collapse';
 import { BottomSheet } from '@/components/BottomSheet';
@@ -1042,14 +1042,12 @@ export default function QuizNewScreen() {
         {step === 6 && madeToken && (
           <>
             <Ghost
-              label="링크 복사"
+              label={COPY_LINK_LABEL}
               onPress={() => {
-                void copyQuizLink(madeToken).then((done) =>
-                  showToast(
-                    done ? '링크를 복사했어요' : '복사가 안 됐어요. 주소를 길게 눌러 복사해 주세요',
-                    done ? 'good' : undefined,
-                  ),
-                );
+                void copyQuizLink(madeToken).then((r) => {
+                  const t = copyLinkToast(r);
+                  if (t) showToast(t.text, t.tone);
+                });
               }}
             />
             <Primary label="끝내기" onPress={() => router.replace(`/owner/quiz/${courseId}` as never)} />

@@ -24,7 +24,7 @@ import { genId } from '@/lib/utils/id';
 import { BottomSheet } from '@/components/BottomSheet';
 import { ScreenLoading } from '@/components/ScreenLoading';
 import { MiniCalendar } from '@/components/blocks/MiniCalendar';
-import { copyQuizLink, makeQuizToken, quizLinkUrl } from '@/lib/quiz/link';
+import { COPY_LINK_LABEL, COPY_LINK_SHORT, copyLinkToast, copyQuizLink, makeQuizToken, quizLinkUrl } from '@/lib/quiz/link';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
@@ -100,8 +100,8 @@ export function QuizLinkSheet({ course, onClose }: { course: TrainingCourse; onC
 
   const copy = async (token: string) => {
     // 복사가 막힌 브라우저에서도 주소는 화면에 그대로 있다 — 실패를 조용히 넘기지 않고 말해 준다.
-    const done = await copyQuizLink(token);
-    showToast(done ? '링크를 복사했어요' : '복사가 안 됐어요. 주소를 길게 눌러 복사해 주세요', done ? 'good' : undefined);
+    const t = copyLinkToast(await copyQuizLink(token));
+    if (t) showToast(t.text, t.tone);
   };
 
   /** 링크만 못 열게 한다 — 이미 푼 사람의 결과는 그대로 남는다(어휘만 '삭제', 기록은 보존). */
@@ -161,9 +161,9 @@ export function QuizLinkSheet({ course, onClose }: { course: TrainingCourse; onC
                     hitSlop={8}
                     style={({ pressed }) => [lst.action, pressed && { opacity: 0.7 }]}
                     accessibilityRole="button"
-                    accessibilityLabel="링크 복사"
+                    accessibilityLabel={COPY_LINK_LABEL}
                   >
-                    <Text style={lst.actionText}>복사</Text>
+                    <Text style={lst.actionText}>{COPY_LINK_SHORT}</Text>
                   </Pressable>
                   <Pressable
                     onPress={() => void remove(l.id)}

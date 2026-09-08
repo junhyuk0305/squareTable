@@ -107,7 +107,8 @@ async function main() {
     if (info) console.log('     →', JSON.stringify(info).slice(0, 200));
 
     // ── K3 문항 ─────────────────────────────────────────────────────────
-    const { data: items, error: itErr } = await guest.rpc('quiz_link_items', { p_token: tk, p_limit: 5 });
+    // p_limit 없이 = 코스 문항 **전부**(0188에서 5개 표본·20개 상한 폐기). 클라가 부르는 방식과 같게 둔다.
+    const { data: items, error: itErr } = await guest.rpc('quiz_link_items', { p_token: tk, p_limit: null });
     check('K3 anon 이 문항을 받음', !itErr && Array.isArray(items) && items.length > 0,
       itErr?.message ?? `items=${JSON.stringify(items ?? null).slice(0, 120)}`);
 
