@@ -91,3 +91,7 @@ scripts/tmp-*.mjs
 credentials.json
 *.keystore
 *.jks
+
+# Firebase 서비스 계정 키(FCM 푸시 발송 권한). google-services.json 은 공개 정보라 커밋하지만
+# 이 키는 절대 커밋 금지 — EAS 에만 업로드해 쓴다.
+*-firebase-adminsdk-*.json

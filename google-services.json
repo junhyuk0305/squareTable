@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "932050566397",
+    "project_id": "squaretable-e6cea",
+    "storage_bucket": "squaretable-e6cea.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:932050566397:android:8b7ae68bd982ce8ac11294",
+        "android_client_info": {
+          "package_name": "com.dochackchack.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC7cGxclVnc0azbfyzHxXkam0i0WCpYZ3Q"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
