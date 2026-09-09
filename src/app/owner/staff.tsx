@@ -87,7 +87,7 @@ export default function OwnerStaffScreen() {
   const ym = today.slice(0, 7);
   const perStaff = useMemo(() => {
     // pay=null = 시급 미설정(계산 불가). 0원과 구별해야 한다 — 0원은 '무급'이라는 사실 주장이다.
-    const map: Record<string, { min: number; pay: number | null; status: 'out' | 'working' | 'done' }> = {};
+    const map: Record<string, { min: number; schedMin: number; pay: number | null; status: 'out' | 'working' | 'done' }> = {};
     const dates = monthDates(ym);
     for (const s of staff) {
       const monthRecs = records.filter((r) => r.staff_id === s.id && r.date.startsWith(ym));
@@ -107,7 +107,9 @@ export default function OwnerStaffScreen() {
       const todayRec = records.find((r) => r.staff_id === s.id && r.date === today);
       const status: 'out' | 'working' | 'done' = !todayRec ? 'out' : !todayRec.check_out ? 'working' : 'done';
       // 급여 규칙(주휴·휴게·야간·연장·추가수당) 반영 예상 인건비 — computePay SSOT(F1). min 은 근무시간 표시용.
-      map[s.id] = { min, pay: wageSet ? computePay(shiftRecs, wages[s.id], settings).total : null, status };
+      // schedMin = 이번 달 **근무표에 잡힌** 분. 0이면 금액이 0인 게 아니라 **아직 계산할 수 없는 것**이다.
+      const schedMin = shiftRecs.reduce((sum, r) => sum + r.work_minutes, 0);
+      map[s.id] = { min, schedMin, pay: wageSet ? computePay(shiftRecs, wages[s.id], settings).total : null, status };
     }
     return map;
   }, [records, wages, settings, staff, ym, today, shiftTemplates, swaps, shiftExceptions]);
@@ -130,6 +132,20 @@ export default function OwnerStaffScreen() {
   }, [staff, gradable, understanding, knowhowLinks]);
 
   const totalPay = staff.reduce((a, s) => a + (perStaff[s.id]?.pay ?? 0), 0);
+  /**
+   * ★"₩0"을 짓지 않는다(2026-09-09). 시급 축은 이미 pay=null 로 0원과 미설정을 갈라 놓았는데,
+   *   히어로는 그 null 을 `?? 0` 으로 삼켜서 **설정이 하나도 없는 새 매장에 "이번 달 예상 인건비 ₩0"**
+   *   을 확정 표시했다. 0원은 '무급'이라는 사실 주장이라 근무표 축에도 같은 규칙을 적용한다.
+   *   막힌 이유는 둘이고, 사장이 다음에 할 일이 서로 다르므로 구분해서 말한다.
+   */
+  const payBlocked: null | '시급' | '근무표' =
+    staff.length === 0
+      ? null
+      : staff.every((s) => perStaff[s.id]?.pay === null)
+        ? '시급'
+        : staff.every((s) => (perStaff[s.id]?.schedMin ?? 0) === 0)
+          ? '근무표'
+          : null;
   const workingCount = staff.filter((s) => perStaff[s.id]?.status === 'working').length;
   const month = Number(ym.slice(5));
 
@@ -175,11 +191,16 @@ export default function OwnerStaffScreen() {
         <Appear delay={stagger(0)}>
         <View style={styles.payCard}>
           <Text style={styles.payLabel}>이번 달 예상 인건비</Text>
-          <Text style={styles.payValue}>{won(totalPay)}</Text>
+          <Text style={styles.payValue}>{payBlocked ? '아직 계산 전' : won(totalPay)}</Text>
           {/* ★금액이 무엇으로 계산됐는지 말한다 — 출퇴근이 아니라 **근무표**다(2026-08-26).
-              안 적으면 사장이 출퇴근 시간과 안 맞는 금액을 보고 계산이 틀렸다고 읽는다. */}
+              안 적으면 사장이 출퇴근 시간과 안 맞는 금액을 보고 계산이 틀렸다고 읽는다.
+              막혀 있으면 그 자리에서 **다음에 할 일**을 말한다(설정 결손은 결과 지점에서 요구한다). */}
           <Text style={styles.payNote}>
-            {month}월 · 세전 · 근무표 기준 · 직원 {staff.length}명{workingCount > 0 ? ` · 근무 중 ${workingCount}명` : ''}
+            {payBlocked === '시급'
+              ? '직원 시급을 정하면 금액이 나와요 — 아래 목록에서 바로 넣을 수 있어요'
+              : payBlocked === '근무표'
+                ? '근무표가 비어 있어요 — 근무 시간을 넣으면 금액이 나와요'
+                : `${month}월 · 세전 · 근무표 기준 · 직원 ${staff.length}명${workingCount > 0 ? ` · 근무 중 ${workingCount}명` : ''}`}
           </Text>
           <Pressable
             onPress={() => router.push('/owner/payroll')}
@@ -312,7 +333,13 @@ export default function OwnerStaffScreen() {
                       </View>
                     )}
                     <Text style={styles.staffMeta} numberOfLines={1}>
-                      이번 달 {fmtDuration(agg?.min ?? 0)} · {agg?.pay === null || agg?.pay === undefined ? '시급 미설정' : won(agg.pay)}
+                      {/* 시급 미설정과 근무표 미입력은 다른 결손이다 — 둘 다 ₩0 으로 뭉개면 사장이 할 일을 못 고른다. */}
+                      이번 달 {fmtDuration(agg?.min ?? 0)} ·{' '}
+                      {agg?.pay === null || agg?.pay === undefined
+                        ? '시급 미설정'
+                        : (agg?.schedMin ?? 0) === 0
+                          ? '근무표 없음'
+                          : won(agg.pay)}
                     </Text>
                   </View>
                 </View>

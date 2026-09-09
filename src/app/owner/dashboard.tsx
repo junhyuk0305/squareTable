@@ -49,6 +49,7 @@ export default function OwnerDashboardScreen() {
     pendingSuggestions,
     missedKnowhowCount,
     behindStaff,
+    scheduleEmpty,
   } = useOwnerDashboardData();
 
   /**
@@ -184,6 +185,18 @@ export default function OwnerDashboardScreen() {
         onPress: () => router.push('/owner/training'),
       };
     }
+    // 설정 결손 — "오늘 할 일"이 아니라 **선행 조건**이라 사람이 기다리는 것들 뒤에 둔다.
+    // 근무표가 비면 급여가 계산되지 않는데, 그 사실이 화면 어디에도 없어 급여일에야 알게 된다.
+    // 짜고 나면 scheduleEmpty 가 false 가 되어 이 줄은 스스로 사라진다.
+    if (scheduleEmpty) {
+      return {
+        label: '근무표 없는 직원',
+        count: staffCount,
+        unit: '명' as const,
+        icon: 'calendar' as const,
+        onPress: () => router.push('/owner/schedule'),
+      };
+    }
     // ★점수(`0/7`)로 쓰지 않는다 — 숫자로 쓰면 직원 줄세우기, 업무 이름으로 쓰면 진도다(감시원칙).
     return {
       label: behindStaff ? `${behindStaff.name} · ${behindStaff.firstTask} 아직` : '',
@@ -192,7 +205,7 @@ export default function OwnerDashboardScreen() {
       icon: 'person-circle' as const,
       onPress: () => router.push('/owner/staff'),
     };
-  }, [pendingSwaps, pendingSuggestions, needsReviewCount, missedKnowhowCount, behindStaff, router]);
+  }, [pendingSwaps, pendingSuggestions, needsReviewCount, missedKnowhowCount, scheduleEmpty, staffCount, behindStaff, router]);
 
   const tourSteps: TourStep[] = useMemo(
     () => [

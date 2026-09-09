@@ -70,6 +70,14 @@ export type OwnerDashboardData = {
   missedKnowhowCount: number;
   /** 진도가 가장 많이 밀린 직원 1명 — 4순위. 없으면 undefined. */
   behindStaff?: StaffBehind;
+  /**
+   * 직원은 있는데 근무표를 **한 번도 짜지 않았다** — 설정 결손. 5순위.
+   * ★이건 "오늘 할 일"이 아니라 **선행 조건**이다. 비어 있으면 급여가 계산되지 않고,
+   *   교대 요청도 생길 수 없다(있지도 않은 근무를 바꿀 수 없다). 그런데 화면 어디에도
+   *   "아직 안 짰다"는 말이 없어서, 사장은 급여일에 가서야 안다.
+   *   채우면 이 값이 false 가 되어 '다음 행동'에서 스스로 사라진다(상시 조르기가 아니다).
+   */
+  scheduleEmpty: boolean;
 };
 
 /** 사장 대시보드 화면의 뷰모델 — 스토어 셀렉터 읽기 + 파생값 계산을 한곳에 모은다. */
@@ -268,5 +276,8 @@ export function useOwnerDashboardData(): OwnerDashboardData {
     pendingSuggestions,
     missedKnowhowCount,
     behindStaff,
+    // 판정은 '반복 근무 템플릿이 하나라도 있는가' — 한 번이라도 짰으면 결손이 아니다.
+    // 직원이 0명이면 근무표를 말할 이유가 없다(초대가 먼저다).
+    scheduleEmpty: staff.length > 0 && shiftTemplates.length === 0,
   };
 }

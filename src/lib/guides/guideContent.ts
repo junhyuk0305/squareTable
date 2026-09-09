@@ -19,7 +19,6 @@ export type Guide = {
 export type GuideId =
   | 'owner_knowhow_v1'
   | 'owner_quiz_v1'
-  | 'owner_schedule_v1'
   | 'owner_payroll_v1'
   | 'junior_home_v1'
   | 'junior_work_v1';
@@ -77,18 +76,6 @@ export const GUIDES: Record<GuideId, Guide> = {
       },
     ],
   },
-  owner_schedule_v1: {
-    pages: [
-      {
-        title: '여기가 급여의 기준이에요',
-        body: '근무표에 찍힌 시간으로 급여가 계산돼요. 여기서 고치면 급여도 같이 바뀌어요.',
-      },
-      {
-        title: '교대 요청은 승인만 하면 돼요',
-        body: '직원이 바꿔달라고 하면 위에 뜨고, 승인하면 근무표에 바로 반영돼요.',
-      },
-    ],
-  },
   owner_payroll_v1: {
     pages: [
       {
@@ -106,6 +93,6 @@ export const GUIDES: Record<GuideId, Guide> = {
 /** 역할별 가이드 id — 설정의 '사용 안내 다시 보기'가 지울 대상. */
 export const GUIDE_IDS_BY_ROLE: Record<'owner' | 'junior', readonly string[]> = {
   // 사장 홈의 스포트라이트 투어(owner_home_v1)도 함께 되살린다 — 사장이 보기엔 같은 '사용 안내'다.
-  owner: ['owner_home_v1', 'owner_knowhow_v1', 'owner_quiz_v1', 'owner_schedule_v1', 'owner_payroll_v1'],
+  owner: ['owner_home_v1', 'owner_knowhow_v1', 'owner_quiz_v1', 'owner_payroll_v1'],
   junior: ['junior_home_v1', 'junior_work_v1'],
 };

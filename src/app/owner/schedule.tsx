@@ -35,7 +35,6 @@ import {
   closedDaysLabel,
   WEEKDAY_LABELS,
 } from '@/lib/utils/schedule';
-import { useGuideOnce } from '@/lib/store/useGuideStore';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Elevation, Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
@@ -65,9 +64,6 @@ export default function OwnerScheduleScreen() {
   const scheduleLoadError = useScheduleStore((s) => s.loadError);
   const retrySchedule = useScheduleStore((s) => s.retry);
   const ready = staffLoaded && scheduleLoaded;
-
-  // 근무표 사용 안내.
-  useGuideOnce('owner_schedule_v1', ready);
 
   const today = todayStr();
   // 날짜 선택 UI는 주간 스트립 **하나뿐**이다. 보이는 주는 선택일에서 파생(월요일 시작 — 기존 규칙 유지).
@@ -328,6 +324,10 @@ export default function OwnerScheduleScreen() {
               </Pressable>
             </View>
           )}
+          {/* ★"근무표가 급여의 기준"은 첫 진입 팝업이 아니라 **상시 한 줄**로 둔다(2026-09-09).
+              팝업은 한 번 보고 사라지는데, 사장이 근무표를 다시 여는 건 보통 몇 주 뒤라 그때는 기억이 없다.
+              이 문장이 필요한 순간은 '여기서 시간을 고칠 때'이고, 그건 매번이다. */}
+          <Text style={styles.basisNote}>근무표에 넣은 시간이 급여 계산의 기준이에요.</Text>
         </View>
         </Appear>
 
@@ -456,6 +456,7 @@ const styles = StyleSheet.create({
   dayCard: { backgroundColor: InkColors.bg, borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, padding: Space.md, ...Elevation.e1 },
   dayNone: { fontSize: 15, lineHeight: 21, color: InkColors.ink2, textAlign: 'center', paddingVertical: Space.lg },
   offText: { fontSize: 12, fontWeight: '700', color: InkColors.ink3, paddingTop: Space.sm },
+  basisNote: { fontSize: 12, fontWeight: '600', color: InkColors.ink3, lineHeight: 17, paddingTop: Space.sm, paddingHorizontal: 4 },
   excRow: { flexDirection: 'row', alignItems: 'center', gap: Space.xs, paddingTop: Space.sm },
   excText: { flex: 1, fontSize: 12, fontWeight: '700', color: InkColors.ink3, lineHeight: 17 },
   excBtn: { minHeight: 34, justifyContent: 'center', paddingHorizontal: 10, borderRadius: Radius.pill, borderWidth: 1, borderColor: InkColors.line },
