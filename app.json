@@ -47,7 +47,8 @@
         {
           "microphonePermission": "노하우와 업무 메시지를 말로 입력할 때 마이크를 사용해요.",
           "recordAudioAndroid": true,
-          "enableBackgroundRecording": false
+          "enableBackgroundRecording": false,
+          "enableBackgroundPlayback": false
         }
       ],
       "expo-notifications",
