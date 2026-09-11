@@ -504,6 +504,9 @@ export function OwnerKnowhowBrowse({
                 aside: heatHead.todo > 0 ? `손볼 것 ${heatHead.todo}개` : undefined,
               }}
               groups={heatGroups}
+              // 카테고리가 많은 매장에서 히어로 하나가 화면을 다 먹는다(2026-09-11 실측: 12개 = 세로 1000px).
+              // 기본은 접어 두고 '더 보기'로 편다 — 아래 목록·찾기 바가 첫 화면 안으로 올라온다.
+              maxGroups={4}
               legend={KNOWHOW_LEGEND}
               hint="상자 하나 = 노하우 하나 · 카테고리를 누르면 아래 목록이 걸러져요"
               onPressCell={onSelect}

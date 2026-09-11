@@ -23,8 +23,7 @@ import { AlertRow } from '@/components/blocks/AlertRow';
 import { Heatmap } from '@/components/blocks/Heatmap';
 import { PickRow } from '@/components/blocks/PickRow';
 import { RollupRows } from '@/components/blocks/RollupRows';
-import { Sparkline } from '@/components/blocks/Sparkline';
-import { StatCard, type StatCardItem } from '@/components/blocks/StatCardGrid';
+
 import { ProgressPill, type ProgressTone } from '@/components/blocks/ProgressPill';
 import { SheetHead, PrimaryButton, GhostButton } from '@/components/owner/quiz/kit';
 import { useGuideOnce } from '@/lib/store/useGuideStore';
@@ -214,6 +213,19 @@ export default function OwnerTrainingScreen() {
         }}
       />
       <ScreenTitleHeader title="퀴즈" backFallback />
+      {/* ★탭은 스크롤 **밖** 맨 위다(2026-09-11, 노하우 탭과 같은 구조) — 스크롤을 내려도
+          지금 어느 칸을 보고 있는지가 사라지지 않는다. 퀴즈가 하나도 없을 땐 가를 것이 없어 안 그린다. */}
+      {ready && quizzes.length > 0 ? (
+        <SegmentTabs
+          style={st.topTabs}
+          items={[
+            { key: 'running', label: '응시 중', count: running.length + (guests.length > 0 ? 1 : 0) },
+            { key: 'done', label: '응시 완료', count: finished.length },
+          ]}
+          value={tab}
+          onChange={(k) => setTab(k as 'running' | 'done')}
+        />
+      ) : null}
       <ScrollView contentContainerStyle={st.scroll} showsVerticalScrollIndicator={false}>
         {/* ★전부 도착 전엔 로딩이다. 코스만 기다리면 "초안"이 먼저 떴다가 "3/5명"으로 뒤바뀐다
             (아직 안 온 것을 없는 것처럼 말하는 것 = 08-07 정본 §0-1 이 금지한 바로 그것). */}
@@ -286,6 +298,10 @@ export default function OwnerTrainingScreen() {
             {/* 히어로 — 화면당 1개(배치규칙②). **히트맵(H5 · §10-1)**: 노하우 1개 = 상자 1개, 색 = 아는 직원 비율.
                 옛 링(문제 낸 노하우 n/m)은 전부 한 번 내면 영구 100%라 히어로 자격이 없었다.
                 ★발행 노하우 0 → 상자가 없다 · 직원 0명 → 비율이 없다. 둘 다 히트맵 대신 문장으로 말한다. */}
+            {/* 히어로·경고·초안은 **'응시 중' 칸의 것**이다(2026-09-11 결정). '응시 완료'는
+                끝난 것을 훑어보는 자리라 지금 손봐야 할 신호를 같이 두면 칸을 가른 뜻이 없다. */}
+            {tab === 'running' ? (
+            <>
             <Appear>
               {stats.publishedEntries > 0 && staffCount > 0 ? (
                 <Heatmap
@@ -378,57 +394,67 @@ export default function OwnerTrainingScreen() {
                 }]}
               />
             ) : null}
+            </>
+            ) : null}
 
-            {/* 응시 중 — D 가로 스크롤(§10-8). 카드 1장 = 퀴즈 1건, 막대 1개 = 사람 1명(통과/미통과).
-                맨 끝 점선 카드 = **합류 전 응시**(게스트 링크). ⛔ 채용 전환 액션 없음 — 명시적으로 스코프 밖.
-                ⛔ "이 사람 준비됐어요" 같은 판단 문구를 넣지 않는다. 판단은 사장이 한다. */}
-            {(live.length > 0 || guests.length > 0) && (
-              <Appear delay={stagger(2)}>
-                <View style={st.group}>
-                  {/* 2026-09-11: 끝난 퀴즈를 볼 자리가 없어서 응시 중과 한 줄에 섞여 있었다.
-                      좌우 두 칸으로 가른다 — 기준은 **전원이 풀었나**(useQuizBoard.answered). */}
-                  <SegmentTabs
-                    style={{ margin: 0 }}
-                    items={[
-                      { key: 'running', label: '응시 중', count: running.length + (guests.length > 0 ? 1 : 0) },
-                      { key: 'done', label: '응시 완료', count: finished.length },
-                    ]}
-                    value={tab}
-                    onChange={(k) => setTab(k as 'running' | 'done')}
-                  />
-                  <Appear key={tab}>
-                  {tab === 'running' ? (
-                    running.length === 0 && guests.length === 0 ? (
+            {/* 퀴즈 목록 — **세로 카드 리스트**(2026-09-11). 옛 판본은 가로 스크롤 카드였는데
+                옆으로 밀어야 다음 퀴즈가 보여서 몇 건인지도, 무엇이 밀려 있는지도 안 읽혔다.
+                탭(응시 중/완료)은 이 화면 **맨 위**로 올라갔다 — 노하우 탭과 같은 구조다. */}
+            <Appear key={tab} delay={stagger(2)}>
+              <View style={st.group}>
+                {tab === 'running' ? (
+                  running.length === 0 && guests.length === 0 ? (
+                    <View style={st.listCard}>
                       <Text style={st.tabEmpty}>지금 나가 있는 퀴즈가 없어요.</Text>
-                    ) : (
-                      <>
-                        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={st.hscroll} contentContainerStyle={st.hscrollInner}>
-                          {running.map((q) => (
-                            <StatCard key={q.course.id} style={st.hcard} item={liveCardOf(q, linkStateOf(q.course.id), () => goDetail(q.course.id))} />
-                          ))}
-                          {guests.length > 0 ? (
-                            <StatCard style={[st.hcard, st.hcardGuest]} item={guestCardOf(guests, () => setGuestOpen(true))} />
-                          ) : null}
-                        </ScrollView>
-                        <Text style={st.footNote}>막대 1개 = 사람 1명 · 검정 = 통과</Text>
-                      </>
-                    )
-                  ) : finished.length === 0 ? (
-                    <Text style={st.tabEmpty}>아직 전원이 푼 퀴즈가 없어요.</Text>
+                    </View>
                   ) : (
-                    <>
-                      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={st.hscroll} contentContainerStyle={st.hscrollInner}>
-                        {finished.map((q) => (
-                          <StatCard key={q.course.id} style={st.hcard} item={liveCardOf(q, linkStateOf(q.course.id), () => goDetail(q.course.id))} />
-                        ))}
-                      </ScrollView>
-                      <Text style={st.footNote}>받은 사람이 전부 풀었어요 · 검정 = 통과</Text>
-                    </>
-                  )}
-                  </Appear>
-                </View>
-              </Appear>
-            )}
+                    <View style={st.listCard}>
+                      {running.map((q, i) => (
+                        <QuizRowView
+                          key={q.course.id}
+                          row={q}
+                          divider={i > 0}
+                          link={linkStateOf(q.course.id)}
+                          onPress={() => goDetail(q.course.id)}
+                        />
+                      ))}
+                      {/* 합류 전 응시(게스트 링크) — 아직 이 매장 사람이 아니라 목록 끝의 한 줄이다.
+                          ⛔ 채용 전환 액션 없음 · ⛔ "이 사람 준비됐어요" 같은 판단 문구 없음. */}
+                      {guests.length > 0 ? (
+                        <Pressable
+                          onPress={() => setGuestOpen(true)}
+                          style={({ pressed }) => [st.row, running.length > 0 && st.rowDivider, pressed && { opacity: 0.6 }]}
+                          accessibilityRole="button"
+                          accessibilityLabel={`합류 전 응시 ${guests.length}명 보기`}
+                        >
+                          <View style={st.rowText}>
+                            <Text style={st.rowTitle} numberOfLines={1}>합류 전 응시</Text>
+                            <Text style={st.rowSub} numberOfLines={1}>링크로 푼 사람 {guests.length}명</Text>
+                          </View>
+                          <ProgressPill text={`${guests.length}명`} tone="neutral" />
+                        </Pressable>
+                      ) : null}
+                    </View>
+                  )
+                ) : finished.length === 0 ? (
+                  <View style={st.listCard}>
+                    <Text style={st.tabEmpty}>아직 전원이 푼 퀴즈가 없어요.</Text>
+                  </View>
+                ) : (
+                  <View style={st.listCard}>
+                    {finished.map((q, i) => (
+                      <QuizRowView
+                        key={q.course.id}
+                        row={q}
+                        divider={i > 0}
+                        link={linkStateOf(q.course.id)}
+                        onPress={() => goDetail(q.course.id)}
+                      />
+                    ))}
+                  </View>
+                )}
+              </View>
+            </Appear>
           </>
         )}
       </ScrollView>
@@ -595,57 +621,6 @@ export default function OwnerTrainingScreen() {
 }
 
 /**
- * 응시 중 카드 1장 = 퀴즈 1건(D 가로 스크롤). 막대 1개 = 받은 사람 1명 — 통과는 검정, 아직은 주황(R4 실측값).
- * ★사람 옆 점수가 아니라 **퀴즈의 진행**이라 `n/m명` 표기가 허용된다(감시원칙은 개인 줄세우기 금지).
- */
-function liveCardOf(q: QuizListRow, link: 'open' | 'closed' | null, onPress: () => void): StatCardItem {
-  const linkTag = link === 'open' ? ' · 링크 열림' : link === 'closed' ? ' · 링크 닫힘' : '';
-  if (q.status === 'scheduled' || q.recipients === 0) {
-    return { key: q.course.id, label: q.course.name, value: '발송 예정', sub: q.caption + linkTag, onPress };
-  }
-  const left = q.recipients - q.passed;
-  return {
-    key: q.course.id,
-    label: q.course.name,
-    value: q.passed,
-    unit: `/${q.recipients}명`,
-    // ★"n명이 아직"은 **아직 뭐요?** 가 되물어진다(워딩 §5). 탭을 가른 뒤로는 틀리기까지 했다 —
-    //   응시 완료 탭의 카드가 "1명이 아직"이라고 말하는데 그 사람은 **풀었고 통과만 못 했다**.
-    //   카드가 세는 값이 통과이므로 문구도 통과로 말한다(2026-09-11).
-    sub: q.staleCount > 0 ? `문항 ${q.staleCount}개 낡음${linkTag}` : left > 0 ? `${left}명 통과 전${linkTag}` : `전원 통과${linkTag}`,
-    onPress,
-    visual: (
-      <Sparkline
-        values={Array.from({ length: q.recipients }, (_, i) => (i < q.passed ? 100 : 30))}
-        tones={Array.from({ length: q.recipients }, (_, i) => (i < q.passed ? 'on' : 'warn'))}
-        accessibilityLabel={`${q.recipients}명 중 ${q.passed}명 통과`}
-      />
-    ),
-  };
-}
-
-/** 합류 전 응시(게스트 링크) 점선 카드 — 막대 1개 = 응시 1건(맞힌 비율). 판단 문구 없음. */
-function guestCardOf(guests: GuestSubmissionRow[], onPress: () => void): StatCardItem {
-  const rates = guests.map((g) => (g.total > 0 ? g.correct / g.total : 0));
-  const best = guests.reduce((a, g) => (g.total > 0 && g.correct / g.total > (a.total > 0 ? a.correct / a.total : -1) ? g : a), guests[0]);
-  return {
-    key: 'guests',
-    label: '합류 전 응시',
-    value: guests.length,
-    unit: '명',
-    sub: `링크로 풂 · 최고 ${best.correct}/${best.total}`,
-    onPress,
-    visual: (
-      <Sparkline
-        values={rates.map((r) => Math.max(10, Math.round(r * 100)))}
-        tones={rates.map((r) => (r >= 0.6 ? 'on' : 'warn'))}
-        accessibilityLabel={`합류 전 응시 ${guests.length}명`}
-      />
-    ),
-  };
-}
-
-/**
  * 퀴즈 한 줄 — 이름 + 일정, 우측에 상태 알약.
  *
  * 알약 우선순위: 낡음 > 진행. 근거가 바뀐 문항이 있으면 그게 먼저 손볼 것이다.
@@ -768,7 +743,8 @@ function GuestRowView({
 
 const st = StyleSheet.create({
   safe: { flex: 1, backgroundColor: InkColors.paper },
-  scroll: { padding: Space.gutter, paddingBottom: Space.xl * 2, gap: Space.md, flexGrow: 1 },
+  // 바닥 여백은 **+ 버튼(56) + 아래 거터(20)** 를 비켜야 한다 — 안 그러면 마지막 줄이 버튼에 가린다.
+  scroll: { padding: Space.gutter, paddingBottom: 56 + Space.gutter * 2, gap: Space.md, flexGrow: 1 },
 
   // ★hitSlop 은 RN-web 에서 안 먹는다 — 실측 높이가 곧 누를 수 있는 크기다(2026-08-26 실측 29·31dp).
   //   48dp 하한(복잡도 §4)은 상자 크기로 지켜야 한다.
@@ -833,7 +809,12 @@ const st = StyleSheet.create({
   rowSubWarn: { color: BrandColors.warnText },
 
   // 접히는 요약행 — 카드가 아니다(카드로 만들면 목록 카드 옆에서 또 하나의 카드로 읽힌다).
-  foldRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, minHeight: 48 },
+  // ★회색 바탕 위에 맨몸으로 두지 않는다(2026-09-11) — 섹션이 흰 카드로 묶여야 한 덩어리로 읽힌다.
+  foldRow: {
+    flexDirection: 'row', alignItems: 'center', gap: Space.sm, minHeight: 48,
+    backgroundColor: InkColors.bg, borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line,
+    paddingHorizontal: Space.lg, ...Elevation.e1,
+  },
   foldText: { flex: 1, minWidth: 0, fontSize: 15, fontWeight: '800', color: InkColors.ink2 },
   // 좌우 여백 = 시트 머리말(SheetHead 16)과 같은 lg. 없으면 목록 카드가 시트 양끝에 붙고
   // 섹션 제목(자체 패딩 4)과 카드의 왼쪽 선이 어긋났다(2026-09-03 웹 실측 피드백). 세 시트가 같이 쓴다.
@@ -844,6 +825,8 @@ const st = StyleSheet.create({
 
   footNote: { fontSize: 13, fontWeight: '600', color: InkColors.ink3, textAlign: 'center' },
   tabEmpty: { fontSize: 15, fontWeight: '600', color: InkColors.ink3, textAlign: 'center', paddingVertical: Space.lg, lineHeight: 21 },
+  // 맨 위 탭 — 공용 SegmentTabs 의 margin(16)을 화면 거터(20)에 맞춘다(노하우 탭과 같은 처리).
+  topTabs: { marginHorizontal: Space.gutter, marginTop: Space.md, marginBottom: 0 },
   // 노하우 탭의 + 버튼과 같은 값이다(OwnerKnowhowBrowse.fab) — 자리가 같으면 모양도 같아야 한다.
   fab: {
     position: 'absolute', right: Space.gutter, bottom: Space.gutter,
