@@ -138,7 +138,7 @@ export default function OwnerLayout() {
         //   항목을 iOS 26 이 '바 버튼'으로 취급해 유리 캡슐을 씌운다 → 웹과 같은 "왼쪽 정렬 평문 제목 +
         //   담백한 뒤로가기"를 네이티브 헤더로는 낼 수 없다. 모든 화면이 `ScreenTitleHeader` 를 직접 그린다.
         //   ★여기서 끄는 것이 핵심이다 — 화면에서 끄면 마운트 전 한 프레임 깜빡인다(native-audit: header-flash).
-        headerShown: false,
+        headerShown: false,
       }}
     >
       {/* ★헤더를 끌 화면은 **레이아웃에서부터** 끈다(2026-09-07 iOS 실기기). 화면 안의
@@ -169,8 +169,6 @@ export default function OwnerLayout() {
       <Stack.Screen name="templates" options={{ title: '노하우 템플릿' }} />
       {/* 다점포 — 다른 내 매장 노하우를 현재 매장으로 가져오기(복제) */}
       <Stack.Screen name="import-knowhow" options={{ title: '다른 매장에서 가져오기' }} />
-      {/* 다점포 — 전 매장 지표 통합뷰(매장 카드 탭 → 전환) */}
-      <Stack.Screen name="overview" options={{ title: '전체 매장 보기' }} />
       <Stack.Screen name="notifications" options={{ title: '알림' }} />
       <Stack.Screen name="edit/[id]" options={{ title: '노하우 수정' }} />
       {/* 대화형 입력 단일 화면 — 기존 answer/[uqId]·add/[category]·capture 위저드를 대체 */}

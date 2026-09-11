@@ -125,7 +125,9 @@ const styles = StyleSheet.create({
     borderBottomColor: InkColors.line,
   },
   // 화살표는 거터 안쪽에서 시작한다 — 아이콘 좌우 여백만큼 당겨 제목과 같은 리듬을 만든다.
-  back: { marginLeft: -4, paddingRight: 6, paddingVertical: 2 },
+  // ★48dp 는 **상자 크기**로 지킨다 — RN-web 은 hitSlop 을 무시한다(2026-08-26 확인).
+  //   paddingVertical:2 + hitSlop 조합이던 동안 실측 30dp 였다(2026-09-11 퀴즈 UI 실측).
+  back: { marginLeft: -4, minWidth: 48, minHeight: 48, alignItems: 'flex-start', justifyContent: 'center', paddingRight: 6 },
   titleWrap: { flex: 1, justifyContent: 'center' },
   title: { fontSize: 16, fontWeight: '800', color: InkColors.ink },
   storeLine: { flexDirection: 'row', alignItems: 'center', gap: Space.xs, marginTop: 1 },
