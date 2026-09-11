@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, Pressable, ScrollView, ActivityIndicator, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -6,7 +6,7 @@ import { Appear, stagger } from '@/components/Appear';
 import { BottomSheet } from '@/components/BottomSheet';
 import { QUIZ_RENDERERS } from '@/components/work/quiz';
 import { generateQuiz } from '@/lib/ai/client';
-import { fetchQuizItemsForAttempt, gradeQuiz, recordQuizStats, insertQuizAttempts } from '@/lib/db';
+import { fetchQuizItemsForAttempt, gradeQuiz, recordQuizStats, recordStaffQuizAttempt } from '@/lib/db';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
@@ -174,6 +174,11 @@ function SavedQuizBody({
   const [failed, setFailed] = useState(false);
   const [results, setResults] = useState<boolean[]>([]);
   const [done, setDone] = useState(false);
+  /**
+   * 낸 답 원문 — 문항별 기록(0190)을 서버가 **다시 채점**해서 적는다.
+   * ★렌더에 안 쓰이므로 ref 다. state 로 두면 답 하나마다 시트 전체가 다시 그려진다.
+   */
+  const given = useRef<{ itemId: string; response: QuizResponse; ord: number }[]>([]);
   /** 틀린 문항이 근거한 노하우 제목들 — 결과 화면의 "무엇을 다시 볼까" + 물어보기 문구의 재료. */
   const [missedTitles, setMissedTitles] = useState<string[]>([]);
 
@@ -194,6 +199,8 @@ function SavedQuizBody({
 
   const answer = (res: QuizResponse) => {
     setPending(res);
+    // 같은 문항을 다시 보내면(채점 실패 후 재시도) 덮어쓴다 — 한 문항에 두 줄이 남지 않게.
+    given.current = [...given.current.filter((g) => g.itemId !== item.id), { itemId: item.id, response: res, ord: at }];
     void send(item.id, res);
   };
 
@@ -220,7 +227,8 @@ function SavedQuizBody({
         .filter((t): t is string => !!t),
     );
     void recordQuizStats(perEntry);
-    void insertQuizAttempts(perEntry.map((e) => ({ entryId: e.entryId, total: e.attempts, correct: e.attempts - e.misses })));
+    // 응시 기록(0190) — 문항별 + 노하우별 집계를 **서버가** 적는다. 여기서 센 값을 보내지 않는다.
+    void recordStaffQuizAttempt(given.current);
     // 통과 기준은 그대로 — 전부 맞아야 통과. 통과 처리 대상은 **실제로 푼 문항의 근거 노하우**뿐이다
     // (0111: 다루지 않은 노하우까지 "안다"로 켜지 않는다).
     if (marks.length === items.length && marks.every(Boolean)) onPass(perEntry.map((e) => e.entryId));

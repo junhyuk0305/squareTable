@@ -1933,25 +1933,30 @@ export async function fetchQuizAttempts(): Promise<QuizAttemptRow[]> {
     total: r.total ?? 0, correct: r.correct ?? 0, takenAt: r.taken_at ?? '',
   }));
 }
-/** 응시 기록 남기기(직원 본인). id·staff_id·taken_at 은 DB default 가 채운다.
- *  기록 실패가 응시 UX 를 막으면 안 되므로 호출부는 fire-and-forget 으로 쓴다. */
-export async function insertQuizAttempts(rows: { entryId: string; total: number; correct: number }[]): Promise<boolean> {
-  if (!HAS_SUPABASE) return true;
-  const usable = rows.filter((r) => r.total > 0);
-  if (usable.length === 0) return true;
-  // getUser() 는 서버 왕복이라 네트워크가 흔들리면 기록이 조용히 사라진다 — 로컬 세션에서 읽는다.
-  const { data: session } = await supabase.auth.getSession();
-  const uid = session.session?.user?.id ?? null;
-  if (!uid) {
-    reportError('db.write:insertQuizAttempts', { message: 'no session' });
-    return false;
+/**
+ * 응시 기록 남기기(직원 본인) — **문항별 + 노하우별 집계를 서버가 한 번에 적는다**(0190).
+ *
+ * 2026-09-11 이전에는 클라가 센 correct/total 만 `quiz_attempts` 에 넣었고 문항별로는
+ * 아무것도 안 남겼다(0103·0112 의 "개인 오답 저장 금지"). 사용자 결정으로 그 원칙을 뒤집어
+ * **사장이 개인 오답을 본다** — 그래서 definer RPC 한 번으로 두 표를 같이 채운다.
+ * 겸사겸사 채점이 서버로 갔다: 게스트 경로와 같은 `quiz_grade_item` 이 정오답을 정한다.
+ *
+ * 기록 실패가 응시 UX 를 막으면 안 되므로 호출부는 fire-and-forget 으로 쓴다.
+ * @returns submission_id — 한 번의 응시를 묶는 열쇠. 못 적었으면 null.
+ */
+export async function recordStaffQuizAttempt(
+  rows: { itemId: string; response: unknown; ord: number }[],
+): Promise<string | null> {
+  if (!HAS_SUPABASE) return null;
+  if (rows.length === 0) return null;
+  const { data, error } = await supabase.rpc('quiz_staff_record', {
+    p_rows: rows.map((r) => ({ item_id: r.itemId, response: r.response ?? null, ord: r.ord })),
+  });
+  if (error) {
+    reportError('db.write:recordStaffQuizAttempt', error);
+    return null;
   }
-  return write(
-    'insertQuizAttempts',
-    supabase.from('quiz_attempts').insert(
-      usable.map((r) => ({ unit_id: _unitId, entry_id: r.entryId, staff_id: uid, total: r.total, correct: r.correct })),
-    ),
-  );
+  return (data as string | null) ?? null;
 }
 
 // ── 게스트 응시 결과(0160·0163) — 사장이 "링크로 푼 사람"을 보는 자리 ──────────────
@@ -2123,6 +2128,41 @@ export type GuestAttemptItemRow = {
   response: QuizResponse | null;
   correct: boolean;
 };
+
+/** 직원 한 명이 낸 답 한 줄(0190). 게스트판과 같은 모양 + 누가 언제인지가 붙는다. */
+export type StaffAttemptItemRow = GuestAttemptItemRow & { staffId: string; submissionId: string; takenAt: string };
+
+/**
+ * 이 퀴즈의 문항들을 **직원이 어떻게 풀었나**(0190) — 문항 id 로 되짚는다.
+ * `quiz_attempt_items` 에 코스가 안 실리므로 코스의 문항 id 집합이 곧 열쇠다(가장 정확한 연결).
+ * RLS 상 관리 권한만 읽는다(qai_select).
+ */
+export async function fetchStaffAttemptItems(itemIds: string[]): Promise<StaffAttemptItemRow[]> {
+  if (!HAS_SUPABASE || itemIds.length === 0) return [];
+  const { data, error } = await supabase
+    .from('quiz_attempt_items')
+    .select('id, item_id, ord, format, payload, response, correct, staff_id, submission_id, created_at')
+    .in('item_id', itemIds)
+    .not('staff_id', 'is', null)
+    .order('created_at', { ascending: false })
+    .limit(500);
+  if (error) {
+    readFail('fetchStaffAttemptItems', error);
+    return [];
+  }
+  return (data ?? []).map((r: any) => ({
+    id: r.id,
+    itemId: r.item_id,
+    ord: r.ord ?? 0,
+    format: r.format ?? '',
+    payload: (r.payload ?? {}) as Record<string, any>,
+    response: (r.response ?? null) as QuizResponse | null,
+    correct: r.correct === true,
+    staffId: r.staff_id,
+    submissionId: r.submission_id,
+    takenAt: r.created_at ?? '',
+  }));
+}
 
 /** 한 번의 제출을 문항 순서대로. RLS 상 관리 권한만 읽는다(qai_select) — 직원·게스트는 0행이다. */
 export async function fetchGuestAttemptItems(submissionId: string): Promise<GuestAttemptItemRow[]> {

@@ -13,7 +13,15 @@ import { useWorkStore, courseEntriesOf, staffWhoUnderstandEntries } from '@/lib/
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { guardWrite } from '@/lib/store/useSyncStore';
 import { showToast } from '@/lib/store/useToastStore';
-import { fetchQuizItems, upsertTrainingCourse, insertQuizAssignments, insertQuizItem } from '@/lib/db';
+import {
+  fetchQuizItems,
+  fetchStaffAttemptItems,
+  upsertTrainingCourse,
+  insertQuizAssignments,
+  insertQuizItem,
+  type StaffAttemptItemRow,
+} from '@/lib/db';
+import { Collapse } from '@/components/Collapse';
 import { genId } from '@/lib/utils/id';
 import { FORMATS } from '@/lib/quiz/formats';
 import { Appear, stagger } from '@/components/Appear';
@@ -69,6 +77,9 @@ export default function QuizDetailScreen() {
   }, [hydrateStaff]);
 
   const [seg, setSeg] = useState<Seg>('people');
+  /** 문항별 답을 펼쳐 놓은 사람(0190). 한 번에 한 명만 편다 — 목록이 통째로 길어지지 않게. */
+  const [openPerson, setOpenPerson] = useState<string | null>(null);
+  const [staffItems, setStaffItems] = useState<StaffAttemptItemRow[]>([]);
   const [moreOpen, setMoreOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [attachOpen, setAttachOpen] = useState(false);
@@ -93,8 +104,14 @@ export default function QuizDetailScreen() {
     const p = entryIds.length === 0 ? Promise.resolve({ data: [] as QuizItem[] }) : fetchQuizItems(entryIds);
     void p.then(({ data }) => {
       if (!alive) return;
-      setItems((data ?? []).filter((q) => q.status === 'active'));
+      const active = (data ?? []).filter((q) => q.status === 'active');
+      setItems(active);
       setItemsLoaded(true);
+      // 문항이 정해진 뒤에야 "누가 이 문항들을 어떻게 풀었나"를 읽을 수 있다(0190) —
+      // quiz_attempt_items 에 코스가 없어 문항 id 집합이 열쇠다.
+      void fetchStaffAttemptItems(active.map((q) => q.id)).then((rows) => {
+        if (alive) setStaffItems(rows);
+      });
     });
     return () => {
       alive = false;
@@ -345,18 +362,57 @@ export default function QuizDetailScreen() {
                 <ProgressRing value={passedCount} total={people.length} label="통과" />
                 <Text style={st.ringSub}>{captionOf(course.answer_days, course.due_days)}</Text>
               </View>
+              {/* 사람 줄을 누르면 **그 사람이 어느 문항을 맞혔는지**가 그 자리에서 펼쳐진다(0190).
+                  ⚠️ 개인 오답을 사장이 보는 것은 2026-09-11 사용자 결정이다 — 0103·0112 의
+                     "개인 오답 저장 금지"를 뒤집은 자리이므로, 되돌릴 땐 0190 과 같이 본다. */}
               <View style={st.listCard}>
-                {people.map((p, i) => (
-                  <View key={p.id} style={[st.row, i > 0 && st.rowDivider]}>
-                    <View style={st.rowText}>
-                      <Text style={st.rowTitle} numberOfLines={1}>{p.name}</Text>
-                      <Text style={st.rowSub} numberOfLines={1}>
-                        {p.passed ? '통과' : p.sent ? '미응시' : '발송 중'}
-                      </Text>
+                {people.map((p, i) => {
+                  const mine = staffItems.filter((r) => r.staffId === p.id);
+                  const open = openPerson === p.id;
+                  return (
+                    <View key={p.id} style={i > 0 ? st.rowDivider : undefined}>
+                      <Pressable
+                        onPress={() => setOpenPerson(open ? null : p.id)}
+                        disabled={mine.length === 0}
+                        style={({ pressed }) => [st.row, pressed && { opacity: 0.6 }]}
+                        accessibilityRole="button"
+                        accessibilityState={{ expanded: open }}
+                        accessibilityLabel={mine.length > 0 ? `${p.name} 푼 문항 ${open ? '접기' : '보기'}` : p.name}
+                      >
+                        <View style={st.rowText}>
+                          <Text style={st.rowTitle} numberOfLines={1}>{p.name}</Text>
+                          <Text style={st.rowSub} numberOfLines={1}>
+                            {mine.length > 0
+                              ? `${mine.length}문제 중 ${mine.filter((r) => r.correct).length}개 맞힘`
+                              : p.passed ? '통과' : p.sent ? '미응시' : '발송 중'}
+                          </Text>
+                        </View>
+                        <ProgressPill text={p.passed ? '다 맞힘' : '아직 안 풂'} tone={p.passed ? 'done' : 'neutral'} />
+                        {mine.length > 0 ? (
+                          <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={15} color={InkColors.ink3} />
+                        ) : null}
+                      </Pressable>
+                      {open && mine.length > 0 ? (
+                        <Collapse>
+                          <View style={st.answerBox}>
+                            {[...mine].sort((a, b) => a.ord - b.ord).map((r) => (
+                              <View key={r.id} style={st.answerRow}>
+                                <Ionicons
+                                  name={r.correct ? 'checkmark-circle' : 'close-circle'}
+                                  size={16}
+                                  color={r.correct ? BrandColors.good : BrandColors.bad}
+                                />
+                                <Text style={st.answerText} numberOfLines={2}>
+                                  {String(r.payload?.ask ?? '문항')}
+                                </Text>
+                              </View>
+                            ))}
+                          </View>
+                        </Collapse>
+                      ) : null}
                     </View>
-                    <ProgressPill text={p.passed ? '다 맞힘' : '아직 안 풂'} tone={p.passed ? 'done' : 'neutral'} />
-                  </View>
-                ))}
+                  );
+                })}
               </View>
               {/* 글자만 있던 버튼 → 흰 버튼(GhostButton). 2026-09-03: 글씨만 있는 버튼 금지. */}
               {notDone.length > 0 && (
@@ -480,10 +536,13 @@ export default function QuizDetailScreen() {
         <BottomSheet visible onClose={() => setMoreOpen(false)}>
           <SheetHead title={course.name} onClose={() => setMoreOpen(false)} />
           <View style={st.sheetBody}>
+            {/* ★탭으로 닿는 것은 여기 두지 않는다(2026-09-11). '문항 다시 보기'·'링크 만들기'는
+                세그먼트를 바꾸는 일이라 탭이 이미 하는 일이었다 — 같은 일에 입구가 둘이면
+                사장은 어느 쪽이 맞는지 매번 고른다. 여기 남는 것은 **탭에 없는 일**뿐이다. */}
             <SheetOption label="이름·설정 고치기" onPress={() => { setMoreOpen(false); setEditOpen(true); }} />
-            <SheetOption label="문항 다시 보기" onPress={() => { setMoreOpen(false); setSeg('items'); }} />
-            <SheetOption label="이 업무에 붙이기" badge="선택" onPress={() => { setMoreOpen(false); setAttachOpen(true); }} />
-            <SheetOption label="링크 만들기" onPress={() => { setMoreOpen(false); setSeg('deploy'); }} />
+            {/* ★"이 업무에 붙이기"는 되물음이 난다(2026-09-11) — 이 화면엔 **현재 업무가 없다.**
+                업무는 시트 안에서 고르는 것이라 "이"가 가리키는 대상이 없었다. 무엇이 달라지는지로 쓴다. */}
+            <SheetOption label="업무에 연결하기" badge="선택" onPress={() => { setMoreOpen(false); setAttachOpen(true); }} />
             <SheetOption label="이걸로 다시 만들기" onPress={() => { setMoreOpen(false); void duplicate(); }} />
             <SheetOption label="보관하기" danger onPress={() => { setMoreOpen(false); void archive(); }} />
           </View>
@@ -546,10 +605,10 @@ export default function QuizDetailScreen() {
           높이는 내용에 맡기고 스크롤은 한 겹만 둔다. 목록이 길면 시트 자체가 늘어난다. */}
       {attachOpen && (
         <BottomSheet visible onClose={() => setAttachOpen(false)}>
-          <SheetHead title="이 업무에 붙이기" onClose={() => setAttachOpen(false)} />
+          <SheetHead title="어느 업무에 연결할까요?" onClose={() => setAttachOpen(false)} />
           <Text style={st.sheetLead}>
-            붙이면 그 업무를 <Text style={st.bold}>할 줄 아는 사람</Text>이 업무 화면에 표시돼요.
-            안 붙여도 퀴즈는 잘 돌아가요.
+            연결하면 그 업무를 <Text style={st.bold}>할 줄 아는 사람</Text>이 업무 화면에 표시돼요.
+            안 해도 퀴즈는 잘 돌아가요.
           </Text>
           {attachable.length === 0 ? (
             <Text style={st.sheetEmpty}>붙일 업무가 아직 없어요. 업무를 만들면 여기에 나와요.</Text>
@@ -566,7 +625,7 @@ export default function QuizDetailScreen() {
                     }}
                     style={({ pressed }) => [st.row, i > 0 && st.rowDivider, pressed && { opacity: 0.6 }]}
                     accessibilityRole="button"
-                    accessibilityLabel={`${t.text}에 붙이기`}
+                    accessibilityLabel={`${t.text}에 연결하기`}
                   >
                     {/* ★제목에 flex 를 안 주면 긴 업무 이름이 화살표를 시트 밖으로 밀어낸다. */}
                     <View style={st.rowText}>
@@ -657,6 +716,10 @@ const st = StyleSheet.create({
     minWidth: 48, minHeight: 48, alignItems: 'flex-end', justifyContent: 'center',
     paddingLeft: Space.sm, marginRight: -4,
   },
+  // 사람 줄 아래 펼쳐지는 문항별 답(0190) — 목록 카드 안이라 따로 테두리를 두지 않는다.
+  answerBox: { paddingBottom: Space.sm, gap: Space.xs },
+  answerRow: { flexDirection: 'row', alignItems: 'flex-start', gap: Space.sm, minHeight: 28 },
+  answerText: { flex: 1, minWidth: 0, fontSize: 13, lineHeight: 18, fontWeight: '600', color: InkColors.ink2 },
   bold: { fontWeight: '800', color: InkColors.ink },
 
   staleBar: {
