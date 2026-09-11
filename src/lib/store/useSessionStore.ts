@@ -7,6 +7,7 @@ import {
   fetchUnitSubscription,
   fetchMySeatLocked,
   fetchBillingFreeMode,
+  fetchIapEnabled,
   fetchDowngradeNeed,
   checkPhoneInUse,
   rpcCreateStore,
@@ -29,6 +30,7 @@ import { joinRejectAction, type JoinMarker } from './joinRejectDetect';
 import { setAnalyticsContext, track, reportError } from '@/lib/analytics/track';
 import { effectivePlanOf, type SubStatusRaw } from '@/lib/utils/subscription';
 import { normalizePlan, type PlanId } from '@/lib/config/tiers';
+import { SHOW_IAP } from '@/lib/config/store-policy';
 import { notifyOwnersJoinRequest } from '@/lib/push/notify';
 
 // 0093: 세션 유효 역할. manager 는 가입 시 선택지가 아니라(가입은 owner/junior 뿐) 활성 매장의
@@ -74,6 +76,8 @@ type SessionState = {
   // ★매장이 아니라 서비스 전체 속성이라 로그아웃 시 초기화하지 않는다(계정 간 누수 대상이 아님).
   //   프로필을 로드할 때마다 서버에서 다시 읽으므로 관리 콘솔에서 끄면 다음 로드에 반영된다.
   freeMode: boolean;
+  /** 앱에서 이용권을 팔아도 되는가(서버 스위치 0187). 판매 롤백은 이 값 하나로 뒤집는다. */
+  iapEnabled: boolean;
   inviteCode: string; // 내 매장 초대코드(사장 화면에서 직원에게 공유)
   email: string;
   bio: string; // 한줄 소개
@@ -162,6 +166,7 @@ const DEMO = {
   seatLocked: false,
   needsDowngradeChoice: false,
   freeMode: false, // 서버에서 읽기 전 기본값 — 읽기 전엔 평시 규칙(과금 게이팅 유지)
+  iapEnabled: false, // 읽기 전엔 안 판다(fail-closed) — 잘못 열리는 쪽이 되돌리기 어렵다
   inviteCode: '482913',
   email: '',
   bio: '',
@@ -385,6 +390,15 @@ async function loadProfile(
       if (fmErr) reportError('session.fetchBillingFreeMode', fmErr);
       else freeMode = fm === true;
     }
+    // 인앱결제 판매 스위치(0187) — 스토어 표면이 애초에 닫힌 빌드(SHOW_IAP=false)면 읽지 않는다
+    // (웹·1차 스토어 빌드에서 매 세션 왕복이 하나 늘 이유가 없다).
+    // 읽기 실패는 이전 값을 유지한다 — 일시 오류로 결제 화면이 깜빡이며 사라지지 않게.
+    let iapEnabled = useSessionStore.getState().iapEnabled;
+    if (SHOW_IAP) {
+      const { data: ie, error: ieErr } = await fetchIapEnabled();
+      if (ieErr) reportError('session.fetchIapEnabled', ieErr);
+      else iapEnabled = ie === true;
+    }
     // 다운그레이드 선택 대기(0142) — 체험이 끝나 무료 한도를 넘긴 것이 있는가.
     // 판정은 서버가 전부 갖는다(사장이 아니면 항상 false 라 역할로 분기하지 않는다).
     // 읽기 실패는 '선택 필요'로 위장하지 않는다(fail-open) — 조회 오류로 앱을 가로막지 않는다.
@@ -458,6 +472,7 @@ async function loadProfile(
       seatLocked,
       needsDowngradeChoice,
       freeMode,
+      iapEnabled,
       bio: profile?.bio ?? '',
       phone: profile?.phone ?? '',
     });

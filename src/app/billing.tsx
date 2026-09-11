@@ -14,12 +14,13 @@ import { canManage } from '@/lib/utils/roles';
 import { BILLING_INFO, formatKrw } from '@/lib/config/billing';
 import { TERMS_VERSION, PAYMENT_SLA_SENTENCE } from '@/lib/config/business';
 import { PLANS, PLAN_ORDER, planMonthlyPrice, withVat, VAT_NOTE_SENTENCE, FREE_PROMO, SIGNUP_PROMO, type PlanId } from '@/lib/config/tiers';
-import { SHOW_BILLING, showPaymentSurface } from '@/lib/config/store-policy';
+import { SHOW_BILLING, showIapSurface, showPaymentSurface } from '@/lib/config/store-policy';
 import { usePaymentClaimStore, CLAIM_ERROR_TEXT } from '@/lib/store/usePaymentClaimStore';
 import { redeemPromoCode, fetchUnitSeatStatus, type SeatStatus } from '@/lib/db';
 import { Appear, stagger } from '@/components/Appear';
 import { Collapse } from '@/components/Collapse';
 import { ScreenLoading } from '@/components/ScreenLoading';
+import { IapPurchasePanel } from '@/components/IapPurchasePanel';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
@@ -70,6 +71,7 @@ function BillingBody() {
   const plan = useSessionStore((s) => s.plan);
   // 전면 무료 스위치(app_config.billing_free_mode) — 켜져 있으면 결제 표면을 감춘다([P8-#5]).
   const freeMode = useSessionStore((s) => s.freeMode);
+  const iapEnabled = useSessionStore((s) => s.iapEnabled);
   const stores = useSessionStore((s) => s.stores);
   const refreshMembership = useSessionStore((s) => s.refreshMembership);
   // 입금 신고(0083) — 신고 등록·상태 표시의 단일 축. 데이터 접근은 스토어 → db.ts 로만(계층 경계).
@@ -344,6 +346,9 @@ function BillingBody() {
             </Text>
           </View>
           </Appear>
+          {/* 스토어 인앱결제 표면(네이티브). 웹 PG 표면(아래 본문)과 채널이 다르므로 판정도 다르다.
+              판정은 store-policy 한 곳(showIapSurface) — 빌드 축·서버 스위치·전면 무료를 합친 값이다. */}
+          {showIapSurface(iapEnabled, freeMode) && isOwner && <IapPurchasePanel onChanged={recheck} />}
           <Appear delay={stagger(2)}>
           <Pressable
             disabled={busy}

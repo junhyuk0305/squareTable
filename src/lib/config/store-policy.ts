@@ -45,6 +45,39 @@ export function showPaymentSurface(freeMode: boolean): boolean {
   return SHOW_BILLING && !freeMode;
 }
 
+/**
+ * 인앱결제(스토어 결제) 표면을 노출해도 되는가 — **플랫폼별 스토어 관문 축.**
+ *
+ * `SHOW_BILLING`(웹 PG·계좌이체 표면)과 다른 축이다. 둘을 한 상수로 합치면 웹 결제 문구가
+ * 앱에 새거나(스토어 위반) 그 반대가 된다 — 채널이 다르므로 판정도 따로다.
+ *
+ * ⛔ 아래 두 상수를 켜는 것은 **각 스토어 관문을 통과한 뒤**이고, 그 변경만 담은 별도 커밋으로 낸다.
+ *   - iOS: 1.0.0 승인·출시 후. 지금 심사 중인 1.0 은 심사 메모에 "앱 안에 인앱결제·가격 표시가 없다"
+ *     (Guideline 3.1.3(f) Free Stand-alone Apps)라고 선언해 뒀다 — 여기를 먼저 켜면 그 선언이 거짓이 된다.
+ *     IAP 를 붙인 1.1 을 낼 때 심사 메모도 함께 고친다
+ *     (정본 = `출시서류_iOS/03_AppStoreConnect_입력텍스트_전체목록_2026-09-04.md` §7).
+ *   - Android: 프로덕션 액세스(개인 계정 = 테스터 12명 × 14일) 통과 후.
+ */
+const IAP_READY_IOS = false;
+const IAP_READY_ANDROID = false;
+
+export const SHOW_IAP =
+  Platform.OS === 'ios' ? IAP_READY_IOS : Platform.OS === 'android' ? IAP_READY_ANDROID : false;
+
+/**
+ * 지금 앱에서 이용권을 팔아도 되는가 — **빌드 축(SHOW_IAP) + 서버 축(iapEnabled) + 운영 축(freeMode).**
+ *
+ * ★서버 축이 있는 이유 = **롤백.** 네이티브는 OTA 가 없으므로(expo-updates 미사용) 빌드 상수만으로는
+ * 문제가 생겼을 때 새 빌드 + 스토어 심사(며칠) 없이 되돌릴 수 없다. 판매 중단은 서버 행 하나로 즉시.
+ *
+ * ⚠️ 이 함수가 false 가 되어도 **이미 산 사람의 구독은 스토어가 계속 청구한다.** 우리가 끌 수 있는 것은
+ * "새로 파는 것"뿐이다 — 진짜 중단은 스토어 콘솔에서 상품을 내리고 기존 구독을 취소·환불하는 일이다.
+ * 그래서 웹훅은 이 스위치와 무관하게 계속 처리한다(돈 낸 사람이 잠기는 쪽이 더 큰 사고다).
+ */
+export function showIapSurface(iapEnabled: boolean, freeMode: boolean): boolean {
+  return SHOW_IAP && iapEnabled && !freeMode;
+}
+
 /** 소셜 로그인 버튼을 노출해도 되는가. */
 export const SHOW_SOCIAL_LOGIN = !IS_IOS_NATIVE;
 
