@@ -359,13 +359,20 @@ async function main() {
         await tapLabel('닫기');
         await settle();
       }
-      // ⋯ → 링크 만들기 (달력으로 바뀐 자리)
-      await tapLabel('더보기');
-      if (await wait('링크 만들기', 15000)) {
-        await tapText('링크 만들기');
-        const onLink = await wait('언제까지 열어 둘까요', 15000);
-        check('링크 시트 열림', onLink);
-        if (onLink) await scan('링크 시트', '08-link-sheet');
+      // 배포 세그먼트 (2026-09-11: 더보기 속 '링크 만들기' 시트가 여기로 접혔다 —
+      // 링크를 만드는 자리가 둘이면 같은 기능이 두 모양을 갖는다).
+      await tapText('배포');
+      const onDeploy = await wait('링크를 받은 사람은', 15000);
+      check('배포 세그먼트 열림', onDeploy);
+      if (onDeploy) {
+        await scan('배포 세그먼트', '08-deploy');
+        // 기간 바꾸기 — 토큰을 두고 만료만 미는 자리. 링크가 하나도 없으면 '기간'이 없다.
+        if (await wait('기간', 4000)) {
+          await tapText('기간');
+          check('기간 달력 열림', await wait('언제까지로 바꿀까요', 15000));
+          await tapLabel('닫기');
+          await settle();
+        }
       }
     } else if (!seeded) {
       check('퀴즈 상세 진입', false, '시드에 실패해 상세를 못 열었다');

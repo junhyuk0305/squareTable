@@ -90,6 +90,12 @@ export type QuizListRow = {
   staleCount: number;
   /** 받는 사람 수 = 발송 원장의 사람 수. 아직 발행 전이면 0. */
   recipients: number;
+  /**
+   * 실제로 **푼** 사람 수(`completedAt`). `passed` 와 다른 값이다 —
+   * 저건 "담긴 노하우를 전부 아는 사람"이라 다 풀어도 틀리면 안 오른다.
+   * 응시 중/완료를 가르는 것은 **풀었나**이지 맞혔나가 아니다(2026-09-11).
+   */
+  answered: number;
   /** 담긴 노하우를 **전부** 아는 사람 수(업무 통과와 같은 규칙). */
   passed: number;
   /** 목록 한 줄의 부제 — 재고 수가 아니라 **일정**을 말한다. */
@@ -375,6 +381,7 @@ export function useQuizBoard() {
         itemCount: entryIds.reduce((n, id) => n + quizCountOf(id), 0),
         staleCount: entryIds.reduce((n, id) => n + staleCountOf(id), 0),
         recipients: new Set(sends.map((a) => a.userId)).size,
+        answered: new Set(sends.filter((a) => !!a.completedAt).map((a) => a.userId)).size,
         passed: staffWhoUnderstandEntries(understanding, entryIds, { now, dueDays: c.due_days ?? null }).length,
         caption,
       };

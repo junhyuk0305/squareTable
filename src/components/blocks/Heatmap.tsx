@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 
 import { BrandColors, InkColors } from '@/lib/theme/colors';
 import { Elevation, Radius } from '@/lib/theme/elevation';
@@ -72,6 +73,7 @@ export function Heatmap({
   onPressGroup,
   legend = QUIZ_LEGEND,
   hint = '상자 하나 = 노하우 하나 · 길게 누르면 이름이 보여요',
+  maxGroups,
 }: {
   /** 머리줄 — 큰 값("41" + "%") · 제목("직원이 아는 노하우") · 우측 보조("58개"·"이번 주 ↑14칸"). */
   head: { value: string; unit?: string; title: string; aside?: string };
@@ -82,6 +84,8 @@ export function Heatmap({
   legend?: HeatLegend;
   /** 피크 줄의 평소 안내문. */
   hint?: string;
+  /** 이 개수까지만 카테고리를 펴고 나머지는 접는다. 없으면 전부 편다(노하우 탭은 그대로). */
+  maxGroups?: number;
 }) {
   const total = groups.reduce((n, g) => n + g.cells.length, 0);
   const stage = STAGE.find((s) => total <= s.max) ?? STAGE[STAGE.length - 1];
@@ -90,6 +94,15 @@ export function Heatmap({
   const hasStale = groups.some((g) => g.cells.some((c) => c.stale));
   const hasMiss = groups.some((g) => g.cells.some((c) => c.miss && !c.stale));
   const [peek, setPeek] = useState<HeatCell | null>(null);
+  /**
+   * 카테고리가 많으면 히어로 하나가 화면을 다 먹는다(2026-09-11 실측: 카테고리 12개 = 세로 1000px,
+   * 그 아래 '응시 중'·'만들다 만 퀴즈'가 스크롤 밖으로 밀렸다). 상위 몇 개만 펴고 나머지는 접는다.
+   * ★순서는 손대지 않는다 — 어느 카테고리가 급한지는 이 블록이 판정할 일이 아니다(표시 전용).
+   */
+  const [moreOpen, setMoreOpen] = useState(false);
+  const foldable = typeof maxGroups === 'number' && groups.length > maxGroups;
+  const shownGroups = foldable && !moreOpen ? groups.slice(0, maxGroups) : groups;
+  const hiddenGroups = groups.length - shownGroups.length;
 
   return (
     <View style={styles.card}>
@@ -105,7 +118,7 @@ export function Heatmap({
         {peek ? `${peek.title} — ${peek.status}` : hint}
       </Text>
 
-      {groups.map((g) => {
+      {shownGroups.map((g) => {
         const shown = collapse ? g.cells.slice(0, stage.cols) : g.cells;
         const rest = g.cells.length - shown.length;
         return (
@@ -173,6 +186,22 @@ export function Heatmap({
           </View>
         );
       })}
+
+      {/* 카테고리 접기/펴기 — 접힌 개수를 숫자로 말한다("더 보기" 단독이면 뭐가 몇 개인지 모른다). */}
+      {foldable ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityState={{ expanded: moreOpen }}
+          accessibilityLabel={moreOpen ? '카테고리 접기' : `카테고리 ${hiddenGroups}개 더 보기`}
+          onPress={() => setMoreOpen((v) => !v)}
+          style={({ pressed }) => [styles.foldRow, pressed && styles.cellPressed]}
+        >
+          <Text style={styles.foldText}>
+            {moreOpen ? '카테고리 접기' : <><Text style={styles.moreN}>{hiddenGroups}개</Text> 카테고리 더 보기</>}
+          </Text>
+          <Ionicons name={moreOpen ? 'chevron-up' : 'chevron-down'} size={15} color={InkColors.ink3} />
+        </Pressable>
+      ) : null}
 
       {/* 범례 — 색 단독으로 상태를 말하지 않는다(글자 병기). */}
       <View style={styles.legend}>
@@ -242,6 +271,12 @@ const styles = StyleSheet.create({
   more: { minHeight: 48, justifyContent: 'center' },
   moreText: { fontSize: 11, lineHeight: 15, fontWeight: '800', color: InkColors.ink2 },
   moreN: { color: InkColors.ink },
+  // 카테고리 접기 줄 — 격자와 범례 사이를 가르는 자리라 위에 선을 하나 둔다.
+  foldRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Space.xs,
+    minHeight: 48, marginTop: Space.xs, borderTopWidth: 1, borderTopColor: InkColors.line,
+  },
+  foldText: { fontSize: 13, fontWeight: '800', color: InkColors.ink2 },
   legend: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: Space.xs - 1, marginTop: Space.md },
   legendText: { fontSize: 10, lineHeight: 14, color: InkColors.ink3 },
   legendBox: { width: LEGEND_BOX, height: LEGEND_BOX, borderRadius: 3, backgroundColor: InkColors.bg },

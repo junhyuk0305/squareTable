@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { View, Text, TextInput, Pressable, ScrollView, ActivityIndicator, StyleSheet } from 'react-native';
 import { KeyboardShift } from '@/components/KeyboardShift';
@@ -144,6 +144,11 @@ export default function QuizNewScreen() {
   // 2·3단계
   const [courseId, setCourseId] = useState<string | null>(null);
   const [courseKey, setCourseKey] = useState<string | null>(null);
+  /**
+   * `courseId` 의 동기판. 생성 루프가 한 바퀴 도는 동안 state 는 아직 안 바뀌어 있어서,
+   * state 로 "이미 만들었나"를 보면 **코스를 노하우 수만큼 만든다.**
+   */
+  const courseRef = useRef<{ id: string; key: string } | null>(null);
   const [made, setMade] = useState<Made[]>([]);
   const [editing, setEditing] = useState<{ item: QuizItem; entry: PlaybookEntry } | null>(null);
   const [manualFor, setManualFor] = useState<PlaybookEntry | null>(null);
@@ -162,6 +167,8 @@ export default function QuizNewScreen() {
   const [linkUntil, setLinkUntil] = useState<string>(() => addDays(todayKst(), LINK_DEFAULT_DAYS));
   /** 발행이 끝난 뒤 손에 쥐어 주는 링크(외부 경로) — 있으면 완료 화면이다. */
   const [madeToken, setMadeToken] = useState<string | null>(null);
+  /** 완료 화면(외부 6단계)인가 — 단계 예산(TOTAL) 밖이라 진행 표시를 그리지 않는다. */
+  const done = step > TOTAL;
 
   const entryById = useMemo(() => new Map(entries.map((e) => [e.id, e])), [entries]);
 
@@ -169,13 +176,23 @@ export default function QuizNewScreen() {
    * 낼 수 있는 재료 = 발행된 노하우. 초안(draft)은 문항 근거가 못 된다.
    * `?only=uncovered` 면 **아직 문제를 안 낸 것만** 남긴다 — 퀴즈 홈 히어로가 가리킨 그 노하우다.
    */
-  const onlyUncovered = only === 'uncovered';
+  /**
+   * 2026-09-11: 퀴즈 홈의 '아직 안 물어본 노하우로 만들기' 버튼을 없애고 **여기 필터**로 옮겼다.
+   * 같은 화면으로 가는 버튼을 목표별로 나누면 입구가 둘이 된다 — 입구는 하나(+ 버튼)로 두고
+   * 좁히는 일은 목록 안에서 한다. `?only=uncovered` 는 초기값으로만 남는다(옛 링크 호환).
+   */
+  const [onlyUncovered, setOnlyUncovered] = useState(only === 'uncovered');
   const pool = useMemo(
     () => {
       const published = entries.filter((e) => e.status !== 'draft');
       return onlyUncovered ? published.filter((e) => quizCountOf(e.id) === 0) : published;
     },
     [entries, onlyUncovered, quizCountOf],
+  );
+  /** 필터 칩에 붙일 수. 0이면 칩을 안 그린다 — 눌러도 빈 목록이 되는 죽은 컨트롤이다. */
+  const uncoveredCount = useMemo(
+    () => entries.filter((e) => e.status !== 'draft' && quizCountOf(e.id) === 0).length,
+    [entries, quizCountOf],
   );
   /**
    * 칩으로 낼 카테고리 = 이 매장 노하우에 **실제로 있는** 것. 빈 칩은 죽은 컨트롤이다.
@@ -263,18 +280,25 @@ export default function QuizNewScreen() {
     setPartFailed(false);
   };
 
-  // ── 1 → 2 : 퀴즈 만들고 문항 생성 ────────────────────────────────────────
-  const start = async () => {
-    if (busy || picked.length === 0) return;
-    setBusy(true);
-    setErr(null);
-    setQuota(false);
-
+  /**
+   * 퀴즈(코스) 행을 **처음 필요해질 때** 만든다(2026-09-11).
+   *
+   * 예전엔 2단계를 넘기는 순간 만들었다. 그래서 AI가 한 문항도 못 만들었거나 사장이 그냥 나가면
+   * **빈 껍데기가 "만들다 만 퀴즈"로 목록에 남았다** — store_001 실측에서 초안 9건 중 5건이
+   * 문항 0개였다. 이제 행은 *남길 것이 생겼을 때* 생긴다: 문항 1개가 저장됐거나, 사장이 직접 쓰기를
+   * 열 때. 그전에 나가면 아무것도 안 남는다.
+   *
+   * ★여러 번 불러도 한 번만 만든다(`courseRef` 는 state 와 달리 루프 안에서 즉시 보인다).
+   * ★담는 노하우는 **고른 것 전부**다 — 문항이 안 나온 노하우도 코스에 있어야 4단계의 '직접 쓰기'가
+   *   그 자리에서 이어진다(옛 동작 유지).
+   */
+  const ensureCourse = useCallback(async (): Promise<{ id: string; key: string } | null> => {
+    if (courseRef.current) return courseRef.current;
     const id = genId('tc');
     const key = `q_${id}`;
     const first = entryById.get(picked[0]);
-    // ★사장이 1단계에서 적은 이름이 먼저다(2026-09-03 버그): 예전엔 여기서 무조건 "<첫 노하우> 확인"을
-    //   만들어 DB 에 쓰고 `setName` 으로 화면 상태까지 덮어써서, 적어 둔 제목이 2단계로 넘어가는 순간 사라졌다.
+    // ★사장이 1단계에서 적은 이름이 먼저다(2026-09-03 버그): 예전엔 무조건 "<첫 노하우> 확인"을
+    //   만들어 DB 에 쓰고 `setName` 으로 화면 상태까지 덮어써서, 적어 둔 제목이 사라졌다.
     const draftName = name.trim() || (first ? `${first.title} 확인` : '새 퀴즈');
     const ok = await guardWrite(
       upsertTrainingCourse({
@@ -295,16 +319,26 @@ export default function QuizNewScreen() {
       () => {},
       '퀴즈를 만들지 못했어요.',
     );
-    if (!ok) {
-      setBusy(false);
-      return;
-    }
+    if (!ok) return null;
+    const made = { id, key };
+    courseRef.current = made;
     // 파트는 코스 행의 컬럼(0164)이지만 코스 행 타입(@/lib/quiz/types)에는 없는 부가 축이라 따로 쓴다.
     // 실패해도 퀴즈 만들기를 막지 않는다 — 파트는 추천 순서일 뿐이고, db 계층이 실패를 관측에 남긴다.
     if (partId) await setCoursePart(id, partId);
+    for (const eid of picked) await addCourseEntry(id, eid);
     setCourseId(id);
     setCourseKey(key);
     setName(draftName);
+    return made;
+  }, [addCourseEntry, entryById, name, partId, picked, unitId]);
+
+  // ── 2 → 3 : 문항 생성. 코스 행은 여기서 만들지 않는다(ensureCourse 가 늦게 만든다) ──────
+  const start = async () => {
+    if (busy || picked.length === 0) return;
+    setBusy(true);
+    setErr(null);
+    setQuota(false);
+
     // 받는 사람 기본값 = 합류한 직원 전원. 고르는 수고를 기본으로 없앤다.
     setTo(staff.map((s) => s.id));
 
@@ -318,7 +352,7 @@ export default function QuizNewScreen() {
     setMade(rows);
     setStep(3);
     setBusy(false);
-    void runGenerate(id, rows);
+    void runGenerate(rows);
   };
 
   /**
@@ -326,7 +360,7 @@ export default function QuizNewScreen() {
    * 만든 즉시 저장한다 — 중간에 앱이 죽어도 만든 것이 남고, 3단계는 저장된 것을 검토하는 자리다.
    */
   const runGenerate = useCallback(
-    async (cid: string, rows: Made[]) => {
+    async (rows: Made[]) => {
       const out: Made[] = [...rows];
       // 혼동쌍(더 큰 쪽 고르기)의 짝을 찾을 후보 — **이 코스에 담은 노하우**로 한정한다.
       // 매장 전체를 넘기면 코스에 없는 노하우가 문항 근거로 붙는다(generate.ts opts.pool 주석).
@@ -340,7 +374,6 @@ export default function QuizNewScreen() {
           setMade([...out]);
           continue;
         }
-        await addCourseEntry(cid, entry.id);
         let items: QuizItem[] = [];
         try {
           items = await generateQuizItems([entry], undefined, { unitId, createdBy: userId, max: 1, pool });
@@ -371,6 +404,14 @@ export default function QuizNewScreen() {
           status: 'active',
           created_by: d.created_by ?? userId,
         };
+        // ★남길 것이 생긴 이 자리에서 코스를 만든다 — 문항 저장보다 **먼저** 만들어야
+        //   저장된 문항이 코스 없이 떠도는 일이 없다.
+        const course = await ensureCourse();
+        if (!course) {
+          out[i] = { ...out[i], state: 'thin' };
+          setMade([...out]);
+          continue;
+        }
         const saved = await guardWrite(insertQuizItem(item), () => {}, '문제 저장에 실패했어요.');
         out[i] = saved
           ? { ...out[i], item, formatLabel: FORMATS[item.format]?.label ?? '', state: 'ok' }
@@ -379,7 +420,7 @@ export default function QuizNewScreen() {
       }
       setStep(4);
     },
-    [entryById, unitId, userId, addCourseEntry],
+    [entryById, unitId, userId, ensureCourse],
   );
 
   const okItems = made.filter((m) => m.state === 'ok' && m.item);
@@ -422,6 +463,8 @@ export default function QuizNewScreen() {
       if (!alive) return;
       if (!c) { setResumed(true); return; }
       const active = (data ?? []).filter((q) => q.status === 'active');
+      // 이어서 만들기는 코스가 이미 있다 — ensureCourse 가 또 만들지 않도록 같은 값을 실어 둔다.
+      courseRef.current = { id: c.id, key: c.key };
       setCourseId(c.id);
       setCourseKey(c.key);
       setName(c.name);
@@ -519,7 +562,8 @@ export default function QuizNewScreen() {
   };
 
   const saveDraftAndLeave = () => {
-    showToast('초안으로 저장했어요', 'good');
+    // 만들어 둔 것이 없으면 저장했다고 말하지 않는다 — 사장이 목록에서 찾으러 간다.
+    if (courseRef.current) showToast('초안으로 저장했어요', 'good');
     router.replace('/owner/training' as never);
   };
 
@@ -537,7 +581,12 @@ export default function QuizNewScreen() {
 
   return (
     <SafeAreaView style={st.safe} edges={['bottom']}>
-      <Stack.Screen options={{ title: '퀴즈 만들기', headerRight: () => <Text style={st.stepBadge}>{step}/{TOTAL}</Text> }} />
+      <Stack.Screen
+        options={{
+          title: '퀴즈 만들기',
+          headerRight: () => (done ? null : <Text style={st.stepBadge}>{step}/{TOTAL}</Text>),
+        }}
+      />
       <ScreenTitleHeader title="퀴즈 만들기" backFallback />
       <KeyboardShift>
       <ScrollView
@@ -545,7 +594,9 @@ export default function QuizNewScreen() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        <StepProgress step={step} total={TOTAL} title={STEP_TITLES[audience][step - 1]} />
+        {/* ★완료 화면(외부 6단계)은 **단계가 아니라 결과**다 — 진행 표시를 그리면 배지가 `6/5`,
+            막대가 `6 / 5`, 제목은 STEP_TITLES 배열 밖이라 빈칸이 됐다(2026-09-11 실측). */}
+        {!done && <StepProgress step={step} total={TOTAL} title={STEP_TITLES[audience][step - 1]} />}
 
         {/* ── 1/5 기본 설정 — 누가 · 무슨 이름 · 어느 자리. 여기서 정해야 뒤 단계가 갈린다 ── */}
         {step === 1 && (
@@ -656,6 +707,23 @@ export default function QuizNewScreen() {
                     showsHorizontalScrollIndicator={false}
                     contentContainerStyle={st.chipRow}
                   >
+                    {/* ★"안 물어본 것만" — 퀴즈 홈의 버튼이 여기로 내려왔다(2026-09-11).
+                        카테고리 칩과 **같은 줄·같은 모양**이다: 둘 다 목록을 좁히는 일이라 형태가 갈릴 이유가 없다.
+                        0건이면 안 그린다 — 눌러 봐야 빈 목록이 되는 죽은 컨트롤이다. */}
+                    {uncoveredCount > 0 ? (
+                      <Pressable
+                        onPress={() => setOnlyUncovered((v) => !v)}
+                        hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+                        style={[st.catChip, onlyUncovered && st.catChipOn]}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: onlyUncovered }}
+                        accessibilityLabel={`아직 안 물어본 노하우만 보기 ${uncoveredCount}개`}
+                      >
+                        <Text style={[st.catChipText, onlyUncovered && st.catChipTextOn]}>
+                          안 물어본 것만 {uncoveredCount}
+                        </Text>
+                      </Pressable>
+                    ) : null}
                     <Pressable
                       onPress={() => setCat(null)}
                       hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
@@ -814,15 +882,16 @@ export default function QuizNewScreen() {
                 <Text style={st.qAsk}>{String(m.item?.payload?.ask ?? '')}</Text>
                 <Text style={st.qSource} numberOfLines={1}>근거 · {m.title}</Text>
                 <View style={st.qActs}>
-                  <SmallAction label="미리보기" onPress={() => setPreview(m.item)} />
+                  <SmallAction label="미리보기" tone="ink" onPress={() => setPreview(m.item)} />
                   <SmallAction
                     label="고치기"
+                    tone="edit"
                     onPress={() => {
                       const e = entryById.get(m.entryId);
                       if (e && m.item) setEditing({ item: m.item, entry: e });
                     }}
                   />
-                  <SmallAction label="빼기" onPress={() => void dropItem(m)} />
+                  <SmallAction label="빼기" tone="danger" onPress={() => void dropItem(m)} />
                 </View>
               </View>
               </Appear>
@@ -840,7 +909,10 @@ export default function QuizNewScreen() {
                       label="직접 쓰기"
                       onPress={() => {
                         const e = entryById.get(m.entryId);
-                        if (e) setManualFor(e);
+                        if (!e) return;
+                        // 문항이 하나도 안 나온 채로 여기까지 올 수 있다 — 그때는 코스가 아직 없다.
+                        // 직접 쓴 문항을 담을 곳이 필요하므로 시트를 열기 전에 만든다.
+                        void ensureCourse().then((c) => { if (c) setManualFor(e); });
                       }}
                     />
                   </View>
@@ -971,10 +1043,8 @@ export default function QuizNewScreen() {
               </>
             )}
 
-            {/* 사장이 못 정하는 것을 미리 말해 준다 — 안 적으면 "왜 오늘 안 왔지"가 문의가 된다. */}
-            {audience === 'staff' ? (
-              <Text style={st.capNote}>근무일에만 · 하루 1번 · 주 2번까지만 보내요</Text>
-            ) : null}
+            {/* 2026-09-11: "근무일에만 · 하루 1번 · 주 2번까지만 보내요" 줄을 뺐다. 사장이 **할 수 있는
+                일이 없는** 문장이라 읽고 나서 다음 행동이 없었다(빈도 상한은 0139 가 알아서 지킨다). */}
             </View>
           </Appear>
         )}
@@ -1016,8 +1086,10 @@ export default function QuizNewScreen() {
         )}
         {step === 4 && (
           <>
+            {/* 문항이 0개면 남은 것이 없다(2026-09-11: 코스 행을 문항과 같이 만들게 바꿨다) —
+                "초안으로 저장"이라고 말하면 목록에서 찾을 수 없는 것을 저장했다고 말하는 셈이다. */}
             {okItems.length === 0 ? (
-              <Ghost label="나중에 하기 · 초안으로 저장" onPress={saveDraftAndLeave} />
+              <Ghost label={courseId ? '나중에 하기 · 초안으로 저장' : '그만두기'} onPress={saveDraftAndLeave} />
             ) : null}
             <Primary
               label={audience === 'guest' ? '링크 기간 정하기' : '받는 사람 고르기'}
@@ -1166,15 +1238,36 @@ function dayLabel(ymd: string): string {
   return m ? `${Number(m[2])}월 ${Number(m[3])}일` : ymd;
 }
 
-function SmallAction({ label, onPress }: { label: string; onPress: () => void }) {
+/**
+ * 행 액션의 역할색(2026-09-11) — 셋이 전부 같은 회색이라 **되돌리기 어려운 '빼기'가
+ * '미리보기'와 같은 무게로 읽혔다**. 색은 800(글자 전용) 토큰만 쓰고 면은 흰색 그대로 둔다.
+ * 색 단독으로 구분하지 않는다 — 라벨이 이미 있으니 색은 거드는 역할이다(ui.md 시맨틱 색).
+ */
+const SMALL_ACT_TONE = {
+  ink: InkColors.ink,
+  edit: BrandColors.mentionText,
+  danger: BrandColors.badText,
+} as const;
+
+function SmallAction({
+  label,
+  onPress,
+  tone,
+}: {
+  label: string;
+  onPress: () => void;
+  /** 안 주면 지금까지의 무채색 그대로다 — 색을 주기로 한 자리에만 준다. */
+  tone?: keyof typeof SMALL_ACT_TONE;
+}) {
+  const color = tone ? SMALL_ACT_TONE[tone] : null;
   return (
     <Pressable
       onPress={onPress}
-      style={({ pressed }) => [st.smallAct, pressed && { opacity: 0.6 }]}
+      style={({ pressed }) => [st.smallAct, color ? { borderColor: color } : null, pressed && { opacity: 0.6 }]}
       accessibilityRole="button"
       accessibilityLabel={label}
     >
-      <Text style={st.smallActText}>{label}</Text>
+      <Text style={[st.smallActText, color ? { color } : null]}>{label}</Text>
     </Pressable>
   );
 }
@@ -1269,9 +1362,12 @@ const st = StyleSheet.create({
   qFormat: { fontSize: 12, fontWeight: '800', color: BrandColors.mentionText },
   qAsk: { fontSize: 15, fontWeight: '700', color: InkColors.ink, lineHeight: 22 },
   qSource: { fontSize: 13, fontWeight: '600', color: InkColors.ink3 },
-  qActs: { flexDirection: 'row', gap: Space.xs, marginTop: Space.xs },
+  // 근거 줄과 버튼 사이를 띄운다 — 붙어 있으면 버튼이 본문의 일부처럼 읽힌다(2026-09-11).
+  qActs: { flexDirection: 'row', gap: Space.sm, marginTop: Space.md },
+  // ★납작한 직사각형으로(2026-09-11 지시). 44dp 가 하한이다 — 더 낮추면 터치 타깃 규칙(48dp)에서
+  //   너무 멀어지고 `qa:quiz-ui` 의 L3 검사(44dp+)가 빨강이 된다. 대신 좌우를 넓혀 비율을 만든다.
   smallAct: {
-    minHeight: 48, justifyContent: 'center', paddingHorizontal: Space.md,
+    minHeight: 44, justifyContent: 'center', paddingHorizontal: Space.lg,
     borderRadius: Radius.sm, borderWidth: 1, borderColor: InkColors.line, backgroundColor: '#FFFFFF', ...Elevation.e1,
   },
   smallActText: { fontSize: 13, fontWeight: '800', color: InkColors.ink2 },

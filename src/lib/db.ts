@@ -1982,6 +1982,11 @@ export type GuestSubmissionRow = {
    *   되짚는다. 그 노하우가 파트가 다른 코스 여러 개에 담겨 있으면 답이 하나가 아니므로 null 이다.
    */
   partName: string | null;
+  /**
+   * 어느 퀴즈로 푼 것인가(0189). **0189 이전 응시는 null 이다** — 그때는 안 적었고 지금 와서
+   * 노하우로 되짚으면 한 노하우가 여러 코스에 담겼을 때 틀린다. 모르는 것은 모른다고 둔다.
+   */
+  courseId: string | null;
 };
 
 /**
@@ -1994,7 +1999,7 @@ export async function fetchGuestQuizSubmissions(): Promise<GuestSubmissionRow[]>
   if (!HAS_SUPABASE) return [];
   const { data, error } = await supabase
     .from('quiz_attempts')
-    .select('entry_id, guest_name, guest_phone, guest_phone_verified, submission_id, total, correct, taken_at, reviewed_at, cleared_at')
+    .select('entry_id, course_id, guest_name, guest_phone, guest_phone_verified, submission_id, total, correct, taken_at, reviewed_at, cleared_at')
     .not('guest_name', 'is', null)
     .not('submission_id', 'is', null)
     .order('taken_at', { ascending: false })
@@ -2039,6 +2044,8 @@ export async function fetchGuestQuizSubmissions(): Promise<GuestSubmissionRow[]>
         entries: [{ entryId: row.entry_id, total: row.total ?? 0, correct: row.correct ?? 0 }],
         attemptCount: row.guest_phone ? (subsByPhone.get(row.guest_phone)?.size ?? 1) : 1,
         partName: null,   // ④ 에서 채운다(못 좁히면 null 그대로).
+        // 한 제출의 행들은 같은 링크에서 나왔으므로 코스도 같다 — 첫 행의 값이 곧 그 제출의 값이다.
+        courseId: row.course_id ?? null,
       });
     }
   }
@@ -2343,6 +2350,18 @@ export async function revokeQuizLink(id: string): Promise<boolean> {
   return writeStrict(
     'revokeQuizLink',
     supabase.from('quiz_links').update({ revoked_at: new Date().toISOString() }).eq('id', id).select('id'),
+  );
+}
+/**
+ * 열어 둔 기간 바꾸기(2026-09-11) — 같은 사람에게 며칠 더 주려고 **링크를 지우고 새로 만들면
+ * 이미 보낸 주소가 죽는다.** 토큰은 그대로 두고 만료만 민다. 정책은 revoke 와 같은 UPDATE 라
+ * RLS 변경이 없다.
+ */
+export async function updateQuizLinkExpiry(id: string, expiresAt: string): Promise<boolean> {
+  if (!HAS_SUPABASE) return true;
+  return writeStrict(
+    'updateQuizLinkExpiry',
+    supabase.from('quiz_links').update({ expires_at: expiresAt }).eq('id', id).select('id'),
   );
 }
 

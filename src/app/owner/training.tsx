@@ -18,6 +18,7 @@ import { EmptyState } from '@/components/EmptyState';
 import { BottomSheet } from '@/components/BottomSheet';
 import { Collapse } from '@/components/Collapse';
 import { SectionLabel } from '@/components/SectionLabel';
+import { SegmentTabs } from '@/components/SegmentTabs';
 import { AlertRow } from '@/components/blocks/AlertRow';
 import { Heatmap } from '@/components/blocks/Heatmap';
 import { PickRow } from '@/components/blocks/PickRow';
@@ -87,6 +88,15 @@ export default function OwnerTrainingScreen() {
     const rank = (r: QuizListRow) => (r.staleCount > 0 ? 2 : r.recipients > r.passed ? 1 : 0);
     return [...quizzes].filter((r) => r.status !== 'draft').sort((a, b) => rank(b) - rank(a));
   }, [quizzes]);
+  /**
+   * 응시 중 / 응시 완료 (2026-09-11) — 가르는 기준은 **전원이 풀었나**(`answered`)이지
+   * 맞혔나(`passed`)가 아니다. 다 풀었는데 틀린 퀴즈는 '완료'이고, 고칠 거리는 경고행이 따로 말한다.
+   * ★링크(외부)만 나간 퀴즈는 받는 사람 원장이 없어 `recipients` 가 0이다 — 완료로 치지 않는다.
+   *   링크는 열려 있는 동안 계속 응시 중이고, 그 결과는 퀴즈 상세의 '배포' 자리에서 본다.
+   */
+  const running = useMemo(() => live.filter((r) => r.recipients === 0 || r.answered < r.recipients), [live]);
+  const finished = useMemo(() => live.filter((r) => r.recipients > 0 && r.answered >= r.recipients), [live]);
+  const [tab, setTab] = useState<'running' | 'done'>('running');
   const drafts = useMemo(() => quizzes.filter((r) => r.status === 'draft'), [quizzes]);
 
   /**
@@ -121,12 +131,6 @@ export default function OwnerTrainingScreen() {
 
   // 퀴즈 화면 사용 안내.
   useGuideOnce('owner_quiz_v1', ready);
-
-  /**
-   * 히어로가 말하는 값 — 적어 둔 노하우 중 **문제를 낸 것**이 몇 개인가.
-   * 나머지(uncovered)가 곧 "아직 안 물어본 노하우"이고 Primary 가 데려갈 곳이다.
-   */
-  const uncovered = Math.max(0, stats.publishedEntries - stats.covered);
 
   /**
    * 보관을 되돌린다 — active 를 다시 켜는 것이 전부다(퀴즈 내용은 그대로 남아 있었다).
@@ -183,8 +187,8 @@ export default function OwnerTrainingScreen() {
   const goMake = () => router.push('/owner/quiz-new' as never);
   /** A1 에서 고른 노하우로 — 만들기 2단계(고르기)를 고른 상태로 건너뛴다. */
   const goMakePicked = () => router.push(`/owner/quiz-new?entries=${picked.join(',')}` as never);
-  /** 아직 문제를 안 낸 노하우만 놓고 고르게 한다 — 히어로가 가리킨 그 노하우들이다. */
-  const goMakeUncovered = () => router.push('/owner/quiz-new?only=uncovered' as never);
+  // 2026-09-11: goMakeUncovered 는 없앴다 — "안 물어본 것만"은 만들기 2단계의 필터가 됐다.
+  // `?only=uncovered` 자체는 quiz-new 가 초기값으로 계속 받는다(옛 링크·푸시 호환).
   const goDetail = (id: string) => router.push(`/owner/quiz/${id}` as never);
   /** 만들다 만 퀴즈를 **만들기 화면 4단계(문항 검토)**로 이어받는다 — 상세에는 보내는 길이 없다. */
   const goResume = (id: string) => router.push(`/owner/quiz-new?course=${id}` as never);
@@ -292,6 +296,9 @@ export default function OwnerTrainingScreen() {
                     aside: heatHead.weekUp > 0 ? `이번 주 ↑${heatHead.weekUp}칸` : `${stats.publishedEntries}개`,
                   }}
                   groups={heatGroups}
+                  // 히어로가 화면을 다 먹지 않게 카테고리 4개까지만 편다(2026-09-11) — 나머지는
+                  // '더 보기'로 접어 '응시 중'·'만들다 만 퀴즈'가 첫 화면 안으로 올라오게 한다.
+                  maxGroups={4}
                   onPressCell={(id) => router.push(`/owner/edit/${id}` as never)}
                 />
               ) : (
@@ -305,19 +312,15 @@ export default function OwnerTrainingScreen() {
               )}
             </Appear>
 
-            {/* Primary 는 화면당 1개다 — 여기 하나뿐이고 아래 목록 행에는 두지 않는다. */}
+            {/* 2026-09-11: '아직 안 물어본 노하우로 만들기' Primary 와 '직접 고르기' 를 뺐다.
+                만들기로 가는 길은 **우하단 + 버튼** 하나다(노하우 탭과 같은 자리·같은 모양) —
+                "안 물어본 것만"은 만들기 2단계의 **필터**가 됐다. 목표를 버튼 이름으로 나누면
+                같은 화면으로 가는 버튼이 둘이 된다.
+                ★노하우가 0개일 때만은 예외다 — 만들 재료가 없으니 갈 곳이 퀴즈가 아니라 노하우다. */}
             <Appear delay={stagger(1)}>
               <View style={st.actions}>
                 {stats.publishedEntries === 0 ? (
                   <PrimaryButton label="노하우 추가하기" onPress={() => router.push('/owner/coach' as never)} />
-                ) : (
-                  <PrimaryButton
-                    label={uncovered > 0 ? '아직 안 물어본 노하우로 만들기' : '퀴즈 만들기'}
-                    onPress={uncovered > 0 ? goMakeUncovered : goMake}
-                  />
-                )}
-                {uncovered > 0 ? (
-                  <GhostButton icon="list-outline" label="직접 고르기" onPress={goMake} />
                 ) : null}
 
                 {/* 만들다 만 퀴즈 — 있을 때만 여기서 눈에 띈다(0건이면 줄째로 안 그린다).
@@ -382,25 +385,67 @@ export default function OwnerTrainingScreen() {
             {(live.length > 0 || guests.length > 0) && (
               <Appear delay={stagger(2)}>
                 <View style={st.group}>
-                  <SectionLabel
-                    title="응시 중"
-                    hint={[live.length > 0 ? `직원 ${live.length}건` : '', guests.length > 0 ? `합류 전 ${guests.length}명` : ''].filter(Boolean).join(' · ')}
+                  {/* 2026-09-11: 끝난 퀴즈를 볼 자리가 없어서 응시 중과 한 줄에 섞여 있었다.
+                      좌우 두 칸으로 가른다 — 기준은 **전원이 풀었나**(useQuizBoard.answered). */}
+                  <SegmentTabs
+                    style={{ margin: 0 }}
+                    items={[
+                      { key: 'running', label: '응시 중', count: running.length + (guests.length > 0 ? 1 : 0) },
+                      { key: 'done', label: '응시 완료', count: finished.length },
+                    ]}
+                    value={tab}
+                    onChange={(k) => setTab(k as 'running' | 'done')}
                   />
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={st.hscroll} contentContainerStyle={st.hscrollInner}>
-                    {live.map((q) => (
-                      <StatCard key={q.course.id} style={st.hcard} item={liveCardOf(q, linkStateOf(q.course.id), () => goDetail(q.course.id))} />
-                    ))}
-                    {guests.length > 0 ? (
-                      <StatCard style={[st.hcard, st.hcardGuest]} item={guestCardOf(guests, () => setGuestOpen(true))} />
-                    ) : null}
-                  </ScrollView>
-                  <Text style={st.footNote}>막대 1개 = 사람 1명 · 검정 = 통과</Text>
+                  <Appear key={tab}>
+                  {tab === 'running' ? (
+                    running.length === 0 && guests.length === 0 ? (
+                      <Text style={st.tabEmpty}>지금 나가 있는 퀴즈가 없어요.</Text>
+                    ) : (
+                      <>
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={st.hscroll} contentContainerStyle={st.hscrollInner}>
+                          {running.map((q) => (
+                            <StatCard key={q.course.id} style={st.hcard} item={liveCardOf(q, linkStateOf(q.course.id), () => goDetail(q.course.id))} />
+                          ))}
+                          {guests.length > 0 ? (
+                            <StatCard style={[st.hcard, st.hcardGuest]} item={guestCardOf(guests, () => setGuestOpen(true))} />
+                          ) : null}
+                        </ScrollView>
+                        <Text style={st.footNote}>막대 1개 = 사람 1명 · 검정 = 통과</Text>
+                      </>
+                    )
+                  ) : finished.length === 0 ? (
+                    <Text style={st.tabEmpty}>아직 전원이 푼 퀴즈가 없어요.</Text>
+                  ) : (
+                    <>
+                      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={st.hscroll} contentContainerStyle={st.hscrollInner}>
+                        {finished.map((q) => (
+                          <StatCard key={q.course.id} style={st.hcard} item={liveCardOf(q, linkStateOf(q.course.id), () => goDetail(q.course.id))} />
+                        ))}
+                      </ScrollView>
+                      <Text style={st.footNote}>받은 사람이 전부 풀었어요 · 검정 = 통과</Text>
+                    </>
+                  )}
+                  </Appear>
                 </View>
               </Appear>
             )}
           </>
         )}
       </ScrollView>
+
+      {/* 만들기 + 버튼 — 노하우 탭(OwnerKnowhowBrowse)과 **같은 자리·같은 모양**이다(2026-09-11).
+          ★ScrollView '밖'(형제)이라 스크롤과 같이 움직이지 않는다. 부모가 프레임 안이라 460px 을 안 넘는다.
+          재료(노하우)가 0이면 안 그린다 — 눌러도 만들 것이 없고, 그 자리는 '노하우 추가하기'가 맡는다. */}
+      {ready && stats.publishedEntries > 0 ? (
+        <Pressable
+          onPress={goMake}
+          accessibilityRole="button"
+          accessibilityLabel="퀴즈 만들기"
+          style={({ pressed }) => [st.fab, pressed && { opacity: 0.85 }]}
+        >
+          <Ionicons name="add" size={28} color={InkColors.ink} />
+        </Pressable>
+      ) : null}
 
       {/* 고쳐야 할 퀴즈 — 새 화면을 만들지 않는다(IA 증식 금지). 갈래가 둘이라 **한 시트 안에서** 나눈다:
           ① 옛 정답이 나가는 퀴즈 → 문항을 다시 만든다  ② 다들 틀리는 노하우 → 글을 고친다.
@@ -564,7 +609,10 @@ function liveCardOf(q: QuizListRow, link: 'open' | 'closed' | null, onPress: () 
     label: q.course.name,
     value: q.passed,
     unit: `/${q.recipients}명`,
-    sub: q.staleCount > 0 ? `문항 ${q.staleCount}개 낡음${linkTag}` : left > 0 ? `${left}명이 아직${linkTag}` : `전원 통과${linkTag}`,
+    // ★"n명이 아직"은 **아직 뭐요?** 가 되물어진다(워딩 §5). 탭을 가른 뒤로는 틀리기까지 했다 —
+    //   응시 완료 탭의 카드가 "1명이 아직"이라고 말하는데 그 사람은 **풀었고 통과만 못 했다**.
+    //   카드가 세는 값이 통과이므로 문구도 통과로 말한다(2026-09-11).
+    sub: q.staleCount > 0 ? `문항 ${q.staleCount}개 낡음${linkTag}` : left > 0 ? `${left}명 통과 전${linkTag}` : `전원 통과${linkTag}`,
     onPress,
     visual: (
       <Sparkline
@@ -795,6 +843,15 @@ const st = StyleSheet.create({
   sheetScroll: { maxHeight: 420, paddingHorizontal: Space.lg, paddingBottom: Space.gutter },
 
   footNote: { fontSize: 13, fontWeight: '600', color: InkColors.ink3, textAlign: 'center' },
+  tabEmpty: { fontSize: 15, fontWeight: '600', color: InkColors.ink3, textAlign: 'center', paddingVertical: Space.lg, lineHeight: 21 },
+  // 노하우 탭의 + 버튼과 같은 값이다(OwnerKnowhowBrowse.fab) — 자리가 같으면 모양도 같아야 한다.
+  fab: {
+    position: 'absolute', right: Space.gutter, bottom: Space.gutter,
+    width: 56, height: 56, borderRadius: Radius.pill,
+    alignItems: 'center', justifyContent: 'center',
+    backgroundColor: BrandColors.yellow, borderWidth: 1, borderColor: BrandColors.yellowDeep,
+    ...Elevation.ey,
+  },
   missIntro: { fontSize: 15, lineHeight: 22, color: InkColors.ink2, marginBottom: Space.md },
 
   // 행 안의 액션 — 48dp 는 상자 크기로 지킨다(hitSlop 은 RN-web 에서 안 먹는다).

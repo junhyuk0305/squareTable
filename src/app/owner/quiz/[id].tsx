@@ -24,14 +24,14 @@ import { ProgressRing } from '@/components/blocks/ProgressRing';
 import { ProgressPill } from '@/components/blocks/ProgressPill';
 import { QuizEditorSheet } from '@/components/owner/quiz/QuizEditorSheet';
 import { QuizPreviewSheet } from '@/components/owner/quiz/QuizPreviewSheet';
-import { QuizLinkSheet } from '@/components/owner/quiz/QuizLinkSheet';
+import { QuizDeployPanel } from '@/components/owner/quiz/QuizDeployPanel';
 import { SheetHead, GhostButton } from '@/components/owner/quiz/kit';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
-import { Space, HEADER_EDGE_GUTTER } from '@/lib/theme/layout';
+import { Space } from '@/lib/theme/layout';
 import type { QuizItem } from '@/lib/quiz/types';
 
-type Seg = 'people' | 'items';
+type Seg = 'people' | 'items' | 'deploy';
 
 /** 사장이 직접 정한 고정 주기의 선택지 — 만들기(B5)와 같은 값이어야 화면끼리 어긋나지 않는다. */
 const CYCLES: { label: string; days: number | null }[] = [
@@ -72,7 +72,6 @@ export default function QuizDetailScreen() {
   const [moreOpen, setMoreOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [attachOpen, setAttachOpen] = useState(false);
-  const [linkOpen, setLinkOpen] = useState(false);
   const [preview, setPreview] = useState<QuizItem | null>(null);
   const [remaking, setRemaking] = useState<{ item: QuizItem; entryId: string; title: string } | null>(null);
   const [busy, setBusy] = useState(false);
@@ -159,6 +158,9 @@ export default function QuizDetailScreen() {
   const segItems: SegmentItem[] = [
     { key: 'people', label: '결과', count: people.length },
     { key: 'items', label: '문항', count: items.length },
+    // 한 퀴즈 = 배포 여러 번(2026-09-11). 링크가 더보기 메뉴 속에 있던 동안 사장은 "또 배포"를
+    // 퀴즈 복제로 이해했다 — 자리를 세그먼트로 올려 같은 퀴즈를 다시 내보내는 길을 보이게 한다.
+    { key: 'deploy', label: '배포' },
   ];
 
   const openMore = () => {
@@ -292,23 +294,24 @@ export default function QuizDetailScreen() {
 
   return (
     <SafeAreaView style={st.safe} edges={['bottom']}>
-      <Stack.Screen
-        options={{
-          title: course.name,
-          headerRight: () => (
-            <Pressable
-              onPress={openMore}
-              hitSlop={10}
-              style={({ pressed }) => [st.headerAction, pressed && { opacity: 0.6 }]}
-              accessibilityRole="button"
-              accessibilityLabel="더보기"
-            >
-              <Ionicons name="ellipsis-horizontal" size={20} color={InkColors.ink} />
-            </Pressable>
-          ),
-        }}
+      <Stack.Screen options={{ title: course.name }} />
+      {/* ★더보기는 **여기** 있어야 한다(2026-09-11). 그전에는 `Stack.Screen` 의 headerRight 에 달아
+          뒀는데, 사장 스택은 `owner/_layout.tsx` 에서 `headerShown:false` 라 **한 번도 그려지지 않았다** —
+          이름·설정 고치기 / 붙이기 / 링크 / 복제 / 보관이 통째로 닿을 수 없는 기능이었다. */}
+      <ScreenTitleHeader
+        title={course.name}
+        backFallback
+        right={
+          <Pressable
+            onPress={openMore}
+            style={({ pressed }) => [st.headerAction, pressed && { opacity: 0.6 }]}
+            accessibilityRole="button"
+            accessibilityLabel="퀴즈 설정"
+          >
+            <Ionicons name="ellipsis-horizontal" size={20} color={InkColors.ink} />
+          </Pressable>
+        }
       />
-      <ScreenTitleHeader title={course.name} backFallback />
       <KeyboardShift>
       <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={st.scroll} showsVerticalScrollIndicator={false}>
         {/* D4 — 낡은 문항. 옛 정답이 그대로 나가는 상태라 결과보다 먼저 말한다. */}
@@ -363,6 +366,11 @@ export default function QuizDetailScreen() {
               )}
             </>
           )
+        ) : seg === 'deploy' ? (
+          <QuizDeployPanel
+            course={course}
+            onOpenResult={(sub) => router.push(`/owner/quiz/guest/${sub}` as never)}
+          />
         ) : items.length === 0 ? (
           <EmptyState
             title="아직 문항이 없어요"
@@ -475,7 +483,7 @@ export default function QuizDetailScreen() {
             <SheetOption label="이름·설정 고치기" onPress={() => { setMoreOpen(false); setEditOpen(true); }} />
             <SheetOption label="문항 다시 보기" onPress={() => { setMoreOpen(false); setSeg('items'); }} />
             <SheetOption label="이 업무에 붙이기" badge="선택" onPress={() => { setMoreOpen(false); setAttachOpen(true); }} />
-            <SheetOption label="링크 만들기" onPress={() => { setMoreOpen(false); setLinkOpen(true); }} />
+            <SheetOption label="링크 만들기" onPress={() => { setMoreOpen(false); setSeg('deploy'); }} />
             <SheetOption label="이걸로 다시 만들기" onPress={() => { setMoreOpen(false); void duplicate(); }} />
             <SheetOption label="보관하기" danger onPress={() => { setMoreOpen(false); void archive(); }} />
           </View>
@@ -576,7 +584,6 @@ export default function QuizDetailScreen() {
       {/* ── D8 보관 — 확인 시트가 없다. 되돌릴 수 있는 동작이라 실행 + 실행취소 토스트다(워딩 §4).
              퀴즈 홈 상단바의 보관함에서도 되돌릴 수 있다. ── */}
 
-      {linkOpen && <QuizLinkSheet course={course} onClose={() => setLinkOpen(false)} />}
       {preview && <QuizPreviewSheet quiz={preview} onClose={() => setPreview(null)} />}
       {remaking && (
         <QuizEditorSheet
@@ -645,9 +652,10 @@ const st = StyleSheet.create({
   scroll: { padding: Space.gutter, paddingBottom: Space.xl * 2, gap: Space.md },
   // ★hitSlop 은 RN-web 에서 안 먹는다 — 실측 높이가 곧 누를 수 있는 크기다(2026-08-26 실측 29·31dp).
   //   48dp 하한(복잡도 §4)은 상자 크기로 지켜야 한다.
+  // ScreenTitleHeader 의 바가 이미 좌우 거터를 갖는다 — 여기서 또 주면 거터가 두 겹이 된다.
   headerAction: {
-    minHeight: 48, justifyContent: 'center',
-    paddingLeft: Space.sm, paddingRight: HEADER_EDGE_GUTTER,
+    minWidth: 48, minHeight: 48, alignItems: 'flex-end', justifyContent: 'center',
+    paddingLeft: Space.sm, marginRight: -4,
   },
   bold: { fontWeight: '800', color: InkColors.ink },
 
