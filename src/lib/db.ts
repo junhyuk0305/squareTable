@@ -428,6 +428,17 @@ export async function fetchBillingFreeMode(): Promise<DbResult<boolean>> {
   return { data: (data as boolean) ?? false, error: error as DbErr };
 }
 
+// ── 인앱결제 판매 스위치(0187 app_config.iap_enabled) — **롤백 경로** ──────────────
+// 네이티브는 OTA 가 없다(expo-updates 미사용). 빌드 상수(SHOW_IAP)로만 막으면 문제가 생겼을 때
+// 되돌리는 데 새 빌드 + 스토어 심사가 필요하다(며칠). 그래서 판매 여부는 **서버 행 하나**로 뒤집는다.
+// ★fail-closed: 못 읽으면 false(안 판다). billing_free_mode 는 반대로 fail-open(무료) 인데,
+//   그쪽은 "못 읽으면 안 잠근다"가 안전한 방향이고 이쪽은 "못 읽으면 안 판다"가 안전한 방향이다.
+export async function fetchIapEnabled(): Promise<DbResult<boolean>> {
+  if (!HAS_SUPABASE) return { data: false, error: null };
+  const { data, error } = await supabase.rpc('iap_enabled');
+  return { data: (data as boolean) ?? false, error: error as DbErr };
+}
+
 // ── 체험 종료 → 다운그레이드 선택(0142) ──────────────────────────────────────
 // 판정은 전부 서버가 갖는다(unit_access_locked / needs_downgrade_choice). 화면은 결과만 그린다 —
 // "무료 매장이 몇 개고 몇 명이 넘치는가"를 클라가 다시 세면 서버와 갈라진다.

@@ -1,0 +1,38 @@
+// 인앱결제(IAP) 상품 SSOT — 스토어 콘솔에 등록한 상품/요금제 id 와 그 의미(플랜·매장 수).
+// 설계 정본 = `출시서류_안드로이드/15_인앱결제_티어사다리_설계_2026-09-06.md`
+//
+// ★여기가 콘솔과 어긋나면 구매는 되는데 매장이 안 열린다. 웹훅이 상품 id 에서 매장 수를 파싱하므로
+//   **명명 규칙을 바꾸면 서버(supabase/functions/iap-webhook)도 같이 바꿔야 한다.**
+//   서버는 이 파일을 import 할 수 없으므로(Deno) 같은 규칙이 그쪽에 한 번 더 있다 — 둘은 한 쌍이다.
+//
+// ⛔ 가격을 여기 적지 않는다. 앱 가격(29,000/매장당 39,000)은 웹 가격(tiers.ts)과 다르고,
+//    두 숫자를 한 파일에 섞으면 반드시 갈라진다. 화면은 스토어가 내려주는 priceString 을 그대로 쓴다.
+
+/** 스토어 구독 id. Play 는 구독 1개 안에 요금제 여러 개, App Store 는 구독 그룹 안에 상품 여러 개. */
+export const IAP_SUBSCRIPTIONS = { single: 'st_single', multi: 'st_multi' } as const;
+
+/** 매장 수 → 요금제(기본 요금제/상품) id. 사다리 상한 5(설계 §7 E). */
+export const IAP_PLANS: { storeCount: number; planId: 'single' | 'multi'; productId: string }[] = [
+  { storeCount: 1, planId: 'single', productId: 'single_monthly' },
+  { storeCount: 2, planId: 'multi', productId: 'multi_2_monthly' },
+  { storeCount: 3, planId: 'multi', productId: 'multi_3_monthly' },
+  { storeCount: 4, planId: 'multi', productId: 'multi_4_monthly' },
+  { storeCount: 5, planId: 'multi', productId: 'multi_5_monthly' },
+];
+
+export const IAP_MAX_STORES = 5;
+
+/** RevenueCat entitlement id — 5개 요금제가 전부 이 하나를 켠다. */
+export const IAP_ENTITLEMENT = 'store_access';
+
+/**
+ * 스토어 상품 id → 플랜·매장 수. 파싱 실패는 null(서버·화면 둘 다 "모르면 안 연다").
+ *
+ * Play 는 `구독id:요금제id`(st_multi:multi_3_monthly) 형태로 내려주고 App Store 는 요금제 id 만 준다
+ * — 콜론 뒤만 본다.
+ */
+export function parseIapProduct(raw: string): { planId: 'single' | 'multi'; storeCount: number } | null {
+  const id = (raw ?? '').trim().split(':').pop() ?? '';
+  const hit = IAP_PLANS.find((p) => p.productId === id);
+  return hit ? { planId: hit.planId, storeCount: hit.storeCount } : null;
+}
