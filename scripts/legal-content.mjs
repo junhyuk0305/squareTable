@@ -894,8 +894,8 @@ const FAQ = `
 <h3>탈퇴하면 데이터는 어떻게 되나요?</h3>
 <p>계정을 삭제하면 유예 기간을 거쳐 <a href="${SITE_URL}/privacy">개인정보 처리방침</a>에 따라 파기돼요. 유예 기간 안에 다시 로그인하면 복구할 수 있어요.</p>
 
-<h2>요금·결제</h2>
-<p>요금제와 결제 방법은 <a href="${SITE_URL}/pricing">요금제 안내</a>에서 최신 내용을 확인해 주세요. 여기 없는 질문은 <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a>으로 보내주시면 답해드려요.</p>
+<h2>더 궁금한 점이 있다면</h2>
+<p>여기 없는 질문은 <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a>으로 보내주시면 답해드려요.</p>
 `;
 
 export const LEGAL_PAGES = [
