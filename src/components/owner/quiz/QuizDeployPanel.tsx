@@ -320,7 +320,9 @@ const st = StyleSheet.create({
     borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.lg,
     backgroundColor: '#FFFFFF', paddingHorizontal: Space.lg, ...Elevation.e1,
   },
-  row: { paddingVertical: Space.sm, gap: Space.xs },
+  // 주소 줄과 버튼은 서로 다른 일이라 사이를 벌리고(gap), 버튼 아래는 행 경계라 좁힌다(2026-09-13).
+  // 버튼 자체의 48dp 는 st.act 의 minHeight 가 지킨다 — 행 패딩으로 키우지 않는다.
+  row: { paddingTop: Space.sm, paddingBottom: Space.xs, gap: Space.md },
   rowTop: { borderTopWidth: 1, borderTopColor: InkColors.line },
   rowHead: { gap: 1 },
   url: { fontSize: 15, fontWeight: '700', color: InkColors.ink },

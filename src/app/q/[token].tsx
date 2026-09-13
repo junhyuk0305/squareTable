@@ -16,7 +16,7 @@
  * (한 번 쓰고 마는 사람에게 배울 것을 주지 않는다).
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, ActivityIndicator, StyleSheet } from 'react-native';
 import { KeyboardShift } from '@/components/KeyboardShift';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -25,6 +25,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { Appear, stagger } from '@/components/Appear';
 import { ScreenLoading } from '@/components/ScreenLoading';
+import { StepProgress } from '@/components/blocks/StepProgress';
 import { QUIZ_RENDERERS } from '@/components/work/quiz';
 import { openQuizLink, fetchQuizLinkItems, gradeQuizLink, submitQuizLink, type QuizLinkInfo } from '@/lib/db';
 import { usePhoneOtp } from '@/lib/otp';
@@ -33,7 +34,7 @@ import { formatPhone, isValidPhone, normalizePhone } from '@/lib/utils/validatio
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
-import type { QuizGrade, QuizItem, QuizResponse } from '@/lib/quiz/types';
+import type { QuizItem, QuizResponse } from '@/lib/quiz/types';
 
 /** 응시자가 낸 답 한 건 — 서버가 이걸로 다시 채점한다(클라는 점수를 계산하지 않는다). */
 type GivenAnswer = { itemId: string; response: QuizResponse };
@@ -95,9 +96,14 @@ export default function QuizLinkScreen() {
   }, [canStart, tk]);
 
   const finish = useCallback(
-    async (result: boolean[], answers: GivenAnswer[]) => {
-      setMarks(result);
+    async (answers: GivenAnswer[]) => {
       setPhase('saving');
+      // 점수는 **다 낸 뒤에** 한 번에 받는다(2026-09-13) — 풀이 중에 문항마다 채점하면 답을 고치러
+      // 앞으로 돌아갈 수 없고, 시험이 아니라 정답 맞히기 연습이 된다.
+      // ★채점이 안 된 문항은 세지 않는다 — 못 잰 것을 오답으로 치면 화면이 거짓말을 한다.
+      //   기록 자체는 아래 submitQuizLink 가 낸 답 원문을 보내 서버가 다시 채점한다.
+      const graded = await Promise.all(answers.map((a) => gradeQuizLink(tk, a.itemId, a.response)));
+      setMarks(graded.filter((g) => !!g.data).map((g) => !!g.data?.correct));
       // 노하우별 집계는 **서버가** 한다(0160) — 여기서는 낸 답을 그대로 넘긴다.
       // ★기다렸다가 결과를 말한다. fire-and-forget 으로 두면 저장이 실패해도 손님에게
       //   "사장님께 전달됐어요"라고 말하게 된다 — 손님은 다시 풀 방법이 없고 사장은 영원히 모른다.
@@ -177,8 +183,6 @@ export default function QuizLinkScreen() {
               onSubmitEditing={() => void start()}
               accessibilityLabel="전화번호 입력"
             />
-            {/* 전화번호를 왜 받는지 말한다 — 안 말하면 "가입 없다면서 번호는 왜"가 된다. 선택이라는 것도 같이. */}
-            <Text style={st.hint}>번호는 안 적어도 돼요. 적어 두면 나중에 같은 곳에서 일하게 될 때 이 결과가 이어져요.</Text>
             </Appear>
 
             {/* 인증은 선택이다(기획 §6-B-8). 안 해도 시작 버튼은 열려 있다. */}
@@ -226,9 +230,10 @@ export default function QuizLinkScreen() {
           <View style={st.foot}>
             <Appear delay={stagger(2)}>
             {/* 로그인이 없으니 가입 때의 동의가 여기엔 없다 — 시작 버튼이 곧 동의다(별도 체크박스 없음, 시장 표준).
-                수집 목적·항목·보관은 처리방침 "퀴즈 링크 참여자" 항목이 정본이다. */}
+                ★말하는 것은 **수집 항목**뿐이다 — 목적·보관기간까지 여기 적으면 시작 버튼 위가 약관이 된다.
+                  정본은 처리방침 "퀴즈 링크 참여자" 항목이고 바로 아래 링크가 거기로 간다. */}
             <Text style={st.consent}>
-              시작하면 적은 이름과 전화번호가 이 매장의 퀴즈 기록으로 보관되는 데 동의하는 거예요.
+              시작하면 이름 · 전화번호(선택) 수집에 동의하는 거예요.
             </Text>
             <Pressable onPress={() => router.push('/privacy')} accessibilityRole="link" hitSlop={8} style={st.consentLinkHit}>
               <Text style={st.consentLink}>개인정보처리방침 보기</Text>
@@ -247,7 +252,7 @@ export default function QuizLinkScreen() {
         </KeyboardShift>
       )}
 
-      {phase === 'quiz' &&<LinkQuizBody token={tk} items={items} onFinish={finish} />}
+      {phase === 'quiz' && info && <LinkQuizBody info={info} items={items} onFinish={finish} />}
 
       {phase === 'done' && (
         <>
@@ -259,7 +264,10 @@ export default function QuizLinkScreen() {
                 size={26}
                 color={saved ? BrandColors.good : BrandColors.warn}
               />
-              <Text style={st.doneText}>{items.length}문제 중 {marks.filter(Boolean).length}개 맞았어요</Text>
+              {/* 채점된 문항만 분모다 — 안 푼 문항·채점이 안 된 문항을 섞으면 점수가 사실과 달라진다. */}
+              {marks.length > 0 ? (
+                <Text style={st.doneText}>{marks.length}문제 중 {marks.filter(Boolean).length}개 맞았어요</Text>
+              ) : null}
               {/* 저장이 실패했으면 "전달됐어요"라고 말하지 않는다 — 손님은 다시 풀 방법이 없고
                   사장은 영원히 모른다. 무엇이 됐고 무엇이 안 됐는지 그대로 말한다. */}
               <Text style={st.centerText}>
@@ -295,112 +303,120 @@ export default function QuizLinkScreen() {
 }
 
 /**
- * 풀이 본체 — 한 번에 한 문항, 답을 내면 서버가 즉시 채점한다(설계 07-29 §04 규칙 4).
- * 채점이 실패하면 오답으로 치지 않는다 — 답을 들고 있다가 다시 보낸다(규칙 6: 막지 않는다).
- * 로그인 응시(UnderstandingCheckSheet)와 같은 규칙이지만 호출하는 RPC 만 토큰판이다.
+ * 풀이 본체 — 한 번에 한 문항이되 **답은 다 낸 뒤에 한꺼번에** 낸다(2026-09-13 사용자 결정).
+ *
+ * 옛 판은 답을 낼 때마다 서버가 즉시 채점하고 정답·해설을 그 자리에서 폈다(설계 07-29 §04 규칙 4).
+ * 그러면 앞 문항으로 돌아갈 수 없고 — 이미 정답을 봤으니 돌아가는 것이 의미가 없다 — 시험이 아니라
+ * 한 문제씩 답을 확인하는 연습이 된다. 여기서는 낸 답을 들고만 있다가 마지막에 제출한다.
+ *
+ * ★문항을 **전부 마운트해 두고 현재 것만 보인다.** 렌더러 17종은 고른 값을 각자 안에 들고 있어서
+ *   (QuizRendererProps 에 초기값이 없다) 언마운트하면 앞으로 돌아갔을 때 고른 답이 사라진다.
+ * ★그 대가로 문항 넘김 애니메이션이 없다 — 마운트가 한 번뿐이라 Appear 가 문항마다 재생되지 않는다.
+ *   넘김 전용 애니메이션을 새로 만들지 않는다(프리미티브 2개 규칙). 움직이는 것은 진행 막대다.
  */
 function LinkQuizBody({
-  token,
+  info,
   items,
   onFinish,
 }: {
-  token: string;
+  info: QuizLinkInfo;
   items: QuizItem[];
-  onFinish: (marks: boolean[], answers: GivenAnswer[]) => void | Promise<void>;
+  onFinish: (answers: GivenAnswer[]) => void | Promise<void>;
 }) {
   const [at, setAt] = useState(0);
-  const [pending, setPending] = useState<QuizResponse | null>(null);
-  const [grade, setGrade] = useState<QuizGrade | null>(null);
-  const [grading, setGrading] = useState(false);
-  const [failed, setFailed] = useState(false);
-  const [results, setResults] = useState<boolean[]>([]);
-  /** 서버에 그대로 넘길 답. 채점이 성공한 문항만 쌓인다(results 와 항상 같은 길이). */
-  const [answers, setAnswers] = useState<GivenAnswer[]>([]);
+  /** 문항 순서 그대로의 답 칸. null = 아직 안 풂(건너뛴 문항도 나중에 돌아와 채울 수 있다). */
+  const [answers, setAnswers] = useState<(QuizResponse | null)[]>(() => items.map(() => null));
+  const scroller = useRef<ScrollView>(null);
 
-  const item = items[at];
-  const Renderer = useMemo(() => (item ? QUIZ_RENDERERS[item.format] : null), [item]);
+  const unanswered = answers.filter((a) => a === null).length;
+  const last = at === items.length - 1;
 
-  const send = async (itemId: string, res: QuizResponse) => {
-    setGrading(true);
-    setFailed(false);
-    const { data } = await gradeQuizLink(token, itemId, res);
-    setGrading(false);
-    if (!data) { setFailed(true); return; }
-    setGrade(data);
-    setResults((prev) => [...prev, data.correct]);
-    setAnswers((prev) => [...prev, { itemId, response: res }]);
+  /** 문항을 바꾸면 위에서부터 읽는다 — 앞 문항이 길었으면 새 문항이 화면 밖에서 시작한다. */
+  const move = (to: number) => {
+    setAt(to);
+    scroller.current?.scrollTo({ y: 0, animated: false });
   };
 
-  const next = () => {
-    if (at + 1 < items.length) {
-      setAt(at + 1);
-      setPending(null);
-      setGrade(null);
-      setFailed(false);
-      return;
-    }
-    void onFinish(results, answers);
+  const submit = () => {
+    const given: GivenAnswer[] = [];
+    answers.forEach((res, i) => {
+      if (res !== null) given.push({ itemId: items[i].id, response: res });
+    });
+    void onFinish(given);
   };
-
-  if (!item || !Renderer) return null;
-  const ask = typeof item.payload?.ask === 'string' ? item.payload.ask : '';
 
   return (
     <>
+      {/* 어디서 온 퀴즈인지·몇 번째인지는 스크롤 밖에 붙어 있다 — 문항이 길어도 사라지지 않는다. */}
+      <View style={st.qHead}>
+        <Text style={st.qHeadStore} numberOfLines={1}>{info.storeName}</Text>
+        <StepProgress step={at + 1} total={items.length} title={info.courseName} />
+      </View>
+
       <KeyboardShift>
-      <ScrollView keyboardShouldPersistTaps="handled" style={{ flex: 1 }} contentContainerStyle={st.body}showsVerticalScrollIndicator={false}>
-        {/* 완료가 아니라 잔여를 센다(레퍼런스 leveltest_05). */}
-        <Text style={st.step}>{items.length - at}문제 남았어요</Text>
-        {/* 문항이 넘어갈 때 통째로 한 번 올라온다 — key={item.id} 라 문항당 1회만 재생된다.
-            ⛔ 넘김 전용 애니메이션(슬라이드·플립)을 새로 만들지 않는다(프리미티브 2개 규칙). */}
-        <Appear key={item.id} style={st.qWrap}>
-          {ask ? <Text style={st.ask}>{ask}</Text> : null}
-          <Renderer
-            payload={item.payload ?? {}}
-            disabled={grading || pending !== null}
-            result={grade ? { correct: grade.correct, answer: grade.answer } : null}
-            onAnswer={(res) => { setPending(res); void send(item.id, res); }}
-          />
-        </Appear>
-
-        {/* 채점 결과는 답을 낸 **뒤에** 나타난다 — 그 순간이 이 화면에서 제일 중요한 변화다. */}
-        {grade ? (
-          <Appear offsetY={6}>
-            <View style={[st.gradeBox, grade.correct ? st.gradePass : st.gradeFail]}>
-              <Text style={st.gradeTitle}>{grade.correct ? '맞았어요' : '이건 이렇게 해요'}</Text>
-              {grade.explain ? <Text style={st.gradeText}>{grade.explain}</Text> : null}
-            </View>
+        <ScrollView
+          ref={scroller}
+          keyboardShouldPersistTaps="handled"
+          style={{ flex: 1 }}
+          contentContainerStyle={st.body}
+          showsVerticalScrollIndicator={false}
+        >
+          <Appear style={st.qWrap}>
+            {items.map((it, i) => {
+              const Renderer = QUIZ_RENDERERS[it.format];
+              const ask = typeof it.payload?.ask === 'string' ? it.payload.ask : '';
+              const on = i === at;
+              return (
+                <View
+                  key={it.id}
+                  style={[st.qWrap, !on && st.hidden]}
+                  pointerEvents={on ? 'auto' : 'none'}
+                  accessibilityElementsHidden={!on}
+                  importantForAccessibility={on ? 'auto' : 'no-hide-descendants'}
+                >
+                  {ask ? <Text style={st.ask}>{ask}</Text> : null}
+                  <Renderer
+                    payload={it.payload ?? {}}
+                    disabled={false}
+                    result={null}
+                    onAnswer={(res) => setAnswers((prev) => prev.map((v, j) => (j === i ? res : v)))}
+                  />
+                </View>
+              );
+            })}
           </Appear>
-        ) : null}
-
-        {failed ? (
-          <View style={st.gradeBox}>
-            <Text style={st.gradeTitle}>지금은 채점이 안 됐어요</Text>
-            <Text style={st.gradeText}>답은 그대로 있어요. 잠시 후 다시 보내면 돼요.</Text>
-          </View>
-        ) : null}
-      </ScrollView>
+        </ScrollView>
       </KeyboardShift>
 
       <View style={st.foot}>
-        {grading ? (
-          <View style={st.footWait}>
-            <ActivityIndicator color={InkColors.ink3} />
-            <Text style={st.footWaitText}>채점하는 중...</Text>
-          </View>
-        ) : failed ? (
-          <Pressable
-            onPress={() => pending !== null && void send(item.id, pending)}
-            style={({ pressed }) => [st.cta, pressed && { opacity: 0.85 }]}
-            accessibilityRole="button"
-          >
-            <Text style={st.ctaText}>다시 보내기</Text>
-          </Pressable>
-        ) : grade ? (
-          <Pressable onPress={next} style={({ pressed }) => [st.cta, pressed && { opacity: 0.85 }]} accessibilityRole="button">
-            <Text style={st.ctaText}>{at + 1 < items.length ? '다음 문제' : '결과 보기'}</Text>
-          </Pressable>
+        {/* 안 푼 문항이 있다는 것은 **낼 때** 말한다 — 문항마다 말하면 잔소리가 된다. */}
+        {last && unanswered > 0 ? (
+          <Text style={st.footNote}>아직 {unanswered}문제 안 풀었어요</Text>
         ) : null}
+        <View style={st.navRow}>
+          <Pressable
+            onPress={() => move(at - 1)}
+            disabled={at === 0}
+            style={({ pressed }) => [st.navBack, at === 0 && { opacity: 0.35 }, pressed && { opacity: 0.6 }]}
+            accessibilityRole="button"
+            accessibilityLabel="이전 문제"
+          >
+            <Text style={st.navBackText}>이전</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => (last ? submit() : move(at + 1))}
+            disabled={last && unanswered === items.length}
+            style={({ pressed }) => [
+              st.cta, st.navNext,
+              last && unanswered === items.length && { opacity: 0.4 },
+              pressed && { opacity: 0.85 },
+            ]}
+            accessibilityRole="button"
+            accessibilityLabel={last ? '답 제출하기' : '다음 문제'}
+          >
+            <Text style={st.ctaText}>{last ? '제출하기' : '다음 문제'}</Text>
+          </Pressable>
+        </View>
       </View>
     </>
   );
@@ -445,17 +461,26 @@ const st = StyleSheet.create({
   consentLinkHit: { alignSelf: 'center', minHeight: 32, justifyContent: 'center', marginBottom: Space.xs },
   consentLink: { fontSize: 12, fontWeight: '800', color: InkColors.ink2, textDecorationLine: 'underline' },
 
-  step: { fontSize: 12, fontWeight: '800', color: InkColors.ink3 },
+  // 응시 중 상단 고정 머리 — 스크롤 밖이라 문항이 길어도 매장·진행이 남는다.
+  qHead: {
+    paddingHorizontal: Space.gutter, paddingTop: Space.md, paddingBottom: Space.sm,
+    gap: Space.sm, borderBottomWidth: 1, borderBottomColor: InkColors.line,
+  },
+  qHeadStore: { fontSize: 12, fontWeight: '800', color: InkColors.ink3 },
+  // 지금 문항이 아닌 것은 자리도 차지하지 않는다(마운트는 유지 — 고른 답을 들고 있어야 한다).
+  hidden: { display: 'none' },
   ask: { fontSize: 17, fontWeight: '800', color: InkColors.ink, lineHeight: 25, marginBottom: Space.sm },
-  gradeBox: { borderRadius: Radius.md, backgroundColor: InkColors.bgSoft, padding: Space.lg, marginTop: Space.lg, gap: Space.xs },
-  gradePass: { backgroundColor: '#E6F1EA' },
-  gradeFail: { backgroundColor: BrandColors.warnSoft },
-  gradeTitle: { fontSize: 15, fontWeight: '800', color: InkColors.ink, lineHeight: 22 },
-  gradeText: { fontSize: 15, fontWeight: '600', color: InkColors.ink2, lineHeight: 22 },
 
   foot: { paddingHorizontal: Space.gutter, paddingTop: Space.sm, paddingBottom: Space.lg, borderTopWidth: 1, borderTopColor: InkColors.line },
-  footWait: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Space.sm, minHeight: 56 },
-  footWaitText: { fontSize: 15, fontWeight: '700', color: InkColors.ink2 },
+  footNote: { fontSize: 13, fontWeight: '700', color: BrandColors.warnText, textAlign: 'center', marginBottom: Space.sm },
+  navRow: { flexDirection: 'row', alignItems: 'stretch', gap: Space.sm },
+  // 되돌아가기는 보조 동작이라 흰 버튼이다 — Primary 는 화면당 하나(오른쪽)다.
+  navBack: {
+    minWidth: 92, minHeight: 56, paddingHorizontal: Space.lg, borderRadius: Radius.md, borderWidth: 1,
+    borderColor: InkColors.line, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center',
+  },
+  navBackText: { fontSize: 16, fontWeight: '800', color: InkColors.ink2 },
+  navNext: { flex: 1 },
   cta: { backgroundColor: InkColors.ink, borderRadius: Radius.md, paddingVertical: 16, alignItems: 'center', minHeight: 56, justifyContent: 'center' },
   ctaText: { color: '#FFFFFF', fontSize: 16, fontWeight: '800' },
 });

@@ -360,7 +360,16 @@ export default function QuizDetailScreen() {
             <>
               <View style={st.ringCard}>
                 <ProgressRing value={passedCount} total={people.length} label="통과" />
-                <Text style={st.ringSub}>{captionOf(course.answer_days, course.due_days)}</Text>
+                {/* 기본 정보는 줄글이 아니라 이름표+값이다(2026-09-13) — "받은 날부터 3일 안에 ·
+                    다시 확인은 저희가 챙겨요"는 한 줄에 두 가지를 이어 붙여 무엇이 무엇의 값인지가 안 보였다. */}
+                <View style={st.factTable}>
+                  {factsOf(items.length, course.answer_days, course.due_days).map(([k, v], i) => (
+                    <View key={k} style={[st.factRow, i > 0 && st.factRowTop]}>
+                      <Text style={st.factKey}>{k}</Text>
+                      <Text style={st.factVal}>{v}</Text>
+                    </View>
+                  ))}
+                </View>
               </View>
               {/* 사람 줄을 누르면 **그 사람이 어느 문항을 맞혔는지**가 그 자리에서 펼쳐진다(0190).
                   ⚠️ 개인 오답을 사장이 보는 것은 2026-09-11 사용자 결정이다 — 0103·0112 의
@@ -688,11 +697,17 @@ function statOf(
   return { attempts, rate: attempts > 0 ? (s?.misses ?? 0) / attempts : 0 };
 }
 
-function captionOf(answerDays: number | null | undefined, dueDays: number | null | undefined): string {
-  const parts: string[] = [];
-  if (answerDays) parts.push(`받은 날부터 ${answerDays}일 안에`);
-  parts.push(dueDays ? `${dueDays}일마다 다시 확인` : '다시 확인은 저희가 챙겨요');
-  return parts.join(' · ');
+/** 링 아래 기본 정보 — 이름표와 값을 짝지어 돌려준다(값은 명사형, 워딩 §5). */
+function factsOf(
+  itemCount: number,
+  answerDays: number | null | undefined,
+  dueDays: number | null | undefined,
+): [string, string][] {
+  return [
+    ['문항', `${itemCount}개`],
+    ['응시 기한', answerDays ? `받은 날부터 ${answerDays}일` : '제한 없음'],
+    ['다시 확인', dueDays ? (CYCLES.find((c) => c.days === dueDays)?.label ?? `${dueDays}일마다`) : '자동'],
+  ];
 }
 
 function todayKst(): string {
@@ -734,7 +749,12 @@ const st = StyleSheet.create({
     backgroundColor: InkColors.bg, borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line,
     padding: Space.lg, alignItems: 'center', gap: Space.xs, ...Elevation.e2,
   },
-  ringSub: { fontSize: 13, fontWeight: '600', color: InkColors.ink3, textAlign: 'center' },
+  // 링 아래 기본 정보 표 — ringCard 가 가운데 정렬이라 표는 스스로 폭을 펴야 한다.
+  factTable: { alignSelf: 'stretch', marginTop: Space.sm },
+  factRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Space.md, paddingVertical: Space.sm },
+  factRowTop: { borderTopWidth: 1, borderTopColor: InkColors.line },
+  factKey: { fontSize: 13, fontWeight: '700', color: InkColors.ink3 },
+  factVal: { flex: 1, minWidth: 0, fontSize: 13, fontWeight: '800', color: InkColors.ink2, textAlign: 'right' },
 
   listCard: {
     backgroundColor: InkColors.bg, borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line,
