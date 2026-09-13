@@ -543,7 +543,9 @@ export default function QuizDetailScreen() {
             {/* ★"이 업무에 붙이기"는 되물음이 난다(2026-09-11) — 이 화면엔 **현재 업무가 없다.**
                 업무는 시트 안에서 고르는 것이라 "이"가 가리키는 대상이 없었다. 무엇이 달라지는지로 쓴다. */}
             <SheetOption label="업무에 연결하기" badge="선택" onPress={() => { setMoreOpen(false); setAttachOpen(true); }} />
-            <SheetOption label="이걸로 다시 만들기" onPress={() => { setMoreOpen(false); void duplicate(); }} />
+            {/* '이걸로 다시 만들기'는 '만들기 화면이 다시 열린다'로 읽혀 되물음이 났다(2026-09-13) —
+                하는 일은 **복제**다: 같은 노하우·문항으로 새 퀴즈 1건이 생기고 이건 그대로 남는다. */}
+            <SheetOption label="퀴즈 복제" onPress={() => { setMoreOpen(false); void duplicate(); }} />
             <SheetOption label="보관하기" danger onPress={() => { setMoreOpen(false); void archive(); }} />
           </View>
         </BottomSheet>

@@ -39,7 +39,7 @@ import { MiniCalendar } from '@/components/blocks/MiniCalendar';
 import { SectionLabel } from '@/components/SectionLabel';
 import {
   COPY_LINK_LABEL,
-  COPY_LINK_SHORT,
+  COPY_LINK_ICON,
   copyLinkToast,
   copyQuizLink,
   makeQuizToken,
@@ -195,8 +195,9 @@ export function QuizDeployPanel({ course, onOpenResult }: { course: TrainingCour
         </View>
       ) : (
         <>
+          {/* 이름은 '링크' 하나로 둔다(2026-09-13) — '열려 있는'은 힌트(지난 링크 N개)가 이미 말한다. */}
           <SectionLabel
-            title="열려 있는 링크"
+            title="링크"
             hint={closed > 0 ? `${live.length}개 · 지난 링크 ${closed}개` : `${live.length}개`}
           />
           {/* 반복 동종 항목이라 행으로 쌓는다 — 링크마다 카드를 만들지 않는다. */}
@@ -209,7 +210,9 @@ export function QuizDeployPanel({ course, onOpenResult }: { course: TrainingCour
                 </View>
                 {/* role=button Pressable 중첩 금지 — 행은 View 이고 액션만 형제 버튼이다. */}
                 <View style={st.acts}>
-                  <RowAction label={COPY_LINK_SHORT} a11y={COPY_LINK_LABEL} onPress={() => void copy(l.token)} />
+                  {/* 복사는 아이콘 하나로(2026-09-13) — 행에서 가장 많이 누르는 일이라 글자보다 빨리 찾는다.
+                      네이티브는 클립보드 모듈이 없어 공유 시트를 연다 → 아이콘도 그에 맞춰 바뀐다(link.ts 정본). */}
+                  <IconAction icon={COPY_LINK_ICON} a11y={COPY_LINK_LABEL} onPress={() => void copy(l.token)} />
                   <RowAction label="기간" a11y="열어 둘 기간 바꾸기" onPress={() => openExtend(l)} />
                   <RowAction label="지우기" a11y="링크 지우기" tone="danger" disabled={busy} onPress={() => void remove(l.id)} />
                 </View>
@@ -276,6 +279,26 @@ export function QuizDeployPanel({ course, onOpenResult }: { course: TrainingCour
         </BottomSheet>
       )}
     </View>
+  );
+}
+
+/** 행 안의 아이콘 액션 — 글자 액션과 같은 48dp 상자를 쓴다(터치 타깃 규칙 공유). */
+function IconAction({
+  icon, a11y, onPress,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  a11y: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [st.act, pressed && { opacity: 0.6 }]}
+      accessibilityRole="button"
+      accessibilityLabel={a11y}
+    >
+      <Ionicons name={icon} size={19} color={InkColors.ink2} />
+    </Pressable>
   );
 }
 

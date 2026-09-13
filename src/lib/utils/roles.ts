@@ -8,6 +8,20 @@ export const canManage = (role: string): boolean => role === 'owner' || role ===
  * 매니저는 직원 탭바를 쓰고, 여기 있는 `/owner/*` 만 연다 — 급여·시급·초대코드·요금제·매장 설정·직원 관리·
  * 노하우 편집·퀴즈는 제외. 판정은 `managerMayOpen`(owner/_layout 가드) 하나만 쓴다.
  */
+/**
+ * ⚠️ 기록만 — 서버와 앱의 매니저 경계가 어긋나 있다(2026-09-13 확인, 이번 QA 에서는 고치지 않는다).
+ *
+ * 서버(0093 `auth_can_manage()`)는 매니저에게 **이 목록보다 넓게** 허용한다:
+ *   · `wages` write(시급 저장)          · `save_payroll_settings`(급여 설정 RPC)
+ *   · `approve_member` / `reject_member`(합류 승인·반려)
+ * 그런데 그 일을 하는 화면(`/owner/staff`·`/owner/payroll`)은 이 허용목록에 없어서
+ * `owner/_layout` 가드가 매니저를 `/junior/home` 으로 되돌린다. 즉 **서버는 허용, 앱은 차단**이다.
+ * (`staff.tsx` 머리 주석은 "이 화면은 매니저도 쓴다"고 적혀 있어 그 주석도 현 동작과 어긋난다.)
+ *
+ * 사용자 판정(2026-09-13): **앱에서 되는 것이 기준**이다 — 안내 모달·안내 문구는 이 목록만 근거로 쓴다.
+ * 닫을 때 고를 것: (a) 라우트를 열어 서버에 맞춘다, (b) 서버 술어를 좁혀 앱에 맞춘다.
+ * 어느 쪽이든 판정은 한 곳에서만 바뀌어야 한다 — 이 목록 또는 `auth_can_manage()`.
+ */
 export const MANAGER_OWNER_ROUTES = [
   '/owner/schedule', // 근무표
   '/owner/work', // 업무 채팅·할일 배정

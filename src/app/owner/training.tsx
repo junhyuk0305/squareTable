@@ -350,7 +350,7 @@ export default function OwnerTrainingScreen() {
                   <PrimaryButton label="노하우 추가하기" onPress={() => router.push('/owner/coach' as never)} />
                 ) : null}
 
-                {/* 만들다 만 퀴즈 — 있을 때만 여기서 눈에 띈다(0건이면 줄째로 안 그린다).
+                {/* 만들던 퀴즈 — 있을 때만 여기서 눈에 띈다(0건이면 줄째로 안 그린다).
                     ★상세가 아니라 **만들기 화면**으로 이어 간다 — 상세에는 보내는 길이 없다. */}
                 {drafts.length > 0 ? (
                   <Pressable
@@ -358,9 +358,9 @@ export default function OwnerTrainingScreen() {
                     style={({ pressed }) => [st.foldRow, pressed && { opacity: 0.6 }]}
                     accessibilityRole="button"
                     accessibilityState={{ expanded: draftOpen }}
-                    accessibilityLabel={`만들다 만 퀴즈 ${drafts.length}건 ${draftOpen ? '접기' : '펼치기'}`}
+                    accessibilityLabel={`만들던 퀴즈 ${drafts.length}건 ${draftOpen ? '접기' : '펼치기'}`}
                   >
-                    <Text style={st.foldText}>만들다 만 퀴즈 {drafts.length}건 이어서 만들기</Text>
+                    <Text style={st.foldText}>만들던 퀴즈 {drafts.length}건</Text>
                     <Ionicons name={draftOpen ? 'chevron-up' : 'chevron-down'} size={15} color={InkColors.ink3} />
                   </Pressable>
                 ) : null}
