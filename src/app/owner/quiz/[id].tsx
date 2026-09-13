@@ -239,17 +239,36 @@ export default function QuizDetailScreen() {
     );
     if (!ok) { setBusy(false); return; }
 
-    for (const eid of entryIds) await addCourseEntry(newId, eid);
+    // ★두 반복문의 결과를 **센다**(2026-09-14). 예전엔 반환을 통째로 버리고 '그대로 복사했어요'를
+    //   무조건 띄웠다 — 노하우가 안 담기거나 문항이 하나도 안 붙어도 성공 토스트가 뜨고 만들기
+    //   화면으로 갔다. 사장은 속이 빈 퀴즈를 "복사된 것"으로 들고 있게 된다.
+    // ⛔ 일부 실패를 롤백하지 않는다: 남은 것은 그대로 쓸 수 있고(만들기 화면이 곧 검토 자리다),
+    //    되돌리기가 또 실패하면 "복사 못 했어요"라고 말해 놓고 초안이 남는 더 나쁜 상태가 된다.
+    //    초안은 퀴즈 탭에서 지울 수 있다. 대신 **무엇이 안 갔는지 그 자리에서 말한다.**
+    let entryFail = 0;
+    for (const eid of entryIds) {
+      if (!(await addCourseEntry(newId, eid))) entryFail++;
+    }
+    let itemFail = 0;
     for (const it of items) {
-      await guardWrite(
+      const done = await guardWrite(
         insertQuizItem({ ...it, id: genId('qz'), created_at: new Date().toISOString() }),
         () => {},
         '문제를 복사하지 못했어요.',
       );
+      if (!done) itemFail++;
     }
     setBusy(false);
     reloadCourses();
-    showToast('문제를 그대로 복사했어요', 'good');
+    if (entryFail > 0 || itemFail > 0) {
+      // 초록(good)을 쓰지 않는다 — 절반만 된 것을 성공색으로 말하면 배너와 토스트가 서로 다른 말을 한다.
+      const parts: string[] = [];
+      if (itemFail > 0) parts.push(`문항 ${itemFail}개`);
+      if (entryFail > 0) parts.push(`노하우 ${entryFail}건`);
+      showToast(`${parts.join(' · ')}은 복사되지 않았어요. 이어서 만들기에서 채워 주세요`);
+    } else {
+      showToast('문제를 그대로 복사했어요', 'good');
+    }
     router.replace(`/owner/quiz-new?course=${newId}` as never);
   };
 

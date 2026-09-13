@@ -60,6 +60,8 @@ export default function QuizLinkScreen() {
   const [marks, setMarks] = useState<boolean[]>([]);
   /** 결과가 실제로 저장됐나 — 이 값으로만 "전달됐어요"를 말한다. */
   const [saved, setSaved] = useState(false);
+  /** 낸 답 원문. 저장이 실패해도 **들고 있는다** — 그래야 '다시 보내기'가 가능하다. */
+  const [given, setGiven] = useState<GivenAnswer[]>([]);
 
   const router = useRouter();
   // 번호를 고치면 훅이 정규화 번호 비교로 sent/verified 를 자동으로 푼다(signup 과 같은 사용법).
@@ -95,15 +97,16 @@ export default function QuizLinkScreen() {
     setPhase('quiz');
   }, [canStart, tk]);
 
-  const finish = useCallback(
+  /**
+   * 낸 답을 서버로 보낸다. **다시 보내기가 이 함수를 그대로 다시 부른다** —
+   * ★한 번 실패하면 손님의 답이 통째로 사라졌다(2026-09-14 발견). 풀이 본체가 언마운트되면서
+   *   고른 값이 같이 없어지고, 결과 화면에는 "보내지 못했어요"만 있고 버튼이 없었다.
+   *   연결이 잠깐 끊긴 것만으로 20분을 잃는다 — 손님은 링크를 다시 열어 처음부터 풀어야 한다.
+   *   그래서 낸 답을 부모가 들고 있다가(given) 그대로 다시 보낸다.
+   */
+  const send = useCallback(
     async (answers: GivenAnswer[]) => {
       setPhase('saving');
-      // 점수는 **다 낸 뒤에** 한 번에 받는다(2026-09-13) — 풀이 중에 문항마다 채점하면 답을 고치러
-      // 앞으로 돌아갈 수 없고, 시험이 아니라 정답 맞히기 연습이 된다.
-      // ★채점이 안 된 문항은 세지 않는다 — 못 잰 것을 오답으로 치면 화면이 거짓말을 한다.
-      //   기록 자체는 아래 submitQuizLink 가 낸 답 원문을 보내 서버가 다시 채점한다.
-      const graded = await Promise.all(answers.map((a) => gradeQuizLink(tk, a.itemId, a.response)));
-      setMarks(graded.filter((g) => !!g.data).map((g) => !!g.data?.correct));
       // 노하우별 집계는 **서버가** 한다(0160) — 여기서는 낸 답을 그대로 넘긴다.
       // ★기다렸다가 결과를 말한다. fire-and-forget 으로 두면 저장이 실패해도 손님에게
       //   "사장님께 전달됐어요"라고 말하게 된다 — 손님은 다시 풀 방법이 없고 사장은 영원히 모른다.
@@ -116,6 +119,21 @@ export default function QuizLinkScreen() {
       setPhase('done');
     },
     [name, otp.verified, phone, phoneOk, tk],
+  );
+
+  const finish = useCallback(
+    async (answers: GivenAnswer[]) => {
+      setPhase('saving');
+      setGiven(answers);
+      // 점수는 **다 낸 뒤에** 한 번에 받는다(2026-09-13) — 풀이 중에 문항마다 채점하면 답을 고치러
+      // 앞으로 돌아갈 수 없고, 시험이 아니라 정답 맞히기 연습이 된다.
+      // ★채점이 안 된 문항은 세지 않는다 — 못 잰 것을 오답으로 치면 화면이 거짓말을 한다.
+      //   기록 자체는 아래 submitQuizLink 가 낸 답 원문을 보내 서버가 다시 채점한다.
+      const graded = await Promise.all(answers.map((a) => gradeQuizLink(tk, a.itemId, a.response)));
+      setMarks(graded.filter((g) => !!g.data).map((g) => !!g.data?.correct));
+      await send(answers);
+    },
+    [send, tk],
   );
 
   return (
@@ -273,12 +291,30 @@ export default function QuizLinkScreen() {
               <Text style={st.centerText}>
                 {saved
                   ? '결과는 사장님께 전달됐어요. 이 창은 닫으셔도 돼요.'
-                  : '결과를 보내지 못했어요. 이 화면을 사장님께 보여 주세요.'}
+                  : '결과를 보내지 못했어요. 답은 그대로 있으니 다시 보내 주세요.'}
               </Text>
             </View>
           </Appear>
           {/* 저장된 경우에만 권한다 — 못 보낸 결과를 "보러 가자"고 하면 빈손으로 보낸다.
               ★가입은 **직원 계정**으로만 연다(0157 로 같은 번호의 사장/직원 계정 분리가 가능해졌다). */}
+          {/* 못 보냈으면 **다시 보내기**가 먼저다(2026-09-14). 낸 답은 given 에 그대로 있다 —
+              연결이 잠깐 끊긴 것만으로 손님이 처음부터 다시 풀게 하지 않는다. */}
+          {!saved && given.length > 0 && (
+            <View style={st.foot}>
+              <Appear delay={stagger(1)}>
+              <Pressable
+                onPress={() => void send(given)}
+                style={({ pressed }) => [st.cta, pressed && { opacity: 0.85 }]}
+                accessibilityRole="button"
+                accessibilityLabel="결과 다시 보내기"
+              >
+                <Text style={st.ctaText}>다시 보내기</Text>
+              </Pressable>
+              <Text style={st.footHint}>계속 안 되면 이 화면을 사장님께 보여 주세요.</Text>
+              </Appear>
+            </View>
+          )}
+
           {saved && (
             <View style={st.foot}>
               <Appear delay={stagger(1)}>
