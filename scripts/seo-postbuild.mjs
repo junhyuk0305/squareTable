@@ -248,6 +248,8 @@ function labelTables(html) {
 function writeLegalPages() {
   for (const page of LEGAL_PAGES) {
     // 푸터의 다른 문서 링크 — 심사원이 한 페이지에서 나머지 고지에 도달할 수 있어야 한다.
+    // ★'홈으로' 링크는 두지 않는다(2026-09-14) — iOS 앱이 이 페이지들을 열고, 홈 → /pricing(웹 계좌이체)이
+    //   클릭 두 번이면 앱 밖 결제로 가는 길이 된다(App Review 3.1.1(a), 한국 스토어프론트는 아웃링크 예외 없음).
     const siblings = LEGAL_PAGES.filter((p) => p.slug !== page.slug)
       .map((p) => `<a href="${SITE_URL}/${p.slug}">${esc(p.title)}</a>`)
       .join(' · ');
@@ -299,7 +301,7 @@ function writeLegalPages() {
     <h1>${esc(page.title)}</h1>
     <p class="meta">${BRAND} · ${esc(OPERATOR)}${page.legal ? ` · 시행일 ${EFFECTIVE_DATE}` : ''}</p>
 ${labelTables(page.html)}
-    <p class="foot">${siblings} · <a href="${SITE_URL}/">${BRAND} 홈으로</a></p>
+    <p class="foot">${siblings}</p>
     <p class="foot" style="margin-top:12px;padding-top:0;border-top:0;font-size:13px">${esc(businessLine())}</p>
   </body>
 </html>
