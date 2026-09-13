@@ -70,7 +70,7 @@ export function OwnerStatusView({ header }: { header: ReactNode }) {
   const prefsLoaded = useMemberPrefsStore((s) => s.loaded);
   const hydratePrefs = useMemberPrefsStore((s) => s.hydrate);
   const { goStore, switching } = useStoreNav();
-  // 현재 플랜의 월 AI 캡(무료 150 / 유료 매장당 1500). null 이면 캡 없음 = 분모를 그리지 않는다.
+  // 현재 플랜의 월 AI 사용량 캡(무료 200 / 유료 매장당 3,000, 0193). null 이면 캡 없음 = 분모를 그리지 않는다.
   const aiCap = PLANS[plan].aiMonthly;
 
   useEffect(() => {
