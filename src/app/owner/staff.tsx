@@ -13,7 +13,7 @@ import { useStaffStore } from '@/lib/store/useStaffStore';
 import { useAttendanceStore } from '@/lib/store/useAttendanceStore';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useWorkStore } from '@/lib/store/useWorkStore';
-import { RoleTabBar } from '@/components/RoleTabBar';
+import { RoleTabBar, goToTab } from '@/components/RoleTabBar';
 import { Appear, stagger } from '@/components/Appear';
 import { ScreenLoading } from '@/components/ScreenLoading';
 import { ConfirmModal } from '@/components/ConfirmModal';
@@ -250,7 +250,7 @@ export default function OwnerStaffScreen() {
           <ActionRow
             variant="tile"
             items={[
-              { key: 'quiz', icon: 'school-outline', label: '퀴즈', onPress: () => router.push('/owner/training') },
+              { key: 'quiz', icon: 'school-outline', label: '퀴즈', onPress: () => goToTab('/owner/training') },
               { key: 'schedule', icon: 'calendar-outline', label: '근무표', onPress: () => router.push('/owner/schedule') },
             ]}
           />

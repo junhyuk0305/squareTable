@@ -20,14 +20,9 @@ import {
   insertQuizItem,
   deleteQuizItem,
   insertQuizAssignments,
-  fetchStoreParts,
-  createStorePart,
-  setCoursePart,
   insertQuizLink,
   type QuizLinkRow,
-  type StorePart,
 } from '@/lib/db';
-import { findSimilarSection } from '@/lib/utils/knowhowSimilarity';
 import { generateQuizItems, QuizQuotaError } from '@/lib/quiz/generate';
 import { aiCapNextStep } from '@/lib/config/tiers';
 import { showUpgradeHint } from '@/lib/config/store-policy';
@@ -37,8 +32,6 @@ import { FORMATS } from '@/lib/quiz/formats';
 import { COPY_LINK_LABEL, copyLinkToast, copyQuizLink, makeQuizToken, quizLinkUrl } from '@/lib/quiz/link';
 import { Appear, stagger } from '@/components/Appear';
 import { Collapse } from '@/components/Collapse';
-import { BottomSheet } from '@/components/BottomSheet';
-import { SheetHead } from '@/components/owner/quiz/kit';
 import { QuizEditorSheet } from '@/components/owner/quiz/QuizEditorSheet';
 import { QuizPreviewSheet } from '@/components/owner/quiz/QuizPreviewSheet';
 import { StepProgress } from '@/components/blocks/StepProgress';
@@ -133,15 +126,7 @@ export default function QuizNewScreen() {
   /** 카테고리 필터 — null = 전체. 노하우 화면과 같은 축(= section)이다. */
   const [cat, setCat] = useState<string | null>(null);
   const [picked, setPicked] = useState<string[]>([]);
-  // 1단계 파트(0164) — 어느 자리인가. null = 공통(고르지 않음).
-  const [parts, setParts] = useState<StorePart[]>([]);
-  const [partsLoaded, setPartsLoaded] = useState(false);
-  const [partId, setPartId] = useState<string | null>(null);
-  const [partAdding, setPartAdding] = useState(false);
-  const [partName, setPartName] = useState('');
-  const [dupPart, setDupPart] = useState<string | null>(null);
-  const [partBusy, setPartBusy] = useState(false);
-  const [partFailed, setPartFailed] = useState(false);
+  // 파트(0164) 칸은 2026-09-13 화면에서 뺐다 — 사장이 쓸 일이 없고 쓰기도 어려웠다. DB 컬럼·함수는 남아 있다.
 
   // 2·3단계
   const [courseId, setCourseId] = useState<string | null>(null);
@@ -219,9 +204,10 @@ export default function QuizNewScreen() {
   const toggle = (id: string) => setPicked((v) => (v.includes(id) ? v.filter((x) => x !== id) : [...v, id]));
 
   /**
-   * `?entries=a,b,c`(2026-08-27 §10-10) — 퀴즈 홈 A1 PickRow 에서 고른 노하우를 **고른 상태로**
-   * 2단계에 착지한다. 나머지 단계(형태·문항수·일정)는 그대로. 한 번만 적용한다(사장이 2단계에서
-   * 빼거나 더한 뒤 이 이펙트가 다시 돌면 되돌아간다). 없어진 노하우 id 는 조용히 버린다.
+   * `?entries=a,b,c`(2026-08-27 §10-10) — 퀴즈 홈 A1 PickRow 에서 고른 노하우를 **고른 상태로** 둔다.
+   * ★1단계(이름·받는 쪽)는 건너뛰지 않는다(2026-09-13) — 예전엔 2단계로 바로 보내서 이름을 못 짓고
+   *   지나갔다. 1단계를 그대로 거치고 2단계에 도착하면 이미 체크돼 있다. 한 번만 적용한다(사장이
+   *   2단계에서 빼거나 더한 뒤 이 이펙트가 다시 돌면 되돌아간다). 없어진 노하우 id 는 조용히 버린다.
    */
   const [prefilled, setPrefilled] = useState(false);
   useEffect(() => {
@@ -234,53 +220,17 @@ export default function QuizNewScreen() {
       setPrefilled(true);
       if (ids.length === 0) return;
       setPicked(ids);
-      setStep(2);
     });
     return () => { alive = false; };
   }, [entriesParam, prefilled, entriesLoaded, entryById]);
 
-  // 파트 후보 = 이 매장이 실제로 쓴 값. 표준 세트를 우리가 정해 주지 않는다(0164 ②).
-  useEffect(() => {
-    let alive = true;
-    void fetchStoreParts().then((rows) => { if (alive) { setParts(rows); setPartsLoaded(true); } });
-    return () => { alive = false; };
-  }, [unitId]);
-
   /**
-   * 목록 순서 — 고른 파트의 노하우가 먼저 온다(0164). **거르지 않는다.**
-   *
-   * ★파트는 거르는 축이 아니다. 파트는 지연 생성이라 초기엔 대부분 노하우에 파트가 없고,
-   *   그때 교집합으로 거르면 목록이 통째로 비어 아무 일도 안 하는 기능이 된다.
-   *   교집합(AND) 필터를 여기 만들지 말 것.
-   * (sort 는 ES2019부터 안정 정렬이라 같은 무리 안의 기존 순서는 그대로다.)
-   *
    * ★2026-08-26: "꼭 알아야 하는 것 N개를 미리 골라 뒀어요"(0167 필수 카테고리)를 **화면에서 뺐다** —
    *   사장이 직접 고르는 자리라 자동 체크와 선정 이유가 오히려 방해였다. 판정 코드
    *   (`lib/quiz/essential.ts` · `units.essential_sections`)는 지우지 않고 남겨 뒀다.
+   * ★2026-09-13: 파트 순서 올리기(0164)도 뺐다 — 목록은 필터 결과 그대로다.
    */
-  const ranked = useMemo(() => {
-    if (!partId) return filtered;
-    const rank = (e: (typeof filtered)[number]) => (e.part_id === partId ? 1 : 0);
-    return [...filtered].sort((a, b) => rank(b) - rank(a));
-  }, [filtered, partId]);
-
-  /** 파트 직접 추가 — 카테고리(PublishConfirmSheet)와 같은 되묻기 패턴(knowhowSimilarity SSOT). */
-  const addPart = async () => {
-    const nm = partName.trim();
-    if (!nm || partBusy) return;
-    const twin = findSimilarSection(nm, parts.map((p) => p.name));
-    if (twin && twin !== dupPart) { setDupPart(twin); return; } // 1회 되묻고, 재확인이면 통과
-    setPartBusy(true);
-    const made = await createStorePart(nm); // 서버 unique 충돌이면 기존 파트가 그대로 돌아온다
-    setPartBusy(false);
-    if (!made) { setPartFailed(true); return; }
-    setParts((v) => (v.some((p) => p.id === made.id) ? v : [...v, made]));
-    setPartId(made.id);
-    setPartAdding(false);
-    setPartName('');
-    setDupPart(null);
-    setPartFailed(false);
-  };
+  const ranked = filtered;
 
   /**
    * 퀴즈(코스) 행을 **처음 필요해질 때** 만든다(2026-09-11).
@@ -324,15 +274,12 @@ export default function QuizNewScreen() {
     if (!ok) return null;
     const made = { id, key };
     courseRef.current = made;
-    // 파트는 코스 행의 컬럼(0164)이지만 코스 행 타입(@/lib/quiz/types)에는 없는 부가 축이라 따로 쓴다.
-    // 실패해도 퀴즈 만들기를 막지 않는다 — 파트는 추천 순서일 뿐이고, db 계층이 실패를 관측에 남긴다.
-    if (partId) await setCoursePart(id, partId);
     for (const eid of picked) await addCourseEntry(id, eid);
     setCourseId(id);
     setCourseKey(key);
     setName(draftName);
     return made;
-  }, [addCourseEntry, entryById, name, partId, picked, unitId]);
+  }, [addCourseEntry, entryById, name, picked, unitId]);
 
   // ── 2 → 3 : 문항 생성. 코스 행은 여기서 만들지 않는다(ensureCourse 가 늦게 만든다) ──────
   const start = async () => {
@@ -444,7 +391,7 @@ export default function QuizNewScreen() {
    *   덜 온 상태로 그리면 "안 물어본 노하우"가 통째로 비었다가 채워지고, 이어서 만들기는
    *   1단계가 스쳤다가 4단계로 튄다(= 아직 안 온 것을 없는 것처럼 말한 셈).
    */
-  const step1Ready = entriesLoaded && partsLoaded && (!onlyUncovered || boardLoaded);
+  const step1Ready = entriesLoaded && (!onlyUncovered || boardLoaded);
 
   /**
    * 이어서 만들기 — 이미 있는 퀴즈(초안·복제본)를 4단계(문항 검토)로 실어 온다.
@@ -636,19 +583,6 @@ export default function QuizNewScreen() {
                     ? '링크를 연 사람에게 이 이름이 보여요. 비워 두면 고른 노하우로 지어 드려요.'
                     : '직원에게 이 이름이 보여요. 비워 두면 고른 노하우로 지어 드려요.'}
                 </Text>
-
-                {/* 파트(0164) — 고르면 다음 단계 목록에서 그 파트 노하우가 위로 온다. 거르지 않는다. */}
-                <Text style={st.label}>{audience === 'guest' ? '어느 자리인가요?' : '누구를 위한 퀴즈인가요?'}</Text>
-                <View style={st.chips}>
-                  <Chip label="공통" on={!partId} onPress={() => setPartId(null)} />
-                  {parts.map((p) => (
-                    <Chip key={p.id} label={p.name} on={partId === p.id} onPress={() => setPartId(p.id)} />
-                  ))}
-                  {/* ★인라인 입력칸을 칩 아래 펼치던 옛 방식은 폐기(2026-08-26) — 칩 줄 안에 입력·경고·버튼이
-                      끼어들어 줄이 무너졌다. 이름 짓기는 시트에서 한다(채팅방 이름 정하듯). */}
-                  <Chip label="+ 직접 추가" on={false} onPress={() => setPartAdding(true)} />
-                </View>
-                <Text style={st.hint}>홀·주방처럼 자리가 나뉘어 있으면 골라 주세요. 안 골라도 돼요.</Text>
               </View>
             </Appear>
           )
@@ -1158,59 +1092,6 @@ export default function QuizNewScreen() {
           }}
         />
       )}
-      {/* 파트 이름 짓기 — 칩 줄 안에서 입력받던 것을 시트로 옮겼다(2026-08-26).
-          이름 하나를 받는 일이라 화면을 새로 만들지 않고 시트 한 장이다. 되묻기(비슷한 이름)는
-          카테고리 만들기와 같은 규칙을 쓴다(knowhowSimilarity SSOT). */}
-      {partAdding && (
-        <BottomSheet
-          visible
-          onClose={() => { setPartAdding(false); setPartName(''); setDupPart(null); setPartFailed(false); }}
-        >
-          <SheetHead
-            title="파트 추가"
-            onClose={() => { setPartAdding(false); setPartName(''); setDupPart(null); setPartFailed(false); }}
-          />
-          <View style={st.sheetBody}>
-          <Text style={st.sheetLead}>홀·주방처럼 자리 이름을 적어 주세요. 이 매장에서만 써요.</Text>
-          <TextInput
-            value={partName}
-            onChangeText={(t) => { setPartName(t); setDupPart(null); setPartFailed(false); }}
-            placeholder="파트 이름"
-            placeholderTextColor={InkColors.ink3}
-            style={st.input}
-            onSubmitEditing={() => void addPart()}
-            returnKeyType="done"
-            autoFocus
-            accessibilityLabel="새 파트 이름"
-          />
-          {dupPart ? (
-            <Text style={st.addWarn}>
-              이미 «{dupPart}» 파트가 있어요. 같은 뜻이면 그쪽에 넣어 주세요 — 한 번 더 누르면 새로 만들어요.
-            </Text>
-          ) : null}
-          {partFailed ? (
-            <Text style={st.addWarn}>파트를 만들지 못했어요. 연결을 확인하고 다시 시도해 주세요.</Text>
-          ) : null}
-          <View style={st.sheetFoot}>
-            {dupPart ? (
-              <Ghost
-                label={`«${dupPart}»로 하기`}
-                onPress={() => {
-                  const hit = parts.find((x) => x.name === dupPart);
-                  if (hit) setPartId(hit.id);
-                  setPartAdding(false); setPartName(''); setDupPart(null); setPartFailed(false);
-                }}
-              />
-            ) : null}
-            <Primary
-              label={dupPart ? '그래도 만들기' : '추가하기'}
-              disabled={partBusy || !partName.trim()}
-              onPress={() => void addPart()}
-            />
-          </View>
-          </View>
-        </BottomSheet>
-      )}
       {preview && <QuizPreviewSheet quiz={preview} onClose={() => setPreview(null)} />}
     </SafeAreaView>
   );
@@ -1392,7 +1273,6 @@ const st = StyleSheet.create({
   thinName: { flex: 1, minWidth: 0, fontSize: 15, fontWeight: '700', color: InkColors.ink },
 
   addBox: { gap: Space.sm },
-  addWarn: { fontSize: 13, fontWeight: '600', color: BrandColors.warnText, lineHeight: 18 },
 
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.xs },
   chip: {
@@ -1426,9 +1306,6 @@ const st = StyleSheet.create({
 
   // 시트 본문 여백 — 값은 kit 의 `qst.body`(좌우 16 · 아래 20)와 같다. 없으면 입력칸·버튼이
   // 시트 좌우 끝에 붙어 SheetHead(16)와 왼쪽 선이 어긋난다.
-  sheetBody: { paddingHorizontal: Space.lg, paddingBottom: Space.gutter },
-  sheetLead: { fontSize: 15, fontWeight: '600', color: InkColors.ink2, lineHeight: 22, marginBottom: Space.md },
-  sheetFoot: { flexDirection: 'row', gap: Space.sm, marginTop: Space.lg },
 
   // 도착 전 자리 — 빈 상태가 스치지 않게 덮는다(전체 화면을 바꾸는 것이 아니라 이 구획만).
   waiting: { alignItems: 'center', justifyContent: 'center', gap: Space.sm, paddingVertical: Space.xl * 2 },

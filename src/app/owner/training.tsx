@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
+import { RoleTabBar } from '@/components/RoleTabBar';
 import { View, Text, Pressable, ScrollView, ActivityIndicator, StyleSheet } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -184,7 +184,7 @@ export default function OwnerTrainingScreen() {
     linkedCourseIds.has(courseId) ? (openLinkCourseIds.has(courseId) ? 'open' : 'closed') : null;
 
   const goMake = () => router.push('/owner/quiz-new' as never);
-  /** A1 에서 고른 노하우로 — 만들기 2단계(고르기)를 고른 상태로 건너뛴다. */
+  /** A1 에서 고른 노하우로 — 1단계(이름)는 그대로 거치고, 2단계(고르기)에 고른 상태로 도착한다. */
   const goMakePicked = () => router.push(`/owner/quiz-new?entries=${picked.join(',')}` as never);
   // 2026-09-11: goMakeUncovered 는 없앴다 — "안 물어본 것만"은 만들기 2단계의 필터가 됐다.
   // `?only=uncovered` 자체는 quiz-new 가 초기값으로 계속 받는다(옛 링크·푸시 호환).
@@ -193,7 +193,8 @@ export default function OwnerTrainingScreen() {
   const goResume = (id: string) => router.push(`/owner/quiz-new?course=${id}` as never);
 
   return (
-    <SafeAreaView style={st.safe} edges={['bottom']}>
+    // 탭 루트(2026-09-13) — 하단 인셋은 RoleTabBar 가, 상단은 ScreenTitleHeader 가 소유한다.
+    <View style={st.safe}>
       <Stack.Screen
         options={{
           title: '퀴즈',
@@ -212,10 +213,13 @@ export default function OwnerTrainingScreen() {
             ) : null,
         }}
       />
-      <ScreenTitleHeader title="퀴즈" backFallback />
+      {/* 탭 루트라 뒤로가기가 없다(노하우 탭과 같다). */}
+      <ScreenTitleHeader title="퀴즈" />
       {/* ★탭은 스크롤 **밖** 맨 위다(2026-09-11, 노하우 탭과 같은 구조) — 스크롤을 내려도
-          지금 어느 칸을 보고 있는지가 사라지지 않는다. 퀴즈가 하나도 없을 땐 가를 것이 없어 안 그린다. */}
-      {ready && quizzes.length > 0 ? (
+          지금 어느 칸을 보고 있는지가 사라지지 않는다.
+          ★퀴즈가 0개여도 그린다(2026-09-13) — 처음 온 사장도 "이 화면은 응시 중/응시 완료 두 칸"이라는
+          구조를 먼저 본다. 만들기 안내(A1·A3)는 '응시 중' 칸의 내용이다. */}
+      {ready ? (
         <SegmentTabs
           style={st.topTabs}
           items={[
@@ -233,6 +237,13 @@ export default function OwnerTrainingScreen() {
           <View style={st.loadingWrap}>
             <ActivityIndicator color={InkColors.ink3} />
             <Text style={st.loadingText}>퀴즈를 불러오는 중...</Text>
+          </View>
+        ) : quizzes.length === 0 && tab === 'done' ? (
+          /* 퀴즈가 없을 때의 '응시 완료' 칸 — 평상시(A2)와 같은 문장. */
+          <View style={st.group}>
+            <View style={st.listCard}>
+              <Text style={st.tabEmpty}>아직 전원이 푼 퀴즈가 없어요.</Text>
+            </View>
           </View>
         ) : quizzes.length === 0 ? (
           usable === 0 ? (
@@ -616,7 +627,8 @@ export default function OwnerTrainingScreen() {
         </BottomSheet>
       )}
 
-    </SafeAreaView>
+      <RoleTabBar role="owner" />
+    </View>
   );
 }
 

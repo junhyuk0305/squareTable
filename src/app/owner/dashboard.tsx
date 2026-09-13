@@ -122,7 +122,7 @@ export default function OwnerDashboardScreen() {
   // (급여 설정 자체는 그 화면 안 진입점과 설정 탭에 그대로 있다).
   const subnav: HeroSubNavItem[] = useMemo(
     () => [
-      { key: 'quiz', icon: 'help-circle-outline', label: '퀴즈', onPress: () => router.push('/owner/training') },
+      { key: 'quiz', icon: 'help-circle-outline', label: '퀴즈', onPress: () => goToTab('/owner/training') },
       {
         key: 'staff',
         icon: 'people-outline',
@@ -182,7 +182,7 @@ export default function OwnerDashboardScreen() {
         count: missedKnowhowCount,
         unit: '개' as const,
         icon: 'help-buoy' as const,
-        onPress: () => router.push('/owner/training'),
+        onPress: () => goToTab('/owner/training'),
       };
     }
     // 설정 결손 — "오늘 할 일"이 아니라 **선행 조건**이라 사람이 기다리는 것들 뒤에 둔다.

@@ -20,7 +20,8 @@ const OWNER_KNOWHOW_TAB = '/owner/categories';
  *  - 홈=집, 노하우=전구, 업무=서류가방, 출퇴근=시계, 설정=톱니
  *
  * 역할별 비대칭: 공통 spine(홈·노하우·업무·설정) + 주니어만 본업 1탭(출퇴근).
- *  - 시니어 4탭: ★2026-08-07 '받은질문'을 노하우 탭 '할 일' 칸으로 흡수했다.
+ *  - 시니어 5탭: ★2026-08-07 '받은질문'을 노하우 탭 '할 일' 칸으로 흡수했고(4탭),
+ *    2026-09-13 '퀴즈'를 서브화면에서 탭으로 올렸다(5탭 — 사용자 결정, ADR-002 재검토 조건 ②).
  *    받은 질문·검토할 제안·쌓인 노하우는 "노하우가 만들어지는 한 흐름"인데 탭이 나뉘어 있어
  *    사장이 세 군데를 돌아다녔다. 밀린 게 있다는 신호는 탭이 아니라 노하우 탭 **배지**가 든다.
  *  - 주니어 5탭: 4번째 '출퇴근'(현장 실행). 질문하기는 노하우 탭 안 세그먼트로.
@@ -44,6 +45,8 @@ const TABS: Record<'junior' | 'owner', Tab[]> = {
     // /owner/knowledge 는 같은 목록의 서브화면(뒤로가기 유지용) — 탭바를 렌더하므로 여기 없으면
     // 그 화면에서 탭바는 보이는데 아무 탭도 안 켜진다.
     { label: '노하우', path: OWNER_KNOWHOW_TAB, icon: 'bulb-outline', iconActive: 'bulb', alsoActiveFor: ['/owner/inbox', '/owner/knowledge'] },
+    // 2026-09-13 퀴즈를 탭으로 올렸다(사장 4탭 → 5탭). 노하우 다음 자리 — 퀴즈는 노하우에서 나온다.
+    { label: '퀴즈', path: '/owner/training', icon: 'school-outline', iconActive: 'school' },
     { label: '업무 채팅', path: '/owner/work', icon: 'briefcase-outline', iconActive: 'briefcase' },
     { label: '설정', path: '/owner/settings', icon: 'settings-outline', iconActive: 'settings' },
   ],

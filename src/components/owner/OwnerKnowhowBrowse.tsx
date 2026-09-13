@@ -4,6 +4,7 @@ import {
   type StyleProp, type ViewStyle,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { goToTab } from '@/components/RoleTabBar';
 import { Ionicons } from '@expo/vector-icons';
 
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
@@ -297,7 +298,7 @@ export function OwnerKnowhowBrowse({
 
   const goAdd = () => router.push('/owner/coach' as never);
   const goHandover = () => router.push('/owner/handover' as never);
-  const goTraining = () => router.push('/owner/training' as never);
+  const goTraining = () => goToTab('/owner/training'); // 퀴즈는 탭이다 — push 하면 스택에 겹친다
   // 매니저 전용 물어보기(정본 §4 "AI 질문 매니저 ✅") — 검색으로 못 찾았을 때의 다음 행동.
   // 사장에겐 숨김(자기 노하우에 자기가 질문하는 표면은 불필요, 사장 AI는 coach가 담당).
   const goAsk = role === 'manager' ? () => router.push('/owner/ask' as never) : undefined;
