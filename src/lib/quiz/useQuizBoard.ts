@@ -370,7 +370,21 @@ export function useQuizBoard() {
         const d = new Date(Date.parse(last));
         const kst = new Date(d.getTime() + 9 * 3600_000);
         const sentDay = `${kst.getUTCMonth() + 1}월 ${kst.getUTCDate()}일`;
-        caption = c.answer_days ? `${sentDay} 보냄 · ${c.answer_days}일 안에` : `${sentDay} 보냄`;
+        /*
+         * ★"3일 안에" → **기간(날짜~날짜)** 으로 바꿨다(2026-09-13 사장 요청).
+         *   "3일 안에"는 기준일이 안 보여서 언제까지인지 세어 봐야 했다 — 목록에서 세게 만들면 안 된다.
+         * ★기준은 **가장 최근 발송일**이다. 마감의 진짜 기준은 사람마다 다른 '받은 날'이라
+         *   (claim_quiz_send 가 받은 날 + answer_days 로 due_on 을 박는다) 이 한 줄이 전원을
+         *   대표할 수는 없다. 그래서 사람별 정확한 문구는 상세 화면(captionOf: "받은 날부터 N일 안에")이
+         *   계속 맡고, 목록은 최근 발송분의 기간을 보여준다.
+         */
+        if (c.answer_days) {
+          const due = new Date(kst.getTime() + c.answer_days * 86_400_000);
+          const dueDay = `${due.getUTCMonth() + 1}월 ${due.getUTCDate()}일`;
+          caption = `${sentDay}~${dueDay}`;
+        } else {
+          caption = `${sentDay} 보냄`;
+        }
         if (cycle) caption = `${cycle} · ${caption}`;
       }
 

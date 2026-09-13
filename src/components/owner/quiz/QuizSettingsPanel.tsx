@@ -29,7 +29,7 @@ import {
 import { todayKst } from '@/lib/quiz/schedule';
 import { SectionLabel } from '@/components/SectionLabel';
 import { QuizDeployPanel } from '@/components/owner/quiz/QuizDeployPanel';
-import { PrimaryButton, qst } from '@/components/owner/quiz/kit';
+import { PrimaryButton, GhostButton, qst } from '@/components/owner/quiz/kit';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
@@ -57,6 +57,7 @@ export function QuizSettingsPanel({
   course,
   staff,
   sends,
+  remind,
   onSaved,
   onOpenResult,
 }: {
@@ -64,6 +65,11 @@ export function QuizSettingsPanel({
   staff: { id: string; name: string }[];
   /** 이 퀴즈의 발송 원장 — 누가 이미 받았나(잠금 판정)와 현재 체크 상태의 출처. */
   sends: QuizAssignment[];
+  /**
+   * '아직 안 푼 N명에게 다시 알리기' — 결과 탭에 있던 것을 여기로 옮겼다(결과 탭은 결과만 본다).
+   * 판정(누가 안 풀었나)은 상세 화면이 한다 — 이 패널이 다시 세지 않는다.
+   */
+  remind?: { count: number; onPress: () => void };
   /** 저장이 끝난 뒤 — 코스·발송 원장을 다시 읽는다. */
   onSaved: () => void;
   onOpenResult: (submissionId: string) => void;
@@ -282,6 +288,16 @@ export function QuizSettingsPanel({
           {removed.length > 0 ? (
             <Text style={s.warnText}>{removed.length}명의 아직 안 나간 배정을 취소해요.</Text>
           ) : null}
+          {/* 다시 알리기 — 새 발송 1건이라 빈도 상한을 그대로 탄다(오늘 이미 받았으면 안 간다). */}
+          {remind ? (
+            <View style={s.remind}>
+              <GhostButton
+                icon="notifications-outline"
+                label={`아직 안 푼 ${remind.count}명에게 다시 알리기`}
+                onPress={remind.onPress}
+              />
+            </View>
+          ) : null}
         </View>
       ) : (
         // 외부 사람 — 링크만. 패널이 링크 목록·복사·기간·회수와 '이 링크로 푼 사람'을 그대로 맡는다.
@@ -328,5 +344,6 @@ const s = StyleSheet.create({
   lockText: { fontSize: 12, fontWeight: '700', color: InkColors.ink3 },
   emptyText: { fontSize: 14, fontWeight: '600', color: InkColors.ink3, paddingVertical: Space.sm },
   warnText: { fontSize: 12.5, fontWeight: '700', color: BrandColors.warnText, marginTop: Space.xs },
+  remind: { marginTop: Space.sm },
   foot: { paddingTop: Space.xs },
 });
