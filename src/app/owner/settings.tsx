@@ -10,7 +10,7 @@ import { useWorkStore } from '@/lib/store/useWorkStore';
 import { useHubStore } from '@/lib/store/useHubStore';
 import { replayGuides as replayGuidesFor } from '@/lib/store/useGuideStore';
 import { showToast } from '@/lib/store/useToastStore';
-import { PLANS, AI_UNIT_NOTE } from '@/lib/config/tiers';
+import { PLANS } from '@/lib/config/tiers';
 import { storeColor } from '@/lib/utils/storeColor';
 import { notifyAction } from '@/lib/utils/confirm';
 import { InkColors } from '@/lib/theme/colors';
@@ -200,7 +200,7 @@ export default function OwnerSettings() {
               first
               icon="sparkles-outline"
               label="AI 사용량"
-              hint={`이번 달 · ${AI_UNIT_NOTE} · 다음 달에 다시 채워져요`}
+              hint="이번 달 · 다음 달에 다시 채워져요"
               value={aiCap != null ? `${aiUsed.toLocaleString()} / ${aiCap.toLocaleString()}` : aiUsed.toLocaleString()}
             />
           )}
