@@ -142,7 +142,6 @@ export default function RootLayout() {
             <Stack.Screen name="privacy" />
             <Stack.Screen name="terms" />
             <Stack.Screen name="legal/[doc]" />
-            <Stack.Screen name="business-info" />
             <Stack.Screen name="account-edit" />
             {/* 매장 진입(stores → 역할 홈 replace)도 슬라이드 없이 — 커버(StoreEnterCover)가 걷히고
                 화면이 Appear 로 등장하는 것이 전환이다(2026-09-03 실기기). 매장 안 서브화면은 owner/junior

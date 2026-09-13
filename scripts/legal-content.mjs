@@ -849,35 +849,103 @@ const DPA = `
 ${DATES}
 `;
 
+// 사업자 정보 표 — 값이 채워진 행만. src/lib/config/business.ts 의 businessRows()와 같은 필터 규칙
+// (빈 문자열 행은 렌더하지 않음 — App Review 2.1(a) placeholder 금지)을 웹 정적 페이지에도 적용한다.
+const BUSINESS_INFO_ROWS = [
+  ['상호', OPERATOR],
+  ['대표자', BUSINESS.ceo],
+  ['사업자등록번호', BUSINESS.bizRegNo],
+  ['통신판매업 신고번호', BUSINESS.mailOrderNo],
+  ['주소', BUSINESS.address],
+  ['고객센터', BUSINESS.phone],
+  ['고객문의', CONTACT_EMAIL],
+  ['호스팅 제공자', 'Supabase / Vercel'],
+].filter(([, v]) => !!v);
+
+const BUSINESS_INFO_PAGE = `
+<h2>사업자 정보</h2>
+<p>「전자상거래 등에서의 소비자보호에 관한 법률」 제10조·제13조에 따른 판매자 정보 고지입니다.</p>
+<div class="tbl">
+<table>
+<tr><th>항목</th><th>내용</th></tr>
+${BUSINESS_INFO_ROWS.map(([k, v]) => `<tr><td>${k}</td><td>${v}</td></tr>`).join('\n')}
+</table>
+</div>
+`;
+
+const FAQ = `
+<h2>시작하기</h2>
+<h3>설치가 필요한가요?</h3>
+<p>아니요. 웹에서 바로 시작해요. 휴대폰 홈 화면에 추가하면 앱처럼 쓸 수 있고, App Store·Google Play에서도 내려받을 수 있어요.</p>
+<h3>어떤 업종이 쓸 수 있나요?</h3>
+<p>카페·음식점·헬스장·학원을 중심으로, 직원과 함께 매장을 운영하는 서비스업이면 쓸 수 있어요. 시작할 때 업종을 고르면 그 업종의 기본 노하우가 미리 담겨요.</p>
+<h3>직원은 어떻게 들어오나요?</h3>
+<p>사장님이 초대코드를 전달하면 직원이 그 코드로 매장에 합류를 신청하고, 사장님이 승인하면 들어와요. 승인 없이 들어올 수 없어요.</p>
+<h3>기계를 잘 못 다루는 직원도 쓸 수 있나요?</h3>
+<p>직원 화면은 물어보기·업무 채팅·출퇴근이 중심이에요. 메신저를 쓸 줄 알면 그대로 쓸 수 있게 만들었어요.</p>
+
+<h2>이용과 데이터</h2>
+<h3>AI가 아무 답이나 지어내지 않나요?</h3>
+<p>매장의 정석의 AI는 사장님이 남긴 노하우에 근거해서만 답하고, 어떤 노하우에서 나온 답인지 출처를 함께 보여줘요. 근거가 없으면 답을 지어내는 대신 사장님께 질문을 전달하고, 사장님의 답이 새 노하우로 쌓여요.</p>
+<h3>우리 가게 노하우를 다른 매장이 볼 수 있나요?</h3>
+<p>볼 수 없어요. 모든 데이터는 데이터베이스 단계에서 매장 단위로 분리돼요. 매장 간 노하우 이동은 같은 사장님 소유의 매장 사이에서, 사장님이 직접 가져올 때만 일어나요.</p>
+<h3>쌓인 노하우를 가지고 나갈 수 있나요?</h3>
+<p>네. 노하우는 언제든 텍스트로 내보낼 수 있어요. 데이터는 사장님 것이라는 게 원칙이에요.</p>
+<h3>탈퇴하면 데이터는 어떻게 되나요?</h3>
+<p>계정을 삭제하면 유예 기간을 거쳐 <a href="${SITE_URL}/privacy">개인정보 처리방침</a>에 따라 파기돼요. 유예 기간 안에 다시 로그인하면 복구할 수 있어요.</p>
+
+<h2>요금·결제</h2>
+<p>요금제와 결제 방법은 <a href="${SITE_URL}/pricing">요금제 안내</a>에서 최신 내용을 확인해 주세요. 여기 없는 질문은 <a href="mailto:${CONTACT_EMAIL}">${CONTACT_EMAIL}</a>으로 보내주시면 답해드려요.</p>
+`;
+
 export const LEGAL_PAGES = [
   {
     slug: 'privacy',
     title: '개인정보처리방침',
     description: '매장의 정석이 수집·이용하는 개인정보 항목과 보유 기간, 처리위탁·국외이전, 앱 접근권한, 정보주체의 권리 행사 방법을 안내합니다.',
     html: PRIVACY,
+    legal: true,
   },
   {
     slug: 'terms',
     title: '서비스 이용약관',
     description: '매장의 정석 서비스의 이용 조건과 절차, 생성형 AI 고지, 유료 이용권·무상 이용기간·환불, 회사와 이용자의 권리·의무를 정한 약관입니다.',
     html: TERMS,
+    legal: true,
   },
   {
     slug: 'account-deletion',
     title: '계정 및 데이터 삭제 안내',
     description: '매장의 정석 계정과 데이터를 삭제하는 방법(앱 내 회원탈퇴·이메일 요청), 삭제 범위·시점과 처리 기간을 안내합니다.',
     html: ACCOUNT_DELETION,
+    legal: true,
   },
   {
     slug: 'ai-policy',
     title: 'AI 이용정책',
     description: '매장의 정석 AI 기능의 데이터 처리 방식(전송 범위·학습 미사용·보관), AI 생성 표시, 허용 범위와 금지행위를 안내합니다.',
     html: AI_POLICY,
+    legal: true,
   },
   {
     slug: 'dpa',
     title: '개인정보 처리위탁 계약',
     description: '사장님(위탁자)과 회사(수탁자) 간 직원 근로정보 처리에 관한 위수탁 계약 전문입니다.',
     html: DPA,
+    legal: true,
+  },
+  {
+    slug: 'faq',
+    title: '자주 묻는 질문',
+    description: '매장의 정석 이용 중 자주 나오는 질문과 답변을 안내합니다.',
+    html: FAQ,
+    legal: false,
+  },
+  {
+    slug: 'business-info',
+    title: '사업자 정보',
+    description: '매장의 정석을 운영하는 사업자 정보(상호·대표자·사업자등록번호·주소·연락처)를 안내합니다.',
+    html: BUSINESS_INFO_PAGE,
+    legal: false,
   },
 ];

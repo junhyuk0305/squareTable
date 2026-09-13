@@ -189,9 +189,10 @@ export default function AccountSettings() {
           {/* AI 이용정책·처리위탁 계약은 웹 정적 페이지가 유일한 정본(legal-content.mjs)이라 앱 요약 화면이 없다.
               약관·처리방침 본문이 참조하는 문서이므로 앱에서도 도달 경로가 있어야 죽은 참조가 안 된다. */}
           <SettingsRow icon="document-text-outline" label="AI 이용정책" onPress={() => void Linking.openURL('https://dochackchack.com/ai-policy').catch(() => {})} />
-          {/* 전자상거래법상 판매자 정보 고지 의무 — 화면(/business-info)은 있었지만 앱 어디서도 링크가 없어
-              사용자가 도달할 수 없었다(2026-07-29 IA 점검에서 발견). 유료 판매 중이므로 접근 경로가 필수다. */}
-          <SettingsRow icon="business-outline" label="사업자 정보" onPress={() => router.push('/business-info')} />
+          {/* FAQ·사업자 정보도 AI 이용정책과 같은 이유로 웹 정적 페이지가 정본이다(legal-content.mjs) —
+              빌드 없이 문서를 고칠 수 있도록 앱에는 요약 화면을 두지 않고 바로 연다. */}
+          <SettingsRow icon="help-circle-outline" label="자주 묻는 질문" onPress={() => void Linking.openURL('https://dochackchack.com/faq').catch(() => {})} />
+          <SettingsRow icon="business-outline" label="사업자 정보" onPress={() => void Linking.openURL('https://dochackchack.com/business-info').catch(() => {})} />
           <SettingsRow icon="chatbubble-ellipses-outline" label="문의하기" onPress={() => setContactModal(true)} />
           <SettingsRow icon="information-circle-outline" label="버전 정보" value={`v${version}`} />
         </SettingsSection>

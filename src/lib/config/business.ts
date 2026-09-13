@@ -40,26 +40,3 @@ export const TERMS_VERSION = '2026-09-13';
  */
 export const PAYMENT_SLA_SENTENCE = '평일 10시~19시에 확인하고, 늦어도 다음 영업일 안에 열어드려요.';
 
-/** 값이 채워진 행만 [라벨, 값] 쌍으로 돌려준다. 빈 값은 렌더하지 않는다. */
-export function businessRows(): [string, string][] {
-  const b = BUSINESS_INFO;
-  return (
-    [
-      ['상호', b.companyName],
-      ['대표자', b.ceo],
-      ['사업자등록번호', b.bizRegNo],
-      ['통신판매업 신고번호', b.mailOrderNo],
-      ['주소', b.address],
-      ['고객센터', b.phone],
-      ['고객문의', b.email],
-      ['호스팅 제공자', b.hosting],
-    ] as [string, string][]
-  ).filter(([, v]) => !!v);
-}
-
-/**
- * 전자상거래법 제10조·제13조가 요구하는 고지 항목이 전부 채워졌는가(유료 판매 고지 노출 판정용).
- * 제13조 제1항 2호가 전화번호까지 요구하므로 phone·address 도 함께 본다.
- */
-export const BUSINESS_INFO_COMPLETE =
-  !!BUSINESS_INFO.bizRegNo && !!BUSINESS_INFO.mailOrderNo && !!BUSINESS_INFO.address && !!BUSINESS_INFO.phone;

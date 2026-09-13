@@ -297,7 +297,7 @@ function writeLegalPages() {
   </head>
   <body>
     <h1>${esc(page.title)}</h1>
-    <p class="meta">${BRAND} · ${esc(OPERATOR)} · 시행일 ${EFFECTIVE_DATE}</p>
+    <p class="meta">${BRAND} · ${esc(OPERATOR)}${page.legal ? ` · 시행일 ${EFFECTIVE_DATE}` : ''}</p>
 ${labelTables(page.html)}
     <p class="foot">${siblings} · <a href="${SITE_URL}/">${BRAND} 홈으로</a></p>
     <p class="foot" style="margin-top:12px;padding-top:0;border-top:0;font-size:13px">${esc(businessLine())}</p>
