@@ -4,12 +4,10 @@
  * 만드는 자리: `QuizLinkSheet`(이미 만든 퀴즈에서) · `quiz-new`(외부용으로 만들 때 자동 생성).
  * 토큰 만들기와 주소 조립을 두 곳에 복제하면 한쪽만 고쳐져 **열리지 않는 링크**가 나간다.
  */
-import { Platform } from 'react-native';
-
 import { genId } from '@/lib/utils/id';
 // 주소 앞부분은 초대 링크와 공용 SSOT(config/site) — 도메인이 두 벌이 되지 않게 한 곳에서 읽는다.
 import { siteOrigin } from '@/lib/config/site';
-// 웹 클립보드 / 네이티브 공유 시트 분기도 초대 블록과 공용(utils/shareText).
+// 클립보드 복사는 초대 블록과 공용 SSOT(utils/shareText) — 웹·네이티브 모두 복사다.
 import { shareText } from '@/lib/utils/shareText';
 
 export { siteOrigin };
@@ -29,30 +27,25 @@ export function quizLinkUrl(token: string): string {
 export type CopyLinkResult = 'copied' | 'shared' | 'dismissed' | 'failed';
 
 /**
- * 버튼 문구. 네이티브 앱엔 `navigator.clipboard` 가 없어(클립보드 모듈 미설치) 복사 버튼이 **항상 실패**했다
- * (2026-09-08 실측). 그래서 네이티브는 RN 내장 공유 시트를 연다 — 모듈 추가·재빌드 없이 쓰고, 시트 안에 '복사'도 있다.
+ * 버튼 문구·아이콘. 웹·네이티브 둘 다 **복사**다(2026-09-14 · expo-clipboard 도입).
+ * 그전엔 네이티브에 클립보드 모듈이 없어 공유 시트를 열었고 문구도 '공유'로 갈라져 있었다.
+ * 동작 정본은 `utils/shareText` 하나다 — 여기서는 말과 아이콘만 정한다.
  */
-export const COPY_LINK_LABEL = Platform.OS === 'web' ? '링크 복사' : '링크 공유';
-export const COPY_LINK_SHORT = Platform.OS === 'web' ? '복사' : '공유';
-/** 아이콘 버튼용 — 문구와 **같은 자리**에서 정한다(둘이 갈라지면 복사 아이콘이 공유 시트를 여는 꼴이 난다).
- *  네이티브에 클립보드 모듈이 들어오면 여기와 위 두 줄만 'copy-outline'/'복사'로 바꾸면 된다. */
-export const COPY_LINK_ICON = Platform.OS === 'web' ? 'copy-outline' : 'share-outline';
+export const COPY_LINK_LABEL = '링크 복사';
+export const COPY_LINK_SHORT = '복사';
+export const COPY_LINK_ICON = 'copy-outline';
 
 /**
- * 웹은 클립보드 복사, 네이티브는 공유 시트. 결과를 돌려준다 — **조용히 실패하지 않는다**(복사가 막힌 브라우저가 있고,
+ * 웹·네이티브 모두 클립보드 복사. 결과를 돌려준다 — **조용히 실패하지 않는다**(복사가 막힌 브라우저가 있고,
  * 그때 아무 말이 없으면 사장은 빈 주소를 붙여 넣는다). 문구는 `copyLinkToast` 가 정한다.
  */
 export async function copyQuizLink(token: string): Promise<CopyLinkResult> {
   return shareText(quizLinkUrl(token));
 }
 
-/** 결과 토스트 — 공유 시트는 그 자체가 피드백이라 열렸거나 닫은 경우엔 토스트를 띄우지 않는다(null). */
+/** 결과 토스트 — 'shared'·'dismissed'(옛 공유 시트 경로)는 그 자체가 피드백이라 조용히 둔다(null). */
 export function copyLinkToast(r: CopyLinkResult): { text: string; tone?: 'good' } | null {
   if (r === 'copied') return { text: '링크를 복사했어요', tone: 'good' };
-  if (r === 'failed') {
-    return {
-      text: Platform.OS === 'web' ? '복사가 안 됐어요. 주소를 길게 눌러 복사해 주세요' : '공유 창을 열지 못했어요. 주소를 길게 눌러 복사해 주세요',
-    };
-  }
+  if (r === 'failed') return { text: '복사가 안 됐어요. 주소를 길게 눌러 복사해 주세요' };
   return null;
 }

@@ -3,12 +3,13 @@
 //
 // 실증(3역할 × 도메인):
 //  · 직원(junior): 시급 쓰기·제안 승인·발행·합류 승인·급여설정·임명 전부 거부(회귀)
-//  · 매니저: 시급·출퇴근 보정·제안 승인·노하우 발행·합류 승인·급여설정 허용 /
+//  · 매니저: 출퇴근 보정·제안 승인·노하우 발행 허용 /
+//            ★시급·급여설정·합류 승인은 **거부**(0201, 2026-09-14 — 앱 허용목록에 맞춰 서버를 좁힘) /
 //            임명·매장이름·매장삭제 거부(사장 전용 잠금)
 //  · 좌석캡: 매니저도 무료 3좌석에 포함(junior+manager 카운트)
 //  · 역할 열람: 같은 매장 멤버는 unit_members 역할 열람 가능, 타 테넌트는 불가
 //  · ★보안: 해제 즉시 권한 소멸 / 매니저 내보내기·나가기 후 멤버십 잔존 0(재접근 차단)
-// 실행: node scripts/qa-roles.mjs (.env + .env.seed 필요). 적용 전제 = 0093 push.
+// 실행: node scripts/qa-roles.mjs (.env + .env.seed 필요). 적용 전제 = 0093 + 0201 push.
 import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -93,7 +94,7 @@ try {
   const rDeny = await M.rpc('set_member_role', { p_uid: jId, p_role: 'manager' });
   check('직원: 임명 거부(not_owner)', /not_owner/.test(rDeny.error?.message ?? ''), rDeny.error?.message ?? '');
   const pDeny = await M.rpc('save_payroll_settings', { p_settings: { qa: true } });
-  check('직원: 급여설정 거부(manager_only)', /manager_only/.test(pDeny.error?.message ?? ''), pDeny.error?.message ?? '');
+  check('직원: 급여설정 거부(owner_only)', /owner_only/.test(pDeny.error?.message ?? ''), pDeny.error?.message ?? '');
 
   // ── ② 임명(사장 전용) ────────────────────────────────────────────────────
   const selfDeny = await O.rpc('set_member_role', { p_uid: oId, p_role: 'manager' });
@@ -104,24 +105,31 @@ try {
   check('★M my_units.role=manager', mu?.[0]?.role === 'manager', `role=${mu?.[0]?.role}`);
 
   // ── ③ 매니저 허용 도메인 ─────────────────────────────────────────────────
-  const wOk = await M.from('wages').upsert({ unit_id: S1, staff_id: jId, hourly_wage: 12000 }).select('staff_id');
-  check('★매니저: 시급 쓰기 허용', !wOk.error && (wOk.data?.length ?? 0) === 1, wOk.error?.message ?? '');
+  // ★2026-09-14(0201): 시급·급여 설정·합류 승인은 매니저에게서 **거뒀다**. 0093(07-30)이 열어 뒀지만
+  //   그 일을 하는 화면(/owner/staff·/owner/payroll)이 앱 허용목록에 없어 매니저는 도착하지 못했다
+  //   — 서버는 허용, 앱은 차단. 사장 판정: 앱이 기준 → 서버를 좁혔다. 아래 세 줄이 그 카운터파트다.
+  const wMDeny = await M.from('wages').upsert({ unit_id: S1, staff_id: jId, hourly_wage: 12000 }).select('staff_id');
+  check('★매니저: 시급 쓰기 거부(0201)', !!wMDeny.error, wMDeny.error?.code ?? '(차단 안 됨!)');
   const att = await M.from('attendance').insert({ id: `att_${s}`, unit_id: S1, staff_id: jId, date: '2026-07-30', work_minutes: 60 });
   check('★매니저: 남의 출퇴근 보정 허용', !att.error, att.error?.message ?? '');
   const sOk = await M.from('playbook_suggestions').update({ status: 'approved', reviewed_by: mId }).eq('id', sugId).select('id');
   check('★매니저: 제안 승인 허용', !sOk.error && (sOk.data?.length ?? 0) === 1, sOk.error?.message ?? '');
   const eOk = await M.from('playbook_entries').insert({ id: `pe_m_${s}`, unit_id: S1, category: 'Know-how', title: 'QA 매니저 발행', creator_id: mId, creator_name: 'QA매니저' });
   check('★매니저: 노하우 발행 허용(저자=매니저)', !eOk.error, eOk.error?.message ?? '');
-  const pOk = await M.rpc('save_payroll_settings', { p_settings: { qa: true } });
-  check('★매니저: 급여설정 허용', !pOk.error, pOk.error?.message ?? '');
+  const pMDeny = await M.rpc('save_payroll_settings', { p_settings: { qa: true } });
+  check('★매니저: 급여설정 거부(0201·owner_only)', /owner_only/.test(pMDeny.error?.message ?? ''), pMDeny.error?.message ?? '(차단 안 됨!)');
+  const pOk = await O.rpc('save_payroll_settings', { p_settings: { qa: true } });
+  check('회귀: 사장 급여설정 정상', !pOk.error, pOk.error?.message ?? '');
 
-  // 합류 승인 — K를 매니저가 승인.
+  // 합류 승인 — 매니저는 거부되고, 사장이 승인한다(0201).
   const K = mk();
   const kId = await signUpSession(K, `qa_rol_k_${s}@example.com`, { name: 'QA직원K', role: 'junior', phone: qaPhones[4] });
   cleanup.push(K);
   await K.rpc('join_by_invite', { p_code: code1 });
-  const { error: ka } = await M.rpc('approve_member', { p_uid: kId });
-  check('★매니저: 합류 승인 허용', !ka, ka?.message ?? '');
+  const { error: kaM } = await M.rpc('approve_member', { p_uid: kId });
+  check('★매니저: 합류 승인 거부(0201·not_owner)', /not_owner/.test(kaM?.message ?? ''), kaM?.message ?? '(차단 안 됨!)');
+  const { error: ka } = await O.rpc('approve_member', { p_uid: kId });
+  check('회귀: 사장 합류 승인 정상', !ka, ka?.message ?? '');
 
   // 좌석캡 — 무료 3좌석에 매니저 포함(M+J+K=3) → 4번째 승인은 staff_limit.
   // ★0134(가입하면 N일): create_store 가 1호점을 **single·trialing** 으로 연다. 그 동안은 캡을 일부러
@@ -138,7 +146,8 @@ try {
   cleanup.push(L);
   const { data: lRow } = await L.auth.getUser();
   await L.rpc('join_by_invite', { p_code: code1 });
-  const la = await M.rpc('approve_member', { p_uid: lRow.user.id });
+  // ★승인 주체는 **사장**이다(0201 이후 매니저는 not_owner 로 먼저 튕겨 캡이 조용히 안 재진다).
+  const la = await O.rpc('approve_member', { p_uid: lRow.user.id });
   check('★좌석캡: 매니저 포함 3좌석 초과 승인 거부(staff_limit)', /staff_limit/.test(la.error?.message ?? ''), la.error?.message ?? '(캡 미작동!)');
 
   // ── ④ 매니저 잠금 3영역(사장 전용) ───────────────────────────────────────

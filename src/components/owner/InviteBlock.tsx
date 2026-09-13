@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, Text, Pressable, StyleSheet, Platform, type StyleProp, type ViewStyle } from 'react-native';
+import { View, Text, Pressable, StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { SectionLabel } from '@/components/SectionLabel';
@@ -57,13 +57,9 @@ export function InviteBlock({
       showToast(what === 'code' ? '초대코드를 복사했어요' : '초대 링크를 복사했어요', 'good');
       return;
     }
-    // 공유 시트는 그 자체가 피드백이라 열렸거나 닫은 경우엔 조용히 둔다. 실패만 말한다.
+    // 'shared'·'dismissed'(옛 공유 시트 경로)는 그 자체가 피드백이라 조용히 둔다. 실패만 말한다.
     if (r === 'failed') {
-      showToast(
-        Platform.OS === 'web'
-          ? '복사가 안 됐어요. 화면의 코드를 길게 눌러 복사해 주세요'
-          : '공유 창을 열지 못했어요. 화면의 코드를 길게 눌러 복사해 주세요',
-      );
+      showToast('복사가 안 됐어요. 화면의 코드를 길게 눌러 복사해 주세요');
     }
   };
 
@@ -78,7 +74,6 @@ export function InviteBlock({
     void shareText(message).then((r) => done('link', r));
   };
 
-  const isWeb = Platform.OS === 'web';
 
   return (
     <View style={style}>
@@ -105,11 +100,11 @@ export function InviteBlock({
           <Pressable
             onPress={sendCode}
             accessibilityRole="button"
-            accessibilityLabel={isWeb ? '초대코드 복사' : '초대코드 공유'}
+            accessibilityLabel="초대코드 복사"
             style={({ pressed }) => [s.copyBtn, pressed && { opacity: 0.85 }]}
           >
-            <Ionicons name={copied === 'code' ? 'checkmark' : isWeb ? 'copy-outline' : 'share-outline'} size={15} color={InkColors.ink} />
-            <Text style={s.copyText}>{copied === 'code' ? '복사됨' : isWeb ? '복사' : '공유'}</Text>
+            <Ionicons name={copied === 'code' ? 'checkmark' : 'copy-outline'} size={15} color={InkColors.ink} />
+            <Text style={s.copyText}>{copied === 'code' ? '복사됨' : '복사'}</Text>
           </Pressable>
           {action}
         </View>
@@ -118,11 +113,11 @@ export function InviteBlock({
           onPress={sendLink}
           scaleTo={0.97}
           accessibilityRole="button"
-          accessibilityLabel={isWeb ? '초대 링크 복사' : '초대 링크 공유'}
+          accessibilityLabel="초대 링크 복사"
           style={s.primary}
         >
-          <Ionicons name={isWeb ? 'link-outline' : 'share-outline'} size={16} color={InkColors.bubbleText} />
-          <Text style={s.primaryText}>{copied === 'link' ? '복사됨' : isWeb ? '초대 링크 복사' : '초대 링크 공유'}</Text>
+          <Ionicons name="link-outline" size={16} color={InkColors.bubbleText} />
+          <Text style={s.primaryText}>{copied === 'link' ? '복사됨' : '초대 링크 복사'}</Text>
         </PressableScale>
       </View>
     </View>

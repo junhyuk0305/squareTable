@@ -211,7 +211,7 @@ export function QuizDeployPanel({ course, onOpenResult }: { course: TrainingCour
                 {/* role=button Pressable 중첩 금지 — 행은 View 이고 액션만 형제 버튼이다. */}
                 <View style={st.acts}>
                   {/* 복사는 아이콘 하나로(2026-09-13) — 행에서 가장 많이 누르는 일이라 글자보다 빨리 찾는다.
-                      네이티브는 클립보드 모듈이 없어 공유 시트를 연다 → 아이콘도 그에 맞춰 바뀐다(link.ts 정본). */}
+                      문구·아이콘 정본은 link.ts, 동작 정본은 utils/shareText 다(웹·네이티브 모두 복사). */}
                   <IconAction icon={COPY_LINK_ICON} a11y={COPY_LINK_LABEL} onPress={() => void copy(l.token)} />
                   <RowAction label="기간" a11y="열어 둘 기간 바꾸기" onPress={() => openExtend(l)} />
                   <RowAction label="지우기" a11y="링크 지우기" tone="danger" disabled={busy} onPress={() => void remove(l.id)} />

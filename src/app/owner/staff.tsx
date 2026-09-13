@@ -59,7 +59,8 @@ export default function OwnerStaffScreen() {
   const scheduleLoaded = useScheduleStore((s) => s.loaded);
   const ready = staffLoaded && wagesSettled && attendanceLoaded && workLoaded && scheduleLoaded;
   const INVITE_CODE = useSessionStore((s) => s.inviteCode) || '------';
-  // 0093: 이 화면은 매니저도 쓴다(승인·시급·급여). 사장 전용 = 내보내기·코드 변경·매니저 지정.
+  // 0201(2026-09-14): 이 화면은 **사장 전용**이다 — 승인·시급·급여를 서버가 사장으로 좁혔고,
+  // roles.ts 허용목록에도 없어 매니저는 여기에 도착하지 못한다. 0093 의 '매니저도 쓴다'는 낡았다.
   const isOwner = useSessionStore((s) => s.role) === 'owner';
 
   // 내보낼 직원 — 확인 모달용. 실수 방지 위해 빨강 모달로 한 번 더 확인한다.
@@ -401,7 +402,7 @@ export default function OwnerStaffScreen() {
       />
       {/* 매니저 안내(2026-09-13) — 실제로 **앱에서 되는 것**만 적는다.
           경계의 정본은 클라이언트 허용목록(lib/utils/roles.ts MANAGER_OWNER_ROUTES)이다.
-          ⚠️서버(0093)는 이보다 넓게 허용한다(시급 저장·급여 설정·합류 승인) — 어긋남은 roles.ts 에 기록. */}
+          서버 쪽 어긋남(0093 이 매니저에게 열어 뒀던 시급·급여·합류 승인)은 0201 에서 닫혔다. */}
       <ConfirmModal
         visible={!!managerTarget}
         icon="ribbon-outline"
