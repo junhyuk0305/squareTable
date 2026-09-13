@@ -357,6 +357,8 @@ async function sweepQuizSends(token: string): Promise<{ swept: number; sent: num
 /**
  * 사장 알림 스윕(0191) — 같은 크론 틱에서 퀴즈 발송 다음으로 돈다.
  * 좌석 잠김 회차 적재·AI 80/100% 행(0193 이 적재)·선점·수신자 해석은 전부 sweep_owner_alerts() 가 한다.
+ * ★0194: 기본 야간창(22:00~08:00 KST)엔, 그 매장에 개인 방해금지를 켠 사장이 없으면 선점을 미룬다
+ *   (알림은 큐에 남아 다음 낮 스윕이 그대로 보낸다 — 유실 아님). 인자 없이 부르면 그 판정은 그대로 적용된다.
  * 여기는 배달과 결과 기록만. 탭하면 앱 안 요금제 화면(/billing) — 외부 결제 유도가 아니다.
  */
 async function sweepOwnerAlerts(token: string): Promise<{ swept: number; sent: number; error?: string }> {

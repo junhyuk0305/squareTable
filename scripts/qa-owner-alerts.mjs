@@ -11,6 +11,8 @@
 //   ⑤ 중간 해소 → 주기 닫힘 · 닫힌 주기는 시간이 지나도 회차가 안 늘어난다
 //   ⑥ 다시 잠김 → 새 주기 · 1회차부터
 //   ⑦ AI 80%·100% — 임계선을 넘는 호출에서 월 1회씩, 넘은 뒤 호출은 추가 행 없음
+//   ⑧ 기본 야간 방해금지(0194) — 개인 방해금지를 안 켠 매장은 22:00~08:00(KST) 선점 안 함(유실 아님, 낮에 그대로 나감)
+//   ⑨ 사장이 방해금지를 직접 켠 매장은 기본 야간 차단에서 빠진다 — 새벽에도 즉시 선점
 //
 // ⚠️ 스윕은 **전역**이다 — 다른 매장의 미발송 알림도 같이 나간다(크론이 5분 안에 보낼 것을 앞당길 뿐).
 // 실행: node scripts/qa-owner-alerts.mjs   (.env + .env.seed)
@@ -123,6 +125,16 @@ async function edgeAnswer(client) {
 async function seedAiUsage(unitId, used) {
   const { error } = await admin.from('ai_usage_monthly').upsert({ unit_id: unitId, month: kstMonth, used }, { onConflict: 'unit_id,month' });
   if (error) throw new Error(`seedAiUsage 실패: ${error.message}`);
+}
+// 오늘(KST) 벽시계 hh:mm 을 ISO 로 — sweep_owner_alerts(p_now) 에 야간/주간을 결정적으로 주입한다.
+function kstToday(hh, mm) {
+  const d = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Seoul' }).format(new Date());
+  return new Date(`${d}T${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}:00+09:00`).toISOString();
+}
+// 크론 입구(엣지)를 거치지 않고 RPC 를 직접 부른다 — p_now 는 엣지가 실어 나르지 않는 테스트 전용 파라미터.
+async function sweepAt(iso) {
+  const { error } = await admin.rpc('sweep_owner_alerts', { p_now: iso });
+  if (error) throw new Error(`sweep_owner_alerts(p_now) 실패: ${error.message}`);
 }
 
 let origFree = null, origTrial = null;
@@ -242,6 +254,57 @@ async function main() {
     await sweep();
     ai = await alerts(unit, 'ai_cap');
     check('⑦ AI 알림도 스윕이 선점·사장 1명', ai.every((x) => !!x.claimed_at && x.recipients === 1), JSON.stringify(ai));
+
+    // ⑧ 기본 야간 방해금지(0194) — 개인 방해금지를 안 켠 매장은 새벽엔 선점 안 함(별도 매장 — 앞 주기와 안 섞이게)
+    const N = await signUp('owner', 'QA야간사장');
+    const { data: csN, error: ceN } = await N.c.rpc('create_store', { p_store_name: 'QA 야간점', p_industry: '카페·디저트', p_biz_no: null });
+    if (ceN) throw new Error(`create_store 실패: ${ceN.message}`);
+    const unitN = csN[0].unit_id;
+    await adminActivate(unitN, 30, 'single');
+    for (let i = 1; i <= 4; i++) {
+      const j = await signUp('junior', `QA야간직원${i}`);
+      const { error: je } = await j.c.rpc('join_by_invite', { p_code: csN[0].invite_code });
+      if (je) throw new Error(`join_by_invite 실패: ${je.message}`);
+      const { error: ae } = await N.c.rpc('approve_member', { p_uid: j.uid });
+      if (ae) throw new Error(`approve_member 실패: ${ae.message}`);
+    }
+    await expire(unitN);
+
+    await sweepAt(kstToday(2, 30)); // 새벽 2:30 — 회차·1회차 행은 생기지만 선점은 안 된다
+    let na = await alerts(unitN, 'seat_lock');
+    check('⑧ 새벽엔 알림 행이 생겨도 선점 안 됨', na.length === 1 && !na[0].claimed_at, JSON.stringify(na));
+
+    await sweepAt(kstToday(2, 35)); // 야간 재실행에도 그대로 미선점(유실도 중복도 아님)
+    na = await alerts(unitN, 'seat_lock');
+    check('⑧ 야간 재실행에도 선점 안 됨', na.length === 1 && !na[0].claimed_at, JSON.stringify(na));
+
+    await sweepAt(kstToday(9, 0)); // 낮이 되면 큐에 남아 있던 알림을 그대로 보낸다 — 유실 없음
+    na = await alerts(unitN, 'seat_lock');
+    check('⑧ 낮이 되면 선점됨(유실 없음)', na.length === 1 && !!na[0].claimed_at, JSON.stringify(na));
+
+    // ⑨ 사장이 방해금지를 직접 켠 매장은 기본 야간 차단에서 빠진다 — 개인 설정이 기본값을 이긴다
+    const P = await signUp('owner', 'QA개인설정사장');
+    const { data: csP, error: ceP } = await P.c.rpc('create_store', { p_store_name: 'QA 개인설정점', p_industry: '카페·디저트', p_biz_no: null });
+    if (ceP) throw new Error(`create_store 실패: ${ceP.message}`);
+    const unitP = csP[0].unit_id;
+    await adminActivate(unitP, 30, 'single');
+    for (let i = 1; i <= 4; i++) {
+      const j = await signUp('junior', `QA개인직원${i}`);
+      const { error: je } = await j.c.rpc('join_by_invite', { p_code: csP[0].invite_code });
+      if (je) throw new Error(`join_by_invite 실패: ${je.message}`);
+      const { error: ae } = await P.c.rpc('approve_member', { p_uid: j.uid });
+      if (ae) throw new Error(`approve_member 실패: ${ae.message}`);
+    }
+    const { error: prefErr } = await P.c.rpc('save_unit_member_prefs', {
+      p_unit_id: unitP, p_nickname: null, p_color: null, p_muted: false,
+      p_quiet_enabled: true, p_quiet_start: '01:00', p_quiet_end: '05:00',
+    });
+    if (prefErr) throw new Error(`save_unit_member_prefs 실패: ${prefErr.message}`);
+    await expire(unitP);
+
+    await sweepAt(kstToday(2, 30)); // 자기 방해금지 시간(01:00~05:00) 안이라도 기본 차단은 안 걸린다
+    const pa = await alerts(unitP, 'seat_lock');
+    check('⑨ 방해금지를 직접 켠 매장은 새벽에도 즉시 선점', pa.length === 1 && !!pa[0].claimed_at, JSON.stringify(pa));
   } finally {
     await restore();
     console.log('  … app_config 원복');
