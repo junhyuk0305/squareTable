@@ -5,7 +5,7 @@ import type { FeedItem, TaskTemplate, DoneMark } from '@/lib/store/useWorkStore'
 import { occursOn } from '@/lib/store/useWorkStore';
 import type { SwapRequest, ShiftTemplate } from '@/lib/store/useScheduleStore';
 import type { PendingMember } from '@/lib/store/useStaffStore';
-import type { UnknownQuery, PlaybookSuggestion, PaymentClaim } from '@/types';
+import type { UnknownQuery, PlaybookSuggestion, PaymentClaim, OwnerAlert } from '@/types';
 // D4 '도와줄 수 있는 질문' 판정 SSOT — 벨 배지·알림 목록이 '내 공간' 리스트와 같은 축을 보게 재사용한다.
 import { answerableQuestions } from '@/lib/store/useUnknownQueueStore';
 import { fmtDateKo } from '@/lib/utils/schedule';
@@ -233,7 +233,9 @@ export function buildJuniorNotifications(args: {
 // + 입금 신고 검토 결과(0083) — 처리 대기가 아니라 "우리가 답한 결과"라 사장이 반드시 봐야 한다.
 export type OwnerNotifKind =
   | 'join_request' | 'question' | 'suggestion' | 'swap_approval' | 'mention'
-  | 'payment_approved' | 'payment_rejected';
+  | 'payment_approved' | 'payment_rejected'
+  // 0191 사장 알림 — 좌석 잠김 · AI 사용량 80%·100%
+  | 'seat_lock' | 'ai_cap';
 export type OwnerNotifRoute =
   | '/owner/inbox' | '/owner/suggestions' | '/owner/schedule' | '/owner/staff' | '/owner/work'
   | '/owner/categories' | '/billing';
@@ -279,8 +281,11 @@ export function ownerUnreadCount(
   ackAt?: string | null,
   /** 입금 신고(0083). 통합 알림(cross-store)은 이 축을 공급하지 않으므로 기본 빈 배열. */
   claims: PaymentClaim[] = [],
+  /** 사장 알림(0191). 통합 알림은 이 축도 공급하지 않는다. */
+  alerts: OwnerAlert[] = [],
 ): number {
   return (
+    alerts.filter((a) => isAfterAck(a.created_at, ackAt)).length +
     pending.filter((p) => isAfterAck(p.created_at, ackAt)).length +
     queue.filter((u) => isPendingQuestion(u) && isAfterAck(u.asked_at, ackAt)).length +
     suggestions.filter((s) => isPendingSuggestionToReview(s, me) && isAfterAck(s.created_at, ackAt)).length +
@@ -305,9 +310,24 @@ export function buildOwnerNotifications(args: {
   ackAt?: string | null;
   /** 입금 신고 검토 결과(0083) 알림용. 없으면 해당 알림 없음. */
   claims?: PaymentClaim[];
+  /** 사장 알림(0191) — 좌석 잠김 · AI 사용량. 없으면 해당 알림 없음. */
+  alerts?: OwnerAlert[];
 }): OwnerNotif[] {
-  const { queue, suggestions, swaps, pending, nameOf, feed = [], userId: me, ackAt, claims = [] } = args;
+  const { queue, suggestions, swaps, pending, nameOf, feed = [], userId: me, ackAt, claims = [], alerts = [] } = args;
   const out: OwnerNotif[] = [];
+
+  // 사장 알림(0191) — 문구는 서버가 적재한 그대로(푸시와 같은 문장). 탭하면 앱 안 요금제 화면.
+  for (const a of alerts) {
+    out.push({
+      id: `alert_${a.id}`,
+      kind: a.kind,
+      title: a.title,
+      body: a.body,
+      at: a.created_at,
+      unread: isAfterAck(a.created_at, ackAt),
+      route: '/billing',
+    });
+  }
 
   // 멘션 — 직원/동료가 채팅·댓글에서 사장(나)을 @언급(내 글 제외). 탭하면 업무 채팅으로.
   if (me) {

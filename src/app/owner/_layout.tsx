@@ -12,6 +12,7 @@ import { useScheduleStore } from '@/lib/store/useScheduleStore';
 import { useSuggestionStore } from '@/lib/store/useSuggestionStore';
 import { useMemberPrefsStore } from '@/lib/store/useMemberPrefsStore';
 import { usePaymentClaimStore } from '@/lib/store/usePaymentClaimStore';
+import { useOwnerAlertStore } from '@/lib/store/useOwnerAlertStore';
 import { purgeExpiredFormerStaff } from '@/lib/db';
 import { retryPendingEmbeddings } from '@/lib/ai/embedBacklog';
 import { HAS_SUPABASE } from '@/lib/supabase';
@@ -51,6 +52,8 @@ export default function OwnerLayout() {
     useMemberPrefsStore.getState().hydrate();
     // 입금 신고 검토 결과(0083)도 벨 배지 축 — 어느 탭에 있든 '입금 확인됨/반려됨'이 잡히게.
     void usePaymentClaimStore.getState().hydrate();
+    // 사장 알림(0191 좌석 잠김·AI 사용량)도 벨 배지 축.
+    void useOwnerAlertStore.getState().hydrate();
     // 퇴사 6개월 경과분 개인 기록 자동 정리(기회적 1회, 실패 무해).
     // 0093: 파기는 사장 전용(0027 owner_only) — 매니저 세션에서 부르면 400 + 관측 노이즈만 남아 게이트.
     if (useSessionStore.getState().role === 'owner') void purgeExpiredFormerStaff();
@@ -138,7 +141,7 @@ export default function OwnerLayout() {
         //   항목을 iOS 26 이 '바 버튼'으로 취급해 유리 캡슐을 씌운다 → 웹과 같은 "왼쪽 정렬 평문 제목 +
         //   담백한 뒤로가기"를 네이티브 헤더로는 낼 수 없다. 모든 화면이 `ScreenTitleHeader` 를 직접 그린다.
         //   ★여기서 끄는 것이 핵심이다 — 화면에서 끄면 마운트 전 한 프레임 깜빡인다(native-audit: header-flash).
-        headerShown: false,
+        headerShown: false,
       }}
     >
       {/* ★헤더를 끌 화면은 **레이아웃에서부터** 끈다(2026-09-07 iOS 실기기). 화면 안의

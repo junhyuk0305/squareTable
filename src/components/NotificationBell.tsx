@@ -12,6 +12,7 @@ import { useUnknownQueueStore } from '@/lib/store/useUnknownQueueStore';
 import { useSuggestionStore } from '@/lib/store/useSuggestionStore';
 import { useStaffStore } from '@/lib/store/useStaffStore';
 import { usePaymentClaimStore } from '@/lib/store/usePaymentClaimStore';
+import { useOwnerAlertStore } from '@/lib/store/useOwnerAlertStore';
 import { useMemberPrefsStore } from '@/lib/store/useMemberPrefsStore';
 import { todayStr } from '@/lib/utils/attendance';
 import { juniorUnreadCount, managerUnreadCount, ownerUnreadCount } from '@/lib/utils/notifications';
@@ -79,12 +80,13 @@ export function OwnerNotificationBell({ edge = true }: { edge?: boolean } = {}) 
   const templates = useWorkStore((s) => s.templates);
   const done = useWorkStore((s) => s.done);
   const claims = usePaymentClaimStore((s) => s.claims);
+  const alerts = useOwnerAlertStore((s) => s.alerts);
   const unitId = useSessionStore((s) => s.unitId);
   const ackAt = useMemberPrefsStore((s) => (unitId ? (s.ackByUnit[unitId] ?? null) : null));
   const today = todayStr();
 
   const count = useMemo(() => {
-    const base = ownerUnreadCount(queue, suggestions, swaps, pending, feed, userId, ackAt, claims);
+    const base = ownerUnreadCount(queue, suggestions, swaps, pending, feed, userId, ackAt, claims, alerts);
     if (role !== 'manager') return base;
     return managerUnreadCount(base, {
       feed,
@@ -96,7 +98,7 @@ export function OwnerNotificationBell({ edge = true }: { edge?: boolean } = {}) 
       nameOf: (id) => staff.find((x) => x.id === id)?.name ?? '직원',
       ackAt,
     });
-  }, [queue, suggestions, swaps, pending, feed, userId, ackAt, claims, role, templates, done, today, staff]);
+  }, [queue, suggestions, swaps, pending, feed, userId, ackAt, claims, alerts, role, templates, done, today, staff]);
 
   return <BellButton count={count} onPress={() => router.push('/owner/notifications')} edge={edge} />;
 }

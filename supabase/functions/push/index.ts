@@ -354,6 +354,39 @@ async function sweepQuizSends(token: string): Promise<{ swept: number; sent: num
   return { swept: rows.length, sent };
 }
 
+/**
+ * 사장 알림 스윕(0191) — 같은 크론 틱에서 퀴즈 발송 다음으로 돈다.
+ * 좌석 잠김 회차 적재·AI 80/100% 행(0193 이 적재)·선점·수신자 해석은 전부 sweep_owner_alerts() 가 한다.
+ * 여기는 배달과 결과 기록만. 탭하면 앱 안 요금제 화면(/billing) — 외부 결제 유도가 아니다.
+ */
+async function sweepOwnerAlerts(token: string): Promise<{ swept: number; sent: number; error?: string }> {
+  const admin = createClient(SUPABASE_URL, token);
+  const { data, error } = await admin.rpc('sweep_owner_alerts');
+  if (error) {
+    console.error('[push] sweep_owner_alerts failed:', error.message);
+    const denied = /permission denied|not exist/i.test(error.message);
+    return { swept: 0, sent: 0, error: denied ? 'forbidden' : 'rpc_failed' };
+  }
+  const rows = (data ?? []) as {
+    out_id: number; out_unit_id: string; out_title: string; out_body: string; out_recipients: string[];
+  }[];
+  let sent = 0;
+  for (const r of rows) {
+    const res = await deliver(admin, r.out_unit_id, r.out_recipients, {
+      title: r.out_title,
+      body: r.out_body,
+      url: '/billing',
+      tag: `owner-alert-${r.out_id}`,
+    });
+    sent += res.sent;
+    // 선점이 발송보다 먼저라 재시도는 없다(0118 과 같은 이유) → 실제 수를 남겨 사후에 구별한다.
+    await admin.from('owner_alerts')
+      .update({ recipients: r.out_recipients.length, delivered: res.sent })
+      .eq('id', r.out_id);
+  }
+  return { swept: rows.length, sent };
+}
+
 Deno.serve(async (req) => {
   const origin = req.headers.get('origin');
   const cors = corsFor(origin);
@@ -401,7 +434,13 @@ Deno.serve(async (req) => {
     // 퀴즈 갈래가 실패해도 할일 리마인더 결과는 그대로 돌려준다(한쪽 장애가 다른 쪽을 삼키지 않는다).
     const quiz = await sweepQuizSends(token);
     if (quiz.error) console.error('[push] quiz sweep failed:', quiz.error);
-    return json(200, { ...swept, quizSwept: quiz.swept, quizSent: quiz.sent, quizError: quiz.error });
+    // 사장 알림(0191)도 같은 원칙 — 실패해도 앞 두 갈래 결과는 그대로 돌려준다.
+    const alerts = await sweepOwnerAlerts(token);
+    if (alerts.error) console.error('[push] owner alert sweep failed:', alerts.error);
+    return json(200, {
+      ...swept, quizSwept: quiz.swept, quizSent: quiz.sent, quizError: quiz.error,
+      alertSwept: alerts.swept, alertSent: alerts.sent, alertError: alerts.error,
+    });
   }
 
   // 호출자 신원 확인용(anon 키 + 호출자 토큰)

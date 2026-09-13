@@ -260,6 +260,18 @@ export type PaymentClaim = {
   created_at: string;
 };
 
+// ── 사장 알림(owner_alerts, 0191) ──────────────────────
+// 좌석 잠김(즉시·+2일·+4일) · AI 사용량 80%·100%. 문구(title·body)는 서버가 적재 시점에 정한다 —
+// 푸시와 알림함이 같은 행을 읽으므로 클라가 문구를 다시 만들지 않는다. RLS 가 그 매장 사장에게만 흘린다.
+export type OwnerAlert = {
+  id: number;
+  unit_id: string;
+  kind: 'seat_lock' | 'ai_cap';
+  title: string;
+  body: string;
+  created_at: string;
+};
+
 // ── Demo (발표 시연용) ────────────────────────────────
 export type SeedQuery = {
   id: string;

@@ -7,7 +7,7 @@
 import { supabase, HAS_SUPABASE } from './supabase';
 import { reportError } from '@/lib/analytics/track';
 import { useSyncStore } from '@/lib/store/useSyncStore';
-import type { PlaybookEntry, PlaybookSuggestion, UnknownQuery, ChatQuery, Owner, Junior, PaymentClaim } from '@/types';
+import type { PlaybookEntry, PlaybookSuggestion, UnknownQuery, ChatQuery, Owner, Junior, PaymentClaim, OwnerAlert } from '@/types';
 import type { TaskTemplate, FeedItem, DoneMark, Recurrence } from '@/lib/store/useWorkStore';
 import type { Room, RoomMember, RoomPref } from '@/lib/store/useRoomStore';
 import type { AttendanceRecord } from '@/lib/store/useAttendanceStore';
@@ -378,6 +378,23 @@ export async function fetchPaymentClaims(): Promise<ReadResult<PaymentClaim[]>> 
     return { data: [], error: true };
   }
   return { data: (data ?? []) as PaymentClaim[], error: false };
+}
+
+// ── 사장 알림(owner_alerts, 0191) — 읽기 전용. 적재·발송은 서버(sweep_owner_alerts·consume_ai_quota) ──
+// RLS 가 '그 매장 사장'으로 좁힌다(매니저·직원은 0행이 정상). 알림함 '이 매장' 축이라 활성 매장으로 거른다.
+export async function fetchOwnerAlerts(unitId: string): Promise<ReadResult<OwnerAlert[]>> {
+  if (!HAS_SUPABASE) return { data: [], error: false };
+  const { data, error } = await supabase
+    .from('owner_alerts')
+    .select('id, unit_id, kind, title, body, created_at')
+    .eq('unit_id', unitId)
+    .order('created_at', { ascending: false })
+    .limit(20);
+  if (error) {
+    readFail('fetchOwnerAlerts', error);
+    return { data: [], error: true };
+  }
+  return { data: (data ?? []) as OwnerAlert[], error: false };
 }
 
 // 신고 등록/갱신. 실패 사유를 화면이 분기해야 하므로(depositor_required·not_owner…) DbResult 원형 유지.
