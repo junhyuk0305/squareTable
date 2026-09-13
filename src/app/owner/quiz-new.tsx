@@ -1075,7 +1075,11 @@ export default function QuizNewScreen() {
           editing={editing.item}
           startMode="manual"
           onClose={() => setEditing(null)}
-          onSaved={() => setEditing(null)}
+          // ★고친 문항을 목록에 제자리 반영한다 — 예전엔 닫기만 해서 4단계에 옛 문항이 그대로 보였다(2026-09-13).
+          onSaved={(item) => {
+            setMade((v) => v.map((x) => (x.item?.id === item.id ? { ...x, item, formatLabel: FORMATS[item.format]?.label ?? item.format, state: 'ok' } : x)));
+            setEditing(null);
+          }}
         />
       )}
       {manualFor && courseId && (
@@ -1086,7 +1090,9 @@ export default function QuizNewScreen() {
           defaultSection={manualFor.section ?? null}
           startMode="manual"
           onClose={() => setManualFor(null)}
-          onSaved={() => {
+          onSaved={(item) => {
+            // 직접 쓴 문항으로 '못 만들었어요' 행을 채운다 — 안 하면 저장됐는데도 행이 그대로 '못 만들었어요'다.
+            setMade((v) => v.map((x) => (x.entryId === manualFor.id ? { ...x, item, formatLabel: FORMATS[item.format]?.label ?? item.format, state: 'ok' } : x)));
             setManualFor(null);
             showToast('문항을 넣었어요', 'good');
           }}
