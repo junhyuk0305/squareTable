@@ -184,6 +184,67 @@ export async function copyKnowhowTo(toUnit: string, entryIds: string[]): Promise
   return { data: (data as number) ?? null, error: error as DbErr };
 }
 
+// ── 노하우 복사하기(0198) — 보내는 매장·받는 매장을 **둘 다 명시** ─────────────────────
+// 위 두 함수(copyKnowhow / copyKnowhowTo)는 한쪽 끝이 활성 매장이라, 3단계 위저드처럼
+// "A→B 를 고르기만" 하는 화면에서는 활성 매장 전환이 부작용이 된다. 그래서 세 번째 문을 둔다.
+// copyKnowhowTo 는 발행 직후 넛지가 계속 쓰므로 남아 있다.
+export type CopiedKnowhowRow = {
+  /** 보내는 매장의 원본 id */ old_id: string;
+  /** 받는 매장에 새로 생긴 id */ new_id: string;
+  title: string;
+  /** 원본의 사진 경로들 — 스토리지 복사는 이 목록으로 클라가 한다(copyKnowhowPhotos). */
+  photos: string[] | null;
+};
+export async function copyKnowhowBetween(
+  fromUnit: string,
+  toUnit: string,
+  entryIds: string[],
+): Promise<DbResult<CopiedKnowhowRow[]>> {
+  if (!HAS_SUPABASE) {
+    return { data: entryIds.map((id) => ({ old_id: id, new_id: `pb_mock_${id}`, title: '', photos: [] })), error: null };
+  }
+  const { data, error } = await supabase.rpc('copy_knowhow_between', {
+    p_from_unit: fromUnit,
+    p_to_unit: toUnit,
+    p_entry_ids: entryIds,
+  });
+  return { data: (data as CopiedKnowhowRow[]) ?? null, error: error as DbErr };
+}
+
+/**
+ * 복사된 항목의 사진을 받는 매장 폴더로 옮겨 붙인다 — 장당 스토리지 복사 후 경로를 기록한다.
+ *
+ * ★사진이 항목을 막지 않는다: 한 장이 실패하면 그 장만 빠지고 나머지·항목 자체는 그대로 간다.
+ *   (사진은 있으면 좋은 것이고, 노하우 본문이 안 건너가는 것이 훨씬 큰 손실이다.)
+ * 경로 규약은 업로드와 같다 — `{unit_id}/{ts}-{rand}.{ext}`. 첫 폴더가 받는 매장이어야
+ * 스토리지 정책(0198)과 set_knowhow_photos 의 경로 검사를 통과한다.
+ * 반환 = 실제로 붙은 장 수(0 이면 사진 없이 복사된 것).
+ */
+export async function copyKnowhowPhotos(row: CopiedKnowhowRow, toUnit: string): Promise<number> {
+  const from = (row.photos ?? []).filter((p) => !!p && !/^(https?:|blob:|data:|file:)/.test(p));
+  if (!HAS_SUPABASE || from.length === 0) return 0;
+  const copied: string[] = [];
+  for (const src of from) {
+    const ext = (src.split('.').pop() || 'jpg').toLowerCase();
+    const dest = `${toUnit}/${Date.now()}-${Math.round(Math.random() * 1e6)}.${ext}`;
+    const { error } = await supabase.storage.from(PHOTO_BUCKET).copy(src, dest);
+    if (error) {
+      // 조용히 넘기지 않는다 — 어떤 장이 안 갔는지 원장에 남긴다(사장 화면은 장 수로만 말한다).
+      console.warn('[db] copyKnowhowPhotos:', error.message);
+      reportError('db:copyKnowhowPhotos', error);
+      continue;
+    }
+    copied.push(dest);
+  }
+  if (copied.length === 0) return 0;
+  const { error } = await supabase.rpc('set_knowhow_photos', { p_entry_id: row.new_id, p_photos: copied });
+  if (error) {
+    reportError('db:setKnowhowPhotos', error);
+    return 0;
+  }
+  return copied.length;
+}
+
 // ── 다점포 통합뷰(0060) — 내 전 매장 핵심 지표 집계(소유 매장만, definer). 합계는 클라 파생 ──────
 export type OwnerOverviewRow = {
   unit_id: string; store_name: string; is_active: boolean;
