@@ -10,6 +10,7 @@ import { coalesce } from '@/lib/store/realtimeSync';
 import type { PaymentClaim } from '@/types';
 import { HAS_SUPABASE } from '@/lib/supabase';
 import { fetchPaymentClaims, submitPaymentClaim } from '@/lib/db';
+import { SHOW_BILLING } from '@/lib/config/store-policy';
 
 /** 신고 실패 사유 — RPC 의 named 에러를 화면 문구로 옮기는 판정은 여기 한 곳(§② SSOT). */
 export type ClaimError =
@@ -70,6 +71,10 @@ export const usePaymentClaimStore = create<State>((set, get) => ({
 
   hydrate: coalesce(async () => {
     if (!HAS_SUPABASE) return;
+    // ★입금 신고는 웹 결제 채널이다 — 앱(SHOW_BILLING=false)에서는 읽지 않는다. 읽으면 사장 알림에
+    //   "입금이 확인돼 이용이 열렸어요"가 떠 앱 안에서 다른 결제 채널을 말하게 된다(2026-09-14 · 3.1.1).
+    //   loaded 는 세운다 — 알림 화면 ready 게이트가 이 값을 기다린다.
+    if (!SHOW_BILLING) return set({ claims: [], loaded: true });
     const { data } = await fetchPaymentClaims();
     // 읽기 실패는 db 계층이 SyncBanner 로 표면화한다 — 여기선 빈 목록으로 위장하지 않게 loaded 만 세운다.
     set({ claims: data, loaded: true });

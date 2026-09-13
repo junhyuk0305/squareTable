@@ -70,9 +70,10 @@ export const AI_UNIT_NOTE = '직원 질문 답변 1 · 퀴즈 만들기 2 · PDF
 
 /** 사장 화면의 한도 도달 안내 뒷문장(퀴즈 만들기·PDF 올리기) — "이번 달 AI 사용량을 다 썼어요" 다음에 붙인다.
  *  canUpgrade = 요금제 화면으로 갈 수 있는 사장인가(store-policy showBillingEntry + 사장 역할 — 호출부가 판정).
- *  ⛔외부 결제 유도 문구를 넣지 않는다. */
+ *  ⛔외부 결제 유도 문구를 넣지 않는다.
+ *  ★행 이름은 채널마다 다르다(웹 '요금제' · iOS '이용권') — 둘에 공통인 섹션 이름 '구독 및 결제'로 말한다. */
 export function aiCapNextStep(canUpgrade: boolean): string {
-  return canUpgrade ? '설정의 요금제에서 바꾸면 바로 더 쓸 수 있어요.' : '다음 달 1일에 다시 채워져요.';
+  return canUpgrade ? '설정의 구독 및 결제에서 바꾸면 바로 더 쓸 수 있어요.' : '다음 달 1일에 다시 채워져요.';
 }
 
 export const PLAN_ORDER: PlanId[] = ['free', 'single', 'multi'];

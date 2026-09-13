@@ -17,7 +17,7 @@ import { Radius } from '@/lib/theme/elevation';
 import { SettingsSection, SettingsRow, SettingsToggle } from '@/components/settings/SettingsKit';
 import { SectionLabel } from '@/components/SectionLabel';
 import { PricingTable } from '@/components/PricingTable';
-import { SHOW_BILLING, showIapSurface, showPaymentSurface } from '@/lib/config/store-policy';
+import { SHOW_BILLING, SHOW_IAP, showIapSurface, showPaymentSurface } from '@/lib/config/store-policy';
 import { TextScaleModal } from '@/components/settings/TextScaleModal';
 import { ContactModal } from '@/components/ContactModal';
 
@@ -68,7 +68,8 @@ export default function AccountSettings() {
     const ok = await confirmAction(
       '회원탈퇴',
       isOwner
-        ? '계정과 매장 데이터(노하우·직원·근무 기록)가 모두 삭제되며 복구할 수 없어요. 정말 탈퇴하시겠어요?'
+        ? // ★앱에서 산 구독은 애플이 청구한다 — 탈퇴(delete_my_account)는 그 구독을 끊지 못하므로 먼저 해지하라고 말한다.
+          `계정과 매장 데이터(노하우·직원·근무 기록)가 모두 삭제되며 복구할 수 없어요.${SHOW_IAP ? ' 앱에서 산 이용권은 탈퇴해도 해지되지 않으니, 기기 설정의 구독 목록에서 먼저 해지해 주세요.' : ''} 정말 탈퇴하시겠어요?`
         : '계정과 내 기록(질문·출퇴근)이 삭제되며 복구할 수 없어요. 정말 탈퇴하시겠어요?',
       '탈퇴하기',
       { destructive: true, icon: 'trash-outline' },
@@ -204,11 +205,12 @@ export default function AccountSettings() {
           <SettingsRow icon="shield-checkmark-outline" label="개인정보처리방침" onPress={() => router.push('/privacy')} />
           {/* AI 이용정책·처리위탁 계약은 웹 정적 페이지가 유일한 정본(legal-content.mjs)이라 앱 요약 화면이 없다.
               약관·처리방침 본문이 참조하는 문서이므로 앱에서도 도달 경로가 있어야 죽은 참조가 안 된다. */}
-          <SettingsRow icon="document-text-outline" label="AI 이용정책" onPress={() => void Linking.openURL('https://dochackchack.com/ai-policy').catch(() => {})} />
+          {/* ★앱 판(/app/…) — 푸터에 홈·요금 링크가 없는 판(seo-postbuild LEGAL_VARIANTS). 웹 판을 열면 홈 → 요금 페이지로 가는 길이 생긴다. */}
+          <SettingsRow icon="document-text-outline" label="AI 이용정책" onPress={() => void Linking.openURL('https://dochackchack.com/app/ai-policy').catch(() => {})} />
           {/* FAQ·사업자 정보도 AI 이용정책과 같은 이유로 웹 정적 페이지가 정본이다(legal-content.mjs) —
               빌드 없이 문서를 고칠 수 있도록 앱에는 요약 화면을 두지 않고 바로 연다. */}
-          <SettingsRow icon="help-circle-outline" label="자주 묻는 질문" onPress={() => void Linking.openURL('https://dochackchack.com/faq').catch(() => {})} />
-          <SettingsRow icon="business-outline" label="사업자 정보" onPress={() => void Linking.openURL('https://dochackchack.com/business-info').catch(() => {})} />
+          <SettingsRow icon="help-circle-outline" label="자주 묻는 질문" onPress={() => void Linking.openURL('https://dochackchack.com/app/faq').catch(() => {})} />
+          <SettingsRow icon="business-outline" label="사업자 정보" onPress={() => void Linking.openURL('https://dochackchack.com/app/business-info').catch(() => {})} />
           <SettingsRow icon="chatbubble-ellipses-outline" label="문의하기" onPress={() => setContactModal(true)} />
           <SettingsRow icon="information-circle-outline" label="버전 정보" value={`v${version}`} />
         </SettingsSection>

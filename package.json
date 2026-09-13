@@ -109,6 +109,7 @@
     "qa:billing-tiers": "node scripts/qa-billing-tiers.mjs",
     "qa:payment-claims": "node scripts/qa-payment-claims.mjs",
     "qa:iap": "node scripts/qa-iap.mjs",
+    "qa:iap-release": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/qa-iap-release.mjs",
     "iap:status": "node scripts/iap-switch.mjs status",
     "iap:on": "node scripts/iap-switch.mjs on",
     "iap:off": "node scripts/iap-switch.mjs off",

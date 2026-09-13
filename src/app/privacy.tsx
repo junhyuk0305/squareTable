@@ -23,7 +23,7 @@ export default function PrivacyScreen() {
         <Text style={styles.updated}>시행일: {TERMS_VERSION} · 운영: 스퀘어테이블</Text>
 
         <Section title="1. 수집 항목">
-          이름, 이메일, 비밀번호, 휴대전화번호(본인 확인 기록 포함), 생년월일, 매장 정보, 사장님이 입력하는 직원 근로정보(근무표·출퇴근·시급), 노하우·사진·질문·채팅·업무·퀴즈 등 콘텐츠, 음성·PDF(변환·추출 즉시 파기), 서비스 이용·오류 기록, 푸시 알림 수신 주소, 유료 이용 시 입금자명 등 결제 신고 정보. 카메라·위치·주민등록번호·광고 식별자는 수집하지 않습니다.
+          이름, 이메일, 비밀번호, 휴대전화번호(본인 확인 기록 포함), 생년월일, 매장 정보, 사장님이 입력하는 직원 근로정보(근무표·출퇴근·시급), 노하우·사진·질문·채팅·업무·퀴즈 등 콘텐츠, 음성·PDF(변환·추출 즉시 파기), 서비스 이용·오류 기록, 푸시 알림 수신 주소, 유료 이용 시 결제 확인에 필요한 정보. 카메라·위치·주민등록번호·광고 식별자는 수집하지 않습니다.
         </Section>
         <Section title="2. 수집·이용 목적">
           매장 단위 계정 식별과 휴대전화 본인 확인, 노하우 저장·검색·AI 답변 제공, 직원-사장님 간 질문 전달, 근무·급여 관리 지원, 유료 이용권 관리, 문의 응대와 업무 알림, 서비스 이용 통계·품질 개선 분석 및 세대 간 지식 교류 분석.
@@ -42,9 +42,9 @@ export default function PrivacyScreen() {
         </Section>
 
         {/* 전문은 웹 정적 페이지가 정본이다. Apple 5.1.1(i)은 앱 안에서도 방침에 접근 가능할 것을
-            요구하므로 이 링크가 그 요건을 채운다. */}
+            요구하므로 이 링크가 그 요건을 채운다. ★앱 판(/app/privacy) — 홈·요금 링크가 없는 판(seo-postbuild LEGAL_VARIANTS). */}
         <Pressable
-          onPress={() => void Linking.openURL('https://dochackchack.com/privacy').catch(() => {})}
+          onPress={() => void Linking.openURL('https://dochackchack.com/app/privacy').catch(() => {})}
           accessibilityRole="link"
           accessibilityLabel="개인정보처리방침 전문 보기"
         >
