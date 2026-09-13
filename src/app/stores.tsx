@@ -20,7 +20,7 @@ import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
 import { canUseMultistore } from '@/lib/config/tiers';
-import { SHOW_BILLING } from '@/lib/config/store-policy';
+import { showBillingEntry } from '@/lib/config/store-policy';
 import { HubTopBar } from '@/components/hub/HubTopBar';
 import { HubTabBar } from '@/components/HubTabBar';
 import { Appear, stagger } from '@/components/Appear';
@@ -46,6 +46,7 @@ export default function StoresHub() {
   const storeName = useSessionStore((s) => s.storeName);
   const plan = useSessionStore((s) => s.plan);
   const freeMode = useSessionStore((s) => s.freeMode);
+  const iapEnabled = useSessionStore((s) => s.iapEnabled);
   const sessionStores = useSessionStore((s) => s.stores);
   const status = useSessionStore((s) => s.status);
   const phone = useSessionStore((s) => s.phone);
@@ -176,8 +177,11 @@ export default function StoresHub() {
     //   "2번째 매장부터 유료" 규칙이 1번째에 걸리던 것 — 게이트의 대상이 아니다.
     if (stores.length === 0) return router.push('/owner/create-store');
     if (canUseMultistore(plan, freeMode)) return router.push('/owner/create-store');
-    // iOS 네이티브: 결제 화면으로 유도하지 않는다(3.1.3(f)). 사실 고지만 남긴다.
-    if (!SHOW_BILLING) return showToast('매장을 더 추가하려면 관리자에게 문의해 주세요.');
+    // 결제 경로가 하나도 없는 빌드(웹 PG 비노출 + 스토어 판매 중단)에서만 사실 고지로 끝낸다.
+    // iOS 는 인앱결제로 다점포를 팔므로 여기로 보내는 것이 맞다(판정은 store-policy 한 곳).
+    if (!showBillingEntry(iapEnabled, freeMode)) {
+      return showToast('매장을 더 추가하려면 관리자에게 문의해 주세요.');
+    }
     router.push('/billing');
   };
   const joinStore = () => router.push('/junior/hub');

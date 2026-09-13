@@ -191,7 +191,13 @@ function BillingBody() {
       paidUntil: useSessionStore.getState().paidUntil,
       plan: useSessionStore.getState().plan,
     });
-    if (!v.entitled) return showToast('아직 활성화 전이에요. 입금 확인 후 반영돼요.');
+    // ★문구가 채널로 갈린다. 앱(스토어 인앱결제) 경로에 "입금 확인"을 띄우면 우리가 팔지도 않는
+    //   계좌이체를 앱 안에서 말하게 된다 — 사실과도 다르고 스토어 규정상으로도 둘 곳이 아니다.
+    if (!v.entitled) {
+      return showToast(
+        SHOW_BILLING ? '아직 활성화 전이에요. 입금 확인 후 반영돼요.' : '아직 반영 전이에요. 잠시 후 다시 확인해 주세요.',
+      );
+    }
     // 페이월 모드에서만 앱으로 진입시킨다. 자발 방문자는 화면에 남아 현재 요금제를 확인한다(뒤로가기로 나감).
     if (!entitledAtMount) return router.replace(manages ? '/owner/dashboard' : '/junior/home');
     showToast(`현재 ${PLANS[useSessionStore.getState().plan].name} 요금제예요.`);
@@ -314,42 +320,81 @@ function BillingBody() {
     const expired = view.state === 'expired';
     // 무료 모드는 "결제를 감춘 것"이지 "이용을 막은 것"이 아니다 — 만료 문구를 그대로 쓰면 겁을 준다.
     const freeNow = SHOW_BILLING && freeMode;
+    // 스토어에서 파는 중인가. 이 값이 이 분기의 성격을 바꾼다 —
+    // 켜져 있으면 여기는 '사실 고지 화면'이 아니라 **구매 화면**이다.
+    const selling = showIapSurface(iapEnabled, freeMode) && isOwner;
     return (
       <SafeAreaView style={styles.safe} edges={['bottom']}>
         <Stack.Screen options={{ headerShown: false }} />
+        {/* ★2026-09-13: 여기 뒤로가기가 **없었다.** 웹 분기만 헤더를 갖고 있어서, 설정·매장 추가에서
+            자발적으로 들어온 사장은 로그아웃 말고 나갈 길이 없는 막다른 길에 갇혔다.
+            규칙은 웹 분기와 같다 — 페이월 모드(만료 강제 라우팅)는 뒤로 갈 유효한 화면이 없어 헤더 없음. */}
+        {entitledAtMount && <ScreenTitleHeader title="이용권" backFallback="/stores" />}
         <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.scroll}>
+          {!ready ? (
+            <ScreenLoading label="이용 상태를 불러오고 있어요…" />
+          ) : (
+            <>
           <Appear delay={stagger(0)}>
           <View style={styles.hero}>
             <View style={styles.iconWrap}>
               <Ionicons
-                name={expired ? 'lock-closed-outline' : 'checkmark-circle-outline'}
+                name={expired ? 'lock-closed-outline' : selling ? 'card-outline' : 'checkmark-circle-outline'}
                 size={26}
                 color={expired ? BrandColors.warn : InkColors.ink}
               />
             </View>
+            {/* ★무료 요금제인 사장에게 "이용 중이에요"라고 말하던 자리다 — 구매 화면에서 "정상 이용 중"을
+                읽으면 살 이유가 사라진다. 상태 문구는 위에서 계산한 headline 하나가 SSOT 다. */}
             <Text style={styles.title}>
-              {freeNow ? FREE_PROMO.headline : expired ? '지금은 이용할 수 없어요' : '이용 중이에요'}
+              {freeNow ? FREE_PROMO.headline : expired ? '지금은 이용할 수 없어요' : headline}
             </Text>
             {!!storeName && <Text style={styles.store}>{storeName}</Text>}
           </View>
           </Appear>
-          <Appear delay={stagger(1)}>
-          <View style={styles.card}>
-            <Text style={styles.body}>
-              {freeNow
-                ? `${FREE_PROMO.until}까지는 모든 기능을 무료로 쓰실 수 있어요. 매장 수·직원 수 제한도 없어요.\n지금은 결제하실 것이 없어요.`
-                : expired
-                  ? isOwner
-                    ? '이 매장의 이용 기간이 끝났어요. 이용 재개는 관리자에게 문의해 주세요.'
-                    : '매장의 이용 기간이 끝났어요. 사장님께 문의해 주세요.'
-                  : '이 매장은 정상적으로 이용 중이에요.'}
-            </Text>
-          </View>
-          </Appear>
+
+          {/* ★좌석 잠금(0115) — 이 카드가 **iOS 에서 한 번도 안 그려졌다.** 아래 웹 분기에만 있었고
+              이 조기 return 이 그걸 통째로 삼켰다. seat 는 이미 위에서 조회하고 있었다(조회는 SHOW_BILLING 과 무관).
+              사장이 "직원이 앱을 못 쓰고 있다"를 알 수 있는 자리가 앱 전체에 여기 하나뿐이다.
+              ⛔이건 구매 유도가 아니라 **상태 설명**이다 — 금액·채널을 말하지 않는다. */}
+          {selling && !!seat && seat.locked > 0 && (
+            <Appear delay={stagger(1)}>
+              <View style={[styles.card, styles.claimRejected]}>
+                <View style={styles.claimHead}>
+                  <Ionicons name="lock-closed-outline" size={18} color={BrandColors.warn} />
+                  <Text style={styles.claimTitle}>직원 {seat.locked}명이 앱을 못 쓰고 있어요</Text>
+                </View>
+                <Text style={styles.body}>
+                  무료 요금제는 직원 {seat.cap}명까지예요. 지금 {seat.total}명이라 나중에 합류한 {seat.locked}명의
+                  자리가 잠겼어요.
+                </Text>
+              </View>
+            </Appear>
+          )}
+
+          {/* 구매 화면일 때는 이 카드를 그리지 않는다 — 아래 패널이 같은 자리를 더 정확히 말한다
+              (블록 예산: hero + 잠김 + 패널 = A형 ≤5 안). */}
+          {!selling && (
+            <Appear delay={stagger(1)}>
+            <View style={styles.card}>
+              <Text style={styles.body}>
+                {freeNow
+                  ? `${FREE_PROMO.until}까지는 모든 기능을 무료로 쓰실 수 있어요. 매장 수·직원 수 제한도 없어요.\n지금은 결제하실 것이 없어요.`
+                  : expired
+                    ? isOwner
+                      ? '이 매장의 이용 기간이 끝났어요. 이용 재개는 관리자에게 문의해 주세요.'
+                      : '매장의 이용 기간이 끝났어요. 사장님께 문의해 주세요.'
+                    : '이 매장은 정상적으로 이용 중이에요.'}
+              </Text>
+            </View>
+            </Appear>
+          )}
+
           {/* 스토어 인앱결제 표면(네이티브). 웹 PG 표면(아래 본문)과 채널이 다르므로 판정도 다르다.
-              판정은 store-policy 한 곳(showIapSurface) — 빌드 축·서버 스위치·전면 무료를 합친 값이다. */}
-          {showIapSurface(iapEnabled, freeMode) && isOwner && <IapPurchasePanel onChanged={recheck} />}
-          <Appear delay={stagger(2)}>
+              판정은 store-policy 한 곳(showIapSurface) — 빌드 축·서버 스위치·전면 무료를 합친 값이다.
+              ★소유 매장 수를 넘겨 기본 선택을 맞춘다 — 이미 아는 것을 다시 묻지 않는다. */}
+          {selling && <IapPurchasePanel onChanged={recheck} ownedStoreCount={ownedCount} />}
+          <Appear delay={stagger(4)}>
           <Pressable
             disabled={busy}
             onPress={recheck}
@@ -358,11 +403,17 @@ function BillingBody() {
             {busy ? <ActivityIndicator color={InkColors.ink2} /> : <Text style={styles.ghostText}>이용 상태 새로고침</Text>}
           </Pressable>
           </Appear>
-          <Appear delay={stagger(3)}>
-          <Pressable onPress={() => void logout()} style={styles.logoutRow}>
-            <Text style={styles.logoutText}>로그아웃</Text>
-          </Pressable>
-          </Appear>
+          {/* 로그아웃은 페이월 모드(나갈 길이 로그아웃뿐)에서만. 자발 방문은 뒤로가기로 나가고,
+              계정 설정에 이미 로그아웃이 있다 — 구매 화면에 로그아웃을 놓지 않는다. */}
+          {!entitledAtMount && (
+            <Appear delay={stagger(5)}>
+            <Pressable onPress={() => void logout()} style={styles.logoutRow}>
+              <Text style={styles.logoutText}>로그아웃</Text>
+            </Pressable>
+            </Appear>
+          )}
+            </>
+          )}
         </ScrollView>
       </SafeAreaView>
     );

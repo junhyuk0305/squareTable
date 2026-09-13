@@ -21,7 +21,7 @@ import { Space, SCREEN_GUTTER, CONTENT_MAX_WIDTH, frameCapStyle } from '@/lib/th
 import { Radius, Elevation } from '@/lib/theme/elevation';
 import { PLANS, VAT_NOTE } from '@/lib/config/tiers';
 import { formatKrw } from '@/lib/config/billing';
-import { showPaymentSurface } from '@/lib/config/store-policy';
+import { showBillingEntry, showPaymentSurface } from '@/lib/config/store-policy';
 
 // 사장 온보딩 — 업종 표준 노하우 팩에서 '선택 → 자동등록'. 빈 매장(노하우 0건) 죽음의 나선 차단.
 // 레이아웃: ① 추천 묶음 한 번에 담기(결정 최소화) → ② '직접 고르기' 접이식 카테고리 섹션(미세조정)
@@ -40,6 +40,7 @@ export default function OwnerOnboardingScreen() {
   const sessionInvite = useSessionStore((s) => s.inviteCode);
   // 전면 무료 스위치 — 켜져 있으면 요금제 후킹을 안 띄운다([P8-#5]).
   const freeMode = useSessionStore((s) => s.freeMode);
+  const iapEnabled = useSessionStore((s) => s.iapEnabled);
   const addEntry = usePlaybookStore((s) => s.add);
 
   const industry = (params.industry as string) || sessionIndustry;
@@ -188,11 +189,13 @@ export default function OwnerOnboardingScreen() {
           </Appear>
 
           {/* 요금제 후킹 — 지금은 무료로 시작했음을 알리고, 직원·AI 무제한(단일 매장)으로
-              업그레이드 경로를 연다. 가격은 tiers.ts(SSOT)에서 읽는다. 탭하면 요금제 선택 화면(/billing).
-              iOS 네이티브는 가격 노출 자체가 3.1.3(f) 상 구매 유도로 읽힐 수 있어 렌더하지 않는다.
+              업그레이드 경로를 연다. 탭하면 요금제 선택 화면(/billing).
               ★전면 무료 모드(서버 스위치)에서도 렌더하지 않는다 — 무료라고 공지해 놓고 요금제로 유도하면
-                같은 앱이 두 말을 하게 된다(2026-08-11 [P8-#5]). 판정은 store-policy 한 곳. */}
-          {showPaymentSurface(freeMode) && (
+                같은 앱이 두 말을 하게 된다(2026-08-11 [P8-#5]). 판정은 store-policy 한 곳.
+              ★★가격 문장만 채널로 갈린다: 웹 PG 축일 때만 tiers.ts(웹 가격 SSOT)를 읽는다.
+                스토어 인앱결제 축(iOS)의 가격은 스토어가 내려주는 값이고 웹과 숫자가 다르다
+                (단일 29,000 vs 20,900) — 여기서 웹 숫자를 보여주면 도착지와 다른 금액을 말하게 된다. */}
+          {showBillingEntry(iapEnabled, freeMode) && (
             <Appear delay={stagger(4)} style={styles.doneStretch}>
             <Pressable
               onPress={() => router.push('/billing' as never)}
@@ -206,7 +209,9 @@ export default function OwnerOnboardingScreen() {
               <View style={{ flex: 1 }}>
                 <Text style={styles.planTitle}>지금은 무료로 시작했어요</Text>
                 <Text style={styles.planSub}>
-                  직원·AI 무제한은 단일 매장 요금제(월 {formatKrw(PLANS.single.monthlyKrw)} · {VAT_NOTE})에서 열려요
+                  {showPaymentSurface(freeMode)
+                    ? `직원·AI 무제한은 단일 매장 요금제(월 ${formatKrw(PLANS.single.monthlyKrw)} · ${VAT_NOTE})에서 열려요`
+                    : '직원·AI 무제한은 단일 매장 이용권에서 열려요'}
                 </Text>
               </View>
               <Ionicons name="chevron-forward" size={16} color={InkColors.ink3} />

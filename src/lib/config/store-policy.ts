@@ -4,13 +4,18 @@
 // 플랫폼 API 가 달라 코드가 갈리는 **구현 차이**는 여기가 아니라 확장자 쌍(.web/.ios/.android)으로 —
 // 절차: .claude/rules/platform.md · /platform-split.
 //
-// ★ SHOW_BILLING=false (iOS 네이티브)
-//   근거: App Review Guideline 3.1.3(f) Free Stand-alone Apps —
-//   "provided there is no purchasing inside the app, or calls to action for purchase outside of the app."
-//   3.1.1(a)에 따라 한국 스토어프론트는 외부결제 버튼·링크·CTA도 금지된다(미국 스토어프론트만 예외).
+// ★ SHOW_BILLING=false (iOS 네이티브) — **웹 PG·계좌이체 표면만** 가리는 상수다.
+//   근거: 3.1.1(a)에 따라 한국 스토어프론트는 외부결제 버튼·링크·CTA도 금지된다(미국 스토어프론트만 예외).
 //   한국 전기통신사업법 대응인 StoreKit External Purchase Entitlement(KR)는 26% 수수료 +
 //   한국 전용 별도 바이너리 + 월별 정산 보고 의무라 채택하지 않는다.
-//   → iOS 앱은 "유료 웹 서비스의 무료 컴패니언"으로 두고, 결제는 dochackchack.com 에서만 받는다.
+//   → iOS 앱 안에서는 계좌번호·"웹에서 결제" 안내·외부 링크가 **한 글자도** 나오지 않는다.
+//
+// ★ 2026-09-12 애플 거절(빌드 1.0(4), Guideline 3.1.1 + 3.1.3(c))로 전제가 바뀌었다.
+//   "조직에 파는 기업용"이라고 선언했으나 같은 서비스를 개인 사장에게도 팔고 있었고,
+//   유료 게이팅(무료 좌석 3명·AI 월 150건·2번째 매장부터 multi)이 앱 안에 살아 있는 채
+//   그 해제만 웹에서 받았다 → "IAP 없이 개인에게 판매"로 판정됐다.
+//   → 3.1.3(f) Free Stand-alone Apps 면제 주장은 **폐기**한다. 개인(단일)·다점포 모두 iOS IAP 로 판다.
+//   → 웹 결제는 프랜차이즈 본사·조직 계약용으로 존치하되 iOS 빌드 경로에서는 계속 비노출이다.
 //
 // ★ SHOW_SOCIAL_LOGIN=false (iOS 네이티브)
 //   근거: Guideline 4.8. 제3자 소셜 로그인(Google Sign-In)으로 주계정을 만들면 동등한 다른 로그인
@@ -20,8 +25,9 @@
 //
 // ★ 2026-08-27: Android 네이티브도 SHOW_BILLING=false.
 //   근거: Google Play 결제 정책 — 앱 안에서 쓰는 구독은 Play 결제만 허용, 계좌이체 안내·외부결제 유도는 위반.
-//   1차 스토어 제출은 양 플랫폼 모두 결제 표면 없이 나가고, 인앱결제(IAP)는 2차에서 붙인다.
-//   결제 표면은 웹(dochackchack.com)에서만 보인다.
+//   ⚠️2026-09-13 갱신: 여기 있던 "결제 표면은 웹에서만 보인다"는 더 이상 사실이 아니다.
+//   `SHOW_BILLING`(웹 PG·계좌이체)은 양 네이티브에서 계속 false 지만, iOS 는 **다른 축**인
+//   `SHOW_IAP` 로 앱 안에서 판다. 두 축을 한 문장으로 읽으면 판정을 또 틀린다.
 
 import { Platform } from 'react-native';
 
@@ -51,14 +57,13 @@ export function showPaymentSurface(freeMode: boolean): boolean {
  * `SHOW_BILLING`(웹 PG·계좌이체 표면)과 다른 축이다. 둘을 한 상수로 합치면 웹 결제 문구가
  * 앱에 새거나(스토어 위반) 그 반대가 된다 — 채널이 다르므로 판정도 따로다.
  *
- * ⛔ 아래 두 상수를 켜는 것은 **각 스토어 관문을 통과한 뒤**이고, 그 변경만 담은 별도 커밋으로 낸다.
- *   - iOS: 1.0.0 승인·출시 후. 지금 심사 중인 1.0 은 심사 메모에 "앱 안에 인앱결제·가격 표시가 없다"
- *     (Guideline 3.1.3(f) Free Stand-alone Apps)라고 선언해 뒀다 — 여기를 먼저 켜면 그 선언이 거짓이 된다.
- *     IAP 를 붙인 1.1 을 낼 때 심사 메모도 함께 고친다
+ *   - iOS: **2026-09-12 개방.** 3.1.1 + 3.1.3(c) 거절의 시정이라 관문을 기다리지 않는다 —
+ *     IAP 가 없는 채로는 재제출해도 같은 사유로 또 거절된다. 심사 메모의 3.1.3(f) 면제 주장도 같이 지운다
  *     (정본 = `출시서류_iOS/03_AppStoreConnect_입력텍스트_전체목록_2026-09-04.md` §7).
- *   - Android: 프로덕션 액세스(개인 계정 = 테스터 12명 × 14일) 통과 후.
+ *   - Android: **닫아 둔다.** 프로덕션 액세스(개인 계정 = 테스터 12명 × 14일) 심사가 선행하는 별도 축이고,
+ *     여기를 같이 열면 그 심사에 결제 표면이 실린 빌드가 들어간다. 여는 것은 통과 후 별도 커밋.
  */
-const IAP_READY_IOS = false;
+const IAP_READY_IOS = true;
 const IAP_READY_ANDROID = false;
 
 export const SHOW_IAP =
@@ -76,6 +81,23 @@ export const SHOW_IAP =
  */
 export function showIapSurface(iapEnabled: boolean, freeMode: boolean): boolean {
   return SHOW_IAP && iapEnabled && !freeMode;
+}
+
+/**
+ * `/billing` 으로 **가는 길**(설정의 구독 행·매장 추가·다점포 안내)을 보여도 되는가 — 채널 무관.
+ *
+ * ★2026-09-12: `SHOW_IAP` 만 열면 iOS 에서 결제 경로가 **여전히 0개**다. `/billing` 진입점 4곳이
+ * 전부 `SHOW_BILLING`(웹 PG 축)으로 잠겨 있어 사장이 그 화면에 도달할 수 없었다
+ * (사장 페이월 강제 라우팅은 2026-08-06 에 제거됐고, 남은 강제 진입은 잠긴 직원뿐이다).
+ * 도착지의 표면 판정(`showPaymentSurface`·`showIapSurface`)과 **가는 길의 판정은 다른 물음**이라
+ * 여기서 한 번만 합친다 — 화면마다 `||` 를 새로 적지 않는다.
+ *
+ * 읽는 곳 = `stores.tsx`(매장 추가) · `PlanUpgradeNotice.tsx`(다점포 가드) · `owner/onboarding.tsx`(첫 안내).
+ * `account-settings.tsx` 만 두 축을 각각 본다 — 길만 갈리는 게 아니라 **그리는 것이 다르기 때문**이다
+ * (웹은 `PricingTable`(웹 가격 정본), 스토어 축은 가격 없는 행 하나 — 두 채널의 금액이 다르다).
+ */
+export function showBillingEntry(iapEnabled: boolean, freeMode: boolean): boolean {
+  return showPaymentSurface(freeMode) || showIapSurface(iapEnabled, freeMode);
 }
 
 /** 소셜 로그인 버튼을 노출해도 되는가. */

@@ -16,7 +16,7 @@ import { Radius } from '@/lib/theme/elevation';
 import { SettingsSection, SettingsRow, SettingsToggle } from '@/components/settings/SettingsKit';
 import { SectionLabel } from '@/components/SectionLabel';
 import { PricingTable } from '@/components/PricingTable';
-import { SHOW_BILLING, showPaymentSurface } from '@/lib/config/store-policy';
+import { SHOW_BILLING, showIapSurface, showPaymentSurface } from '@/lib/config/store-policy';
 import { TextScaleModal } from '@/components/settings/TextScaleModal';
 import { ContactModal } from '@/components/ContactModal';
 
@@ -37,6 +37,7 @@ export default function AccountSettings() {
   const role = useSessionStore((s) => s.role);
   const plan = useSessionStore((s) => s.plan);
   const freeMode = useSessionStore((s) => s.freeMode);
+  const iapEnabled = useSessionStore((s) => s.iapEnabled);
   const storeName = useSessionStore((s) => s.storeName);
   const stores = useSessionStore((s) => s.stores);
   // 요금제는 매장 단위 — 다점포 사장은 지금 보는 플랜이 어느 매장 것인지 알아야 한다(1곳이면 소음이라 생략).
@@ -127,10 +128,19 @@ export default function AccountSettings() {
           <SettingsRow icon="text-outline" label="글자 크기" value={SCALE_LABEL[prefs.textScale]} onPress={() => setScaleModal(true)} />
         </SettingsSection>
 
+        {/* 스토어 인앱결제 축(iOS) — 웹 PG 축과 채널이 다르므로 표면도 다르다.
+            ⛔ PricingTable(웹 가격 정본)을 여기에 그리지 않는다 — 앱 가격은 스토어가 내려주고 숫자가 다르다.
+            행 하나로 `/billing` 에 착지시키고, 가격·구매는 그 화면의 IapPurchasePanel 이 맡는다. */}
+        {!SHOW_BILLING && isOwner && showIapSurface(iapEnabled, freeMode) && (
+          <SettingsSection icon="card-outline" title="구독 및 결제">
+            <SettingsRow first icon="card-outline" label="이용권" onPress={() => router.push('/billing' as never)} />
+          </SettingsSection>
+        )}
+
         {/* 구독 및 결제(사장만) — 계정 단위 항목이라 F6에서 owner/settings → 여기로 이동.
             전면 무료 모드(freeMode·서버 스위치) 동안엔 단순 안내 행 유지.
-            iOS 네이티브에서는 섹션 전체를 렌더하지 않는다 — 가격표(PricingTable)·요금제 CTA 모두
-            App Review 3.1.3(f) 위반. 판정은 store-policy.ts 하나에만 둔다. */}
+            iOS 네이티브에서는 이 블록을 렌더하지 않는다 — 가격표(PricingTable)·요금제 CTA 모두
+            웹 PG 채널의 표면이다. 판정은 store-policy.ts 하나에만 둔다. */}
         {SHOW_BILLING && isOwner &&
           (!showPaymentSurface(freeMode) ? (
             <SettingsSection icon="card-outline" title="구독 및 결제">

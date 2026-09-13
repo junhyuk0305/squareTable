@@ -5,7 +5,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
 import { Space, frameCapStyle } from '@/lib/theme/layout';
-import { SHOW_BILLING } from '@/lib/config/store-policy';
+import { showBillingEntry } from '@/lib/config/store-policy';
+import { useSessionStore } from '@/lib/store/useSessionStore';
 
 /**
  * 다점포 전용 화면의 요금제 가드(과금층 0062) — 무료·단일 요금제로 딥링크 진입 시
@@ -14,15 +15,20 @@ import { SHOW_BILLING } from '@/lib/config/store-policy';
  */
 export function PlanUpgradeNotice({ description }: { description: string }) {
   const router = useRouter();
+  const freeMode = useSessionStore((s) => s.freeMode);
+  const iapEnabled = useSessionStore((s) => s.iapEnabled);
+  const entry = showBillingEntry(iapEnabled, freeMode);
   return (
     <View style={[styles.center, frameCapStyle]}>
       <View style={styles.iconWrap}>
         <Ionicons name="lock-closed-outline" size={24} color={InkColors.ink2} />
       </View>
-      {/* iOS 네이티브: 요금제명·업그레이드 CTA 모두 제거(3.1.3(f)). 사실 고지만 남긴다. */}
-      <Text style={styles.title}>{SHOW_BILLING ? '다점포 요금제에서 열려요' : '이 매장에서는 쓸 수 없어요'}</Text>
-      <Text style={styles.desc}>{SHOW_BILLING ? description : '여러 매장을 함께 관리할 때 쓰는 기능이에요.'}</Text>
-      {SHOW_BILLING && (
+      {/* 결제 경로가 없는 빌드에서만 사실 고지로 끝낸다 — 잠긴 기능을 보여주면서 푸는 길이 없으면
+          막다른 길이다(2026-09-12 애플 3.1.3(c) 지적의 자리). 판정은 store-policy 한 곳.
+          ⛔ 여기에 금액을 적지 않는다 — 웹 가격과 앱 가격이 다르다. 가격은 도착지가 말한다. */}
+      <Text style={styles.title}>{entry ? '다점포 요금제에서 열려요' : '이 매장에서는 쓸 수 없어요'}</Text>
+      <Text style={styles.desc}>{entry ? description : '여러 매장을 함께 관리할 때 쓰는 기능이에요.'}</Text>
+      {entry && (
         <Pressable
           onPress={() => router.push('/billing' as never)}
           style={({ pressed }) => [styles.cta, pressed && { opacity: 0.88 }]}
