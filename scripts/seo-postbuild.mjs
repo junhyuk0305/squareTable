@@ -25,7 +25,9 @@ const DIST = resolve(__dirname, '..', 'dist');
 
 // ── 설정 ───────────────────────────────────────────────────────────────
 const SITE_URL = (process.env.SEO_SITE_URL || 'https://dochackchack.com').replace(/\/+$/, '');
-const OG_IMAGE = `${SITE_URL}/icon-512.png`; // TODO: 1200×630 전용 OG 이미지로 교체 권장(현재 정사각 아이콘 임시)
+// ★경로를 icon-512.png 에서 바꿨다(2026-09-13) — 카카오는 og:image 를 URL 로 캐시해서, 같은 주소에 새 로고를
+//   올려도 미리보기엔 옛 '착착' 로고가 계속 떴다. 로고를 또 바꾸면 파일명도 같이 바꾼다.
+const OG_IMAGE = `${SITE_URL}/og-image.png`; // TODO: 1200×630 전용 OG 이미지로 교체 권장(현재 정사각 아이콘 임시)
 const BRAND = '매장의 정석';
 const TITLE = '매장의 정석 — 우리 매장 운영의 기준';
 const DESC =

@@ -2501,7 +2501,7 @@ export async function gradeQuizLink(token: string, itemId: string, response: Qui
  */
 export async function submitQuizLink(
   token: string,
-  guest: { name: string; phone: string; phoneVerified: boolean },
+  guest: { name: string; phone: string | null; phoneVerified: boolean }, // phone null = 안 적음(0195 선택)
   answers: { itemId: string; response: QuizResponse }[],
 ): Promise<boolean> {
   if (!HAS_SUPABASE) return true;

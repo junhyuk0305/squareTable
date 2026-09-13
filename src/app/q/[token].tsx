@@ -1,9 +1,9 @@
 /**
  * 외부 공유 응시 화면(0113, 기획 §4.2) — 이 앱에서 **로그인 없이 도는 유일한 라우트**다.
  *
- * 단기 직원용. 링크를 열면 이름·전화번호만 적고 바로 푼다. 사장은 그 이름으로 결과를 본다.
+ * 단기 직원용. 링크를 열면 이름만 적고 바로 푼다. 사장은 그 이름으로 결과를 본다.
  *
- * 전화번호는 **식별키**다(0160, 기획 Q1) — 같은 사람의 재응시를 한 사람으로 묶고, 나중에 이 매장에
+ * 전화번호는 **선택**이고(0195, 2026-09-13 최소수집), 적으면 **식별키**가 된다(0160, 기획 Q1) — 같은 사람의 재응시를 한 사람으로 묶고, 나중에 이 매장에
  * 실제로 합류하면 응시 이력이 직원 이력으로 이어진다. 인증(SMS)은 **선택**이다(기획 §6-B-8):
  * 안 해도 풀 수 있고, 하면 나중에 본인 계정에 붙일 때 확실해진다.
  *
@@ -64,7 +64,8 @@ export default function QuizLinkScreen() {
   // 번호를 고치면 훅이 정규화 번호 비교로 sent/verified 를 자동으로 푼다(signup 과 같은 사용법).
   const otp = usePhoneOtp(normalizePhone(phone));
   const phoneOk = isValidPhone(phone);
-  const canStart = !!name.trim() && phoneOk;
+  // 이름만 필수. 번호는 비워도 되고, 적었으면 휴대폰 형식이어야 한다(잘못 적은 번호가 식별키가 되면 남의 이력에 붙는다).
+  const canStart = !!name.trim() && (phone.trim() === '' || phoneOk);
 
   useEffect(() => {
     if (!tk) return;
@@ -102,13 +103,13 @@ export default function QuizLinkScreen() {
       //   "사장님께 전달됐어요"라고 말하게 된다 — 손님은 다시 풀 방법이 없고 사장은 영원히 모른다.
       const ok = await submitQuizLink(
         tk,
-        { name: name.trim(), phone: normalizePhone(phone), phoneVerified: otp.verified },
+        { name: name.trim(), phone: phoneOk ? normalizePhone(phone) : null, phoneVerified: phoneOk && otp.verified },
         answers,
       );
       setSaved(ok);
       setPhase('done');
     },
-    [name, otp.verified, phone, tk],
+    [name, otp.verified, phone, phoneOk, tk],
   );
 
   return (
@@ -151,7 +152,7 @@ export default function QuizLinkScreen() {
               <Text style={st.lead}>
                 문제 {info.itemCount}개 · {minutesFor(info.itemCount)}분 정도
               </Text>
-              <Text style={st.sub}>이름과 전화번호만 적으면 바로 시작해요. 가입은 없어요.</Text>
+              <Text style={st.sub}>이름만 적으면 바로 시작해요. 가입은 없어요.</Text>
             </Appear>
             <Appear delay={stagger(1)} style={st.qWrap}>
             <TextInput
@@ -168,7 +169,7 @@ export default function QuizLinkScreen() {
               style={st.input}
               value={phone}
               onChangeText={(v) => setPhone(formatPhone(v))}
-              placeholder="010-1234-5678"
+              placeholder="전화번호 (선택)"
               placeholderTextColor={InkColors.ink3}
               keyboardType="phone-pad"
               maxLength={13}
@@ -176,8 +177,8 @@ export default function QuizLinkScreen() {
               onSubmitEditing={() => void start()}
               accessibilityLabel="전화번호 입력"
             />
-            {/* 전화번호를 왜 받는지 말한다 — 안 말하면 "가입 없다면서 번호는 왜"가 된다. */}
-            <Text style={st.hint}>사장님이 결과를 확인할 때 쓰고, 나중에 같은 곳에서 일하게 되면 이 결과가 이어져요.</Text>
+            {/* 전화번호를 왜 받는지 말한다 — 안 말하면 "가입 없다면서 번호는 왜"가 된다. 선택이라는 것도 같이. */}
+            <Text style={st.hint}>번호는 안 적어도 돼요. 적어 두면 나중에 같은 곳에서 일하게 될 때 이 결과가 이어져요.</Text>
             </Appear>
 
             {/* 인증은 선택이다(기획 §6-B-8). 안 해도 시작 버튼은 열려 있다. */}
@@ -224,6 +225,14 @@ export default function QuizLinkScreen() {
           </ScrollView>
           <View style={st.foot}>
             <Appear delay={stagger(2)}>
+            {/* 로그인이 없으니 가입 때의 동의가 여기엔 없다 — 시작 버튼이 곧 동의다(별도 체크박스 없음, 시장 표준).
+                수집 목적·항목·보관은 처리방침 "퀴즈 링크 참여자" 항목이 정본이다. */}
+            <Text style={st.consent}>
+              시작하면 적은 이름과 전화번호가 이 매장의 퀴즈 기록으로 보관되는 데 동의하는 거예요.
+            </Text>
+            <Pressable onPress={() => router.push('/privacy')} accessibilityRole="link" hitSlop={8} style={st.consentLinkHit}>
+              <Text style={st.consentLink}>개인정보처리방침 보기</Text>
+            </Pressable>
             <Pressable
               onPress={() => void start()}
               disabled={!canStart}
@@ -431,6 +440,10 @@ const st = StyleSheet.create({
   otpMsg: { fontSize: 13, fontWeight: '600', color: BrandColors.warn, lineHeight: 20 },
   otpOk: { fontSize: 13, fontWeight: '700', color: BrandColors.good, lineHeight: 20, marginTop: Space.sm },
   footHint: { fontSize: 13, fontWeight: '600', color: InkColors.ink3, textAlign: 'center', marginTop: Space.sm },
+  consent: { fontSize: 12, fontWeight: '600', color: InkColors.ink3, lineHeight: 18, textAlign: 'center' },
+  // 링크는 글자만이지만 터치 타깃은 hitSlop 으로 넓힌다 — RN-web 이 hitSlop 을 무시하므로 minHeight 도 같이.
+  consentLinkHit: { alignSelf: 'center', minHeight: 32, justifyContent: 'center', marginBottom: Space.xs },
+  consentLink: { fontSize: 12, fontWeight: '800', color: InkColors.ink2, textDecorationLine: 'underline' },
 
   step: { fontSize: 12, fontWeight: '800', color: InkColors.ink3 },
   ask: { fontSize: 17, fontWeight: '800', color: InkColors.ink, lineHeight: 25, marginBottom: Space.sm },

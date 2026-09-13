@@ -746,8 +746,11 @@ async function main() {
       JSON.stringify(row)); }
   { const { error } = await g.rpc('quiz_link_submit', { p_token: TOK, p_guest_name: '  ', p_guest_phone: PHONE, p_phone_verified: false, p_answers: [{ item_id: QMC, response: 1 }] });
     check('⑩-15 이름 없이 제출 차단', !!error && /name_required/.test(error?.message ?? ''), error?.message ?? '(차단 안됨!)'); }
-  { const { error } = await g.rpc('quiz_link_submit', { p_token: TOK, p_guest_name: '번호없음', p_guest_phone: '', p_phone_verified: false, p_answers: [{ item_id: QMC, response: 1 }] });
-    check('⑩-15b ★전화번호 없이 제출 차단(식별키라 필수)', !!error && /phone_required/.test(error?.message ?? ''), error?.message ?? '(차단 안됨!)'); }
+  { const { data, error } = await g.rpc('quiz_link_submit', { p_token: TOK, p_guest_name: '번호없음', p_guest_phone: '', p_phone_verified: true, p_answers: [{ item_id: QMC, response: 1 }] });
+    // 0195: 번호는 선택 — 빈 번호로도 적히고, 번호가 없으면 verified 는 클라가 뭐라 하든 false 여야 한다.
+    const { data: nrows } = await owner.from('quiz_attempts').select('guest_phone, guest_phone_verified').eq('entry_id', E[0]).eq('guest_name', '번호없음');
+    const nrow = nrows?.[0] ?? null;
+    check('⑩-15b ★전화번호 없이 제출 허용(0195 선택) · 번호 null · verified false', !error && data === 1 && !!nrow && nrow.guest_phone === null && nrow.guest_phone_verified === false, error?.message ?? JSON.stringify(nrow)); }
   { const { error } = await g.rpc('quiz_link_submit', { p_token: TOK, p_guest_name: '집전화', p_guest_phone: '02-123-4567', p_phone_verified: false, p_answers: [{ item_id: QMC, response: 1 }] });
     check('⑩-15c 휴대폰이 아닌 번호 차단', !!error && /bad_phone/.test(error?.message ?? ''), error?.message ?? '(차단 안됨!)'); }
   { const { data } = await g.rpc('quiz_link_submit', { p_token: TOK, p_guest_name: '침입자', p_guest_phone: PHONE, p_phone_verified: false, p_answers: [{ item_id: `qi_out_${s}`, response: 0 }] });
