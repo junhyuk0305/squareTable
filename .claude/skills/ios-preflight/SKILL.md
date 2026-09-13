@@ -129,6 +129,9 @@ node .claude/skills/ios-preflight/scripts/scan-ios.mjs
 규칙 9종: `ios-vc-frame` · `ios-header-inset` · `ios-shadow` · `ios-permission` · `ios-kb-event` ·
 `ios-mixed-run` · `ios-scroll-inset` · `ios-ignored-nav-option` · `ios-a11y-pair`.
 
+**심사 제출을 앞두고 있으면 여기서 심사 스캐너도 같이 돌린다**(아래 §심사 게이트):
+`node .claude/skills/ios-preflight/scripts/scan-review.mjs --fetch --introspect`
+
 ### 2단계 — 스캐너가 못 잡는 것 (`references/checklist-ios.md`)
 
 체크리스트에서 **이번에 바뀐 코드에 해당하는 항목만** 본다. 전 항목 순회는 첫 감사 1회면 충분하다.
@@ -177,17 +180,36 @@ node .claude/skills/ios-preflight/scripts/scan-ios.mjs
 > 양쪽 다면 `native-audit` 축이다. iOS만이면 위 §핵심 7가지 중 어느 축인지 이름을 붙이고 시작한다.
 > 축 이름을 못 붙이면 아직 고치지 않는다.
 
-## 심사 리스크 (제출 전 1회)
+## 심사 게이트 (제출 전 — 별도 스캐너)
 
-| 조항 | 내용 | 우리 상태 |
-|---|---|---|
-| 3.1.1 | 앱 안에서 외부 결제 유도 금지 | `npm run native:gate` 의 "네이티브 결제 표면" 항목이 담당 — 그쪽 결과를 인용한다 |
-| 5.1.1 | 권한 요청 목적 문구 필요 · 안 쓰는 권한 요청 금지 | 스캐너 `ios-permission` + `출시서류_iOS/02_*` |
-| 5.1.1(v) | 계정 생성 앱은 **앱 안에서 계정 삭제** 제공 | `/account-deletion` 경로 존재 확인 |
-| 4.0 | 알림 권한만 묻고 알림이 안 오면 지적 대상 | §핵심 6 (APNs) |
+```bash
+node .claude/skills/ios-preflight/scripts/scan-review.mjs --fetch --introspect
+```
+
+규칙 10종(`rev-*`)이 조항 번호와 함께 나오고, **코드로는 못 보는 것**(판매 스위치·RC 키·상품 상태)은
+맨 아래 "🔑" 목록으로 따로 찍힌다. 조항별 확인표·우리 반려 이력은 **`references/review-gates.md`**.
+
+**두 플래그는 기본이 꺼져 있다. 제출 전에는 반드시 켠다.**
+- `--fetch` — 앱이 여는 외부 URL 을 **실제로 받아** 그 페이지에서 결제로 가는 길이 있는지 본다(네트워크)
+- `--introspect` — `expo config --type introspect` 로 **최종 Info.plist** 를 뽑는다(1~2분)
 
 정본 문서는 `출시서류_iOS/` 다. 이 스킬은 **코드와 문서가 어긋났는지**만 본다 — 문서 내용을
 여기에 복제하지 않는다.
+
+### §핵심 8. 심사 표면은 바이너리에서 끝나지 않는다 (2026-09-12 반려에서 나온 축)
+
+애플은 **"앱 화면에 결제 버튼이 있나"가 아니라 "개인이 돈을 내면 무엇이 풀리는가"** 를 본다.
+그래서 세 가지가 코드 밖에서 결정된다.
+
+1. **웹사이트도 심사 대상이다.** 09-12 심사관은 우리 사이트의 판매 흐름까지 확인했다. 앱에서 여는
+   페이지가 한 번 더 링크해 결제에 닿으면 그것도 외부결제 CTA 다(한국 스토어프론트는 아웃링크 예외 없음).
+2. **UI 를 감추는 것은 방어가 아니다.** 직전 빌드는 결제 표면을 `SHOW_BILLING=false` 로 감췄는데도
+   유료 게이팅(좌석 캡·AI 캡·2번째 매장)이 남아 있어 "IAP 없이 판매"로 판정됐다.
+3. **우리가 선언한 적 없는 것이 선언된다.** 09-10 의 `UIBackgroundModes: ["audio"]` 는 `expo-audio`
+   플러그인 기본값이었다. `app.json` 을 읽어서는 영원히 안 보인다 — **최종 산출물을 뽑아야** 보인다.
+   ★단 `introspect` 는 **빌드 프로파일을 모른다**(dev-client 전용 문구까지 같이 나온다).
+
+**규칙: 스토어 정책 판정은 화면이 아니라 ①게이팅 ②앱이 여는 웹페이지 ③최종 Info.plist 세 곳에서 한다.**
 
 ## 근거 (판단이 갈리면 여기로)
 
