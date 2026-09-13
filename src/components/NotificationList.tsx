@@ -37,7 +37,9 @@ export const OWNER_KIND_UI: Record<OwnerNotifKind, { icon: IconName; tint: strin
   ai_cap: { icon: 'flash', tint: BrandColors.yellowSoft },
 };
 /** 허브(역할 혼합 가능) 용 — 두 맵 합성. */
-export const ALL_KIND_UI = { ...JUNIOR_KIND_UI, ...OWNER_KIND_UI };
+// 닫힌 매장(0197) — 통합 목록에만 나온다(매장 안 알림함엔 그 매장이 없다).
+const CLOSURE_UI = { icon: 'lock-closed', tint: BrandColors.accentSoft } as const;
+export const ALL_KIND_UI = { ...JUNIOR_KIND_UI, ...OWNER_KIND_UI, closure: CLOSURE_UI };
 
 /** 알림 한 행의 공통 모양(직원·사장 공유). kind는 화면별 union을 문자열로 받는다.
  *  route/readFeedId 는 탭 동작용 — 실제 라우팅/읽음처리는 화면(onPress)이 수행. */

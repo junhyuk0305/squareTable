@@ -6,6 +6,7 @@ import {
   buildManagerNotifications,
   buildOwnerNotifications,
   isPendingAssignment,
+  isAfterAck,
   juniorUnreadCount,
   managerUnreadCount,
   ownerUnreadCount,
@@ -17,8 +18,22 @@ import {
 } from './notifications';
 import { canManage } from './roles';
 
+/** 닫힌 매장 알림(0196·0197) — 매장이 닫혀 들어갈 곳이 없으므로 route 가 없다(탭 = 문구만). */
+export type ClosureNotif = { id: string; kind: 'closure'; title: string; body: string; at: string; unread: boolean };
+
 /** 통합 리스트 한 행 = 기존 알림 행 + 어느 매장 것인지(unitId). 매장명·색 표시는 화면이 붙인다. */
-export type CrossNotifRow = (JuniorNotif | OwnerNotif | ManagerNotif) & { unitId: string };
+export type CrossNotifRow = (JuniorNotif | OwnerNotif | ManagerNotif | ClosureNotif) & { unitId: string };
+
+/** 닫힘 원장 행 → 알림 행. 읽음 축은 처리형 항목과 같은 '모두 읽기' 시각(0078)뿐이다. */
+export function buildClosureNotifs(
+  rows: { id: number; unit_id: string; title: string; body: string; created_at: string }[],
+  ackOf: (uid: string) => string | null | undefined,
+): CrossNotifRow[] {
+  return rows.map((r) => ({
+    id: `closure-${r.id}`, kind: 'closure' as const, title: r.title, body: r.body, at: r.created_at,
+    unread: isAfterAck(r.created_at, ackOf(r.unit_id)), unitId: r.unit_id,
+  }));
+}
 
 // 매장 하나에서 쓸 인자 묶음 — 카운트와 목록이 **같은 입력**을 보게 한 곳에서 만든다.
 const ownerArgsOf = (d: UnitNotifData, me: string, nameOf: (id: string) => string, ackAt?: string | null) =>

@@ -505,6 +505,18 @@ export async function rpcClearIapRelease(): Promise<{ error: DbErr }> {
   return { error: error as DbErr };
 }
 
+// ── 닫힌 매장 알림(0196 원장 · 0197 RPC) — 내가 직원·매니저로 속한 매장이 닫혔다는 행. 허브 알림함에 들어간다 ──
+export type UnitClosureAlert = { id: number; unit_id: string; store_name: string; title: string; body: string; created_at: string };
+export async function fetchMyUnitClosureAlerts(): Promise<DbResult<UnitClosureAlert[]>> {
+  if (!HAS_SUPABASE) return { data: [], error: null };
+  const { data, error } = await supabase.rpc('my_unit_closure_alerts');
+  if (error) {
+    readFail('fetchMyUnitClosureAlerts', error);
+    return { data: null, error: error as DbErr };
+  }
+  return { data: (data as UnitClosureAlert[]) ?? [], error: null };
+}
+
 // ── 이전 매장(0196) — 유료가 끝나 닫힌 소유 매장. 목록은 서버(my_previous_units = unit_access_locked)가 SSOT ──
 export type PreviousUnitRow = { unit_id: string; store_name: string; industry: string | null; closed_at: string };
 export async function fetchMyPreviousUnits(): Promise<DbResult<PreviousUnitRow[]>> {

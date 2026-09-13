@@ -295,6 +295,19 @@ async function liveChecks() {
     p_terms_version: '2026-08-07', p_biz_no: null, p_biz_email: null, p_store_count: 1,
   });
   check('★⑦ 구독이 끝나면 계좌이체가 다시 열린다', !eClaim2, eClaim2?.message ?? '');
+  // ★0197: 유예(grace) 중에도 막는다 — 애플이 재시도 중이라 성공하면 두 번 낸다. canceled 는 통과(채널 전환 D).
+  await svcPatch(`iap_subscriptions?original_transaction_id=eq.qa_${s}`, { status: 'grace' });
+  const { error: eClaim3 } = await P.c.rpc('submit_payment_claim', {
+    p_plan: 'single', p_amount: 1, p_depositor: 'QA입금자', p_months: 1, p_memo: null,
+    p_terms_version: '2026-08-07', p_biz_no: null, p_biz_email: null, p_store_count: 1,
+  });
+  check('★⑦ 유예(grace) 중에도 계좌이체 신고가 거부된다', eClaim3?.message?.includes('iap_subscription_active'), eClaim3?.message ?? '통과돼버림');
+  await svcPatch(`iap_subscriptions?original_transaction_id=eq.qa_${s}`, { status: 'canceled' });
+  const { error: eClaim4 } = await P.c.rpc('submit_payment_claim', {
+    p_plan: 'single', p_amount: 1, p_depositor: 'QA입금자', p_months: 1, p_memo: null,
+    p_terms_version: '2026-08-07', p_biz_no: null, p_biz_email: null, p_store_count: 1,
+  });
+  check('★⑦ 해지 예약(canceled)은 통과 — 기간 끝에 이어 붙인다', !eClaim4, eClaim4?.message ?? '');
 
   // ══ 0196 — 예고/확정 분리 · 닫을 매장 선택 · 유예 · 이전 매장 (2026-09-13 신설) ════════════════
   //   웹훅 판정은 DB 함수 apply_iap_event 가 SSOT 다(엣지는 인증·파싱만). 여기서 같은 경로를 직접 친다.

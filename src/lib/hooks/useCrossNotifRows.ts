@@ -10,7 +10,7 @@ import { useCrossNotifStore } from '@/lib/store/useCrossNotifStore';
 import { useMemberPrefsStore } from '@/lib/store/useMemberPrefsStore';
 import { useWorkStore } from '@/lib/store/useWorkStore';
 import { showToast } from '@/lib/store/useToastStore';
-import { buildStoreNotifs, mergeCrossNotifs, crossNotifTotal, storeUnreadCount } from '@/lib/utils/crossStoreNotifs';
+import { buildStoreNotifs, buildClosureNotifs, mergeCrossNotifs, crossNotifTotal, storeUnreadCount } from '@/lib/utils/crossStoreNotifs';
 import { storeColor } from '@/lib/utils/storeColor';
 import { todayStr } from '@/lib/utils/attendance';
 import type { NotifRow } from '@/components/NotificationList';
@@ -23,6 +23,7 @@ export function useCrossNotifRows() {
   const sessionStores = useSessionStore((s) => s.stores);
   const switchUnit = useSessionStore((s) => s.switchUnit);
   const crossData = useCrossNotifStore((s) => s.data);
+  const closures = useCrossNotifStore((s) => s.closures);
   const markFeedRead = useCrossNotifStore((s) => s.markFeedRead);
   const prefFor = useMemberPrefsStore((s) => s.prefFor);
   const [switching, setSwitching] = useState(false);
@@ -44,6 +45,10 @@ export function useCrossNotifRows() {
     const unreadByUnit: Record<string, number> = {};
     for (const d of crossData) unreadByUnit[d.unitId] = storeUnreadCount(d, rOf(d.unitId), me, today, ackOf(d.unitId));
     const perStore = crossData.map((d) => buildStoreNotifs(d, rOf(d.unitId), me, today, ackOf(d.unitId)));
+    // 닫힌 매장 알림(0197) — 매장별 행에 얹는다. 카운트도 같은 행을 센다(배지·목록 같은 입력).
+    const closureRows = buildClosureNotifs(closures, ackOf);
+    for (const r of closureRows) if (r.unread) unreadByUnit[r.unitId] = (unreadByUnit[r.unitId] ?? 0) + 1;
+    perStore.push(closureRows);
     const merged = mergeCrossNotifs(perStore);
     return {
       rows: merged,
@@ -52,7 +57,7 @@ export function useCrossNotifRows() {
       // 목록에서 잘려나간 개수 — 0 이 아니면 화면이 "N건 더 있어요"를 말해야 한다(#13).
       hiddenCount: Math.max(0, crossNotifTotal(perStore) - merged.length),
     };
-  }, [crossData, sessionStores, role, me, today, ackByUnit]);
+  }, [crossData, closures, sessionStores, role, me, today, ackByUnit]);
 
   /** NotificationList 에 바로 넣을 행(매장 점·이름 칩 포함). */
   const listRows: (NotifRow & { unitId: string })[] = rows.map((r) => ({
@@ -68,6 +73,11 @@ export function useCrossNotifRows() {
   const openRow = async (r: NotifRow) => {
     const row = r as NotifRow & { unitId?: string };
     if (switching || !row.unitId) return;
+    // 닫힌 매장 알림 — 들어갈 매장이 없다(전환하면 unit_locked). 다음 행동은 문구가 말한다.
+    if (row.kind === 'closure') {
+      showToast(row.body ?? '사장님께 문의해 주세요.');
+      return;
+    }
     if (row.unitId !== unitId) {
       setSwitching(true);
       const { error } = await switchUnit(row.unitId);

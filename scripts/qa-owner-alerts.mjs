@@ -289,12 +289,14 @@ async function main() {
     if (ceP) throw new Error(`create_store 실패: ${ceP.message}`);
     const unitP = csP[0].unit_id;
     await adminActivate(unitP, 30, 'single');
+    const staffP = [];
     for (let i = 1; i <= 4; i++) {
       const j = await signUp('junior', `QA개인직원${i}`);
       const { error: je } = await j.c.rpc('join_by_invite', { p_code: csP[0].invite_code });
       if (je) throw new Error(`join_by_invite 실패: ${je.message}`);
       const { error: ae } = await P.c.rpc('approve_member', { p_uid: j.uid });
       if (ae) throw new Error(`approve_member 실패: ${ae.message}`);
+      staffP.push(j);
     }
     const { error: prefErr } = await P.c.rpc('save_unit_member_prefs', {
       p_unit_id: unitP, p_nickname: null, p_color: null, p_muted: false,
@@ -337,6 +339,12 @@ async function main() {
     await sweep();
     cl = await closures();
     check('⑩ 다시 닫히면 새 닫힘으로 1행 더(총 2행)', cl.length === 2 && cl.every((x) => !!x.claimed_at), JSON.stringify(cl.map((x) => x.closed_key)));
+    // 0197 — 허브 알림함: 직원은 자기 매장의 닫힘 행을 읽고, 사장은 0행(설정 → 이전 매장이 사장의 자리다).
+    const { data: inboxJ, error: inboxErr } = await staffP[0].c.rpc('my_unit_closure_alerts');
+    check('⑩ 직원 허브 알림함에 닫힘 행이 온다', !inboxErr && (inboxJ ?? []).filter((x) => x.unit_id === unitP).length === 2, inboxErr?.message ?? JSON.stringify((inboxJ ?? []).map((x) => x.title)));
+    check('⑩ 문구·매장명 동봉', (inboxJ ?? []).every((x) => /이용이 끝났어요/.test(x.title) && !!x.store_name), '');
+    const { data: inboxO } = await P.c.rpc('my_unit_closure_alerts');
+    check('⑩ 사장은 0행', (inboxO ?? []).length === 0, `rows=${inboxO?.length}`);
     void csQ;
   } finally {
     await restore();
