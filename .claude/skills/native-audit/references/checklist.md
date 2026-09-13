@@ -25,6 +25,11 @@
 - ✂️ 탭바(RoleTabBar/HubTabBar) 그리는 화면의 SafeAreaView `bottom` edge — 이중 inset → 탭바 높이가 화면마다 다름.
 - ✂️ `<Modal>`에 `onRequestClose` 없음 — **Android 하드웨어/제스처 뒤로가기가 모달을 못 닫는다**(웹은 무관).
 - 바텀시트류 Modal에 `insets.bottom` 미반영 — 하단 버튼이 네비게이션 바에 가려짐. 공용 BottomSheet를 쓰면 해결됨.
+- ✂️ 반대 방향(2026-09-13 신설 `kb-inset-double`): 시트가 `insets.bottom` 을 **키보드 열림 중에도** 깔면
+  버튼과 키보드 사이가 안전영역만큼 벌어진다. 판정은 `useKeyboardShiftPad()` 하나로 — 키보드 리스너를 또 달지 않는다.
+- ✂️ 시트 손잡이가 **끌어 내려지지 않는다** — 시트 뿌리의 팬 응답자는 비캡처라 본문이 `flex:1` ScrollView 면
+  스크롤이 제스처를 가져간다. 손잡이에는 **시작 즉시 잡는** 응답자를 따로 두고, 터치 상자를 세로로 넓힌다
+  (공용 BottomSheet 의 `gripZone`). 손으로 세운 시트는 이 응답자가 아예 없어 손잡이가 장식이었다.
 - `position:'absolute', bottom: 0` 고정 요소(FAB·배너) — 부모가 inset을 안 가지면 제스처바와 겹침.
   (FAB이 탭바 위 콘텐츠 영역 안이면 안전 — 이 앱의 FAB은 안전 패턴.)
 - Android 15 일부 기기에서 safe-area-context `bottom` 이 **0** 으로 온다(커뮤니티 보고) — `Math.max(insets.bottom, 8)` 같은 하한이 있어야 한다(탭바는 이미 준수).

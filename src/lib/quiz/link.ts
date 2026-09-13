@@ -34,6 +34,9 @@ export type CopyLinkResult = 'copied' | 'shared' | 'dismissed' | 'failed';
  */
 export const COPY_LINK_LABEL = Platform.OS === 'web' ? '링크 복사' : '링크 공유';
 export const COPY_LINK_SHORT = Platform.OS === 'web' ? '복사' : '공유';
+/** 아이콘 버튼용 — 문구와 **같은 자리**에서 정한다(둘이 갈라지면 복사 아이콘이 공유 시트를 여는 꼴이 난다).
+ *  네이티브에 클립보드 모듈이 들어오면 여기와 위 두 줄만 'copy-outline'/'복사'로 바꾸면 된다. */
+export const COPY_LINK_ICON = Platform.OS === 'web' ? 'copy-outline' : 'share-outline';
 
 /**
  * 웹은 클립보드 복사, 네이티브는 공유 시트. 결과를 돌려준다 — **조용히 실패하지 않는다**(복사가 막힌 브라우저가 있고,

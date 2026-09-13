@@ -1,14 +1,14 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, Pressable, ScrollView, TextInput, Modal, Platform, StyleSheet, type NativeSyntheticEvent, type NativeScrollEvent } from 'react-native';
+import { View, Text, Pressable, ScrollView, TextInput, Platform, StyleSheet, type NativeSyntheticEvent, type NativeScrollEvent } from 'react-native';
 import { KeyboardShift } from '@/components/KeyboardShift';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { BottomSheet } from '@/components/BottomSheet';
 import { StoredImage } from '@/components/StoredImage';
 import { Ionicons } from '@expo/vector-icons';
 
 import { type FeedItem, REACTIONS } from '@/lib/store/useWorkStore';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Elevation, Radius } from '@/lib/theme/elevation';
-import { modalFrameStyle, Space } from '@/lib/theme/layout';
+import { Space } from '@/lib/theme/layout';
 import { hhmm } from '@/lib/utils/attendance';
 import { ReactionBar } from './ReactionBar';
 import { MentionInput, extractMentions, type Member } from './MentionInput';
@@ -158,8 +158,6 @@ export function WorkChat({
   // 롱프레스로 연 메시지 액션 시트(할일로/삭제). null이면 닫힘.
   const [actionItem, setActionItem] = useState<FeedItem | null>(null);
   const scrollRef = useRef<ScrollView>(null);
-  // 롱프레스 액션 시트 하단 안전영역(Android 네비게이션 바 · iOS 홈 인디케이터).
-  const insets = useSafeAreaInsets();
 
   // 받아쓰기 힌트 — 멤버 이름. 사람 이름은 사전에 없는 고유명사라 가장 자주 틀린다.
   const voiceHints = useMemo(() => buildHints(members.map((m) => m.name)), [members]);
@@ -412,13 +410,11 @@ export function WorkChat({
         </Pressable>
       </ChatComposerBar>
 
-      {/* 메시지 롱프레스 액션 시트 — 프레임(460) 안에 가둔다(modalFrameStyle).
-          하단 insets: Android edge-to-edge 에서 시트가 네비게이션 바에 가려진다(BottomSheet 와 같은 규칙). */}
-      <Modal visible={!!actionItem} transparent animationType="slide" statusBarTranslucent navigationBarTranslucent onRequestClose={() => setActionItem(null)}>
-        <View style={modalFrameStyle}>
-          <Pressable style={s.sheetBackdrop} onPress={() => setActionItem(null)} />
-          <View style={[s.sheet, { paddingBottom: 24 + insets.bottom }]}>
-            <View style={s.sheetHandle} />
+      {/* 메시지 롱프레스 액션 시트 — 2026-09-13 공용 BottomSheet 로 교체.
+          손으로 쓴 스캐폴드라 손잡이가 있어도 **끌어 내려지지 않았다**(드래그 응답자가 공용에만 있다).
+          프레임 격리·edge-to-edge 하단 인셋·키보드도 이제 공용이 맡는다. */}
+      <BottomSheet visible={!!actionItem} onClose={() => setActionItem(null)}>
+          <View style={s.sheet}>
             {/* 리액션 빠른 선택 — 카톡식으로 시트 상단에 이모지 행. 누르면 반영하고 닫힌다. */}
             <View style={s.sheetReactRow}>
               {REACTIONS.map((e) => (
@@ -468,8 +464,7 @@ export function WorkChat({
               <Text style={s.sheetCancelText}>취소</Text>
             </Pressable>
           </View>
-        </View>
-      </Modal>
+      </BottomSheet>
     </KeyboardShift>
   );
 }
@@ -637,10 +632,8 @@ const s = StyleSheet.create({
   menuInfoRow: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 11, paddingTop: 8, paddingBottom: 2, borderTopWidth: 1, borderTopColor: InkColors.line, marginTop: 4 },
   menuInfoText: { flex: 1, fontSize: 10.5, color: InkColors.ink3, fontWeight: '600' },
 
-  // 롱프레스 액션 시트 — 딤 없이 올라오기만(공용 BottomSheet와 동일 규칙: backdrop은 투명 flex:1).
-  sheetBackdrop: { flex: 1 },
-  sheet: { backgroundColor: '#FFFFFF', borderTopLeftRadius: Radius.sheet, borderTopRightRadius: Radius.sheet, paddingHorizontal: 12, paddingTop: 10, paddingBottom: 24, gap: 4, ...Elevation.e3 },
-  sheetHandle: { width: 40, height: 4, borderRadius: Radius.pill, backgroundColor: InkColors.line, alignSelf: 'center', marginBottom: 8 },
+  // 롱프레스 액션 시트 — 모양(배경·라운드·그림자·손잡이·하단 인셋)은 공용 BottomSheet 가 그린다.
+  sheet: { paddingHorizontal: 12, paddingBottom: 20, gap: 4 },
   sheetReactRow: { flexDirection: 'row', justifyContent: 'space-around', paddingVertical: 6, paddingHorizontal: 4, marginBottom: 4, borderBottomWidth: 1, borderBottomColor: InkColors.line },
   sheetReact: { width: 48, height: 48, borderRadius: Radius.pill, alignItems: 'center', justifyContent: 'center' },
   sheetReactEmoji: { fontSize: 26 },

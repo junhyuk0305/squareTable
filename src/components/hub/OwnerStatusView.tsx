@@ -269,9 +269,12 @@ export function OwnerStatusView({ header }: { header: ReactNode }) {
       value: laborLoadError ? '—' : laborTotal >= 10000 ? Math.round(laborTotal / 10000).toLocaleString() : laborTotal.toLocaleString(),
       unit: laborLoadError ? undefined : laborTotal >= 10000 ? '만원' : '원',
       sub: laborLoadError ? '불러오지 못했어요' : multi ? `매장 ${overview.length}곳 합계 · 근무표 기준` : '근무표 기준',
+      // ★목적지는 '급여 설정'(수당·정산 기준)이 아니라 **직원·급여**다 — 이 칸을 누르는 사람은
+      //   "이 금액이 누구에게서 나왔나"를 보려는 것이고, 그 답(직원별 시간·금액)은 owner/staff 에만 있다.
+      //   수당 규칙을 고치는 화면은 거기서 한 번 더 들어간다(staff.tsx '급여 설정' 버튼).
       onPress: () => {
-        if (multi) setPicker({ title: '급여', path: '/owner/payroll', units: overview.map((r) => ({ uid: r.unit_id, count: 0 })) });
-        else if (overview[0]) void goStore(overview[0].unit_id, '/owner/payroll');
+        if (multi) setPicker({ title: '직원 급여', path: '/owner/staff', units: overview.map((r) => ({ uid: r.unit_id, count: 0 })) });
+        else if (overview[0]) void goStore(overview[0].unit_id, '/owner/staff');
       },
     },
     // 'AI 답변 사용' 칸은 2026-08-27 §7-6 판정으로 뺐다 — 월 사용/캡은 매장 설정(owner/settings)의 한 행으로 옮김.

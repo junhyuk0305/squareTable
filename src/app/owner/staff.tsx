@@ -20,14 +20,12 @@ import { ConfirmModal } from '@/components/ConfirmModal';
 import { Avatar } from '@/components/Avatar';
 import { SectionLabel } from '@/components/SectionLabel';
 import { InviteBlock } from '@/components/owner/InviteBlock';
-import { ProgressPill } from '@/components/blocks/ProgressPill';
 import { ActionRow } from '@/components/blocks/ActionRow';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
 import { fmtDuration, won, todayStr, liveMinutes } from '@/lib/utils/attendance';
 import { computePay, shiftsToPayRecords } from '@/lib/utils/payroll';
-import { gradableTasks, staffBehind, type StaffBehind } from '@/lib/utils/taskProgress';
 import { showToast } from '@/lib/store/useToastStore';
 import { rotateInviteCode } from '@/lib/db';
 
@@ -69,6 +67,8 @@ export default function OwnerStaffScreen() {
   // 거절 대상 — 확인 모달용(신청 거절도 되돌리기 번거로우니 한 번 확인).
   const [rejectTarget, setRejectTarget] = useState<{ id: string; name: string } | null>(null);
   const [rotateOpen, setRotateOpen] = useState(false);
+  // 매니저로 지정할 직원 — 안내 모달용(무엇이 같고 무엇이 다른지 먼저 보여준다).
+  const [managerTarget, setManagerTarget] = useState<{ id: string; name: string } | null>(null);
   const [rotating, setRotating] = useState(false);
 
   // 화면 진입/복귀 시마다 명부·합류신청을 다시 당겨온다. owner 레이아웃 hydrate는 로그인 시 1회뿐이라,
@@ -114,23 +114,10 @@ export default function OwnerStaffScreen() {
     return map;
   }, [records, wages, settings, staff, ym, today, shiftTemplates, swaps, shiftExceptions]);
 
-  // 직원별 퀴즈 진도 — 판정 본체는 taskProgress(사장 홈과 같은 잣대). 여기서 다시 세지 않는다.
-  // hydrate 는 owner/_layout 이 이미 돌린다.
-  const templates = useWorkStore((s) => s.templates);
-  const knowhowLinks = useWorkStore((s) => s.knowhowLinks);
-  const understanding = useWorkStore((s) => s.understanding);
-  const quizCounts = useWorkStore((s) => s.quizCounts);
-  const gradable = useMemo(
-    () => gradableTasks(templates, knowhowLinks, quizCounts),
-    [templates, knowhowLinks, quizCounts],
-  );
-  // 밀린 직원만 담긴 맵 — 없으면 "다 봤어요"다. 단 gradable 이 0이면 잴 수 없는 것이라 아예 안 그린다.
-  const behindOf = useMemo(() => {
-    const map: Record<string, StaffBehind> = {};
-    for (const r of staffBehind(staff, gradable, understanding, knowhowLinks)) map[r.staffId] = r;
-    return map;
-  }, [staff, gradable, understanding, knowhowLinks]);
-
+  // 직원별 퀴즈 진도 줄은 2026-09-13 실측 QA 로 **이 화면에서 뺐다**(사장 요청).
+  //   이유: 이 화면은 '누구에게 얼마' 를 보는 자리고, 진도는 퀴즈 탭(응시 현황)이 이미 맡는다.
+  //   같은 사실을 두 화면에서 말하면 둘 중 하나만 고쳐지는 순간 서로 다른 말을 한다.
+  //   판정 본체(taskProgress)는 그대로 두고 여기서 부르지만 않는다 — 퀴즈 탭·사장 홈이 계속 쓴다.
   const totalPay = staff.reduce((a, s) => a + (perStaff[s.id]?.pay ?? 0), 0);
   /**
    * ★"₩0"을 짓지 않는다(2026-09-09). 시급 축은 이미 pay=null 로 0원과 미설정을 갈라 놓았는데,
@@ -313,7 +300,6 @@ export default function OwnerStaffScreen() {
           {staff.map((s, i) => {
             const agg = perStaff[s.id];
             const isManager = roles[s.id] === 'manager';
-            const behind = behindOf[s.id];
             return (
             <Appear key={s.id} delay={stagger(i)} style={styles.staffItem}>
             <View style={[styles.staffRow, styles.staffRowFlat]}>
@@ -357,34 +343,27 @@ export default function OwnerStaffScreen() {
                 </Pressable>
               )}
             </View>
-            {/* 퀴즈 진도 — 이름 줄(근무 상태 칩)·둘째 줄(시간·급여)이 이미 꽉 차서 셋째 줄로 뺀다.
-                같은 줄에 밀어 넣으면 이름·금액·업무 이름이 전부 잘린다(폭 실측).
-                ★ 점수(`0/7`) 대신 업무 이름으로 쓴다 — 숫자로 쓰면 직원 줄세우기다(감시원칙 D1~D5).
-                잴 수 있는 업무(노하우+문항)가 하나도 없으면 아무것도 안 그린다: "판정 불가"는 "다 했음"이 아니다.
-                staffTap(출근기록 진입)과 형제 — Pressable 중첩 금지(RNW). */}
-            {gradable.length > 0 && (
-              <View style={styles.progressRow}>
-                <Text style={styles.progressText} numberOfLines={1}>
-                  {behind ? `${behind.firstTask} 아직` : '다 봤어요'}
-                </Text>
-                <ProgressPill
-                  text={behind ? `${behind.total}개` : '✓'}
-                  tone={!behind ? 'done' : behind.total === 1 ? 'progress' : 'behind'}
-                />
-              </View>
-            )}
-            {/* 매니저 지정/해제(0093) — 사장 전용. 확인 모달 없이 즉시 실행(P7, 같은 버튼으로 되돌림).
-                staffTap(출근기록 진입)과 형제로 분리 — Pressable 중첩 금지(RNW). */}
+            {/* 매니저 지정/해제(0093) — 사장 전용. staffTap(출근기록 진입)과 형제로 분리(Pressable 중첩 금지·RNW).
+                ★지정은 **권한이 늘어나는 방향**이라 안내 모달을 먼저 띄운다(2026-09-13 사장 요청):
+                  같은 버튼으로 되돌릴 수 있다는 것(P7)은 "무엇이 달라지는지 모른 채 눌렀다"를 못 막는다.
+                해제는 권한이 줄어드는 쪽이라 그대로 즉시 실행한다 — 확인을 두 방향에 다 걸면 되돌리기가 무거워진다.
+                지정 버튼은 노랑(권장 액션·검정 글자), 해제는 눌러서 되돌리는 회색 글자 그대로. */}
             {isOwner && (
               <Pressable
-                onPress={() => setRole(s.id, isManager ? 'junior' : 'manager')}
+                onPress={() => (isManager ? setRole(s.id, 'junior') : setManagerTarget({ id: s.id, name: s.name }))}
                 hitSlop={6}
                 accessibilityRole="button"
                 accessibilityLabel={isManager ? `${s.name} 매니저 해제` : `${s.name} 매니저로 지정`}
-                style={({ pressed }) => [styles.roleBtn, pressed && { opacity: 0.6 }]}
+                style={({ pressed }) => [isManager ? styles.roleBtn : styles.roleBtnOn, pressed && { opacity: 0.6 }]}
               >
-                <Ionicons name={isManager ? 'remove-circle-outline' : 'ribbon-outline'} size={14} color={InkColors.ink3} />
-                <Text style={styles.roleBtnText}>{isManager ? '매니저 해제' : '매니저로 지정'}</Text>
+                <Ionicons
+                  name={isManager ? 'remove-circle-outline' : 'ribbon-outline'}
+                  size={14}
+                  color={isManager ? InkColors.ink3 : InkColors.ink}
+                />
+                <Text style={isManager ? styles.roleBtnText : styles.roleBtnOnText}>
+                  {isManager ? '매니저 해제' : '매니저로 지정'}
+                </Text>
               </Pressable>
             )}
             </Appear>
@@ -419,6 +398,22 @@ export default function OwnerStaffScreen() {
         confirmLabel="거절"
         onConfirm={confirmReject}
         onCancel={() => setRejectTarget(null)}
+      />
+      {/* 매니저 안내(2026-09-13) — 실제로 **앱에서 되는 것**만 적는다.
+          경계의 정본은 클라이언트 허용목록(lib/utils/roles.ts MANAGER_OWNER_ROUTES)이다.
+          ⚠️서버(0093)는 이보다 넓게 허용한다(시급 저장·급여 설정·합류 승인) — 어긋남은 roles.ts 에 기록. */}
+      <ConfirmModal
+        visible={!!managerTarget}
+        icon="ribbon-outline"
+        title="매니저로 지정할까요?"
+        message={`'${managerTarget?.name ?? ''}' 님이 매장 관리를 도울 수 있어요.\n\n새로 할 수 있는 것 — 근무표 짜기·교대 승인, 할일 배정, 공지 쓰기, 출근 기록 수정, 업무방 관리.\n\n그대로인 것 — 급여·시급, 초대코드, 직원 내보내기·매니저 지정, 노하우 편집, 퀴즈, 요금제는 사장님만 해요.`}
+        accent="매니저도 직원 화면을 그대로 써요. 설정의 '매장 관리'로 들어가요."
+        confirmLabel="매니저로 지정"
+        onConfirm={() => {
+          if (managerTarget) setRole(managerTarget.id, 'manager');
+          setManagerTarget(null);
+        }}
+        onCancel={() => setManagerTarget(null)}
       />
       <ConfirmModal
         visible={rotateOpen}
@@ -537,11 +532,14 @@ const styles = StyleSheet.create({
   staffItem: { borderBottomWidth: 1, borderBottomColor: InkColors.line },
   staffRowFlat: { borderBottomWidth: 0 },
   roleBtn: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-end', gap: 4, paddingBottom: 12, paddingHorizontal: 2 },
-  // 퀴즈 진도 줄 — 항목 폭 전체를 쓴다(이름 칼럼은 시급 입력·내보내기와 폭을 다투는 자리라 여기 못 둔다).
-  // 알약은 오른쪽 끝 고정 → 열지 않고 세로로 훑을 수 있다.
-  progressRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, minHeight: 28, paddingBottom: Space.sm },
-  progressText: { flex: 1, minWidth: 0, fontSize: 12, fontWeight: '600', color: InkColors.ink2 },
   roleBtnText: { fontSize: 12, fontWeight: '700', color: InkColors.ink3 },
+  // 지정(권장 액션) — 노랑 알약 + 검정 글자. 해제(roleBtn)와 무게를 일부러 다르게 둔다.
+  roleBtnOn: {
+    flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-end', gap: 4,
+    marginBottom: 12, paddingVertical: 6, paddingHorizontal: 12,
+    borderRadius: Radius.pill, backgroundColor: BrandColors.yellow, borderWidth: 1, borderColor: BrandColors.yellowDeep,
+  },
+  roleBtnOnText: { fontSize: 12, fontWeight: '800', color: InkColors.ink },
   staffTap: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12, minWidth: 0 },
   nameCol: { flex: 1, minWidth: 0 },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6, minWidth: 0 },

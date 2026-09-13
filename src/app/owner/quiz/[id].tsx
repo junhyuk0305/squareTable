@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
-import { View, Text, TextInput, Pressable, ScrollView, ActivityIndicator, StyleSheet } from 'react-native';
+import { View, Text, Pressable, ScrollView, ActivityIndicator, StyleSheet } from 'react-native';
 import { KeyboardShift } from '@/components/KeyboardShift';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
@@ -19,11 +19,13 @@ import {
   upsertTrainingCourse,
   insertQuizAssignments,
   insertQuizItem,
+  updateQuizItem,
   type StaffAttemptItemRow,
 } from '@/lib/db';
-import { Collapse } from '@/components/Collapse';
 import { genId } from '@/lib/utils/id';
 import { FORMATS } from '@/lib/quiz/formats';
+// KST 오늘은 일정 SSOT 하나만 쓴다(이 파일·만들기·설정 패널에 복붙돼 있던 것을 걷었다).
+import { todayKst, cycleLabel } from '@/lib/quiz/schedule';
 import { Appear, stagger } from '@/components/Appear';
 import { BottomSheet } from '@/components/BottomSheet';
 import { SegmentTabs, type SegmentItem } from '@/components/SegmentTabs';
@@ -32,25 +34,24 @@ import { ProgressRing } from '@/components/blocks/ProgressRing';
 import { ProgressPill } from '@/components/blocks/ProgressPill';
 import { QuizEditorSheet } from '@/components/owner/quiz/QuizEditorSheet';
 import { QuizPreviewSheet } from '@/components/owner/quiz/QuizPreviewSheet';
-import { QuizDeployPanel } from '@/components/owner/quiz/QuizDeployPanel';
-import { SheetHead, GhostButton } from '@/components/owner/quiz/kit';
+import { QuizSettingsPanel } from '@/components/owner/quiz/QuizSettingsPanel';
+import { SheetHead } from '@/components/owner/quiz/kit';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
 import type { QuizItem } from '@/lib/quiz/types';
 
-type Seg = 'people' | 'items' | 'deploy';
-
-/** 사장이 직접 정한 고정 주기의 선택지 — 만들기(B5)와 같은 값이어야 화면끼리 어긋나지 않는다. */
-const CYCLES: { label: string; days: number | null }[] = [
-  { label: '맡길래요', days: null },
-  { label: '한 달마다', days: 30 },
-  { label: '3개월마다', days: 90 },
-  { label: '6개월마다', days: 180 },
-];
+type Seg = 'people' | 'items' | 'settings';
 
 /**
- * 퀴즈 상세 — 결과(C1) · 문항별(C2) · 더보기(C3) + 예외 D4·D8·D10·D11.
+ * 퀴즈 상세 — 결과(C1) · 문항(C2) · 설정 + 더보기(C3) + 예외 D4·D8.
+ *
+ * ★2026-09-13 개편: 세 번째 탭이 '배포' → **'설정'** 이 됐다. 이름·주기를 고치는 자리가 더보기 속
+ *   시트였고(D11), 받는 사람을 고치는 자리는 아무 데도 없었다 — 고치는 일은 전부 설정 탭으로 모으고
+ *   배포는 그 안의 한 섹션이 된다(내부면 사람, 외부면 링크 — `course.audience`·0200 이 가른다).
+ *   그래서 **결과 탭은 결과만** 본다(다시 알리기도 설정으로 옮겼다).
+ * ★문항은 이제 낸 뒤에도 제자리에서 고치고 뺄 수 있다(줄 탭 → 작은 시트). 이미 푼 사람의 결과는
+ *   안 바뀐다 — quiz_attempt_items 가 응시 시점 payload 를 스냅샷으로 들고 있다(0160 §2).
  *
  * ★사람 옆에 **점수를 쓰지 않는다** — 통과/대기 두 값뿐이다(감시원칙 D1~D5, 줄세우기 금지).
  * ★문항별 오답률은 **직원 평가가 아니라 노하우 결함 신호**로 뒤집어 말한다(0103). 다른 퀴즈 도구와
@@ -59,14 +60,13 @@ const CYCLES: { label: string; days: number | null }[] = [
  */
 export default function QuizDetailScreen() {
   const router = useRouter();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  /** `?tab=settings` — 퀴즈 탭 목록의 설정 아이콘이 곧장 설정으로 보낸다(한 번에 도착한다). */
+  const { id, tab } = useLocalSearchParams<{ id: string; tab?: string }>();
   const unitId = useSessionStore((s) => s.unitId);
 
   const { courses, boardLoaded, quizStats, sendsByCourse, bumpSends, reloadCourses } = useQuizBoard();
   const courseEntries = useWorkStore((s) => s.courseEntries);
   const understanding = useWorkStore((s) => s.understanding);
-  const templates = useWorkStore((s) => s.templates);
-  const attachKnowhow = useWorkStore((s) => s.attachKnowhow);
   const addCourseEntry = useWorkStore((s) => s.addCourseEntry);
   const entries = usePlaybookStore((s) => s.entries);
   const staff = useStaffStore((s) => s.staff);
@@ -76,24 +76,21 @@ export default function QuizDetailScreen() {
     void hydrateStaff();
   }, [hydrateStaff]);
 
-  const [seg, setSeg] = useState<Seg>('people');
-  /** 문항별 답을 펼쳐 놓은 사람(0190). 한 번에 한 명만 편다 — 목록이 통째로 길어지지 않게. */
-  const [openPerson, setOpenPerson] = useState<string | null>(null);
+  const [seg, setSeg] = useState<Seg>(tab === 'settings' ? 'settings' : tab === 'items' ? 'items' : 'people');
   const [staffItems, setStaffItems] = useState<StaffAttemptItemRow[]>([]);
   const [moreOpen, setMoreOpen] = useState(false);
-  const [editOpen, setEditOpen] = useState(false);
-  const [attachOpen, setAttachOpen] = useState(false);
   const [preview, setPreview] = useState<QuizItem | null>(null);
+  /** 문항 줄을 누르면 뜨는 작은 메뉴 — 미리보기 / 고치기 / 빼기. 줄 안에 버튼 3개를 넣으면 알약과 겹친다. */
+  const [itemMenu, setItemMenu] = useState<QuizItem | null>(null);
+  /** 제자리 수정(0107 updateQuizItem) — 이미 낸 퀴즈의 문항도 여기서 고친다.
+   *  이미 푼 사람의 결과는 안 바뀐다: quiz_attempt_items 가 응시 시점 payload 를 스냅샷으로 들고 있다. */
+  const [editingItem, setEditingItem] = useState<QuizItem | null>(null);
   const [remaking, setRemaking] = useState<{ item: QuizItem; entryId: string; title: string } | null>(null);
   const [busy, setBusy] = useState(false);
 
   const course = useMemo(() => courses.find((c) => c.id === id) ?? null, [courses, id]);
   const entryIds = useMemo(() => courseEntriesOf(courseEntries, id ?? '').map((r) => r.entryId), [courseEntries, id]);
   const entryById = useMemo(() => new Map(entries.map((e) => [e.id, e])), [entries]);
-
-  // 이름·주기 편집 draft(D11) — 시트를 열 때 현재 값을 실어 준다.
-  const [draftName, setDraftName] = useState('');
-  const [draftCycle, setDraftCycle] = useState<number | null>(null);
 
   const [items, setItems] = useState<QuizItem[]>([]);
   const [itemsLoaded, setItemsLoaded] = useState(false);
@@ -119,7 +116,6 @@ export default function QuizDetailScreen() {
   }, [entryIds, itemsReload]);
 
   const sends = useMemo(() => sendsByCourse.get(id ?? '') ?? [], [sendsByCourse, id]);
-  const sentUserIds = useMemo(() => [...new Set(sends.filter((a) => a.sentAt).map((a) => a.userId))], [sends]);
   const allUserIds = useMemo(() => [...new Set(sends.map((a) => a.userId))], [sends]);
 
   // 주기 due 판정 기준 시각 — 렌더 중 Date.now() 금지(컴파일러 순수성). 마운트 1회로 충분하다.
@@ -169,22 +165,15 @@ export default function QuizDetailScreen() {
     [items, entryById],
   );
 
-  /** 붙일 수 있는 업무 = 숨기지 않은 템플릿. 시트가 열릴 때마다 다시 거르지 않는다. */
-  const attachable = useMemo(() => templates.filter((t) => !t.hidden), [templates]);
-
   const segItems: SegmentItem[] = [
     { key: 'people', label: '결과', count: people.length },
     { key: 'items', label: '문항', count: items.length },
-    // 한 퀴즈 = 배포 여러 번(2026-09-11). 링크가 더보기 메뉴 속에 있던 동안 사장은 "또 배포"를
-    // 퀴즈 복제로 이해했다 — 자리를 세그먼트로 올려 같은 퀴즈를 다시 내보내는 길을 보이게 한다.
-    { key: 'deploy', label: '배포' },
+    // 2026-09-13: '배포' → '설정'. 이름·주기·마감을 고치는 자리가 더보기(⋯) 속 시트였고, 받는 사람을
+    // 고치는 자리는 아무 데도 없었다. 고치는 일을 여기 한 탭으로 모으고, 배포는 그 안의 한 섹션이 된다
+    // (내부면 사람 고르기, 외부면 링크 — 한쪽만 보여준다. 근거는 course.audience · 0200).
+    // 결과 탭은 그래서 **결과만** 본다.
+    { key: 'settings', label: '설정' },
   ];
-
-  const openMore = () => {
-    setDraftName(course?.name ?? '');
-    setDraftCycle(course?.due_days ?? null);
-    setMoreOpen(true);
-  };
 
   const saveCourse = async (patch: { name?: string; due_days?: number | null; active?: boolean }) => {
     if (!course || busy) return false;
@@ -320,7 +309,7 @@ export default function QuizDetailScreen() {
         backFallback
         right={
           <Pressable
-            onPress={openMore}
+            onPress={() => setMoreOpen(true)}
             style={({ pressed }) => [st.headerAction, pressed && { opacity: 0.6 }]}
             accessibilityRole="button"
             accessibilityLabel="퀴즈 설정"
@@ -371,69 +360,53 @@ export default function QuizDetailScreen() {
                   ))}
                 </View>
               </View>
-              {/* 사람 줄을 누르면 **그 사람이 어느 문항을 맞혔는지**가 그 자리에서 펼쳐진다(0190).
+              {/* 사람 줄을 누르면 **개인 상세 화면**으로 간다(2026-09-13).
+                  그전에는 그 자리에서 줄이 펼쳐져 문항 제목 + 체크/엑스만 보였다 — 사장이 물은
+                  "이 사람 어떤지"는 몇 번 봤고·정답률이 얼마고·무엇을 어떻게 틀렸나가 같이 있어야
+                  답이 된다. 그 셋을 한 줄 밑에 넣을 수는 없어 화면을 나눴다(`/owner/quiz/person`).
                   ⚠️ 개인 오답을 사장이 보는 것은 2026-09-11 사용자 결정이다 — 0103·0112 의
                      "개인 오답 저장 금지"를 뒤집은 자리이므로, 되돌릴 땐 0190 과 같이 본다. */}
               <View style={st.listCard}>
                 {people.map((p, i) => {
                   const mine = staffItems.filter((r) => r.staffId === p.id);
-                  const open = openPerson === p.id;
+                  const done = mine.length > 0;
                   return (
-                    <View key={p.id} style={i > 0 ? st.rowDivider : undefined}>
-                      <Pressable
-                        onPress={() => setOpenPerson(open ? null : p.id)}
-                        disabled={mine.length === 0}
-                        style={({ pressed }) => [st.row, pressed && { opacity: 0.6 }]}
-                        accessibilityRole="button"
-                        accessibilityState={{ expanded: open }}
-                        accessibilityLabel={mine.length > 0 ? `${p.name} 푼 문항 ${open ? '접기' : '보기'}` : p.name}
-                      >
-                        <View style={st.rowText}>
-                          <Text style={st.rowTitle} numberOfLines={1}>{p.name}</Text>
-                          <Text style={st.rowSub} numberOfLines={1}>
-                            {mine.length > 0
-                              ? `${mine.length}문제 중 ${mine.filter((r) => r.correct).length}개 맞힘`
-                              : p.passed ? '통과' : p.sent ? '미응시' : '발송 중'}
-                          </Text>
-                        </View>
-                        <ProgressPill text={p.passed ? '다 맞힘' : '아직 안 풂'} tone={p.passed ? 'done' : 'neutral'} />
-                        {mine.length > 0 ? (
-                          <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={15} color={InkColors.ink3} />
-                        ) : null}
-                      </Pressable>
-                      {open && mine.length > 0 ? (
-                        <Collapse>
-                          <View style={st.answerBox}>
-                            {[...mine].sort((a, b) => a.ord - b.ord).map((r) => (
-                              <View key={r.id} style={st.answerRow}>
-                                <Ionicons
-                                  name={r.correct ? 'checkmark-circle' : 'close-circle'}
-                                  size={16}
-                                  color={r.correct ? BrandColors.good : BrandColors.bad}
-                                />
-                                <Text style={st.answerText} numberOfLines={2}>
-                                  {String(r.payload?.ask ?? '문항')}
-                                </Text>
-                              </View>
-                            ))}
-                          </View>
-                        </Collapse>
-                      ) : null}
-                    </View>
+                    <Pressable
+                      key={p.id}
+                      onPress={() => router.push(`/owner/quiz/person?course=${id}&staff=${p.id}` as never)}
+                      disabled={!done}
+                      style={({ pressed }) => [st.row, i > 0 && st.rowDivider, pressed && { opacity: 0.6 }]}
+                      accessibilityRole="button"
+                      accessibilityLabel={done ? `${p.name} 응시 결과 보기` : p.name}
+                    >
+                      <View style={st.rowText}>
+                        <Text style={st.rowTitle} numberOfLines={1}>{p.name}</Text>
+                        <Text style={st.rowSub} numberOfLines={1}>
+                          {done
+                            ? `${mine.length}문제 중 ${mine.filter((r) => r.correct).length}개 맞힘`
+                            : p.passed ? '통과' : p.sent ? '미응시' : '발송 중'}
+                        </Text>
+                      </View>
+                      <ProgressPill text={p.passed ? '다 맞힘' : '아직 안 풂'} tone={p.passed ? 'done' : 'neutral'} />
+                      {done ? <Ionicons name="chevron-forward" size={15} color={InkColors.ink3} /> : null}
+                    </Pressable>
                   );
                 })}
               </View>
-              {/* 글자만 있던 버튼 → 흰 버튼(GhostButton). 2026-09-03: 글씨만 있는 버튼 금지. */}
-              {notDone.length > 0 && (
-                <View style={{ marginTop: Space.sm }}>
-                  <GhostButton icon="notifications-outline" label={`아직 안 푼 ${notDone.length}명에게 다시 알리기`} onPress={() => void remind()} />
-                </View>
-              )}
+              {/* '다시 알리기'는 설정 탭(배포 섹션)으로 옮겼다 — 결과 탭은 결과만 본다(2026-09-13).
+                  판정(누가 안 풀었나)은 여기 `notDone` 그대로이고, 버튼만 그쪽에서 그린다. */}
             </>
           )
-        ) : seg === 'deploy' ? (
-          <QuizDeployPanel
+        ) : seg === 'settings' ? (
+          /* key={course.id} — 다른 퀴즈로 옮기면 폼을 새로 마운트한다(패널이 이펙트로 상태를
+             되돌리지 않는 대신 여기서 끊는다. 패널 주석 참고). */
+          <QuizSettingsPanel
+            key={course.id}
             course={course}
+            staff={staff.map((x) => ({ id: x.id, name: x.name }))}
+            sends={sends}
+            remind={notDone.length > 0 ? { count: notDone.length, onPress: () => void remind() } : undefined}
+            onSaved={() => { reloadCourses(); bumpSends(); }}
             onOpenResult={(sub) => router.push(`/owner/quiz/guest/${sub}` as never)}
           />
         ) : items.length === 0 ? (
@@ -450,10 +423,10 @@ export default function QuizDetailScreen() {
                 return (
                   <Appear key={q.id} delay={stagger(i)}>
                   <Pressable
-                    onPress={() => setPreview(q)}
+                    onPress={() => setItemMenu(q)}
                     style={({ pressed }) => [st.row, i > 0 && st.rowDivider, pressed && { opacity: 0.6 }]}
                     accessibilityRole="button"
-                    accessibilityLabel={`${i + 1}번 문항 미리보기`}
+                    accessibilityLabel={`${i + 1}번 문항 — 미리보기·고치기·빼기`}
                   >
                     <View style={st.rowText}>
                       <Text style={st.rowTitle} numberOfLines={1}>
@@ -545,112 +518,76 @@ export default function QuizDetailScreen() {
         <BottomSheet visible onClose={() => setMoreOpen(false)}>
           <SheetHead title={course.name} onClose={() => setMoreOpen(false)} />
           <View style={st.sheetBody}>
-            {/* ★탭으로 닿는 것은 여기 두지 않는다(2026-09-11). '문항 다시 보기'·'링크 만들기'는
-                세그먼트를 바꾸는 일이라 탭이 이미 하는 일이었다 — 같은 일에 입구가 둘이면
-                사장은 어느 쪽이 맞는지 매번 고른다. 여기 남는 것은 **탭에 없는 일**뿐이다. */}
-            <SheetOption label="이름·설정 고치기" onPress={() => { setMoreOpen(false); setEditOpen(true); }} />
-            {/* ★"이 업무에 붙이기"는 되물음이 난다(2026-09-11) — 이 화면엔 **현재 업무가 없다.**
-                업무는 시트 안에서 고르는 것이라 "이"가 가리키는 대상이 없었다. 무엇이 달라지는지로 쓴다. */}
-            <SheetOption label="업무에 연결하기" badge="선택" onPress={() => { setMoreOpen(false); setAttachOpen(true); }} />
-            <SheetOption label="이걸로 다시 만들기" onPress={() => { setMoreOpen(false); void duplicate(); }} />
+            {/* ★탭으로 닿는 것은 여기 두지 않는다(2026-09-11). 같은 일에 입구가 둘이면 사장은 어느 쪽이
+                맞는지 매번 고른다 — 여기 남는 것은 **탭에 없는 일**뿐이다.
+                2026-09-13: '이름·설정 고치기'가 설정 탭이 되어 나갔고, '업무에 연결하기'도 뺐다 —
+                같은 연결을 할일 쪽(할일 추가·수정의 '노하우 첨부')이 이미 맡고 그쪽이 주 경로다.
+                여기 있던 목록은 매장의 할일 전부라서, 이 화면에서 고를 맥락도 아니었다. */}
+            {/* '이걸로 다시 만들기'는 '만들기 화면이 다시 열린다'로 읽혀 되물음이 났다(2026-09-13) —
+                하는 일은 **복제**다: 같은 노하우·문항으로 새 퀴즈 1건이 생기고 이건 그대로 남는다. */}
+            <SheetOption label="퀴즈 복제" onPress={() => { setMoreOpen(false); void duplicate(); }} />
             <SheetOption label="보관하기" danger onPress={() => { setMoreOpen(false); void archive(); }} />
           </View>
         </BottomSheet>
       )}
 
-      {/* ── D11 이름·설정 고치기. 보낸 뒤에는 "언제 보낼까요"가 사라지고 **앞으로의 주기**만 남는다 ── */}
-      {editOpen && (
-        <BottomSheet visible onClose={() => setEditOpen(false)}>
-          <SheetHead title="이름·설정 고치기" onClose={() => setEditOpen(false)} />
-          <View style={st.sheetBody}>
-          {sentUserIds.length > 0 && (
-            <View style={st.infoBar}>
-              <Text style={st.infoBarText}>이미 {sentUserIds.length}명에게 보낸 퀴즈예요</Text>
-            </View>
-          )}
-          <Text style={st.label}>퀴즈 이름</Text>
-          <TextInput value={draftName} onChangeText={setDraftName} style={st.input} placeholderTextColor={InkColors.ink3} />
-          <Text style={st.label}>다시 확인</Text>
-          <View style={st.chips}>
-            {CYCLES.map((c) => (
-              <Pressable
-                key={c.label}
-                onPress={() => setDraftCycle(c.days)}
-                style={({ pressed }) => [st.chip, draftCycle === c.days && st.chipOn, pressed && { opacity: 0.7 }]}
-                accessibilityRole="button"
-                accessibilityState={{ selected: draftCycle === c.days }}
-                accessibilityLabel={c.label}
-              >
-                <Text style={[st.chipText, draftCycle === c.days && st.chipTextOn]}>{c.label}</Text>
-              </Pressable>
-            ))}
-          </View>
-          <View style={st.noteCard}>
-            <Text style={st.noteText}>
-              이미 통과한 사람은 그대로예요. <Text style={st.bold}>다음 응시부터</Text> 바뀐 일정으로 돌아가요.
-            </Text>
-          </View>
-          <Pressable
-            onPress={async () => {
-              const ok = await saveCourse({ name: draftName.trim() || course.name, due_days: draftCycle });
-              if (ok) {
-                setEditOpen(false);
-                showToast('저장했어요', 'good');
-              }
-            }}
-            style={({ pressed }) => [st.primary, pressed && { opacity: 0.85 }]}
-            accessibilityRole="button"
-            accessibilityLabel="저장"
-          >
-            <Text style={st.primaryText}>저장</Text>
-          </Pressable>
-          </View>
-        </BottomSheet>
-      )}
-
-      {/* ── D10 이 업무에 붙이기 — 관문이 아니라 **만든 뒤의 선택**이다 ── */}
-      {/* ★시트 높이를 72%로 못 박고 그 안에 maxHeight 320 스크롤을 또 넣어 두어서, 업무가 적으면
-          아래가 텅 비고 많으면 시트 안에 스크롤이 두 겹으로 겹쳤다(2026-08-26 수정).
-          높이는 내용에 맡기고 스크롤은 한 겹만 둔다. 목록이 길면 시트 자체가 늘어난다. */}
-      {attachOpen && (
-        <BottomSheet visible onClose={() => setAttachOpen(false)}>
-          <SheetHead title="어느 업무에 연결할까요?" onClose={() => setAttachOpen(false)} />
-          <Text style={st.sheetLead}>
-            연결하면 그 업무를 <Text style={st.bold}>할 줄 아는 사람</Text>이 업무 화면에 표시돼요.
-            안 해도 퀴즈는 잘 돌아가요.
-          </Text>
-          {attachable.length === 0 ? (
-            <Text style={st.sheetEmpty}>붙일 업무가 아직 없어요. 업무를 만들면 여기에 나와요.</Text>
-          ) : (
-            <ScrollView keyboardShouldPersistTaps="handled" style={st.sheetScroll} showsVerticalScrollIndicator={false}>
-              <View style={st.listCard}>
-                {attachable.map((t, i) => (
-                  <Pressable
-                    key={t.id}
-                    onPress={async () => {
-                      await attachKnowhow(t.id, entryIds);
-                      setAttachOpen(false);
-                      showToast(`"${t.text}"에 붙였어요`, 'good');
-                    }}
-                    style={({ pressed }) => [st.row, i > 0 && st.rowDivider, pressed && { opacity: 0.6 }]}
-                    accessibilityRole="button"
-                    accessibilityLabel={`${t.text}에 연결하기`}
-                  >
-                    {/* ★제목에 flex 를 안 주면 긴 업무 이름이 화살표를 시트 밖으로 밀어낸다. */}
-                    <View style={st.rowText}>
-                      <Text style={st.rowTitle} numberOfLines={1}>{t.text}</Text>
-                    </View>
-                    <Ionicons name="chevron-forward" size={15} color={InkColors.ink3} />
-                  </Pressable>
-                ))}
-              </View>
-            </ScrollView>
-          )}
-        </BottomSheet>
-      )}
-
       {/* ── D8 보관 — 확인 시트가 없다. 되돌릴 수 있는 동작이라 실행 + 실행취소 토스트다(워딩 §4).
              퀴즈 홈 상단바의 보관함에서도 되돌릴 수 있다. ── */}
+
+      {/* ── 문항 줄 메뉴(2026-09-13) — 낸 퀴즈의 문항도 여기서 고치고 뺀다.
+             그전에는 줄을 누르면 미리보기만 떴고, 고치는 길은 '낡은 문항' 상자의 [새로 만들기] 하나뿐이었다
+             (그건 새 문항을 만들어 옛것을 보관하는 다른 동작이다). 버튼 3개를 줄에 넣으면 알약과 겹쳐서
+             줄 탭 → 작은 시트로 둔다. */}
+      {itemMenu && (
+        <BottomSheet visible onClose={() => setItemMenu(null)}>
+          <SheetHead title={`${FORMATS[itemMenu.format]?.label ?? itemMenu.format} 문항`} onClose={() => setItemMenu(null)} />
+          <View style={st.sheetBody}>
+            <SheetOption label="미리보기" onPress={() => { const q = itemMenu; setItemMenu(null); setPreview(q); }} />
+            <SheetOption label="고치기" onPress={() => { const q = itemMenu; setItemMenu(null); setEditingItem(q); }} />
+            {/* 빼기 = 보관(status='archived')이다. 지우지 않는 이유: 이미 푼 사람의 결과 화면이
+                이 문항을 가리키고(quiz_attempt_items 는 스냅샷이라 FK 는 없지만 사장이 되짚는다),
+                되돌릴 길도 남겨야 한다. 출제에서는 즉시 빠진다(active 만 나간다). */}
+            <SheetOption
+              label="이 퀴즈에서 빼기"
+              danger
+              onPress={async () => {
+                const q = itemMenu;
+                setItemMenu(null);
+                if (!q) return;
+                const ok = await guardWrite(
+                  updateQuizItem(q.id, { status: 'archived' }),
+                  () => {},
+                  '빼지 못했어요.',
+                );
+                if (ok) {
+                  setItemsReload((v) => v + 1);
+                  showToast('문항을 뺐어요. 다음 응시부터 안 나가요', 'good');
+                }
+              }}
+            />
+          </View>
+        </BottomSheet>
+      )}
+
+      {/* 제자리 수정 — 같은 문항 행을 고친다(새 문항을 만들지 않는다). 이미 낸 결과는 안 바뀐다. */}
+      {editingItem && (
+        <QuizEditorSheet
+          subject={{
+            entryId: (editingItem.entry_ids ?? [])[0] ?? '',
+            title: entryById.get((editingItem.entry_ids ?? [])[0] ?? '')?.title ?? '노하우',
+          }}
+          courseId={course.id}
+          entries={entries}
+          defaultSection={entryById.get((editingItem.entry_ids ?? [])[0] ?? '')?.section ?? null}
+          editing={editingItem}
+          startMode="manual"
+          onClose={() => setEditingItem(null)}
+          onSaved={() => {
+            setEditingItem(null);
+            setItemsReload((v) => v + 1);
+          }}
+        />
+      )}
 
       {preview && <QuizPreviewSheet quiz={preview} onClose={() => setPreview(null)} />}
       {remaking && (
@@ -706,23 +643,16 @@ function factsOf(
   return [
     ['문항', `${itemCount}개`],
     ['응시 기한', answerDays ? `받은 날부터 ${answerDays}일` : '제한 없음'],
-    ['다시 확인', dueDays ? (CYCLES.find((c) => c.days === dueDays)?.label ?? `${dueDays}일마다`) : '자동'],
+    ['다시 확인', cycleLabel(dueDays) ?? '자동'],
   ];
 }
 
-function todayKst(): string {
-  const k = new Date(Date.now() + 9 * 3600_000);
-  const p = (n: number) => String(n).padStart(2, '0');
-  return `${k.getUTCFullYear()}-${p(k.getUTCMonth() + 1)}-${p(k.getUTCDate())}`;
-}
 
 const st = StyleSheet.create({
   safe: { flex: 1, backgroundColor: InkColors.paper },
   loadingWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: Space.sm },
   loadingText: { fontSize: 13, fontWeight: '600', color: InkColors.ink3 },
   segBody: { gap: Space.md },
-  sheetScroll: { maxHeight: 360 },
-  sheetEmpty: { fontSize: 15, fontWeight: '600', color: InkColors.ink3, paddingVertical: Space.lg, textAlign: 'center' },
   scroll: { padding: Space.gutter, paddingBottom: Space.xl * 2, gap: Space.md },
   // ★hitSlop 은 RN-web 에서 안 먹는다 — 실측 높이가 곧 누를 수 있는 크기다(2026-08-26 실측 29·31dp).
   //   48dp 하한(복잡도 §4)은 상자 크기로 지켜야 한다.
@@ -732,9 +662,6 @@ const st = StyleSheet.create({
     paddingLeft: Space.sm, marginRight: -4,
   },
   // 사람 줄 아래 펼쳐지는 문항별 답(0190) — 목록 카드 안이라 따로 테두리를 두지 않는다.
-  answerBox: { paddingBottom: Space.sm, gap: Space.xs },
-  answerRow: { flexDirection: 'row', alignItems: 'flex-start', gap: Space.sm, minHeight: 28 },
-  answerText: { flex: 1, minWidth: 0, fontSize: 13, lineHeight: 18, fontWeight: '600', color: InkColors.ink2 },
   bold: { fontWeight: '800', color: InkColors.ink },
 
   staleBar: {
@@ -805,43 +732,7 @@ const st = StyleSheet.create({
     backgroundColor: BrandColors.yellowSoft, borderRadius: Radius.pill, paddingHorizontal: Space.sm, paddingVertical: 3,
   },
 
-  infoBar: {
-    backgroundColor: BrandColors.mentionSoft, borderRadius: Radius.sm, paddingHorizontal: Space.md, paddingVertical: Space.sm,
-    marginTop: Space.sm,
-  },
-  infoBarText: { fontSize: 13, fontWeight: '700', color: BrandColors.mentionText },
-  label: { fontSize: 13, fontWeight: '800', color: InkColors.ink2, marginTop: Space.md },
-  input: {
-    borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.sm, marginTop: Space.xs,
-    paddingHorizontal: Space.md, minHeight: 48, fontSize: 15, fontWeight: '700', color: InkColors.ink,
-    backgroundColor: '#FFFFFF',
-  },
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.xs, marginTop: Space.xs },
-  chip: {
-    minHeight: 48, justifyContent: 'center', paddingHorizontal: Space.md,
-    borderRadius: Radius.pill, borderWidth: 1, borderColor: InkColors.line, backgroundColor: '#FFFFFF',
-  },
-  chipOn: { backgroundColor: InkColors.ink, borderColor: InkColors.ink },
-  chipText: { fontSize: 13, fontWeight: '700', color: InkColors.ink2 },
-  chipTextOn: { color: '#FFFFFF', fontWeight: '800' },
 
-  noteCard: {
-    backgroundColor: BrandColors.yellowSoft, borderRadius: Radius.sm, borderWidth: 1, borderColor: BrandColors.gold,
-    padding: Space.md, marginTop: Space.md, ...Elevation.e1,
-  },
-  noteText: { fontSize: 15, fontWeight: '600', color: InkColors.ink, lineHeight: 22 },
 
-  sheetLead: { fontSize: 15, fontWeight: '600', color: InkColors.ink2, lineHeight: 22, marginTop: Space.sm },
-  sheetFoot: { flexDirection: 'row', gap: Space.sm, marginTop: Space.lg },
 
-  primary: {
-    minHeight: 56, alignItems: 'center', justifyContent: 'center', marginTop: Space.lg,
-    borderRadius: Radius.md, backgroundColor: InkColors.ink, ...Elevation.e1,
-  },
-  primaryText: { fontSize: 15, fontWeight: '800', color: '#FFFFFF' },
-  ghost: {
-    flex: 1, minHeight: 56, alignItems: 'center', justifyContent: 'center',
-    borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, backgroundColor: '#FFFFFF', ...Elevation.e1,
-  },
-  ghostText: { fontSize: 15, fontWeight: '800', color: InkColors.ink2 },
 });

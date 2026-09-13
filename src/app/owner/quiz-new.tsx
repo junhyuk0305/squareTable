@@ -30,6 +30,8 @@ import { getSectionMeta } from '@/lib/utils/category';
 import { UNSECTIONED } from '@/lib/config/sections';
 import { FORMATS } from '@/lib/quiz/formats';
 import { COPY_LINK_LABEL, copyLinkToast, copyQuizLink, makeQuizToken, quizLinkUrl } from '@/lib/quiz/link';
+// KST 날짜 도구는 일정 SSOT 하나만 쓴다 — 이 파일·상세·설정 패널에 복붙돼 있던 것을 걷었다.
+import { todayKst, addDaysKst as addDays, daysBetweenKst as daysBetween } from '@/lib/quiz/schedule';
 import { Appear, stagger } from '@/components/Appear';
 import { Collapse } from '@/components/Collapse';
 import { QuizEditorSheet } from '@/components/owner/quiz/QuizEditorSheet';
@@ -291,16 +293,32 @@ export default function QuizNewScreen() {
     // 받는 사람 기본값 = 합류한 직원 전원. 고르는 수고를 기본으로 없앤다.
     setTo(staff.map((s) => s.id));
 
-    const rows: Made[] = picked.map((eid) => ({
-      entryId: eid,
-      title: entryById.get(eid)?.title ?? '노하우',
-      item: null,
-      formatLabel: '',
-      state: 'wait',
-    }));
+    /*
+     * ★이미 만들어진 문항은 **다시 만들지 않는다**(2026-09-13).
+     *   이어서 만들기·복제가 1단계부터 시작하게 되면서, 2단계를 다시 지나가게 됐다. 그때 전부
+     *   새로 만들면 ①같은 노하우에 문항이 두 개씩 쌓이고 ②AI 사용량을 공짜로 태운다.
+     *   그래서 고른 노하우 중 **문항이 없는 것만** 만든다.
+     * ★하나도 만들 것이 없으면 3단계(만드는 중)를 건너뛰고 곧장 4단계로 간다 —
+     *   아무것도 안 하는 진행 화면을 보여주지 않는다.
+     */
+    const rows: Made[] = picked.map((eid) => {
+      const prev = made.find((m) => m.entryId === eid && m.item);
+      if (prev) return prev;
+      return {
+        entryId: eid,
+        title: entryById.get(eid)?.title ?? '노하우',
+        item: null,
+        formatLabel: '',
+        state: 'wait',
+      };
+    });
     setMade(rows);
-    setStep(3);
     setBusy(false);
+    if (rows.every((r) => !!r.item)) {
+      setStep(4);
+      return;
+    }
+    setStep(3);
     void runGenerate(rows);
   };
 
@@ -317,6 +335,8 @@ export default function QuizNewScreen() {
         .map((r) => entryById.get(r.entryId))
         .filter((e): e is PlaybookEntry => !!e);
       for (let i = 0; i < out.length; i++) {
+        // 이미 문항이 있는 줄(이어서 만들기·복제로 실려 온 것)은 건너뛴다 — 위 start 주석 참고.
+        if (out[i].item) continue;
         const entry = entryById.get(out[i].entryId);
         if (!entry) {
           out[i] = { ...out[i], state: 'thin' };
@@ -394,8 +414,13 @@ export default function QuizNewScreen() {
   const step1Ready = entriesLoaded && (!onlyUncovered || boardLoaded);
 
   /**
-   * 이어서 만들기 — 이미 있는 퀴즈(초안·복제본)를 4단계(문항 검토)로 실어 온다.
-   * ★한 번만 한다. 사장이 4단계에서 문항을 빼거나 고친 뒤 이 이펙트가 다시 돌면 되돌아간다.
+   * 이어서 만들기 — 이미 있는 퀴즈(만들던 것·복제본)를 실어 온다.
+   *
+   * ★2026-09-13(사장 요청): **1단계부터** 시작한다. 예전엔 곧장 4단계(문항 검토)로 떨어져서,
+   *   이름·받는 쪽을 고칠 자리를 지나쳤고 "퀴즈 만들기는 1단계부터"라는 규칙에도 어긋났다.
+   *   대신 **이미 정해진 것은 다 실려 있다** — 이름·대상·고른 노하우·만들어진 문항까지.
+   *   그래서 2단계에서 [문제 만들기]를 눌러도 있는 문항은 다시 만들지 않는다(start 주석 참고).
+   * ★한 번만 한다. 사장이 뒤 단계에서 문항을 빼거나 고친 뒤 이 이펙트가 다시 돌면 되돌아간다.
    * ★검토는 **노하우 한 줄에 문항 하나**다(이 화면의 원래 모양). 한 노하우에 문항이 여럿이면
    *   그중 하나만 줄로 보이지만, 보낼 때는 코스의 활성 문항이 전부 나간다.
    */
@@ -419,6 +444,8 @@ export default function QuizNewScreen() {
       setName(c.name);
       setPicked(eids);
       setTo(staff.map((s) => s.id));
+      // 대상(0200)도 실어 온다 — 만들기 1단계의 답이 이제 코스에 저장된다. 안 정해진 옛 퀴즈는 기본값 그대로.
+      if (c.audience === 'staff' || c.audience === 'guest') setAudience(c.audience);
       setMade(
         eids.map((eid) => {
           const item = active.find((q) => (q.entry_ids ?? []).includes(eid)) ?? null;
@@ -431,7 +458,8 @@ export default function QuizNewScreen() {
           };
         }),
       );
-      setStep(4);
+      // ★1단계로 둔다(2026-09-13) — 실어 온 값은 그대로 보이고, 사장은 이름부터 확인하며 넘어간다.
+      setStep(1);
       setResumed(true);
     });
     return () => { alive = false; };
@@ -469,6 +497,9 @@ export default function QuizNewScreen() {
         due_days: null,
         start_at: scheduledOn,
         answer_days: answerDays,
+        // 0200: 1단계에서 고른 대상을 저장한다 — 그전에는 여기 분기에만 쓰고 버려서, 나중에 이 퀴즈가
+        // 내부용인지 외부용인지 알 방법이 없었다(상세의 배포 섹션이 늘 링크만 보여준 원인).
+        audience,
         position: 0,
         active: true,
       }),
@@ -1103,27 +1134,6 @@ export default function QuizNewScreen() {
   );
 }
 
-/** 두 날짜(YYYY-MM-DD) 사이 일수. DB 는 '며칠 안에'(answer_days)로 세므로 달력 값을 여기서 되돌린다. */
-function daysBetween(from: string, to: string): number {
-  const a = Date.parse(`${from}T00:00:00+09:00`);
-  const b = Date.parse(`${to}T00:00:00+09:00`);
-  if (!Number.isFinite(a) || !Number.isFinite(b)) return 0;
-  return Math.max(0, Math.round((b - a) / 86_400_000));
-}
-
-/** KST 오늘 "YYYY-MM-DD". 서버(due_quiz_sends)도 KST 고정이라 같은 축으로 만든다. */
-function todayKst(): string {
-  const k = new Date(Date.now() + 9 * 3600_000);
-  return `${k.getUTCFullYear()}-${pad(k.getUTCMonth() + 1)}-${pad(k.getUTCDate())}`;
-}
-function addDays(ymd: string, n: number): string {
-  const d = new Date(`${ymd}T00:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + n);
-  return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
-}
-function pad(n: number) {
-  return String(n).padStart(2, '0');
-}
 function dayLabel(ymd: string): string {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(ymd);
   return m ? `${Number(m[2])}월 ${Number(m[3])}일` : ymd;

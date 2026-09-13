@@ -127,3 +127,54 @@ export function sendBlockReason(
 export function canSend(sentAt: string[], ignoredStreak: number, workingToday: boolean, now: number): boolean {
   return sendBlockReason(sentAt, ignoredStreak, workingToday, now) === null;
 }
+
+// ── 날짜 도구(KST 고정) ────────────────────────────────────────────────────
+/**
+ * 이 셋은 화면 세 곳(`quiz-new`·`quiz/[id]`·설정 패널)에 **각자 복붙돼 있었다**.
+ * 같은 축(KST)을 세 번 적으면 한 곳만 고치는 순간 "오늘"이 화면마다 달라진다 —
+ * 서버(`due_quiz_sends`)도 KST 고정이라 축이 어긋나면 발송일이 하루 밀린다.
+ * 판정이 아니라 표기라도, 축은 한 곳에서만 정한다(아키텍처 규칙 ②).
+ */
+const pad2 = (n: number) => String(n).padStart(2, '0');
+
+/** KST 오늘 "YYYY-MM-DD". */
+export function todayKst(): string {
+  const k = new Date(Date.now() + 9 * 3600_000);
+  return `${k.getUTCFullYear()}-${pad2(k.getUTCMonth() + 1)}-${pad2(k.getUTCDate())}`;
+}
+
+/** "YYYY-MM-DD" + n일. */
+export function addDaysKst(ymd: string, n: number): string {
+  const d = new Date(`${ymd}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + n);
+  return `${d.getUTCFullYear()}-${pad2(d.getUTCMonth() + 1)}-${pad2(d.getUTCDate())}`;
+}
+
+/** 두 날짜 사이 일수. DB 는 '며칠 안에'(answer_days)로 세므로 달력 값을 여기서 되돌린다. */
+export function daysBetweenKst(from: string, to: string): number {
+  const a = Date.parse(`${from}T00:00:00+09:00`);
+  const b = Date.parse(`${to}T00:00:00+09:00`);
+  if (!Number.isFinite(a) || !Number.isFinite(b)) return 0;
+  return Math.max(0, Math.round((b - a) / 86_400_000));
+}
+
+/** "2026-09-16" → "9월 16일". 잘못된 값은 통째로 돌려준다(날짜를 지어내지 않는다). */
+export function dayLabelKst(ymd: string | null | undefined): string {
+  if (!ymd) return '';
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(ymd);
+  return m ? `${Number(m[2])}월 ${Number(m[3])}일` : ymd;
+}
+
+/**
+ * 재확인 주기 라벨 — 사장이 직접 정한 값(due_days)만 말한다. 맡긴 경우는 날짜를 주장하지 않는다(null).
+ * 퀴즈 목록(useQuizBoard)과 상세 기본정보가 같은 값을 써야 화면끼리 어긋나지 않는다.
+ */
+export function cycleLabel(dueDays: number | null | undefined): string | null {
+  if (!dueDays || dueDays <= 0) return null;
+  if (dueDays % 30 === 0) {
+    const m = dueDays / 30;
+    return m === 1 ? '한 달마다' : `${m}개월마다`;
+  }
+  if (dueDays % 7 === 0) return `${dueDays / 7}주마다`;
+  return `${dueDays}일마다`;
+}

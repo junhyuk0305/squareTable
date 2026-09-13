@@ -110,6 +110,12 @@ export type TrainingCourse = {
   start_at?: string | null;
   /** 마감(며칠 안에, 0139). null = 마감 없음. 기준일은 만든 날이 아니라 받은 날. */
   answer_days?: number | null;
+  /**
+   * 누구에게 나가는 퀴즈인가(0200). 'staff'=우리 직원(발송 원장) · 'guest'=외부 사람(링크).
+   * null = 아직 안 정함(만들던 퀴즈) — 화면은 지어내지 않고 설정에서 고르게 한다.
+   * 만들기 1단계의 답이 여기에 남는다(그전에는 발행 분기에만 쓰고 버렸다).
+   */
+  audience?: 'staff' | 'guest' | null;
   position: number;
   active: boolean;
   created_at?: string;

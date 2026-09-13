@@ -101,6 +101,8 @@ for (const f of files) {
   // ── 줄 단위 규칙 ──
   const hasTabBar = /<(RoleTabBar|HubTabBar)\b/.test(src);
   const hasModal = /<Modal\b/.test(src);
+  // 자기 손으로 Modal 시트를 세운 파일인가(공용 BottomSheet 를 안 쓰고).
+  const ownModalSheet = hasModal && !/<BottomSheet\b/.test(src);
   const hasTextInput = /<TextInput\b/.test(src);
   lines.forEach((line, i0) => {
     const n = i0 + 1;
@@ -131,6 +133,13 @@ for (const f of files) {
     if (hasModal && /autoFocus/.test(line))
       findings.push({ level: 0, loc: loc(n), rule: 'modal-autofocus',
         msg: 'Modal 안 autoFocus — Android 일부 기종에서 키보드 안 뜸. 기기에서 확인' });
+
+    // 🟡 키보드 열림 중 하단 인셋 이중 — 시트가 insets.bottom 을 깔면서 키보드 상태를 안 본다.
+    //    (2026-09-13 아이폰 실측) KeyboardShift 의 패딩이 이미 화면 바닥까지 덮은 위에 안전영역을
+    //    또 깔면 그 34pt 가 버튼과 키보드 사이의 빈 칸이 된다. 공용 BottomSheet 는 useKeyboardShiftPad 로 끈다.
+    if (ownModalSheet && /insets\.bottom/.test(line) && !/useKeyboardShiftPad/.test(src))
+      findings.push({ level: 1, loc: loc(n), rule: 'kb-inset-double',
+        msg: '손으로 만든 시트가 insets.bottom 을 깔면서 키보드 상태를 안 본다 — 키보드 열리면 버튼과 키보드 사이가 안전영역만큼 벌어진다. 공용 BottomSheet 로 바꾸거나 useKeyboardShiftPad()>0 일 때 0 으로' });
 
     // ℹ️ overflow visible — Android View는 자식을 클리핑한다
     if (/overflow:\s*['"]visible['"]/.test(line))

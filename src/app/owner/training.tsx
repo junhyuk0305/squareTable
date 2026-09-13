@@ -6,7 +6,8 @@ import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-rou
 import { Ionicons } from '@expo/vector-icons';
 
 import { useQuizBoard, type QuizListRow } from '@/lib/quiz/useQuizBoard';
-import { fetchGuestQuizSubmissions, upsertTrainingCourse, type GuestSubmissionRow } from '@/lib/db';
+import { useQuizCourseStats, ratePct, peopleLabel, type QuizCourseStat } from '@/lib/quiz/courseStats';
+import { fetchGuestQuizSubmissions, upsertTrainingCourse, deleteTrainingCourse, type GuestSubmissionRow } from '@/lib/db';
 import { guardWrite } from '@/lib/store/useSyncStore';
 import { showToast } from '@/lib/store/useToastStore';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
@@ -20,6 +21,7 @@ import { Collapse } from '@/components/Collapse';
 import { SectionLabel } from '@/components/SectionLabel';
 import { SegmentTabs } from '@/components/SegmentTabs';
 import { AlertRow } from '@/components/blocks/AlertRow';
+import { ConfirmModal } from '@/components/ConfirmModal';
 import { Heatmap } from '@/components/blocks/Heatmap';
 import { PickRow } from '@/components/blocks/PickRow';
 import { RollupRows } from '@/components/blocks/RollupRows';
@@ -53,6 +55,9 @@ export default function OwnerTrainingScreen() {
     staffCount, bumpQuiz, missPctOf, openLinkCourseIds, linkedCourseIds, archived, reloadCourses,
   } = useQuizBoard();
 
+  /** 응시 기준 집계(0199) — 정답률·응시인원. 발송 원장과 출처가 달라 훅도 따로다(courseStats 주석). */
+  const { statOf, loaded: statsLoaded } = useQuizCourseStats();
+
   const quizzes = useMemo(() => buildQuizzes(), [buildQuizzes]);
   const stats = useMemo(() => buildStats(quizzes), [buildStats, quizzes]);
   /** 히어로(§10-1) — 노하우 1개 = 상자 1개, 색 = 아는 직원 비율. 의존성은 배열 자체(컴파일러 캐시 함정). */
@@ -78,6 +83,8 @@ export default function OwnerTrainingScreen() {
   const [guestOpen, setGuestOpen] = useState(false);
   const [boxOpen, setBoxOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  /** 지울 만들던 퀴즈 — 확인 모달용. 초안만 지운다(보낸 퀴즈는 보관만 있다). */
+  const [dropTarget, setDropTarget] = useState<{ id: string; name: string } | null>(null);
 
   /**
    * 고쳐야 할 것이 먼저 온다 — 노하우가 바뀜 > 아직 다 못 맞힌 사람이 있음 > 나머지.
@@ -125,8 +132,11 @@ export default function OwnerTrainingScreen() {
    */
   const pickPool = useMemo(() => entries.filter((e) => e.status !== 'draft').slice(0, 5), [entries]);
 
-  /** 그릴 준비 — 퀴즈 판(boardLoaded)과 링크 응시 결과가 **둘 다** 와야 한다. */
-  const ready = boardLoaded && guestsLoaded;
+  /**
+   * 그릴 준비 — 퀴즈 판(boardLoaded)·링크 응시 결과·응시 집계가 **다** 와야 한다.
+   * ★집계를 빼면 줄이 "정답률 —" 으로 먼저 떴다가 값으로 바뀐다(= 아직 안 온 것을 없는 것처럼 말한 셈).
+   */
+  const ready = boardLoaded && guestsLoaded && statsLoaded;
 
   // 퀴즈 화면 사용 안내.
   useGuideOnce('owner_quiz_v1', ready);
@@ -179,6 +189,27 @@ export default function OwnerTrainingScreen() {
     });
   }, [undo, boardLoaded, archived, router, unarchive]);
 
+  /**
+   * 만들던 퀴즈 지우기(2026-09-13 사장 요청) — **초안만** 지운다.
+   *
+   * ★보낸 퀴즈에는 삭제를 두지 않는다(보관만). 응시 기록의 course_id 가 on delete set null 이라
+   *   지우면 그 사람의 응시가 어느 퀴즈였는지 영영 못 되짚는다 — 그건 되돌릴 수 없는 손실이다.
+   * ★초안은 아직 아무에게도 안 나갔고 응시도 없어서(status='draft' 판정이 그것을 보장한다)
+   *   지워도 잃는 기록이 없다. course_entries·quiz_items 는 FK cascade 로 같이 정리된다.
+   */
+  const dropDraft = useCallback(async () => {
+    const t = dropTarget;
+    setDropTarget(null);
+    if (!t) return;
+    setBusy(true);
+    const ok = await guardWrite(deleteTrainingCourse(t.id), () => {}, '지우지 못했어요.');
+    setBusy(false);
+    if (ok) {
+      reloadCourses();
+      showToast('지웠어요', 'good');
+    }
+  }, [dropTarget, reloadCourses]);
+
   /** 이 퀴즈가 링크로도 나가는가 — 있으면 열림/닫힘까지. 없으면 꼬리표를 안 붙인다. */
   const linkStateOf = (courseId: string): 'open' | 'closed' | null =>
     linkedCourseIds.has(courseId) ? (openLinkCourseIds.has(courseId) ? 'open' : 'closed') : null;
@@ -189,6 +220,8 @@ export default function OwnerTrainingScreen() {
   // 2026-09-11: goMakeUncovered 는 없앴다 — "안 물어본 것만"은 만들기 2단계의 필터가 됐다.
   // `?only=uncovered` 자체는 quiz-new 가 초기값으로 계속 받는다(옛 링크·푸시 호환).
   const goDetail = (id: string) => router.push(`/owner/quiz/${id}` as never);
+  /** 설정 아이콘 — 상세의 설정 탭으로 곧장(이름·주기·마감·배포가 거기 한 자리에 있다). */
+  const goSettings = (id: string) => router.push(`/owner/quiz/${id}?tab=settings` as never);
   /** 만들다 만 퀴즈를 **만들기 화면 4단계(문항 검토)**로 이어받는다 — 상세에는 보내는 길이 없다. */
   const goResume = (id: string) => router.push(`/owner/quiz-new?course=${id}` as never);
 
@@ -313,6 +346,16 @@ export default function OwnerTrainingScreen() {
                 끝난 것을 훑어보는 자리라 지금 손봐야 할 신호를 같이 두면 칸을 가른 뜻이 없다. */}
             {tab === 'running' ? (
             <>
+            {/* ★순서(2026-09-13 사장 요청): **빨강 알림 → 히트맵 → 응시 중인 퀴즈(제목+목록)**.
+                고쳐야 할 것이 가장 위다 — 히트맵 아래에 있으면 스크롤해야 보였다.
+                0건이면 줄째로 안 그린다(AlertRow 가 count<=0 에서 null 을 돌려준다). */}
+            <AlertRow
+              label="응시 중인 퀴즈 중 고칠 것"
+              count={fix.count}
+              unit="건"
+              preview={fix.preview}
+              onPress={() => setFixOpen(true)}
+            />
             <Appear>
               {stats.publishedEntries > 0 && staffCount > 0 ? (
                 <Heatmap
@@ -350,68 +393,22 @@ export default function OwnerTrainingScreen() {
                   <PrimaryButton label="노하우 추가하기" onPress={() => router.push('/owner/coach' as never)} />
                 ) : null}
 
-                {/* 만들다 만 퀴즈 — 있을 때만 여기서 눈에 띈다(0건이면 줄째로 안 그린다).
-                    ★상세가 아니라 **만들기 화면**으로 이어 간다 — 상세에는 보내는 길이 없다. */}
-                {drafts.length > 0 ? (
-                  <Pressable
-                    onPress={() => setDraftOpen((v) => !v)}
-                    style={({ pressed }) => [st.foldRow, pressed && { opacity: 0.6 }]}
-                    accessibilityRole="button"
-                    accessibilityState={{ expanded: draftOpen }}
-                    accessibilityLabel={`만들다 만 퀴즈 ${drafts.length}건 ${draftOpen ? '접기' : '펼치기'}`}
-                  >
-                    <Text style={st.foldText}>만들다 만 퀴즈 {drafts.length}건 이어서 만들기</Text>
-                    <Ionicons name={draftOpen ? 'chevron-up' : 'chevron-down'} size={15} color={InkColors.ink3} />
-                  </Pressable>
-                ) : null}
-                {drafts.length > 0 && draftOpen ? (
-                  <Collapse>
-                    <View style={st.listCard}>
-                      {drafts.map((q, i) => (
-                        <QuizRowView
-                          key={q.course.id}
-                          row={q}
-                          divider={i > 0}
-                          link={linkStateOf(q.course.id)}
-                          onPress={() => goResume(q.course.id)}
-                        />
-                      ))}
-                    </View>
-                  </Collapse>
-                ) : null}
               </View>
             </Appear>
 
-            {/* 고칠 것 — 경고행은 **응시 중인 퀴즈만**(§10-2). 미리보기형(§7-3: 낡음+오답 두 갈래, 행동이 다름)
-                이 화면의 미리보기형은 이것 하나. 갈래는 시트 안에서 나눈다. 0건이면 줄째로 안 그린다. */}
-            <AlertRow
-              label="응시 중인 퀴즈 중 고칠 것"
-              count={fix.count}
-              unit="건"
-              preview={fix.preview}
-              onPress={() => setFixOpen(true)}
-            />
-
-            {/* 롤업 '손볼 것' — 경고에서 빠진 낡은 문항(초안·보관 = 안 나가는 중)은 사라지지 않고 여기로. */}
-            {fix.staleIdle.length > 0 ? (
-              <RollupRows
-                rows={[{
-                  key: 'idle-stale',
-                  title: '낡은 문항 있는 퀴즈',
-                  count: fix.staleIdle.length,
-                  unit: '건',
-                  target: `안 나가는 중 · ${fix.staleIdle.map((x) => x.course.name).slice(0, 2).join(', ')}${fix.staleIdle.length > 2 ? ' 외' : ''}`,
-                  onPress: () => (fix.staleIdle.every((x) => x.archived) ? setBoxOpen(true) : setDraftOpen(true)),
-                }]}
-              />
-            ) : null}
             </>
             ) : null}
 
             {/* 퀴즈 목록 — **세로 카드 리스트**(2026-09-11). 옛 판본은 가로 스크롤 카드였는데
                 옆으로 밀어야 다음 퀴즈가 보여서 몇 건인지도, 무엇이 밀려 있는지도 안 읽혔다.
-                탭(응시 중/완료)은 이 화면 **맨 위**로 올라갔다 — 노하우 탭과 같은 구조다. */}
+                탭(응시 중/완료)은 이 화면 **맨 위**로 올라갔다 — 노하우 탭과 같은 구조다.
+                ★2026-09-13: 목록에 **제목**을 달았다(사장 요청) — 히트맵 바로 밑에 흰 카드만 있으면
+                그것이 무엇의 목록인지 읽히지 않았다. */}
             <Appear key={tab} delay={stagger(2)}>
+              <SectionLabel
+                title={tab === 'running' ? '응시 중인 퀴즈' : '응시 완료'}
+                hint={tab === 'running' ? `${running.length}건` : `${finished.length}건`}
+              />
               <View style={st.group}>
                 {tab === 'running' ? (
                   running.length === 0 && guests.length === 0 ? (
@@ -426,7 +423,9 @@ export default function OwnerTrainingScreen() {
                           row={q}
                           divider={i > 0}
                           link={linkStateOf(q.course.id)}
+                          stat={statOf(q.course.id)}
                           onPress={() => goDetail(q.course.id)}
+                          onSettings={() => goSettings(q.course.id)}
                         />
                       ))}
                       {/* 합류 전 응시(게스트 링크) — 아직 이 매장 사람이 아니라 목록 끝의 한 줄이다.
@@ -459,13 +458,70 @@ export default function OwnerTrainingScreen() {
                         row={q}
                         divider={i > 0}
                         link={linkStateOf(q.course.id)}
+                        stat={statOf(q.course.id)}
                         onPress={() => goDetail(q.course.id)}
+                        onSettings={() => goSettings(q.course.id)}
                       />
                     ))}
                   </View>
                 )}
               </View>
             </Appear>
+
+            {/* 만들던 퀴즈 · 낡은 문항 롤업은 **목록 아래**다(2026-09-13) — 위쪽 순서는
+                빨강 알림 → 히트맵 → 응시 중인 퀴즈로 못 박혔고, 이 둘은 "나중에 손볼 것"이다.
+                '응시 중' 칸의 것이므로 완료 칸에서는 안 그린다. */}
+            {tab === 'running' ? (
+            <Appear delay={stagger(3)}>
+              <View style={st.actions}>
+                {/* 만들던 퀴즈 — 있을 때만(0건이면 줄째로 안 그린다).
+                    ★상세가 아니라 **만들기 화면**으로 이어 간다 — 상세에는 보내는 길이 없다.
+                    ★줄마다 지우기: 초안은 아직 아무에게도 안 나갔고 응시도 없어 잃을 기록이 없다. */}
+                {drafts.length > 0 ? (
+                  <Pressable
+                    onPress={() => setDraftOpen((v) => !v)}
+                    style={({ pressed }) => [st.foldRow, pressed && { opacity: 0.6 }]}
+                    accessibilityRole="button"
+                    accessibilityState={{ expanded: draftOpen }}
+                    accessibilityLabel={`만들던 퀴즈 ${drafts.length}건 ${draftOpen ? '접기' : '펼치기'}`}
+                  >
+                    <Text style={st.foldText}>만들던 퀴즈 {drafts.length}건</Text>
+                    <Ionicons name={draftOpen ? 'chevron-up' : 'chevron-down'} size={15} color={InkColors.ink3} />
+                  </Pressable>
+                ) : null}
+                {drafts.length > 0 && draftOpen ? (
+                  <Collapse>
+                    <View style={st.listCard}>
+                      {drafts.map((q, i) => (
+                        <QuizRowView
+                          key={q.course.id}
+                          row={q}
+                          divider={i > 0}
+                          link={linkStateOf(q.course.id)}
+                          onPress={() => goResume(q.course.id)}
+                          onDelete={() => setDropTarget({ id: q.course.id, name: q.course.name })}
+                        />
+                      ))}
+                    </View>
+                  </Collapse>
+                ) : null}
+
+                {/* 롤업 '손볼 것' — 경고에서 빠진 낡은 문항(초안·보관 = 안 나가는 중)은 사라지지 않고 여기로. */}
+                {fix.staleIdle.length > 0 ? (
+                  <RollupRows
+                    rows={[{
+                      key: 'idle-stale',
+                      title: '낡은 문항 있는 퀴즈',
+                      count: fix.staleIdle.length,
+                      unit: '건',
+                      target: `안 나가는 중 · ${fix.staleIdle.map((x) => x.course.name).slice(0, 2).join(', ')}${fix.staleIdle.length > 2 ? ' 외' : ''}`,
+                      onPress: () => (fix.staleIdle.every((x) => x.archived) ? setBoxOpen(true) : setDraftOpen(true)),
+                    }]}
+                  />
+                ) : null}
+              </View>
+            </Appear>
+            ) : null}
           </>
         )}
       </ScrollView>
@@ -627,6 +683,18 @@ export default function OwnerTrainingScreen() {
         </BottomSheet>
       )}
 
+      {/* 만들던 퀴즈 지우기 — 되돌릴 수 없으니 빨강 모달로 한 번 확인한다(내보내기·코드 변경과 같은 규칙). */}
+      <ConfirmModal
+        visible={!!dropTarget}
+        icon="trash-outline"
+        destructive
+        title="만들던 퀴즈 지우기"
+        message={`'${dropTarget?.name ?? ''}'을 지워요.\n아직 아무에게도 안 나간 퀴즈라 응시 기록은 없어요. 담긴 노하우는 그대로 남아요.`}
+        confirmLabel={busy ? '지우는 중…' : '지우기'}
+        busy={busy}
+        onConfirm={() => void dropDraft()}
+        onCancel={() => setDropTarget(null)}
+      />
       <RoleTabBar role="owner" />
     </View>
   );
@@ -642,13 +710,22 @@ function QuizRowView({
   row,
   divider,
   link,
+  stat,
   onPress,
+  onSettings,
+  onDelete,
 }: {
   row: QuizListRow;
   divider: boolean;
   /** 링크로도 나가는 퀴즈인가(외부용). null = 직원용. */
   link: 'open' | 'closed' | null;
+  /** 응시 기준 집계(0199). 없으면 아직 아무도 안 풀었거나 못 읽은 것 — 0% 라고 말하지 않는다. */
+  stat?: QuizCourseStat;
   onPress: () => void;
+  /** 있으면 우측에 설정 아이콘(→ 상세의 설정 탭). 초안 줄에는 안 준다(고칠 배포가 없다). */
+  onSettings?: () => void;
+  /** 있으면 우측에 지우기 아이콘. 만들던 퀴즈(초안) 줄에만 준다. */
+  onDelete?: () => void;
 }) {
   let pill = '초안';
   let tone: ProgressTone = 'neutral';
@@ -677,20 +754,62 @@ function QuizRowView({
     .filter(Boolean)
     .join(' · ');
 
+  /**
+   * 정답률·응시인원(2026-09-13 사장 요청) — 색으로 뜻을 가른다: **정답률 파랑 · 응시 다른 색**.
+   * ★정답률은 표본이 없으면 '—' 다. 0% 는 "다 틀렸다"는 사실 주장이라 미응시와 섞으면 안 된다.
+   * ★응시는 받는 사람이 정해진 내부 퀴즈면 분모를 같이 말하고(3/5명), 링크만 나간 퀴즈는 인원만 말한다.
+   * 초안(아직 안 보낸 것)에는 안 그린다 — 잴 것이 없다.
+   */
+  const rate = ratePct(stat);
+  const showStats = row.status !== 'draft';
+
   return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => [st.row, divider && st.rowDivider, pressed && { opacity: 0.6 }]}
-      accessibilityRole="button"
-      accessibilityLabel={`${row.course.name} 열기`}
-    >
-      <View style={st.rowText}>
-        <Text style={st.rowTitle} numberOfLines={1}>{row.course.name}</Text>
-        <Text style={[st.rowSub, row.itemCount === 0 && st.rowSubWarn]} numberOfLines={1}>{meta}</Text>
-        <Text style={st.rowSub} numberOfLines={1}>{row.caption}</Text>
-      </View>
-      <ProgressPill text={pill} tone={tone} />
-    </Pressable>
+    <View style={[st.rowWrap, divider && st.rowDivider]}>
+      <Pressable
+        onPress={onPress}
+        style={({ pressed }) => [st.row, pressed && { opacity: 0.6 }]}
+        accessibilityRole="button"
+        accessibilityLabel={`${row.course.name} 열기`}
+      >
+        <View style={st.rowText}>
+          <Text style={st.rowTitle} numberOfLines={1}>{row.course.name}</Text>
+          <Text style={[st.rowSub, row.itemCount === 0 && st.rowSubWarn]} numberOfLines={1}>{meta}</Text>
+          <Text style={st.rowSub} numberOfLines={1}>{row.caption}</Text>
+          {showStats ? (
+            <View style={st.statRow}>
+              <Text style={st.statLabel}>정답률</Text>
+              <Text style={st.statRate}>{rate == null ? '—' : `${rate}%`}</Text>
+              <Text style={st.statLabel}>응시</Text>
+              <Text style={st.statPeople}>
+                {peopleLabel(stat, { answered: row.answered, recipients: row.recipients })}
+              </Text>
+            </View>
+          ) : null}
+        </View>
+        <ProgressPill text={pill} tone={tone} />
+      </Pressable>
+      {/* 아이콘은 **형제**로 둔다 — Pressable 중첩 금지(RNW 에서 안쪽이 안 눌린다). */}
+      {onSettings ? (
+        <Pressable
+          onPress={onSettings}
+          style={({ pressed }) => [st.rowIcon, pressed && { opacity: 0.6 }]}
+          accessibilityRole="button"
+          accessibilityLabel={`${row.course.name} 설정`}
+        >
+          <Ionicons name="settings-outline" size={18} color={InkColors.ink3} />
+        </Pressable>
+      ) : null}
+      {onDelete ? (
+        <Pressable
+          onPress={onDelete}
+          style={({ pressed }) => [st.rowIcon, pressed && { opacity: 0.6 }]}
+          accessibilityRole="button"
+          accessibilityLabel={`${row.course.name} 지우기`}
+        >
+          <Ionicons name="trash-outline" size={18} color={BrandColors.bad} />
+        </Pressable>
+      ) : null}
+    </View>
   );
 }
 
@@ -801,8 +920,17 @@ const st = StyleSheet.create({
     ...Elevation.e2,
     paddingHorizontal: Space.lg,
   },
-  row: { flexDirection: 'row', alignItems: 'center', gap: Space.md, minHeight: 56, paddingVertical: Space.sm },
+  // 줄 = [누르는 본문][설정][지우기]. 아이콘을 본문 Pressable 안에 넣으면 RNW 에서 안 눌린다.
+  rowWrap: { flexDirection: 'row', alignItems: 'center' },
+  // 2026-09-13: 정답률·응시 줄이 붙어 카드가 세로로 커졌다(사장 요청). 4줄 + 여백 기준 최소 높이.
+  row: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: Space.md, minHeight: 84, paddingVertical: Space.md },
+  rowIcon: { minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   rowDivider: { borderTopWidth: 1, borderTopColor: InkColors.line },
+  // 정답률 파랑 · 응시 초록 — 같은 뜻의 숫자는 개인 상세 대시보드에서도 같은 색이다.
+  statRow: { flexDirection: 'row', alignItems: 'center', gap: Space.xs, marginTop: 3, flexWrap: 'wrap' },
+  statLabel: { fontSize: 11.5, fontWeight: '700', color: InkColors.ink3 },
+  statRate: { fontSize: 14, fontWeight: '900', color: BrandColors.mentionText, marginRight: Space.xs },
+  statPeople: { fontSize: 14, fontWeight: '900', color: BrandColors.goodText },
   rowText: { flex: 1, minWidth: 0, gap: 2 },
   rowTitle: { fontSize: 15, lineHeight: 21, fontWeight: '800', color: InkColors.ink },
   rowSub: { fontSize: 13, lineHeight: 18, fontWeight: '600', color: InkColors.ink3 },

@@ -1,14 +1,13 @@
 // 작은 ⓘ 아이콘 → 탭하면 1~2줄 설명 바텀시트.
-// 모바일이라 hover 대신 '탭'으로 연다. 모달/딤은 반드시 프레임(460px) 안에 가둔다(modalFrameStyle).
+// 모바일이라 hover 대신 '탭'으로 연다. 시트 스캐폴드(프레임 격리·손잡이·드래그 닫기·하단 인셋)는 공용 BottomSheet.
 // 사용처: 두뇌 점수·받은 질문·노하우·번 돈 배지 등 처음 보면 헷갈리는 지표 옆.
 import { useState } from 'react';
-import { Modal, View, Text, Pressable, Platform, StyleSheet } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { View, Text, Pressable, Platform, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
+import { BottomSheet } from '@/components/BottomSheet';
 import { InkColors } from '@/lib/theme/colors';
-import { Elevation, Radius } from '@/lib/theme/elevation';
-import { modalFrameStyle } from '@/lib/theme/layout';
+import { Radius } from '@/lib/theme/elevation';
 
 export function InfoDot({
   title,
@@ -25,9 +24,9 @@ export function InfoDot({
   accessibilityLabel?: string;
 }) {
   const [open, setOpen] = useState(false);
-  // Android 15 edge-to-edge 는 Modal 창도 네비게이션 바 밑까지 그린다 — 하단 버튼이 가려져
-  // 시트 paddingBottom 에 insets.bottom 을 더한다(BottomSheet 와 같은 규칙, 2026-09-02).
-  const insets = useSafeAreaInsets();
+  // 2026-09-13: 손으로 쓴 Modal 스캐폴드를 공용 BottomSheet 로 교체했다. 같은 모양을 두 번 적으면
+  //   손잡이 여백(여기 4 / 공용 6)·하단 인셋·드래그 닫기가 갈라진다 — 실제로 이 시트는 손잡이가
+  //   있는데도 끌어 내려지지 않았다. edge-to-edge·키보드·프레임 격리는 이제 공용이 맡는다.
 
   return (
     <>
@@ -50,52 +49,30 @@ export function InfoDot({
         <Ionicons name="information-circle-outline" size={size} color={color} />
       </Pressable>
 
-      <Modal visible={open} transparent animationType="slide" statusBarTranslucent navigationBarTranslucent onRequestClose={() => setOpen(false)}>
-        <View style={modalFrameStyle}>
-          <Pressable style={styles.backdrop} onPress={() => setOpen(false)} />
-          <View style={[styles.sheet, { paddingBottom: 28 + insets.bottom }]}>
-            <View style={styles.handle} />
-            <View style={styles.head}>
-              <Ionicons name="information-circle" size={20} color={InkColors.ink} />
-              <Text style={styles.title}>{title}</Text>
-            </View>
-            <Text style={styles.body}>{body}</Text>
-            <Pressable
-              onPress={() => setOpen(false)}
-              style={({ pressed }) => [styles.btn, pressed && { opacity: 0.85 }]}
-            >
-              <Text style={styles.btnText}>알겠어요</Text>
-            </Pressable>
+      <BottomSheet visible={open} onClose={() => setOpen(false)}>
+        <View style={styles.sheet}>
+          <View style={styles.head}>
+            <Ionicons name="information-circle" size={20} color={InkColors.ink} />
+            <Text style={styles.title}>{title}</Text>
           </View>
+          <Text style={styles.body}>{body}</Text>
+          <Pressable
+            onPress={() => setOpen(false)}
+            style={({ pressed }) => [styles.btn, pressed && { opacity: 0.85 }]}
+          >
+            <Text style={styles.btnText}>알겠어요</Text>
+          </Pressable>
         </View>
-      </Modal>
+      </BottomSheet>
     </>
   );
 }
 
 const styles = StyleSheet.create({
   dot: { padding: 2 },
-  // 딤 없이 올라오기만(공용 BottomSheet와 동일 규칙: backdrop은 투명 flex:1).
-  backdrop: { flex: 1 },
-  sheet: {
-    backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: Radius.sheet,
-    borderTopRightRadius: Radius.sheet,
-    // 시트 좌우 여백 16 — 시트 표준을 따른다(kit 의 qst.body). 22 는 이 시트만 쓰던 값이었다.
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 28,
-    gap: 12,
-    ...Elevation.e3,
-  },
-  handle: {
-    width: 40,
-    height: 4,
-    borderRadius: Radius.pill,
-    backgroundColor: InkColors.line,
-    alignSelf: 'center',
-    marginBottom: 4,
-  },
+  // 시트 좌우 여백 16 — 시트 표준을 따른다(kit 의 qst.body). 22 는 이 시트만 쓰던 값이었다.
+  // 모양(배경·라운드·그림자·손잡이·하단 인셋)은 공용 BottomSheet 가 그린다.
+  sheet: { paddingHorizontal: 16, paddingBottom: 20, gap: 12 },
   head: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   title: { fontSize: 17, fontWeight: '800', color: InkColors.ink, flex: 1 },
   body: { fontSize: 15, color: InkColors.ink2, lineHeight: 22 },

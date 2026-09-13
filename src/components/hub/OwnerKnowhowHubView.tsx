@@ -384,15 +384,16 @@ export function OwnerKnowhowHubView({ header }: { header: ReactNode }) {
                 </Pressable>
               ))}
             {overview.length > 1 && (
+              // 2026-09-13: 매장 선택 시트를 끼우지 않는다 — 보내는 매장·받는 매장은 화면 1단계에서
+              //   둘 다 고른다. 시트가 활성 매장을 먼저 바꾸던 부작용도 같이 사라진다(switchUnit 없음).
               <Pressable
-                onPress={() => setPicker({ title: '다른 매장에서 가져오기', hint: '어느 매장으로 가져올지 골라 주세요', path: '/owner/import-knowhow', rows: allRows() })}
-                disabled={!!switching}
+                onPress={() => router.push('/owner/import-knowhow')}
                 style={({ pressed }) => [styles.row, styles.importRow, pressed && { opacity: 0.85 }]}
                 accessibilityRole="button"
-                accessibilityLabel="다른 매장에서 노하우 가져오기"
+                accessibilityLabel="노하우 복사하기"
               >
-                <Ionicons name="swap-horizontal" size={15} color={InkColors.ink2} />
-                <Text style={styles.importText}>다른 매장에서 가져오기</Text>
+                <Ionicons name="copy-outline" size={15} color={InkColors.ink2} />
+                <Text style={styles.importText}>노하우 복사하기</Text>
                 <Ionicons name="chevron-forward" size={15} color={InkColors.ink3} />
               </Pressable>
             )}

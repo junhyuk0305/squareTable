@@ -1,4 +1,4 @@
-import { useContext, useEffect, useRef, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { HeaderHeightContext } from 'expo-router/build/react-navigation/elements';
 import { Keyboard, LayoutAnimation, Platform, View, type KeyboardEvent, type StyleProp, type ViewStyle } from 'react-native';
 import {
@@ -8,6 +8,18 @@ import {
   useSafeAreaFrame,
   useSafeAreaInsets,
 } from 'react-native-safe-area-context';
+
+/**
+ * 이 상자가 **지금 키보드 때문에 대고 있는 하단 패딩(px)**. 0 = 키보드 없음.
+ *
+ * 왜 공개하는가(2026-09-13): 키보드가 뜨면 이 패딩이 화면 바닥까지(=홈 인디케이터·제스처바 영역까지)
+ * 이미 덮는다. 그런데 그 안에 든 바텀시트가 `insets.bottom` 스페이서를 **또** 깔면 버튼과 키보드 사이가
+ * 그만큼 벌어진다(아이폰 실측: 안전영역 34 + 시트 자체 18 = 52pt). 이 저장소가 반복해서 낸
+ * "하단 인셋 이중 소유"와 같은 부류라, 소비자가 키보드 리스너를 **또** 달지 않고 여기 값을 읽게 한다.
+ * 키보드 기하학의 정본은 이 파일 하나다(native-audit 규칙 kav-shared).
+ */
+const KeyboardPadContext = createContext(0);
+export const useKeyboardShiftPad = (): number => useContext(KeyboardPadContext);
 
 /**
  * 키보드 회피 — 화면·시트의 키보드 회피는 전부 이걸로(RN KeyboardAvoidingView 직접 사용 금지. native-audit 규칙 kav-shared).
@@ -90,7 +102,9 @@ function Shifter({ children }: { children: ReactNode }) {
 
   return (
     <View style={[styles.fill, { paddingBottom: pad }]}>
-      <View style={styles.fill}>{children}</View>
+      <View style={styles.fill}>
+        <KeyboardPadContext.Provider value={pad}>{children}</KeyboardPadContext.Provider>
+      </View>
     </View>
   );
 }
