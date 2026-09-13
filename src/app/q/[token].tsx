@@ -36,6 +36,10 @@ import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
 import type { QuizItem, QuizResponse } from '@/lib/quiz/types';
 
+/** 화면에 점수를 띄우기 위한 채점을 **몇 개씩 끊어 보낼지**. 회선이 약한 휴대폰에서 한 번에
+ *  수십 개를 쏘면 뒤쪽이 무더기로 실패한다. 기록 자체는 submitQuizLink 한 번에 전부 간다. */
+const GRADE_CHUNK = 4;
+
 /** 응시자가 낸 답 한 건 — 서버가 이걸로 다시 채점한다(클라는 점수를 계산하지 않는다). */
 type GivenAnswer = { itemId: string; response: QuizResponse };
 
@@ -62,6 +66,8 @@ export default function QuizLinkScreen() {
   const [saved, setSaved] = useState(false);
   /** 낸 답 원문. 저장이 실패해도 **들고 있는다** — 그래야 '다시 보내기'가 가능하다. */
   const [given, setGiven] = useState<GivenAnswer[]>([]);
+  /** 화면에서 점수를 못 잰 문항 수. 0 이 아니면 **분모가 사장 화면과 다르다**고 말한다. */
+  const [missed, setMissed] = useState(0);
 
   const router = useRouter();
   // 번호를 고치면 훅이 정규화 번호 비교로 sent/verified 를 자동으로 푼다(signup 과 같은 사용법).
@@ -129,8 +135,23 @@ export default function QuizLinkScreen() {
       // 앞으로 돌아갈 수 없고, 시험이 아니라 정답 맞히기 연습이 된다.
       // ★채점이 안 된 문항은 세지 않는다 — 못 잰 것을 오답으로 치면 화면이 거짓말을 한다.
       //   기록 자체는 아래 submitQuizLink 가 낸 답 원문을 보내 서버가 다시 채점한다.
-      const graded = await Promise.all(answers.map((a) => gradeQuizLink(tk, a.itemId, a.response)));
-      setMarks(graded.filter((g) => !!g.data).map((g) => !!g.data?.correct));
+      // ★한 번에 다 쏘지 않는다(2026-09-14). 0188 이 출제 상한을 없애 문항이 수십 개일 수 있는데
+      //   Promise.all 로 전부 동시에 보내면 휴대폰 회선에서 뒤쪽이 무더기로 실패한다. 그러면
+      //   채점 못 한 문항이 조용히 빠져 **손님이 보는 분모(marks.length)와 사장이 보는 분모가
+      //   달라진다** — 같은 응시인데 숫자가 둘이 된다. 네 개씩 끊어 보낸다.
+      const graded: boolean[] = [];
+      let ungraded = 0;
+      for (let i = 0; i < answers.length; i += GRADE_CHUNK) {
+        const part = await Promise.all(
+          answers.slice(i, i + GRADE_CHUNK).map((a) => gradeQuizLink(tk, a.itemId, a.response)),
+        );
+        for (const g of part) {
+          if (g.data) graded.push(!!g.data.correct);
+          else ungraded++;
+        }
+      }
+      setMarks(graded);
+      setMissed(ungraded);
       await send(answers);
     },
     [send, tk],
@@ -285,6 +306,11 @@ export default function QuizLinkScreen() {
               {/* 채점된 문항만 분모다 — 안 푼 문항·채점이 안 된 문항을 섞으면 점수가 사실과 달라진다. */}
               {marks.length > 0 ? (
                 <Text style={st.doneText}>{marks.length}문제 중 {marks.filter(Boolean).length}개 맞았어요</Text>
+              ) : null}
+              {/* 못 잰 문항이 있으면 **여기 숫자가 전부가 아니라고 말한다** — 안 말하면 손님과
+                  사장이 서로 다른 점수를 보면서 둘 다 맞다고 믿는다. 기록은 낸 답 전부로 남는다. */}
+              {missed > 0 ? (
+                <Text style={st.doneNote}>{missed}문제는 여기서 점수를 못 쟀어요. 사장님께는 푼 것 전부가 갔어요.</Text>
               ) : null}
               {/* 저장이 실패했으면 "전달됐어요"라고 말하지 않는다 — 손님은 다시 풀 방법이 없고
                   사장은 영원히 모른다. 무엇이 됐고 무엇이 안 됐는지 그대로 말한다. */}
@@ -506,6 +532,7 @@ const st = StyleSheet.create({
   // 지금 문항이 아닌 것은 자리도 차지하지 않는다(마운트는 유지 — 고른 답을 들고 있어야 한다).
   hidden: { display: 'none' },
   ask: { fontSize: 17, fontWeight: '800', color: InkColors.ink, lineHeight: 25, marginBottom: Space.sm },
+  doneNote: { fontSize: 13, fontWeight: '700', color: BrandColors.warnText, textAlign: 'center', lineHeight: 19 },
 
   foot: { paddingHorizontal: Space.gutter, paddingTop: Space.sm, paddingBottom: Space.lg, borderTopWidth: 1, borderTopColor: InkColors.line },
   footNote: { fontSize: 13, fontWeight: '700', color: BrandColors.warnText, textAlign: 'center', marginBottom: Space.sm },

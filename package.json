@@ -126,7 +126,8 @@
     "qa:blocks": "node scripts/qa-blocks-browser.mjs",
     "qa:quiz-formats": "node scripts/qa-quiz-formats-browser.mjs",
     "qa:quiz-ui": "node scripts/qa-quiz-ui-browser.mjs",
-    "qa:quiz-link": "node scripts/qa-quiz-link-live.mjs"
+    "qa:quiz-link": "node scripts/qa-quiz-link-live.mjs",
+    "qa:quiz-integrity": "node scripts/qa-quiz-attempt-integrity.mjs"
   },
   "private": true
 }
