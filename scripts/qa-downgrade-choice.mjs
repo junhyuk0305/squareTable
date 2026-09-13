@@ -238,7 +238,9 @@ async function main() {
   await svcRpc('admin_activate_store', { p_unit_id: S2, p_days: 30, p_plan: 'multi' });
   await svcRpc('admin_activate_store', { p_unit_id: S3, p_days: 30, p_plan: 'multi' });
   const after = [await locked(O.c, S1), await locked(O.c, S2), await locked(O.c, S3)];
-  check('★⑦ 결제 후 세 매장 모두 열린다(아무것도 삭제되지 않았다)', after.every((v) => v === false), JSON.stringify(after));
+  // ★0196(2026-09-13 §3-6): 유료 매장을 하나라도 가진 사장에게 무료 매장은 0개다 — 남겨 뒀던 무료 1호점은
+  //   결제한 2·3호점 옆에서 **이전 매장**이 된다(줄였는데 안 닫히는 구멍을 막은 규칙). 옛 기대 "셋 다 열림"은 폐기.
+  check('★⑦ 결제한 2·3호점은 열리고, 무료로 남긴 1호점은 이전 매장이 된다(0196 ★규칙)', after[0] === true && after[1] === false && after[2] === false, JSON.stringify(after));
   const { error: eSw2 } = await O.c.rpc('switch_active_unit', { p_unit_id: S2 });
   check('★⑦ 결제 후 전환도 다시 열린다', !eSw2, eSw2?.message ?? 'ok');
 
@@ -253,6 +255,8 @@ async function main() {
   await svcRpc('admin_activate_store', { p_unit_id: S1, p_days: 30, p_plan: 'multi' });
   const { data: sl4 } = await staff[4].c.rpc('my_seat_locked');
   check('★⑦ 결제하면 못 고른 직원도 그대로 돌아온다', sl4 === false, `locked=${sl4}`);
+  const after3 = [await locked(O.c, S1), await locked(O.c, S2), await locked(O.c, S3)];
+  check('★⑦ 세 매장 다 결제하면 셋 다 열린다(아무것도 삭제되지 않았다)', after3.every((v) => v === false), JSON.stringify(after3));
 
   // ── ⑨⑩ 화면 축 — 요금제 경로와 금액 SSOT (소스 정적 검사) ────────────────
   //   서버로는 증명할 수 없는 두 가지다. 브라우저 검증의 사전 조건이라 여기서 먼저 고정한다.

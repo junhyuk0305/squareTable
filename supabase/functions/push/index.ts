@@ -389,6 +389,38 @@ async function sweepOwnerAlerts(token: string): Promise<{ swept: number; sent: n
   return { swept: rows.length, sent };
 }
 
+/**
+ * 닫힌 매장 직원 알림 스윕(0196) — 사장 알림 다음으로 같은 틱에서 돈다.
+ * 원장 적재·선점·수신자(그 매장 직원·매니저) 해석은 sweep_unit_closures() 가 한다. 여기는 배달과 결과 기록만.
+ * 탭하면 매장 목록(/stores) — 닫힌 매장은 목록에서 사라져 있고, 문구가 "사장님께 문의"를 말한다.
+ */
+async function sweepUnitClosures(token: string): Promise<{ swept: number; sent: number; error?: string }> {
+  const admin = createClient(SUPABASE_URL, token);
+  const { data, error } = await admin.rpc('sweep_unit_closures');
+  if (error) {
+    console.error('[push] sweep_unit_closures failed:', error.message);
+    const denied = /permission denied|not exist/i.test(error.message);
+    return { swept: 0, sent: 0, error: denied ? 'forbidden' : 'rpc_failed' };
+  }
+  const rows = (data ?? []) as {
+    out_id: number; out_unit_id: string; out_title: string; out_body: string; out_recipients: string[];
+  }[];
+  let sent = 0;
+  for (const r of rows) {
+    const res = await deliver(admin, r.out_unit_id, r.out_recipients, {
+      title: r.out_title,
+      body: r.out_body,
+      url: '/stores',
+      tag: `unit-closure-${r.out_id}`,
+    });
+    sent += res.sent;
+    await admin.from('unit_closure_alerts')
+      .update({ recipients: r.out_recipients.length, delivered: res.sent })
+      .eq('id', r.out_id);
+  }
+  return { swept: rows.length, sent };
+}
+
 Deno.serve(async (req) => {
   const origin = req.headers.get('origin');
   const cors = corsFor(origin);
@@ -439,9 +471,13 @@ Deno.serve(async (req) => {
     // 사장 알림(0191)도 같은 원칙 — 실패해도 앞 두 갈래 결과는 그대로 돌려준다.
     const alerts = await sweepOwnerAlerts(token);
     if (alerts.error) console.error('[push] owner alert sweep failed:', alerts.error);
+    // 닫힌 매장 직원 알림(0196) — 같은 원칙.
+    const closures = await sweepUnitClosures(token);
+    if (closures.error) console.error('[push] unit closure sweep failed:', closures.error);
     return json(200, {
       ...swept, quizSwept: quiz.swept, quizSent: quiz.sent, quizError: quiz.error,
       alertSwept: alerts.swept, alertSent: alerts.sent, alertError: alerts.error,
+      closureSwept: closures.swept, closureSent: closures.sent, closureError: closures.error,
     });
   }
 

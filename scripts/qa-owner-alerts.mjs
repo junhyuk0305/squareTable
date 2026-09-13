@@ -13,6 +13,7 @@
 //   ⑦ AI 80%·100% — 임계선을 넘는 호출에서 월 1회씩, 넘은 뒤 호출은 추가 행 없음
 //   ⑧ 기본 야간 방해금지(0194) — 개인 방해금지를 안 켠 매장은 22:00~08:00(KST) 선점 안 함(유실 아님, 낮에 그대로 나감)
 //   ⑨ 사장이 방해금지를 직접 켠 매장은 기본 야간 차단에서 빠진다 — 새벽에도 즉시 선점
+//   ⑩ 닫힌 매장 직원 알림(0196) — 잠기면 직원 전원에게 1회 · 재실행 멱등 · 재닫힘은 새 행
 //
 // ⚠️ 스윕은 **전역**이다 — 다른 매장의 미발송 알림도 같이 나간다(크론이 5분 안에 보낼 것을 앞당길 뿐).
 // 실행: node scripts/qa-owner-alerts.mjs   (.env + .env.seed)
@@ -305,6 +306,38 @@ async function main() {
     await sweepAt(kstToday(2, 30)); // 자기 방해금지 시간(01:00~05:00) 안이라도 기본 차단은 안 걸린다
     const pa = await alerts(unitP, 'seat_lock');
     check('⑨ 방해금지를 직접 켠 매장은 새벽에도 즉시 선점', pa.length === 1 && !!pa[0].claimed_at, JSON.stringify(pa));
+
+    // ⑩ 닫힌 매장 직원 알림(0196 sweep_unit_closures) — 같은 크론 틱에서 돈다. 멱등 = 두 번 돌려도 1행.
+    //    unitP 는 만료돼 무료다. 사장 P 에게 유료 매장이 하나 생기면(★0196 규칙) unitP 는 잠긴다 = 이전 매장.
+    const { error: slotErr } = await admin.from('store_slots').insert({ owner_id: P.uid, paid_until: new Date(Date.now() + 30 * 864e5).toISOString(), claim_id: null, source: 'grant' });
+    if (slotErr) throw new Error(`store_slots insert 실패: ${slotErr.message}`);
+    const { data: csQ, error: ceQ } = await P.c.rpc('create_store', { p_store_name: 'QA 유료점', p_industry: '카페·디저트', p_biz_no: null });
+    if (ceQ) throw new Error(`create_store(유료점) 실패: ${ceQ.message}`);
+    const { data: lockedP } = await P.c.rpc('unit_access_locked', { p_unit: unitP });
+    check('⑩ 유료 매장이 생기자 무료 매장은 잠긴다(이전 매장)', lockedP === true, `locked=${lockedP}`);
+    const closures = async () => {
+      const { data, error } = await admin.from('unit_closure_alerts').select('id, closed_key, title, claimed_at, recipients').eq('unit_id', unitP).order('id');
+      if (error) throw new Error(`unit_closure_alerts 읽기 실패: ${error.message}`);
+      return data ?? [];
+    };
+    const sw1 = await sweep();
+    let cl = await closures();
+    check('⑩ 잠김 → 직원 알림 1행 · 선점됨', cl.length === 1 && !!cl[0].claimed_at, JSON.stringify(cl));
+    check('⑩ 문구 = "○○점 이용이 끝났어요"', /QA 개인설정점 이용이 끝났어요/.test(cl[0]?.title ?? ''), cl[0]?.title);
+    check('⑩ 수신자 = 직원 4명(사장 제외)', cl[0]?.recipients === 4, `recipients=${cl[0]?.recipients} sweep=${JSON.stringify(sw1?.closureSwept)}`);
+    await sweep();
+    cl = await closures();
+    check('⑩ 재실행 멱등 — 같은 닫힘에 두 번 보내지 않는다', cl.length === 1, `rows=${cl.length}`);
+    // 다시 열렸다 또 닫히면(만료일이 달라짐) 새 행 = 다시 한 번만.
+    await adminActivate(unitP, 30, 'multi');
+    await sweep();
+    check('⑩ 다시 열리면 행이 늘지 않는다', (await closures()).length === 1);
+    await expire(unitP);
+    await sweep();
+    await sweep();
+    cl = await closures();
+    check('⑩ 다시 닫히면 새 닫힘으로 1행 더(총 2행)', cl.length === 2 && cl.every((x) => !!x.claimed_at), JSON.stringify(cl.map((x) => x.closed_key)));
+    void csQ;
   } finally {
     await restore();
     console.log('  … app_config 원복');
