@@ -218,11 +218,15 @@ export async function copyKnowhowBetween(
  *   (사진은 있으면 좋은 것이고, 노하우 본문이 안 건너가는 것이 훨씬 큰 손실이다.)
  * 경로 규약은 업로드와 같다 — `{unit_id}/{ts}-{rand}.{ext}`. 첫 폴더가 받는 매장이어야
  * 스토리지 정책(0198)과 set_knowhow_photos 의 경로 검사를 통과한다.
- * 반환 = 실제로 붙은 장 수(0 이면 사진 없이 복사된 것).
+ * 반환 = `{ copied, total }`. ★장 수 하나만 돌려주면 "원래 사진이 없었다"와 "다 실패했다"가
+ *   호출부에서 같은 값(0)이 되어, 3단계가 **유실을 못 말한다**(조용한 절단). 분모를 같이 준다.
  */
-export async function copyKnowhowPhotos(row: CopiedKnowhowRow, toUnit: string): Promise<number> {
+export async function copyKnowhowPhotos(
+  row: CopiedKnowhowRow,
+  toUnit: string,
+): Promise<{ copied: number; total: number }> {
   const from = (row.photos ?? []).filter((p) => !!p && !/^(https?:|blob:|data:|file:)/.test(p));
-  if (!HAS_SUPABASE || from.length === 0) return 0;
+  if (!HAS_SUPABASE || from.length === 0) return { copied: 0, total: from.length };
   const copied: string[] = [];
   for (const src of from) {
     const ext = (src.split('.').pop() || 'jpg').toLowerCase();
@@ -236,13 +240,13 @@ export async function copyKnowhowPhotos(row: CopiedKnowhowRow, toUnit: string): 
     }
     copied.push(dest);
   }
-  if (copied.length === 0) return 0;
+  if (copied.length === 0) return { copied: 0, total: from.length };
   const { error } = await supabase.rpc('set_knowhow_photos', { p_entry_id: row.new_id, p_photos: copied });
   if (error) {
     reportError('db:setKnowhowPhotos', error);
-    return 0;
+    return { copied: 0, total: from.length };
   }
-  return copied.length;
+  return { copied: copied.length, total: from.length };
 }
 
 // ── 다점포 통합뷰(0060) — 내 전 매장 핵심 지표 집계(소유 매장만, definer). 합계는 클라 파생 ──────
@@ -2551,14 +2555,20 @@ export async function cancelPendingQuizAssignments(courseId: string): Promise<bo
 export async function cancelPendingQuizAssignmentsFor(courseId: string, userIds: string[]): Promise<boolean> {
   if (!HAS_SUPABASE) return true;
   if (userIds.length === 0) return true;
-  return write(
+  // ★write() 가 아니라 writeStrict() 다 — DELETE 가 0행이어도 PostgREST 는 error=null 을 준다.
+  //   그 사이 스케줄러가 보내 sent_at 이 찍혔으면 한 건도 안 지워지는데, 화면은 "취소했어요"라고
+  //   말한다(사장은 뺐다고 믿는 사람에게 퀴즈가 나간다). 0행이면 실패로 돌려 호출부가 배너를 띄운다.
+  //   ⚠️ 일부만 지워진 경우(3명 중 2명)는 여기서 구분하지 않는다 — 그건 이미 나간 사람이 섞인
+  //      것이고, 그 사람은 애초에 뺄 수 없다는 것이 화면 규칙이다(sentIds 는 체크가 잠겨 있다).
+  return writeStrict(
     'cancelPendingQuizAssignmentsFor',
     supabase
       .from('quiz_assignments')
       .delete()
       .eq('course_id', courseId)
       .is('sent_at', null)
-      .in('user_id', userIds),
+      .in('user_id', userIds)
+      .select('user_id'),
   );
 }
 

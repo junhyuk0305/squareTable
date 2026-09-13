@@ -40,7 +40,7 @@ const TOTAL_STEPS = 3;
 const STEP_TITLES = ['매장 고르기', '노하우 고르기', '복사 완료'] as const;
 
 /** 3단계 결과 한 줄 — 무엇이 갔고 사진이 몇 장 붙었나. */
-type CopiedRow = { title: string; photos: number };
+type CopiedRow = { title: string; photos: number; photosTotal: number };
 
 /**
  * OwnerKnowhowImport — 노하우 복사하기(3단계 위저드).
@@ -159,11 +159,12 @@ export function OwnerKnowhowImport() {
       await notifyAction('복사하지 못했어요', friendly(error?.message), '확인', { icon: 'alert-circle-outline' });
       return;
     }
-    // 사진은 항목 뒤에 따라간다 — 여기서 실패해도 3단계는 그대로 보여준다(장 수만 0 이 된다).
+    // 사진은 항목 뒤에 따라간다 — 여기서 실패해도 항목은 그대로 간다.
+    // ★못 간 장은 **말한다**. 붙은 장 수만 보여주면 "원래 사진이 없었다"와 구별이 안 된다.
     const done: CopiedRow[] = [];
     for (const r of data) {
-      const n = await copyKnowhowPhotos(r, toId);
-      done.push({ title: r.title, photos: n });
+      const { copied, total } = await copyKnowhowPhotos(r, toId);
+      done.push({ title: r.title, photos: copied, photosTotal: total });
     }
     // 받는 매장이 지금 들어가 있는 매장이면 목록에 즉시 반영한다(무음 유실 방지).
     if (toId === activeUnit) await hydrate();
@@ -185,6 +186,8 @@ export function OwnerKnowhowImport() {
   }
 
   const photoTotal = result.reduce((a, r) => a + r.photos, 0);
+  // 못 간 사진 — 있으면 그대로 말한다(사장이 받는 매장에서 빈 자리를 나중에 발견하지 않게).
+  const photoMissed = result.reduce((a, r) => a + (r.photosTotal - r.photos), 0);
 
   return (
     <View style={styles.flex}>
@@ -370,6 +373,11 @@ export function OwnerKnowhowImport() {
               {photoTotal > 0 ? `사진 ${photoTotal}장도 같이 옮겼어요. ` : ''}
               보내는 매장의 원본은 그대로 남아 있어요.
             </Text>
+            {photoMissed > 0 ? (
+              <Text style={styles.doneWarn}>
+                사진 {photoMissed}장은 옮기지 못했어요. 노하우는 다 갔어요 — 사진만 받는 매장에서 다시 올려 주세요.
+              </Text>
+            ) : null}
             <View style={styles.list}>
               {result.map((r, i) => (
                 <View key={`${r.title}-${i}`} style={styles.row}>
@@ -378,7 +386,12 @@ export function OwnerKnowhowImport() {
                     <Text style={styles.rowTitle} numberOfLines={2}>{r.title}</Text>
                     <View style={styles.rowMeta}>
                       <Text style={styles.rowSub}>점검 필요</Text>
-                      {r.photos > 0 ? <Text style={styles.rowSub}>· 사진 {r.photos}장</Text> : null}
+                      {r.photosTotal > 0 ? (
+                        <Text style={styles.rowSub}>
+                          · 사진 {r.photos > 0 ? `${r.photos}장` : '0장'}
+                          {r.photosTotal > r.photos ? ` (${r.photosTotal}장 중)` : ''}
+                        </Text>
+                      ) : null}
                     </View>
                   </View>
                 </View>
@@ -514,6 +527,8 @@ const styles = StyleSheet.create({
   doneHead: { flexDirection: 'row', alignItems: 'center', gap: 7 },
   doneTitle: { flex: 1, fontSize: 16, fontWeight: '800', color: InkColors.ink, lineHeight: 23 },
   doneSub: { fontSize: 13.5, color: InkColors.ink2, fontWeight: '600', lineHeight: 20 },
+  // 유실 안내 — 성공 화면 안의 경고라 색이 아니라 말로 먼저 말하고, 색은 보조다(워딩 P9).
+  doneWarn: { fontSize: 13.5, color: BrandColors.warnText, fontWeight: '700', lineHeight: 20 },
 
   // 하단 도크
   dock: {

@@ -52,10 +52,6 @@ export function BottomSheet({
   sheetStyle?: StyleProp<ViewStyle>;
   children: ReactNode;
 }) {
-  const insets = useSafeAreaInsets();
-  // 키보드가 올라와 있으면(>0) 아래 안전영역 스페이서를 깔지 않는다 — 위 ⚠️ 참고.
-  const kbPad = useKeyboardShiftPad();
-  const bottomSpacer = kbPad > 0 ? 0 : insets.bottom;
   // 아래로 끌어 내리기(2026-09-03): 시트가 손가락을 따라 내려가고, 놓을 때 충분히 내렸으면 닫힌다.
   // ★시트 전체 응답자는 비캡처라 시트 안 ScrollView 가 먼저 잡는다 — 스크롤되는 시트에서는 스크롤이 이긴다.
   //   위로는 안 끌린다(0 하한). 닫힘 애니는 Modal 의 slide 가 맡으므로 여기선 위치만 되돌린다.
@@ -118,11 +114,28 @@ export function BottomSheet({
             <View style={styles.grip} />
           </View>
           {children}
-          {bottomSpacer > 0 && <View style={{ height: bottomSpacer }} />}
+          <SheetBottomInset />
         </Animated.View>
       </KeyboardShift>
     </Modal>
   );
+}
+
+/**
+ * 시트 맨 아래 안전영역 스페이서.
+ *
+ * ★**별도 컴포넌트인 이유**: 키보드 패딩은 바로 위 `<KeyboardShift>` 가 들고 있는데, 그 값을
+ *   읽는 `useKeyboardShiftPad()` 는 **그 안에서** 불러야 한다. BottomSheet 본체에서 부르면
+ *   provider 의 조상 값(화면 쪽 KeyboardShift, 없으면 기본값 0)을 읽어 판정이 어긋난다 —
+ *   조상이 없는 화면(설정·근무표 등)에서는 kbPad 가 영영 0 이라 스페이서가 그대로 깔리고,
+ *   "키보드 열림 중 하단 인셋 이중 소유"가 고쳐지지 않는다(2026-09-14 확인).
+ * 키보드가 올라와 있으면(pad>0) KeyboardShift 의 패딩이 이미 바닥까지 덮으므로 깔지 않는다.
+ */
+function SheetBottomInset() {
+  const insets = useSafeAreaInsets();
+  const kbPad = useKeyboardShiftPad();
+  if (kbPad > 0 || insets.bottom <= 0) return null;
+  return <View style={{ height: insets.bottom }} />;
 }
 
 /** 놓았을 때 닫히는 기준 — 끌어 내린 거리(px) 또는 속도(px/ms). */
