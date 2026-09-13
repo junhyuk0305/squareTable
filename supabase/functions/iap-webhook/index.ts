@@ -24,7 +24,7 @@ const WEBHOOK_SECRET = Deno.env.get('RC_WEBHOOK_SECRET') ?? '';
 // ⚠️ 상품 id 규칙의 클라이언트 카운터파트 = `src/lib/config/iap.ts`.
 //    Deno 라 그 파일을 import 할 수 없다 — **둘은 한 쌍이고, 한쪽만 고치면 결제는 되는데 매장이 안 열린다.**
 const PRODUCTS: Record<string, { plan: 'single' | 'multi'; count: number }> = {
-  single_monthly: { plan: 'single', count: 1 },
+  single_1_monthly: { plan: 'single', count: 1 },
   multi_2_monthly: { plan: 'multi', count: 2 },
   multi_3_monthly: { plan: 'multi', count: 3 },
   multi_4_monthly: { plan: 'multi', count: 4 },

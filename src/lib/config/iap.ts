@@ -13,7 +13,8 @@ export const IAP_SUBSCRIPTIONS = { single: 'st_single', multi: 'st_multi' } as c
 
 /** 매장 수 → 요금제(기본 요금제/상품) id. 사다리 상한 5(설계 §7 E). */
 export const IAP_PLANS: { storeCount: number; planId: 'single' | 'multi'; productId: string }[] = [
-  { storeCount: 1, planId: 'single', productId: 'single_monthly' },
+  // ★'single_monthly' 가 아니다 — 2026-09-13 App Store Connect 에서 삭제돼 애플이 그 id 를 영구 재사용 금지했다.
+  { storeCount: 1, planId: 'single', productId: 'single_1_monthly' },
   { storeCount: 2, planId: 'multi', productId: 'multi_2_monthly' },
   { storeCount: 3, planId: 'multi', productId: 'multi_3_monthly' },
   { storeCount: 4, planId: 'multi', productId: 'multi_4_monthly' },

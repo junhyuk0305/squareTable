@@ -75,8 +75,8 @@ function staticChecks() {
   }
   for (const id of hook.keys()) check(`${id} 가 앱 표에도 있다`, app.has(id), app.has(id) ? '' : '앱에 없음');
   // single 은 1매장이어야 한다(sync_iap_slots 가 single_is_one_store 로 거부한다).
-  const single = app.get('single_monthly');
-  check('single_monthly = 1매장', single?.count === 1 && single?.plan === 'single', JSON.stringify(single ?? null));
+  const single = app.get('single_1_monthly');
+  check('single_1_monthly = 1매장', single?.count === 1 && single?.plan === 'single', JSON.stringify(single ?? null));
 }
 
 // ══ B. 라이브 ══════════════════════════════════════════════════════════════
@@ -272,7 +272,7 @@ async function liveChecks() {
 
   // ── ⑦ 이중 청구 차단 ─────────────────────────────────────────────────────
   const ins = await svcPost('iap_subscriptions', {
-    owner_id: P.uid, platform: 'appstore', product_id: 'single_monthly', store_count: 1,
+    owner_id: P.uid, platform: 'appstore', product_id: 'single_1_monthly', store_count: 1,
     original_transaction_id: `qa_${s}`, status: 'active', current_period_end: end1,
   });
   check('셋업: 구독 행 생성', ins.ok, `status=${ins.status}`);
