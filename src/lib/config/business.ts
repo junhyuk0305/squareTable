@@ -28,7 +28,9 @@ export const BUSINESS_INFO = {
  * ★SSOT 는 scripts/legal-content.mjs 의 EFFECTIVE_DATE 다(.ts 에서 .mjs 를 import 할 수 없어 복제).
  *   약관을 개정하면 **두 곳을 함께** 고친다 — 어긋나면 실제로 동의한 조건을 특정할 수 없게 된다.
  */
-export const TERMS_VERSION = '2026-09-20';
+// ★v2.1 = 2026-09-13 즉시 시행(공고일 = 시행일, 사용자 결정). v2 의 시행일도 09-13 이라 날짜만으로는 둘이
+//   구별되지 않는다 — 실유료 고객 0명이라 받아들인 것이다. 다음 개정부터는 날짜가 겹치지 않게 한다.
+export const TERMS_VERSION = '2026-09-13';
 
 /**
  * 입금 확인 약속(SLA) — 계좌이체는 사람이 통장을 보고 승인하는 구조라, 이 문장이 없으면
