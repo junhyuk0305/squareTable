@@ -152,6 +152,7 @@ export function Heatmap({
                 return (
                   <View key={c.id} style={{ width: `${100 / stage.cols}%`, padding: stage.gap / 2 }}>
                     <Pressable
+                      testID="heat-cell"
                       accessibilityRole="button"
                       accessibilityLabel={`${c.title}, ${c.status}`}
                       onPress={() => onPressCell(c.id)}

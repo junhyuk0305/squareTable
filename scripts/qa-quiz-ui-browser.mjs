@@ -118,6 +118,9 @@ const MEASURE = () => {
   for (const el of document.querySelectorAll('[role="button"],[role="checkbox"],[role="radio"],button')) {
     if (!vis(el)) continue;
     if (el.getAttribute('aria-disabled') === 'true' || el.disabled) continue;
+    // ★히트맵 상자는 세지 않는다(2026-09-14) — 개수에 따라 28·20·18px 로 줄어드는 게 설계다
+    //   (Heatmap.tsx STAGE · 블록어휘 §7-2 H5, 08-27). 이 검사는 그보다 먼저(08-26) 만들어졌다.
+    if (el.getAttribute('data-testid') === 'heat-cell') continue;
     const r = el.getBoundingClientRect();
     if (r.height < 44) out.smallTaps.push({ t: label(el), h: Math.round(r.height) });
   }
@@ -349,23 +352,27 @@ async function main() {
       await tapText('문항');
       await scan('퀴즈 상세(문항)', '06-detail-items');
 
-      // ⋯ → 이 업무에 붙이기 (사장이 지목한 깨진 시트)
-      await tapLabel('더보기');
-      const onMore = await wait('이 업무에 붙이기', 15000);
+      // ⋯ 더보기 시트 — 2026-09-13(b0b750d)에 '업무에 붙이기'가 빠지고 버튼 이름이 '퀴즈 설정'이 됐다.
+      //   남은 항목은 탭에 없는 일(복제·보관)뿐이다.
+      await tapLabel('퀴즈 설정');
+      const onMore = await wait('퀴즈 복제', 15000);
       check('더보기 시트 열림', onMore);
       if (onMore) {
-        await tapText('이 업무에 붙이기');
-        if (await wait('붙이면 그 업무를', 15000)) await scan('붙이기 시트', '07-attach-sheet');
+        await scan('더보기 시트', '07-more-sheet');
         await tapLabel('닫기');
         await settle();
       }
-      // 배포 세그먼트 (2026-09-11: 더보기 속 '링크 만들기' 시트가 여기로 접혔다 —
-      // 링크를 만드는 자리가 둘이면 같은 기능이 두 모양을 갖는다).
-      await tapText('배포');
+      // 설정 탭 → 배포 섹션 (2026-09-13 b0b750d: '배포' 탭이 '설정' 탭이 됐고 배포는 그 안의 한 섹션이다.
+      //   받는 사람을 아직 안 골랐으면 '외부 사람'을 골라야 링크 패널이 나온다 — course.audience · 0200).
+      await tapText('설정');
+      const onSettings = await wait('배포', 15000);
+      check('설정 탭 열림', onSettings);
+      if (onSettings) await scan('설정 탭', '08a-settings');
+      if (await wait('누구에게 낼 퀴즈예요?', 4000)) await tapLabel('외부 사람');
       const onDeploy = await wait('링크를 받은 사람은', 15000);
-      check('배포 세그먼트 열림', onDeploy);
+      check('설정 탭 · 링크 패널 열림', onDeploy);
       if (onDeploy) {
-        await scan('배포 세그먼트', '08-deploy');
+        await scan('설정 탭 · 링크 패널', '08-deploy');
         // 기간 바꾸기 — 토큰을 두고 만료만 미는 자리. 링크가 하나도 없으면 '기간'이 없다.
         if (await wait('기간', 4000)) {
           await tapText('기간');
