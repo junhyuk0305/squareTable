@@ -456,6 +456,74 @@ export async function fetchIapEnabled(): Promise<DbResult<boolean>> {
   return { data: (data as boolean) ?? false, error: error as DbErr };
 }
 
+// ── 앱 구독 현재 상태(0187 iap_subscriptions · 0196 pending/grace) — 읽기 전용. 쓰기는 웹훅뿐 ──
+// 한 계정에 옛 거래 행이 여러 개 남을 수 있다(재구독). "지금 살아 있는 구독" = 기간이 안 끝난 행 중 가장 먼 것.
+//   active = 자동갱신 켜짐 · canceled = 해지 예약(기간 끝까지 씀) · grace = 결제 실패 유예(애플이 열어 둔 기간).
+export type IapSubscriptionRow = {
+  status: 'active' | 'canceled' | 'refunded' | 'expired' | 'grace';
+  store_count: number;
+  product_id: string;
+  current_period_end: string;
+  pending_product_id: string | null;
+  pending_store_count: number | null;
+  pending_at: string | null;
+};
+export async function fetchMyIapSubscription(): Promise<DbResult<IapSubscriptionRow | null>> {
+  if (!HAS_SUPABASE) return { data: null, error: null };
+  const { data, error } = await supabase
+    .from('iap_subscriptions')
+    .select('status, store_count, product_id, current_period_end, pending_product_id, pending_store_count, pending_at')
+    .in('status', ['active', 'canceled', 'grace'])
+    .gt('current_period_end', new Date().toISOString())
+    .order('current_period_end', { ascending: false })
+    .limit(1);
+  if (error) {
+    readFail('fetchMyIapSubscription', error);
+    return { data: null, error: error as DbErr };
+  }
+  return { data: ((data ?? [])[0] as IapSubscriptionRow) ?? null, error: null };
+}
+
+// 줄이기 전에 사장이 고른 "닫을 매장"(0196 iap_release_choice). 서버는 이 명단을 결제일 확정 때 연장에서 뺀다.
+export async function fetchMyIapReleaseChoice(): Promise<DbResult<string[]>> {
+  if (!HAS_SUPABASE) return { data: [], error: null };
+  const { data, error } = await supabase.from('iap_release_choice').select('unit_id');
+  if (error) {
+    readFail('fetchMyIapReleaseChoice', error);
+    return { data: null, error: error as DbErr };
+  }
+  return { data: (data ?? []).map((r) => String((r as { unit_id: string }).unit_id)), error: null };
+}
+export async function rpcChooseIapRelease(unitIds: string[]): Promise<{ error: DbErr }> {
+  if (!HAS_SUPABASE) return { error: null };
+  const { error } = await supabase.rpc('choose_iap_release', { p_units: unitIds });
+  return { error: error as DbErr };
+}
+export async function rpcClearIapRelease(): Promise<{ error: DbErr }> {
+  if (!HAS_SUPABASE) return { error: null };
+  const { error } = await supabase.rpc('clear_iap_release');
+  return { error: error as DbErr };
+}
+
+// ── 이전 매장(0196) — 유료가 끝나 닫힌 소유 매장. 목록은 서버(my_previous_units = unit_access_locked)가 SSOT ──
+export type PreviousUnitRow = { unit_id: string; store_name: string; industry: string | null; closed_at: string };
+export async function fetchMyPreviousUnits(): Promise<DbResult<PreviousUnitRow[]>> {
+  if (!HAS_SUPABASE) return { data: [], error: null };
+  const { data, error } = await supabase.rpc('my_previous_units');
+  if (error) {
+    readFail('fetchMyPreviousUnits', error);
+    return { data: null, error: error as DbErr };
+  }
+  return { data: (data as PreviousUnitRow[]) ?? [], error: null };
+}
+// 다시 열기 — 새 매장 추가와 같은 슬롯 규칙(no_store_slot). 직원·근무표·출퇴근·업무 보드는 서버가 비운다.
+export async function rpcReopenStore(unitId: string): Promise<DbResult<{ unit_id: string; invite_code: string; paid_until: string }>> {
+  if (!HAS_SUPABASE) return { data: null, error: null };
+  const { data, error } = await supabase.rpc('reopen_store', { p_unit: unitId });
+  const row = Array.isArray(data) ? data[0] : data;
+  return { data: (row as { unit_id: string; invite_code: string; paid_until: string }) ?? null, error: error as DbErr };
+}
+
 // ── 체험 종료 → 다운그레이드 선택(0142) ──────────────────────────────────────
 // 판정은 전부 서버가 갖는다(unit_access_locked / needs_downgrade_choice). 화면은 결과만 그린다 —
 // "무료 매장이 몇 개고 몇 명이 넘치는가"를 클라가 다시 세면 서버와 갈라진다.

@@ -186,7 +186,10 @@ export default function StoresHub() {
   };
   const joinStore = () => router.push('/junior/hub');
 
-  const storeCount = stores.length;
+  // ★0196: 유료가 끝나 닫힌(잠긴) 매장은 목록에서 **뺀다** — 설정 → 이전 매장에 보관된다(사장), 직원에겐 사라진다.
+  //   잠김 목록을 못 읽었으면(lockReadFailed) 전부 그대로 보여주고 enterStore 가 진입을 막는다(fail-closed).
+  const visibleStores = lockedUnits.length > 0 ? stores.filter((s) => !lockedUnits.includes(s.unit_id)) : stores;
+  const storeCount = visibleStores.length;
 
   // 화면 단일 게이트 — 사장 지표는 사장일 때만 기다린다(직원은 애초에 안 부른다).
   const ready = (!isOwner || ovLoaded) && lockLoaded && crossLoaded && prefsLoaded;
@@ -222,7 +225,7 @@ export default function StoresHub() {
           </View>
         </Appear>
 
-        {stores.length === 0 ? (
+        {visibleStores.length === 0 ? (
           // ── 빈 상태(매장 0곳): 마법사로 튕기지 않고 허브에서 시작 ──
           <Appear delay={stagger(1)}>
             <View style={styles.empty}>
@@ -252,36 +255,33 @@ export default function StoresHub() {
                     때만 표기하고, 섞여 있으면(사장 매장 + 매니저 매장) 각 매장 줄에서 말한다.
                     예전엔 "매니저 매장이 하나라도 있으면 매니저"라 사장 매장까지 매니저로 불렀다. */}
                 <SectionLabel title={`매장 ${storeCount}곳`} hint={uniformRole ? roleNoun(uniformRole) : undefined} />
-                {stores.map((s, i) => {
+                {visibleStores.map((s, i) => {
                   const ov = overview[s.unit_id];
                   const isActive = s.unit_id === unitId;
-                  const isLocked = lockedUnits.includes(s.unit_id);
                   const pref = prefFor(s.unit_id);
                   const color = storeColor(s.unit_id, pref.color);
                   return (
                     <Appear key={s.unit_id} delay={stagger(i)}>
                     <Pressable
                       onPress={() => enterStore(s)}
-                      style={({ pressed }) => [styles.card, isActive && styles.cardActive, isLocked && styles.cardLocked, pressed && styles.pressed]}
+                      style={({ pressed }) => [styles.card, isActive && styles.cardActive, pressed && styles.pressed]}
                     >
                       <View style={[styles.cardIcon, { backgroundColor: color + '22' }]}>
-                        <Ionicons name={isLocked ? 'lock-closed-outline' : industryIcon(s.industry)} size={20} color={isLocked ? InkColors.ink3 : color} />
+                        <Ionicons name={industryIcon(s.industry)} size={20} color={color} />
                       </View>
                       <View style={{ flex: 1, minWidth: 0 }}>
                         <View style={styles.cardTitleRow}>
                           <Text style={styles.storeName} numberOfLines={1}>{pref.nickname || s.store_name}</Text>
-                          {/* ★색만으로 상태를 구분하지 않는다 — 라벨을 병기한다(ui.md). */}
-                          {isLocked ? <Text style={styles.lockBadge}>잠김</Text> : isActive && <Text style={styles.recentBadge}>최근</Text>}
+                          {/* ★0196: 잠긴 매장은 이 목록에 없다(이전 매장) — '잠김' 배지는 사라졌다. */}
+                          {isActive && <Text style={styles.recentBadge}>최근</Text>}
                         </View>
                         {/* 역할이 섞인 사람에겐 이 줄이 "이 매장에서 나는 누구인가"를 말한다.
                             전 매장이 같은 역할이면 위 섹션 라벨이 이미 말했으므로 반복하지 않는다. */}
                         <Text style={styles.storeMeta} numberOfLines={1}>
-                          {isLocked
-                            ? '요금제를 적용하면 그대로 다시 열려요'
-                            : (uniformRole ? '' : `${roleNoun(s.role)} · `) +
-                              (s.role === 'owner' && ov
-                                ? `직원 ${ov.staff} · 노하우 ${ov.knowhow}`
-                                : '탭하면 매장으로 들어가요')}
+                          {(uniformRole ? '' : `${roleNoun(s.role)} · `) +
+                            (s.role === 'owner' && ov
+                              ? `직원 ${ov.staff} · 노하우 ${ov.knowhow}`
+                              : '탭하면 매장으로 들어가요')}
                         </Text>
                       </View>
                       <View style={styles.cardRight}>
@@ -357,13 +357,10 @@ const styles = StyleSheet.create({
   },
   pressed: { opacity: 0.7 },
   cardActive: { borderColor: BrandColors.yellowDeep },
-  // 잠긴 매장 — 눌러도 안 들어가진다는 걸 면으로도 말한다(라벨은 lockBadge 가 병기).
-  cardLocked: { backgroundColor: InkColors.bgSoft },
   cardIcon: { width: 40, height: 40, borderRadius: Radius.sm, backgroundColor: BrandColors.yellowSoft, alignItems: 'center', justifyContent: 'center' },
   cardTitleRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
   storeName: { flexShrink: 1, fontSize: 15, lineHeight: 21, fontWeight: '800', color: InkColors.ink },
   recentBadge: { fontSize: 10, fontWeight: '900', color: '#7a5f10', backgroundColor: BrandColors.yellow, paddingHorizontal: 8, paddingVertical: 2, borderRadius: Radius.pill, overflow: 'hidden' },
-  lockBadge: { fontSize: 10, fontWeight: '900', color: InkColors.bubbleText, backgroundColor: InkColors.ink2, paddingHorizontal: 8, paddingVertical: 2, borderRadius: Radius.pill, overflow: 'hidden' },
   storeMeta: { fontSize: 13, color: InkColors.ink2, marginTop: 2 },
   cardRight: { alignItems: 'flex-end', gap: Space.sm },
   needChip: {

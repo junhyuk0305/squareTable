@@ -6,16 +6,21 @@
 //   남은 기간 정산은 스토어가 한다 — 사장에게 그 사정을 설명하지 않는다(우리 쪽 사정이다).
 // ⛔ 가격을 여기 적지 않는다. 스토어가 내려주는 문자열(priceString)을 그대로 쓴다.
 //    ★한도(직원 수·AI 건수)는 다르다 — 그건 채널과 무관한 플랜 정의라 tiers.ts 가 SSOT 다.
-//    갈리는 것은 **금액**뿐이다(2026-09-13 결정: 웹 25,000 ↔ 앱 33,000 — 앱 = 웹 × 1.3 천원 반올림).
-// ⛔ "웹에서 결제하세요" 같은 안내를 넣지 않는다 — 양 스토어 모두 위반이다.
+// ⛔ "웹에서 결제하세요" 같은 안내를 넣지 않는다 — 양 스토어 모두 위반이다. 앱 안에서 다른 결제 채널을 말하지 않는다.
 //
 // ★2026-09-13 구조 변경 — 애플 3.1.1 거절의 시정으로 세 가지를 더했다.
 //   ① **자동갱신 구독 고지**(Guideline 3.1.2(a)): 기간·자동갱신·해지 방법 + 이용약관·개인정보처리방침
-//      **기능하는 링크가 바이너리 안에** 있어야 한다. 없으면 3.1.1 을 고쳐도 여기서 다시 걸린다.
-//      링크는 앱 내 라우트(/terms · /privacy)다 — 외부 브라우저로 내보내지 않는다.
-//   ② **무엇이 열리는가를 구매 버튼 누르기 전에** 말한다. 전에는 상품 5개만 평면으로 나열해서
-//      "무엇이 달라지는지"가 화면에 없었다(살 이유가 화면에 없는 결제 화면이었다).
+//      **기능하는 링크가 바이너리 안에** 있어야 한다. 링크는 앱 내 라우트(/terms · /privacy)다.
+//   ② **무엇이 열리는가를 구매 버튼 누르기 전에** 말한다.
 //   ③ **소유 매장 수를 이미 아는데 5개를 다 물었다** → 그 수를 기본으로 제시하고 나머지는 접는다.
+//
+// ★2026-09-13 2차(0196) — 결제 이후의 모든 경우(명세 `메가프롬프트_인앱결제_구독구조_2026-09-13.md` §3):
+//   A2 다른 채널로 이용 기간이 남은 사장은 **못 산다**(두 번 내는 사고를 막는다 — 경고가 아니라 차단).
+//   A3·A4 현재 구독 카드(N매장 · 다음 결제일 · 예정된 변경 · 해지 예약 · 결제 유예).
+//   C1 늘리기 = 오늘 결제·오늘부터 적용·남은 기간은 애플이 돌려준다 → 버튼 위 한 줄 + "자세히" 펼침.
+//   C2 줄이기 = 오늘 결제 없음·다음 결제일부터 → **닫을 매장을 사장이 고른다**(서버 choose_iap_release).
+//   C4 해지·C3 줄이기 취소 = 애플 구독 관리 창(앱 위에 뜬다). 결과는 웹훅으로 온다.
+//   B1 열리면 완료 카드 · B3 결제 응답이 20초 넘게 안 오면 스피너 대신 안내 · 구매 복원은 맨 아래 작은 링크.
 
 import { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
@@ -30,48 +35,61 @@ import { PLANS } from '@/lib/config/tiers';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
+import { rpcChooseIapRelease, rpcClearIapRelease, type IapSubscriptionRow } from '@/lib/db';
 import {
   initPurchases,
   fetchOffers,
   purchaseOffer,
   restorePurchases,
   currentEntitlement,
+  showManageSubscriptions,
   isUserCancelled,
   HAS_IAP,
   type IapOffer,
 } from '@/lib/iap/purchases';
 
+/** "9월 13일" — 해를 넘기면 연도를 붙인다(결제 화면에서 지난 날짜로 읽히는 오해가 제일 위험하다). */
+function fmtDay(isoLike: string | null | undefined, now: number = Date.now()): string {
+  if (!isoLike) return '';
+  const d = new Date(isoLike);
+  if (Number.isNaN(d.getTime())) return '';
+  const year = d.getFullYear() !== new Date(now).getFullYear() ? `${d.getFullYear()}년 ` : '';
+  return `${year}${d.getMonth() + 1}월 ${d.getDate()}일`;
+}
+
 /**
- * 이미 남아 있는 유료 기간을 알리는 문구(없으면 null).
- *
- * ★0187 의 이중청구 가드는 **한 방향**뿐이다 — 앱 구독 중이면 계좌이체 신고를 막지만,
- *   이미 계좌이체로 유료인 사장이 앱에서 또 사는 것은 서버가 막지 않는다(`sync_iap_slots` 는
- *   기간을 줄이지 않으므로 두 채널이 겹친 채 둘 다 청구된다). 막을 수 없으면 **알려는 준다.**
- * ⛔ 채널(계좌이체·웹)을 말하지 않는다 — 앱 안에서 외부 결제를 언급하면 스토어 위반이다.
- * ★해를 넘기는 날짜엔 연도를 붙인다 — 계좌이체는 몇 달치를 한 번에 내기도 해서 "7월 30일"만 보면
- *   지난 날짜로 읽힌다(결제 화면에서 가장 위험한 종류의 오해다).
- * ※ 컴포넌트 밖에 둔다 — 렌더 중 `Date.now()` 직접 호출은 순수성 규칙 위반이다(`deriveSubscription` 과 같은 형태).
+ * A2 — 다른 경로로 산 이용 기간이 남아 있으면 앱에서 또 살 수 없다(없으면 null).
+ * ★0187 의 이중청구 가드는 **한 방향**뿐이다(앱 구독 중이면 다른 신고를 막는다). 반대 방향은 서버가 안 막고
+ *   `sync_iap_slots` 도 기간을 줄이지 않으므로 두 기간이 겹친 채 둘 다 청구된다 → 화면에서 **막는다**.
+ * ⛔ 채널을 말하지 않는다 — 앱 안에서 외부 결제를 언급하면 스토어 위반이다.
+ * ※ 컴포넌트 밖에 둔다 — 렌더 중 `Date.now()` 직접 호출은 순수성 규칙 위반이다.
  */
-function overlapNote(plan: string, paidUntil: string | null | undefined, now: number = Date.now()): string | null {
+function otherPaidNote(plan: string, paidUntil: string | null | undefined, now: number = Date.now()): string | null {
   if (plan === 'free' || !paidUntil) return null;
-  const end = new Date(paidUntil);
-  const ms = end.getTime();
+  const ms = new Date(paidUntil).getTime();
   if (Number.isNaN(ms) || ms <= now) return null;
-  const year = end.getFullYear() !== new Date(now).getFullYear() ? `${end.getFullYear()}년 ` : '';
-  return `이 매장은 ${year}${end.getMonth() + 1}월 ${end.getDate()}일까지 이미 이용 기간이 남아 있어요. 지금 사시면 기간이 겹쳐요.`;
+  return `${fmtDay(paidUntil, now)}까지 이용 기간이 남아 있어요. 그 뒤에 여기서 이어가실 수 있어요.`;
 }
 
 /** 결제 후 매장이 열리기까지 기다리는 시간. 이 뒤에도 안 열리면 문구가 '오래 걸리는 중'으로 바뀐다. */
 const WAIT_TICK_MS = 5000;
 const WAIT_TICKS = 6; // 30초
+/** B3 — 구매 호출 뒤 이 시간 안에 응답이 없으면 스피너를 걷고 안내한다(결제는 끝났을 수 있다). */
+const PURCHASE_SLOW_MS = 20000;
 
 export function IapPurchasePanel({
   onChanged,
-  ownedStoreCount,
+  ownedStores,
+  subscription,
+  releaseChoice,
 }: {
   onChanged: () => void | Promise<void>;
-  /** 사장이 실제로 가진 매장 수 — 기본 선택을 여기에 맞춘다(5개를 다 묻지 않기 위해). */
-  ownedStoreCount: number;
+  /** 사장이 실제로 가진(열린) 매장 — 기본 선택과 "닫을 매장 고르기"의 후보. */
+  ownedStores: { unit_id: string; store_name: string }[];
+  /** 서버가 아는 지금 구독(null = 앱 구독 없음). 데이터 접근은 db.ts(fetchMyIapSubscription) — 화면이 SDK 로 판정하지 않는다. */
+  subscription: IapSubscriptionRow | null;
+  /** 이미 골라 둔 "닫을 매장"(예고 카드 문구용). */
+  releaseChoice: string[];
 }) {
   const router = useRouter();
   const userId = useSessionStore((s) => s.userId);
@@ -80,31 +98,39 @@ export function IapPurchasePanel({
   const plan = useSessionStore((s) => s.plan);
   const paidUntil = useSessionStore((s) => s.paidUntil);
   const [offers, setOffers] = useState<IapOffer[]>([]);
-  const [owned, setOwned] = useState<number>(0); // 지금 구독 중인 요금제의 매장 수(0 = 없음)
   const [picked, setPicked] = useState<number>(0); // 고른 매장 수(0 = 아직 목록이 없음)
   const [moreOpen, setMoreOpen] = useState(false);
+  const [detailOpen, setDetailOpen] = useState(false);
+  // 줄이기 — 닫을 매장으로 체크한 것.
+  const [release, setRelease] = useState<string[]>([]);
   // ★소스를 AND 한 ready 하나로 묶어 화면이 통째로 등장하게 한다(부분 렌더 금지).
   const [ready, setReady] = useState(false);
   const [busy, setBusy] = useState(false);
-  // 결제는 끝났는데 매장이 아직 안 열린 상태. null = 해당 없음.
+  // B3 — 결제 응답이 늦다. 스피너 대신 안내를 띄우고 버튼을 돌려준다.
+  const [slow, setSlow] = useState(false);
+  // 결제는 끝났는데 매장이 아직 안 열린 상태. null = 해당 없음. bought = 이번에 산 매장 수(완료 카드 문구).
   const [waiting, setWaiting] = useState<'soon' | 'slow' | null>(null);
+  const [bought, setBought] = useState(0);
+  const [doneDismissed, setDoneDismissed] = useState(false);
   const waitTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // 지금 구독 중인 매장 수(서버 SSOT). 0 = 앱 구독 없음.
+  const sub = subscription;
+  const owned = sub?.store_count ?? 0;
+  const pendingCount = sub?.pending_store_count ?? null;
 
   useEffect(() => {
     let alive = true;
     void (async () => {
       try {
         await initPurchases(userId);
-        const [list, ent] = await Promise.all([fetchOffers(), currentEntitlement()]);
+        // 목록은 스토어에서, 구독 상태는 서버에서 — SDK 의 entitlement 는 목록 정합 확인용으로만 읽는다.
+        const [list] = await Promise.all([fetchOffers(), currentEntitlement()]);
         if (!alive) return;
         setOffers(list);
-        const now = ent.active
-          ? (list.find((o) => o.pkg.product.identifier === ent.productId)?.storeCount ?? 1)
-          : 0;
-        setOwned(now);
-        // 기본 제시 = 이미 구독 중이면 한 칸 위, 아니면 가진 매장 수. 목록에 없는 수는 가장 가까운 것으로.
-        const want = now > 0 ? now + 1 : Math.max(1, ownedStoreCount);
-        const hit = list.find((o) => o.storeCount === want) ?? list.find((o) => o.storeCount > now) ?? list[0];
+        // 기본 제시 = 구독 중이면 한 칸 위, 아니면 가진 매장 수. 목록에 없는 수는 가장 가까운 것으로.
+        const want = owned > 0 ? owned + 1 : Math.max(1, ownedStores.length);
+        const hit = list.find((o) => o.storeCount === want) ?? list.find((o) => o.storeCount > owned) ?? list[list.length - 1];
         setPicked(hit?.storeCount ?? 0);
       } catch {
         // 스토어 조회 실패(네트워크·미승인 상품)는 빈 목록으로 둔다 — 아래에서 사유를 문구로 낸다.
@@ -116,9 +142,11 @@ export function IapPurchasePanel({
     return () => {
       alive = false;
     };
-  }, [userId, ownedStoreCount]);
+    // 목록·기본값은 처음 한 번만. owned 가 뒤에 바뀌면(결제 반영) 사용자가 고른 값을 덮지 않는다.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId]);
 
-  // 결제 뒤 반영 대기 — 웹훅(sync_iap_slots)이 도착해야 매장이 열린다. 몇 초 걸리는 것이 정상이고,
+  // 결제 뒤 반영 대기 — 웹훅이 도착해야 매장이 열린다. 몇 초 걸리는 것이 정상이고,
   // 실패하면 영영 안 열린다(설계 §11-5 #4). 그 사이 화면이 침묵하면 사장은 돈만 낸 상태로 남는다.
   useEffect(() => {
     if (waiting === null) return;
@@ -138,23 +166,49 @@ export function IapPurchasePanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [waiting === null]);
 
-  // 매장이 열리면(=plan 이 유료로 바뀌면) 대기 안내를 걷는다.
+  // 열렸는가 = 서버가 이번에 산 매장 수를 알게 됐다(늘리기) 또는 무료였던 plan 이 유료가 됐다(최초구매).
   // ★상태를 지우는 이펙트를 두지 않는다 — 파생으로 충분하고, 이펙트 안의 setState 는 연쇄 렌더가 된다.
-  const showWait = waiting !== null && plan === 'free';
+  const opened = waiting !== null && bought > 0 && (owned >= bought || (plan !== 'free' && owned > 0));
+  const showWait = waiting !== null && !opened;
+  const showDone = opened && !doneDismissed;
 
   const selected = offers.find((o) => o.storeCount === picked) ?? null;
+  const isUp = !!selected && owned > 0 && selected.storeCount > owned;
+  const isDown = !!selected && owned > 0 && selected.storeCount < owned;
+  const needRelease = isDown ? owned - selected!.storeCount : 0;
+  // 닫을 매장 후보 = 지금 열린 소유 매장. 개수가 맞아야 결제로 간다.
+  const releaseReady = !isDown || release.length === needRelease;
 
   const buy = async (offer: IapOffer) => {
     if (busy) return;
     setBusy(true);
+    setSlow(false);
+    // C2 줄이기 — 닫을 매장을 먼저 서버에 적어 둔다(결제일 확정 때 서버가 그 매장을 연장에서 뺀다).
+    if (isDown) {
+      const { error } = await rpcChooseIapRelease(release);
+      if (error) {
+        setBusy(false);
+        return showToast('닫을 매장을 저장하지 못했어요. 잠시 후 다시 시도해 주세요.');
+      }
+    }
+    const slowTimer = setTimeout(() => setSlow(true), PURCHASE_SLOW_MS);
     try {
       await purchaseOffer(offer);
-      setOwned(offer.storeCount);
-      setWaiting('soon');
+      if (isDown) {
+        // 오늘 결제 없음 — 다음 결제일에 반영된다. 예고는 웹훅(PRODUCT_CHANGE)이 적어 주고 카드가 그린다.
+        showToast(`다음 결제일부터 매장 ${offer.storeCount}개 요금이에요.`);
+      } else {
+        setBought(offer.storeCount);
+        setDoneDismissed(false);
+        setWaiting('soon');
+      }
       await onChanged();
     } catch (e) {
+      if (isDown) void rpcClearIapRelease();
       if (!isUserCancelled(e)) showToast('결제를 마치지 못했어요. 잠시 후 다시 시도해 주세요.');
     } finally {
+      clearTimeout(slowTimer);
+      setSlow(false);
       setBusy(false);
     }
   };
@@ -165,12 +219,13 @@ export function IapPurchasePanel({
     try {
       await restorePurchases();
       const ent = await currentEntitlement();
-      const now = ent.active
-        ? (offers.find((o) => o.pkg.product.identifier === ent.productId)?.storeCount ?? 1)
-        : 0;
-      setOwned(now);
-      if (now > 0) setWaiting('soon');
-      showToast(now > 0 ? '이용권을 되살렸어요.' : '이 계정으로 산 이용권이 없어요.');
+      const n = ent.active ? (offers.find((o) => o.pkg.product.identifier === ent.productId)?.storeCount ?? 1) : 0;
+      if (n > 0) {
+        setBought(n);
+        setDoneDismissed(false);
+        setWaiting('soon');
+      }
+      showToast(n > 0 ? `이용권을 되살렸어요 · 매장 ${n}개` : '이 계정으로 산 이용권이 없어요.');
       await onChanged();
     } catch {
       showToast('이용권을 확인하지 못했어요. 잠시 후 다시 시도해 주세요.');
@@ -179,12 +234,26 @@ export function IapPurchasePanel({
     }
   };
 
+  const manage = async () => {
+    try {
+      await showManageSubscriptions();
+      await onChanged();
+    } catch {
+      showToast('구독 관리 창을 열지 못했어요. 기기 설정의 구독 목록에서 하실 수 있어요.');
+    }
+  };
+
   if (!ready) return <ScreenLoading label="이용권을 불러오고 있어요…" />;
 
   const free = PLANS.free;
   const paidAi = PLANS.single.aiMonthly;
-  // 이미 유료 기간이 남아 있는가(채널 무관). 스토어 구독으로 산 것이면 owned>0 이라 그쪽 문구가 맡는다.
-  const paidNote = owned === 0 ? overlapNote(plan, paidUntil) : null;
+  // A2 — 앱 구독이 없는데 유료 기간이 남아 있다 = 다른 경로로 산 것. 겹쳐 사지 못하게 막는다.
+  const blockedNote = owned === 0 ? otherPaidNote(plan, paidUntil) : null;
+  const releaseNames = releaseChoice
+    .map((id) => ownedStores.find((s) => s.unit_id === id)?.store_name)
+    .filter((n): n is string => !!n);
+  const one = offers.find((o) => o.storeCount === 1);
+  const two = offers.find((o) => o.storeCount === 2);
 
   return (
     <>
@@ -195,23 +264,77 @@ export function IapPurchasePanel({
             <View style={styles.waitHead}>
               <Ionicons name="time-outline" size={18} color={BrandColors.warn} />
               <Text style={styles.waitTitle}>
-                {waiting === 'soon' ? '결제가 끝났어요' : '매장이 열리는 데 오래 걸리고 있어요'}
+                {waiting === 'soon' ? '매장이 열리고 있어요' : '매장이 열리는 데 오래 걸리고 있어요'}
               </Text>
             </View>
             <Text style={styles.body}>
               {waiting === 'soon'
-                ? '매장이 열리기까지 잠시 걸려요. 이 화면에 그대로 계시면 자동으로 반영돼요.'
-                : '결제는 정상으로 끝났어요. 매장이 아직 안 열렸다면 설정의 문의하기로 알려 주세요. 다시 결제하지 않으셔도 돼요.'}
+                ? '결제가 끝났어요. 매장이 열리기까지 잠시 걸려요. 이 화면에 그대로 계시면 자동으로 반영돼요.'
+                : '결제는 정상으로 끝났어요. 매장이 아직 안 열렸다면 설정의 문의하기로 알려 주세요. 다시 결제하지 마세요.'}
             </Text>
           </View>
         </Appear>
       )}
 
+      {/* B1 — 열렸다. 대기 카드가 있던 자리에 완료를 말로 남긴다(닫을 수 있다). */}
+      {showDone && (
+        <Appear delay={stagger(0)}>
+          <View style={[styles.card, styles.doneCard]}>
+            <View style={styles.waitHead}>
+              <Ionicons name="checkmark-circle" size={18} color={BrandColors.goodText} />
+              <Text style={styles.waitTitle}>매장이 열렸어요</Text>
+              <View style={{ flex: 1 }} />
+              <Pressable onPress={() => setDoneDismissed(true)} accessibilityRole="button" accessibilityLabel="닫기" style={styles.closeHit}>
+                <Ionicons name="close" size={18} color={InkColors.ink3} />
+              </Pressable>
+            </View>
+            <Text style={styles.body}>이제 매장 {Math.max(bought, owned)}개까지 쓸 수 있어요.</Text>
+          </View>
+        </Appear>
+      )}
+
+      {/* A3·A4 — 현재 구독 카드. 사장이 결제일을 기억할 필요가 없게 여기서 말한다. */}
+      {!!sub && (
+        <Appear delay={stagger(1)}>
+          <View style={[styles.card, sub.status === 'grace' && styles.waitCard]}>
+            <Text style={styles.heading}>지금 이용권</Text>
+            {sub.status === 'grace' ? (
+              <>
+                <Text style={styles.curTitle}>결제 수단을 확인해 주세요</Text>
+                <Text style={styles.body}>
+                  매장 {sub.store_count}개 · {fmtDay(sub.current_period_end)}까지 이용 가능해요. 그 안에 결제되면 그대로 이어져요.
+                </Text>
+              </>
+            ) : sub.status === 'canceled' ? (
+              <>
+                <Text style={styles.curTitle}>매장 {sub.store_count}개 · {fmtDay(sub.current_period_end)}까지 쓸 수 있어요</Text>
+                <Text style={styles.body}>그 뒤엔 무료 요금제로 바뀌어요. 2호점부터는 이전 매장으로 옮겨져요.</Text>
+              </>
+            ) : (
+              <>
+                <Text style={styles.curTitle}>매장 {sub.store_count}개 이용 중 · 다음 결제일 {fmtDay(sub.current_period_end)}</Text>
+                {pendingCount !== null && (
+                  <Text style={styles.pendingNote}>
+                    {fmtDay(sub.pending_at)}에 {releaseNames.length > 0 ? `${releaseNames.join(' · ')}이 닫히고 ` : ''}매장 {pendingCount}개 요금이 돼요. 그날까지는 지금처럼 쓸 수 있어요.
+                  </Text>
+                )}
+              </>
+            )}
+            {/* 해지·줄이기 취소·다시 이어가기 = 전부 스토어 관리 창. 앱은 구독을 직접 못 끊는다. */}
+            <Pressable onPress={() => void manage()} accessibilityRole="button" style={({ pressed }) => [styles.ghost, pressed && { opacity: 0.7 }]}>
+              <Text style={styles.ghostText}>
+                {sub.status === 'canceled' ? '다시 이어가기' : sub.status === 'grace' ? '결제 수단 바꾸기' : pendingCount !== null ? '줄이기 취소' : '구독 해지'}
+              </Text>
+            </Pressable>
+          </View>
+        </Appear>
+      )}
+
       {/* ② 무엇이 열리는가 — 구매 버튼을 누르기 전에 읽혀야 한다. */}
-      <Appear delay={stagger(1)}>
+      <Appear delay={stagger(2)}>
         <View style={styles.card}>
-          <Text style={styles.heading}>{owned > 0 ? '매장 더 추가하기' : '매장 이용권'}</Text>
-          {/* ★라벨이 "지금" 이면 안 된다 — 계좌이체로 이미 유료인 사장에게 "지금 직원 3명"은 거짓말이다.
+          <Text style={styles.heading}>{owned > 0 ? '매장 수 바꾸기' : '매장 이용권'}</Text>
+          {/* ★라벨이 "지금" 이면 안 된다 — 다른 경로로 이미 유료인 사장에게 "지금 직원 3명"은 거짓말이다.
               두 줄 다 **요금제 정의**로 두면 누가 보든 항상 참이다. */}
           <View style={styles.diffRow}>
             <Text style={styles.diffLabel}>무료</Text>
@@ -237,7 +360,7 @@ export function IapPurchasePanel({
 
       {/* ③ 매장 수 — 가진 수를 기본으로 제시하고 나머지는 접는다(5개를 다 묻지 않는다). */}
       {!!selected && (
-        <Appear delay={stagger(2)}>
+        <Appear delay={stagger(3)}>
           <View style={styles.card}>
             <View style={styles.pickRow}>
               <Text style={styles.pickTitle}>매장 {selected.storeCount}개</Text>
@@ -265,6 +388,7 @@ export function IapPurchasePanel({
                       key={o.pkg.identifier}
                       onPress={() => {
                         setPicked(o.storeCount);
+                        setRelease([]);
                         setMoreOpen(false);
                       }}
                       accessibilityRole="button"
@@ -287,14 +411,81 @@ export function IapPurchasePanel({
               </Collapse>
             )}
 
+            {/* C1 늘리기 — 오늘 결제·오늘부터 적용. 무엇이 어떻게 되는지 버튼 위에서 말한다. */}
+            {isUp && (
+              <>
+                <Text style={styles.note}>
+                  오늘부터 매장 {selected.storeCount}개예요. 남은 매장 {owned}개 기간의 요금은 애플이 돌려드려요. 다음 결제일은 오늘부터 한 달 뒤예요.
+                </Text>
+                <Pressable
+                  onPress={() => setDetailOpen((v) => !v)}
+                  accessibilityRole="button"
+                  accessibilityState={{ expanded: detailOpen }}
+                  style={({ pressed }) => [styles.moreBtn, pressed && { opacity: 0.7 }]}
+                >
+                  <Text style={styles.moreText}>자세히</Text>
+                  <Ionicons name={detailOpen ? 'chevron-up' : 'chevron-down'} size={16} color={InkColors.ink3} />
+                </Pressable>
+                {detailOpen && (
+                  <Collapse style={styles.detailBox}>
+                    <Text style={styles.detailTitle}>매장을 늘리면 요금은 이렇게 돼요</Text>
+                    <Text style={styles.detailBody}>
+                      예를 들어 9월 13일에 매장 1개{one ? `(${one.priceString})` : ''}로 시작했다가 9월 23일에 매장 2개로 늘리면,
+                    </Text>
+                    <Text style={styles.detailBody}>
+                      · 그 자리에서 매장 2개 요금{two ? `(${two.priceString})` : ''}을 결제하고, 오늘부터 매장 2개를 쓸 수 있어요.
+                    </Text>
+                    <Text style={styles.detailBody}>
+                      · 매장 1개 요금 중 아직 안 쓴 20일치는 애플이 며칠 안에 결제 수단으로 돌려드려요.
+                    </Text>
+                    <Text style={styles.detailBody}>· 다음 결제일은 10월 23일이 돼요. 그 뒤로는 매달 이날 결제돼요.</Text>
+                    <Text style={styles.detailBody}>
+                      결국 9월 13일부터 23일까지 열흘은 매장 1개 값만 내신 거예요. 손해 보는 금액은 없어요.
+                    </Text>
+                    <Text style={styles.detailBody}>매장을 줄일 때는 오늘 결제가 없고, 다음 결제일부터 줄어든 요금이 적용돼요.</Text>
+                  </Collapse>
+                )}
+              </>
+            )}
+
+            {/* C2 줄이기 — 오늘 결제 없음. 다음 결제일에 닫힐 매장을 사장이 고른다(N−M곳). */}
+            {isDown && (
+              <Collapse style={styles.releaseBox}>
+                <Text style={styles.note}>
+                  오늘 결제는 없어요. 다음 결제일 {fmtDay(sub?.current_period_end)}부터 매장 {selected.storeCount}개 요금이에요. 그날 닫을 매장 {needRelease}곳을 골라 주세요.
+                </Text>
+                {ownedStores.map((s) => {
+                  const on = release.includes(s.unit_id);
+                  const full = !on && release.length >= needRelease;
+                  return (
+                    <Pressable
+                      key={s.unit_id}
+                      disabled={full}
+                      onPress={() => setRelease((cur) => (on ? cur.filter((x) => x !== s.unit_id) : [...cur, s.unit_id]))}
+                      accessibilityRole="checkbox"
+                      accessibilityState={{ checked: on, disabled: full }}
+                      style={({ pressed }) => [styles.offer, on && styles.offerOn, full && { opacity: 0.4 }, pressed && { opacity: 0.7 }]}
+                    >
+                      <View style={styles.offerLeft}>
+                        <Ionicons name={on ? 'checkbox' : 'square-outline'} size={20} color={on ? InkColors.ink : InkColors.ink3} />
+                        <Text style={styles.offerTitle} numberOfLines={1}>{s.store_name}</Text>
+                      </View>
+                      {on && <Text style={styles.offerTag}>닫힘 예정</Text>}
+                    </Pressable>
+                  );
+                })}
+                <Text style={styles.hint}>닫힌 매장은 설정의 이전 매장에 보관돼요. 노하우·퀴즈·채팅은 남아요.</Text>
+              </Collapse>
+            )}
+
             {/* Primary 는 화면당 1개 — 위 목록은 '고르기'고 결제는 여기 하나다. */}
             <Pressable
-              disabled={busy || selected.storeCount === owned}
+              disabled={busy || selected.storeCount === owned || blockedNote !== null || !releaseReady}
               onPress={() => void buy(selected)}
               accessibilityRole="button"
               style={({ pressed }) => [
                 styles.primary,
-                (busy || selected.storeCount === owned) && { opacity: 0.5 },
+                (busy || selected.storeCount === owned || blockedNote !== null || !releaseReady) && { opacity: 0.5 },
                 pressed && { opacity: 0.88 },
               ]}
             >
@@ -302,16 +493,26 @@ export function IapPurchasePanel({
                 <ActivityIndicator color="#FFFFFF" />
               ) : (
                 <Text style={styles.primaryText}>
-                  {selected.storeCount === owned ? '이용 중인 요금제예요' : owned > 0 ? '요금제 바꾸기' : '이용권 사기'}
+                  {selected.storeCount === owned
+                    ? '이용 중인 요금제예요'
+                    : isUp
+                      ? `매장 ${selected.storeCount}개로 늘리기`
+                      : isDown
+                        ? `매장 ${selected.storeCount}개로 줄이기`
+                        : '이용권 사기'}
                 </Text>
               )}
             </Pressable>
 
-            {/* ★이중 결제 예방 — 0187 의 가드는 **한 방향**뿐이다(앱 구독 중이면 계좌이체 신고를 막는다).
-                반대 방향(이미 계좌이체로 유료인 사장이 앱에서 또 산다)은 서버가 막지 않는다 —
-                `sync_iap_slots` 가 기간을 줄이지 않으므로 두 채널의 기간이 겹친 채 둘 다 청구된다.
-                앱 안에서 계좌이체를 언급할 수 없으므로(스토어 위반) **채널을 말하지 않고 사실만** 알린다. */}
-            {paidNote !== null && <Text style={styles.warnNote}>{paidNote}</Text>}
+            {/* B3 — 결제 응답이 늦다. 스피너만 돌리지 않는다: 이미 결제됐을 수 있고, 두 번 결제되지 않는다. */}
+            {slow && (
+              <Text style={styles.warnNote}>
+                {"결제 확인이 늦어지고 있어요. 결제가 끝났다면 앱을 껐다 켜거나 아래 '구매 복원'을 눌러 주세요. 두 번 결제되지 않아요."}
+              </Text>
+            )}
+
+            {/* A2 — 다른 경로로 산 기간이 남아 있으면 못 산다(겹쳐 두 번 내는 사고 차단). 채널은 말하지 않는다. */}
+            {blockedNote !== null && <Text style={styles.warnNote}>{blockedNote}</Text>}
 
             {/* ★자동갱신 고지(Guideline 3.1.2(a)) — 기간·자동갱신·해지 방법을 구매 지점에 둔다. */}
             <Text style={styles.legal}>
@@ -331,15 +532,16 @@ export function IapPurchasePanel({
         </Appear>
       )}
 
-      {/* ④ 구매 복원 — 스토어 필수 요건. 기기를 바꾸거나 앱을 지웠다 깔면 여기로 되살린다. */}
-      <Appear delay={stagger(3)}>
+      {/* ④ 구매 복원 — 스토어 필수 요건(삭제 불가). 기기를 바꾸거나 앱을 지웠다 깔면 여기로 되살린다.
+          카드 밖 맨 아래 작은 링크 — 주 동작이 아니다. */}
+      <Appear delay={stagger(4)}>
         <Pressable
           disabled={busy}
           onPress={() => void restore()}
-          accessibilityRole="button"
-          style={({ pressed }) => [styles.ghost, pressed && { opacity: 0.7 }, busy && { opacity: 0.6 }]}
+          accessibilityRole="link"
+          style={({ pressed }) => [styles.restoreHit, pressed && { opacity: 0.7 }, busy && { opacity: 0.6 }]}
         >
-          <Text style={styles.ghostText}>구매 복원</Text>
+          <Text style={styles.restoreText}>구매 복원</Text>
         </Pressable>
       </Appear>
     </>
@@ -358,11 +560,18 @@ const styles = StyleSheet.create({
   heading: { fontSize: 17, fontWeight: '700', color: InkColors.ink, marginBottom: Space.md },
   body: { fontSize: 15, lineHeight: 22, color: InkColors.ink2 },
   note: { fontSize: 14, lineHeight: 20, color: InkColors.ink3, marginTop: Space.sm },
+  hint: { fontSize: 13, lineHeight: 19, color: InkColors.ink3, marginTop: Space.xs },
 
-  // 결제 후 반영 대기
+  // 결제 후 반영 대기 · 완료
   waitCard: { borderColor: BrandColors.warn },
+  doneCard: { borderColor: BrandColors.good },
   waitHead: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, marginBottom: 6 },
   waitTitle: { fontSize: 15, fontWeight: '900', color: InkColors.ink },
+  closeHit: { minWidth: 48, minHeight: 48, alignItems: 'flex-end', justifyContent: 'center', marginRight: -Space.sm, marginVertical: -Space.md },
+
+  // 현재 구독
+  curTitle: { fontSize: 16, fontWeight: '800', color: InkColors.ink, lineHeight: 23, marginBottom: Space.xs },
+  pendingNote: { fontSize: 14, lineHeight: 20, color: BrandColors.warnText, fontWeight: '600', marginTop: Space.xs },
 
   // 무료 ↔ 이용권 대비
   diffRow: { flexDirection: 'row', alignItems: 'flex-start', gap: Space.md, marginBottom: Space.sm },
@@ -403,9 +612,15 @@ const styles = StyleSheet.create({
   },
   offerOn: { borderColor: InkColors.ink, borderWidth: 2 },
   offerLeft: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, flex: 1 },
-  offerTitle: { fontSize: 15, fontWeight: '600', color: InkColors.ink },
+  offerTitle: { fontSize: 15, fontWeight: '600', color: InkColors.ink, flexShrink: 1 },
   offerTag: { fontSize: 12, color: InkColors.ink3 },
   offerPrice: { fontSize: 15, fontWeight: '700', color: InkColors.ink },
+
+  // 늘리기 자세히 · 줄이기 닫을 매장
+  detailBox: { gap: Space.sm, marginBottom: Space.lg, padding: Space.md, borderRadius: Radius.md, backgroundColor: InkColors.bgSoft },
+  detailTitle: { fontSize: 15, fontWeight: '800', color: InkColors.ink },
+  detailBody: { fontSize: 14, lineHeight: 21, color: InkColors.ink2 },
+  releaseBox: { gap: Space.sm, marginBottom: Space.lg },
 
   primary: {
     minHeight: 56,
@@ -416,7 +631,7 @@ const styles = StyleSheet.create({
   },
   primaryText: { fontSize: 16, fontWeight: '900', color: '#FFFFFF' },
 
-  warnNote: { fontSize: 13, lineHeight: 20, color: BrandColors.warnText, marginTop: Space.md, fontWeight: '600' },
+  warnNote: { fontSize: 14, lineHeight: 20, color: BrandColors.warnText, marginTop: Space.md, fontWeight: '600' },
   legal: { fontSize: 12, lineHeight: 18, color: InkColors.ink3, marginTop: Space.md },
   legalLinks: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, marginTop: 2 },
   legalHit: { minHeight: 48, justifyContent: 'center' },
@@ -431,6 +646,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: InkColors.line,
     backgroundColor: InkColors.bgSoft,
+    marginTop: Space.md,
   },
   ghostText: { fontSize: 14, fontWeight: '700', color: InkColors.ink2 },
+
+  restoreHit: { minHeight: 48, alignItems: 'center', justifyContent: 'center' },
+  restoreText: { fontSize: 13, color: InkColors.ink3, fontWeight: '700', textDecorationLine: 'underline' },
 });

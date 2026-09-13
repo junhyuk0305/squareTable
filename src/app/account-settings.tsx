@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
+import { fetchMyPreviousUnits } from '@/lib/db';
 import { View, Text, StyleSheet, ScrollView, Pressable, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -48,6 +49,14 @@ export default function AccountSettings() {
   const [busy, setBusy] = useState(false);
   const [scaleModal, setScaleModal] = useState(false);
   const [contactModal, setContactModal] = useState(false);
+  // 이전 매장(0196) — 유료가 끝나 닫힌 소유 매장 수. 0이면 행 자체를 안 그린다(없는 것을 말하지 않는다).
+  const [prevCount, setPrevCount] = useState(0);
+  useEffect(() => {
+    if (!isOwner) return;
+    let alive = true;
+    void fetchMyPreviousUnits().then(({ data }) => { if (alive && data) setPrevCount(data.length); });
+    return () => { alive = false; };
+  }, [isOwner]);
 
   const version = Constants.expoConfig?.version ?? '1.0.0';
 
@@ -178,6 +187,13 @@ export default function AccountSettings() {
               </Pressable>
             </View>
           ))}
+
+        {/* 이전 매장(0196) — 구독 및 결제 바로 아래. 닫힌 매장이 있을 때만(대다수 사장에겐 안 보인다). */}
+        {isOwner && prevCount > 0 && (
+          <SettingsSection icon="archive-outline" title="이전 매장">
+            <SettingsRow first icon="storefront-outline" label="이전 매장" value={`${prevCount}곳`} onPress={() => router.push('/owner/previous-stores' as never)} />
+          </SettingsSection>
+        )}
 
         {/* ★2026-08-06: 섹션 6개 → 4개. SettingsSection은 '제목 + 흰 카드'라, 여섯 개가 이어지면
             화면 전체가 같은 형태의 나열이 된다(카드 6장 · 연속 4 — 배치규칙① 위반, 실브라우저 실측).

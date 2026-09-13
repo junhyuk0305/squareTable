@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
+import { fetchMyPreviousUnits } from '@/lib/db';
 import { View, Text, StyleSheet, TextInput, Pressable, ScrollView, ActivityIndicator } from 'react-native';
 import { KeyboardShift } from '@/components/KeyboardShift';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -41,6 +42,15 @@ export default function OwnerCreateStore() {
   const [needPhone, setNeedPhone] = useState(false);
   /** 인증 + profiles.phone 반영이 **둘 다** 끝났는가. PhoneVerifyBlock 이 올려준다. */
   const [phoneReady, setPhoneReady] = useState(false);
+
+  // 이전 매장(0196) — 닫힌 매장이 있으면 새로 만드는 대신 그것을 다시 열 수 있다(같은 이용권 1개를 쓴다).
+  const [prevCount, setPrevCount] = useState(0);
+  useEffect(() => {
+    if (!isAddingStore) return;
+    let alive = true;
+    void fetchMyPreviousUnits().then(({ data }) => { if (alive && data) setPrevCount(data.length); });
+    return () => { alive = false; };
+  }, [isAddingStore]);
 
   const valid = !!storeName.trim() && !!industry && (!bizNo.trim() || isValidBizNo(bizNo));
 
@@ -87,6 +97,20 @@ export default function OwnerCreateStore() {
           </Text>
         </View>
         </Appear>
+
+        {isAddingStore && prevCount > 0 && (
+          <Appear delay={40}>
+          <Pressable
+            onPress={() => router.push('/owner/previous-stores' as never)}
+            accessibilityRole="button"
+            style={({ pressed }) => [styles.prevRow, pressed && { opacity: 0.7 }]}
+          >
+            <Ionicons name="archive-outline" size={18} color={InkColors.ink2} />
+            <Text style={styles.prevText}>이전 매장에서 고르기 · {prevCount}곳</Text>
+            <Ionicons name="chevron-forward" size={16} color={InkColors.ink3} />
+          </Pressable>
+          </Appear>
+        )}
 
         <Appear delay={60}>
         <View style={styles.card}>
@@ -176,6 +200,12 @@ const styles = StyleSheet.create({
   sub: { fontSize: 15, color: InkColors.ink2, textAlign: 'center', lineHeight: 22 },
   strong: { fontWeight: '800', color: InkColors.ink },
 
+  // 이전 매장 진입 행 — 폼 위에 한 줄. 카드가 아니라 행(카드 연속을 만들지 않는다).
+  prevRow: {
+    flexDirection: 'row', alignItems: 'center', gap: Space.sm, minHeight: 48,
+    paddingHorizontal: Space.md, borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, backgroundColor: '#FFFFFF',
+  },
+  prevText: { flex: 1, fontSize: 15, fontWeight: '700', color: InkColors.ink },
   card: { backgroundColor: '#FFFFFF', borderRadius: Radius.lg, borderWidth: 1, borderColor: InkColors.line, padding: 20, gap: 8 },
   label: { fontSize: 13, fontWeight: '700', color: InkColors.ink2, marginTop: 6 },
   req: { color: BrandColors.accentText, fontWeight: '900' },

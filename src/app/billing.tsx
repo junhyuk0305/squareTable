@@ -16,7 +16,15 @@ import { TERMS_VERSION, PAYMENT_SLA_SENTENCE } from '@/lib/config/business';
 import { PLANS, PLAN_ORDER, planMonthlyPrice, supplyPrice, VAT_NOTE_SENTENCE, FREE_PROMO, SIGNUP_PROMO, type PlanId } from '@/lib/config/tiers';
 import { SHOW_BILLING, showIapSurface, showPaymentSurface } from '@/lib/config/store-policy';
 import { usePaymentClaimStore, CLAIM_ERROR_TEXT } from '@/lib/store/usePaymentClaimStore';
-import { redeemPromoCode, fetchUnitSeatStatus, type SeatStatus } from '@/lib/db';
+import {
+  redeemPromoCode,
+  fetchUnitSeatStatus,
+  fetchMyIapSubscription,
+  fetchMyIapReleaseChoice,
+  fetchMyLockedUnits,
+  type SeatStatus,
+  type IapSubscriptionRow,
+} from '@/lib/db';
 import { Appear, stagger } from '@/components/Appear';
 import { Collapse } from '@/components/Collapse';
 import { ScreenLoading } from '@/components/ScreenLoading';
@@ -36,6 +44,14 @@ const PROMO_ERROR_TEXT: Record<string, string> = {
   not_owner: '사장님 계정에서만 코드를 쓸 수 있어요.',
   unknown: '코드 적용에 실패했어요. 잠시 후 다시 시도해 주세요.',
 };
+/** "9월 13일" — 해를 넘기면 연도를 붙인다(결제 화면에서 지난 날짜로 읽히는 오해가 제일 위험하다). */
+function fmtDayKo(iso: string, now: number = Date.now()): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const year = d.getFullYear() !== new Date(now).getFullYear() ? `${d.getFullYear()}년 ` : '';
+  return `${year}${d.getMonth() + 1}월 ${d.getDate()}일`;
+}
+
 function promoErrorText(message?: string): string {
   const m = message ?? '';
   for (const key of Object.keys(PROMO_ERROR_TEXT)) {
@@ -106,6 +122,13 @@ function BillingBody() {
   const [seat, setSeat] = useState<SeatStatus | null>(null);
   // ★실패해도 true — 좌석 조회 한 번 실패로 요금제 화면이 영영 로딩이 되면 안 된다.
   const [seatLoaded, setSeatLoaded] = useState(false);
+  // 앱 구독(0187·0196) — 현재 구독 카드(네이티브)와 채널 전환 안내(웹) 둘 다 이 한 행을 본다.
+  //   서버가 SSOT 다(SDK entitlement 로 판정하지 않는다). 잠긴(이전) 매장은 "닫을 매장" 후보에서 뺀다.
+  const [iapSub, setIapSub] = useState<IapSubscriptionRow | null>(null);
+  const [releaseChoice, setReleaseChoice] = useState<string[]>([]);
+  const [lockedUnits, setLockedUnits] = useState<string[]>([]);
+  // ★실패해도 true — 조회 한 번 실패로 요금제 화면이 영영 로딩이 되면 안 된다.
+  const [iapLoaded, setIapLoaded] = useState(false);
   // 무료 이용 코드(0092) — 기본 접힘(화면 요소 예산). 검증·기록·활성화는 전부 서버 RPC.
   const [promoOpen, setPromoOpen] = useState(false);
   const [promoCode, setPromoCode] = useState('');
@@ -175,14 +198,37 @@ function BillingBody() {
       .finally(() => setSeatLoaded(true));
   }, [manages, plan]);
 
-  // 화면 단일 게이트 — 이 화면이 읽는 원격 소스는 둘(입금 신고·좌석 현황)이고, 둘 다 자기 담당
+  // 앱 구독 상태 — 사장만. plan 이 바뀌면(결제 반영) 다시 읽어 현재 카드가 따라온다.
+  useEffect(() => {
+    if (!isOwner) return;
+    let alive = true;
+    void (async () => {
+      const [{ data: sub }, { data: choice }, { data: locked }] = await Promise.all([
+        fetchMyIapSubscription(), fetchMyIapReleaseChoice(), fetchMyLockedUnits(),
+      ]);
+      if (!alive) return;
+      setIapSub(sub ?? null);
+      setReleaseChoice(choice ?? []);
+      setLockedUnits(locked ?? []);
+      setIapLoaded(true);
+    })();
+    return () => { alive = false; };
+  }, [isOwner, plan]);
+
+  // 화면 단일 게이트 — 이 화면이 읽는 원격 소스는 셋(입금 신고·좌석 현황·앱 구독)이고, 전부 자기 담당
   // 역할에서만 조회한다. 안 부르는 소스를 기다리면 영영 로딩이므로 필요한 쪽만 AND 한다.
   const needsClaims = isOwner && SHOW_BILLING;
-  const ready = (!needsClaims || claimsLoaded) && (!manages || seatLoaded);
+  const ready = (!needsClaims || claimsLoaded) && (!manages || seatLoaded) && (!isOwner || iapLoaded);
 
   const recheck = async () => {
     setBusy(true);
     await refreshMembership();
+    if (isOwner) {
+      // 구독 카드는 plan 과 별개로 바뀐다(줄이기 예고·해지 예약은 plan 을 안 건드린다) — 같이 당긴다.
+      const [{ data: sub }, { data: choice }] = await Promise.all([fetchMyIapSubscription(), fetchMyIapReleaseChoice()]);
+      setIapSub(sub ?? null);
+      setReleaseChoice(choice ?? []);
+    }
     setBusy(false);
     // 활성화됐으면 게이트가 자동으로 화면을 넘긴다. 아니면 그대로 안내가 유지된다.
     if (!useSessionStore.getState().unitId) return;
@@ -394,7 +440,16 @@ function BillingBody() {
           {/* 스토어 인앱결제 표면(네이티브). 웹 PG 표면(아래 본문)과 채널이 다르므로 판정도 다르다.
               판정은 store-policy 한 곳(showIapSurface) — 빌드 축·서버 스위치·전면 무료를 합친 값이다.
               ★소유 매장 수를 넘겨 기본 선택을 맞춘다 — 이미 아는 것을 다시 묻지 않는다. */}
-          {selling && <IapPurchasePanel onChanged={recheck} ownedStoreCount={ownedCount} />}
+          {selling && (
+            <IapPurchasePanel
+              onChanged={recheck}
+              ownedStores={stores
+                .filter((st) => st.role === 'owner' && !lockedUnits.includes(st.unit_id))
+                .map((st) => ({ unit_id: st.unit_id, store_name: st.store_name }))}
+              subscription={iapSub}
+              releaseChoice={releaseChoice}
+            />
+          )}
           <Appear delay={stagger(4)}>
           <Pressable
             disabled={busy}
@@ -556,8 +611,35 @@ function BillingBody() {
                 <Text style={styles.body}>무료 요금제는 입금 없이 쓸 수 있어요. 직원 {PLANS.free.maxStaff}명, AI 사용량 월 {PLANS.free.aiMonthly}까지 제공돼요.</Text>
               </View>
               </Appear>
+            ) : iapSub && iapSub.status !== 'canceled' ? (
+              /* ★채널 전환 D(0196) — 앱 구독이 자동갱신 중이면 여기서 또 내게 하지 않는다(서버 가드 0187 의 화면 카운터파트).
+                 웹에서는 앱을 언급해도 된다. 해지가 웹훅으로 확인되면(canceled) 아래 폼이 다시 열린다. */
+              <Appear delay={stagger(3)}>
+              <View style={styles.card}>
+                <View style={styles.claimHead}>
+                  <Ionicons name="phone-portrait-outline" size={18} color={InkColors.ink2} />
+                  <Text style={styles.claimTitle}>앱에서 구독 중이에요</Text>
+                </View>
+                <Text style={styles.body}>
+                  매장 {iapSub.store_count}개 · 다음 결제일 {fmtDayKo(iapSub.current_period_end)}. 앱 구독을 해지하고 나면 여기서 이어서 결제할 수 있어요.
+                </Text>
+              </View>
+              </Appear>
             ) : (
               <>
+                {/* 앱 구독을 해지해 둔 사장 — 기간이 끝나길 기다리게 하지 않는다. 지금 신고하면 승인 시 앱 종료일 **뒤에**
+                    이어 붙는다(admin_activate_store 가 greatest(paid_until, now()) + 일수 라 이미 그렇게 동작). */}
+                {iapSub?.status === 'canceled' && (
+                  <Appear delay={stagger(3)}>
+                  <View style={[styles.card, styles.claimPending]}>
+                    <View style={styles.claimHead}>
+                      <Ionicons name="phone-portrait-outline" size={18} color={InkColors.ink2} />
+                      <Text style={styles.claimTitle}>앱 구독이 {fmtDayKo(iapSub.current_period_end)}에 끝나요</Text>
+                    </View>
+                    <Text style={styles.body}>지금 등록하시면 그날부터 이어져요.</Text>
+                  </View>
+                  </Appear>
+                )}
                 {/* ★2026-08-06: 안내 문구 · 입금 계좌 · 입금자명이 각각 카드라 **카드 3연속**이었다
                     (배치규칙① 위반 · 실브라우저 실측 카드런 3). 셋은 "입금하기" 한 동작이라
                     — 계좌를 보고 이체한 뒤 그 이름을 적는다 — 한 카드로 합친다. 행은 하나도 안 없앴다. */}

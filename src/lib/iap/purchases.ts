@@ -74,6 +74,15 @@ export async function restorePurchases(): Promise<CustomerInfo> {
   return Purchases.restorePurchases();
 }
 
+/**
+ * 구독 관리 창(해지·줄이기 취소·다시 이어가기). 앱은 구독을 직접 못 끊는다 — 스토어 창을 **앱 위에** 띄운다.
+ * 결과는 웹훅(CANCELLATION/UNCANCELLATION/PRODUCT_CHANGE)으로 온다 — 여기서 상태를 바꾸지 않는다.
+ */
+export async function showManageSubscriptions(): Promise<void> {
+  if (!HAS_IAP) return;
+  await Purchases.showManageSubscriptions();
+}
+
 /** 지금 스토어 구독이 살아 있는가(화면 표시용). 매장을 여는 판정은 서버가 한다. */
 export async function currentEntitlement(): Promise<{ active: boolean; productId: string | null }> {
   if (!HAS_IAP) return { active: false, productId: null };
