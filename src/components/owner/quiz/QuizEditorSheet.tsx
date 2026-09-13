@@ -9,7 +9,7 @@
  * 기존 발행 경로(buildPlaybookEntryFromSquare → usePlaybookStore.add)를 그대로 탄다. 새 경로를 만들지 않는다.
  */
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { View, Text, Pressable, ScrollView, StyleSheet } from 'react-native';
 
 import type { QuizFormat, QuizItem, QuizKind } from '@/lib/quiz/types';
@@ -28,6 +28,7 @@ import { useWorkStore, courseEntriesOf } from '@/lib/store/useWorkStore';
 import { showToast } from '@/lib/store/useToastStore';
 import { buildDirectUq, buildPlaybookEntryFromSquare } from '@/lib/utils/buildEntry';
 import { genId } from '@/lib/utils/id';
+import { authStorage } from '@/lib/storage/authStorage';
 import { BottomSheet } from '@/components/BottomSheet';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
@@ -80,7 +81,8 @@ export function QuizEditorSheet({
   replacing?: QuizItem | null;
   startMode: 'ai' | 'manual';
   onClose: () => void;
-  onSaved: () => void;
+  /** 저장된 문항을 돌려준다 — 호출부가 다시 읽지 않고 자기 목록을 제자리에서 고친다(quiz-new 4단계). */
+  onSaved: (item: QuizItem) => void;
 }) {
   const unitId = useSessionStore((s) => s.unitId);
   const userId = useSessionStore((s) => s.userId);
@@ -125,6 +127,38 @@ export function QuizEditorSheet({
   const [source, setSource] = useState<'ai' | 'owner'>(editing?.source ?? (startMode === 'ai' ? 'ai' : 'owner'));
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  /**
+   * 직접 쓰기 임시 저장(2026-09-13) — 쓰다가 시트를 닫거나 화면을 떠나도 폼이 남는다.
+   * 열쇠 = 코스·노하우·(고치는 문항). 저장에 성공하면 지운다. 저장소는 설정과 같은 authStorage
+   * (웹 localStorage / 네이티브 AsyncStorage) — 새로고침에도 남는다. 직접 쓰기(manual)에서만 쓴다:
+   * AI 초안은 검수 목록이라 임시 저장할 폼이 없다.
+   */
+  const draftKey = startMode === 'manual' ? `quiz_draft:${courseId}:${subject.entryId}:${editing?.id ?? 'new'}` : null;
+  const [draftRestored, setDraftRestored] = useState(false);
+  useEffect(() => {
+    if (!draftKey) return;
+    let alive = true;
+    void authStorage.getItem(draftKey).then((raw) => {
+      if (!alive || !raw) return;
+      try {
+        const d = JSON.parse(raw) as { format: QuizFormat; payload: Record<string, any> };
+        if (!FORMATS[d.format]) return;
+        setFormat(d.format);
+        setPayload(d.payload);
+        setSource('owner');
+        setStep('form');
+        setDraftRestored(true);
+      } catch { /* 깨진 임시본은 없는 것과 같다 */ }
+    });
+    return () => { alive = false; };
+  }, [draftKey]);
+  useEffect(() => {
+    if (!draftKey || step !== 'form') return;
+    // 고치기로 열고 손대지 않았으면 임시본을 남기지 않는다 — 다음에 열 때 "불러왔어요"가 거짓이 된다.
+    if (editing && editing.format === format && JSON.stringify(editing.payload) === JSON.stringify(payload)) return;
+    void authStorage.setItem(draftKey, JSON.stringify({ format, payload }));
+  }, [draftKey, step, format, payload, editing]);
 
   // AI 경로 — 고른 형태로 만들고, 결과는 검수 목록으로만 들어온다(바로 저장하지 않는다).
   const [aiFormats, setAiFormats] = useState<Set<QuizFormat>>(new Set());
@@ -251,8 +285,9 @@ export function QuizEditorSheet({
         };
     const ok = await save(item, !editing);
     if (ok) {
+      if (draftKey) void authStorage.removeItem(draftKey);
       showToast(editing ? '문제를 고쳤어요' : '문제를 추가했어요', 'good');
-      onSaved();
+      onSaved(item);
       onClose();
     }
   };
@@ -270,7 +305,7 @@ export function QuizEditorSheet({
     }
     const rest = drafts.filter((x) => x.id !== d.id);
     setDrafts(rest);
-    onSaved();
+    onSaved(d);
     if (rest.length === 0 || replacing) onClose();
   };
 
@@ -406,6 +441,7 @@ export function QuizEditorSheet({
                 </Pressable>
               ) : null}
             </View>
+            {draftRestored ? <Text style={est.restored}>쓰다 만 내용을 불러왔어요</Text> : null}
             <PayloadForm format={format} payload={payload} onChange={setPayload} />
             {err ? <ErrorNote text={err} /> : null}
 
@@ -520,6 +556,7 @@ const est = StyleSheet.create({
     marginTop: Space.lg, gap: Space.sm, backgroundColor: InkColors.bgSoft, borderRadius: Radius.md, padding: Space.md,
   },
   linkText: { fontSize: 13, color: InkColors.ink2, fontWeight: '600', lineHeight: 19 },
+  restored: { fontSize: 13, color: InkColors.ink3, fontWeight: '600', lineHeight: 19, marginBottom: Space.xs },
 
   draftCard: {
     backgroundColor: '#FFFFFF', borderRadius: Radius.lg, borderWidth: 1, borderColor: InkColors.line,
