@@ -2023,7 +2023,7 @@ export async function deleteQuizItem(id: string): Promise<boolean> {
 // ── 훈련 코스(0108) — 0099 의 'first_day'|'regular' 문자열을 대체하는 매장 소유 코스 ──────
 // 읽기는 매장 전원(직원 훈련 카드가 코스 이름을 쓴다), 쓰기는 관리 권한(RLS tc_*).
 const TRAINING_COURSE_COLS =
-  'id, unit_id, key, name, description, preset, min_items, max_items, due_days, start_at, answer_days, position, active, created_at';
+  'id, unit_id, key, name, description, preset, min_items, max_items, due_days, start_at, answer_days, audience, position, active, created_at';
 
 export async function fetchTrainingCourses(): Promise<DbResult<TrainingCourseRow[]>> {
   if (!HAS_SUPABASE) return { data: [], error: null };
@@ -2056,6 +2056,7 @@ export async function upsertTrainingCourse(c: TrainingCourseRow): Promise<boolea
           //   새 컬럼을 늘릴 때 이 두 곳(COLS·upsert)을 같이 고친다.
           start_at: c.start_at ?? null,
           answer_days: c.answer_days ?? null,
+          audience: c.audience ?? null,
           position: c.position,
           active: c.active,
         },
@@ -2298,6 +2299,54 @@ export type GuestAttemptItemRow = {
   correct: boolean;
 };
 
+// ── 퀴즈별 응시 집계(0199) — 정답률·응시인원 ─────────────────────────────────────────
+// ★클라에서 세지 않는다: fetchQuizAttempts 는 최근 200행만 읽어서, 원장이 커지면 표본이 조용히
+//   잘린 정답률을 자신있게 말하게 된다. 집계는 서버 함수 하나가 한다(RLS 는 invoker 로 그대로 걸린다).
+export type QuizCourseStat = {
+  courseId: string;
+  /** 응시 횟수(제출 단위) */ submissions: number;
+  /** 응시한 사람 수 */ people: number;
+  /** 나간 문항 수 합 = 정답률 분모 */ asked: number;
+  /** 맞힌 문항 수 합 = 정답률 분자 */ correct: number;
+};
+export async function fetchQuizCourseStats(): Promise<Record<string, QuizCourseStat>> {
+  if (!HAS_SUPABASE) return {};
+  const { data, error } = await supabase.rpc('quiz_course_stats');
+  if (error) {
+    readFail('fetchQuizCourseStats', error);
+    return {};
+  }
+  const out: Record<string, QuizCourseStat> = {};
+  for (const r of (data ?? []) as Record<string, unknown>[]) {
+    const id = String(r.course_id);
+    out[id] = {
+      courseId: id,
+      submissions: Number(r.submissions ?? 0),
+      people: Number(r.people ?? 0),
+      asked: Number(r.asked ?? 0),
+      correct: Number(r.correct ?? 0),
+    };
+  }
+  return out;
+}
+
+/** 한 사람의 이 퀴즈 응시 목록(제출 단위 점수·시각) — 개인 상세 화면의 위쪽 대시보드. */
+export type PersonAttemptRow = { submissionId: string; takenAt: string; asked: number; correct: number };
+export async function fetchQuizCoursePerson(courseId: string, staffId: string): Promise<PersonAttemptRow[]> {
+  if (!HAS_SUPABASE || !courseId || !staffId) return [];
+  const { data, error } = await supabase.rpc('quiz_course_person', { p_course_id: courseId, p_staff_id: staffId });
+  if (error) {
+    readFail('fetchQuizCoursePerson', error);
+    return [];
+  }
+  return ((data ?? []) as Record<string, unknown>[]).map((r) => ({
+    submissionId: String(r.submission_id),
+    takenAt: String(r.taken_at),
+    asked: Number(r.asked ?? 0),
+    correct: Number(r.correct ?? 0),
+  }));
+}
+
 /** 직원 한 명이 낸 답 한 줄(0190). 게스트판과 같은 모양 + 누가 언제인지가 붙는다. */
 export type StaffAttemptItemRow = GuestAttemptItemRow & { staffId: string; submissionId: string; takenAt: string };
 
@@ -2489,6 +2538,27 @@ export async function cancelPendingQuizAssignments(courseId: string): Promise<bo
   return write(
     'cancelPendingQuizAssignments',
     supabase.from('quiz_assignments').delete().eq('course_id', courseId).is('sent_at', null),
+  );
+}
+
+/**
+ * 특정 사람들의 **아직 안 나간** 배정만 취소(설정 탭에서 받는 사람을 뺐을 때).
+ *
+ * ★이미 나간 건은 건드리지 않는다 — 위 함수와 같은 이유다(발송 기록이자 빈도 상한의 근거).
+ *   그래서 "이미 받은 사람은 목록에서 뺄 수 없다"가 화면 규칙이 된다: 서버가 못 지우는 것을
+ *   화면이 지운 척하면 안 된다.
+ */
+export async function cancelPendingQuizAssignmentsFor(courseId: string, userIds: string[]): Promise<boolean> {
+  if (!HAS_SUPABASE) return true;
+  if (userIds.length === 0) return true;
+  return write(
+    'cancelPendingQuizAssignmentsFor',
+    supabase
+      .from('quiz_assignments')
+      .delete()
+      .eq('course_id', courseId)
+      .is('sent_at', null)
+      .in('user_id', userIds),
   );
 }
 
