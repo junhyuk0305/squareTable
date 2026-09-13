@@ -292,19 +292,22 @@ async function main() {
     .upsert({ user_id: ownerId, unit_id: UNIT, role: 'owner' }, { onConflict: 'user_id,unit_id' }));
 
   // ════════════════════════════════════════════════════════════════
-  console.log('3) 구독 활성화 (multi — 페이월 우회 + 다점포 화면 심사 가능)');
+  // ★2026-09-13 변경: 예전엔 multi 365일을 켜 페이월을 우회했다. 3.1.1 거절 뒤 심사관은 **앱 안 구매 화면**을
+  //   직접 보고 샌드박스로 산다 — 유료 기간이 남아 있으면 구매 버튼이 막히고 "이미 이용 기간이 남아 있어요"가 떠서
+  //   "살 필요 없는 앱"으로 읽힌다. → 보통 사장님과 같은 **무료** 상태로 둔다(직원 1명·매장 1곳 = 무료 한도 안).
+  //   ⚠️ 심사관이 샌드박스로 사면 웹훅이 이 매장을 실제로 연다 — 다음 제출 전 이 시드를 다시 돌리면 무료로 돌아온다.
+  //   ★2026-09-14: 이 수정은 09-13 에 stash 에만 있고 커밋되지 않아, 재제출 직전 시드가 매장을 유료로 켰다.
+  console.log('3) 구독 = 무료 유지 (심사관이 구매 화면을 보통 사장님과 같게 보도록)');
   {
     const { data: sub } = await db.from('unit_subscriptions')
       .select('plan,status,paid_until').eq('unit_id', UNIT).maybeSingle();
-    const farEnough = sub?.plan === 'multi' && sub?.status === 'active'
-      && sub?.paid_until && new Date(sub.paid_until) > addDays(180);
-    if (farEnough) {
-      console.log(`  · 이미 multi/active (paid_until=${String(sub.paid_until).slice(0, 10)}) → 건너뜀`);
+    const paidLeft = sub?.status === 'active' && (!sub?.paid_until || new Date(sub.paid_until) > now);
+    if (!paidLeft) {
+      console.log(`  · 이미 무료 판정 (status=${sub?.status ?? '행 없음'}) → 건너뜀`);
     } else {
-      const { data, error } = await db.rpc('admin_activate_store', { p_unit_id: UNIT, p_days: 365, p_plan: 'multi' });
+      const { error } = await db.rpc('admin_expire_store', { p_unit_id: UNIT });
       if (error) throw error;
-      const row = Array.isArray(data) ? data[0] : data;
-      console.log(`  ✓ admin_activate_store → plan=${row?.plan} status=${row?.status} paid_until=${String(row?.paid_until).slice(0, 10)}`);
+      console.log(`  ✓ admin_expire_store → 유료 기간 종료 (이전 plan=${sub.plan} paid_until=${String(sub.paid_until).slice(0, 10)})`);
     }
   }
 
