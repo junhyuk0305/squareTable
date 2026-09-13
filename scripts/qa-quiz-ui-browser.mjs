@@ -374,8 +374,10 @@ async function main() {
       if (onDeploy) {
         await scan('설정 탭 · 링크 패널', '08-deploy');
         // 기간 바꾸기 — 토큰을 두고 만료만 미는 자리. 링크가 하나도 없으면 '기간'이 없다.
-        if (await wait('기간', 4000)) {
-          await tapText('기간');
+        // ★'기간'이라는 글자로 찾지 않는다(2026-09-14) — 경고 문구("필요한 기간만 열어 두고")에도 들어 있어
+        //   링크가 없는 매장에서 문구를 누르고 실패했다. 버튼의 접근성 이름으로 찾는다.
+        if (await page.getByLabel('열어 둘 기간 바꾸기').first().isVisible().catch(() => false)) {
+          await tapLabel('열어 둘 기간 바꾸기');
           check('기간 달력 열림', await wait('언제까지로 바꿀까요', 15000));
           await tapLabel('닫기');
           await settle();
