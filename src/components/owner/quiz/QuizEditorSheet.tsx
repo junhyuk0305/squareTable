@@ -17,6 +17,8 @@ import { FORMATS, formatsForKind } from '@/lib/quiz/formats';
 import { detectKinds } from '@/lib/quiz/detect';
 import { findPairSet } from '@/lib/quiz/pairing';
 import { generateQuizItems, QuizQuotaError } from '@/lib/quiz/generate';
+import { aiCapNextStep } from '@/lib/config/tiers';
+import { showUpgradeHint } from '@/lib/config/store-policy';
 import { changedKinds } from '@/lib/quiz/delta';
 import { insertQuizItem, updateQuizItem } from '@/lib/db';
 import { guardWrite } from '@/lib/store/useSyncStore';
@@ -186,7 +188,7 @@ export function QuizEditorSheet({
       // "낼 게 부족해서 안 낸 것"과 "장애·한도"를 섞지 않는다(generate.ts 주석).
       setAiNote(
         e instanceof QuizQuotaError
-          ? '이번 달 AI 사용량을 다 썼어요. 직접 쓰기로 만들어 주세요.'
+          ? `이번 달 AI 사용량을 다 썼어요. ${aiCapNextStep(showUpgradeHint(useSessionStore.getState()))} 직접 쓰기로 만들 수도 있어요.`
           : '지금은 문제를 만들 수 없어요. 잠시 뒤 다시 하거나 직접 써 주세요.',
       );
       return;

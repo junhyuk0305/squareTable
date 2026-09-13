@@ -1,8 +1,8 @@
 // 과금 티어 SSOT — 티어·한도·가격·표시 문구는 전부 여기서만 정의한다(2곳 복제 금지).
 // billing 화면·다점포 게이팅·쿼터 안내문이 이 파일만 참조한다.
 //
-// ⚠️ 서버 카운터파트: 같은 한도가 supabase/migrations/0062_plan_tiers.sql 의
-//    create_store(매장 캡)·approve_member(직원 3명)·consume_ai_quota(월 300건)에 박혀 있다.
+// ⚠️ 서버 카운터파트: 같은 한도가 서버 함수에 박혀 있다 — approve_member(직원 3명, 0115)·
+//    consume_ai_quota/ai_quota_status(무료 200 / 유료 3,000, 0193)·payment_claim_amount(가격, 0192).
 //    한도를 바꾸면 반드시 양쪽을 함께 바꾼다(클라=표시·서버=강제).
 // ⚠️ 전면 무료 모드(app_config.billing_free_mode) 동안엔 캡·게이팅이 전부 우회된다.
 //    서버는 billing_free_mode()로 스스로 읽고, 화면은 세션의 freeMode 를 이 파일 함수에 넘긴다
@@ -19,7 +19,7 @@ export type PlanDef = {
   perStore: boolean; // true 면 청구액 = 매장수 × monthlyKrw
   maxStores: number | null; // null = 무제한(안전 하드상한 15는 서버 별도)
   maxStaff: number | null; // 매장당 직원(알바) 좌석. null = 무제한
-  aiMonthly: number | null; // 매장당 월 AI답변(LLM 생성) 건수. null = 무제한
+  aiMonthly: number | null; // 매장당 월 AI 사용량(단위 — AI_UNIT_NOTE). null = 무제한
   features: string[]; // 카드 불릿(사용자 언어)
 };
 
@@ -32,8 +32,8 @@ export const PLANS: Record<PlanId, PlanDef> = {
     perStore: false,
     maxStores: 1,
     maxStaff: 3,
-    aiMonthly: 150,
-    features: ['매장 1개', '직원 3명까지', 'AI 답변 월 150건', '노하우 등록 무제한'],
+    aiMonthly: 200,
+    features: ['매장 1개', '직원 3명까지', 'AI 사용량 월 200', '노하우 등록 무제한'],
   },
   single: {
     id: 'single',
@@ -44,8 +44,8 @@ export const PLANS: Record<PlanId, PlanDef> = {
     perStore: false,
     maxStores: 1,
     maxStaff: null,
-    aiMonthly: 1500,
-    features: ['매장 1개', '직원 무제한', 'AI 답변 월 1,500건', '질문·노하우 무제한'],
+    aiMonthly: 3000,
+    features: ['매장 1개', '직원 무제한', 'AI 사용량 월 3,000', '질문·노하우 무제한'],
   },
   multi: {
     id: 'multi',
@@ -56,10 +56,21 @@ export const PLANS: Record<PlanId, PlanDef> = {
     perStore: true,
     maxStores: null,
     maxStaff: null,
-    aiMonthly: 1500,
-    features: ['매장 2개 이상', '매장당 AI 답변 월 1,500건', '전체 매장 한눈에 보기', '매장 간 노하우 가져오기'],
+    aiMonthly: 3000,
+    features: ['매장 2개 이상', '매장당 AI 사용량 월 3,000', '전체 매장 한눈에 보기', '매장 간 노하우 가져오기'],
   },
 } as const;
+
+// AI 사용량 산식(2026-09-13 · 서버 0193 · 가중치 정본 = supabase/functions/ai/index.ts AI_UNITS).
+// 한 캡에 합산한다. 음성 입력·노하우 정리는 세지 않는다. 숫자를 바꾸면 엣지 표와 약관 제11조를 같이 고친다.
+export const AI_UNIT_NOTE = '직원 질문 답변 1 · 퀴즈 만들기 2 · PDF 쪽당 1';
+
+/** 사장 화면의 한도 도달 안내 뒷문장(퀴즈 만들기·PDF 올리기) — "이번 달 AI 사용량을 다 썼어요" 다음에 붙인다.
+ *  canUpgrade = 요금제 화면으로 갈 수 있는 사장인가(store-policy showBillingEntry + 사장 역할 — 호출부가 판정).
+ *  ⛔외부 결제 유도 문구를 넣지 않는다. */
+export function aiCapNextStep(canUpgrade: boolean): string {
+  return canUpgrade ? '설정의 요금제에서 바꾸면 바로 더 쓸 수 있어요.' : '다음 달 1일에 다시 채워져요.';
+}
 
 export const PLAN_ORDER: PlanId[] = ['free', 'single', 'multi'];
 

@@ -216,13 +216,13 @@ export function IapPurchasePanel({
           <View style={styles.diffRow}>
             <Text style={styles.diffLabel}>무료</Text>
             <Text style={styles.diffText}>
-              직원 {free.maxStaff}명 · AI 답변 월 {free.aiMonthly}건
+              직원 {free.maxStaff}명 · AI 사용량 월 {free.aiMonthly}
             </Text>
           </View>
           <View style={styles.diffRow}>
             <Text style={[styles.diffLabel, styles.diffLabelOn]}>이용권</Text>
             <Text style={[styles.diffText, styles.diffTextOn]}>
-              직원 수 제한 없음 · AI 답변 월 {paidAi?.toLocaleString()}건
+              직원 수 제한 없음 · AI 사용량 월 {paidAi?.toLocaleString()}
             </Text>
           </View>
           {offers.length === 0 && (

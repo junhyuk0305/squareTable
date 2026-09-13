@@ -37,7 +37,7 @@ export type GenerateAnswerOutput = {
   // 월 AI답변 한도 초과(엣지 402). mock 폴백으로 위장하지 않고 호출부가
   // 업그레이드 안내 + 후보/사장 라우팅 경로로 자연 강등한다(과금층 0062·0082).
   quotaExceeded?: boolean;
-  quotaCap?: number;             // 그때 적용된 캡(무료 150 / 유료 매장당 1500) — 화면이 숫자를 하드코딩하지 않게 서버값을 싣는다.
+  quotaCap?: number;             // 그때 적용된 캡(무료 200 / 유료 매장당 3,000, 0193) — 화면이 숫자를 하드코딩하지 않게 서버값을 싣는다.
 };
 
 // ── 사장님 SQUARE 정리 (원문 → 6칸 구조화) ───────────────────
@@ -154,7 +154,7 @@ export type DocExtractOutput = {
   text: string;
   /** 문서에서 읽을 수 있는 글자가 없었음 → 호출부가 재스캔/직접 붙여넣기 안내. */
   empty: boolean;
-  /** 엣지 거절 사유(unsupported_doc · doc_too_large · doc_not_accepted). 있으면 text는 비어 있다. */
+  /** 엣지 거절 사유(unsupported_doc · doc_too_large · doc_not_accepted) · 클라 판정(quota = 월 AI 한도). 있으면 text는 비어 있다. */
   error?: string;
 };
 

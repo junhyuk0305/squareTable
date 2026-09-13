@@ -55,10 +55,11 @@ const EDGE_MAX_ATTEMPTS = 2;      // 최초 1 + 재시도 1
 const EDGE_RETRY_DELAY_MS = 400;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-// 월 AI답변 한도 초과(엣지 402 ai_quota_exceeded) — 일반 실패와 구분해 던진다.
+// 월 AI 사용량 한도 초과(엣지 402 ai_quota_exceeded) — 일반 실패와 구분해 던진다.
 // 일반 실패는 mock 폴백(degraded)이지만, 쿼터 초과를 mock 으로 위장하면 캡이 무의미해진다.
-// ★ cap 을 실어 나른다 — 0082 부터 유료 플랜에도 캡(매장당 1500)이 있어서, 화면이
-//   PLANS.free.aiMonthly(150)를 하드코딩하면 유료 매장에 틀린 숫자를 보여준다.
+// ★ cap 을 실어 나른다 — 유료 플랜에도 캡(매장당 3,000, 0193)이 있어서, 화면이
+//   PLANS.free.aiMonthly 를 하드코딩하면 유료 매장에 틀린 숫자를 보여준다.
+// (2026-09-13: 답변뿐 아니라 퀴즈 만들기·PDF 올리기도 같은 캡을 쓴다 → doc_extract 도 이 에러를 받는다.)
 class AiQuotaError extends Error {
   constructor(readonly cap: number, readonly used: number) { super('ai_quota_exceeded'); }
 }
@@ -250,6 +251,8 @@ export async function extractDocText(input: DocExtractInput): Promise<DocExtract
     const text = String(out?.text ?? '').trim();
     return { text, empty: !text || out?.empty === true, ...(out?.error ? { error: out.error } : {}) };
   } catch (e) {
+    // 0193부터 PDF 도 AI 캡(쪽당 1)을 쓴다 — 한도는 연결 문제와 다음 행동이 달라 따로 돌려준다.
+    if (e instanceof AiQuotaError) return { text: '', empty: true, error: 'quota' };
     console.warn('[ai] extractDocText failed:', e);
     reportError('ai.extractDocText.failed', e);
     return { text: '', empty: true, error: 'failed' };

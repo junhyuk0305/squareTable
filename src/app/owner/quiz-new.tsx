@@ -29,6 +29,8 @@ import {
 } from '@/lib/db';
 import { findSimilarSection } from '@/lib/utils/knowhowSimilarity';
 import { generateQuizItems, QuizQuotaError } from '@/lib/quiz/generate';
+import { aiCapNextStep } from '@/lib/config/tiers';
+import { showUpgradeHint } from '@/lib/config/store-policy';
 import { getSectionMeta } from '@/lib/utils/category';
 import { UNSECTIONED } from '@/lib/config/sections';
 import { FORMATS } from '@/lib/quiz/formats';
@@ -859,7 +861,9 @@ export default function QuizNewScreen() {
               /* D2 — 한도. "실패"가 아니라 한도라고 정확히 말하고 우회로를 남긴다. */
               <View style={st.warnBox}>
                 <Text style={st.warnTitle}>이번 달 AI 사용량을 다 썼어요</Text>
-                <Text style={st.warnBody}>고르신 노하우는 저장해 뒀어요. 지금 필요하면 문항을 직접 쓸 수도 있어요.</Text>
+                <Text style={st.warnBody}>
+                  {`고르신 노하우는 저장해 뒀어요. ${aiCapNextStep(showUpgradeHint(useSessionStore.getState()))} 지금 필요하면 문항을 직접 쓸 수도 있어요.`}
+                </Text>
               </View>
             ) : err ? (
               /* D3 — 장애. D1(재료 부족)과 다음 행동이 달라야 사장이 노하우를 괜히 고치지 않는다. */

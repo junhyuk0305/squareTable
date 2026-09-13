@@ -10,7 +10,6 @@ import { HAS_SUPABASE } from '@/lib/supabase';
 import { fetchChatQueries, insertChatQuery, updateChatSatisfaction, recomputePlaybookStats } from '@/lib/db';
 import { guardWrite } from '@/lib/store/useSyncStore';
 import { showToast } from '@/lib/store/useToastStore';
-import { PLANS } from '@/lib/config/tiers';
 import { isServable } from '@/lib/utils/entryStatus';
 import { genId } from '@/lib/utils/id';
 import seedData from '@/data/chat-queries.json';
@@ -178,10 +177,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
       if (ai.quotaExceeded) {
         if (!quotaNotified) {
           quotaNotified = true;
-          // 캡은 서버가 실어 보낸 값을 쓴다 — 0082 부터 유료 플랜에도 캡(매장당 1500)이 있어서
-          // PLANS.free.aiMonthly 를 하드코딩하면 유료 매장에 150 이라는 틀린 숫자가 뜬다.
-          const cap = ai.quotaCap || PLANS.free.aiMonthly || 0;
-          showToast(`이번 달 AI 답변 ${cap.toLocaleString()}건을 모두 썼어요. 사장님께 요금제 변경을 요청해 주세요.`, 'warn');
+          // 숫자를 말하지 않는다 — 2026-09-13(0193)부터 캡은 답변 건수가 아니라 답변·퀴즈 만들기·PDF 합산
+          // 단위라, 직원에게 "3,000건"이라고 하면 틀린 말이 된다. 사장에게는 80%·100% 알림이 따로 간다(0191).
+          showToast('이번 달 AI 사용량을 모두 썼어요. 사장님께 요금제 변경을 요청해 주세요.', 'warn');
         }
         return false;
       }

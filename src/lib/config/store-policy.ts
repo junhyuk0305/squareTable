@@ -100,6 +100,15 @@ export function showBillingEntry(iapEnabled: boolean, freeMode: boolean): boolea
   return showPaymentSurface(freeMode) || showIapSurface(iapEnabled, freeMode);
 }
 
+/**
+ * 한도 안내(AI 사용량 도달 등)에서 "요금제를 바꾸면 된다"고 말해도 되는가 —
+ * **사장**이면서 `/billing` 으로 가는 길이 열린 채널일 때만(매니저·직원은 요금제를 못 바꾼다).
+ * 읽는 곳 = `quiz-new.tsx` · `QuizEditorSheet.tsx` · `HandoverImport.tsx`(tiers.aiCapNextStep 에 넘긴다).
+ */
+export function showUpgradeHint(s: { role: string | null; iapEnabled: boolean; freeMode: boolean }): boolean {
+  return s.role === 'owner' && showBillingEntry(s.iapEnabled, s.freeMode);
+}
+
 /** 소셜 로그인 버튼을 노출해도 되는가. */
 export const SHOW_SOCIAL_LOGIN = !IS_IOS_NATIVE;
 

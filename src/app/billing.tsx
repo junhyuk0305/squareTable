@@ -553,7 +553,7 @@ function BillingBody() {
               /* 무료 선택 — 입금 절차 없음 */
               <Appear delay={stagger(3)}>
               <View style={styles.card}>
-                <Text style={styles.body}>무료 요금제는 입금 없이 쓸 수 있어요. 직원 {PLANS.free.maxStaff}명, AI 답변 월 {PLANS.free.aiMonthly}건까지 제공돼요.</Text>
+                <Text style={styles.body}>무료 요금제는 입금 없이 쓸 수 있어요. 직원 {PLANS.free.maxStaff}명, AI 사용량 월 {PLANS.free.aiMonthly}까지 제공돼요.</Text>
               </View>
               </Appear>
             ) : (

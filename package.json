@@ -93,6 +93,7 @@
     "qa:notif-axis": "node scripts/qa-notif-axis.mjs",
     "qa:notif-ack": "node scripts/qa-notif-ack.mjs",
     "qa:owner-alerts": "node scripts/qa-owner-alerts.mjs",
+    "qa:ai-units": "node scripts/qa-ai-units.mjs",
     "qa:room-isolation": "node scripts/qa-room-isolation.mjs",
     "qa:room-matrix": "node scripts/qa-room-matrix.mjs",
     "qa:room-cso": "node scripts/qa-room-cso.mjs",

@@ -4,8 +4,9 @@
 // 서버 스위치(app_config.billing_free_mode)를 false 로 잠깐 뒤집고 캡 3종을 실증한 뒤
 // 반드시 true 로 원복한다(finally — 파일럿 Phase 0 유지가 최우선 불변식).
 //   ① 좌석 캡: 무료 매장 직원 3명 승인 OK → 4번째 승인 staff_limit
-//   ② AI 캡(0082 플랜별): free 150 / 유료 매장당 1500. 캡 직전 200 → 캡 도달 402 로 경계를 양쪽에서 찍는다.
-//      ★ 유료 "무제한"은 폐기됐다(행사장형 무한호출 구멍). 유료도 1500 에서 402 가 나는지 회귀 가드한다.
+//   ② AI 캡(0193 플랜별): free 200 / 유료 매장당 3000. 캡 직전 200 → 캡 도달 402 로 경계를 양쪽에서 찍는다.
+//      ★ 유료 "무제한"은 폐기됐다(행사장형 무한호출 구멍). 유료도 3000 에서 402 가 나는지 회귀 가드한다.
+//      (가중치 — 답변 1·퀴즈 2·PDF 쪽당 1 — 는 qa-ai-units.mjs 가 본다.)
 //   ③ 매장 캡(★0130 슬롯 선구매로 규칙이 바뀜): 2번째 매장부터는 **매장 슬롯**이 있어야 한다.
 //      플랜만으로는 못 늘린다 — multi 라도 슬롯 0개면 no_store_slot. 슬롯을 적립하면 그때 열리고,
 //      그 매장은 바로 multi·active 로 시작한다(결제 뒤 추가분이 무료로 열리던 구멍을 닫은 것).
@@ -38,10 +39,10 @@ const env = loadEnv();
 const URL = env.EXPO_PUBLIC_SUPABASE_URL || env.SUPABASE_URL;
 const ANON = env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 
-// 월 AI답변 캡(확정 정책 2026-07-22). 정본 = 0082 consume_ai_quota/ai_quota_status.
+// 월 AI 사용량 캡(확정 정책 2026-09-13). 정본 = 0193 consume_ai_quota/ai_quota_status.
 // 클라 표시는 src/lib/config/tiers.ts PLANS.*.aiMonthly — 세 곳이 같은 값이어야 한다.
-const FREE_CAP = 150;
-const PAID_CAP = 1500;
+const FREE_CAP = 200;
+const PAID_CAP = 3000;
 const SERVICE = env.SUPABASE_SERVICE_ROLE_KEY;
 if (!URL || !ANON || !SERVICE) { console.error('FAIL: URL/ANON/SERVICE_ROLE env 필요(.env + .env.seed)'); process.exit(2); }
 

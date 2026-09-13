@@ -24,6 +24,8 @@ import { UNSECTIONED } from '@/lib/config/sections';
 import { EXTRACTION_MASTER } from '@/data/extraction-master';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { useSessionStore } from '@/lib/store/useSessionStore';
+import { aiCapNextStep } from '@/lib/config/tiers';
+import { showUpgradeHint } from '@/lib/config/store-policy';
 import { showToast } from '@/lib/store/useToastStore';
 import { genId } from '@/lib/utils/id';
 import type { PlaybookEntry, SquareBlock } from '@/types';
@@ -230,7 +232,9 @@ function HandoverImportBody() {
     setExtracting(false);
     if (out.empty) {
       setError(
-        out.error === 'doc_too_large'
+        out.error === 'quota'
+          ? `이번 달 AI 사용량을 다 썼어요. ${aiCapNextStep(showUpgradeHint(useSessionStore.getState()))} 내용을 직접 붙여넣을 수도 있어요.`
+          : out.error === 'doc_too_large'
           ? 'PDF가 너무 커요 (최대 10MB). 페이지를 나눠 저장한 뒤 한 부분씩 올려주세요.'
           : out.error === 'failed' || out.error === 'mock_mode'
             ? 'PDF를 읽는 중 연결 문제가 생겼어요. 잠시 후 다시 시도해 주세요.'

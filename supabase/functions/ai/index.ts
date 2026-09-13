@@ -329,19 +329,46 @@ function userClient(authz: string) {
   });
 }
 
-// 쿼터 사전판정(비차감). 카운트는 답변이 "성공 서빙된 뒤" consume_ai_quota 로만 올린다 —
-// LLM 5xx/타임아웃에 대한 클라 재시도가 같은 질문을 이중차감하는 것을 막는다(실패는 공짜).
+// ── AI 캡 가중치(2026-09-13 결정 · 0193) — 표는 **여기 한 곳**. DB 는 "몇 단위"만 받는다 ──
+// 1단위 ≈ 직원 질문 답변 1건 ≈ 1.5원(gemini-3.1-flash-lite 실측). 캡 = 무료 200 / 유료 3,000(매장당 월, DB).
+//   answer(기본)       1  — 표에 없는 태스크도 1(미지 태스크로 과금을 우회하지 못하게)
+//   quiz_item·quiz     2  — 문항 만들기 1회(1~2문항). 보통 1.6원 · 최대 20원
+//   doc_extract        쪽당 1(1건 최대 60) — 쪽수는 호출 전엔 모른다 → 사전판정은 1, 차감은 사후 실제 쪽수
+//   transcribe 외 입력·정리 태스크  0
+const AI_UNITS: Record<string, number> = {
+  square: 0, patch: 0, intent: 0, embed: 0, search: 0, triage: 0, transcribe: 0,
+  quiz: 2, quiz_item: 2,
+  doc_extract: 1,
+};
+const aiUnitsBefore = (task: string): number => AI_UNITS[task] ?? 1;
+
+// PDF 쪽수 = 입력 토큰 중 IMAGE 몫 ÷ 쪽당 토큰. ★실측(2026-09-13, gemini-3.1-flash-lite):
+//   1쪽 IMAGE 532 · 3쪽 1,560 · 6쪽 3,120 → 쪽당 520(문서 기본값 258 이 아니다). 지시문 TEXT 268 은 쪽수와 무관.
+//   modality 내역이 없으면 (전체 − 지시문 268) ÷ 520 으로 대신한다. 지시문을 고치면 268 도 다시 잰다.
+// ⚠️ 사전판정은 1단위라 남은 양이 1이어도 60쪽짜리가 통과한다 → 캡을 최대 59 넘을 수 있다(의도된 허용).
+const PDF_TOKENS_PER_PAGE = 520;
+const DOC_EXTRACT_PROMPT_TOKENS = 268;
+function docExtractPages(usage: unknown): number {
+  const u = usage as { promptTokenCount?: number; promptTokensDetails?: { modality?: string; tokenCount?: number }[] } | null;
+  const prompt = Number(u?.promptTokenCount) || 0;
+  if (prompt <= 0) return 0; // 모델을 안 불렀다(빈 입력·형식 거부) → 차감 없음
+  const image = (u?.promptTokensDetails ?? []).find((d) => d?.modality === 'IMAGE')?.tokenCount;
+  const pageTokens = typeof image === 'number' ? image : prompt - DOC_EXTRACT_PROMPT_TOKENS;
+  return Math.min(Math.max(Math.round(pageTokens / PDF_TOKENS_PER_PAGE), 1), 60);
+}
+
+// 쿼터 사전판정(비차감). 카운트는 "성공 서빙된 뒤" consume_ai_quota 로만 올린다 —
+// LLM 5xx/타임아웃에 대한 클라 재시도가 같은 요청을 이중차감하는 것을 막는다(실패는 공짜).
 //
-// ★ 판정 규칙을 여기서 재구현하지 않는다. 0082 ai_quota_status() 하나만 부른다.
+// ★ 판정 규칙을 여기서 재구현하지 않는다. ai_quota_status(p_units)(0193) 하나만 부른다.
 //   이전에는 캡 숫자(300)와 "유료=무제한" 규칙을 엣지가 자기 상수로 들고 있어서 DB 정본과
-//   어긋났다(확정 정책은 무료150/유료1500인데 코드는 무료300/유료무제한이었다).
-//   플랜별 캡·월 경계(KST)·free_mode 우회는 전부 DB 함수의 책임이다.
+//   어긋났다. 플랜별 캡·월 경계(KST)·free_mode 우회는 전부 DB 함수의 책임이다.
 //
 // 읽기는 호출자 JWT + RLS(자기 매장 행만)라 추가 격리 게이트 불요. 오류는 전부 fail-open —
 // 과금 인프라 장애가 파일럿 답변을 막는 게 더 큰 사고다(subscription.ts 의 fail-open 철학과 동일).
-async function aiQuotaBlocked(authz: string): Promise<{ blocked: boolean; used: number; cap: number }> {
+async function aiQuotaBlocked(authz: string, units: number): Promise<{ blocked: boolean; used: number; cap: number }> {
   const sb = userClient(authz);
-  const { data, error } = await sb.rpc('ai_quota_status');
+  const { data, error } = await sb.rpc('ai_quota_status', { p_units: units });
   if (error) return { blocked: false, used: 0, cap: 0 }; // 판정 불가 → 통과(fail-open)
   const row = Array.isArray(data) ? data[0] : data;
   if (!row) return { blocked: false, used: 0, cap: 0 };
@@ -532,8 +559,7 @@ ${query}
 }
 
 // 이해확인 퀴즈(S1 ④) — 업무에 붙은 노하우로 객관식 상황문제 2~3개 생성. 채점은 클라(answer_index).
-// 쿼터: denylist에 넣지 않아 answer 와 동일하게 월 캡을 차감(무료 150 / 유료 매장당 1500, 0082)
-//   — 사전판정 402 + 성공 후 카운트.
+// 쿼터: 퀴즈 생성이라 2단위(AI_UNITS) — 사전판정 402 + 성공 후 차감.
 // ⚠️ 이 태스크는 하위호환용으로 남긴다. 신규 경로는 아래 handleQuizItem(task:'quiz_item') 이다.
 async function handleQuiz(payload: any) {
   const sops = ((payload.sops ?? []) as any[]).slice(0, MAX_SOPS);
@@ -587,7 +613,8 @@ ${sopText}`;
 //
 // 기존 handleQuiz 와의 차이: 형태(format)를 요청이 지정하고, 결과가 DB(quiz_items)에 **저장**된다.
 //   저장된 문항으로 응시할 땐 AI 호출이 0이라 결과적으로 현행보다 캡을 덜 쓴다.
-// 쿼터: 차감 태스크(denylist 에 넣지 않는다) — 생성 시 1회 차감.
+// 쿼터: 생성 1회 = 2단위 차감(AI_UNITS, 2026-09-13). ★종전 주석은 "1회 차감"이라 적었지만 실제로는
+//   denylist 에 들어 있어 **비차감**이었다. 모델을 안 부른 결과(rejected)는 여전히 차감 0.
 //
 // 그라운딩 규칙은 handleQuiz 를 그대로 승계한다(절대 완화 금지).
 async function handleQuizItem(payload: any) {
@@ -1010,8 +1037,8 @@ async function handleTranscribe(payload: any) {
 }
 
 // ── 문서 텍스트 추출(doc_extract) ────────────────────────────
-// PDF(인수인계서·매뉴얼) → 본문 텍스트. 결과는 붙여넣기 입력창에 주입되는 "입력 수단"이라
-// transcribe 와 같은 등급: 쿼터 미차감 + mock 폴백 없음(지어낸 텍스트가 노하우로 가면 비가역).
+// PDF(인수인계서·매뉴얼) → 본문 텍스트. 결과는 붙여넣기 입력창에 주입되는 "입력 수단"이다.
+// 쿼터: 쪽당 1단위(최대 60, 2026-09-13 — 종전 미차감) · mock 폴백 없음(지어낸 텍스트가 노하우로 가면 비가역).
 // Gemini 는 PDF 페이지를 이미지로도 읽으므로(내장 OCR) 텍스트 PDF·스캔 PDF 를 한 경로로 처리한다.
 const DOC_MIME_ALLOW = ['application/pdf'];
 // base64 하드캡 ≈ 14MB(원본 ~10MB). 비용 DoS 방어선 — 클라 캡(10MB)이 뚫려도 여기서 잘린다.
@@ -1143,25 +1170,17 @@ Deno.serve(async (req: Request) => {
     const payload = body?.payload ?? {};
     const authz = req.headers.get('Authorization') ?? '';
 
-    // 3) AI답변 월 쿼터(과금층 0062·0082) — answer 태스크만. 진입 시엔 "비차감 사전판정"으로
-    //    플랜별 캡(무료 150 / 유료 매장당 1500) 초과를 402로 거부하고,
-    //    카운트 증가는 답변 성공 후(아래)로 미룬다.
+    // 3) AI 월 쿼터(0193) — 가중치 표 AI_UNITS 의 단위가 0보다 큰 태스크만. 진입 시엔 "비차감 사전판정"
+    //    (남은 양 < 필요 단위면 402), 차감은 성공 서빙 후(아래)로 미룬다.
     //    ⚠️ 쿼터 인프라 장애는 fail-open: 과금 로직이 파일럿 답변을 막는 게 더 큰 사고
     //    (subscription.ts 의 fail-open 철학과 동일). 로그만 남기고 통과시킨다.
-    //    (denylist = 아래 라우팅 삼항식의 非answer 분기와 동일 목록 — 새 태스크를 라우팅에
-    //     추가하면 여기도 함께. 미지 태스크는 기본 라우팅과 같이 answer 로 취급해 과금 우회를 막는다.)
-    //    (transcribe = 받아쓰기, doc_extract = 문서 추출 = '입력 수단'이라 답변 캡을 차감하지 않는다 —
-    //     캡을 물리면 등록·질문 자체를 억제해 북극성과 충돌. 남용 방어는 레이트리밋 + 길이/페이로드 하드캡이 담당.)
-    //    (quiz_item = 문항 '제작 수단'이라 doc_extract·transcribe 와 같은 이유로 비차감이다.
-    //     캡을 물리면 사장이 문항 만들기를 아끼게 되고, 문항이 없으면 퀴즈가 아예 안 나간다
-    //     — 기능 자체를 억제하는 캡이 된다. 형태 하나당 1회 호출이라 다양하게 낼수록 캡을
-    //     많이 먹는 구조라 특히 그렇다. 남용 방어는 레이트리밋(사용자 10/분·매장 20/분)이 담당한다.
-    //     ⚠️ 대신 문항 무한 생성이 열린다 — 매장당 quiz_items 행 상한을 두는 걸 후속으로 검토할 것.)
-    //    (레거시 quiz = 응시 때마다 즉석 생성하던 옛 경로라 차감을 유지한다. 신규 경로가 아니다.)
-    const isAnswer = !['square', 'patch', 'intent', 'embed', 'search', 'triage', 'transcribe', 'doc_extract', 'quiz_item'].includes(task);
-    if (isAnswer) {
+    //    (2026-09-13 전환: 종전엔 답변만 차감했고 quiz_item·doc_extract 는 '제작·입력 수단'이라 비차감이었다.
+    //     원가가 퀴즈 최대 20원·PDF 최대 135원이라 캡 밖에 두면 무료 매장이 원가를 무한히 쓸 수 있어 합산으로 바꿨다.)
+    //    ★사장 에스컬레이션(직원 질문 → 사장 1탭)은 이 함수를 부르지 않는다 — 클라가 질문 행만 쓴다(캡 미적용, 2026-07-21).
+    const unitsBefore = aiUnitsBefore(task);
+    if (unitsBefore > 0) {
       try {
-        const q = await aiQuotaBlocked(authz);
+        const q = await aiQuotaBlocked(authz, unitsBefore);
         if (q.blocked) {
           return json({ error: 'ai_quota_exceeded', used: q.used, cap: q.cap }, 402);
         }
@@ -1192,14 +1211,17 @@ Deno.serve(async (req: Request) => {
                         ? await handleQuizItem(payload)
                         : await handleAnswer(payload);
 
-    // 답변이 실제로 서빙된 경우에만 월 카운터 증가(consume_ai_quota, 0062 — 여기선 카운터로만 쓰고
+    // 실제로 서빙된 경우에만 월 카운터 증가(consume_ai_quota(p_units), 0193 — 여기선 카운터로만 쓰고
     // allowed 판정은 위 사전판정이 담당). 실패(throw)·정크 거절은 미차감 → 재시도 이중차감 없음.
     // 응답 전에 await(엣지 런타임이 응답 후 백그라운드 작업을 보장하지 않음). 실패는 관대(undercount 허용).
-    // ★rejected 가 붙은 결과는 종류를 가리지 않고 미차감 — "모델을 안 불렀으면 안 받는다"가 규칙이고,
+    // ★rejected·error 가 붙은 결과는 종류를 가리지 않고 미차감 — "모델을 안 불렀으면 안 받는다"가 규칙이고,
     //   거절 사유를 여기에 하나씩 나열하면 새 사유가 생길 때마다 조용히 과금되는 구멍이 난다.
-    if (isAnswer && !(result as { rejected?: string })?.rejected) {
+    //   (doc_extract 의 형식 거부·용량 초과·업스트림 거부는 error 로 돌아온다.)
+    const served = result as { rejected?: string; error?: string; usage?: unknown };
+    const unitsAfter = task === 'doc_extract' ? docExtractPages(served?.usage) : unitsBefore;
+    if (unitsAfter > 0 && !served?.rejected && !served?.error) {
       try {
-        const { error: cErr } = await userClient(authz).rpc('consume_ai_quota');
+        const { error: cErr } = await userClient(authz).rpc('consume_ai_quota', { p_units: unitsAfter });
         if (cErr) console.error('consume_ai_quota (post-serve) error:', cErr.message ?? cErr);
       } catch (e) {
         console.error('consume_ai_quota (post-serve) failed:', e);

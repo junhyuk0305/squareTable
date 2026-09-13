@@ -40,7 +40,7 @@ const ceilDays = (ms: number) => Math.max(0, Math.ceil(ms / DAY));
  *
  * 2026-08-06 결정: 유료 기간이 끝나면 **앱을 잠그지 않고 무료 요금제로 강등**한다.
  *   (7일 체험이 끝난 매장이 8일째에 앱을 아예 못 열던 동작을 폐기. 라이브 검증으로 확인된 결함.)
- *   미납 압박은 잠금이 아니라 무료 한도(직원 3명·AI 150건)와 좌석 잠금으로 건다.
+ *   미납 압박은 잠금이 아니라 무료 한도(직원 3명·AI 월 200)와 좌석 잠금으로 건다.
  */
 export function effectivePlanOf(
   s: { plan?: PlanId; subStatus: SubStatusRaw; paidUntil: string; trialEndsAt: string },

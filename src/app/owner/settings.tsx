@@ -10,7 +10,7 @@ import { useWorkStore } from '@/lib/store/useWorkStore';
 import { useHubStore } from '@/lib/store/useHubStore';
 import { replayGuides as replayGuidesFor } from '@/lib/store/useGuideStore';
 import { showToast } from '@/lib/store/useToastStore';
-import { PLANS } from '@/lib/config/tiers';
+import { PLANS, AI_UNIT_NOTE } from '@/lib/config/tiers';
 import { storeColor } from '@/lib/utils/storeColor';
 import { notifyAction } from '@/lib/utils/confirm';
 import { InkColors } from '@/lib/theme/colors';
@@ -67,7 +67,7 @@ export default function OwnerSettings() {
   const training = useWorkStore((s) => s.training);
   const done = useWorkStore((s) => s.done);
   const workLoaded = useWorkStore((s) => s.loaded);
-  // AI 답변 월 사용량 — 2026-08-27 §7-6 판정으로 허브 현황 L4 칸에서 여기로 옮김. 원장은 그대로
+  // AI 월 사용량(답변·퀴즈 만들기·PDF 합산, 0193) — 2026-08-27 §7-6 판정으로 허브 현황 L4 칸에서 여기로 옮김. 원장은 그대로
   // owner_overview.ai_used(이 매장 행) / PLANS[plan].aiMonthly. 실패하면 행 자체를 그리지 않는다(0건 위장 금지).
   const overview = useHubStore((s) => s.overview);
   const ownerLoaded = useHubStore((s) => s.ownerLoaded);
@@ -199,9 +199,9 @@ export default function OwnerSettings() {
             <SettingsRow
               first
               icon="sparkles-outline"
-              label="AI 답변 사용"
-              hint={aiCap != null ? `이번 달 · 월 ${aiCap.toLocaleString()}건까지 · 다음 달에 다시 채워져요` : '이번 달 · 직원이 물었을 때 AI가 답한 횟수'}
-              value={aiCap != null ? `${aiUsed.toLocaleString()} / ${aiCap.toLocaleString()}건` : `${aiUsed.toLocaleString()}건`}
+              label="AI 사용량"
+              hint={`이번 달 · ${AI_UNIT_NOTE} · 다음 달에 다시 채워져요`}
+              value={aiCap != null ? `${aiUsed.toLocaleString()} / ${aiCap.toLocaleString()}` : aiUsed.toLocaleString()}
             />
           )}
           <SettingsRow

@@ -404,7 +404,7 @@ export function OwnerStatusView({ header }: { header: ReactNode }) {
                 <View style={[styles.dot, { backgroundColor: colorOf(r.unit_id) }]} />
                 <Text style={styles.rowTitle} numberOfLines={1}>{labelOf(r.unit_id)}</Text>
                 <Text style={styles.rowSub}>
-                  {`${laborLoadError ? '—' : `${(labor[r.unit_id] ?? 0).toLocaleString()}원`} · AI ${r.ai_used}${aiCap != null ? `/${aiCap.toLocaleString()}` : ''}건`}
+                  {`${laborLoadError ? '—' : `${(labor[r.unit_id] ?? 0).toLocaleString()}원`} · AI ${r.ai_used.toLocaleString()}${aiCap != null ? `/${aiCap.toLocaleString()}` : ''}`}
                 </Text>
               </View>
             ))}

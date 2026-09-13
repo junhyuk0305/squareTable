@@ -131,7 +131,7 @@ export default function OwnerLayout() {
   }
   // ★2026-08-06: 만료 페이월(구독 만료 → /billing 강제) 제거.
   //   만료는 이제 앱 잠금이 아니라 **무료 요금제 강등**이다(effectivePlanOf / 0115 effective_plan).
-  //   사장은 만료돼도 앱을 그대로 쓰고, 제한은 무료 한도(직원 3명·AI 150건)와 좌석 잠금으로만 걸린다.
+  //   사장은 만료돼도 앱을 그대로 쓰고, 제한은 무료 한도(직원 3명·AI 월 200)와 좌석 잠금으로만 걸린다.
   //   업그레이드 경로는 강제 라우팅이 아니라 /billing 자발 방문(설정·매장 추가·한도 안내)이다.
   return (
     <Stack
@@ -141,7 +141,7 @@ export default function OwnerLayout() {
         //   항목을 iOS 26 이 '바 버튼'으로 취급해 유리 캡슐을 씌운다 → 웹과 같은 "왼쪽 정렬 평문 제목 +
         //   담백한 뒤로가기"를 네이티브 헤더로는 낼 수 없다. 모든 화면이 `ScreenTitleHeader` 를 직접 그린다.
         //   ★여기서 끄는 것이 핵심이다 — 화면에서 끄면 마운트 전 한 프레임 깜빡인다(native-audit: header-flash).
-        headerShown: false,
+        headerShown: false,
       }}
     >
       {/* ★헤더를 끌 화면은 **레이아웃에서부터** 끈다(2026-09-07 iOS 실기기). 화면 안의

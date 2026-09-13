@@ -131,7 +131,7 @@ const NOSCRIPT = `<noscript>
         <li>여러 매장을 한 계정에서 — 매장을 오가고 검증된 노하우를 매장 간에 가져오기</li>
         <li>출퇴근·인건비 자동 집계</li>
       </ul>
-      <p>신용카드 없이 무료로 시작 · 매장 1곳 · 직원 3명 · AI 월 150건 무료.</p>
+      <p>신용카드 없이 무료로 시작 · 매장 1곳 · 직원 3명 · AI 월 200 무료.</p>
       <p><a href="/welcome.html">매장의 정석 소개</a> · <a href="/features">기능</a> · <a href="/pricing">요금제·자주 묻는 질문</a> · <a href="/inquiry">도입 문의</a></p>
       <p>업종별 활용: <a href="/cafe">카페</a> · <a href="/restaurant">음식점</a> · <a href="/gym">헬스장·필라테스</a> · <a href="/academy">학원</a> · <a href="/signup">무료로 시작</a></p>
     </div>
