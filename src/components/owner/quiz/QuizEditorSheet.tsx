@@ -341,10 +341,12 @@ export function QuizEditorSheet({
     const ok = await addEntry(entry);
     if (ok) {
       // 코스에도 담아야 직원 퀴즈에 나간다(0111 — 예전엔 업무에 첨부했다).
-      if (courseId) await addCourseEntry(courseId, entry.id);
+      // ★담기 결과로 말한다(2026-09-14) — 예전엔 담기가 실패해도 '퀴즈에 담았어요'를 초록으로 띄웠다.
+      const inCourse = courseId ? await addCourseEntry(courseId, entry.id) : true;
       setLinkedIds((prev) => [...prev, entry.id]);
       setErr(null);
-      showToast('노하우로 추가하고 퀴즈에 담았어요', 'good');
+      if (inCourse) showToast('노하우로 추가하고 퀴즈에 담았어요', 'good');
+      else showToast('노하우는 추가했지만 퀴즈에 담지 못했어요');
     }
     setBusy(false);
   };

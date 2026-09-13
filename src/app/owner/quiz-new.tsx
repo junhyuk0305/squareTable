@@ -276,7 +276,13 @@ export default function QuizNewScreen() {
     if (!ok) return null;
     const made = { id, key };
     courseRef.current = made;
-    for (const eid of picked) await addCourseEntry(id, eid);
+    // ★담기 실패를 센다(2026-09-14, quiz/[id] 복제와 같은 부류). 예전엔 반환을 버려서, 안 담긴 노하우의
+    //   문항이 4단계에 '만든 문제'로 그대로 보이고 초록 토스트로 보내졌다 — 직원에겐 그 문항이 안 나간다.
+    let entryFail = 0;
+    for (const eid of picked) {
+      if (!(await addCourseEntry(id, eid))) entryFail++;
+    }
+    if (entryFail > 0) showToast(`노하우 ${entryFail}건은 퀴즈에 담기지 않았어요. 그 문항은 직원에게 안 나가요`);
     setCourseId(id);
     setCourseKey(key);
     setName(draftName);
