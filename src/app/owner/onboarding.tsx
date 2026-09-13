@@ -194,7 +194,7 @@ export default function OwnerOnboardingScreen() {
                 같은 앱이 두 말을 하게 된다(2026-08-11 [P8-#5]). 판정은 store-policy 한 곳.
               ★★가격 문장만 채널로 갈린다: 웹 PG 축일 때만 tiers.ts(웹 가격 SSOT)를 읽는다.
                 스토어 인앱결제 축(iOS)의 가격은 스토어가 내려주는 값이고 웹과 숫자가 다르다
-                (단일 29,000 vs 20,900) — 여기서 웹 숫자를 보여주면 도착지와 다른 금액을 말하게 된다. */}
+                (단일 앱 33,000 vs 웹 25,000) — 여기서 웹 숫자를 보여주면 도착지와 다른 금액을 말하게 된다. */}
           {showBillingEntry(iapEnabled, freeMode) && (
             <Appear delay={stagger(4)} style={styles.doneStretch}>
             <Pressable

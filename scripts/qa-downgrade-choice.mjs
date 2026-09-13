@@ -264,12 +264,12 @@ async function main() {
     /\/billing\?plan=/.test(dg) && /stores=/.test(dg), '');
   check('★⑨ /billing 이 그 값을 받아 미리 선택된 상태로 착지한다',
     /useLocalSearchParams/.test(bl) && /plan/.test(bl) && /stores/.test(bl), '');
-  // ⑩ 표시가는 **공급가액 + '부가세 별도'**(제품 전체 규칙)라 이 화면은 planMonthlyPrice 만 쓴다.
-  //    실제 입금액(withVat)은 /billing 이 말한다 — 두 화면이 같은 숫자를 두 번 말하지 않게.
+  // ⑩ 표시가는 **부가세 포함가**(2026-09-13 · 표시가 = 입금액)라 이 화면은 planMonthlyPrice 만 쓴다.
+  //    공급가액·부가세 분할(supplyPrice)은 /billing 이 말한다 — 두 화면이 같은 숫자를 두 번 말하지 않게.
   check('★⑩ 화면이 금액을 tiers.ts 로 계산한다', /planMonthlyPrice/.test(dg), '');
-  check('★⑩ 입금액(부가세 포함)은 /billing 이 tiers.ts 로 계산한다', /withVat/.test(bl), '');
+  check('★⑩ 입금액·세금계산서 분할은 /billing 이 tiers.ts 로 계산한다', /planMonthlyPrice/.test(bl) && /supplyPrice/.test(bl), '');
   // ★빈 파일에서 "숫자가 없다"가 통과하면 안 된다 — 건너뛴 것을 통과로 세지 않는다(AGENTS).
-  check('★⑩ 화면에 금액 숫자 사본이 없다', dg.length > 0 && !/\b(19000|29000|20900|31900|87000)\b/.test(dg), '');
+  check('★⑩ 화면에 금액 숫자 사본이 없다', dg.length > 0 && !/\b(25000|29000|33000|38000|58000|87000)\b/.test(dg), '');
   check('★⑩ 부가세 문구도 SSOT 에서 가져온다', /VAT_NOTE_SENTENCE/.test(dg), '');
 
   // ── ⑪ 실패 경로 — 이 하니스가 **해피패스만 덮어서** #46 이 살아남았다 (2026-08-25 감사) ──

@@ -5,7 +5,7 @@
 //   ③ 무료·만료 매장에 자동 배정(신고 매장 우선)
 //   ④ 남은 슬롯으로 새 매장 생성 → 매장별 독립 만료일
 //   ⑤ 슬롯 소진 후 다시 no_store_slot
-//   ⑥ 금액 = 산 개수 × 31,900 (소유 매장 수와 무관)
+//   ⑥ 금액 = 산 개수 × 29,000 (소유 매장 수와 무관 · 0192 부가세 포함가)
 //   ⑦ 금액·개수 위조 직접 insert 차단(RLS 재장착 확인)
 //   ⑧ 0137 무료 지급(관리 콘솔 버튼)
 //   ⑨ ★0141 가입 체험 구간 — 슬롯 면제 + 종료 후 재차단 + 체험 매장도 슬롯을 먹는다(0136)
@@ -99,7 +99,7 @@ async function signUp(role, name) {
   throw new Error('signUp 레이트리밋 소진');
 }
 const cleanup = [];
-const MULTI_VAT = 31900;
+const MULTI_VAT = 29000; // 매장당 부가세 포함가(0192)
 
 async function main() {
   const { data: fm } = await svcRpc('billing_free_mode');
@@ -128,11 +128,11 @@ async function main() {
   const sl0 = Array.isArray(slot0.data) ? slot0.data[0] : slot0.data;
   check('남은 슬롯 0개', sl0?.open_count === 0, `open=${sl0?.open_count}`);
 
-  // ── ⑥ 금액 = 산 개수 × 31,900 (소유 매장 수와 무관) ───────────────────────
+  // ── ⑥ 금액 = 산 개수 × 29,000 (소유 매장 수와 무관) ───────────────────────
   const a1 = await svcRpc('payment_claim_amount', { p_plan: 'multi', p_months: 1, p_store_count: 1 });
   const a3 = await svcRpc('payment_claim_amount', { p_plan: 'multi', p_months: 1, p_store_count: 3 });
-  check('★⑥ 1개분 = 31,900', a1.data === MULTI_VAT, `${a1.data}`);
-  check('★⑥ 3개분 = 95,700 (소유 매장은 1개뿐인데도)', a3.data === MULTI_VAT * 3, `${a3.data}`);
+  check('★⑥ 1개분 = 29,000', a1.data === MULTI_VAT, `${a1.data}`);
+  check('★⑥ 3개분 = 87,000 (소유 매장은 1개뿐인데도)', a3.data === MULTI_VAT * 3, `${a3.data}`);
 
   // ── ② N개 동시 결제 ───────────────────────────────────────────────────────
   const { data: claim, error: eC } = await O.c.rpc('submit_payment_claim', {

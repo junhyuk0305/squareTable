@@ -39,8 +39,8 @@ export const PLANS: Record<PlanId, PlanDef> = {
     id: 'single',
     name: '단일 매장',
     tagline: '직원과 함께 운영하는 매장',
-    // ★정가(2026-07-31 파일럿 할인 종료 — 서버 카운터파트 payment_claim_amount(0098)와 함께 변경).
-    monthlyKrw: 19000,
+    // ★부가세 포함가(2026-09-13 전환 — 서버 카운터파트 payment_claim_amount(0192)와 함께 변경).
+    monthlyKrw: 25000,
     perStore: false,
     maxStores: 1,
     maxStaff: null,
@@ -51,7 +51,7 @@ export const PLANS: Record<PlanId, PlanDef> = {
     id: 'multi',
     name: '다점포',
     tagline: '매장 2개부터, 매장당 요금',
-    // ★정가(2026-07-31 파일럿 할인 종료 — 서버 카운터파트 payment_claim_amount(0098)와 함께 변경).
+    // ★부가세 포함가(2026-09-13 전환 — 서버 카운터파트 payment_claim_amount(0192)와 함께 변경). 매장당.
     monthlyKrw: 29000,
     perStore: true,
     maxStores: null,
@@ -91,16 +91,17 @@ export const SIGNUP_PROMO = {
 } as const;
 
 // 부가세 — 일반과세자(2026-08-03 등록)라 매출의 10%가 부가세다.
-// PLANS.monthlyKrw 는 전부 **공급가액**이고, 화면 표시가도 공급가액 + "부가세 별도" 꼬리표다.
-// 실제로 받는 돈(입금 요청액)은 withVat() 를 통과한 값 — 19,000 → 20,900 / 29,000 → 31,900.
-// ⚠️ 서버 카운터파트: payment_claim_amount(0106). 세율·가격을 바꾸면 **양쪽을 함께** 바꾼다.
+// ★2026-09-13: PLANS.monthlyKrw 는 전부 **부가세 포함가**다 — 화면 표시가 = 입금 요청액.
+//   종전 "공급가액을 표시하고 부가세를 따로 더해 청구"하던 체계(0106)는 폐기했다.
+//   세금계산서는 여전히 공급가액+부가세로 쪼개 발행한다 → supplyPrice().
+// ⚠️ 서버 카운터파트: payment_claim_amount(0192). 가격을 바꾸면 **양쪽을 함께** 바꾼다.
 export const VAT_RATE = 0.1;
-export const VAT_NOTE = '부가세 별도';
-export const VAT_NOTE_SENTENCE = '표시 금액은 부가세 별도예요.';
+export const VAT_NOTE = '부가세 포함';
+export const VAT_NOTE_SENTENCE = '표시 금액은 부가세 포함이에요.';
 
-/** 공급가액 → 부가세 포함 청구액(원). 서버 payment_claim_amount(0106)와 같은 식이어야 한다. */
-export function withVat(krw: number): number {
-  return Math.round(krw * (1 + VAT_RATE));
+/** 부가세 포함가 → 공급가액(원). 세금계산서 분할용. 부가세 = 포함가 − 공급가액. */
+export function supplyPrice(krw: number): number {
+  return Math.round(krw / (1 + VAT_RATE));
 }
 
 // DB(unit_subscriptions.plan) 원시값 → PlanId. 알 수 없는 값·빈값은 가장 보수적인 'free'.

@@ -13,7 +13,7 @@ import { deriveSubscription, isPlanLapsed } from '@/lib/utils/subscription';
 import { canManage } from '@/lib/utils/roles';
 import { BILLING_INFO, formatKrw } from '@/lib/config/billing';
 import { TERMS_VERSION, PAYMENT_SLA_SENTENCE } from '@/lib/config/business';
-import { PLANS, PLAN_ORDER, planMonthlyPrice, withVat, VAT_NOTE_SENTENCE, FREE_PROMO, SIGNUP_PROMO, type PlanId } from '@/lib/config/tiers';
+import { PLANS, PLAN_ORDER, planMonthlyPrice, supplyPrice, VAT_NOTE_SENTENCE, FREE_PROMO, SIGNUP_PROMO, type PlanId } from '@/lib/config/tiers';
 import { SHOW_BILLING, showIapSurface, showPaymentSurface } from '@/lib/config/store-policy';
 import { usePaymentClaimStore, CLAIM_ERROR_TEXT } from '@/lib/store/usePaymentClaimStore';
 import { redeemPromoCode, fetchUnitSeatStatus, type SeatStatus } from '@/lib/db';
@@ -135,8 +135,9 @@ function BillingBody() {
   const MULTI_MIN_STORES = 2;
   const [storeCount, setStoreCount] = useState(paramStores >= 1 ? paramStores : Math.max(ownedCount, MULTI_MIN_STORES));
   const buyCount = selectedPlan === 'multi' ? storeCount : 1;
-  const monthlyTotal = planMonthlyPrice(selectedPlan, buyCount); // 공급가액(표시가)
-  const monthlyBilled = withVat(monthlyTotal); // 실제 입금 요청액 — 서버 payment_claim_amount(0130)와 같은 값
+  // 표시가 = 부가세 포함가 = 실제 입금 요청액 — 서버 payment_claim_amount(0192)와 같은 값
+  const monthlyBilled = planMonthlyPrice(selectedPlan, buyCount);
+  const monthlySupply = supplyPrice(monthlyBilled); // 세금계산서 분할용
 
   // 자동 재확인: /billing 은 top-level 라우트라 owner/junior 레이아웃의 refreshMembership 폴이 여기선 안 돈다.
   //   → 이 화면 자체에서 30초마다 상태를 당겨, 계좌이체 활성화가 반영되면 새로고침 탭 없이 자동으로 앱에 진입.
@@ -583,7 +584,7 @@ function BillingBody() {
                     <Row label="예금주" value={BILLING_INFO.holder} />
                     <Row label="금액" value={`${formatKrw(monthlyBilled)} / 월`} strong />
                     <Text style={styles.hint}>
-                      {formatKrw(monthlyTotal)} + 부가세 {formatKrw(monthlyBilled - monthlyTotal)}이에요.
+                      공급가액 {formatKrw(monthlySupply)} + 부가세 {formatKrw(monthlyBilled - monthlySupply)}이에요.
                     </Text>
                     {selectedPlan === 'multi' && (
                       <>

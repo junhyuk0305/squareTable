@@ -12,8 +12,8 @@ import {
   fetchDowngradeNeed, fetchMyFreeUnits, fetchStaffProfiles,
   rpcChooseKeptStore, rpcChooseKeptSeats, type DowngradeNeed,
 } from '@/lib/db';
-// 금액은 전부 tiers.ts 가 계산한다. 표시가는 **공급가액 + "부가세 별도"** — 제품 전체가 쓰는 규칙이고
-// 실제 입금액(withVat)은 /billing 이 말한다. 여기서 두 번 말하면 숫자가 두 개로 읽힌다.
+// 금액은 전부 tiers.ts 가 계산한다. 표시가는 **부가세 포함가**(2026-09-13 — 표시가 = 입금액)이고
+// 공급가액·부가세 분할은 /billing 이 말한다. 여기서 두 번 말하면 숫자가 두 개로 읽힌다.
 import { PLANS, planMonthlyPrice, VAT_NOTE_SENTENCE, type PlanId } from '@/lib/config/tiers';
 import { formatKrw } from '@/lib/config/billing';
 import { PAYMENT_SLA_SENTENCE } from '@/lib/config/business';

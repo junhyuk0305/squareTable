@@ -39,10 +39,10 @@ const ANON = env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 const SERVICE = env.SUPABASE_SERVICE_ROLE_KEY;
 if (!URL || !ANON || !SERVICE) { console.error('FAIL: URL/ANON/SERVICE_ROLE env 필요(.env + .env.seed)'); process.exit(2); }
 
-// 요금 SSOT 3중 확인 대상: src/lib/config/tiers.ts · 0106 payment_claim_amount · 여기.
-// ★청구액은 부가세 포함(0106) — 공급가액 19,000/29,000 에 10% 를 더한 값이다.
-const SINGLE_KRW = 20900;
-const MULTI_KRW = 31900;
+// 요금 SSOT 3중 확인 대상: src/lib/config/tiers.ts · 0192 payment_claim_amount · 여기.
+// ★2026-09-13(0192): 표시가 = 청구액 = 부가세 포함가. 종전 "공급가액 + 10%" 청구(0106)는 폐기.
+const SINGLE_KRW = 25000;
+const MULTI_KRW = 29000;
 // 주문 시점 동의(0116) — 없으면 서버가 consent_required 로 거부한다. SSOT = business.ts TERMS_VERSION.
 const TERMS = '2026-08-07';
 
