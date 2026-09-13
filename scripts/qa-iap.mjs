@@ -12,9 +12,11 @@
 //       가산이면 갱신마다 기간이 앞서 나가 공짜 기간이 쌓인다(0187 초안이 이랬다)
 //    ③ ★웹훅 재전송에 안전(같은 이벤트 두 번 = 결과 같음)
 //    ④ 업그레이드(매장 더 추가) / ⑤ 다운그레이드(초과분은 연장 안 함)
-//    ⑥ ★single 은 슬롯 경로를 안 탄다(다점포 누수 차단)
+//    ⑥ ★single 은 배정 루프를 안 탄다(다점포 누수 차단) — 단 **소비된** 흔적 슬롯 1개는 남긴다
 //    ⑦ 이중 청구 차단 — 활성 IAP 가 있으면 계좌이체 신고 거부
 //    ⑧ ★판매 스위치 fail-closed — 롤백 경로가 실제로 닫는가
+//    ⑨ ★★single → multi 업그레이드가 실제로 매장을 늘리는가 (2026-09-13 신설)
+//       초안은 single 이 흔적을 안 남겨 업그레이드가 **돈만 받고 아무것도 안 여는** 상태였다.
 //
 // 0187 미적용이면 A 만 돌고 B 는 SKIP(실패가 아니다).
 import { createClient } from '@supabase/supabase-js';
@@ -231,10 +233,42 @@ async function liveChecks() {
   const t1 = await paidUntilOf(T1);
   check('★⑥ single 구매 — 슬롯을 적립하지 않는다', r6.data?.granted === 0 && r6.data?.assigned === 0, JSON.stringify(r6.data));
   check('★★⑥ 플랜이 single 이다 (multi 면 다점포 기능이 새어 나간다)', t1?.plan === 'single', `plan=${t1?.plan}`);
-  const pslots = await svcSel(`store_slots?owner_id=eq.${P.uid}&select=id`);
-  check('★⑥ 이 계정엔 슬롯 행 자체가 없다', pslots.length === 0, `slots=${pslots.length}`);
+  // ★2026-09-13: single 도 **소비된** 슬롯 흔적 1개를 남긴다(⑨ 업그레이드가 이걸 찾는다).
+  //   중요한 것은 "미소비 슬롯이 0개"다 — 하나라도 미소비면 공짜 2호점이 생긴다.
+  const pslots = await svcSel(`store_slots?owner_id=eq.${P.uid}&select=id,source,consumed_at,consumed_unit_id`);
+  check('★⑥ single 은 흔적 슬롯 1개를 남긴다(정산 대사·업그레이드용)', pslots.length === 1 && pslots[0]?.source === 'iap', `slots=${pslots.length}`);
+  check('★★⑥ 그 슬롯은 처음부터 소비됨 — 공짜 2호점이 생기지 않는다',
+    pslots.length === 1 && !!pslots[0]?.consumed_at && pslots[0]?.consumed_unit_id === T1, JSON.stringify(pslots[0] ?? null));
+  const { error: eFree2 } = await P.c.rpc('create_store', { p_store_name: 'QA단일 2호점', p_industry: '카페·디저트', p_biz_no: null });
+  check('★★⑥ single 구독자는 2호점을 못 만든다', !!eFree2, eFree2?.message ?? '만들어져버림');
+  // 갱신을 한 번 더 돌려도 흔적이 두 개로 늘지 않는다(멱등).
+  await svcRpc('sync_iap_slots', { p_owner: P.uid, p_plan: 'single', p_count: 1, p_period_end: iso(days(60)) });
+  const pslots2 = await svcSel(`store_slots?owner_id=eq.${P.uid}&select=id`);
+  check('★⑥ single 갱신 — 흔적 슬롯이 또 쌓이지 않는다', pslots2.length === 1, `slots=${pslots2.length}`);
   const r6b = await svcRpc('sync_iap_slots', { p_owner: P.uid, p_plan: 'single', p_count: 2, p_period_end: end1 });
   check('★⑥ single + 2매장 조합은 거부된다', !r6b.ok, `status=${r6b.status}`);
+
+  // ── ⑨ ★single → multi 업그레이드 (2026-09-13 신설) ───────────────────────
+  //   초안은 single 이 슬롯 흔적을 안 남겨서, 여기서 ①이 연장 대상을 못 찾고 → 슬롯만 쌓이고
+  //   → assign_open_slots 는 **유료 single 매장을 대상에서 제외**해 배정 0 →
+  //   **돈은 냈는데 매장이 하나도 안 늘어나는** 상태로 끝났다. 그 회귀를 여기서 증명한다.
+  //   ★별도 계정으로 돈다 — ⑦(이중청구)이 P 의 활성 매장을 보기 때문에 여기서 매장을 늘리면 그쪽이 흔들린다.
+  const U = await signUp('QA인앱승급');
+  cleanup.push(U.c);
+  const { data: u1c } = await U.c.rpc('create_store', { p_store_name: 'QA승급 1호점', p_industry: '카페·디저트', p_biz_no: null });
+  const V1 = u1c?.[0]?.unit_id;
+  await svcRpc('sync_iap_slots', { p_owner: U.uid, p_plan: 'single', p_count: 1, p_period_end: end1 });
+  const end9 = iso(days(90));
+  const r9 = await svcRpc('sync_iap_slots', { p_owner: U.uid, p_plan: 'multi', p_count: 3, p_period_end: end9 });
+  check('★★⑨ single→multi — 쓰던 1호점을 연장 대상으로 잡는다(extended=1)', r9.data?.extended === 1, JSON.stringify(r9.data));
+  check('★★⑨ 부족분 2개만 적립한다(3개를 새로 쌓으면 버그)', r9.data?.granted === 2, JSON.stringify(r9.data));
+  const t9 = await paidUntilOf(V1);
+  check('★★⑨ 1호점이 multi 로 승격 — 다점포 기능이 열린다', t9?.plan === 'multi', `plan=${t9?.plan}`);
+  check('★⑨ 1호점 만료일 = 새 갱신일', sameTime(t9?.paid_until, end9), `${t9?.paid_until} vs ${end9}`);
+  const open9 = await svcSel(`store_slots?owner_id=eq.${U.uid}&consumed_at=is.null&select=id`);
+  check('★★⑨ 미소비 슬롯 2개 — 2·3호점을 실제로 만들 수 있다', open9.length === 2, `open=${open9.length}`);
+  const { data: c9, error: e9 } = await U.c.rpc('create_store', { p_store_name: 'QA승급 2호점', p_industry: '카페·디저트', p_biz_no: null });
+  check('★★⑨ 실제로 2호점이 만들어진다', !!c9?.[0]?.unit_id, e9?.message ?? c9?.[0]?.unit_id);
 
   // ── ⑦ 이중 청구 차단 ─────────────────────────────────────────────────────
   const ins = await svcPost('iap_subscriptions', {
