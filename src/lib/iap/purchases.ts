@@ -6,7 +6,13 @@
 // 결제 결과로 매장이 열리는 것은 **RevenueCat 웹훅 → sync_iap_slots** 경로다 —
 // 앱이 직접 DB 를 고치지 않는다(앱을 믿으면 위조 구매로 매장이 열린다).
 
-import Purchases, { LOG_LEVEL, type PurchasesPackage, type CustomerInfo } from 'react-native-purchases';
+import Purchases, {
+  LOG_LEVEL,
+  STORE_REPLACEMENT_MODE,
+  type PurchasesPackage,
+  type CustomerInfo,
+  type StoreProductChangeInfo,
+} from 'react-native-purchases';
 import { Platform } from 'react-native';
 import { IAP_ENTITLEMENT, parseIapProduct } from '@/lib/config/iap';
 
@@ -61,11 +67,40 @@ export async function fetchOffers(): Promise<IapOffer[]> {
 }
 
 /**
+ * Play 요금제 변경 정보(iOS 는 해당 없음 — 애플은 같은 구독 그룹 안의 갈아타기를 스토어가 알아서 한다).
+ *
+ * ★★넘기지 않으면 Play 는 **갈아타기가 아니라 구독을 하나 더 만든다** — 사장이 두 번 청구된다.
+ *   그래서 "지금 구독"이 있으면 반드시 채운다. 문자열을 우리가 조립하지 않고 RC 가 준 id 를 그대로 쓴다.
+ *
+ * ★"갈아탈 구독이 있나"를 **우리 서버 행이 아니라 스토어에 묻는다.** 서버 행은 웹훅이 늦으면 아직 비어 있는데,
+ *   그 사이에 사장이 다른 요금제를 고르면 "첫 구매"로 판정돼 구독이 두 개가 된다. 조회가 실패하면
+ *   구매를 **중단**한다 — 갈아타기인지 모르는 채로 사면 두 번 청구되는 쪽이 더 큰 사고다.
+ *
+ *   - 늘리기 = CHARGE_PRORATED_PRICE: 즉시 적용하고 **남은 기간의 차액만** 오늘 받는다. 결제일은 그대로.
+ *     Google 이 "더 비싼 등급으로 올릴 때" 공식 권장하는 모드이고 웹 SaaS 관행과도 같다(2026-09-18 사용자 결정).
+ *     애플은 같은 자리에서 "전액 결제 + 남은 기간 환불 + 결제일 초기화"를 한다 — 스토어가 하는 일이 다르므로
+ *     화면 문구도 갈린다(store-policy `UPGRADE_CREDIT`). ⚠️이 모드는 **올릴 때만** 쓸 수 있다.
+ *   - 줄이기 = DEFERRED: 다음 결제일에 바뀐다(애플과 같다 · 웹훅 PRODUCT_CHANGE=예고 → RENEWAL=확정).
+ *     ★DEFERRED 는 Play 콘솔에 **실시간 개발자 알림(RTDN)** 이 연결돼야 동작한다(RevenueCat 요구사항).
+ */
+async function playProductChange(downgrade: boolean): Promise<StoreProductChangeInfo | null> {
+  const cur = await currentEntitlement();
+  if (!cur.active || !cur.storeProductId) return null; // 첫 구매 — 갈아탈 구독이 없다
+  return {
+    oldProductIdentifier: cur.storeProductId,
+    replacementMode: downgrade ? STORE_REPLACEMENT_MODE.DEFERRED : STORE_REPLACEMENT_MODE.CHARGE_PRORATED_PRICE,
+  };
+}
+
+/**
  * 구매 또는 요금제 변경. **스토어 구독에는 수량이 없다** — "매장 더 추가"는 상위 요금제로 갈아타는 것이고,
  * 남은 기간 일할 정산은 스토어가 한다. 화면에는 그 사실을 드러내지 않는다.
+ *
+ * `downgrade` = 지금보다 적은 매장 수로 가는 것(화면이 이미 아는 판정을 그대로 받는다 — 여기서 다시 세지 않는다).
  */
-export async function purchaseOffer(offer: IapOffer): Promise<CustomerInfo> {
-  const { customerInfo } = await Purchases.purchasePackage(offer.pkg);
+export async function purchaseOffer(offer: IapOffer, opts?: { downgrade?: boolean }): Promise<CustomerInfo> {
+  const change = Platform.OS === 'android' ? await playProductChange(Boolean(opts?.downgrade)) : null;
+  const { customerInfo } = await Purchases.purchasePackage(offer.pkg, null, change);
   return customerInfo;
 }
 
@@ -83,12 +118,36 @@ export async function showManageSubscriptions(): Promise<void> {
   await Purchases.showManageSubscriptions();
 }
 
-/** 지금 스토어 구독이 살아 있는가(화면 표시용). 매장을 여는 판정은 서버가 한다. */
-export async function currentEntitlement(): Promise<{ active: boolean; productId: string | null }> {
-  if (!HAS_IAP) return { active: false, productId: null };
+export type IapCurrent = {
+  active: boolean;
+  /** 지금 스토어 구독이 여는 매장 수. 모르는 상품이면 0(“모르면 안 연다”). */
+  storeCount: number;
+  /** Play 요금제 변경에 넘길 "지금 구독" id(iOS 는 쓰지 않는다). */
+  storeProductId: string | null;
+};
+
+/**
+ * 지금 스토어 구독이 살아 있는가(화면 표시용). 매장을 여는 판정은 서버가 한다.
+ *
+ * ★같은 물음에 답이 세 군데 있고 **형태가 다 다르다** — 용도별로 골라 쓴다(2026-09-18 실측·문서 확인):
+ *   · 매장 수 = `productPlanIdentifier`(Play 는 요금제 id 에 들어 있다. 상품 id 는 `st_multi` 뿐이라
+ *     그것만 보면 몇 매장인지 영영 모른다). 애플은 그 필드가 null 이고 상품 id 하나에 다 들어 있다.
+ *   · 갈아탈 대상 id = `activeSubscriptions`(Play 는 `구독id:요금제id` 형태로 준다).
+ *     ★Play 요금제 변경은 **이 형태를 요구한다** — `st_multi` 만 넘기면 지금 구독을 못 찾아
+ *     갈아타기가 아니라 구독이 하나 더 생길 수 있다(RevenueCat 문서 Upgrades·Downgrades).
+ *     우리가 문자열을 조립하지 않고 SDK 가 준 값을 그대로 쓴다.
+ */
+export async function currentEntitlement(): Promise<IapCurrent> {
+  if (!HAS_IAP) return { active: false, storeCount: 0, storeProductId: null };
   const info = await Purchases.getCustomerInfo();
   const ent = info.entitlements.active[IAP_ENTITLEMENT];
-  return { active: Boolean(ent), productId: ent?.productIdentifier ?? null };
+  // 우리가 아는 상품인 구독만 갈아타기 대상으로 본다(모르는 구독을 옛 상품으로 넘기지 않는다).
+  const known = (info.activeSubscriptions ?? []).find((s) => parseIapProduct(s));
+  return {
+    active: Boolean(ent),
+    storeCount: parseIapProduct(ent?.productPlanIdentifier ?? ent?.productIdentifier ?? '')?.storeCount ?? 0,
+    storeProductId: known ?? ent?.productIdentifier ?? null,
+  };
 }
 
 /** 사용자가 취소 버튼을 눌렀을 뿐인가 — 이건 에러 토스트를 띄우면 안 된다. */

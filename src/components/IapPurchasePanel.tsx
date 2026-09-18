@@ -32,6 +32,7 @@ import { Appear, stagger } from '@/components/Appear';
 import { Collapse } from '@/components/Collapse';
 import { ScreenLoading } from '@/components/ScreenLoading';
 import { PLANS } from '@/lib/config/tiers';
+import { UPGRADE_CREDIT } from '@/lib/config/store-policy';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
@@ -202,7 +203,8 @@ export function IapPurchasePanel({
     }
     const slowTimer = setTimeout(() => setSlow(true), PURCHASE_SLOW_MS);
     try {
-      await purchaseOffer(offer);
+      // ★isDown 을 넘긴다 — Play 는 "갈아타기"라고 말해 주지 않으면 구독을 하나 더 만든다(두 번 청구).
+      await purchaseOffer(offer, { downgrade: isDown });
       if (isDown) {
         // 오늘 결제 없음 — 다음 결제일에 반영된다. 예고는 웹훅(PRODUCT_CHANGE)이 적어 주고 카드가 그린다.
         showToast(`다음 결제일부터 매장 ${offer.storeCount}개 요금이에요.`);
@@ -231,7 +233,9 @@ export function IapPurchasePanel({
     try {
       await restorePurchases();
       const ent = await currentEntitlement();
-      const n = ent.active ? (offers.find((o) => o.pkg.product.identifier === ent.productId)?.storeCount ?? 1) : 0;
+      // ★목록과 id 를 맞춰 보지 않는다 — Play 의 구독 id(st_multi)는 목록의 id(st_multi:multi-3-monthly)와
+      //   달라 매번 "산 이용권이 없어요"가 됐다. 매장 수 판정은 purchases 모듈 한 곳이다.
+      const n = ent.active ? ent.storeCount : 0;
       if (n > 0) {
         setBought(n);
         setDoneDismissed(false);
@@ -427,7 +431,10 @@ export function IapPurchasePanel({
             {isUp && (
               <>
                 <Text style={styles.note}>
-                  오늘부터 매장 {selected.storeCount}개예요. 남은 매장 {owned}개 기간의 요금은 애플이 돌려드려요. 다음 결제일은 오늘부터 한 달 뒤예요.
+                  오늘부터 매장 {selected.storeCount}개예요.{' '}
+                  {UPGRADE_CREDIT === 'refund'
+                    ? `남은 매장 ${owned}개 기간의 요금은 애플이 돌려드려요. 다음 결제일은 오늘부터 한 달 뒤예요.`
+                    : '오늘은 남은 기간에 해당하는 차액만 결제돼요. 다음 결제일은 그대로예요.'}
                 </Text>
                 <Pressable
                   onPress={() => setDetailOpen((v) => !v)}
@@ -444,13 +451,27 @@ export function IapPurchasePanel({
                     <Text style={styles.detailBody}>
                       예를 들어 9월 13일에 매장 1개{one ? `(${one.priceString})` : ''}로 시작했다가 9월 23일에 매장 2개로 늘리면,
                     </Text>
-                    <Text style={styles.detailBody}>
-                      · 그 자리에서 매장 2개 요금{two ? `(${two.priceString})` : ''}을 결제하고, 오늘부터 매장 2개를 쓸 수 있어요.
-                    </Text>
-                    <Text style={styles.detailBody}>
-                      · 매장 1개 요금 중 아직 안 쓴 20일치는 애플이 며칠 안에 결제 수단으로 돌려드려요.
-                    </Text>
-                    <Text style={styles.detailBody}>· 다음 결제일은 10월 23일이 돼요. 그 뒤로는 매달 이날 결제돼요.</Text>
+                    {UPGRADE_CREDIT === 'refund' ? (
+                      <>
+                        <Text style={styles.detailBody}>
+                          · 그 자리에서 매장 2개 요금{two ? `(${two.priceString})` : ''}을 결제하고, 오늘부터 매장 2개를 쓸 수 있어요.
+                        </Text>
+                        <Text style={styles.detailBody}>
+                          · 매장 1개 요금 중 아직 안 쓴 20일치는 애플이 며칠 안에 결제 수단으로 돌려드려요.
+                        </Text>
+                        <Text style={styles.detailBody}>· 다음 결제일은 10월 23일이 돼요. 그 뒤로는 매달 이날 결제돼요.</Text>
+                      </>
+                    ) : (
+                      <>
+                        <Text style={styles.detailBody}>
+                          · 오늘은 매장 2개 요금{two ? `(${two.priceString})` : ''} 전액이 아니라, 남은 20일치의 차액만 결제돼요.
+                        </Text>
+                        <Text style={styles.detailBody}>· 오늘부터 매장 2개를 쓸 수 있어요.</Text>
+                        <Text style={styles.detailBody}>
+                          · 다음 결제일은 10월 13일 그대로예요. 그날부터 매장 2개 요금이 결제돼요.
+                        </Text>
+                      </>
+                    )}
                     <Text style={styles.detailBody}>
                       결국 9월 13일부터 23일까지 열흘은 매장 1개 값만 내신 거예요. 손해 보는 금액은 없어요.
                     </Text>
