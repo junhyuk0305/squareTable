@@ -575,6 +575,10 @@ export const useSessionStore = create<SessionState>((set, get) => ({
         ? '생년월일을 확인할 수 없어요. 생년월일 8자리를 다시 확인해주세요.'
         : /not_authenticated/.test(error.message)
         ? '로그인이 만료됐어요. 다시 로그인해 주세요.'
+        // 0204: 번호 충돌을 서버가 조용히 null 로 덮어쓰던 것을 named 에러로 바꿨다(사전검사와 UPDATE
+        // 사이의 레이스에서만 도달한다). 화면의 사전검사 문구와 같은 말로 안내한다.
+        : /phone_taken/.test(error.message)
+        ? `이미 ${role === 'owner' ? '사장' : '직원'}으로 가입된 번호예요. 다른 번호를 입력해 주세요.`
         : friendlyError(error.message, '프로필 저장에 실패했어요. 잠시 후 다시 시도해 주세요.');
       return { error: msg };
     }

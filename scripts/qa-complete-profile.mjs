@@ -105,7 +105,9 @@ try {
   const { data: ji, error: jErr } = await staff.rpc('join_by_invite', { p_code: code });
   check('C3 완성 후 join_by_invite 성공(트랩 해제)', !jErr && !!(Array.isArray(ji) ? ji[0] : ji)?.store_name, jErr?.message ?? '');
 
-  // ── D: 전화번호 중복 → 예외 없이 phone=null 보류(계정 생존) ─────────────────
+  // ── D: 전화번호 중복 → phone_taken 으로 거부(0204) ─────────────────
+  // 0204 이전엔 '예외 없이 phone=null 보류(계정 생존)' 였다. 그 분기가 조용한 유실 경로여서
+  // (사용자는 저장된 줄 알고, 이미 저장돼 있던 번호까지 null 로 덮였다) 명시적 거부로 바꿨다.
   const dupPhone = `0109${s.slice(0, 7)}`;
   const d1 = mk();
   const d1id = await signUpOAuthLike(d1, `qa_cp_d1_${s}@example.com`, 'CPdup1');
@@ -115,9 +117,9 @@ try {
   const d2id = await signUpOAuthLike(d2, `qa_cp_d2_${s}@example.com`, 'CPdup2');
   cleanup.push(d2);
   const { error: dupErr } = await d2.rpc('complete_profile', { p_name: 'CPdup2', p_phone: dupPhone, p_birth_date: '1993-06-06' });
-  check('D1 중복 번호 완성이 예외를 던지지 않음(계정 생존)', !dupErr, dupErr?.message ?? '');
+  check('D1 중복 번호는 phone_taken 으로 거부(0204)', /phone_taken/.test(dupErr?.message ?? ''), dupErr?.message ?? '(예외 없음)');
   const { data: pd2 } = await d2.from('profiles').select('phone').eq('id', d2id).maybeSingle();
-  check('D2 중복 번호는 보류(phone=null)', pd2?.phone == null, `phone=${pd2?.phone}`);
+  check('D2 중복 번호는 기록되지 않음', pd2?.phone == null, `phone=${pd2?.phone}`);
 
   // ── E: 완성화면의 실제 순서(사장) — create_store 가 생년월일을 직접 기록하며 성공 → complete_profile ──
   // 결손(birth_date=null) 프로필에 create_store(p_birth_date=지정) 를 바로 불러도 통과해야 한다(트랩 없음).
@@ -162,9 +164,18 @@ try {
   const fOwner2Id = await signUpOAuthLike(fOwner2, `qa_cp_f3_${s}@example.com`, 'CProleO2');
   cleanup.push(fOwner2);
   const { error: fOwner2Err } = await fOwner2.rpc('complete_profile', { p_name: 'CProleO2', p_phone: rolePhone, p_birth_date: '1987-03-03', p_role: 'owner' });
-  check('F5 같은 role(owner) 재사용 시도는 예외 없이 phone=null 보류', !fOwner2Err, fOwner2Err?.message ?? '');
+  check('F5 같은 role(owner) 재사용 시도는 phone_taken 으로 거부(0204)', /phone_taken/.test(fOwner2Err?.message ?? ''), fOwner2Err?.message ?? '(예외 없음)');
   const { data: pF3 } = await fOwner2.from('profiles').select('phone').eq('id', fOwner2Id).maybeSingle();
-  check('F6 같은 role 중복은 여전히 차단(phone=null)', pF3?.phone == null, `phone=${pF3?.phone}`);
+  check('F6 같은 role 중복은 여전히 차단(기록 안 됨)', pF3?.phone == null, `phone=${pF3?.phone}`);
+
+  // ── G: 0204 회귀 — 충돌이 '이미 저장된 내 번호'를 파괴하지 않는다 ──────────────
+  // 0204 이전: 충돌 분기가 phone=null 로 UPDATE 해서, 남의 번호를 잘못 넣은 재제출 한 번에
+  // 본인 번호가 사라졌다(무음 데이터 유실). 이제는 롤백되므로 원래 번호가 그대로 남아야 한다.
+  // fJunior(signup_role=junior)가 d1(역시 junior)이 쓰는 dupPhone 을 시도한다.
+  const { error: gErr } = await fJunior.rpc('complete_profile', { p_name: 'CProleJ', p_phone: dupPhone, p_birth_date: '1986-02-02', p_role: 'junior' });
+  check('G1 남의 번호로 재제출하면 phone_taken 으로 거부', /phone_taken/.test(gErr?.message ?? ''), gErr?.message ?? '(예외 없음)');
+  const { data: pG } = await fJunior.from('profiles').select('phone').eq('id', fJuniorId).maybeSingle();
+  check('G2 거부돼도 원래 내 번호는 보존됨(파괴 없음)', normalizePhone(pG?.phone) === rolePhone, `phone=${pG?.phone}`);
 } catch (e) {
   fail++; console.log('  FAIL exception:', e.message);
 } finally {
