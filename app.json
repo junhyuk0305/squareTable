@@ -23,6 +23,8 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
+      "allowBackup": false,
+      "blockedPermissions": ["android.permission.SYSTEM_ALERT_WINDOW"],
       "package": "com.dochackchack.app",
       "googleServicesFile": "./google-services.json"
     },

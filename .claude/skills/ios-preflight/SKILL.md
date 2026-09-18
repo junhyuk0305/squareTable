@@ -22,6 +22,7 @@ description: iOS(아이폰)에서만 조용히 틀리는 지점을 실기기·�
 | 웹 ↔ 네이티브 갈림길 일반(KAV 공용규칙·inset 이중적용·Modal back·hover·persist-taps) | `native-audit` |
 | **안드로이드 층(HWUI) 렌더링**(opacity+elevation·오프스크린 합성) | `native-audit` |
 | **iOS만의 축 7가지**(아래 §핵심) | **이 스킬** |
+| **안드로이드 OS 계약**(API 36 강제·글꼴 배율·시스템바·FCM·최종 매니페스트·Play 출고) | `android-preflight` |
 | 의도한 플랫폼 분기의 설계·배치 | `/platform-split` |
 | 출고 가능 여부(태그·미커밋·EAS 환경변수) | `npm run native:gate` |
 

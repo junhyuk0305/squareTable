@@ -72,6 +72,7 @@ replace-slide · header-flash · **kb-inset-double**(신설). fade-elevation·re
 | .web 분기 짝·번들 생성 | `native:preflight` | EAS 빌드 전 1회 |
 | 460px 레이아웃·터치 48dp | `qa:quiz-ui` (웹 브라우저) | 웹 쪽 보증으로 인정 |
 | **KAV·inset·Modal·제스처·애니·층 갈림길** | **이 감사** | 1·2단계 |
+| 안드로이드 **OS 계약·기기 다양성·Play 출고**(API 36·글꼴 배율·FCM·권한·서명) | `/android-preflight` | 이 감사 범위 아님 — 안드로이드 빌드·업로드 전이면 그쪽 |
 | **의도한** 플랫폼 차이의 설계·배치·예외표 등록 | `/platform-split` | 이 감사 범위 아님 — 새 분기를 만드는 작업이면 그쪽 |
 
 ### 4단계 — 보고
