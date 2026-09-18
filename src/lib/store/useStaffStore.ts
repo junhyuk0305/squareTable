@@ -12,6 +12,8 @@ import { subscribeDebounced } from '@/lib/store/realtimeSync';
 import { optimisticRemove } from '@/lib/store/crudHelpers';
 import { useSyncStore } from '@/lib/store/useSyncStore';
 import { useSessionStore } from '@/lib/store/useSessionStore';
+import { router } from 'expo-router';
+import { showUpgradeHint } from '@/lib/config/store-policy';
 
 const demoOwner = (usersData as any).owner as Owner;
 const demoStaff = (usersData as any).staff as Junior[];
@@ -108,11 +110,14 @@ export const useStaffStore = create<StaffState>((set, get) => ({
       if (ok) get().hydrate();
       else {
         set({ pending: before });
-        useSyncStore.getState().noteError(
-          code === 'staff_limit'
-            ? `무료 요금제는 직원 ${PLANS.free.maxStaff}명까지 승인할 수 있어요. 요금제를 올리면 더 승인할 수 있어요.`
-            : '승인에 실패했어요. 다시 시도해 주세요.',
-        );
+        const limitMsg = `무료 요금제는 직원 ${PLANS.free.maxStaff}명까지 승인할 수 있어요.`;
+        // 결제 화면으로 갈 수 있는 사장에게만 길을 준다(매니저·직원은 요금제를 못 바꾼다 · 판정 store-policy).
+        // ★행 이름이 채널마다 달라(웹 '요금제' · iOS '이용권') 문구로 위치를 말하지 않고 버튼으로 보낸다.
+        if (code === 'staff_limit' && showUpgradeHint(useSessionStore.getState())) {
+          showToast(`${limitMsg} 바꾸면 더 승인할 수 있어요.`, undefined, { label: '바꾸러 가기', onPress: () => router.push('/billing') });
+          return;
+        }
+        useSyncStore.getState().noteError(code === 'staff_limit' ? limitMsg : '승인에 실패했어요. 다시 시도해 주세요.');
       }
     });
   },

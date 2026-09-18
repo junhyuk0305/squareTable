@@ -13,6 +13,7 @@ import {
   enableNativePush,
 } from '@/lib/push/nativepush';
 import { canManage } from '@/lib/utils/roles';
+import { SHOW_BILLING } from '@/lib/config/store-policy';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Space, SCREEN_GUTTER } from '@/lib/theme/layout';
@@ -101,7 +102,8 @@ export function NotificationPermissionSheet() {
   };
 
   const lines = canManage(role)
-    ? ['직원이 모르는 걸 물어보면 바로', '새 제안·합류 신청이 오면 바로', '교대 요청·입금 확인 결과']
+    ? // 입금 확인은 웹 결제 채널에만 있다 — 앱에서 말하지 않는다(store-policy SHOW_BILLING).
+      ['직원이 모르는 걸 물어보면 바로', '새 제안·합류 신청이 오면 바로', SHOW_BILLING ? '교대 요청·입금 확인 결과' : '교대 요청이 오면 바로']
     : ['사장님이 내 질문에 답하면 바로', '새 공지가 올라오면 바로', '내 근무·교대 소식'];
 
   return (

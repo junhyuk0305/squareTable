@@ -36,9 +36,10 @@ const PRODUCTS: Record<string, { plan: 'single' | 'multi'; count: number }> = {
   multi_5_monthly: { plan: 'multi', count: 5 },
 };
 
-// Play 는 `구독id:요금제id`(st_multi:multi_3_monthly), App Store 는 요금제 id 만 준다 — 콜론 뒤만 본다.
+// Play 는 `구독id:요금제id`(st_multi:multi-3-monthly), App Store 는 요금제 id 만 준다 — 콜론 뒤만 본다.
+// ★Play 기본 요금제 id 는 밑줄을 못 써서 하이픈이다(콘솔 규칙) → 밑줄로 바꿔 위 표를 본다.
 function parseProduct(raw: string) {
-  const id = (raw ?? '').trim().split(':').pop() ?? '';
+  const id = ((raw ?? '').trim().split(':').pop() ?? '').replace(/-/g, '_');
   return PRODUCTS[id] ? { id, ...PRODUCTS[id] } : null;
 }
 

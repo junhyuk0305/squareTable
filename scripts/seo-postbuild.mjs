@@ -15,7 +15,7 @@
 //
 // 도메인은 아래 SITE_URL 단일 상수(Vercel 환경변수 SEO_SITE_URL 로 override 가능).
 
-import { readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { LEGAL_PAGES, EFFECTIVE_DATE, OPERATOR, businessLine } from './legal-content.mjs';
@@ -245,13 +245,25 @@ function labelTables(html) {
   });
 }
 
+// ★두 벌을 낸다(2026-09-14).
+//   웹 판  /<slug>      — 사람·크롤러용.
+//   앱 판  /app/<slug>  — **앱이 여는 주소.** 푸터에 같은 판의 문서 링크만 두고 홈·요금 링크를 절대 두지 않는다.
+//   웹 판에 '홈으로'를 되살려도(앱 판을 여는 빌드가 승인된 뒤) 앱에서 결제로 가는 길이 생기지 않게 둘을 가른다.
+//   앱 판은 색인하지 않는다(noindex) — canonical 은 웹 판.
+const LEGAL_VARIANTS = [
+  { dir: '', robots: 'index,follow' },
+  { dir: 'app', robots: 'noindex,follow' },
+];
+
 function writeLegalPages() {
-  for (const page of LEGAL_PAGES) {
+  for (const { dir } of LEGAL_VARIANTS) if (dir) mkdirSync(resolve(DIST, dir), { recursive: true });
+  for (const [{ dir, robots }, page] of LEGAL_VARIANTS.flatMap((v) => LEGAL_PAGES.map((p) => [v, p]))) {
+    const base = dir ? `/${dir}` : '';
     // 푸터의 다른 문서 링크 — 심사원이 한 페이지에서 나머지 고지에 도달할 수 있어야 한다.
-    // ★'홈으로' 링크는 두지 않는다(2026-09-14) — iOS 앱이 이 페이지들을 열고, 홈 → /pricing(웹 계좌이체)이
+    // ★'홈으로' 링크는 두지 않는다(2026-09-14) — iOS 앱(빌드 7)이 웹 판을 열고, 홈 → /pricing(웹 계좌이체)이
     //   클릭 두 번이면 앱 밖 결제로 가는 길이 된다(App Review 3.1.1(a), 한국 스토어프론트는 아웃링크 예외 없음).
     const siblings = LEGAL_PAGES.filter((p) => p.slug !== page.slug)
-      .map((p) => `<a href="${SITE_URL}/${p.slug}">${esc(p.title)}</a>`)
+      .map((p) => `<a href="${SITE_URL}${base}/${p.slug}">${esc(p.title)}</a>`)
       .join(' · ');
     const html = `<!DOCTYPE html>
 <html lang="ko">
@@ -260,7 +272,7 @@ function writeLegalPages() {
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>${esc(page.title)} — ${BRAND}</title>
     <meta name="description" content="${esc(page.description)}" />
-    <meta name="robots" content="index,follow" />
+    <meta name="robots" content="${robots}" />
     <link rel="canonical" href="${SITE_URL}/${page.slug}" />
     <meta property="og:type" content="article" />
     <meta property="og:site_name" content="${BRAND}" />
@@ -306,8 +318,8 @@ ${labelTables(page.html)}
   </body>
 </html>
 `;
-    writeFileSync(resolve(DIST, `${page.slug}.html`), html, 'utf8');
-    console.log(`[seo] dist/${page.slug}.html 생성 (${page.title})`);
+    writeFileSync(resolve(DIST, dir, `${page.slug}.html`), html, 'utf8');
+    console.log(`[seo] dist${base}/${page.slug}.html 생성 (${page.title})`);
   }
 }
 

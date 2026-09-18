@@ -109,26 +109,44 @@ async function svcPost(path, body) {
   return { ok: res.ok, status: res.status, data: Array.isArray(j) ? j[0] : j };
 }
 
-const s = String(Date.now()).slice(-9);
-const pw = 'Test1234!qa';
-let seq = 0;
+const s = String(Date.now()).slice(-9); // 이번 실행의 거래 id 꼬리(qa_${s}) — 그 행은 다음 실행의 초기화가 지운다
 const seededPhones = [];
-const cleanup = [];
-async function signUp(name) {
-  const c = mk();
+
+// ★고정 계정 4개를 재사용한다(2026-09-14 사용자 결정). 예전엔 매 실행 새로 가입하고 끝에 탈퇴시켜
+//   가입 레이트리밋에 걸리고 탈퇴 계정이 쌓였다. 시나리오마다 **다른 사장**이 깨끗한 상태로 시작해야 하므로
+//   (⑦ 이 P 의 활성 매장을 본다 등) 한 계정으로 겸하지 않는다.
+//   처음 한 번만 가입 → 이후엔 로그인하고 그 계정의 매장·슬롯·구독 행을 비운 뒤 시작한다. 끝나도 계정은 지우지 않는다.
+const FIXED_PW = 'QaIap1234!';
+const FIXED_OWNER = /^qa\.iap\.[1-4]@example\.com$/; // 초기화(삭제)가 이 네 계정 밖으로 새지 않게 막는다
+let seq = 0;
+async function fixedOwner(name) {
   seq += 1;
-  const phone = `0107${String((Number(s) + seq * 31) % 10000000).padStart(7, '0')}`;
+  const email = `qa.iap.${seq}@example.com`;
+  const phone = `0109999010${seq}`;
+  if (!FIXED_OWNER.test(email)) throw new Error(`고정 계정 범위 밖: ${email}`);
   await seedVerifiedPhones(URL, SERVICE, [phone]);
   seededPhones.push(phone);
-  const email = `qa_iap_${s}_${seq}@example.com`;
-  for (let a = 0; a < 6; a++) {
-    const { data, error } = await c.auth.signUp({ email, password: pw, options: { data: { name, role: 'owner', phone, birth_date: '1990-01-15' } } });
-    if (!error && data.session) return { c, uid: data.user.id, email };
-    if (!/rate limit/i.test(error?.message ?? '')) throw new Error(`signUp: ${error?.message}`);
+  const c = mk();
+  let { data } = await c.auth.signInWithPassword({ email, password: FIXED_PW });
+  // 최초 1회만 가입한다. 레이트리밋이면 기다렸다가 다시.
+  for (let a = 0; a < 6 && !data?.user; a++) {
+    const r = await c.auth.signUp({ email, password: FIXED_PW, options: { data: { name, role: 'owner', phone, birth_date: '1990-01-15' } } });
+    if (!r.error && r.data.session) { data = r.data; break; }
+    if (!/rate limit/i.test(r.error?.message ?? '')) throw new Error(`signUp ${email}: ${r.error?.message}`);
     info(`레이트리밋 — ${20 * (a + 1)}s 대기`);
-    await new Promise((r) => setTimeout(r, 20000 * (a + 1)));
+    await new Promise((res) => setTimeout(res, 20000 * (a + 1)));
   }
-  throw new Error('signUp 레이트리밋 소진');
+  if (!data?.user) throw new Error(`고정 계정 준비 실패: ${email}`);
+  await resetOwner(data.user.id);
+  return { c, uid: data.user.id, email };
+}
+// 그 사장의 IAP 흔적과 매장을 비운다(매장의 자식 데이터는 units cascade). 계정·프로필 행은 남긴다.
+async function resetOwner(uid) {
+  for (const path of [`iap_release_choice?owner_id=eq.${uid}`, `store_slots?owner_id=eq.${uid}`, `iap_subscriptions?owner_id=eq.${uid}`, `units?owner_id=eq.${uid}`]) {
+    const res = await fetch(`${URL}/rest/v1/${path}`, { method: 'DELETE', headers: SH });
+    if (!res.ok) throw new Error(`초기화 실패 ${path}: ${res.status} ${await res.text()}`);
+  }
+  await svcPatch(`profiles?id=eq.${uid}`, { unit_id: null, active_unit_id: null, pending_unit_id: null });
 }
 
 const iso = (d) => new Date(d).toISOString();
@@ -180,8 +198,7 @@ async function liveChecks() {
   await svcPatch('app_config?key=eq.iap_enabled', { value: originalIapEnabled ?? 'false', updated_at: iso(Date.now()) });
 
   // ── 셋업: 사장 1명 + 1호점(무료) ─────────────────────────────────────────
-  const O = await signUp('QA인앱사장');
-  cleanup.push(O.c);
+  const O = await fixedOwner('QA인앱사장');
   const { data: c1 } = await O.c.rpc('create_store', { p_store_name: 'QA인앱 1호점', p_industry: '카페·디저트', p_biz_no: null });
   const S1 = c1?.[0]?.unit_id;
   check('셋업 1호점 생성', !!S1, S1);
@@ -230,8 +247,7 @@ async function liveChecks() {
   check('★⑤ 초과분(2호점)은 그대로 — 다음 갱신일에 자연 만료', sameTime(b5?.paid_until, end2), `${b5?.paid_until}`);
 
   // ── ⑥ single 은 슬롯 경로를 안 탄다(다점포 누수) ─────────────────────────
-  const P = await signUp('QA인앱단일');
-  cleanup.push(P.c);
+  const P = await fixedOwner('QA인앱단일');
   const { data: p1c } = await P.c.rpc('create_store', { p_store_name: 'QA단일 1호점', p_industry: '카페·디저트', p_biz_no: null });
   const T1 = p1c?.[0]?.unit_id;
   const r6 = await svcRpc('sync_iap_slots', { p_owner: P.uid, p_plan: 'single', p_count: 1, p_period_end: end1 });
@@ -258,8 +274,7 @@ async function liveChecks() {
   //   → assign_open_slots 는 **유료 single 매장을 대상에서 제외**해 배정 0 →
   //   **돈은 냈는데 매장이 하나도 안 늘어나는** 상태로 끝났다. 그 회귀를 여기서 증명한다.
   //   ★별도 계정으로 돈다 — ⑦(이중청구)이 P 의 활성 매장을 보기 때문에 여기서 매장을 늘리면 그쪽이 흔들린다.
-  const U = await signUp('QA인앱승급');
-  cleanup.push(U.c);
+  const U = await fixedOwner('QA인앱승급');
   const { data: u1c } = await U.c.rpc('create_store', { p_store_name: 'QA승급 1호점', p_industry: '카페·디저트', p_biz_no: null });
   const V1 = u1c?.[0]?.unit_id;
   await svcRpc('sync_iap_slots', { p_owner: U.uid, p_plan: 'single', p_count: 1, p_period_end: end1 });
@@ -319,8 +334,7 @@ async function liveChecks() {
     check('★0196 적용됨(apply_iap_event 존재)', false, 'PGRST202 — 0196 를 적용해라');
     return;
   }
-  const W = await signUp('QA인앱예고');
-  cleanup.push(W.c);
+  const W = await fixedOwner('QA인앱예고');
   const txn = `qa_ev_${s}`;
   const ev = (type, productId, plan, count, end, extra = {}) => svcRpc('apply_iap_event', {
     p_owner: W.uid, p_platform: 'appstore', p_txn: txn, p_type: type, p_product_id: productId,
@@ -428,7 +442,6 @@ async function main() {
 main()
   .catch((e) => { console.error('\n✗ 중단:', e.message); fail++; })
   .finally(async () => {
-    for (const c of cleanup) { try { await c.rpc('delete_my_account'); } catch { /* */ } }
     try { await cleanupSeededPhones(URL, SERVICE, seededPhones); } catch { /* */ }
     if (originalTrialDays !== null) {
       try { await setSignupTrialDays(originalTrialDays); }

@@ -136,7 +136,8 @@ function BillingBody() {
   // ★진입 파라미터(0142 /downgrade → 여기) — 앞 화면에서 이미 고른 요금제·매장수를 실어 온다.
   //   여기서 다시 고르게 하면 그 화면에서 한 결정이 버려진다. 값 검증은 여기서 하고(위조 URL),
   //   금액 재계산은 서버(payment_claim_amount)가 하므로 파라미터로 금액이 바뀌지는 않는다.
-  const params = useLocalSearchParams<{ plan?: string; stores?: string }>();
+  // intent=add-store — 매장 추가(stores.tsx)에서 왔다. 이용권 기본 제시를 가진 매장 +1 로.
+  const params = useLocalSearchParams<{ plan?: string; stores?: string; intent?: string }>();
   const paramPlan: PlanId | null = params.plan === 'single' || params.plan === 'multi' ? params.plan : null;
   const paramStores = Math.min(Math.max(Number(params.stores) || 0, 0), 15);
 
@@ -220,8 +221,10 @@ function BillingBody() {
   const needsClaims = isOwner && SHOW_BILLING;
   const ready = (!needsClaims || claimsLoaded) && (!manages || seatLoaded) && (!isOwner || iapLoaded);
 
-  const recheck = async () => {
-    setBusy(true);
+  // quiet = 이용권 패널이 결제·복원 뒤 반영을 기다리며 부르는 새로고침(5초마다). 토스트를 내지 않는다 —
+  //   "현재 ○○ 요금제예요"가 결과 토스트("이 계정으로 산 이용권이 없어요" 등)를 1초 안에 덮었다(2026-09-14).
+  const recheck = async (quiet = false) => {
+    if (!quiet) setBusy(true);
     await refreshMembership();
     if (isOwner) {
       // 구독 카드는 plan 과 별개로 바뀐다(줄이기 예고·해지 예약은 plan 을 안 건드린다) — 같이 당긴다.
@@ -229,7 +232,7 @@ function BillingBody() {
       setIapSub(sub ?? null);
       setReleaseChoice(choice ?? []);
     }
-    setBusy(false);
+    if (!quiet) setBusy(false);
     // 활성화됐으면 게이트가 자동으로 화면을 넘긴다. 아니면 그대로 안내가 유지된다.
     if (!useSessionStore.getState().unitId) return;
     const v = deriveSubscription({
@@ -241,13 +244,14 @@ function BillingBody() {
     // ★문구가 채널로 갈린다. 앱(스토어 인앱결제) 경로에 "입금 확인"을 띄우면 우리가 팔지도 않는
     //   계좌이체를 앱 안에서 말하게 된다 — 사실과도 다르고 스토어 규정상으로도 둘 곳이 아니다.
     if (!v.entitled) {
+      if (quiet) return;
       return showToast(
         SHOW_BILLING ? '아직 활성화 전이에요. 입금 확인 후 반영돼요.' : '아직 반영 전이에요. 잠시 후 다시 확인해 주세요.',
       );
     }
     // 페이월 모드에서만 앱으로 진입시킨다. 자발 방문자는 화면에 남아 현재 요금제를 확인한다(뒤로가기로 나감).
     if (!entitledAtMount) return router.replace(manages ? '/owner/dashboard' : '/junior/home');
-    showToast(`현재 ${PLANS[useSessionStore.getState().plan].name} 요금제예요.`);
+    if (!quiet) showToast(`현재 ${PLANS[useSessionStore.getState().plan].name} 요금제예요.`);
   };
 
   const copy = (label: string, value: string) => {
@@ -442,18 +446,19 @@ function BillingBody() {
               ★소유 매장 수를 넘겨 기본 선택을 맞춘다 — 이미 아는 것을 다시 묻지 않는다. */}
           {selling && (
             <IapPurchasePanel
-              onChanged={recheck}
+              onChanged={() => recheck(true)}
               ownedStores={stores
                 .filter((st) => st.role === 'owner' && !lockedUnits.includes(st.unit_id))
                 .map((st) => ({ unit_id: st.unit_id, store_name: st.store_name }))}
               subscription={iapSub}
               releaseChoice={releaseChoice}
+              wantMore={params.intent === 'add-store'}
             />
           )}
           <Appear delay={stagger(4)}>
           <Pressable
             disabled={busy}
-            onPress={recheck}
+            onPress={() => void recheck()}
             style={({ pressed }) => [styles.ghost, pressed && { opacity: 0.7 }, busy && { opacity: 0.6 }]}
           >
             {busy ? <ActivityIndicator color={InkColors.ink2} /> : <Text style={styles.ghostText}>이용 상태 새로고침</Text>}
@@ -885,7 +890,7 @@ function BillingBody() {
         )}
 
         <Appear delay={stagger(7)}>
-        <Pressable disabled={busy} onPress={recheck} style={({ pressed }) => [styles.ghost, pressed && { opacity: 0.7 }, busy && { opacity: 0.6 }]}>
+        <Pressable disabled={busy} onPress={() => void recheck()} style={({ pressed }) => [styles.ghost, pressed && { opacity: 0.7 }, busy && { opacity: 0.6 }]}>
           {busy ? <ActivityIndicator color={InkColors.ink2} /> : <Text style={styles.ghostText}>이용 상태 새로고침</Text>}
         </Pressable>
         </Appear>

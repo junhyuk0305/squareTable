@@ -19,7 +19,7 @@ export async function fetchOffers(): Promise<IapOffer[]> {
   return [];
 }
 
-export async function purchaseOffer(_offer: IapOffer): Promise<CustomerInfo> {
+export async function purchaseOffer(_offer: IapOffer, _opts?: { downgrade?: boolean }): Promise<CustomerInfo> {
   throw new Error('iap_not_available_on_web');
 }
 
@@ -30,8 +30,10 @@ export async function restorePurchases(): Promise<CustomerInfo> {
 // 웹에는 스토어 구독 관리 창이 없다 — 웹 구독은 billing.tsx 의 계좌이체/PG 표면이 맡는다.
 export async function showManageSubscriptions(): Promise<void> {}
 
-export async function currentEntitlement(): Promise<{ active: boolean; productId: string | null }> {
-  return { active: false, productId: null };
+export type IapCurrent = { active: boolean; storeCount: number; storeProductId: string | null };
+
+export async function currentEntitlement(): Promise<IapCurrent> {
+  return { active: false, storeCount: 0, storeProductId: null };
 }
 
 export function isUserCancelled(_e: unknown): boolean {

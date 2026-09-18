@@ -103,7 +103,17 @@ function purchasePathIn(url, html) {
   // 법률 문서는 계좌·결제를 **서술**한다 → 행동 유도 문구만 본다.
   const words = isLegal ? ['결제하기', '구독하기', '카드 등록'] : ['계좌번호', '무통장', '입금 계좌', '입금해', '결제하기', '구독하기', '카드 등록'];
   for (const w of words) if (text.includes(w)) hits.push(`본문에 "${w}"`);
-  return hits;
+  // ★2026-09-14 사각지대 ① — 법률 문서의 결제 서술을 통째로 빼서 **요금 페이지 주소**와 **입금 절차**를 못 잡았다
+  //   (09-13 약관 제11조의 "웹(https://dochackchack.com/pricing)"이 그대로 통과했다).
+  //   오탐 기준: 서술(허용) = "계좌이체 방식으로 결제한다"·"계좌번호를 수집하지 않는다" 같은 사실 고지.
+  //             길(🔴)   = 요금·결제 페이지 **주소**(링크가 아니어도 적어 두면 찾아간다) · 계좌번호 · 입금하라는 **절차**.
+  if (isLegal) {
+    for (const m of text.matchAll(/\S*\/(pricing|plans|billing|checkout)(?![\w-])/gi)) hits.push(`본문에 요금·결제 페이지 주소 "${m[0]}"`);
+    for (const w of ['계좌로 입금', '입금해 주', '입금해주', '입금하시면', '아래 계좌']) if (text.includes(w)) hits.push(`본문에 입금 절차 "${w}"`);
+    const acct = text.match(/(계좌|입금)[^.。]{0,30}?\d{2,6}-\d{2,6}-\d{2,8}/);
+    if (acct) hits.push(`본문에 계좌번호 "${acct[0]}"`);
+  }
+  return [...new Set(hits)]; // 같은 앵커가 여러 번 나오는 페이지(메뉴·푸터)에서 한 줄만 낸다
 }
 
 if (outlinks.size > 0) {
@@ -112,18 +122,45 @@ if (outlinks.size > 0) {
       add('ℹ️', loc, 'rev-outlink', '3.1.1', `앱에서 이 페이지를 연다: ${url} — 이 페이지(와 거기서 다시 나가는 링크)에 결제 경로가 없어야 한다. 자동 확인: --fetch`);
     }
   } else {
+    // --origin <주소>: 우리 사이트 주소를 이 주소로 바꿔 받는다 — 배포 **전에** 로컬 빌드(dist)를 검사할 때(예: npx serve dist).
+    const originArg = process.argv.includes('--origin') ? process.argv[process.argv.indexOf('--origin') + 1]?.replace(/\/+$/, '') : null;
+    const fetchUrl = (u) => (originArg && SITE_ORIGIN && u.startsWith(SITE_ORIGIN) ? originArg + u.slice(SITE_ORIGIN.length) : u);
+    const pages = new Map(); // 받은 주소 → html(null = 실패). 2단 경로에서 같은 페이지를 다시 받지 않는다.
+    const getPage = (u) => {
+      if (!pages.has(u)) pages.set(u, fetch(u, { redirect: 'follow', signal: AbortSignal.timeout(20000) }).then((r) => r.text()).catch(() => null));
+      return pages.get(u);
+    };
+    const hopReported = new Set();
     for (const [url, loc] of outlinks) {
-      let html = null;
-      try {
-        const res = await fetch(url, { redirect: 'follow', signal: AbortSignal.timeout(20000) });
-        html = await res.text();
-      } catch {
+      const html = await getPage(fetchUrl(url));
+      if (html === null) {
         add('ℹ️', loc, 'rev-outlink', '3.1.1', `${url} 를 받지 못했다(네트워크). 직접 열어 결제 경로를 확인하라.`);
         continue;
       }
       const hits = purchasePathIn(url, html);
       if (hits.length > 0) {
         add('🔴', loc, 'rev-outlink', '3.1.1', `앱에서 여는 ${url} 에 **앱 밖 결제로 가는 길**이 있다 — ${hits.join(' · ')}. 한국 스토어프론트는 외부결제 아웃링크가 금지다(예외는 미국뿐). 심사관은 웹사이트까지 들어가 본다(2026-09-12 실사례). 이 링크를 iOS 에서 감추거나, 그 페이지에서 결제 경로를 떼라.`);
+      }
+      // ★2026-09-14 사각지대 ② — 2단 경로. 앱이 연 페이지에서 **같은 사이트의 다른 페이지**로 한 번 더 가면 결제에 닿는가.
+      //   09-13 까지 법률 페이지 푸터의 '홈으로' → 홈 → /pricing 이 클릭 두 번이었는데, 이 검사는 첫 페이지만 봤다.
+      const base = new URL(fetchUrl(url));
+      for (const m of html.matchAll(/href="([^"#]+)"/g)) {
+        let hop;
+        try { hop = new URL(fetchUrl(new URL(m[1], base).href)); } catch { continue; }
+        if (hop.origin !== base.origin || hop.pathname === base.pathname || hopReported.has(hop.pathname)) continue;
+        const hopHtml = await getPage(hop.href);
+        if (hopHtml === null) continue;
+        let hopHits = purchasePathIn(hop.href, hopHtml);
+        // 루트는 JS 로 소개 페이지로 넘긴다(inject-landing-redirect) — 사람이 실제로 보는 페이지까지 본다.
+        const jsNext = hopHtml.match(/location\.replace\('(\/[\w.-]+\.html)'\)/);
+        if (jsNext) {
+          const shown = await getPage(new URL(jsNext[1], base).href);
+          if (shown !== null) hopHits = [...hopHits, ...purchasePathIn(jsNext[1], shown)];
+        }
+        if (hopHits.length > 0) {
+          hopReported.add(hop.pathname);
+          add('🔴', loc, 'rev-outlink', '3.1.1', `앱에서 여는 ${url} → 같은 사이트 ${hop.pathname} 로 한 번 더 가면 **결제로 가는 길**이 있다 — ${hopHits.join(' · ')}. 클릭 두 번도 외부결제 유도다(09-13 법률 페이지 푸터 '홈으로' 사례). 앱이 여는 페이지에서 그 링크를 떼라.`);
+        }
       }
     }
   }

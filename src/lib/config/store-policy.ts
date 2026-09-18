@@ -60,11 +60,13 @@ export function showPaymentSurface(freeMode: boolean): boolean {
  *   - iOS: **2026-09-12 개방.** 3.1.1 + 3.1.3(c) 거절의 시정이라 관문을 기다리지 않는다 —
  *     IAP 가 없는 채로는 재제출해도 같은 사유로 또 거절된다. 심사 메모의 3.1.3(f) 면제 주장도 같이 지운다
  *     (정본 = `출시서류_iOS/03_AppStoreConnect_입력텍스트_전체목록_2026-09-04.md` §7).
- *   - Android: **닫아 둔다.** 프로덕션 액세스(개인 계정 = 테스터 12명 × 14일) 심사가 선행하는 별도 축이고,
- *     여기를 같이 열면 그 심사에 결제 표면이 실린 빌드가 들어간다. 여는 것은 통과 후 별도 커밋.
+ *   - Android: **2026-09-18 개방.** 사장이 앱 안에서 이용권을 살 수 있는 경로를 iOS 와 같게 둔다
+ *     (사용자 결정 — 한쪽만 팔면 같은 제품이 기기에 따라 다른 물건이 된다).
+ *     ★여는 조건은 코드가 아니라 콘솔에 있다: Play 구독 상품 5개 + RevenueCat Android 앱·서비스계정 +
+ *     빌드에 `EXPO_PUBLIC_RC_ANDROID_KEY`. 키가 없으면 `HAS_IAP` 가 false 라 표면은 어차피 안 뜬다.
  */
 const IAP_READY_IOS = true;
-const IAP_READY_ANDROID = false;
+const IAP_READY_ANDROID = true;
 
 export const SHOW_IAP =
   Platform.OS === 'ios' ? IAP_READY_IOS : Platform.OS === 'android' ? IAP_READY_ANDROID : false;
@@ -108,6 +110,17 @@ export function showBillingEntry(iapEnabled: boolean, freeMode: boolean): boolea
 export function showUpgradeHint(s: { role: string | null; iapEnabled: boolean; freeMode: boolean }): boolean {
   return s.role === 'owner' && showBillingEntry(s.iapEnabled, s.freeMode);
 }
+
+/**
+ * 매장을 **늘릴 때** 오늘 얼마를 받고 결제일이 어떻게 되는가 — 사장에게 하는 말이 갈리는 유일한 자리다.
+ *
+ *   - `refund`(애플): 새 요금 **전액**을 오늘 받고, 안 쓴 기간은 결제 수단으로 환불한다. 결제일은 오늘 기준으로 초기화.
+ *   - `prorated`(플레이): 남은 기간의 **차액만** 오늘 받고, **결제일은 그대로**다(CHARGE_PRORATED_PRICE).
+ *
+ * 스토어가 실제로 하는 일이 다르므로 문구를 통일할 수 없다. 하나를 골라 양쪽에 쓰면 한쪽 사장은
+ * 오지 않는 환불을 기다리거나, 안 나갈 금액을 각오하고 버튼을 누른다. 결제 동작 자체는 `lib/iap/purchases.ts`.
+ */
+export const UPGRADE_CREDIT: 'refund' | 'prorated' = Platform.OS === 'android' ? 'prorated' : 'refund';
 
 /** 소셜 로그인 버튼을 노출해도 되는가. */
 export const SHOW_SOCIAL_LOGIN = !IS_IOS_NATIVE;

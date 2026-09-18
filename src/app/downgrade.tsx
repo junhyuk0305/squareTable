@@ -17,7 +17,7 @@ import {
 import { PLANS, planMonthlyPrice, VAT_NOTE_SENTENCE, type PlanId } from '@/lib/config/tiers';
 import { formatKrw } from '@/lib/config/billing';
 import { PAYMENT_SLA_SENTENCE } from '@/lib/config/business';
-import { SHOW_BILLING } from '@/lib/config/store-policy';
+import { SHOW_BILLING, showIapSurface } from '@/lib/config/store-policy';
 import { StepProgress } from '@/components/blocks/StepProgress';
 import { Appear, stagger } from '@/components/Appear';
 import { ScreenLoading } from '@/components/ScreenLoading';
@@ -138,9 +138,15 @@ function DowngradeBody() {
   const staffCount = staff.length;
   const freeStores = stores.filter((s) => freeUnitIds.includes(s.unit_id));
 
+  // 유료로 갈 길이 있나 — 웹 = 요금제(SHOW_BILLING), iOS = 이용권(인앱결제 · 판매 스위치·전면 무료 포함). 판정은 store-policy.
+  // ★2026-09-14: iOS 는 SHOW_BILLING 만 봐서 유료 선택지가 통째로 없었고, "요금제로 전부 지키기"가 같은 갈림길로 되돌아왔다.
+  const iapEnabled = useSessionStore((s) => s.iapEnabled);
+  const freeMode = useSessionStore((s) => s.freeMode);
+  const canBuy = SHOW_BILLING || showIapSurface(iapEnabled, freeMode);
+
   const goBilling = (plan: PlanId) => {
-    // ★거기서 다시 고르게 하면 이 화면에서 한 결정이 버려진다 → 요금제·매장수를 실어 보낸다.
-    if (!SHOW_BILLING) return showToast('요금제를 바꾸려면 관리자에게 문의해 주세요.');
+    // ★거기서 다시 고르게 하면 이 화면에서 한 결정이 버려진다 → 요금제·매장수를 실어 보낸다(iOS 이용권 화면은 안 쓴다).
+    if (!canBuy) return showToast('요금제를 바꾸려면 관리자에게 문의해 주세요.');
     router.push(`/billing?plan=${plan}&stores=${plan === 'multi' ? ownedCount : 1}`);
   };
 
@@ -227,6 +233,7 @@ function DowngradeBody() {
             need={need}
             ownedCount={ownedCount}
             staffCount={staffCount}
+            iap={!SHOW_BILLING && canBuy}
             onFree={() => setStep(need.need_store ? 'store' : 'seats')}
             onPlan={goBilling}
           />
@@ -265,6 +272,7 @@ function DowngradeBody() {
               busy={busy}
               onPress={submitStore}
               onPlan={() => setStep('fork')}
+              canPlan={canBuy}
             />
           </>
         ) : (
@@ -302,6 +310,7 @@ function DowngradeBody() {
               busy={busy}
               onPress={submitSeats}
               onPlan={() => setStep('fork')}
+              canPlan={canBuy}
             />
           </>
         )}
@@ -314,11 +323,13 @@ function DowngradeBody() {
 // 사장의 **실제 숫자**로 "이 요금제가 무엇을 지켜주는가"를 말한다. 일반적인 가격표를 다시 그리지 않는다.
 // 금액은 전부 tiers.ts 에서 계산한다 — 이 파일에 숫자를 적지 않는다(SSOT).
 function ForkView({
-  need, ownedCount, staffCount, onFree, onPlan,
+  need, ownedCount, staffCount, iap, onFree, onPlan,
 }: {
   need: DowngradeNeed;
   ownedCount: number;
   staffCount: number;
+  /** 앱 인앱결제로 살 수 있다 — 웹 요금제 두 줄 대신 가격 없는 이용권 한 줄(가격은 스토어가 말한다). */
+  iap: boolean;
   onFree: () => void;
   onPlan: (plan: PlanId) => void;
 }) {
@@ -362,6 +373,14 @@ function ForkView({
                 onPress={() => onPlan('multi')}
               />
             </>
+          )}
+          {iap && (
+            <OptionRow
+              title="이용권"
+              price=""
+              body={`매장 ${ownedCount}곳 · 직원 ${staffCount}명 전원 그대로`}
+              onPress={() => onPlan(ownedCount > 1 ? 'multi' : 'single')}
+            />
           )}
         </View>
       </Appear>
@@ -426,8 +445,8 @@ function PickRow({
 }
 
 function FooterActions({
-  label, disabled, busy, onPress, onPlan,
-}: { label: string; disabled: boolean; busy: boolean; onPress: () => void; onPlan: () => void }) {
+  label, disabled, busy, onPress, onPlan, canPlan,
+}: { label: string; disabled: boolean; busy: boolean; onPress: () => void; onPlan: () => void; canPlan: boolean }) {
   return (
     <Appear delay={stagger(3)}>
       <View style={styles.footer}>
@@ -438,10 +457,13 @@ function FooterActions({
         >
           {busy ? <ActivityIndicator color={InkColors.bubbleText} /> : <Text style={styles.primaryText}>{label}</Text>}
         </Pressable>
-        {/* 고르다가 "이럴 바엔 요금제"가 실제 전환 지점이다 — 두 단계 모두에서 되돌아갈 수 있어야 한다. */}
-        <Pressable onPress={onPlan} hitSlop={8} style={styles.link}>
-          <Text style={styles.linkText}>요금제로 전부 지키기</Text>
-        </Pressable>
+        {/* 고르다가 "이럴 바엔 요금제"가 실제 전환 지점이다 — 두 단계 모두에서 되돌아갈 수 있어야 한다.
+            살 길이 없으면(판매 중단 등) 갈림길에 유료 선택지가 없어 같은 자리로 되돌아올 뿐이다 — 링크를 두지 않는다. */}
+        {canPlan && (
+          <Pressable onPress={onPlan} hitSlop={8} style={styles.link}>
+            <Text style={styles.linkText}>{SHOW_BILLING ? '요금제로 전부 지키기' : '이용권으로 전부 지키기'}</Text>
+          </Pressable>
+        )}
       </View>
     </Appear>
   );

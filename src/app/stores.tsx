@@ -182,7 +182,8 @@ export default function StoresHub() {
     if (!showBillingEntry(iapEnabled, freeMode)) {
       return showToast('매장을 더 추가하려면 관리자에게 문의해 주세요.');
     }
-    router.push('/billing');
+    // 매장 추가 의도를 넘긴다 — 이용권 기본 제시가 가진 매장 +1 이 된다(가진 수만 사면 새 매장이 여전히 막힌다).
+    router.push('/billing?intent=add-store');
   };
   const joinStore = () => router.push('/junior/hub');
 

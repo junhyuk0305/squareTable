@@ -32,10 +32,12 @@ import { Appear, stagger } from '@/components/Appear';
 import { Collapse } from '@/components/Collapse';
 import { ScreenLoading } from '@/components/ScreenLoading';
 import { PLANS } from '@/lib/config/tiers';
+import { UPGRADE_CREDIT } from '@/lib/config/store-policy';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
 import { rpcChooseIapRelease, rpcClearIapRelease, type IapSubscriptionRow } from '@/lib/db';
+import { releaseRule } from '@/lib/iap/release';
 import {
   initPurchases,
   fetchOffers,
@@ -82,6 +84,7 @@ export function IapPurchasePanel({
   ownedStores,
   subscription,
   releaseChoice,
+  wantMore = false,
 }: {
   onChanged: () => void | Promise<void>;
   /** 사장이 실제로 가진(열린) 매장 — 기본 선택과 "닫을 매장 고르기"의 후보. */
@@ -90,11 +93,13 @@ export function IapPurchasePanel({
   subscription: IapSubscriptionRow | null;
   /** 이미 골라 둔 "닫을 매장"(예고 카드 문구용). */
   releaseChoice: string[];
+  /** '매장 추가'에서 들어왔다 — 기본 제시를 가진 매장 수 + 1 로(가진 수만 사면 새 매장이 여전히 막힌다). */
+  wantMore?: boolean;
 }) {
   const router = useRouter();
   const userId = useSessionStore((s) => s.userId);
-  // ★"매장이 열렸다"의 판정은 세션의 plan 이다(서버가 SSOT). 결제 성공 토스트로 갈음하지 않는다 —
-  //   결제와 매장 열림 사이에 웹훅이 있고, 그게 늦거나 실패할 수 있다.
+  // ★"매장이 열렸다"의 판정은 서버 구독 행(subscription.store_count)이다. 결제 성공 토스트로 갈음하지 않는다 —
+  //   결제와 매장 열림 사이에 웹훅이 있고, 그게 늦거나 실패할 수 있다. plan 은 A2(다른 경로 유료 기간) 판정에만 쓴다.
   const plan = useSessionStore((s) => s.plan);
   const paidUntil = useSessionStore((s) => s.paidUntil);
   const [offers, setOffers] = useState<IapOffer[]>([]);
@@ -128,8 +133,8 @@ export function IapPurchasePanel({
         const [list] = await Promise.all([fetchOffers(), currentEntitlement()]);
         if (!alive) return;
         setOffers(list);
-        // 기본 제시 = 구독 중이면 한 칸 위, 아니면 가진 매장 수. 목록에 없는 수는 가장 가까운 것으로.
-        const want = owned > 0 ? owned + 1 : Math.max(1, ownedStores.length);
+        // 기본 제시 = 구독 중이면 한 칸 위, 아니면 가진 매장 수(매장 추가에서 왔으면 +1). 목록에 없는 수는 가장 가까운 것으로.
+        const want = owned > 0 ? owned + 1 : Math.max(1, ownedStores.length + (wantMore ? 1 : 0));
         const hit = list.find((o) => o.storeCount === want) ?? list.find((o) => o.storeCount > owned) ?? list[list.length - 1];
         setPicked(hit?.storeCount ?? 0);
       } catch {
@@ -166,26 +171,31 @@ export function IapPurchasePanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [waiting === null]);
 
-  // 열렸는가 = 서버가 이번에 산 매장 수를 알게 됐다(늘리기) 또는 무료였던 plan 이 유료가 됐다(최초구매).
+  // 열렸는가 = 서버 구독 행이 이번에 산 매장 수를 알게 됐다(최초구매·늘리기·복원 공통).
+  // ★plan 으로 판정하지 않는다 — 늘리기는 이미 유료라 plan 이 결제 전부터 참이어서 서버 반영 전에 완료 카드가 떴다(2026-09-14).
   // ★상태를 지우는 이펙트를 두지 않는다 — 파생으로 충분하고, 이펙트 안의 setState 는 연쇄 렌더가 된다.
-  const opened = waiting !== null && bought > 0 && (owned >= bought || (plan !== 'free' && owned > 0));
+  const opened = waiting !== null && bought > 0 && owned >= bought;
   const showWait = waiting !== null && !opened;
   const showDone = opened && !doneDismissed;
 
   const selected = offers.find((o) => o.storeCount === picked) ?? null;
   const isUp = !!selected && owned > 0 && selected.storeCount > owned;
-  const isDown = !!selected && owned > 0 && selected.storeCount < owned;
-  const needRelease = isDown ? owned - selected!.storeCount : 0;
-  // 닫을 매장 후보 = 지금 열린 소유 매장. 개수가 맞아야 결제로 간다.
-  const releaseReady = !isDown || release.length === needRelease;
+  // 줄이기 — 닫을 매장 수는 **열린 매장** 기준(서버 0196 과 같은 규칙). 판정 = lib/iap/release.ts.
+  const { isDown, needRelease, ready: releaseReady } = releaseRule({
+    subscribed: owned,
+    openStores: ownedStores.length,
+    target: selected?.storeCount ?? owned,
+    chosen: release.length,
+  });
 
   const buy = async (offer: IapOffer) => {
     if (busy) return;
     setBusy(true);
     setSlow(false);
     // C2 줄이기 — 닫을 매장을 먼저 서버에 적어 둔다(결제일 확정 때 서버가 그 매장을 연장에서 뺀다).
+    // 닫을 매장이 없는 줄이기(열린 매장 ≤ 새 매장 수)는 옛 명단을 비운다 — 빈 명단은 서버가 units_required 로 거부한다.
     if (isDown) {
-      const { error } = await rpcChooseIapRelease(release);
+      const { error } = needRelease > 0 ? await rpcChooseIapRelease(release) : await rpcClearIapRelease();
       if (error) {
         setBusy(false);
         return showToast('닫을 매장을 저장하지 못했어요. 잠시 후 다시 시도해 주세요.');
@@ -193,7 +203,8 @@ export function IapPurchasePanel({
     }
     const slowTimer = setTimeout(() => setSlow(true), PURCHASE_SLOW_MS);
     try {
-      await purchaseOffer(offer);
+      // ★isDown 을 넘긴다 — Play 는 "갈아타기"라고 말해 주지 않으면 구독을 하나 더 만든다(두 번 청구).
+      await purchaseOffer(offer, { downgrade: isDown });
       if (isDown) {
         // 오늘 결제 없음 — 다음 결제일에 반영된다. 예고는 웹훅(PRODUCT_CHANGE)이 적어 주고 카드가 그린다.
         showToast(`다음 결제일부터 매장 ${offer.storeCount}개 요금이에요.`);
@@ -214,12 +225,17 @@ export function IapPurchasePanel({
   };
 
   const restore = async () => {
-    if (busy) return;
-    setBusy(true);
+    // B3 안내("구매 복원을 눌러 주세요")가 떠 있으면 결제 응답을 기다리는 중이어도 누를 수 있어야 한다 —
+    //   예전엔 busy 로 링크가 막혀 안내가 가리키는 버튼이 안 눌렸다(2026-09-14). 그때는 결제 쪽 busy 를 건드리지 않는다.
+    if (busy && !slow) return;
+    const lock = !busy;
+    if (lock) setBusy(true);
     try {
       await restorePurchases();
       const ent = await currentEntitlement();
-      const n = ent.active ? (offers.find((o) => o.pkg.product.identifier === ent.productId)?.storeCount ?? 1) : 0;
+      // ★목록과 id 를 맞춰 보지 않는다 — Play 의 구독 id(st_multi)는 목록의 id(st_multi:multi-3-monthly)와
+      //   달라 매번 "산 이용권이 없어요"가 됐다. 매장 수 판정은 purchases 모듈 한 곳이다.
+      const n = ent.active ? ent.storeCount : 0;
       if (n > 0) {
         setBought(n);
         setDoneDismissed(false);
@@ -230,7 +246,7 @@ export function IapPurchasePanel({
     } catch {
       showToast('이용권을 확인하지 못했어요. 잠시 후 다시 시도해 주세요.');
     } finally {
-      setBusy(false);
+      if (lock) setBusy(false);
     }
   };
 
@@ -415,7 +431,10 @@ export function IapPurchasePanel({
             {isUp && (
               <>
                 <Text style={styles.note}>
-                  오늘부터 매장 {selected.storeCount}개예요. 남은 매장 {owned}개 기간의 요금은 애플이 돌려드려요. 다음 결제일은 오늘부터 한 달 뒤예요.
+                  오늘부터 매장 {selected.storeCount}개예요.{' '}
+                  {UPGRADE_CREDIT === 'refund'
+                    ? `남은 매장 ${owned}개 기간의 요금은 애플이 돌려드려요. 다음 결제일은 오늘부터 한 달 뒤예요.`
+                    : '오늘은 남은 기간에 해당하는 차액만 결제돼요. 다음 결제일은 그대로예요.'}
                 </Text>
                 <Pressable
                   onPress={() => setDetailOpen((v) => !v)}
@@ -432,13 +451,27 @@ export function IapPurchasePanel({
                     <Text style={styles.detailBody}>
                       예를 들어 9월 13일에 매장 1개{one ? `(${one.priceString})` : ''}로 시작했다가 9월 23일에 매장 2개로 늘리면,
                     </Text>
-                    <Text style={styles.detailBody}>
-                      · 그 자리에서 매장 2개 요금{two ? `(${two.priceString})` : ''}을 결제하고, 오늘부터 매장 2개를 쓸 수 있어요.
-                    </Text>
-                    <Text style={styles.detailBody}>
-                      · 매장 1개 요금 중 아직 안 쓴 20일치는 애플이 며칠 안에 결제 수단으로 돌려드려요.
-                    </Text>
-                    <Text style={styles.detailBody}>· 다음 결제일은 10월 23일이 돼요. 그 뒤로는 매달 이날 결제돼요.</Text>
+                    {UPGRADE_CREDIT === 'refund' ? (
+                      <>
+                        <Text style={styles.detailBody}>
+                          · 그 자리에서 매장 2개 요금{two ? `(${two.priceString})` : ''}을 결제하고, 오늘부터 매장 2개를 쓸 수 있어요.
+                        </Text>
+                        <Text style={styles.detailBody}>
+                          · 매장 1개 요금 중 아직 안 쓴 20일치는 애플이 며칠 안에 결제 수단으로 돌려드려요.
+                        </Text>
+                        <Text style={styles.detailBody}>· 다음 결제일은 10월 23일이 돼요. 그 뒤로는 매달 이날 결제돼요.</Text>
+                      </>
+                    ) : (
+                      <>
+                        <Text style={styles.detailBody}>
+                          · 오늘은 매장 2개 요금{two ? `(${two.priceString})` : ''} 전액이 아니라, 남은 20일치의 차액만 결제돼요.
+                        </Text>
+                        <Text style={styles.detailBody}>· 오늘부터 매장 2개를 쓸 수 있어요.</Text>
+                        <Text style={styles.detailBody}>
+                          · 다음 결제일은 10월 13일 그대로예요. 그날부터 매장 2개 요금이 결제돼요.
+                        </Text>
+                      </>
+                    )}
                     <Text style={styles.detailBody}>
                       결국 9월 13일부터 23일까지 열흘은 매장 1개 값만 내신 거예요. 손해 보는 금액은 없어요.
                     </Text>
@@ -452,9 +485,10 @@ export function IapPurchasePanel({
             {isDown && (
               <Collapse style={styles.releaseBox}>
                 <Text style={styles.note}>
-                  오늘 결제는 없어요. 다음 결제일 {fmtDay(sub?.current_period_end)}부터 매장 {selected.storeCount}개 요금이에요. 그날 닫을 매장 {needRelease}곳을 골라 주세요.
+                  오늘 결제는 없어요. 다음 결제일 {fmtDay(sub?.current_period_end)}부터 매장 {selected.storeCount}개 요금이에요.{' '}
+                  {needRelease > 0 ? `그날 닫을 매장 ${needRelease}곳을 골라 주세요.` : '닫히는 매장은 없어요.'}
                 </Text>
-                {ownedStores.map((s) => {
+                {needRelease > 0 && ownedStores.map((s) => {
                   const on = release.includes(s.unit_id);
                   const full = !on && release.length >= needRelease;
                   return (
@@ -474,7 +508,7 @@ export function IapPurchasePanel({
                     </Pressable>
                   );
                 })}
-                <Text style={styles.hint}>닫힌 매장은 설정의 이전 매장에 보관돼요. 노하우·퀴즈·채팅은 남아요.</Text>
+                {needRelease > 0 && <Text style={styles.hint}>닫힌 매장은 설정의 이전 매장에 보관돼요. 노하우·퀴즈·채팅은 남아요.</Text>}
               </Collapse>
             )}
 
@@ -536,10 +570,10 @@ export function IapPurchasePanel({
           카드 밖 맨 아래 작은 링크 — 주 동작이 아니다. */}
       <Appear delay={stagger(4)}>
         <Pressable
-          disabled={busy}
+          disabled={busy && !slow}
           onPress={() => void restore()}
           accessibilityRole="link"
-          style={({ pressed }) => [styles.restoreHit, pressed && { opacity: 0.7 }, busy && { opacity: 0.6 }]}
+          style={({ pressed }) => [styles.restoreHit, pressed && { opacity: 0.7 }, busy && !slow && { opacity: 0.6 }]}
         >
           <Text style={styles.restoreText}>구매 복원</Text>
         </Pressable>

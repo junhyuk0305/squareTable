@@ -11,7 +11,13 @@
 /** 스토어 구독 id. Play 는 구독 1개 안에 요금제 여러 개, App Store 는 구독 그룹 안에 상품 여러 개. */
 export const IAP_SUBSCRIPTIONS = { single: 'st_single', multi: 'st_multi' } as const;
 
-/** 매장 수 → 요금제(기본 요금제/상품) id. 사다리 상한 5(설계 §7 E). */
+/**
+ * 매장 수 → 요금제(기본 요금제/상품) id. 사다리 상한 5(설계 §7 E).
+ *
+ * ★Play 기본 요금제 id 에는 **밑줄을 못 쓴다**(소문자·숫자·하이픈만 — Play Console 규칙).
+ *   그래서 콘솔에는 `single-1-monthly` 처럼 하이픈으로 넣고, 여기 표는 밑줄판 하나만 둔다
+ *   — 아래 parse 가 하이픈을 밑줄로 바꿔 같은 표를 본다. 표를 둘로 늘리면 두 스토어가 갈라진다.
+ */
 export const IAP_PLANS: { storeCount: number; planId: 'single' | 'multi'; productId: string }[] = [
   // ★'single_monthly' 가 아니다 — 2026-09-13 App Store Connect 에서 삭제돼 애플이 그 id 를 영구 재사용 금지했다.
   { storeCount: 1, planId: 'single', productId: 'single_1_monthly' },
@@ -29,11 +35,11 @@ export const IAP_ENTITLEMENT = 'store_access';
 /**
  * 스토어 상품 id → 플랜·매장 수. 파싱 실패는 null(서버·화면 둘 다 "모르면 안 연다").
  *
- * Play 는 `구독id:요금제id`(st_multi:multi_3_monthly) 형태로 내려주고 App Store 는 요금제 id 만 준다
- * — 콜론 뒤만 본다.
+ * Play 는 `구독id:요금제id`(st_multi:multi-3-monthly) 형태로 내려주고 App Store 는 요금제 id 만 준다
+ * — 콜론 뒤만 본다. Play 쪽 하이픈은 밑줄로 바꿔 한 표를 본다(위 ★).
  */
 export function parseIapProduct(raw: string): { planId: 'single' | 'multi'; storeCount: number } | null {
-  const id = (raw ?? '').trim().split(':').pop() ?? '';
+  const id = ((raw ?? '').trim().split(':').pop() ?? '').replace(/-/g, '_');
   const hit = IAP_PLANS.find((p) => p.productId === id);
   return hit ? { planId: hit.planId, storeCount: hit.storeCount } : null;
 }

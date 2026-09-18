@@ -30,7 +30,8 @@ const QA_EMAIL = /@example\.com|@squaretable\.test|@test\.com|@pilot\.squaretabl
 //   PROTECT_UNITS 이중화: 매장이 아직 없거나 프로필 unit_id 가 잠시 비어 있는 순간에도 계정이 살아남는다.
 //   hubdemo.* = 허브 대시보드 QA 데모 계정(seed-demo-hub.mjs) — 합류신청 pending 계정은 소속 매장이
 //   없어 PROTECT_UNITS 경유 보호가 안 되므로 이메일 패턴으로 보호한다.
-const PROTECT_EMAIL = /appreview\.(owner|staff)@|hubdemo\./i;
+//   qa.iap.1~4 = qa:iap 고정 사장 계정(2026-09-14) — 매 실행 스스로 매장·슬롯을 비우므로 계정을 지우면 다시 가입해야 한다.
+const PROTECT_EMAIL = /appreview\.(owner|staff)@|hubdemo\.|qa\.iap\.[1-4]@example\.com/i;
 
 async function listAuthUsers() {
   const users = []; let p = 1;
