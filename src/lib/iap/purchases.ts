@@ -80,15 +80,22 @@ export async function fetchOffers(): Promise<IapOffer[]> {
  *     Google 이 "더 비싼 등급으로 올릴 때" 공식 권장하는 모드이고 웹 SaaS 관행과도 같다(2026-09-18 사용자 결정).
  *     애플은 같은 자리에서 "전액 결제 + 남은 기간 환불 + 결제일 초기화"를 한다 — 스토어가 하는 일이 다르므로
  *     화면 문구도 갈린다(store-policy `UPGRADE_CREDIT`). ⚠️이 모드는 **올릴 때만** 쓸 수 있다.
- *   - 줄이기 = DEFERRED: 다음 결제일에 바뀐다(애플과 같다 · 웹훅 PRODUCT_CHANGE=예고 → RENEWAL=확정).
- *     ★DEFERRED 는 Play 콘솔에 **실시간 개발자 알림(RTDN)** 이 연결돼야 동작한다(RevenueCat 요구사항).
+ *   - 줄이기 = WITHOUT_PRORATION: 오늘 결제가 없고 **옛 구독 만료일에** 새 요금이 청구된다
+ *     (애플과 같은 말이 된다 · 웹훅 PRODUCT_CHANGE=예고 → RENEWAL=확정).
+ *     ★★2026-09-19 실기기: 여기에 DEFERRED 를 쓰면 **Play 가 결제 흐름을 거절한다**
+ *       ("문제가 발생했습니다"). Play 는 **같은 구독 상품의 기본 요금제끼리 바꿀 때 DEFERRED 를
+ *       지원하지 않는다** — 우리 줄이기는 전부 st_multi 안에서 일어나므로 항상 이 경우다.
+ *       잘못된 replacement mode 는 조용히 무시되지 않고 구매 자체를 실패시킨다.
+ *     ★RTDN 은 여전히 필요하다 — 확정(RENEWAL)이 웹훅으로 와야 매장이 실제로 줄어든다.
  */
 async function playProductChange(downgrade: boolean): Promise<StoreProductChangeInfo | null> {
   const cur = await currentEntitlement();
   if (!cur.active || !cur.storeProductId) return null; // 첫 구매 — 갈아탈 구독이 없다
   return {
     oldProductIdentifier: cur.storeProductId,
-    replacementMode: downgrade ? STORE_REPLACEMENT_MODE.DEFERRED : STORE_REPLACEMENT_MODE.CHARGE_PRORATED_PRICE,
+    replacementMode: downgrade
+      ? STORE_REPLACEMENT_MODE.WITHOUT_PRORATION
+      : STORE_REPLACEMENT_MODE.CHARGE_PRORATED_PRICE,
   };
 }
 
