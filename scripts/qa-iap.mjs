@@ -238,6 +238,15 @@ async function liveChecks() {
   const slots = await svcSel(`store_slots?owner_id=eq.${O.uid}&consumed_at=is.null&select=id,source`);
   check('★④ 남는 슬롯 1개(3호점을 만들 수 있다)', slots.length === 1 && slots[0]?.source === 'iap', `open=${slots.length}`);
 
+  // ── ⑮ ★미소비 슬롯은 누적되지 않는다 (2026-09-21) ────────────────────────
+  //   ④ 의 결과로 미소비 슬롯 1개가 떠 있다(3호점을 아직 안 만들었다). 이 상태에서 같은 갱신이
+  //   한 번 더 오면 v_need 가 미소비 슬롯을 세지 않아 **또 1개가 적립된다** — 한 결제 주기 동안
+  //   구독보다 많은 매장을 열 수 있다. 웹훅은 PRODUCT_CHANGE + INITIAL_PURCHASE 로 두 번 부른다.
+  const r4b = await svcRpc('sync_iap_slots', { p_owner: O.uid, p_plan: 'multi', p_count: 3, p_period_end: end2 });
+  const slots4b = await svcSel(`store_slots?owner_id=eq.${O.uid}&consumed_at=is.null&select=id,source,paid_until`);
+  check('★⑮ 같은 갱신이 또 와도 슬롯을 새로 적립하지 않는다', r4b.data?.granted === 0, JSON.stringify(r4b.data));
+  check('★⑮ 미소비 슬롯은 여전히 1개다(누적 금지)', slots4b.length === 1, `open=${slots4b.length}`);
+
   // ── ⑤ 다운그레이드 — 초과분은 연장하지 않는다 ────────────────────────────
   const end3 = iso(days(90));
   const r5 = await svcRpc('sync_iap_slots', { p_owner: O.uid, p_plan: 'multi', p_count: 1, p_period_end: end3 });
