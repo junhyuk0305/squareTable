@@ -136,4 +136,98 @@ let hqId;
   }
 }
 
+// ── P2(0209~0212): 작업실 · 연결 매장 · 다른 브랜드(경계용) ──────────────────
+// 연결 매장은 고정 계정의 기존 매장만 쓴다(계정 신설 금지). 있는 것만 연결하고 없으면 건너뛴다.
+//   store_001(사장 김영자)      가맹 · 요약 공개 · payer=brand
+//   store_appreview(심사 데모)  가맹 · 운영 공개 · payer=store
+//   store_eval(평가 픽스처)     직영 · 운영 공개 · payer=brand (초대자=담당자 표시)
+//   brand_other                 담당자 0명 · store_002_demo 연결 — "다른 브랜드가 안 보인다" 실증용
+{
+  // 시스템 계정 + 작업실(멱등). 시스템 계정은 사람이 로그인하지 않는다.
+  const SYS_EMAIL = `system+${BRAND_ID}@squaretable.app`;
+  let sysId = null;
+  const { data: created, error: cErr } = await db.auth.admin.createUser({
+    email: SYS_EMAIL,
+    password: `sys-${Math.random().toString(36).slice(2)}-${Date.now()}`,
+    email_confirm: true,
+    user_metadata: { name: `${BRAND_NAME} 시스템`, role: 'owner' },
+  });
+  if (cErr) {
+    if (/already.*registered|exists/i.test(cErr.message)) {
+      const { data: list } = await db.auth.admin.listUsers({ perPage: 1000 });
+      sysId = list.users.find((u) => u.email === SYS_EMAIL)?.id ?? null;
+    } else {
+      console.error('✗ 시스템 계정 생성 실패 —', cErr.message);
+      process.exit(1);
+    }
+  } else {
+    sysId = created.user.id;
+  }
+  const { data: ws, error: wsErr } = await db.rpc('admin_create_brand_workspace', { p_brand_id: BRAND_ID, p_system_user_id: sysId });
+  if (wsErr) { console.error('✗ 작업실 생성 실패 —', wsErr.message); process.exit(1); }
+  console.log(`  · 작업실: ${ws} (시스템 계정 ${SYS_EMAIL})`);
+
+  // 사장 김영자(store_001)의 전화번호 — 매장 초대는 점주 번호로 간다(정본 §3-5 B). 시드 계정은 OTP 를 안 거쳐
+  // 번호가 비어 있을 수 있어 QA 번호를 채운다(실계정은 가입 시 인증된 번호가 이미 있다). 있으면 건드리지 않는다.
+  {
+    const { data: ownerUnit } = await db.from('units').select('owner_id').eq('id', 'store_001').maybeSingle();
+    if (ownerUnit?.owner_id) {
+      const { data: op } = await db.from('profiles').select('phone').eq('id', ownerUnit.owner_id).maybeSingle();
+      if (op && !op.phone) {
+        const { error: pe } = await db.from('profiles').update({ phone: '01055550001' }).eq('id', ownerUnit.owner_id);
+        console.log(pe ? `  ⚠ 사장 전화번호 채우기 실패 — ${pe.message}` : '  · 사장(store_001) QA 전화번호 채움');
+      }
+    }
+  }
+
+  // 계약 값(정본 §4-D: 브랜드별 계약가·기본 payer).
+  await db.from('brands').update({ price_per_store_krw: 25000, default_payer: 'brand', biz_no: '1234567890' }).eq('id', BRAND_ID);
+
+  // 연결 매장 — 있는 것만. 이미 active 면 그대로 둔다(멱등).
+  const want = [
+    { unit: 'store_001', payer: 'brand', visibility: 'summary', direct: false },
+    { unit: 'store_appreview', payer: 'store', visibility: 'ops', direct: false },
+    { unit: 'store_eval', payer: 'brand', visibility: 'ops', direct: true },
+  ];
+  for (const w of want) {
+    const { data: u } = await db.from('units').select('id, owner_id').eq('id', w.unit).is('deleted_at', null).maybeSingle();
+    if (!u) { console.log(`  · ${w.unit} 없음 — 건너뜀`); continue; }
+    const { data: cur } = await db.from('brand_units').select('id, brand_id').eq('unit_id', w.unit).eq('status', 'active').maybeSingle();
+    if (cur && cur.brand_id === BRAND_ID) { console.log(`  · ${w.unit} 이미 연결됨`); continue; }
+    if (cur) await db.from('brand_units').update({ status: 'ended', ended_at: new Date().toISOString(), end_reason: 'seed_reset' }).eq('id', cur.id);
+    const { error } = await db.from('brand_units').insert({
+      brand_id: BRAND_ID, unit_id: w.unit, payer: w.payer, visibility: w.visibility,
+      invited_by: w.direct ? hqId : null, accepted_by: u.owner_id,
+    });
+    if (error) { console.error(`✗ ${w.unit} 연결 실패 —`, error.message); process.exit(1); }
+    console.log(`  · 연결: ${w.unit} (${w.direct ? '직영' : '가맹'} · ${w.visibility} · payer=${w.payer})`);
+  }
+
+  // 다른 브랜드(담당자 0명) + store_002_demo — 있으면 연결. 경계 하니스가 "안 보인다"를 잰다.
+  await db.from('brands').upsert({ id: 'brand_other', name: '다른 본사(경계용)', status: 'active' }, { onConflict: 'id' });
+  const { data: u2 } = await db.from('units').select('id, owner_id').eq('id', 'store_002_demo').is('deleted_at', null).maybeSingle();
+  if (u2) {
+    const { data: cur2 } = await db.from('brand_units').select('id, brand_id').eq('unit_id', 'store_002_demo').eq('status', 'active').maybeSingle();
+    if (!cur2) {
+      await db.from('brand_units').insert({ brand_id: 'brand_other', unit_id: 'store_002_demo', payer: 'brand', visibility: 'ops', accepted_by: u2.owner_id });
+      console.log('  · brand_other ← store_002_demo 연결');
+    }
+  }
+
+  // 실증: 담당자로 brand_overview() — 다른 브랜드 매장은 없고, my_units 는 비어야 한다(작업실이 매장으로 안 샘).
+  const anon = env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+  if (anon) {
+    const asUser = createClient(URL_, anon, { auth: { persistSession: false, autoRefreshToken: false } });
+    await asUser.auth.signInWithPassword({ email: HQ_EMAIL, password: PASSWORD });
+    const { data: ov, error: ovErr } = await asUser.rpc('brand_overview');
+    if (ovErr) { console.error('✗ brand_overview 실패 —', ovErr.message); process.exit(1); }
+    const ids = (ov ?? []).map((r) => r.unit_id);
+    if (ids.includes('store_002_demo')) { console.error('✗ 경계 위반: 다른 브랜드 매장이 보인다'); process.exit(1); }
+    const { data: mu } = await asUser.rpc('my_units');
+    if ((mu ?? []).length) { console.error('✗ 담당자의 my_units 가 비어 있지 않다(작업실이 매장으로 샘)'); process.exit(1); }
+    console.log(`  ✓ brand_overview: ${ids.join(', ') || '(0곳)'} · 다른 브랜드 0 · my_units 0`);
+    await asUser.auth.signOut();
+  }
+}
+
 console.log(`\n완료 — 웹에서 ${HQ_EMAIL} / ${PASSWORD} 로 로그인하면 본사 대시보드로 들어간다.`);

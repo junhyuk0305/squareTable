@@ -130,6 +130,8 @@
     "qa:quiz-link": "node scripts/qa-quiz-link-live.mjs",
     "qa:quiz-integrity": "node scripts/qa-quiz-attempt-integrity.mjs",
     "qa:hq": "node scripts/qa-hq-browser.mjs",
+    "qa:brand": "node scripts/qa-brand.mjs",
+    "qa:brand-boundary": "node scripts/qa-brand-boundary.mjs",
     "web:size": "expo export --platform web && node scripts/web-bundle-size.mjs"
   },
   "private": true
