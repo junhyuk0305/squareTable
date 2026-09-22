@@ -1,5 +1,6 @@
 import { type ReactNode } from 'react';
 import { View, StyleSheet } from 'react-native';
+import { usePathname } from 'expo-router';
 
 import { ResponsiveShell } from '@/components/ResponsiveShell';
 import { ShellProvider } from '@/components/shell/shellContext';
@@ -7,31 +8,34 @@ import { OwnerWebShell } from '@/components/shell/OwnerWebShell';
 import { HqShell } from '@/components/shell/HqShell';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { SHOW_HQ_CONSOLE } from '@/lib/config/store-policy';
-import { IS_HQ_PREVIEW } from '@/lib/config/hqPreview';
 import { canManage } from '@/lib/utils/roles';
 import { InkColors } from '@/lib/theme/colors';
 
 /**
  * 앱 껍데기 — **웹판.** 로그인한 사람의 종류에 따라 셸만 갈린다(기획정본 §5-1).
  *
- *   본사 담당자(brandId)  → 본사 데스크톱 셸 (넓은 레이아웃 전용)
- *   사장·매니저           → 넓은 사장 웹 셸  (화면 내용은 폰과 같다 — 껍데기만 교체)
- *   그 밖(직원·비로그인)   → 지금 폰 셸 그대로
+ *   `/hq/*` 라우트          → 본사 데스크톱 셸 (넓은 레이아웃 전용)
+ *   사장·매니저              → 넓은 사장 웹 셸  (화면 내용은 폰과 같다 — 껍데기만 교체)
+ *   그 밖(직원·비로그인)      → 지금 폰 셸 그대로
+ *
+ * ★셸 선택이 **세션이 아니라 경로**를 따르는 이유: 한 사람이 본사 담당자이면서 매장 사장일 수 있다
+ *   (직영 본사 대표 — 정본 §3-1). 세션의 brandId 만 보고 고르면 그 사람은 자기 매장 화면을
+ *   영영 못 본다("내 매장으로"를 눌러도 본사 셸에 갇힌다). 어디에 **있느냐**로 고르면 두 축을 오간다.
+ *   본사 라우트에 들어갈 자격은 `src/app/hq/_layout.tsx` 가 따로 지킨다 — 셸은 그리기만 한다.
  *
  * ★화면 파일은 한 개도 복제하지 않는다. 갈림은 이 파일 하나이고, 루트 `_layout.tsx` 은
  *   `AppShell` 한 곳만 부른다(platform.md: 화면 통째 `.web.tsx` 금지).
  */
 export function AppShell({ children }: { children: ReactNode }) {
+  const pathname = usePathname();
   const status = useSessionStore((s) => s.status);
   const role = useSessionStore((s) => s.role);
-  const brandId = useSessionStore((s) => s.brandId);
 
   // 세션이 확정되기 전에 폰 프레임을 그리면, 사장·본사는 곧바로 넓은 셸로 갈아타며 한 번 튄다.
   // 확정될 때까지는 프레임 없는 빈 배경만 둔다 — 그 위를 스플래시가 덮으므로 보이는 것은 같다.
   if (status === 'loading') return <View style={styles.booting}>{children}</View>;
 
-  // brandId 파생은 P2(브랜드 축)에서 온다. 지금은 QA 미리보기 플래그로만 켜진다.
-  if (SHOW_HQ_CONSOLE && (!!brandId || IS_HQ_PREVIEW)) {
+  if (SHOW_HQ_CONSOLE && (pathname === '/hq' || pathname.startsWith('/hq/'))) {
     return (
       <ShellProvider kind="hq">
         <HqShell>{children}</HqShell>

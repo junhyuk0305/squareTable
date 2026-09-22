@@ -27,6 +27,7 @@ export function OwnerWebShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const role = useSessionStore((s) => s.role);
   const unitId = useSessionStore((s) => s.unitId);
+  const brandId = useSessionStore((s) => s.brandId);
   const storeName = useSessionStore((s) => s.storeName);
   const { nameOf } = useStoreDisplay();
 
@@ -66,6 +67,19 @@ export function OwnerWebShell({ children }: { children: ReactNode }) {
 
   const footer: NavGroup = {
     items: [
+      // 본사 담당자이면서 매장 사장인 사람(직영 본사 대표 — 정본 §3-1)의 돌아가는 길.
+      // 본사 셸의 '내 매장으로'와 한 쌍이다. 담당자가 아니면 항목 자체가 없다.
+      ...(brandId
+        ? [
+            {
+              key: '/hq',
+              label: '본사 대시보드',
+              icon: 'business-outline' as const,
+              active: false,
+              onPress: () => router.replace('/hq'),
+            },
+          ]
+        : []),
       {
         key: '/notifications',
         label: '알림',

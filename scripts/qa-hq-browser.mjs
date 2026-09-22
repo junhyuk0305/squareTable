@@ -3,13 +3,15 @@
 // 로그인한 사람의 종류에 따라 **껍데기만** 갈리는지 숫자로 확인한다.
 //   A 사장  — 왼쪽 사이드바 + 본문 720 캡 · 하단 탭바 없음 · 사이드바 항목 = 허브3 + 매장5 + 하단3
 //   B 직원  — 지금 폰 프레임(460) 그대로 · 사이드바 없음 · 하단 탭바 있음
-//   C 본사  — 사이드바 5메뉴 · 본문 폭 캡 없음 · 탭바 없음 (브랜드 축 P2 전이라 개발 전용 플래그로 연다)
+//   C 본사  — **실제 본사 담당자 계정으로 로그인**해서 연다(0208 brand_members). 개발용 플래그 없음.
+//             로그인 직후 / 가 /hq 로 착지하는지 · 사이드바 5메뉴 · 본문 폭 캡 없음 · 탭바 없음
 //   D 모달  — 사장 셸에서 확인 모달이 460 폭으로, 사이드바 **오른쪽 가운데**에 뜬다
 //   E 시트  — 사장 셸에서 바텀시트가 460 프레임 안에 잘림 없이 뜬다
 //   F 콘솔 에러 0 · 가려짐(elementFromPoint) 0 — 세 세션 모두
 //
 // 실행: `npm run web` 을 띄운 뒤 `node scripts/qa-hq-browser.mjs` (QA_ORIGIN 기본 localhost:8081)
-// 계정: 축 A 고정 계정(사장 owner@pilot… · 직원 staff2@pilot…) — ⛔계정을 새로 만들지 않는다.
+// 계정: 고정 계정만 쓴다 — 사장 owner@pilot… · 직원 staff2@pilot… · 본사 hq@pilot…
+//       (본사 계정·브랜드는 `node scripts/seed-brand-demo.mjs` 가 만든다. ⛔여기서 계정을 만들지 않는다.)
 // 스크린샷 → ./qa-shots/hq/
 import { readFileSync, mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -47,6 +49,7 @@ catch { console.error('playwright 미설치'); process.exit(2); }
 const PW = 'pilot1234';
 const OWNER = 'owner@pilot.squaretable.app';
 const JUNIOR = 'staff2@pilot.squaretable.app';
+const HQ = 'hq@pilot.squaretable.app';
 
 const projectRef = new URL(URL_).hostname.split('.')[0];
 const STORAGE_KEY = `sb-${projectRef}-auth-token`;
@@ -69,22 +72,20 @@ async function passwordSession(email) {
   return j;
 }
 
-/** 세션(+본사 미리보기 플래그)을 심은 새 페이지. 콘솔 에러는 모아 둔다. */
-async function openPage(ctx, { session, hqPreview = false }) {
+/** 세션을 심은 새 페이지. 콘솔 에러는 모아 둔다. */
+async function openPage(ctx, { session }) {
   const page = await ctx.newPage();
   const errors = [];
   page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
   page.on('pageerror', (e) => errors.push(String(e)));
   await page.addInitScript(
-    ([k, v, hq]) => {
+    ([k, v]) => {
       try {
+        localStorage.clear();
         if (v) localStorage.setItem(k, v);
-        else localStorage.removeItem(k);
-        if (hq) localStorage.setItem('st-hq-preview', '1');
-        else localStorage.removeItem('st-hq-preview');
       } catch { /* 저장 불가 브라우저 */ }
     },
-    [STORAGE_KEY, session ? JSON.stringify(session) : null, hqPreview],
+    [STORAGE_KEY, session ? JSON.stringify(session) : null],
   );
   page.qaErrors = errors;
   return page;
@@ -152,6 +153,10 @@ const capColumn = (page) =>
 const browser = await chromium.launch();
 try {
   const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  // dev 서버는 코드가 바뀌면 다시 번들한다(수십 초). 기본 30초로는 그 구간이 통째로 실패로 보인다 —
+  // 제품이 아니라 빌드 대기를 재는 것이므로 넉넉히 준다.
+  ctx.setDefaultNavigationTimeout(180000);
+  ctx.setDefaultTimeout(60000);
 
   // ── A 사장 웹 셸 ─────────────────────────────────────────────
   console.log('\nA 사장 — 넓은 웹 셸');
@@ -245,10 +250,13 @@ try {
   await pj.close();
 
   // ── C 본사 셸 ────────────────────────────────────────────────
-  console.log('\nC 본사 — 데스크톱 셸 5메뉴 (개발 전용 미리보기 플래그)');
-  const ph = await openPage(ctx, { session: ownerSession, hqPreview: true });
-  await ph.goto(`${ORIGIN}/hq`, { waitUntil: 'domcontentloaded' });
+  console.log('\nC 본사 — 실제 담당자 계정으로 로그인');
+  const hqSession = await passwordSession(HQ);
+  const ph = await openPage(ctx, { session: hqSession });
+  // ★루트로 들어간다 — "로그인하면 본사 대시보드로 간다"는 판정 자체를 재는 것이 요점이다.
+  await ph.goto(`${ORIGIN}/`, { waitUntil: 'domcontentloaded' });
   await settle(ph);
+  check('C0 로그인 후 /hq 로 착지한다', new URL(ph.url()).pathname === '/hq', ph.url());
   await ph.screenshot({ path: `${SHOTS}/C-hq-dashboard.png` });
   const hqSide = await box(ph, '[data-testid="side-nav"]');
   const hqMain = await box(ph, '[data-testid="hq-main"]');

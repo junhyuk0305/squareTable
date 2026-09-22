@@ -521,6 +521,19 @@ export async function fetchIapEnabled(): Promise<DbResult<boolean>> {
   return { data: (data as boolean) ?? false, error: error as DbErr };
 }
 
+// ── 본사(브랜드) 담당자 판정 (0208) ────────────────────────────────────────
+// "이 사람이 어느 브랜드의 본사 담당자인가" — 0행이면 아니다.
+// ★`brand_members` 는 RLS 정책이 하나도 없어 클라이언트 직접 조회가 0행이다. 입구는 이 정의자 함수뿐이다.
+//   매장 권한(`role`)과 **다른 라인**이라 여기서 매장 데이터가 딸려 나오지 않는다(기획정본 §6-2 ①).
+// ⚠️fail-closed: 못 읽으면 null(본사 아님). 잘못 열리는 쪽이 되돌리기 어렵다.
+export type MyBrandRow = { brand_id: string; brand_name: string };
+export async function fetchMyBrand(): Promise<DbResult<MyBrandRow | null>> {
+  if (!HAS_SUPABASE) return { data: null, error: null };
+  const { data, error } = await supabase.rpc('my_brand');
+  const row = Array.isArray(data) && data.length > 0 ? (data[0] as MyBrandRow) : null;
+  return { data: error ? null : row, error: error as DbErr };
+}
+
 // ── 앱 구독 현재 상태(0187 iap_subscriptions · 0196 pending/grace) — 읽기 전용. 쓰기는 웹훅뿐 ──
 // 한 계정에 옛 거래 행이 여러 개 남을 수 있다(재구독). "지금 살아 있는 구독" = 기간이 안 끝난 행 중 가장 먼 것.
 //   active = 자동갱신 켜짐 · canceled = 해지 예약(기간 끝까지 씀) · grace = 결제 실패 유예(애플이 열어 둔 기간).

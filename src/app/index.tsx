@@ -49,17 +49,22 @@ export default function LandingScreen() {
   const unitId = useSessionStore((s) => s.unitId);
   const pendingUnitId = useSessionStore((s) => s.pendingUnitId);
   const needsDowngradeChoice = useSessionStore((s) => s.needsDowngradeChoice);
+  const brandId = useSessionStore((s) => s.brandId);
 
   // 이미 로그인된 재방문자는 마케팅을 건너뛰고 각자 홈으로. (데모 빌드는 항상 랜딩을 보여준다)
   if (HAS_SUPABASE && status === 'signed_in') {
     // 소셜 로그인으로 들어와 프로필이 결손(phone/생년월일 없음)이면 역할 홈 대신 완성화면으로 — 이 관문이
     // OAuth 복귀(redirectTo=오리진→여기)를 가장 먼저 받는다. 완성 후엔 phone 이 채워져 이 분기를 안 탄다.
-    if (needsProfileSetup({ status, phone, unitId, pendingUnitId })) {
+    if (needsProfileSetup({ status, phone, unitId, pendingUnitId, brandId })) {
       return <Redirect href="/complete-profile" />;
     }
     // 체험이 끝나 무료 한도를 넘긴 것이 있으면 먼저 무엇을 남길지 고른다(0142).
     // 판정은 서버가 갖고 세션이 실어온다 — 순서는 프로필 완성 **다음**이다.
     if (needsDowngradeChoice) return <Redirect href="/downgrade" />;
+    // 본사 담당자는 본사 대시보드가 홈이다(정본 §3-1·§5-1). 매장 사장을 겸하면 본사 셸의
+    // '내 매장으로'로 건너간다 — 두 축을 오가는 길은 셸 양쪽에 한 쌍으로 있다.
+    // ★프로필 완성·다운그레이드 **다음**이다. 그 둘은 계정 축이라 본사보다 먼저 막아야 한다.
+    if (brandId) return <Redirect href="/hq" />;
     return <Redirect href="/hub" />;
   }
   if (HAS_SUPABASE && status === 'loading') return null; // 스플래시가 덮는 구간 — 깜빡임 방지

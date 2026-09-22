@@ -53,7 +53,7 @@
     "platform:status": "node scripts/platform-status.mjs",
     "native:gate": "node scripts/native-gate.mjs",
     "native:preflight": "node scripts/native-preflight.mjs",
-    "qa:seed": "node scripts/seed-demo.mjs && node scripts/seed-quiz-demo.mjs",
+    "qa:seed": "node scripts/seed-demo.mjs && node scripts/seed-quiz-demo.mjs && node scripts/seed-brand-demo.mjs",
     "qa:fresh": "node --env-file=.env.seed scripts/qa-fresh-accounts.mjs",
     "qa:coldstart": "node scripts/qa-coldstart.mjs",
     "qa:downgrade": "node scripts/qa-downgrade-choice.mjs",

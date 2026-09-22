@@ -27,12 +27,13 @@ export function useSessionGate(): ReactElement | null | undefined {
   const unitId = useSessionStore((s) => s.unitId);
   const pendingUnitId = useSessionStore((s) => s.pendingUnitId);
   const needsDowngradeChoice = useSessionStore((s) => s.needsDowngradeChoice);
+  const brandId = useSessionStore((s) => s.brandId);
 
   if (!HAS_SUPABASE) return undefined;
   if (status === 'signed_out') return <Redirect href="/" />;
   if (status === 'loading') return null;
   // 소셜 로그인 결손 프로필(전화/생년월일 없음)은 매장을 만들거나 합류하기 전에 완성화면으로.
-  if (needsProfileSetup({ status, phone, unitId, pendingUnitId })) return <Redirect href="/complete-profile" />;
+  if (needsProfileSetup({ status, phone, unitId, pendingUnitId, brandId })) return <Redirect href="/complete-profile" />;
   // 체험이 끝나 무료 한도를 넘긴 것이 있으면 무엇을 남길지 먼저 고른다(0142).
   if (needsDowngradeChoice) return <Redirect href="/downgrade" />;
   return undefined;
