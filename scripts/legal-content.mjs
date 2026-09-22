@@ -92,6 +92,14 @@ export const BUSINESS = {
   phone: '010-8282-9583',
 };
 
+/**
+ * 통신판매업 신고번호가 아직 없을 때 그 자리에 대신 적는 문장.
+ * 신고 자체가 면제 상태다(공정위 고시 — 직전연도 통신판매 거래 50회 미만). 빈칸으로 두면
+ * 카드사 심사에서 "미기재"로 읽히므로 사유를 적는다(2026-09-22 토스 온보딩팀 요청).
+ * mailOrderNo 를 채우면 이 문장은 자동으로 신고번호로 바뀐다 — 푸터와 사업자정보 페이지가 함께.
+ */
+export const MAIL_ORDER_EXEMPT = '면제 대상(직전연도 통신판매 거래 50회 미만)';
+
 export const SITE_URL = 'https://dochackchack.com';
 
 /** 사업자 정보 한 줄(푸터용). 값이 있는 항목만 잇는다 — 빈 칸 placeholder 는 심사 지적 대상이다. */
@@ -100,7 +108,7 @@ export function businessLine() {
     `상호 ${OPERATOR}`,
     `대표 ${BUSINESS.ceo}`,
     `사업자등록번호 ${BUSINESS.bizRegNo}`,
-    BUSINESS.mailOrderNo ? `통신판매업 신고 ${BUSINESS.mailOrderNo}` : '',
+    `통신판매업 신고 ${BUSINESS.mailOrderNo || MAIL_ORDER_EXEMPT}`,
     `주소 ${BUSINESS.address}`,
     BUSINESS.phone ? `전화 ${BUSINESS.phone}` : '',
     `이메일 ${CONTACT_EMAIL}`,
@@ -870,7 +878,7 @@ const BUSINESS_INFO_ROWS = [
   ['상호', OPERATOR],
   ['대표자', BUSINESS.ceo],
   ['사업자등록번호', BUSINESS.bizRegNo],
-  ['통신판매업 신고번호', BUSINESS.mailOrderNo],
+  ['통신판매업 신고번호', BUSINESS.mailOrderNo || MAIL_ORDER_EXEMPT],
   ['주소', BUSINESS.address],
   ['고객센터', BUSINESS.phone],
   ['고객문의', CONTACT_EMAIL],
