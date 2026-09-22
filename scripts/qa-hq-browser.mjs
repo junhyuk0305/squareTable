@@ -285,6 +285,41 @@ try {
   }
   await ph.screenshot({ path: `${SHOTS}/C-hq-settings.png` });
   await ph.close();
+
+  // ── G 셸 경계 — 자격이 서기 전엔 크롬 0 ─────────────────────────
+  // 2026-09-22 사용자 지적: 미로그인 방문자가 /hq 를 열면 본사 사이드바(메뉴 5 + 로그아웃)가 보였다.
+  // 셸은 자격 뒤에 씌운다 — 미로그인·무자격자·인증 화면 어디에도 사이드바 DOM 이 0개여야 한다.
+  console.log('\nG 셸 경계 — 미로그인·무자격자·인증 화면에 사이드바 0');
+  const hasLeaf = (page, t) =>
+    page.evaluate(
+      (txt) => [...document.querySelectorAll('div,span')].some((d) => !d.children.length && (d.textContent ?? '').trim() === txt),
+      t,
+    );
+
+  const pg1 = await openPage(ctx, { session: null });
+  await pg1.goto(`${ORIGIN}/hq`, { waitUntil: 'domcontentloaded' });
+  await settle(pg1);
+  await pg1.screenshot({ path: `${SHOTS}/G-anon-hq.png` });
+  check('G1 미로그인 /hq — 사이드바 0', !(await box(pg1, '[data-testid="side-nav"]')));
+  check('G2 미로그인 /hq — 로그인 안내가 보인다', await hasLeaf(pg1, '본사 담당자 계정으로 로그인해 주세요'));
+  check('G3 미로그인 /hq — 콘솔 에러 0', pg1.qaErrors.length === 0, pg1.qaErrors.slice(0, 3).join(' | '));
+  await pg1.close();
+
+  const pg2 = await openPage(ctx, { session: ownerSession });
+  await pg2.goto(`${ORIGIN}/hq`, { waitUntil: 'domcontentloaded' });
+  await settle(pg2);
+  await pg2.screenshot({ path: `${SHOTS}/G-owner-hq.png` });
+  check('G4 무자격 사장 /hq — 사이드바 0(사장 셸도 본사 셸도 아님)', !(await box(pg2, '[data-testid="side-nav"]')));
+  check('G5 무자격 사장 /hq — 안내 + 돌아갈 길', await hasLeaf(pg2, '이 계정은 본사 담당자가 아니에요'));
+  await pg2.close();
+
+  const pg3 = await openPage(ctx, { session: null });
+  await pg3.goto(`${ORIGIN}/login`, { waitUntil: 'domcontentloaded' });
+  await settle(pg3);
+  await pg3.screenshot({ path: `${SHOTS}/G-anon-login.png` });
+  check('G6 /login — 사이드바 0', !(await box(pg3, '[data-testid="side-nav"]')));
+  check('G7 /login — 하단 탭바 0', (await tabBarCount(pg3, ['현황', '오늘', '노하우', '매장'])) === 0);
+  await pg3.close();
 } catch (e) {
   fail++;
   console.log('\n✗ 하니스 중단:', String(e).slice(0, 300));

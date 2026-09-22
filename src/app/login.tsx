@@ -69,7 +69,9 @@ export default function LoginScreen() {
       flash(error || '로그인에 실패했어요. 잠시 후 다시 시도해주세요.', true);
       return;
     }
-    router.replace('/hub');
+    // 착지는 루트(index)가 정한다 — 프로필 완성 → 다운그레이드 → 본사(/hq) → 허브 순.
+    // 여기서 /hub 로 직행하면 본사 담당자가 매장 없는 허브에 떨어진다(2026-09-22).
+    router.replace('/');
   };
 
   return (

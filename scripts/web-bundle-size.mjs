@@ -62,13 +62,8 @@ const kb = (n) => `${(n / 1024).toFixed(1)}KB`;
 console.log(`\n웹 번들 — JS ${sized.length}개 · 합계 ${kb(totalJs)} · dist 전체 ${kb(totalAll)}`);
 if (sized[0]) console.log(`최대 청크 ${sized[0].name} ${kb(sized[0].bytes)}`);
 
-let fail = 0;
-if (leaked.length) {
-  fail = 1;
-  console.log(`\n✗ 개발 전용 플래그 '${DEV_ONLY_MARKER}' 가 프로덕션 번들에 남았다: ${leaked.map((f) => f.name).join(', ')}`);
-} else {
-  console.log(`✓ 개발 전용 플래그 '${DEV_ONLY_MARKER}' 프로덕션 번들에 0건`);
-}
+// 개발 전용 플래그 누수 검사는 d244236(플래그 폐기)에서 마커와 함께 사라졌다 — 판정 블록만 남아
+// `leaked` 미정의로 매번 크래시했다(2026-09-22 실측).
 
 if (existsSync(BASELINE)) {
   const prev = JSON.parse(readFileSync(BASELINE, 'utf8'));
