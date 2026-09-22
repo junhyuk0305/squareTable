@@ -35,6 +35,10 @@ export const OWNER_KIND_UI: Record<OwnerNotifKind, { icon: IconName; tint: strin
   payment_rejected: { icon: 'alert-circle', tint: BrandColors.accentSoft },
   seat_lock: { icon: 'lock-closed', tint: BrandColors.accentSoft },
   ai_cap: { icon: 'flash', tint: BrandColors.yellowSoft },
+  // 0204 결제 알림 — 카드 모양 아이콘은 쓰지 않는다(같은 행이 iOS 앱 알림함에도 나온다).
+  card_fail: { icon: 'alert-circle', tint: BrandColors.accentSoft },
+  card_renew: { icon: 'calendar', tint: BrandColors.yellowSoft },
+  card_end: { icon: 'time', tint: BrandColors.yellowSoft },
 };
 /** 허브(역할 혼합 가능) 용 — 두 맵 합성. */
 // 닫힌 매장(0197) — 통합 목록에만 나온다(매장 안 알림함엔 그 매장이 없다).

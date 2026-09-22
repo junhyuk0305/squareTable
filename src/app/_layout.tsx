@@ -149,6 +149,8 @@ export default function RootLayout() {
             <Stack.Screen name="junior" options={{ animation: 'none' }} />
             <Stack.Screen name="owner" options={{ animation: 'none' }} />
             <Stack.Screen name="billing" />
+            {/* 토스 카드 등록창에서 돌아오는 자리(웹 전용, 0204). */}
+            <Stack.Screen name="billing-card" />
             {/* 체험 종료 → 무엇을 남길지 고르는 가로막는 화면(0142). 허브·매장과 **같은 층**이다 —
                 owner/ 안에 두면 활성 매장이 잠긴 순간 진입 자체가 막혀 계정이 갇힌다. */}
             <Stack.Screen name="downgrade" />

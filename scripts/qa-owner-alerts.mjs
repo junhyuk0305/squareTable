@@ -100,7 +100,7 @@ async function sweep() {
 }
 async function alerts(unitId, kind) {
   const { data, error } = await admin.from('owner_alerts')
-    .select('id, period, step, title, claimed_at, recipients').eq('unit_id', unitId).eq('kind', kind).order('id');
+    .select('id, period, step, title, body, claimed_at, recipients').eq('unit_id', unitId).eq('kind', kind).order('id');
   if (error) throw new Error(`owner_alerts 읽기 실패: ${error.message}`);
   return data ?? [];
 }
@@ -346,6 +346,43 @@ async function main() {
     const { data: inboxO } = await P.c.rpc('my_unit_closure_alerts');
     check('⑩ 사장은 0행', (inboxO ?? []).length === 0, `rows=${inboxO?.length}`);
     void csQ;
+
+    // ⑪ 카드 결제 알림(0204) — 같은 원장·같은 스윕·같은 배달. 결제 3일 전 예고 1행 · 실패 알림 1행 · 수신자 = 사장 1명.
+    //    (갱신 실패가 구독을 past_due 로 바꾸므로 예고를 먼저 검증한다.)
+    const cardRows = async () => {
+      await admin.from('card_payments').delete().eq('owner_id', O.uid);
+      await admin.from('card_subscriptions').delete().eq('owner_id', O.uid);
+    };
+    await cardRows();
+    try {
+      const { error: csErr } = await admin.from('card_subscriptions').insert({
+        owner_id: O.uid, plan: 'single', store_count: 1, amount_krw: 25000, status: 'active', livemode: false,
+        current_period_start: new Date(Date.now() - 27 * 864e5).toISOString(),
+        current_period_end: new Date(Date.now() + 3 * 864e5).toISOString(),
+        next_charge_at: new Date(Date.now() + 2 * 864e5).toISOString(),
+        terms_version: 'qa', agreed_at: new Date().toISOString(),
+      });
+      if (csErr) throw new Error(`card_subscriptions insert 실패: ${csErr.message}`);
+      await sweep();
+      await sweep();
+      const cr = await alerts(unit, 'card_renew');
+      check('⑪ 결제 3일 전 예고 1행(스윕 두 번) · 선점 · 사장 1명', cr.length === 1 && !!cr[0].claimed_at && cr[0].recipients === 1, JSON.stringify(cr));
+
+      const orderId = `RNqa_${s}_${Date.now()}`;
+      const { error: cpErr } = await admin.from('card_payments').insert({
+        order_id: orderId, owner_id: O.uid, kind: 'renewal', plan: 'single', store_count: 1, amount_krw: 25000, livemode: false, order_name: 'qa',
+      });
+      if (cpErr) throw new Error(`card_payments insert 실패: ${cpErr.message}`);
+      await admin.rpc('card_record_charge', { p_order_id: orderId, p_ok: false, p_fail_message: '한도 초과' });
+      await admin.rpc('card_record_charge', { p_order_id: orderId, p_ok: false, p_fail_message: '한도 초과' });
+      await sweep();
+      await sweep();
+      const cf = await alerts(unit, 'card_fail');
+      check('⑪ 결제 실패 알림 1행(반영 두 번·스윕 두 번) · 선점 · 사장 1명', cf.length === 1 && cf[0].period === orderId && !!cf[0].claimed_at && cf[0].recipients === 1, JSON.stringify(cf));
+      check('⑪ 결제 알림 제목·본문에 카드·웹 없음(iOS 앱에도 나간다)', [...cr, ...cf].every((x) => !/카드|웹/.test(`${x.title} ${x.body}`)), JSON.stringify([...cr, ...cf].map((x) => `${x.title} / ${x.body}`)));
+    } finally {
+      await cardRows();
+    }
   } finally {
     await restore();
     console.log('  … app_config 원복');

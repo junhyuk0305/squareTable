@@ -559,6 +559,17 @@ export async function fetchMyIapReleaseChoice(): Promise<DbResult<string[]>> {
   }
   return { data: (data ?? []).map((r) => String((r as { unit_id: string }).unit_id)), error: null };
 }
+// 카드 구독 줄이기 때 "닫을 매장" 후보(0204 my_card_release_candidates) — 카드 구독으로 연, 지금 열린 소유 매장.
+// 계좌이체로 연 매장은 빠진다(구독 갱신이 닫지 못한다). 서버 card_begin_change 가 같은 목록으로 개수를 검증한다.
+export async function fetchMyCardReleaseCandidates(): Promise<DbResult<{ unit_id: string; store_name: string }[]>> {
+  if (!HAS_SUPABASE) return { data: [], error: null };
+  const { data, error } = await supabase.rpc('my_card_release_candidates');
+  if (error) {
+    readFail('fetchMyCardReleaseCandidates', error);
+    return { data: null, error: error as DbErr };
+  }
+  return { data: (data ?? []) as { unit_id: string; store_name: string }[], error: null };
+}
 export async function rpcChooseIapRelease(unitIds: string[]): Promise<{ error: DbErr }> {
   if (!HAS_SUPABASE) return { error: null };
   const { error } = await supabase.rpc('choose_iap_release', { p_units: unitIds });
@@ -567,6 +578,72 @@ export async function rpcChooseIapRelease(unitIds: string[]): Promise<{ error: D
 export async function rpcClearIapRelease(): Promise<{ error: DbErr }> {
   if (!HAS_SUPABASE) return { error: null };
   const { error } = await supabase.rpc('clear_iap_release');
+  return { error: error as DbErr };
+}
+
+// ── 웹 카드 정기결제(0204 card_subscriptions · card_payments) — 읽기 + 해지·해지 취소 ──
+// 청구·요금 변경·카드 변경은 토스 호출이 필요해 엣지(card-billing, lib/payments/cardBilling.ts)로만 간다.
+// RLS: 본인 행만. 빌링키는 이 테이블들에 없다(card_billing_keys — 클라 grant 0).
+export type CardSubscriptionRow = {
+  plan: 'single' | 'multi';
+  store_count: number;
+  amount_krw: number;
+  status: 'active' | 'canceled' | 'past_due' | 'expired' | 'refunded';
+  livemode: boolean;
+  current_period_start: string;
+  current_period_end: string;
+  next_charge_at: string | null;
+  fail_count: number;
+  last_fail_message: string | null;
+  pending_plan: 'single' | 'multi' | null;
+  pending_store_count: number | null;
+  card_company: string | null;
+  card_number: string | null;
+};
+export async function fetchMyCardSubscription(): Promise<DbResult<CardSubscriptionRow | null>> {
+  if (!HAS_SUPABASE) return { data: null, error: null };
+  const { data, error } = await supabase
+    .from('card_subscriptions')
+    .select('plan, store_count, amount_krw, status, livemode, current_period_start, current_period_end, next_charge_at, fail_count, last_fail_message, pending_plan, pending_store_count, card_company, card_number')
+    .maybeSingle();
+  if (error) {
+    readFail('fetchMyCardSubscription', error);
+    return { data: null, error: error as DbErr };
+  }
+  return { data: (data as CardSubscriptionRow) ?? null, error: null };
+}
+
+export type CardPaymentRow = { order_id: string; amount_krw: number; status: string; approved_at: string | null; receipt_url: string | null };
+/** 가장 최근 승인된 카드 결제 1건(영수증 링크용). */
+export async function fetchMyLastCardPayment(): Promise<DbResult<CardPaymentRow | null>> {
+  if (!HAS_SUPABASE) return { data: null, error: null };
+  const { data, error } = await supabase
+    .from('card_payments')
+    .select('order_id, amount_krw, status, approved_at, receipt_url')
+    .in('status', ['done', 'partial_canceled', 'canceled'])
+    .order('approved_at', { ascending: false })
+    .limit(1);
+  if (error) {
+    readFail('fetchMyLastCardPayment', error);
+    return { data: null, error: error as DbErr };
+  }
+  return { data: ((data ?? [])[0] as CardPaymentRow) ?? null, error: null };
+}
+
+/** 토스 customerKey — 카드 등록창을 열기 직전에 받는다(사장만, 없으면 서버가 만든다). */
+export async function rpcCardCustomerKey(): Promise<DbResult<string>> {
+  if (!HAS_SUPABASE) return { data: null, error: null };
+  const { data, error } = await supabase.rpc('card_customer_key');
+  return { data: (data as string) ?? null, error: error as DbErr };
+}
+export async function rpcCardCancel(): Promise<{ error: DbErr }> {
+  if (!HAS_SUPABASE) return { error: null };
+  const { error } = await supabase.rpc('card_cancel_subscription');
+  return { error: error as DbErr };
+}
+export async function rpcCardResume(): Promise<{ error: DbErr }> {
+  if (!HAS_SUPABASE) return { error: null };
+  const { error } = await supabase.rpc('card_resume_subscription');
   return { error: error as DbErr };
 }
 

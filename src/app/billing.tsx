@@ -14,7 +14,7 @@ import { canManage } from '@/lib/utils/roles';
 import { BILLING_INFO, formatKrw } from '@/lib/config/billing';
 import { TERMS_VERSION, PAYMENT_SLA_SENTENCE } from '@/lib/config/business';
 import { PLANS, PLAN_ORDER, planMonthlyPrice, supplyPrice, VAT_NOTE_SENTENCE, FREE_PROMO, SIGNUP_PROMO, type PlanId } from '@/lib/config/tiers';
-import { SHOW_BILLING, showIapSurface, showPaymentSurface } from '@/lib/config/store-policy';
+import { SHOW_BILLING, SHOW_CARD_BILLING, showIapSurface, showPaymentSurface } from '@/lib/config/store-policy';
 import { usePaymentClaimStore, CLAIM_ERROR_TEXT } from '@/lib/store/usePaymentClaimStore';
 import {
   redeemPromoCode,
@@ -22,13 +22,17 @@ import {
   fetchMyIapSubscription,
   fetchMyIapReleaseChoice,
   fetchMyLockedUnits,
+  fetchMyCardSubscription,
+  fetchMyCardReleaseCandidates,
   type SeatStatus,
   type IapSubscriptionRow,
+  type CardSubscriptionRow,
 } from '@/lib/db';
 import { Appear, stagger } from '@/components/Appear';
 import { Collapse } from '@/components/Collapse';
 import { ScreenLoading } from '@/components/ScreenLoading';
 import { IapPurchasePanel } from '@/components/IapPurchasePanel';
+import { CardBillingPanel } from '@/components/CardBillingPanel';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
@@ -129,6 +133,15 @@ function BillingBody() {
   const [lockedUnits, setLockedUnits] = useState<string[]>([]);
   // ★실패해도 true — 조회 한 번 실패로 요금제 화면이 영영 로딩이 되면 안 된다.
   const [iapLoaded, setIapLoaded] = useState(false);
+  // 웹 카드 정기결제(0204) — 살아 있는 카드 구독이 있으면 결제 폼 대신 관리 패널을 그린다.
+  const [cardSub, setCardSub] = useState<CardSubscriptionRow | null>(null);
+  // 줄이기 때 "닫을 매장" 후보 — 카드 구독으로 연 매장만(서버 card_release_candidates 와 같은 목록. 계좌이체로 연 매장은 구독이 닫지 못한다).
+  const [cardCandidates, setCardCandidates] = useState<{ unit_id: string; store_name: string }[]>([]);
+  const [cardLoaded, setCardLoaded] = useState(false);
+  // 해지 예약 구독의 기간 만료 판정 기준 시각(렌더 중 Date.now() 금지 — 화면 진입 시각으로 고정).
+  const [loadedAt] = useState(() => Date.now());
+  // 결제 방법 — 카드 결제가 열린 웹에서는 카드가 기본. 계좌이체는 백업 경로라 닫지 않는다.
+  const [payMethod, setPayMethod] = useState<'card' | 'transfer'>(SHOW_CARD_BILLING ? 'card' : 'transfer');
   // 무료 이용 코드(0092) — 기본 접힘(화면 요소 예산). 검증·기록·활성화는 전부 서버 RPC.
   const [promoOpen, setPromoOpen] = useState(false);
   const [promoCode, setPromoCode] = useState('');
@@ -158,10 +171,30 @@ function BillingBody() {
   //   "매장 1개 × 29,000원 / 지금 매장 2개를 갖고 계세요"가 한 화면에 공존했다. 이 값은 multi 에서만 쓰인다.
   const MULTI_MIN_STORES = 2;
   const [storeCount, setStoreCount] = useState(paramStores >= 1 ? paramStores : Math.max(ownedCount, MULTI_MIN_STORES));
+  // 사장이 스테퍼를 직접 눌렀는가 — 카드 구독 동기화(아래)가 사장의 선택을 덮지 않게.
+  const storeTouched = useRef(paramStores >= 1);
   const buyCount = selectedPlan === 'multi' ? storeCount : 1;
   // 표시가 = 부가세 포함가 = 실제 입금 요청액 — 서버 payment_claim_amount(0192)와 같은 값
   const monthlyBilled = planMonthlyPrice(selectedPlan, buyCount);
   const monthlySupply = supplyPrice(monthlyBilled); // 세금계산서 분할용
+  // 살아 있는 카드 구독 = 자동결제 켜짐·재시도 중·해지 예약(기간 남음). 끝난 것(expired·refunded)은 새로 결제한다.
+  const cardLive =
+    !!cardSub &&
+    (cardSub.status === 'active' ||
+      cardSub.status === 'past_due' ||
+      (cardSub.status === 'canceled' && new Date(cardSub.current_period_end).getTime() > loadedAt));
+  // 확인 중인 계좌이체 신고가 있으면 계좌이체 쪽만 보여준다(그 상태 카드가 거기 있다) — 카드로 또 내면 서버가 막는다.
+  const claimPending = latestClaim?.status === 'pending';
+  // 카드 해지·변경 뒤 — 토스트 없이 구독·세션만 다시 읽는다(recheck 는 "현재 ○○ 요금제예요"를 띄운다).
+  const reloadCard = async () => {
+    await refreshMembership();
+    const [{ data: card }, { data: choice }, { data: candidates }] = await Promise.all([
+      fetchMyCardSubscription(), fetchMyIapReleaseChoice(), fetchMyCardReleaseCandidates(),
+    ]);
+    setCardSub(card ?? null);
+    setReleaseChoice(choice ?? []);
+    setCardCandidates(candidates ?? []);
+  };
 
   // 자동 재확인: /billing 은 top-level 라우트라 owner/junior 레이아웃의 refreshMembership 폴이 여기선 안 돈다.
   //   → 이 화면 자체에서 30초마다 상태를 당겨, 계좌이체 활성화가 반영되면 새로고침 탭 없이 자동으로 앱에 진입.
@@ -216,10 +249,30 @@ function BillingBody() {
     return () => { alive = false; };
   }, [isOwner, plan]);
 
-  // 화면 단일 게이트 — 이 화면이 읽는 원격 소스는 셋(입금 신고·좌석 현황·앱 구독)이고, 전부 자기 담당
+  // 카드 구독 상태 — 사장·카드 결제가 열린 웹만. ★실패해도 loaded(요금제 화면이 영영 로딩이 되면 안 된다).
+  useEffect(() => {
+    if (!isOwner || !SHOW_CARD_BILLING) return;
+    let alive = true;
+    void Promise.all([fetchMyCardSubscription(), fetchMyCardReleaseCandidates()]).then(([{ data }, { data: candidates }]) => {
+      if (!alive) return;
+      setCardSub(data ?? null);
+      setCardCandidates(candidates ?? []);
+      // ★카드 구독 중이면 요금제·매장 수 기본값을 **구독과 맞춘다.** 소유 매장 수로 두면(구독 3매장인데 매장 4개 소유)
+      //   사장이 아무것도 안 눌렀는데 "지금 바로 변경하기(즉시 차액 결제)" 버튼이 뜬다(2026-09-15 독립 검증 지적).
+      if (data && ['active', 'past_due', 'canceled'].includes(data.status)) {
+        if (!planTouched.current) setSelectedPlan(data.plan);
+        if (!storeTouched.current && data.plan === 'multi') setStoreCount(data.store_count);
+      }
+      setCardLoaded(true);
+    });
+    return () => { alive = false; };
+  }, [isOwner, plan]);
+
+  // 화면 단일 게이트 — 이 화면이 읽는 원격 소스는 넷(입금 신고·좌석 현황·앱 구독·카드 구독)이고, 전부 자기 담당
   // 역할에서만 조회한다. 안 부르는 소스를 기다리면 영영 로딩이므로 필요한 쪽만 AND 한다.
   const needsClaims = isOwner && SHOW_BILLING;
-  const ready = (!needsClaims || claimsLoaded) && (!manages || seatLoaded) && (!isOwner || iapLoaded);
+  const needsCard = isOwner && SHOW_CARD_BILLING;
+  const ready = (!needsClaims || claimsLoaded) && (!manages || seatLoaded) && (!isOwner || iapLoaded) && (!needsCard || cardLoaded);
 
   // quiet = 이용권 패널이 결제·복원 뒤 반영을 기다리며 부르는 새로고침(5초마다). 토스트를 내지 않는다 —
   //   "현재 ○○ 요금제예요"가 결과 토스트("이 계정으로 산 이용권이 없어요" 등)를 1초 안에 덮었다(2026-09-14).
@@ -231,6 +284,7 @@ function BillingBody() {
       const [{ data: sub }, { data: choice }] = await Promise.all([fetchMyIapSubscription(), fetchMyIapReleaseChoice()]);
       setIapSub(sub ?? null);
       setReleaseChoice(choice ?? []);
+      if (SHOW_CARD_BILLING) setCardSub((await fetchMyCardSubscription()).data ?? null);
     }
     if (!quiet) setBusy(false);
     // 활성화됐으면 게이트가 자동으로 화면을 넘긴다. 아니면 그대로 안내가 유지된다.
@@ -609,7 +663,59 @@ function BillingBody() {
             </View>
             </Appear>
 
-            {selectedPlan === 'free' ? (
+            {/* 몇 개분을 살지 — 이게 결제의 입력이다(0130 store_count). 카드·계좌이체·카드 요금 변경이 같은 값을 쓴다.
+                한 번에 여러 개를 사도 되고, 나중에 하나씩 더 사도 된다. */}
+            {selectedPlan === 'multi' && !(iapSub && iapSub.status !== 'canceled') && (
+              <Appear delay={stagger(3)}>
+              <View style={styles.section}>
+                <Text style={styles.sectionLabel}>매장 개수</Text>
+                <View style={styles.card}>
+                  <View style={styles.stepper}>
+                    <Pressable
+                      onPress={() => { storeTouched.current = true; setStoreCount((n) => Math.max(MULTI_MIN_STORES, n - 1)); }}
+                      disabled={storeCount <= MULTI_MIN_STORES}
+                      style={({ pressed }) => [styles.stepBtn, pressed && { opacity: 0.6 }, storeCount <= MULTI_MIN_STORES && { opacity: 0.4 }]}
+                      accessibilityRole="button"
+                      accessibilityLabel="매장 개수 줄이기"
+                    >
+                      <Ionicons name="remove" size={20} color={InkColors.ink} />
+                    </Pressable>
+                    <Text style={styles.stepValue}>{storeCount}개</Text>
+                    <Pressable
+                      onPress={() => { storeTouched.current = true; setStoreCount((n) => Math.min(15, n + 1)); }}
+                      disabled={storeCount >= 15}
+                      style={({ pressed }) => [styles.stepBtn, pressed && { opacity: 0.6 }, storeCount >= 15 && { opacity: 0.4 }]}
+                      accessibilityRole="button"
+                      accessibilityLabel="매장 개수 늘리기"
+                    >
+                      <Ionicons name="add" size={20} color={InkColors.ink} />
+                    </Pressable>
+                  </View>
+                  <Text style={styles.hint}>
+                    {cardLive
+                      ? '늘리면 남은 이용 기간만큼의 차액이 바로 결제되고, 줄이면 다음 결제일부터 적용돼요.'
+                      : `결제되면 ${storeCount}개만큼 열려요. 아직 무료인 내 매장이 먼저 열리고, 남는 건 새 매장을 만들 때 쓰여요.`}
+                    {ownedCount > 0 ? ` 지금 매장 ${ownedCount}개를 갖고 계세요.` : ''}
+                  </Text>
+                </View>
+              </View>
+              </Appear>
+            )}
+
+            {cardLive && cardSub ? (
+              /* 카드 자동결제 중 — 결제 폼 대신 관리 패널(변경·해지·카드 바꾸기). 계좌이체를 같이 띄우면 두 번 낸다(서버 가드 0204). */
+              <Appear delay={stagger(3)}>
+                <CardBillingPanel
+                  sub={cardSub}
+                  selectedPlan={selectedPlan}
+                  storeCount={buyCount}
+                  userName={userName}
+                  openStores={cardCandidates}
+                  releaseChoice={releaseChoice}
+                  onChanged={() => void reloadCard()}
+                />
+              </Appear>
+            ) : selectedPlan === 'free' ? (
               /* 무료 선택 — 입금 절차 없음 */
               <Appear delay={stagger(3)}>
               <View style={styles.card}>
@@ -641,10 +747,62 @@ function BillingBody() {
                       <Ionicons name="phone-portrait-outline" size={18} color={InkColors.ink2} />
                       <Text style={styles.claimTitle}>앱 구독이 {fmtDayKo(iapSub.current_period_end)}에 끝나요</Text>
                     </View>
-                    <Text style={styles.body}>지금 등록하시면 그날부터 이어져요.</Text>
+                    <Text style={styles.body}>
+                      {payMethod === 'card'
+                        ? '카드로 결제하면 오늘부터 새 이용 기간이 시작돼요. 겹치는 기간이 아깝다면 앱 구독이 끝난 뒤 결제해 주세요.'
+                        : '지금 등록하시면 그날부터 이어져요.'}
+                    </Text>
                   </View>
                   </Appear>
                 )}
+                {/* 결제 방법 — 카드 자동결제(0204)가 열린 웹에서만 고른다. 키가 없으면 계좌이체만(종전과 같다). */}
+                {SHOW_CARD_BILLING && !claimPending && (
+                  <Appear delay={stagger(3)}>
+                  <View style={styles.section}>
+                    <Text style={styles.sectionLabel}>결제 방법</Text>
+                    <View style={styles.planList}>
+                      {([
+                        { id: 'card', name: '카드 자동결제', desc: '결제하면 바로 열리고, 한 달마다 자동으로 결제돼요. 언제든 해지할 수 있어요.' },
+                        { id: 'transfer', name: '계좌이체', desc: '한 달씩 직접 입금해요. 확인 후 열리고 자동결제는 없어요.' },
+                      ] as const).map((m) => {
+                        const selected = payMethod === m.id;
+                        return (
+                          <Pressable
+                            key={m.id}
+                            onPress={() => setPayMethod(m.id)}
+                            style={[styles.planCard, selected && styles.planCardSelected]}
+                            accessibilityRole="button"
+                            accessibilityState={{ selected }}
+                            accessibilityLabel={`${m.name} 선택`}
+                          >
+                            <View style={styles.planHead}>
+                              <Ionicons
+                                name={selected ? 'radio-button-on' : 'radio-button-off'}
+                                size={18}
+                                color={selected ? InkColors.ink : InkColors.ink3}
+                              />
+                              <Text style={styles.planName}>{m.name}</Text>
+                            </View>
+                            <Text style={styles.planTagline}>{m.desc}</Text>
+                          </Pressable>
+                        );
+                      })}
+                    </View>
+                  </View>
+                  </Appear>
+                )}
+                {payMethod === 'card' && !claimPending ? (
+                  <Appear delay={stagger(4)}>
+                    <CardBillingPanel
+                      sub={null}
+                      selectedPlan={selectedPlan}
+                      storeCount={buyCount}
+                      userName={userName}
+                      onChanged={() => void reloadCard()}
+                    />
+                  </Appear>
+                ) : (
+                <>
                 {/* ★2026-08-06: 안내 문구 · 입금 계좌 · 입금자명이 각각 카드라 **카드 3연속**이었다
                     (배치규칙① 위반 · 실브라우저 실측 카드런 3). 셋은 "입금하기" 한 동작이라
                     — 계좌를 보고 이체한 뒤 그 이름을 적는다 — 한 카드로 합친다. 행은 하나도 안 없앴다. */}
@@ -674,42 +832,9 @@ function BillingBody() {
                       공급가액 {formatKrw(monthlySupply)} + 부가세 {formatKrw(monthlyBilled - monthlySupply)}이에요.
                     </Text>
                     {selectedPlan === 'multi' && (
-                      <>
-                        <Text style={styles.hint}>
-                          매장 {buyCount}개 × {formatKrw(PLANS.multi.monthlyKrw)} 기준이에요.
-                        </Text>
-
-                        <View style={styles.payDivider} />
-
-                        {/* 몇 개분을 살지 — 이게 결제의 입력이다(0130 store_count).
-                            한 번에 여러 개를 사도 되고, 나중에 하나씩 더 사도 된다. */}
-                        <Text style={styles.payFieldLabel}>매장 개수</Text>
-                        <View style={styles.stepper}>
-                          <Pressable
-                            onPress={() => setStoreCount((n) => Math.max(MULTI_MIN_STORES, n - 1))}
-                            disabled={storeCount <= MULTI_MIN_STORES}
-                            style={({ pressed }) => [styles.stepBtn, pressed && { opacity: 0.6 }, storeCount <= MULTI_MIN_STORES && { opacity: 0.4 }]}
-                            accessibilityRole="button"
-                            accessibilityLabel="매장 개수 줄이기"
-                          >
-                            <Ionicons name="remove" size={20} color={InkColors.ink} />
-                          </Pressable>
-                          <Text style={styles.stepValue}>{storeCount}개</Text>
-                          <Pressable
-                            onPress={() => setStoreCount((n) => Math.min(15, n + 1))}
-                            disabled={storeCount >= 15}
-                            style={({ pressed }) => [styles.stepBtn, pressed && { opacity: 0.6 }, storeCount >= 15 && { opacity: 0.4 }]}
-                            accessibilityRole="button"
-                            accessibilityLabel="매장 개수 늘리기"
-                          >
-                            <Ionicons name="add" size={20} color={InkColors.ink} />
-                          </Pressable>
-                        </View>
-                        <Text style={styles.hint}>
-                          입금이 확인되면 {storeCount}개만큼 열려요. 아직 무료인 내 매장이 먼저 열리고, 남는 건 새 매장을 만들 때 쓰여요.
-                          {ownedCount > 0 ? ` 지금 매장 ${ownedCount}개를 갖고 계세요.` : ''}
-                        </Text>
-                      </>
+                      <Text style={styles.hint}>
+                        매장 {buyCount}개 × {formatKrw(PLANS.multi.monthlyKrw)} 기준이에요. 입금이 확인되면 {buyCount}개만큼 열려요.
+                      </Text>
                     )}
 
                     <View style={styles.payDivider} />
@@ -844,6 +969,8 @@ function BillingBody() {
                   <Text style={styles.mailText}>메일로도 알리기 ({BILLING_INFO.contactValue})</Text>
                 </Pressable>
                 </Appear>
+                </>
+                )}
               </>
             )}
             {/* 도입 문의(0105) — 표준 3티어에 안 담기는 도입(다점포 대량·프랜차이즈 본사)의 상담 창구. */}
