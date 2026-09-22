@@ -1,4 +1,4 @@
--- 0204_card_billing.sql — 웹 카드 정기결제(토스페이먼츠 빌링) 채널 (2026-09-15)
+-- 0208_card_billing.sql — 웹 카드 정기결제(토스페이먼츠 빌링) 채널 (2026-09-15, 번호 0204→0208 2026-09-22)
 --
 -- ── 무엇을 푸는가 ───────────────────────────────────────────────────────────
 -- 웹 결제는 지금까지 계좌이체(0083) 하나였다 — 매달 사람이 통장을 보고 승인한다.
@@ -278,10 +278,12 @@ declare
   v_unit    text;
   v_units   text[] := '{}';
   v_chosen  text[] := '{}';   -- ★0196: 사장이 "닫을 매장"으로 고른 것(없으면 빈 배열 = 0187 과 동일 동작)
-  v_targets text[] := '{}';   -- ★0204: 새 슬롯을 받을 매장 — ① 연장 전에 고정
+  v_targets text[] := '{}';   -- ★0208: 새 슬롯을 받을 매장 — ① 연장 전에 고정
   v_slot    uuid;
   v_days    int;
   v_need    int;
+  v_keep    int;              -- ★0207: 미소비로 유지할 수 있는 최대 슬롯 수
+  v_reuse   int;              -- ★0207: 그중 이미 있어 재사용한 수
   i         int;
 begin
   if p_owner is null then raise exception 'owner_required'; end if;
@@ -355,7 +357,7 @@ begin
        limit p_count
     ) t;
 
-  -- ★0204: 새 슬롯을 받을 매장을 **지금**(① 연장 전) 고정한다. 기준은 assign_open_slots(0196 (5))와 같다
+  -- ★0208: 새 슬롯을 받을 매장을 **지금**(① 연장 전) 고정한다. 기준은 assign_open_slots(0196 (5))와 같다
   --   (무료이거나 가입 체험 · 잠기지 않음 · 오래된 순) + ①의 연장 대상은 뺀다(같은 매장에 흔적이 두 번 붙지 않게).
   select coalesce(array_agg(u.id order by u.created_at asc), '{}')
     into v_targets
@@ -387,19 +389,48 @@ begin
 
   -- ② 모자란 만큼만 새 슬롯을 적립한다. claim_id 는 null 이지만 source='iap' 라
   --    무료 지급(grant)과 섞이지 않는다 — 0187(1)이 그래서 필요했다.
-  v_need := greatest(0, p_count - extended);
+  --
+  -- ★0207(2026-09-21, 0208 로 승계): **이미 떠 있는 미소비 슬롯을 먼저 센다.**
+  --   초안은 `v_need := greatest(0, p_count - extended)` 였다. extended 는 **매장에 붙은** 슬롯만
+  --   세므로, 매장을 다 만들지 않은 사장은 sync 가 불릴 때마다 슬롯이 새로 적립됐다.
+  --   웹훅은 요금제 교체 한 번에 PRODUCT_CHANGE + INITIAL_PURCHASE 로 **두 번** 부른다.
+  --   실측(2026-09-19, hubdemo.starter): 3곳 구독인데 유효 슬롯 5개(소비 1 + 미소비 4)
+  --   → 그 결제 주기 동안 **구독보다 많은 매장을 열 수 있었다**(다음 갱신에서 초과분은 닫힌다).
+  --   ⛔플랫폼 무관이다 — 애플도 같았다. 안드로이드 실기기 검증 중에 드러났을 뿐이다.
+  --
+  --   재사용 대상은 **유효한(아직 안 끝난) 미소비 iap 슬롯**을 만료 임박 순으로 v_keep 개까지다.
+  --   그 슬롯들의 paid_until 은 새 결제일로 **대입**한다(가산 아님 — 0187 ② 와 같은 원칙).
+  --   ⛔v_keep 을 넘는 미소비 슬롯은 건드리지 않는다: 줄이기로 남게 된 초과분이라
+  --     연장하면 닫혀야 할 매장이 열린다(⑤ 와 같은 의미).
+  v_keep := greatest(0, p_count - extended);
+
+  with pick as (
+    select s.id from public.store_slots s
+     where s.owner_id = p_owner and s.source = 'iap'
+       and s.consumed_at is null and s.paid_until > now()
+     order by s.paid_until asc, s.id asc
+     limit v_keep
+  )
+  update public.store_slots s
+     set paid_until = p_period_end
+    from pick where s.id = pick.id;
+  get diagnostics v_reuse = row_count;
+
+  v_need := greatest(0, v_keep - v_reuse);
   for i in 1 .. v_need loop
     insert into public.store_slots (owner_id, paid_until, claim_id, source)
     values (p_owner, p_period_end, null, 'iap');
   end loop;
   granted := v_need;
 
-  -- ★0204: 배정 = ① 전에 고정한 대상에만(assign_open_slots 와 같은 루프 · 대상만 미리 정해 둔 것).
+  -- ★0208: 배정 = ① 전에 고정한 대상에만(assign_open_slots 와 같은 루프 · 대상만 미리 정해 둔 것).
   --   남는 슬롯은 새 매장 만들기·이전 매장 다시 열기(reopen_store)에 쓰인다(0196 규칙 그대로).
+  --   ★0207 승계: 상한은 v_need 가 아니라 **v_keep**(새로 적립한 것 + 재사용한 것)이다.
+  --   재사용만으로 v_need 가 0 이 될 수 있는데, v_need 로 재면 열 수 있는 매장을 안 열고 끝난다.
   assigned := 0;
-  if v_need > 0 then
+  if v_keep > 0 then
     foreach v_unit in array v_targets loop
-      exit when assigned >= v_need;
+      exit when assigned >= v_keep;
       select id into v_slot
         from public.store_slots
        where owner_id = p_owner and consumed_at is null and paid_until > now()
@@ -429,7 +460,7 @@ begin
            and not (s2.consumed_unit_id = any(v_units))
          group by s2.consumed_unit_id
          order by min(s2.consumed_at) asc
-         limit v_need
+         limit v_keep
       ) n
      where s.unit_id = n.unit_id;
   end if;
@@ -1116,7 +1147,7 @@ begin
     raise exception 'iap_subscription_active';
   end if;
 
-  -- ★0204: 카드 자동결제가 켜져 있거나 재시도 중이면 계좌이체를 받지 않는다. 해지 예약(canceled)은 통과(위와 같은 이유).
+  -- ★0208: 카드 자동결제가 켜져 있거나 재시도 중이면 계좌이체를 받지 않는다. 해지 예약(canceled)은 통과(위와 같은 이유).
   if exists (
     select 1 from public.card_subscriptions
      where owner_id = v_uid and status in ('active', 'past_due')
@@ -1236,7 +1267,7 @@ begin
     end if;
   end loop;
 
-  -- (c2) ★0204: 카드 자동결제 예고 — 결제 3일 전(card_renew) · 해지 예약 기간 끝 3일 전(card_end). 사용자 결정 09-15.
+  -- (c2) ★0208: 카드 자동결제 예고 — 결제 3일 전(card_renew) · 해지 예약 기간 끝 3일 전(card_end). 사용자 결정 09-15.
   --   · 창 안에 들어온 첫 스윕에서 1행. period = 사장id:기간끝 → 매장(unit)이 아니라 **사장·기간** 기준으로 1회다
   --     (알림을 붙이는 활성 매장이 스윕 사이에 바뀌어도 두 번 나가지 않게 unit 을 빼고 존재를 본다).
   --   · 해지를 창 안에서 누른 사장에겐 끝 예고를 보내지 않는다 — 방금 화면에서 날짜를 봤다.

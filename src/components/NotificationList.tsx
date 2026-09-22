@@ -35,7 +35,7 @@ export const OWNER_KIND_UI: Record<OwnerNotifKind, { icon: IconName; tint: strin
   payment_rejected: { icon: 'alert-circle', tint: BrandColors.accentSoft },
   seat_lock: { icon: 'lock-closed', tint: BrandColors.accentSoft },
   ai_cap: { icon: 'flash', tint: BrandColors.yellowSoft },
-  // 0204 결제 알림 — 카드 모양 아이콘은 쓰지 않는다(같은 행이 iOS 앱 알림함에도 나온다).
+  // 0208 결제 알림 — 카드 모양 아이콘은 쓰지 않는다(같은 행이 iOS 앱 알림함에도 나온다).
   card_fail: { icon: 'alert-circle', tint: BrandColors.accentSoft },
   card_renew: { icon: 'calendar', tint: BrandColors.yellowSoft },
   card_end: { icon: 'time', tint: BrandColors.yellowSoft },

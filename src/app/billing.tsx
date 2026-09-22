@@ -133,7 +133,7 @@ function BillingBody() {
   const [lockedUnits, setLockedUnits] = useState<string[]>([]);
   // ★실패해도 true — 조회 한 번 실패로 요금제 화면이 영영 로딩이 되면 안 된다.
   const [iapLoaded, setIapLoaded] = useState(false);
-  // 웹 카드 정기결제(0204) — 살아 있는 카드 구독이 있으면 결제 폼 대신 관리 패널을 그린다.
+  // 웹 카드 정기결제(0208) — 살아 있는 카드 구독이 있으면 결제 폼 대신 관리 패널을 그린다.
   const [cardSub, setCardSub] = useState<CardSubscriptionRow | null>(null);
   // 줄이기 때 "닫을 매장" 후보 — 카드 구독으로 연 매장만(서버 card_release_candidates 와 같은 목록. 계좌이체로 연 매장은 구독이 닫지 못한다).
   const [cardCandidates, setCardCandidates] = useState<{ unit_id: string; store_name: string }[]>([]);
@@ -703,7 +703,7 @@ function BillingBody() {
             )}
 
             {cardLive && cardSub ? (
-              /* 카드 자동결제 중 — 결제 폼 대신 관리 패널(변경·해지·카드 바꾸기). 계좌이체를 같이 띄우면 두 번 낸다(서버 가드 0204). */
+              /* 카드 자동결제 중 — 결제 폼 대신 관리 패널(변경·해지·카드 바꾸기). 계좌이체를 같이 띄우면 두 번 낸다(서버 가드 0208). */
               <Appear delay={stagger(3)}>
                 <CardBillingPanel
                   sub={cardSub}
@@ -755,7 +755,7 @@ function BillingBody() {
                   </View>
                   </Appear>
                 )}
-                {/* 결제 방법 — 카드 자동결제(0204)가 열린 웹에서만 고른다. 키가 없으면 계좌이체만(종전과 같다). */}
+                {/* 결제 방법 — 카드 자동결제(0208)가 열린 웹에서만 고른다. 키가 없으면 계좌이체만(종전과 같다). */}
                 {SHOW_CARD_BILLING && !claimPending && (
                   <Appear delay={stagger(3)}>
                   <View style={styles.section}>

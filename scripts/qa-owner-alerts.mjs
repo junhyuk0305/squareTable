@@ -347,7 +347,7 @@ async function main() {
     check('⑩ 사장은 0행', (inboxO ?? []).length === 0, `rows=${inboxO?.length}`);
     void csQ;
 
-    // ⑪ 카드 결제 알림(0204) — 같은 원장·같은 스윕·같은 배달. 결제 3일 전 예고 1행 · 실패 알림 1행 · 수신자 = 사장 1명.
+    // ⑪ 카드 결제 알림(0208) — 같은 원장·같은 스윕·같은 배달. 결제 3일 전 예고 1행 · 실패 알림 1행 · 수신자 = 사장 1명.
     //    (갱신 실패가 구독을 past_due 로 바꾸므로 예고를 먼저 검증한다.)
     const cardRows = async () => {
       await admin.from('card_payments').delete().eq('owner_id', O.uid);

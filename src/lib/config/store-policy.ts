@@ -72,7 +72,7 @@ export const SHOW_IAP =
   Platform.OS === 'ios' ? IAP_READY_IOS : Platform.OS === 'android' ? IAP_READY_ANDROID : false;
 
 /**
- * 웹 카드 정기결제(토스페이먼츠 빌링, 0204) 표면을 그려도 되는가 — 웹 결제 축(`SHOW_BILLING`) 안의 하위 채널.
+ * 웹 카드 정기결제(토스페이먼츠 빌링, 0208) 표면을 그려도 되는가 — 웹 결제 축(`SHOW_BILLING`) 안의 하위 채널.
  *
  * 스위치 = 클라이언트 키(`EXPO_PUBLIC_TOSS_CLIENT_KEY`, Vercel 환경변수). 키가 없으면 계좌이체만 보인다 —
  * 카드사 심사 전후로 켜고 끄는 데 코드 변경이 필요 없다. 테스트 키로 켜 둔 동안 누가 결제할 수 있는지는

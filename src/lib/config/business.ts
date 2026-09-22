@@ -32,7 +32,7 @@ export const BUSINESS_INFO = {
  */
 // ★v2.1 = 2026-09-13 즉시 시행(공고일 = 시행일, 사용자 결정). v2 의 시행일도 09-13 이라 날짜만으로는 둘이
 //   구별되지 않는다 — 실유료 고객 0명이라 받아들인 것이다. 다음 개정부터는 날짜가 겹치지 않게 한다.
-// ★v2.2 = 웹 카드 정기결제(0204). 날짜는 legal-content.mjs EFFECTIVE_DATE 와 함께 배포일로 교체한다.
+// ★v2.2 = 웹 카드 정기결제(0208). 날짜는 legal-content.mjs EFFECTIVE_DATE 와 함께 배포일로 교체한다.
 export const TERMS_VERSION = '2026-09-17';
 
 /**

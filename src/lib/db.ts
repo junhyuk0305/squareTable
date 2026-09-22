@@ -559,7 +559,7 @@ export async function fetchMyIapReleaseChoice(): Promise<DbResult<string[]>> {
   }
   return { data: (data ?? []).map((r) => String((r as { unit_id: string }).unit_id)), error: null };
 }
-// 카드 구독 줄이기 때 "닫을 매장" 후보(0204 my_card_release_candidates) — 카드 구독으로 연, 지금 열린 소유 매장.
+// 카드 구독 줄이기 때 "닫을 매장" 후보(0208 my_card_release_candidates) — 카드 구독으로 연, 지금 열린 소유 매장.
 // 계좌이체로 연 매장은 빠진다(구독 갱신이 닫지 못한다). 서버 card_begin_change 가 같은 목록으로 개수를 검증한다.
 export async function fetchMyCardReleaseCandidates(): Promise<DbResult<{ unit_id: string; store_name: string }[]>> {
   if (!HAS_SUPABASE) return { data: [], error: null };
@@ -581,7 +581,7 @@ export async function rpcClearIapRelease(): Promise<{ error: DbErr }> {
   return { error: error as DbErr };
 }
 
-// ── 웹 카드 정기결제(0204 card_subscriptions · card_payments) — 읽기 + 해지·해지 취소 ──
+// ── 웹 카드 정기결제(0208 card_subscriptions · card_payments) — 읽기 + 해지·해지 취소 ──
 // 청구·요금 변경·카드 변경은 토스 호출이 필요해 엣지(card-billing, lib/payments/cardBilling.ts)로만 간다.
 // RLS: 본인 행만. 빌링키는 이 테이블들에 없다(card_billing_keys — 클라 grant 0).
 export type CardSubscriptionRow = {

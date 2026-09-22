@@ -1,8 +1,8 @@
 // supabase/functions/card-billing/index.ts  (Deno / Supabase Edge Function)
-// 웹 카드 정기결제(토스페이먼츠 빌링) — 토스 API 를 부르는 유일한 자리. 스키마·판정 = 0204_card_billing.sql.
+// 웹 카드 정기결제(토스페이먼츠 빌링) — 토스 API 를 부르는 유일한 자리. 스키마·판정 = 0208_card_billing.sql.
 //
 // 역할 분담:
-//   DB(0204)  = 무엇을 청구할지 정하고(금액·가드·선점), 결과를 반영한다(card_record_charge — 멱등).
+//   DB(0208)  = 무엇을 청구할지 정하고(금액·가드·선점), 결과를 반영한다(card_record_charge — 멱등).
 //   여기      = 인증 + 토스 호출 + 결과 전달. 판정을 여기서 새로 하지 않는다.
 //
 // action

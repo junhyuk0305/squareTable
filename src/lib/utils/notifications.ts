@@ -234,7 +234,7 @@ export function buildJuniorNotifications(args: {
 export type OwnerNotifKind =
   | 'join_request' | 'question' | 'suggestion' | 'swap_approval' | 'mention'
   | 'payment_approved' | 'payment_rejected'
-  // 0191 사장 알림 — 좌석 잠김 · AI 사용량 80%·100% · 0204 카드 결제 실패·결제 예고·해지 예약 종료 예고
+  // 0191 사장 알림 — 좌석 잠김 · AI 사용량 80%·100% · 0208 카드 결제 실패·결제 예고·해지 예약 종료 예고
   | 'seat_lock' | 'ai_cap' | 'card_fail' | 'card_renew' | 'card_end';
 export type OwnerNotifRoute =
   | '/owner/inbox' | '/owner/suggestions' | '/owner/schedule' | '/owner/staff' | '/owner/work'

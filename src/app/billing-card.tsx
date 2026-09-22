@@ -13,7 +13,7 @@ import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
 
-// 토스 카드 등록창에서 돌아오는 자리(웹 전용, 0204).
+// 토스 카드 등록창에서 돌아오는 자리(웹 전용, 0208).
 //   successUrl = /billing-card?mode=subscribe&plan=..&stores=..  (+ 토스가 붙이는 customerKey·authKey)
 //   failUrl    = 같은 주소 + fail=1 (+ 토스가 붙이는 code·message)
 // ★authKey 는 일회용이다. 이 화면은 받자마자 한 번만 서버에 넘기고, 결과만 보여준다.

@@ -17,7 +17,7 @@ import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
 
-// 웹 카드 정기결제(토스페이먼츠 빌링, 0204) — /billing 안의 카드 결제 블록.
+// 웹 카드 정기결제(토스페이먼츠 빌링, 0208) — /billing 안의 카드 결제 블록.
 //   sub = null      → 새로 결제: 금액·이용 기간·다음 결제일 → 자동결제 동의 → 토스 카드 등록창
 //   sub = 살아 있음 → 관리: 다음 결제일·카드·요금제 변경·해지/해지 취소·카드 바꾸기
 // ★금액은 보여주기만 한다. 실제 청구액은 서버(payment_claim_amount 0192)가 다시 계산한다.

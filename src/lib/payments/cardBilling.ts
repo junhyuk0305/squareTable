@@ -1,5 +1,5 @@
 // 웹 카드 정기결제(토스페이먼츠 빌링) 클라이언트.
-// 서버 = supabase/functions/card-billing(토스 호출) · supabase/migrations/0204_card_billing.sql(판정).
+// 서버 = supabase/functions/card-billing(토스 호출) · supabase/migrations/0208_card_billing.sql(판정).
 //
 // ★웹 전용이다. 네이티브에서는 이 모듈의 함수를 부를 일이 없다(store-policy SHOW_CARD_BILLING=false).
 //   iOS·Android 앱 안에서 카드 결제·외부 결제 안내가 한 글자도 나오면 스토어 규정 위반이다.

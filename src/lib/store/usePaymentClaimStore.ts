@@ -32,7 +32,7 @@ function toClaimError(message?: string): ClaimError {
   if (m.includes('bad_biz_no')) return 'bad_biz_no';
   // 앱 스토어 구독 중 계좌이체 신고를 서버가 막는다(0187) — 이중 청구 방지.
   if (m.includes('iap_subscription_active')) return 'iap_subscription_active';
-  // 웹 카드 자동결제 중 계좌이체 신고를 서버가 막는다(0204) — 이중 청구 방지.
+  // 웹 카드 자동결제 중 계좌이체 신고를 서버가 막는다(0208) — 이중 청구 방지.
   if (m.includes('card_subscription_active')) return 'card_subscription_active';
   return 'unknown';
 }
