@@ -9,6 +9,7 @@
 import { useEffect } from 'react';
 import { router } from 'expo-router';
 import { useSessionStore } from '@/lib/store/useSessionStore';
+import { WEB_PUSH_ENABLED } from '@/lib/config/store-policy';
 import { canManage } from '@/lib/utils/roles';
 import { usePreferencesStore } from '@/lib/store/usePreferencesStore';
 import { registerServiceWorker, ensurePushSubscribed } from '@/lib/push/webpush';
@@ -57,7 +58,9 @@ export function usePushBootstrap(): void {
   const signedIn = useSessionStore((s) => s.status === 'signed_in');
   useEffect(() => {
     if (signedIn && userId) {
-      void ensurePushSubscribed(userId, unitId || null); // 웹 전용(네이티브 no-op)
+      // 웹 푸시는 정책으로 꺼 뒀다(2026-09-22 — 알림은 폰 앱이 받는다). 서비스워커 등록·
+      // 알림 클릭 라우팅은 위에 그대로 둔다(PWA 불변식: 헤드 주입·정적 규약 파일은 안 건드린다).
+      if (WEB_PUSH_ENABLED) void ensurePushSubscribed(userId, unitId || null); // 웹 전용(네이티브 no-op)
       void ensureNativePushRegistered(unitId || null); // 네이티브 전용(웹 no-op)
       void usePreferencesStore.getState().hydrateNotify(); // DB 알림 선호를 로컬 캐시로(전 플랫폼)
     }

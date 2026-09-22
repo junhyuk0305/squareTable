@@ -13,7 +13,7 @@ import {
   enableNativePush,
 } from '@/lib/push/nativepush';
 import { canManage } from '@/lib/utils/roles';
-import { SHOW_BILLING } from '@/lib/config/store-policy';
+import { SHOW_BILLING, WEB_PUSH_ENABLED } from '@/lib/config/store-policy';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Space, SCREEN_GUTTER } from '@/lib/theme/layout';
@@ -58,7 +58,8 @@ export function NotificationPermissionSheet() {
   useEffect(() => {
     // '본 적 있음'이 도착하기 전에 띄우면 이미 본 사람에게 또 뜬다 — 도착을 기다린다.
     if (!tourLoaded || seen[NOTIFY_ASKED_ID] || !userId) return;
-    if (!isNative && !pushSupported()) return; // 웹 푸시 미지원 브라우저
+    // 웹 푸시 미지원 브라우저 + 정책으로 끈 경우(웹은 안 묻는다 — 알림은 폰 앱이 받는다).
+    if (!isNative && !(WEB_PUSH_ENABLED && pushSupported())) return;
     // ★앞 장(직원 환영 코치·사용 안내 팝업)이 떠 있으면 기다린다 — 겹치면 둘 다 안 읽힌다.
     //   markSeen 을 안 하므로, 앞 장이 닫히면 이 effect 가 다시 돌아 같은 진입에서 이어 뜬다.
     //   (예전엔 타이머 안에서 가이드만 한 번 확인하고 그냥 접었다 — 다음 진입까지 밀렸다.)
