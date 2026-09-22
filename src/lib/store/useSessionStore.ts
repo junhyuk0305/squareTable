@@ -78,6 +78,13 @@ type SessionState = {
   freeMode: boolean;
   /** 앱에서 이용권을 팔아도 되는가(서버 스위치 0187). 판매 롤백은 이 값 하나로 뒤집는다. */
   iapEnabled: boolean;
+  /**
+   * 본사(브랜드) 담당자로 로그인했는가 — 담당자면 브랜드 id, 아니면 null.
+   * ★매장 권한(`role`)과 **다른 라인**이다(`brand_members` ⊥ `unit_members`).
+   *  P1 에서는 필드만 두고 항상 null 이다 — `brand_members` 에서 파생하는 것은 P2(조직 축).
+   *  웹 셸은 이 값 하나로 본사 대시보드를 고른다(`AppShell.web.tsx`).
+   */
+  brandId: string | null;
   inviteCode: string; // 내 매장 초대코드(사장 화면에서 직원에게 공유)
   email: string;
   bio: string; // 한줄 소개
@@ -499,6 +506,8 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   ...(HAS_SUPABASE ? { ...DEMO, status: 'loading' } : DEMO),
   // 로그인 전엔 '가입 때 고른 역할'을 알 수 없다 → null. loadProfile 이 메타데이터에서 채운다.
   signupRole: null,
+  // 브랜드 축(P2)이 붙기 전까지 항상 null. 파생 지점이 생기면 loadProfile 이 채운다.
+  brandId: null,
 
   init: async () => {
     if (!HAS_SUPABASE) {

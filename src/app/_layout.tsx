@@ -4,7 +4,7 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFonts } from 'expo-font';
-import { ResponsiveShell } from '@/components/ResponsiveShell';
+import { AppShell } from '@/components/shell/AppShell';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { SwipeBack } from '@/components/SwipeBack';
 import { SplashAnimation } from '@/components/SplashAnimation';
@@ -102,7 +102,7 @@ export default function RootLayout() {
   return (
     <SafeAreaProvider>
       <StatusBar style="dark" />
-      <ResponsiveShell>
+      <AppShell>
         {!splashDone && <SplashAnimation ready={booted || bootTimedOut} onDone={handleSplashDone} />}
         <SyncBanner />
         {/* 매장 진입 커버 — 어느 자리에서 눌렀든(허브 카드·상단바 매장 칸) 같은 커버를 여기서 그린다. */}
@@ -155,7 +155,7 @@ export default function RootLayout() {
           </Stack>
           </SwipeBack>
         </ErrorBoundary>
-      </ResponsiveShell>
+      </AppShell>
     </SafeAreaProvider>
   );
 }
