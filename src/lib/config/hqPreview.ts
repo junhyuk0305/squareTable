@@ -7,7 +7,7 @@
  *   산출물에 플래그 문자열이 남지 않는 것을 `scripts/web-bundle-size.mjs` 가 확인한다.
  * 모듈 평가 시 1회만 읽는다(셸과 라우트 게이트가 같은 값을 봐야 한다).
  */
+// ★한 줄로 둔다 — `typeof window` 가드가 `window.localStorage` 와 **같은 줄**에 있어야
+//   native:preflight 의 웹 전용 API 래칫이 가드를 알아본다(줄 단위로 본다).
 export const IS_HQ_PREVIEW: boolean =
-  __DEV__ && typeof window !== 'undefined' && !!window.localStorage
-    ? window.localStorage.getItem('st-hq-preview') === '1'
-    : false;
+  __DEV__ && typeof window !== 'undefined' && window.localStorage?.getItem('st-hq-preview') === '1';
