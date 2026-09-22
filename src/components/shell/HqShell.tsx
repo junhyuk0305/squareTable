@@ -79,7 +79,7 @@ export function HqShell({ children }: { children: ReactNode }) {
   return (
     <View style={styles.outer}>
       <SideNav subtitle="본사" groups={groups} footer={{ items: footerItems }} />
-      <View style={styles.main}>{children}</View>
+      <View testID="hq-main" style={styles.main}>{children}</View>
     </View>
   );
 }

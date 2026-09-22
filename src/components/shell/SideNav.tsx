@@ -40,7 +40,7 @@ export function SideNav({
   footer?: NavGroup;
 }) {
   return (
-    <View style={styles.side}>
+    <View testID="side-nav" style={styles.side}>
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <View style={styles.brand}>
           <Wordmark size="xs" />
@@ -74,6 +74,7 @@ function NavRow({ item }: { item: NavItem }) {
   const color = item.active ? InkColors.ink : InkColors.ink2;
   return (
     <Pressable
+      testID={`nav-${item.key}`}
       onPress={item.onPress}
       accessibilityRole="button"
       accessibilityState={{ selected: item.active }}

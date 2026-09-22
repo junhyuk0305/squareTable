@@ -128,7 +128,9 @@
     "qa:quiz-formats": "node scripts/qa-quiz-formats-browser.mjs",
     "qa:quiz-ui": "node scripts/qa-quiz-ui-browser.mjs",
     "qa:quiz-link": "node scripts/qa-quiz-link-live.mjs",
-    "qa:quiz-integrity": "node scripts/qa-quiz-attempt-integrity.mjs"
+    "qa:quiz-integrity": "node scripts/qa-quiz-attempt-integrity.mjs",
+    "qa:hq": "node scripts/qa-hq-browser.mjs",
+    "web:size": "expo export --platform web && node scripts/web-bundle-size.mjs"
   },
   "private": true
 }

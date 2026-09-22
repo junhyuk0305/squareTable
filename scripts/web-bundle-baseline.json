@@ -1,0 +1,11 @@
+{
+  "measuredAt": "2026-09-22",
+  "jsFiles": 4,
+  "totalJsBytes": 5401347,
+  "totalDistBytes": 10011232,
+  "largestChunk": {
+    "name": "_expo/static/js/web/entry-ccf21209152e16e1bec374a3f9832b08.js",
+    "bytes": 5385101
+  },
+  "note": "P1 전 · main 7d2f74f"
+}

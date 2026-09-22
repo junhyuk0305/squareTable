@@ -102,7 +102,7 @@ export function OwnerWebShell({ children }: { children: ReactNode }) {
       <SideNav subtitle={storeLabel ? `지금 · ${storeLabel}` : undefined} groups={groups} footer={footer} />
       <View style={styles.main}>
         {/* 본문 컬럼 — 모달·바텀시트는 ResponsiveShell 때와 같이 바깥(body)으로 나가 frameCapStyle(460)로 가운데에 뜬다. */}
-        <View style={styles.content}>{children}</View>
+        <View testID="owner-web-content" style={styles.content}>{children}</View>
       </View>
     </View>
   );
