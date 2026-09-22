@@ -64,3 +64,21 @@ export const modalFrameStyle: ViewStyle = {
   alignSelf: 'center',
   justifyContent: 'flex-end',
 };
+
+/**
+ * 넓은 웹 셸(사장)의 본문 컬럼 최대폭.
+ *
+ * 화면들이 460 전제로 만들어져 있어 사이드바가 생긴 만큼 그대로 늘리면 줄이 늘어져 깨진다.
+ * 한 단계만 넓히고(460 → 720) 화면별 두 단 배치는 별도 단계에서 한다(구현계획 P7).
+ * 모달·바텀시트는 여기가 아니라 `frameCapStyle`(460) 그대로다 — 넓은 셸에서도 가운데 460 폭으로 뜬다.
+ */
+export const OWNER_WEB_MAX_WIDTH = 720;
+
+/** 넓은 웹 셸의 왼쪽 사이드바 폭(본사 대시보드 데모 HTML `.side` 와 같은 값). */
+export const SIDE_NAV_WIDTH = 224;
+
+/**
+ * 본사 화면 본문의 좌우 거터 — 넓은 레이아웃이라 폰 거터(20)보다 한 단계 크다.
+ * 데모 HTML `.page` 의 32px 과 같은 값이다. 본사 화면 밖에서는 쓰지 않는다.
+ */
+export const HQ_PAGE_GUTTER = 32;
