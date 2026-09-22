@@ -1,15 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, Pressable, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Stack, useRouter, Redirect } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useMemberPrefsStore } from '@/lib/store/useMemberPrefsStore';
 import { useCrossNotifStore } from '@/lib/store/useCrossNotifStore';
 import { showToast } from '@/lib/store/useToastStore';
-import { needsProfileSetup } from '@/lib/store/profileSetup';
-import { HAS_SUPABASE } from '@/lib/supabase';
+import { useSessionGate } from '@/lib/hooks/useSessionGate';
 import { storeColor } from '@/lib/utils/storeColor';
 import { useCrossNotifRows } from '@/lib/hooks/useCrossNotifRows';
 import { assignedTodayCount } from '@/lib/utils/crossStoreNotifs';
@@ -48,9 +47,8 @@ export default function StoresHub() {
   const freeMode = useSessionStore((s) => s.freeMode);
   const iapEnabled = useSessionStore((s) => s.iapEnabled);
   const sessionStores = useSessionStore((s) => s.stores);
-  const status = useSessionStore((s) => s.status);
-  const phone = useSessionStore((s) => s.phone);
-  const pendingUnitId = useSessionStore((s) => s.pendingUnitId);
+  // 출입 게이트 4단(미로그인·세션 확정 전·프로필 미완성·다운그레이드 선택 대기)은 hub.tsx 와 같은 훅.
+  const gate = useSessionGate();
 
   const isOwner = role === 'owner';
   // ★'매장을 만들 수 있는 사람인가'는 role 로 못 가른다 — handle_new_user 가 신규 프로필을 무조건
@@ -74,8 +72,6 @@ export default function StoresHub() {
 
   // 전 매장이 같은 역할인가 — 목록 전체를 한 단어로 부를 수 있을 때만 섹션 라벨에 역할을 쓴다(0093).
   const uniformRole = stores.length > 0 && stores.every((s) => s.role === stores[0].role) ? stores[0].role : null;
-
-  const needsDowngradeChoice = useSessionStore((s) => s.needsDowngradeChoice);
 
   const [overview, setOverview] = useState<Record<string, OwnerOverviewRow>>({});
   // 무료 초과로 잠긴 매장(0142) — 판정은 서버(my_locked_units)가 SSOT. 카드마다 RPC 를 부르지 않는다.
@@ -195,15 +191,7 @@ export default function StoresHub() {
   // 화면 단일 게이트 — 사장 지표는 사장일 때만 기다린다(직원은 애초에 안 부른다).
   const ready = (!isOwner || ovLoaded) && lockLoaded && crossLoaded && prefsLoaded;
 
-  // 게이트(index.tsx와 동일 규칙): 미로그인 → 랜딩, 프로필 미완성 → 완성화면.
-  // 루트 레벨이라 owner/junior 그룹 게이트를 안 타므로 여기서 직접 지킨다.
-  if (HAS_SUPABASE && status === 'signed_out') return <Redirect href="/" />;
-  if (HAS_SUPABASE && status === 'loading') return null;
-  if (HAS_SUPABASE && needsProfileSetup({ status, phone, unitId, pendingUnitId })) {
-    return <Redirect href="/complete-profile" />;
-  }
-  // 다운그레이드 선택 대기(0142) — 허브 층 세 화면(index·hub·stores)이 같은 게이트를 가진다.
-  if (HAS_SUPABASE && needsDowngradeChoice) return <Redirect href="/downgrade" />;
+  if (gate !== undefined) return gate;
 
   // 진입 커버는 전역 <StoreEnterCover/>(_layout)가 덮는다 — 상단바에서 눌러도 같은 커버여야 하므로.
 
