@@ -102,28 +102,15 @@ const box = (page, sel) =>
   }, sel);
 
 /**
- * 폰 프레임 찾기 — nativeID→DOM id 매핑은 RN Web 에서 보장되지 않는다(ui.md).
- * 그래서 id 대신 **계산된 maxWidth 가 460px 이면서 화면 높이를 채우는** 컬럼을 찾는다.
+ * 사이드바 **밖**에 있는 하단 탭 버튼 수 — 사이드바 항목과 라벨이 같아 안쪽은 빼고 센다.
+ * ★textContent 로 찾지 않는다 — 아이콘이 폰트 글리프라 텍스트에 섞여 정확 일치가 안 된다. aria-label 로 본다.
  */
-const phoneFrame = (page) =>
-  page.evaluate(() => {
-    let best = null;
-    for (const el of document.querySelectorAll('div')) {
-      if (getComputedStyle(el).maxWidth !== '460px') continue;
-      const r = el.getBoundingClientRect();
-      if (r.height < innerHeight * 0.6) continue;
-      if (!best || r.height > best.h) best = { w: r.width, h: r.height, x: r.x };
-    }
-    return best;
-  });
-
-/** 사이드바 **밖**에 있는 하단 탭 버튼 수 — 사이드바 항목과 라벨이 같아 안쪽은 빼고 센다. */
 const tabBarCount = (page, labels) =>
   page.evaluate((ls) => {
     const side = document.querySelector('[data-testid="side-nav"]');
-    return [...document.querySelectorAll('[role="button"]')].filter((b) => {
+    return [...document.querySelectorAll('[aria-label]')].filter((b) => {
       if (side && side.contains(b)) return false;
-      return ls.includes((b.textContent ?? '').trim());
+      return ls.includes((b.getAttribute('aria-label') ?? '').trim());
     }).length;
   }, labels);
 
@@ -142,21 +129,25 @@ const occluded = (page) =>
     return out;
   });
 
-/** 정확히 그 글자를 가진 리프에서 위로 올라가며 폭이 생기는 상자를 찾는다(모달·시트 측정용). */
-const boxOfText = (page, text) =>
-  page.evaluate((t) => {
-    const leaf = [...document.querySelectorAll('div,span,p')].find(
-      (e) => !e.children.length && (e.textContent ?? '').trim() === t,
-    );
-    if (!leaf) return null;
-    let el = leaf;
-    for (let i = 0; i < 8 && el.parentElement; i++) {
-      el = el.parentElement;
+/**
+ * 화면에 떠 있는 **460 캡 컬럼**(`frameCapStyle`·`modalFrameStyle`)을 찾는다.
+ *
+ * ★사장 웹 셸의 본문은 720 이라 460 컬럼이 **평소엔 하나도 없다** — 즉 460 컬럼의 존재가 곧
+ *   "모달이나 시트가 떠 있다"는 신호다. 글자로 찾으면 문구가 바뀔 때마다 검사가 깨진다.
+ */
+const capColumn = (page) =>
+  page.evaluate(() => {
+    let best = null;
+    for (const el of document.querySelectorAll('div')) {
+      if (getComputedStyle(el).maxWidth !== '460px') continue;
       const r = el.getBoundingClientRect();
-      if (r.width >= 200) return { x: r.x, w: r.width, right: r.right, top: r.y, bottom: r.bottom };
+      if (r.width < 100 || r.height < 40) continue;
+      if (!best || r.width * r.height > best.area) {
+        best = { x: r.x, w: r.width, right: r.right, top: r.y, bottom: r.bottom, area: r.width * r.height };
+      }
     }
-    return null;
-  }, text);
+    return best;
+  });
 
 const browser = await chromium.launch();
 try {
@@ -192,12 +183,13 @@ try {
 
   // ── D 확인 모달 ──────────────────────────────────────────────
   console.log('\nD 확인 모달 — 460 폭, 사이드바 오른쪽');
+  check('D0 모달 열기 전에는 460 캡 컬럼이 없다(본문은 720)', !(await capColumn(po)));
   await po.click('[data-testid="nav-logout"]');
   await po.waitForTimeout(1000);
   await po.screenshot({ path: `${SHOTS}/D-owner-dialog.png` });
-  const dialog = await boxOfText(po, '로그아웃하시겠어요?');
+  const dialog = await capColumn(po);
   const vw = await po.evaluate(() => innerWidth);
-  check('D1 확인 모달이 떴다', !!dialog);
+  check('D1 확인 모달이 떴다(460 캡 컬럼 등장)', !!dialog);
   check('D2 모달이 460 프레임 안이다', !!dialog && dialog.w <= 461, dialog ? `${dialog.w}px` : '');
   check('D3 모달이 잘리지 않는다', !!dialog && dialog.x >= 0 && dialog.right <= vw, dialog ? `x=${dialog.x} right=${dialog.right}` : '');
   check(
@@ -214,15 +206,23 @@ try {
 
   // ── E 바텀시트 ───────────────────────────────────────────────
   console.log('\nE 바텀시트 — 460 프레임 안, 잘림 0');
-  const infoDot = await po.$('[aria-label$="설명 보기"]');
-  if (!infoDot) {
-    check('E1 ⓘ 트리거를 찾았다', false, '현황 화면에 InfoDot 이 없다 — 시드 상태를 확인한다');
+  // 현황 화면의 '답 기다리는 질문' 행 → OwnerStatusView 의 BottomSheet(종류가 2개 이상일 때).
+  const opened = await po.evaluate(() => {
+    const leaf = [...document.querySelectorAll('div,span')].find(
+      (e) => !e.children.length && (e.textContent ?? '').trim() === '답 기다리는 질문',
+    );
+    const btn = leaf?.closest('[role="button"]') ?? leaf?.parentElement?.closest('[role="button"]');
+    if (!btn) return false;
+    btn.click();
+    return true;
+  });
+  if (!opened) {
+    check('E1 시트 트리거를 찾았다', false, "현황 화면에 '답 기다리는 질문' 행이 없다 — 시드 상태를 확인한다");
   } else {
-    await infoDot.click();
-    await po.waitForTimeout(900);
+    await po.waitForTimeout(1000);
     await po.screenshot({ path: `${SHOTS}/E-owner-sheet.png` });
-    const sheet = await boxOfText(po, '알겠어요');
-    check('E1 바텀시트가 떴다', !!sheet);
+    const sheet = await capColumn(po);
+    check('E1 바텀시트가 떴다(460 캡 컬럼 등장)', !!sheet);
     check('E2 시트가 460 프레임 안이다', !!sheet && sheet.w <= 461, sheet ? `${sheet.w}px` : '');
     check('E3 시트가 잘리지 않는다', !!sheet && sheet.x >= 0 && sheet.right <= vw, sheet ? `x=${sheet.x} right=${sheet.right}` : '');
   }
@@ -236,7 +236,7 @@ try {
   await settle(pj);
   await pj.screenshot({ path: `${SHOTS}/B-junior-hub.png` });
   check('B1 사이드바가 없다', !(await box(pj, '[data-testid="side-nav"]')));
-  const frame = await phoneFrame(pj);
+  const frame = await capColumn(pj); // 폰 셸에서는 이 460 컬럼이 곧 프레임이다
   check('B2 폰 프레임 460 유지', !!frame && Math.abs(frame.w - 460) < 1.5, frame ? `${frame.w}px` : '프레임 없음');
   check('B3 하단 탭바가 그대로 있다', (await tabBarCount(pj, ['오늘', '성장', '매장'])) >= 3);
   check('B4 콘솔 에러 0', pj.qaErrors.length === 0, pj.qaErrors.slice(0, 3).join(' | '));
@@ -256,7 +256,7 @@ try {
   const hqKeys = await ph.$$eval('[data-testid^="nav-/hq"]', (els) => els.map((e) => e.getAttribute('data-testid')));
   check('C2 5메뉴가 다 있다', hqKeys.length === 5, hqKeys.join(' '));
   check('C3 본문에 폭 캡이 없다(넓은 웹 전용)', !!hqMain && hqMain.w > 720, hqMain ? `${hqMain.w}px` : '본문 없음');
-  check('C4 폰 프레임(460)을 쓰지 않는다', !(await phoneFrame(ph)));
+  check('C4 폰 프레임(460)을 쓰지 않는다', !(await capColumn(ph)));
   check('C5 하단 탭바가 없다', (await tabBarCount(ph, ['현황', '오늘'])) === 0);
   check('C6 콘솔 에러 0', ph.qaErrors.length === 0, ph.qaErrors.slice(0, 3).join(' | '));
   const occC = await occluded(ph);
