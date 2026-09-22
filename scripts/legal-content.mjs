@@ -85,8 +85,8 @@ export const BUSINESS = {
   address: '서울특별시 구로구 남부순환로95길 54, 106동 1504호',
   /** 통신판매업 신고번호 — 신고증 수령 후 채운다. 빈 문자열이면 그 행은 렌더하지 않는다. */
   mailOrderNo: '',
-  /** 고객센터 전화 — 확보 후 채운다. 빈 문자열이면 그 행은 렌더하지 않는다. */
-  phone: '',
+  /** 고객센터 전화 — business.ts 와 같은 값. ⛔카드사 심사 중 변경 금지. */
+  phone: '010-8282-9583',
 };
 
 export const SITE_URL = 'https://dochackchack.com';
