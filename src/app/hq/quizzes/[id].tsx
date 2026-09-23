@@ -274,7 +274,7 @@ export default function HqQuizBuilderScreen() {
   if (storeError || !wsUnitId) {
     return (
       <HqPage title="퀴즈" sub="빌더를 열 수 없어요" actions={<HqButton label="목록으로" onPress={() => router.replace('/hq/quizzes')} />}>
-        <HqNotice tone="warn">{storeError ?? '작업실이 아직 준비되지 않았어요.'}</HqNotice>
+        <HqNotice tone="warn">{storeError ?? '라이브러리가 아직 준비되지 않았어요.'}</HqNotice>
       </HqPage>
     );
   }
@@ -323,7 +323,7 @@ export default function HqQuizBuilderScreen() {
             </View>
           </HqCard>
 
-          <HqCard title="노하우 고르기" sub="발행된 작업실 노하우만 고를 수 있어요. 고른 노하우마다 문항이 하나씩 만들어져요.">
+          <HqCard title="노하우 고르기" sub="발행된 라이브러리 노하우만 고를 수 있어요. 고른 노하우마다 문항이 하나씩 만들어져요.">
             {published.length === 0 ? (
               <HqEmpty text="발행된 노하우가 아직 없어요. 노하우 화면에서 먼저 쓰고 발행해 주세요." />
             ) : (

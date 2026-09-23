@@ -23,7 +23,7 @@ const MESSAGES: Record<string, string> = {
   no_proposal: '기다리는 제안이 없어요.',
   invite_not_pending: '이미 답했거나 만료된 초대라 취소할 수 없어요.',
   // ── P4 배포(0215·0217) ──
-  no_workspace: '작업실이 아직 준비되지 않았어요. 담당자에게 문의해 주세요.',
+  no_workspace: '라이브러리가 아직 준비되지 않았어요. 담당자에게 문의해 주세요.',
   too_many_entries: '한 번에 보낼 수 있는 노하우 수를 넘었어요. 나눠서 보내 주세요.',
   too_many_units: '한 번에 보낼 수 있는 매장 수를 넘었어요. 나눠서 보내 주세요.',
   duplicate_unit: '같은 매장이 두 번 들어 있어요.',

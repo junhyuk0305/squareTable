@@ -150,7 +150,7 @@ export default function HqKnowhowEditorScreen() {
 
   const runStructure = async () => {
     if (!raw.trim()) { setErr('먼저 노하우 내용을 붙여넣어 주세요.'); return; }
-    if (!wsUnitId) { setErr('작업실이 준비되지 않아 AI 정리를 할 수 없어요.'); return; }
+    if (!wsUnitId) { setErr('라이브러리가 준비되지 않아 AI 정리를 할 수 없어요.'); return; }
     setPhase('structuring');
     setErr(null);
     setNote(null);
@@ -181,7 +181,7 @@ export default function HqKnowhowEditorScreen() {
 
   const save = async () => {
     if (!draft) return;
-    if (!wsUnitId) { setErr('작업실이 준비되지 않아 저장할 수 없어요.'); return; }
+    if (!wsUnitId) { setErr('라이브러리가 준비되지 않아 저장할 수 없어요.'); return; }
     const sq = squareOf(square, draft);
     if (!isSquarePublishable(sq)) { setErr('할 일 단계를 하나 이상 적거나 상황을 조금 더 자세히 써 주세요.'); return; }
     setPhase('saving');
@@ -223,7 +223,7 @@ export default function HqKnowhowEditorScreen() {
   if (storeError || !wsUnitId) {
     return (
       <HqPage title="노하우" sub="편집기를 열 수 없어요" actions={<HqButton label="목록으로" onPress={() => router.replace('/hq/knowhow')} />}>
-        <HqNotice tone="warn">{storeError ?? '작업실이 아직 준비되지 않았어요.'}</HqNotice>
+        <HqNotice tone="warn">{storeError ?? '라이브러리가 아직 준비되지 않았어요.'}</HqNotice>
       </HqPage>
     );
   }
