@@ -134,6 +134,7 @@
     "qa:brand-boundary": "node scripts/qa-brand-boundary.mjs",
     "qa:brand-deploy": "node scripts/qa-brand-deploy.mjs",
     "qa:brand-billing": "node scripts/qa-brand-billing.mjs",
+    "qa:brand-relation": "node scripts/qa-brand-relation.mjs",
     "qa:canary": "node scripts/qa-canary.mjs",
     "web:size": "expo export --platform web && node scripts/web-bundle-size.mjs"
   },

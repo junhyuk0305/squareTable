@@ -125,6 +125,9 @@ export default function HqStoresScreen() {
     { key: 'ai', label: 'AI 사용(월)', align: 'right', render: (r) => <Cell kind="num">{r.ai_used}</Cell>, sortValue: (r) => r.ai_used },
     // 숙지율은 사본(P4)이 생기기 전엔 재료가 없다 — 0 이 아니라 '—'(HqStrip 과 같은 규칙).
     { key: 'mastery', label: '숙지율', align: 'right', render: (r) => <Cell kind={r.mastery === null ? 'muted' : 'num'}>{r.mastery === null ? '—' : `${Math.round(r.mastery * 100)}%`}</Cell>, sortValue: (r) => r.mastery },
+    // 0226 — '운영 공개'가 아닌 매장은 재료가 없어 '—'(0 이 아니다 · 숙지율과 같은 규칙).
+    { key: 'behind', label: '미이수', align: 'right', render: (r) => <Cell kind={r.staff_behind === null ? 'muted' : 'num'}>{r.staff_behind === null ? '—' : `${r.staff_behind}명`}</Cell>, sortValue: (r) => r.staff_behind },
+    { key: 'weak', label: '오답 몰림', align: 'right', render: (r) => <Cell kind={r.weak_entries === null ? 'muted' : 'num'}>{r.weak_entries === null ? '—' : `${r.weak_entries}건`}</Cell>, sortValue: (r) => r.weak_entries },
     { key: 'since', label: '연결일', width: 110, render: (r) => <Cell kind="muted">{fmtDay(r.accepted_at)}</Cell>, sortValue: (r) => r.accepted_at },
   ];
 
@@ -314,6 +317,10 @@ function StoreDrawer({ row, dates, rules, onClose, onChanged }: {
         <HqRow k="AI 사용(월)" v={`${row.ai_used}건`} />
         {row.tasks_done_30d !== null ? <HqRow k="업무 완료(30일)" v={`${row.tasks_done_30d}건`} /> : null}
         {row.quiz_courses !== null ? <HqRow k="매장 퀴즈" v={`${row.quiz_courses}개`} /> : null}
+        {/* 0226 집계 세분화(정본 02 §3 이유 2) — **누가**는 없다. 본사는 점장에게 말하면 되고 점장은 안다.
+            ⛔직영이라고 더 주지 않는다. 관계와 무관하게 '운영 공개'에서만 값이 온다. */}
+        {row.staff_behind !== null ? <HqRow k="미이수 인원" v={`${row.staff_behind}명`} tail={<Text style={styles.payerNote}>받은 노하우를 하나라도 안 본 직원 수</Text>} /> : null}
+        {row.weak_entries !== null ? <HqRow k="오답 몰린 노하우" v={`${row.weak_entries}건`} tail={<Text style={styles.payerNote}>직원이 못 외운 게 아니라 글이 헷갈릴 수 있어요</Text>} /> : null}
       </View>
 
       {/* 직영(0224) — 본사가 **하한**을 정한다. 점장은 그 위로만 움직인다(정본 §5 C안).

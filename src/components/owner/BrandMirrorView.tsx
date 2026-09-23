@@ -79,6 +79,10 @@ export function BrandMirrorView({ unitId }: { unitId: string }) {
               <Kv k="이번 달 AI 사용" v={`${num(row.ai_used)}건`} />
               <Kv k="업무 완료(30일)" v={num(row.tasks_done_30d)} />
               <Kv k="매장 퀴즈 수" v={num(row.quiz_courses)} />
+              {/* 0226 — **숫자만** 간다. 누가 미이수인지는 어느 수준에서도 가지 않는다(정본 02 §3).
+                  미러 뷰에 같이 세우는 이유: 본사가 보는 것을 점주도 정확히 같은 줄로 봐야 한다. */}
+              <Kv k="미이수 인원" v={row.staff_behind === null ? '—' : `${row.staff_behind}명`} />
+              <Kv k="오답 몰린 노하우" v={row.weak_entries === null ? '—' : `${row.weak_entries}건`} />
               <Text style={styles.foot}>
                 줄표(—)는 지금 공개 수준에서 본사에 가지 않는 값이에요. 급여·근태·직원 이름·개인별 점수·업무 채팅은
                 어느 수준에서도 본사에 가지 않아요.
