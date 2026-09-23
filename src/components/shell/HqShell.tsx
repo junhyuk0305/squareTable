@@ -34,7 +34,6 @@ export function HqShell({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const stores = useSessionStore((s) => s.stores);
-  const unitId = useSessionStore((s) => s.unitId);
   const brandName = useBrandStore((s) => s.brand?.brand_name ?? null);
   const hydrateBrand = useBrandStore((s) => s.hydrate);
   // 브랜드 이름은 my_brand 확장 행에서 — 화면들이 같은 캐시를 쓰므로 여기서 한 번 당겨 두면 첫 화면이 빈 표로 깜빡이지 않는다.
@@ -58,8 +57,13 @@ export function HqShell({ children }: { children: ReactNode }) {
 
   // 담당자가 자기 매장도 갖고 있으면(직영 점주 겸직) 전환기 — subtitle(브랜드명) 자리를 눌러 연다(P3, 레퍼런스 §4-2).
   // 하단 항목 쌍('내 매장으로' ↔ '본사 대시보드')은 P3 에서 없앴다 — 전환 수단은 한 곳.
+  //
+  // ★P4: `unitId` 를 보지 않는다. 노하우 편집기가 작업실을 활성 매장으로 세우므로(0215 brand_enter_workspace)
+  //   순수 담당자도 `unitId` 가 작업실 id 로 차 있다 — 그걸 '내 매장'으로 읽으면 매장 없는 담당자에게
+  //   전환기가 뜨고 `/stores` 에서 **작업실이 매장처럼 보인다**(지시서 §1 #2 의 세션 누수).
+  //   자격의 정본은 `stores` = `my_units()` 이고, 그건 이미 `kind='store'` 로 작업실을 뺀다(0209).
   const switchOptions: NavSwitchOption[] =
-    stores.length > 0 || unitId
+    stores.length > 0
       ? [{ key: 'my-stores', label: '내 매장으로', icon: 'storefront-outline', onPress: () => router.replace('/stores') }]
       : [];
   const footerItems = [];
