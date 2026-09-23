@@ -195,7 +195,7 @@ function ConversationalEdit({ entry, quizCountOf }: { entry: PlaybookEntry; quiz
       </Appear>
 
       {/* 본사 사본이면 배지·새 버전(교체/유지)·숨기기 줄이 여기 붙는다. 사본이 아니면 아무것도 안 그린다. */}
-      <BrandCopyPanel entry={entry} />
+      <BrandCopyPanel copy={entry} />
 
       <OwnerCoachChat
         uq={syntheticUq}

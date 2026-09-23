@@ -18,6 +18,7 @@ import {
   staffWhoUnderstandEntries,
 } from '@/lib/store/useWorkStore';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
+import { isBrandHidden } from '@/lib/brand/copy';
 import { useStaffStore } from '@/lib/store/useStaffStore';
 import { useHubStore } from '@/lib/store/useHubStore';
 import { useSessionStore } from '@/lib/store/useSessionStore';
@@ -234,12 +235,22 @@ export function useQuizBoard() {
 
   const entryById = useMemo(() => new Map(entries.map((e) => [e.id, e])), [entries]);
 
+  /**
+   * 실제로 나갈 문항 — 점주가 숨긴 본사 노하우 사본을 근거로 하는 문항은 뺀다(0220 quiz_items_for 의 서버 술어와 같은 뜻).
+   * 여기서 안 빼면 "문제 3개"라 했는데 직원에겐 2개가 나간다. 미연결 매장은 숨긴 사본이 없어 한 건도 안 빠진다.
+   */
+  const servableItems = useMemo(
+    () =>
+      quizItems.filter((q) => !(q.entry_ids ?? []).some((id) => { const e = entryById.get(id); return !!e && isBrandHidden(e); })),
+    [quizItems, entryById],
+  );
+
   const quizCountOf = useCallback(
     (entryId: string) =>
       trainedEntryIds.includes(entryId)
-        ? quizItems.filter((q) => q.status === 'active' && (q.entry_ids ?? []).includes(entryId)).length
+        ? servableItems.filter((q) => q.status === 'active' && (q.entry_ids ?? []).includes(entryId)).length
         : 0,
-    [quizItems, trainedEntryIds],
+    [servableItems, trainedEntryIds],
   );
 
   const staleCountOf = useCallback(

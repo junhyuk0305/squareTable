@@ -1,36 +1,57 @@
-// BrandCopyPanel.tsx — 노하우 수정 화면의 본사 사본 줄(정본 §4-E ③): 배지 · 새 버전 교체/유지 · 숨기기/되살리기.
+// BrandCopyPanel.tsx — 노하우·퀴즈 수정 화면의 본사 사본 줄(정본 §4-E ③): 배지 · 새 버전 교체/유지 · 숨기기/되살리기.
 //
-// ★미연결 diff 0: 사본이 아니면 `null` — 매장 자체 노하우에서는 이 줄이 존재하지 않는다(brand-boundary).
+// ★미연결 diff 0: 사본이 아니면 `null` — 매장 자체 노하우·퀴즈에서는 이 줄이 존재하지 않는다(brand-boundary).
 // ★판정은 `lib/brand/copy.ts`, 쓰기는 `lib/brand/brandDb.ts` 정의자 RPC. 이 부품은 화면만 그린다.
+// ★두 축(노하우 kind='entry' · 퀴즈 kind='course')이 **한 부품**이다(P5) — 컬럼 이름이 같아 판정·문구가 같고, 다른 것은
+//   부르는 RPC 두 개와 명사("노하우"/"퀴즈")뿐이다. 따로 만들면 교체/유지 시트 문안이 둘로 갈라진다.
 //
 // 왜 수정 화면에 두나: 점주가 사본을 만나는 자리가 여기다(목록에서 눌러 들어온다). 별도 '본사 노하우'
-// 탭을 만들면 탭이 늘고(정본 §4-E "신규 탭 0"), 점주가 자기 노하우와 받은 노하우를 두 곳에서 관리하게 된다.
+// 탭을 만들면 탭이 늘고(정본 §4-E "신규 탭 0"), 점주가 자기 것과 받은 것을 두 곳에서 관리하게 된다.
 import { useState } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { BottomSheet } from '@/components/BottomSheet';
 import { BrandCopyBadges } from '@/components/owner/BrandCopyBadges';
-import { isBrandCopy, isBrandHidden, hasBrandPending, isBrandModified } from '@/lib/brand/copy';
-import { hideBrandCopy, applyBrandPending } from '@/lib/brand/brandDb';
+import { isBrandCopy, isBrandHidden, hasBrandPending, isBrandModified, type BrandCopyFields } from '@/lib/brand/copy';
+import { hideBrandCopy, applyBrandPending, hideBrandCourse, applyBrandCoursePending } from '@/lib/brand/brandDb';
 import { brandErrorMessage } from '@/lib/brand/errors';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { confirmAction } from '@/lib/utils/confirm';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
-import type { PlaybookEntry } from '@/types';
 
-export function BrandCopyPanel({ entry }: { entry: PlaybookEntry }) {
-  const hydrate = usePlaybookStore((s) => s.hydrate);
+type Kind = 'entry' | 'course';
+const NOUN: Record<Kind, string> = { entry: '노하우', course: '퀴즈' };
+const HIDE_BODY: Record<Kind, string> = {
+  entry: '직원 검색·AI 답변·퀴즈에서 빠져요. 본사에는 "숨김"으로 보이고, 내용은 계속 갱신돼요. 언제든 되살릴 수 있어요.',
+  course: '아직 안 나간 발송은 취소되고 직원에게 보이지 않아요. 본사에는 "숨김"으로 보이고, 내용은 계속 갱신돼요. 언제든 되살릴 수 있어요.',
+};
+
+export function BrandCopyPanel({
+  kind = 'entry',
+  copy,
+  onChanged,
+}: {
+  kind?: Kind;
+  /** 사본 행(노하우 PlaybookEntry 또는 퀴즈 TrainingCourse). 판정에 필요한 컬럼만 본다. */
+  copy: BrandCopyFields & { id: string };
+  /** 서버가 바뀐 뒤 화면 재료를 다시 읽는 함수. 노하우는 생략 시 usePlaybookStore.hydrate. */
+  onChanged?: () => void | Promise<void>;
+}) {
+  const hydratePlaybook = usePlaybookStore((s) => s.hydrate);
   const [sheet, setSheet] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  if (!isBrandCopy(entry)) return null;
+  if (!isBrandCopy(copy)) return null;
 
-  const hidden = isBrandHidden(entry);
-  const pending = hasBrandPending(entry);
+  const noun = NOUN[kind];
+  const hidden = isBrandHidden(copy);
+  const pending = hasBrandPending(copy);
+  const hide = kind === 'course' ? hideBrandCourse : hideBrandCopy;
+  const answer = kind === 'course' ? applyBrandCoursePending : applyBrandPending;
 
   const run = async (fn: () => ReturnType<typeof hideBrandCopy>) => {
     setBusy(true);
@@ -39,39 +60,34 @@ export function BrandCopyPanel({ entry }: { entry: PlaybookEntry }) {
     setBusy(false);
     // 무음 실패 금지 — 숨겼다고 믿는데 직원에게 계속 보이면 그게 제일 나쁘다.
     if (e) { setErr(brandErrorMessage(e)); return false; }
-    await hydrate();
+    await (onChanged ? onChanged() : hydratePlaybook());
     return true;
   };
 
   const toggleHidden = async () => {
     if (!hidden) {
-      const ok = await confirmAction(
-        '이 매장에서 숨기기',
-        '직원 검색·AI 답변·퀴즈에서 빠져요. 본사에는 "숨김"으로 보이고, 내용은 계속 갱신돼요. 언제든 되살릴 수 있어요.',
-        '숨기기',
-        { icon: 'eye-off-outline' },
-      );
+      const ok = await confirmAction('이 매장에서 숨기기', HIDE_BODY[kind], '숨기기', { icon: 'eye-off-outline' });
       if (!ok) return;
     }
-    await run(() => hideBrandCopy(entry.id, !hidden));
+    await run(() => hide(copy.id, !hidden));
   };
 
   const answerPending = async (replace: boolean) => {
-    const ok = await run(() => applyBrandPending(entry.id, replace));
+    const ok = await run(() => answer(copy.id, replace));
     if (ok) setSheet(false);
   };
 
   return (
     <View style={styles.wrap}>
       <View style={styles.head}>
-        <BrandCopyBadges entry={entry} size="card" />
+        <BrandCopyBadges entry={copy} size="card" />
       </View>
       <Text style={styles.body}>
         {hidden
-          ? '이 매장에서 숨긴 본사 노하우예요. 직원에게 보이지 않아요.'
-          : isBrandModified(entry)
-            ? '본사가 보낸 노하우를 이 매장에 맞게 고쳤어요. 본사가 다시 보내도 내 수정은 덮이지 않아요.'
-            : '본사가 보낸 노하우예요. 이 매장에 맞게 고치거나 숨길 수 있어요.'}
+          ? `이 매장에서 숨긴 본사 ${noun}예요. 직원에게 보이지 않아요.`
+          : isBrandModified(copy)
+            ? `본사가 보낸 ${noun}를 이 매장에 맞게 고쳤어요. 본사가 다시 보내도 내 수정은 덮이지 않아요.`
+            : `본사가 보낸 ${noun}예요. 이 매장에 맞게 고치거나 숨길 수 있어요.`}
       </Text>
 
       {err ? <Text style={styles.err}>{err}</Text> : null}
@@ -100,7 +116,7 @@ export function BrandCopyPanel({ entry }: { entry: PlaybookEntry }) {
         <BottomSheet visible onClose={() => setSheet(false)}>
           <Text style={styles.sheetTitle}>본사에서 새 버전이 왔어요</Text>
           <Text style={styles.sheetHint}>
-            이 노하우는 이 매장에 맞게 고쳐 둔 것이라 자동으로 바뀌지 않았어요. 어느 쪽으로 할지 골라 주세요.
+            이 {noun}는 이 매장에 맞게 고쳐 둔 것이라 자동으로 바뀌지 않았어요. 어느 쪽으로 할지 골라 주세요.
           </Text>
           {err ? <Text style={styles.err}>{err}</Text> : null}
           <View style={styles.sheetBtns}>
@@ -112,7 +128,7 @@ export function BrandCopyPanel({ entry }: { entry: PlaybookEntry }) {
               onPress={() => void answerPending(true)}
               testID="brand-pending-replace"
             />
-            <Text style={styles.sheetNote}>내가 고친 내용은 사라져요.</Text>
+            <Text style={styles.sheetNote}>{kind === 'course' ? '내가 고친 이름·문항은 사라져요.' : '내가 고친 내용은 사라져요.'}</Text>
             <Btn
               label="내 수정 유지하기"
               icon="lock-closed-outline"

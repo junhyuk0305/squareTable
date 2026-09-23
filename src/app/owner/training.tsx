@@ -6,6 +6,7 @@ import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-rou
 import { Ionicons } from '@expo/vector-icons';
 
 import { useQuizBoard, type QuizListRow } from '@/lib/quiz/useQuizBoard';
+import { BrandCopyBadges } from '@/components/owner/BrandCopyBadges';
 import { useQuizCourseStats, ratePct, peopleLabel, type QuizCourseStat } from '@/lib/quiz/courseStats';
 import { fetchGuestQuizSubmissions, upsertTrainingCourse, deleteTrainingCourse, type GuestSubmissionRow } from '@/lib/db';
 import { guardWrite } from '@/lib/store/useSyncStore';
@@ -772,7 +773,11 @@ function QuizRowView({
         accessibilityLabel={`${row.course.name} 열기`}
       >
         <View style={st.rowText}>
-          <Text style={st.rowTitle} numberOfLines={1}>{row.course.name}</Text>
+          <View style={st.rowTitleLine}>
+            <Text style={[st.rowTitle, { flexShrink: 1 }]} numberOfLines={1}>{row.course.name}</Text>
+            {/* 본사 사본 배지(정본 §4-E ③) — 사본이 아니면 아무것도 안 그린다(미연결 diff 0). 노하우 목록과 같은 부품. */}
+            <BrandCopyBadges entry={row.course} />
+          </View>
           <Text style={[st.rowSub, row.itemCount === 0 && st.rowSubWarn]} numberOfLines={1}>{meta}</Text>
           <Text style={st.rowSub} numberOfLines={1}>{row.caption}</Text>
           {showStats ? (
@@ -932,6 +937,7 @@ const st = StyleSheet.create({
   statRate: { fontSize: 14, fontWeight: '900', color: BrandColors.mentionText, marginRight: Space.xs },
   statPeople: { fontSize: 14, fontWeight: '900', color: BrandColors.goodText },
   rowText: { flex: 1, minWidth: 0, gap: 2 },
+  rowTitleLine: { flexDirection: 'row', alignItems: 'center', gap: 6, minWidth: 0 },
   rowTitle: { fontSize: 15, lineHeight: 21, fontWeight: '800', color: InkColors.ink },
   rowSub: { fontSize: 13, lineHeight: 18, fontWeight: '600', color: InkColors.ink3 },
 
