@@ -40,6 +40,8 @@ export const OWNER_KIND_UI: Record<OwnerNotifKind, { icon: IconName; tint: strin
   brand_visibility_request: { icon: 'eye', tint: BrandColors.yellowSoft },
   brand_payer_proposal: { icon: 'card', tint: BrandColors.yellowSoft },
   brand_ended: { icon: 'unlink', tint: BrandColors.brandSoft },
+  // 0217 — 도착은 '받은 것'(중립 초록계가 아니라 브랜드 톤). 답할 것이 아니라 확인할 것이다.
+  brand_deploy: { icon: 'download-outline', tint: BrandColors.brandSoft },
 };
 /** 허브(역할 혼합 가능) 용 — 두 맵 합성. */
 // 닫힌 매장(0197) — 통합 목록에만 나온다(매장 안 알림함엔 그 매장이 없다).

@@ -11,6 +11,7 @@ import { BottomSheet } from '@/components/BottomSheet';
 import { EmptyState } from '@/components/EmptyState';
 import { ScreenLoading } from '@/components/ScreenLoading';
 import { VerifyBadge } from '@/components/VerifyBadge';
+import { BrandCopyPanel } from '@/components/owner/BrandCopyPanel';
 import { formatRelative } from '@/components/coach/coachUtils';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { useSessionStore } from '@/lib/store/useSessionStore';
@@ -192,6 +193,9 @@ function ConversationalEdit({ entry, quizCountOf }: { entry: PlaybookEntry; quiz
           <Text style={styles.quizBtnText}>퀴즈 만들기</Text>
         </Pressable>
       </Appear>
+
+      {/* 본사 사본이면 배지·새 버전(교체/유지)·숨기기 줄이 여기 붙는다. 사본이 아니면 아무것도 안 그린다. */}
+      <BrandCopyPanel entry={entry} />
 
       <OwnerCoachChat
         uq={syntheticUq}

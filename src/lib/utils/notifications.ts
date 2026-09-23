@@ -237,10 +237,12 @@ export type OwnerNotifKind =
   // 0191 사장 알림 — 좌석 잠김 · AI 사용량 80%·100%
   | 'seat_lock' | 'ai_cap'
   // 0213 본사 축 — 연결 요청 · 공개 수준 상향 요청 · 요금 부담 제안 · 본사가 해제함
-  | 'brand_invite' | 'brand_visibility_request' | 'brand_payer_proposal' | 'brand_ended';
+  | 'brand_invite' | 'brand_visibility_request' | 'brand_payer_proposal' | 'brand_ended'
+  // 0217 본사 축 — 배포 도착(정본 §4-E ④ '필수'). 노하우가 실제로 온 매장에만 들어온다.
+  | 'brand_deploy';
 export type OwnerNotifRoute =
   | '/owner/inbox' | '/owner/suggestions' | '/owner/schedule' | '/owner/staff' | '/owner/work'
-  | '/owner/categories' | '/billing' | '/owner/brand-consent' | '/owner/brand-link';
+  | '/owner/categories' | '/billing' | '/owner/brand-consent' | '/owner/brand-link' | '/owner/knowledge';
 
 /** 사장 알림(owner_alerts) 행이 탭으로 가는 곳 — 본사 축은 동의 화면/본사 연결, 나머지는 요금제. */
 export function ownerAlertRoute(kind: OwnerAlert['kind']): OwnerNotifRoute {
@@ -249,6 +251,8 @@ export function ownerAlertRoute(kind: OwnerAlert['kind']): OwnerNotifRoute {
     case 'brand_visibility_request':
     case 'brand_payer_proposal':
     case 'brand_ended': return '/owner/brand-link';
+    // 배포 도착은 연결 설정이 아니라 **받은 노하우**로 보낸다 — 점주가 할 일은 내용 확인이다.
+    case 'brand_deploy': return '/owner/knowledge';
     default: return '/billing';
   }
 }

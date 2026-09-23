@@ -12,6 +12,7 @@ import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { ScreenLoading } from '@/components/ScreenLoading';
 import { SectionLabel } from '@/components/SectionLabel';
 import { BottomSheet } from '@/components/BottomSheet';
+import { BrandMirrorView } from '@/components/owner/BrandMirrorView';
 import { useOwnerBrandStore } from '@/lib/store/useOwnerBrandStore';
 import { setBrandVisibility, acceptPayer, endBrandUnit, type MyBrandViewRow, type BrandVisibility } from '@/lib/brand/brandDb';
 import { brandErrorMessage } from '@/lib/brand/errors';
@@ -170,6 +171,11 @@ function LinkCard({ link, onChanged }: { link: MyBrandViewRow; onChanged: () => 
             );
           })}
         </View>
+      </View>
+
+      {/* 미러 뷰 — 대칭 가시성(§4-A). 해제 바로 위에 둔다: "무엇이 보이는지"를 본 다음 끊을지 고른다. */}
+      <View style={[styles.section, styles.rowBorder]}>
+        <BrandMirrorView unitId={link.unit_id} />
       </View>
 
       <View style={[styles.section, styles.rowBorder]}>

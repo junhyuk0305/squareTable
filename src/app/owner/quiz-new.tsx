@@ -7,6 +7,7 @@ import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
+import { servable } from '@/lib/brand/copy';
 import { useStaffStore } from '@/lib/store/useStaffStore';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useWorkStore, courseEntriesOf } from '@/lib/store/useWorkStore';
@@ -173,7 +174,9 @@ export default function QuizNewScreen() {
   const [onlyUncovered, setOnlyUncovered] = useState(only === 'uncovered');
   const pool = useMemo(
     () => {
-      const published = entries.filter((e) => e.status !== 'draft');
+      // 숨긴 본사 사본은 후보에서 뺀다(정본 §4-B "숨김 = 검색·AI·퀴즈에서 제외").
+      // 판정 SSOT = lib/brand/copy.ts · 서버 짝 = match_playbook 의 brand_hidden_at is null(0217).
+      const published = servable(entries.filter((e) => e.status !== 'draft'));
       return onlyUncovered ? published.filter((e) => quizCountOf(e.id) === 0) : published;
     },
     [entries, onlyUncovered, quizCountOf],

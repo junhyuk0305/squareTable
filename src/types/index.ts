@@ -278,7 +278,9 @@ export type OwnerAlert = {
   id: number;
   unit_id: string;
   // 0213 본사(브랜드) 축 4종 — 연결 요청 · 공개 수준 상향 요청 · 요금 부담 제안 · 본사가 해제함.
-  kind: 'seat_lock' | 'ai_cap' | 'brand_invite' | 'brand_visibility_request' | 'brand_payer_proposal' | 'brand_ended';
+  // 0217 에 'brand_deploy'(배포 도착) 추가 — 서버 CHECK(owner_alerts_kind_check)와 같은 목록이어야 한다.
+  kind: 'seat_lock' | 'ai_cap' | 'brand_invite' | 'brand_visibility_request' | 'brand_payer_proposal'
+      | 'brand_ended' | 'brand_deploy';
   title: string;
   body: string;
   created_at: string;

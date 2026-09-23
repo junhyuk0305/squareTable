@@ -21,6 +21,7 @@ import { Collapse } from '@/components/Collapse';
 import { EmptyState } from '@/components/EmptyState';
 import { InfoDot } from '@/components/InfoDot';
 import { VerifyBadge } from '@/components/VerifyBadge';
+import { BrandCopyBadges } from '@/components/owner/BrandCopyBadges';
 import { SectionLabel } from '@/components/SectionLabel';
 import { SegmentTabs, type SegmentItem } from '@/components/SegmentTabs';
 import { Heatmap, type HeatCell, type HeatGroup, type HeatLegend, type HeatLevel } from '@/components/blocks/Heatmap';
@@ -155,6 +156,8 @@ function EntryRow({ e, onPress, usedBy = 0, divider = true }: { e: PlaybookEntry
               <Text style={styles.badgeUnusedText}>안 쓰임</Text>
             </View>
           ) : null}
+          {/* 본사 사본 배지(정본 §4-E ③) — 사본이 아니면 아무것도 안 그린다(미연결 diff 0). */}
+          <BrandCopyBadges entry={e} />
           {e.verification ? <VerifyBadge state={e.verification.state} size="list" /> : null}
         </View>
       </View>
