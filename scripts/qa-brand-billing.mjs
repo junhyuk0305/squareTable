@@ -8,6 +8,8 @@
 //   B 매장→본사 전환 — 남은 유료 기간이 **끝난 다음 날**부터 · 그 달 청구에는 안 들어간다
 //   C 본사→매장 전환 — 당월 말까지 본사 부담 유지 · 다음 청구에서 빠짐 · 점주에게 요금제 선택 알림 1행
 //   D 승인 — `unit_subscriptions` 를 **대입**(더하지 않는다) · plan multi · 브랜드 paid_until 갱신
+//     ★켜는 대상은 "승인 시점에 본사 부담인 매장"이다. 청구 대상(그 달 1일 이전 시작)과 **다를 수 있고**,
+//       그게 계약 제5조 제2항(추가 매장은 활성화 시점부터 · 요금은 다음 청구분부터)이다.
 //   E 크레딧 — 미개시 월분을 크레딧으로 돌리면 다음 청구서에서 자동 차감
 //   F 미납 정지 — 브랜드 status='suspended' 면 보기·배포 RPC 가 전부 닫힌다(사본 잔존은 qa:brand-deploy I1)
 //   G 경계 — 청구 원장 직접 조회 0행 · 내부 함수 실행 거부 · 점주·직원에게 안 열린다 · 다른 브랜드 안 보임
@@ -183,8 +185,16 @@ try {
   const dup = await svc.rpc('brand_invoice_issue', { p_brand: BRAND, p_period: THIS });
   check('D2 같은 달을 두 번 발행하지 못한다(월 1장)', !!dup.error, JSON.stringify(dup.data));
   const brandUntil = monthEnd(THIS);
+  // ★켜는 대상 = "**승인 시점(오늘)에** 본사 부담인 매장"이지 "이번 달 청구서에 든 매장"이 아니다.
+  //   둘은 원래 다르다 — 계약 제5조 제2항 "추가 매장은 이용권 활성화 시점부터, 요금은 다음 청구분부터".
+  //   월 중에 연결된 매장은 이번 달 청구서에는 없지만(시작일 > 그 달 1일) 승인과 함께 바로 켜져야 한다.
+  //   2026-09-23 까지는 `expectIds.length`(= 청구 대상 수)와 비교해서, 그 규칙이 맞게 도는데도 RED 였다.
+  const { data: onRows } = await svc.from('brand_units').select('unit_id, payer_effective_from')
+    .eq('brand_id', BRAND).eq('status', 'active').eq('payer', 'brand');
+  const expectOn = (onRows ?? []).filter((r) => r.payer_effective_from && r.payer_effective_from <= TODAY).length;
   const appr = await svc.rpc('brand_invoice_approve', { p_id: issue.data?.id, p_paid_until: brandUntil, p_by: 'qa' });
-  check('D3 승인 → 대상 매장 수만큼 켠다', !appr.error && appr.data === expectIds.length, appr.error?.message ?? String(appr.data));
+  check('D3 승인 → 그 시점에 본사 부담인 매장 수만큼 켠다(청구 대상 수와 다를 수 있다 — 계약 제5조 2항)',
+    !appr.error && appr.data === expectOn, appr.error?.message ?? `${appr.data} ≠ ${expectOn}`);
   const s1 = await sub();
   check('D4 ★대입이다 — 기존 남은 기간에 **더하지 않는다**', sameTs(s1?.paid_until, untilTs(brandUntil)),
     `${s1?.paid_until} ≠ ${untilTs(brandUntil)} (기존 ${untilTs(keepUntil)})`);
