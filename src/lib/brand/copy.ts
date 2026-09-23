@@ -6,16 +6,25 @@
 //
 // ★서버 쪽 SSOT 는 `match_playbook`(0217)의 `brand_hidden_at is null` 이다 — 의미검색·AI 답변은 거기서 빠진다.
 //   여기 술어는 **클라가 고르는 목록**(퀴즈 후보·첨부 후보)에서 같은 것을 빼는 짝이다. 둘이 같은 뜻이어야 한다.
-import type { PlaybookEntry } from '@/types';
+/**
+ * 0216(노하우)·0219(퀴즈) 컬럼만 보는 최소 모양 — 전체 PlaybookEntry·TrainingCourse 가 아니어도 판정된다(표 행·요약 행).
+ * 두 축의 컬럼 이름이 같고(정본 §6-1 "같은 버전 컬럼 세트") 원본 링크만 다르다 — `brand_entry_id` / `brand_course_id`.
+ * 그래서 노하우 카드·퀴즈 카드가 **이 한 벌**의 술어와 배지·패널 부품을 그대로 쓴다(P5: 점주 앱 코드 추가 최소).
+ */
+export type BrandCopyFields = {
+  brand_entry_id?: string | null;
+  brand_course_id?: string | null;
+  brand_version?: number | null;
+  brand_pending_version?: number | null;
+  local_modified_at?: string | null;
+  brand_hidden_at?: string | null;
+};
 
-/** 0216 컬럼만 보는 최소 모양 — 전체 PlaybookEntry 가 아니어도 판정된다(표 행·요약 행). */
-export type BrandCopyFields = Pick<
-  PlaybookEntry,
-  'brand_entry_id' | 'brand_version' | 'brand_pending_version' | 'local_modified_at' | 'brand_hidden_at'
->;
+/** 작업실 원본 id(노하우면 brand_entry_id · 퀴즈면 brand_course_id). null = 사본이 아니다. */
+export const brandSourceId = (e: BrandCopyFields): string | null => e.brand_entry_id ?? e.brand_course_id ?? null;
 
-/** 본사가 내려준 사본인가. false = 매장이 직접 쓴 노하우(미연결 매장의 **모든** 행). */
-export const isBrandCopy = (e: BrandCopyFields): boolean => !!e.brand_entry_id;
+/** 본사가 내려준 사본인가. false = 매장이 직접 쓴 노하우·퀴즈(미연결 매장의 **모든** 행). */
+export const isBrandCopy = (e: BrandCopyFields): boolean => !!brandSourceId(e);
 
 /** 점주가 이 매장에서 숨겼나. 검색·AI·퀴즈에서 빠진다(내용 갱신은 계속 받는다 — 정본 §4-B). */
 export const isBrandHidden = (e: BrandCopyFields): boolean => !!e.brand_hidden_at;

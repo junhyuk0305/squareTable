@@ -32,6 +32,10 @@ const MESSAGES: Record<string, string> = {
   not_brand_copy: '본사가 보낸 노하우만 숨기거나 되살릴 수 있어요.',
   no_pending_version: '기다리는 새 버전이 없어요.',
   source_gone: '본사 원본이 사라져 새 버전으로 바꿀 수 없어요. 지금 내용은 그대로 남아요.',
+  // ── P5 퀴즈 배포(0220) ──
+  course_not_in_workspace: '본사 퀴즈가 아니라 보낼 수 없어요.',
+  course_empty: '담긴 노하우가 없어 보낼 수 없어요. 발행된 노하우를 고르고 문항을 만든 뒤 보내 주세요.',
+  course_not_found: '퀴즈를 찾을 수 없어요.',
 };
 
 export function brandErrorMessage(err: DbErr, fallback = '잠시 뒤 다시 시도해 주세요.'): string {

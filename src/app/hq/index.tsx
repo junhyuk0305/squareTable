@@ -10,6 +10,7 @@ import { HqStrip } from '@/components/hq/HqStrip';
 import { HqTable, Cell } from '@/components/hq/HqTable';
 import { useBrandStore } from '@/lib/store/useBrandStore';
 import { useBrandKnowhowStore } from '@/lib/store/useBrandKnowhowStore';
+import { useBrandQuizStore } from '@/lib/store/useBrandQuizStore';
 import { visibilityLabel, payerLabel } from '@/lib/brand/visibility';
 import { InkColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
@@ -27,8 +28,11 @@ export default function HqDashboardScreen() {
   // ★같은 재료를 노하우 화면과 공유한다 — 대시보드가 따로 세면 두 숫자가 어긋난다.
   const deployedCount = useBrandKnowhowStore((s) => s.list.filter((r) => r.deployed_units > 0).length);
   const hydrateKnowhow = useBrandKnowhowStore((s) => s.hydrate);
+  // '배포한 퀴즈'(P5) — 같은 규칙: 한 곳 이상에 내려간 작업실 퀴즈 수(0220 brand_quiz_list.deployed_units). 퀴즈 화면과 재료 공유.
+  const deployedQuizzes = useBrandQuizStore((s) => s.list.filter((r) => r.deployed_units > 0).length);
+  const hydrateQuiz = useBrandQuizStore((s) => s.hydrate);
 
-  useFocusEffect(useCallback(() => { void hydrate(); void hydrateKnowhow(); }, [hydrate, hydrateKnowhow]));
+  useFocusEffect(useCallback(() => { void hydrate(); void hydrateKnowhow(); void hydrateQuiz(); }, [hydrate, hydrateKnowhow, hydrateQuiz]));
 
   const stats = useMemo(() => {
     const pendingInvites = invites.filter((i) => i.kind === 'store' && i.status === 'pending').length;
@@ -60,6 +64,7 @@ export default function HqDashboardScreen() {
         items={[
           { label: '연결 매장', value: overview.length, unit: '곳', sub: stats.pendingInvites ? `초대 대기 ${stats.pendingInvites}건` : '초대 대기 없음' },
           { label: '배포한 노하우', value: deployedCount, unit: '건', sub: deployedCount ? '한 곳 이상에 내려간 노하우' : '노하우를 쓰고 [배포]를 누르면 세요' },
+          { label: '배포한 퀴즈', value: deployedQuizzes, unit: '건', sub: deployedQuizzes ? '한 곳 이상에 내려간 퀴즈 · 발송은 매장이 정해요' : '퀴즈를 만들고 [배포]를 누르면 세요' },
           { label: '숙지율', value: stats.mastery === null ? null : `${stats.mastery}%`, sub: stats.mastery === null ? '배포한 노하우가 생기면 계산돼요' : '연결 매장 평균 · 배포 노하우 중 직원 1명 이상이 아는 비율' },
           { label: '미해결 질문', value: stats.pendingQ, unit: '건', sub: '연결 매장 합계 · 건수만' },
           { label: '이번 달 AI 사용', value: stats.aiUsed, unit: '건', sub: '연결 매장 합계' },

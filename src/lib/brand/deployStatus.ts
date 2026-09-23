@@ -20,8 +20,11 @@ export const DEPLOY_STATUS: Record<DeployStatus, { label: string; tone: PillTone
   hidden:   { label: '숨김',        tone: 'b', hint: '점주가 이 매장에서 숨겼어요. 내용은 계속 갱신돼요.' },
 };
 
-/** 교차표 격자 — 사본이 없는 칸은 서버가 행을 안 주므로 여기서 '미배포'로 채운다. */
-export function deployStatusMap(cells: BrandDeployCell[]): Map<string, BrandDeployCell> {
-  return new Map(cells.map((c) => [`${c.entry_id}|${c.unit_id}`, c]));
+/**
+ * 교차표 격자 — 사본이 없는 칸은 서버가 행을 안 주므로 여기서 '미배포'로 채운다.
+ * 노하우 칸(entry_id)·퀴즈 칸(course_id) 둘 다 이 한 함수를 쓴다 — 원본 id 를 꺼내는 함수만 다르다(P5).
+ */
+export function deployStatusMap<T extends { unit_id: string }>(cells: T[], idOf: (c: T) => string): Map<string, T> {
+  return new Map(cells.map((c) => [`${idOf(c)}|${c.unit_id}`, c]));
 }
-export const cellKey = (entryId: string, unitId: string) => `${entryId}|${unitId}`;
+export const cellKey = (sourceId: string, unitId: string) => `${sourceId}|${unitId}`;

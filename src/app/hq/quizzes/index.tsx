@@ -1,7 +1,8 @@
-// /hq/knowhow — 본사 노하우(정본 §5-2): 표(제목·섹션·버전·배포 매장 수·수정일) + 교차표(노하우 × 매장)
-//                + 다중선택 → [배포] → 대상 매장 고르기 → 확인.
+// /hq/quizzes — 본사 퀴즈(정본 §5-2): 표(제목·문항 수·참조 노하우 수·배포 매장 수·수정일) + 교차표(퀴즈 × 매장)
+//                + 다중선택 → [배포] → 대상 매장 고르기(함께 내려갈 노하우를 **미리** 알린다) → 확인.
 //
-// 재료 = useBrandKnowhowStore(작업실 원본 + 배포 현황) · useBrandStore(연결 매장 목록).
+// 재료 = useBrandQuizStore(작업실 원본 + 배포 현황) · useBrandStore(연결 매장 목록).
+// 노하우 화면(/hq/knowhow)과 같은 모양·같은 상태 어휘(deployStatus.ts)다 — 본사가 두 화면을 오가며 같은 뜻으로 읽는다.
 // ★작업실 진입(0215)은 스토어 hydrate 가 먼저 한다 — 이 화면은 그 결과만 그린다.
 import { useCallback, useMemo, useState } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
@@ -11,11 +12,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { HqPage, HqButton, HqPill, HqSlab, HqNotice, HqCard, HqEmpty } from '@/components/hq/HqKit';
 import { HqTable, Cell, type HqColumn } from '@/components/hq/HqTable';
 import { HqModal } from '@/components/hq/HqModal';
-import { useBrandKnowhowStore } from '@/lib/store/useBrandKnowhowStore';
+import { useBrandQuizStore } from '@/lib/store/useBrandQuizStore';
 import { useBrandStore } from '@/lib/store/useBrandStore';
 import { DEPLOY_STATUS, deployStatusMap, cellKey, type DeployStatus } from '@/lib/brand/deployStatus';
 import { visibilityLabel } from '@/lib/brand/visibility';
-import type { BrandKnowhowRow } from '@/lib/brand/brandDb';
+import type { BrandQuizRow, BrandCourseDeployResult } from '@/lib/brand/brandDb';
 import { InkColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
@@ -25,15 +26,17 @@ const fmtDate = (iso: string) => {
   return Number.isNaN(d.getTime()) ? '—' : `${d.getMonth() + 1}월 ${d.getDate()}일`;
 };
 
-export default function HqKnowhowScreen() {
+export default function HqQuizzesScreen() {
   const router = useRouter();
-  const list = useBrandKnowhowStore((s) => s.list);
-  const matrix = useBrandKnowhowStore((s) => s.matrix);
-  const loaded = useBrandKnowhowStore((s) => s.loaded);
-  const error = useBrandKnowhowStore((s) => s.error);
-  const hydrate = useBrandKnowhowStore((s) => s.hydrate);
-  const refresh = useBrandKnowhowStore((s) => s.refresh);
-  const deploy = useBrandKnowhowStore((s) => s.deploy);
+  const list = useBrandQuizStore((s) => s.list);
+  const matrix = useBrandQuizStore((s) => s.matrix);
+  const entryMatrix = useBrandQuizStore((s) => s.entryMatrix);
+  const courseEntries = useBrandQuizStore((s) => s.courseEntries);
+  const loaded = useBrandQuizStore((s) => s.loaded);
+  const error = useBrandQuizStore((s) => s.error);
+  const hydrate = useBrandQuizStore((s) => s.hydrate);
+  const refresh = useBrandQuizStore((s) => s.refresh);
+  const deploy = useBrandQuizStore((s) => s.deploy);
   const overview = useBrandStore((s) => s.overview);
   const hydrateBrand = useBrandStore((s) => s.hydrate);
 
@@ -46,9 +49,18 @@ export default function HqKnowhowScreen() {
   const [result, setResult] = useState<string | null>(null);
   const [deployErr, setDeployErr] = useState<string | null>(null);
 
-  const cells = useMemo(() => deployStatusMap(matrix, (c) => c.entry_id), [matrix]);
-  const statusOf = (entryId: string, unitId: string): DeployStatus =>
-    cells.get(cellKey(entryId, unitId))?.status ?? 'none';
+  const cells = useMemo(() => deployStatusMap(matrix, (c) => c.course_id), [matrix]);
+  const entryCells = useMemo(() => deployStatusMap(entryMatrix, (c) => c.entry_id), [entryMatrix]);
+  const statusOf = (courseId: string, unitId: string): DeployStatus =>
+    cells.get(cellKey(courseId, unitId))?.status ?? 'none';
+
+  /** 고른 퀴즈들이 담은 노하우 중 그 매장에 사본이 없는 것 — 배포하면 **함께 내려간다**(정본 §4-B "없으면 먼저 자동 배포"). */
+  const missingFor = (unitId: string): number => {
+    const ids = new Set(courseEntries.filter((r) => picked.has(r.courseId)).map((r) => r.entryId));
+    let n = 0;
+    ids.forEach((eid) => { if (!entryCells.has(cellKey(eid, unitId))) n++; });
+    return n;
+  };
 
   const toggle = (id: string) =>
     setPicked((p) => {
@@ -59,7 +71,6 @@ export default function HqKnowhowScreen() {
   const allPicked = list.length > 0 && picked.size === list.length;
 
   const openDeployModal = () => {
-    // 기본 대상 = 연결 매장 전체(본사가 노하우를 만든 이유는 대개 전 매장이다). 빼는 것은 체크로.
     setTargets(new Set(overview.map((r) => r.unit_id)));
     setResult(null);
     setDeployErr(null);
@@ -69,46 +80,58 @@ export default function HqKnowhowScreen() {
   const runDeploy = async () => {
     setBusy(true);
     setDeployErr(null);
-    const r = await deploy([...picked], [...targets]);
+    // 퀴즈마다 RPC 1회(서버가 퀴즈 1건 × 매장 m곳을 한 트랜잭션으로). 하나라도 거부되면 거기서 멈추고 이유를 말한다.
+    const all: BrandCourseDeployResult[] = [];
+    for (const id of picked) {
+      const r = await deploy(id, [...targets]);
+      if (r.error) { setBusy(false); setDeployErr(r.error); return; }
+      all.push(...(r.data ?? []));
+    }
     setBusy(false);
-    if (r.error) { setDeployErr(r.error); return; }
-    const rows = r.data ?? [];
-    const n = (a: string) => rows.filter((x) => x.action === a).length;
+    const n = (a: string) => all.filter((x) => x.action === a).length;
+    const added = all.reduce((s, x) => s + x.entries_added, 0);
     // 숫자를 그대로 말한다 — '배포 완료'만 띄우면 대기로 빠진 매장을 본사가 모른다.
     setResult(
       [n('created') ? `새로 ${n('created')}곳` : '', n('updated') ? `갱신 ${n('updated')}곳` : '',
-       n('pending') ? `새 버전 대기 ${n('pending')}곳` : ''].filter(Boolean).join(' · ') || '바뀐 것이 없어요',
+       n('pending') ? `새 버전 대기 ${n('pending')}곳` : '', added ? `노하우 ${added}건 함께` : ''].filter(Boolean).join(' · ') || '바뀐 것이 없어요',
     );
     setPicked(new Set());
   };
 
-  const columns: HqColumn<BrandKnowhowRow>[] = [
+  const columns: HqColumn<BrandQuizRow>[] = [
     {
       key: 'pick',
       label: '',
       width: 48,
-      render: (r) => <Check on={picked.has(r.id)} onPress={() => toggle(r.id)} label={`${r.title} 고르기`} />,
+      render: (r) => <Check on={picked.has(r.id)} onPress={() => toggle(r.id)} label={`${r.name} 고르기`} />,
     },
     {
-      // ★행 전체를 Pressable 로 만들지 않는다 — 체크 칸(Pressable)이 그 안에 들어가면 RNW 에서
-      //   중첩 button 이 되어 바깥이 안쪽 클릭을 먹는다(메모리 feedback_rnw_nested_button).
-      //   그래서 '고르기'와 '열기'를 **나란한 두 Pressable** 로 나눈다.
-      key: 'title',
+      // ★행 전체를 Pressable 로 만들지 않는다 — 체크 칸과 중첩 button(메모리 feedback_rnw_nested_button). '고르기'/'열기' 두 Pressable.
+      key: 'name',
       label: '제목',
       width: 300,
       render: (r) => (
         <Pressable
-          onPress={() => router.push({ pathname: '/hq/knowhow/[id]', params: { id: r.id } })}
+          onPress={() => router.push({ pathname: '/hq/quizzes/[id]', params: { id: r.id } })}
           accessibilityRole="link"
-          accessibilityLabel={`${r.title} 편집기 열기`}
+          accessibilityLabel={`${r.name} 빌더 열기`}
           style={({ pressed }) => [pressed && { opacity: 0.6 }]}
         >
-          <Cell kind="name">{r.title}</Cell>
+          <Cell kind="name">{r.name}</Cell>
         </Pressable>
       ),
-      sortValue: (r) => r.title,
+      sortValue: (r) => r.name,
     },
-    { key: 'section', label: '섹션', width: 140, render: (r) => <Cell kind="muted">{r.section || '미분류'}</Cell>, sortValue: (r) => r.section ?? '' },
+    {
+      key: 'items',
+      label: '문항',
+      width: 90,
+      align: 'right',
+      // 문항 0개면 보내도 낼 게 없다 — 표에서 바로 말한다(열어 보고 알게 하지 않는다).
+      render: (r) => (r.items ? <Cell kind="num">{`${r.items}개`}</Cell> : <Cell kind="muted">없음</Cell>),
+      sortValue: (r) => r.items,
+    },
+    { key: 'entries', label: '노하우', width: 90, align: 'right', render: (r) => <Cell kind="num">{r.entries ? `${r.entries}건` : '—'}</Cell>, sortValue: (r) => r.entries },
     {
       key: 'ver',
       label: '배포 버전',
@@ -125,40 +148,40 @@ export default function HqKnowhowScreen() {
       render: (r) => (r.deployed_units ? <Cell kind="num">{`${r.deployed_units}곳`}</Cell> : <Cell kind="muted">—</Cell>),
       sortValue: (r) => r.deployed_units,
     },
-    { key: 'photos', label: '사진', width: 80, align: 'right', render: (r) => <Cell kind="num">{r.photos || '—'}</Cell> },
     { key: 'upd', label: '수정일', width: 110, align: 'right', render: (r) => <Cell kind="muted">{fmtDate(r.updated_at)}</Cell>, sortValue: (r) => r.updated_at },
   ];
 
-  // 교차표 — 노하우 행 × 매장 열. 매장이 많으면 표만 가로로 스크롤한다(HqTable).
-  const xColumns: HqColumn<BrandKnowhowRow>[] = [
-    { key: 'title', label: '노하우', width: 260, render: (r) => <Cell kind="name">{r.title}</Cell> },
+  const xColumns: HqColumn<BrandQuizRow>[] = [
+    { key: 'name', label: '퀴즈', width: 260, render: (r) => <Cell kind="name">{r.name}</Cell> },
     ...overview.map((u) => ({
       key: u.unit_id,
       label: u.store_name,
       width: 128,
-      render: (r: BrandKnowhowRow) => {
+      render: (r: BrandQuizRow) => {
         const st = DEPLOY_STATUS[statusOf(r.id, u.unit_id)];
         return <HqPill tone={st.tone} label={st.label} />;
       },
     })),
   ];
 
+  const pickedNoItems = list.filter((r) => picked.has(r.id) && r.items === 0).length;
+
   return (
     <HqPage
-      title="노하우"
-      sub="본사가 쓴 노하우를 매장에 보내요. 점주는 받은 노하우를 고치거나 이 매장에서 숨길 수 있어요."
+      title="퀴즈"
+      sub="본사가 만든 퀴즈를 매장에 보내요. 언제 누구에게 낼지는 점주가 정하고, 발송은 그 매장의 규칙대로 나가요."
       actions={
         <>
           <HqButton label="새로고침" icon="refresh-outline" onPress={() => void refresh()} />
-          <HqButton label="노하우 쓰기" icon="add" variant="pri" onPress={() => router.push({ pathname: '/hq/knowhow/[id]', params: { id: 'new' } })} />
+          <HqButton label="퀴즈 만들기" icon="add" variant="pri" onPress={() => router.push({ pathname: '/hq/quizzes/[id]', params: { id: 'new' } })} />
         </>
       }
-      testID="hq-knowhow"
+      testID="hq-quizzes"
     >
       {error ? <HqNotice tone="warn">{error} 새로고침을 눌러 다시 시도해 주세요.</HqNotice> : null}
 
       <HqSlab
-        title="노하우"
+        title="퀴즈"
         hint={picked.size ? `${picked.size}건 선택` : '왼쪽 칸을 눌러 여러 건을 고른 뒤 한 번에 보낼 수 있어요'}
       />
       <View style={styles.bar}>
@@ -187,20 +210,20 @@ export default function HqKnowhowScreen() {
         footer={loaded ? `${list.length}건` : undefined}
         empty={
           <HqEmpty
-            text={loaded ? '아직 쓴 노하우가 없어요. 붙여넣기만 해도 AI가 카드로 정리해요.' : '불러오는 중…'}
-            action={loaded ? <HqButton label="노하우 쓰기" variant="pri" onPress={() => router.push({ pathname: '/hq/knowhow/[id]', params: { id: 'new' } })} /> : undefined}
+            text={loaded ? '아직 만든 퀴즈가 없어요. 노하우를 고르면 AI가 문항을 만들어요.' : '불러오는 중…'}
+            action={loaded ? <HqButton label="퀴즈 만들기" variant="pri" onPress={() => router.push({ pathname: '/hq/quizzes/[id]', params: { id: 'new' } })} /> : undefined}
           />
         }
-        testID="hq-knowhow-table"
+        testID="hq-quizzes-table"
       />
 
       <HqSlab title="매장별 배포 상태" hint="미배포 · 최신 · 수정됨 · 새 버전 대기 · 숨김" />
       {overview.length === 0 || list.length === 0 ? (
         <HqCard>
-          <HqEmpty text={overview.length === 0 ? '연결된 매장이 생기면 교차표가 채워져요.' : '노하우를 쓰면 교차표가 채워져요.'} />
+          <HqEmpty text={overview.length === 0 ? '연결된 매장이 생기면 교차표가 채워져요.' : '퀴즈를 만들면 교차표가 채워져요.'} />
         </HqCard>
       ) : (
-        <HqTable columns={xColumns} rows={list} rowKey={(r) => r.id} testID="hq-knowhow-xtable" />
+        <HqTable columns={xColumns} rows={list} rowKey={(r) => r.id} testID="hq-quizzes-xtable" />
       )}
       <View style={styles.legend}>
         {(['current', 'modified', 'pending', 'hidden', 'none'] as DeployStatus[]).map((k) => (
@@ -213,8 +236,8 @@ export default function HqKnowhowScreen() {
 
       <HqModal
         open={openDeploy}
-        title={`노하우 ${picked.size}건 보내기`}
-        sub="고른 매장에 즉시 도착하고 점주에게 알림이 가요. 점주가 고쳐 둔 사본은 덮지 않고 '새 버전 있음'으로 알려요."
+        title={`퀴즈 ${picked.size}건 보내기`}
+        sub="매장에 '아직 안 보냄' 상태로 도착하고 점주에게 알림이 가요. 퀴즈가 쓰는 노하우가 그 매장에 없으면 함께 내려가요. 점주가 고쳐 둔 사본은 덮지 않고 '새 버전 있음'으로 알려요."
         width={560}
         onClose={() => setOpenDeploy(false)}
       >
@@ -226,6 +249,9 @@ export default function HqKnowhowScreen() {
           </>
         ) : (
           <>
+            {pickedNoItems > 0 ? (
+              <HqNotice tone="warn">{`고른 퀴즈 중 ${pickedNoItems}건은 문항이 없어요. 보내도 직원에게 낼 문제가 없어요.`}</HqNotice>
+            ) : null}
             <View style={styles.pickBar}>
               <Pressable
                 onPress={() => setTargets(targets.size === overview.length ? new Set() : new Set(overview.map((r) => r.unit_id)))}
@@ -238,26 +264,30 @@ export default function HqKnowhowScreen() {
               <Text style={styles.barNote}>{targets.size}곳 선택</Text>
             </View>
             <View style={styles.unitList}>
-              {overview.map((u) => (
-                <Pressable
-                  key={u.unit_id}
-                  onPress={() =>
-                    setTargets((t) => {
-                      const n = new Set(t);
-                      if (n.has(u.unit_id)) n.delete(u.unit_id); else n.add(u.unit_id);
-                      return n;
-                    })
-                  }
-                  accessibilityRole="checkbox"
-                  accessibilityState={{ checked: targets.has(u.unit_id) }}
-                  accessibilityLabel={u.store_name}
-                  style={({ pressed }) => [styles.unitRow, pressed && { backgroundColor: InkColors.paper }]}
-                >
-                  <Check on={targets.has(u.unit_id)} onPress={() => {}} label="" />
-                  <Text style={styles.unitName} numberOfLines={1}>{u.store_name}</Text>
-                  <Text style={styles.unitVis}>{visibilityLabel(u.visibility)}</Text>
-                </Pressable>
-              ))}
+              {overview.map((u) => {
+                const missing = missingFor(u.unit_id);
+                return (
+                  <Pressable
+                    key={u.unit_id}
+                    onPress={() =>
+                      setTargets((t) => {
+                        const n = new Set(t);
+                        if (n.has(u.unit_id)) n.delete(u.unit_id); else n.add(u.unit_id);
+                        return n;
+                      })
+                    }
+                    accessibilityRole="checkbox"
+                    accessibilityState={{ checked: targets.has(u.unit_id) }}
+                    accessibilityLabel={u.store_name}
+                    style={({ pressed }) => [styles.unitRow, pressed && { backgroundColor: InkColors.paper }]}
+                  >
+                    <Check on={targets.has(u.unit_id)} onPress={() => {}} label="" />
+                    <Text style={styles.unitName} numberOfLines={1}>{u.store_name}</Text>
+                    {/* 함께 내려갈 노하우를 미리 말한다(지시서 §3-2) — 눌러 보고 알게 하지 않는다. */}
+                    <Text style={styles.unitVis}>{missing ? `노하우 ${missing}건 함께` : visibilityLabel(u.visibility)}</Text>
+                  </Pressable>
+                );
+              })}
             </View>
             <HqButton
               label={busy ? '보내는 중…' : `${targets.size}곳에 보내기`}
@@ -272,7 +302,7 @@ export default function HqKnowhowScreen() {
   );
 }
 
-/** 체크 칸 — 표 안에서 쓰므로 작게. ★중첩 button 금지(메모리 feedback_rnw_nested_button)라 행 안에서는 장식으로만 쓴다. */
+/** 체크 칸 — 표 안에서 쓰므로 작게. ★중첩 button 금지라 행 안에서는 장식으로만 쓴다(노하우 화면과 같은 부품). */
 function Check({ on, onPress, label }: { on: boolean; onPress: () => void; label: string }) {
   if (!label) {
     return (

@@ -2,10 +2,11 @@
 //
 // 전부 정의자 RPC 다 — 클라이언트는 brand_* 테이블을 직접 읽지 않는다(정책 0개라 읽어도 0행).
 // 본사 쪽(brand*) 과 점주 쪽(my*·respond*·set*·end*) 이 한 파일에 있는 이유: 같은 축의 양끝이고
-// 매장 앱 신규 호출 수가 규칙(brand-boundary)에 고정돼 있다 — P4 기준 **9개**:
+// 매장 앱 신규 호출 수가 규칙(brand-boundary)에 고정돼 있다 — P5 기준 **11개**:
 //   fetchMyBrandInvites · respondBrandInvite · setBrandVisibility · endBrandUnit · myBrandView
-//   · hideBrandCopy · applyBrandPending · myBrandMirror (+ proposePayer/acceptPayer 는 양쪽 공용).
-//   (P2 규칙은 6개였다. P3 에서 my_brand_invites 가, P4 에서 숨김·새버전·미러 뷰가 늘었다.)
+//   · hideBrandCopy · applyBrandPending · myBrandMirror · hideBrandCourse · applyBrandCoursePending
+//   (+ proposePayer/acceptPayer 는 양쪽 공용).
+//   (P2 규칙은 6개였다. P3 에서 my_brand_invites 가, P4 에서 숨김·새버전·미러 뷰가, P5 에서 퀴즈 사본의 숨김·새버전이 늘었다.)
 import { supabase, HAS_SUPABASE } from '@/lib/supabase';
 import type { DbResult, DbErr } from '@/lib/db';
 
@@ -95,6 +96,31 @@ export type BrandDeployCell = {
 /** 배포 결과 한 칸(0217 brand_deploy_entries). */
 export type BrandDeployResult = { unit_id: string; entry_id: string; action: 'created' | 'updated' | 'pending' };
 
+/** 0220 brand_quiz_list() 한 행 — 본사 퀴즈 표(§5-2: 제목·문항 수·참조 노하우 수·배포 매장 수·수정일). */
+export type BrandQuizRow = {
+  id: string;
+  name: string;
+  /** 실제로 나갈 문항 수(active + 아는 형태 — quiz_item_counts 와 같은 기준). */
+  items: number;
+  entries: number;
+  deployed_units: number;
+  /** 몇 번째 배포까지 갔나. 0 = 아직 안 내림. */
+  version: number;
+  updated_at: string;
+};
+
+/** 퀴즈 교차표 한 칸(0220 brand_course_matrix). 노하우 칸과 같은 상태 어휘 — 원본 id 이름만 다르다. */
+export type BrandCourseCell = {
+  course_id: string;
+  unit_id: string;
+  status: BrandDeployCell['status'];
+  brand_version: number | null;
+  pending_version: number | null;
+};
+
+/** 퀴즈 배포 결과 한 매장(0220 brand_deploy_course). entries_added = 없어서 함께 내려간 노하우 수. */
+export type BrandCourseDeployResult = { unit_id: string; action: 'created' | 'updated' | 'pending'; entries_added: number };
+
 /** 점주 설정 > 본사 연결(0211 my_brand_view). */
 export type MyBrandViewRow = {
   unit_id: string;
@@ -160,6 +186,16 @@ export const fetchBrandDeployMatrix = () => rows<BrandDeployCell>('brand_deploy_
 export const deployBrandEntries = (entryIds: string[], unitIds: string[]) =>
   rows<BrandDeployResult>('brand_deploy_entries', { p_entry_ids: entryIds, p_unit_ids: unitIds });
 
+// ── 본사 퀴즈 · 배포(P5) ─────────────────────────────────────────────────
+export const fetchBrandQuizzes = () => rows<BrandQuizRow>('brand_quiz_list');
+export const fetchBrandCourseMatrix = () => rows<BrandCourseCell>('brand_course_matrix');
+/**
+ * 퀴즈 1건 → 매장 m곳(0220). 그 매장에 없는 참조 노하우는 서버가 **먼저** 내리고, 사본 퀴즈의 항목·문항은
+ * 그 매장 사본 id 로 재매핑된다. ⛔발송(`quiz_assignments`)은 만들지 않는다 — 점주가 받는 사람을 고르면 매장 엔진이 보낸다.
+ */
+export const deployBrandCourse = (courseId: string, unitIds: string[]) =>
+  rows<BrandCourseDeployResult>('brand_deploy_course', { p_course_id: courseId, p_unit_ids: unitIds });
+
 // ── 점주 쪽(매장 앱 신규 호출 6개) ──────────────────────────────────────────
 export const fetchMyBrandInvites = () => rows<MyBrandInviteRow>('my_brand_invites');
 export const respondBrandInvite = (inviteId: string, unitIds: string[], visibility: BrandVisibility, accept: boolean) =>
@@ -175,6 +211,12 @@ export const hideBrandCopy = (entryId: string, hidden: boolean) =>
 /** 새 버전에 답한다(0217) — replace=true 새 버전으로 교체(내 수정 버림) / false 내 수정 유지. */
 export const applyBrandPending = (entryId: string, replace: boolean) =>
   call('apply_brand_pending', { p_entry_id: entryId, p_replace: replace });
+/** 퀴즈 사본 숨기기/되살리기(0220). 숨기면 아직 안 나간 발송은 취소된다(나간 것은 기록으로 남는다). */
+export const hideBrandCourse = (courseId: string, hidden: boolean) =>
+  call('hide_brand_course', { p_course_id: courseId, p_hidden: hidden });
+/** 퀴즈 사본의 새 버전에 답한다(0220) — replace=true 원본(항목·문항 포함)으로 교체 / false 내 수정 유지. */
+export const applyBrandCoursePending = (courseId: string, replace: boolean) =>
+  call('apply_brand_course_pending', { p_course_id: courseId, p_replace: replace });
 /**
  * 미러 뷰 "본사가 보는 화면 그대로"(0217) — `brand_overview` 와 **같은 본문**을 자기 매장으로만 지난다
  * (정본 §4-A 대칭 가시성). 그래서 타입도 본사 쪽 행과 같은 것을 쓴다.

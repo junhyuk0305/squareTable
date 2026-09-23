@@ -34,7 +34,9 @@ export default function HqLayout() {
       {/* 노하우는 표(index)와 편집기([id])로 나뉜다 — `/hq/knowhow/new` 는 [id]='new' 로 들어온다. */}
       <Stack.Screen name="knowhow/index" />
       <Stack.Screen name="knowhow/[id]" />
-      <Stack.Screen name="quizzes" />
+      {/* 퀴즈도 표(index)와 빌더([id])로 나뉜다 — `/hq/quizzes/new` 는 [id]='new'. */}
+      <Stack.Screen name="quizzes/index" />
+      <Stack.Screen name="quizzes/[id]" />
       <Stack.Screen name="settings" />
       <Stack.Screen name="join" />
     </Stack>

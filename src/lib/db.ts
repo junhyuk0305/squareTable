@@ -1834,15 +1834,16 @@ export async function fetchCourseEntries(): Promise<CourseEntryRow[]> {
   }
   return (data ?? []).map((r: any) => ({ courseId: r.course_id, entryId: r.entry_id, position: r.position }));
 }
-/** 코스에 노하우 담기(관리 권한만, RLS). 충돌 기준 = (course_id, entry_id) — 같은 코스 재추가만 멱등. */
-export async function insertCourseEntry(courseId: string, entryId: string, position: number): Promise<boolean> {
+/** 코스에 노하우 담기(관리 권한만, RLS). 충돌 기준 = (course_id, entry_id) — 같은 코스 재추가만 멱등.
+ *  unitId 는 본사 빌더가 작업실 id 를 명시할 때만 넘긴다(세션 unitId 가 담당자의 옛 매장일 수 있다 — hq/knowhow/[id] 머리주석). */
+export async function insertCourseEntry(courseId: string, entryId: string, position: number, unitId?: string): Promise<boolean> {
   if (!HAS_SUPABASE) return true;
   return write(
     'insertCourseEntry',
     supabase
       .from('course_entries')
       .upsert(
-        { unit_id: _unitId, course_id: courseId, entry_id: entryId, position },
+        { unit_id: unitId ?? _unitId, course_id: courseId, entry_id: entryId, position },
         { onConflict: 'course_id,entry_id', ignoreDuplicates: true },
       ),
   );
@@ -2039,8 +2040,9 @@ export async function deleteQuizItem(id: string): Promise<boolean> {
 
 // ── 훈련 코스(0108) — 0099 의 'first_day'|'regular' 문자열을 대체하는 매장 소유 코스 ──────
 // 읽기는 매장 전원(직원 훈련 카드가 코스 이름을 쓴다), 쓰기는 관리 권한(RLS tc_*).
+// 0219 본사 사본 컬럼 5개도 읽는다(배지·교체/유지·숨김 판정 재료). upsert 목록에는 **넣지 않는다** — 그 다섯은 배포 RPC 만 쓴다.
 const TRAINING_COURSE_COLS =
-  'id, unit_id, key, name, description, preset, min_items, max_items, due_days, start_at, answer_days, audience, position, active, created_at';
+  'id, unit_id, key, name, description, preset, min_items, max_items, due_days, start_at, answer_days, audience, position, active, created_at, brand_course_id, brand_version, brand_pending_version, local_modified_at, brand_hidden_at';
 
 export async function fetchTrainingCourses(): Promise<DbResult<TrainingCourseRow[]>> {
   if (!HAS_SUPABASE) return { data: [], error: null };
