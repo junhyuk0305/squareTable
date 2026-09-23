@@ -12,7 +12,10 @@
 //   F 숨김 — hide_brand_copy · 교차표 'hidden' · 숙지율 분모에서 빠짐 · 재배포해도 숨김 유지
 //   G 경계 — 미연결 매장 0건 · 남의 매장 노하우를 원본으로 못 씀 · 직원은 숨김·교체 못 함 · 본사는 사본 직접 못 읽음
 //   H 미러 뷰 — my_brand_mirror 가 brand_overview 와 **같은 값** · 남의 매장은 0행
-//   I 해제 후 잔존 — 연결을 끊어도 사본은 매장에 남는다(정본 §4-B)
+//   J 퀴즈 배포(P5 · 0219·0220) — 퀴즈 사본 · course_entries·quiz_items.entry_ids 가 **그 매장 사본 id** · 없는 노하우만 선배포 ·
+//     알림 한 행("퀴즈와 노하우 n건") · ★quiz_assignments 0행 · 버전 규칙 4종(코스 이름·문항 수정 둘 다 '수정') · 숨김(안 나간 발송 취소) ·
+//     숨긴 노하우 사본을 근거로 하는 문항은 출제·개수에서 빠짐 · 경계(미연결·섞임·직원·본사 직접 읽기·매장 퀴즈를 원본으로)
+//   I 해제 후 잔존 — 연결을 끊어도 사본(노하우·퀴즈)은 매장에 남는다(정본 §4-B)
 import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -66,7 +69,15 @@ const SQ = (n) => ({
 
 // 하니스가 만든 것만 지운다(고정 계정의 기존 데이터는 건드리지 않는다).
 const SRC_PREFIX = 'pb_qadeploy_';
+const SRC_C = 'tc_qadeploy_c';                 // 작업실 원본 퀴즈(J)
+const QI_PREFIX = 'qi_qadeploy_';              // 작업실 원본 문항(J)
 async function cleanup(wsUnit) {
+  // J 퀴즈 — 사본 코스(cascade: course_entries·quiz_assignments) → 사본 문항 → 원본 문항 → 원본 코스 → 배포 원장.
+  await svc.from('training_courses').delete().eq('brand_course_id', SRC_C);
+  await svc.from('quiz_items').delete().like('brand_item_id', `${QI_PREFIX}%`);
+  await svc.from('quiz_items').delete().like('id', `${QI_PREFIX}%`);
+  await svc.from('training_courses').delete().eq('id', SRC_C);
+  await svc.from('brand_deployments').delete().eq('source_id', SRC_C);
   const { data: srcs } = await svc.from('playbook_entries').select('id').like('id', `${SRC_PREFIX}%`);
   const srcIds = (srcs ?? []).map((r) => r.id);
   if (srcIds.length) {
@@ -283,11 +294,168 @@ try {
   check('H5 운영 공개로 올리면 미러 뷰의 운영 컬럼도 숫자가 된다', m2 && typeof m2.tasks_done_30d === 'number', JSON.stringify(m2));
   await O.rpc('set_brand_visibility', { p_unit_id: UNIT, p_visibility: 'summary' });
 
+  // ── J 퀴즈 배포(P5 · 0219·0220) ────────────────────────────────────────
+  console.log('\nJ 퀴즈 배포');
+  const QI_A = `${QI_PREFIX}a`;
+  const QI_B = `${QI_PREFIX}b`;
+  const mc4 = (ask) => ({ ask, choices: ['하나', '둘', '셋', '넷'], answer_index: 0, explain: '설명' });
+  // 작업실 원본 = 코스 1 + 항목 A·B + 문항 2(A 근거 · B 근거). service_role 로 준비(빌더 자체는 브라우저 실측 몫).
+  const insC = await svc.from('training_courses').insert({
+    id: SRC_C, unit_id: ws, key: 'q_qadeploy_c', name: 'QA 본사 퀴즈', description: null, preset: null,
+    min_items: 1, max_items: 10, due_days: null, start_at: null, answer_days: 3, audience: null, position: 0, active: true,
+  });
+  const insCe = await svc.from('course_entries').insert([
+    { course_id: SRC_C, entry_id: SRC_A, unit_id: ws, position: 0 },
+    { course_id: SRC_C, entry_id: SRC_B, unit_id: ws, position: 1 },
+  ]);
+  const insQi = await svc.from('quiz_items').insert([
+    { id: QI_A, unit_id: ws, entry_ids: [SRC_A], kind: 't0', format: 'mc4', payload: mc4('A 문항'), source: 'ai', status: 'active', created_by: hqId },
+    { id: QI_B, unit_id: ws, entry_ids: [SRC_B], kind: 't0', format: 'mc4', payload: mc4('B 문항'), source: 'ai', status: 'active', created_by: hqId },
+  ]);
+  check('J1 작업실에 원본 퀴즈(코스 1 · 항목 2 · 문항 2) 준비', !insC.error && !insCe.error && !insQi.error, insC.error?.message ?? insCe.error?.message ?? insQi.error?.message);
+  const ql0 = await H.rpc('brand_quiz_list');
+  const q0 = (ql0.data ?? []).find((r) => r.id === SRC_C);
+  check('J2 본사 퀴즈 표에 보인다(문항 2 · 노하우 2 · 배포 0 · 버전 0)', !ql0.error && q0 && q0.items === 2 && q0.entries === 2 && q0.deployed_units === 0 && q0.version === 0, ql0.error?.message ?? JSON.stringify(q0));
+
+  // "없으면 먼저 자동 배포"를 재려고 매장의 B 사본을 지운다(A 사본은 그대로 — 건드리지 않아야 한다).
+  await svc.from('playbook_entries').delete().eq('unit_id', UNIT).eq('brand_entry_id', SRC_B);
+  const { data: cA0 } = await svc.from('playbook_entries').select('id, brand_version').eq('unit_id', UNIT).eq('brand_entry_id', SRC_A).maybeSingle();
+  const { data: qzBefore } = await svc.from('quiz_assignments').select('id').eq('unit_id', UNIT);
+
+  const dc1 = await H.rpc('brand_deploy_course', { p_course_id: SRC_C, p_unit_ids: [UNIT] });
+  check('J3 배포 성공(created · 노하우 1건 함께)', !dc1.error && (dc1.data ?? []).length === 1 && dc1.data[0].action === 'created' && dc1.data[0].entries_added === 1, dc1.error?.message ?? JSON.stringify(dc1.data));
+  const { data: cc } = await svc.from('training_courses').select('*').eq('unit_id', UNIT).eq('brand_course_id', SRC_C).maybeSingle();
+  check('J4 매장에 퀴즈 사본 1행(brand_version=1 · key=brand:<원본> · start_at null · audience null · 미수정)',
+    cc && cc.brand_version === 1 && cc.key === `brand:${SRC_C}` && cc.start_at === null && cc.audience === null && cc.local_modified_at === null && cc.brand_hidden_at === null && cc.name === 'QA 본사 퀴즈' && cc.answer_days === 3,
+    JSON.stringify(cc));
+  const { data: cB1 } = await svc.from('playbook_entries').select('id, brand_version').eq('unit_id', UNIT).eq('brand_entry_id', SRC_B).maybeSingle();
+  const { data: cA1 } = await svc.from('playbook_entries').select('id, brand_version').eq('unit_id', UNIT).eq('brand_entry_id', SRC_A).maybeSingle();
+  check('J5 없던 노하우 B 만 자동 배포됐고 있던 A 는 버전이 그대로다', !!cB1 && cA1?.brand_version === cA0?.brand_version, JSON.stringify({ b: cB1, a0: cA0, a1: cA1 }));
+  const { data: ceCopy } = await svc.from('course_entries').select('entry_id, position').eq('course_id', cc?.id ?? '').order('position');
+  check('J6 ★사본의 course_entries 가 **그 매장 사본 id** 를 가리킨다(작업실 id 아님)',
+    (ceCopy ?? []).map((r) => r.entry_id).join(',') === `${cA1?.id},${cB1?.id}`, JSON.stringify({ ce: ceCopy, a: cA1?.id, b: cB1?.id }));
+  const { data: qiCopy } = await svc.from('quiz_items').select('id, entry_ids, brand_item_id, status, source_updated_at, payload').eq('unit_id', UNIT).in('brand_item_id', [QI_A, QI_B]);
+  const qiA = (qiCopy ?? []).find((q) => q.brand_item_id === QI_A);
+  const qiB = (qiCopy ?? []).find((q) => q.brand_item_id === QI_B);
+  check('J7 ★문항 사본 2건 · entry_ids 가 매장 사본 id · 활성 · 낡음 스냅샷(0114) 찍힘',
+    qiA && qiB && qiA.entry_ids.join() === cA1?.id && qiB.entry_ids.join() === cB1?.id && qiA.status === 'active' && !!qiA.source_updated_at,
+    JSON.stringify(qiCopy));
+  const { data: qzAfter } = await svc.from('quiz_assignments').select('id').eq('unit_id', UNIT);
+  check('J8 ★★본사 배포는 quiz_assignments 를 만들지 않는다(발송은 매장 엔진)', (qzAfter ?? []).length === (qzBefore ?? []).length, `${(qzBefore ?? []).length}→${(qzAfter ?? []).length}`);
+  const { data: alJ } = await svc.from('owner_alerts').select('title, body').eq('unit_id', UNIT).eq('kind', 'brand_deploy').order('created_at', { ascending: false }).limit(1);
+  check('J9 점주 알림 한 행 — 퀴즈와 함께 간 노하우가 **같은 문장**에', (alJ?.[0]?.title ?? '').includes('퀴즈') && (alJ?.[0]?.body ?? '').includes('퀴즈와 노하우 1건'), JSON.stringify(alJ));
+  const cm1 = await H.rpc('brand_course_matrix');
+  check('J10 퀴즈 교차표 = current', !cm1.error && (cm1.data ?? []).some((r) => r.course_id === SRC_C && r.unit_id === UNIT && r.status === 'current'), cm1.error?.message ?? JSON.stringify(cm1.data));
+  const ql1 = await H.rpc('brand_quiz_list');
+  const q1 = (ql1.data ?? []).find((r) => r.id === SRC_C);
+  check('J11 표에 배포 매장 1곳 · 버전 1', q1?.deployed_units === 1 && q1?.version === 1, JSON.stringify(q1));
+
+  // 미수정 자동 갱신 — 원본 이름·문항을 고쳐 재배포.
+  await svc.from('training_courses').update({ name: 'QA 본사 퀴즈(고침)' }).eq('id', SRC_C);
+  await svc.from('quiz_items').update({ payload: mc4('A 문항(고침)') }).eq('id', QI_A);
+  const dc2 = await H.rpc('brand_deploy_course', { p_course_id: SRC_C, p_unit_ids: [UNIT] });
+  const { data: cc2 } = await svc.from('training_courses').select('name, brand_version, local_modified_at, brand_pending_version').eq('id', cc?.id ?? '').maybeSingle();
+  const { data: qiA2 } = await svc.from('quiz_items').select('payload').eq('id', qiA?.id ?? '').maybeSingle();
+  check('J12 재배포 → updated · 이름·문항 갱신 · brand_version=2 · ★local_modified_at 은 null(코스 트리거 우회 + 문항 트리거는 배포 중 잠김)',
+    !dc2.error && dc2.data?.[0]?.action === 'updated' && dc2.data[0].entries_added === 0 && cc2?.name === 'QA 본사 퀴즈(고침)' && cc2?.brand_version === 2 && cc2?.local_modified_at === null && qiA2?.payload?.ask === 'A 문항(고침)',
+    dc2.error?.message ?? JSON.stringify({ r: dc2.data, c: cc2, q: qiA2?.payload }));
+
+  // 점주가 코스 이름을 고치면 '수정됨'(0219 코스 트리거).
+  const oName = await O.from('training_courses').update({ name: '우리 매장 퀴즈' }).eq('id', cc.id).select('id');
+  const { data: cc3 } = await svc.from('training_courses').select('local_modified_at').eq('id', cc.id).maybeSingle();
+  check('J13 점주가 이름을 고치면 local_modified_at 이 찍힌다', !oName.error && (oName.data ?? []).length === 1 && !!cc3?.local_modified_at, oName.error?.message ?? JSON.stringify(cc3));
+  // 문항 수정도 '수정'이다(0219 문항 트리거) — 코스 스탬프를 비운 뒤 문항만 고쳐서 따로 잰다.
+  await svc.from('training_courses').update({ local_modified_at: null }).eq('id', cc.id);
+  const oItem = await O.from('quiz_items').update({ payload: mc4('우리 매장식 A 문항') }).eq('id', qiA.id).select('id');
+  const { data: cc4 } = await svc.from('training_courses').select('local_modified_at').eq('id', cc.id).maybeSingle();
+  check('J14 ★점주가 문항을 고쳐도 퀴즈 사본에 local_modified_at 이 찍힌다(재배포가 문항을 되돌리지 않게)', !oItem.error && (oItem.data ?? []).length === 1 && !!cc4?.local_modified_at, oItem.error?.message ?? JSON.stringify(cc4));
+  const cmMod = await H.rpc('brand_course_matrix');
+  check('J15 교차표 modified', (cmMod.data ?? []).some((r) => r.course_id === SRC_C && r.unit_id === UNIT && r.status === 'modified'));
+
+  // 수정본 → 대기.
+  await svc.from('training_courses').update({ name: 'QA 본사 퀴즈(v3)' }).eq('id', SRC_C);
+  await svc.from('quiz_items').update({ payload: mc4('A 문항(v3)') }).eq('id', QI_A);
+  const dc3 = await H.rpc('brand_deploy_course', { p_course_id: SRC_C, p_unit_ids: [UNIT] });
+  const { data: cc5 } = await svc.from('training_courses').select('name, brand_version, brand_pending_version').eq('id', cc.id).maybeSingle();
+  const { data: qiA3 } = await svc.from('quiz_items').select('payload').eq('id', qiA.id).maybeSingle();
+  check('J16 재배포 → pending · 이름·문항 안 덮음 · brand_pending_version=3',
+    !dc3.error && dc3.data?.[0]?.action === 'pending' && cc5?.name === '우리 매장 퀴즈' && cc5?.brand_version === 2 && cc5?.brand_pending_version === 3 && qiA3?.payload?.ask === '우리 매장식 A 문항',
+    dc3.error?.message ?? JSON.stringify({ r: dc3.data, c: cc5, q: qiA3?.payload }));
+  const jKeep = await J.rpc('apply_brand_course_pending', { p_course_id: cc.id, p_replace: false });
+  check('J17 직원은 답할 수 없다(not_owner)', errCode(jKeep.error) === 'not_owner', jKeep.error?.message);
+  const keepC = await O.rpc('apply_brand_course_pending', { p_course_id: cc.id, p_replace: false });
+  const { data: cc6 } = await svc.from('training_courses').select('name, brand_version, brand_pending_version, local_modified_at').eq('id', cc.id).maybeSingle();
+  check('J18 유지 → 내용 그대로 · pending 비움 · brand_version=3 · 여전히 수정본', !keepC.error && cc6?.name === '우리 매장 퀴즈' && cc6?.brand_pending_version === null && cc6?.brand_version === 3 && !!cc6?.local_modified_at, keepC.error?.message ?? JSON.stringify(cc6));
+  await svc.from('training_courses').update({ name: 'QA 본사 퀴즈(v4)' }).eq('id', SRC_C);
+  await H.rpc('brand_deploy_course', { p_course_id: SRC_C, p_unit_ids: [UNIT] });
+  const replC = await O.rpc('apply_brand_course_pending', { p_course_id: cc.id, p_replace: true });
+  const { data: cc7 } = await svc.from('training_courses').select('name, brand_version, brand_pending_version, local_modified_at').eq('id', cc.id).maybeSingle();
+  const { data: qiA4 } = await svc.from('quiz_items').select('payload').eq('id', qiA.id).maybeSingle();
+  check('J19 교체 → 이름·문항이 원본으로 · 미수정으로 돌아간다(local_modified_at null · brand_version=4)',
+    !replC.error && cc7?.name === 'QA 본사 퀴즈(v4)' && cc7?.local_modified_at === null && cc7?.brand_pending_version === null && cc7?.brand_version === 4 && qiA4?.payload?.ask === 'A 문항(v3)',
+    replC.error?.message ?? JSON.stringify({ c: cc7, q: qiA4?.payload }));
+
+  // 숨김 — 아직 안 나간 발송은 취소된다. 나간 것은 남는다.
+  const jrId = (await J.auth.getUser()).data.user.id;
+  const insQz = await svc.from('quiz_assignments').insert([
+    { id: 'qz_qadeploy_pending', unit_id: UNIT, course_id: cc.id, user_id: jrId, scheduled_on: '2026-01-01', sent_at: null },
+    { id: 'qz_qadeploy_sent', unit_id: UNIT, course_id: cc.id, user_id: jrId, scheduled_on: '2026-01-02', sent_at: new Date().toISOString() },
+  ]);
+  const jHideC = await J.rpc('hide_brand_course', { p_course_id: cc.id, p_hidden: true });
+  check('J20 직원은 퀴즈를 숨길 수 없다(not_owner)', errCode(jHideC.error) === 'not_owner', jHideC.error?.message);
+  const hidC = await O.rpc('hide_brand_course', { p_course_id: cc.id, p_hidden: true });
+  const { data: cc8 } = await svc.from('training_courses').select('brand_hidden_at, local_modified_at').eq('id', cc.id).maybeSingle();
+  const { data: qzLeft } = await svc.from('quiz_assignments').select('id').in('id', ['qz_qadeploy_pending', 'qz_qadeploy_sent']);
+  check('J21 점주가 숨긴다 · 안 나간 발송만 취소(나간 것은 기록으로 남는다) · 숨김은 수정이 아니다',
+    !insQz.error && !hidC.error && !!cc8?.brand_hidden_at && cc8?.local_modified_at === null && (qzLeft ?? []).map((r) => r.id).join() === 'qz_qadeploy_sent',
+    insQz.error?.message ?? hidC.error?.message ?? JSON.stringify({ c: cc8, qz: qzLeft }));
+  const cmHid = await H.rpc('brand_course_matrix');
+  check('J22 본사에는 hidden 으로만 보인다', (cmHid.data ?? []).some((r) => r.course_id === SRC_C && r.unit_id === UNIT && r.status === 'hidden'));
+  await svc.from('training_courses').update({ name: 'QA 본사 퀴즈(v5)' }).eq('id', SRC_C);
+  await H.rpc('brand_deploy_course', { p_course_id: SRC_C, p_unit_ids: [UNIT] });
+  const { data: cc9 } = await svc.from('training_courses').select('name, brand_hidden_at, brand_version').eq('id', cc.id).maybeSingle();
+  check('J23 재배포해도 숨김은 유지되고 내용만 갱신된다', cc9?.name === 'QA 본사 퀴즈(v5)' && !!cc9?.brand_hidden_at && cc9?.brand_version === 5, JSON.stringify(cc9));
+  const backC = await O.rpc('hide_brand_course', { p_course_id: cc.id, p_hidden: false });
+  check('J24 되살리기', !backC.error, backC.error?.message);
+  await svc.from('quiz_assignments').delete().like('id', 'qz_qadeploy_%');
+
+  // 숨긴 노하우 사본을 근거로 하는 문항은 출제·개수에서 빠진다(지시서 §1 #5 · 0220).
+  await O.rpc('hide_brand_copy', { p_entry_id: cA1.id, p_hidden: true });
+  const served = await J.rpc('quiz_items_for', { p_entry_ids: [cA1.id, cB1.id], p_limit: 10 });
+  const counts = await J.rpc('quiz_item_counts');
+  check('J25 ★숨긴 노하우(A)의 문항은 직원 응시에서 빠지고 B 문항만 나간다',
+    !served.error && (served.data ?? []).some((r) => r.id === qiB.id) && !(served.data ?? []).some((r) => r.id === qiA.id),
+    served.error?.message ?? JSON.stringify((served.data ?? []).map((r) => r.id)));
+  check('J26 개수도 같은 기준(A 는 0 · B 는 1)',
+    !counts.error && !(counts.data ?? []).some((r) => r.entry_id === cA1.id) && (counts.data ?? []).some((r) => r.entry_id === cB1.id && r.n >= 1),
+    counts.error?.message ?? JSON.stringify(counts.data));
+  await O.rpc('hide_brand_copy', { p_entry_id: cA1.id, p_hidden: false });
+  const served2 = await J.rpc('quiz_items_for', { p_entry_ids: [cA1.id, cB1.id], p_limit: 10 });
+  check('J27 되살리면 다시 나간다', (served2.data ?? []).some((r) => r.id === qiA.id));
+
+  // 경계.
+  const notConnC = await H.rpc('brand_deploy_course', { p_course_id: SRC_C, p_unit_ids: [OTHER] });
+  const mixedC = await H.rpc('brand_deploy_course', { p_course_id: SRC_C, p_unit_ids: [UNIT, OTHER] });
+  const { data: otherC } = await svc.from('training_courses').select('id').eq('unit_id', OTHER).eq('brand_course_id', SRC_C);
+  check('J28 미연결 매장·섞인 대상은 전부 거부(not_connected) · 사본 0건', errCode(notConnC.error) === 'not_connected' && errCode(mixedC.error) === 'not_connected' && (otherC ?? []).length === 0, `${notConnC.error?.message} / ${mixedC.error?.message} / ${(otherC ?? []).length}`);
+  const jDepC = await J.rpc('brand_deploy_course', { p_course_id: SRC_C, p_unit_ids: [UNIT] });
+  check('J29 직원은 퀴즈를 배포 못 함(not_brand_member)', errCode(jDepC.error) === 'not_brand_member', jDepC.error?.message);
+  const storeC = await H.rpc('brand_deploy_course', { p_course_id: cc.id, p_unit_ids: [UNIT] });
+  check('J30 매장 퀴즈(사본 포함)를 원본으로 못 쓴다(course_not_in_workspace)', errCode(storeC.error) === 'course_not_in_workspace', storeC.error?.message);
+  const hqReadC = await H.from('training_courses').select('id').eq('unit_id', UNIT);
+  const hqReadQ = await H.from('quiz_items').select('id').eq('unit_id', UNIT);
+  check('J31 본사가 매장 퀴즈·문항을 **직접** 읽으면 0행(RLS 정책 0개 유지)', !hqReadC.error && (hqReadC.data ?? []).length === 0 && !hqReadQ.error && (hqReadQ.data ?? []).length === 0);
+  const jCm = await J.rpc('brand_course_matrix');
+  const jQl = await J.rpc('brand_quiz_list');
+  check('J32 직원의 퀴즈 표·교차표 0행', !jCm.error && (jCm.data ?? []).length === 0 && !jQl.error && (jQl.data ?? []).length === 0);
+
   // ── I 해제 후 잔존 ──────────────────────────────────────────────────────
   console.log('\nI 해제 후 사본 잔존');
   const end = await O.rpc('end_brand_unit', { p_unit_id: UNIT, p_reason: 'qa_deploy' });
   const { data: leftover } = await svc.from('playbook_entries').select('id, status, brand_entry_id').eq('unit_id', UNIT).in('brand_entry_id', [SRC_A, SRC_B]);
   check('I1 ★해제해도 사본은 매장에 남는다(정본 §4-B)', !end.error && (leftover ?? []).length === 2 && leftover.every((r) => r.status === 'published'), end.error?.message ?? JSON.stringify(leftover));
+  const { data: leftC } = await svc.from('training_courses').select('id, active').eq('unit_id', UNIT).eq('brand_course_id', SRC_C);
+  check('I1b 퀴즈 사본도 남는다(P5)', (leftC ?? []).length === 1 && leftC[0].active === true, JSON.stringify(leftC));
   const mxEnd = await H.rpc('brand_deploy_matrix');
   check('I2 해제 뒤 본사 교차표에서는 사라진다(active 연결만)', !(mxEnd.data ?? []).some((r) => r.unit_id === UNIT));
   const depEnd = await H.rpc('brand_deploy_entries', { p_entry_ids: [SRC_A], p_unit_ids: [UNIT] });
