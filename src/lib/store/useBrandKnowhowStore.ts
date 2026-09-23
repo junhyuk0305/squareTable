@@ -37,7 +37,8 @@ type State = {
   hydrate: () => Promise<void>;
   refresh: () => Promise<void>;
   /** 배포 — 성공하면 결과 격자를 돌려주고 스스로 재조회한다. */
-  deploy: (entryIds: string[], unitIds: string[]) => Promise<{ data: BrandDeployResult[] | null; error: string | null }>;
+  /** required=true 면 직영 대상에 '필수'가 걸린다(0225). 가맹 대상은 말없이 건너뛴다 — 거부가 아니다. */
+  deploy: (entryIds: string[], unitIds: string[], required?: boolean) => Promise<{ data: BrandDeployResult[] | null; error: string | null }>;
   reset: () => void;
 };
 
@@ -78,8 +79,8 @@ export const useBrandKnowhowStore = create<State>((set, get) => {
     ...EMPTY,
     hydrate,
     refresh: hydrate,
-    deploy: async (entryIds, unitIds) => {
-      const r = await deployBrandEntries(entryIds, unitIds);
+    deploy: async (entryIds, unitIds, required = false) => {
+      const r = await deployBrandEntries(entryIds, unitIds, required);
       if (r.error) {
         reportError('brandKnowhow.deploy', r.error);
         return { data: null, error: brandErrorMessage(r.error, '배포하지 못했어요.') };

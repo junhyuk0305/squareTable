@@ -5,7 +5,7 @@
 // 매장 앱 신규 호출 수가 규칙(brand-boundary)에 고정돼 있다 — P5 기준 **11개**:
 //   fetchMyBrandInvites · respondBrandInvite · setBrandVisibility · endBrandUnit · myBrandView
 //   · hideBrandCopy · applyBrandPending · myBrandMirror · hideBrandCourse · applyBrandCoursePending
-//   (+ proposePayer/acceptPayer 는 양쪽 공용).
+//   (+ proposePayer/acceptPayer 는 양쪽 공용). **P9-2 에서 ackBrandConsent 가 늘어 12개다.**
 //   (P2 규칙은 6개였다. P3 에서 my_brand_invites 가, P4 에서 숨김·새버전·미러 뷰가, P5 에서 퀴즈 사본의 숨김·새버전이 늘었다.)
 import { supabase, HAS_SUPABASE } from '@/lib/supabase';
 import type { DbResult, DbErr } from '@/lib/db';
@@ -139,10 +139,20 @@ export type MyBrandViewRow = {
   brand_id: string;
   brand_name: string;
   brand_biz_no: string | null;
-  /** 0223 — 직영이면 규칙을 본사가 정한다. 점주 화면이 잠금·이유를 그리는 재료(P9-2). */
+  /** 0223 — 직영이면 규칙을 본사가 정한다. 점주 화면이 잠금·이유를 그리는 재료. */
   relation: BrandRelation;
   payer: BrandPayer;
   visibility: BrandVisibility;
+  /** 0224 — 공개 수준의 하한. 이 아래는 회색 + 자물쇠다(가맹은 언제나 'summary'). */
+  visibility_floor: BrandVisibility;
+  /** 0224 — false 면 [연결 해제] 버튼을 숨긴다(서버도 `owner_cannot_end` 로 거부). */
+  owner_can_end: boolean;
+  /** 0224 — true 면 받은 노하우·퀴즈를 숨길 수 없다. */
+  content_required: boolean;
+  /** 0224 — 가맹은 '동의'(수락/거절) · 직영은 '고지'(확인/문의하기). */
+  consent_kind: 'consent' | 'notice';
+  /** 0224 — true 면 관계가 바뀌어 동의·고지를 다시 받아야 한다(정본 §8). */
+  consent_pending: boolean;
   visibility_requested: 'knowhow' | 'ops' | null;
   payer_proposed: BrandPayer | null;
   payer_proposed_by_me: boolean;
@@ -172,6 +182,20 @@ export type BrandInvoiceRow = {
   status: 'issued' | 'paid' | 'credited' | 'refunded';
   issued_at: string;
   paid_at: string | null;
+};
+
+/**
+ * 0224 brand_unit_rules 한 줄 — 매장 드로어의 직영 전용 값 3개(+동의 상태).
+ * ★`brand_overview` 를 넓히지 않는다 — RETURNS TABLE 이 바뀌면 그 위 함수 3개를 또 DROP 해야 한다
+ *   (0221 이 `brand_payer_dates` 를 따로 낸 것과 같은 이유).
+ */
+export type BrandUnitRulesRow = {
+  unit_id: string;
+  visibility_floor: BrandVisibility;
+  owner_can_end: boolean;
+  content_required: boolean;
+  consent_kind: 'consent' | 'notice';
+  consent_pending: boolean;
 };
 
 /** 0221 brand_payer_dates 한 줄 — 매장 드로어의 "적용일 · 본사 부담 종료일". */
@@ -229,8 +253,8 @@ export const enterBrandWorkspace = async (): Promise<DbResult<string | null>> =>
 export const fetchBrandKnowhow = () => rows<BrandKnowhowRow>('brand_knowhow_list');
 export const fetchBrandDeployMatrix = () => rows<BrandDeployCell>('brand_deploy_matrix');
 /** 노하우 n건 → 매장 m곳. 서버가 한 트랜잭션에 사본·임베딩·알림까지 끝낸다(정본 §6-3). */
-export const deployBrandEntries = (entryIds: string[], unitIds: string[]) =>
-  rows<BrandDeployResult>('brand_deploy_entries', { p_entry_ids: entryIds, p_unit_ids: unitIds });
+export const deployBrandEntries = (entryIds: string[], unitIds: string[], required = false) =>
+  rows<BrandDeployResult>('brand_deploy_entries', { p_entry_ids: entryIds, p_unit_ids: unitIds, p_required: required });
 
 // ── 본사 퀴즈 · 배포(P5) ─────────────────────────────────────────────────
 export const fetchBrandQuizzes = () => rows<BrandQuizRow>('brand_quiz_list');
@@ -239,8 +263,8 @@ export const fetchBrandCourseMatrix = () => rows<BrandCourseCell>('brand_course_
  * 퀴즈 1건 → 매장 m곳(0220). 그 매장에 없는 참조 노하우는 서버가 **먼저** 내리고, 사본 퀴즈의 항목·문항은
  * 그 매장 사본 id 로 재매핑된다. ⛔발송(`quiz_assignments`)은 만들지 않는다 — 점주가 받는 사람을 고르면 매장 엔진이 보낸다.
  */
-export const deployBrandCourse = (courseId: string, unitIds: string[]) =>
-  rows<BrandCourseDeployResult>('brand_deploy_course', { p_course_id: courseId, p_unit_ids: unitIds });
+export const deployBrandCourse = (courseId: string, unitIds: string[], required = false) =>
+  rows<BrandCourseDeployResult>('brand_deploy_course', { p_course_id: courseId, p_unit_ids: unitIds, p_required: required });
 
 // ── 본사 결제 · 정산(P6) — 전부 **표시만**. 발행·승인은 내부 콘솔(service_role)이 한다 ──
 /**
@@ -252,6 +276,19 @@ export const fetchBrandBilling = (period?: string) =>
 export const fetchBrandInvoices = () => rows<BrandInvoiceRow>('brand_invoices_list');
 export const fetchBrandPayerDates = () => rows<BrandPayerDateRow>('brand_payer_dates');
 
+// ── 본사: 직영 전용 규칙(P9-2) — ⛔가맹에서는 서버가 거부한다(관계는 우리만 바꾼다) ──
+export const fetchBrandUnitRules = () => rows<BrandUnitRulesRow>('brand_unit_rules');
+/** 직영의 공개 수준 **하한**을 정한다(0224). 점장은 이 위로만 움직인다. 바꾸면 점장에게 고지 알림 1건. */
+export const setVisibilityFloor = (unitId: string, floor: BrandVisibility) =>
+  call('set_visibility_floor', { p_unit_id: unitId, p_floor: floor });
+/**
+ * 직영의 '필수 배포'를 켜고 끈다(0224). true 면 점주가 받은 노하우·퀴즈를 숨길 수 없다.
+ * ★배포는 이 값을 **켜기만** 한다 — 끄는 것은 상태가 보이는 여기(매장 드로어)뿐이다.
+ *   배포가 체크 값을 그대로 반영하면 체크를 깜빡한 재배포 한 번이 제약을 조용히 푼다.
+ */
+export const setContentRequired = (unitId: string, required: boolean) =>
+  call('set_content_required', { p_unit_id: unitId, p_required: required });
+
 // ── 점주 쪽(매장 앱 신규 호출 6개) ──────────────────────────────────────────
 export const fetchMyBrandInvites = () => rows<MyBrandInviteRow>('my_brand_invites');
 export const respondBrandInvite = (inviteId: string, unitIds: string[], visibility: BrandVisibility, accept: boolean) =>
@@ -261,6 +298,13 @@ export const setBrandVisibility = (unitId: string, visibility: BrandVisibility) 
 export const endBrandUnit = (unitId: string, reason?: string) =>
   call('end_brand_unit', { p_unit_id: unitId, p_reason: reason ?? null });
 export const myBrandView = () => rows<MyBrandViewRow>('my_brand_view');
+/**
+ * 관계가 바뀌어 다시 받는 동의·고지에 답한다(0224 · 정본 §7·§8).
+ * 가맹(`consent_kind='consent'`) = 수락/거절(거절하면 연결이 끝난다) · 직영(`'notice'`) = 확인만.
+ * ★매장 앱 신규 호출이 11 → **12** 로 늘어난 줄이다(brand-boundary.md 고정 목록을 같은 커밋에서 고쳤다).
+ */
+export const ackBrandConsent = (unitId: string, accept: boolean) =>
+  call('ack_brand_consent', { p_unit_id: unitId, p_accept: accept });
 /** 이 매장에서 숨기기 / 되살리기(0217). 사본만 — 매장 자체 노하우엔 이 길이 없다. */
 export const hideBrandCopy = (entryId: string, hidden: boolean) =>
   call('hide_brand_copy', { p_entry_id: entryId, p_hidden: hidden });

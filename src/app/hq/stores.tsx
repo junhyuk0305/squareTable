@@ -21,10 +21,13 @@ import {
   acceptPayer,
   endBrandUnit,
   revokeInvite,
+  setVisibilityFloor,
+  setContentRequired,
   type BrandOverviewRow,
   type BrandPayer,
   type BrandPayerDateRow,
   type BrandRelation,
+  type BrandUnitRulesRow,
   type BrandVisibility,
 } from '@/lib/brand/brandDb';
 import { brandErrorMessage } from '@/lib/brand/errors';
@@ -58,6 +61,7 @@ export default function HqStoresScreen() {
   const invites = useBrandStore((s) => s.invites);
   const brand = useBrandStore((s) => s.brand);
   const payerDates = useBrandStore((s) => s.payerDates);
+  const unitRules = useBrandStore((s) => s.unitRules);
   const loaded = useBrandStore((s) => s.loaded);
   const error = useBrandStore((s) => s.error);
   const hydrate = useBrandStore((s) => s.hydrate);
@@ -238,6 +242,7 @@ export default function HqStoresScreen() {
         key={selectedRow?.unit_id ?? 'none'}
         row={selectedRow}
         dates={payerDates.find((d) => d.unit_id === selectedRow?.unit_id) ?? null}
+        rules={unitRules.find((r) => r.unit_id === selectedRow?.unit_id) ?? null}
         onClose={() => setSelected(null)}
         onChanged={() => void refresh()}
       />
@@ -259,10 +264,12 @@ export default function HqStoresScreen() {
 }
 
 // ── 드로어: 연결 정보 · 상향 요청 · payer 제안/응답 · 해제 ─────────────────────
-function StoreDrawer({ row, dates, onClose, onChanged }: {
+function StoreDrawer({ row, dates, rules, onClose, onChanged }: {
   row: BrandOverviewRow | null;
   /** 0221 본사 부담 시작·종료일. `brand_overview` 를 넓히지 않고 작은 RPC 로 따로 받는다. */
   dates: BrandPayerDateRow | null;
+  /** 0224 직영 전용 값 3개. 가맹이면 전부 기본값이고 아래 구역이 통째로 회색이다. */
+  rules: BrandUnitRulesRow | null;
   onClose: () => void;
   onChanged: () => void;
 }) {
@@ -271,6 +278,7 @@ function StoreDrawer({ row, dates, onClose, onChanged }: {
   const [reqLevel, setReqLevel] = useState<'knowhow' | 'ops'>(() => (row?.visibility === 'summary' ? 'knowhow' : 'ops'));
 
   if (!row) return null;
+  const direct = row.relation === 'direct';
   const canRequest = row.visibility !== 'ops' && !row.visibility_requested;
   const otherPayer: BrandPayer = row.payer === 'brand' ? 'store' : 'brand';
   const payerNote = payerDateNote(row.payer, dates);
@@ -308,7 +316,52 @@ function StoreDrawer({ row, dates, onClose, onChanged }: {
         {row.quiz_courses !== null ? <HqRow k="매장 퀴즈" v={`${row.quiz_courses}개`} /> : null}
       </View>
 
-      {/* 공개 수준 상향 요청 — 본사는 요청만(§3-4). 점주가 앱에서 수락하거나 유지한다. */}
+      {/* 직영(0224) — 본사가 **하한**을 정한다. 점장은 그 위로만 움직인다(정본 §5 C안).
+          ⛔가맹에는 이 구역이 없다. "점주가 동의하면 본사가 정한다"를 만들지 않는 것이 방어선이다(정본 §4). */}
+      {direct ? (
+        <View style={styles.section}>
+          <HqSlab title="공개 범위 하한" hint="직영점만 · 점장은 이 위로만 고를 수 있어요" />
+          <View style={{ gap: Space.sm }}>
+            <HqSegment
+              items={VISIBILITY_LEVELS.map((l) => ({ key: l.key, label: l.label }))}
+              value={rules?.visibility_floor ?? 'summary'}
+              onChange={(v) => void run(() => setVisibilityFloor(row.unit_id, v), '하한을 바꿨어요. 점장에게 알려드렸어요.')}
+            />
+            <Text style={styles.hint}>
+              하한을 올리면 지금 공개 수준이 그 아래일 때 같이 올라가요. 바꾸면 점장에게 고지 알림이 한 건 가요.
+            </Text>
+          </View>
+        </View>
+      ) : null}
+
+      {/* 직영(0224) — 필수 배포. ★배포 모달의 [필수로 내리기]는 이 값을 **켜기만** 한다.
+          끄는 것은 상태가 보이는 여기뿐이다 — 배포가 체크 값을 그대로 반영하면 체크를 깜빡한
+          재배포 한 번이 본사가 일부러 세운 제약을 조용히 푼다(사용자 결정 2026-09-23). */}
+      {direct ? (
+        <View style={styles.section}>
+          <HqSlab title="받은 내용 숨기기 금지" hint="직영점만" />
+          <View style={{ gap: Space.sm }}>
+            <Text style={styles.hint}>
+              {rules?.content_required
+                ? '지금은 필수예요 — 점장이 받은 노하우·퀴즈를 숨길 수 없어요.'
+                : '지금은 권장이에요 — 점장이 받은 내용을 숨길 수 있어요.'}
+            </Text>
+            <HqButton
+              label={rules?.content_required ? '숨길 수 있게 되돌리기' : '필수로 바꾸기'}
+              variant={rules?.content_required ? undefined : 'dark'}
+              disabled={busy}
+              testID="hq-content-required"
+              onPress={() => void run(
+                () => setContentRequired(row.unit_id, !rules?.content_required),
+                rules?.content_required ? '이제 점장이 숨길 수 있어요.' : '필수로 바꿨어요.',
+              )}
+            />
+          </View>
+        </View>
+      ) : null}
+
+      {/* 공개 수준 상향 요청 — 가맹에서 본사는 **요청만**(§3-4). 점주가 앱에서 수락하거나 유지한다. */}
+      {direct ? null : (
       <View style={styles.section}>
       <HqSlab title="공개 수준 올려 달라고 요청" />
       {row.visibility === 'ops' ? (
@@ -333,11 +386,15 @@ function StoreDrawer({ row, dates, onClose, onChanged }: {
       )}
 
       </View>
+      )}
 
-      {/* payer — 제안 → 상대 수락(§3-5 D). 반영 시점·정산은 P6. */}
+      {/* payer — 제안 → 상대 수락(§3-5 D). 반영 시점·정산은 P6.
+          직영은 본사 부담 고정이라 제안 경로 자체가 없다(정본 §4-3 · 서버도 `direct_payer_fixed`). */}
       <View style={styles.section}>
       <HqSlab title="요금 부담 변경" />
-      {row.payer_proposed ? (
+      {direct ? (
+        <Text style={styles.hint}>직영점은 본사 부담으로 고정돼요. 바꾸려면 먼저 관계를 가맹으로 바꿔야 해요(스퀘어테이블에 문의).</Text>
+      ) : row.payer_proposed ? (
         row.payer_proposed_by_brand ? (
           <Text style={styles.hint}>{payerLabel(row.payer_proposed)}으로 바꾸자는 제안을 점주가 보고 있어요.</Text>
         ) : (

@@ -40,7 +40,8 @@ type State = {
   hydrate: () => Promise<void>;
   refresh: () => Promise<void>;
   /** 배포 — 성공하면 매장별 결과를 돌려주고 스스로 재조회한다. */
-  deploy: (courseId: string, unitIds: string[]) => Promise<{ data: BrandCourseDeployResult[] | null; error: string | null }>;
+  /** required=true 면 직영 대상에 '필수'가 걸린다(0225). 가맹 대상은 말없이 건너뛴다 — 거부가 아니다. */
+  deploy: (courseId: string, unitIds: string[], required?: boolean) => Promise<{ data: BrandCourseDeployResult[] | null; error: string | null }>;
   reset: () => void;
 };
 
@@ -87,8 +88,8 @@ export const useBrandQuizStore = create<State>((set, get) => {
     ...EMPTY,
     hydrate,
     refresh: hydrate,
-    deploy: async (courseId, unitIds) => {
-      const r = await deployBrandCourse(courseId, unitIds);
+    deploy: async (courseId, unitIds, required = false) => {
+      const r = await deployBrandCourse(courseId, unitIds, required);
       if (r.error) {
         reportError('brandQuiz.deploy', r.error);
         return { data: null, error: brandErrorMessage(r.error, '배포하지 못했어요.') };

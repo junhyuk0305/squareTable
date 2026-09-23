@@ -14,9 +14,9 @@ import { ScreenLoading } from '@/components/ScreenLoading';
 import { SectionLabel } from '@/components/SectionLabel';
 import { useOwnerBrandStore } from '@/lib/store/useOwnerBrandStore';
 import { useSessionStore } from '@/lib/store/useSessionStore';
-import { respondBrandInvite, type BrandVisibility } from '@/lib/brand/brandDb';
+import { respondBrandInvite, ackBrandConsent, type BrandVisibility, type MyBrandViewRow } from '@/lib/brand/brandDb';
 import { brandErrorMessage } from '@/lib/brand/errors';
-import { VISIBILITY_LEVELS, NEVER_SHARED, payerLabel } from '@/lib/brand/visibility';
+import { VISIBILITY_LEVELS, NEVER_SHARED, payerLabel, relationLabel, RELATION_RULES, visibilityLabel } from '@/lib/brand/visibility';
 import { showToast } from '@/lib/store/useToastStore';
 import { confirmAction } from '@/lib/utils/confirm';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
@@ -40,6 +40,10 @@ export default function BrandConsentScreen() {
     () => (typeof params.invite === 'string' && invites.find((i) => i.invite_id === params.invite)) || invites[0] || null,
     [invites, params.invite],
   );
+  // ★관계가 바뀌어 **다시 받는** 동의·고지(0224 · 정본 §8). 새 초대와 같은 화면을 쓰되 갈래가 다르다:
+  //   가맹 = [수락]/[거절](거절하면 연결이 끝난다) · 직영 = [확인]/[문의하기](고지라 거절이 없다).
+  //   이미 연결된 매장이라 매장 고르기·수준 고르기가 없다 — 무엇이 달라졌는지만 말한다.
+  const pending = useMemo(() => links.find((l) => l.consent_pending) ?? null, [links]);
   // 내가 사장인 매장 중 아직 어느 본사에도 연결 안 된 것만 고를 수 있다(매장은 동시에 한 브랜드).
   const linkedIds = useMemo(() => new Set(links.map((l) => l.unit_id)), [links]);
   const candidates = useMemo(() => stores.filter((s) => s.role === 'owner' && !linkedIds.has(s.unit_id)), [stores, linkedIds]);
@@ -86,6 +90,9 @@ export default function BrandConsentScreen() {
       <ScreenTitleHeader title="본사 연결 요청" backFallback="/hub" />
       {!loaded ? (
         <ScreenLoading label="연결 요청을 확인하는 중" />
+      ) : pending ? (
+        // 다시 받는 동의·고지가 있으면 그것이 먼저다 — 이미 연결된 매장의 규칙이 바뀐 것이라 더 급하다.
+        <ReConsent link={pending} onDone={() => { void hydrate(); router.replace('/owner/brand-link'); }} />
       ) : !invite ? (
         <View style={styles.empty} testID="brand-consent-empty">
           <Ionicons name="checkmark-circle-outline" size={28} color={InkColors.ink3} />
@@ -182,6 +189,126 @@ export default function BrandConsentScreen() {
         </ScrollView>
       )}
     </SafeAreaView>
+  );
+}
+
+/**
+ * 관계가 바뀐 뒤 다시 받는 동의·고지(정본 §7·§8).
+ *
+ * 경계표는 새 초대 화면과 **같은 표**(`RELATION_RULES` · `NEVER_SHARED`)를 쓴다 — 두 화면이 다른 표를
+ * 그리면 점주가 동의한 것과 본사가 보는 것이 달라진다(brand-boundary 가 가장 경계하는 사고).
+ * 다른 것은 두 칸뿐이다: 버튼(수락/거절 vs 확인/문의하기)과 성격(동의 vs 고지).
+ */
+function ReConsent({ link, onDone }: { link: MyBrandViewRow; onDone: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const notice = link.consent_kind === 'notice';
+
+  const answer = async (accept: boolean) => {
+    if (!accept) {
+      const ok = await confirmAction(
+        '연결 해제',
+        `동의하지 않으면 ${link.brand_name}와의 연결이 끝나요. 받았던 노하우는 매장에 남아요.`,
+        '동의 안 함',
+        { destructive: true, icon: 'unlink-outline' },
+      );
+      if (!ok) return;
+    }
+    setBusy(true);
+    const err = await ackBrandConsent(link.unit_id, accept);
+    setBusy(false);
+    if (err) {
+      showToast(brandErrorMessage(err), 'warn');
+      return;
+    }
+    showToast(accept ? '확인했어요.' : '연결을 끝냈어요.', 'good');
+    onDone();
+  };
+
+  return (
+    <ScrollView contentContainerStyle={styles.body} testID="brand-reconsent">
+      <View style={styles.hero}>
+        <View style={styles.heroIcon}><Ionicons name="swap-horizontal" size={20} color={InkColors.ink} /></View>
+        <Text style={styles.heroTitle}>{link.brand_name}</Text>
+        <Text style={styles.heroSub}>사업자등록번호 {fmtBiz(link.brand_biz_no)}</Text>
+        <Text style={styles.heroSub}>
+          이 매장은 이제 <Text style={{ fontWeight: '800', color: InkColors.ink }}>{relationLabel(link.relation)}점</Text>이에요
+        </Text>
+      </View>
+
+      <SectionLabel
+        icon={notice ? 'megaphone-outline' : 'shield-checkmark-outline'}
+        title={notice ? '본사가 보는 범위를 알려드려요' : '공개 범위에 다시 동의해 주세요'}
+        hint={notice ? '직영점이라 본사가 정해요' : '관계가 바뀌어 근거가 달라졌어요'}
+      />
+      <View style={styles.card}>
+        <Text style={styles.cardText}>
+          {notice
+            ? '본사가 이 매장을 직영으로 전환했어요. 직영점은 공개 범위의 최소선을 본사가 정하고, 점장님은 그 위로만 조정할 수 있어요.'
+            : '이 매장이 가맹으로 바뀌었어요. 이제 공개 범위를 사장님이 직접 정하고, 연결도 언제든 끊을 수 있어요.'}
+        </Text>
+      </View>
+
+      {/* 지금 실제로 무엇이 보이나 — 추상적인 표보다 이 한 줄이 먼저다. */}
+      <View style={styles.card}>
+        <View style={styles.pickRow}>
+          <Ionicons name="eye-outline" size={18} color={InkColors.ink3} />
+          <Text style={styles.pickName}>지금 공개 수준</Text>
+          <Text style={styles.pickSub}>{visibilityLabel(link.visibility)}</Text>
+        </View>
+        {notice ? (
+          <View style={[styles.pickRow, styles.pickBorder]}>
+            <Ionicons name="lock-closed" size={18} color={InkColors.ink3} />
+            <Text style={styles.pickName}>본사가 정한 최소선</Text>
+            <Text style={styles.pickSub}>{visibilityLabel(link.visibility_floor)}</Text>
+          </View>
+        ) : null}
+      </View>
+
+      <SectionLabel icon="list-outline" title={`${relationLabel(link.relation)}점에서는 이렇게 달라져요`} />
+      <View style={styles.card}>
+        {RELATION_RULES.map((r, i) => (
+          <View key={r.label} style={[styles.pickRow, i > 0 && styles.pickBorder]}>
+            <Text style={styles.pickName}>{r.label}</Text>
+            <Text style={styles.pickSub}>{link.relation === 'direct' ? r.direct : r.franchise}</Text>
+          </View>
+        ))}
+      </View>
+
+      <View style={styles.never}>
+        <Text style={styles.neverTitle}>관계와 상관없이 본사에 가지 않는 것</Text>
+        <Text style={styles.neverBody}>{NEVER_SHARED.join(' · ')}</Text>
+      </View>
+
+      <Pressable
+        testID="brand-reconsent-accept"
+        accessibilityRole="button"
+        disabled={busy}
+        onPress={() => void answer(true)}
+        style={({ pressed }) => [styles.primary, busy && { opacity: 0.45 }, pressed && { opacity: 0.85 }]}
+      >
+        <Text style={styles.primaryText}>{notice ? '확인했어요' : '동의하고 계속하기'}</Text>
+      </Pressable>
+      {notice ? (
+        <Pressable
+          testID="brand-reconsent-ask"
+          accessibilityRole="button"
+          onPress={() => showToast('본사 담당자에게 문의해 주세요.', 'info')}
+          style={({ pressed }) => [styles.secondary, pressed && { opacity: 0.7 }]}
+        >
+          <Text style={styles.secondaryText}>문의하기</Text>
+        </Pressable>
+      ) : (
+        <Pressable
+          testID="brand-reconsent-decline"
+          accessibilityRole="button"
+          disabled={busy}
+          onPress={() => void answer(false)}
+          style={({ pressed }) => [styles.secondary, pressed && { opacity: 0.7 }]}
+        >
+          <Text style={styles.secondaryText}>동의하지 않기(연결 끝내기)</Text>
+        </Pressable>
+      )}
+    </ScrollView>
   );
 }
 

@@ -44,6 +44,9 @@ export const OWNER_KIND_UI: Record<OwnerNotifKind, { icon: IconName; tint: strin
   brand_deploy: { icon: 'download-outline', tint: BrandColors.brandSoft },
   // 0221 — 요금제 선택은 **기한이 있는 할 일**이다(안 고르면 무료로 내려간다) → payer 제안과 같은 결제 톤.
   brand_plan_choice: { icon: 'card', tint: BrandColors.accentSoft },
+  // 0224 — 관계 전환·하한 변경은 **고지**다(답할 것이 아니다) → 해제와 같은 중립 브랜드 톤.
+  brand_relation_changed: { icon: 'swap-horizontal', tint: BrandColors.brandSoft },
+  brand_floor_changed: { icon: 'lock-closed', tint: BrandColors.brandSoft },
 };
 /** 허브(역할 혼합 가능) 용 — 두 맵 합성. */
 // 닫힌 매장(0197) — 통합 목록에만 나온다(매장 안 알림함엔 그 매장이 없다).

@@ -241,7 +241,9 @@ export type OwnerNotifKind =
   // 0217 본사 축 — 배포 도착(정본 §4-E ④ '필수'). 노하우가 실제로 온 매장에만 들어온다.
   | 'brand_deploy'
   // 0221 본사 축 — 본사 부담이 당월 말로 끝나니 다음 달 요금제를 고르라는 사전 안내(정본 §4-D).
-  | 'brand_plan_choice';
+  | 'brand_plan_choice'
+  // 0224 본사 축 — 직영↔가맹 전환 · 직영 공개 범위 하한 변경. 둘 다 **고지**다(답할 것이 아니다).
+  | 'brand_relation_changed' | 'brand_floor_changed';
 export type OwnerNotifRoute =
   | '/owner/inbox' | '/owner/suggestions' | '/owner/schedule' | '/owner/staff' | '/owner/work'
   | '/owner/categories' | '/billing' | '/owner/brand-consent' | '/owner/brand-link' | '/owner/knowledge';
@@ -253,6 +255,10 @@ export function ownerAlertRoute(kind: OwnerAlert['kind']): OwnerNotifRoute {
     case 'brand_visibility_request':
     case 'brand_payer_proposal':
     case 'brand_ended': return '/owner/brand-link';
+    // 0224 — 관계가 바뀌면 동의를 다시 받을 수 있다(직영→가맹). 그 화면이 동의 화면이다.
+    case 'brand_relation_changed': return '/owner/brand-consent';
+    // 하한 변경은 답할 것이 아니라 **지금 범위를 확인할 것**이다 → 설정 > 본사 연결.
+    case 'brand_floor_changed': return '/owner/brand-link';
     // 배포 도착은 연결 설정이 아니라 **받은 노하우**로 보낸다 — 점주가 할 일은 내용 확인이다.
     case 'brand_deploy': return '/owner/knowledge';
     // 요금제 선택은 **결제 화면**으로 보낸다. 해제된 매장은 설정 > 본사 연결이 비어 있어서

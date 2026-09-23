@@ -11,11 +11,13 @@ import {
   fetchBrandInvites,
   fetchBrandMembers,
   fetchBrandPayerDates,
+  fetchBrandUnitRules,
   type MyBrandFullRow,
   type BrandOverviewRow,
   type BrandInviteRow,
   type BrandMemberRow,
   type BrandPayerDateRow,
+  type BrandUnitRulesRow,
 } from '@/lib/brand/brandDb';
 import { reportError } from '@/lib/analytics/track';
 
@@ -26,6 +28,8 @@ type State = {
   members: BrandMemberRow[];
   /** 매장별 본사 부담 시작·종료일(0221) — 매장 드로어 payer 줄. `brand_overview` 를 넓히지 않았다(그 위 함수 3개를 drop 해야 한다). */
   payerDates: BrandPayerDateRow[];
+  /** 매장별 직영 전용 값(0224) — 매장 드로어의 하한·해제권·필수 배포. `brand_overview` 를 넓히지 않았다. */
+  unitRules: BrandUnitRulesRow[];
   /** 첫 조회가 끝났나(실패해도 선다 — 화면은 error 로 갈린다). */
   loaded: boolean;
   error: string | null;
@@ -35,16 +39,17 @@ type State = {
   reset: () => void;
 };
 
-const EMPTY: Pick<State, 'brand' | 'overview' | 'invites' | 'members' | 'payerDates' | 'loaded' | 'error'> = {
-  brand: null, overview: [], invites: [], members: [], payerDates: [], loaded: false, error: null,
+const EMPTY: Pick<State, 'brand' | 'overview' | 'invites' | 'members' | 'payerDates' | 'unitRules' | 'loaded' | 'error'> = {
+  brand: null, overview: [], invites: [], members: [], payerDates: [], unitRules: [], loaded: false, error: null,
 };
 
 export const useBrandStore = create<State>((set) => {
   const hydrate = coalesce(async () => {
-    const [b, o, i, m, d] = await Promise.all([
+    const [b, o, i, m, d, r] = await Promise.all([
       fetchMyBrandFull(), fetchBrandOverview(), fetchBrandInvites(), fetchBrandMembers(), fetchBrandPayerDates(),
+      fetchBrandUnitRules(),
     ]);
-    const err = b.error ?? o.error ?? i.error ?? m.error ?? d.error;
+    const err = b.error ?? o.error ?? i.error ?? m.error ?? d.error ?? r.error;
     if (err) {
       reportError('brand.hydrate', err);
       // 부분 실패도 실패다 — 표가 반만 채워진 채 "정상"으로 보이면 그게 더 위험하다. 이전 값은 유지한다.
@@ -58,6 +63,7 @@ export const useBrandStore = create<State>((set) => {
       invites: i.data ?? [],
       members: m.data ?? [],
       payerDates: d.data ?? [],
+      unitRules: r.data ?? [],
       loaded: true,
       error: null,
     });

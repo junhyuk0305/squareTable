@@ -278,10 +278,12 @@ export type OwnerAlert = {
   id: number;
   unit_id: string;
   // 0213 본사(브랜드) 축 4종 — 연결 요청 · 공개 수준 상향 요청 · 요금 부담 제안 · 본사가 해제함.
-  // 0217 에 'brand_deploy'(배포 도착), 0221 에 'brand_plan_choice'(본사 부담이 끝나니 다음 달 요금제 선택)
-  // 추가 — 서버 CHECK(owner_alerts_kind_check)와 같은 목록이어야 한다.
+  // 0217 에 'brand_deploy'(배포 도착), 0221 에 'brand_plan_choice'(본사 부담이 끝나니 다음 달 요금제 선택),
+  // 0224 에 'brand_relation_changed'(직영↔가맹 전환)·'brand_floor_changed'(직영 공개 범위 하한) 추가 —
+  // 서버 CHECK(owner_alerts_kind_check)와 같은 목록이어야 한다.
   kind: 'seat_lock' | 'ai_cap' | 'brand_invite' | 'brand_visibility_request' | 'brand_payer_proposal'
-      | 'brand_ended' | 'brand_deploy' | 'brand_plan_choice';
+      | 'brand_ended' | 'brand_deploy' | 'brand_plan_choice'
+      | 'brand_relation_changed' | 'brand_floor_changed';
   title: string;
   body: string;
   created_at: string;

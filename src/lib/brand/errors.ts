@@ -36,6 +36,19 @@ const MESSAGES: Record<string, string> = {
   course_not_in_workspace: '본사 퀴즈가 아니라 보낼 수 없어요.',
   course_empty: '담긴 노하우가 없어 보낼 수 없어요. 발행된 노하우를 고르고 문항을 만든 뒤 보내 주세요.',
   course_not_found: '퀴즈를 찾을 수 없어요.',
+  // ── P9 직영·가맹(0223·0224) ──
+  invalid_relation: '관계 값이 잘못됐어요.',
+  reason_required: '바꾸는 이유를 적어 주세요.',
+  same_relation: '지금과 같은 관계예요.',
+  below_floor: '직영점은 본사가 정한 범위보다 좁게는 설정할 수 없어요. 바꾸려면 본사에 문의해 주세요.',
+  owner_cannot_end: '직영점은 매장에서 연결을 끊을 수 없어요. 본사에 문의해 주세요.',
+  content_required: '본사가 필수로 보낸 내용이라 숨길 수 없어요. 본사에 문의해 주세요.',
+  direct_payer_fixed: '직영점은 요금을 본사가 내요. 요금 부담은 바꿀 수 없어요.',
+  franchise_floor_fixed: '가맹점의 공개 범위는 점주가 정해요. 본사는 올려 달라고 요청만 할 수 있어요.',
+  franchise_can_hide: '가맹점에는 필수 배포를 걸 수 없어요(가맹사업법 제12조).',
+  same_floor: '지금과 같은 범위예요.',
+  no_pending_consent: '다시 받을 동의가 없어요.',
+  notice_cannot_decline: '직영점 고지는 거절할 수 없어요. 궁금한 점은 본사에 문의해 주세요.',
 };
 
 export function brandErrorMessage(err: DbErr, fallback = '잠시 뒤 다시 시도해 주세요.'): string {

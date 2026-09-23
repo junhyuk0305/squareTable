@@ -15,7 +15,7 @@ import { HqModal } from '@/components/hq/HqModal';
 import { useBrandQuizStore } from '@/lib/store/useBrandQuizStore';
 import { useBrandStore } from '@/lib/store/useBrandStore';
 import { DEPLOY_STATUS, deployStatusMap, cellKey, type DeployStatus } from '@/lib/brand/deployStatus';
-import { visibilityLabel } from '@/lib/brand/visibility';
+import { visibilityLabel, relationLabel, RELATIONS, deployMixNotice, REQUIRED_HINT } from '@/lib/brand/visibility';
 import type { BrandQuizRow, BrandCourseDeployResult } from '@/lib/brand/brandDb';
 import { InkColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
@@ -48,6 +48,8 @@ export default function HqQuizzesScreen() {
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<string | null>(null);
   const [deployErr, setDeployErr] = useState<string | null>(null);
+  /** [필수로 내리기](정본 02 §9) — 서버가 **직영 대상만** 켜고, 끄는 길은 여기에 없다(매장 드로어에서만). */
+  const [required, setRequired] = useState(false);
 
   const cells = useMemo(() => deployStatusMap(matrix, (c) => c.course_id), [matrix]);
   const entryCells = useMemo(() => deployStatusMap(entryMatrix, (c) => c.entry_id), [entryMatrix]);
@@ -70,10 +72,21 @@ export default function HqQuizzesScreen() {
     });
   const allPicked = list.length > 0 && picked.size === list.length;
 
+  // 고른 대상 중 직영만 — [필수로 내리기] 표시 여부와 "미리 말하기" 문장이 둘 다 이 목록에서 나온다.
+  const directTargets = useMemo(
+    () => overview.filter((u) => targets.has(u.unit_id) && u.relation === 'direct'),
+    [overview, targets],
+  );
+  const mixNotice = useMemo(
+    () => deployMixNotice(overview.filter((u) => targets.has(u.unit_id)), required),
+    [overview, targets, required],
+  );
+
   const openDeployModal = () => {
     setTargets(new Set(overview.map((r) => r.unit_id)));
     setResult(null);
     setDeployErr(null);
+    setRequired(false);   // 모달을 열 때마다 꺼진 상태로 — 지난 배포의 체크가 남으면 조용히 강제된다.
     setOpenDeploy(true);
   };
 
@@ -83,7 +96,9 @@ export default function HqQuizzesScreen() {
     // 퀴즈마다 RPC 1회(서버가 퀴즈 1건 × 매장 m곳을 한 트랜잭션으로). 하나라도 거부되면 거기서 멈추고 이유를 말한다.
     const all: BrandCourseDeployResult[] = [];
     for (const id of picked) {
-      const r = await deploy(id, [...targets]);
+      // ★required 는 **직영 대상에만** 걸린다(서버가 relation 으로 거른다). 가맹이 섞여도 거부하지 않는다.
+      //   배포와 같은 트랜잭션이라 배포가 거부되면 필수도 같이 되감긴다.
+      const r = await deploy(id, [...targets], required);
       if (r.error) { setBusy(false); setDeployErr(r.error); return; }
       all.push(...(r.data ?? []));
     }
@@ -261,6 +276,20 @@ export default function HqQuizzesScreen() {
               >
                 <Text style={styles.barBtnText}>{targets.size === overview.length ? '전체 해제' : '전체 선택'}</Text>
               </Pressable>
+              {/* 묶음 버튼(정본 02 §9) — 그 관계가 아예 없으면 버튼도 없다. */}
+              {RELATIONS.map((rel) =>
+                overview.some((u) => u.relation === rel.key) ? (
+                  <Pressable
+                    key={rel.key}
+                    onPress={() => setTargets(new Set(overview.filter((u) => u.relation === rel.key).map((u) => u.unit_id)))}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${rel.label} 매장만 고르기`}
+                    style={({ pressed }) => [styles.barBtn, pressed && { opacity: 0.85 }]}
+                  >
+                    <Text style={styles.barBtnText}>{rel.label} 전체</Text>
+                  </Pressable>
+                ) : null,
+              )}
               <Text style={styles.barNote}>{targets.size}곳 선택</Text>
             </View>
             <View style={styles.unitList}>
@@ -283,12 +312,31 @@ export default function HqQuizzesScreen() {
                   >
                     <Check on={targets.has(u.unit_id)} onPress={() => {}} label="" />
                     <Text style={styles.unitName} numberOfLines={1}>{u.store_name}</Text>
+                    <Text style={styles.unitRel}>{relationLabel(u.relation)}</Text>
                     {/* 함께 내려갈 노하우를 미리 말한다(지시서 §3-2) — 눌러 보고 알게 하지 않는다. */}
                     <Text style={styles.unitVis}>{missing ? `노하우 ${missing}건 함께` : visibilityLabel(u.visibility)}</Text>
                   </Pressable>
                 );
               })}
             </View>
+            {/* [필수로 내리기] — 직영 대상이 있을 때만. 가맹에는 선택지 자체를 두지 않는다(정본 02 §4). */}
+            {directTargets.length > 0 ? (
+              <Pressable
+                onPress={() => setRequired((v) => !v)}
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: required }}
+                accessibilityLabel="필수로 내리기"
+                testID="hq-deploy-required"
+                style={({ pressed }) => [styles.reqRow, pressed && { opacity: 0.8 }]}
+              >
+                <Check on={required} onPress={() => {}} label="" />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.reqName}>필수로 내리기 (직영 {directTargets.length}곳)</Text>
+                  <Text style={styles.reqHint}>{REQUIRED_HINT}</Text>
+                </View>
+              </Pressable>
+            ) : null}
+            {mixNotice ? <HqNotice tone="i">{mixNotice}</HqNotice> : null}
             <HqButton
               label={busy ? '보내는 중…' : `${targets.size}곳에 보내기`}
               variant="pri"
@@ -344,5 +392,9 @@ const styles = StyleSheet.create({
   unitList: { borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.sm, overflow: 'hidden', marginBottom: 16, maxHeight: 320 },
   unitRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10, paddingHorizontal: 14, minHeight: 48, borderBottomWidth: 1, borderBottomColor: InkColors.line },
   unitName: { flex: 1, minWidth: 0, fontSize: 14.5, fontWeight: '600', color: InkColors.ink },
+  unitRel: { fontSize: 12, fontWeight: '800', color: InkColors.ink3 },
+  reqRow: { flexDirection: 'row', alignItems: 'flex-start', gap: Space.sm, paddingVertical: 10, marginBottom: 12 },
+  reqName: { fontSize: 14, fontWeight: '800', color: InkColors.ink },
+  reqHint: { fontSize: 12.5, lineHeight: 18, color: InkColors.ink3, marginTop: 2 },
   unitVis: { fontSize: 13, color: InkColors.ink3 },
 });

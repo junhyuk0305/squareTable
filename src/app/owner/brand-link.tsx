@@ -16,7 +16,10 @@ import { BrandMirrorView } from '@/components/owner/BrandMirrorView';
 import { useOwnerBrandStore } from '@/lib/store/useOwnerBrandStore';
 import { setBrandVisibility, acceptPayer, endBrandUnit, type MyBrandViewRow, type BrandVisibility } from '@/lib/brand/brandDb';
 import { brandErrorMessage } from '@/lib/brand/errors';
-import { VISIBILITY_LEVELS, NEVER_SHARED, END_REASONS, visibilityLabel, payerLabel } from '@/lib/brand/visibility';
+import {
+  VISIBILITY_LEVELS, NEVER_SHARED, END_REASONS, visibilityLabel, payerLabel,
+  relationLabel, isBelowFloor, LOCK_REASON,
+} from '@/lib/brand/visibility';
 import { showToast } from '@/lib/store/useToastStore';
 import { confirmAction } from '@/lib/utils/confirm';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
@@ -73,6 +76,7 @@ export default function BrandLinkScreen() {
 }
 
 function LinkCard({ link, onChanged }: { link: MyBrandViewRow; onChanged: () => void }) {
+  const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [endOpen, setEndOpen] = useState(false);
 
@@ -90,6 +94,11 @@ function LinkCard({ link, onChanged }: { link: MyBrandViewRow; onChanged: () => 
   };
 
   const setLevel = (v: BrandVisibility) => {
+    // 하한 아래는 아예 부르지 않는다 — 서버도 `below_floor` 로 거부하지만, 여기서 이유를 바로 말해 준다.
+    if (isBelowFloor(v, link.visibility_floor)) {
+      showToast(LOCK_REASON.direct, 'warn');
+      return;
+    }
     if (v === link.visibility && !link.visibility_requested) return;
     void run(() => setBrandVisibility(link.unit_id, v), v === link.visibility ? '지금 수준을 유지해요.' : `${visibilityLabel(v)}로 바꿨어요. 본사 화면에 바로 반영돼요.`);
   };
@@ -109,8 +118,28 @@ function LinkCard({ link, onChanged }: { link: MyBrandViewRow; onChanged: () => 
           <Text style={styles.brand} numberOfLines={1}>{link.brand_name}</Text>
           <Text style={styles.meta}>사업자등록번호 {fmtBiz(link.brand_biz_no)} · {fmtDay(link.accepted_at)} 연결</Text>
         </View>
-        <View style={styles.pill}><Text style={styles.pillText}>연결됨</Text></View>
+        <View style={styles.pill}><Text style={styles.pillText}>{relationLabel(link.relation)} · 연결됨</Text></View>
       </View>
+
+      {/* 관계가 바뀌어 다시 받는 동의·고지(0224 · 정본 §8). 카드 맨 위 — 아래 칸들의 규칙이 이걸로 갈린다. */}
+      {link.consent_pending ? (
+        <Pressable
+          testID="brand-consent-pending"
+          accessibilityRole="button"
+          onPress={() => router.push('/owner/brand-consent')}
+          style={({ pressed }) => [styles.banner, styles.rowBorder, pressed && { opacity: 0.8 }]}
+        >
+          <Ionicons name="swap-horizontal" size={16} color={BrandColors.warnText} />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.bannerTitle}>
+              {link.consent_kind === 'notice'
+                ? '이 매장이 직영으로 바뀌었어요 — 본사가 보는 범위를 확인해 주세요'
+                : '이 매장이 가맹으로 바뀌었어요 — 공개 범위에 다시 동의해 주세요'}
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={16} color={InkColors.ink3} />
+        </Pressable>
+      ) : null}
 
       <View style={[styles.kv, styles.rowBorder]}>
         <Text style={styles.k}>요금 부담</Text>
@@ -160,25 +189,41 @@ function LinkCard({ link, onChanged }: { link: MyBrandViewRow; onChanged: () => 
           {VISIBILITY_LEVELS.map((lv) => {
             const on = lv.key === link.visibility;
             const requested = lv.key === link.visibility_requested;
+            // 하한 아래 = 회색 + 자물쇠 + 이유(정본 §5). **숨기지 않는다** — 안 보이면 버그로 읽는다.
+            const locked = isBelowFloor(lv.key, link.visibility_floor);
             return (
               <Pressable
                 key={lv.key}
                 testID={`brand-vis-${lv.key}`}
                 accessibilityRole="radio"
-                accessibilityState={{ checked: on }}
-                accessibilityLabel={lv.label}
+                accessibilityState={{ checked: on, disabled: locked }}
+                accessibilityLabel={locked ? `${lv.label} — 본사가 정해서 고를 수 없어요` : lv.label}
                 disabled={busy}
                 onPress={() => setLevel(lv.key)}
-                style={[styles.level, on && styles.levelOn, requested && styles.levelReq]}
+                style={[styles.level, on && styles.levelOn, requested && styles.levelReq, locked && styles.levelLocked]}
               >
-                <Text style={[styles.levelName, on && { color: InkColors.ink }]}>{lv.label}</Text>
+                <View style={styles.levelNameRow}>
+                  {locked ? <Ionicons name="lock-closed" size={13} color={InkColors.ink3} /> : null}
+                  <Text style={[styles.levelName, on && { color: InkColors.ink }, locked && { color: InkColors.ink3 }]}>{lv.label}</Text>
+                </View>
                 <Text style={styles.levelShort}>{lv.short}</Text>
+                {locked ? <Text style={styles.levelTag}>{LOCK_REASON.direct}</Text> : null}
                 {on && link.visibility_requested ? <Text style={styles.levelTag}>지금 · 유지하려면 다시 누르기</Text> : null}
                 {requested ? <Text style={styles.levelTag}>본사 요청</Text> : null}
               </Pressable>
             );
           })}
         </View>
+        {link.relation === 'direct' ? (
+          <Pressable
+            testID="brand-floor-ask"
+            accessibilityRole="button"
+            onPress={() => showToast('본사 담당자에게 문의해 주세요. 공개 범위 하한은 본사가 정해요.', 'info')}
+            style={({ pressed }) => [styles.small, pressed && { opacity: 0.7 }]}
+          >
+            <Text style={styles.smallText}>문의하기</Text>
+          </Pressable>
+        ) : null}
       </View>
 
       {/* 미러 뷰 — 대칭 가시성(§4-A). 해제 바로 위에 둔다: "무엇이 보이는지"를 본 다음 끊을지 고른다. */}
@@ -186,12 +231,23 @@ function LinkCard({ link, onChanged }: { link: MyBrandViewRow; onChanged: () => 
         <BrandMirrorView unitId={link.unit_id} />
       </View>
 
+      {/* 직영(owner_can_end=false)이면 버튼 자체를 숨긴다 — 서버도 `owner_cannot_end` 로 거부한다(정본 §4-3).
+          다만 **왜 없는지**는 남긴다. 버튼이 말없이 사라지면 점장은 고장으로 읽는다. */}
       <View style={[styles.section, styles.rowBorder]}>
-        <Pressable testID="brand-end" accessibilityRole="button" disabled={busy} onPress={() => setEndOpen(true)} style={({ pressed }) => [styles.danger, pressed && { opacity: 0.8 }]}>
-          <Ionicons name="unlink-outline" size={16} color={BrandColors.badText} />
-          <Text style={styles.dangerText}>연결 해제</Text>
-        </Pressable>
-        <Text style={styles.note}>해제해도 받았던 노하우는 매장에 남아요. 본사 부담이었다면 이번 달 말까지는 그대로예요.</Text>
+        {link.owner_can_end ? (
+          <>
+            <Pressable testID="brand-end" accessibilityRole="button" disabled={busy} onPress={() => setEndOpen(true)} style={({ pressed }) => [styles.danger, pressed && { opacity: 0.8 }]}>
+              <Ionicons name="unlink-outline" size={16} color={BrandColors.badText} />
+              <Text style={styles.dangerText}>연결 해제</Text>
+            </Pressable>
+            <Text style={styles.note}>해제해도 받았던 노하우는 매장에 남아요. 본사 부담이었다면 이번 달 말까지는 그대로예요.</Text>
+          </>
+        ) : (
+          <View style={styles.lockRow} testID="brand-end-locked">
+            <Ionicons name="lock-closed" size={15} color={InkColors.ink3} />
+            <Text style={styles.note}>직영점이라 매장에서 연결을 끊을 수 없어요. 본사에 문의해 주세요.</Text>
+          </View>
+        )}
       </View>
 
       <BottomSheet visible={endOpen} onClose={() => setEndOpen(false)}>
@@ -241,9 +297,13 @@ const styles = StyleSheet.create({
   level: { borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.sm, paddingVertical: 10, paddingHorizontal: Space.md, minHeight: 48, justifyContent: 'center' },
   levelOn: { borderColor: InkColors.ink, backgroundColor: BrandColors.yellowSoft },
   levelReq: { borderColor: BrandColors.warnBorder, borderStyle: 'dashed' },
+  // 하한 아래 — 숨기지 않고 회색으로 남긴다(정본 §2 ②). 높이는 그대로라 목록이 흔들리지 않는다.
+  levelLocked: { backgroundColor: InkColors.cream, borderStyle: 'dashed' },
+  levelNameRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   levelName: { fontSize: 14, fontWeight: '800', color: InkColors.ink2 },
   levelShort: { fontSize: 12, color: InkColors.ink3, marginTop: 1 },
   levelTag: { fontSize: 11.5, fontWeight: '700', color: BrandColors.warnText, marginTop: 3 },
+  lockRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   danger: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', paddingVertical: 8, paddingHorizontal: 14, borderRadius: Radius.pill, backgroundColor: BrandColors.badSoft },
   dangerText: { fontSize: 13, fontWeight: '800', color: BrandColors.badText },
   note: { fontSize: 12.5, lineHeight: 18, color: InkColors.ink3 },

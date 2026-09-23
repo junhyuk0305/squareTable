@@ -1,17 +1,18 @@
 // /hq — 대시보드(정본 §5-2): KPI 스트립 → 확인 필요 → 매장 표 요약. 교차표(매장 × 노하우 숙지)는 P4.
 //
 // 재료 = useBrandStore(brand_overview · brand_invites_list). 숫자는 전부 매장 단위 — 개인 축 0, 랭킹 0.
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 
-import { HqPage, HqButton, HqPill, HqSlab, HqNotice } from '@/components/hq/HqKit';
+import { HqPage, HqButton, HqPill, HqSlab, HqNotice, HqSegment } from '@/components/hq/HqKit';
 import { HqStrip } from '@/components/hq/HqStrip';
 import { HqTable, Cell } from '@/components/hq/HqTable';
 import { useBrandStore } from '@/lib/store/useBrandStore';
 import { useBrandKnowhowStore } from '@/lib/store/useBrandKnowhowStore';
 import { useBrandQuizStore } from '@/lib/store/useBrandQuizStore';
-import { visibilityLabel, payerLabel } from '@/lib/brand/visibility';
+import { visibilityLabel, payerLabel, relationLabel, RELATIONS } from '@/lib/brand/visibility';
+import type { BrandRelation } from '@/lib/brand/brandDb';
 import { InkColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
 
@@ -34,19 +35,38 @@ export default function HqDashboardScreen() {
 
   useFocusEffect(useCallback(() => { void hydrate(); void hydrateKnowhow(); void hydrateQuiz(); }, [hydrate, hydrateKnowhow, hydrateQuiz]));
 
+  /**
+   * KPI 직영/가맹 토글(정본 02 §9) — 기본은 전체 합산.
+   * 성격이 다른 매장이 섞인 평균은 의미가 없다 — 직영 3곳과 가맹 40곳의 숙지율을 한 줄로 섮으면
+   * 어느 쪽도 설명하지 못한다. ★매장 표 필터와 **따로** 둔다(층이 다르다 — 지시서 §6 #5).
+   * 한 관계만 있는 브랜드에서는 고를 것이 없으므로 토글을 그리지 않는다.
+   */
+  const [relF, setRelF] = useState<'all' | BrandRelation>('all');
+  const mixed = useMemo(
+    () => RELATIONS.every((r) => overview.some((u) => u.relation === r.key)),
+    [overview],
+  );
+  const scope = useMemo(
+    () => (relF === 'all' || !mixed ? overview : overview.filter((u) => u.relation === relF)),
+    [overview, relF, mixed],
+  );
+
   const stats = useMemo(() => {
     const pendingInvites = invites.filter((i) => i.kind === 'store' && i.status === 'pending').length;
     const expiredInvites = invites.filter((i) => i.kind === 'store' && i.status === 'expired').length;
     const visRequests = overview.filter((r) => r.visibility_requested).length;
     const payerToAnswer = overview.filter((r) => r.payer_proposed && !r.payer_proposed_by_brand).length;
     const payerWaiting = overview.filter((r) => r.payer_proposed && r.payer_proposed_by_brand).length;
-    const pendingQ = overview.reduce((a, r) => a + r.pending_q, 0);
-    const aiUsed = overview.reduce((a, r) => a + r.ai_used, 0);
+    const pendingQ = scope.reduce((a, r) => a + r.pending_q, 0);
+    const aiUsed = scope.reduce((a, r) => a + r.ai_used, 0);
     // 숙지율: 재료가 있는 매장만 평균. P4 사본 전엔 전부 null → null.
-    const withMastery = overview.filter((r) => r.mastery !== null);
+    const withMastery = scope.filter((r) => r.mastery !== null);
     const mastery = withMastery.length ? Math.round((withMastery.reduce((a, r) => a + (r.mastery ?? 0), 0) / withMastery.length) * 100) : null;
     return { pendingInvites, expiredInvites, visRequests, payerToAnswer, payerWaiting, pendingQ, aiUsed, mastery };
-  }, [overview, invites]);
+  }, [overview, scope, invites]);
+
+  // 보조줄이 "연결 매장 합계"인지 "직영 합계"인지 말해 준다 — 숫자만 바뀌고 설명이 그대로면 오독한다.
+  const scopeNote = relF === 'all' || !mixed ? '연결 매장' : `${relationLabel(relF)} 매장`;
 
   const goStores = (unit?: string) => router.push(unit ? { pathname: '/hq/stores', params: { unit } } : '/hq/stores');
 
@@ -59,15 +79,27 @@ export default function HqDashboardScreen() {
     >
       {error ? <HqNotice tone="warn">현황을 불러오지 못했어요. 새로고침을 눌러 다시 시도해 주세요. ({error})</HqNotice> : null}
 
+      {/* 혼합 브랜드에서만 뜬다 — 직영이나 가맹 한쪽뿐이면 고를 것이 없다(빈 토글은 소음이다). */}
+      {mixed ? (
+        <View style={styles.kpiScope} testID="hq-kpi-scope">
+          <Text style={styles.kpiScopeLabel}>KPI 범위</Text>
+          <HqSegment
+            items={[{ key: 'all', label: '전체' }, ...RELATIONS.map((r) => ({ key: r.key, label: r.label }))]}
+            value={relF}
+            onChange={setRelF}
+          />
+        </View>
+      ) : null}
+
       <HqStrip
         testID="hq-kpi"
         items={[
-          { label: '연결 매장', value: overview.length, unit: '곳', sub: stats.pendingInvites ? `초대 대기 ${stats.pendingInvites}건` : '초대 대기 없음' },
+          { label: '연결 매장', value: scope.length, unit: '곳', sub: relF !== 'all' && mixed ? `${relationLabel(relF)}만 · 전체 ${overview.length}곳` : stats.pendingInvites ? `초대 대기 ${stats.pendingInvites}건` : '초대 대기 없음' },
           { label: '배포한 노하우', value: deployedCount, unit: '건', sub: deployedCount ? '한 곳 이상에 내려간 노하우' : '노하우를 쓰고 [배포]를 누르면 세요' },
           { label: '배포한 퀴즈', value: deployedQuizzes, unit: '건', sub: deployedQuizzes ? '한 곳 이상에 내려간 퀴즈 · 발송은 매장이 정해요' : '퀴즈를 만들고 [배포]를 누르면 세요' },
-          { label: '숙지율', value: stats.mastery === null ? null : `${stats.mastery}%`, sub: stats.mastery === null ? '배포한 노하우가 생기면 계산돼요' : '연결 매장 평균 · 배포 노하우 중 직원 1명 이상이 아는 비율' },
-          { label: '미해결 질문', value: stats.pendingQ, unit: '건', sub: '연결 매장 합계 · 건수만' },
-          { label: '이번 달 AI 사용', value: stats.aiUsed, unit: '건', sub: '연결 매장 합계' },
+          { label: '숙지율', value: stats.mastery === null ? null : `${stats.mastery}%`, sub: stats.mastery === null ? '배포한 노하우가 생기면 계산돼요' : `${scopeNote} 평균 · 배포 노하우 중 직원 1명 이상이 아는 비율` },
+          { label: '미해결 질문', value: stats.pendingQ, unit: '건', sub: `${scopeNote} 합계 · 건수만` },
+          { label: '이번 달 AI 사용', value: stats.aiUsed, unit: '건', sub: `${scopeNote} 합계` },
         ]}
       />
 
@@ -110,6 +142,9 @@ function AttentionCell({ k, v, n, onPress }: { k: string; v: number; n: string; 
 }
 
 const styles = StyleSheet.create({
+  // KPI 스트립 **위**에 붙인다 — 아래 숫자들의 범위를 정하는 것이라 먼저 읽혀야 한다.
+  kpiScope: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 },
+  kpiScopeLabel: { fontSize: 13, fontWeight: '700', color: InkColors.ink2 },
   cellcard: { flexDirection: 'row', flexWrap: 'wrap', borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md, overflow: 'hidden', marginBottom: 22, backgroundColor: InkColors.bg, ...Elevation.e1 },
   cell: { flex: 1, minWidth: 180, paddingVertical: 16, paddingHorizontal: 18, borderLeftWidth: 1, borderLeftColor: InkColors.line, marginLeft: -1 },
   cellK: { fontSize: 14, fontWeight: '600', color: InkColors.ink2, marginBottom: 6 },
