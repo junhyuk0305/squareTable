@@ -16,7 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { HqPage, HqButton, HqCard, HqNotice, HqRow, HqPill, HqEmpty } from '@/components/hq/HqKit';
 import { HqModal } from '@/components/hq/HqModal';
-import { PayloadForm, answerTextOf } from '@/components/owner/quiz/PayloadForm';
+import { PayloadForm, answerTextOf, emptyPayload } from '@/components/owner/quiz/PayloadForm';
 import { useBrandQuizStore } from '@/lib/store/useBrandQuizStore';
 import { useBrandKnowhowStore } from '@/lib/store/useBrandKnowhowStore';
 import { useSessionStore } from '@/lib/store/useSessionStore';
@@ -31,7 +31,7 @@ import {
 } from '@/lib/db';
 import { generateQuizItems, QuizQuotaError } from '@/lib/quiz/generate';
 import { FORMATS } from '@/lib/quiz/formats';
-import type { QuizItem } from '@/lib/quiz/types';
+import type { QuizItem, QuizFormat } from '@/lib/quiz/types';
 import { genId } from '@/lib/utils/id';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
@@ -76,6 +76,9 @@ export default function HqQuizBuilderScreen() {
   const [editing, setEditing] = useState<QuizItem | null>(null);
   const [editPayload, setEditPayload] = useState<Record<string, any>>({});
   const [editErr, setEditErr] = useState<string | null>(null);
+  /** 편집 모달이 '새 문항'을 들고 있나 — 저장이 insert 로 갈지 update 로 갈지 가른다(P7 [직접 쓰기]). */
+  const [creating, setCreating] = useState(false);
+  const [fmtOpen, setFmtOpen] = useState(false);
   /** 만들어진 코스 id — 새로 만들기는 첫 문항이 생기는 순간 코스를 만든다(quiz-new 와 같은 순서: 문항이 코스 없이 떠돌지 않게). */
   const courseRef = useRef<string | null>(isNew ? null : (id ?? null));
 
@@ -207,15 +210,53 @@ export default function HqQuizBuilderScreen() {
   };
 
   const openEdit = (q: QuizItem) => {
+    setCreating(false);
     setEditing(q);
     setEditPayload(q.payload ?? {});
     setEditErr(null);
+  };
+  /**
+   * [직접 쓰기](P7 이월분) — 사장 `QuizEditorSheet` 의 manual 경로와 **같은 순서**다:
+   *   형태 고르기 → `emptyPayload(f)` → `PayloadForm` → 저장. 같은 부품을 부르고 새 폼을 만들지 않는다.
+   * 형태는 전부 보여 준다 — `formatsForKind` 는 AI 가 **자동으로 뽑을 수 있는** 것을 좁히는 판정이고,
+   * 사람이 직접 쓸 때는 그 제약이 없다(사장 시트도 근거 노하우가 없으면 전 형태를 준다). 최종 관문은 `validate`.
+   */
+  const startManual = (f: QuizFormat) => {
+    if (!wsUnitId) return;
+    setFmtOpen(false);
+    setCreating(true);
+    setEditErr(null);
+    setEditPayload(emptyPayload(f));
+    setEditing({
+      id: genId('qz'),
+      unit_id: wsUnitId,
+      entry_ids: picked,           // 근거 = 지금 고른 노하우. 오답 귀속·재매핑이 AI 문항과 같은 축을 탄다.
+      kind: FORMATS[f].kind,
+      format: f,
+      payload: emptyPayload(f),
+      source: 'owner',
+      status: 'active',
+      created_by: userId,
+    });
   };
   const saveEdit = async () => {
     if (!editing) return;
     // 레지스트리가 최종 관문 — 사장 문항 수정과 같은 검증(FORMATS[f].validate: null=통과, 문자열=사람에게 보일 오류).
     const bad = FORMATS[editing.format]?.validate(editPayload);
     if (bad) { setEditErr(bad); return; }
+    if (creating) {
+      // 직접 쓴 첫 문항이면 코스가 아직 없을 수 있다 — AI 경로와 같은 순서로 먼저 만든다.
+      const cid = await ensureCourse();
+      if (!cid) { setEditErr('퀴즈를 만들지 못했어요. 잠시 뒤 다시 시도해 주세요.'); return; }
+      const made = await insertQuizItem({ ...editing, payload: editPayload });
+      if (!made) { setEditErr('저장하지 못했어요. 잠시 뒤 다시 시도해 주세요.'); return; }
+      setEditing(null);
+      setCreating(false);
+      setItemsReload((v) => v + 1);
+      await refresh();
+      if (isNew) router.replace({ pathname: '/hq/quizzes/[id]', params: { id: cid } });
+      return;
+    }
     const ok = await updateQuizItem(editing.id, { payload: editPayload });
     if (!ok) { setEditErr('저장하지 못했어요. 잠시 뒤 다시 시도해 주세요.'); return; }
     setEditing(null);
@@ -334,10 +375,19 @@ export default function HqQuizBuilderScreen() {
 
         {/* ── 오른쪽: 문항 검토·수정 ─────────────────────────────── */}
         <View style={styles.col}>
-          <HqCard title={`문항 ${items.length}개`} sub="이 문항이 매장에 그대로 가요. 형태는 노하우 내용에 맞춰 코드가 정했어요.">
+          <HqCard title={`문항 ${items.length}개`} sub="이 문항이 매장에 그대로 가요. AI 가 만든 형태는 노하우 내용에 맞춰 코드가 정했고, 직접 쓸 때는 형태를 고를 수 있어요.">
+            <View style={styles.itemBtns}>
+              <HqButton
+                label="직접 쓰기"
+                icon="create-outline"
+                disabled={picked.length === 0 || phase !== 'idle'}
+                onPress={() => setFmtOpen(true)}
+                testID="hq-quiz-item-new"
+              />
+            </View>
             {items.length === 0 ? (
               <View style={styles.blank}>
-                <Text style={styles.blankText}>{picked.length ? '왼쪽에서 [문항 만들기]를 누르면 여기에 문항이 쌓여요.' : '먼저 왼쪽에서 노하우를 골라 주세요.'}</Text>
+                <Text style={styles.blankText}>{picked.length ? '왼쪽에서 [문항 만들기]를 누르거나 위 [직접 쓰기]로 한 문항씩 쓸 수 있어요.' : '먼저 왼쪽에서 노하우를 골라 주세요.'}</Text>
               </View>
             ) : (
               items.map((q, i) => {
@@ -363,7 +413,23 @@ export default function HqQuizBuilderScreen() {
         </View>
       </View>
 
-      <HqModal open={!!editing} title="문항 고치기" sub={editing ? FORMATS[editing.format]?.label : undefined} width={600} onClose={() => setEditing(null)}>
+      {/* 형태 고르기 — 사장 시트의 pick 단계와 같은 자리. 고르면 빈 폼(`emptyPayload`)으로 편집 모달이 열린다. */}
+      <HqModal open={fmtOpen} title="어떤 형태로 쓸까요" sub="고르면 그 형태의 빈 칸이 열려요. 저장할 때 형태별 규칙을 다시 확인해요." width={560} onClose={() => setFmtOpen(false)}>
+        <View style={styles.fmtList}>
+          {Object.values(FORMATS).map((spec) => (
+            <Pressable
+              key={spec.key}
+              onPress={() => startManual(spec.key)}
+              accessibilityRole="button"
+              style={({ pressed }) => [styles.fmtRow, pressed && { opacity: 0.85 }]}
+            >
+              <Text style={styles.fmtLabel}>{spec.label}</Text>
+            </Pressable>
+          ))}
+        </View>
+      </HqModal>
+
+      <HqModal open={!!editing} title={creating ? '문항 쓰기' : '문항 고치기'} sub={editing ? FORMATS[editing.format]?.label : undefined} width={600} onClose={() => { setEditing(null); setCreating(false); }}>
         {editing ? (
           <>
             {editErr ? <HqNotice tone="warn">{editErr}</HqNotice> : null}
@@ -371,7 +437,7 @@ export default function HqQuizBuilderScreen() {
             <HqRow first k="정답" v={answerTextOf(editing.format, editPayload) || '—'} />
             <View style={styles.editBtns}>
               <HqButton label="저장" variant="pri" onPress={() => void saveEdit()} testID="hq-quiz-item-save" />
-              <HqButton label="취소" onPress={() => setEditing(null)} />
+              <HqButton label="취소" onPress={() => { setEditing(null); setCreating(false); }} />
             </View>
           </>
         ) : null}
@@ -381,6 +447,10 @@ export default function HqQuizBuilderScreen() {
 }
 
 const styles = StyleSheet.create({
+  fmtList: { gap: Space.sm, maxHeight: 420 },
+  fmtRow: { borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.sm, paddingVertical: 12, paddingHorizontal: 14, backgroundColor: InkColors.paper },
+  fmtLabel: { fontSize: 15, fontWeight: '700', color: InkColors.ink },
+
   two: { flexDirection: 'row', flexWrap: 'wrap', gap: 18, alignItems: 'flex-start' },
   col: { flex: 1, minWidth: 420 },
 

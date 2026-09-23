@@ -25,6 +25,7 @@ import { HubTabBar } from '@/components/HubTabBar';
 import { Appear, stagger } from '@/components/Appear';
 import { ScreenLoading } from '@/components/ScreenLoading';
 import { SectionLabel } from '@/components/SectionLabel';
+import { TwoPane, Pane } from '@/components/shell/TwoPane';
 import { useStoreEntryStore } from '@/lib/store/useStoreEntryStore';
 
 // 진입 순서·타임아웃·커버는 useStoreEntryStore(+ 전역 StoreEnterCover)로 옮겼다 —
@@ -244,6 +245,9 @@ export default function StoresHub() {
                     때만 표기하고, 섞여 있으면(사장 매장 + 매니저 매장) 각 매장 줄에서 말한다.
                     예전엔 "매니저 매장이 하나라도 있으면 매니저"라 사장 매장까지 매니저로 불렀다. */}
                 <SectionLabel title={`매장 ${storeCount}곳`} hint={uniformRole ? roleNoun(uniformRole) : undefined} />
+                {/* 넓은 웹에서만 두 단 — 왼쪽 목록 / 오른쪽 '매장 추가'. 폰 폭에서는 지금 순서 그대로 한 줄씩이다. */}
+                <TwoPane gap={Space.md}>
+                <Pane side="main">
                 {visibleStores.map((s, i) => {
                   const ov = overview[s.unit_id];
                   const isActive = s.unit_id === unitId;
@@ -290,7 +294,10 @@ export default function StoresHub() {
                   );
                 })}
 
+                </Pane>
+
                 {/* 매장 추가(사장) / 매장 합류(직원) */}
+                <Pane side="rail">
                 <Pressable onPress={isOwner ? addStore : joinStore} style={({ pressed }) => [styles.addCard, pressed && styles.pressed]}>
                   <View style={styles.addIcon}>
                     <Ionicons name={isOwner ? 'add' : 'enter-outline'} size={20} color={InkColors.ink} />
@@ -300,6 +307,8 @@ export default function StoresHub() {
                     <Text style={styles.addSub}>{isOwner ? '2번째 매장부터는 매장당 요금' : '사장님께 받은 초대코드 입력'}</Text>
                   </View>
                 </Pressable>
+                </Pane>
+                </TwoPane>
               </View>
             </Appear>
 

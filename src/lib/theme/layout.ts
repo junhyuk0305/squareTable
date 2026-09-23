@@ -74,8 +74,14 @@ export const modalFrameStyle: ViewStyle = {
  */
 export const OWNER_WEB_MAX_WIDTH = 720;
 
-/** 넓은 웹 셸의 왼쪽 사이드바 폭(본사 대시보드 데모 HTML `.side` 와 같은 값). */
-export const SIDE_NAV_WIDTH = 224;
+/**
+ * 넓은 웹 셸의 왼쪽 사이드바 폭.
+ *
+ * ★2026-09-23(P7) 224 → 240. 데모 HTML `.side` 는 224 였지만, 실제 항목 중 긴 것("계정 설정"·
+ *   "본사 대시보드")이 아이콘+여백과 함께 224 안에서 줄바꿈 직전까지 찬다. 널리 쓰는 하한은
+ *   Polaris 240 · Carbon 256 · Material ≤280 이다 — 그중 가장 좁은 240 을 쓴다.
+ */
+export const SIDE_NAV_WIDTH = 240;
 
 /**
  * 본사 화면 본문의 좌우 거터 — 넓은 레이아웃이라 폰 거터(20)보다 한 단계 크다.
