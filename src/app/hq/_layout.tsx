@@ -31,7 +31,9 @@ export default function HqLayout() {
     <Stack screenOptions={{ headerShown: false, animation: 'none' }}>
       <Stack.Screen name="index" />
       <Stack.Screen name="stores" />
-      <Stack.Screen name="knowhow" />
+      {/* 노하우는 표(index)와 편집기([id])로 나뉜다 — `/hq/knowhow/new` 는 [id]='new' 로 들어온다. */}
+      <Stack.Screen name="knowhow/index" />
+      <Stack.Screen name="knowhow/[id]" />
       <Stack.Screen name="quizzes" />
       <Stack.Screen name="settings" />
       <Stack.Screen name="join" />

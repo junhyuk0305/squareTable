@@ -22,6 +22,16 @@ const MESSAGES: Record<string, string> = {
   iap_active: '이 매장은 앱 구독이 살아 있어 본사 부담으로 바꿀 수 없어요. 구독이 끝난 뒤 다시 제안해 주세요.',
   no_proposal: '기다리는 제안이 없어요.',
   invite_not_pending: '이미 답했거나 만료된 초대라 취소할 수 없어요.',
+  // ── P4 배포(0215·0217) ──
+  no_workspace: '작업실이 아직 준비되지 않았어요. 담당자에게 문의해 주세요.',
+  too_many_entries: '한 번에 보낼 수 있는 노하우 수를 넘었어요. 나눠서 보내 주세요.',
+  too_many_units: '한 번에 보낼 수 있는 매장 수를 넘었어요. 나눠서 보내 주세요.',
+  duplicate_unit: '같은 매장이 두 번 들어 있어요.',
+  entry_not_in_workspace: '본사 노하우가 아니라 보낼 수 없어요.',
+  entry_not_found: '노하우를 찾을 수 없어요.',
+  not_brand_copy: '본사가 보낸 노하우만 숨기거나 되살릴 수 있어요.',
+  no_pending_version: '기다리는 새 버전이 없어요.',
+  source_gone: '본사 원본이 사라져 새 버전으로 바꿀 수 없어요. 지금 내용은 그대로 남아요.',
 };
 
 export function brandErrorMessage(err: DbErr, fallback = '잠시 뒤 다시 시도해 주세요.'): string {
