@@ -23,6 +23,7 @@ import { SectionLabel } from '@/components/SectionLabel';
 import { BottomSheet } from '@/components/BottomSheet';
 import { SheetHead } from '@/components/owner/quiz/kit';
 import { AlertRow } from '@/components/blocks/AlertRow';
+import { BrandInviteCard } from '@/components/owner/BrandInviteCard';
 import { ProgressPill } from '@/components/blocks/ProgressPill';
 import { StackBar } from '@/components/blocks/StackBar';
 import { StatCardGrid, type StatCardItem } from '@/components/blocks/StatCardGrid';
@@ -290,6 +291,8 @@ export function OwnerStatusView({ header }: { header: ReactNode }) {
       {header}
       {/* 카드↔카드 = md(12). 제목 달린 섹션 앞의 추가 여백은 SectionLabel 자신이 든다(2026-09-03). */}
       <View style={{ gap: Space.md }}>
+      {/* ── 0) 본사 연결 요청(P3, 정본 §4-E ①) — 요청이 없으면 카드 자체가 없다(미연결 매장 diff 0). ── */}
+      <BrandInviteCard />
       {starterRow && (
         <Appear delay={stagger(0)}>
           <StarterChecklist row={starterRow} />

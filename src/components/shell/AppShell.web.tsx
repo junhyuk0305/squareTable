@@ -11,11 +11,14 @@ import { SHOW_HQ_CONSOLE } from '@/lib/config/store-policy';
 import { canManage } from '@/lib/utils/roles';
 import { InkColors } from '@/lib/theme/colors';
 
+import { usePendingBrandJoin } from '@/lib/brand/usePendingBrandJoin';
+
 /**
  * 인증 계열 경로 — **앱 크롬 0.** 로그인은 로그인만 한다(2026-09-22 사용자 지적).
  * 로그인한 사장이 여기 서 있어도(프로필 완성 전·로그아웃 직후) 사이드바를 두르지 않는다.
+ * `/hq/join` = 담당자 초대 링크 착지(P3) — 아직 담당자가 아닌 사람이 오므로 본사 셸보다 먼저 걸러야 한다.
  */
-const AUTH_PATHS = ['/login', '/signup', '/complete-profile'];
+const AUTH_PATHS = ['/login', '/signup', '/complete-profile', '/hq/join'];
 
 /**
  * 앱 껍데기 — **웹판.** 로그인한 사람의 종류에 따라 셸만 갈린다(기획정본 §5-1).
@@ -43,6 +46,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   const status = useSessionStore((s) => s.status);
   const role = useSessionStore((s) => s.role);
   const brandId = useSessionStore((s) => s.brandId);
+  // 담당자 초대 링크(/hq/join)로 온 사람이 가입·로그인을 마치면 어느 화면에 있든 여기서 수락 → /hq.
+  usePendingBrandJoin();
 
   // 세션이 확정되기 전에 폰 프레임을 그리면, 사장·본사는 곧바로 넓은 셸로 갈아타며 한 번 튄다.
   // 확정될 때까지는 프레임 없는 빈 배경만 둔다 — 그 위를 스플래시가 덮으므로 보이는 것은 같다.

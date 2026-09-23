@@ -35,6 +35,11 @@ export const OWNER_KIND_UI: Record<OwnerNotifKind, { icon: IconName; tint: strin
   payment_rejected: { icon: 'alert-circle', tint: BrandColors.accentSoft },
   seat_lock: { icon: 'lock-closed', tint: BrandColors.accentSoft },
   ai_cap: { icon: 'flash', tint: BrandColors.yellowSoft },
+  // 0213 본사 축 — 요청·제안은 '답할 것'(노랑), 해제는 결과(중립).
+  brand_invite: { icon: 'business', tint: BrandColors.yellowSoft },
+  brand_visibility_request: { icon: 'eye', tint: BrandColors.yellowSoft },
+  brand_payer_proposal: { icon: 'card', tint: BrandColors.yellowSoft },
+  brand_ended: { icon: 'unlink', tint: BrandColors.brandSoft },
 };
 /** 허브(역할 혼합 가능) 용 — 두 맵 합성. */
 // 닫힌 매장(0197) — 통합 목록에만 나온다(매장 안 알림함엔 그 매장이 없다).

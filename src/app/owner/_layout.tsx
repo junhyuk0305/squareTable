@@ -167,6 +167,9 @@ export default function OwnerLayout() {
       <Stack.Screen name="ask" options={{ title: '물어보기' }} />
       <Stack.Screen name="schedule" options={{ title: '근무표' }} />
       <Stack.Screen name="store-config" options={{ title: '매장 기본 정보' }} />
+      {/* 본사 축(P3): 연결 요청 동의 · 설정 > 본사 연결. 미연결 매장에선 진입점 자체가 안 그려진다. */}
+      <Stack.Screen name="brand-consent" options={{ title: '본사 연결 요청' }} />
+      <Stack.Screen name="brand-link" options={{ title: '본사 연결' }} />
       <Stack.Screen name="timesheet/[staffId]" options={{ title: '출근 기록' }} />
       <Stack.Screen name="payroll" options={{ title: '급여 설정' }} />
       <Stack.Screen name="knowledge" options={{ title: '내 노하우' }} />

@@ -1,5 +1,182 @@
-import { HqPlaceholder } from '@/components/hq/HqPlaceholder';
+// /hq/settings — 설정(정본 §5-2): 브랜드 정보 · 구성원(초대 링크) · 결제(표시만) · 데이터 공개 안내 · 연결 해제 안내.
+//
+// 재료 = useBrandStore(my_brand 확장 · brand_members_list · brand_invites_list). 청구·결제 실행은 P6 —
+// 여기는 계약가·대상 매장 수·paid_until 을 **보여 주기만** 한다(정본 §5-2 "표시만").
+import { useCallback, useMemo, useState } from 'react';
+import { View, Text, StyleSheet } from 'react-native';
+import { useFocusEffect } from 'expo-router';
 
-export default function HqScreen() {
-  return <HqPlaceholder title="설정" />;
+import { HqPage, HqButton, HqPill, HqCard, HqRow, HqNotice, HqEmpty } from '@/components/hq/HqKit';
+import { HqTable, Cell } from '@/components/hq/HqTable';
+import { HqModal } from '@/components/hq/HqModal';
+import { useBrandStore } from '@/lib/store/useBrandStore';
+import { inviteBrandMember } from '@/lib/brand/brandDb';
+import { brandErrorMessage } from '@/lib/brand/errors';
+import { VISIBILITY_LEVELS, NEVER_SHARED, payerLabel } from '@/lib/brand/visibility';
+import { useCopyToClipboard, canCopyToClipboard } from '@/lib/utils/useCopyToClipboard';
+import { showToast } from '@/lib/store/useToastStore';
+import { InkColors, BrandColors } from '@/lib/theme/colors';
+import { Radius } from '@/lib/theme/elevation';
+import { Space } from '@/lib/theme/layout';
+
+const fmtDay = (iso: string) => new Date(iso).toLocaleDateString('ko-KR');
+const fmtBiz = (n: string | null) => (n && n.length === 10 ? `${n.slice(0, 3)}-${n.slice(3, 5)}-${n.slice(5)}` : n || '—');
+const joinUrl = (token: string) => {
+  const origin = typeof location !== 'undefined' ? location.origin : '';
+  return `${origin}/hq/join?token=${token}`;
+};
+
+export default function HqSettingsScreen() {
+  const brand = useBrandStore((s) => s.brand);
+  const overview = useBrandStore((s) => s.overview);
+  const members = useBrandStore((s) => s.members);
+  const invites = useBrandStore((s) => s.invites);
+  const loaded = useBrandStore((s) => s.loaded);
+  const error = useBrandStore((s) => s.error);
+  const hydrate = useBrandStore((s) => s.hydrate);
+  const refresh = useBrandStore((s) => s.refresh);
+  useFocusEffect(useCallback(() => { void hydrate(); }, [hydrate]));
+
+  const [link, setLink] = useState<{ url: string; expires: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const { copied, copy } = useCopyToClipboard();
+
+  const memberInvites = useMemo(() => invites.filter((i) => i.kind === 'member' && i.status === 'pending' && i.token), [invites]);
+  const brandPaid = overview.filter((r) => r.payer === 'brand').length;
+  const price = brand?.price_per_store_krw ?? null;
+
+  const makeLink = async () => {
+    setBusy(true);
+    const r = await inviteBrandMember();
+    setBusy(false);
+    if (r.error || !r.data?.[0]) {
+      showToast(brandErrorMessage(r.error), 'warn');
+      return;
+    }
+    setLink({ url: joinUrl(r.data[0].token), expires: r.data[0].expires_at });
+    void refresh();
+  };
+
+  return (
+    <HqPage title="설정" sub="브랜드 정보 · 구성원 · 결제 · 본사가 볼 수 있는 범위" testID="hq-settings">
+      {error ? <HqNotice tone="warn">설정을 불러오지 못했어요. ({error})</HqNotice> : null}
+
+      <HqCard title="브랜드 정보" sub="변경은 스퀘어테이블에 요청해 주세요(계약 정보라 화면에서 고치지 않아요).">
+        <HqRow first k="브랜드 이름" v={brand?.brand_name ?? (loaded ? '—' : '불러오는 중…')} />
+        <HqRow k="사업자등록번호" v={fmtBiz(brand?.biz_no ?? null)} />
+        <HqRow k="매장 추가 시 기본 요금 부담" v={brand ? payerLabel(brand.default_payer) : '—'} />
+      </HqCard>
+
+      <HqCard
+        title="구성원"
+        sub="담당자는 전원 같은 권한이에요. 초대 링크(7일)를 만들어 전달하면 그 사람이 가입한 뒤 이 브랜드에 합류해요."
+      >
+        <View style={{ gap: 0 }}>
+          {members.length === 0 ? (
+            <HqEmpty text={loaded ? '구성원이 없어요.' : '불러오는 중…'} />
+          ) : (
+            members.map((m, i) => (
+              <HqRow
+                key={m.user_id}
+                first={i === 0}
+                k={m.is_me ? '나' : '담당자'}
+                v={m.name || '이름 없음'}
+                tail={<Text style={styles.muted}>{fmtDay(m.joined_at)} 합류</Text>}
+              />
+            ))
+          )}
+        </View>
+        <View style={{ flexDirection: 'row', gap: Space.sm, marginTop: Space.lg }}>
+          <HqButton label="초대 링크 만들기" variant="pri" icon="link-outline" disabled={busy} testID="hq-member-invite" onPress={() => void makeLink()} />
+        </View>
+        {memberInvites.length > 0 ? (
+          <View style={{ marginTop: Space.lg }}>
+            <Text style={styles.subhead}>아직 안 쓴 초대 링크</Text>
+            <HqTable
+              columns={[
+                { key: 'made', label: '만든 날', width: 120, render: (i) => <Cell kind="muted">{fmtDay(i.created_at)}</Cell> },
+                { key: 'exp', label: '만료', width: 120, render: (i) => <Cell kind="muted">{fmtDay(i.expires_at)}</Cell> },
+                { key: 'st', label: '상태', width: 100, render: () => <HqPill tone="w" label="대기" /> },
+                {
+                  key: 'act',
+                  label: '',
+                  render: (i) =>
+                    canCopyToClipboard() ? (
+                      <HqButton label="링크 복사" onPress={() => void copy(joinUrl(i.token!)).then(() => showToast('링크를 복사했어요.', 'good'))} />
+                    ) : (
+                      <Cell kind="muted">{joinUrl(i.token!)}</Cell>
+                    ),
+                },
+              ]}
+              rows={memberInvites}
+              rowKey={(i) => i.id}
+            />
+          </View>
+        ) : null}
+      </HqCard>
+
+      <HqCard title="결제" sub="본사 부담(payer=본사) 매장 수 × 브랜드 계약가. 청구서·결제는 다음 단계에서 열려요 — 지금은 표시만이에요.">
+        <HqRow first k="매장당 월 계약가" v={price !== null ? `${price.toLocaleString()}원` : '—'} tail={<Text style={styles.muted}>부가세 별도 · 계약서 기준</Text>} />
+        <HqRow k="본사 부담 매장" v={`${brandPaid}곳`} tail={<Text style={styles.muted}>매장 부담 {overview.length - brandPaid}곳은 청구에 없어요</Text>} />
+        <HqRow k="월 예상 청구액" v={price !== null ? `${(price * brandPaid).toLocaleString()}원` : '—'} />
+        <HqRow k="이용 기간" v={brand?.paid_until ? `${brand.paid_until}까지` : '아직 결제 전'} />
+        <Text style={styles.src}>월 중에 추가된 매장은 다음 청구부터, 해제는 당월 말까지 유지돼요. 가맹점주에게 월 회수는 하지 않아요(가맹사업법 제12조).</Text>
+      </HqCard>
+
+      <HqCard title="본사가 볼 수 있는 것" sub="점주가 매장마다 고르는 공개 수준에 따라 달라져요. 본사는 올려 달라고 요청만 할 수 있어요.">
+        <View style={styles.levels}>
+          {VISIBILITY_LEVELS.map((l) => (
+            <View key={l.key} style={styles.level}>
+              <Text style={styles.levelName}>{l.label}</Text>
+              <Text style={styles.levelShort}>{l.short}</Text>
+              {l.sees.map((s) => (
+                <Text key={s} style={styles.levelItem}>· {s}</Text>
+              ))}
+            </View>
+          ))}
+        </View>
+        <View style={styles.never}>
+          <Text style={styles.neverTitle}>어느 수준에서도 볼 수 없는 것</Text>
+          <Text style={styles.neverBody}>{NEVER_SHARED.join(' · ')}</Text>
+          <Text style={styles.src}>계약 문구가 아니라 데이터베이스 권한으로 막혀 있어요. 조회 경로 자체가 없어요.</Text>
+        </View>
+      </HqCard>
+
+      <HqCard title="연결 해제" sub="점주도, 본사도 언제든 끝낼 수 있어요.">
+        <Text style={styles.body}>해제하면 본사 화면에서 그 매장이 바로 사라지고, 매장이 받았던 노하우는 매장에 그대로 남아요. 본사 부담 매장이었다면 당월 말까지는 유지돼요.</Text>
+        <Text style={styles.body}>매장에서 해제하려면 <Text style={{ fontWeight: '700' }}>매장 &gt; 행 선택 &gt; 연결 해제</Text>.</Text>
+      </HqCard>
+
+      <HqModal open={!!link} title="초대 링크를 만들었어요" sub={link ? `${fmtDay(link.expires)}까지 쓸 수 있어요. 링크를 받은 사람이 가입(또는 로그인)하면 이 브랜드 담당자가 돼요.` : undefined} onClose={() => setLink(null)}>
+        {link ? (
+          <>
+            <View style={styles.linkBox}>
+              <Text selectable style={styles.linkText} testID="hq-member-invite-link">{link.url}</Text>
+            </View>
+            <View style={{ flexDirection: 'row', gap: Space.sm, marginTop: Space.lg }}>
+              {canCopyToClipboard() ? <HqButton label={copied ? '복사됨' : '링크 복사'} variant="pri" onPress={() => void copy(link.url)} /> : null}
+              <HqButton label="닫기" onPress={() => setLink(null)} />
+            </View>
+          </>
+        ) : null}
+      </HqModal>
+    </HqPage>
+  );
 }
+
+const styles = StyleSheet.create({
+  muted: { fontSize: 12, color: InkColors.ink3 },
+  subhead: { fontSize: 12.5, fontWeight: '700', color: InkColors.ink2, marginBottom: 8 },
+  src: { fontSize: 11.5, color: InkColors.ink3, marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: InkColors.line, borderStyle: 'dashed', lineHeight: 17 },
+  body: { fontSize: 13, lineHeight: 20, color: InkColors.ink2, marginBottom: 6 },
+  levels: { flexDirection: 'row', gap: Space.md, flexWrap: 'wrap' },
+  level: { flex: 1, minWidth: 200, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.sm, padding: 14, gap: 3, backgroundColor: InkColors.paper },
+  levelName: { fontSize: 13.5, fontWeight: '800', color: InkColors.ink },
+  levelShort: { fontSize: 12, color: InkColors.ink2, marginBottom: 6 },
+  levelItem: { fontSize: 12.5, lineHeight: 18, color: InkColors.ink },
+  never: { marginTop: Space.md, borderWidth: 1, borderColor: BrandColors.badSoft, backgroundColor: BrandColors.badSoft, borderRadius: Radius.sm, padding: 14 },
+  neverTitle: { fontSize: 13, fontWeight: '800', color: BrandColors.badText, marginBottom: 4 },
+  neverBody: { fontSize: 12.5, lineHeight: 18, color: BrandColors.badText },
+  linkBox: { borderWidth: 1, borderColor: InkColors.line, backgroundColor: InkColors.paper, borderRadius: Radius.sm, padding: 12 },
+  linkText: { fontSize: 12.5, color: InkColors.ink, fontFamily: 'monospace' },
+});

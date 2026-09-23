@@ -266,7 +266,8 @@ export type PaymentClaim = {
 export type OwnerAlert = {
   id: number;
   unit_id: string;
-  kind: 'seat_lock' | 'ai_cap';
+  // 0213 본사(브랜드) 축 4종 — 연결 요청 · 공개 수준 상향 요청 · 요금 부담 제안 · 본사가 해제함.
+  kind: 'seat_lock' | 'ai_cap' | 'brand_invite' | 'brand_visibility_request' | 'brand_payer_proposal' | 'brand_ended';
   title: string;
   body: string;
   created_at: string;

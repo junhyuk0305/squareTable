@@ -58,6 +58,8 @@ const errCode = (e) => (e?.message ?? '').split(/[\s:]/)[0];
 // 시드 상태로 되돌리기(service_role) — store_001 ↔ brand_pilot active·summary·payer=brand, 대기 초대 0.
 async function restore(ownerId) {
   await svc.from('brand_invites').delete().eq('brand_id', BRAND).eq('kind', 'store').eq('status', 'pending');
+  // 0213 알림 행(brand_*)은 하니스가 만든 것만 지운다 — 좌석·AI 알림은 건드리지 않는다.
+  await svc.from('owner_alerts').delete().eq('unit_id', UNIT).like('kind', 'brand_%');
   const { data: cur } = await svc.from('brand_units').select('id, brand_id').eq('unit_id', UNIT).eq('status', 'active').maybeSingle();
   if (cur && cur.brand_id === BRAND) {
     await svc.from('brand_units').update({ payer: 'brand', visibility: 'summary', payer_proposed: null, payer_proposed_by: null, visibility_requested: null }).eq('id', cur.id);
@@ -187,6 +189,38 @@ try {
   check('G4 직원의 brand_overview 0행', !jov.error && (jov.data ?? []).length === 0, jov.error?.message);
   const own = await H.rpc('brand_connect_own_unit', { p_unit_id: UNIT, p_payer: 'brand' });
   check('G5 담당자가 남의 매장을 직영으로 못 붙인다(not_owner)', errCode(own.error) === 'not_owner', own.error?.message);
+
+  // ── H 점주 알림 4종(0213 owner_alerts) + 상향 요청 '유지' 응답 ──────────────
+  // 위 A2(초대)·E1(상향 요청)·E3(본사 payer 제안)이 남긴 행을 읽고, 본사 해제·유지 응답은 여기서 만든다.
+  console.log('\nH 점주 알림(0213)');
+  const since = new Date(Date.now() - 5 * 60_000).toISOString();
+  const alertsOf = async (kind) => (await svc.from('owner_alerts').select('id, kind, period, title').eq('unit_id', UNIT).eq('kind', kind).gte('created_at', since)).data ?? [];
+  const hInv = await alertsOf('brand_invite');
+  check('H1 초대 → 점주 매장에 brand_invite 알림(사건 = 초대 id)', hInv.some((a) => a.period === inv.data && a.title.includes('연결을 요청')), JSON.stringify(hInv));
+  const hVis = await alertsOf('brand_visibility_request');
+  check('H2 상향 요청 → brand_visibility_request 알림', hVis.length >= 1 && hVis[0].title.includes('공개 수준'), JSON.stringify(hVis));
+  const hPay = await alertsOf('brand_payer_proposal');
+  check('H3 본사 payer 제안 → brand_payer_proposal 알림', hPay.length >= 1 && hPay[0].title.includes('요금 부담'), JSON.stringify(hPay));
+  const oAl = await O.from('owner_alerts').select('kind').eq('unit_id', UNIT).like('kind', 'brand_%');
+  check('H4 점주(사장)는 자기 매장 알림을 읽는다(RLS)', !oAl.error && (oAl.data ?? []).length >= 3, oAl.error?.message ?? `${(oAl.data ?? []).length}행`);
+  const jAl = await J.from('owner_alerts').select('kind').eq('unit_id', UNIT);
+  check('H5 직원은 0행(RLS)', !jAl.error && (jAl.data ?? []).length === 0);
+  // 연결을 되살려 '유지' 응답과 본사 해제를 잰다.
+  await restore(ownerId);
+  const req2 = await H.rpc('request_visibility', { p_unit_id: UNIT, p_visibility: 'ops' });
+  const keep = await O.rpc('set_brand_visibility', { p_unit_id: UNIT, p_visibility: 'summary' });
+  const viewK = await O.rpc('my_brand_view');
+  const rowK = (viewK.data ?? []).find((r) => r.unit_id === UNIT);
+  check('H6 점주가 지금 수준을 고르면(유지) 요청이 닫힌다', !req2.error && !keep.error && rowK?.visibility === 'summary' && rowK?.visibility_requested === null, req2.error?.message ?? keep.error?.message ?? JSON.stringify(rowK));
+  const oProp = await O.rpc('propose_payer', { p_unit_id: UNIT, p_payer: 'store' });
+  const hPay2 = await alertsOf('brand_payer_proposal');
+  // restore() 가 하니스 알림을 지운 뒤라 기준선은 0행 — 점주 제안 뒤에도 0행이어야 한다.
+  check('H7 점주 자신의 payer 제안은 점주 알림을 만들지 않는다', !oProp.error && hPay2.length === 0, oProp.error?.message ?? `${hPay2.length}행`);
+  const hqEnd = await H.rpc('end_brand_unit', { p_unit_id: UNIT, p_reason: 'qa_hq' });
+  const hEnd = await alertsOf('brand_ended');
+  check('H8 본사 해제 → brand_ended 알림', !hqEnd.error && hEnd.length === 1 && hEnd[0].title.includes('연결이 끝났'), hqEnd.error?.message ?? JSON.stringify(hEnd));
+  const ovEnd = await H.rpc('brand_overview');
+  check('H9 본사 해제 뒤 brand_overview 0행', !(ovEnd.data ?? []).some((r) => r.unit_id === UNIT));
 
   await O.auth.signOut(); await H.auth.signOut(); await J.auth.signOut();
 } catch (e) {

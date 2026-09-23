@@ -2,7 +2,7 @@ import { type ReactNode } from 'react';
 import { View, StyleSheet } from 'react-native';
 import { usePathname, useRouter } from 'expo-router';
 
-import { SideNav, type NavGroup } from '@/components/shell/SideNav';
+import { SideNav, type NavGroup, type NavSwitchOption } from '@/components/shell/SideNav';
 import { HUB_TABS } from '@/components/HubTabBar';
 import { goToTab, isTabActive, storeTabsFor } from '@/components/RoleTabBar';
 import { useStoreDisplay } from '@/components/StoreHeaderTitle';
@@ -65,21 +65,14 @@ export function OwnerWebShell({ children }: { children: ReactNode }) {
     });
   }
 
+  // 본사 담당자이면서 매장 사장인 사람(직영 본사 대표 — 정본 §3-1)의 건너가는 길 — subtitle 자리의 전환기(P3).
+  // 하단 항목 쌍은 P3 에서 없앴다. 담당자가 아니면 전환기 자체가 없다(subtitle 은 글자만).
+  const switchOptions: NavSwitchOption[] = brandId
+    ? [{ key: 'hq', label: '본사 대시보드', icon: 'business-outline', onPress: () => router.replace('/hq') }]
+    : [];
+
   const footer: NavGroup = {
     items: [
-      // 본사 담당자이면서 매장 사장인 사람(직영 본사 대표 — 정본 §3-1)의 돌아가는 길.
-      // 본사 셸의 '내 매장으로'와 한 쌍이다. 담당자가 아니면 항목 자체가 없다.
-      ...(brandId
-        ? [
-            {
-              key: '/hq',
-              label: '본사 대시보드',
-              icon: 'business-outline' as const,
-              active: false,
-              onPress: () => router.replace('/hq'),
-            },
-          ]
-        : []),
       {
         key: '/notifications',
         label: '알림',
@@ -113,7 +106,12 @@ export function OwnerWebShell({ children }: { children: ReactNode }) {
 
   return (
     <View style={styles.outer}>
-      <SideNav subtitle={storeLabel ? `지금 · ${storeLabel}` : undefined} groups={groups} footer={footer} />
+      <SideNav
+        subtitle={storeLabel ? `지금 · ${storeLabel}` : brandId ? '내 매장' : undefined}
+        switchOptions={switchOptions}
+        groups={groups}
+        footer={footer}
+      />
       <View style={styles.main}>
         {/* 본문 컬럼 — 모달·바텀시트는 ResponsiveShell 때와 같이 바깥(body)으로 나가 frameCapStyle(460)로 가운데에 뜬다. */}
         <View testID="owner-web-content" style={styles.content}>{children}</View>

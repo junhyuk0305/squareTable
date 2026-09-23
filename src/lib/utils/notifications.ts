@@ -235,10 +235,23 @@ export type OwnerNotifKind =
   | 'join_request' | 'question' | 'suggestion' | 'swap_approval' | 'mention'
   | 'payment_approved' | 'payment_rejected'
   // 0191 사장 알림 — 좌석 잠김 · AI 사용량 80%·100%
-  | 'seat_lock' | 'ai_cap';
+  | 'seat_lock' | 'ai_cap'
+  // 0213 본사 축 — 연결 요청 · 공개 수준 상향 요청 · 요금 부담 제안 · 본사가 해제함
+  | 'brand_invite' | 'brand_visibility_request' | 'brand_payer_proposal' | 'brand_ended';
 export type OwnerNotifRoute =
   | '/owner/inbox' | '/owner/suggestions' | '/owner/schedule' | '/owner/staff' | '/owner/work'
-  | '/owner/categories' | '/billing';
+  | '/owner/categories' | '/billing' | '/owner/brand-consent' | '/owner/brand-link';
+
+/** 사장 알림(owner_alerts) 행이 탭으로 가는 곳 — 본사 축은 동의 화면/본사 연결, 나머지는 요금제. */
+export function ownerAlertRoute(kind: OwnerAlert['kind']): OwnerNotifRoute {
+  switch (kind) {
+    case 'brand_invite': return '/owner/brand-consent';
+    case 'brand_visibility_request':
+    case 'brand_payer_proposal':
+    case 'brand_ended': return '/owner/brand-link';
+    default: return '/billing';
+  }
+}
 
 export type OwnerNotif = {
   id: string;
@@ -316,7 +329,7 @@ export function buildOwnerNotifications(args: {
   const { queue, suggestions, swaps, pending, nameOf, feed = [], userId: me, ackAt, claims = [], alerts = [] } = args;
   const out: OwnerNotif[] = [];
 
-  // 사장 알림(0191) — 문구는 서버가 적재한 그대로(푸시와 같은 문장). 탭하면 앱 안 요금제 화면.
+  // 사장 알림(0191·0213) — 문구는 서버가 적재한 그대로(푸시와 같은 문장). 탭 목적지는 종류가 정한다.
   for (const a of alerts) {
     out.push({
       id: `alert_${a.id}`,
@@ -325,7 +338,7 @@ export function buildOwnerNotifications(args: {
       body: a.body,
       at: a.created_at,
       unread: isAfterAck(a.created_at, ackAt),
-      route: '/billing',
+      route: ownerAlertRoute(a.kind),
     });
   }
 

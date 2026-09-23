@@ -44,6 +44,17 @@ export type BrandInviteRow = {
 
 export type BrandMemberRow = { user_id: string; name: string; joined_at: string; is_me: boolean };
 
+/** 0212 my_brand() 확장 행 — 설정 화면(브랜드 정보·결제 표시)용. 세션은 brand_id·brand_name 만 쓴다(db.ts). */
+export type MyBrandFullRow = {
+  brand_id: string;
+  brand_name: string;
+  biz_no: string | null;
+  default_payer: BrandPayer;
+  price_per_store_krw: number | null;
+  paid_until: string | null;
+  workspace_unit_id: string | null;
+};
+
 /** 점주에게 온 연결 요청(0210 my_brand_invites). */
 export type MyBrandInviteRow = {
   invite_id: string;
@@ -81,6 +92,10 @@ async function call(name: string, args?: Record<string, unknown>): Promise<DbErr
 }
 
 // ── 본사 쪽 ───────────────────────────────────────────────────────────────
+export const fetchMyBrandFull = async (): Promise<DbResult<MyBrandFullRow | null>> => {
+  const r = await rows<MyBrandFullRow>('my_brand');
+  return { data: r.error ? null : (r.data?.[0] ?? null), error: r.error };
+};
 export const fetchBrandOverview = () => rows<BrandOverviewRow>('brand_overview');
 export const fetchBrandInvites = () => rows<BrandInviteRow>('brand_invites_list');
 export const fetchBrandMembers = () => rows<BrandMemberRow>('brand_members_list');
@@ -91,6 +106,8 @@ export const connectOwnUnit = (unitId: string, payer?: BrandPayer) =>
   call('brand_connect_own_unit', { p_unit_id: unitId, p_payer: payer ?? null });
 export const requestVisibility = (unitId: string, visibility: 'knowhow' | 'ops') =>
   call('request_visibility', { p_unit_id: unitId, p_visibility: visibility });
+/** 담당자 초대 수락(0210) — 가입은 기존 흐름 그대로, 뒤에 이것 하나만 더 부른다(`/hq/join`). */
+export const acceptBrandMemberInvite = (token: string) => call('accept_brand_member_invite', { p_token: token });
 
 // ── 점주 쪽(매장 앱 신규 호출 6개) ──────────────────────────────────────────
 export const fetchMyBrandInvites = () => rows<MyBrandInviteRow>('my_brand_invites');

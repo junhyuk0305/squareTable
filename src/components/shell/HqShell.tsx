@@ -1,10 +1,11 @@
-import { type ReactNode } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import { View, StyleSheet } from 'react-native';
 import { usePathname, useRouter, type Href } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
-import { SideNav, type NavGroup } from '@/components/shell/SideNav';
+import { SideNav, type NavGroup, type NavSwitchOption } from '@/components/shell/SideNav';
 import { useSessionStore } from '@/lib/store/useSessionStore';
+import { useBrandStore } from '@/lib/store/useBrandStore';
 import { confirmAction } from '@/lib/utils/confirm';
 import { logout } from '@/lib/auth';
 import { InkColors } from '@/lib/theme/colors';
@@ -34,6 +35,10 @@ export function HqShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const stores = useSessionStore((s) => s.stores);
   const unitId = useSessionStore((s) => s.unitId);
+  const brandName = useBrandStore((s) => s.brand?.brand_name ?? null);
+  const hydrateBrand = useBrandStore((s) => s.hydrate);
+  // 브랜드 이름은 my_brand 확장 행에서 — 화면들이 같은 캐시를 쓰므로 여기서 한 번 당겨 두면 첫 화면이 빈 표로 깜빡이지 않는다.
+  useEffect(() => { void hydrateBrand(); }, [hydrateBrand]);
 
   const groups: NavGroup[] = [
     {
@@ -51,17 +56,13 @@ export function HqShell({ children }: { children: ReactNode }) {
     },
   ];
 
-  // 담당자가 자기 매장도 갖고 있으면(직영 점주 겸직) 매장 앱으로 돌아가는 길을 둔다.
+  // 담당자가 자기 매장도 갖고 있으면(직영 점주 겸직) 전환기 — subtitle(브랜드명) 자리를 눌러 연다(P3, 레퍼런스 §4-2).
+  // 하단 항목 쌍('내 매장으로' ↔ '본사 대시보드')은 P3 에서 없앴다 — 전환 수단은 한 곳.
+  const switchOptions: NavSwitchOption[] =
+    stores.length > 0 || unitId
+      ? [{ key: 'my-stores', label: '내 매장으로', icon: 'storefront-outline', onPress: () => router.replace('/stores') }]
+      : [];
   const footerItems = [];
-  if (stores.length > 0 || unitId) {
-    footerItems.push({
-      key: 'my-stores',
-      label: '내 매장으로',
-      icon: 'swap-horizontal-outline' as IconName,
-      active: false,
-      onPress: () => router.replace('/stores'),
-    });
-  }
   footerItems.push({
     key: 'logout',
     label: '로그아웃',
@@ -78,7 +79,7 @@ export function HqShell({ children }: { children: ReactNode }) {
 
   return (
     <View style={styles.outer}>
-      <SideNav subtitle="본사" groups={groups} footer={{ items: footerItems }} />
+      <SideNav subtitle={brandName ?? '본사'} switchOptions={switchOptions} groups={groups} footer={{ items: footerItems }} />
       <View testID="hq-main" style={styles.main}>{children}</View>
     </View>
   );

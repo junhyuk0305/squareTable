@@ -14,6 +14,7 @@
 //       (본사 계정·브랜드는 `node scripts/seed-brand-demo.mjs` 가 만든다. ⛔여기서 계정을 만들지 않는다.)
 // 스크린샷 → ./qa-shots/hq/
 import { readFileSync, mkdirSync } from 'node:fs';
+import { createClient } from '@supabase/supabase-js';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
@@ -50,6 +51,9 @@ const PW = 'pilot1234';
 const OWNER = 'owner@pilot.squaretable.app';
 const JUNIOR = 'staff2@pilot.squaretable.app';
 const HQ = 'hq@pilot.squaretable.app';
+// P3 점주 동의 화면 실측용 — 초대 한 건을 service_role 로 심고 끝나면 지운다(계정은 만들지 않는다).
+const SRV = env.SUPABASE_SERVICE_ROLE_KEY;
+const svc = SRV ? createClient(URL_, SRV, { auth: { persistSession: false, autoRefreshToken: false } }) : null;
 
 const projectRef = new URL(URL_).hostname.split('.')[0];
 const STORAGE_KEY = `sb-${projectRef}-auth-token`;
@@ -114,6 +118,13 @@ const tabBarCount = (page, labels) =>
       return ls.includes((b.getAttribute('aria-label') ?? '').trim());
     }).length;
   }, labels);
+
+/** 정확히 그 글자만 가진 리프가 있나. */
+const hasLeafC = (page, t) =>
+  page.evaluate(
+    (txt) => [...document.querySelectorAll('div,span')].some((d) => !d.children.length && (d.textContent ?? '').trim() === txt),
+    t,
+  );
 
 /** 글자를 가진 리프 중 다른 것에 가려진 것 — 덮인 채로 재면 나머지 판정이 전부 거짓이 된다. */
 const occluded = (page) =>
@@ -284,6 +295,48 @@ try {
     check(`C8 '${title}' 화면이 열린다`, shown);
   }
   await ph.screenshot({ path: `${SHOTS}/C-hq-settings.png` });
+
+  // ── C9~ P3 본사 3화면 실측 — 표·드로어·초대 폼·구성원·KPI. 시드(store_001·store_appreview 연결) 기준.
+  console.log('\nC9 본사 화면 내용(P3)');
+  check('C9-0 사이드바 하단 "내 매장으로" 항목이 없다(전환기로 승격)', !(await box(ph, '[data-testid="nav-my-stores"]')));
+  await ph.click('[data-testid="nav-/hq/stores"]');
+  await ph.waitForTimeout(1500);
+  await ph.screenshot({ path: `${SHOTS}/C9-hq-stores.png` });
+  check('C9-1 매장 표에 시드 매장 행이 있다(store_001)', !!(await box(ph, '[data-testid="hq-row-store_001"]')));
+  check('C9-2 드로어는 닫혀 있다', !(await box(ph, '[data-testid="hq-drawer"]')));
+  await ph.click('[data-testid="hq-row-store_001"]');
+  await ph.waitForTimeout(500);
+  const drawer = await box(ph, '[data-testid="hq-drawer"]');
+  const hqMainNow = await box(ph, '[data-testid="hq-main"]');
+  check('C9-3 행을 누르면 오른쪽 드로어가 열린다', !!drawer);
+  check('C9-4 드로어는 본문 오른쪽 끝에 붙는다(폭 392)', !!drawer && !!hqMainNow && Math.abs(drawer.right - hqMainNow.right) < 2 && Math.abs(drawer.w - 392) < 2, drawer ? `w=${drawer.w} right=${drawer.right}` : '');
+  check('C9-5 드로어에 상향 요청 버튼', !!(await box(ph, '[data-testid="hq-request-visibility"]')));
+  await ph.screenshot({ path: `${SHOTS}/C9-hq-drawer.png` });
+  await ph.click('[data-testid="hq-drawer-close"]');
+  await ph.waitForTimeout(300);
+  check('C9-6 닫기 → 드로어 0', !(await box(ph, '[data-testid="hq-drawer"]')));
+  await ph.click('[data-testid="hq-add-store"]');
+  await ph.waitForTimeout(500);
+  check('C9-7 "매장 추가" → 전화번호 초대 폼', !!(await box(ph, '[data-testid="hq-modal"]')) && !!(await box(ph, '[data-testid="hq-invite-phone"]')));
+  check('C9-8 폼이 떠도 460 폰 프레임을 쓰지 않는다', !(await capColumn(ph)));
+  await ph.screenshot({ path: `${SHOTS}/C9-hq-invite.png` });
+  await ph.evaluate(() => {
+    const b = [...document.querySelectorAll('[aria-label="닫기"]')].pop();
+    b?.click();
+  });
+  await ph.waitForTimeout(300);
+  check('C9-9 닫기 → 폼 0', !(await box(ph, '[data-testid="hq-modal"]')));
+  await ph.click('[data-testid="nav-/hq/settings"]');
+  await ph.waitForTimeout(1200);
+  check('C9-10 설정에 구성원(나) 행과 초대 링크 버튼', (await hasLeafC(ph, '나')) && !!(await box(ph, '[data-testid="hq-member-invite"]')));
+  check('C9-11 설정에 공개 수준 3단(요약·노하우 공개·운영 공개)', (await hasLeafC(ph, '요약')) && (await hasLeafC(ph, '노하우 공개')) && (await hasLeafC(ph, '운영 공개')));
+  await ph.click('[data-testid="nav-/hq"]');
+  await ph.waitForTimeout(1200);
+  check('C9-12 대시보드 KPI 스트립 + 확인 필요 + 매장 표', !!(await box(ph, '[data-testid="hq-kpi"]')) && !!(await box(ph, '[data-testid="hq-attention"]')) && !!(await box(ph, '[data-testid="hq-dashboard-table"]')));
+  check('C9-13 P3 화면 콘솔 에러 0', ph.qaErrors.length === 0, ph.qaErrors.slice(0, 3).join(' | '));
+  const occC9 = await occluded(ph);
+  check('C9-14 가려진 글자 0', occC9.length === 0, occC9.slice(0, 4).join(' | '));
+  await ph.screenshot({ path: `${SHOTS}/C9-hq-dashboard.png` });
   await ph.close();
 
   // ── G 셸 경계 — 자격이 서기 전엔 크롬 0 ─────────────────────────
@@ -320,6 +373,55 @@ try {
   check('G6 /login — 사이드바 0', !(await box(pg3, '[data-testid="side-nav"]')));
   check('G7 /login — 하단 탭바 0', (await tabBarCount(pg3, ['현황', '오늘', '노하우', '매장'])) === 0);
   await pg3.close();
+
+  // ── H P3 — /hq/join 크롬 0 · 점주 동의 화면 · 설정 > 본사 연결 ──────────────
+  console.log('\nH P3 — 담당자 초대 착지 · 점주 동의 · 본사 연결');
+  const pj1 = await openPage(ctx, { session: null });
+  await pj1.goto(`${ORIGIN}/hq/join?token=qa-token`, { waitUntil: 'domcontentloaded' });
+  await settle(pj1);
+  await pj1.screenshot({ path: `${SHOTS}/H-anon-join.png` });
+  check('H1 미로그인 /hq/join — 사이드바 0(크롬 0)', !(await box(pj1, '[data-testid="side-nav"]')));
+  check('H2 미로그인 /hq/join — 가입/로그인 안내', (await hasLeaf(pj1, '본사 담당자 초대예요')) && !!(await box(pj1, '[data-testid="hq-join-primary"]')));
+  check('H3 미로그인 /hq/join — 콘솔 에러 0', pj1.qaErrors.length === 0, pj1.qaErrors.slice(0, 3).join(' | '));
+  await pj1.close();
+
+  if (!svc) {
+    check('H4 점주 동의 화면(서비스 키 없음 — 건너뜀)', false, '.env.seed 의 SUPABASE_SERVICE_ROLE_KEY 필요');
+  } else {
+    // 사장(owner@pilot)의 번호로 brand_pilot 초대 한 건을 심는다 — 흉내가 아니라 실제 행이다. 끝나면 지운다.
+    const ownerUid = JSON.parse(Buffer.from(ownerSession.access_token.split('.')[1], 'base64').toString()).sub;
+    const { data: prof } = await svc.from('profiles').select('phone_norm').eq('id', ownerUid).maybeSingle();
+    await svc.from('brand_invites').delete().eq('brand_id', 'brand_pilot').eq('kind', 'store').eq('status', 'pending');
+    const { data: inv, error: invErr } = await svc.from('brand_invites').insert({ brand_id: 'brand_pilot', kind: 'store', phone_norm: prof?.phone_norm, payer: 'brand', expires_at: new Date(Date.now() + 86400e3).toISOString() }).select('id').single();
+    check('H4 QA 초대 행 삽입', !invErr && !!inv?.id, invErr?.message);
+    try {
+      const po2 = await openPage(ctx, { session: ownerSession });
+      await po2.goto(`${ORIGIN}/hub`, { waitUntil: 'domcontentloaded' });
+      await settle(po2);
+      await po2.screenshot({ path: `${SHOTS}/H-owner-hub-card.png` });
+      check('H5 사장 홈(허브 현황)에 연결 요청 카드', !!(await box(po2, '[data-testid="brand-invite-card"]')));
+      await po2.click('[data-testid="brand-invite-card"]').catch(() => {});
+      await po2.waitForTimeout(1500);
+      await po2.screenshot({ path: `${SHOTS}/H-owner-consent.png` });
+      check('H6 동의 화면 — 관측 경계표(수준 3단)가 첫 화면', !!(await box(po2, '[data-testid="brand-consent"]')) && !!(await box(po2, '[data-testid="brand-level-summary"]')) && !!(await box(po2, '[data-testid="brand-level-ops"]')));
+      check('H7 동의 화면 — 어느 수준에도 없는 것 고지', await hasLeaf(po2, '어느 수준에서도 본사에 가지 않는 것'));
+      check('H8 동의 화면 — 수락/거절 버튼', !!(await box(po2, '[data-testid="brand-accept"]')) && !!(await box(po2, '[data-testid="brand-decline"]')));
+      check('H9 동의 화면 콘솔 에러 0', po2.qaErrors.length === 0, po2.qaErrors.slice(0, 3).join(' | '));
+      // ⛔수락·거절은 누르지 않는다 — 시드 연결(store_001 ↔ brand_pilot)을 바꾼다.
+      await po2.goto(`${ORIGIN}/owner/brand-link`, { waitUntil: 'domcontentloaded' });
+      await settle(po2);
+      await po2.screenshot({ path: `${SHOTS}/H-owner-brand-link.png` });
+      check('H10 설정 > 본사 연결 — 시드 연결(store_001) 카드 + 공개 수준 세그먼트', !!(await box(po2, '[data-testid="brand-link-store_001"]')) && !!(await box(po2, '[data-testid="brand-vis-summary"]')));
+      check('H11 본사 연결 — 해제 버튼', !!(await box(po2, '[data-testid="brand-end"]')));
+      await po2.goto(`${ORIGIN}/owner/settings`, { waitUntil: 'domcontentloaded' });
+      await settle(po2);
+      check('H12 매장 설정에 "본사 연결" 섹션', await hasLeaf(po2, '본사 연결'));
+      await po2.close();
+    } finally {
+      if (inv?.id) await svc.from('brand_invites').delete().eq('id', inv.id);
+      await svc.from('owner_alerts').delete().eq('unit_id', 'store_001').like('kind', 'brand_%');
+    }
+  }
 } catch (e) {
   fail++;
   console.log('\n✗ 하니스 중단:', String(e).slice(0, 300));

@@ -1,4 +1,4 @@
-import { Stack, useRouter } from 'expo-router';
+import { Stack, useRouter, usePathname } from 'expo-router';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -25,6 +25,22 @@ export default function HqLayout() {
   const brandId = useSessionStore((s) => s.brandId);
   const stores = useSessionStore((s) => s.stores);
   const unitId = useSessionStore((s) => s.unitId);
+  const pathname = usePathname();
+
+  const stack = (
+    <Stack screenOptions={{ headerShown: false, animation: 'none' }}>
+      <Stack.Screen name="index" />
+      <Stack.Screen name="stores" />
+      <Stack.Screen name="knowhow" />
+      <Stack.Screen name="quizzes" />
+      <Stack.Screen name="settings" />
+      <Stack.Screen name="join" />
+    </Stack>
+  );
+
+  // `/hq/join?token=` 은 **아직 담당자가 아닌 사람**이 오는 곳이다(초대 링크). 출입 판정을 타면 영영 못 들어온다.
+  // 화면 자신이 로그인 여부를 갈라 가입/로그인/수락을 안내한다(크롬 0 은 AppShell.web AUTH_PATHS).
+  if (pathname === '/hq/join') return stack;
 
   // 네이티브: 스토어 앱에는 본사 화면이 없다. 판정은 store-policy 상수만 읽는다(Platform.OS 직접 판정 금지).
   if (!SHOW_HQ_CONSOLE) {
@@ -66,15 +82,7 @@ export default function HqLayout() {
     );
   }
 
-  return (
-    <Stack screenOptions={{ headerShown: false, animation: 'none' }}>
-      <Stack.Screen name="index" />
-      <Stack.Screen name="stores" />
-      <Stack.Screen name="knowhow" />
-      <Stack.Screen name="quizzes" />
-      <Stack.Screen name="settings" />
-    </Stack>
-  );
+  return stack;
 }
 
 /** 못 들어올 때 보여 주는 한 장 — 이유 한 줄 + 다음 행동 하나. */
