@@ -32,7 +32,7 @@ description: 본사(브랜드) 축 작업 절차 — 브랜드 테이블·정의
 
 - RPC 호출부 = `src/lib/brand/brandDb.ts`(`db.ts` 에 섞지 않는다). 상태 = `src/lib/store/useBrandStore.ts`(RPC 1회 → 캐시 → 포커스·수동 새로고침, realtime 없음).
 - 본사 화면 = `src/app/hq/*` + `src/components/hq/*`(표시 전용, 행 배열만 받는다). 로직은 `src/lib/ai/`·`src/lib/quiz/`·`src/lib/db.ts` 를 작업실 unit 으로 그대로 부른다.
-- 점주 앱 신규 호출 6개 이내(규칙 파일). 신규 탭 0. 웹 진입은 `AppShell.web` 이 자격 뒤에 셸을 씌운다 — 새 라우트 그룹을 만들면 `qa:hq` G 케이스처럼 "미로그인·무자격에 사이드바 0"을 케이스로 고정.
+- 점주 앱 신규 호출 수는 규칙 파일(`brand-boundary.md`)의 고정 목록이 정본(P5 기준 11개). 늘리면 그 줄을 같은 커밋에서 고친다. 신규 탭 0. 웹 진입은 `AppShell.web` 이 자격 뒤에 셸을 씌운다 — 새 라우트 그룹을 만들면 `qa:hq` G 케이스처럼 "미로그인·무자격에 사이드바 0"을 케이스로 고정.
 
 ## 3. 검증 (순서대로, 사이 45~90초)
 
@@ -41,7 +41,7 @@ description: 본사(브랜드) 축 작업 절차 — 브랜드 테이블·정의
 | `node scripts/seed-brand-demo.mjs` | 고정 계정 `hq@pilot…` + `brand_pilot` 멱등 시드(연결 매장·수준·배포 상태는 그 테이블이 생기는 단계에서 추가) | 전부 |
 | `npm run qa:brand` | 교차 브랜드 0행 · 작업실이 매장 목록에 안 뜸 · 미연결 매장 diff 0 | P2~ |
 | `npm run qa:brand-boundary` | §3-4 금지 행 전부 0행/거부 · 수준별 컬럼 null · 수락 전 매장명 0 | P2~ (RLS·RPC 변경 시 필수) |
-| `npm run qa:brand-deploy` | 사본 생성 · 미수정 자동 갱신 · 수정본 대기 · 교체/유지 · 숨김 유지 · 해제 후 잔존 · 사진 열람 | P4~ |
+| `npm run qa:brand-deploy` | A~I 노하우(사본 생성 · 미수정 자동 갱신 · 수정본 대기 · 교체/유지 · 숨김 유지 · 해제 후 잔존) + J 퀴즈(재매핑 · 없는 노하우만 선배포 · `quiz_assignments` 0행 · 코스·문항 수정 → 대기 · 숨김 · 출제 제외) | P4~ |
 | `npm run qa:brand-billing` | 청구액 = payer=brand 매장 수 × 계약가 · 월 중 추가는 다음 청구 · 해제는 당월 말 유지 · IAP 전환 거부 | P6 |
 | `npm run qa:hq` | 셸 3갈래 + 셸 경계(G) 브라우저 실측(playwright 는 npx 캐시 복사 → 삭제, 메모리 `qa_harness_traps` 11) | 전부 |
 | 기존 `crosstenant`·`qa:onboarding`·`qa:roles`·`qa:quiz-schedule`·`qa:ai-core` | 회귀 0 | 해당 축 |
