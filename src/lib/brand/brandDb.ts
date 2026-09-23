@@ -12,12 +12,20 @@ import type { DbResult, DbErr } from '@/lib/db';
 
 export type BrandPayer = 'brand' | 'store';
 export type BrandVisibility = 'summary' | 'knowhow' | 'ops';
+/**
+ * 0223 — 이 매장이 본사와 어떤 관계인가. `direct` 직영(본사 고용) · `franchise` 가맹(독립 사업자).
+ * 기능 목록은 같고, 항목마다 **(켤 수 있는가 × 누가 정하는가)** 만 갈린다(정본 02 §1).
+ * ⛔쓰기 경로는 클라이언트에 없다 — 우리(내부 콘솔 · service_role)만 바꾼다(정본 §12 R3).
+ */
+export type BrandRelation = 'direct' | 'franchise';
 
 /** 0212 brand_overview() 한 행 — 수준 밖 컬럼은 서버가 null 로 준다. */
 export type BrandOverviewRow = {
   unit_id: string;
   store_name: string;
   industry: string | null;
+  /** 0223 — 직영/가맹. 표 배지·필터와 드로어 항목표가 쓴다. */
+  relation: BrandRelation;
   payer: BrandPayer;
   visibility: BrandVisibility;
   visibility_requested: 'knowhow' | 'ops' | null;
@@ -31,6 +39,10 @@ export type BrandOverviewRow = {
   mastery: number | null;
   tasks_done_30d: number | null;
   quiz_courses: number | null;
+  /** 0223 자리표시 — P9-3 이 채운다(미이수 인원 수). 그때까지 언제나 null. */
+  staff_behind: number | null;
+  /** 0223 자리표시 — P9-3 이 채운다(오답이 몰린 노하우 건수). 그때까지 언제나 null. */
+  weak_entries: number | null;
 };
 
 export type BrandInviteRow = {
@@ -127,6 +139,8 @@ export type MyBrandViewRow = {
   brand_id: string;
   brand_name: string;
   brand_biz_no: string | null;
+  /** 0223 — 직영이면 규칙을 본사가 정한다. 점주 화면이 잠금·이유를 그리는 재료(P9-2). */
+  relation: BrandRelation;
   payer: BrandPayer;
   visibility: BrandVisibility;
   visibility_requested: 'knowhow' | 'ops' | null;

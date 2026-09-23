@@ -24,10 +24,11 @@ import {
   type BrandOverviewRow,
   type BrandPayer,
   type BrandPayerDateRow,
+  type BrandRelation,
   type BrandVisibility,
 } from '@/lib/brand/brandDb';
 import { brandErrorMessage } from '@/lib/brand/errors';
-import { visibilityLabel, payerLabel, VISIBILITY_LEVELS } from '@/lib/brand/visibility';
+import { visibilityLabel, payerLabel, relationLabel, RELATIONS, VISIBILITY_LEVELS } from '@/lib/brand/visibility';
 import { formatPhone, isValidPhone, normalizePhone } from '@/lib/utils/validation';
 import { showToast } from '@/lib/store/useToastStore';
 import { confirmAction } from '@/lib/utils/confirm';
@@ -37,6 +38,8 @@ import { Space } from '@/lib/theme/layout';
 
 const fmtDay = (iso: string) => new Date(iso).toLocaleDateString('ko-KR');
 const VIS_TONE: Record<BrandVisibility, 'n' | 'i' | 'g'> = { summary: 'n', knowhow: 'i', ops: 'g' };
+// 관계 배지(0223) — 직영만 색을 준다. 가맹이 기본값이고 대부분이라, 둘 다 물들이면 표가 시끄럽다.
+const REL_TONE: Record<BrandRelation, 'i' | 'n'> = { direct: 'i', franchise: 'n' };
 
 /**
  * 요금 부담 줄 옆의 날짜 한 마디(정본 §4-D). 본사 부담이면 "언제부터", 매장 부담인데 이번 달까지
@@ -64,6 +67,7 @@ export default function HqStoresScreen() {
   useFocusEffect(useCallback(() => { void hydrate(); }, [hydrate]));
 
   const [q, setQ] = useState('');
+  const [relF, setRelF] = useState<'all' | BrandRelation>('all');
   const [payerF, setPayerF] = useState<'all' | BrandPayer>('all');
   const [visF, setVisF] = useState<'all' | BrandVisibility>('all');
   // 대시보드에서 행을 눌러 왔을 때(`?unit=`) 드로어를 바로 연다(첫 렌더 초기값).
@@ -75,10 +79,11 @@ export default function HqStoresScreen() {
     return overview.filter(
       (r) =>
         (!needle || r.store_name.includes(needle)) &&
+        (relF === 'all' || r.relation === relF) &&
         (payerF === 'all' || r.payer === payerF) &&
         (visF === 'all' || r.visibility === visF),
     );
-  }, [overview, q, payerF, visF]);
+  }, [overview, q, relF, payerF, visF]);
 
   const pendingInvites = useMemo(() => invites.filter((i) => i.kind === 'store' && i.status === 'pending'), [invites]);
   const selectedRow = overview.find((r) => r.unit_id === selected) ?? null;
@@ -96,6 +101,8 @@ export default function HqStoresScreen() {
       ),
       sortValue: (r) => r.store_name,
     },
+    // 관계(0223) — 이름 바로 옆. 아래 열들의 뜻이 관계마다 다르므로(누가 정하나) 먼저 읽혀야 한다.
+    { key: 'rel', label: '관계', width: 80, render: (r) => <HqPill tone={REL_TONE[r.relation]} label={relationLabel(r.relation)} />, sortValue: (r) => r.relation },
     { key: 'payer', label: '요금 부담', width: 110, render: (r) => <HqPill tone={r.payer === 'brand' ? 'y' : 'n'} label={payerLabel(r.payer)} /> },
     {
       key: 'vis',
@@ -147,6 +154,11 @@ export default function HqStoresScreen() {
               accessibilityLabel="매장 이름으로 찾기"
             />
           </View>
+          <HqSegment
+            items={[{ key: 'all', label: '관계 전체' }, ...RELATIONS.map((r) => ({ key: r.key, label: r.label }))]}
+            value={relF}
+            onChange={setRelF}
+          />
           <HqSegment
             items={[{ key: 'all', label: '요금 전체' }, { key: 'brand', label: '본사 부담' }, { key: 'store', label: '매장 부담' }]}
             value={payerF}
@@ -278,7 +290,10 @@ function StoreDrawer({ row, dates, onClose, onChanged }: {
   return (
     <HqDrawer open title={row.store_name} sub={row.industry ?? undefined} onClose={onClose}>
       <View style={styles.kv}>
-        <HqRow first k="연결일" v={fmtDay(row.accepted_at)} />
+        {/* 관계(0223) — 맨 위. 아래 줄들이 "누가 정하나"로 갈리는 기준이라 먼저 읽혀야 한다.
+            ⛔여기서 바꾸는 길은 없다(정본 §12 R3: 우리만 바꾼다). 바꾸려면 내부 콘솔이다. */}
+        <HqRow first k="관계" v={<HqPill tone={REL_TONE[row.relation]} label={relationLabel(row.relation)} />} />
+        <HqRow k="연결일" v={fmtDay(row.accepted_at)} />
         <HqRow
           k="요금 부담"
           v={<HqPill tone={row.payer === 'brand' ? 'y' : 'n'} label={payerLabel(row.payer)} />}

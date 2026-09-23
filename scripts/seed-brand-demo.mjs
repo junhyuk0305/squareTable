@@ -194,11 +194,23 @@ let hqId;
   for (const w of want) {
     const { data: u } = await db.from('units').select('id, owner_id').eq('id', w.unit).is('deleted_at', null).maybeSingle();
     if (!u) { console.log(`  · ${w.unit} 없음 — 건너뜀`); continue; }
-    const { data: cur } = await db.from('brand_units').select('id, brand_id').eq('unit_id', w.unit).eq('status', 'active').maybeSingle();
-    if (cur && cur.brand_id === BRAND_ID) { console.log(`  · ${w.unit} 이미 연결됨`); continue; }
+    const { data: cur } = await db.from('brand_units').select('id, brand_id, relation').eq('unit_id', w.unit).eq('status', 'active').maybeSingle();
+    if (cur && cur.brand_id === BRAND_ID) {
+      // 이미 연결돼 있어도 **관계는 맞춘다**(0223 이 기존 행을 전부 franchise 로 만들었다 — 멱등 재실행이 직영을 되살려야 한다).
+      const rel = w.direct ? 'direct' : 'franchise';
+      if (cur.relation !== rel) {
+        await db.from('brand_units').update({ relation: rel }).eq('id', cur.id);
+        console.log(`  · ${w.unit} 이미 연결됨 — 관계만 ${rel} 로 맞춤`);
+      } else {
+        console.log(`  · ${w.unit} 이미 연결됨`);
+      }
+      continue;
+    }
     if (cur) await db.from('brand_units').update({ status: 'ended', ended_at: new Date().toISOString(), end_reason: 'seed_reset' }).eq('id', cur.id);
     const { error } = await db.from('brand_units').insert({
       brand_id: BRAND_ID, unit_id: w.unit, payer: w.payer, visibility: w.visibility,
+      // 0223 relation — 직영은 `store_eval` 하나뿐이다(정본 02 §6 "시드는 store_eval 만 direct").
+      relation: w.direct ? 'direct' : 'franchise',
       invited_by: w.direct ? hqId : null, accepted_by: u.owner_id,
     });
     if (error) { console.error(`✗ ${w.unit} 연결 실패 —`, error.message); process.exit(1); }

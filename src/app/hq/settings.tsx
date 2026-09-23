@@ -15,7 +15,7 @@ import { useBrandBillingStore } from '@/lib/store/useBrandBillingStore';
 import { inviteBrandMember } from '@/lib/brand/brandDb';
 import { brandErrorMessage } from '@/lib/brand/errors';
 import { BILLING_RULES, INVOICE_STATUS, krw, periodLabel } from '@/lib/brand/billing';
-import { VISIBILITY_LEVELS, NEVER_SHARED, payerLabel } from '@/lib/brand/visibility';
+import { VISIBILITY_LEVELS, NEVER_SHARED, payerLabel, relationLabel } from '@/lib/brand/visibility';
 import { useCopyToClipboard, canCopyToClipboard } from '@/lib/utils/useCopyToClipboard';
 import { showToast } from '@/lib/store/useToastStore';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
@@ -51,6 +51,14 @@ export default function HqSettingsScreen() {
 
   const memberInvites = useMemo(() => invites.filter((i) => i.kind === 'member' && i.status === 'pending' && i.token), [invites]);
   const brandPaid = overview.filter((r) => r.payer === 'brand').length;
+  // 청구 목록의 관계 표시(0223 · 정본 02 §9) — `brand_billing_preview_mine` 을 넓히지 않고 매장 표에서 집어 온다.
+  //   두 RPC 가 같은 브랜드의 active 연결을 보므로 붙지 않는 줄은 없다. 그래도 없으면 '—' 다(거짓말보다 빈 칸).
+  // ★직영은 사실상 항상 본사 부담이라, 실제 협상 숫자는 **가맹 중 본사 부담이 몇 곳인가**다.
+  const relationOf = useMemo(
+    () => new Map(overview.map((r) => [r.unit_id, r.relation] as const)),
+    [overview],
+  );
+  const franchisePaid = current.filter((r) => relationOf.get(r.unit_id) === 'franchise').length;
   const price = brand?.price_per_store_krw ?? null;
   // ★금액을 화면에서 세지 않는다 — 내부 콘솔의 발행과 **같은 함수**가 준 줄을 더하기만 한다(0222).
   const currentAmount = current.reduce((s, r) => s + r.price_krw, 0);
@@ -130,7 +138,7 @@ export default function HqSettingsScreen() {
 
       <HqCard title="결제" sub="월 선불 · 계좌이체 + 세금계산서 · 자동결제 없음(계약 제6조). 청구서 발행과 입금 확인은 스퀘어테이블이 해요 — 이 화면은 표시만이에요.">
         <HqRow first k="매장당 월 계약가" v={krw(price)} tail={<Text style={styles.muted}>부가세 별도 · 계약서 기준</Text>} />
-        <HqRow k="이번 달 청구 대상" v={`${current.length}곳`} tail={<Text style={styles.muted}>매장 부담 {overview.length - brandPaid}곳은 청구에 없어요</Text>} />
+        <HqRow k="이번 달 청구 대상" v={`${current.length}곳`} tail={<Text style={styles.muted}>가맹 {franchisePaid}곳 · 매장 부담 {overview.length - brandPaid}곳은 청구에 없어요</Text>} />
         <HqRow k="이번 달 금액" v={krw(currentAmount)} />
         <HqRow k="다음 청구 예정" v={`${next.length}곳 · ${krw(nextAmount)}`} tail={<Text style={styles.muted}>{nextNote}</Text>} />
         <HqRow k="이용 기간" v={brand?.paid_until ? `${brand.paid_until}까지` : '아직 결제 전'} />
@@ -142,6 +150,15 @@ export default function HqSettingsScreen() {
           <HqTable
             columns={[
               { key: 'name', label: '매장', render: (r) => <Cell kind="name">{r.store_name}</Cell> },
+              {
+                key: 'rel',
+                label: '관계',
+                width: 80,
+                render: (r) => {
+                  const rel = relationOf.get(r.unit_id);
+                  return rel ? <HqPill tone={rel === 'direct' ? 'i' : 'n'} label={relationLabel(rel)} /> : <Cell kind="muted">—</Cell>;
+                },
+              },
               { key: 'since', label: '본사 부담 시작', width: 140, render: (r) => <Cell kind="muted">{r.since}</Cell> },
               { key: 'price', label: '금액', width: 120, align: 'right', render: (r) => <Cell kind="num">{krw(r.price_krw)}</Cell> },
             ]}
