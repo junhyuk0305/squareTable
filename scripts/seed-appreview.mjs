@@ -25,6 +25,7 @@ import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { assertSeedTarget } from './lib/seed-target.mjs';
 
 const __dir = dirname(fileURLToPath(import.meta.url));
 const readJson = (p) => JSON.parse(readFileSync(join(__dir, '..', 'src', 'data', p), 'utf8'));
@@ -60,6 +61,7 @@ const INVITE_CODE = '770427';
 const STORE_NAME = '우리 데모 카페 (App Review)';
 const P = 'apr_';                                     // 노하우 id 접두(전역 PK 충돌 방지)
 
+assertSeedTarget(URL, 'seed-appreview.mjs');
 const db = createClient(URL, SERVICE, { auth: { persistSession: false } });
 const anon = () => createClient(URL, ANON, { auth: { persistSession: false, autoRefreshToken: false } });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));

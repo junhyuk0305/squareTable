@@ -14,6 +14,7 @@ import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { assertSeedTarget } from './lib/seed-target.mjs';
 
 function loadEnv() {
   const e = { ...process.env };
@@ -41,6 +42,7 @@ const BRAND_NAME = '스퀘어 F&B';
 const HQ_EMAIL = 'hq@pilot.squaretable.app';
 const PASSWORD = 'pilot1234';
 
+assertSeedTarget(URL_, 'seed-brand-demo.mjs');
 const db = createClient(URL_, KEY, { auth: { persistSession: false, autoRefreshToken: false } });
 
 console.log('본사(브랜드) QA 시드');

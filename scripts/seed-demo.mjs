@@ -14,6 +14,7 @@ import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { assertSeedTarget } from './lib/seed-target.mjs';
 
 const __dir = dirname(fileURLToPath(import.meta.url));
 
@@ -24,9 +25,13 @@ for (const line of readFileSync(envPath, 'utf8').split('\n')) {
   const m = line.match(/^\s*([A-Z_]+)\s*=\s*(.+)\s*$/);
   if (m && !m[1].startsWith('#')) env[m[1]] = m[2].trim();
 }
-const URL = env.SUPABASE_URL || process.env.SUPABASE_URL;
-const KEY = env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
+// ★process.env 가 먼저다. 파일을 먼저 읽던 순서를 2026-09-23 에 뒤집었다 —
+//   다른 시드 6개는 전부 process.env 먼저인데 이 파일만 반대라, 로컬 리허설용 덮어쓰기가
+//   조용히 무시되고 라이브를 쳤다(scripts/lib/seed-target.mjs 머리주석).
+const URL = process.env.SUPABASE_URL || env.SUPABASE_URL;
+const KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || env.SUPABASE_SERVICE_ROLE_KEY;
 if (!URL || !KEY) { console.error('✗ SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY 필요'); process.exit(1); }
+assertSeedTarget(URL, 'seed-demo.mjs');
 const db = createClient(URL, KEY, { auth: { persistSession: false } });
 
 const UNIT = 'store_001';
@@ -127,7 +132,18 @@ async function main() {
   await step('swap_requests purge', db.from('swap_requests').delete().eq('unit_id', UNIT));
   await step('suggestions purge', db.from('playbook_suggestions').delete().eq('unit_id', UNIT));
   // 비기본방 + 멤버 정리(기본방 'room_main_store_001'은 유지)
-  await step('room_members purge', db.from('work_room_members').delete().neq('room_id', ROOM));
+  // ★이 매장의 방만 고른 뒤 지운다. 2026-09-23 까지는 `.neq('room_id', ROOM)` 한 줄이었는데,
+  //   `work_room_members` 에 unit_id 가 없어서 **전 매장의 멤버 행이 지워졌다**(매장 하나 시드가
+  //   다른 매장 채팅방 명부를 날린다). 기본방은 is_default 로 보이므로 표시가 안 깨져 조용하다.
+  const { data: unitRooms, error: roomsErr } = await db
+    .from('work_rooms').select('id').eq('unit_id', UNIT).neq('id', ROOM);
+  if (roomsErr) { console.error(`  ✗ room 조회: ${roomsErr.message}`); throw roomsErr; }
+  const purgeRoomIds = (unitRooms || []).map((r) => r.id);
+  if (purgeRoomIds.length) {
+    await step('room_members purge', db.from('work_room_members').delete().in('room_id', purgeRoomIds));
+  } else {
+    console.log('  ✓ room_members purge (지울 비기본방 없음)');
+  }
   await step('extra rooms purge', db.from('work_rooms').delete().eq('unit_id', UNIT).eq('is_default', false));
 
   // ════════════════════════════════════════════════════════
