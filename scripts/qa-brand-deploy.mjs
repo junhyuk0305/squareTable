@@ -284,7 +284,14 @@ try {
   check('H2 ★본사가 보는 값과 **같다**(같은 SQL 을 지난다)',
     !!mRow && !!hRow && JSON.stringify(mRow) === JSON.stringify(hRow),
     JSON.stringify({ mine: mRow, hq: hRow }));
-  check('H3 미러 뷰에 남의 매장은 없다', !(mir.data ?? []).some((r) => r.unit_id === OTHER));
+  // ★`OTHER`(store_002_demo)를 여기 쓰면 안 된다 — 그것은 **같은 점주(김영자)의 2호점**이고
+  //   brand_other 에 연결돼 있다. 미러 뷰는 "내가 **사장인** 매장의 브랜드 연결 현황"이라
+  //   다른 브랜드에 연결됐더라도 내 매장이면 보이는 것이 맞다(본사 뷰에 안 보이는 것은 qa:brand G1 이 잰다).
+  //   진짜 남의 매장 = store_starter_demo(한지현 소유 · seed-demo-hub). 2026-09-23 라이브 실측으로 갈렸다
+  //   — 로컬에는 그 매장이 없어서 공허하게 통과했었다.
+  check('H3 미러 뷰에 **내가 사장이 아닌** 매장은 없다',
+    !(mir.data ?? []).some((r) => r.unit_id === 'store_starter_demo'),
+    JSON.stringify((mir.data ?? []).map((r) => r.unit_id)));
   const jMir = await J.rpc('my_brand_mirror');
   check('H4 직원의 미러 뷰 0행(사장만)', !jMir.error && (jMir.data ?? []).length === 0);
   // 수준을 올리면 미러 뷰도 같이 열린다(둘이 같은 본문이라는 증거).
