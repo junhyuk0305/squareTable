@@ -13,7 +13,9 @@ export const OTP_RESEND_SECONDS = 60;
 
 type OtpReason =
   | 'cooldown' | 'daily_cap' | 'rate_limited' | 'expired' | 'mismatch'
-  | 'too_many' | 'invalid_phone' | 'not_configured' | 'send_failed' | 'network';
+  | 'too_many' | 'invalid_phone' | 'not_configured' | 'send_failed' | 'network'
+  // reset_password(2026-09-23) 전용
+  | 'no_account' | 'weak_password';
 
 // "N초 후"를 사람이 읽는 단위로. 90초를 "90초"라고 말하면 길게 느껴진다.
 function waitText(sec: number): string {
@@ -52,11 +54,15 @@ function reasonMsg(reason: OtpReason, retryAfterSec: number | null): string {
       return '문자를 보내지 못했어요. 잠시 후 다시 시도해 주세요.';
     case 'network':
       return '연결 문제로 완료하지 못했어요. 잠시 후 다시 시도해 주세요.';
+    case 'no_account':
+      return '이 번호로 가입된 계정이 없어요. 사장님/직원 선택과 번호를 확인해 주세요.';
+    case 'weak_password':
+      return '비밀번호는 9자 이상이어야 해요.';
   }
 }
 
 async function callOtp(
-  body: { action: 'send' | 'verify'; phone: string; code?: string },
+  body: { action: 'send' | 'verify' | 'reset_password'; phone: string; code?: string; role?: 'owner' | 'junior'; new_password?: string },
 ): Promise<{ ok: boolean; reason: OtpReason | null; retryAfterSec: number | null }> {
   try {
     const res = await fetch(OTP_ENDPOINT, {
@@ -76,6 +82,21 @@ async function callOtp(
   } catch {
     return { ok: false, reason: 'network', retryAfterSec: null };
   }
+}
+
+/**
+ * 비밀번호 재설정(전화번호 인증, 2026-09-23) — 인증번호 + 새 비밀번호를 한 번에 보낸다.
+ * 서버가 코드를 대조하고(verify 와 같은 규칙) 그 번호·역할 계정의 비밀번호를 바꾼다. 코드는 한 번 쓰면 만료.
+ * 성공이면 message 는 null. 실패면 사람이 읽는 이유 한 줄.
+ */
+export async function resetPasswordByPhone(args: {
+  phone: string;
+  code: string;
+  role: 'owner' | 'junior';
+  newPassword: string;
+}): Promise<{ ok: boolean; message: string | null }> {
+  const r = await callOtp({ action: 'reset_password', phone: args.phone, code: args.code, role: args.role, new_password: args.newPassword });
+  return { ok: r.ok, message: r.ok ? null : reasonMsg(r.reason ?? 'network', r.retryAfterSec) };
 }
 
 // 화면용 훅 — normalizePhone 된 번호를 받는다. 번호가 바뀌면 sent/verified 가 자동으로 풀린다

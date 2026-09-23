@@ -434,16 +434,16 @@ function AddStoreModal({
 }
 
 const styles = StyleSheet.create({
-  sub: { fontSize: 11.5, color: InkColors.ink3, marginTop: 2 },
+  sub: { fontSize: 13, color: InkColors.ink3, marginTop: 2 },
   fbar: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, marginBottom: 12, flexWrap: 'wrap' },
-  search: { flexDirection: 'row', alignItems: 'center', gap: 7, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.sm, paddingHorizontal: 12, minWidth: 220, height: 36, backgroundColor: InkColors.bg },
-  searchInput: { flex: 1, fontSize: 13, color: InkColors.ink, paddingVertical: 0 },
+  search: { flexDirection: 'row', alignItems: 'center', gap: 7, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.sm, paddingHorizontal: 12, minWidth: 220, height: 40, backgroundColor: InkColors.bg },
+  searchInput: { flex: 1, fontSize: 14.5, color: InkColors.ink, paddingVertical: 0 },
   kv: { borderTopWidth: 1, borderTopColor: InkColors.line, marginBottom: Space.lg },
   section: { marginBottom: Space.xl },
-  hint: { fontSize: 12.5, lineHeight: 18, color: InkColors.ink2, marginBottom: Space.md },
-  label: { fontSize: 12.5, fontWeight: '700', color: InkColors.ink2, marginBottom: 6 },
-  input: { borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.sm, paddingHorizontal: 12, height: 40, fontSize: 14, color: InkColors.ink },
-  err: { fontSize: 12.5, color: BrandColors.badText, marginTop: Space.sm },
+  hint: { fontSize: 14, lineHeight: 20, color: InkColors.ink2, marginBottom: Space.md },
+  label: { fontSize: 14, fontWeight: '700', color: InkColors.ink2, marginBottom: 6 },
+  input: { borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.sm, paddingHorizontal: 12, height: 44, fontSize: 15.5, color: InkColors.ink },
+  err: { fontSize: 14, color: BrandColors.badText, marginTop: Space.sm },
   ownRow: { flexDirection: 'row', alignItems: 'center', gap: Space.md, paddingVertical: 10, paddingHorizontal: 16 },
-  ownName: { flex: 1, fontSize: 13.5, fontWeight: '600', color: InkColors.ink },
+  ownName: { flex: 1, fontSize: 15, fontWeight: '600', color: InkColors.ink },
 });

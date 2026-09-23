@@ -165,18 +165,18 @@ export default function HqSettingsScreen() {
 }
 
 const styles = StyleSheet.create({
-  muted: { fontSize: 12, color: InkColors.ink3 },
-  subhead: { fontSize: 12.5, fontWeight: '700', color: InkColors.ink2, marginBottom: 8 },
-  src: { fontSize: 11.5, color: InkColors.ink3, marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: InkColors.line, borderStyle: 'dashed', lineHeight: 17 },
-  body: { fontSize: 13, lineHeight: 20, color: InkColors.ink2, marginBottom: 6 },
+  muted: { fontSize: 13.5, color: InkColors.ink3 },
+  subhead: { fontSize: 14, fontWeight: '700', color: InkColors.ink2, marginBottom: 8 },
+  src: { fontSize: 13, color: InkColors.ink3, marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: InkColors.line, borderStyle: 'dashed', lineHeight: 19 },
+  body: { fontSize: 14.5, lineHeight: 22, color: InkColors.ink2, marginBottom: 6 },
   levels: { flexDirection: 'row', gap: Space.md, flexWrap: 'wrap' },
   level: { flex: 1, minWidth: 200, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.sm, padding: 14, gap: 3, backgroundColor: InkColors.paper },
-  levelName: { fontSize: 13.5, fontWeight: '800', color: InkColors.ink },
-  levelShort: { fontSize: 12, color: InkColors.ink2, marginBottom: 6 },
-  levelItem: { fontSize: 12.5, lineHeight: 18, color: InkColors.ink },
+  levelName: { fontSize: 15.5, fontWeight: '800', color: InkColors.ink },
+  levelShort: { fontSize: 13.5, color: InkColors.ink2, marginBottom: 6 },
+  levelItem: { fontSize: 14, lineHeight: 20, color: InkColors.ink },
   never: { marginTop: Space.md, borderWidth: 1, borderColor: BrandColors.badSoft, backgroundColor: BrandColors.badSoft, borderRadius: Radius.sm, padding: 14 },
-  neverTitle: { fontSize: 13, fontWeight: '800', color: BrandColors.badText, marginBottom: 4 },
-  neverBody: { fontSize: 12.5, lineHeight: 18, color: BrandColors.badText },
+  neverTitle: { fontSize: 14.5, fontWeight: '800', color: BrandColors.badText, marginBottom: 4 },
+  neverBody: { fontSize: 14, lineHeight: 20, color: BrandColors.badText },
   linkBox: { borderWidth: 1, borderColor: InkColors.line, backgroundColor: InkColors.paper, borderRadius: Radius.sm, padding: 12 },
-  linkText: { fontSize: 12.5, color: InkColors.ink, fontFamily: 'monospace' },
+  linkText: { fontSize: 14, color: InkColors.ink, fontFamily: 'monospace' },
 });

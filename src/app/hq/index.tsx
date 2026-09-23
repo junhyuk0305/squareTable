@@ -101,8 +101,8 @@ function AttentionCell({ k, v, n, onPress }: { k: string; v: number; n: string; 
 const styles = StyleSheet.create({
   cellcard: { flexDirection: 'row', flexWrap: 'wrap', borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md, overflow: 'hidden', marginBottom: 22, backgroundColor: InkColors.bg, ...Elevation.e1 },
   cell: { flex: 1, minWidth: 180, paddingVertical: 16, paddingHorizontal: 18, borderLeftWidth: 1, borderLeftColor: InkColors.line, marginLeft: -1 },
-  cellK: { fontSize: 12.5, fontWeight: '600', color: InkColors.ink2, marginBottom: 6 },
-  cellV: { fontSize: 19, fontWeight: '800', letterSpacing: -0.4, color: InkColors.ink },
-  cellZero: { fontSize: 15, fontWeight: '700', color: InkColors.ink3 },
-  cellN: { fontSize: 11.5, color: InkColors.ink3, marginTop: 4 },
+  cellK: { fontSize: 14, fontWeight: '600', color: InkColors.ink2, marginBottom: 6 },
+  cellV: { fontSize: 22, fontWeight: '800', letterSpacing: -0.4, color: InkColors.ink },
+  cellZero: { fontSize: 17, fontWeight: '700', color: InkColors.ink3 },
+  cellN: { fontSize: 13, color: InkColors.ink3, marginTop: 4 },
 });

@@ -57,7 +57,7 @@ const styles = StyleSheet.create({
   },
   body: { paddingVertical: 22, paddingHorizontal: 24 },
   dh: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginBottom: 16 },
-  h3: { fontSize: 17, fontWeight: '800', letterSpacing: -0.3, color: InkColors.ink },
-  p: { fontSize: 12.5, color: InkColors.ink2, marginTop: 3 },
+  h3: { fontSize: 19, fontWeight: '800', letterSpacing: -0.3, color: InkColors.ink },
+  p: { fontSize: 14, color: InkColors.ink2, marginTop: 3 },
   x: { width: 32, height: 32, borderRadius: Radius.sm, alignItems: 'center', justifyContent: 'center' },
 });

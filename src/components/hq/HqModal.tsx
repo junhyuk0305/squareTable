@@ -47,7 +47,7 @@ const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
   card: { backgroundColor: InkColors.bg, borderRadius: Radius.lg, padding: 24, ...Elevation.e3 },
   head: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginBottom: 16 },
-  title: { fontSize: 17, fontWeight: '800', letterSpacing: -0.3, color: InkColors.ink },
-  sub: { fontSize: 12.5, color: InkColors.ink2, marginTop: 3, lineHeight: 18 },
+  title: { fontSize: 19, fontWeight: '800', letterSpacing: -0.3, color: InkColors.ink },
+  sub: { fontSize: 14, color: InkColors.ink2, marginTop: 3, lineHeight: 20 },
   x: { width: 32, height: 32, borderRadius: Radius.sm, alignItems: 'center', justifyContent: 'center' },
 });
