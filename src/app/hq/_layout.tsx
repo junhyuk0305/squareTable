@@ -1,4 +1,4 @@
-import { Stack, useRouter, usePathname } from 'expo-router';
+import { Stack, Redirect, useRouter, usePathname } from 'expo-router';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -55,16 +55,9 @@ export default function HqLayout() {
   // 세션이 확정되기 전에는 아무 말도 하지 않는다 — '로그인하세요'가 스쳤다가 사라지면 그게 더 혼란스럽다.
   if (status === 'loading') return null;
 
-  if (status !== 'signed_in') {
-    return (
-      <Notice
-        icon="log-in-outline"
-        title="본사 담당자 계정으로 로그인해 주세요"
-        body="본사 대시보드는 본사 담당자만 볼 수 있어요."
-        action={{ label: '로그인', href: '/login' }}
-      />
-    );
-  }
+  // 미로그인 = 로그인 화면 직행(사용자 결정 09-23, 웹 표준). 로그인 뒤 착지는 index 가 brandId 로 /hq 에 다시 보내므로
+  // return-to 가 필요 없다. 무자격(로그인했는데 담당자가 아님)만 아래 안내 한 장으로 남긴다.
+  if (status !== 'signed_in') return <Redirect href="/login" />;
 
   if (!brandId) {
     const hasStore = stores.length > 0 || !!unitId;

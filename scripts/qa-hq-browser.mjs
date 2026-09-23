@@ -354,7 +354,7 @@ try {
   await settle(pg1);
   await pg1.screenshot({ path: `${SHOTS}/G-anon-hq.png` });
   check('G1 미로그인 /hq — 사이드바 0', !(await box(pg1, '[data-testid="side-nav"]')));
-  check('G2 미로그인 /hq — 로그인 안내가 보인다', await hasLeaf(pg1, '본사 담당자 계정으로 로그인해 주세요'));
+  check('G2 미로그인 /hq — /login 으로 직행한다(09-23 결정)', new URL(pg1.url()).pathname === '/login', pg1.url());
   check('G3 미로그인 /hq — 콘솔 에러 0', pg1.qaErrors.length === 0, pg1.qaErrors.slice(0, 3).join(' | '));
   await pg1.close();
 

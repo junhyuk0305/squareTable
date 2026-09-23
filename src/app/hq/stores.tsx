@@ -20,6 +20,7 @@ import {
   proposePayer,
   acceptPayer,
   endBrandUnit,
+  revokeInvite,
   type BrandOverviewRow,
   type BrandPayer,
   type BrandVisibility,
@@ -170,6 +171,31 @@ export default function HqStoresScreen() {
             { key: 'status', label: '상태', width: 110, render: () => <HqPill tone="w" label="대기" /> },
             { key: 'sent', label: '보낸 날', render: (i) => <Cell kind="muted">{fmtDay(i.created_at)}</Cell> },
             { key: 'exp', label: '만료', render: (i) => <Cell kind="muted">{fmtDay(i.expires_at)}</Cell> },
+            {
+              key: 'act',
+              label: '',
+              width: 110,
+              align: 'right',
+              // 취소(0214) — 점주 카드는 즉시 사라진다. 잘못 보낸 번호를 14일 동안 못 거두던 것(사용자 결정 09-23).
+              render: (i) => (
+                <HqButton
+                  label="초대 취소"
+                  testID={`hq-invite-revoke-${i.id}`}
+                  onPress={() => {
+                    void (async () => {
+                      const ok = await confirmAction('초대 취소', `${formatPhone(i.phone ?? '')} 번호로 보낸 초대를 거둘까요? 점주 앱의 요청 카드가 바로 사라져요.`, '취소하기', { destructive: true, icon: 'close-circle-outline' });
+                      if (!ok) return;
+                      const err = await revokeInvite(i.id);
+                      if (err) showToast(brandErrorMessage(err), 'warn');
+                      else {
+                        showToast('초대를 취소했어요.', 'good');
+                        void refresh();
+                      }
+                    })();
+                  }}
+                />
+              ),
+            },
           ]}
           rows={pendingInvites}
           rowKey={(i) => i.id}

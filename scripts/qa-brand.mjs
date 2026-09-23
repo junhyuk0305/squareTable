@@ -57,7 +57,7 @@ const errCode = (e) => (e?.message ?? '').split(/[\s:]/)[0];
 
 // 시드 상태로 되돌리기(service_role) — store_001 ↔ brand_pilot active·summary·payer=brand, 대기 초대 0.
 async function restore(ownerId) {
-  await svc.from('brand_invites').delete().eq('brand_id', BRAND).eq('kind', 'store').eq('status', 'pending');
+  await svc.from('brand_invites').delete().eq('brand_id', BRAND).eq('kind', 'store').in('status', ['pending', 'revoked']);
   // 0213 알림 행(brand_*)은 하니스가 만든 것만 지운다 — 좌석·AI 알림은 건드리지 않는다.
   await svc.from('owner_alerts').delete().eq('unit_id', UNIT).like('kind', 'brand_%');
   const { data: cur } = await svc.from('brand_units').select('id, brand_id').eq('unit_id', UNIT).eq('status', 'active').maybeSingle();
@@ -221,6 +221,21 @@ try {
   check('H8 본사 해제 → brand_ended 알림', !hqEnd.error && hEnd.length === 1 && hEnd[0].title.includes('연결이 끝났'), hqEnd.error?.message ?? JSON.stringify(hEnd));
   const ovEnd = await H.rpc('brand_overview');
   check('H9 본사 해제 뒤 brand_overview 0행', !(ovEnd.data ?? []).some((r) => r.unit_id === UNIT));
+
+  // ── I 초대 취소(0214) ────────────────────────────────────────────────────
+  console.log('\nI 초대 취소(0214)');
+  const inv2 = await H.rpc('brand_invite_store', { p_phone: ownerPhone, p_payer: 'brand' });
+  const jRev = await J.rpc('brand_revoke_invite', { p_invite_id: inv2.data });
+  check('I1 담당자 아닌 계정은 취소 못 함(not_brand_member)', errCode(jRev.error) === 'not_brand_member', jRev.error?.message);
+  const rev = await H.rpc('brand_revoke_invite', { p_invite_id: inv2.data });
+  const listR = await H.rpc('brand_invites_list');
+  check('I2 본사가 취소 → status=revoked', !rev.error && (listR.data ?? []).find((r) => r.id === inv2.data)?.status === 'revoked', rev.error?.message);
+  const mineR = await O.rpc('my_brand_invites');
+  check('I3 취소 즉시 점주 카드 0', !mineR.error && !(mineR.data ?? []).some((r) => r.invite_id === inv2.data));
+  const revAgain = await H.rpc('brand_revoke_invite', { p_invite_id: inv2.data });
+  check('I4 두 번 취소 거부(invite_not_pending)', errCode(revAgain.error) === 'invite_not_pending', revAgain.error?.message);
+  const respR = await O.rpc('respond_brand_invite', { p_invite_id: inv2.data, p_unit_ids: [UNIT], p_visibility: 'summary', p_accept: true });
+  check('I5 취소된 초대는 수락 불가(invite_invalid)', errCode(respR.error) === 'invite_invalid', respR.error?.message);
 
   await O.auth.signOut(); await H.auth.signOut(); await J.auth.signOut();
 } catch (e) {

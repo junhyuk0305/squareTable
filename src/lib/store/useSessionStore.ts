@@ -131,6 +131,11 @@ type SessionState = {
   // 현재 로그인 사용자의 소속을 서버에서 재확인(승인 반영·강제 소속해제 감지). 대기화면 폴링/직원홈 가드에 사용.
   refreshMembership: () => Promise<void>;
   sendMagicLink: (email: string) => Promise<{ error: string | null }>;
+  // 비밀번호 찾기(09-23): 재설정 메일 발송. 메일의 링크는 웹 오리진으로 돌아오고(PASSWORD_RECOVERY) reset-password 화면이 받는다.
+  sendPasswordReset: (email: string) => Promise<{ error: string | null }>;
+  /** 재설정 링크로 들어온 세션 — reset-password 화면이 새 비밀번호를 받을 때까지 true. */
+  passwordRecovery: boolean;
+  clearPasswordRecovery: () => void;
   // 이메일 인증 메일 발송(회원가입 화면의 '인증' 버튼). 데모는 발송 생략.
   verifyEmail: (email: string) => Promise<{ status: 'demo' | 'sent' | 'rate' | 'error'; message?: string }>;
   updateProfile: (patch: { name?: string; phone?: string; phone_last4?: string; bio?: string; email?: string }) => Promise<{ error: string | null }>;
@@ -526,6 +531,8 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   signupRole: null,
   // 브랜드 축(P2)이 붙기 전까지 항상 null. 파생 지점이 생기면 loadProfile 이 채운다.
   brandId: null,
+  passwordRecovery: false,
+  clearPasswordRecovery: () => set({ passwordRecovery: false }),
 
   init: async () => {
     if (!HAS_SUPABASE) {
@@ -540,8 +547,10 @@ export const useSessionStore = create<SessionState>((set, get) => ({
 
     if (!_authSubscribed) {
       _authSubscribed = true;
-      supabase.auth.onAuthStateChange((_evt, session) => {
+      supabase.auth.onAuthStateChange((evt, session) => {
         const u = session?.user;
+        // 재설정 메일 링크로 들어온 세션 — 화면(루트 _layout)이 reset-password 로 보낸다. 프로필 로드는 그대로 한다.
+        if (evt === 'PASSWORD_RECOVERY') set({ passwordRecovery: true });
         if (u) loadProfile(set, u.id, u.email ?? '', pendingOwnerMeta(u));
         else {
           setAnalyticsContext({ userId: null, unitId: null, role: null });
@@ -846,6 +855,17 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     if (!HAS_SUPABASE) return;
     const uid = get().userId;
     if (uid) await loadProfile(set, uid, get().email);
+  },
+
+  sendPasswordReset: async (email) => {
+    if (!HAS_SUPABASE) return { error: null };
+    // 링크는 웹 오리진으로 돌아온다(OAuth 복귀와 같은 주소라 Supabase 허용 목록을 안 늘린다). 앱에서 요청해도
+    // 메일 링크는 브라우저(웹)에서 열려 새 비밀번호를 정하고, 앱으로 돌아와 로그인한다.
+    const redirectTo = typeof window !== 'undefined' && window.location?.origin ? window.location.origin : 'https://app.squaretable.app';
+    const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
+    // 존재 비노출(OWASP): 미가입 이메일도 같은 문장으로 답한다 — 화면이 "보냈어요" 한 가지만 말한다.
+    if (!error) return { error: null };
+    return { error: /rate|too many|limit/i.test(error.message) ? '잠시 뒤에 다시 보낼 수 있어요(1분).' : friendlyError(error.message, '메일을 보내지 못했어요. 잠시 후 다시 시도해 주세요.') };
   },
 
   sendMagicLink: async (email) => {

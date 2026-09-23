@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Stack } from 'expo-router';
+import { Stack, usePathname, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -55,6 +55,14 @@ export default function RootLayout() {
   const init = useSessionStore((s) => s.init);
   // 무료 공지 팝업은 로그인 화면이 아니라 로그인 후(홈 진입)에만 띄운다.
   const signedIn = useSessionStore((s) => s.status === 'signed_in');
+  // 비밀번호 재설정 링크로 들어온 세션(PASSWORD_RECOVERY) — 어느 화면에 떨어졌든 reset-password 로 보낸다.
+  // index 를 안 건드리고 여기서 한 줄로: 착지 판정(index)보다 먼저 잡아야 허브로 새지 않는다.
+  const passwordRecovery = useSessionStore((s) => s.passwordRecovery);
+  const pathname = usePathname();
+  const router = useRouter();
+  useEffect(() => {
+    if (passwordRecovery && pathname !== '/reset-password') router.replace('/reset-password');
+  }, [passwordRecovery, pathname, router]);
   useEffect(() => {
     void hydrateLocalPrefs();
     init();

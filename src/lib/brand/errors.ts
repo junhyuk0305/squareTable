@@ -21,6 +21,7 @@ const MESSAGES: Record<string, string> = {
   same_payer: '지금과 같은 요금 부담이에요.',
   iap_active: '이 매장은 앱 구독이 살아 있어 본사 부담으로 바꿀 수 없어요. 구독이 끝난 뒤 다시 제안해 주세요.',
   no_proposal: '기다리는 제안이 없어요.',
+  invite_not_pending: '이미 답했거나 만료된 초대라 취소할 수 없어요.',
 };
 
 export function brandErrorMessage(err: DbErr, fallback = '잠시 뒤 다시 시도해 주세요.'): string {

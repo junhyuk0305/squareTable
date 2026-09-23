@@ -31,7 +31,9 @@ const QA_EMAIL = /@example\.com|@squaretable\.test|@test\.com|@pilot\.squaretabl
 //   hubdemo.* = 허브 대시보드 QA 데모 계정(seed-demo-hub.mjs) — 합류신청 pending 계정은 소속 매장이
 //   없어 PROTECT_UNITS 경유 보호가 안 되므로 이메일 패턴으로 보호한다.
 //   qa.iap.1~4 = qa:iap 고정 사장 계정(2026-09-14) — 매 실행 스스로 매장·슬롯을 비우므로 계정을 지우면 다시 가입해야 한다.
-const PROTECT_EMAIL = /appreview\.(owner|staff)@|hubdemo\.|qa\.iap\.[1-4]@example\.com/i;
+// 브랜드 시스템 계정 `system+<brand_id>@squaretable.app`(0209 작업실 소유자) — 사람이 로그인하지 않는 계정이라
+// 멤버 0·소속 0 으로 보이지만 지우면 본사 작업실(노하우 저작 그릇)이 통째로 사라진다(사용자 결정 09-23: 보호).
+const PROTECT_EMAIL = /appreview\.(owner|staff)@|hubdemo\.|qa\.iap\.[1-4]@example\.com|^system\+/i;
 
 async function listAuthUsers() {
   const users = []; let p = 1;
@@ -40,7 +42,7 @@ async function listAuthUsers() {
 }
 
 (async () => {
-  const { data: units } = await admin.from('units').select('id,store_name,owner_id,deleted_at');
+  const { data: units } = await admin.from('units').select('id,store_name,owner_id,deleted_at,kind');
   const { data: profs } = await admin.from('profiles').select('id,unit_id,role,deleted_at');
   const users = await listAuthUsers();
   const emailById = new Map(users.map(u => [u.id, (u.email || '').toLowerCase()]));
@@ -57,6 +59,7 @@ async function listAuthUsers() {
   const delUnits = [];
   for (const u of units) {
     if (PROTECT_UNITS.has(u.id)) continue;
+    if (u.kind === 'brand_workspace') continue;                        // 본사 작업실(0209) → 보호(시스템 계정 소유)
     // 활성 owner가 있고, 그 owner가 실사용자면 보호(멤버 0이어도)
     const ownerEmail = emailById.get(u.owner_id) || '';
     const ownerLive = liveProfIds.has(u.owner_id);

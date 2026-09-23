@@ -106,6 +106,8 @@ export const connectOwnUnit = (unitId: string, payer?: BrandPayer) =>
   call('brand_connect_own_unit', { p_unit_id: unitId, p_payer: payer ?? null });
 export const requestVisibility = (unitId: string, visibility: 'knowhow' | 'ops') =>
   call('request_visibility', { p_unit_id: unitId, p_visibility: visibility });
+/** 대기 중인 초대 취소(0214) — 자기 브랜드의 pending 만. 점주 카드는 즉시 사라진다. */
+export const revokeInvite = (inviteId: string) => call('brand_revoke_invite', { p_invite_id: inviteId });
 /** 담당자 초대 수락(0210) — 가입은 기존 흐름 그대로, 뒤에 이것 하나만 더 부른다(`/hq/join`). */
 export const acceptBrandMemberInvite = (token: string) => call('accept_brand_member_invite', { p_token: token });
 
