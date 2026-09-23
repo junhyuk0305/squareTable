@@ -149,7 +149,11 @@ begin
         insert into public.playbook_embeddings(entry_id, unit_id, embedding, embedded_at)
         select v_new, v_uid, emb.embedding, now()
           from public.playbook_embeddings emb where emb.entry_id = v_eid
-        on conflict (entry_id) do nothing;
+        -- ★제약 이름으로 못 박는다. `on conflict (entry_id)` 는 **모호하다** —
+        --   이 함수의 OUT 이름(`returns table(..., entry_id, ...)`)이 plpgsql 변수로 보여서
+        --   충돌 대상이 컬럼인지 변수인지 갈리지 않는다(42702 column reference "entry_id" is ambiguous).
+        --   2026-09-23 로컬 리허설에서 B1 이 이걸로 FAIL 했다 — 첫 배포가 통째로 죽는 자리다.
+        on conflict on constraint playbook_embeddings_pkey do nothing;
         insert into public.brand_deployment_targets(deployment_id, unit_id, copy_id, status)
         values (v_dep, v_uid, v_new, 'created');
         return query select v_uid, v_eid, 'created'::text;
@@ -411,7 +415,14 @@ language sql stable security definer set search_path = public as $$
     end
   from public.brand_units bu
   join public.units u on u.id = bu.unit_id and u.deleted_at is null
-  where (p_brand is null or bu.brand_id = p_brand)
+  -- ★★인자가 둘 다 null 이면 **0행**이다. 예전 술어는 `(p_brand is null or ...)` 뿐이라
+  --   둘 다 null 일 때 필터가 통째로 사라져 **전 브랜드의 연결 매장이 나갔다.**
+  --   `brand_overview()` 는 `auth_brand_id()` 를 넘기는데 그 값은 **담당자가 아닌 모든 사람에게 null**
+  --   이고(정지 브랜드 포함 — 0208 이 status='active' 만 본다), 이 함수는 authenticated 전체에 열려 있다.
+  --   = 직원 계정이 남의 브랜드 매장 이름·직원 수·AI 사용량·숙지율을 받았다.
+  --   2026-09-23 로컬 리허설 F1 에서 잡았다(직원 로그인으로 1행 수신 실측).
+  where (p_brand is not null or p_units is not null)    -- ★입구가 하나도 없으면 아무것도 주지 않는다
+    and (p_brand is null or bu.brand_id = p_brand)
     and (p_units is null or bu.unit_id = any(p_units))
     and bu.status = 'active'                            -- ★해제 즉시 0행(양쪽 입구 공통)
   order by u.store_name

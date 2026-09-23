@@ -47,7 +47,13 @@ create or replace function public.brand_payer_start(p_unit text)
 returns date language sql stable security definer set search_path = public as $$
   select greatest(
            (now() at time zone 'Asia/Seoul')::date,
-           coalesce((select (s.paid_until at time zone 'Asia/Seoul')::date + 1
+           -- ★`paid_until` 에는 **두 관례가 섞여 있다**:
+           --   · admin_activate_store(0036·0062) = `now() + N일` → 그날 한낮. 그 날짜까지는 커버된다.
+           --   · brand_apply_paid_until(0222)    = `(D+1) 00:00 KST` → **배타적 자정**. 마지막 커버일은 D.
+           --   그냥 `::date + 1` 을 하면 자정 관례에서 하루가 뜬다(D+2 부터 본사 부담 = 아무도 안 내는 날).
+           --   마지막으로 커버된 '순간'의 날짜를 잡아 +1 하면 두 관례가 같이 맞는다.
+           --   2026-09-23 로컬 리허설 B3 에서 잡았다(10-14 기대 · 10-15 수신).
+           coalesce((select ((s.paid_until - interval '1 microsecond') at time zone 'Asia/Seoul')::date + 1
                        from public.unit_subscriptions s
                       where s.unit_id = p_unit and s.paid_until > now()),
                     (now() at time zone 'Asia/Seoul')::date))

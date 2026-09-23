@@ -88,7 +88,10 @@ begin
         insert into public.playbook_embeddings(entry_id, unit_id, embedding, embedded_at)
         select v_new, v_uid, emb.embedding, now()
           from public.playbook_embeddings emb where emb.entry_id = v_eid
-        on conflict (entry_id) do nothing;
+        -- ★제약 이름으로 못 박는다(0217 과 같은 이유) — 이 함수도 OUT 이름에 `entry_id` 가 있어
+        --   `on conflict (entry_id)` 가 42702 로 죽는다. 0220 이 배포 몸통을 `_core` 로 옮겨 받았으므로
+        --   0217 만 고치면 실제로 도는 쪽이 그대로 깨진 채 남는다.
+        on conflict on constraint playbook_embeddings_pkey do nothing;
         insert into public.brand_deployment_targets(deployment_id, unit_id, copy_id, status)
         values (v_dep, v_uid, v_new, 'created');
         return query select v_uid, v_eid, 'created'::text;
