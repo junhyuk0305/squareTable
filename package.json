@@ -132,6 +132,7 @@
     "qa:hq": "node scripts/qa-hq-browser.mjs",
     "qa:brand": "node scripts/qa-brand.mjs",
     "qa:brand-boundary": "node scripts/qa-brand-boundary.mjs",
+    "qa:brand-deploy": "node scripts/qa-brand-deploy.mjs",
     "web:size": "expo export --platform web && node scripts/web-bundle-size.mjs"
   },
   "private": true

@@ -105,10 +105,30 @@ try {
     ['brand_log', { p_brand: 'brand_pilot', p_unit: null, p_kind: 'x', p_payload: {} }],
     ['admin_create_brand_workspace', { p_brand_id: 'brand_pilot', p_system_user_id: '00000000-0000-0000-0000-000000000000' }],
     ['brand_has_unit', { p_brand: 'brand_pilot', p_unit: UNIT }],
-    ['auth_owns_unit', { p_unit: UNIT }],
+    ['brand_alert', { p_unit: UNIT, p_kind: 'brand_deploy', p_period: 'x', p_title: 'x', p_body: 'x' }],
+    ['brand_visibility', { p_unit: UNIT }],
+    // brand_overview 의 본문(0217) — 인자로 남의 브랜드를 넣을 수 있으므로 반드시 막혀야 한다.
+    ['brand_overview_rows', { p_brand: 'brand_other', p_units: null }],
   ]) {
     const r = await H.rpc(fn, args);
     check(`⑤${fn} 실행 거부`, !!r.error && /permission denied|42501/.test(`${r.error.code} ${r.error.message}`), r.error ? `${r.error.code}` : '실행됨');
+  }
+
+  // ★`auth_owns_unit` 은 **막으면 안 된다** — 2026-09-23 실측으로 확인한 회귀다.
+  //   0198 의 스토리지 정책 2개(photos_tenant_read·photos_auth_upload)가 이 함수를 술어로 쓰고,
+  //   정책 술어는 **호출자(authenticated) 권한으로 평가**된다. 0211 이 revoke 한 뒤로 활성 매장이
+  //   아닌 폴더를 읽거나 올리려 하면 `permission denied for function auth_owns_unit` 로 죽었다
+  //   (= 다점포 사장의 노하우 사진 복사 경로. 0198 이 생긴 이유 그 자체). 0215 에서 다시 grant 한다.
+  //   경계 관점에서 안전한 이유: 이 함수는 **자기 소유 여부**만 답한다(auth.uid() 기준). 남의 매장을
+  //   물으면 false 라 새는 정보가 없다 — 그래서 '실행 가능 + 남의 매장은 false' 를 잰다.
+  {
+    const own = await O.rpc('auth_owns_unit', { p_unit: UNIT });
+    check('⑤auth_owns_unit 은 실행 가능해야 한다(스토리지 정책 술어 · 0215)', !own.error && own.data === true, own.error?.message ?? String(own.data));
+    const other = await J.rpc('auth_owns_unit', { p_unit: UNIT });
+    check('⑤auth_owns_unit 은 남의 매장에 false(정보 누출 없음)', !other.error && other.data === false, other.error?.message ?? String(other.data));
+    const photo = await O.storage.from('playbook-photos').createSignedUrl('store_zzz_notmine/x.jpg', 60);
+    check('⑤사진 정책이 함수 권한 오류로 죽지 않는다(없는 파일 오류여야 한다)',
+      !/permission denied for function/.test(photo.error?.message ?? ''), photo.error?.message);
   }
 
   await H.auth.signOut(); await O.auth.signOut(); await J.auth.signOut();
