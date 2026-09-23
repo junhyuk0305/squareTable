@@ -133,6 +133,38 @@ export type MyBrandViewRow = {
   payer_proposed: BrandPayer | null;
   payer_proposed_by_me: boolean;
   accepted_at: string;
+  /** 0221 — 본사 부담이 시작되는 날(payer=store 면 null). */
+  payer_effective_from: string | null;
+  /** 0221 — 본사 부담이 끝나는 날. 해제·본사→매장 전환 때 당월 말이 박힌다. */
+  brand_paid_through: string | null;
+};
+
+/** 0222 brand_billing_preview 한 줄 — 이번 달 청구 대상 매장. */
+export type BrandBillingRow = {
+  unit_id: string;
+  store_name: string;
+  price_krw: number;
+  /** 본사 부담 시작일 */
+  since: string;
+};
+
+/** 0222 brand_invoices_list 한 줄 — 설정 > 결제의 청구서 목록(표시만). */
+export type BrandInvoiceRow = {
+  id: string;
+  period: string;
+  unit_count: number;
+  amount_krw: number;
+  credit_krw: number;
+  status: 'issued' | 'paid' | 'credited' | 'refunded';
+  issued_at: string;
+  paid_at: string | null;
+};
+
+/** 0221 brand_payer_dates 한 줄 — 매장 드로어의 "적용일 · 본사 부담 종료일". */
+export type BrandPayerDateRow = {
+  unit_id: string;
+  payer_effective_from: string | null;
+  brand_paid_through: string | null;
 };
 
 async function rows<T>(name: string, args?: Record<string, unknown>): Promise<DbResult<T[]>> {
@@ -195,6 +227,16 @@ export const fetchBrandCourseMatrix = () => rows<BrandCourseCell>('brand_course_
  */
 export const deployBrandCourse = (courseId: string, unitIds: string[]) =>
   rows<BrandCourseDeployResult>('brand_deploy_course', { p_course_id: courseId, p_unit_ids: unitIds });
+
+// ── 본사 결제 · 정산(P6) — 전부 **표시만**. 발행·승인은 내부 콘솔(service_role)이 한다 ──
+/**
+ * 이번 달(또는 지정 기간) 청구 대상 매장. ★내부 콘솔의 발행과 **같은 함수**(`brand_billing_preview`)를
+ * 지난다 — 화면이 따로 세면 "화면엔 3곳, 청구서엔 2곳"이 된다(0222 주석).
+ */
+export const fetchBrandBilling = (period?: string) =>
+  rows<BrandBillingRow>('brand_billing_preview_mine', { p_period: period ?? null });
+export const fetchBrandInvoices = () => rows<BrandInvoiceRow>('brand_invoices_list');
+export const fetchBrandPayerDates = () => rows<BrandPayerDateRow>('brand_payer_dates');
 
 // ── 점주 쪽(매장 앱 신규 호출 6개) ──────────────────────────────────────────
 export const fetchMyBrandInvites = () => rows<MyBrandInviteRow>('my_brand_invites');

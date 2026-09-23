@@ -239,7 +239,9 @@ export type OwnerNotifKind =
   // 0213 본사 축 — 연결 요청 · 공개 수준 상향 요청 · 요금 부담 제안 · 본사가 해제함
   | 'brand_invite' | 'brand_visibility_request' | 'brand_payer_proposal' | 'brand_ended'
   // 0217 본사 축 — 배포 도착(정본 §4-E ④ '필수'). 노하우가 실제로 온 매장에만 들어온다.
-  | 'brand_deploy';
+  | 'brand_deploy'
+  // 0221 본사 축 — 본사 부담이 당월 말로 끝나니 다음 달 요금제를 고르라는 사전 안내(정본 §4-D).
+  | 'brand_plan_choice';
 export type OwnerNotifRoute =
   | '/owner/inbox' | '/owner/suggestions' | '/owner/schedule' | '/owner/staff' | '/owner/work'
   | '/owner/categories' | '/billing' | '/owner/brand-consent' | '/owner/brand-link' | '/owner/knowledge';
@@ -253,6 +255,9 @@ export function ownerAlertRoute(kind: OwnerAlert['kind']): OwnerNotifRoute {
     case 'brand_ended': return '/owner/brand-link';
     // 배포 도착은 연결 설정이 아니라 **받은 노하우**로 보낸다 — 점주가 할 일은 내용 확인이다.
     case 'brand_deploy': return '/owner/knowledge';
+    // 요금제 선택은 **결제 화면**으로 보낸다. 해제된 매장은 설정 > 본사 연결이 비어 있어서
+    // 거기로 보내면 막다른 길이 된다 — 점주가 할 일은 요금제를 고르는 것이다.
+    case 'brand_plan_choice': return '/billing';
     default: return '/billing';
   }
 }

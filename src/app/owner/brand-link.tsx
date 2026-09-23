@@ -117,6 +117,14 @@ function LinkCard({ link, onChanged }: { link: MyBrandViewRow; onChanged: () => 
         <Text style={styles.v}>{payerLabel(link.payer)}</Text>
       </View>
 
+      {/* 본사 부담이 언제까지인지 한 줄(0221 · 정본 §4-D "당월 말까지 유지"). 금액은 없다 — 점주는 누가 내는지만 본다. */}
+      {link.brand_paid_through && link.payer === 'store' ? (
+        <View style={[styles.kv, styles.rowBorder]}>
+          <Text style={styles.k}>본사 부담 종료</Text>
+          <Text style={styles.v}>{link.brand_paid_through}까지</Text>
+        </View>
+      ) : null}
+
       {/* 요금 부담 제안(§3-5 D) — 본사가 보낸 제안에만 답한다. 내 제안은 본사 대기 표시. */}
       {link.payer_proposed ? (
         <View style={[styles.banner, styles.rowBorder]}>

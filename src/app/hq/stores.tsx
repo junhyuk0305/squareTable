@@ -23,6 +23,7 @@ import {
   revokeInvite,
   type BrandOverviewRow,
   type BrandPayer,
+  type BrandPayerDateRow,
   type BrandVisibility,
 } from '@/lib/brand/brandDb';
 import { brandErrorMessage } from '@/lib/brand/errors';
@@ -37,11 +38,23 @@ import { Space } from '@/lib/theme/layout';
 const fmtDay = (iso: string) => new Date(iso).toLocaleDateString('ko-KR');
 const VIS_TONE: Record<BrandVisibility, 'n' | 'i' | 'g'> = { summary: 'n', knowhow: 'i', ops: 'g' };
 
+/**
+ * 요금 부담 줄 옆의 날짜 한 마디(정본 §4-D). 본사 부담이면 "언제부터", 매장 부담인데 이번 달까지
+ * 본사가 내는 중이면 "언제까지". 둘 다 없으면 아무 말도 안 붙인다 — 빈 칸이 낫다.
+ */
+function payerDateNote(payer: BrandPayer, dates: BrandPayerDateRow | null): string | undefined {
+  if (!dates) return undefined;
+  if (payer === 'brand' && dates.payer_effective_from) return `${dates.payer_effective_from}부터 본사 부담`;
+  if (payer === 'store' && dates.brand_paid_through) return `본사 부담은 ${dates.brand_paid_through}까지`;
+  return undefined;
+}
+
 export default function HqStoresScreen() {
   const params = useLocalSearchParams<{ unit?: string }>();
   const overview = useBrandStore((s) => s.overview);
   const invites = useBrandStore((s) => s.invites);
   const brand = useBrandStore((s) => s.brand);
+  const payerDates = useBrandStore((s) => s.payerDates);
   const loaded = useBrandStore((s) => s.loaded);
   const error = useBrandStore((s) => s.error);
   const hydrate = useBrandStore((s) => s.hydrate);
@@ -209,7 +222,13 @@ export default function HqStoresScreen() {
       </HqPage>
 
       {/* key = 매장 — 행이 바뀌면 드로어를 새로 마운트해 로컬 상태(요청 수준 기본값)가 그 매장으로 선다. */}
-      <StoreDrawer key={selectedRow?.unit_id ?? 'none'} row={selectedRow} onClose={() => setSelected(null)} onChanged={() => void refresh()} />
+      <StoreDrawer
+        key={selectedRow?.unit_id ?? 'none'}
+        row={selectedRow}
+        dates={payerDates.find((d) => d.unit_id === selectedRow?.unit_id) ?? null}
+        onClose={() => setSelected(null)}
+        onChanged={() => void refresh()}
+      />
 
       {/* 열 때마다 새로 마운트 — 입력값이 이전 초대의 것으로 남지 않는다. */}
       {addOpen ? (
@@ -228,7 +247,13 @@ export default function HqStoresScreen() {
 }
 
 // ── 드로어: 연결 정보 · 상향 요청 · payer 제안/응답 · 해제 ─────────────────────
-function StoreDrawer({ row, onClose, onChanged }: { row: BrandOverviewRow | null; onClose: () => void; onChanged: () => void }) {
+function StoreDrawer({ row, dates, onClose, onChanged }: {
+  row: BrandOverviewRow | null;
+  /** 0221 본사 부담 시작·종료일. `brand_overview` 를 넓히지 않고 작은 RPC 로 따로 받는다. */
+  dates: BrandPayerDateRow | null;
+  onClose: () => void;
+  onChanged: () => void;
+}) {
   const [busy, setBusy] = useState(false);
   // 지금 수준보다 높은 첫 수준을 기본으로(부모가 key 로 매장마다 새로 마운트한다).
   const [reqLevel, setReqLevel] = useState<'knowhow' | 'ops'>(() => (row?.visibility === 'summary' ? 'knowhow' : 'ops'));
@@ -236,6 +261,7 @@ function StoreDrawer({ row, onClose, onChanged }: { row: BrandOverviewRow | null
   if (!row) return null;
   const canRequest = row.visibility !== 'ops' && !row.visibility_requested;
   const otherPayer: BrandPayer = row.payer === 'brand' ? 'store' : 'brand';
+  const payerNote = payerDateNote(row.payer, dates);
 
   const run = async (fn: () => Promise<{ message: string } | null>, okMsg: string) => {
     setBusy(true);
@@ -253,7 +279,11 @@ function StoreDrawer({ row, onClose, onChanged }: { row: BrandOverviewRow | null
     <HqDrawer open title={row.store_name} sub={row.industry ?? undefined} onClose={onClose}>
       <View style={styles.kv}>
         <HqRow first k="연결일" v={fmtDay(row.accepted_at)} />
-        <HqRow k="요금 부담" v={<HqPill tone={row.payer === 'brand' ? 'y' : 'n'} label={payerLabel(row.payer)} />} />
+        <HqRow
+          k="요금 부담"
+          v={<HqPill tone={row.payer === 'brand' ? 'y' : 'n'} label={payerLabel(row.payer)} />}
+          tail={payerNote ? <Text style={styles.payerNote}>{payerNote}</Text> : undefined}
+        />
         <HqRow k="공개 수준" v={<HqPill tone={VIS_TONE[row.visibility]} label={visibilityLabel(row.visibility)} />} />
         <HqRow k="직원" v={`${row.staff}명`} />
         <HqRow k="자체 노하우" v={`${row.knowhow_own}건`} />
@@ -441,6 +471,7 @@ const styles = StyleSheet.create({
   kv: { borderTopWidth: 1, borderTopColor: InkColors.line, marginBottom: Space.lg },
   section: { marginBottom: Space.xl },
   hint: { fontSize: 14, lineHeight: 20, color: InkColors.ink2, marginBottom: Space.md },
+  payerNote: { fontSize: 13.5, color: InkColors.ink3 },
   label: { fontSize: 14, fontWeight: '700', color: InkColors.ink2, marginBottom: 6 },
   input: { borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.sm, paddingHorizontal: 12, height: 44, fontSize: 15.5, color: InkColors.ink },
   err: { fontSize: 14, color: BrandColors.badText, marginTop: Space.sm },

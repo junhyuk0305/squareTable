@@ -1,7 +1,8 @@
 // /hq/settings — 설정(정본 §5-2): 브랜드 정보 · 구성원(초대 링크) · 결제(표시만) · 데이터 공개 안내 · 연결 해제 안내.
 //
-// 재료 = useBrandStore(my_brand 확장 · brand_members_list · brand_invites_list). 청구·결제 실행은 P6 —
-// 여기는 계약가·대상 매장 수·paid_until 을 **보여 주기만** 한다(정본 §5-2 "표시만").
+// 재료 = useBrandStore(my_brand 확장 · brand_members_list · brand_invites_list) + useBrandBillingStore(P6).
+// ★결제는 **표시만**이다 — 발행·입금 확인·크레딧·환불은 내부 콘솔(service_role)이 한다(정본 §4-D·§5-2).
+//   대상·금액도 여기서 세지 않는다. 내부 콘솔의 발행과 같은 함수(`brand_billing_preview`)가 준 줄을 더한다.
 import { useCallback, useMemo, useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { useFocusEffect } from 'expo-router';
@@ -10,8 +11,10 @@ import { HqPage, HqButton, HqPill, HqCard, HqRow, HqNotice, HqEmpty } from '@/co
 import { HqTable, Cell } from '@/components/hq/HqTable';
 import { HqModal } from '@/components/hq/HqModal';
 import { useBrandStore } from '@/lib/store/useBrandStore';
+import { useBrandBillingStore } from '@/lib/store/useBrandBillingStore';
 import { inviteBrandMember } from '@/lib/brand/brandDb';
 import { brandErrorMessage } from '@/lib/brand/errors';
+import { BILLING_RULES, INVOICE_STATUS, krw, periodLabel } from '@/lib/brand/billing';
 import { VISIBILITY_LEVELS, NEVER_SHARED, payerLabel } from '@/lib/brand/visibility';
 import { useCopyToClipboard, canCopyToClipboard } from '@/lib/utils/useCopyToClipboard';
 import { showToast } from '@/lib/store/useToastStore';
@@ -35,7 +38,12 @@ export default function HqSettingsScreen() {
   const error = useBrandStore((s) => s.error);
   const hydrate = useBrandStore((s) => s.hydrate);
   const refresh = useBrandStore((s) => s.refresh);
-  useFocusEffect(useCallback(() => { void hydrate(); }, [hydrate]));
+  // 결제는 이 화면에서만 본다 — 대시보드·매장·노하우·퀴즈의 조회에 청구 RPC 를 얹지 않는다.
+  const current = useBrandBillingStore((s) => s.current);
+  const next = useBrandBillingStore((s) => s.next);
+  const invoices = useBrandBillingStore((s) => s.invoices);
+  const hydrateBilling = useBrandBillingStore((s) => s.hydrate);
+  useFocusEffect(useCallback(() => { void hydrate(); void hydrateBilling(); }, [hydrate, hydrateBilling]));
 
   const [link, setLink] = useState<{ url: string; expires: string } | null>(null);
   const [busy, setBusy] = useState(false);
@@ -44,6 +52,11 @@ export default function HqSettingsScreen() {
   const memberInvites = useMemo(() => invites.filter((i) => i.kind === 'member' && i.status === 'pending' && i.token), [invites]);
   const brandPaid = overview.filter((r) => r.payer === 'brand').length;
   const price = brand?.price_per_store_krw ?? null;
+  // ★금액을 화면에서 세지 않는다 — 내부 콘솔의 발행과 **같은 함수**가 준 줄을 더하기만 한다(0222).
+  const currentAmount = current.reduce((s, r) => s + r.price_krw, 0);
+  const nextAmount = next.reduce((s, r) => s + r.price_krw, 0);
+  const diff = next.length - current.length;
+  const nextNote = diff === 0 ? '이번 달과 같아요' : diff > 0 ? `${diff}곳 늘어요` : `${-diff}곳 줄어요`;
 
   const makeLink = async () => {
     setBusy(true);
@@ -115,12 +128,51 @@ export default function HqSettingsScreen() {
         ) : null}
       </HqCard>
 
-      <HqCard title="결제" sub="본사 부담(payer=본사) 매장 수 × 브랜드 계약가. 청구서·결제는 다음 단계에서 열려요 — 지금은 표시만이에요.">
-        <HqRow first k="매장당 월 계약가" v={price !== null ? `${price.toLocaleString()}원` : '—'} tail={<Text style={styles.muted}>부가세 별도 · 계약서 기준</Text>} />
-        <HqRow k="본사 부담 매장" v={`${brandPaid}곳`} tail={<Text style={styles.muted}>매장 부담 {overview.length - brandPaid}곳은 청구에 없어요</Text>} />
-        <HqRow k="월 예상 청구액" v={price !== null ? `${(price * brandPaid).toLocaleString()}원` : '—'} />
+      <HqCard title="결제" sub="월 선불 · 계좌이체 + 세금계산서 · 자동결제 없음(계약 제6조). 청구서 발행과 입금 확인은 스퀘어테이블이 해요 — 이 화면은 표시만이에요.">
+        <HqRow first k="매장당 월 계약가" v={krw(price)} tail={<Text style={styles.muted}>부가세 별도 · 계약서 기준</Text>} />
+        <HqRow k="이번 달 청구 대상" v={`${current.length}곳`} tail={<Text style={styles.muted}>매장 부담 {overview.length - brandPaid}곳은 청구에 없어요</Text>} />
+        <HqRow k="이번 달 금액" v={krw(currentAmount)} />
+        <HqRow k="다음 청구 예정" v={`${next.length}곳 · ${krw(nextAmount)}`} tail={<Text style={styles.muted}>{nextNote}</Text>} />
         <HqRow k="이용 기간" v={brand?.paid_until ? `${brand.paid_until}까지` : '아직 결제 전'} />
-        <Text style={styles.src}>월 중에 추가된 매장은 다음 청구부터, 해제는 당월 말까지 유지돼요. 가맹점주에게 월 회수는 하지 않아요(가맹사업법 제12조).</Text>
+
+        <Text style={[styles.subhead, { marginTop: Space.lg }]}>이번 달 청구 대상 ({current.length}곳)</Text>
+        {current.length === 0 ? (
+          <HqEmpty text="본사 부담 매장이 아직 없어요. 매장 화면에서 요금 부담을 바꾸자고 제안할 수 있어요." />
+        ) : (
+          <HqTable
+            columns={[
+              { key: 'name', label: '매장', render: (r) => <Cell kind="name">{r.store_name}</Cell> },
+              { key: 'since', label: '본사 부담 시작', width: 140, render: (r) => <Cell kind="muted">{r.since}</Cell> },
+              { key: 'price', label: '금액', width: 120, align: 'right', render: (r) => <Cell kind="num">{krw(r.price_krw)}</Cell> },
+            ]}
+            rows={current}
+            rowKey={(r) => r.unit_id}
+          />
+        )}
+
+        <Text style={[styles.subhead, { marginTop: Space.lg }]}>청구서</Text>
+        {invoices.length === 0 ? (
+          <HqEmpty text="아직 발행된 청구서가 없어요." />
+        ) : (
+          <HqTable
+            columns={[
+              { key: 'period', label: '기간', width: 130, render: (r) => <Cell kind="name">{periodLabel(r.period)}</Cell> },
+              { key: 'units', label: '매장', width: 90, align: 'right', render: (r) => <Cell kind="num">{r.unit_count}곳</Cell> },
+              { key: 'amount', label: '금액', width: 130, align: 'right', render: (r) => <Cell kind="num">{krw(r.amount_krw)}</Cell> },
+              { key: 'credit', label: '크레딧 차감', width: 130, align: 'right', render: (r) => <Cell kind="muted">{r.credit_krw ? `− ${krw(r.credit_krw)}` : '—'}</Cell> },
+              { key: 'status', label: '상태', width: 110, render: (r) => <HqPill tone={r.status === 'paid' ? 'g' : r.status === 'issued' ? 'y' : 'n'} label={INVOICE_STATUS[r.status]} /> },
+            ]}
+            rows={invoices}
+            rowKey={(r) => r.id}
+          />
+        )}
+
+        <View style={styles.rules}>
+          {BILLING_RULES.map((r) => (
+            <Text key={r} style={styles.ruleItem}>· {r}</Text>
+          ))}
+        </View>
+        <Text style={styles.src}>가맹점주에게 이 요금을 월 회수하지 않아요(가맹사업법 제12조). 매장 부담 매장은 점주가 고른 요금제 그대로예요.</Text>
       </HqCard>
 
       <HqCard title="본사가 볼 수 있는 것" sub="점주가 매장마다 고르는 공개 수준에 따라 달라져요. 본사는 올려 달라고 요청만 할 수 있어요.">
@@ -174,6 +226,8 @@ const styles = StyleSheet.create({
   levelName: { fontSize: 15.5, fontWeight: '800', color: InkColors.ink },
   levelShort: { fontSize: 13.5, color: InkColors.ink2, marginBottom: 6 },
   levelItem: { fontSize: 14, lineHeight: 20, color: InkColors.ink },
+  rules: { marginTop: Space.md, gap: 3 },
+  ruleItem: { fontSize: 14, lineHeight: 20, color: InkColors.ink2 },
   never: { marginTop: Space.md, borderWidth: 1, borderColor: BrandColors.badSoft, backgroundColor: BrandColors.badSoft, borderRadius: Radius.sm, padding: 14 },
   neverTitle: { fontSize: 14.5, fontWeight: '800', color: BrandColors.badText, marginBottom: 4 },
   neverBody: { fontSize: 14, lineHeight: 20, color: BrandColors.badText },
