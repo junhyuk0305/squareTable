@@ -70,10 +70,10 @@
 //   안 바꾸면 약관이 "지난 날에 이미 시행됐다"고 말하게 된다(동의 시점 기록 terms_version 도 어긋난다).
 //   바꿀 곳 3군데: 여기 · 바로 아래 ANNOUNCED_DATE · src/lib/config/business.ts 의 TERMS_VERSION. 셋이 같아야 한다.
 //   배포 시점에 웹 유료 고객이 생겼다면 그때는 시행일을 공고 +7일로 늦춘다.
-export const EFFECTIVE_DATE = '2026-09-17';
+export const EFFECTIVE_DATE = '2026-09-29';
 
 /** 공고일. 시행 최소 7일 전(불리한 변경은 30일 전) 공고 — 개정 시 두 날짜를 함께 갱신한다. */
-export const ANNOUNCED_DATE = '2026-09-17';
+export const ANNOUNCED_DATE = '2026-09-29';
 
 /** 직전 판 시행일 — 변경 이력 표와 아카이브 파일명에 쓴다. */
 export const PREVIOUS_EFFECTIVE_DATE = '2026-09-13';
