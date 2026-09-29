@@ -51,8 +51,16 @@ try {
   const J = await login(JUNIOR);
 
   console.log('\n① 본사 JWT 의 매장 테이블 직접 읽기 — 전부 0행/42501');
+  // ★본사 담당자는 자기 작업실(units.kind='brand_workspace', 0215)의 멤버라 units·unit_members·profiles 에
+  //   그 작업실 행을 정상적으로 본다 — 매장이 아니므로 경계 위반이 아니다(brand-boundary 규칙 '작업실 제외 필터').
+  //   검사 대상은 '매장'이므로 작업실과 그 소유자를 분모에서 뺀다. id 는 하드코딩하지 않고 유도한다.
+  const ws = await H.from('units').select('id, owner_id').eq('kind', 'brand_workspace');
+  const wsIds = (ws.data ?? []).map((r) => r.id);
+  const wsOwners = (ws.data ?? []).map((r) => r.owner_id);
+  const exceptWs = (q, col) => (wsIds.length ? q.not(col, 'in', `(${wsIds.join(',')})`) : q);
+
   const tables = [
-    ['units', 'id'], ['unit_members', 'user_id'], ['playbook_entries', 'id'], ['training_courses', 'id'],
+    ['playbook_entries', 'id'], ['training_courses', 'id'],
     ['quiz_items', 'id'], ['knowhow_understanding', 'entry_id'], ['wages', 'staff_id'], ['attendance', 'id'],
     ['work_rooms', 'id'], ['unknown_queries', 'id'], ['chat_queries', 'id'], ['work_feed', 'id'],
     ['unit_subscriptions', 'unit_id'], ['owner_alerts', 'id'],
@@ -62,7 +70,14 @@ try {
     const r = await H.from(t).select(col).limit(5);
     check(`①${t} 직접 조회 차단`, blocked(r), r.error ? `${r.error.code} ${r.error.message}` : `${(r.data ?? []).length}행`);
   }
-  const pr = await H.from('profiles').select('id, name, phone').neq('id', (await H.auth.getUser()).data.user.id).limit(5);
+  const un = await H.from('units').select('id').neq('kind', 'brand_workspace').limit(5);
+  check('①units 직접 조회 차단(작업실 제외)', blocked(un), un.error ? `${un.error.code} ${un.error.message}` : `${(un.data ?? []).length}행`);
+  const um = await exceptWs(H.from('unit_members').select('user_id'), 'unit_id').limit(5);
+  check('①unit_members 직접 조회 차단(작업실 제외)', blocked(um), um.error ? `${um.error.code} ${um.error.message}` : `${(um.data ?? []).length}행`);
+
+  const me = (await H.auth.getUser()).data.user.id;
+  const pr = await H.from('profiles').select('id, name, phone')
+    .not('id', 'in', `(${[me, ...wsOwners].join(',')})`).limit(5);
   check('①profiles(남의 이름·전화) 차단', blocked(pr), pr.error ? pr.error.code : `${(pr.data ?? []).length}행`);
 
   console.log('\n② 수준별 컬럼 — 요약(store_001)');

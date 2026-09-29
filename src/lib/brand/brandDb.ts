@@ -288,6 +288,12 @@ export const setVisibilityFloor = (unitId: string, floor: BrandVisibility) =>
  */
 export const setContentRequired = (unitId: string, required: boolean) =>
   call('set_content_required', { p_unit_id: unitId, p_required: required });
+/**
+ * 직영의 '점주 해제권'을 켜고 끈다(0227). false 면 점주가 연결을 못 끊는다(서버가 `owner_cannot_end` 거부).
+ * ★0224 가 컬럼·방어선·자물쇠 분기만 만들고 setter 를 빠뜨려 도달 불가였던 자리다(2026-09-26 실측).
+ */
+export const setOwnerCanEnd = (unitId: string, canEnd: boolean) =>
+  call('set_owner_can_end', { p_unit_id: unitId, p_can_end: canEnd });
 
 // ── 점주 쪽(매장 앱 신규 호출 6개) ──────────────────────────────────────────
 export const fetchMyBrandInvites = () => rows<MyBrandInviteRow>('my_brand_invites');

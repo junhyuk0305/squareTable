@@ -23,6 +23,7 @@ import {
   revokeInvite,
   setVisibilityFloor,
   setContentRequired,
+  setOwnerCanEnd,
   type BrandOverviewRow,
   type BrandPayer,
   type BrandPayerDateRow,
@@ -361,6 +362,31 @@ function StoreDrawer({ row, dates, rules, onClose, onChanged }: {
               onPress={() => void run(
                 () => setContentRequired(row.unit_id, !rules?.content_required),
                 rules?.content_required ? '이제 점장이 숨길 수 있어요.' : '필수로 바꿨어요.',
+              )}
+            />
+          </View>
+        </View>
+      ) : null}
+
+      {/* 직영(0227) — 점주 해제권. 0224 가 컬럼·서버 거부·점주 앱 자물쇠까지 만들고 **켜는 자리를
+          빠뜨려서** 자물쇠가 도달 불가였다(2026-09-26 실측). 하한·필수 배포와 같은 층에 둔다. */}
+      {direct ? (
+        <View style={styles.section}>
+          <HqSlab title="점주 해제권" hint="직영점만" />
+          <View style={{ gap: Space.sm }}>
+            <Text style={styles.hint}>
+              {rules?.owner_can_end === false
+                ? '지금은 본사 문의예요 — 점장이 매장에서 연결을 끊을 수 없어요.'
+                : '지금은 끊을 수 있어요 — 점장이 매장에서 연결을 끝낼 수 있어요.'}
+            </Text>
+            <HqButton
+              label={rules?.owner_can_end === false ? '끊을 수 있게 되돌리기' : '본사 문의로 바꾸기'}
+              variant={rules?.owner_can_end === false ? undefined : 'dark'}
+              disabled={busy}
+              testID="hq-owner-can-end"
+              onPress={() => void run(
+                () => setOwnerCanEnd(row.unit_id, rules?.owner_can_end === false),
+                rules?.owner_can_end === false ? '이제 점장이 끊을 수 있어요.' : '본사 문의로 바꿨어요.',
               )}
             />
           </View>
