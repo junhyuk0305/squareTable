@@ -148,9 +148,20 @@ begin
      and pg_get_constraintdef(con.oid) like '%kind%';
   if c is not null then execute format('alter table public.owner_alerts drop constraint %I', c); end if;
 end $$;
+-- ★2026-09-29: 목록이 **기존 종류를 전부 포함**해야 한다. 이 파일을 쓴 09-15 에는 'seat_lock'·'ai_cap'
+--   둘뿐이었으나, 그 뒤 본사(브랜드) 작업이 알림 9종을 더했고 라이브에 그 행들이 이미 쌓여 있다.
+--   둘만 적고 적용하면 기존 행이 제약을 위반해 마이그레이션 전체가 거부된다(23514, 실측 2026-09-29).
+--   브랜드 9종의 정본 = 0227_brand_owner_can_end.sql. 여기서는 그 목록 + 카드 3종이다.
+-- ⚠️ 0208 이 0227 보다 **뒤에** 적용되는 라이브 기준이다. 처음부터 다시 만드는 환경(db reset)에서는
+--   0208 → … → 0227 순서라 0227 의 목록이 나중에 덮어써 카드 3종이 빠진다. 본사 브랜치를 머지할 때
+--   0227 의 목록에 'card_fail'·'card_renew'·'card_end' 를 더해야 한다.
 alter table public.owner_alerts
   add constraint owner_alerts_kind_check
-  check (kind in ('seat_lock', 'ai_cap', 'card_fail', 'card_renew', 'card_end'));
+  check (kind in ('seat_lock', 'ai_cap',
+                  'brand_invite', 'brand_visibility_request', 'brand_payer_proposal', 'brand_ended',
+                  'brand_deploy', 'brand_plan_choice',
+                  'brand_relation_changed', 'brand_floor_changed', 'brand_end_right_changed',
+                  'card_fail', 'card_renew', 'card_end'));
 
 -- ════════════════════════════════════════════════════════════════════════════
 -- (4) 내부 조립 함수
