@@ -31,6 +31,10 @@ function loadEnv() {
 const env = loadEnv();
 const URL = env.EXPO_PUBLIC_SUPABASE_URL;
 const SERVICE = env.SUPABASE_SERVICE_ROLE_KEY;
+// ★2026-09-30: Vault 에 넣는 값은 **service_role JWT 아무것이나** 된다.
+//   엣지의 renew 는 더 이상 `SUPABASE_SERVICE_ROLE_KEY` 와 글자 비교를 하지 않고
+//   **토큰의 role 클레임**을 본다(플랫폼이 주입 키를 바꿔도 안 깨지게 — 09-23 전환 때
+//   어긋나 크론이 매시 401 로 튕겼다). 엣지 게이트웨이가 서명을 이미 검증하므로 위조는 불가.
 if (!URL || !SERVICE) {
   console.error('FAIL: EXPO_PUBLIC_SUPABASE_URL 과 SUPABASE_SERVICE_ROLE_KEY 가 필요해요(.env / .env.seed).');
   process.exit(2);

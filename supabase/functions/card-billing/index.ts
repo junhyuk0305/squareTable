@@ -35,6 +35,32 @@ const TEST_OWNERS = (Deno.env.get('TOSS_TEST_OWNER_EMAILS') ?? '')
 const ALLOWED_ORIGINS = (Deno.env.get('ALLOWED_ORIGINS') ?? 'https://dochackchack.com')
   .split(',').map((s) => s.trim()).filter(Boolean);
 
+/**
+ * 크론 호출인가 — **토큰의 `role` 클레임이 `service_role` 인지**만 본다.
+ *
+ * ★2026-09-30 에 바꾼 이유: 예전엔 `SUPABASE_SERVICE_ROLE_KEY` 와 **글자 비교**를 했는데,
+ *   그 값은 Supabase 가 주입하는 것이라 플랫폼 사정으로 바뀐다. 09-23 API 키 체계 전환 뒤
+ *   Vault 에 넣어 둔 키와 어긋나 **갱신 크론이 매시 401 로 튕겼다**(첫 결제는 정상 — renew 만 막힘).
+ *   role 로 보면 어떤 service_role 토큰이든 통과하므로 플랫폼이 또 바꿔도 안 깨진다.
+ *
+ * ⛔**서명은 여기서 검증하지 않는다 — 엣지 게이트웨이가 이미 한다.**
+ *   실측(2026-09-30 로컬): 서명이 틀린 토큰은 우리 코드에 닿기 전에 `UNAUTHORIZED_JWT` 로 막히고,
+ *   JWT 형식이 아닌 문자열은 `UNAUTHORIZED_INVALID_JWT_FORMAT` 으로 막힌다.
+ *   따라서 **이 함수를 `--no-verify-jwt` 로 배포하면 이 전제가 깨져 누구나 renew 를 부를 수 있다.**
+ *   배포는 반드시 `npx supabase functions deploy card-billing` (플래그 없이).
+ */
+function isServiceRoleToken(token: string): boolean {
+  const part = token.split('.')[1];
+  if (!part) return false;
+  try {
+    const b64 = part.replace(/-/g, '+').replace(/_/g, '/');
+    const padded = b64 + '='.repeat((4 - (b64.length % 4)) % 4);
+    return JSON.parse(atob(padded))?.role === 'service_role';
+  } catch {
+    return false;
+  }
+}
+
 function corsFor(origin: string | null) {
   const allow = ALLOWED_ORIGINS.includes('*')
     ? '*'
@@ -214,7 +240,11 @@ Deno.serve(async (req) => {
 
   // ── 크론 ──
   if (action === 'renew') {
-    if ((req.headers.get('Authorization') ?? '') !== `Bearer ${SERVICE_ROLE}`) return json({ error: 'unauthorized' }, 401);
+    const auth = req.headers.get('Authorization') ?? '';
+    const token = auth.startsWith('Bearer ') ? auth.slice(7) : '';
+    if (!(!!SERVICE_ROLE && token === SERVICE_ROLE) && !isServiceRoleToken(token)) {
+      return json({ error: 'unauthorized' }, 401);
+    }
     if (!TOSS_SECRET) return json({ error: 'not_configured' }, 500);
     try {
       const reconciled = await reconcile(db);
