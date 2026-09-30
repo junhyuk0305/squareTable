@@ -20,11 +20,6 @@ import { InkColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
 
-const fmtDate = (iso: string) => {
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? '—' : `${d.getMonth() + 1}월 ${d.getDate()}일`;
-};
-
 export default function HqKnowhowScreen() {
   const router = useRouter();
   const list = useBrandKnowhowStore((s) => s.list);
@@ -96,6 +91,7 @@ export default function HqKnowhowScreen() {
     setPicked(new Set());
   };
 
+  // 표는 '무엇을 어디까지 배포했나'까지만 — 사진 수·수정일 같은 세부는 편집기에서 본다.
   const columns: HqColumn<BrandKnowhowRow>[] = [
     {
       key: 'pick',
@@ -139,8 +135,6 @@ export default function HqKnowhowScreen() {
       render: (r) => (r.deployed_units ? <Cell kind="num">{`${r.deployed_units}곳`}</Cell> : <Cell kind="muted">—</Cell>),
       sortValue: (r) => r.deployed_units,
     },
-    { key: 'photos', label: '사진', width: 80, align: 'right', render: (r) => <Cell kind="num">{r.photos || '—'}</Cell> },
-    { key: 'upd', label: '수정일', width: 110, align: 'right', render: (r) => <Cell kind="muted">{fmtDate(r.updated_at)}</Cell>, sortValue: (r) => r.updated_at },
   ];
 
   // 교차표 — 노하우 행 × 매장 열. 매장이 많으면 표만 가로로 스크롤한다(HqTable).

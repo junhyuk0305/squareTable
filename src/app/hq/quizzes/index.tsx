@@ -21,11 +21,6 @@ import { InkColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
 
-const fmtDate = (iso: string) => {
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? '—' : `${d.getMonth() + 1}월 ${d.getDate()}일`;
-};
-
 export default function HqQuizzesScreen() {
   const router = useRouter();
   const list = useBrandQuizStore((s) => s.list);
@@ -113,6 +108,7 @@ export default function HqQuizzesScreen() {
     setPicked(new Set());
   };
 
+  // 표는 '무엇을 어디까지 배포했나'까지만 — 쓰는 노하우·수정일은 빌더에서 본다.
   const columns: HqColumn<BrandQuizRow>[] = [
     {
       key: 'pick',
@@ -146,7 +142,6 @@ export default function HqQuizzesScreen() {
       render: (r) => (r.items ? <Cell kind="num">{`${r.items}개`}</Cell> : <Cell kind="muted">없음</Cell>),
       sortValue: (r) => r.items,
     },
-    { key: 'entries', label: '노하우', width: 90, align: 'right', render: (r) => <Cell kind="num">{r.entries ? `${r.entries}건` : '—'}</Cell>, sortValue: (r) => r.entries },
     {
       key: 'ver',
       label: '배포 버전',
@@ -163,7 +158,6 @@ export default function HqQuizzesScreen() {
       render: (r) => (r.deployed_units ? <Cell kind="num">{`${r.deployed_units}곳`}</Cell> : <Cell kind="muted">—</Cell>),
       sortValue: (r) => r.deployed_units,
     },
-    { key: 'upd', label: '수정일', width: 110, align: 'right', render: (r) => <Cell kind="muted">{fmtDate(r.updated_at)}</Cell>, sortValue: (r) => r.updated_at },
   ];
 
   const xColumns: HqColumn<BrandQuizRow>[] = [

@@ -11,7 +11,7 @@ import { HqTable, Cell } from '@/components/hq/HqTable';
 import { useBrandStore } from '@/lib/store/useBrandStore';
 import { useBrandKnowhowStore } from '@/lib/store/useBrandKnowhowStore';
 import { useBrandQuizStore } from '@/lib/store/useBrandQuizStore';
-import { visibilityLabel, payerLabel, relationLabel, RELATIONS } from '@/lib/brand/visibility';
+import { visibilityLabel, relationLabel, RELATIONS } from '@/lib/brand/visibility';
 import type { BrandRelation } from '@/lib/brand/brandDb';
 import { InkColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
@@ -57,23 +57,33 @@ export default function HqDashboardScreen() {
     const visRequests = overview.filter((r) => r.visibility_requested).length;
     const payerToAnswer = overview.filter((r) => r.payer_proposed && !r.payer_proposed_by_brand).length;
     const payerWaiting = overview.filter((r) => r.payer_proposed && r.payer_proposed_by_brand).length;
-    const pendingQ = scope.reduce((a, r) => a + r.pending_q, 0);
-    const aiUsed = scope.reduce((a, r) => a + r.ai_used, 0);
     // 숙지율: 재료가 있는 매장만 평균. P4 사본 전엔 전부 null → null.
     const withMastery = scope.filter((r) => r.mastery !== null);
     const mastery = withMastery.length ? Math.round((withMastery.reduce((a, r) => a + (r.mastery ?? 0), 0) / withMastery.length) * 100) : null;
-    return { pendingInvites, expiredInvites, visRequests, payerToAnswer, payerWaiting, pendingQ, aiUsed, mastery };
+    return { pendingInvites, expiredInvites, visRequests, payerToAnswer, payerWaiting, mastery };
   }, [overview, scope, invites]);
 
   // 보조줄이 "연결 매장 합계"인지 "직영 합계"인지 말해 준다 — 숫자만 바뀌고 설명이 그대로면 오독한다.
   const scopeNote = relF === 'all' || !mixed ? '연결 매장' : `${relationLabel(relF)} 매장`;
+
+  // 0건은 그리지 않는다 — '없음' 칸 네 개는 읽을 것이 없는데 자리만 차지한다.
+  const attention = useMemo(
+    () =>
+      [
+        { k: '연결 동의 대기', v: stats.pendingInvites, n: '점주가 앱에서 수락하면 표에 올라와요' },
+        { k: '공개 수준 요청 중', v: stats.visRequests, n: '점주가 답을 보고 있어요' },
+        { k: '답할 요금 부담 제안', v: stats.payerToAnswer, n: stats.payerWaiting ? `보낸 제안 ${stats.payerWaiting}건은 점주 대기` : '점주가 보낸 제안' },
+        { k: '만료된 초대', v: stats.expiredInvites, n: '14일이 지났어요. 다시 보낼 수 있어요' },
+      ].filter((a) => a.v > 0),
+    [stats],
+  );
 
   const goStores = (unit?: string) => router.push(unit ? { pathname: '/hq/stores', params: { unit } } : '/hq/stores');
 
   return (
     <HqPage
       title="대시보드"
-      sub={brand ? `${brand.brand_name} · 연결 매장 ${overview.length}곳의 매장 단위 요약이에요. 매장 순위·등급·종합 점수는 만들지 않아요.` : loaded ? '' : '불러오는 중…'}
+      sub={brand ? `${brand.brand_name} · 연결 매장 ${overview.length}곳` : loaded ? '' : '불러오는 중…'}
       actions={<HqButton label="새로고침" icon="refresh-outline" onPress={() => void refresh()} />}
       testID="hq-dashboard"
     >
@@ -97,29 +107,30 @@ export default function HqDashboardScreen() {
           { label: '연결 매장', value: scope.length, unit: '곳', sub: relF !== 'all' && mixed ? `${relationLabel(relF)}만 · 전체 ${overview.length}곳` : stats.pendingInvites ? `초대 대기 ${stats.pendingInvites}건` : '초대 대기 없음' },
           { label: '배포한 노하우', value: deployedCount, unit: '건', sub: deployedCount ? '한 곳 이상에 내려간 노하우' : '노하우를 쓰고 [배포]를 누르면 세요' },
           { label: '배포한 퀴즈', value: deployedQuizzes, unit: '건', sub: deployedQuizzes ? '한 곳 이상에 내려간 퀴즈 · 발송은 매장이 정해요' : '퀴즈를 만들고 [배포]를 누르면 세요' },
-          { label: '숙지율', value: stats.mastery === null ? null : `${stats.mastery}%`, sub: stats.mastery === null ? '배포한 노하우가 생기면 계산돼요' : `${scopeNote} 평균 · 배포 노하우 중 직원 1명 이상이 아는 비율` },
-          { label: '미해결 질문', value: stats.pendingQ, unit: '건', sub: `${scopeNote} 합계 · 건수만` },
-          { label: '이번 달 AI 사용', value: stats.aiUsed, unit: '건', sub: `${scopeNote} 합계` },
+          { label: '숙지율', value: stats.mastery === null ? null : `${stats.mastery}%`, sub: stats.mastery === null ? '배포한 노하우가 생기면 계산돼요' : `${scopeNote} 평균` },
         ]}
       />
 
       <HqSlab title="확인 필요" hint="본사가 처리할 수 있는 것만 올려요" />
-      <View style={styles.cellcard} testID="hq-attention">
-        <AttentionCell k="연결 동의 대기" v={stats.pendingInvites} n="점주가 앱에서 수락하면 표에 올라와요" onPress={() => goStores()} />
-        <AttentionCell k="공개 수준 요청 중" v={stats.visRequests} n="점주가 답을 보고 있어요" onPress={() => goStores()} />
-        <AttentionCell k="답할 요금 부담 제안" v={stats.payerToAnswer} n={stats.payerWaiting ? `보낸 제안 ${stats.payerWaiting}건은 점주 대기` : '점주가 보낸 제안'} onPress={() => goStores()} />
-        <AttentionCell k="만료된 초대" v={stats.expiredInvites} n="14일이 지났어요. 다시 보낼 수 있어요" onPress={() => goStores()} />
-      </View>
+      {attention.length === 0 ? (
+        <View style={styles.attNone} testID="hq-attention">
+          <Text style={styles.attNoneText}>{loaded ? '지금 확인할 일이 없어요.' : '불러오는 중…'}</Text>
+        </View>
+      ) : (
+        <View style={styles.cellcard} testID="hq-attention">
+          {attention.map((a) => (
+            <AttentionCell key={a.k} k={a.k} v={a.v} n={a.n} onPress={() => goStores()} />
+          ))}
+        </View>
+      )}
 
       <HqSlab title="매장" hint="이름순 · 행을 누르면 매장 화면에서 연결 정보가 열려요" more={{ label: '전체 보기', onPress: () => goStores() }} />
       <HqTable
         columns={[
           { key: 'name', label: '매장', width: 220, render: (r) => <Cell kind="name">{r.store_name}</Cell> },
-          { key: 'payer', label: '요금 부담', width: 110, render: (r) => <HqPill tone={r.payer === 'brand' ? 'y' : 'n'} label={payerLabel(r.payer)} /> },
           { key: 'vis', label: '공개 수준', width: 130, render: (r) => <HqPill tone={r.visibility === 'ops' ? 'g' : r.visibility === 'knowhow' ? 'i' : 'n'} label={visibilityLabel(r.visibility)} /> },
           { key: 'staff', label: '직원', align: 'right', render: (r) => <Cell kind="num">{r.staff}</Cell>, sortValue: (r) => r.staff },
           { key: 'pq', label: '미해결 질문', align: 'right', render: (r) => <Cell kind="num">{r.pending_q}</Cell>, sortValue: (r) => r.pending_q },
-          { key: 'ai', label: 'AI 사용(월)', align: 'right', render: (r) => <Cell kind="num">{r.ai_used}</Cell>, sortValue: (r) => r.ai_used },
         ]}
         rows={overview}
         rowKey={(r) => r.unit_id}
@@ -145,6 +156,8 @@ const styles = StyleSheet.create({
   // KPI 스트립 **위**에 붙인다 — 아래 숫자들의 범위를 정하는 것이라 먼저 읽혀야 한다.
   kpiScope: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 },
   kpiScopeLabel: { fontSize: 13, fontWeight: '700', color: InkColors.ink2 },
+  attNone: { borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md, paddingVertical: 18, paddingHorizontal: 18, marginBottom: 22, backgroundColor: InkColors.bg },
+  attNoneText: { fontSize: 14, color: InkColors.ink3 },
   cellcard: { flexDirection: 'row', flexWrap: 'wrap', borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md, overflow: 'hidden', marginBottom: 22, backgroundColor: InkColors.bg, ...Elevation.e1 },
   cell: { flex: 1, minWidth: 180, paddingVertical: 16, paddingHorizontal: 18, borderLeftWidth: 1, borderLeftColor: InkColors.line, marginLeft: -1 },
   cellK: { fontSize: 14, fontWeight: '600', color: InkColors.ink2, marginBottom: 6 },

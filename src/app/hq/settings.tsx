@@ -1,4 +1,4 @@
-// /hq/settings — 설정(정본 §5-2): 브랜드 정보 · 구성원(초대 링크) · 결제(표시만) · 데이터 공개 안내 · 연결 해제 안내.
+// /hq/settings — 설정(정본 §5-2): 브랜드 정보 · 구성원(초대 링크) · 결제(표시만) · 연결 해제 안내.
 //
 // 재료 = useBrandStore(my_brand 확장 · brand_members_list · brand_invites_list) + useBrandBillingStore(P6).
 // ★결제는 **표시만**이다 — 발행·입금 확인·크레딧·환불은 내부 콘솔(service_role)이 한다(정본 §4-D·§5-2).
@@ -15,10 +15,10 @@ import { useBrandBillingStore } from '@/lib/store/useBrandBillingStore';
 import { inviteBrandMember } from '@/lib/brand/brandDb';
 import { brandErrorMessage } from '@/lib/brand/errors';
 import { BILLING_RULES, INVOICE_STATUS, krw, periodLabel } from '@/lib/brand/billing';
-import { VISIBILITY_LEVELS, NEVER_SHARED, payerLabel, relationLabel } from '@/lib/brand/visibility';
+import { payerLabel, relationLabel } from '@/lib/brand/visibility';
 import { useCopyToClipboard, canCopyToClipboard } from '@/lib/utils/useCopyToClipboard';
 import { showToast } from '@/lib/store/useToastStore';
-import { InkColors, BrandColors } from '@/lib/theme/colors';
+import { InkColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
 
@@ -79,7 +79,7 @@ export default function HqSettingsScreen() {
   };
 
   return (
-    <HqPage title="설정" sub="브랜드 정보 · 구성원 · 결제 · 본사가 볼 수 있는 범위" testID="hq-settings">
+    <HqPage title="설정" sub="브랜드 정보 · 구성원 · 결제" testID="hq-settings">
       {error ? <HqNotice tone="warn">설정을 불러오지 못했어요. ({error})</HqNotice> : null}
 
       <HqCard title="브랜드 정보" sub="변경은 스퀘어테이블에 요청해 주세요(계약 정보라 화면에서 고치지 않아요).">
@@ -192,25 +192,6 @@ export default function HqSettingsScreen() {
         <Text style={styles.src}>가맹점주에게 이 요금을 월 회수하지 않아요(가맹사업법 제12조). 매장 부담 매장은 점주가 고른 요금제 그대로예요.</Text>
       </HqCard>
 
-      <HqCard title="본사가 볼 수 있는 것" sub="점주가 매장마다 고르는 공개 수준에 따라 달라져요. 본사는 올려 달라고 요청만 할 수 있어요.">
-        <View style={styles.levels}>
-          {VISIBILITY_LEVELS.map((l) => (
-            <View key={l.key} style={styles.level}>
-              <Text style={styles.levelName}>{l.label}</Text>
-              <Text style={styles.levelShort}>{l.short}</Text>
-              {l.sees.map((s) => (
-                <Text key={s} style={styles.levelItem}>· {s}</Text>
-              ))}
-            </View>
-          ))}
-        </View>
-        <View style={styles.never}>
-          <Text style={styles.neverTitle}>어느 수준에서도 볼 수 없는 것</Text>
-          <Text style={styles.neverBody}>{NEVER_SHARED.join(' · ')}</Text>
-          <Text style={styles.src}>계약 문구가 아니라 데이터베이스 권한으로 막혀 있어요. 조회 경로 자체가 없어요.</Text>
-        </View>
-      </HqCard>
-
       <HqCard title="연결 해제" sub="점주도, 본사도 언제든 끝낼 수 있어요.">
         <Text style={styles.body}>해제하면 본사 화면에서 그 매장이 바로 사라지고, 매장이 받았던 노하우는 매장에 그대로 남아요. 본사 부담 매장이었다면 당월 말까지는 유지돼요.</Text>
         <Text style={styles.body}>매장에서 해제하려면 <Text style={{ fontWeight: '700' }}>매장 &gt; 행 선택 &gt; 연결 해제</Text>.</Text>
@@ -238,16 +219,8 @@ const styles = StyleSheet.create({
   subhead: { fontSize: 14, fontWeight: '700', color: InkColors.ink2, marginBottom: 8 },
   src: { fontSize: 13, color: InkColors.ink3, marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: InkColors.line, borderStyle: 'dashed', lineHeight: 19 },
   body: { fontSize: 14.5, lineHeight: 22, color: InkColors.ink2, marginBottom: 6 },
-  levels: { flexDirection: 'row', gap: Space.md, flexWrap: 'wrap' },
-  level: { flex: 1, minWidth: 200, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.sm, padding: 14, gap: 3, backgroundColor: InkColors.paper },
-  levelName: { fontSize: 15.5, fontWeight: '800', color: InkColors.ink },
-  levelShort: { fontSize: 13.5, color: InkColors.ink2, marginBottom: 6 },
-  levelItem: { fontSize: 14, lineHeight: 20, color: InkColors.ink },
   rules: { marginTop: Space.md, gap: 3 },
   ruleItem: { fontSize: 14, lineHeight: 20, color: InkColors.ink2 },
-  never: { marginTop: Space.md, borderWidth: 1, borderColor: BrandColors.badSoft, backgroundColor: BrandColors.badSoft, borderRadius: Radius.sm, padding: 14 },
-  neverTitle: { fontSize: 14.5, fontWeight: '800', color: BrandColors.badText, marginBottom: 4 },
-  neverBody: { fontSize: 14, lineHeight: 20, color: BrandColors.badText },
   linkBox: { borderWidth: 1, borderColor: InkColors.line, backgroundColor: InkColors.paper, borderRadius: Radius.sm, padding: 12 },
   linkText: { fontSize: 14, color: InkColors.ink, fontFamily: 'monospace' },
 });

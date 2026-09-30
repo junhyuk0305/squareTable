@@ -73,7 +73,6 @@ export default function HqStoresScreen() {
 
   const [q, setQ] = useState('');
   const [relF, setRelF] = useState<'all' | BrandRelation>('all');
-  const [payerF, setPayerF] = useState<'all' | BrandPayer>('all');
   const [visF, setVisF] = useState<'all' | BrandVisibility>('all');
   // 대시보드에서 행을 눌러 왔을 때(`?unit=`) 드로어를 바로 연다(첫 렌더 초기값).
   const [selected, setSelected] = useState<string | null>(() => (typeof params.unit === 'string' && params.unit ? params.unit : null));
@@ -85,14 +84,14 @@ export default function HqStoresScreen() {
       (r) =>
         (!needle || r.store_name.includes(needle)) &&
         (relF === 'all' || r.relation === relF) &&
-        (payerF === 'all' || r.payer === payerF) &&
         (visF === 'all' || r.visibility === visF),
     );
-  }, [overview, q, relF, payerF, visF]);
+  }, [overview, q, relF, visF]);
 
   const pendingInvites = useMemo(() => invites.filter((i) => i.kind === 'store' && i.status === 'pending'), [invites]);
   const selectedRow = overview.find((r) => r.unit_id === selected) ?? null;
 
+  // 표는 '누가 어떤 조건으로 연결돼 있나'까지만 — 나머지 지표는 행을 누르면 드로어에 전부 있다.
   const columns: HqColumn<BrandOverviewRow>[] = [
     {
       key: 'name',
@@ -108,7 +107,6 @@ export default function HqStoresScreen() {
     },
     // 관계(0223) — 이름 바로 옆. 아래 열들의 뜻이 관계마다 다르므로(누가 정하나) 먼저 읽혀야 한다.
     { key: 'rel', label: '관계', width: 80, render: (r) => <HqPill tone={REL_TONE[r.relation]} label={relationLabel(r.relation)} />, sortValue: (r) => r.relation },
-    { key: 'payer', label: '요금 부담', width: 110, render: (r) => <HqPill tone={r.payer === 'brand' ? 'y' : 'n'} label={payerLabel(r.payer)} /> },
     {
       key: 'vis',
       label: '공개 수준',
@@ -121,22 +119,16 @@ export default function HqStoresScreen() {
       ),
     },
     { key: 'staff', label: '직원', align: 'right', render: (r) => <Cell kind="num">{r.staff}</Cell>, sortValue: (r) => r.staff },
-    { key: 'knowhow', label: '자체 노하우', align: 'right', render: (r) => <Cell kind="num">{r.knowhow_own}</Cell>, sortValue: (r) => r.knowhow_own },
     { key: 'pq', label: '미해결 질문', align: 'right', render: (r) => <Cell kind="num">{r.pending_q}</Cell>, sortValue: (r) => r.pending_q },
-    { key: 'ai', label: 'AI 사용(월)', align: 'right', render: (r) => <Cell kind="num">{r.ai_used}</Cell>, sortValue: (r) => r.ai_used },
     // 숙지율은 사본(P4)이 생기기 전엔 재료가 없다 — 0 이 아니라 '—'(HqStrip 과 같은 규칙).
     { key: 'mastery', label: '숙지율', align: 'right', render: (r) => <Cell kind={r.mastery === null ? 'muted' : 'num'}>{r.mastery === null ? '—' : `${Math.round(r.mastery * 100)}%`}</Cell>, sortValue: (r) => r.mastery },
-    // 0226 — '운영 공개'가 아닌 매장은 재료가 없어 '—'(0 이 아니다 · 숙지율과 같은 규칙).
-    { key: 'behind', label: '미이수', align: 'right', render: (r) => <Cell kind={r.staff_behind === null ? 'muted' : 'num'}>{r.staff_behind === null ? '—' : `${r.staff_behind}명`}</Cell>, sortValue: (r) => r.staff_behind },
-    { key: 'weak', label: '오답 몰림', align: 'right', render: (r) => <Cell kind={r.weak_entries === null ? 'muted' : 'num'}>{r.weak_entries === null ? '—' : `${r.weak_entries}건`}</Cell>, sortValue: (r) => r.weak_entries },
-    { key: 'since', label: '연결일', width: 110, render: (r) => <Cell kind="muted">{fmtDay(r.accepted_at)}</Cell>, sortValue: (r) => r.accepted_at },
   ];
 
   return (
     <View style={{ flex: 1 }}>
       <HqPage
         title="매장"
-        sub={loaded ? `연결된 매장 ${overview.length}곳 · 초대 대기 ${pendingInvites.length}건. 행을 누르면 오른쪽에 연결 정보가 열려요.` : '불러오는 중…'}
+        sub={loaded ? `연결된 매장 ${overview.length}곳 · 초대 대기 ${pendingInvites.length}건` : '불러오는 중…'}
         actions={
           <>
             <HqButton label="새로고침" icon="refresh-outline" onPress={() => void refresh()} />
@@ -168,11 +160,6 @@ export default function HqStoresScreen() {
             onChange={setRelF}
           />
           <HqSegment
-            items={[{ key: 'all', label: '요금 전체' }, { key: 'brand', label: '본사 부담' }, { key: 'store', label: '매장 부담' }]}
-            value={payerF}
-            onChange={setPayerF}
-          />
-          <HqSegment
             items={[{ key: 'all', label: '수준 전체' }, ...VISIBILITY_LEVELS.map((l) => ({ key: l.key, label: l.label }))]}
             value={visF}
             onChange={setVisF}
@@ -185,7 +172,7 @@ export default function HqStoresScreen() {
           rowKey={(r) => r.unit_id}
           onRowPress={(r) => setSelected(r.unit_id)}
           selectedKey={selected}
-          footer={loaded ? `${rows.length}곳 표시 · 이름순. 점수·등급·순위는 만들지 않아요.` : undefined}
+          footer={loaded ? `${rows.length}곳 · 이름순` : undefined}
           empty={
             <HqEmpty
               text={overview.length === 0 ? '아직 연결된 매장이 없어요. 점주 전화번호로 초대하면 점주가 앱에서 수락해요.' : '조건에 맞는 매장이 없어요.'}
