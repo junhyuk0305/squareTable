@@ -20,6 +20,7 @@ import { View, Text, TextInput, Pressable, StyleSheet } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 
 import { HqPage, HqButton, HqCard, HqNotice, HqRow, HqSegment, HqPill, HqEmpty } from '@/components/hq/HqKit';
+import { ScreenLoading } from '@/components/ScreenLoading';
 import { HqModal } from '@/components/hq/HqModal';
 import { useBrandKnowhowStore } from '@/lib/store/useBrandKnowhowStore';
 import { structureSquare, extractDocText, embedEntry } from '@/lib/ai';
@@ -219,7 +220,7 @@ export default function HqKnowhowEditorScreen() {
 
   // 스토어가 아직 안 섰거나 작업실 진입이 실패하면 편집기를 열지 않는다(ready 게이트 — 빈 칸에
   // 글을 쓰게 하고 저장에서 실패하는 것이 가장 나쁘다).
-  if (!loaded) return <HqPage title="노하우" sub="불러오는 중…">{null}</HqPage>;
+  if (!loaded) return <HqPage title="노하우"><ScreenLoading label="노하우를 불러오고 있어요…" /></HqPage>;
   if (storeError || !wsUnitId) {
     return (
       <HqPage title="노하우" sub="편집기를 열 수 없어요" actions={<HqButton label="목록으로" onPress={() => router.replace('/hq/knowhow')} />}>

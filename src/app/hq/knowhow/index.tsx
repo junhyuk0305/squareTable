@@ -11,6 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { HqPage, HqButton, HqPill, HqSlab, HqNotice, HqCard, HqEmpty } from '@/components/hq/HqKit';
 import { HqTable, Cell, type HqColumn } from '@/components/hq/HqTable';
 import { HqModal } from '@/components/hq/HqModal';
+import { ScreenLoading } from '@/components/ScreenLoading';
 import { useBrandKnowhowStore } from '@/lib/store/useBrandKnowhowStore';
 import { useBrandUnitsStore } from '@/lib/store/useBrandUnitsStore';
 import { DEPLOY_STATUS, deployStatusMap, cellKey, type DeployStatus } from '@/lib/brand/deployStatus';
@@ -24,13 +25,16 @@ export default function HqKnowhowScreen() {
   const router = useRouter();
   const list = useBrandKnowhowStore((s) => s.list);
   const matrix = useBrandKnowhowStore((s) => s.matrix);
-  const loaded = useBrandKnowhowStore((s) => s.loaded);
+  const knowhowLoaded = useBrandKnowhowStore((s) => s.loaded);
   const error = useBrandKnowhowStore((s) => s.error);
   const hydrate = useBrandKnowhowStore((s) => s.hydrate);
   const refresh = useBrandKnowhowStore((s) => s.refresh);
   const deploy = useBrandKnowhowStore((s) => s.deploy);
   const overview = useBrandUnitsStore((s) => s.overview);
   const hydrateUnits = useBrandUnitsStore((s) => s.hydrate);
+  // ready 게이트(ui.md) — 표·교차표의 행(노하우)과 열(연결 매장)이 둘 다 와야 그린다.
+  const unitsLoaded = useBrandUnitsStore((s) => s.loaded);
+  const ready = knowhowLoaded && unitsLoaded;
 
   useFocusEffect(useCallback(() => { void hydrate(); void hydrateUnits(); }, [hydrate, hydrateUnits]));
 
@@ -151,18 +155,28 @@ export default function HqKnowhowScreen() {
     })),
   ];
 
+  // 머리(제목·버튼)는 게이트 밖 — 골격은 즉시 선다.
+  const head = {
+    title: '노하우',
+    sub: '본사가 쓴 노하우를 매장에 보내요. 점주는 받은 노하우를 고치거나 이 매장에서 숨길 수 있어요.',
+    actions: (
+      <>
+        <HqButton label="새로고침" icon="refresh-outline" onPress={() => void refresh()} />
+        <HqButton label="노하우 쓰기" icon="add" variant="pri" onPress={() => router.push({ pathname: '/hq/knowhow/[id]', params: { id: 'new' } })} />
+      </>
+    ),
+    testID: 'hq-knowhow',
+  };
+  if (!ready) {
+    return (
+      <HqPage {...head}>
+        <ScreenLoading label="노하우를 불러오고 있어요…" />
+      </HqPage>
+    );
+  }
+
   return (
-    <HqPage
-      title="노하우"
-      sub="본사가 쓴 노하우를 매장에 보내요. 점주는 받은 노하우를 고치거나 이 매장에서 숨길 수 있어요."
-      actions={
-        <>
-          <HqButton label="새로고침" icon="refresh-outline" onPress={() => void refresh()} />
-          <HqButton label="노하우 쓰기" icon="add" variant="pri" onPress={() => router.push({ pathname: '/hq/knowhow/[id]', params: { id: 'new' } })} />
-        </>
-      }
-      testID="hq-knowhow"
-    >
+    <HqPage {...head}>
       {error ? <HqNotice tone="warn">{error} 새로고침을 눌러 다시 시도해 주세요.</HqNotice> : null}
 
       <HqSlab
@@ -185,18 +199,18 @@ export default function HqKnowhowScreen() {
           disabled={picked.size === 0 || overview.length === 0}
           onPress={openDeployModal}
         />
-        {overview.length === 0 && loaded ? <Text style={styles.barNote}>연결된 매장이 없어 아직 보낼 곳이 없어요.</Text> : null}
+        {overview.length === 0 ? <Text style={styles.barNote}>연결된 매장이 없어 아직 보낼 곳이 없어요.</Text> : null}
       </View>
 
       <HqTable
         columns={columns}
         rows={list}
         rowKey={(r) => r.id}
-        footer={loaded ? `${list.length}건` : undefined}
+        footer={`${list.length}건`}
         empty={
           <HqEmpty
-            text={loaded ? '아직 쓴 노하우가 없어요. 붙여넣기만 해도 AI가 카드로 정리해요.' : '불러오는 중…'}
-            action={loaded ? <HqButton label="노하우 쓰기" variant="pri" onPress={() => router.push({ pathname: '/hq/knowhow/[id]', params: { id: 'new' } })} /> : undefined}
+            text="아직 쓴 노하우가 없어요. 붙여넣기만 해도 AI가 카드로 정리해요."
+            action={<HqButton label="노하우 쓰기" variant="pri" onPress={() => router.push({ pathname: '/hq/knowhow/[id]', params: { id: 'new' } })} />}
           />
         }
         testID="hq-knowhow-table"

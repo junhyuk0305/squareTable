@@ -8,6 +8,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { HqPage, HqButton, HqPill, HqSlab, HqNotice, HqSegment } from '@/components/hq/HqKit';
 import { HqStrip } from '@/components/hq/HqStrip';
 import { HqTable, Cell } from '@/components/hq/HqTable';
+import { ScreenLoading } from '@/components/ScreenLoading';
 import { useBrandStore } from '@/lib/store/useBrandStore';
 import { useBrandUnitsStore } from '@/lib/store/useBrandUnitsStore';
 import { useBrandKnowhowStore } from '@/lib/store/useBrandKnowhowStore';
@@ -28,16 +29,19 @@ export default function HqDashboardScreen() {
   const unitsLoaded = useBrandUnitsStore((s) => s.loaded);
   const unitsError = useBrandUnitsStore((s) => s.error);
   const hydrateUnits = useBrandUnitsStore((s) => s.hydrate);
-  const loaded = brandLoaded && unitsLoaded;
   const error = brandError ?? unitsError;
   const refresh = useCallback(() => Promise.all([hydrateBrand(), hydrateUnits()]), [hydrateBrand, hydrateUnits]);
   // '배포한 노하우' = 한 곳 이상에 내려간 작업실 노하우 수(0217 brand_knowhow_list.deployed_units).
   // ★같은 재료를 노하우 화면과 공유한다 — 대시보드가 따로 세면 두 숫자가 어긋난다.
   const deployedCount = useBrandKnowhowStore((s) => s.list.filter((r) => r.deployed_units > 0).length);
+  const knowhowLoaded = useBrandKnowhowStore((s) => s.loaded);
   const hydrateKnowhow = useBrandKnowhowStore((s) => s.hydrate);
   // '배포한 퀴즈'(P5) — 같은 규칙: 한 곳 이상에 내려간 작업실 퀴즈 수(0220 brand_quiz_list.deployed_units). 퀴즈 화면과 재료 공유.
   const deployedQuizzes = useBrandQuizStore((s) => s.list.filter((r) => r.deployed_units > 0).length);
+  const quizLoaded = useBrandQuizStore((s) => s.loaded);
   const hydrateQuiz = useBrandQuizStore((s) => s.hydrate);
+  // ready 게이트(ui.md) — 이 화면이 그리는 원격 소스 넷이 다 와야 그린다. 'KPI 0'이나 '확인할 일 없음'이 먼저 스치지 않는다.
+  const ready = brandLoaded && unitsLoaded && knowhowLoaded && quizLoaded;
 
   useFocusEffect(useCallback(() => { void refresh(); void hydrateKnowhow(); void hydrateQuiz(); }, [refresh, hydrateKnowhow, hydrateQuiz]));
 
@@ -86,12 +90,22 @@ export default function HqDashboardScreen() {
 
   // 행 = 그 매장 상세 주소로(push — 뒤로가기가 대시보드로 돌아온다). 목록 화면과 같은 경로를 쓴다.
   const goStores = (unit?: string) => router.push(unit ? { pathname: '/hq/stores/[id]', params: { id: unit } } : '/hq/stores');
+  const refreshButton = <HqButton label="새로고침" icon="refresh-outline" onPress={() => void refresh()} />;
+
+  // 머리(제목·새로고침)는 게이트 밖 — 골격은 즉시 선다. 본문은 다 온 뒤에 통째로.
+  if (!ready) {
+    return (
+      <HqPage title="대시보드" actions={refreshButton} testID="hq-dashboard">
+        <ScreenLoading label="본사 현황을 불러오고 있어요…" />
+      </HqPage>
+    );
+  }
 
   return (
     <HqPage
       title="대시보드"
-      sub={brand ? `${brand.brand_name} · 연결 매장 ${overview.length}곳` : loaded ? '' : '불러오는 중…'}
-      actions={<HqButton label="새로고침" icon="refresh-outline" onPress={() => void refresh()} />}
+      sub={brand ? `${brand.brand_name} · 연결 매장 ${overview.length}곳` : undefined}
+      actions={refreshButton}
       testID="hq-dashboard"
     >
       {error ? <HqNotice tone="warn">현황을 불러오지 못했어요. 새로고침을 눌러 다시 시도해 주세요. ({error})</HqNotice> : null}
@@ -121,7 +135,7 @@ export default function HqDashboardScreen() {
       <HqSlab title="확인 필요" hint="본사가 처리할 수 있는 것만 올려요" />
       {attention.length === 0 ? (
         <View style={styles.attNone} testID="hq-attention">
-          <Text style={styles.attNoneText}>{loaded ? '지금 확인할 일이 없어요.' : '불러오는 중…'}</Text>
+          <Text style={styles.attNoneText}>지금 확인할 일이 없어요.</Text>
         </View>
       ) : (
         <View style={styles.cellcard} testID="hq-attention">
@@ -142,7 +156,7 @@ export default function HqDashboardScreen() {
         rows={overview}
         rowKey={(r) => r.unit_id}
         onRowPress={(r) => goStores(r.unit_id)}
-        footer={loaded ? `${overview.length}곳` : undefined}
+        footer={`${overview.length}곳`}
         testID="hq-dashboard-table"
       />
     </HqPage>

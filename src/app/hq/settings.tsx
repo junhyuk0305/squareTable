@@ -10,6 +10,7 @@ import { useFocusEffect } from 'expo-router';
 import { HqPage, HqButton, HqPill, HqCard, HqRow, HqNotice, HqEmpty } from '@/components/hq/HqKit';
 import { HqTable, Cell } from '@/components/hq/HqTable';
 import { HqModal } from '@/components/hq/HqModal';
+import { ScreenLoading } from '@/components/ScreenLoading';
 import { useBrandStore } from '@/lib/store/useBrandStore';
 import { useBrandUnitsStore } from '@/lib/store/useBrandUnitsStore';
 import { useBrandBillingStore } from '@/lib/store/useBrandBillingStore';
@@ -42,7 +43,6 @@ export default function HqSettingsScreen() {
   const unitsLoaded = useBrandUnitsStore((s) => s.loaded);
   const unitsError = useBrandUnitsStore((s) => s.error);
   const hydrateUnits = useBrandUnitsStore((s) => s.hydrate);
-  const loaded = brandLoaded && unitsLoaded;
   const error = brandError ?? unitsError;
   const hydrate = useCallback(() => Promise.all([hydrateBrand(), hydrateUnits()]), [hydrateBrand, hydrateUnits]);
   const refresh = hydrate;
@@ -50,7 +50,10 @@ export default function HqSettingsScreen() {
   const current = useBrandBillingStore((s) => s.current);
   const next = useBrandBillingStore((s) => s.next);
   const invoices = useBrandBillingStore((s) => s.invoices);
+  const billingLoaded = useBrandBillingStore((s) => s.loaded);
   const hydrateBilling = useBrandBillingStore((s) => s.hydrate);
+  // ready 게이트(ui.md) — 브랜드·매장 축·결제 셋이 다 와야 그린다. '이번 달 청구 대상 0곳'이 먼저 스치지 않는다.
+  const ready = brandLoaded && unitsLoaded && billingLoaded;
   useFocusEffect(useCallback(() => { void hydrate(); void hydrateBilling(); }, [hydrate, hydrateBilling]));
 
   const [link, setLink] = useState<{ url: string; expires: string } | null>(null);
@@ -86,12 +89,21 @@ export default function HqSettingsScreen() {
     void refresh();
   };
 
+  // 머리(제목)는 게이트 밖 — 골격은 즉시 선다. 설정류라 등장 애니메이션은 없다(ui.md 예외).
+  if (!ready) {
+    return (
+      <HqPage title="설정" sub="브랜드 정보 · 구성원 · 결제" testID="hq-settings">
+        <ScreenLoading label="설정을 불러오고 있어요…" />
+      </HqPage>
+    );
+  }
+
   return (
     <HqPage title="설정" sub="브랜드 정보 · 구성원 · 결제" testID="hq-settings">
       {error ? <HqNotice tone="warn">설정을 불러오지 못했어요. ({error})</HqNotice> : null}
 
       <HqCard title="브랜드 정보" sub="변경은 스퀘어테이블에 요청해 주세요(계약 정보라 화면에서 고치지 않아요).">
-        <HqRow first k="브랜드 이름" v={brand?.brand_name ?? (loaded ? '—' : '불러오는 중…')} />
+        <HqRow first k="브랜드 이름" v={brand?.brand_name ?? '—'} />
         <HqRow k="사업자등록번호" v={fmtBiz(brand?.biz_no ?? null)} />
         <HqRow k="매장 추가 시 기본 요금 부담" v={brand ? payerLabel(brand.default_payer) : '—'} />
       </HqCard>
@@ -102,7 +114,7 @@ export default function HqSettingsScreen() {
       >
         <View style={{ gap: 0 }}>
           {members.length === 0 ? (
-            <HqEmpty text={loaded ? '구성원이 없어요.' : '불러오는 중…'} />
+            <HqEmpty text="구성원이 없어요." />
           ) : (
             members.map((m, i) => (
               <HqRow

@@ -15,6 +15,7 @@ import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 import { HqPage, HqButton, HqCard, HqNotice, HqRow, HqPill, HqEmpty } from '@/components/hq/HqKit';
+import { ScreenLoading } from '@/components/ScreenLoading';
 import { HqModal } from '@/components/hq/HqModal';
 import { PayloadForm, answerTextOf, emptyPayload } from '@/components/owner/quiz/PayloadForm';
 import { useBrandQuizStore } from '@/lib/store/useBrandQuizStore';
@@ -270,7 +271,7 @@ export default function HqQuizBuilderScreen() {
   };
 
   // ready 게이트 — 작업실 진입이 실패하면 빌더를 열지 않는다(빈 칸에 골라 놓고 저장에서 실패하는 것이 가장 나쁘다).
-  if (!loaded || !entriesLoaded) return <HqPage title="퀴즈" sub="불러오는 중…">{null}</HqPage>;
+  if (!loaded || !entriesLoaded) return <HqPage title="퀴즈"><ScreenLoading label="퀴즈를 불러오고 있어요…" /></HqPage>;
   if (storeError || !wsUnitId) {
     return (
       <HqPage title="퀴즈" sub="빌더를 열 수 없어요" actions={<HqButton label="목록으로" onPress={() => router.replace('/hq/quizzes')} />}>

@@ -12,6 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { HqPage, HqButton, HqPill, HqSlab, HqNotice, HqCard, HqEmpty } from '@/components/hq/HqKit';
 import { HqTable, Cell, type HqColumn } from '@/components/hq/HqTable';
 import { HqModal } from '@/components/hq/HqModal';
+import { ScreenLoading } from '@/components/ScreenLoading';
 import { useBrandQuizStore } from '@/lib/store/useBrandQuizStore';
 import { useBrandUnitsStore } from '@/lib/store/useBrandUnitsStore';
 import { DEPLOY_STATUS, deployStatusMap, cellKey, type DeployStatus } from '@/lib/brand/deployStatus';
@@ -27,13 +28,16 @@ export default function HqQuizzesScreen() {
   const matrix = useBrandQuizStore((s) => s.matrix);
   const entryMatrix = useBrandQuizStore((s) => s.entryMatrix);
   const courseEntries = useBrandQuizStore((s) => s.courseEntries);
-  const loaded = useBrandQuizStore((s) => s.loaded);
+  const quizLoaded = useBrandQuizStore((s) => s.loaded);
   const error = useBrandQuizStore((s) => s.error);
   const hydrate = useBrandQuizStore((s) => s.hydrate);
   const refresh = useBrandQuizStore((s) => s.refresh);
   const deploy = useBrandQuizStore((s) => s.deploy);
   const overview = useBrandUnitsStore((s) => s.overview);
   const hydrateUnits = useBrandUnitsStore((s) => s.hydrate);
+  // ready 게이트(ui.md) — 표·교차표의 행(퀴즈)과 열(연결 매장)이 둘 다 와야 그린다.
+  const unitsLoaded = useBrandUnitsStore((s) => s.loaded);
+  const ready = quizLoaded && unitsLoaded;
 
   useFocusEffect(useCallback(() => { void hydrate(); void hydrateUnits(); }, [hydrate, hydrateUnits]));
 
@@ -175,18 +179,28 @@ export default function HqQuizzesScreen() {
 
   const pickedNoItems = list.filter((r) => picked.has(r.id) && r.items === 0).length;
 
+  // 머리(제목·버튼)는 게이트 밖 — 골격은 즉시 선다.
+  const head = {
+    title: '퀴즈',
+    sub: '본사가 만든 퀴즈를 매장에 보내요. 언제 누구에게 낼지는 점주가 정하고, 발송은 그 매장의 규칙대로 나가요.',
+    actions: (
+      <>
+        <HqButton label="새로고침" icon="refresh-outline" onPress={() => void refresh()} />
+        <HqButton label="퀴즈 만들기" icon="add" variant="pri" onPress={() => router.push({ pathname: '/hq/quizzes/[id]', params: { id: 'new' } })} />
+      </>
+    ),
+    testID: 'hq-quizzes',
+  };
+  if (!ready) {
+    return (
+      <HqPage {...head}>
+        <ScreenLoading label="퀴즈를 불러오고 있어요…" />
+      </HqPage>
+    );
+  }
+
   return (
-    <HqPage
-      title="퀴즈"
-      sub="본사가 만든 퀴즈를 매장에 보내요. 언제 누구에게 낼지는 점주가 정하고, 발송은 그 매장의 규칙대로 나가요."
-      actions={
-        <>
-          <HqButton label="새로고침" icon="refresh-outline" onPress={() => void refresh()} />
-          <HqButton label="퀴즈 만들기" icon="add" variant="pri" onPress={() => router.push({ pathname: '/hq/quizzes/[id]', params: { id: 'new' } })} />
-        </>
-      }
-      testID="hq-quizzes"
-    >
+    <HqPage {...head}>
       {error ? <HqNotice tone="warn">{error} 새로고침을 눌러 다시 시도해 주세요.</HqNotice> : null}
 
       <HqSlab
@@ -209,18 +223,18 @@ export default function HqQuizzesScreen() {
           disabled={picked.size === 0 || overview.length === 0}
           onPress={openDeployModal}
         />
-        {overview.length === 0 && loaded ? <Text style={styles.barNote}>연결된 매장이 없어 아직 보낼 곳이 없어요.</Text> : null}
+        {overview.length === 0 ? <Text style={styles.barNote}>연결된 매장이 없어 아직 보낼 곳이 없어요.</Text> : null}
       </View>
 
       <HqTable
         columns={columns}
         rows={list}
         rowKey={(r) => r.id}
-        footer={loaded ? `${list.length}건` : undefined}
+        footer={`${list.length}건`}
         empty={
           <HqEmpty
-            text={loaded ? '아직 만든 퀴즈가 없어요. 노하우를 고르면 AI가 문항을 만들어요.' : '불러오는 중…'}
-            action={loaded ? <HqButton label="퀴즈 만들기" variant="pri" onPress={() => router.push({ pathname: '/hq/quizzes/[id]', params: { id: 'new' } })} /> : undefined}
+            text="아직 만든 퀴즈가 없어요. 노하우를 고르면 AI가 문항을 만들어요."
+            action={<HqButton label="퀴즈 만들기" variant="pri" onPress={() => router.push({ pathname: '/hq/quizzes/[id]', params: { id: 'new' } })} />}
           />
         }
         testID="hq-quizzes-table"

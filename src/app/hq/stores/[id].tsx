@@ -10,6 +10,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { HqButton, HqPill, HqRow, HqSlab, HqSegment, HqEmpty } from '@/components/hq/HqKit';
 import { useStoresTwoPane } from '@/components/hq/storesPane';
+import { ScreenLoading } from '@/components/ScreenLoading';
 import { useBrandUnitsStore } from '@/lib/store/useBrandUnitsStore';
 import { useBrandUnitDetailStore } from '@/lib/store/useBrandUnitDetailStore';
 import {
@@ -58,10 +59,14 @@ export default function HqStoreDetailScreen() {
   const twoPane = useStoresTwoPane();
 
   const overview = useBrandUnitsStore((s) => s.overview);
-  const loaded = useBrandUnitsStore((s) => s.loaded);
+  const unitsLoaded = useBrandUnitsStore((s) => s.loaded);
   const refreshUnits = useBrandUnitsStore((s) => s.refresh);
   const payerDates = useBrandUnitDetailStore((s) => s.payerDates);
   const unitRules = useBrandUnitDetailStore((s) => s.unitRules);
+  const detailLoaded = useBrandUnitDetailStore((s) => s.loaded);
+  // 상세 칸의 ready 게이트(ui.md) — 목록과 따로 갖는다. 직영 규칙이 늦게 오면 '권장'·'끊을 수 있어요' 같은
+  // 기본값이 먼저 스쳤다가 바뀐다 — 본사가 그 순간 버튼을 누르면 반대로 바꾼다.
+  const ready = unitsLoaded && detailLoaded;
   const hydrateDetail = useBrandUnitDetailStore((s) => s.hydrate);
   const refreshDetail = useBrandUnitDetailStore((s) => s.refresh);
 
@@ -77,7 +82,7 @@ export default function HqStoreDetailScreen() {
 
   const row = overview.find((r) => r.unit_id === id) ?? null;
 
-  if (!loaded) return null;
+  if (!ready) return <ScreenLoading label="매장 정보를 불러오고 있어요…" />;
   if (!row) {
     return (
       <DetailFrame title="매장" twoPane={twoPane} onClose={close}>
