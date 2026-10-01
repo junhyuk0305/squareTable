@@ -157,8 +157,12 @@ export function HqRow({ k, v, tail, first }: { k: string; v?: ReactNode; tail?: 
   return (
     <View style={[styles.row, !first && styles.rowBorder]}>
       <Text style={styles.rowK}>{k}</Text>
-      <View style={styles.rowV}>{typeof v === 'string' || typeof v === 'number' ? <Text style={styles.rowVText}>{v}</Text> : v}</View>
-      {tail ? <View style={styles.rowTail}>{tail}</View> : null}
+      {/* 꼬리(보조 설명)는 값 **아래**에 둔다. 옆에 두면 좁은 칸(상세 392)에서 긴 꼬리가 값을 0 가까이 눌러
+          배지가 세로로 섰고, 남은 90px 에서 꼬리가 "본사 부 / 담"처럼 끊겼다(2026-10-01 실측). */}
+      <View style={styles.rowV}>
+        {typeof v === 'string' || typeof v === 'number' ? <Text style={styles.rowVText}>{v}</Text> : v}
+        {tail ? <View style={styles.rowTail}>{tail}</View> : null}
+      </View>
     </View>
   );
 }
@@ -170,7 +174,7 @@ export function HqSlab({ title, hint, more }: { title: string; hint?: string; mo
       <Text style={styles.slabTitle}>{title}</Text>
       {hint ? <Text style={styles.slabHint}>{hint}</Text> : null}
       {more ? (
-        <Pressable onPress={more.onPress} accessibilityRole="button" style={{ marginLeft: 'auto' }}>
+        <Pressable onPress={more.onPress} accessibilityRole="button" style={{ marginLeft: 'auto', flexShrink: 0 }}>
           <Text style={styles.slabMore}>{more.label}</Text>
         </Pressable>
       ) : null}
@@ -272,13 +276,15 @@ const styles = StyleSheet.create({
     backgroundColor: InkColors.bg,
     minHeight: 40,
     alignSelf: 'flex-start', // 세로 컨테이너 안에서 가로로 늘어나지 않는다(드로어 실측 2026-09-23)
+    flexShrink: 0,
   },
   btnPri: { backgroundColor: BrandColors.yellow, borderColor: BrandColors.yellowDeep },
   btnDark: { backgroundColor: InkColors.ink, borderColor: InkColors.ink },
   btnDanger: { borderColor: BrandColors.badSoft, backgroundColor: BrandColors.badSoft },
   btnText: { fontSize: 14.5, fontWeight: '700' },
 
-  pill: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingVertical: 2, paddingHorizontal: 9, borderRadius: Radius.pill, alignSelf: 'flex-start' },
+  // ★짧은 글자 부품(배지·버튼·세그먼트·라벨·제목)은 flexShrink 0 — 옆 요소에 눌려 접히지 않는다(ui.md 줄바꿈 규칙).
+  pill: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingVertical: 2, paddingHorizontal: 9, borderRadius: Radius.pill, alignSelf: 'flex-start', flexShrink: 0 },
   pillDot: { width: 5, height: 5, borderRadius: Radius.pill, opacity: 0.85 },
   pillText: { fontSize: 13, fontWeight: '700' },
 
@@ -292,15 +298,16 @@ const styles = StyleSheet.create({
 
   row: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 11, minHeight: 44 },
   rowBorder: { borderTopWidth: 1, borderTopColor: InkColors.line },
-  rowK: { width: 160, fontSize: 14.5, fontWeight: '600', color: InkColors.ink2 },
-  rowV: { flex: 1, minWidth: 0 },
+  rowK: { width: 160, flexShrink: 0, fontSize: 14.5, fontWeight: '600', color: InkColors.ink2 },
+  rowV: { flex: 1, minWidth: 0, gap: Space.xs },
   rowVText: { fontSize: 14.5, fontWeight: '600', color: InkColors.ink },
-  rowTail: { marginLeft: 'auto' },
+  rowTail: { alignSelf: 'stretch' },
 
+  // 제목은 줄지 않고, 옆 설명(긴 문장)이 남은 폭에서 줄바꿈한다.
   slab: { flexDirection: 'row', alignItems: 'baseline', gap: 9, marginBottom: 9 },
-  slabTitle: { fontSize: 16, fontWeight: '700', color: InkColors.ink },
-  slabHint: { fontSize: 13.5, color: InkColors.ink3 },
-  slabMore: { fontSize: 14, fontWeight: '600', color: InkColors.ink2 },
+  slabTitle: { fontSize: 16, fontWeight: '700', color: InkColors.ink, flexShrink: 0 },
+  slabHint: { fontSize: 13.5, color: InkColors.ink3, flex: 1, minWidth: 0 },
+  slabMore: { fontSize: 14, fontWeight: '600', color: InkColors.ink2, flexShrink: 0 },
 
   empty: { paddingVertical: 28, paddingHorizontal: 16, alignItems: 'center', gap: Space.md },
   emptyText: { fontSize: 14.5, color: InkColors.ink3, textAlign: 'center' },
@@ -309,7 +316,7 @@ const styles = StyleSheet.create({
   loadErrBody: { fontSize: 14, color: InkColors.ink2, textAlign: 'center', marginBottom: Space.xs },
 
   seg: { flexDirection: 'row', backgroundColor: InkColors.paper, borderRadius: Radius.pill, padding: 3, gap: 2, alignSelf: 'flex-start' },
-  segItem: { paddingVertical: 6, paddingHorizontal: 13, borderRadius: Radius.pill },
+  segItem: { paddingVertical: 6, paddingHorizontal: 13, borderRadius: Radius.pill, flexShrink: 0 },
   segOn: { backgroundColor: InkColors.ink },
   segText: { fontSize: 14, fontWeight: '700', color: InkColors.ink2 },
   segTextOn: { color: InkColors.bubbleText },

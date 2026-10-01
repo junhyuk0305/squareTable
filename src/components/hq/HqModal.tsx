@@ -1,6 +1,6 @@
 // HqModal.tsx — 본사 화면의 가운데 모달(매장 추가 · 초대 링크). 폰 확인 모달(frameCapStyle 460)을 쓰지 않는다.
 import { type ReactNode } from 'react';
-import { Modal, View, Text, Pressable, StyleSheet } from 'react-native';
+import { Modal, View, Text, Pressable, StyleSheet, type ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { InkColors } from '@/lib/theme/colors';
@@ -45,7 +45,8 @@ export function HqModal({
 const styles = StyleSheet.create({
   dim: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(17,17,17,0.28)' },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
-  card: { backgroundColor: InkColors.bg, borderRadius: Radius.lg, padding: 24, ...Elevation.e3 },
+  // 모달은 본사 셸(hq-main) 밖에 그려져 셸의 한글 어절 줄바꿈을 상속하지 못한다 — 여기서 다시 건다(HqShell 과 같은 값).
+  card: { backgroundColor: InkColors.bg, borderRadius: Radius.lg, padding: 24, ...Elevation.e3, wordBreak: 'keep-all', overflowWrap: 'anywhere' } as ViewStyle,
   head: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginBottom: 16 },
   title: { fontSize: 19, fontWeight: '800', letterSpacing: -0.3, color: InkColors.ink },
   sub: { fontSize: 14, color: InkColors.ink2, marginTop: 3, lineHeight: 20 },

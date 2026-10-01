@@ -1,5 +1,5 @@
 import { useEffect, type ReactNode } from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, StyleSheet, type ViewStyle } from 'react-native';
 import { usePathname, useRouter, type Href } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -93,5 +93,8 @@ export function HqShell({ children }: { children: ReactNode }) {
 const styles = StyleSheet.create({
   outer: { flex: 1, flexDirection: 'row', backgroundColor: InkColors.bg },
   // ★폭 캡이 없다 — 본사 화면은 넓은 레이아웃 전용이다(정본 §5-1).
-  main: { flex: 1, minWidth: 0, backgroundColor: InkColors.bg },
+  // ★한글은 어절(띄어쓰기) 단위로만 줄바꿈 — 기본값은 글자 단위라 "본사 부 / 담"처럼 단어 가운데서 끊겼다(10-01).
+  //   글자가 상속하므로 본문 전체에 한 번 건다. 띄어쓰기 없는 긴 글자(링크·번호)는 넘치지 않게 anywhere 로 끊는다.
+  //   웹 전용 CSS 속성이라 ViewStyle 타입에 없다(본사 셸은 웹 전용).
+  main: { flex: 1, minWidth: 0, backgroundColor: InkColors.bg, wordBreak: 'keep-all', overflowWrap: 'anywhere' } as ViewStyle,
 });

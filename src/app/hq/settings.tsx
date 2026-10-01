@@ -117,7 +117,8 @@ export default function HqSettingsScreen() {
       <HqCard title="브랜드 정보" sub="변경은 스퀘어테이블에 요청해 주세요(계약 정보라 화면에서 고치지 않아요).">
         <HqRow first k="브랜드 이름" v={brand?.brand_name ?? '—'} />
         <HqRow k="사업자등록번호" v={fmtBiz(brand?.biz_no ?? null)} />
-        <HqRow k="매장 추가 시 기본 요금 부담" v={brand ? payerLabel(brand.default_payer) : '—'} />
+        {/* 라벨 칸(160)에 한 줄로 — '매장 추가 시 기본 요금 부담'은 두 줄로 접혔다(10-01). 뜻은 같다: 매장을 새로 붙일 때의 기본값. */}
+        <HqRow k="새 매장 요금 부담" v={brand ? payerLabel(brand.default_payer) : '—'} />
       </HqCard>
 
       <HqCard

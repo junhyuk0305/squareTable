@@ -395,5 +395,43 @@ for (const a of ANIMS) {
   });
 }
 
+// ── J. 짧은 글자 줄바꿈(ui.md "짧은 글자는 접히지 않는다") ──────────────────
+section('J. 라벨·배지·버튼·제목(16자 이하)이 두 줄로 접히지 않는다');
+{
+  // 글자 잎(div/span[dir=auto])마다 높이가 줄높이 × 1.6 을 넘으면 접힌 것이다.
+  const DETECT = `(()=>{const out=[];
+    for(const e of document.querySelectorAll('div[dir="auto"],span[dir="auto"]')){
+      if(e.querySelector('div[dir="auto"],span[dir="auto"]'))continue;
+      const t=(e.innerText||'').trim(); if(!t||t.length>16||t.includes('\\n'))continue;
+      const r=e.getBoundingClientRect(); if(!r.width||!r.height)continue;
+      const cs=getComputedStyle(e); const fs=parseFloat(cs.fontSize); const lh=cs.lineHeight==='normal'?fs*1.35:parseFloat(cs.lineHeight);
+      if(r.height>lh*1.6) out.push(t+'('+Math.round(r.width)+'×'+Math.round(r.height)+')');
+    } return [...new Set(out)];})()`;
+  const PAGES = ['/hq', '/hq/stores', `/hq/stores/${UNIT}`, '/hq/knowhow', '/hq/quizzes', '/hq/settings', '/hq/knowhow/new', '/hq/quizzes/new'];
+  for (const width of [1280, 1371, 1600]) {
+    await withPage({ width }, async (page) => {
+      const found = [];
+      for (const p of PAGES) {
+        await page.goto(p);
+        await page.waitFor(`!!document.querySelector('[data-testid="hq-main"]') && !document.body.innerText.includes('불러오고 있어요')`, 40000);
+        await sleep(2000);
+        for (const f of await page.eval(DETECT)) found.push(`${p} ${f}`);
+        if (p === '/hq/stores') {
+          await page.click('[data-testid="hq-add-store"]');
+          await sleep(1000);
+          for (const f of await page.eval(DETECT)) found.push(`[매장 추가] ${f}`);
+        }
+      }
+      check(`J 창 ${width}: 접힌 짧은 글자 0`, found.length === 0, found.join(' · '));
+    });
+  }
+  // 한글 어절 줄바꿈 — 본사 셸 본문이 keep-all 이어야 "본사 부 / 담" 같은 단어 중간 끊김이 없다.
+  await withPage({}, async (page) => {
+    await page.goto('/hq');
+    await page.waitFor(`!!document.querySelector('[data-testid="hq-main"]')`, 40000);
+    check('J 본사 셸 본문 = 한글 어절 단위 줄바꿈(keep-all)', (await page.eval(`getComputedStyle(document.querySelector('[data-testid="hq-main"]')).wordBreak`)) === 'keep-all');
+  });
+}
+
 console.log(`\n── 결과 ── pass ${pass} / fail ${fail}`);
 process.exit(fail ? 1 : 0);
