@@ -74,11 +74,12 @@ export default function HqStoreDetailScreen() {
   useEffect(() => { void hydrateDetail(); }, [id, hydrateDetail]);
 
   /**
-   * 닫기 = 이 매장 칸의 스택에서 한 칸 뒤로(= 목록). 주소로 바로 들어와 뒤가 없으면 목록 주소로.
-   * ★전역 `router.canGoBack()` 이 아니라 가장 가까운 네비게이터로 판정한다 — 전역은 부모 스택까지 봐서
-   *   대시보드에서 들어온 경우 '닫기'가 대시보드로 새어 나간다(HeaderBackButton 과 같은 이유).
+   * 닫기 = 이 매장 칸의 스택에서 한 칸 뒤로(= 목록). 그 스택에 아래 칸이 없으면(대시보드 행·주소 직접 입력으로
+   * 상세부터 들어온 경우) 목록 주소로 바꾼다.
+   * ★`navigation.canGoBack()`·`goBack()` 을 쓰지 않는다 — 둘 다 부모 스택까지 거슬러 올라가서, 대시보드에서
+   *   들어온 상세의 '닫기'가 목록이 아니라 대시보드로 갔다(2026-10-01 실측). 이 칸 스택의 index 만 본다.
    */
-  const close = () => (navigation.canGoBack() ? navigation.goBack() : router.replace('/hq/stores'));
+  const close = () => ((navigation.getState()?.index ?? 0) > 0 ? navigation.goBack() : router.replace('/hq/stores'));
 
   const row = overview.find((r) => r.unit_id === id) ?? null;
 

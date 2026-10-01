@@ -6,7 +6,7 @@
 // 상세는 `[id].tsx` — 매장 주소(`/hq/stores/<unit_id>`)가 공유·새로고침·뒤로가기의 SSOT 다.
 import { useCallback, useMemo, useState } from 'react';
 import { View, Text, TextInput, StyleSheet } from 'react-native';
-import { Slot, useFocusEffect, useGlobalSearchParams, useRouter } from 'expo-router';
+import { Slot, useFocusEffect, usePathname, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 import { HqPage, HqButton, HqPill, HqCard, HqSlab, HqNotice, HqSegment, HqEmpty } from '@/components/hq/HqKit';
@@ -35,6 +35,7 @@ import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
 
+const STORES_PATH = '/hq/stores';
 const fmtDay = (iso: string) => new Date(iso).toLocaleDateString('ko-KR');
 const VIS_TONE: Record<BrandVisibility, 'n' | 'i' | 'g'> = { summary: 'n', knowhow: 'i', ops: 'g' };
 // 관계 배지(0223) — 직영만 색을 준다. 가맹이 기본값이고 대부분이라, 둘 다 물들이면 표가 시끄럽다.
@@ -43,9 +44,11 @@ const REL_TONE: Record<BrandRelation, 'i' | 'n'> = { direct: 'i', franchise: 'n'
 export default function HqStoresLayout() {
   const router = useRouter();
   const twoPane = useStoresTwoPane();
-  // 지금 열린 상세 — 레이아웃은 자식의 동적 파라미터를 전역 파라미터로만 본다.
-  const { id } = useGlobalSearchParams<{ id?: string }>();
-  const detailId = typeof id === 'string' && id ? id : null;
+  // 지금 열린 상세 = 실제 주소에서 읽는다(URL 이 SSOT).
+  // ★`useGlobalSearchParams()` 를 쓰지 않는다 — 대시보드에서 상세로 push 하면 부모 스택의 'stores' 칸에 id 가 붙고,
+  //   안쪽에서 목록으로 replace 해도 그 id 가 남아 "주소는 목록인데 상세가 열린 것"으로 읽혔다(2026-10-01 실측).
+  const pathname = usePathname();
+  const detailId = pathname.startsWith(`${STORES_PATH}/`) ? decodeURIComponent(pathname.slice(STORES_PATH.length + 1)) : null;
 
   const overview = useBrandUnitsStore((s) => s.overview);
   const invites = useBrandUnitsStore((s) => s.invites);
