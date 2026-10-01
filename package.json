@@ -130,6 +130,7 @@
     "qa:quiz-link": "node scripts/qa-quiz-link-live.mjs",
     "qa:quiz-integrity": "node scripts/qa-quiz-attempt-integrity.mjs",
     "qa:hq": "node scripts/qa-hq-browser.mjs",
+    "qa:hq-structure": "node scripts/qa-hq-structure.mjs",
     "qa:brand": "node scripts/qa-brand.mjs",
     "qa:brand-boundary": "node scripts/qa-brand-boundary.mjs",
     "qa:brand-deploy": "node scripts/qa-brand-deploy.mjs",
