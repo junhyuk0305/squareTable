@@ -21,6 +21,7 @@ import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 
 import { HqPage, HqButton, HqCard, HqNotice, HqRow, HqSegment, HqPill, HqEmpty, HqLoadError } from '@/components/hq/HqKit';
 import { ScreenLoading } from '@/components/ScreenLoading';
+import { Appear } from '@/components/Appear';
 import { HqModal } from '@/components/hq/HqModal';
 import { useBrandKnowhowStore } from '@/lib/store/useBrandKnowhowStore';
 import { structureSquare, extractDocText, embedEntry } from '@/lib/ai';
@@ -257,7 +258,8 @@ export default function HqKnowhowEditorScreen() {
       {err ? <HqNotice tone="warn">{err}</HqNotice> : null}
       {note ? <HqNotice tone="i">{note}</HqNotice> : null}
 
-      <View style={styles.two}>
+      {/* 등장 — 좌우 두 칸이 한 섹션이다(입력 ↔ 결과를 같이 본다). */}
+      <Appear style={styles.two}>
         {/* ── 왼쪽: 입력 ─────────────────────────────────────────── */}
         <View style={styles.col}>
           <HqCard title="원문 붙여넣기" sub="사장님께 설명하듯 그냥 쓰거나, 문서에서 복사해 붙여넣어도 돼요.">
@@ -367,7 +369,7 @@ export default function HqKnowhowEditorScreen() {
             </HqCard>
           )}
         </View>
-      </View>
+      </Appear>
 
       {/* 템플릿 고르기 — 업종팩(compile:packs 산출물) 그대로. 작업실은 업종이 없으므로 전 업종을 보여 준다. */}
       <HqModal

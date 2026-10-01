@@ -12,6 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { SHOW_HQ_CONSOLE } from '@/lib/config/store-policy';
 import { acceptPendingBrandJoin, savePendingBrandJoin } from '@/lib/brand/usePendingBrandJoin';
+import { Appear } from '@/components/Appear';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
@@ -85,7 +86,8 @@ function Card({
   return (
     <View style={styles.wrap} testID="hq-join">
       <Stack.Screen options={{ headerShown: false }} />
-      <View style={styles.card}>
+      {/* key = 제목 — 상태가 바뀌어(가입 안내 → 등록 중 → 실패) 카드 내용이 갈리면 새 카드로 다시 나타난다. */}
+      <Appear key={title} style={styles.card}>
         <Ionicons name={icon} size={28} color={InkColors.ink} />
         <Text style={styles.title}>{title}</Text>
         <Text style={styles.body}>{body}</Text>
@@ -99,7 +101,7 @@ function Card({
             <Text style={styles.link}>{secondary.label}</Text>
           </Pressable>
         ) : null}
-      </View>
+      </Appear>
     </View>
   );
 }

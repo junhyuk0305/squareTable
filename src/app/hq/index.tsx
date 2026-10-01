@@ -9,6 +9,7 @@ import { HqPage, HqButton, HqPill, HqSlab, HqSegment, HqLoadError } from '@/comp
 import { HqStrip } from '@/components/hq/HqStrip';
 import { HqTable, Cell } from '@/components/hq/HqTable';
 import { ScreenLoading } from '@/components/ScreenLoading';
+import { Appear, stagger } from '@/components/Appear';
 import { useBrandStore } from '@/lib/store/useBrandStore';
 import { useBrandUnitsStore } from '@/lib/store/useBrandUnitsStore';
 import { useBrandKnowhowStore } from '@/lib/store/useBrandKnowhowStore';
@@ -129,57 +130,63 @@ export default function HqDashboardScreen() {
       actions={refreshButton}
       testID="hq-dashboard"
     >
+      {/* 등장은 섹션 단위로(ui.md ⑤) — KPI · 확인 필요 · 매장 표 순서로 30ms 씩. */}
+      <Appear>
+        {/* 혼합 브랜드에서만 뜬다 — 직영이나 가맹 한쪽뿐이면 고를 것이 없다(빈 토글은 소음이다). */}
+        {mixed ? (
+          <View style={styles.kpiScope} testID="hq-kpi-scope">
+            <Text style={styles.kpiScopeLabel}>KPI 범위</Text>
+            <HqSegment
+              items={[{ key: 'all', label: '전체' }, ...RELATIONS.map((r) => ({ key: r.key, label: r.label }))]}
+              value={relF}
+              onChange={setRelF}
+            />
+          </View>
+        ) : null}
 
-      {/* 혼합 브랜드에서만 뜬다 — 직영이나 가맹 한쪽뿐이면 고를 것이 없다(빈 토글은 소음이다). */}
-      {mixed ? (
-        <View style={styles.kpiScope} testID="hq-kpi-scope">
-          <Text style={styles.kpiScopeLabel}>KPI 범위</Text>
-          <HqSegment
-            items={[{ key: 'all', label: '전체' }, ...RELATIONS.map((r) => ({ key: r.key, label: r.label }))]}
-            value={relF}
-            onChange={setRelF}
-          />
-        </View>
-      ) : null}
+        <HqStrip
+          testID="hq-kpi"
+          items={[
+            { label: '연결 매장', value: scope.length, unit: '곳', sub: relF !== 'all' && mixed ? `${relationLabel(relF)}만 · 전체 ${overview.length}곳` : stats.pendingInvites ? `초대 대기 ${stats.pendingInvites}건` : '초대 대기 없음' },
+            { label: '배포한 노하우', value: deployedCount, unit: '건', sub: deployedCount ? '한 곳 이상에 내려간 노하우' : '노하우를 쓰고 [배포]를 누르면 세요' },
+            { label: '배포한 퀴즈', value: deployedQuizzes, unit: '건', sub: deployedQuizzes ? '한 곳 이상에 내려간 퀴즈 · 발송은 매장이 정해요' : '퀴즈를 만들고 [배포]를 누르면 세요' },
+            { label: '숙지율', value: stats.mastery === null ? null : `${stats.mastery}%`, sub: stats.mastery === null ? '배포한 노하우가 생기면 계산돼요' : `${scopeNote} 평균` },
+          ]}
+        />
+      </Appear>
 
-      <HqStrip
-        testID="hq-kpi"
-        items={[
-          { label: '연결 매장', value: scope.length, unit: '곳', sub: relF !== 'all' && mixed ? `${relationLabel(relF)}만 · 전체 ${overview.length}곳` : stats.pendingInvites ? `초대 대기 ${stats.pendingInvites}건` : '초대 대기 없음' },
-          { label: '배포한 노하우', value: deployedCount, unit: '건', sub: deployedCount ? '한 곳 이상에 내려간 노하우' : '노하우를 쓰고 [배포]를 누르면 세요' },
-          { label: '배포한 퀴즈', value: deployedQuizzes, unit: '건', sub: deployedQuizzes ? '한 곳 이상에 내려간 퀴즈 · 발송은 매장이 정해요' : '퀴즈를 만들고 [배포]를 누르면 세요' },
-          { label: '숙지율', value: stats.mastery === null ? null : `${stats.mastery}%`, sub: stats.mastery === null ? '배포한 노하우가 생기면 계산돼요' : `${scopeNote} 평균` },
-        ]}
-      />
+      <Appear delay={stagger(1)}>
+        <HqSlab title="확인 필요" hint="본사가 처리할 수 있는 것만 올려요" />
+        {attention.length === 0 ? (
+          <View style={styles.attNone} testID="hq-attention">
+            <Text style={styles.attNoneText}>지금 확인할 일이 없어요.</Text>
+          </View>
+        ) : (
+          <View style={styles.cellcard} testID="hq-attention">
+            {attention.map((a) => (
+              <AttentionCell key={a.k} k={a.k} v={a.v} n={a.n} onPress={() => goStores()} />
+            ))}
+          </View>
+        )}
+      </Appear>
 
-      <HqSlab title="확인 필요" hint="본사가 처리할 수 있는 것만 올려요" />
-      {attention.length === 0 ? (
-        <View style={styles.attNone} testID="hq-attention">
-          <Text style={styles.attNoneText}>지금 확인할 일이 없어요.</Text>
-        </View>
-      ) : (
-        <View style={styles.cellcard} testID="hq-attention">
-          {attention.map((a) => (
-            <AttentionCell key={a.k} k={a.k} v={a.v} n={a.n} onPress={() => goStores()} />
-          ))}
-        </View>
-      )}
-
-      <HqSlab title="매장" hint="이름순 · 행을 누르면 매장 화면에서 연결 정보가 열려요" more={{ label: '전체 보기', onPress: () => goStores() }} />
-      <HqTable
-        columns={[
-          { key: 'name', label: '매장', width: 220, render: (r) => <Cell kind="name">{r.store_name}</Cell> },
-          { key: 'vis', label: '공개 수준', width: 130, render: (r) => <HqPill tone={r.visibility === 'ops' ? 'g' : r.visibility === 'knowhow' ? 'i' : 'n'} label={visibilityLabel(r.visibility)} /> },
-          { key: 'staff', label: '직원', align: 'right', render: (r) => <Cell kind="num">{r.staff}</Cell>, sortValue: (r) => r.staff },
-          { key: 'pq', label: '미해결 질문', align: 'right', render: (r) => <Cell kind="num">{r.pending_q}</Cell>, sortValue: (r) => r.pending_q },
-        ]}
-        rows={overview}
-        rowKey={(r) => r.unit_id}
-        onRowPress={(r) => goStores(r.unit_id)}
-        maxRows={DASHBOARD_TABLE_ROWS}
-        footer={overview.length > DASHBOARD_TABLE_ROWS ? `전체 ${overview.length}곳 중 ${DASHBOARD_TABLE_ROWS}곳` : `${overview.length}곳`}
-        testID="hq-dashboard-table"
-      />
+      <Appear delay={stagger(2)}>
+        <HqSlab title="매장" hint="이름순 · 행을 누르면 매장 화면에서 연결 정보가 열려요" more={{ label: '전체 보기', onPress: () => goStores() }} />
+        <HqTable
+          columns={[
+            { key: 'name', label: '매장', width: 220, render: (r) => <Cell kind="name">{r.store_name}</Cell> },
+            { key: 'vis', label: '공개 수준', width: 130, render: (r) => <HqPill tone={r.visibility === 'ops' ? 'g' : r.visibility === 'knowhow' ? 'i' : 'n'} label={visibilityLabel(r.visibility)} /> },
+            { key: 'staff', label: '직원', align: 'right', render: (r) => <Cell kind="num">{r.staff}</Cell>, sortValue: (r) => r.staff },
+            { key: 'pq', label: '미해결 질문', align: 'right', render: (r) => <Cell kind="num">{r.pending_q}</Cell>, sortValue: (r) => r.pending_q },
+          ]}
+          rows={overview}
+          rowKey={(r) => r.unit_id}
+          onRowPress={(r) => goStores(r.unit_id)}
+          maxRows={DASHBOARD_TABLE_ROWS}
+          footer={overview.length > DASHBOARD_TABLE_ROWS ? `전체 ${overview.length}곳 중 ${DASHBOARD_TABLE_ROWS}곳` : `${overview.length}곳`}
+          testID="hq-dashboard-table"
+        />
+      </Appear>
     </HqPage>
   );
 }

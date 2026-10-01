@@ -16,6 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { HqPage, HqButton, HqCard, HqNotice, HqRow, HqPill, HqEmpty, HqLoadError } from '@/components/hq/HqKit';
 import { ScreenLoading } from '@/components/ScreenLoading';
+import { Appear } from '@/components/Appear';
 import { HqModal } from '@/components/hq/HqModal';
 import { PayloadForm, answerTextOf, emptyPayload } from '@/components/owner/quiz/PayloadForm';
 import { useBrandQuizStore } from '@/lib/store/useBrandQuizStore';
@@ -317,7 +318,8 @@ export default function HqQuizBuilderScreen() {
       {err ? <HqNotice tone="warn">{err}</HqNotice> : null}
       {note ? <HqNotice tone="i">{note}</HqNotice> : null}
 
-      <View style={styles.two}>
+      {/* 등장 — 좌우 두 칸이 한 섹션이다(노하우 고르기 ↔ 문항을 같이 본다). */}
+      <Appear style={styles.two}>
         {/* ── 왼쪽: 이름 + 노하우 고르기 ─────────────────────────── */}
         <View style={styles.col}>
           <HqCard title="퀴즈 이름" sub="매장에는 이 이름 그대로 가요. 점주가 바꿀 수 있어요.">
@@ -423,7 +425,7 @@ export default function HqQuizBuilderScreen() {
             )}
           </HqCard>
         </View>
-      </View>
+      </Appear>
 
       {/* 형태 고르기 — 사장 시트의 pick 단계와 같은 자리. 고르면 빈 폼(`emptyPayload`)으로 편집 모달이 열린다. */}
       <HqModal open={fmtOpen} title="어떤 형태로 쓸까요" sub="고르면 그 형태의 빈 칸이 열려요. 저장할 때 형태별 규칙을 다시 확인해요." width={560} onClose={() => setFmtOpen(false)}>

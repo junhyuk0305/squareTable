@@ -14,6 +14,7 @@ import { HqTable, Cell, type HqColumn } from '@/components/hq/HqTable';
 import { HqModal } from '@/components/hq/HqModal';
 import { HqDeployCounts } from '@/components/hq/HqDeployCounts';
 import { ScreenLoading } from '@/components/ScreenLoading';
+import { Appear, stagger } from '@/components/Appear';
 import { useBrandQuizStore } from '@/lib/store/useBrandQuizStore';
 import { useBrandUnitsStore } from '@/lib/store/useBrandUnitsStore';
 import { DEPLOY_STATUS, deployStatusMap, cellKey, type DeployStatus } from '@/lib/brand/deployStatus';
@@ -208,60 +209,64 @@ export default function HqQuizzesScreen() {
 
   return (
     <HqPage {...head}>
-
-      <HqSlab
-        title="퀴즈"
-        hint={picked.size ? `${picked.size}건 선택` : '왼쪽 칸을 눌러 여러 건을 고른 뒤 한 번에 보낼 수 있어요'}
-      />
-      <View style={styles.bar}>
-        <Pressable
-          onPress={() => setPicked(allPicked ? new Set() : new Set(list.map((r) => r.id)))}
-          accessibilityRole="button"
-          accessibilityLabel={allPicked ? '전체 선택 해제' : '전체 선택'}
-          style={({ pressed }) => [styles.barBtn, pressed && { opacity: 0.85 }]}
-        >
-          <Text style={styles.barBtnText}>{allPicked ? '전체 해제' : '전체 선택'}</Text>
-        </Pressable>
-        <HqButton
-          label={picked.size ? `${picked.size}건 배포` : '배포'}
-          icon="paper-plane-outline"
-          variant="dark"
-          disabled={picked.size === 0 || overview.length === 0}
-          onPress={openDeployModal}
+      {/* 등장은 섹션 단위로(ui.md ⑤) — 퀴즈 표 → 배포 상태 순서로(노하우 화면과 같다). */}
+      <Appear>
+        <HqSlab
+          title="퀴즈"
+          hint={picked.size ? `${picked.size}건 선택` : '왼쪽 칸을 눌러 여러 건을 고른 뒤 한 번에 보낼 수 있어요'}
         />
-        {overview.length === 0 ? <Text style={styles.barNote}>연결된 매장이 없어 아직 보낼 곳이 없어요.</Text> : null}
-      </View>
-
-      <HqTable
-        columns={columns}
-        rows={list}
-        rowKey={(r) => r.id}
-        footer={`${list.length}건`}
-        empty={
-          <HqEmpty
-            text="아직 만든 퀴즈가 없어요. 노하우를 고르면 AI가 문항을 만들어요."
-            action={<HqButton label="퀴즈 만들기" variant="pri" onPress={() => router.push({ pathname: '/hq/quizzes/[id]', params: { id: 'new' } })} />}
+        <View style={styles.bar}>
+          <Pressable
+            onPress={() => setPicked(allPicked ? new Set() : new Set(list.map((r) => r.id)))}
+            accessibilityRole="button"
+            accessibilityLabel={allPicked ? '전체 선택 해제' : '전체 선택'}
+            style={({ pressed }) => [styles.barBtn, pressed && { opacity: 0.85 }]}
+          >
+            <Text style={styles.barBtnText}>{allPicked ? '전체 해제' : '전체 선택'}</Text>
+          </Pressable>
+          <HqButton
+            label={picked.size ? `${picked.size}건 배포` : '배포'}
+            icon="paper-plane-outline"
+            variant="dark"
+            disabled={picked.size === 0 || overview.length === 0}
+            onPress={openDeployModal}
           />
-        }
-        testID="hq-quizzes-table"
-      />
+          {overview.length === 0 ? <Text style={styles.barNote}>연결된 매장이 없어 아직 보낼 곳이 없어요.</Text> : null}
+        </View>
 
-      <HqSlab title="매장별 배포 상태" hint="숫자를 누르면 그 매장 목록이 열려요" />
-      {overview.length === 0 || list.length === 0 ? (
-        <HqCard>
-          <HqEmpty text={overview.length === 0 ? '연결된 매장이 생기면 채워져요.' : '퀴즈를 만들어 보내면 매장마다 상태가 여기에 모여요.'} />
-        </HqCard>
-      ) : (
-        <HqDeployCounts rows={countRows} units={overview} statusOf={statusOf} kind="퀴즈" testID="hq-quizzes-xtable" />
-      )}
-      <View style={styles.legend}>
-        {(['current', 'modified', 'pending', 'hidden', 'none'] as DeployStatus[]).map((k) => (
-          <View key={k} style={styles.legendItem}>
-            <HqPill tone={DEPLOY_STATUS[k].tone} label={DEPLOY_STATUS[k].label} />
-            <Text style={styles.legendText}>{DEPLOY_STATUS[k].hint}</Text>
-          </View>
-        ))}
-      </View>
+        <HqTable
+          columns={columns}
+          rows={list}
+          rowKey={(r) => r.id}
+          footer={`${list.length}건`}
+          empty={
+            <HqEmpty
+              text="아직 만든 퀴즈가 없어요. 노하우를 고르면 AI가 문항을 만들어요."
+              action={<HqButton label="퀴즈 만들기" variant="pri" onPress={() => router.push({ pathname: '/hq/quizzes/[id]', params: { id: 'new' } })} />}
+            />
+          }
+          testID="hq-quizzes-table"
+        />
+      </Appear>
+
+      <Appear delay={stagger(1)}>
+        <HqSlab title="매장별 배포 상태" hint="숫자를 누르면 그 매장 목록이 열려요" />
+        {overview.length === 0 || list.length === 0 ? (
+          <HqCard>
+            <HqEmpty text={overview.length === 0 ? '연결된 매장이 생기면 채워져요.' : '퀴즈를 만들어 보내면 매장마다 상태가 여기에 모여요.'} />
+          </HqCard>
+        ) : (
+          <HqDeployCounts rows={countRows} units={overview} statusOf={statusOf} kind="퀴즈" testID="hq-quizzes-xtable" />
+        )}
+        <View style={styles.legend}>
+          {(['current', 'modified', 'pending', 'hidden', 'none'] as DeployStatus[]).map((k) => (
+            <View key={k} style={styles.legendItem}>
+              <HqPill tone={DEPLOY_STATUS[k].tone} label={DEPLOY_STATUS[k].label} />
+              <Text style={styles.legendText}>{DEPLOY_STATUS[k].hint}</Text>
+            </View>
+          ))}
+        </View>
+      </Appear>
 
       <HqModal
         open={openDeploy}

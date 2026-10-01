@@ -13,6 +13,7 @@ import { HqPage, HqButton, HqPill, HqCard, HqSlab, HqNotice, HqSegment, HqEmpty,
 import { HqTable, Cell, type HqColumn, type HqSort } from '@/components/hq/HqTable';
 import { HqModal } from '@/components/hq/HqModal';
 import { ScreenLoading } from '@/components/ScreenLoading';
+import { Appear, stagger } from '@/components/Appear';
 import { useStoresTwoPane, HQ_STORE_DETAIL_WIDTH } from '@/components/hq/storesPane';
 import { useBrandStore } from '@/lib/store/useBrandStore';
 import { useBrandUnitsPageStore, HQ_STORES_PAGE_SIZE } from '@/lib/store/useBrandUnitsPageStore';
@@ -181,114 +182,122 @@ export default function HqStoresLayout() {
             <HqLoadError title="매장 목록을 불러오지 못했어요" onRetry={refresh} testID="hq-stores-error" />
           ) : (
             <>
-              {/* 필터 바 */}
-              <View style={styles.fbar}>
-                <View style={styles.search}>
-                  <Ionicons name="search-outline" size={15} color={InkColors.ink3} />
-                  <TextInput
-                    value={qInput}
-                    onChangeText={setQInput}
-                    placeholder="매장 이름으로 찾기"
-                    placeholderTextColor={InkColors.ink3}
-                    style={styles.searchInput}
-                    accessibilityLabel="매장 이름으로 찾기"
+              {/* 등장은 섹션 단위로(ui.md ⑤) — 표 · 초대 대기 · 안내 순서로 30ms 씩.
+                  ★쪽·정렬을 바꿀 때는 다시 재생하지 않는다 — Appear 는 마운트 1회이고 표는 같은 자리에서 행만 바뀐다. */}
+              <Appear>
+                {/* 필터 바 */}
+                <View style={styles.fbar}>
+                  <View style={styles.search}>
+                    <Ionicons name="search-outline" size={15} color={InkColors.ink3} />
+                    <TextInput
+                      value={qInput}
+                      onChangeText={setQInput}
+                      placeholder="매장 이름으로 찾기"
+                      placeholderTextColor={InkColors.ink3}
+                      style={styles.searchInput}
+                      accessibilityLabel="매장 이름으로 찾기"
+                    />
+                  </View>
+                  <HqSegment
+                    items={[{ key: 'all', label: '관계 전체' }, ...RELATIONS.map((r) => ({ key: r.key, label: r.label }))]}
+                    value={query.relation ?? 'all'}
+                    onChange={(v: 'all' | BrandRelation) => setQuery({ relation: v === 'all' ? null : v })}
+                  />
+                  <HqSegment
+                    items={[{ key: 'all', label: '수준 전체' }, ...VISIBILITY_LEVELS.map((l) => ({ key: l.key, label: l.label }))]}
+                    value={query.visibility ?? 'all'}
+                    onChange={(v: 'all' | BrandVisibility) => setQuery({ visibility: v === 'all' ? null : v })}
                   />
                 </View>
-                <HqSegment
-                  items={[{ key: 'all', label: '관계 전체' }, ...RELATIONS.map((r) => ({ key: r.key, label: r.label }))]}
-                  value={query.relation ?? 'all'}
-                  onChange={(v: 'all' | BrandRelation) => setQuery({ relation: v === 'all' ? null : v })}
-                />
-                <HqSegment
-                  items={[{ key: 'all', label: '수준 전체' }, ...VISIBILITY_LEVELS.map((l) => ({ key: l.key, label: l.label }))]}
-                  value={query.visibility ?? 'all'}
-                  onChange={(v: 'all' | BrandVisibility) => setQuery({ visibility: v === 'all' ? null : v })}
-                />
-              </View>
 
-              <HqTable
-                columns={columns}
-                rows={rows}
-                rowKey={(r) => r.unit_id}
-                onRowPress={(r) => openDetail(r.unit_id)}
-                selectedKey={detailId}
-                sort={tableSort}
-                onSortChange={onSortChange}
-                footer={footer}
-                empty={
-                  <HqEmpty
-                    text={totalAll === 0 ? '아직 연결된 매장이 없어요. 점주 전화번호로 초대하면 점주가 앱에서 수락해요.' : '조건에 맞는 매장이 없어요.'}
-                    action={totalAll === 0 ? <HqButton label="매장 추가" variant="pri" onPress={() => setAddOpen(true)} /> : undefined}
-                  />
-                }
-                testID="hq-stores-table"
-              />
+                <HqTable
+                  columns={columns}
+                  rows={rows}
+                  rowKey={(r) => r.unit_id}
+                  onRowPress={(r) => openDetail(r.unit_id)}
+                  selectedKey={detailId}
+                  sort={tableSort}
+                  onSortChange={onSortChange}
+                  footer={footer}
+                  empty={
+                    <HqEmpty
+                      text={totalAll === 0 ? '아직 연결된 매장이 없어요. 점주 전화번호로 초대하면 점주가 앱에서 수락해요.' : '조건에 맞는 매장이 없어요.'}
+                      action={totalAll === 0 ? <HqButton label="매장 추가" variant="pri" onPress={() => setAddOpen(true)} /> : undefined}
+                    />
+                  }
+                  testID="hq-stores-table"
+                />
 
-              {/* 쪽 넘김 — 쪽이 하나면 그리지 않는다(파일럿 규모에선 보이지 않는 게 정상). */}
-              {pages > 1 ? (
-                <View style={styles.pager} testID="hq-stores-pager">
-                  <HqButton
-                    label="이전"
-                    icon="chevron-back"
-                    disabled={page === 0}
-                    testID="hq-stores-prev"
-                    onPress={() => setQuery({ offset: (page - 1) * HQ_STORES_PAGE_SIZE })}
-                  />
-                  <Text style={styles.pagerText}>{page + 1} / {pages}쪽</Text>
-                  <HqButton
-                    label="다음"
-                    icon="chevron-forward"
-                    disabled={page + 1 >= pages}
-                    testID="hq-stores-next"
-                    onPress={() => setQuery({ offset: (page + 1) * HQ_STORES_PAGE_SIZE })}
-                  />
-                </View>
-              ) : null}
+                {/* 쪽 넘김 — 쪽이 하나면 그리지 않는다(파일럿 규모에선 보이지 않는 게 정상). */}
+                {pages > 1 ? (
+                  <View style={styles.pager} testID="hq-stores-pager">
+                    <HqButton
+                      label="이전"
+                      icon="chevron-back"
+                      disabled={page === 0}
+                      testID="hq-stores-prev"
+                      onPress={() => setQuery({ offset: (page - 1) * HQ_STORES_PAGE_SIZE })}
+                    />
+                    <Text style={styles.pagerText}>{page + 1} / {pages}쪽</Text>
+                    <HqButton
+                      label="다음"
+                      icon="chevron-forward"
+                      disabled={page + 1 >= pages}
+                      testID="hq-stores-next"
+                      onPress={() => setQuery({ offset: (page + 1) * HQ_STORES_PAGE_SIZE })}
+                    />
+                  </View>
+                ) : null}
+              </Appear>
 
               {/* 대기 초대 — 수락 전엔 매장명이 없다(번호만). 만료는 서버가 status 로 준다. */}
-              <HqSlab title="초대 대기" hint="점주가 앱에서 수락하면 위 표로 올라와요. 14일이 지나면 만료돼요." />
-              <HqTable
-                columns={[
-                  { key: 'phone', label: '점주 전화번호', width: 170, render: (i) => <Cell kind="name">{formatPhone(i.phone ?? '')}</Cell> },
-                  { key: 'payer', label: '요금 부담', width: 110, render: (i) => <HqPill tone={i.payer === 'brand' ? 'y' : 'n'} label={i.payer ? payerLabel(i.payer) : '—'} /> },
-                  { key: 'status', label: '상태', width: 110, render: () => <HqPill tone="w" label="대기" /> },
-                  { key: 'sent', label: '보낸 날', render: (i) => <Cell kind="muted">{fmtDay(i.created_at)}</Cell> },
-                  { key: 'exp', label: '만료', render: (i) => <Cell kind="muted">{fmtDay(i.expires_at)}</Cell> },
-                  {
-                    key: 'act',
-                    label: '',
-                    width: 110,
-                    align: 'right',
-                    // 취소(0214) — 점주 카드는 즉시 사라진다. 잘못 보낸 번호를 14일 동안 못 거두던 것(사용자 결정 09-23).
-                    render: (i) => (
-                      <HqButton
-                        label="초대 취소"
-                        testID={`hq-invite-revoke-${i.id}`}
-                        onPress={() => {
-                          void (async () => {
-                            const ok = await confirmAction('초대 취소', `${formatPhone(i.phone ?? '')} 번호로 보낸 초대를 거둘까요? 점주 앱의 요청 카드가 바로 사라져요.`, '취소하기', { destructive: true, icon: 'close-circle-outline' });
-                            if (!ok) return;
-                            const err = await revokeInvite(i.id);
-                            if (err) showToast(brandErrorMessage(err), 'warn');
-                            else {
-                              showToast('초대를 취소했어요.', 'good');
-                              void refresh();
-                            }
-                          })();
-                        }}
-                      />
-                    ),
-                  },
-                ]}
-                rows={pendingInvites}
-                rowKey={(i) => i.id}
-                empty={<HqEmpty text="기다리는 초대가 없어요." />}
-                testID="hq-invites-table"
-              />
+              <Appear delay={stagger(1)}>
+                <HqSlab title="초대 대기" hint="점주가 앱에서 수락하면 위 표로 올라와요. 14일이 지나면 만료돼요." />
+                <HqTable
+                  columns={[
+                    { key: 'phone', label: '점주 전화번호', width: 170, render: (i) => <Cell kind="name">{formatPhone(i.phone ?? '')}</Cell> },
+                    { key: 'payer', label: '요금 부담', width: 110, render: (i) => <HqPill tone={i.payer === 'brand' ? 'y' : 'n'} label={i.payer ? payerLabel(i.payer) : '—'} /> },
+                    { key: 'status', label: '상태', width: 110, render: () => <HqPill tone="w" label="대기" /> },
+                    { key: 'sent', label: '보낸 날', render: (i) => <Cell kind="muted">{fmtDay(i.created_at)}</Cell> },
+                    { key: 'exp', label: '만료', render: (i) => <Cell kind="muted">{fmtDay(i.expires_at)}</Cell> },
+                    {
+                      key: 'act',
+                      label: '',
+                      width: 110,
+                      align: 'right',
+                      // 취소(0214) — 점주 카드는 즉시 사라진다. 잘못 보낸 번호를 14일 동안 못 거두던 것(사용자 결정 09-23).
+                      render: (i) => (
+                        <HqButton
+                          label="초대 취소"
+                          testID={`hq-invite-revoke-${i.id}`}
+                          onPress={() => {
+                            void (async () => {
+                              const ok = await confirmAction('초대 취소', `${formatPhone(i.phone ?? '')} 번호로 보낸 초대를 거둘까요? 점주 앱의 요청 카드가 바로 사라져요.`, '취소하기', { destructive: true, icon: 'close-circle-outline' });
+                              if (!ok) return;
+                              const err = await revokeInvite(i.id);
+                              if (err) showToast(brandErrorMessage(err), 'warn');
+                              else {
+                                showToast('초대를 취소했어요.', 'good');
+                                void refresh();
+                              }
+                            })();
+                          }}
+                        />
+                      ),
+                    },
+                  ]}
+                  rows={pendingInvites}
+                  rowKey={(i) => i.id}
+                  empty={<HqEmpty text="기다리는 초대가 없어요." />}
+                  testID="hq-invites-table"
+                />
+              </Appear>
 
-              <HqNotice>
-                매장 삭제·직원 임면은 이 화면에 없어요. 매장의 존재와 사람의 지위는 점주만 정해요. 공개 수준도 점주가 고르고, 본사는 올려 달라고 요청만 할 수 있어요.
-              </HqNotice>
+              <Appear delay={stagger(2)}>
+                <HqNotice>
+                  매장 삭제·직원 임면은 이 화면에 없어요. 매장의 존재와 사람의 지위는 점주만 정해요. 공개 수준도 점주가 고르고, 본사는 올려 달라고 요청만 할 수 있어요.
+                </HqNotice>
+              </Appear>
             </>
           )}
         </HqPage>

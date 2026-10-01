@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { SHOW_HQ_CONSOLE } from '@/lib/config/store-policy';
+import { Appear } from '@/components/Appear';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
 import { Space, HQ_PAGE_GUTTER } from '@/lib/theme/layout';
@@ -99,7 +100,7 @@ function Notice({
   const router = useRouter();
   return (
     <View style={styles.wrap}>
-      <View style={styles.card}>
+      <Appear style={styles.card}>
         <Ionicons name={icon} size={28} color={InkColors.ink} />
         <Text style={styles.title}>{title}</Text>
         <Text style={styles.body}>{body}</Text>
@@ -112,7 +113,7 @@ function Notice({
             <Text style={styles.btnText}>{action.label}</Text>
           </Pressable>
         ) : null}
-      </View>
+      </Appear>
     </View>
   );
 }

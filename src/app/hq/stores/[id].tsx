@@ -11,6 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { HqButton, HqPill, HqRow, HqSlab, HqSegment, HqEmpty, HqLoadError } from '@/components/hq/HqKit';
 import { useStoresTwoPane } from '@/components/hq/storesPane';
 import { ScreenLoading } from '@/components/ScreenLoading';
+import { Appear } from '@/components/Appear';
 import { useBrandUnitsPageStore } from '@/lib/store/useBrandUnitsPageStore';
 import { useBrandUnitDetailStore } from '@/lib/store/useBrandUnitDetailStore';
 import {
@@ -99,16 +100,19 @@ export default function HqStoreDetailScreen() {
 
   return (
     <DetailFrame title={row.store_name} sub={row.industry ?? undefined} twoPane={twoPane} onClose={close}>
-      {/* key = 매장 — 2단에서 다른 매장으로 갈아 끼울 때 로컬 상태(요청 수준 기본값)가 그 매장으로 선다.
-          라우트 replace 도 새로 마운트하지만, 같은 라우트의 파라미터만 바뀌는 경로가 생겨도 안전하게. */}
-      <StoreDetail
-        key={row.unit_id}
-        row={row}
-        dates={payerDates.find((d) => d.unit_id === row.unit_id) ?? null}
-        rules={unitRules.find((r) => r.unit_id === row.unit_id) ?? null}
-        onClose={close}
-        onChanged={() => { void refreshList(); void refreshDetail(); }}
-      />
+      {/* key = 매장(Appear 에 둔다 — 그 아래 StoreDetail 도 같이 새로 마운트된다).
+          ① 2단에서 다른 매장으로 갈아 끼울 때 로컬 상태(요청 수준 기본값)가 그 매장으로 선다.
+             라우트 replace 도 새로 마운트하지만, 같은 라우트의 파라미터만 바뀌는 경로가 생겨도 안전하게.
+          ② 새 매장이 매번 같은 방식으로 나타난다(등장 애니메이션). */}
+      <Appear key={row.unit_id}>
+        <StoreDetail
+          row={row}
+          dates={payerDates.find((d) => d.unit_id === row.unit_id) ?? null}
+          rules={unitRules.find((r) => r.unit_id === row.unit_id) ?? null}
+          onClose={close}
+          onChanged={() => { void refreshList(); void refreshDetail(); }}
+        />
+      </Appear>
     </DetailFrame>
   );
 }
