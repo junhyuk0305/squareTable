@@ -144,7 +144,8 @@ export default function HqStoresLayout() {
       ),
     },
     { key: 'staff', label: '직원', align: 'right', render: (r) => <Cell kind="num">{r.staff}</Cell>, sortValue: (r) => r.staff },
-    { key: 'pending_q', label: '미해결 질문', align: 'right', render: (r) => <Cell kind="num">{r.pending_q}</Cell>, sortValue: (r) => r.pending_q },
+    // '미해결 질문'은 목록에 두지 않는다(사용자 결정 10-01) — 머리글이 가장 넓어 이 열 하나 때문에 1366·1440
+    // 노트북에서 2단이 안 섰다. 값은 상세와 대시보드 표에 그대로 있다.
     // 숙지율은 사본(P4)이 생기기 전엔 재료가 없다 — 0 이 아니라 '—'(HqStrip 과 같은 규칙).
     { key: 'mastery', label: '숙지율', align: 'right', render: (r) => <Cell kind={r.mastery === null ? 'muted' : 'num'}>{r.mastery === null ? '—' : `${Math.round(r.mastery * 100)}%`}</Cell>, sortValue: (r) => r.mastery },
   ];
