@@ -29,10 +29,10 @@ const SITE_URL = (process.env.SEO_SITE_URL || 'https://dochackchack.com').replac
 //   올려도 미리보기엔 옛 '착착' 로고가 계속 떴다. 로고를 또 바꾸면 파일명도 같이 바꾼다.
 const OG_IMAGE = `${SITE_URL}/og-image.png`; // TODO: 1200×630 전용 OG 이미지로 교체 권장(현재 정사각 아이콘 임시)
 const BRAND = '매장의 정석';
-const TITLE = '매장의 정석 — 우리 매장 운영의 기준';
+const TITLE = '매장의 정석 — 직원 질문, 이제 AI가 답합니다';
 const DESC =
-  '사장님 머릿속 노하우를 가게 전용 AI로. 직원이 묻는 순간, 우리 가게 방식 그대로 답이 나옵니다. 카페·음식점·헬스장·학원 매장 운영 AI, 매장의 정석.';
-const OG_DESC = '사장님이 한 번 알려주면, 직원이 물을 때 AI가 우리 가게 방식 그대로 대신 답해요.';
+  '한 번 알려준 답을 AI가 기억해요. 직원이 물으면 우리 가게 방식대로 답해요. 카페, 음식점, 헬스장, 학원 사장님을 위한 매장 운영 AI, 매장의 정석.';
+const OG_DESC = '한 번 알려준 답을 AI가 기억해요. 직원이 물으면 우리 가게 방식대로 답해요.';
 // 검색엔진 소유확인(선택) — Vercel 환경변수로 넣으면 자동 주입. 없으면 생략.
 const NAVER_VERIFY = process.env.SEO_NAVER_VERIFY || '';
 const GOOGLE_VERIFY = process.env.SEO_GOOGLE_VERIFY || '';
@@ -116,14 +116,14 @@ function metaBlock({ withDescription }) {
 const NOSCRIPT = `<noscript>
     <!-- seo:noscript:start -->
     <div style="max-width:680px;margin:0 auto;padding:32px 20px;font-family:'Malgun Gothic',sans-serif;line-height:1.7;color:#111">
-      <h1>매장의 정석 — 우리 매장 운영의 기준</h1>
-      <p>사장님 머릿속 노하우를 가게 전용 AI로. 직원이 묻는 순간, 우리 가게 방식 그대로 답이 나옵니다. 카페·음식점·헬스장·학원 매장 운영 AI, 매장의 정석.</p>
-      <h2>이런 순간, 있으시죠</h2>
+      <h1>매장의 정석 — 직원 질문, 이제 AI가 답합니다</h1>
+      <p>한 번 알려준 답을 AI가 기억해요. 직원이 물으면 우리 가게 방식대로 답해요. 카페, 음식점, 헬스장, 학원 사장님을 위한 매장 운영 AI, 매장의 정석.</p>
+      <h2>사장님 시간을 뺏는 네 가지</h2>
       <ul>
-        <li>직원이 바뀔 때마다 같은 걸 몇 번씩 다시 설명</li>
-        <li>쉬는 날에도 울리는 “사장님, 이건 어떻게 해요?” 전화</li>
-        <li>노하우가 머릿속에만 있어 내가 없으면 멈추는 가게</li>
-        <li>카톡 공지·메모지·말로 전한 지시가 흩어져 아무도 제대로 안 봄</li>
+        <li>직원 한 명 바뀔 때마다 같은 설명을 다시 해요</li>
+        <li>쉬는 날에 오는 “사장님, 이건 어떻게 해요?” 전화</li>
+        <li>적어둘 시간이 없어서 내가 없으면 가게가 멈춰요</li>
+        <li>카톡에, 메모지에, 말로 흩어진 지시를 아무도 제대로 못 봐요</li>
       </ul>
       <h2>매장의 정석이 하는 일</h2>
       <ul>
