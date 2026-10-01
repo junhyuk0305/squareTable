@@ -84,7 +84,8 @@ export default function HqDashboardScreen() {
     [stats],
   );
 
-  const goStores = (unit?: string) => router.push(unit ? { pathname: '/hq/stores', params: { unit } } : '/hq/stores');
+  // 행 = 그 매장 상세 주소로(push — 뒤로가기가 대시보드로 돌아온다). 목록 화면과 같은 경로를 쓴다.
+  const goStores = (unit?: string) => router.push(unit ? { pathname: '/hq/stores/[id]', params: { id: unit } } : '/hq/stores');
 
   return (
     <HqPage

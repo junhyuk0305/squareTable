@@ -30,6 +30,8 @@ export default function HqLayout() {
   const stack = (
     <Stack screenOptions={{ headerShown: false, animation: 'none' }}>
       <Stack.Screen name="index" />
+      {/* 매장은 자기 레이아웃(stores/_layout: 목록 + <Slot/>)을 가진 폴더다 — 이 스택에는 'stores' 한 칸으로 보인다.
+          `stores/index`·`stores/[id]` 는 그 안의 Slot 이 고른다(여기서 따로 선언하면 없는 라우트 경고가 난다). */}
       <Stack.Screen name="stores" />
       {/* 노하우는 표(index)와 편집기([id])로 나뉜다 — `/hq/knowhow/new` 는 [id]='new' 로 들어온다. */}
       <Stack.Screen name="knowhow/index" />
