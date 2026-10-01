@@ -45,6 +45,24 @@ export type BrandOverviewRow = {
   weak_entries: number | null;
 };
 
+/** 0228 brand_overview_page 정렬 키 — 매장 표 머리글과 1:1. */
+export type BrandOverviewSort = 'name' | 'relation' | 'staff' | 'pending_q' | 'mastery';
+
+export type BrandOverviewQuery = {
+  limit: number;
+  offset: number;
+  sort: BrandOverviewSort;
+  desc: boolean;
+  q?: string | null;
+  relation?: BrandRelation | null;
+  visibility?: BrandVisibility | null;
+  /** 바깥 필터(내 브랜드 결과를 좁히기만 한다) — 상세 한 매장 · '매장 추가'의 내 매장 중 연결된 것. */
+  units?: string[] | null;
+};
+
+/** 0228 한 행 = brand_overview 행 + 거른 뒤 전체 개수 + 거르기 전 연결 매장 수. */
+export type BrandOverviewPageRow = BrandOverviewRow & { total_count: number; total_all: number };
+
 export type BrandInviteRow = {
   id: string;
   kind: 'member' | 'store';
@@ -222,6 +240,18 @@ export const fetchMyBrandFull = async (): Promise<DbResult<MyBrandFullRow | null
   return { data: r.error ? null : (r.data?.[0] ?? null), error: r.error };
 };
 export const fetchBrandOverview = () => rows<BrandOverviewRow>('brand_overview');
+/** 0228 — 검색·필터·정렬·쪽을 서버에서. 클라가 한 쪽만 받아 정렬하면 전체 순위가 아니라 그 쪽 안 순위가 된다. */
+export const fetchBrandOverviewPage = (q: BrandOverviewQuery) =>
+  rows<BrandOverviewPageRow>('brand_overview_page', {
+    p_limit: q.limit,
+    p_offset: q.offset,
+    p_sort: q.sort,
+    p_desc: q.desc,
+    p_q: q.q ?? null,
+    p_relation: q.relation ?? null,
+    p_visibility: q.visibility ?? null,
+    p_units: q.units ?? null,
+  });
 export const fetchBrandInvites = () => rows<BrandInviteRow>('brand_invites_list');
 export const fetchBrandMembers = () => rows<BrandMemberRow>('brand_members_list');
 export const inviteBrandMember = () => rows<{ token: string; expires_at: string }>('brand_invite_member');

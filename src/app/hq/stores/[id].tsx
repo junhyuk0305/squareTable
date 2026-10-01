@@ -2,16 +2,16 @@
 //
 // 예전 드로어 내용을 섹션 그대로 옮겼다(문구·권한 판정 동일). 주소가 SSOT 라 공유·새로고침·뒤로가기가 된다.
 // ★탭을 만들지 않는다 — 섹션이 더 늘면 그때 `[id]/_layout.tsx` 로 승격한다.
-// 재료 = useBrandUnitsStore(이 매장의 overview 행) · useBrandUnitDetailStore(부담 날짜 · 직영 규칙 — 상세가 열릴 때만 받는다).
+// 재료 = useBrandUnitDetailStore(이 매장 행 · 부담 날짜 · 직영 규칙 — 상세가 열릴 때만 받는다). 전 매장 요약은 받지 않는다.
 import { useEffect, useState, type ReactNode } from 'react';
 import { View, Text, Pressable, ScrollView, StyleSheet } from 'react-native';
 import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
-import { HqButton, HqPill, HqRow, HqSlab, HqSegment, HqEmpty } from '@/components/hq/HqKit';
+import { HqButton, HqPill, HqRow, HqSlab, HqSegment, HqEmpty, HqNotice } from '@/components/hq/HqKit';
 import { useStoresTwoPane } from '@/components/hq/storesPane';
 import { ScreenLoading } from '@/components/ScreenLoading';
-import { useBrandUnitsStore } from '@/lib/store/useBrandUnitsStore';
+import { useBrandUnitsPageStore } from '@/lib/store/useBrandUnitsPageStore';
 import { useBrandUnitDetailStore } from '@/lib/store/useBrandUnitDetailStore';
 import {
   requestVisibility,
@@ -58,20 +58,22 @@ export default function HqStoreDetailScreen() {
   const navigation = useNavigation();
   const twoPane = useStoresTwoPane();
 
-  const overview = useBrandUnitsStore((s) => s.overview);
-  const unitsLoaded = useBrandUnitsStore((s) => s.loaded);
-  const refreshUnits = useBrandUnitsStore((s) => s.refresh);
+  const row = useBrandUnitDetailStore((s) => s.row);
   const payerDates = useBrandUnitDetailStore((s) => s.payerDates);
   const unitRules = useBrandUnitDetailStore((s) => s.unitRules);
+  const detailUnit = useBrandUnitDetailStore((s) => s.unitId);
   const detailLoaded = useBrandUnitDetailStore((s) => s.loaded);
+  const detailError = useBrandUnitDetailStore((s) => s.error);
+  const loadDetail = useBrandUnitDetailStore((s) => s.load);
+  const refreshDetail = useBrandUnitDetailStore((s) => s.refresh);
+  const refreshList = useBrandUnitsPageStore((s) => s.refresh);
   // 상세 칸의 ready 게이트(ui.md) — 목록과 따로 갖는다. 직영 규칙이 늦게 오면 '권장'·'끊을 수 있어요' 같은
   // 기본값이 먼저 스쳤다가 바뀐다 — 본사가 그 순간 버튼을 누르면 반대로 바꾼다.
-  const ready = unitsLoaded && detailLoaded;
-  const hydrateDetail = useBrandUnitDetailStore((s) => s.hydrate);
-  const refreshDetail = useBrandUnitDetailStore((s) => s.refresh);
+  // ★재료가 **이 매장 것**일 때만 선다 — 갈아 끼우는 순간 옛 매장 값이 새 주소 아래 스치지 않게.
+  const ready = detailLoaded && detailUnit === id;
 
-  // 부담 날짜·직영 규칙은 상세가 열릴 때만 받는다(쓰는 곳이 여기뿐이다). 매장을 갈아 끼울 때마다 다시 받는다.
-  useEffect(() => { void hydrateDetail(); }, [id, hydrateDetail]);
+  // 매장 행·부담 날짜·직영 규칙은 상세가 열릴 때만 받는다(쓰는 곳이 여기뿐이다). 매장을 갈아 끼울 때마다 다시 받는다.
+  useEffect(() => { if (id) void loadDetail(id); }, [id, loadDetail]);
 
   /**
    * 닫기 = 이 매장 칸의 스택에서 한 칸 뒤로(= 목록). 그 스택에 아래 칸이 없으면(대시보드 행·주소 직접 입력으로
@@ -81,13 +83,16 @@ export default function HqStoreDetailScreen() {
    */
   const close = () => ((navigation.getState()?.index ?? 0) > 0 ? navigation.goBack() : router.replace('/hq/stores'));
 
-  const row = overview.find((r) => r.unit_id === id) ?? null;
-
   if (!ready) return <ScreenLoading label="매장 정보를 불러오고 있어요…" />;
   if (!row) {
     return (
       <DetailFrame title="매장" twoPane={twoPane} onClose={close}>
-        <HqEmpty text="이 매장은 지금 연결된 매장 목록에 없어요." />
+        {/* 읽기 실패를 '없는 매장'으로 위장하지 않는다. */}
+        {detailError ? (
+          <HqNotice tone="warn">매장 정보를 불러오지 못했어요. 목록에서 다시 열어 주세요. ({detailError})</HqNotice>
+        ) : (
+          <HqEmpty text="이 매장은 지금 연결된 매장 목록에 없어요." />
+        )}
       </DetailFrame>
     );
   }
@@ -102,7 +107,7 @@ export default function HqStoreDetailScreen() {
         dates={payerDates.find((d) => d.unit_id === row.unit_id) ?? null}
         rules={unitRules.find((r) => r.unit_id === row.unit_id) ?? null}
         onClose={close}
-        onChanged={() => { void refreshUnits(); void refreshDetail(); }}
+        onChanged={() => { void refreshList(); void refreshDetail(); }}
       />
     </DetailFrame>
   );

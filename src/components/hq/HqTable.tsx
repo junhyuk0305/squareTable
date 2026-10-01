@@ -20,6 +20,12 @@ export type HqColumn<Row> = {
   sortValue?: (row: Row) => number | string | null;
 };
 
+export type HqSort = { key: string; dir: 'asc' | 'desc' };
+
+/** 머리글 클릭 순환: 처음 = 큰 값부터 → 작은 값부터 → 기본(부르는 쪽이 준 순서). */
+const nextSort = (s: HqSort | null, key: string): HqSort | null =>
+  s?.key === key ? (s.dir === 'desc' ? { key, dir: 'asc' } : null) : { key, dir: 'desc' };
+
 /** 고정 폭 열 — `cellBox` 의 flexBasis:0 을 폭으로 덮어야 한다(width 만 주면 basis 0 이 이겨 내용 폭까지 줄어든다 — 2026-09-23 실측). */
 const fixed = (w: number) => ({ flexBasis: w, width: w, flexGrow: 0, flexShrink: 0 });
 
@@ -32,6 +38,9 @@ export function HqTable<Row>({
   footer,
   empty,
   testID,
+  sort: sortProp,
+  onSortChange,
+  maxRows,
 }: {
   columns: HqColumn<Row>[];
   rows: Row[];
@@ -41,11 +50,21 @@ export function HqTable<Row>({
   footer?: string;
   empty?: ReactNode;
   testID?: string;
+  /**
+   * 제어 정렬 — `onSortChange` 를 주면 표는 행을 **다시 정렬하지 않는다**(받은 순서 그대로) 머리글 표시·클릭만 한다.
+   * 쪽으로 나눈 표(서버 정렬)용이다. 한 쪽만 받아 여기서 정렬하면 전체 순위가 아니라 그 쪽 안 순위가 된다.
+   */
+  sort?: HqSort | null;
+  onSortChange?: (s: HqSort | null) => void;
+  /** 앞 N행만 그린다 — **정렬한 뒤에** 자른다(요약 표: 전체를 받은 화면이 상위 N행만 보일 때). */
+  maxRows?: number;
 }) {
-  const [sort, setSort] = useState<{ key: string; dir: 'asc' | 'desc' } | null>(null);
+  const [localSort, setLocalSort] = useState<HqSort | null>(null);
+  const controlled = !!onSortChange;
+  const sort = controlled ? (sortProp ?? null) : localSort;
 
-  const sorted = (() => {
-    if (!sort) return rows;
+  const allSorted = (() => {
+    if (controlled || !sort) return rows;
     const col = columns.find((c) => c.key === sort.key);
     if (!col?.sortValue) return rows;
     const sv = col.sortValue;
@@ -60,6 +79,7 @@ export function HqTable<Row>({
       return sort.dir === 'asc' ? cmp : -cmp;
     });
   })();
+  const sorted = maxRows === undefined ? allSorted : allSorted.slice(0, maxRows);
 
   return (
     <View style={styles.card} testID={testID}>
@@ -85,7 +105,7 @@ export function HqTable<Row>({
                   key={c.key}
                   accessibilityRole="button"
                   accessibilityLabel={`${c.label} 정렬`}
-                  onPress={() => setSort((s) => (s?.key === c.key ? (s.dir === 'desc' ? { key: c.key, dir: 'asc' } : null) : { key: c.key, dir: 'desc' }))}
+                  onPress={() => (onSortChange ? onSortChange(nextSort(sort, c.key)) : setLocalSort((s) => nextSort(s, c.key)))}
                   style={[styles.cellBox, c.width ? fixed(c.width) : null]}
                 >
                   {cell}

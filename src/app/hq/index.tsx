@@ -18,6 +18,12 @@ import type { BrandRelation } from '@/lib/brand/brandDb';
 import { InkColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
 
+/**
+ * 대시보드 매장 표는 요약이다 — 상위 10행 + '전체 보기'(쪽 넘김은 매장 화면에만 둔다 · R5 지시).
+ * 표가 **전 매장을 정렬한 뒤** 10행을 자르므로 '직원 많은 순'도 전체 기준이다. 10행 ≈ 520px 로 첫 화면 안에 끝난다.
+ */
+const DASHBOARD_TABLE_ROWS = 10;
+
 export default function HqDashboardScreen() {
   const router = useRouter();
   const brand = useBrandStore((s) => s.brand);
@@ -156,7 +162,8 @@ export default function HqDashboardScreen() {
         rows={overview}
         rowKey={(r) => r.unit_id}
         onRowPress={(r) => goStores(r.unit_id)}
-        footer={`${overview.length}곳`}
+        maxRows={DASHBOARD_TABLE_ROWS}
+        footer={overview.length > DASHBOARD_TABLE_ROWS ? `전체 ${overview.length}곳 중 ${DASHBOARD_TABLE_ROWS}곳` : `${overview.length}곳`}
         testID="hq-dashboard-table"
       />
     </HqPage>

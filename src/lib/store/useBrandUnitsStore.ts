@@ -1,6 +1,7 @@
 // useBrandUnitsStore.ts — 본사의 매장 축: 연결 매장 요약(brand_overview) + 초대(brand_invites_list). realtime 없음(정본 §6-3).
 //
-// 쓰는 화면 = 대시보드 · 매장 · 노하우/퀴즈(교차표 열과 배포 대상이 연결 매장이다) · 설정(청구 줄의 관계·부담 수).
+// 쓰는 화면 = 대시보드(KPI 는 전 매장 집계) · 노하우/퀴즈(교차표 열과 배포 대상이 연결 매장이다) · 설정(청구 줄의 관계·부담 수).
+// 매장 화면은 쓰지 않는다 — 목록은 쪽(useBrandUnitsPageStore), 상세는 한 매장(useBrandUnitDetailStore)으로 받는다(0228).
 // `useBrandStore` 에 얹지 않은 이유: 셸이 브랜드 이름 때문에 그걸 늘 부른다 — 거기 얹으면 매장 축이 모든 화면에 따라붙는다.
 // 화면이 자기 포커스에서 부른다(useBrandBillingStore 와 같은 모양).
 import { create } from 'zustand';
