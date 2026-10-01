@@ -14,7 +14,7 @@ import { View, Text, TextInput, Pressable, StyleSheet } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
-import { HqPage, HqButton, HqCard, HqNotice, HqRow, HqPill, HqEmpty } from '@/components/hq/HqKit';
+import { HqPage, HqButton, HqCard, HqNotice, HqRow, HqPill, HqEmpty, HqLoadError } from '@/components/hq/HqKit';
 import { ScreenLoading } from '@/components/ScreenLoading';
 import { HqModal } from '@/components/hq/HqModal';
 import { PayloadForm, answerTextOf, emptyPayload } from '@/components/owner/quiz/PayloadForm';
@@ -59,7 +59,10 @@ export default function HqQuizBuilderScreen() {
   // 작업실 노하우 원본 — 노하우 스토어가 이미 읽는다(같은 RLS 경로). 두 스토어 다 hydrate 첫 줄이 작업실 진입(멱등).
   const entries = useBrandKnowhowStore((s) => s.entries);
   const entriesLoaded = useBrandKnowhowStore((s) => s.loaded);
+  // 노하우 원본을 못 읽으면 빌더의 '고를 노하우'가 비어 "노하우가 없다"로 보인다 — 퀴즈 쪽 실패와 같이 막는다.
+  const entriesError = useBrandKnowhowStore((s) => s.error);
   const hydrateKnowhow = useBrandKnowhowStore((s) => s.hydrate);
+  const refreshKnowhow = useBrandKnowhowStore((s) => s.refresh);
   useFocusEffect(useCallback(() => { void hydrate(); void hydrateKnowhow(); }, [hydrate, hydrateKnowhow]));
 
   const existing = useMemo(() => (isNew ? null : courses.find((c) => c.id === id) ?? null), [courses, id, isNew]);
@@ -272,10 +275,18 @@ export default function HqQuizBuilderScreen() {
 
   // ready 게이트 — 작업실 진입이 실패하면 빌더를 열지 않는다(빈 칸에 골라 놓고 저장에서 실패하는 것이 가장 나쁘다).
   if (!loaded || !entriesLoaded) return <HqPage title="퀴즈"><ScreenLoading label="퀴즈를 불러오고 있어요…" /></HqPage>;
-  if (storeError || !wsUnitId) {
+  if (storeError || entriesError || !wsUnitId) {
     return (
       <HqPage title="퀴즈" sub="빌더를 열 수 없어요" actions={<HqButton label="목록으로" onPress={() => router.replace('/hq/quizzes')} />}>
-        <HqNotice tone="warn">{storeError ?? '라이브러리가 아직 준비되지 않았어요.'}</HqNotice>
+        {storeError || entriesError ? (
+          <HqLoadError
+            title={storeError ? '퀴즈를 불러오지 못했어요' : '노하우를 불러오지 못했어요'}
+            onRetry={() => Promise.all([refresh(), refreshKnowhow()])}
+            testID="hq-quiz-editor-error"
+          />
+        ) : (
+          <HqNotice tone="warn">라이브러리가 아직 준비되지 않았어요.</HqNotice>
+        )}
       </HqPage>
     );
   }

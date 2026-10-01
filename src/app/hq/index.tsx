@@ -5,7 +5,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 
-import { HqPage, HqButton, HqPill, HqSlab, HqNotice, HqSegment } from '@/components/hq/HqKit';
+import { HqPage, HqButton, HqPill, HqSlab, HqSegment, HqLoadError } from '@/components/hq/HqKit';
 import { HqStrip } from '@/components/hq/HqStrip';
 import { HqTable, Cell } from '@/components/hq/HqTable';
 import { ScreenLoading } from '@/components/ScreenLoading';
@@ -35,8 +35,10 @@ export default function HqDashboardScreen() {
   const unitsLoaded = useBrandUnitsStore((s) => s.loaded);
   const unitsError = useBrandUnitsStore((s) => s.error);
   const hydrateUnits = useBrandUnitsStore((s) => s.hydrate);
-  const error = brandError ?? unitsError;
-  const refresh = useCallback(() => Promise.all([hydrateBrand(), hydrateUnits()]), [hydrateBrand, hydrateUnits]);
+  const knowhowError = useBrandKnowhowStore((s) => s.error);
+  const quizError = useBrandQuizStore((s) => s.error);
+  // 넷 중 하나라도 못 읽으면 KPI 가 거짓이 된다('배포한 노하우 0건'·'지금 확인할 일이 없어요').
+  const error = brandError ?? unitsError ?? knowhowError ?? quizError;
   // '배포한 노하우' = 한 곳 이상에 내려간 작업실 노하우 수(0217 brand_knowhow_list.deployed_units).
   // ★같은 재료를 노하우 화면과 공유한다 — 대시보드가 따로 세면 두 숫자가 어긋난다.
   const deployedCount = useBrandKnowhowStore((s) => s.list.filter((r) => r.deployed_units > 0).length);
@@ -49,7 +51,12 @@ export default function HqDashboardScreen() {
   // ready 게이트(ui.md) — 이 화면이 그리는 원격 소스 넷이 다 와야 그린다. 'KPI 0'이나 '확인할 일 없음'이 먼저 스치지 않는다.
   const ready = brandLoaded && unitsLoaded && knowhowLoaded && quizLoaded;
 
-  useFocusEffect(useCallback(() => { void refresh(); void hydrateKnowhow(); void hydrateQuiz(); }, [refresh, hydrateKnowhow, hydrateQuiz]));
+  // 새로고침·다시 시도·포커스 = 네 재료를 같이.
+  const refresh = useCallback(
+    () => Promise.all([hydrateBrand(), hydrateUnits(), hydrateKnowhow(), hydrateQuiz()]),
+    [hydrateBrand, hydrateUnits, hydrateKnowhow, hydrateQuiz],
+  );
+  useFocusEffect(useCallback(() => { void refresh(); }, [refresh]));
 
   /**
    * KPI 직영/가맹 토글(정본 02 §9) — 기본은 전체 합산.
@@ -106,6 +113,14 @@ export default function HqDashboardScreen() {
       </HqPage>
     );
   }
+  // 3분기의 둘째 — 못 읽은 재료가 있으면 숫자를 그리지 않는다(0 으로 위장하지 않는다).
+  if (error) {
+    return (
+      <HqPage title="대시보드" actions={refreshButton} testID="hq-dashboard">
+        <HqLoadError title="본사 현황을 불러오지 못했어요" onRetry={refresh} testID="hq-dashboard-error" />
+      </HqPage>
+    );
+  }
 
   return (
     <HqPage
@@ -114,7 +129,6 @@ export default function HqDashboardScreen() {
       actions={refreshButton}
       testID="hq-dashboard"
     >
-      {error ? <HqNotice tone="warn">현황을 불러오지 못했어요. 새로고침을 눌러 다시 시도해 주세요. ({error})</HqNotice> : null}
 
       {/* 혼합 브랜드에서만 뜬다 — 직영이나 가맹 한쪽뿐이면 고를 것이 없다(빈 토글은 소음이다). */}
       {mixed ? (

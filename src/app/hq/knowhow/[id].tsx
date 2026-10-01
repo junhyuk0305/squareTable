@@ -19,7 +19,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { View, Text, TextInput, Pressable, StyleSheet } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 
-import { HqPage, HqButton, HqCard, HqNotice, HqRow, HqSegment, HqPill, HqEmpty } from '@/components/hq/HqKit';
+import { HqPage, HqButton, HqCard, HqNotice, HqRow, HqSegment, HqPill, HqEmpty, HqLoadError } from '@/components/hq/HqKit';
 import { ScreenLoading } from '@/components/ScreenLoading';
 import { HqModal } from '@/components/hq/HqModal';
 import { useBrandKnowhowStore } from '@/lib/store/useBrandKnowhowStore';
@@ -224,7 +224,11 @@ export default function HqKnowhowEditorScreen() {
   if (storeError || !wsUnitId) {
     return (
       <HqPage title="노하우" sub="편집기를 열 수 없어요" actions={<HqButton label="목록으로" onPress={() => router.replace('/hq/knowhow')} />}>
-        <HqNotice tone="warn">{storeError ?? '라이브러리가 아직 준비되지 않았어요.'}</HqNotice>
+        {storeError ? (
+          <HqLoadError title="노하우를 불러오지 못했어요" onRetry={refresh} testID="hq-knowhow-editor-error" />
+        ) : (
+          <HqNotice tone="warn">라이브러리가 아직 준비되지 않았어요.</HqNotice>
+        )}
       </HqPage>
     );
   }

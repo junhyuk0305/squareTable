@@ -1,4 +1,4 @@
-// /hq/quizzes — 본사 퀴즈(정본 §5-2): 표(제목·문항 수·참조 노하우 수·배포 매장 수·수정일) + 교차표(퀴즈 × 매장)
+// /hq/quizzes — 본사 퀴즈(정본 §5-2): 표(제목·문항 수·참조 노하우 수·배포 매장 수·수정일) + 상태별 매장 수(퀴즈 × 배포 상태 5칸)
 //                + 다중선택 → [배포] → 대상 매장 고르기(함께 내려갈 노하우를 **미리** 알린다) → 확인.
 //
 // 재료 = useBrandQuizStore(작업실 원본 + 배포 현황) · useBrandUnitsStore(연결 매장 목록).
@@ -9,9 +9,10 @@ import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
-import { HqPage, HqButton, HqPill, HqSlab, HqNotice, HqCard, HqEmpty } from '@/components/hq/HqKit';
+import { HqPage, HqButton, HqPill, HqSlab, HqNotice, HqCard, HqEmpty, HqLoadError } from '@/components/hq/HqKit';
 import { HqTable, Cell, type HqColumn } from '@/components/hq/HqTable';
 import { HqModal } from '@/components/hq/HqModal';
+import { HqDeployCounts } from '@/components/hq/HqDeployCounts';
 import { ScreenLoading } from '@/components/ScreenLoading';
 import { useBrandQuizStore } from '@/lib/store/useBrandQuizStore';
 import { useBrandUnitsStore } from '@/lib/store/useBrandUnitsStore';
@@ -37,7 +38,10 @@ export default function HqQuizzesScreen() {
   const hydrateUnits = useBrandUnitsStore((s) => s.hydrate);
   // ready 게이트(ui.md) — 표·교차표의 행(퀴즈)과 열(연결 매장)이 둘 다 와야 그린다.
   const unitsLoaded = useBrandUnitsStore((s) => s.loaded);
+  const unitsError = useBrandUnitsStore((s) => s.error);
   const ready = quizLoaded && unitsLoaded;
+  // 새로고침·다시 시도 = 두 재료를 같이. 한쪽만 다시 받으면 행과 매장 수가 서로 다른 시점이 된다.
+  const reload = useCallback(() => Promise.all([refresh(), hydrateUnits()]), [refresh, hydrateUnits]);
 
   useFocusEffect(useCallback(() => { void hydrate(); void hydrateUnits(); }, [hydrate, hydrateUnits]));
 
@@ -52,8 +56,11 @@ export default function HqQuizzesScreen() {
 
   const cells = useMemo(() => deployStatusMap(matrix, (c) => c.course_id), [matrix]);
   const entryCells = useMemo(() => deployStatusMap(entryMatrix, (c) => c.entry_id), [entryMatrix]);
-  const statusOf = (courseId: string, unitId: string): DeployStatus =>
-    cells.get(cellKey(courseId, unitId))?.status ?? 'none';
+  const statusOf = useCallback(
+    (courseId: string, unitId: string): DeployStatus => cells.get(cellKey(courseId, unitId))?.status ?? 'none',
+    [cells],
+  );
+  const countRows = useMemo(() => list.map((r) => ({ id: r.id, title: r.name })), [list]);
 
   /** 고른 퀴즈들이 담은 노하우 중 그 매장에 사본이 없는 것 — 배포하면 **함께 내려간다**(정본 §4-B "없으면 먼저 자동 배포"). */
   const missingFor = (unitId: string): number => {
@@ -164,19 +171,6 @@ export default function HqQuizzesScreen() {
     },
   ];
 
-  const xColumns: HqColumn<BrandQuizRow>[] = [
-    { key: 'name', label: '퀴즈', width: 260, render: (r) => <Cell kind="name">{r.name}</Cell> },
-    ...overview.map((u) => ({
-      key: u.unit_id,
-      label: u.store_name,
-      width: 128,
-      render: (r: BrandQuizRow) => {
-        const st = DEPLOY_STATUS[statusOf(r.id, u.unit_id)];
-        return <HqPill tone={st.tone} label={st.label} />;
-      },
-    })),
-  ];
-
   const pickedNoItems = list.filter((r) => picked.has(r.id) && r.items === 0).length;
 
   // 머리(제목·버튼)는 게이트 밖 — 골격은 즉시 선다.
@@ -185,7 +179,7 @@ export default function HqQuizzesScreen() {
     sub: '본사가 만든 퀴즈를 매장에 보내요. 언제 누구에게 낼지는 점주가 정하고, 발송은 그 매장의 규칙대로 나가요.',
     actions: (
       <>
-        <HqButton label="새로고침" icon="refresh-outline" onPress={() => void refresh()} />
+        <HqButton label="새로고침" icon="refresh-outline" onPress={() => void reload()} />
         <HqButton label="퀴즈 만들기" icon="add" variant="pri" onPress={() => router.push({ pathname: '/hq/quizzes/[id]', params: { id: 'new' } })} />
       </>
     ),
@@ -198,10 +192,22 @@ export default function HqQuizzesScreen() {
       </HqPage>
     );
   }
+  // 3분기의 둘째 — 못 읽었으면 표를 그리지 않는다. 그리면 "아직 만든 퀴즈가 없어요"·전부 '미배포' 같은
+  // **정상 문구로 장애가 위장된다**(노하우 화면과 같은 규칙).
+  if (error || unitsError) {
+    return (
+      <HqPage {...head}>
+        <HqLoadError
+          title={error ? '퀴즈를 불러오지 못했어요' : '연결 매장을 불러오지 못했어요'}
+          onRetry={reload}
+          testID="hq-quizzes-error"
+        />
+      </HqPage>
+    );
+  }
 
   return (
     <HqPage {...head}>
-      {error ? <HqNotice tone="warn">{error} 새로고침을 눌러 다시 시도해 주세요.</HqNotice> : null}
 
       <HqSlab
         title="퀴즈"
@@ -240,13 +246,13 @@ export default function HqQuizzesScreen() {
         testID="hq-quizzes-table"
       />
 
-      <HqSlab title="매장별 배포 상태" hint="미배포 · 최신 · 수정됨 · 새 버전 대기 · 숨김" />
+      <HqSlab title="매장별 배포 상태" hint="숫자를 누르면 그 매장 목록이 열려요" />
       {overview.length === 0 || list.length === 0 ? (
         <HqCard>
-          <HqEmpty text={overview.length === 0 ? '연결된 매장이 생기면 교차표가 채워져요.' : '퀴즈를 만들면 교차표가 채워져요.'} />
+          <HqEmpty text={overview.length === 0 ? '연결된 매장이 생기면 채워져요.' : '퀴즈를 만들어 보내면 매장마다 상태가 여기에 모여요.'} />
         </HqCard>
       ) : (
-        <HqTable columns={xColumns} rows={list} rowKey={(r) => r.id} testID="hq-quizzes-xtable" />
+        <HqDeployCounts rows={countRows} units={overview} statusOf={statusOf} kind="퀴즈" testID="hq-quizzes-xtable" />
       )}
       <View style={styles.legend}>
         {(['current', 'modified', 'pending', 'hidden', 'none'] as DeployStatus[]).map((k) => (

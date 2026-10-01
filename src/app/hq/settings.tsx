@@ -7,7 +7,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 
-import { HqPage, HqButton, HqPill, HqCard, HqRow, HqNotice, HqEmpty } from '@/components/hq/HqKit';
+import { HqPage, HqButton, HqPill, HqCard, HqRow, HqEmpty, HqLoadError } from '@/components/hq/HqKit';
 import { HqTable, Cell } from '@/components/hq/HqTable';
 import { HqModal } from '@/components/hq/HqModal';
 import { ScreenLoading } from '@/components/ScreenLoading';
@@ -51,6 +51,7 @@ export default function HqSettingsScreen() {
   const next = useBrandBillingStore((s) => s.next);
   const invoices = useBrandBillingStore((s) => s.invoices);
   const billingLoaded = useBrandBillingStore((s) => s.loaded);
+  const billingError = useBrandBillingStore((s) => s.error);
   const hydrateBilling = useBrandBillingStore((s) => s.hydrate);
   // ready 게이트(ui.md) — 브랜드·매장 축·결제 셋이 다 와야 그린다. '이번 달 청구 대상 0곳'이 먼저 스치지 않는다.
   const ready = brandLoaded && unitsLoaded && billingLoaded;
@@ -97,10 +98,21 @@ export default function HqSettingsScreen() {
       </HqPage>
     );
   }
+  // 3분기의 둘째 — 결제를 못 읽었는데 '청구 대상 0곳 · 0원'을 그리면 그게 가장 위험한 위장이다.
+  if (error || billingError) {
+    return (
+      <HqPage title="설정" sub="브랜드 정보 · 구성원 · 결제" testID="hq-settings">
+        <HqLoadError
+          title={error ? '설정을 불러오지 못했어요' : '결제 정보를 불러오지 못했어요'}
+          onRetry={() => Promise.all([hydrate(), hydrateBilling()])}
+          testID="hq-settings-error"
+        />
+      </HqPage>
+    );
+  }
 
   return (
     <HqPage title="설정" sub="브랜드 정보 · 구성원 · 결제" testID="hq-settings">
-      {error ? <HqNotice tone="warn">설정을 불러오지 못했어요. ({error})</HqNotice> : null}
 
       <HqCard title="브랜드 정보" sub="변경은 스퀘어테이블에 요청해 주세요(계약 정보라 화면에서 고치지 않아요).">
         <HqRow first k="브랜드 이름" v={brand?.brand_name ?? '—'} />

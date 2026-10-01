@@ -9,7 +9,7 @@ import { View, Text, TextInput, StyleSheet } from 'react-native';
 import { Slot, useFocusEffect, usePathname, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
-import { HqPage, HqButton, HqPill, HqCard, HqSlab, HqNotice, HqSegment, HqEmpty } from '@/components/hq/HqKit';
+import { HqPage, HqButton, HqPill, HqCard, HqSlab, HqNotice, HqSegment, HqEmpty, HqLoadError } from '@/components/hq/HqKit';
 import { HqTable, Cell, type HqColumn, type HqSort } from '@/components/hq/HqTable';
 import { HqModal } from '@/components/hq/HqModal';
 import { ScreenLoading } from '@/components/ScreenLoading';
@@ -173,14 +173,13 @@ export default function HqStoresLayout() {
           testID="hq-stores"
         >
           {/* 머리(제목·버튼)는 게이트 밖. 본문은 다 온 뒤에 — '아직 연결된 매장이 없어요'가 로딩 중에 스치지 않는다. */}
+          {/* 실패하면 표를 그리지 않는다 — 첫 조회 실패가 '아직 연결된 매장이 없어요'로 위장된다. */}
           {!ready ? (
             <ScreenLoading label="매장 목록을 불러오고 있어요…" />
+          ) : error ? (
+            <HqLoadError title="매장 목록을 불러오지 못했어요" onRetry={refresh} testID="hq-stores-error" />
           ) : (
             <>
-              {error ? (
-                <HqNotice tone="warn">매장 목록을 불러오지 못했어요. 새로고침을 눌러 다시 시도해 주세요. ({error})</HqNotice>
-              ) : null}
-
               {/* 필터 바 */}
               <View style={styles.fbar}>
                 <View style={styles.search}>

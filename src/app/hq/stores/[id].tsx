@@ -8,7 +8,7 @@ import { View, Text, Pressable, ScrollView, StyleSheet } from 'react-native';
 import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
-import { HqButton, HqPill, HqRow, HqSlab, HqSegment, HqEmpty, HqNotice } from '@/components/hq/HqKit';
+import { HqButton, HqPill, HqRow, HqSlab, HqSegment, HqEmpty, HqLoadError } from '@/components/hq/HqKit';
 import { useStoresTwoPane } from '@/components/hq/storesPane';
 import { ScreenLoading } from '@/components/ScreenLoading';
 import { useBrandUnitsPageStore } from '@/lib/store/useBrandUnitsPageStore';
@@ -89,7 +89,7 @@ export default function HqStoreDetailScreen() {
       <DetailFrame title="매장" twoPane={twoPane} onClose={close}>
         {/* 읽기 실패를 '없는 매장'으로 위장하지 않는다. */}
         {detailError ? (
-          <HqNotice tone="warn">매장 정보를 불러오지 못했어요. 목록에서 다시 열어 주세요. ({detailError})</HqNotice>
+          <HqLoadError title="매장 정보를 불러오지 못했어요" onRetry={refreshDetail} testID="hq-store-detail-error" />
         ) : (
           <HqEmpty text="이 매장은 지금 연결된 매장 목록에 없어요." />
         )}

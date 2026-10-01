@@ -3,7 +3,7 @@
 // ★로직 0. 판정·조회는 화면(src/app/hq/*)과 훅(useBrandStore)이 하고 여기는 값만 그린다.
 // ★폰 프레임(460)·frameCapStyle 을 쓰지 않는다 — 본사 화면은 넓은 레이아웃 전용(정본 §5-1).
 // 색은 앱 토큰(InkColors·BrandColors)이 정본. 데모의 --y-deep 는 BrandColors.yellowDeep 로.
-import { type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { View, Text, Pressable, ScrollView, StyleSheet, type ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -188,6 +188,34 @@ export function HqEmpty({ text, action }: { text: string; action?: ReactNode }) 
   );
 }
 
+/**
+ * 읽기 실패 자리 — "없어요"(0건)와 **다른 상태**다(앱의 `LoadErrorState` 와 같은 규약·같은 문구).
+ * 화면 3분기: 기다리는 중 → ScreenLoading / 실패 → 이것 / 0건 → HqEmpty + 다음 행동.
+ * 실패를 0건으로 흡수하면 장애가 "연결된 매장이 없어요" 같은 정상 문구로 위장된다.
+ * 다시 시도 중에는 버튼이 '불러오는 중…'으로 바뀌고 잠긴다 — 눌렀는데 아무 반응이 없으면 또 누른다.
+ */
+export function HqLoadError({ title, onRetry, testID }: { title: string; onRetry: () => Promise<unknown>; testID?: string }) {
+  const [busy, setBusy] = useState(false);
+  return (
+    <View style={styles.loadErr} testID={testID}>
+      <Ionicons name="cloud-offline-outline" size={22} color={BrandColors.warnText} />
+      <Text style={styles.loadErrTitle}>{title}</Text>
+      <Text style={styles.loadErrBody}>연결을 확인하고 다시 시도해 주세요.</Text>
+      <HqButton
+        label={busy ? '불러오는 중…' : '다시 시도'}
+        icon={busy ? undefined : 'refresh-outline'}
+        disabled={busy}
+        style={{ alignSelf: 'center' }}
+        testID={testID ? `${testID}-retry` : undefined}
+        onPress={() => {
+          setBusy(true);
+          void onRetry().finally(() => setBusy(false));
+        }}
+      />
+    </View>
+  );
+}
+
 /** 세그먼트(요약/노하우/운영 · 본사/매장) — 넓은 화면용 작은 것. */
 export function HqSegment<T extends string>({
   items,
@@ -276,6 +304,9 @@ const styles = StyleSheet.create({
 
   empty: { paddingVertical: 28, paddingHorizontal: 16, alignItems: 'center', gap: Space.md },
   emptyText: { fontSize: 14.5, color: InkColors.ink3, textAlign: 'center' },
+  loadErr: { alignItems: 'center', gap: Space.sm, paddingVertical: Space.xl, paddingHorizontal: Space.lg, borderWidth: 1, borderColor: BrandColors.warnBorder, borderRadius: Radius.md, backgroundColor: BrandColors.warnSoft, marginBottom: 22 },
+  loadErrTitle: { fontSize: 15, fontWeight: '800', color: BrandColors.warnText, textAlign: 'center' },
+  loadErrBody: { fontSize: 14, color: InkColors.ink2, textAlign: 'center', marginBottom: Space.xs },
 
   seg: { flexDirection: 'row', backgroundColor: InkColors.paper, borderRadius: Radius.pill, padding: 3, gap: 2, alignSelf: 'flex-start' },
   segItem: { paddingVertical: 6, paddingHorizontal: 13, borderRadius: Radius.pill },

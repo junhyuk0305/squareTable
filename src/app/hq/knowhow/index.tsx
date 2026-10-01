@@ -1,4 +1,4 @@
-// /hq/knowhow — 본사 노하우(정본 §5-2): 표(제목·섹션·버전·배포 매장 수·수정일) + 교차표(노하우 × 매장)
+// /hq/knowhow — 본사 노하우(정본 §5-2): 표(제목·섹션·버전·배포 매장 수·수정일) + 상태별 매장 수(노하우 × 배포 상태 5칸)
 //                + 다중선택 → [배포] → 대상 매장 고르기 → 확인.
 //
 // 재료 = useBrandKnowhowStore(작업실 원본 + 배포 현황) · useBrandUnitsStore(연결 매장 목록).
@@ -8,9 +8,10 @@ import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
-import { HqPage, HqButton, HqPill, HqSlab, HqNotice, HqCard, HqEmpty } from '@/components/hq/HqKit';
+import { HqPage, HqButton, HqPill, HqSlab, HqNotice, HqCard, HqEmpty, HqLoadError } from '@/components/hq/HqKit';
 import { HqTable, Cell, type HqColumn } from '@/components/hq/HqTable';
 import { HqModal } from '@/components/hq/HqModal';
+import { HqDeployCounts } from '@/components/hq/HqDeployCounts';
 import { ScreenLoading } from '@/components/ScreenLoading';
 import { useBrandKnowhowStore } from '@/lib/store/useBrandKnowhowStore';
 import { useBrandUnitsStore } from '@/lib/store/useBrandUnitsStore';
@@ -34,7 +35,10 @@ export default function HqKnowhowScreen() {
   const hydrateUnits = useBrandUnitsStore((s) => s.hydrate);
   // ready 게이트(ui.md) — 표·교차표의 행(노하우)과 열(연결 매장)이 둘 다 와야 그린다.
   const unitsLoaded = useBrandUnitsStore((s) => s.loaded);
+  const unitsError = useBrandUnitsStore((s) => s.error);
   const ready = knowhowLoaded && unitsLoaded;
+  // 새로고침·다시 시도 = 두 재료를 같이. 한쪽만 다시 받으면 행과 매장 수가 서로 다른 시점이 된다.
+  const reload = useCallback(() => Promise.all([refresh(), hydrateUnits()]), [refresh, hydrateUnits]);
 
   useFocusEffect(useCallback(() => { void hydrate(); void hydrateUnits(); }, [hydrate, hydrateUnits]));
 
@@ -48,8 +52,11 @@ export default function HqKnowhowScreen() {
   const [required, setRequired] = useState(false);
 
   const cells = useMemo(() => deployStatusMap(matrix, (c) => c.entry_id), [matrix]);
-  const statusOf = (entryId: string, unitId: string): DeployStatus =>
-    cells.get(cellKey(entryId, unitId))?.status ?? 'none';
+  const statusOf = useCallback(
+    (entryId: string, unitId: string): DeployStatus => cells.get(cellKey(entryId, unitId))?.status ?? 'none',
+    [cells],
+  );
+  const countRows = useMemo(() => list.map((r) => ({ id: r.id, title: r.title })), [list]);
 
   const toggle = (id: string) =>
     setPicked((p) => {
@@ -141,27 +148,13 @@ export default function HqKnowhowScreen() {
     },
   ];
 
-  // 교차표 — 노하우 행 × 매장 열. 매장이 많으면 표만 가로로 스크롤한다(HqTable).
-  const xColumns: HqColumn<BrandKnowhowRow>[] = [
-    { key: 'title', label: '노하우', width: 260, render: (r) => <Cell kind="name">{r.title}</Cell> },
-    ...overview.map((u) => ({
-      key: u.unit_id,
-      label: u.store_name,
-      width: 128,
-      render: (r: BrandKnowhowRow) => {
-        const st = DEPLOY_STATUS[statusOf(r.id, u.unit_id)];
-        return <HqPill tone={st.tone} label={st.label} />;
-      },
-    })),
-  ];
-
   // 머리(제목·버튼)는 게이트 밖 — 골격은 즉시 선다.
   const head = {
     title: '노하우',
     sub: '본사가 쓴 노하우를 매장에 보내요. 점주는 받은 노하우를 고치거나 이 매장에서 숨길 수 있어요.',
     actions: (
       <>
-        <HqButton label="새로고침" icon="refresh-outline" onPress={() => void refresh()} />
+        <HqButton label="새로고침" icon="refresh-outline" onPress={() => void reload()} />
         <HqButton label="노하우 쓰기" icon="add" variant="pri" onPress={() => router.push({ pathname: '/hq/knowhow/[id]', params: { id: 'new' } })} />
       </>
     ),
@@ -174,10 +167,22 @@ export default function HqKnowhowScreen() {
       </HqPage>
     );
   }
+  // 3분기의 둘째 — 못 읽었으면 표를 그리지 않는다. 그리면 "아직 쓴 노하우가 없어요"·"연결된 매장이 없어
+  // 보낼 곳이 없어요"·전부 '미배포' 같은 **정상 문구로 장애가 위장된다**.
+  if (error || unitsError) {
+    return (
+      <HqPage {...head}>
+        <HqLoadError
+          title={error ? '노하우를 불러오지 못했어요' : '연결 매장을 불러오지 못했어요'}
+          onRetry={reload}
+          testID="hq-knowhow-error"
+        />
+      </HqPage>
+    );
+  }
 
   return (
     <HqPage {...head}>
-      {error ? <HqNotice tone="warn">{error} 새로고침을 눌러 다시 시도해 주세요.</HqNotice> : null}
 
       <HqSlab
         title="노하우"
@@ -216,13 +221,13 @@ export default function HqKnowhowScreen() {
         testID="hq-knowhow-table"
       />
 
-      <HqSlab title="매장별 배포 상태" hint="미배포 · 최신 · 수정됨 · 새 버전 대기 · 숨김" />
+      <HqSlab title="매장별 배포 상태" hint="숫자를 누르면 그 매장 목록이 열려요" />
       {overview.length === 0 || list.length === 0 ? (
         <HqCard>
-          <HqEmpty text={overview.length === 0 ? '연결된 매장이 생기면 교차표가 채워져요.' : '노하우를 쓰면 교차표가 채워져요.'} />
+          <HqEmpty text={overview.length === 0 ? '연결된 매장이 생기면 채워져요.' : '노하우를 쓰고 보내면 매장마다 상태가 여기에 모여요.'} />
         </HqCard>
       ) : (
-        <HqTable columns={xColumns} rows={list} rowKey={(r) => r.id} testID="hq-knowhow-xtable" />
+        <HqDeployCounts rows={countRows} units={overview} statusOf={statusOf} kind="노하우" testID="hq-knowhow-xtable" />
       )}
       <View style={styles.legend}>
         {(['current', 'modified', 'pending', 'hidden', 'none'] as DeployStatus[]).map((k) => (
