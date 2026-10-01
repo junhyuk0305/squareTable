@@ -1,7 +1,7 @@
 // /hq/knowhow — 본사 노하우(정본 §5-2): 표(제목·섹션·버전·배포 매장 수·수정일) + 교차표(노하우 × 매장)
 //                + 다중선택 → [배포] → 대상 매장 고르기 → 확인.
 //
-// 재료 = useBrandKnowhowStore(작업실 원본 + 배포 현황) · useBrandStore(연결 매장 목록).
+// 재료 = useBrandKnowhowStore(작업실 원본 + 배포 현황) · useBrandUnitsStore(연결 매장 목록).
 // ★작업실 진입(0215)은 스토어 hydrate 가 먼저 한다 — 이 화면은 그 결과만 그린다.
 import { useCallback, useMemo, useState } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
@@ -12,7 +12,7 @@ import { HqPage, HqButton, HqPill, HqSlab, HqNotice, HqCard, HqEmpty } from '@/c
 import { HqTable, Cell, type HqColumn } from '@/components/hq/HqTable';
 import { HqModal } from '@/components/hq/HqModal';
 import { useBrandKnowhowStore } from '@/lib/store/useBrandKnowhowStore';
-import { useBrandStore } from '@/lib/store/useBrandStore';
+import { useBrandUnitsStore } from '@/lib/store/useBrandUnitsStore';
 import { DEPLOY_STATUS, deployStatusMap, cellKey, type DeployStatus } from '@/lib/brand/deployStatus';
 import { visibilityLabel, relationLabel, RELATIONS, deployMixNotice, REQUIRED_HINT } from '@/lib/brand/visibility';
 import type { BrandKnowhowRow } from '@/lib/brand/brandDb';
@@ -29,10 +29,10 @@ export default function HqKnowhowScreen() {
   const hydrate = useBrandKnowhowStore((s) => s.hydrate);
   const refresh = useBrandKnowhowStore((s) => s.refresh);
   const deploy = useBrandKnowhowStore((s) => s.deploy);
-  const overview = useBrandStore((s) => s.overview);
-  const hydrateBrand = useBrandStore((s) => s.hydrate);
+  const overview = useBrandUnitsStore((s) => s.overview);
+  const hydrateUnits = useBrandUnitsStore((s) => s.hydrate);
 
-  useFocusEffect(useCallback(() => { void hydrate(); void hydrateBrand(); }, [hydrate, hydrateBrand]));
+  useFocusEffect(useCallback(() => { void hydrate(); void hydrateUnits(); }, [hydrate, hydrateUnits]));
 
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [openDeploy, setOpenDeploy] = useState(false);

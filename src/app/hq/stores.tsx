@@ -1,8 +1,8 @@
 // /hq/stores — 매장(정본 §5-2): 필터 → 표(이름순) → 우측 드로어(연결 정보·상향 요청·payer 제안·해제) → "매장 추가"(전화번호 + payer) · 대기 초대.
 //
-// 재료는 useBrandStore 한 곳(brand_overview · brand_invites_list). 표는 행 배열만 받는다.
+// 재료 = useBrandUnitsStore(brand_overview · brand_invites_list) · 드로어만 useBrandUnitDetailStore(부담 날짜 · 직영 규칙). 표는 행 배열만 받는다.
 // 초대 취소(revoke)는 없다 — 14일 만료만(P3 지시서 §1 #10, 확인 대기).
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Text, TextInput, StyleSheet } from 'react-native';
 import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -12,6 +12,8 @@ import { HqTable, Cell, type HqColumn } from '@/components/hq/HqTable';
 import { HqDrawer } from '@/components/hq/HqDrawer';
 import { HqModal } from '@/components/hq/HqModal';
 import { useBrandStore } from '@/lib/store/useBrandStore';
+import { useBrandUnitsStore } from '@/lib/store/useBrandUnitsStore';
+import { useBrandUnitDetailStore } from '@/lib/store/useBrandUnitDetailStore';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import {
   inviteStore,
@@ -58,15 +60,16 @@ function payerDateNote(payer: BrandPayer, dates: BrandPayerDateRow | null): stri
 
 export default function HqStoresScreen() {
   const params = useLocalSearchParams<{ unit?: string }>();
-  const overview = useBrandStore((s) => s.overview);
-  const invites = useBrandStore((s) => s.invites);
+  const overview = useBrandUnitsStore((s) => s.overview);
+  const invites = useBrandUnitsStore((s) => s.invites);
   const brand = useBrandStore((s) => s.brand);
-  const payerDates = useBrandStore((s) => s.payerDates);
-  const unitRules = useBrandStore((s) => s.unitRules);
-  const loaded = useBrandStore((s) => s.loaded);
-  const error = useBrandStore((s) => s.error);
-  const hydrate = useBrandStore((s) => s.hydrate);
-  const refresh = useBrandStore((s) => s.refresh);
+  const payerDates = useBrandUnitDetailStore((s) => s.payerDates);
+  const unitRules = useBrandUnitDetailStore((s) => s.unitRules);
+  const refreshDetail = useBrandUnitDetailStore((s) => s.refresh);
+  const loaded = useBrandUnitsStore((s) => s.loaded);
+  const error = useBrandUnitsStore((s) => s.error);
+  const hydrate = useBrandUnitsStore((s) => s.hydrate);
+  const refresh = useBrandUnitsStore((s) => s.refresh);
 
   // 포커스마다 재조회(정본 §6-3) — 점주가 수준을 내리면 돌아왔을 때 사라져 있어야 한다.
   useFocusEffect(useCallback(() => { void hydrate(); }, [hydrate]));
@@ -235,7 +238,7 @@ export default function HqStoresScreen() {
         dates={payerDates.find((d) => d.unit_id === selectedRow?.unit_id) ?? null}
         rules={unitRules.find((r) => r.unit_id === selectedRow?.unit_id) ?? null}
         onClose={() => setSelected(null)}
-        onChanged={() => void refresh()}
+        onChanged={() => { void refresh(); void refreshDetail(); }}
       />
 
       {/* 열 때마다 새로 마운트 — 입력값이 이전 초대의 것으로 남지 않는다. */}
@@ -267,6 +270,10 @@ function StoreDrawer({ row, dates, rules, onClose, onChanged }: {
   const [busy, setBusy] = useState(false);
   // 지금 수준보다 높은 첫 수준을 기본으로(부모가 key 로 매장마다 새로 마운트한다).
   const [reqLevel, setReqLevel] = useState<'knowhow' | 'ops'>(() => (row?.visibility === 'summary' ? 'knowhow' : 'ops'));
+  // 부담 날짜·직영 규칙은 드로어가 열릴 때만 받는다 — 목록을 열 때마다 받던 것(쓰는 곳이 여기뿐이다).
+  const hydrateDetail = useBrandUnitDetailStore((s) => s.hydrate);
+  const open = !!row;
+  useEffect(() => { if (open) void hydrateDetail(); }, [open, hydrateDetail]);
 
   if (!row) return null;
   const direct = row.relation === 'direct';

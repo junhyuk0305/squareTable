@@ -1,7 +1,7 @@
 // /hq/quizzes — 본사 퀴즈(정본 §5-2): 표(제목·문항 수·참조 노하우 수·배포 매장 수·수정일) + 교차표(퀴즈 × 매장)
 //                + 다중선택 → [배포] → 대상 매장 고르기(함께 내려갈 노하우를 **미리** 알린다) → 확인.
 //
-// 재료 = useBrandQuizStore(작업실 원본 + 배포 현황) · useBrandStore(연결 매장 목록).
+// 재료 = useBrandQuizStore(작업실 원본 + 배포 현황) · useBrandUnitsStore(연결 매장 목록).
 // 노하우 화면(/hq/knowhow)과 같은 모양·같은 상태 어휘(deployStatus.ts)다 — 본사가 두 화면을 오가며 같은 뜻으로 읽는다.
 // ★작업실 진입(0215)은 스토어 hydrate 가 먼저 한다 — 이 화면은 그 결과만 그린다.
 import { useCallback, useMemo, useState } from 'react';
@@ -13,7 +13,7 @@ import { HqPage, HqButton, HqPill, HqSlab, HqNotice, HqCard, HqEmpty } from '@/c
 import { HqTable, Cell, type HqColumn } from '@/components/hq/HqTable';
 import { HqModal } from '@/components/hq/HqModal';
 import { useBrandQuizStore } from '@/lib/store/useBrandQuizStore';
-import { useBrandStore } from '@/lib/store/useBrandStore';
+import { useBrandUnitsStore } from '@/lib/store/useBrandUnitsStore';
 import { DEPLOY_STATUS, deployStatusMap, cellKey, type DeployStatus } from '@/lib/brand/deployStatus';
 import { visibilityLabel, relationLabel, RELATIONS, deployMixNotice, REQUIRED_HINT } from '@/lib/brand/visibility';
 import type { BrandQuizRow, BrandCourseDeployResult } from '@/lib/brand/brandDb';
@@ -32,10 +32,10 @@ export default function HqQuizzesScreen() {
   const hydrate = useBrandQuizStore((s) => s.hydrate);
   const refresh = useBrandQuizStore((s) => s.refresh);
   const deploy = useBrandQuizStore((s) => s.deploy);
-  const overview = useBrandStore((s) => s.overview);
-  const hydrateBrand = useBrandStore((s) => s.hydrate);
+  const overview = useBrandUnitsStore((s) => s.overview);
+  const hydrateUnits = useBrandUnitsStore((s) => s.hydrate);
 
-  useFocusEffect(useCallback(() => { void hydrate(); void hydrateBrand(); }, [hydrate, hydrateBrand]));
+  useFocusEffect(useCallback(() => { void hydrate(); void hydrateUnits(); }, [hydrate, hydrateUnits]));
 
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [openDeploy, setOpenDeploy] = useState(false);

@@ -1,6 +1,6 @@
 // /hq/settings — 설정(정본 §5-2): 브랜드 정보 · 구성원(초대 링크) · 결제(표시만) · 연결 해제 안내.
 //
-// 재료 = useBrandStore(my_brand 확장 · brand_members_list · brand_invites_list) + useBrandBillingStore(P6).
+// 재료 = useBrandStore(my_brand 확장 · brand_members_list) + useBrandUnitsStore(구성원 초대 · 청구 줄의 관계·부담 수) + useBrandBillingStore(P6).
 // ★결제는 **표시만**이다 — 발행·입금 확인·크레딧·환불은 내부 콘솔(service_role)이 한다(정본 §4-D·§5-2).
 //   대상·금액도 여기서 세지 않는다. 내부 콘솔의 발행과 같은 함수(`brand_billing_preview`)가 준 줄을 더한다.
 import { useCallback, useMemo, useState } from 'react';
@@ -11,6 +11,7 @@ import { HqPage, HqButton, HqPill, HqCard, HqRow, HqNotice, HqEmpty } from '@/co
 import { HqTable, Cell } from '@/components/hq/HqTable';
 import { HqModal } from '@/components/hq/HqModal';
 import { useBrandStore } from '@/lib/store/useBrandStore';
+import { useBrandUnitsStore } from '@/lib/store/useBrandUnitsStore';
 import { useBrandBillingStore } from '@/lib/store/useBrandBillingStore';
 import { inviteBrandMember } from '@/lib/brand/brandDb';
 import { brandErrorMessage } from '@/lib/brand/errors';
@@ -31,13 +32,20 @@ const joinUrl = (token: string) => {
 
 export default function HqSettingsScreen() {
   const brand = useBrandStore((s) => s.brand);
-  const overview = useBrandStore((s) => s.overview);
   const members = useBrandStore((s) => s.members);
-  const invites = useBrandStore((s) => s.invites);
-  const loaded = useBrandStore((s) => s.loaded);
-  const error = useBrandStore((s) => s.error);
-  const hydrate = useBrandStore((s) => s.hydrate);
-  const refresh = useBrandStore((s) => s.refresh);
+  const brandLoaded = useBrandStore((s) => s.loaded);
+  const brandError = useBrandStore((s) => s.error);
+  const hydrateBrand = useBrandStore((s) => s.hydrate);
+  // 매장 축은 이 화면이 직접 받는다 — 청구 줄의 관계 배지와 "매장 부담 N곳"이 overview 에서 나온다(셸이 대신 받지 않는다).
+  const overview = useBrandUnitsStore((s) => s.overview);
+  const invites = useBrandUnitsStore((s) => s.invites);
+  const unitsLoaded = useBrandUnitsStore((s) => s.loaded);
+  const unitsError = useBrandUnitsStore((s) => s.error);
+  const hydrateUnits = useBrandUnitsStore((s) => s.hydrate);
+  const loaded = brandLoaded && unitsLoaded;
+  const error = brandError ?? unitsError;
+  const hydrate = useCallback(() => Promise.all([hydrateBrand(), hydrateUnits()]), [hydrateBrand, hydrateUnits]);
+  const refresh = hydrate;
   // 결제는 이 화면에서만 본다 — 대시보드·매장·노하우·퀴즈의 조회에 청구 RPC 를 얹지 않는다.
   const current = useBrandBillingStore((s) => s.current);
   const next = useBrandBillingStore((s) => s.next);

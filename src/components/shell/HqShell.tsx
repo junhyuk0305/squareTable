@@ -36,7 +36,8 @@ export function HqShell({ children }: { children: ReactNode }) {
   const stores = useSessionStore((s) => s.stores);
   const brandName = useBrandStore((s) => s.brand?.brand_name ?? null);
   const hydrateBrand = useBrandStore((s) => s.hydrate);
-  // 브랜드 이름은 my_brand 확장 행에서 — 화면들이 같은 캐시를 쓰므로 여기서 한 번 당겨 두면 첫 화면이 빈 표로 깜빡이지 않는다.
+  // 브랜드 이름은 my_brand 확장 행에서. ★이 스토어는 브랜드 정체성만 받는다 — 매장 축(overview)은
+  //   그걸 그리는 화면이 자기 포커스에서 부른다(useBrandUnitsStore). 셸이 부르면 모든 화면에 따라붙는다.
   useEffect(() => { void hydrateBrand(); }, [hydrateBrand]);
 
   const groups: NavGroup[] = [

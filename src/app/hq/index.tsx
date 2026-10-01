@@ -1,6 +1,6 @@
 // /hq — 대시보드(정본 §5-2): KPI 스트립 → 확인 필요 → 매장 표 요약. 교차표(매장 × 노하우 숙지)는 P4.
 //
-// 재료 = useBrandStore(brand_overview · brand_invites_list). 숫자는 전부 매장 단위 — 개인 축 0, 랭킹 0.
+// 재료 = useBrandStore(브랜드 이름) · useBrandUnitsStore(brand_overview · brand_invites_list). 숫자는 전부 매장 단위 — 개인 축 0, 랭킹 0.
 import { useCallback, useMemo, useState } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
@@ -9,6 +9,7 @@ import { HqPage, HqButton, HqPill, HqSlab, HqNotice, HqSegment } from '@/compone
 import { HqStrip } from '@/components/hq/HqStrip';
 import { HqTable, Cell } from '@/components/hq/HqTable';
 import { useBrandStore } from '@/lib/store/useBrandStore';
+import { useBrandUnitsStore } from '@/lib/store/useBrandUnitsStore';
 import { useBrandKnowhowStore } from '@/lib/store/useBrandKnowhowStore';
 import { useBrandQuizStore } from '@/lib/store/useBrandQuizStore';
 import { visibilityLabel, relationLabel, RELATIONS } from '@/lib/brand/visibility';
@@ -19,12 +20,17 @@ import { Radius, Elevation } from '@/lib/theme/elevation';
 export default function HqDashboardScreen() {
   const router = useRouter();
   const brand = useBrandStore((s) => s.brand);
-  const overview = useBrandStore((s) => s.overview);
-  const invites = useBrandStore((s) => s.invites);
-  const loaded = useBrandStore((s) => s.loaded);
-  const error = useBrandStore((s) => s.error);
-  const hydrate = useBrandStore((s) => s.hydrate);
-  const refresh = useBrandStore((s) => s.refresh);
+  const brandLoaded = useBrandStore((s) => s.loaded);
+  const brandError = useBrandStore((s) => s.error);
+  const hydrateBrand = useBrandStore((s) => s.hydrate);
+  const overview = useBrandUnitsStore((s) => s.overview);
+  const invites = useBrandUnitsStore((s) => s.invites);
+  const unitsLoaded = useBrandUnitsStore((s) => s.loaded);
+  const unitsError = useBrandUnitsStore((s) => s.error);
+  const hydrateUnits = useBrandUnitsStore((s) => s.hydrate);
+  const loaded = brandLoaded && unitsLoaded;
+  const error = brandError ?? unitsError;
+  const refresh = useCallback(() => Promise.all([hydrateBrand(), hydrateUnits()]), [hydrateBrand, hydrateUnits]);
   // '배포한 노하우' = 한 곳 이상에 내려간 작업실 노하우 수(0217 brand_knowhow_list.deployed_units).
   // ★같은 재료를 노하우 화면과 공유한다 — 대시보드가 따로 세면 두 숫자가 어긋난다.
   const deployedCount = useBrandKnowhowStore((s) => s.list.filter((r) => r.deployed_units > 0).length);
@@ -33,7 +39,7 @@ export default function HqDashboardScreen() {
   const deployedQuizzes = useBrandQuizStore((s) => s.list.filter((r) => r.deployed_units > 0).length);
   const hydrateQuiz = useBrandQuizStore((s) => s.hydrate);
 
-  useFocusEffect(useCallback(() => { void hydrate(); void hydrateKnowhow(); void hydrateQuiz(); }, [hydrate, hydrateKnowhow, hydrateQuiz]));
+  useFocusEffect(useCallback(() => { void refresh(); void hydrateKnowhow(); void hydrateQuiz(); }, [refresh, hydrateKnowhow, hydrateQuiz]));
 
   /**
    * KPI 직영/가맹 토글(정본 02 §9) — 기본은 전체 합산.
