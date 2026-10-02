@@ -7,7 +7,7 @@ import { ShellProvider } from '@/components/shell/shellContext';
 import { OwnerWebShell } from '@/components/shell/OwnerWebShell';
 import { HqShell } from '@/components/shell/HqShell';
 import { useSessionStore } from '@/lib/store/useSessionStore';
-import { SHOW_HQ_CONSOLE } from '@/lib/config/store-policy';
+import { SHOW_HQ_CONSOLE, SHOW_OWNER_WEB_SHELL } from '@/lib/config/store-policy';
 import { canManage } from '@/lib/utils/roles';
 import { InkColors } from '@/lib/theme/colors';
 
@@ -72,7 +72,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     return phone;
   }
 
-  if (status === 'signed_in' && canManage(role)) {
+  if (SHOW_OWNER_WEB_SHELL && status === 'signed_in' && canManage(role)) {
     return (
       <ShellProvider kind="owner-web">
         <OwnerWebShell>{children}</OwnerWebShell>

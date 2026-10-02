@@ -145,6 +145,16 @@ export const SHOW_GUIDE_POPUP = !IS_NATIVE;
 export const SHOW_HQ_CONSOLE = !IS_NATIVE;
 
 /**
+ * 사장·매니저가 웹에서 넓은 사장 웹 셸(사이드바)을 보는가 — **사업 판단 축**(2026-10-02 사용자 결정).
+ *
+ * 본사 대시보드를 머지할 때 사장 웹 화면은 그대로 두기로 했다. Toss 카드사 심사관이 사장 계정으로
+ * 웹 결제 화면을 보고 있어서, 심사 중에 그 화면의 모양이 바뀌면 안 된다.
+ * false 면 사장·매니저도 폰 프레임(ResponsiveShell)이다. 심사가 끝나면 이 값만 true 로 바꾼다.
+ * 읽는 곳 = `components/shell/AppShell.web.tsx` 하나(TwoPane 은 셸 종류를 따라 같이 꺼진다).
+ */
+export const SHOW_OWNER_WEB_SHELL = false;
+
+/**
  * 웹에서 'PWA 설치(홈 화면에 추가)'를 권해도 되는가 — **채널 축**.
  *
  * 네이티브 앱이 양쪽 스토어에 나가 있으므로 웹에서 설치를 따로 권하지 않는다(2026-09-22 결정).
