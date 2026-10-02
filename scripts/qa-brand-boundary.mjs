@@ -66,8 +66,12 @@ try {
     ['unit_subscriptions', 'unit_id'], ['owner_alerts', 'id'],
     ['brands', 'id'], ['brand_members', 'user_id'], ['brand_invites', 'id'], ['brand_units', 'id'], ['brand_events', 'id'],
   ];
+  // ★라이브러리 내용(노하우·퀴즈)도 같은 이유로 뺀다 — 담당자가 쓴 본사 노하우는 작업실 행이다(2026-10-02:
+  //   화면에서 노하우를 하나 쓰자 ①playbook_entries 가 1행으로 '위반'이 됐다. 매장 행이 아니다).
+  const LIBRARY = new Set(['playbook_entries', 'training_courses', 'quiz_items']);
   for (const [t, col] of tables) {
-    const r = await H.from(t).select(col).limit(5);
+    const q = H.from(t).select(col);
+    const r = await (LIBRARY.has(t) ? exceptWs(q, 'unit_id') : q).limit(5);
     check(`①${t} 직접 조회 차단`, blocked(r), r.error ? `${r.error.code} ${r.error.message}` : `${(r.data ?? []).length}행`);
   }
   const un = await H.from('units').select('id').neq('kind', 'brand_workspace').limit(5);

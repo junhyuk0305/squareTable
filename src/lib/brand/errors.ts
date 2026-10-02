@@ -49,6 +49,9 @@ const MESSAGES: Record<string, string> = {
   same_floor: '지금과 같은 범위예요.',
   no_pending_consent: '다시 받을 동의가 없어요.',
   notice_cannot_decline: '직영점 고지는 거절할 수 없어요. 궁금한 점은 본사에 문의해 주세요.',
+  // ── 0227·0229 점주 해제권 ──
+  franchise_can_end: '가맹점은 점주가 언제든 연결을 끝낼 수 있어요. 본사가 막을 수 없어요.',
+  invalid_argument: '값이 비어 있어요. 다시 골라 주세요.',
 };
 
 export function brandErrorMessage(err: DbErr, fallback = '잠시 뒤 다시 시도해 주세요.'): string {
