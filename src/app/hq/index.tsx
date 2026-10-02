@@ -1,11 +1,13 @@
-// /hq — 대시보드(정본 §5-2): KPI 스트립 → 확인 필요 → 매장 표 요약. 교차표(매장 × 노하우 숙지)는 P4.
+// /hq — 대시보드(정본 §5-2): KPI 스트립 → [확인 필요 | 매장 현황] 두 칸. 하위 메뉴가 없는 한 장이다.
+// 2026-10-02 레퍼런스 개편: 세 덩어리를 세로로 쌓던 것을 숫자 줄 아래 두 칸으로 — 한 화면에서 '할 일'과 '매장'을 같이 본다.
+// KPI 범위(직영/가맹) 토글은 머리 줄 오른쪽으로 갔다 — 아래 숫자 전부의 범위라 화면 머리에 둔다.
 //
 // 재료 = useBrandStore(브랜드 이름) · useBrandUnitsStore(brand_overview · brand_invites_list). 숫자는 전부 매장 단위 — 개인 축 0, 랭킹 0.
 import { useCallback, useMemo, useState } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 
-import { HqPage, HqButton, HqPill, HqSlab, HqSegment, HqLoadError } from '@/components/hq/HqKit';
+import { HqPage, HqPill, HqSlab, HqSegment, HqLoadError, HqCard } from '@/components/hq/HqKit';
 import { HqStrip } from '@/components/hq/HqStrip';
 import { HqTable, Cell } from '@/components/hq/HqTable';
 import { ScreenLoading } from '@/components/ScreenLoading';
@@ -14,10 +16,10 @@ import { useBrandStore } from '@/lib/store/useBrandStore';
 import { useBrandUnitsStore } from '@/lib/store/useBrandUnitsStore';
 import { useBrandKnowhowStore } from '@/lib/store/useBrandKnowhowStore';
 import { useBrandQuizStore } from '@/lib/store/useBrandQuizStore';
-import { visibilityLabel, relationLabel, RELATIONS } from '@/lib/brand/visibility';
+import { visibilityLabel, relationLabel, RELATIONS, VIS_TONE } from '@/lib/brand/visibility';
 import type { BrandRelation } from '@/lib/brand/brandDb';
 import { InkColors } from '@/lib/theme/colors';
-import { Radius, Elevation } from '@/lib/theme/elevation';
+import { Space } from '@/lib/theme/layout';
 
 /**
  * 대시보드 매장 표는 요약이다 — 상위 10행 + '전체 보기'(쪽 넘김은 매장 화면에만 둔다 · R5 지시).
@@ -52,7 +54,7 @@ export default function HqDashboardScreen() {
   // ready 게이트(ui.md) — 이 화면이 그리는 원격 소스 넷이 다 와야 그린다. 'KPI 0'이나 '확인할 일 없음'이 먼저 스치지 않는다.
   const ready = brandLoaded && unitsLoaded && knowhowLoaded && quizLoaded;
 
-  // 새로고침·다시 시도·포커스 = 네 재료를 같이.
+  // 다시 시도·포커스 = 네 재료를 같이.
   const refresh = useCallback(
     () => Promise.all([hydrateBrand(), hydrateUnits(), hydrateKnowhow(), hydrateQuiz()]),
     [hydrateBrand, hydrateUnits, hydrateKnowhow, hydrateQuiz],
@@ -94,22 +96,32 @@ export default function HqDashboardScreen() {
   const attention = useMemo(
     () =>
       [
-        { k: '연결 동의 대기', v: stats.pendingInvites, n: '점주가 앱에서 수락하면 표에 올라와요' },
-        { k: '공개 수준 요청 중', v: stats.visRequests, n: '점주가 답을 보고 있어요' },
-        { k: '답할 요금 부담 제안', v: stats.payerToAnswer, n: stats.payerWaiting ? `보낸 제안 ${stats.payerWaiting}건은 점주 대기` : '점주가 보낸 제안' },
-        { k: '만료된 초대', v: stats.expiredInvites, n: '14일이 지났어요. 다시 보낼 수 있어요' },
+        { k: '연결 동의 대기', v: stats.pendingInvites, n: '점주가 앱에서 수락하면 전체 매장에 올라와요', to: 'invites' as const },
+        { k: '공개 수준 요청 중', v: stats.visRequests, n: '점주가 답을 보고 있어요', to: 'stores' as const },
+        { k: '답할 요금 부담 제안', v: stats.payerToAnswer, n: stats.payerWaiting ? `보낸 제안 ${stats.payerWaiting}건은 점주 대기` : '점주가 보낸 제안', to: 'stores' as const },
+        { k: '만료된 초대', v: stats.expiredInvites, n: '14일이 지났어요. 다시 보낼 수 있어요', to: 'invites' as const },
       ].filter((a) => a.v > 0),
     [stats],
   );
 
   // 행 = 그 매장 상세 주소로(push — 뒤로가기가 대시보드로 돌아온다). 목록 화면과 같은 경로를 쓴다.
   const goStores = (unit?: string) => router.push(unit ? { pathname: '/hq/stores/[id]', params: { id: unit } } : '/hq/stores');
-  const refreshButton = <HqButton label="새로고침" icon="refresh-outline" onPress={() => void refresh()} />;
+  // 혼합 브랜드에서만 뜬다 — 직영이나 가맹 한쪽뿐이면 고를 것이 없다(빈 토글은 소음이다).
+  const scopeToggle = mixed ? (
+    <View style={styles.kpiScope} testID="hq-kpi-scope">
+      <Text style={styles.kpiScopeLabel}>KPI 범위</Text>
+      <HqSegment
+        items={[{ key: 'all', label: '전체' }, ...RELATIONS.map((r) => ({ key: r.key, label: r.label }))]}
+        value={relF}
+        onChange={setRelF}
+      />
+    </View>
+  ) : null;
 
-  // 머리(제목·새로고침)는 게이트 밖 — 골격은 즉시 선다. 본문은 다 온 뒤에 통째로.
+  // 머리(제목)는 게이트 밖 — 골격은 즉시 선다. 본문은 다 온 뒤에 통째로.
   if (!ready) {
     return (
-      <HqPage title="대시보드" actions={refreshButton} testID="hq-dashboard">
+      <HqPage title="대시보드" testID="hq-dashboard">
         <ScreenLoading label="본사 현황을 불러오고 있어요…" />
       </HqPage>
     );
@@ -117,7 +129,7 @@ export default function HqDashboardScreen() {
   // 3분기의 둘째 — 못 읽은 재료가 있으면 숫자를 그리지 않는다(0 으로 위장하지 않는다).
   if (error) {
     return (
-      <HqPage title="대시보드" actions={refreshButton} testID="hq-dashboard">
+      <HqPage title="대시보드" testID="hq-dashboard">
         <HqLoadError title="본사 현황을 불러오지 못했어요" onRetry={refresh} testID="hq-dashboard-error" />
       </HqPage>
     );
@@ -127,23 +139,11 @@ export default function HqDashboardScreen() {
     <HqPage
       title="대시보드"
       sub={brand ? `${brand.brand_name} · 연결 매장 ${overview.length}곳` : undefined}
-      actions={refreshButton}
+      actions={scopeToggle}
       testID="hq-dashboard"
     >
-      {/* 등장은 섹션 단위로(ui.md ⑤) — KPI · 확인 필요 · 매장 표 순서로 30ms 씩. */}
+      {/* 등장은 섹션 단위로(ui.md ⑤) — KPI · 두 칸 순서로. */}
       <Appear>
-        {/* 혼합 브랜드에서만 뜬다 — 직영이나 가맹 한쪽뿐이면 고를 것이 없다(빈 토글은 소음이다). */}
-        {mixed ? (
-          <View style={styles.kpiScope} testID="hq-kpi-scope">
-            <Text style={styles.kpiScopeLabel}>KPI 범위</Text>
-            <HqSegment
-              items={[{ key: 'all', label: '전체' }, ...RELATIONS.map((r) => ({ key: r.key, label: r.label }))]}
-              value={relF}
-              onChange={setRelF}
-            />
-          </View>
-        ) : null}
-
         <HqStrip
           testID="hq-kpi"
           items={[
@@ -155,62 +155,83 @@ export default function HqDashboardScreen() {
         />
       </Appear>
 
-      <Appear delay={stagger(1)}>
-        <HqSlab title="확인 필요" hint="본사가 처리할 수 있는 것만 올려요" />
-        {attention.length === 0 ? (
-          <View style={styles.attNone} testID="hq-attention">
-            <Text style={styles.attNoneText}>지금 확인할 일이 없어요.</Text>
+      <Appear delay={stagger(1)} style={styles.cols}>
+        <HqCard style={styles.attCol} testID="hq-attention">
+          <View style={styles.cardHead}>
+            <Text style={styles.cardTitle}>확인 필요</Text>
+            <Text style={styles.cardMeta}>{attention.length ? `${attention.reduce((n, x) => n + x.v, 0)}건` : ''}</Text>
           </View>
-        ) : (
-          <View style={styles.cellcard} testID="hq-attention">
-            {attention.map((a) => (
-              <AttentionCell key={a.k} k={a.k} v={a.v} n={a.n} onPress={() => goStores()} />
-            ))}
-          </View>
-        )}
-      </Appear>
+          {attention.length === 0 ? (
+            <View style={styles.attNone}><Text style={styles.attNoneText}>지금 확인할 일이 없어요.</Text></View>
+          ) : (
+            attention.map((a, i) => (
+              <AttentionRow
+                key={a.k}
+                k={a.k}
+                v={a.v}
+                n={a.n}
+                first={i === 0}
+                onPress={() => (a.to === 'invites' ? router.push('/hq/stores/invites') : goStores())}
+              />
+            ))
+          )}
+        </HqCard>
 
-      <Appear delay={stagger(2)}>
-        <HqSlab title="매장" hint="이름순 · 행을 누르면 매장 화면에서 연결 정보가 열려요" more={{ label: '전체 보기', onPress: () => goStores() }} />
-        <HqTable
-          columns={[
-            { key: 'name', label: '매장', width: 220, render: (r) => <Cell kind="name">{r.store_name}</Cell> },
-            { key: 'vis', label: '공개 수준', width: 130, render: (r) => <HqPill tone={r.visibility === 'ops' ? 'g' : r.visibility === 'knowhow' ? 'i' : 'n'} label={visibilityLabel(r.visibility)} /> },
-            { key: 'staff', label: '직원', align: 'right', render: (r) => <Cell kind="num">{r.staff}</Cell>, sortValue: (r) => r.staff },
-            { key: 'pq', label: '미해결 질문', align: 'right', render: (r) => <Cell kind="num">{r.pending_q}</Cell>, sortValue: (r) => r.pending_q },
-          ]}
-          rows={overview}
-          rowKey={(r) => r.unit_id}
-          onRowPress={(r) => goStores(r.unit_id)}
-          maxRows={DASHBOARD_TABLE_ROWS}
-          footer={overview.length > DASHBOARD_TABLE_ROWS ? `전체 ${overview.length}곳 중 ${DASHBOARD_TABLE_ROWS}곳` : `${overview.length}곳`}
-          testID="hq-dashboard-table"
-        />
+        <View style={styles.tableCol}>
+          <HqSlab title="매장 현황" hint="이름순 · 행을 누르면 매장 상세" more={{ label: '전체 매장', onPress: () => goStores() }} />
+          <HqTable
+            columns={[
+              { key: 'name', label: '매장', width: 200, render: (r) => <Cell kind="name">{r.store_name}</Cell> },
+              { key: 'vis', label: '공개 수준', width: 130, render: (r) => <HqPill tone={VIS_TONE[r.visibility]} label={visibilityLabel(r.visibility)} /> },
+              { key: 'staff', label: '직원', align: 'right', render: (r) => <Cell kind="num">{r.staff}</Cell>, sortValue: (r) => r.staff },
+              { key: 'pq', label: '미해결 질문', align: 'right', render: (r) => <Cell kind="num">{r.pending_q}</Cell>, sortValue: (r) => r.pending_q },
+            ]}
+            rows={overview}
+            rowKey={(r) => r.unit_id}
+            onRowPress={(r) => goStores(r.unit_id)}
+            maxRows={DASHBOARD_TABLE_ROWS}
+            footer={overview.length > DASHBOARD_TABLE_ROWS ? `전체 ${overview.length}곳 중 ${DASHBOARD_TABLE_ROWS}곳` : `${overview.length}곳`}
+            testID="hq-dashboard-table"
+          />
+        </View>
       </Appear>
     </HqPage>
   );
 }
 
-function AttentionCell({ k, v, n, onPress }: { k: string; v: number; n: string; onPress: () => void }) {
+/** 확인 필요 한 줄 — 이름 · 설명 · 오른쪽 큰 숫자. 누르면 처리할 화면으로. */
+function AttentionRow({ k, v, n, first, onPress }: { k: string; v: number; n: string; first: boolean; onPress: () => void }) {
   return (
-    <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={`${k} ${v}건`} style={({ pressed }) => [styles.cell, pressed && { backgroundColor: InkColors.paper }]}>
-      <Text style={styles.cellK}>{k}</Text>
-      <Text style={[styles.cellV, v === 0 && styles.cellZero]}>{v === 0 ? '없음' : v}</Text>
-      <Text style={styles.cellN}>{n}</Text>
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`${k} ${v}건`}
+      style={({ pressed }) => [styles.attRow, !first && styles.attBorder, pressed && { backgroundColor: InkColors.paper }]}
+    >
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text style={styles.cellK}>{k}</Text>
+        <Text style={styles.cellN}>{n}</Text>
+      </View>
+      <Text style={styles.cellV}>{v}</Text>
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  // KPI 스트립 **위**에 붙인다 — 아래 숫자들의 범위를 정하는 것이라 먼저 읽혀야 한다.
-  kpiScope: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 },
+  kpiScope: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   kpiScopeLabel: { fontSize: 13, fontWeight: '700', color: InkColors.ink2 },
-  attNone: { borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md, paddingVertical: 18, paddingHorizontal: 18, marginBottom: 22, backgroundColor: InkColors.bg },
+  // 두 칸 — 왼쪽 확인 필요(고정 폭) · 오른쪽 매장 현황(남는 폭). 좁으면 아래로 접힌다.
+  cols: { flexDirection: 'row', alignItems: 'flex-start', gap: Space.xl, flexWrap: 'wrap' },
+  attCol: { width: 360, flexGrow: 0, flexShrink: 0 },
+  tableCol: { flex: 1, minWidth: 520 },
+  cardHead: { flexDirection: 'row', alignItems: 'baseline', gap: Space.sm, marginBottom: Space.sm },
+  cardTitle: { fontSize: 16, fontWeight: '700', color: InkColors.ink, flexShrink: 0 },
+  cardMeta: { fontSize: 13.5, color: InkColors.ink3 },
+  attNone: { paddingVertical: Space.md },
   attNoneText: { fontSize: 14, color: InkColors.ink3 },
-  cellcard: { flexDirection: 'row', flexWrap: 'wrap', borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md, overflow: 'hidden', marginBottom: 22, backgroundColor: InkColors.bg, ...Elevation.e1 },
-  cell: { flex: 1, minWidth: 180, paddingVertical: 16, paddingHorizontal: 18, borderLeftWidth: 1, borderLeftColor: InkColors.line, marginLeft: -1 },
-  cellK: { fontSize: 14, fontWeight: '600', color: InkColors.ink2, marginBottom: 6 },
-  cellV: { fontSize: 22, fontWeight: '800', letterSpacing: -0.4, color: InkColors.ink },
-  cellZero: { fontSize: 17, fontWeight: '700', color: InkColors.ink3 },
-  cellN: { fontSize: 13, color: InkColors.ink3, marginTop: 4 },
+  attRow: { flexDirection: 'row', alignItems: 'center', gap: Space.md, paddingVertical: Space.md, minHeight: 56 },
+  attBorder: { borderTopWidth: 1, borderTopColor: InkColors.line },
+  cellK: { fontSize: 14.5, fontWeight: '700', color: InkColors.ink },
+  cellV: { fontSize: 22, fontWeight: '800', letterSpacing: -0.4, color: InkColors.ink, fontVariant: ['tabular-nums'], flexShrink: 0 },
+  cellN: { fontSize: 13, color: InkColors.ink3, marginTop: 2 },
 });

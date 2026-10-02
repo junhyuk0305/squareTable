@@ -8,15 +8,13 @@ import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
-import { HqPage, HqButton, HqPill, HqSlab, HqNotice, HqCard, HqEmpty, HqLoadError } from '@/components/hq/HqKit';
+import { HqPage, HqButton, HqNotice, HqEmpty, HqLoadError } from '@/components/hq/HqKit';
 import { HqTable, Cell, type HqColumn } from '@/components/hq/HqTable';
 import { HqModal } from '@/components/hq/HqModal';
-import { HqDeployCounts } from '@/components/hq/HqDeployCounts';
 import { ScreenLoading } from '@/components/ScreenLoading';
-import { Appear, stagger } from '@/components/Appear';
+import { Appear } from '@/components/Appear';
 import { useBrandKnowhowStore } from '@/lib/store/useBrandKnowhowStore';
 import { useBrandUnitsStore } from '@/lib/store/useBrandUnitsStore';
-import { DEPLOY_STATUS, deployStatusMap, cellKey, type DeployStatus } from '@/lib/brand/deployStatus';
 import { visibilityLabel, relationLabel, RELATIONS, deployMixNotice, REQUIRED_HINT } from '@/lib/brand/visibility';
 import type { BrandKnowhowRow } from '@/lib/brand/brandDb';
 import { InkColors } from '@/lib/theme/colors';
@@ -26,7 +24,6 @@ import { Space } from '@/lib/theme/layout';
 export default function HqKnowhowScreen() {
   const router = useRouter();
   const list = useBrandKnowhowStore((s) => s.list);
-  const matrix = useBrandKnowhowStore((s) => s.matrix);
   const knowhowLoaded = useBrandKnowhowStore((s) => s.loaded);
   const error = useBrandKnowhowStore((s) => s.error);
   const hydrate = useBrandKnowhowStore((s) => s.hydrate);
@@ -38,7 +35,7 @@ export default function HqKnowhowScreen() {
   const unitsLoaded = useBrandUnitsStore((s) => s.loaded);
   const unitsError = useBrandUnitsStore((s) => s.error);
   const ready = knowhowLoaded && unitsLoaded;
-  // 새로고침·다시 시도 = 두 재료를 같이. 한쪽만 다시 받으면 행과 매장 수가 서로 다른 시점이 된다.
+  // 다시 시도 = 두 재료를 같이. 한쪽만 다시 받으면 행과 매장 수가 서로 다른 시점이 된다.
   const reload = useCallback(() => Promise.all([refresh(), hydrateUnits()]), [refresh, hydrateUnits]);
 
   useFocusEffect(useCallback(() => { void hydrate(); void hydrateUnits(); }, [hydrate, hydrateUnits]));
@@ -52,12 +49,6 @@ export default function HqKnowhowScreen() {
   /** [필수로 내리기](정본 02 §9) — 서버가 **직영 대상만** 켜고, 끄는 길은 여기에 없다(매장 드로어에서만). */
   const [required, setRequired] = useState(false);
 
-  const cells = useMemo(() => deployStatusMap(matrix, (c) => c.entry_id), [matrix]);
-  const statusOf = useCallback(
-    (entryId: string, unitId: string): DeployStatus => cells.get(cellKey(entryId, unitId))?.status ?? 'none',
-    [cells],
-  );
-  const countRows = useMemo(() => list.map((r) => ({ id: r.id, title: r.title })), [list]);
 
   const toggle = (id: string) =>
     setPicked((p) => {
@@ -151,11 +142,10 @@ export default function HqKnowhowScreen() {
 
   // 머리(제목·버튼)는 게이트 밖 — 골격은 즉시 선다.
   const head = {
-    title: '노하우',
+    title: '전체 노하우',
     sub: '본사가 쓴 노하우를 매장에 보내요. 점주는 받은 노하우를 고치거나 이 매장에서 숨길 수 있어요.',
     actions: (
       <>
-        <HqButton label="새로고침" icon="refresh-outline" onPress={() => void reload()} />
         <HqButton label="노하우 쓰기" icon="add" variant="pri" onPress={() => router.push({ pathname: '/hq/knowhow/[id]', params: { id: 'new' } })} />
       </>
     ),
@@ -186,10 +176,6 @@ export default function HqKnowhowScreen() {
     <HqPage {...head}>
       {/* 등장은 섹션 단위로(ui.md ⑤) — 노하우 표 → 배포 상태 순서로. */}
       <Appear>
-        <HqSlab
-          title="노하우"
-          hint={picked.size ? `${picked.size}건 선택` : '왼쪽 칸을 눌러 여러 건을 고른 뒤 한 번에 보낼 수 있어요'}
-        />
         <View style={styles.bar}>
           <Pressable
             onPress={() => setPicked(allPicked ? new Set() : new Set(list.map((r) => r.id)))}
@@ -206,7 +192,13 @@ export default function HqKnowhowScreen() {
             disabled={picked.size === 0 || overview.length === 0}
             onPress={openDeployModal}
           />
-          {overview.length === 0 ? <Text style={styles.barNote}>연결된 매장이 없어 아직 보낼 곳이 없어요.</Text> : null}
+          <Text style={styles.barNote}>
+            {overview.length === 0
+              ? '연결된 매장이 없어 아직 보낼 곳이 없어요.'
+              : picked.size
+                ? `${picked.size}건 선택`
+                : '왼쪽 칸을 눌러 여러 건을 고른 뒤 한 번에 보낼 수 있어요.'}
+          </Text>
         </View>
 
         <HqTable
@@ -224,24 +216,6 @@ export default function HqKnowhowScreen() {
         />
       </Appear>
 
-      <Appear delay={stagger(1)}>
-        <HqSlab title="매장별 배포 상태" hint="숫자를 누르면 그 매장 목록이 열려요" />
-        {overview.length === 0 || list.length === 0 ? (
-          <HqCard>
-            <HqEmpty text={overview.length === 0 ? '연결된 매장이 생기면 채워져요.' : '노하우를 쓰고 보내면 매장마다 상태가 여기에 모여요.'} />
-          </HqCard>
-        ) : (
-          <HqDeployCounts rows={countRows} units={overview} statusOf={statusOf} kind="노하우" testID="hq-knowhow-xtable" />
-        )}
-        <View style={styles.legend}>
-          {(['current', 'modified', 'pending', 'hidden', 'none'] as DeployStatus[]).map((k) => (
-            <View key={k} style={styles.legendItem}>
-              <HqPill tone={DEPLOY_STATUS[k].tone} label={DEPLOY_STATUS[k].label} />
-              <Text style={styles.legendText}>{DEPLOY_STATUS[k].hint}</Text>
-            </View>
-          ))}
-        </View>
-      </Appear>
 
       <HqModal
         open={openDeploy}

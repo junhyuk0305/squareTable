@@ -88,3 +88,11 @@ export const SIDE_NAV_WIDTH = 240;
  * 데모 HTML `.page` 의 32px 과 같은 값이다. 본사 화면 밖에서는 쓰지 않는다.
  */
 export const HQ_PAGE_GUTTER = 32;
+
+/**
+ * 본사 셸 2단 메뉴(2026-10-02) — 아이콘 줄 + 하위 메뉴 칸. 합 304 는 옛 사이드바(240)보다 64 넓지만,
+ * 매장 상세가 목록 옆 칸(392)이 아니라 페이지가 되면서 본문은 오히려 넓어졌다.
+ * 아이콘 줄 72 = 라벨 '대시보드'(11.5px)가 한 줄로 서는 폭. 하위 메뉴 232 = 매장 이름 12자 안팎이 말줄임 없이 서는 폭.
+ */
+export const HQ_RAIL_WIDTH = 72;
+export const HQ_SUBNAV_WIDTH = 232;

@@ -31,16 +31,21 @@ export default function HqLayout() {
   const stack = (
     <Stack screenOptions={{ headerShown: false, animation: 'none' }}>
       <Stack.Screen name="index" />
-      {/* 매장은 자기 레이아웃(stores/_layout: 목록 + <Slot/>)을 가진 폴더다 — 이 스택에는 'stores' 한 칸으로 보인다.
-          `stores/index`·`stores/[id]` 는 그 안의 Slot 이 고른다(여기서 따로 선언하면 없는 라우트 경고가 난다). */}
-      <Stack.Screen name="stores" />
-      {/* 노하우는 표(index)와 편집기([id])로 나뉜다 — `/hq/knowhow/new` 는 [id]='new' 로 들어온다. */}
+      {/* 2026-10-02 하위 메뉴 개편 — 한 화면에 기능 하나. 매장 상세는 목록 옆 칸이 아니라 페이지다(push).
+          정적 경로(invites·status·members·billing)가 동적 [id] 보다 먼저 잡힌다(expo-router 규칙). */}
+      <Stack.Screen name="stores/index" />
+      <Stack.Screen name="stores/invites" />
+      <Stack.Screen name="stores/[id]" />
+      {/* 노하우·퀴즈 = 표(index) · 배포 상태(status) · 편집기/빌더([id], 'new' = 새로 쓰기). */}
       <Stack.Screen name="knowhow/index" />
+      <Stack.Screen name="knowhow/status" />
       <Stack.Screen name="knowhow/[id]" />
-      {/* 퀴즈도 표(index)와 빌더([id])로 나뉜다 — `/hq/quizzes/new` 는 [id]='new'. */}
       <Stack.Screen name="quizzes/index" />
+      <Stack.Screen name="quizzes/status" />
       <Stack.Screen name="quizzes/[id]" />
-      <Stack.Screen name="settings" />
+      <Stack.Screen name="settings/index" />
+      <Stack.Screen name="settings/members" />
+      <Stack.Screen name="settings/billing" />
       <Stack.Screen name="join" />
     </Stack>
   );

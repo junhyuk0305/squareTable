@@ -13,31 +13,114 @@ import { Space, HQ_PAGE_GUTTER } from '@/lib/theme/layout';
 
 type IconName = keyof typeof Ionicons.glyphMap;
 
-/** 화면 한 장 — 머리(제목·설명·오른쪽 버튼) + 세로 스크롤 본문. 폭 캡 없음, 최대 1400. */
+/**
+ * 화면 한 장 — 흰 머리 줄(← · 제목 + 개수 · 배지 · 설명 · 오른쪽 버튼 · 탭) + 회색 바탕 본문(최대 1400).
+ *
+ * 머리 줄과 본문을 **아래 선 하나와 바탕색**으로 가른다(2026-10-02 레퍼런스 개편). 예전엔 흰 바탕 위에
+ * 흰 카드라 카드 경계가 테두리 한 줄뿐이었다 — 회색 바탕 위 흰 카드로 묶음이 먼저 보인다.
+ * 탭은 머리 줄 바닥에 붙는다(밑줄 탭) — 탭이 바꾸는 것은 본문 전체라 본문 안에 두지 않는다.
+ */
 export function HqPage({
   title,
+  count,
+  badges,
   sub,
+  back,
   actions,
+  tabs,
   children,
   testID,
 }: {
   title: string;
+  /** 제목 옆 흐린 숫자("전체 매장 3"). 0 도 그린다 — 없음과 0 은 다르다. */
+  count?: number;
+  /** 제목 옆 배지(관계·공개 수준 등). */
+  badges?: ReactNode;
   sub?: string;
+  /** 왼쪽 ← — 상세 화면에서 목록으로. */
+  back?: { label: string; onPress: () => void; testID?: string };
   actions?: ReactNode;
+  /** 머리 줄 바닥의 탭(HqTabs). */
+  tabs?: ReactNode;
   children: ReactNode;
   testID?: string;
 }) {
   return (
-    <ScrollView style={styles.scroll} contentContainerStyle={styles.page} testID={testID}>
-      <View style={styles.phead}>
-        <View style={{ flex: 1, minWidth: 0 }}>
-          <Text style={styles.h1}>{title}</Text>
-          {sub ? <Text style={styles.psub}>{sub}</Text> : null}
+    <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollBody} testID={testID}>
+      <View style={[styles.phead, !!tabs && { paddingBottom: 0 }]}>
+        <View style={styles.pheadRow}>
+          {back ? (
+            <Pressable
+              onPress={back.onPress}
+              accessibilityRole="button"
+              accessibilityLabel={back.label}
+              testID={back.testID}
+              style={({ pressed }) => [styles.back, pressed && { backgroundColor: InkColors.paper }]}
+            >
+              <Ionicons name="arrow-back" size={20} color={InkColors.ink} />
+            </Pressable>
+          ) : null}
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <View style={styles.titleRow}>
+              <Text style={styles.h1}>{title}</Text>
+              {count !== undefined ? <Text style={styles.count}>{count}</Text> : null}
+              {badges}
+            </View>
+            {sub ? <Text style={styles.psub}>{sub}</Text> : null}
+          </View>
+          {actions ? <View style={styles.pact}>{actions}</View> : null}
         </View>
-        {actions ? <View style={styles.pact}>{actions}</View> : null}
+        {tabs}
       </View>
-      {children}
+      <View style={styles.page}>{children}</View>
     </ScrollView>
+  );
+}
+
+/** 밑줄 탭 — HqPage 의 tabs 자리에 둔다. 선택 표시는 밑줄 + 굵기 + 색 셋이 같이 바뀐다. */
+export function HqTabs<T extends string>({
+  items,
+  value,
+  onChange,
+  testID,
+}: {
+  items: { key: T; label: string; count?: number }[];
+  value: T;
+  onChange: (k: T) => void;
+  testID?: string;
+}) {
+  return (
+    <View style={styles.tabs} testID={testID}>
+      {items.map((it) => {
+        const on = it.key === value;
+        return (
+          <Pressable
+            key={it.key}
+            onPress={() => onChange(it.key)}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: on }}
+            aria-selected={on}
+            accessibilityLabel={it.label}
+            testID={testID ? `${testID}-${it.key}` : undefined}
+            style={[styles.tab, on && styles.tabOn]}
+          >
+            <Text style={[styles.tabText, on && styles.tabTextOn]}>{it.label}</Text>
+            {it.count !== undefined ? <Text style={styles.tabCount}>{it.count}</Text> : null}
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+/** 라벨이 위·값이 아래인 칸(설정·개요) — 카드 안을 여러 칸으로 나눌 때. 꼬리(도움말)는 값 아래 회색 한 줄. */
+export function HqField({ label, children, hint, style }: { label: string; children: ReactNode; hint?: string; style?: ViewStyle }) {
+  return (
+    <View style={[styles.field, style]}>
+      <Text style={styles.fieldK}>{label}</Text>
+      {typeof children === 'string' || typeof children === 'number' ? <Text style={styles.fieldV}>{children}</Text> : children}
+      {hint ? <Text style={styles.fieldHint}>{hint}</Text> : null}
+    </View>
   );
 }
 
@@ -258,12 +341,30 @@ export function HqSegment<T extends string>({
 }
 
 const styles = StyleSheet.create({
-  scroll: { flex: 1, backgroundColor: InkColors.bg },
-  page: { paddingTop: 26, paddingBottom: 60, paddingHorizontal: HQ_PAGE_GUTTER, maxWidth: 1400, width: '100%' },
-  phead: { flexDirection: 'row', alignItems: 'flex-end', gap: 20, marginBottom: 20 },
-  h1: { fontSize: 24, fontWeight: '800', letterSpacing: -0.5, color: InkColors.ink, marginBottom: 3 },
-  psub: { fontSize: 15, color: InkColors.ink2 },
-  pact: { flexDirection: 'row', gap: Space.sm, flexShrink: 0 },
+  // 바탕 = 옅은 회색(paper), 카드·표·머리 줄 = 흰색. 경계가 선이 아니라 면으로 보인다.
+  scroll: { flex: 1, backgroundColor: InkColors.paper },
+  scrollBody: { flexGrow: 1 },
+  page: { paddingTop: Space.xl, paddingBottom: 60, paddingHorizontal: HQ_PAGE_GUTTER, maxWidth: 1400, width: '100%' },
+  phead: { backgroundColor: InkColors.bg, borderBottomWidth: 1, borderBottomColor: InkColors.line, paddingTop: 22, paddingBottom: 18, paddingHorizontal: HQ_PAGE_GUTTER },
+  pheadRow: { flexDirection: 'row', alignItems: 'center', gap: Space.md },
+  back: { width: 36, height: 36, borderRadius: Radius.sm, alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginLeft: -Space.sm },
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: 10, flexWrap: 'wrap' },
+  h1: { fontSize: 22, fontWeight: '800', letterSpacing: -0.5, color: InkColors.ink, flexShrink: 0 },
+  count: { fontSize: 22, fontWeight: '700', color: InkColors.ink3, fontVariant: ['tabular-nums'], flexShrink: 0 },
+  psub: { fontSize: 14, color: InkColors.ink2, marginTop: Space.xs },
+  pact: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, flexShrink: 0 },
+
+  tabs: { flexDirection: 'row', gap: Space.xl, marginTop: Space.lg },
+  tab: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 10, borderBottomWidth: 2, borderBottomColor: 'transparent', marginBottom: -1, flexShrink: 0 },
+  tabOn: { borderBottomColor: InkColors.ink },
+  tabText: { fontSize: 15, fontWeight: '600', color: InkColors.ink3 },
+  tabTextOn: { color: InkColors.ink, fontWeight: '800' },
+  tabCount: { fontSize: 13, fontWeight: '700', color: InkColors.ink3, fontVariant: ['tabular-nums'] },
+
+  field: { flex: 1, minWidth: 0, gap: 6 },
+  fieldK: { fontSize: 13.5, fontWeight: '700', color: InkColors.ink2 },
+  fieldV: { fontSize: 15.5, fontWeight: '700', color: InkColors.ink },
+  fieldHint: { fontSize: 13, color: InkColors.ink3, lineHeight: 18 },
 
   btn: {
     flexDirection: 'row',
@@ -289,7 +390,7 @@ const styles = StyleSheet.create({
   pillDot: { width: 5, height: 5, borderRadius: Radius.pill, opacity: 0.85 },
   pillText: { fontSize: 13, fontWeight: '700' },
 
-  notice: { borderWidth: 1, borderColor: InkColors.line, backgroundColor: InkColors.paper, borderRadius: 12, paddingVertical: 12, paddingHorizontal: 15, marginBottom: 22 },
+  notice: { borderWidth: 1, borderColor: InkColors.line, backgroundColor: InkColors.bg, borderRadius: 12, paddingVertical: 12, paddingHorizontal: 15, marginBottom: 22 },
   noticeText: { fontSize: 14, lineHeight: 22, color: InkColors.ink2 },
 
   card: { borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md, backgroundColor: InkColors.bg, padding: 22, paddingTop: 20, marginBottom: 18, ...Elevation.e1, overflow: 'hidden' },
@@ -316,7 +417,8 @@ const styles = StyleSheet.create({
   loadErrTitle: { fontSize: 15, fontWeight: '800', color: BrandColors.warnText, textAlign: 'center' },
   loadErrBody: { fontSize: 14, color: InkColors.ink2, textAlign: 'center', marginBottom: Space.xs },
 
-  seg: { flexDirection: 'row', backgroundColor: InkColors.paper, borderRadius: Radius.pill, padding: 3, gap: 2, alignSelf: 'flex-start' },
+  // 흰 면 + 테두리 — 회색 바탕(HqPage)과 흰 카드 어디에 놓여도 보인다.
+  seg: { flexDirection: 'row', backgroundColor: InkColors.bg, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.pill, padding: 3, gap: 2, alignSelf: 'flex-start' },
   segItem: { paddingVertical: 6, paddingHorizontal: 13, borderRadius: Radius.pill, flexShrink: 0 },
   segOn: { backgroundColor: InkColors.ink },
   segText: { fontSize: 14, fontWeight: '700', color: InkColors.ink2 },

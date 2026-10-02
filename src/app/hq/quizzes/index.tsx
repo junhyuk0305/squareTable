@@ -9,15 +9,14 @@ import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
-import { HqPage, HqButton, HqPill, HqSlab, HqNotice, HqCard, HqEmpty, HqLoadError } from '@/components/hq/HqKit';
+import { HqPage, HqButton, HqNotice, HqEmpty, HqLoadError } from '@/components/hq/HqKit';
 import { HqTable, Cell, type HqColumn } from '@/components/hq/HqTable';
 import { HqModal } from '@/components/hq/HqModal';
-import { HqDeployCounts } from '@/components/hq/HqDeployCounts';
 import { ScreenLoading } from '@/components/ScreenLoading';
-import { Appear, stagger } from '@/components/Appear';
+import { Appear } from '@/components/Appear';
 import { useBrandQuizStore } from '@/lib/store/useBrandQuizStore';
 import { useBrandUnitsStore } from '@/lib/store/useBrandUnitsStore';
-import { DEPLOY_STATUS, deployStatusMap, cellKey, type DeployStatus } from '@/lib/brand/deployStatus';
+import { deployStatusMap, cellKey } from '@/lib/brand/deployStatus';
 import { visibilityLabel, relationLabel, RELATIONS, deployMixNotice, REQUIRED_HINT } from '@/lib/brand/visibility';
 import type { BrandQuizRow, BrandCourseDeployResult } from '@/lib/brand/brandDb';
 import { InkColors } from '@/lib/theme/colors';
@@ -27,7 +26,6 @@ import { Space } from '@/lib/theme/layout';
 export default function HqQuizzesScreen() {
   const router = useRouter();
   const list = useBrandQuizStore((s) => s.list);
-  const matrix = useBrandQuizStore((s) => s.matrix);
   const entryMatrix = useBrandQuizStore((s) => s.entryMatrix);
   const courseEntries = useBrandQuizStore((s) => s.courseEntries);
   const quizLoaded = useBrandQuizStore((s) => s.loaded);
@@ -41,7 +39,7 @@ export default function HqQuizzesScreen() {
   const unitsLoaded = useBrandUnitsStore((s) => s.loaded);
   const unitsError = useBrandUnitsStore((s) => s.error);
   const ready = quizLoaded && unitsLoaded;
-  // 새로고침·다시 시도 = 두 재료를 같이. 한쪽만 다시 받으면 행과 매장 수가 서로 다른 시점이 된다.
+  // 다시 시도 = 두 재료를 같이. 한쪽만 다시 받으면 행과 매장 수가 서로 다른 시점이 된다.
   const reload = useCallback(() => Promise.all([refresh(), hydrateUnits()]), [refresh, hydrateUnits]);
 
   useFocusEffect(useCallback(() => { void hydrate(); void hydrateUnits(); }, [hydrate, hydrateUnits]));
@@ -55,13 +53,7 @@ export default function HqQuizzesScreen() {
   /** [필수로 내리기](정본 02 §9) — 서버가 **직영 대상만** 켜고, 끄는 길은 여기에 없다(매장 드로어에서만). */
   const [required, setRequired] = useState(false);
 
-  const cells = useMemo(() => deployStatusMap(matrix, (c) => c.course_id), [matrix]);
   const entryCells = useMemo(() => deployStatusMap(entryMatrix, (c) => c.entry_id), [entryMatrix]);
-  const statusOf = useCallback(
-    (courseId: string, unitId: string): DeployStatus => cells.get(cellKey(courseId, unitId))?.status ?? 'none',
-    [cells],
-  );
-  const countRows = useMemo(() => list.map((r) => ({ id: r.id, title: r.name })), [list]);
 
   /** 고른 퀴즈들이 담은 노하우 중 그 매장에 사본이 없는 것 — 배포하면 **함께 내려간다**(정본 §4-B "없으면 먼저 자동 배포"). */
   const missingFor = (unitId: string): number => {
@@ -176,11 +168,10 @@ export default function HqQuizzesScreen() {
 
   // 머리(제목·버튼)는 게이트 밖 — 골격은 즉시 선다.
   const head = {
-    title: '퀴즈',
+    title: '전체 퀴즈',
     sub: '본사가 만든 퀴즈를 매장에 보내요. 언제 누구에게 낼지는 점주가 정하고, 발송은 그 매장의 규칙대로 나가요.',
     actions: (
       <>
-        <HqButton label="새로고침" icon="refresh-outline" onPress={() => void reload()} />
         <HqButton label="퀴즈 만들기" icon="add" variant="pri" onPress={() => router.push({ pathname: '/hq/quizzes/[id]', params: { id: 'new' } })} />
       </>
     ),
@@ -211,10 +202,6 @@ export default function HqQuizzesScreen() {
     <HqPage {...head}>
       {/* 등장은 섹션 단위로(ui.md ⑤) — 퀴즈 표 → 배포 상태 순서로(노하우 화면과 같다). */}
       <Appear>
-        <HqSlab
-          title="퀴즈"
-          hint={picked.size ? `${picked.size}건 선택` : '왼쪽 칸을 눌러 여러 건을 고른 뒤 한 번에 보낼 수 있어요'}
-        />
         <View style={styles.bar}>
           <Pressable
             onPress={() => setPicked(allPicked ? new Set() : new Set(list.map((r) => r.id)))}
@@ -231,7 +218,13 @@ export default function HqQuizzesScreen() {
             disabled={picked.size === 0 || overview.length === 0}
             onPress={openDeployModal}
           />
-          {overview.length === 0 ? <Text style={styles.barNote}>연결된 매장이 없어 아직 보낼 곳이 없어요.</Text> : null}
+          <Text style={styles.barNote}>
+            {overview.length === 0
+              ? '연결된 매장이 없어 아직 보낼 곳이 없어요.'
+              : picked.size
+                ? `${picked.size}건 선택`
+                : '왼쪽 칸을 눌러 여러 건을 고른 뒤 한 번에 보낼 수 있어요.'}
+          </Text>
         </View>
 
         <HqTable
@@ -249,24 +242,6 @@ export default function HqQuizzesScreen() {
         />
       </Appear>
 
-      <Appear delay={stagger(1)}>
-        <HqSlab title="매장별 배포 상태" hint="숫자를 누르면 그 매장 목록이 열려요" />
-        {overview.length === 0 || list.length === 0 ? (
-          <HqCard>
-            <HqEmpty text={overview.length === 0 ? '연결된 매장이 생기면 채워져요.' : '퀴즈를 만들어 보내면 매장마다 상태가 여기에 모여요.'} />
-          </HqCard>
-        ) : (
-          <HqDeployCounts rows={countRows} units={overview} statusOf={statusOf} kind="퀴즈" testID="hq-quizzes-xtable" />
-        )}
-        <View style={styles.legend}>
-          {(['current', 'modified', 'pending', 'hidden', 'none'] as DeployStatus[]).map((k) => (
-            <View key={k} style={styles.legendItem}>
-              <HqPill tone={DEPLOY_STATUS[k].tone} label={DEPLOY_STATUS[k].label} />
-              <Text style={styles.legendText}>{DEPLOY_STATUS[k].hint}</Text>
-            </View>
-          ))}
-        </View>
-      </Appear>
 
       <HqModal
         open={openDeploy}

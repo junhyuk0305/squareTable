@@ -1,4 +1,5 @@
-// qa-hq-structure.mjs — 본사 대시보드 구조 회귀(2026-10-01 R1~R5 · 상태별 매장 수 · 로딩/실패 3분기 · 등장 애니메이션).
+// qa-hq-structure.mjs — 본사 대시보드 구조 회귀(2026-10-01 R1~R5 · 상태별 매장 수 · 로딩/실패 3분기 · 등장 애니메이션
+//   · 2026-10-02 하위 메뉴 개편: 2단 메뉴 · 전체 매장 전체 폭 · 매장 상세 페이지 + 탭 · 초대 대기·배포 상태·설정 분리).
 //
 //   npm run qa:hq-structure            (개발 서버 http://localhost:8081 이 떠 있어야 한다 · QA_ORIGIN 으로 바꾼다)
 //
@@ -79,7 +80,7 @@ const waitRows = (page, table) => page.waitFor(`${ROWS(table)}.length > 0`, 4000
 const navActive = (page, key) =>
   page.eval(`(()=>{const bg=k=>getComputedStyle(document.querySelector('[data-testid="nav-'+k+'"]')).backgroundColor;return bg(${JSON.stringify(key)})!=='rgba(0, 0, 0, 0)' && bg('/hq/knowhow')==='rgba(0, 0, 0, 0)';})()`);
 const detailTitle = (page) =>
-  page.eval(`(()=>{const d=document.querySelector('[data-testid="hq-drawer"]');if(!d||!d.getBoundingClientRect().width)return null;return d.innerText.split('\\n').filter(Boolean).slice(0,2).join(' | ');})()`);
+  page.eval(`(()=>{const d=document.querySelector('[data-testid="hq-store-detail"]');if(!d||!d.getBoundingClientRect().width)return null;return d.innerText.split('\\n').filter(Boolean).slice(0,2).join(' | ');})()`);
 const SEARCH = 'input[aria-label="매장 이름으로 찾기"]';
 
 // ── A. 서버 — 0228 brand_overview_page 경계 ─────────────────────────────────
@@ -108,7 +109,7 @@ section('A. 서버 입구(0228) — 경계 · 전체 기준 정렬');
 
 // ── B. 데이터 축(R1) — 화면이 쓰는 것만 받는다 ─────────────────────────────
 section('B. 데이터 축 — 셸이 전 매장 요약을 끌고 오지 않는다');
-for (const [path, wait] of [['/hq/knowhow/new', '[data-testid="hq-main"]'], ['/hq/stores', '[data-testid="hq-stores-table"]'], [`/hq/stores/${UNIT}`, '[data-testid="hq-drawer"]']]) {
+for (const [path, wait] of [['/hq/knowhow/new', '[data-testid="hq-main"]'], ['/hq/stores', '[data-testid="hq-stores-table"]'], [`/hq/stores/${UNIT}`, '[data-testid="hq-store-tabs"]']]) {
   await withPage({}, async (page) => {
     await page.goto(path);
     await page.waitFor(`!!document.querySelector('${wait}')`, 40000);
@@ -118,139 +119,117 @@ for (const [path, wait] of [['/hq/knowhow/new', '[data-testid="hq-main"]'], ['/h
   });
 }
 
-// ── C. 라우팅(R2) — 매장 주소 · 2단 · 히스토리 ────────────────────────────
-section('C. 매장 목록 + 상세 라우팅');
+// ── C. 라우팅 — 하위 메뉴 · 전체 매장 · 매장 상세 페이지(2026-10-02 개편) ─────────────
+section('C. 하위 메뉴 + 전체 매장 + 매장 상세 페이지');
+const subActive = (page, key) =>
+  page.eval(`(()=>{const e=document.querySelector('[data-testid="subnav-${key}"]');return !!e && e.getAttribute('aria-selected')==='true';})()`);
 await withPage({}, async (page) => {
   await page.goto('/hq/stores');
   await waitRows(page, 'hq-stores-table');
   await sleep(1500);
   const ids = await page.eval(ROWS('hq-stores-table'));
-  check('C1 목록 보임 · 상세 없음', (await page.visible('[data-testid="hq-stores"]')) && !(await page.visible('[data-testid="hq-drawer"]')));
-  check('C2 넓은 창 빈 자리 문구', (await page.text()).includes('매장을 고르면 여기에 연결 정보가 열려요.'));
-  check('C3 사이드바 매장 활성(/hq/stores)', await navActive(page, '/hq/stores'));
-  // 목록 쪽 조회만 센다 — 상세 칸도 같은 입구를 쓰지만 p_units=[그 매장]으로 한 행만 받는다.
-  const listFetches = () => page.calls.filter((c) => c.name === 'brand_overview_page' && !c.body?.p_units).length;
-  const ov0 = listFetches();
-  await page.click(`[data-testid="hq-row-${ids[0]}"]`);
-  await page.waitFor(`location.pathname === '/hq/stores/${ids[0]}'`);
-  await sleep(800);
-  check('C4 행 → /hq/stores/<id>', (await page.path()) === `/hq/stores/${ids[0]}`);
-  check('C5 넓은 창: 목록 + 상세 같이', (await page.visible('[data-testid="hq-stores"]')) && (await page.visible('[data-testid="hq-drawer"]')));
-  check('C6 사이드바 매장 활성(/hq/stores/<id>)', await navActive(page, '/hq/stores'));
-  const h1 = await page.eval('history.length');
-  if (ids.length > 1) {
-    const t0 = await detailTitle(page);
-    await page.click(`[data-testid="hq-row-${ids[1]}"]`);
-    await page.waitFor(`location.pathname === '/hq/stores/${ids[1]}'`);
-    await sleep(800);
-    check('C7 갈아 끼우면 상세 내용이 바뀐다', t0 !== (await detailTitle(page)));
-    check('C8 갈아 끼우기 = replace(history 길이 그대로)', (await page.eval('history.length')) === h1);
-    check('C9 갈아 끼워도 목록 재조회 0', listFetches() === ov0, `${ov0} → ${listFetches()}`);
-  } else {
-    check('C7~C9 매장이 2곳 이상 필요(고정 계정 상태 확인)', false, `${ids.length}곳`);
-  }
-  const name0 = await page.eval(`document.querySelector('[data-testid="hq-row-${ids[0]}"]').innerText.split('\\n')[0]`);
-  const needle = name0.slice(0, 2);
+  check('C1 전체 매장: 표 보임 · 상세 없음', (await page.visible('[data-testid="hq-stores"]')) && !(await page.visible('[data-testid="hq-store-detail"]')));
+  check('C2 아이콘 줄 매장 활성 · 하위 메뉴 전체 매장 활성', (await navActive(page, '/hq/stores')) && (await subActive(page, 'stores-all')));
+  check('C3 하위 메뉴 매장 트리 = 표의 매장', await page.waitFor(`!!document.querySelector('[data-testid="hq-tree-${ids[0]}"]')`, 20000));
+  const needle = (await page.eval(`document.querySelector('[data-testid="hq-row-${ids[0]}"]').innerText.split('\\n')[0]`)).slice(0, 2);
   await page.type(SEARCH, needle);
-  await sleep(1500); // 검색은 멈추고 0.3초 뒤 서버로 간다 — 그 응답까지
+  await sleep(1500);
   await waitRows(page, 'hq-stores-table');
   const filtered = await page.eval(ROWS('hq-stores-table'));
+  const h0 = await page.eval('history.length');
   await page.click(`[data-testid="hq-row-${filtered[0]}"]`);
+  await page.waitFor(`location.pathname === '/hq/stores/${filtered[0]}'`);
+  await page.waitFor(`!!document.querySelector('[data-testid="hq-store-tabs"]')`, 40000);
   await sleep(800);
-  check('C10 상세를 바꿔도 검색어 유지', (await page.eval(`document.querySelector('${SEARCH}').value`)) === needle);
-  await page.back();
-  await sleep(1000);
-  check('C11 뒤로가기 → /hq/stores(본사 안)', (await page.path()) === '/hq/stores', await page.path());
-  check('C12 뒤로가기 뒤 상세 닫힘 · 검색어 유지', !(await page.visible('[data-testid="hq-drawer"]')) && (await page.eval(`document.querySelector('${SEARCH}').value`)) === needle);
-  await page.click(`[data-testid="hq-row-${filtered[0]}"]`);
-  await page.waitFor(`location.pathname.startsWith('/hq/stores/')`);
+  check('C4 행 → /hq/stores/<id> 페이지(목록은 안 보임)', (await page.visible('[data-testid="hq-store-detail"]')) && !(await page.visible('[data-testid="hq-stores"]')));
+  check('C5 상세에서 트리의 그 매장 활성', await page.eval(`document.querySelector('[data-testid="hq-tree-${filtered[0]}"]')?.getAttribute('aria-selected')==='true'`));
+  check('C6 행 → 상세 = push(history +1)', (await page.eval('history.length')) === h0 + 1);
+  if (ids.length > 1) {
+    const other = ids.find((x) => x !== filtered[0]);
+    const t0 = await detailTitle(page);
+    const h1 = await page.eval('history.length');
+    await page.click(`[data-testid="hq-tree-${other}"]`);
+    await page.waitFor(`location.pathname === '/hq/stores/${other}'`);
+    await page.waitFor(`!!document.querySelector('[data-testid="hq-store-tabs"]')`, 40000);
+    await sleep(800);
+    check('C7 트리로 다른 매장 = 내용 바뀜 · replace(history 그대로)', t0 !== (await detailTitle(page)) && (await page.eval('history.length')) === h1);
+  } else {
+    check('C7 매장이 2곳 이상 필요(고정 계정 상태 확인)', false, `${ids.length}곳`);
+  }
+  await page.click('[data-testid="hq-store-back"]');
+  await sleep(1200);
+  check('C8 ← → /hq/stores · 검색어 유지', (await page.path()) === '/hq/stores' && (await page.eval(`document.querySelector('${SEARCH}')?.value`)) === needle, await page.path());
+  // 탭은 주소가 SSOT — 바꾸면 ?tab= 이 붙고, 새로고침해도 같은 탭이다.
+  await page.goto(`/hq/stores/${UNIT}`);
+  await page.waitFor(`!!document.querySelector('[data-testid="hq-store-tabs"]')`, 40000);
   await sleep(800);
-  const before = await detailTitle(page);
+  await page.click('[data-testid="hq-store-tabs-rules"]');
+  await sleep(800);
+  check('C9 탭 → ?tab=rules', (await page.eval('location.search')).includes('tab=rules'));
   await page.reload();
-  await page.waitFor(`!!document.querySelector('[data-testid="hq-drawer"]') && document.querySelector('[data-testid="hq-drawer"]').innerText.includes('관계')`, 40000);
-  await sleep(1500);
-  check('C13 새로고침 → 같은 매장', (await detailTitle(page)) === before);
-  await page.click('[data-testid="hq-drawer-close"]');
-  await sleep(800);
-  check('C14 ✕ → /hq/stores', (await page.path()) === '/hq/stores');
+  await page.waitFor(`!!document.querySelector('[data-testid="hq-store-tabs"]')`, 40000);
+  await sleep(1200);
+  check('C10 새로고침 → 같은 탭(연결과 규칙)', await page.eval(`document.querySelector('[data-testid="hq-store-tabs-rules"]')?.getAttribute('aria-selected')==='true'`));
+  await page.click('[data-testid="hq-store-back"]');
+  await sleep(1000);
+  check('C11 주소로 바로 들어온 상세의 ← = 전체 매장', (await page.path()) === '/hq/stores', await page.path());
   await page.goto('/hq/stores/no_such_unit');
-  check('C15 없는 id → 안내 문구', await page.waitFor(`document.body.innerText.includes('이 매장은 지금 연결된 매장 목록에 없어요.')`, 40000));
+  check('C12 없는 id → 안내 문구', await page.waitFor(`document.body.innerText.includes('이 매장은 지금 연결된 매장 목록에 없어요.')`, 40000));
+  // 초대 대기 = 자기 화면. 하위 메뉴 + = 초대 대기 화면 + 매장 추가 창.
+  await page.goto('/hq/stores');
+  await waitRows(page, 'hq-stores-table');
+  await page.click('[data-testid="subnav-stores-invites"]');
+  await page.waitFor(`location.pathname === '/hq/stores/invites'`);
+  await page.waitFor(`!!document.querySelector('[data-testid="hq-invites-table"]')`, 40000);
+  check('C13 하위 메뉴 초대 대기 → /hq/stores/invites · 표 · 활성', await subActive(page, 'stores-invites'));
+  await page.click('[data-testid="subnav-add"]');
+  check('C14 하위 메뉴 + → 매장 추가 창', await page.waitFor(`!!document.querySelector('[data-testid="hq-invite-phone"]')`, 20000));
   console.log('   콘솔 에러', page.errors.length);
 });
-await withPage({ width: 1280, height: 900 }, async (page) => {
-  await page.goto('/hq/stores');
-  await waitRows(page, 'hq-stores-table');
-  await sleep(1500);
-  const ids = await page.eval(ROWS('hq-stores-table'));
-  check('C16 좁은 창 /hq/stores: 목록만', await page.visible('[data-testid="hq-stores"]'));
-  await page.click(`[data-testid="hq-row-${ids[0]}"]`);
-  await page.waitFor(`location.pathname.startsWith('/hq/stores/')`);
-  await sleep(800);
-  check('C17 좁은 창 상세: 상세만 · 목록으로 버튼', !(await page.visible('[data-testid="hq-stores"]')) && (await page.visible('[data-testid="hq-drawer"]')) && (await page.visible('[aria-label="목록으로"]')));
-  await page.click('[aria-label="목록으로"]');
-  await sleep(800);
-  check('C18 목록으로 → /hq/stores · 목록 보임', (await page.path()) === '/hq/stores' && (await page.visible('[data-testid="hq-stores"]')));
-  await page.goto(`/hq/stores/${ids[0]}`);
-  check('C19 주소 직접 입력 → 그 매장', await page.waitFor(`!!document.querySelector('[data-testid="hq-drawer"]')`, 40000));
-  await sleep(1000);
-  await page.click('[aria-label="목록으로"]');
-  await sleep(800);
-  check('C20 딥링크에서 목록으로 → /hq/stores', (await page.path()) === '/hq/stores');
-});
 
-// ── D. 닫기·뒤로가기(R4) ───────────────────────────────────────────────
-section('D. 대시보드에서 들어온 상세의 닫기 · 사이드바 이동');
-for (const [width, closeSel, label] of [[1600, '[data-testid="hq-drawer-close"]', '넓은 창 ✕'], [1280, '[aria-label="목록으로"]', '좁은 창 목록으로']]) {
-  await withPage({ width }, async (page) => {
-    await page.goto('/hq');
-    await waitRows(page, 'hq-dashboard-table');
-    await page.click(`[data-testid="hq-dashboard-table"] [data-testid="hq-row-${UNIT}"]`);
-    await page.waitFor(`!!document.querySelector('[data-testid="hq-drawer"]') && location.pathname==='/hq/stores/${UNIT}'`, 20000);
-    await sleep(800);
-    await page.click(closeSel);
-    await sleep(1000);
-    check(`D ${label}: 대시보드 → 상세 → 닫기 = 목록(대시보드로 새지 않는다)`, (await page.path()) === '/hq/stores' && (await page.visible('[data-testid="hq-stores"]')), await page.path());
-    await page.back();
-    await sleep(1000);
-    check(`D ${label}: 그 뒤 뒤로 = /hq`, (await page.path()) === '/hq', await page.path());
-  });
-}
+// ── D. 뒤로가기 · 메뉴 이동 ──────────────────────────────────────────────
+section('D. 대시보드에서 들어온 상세 · 메뉴 이동');
 await withPage({}, async (page) => {
-  await page.goto('/hq/stores');
-  await waitRows(page, 'hq-stores-table');
-  await page.click(`[data-testid="hq-row-${UNIT}"]`);
-  await page.waitFor(`location.pathname==='/hq/stores/${UNIT}'`);
+  await page.goto('/hq');
+  await waitRows(page, 'hq-dashboard-table');
+  await page.click(`[data-testid="hq-dashboard-table"] [data-testid="hq-row-${UNIT}"]`);
+  await page.waitFor(`!!document.querySelector('[data-testid="hq-store-tabs"]') && location.pathname==='/hq/stores/${UNIT}'`, 40000);
+  await sleep(800);
+  await page.click('[data-testid="hq-store-back"]');
+  await sleep(1000);
+  check('D 대시보드 → 상세 → ← = 대시보드(들어온 곳)', (await page.path()) === '/hq', await page.path());
+  await page.goto(`/hq/stores/${UNIT}`);
+  await page.waitFor(`!!document.querySelector('[data-testid="hq-store-tabs"]')`, 40000);
   await sleep(600);
   await page.click('[data-testid="nav-/hq/knowhow"]');
   await page.waitFor(`location.pathname==='/hq/knowhow'`);
   await sleep(800);
-  await page.back();
-  await sleep(1000);
-  check('D 상세 → 사이드바 노하우 → 뒤로 = 목록', (await page.path()) === '/hq/stores', await page.path());
-  await page.click(`[data-testid="hq-row-${UNIT}"]`);
-  await page.waitFor(`location.pathname==='/hq/stores/${UNIT}'`);
-  await sleep(600);
-  await page.click('[data-testid="nav-/hq/stores"]');
-  await sleep(1000);
-  check('D 상세에서 사이드바 매장 = 목록 · 상세 닫힘', (await page.path()) === '/hq/stores' && !(await page.visible('[data-testid="hq-drawer"]')));
+  check('D 아이콘 줄 노하우 → 하위 메뉴 노하우(전체 노하우 활성)', await subActive(page, 'knowhow-all'));
+  await page.click('[data-testid="subnav-knowhow-status"]');
+  await page.waitFor(`location.pathname==='/hq/knowhow/status'`);
+  await sleep(800);
+  check('D 하위 메뉴 배포 상태 → /hq/knowhow/status · 활성', await subActive(page, 'knowhow-status'));
+  await page.click('[data-testid="nav-/hq"]');
+  await page.waitFor(`location.pathname==='/hq'`);
+  await sleep(800);
+  check('D 대시보드에는 하위 메뉴가 없다', !(await page.visible('[data-testid="hq-subnav"]')));
 });
 
-// ── E. 2단 기준 폭 ─────────────────────────────────────────────────────
-section('E. 2단 기준 폭(1371) · 표 머리글 한 줄 · 가로 스크롤 0');
+// ── E. 폭 — 머리글 한 줄 · 페이지 가로 스크롤 0 ──────────────────────────────
+section('E. 전체 매장 표 머리글 한 줄 · 페이지 가로 넘침 0 (1280 · 1440 · 1600)');
 await withPage({ width: 1440, height: 900 }, async (page) => {
-  await page.goto(`/hq/stores/${UNIT}`);
-  await page.waitFor(`!!document.querySelector('[data-testid="hq-drawer"]') && ${ROWS('hq-stores-table')}.length>0`, 40000);
+  await page.goto('/hq/stores');
+  await waitRows(page, 'hq-stores-table');
   await sleep(2000);
-  const probe = `(()=>{const t=document.querySelector('[data-testid="hq-stores-table"]');if(!t||!t.getBoundingClientRect().width)return null;
-    const sc=[...t.querySelectorAll('div')].find(d=>{const s=getComputedStyle(d);return s.overflowX==='auto'||s.overflowX==='scroll';});
-    const tall=[...t.querySelectorAll('div[dir="auto"]')].filter(e=>e.innerText&&['매장','관계','공개 수준','직원','숙지율'].includes(e.innerText)).some(e=>e.getBoundingClientRect().height>24);
-    return {fit: sc ? sc.scrollWidth <= sc.clientWidth : true, tall};})()`;
-  for (const [w, want] of [[1370, false], [1371, true], [1440, true]]) {
+  const probe = `(()=>{const t=document.querySelector('[data-testid="hq-stores-table"]');if(!t)return null;
+    const heads=['매장','관계','공개 수준','직원','자체 노하우','받은 노하우','숙지율','미해결 질문','요금 부담'];
+    const tall=[...t.querySelectorAll('div[dir="auto"]')].filter(e=>heads.includes(e.innerText)).filter(e=>e.getBoundingClientRect().height>24).map(e=>e.innerText);
+    return {tall, page: document.scrollingElement.scrollWidth <= window.innerWidth};})()`;
+  for (const w of [1280, 1440, 1600]) {
     await page.resize(w, 900);
-    await sleep(600);
+    await sleep(700);
     const r = await page.eval(probe);
-    if (!want) check(`E ${w}: 한 단(목록 숨김)`, r === null);
-    else check(`E ${w}: 2단 · 머리글 한 줄 · 가로 스크롤 0`, !!r && r.fit && !r.tall, JSON.stringify(r));
+    check(`E ${w}: 머리글 한 줄 · 페이지 가로 넘침 0`, !!r && r.tall.length === 0 && r.page, JSON.stringify(r));
   }
 });
 
@@ -261,8 +240,11 @@ const GATES = [
   { path: '/hq', loading: '본사 현황을 불러오고 있어요', bad: ['지금 확인할 일이 없어요', '초대 대기 없음'], done: '[data-testid="hq-dashboard-table"] [data-testid^="hq-row-"]' },
   { path: '/hq/knowhow', loading: '노하우를 불러오고 있어요', bad: ['아직 쓴 노하우가 없어요', '연결된 매장이 없어 아직 보낼 곳이 없어요'], done: '[data-testid="hq-knowhow-table"]' },
   { path: '/hq/quizzes', loading: '퀴즈를 불러오고 있어요', bad: ['아직 만든 퀴즈가 없어요'], done: '[data-testid="hq-quizzes-table"]' },
-  { path: '/hq/settings', loading: '설정을 불러오고 있어요', bad: ['구성원이 없어요', '아직 결제 전'], done: '[data-testid="hq-member-invite"]' },
-  { path: `/hq/stores/${UNIT}`, loading: '매장 정보를 불러오고 있어요', bad: ['연결된 매장 목록에 없어요'], done: '[data-testid="hq-drawer"]' },
+  { path: '/hq/settings/members', loading: '구성원을 불러오고 있어요', bad: ['구성원이 없어요'], done: '[data-testid="hq-members-table"] [data-testid^="hq-row-"]' },
+  { path: '/hq/settings/billing', loading: '설정을 불러오고 있어요', bad: ['아직 결제 전'], done: '[data-testid="hq-billing-summary"]' },
+  { path: `/hq/stores/${UNIT}`, loading: '매장 정보를 불러오고 있어요', bad: ['연결된 매장 목록에 없어요'], done: '[data-testid="hq-store-kpi"]' },
+  { path: '/hq/stores/invites', loading: '초대 목록을 불러오고 있어요', bad: ['기다리는 초대가 없어요'], done: '[data-testid="hq-invites-table"]' },
+  { path: '/hq/knowhow/status', loading: '노하우 배포 상태를 불러오고 있어요', bad: ['연결된 매장이 생기면'], done: '[data-testid="hq-knowhow-status-body"]' },
 ];
 for (const g of GATES) {
   await withPage({}, async (page) => {
@@ -287,9 +269,9 @@ const FAILS = [
   { path: '/hq/knowhow', fail: ['brand_overview'], err: '연결 매장을 불러오지 못했어요', lies: ['연결된 매장이 없어 아직 보낼 곳이 없어요', '연결된 매장이 생기면'], ok: '[data-testid="hq-knowhow-table"]', box: 'hq-knowhow-error' },
   { path: '/hq/quizzes', fail: ['brand_quiz_list'], err: '퀴즈를 불러오지 못했어요', lies: ['아직 만든 퀴즈가 없어요'], ok: '[data-testid="hq-quizzes-table"]', box: 'hq-quizzes-error' },
   { path: '/hq', fail: ['brand_quiz_list'], err: '본사 현황을 불러오지 못했어요', lies: ['배포한 퀴즈', '지금 확인할 일이 없어요'], ok: '[data-testid="hq-kpi"]', box: 'hq-dashboard-error' },
-  { path: '/hq/settings', fail: ['brand_billing_preview_mine'], err: '결제 정보를 불러오지 못했어요', lies: ['이번 달 청구 대상'], ok: '[data-testid="hq-member-invite"]', box: 'hq-settings-error' },
+  { path: '/hq/settings/billing', fail: ['brand_billing_preview_mine'], err: '결제 정보를 불러오지 못했어요', lies: ['이번 달 청구 대상'], ok: '[data-testid="hq-billing-summary"]', box: 'hq-settings-error' },
   { path: '/hq/stores', fail: ['brand_overview_page'], err: '매장 목록을 불러오지 못했어요', lies: ['아직 연결된 매장이 없어요'], ok: '[data-testid="hq-stores-table"] [data-testid^="hq-row-"]', box: 'hq-stores-error' },
-  { path: `/hq/stores/${UNIT}`, fail: ['brand_unit_rules'], err: '매장 정보를 불러오지 못했어요', lies: ['연결된 매장 목록에 없어요'], ok: '[data-testid="hq-drawer"] [data-testid="hq-request-visibility"], [data-testid="hq-drawer"] [data-testid="hq-content-required"]', box: 'hq-store-detail-error' },
+  { path: `/hq/stores/${UNIT}`, fail: ['brand_unit_rules'], err: '매장 정보를 불러오지 못했어요', lies: ['연결된 매장 목록에 없어요'], ok: '[data-testid="hq-store-kpi"]', box: 'hq-store-detail-error' },
 ];
 for (const c of FAILS) {
   await withPage({}, async (page) => {
@@ -344,21 +326,30 @@ if (!svc) {
       check('H 준비 — 원본 넣기·배포', false, ins.error?.message ?? dep.error?.message);
     } else {
       await withPage({}, async (page) => {
-        await page.goto('/hq/knowhow');
-        await page.waitFor(`!!document.querySelector('[data-testid="hq-knowhow-xtable-${SRC}-current"]')`, 40000);
+        await page.goto('/hq/knowhow/status');
+        await page.waitFor(`!!document.querySelector('[data-testid="hq-knowhow-status-xtable-${SRC}-current"]')`, 40000);
         await sleep(800);
-        const cell = (st) => page.eval(`document.querySelector('[data-testid="hq-knowhow-xtable-${SRC}-${st}"]')?.innerText ?? '—'`);
+        const cell = (st) => page.eval(`document.querySelector('[data-testid="hq-knowhow-status-xtable-${SRC}-${st}"]')?.innerText ?? '—'`);
         const got = { current: await cell('current'), modified: await cell('modified'), pending: await cell('pending'), hidden: await cell('hidden'), none: await cell('none') };
         const none = units.length - 1;
         check('H1 최신 1곳 · 미배포 = 나머지 · 다른 상태 —', got.current === '1곳' && got.modified === '—' && got.pending === '—' && got.hidden === '—' && got.none === (none ? `${none}곳` : '—'), JSON.stringify(got));
         check('H2 바닥줄 = 연결 매장 수 기준', (await page.text()).includes(`연결 매장 ${units.length}곳 기준`));
-        await page.click(`[data-testid="hq-knowhow-xtable-${SRC}-current"]`);
-        await page.waitFor(`!!document.querySelector('[data-testid="hq-knowhow-xtable-stores"]')`, 8000);
-        const listed = await page.eval(`document.querySelector('[data-testid="hq-knowhow-xtable-stores"]').innerText`);
+        await page.click(`[data-testid="hq-knowhow-status-xtable-${SRC}-current"]`);
+        await page.waitFor(`!!document.querySelector('[data-testid="hq-knowhow-status-xtable-stores"]')`, 8000);
+        const listed = await page.eval(`document.querySelector('[data-testid="hq-knowhow-status-xtable-stores"]').innerText`);
         const name = units.find((u) => u.unit_id === UNIT).store_name;
         check('H3 숫자를 누르면 그 매장만', listed.includes(name) && units.filter((u) => u.unit_id !== UNIT).every((u) => !listed.includes(u.store_name)), listed.replace(/\n/g, ' | '));
         await page.click(`[aria-label="${name} 매장 열기"]`);
         check('H4 매장을 누르면 그 매장 상세', await page.waitFor(`location.pathname === '/hq/stores/${UNIT}'`, 10000));
+        // 매장 상세(2026-10-02) — 개요의 본사 노하우 칸 · 노하우 탭이 같은 사본을 이 매장 기준으로 센다.
+        await page.waitFor(`!!document.querySelector('[data-testid="hq-store-knowhow-status"]')`, 40000);
+        await sleep(600);
+        const ov = await page.eval(`document.querySelector('[data-testid="hq-store-knowhow-status"]').innerText`);
+        check('H5 상세 개요: 본사 노하우 최신 1', /최신\s*\n?\s*1/.test(ov), ov.replace(/\n/g, ' | '));
+        await page.click('[data-testid="hq-store-tabs-knowhow"]');
+        await page.waitFor(`!!document.querySelector('[data-testid="hq-store-knowhow-table"] [data-testid="hq-row-${SRC}"]')`, 20000);
+        const rowText = await page.eval(`document.querySelector('[data-testid="hq-store-knowhow-table"] [data-testid="hq-row-${SRC}"]').innerText`);
+        check('H6 상세 노하우 탭: 그 노하우가 이 매장 최신', rowText.includes('최신'), rowText.replace(/\n/g, ' | '));
       });
     }
   } finally {
@@ -373,10 +364,10 @@ section('I. 등장 애니메이션');
 const ANIMS = [
   { path: '/hq', sel: '[data-testid="hq-dashboard-table"]', anim: true },
   { path: '/hq/stores', sel: '[data-testid="hq-stores-table"]', anim: true },
-  { path: `/hq/stores/${UNIT}`, sel: '[data-testid="hq-request-visibility"], [data-testid="hq-content-required"]', anim: true },
+  { path: `/hq/stores/${UNIT}`, sel: '[data-testid="hq-store-kpi"]', anim: true },
   { path: '/hq/knowhow', sel: '[data-testid="hq-knowhow-table"]', anim: true },
   { path: '/hq/quizzes', sel: '[data-testid="hq-quizzes-table"]', anim: true },
-  { path: '/hq/settings', sel: '[data-testid="hq-member-invite"]', anim: false },
+  { path: '/hq/settings/members', sel: '[data-testid="hq-members-table"]', anim: false },
 ];
 for (const a of ANIMS) {
   await withPage({}, async (page) => {
@@ -407,7 +398,8 @@ section('J. 라벨·배지·버튼·제목(16자 이하)이 두 줄로 접히지
       const cs=getComputedStyle(e); const fs=parseFloat(cs.fontSize); const lh=cs.lineHeight==='normal'?fs*1.35:parseFloat(cs.lineHeight);
       if(r.height>lh*1.6) out.push(t+'('+Math.round(r.width)+'×'+Math.round(r.height)+')');
     } return [...new Set(out)];})()`;
-  const PAGES = ['/hq', '/hq/stores', `/hq/stores/${UNIT}`, '/hq/knowhow', '/hq/quizzes', '/hq/settings', '/hq/knowhow/new', '/hq/quizzes/new'];
+  const PAGES = ['/hq', '/hq/stores', '/hq/stores/invites', `/hq/stores/${UNIT}`, `/hq/stores/${UNIT}?tab=knowhow`, `/hq/stores/${UNIT}?tab=rules`,
+    '/hq/knowhow', '/hq/knowhow/status', '/hq/quizzes', '/hq/quizzes/status', '/hq/settings', '/hq/settings/members', '/hq/settings/billing', '/hq/knowhow/new', '/hq/quizzes/new'];
   for (const width of [1280, 1371, 1600]) {
     await withPage({ width }, async (page) => {
       const found = [];

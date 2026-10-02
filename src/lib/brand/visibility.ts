@@ -49,6 +49,14 @@ export const payerLabel = (p: BrandPayer): string => (p === 'brand' ? '본사 �
  */
 export const relationLabel = (r: BrandRelation): string => (r === 'direct' ? '직영' : '가맹');
 
+/**
+ * 본사 화면 배지 색 — 목록·상세·대시보드가 같은 매장을 같은 색으로 그리게 한 곳에 둔다(전엔 화면마다 복제).
+ * 관계는 직영만 색을 준다 — 가맹이 기본값이고 대부분이라 둘 다 물들이면 표가 시끄럽다.
+ * (PillTone 값만 쓴다 — 표시 부품 HqKit 을 lib 가 import 하지 않게 글자 그대로 둔다.)
+ */
+export const VIS_TONE: Record<BrandVisibility, 'n' | 'i' | 'g'> = { summary: 'n', knowhow: 'i', ops: 'g' };
+export const REL_TONE: Record<BrandRelation, 'i' | 'n'> = { direct: 'i', franchise: 'n' };
+
 /** 표 필터·세그먼트의 순서 정본. '전체'는 화면이 앞에 붙인다. */
 export const RELATIONS: { key: BrandRelation; label: string }[] = [
   { key: 'direct', label: '직영' },

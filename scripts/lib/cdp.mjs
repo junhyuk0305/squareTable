@@ -87,14 +87,16 @@ export async function launch({ origin, storageKey, width = 1600, height = 1000, 
     }
     if (m.method === 'Fetch.requestPaused') {
       const name = m.params.request.url.match(/\/rpc\/([a-z0-9_]+)/)?.[1];
+      // ★응답을 기다리는 사이 failRpc([]) 가 Fetch 를 끄면 이 호출이 'Fetch domain is not enabled' 로 거부된다 —
+      //   잡지 않으면 하니스가 통째로 죽는다(2026-10-02 G 묶음). 꺼진 뒤엔 요청이 그대로 흘러가므로 버려도 된다.
       if (name && failing.has(name)) {
         void s('Fetch.fulfillRequest', {
           requestId: m.params.requestId, responseCode: 500,
           responseHeaders: [{ name: 'Content-Type', value: 'application/json' }, { name: 'Access-Control-Allow-Origin', value: '*' }],
           body: Buffer.from(JSON.stringify({ message: 'qa forced failure', code: 'QA500' })).toString('base64'),
-        });
+        }).catch(() => {});
       } else {
-        void s('Fetch.continueRequest', { requestId: m.params.requestId });
+        void s('Fetch.continueRequest', { requestId: m.params.requestId }).catch(() => {});
       }
     }
   });
