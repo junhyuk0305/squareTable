@@ -119,6 +119,13 @@ export type TrainingCourse = {
   position: number;
   active: boolean;
   created_at?: string;
+  // ── 본사 사본(브랜드 축) — 0219 컬럼. 노하우(0216)와 같은 이름·같은 뜻, 원본 링크만 brand_course_id 다.
+  //   미연결 매장에서는 전부 null 이라 화면이 한 줄도 달라지지 않는다(미연결 diff 0). 판정 = src/lib/brand/copy.ts.
+  brand_course_id?: string | null;
+  brand_version?: number | null;
+  brand_pending_version?: number | null;
+  local_modified_at?: string | null;
+  brand_hidden_at?: string | null;
 };
 
 /**

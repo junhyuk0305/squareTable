@@ -234,11 +234,41 @@ export function buildJuniorNotifications(args: {
 export type OwnerNotifKind =
   | 'join_request' | 'question' | 'suggestion' | 'swap_approval' | 'mention'
   | 'payment_approved' | 'payment_rejected'
-  // 0191 사장 알림 — 좌석 잠김 · AI 사용량 80%·100% · 0208 카드 결제 실패·결제 예고·해지 예약 종료 예고
-  | 'seat_lock' | 'ai_cap' | 'card_fail' | 'card_renew' | 'card_end';
+  // 0191 사장 알림 — 좌석 잠김 · AI 사용량 80%·100%
+  | 'seat_lock' | 'ai_cap'
+  // 0208 카드 결제 실패 · 결제 예고 · 해지 예약 종료 예고
+  | 'card_fail' | 'card_renew' | 'card_end'
+  // 0213 본사 축 — 연결 요청 · 공개 수준 상향 요청 · 요금 부담 제안 · 본사가 해제함
+  | 'brand_invite' | 'brand_visibility_request' | 'brand_payer_proposal' | 'brand_ended'
+  // 0217 본사 축 — 배포 도착(정본 §4-E ④ '필수'). 노하우가 실제로 온 매장에만 들어온다.
+  | 'brand_deploy'
+  // 0221 본사 축 — 본사 부담이 당월 말로 끝나니 다음 달 요금제를 고르라는 사전 안내(정본 §4-D).
+  | 'brand_plan_choice'
+  // 0224 본사 축 — 직영↔가맹 전환 · 직영 공개 범위 하한 변경. 둘 다 **고지**다(답할 것이 아니다).
+  | 'brand_relation_changed' | 'brand_floor_changed';
 export type OwnerNotifRoute =
   | '/owner/inbox' | '/owner/suggestions' | '/owner/schedule' | '/owner/staff' | '/owner/work'
-  | '/owner/categories' | '/billing';
+  | '/owner/categories' | '/billing' | '/owner/brand-consent' | '/owner/brand-link' | '/owner/knowledge';
+
+/** 사장 알림(owner_alerts) 행이 탭으로 가는 곳 — 본사 축은 동의 화면/본사 연결, 나머지는 요금제. */
+export function ownerAlertRoute(kind: OwnerAlert['kind']): OwnerNotifRoute {
+  switch (kind) {
+    case 'brand_invite': return '/owner/brand-consent';
+    case 'brand_visibility_request':
+    case 'brand_payer_proposal':
+    case 'brand_ended': return '/owner/brand-link';
+    // 0224 — 관계가 바뀌면 동의를 다시 받을 수 있다(직영→가맹). 그 화면이 동의 화면이다.
+    case 'brand_relation_changed': return '/owner/brand-consent';
+    // 하한 변경은 답할 것이 아니라 **지금 범위를 확인할 것**이다 → 설정 > 본사 연결.
+    case 'brand_floor_changed': return '/owner/brand-link';
+    // 배포 도착은 연결 설정이 아니라 **받은 노하우**로 보낸다 — 점주가 할 일은 내용 확인이다.
+    case 'brand_deploy': return '/owner/knowledge';
+    // 요금제 선택은 **결제 화면**으로 보낸다. 해제된 매장은 설정 > 본사 연결이 비어 있어서
+    // 거기로 보내면 막다른 길이 된다 — 점주가 할 일은 요금제를 고르는 것이다.
+    case 'brand_plan_choice': return '/billing';
+    default: return '/billing';
+  }
+}
 
 export type OwnerNotif = {
   id: string;
@@ -316,7 +346,7 @@ export function buildOwnerNotifications(args: {
   const { queue, suggestions, swaps, pending, nameOf, feed = [], userId: me, ackAt, claims = [], alerts = [] } = args;
   const out: OwnerNotif[] = [];
 
-  // 사장 알림(0191) — 문구는 서버가 적재한 그대로(푸시와 같은 문장). 탭하면 앱 안 요금제 화면.
+  // 사장 알림(0191·0213) — 문구는 서버가 적재한 그대로(푸시와 같은 문장). 탭 목적지는 종류가 정한다.
   for (const a of alerts) {
     out.push({
       id: `alert_${a.id}`,
@@ -325,7 +355,7 @@ export function buildOwnerNotifications(args: {
       body: a.body,
       at: a.created_at,
       unread: isAfterAck(a.created_at, ackAt),
-      route: '/billing',
+      route: ownerAlertRoute(a.kind),
     });
   }
 

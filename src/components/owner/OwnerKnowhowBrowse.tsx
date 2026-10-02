@@ -21,7 +21,9 @@ import { Collapse } from '@/components/Collapse';
 import { EmptyState } from '@/components/EmptyState';
 import { InfoDot } from '@/components/InfoDot';
 import { VerifyBadge } from '@/components/VerifyBadge';
+import { BrandCopyBadges } from '@/components/owner/BrandCopyBadges';
 import { SectionLabel } from '@/components/SectionLabel';
+import { TwoPane, Pane } from '@/components/shell/TwoPane';
 import { SegmentTabs, type SegmentItem } from '@/components/SegmentTabs';
 import { Heatmap, type HeatCell, type HeatGroup, type HeatLegend, type HeatLevel } from '@/components/blocks/Heatmap';
 import { CategoryEditSheet } from '@/components/owner/CategoryEditSheet';
@@ -155,6 +157,8 @@ function EntryRow({ e, onPress, usedBy = 0, divider = true }: { e: PlaybookEntry
               <Text style={styles.badgeUnusedText}>안 쓰임</Text>
             </View>
           ) : null}
+          {/* 본사 사본 배지(정본 §4-E ③) — 사본이 아니면 아무것도 안 그린다(미연결 diff 0). */}
+          <BrandCopyBadges entry={e} />
           {e.verification ? <VerifyBadge state={e.verification.state} size="list" /> : null}
         </View>
       </View>
@@ -491,7 +495,10 @@ export function OwnerKnowhowBrowse({
   // ── 칸 ② 노하우 ────────────────────────────────────────────
   const knowhowSegment = () => {
     return (
-      <>
+      // 넓은 웹에서만 두 단 — 왼쪽 히어로·탭·목록 / 오른쪽 찾기 바·검토 대기.
+      // 폰 폭에서는 아래 순서 그대로다(찾기 바는 톱니 줄 바로 아래 · 2026-08-19 규칙 유지).
+      <TwoPane gap={Space.md}>
+        <Pane side="main">
         {/* ── 히어로(H5) — 노하우 1개 = 상자 1개. 색 = 한 달간 물어본 횟수(쓰임) · 점선 = 안 물어봄 ·
                주황 = 확인 필요 · 빨강 = 오래 손 안 댐. 카테고리 이름 탭 = 아래 목록 필터, 상자 탭 = 고치기.
                화면당 히어로 1개(배치규칙②) — 이 칸의 다른 블록은 찾기 바와 목록뿐이다. ── */}
@@ -588,7 +595,10 @@ export function OwnerKnowhowBrowse({
           )}
         </View>
 
-        {/* 찾기 바 — 검색·카테고리. 톱니 줄 바로 아래 고정이다(2026-08-19). */}
+        </Pane>
+
+        {/* 찾기 바 — 검색·카테고리. 톱니 줄 바로 아래 고정이다(2026-08-19 · 넓은 웹에서는 오른쪽 레일). */}
+        <Pane side="rail">
         {hasEntries && (
           <View style={styles.findBar}>
             {/* 행1 — 검색 */}
@@ -661,6 +671,9 @@ export function OwnerKnowhowBrowse({
           <Text style={styles.draftBannerCta}>검수하기 ›</Text>
         </Pressable>
         )}
+        </Pane>
+
+        <Pane side="main">
 
         {!hasEntries ? (
           loadError ? (
@@ -701,7 +714,8 @@ export function OwnerKnowhowBrowse({
         {/* ★2026-08-19: '여러 개 한 번에 추가'(인수인계서 올리기 / 템플릿 둘러보기) 카드 삭제.
             매일 보는 목록 아래에 상시 붙어 있을 무게가 아니었다. 두 경로 자체는 살아 있다 —
             인수인계서=노하우 추가 채팅의 ＋메뉴·첫 출근 안내, 템플릿=허브 '노하우 담기'·시작 체크리스트. */}
-      </>
+        </Pane>
+      </TwoPane>
     );
   };
 

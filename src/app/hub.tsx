@@ -1,10 +1,9 @@
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Stack, Redirect } from 'expo-router';
+import { Stack } from 'expo-router';
 
 import { useSessionStore } from '@/lib/store/useSessionStore';
-import { needsProfileSetup } from '@/lib/store/profileSetup';
-import { HAS_SUPABASE } from '@/lib/supabase';
+import { useSessionGate } from '@/lib/hooks/useSessionGate';
 import { HubTopBar } from '@/components/hub/HubTopBar';
 import { HubTabBar } from '@/components/HubTabBar';
 import { OwnerStatusView } from '@/components/hub/OwnerStatusView';
@@ -23,24 +22,14 @@ const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'] as const;
 
 export default function HubScreen() {
   const role = useSessionStore((s) => s.role);
-  const status = useSessionStore((s) => s.status);
-  const phone = useSessionStore((s) => s.phone);
   const unitId = useSessionStore((s) => s.unitId);
-  const pendingUnitId = useSessionStore((s) => s.pendingUnitId);
   const sessionStores = useSessionStore((s) => s.stores);
-  const needsDowngradeChoice = useSessionStore((s) => s.needsDowngradeChoice);
+  // 출입 게이트 4단(미로그인·세션 확정 전·프로필 미완성·다운그레이드 선택 대기)은 stores.tsx 와 같은 훅.
+  const gate = useSessionGate();
 
   const isOwner = role === 'owner';
 
-  // 게이트(stores.tsx 와 동일 규칙) — 루트 레벨이라 owner/junior 그룹 게이트를 안 탄다.
-  if (HAS_SUPABASE && status === 'signed_out') return <Redirect href="/" />;
-  if (HAS_SUPABASE && status === 'loading') return null;
-  if (HAS_SUPABASE && needsProfileSetup({ status, phone, unitId, pendingUnitId })) {
-    return <Redirect href="/complete-profile" />;
-  }
-  // 다운그레이드 선택 대기(0142) — index 뿐 아니라 여기에도 둔다. 로그인 후 실제 착지 화면이라
-  // 새로고침·딥링크로 /hub 에 바로 들어오면 index 의 게이트를 안 탄다.
-  if (HAS_SUPABASE && needsDowngradeChoice) return <Redirect href="/downgrade" />;
+  if (gate !== undefined) return gate;
   // 매장 0곳이어도 이 탭을 막지 않는다 — 예전엔 /stores 로 되돌려서, 아직 합류하지 않은 직원은
   // 탭이 보이는데 누르면 튕겨 나왔다. 본문만 빈 상태로 바꾸고 다음 행동을 준다(NoStoreView).
   const hasStore = sessionStores.length > 0 || !!unitId;

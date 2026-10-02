@@ -17,6 +17,7 @@ import { createClient } from '@supabase/supabase-js';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, join } from 'node:path';
+import { assertSeedTarget } from './lib/seed-target.mjs';
 
 const __dir = dirname(fileURLToPath(import.meta.url));
 const readJson = (p) => JSON.parse(readFileSync(join(__dir, '..', 'src', 'data', p), 'utf8'));
@@ -47,6 +48,7 @@ const STAFF_EMAIL = process.env.EVAL_STAFF_EMAIL || 'eval-staff@squaretable.test
 const PASSWORD = process.env.EVAL_PASSWORD || 'evaltest1234';
 const ID_PREFIX = 'eval_';
 
+assertSeedTarget(URL, 'seed-eval.mjs');
 const db = createClient(URL, SERVICE, { auth: { persistSession: false } });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 

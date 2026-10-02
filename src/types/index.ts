@@ -115,6 +115,17 @@ export type PlaybookEntry = {
   section?: string | null;
   order_index?: number;
   source_id?: string | null;
+  // ── 본사 사본(브랜드 축) — 0216 컬럼 ──
+  // brand_entry_id: 작업실 원본 id. **null/undefined = 매장이 직접 쓴 노하우**(지금까지의 모든 행) —
+  //   미연결 매장에서는 이 다섯 개가 전부 null 이라 화면이 한 줄도 달라지지 않는다(미연결 diff 0).
+  // brand_version: 이 사본이 담은 원본 버전 · brand_pending_version: 점주가 고친 사본에 온 새 버전(교체/유지 시트)
+  // local_modified_at: 점주가 본문을 고친 시각(0216 트리거가 찍는다. null = 미수정 → 재배포 자동 갱신)
+  // brand_hidden_at: 이 매장에서 숨긴 시각(검색·AI·퀴즈에서 제외. 판정 = isBrandHidden)
+  brand_entry_id?: string | null;
+  brand_version?: number | null;
+  brand_pending_version?: number | null;
+  local_modified_at?: string | null;
+  brand_hidden_at?: string | null;
   // ── 파트(홀·주방 같은 담당) — 0164 컬럼 ──
   // 이 노하우가 누구 담당인지. null/undefined = 공통(전원). 카테고리와 다른 축이라 함께 붙는다.
   // ★거르는 축이 아니다 — 목록에서 **위로 올릴 뿐** 다른 노하우를 가리지 않는다.
@@ -267,7 +278,14 @@ export type PaymentClaim = {
 export type OwnerAlert = {
   id: number;
   unit_id: string;
-  kind: 'seat_lock' | 'ai_cap' | 'card_fail' | 'card_renew' | 'card_end';
+  // 0208 카드 결제 3종 · 0213 본사(브랜드) 축 4종 — 연결 요청 · 공개 수준 상향 요청 · 요금 부담 제안 · 본사가 해제함.
+  // 0217 에 'brand_deploy'(배포 도착), 0221 에 'brand_plan_choice'(본사 부담이 끝나니 다음 달 요금제 선택),
+  // 0224 에 'brand_relation_changed'(직영↔가맹 전환)·'brand_floor_changed'(직영 공개 범위 하한) 추가 —
+  // 서버 CHECK(owner_alerts_kind_check)와 같은 목록이어야 한다.
+  kind: 'seat_lock' | 'ai_cap' | 'card_fail' | 'card_renew' | 'card_end'
+      | 'brand_invite' | 'brand_visibility_request' | 'brand_payer_proposal'
+      | 'brand_ended' | 'brand_deploy' | 'brand_plan_choice'
+      | 'brand_relation_changed' | 'brand_floor_changed';
   title: string;
   body: string;
   created_at: string;

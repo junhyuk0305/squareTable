@@ -1,0 +1,60 @@
+// errors.ts — brand_* RPC 의 raise exception 코드 → 사람 말. 무음 실패 금지(화면은 이유 한 줄 + 다음 행동).
+import type { DbErr } from '@/lib/db';
+
+const MESSAGES: Record<string, string> = {
+  not_brand_member: '본사 담당자 계정이 아니에요.',
+  not_signed_in: '로그인이 필요해요.',
+  invalid_phone: '휴대폰 번호 형식을 확인해 주세요.',
+  invalid_payer: '요금 부담을 골라 주세요.',
+  invite_exists: '이 번호에는 이미 보낸 초대가 기다리고 있어요.',
+  invite_invalid: '이미 쓰였거나 잘못된 초대예요.',
+  invite_expired: '초대가 만료됐어요. 다시 보내 주세요.',
+  not_invitee: '내 번호로 온 요청이 아니에요.',
+  invalid_visibility: '공개 수준을 골라 주세요.',
+  no_units: '연결할 매장을 하나 이상 골라 주세요.',
+  not_owner: '이 매장의 사장만 할 수 있어요.',
+  not_a_store: '연결할 수 없는 매장이에요.',
+  already_connected: '이미 다른 본사와 연결된 매장이에요.',
+  not_connected: '연결된 매장이 아니에요.',
+  not_an_upgrade: '지금 수준보다 높은 수준만 요청할 수 있어요.',
+  not_allowed: '할 수 없는 작업이에요.',
+  same_payer: '지금과 같은 요금 부담이에요.',
+  iap_active: '이 매장은 앱 구독이 살아 있어 본사 부담으로 바꿀 수 없어요. 구독이 끝난 뒤 다시 제안해 주세요.',
+  no_proposal: '기다리는 제안이 없어요.',
+  invite_not_pending: '이미 답했거나 만료된 초대라 취소할 수 없어요.',
+  // ── P4 배포(0215·0217) ──
+  no_workspace: '라이브러리가 아직 준비되지 않았어요. 담당자에게 문의해 주세요.',
+  too_many_entries: '한 번에 보낼 수 있는 노하우 수를 넘었어요. 나눠서 보내 주세요.',
+  too_many_units: '한 번에 보낼 수 있는 매장 수를 넘었어요. 나눠서 보내 주세요.',
+  duplicate_unit: '같은 매장이 두 번 들어 있어요.',
+  entry_not_in_workspace: '본사 노하우가 아니라 보낼 수 없어요.',
+  entry_not_found: '노하우를 찾을 수 없어요.',
+  not_brand_copy: '본사가 보낸 노하우만 숨기거나 되살릴 수 있어요.',
+  no_pending_version: '기다리는 새 버전이 없어요.',
+  source_gone: '본사 원본이 사라져 새 버전으로 바꿀 수 없어요. 지금 내용은 그대로 남아요.',
+  // ── P5 퀴즈 배포(0220) ──
+  course_not_in_workspace: '본사 퀴즈가 아니라 보낼 수 없어요.',
+  course_empty: '담긴 노하우가 없어 보낼 수 없어요. 발행된 노하우를 고르고 문항을 만든 뒤 보내 주세요.',
+  course_not_found: '퀴즈를 찾을 수 없어요.',
+  // ── P9 직영·가맹(0223·0224) ──
+  invalid_relation: '관계 값이 잘못됐어요.',
+  reason_required: '바꾸는 이유를 적어 주세요.',
+  same_relation: '지금과 같은 관계예요.',
+  below_floor: '직영점은 본사가 정한 범위보다 좁게는 설정할 수 없어요. 바꾸려면 본사에 문의해 주세요.',
+  owner_cannot_end: '직영점은 매장에서 연결을 끊을 수 없어요. 본사에 문의해 주세요.',
+  content_required: '본사가 필수로 보낸 내용이라 숨길 수 없어요. 본사에 문의해 주세요.',
+  direct_payer_fixed: '직영점은 요금을 본사가 내요. 요금 부담은 바꿀 수 없어요.',
+  franchise_floor_fixed: '가맹점의 공개 범위는 점주가 정해요. 본사는 올려 달라고 요청만 할 수 있어요.',
+  franchise_can_hide: '가맹점에는 필수 배포를 걸 수 없어요(가맹사업법 제12조).',
+  same_floor: '지금과 같은 범위예요.',
+  no_pending_consent: '다시 받을 동의가 없어요.',
+  notice_cannot_decline: '직영점 고지는 거절할 수 없어요. 궁금한 점은 본사에 문의해 주세요.',
+  // ── 0227·0229 점주 해제권 ──
+  franchise_can_end: '가맹점은 점주가 언제든 연결을 끝낼 수 있어요. 본사가 막을 수 없어요.',
+  invalid_argument: '값이 비어 있어요. 다시 골라 주세요.',
+};
+
+export function brandErrorMessage(err: DbErr, fallback = '잠시 뒤 다시 시도해 주세요.'): string {
+  const code = (err?.message ?? '').split(/[\s:]/)[0];
+  return MESSAGES[code] ?? fallback;
+}

@@ -69,7 +69,9 @@ export default function LoginScreen() {
       flash(error || '로그인에 실패했어요. 잠시 후 다시 시도해주세요.', true);
       return;
     }
-    router.replace('/hub');
+    // 착지는 루트(index)가 정한다 — 프로필 완성 → 다운그레이드 → 본사(/hq) → 허브 순.
+    // 여기서 /hub 로 직행하면 본사 담당자가 매장 없는 허브에 떨어진다(2026-09-22).
+    router.replace('/');
   };
 
   return (
@@ -131,6 +133,13 @@ export default function LoginScreen() {
 
           {/* 안내/실패 문구 — 로그인 버튼 바로 아래. 실패는 빨강으로 시선 유도. */}
           {msg && <Text style={[styles.msg, msgErr && styles.msgErr]}>{msg}</Text>}
+
+          {/* 비밀번호 찾기(09-23) — 이메일로 재설정 링크. 앱·웹 같은 화면. */}
+          {HAS_SUPABASE ? (
+            <Pressable onPress={() => router.push('/forgot-password')} accessibilityRole="button" style={({ pressed }) => [styles.forgotRow, pressed && { opacity: 0.7 }]}>
+              <Text style={styles.forgotText}>비밀번호를 잊으셨나요?</Text>
+            </Pressable>
+          ) : null}
 
           {/* 소셜 로그인(구글 등) — 웹 전용. 데모 빌드에선 렌더 안 됨. */}
           <SocialAuthButtons />
@@ -200,6 +209,8 @@ const styles = StyleSheet.create({
   msg: { fontSize: 15, lineHeight: 22, color: InkColors.ink2, textAlign: 'center', marginTop: 2 },
   msgErr: { color: BrandColors.accentText, fontWeight: '700' },
   demoNote: { fontSize: 12, lineHeight: 18, color: InkColors.ink3, textAlign: 'center' },
+  forgotRow: { alignSelf: 'center', minHeight: 44, justifyContent: 'center', paddingHorizontal: Space.sm },
+  forgotText: { fontSize: 13, fontWeight: '600', color: InkColors.ink2, textDecorationLine: 'underline' },
   signupBlock: { alignItems: 'center', gap: Space.md },
   signupLead: { fontSize: 13, lineHeight: 19, color: InkColors.ink3 },
   signupBtn: {

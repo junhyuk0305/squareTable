@@ -19,6 +19,7 @@ import { ScreenLoading } from '@/components/ScreenLoading';
 import { ConfirmModal } from '@/components/ConfirmModal';
 import { Avatar } from '@/components/Avatar';
 import { SectionLabel } from '@/components/SectionLabel';
+import { TwoPane, Pane } from '@/components/shell/TwoPane';
 import { InviteBlock } from '@/components/owner/InviteBlock';
 import { ActionRow } from '@/components/blocks/ActionRow';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
@@ -176,6 +177,10 @@ export default function OwnerStaffScreen() {
       <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         {/* ① 급여 — 이번 달 인건비 총액 + 급여 설정 진입(상단). 구 '근무·급여'·'급여 설정' 카드를 흡수.
             이 화면의 히어로는 여기 하나다(2026-08-06) — 아래 초대코드가 같은 다크·30sp 규격이라 히어로가 둘이었다. */}
+        {/* 넓은 웹에서만 두 단 — 왼쪽 급여·직원 목록 / 오른쪽 초대·바로 가기.
+            폰 폭에서는 아래 순서 그대로 한 줄씩이다(배치만 바뀐다). */}
+        <TwoPane gap={12}>
+        <Pane side="main">
         <Appear delay={stagger(0)}>
         <View style={styles.payCard}>
           <Text style={styles.payLabel}>이번 달 예상 인건비</Text>
@@ -206,6 +211,9 @@ export default function OwnerStaffScreen() {
         {/* ② 초대 — 코드 한 줄만 주던 자리를 공용 InviteBlock 으로 바꿨다(2026-09-08).
             안내·코드 복사·초대 링크가 한 벌이라, 사장이 자리마다 다른 설명을 읽지 않는다.
             '코드 변경'만 이 화면 고유라 action 슬롯으로 넘긴다. */}
+        </Pane>
+
+        <Pane side="rail">
         <Appear delay={stagger(1)}>
         <InviteBlock
           code={INVITE_CODE}
@@ -245,6 +253,9 @@ export default function OwnerStaffScreen() {
         </View>
         </Appear>
 
+        </Pane>
+
+        <Pane side="main">
         {/* 합류 신청(승인 대기) — 남용 #2. 코드로 신청한 사람을 사장이 승인해야 소속된다. */}
         {pending.length > 0 && (
           <Appear delay={stagger(3)}>
@@ -376,6 +387,8 @@ export default function OwnerStaffScreen() {
         <Appear delay={stagger(6)}>
         <Text style={styles.demoNote}>* 직원을 누르면 출근 기록을 보고 시간을 수정할 수 있어요. 시급을 바꾸면 인건비에 바로 반영돼요.</Text>
         </Appear>
+        </Pane>
+        </TwoPane>
         <View style={{ height: 12 }} />
       </ScrollView>
       </KeyboardShift>

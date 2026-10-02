@@ -59,6 +59,7 @@ function CompleteProfileForm() {
   const phone0 = useSessionStore((s) => s.phone);
   const unitId = useSessionStore((s) => s.unitId);
   const pendingUnitId = useSessionStore((s) => s.pendingUnitId);
+  const brandId = useSessionStore((s) => s.brandId);
   const completeProfile = useSessionStore((s) => s.completeProfile);
   const createStore = useSessionStore((s) => s.createStore);
   const isPhoneTaken = useSessionStore((s) => s.isPhoneTaken);
@@ -83,7 +84,7 @@ function CompleteProfileForm() {
   // ★ !busy 필수: 제출 중엔 completeProfile 이 phone 을 먼저 채워 needsProfileSetup 이 false 로 바뀌는데,
   //   그 순간 이 가드가 발동하면 createStore 전에 홈으로 튕겨 사장 온보딩이 깨진다. 제출은 submit()이 끝에서
   //   명시적으로 라우팅하므로, 제출 중(busy)엔 가드를 쉰다.
-  if (!busy && !storeRetry && HAS_SUPABASE && status === 'signed_in' && !needsProfileSetup({ status, phone: phone0, unitId, pendingUnitId })) {
+  if (!busy && !storeRetry && HAS_SUPABASE && status === 'signed_in' && !needsProfileSetup({ status, phone: phone0, unitId, pendingUnitId, brandId })) {
     return <Redirect href="/hub" />;
   }
 

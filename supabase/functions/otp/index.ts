@@ -208,5 +208,48 @@ Deno.serve(async (req) => {
     return json(200, { ok: true }, cors);
   }
 
+  // ── 비밀번호 재설정(2026-09-23 사용자 결정: 이메일이 아니라 **전화번호 인증**으로) ─────────
+  // 흐름: send(위) → 사용자가 인증번호 + 새 비밀번호를 한 번에 보낸다. 코드 대조는 verify 와 같은 규칙
+  // (만료 3분·오답 5회·해시)이고, 맞으면 그 번호·역할의 계정 비밀번호를 admin 으로 바꾼다.
+  // 같은 번호가 사장·직원 두 계정을 가질 수 있어(가입 규칙) role 을 받는다. 번호 소유를 증명한 사람에게
+  // "그 역할 계정이 없다"는 답은 노출이 아니다(자기 번호). 코드는 한 번 쓰면 만료시켜 재사용을 막는다.
+  if (body.action === 'reset_password') {
+    const b = body as { code?: string; role?: string; new_password?: string };
+    const code = String(b.code ?? '').replace(/\D/g, '');
+    const role = b.role === 'owner' || b.role === 'junior' ? b.role : null;
+    const newPw = String(b.new_password ?? '');
+    if (code.length !== 6) return json(400, { ok: false, reason: 'mismatch' }, cors);
+    if (!role) return json(400, { ok: false, reason: 'bad_action' }, cors);
+    if (newPw.length < 9 || newPw.length > 72) return json(400, { ok: false, reason: 'weak_password' }, cors);
+
+    const { data: row, error: selErr } = await admin
+      .from('phone_otps').select('*').eq('phone', phone).maybeSingle();
+    if (selErr) return json(500, { ok: false, reason: 'db' }, cors);
+    if (!row) return json(400, { ok: false, reason: 'expired' }, cors);
+    if (row.attempts >= MAX_ATTEMPTS) return json(429, { ok: false, reason: 'too_many' }, cors);
+    if (Date.now() > new Date(row.expires_at).getTime()) {
+      return json(400, { ok: false, reason: 'expired' }, cors);
+    }
+    if (await sha256Hex(`${phone}:${code}`) !== row.code_hash) {
+      const { error: aErr } = await admin.from('phone_otps').update({ attempts: row.attempts + 1 }).eq('phone', phone);
+      if (aErr) { console.error('otp: attempts update failed:', aErr.message); return json(500, { ok: false, reason: 'db' }, cors); }
+      return json(400, { ok: false, reason: 'mismatch' }, cors);
+    }
+
+    // 계정 찾기 — profiles.phone_norm(0022 generated) + role. 탈퇴(deleted_at) 계정은 제외.
+    const { data: profs, error: pErr } = await admin
+      .from('profiles').select('id').eq('phone_norm', phone).eq('role', role).is('deleted_at', null).limit(2);
+    if (pErr) return json(500, { ok: false, reason: 'db' }, cors);
+    if (!profs || profs.length === 0) return json(404, { ok: false, reason: 'no_account' }, cors);
+
+    const { error: uErr } = await admin.auth.admin.updateUserById(profs[0].id, { password: newPw });
+    if (uErr) { console.error('otp: password update failed:', uErr.message); return json(500, { ok: false, reason: 'db' }, cors); }
+
+    // 코드 소모 — 같은 코드로 두 번 바꾸지 못한다. verified_at 은 인증 이력이라 같이 남긴다.
+    await admin.from('phone_otps')
+      .update({ expires_at: new Date().toISOString(), verified_at: new Date().toISOString() }).eq('phone', phone);
+    return json(200, { ok: true }, cors);
+  }
+
   return json(400, { ok: false, reason: 'bad_action' }, cors);
 });

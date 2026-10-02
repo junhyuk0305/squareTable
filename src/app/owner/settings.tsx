@@ -8,6 +8,8 @@ import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useMemberPrefsStore, DEFAULT_MEMBER_PREF } from '@/lib/store/useMemberPrefsStore';
 import { useWorkStore } from '@/lib/store/useWorkStore';
 import { useHubStore } from '@/lib/store/useHubStore';
+import { useOwnerBrandStore } from '@/lib/store/useOwnerBrandStore';
+import { visibilityLabel, payerLabel } from '@/lib/brand/visibility';
 import { replayGuides as replayGuidesFor } from '@/lib/store/useGuideStore';
 import { showToast } from '@/lib/store/useToastStore';
 import { PLANS } from '@/lib/config/tiers';
@@ -48,6 +50,13 @@ export default function OwnerSettings() {
    * 그 함수만 구독하면 save 의 낙관적 반영(byUnit 교체)에 이 화면이 리렌더되지 않아,
    * 토글을 눌러도 스위치가 그대로 있고 방해금지 시간대 줄도 안 나타난다(2026-08-19 수정).
    */
+  // 본사 연결(P3) — 이 매장의 active 연결·내 번호로 온 요청. 둘 다 0이면 줄 자체가 없다(미연결 매장 diff 0).
+  const brandLink = useOwnerBrandStore((s) => s.links.find((l) => l.unit_id === unitId) ?? null);
+  const brandInvites = useOwnerBrandStore((s) => s.invites.length);
+  const hydrateBrand = useOwnerBrandStore((s) => s.hydrate);
+  useEffect(() => {
+    void hydrateBrand();
+  }, [hydrateBrand, unitId]);
   const pref = useMemberPrefsStore((s) => s.byUnit[unitId ?? ''] ?? DEFAULT_MEMBER_PREF);
   const color = storeColor(unitId ?? '', pref.color);
   // ★도착 전엔 pref 가 DEFAULT_MEMBER_PREF 라 음소거·방해금지 스위치가 **꺼짐으로 확정 표시**된 뒤
@@ -166,6 +175,30 @@ export default function OwnerSettings() {
             />
           )}
         </SettingsSection>
+
+        {/* 본사 연결(P3, 정본 §4-E ②) — 연결됐거나 요청이 와 있을 때만. 초대제라 '연결하기' 진입점은 없다. */}
+        {brandLink || brandInvites > 0 ? (
+          <SettingsSection icon="business-outline" title="본사 연결">
+            {brandLink ? (
+              <SettingsRow
+                first
+                icon="link-outline"
+                label={brandLink.brand_name}
+                hint={`${payerLabel(brandLink.payer)} · ${visibilityLabel(brandLink.visibility)}${brandLink.visibility_requested || brandLink.payer_proposed ? ' · 답할 요청 있음' : ''}`}
+                onPress={() => router.push('/owner/brand-link')}
+              />
+            ) : null}
+            {brandInvites > 0 ? (
+              <SettingsRow
+                first={!brandLink}
+                icon="mail-unread-outline"
+                label="연결 요청"
+                value={`${brandInvites}건`}
+                onPress={() => router.push('/owner/brand-consent')}
+              />
+            ) : null}
+          </SettingsSection>
+        ) : null}
 
         {/* 이 매장 알림 — 매장별(unit_member_prefs). 계정 전역 푸시 on/off 는 전체 계정 설정에. */}
         <SettingsSection icon="notifications-outline" title="이 매장 알림">

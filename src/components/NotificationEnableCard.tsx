@@ -6,6 +6,9 @@
 //   - default: "알림 켜기" 버튼 → 권한 요청 + 구독/토큰등록.
 //   - denied: 설정에서 허용하라는 안내(앱에서 다시 못 띄움) — 웹은 브라우저, 네이티브는 OS 설정.
 //   - iOS 사파리 미설치(웹 전용): '홈 화면에 추가' 안내(설치해야 iOS 가 푸시를 준다).
+//
+// ★2026-09-22: 웹에서는 이 카드가 통째로 안 뜬다 — 알림은 폰 앱이 받는다
+//   (store-policy `WEB_PUSH_ENABLED`·`SHOW_PWA_INSTALL`). 네이티브 경로는 그대로다.
 
 import { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Pressable } from 'react-native';
@@ -25,6 +28,7 @@ import {
   nativePermissionState,
   enableNativePush,
 } from '@/lib/push/nativepush';
+import { SHOW_PWA_INSTALL, WEB_PUSH_ENABLED } from '@/lib/config/store-policy';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Elevation, Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
@@ -49,11 +53,13 @@ export function NotificationEnableCard() {
     };
   }, [isNative]);
 
-  const iosInstall = needsIosInstall();
+  // 웹은 정책으로 꺼 뒀다(알림은 폰 앱) — 설치 유도도, 웹 푸시 켜기도 하지 않는다.
+  const iosInstall = SHOW_PWA_INSTALL && needsIosInstall();
+  const webPush = WEB_PUSH_ENABLED && pushSupported();
 
   // 이미 켜짐 → 숨김. 지원 안 하고 iOS 설치 안내도 아니면 숨김.
   if (perm === 'granted') return null;
-  if (!pushSupported() && !isNative && !iosInstall) return null;
+  if (!webPush && !isNative && !iosInstall) return null;
 
   // iOS 사파리 미설치 — 설치해야 알림을 받는다.
   if (iosInstall) {

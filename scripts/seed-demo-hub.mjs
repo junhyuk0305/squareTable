@@ -24,6 +24,7 @@ import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { assertSeedTarget } from './lib/seed-target.mjs';
 
 const __dir = dirname(fileURLToPath(import.meta.url));
 const readEnv = (file) => {
@@ -45,6 +46,7 @@ const SERVICE = process.env.SUPABASE_SERVICE_ROLE_KEY || envSeed.SUPABASE_SERVIC
 const ANON = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || envApp.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 if (!URL || !SERVICE) { console.error('✗ SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY 필요(.env.seed)'); process.exit(1); }
 
+assertSeedTarget(URL, 'seed-demo-hub.mjs');
 const db = createClient(URL, SERVICE, { auth: { persistSession: false } });
 const anon = () => createClient(URL, ANON, { auth: { persistSession: false, autoRefreshToken: false } });
 

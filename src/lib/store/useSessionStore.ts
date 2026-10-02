@@ -21,6 +21,7 @@ import {
   updateProfileFields,
   updateUnitIndustry,
   fetchMyUnits,
+  fetchMyBrand,
   switchActiveUnit,
   type MyUnitRow,
 } from '@/lib/db';
@@ -78,6 +79,13 @@ type SessionState = {
   freeMode: boolean;
   /** 앱에서 이용권을 팔아도 되는가(서버 스위치 0187). 판매 롤백은 이 값 하나로 뒤집는다. */
   iapEnabled: boolean;
+  /**
+   * 본사(브랜드) 담당자로 로그인했는가 — 담당자면 브랜드 id, 아니면 null.
+   * ★매장 권한(`role`)과 **다른 라인**이다(`brand_members` ⊥ `unit_members`).
+   *  P1 에서는 필드만 두고 항상 null 이다 — `brand_members` 에서 파생하는 것은 P2(조직 축).
+   *  웹 셸은 이 값 하나로 본사 대시보드를 고른다(`AppShell.web.tsx`).
+   */
+  brandId: string | null;
   inviteCode: string; // 내 매장 초대코드(사장 화면에서 직원에게 공유)
   email: string;
   bio: string; // 한줄 소개
@@ -283,7 +291,7 @@ async function loadProfile(
       _lastLoadFault = 'load_failed'; // 로그인 직후라면 signInWithPassword 가 '네트워크 오류' 문구로 노출(#17·#18)
       setUnitId(null);
       setAnalyticsContext({ userId: null, unitId: null, role: null });
-      set({ status: 'signed_out', unitId: '', userId: '', userName: '', storeName: '', pendingUnitId: '', pendingStoreName: '', rejectedJoinStoreName: '', industry: '', inviteCode: '', bio: '', phone: '', plan: 'free', seatLocked: false, needsDowngradeChoice: false, subStatus: '', trialEndsAt: '', paidUntil: '' });
+      set({ status: 'signed_out', brandId: null, unitId: '', userId: '', userName: '', storeName: '', pendingUnitId: '', pendingStoreName: '', rejectedJoinStoreName: '', industry: '', inviteCode: '', bio: '', phone: '', plan: 'free', seatLocked: false, needsDowngradeChoice: false, subStatus: '', trialEndsAt: '', paidUntil: '' });
       return;
     }
 
@@ -293,7 +301,7 @@ async function loadProfile(
       _lastLoadFault = 'deleted'; // 로그인 직후라면 signInWithPassword 가 '탈퇴 처리된 계정' 문구로 노출(#16)
       setUnitId(null);
       setAnalyticsContext({ userId: null, unitId: null, role: null });
-      set({ status: 'signed_out', unitId: '', userId: '', userName: '', storeName: '', pendingUnitId: '', pendingStoreName: '', rejectedJoinStoreName: '', industry: '', inviteCode: '', bio: '', phone: '', plan: 'free', seatLocked: false, needsDowngradeChoice: false, subStatus: '', trialEndsAt: '', paidUntil: '' });
+      set({ status: 'signed_out', brandId: null, unitId: '', userId: '', userName: '', storeName: '', pendingUnitId: '', pendingStoreName: '', rejectedJoinStoreName: '', industry: '', inviteCode: '', bio: '', phone: '', plan: 'free', seatLocked: false, needsDowngradeChoice: false, subStatus: '', trialEndsAt: '', paidUntil: '' });
       void supabase.auth.signOut().catch(() => {});
       return;
     }
@@ -446,6 +454,22 @@ async function loadProfile(
     else if (jr.kind === 'clear') clearJoinMarker(userId);
     // 이름을 모르는 마커(콜드 로드 생성 등)도 안내는 떠야 한다 — 빈값이면 대기 카드와 같은 폴백.
     if (jr.kind === 'show' || jr.kind === 'reject') rejectedJoinStoreName = jr.storeName || '신청한 매장';
+    // 본사(브랜드) 담당자 파생(0208) — 매니저 승격과 **같은 방식**이다. `profiles.role` 은 안 건드린다.
+    // 여기가 유일한 승격 지점이고, 화면은 세션의 brandId 만 본다.
+    // ⚠️fail-closed: 읽기 실패는 '본사 아님'으로 둔다. 잘못 열리는 쪽이 되돌리기 어렵다.
+    //   단 **같은 사용자**의 일시 실패는 이전 값을 유지한다 — 새로고침 한 번에 담당자가 매장 화면으로
+    //   떨어지면 그게 더 큰 사고다(구독·매장목록이 쓰는 보존 패턴과 같다).
+    let brandId: string | null = null;
+    {
+      const { data: brand, error: brandErr } = await fetchMyBrand();
+      if (brandErr) {
+        reportError('session.fetchMyBrand', brandErr);
+        const prev = useSessionStore.getState();
+        if (prev.userId === userId) brandId = prev.brandId;
+      } else {
+        brandId = brand?.brand_id ?? null;
+      }
+    }
     setUnitId(unitId || null);
     setAnalyticsContext({ userId, unitId: unitId || null, role }); // 관측 이벤트에 매장/유저/역할 태깅
     set({
@@ -458,6 +482,7 @@ async function loadProfile(
       role,
       // 가입 때 고른 역할(권한 아님 — 화면 분기 전용). 메타데이터가 없는 옛 계정·소셜 가입은 null.
       signupRole: meta?.role === 'owner' ? 'owner' : meta?.role === 'junior' ? 'junior' : null,
+      brandId,
       unitId,
       storeName,
       // 승인 대기 상태 반영(남용 #2). 승인돼 unitId가 붙으면 pending은 비운다(pendingStoreName도 정리).
@@ -487,7 +512,7 @@ async function loadProfile(
     _lastLoadFault = 'load_failed'; // 로그인 직후라면 signInWithPassword 가 '네트워크 오류' 문구로 노출(#17)
     setUnitId(null);
     setAnalyticsContext({ userId: null, unitId: null, role: null });
-    set({ status: 'signed_out', unitId: '', userId: '', userName: '', storeName: '', stores: [], pendingUnitId: '', pendingStoreName: '', rejectedJoinStoreName: '', industry: '', inviteCode: '', bio: '', plan: 'free', seatLocked: false, needsDowngradeChoice: false, subStatus: '', trialEndsAt: '', paidUntil: '' });
+    set({ status: 'signed_out', brandId: null, unitId: '', userId: '', userName: '', storeName: '', stores: [], pendingUnitId: '', pendingStoreName: '', rejectedJoinStoreName: '', industry: '', inviteCode: '', bio: '', plan: 'free', seatLocked: false, needsDowngradeChoice: false, subStatus: '', trialEndsAt: '', paidUntil: '' });
   }
 }
 
@@ -499,6 +524,8 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   ...(HAS_SUPABASE ? { ...DEMO, status: 'loading' } : DEMO),
   // 로그인 전엔 '가입 때 고른 역할'을 알 수 없다 → null. loadProfile 이 메타데이터에서 채운다.
   signupRole: null,
+  // 브랜드 축(P2)이 붙기 전까지 항상 null. 파생 지점이 생기면 loadProfile 이 채운다.
+  brandId: null,
 
   init: async () => {
     if (!HAS_SUPABASE) {
@@ -518,7 +545,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
         if (u) loadProfile(set, u.id, u.email ?? '', pendingOwnerMeta(u));
         else {
           setAnalyticsContext({ userId: null, unitId: null, role: null });
-          set({ status: 'signed_out', unitId: '', userId: '', userName: '', plan: 'free', seatLocked: false, needsDowngradeChoice: false, subStatus: '', trialEndsAt: '', paidUntil: '' });
+          set({ status: 'signed_out', brandId: null, unitId: '', userId: '', userName: '', plan: 'free', seatLocked: false, needsDowngradeChoice: false, subStatus: '', trialEndsAt: '', paidUntil: '' });
         }
       });
     }
@@ -901,7 +928,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   deleteAccount: async () => {
     if (!HAS_SUPABASE) {
       // 데모 모드: 실제 삭제 대상 없음 → 세션만 종료.
-      set({ status: 'signed_out', unitId: '', userId: '', userName: '', pendingUnitId: '', pendingStoreName: '', rejectedJoinStoreName: '', industry: '', plan: 'free', seatLocked: false, needsDowngradeChoice: false, subStatus: '', trialEndsAt: '', paidUntil: '' });
+      set({ status: 'signed_out', brandId: null, unitId: '', userId: '', userName: '', pendingUnitId: '', pendingStoreName: '', rejectedJoinStoreName: '', industry: '', plan: 'free', seatLocked: false, needsDowngradeChoice: false, subStatus: '', trialEndsAt: '', paidUntil: '' });
       return { error: null };
     }
     const { error } = await rpcDeleteMyAccount();
@@ -915,7 +942,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     } catch (e) {
       console.warn('[session] signOut after delete failed:', e);
     }
-    set({ status: 'signed_out', unitId: '', userId: '', userName: '', pendingUnitId: '', pendingStoreName: '', rejectedJoinStoreName: '', industry: '', plan: 'free', seatLocked: false, needsDowngradeChoice: false, subStatus: '', trialEndsAt: '', paidUntil: '' });
+    set({ status: 'signed_out', brandId: null, unitId: '', userId: '', userName: '', pendingUnitId: '', pendingStoreName: '', rejectedJoinStoreName: '', industry: '', plan: 'free', seatLocked: false, needsDowngradeChoice: false, subStatus: '', trialEndsAt: '', paidUntil: '' });
     return { error: null };
   },
 
@@ -1050,7 +1077,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
         console.warn('[session] signOut failed:', e);
       }
     }
-    set({ status: 'signed_out', unitId: '', userId: '', userName: '', pendingUnitId: '', pendingStoreName: '', rejectedJoinStoreName: '', industry: '', plan: 'free', seatLocked: false, needsDowngradeChoice: false, subStatus: '', trialEndsAt: '', paidUntil: '' });
+    set({ status: 'signed_out', brandId: null, unitId: '', userId: '', userName: '', pendingUnitId: '', pendingStoreName: '', rejectedJoinStoreName: '', industry: '', plan: 'free', seatLocked: false, needsDowngradeChoice: false, subStatus: '', trialEndsAt: '', paidUntil: '' });
   },
 
   switchTo: (role) => {

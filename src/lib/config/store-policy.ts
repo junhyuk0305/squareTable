@@ -144,3 +144,42 @@ export const SHOW_SOCIAL_LOGIN = !IS_IOS_NATIVE;
  * → 웹에서 먼저 검증하고, 실기기 확인이 끝나면 이 상수만 지운다(화면 코드는 안 건드린다).
  */
 export const SHOW_GUIDE_POPUP = !IS_NATIVE;
+
+/**
+ * 본사 대시보드(`/hq/*`)를 띄워도 되는가 — **채널 축**.
+ *
+ * 본사 담당자는 넓은 데스크톱 화면에서만 일한다(기획정본 §5-1: 본사 화면에 폰 레이아웃 금지).
+ * 스토어 앱에는 본사 화면이 존재할 이유가 없어, 네이티브에서는 라우트 자체를 안내 화면으로 막는다.
+ * 읽는 곳 = `src/app/hq/_layout.tsx` · `components/shell/AppShell.web.tsx`.
+ */
+export const SHOW_HQ_CONSOLE = !IS_NATIVE;
+
+/**
+ * 사장·매니저가 웹에서 넓은 사장 웹 셸(사이드바)을 보는가 — **사업 판단 축**(2026-10-02 사용자 결정).
+ *
+ * 본사 대시보드를 머지할 때 사장 웹 화면은 그대로 두기로 했다. Toss 카드사 심사관이 사장 계정으로
+ * 웹 결제 화면을 보고 있어서, 심사 중에 그 화면의 모양이 바뀌면 안 된다.
+ * false 면 사장·매니저도 폰 프레임(ResponsiveShell)이다. 심사가 끝나면 이 값만 true 로 바꾼다.
+ * 읽는 곳 = `components/shell/AppShell.web.tsx` 하나(TwoPane 은 셸 종류를 따라 같이 꺼진다).
+ */
+export const SHOW_OWNER_WEB_SHELL = false;
+
+/**
+ * 웹에서 'PWA 설치(홈 화면에 추가)'를 권해도 되는가 — **채널 축**.
+ *
+ * 네이티브 앱이 양쪽 스토어에 나가 있으므로 웹에서 설치를 따로 권하지 않는다(2026-09-22 결정).
+ * ★헤드 주입·서비스워커 등록·정적 규약 파일(`apple-touch-icon` 등)은 그대로 둔다 —
+ *   캐치올 리라이트가 없는 파일을 404 대신 HTML 로 돌려주는 불변식 때문이다(PWA 메모리).
+ * 지금 가리는 자리 = `NotificationEnableCard` 의 iOS 사파리 설치 안내 하나(실측 2026-09-22,
+ * `beforeinstallprompt` 사용처 0건).
+ */
+export const SHOW_PWA_INSTALL = false;
+
+/**
+ * 웹 푸시 구독을 등록해도 되는가 — **채널 축**.
+ *
+ * 알림은 폰 앱이 받는다(2026-09-22 결정). 네이티브 푸시는 이 상수와 무관하다.
+ * 읽는 곳 = `usePushBootstrap`(자동 재구독) · `NotificationEnableCard`(켜기 CTA) ·
+ * `NotificationPermissionSheet`(첫 진입 시트) — 웹 분기 셋 전부.
+ */
+export const WEB_PUSH_ENABLED = false;

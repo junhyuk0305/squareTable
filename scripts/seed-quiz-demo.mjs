@@ -19,6 +19,7 @@ import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { assertSeedTarget } from './lib/seed-target.mjs';
 
 const __dir = dirname(fileURLToPath(import.meta.url));
 const readEnv = (file) => {
@@ -37,6 +38,7 @@ const URL_ = process.env.SUPABASE_URL || envSeed.SUPABASE_URL || envApp.EXPO_PUB
 const SERVICE = process.env.SUPABASE_SERVICE_ROLE_KEY || envSeed.SUPABASE_SERVICE_ROLE_KEY;
 if (!URL_ || !SERVICE) { console.error('✗ SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY 필요(.env.seed)'); process.exit(1); }
 
+assertSeedTarget(URL_, 'seed-quiz-demo.mjs');
 const db = createClient(URL_, SERVICE, { auth: { persistSession: false } });
 const PURGE_ONLY = process.argv.includes('--purge');
 

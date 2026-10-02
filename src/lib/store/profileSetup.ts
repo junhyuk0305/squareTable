@@ -13,6 +13,13 @@ export function needsProfileSetup(s: {
   phone: string;
   unitId: string;
   pendingUnitId: string;
+  /** 본사(브랜드) 담당자면 브랜드 id. 0208 이전 호출부는 안 넘겨도 된다(= 지금과 같은 동작). */
+  brandId?: string | null;
 }): boolean {
+  // 본사 담당자는 **대상이 아니다**(2026-09-22, 0208). 이 게이트가 존재하는 이유는
+  // create_store / join_by_invite 가 birth_date_required 로 막히는 것을 미리 푸는 것인데,
+  // 담당자는 매장을 만들지도 합류하지도 않는다. 넣지 않으면 "매장 없음 + 전화 없음"이
+  // 그대로 걸려 **본사 계정이 프로필 완성 화면에 영영 갇힌다**(실측으로 잡았다).
+  if (s.brandId) return false;
   return s.status === 'signed_in' && !s.phone && !s.unitId && !s.pendingUnitId;
 }

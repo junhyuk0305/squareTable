@@ -7,6 +7,7 @@ import { usePathname } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { TabButton, goToTab, type Tab } from '@/components/RoleTabBar';
+import { useShell } from '@/components/shell/shellContext';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useMemberPrefsStore } from '@/lib/store/useMemberPrefsStore';
 import { useCrossNotifStore } from '@/lib/store/useCrossNotifStore';
@@ -14,7 +15,8 @@ import { assignedTodayCount, storeUnreadCount } from '@/lib/utils/crossStoreNoti
 import { todayStr } from '@/lib/utils/attendance';
 import { InkColors } from '@/lib/theme/colors';
 
-const TABS: Record<'junior' | 'owner', Tab[]> = {
+/** 허브 층 탭 — 넓은 웹 셸의 사이드바도 이 목록을 그대로 쓴다(복제 금지). */
+export const HUB_TABS: Record<'junior' | 'owner', Tab[]> = {
   owner: [
     { label: '현황', path: '/hub', icon: 'stats-chart-outline', iconActive: 'stats-chart' },
     // 허브 '노하우'(지식 신선도) — 매장 앱 노하우 탭과 층이 다르다(허브=계정 스코프 집계·이동).
@@ -55,7 +57,12 @@ export function HubTabBar({ role }: { role: 'junior' | 'owner' }) {
   const pathname = usePathname();
   const insets = useSafeAreaInsets();
   const badge = useFirstTabBadge(role);
-  const tabs = TABS[role];
+  const tabs = HUB_TABS[role];
+  const shell = useShell();
+
+  // 넓은 웹 셸(사장·본사)에서는 왼쪽 사이드바가 이동을 맡는다 — 하단 탭바까지 그리면
+  // 같은 이동 수단이 둘이 된다. 폰 셸(네이티브·직원 웹)은 지금 그대로다.
+  if (shell !== 'phone') return null;
 
   const isActive = (t: Tab) => pathname === String(t.path) || pathname.startsWith(`${String(t.path)}/`);
 

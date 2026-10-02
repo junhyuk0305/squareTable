@@ -1,0 +1,433 @@
+// qa-hq-browser.mjs — 웹 셸 세 갈래 실브라우저 실측 (본사 웹 대시보드 P1).
+//
+// 로그인한 사람의 종류에 따라 **껍데기만** 갈리는지 숫자로 확인한다.
+//   A 사장  — 왼쪽 사이드바 + 본문 720 캡 · 하단 탭바 없음 · 사이드바 항목 = 허브3 + 매장5 + 하단3
+//   B 직원  — 지금 폰 프레임(460) 그대로 · 사이드바 없음 · 하단 탭바 있음
+//   C 본사  — **실제 본사 담당자 계정으로 로그인**해서 연다(0208 brand_members). 개발용 플래그 없음.
+//             로그인 직후 / 가 /hq 로 착지하는지 · 사이드바 5메뉴 · 본문 폭 캡 없음 · 탭바 없음
+//   D 모달  — 사장 셸에서 확인 모달이 460 폭으로, 사이드바 **오른쪽 가운데**에 뜬다
+//   E 시트  — 사장 셸에서 바텀시트가 460 프레임 안에 잘림 없이 뜬다
+//   F 콘솔 에러 0 · 가려짐(elementFromPoint) 0 — 세 세션 모두
+//
+// 실행: `npm run web` 을 띄운 뒤 `node scripts/qa-hq-browser.mjs` (QA_ORIGIN 기본 localhost:8081)
+// 계정: 고정 계정만 쓴다 — 사장 owner@pilot… · 직원 staff2@pilot… · 본사 hq@pilot…
+//       (본사 계정·브랜드는 `node scripts/seed-brand-demo.mjs` 가 만든다. ⛔여기서 계정을 만들지 않는다.)
+// 스크린샷 → ./qa-shots/hq/
+import { readFileSync, mkdirSync } from 'node:fs';
+import { createClient } from '@supabase/supabase-js';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
+
+function loadEnv() {
+  const e = { ...process.env };
+  const root = join(dirname(fileURLToPath(import.meta.url)), '..');
+  for (const f of ['.env', '.env.seed']) {
+    try {
+      for (const line of readFileSync(join(root, f), 'utf8').split('\n')) {
+        const m = line.match(/^([A-Z0-9_]+)=(.*)$/);
+        if (m && !e[m[1]]) e[m[1]] = m[2].trim();
+      }
+    } catch { /* 없으면 skip */ }
+  }
+  return e;
+}
+const env = loadEnv();
+const URL_ = env.EXPO_PUBLIC_SUPABASE_URL;
+const ANON = env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+const ORIGIN = process.env.QA_ORIGIN ?? 'http://localhost:8081';
+const SHOTS = './qa-shots/hq';
+mkdirSync(SHOTS, { recursive: true });
+if (!URL_ || !ANON) {
+  console.error('FAIL: EXPO_PUBLIC_SUPABASE_URL / ANON_KEY 필요(.env)');
+  process.exit(2);
+}
+
+let chromium;
+try { ({ chromium } = await import('playwright')); }
+catch { console.error('playwright 미설치'); process.exit(2); }
+
+// 축 A 고정 계정(메모리 feedback_qa_use_fixed_accounts).
+const PW = 'pilot1234';
+const OWNER = 'owner@pilot.squaretable.app';
+const JUNIOR = 'staff2@pilot.squaretable.app';
+const HQ = 'hq@pilot.squaretable.app';
+// P3 점주 동의 화면 실측용 — 초대 한 건을 service_role 로 심고 끝나면 지운다(계정은 만들지 않는다).
+const SRV = env.SUPABASE_SERVICE_ROLE_KEY;
+const svc = SRV ? createClient(URL_, SRV, { auth: { persistSession: false, autoRefreshToken: false } }) : null;
+
+const projectRef = new URL(URL_).hostname.split('.')[0];
+const STORAGE_KEY = `sb-${projectRef}-auth-token`;
+
+let pass = 0;
+let fail = 0;
+const check = (n, ok, extra = '') => {
+  if (ok) { pass++; console.log('  ✓', n); }
+  else { fail++; console.log('  ✗', n, extra); }
+};
+
+async function passwordSession(email) {
+  const res = await fetch(`${URL_}/auth/v1/token?grant_type=password`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', apikey: ANON },
+    body: JSON.stringify({ email, password: PW }),
+  });
+  const j = await res.json();
+  if (!res.ok || !j.access_token) throw new Error(`${email} 로그인 실패: ${JSON.stringify(j).slice(0, 200)}`);
+  return j;
+}
+
+/** 세션을 심은 새 페이지. 콘솔 에러는 모아 둔다. */
+async function openPage(ctx, { session }) {
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
+  page.on('pageerror', (e) => errors.push(String(e)));
+  await page.addInitScript(
+    ([k, v]) => {
+      try {
+        localStorage.clear();
+        if (v) localStorage.setItem(k, v);
+      } catch { /* 저장 불가 브라우저 */ }
+    },
+    [STORAGE_KEY, session ? JSON.stringify(session) : null],
+  );
+  page.qaErrors = errors;
+  return page;
+}
+
+/** 스플래시(~1.9s)와 화면 로딩 게이트가 지나갈 때까지. */
+const settle = (page) => page.waitForTimeout(5000);
+
+const box = (page, sel) =>
+  page.evaluate((s) => {
+    const el = document.querySelector(s);
+    if (!el) return null;
+    const r = el.getBoundingClientRect();
+    return { x: r.x, y: r.y, w: r.width, h: r.height, right: r.right, bottom: r.bottom };
+  }, sel);
+
+/**
+ * 사이드바 **밖**에 있는 하단 탭 버튼 수 — 사이드바 항목과 라벨이 같아 안쪽은 빼고 센다.
+ * ★textContent 로 찾지 않는다 — 아이콘이 폰트 글리프라 텍스트에 섞여 정확 일치가 안 된다. aria-label 로 본다.
+ */
+const tabBarCount = (page, labels) =>
+  page.evaluate((ls) => {
+    const side = document.querySelector('[data-testid="side-nav"]');
+    return [...document.querySelectorAll('[aria-label]')].filter((b) => {
+      if (side && side.contains(b)) return false;
+      return ls.includes((b.getAttribute('aria-label') ?? '').trim());
+    }).length;
+  }, labels);
+
+/** 정확히 그 글자만 가진 리프가 있나. */
+const hasLeafC = (page, t) =>
+  page.evaluate(
+    (txt) => [...document.querySelectorAll('div,span')].some((d) => !d.children.length && (d.textContent ?? '').trim() === txt),
+    t,
+  );
+
+/** 글자를 가진 리프 중 다른 것에 가려진 것 — 덮인 채로 재면 나머지 판정이 전부 거짓이 된다. */
+const occluded = (page) =>
+  page.evaluate(() => {
+    const out = [];
+    for (const el of document.querySelectorAll('div,span,p,button')) {
+      const t = (el.textContent ?? '').trim();
+      if (!t || t.length > 40 || el.children.length) continue;
+      const r = el.getBoundingClientRect();
+      if (r.width < 4 || r.height < 4 || r.bottom < 0 || r.top > innerHeight) continue;
+      const hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+      if (hit && hit !== el && !el.contains(hit) && !hit.contains(el)) out.push(t);
+    }
+    return out;
+  });
+
+/**
+ * 화면에 떠 있는 **460 캡 컬럼**(`frameCapStyle`·`modalFrameStyle`)을 찾는다.
+ *
+ * ★사장 웹 셸의 본문은 720 이라 460 컬럼이 **평소엔 하나도 없다** — 즉 460 컬럼의 존재가 곧
+ *   "모달이나 시트가 떠 있다"는 신호다. 글자로 찾으면 문구가 바뀔 때마다 검사가 깨진다.
+ */
+const capColumn = (page) =>
+  page.evaluate(() => {
+    let best = null;
+    for (const el of document.querySelectorAll('div')) {
+      if (getComputedStyle(el).maxWidth !== '460px') continue;
+      const r = el.getBoundingClientRect();
+      if (r.width < 100 || r.height < 40) continue;
+      if (!best || r.width * r.height > best.area) {
+        best = { x: r.x, w: r.width, right: r.right, top: r.y, bottom: r.bottom, area: r.width * r.height };
+      }
+    }
+    return best;
+  });
+
+const browser = await chromium.launch();
+try {
+  const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  // dev 서버는 코드가 바뀌면 다시 번들한다(수십 초). 기본 30초로는 그 구간이 통째로 실패로 보인다 —
+  // 제품이 아니라 빌드 대기를 재는 것이므로 넉넉히 준다.
+  ctx.setDefaultNavigationTimeout(180000);
+  ctx.setDefaultTimeout(60000);
+
+  // ── A 사장 웹 셸 ─────────────────────────────────────────────
+  console.log('\nA 사장 — 넓은 웹 셸');
+  const ownerSession = await passwordSession(OWNER);
+  const po = await openPage(ctx, { session: ownerSession });
+  await po.goto(`${ORIGIN}/hub`, { waitUntil: 'domcontentloaded' });
+  await settle(po);
+  await po.screenshot({ path: `${SHOTS}/A-owner-hub.png` });
+
+  const side = await box(po, '[data-testid="side-nav"]');
+  const content = await box(po, '[data-testid="owner-web-content"]');
+  check('A1 사이드바가 있다', !!side);
+  check('A2 본문 폭 ≤ 720', !!content && content.w <= 721, content ? `${content.w}px` : '본문 없음');
+  check(
+    'A3 본문이 사이드바 오른쪽에서 시작한다',
+    !!side && !!content && content.x >= side.right - 1,
+    side && content ? `side.right=${side.right} content.x=${content.x}` : '',
+  );
+  const navKeys = await po.$$eval('[data-testid^="nav-"]', (els) => els.map((e) => e.getAttribute('data-testid')));
+  // 허브 3(현황·노하우·매장) + 매장 5(홈·노하우·퀴즈·업무 채팅·설정) + 하단 3(알림·계정 설정·로그아웃)
+  check('A4 사이드바 항목 11개', navKeys.length === 11, navKeys.join(' '));
+  for (const want of ['nav-/hub', 'nav-/hub-growth', 'nav-/stores', 'nav-/owner/dashboard', 'nav-/owner/settings', 'nav-/notifications', 'nav-logout']) {
+    check(`A5 ${want}`, navKeys.includes(want));
+  }
+  check('A6 하단 탭바가 없다(이동 수단 이중 노출 0)', (await tabBarCount(po, ['현황', '노하우', '매장'])) === 0);
+  check('A7 콘솔 에러 0', po.qaErrors.length === 0, po.qaErrors.slice(0, 3).join(' | '));
+  const occA = await occluded(po);
+  check('A8 가려진 글자 0', occA.length === 0, occA.slice(0, 4).join(' | '));
+
+  // ── D 확인 모달 ──────────────────────────────────────────────
+  console.log('\nD 확인 모달 — 460 폭, 사이드바 오른쪽');
+  check('D0 모달 열기 전에는 460 캡 컬럼이 없다(본문은 720)', !(await capColumn(po)));
+  await po.click('[data-testid="nav-logout"]');
+  await po.waitForTimeout(1000);
+  await po.screenshot({ path: `${SHOTS}/D-owner-dialog.png` });
+  const dialog = await capColumn(po);
+  const vw = await po.evaluate(() => innerWidth);
+  check('D1 확인 모달이 떴다(460 캡 컬럼 등장)', !!dialog);
+  check('D2 모달이 460 프레임 안이다', !!dialog && dialog.w <= 461, dialog ? `${dialog.w}px` : '');
+  check('D3 모달이 잘리지 않는다', !!dialog && dialog.x >= 0 && dialog.right <= vw, dialog ? `x=${dialog.x} right=${dialog.right}` : '');
+  check(
+    'D4 모달이 사이드바에 가리지 않는다',
+    !!dialog && !!side && dialog.x > side.right - 1,
+    dialog && side ? `dialog.x=${dialog.x} side.right=${side.right}` : '',
+  );
+  // ⛔확인을 누르면 진짜 로그아웃된다 — 취소로 닫는다.
+  await po.evaluate(() => {
+    const b = [...document.querySelectorAll('div,span,button')].find((e) => !e.children.length && (e.textContent ?? '').trim() === '취소');
+    (b?.closest('[role="button"]') ?? b)?.click();
+  });
+  await po.waitForTimeout(700);
+
+  // ── E 바텀시트 ───────────────────────────────────────────────
+  console.log('\nE 바텀시트 — 460 프레임 안, 잘림 0');
+  // 현황 화면의 '답 기다리는 질문' 행 → OwnerStatusView 의 BottomSheet(종류가 2개 이상일 때).
+  const opened = await po.evaluate(() => {
+    const leaf = [...document.querySelectorAll('div,span')].find(
+      (e) => !e.children.length && (e.textContent ?? '').trim() === '답 기다리는 질문',
+    );
+    const btn = leaf?.closest('[role="button"]') ?? leaf?.parentElement?.closest('[role="button"]');
+    if (!btn) return false;
+    btn.click();
+    return true;
+  });
+  if (!opened) {
+    check('E1 시트 트리거를 찾았다', false, "현황 화면에 '답 기다리는 질문' 행이 없다 — 시드 상태를 확인한다");
+  } else {
+    await po.waitForTimeout(1000);
+    await po.screenshot({ path: `${SHOTS}/E-owner-sheet.png` });
+    const sheet = await capColumn(po);
+    check('E1 바텀시트가 떴다(460 캡 컬럼 등장)', !!sheet);
+    check('E2 시트가 460 프레임 안이다', !!sheet && sheet.w <= 461, sheet ? `${sheet.w}px` : '');
+    check('E3 시트가 잘리지 않는다', !!sheet && sheet.x >= 0 && sheet.right <= vw, sheet ? `x=${sheet.x} right=${sheet.right}` : '');
+  }
+  await po.close();
+
+  // ── B 직원 웹 ────────────────────────────────────────────────
+  console.log('\nB 직원 — 지금 폰 셸 그대로');
+  const juniorSession = await passwordSession(JUNIOR);
+  const pj = await openPage(ctx, { session: juniorSession });
+  await pj.goto(`${ORIGIN}/hub`, { waitUntil: 'domcontentloaded' });
+  await settle(pj);
+  await pj.screenshot({ path: `${SHOTS}/B-junior-hub.png` });
+  check('B1 사이드바가 없다', !(await box(pj, '[data-testid="side-nav"]')));
+  const frame = await capColumn(pj); // 폰 셸에서는 이 460 컬럼이 곧 프레임이다
+  check('B2 폰 프레임 460 유지', !!frame && Math.abs(frame.w - 460) < 1.5, frame ? `${frame.w}px` : '프레임 없음');
+  check('B3 하단 탭바가 그대로 있다', (await tabBarCount(pj, ['오늘', '성장', '매장'])) >= 3);
+  check('B4 콘솔 에러 0', pj.qaErrors.length === 0, pj.qaErrors.slice(0, 3).join(' | '));
+  const occB = await occluded(pj);
+  check('B5 가려진 글자 0', occB.length === 0, occB.slice(0, 4).join(' | '));
+  await pj.close();
+
+  // ── C 본사 셸 ────────────────────────────────────────────────
+  console.log('\nC 본사 — 실제 담당자 계정으로 로그인');
+  const hqSession = await passwordSession(HQ);
+  const ph = await openPage(ctx, { session: hqSession });
+  // ★루트로 들어간다 — "로그인하면 본사 대시보드로 간다"는 판정 자체를 재는 것이 요점이다.
+  await ph.goto(`${ORIGIN}/`, { waitUntil: 'domcontentloaded' });
+  await settle(ph);
+  check('C0 로그인 후 /hq 로 착지한다', new URL(ph.url()).pathname === '/hq', ph.url());
+  await ph.screenshot({ path: `${SHOTS}/C-hq-dashboard.png` });
+  const hqSide = await box(ph, '[data-testid="side-nav"]');
+  const hqMain = await box(ph, '[data-testid="hq-main"]');
+  check('C1 본사 사이드바가 있다', !!hqSide);
+  const hqKeys = await ph.$$eval('[data-testid^="nav-/hq"]', (els) => els.map((e) => e.getAttribute('data-testid')));
+  check('C2 5메뉴가 다 있다', hqKeys.length === 5, hqKeys.join(' '));
+  check('C3 본문에 폭 캡이 없다(넓은 웹 전용)', !!hqMain && hqMain.w > 720, hqMain ? `${hqMain.w}px` : '본문 없음');
+  check('C4 폰 프레임(460)을 쓰지 않는다', !(await capColumn(ph)));
+  check('C5 하단 탭바가 없다', (await tabBarCount(ph, ['현황', '오늘'])) === 0);
+  check('C6 콘솔 에러 0', ph.qaErrors.length === 0, ph.qaErrors.slice(0, 3).join(' | '));
+  const occC = await occluded(ph);
+  check('C7 가려진 글자 0', occC.length === 0, occC.slice(0, 4).join(' | '));
+  for (const [key, title] of [
+    ['nav-/hq/stores', '매장'],
+    ['nav-/hq/knowhow', '노하우'],
+    ['nav-/hq/quizzes', '퀴즈'],
+    ['nav-/hq/settings', '설정'],
+  ]) {
+    await ph.click(`[data-testid="${key}"]`).catch(() => {});
+    await ph.waitForTimeout(700);
+    const shown = await ph.evaluate(
+      (t) => [...document.querySelectorAll('div,span')].some((d) => !d.children.length && (d.textContent ?? '').trim() === t),
+      title,
+    );
+    check(`C8 '${title}' 화면이 열린다`, shown);
+  }
+  await ph.screenshot({ path: `${SHOTS}/C-hq-settings.png` });
+
+  // ── C9~ P3 본사 3화면 실측 — 표·드로어·초대 폼·구성원·KPI. 시드(store_001·store_appreview 연결) 기준.
+  console.log('\nC9 본사 화면 내용(P3)');
+  check('C9-0 사이드바 하단 "내 매장으로" 항목이 없다(전환기로 승격)', !(await box(ph, '[data-testid="nav-my-stores"]')));
+  await ph.click('[data-testid="nav-/hq/stores"]');
+  await ph.waitForTimeout(1500);
+  await ph.screenshot({ path: `${SHOTS}/C9-hq-stores.png` });
+  check('C9-1 매장 표에 시드 매장 행이 있다(store_001)', !!(await box(ph, '[data-testid="hq-row-store_001"]')));
+  check('C9-2 드로어는 닫혀 있다', !(await box(ph, '[data-testid="hq-drawer"]')));
+  await ph.click('[data-testid="hq-row-store_001"]');
+  await ph.waitForTimeout(500);
+  const drawer = await box(ph, '[data-testid="hq-drawer"]');
+  const hqMainNow = await box(ph, '[data-testid="hq-main"]');
+  check('C9-3 행을 누르면 오른쪽 드로어가 열린다', !!drawer);
+  check('C9-4 드로어는 본문 오른쪽 끝에 붙는다(폭 392)', !!drawer && !!hqMainNow && Math.abs(drawer.right - hqMainNow.right) < 2 && Math.abs(drawer.w - 392) < 2, drawer ? `w=${drawer.w} right=${drawer.right}` : '');
+  check('C9-5 드로어에 상향 요청 버튼', !!(await box(ph, '[data-testid="hq-request-visibility"]')));
+  await ph.screenshot({ path: `${SHOTS}/C9-hq-drawer.png` });
+  await ph.click('[data-testid="hq-drawer-close"]');
+  await ph.waitForTimeout(300);
+  check('C9-6 닫기 → 드로어 0', !(await box(ph, '[data-testid="hq-drawer"]')));
+  await ph.click('[data-testid="hq-add-store"]');
+  await ph.waitForTimeout(500);
+  check('C9-7 "매장 추가" → 전화번호 초대 폼', !!(await box(ph, '[data-testid="hq-modal"]')) && !!(await box(ph, '[data-testid="hq-invite-phone"]')));
+  check('C9-8 폼이 떠도 460 폰 프레임을 쓰지 않는다', !(await capColumn(ph)));
+  await ph.screenshot({ path: `${SHOTS}/C9-hq-invite.png` });
+  await ph.evaluate(() => {
+    const b = [...document.querySelectorAll('[aria-label="닫기"]')].pop();
+    b?.click();
+  });
+  await ph.waitForTimeout(300);
+  check('C9-9 닫기 → 폼 0', !(await box(ph, '[data-testid="hq-modal"]')));
+  await ph.click('[data-testid="nav-/hq/settings"]');
+  await ph.waitForTimeout(1200);
+  check('C9-10 설정에 구성원(나) 행과 초대 링크 버튼', (await hasLeafC(ph, '나')) && !!(await box(ph, '[data-testid="hq-member-invite"]')));
+  check('C9-11 설정에 공개 수준 3단(요약·노하우 공개·운영 공개)', (await hasLeafC(ph, '요약')) && (await hasLeafC(ph, '노하우 공개')) && (await hasLeafC(ph, '운영 공개')));
+  await ph.click('[data-testid="nav-/hq"]');
+  await ph.waitForTimeout(1200);
+  check('C9-12 대시보드 KPI 스트립 + 확인 필요 + 매장 표', !!(await box(ph, '[data-testid="hq-kpi"]')) && !!(await box(ph, '[data-testid="hq-attention"]')) && !!(await box(ph, '[data-testid="hq-dashboard-table"]')));
+  check('C9-13 P3 화면 콘솔 에러 0', ph.qaErrors.length === 0, ph.qaErrors.slice(0, 3).join(' | '));
+  const occC9 = await occluded(ph);
+  check('C9-14 가려진 글자 0', occC9.length === 0, occC9.slice(0, 4).join(' | '));
+  await ph.screenshot({ path: `${SHOTS}/C9-hq-dashboard.png` });
+  await ph.close();
+
+  // ── G 셸 경계 — 자격이 서기 전엔 크롬 0 ─────────────────────────
+  // 2026-09-22 사용자 지적: 미로그인 방문자가 /hq 를 열면 본사 사이드바(메뉴 5 + 로그아웃)가 보였다.
+  // 셸은 자격 뒤에 씌운다 — 미로그인·무자격자·인증 화면 어디에도 사이드바 DOM 이 0개여야 한다.
+  console.log('\nG 셸 경계 — 미로그인·무자격자·인증 화면에 사이드바 0');
+  const hasLeaf = (page, t) =>
+    page.evaluate(
+      (txt) => [...document.querySelectorAll('div,span')].some((d) => !d.children.length && (d.textContent ?? '').trim() === txt),
+      t,
+    );
+
+  const pg1 = await openPage(ctx, { session: null });
+  await pg1.goto(`${ORIGIN}/hq`, { waitUntil: 'domcontentloaded' });
+  await settle(pg1);
+  await pg1.screenshot({ path: `${SHOTS}/G-anon-hq.png` });
+  check('G1 미로그인 /hq — 사이드바 0', !(await box(pg1, '[data-testid="side-nav"]')));
+  check('G2 미로그인 /hq — /login 으로 직행한다(09-23 결정)', new URL(pg1.url()).pathname === '/login', pg1.url());
+  check('G3 미로그인 /hq — 콘솔 에러 0', pg1.qaErrors.length === 0, pg1.qaErrors.slice(0, 3).join(' | '));
+  await pg1.close();
+
+  const pg2 = await openPage(ctx, { session: ownerSession });
+  await pg2.goto(`${ORIGIN}/hq`, { waitUntil: 'domcontentloaded' });
+  await settle(pg2);
+  await pg2.screenshot({ path: `${SHOTS}/G-owner-hq.png` });
+  check('G4 무자격 사장 /hq — 사이드바 0(사장 셸도 본사 셸도 아님)', !(await box(pg2, '[data-testid="side-nav"]')));
+  check('G5 무자격 사장 /hq — 안내 + 돌아갈 길', await hasLeaf(pg2, '이 계정은 본사 담당자가 아니에요'));
+  await pg2.close();
+
+  const pg3 = await openPage(ctx, { session: null });
+  await pg3.goto(`${ORIGIN}/login`, { waitUntil: 'domcontentloaded' });
+  await settle(pg3);
+  await pg3.screenshot({ path: `${SHOTS}/G-anon-login.png` });
+  check('G6 /login — 사이드바 0', !(await box(pg3, '[data-testid="side-nav"]')));
+  check('G7 /login — 하단 탭바 0', (await tabBarCount(pg3, ['현황', '오늘', '노하우', '매장'])) === 0);
+  await pg3.close();
+
+  // ── H P3 — /hq/join 크롬 0 · 점주 동의 화면 · 설정 > 본사 연결 ──────────────
+  console.log('\nH P3 — 담당자 초대 착지 · 점주 동의 · 본사 연결');
+  const pj1 = await openPage(ctx, { session: null });
+  await pj1.goto(`${ORIGIN}/hq/join?token=qa-token`, { waitUntil: 'domcontentloaded' });
+  await settle(pj1);
+  await pj1.screenshot({ path: `${SHOTS}/H-anon-join.png` });
+  check('H1 미로그인 /hq/join — 사이드바 0(크롬 0)', !(await box(pj1, '[data-testid="side-nav"]')));
+  check('H2 미로그인 /hq/join — 가입/로그인 안내', (await hasLeaf(pj1, '본사 담당자 초대예요')) && !!(await box(pj1, '[data-testid="hq-join-primary"]')));
+  check('H3 미로그인 /hq/join — 콘솔 에러 0', pj1.qaErrors.length === 0, pj1.qaErrors.slice(0, 3).join(' | '));
+  await pj1.close();
+
+  if (!svc) {
+    check('H4 점주 동의 화면(서비스 키 없음 — 건너뜀)', false, '.env.seed 의 SUPABASE_SERVICE_ROLE_KEY 필요');
+  } else {
+    // 사장(owner@pilot)의 번호로 brand_pilot 초대 한 건을 심는다 — 흉내가 아니라 실제 행이다. 끝나면 지운다.
+    const ownerUid = JSON.parse(Buffer.from(ownerSession.access_token.split('.')[1], 'base64').toString()).sub;
+    const { data: prof } = await svc.from('profiles').select('phone_norm').eq('id', ownerUid).maybeSingle();
+    await svc.from('brand_invites').delete().eq('brand_id', 'brand_pilot').eq('kind', 'store').eq('status', 'pending');
+    const { data: inv, error: invErr } = await svc.from('brand_invites').insert({ brand_id: 'brand_pilot', kind: 'store', phone_norm: prof?.phone_norm, payer: 'brand', expires_at: new Date(Date.now() + 86400e3).toISOString() }).select('id').single();
+    check('H4 QA 초대 행 삽입', !invErr && !!inv?.id, invErr?.message);
+    try {
+      const po2 = await openPage(ctx, { session: ownerSession });
+      await po2.goto(`${ORIGIN}/hub`, { waitUntil: 'domcontentloaded' });
+      await settle(po2);
+      await po2.screenshot({ path: `${SHOTS}/H-owner-hub-card.png` });
+      check('H5 사장 홈(허브 현황)에 연결 요청 카드', !!(await box(po2, '[data-testid="brand-invite-card"]')));
+      await po2.click('[data-testid="brand-invite-card"]').catch(() => {});
+      await po2.waitForTimeout(1500);
+      await po2.screenshot({ path: `${SHOTS}/H-owner-consent.png` });
+      check('H6 동의 화면 — 관측 경계표(수준 3단)가 첫 화면', !!(await box(po2, '[data-testid="brand-consent"]')) && !!(await box(po2, '[data-testid="brand-level-summary"]')) && !!(await box(po2, '[data-testid="brand-level-ops"]')));
+      check('H7 동의 화면 — 어느 수준에도 없는 것 고지', await hasLeaf(po2, '어느 수준에서도 본사에 가지 않는 것'));
+      check('H8 동의 화면 — 수락/거절 버튼', !!(await box(po2, '[data-testid="brand-accept"]')) && !!(await box(po2, '[data-testid="brand-decline"]')));
+      check('H9 동의 화면 콘솔 에러 0', po2.qaErrors.length === 0, po2.qaErrors.slice(0, 3).join(' | '));
+      // ⛔수락·거절은 누르지 않는다 — 시드 연결(store_001 ↔ brand_pilot)을 바꾼다.
+      await po2.goto(`${ORIGIN}/owner/brand-link`, { waitUntil: 'domcontentloaded' });
+      await settle(po2);
+      await po2.screenshot({ path: `${SHOTS}/H-owner-brand-link.png` });
+      check('H10 설정 > 본사 연결 — 시드 연결(store_001) 카드 + 공개 수준 세그먼트', !!(await box(po2, '[data-testid="brand-link-store_001"]')) && !!(await box(po2, '[data-testid="brand-vis-summary"]')));
+      check('H11 본사 연결 — 해제 버튼', !!(await box(po2, '[data-testid="brand-end"]')));
+      await po2.goto(`${ORIGIN}/owner/settings`, { waitUntil: 'domcontentloaded' });
+      await settle(po2);
+      check('H12 매장 설정에 "본사 연결" 섹션', await hasLeaf(po2, '본사 연결'));
+      await po2.close();
+    } finally {
+      if (inv?.id) await svc.from('brand_invites').delete().eq('id', inv.id);
+      await svc.from('owner_alerts').delete().eq('unit_id', 'store_001').like('kind', 'brand_%');
+    }
+  }
+} catch (e) {
+  fail++;
+  console.log('\n✗ 하니스 중단:', String(e).slice(0, 300));
+} finally {
+  await browser.close();
+}
+
+console.log(`\n── 결과 ── pass ${pass} / fail ${fail}   스크린샷: ${SHOTS}`);
+process.exit(fail ? 1 : 0);

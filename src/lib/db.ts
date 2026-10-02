@@ -521,6 +521,19 @@ export async function fetchIapEnabled(): Promise<DbResult<boolean>> {
   return { data: (data as boolean) ?? false, error: error as DbErr };
 }
 
+// ── 본사(브랜드) 담당자 판정 (0208) ────────────────────────────────────────
+// "이 사람이 어느 브랜드의 본사 담당자인가" — 0행이면 아니다.
+// ★`brand_members` 는 RLS 정책이 하나도 없어 클라이언트 직접 조회가 0행이다. 입구는 이 정의자 함수뿐이다.
+//   매장 권한(`role`)과 **다른 라인**이라 여기서 매장 데이터가 딸려 나오지 않는다(기획정본 §6-2 ①).
+// ⚠️fail-closed: 못 읽으면 null(본사 아님). 잘못 열리는 쪽이 되돌리기 어렵다.
+export type MyBrandRow = { brand_id: string; brand_name: string };
+export async function fetchMyBrand(): Promise<DbResult<MyBrandRow | null>> {
+  if (!HAS_SUPABASE) return { data: null, error: null };
+  const { data, error } = await supabase.rpc('my_brand');
+  const row = Array.isArray(data) && data.length > 0 ? (data[0] as MyBrandRow) : null;
+  return { data: error ? null : row, error: error as DbErr };
+}
+
 // ── 앱 구독 현재 상태(0187 iap_subscriptions · 0196 pending/grace) — 읽기 전용. 쓰기는 웹훅뿐 ──
 // 한 계정에 옛 거래 행이 여러 개 남을 수 있다(재구독). "지금 살아 있는 구독" = 기간이 안 끝난 행 중 가장 먼 것.
 //   active = 자동갱신 켜짐 · canceled = 해지 예약(기간 끝까지 씀) · grace = 결제 실패 유예(애플이 열어 둔 기간).
@@ -1898,15 +1911,16 @@ export async function fetchCourseEntries(): Promise<CourseEntryRow[]> {
   }
   return (data ?? []).map((r: any) => ({ courseId: r.course_id, entryId: r.entry_id, position: r.position }));
 }
-/** 코스에 노하우 담기(관리 권한만, RLS). 충돌 기준 = (course_id, entry_id) — 같은 코스 재추가만 멱등. */
-export async function insertCourseEntry(courseId: string, entryId: string, position: number): Promise<boolean> {
+/** 코스에 노하우 담기(관리 권한만, RLS). 충돌 기준 = (course_id, entry_id) — 같은 코스 재추가만 멱등.
+ *  unitId 는 본사 빌더가 작업실 id 를 명시할 때만 넘긴다(세션 unitId 가 담당자의 옛 매장일 수 있다 — hq/knowhow/[id] 머리주석). */
+export async function insertCourseEntry(courseId: string, entryId: string, position: number, unitId?: string): Promise<boolean> {
   if (!HAS_SUPABASE) return true;
   return write(
     'insertCourseEntry',
     supabase
       .from('course_entries')
       .upsert(
-        { unit_id: _unitId, course_id: courseId, entry_id: entryId, position },
+        { unit_id: unitId ?? _unitId, course_id: courseId, entry_id: entryId, position },
         { onConflict: 'course_id,entry_id', ignoreDuplicates: true },
       ),
   );
@@ -2103,8 +2117,9 @@ export async function deleteQuizItem(id: string): Promise<boolean> {
 
 // ── 훈련 코스(0108) — 0099 의 'first_day'|'regular' 문자열을 대체하는 매장 소유 코스 ──────
 // 읽기는 매장 전원(직원 훈련 카드가 코스 이름을 쓴다), 쓰기는 관리 권한(RLS tc_*).
+// 0219 본사 사본 컬럼 5개도 읽는다(배지·교체/유지·숨김 판정 재료). upsert 목록에는 **넣지 않는다** — 그 다섯은 배포 RPC 만 쓴다.
 const TRAINING_COURSE_COLS =
-  'id, unit_id, key, name, description, preset, min_items, max_items, due_days, start_at, answer_days, audience, position, active, created_at';
+  'id, unit_id, key, name, description, preset, min_items, max_items, due_days, start_at, answer_days, audience, position, active, created_at, brand_course_id, brand_version, brand_pending_version, local_modified_at, brand_hidden_at';
 
 export async function fetchTrainingCourses(): Promise<DbResult<TrainingCourseRow[]>> {
   if (!HAS_SUPABASE) return { data: [], error: null };

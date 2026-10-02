@@ -1,0 +1,46 @@
+# 라이브 합성 감시(카나리) — 핵심 길 6개가 살아 있나만 본다.
+#
+# 왜: 기존 하니스들은 크고 느리고 계정·매장을 만들었다 지운다(자주 못 돌린다).
+#   그래서 라이브가 조용히 깨져 있어도 다음 수동 QA 때까지 무음이다 — 2026-09-23 에
+#   "0211 이 회수한 권한 때문에 사진 경로가 죽어 있던" 것을 한참 뒤에야 안 것이 그 예다.
+#   이 워크플로는 **읽기 전용 6쿼리**를 자주 돌려 죽으면 GitHub 가 알리게 한다.
+#
+# 성격: 쓰기 0 · 계정 신설 0 · AI 호출 0(있는 임베딩을 되먹인다 = AI 캡 소모 0).
+#   유일한 부수효과는 고정 계정 로그인 세션 하나이고 끝에 닫는다.
+#
+# ★대상 DB 는 아래 env 로 **준 곳만** 친다. qa-canary.mjs 는 .env 파일을 읽지 않는다
+#   (하니스마다 대상 결정 줄이 달라 라이브를 오발하던 문제 — scripts/lib/seed-target.mjs 참고).
+#
+# 필요 시크릿(Settings → Secrets and variables → Actions):
+#   EXPO_PUBLIC_SUPABASE_URL · EXPO_PUBLIC_SUPABASE_ANON_KEY  (qa-onboarding 과 공용)
+#   QA_CANARY_EMAIL · QA_CANARY_PASSWORD                      (고정 QA 사장 계정)
+
+name: qa-canary
+
+# ★2026-09-23 사용자 결정: **자동 실행하지 않는다(수동 전용).** 실사용 매장이 아직 없어
+#   자동 감시의 값이 작고, 필요할 때 손으로 돌리는 것으로 충분하다.
+#   평소 쓰는 법 = 로컬에서 `npm run qa:canary`(환경변수 4개를 주고 — 파일을 안 읽는다).
+#   자동으로 돌리고 싶어지면(= 유료 매장이 들어오면) 아래 주석 두 줄을 풀고 시크릿을 넣는다.
+on:
+  # schedule:
+  #   - cron: '0 */6 * * *' # 6시간마다(KST 09·15·21·03시). 읽기 6번이라 부담이 없다.
+  workflow_dispatch: {}   # Actions 탭에서 손으로 누를 때만 돈다
+
+jobs:
+  qa-canary:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5 # 읽기 6번이 5분을 넘으면 그 자체가 이상 신호다
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      - name: 카나리(라이브 · 읽기 전용 6쿼리)
+        env:
+          EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
+          EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
+          QA_EMAIL: ${{ secrets.QA_CANARY_EMAIL }}
+          QA_PASSWORD: ${{ secrets.QA_CANARY_PASSWORD }}
+        run: npm run qa:canary

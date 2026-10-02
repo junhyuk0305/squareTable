@@ -330,7 +330,11 @@ async function flow7({ owner, ownerId, jA, jAId, UNIT, UNIT_B }) {
   check('S3#3-4 읽음 집계 0/2', rs0?.[0]?.total === 2 && rs0?.[0]?.read_count === 0, JSON.stringify(rs0));
   // 알바A(매장A 소속)가 A의 공지를 읽음 처리(read_by 추가) → 1개 매장 읽음.
   const aNotice = bnotices.find((f) => f.unit_id === UNIT);
-  await jA.from('work_feed').update({ data: { ...aNotice.data, read_by: [jAId] } }).eq('id', aNotice.id);
+  // ★읽음 처리는 `mark_feed_read` 정의자 RPC 로 한다(0176). 직접 UPDATE 는 `wf_update` 정책이
+  //   **작성자만**(`data->>'authorId' = auth.uid()`) 허용하므로 직원이 사장 공지를 읽음 처리하면
+  //   RLS 가 0행으로 조용히 거부한다 — 이 하니스는 0176 이후로 그 낡은 길을 쓰고 있었다(2026-09-23 실측).
+  const mr = await jA.rpc('mark_feed_read', { p_feed_id: aNotice.id });
+  check('S3#3-5a 직원이 공지를 읽음 처리(mark_feed_read)', !mr.error && mr.data === true, mr.error?.message ?? String(mr.data));
   const { data: rs1 } = await owner.rpc('broadcast_read_status', { p_broadcast_id: BID });
   check('S3#3-5 A 읽음 후 1/2 매장', rs1?.[0]?.total === 2 && rs1?.[0]?.read_count === 1, JSON.stringify(rs1));
   // ★크로스테넌트: 비소유 매장 포함 발송 거부.

@@ -35,6 +35,18 @@ export const OWNER_KIND_UI: Record<OwnerNotifKind, { icon: IconName; tint: strin
   payment_rejected: { icon: 'alert-circle', tint: BrandColors.accentSoft },
   seat_lock: { icon: 'lock-closed', tint: BrandColors.accentSoft },
   ai_cap: { icon: 'flash', tint: BrandColors.yellowSoft },
+  // 0213 본사 축 — 요청·제안은 '답할 것'(노랑), 해제는 결과(중립).
+  brand_invite: { icon: 'business', tint: BrandColors.yellowSoft },
+  brand_visibility_request: { icon: 'eye', tint: BrandColors.yellowSoft },
+  brand_payer_proposal: { icon: 'card', tint: BrandColors.yellowSoft },
+  brand_ended: { icon: 'unlink', tint: BrandColors.brandSoft },
+  // 0217 — 도착은 '받은 것'(중립 초록계가 아니라 브랜드 톤). 답할 것이 아니라 확인할 것이다.
+  brand_deploy: { icon: 'download-outline', tint: BrandColors.brandSoft },
+  // 0221 — 요금제 선택은 **기한이 있는 할 일**이다(안 고르면 무료로 내려간다) → payer 제안과 같은 결제 톤.
+  brand_plan_choice: { icon: 'card', tint: BrandColors.accentSoft },
+  // 0224 — 관계 전환·하한 변경은 **고지**다(답할 것이 아니다) → 해제와 같은 중립 브랜드 톤.
+  brand_relation_changed: { icon: 'swap-horizontal', tint: BrandColors.brandSoft },
+  brand_floor_changed: { icon: 'lock-closed', tint: BrandColors.brandSoft },
   // 0208 결제 알림 — 카드 모양 아이콘은 쓰지 않는다(같은 행이 iOS 앱 알림함에도 나온다).
   card_fail: { icon: 'alert-circle', tint: BrandColors.accentSoft },
   card_renew: { icon: 'calendar', tint: BrandColors.yellowSoft },

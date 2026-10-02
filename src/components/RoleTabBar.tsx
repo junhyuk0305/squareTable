@@ -8,6 +8,7 @@ import { Radius } from '@/lib/theme/elevation';
 import { USE_NATIVE_DRIVER } from '@/lib/anim';
 import { useOwnerTodoCount } from '@/lib/hooks/useOwnerTodoCount';
 import { useSessionStore } from '@/lib/store/useSessionStore';
+import { useShell } from '@/components/shell/shellContext';
 
 type IconName = keyof typeof Ionicons.glyphMap;
 export type Tab = { label: string; path: Href; icon: IconName; iconActive: IconName; alsoActiveFor?: Href[] };
@@ -53,6 +54,28 @@ const TABS: Record<'junior' | 'owner', Tab[]> = {
 };
 
 /**
+ * 매장 층에서 이 세션이 쓰는 탭 세트 — **매니저는 직원 세트**다
+ * (사장 탭은 허용 목록 밖으로 튕기는 길뿐 — roles.ts `MANAGER_OWNER_ROUTES`).
+ * 하단 탭바와 넓은 웹 셸의 사이드바가 같은 판정을 쓴다 — 목록을 복제하지 않는다.
+ */
+export function storeTabsFor(role: 'junior' | 'owner', sessionRole: string): Tab[] {
+  return TABS[role === 'owner' && sessionRole !== 'owner' ? 'junior' : role];
+}
+
+/**
+ * 탭 활성 판정 — 자기 경로 + 하위 경로(`/base/...`) + 계열 서브화면(`alsoActiveFor`).
+ * pathname 은 쿼리/해시가 제거된 문자열이고, path 는 Href(미래에 쿼리·세그먼트가 붙을 수 있음)이므로
+ * 정확 일치만 보면 경로가 바뀔 때 하이라이트가 깨진다. 탭바와 사이드바가 같은 함수를 쓴다.
+ */
+export function isTabActive(t: Tab, pathname: string): boolean {
+  const match = (path: Href) => {
+    const base = String(path);
+    return pathname === base || pathname.startsWith(`${base}/`);
+  };
+  return match(t.path) || (t.alsoActiveFor?.some(match) ?? false);
+}
+
+/**
  * 탭 루트로 이동 — 탭은 '전환'이지 스택 히스토리가 아니다.
  * push 로 탭 루트를 열면 같은 탭이 스택에 중복 적재돼 ① 뒤로가기 화살표가 새고 ② 전환 애니메이션이
  * 어긋나 하단 탭 활성화가 튀는 현상이 생긴다. 그래서 탭바든 화면 안 바로가기든 탭 이동은 모두
@@ -68,19 +91,17 @@ export function RoleTabBar({ role }: { role: 'junior' | 'owner' }) {
   const insets = useSafeAreaInsets();
   // 매니저는 사장 화면(근무표 등)을 열어도 직원 탭바를 쓴다 — 사장 탭은 허용 목록 밖으로 튕기는 길뿐이다.
   const sessionRole = useSessionStore((s) => s.role);
-  const tabs = TABS[role === 'owner' && sessionRole !== 'owner' ? 'junior' : role];
+  const tabs = storeTabsFor(role, sessionRole);
   // '할 일'(답할 질문 + 검토할 제안) 배지 — 받은질문 탭이 사라진 자리를 대신하는 신호.
   //  판정 SSOT = useOwnerTodoCount. 훅은 조건부 호출이 안 되므로 junior 에서도 부르되 배지는 안 붙인다.
   const todo = useOwnerTodoCount();
+  const shell = useShell();
 
-  // pathname은 쿼리/해시가 제거된 문자열. t.path는 Href(미래에 쿼리·세그먼트가 붙을 수 있음)이므로
-  // 정확 일치 + 하위 경로(`/base/...`)까지 활성으로 본다 → 경로가 바뀌어도 하이라이트가 깨지지 않는다.
-  const matchPath = (path: Href) => {
-    const base = String(path);
-    return pathname === base || pathname.startsWith(`${base}/`);
-  };
-  // 탭 자기 경로 + 계열 서브화면(alsoActiveFor) 중 하나라도 맞으면 활성.
-  const isActive = (t: Tab) => matchPath(t.path) || (t.alsoActiveFor?.some(matchPath) ?? false);
+  // 넓은 웹 셸(사장·본사)에서는 왼쪽 사이드바가 이동을 맡는다 — 하단 탭바까지 그리면
+  // 같은 이동 수단이 둘이 된다. 폰 셸(네이티브·직원 웹)은 지금 그대로다.
+  if (shell !== 'phone') return null;
+
+  const isActive = (t: Tab) => isTabActive(t, pathname);
 
   return (
     <View style={[styles.bar, { paddingBottom: Math.max(insets.bottom, 8) }]}>
