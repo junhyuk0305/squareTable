@@ -11,7 +11,7 @@ import { HqPage, HqPill, HqSlab, HqSegment, HqLoadError, HqCard } from '@/compon
 import { HqStrip } from '@/components/hq/HqStrip';
 import { HqTable, Cell } from '@/components/hq/HqTable';
 import { ScreenLoading } from '@/components/ScreenLoading';
-import { Appear, stagger } from '@/components/Appear';
+import { Appear } from '@/components/Appear';
 import { useBrandStore } from '@/lib/store/useBrandStore';
 import { useBrandUnitsStore } from '@/lib/store/useBrandUnitsStore';
 import { useBrandKnowhowStore } from '@/lib/store/useBrandKnowhowStore';
@@ -142,7 +142,8 @@ export default function HqDashboardScreen() {
       actions={scopeToggle}
       testID="hq-dashboard"
     >
-      {/* 등장은 섹션 단위로(ui.md ⑤) — KPI · 두 칸 순서로. */}
+      {/* 등장은 한 번 — 숫자 줄과 두 칸을 한 덩어리로 올린다. 섹션마다 따로 올리면 30ms 차이로 두 번 움직여
+          "들어가는 애니메이션이 두 번 나온다"로 보였다(사용자 지적 2026-10-02). */}
       <Appear>
         <HqStrip
           testID="hq-kpi"
@@ -153,9 +154,8 @@ export default function HqDashboardScreen() {
             { label: '숙지율', value: stats.mastery === null ? null : `${stats.mastery}%`, sub: stats.mastery === null ? '배포한 노하우가 생기면 계산돼요' : `${scopeNote} 평균` },
           ]}
         />
-      </Appear>
 
-      <Appear delay={stagger(1)} style={styles.cols}>
+        <View style={styles.cols}>
         <HqCard style={styles.attCol} testID="hq-attention">
           <View style={styles.cardHead}>
             <Text style={styles.cardTitle}>확인 필요</Text>
@@ -193,6 +193,7 @@ export default function HqDashboardScreen() {
             footer={overview.length > DASHBOARD_TABLE_ROWS ? `전체 ${overview.length}곳 중 ${DASHBOARD_TABLE_ROWS}곳` : `${overview.length}곳`}
             testID="hq-dashboard-table"
           />
+        </View>
         </View>
       </Appear>
     </HqPage>
