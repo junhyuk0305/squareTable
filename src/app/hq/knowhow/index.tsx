@@ -130,7 +130,7 @@ export default function HqKnowhowScreen() {
       ),
       sortValue: (r) => r.title,
     },
-    { key: 'section', label: '섹션', width: 140, render: (r) => <Cell kind="muted">{r.section || '미분류'}</Cell>, sortValue: (r) => r.section ?? '' },
+    { key: 'section', label: '카테고리', width: 140, render: (r) => <Cell kind="muted">{r.section || '미분류'}</Cell>, sortValue: (r) => r.section ?? '' },
     {
       key: 'ver',
       label: '배포 버전',

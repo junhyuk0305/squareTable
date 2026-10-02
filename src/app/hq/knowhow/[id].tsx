@@ -19,7 +19,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { View, Text, TextInput, Pressable, StyleSheet } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 
-import { HqPage, HqButton, HqCard, HqNotice, HqRow, HqSegment, HqPill, HqEmpty, HqLoadError } from '@/components/hq/HqKit';
+import { HqPage, HqButton, HqCard, HqNotice, HqRow, HqPill, HqEmpty, HqLoadError } from '@/components/hq/HqKit';
 import { ScreenLoading } from '@/components/ScreenLoading';
 import { Appear } from '@/components/Appear';
 import { HqModal } from '@/components/hq/HqModal';
@@ -28,8 +28,9 @@ import { structureSquare, extractDocText, embedEntry } from '@/lib/ai';
 import { pickPdf, PDF_PICK_SUPPORTED } from '@/lib/import/pickPdf';
 import { MAX_IMPORT_CHARS } from '@/lib/import/chunk';
 import { KNOWHOW_TEMPLATES, type PlaybookTemplate } from '@/data/knowhowPacks';
-import { getCategoryGuide } from '@/lib/ai/categoryGuide';
+import { EXTRACTION_MASTER } from '@/data/extraction-master';
 import { CATEGORY_LABELS } from '@/lib/ai/embedText';
+import { getSectionMeta } from '@/lib/utils/category';
 import { buildDirectUq, buildPlaybookEntryFromSquare, isSquarePublishable } from '@/lib/utils/buildEntry';
 import { insertEntry, updateEntry } from '@/lib/db';
 import { InkColors } from '@/lib/theme/colors';
@@ -37,7 +38,9 @@ import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
 import type { PlaybookEntry, SquareBlock, Category } from '@/types';
 
-const CATS = (Object.keys(CATEGORY_LABELS) as Category[]).map((k) => ({ key: k, label: CATEGORY_LABELS[k] }));
+// 종류(루틴·돌발·원칙·꿀팁)는 AI 내부 비계다 — 화면에 고르게 하지 않는다(사용자 분류 = section '카테고리' 하나).
+// 매장 앱(OwnerCoachChat)과 같이 AI 가 정한 종류를 그대로 쓰고, 모르는 값이면 이전 값을 지킨다.
+const isCategory = (k: unknown): k is Category => typeof k === 'string' && k in CATEGORY_LABELS;
 
 /** 매장 앱(HandoverImport)과 같은 클라 상한 — 엣지 하드캡(14MB)보다 먼저 사람 말로 막는다. */
 const MAX_PDF_BYTES = 10 * 1024 * 1024;
@@ -156,13 +159,15 @@ export default function HqKnowhowEditorScreen() {
     setPhase('structuring');
     setErr(null);
     setNote(null);
-    const cat: Category = draft?.category ?? 'Routine';
+    const prev: Category = draft?.category ?? 'Routine';
     const out = await structureSquare({
       storeId: wsUnitId,
       rawText: raw,
-      category: cat,
-      categoryGuide: getCategoryGuide(cat).extractionGuide,
+      category: prev,
+      categoryGuide: EXTRACTION_MASTER, // 매장 앱과 같은 단일 지침 — 분류는 AI 가 내부에서 판단한다
     });
+    const aiCat = out.segments?.[0]?.category;
+    const cat: Category = isCategory(aiCat) ? aiCat : prev;
     setPhase('idle');
     if (out.usable === false) {
       setErr('운영 내용으로 읽히지 않았어요. 어떤 상황에서 무엇을 어떻게 하는지가 들어가면 카드로 정리돼요.');
@@ -274,11 +279,6 @@ export default function HqKnowhowEditorScreen() {
               testID="hq-editor-raw"
             />
             <View style={styles.rowBtns}>
-              <HqSegment
-                items={CATS}
-                value={draft?.category ?? 'Routine'}
-                onChange={(k) => setDraft((d) => (d ? { ...d, category: k } : { title: '', category: k, situation: '', steps: [], dont: '', section: '' }))}
-              />
               <HqButton
                 label={phase === 'structuring' ? 'AI가 정리하는 중…' : 'AI로 정리'}
                 icon="sparkles-outline"
@@ -325,8 +325,7 @@ export default function HqKnowhowEditorScreen() {
           ) : (
             <HqCard title="카드 편집" sub="이 내용이 매장에 그대로 갑니다.">
               <HqRow first k="제목" v={<TextInput value={draft.title} onChangeText={(t) => setDraft({ ...draft, title: t })} style={styles.input} accessibilityLabel="제목" testID="hq-editor-title" />} />
-              <HqRow k="분류" v={<HqSegment items={CATS} value={draft.category} onChange={(k) => setDraft({ ...draft, category: k })} />} />
-              <HqRow k="섹션" v={<TextInput value={draft.section} onChangeText={(t) => setDraft({ ...draft, section: t })} placeholder="오픈 · 마감 · 레시피 …" placeholderTextColor={InkColors.ink3} style={styles.input} accessibilityLabel="섹션" />} />
+              <HqRow k="카테고리" v={<TextInput value={draft.section} onChangeText={(t) => setDraft({ ...draft, section: t })} placeholder="오픈 · 마감 · 레시피 …" placeholderTextColor={InkColors.ink3} style={styles.input} accessibilityLabel="카테고리" />} />
               <HqRow k="어떤 상황에서" v={<TextInput value={draft.situation} onChangeText={(t) => setDraft({ ...draft, situation: t })} multiline style={[styles.input, styles.inputTall]} accessibilityLabel="상황" />} />
               <HqRow
                 k="무엇을 한다"
@@ -393,7 +392,7 @@ export default function HqKnowhowEditorScreen() {
                 <View style={{ flex: 1, minWidth: 0 }}>
                   <Text style={styles.tplTitle} numberOfLines={1}>{t.title}</Text>
                   <Text style={styles.tplSub} numberOfLines={1}>
-                    {CATEGORY_LABELS[(t.category as Category) ?? 'Routine']}
+                    {getSectionMeta(t.section).label}
                     {t.square?.situation ? ` · ${t.square.situation}` : ''}
                   </Text>
                 </View>

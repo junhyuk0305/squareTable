@@ -1134,11 +1134,14 @@ async function authUser(req: Request): Promise<{ id: string; unitId: string | nu
   });
   const { data, error } = await sb.auth.getUser();
   if (error || !data?.user) return null;
-  // 매장 소속 유저만 AI 사용 허용
-  const { data: prof } = await sb
-    .from('profiles').select('unit_id').eq('id', data.user.id).single();
-  if (!prof?.unit_id) return null;
-  return { id: data.user.id, unitId: prof.unit_id };
+  // 매장 소속 유저만 AI 사용 허용 — 매장 판정은 RLS 와 같은 auth_unit_id()(0055) 하나로 한다.
+  // ★profiles.unit_id 를 직접 읽지 않는다: 그건 '처음 가입한 매장'이고, 매장 전환(active_unit_id)을 모른다.
+  //   그래서 다점포 사장의 두 번째 매장에서 색인(handleEmbed)이 forbidden, 검색이 첫 매장으로 돌았고,
+  //   unit_id 가 비어 있는 본사 담당자(활성 = 라이브러리 ws_*, 0215)는 401 → 노하우 정리가 전부 mock 이었다(2026-10-02 실측).
+  const { data: unitId, error: unitErr } = await sb.rpc('auth_unit_id');
+  if (unitErr) console.error('authUser: auth_unit_id failed:', unitErr.message);
+  if (typeof unitId !== 'string' || !unitId) return null;
+  return { id: data.user.id, unitId };
 }
 
 Deno.serve(async (req: Request) => {

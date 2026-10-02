@@ -187,7 +187,8 @@ export function HqEmpty({ text, action }: { text: string; action?: ReactNode }) 
   return (
     <View style={styles.empty}>
       <Text style={styles.emptyText}>{text}</Text>
-      {action}
+      {/* HqButton 은 alignSelf:'flex-start' 라 감싸야 가운데로 온다 — 감싼 View 가 버튼 폭으로 줄어 가운데에 선다. */}
+      {action ? <View>{action}</View> : null}
     </View>
   );
 }
