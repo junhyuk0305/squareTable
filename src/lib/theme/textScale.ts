@@ -1,18 +1,60 @@
 // 전역 글자 크기 — 설정의 '작게/보통/크게'를 앱 전체 텍스트에 실제로 반영한다.
 //
-// RN(Web 포함)에는 "앱 전역 폰트 배율" 개념이 없어, Text/TextInput의 render를
-// 한 번 감싸(monkey-patch) 모든 텍스트의 fontSize·lineHeight에 배율을 곱한다.
+// RN에는 "앱 전역 폰트 배율" 개념이 없어, 모든 텍스트의 fontSize·lineHeight에 배율을 직접 곱한다.
+//  · 웹: RN-Web Text/TextInput은 forwardRef라 render를 한 번 감싼다(monkey-patch, patchTextScaling).
+//  · 네이티브: RN 0.85 Text/TextInput은 render가 없는 함수 컴포넌트라 위 패치가 건너뛴다.
+//    metro.config.js가 두 모듈 요청을 nativeText.ts·nativeTextInput.ts로 돌리고,
+//    그 감싸개가 nativeScaledStyle로 곱한다(RN 내부 컴포넌트가 쓰는 Text까지 덮는다).
 // 배율은 모듈 변수로 두고, 값이 바뀌면 _layout이 트리를 다시 렌더해 즉시 반영된다.
 //
-// 주의: @expo/vector-icons 아이콘도 내부적으로 Text라 함께 살짝 커지는데(0.92~1.12),
-// 이는 의도된 동작(아이콘·글자가 같은 비율로 움직여 레이아웃이 깨지지 않음).
-import { Text, TextInput, StyleSheet } from 'react-native';
+// 주의: @expo/vector-icons 아이콘도 내부적으로 Text라 함께 살짝 커지는데(0.9~1.18),
+// 이는 의도된 동작(아이콘·글자가 같은 비율로 움직여 레이아웃이 깨지지 않음). 네이티브도 같다.
+import { Text, TextInput, StyleSheet, Platform } from 'react-native';
 
 let factor = 1;
 
 /** 현재 배율을 설정한다. _layout이 textScale 변화에 맞춰 호출. */
 export function setTextScaleFactor(f: number) {
   factor = f;
+}
+
+/** 현재 배율. 네이티브 감싸개가 렌더마다 읽고, 1이면 아무것도 하지 않는다. */
+export function getTextScaleFactor() {
+  return factor;
+}
+
+const round2 = (n: number) => Math.round(n * 100) / 100;
+
+/**
+ * 네이티브 감싸개용. style에 덧씌울 {fontSize, lineHeight}를 돌려주고, 손댈 게 없으면 null.
+ * 웹 패치와 같은 규칙: 지정한 fontSize·lineHeight에 배율을 곱하고, fontSize가 없으면 기본 14로 본다.
+ * 웹과 다른 점 2가지:
+ *  · 중첩 Text가 fontSize를 안 주면(inheritsFontSize) 부모가 이미 곱한 크기를 물려받게 둔다(두 번 곱하지 않음).
+ *  · 줄높이를 안 준 텍스트에 1.4 줄높이를 넣지 않는다. 네이티브 기본 줄높이는 글자 크기를 따라 커진다.
+ */
+export function nativeScaledStyle(style: unknown, inheritsFontSize: boolean, maxMultiplier?: number) {
+  const f = nativeAppFactor(maxMultiplier);
+  if (f === 1) return null;
+  const flat = (StyleSheet.flatten(style as any) || {}) as any;
+  const out: { fontSize?: number; lineHeight?: number } = {};
+  if (typeof flat.fontSize === 'number') out.fontSize = round2(flat.fontSize * f);
+  else if (!inheritsFontSize) out.fontSize = round2(14 * f);
+  if (typeof flat.lineHeight === 'number') out.lineHeight = round2(flat.lineHeight * f);
+  return out.fontSize === undefined && out.lineHeight === undefined ? null : out;
+}
+
+/**
+ * 네이티브 감싸개용. `maxFontSizeMultiplier` 를 **전체 확대 상한**으로 읽는다(10-04 리뷰).
+ * RN 의 그 prop 은 OS 글꼴 배율만 자른다. 앱 배율(크게 1.18)이 그 위에 또 곱해지면 고정 폭 칸(시급·근무 시각·
+ * 숫자 배지)이 상한을 둬도 잘린다. 그래서 앱 배율을 먼저 상한 안으로 자르고(nativeAppFactor),
+ * 남은 몫만 OS 배율에 준다(nativeOsCap). 상한이 없으면(undefined·0) 둘 다 지금과 같다.
+ */
+export function nativeAppFactor(maxMultiplier?: number) {
+  return typeof maxMultiplier === 'number' && maxMultiplier >= 1 ? Math.min(factor, maxMultiplier) : factor;
+}
+export function nativeOsCap(maxMultiplier?: number) {
+  if (typeof maxMultiplier !== 'number' || maxMultiplier < 1) return maxMultiplier;
+  return round2(maxMultiplier / nativeAppFactor(maxMultiplier));
 }
 
 let patched = false;
@@ -27,6 +69,8 @@ let patched = false;
  * 덮어쓰는 스타일을 끼워 넣어야 배율이 실제로 반영된다.
  */
 export function patchTextScaling() {
+  // 네이티브는 metro 감싸개가 맡는다. RN이 나중에 render를 되살려도 두 번 곱하지 않게 웹에서만 건다.
+  if (Platform.OS !== 'web') return;
   if (patched) return;
   patched = true;
 

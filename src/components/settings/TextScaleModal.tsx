@@ -23,7 +23,7 @@ export function TextScaleModal({ visible, onClose }: { visible: boolean; onClose
   const beginTextScale = usePreferencesStore((s) => s.beginTextScale);
 
   return (
-    <BottomSheet visible={visible} onClose={onClose} sheetStyle={{ height: '52%' }}>
+    <BottomSheet visible={visible} onClose={onClose} sheetStyle={{ minHeight: '52%', maxHeight: '90%' }}>
       <Text style={s.title}>글자 크기</Text>
       <Text style={s.lead}>보기 편한 크기를 고르세요. 고르면 잠깐 뒤 앱 전체 글자 크기가 바뀌어요.</Text>
 
@@ -44,8 +44,8 @@ export function TextScaleModal({ visible, onClose }: { visible: boolean; onClose
               accessibilityState={{ selected: on }}
               accessibilityLabel={`글자 크기 ${o.label}`}
             >
-              {/* 각 옵션이 실제 그 배율로 보이는 미리보기 — 눌러 비교하지 않아도 차이가 보인다. */}
-              <Text style={[s.sample, { fontSize: Math.round(17 * factor) }]}>가나다 Aa</Text>
+              {/* 각 옵션이 실제 그 배율로 보이는 미리보기. 앱 배율이 이 글자에도 곱해지므로 지금 배율로 나눠 둔다. */}
+              <Text style={[s.sample, { fontSize: (17 * factor) / TEXT_SCALE_FACTOR[textScale] }]} numberOfLines={1}>가나다 Aa</Text>
               <View style={{ flex: 1 }}>
                 <Text style={s.rowLabel}>{o.label}</Text>
                 <Text style={s.rowSub}>{o.sub}</Text>
@@ -66,10 +66,10 @@ export function TextScaleModal({ visible, onClose }: { visible: boolean; onClose
 const s = StyleSheet.create({
   title: { fontSize: 16, fontWeight: '800', color: InkColors.ink, paddingHorizontal: 16, paddingBottom: 4 },
   lead: { fontSize: 12.5, color: InkColors.ink2, paddingHorizontal: 16, paddingBottom: 12, lineHeight: 18 },
-  list: { paddingHorizontal: 16, gap: 8, flex: 1 },
+  list: { paddingHorizontal: 16, gap: 8, flexGrow: 1 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 14, paddingVertical: 14, borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, backgroundColor: InkColors.bg },
   rowOn: { borderColor: InkColors.ink, backgroundColor: BrandColors.yellowSoft },
-  sample: { fontWeight: '800', color: InkColors.ink, width: 92 },
+  sample: { fontWeight: '800', color: InkColors.ink, minWidth: 92 },
   rowLabel: { fontSize: 15, fontWeight: '800', color: InkColors.ink },
   rowSub: { fontSize: 12, color: InkColors.ink3, marginTop: 1 },
   doneBtn: { marginHorizontal: 16, marginTop: 12, marginBottom: 18, backgroundColor: InkColors.ink, borderRadius: Radius.md, paddingVertical: 14, alignItems: 'center' },
