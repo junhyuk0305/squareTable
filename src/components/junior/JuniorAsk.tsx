@@ -17,6 +17,7 @@ import { ChatComposerBar, PlusToggleIcon } from '@/components/ChatComposerBar';
 import { ScreenLoading } from '@/components/ScreenLoading';
 import { ChatTurn } from '@/components/junior/ChatTurn';
 
+import { isBrandHidden } from '@/lib/brand/copy';
 import { useChatStore } from '@/lib/store/useChatStore';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { useUnknownQueueStore } from '@/lib/store/useUnknownQueueStore';
@@ -71,8 +72,9 @@ export function JuniorAsk({ suggestEntry = true, seed }: { suggestEntry?: boolea
   //  needs_review·is_template 로 더 좁혀 세면 화면의 'n개'와 AI가 쓰는 노하우가 어긋난다 —
   //  업종팩을 fork한 매장(전부 needs_review=true)은 화면이 칩을 아예 안 그리는데
   //  AI는 그 노하우들로 답했다. 개수는 여기서, 문장도 이 값으로 말한다.
+  //  ★숨긴 본사 사본도 뺀다(match_playbook 0217 의 brand_hidden_at is null). 사장 화면(owner/ask)은 숨긴 행도 받는다.
   const grounded = useMemo(
-    () => entries.filter((e) => (e.status ?? 'published') === 'published'),
+    () => entries.filter((e) => (e.status ?? 'published') === 'published' && !isBrandHidden(e)),
     [entries],
   );
   // 그중 사장님이 아직 확인 안 한 것 — 안내 문장이 이 수를 그대로 밝힌다(숨기지 않는다).

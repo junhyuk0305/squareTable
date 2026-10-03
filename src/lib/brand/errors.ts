@@ -52,6 +52,8 @@ const MESSAGES: Record<string, string> = {
   // ── 0227·0229 점주 해제권 ──
   franchise_can_end: '가맹점은 점주가 언제든 연결을 끝낼 수 있어요. 본사가 막을 수 없어요.',
   invalid_argument: '값이 비어 있어요. 다시 골라 주세요.',
+  // ── 0231 숨긴 본사 퀴즈 ──
+  course_hidden: '이 매장에서 숨긴 퀴즈라 보낼 수 없어요. 되살린 뒤 보내 주세요.',
 };
 
 export function brandErrorMessage(err: DbErr, fallback = '잠시 뒤 다시 시도해 주세요.'): string {

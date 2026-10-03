@@ -50,6 +50,7 @@ import {
 } from '@/lib/db';
 // 코스 행(0108 training_courses). db.ts 의 TrainingCourse 는 코스 **key** 문자열이라 이름이 겹친다 → 행은 Row 로 별칭.
 import type { QuizAssignment, TrainingCourse as TrainingCourseRow } from '@/lib/quiz/types';
+import { isBrandHidden } from '@/lib/brand/copy';
 import { guardWrite, useSyncStore } from '@/lib/store/useSyncStore';
 import { coalesce, subscribeDebounced, settleWithin, HYDRATE_TIMEOUT_MS } from '@/lib/store/realtimeSync';
 import { genId } from '@/lib/utils/id';
@@ -800,7 +801,8 @@ export const useWorkStore = create<State>((set, get) => ({
       templates: templates.data, done: live.done, feed: live.feed,
       knowhowLinks, understanding, courseEntries, training, trainingRequests, assignments, quizAttempts,
       // 직원에게 보일 코스만(비활성 제외) 사장 화면과 같은 순서로 — 카드 순서 = 사장이 정한 순서.
-      courses: (courses.data ?? []).filter((c) => c.active).sort((a, b) => a.position - b.position),
+      // 숨긴 본사 퀴즈도 뺀다. 직원은 RLS(0231 tc_select)가 1선이고 이건 2선이다(사장 계정·0231 전 DB).
+      courses: (courses.data ?? []).filter((c) => c.active && !isBrandHidden(c)).sort((a, b) => a.position - b.position),
       // 읽기 실패(null)면 빈 맵 = 문항 0건 취급이다. 퀴즈가 잠깐 안 뜨는 쪽이 검수 안 된 문제가
       // 나가는 쪽보다 낫다(fail-closed). 실패 자체는 readFail 이 이미 보고한다.
       quizCounts: quizCounts.data ?? {},

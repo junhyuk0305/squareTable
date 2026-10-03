@@ -10,11 +10,14 @@
 //   D 점주 수정 → 대기 — 내용 안 덮음 · brand_pending_version 기록 · 교차표 'modified'→'pending'
 //   E 교체 / 유지 — apply_brand_pending(true) 는 원본으로 덮고 미수정으로 · (false) 는 내용 유지
 //   F 숨김 — hide_brand_copy · 교차표 'hidden' · 숙지율 분모에서 빠짐 · 재배포해도 숨김 유지
+//     ★0231: 숨긴 사본은 사장만 읽는다(직원·매니저 0행) · 되살리면 직원이 다시 읽는다
 //   G 경계 — 미연결 매장 0건 · 남의 매장 노하우를 원본으로 못 씀 · 직원은 숨김·교체 못 함 · 본사는 사본 직접 못 읽음
 //   H 미러 뷰 — my_brand_mirror 가 brand_overview 와 **같은 값** · 남의 매장은 0행
 //   J 퀴즈 배포(P5 · 0219·0220) — 퀴즈 사본 · course_entries·quiz_items.entry_ids 가 **그 매장 사본 id** · 없는 노하우만 선배포 ·
 //     알림 한 행("퀴즈와 노하우 n건") · ★quiz_assignments 0행 · 버전 규칙 4종(코스 이름·문항 수정 둘 다 '수정') · 숨김(안 나간 발송 취소) ·
 //     숨긴 노하우 사본을 근거로 하는 문항은 출제·개수에서 빠짐 · 경계(미연결·섞임·직원·본사 직접 읽기·매장 퀴즈를 원본으로)
+//     ★0231: 숨긴 퀴즈는 사장만 읽는다(직원·매니저 0행) · 사장 직접 발송은 course_hidden · 재확인 발송은 0행
+//     (매니저 단정은 고정 매니저 계정이 store_001 활성 매니저일 때만 잰다. 아니면 SKIP '미검증' — fail 로 세지 않는다)
 //   I 해제 후 잔존 — 연결을 끊어도 사본(노하우·퀴즈)은 매장에 남는다(정본 §4-B)
 import { createClient } from '@supabase/supabase-js';
 import { readFileSync } from 'node:fs';
@@ -43,6 +46,7 @@ if (!URL_ || !ANON || !SRV) { console.error('FAIL: URL/ANON/SERVICE_ROLE 필요(
 const PW = 'pilot1234';
 const OWNER = 'owner@pilot.squaretable.app';
 const JUNIOR = 'staff2@pilot.squaretable.app';
+const MANAGER = 'staff@pilot.squaretable.app';   // 박지원(매니저 권한 직원 — seed-quiz-demo · qa-screen-shot)
 const HQ = 'hq@pilot.squaretable.app';
 const BRAND = 'brand_pilot';
 const UNIT = 'store_001';        // 사장 owner@pilot 의 매장 = 연결 대상
@@ -106,6 +110,20 @@ try {
   const H = await login(HQ);
   const O = await login(OWNER);
   const J = await login(JUNIOR);
+  // 매니저(0231 숨김 0행 단정용) — 고정 계정이 이 매장의 매니저이고 활성 매장도 여기일 때만 쓴다.
+  // 계정을 새로 만들거나 역할을 바꾸지 않는다(feedback_qa_use_fixed_accounts). 못 쓰면 '미검증'으로 건너뛴다.
+  let M = null;
+  let MGR_WHY = '';
+  try {
+    const m = await login(MANAGER);
+    const mId = (await m.auth.getUser()).data.user.id;
+    const { data: mm } = await svc.from('unit_members').select('role').eq('user_id', mId).eq('unit_id', UNIT).maybeSingle();
+    const { data: mp } = await svc.from('profiles').select('active_unit_id').eq('id', mId).maybeSingle();
+    if (mm?.role === 'manager' && mp?.active_unit_id === UNIT) M = m;
+    else MGR_WHY = `${MANAGER} 가 ${UNIT} 의 활성 매니저가 아니다(role ${mm?.role ?? '없음'} · 활성 ${mp?.active_unit_id ?? '없음'})`;
+  } catch (e) {
+    MGR_WHY = `${MANAGER} 로그인 불가(${String(e).slice(0, 80)})`;
+  }
   const hqId = (await H.auth.getUser()).data.user.id;
   await cleanup(null);
 
@@ -248,9 +266,31 @@ try {
   await H.rpc('brand_deploy_entries', { p_entry_ids: [SRC_A], p_unit_ids: [UNIT] });
   const { data: cA8 } = await svc.from('playbook_entries').select('brand_hidden_at, brand_version').eq('id', cA.id).maybeSingle();
   check('F7 재배포해도 숨김은 유지되고 내용만 갱신된다', !!cA8?.brand_hidden_at && cA8?.brand_version === 5, JSON.stringify(cA8));
+  // ★0231: 숨긴 사본은 소유주만 읽는다. 직원·매니저는 RLS 로 0행(재배포 뒤에도).
+  const jSeeHid = await J.from('playbook_entries').select('id').eq('id', cA.id);
+  check('F7s ★직원은 숨긴 사본을 읽지 못한다(0행)', !jSeeHid.error && (jSeeHid.data ?? []).length === 0, jSeeHid.error?.message ?? `${(jSeeHid.data ?? []).length}행`);
+  const oSeeHid = await O.from('playbook_entries').select('id, brand_hidden_at').eq('id', cA.id);
+  check('F7o 사장은 숨긴 사본을 읽는다(되살리기 목록 · 1행)', !oSeeHid.error && (oSeeHid.data ?? []).length === 1 && !!oSeeHid.data[0].brand_hidden_at, oSeeHid.error?.message ?? JSON.stringify(oSeeHid.data));
+  if (M) {
+    const mSeeHid = await M.from('playbook_entries').select('id').eq('id', cA.id);
+    check('F7m ★매니저도 숨긴 사본을 읽지 못한다(0행)', !mSeeHid.error && (mSeeHid.data ?? []).length === 0, mSeeHid.error?.message ?? `${(mSeeHid.data ?? []).length}행`);
+  } else skipped('F7m 매니저 숨김 0행', `미검증 — ${MGR_WHY}`);
+  // ★0231 S8: 숨긴 사본을 근거로 한 문항(정답 포함)도 소유주만. 매장 문항 하나를 숨긴 사본에 걸어 잰다
+  //   (id 접두사 qi_qadeploy_ 라 시작·끝 정리가 지운다).
+  const QI_HID = `${QI_PREFIX}hidcheck`;
+  const insHidQi = await svc.from('quiz_items').insert({ id: QI_HID, unit_id: UNIT, entry_ids: [cA.id], kind: 't0', format: 'mc4', payload: { q: '숨김 확인' } });
+  const oSeeQi = await O.from('quiz_items').select('id').eq('id', QI_HID);
+  check('F7q 사장은 숨긴 사본 근거 문항을 읽는다(1행)', !insHidQi.error && !oSeeQi.error && (oSeeQi.data ?? []).length === 1, insHidQi.error?.message ?? oSeeQi.error?.message ?? `${(oSeeQi.data ?? []).length}행`);
+  if (M) {
+    const mSeeQi = await M.from('quiz_items').select('id').eq('id', QI_HID);
+    check('F7qm ★매니저는 숨긴 사본 근거 문항을 읽지 못한다(0행)', !mSeeQi.error && (mSeeQi.data ?? []).length === 0, mSeeQi.error?.message ?? `${(mSeeQi.data ?? []).length}행`);
+  } else skipped('F7qm 매니저 숨긴 문항 0행', `미검증 — ${MGR_WHY}`);
+  await svc.from('quiz_items').delete().eq('id', QI_HID);
   const back = await O.rpc('hide_brand_copy', { p_entry_id: cA.id, p_hidden: false });
   const { data: cA9 } = await svc.from('playbook_entries').select('brand_hidden_at').eq('id', cA.id).maybeSingle();
   check('F8 되살리기', !back.error && cA9?.brand_hidden_at === null, back.error?.message);
+  const jSeeBack = await J.from('playbook_entries').select('id').eq('id', cA.id);
+  check('F8s 되살리면 직원이 다시 읽는다(1행)', !jSeeBack.error && (jSeeBack.data ?? []).length === 1, jSeeBack.error?.message ?? `${(jSeeBack.data ?? []).length}행`);
 
   // ── G 경계 ──────────────────────────────────────────────────────────────
   console.log('\nG 경계');
@@ -418,12 +458,29 @@ try {
     insQz.error?.message ?? hidC.error?.message ?? JSON.stringify({ c: cc8, qz: qzLeft }));
   const cmHid = await H.rpc('brand_course_matrix');
   check('J22 본사에는 hidden 으로만 보인다', (cmHid.data ?? []).some((r) => r.course_id === SRC_C && r.unit_id === UNIT && r.status === 'hidden'));
+  // ★0231: 숨긴 퀴즈는 소유주만 읽는다. 이미 받은 직원(qz_qadeploy_sent)도 코스 행을 못 받아 훈련 카드가 안 뜬다.
+  const jSeeC = await J.from('training_courses').select('id').eq('id', cc.id);
+  check('J22s ★직원은 숨긴 퀴즈를 읽지 못한다(0행 · 이미 받은 발송이 있어도)', !jSeeC.error && (jSeeC.data ?? []).length === 0, jSeeC.error?.message ?? `${(jSeeC.data ?? []).length}행`);
+  const oSeeC = await O.from('training_courses').select('id').eq('id', cc.id);
+  check('J22o 사장은 숨긴 퀴즈를 읽는다(1행)', !oSeeC.error && (oSeeC.data ?? []).length === 1, oSeeC.error?.message ?? `${(oSeeC.data ?? []).length}행`);
+  if (M) {
+    const mSeeC = await M.from('training_courses').select('id').eq('id', cc.id);
+    check('J22m ★매니저도 숨긴 퀴즈를 읽지 못한다(0행)', !mSeeC.error && (mSeeC.data ?? []).length === 0, mSeeC.error?.message ?? `${(mSeeC.data ?? []).length}행`);
+  } else skipped('J22m 매니저 숨긴 퀴즈 0행', `미검증 — ${MGR_WHY}`);
+  // 새 발송 차단(0231 트리거) — 사장이 직접 보내면 course_hidden, 시스템 재확인은 조용히 0행.
+  const manualHid = await O.from('quiz_assignments').insert({ id: 'qz_qadeploy_manual', unit_id: UNIT, course_id: cc.id, user_id: jrId, scheduled_on: '2026-01-03' });
+  check('J22t ★숨긴 퀴즈를 사장이 직접 보내면 거부(course_hidden)', errCode(manualHid.error) === 'course_hidden', manualHid.error?.message ?? '거부 안 됨');
+  const recheckHid = await svc.from('quiz_assignments').insert({ id: 'qz_qadeploy_recheck', unit_id: UNIT, course_id: cc.id, user_id: jrId, scheduled_on: '2026-01-04', origin: 'recheck' });
+  const { data: recheckRow } = await svc.from('quiz_assignments').select('id').in('id', ['qz_qadeploy_manual', 'qz_qadeploy_recheck']);
+  check('J22u 숨긴 퀴즈의 재확인 발송은 에러 없이 0행', !recheckHid.error && (recheckRow ?? []).length === 0, recheckHid.error?.message ?? JSON.stringify(recheckRow));
   await svc.from('training_courses').update({ name: 'QA 본사 퀴즈(v5)' }).eq('id', SRC_C);
   await H.rpc('brand_deploy_course', { p_course_id: SRC_C, p_unit_ids: [UNIT] });
   const { data: cc9 } = await svc.from('training_courses').select('name, brand_hidden_at, brand_version').eq('id', cc.id).maybeSingle();
   check('J23 재배포해도 숨김은 유지되고 내용만 갱신된다', cc9?.name === 'QA 본사 퀴즈(v5)' && !!cc9?.brand_hidden_at && cc9?.brand_version === 5, JSON.stringify(cc9));
   const backC = await O.rpc('hide_brand_course', { p_course_id: cc.id, p_hidden: false });
   check('J24 되살리기', !backC.error, backC.error?.message);
+  const jSeeCBack = await J.from('training_courses').select('id').eq('id', cc.id);
+  check('J24s 되살리면 직원이 다시 읽는다(1행)', !jSeeCBack.error && (jSeeCBack.data ?? []).length === 1, jSeeCBack.error?.message ?? `${(jSeeCBack.data ?? []).length}행`);
   await svc.from('quiz_assignments').delete().like('id', 'qz_qadeploy_%');
 
   // 숨긴 노하우 사본을 근거로 하는 문항은 출제·개수에서 빠진다(지시서 §1 #5 · 0220).
@@ -471,7 +528,7 @@ try {
   const applyEnd = leftCopy ? await O.rpc('apply_brand_pending', { p_entry_id: leftCopy.id, p_replace: true }) : { error: { message: 'x' } };
   check('I4 해제 뒤 교체 시도는 거부된다(원본을 못 읽는다)', !!applyEnd.error, JSON.stringify(applyEnd.error));
 
-  await O.auth.signOut(); await H.auth.signOut(); await J.auth.signOut();
+  await O.auth.signOut(); await H.auth.signOut(); await J.auth.signOut(); if (M) await M.auth.signOut();
 } catch (e) {
   fail++;
   console.log('\n✗ 하니스 중단:', String(e).slice(0, 400));
