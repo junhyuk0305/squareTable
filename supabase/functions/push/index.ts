@@ -91,6 +91,30 @@ function inQuietWindow(now: string, start?: string | null, end?: string | null):
 
 type Admin = ReturnType<typeof createClient>;
 
+// ── 앱 기기(Expo)용 사장 알림 문구 — 웹 카드 결제 알림(0230) 3종만 바꾼다 ──────────────────
+// 카드 알림 원문에는 금액·카드사 사유(토스 원문)·'결제 수단'·'자동결제 해지'가 들어 있다. 이걸 iOS·안드
+// 잠금화면에 띄우지 않고 이용 상태만 말한다(3.1.1·Play 결제 정책 · 10-03 사용자 결정). 웹 푸시는 원문 그대로다.
+// ★같은 표가 클라에 한 벌 더 있다 = src/lib/utils/notifications.ts ownerAlertForPlatform(앱 알림함).
+//   엣지는 src 를 import 하지 못한다. 한쪽 문구를 바꾸면 다른 쪽도 같이 바꾼다.
+// 'skip' = 앱 기기에는 보내지 않는다(웹 푸시만). 같은 사건을 0232 의 채널 무관 상태 알림(sub_*)이 말한다:
+//   card_renew → 갱신 뒤 sub_renewed · card_end → 해지 직후 sub_ending · card_fail 3회차(소진) → sub_ended ·
+//   card_fail 0(매장 수 변경 거절)은 웹에서 한 일이라 앱 이용 상태와 무관하다.
+// card_fail 1·2회차(재시도 중)는 sub_* 가 없어 중립 문구로 보낸다. 카드 알림이 아니거나 kind 를 모르면 null → 원문.
+function nativeOwnerAlertText(
+  kind: string | undefined,
+  step: number | undefined,
+): { title: string; body: string } | 'skip' | null {
+  switch (kind) {
+    case 'card_renew':
+    case 'card_end':
+      return 'skip';
+    case 'card_fail':
+      if (step === 0 || (step ?? 0) >= 3) return 'skip';
+      return { title: '이용 기간 연장이 아직 안 됐어요', body: '이용 상태는 이용권 화면에서 볼 수 있어요.' };
+    default: return null;
+  }
+}
+
 /**
  * 네이티브 발송(Expo Push API) — push_device_tokens 의 각 토큰으로 쏜다.
  * 응답의 각 항목이 입력과 같은 순서로 온다(Expo 문서 보장) → 인덱스로 토큰行에 매칭해 죽은 토큰을 가른다.
@@ -162,12 +186,16 @@ async function deliverExpoPush(
  * 행이 없는 수신자는 기본값(켜짐·음소거/방해금지 꺼짐)으로 발송 대상 유지(신규 사용자 무음화 방지).
  * 선호 조회 실패 = fail-open(전원 발송) — 과알림이 무음 드롭보다 안전. 단 조용히 넘기지 않고
  * 로그를 남긴다(스키마 드리프트가 나도 엣지 로그로 감지 가능 — 2026-07-24 리뷰 반영).
+ *
+ * nativeIn = 앱 기기(Expo)에만 다르게 보낼 제목·본문. 없으면 웹과 같은 문구가 간다. 'skip' 이면 앱 기기에는
+ *   보내지 않는다(사장 카드 알림만 쓴다 — nativeOwnerAlertText).
  */
 async function deliver(
   admin: Admin,
   scopeUnit: string,
   targets: string[],
   notifIn: { title: string; body: string; url: string; tag?: string },
+  nativeIn?: { title: string; body: string } | 'skip',
 ): Promise<{ sent: number; recipients: number; suppressed: number; pruned: number }> {
   if (targets.length === 0) return { sent: 0, recipients: 0, suppressed: 0, pruned: 0 };
 
@@ -249,7 +277,9 @@ async function deliver(
     await admin.from('push_subscriptions').delete().in('id', dead);
   }
 
-  const expo = await deliverExpoPush(admin, deviceTokens ?? [], notifIn);
+  const expo = nativeIn === 'skip'
+    ? { sent: 0, pruned: 0 }
+    : await deliverExpoPush(admin, deviceTokens ?? [], nativeIn ? { ...notifIn, ...nativeIn } : notifIn);
 
   return {
     sent: sent + expo.sent,
@@ -360,6 +390,7 @@ async function sweepQuizSends(token: string): Promise<{ swept: number; sent: num
  * ★0194: 기본 야간창(22:00~08:00 KST)엔, 그 매장에 개인 방해금지를 켠 사장이 없으면 선점을 미룬다
  *   (알림은 큐에 남아 다음 낮 스윕이 그대로 보낸다 — 유실 아님). 인자 없이 부르면 그 판정은 그대로 적용된다.
  * 여기는 배달과 결과 기록만. 탭하면 앱 안 요금제 화면(/billing) — 외부 결제 유도가 아니다.
+ * 예외 하나: 카드 결제 알림(0230)은 앱 기기에 중립 문구로 보내거나 보내지 않는다(nativeOwnerAlertText).
  */
 async function sweepOwnerAlerts(token: string): Promise<{ swept: number; sent: number; error?: string }> {
   const admin = createClient(SUPABASE_URL, token);
@@ -372,14 +403,27 @@ async function sweepOwnerAlerts(token: string): Promise<{ swept: number; sent: n
   const rows = (data ?? []) as {
     out_id: number; out_unit_id: string; out_title: string; out_body: string; out_recipients: string[];
   }[];
+  if (rows.length === 0) return { swept: 0, sent: 0 };
+  // 앱 기기용 문구(nativeOwnerAlertText)를 고르려면 kind·step 이 필요하다. sweep_owner_alerts 반환 열에는
+  //   없어서 id 로 한 번 더 읽는다. 읽기에 실패하면 카드 알림인지 모른다. 그때는 그 틱의 앱 기기 발송을 건너뛴다
+  //   (원문 카드 결제 안내가 잠금화면에 나가는 것보다 낫다 · 10-04 리뷰). 알림함과 웹 푸시는 그대로다.
+  const { data: meta, error: metaErr } = await admin
+    .from('owner_alerts')
+    .select('id, kind, step')
+    .in('id', rows.map((r) => r.out_id));
+  if (metaErr) console.error('[push] owner_alerts kind read failed (이 틱 앱 기기 발송 건너뜀):', metaErr.message);
+  const metaById = new Map(
+    (meta ?? []).map((m: { id: number; kind: string; step: number }) => [m.id, m]),
+  );
   let sent = 0;
   for (const r of rows) {
+    const m = metaById.get(r.out_id);
     const res = await deliver(admin, r.out_unit_id, r.out_recipients, {
       title: r.out_title,
       body: r.out_body,
       url: '/billing',
       tag: `owner-alert-${r.out_id}`,
-    });
+    }, metaErr ? 'skip' : (nativeOwnerAlertText(m?.kind, m?.step) ?? undefined));
     sent += res.sent;
     // 선점이 발송보다 먼저라 재시도는 없다(0118 과 같은 이유) → 실제 수를 남겨 사후에 구별한다.
     await admin.from('owner_alerts')

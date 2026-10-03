@@ -13,6 +13,8 @@
 //    ⑫ 앱 구독이 살아 있으면 카드 쪽이 물러난다 — 청구 안 함·자동결제 멈춤·해지 취소/변경 거부·예고 알림 없음
 //    ⑬ 줄이기 닫을 매장 — 필수·개수·소속 검증 · 예고 취소/늘리기/해지 시 명단 정리 · 갱신에서 고른 매장만 닫힘 ·
 //       잠긴(이전) 매장은 후보가 아니고 갱신 때 되살아나지 않는다
+//    ⑭ 구독 상태 알림(0232, 채널 무관) — 카드·앱 구독 각각 늘었어요·끝나요·끝났어요 1행씩 · 스윕 재실행에도 1행 ·
+//       첫 결제엔 없음 · 계좌이체로 더 길게 열린 매장·본사 부담 매장(로컬만)엔 끝나요·끝났어요 없음 · 문구에 채널·금액 없음
 // B. 엣지(card-billing 이 떠 있을 때만) — precheck 허용 목록 · 토스 연결(가짜 authKey 는 토스가 거절) · renew 인증
 //
 // ⛔ 라이브 DB 에 쓰는 하니스다. 대상은 QA_SUPABASE_URL / QA_SUPABASE_ANON_KEY / QA_SUPABASE_SERVICE_ROLE_KEY 로
@@ -101,6 +103,8 @@ async function account(n) {
   if (owned[0]) {
     // 지난 실행의 카드 결제 알림(⑪)이 남으면 "1행" 검사가 흔들린다 — 이 계정 매장의 카드 알림만 지운다.
     await svcWrite('DELETE', `owner_alerts?unit_id=eq.${owned[0].id}&kind=in.(card_fail,card_renew,card_end)`);
+    // 구독 상태 알림(⑭, 0232)은 period = 사장id:기간끝 이다. 붙은 매장과 무관하게 이 사장 것만 지운다.
+    await svcWrite('DELETE', `owner_alerts?kind=in.(sub_renewed,sub_ending,sub_ended)&period=like.${encodeURIComponent(`${uid}:*`)}`);
     // 2호점 생성 검증이 전화 인증 게이트(0088)를 다시 통과해야 한다 — 재사용 계정도 시드한다.
     await seedVerifiedPhones(URL, SERVICE, [`0107${String(7700000 + n)}`]);
     seededPhones.push(`0107${String(7700000 + n)}`);
@@ -395,6 +399,7 @@ async function dbChecks() {
     check('★⑨ 구독 없이 하루 지난 빌링키는 삭제 대상', (hk2.data ?? []).some((r) => r.owner_id === R.uid && r.billing_key === 'bk_qa_orphan'), JSON.stringify(hk2.data));
 
     await releaseChecks();
+    await subAlertChecks();
   } finally {
     if (trial !== null) await svcWrite('PATCH', 'app_config?key=eq.signup_trial_days', { value: trial });
     if (fm !== null) await svcWrite('PATCH', 'app_config?key=eq.billing_free_mode', { value: fm });
@@ -475,6 +480,118 @@ async function releaseChecks() {
   check('★⑬ single 갱신 → 남긴 3호점이 열린다(더 오래된 이전 1호점이 되살아나지 않는다)', near(b3?.paid_until, fin?.current_period_end, 5000) && b3?.plan === 'single' && new Date(b1?.paid_until) < new Date() && b2?.paid_until === u2Before, JSON.stringify({ b1: b1?.paid_until, b2: b2?.paid_until, b3: [b3?.plan, b3?.paid_until], end: fin?.current_period_end }));
   const b4 = await unitSub(u4);
   check('★⑬ single 갱신이 가장 오래된 구독 밖 매장을 카드 돈으로 연장하지 않는다', b4?.paid_until === u4Start?.paid_until && b4?.plan === u4Start?.plan, JSON.stringify({ before: u4Start, after: b4 }));
+}
+
+// ⑭ 구독 상태 알림(0232) — 결제 채널과 무관한 sub_renewed·sub_ending·sub_ended. dbChecks 안에서 부른다(무료 모드 꺼짐 필요).
+//   기간 끝은 기다리지 않고 구독 행·매장 만료일을 과거로 옮겨 시뮬레이션한다(0191 하니스와 같은 방식).
+//   본사 부담 검사는 brands·brand_units 행을 만들어야 해서 로컬(127.0.0.1·localhost)에서만 돈다.
+async function subAlertChecks() {
+  console.log('\n■ ⑭ 구독 상태 알림(0232)');
+  const subAlerts = (uid, kind) =>
+    svcSel(`owner_alerts?kind=eq.${kind}&period=like.${encodeURIComponent(`${uid}:*`)}&select=unit_id,period,step,title,body&order=id`);
+  // 앱 알림함·잠금화면에도 나간다 — 채널·결제·금액을 말하면 안 된다(0232 설계 ①). '원'은 금액 꼴만 본다.
+  const neutral = (a) => !!a && !/카드|웹|애플|구글|스토어|결제|\d[\d,]*원/.test(`${a.title} ${a.body}`);
+  const kstDay = (iso) => {
+    const p = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Seoul', month: 'numeric', day: 'numeric' })
+      .formatToParts(new Date(iso)).map((x) => [x.type, x.value]));
+    return `${p.month}월 ${p.day}일`;
+  };
+  const sweep2 = async () => { await sweepNow(); await sweepNow(); };   // 두 번 돌려도 1행이어야 한다
+  const cardFirst = async (o, bk) => {
+    const b = orderOf(await begin(o, 'single', 1));
+    const ck = (await o.c.rpc('card_customer_key')).data;
+    await svcRpc('card_save_billing_key', { p_owner: o.uid, p_customer_key: ck, p_billing_key: bk, p_card_company: '신한', p_card_number: '5555****' });
+    await svcRpc('card_record_charge', { p_order_id: b.order_id, p_ok: true, p_payment_key: `pk_${bk}` });
+  };
+  // 기간 끝 시뮬레이션. keepUnit = 매장 만료일은 두고 구독만 끝낸다(계좌이체·본사로 더 열린 매장).
+  const endCard = async (o, keepUnit = false) => {
+    await svcWrite('PATCH', `card_subscriptions?owner_id=eq.${o.uid}`, { current_period_end: days(-0.01) });
+    if (!keepUnit) await svcWrite('PATCH', `unit_subscriptions?unit_id=eq.${o.unit}`, { paid_until: days(-0.01) });
+    await svcRpc('card_housekeeping', { p_livemode: false });
+  };
+
+  // ── 카드: 첫 결제 → 갱신 → 해지 → 기간 끝 ──
+  const P = await account(2);
+  await cardFirst(P, 'bk_qa_sub_p');
+  await sweep2();
+  check('⑭ 카드 첫 결제엔 늘었어요 없음', (await subAlerts(P.uid, 'sub_renewed')).length === 0);
+  await svcWrite('PATCH', `card_subscriptions?owner_id=eq.${P.uid}`, { next_charge_at: days(-0.01) });
+  const dp = (await svcRpc('card_claim_due', { p_livemode: false, p_owner: P.uid })).data?.[0];
+  await svcRpc('card_record_charge', { p_order_id: dp?.order_id, p_ok: true, p_payment_key: 'pk_qa_sub_rn', p_approved_at: new Date().toISOString() });
+  await sweep2();
+  const pEnd = (await sub(P.uid))?.current_period_end;
+  const pr = await subAlerts(P.uid, 'sub_renewed');
+  check('★⑭ 카드 갱신 → 늘었어요 1행 · 날짜 = 새 기간 끝 · 활성 매장', pr.length === 1 && pr[0].title === `이용 기간이 ${kstDay(pEnd)}까지 늘었어요` && pr[0].unit_id === (await activeUnitOf(P.uid)), JSON.stringify(pr));
+  check('⑭ 늘었어요 문구에 채널·금액 없음', neutral(pr[0]), `${pr[0]?.title} / ${pr[0]?.body}`);
+  const pc = await P.c.rpc('card_cancel_subscription');
+  await sweep2();
+  const pe = await subAlerts(P.uid, 'sub_ending');
+  check('★⑭ 카드 해지 → 끝나요 1행 · 날짜 = 기간 끝 · "무료 요금제로 바뀌어요"', !pc.error && pe.length === 1 && pe[0].title === `${kstDay(pEnd)}에 이용 기간이 끝나요` && /무료 요금제로 바뀌어요/.test(pe[0].body), JSON.stringify(pe));
+  check('⑭ 끝나요 문구에 채널·금액 없음', neutral(pe[0]), `${pe[0]?.title} / ${pe[0]?.body}`);
+  check('⑭ 기간이 남은 해지 예약엔 끝났어요 없음', (await subAlerts(P.uid, 'sub_ended')).length === 0);
+  await endCard(P);
+  await sweep2();
+  const pd = await subAlerts(P.uid, 'sub_ended');
+  check('★⑭ 카드 기간 끝 → 끝났어요 1행', pd.length === 1 && pd[0].title === '이용 기간이 끝났어요' && (await sub(P.uid))?.status === 'expired', JSON.stringify(pd));
+  check('⑭ 끝났어요 문구에 채널·금액 없음', neutral(pd[0]), `${pd[0]?.title} / ${pd[0]?.body}`);
+
+  // ── 앱 구독: 첫 구매 → RENEWAL → CANCELLATION → EXPIRATION (웹훅과 같은 apply_iap_event 경로) ──
+  const Q = await account(3);
+  const txn = `qa_sub_${Date.now()}`;
+  const iapEv = (type, end, reason = null) => svcRpc('apply_iap_event', {
+    p_owner: Q.uid, p_platform: 'appstore', p_txn: txn, p_type: type, p_product_id: 'single_1_monthly',
+    p_plan: 'single', p_count: 1, p_period_end: end, p_reason: reason, p_raw: { event: { type } },
+  });
+  const q0 = await iapEv('INITIAL_PURCHASE', days(30));
+  await sweep2();
+  check('⑭ 앱 첫 구매엔 늘었어요 없음', q0.ok && (await subAlerts(Q.uid, 'sub_renewed')).length === 0, q0.err);
+  const qEnd = days(60);
+  await iapEv('RENEWAL', qEnd);
+  await sweep2();
+  const qr = await subAlerts(Q.uid, 'sub_renewed');
+  check('★⑭ 앱 RENEWAL → 늘었어요 1행 · 날짜 = 새 기간 끝', qr.length === 1 && qr[0].title === `이용 기간이 ${kstDay(qEnd)}까지 늘었어요` && qr[0].unit_id === Q.unit, JSON.stringify(qr));
+  await iapEv('CANCELLATION', qEnd, 'UNSUBSCRIBE');
+  await sweep2();
+  const qe = await subAlerts(Q.uid, 'sub_ending');
+  check('★⑭ 앱 해지(CANCELLATION·UNSUBSCRIBE) → 끝나요 1행', qe.length === 1 && qe[0].title === `${kstDay(qEnd)}에 이용 기간이 끝나요`, JSON.stringify(qe));
+  await iapEv('EXPIRATION', days(-0.01), 'UNSUBSCRIBE');
+  await svcWrite('PATCH', `unit_subscriptions?unit_id=eq.${Q.unit}`, { paid_until: days(-0.01) });
+  await sweep2();
+  const qd = await subAlerts(Q.uid, 'sub_ended');
+  check('★⑭ 앱 EXPIRATION → 끝났어요 1행', qd.length === 1 && qd[0].title === '이용 기간이 끝났어요', JSON.stringify(qd));
+  const qAll = [...qr, ...qe, ...qd];
+  check('⑭ 앱 구독 알림 3행 모두 채널·금액 없음', qAll.length === 3 && qAll.every(neutral), JSON.stringify(qAll.map((a) => a.title)));
+  check('⑭ 스윕을 더 돌려도 3종 각 1행', (await subAlerts(Q.uid, 'sub_renewed')).length === 1 && (await subAlerts(Q.uid, 'sub_ending')).length === 1 && (await subAlerts(Q.uid, 'sub_ended')).length === 1);
+
+  // ── 계좌이체로 더 길게 열린 매장 — 구독이 끝나도 매장은 유료다 ──
+  const R = await account(4);
+  await cardFirst(R, 'bk_qa_sub_r');
+  await svcWrite('PATCH', `unit_subscriptions?unit_id=eq.${R.unit}`, { paid_until: days(40) });
+  await R.c.rpc('card_cancel_subscription');
+  await sweep2();
+  check('★⑭ 계좌이체로 더 열린 매장엔 끝나요 없음', (await subAlerts(R.uid, 'sub_ending')).length === 0);
+  await endCard(R, true);
+  await sweep2();
+  check('★⑭ 계좌이체 유료 기간이 남은 매장엔 끝났어요 없음', (await subAlerts(R.uid, 'sub_ended')).length === 0 && (await unitSub(R.unit))?.status === 'active');
+
+  // ── 본사 부담 매장 — 로컬만(라이브에 본사 행을 만들지 않는다) ──
+  if (!/127\.0\.0\.1|localhost/.test(URL)) { skipped('⑭ 본사 부담 매장', '라이브 대상 — 본사 행을 만들지 않는다'); return; }
+  const S = await account(5);
+  const brandId = `qa_sub_brand_${Date.now()}`;
+  try {
+    await cardFirst(S, 'bk_qa_sub_s');
+    await svcWrite('POST', 'brands', { id: brandId, name: 'QA구독알림본사' });
+    await svcWrite('POST', 'brand_units', { brand_id: brandId, unit_id: S.unit, payer: 'brand', visibility: 'summary', accepted_by: S.uid });
+    await S.c.rpc('card_cancel_subscription');
+    await sweep2();
+    check('★⑭ 본사 부담 매장엔 끝나요 없음', (await subAlerts(S.uid, 'sub_ending')).length === 0);
+    await endCard(S);
+    await sweep2();
+    check('★⑭ 본사 부담 매장엔 끝났어요 없음(본사 입금 전이라 무료여도)', (await subAlerts(S.uid, 'sub_ended')).length === 0);
+  } finally {
+    await svcWrite('DELETE', `brand_units?brand_id=eq.${brandId}`).catch(() => {});
+    await svcWrite('DELETE', `brands?id=eq.${brandId}`).catch(() => {});
+  }
 }
 
 async function edgeChecks() {

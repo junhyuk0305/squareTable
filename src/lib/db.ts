@@ -451,7 +451,7 @@ export async function fetchOwnerAlerts(unitId: string): Promise<ReadResult<Owner
   if (!HAS_SUPABASE) return { data: [], error: false };
   const { data, error } = await supabase
     .from('owner_alerts')
-    .select('id, unit_id, kind, title, body, created_at')
+    .select('id, unit_id, kind, step, title, body, created_at')
     .eq('unit_id', unitId)
     .order('created_at', { ascending: false })
     .limit(20);
@@ -460,6 +460,23 @@ export async function fetchOwnerAlerts(unitId: string): Promise<ReadResult<Owner
     return { data: [], error: true };
   }
   return { data: (data ?? []) as OwnerAlert[], error: false };
+}
+
+/** 푸시 탭 → 그 사장 알림의 종류와 매장. RLS 가 그 매장 사장에게만 행을 준다(아니면 null). */
+export async function fetchOwnerAlertMeta(
+  id: number,
+): Promise<{ kind: OwnerAlert['kind']; unit_id: string } | null> {
+  if (!HAS_SUPABASE) return null;
+  const { data, error } = await supabase
+    .from('owner_alerts')
+    .select('kind, unit_id')
+    .eq('id', id)
+    .maybeSingle();
+  if (error) {
+    readFail('fetchOwnerAlertMeta', error);
+    return null;
+  }
+  return (data as { kind: OwnerAlert['kind']; unit_id: string } | null) ?? null;
 }
 
 // 신고 등록/갱신. 실패 사유를 화면이 분기해야 하므로(depositor_required·not_owner…) DbResult 원형 유지.

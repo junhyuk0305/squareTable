@@ -103,6 +103,14 @@ if (UPDATE) {
   if (stale.length) warns.push(`baseline에 있으나 사라진 항목 ${stale.length}건 — --update-baseline 으로 청소 권장.`);
 }
 
+// ── Q2b. 앱 카드 알림 표 두 벌(알림함 클라 · 앱 기기 푸시 엣지)이 같은가 ─────────
+// 엣지는 src 를 import 못해 같은 표가 두 곳에 있다. 어긋나면 잠금화면과 알림함이 다른 말을 한다(2026-10-04).
+try {
+  execSync('node scripts/check-card-alert-sync.mjs', { cwd: ROOT, stdio: 'inherit' });
+} catch {
+  problems.push('앱 카드 알림 표가 어긋났다 — notifications.ts ownerAlertForPlatform 과 push 엣지 nativeOwnerAlertText 를 같게 고쳐라.');
+}
+
 // ── Q3. Android·iOS 번들 실증 ───────────────────────────────────
 if (SKIP_BUNDLE) {
   warns.push('번들 검사 생략(--skip-bundle) — "앱 JS가 뜬다"는 보증 없음. 빌드 전엔 전체 실행 필수.');

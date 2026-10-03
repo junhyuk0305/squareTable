@@ -16,6 +16,8 @@ import { supabase } from '@/lib/supabase';
 import { reportError } from '@/lib/analytics/track';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { canManage } from '@/lib/utils/roles';
+// db 는 useSessionStore 가 이미 정적으로 import 한다 → 부팅 그래프에 새 모듈이 늘지 않는다.
+import { fetchOwnerAlertMeta } from '@/lib/db';
 import type { PushPermission } from '@/lib/push/webpush';
 
 // 앱이 켜져 있는 동안 수신한 알림도 배너로 보여준다 — 기본 핸들러는 포그라운드에서 숨기므로,
@@ -58,14 +60,36 @@ export function bindNotificationTapRouting(): void {
   if (listenerBound || !pushSupported()) return;
   listenerBound = true;
   Notifications.addNotificationResponseReceivedListener((res) => {
-    const url = res.notification.request.content.data?.url as string | undefined;
+    const content = res.notification.request.content;
+    const url = content.data?.url as string | undefined;
     if (!url) return;
-    try {
-      router.push(routeForRole(url) as never);
-    } catch {
-      /* 알 수 없는 경로면 무시 — 앱은 열려 있는 상태 유지 */
-    }
+    void resolveTapUrl(url, content.categoryIdentifier).then((to) => {
+      try {
+        router.push(routeForRole(to) as never);
+      } catch {
+        /* 알 수 없는 경로면 무시 — 앱은 열려 있는 상태 유지 */
+      }
+    });
   });
+}
+
+// 사장 알림 푸시는 엣지가 종류와 상관없이 '/billing' 을 싣는다(push/index.ts sweepOwnerAlerts).
+// tag 'owner-alert-<id>' 가 categoryIdentifier 로 오므로 그 행의 kind 로 목록과 같은 목적지를 고른다.
+// ★알림 매장이 지금 활성 매장일 때만 바꾼다. 다른 매장이면 그 매장에서의 역할(직원·매니저)이나 노하우가
+//   어긋난다(직원이면 /junior/brand-link 같은 없는 화면). 그때와 못 읽었을 때(세션 복원 전·RLS 0행)는
+//   실린 url 그대로 간다. 지금 동작과 같다.
+async function resolveTapUrl(url: string, category: string | null): Promise<string> {
+  const m = /^owner-alert-(\d+)$/.exec(category ?? '');
+  if (!m) return url;
+  try {
+    const a = await fetchOwnerAlertMeta(Number(m[1]));
+    if (!a || a.unit_id !== useSessionStore.getState().unitId) return url;
+    // 동적 import — notifications.ts 는 스토어(useWorkStore 등)를 끌고 와서 부팅 경로에 두지 않는다.
+    const { ownerAlertRoute } = await import('@/lib/utils/notifications');
+    return ownerAlertRoute(a.kind);
+  } catch {
+    return url;
+  }
 }
 
 // expo-notifications 는 'undetermined'를 쓴다 — 웹의 PushPermission('default')과 어휘를 맞춘다.

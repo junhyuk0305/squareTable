@@ -275,6 +275,7 @@ export type PaymentClaim = {
 // 좌석 잠김(즉시·+2일·+4일) · AI 사용량 80%·100% · 카드 결제 실패·결제 예고·해지 예약 종료 예고(0208).
 // 문구(title·body)는 서버가 적재 시점에 정한다 —
 // 푸시와 알림함이 같은 행을 읽으므로 클라가 문구를 다시 만들지 않는다. RLS 가 그 매장 사장에게만 흘린다.
+// 예외: 앱(iOS·안드) 알림함의 카드 결제 3종은 ownerAlertForPlatform(utils/notifications.ts)이 숨기거나 중립 문구로 바꾼다.
 export type OwnerAlert = {
   id: number;
   unit_id: string;
@@ -285,7 +286,13 @@ export type OwnerAlert = {
   kind: 'seat_lock' | 'ai_cap' | 'card_fail' | 'card_renew' | 'card_end'
       | 'brand_invite' | 'brand_visibility_request' | 'brand_payer_proposal'
       | 'brand_ended' | 'brand_deploy' | 'brand_plan_choice'
-      | 'brand_relation_changed' | 'brand_floor_changed';
+      | 'brand_relation_changed' | 'brand_floor_changed'
+      // 0227·0229 — 본사가 점주 해제권을 켜거나 끔(고지).
+      | 'brand_end_right_changed'
+      // 0232 — 구독 상태(결제 채널 무관): 늘었어요 · 끝나요 · 끝났어요. 앱·웹 공통.
+      | 'sub_renewed' | 'sub_ending' | 'sub_ended';
+  /** 회차(0191). card_fail: 0 = 매장 수 변경 거절, 1·2 = 연장 재시도 중, 3 = 소진. */
+  step?: number;
   title: string;
   body: string;
   created_at: string;

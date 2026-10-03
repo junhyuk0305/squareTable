@@ -11,6 +11,7 @@ import { answerableQuestions } from '@/lib/store/useUnknownQueueStore';
 import { fmtDateKo } from '@/lib/utils/schedule';
 // 요금제 표시명은 tiers.ts 가 SSOT — 알림 문구에서 이름을 재정의하지 않는다.
 import { PLANS } from '@/lib/config/tiers';
+import { SHOW_BILLING } from '@/lib/config/store-policy';
 
 /** 알림 목록 최대 개수 — 무한 누적 방지(최신 우선). */
 export const MAX_NOTIFS = 50;
@@ -245,7 +246,11 @@ export type OwnerNotifKind =
   // 0221 본사 축 — 본사 부담이 당월 말로 끝나니 다음 달 요금제를 고르라는 사전 안내(정본 §4-D).
   | 'brand_plan_choice'
   // 0224 본사 축 — 직영↔가맹 전환 · 직영 공개 범위 하한 변경. 둘 다 **고지**다(답할 것이 아니다).
-  | 'brand_relation_changed' | 'brand_floor_changed';
+  | 'brand_relation_changed' | 'brand_floor_changed'
+  // 0227 본사 축 — 점주 해제권 변경(고지). 해제 버튼이 있는 설정 > 본사 연결로 보낸다.
+  | 'brand_end_right_changed'
+  // 0232 구독 상태(결제 채널 무관) — 늘었어요 · 끝나요 · 끝났어요. 탭은 ownerAlertRoute default '/billing'.
+  | 'sub_renewed' | 'sub_ending' | 'sub_ended';
 export type OwnerNotifRoute =
   | '/owner/inbox' | '/owner/suggestions' | '/owner/schedule' | '/owner/staff' | '/owner/work'
   | '/owner/categories' | '/billing' | '/owner/brand-consent' | '/owner/brand-link' | '/owner/knowledge';
@@ -257,16 +262,40 @@ export function ownerAlertRoute(kind: OwnerAlert['kind']): OwnerNotifRoute {
     case 'brand_visibility_request':
     case 'brand_payer_proposal':
     case 'brand_ended': return '/owner/brand-link';
-    // 0224 — 관계가 바뀌면 동의를 다시 받을 수 있다(직영→가맹). 그 화면이 동의 화면이다.
-    case 'brand_relation_changed': return '/owner/brand-consent';
+    // 0224 — 직영 전환은 동의 대기를 만들지 않는다(consent_pending 은 가맹 전환만 켠다). 그래서 동의 화면으로
+    //   보내면 빈 화면이 된다. 알림 행만으로는 어느 쪽인지 모른다(payload 없음). 그래서 본사 연결로 보낸다.
+    //   동의가 남아 있으면 그 화면 카드 맨 위 배너가 동의 화면으로 이어 준다(brand-link.tsx).
+    case 'brand_relation_changed': return '/owner/brand-link';
     // 하한 변경은 답할 것이 아니라 **지금 범위를 확인할 것**이다 → 설정 > 본사 연결.
-    case 'brand_floor_changed': return '/owner/brand-link';
+    // 해제권 변경(0227)도 같다 — 해제 버튼이 있는 곳이 본사 연결이다.
+    case 'brand_floor_changed':
+    case 'brand_end_right_changed': return '/owner/brand-link';
     // 배포 도착은 연결 설정이 아니라 **받은 노하우**로 보낸다 — 점주가 할 일은 내용 확인이다.
     case 'brand_deploy': return '/owner/knowledge';
     // 요금제 선택은 **결제 화면**으로 보낸다. 해제된 매장은 설정 > 본사 연결이 비어 있어서
     // 거기로 보내면 막다른 길이 된다 — 점주가 할 일은 요금제를 고르는 것이다.
     case 'brand_plan_choice': return '/billing';
     default: return '/billing';
+  }
+}
+
+/** 웹 카드 결제 알림(0230) 3종을 이 플랫폼에서 어떻게 보일까. 웹은 서버 문구 그대로 쓴다. null = 이 플랫폼에선 안 보인다.
+ *  앱(iOS·안드)에는 결제 안내를 띄우지 않는다(3.1.1·Play 결제 정책 · 10-03 사용자 결정). 이용 상태는 결제 채널과
+ *  무관한 sub_*(0232)가 말한다: card_renew → 갱신 뒤 sub_renewed · card_end → 해지 직후 sub_ending ·
+ *  card_fail 3회차(소진) → sub_ended · card_fail 0(매장 수 변경 거절)은 웹에서 한 일이라 앱 이용 상태와 무관하다.
+ *  card_fail 1·2회차(재시도 중)는 sub_* 가 없어 금액·카드사 사유를 뺀 중립 문구로 남긴다. 탭은 앱 안 이용권 화면이다.
+ *  ★같은 표가 엣지에 한 벌 더 있다 = supabase/functions/push/index.ts nativeOwnerAlertText(앱 기기 푸시).
+ *   한쪽을 바꾸면 다른 쪽도 같이 바꾼다. */
+export function ownerAlertForPlatform(a: OwnerAlert): OwnerAlert | null {
+  if (SHOW_BILLING) return a;
+  switch (a.kind) {
+    case 'card_renew':
+    case 'card_end':
+      return null;
+    case 'card_fail':
+      if (a.step === 0 || (a.step ?? 0) >= 3) return null;
+      return { ...a, title: '이용 기간 연장이 아직 안 됐어요', body: '이용 상태는 이용권 화면에서 볼 수 있어요.' };
+    default: return a;
   }
 }
 
@@ -315,7 +344,7 @@ export function ownerUnreadCount(
   alerts: OwnerAlert[] = [],
 ): number {
   return (
-    alerts.filter((a) => isAfterAck(a.created_at, ackAt)).length +
+    alerts.filter((a) => ownerAlertForPlatform(a) && isAfterAck(a.created_at, ackAt)).length +
     pending.filter((p) => isAfterAck(p.created_at, ackAt)).length +
     queue.filter((u) => isPendingQuestion(u) && isAfterAck(u.asked_at, ackAt)).length +
     suggestions.filter((s) => isPendingSuggestionToReview(s, me) && isAfterAck(s.created_at, ackAt)).length +
@@ -347,7 +376,10 @@ export function buildOwnerNotifications(args: {
   const out: OwnerNotif[] = [];
 
   // 사장 알림(0191·0213) — 문구는 서버가 적재한 그대로(푸시와 같은 문장). 탭 목적지는 종류가 정한다.
-  for (const a of alerts) {
+  //   앱에서는 카드 결제 알림을 숨기거나 중립 문구로 바꾼다(ownerAlertForPlatform). 벨 숫자도 같은 판정을 쓴다.
+  for (const raw of alerts) {
+    const a = ownerAlertForPlatform(raw);
+    if (!a) continue;
     out.push({
       id: `alert_${a.id}`,
       kind: a.kind,

@@ -47,10 +47,16 @@ export const OWNER_KIND_UI: Record<OwnerNotifKind, { icon: IconName; tint: strin
   // 0224 — 관계 전환·하한 변경은 **고지**다(답할 것이 아니다) → 해제와 같은 중립 브랜드 톤.
   brand_relation_changed: { icon: 'swap-horizontal', tint: BrandColors.brandSoft },
   brand_floor_changed: { icon: 'lock-closed', tint: BrandColors.brandSoft },
+  // 0227 — 해제권 변경도 고지다 → 같은 중립 브랜드 톤.
+  brand_end_right_changed: { icon: 'key', tint: BrandColors.brandSoft },
   // 0208 결제 알림 — 카드 모양 아이콘은 쓰지 않는다(같은 행이 iOS 앱 알림함에도 나온다).
   card_fail: { icon: 'alert-circle', tint: BrandColors.accentSoft },
   card_renew: { icon: 'calendar', tint: BrandColors.yellowSoft },
   card_end: { icon: 'time', tint: BrandColors.yellowSoft },
+  // 0232 구독 상태(결제 채널 무관) — 늘었어요는 결과(입금 승인과 같은 초록), 끝나요는 기한(노랑), 끝났어요는 상태 변화.
+  sub_renewed: { icon: 'checkmark-circle', tint: '#E4F2E8' },
+  sub_ending: { icon: 'time', tint: BrandColors.yellowSoft },
+  sub_ended: { icon: 'alert-circle', tint: BrandColors.accentSoft },
 };
 /** 허브(역할 혼합 가능) 용 — 두 맵 합성. */
 // 닫힌 매장(0197) — 통합 목록에만 나온다(매장 안 알림함엔 그 매장이 없다).
