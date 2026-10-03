@@ -187,7 +187,7 @@ const styles = StyleSheet.create({
     borderLeftWidth: 3,
     paddingLeft: 8,
   },
-  previewTag: { fontSize: 10, fontWeight: '800', letterSpacing: 0.5, width: 36 },
+  previewTag: { fontSize: 10, fontWeight: '800', letterSpacing: 0.5, minWidth: 36 },
   previewText: { flex: 1, fontSize: 15, color: InkColors.ink2, lineHeight: 22 },
   source: { fontSize: 11, color: InkColors.ink3, marginTop: 2 },
 });

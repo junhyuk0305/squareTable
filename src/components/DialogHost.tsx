@@ -6,10 +6,12 @@ import { useDialogStore } from '@/lib/store/useDialogStore';
 export function DialogHost() {
   const current = useDialogStore((s) => s.current);
   const close = useDialogStore((s) => s.close);
+  // 닫히는 중인 시트가 있으면(iOS) 그 닫힘이 끝난 뒤에 띄운다 — useDialogStore.holdForDismiss 참고.
+  const dismissing = useDialogStore((s) => s.dismissing);
 
   return (
     <ConfirmModal
-      visible={!!current}
+      visible={!!current && dismissing === 0}
       title={current?.title ?? ''}
       message={current?.message ?? ''}
       confirmLabel={current?.confirmLabel}

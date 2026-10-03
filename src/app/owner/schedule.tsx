@@ -234,7 +234,7 @@ export default function OwnerScheduleScreen() {
             trailing={
               pending.length > 0 ? (
                 <View style={styles.badge}>
-                  <Text style={styles.badgeText}>{pending.length}</Text>
+                  <Text style={styles.badgeText} maxFontSizeMultiplier={1.3}>{pending.length}</Text>
                 </View>
               ) : undefined
             }

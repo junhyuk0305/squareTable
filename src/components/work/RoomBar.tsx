@@ -92,7 +92,7 @@ export function RoomBar({
               </Text>
               {n > 0 && (
                 <View style={s.badge}>
-                  <Text style={s.badgeText}>{n > 99 ? '99+' : n}</Text>
+                  <Text style={s.badgeText} maxFontSizeMultiplier={1.3}>{n > 99 ? '99+' : n}</Text>
                 </View>
               )}
             </Pressable>

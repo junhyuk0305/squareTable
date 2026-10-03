@@ -85,7 +85,7 @@ export default function BrandConsentScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
+    <SafeAreaView style={styles.safe} edges={['bottom']}>
       <Stack.Screen options={{ title: '본사 연결 요청' }} />
       <ScreenTitleHeader title="본사 연결 요청" backFallback="/hub" />
       {!loaded ? (
@@ -98,6 +98,12 @@ export default function BrandConsentScreen() {
           <Ionicons name="checkmark-circle-outline" size={28} color={InkColors.ink3} />
           <Text style={styles.emptyTitle}>기다리는 연결 요청이 없어요</Text>
           <Text style={styles.emptyBody}>본사가 내 번호로 초대를 보내면 여기에 떠요. 이미 답했거나 14일이 지나 만료된 요청은 보이지 않아요.</Text>
+          {/* 이미 답했거나 만료된 초대 알림으로 오면 헤더 뒤로가기 말고 나갈 길이 없다. Redirect 는 respond() 직후 흐름과 경합해서 버튼으로 둔다. */}
+          {links.length > 0 ? (
+            <Pressable accessibilityRole="button" testID="brand-consent-empty-link" onPress={() => router.replace('/owner/brand-link')} style={({ pressed }) => [styles.secondary, pressed && { opacity: 0.7 }]}>
+              <Text style={styles.secondaryText}>본사 연결 보기</Text>
+            </Pressable>
+          ) : null}
         </View>
       ) : (
         <ScrollView contentContainerStyle={styles.body} testID="brand-consent">
@@ -267,9 +273,9 @@ function ReConsent({ link, onDone }: { link: MyBrandViewRow; onDone: () => void 
       <SectionLabel icon="list-outline" title={`${relationLabel(link.relation)}점에서는 이렇게 달라져요`} />
       <View style={styles.card}>
         {RELATION_RULES.map((r, i) => (
-          <View key={r.label} style={[styles.pickRow, i > 0 && styles.pickBorder]}>
+          <View key={r.label} style={[styles.pickRow, styles.ruleRow, i > 0 && styles.pickBorder]}>
             <Text style={styles.pickName}>{r.label}</Text>
-            <Text style={styles.pickSub}>{link.relation === 'direct' ? r.direct : r.franchise}</Text>
+            <Text style={[styles.pickSub, styles.ruleVal]}>{link.relation === 'direct' ? r.direct : r.franchise}</Text>
           </View>
         ))}
       </View>
@@ -327,7 +333,8 @@ const styles = StyleSheet.create({
   levelOn: { borderColor: InkColors.ink, backgroundColor: BrandColors.yellowSoft },
   levelHead: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, marginBottom: 4 },
   levelName: { fontSize: 15, fontWeight: '800', color: InkColors.ink2 },
-  levelShort: { fontSize: 12, color: InkColors.ink3, marginLeft: 'auto' },
+  // flexShrink — 글자가 커지면 짧은 설명이 카드 밖으로 넘치지 않고 안에서 줄바꿈된다.
+  levelShort: { fontSize: 12, color: InkColors.ink3, marginLeft: 'auto', flexShrink: 1, textAlign: 'right' },
   levelItem: { fontSize: 13, lineHeight: 19, color: InkColors.ink, paddingLeft: 26 },
   never: { borderWidth: 1, borderColor: BrandColors.badSoft, backgroundColor: BrandColors.badSoft, borderRadius: Radius.md, padding: Space.md },
   neverTitle: { fontSize: 13, fontWeight: '800', color: BrandColors.badText, marginBottom: 3 },
@@ -339,6 +346,9 @@ const styles = StyleSheet.create({
   pickBorder: { borderTopWidth: 1, borderTopColor: InkColors.line },
   pickName: { flex: 1, fontSize: 15, fontWeight: '700', color: InkColors.ink },
   pickSub: { fontSize: 12, color: InkColors.ink3 },
+  // 재동의 표 — 설명(pickSub)이 줄어들지 않으면 항목명(flex 1)이 남는 폭 0이 되어 사라진다. 설명에 상한을 두고 줄바꿈한다.
+  ruleRow: { paddingVertical: Space.sm },
+  ruleVal: { flexShrink: 1, maxWidth: '55%', textAlign: 'right' },
   primary: { marginTop: Space.sm, minHeight: 52, borderRadius: Radius.pill, backgroundColor: BrandColors.brand, alignItems: 'center', justifyContent: 'center' },
   primaryText: { fontSize: 15, fontWeight: '800', color: InkColors.bubbleText },
   secondary: { minHeight: 48, alignItems: 'center', justifyContent: 'center' },

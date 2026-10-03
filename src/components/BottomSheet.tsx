@@ -5,17 +5,19 @@ import {
   Animated,
   PanResponder,
   StyleSheet,
+  Platform,
   type PanResponderGestureState,
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
-import { useEffect, useMemo, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, type ReactNode } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { USE_NATIVE_DRIVER } from '@/lib/anim';
 import { KeyboardShift, useKeyboardShiftPad } from '@/components/KeyboardShift';
 import { modalFrameStyle } from '@/lib/theme/layout';
 import { InkColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
+import { useDialogStore } from '@/lib/store/useDialogStore';
 
 /**
  * 공용 바텀시트 스캐폴드 — 5개 모달(노하우상세·교대요청·할일추가·시프트선택·근무표편집)에 byte-단위로
@@ -95,6 +97,25 @@ export function BottomSheet({
   // 다시 열릴 때 지난 드래그 위치가 남지 않게.
   useEffect(() => { if (visible) dragY.setValue(0); }, [visible, dragY]);
 
+  // iOS: 닫히는 동안 확인창(DialogHost)을 붙잡아 둔다. 시트를 닫으며 바로 confirmAction 을 부르는 흐름에서
+  // 확인창이 사라지던 것(2026-10-02). onDismiss 가 안 오는 경우에 대비해 타이머로도 놓아 준다.
+  const wasVisible = useRef(visible);
+  const releaseDismiss = useRef<(() => void) | null>(null);
+  // layout effect 인 이유: 시트를 닫는 같은 틱에 confirmAction 을 부르면 그 커밋에서 확인창이 먼저 보이게 그려진다.
+  //   passive effect 면 그 뒤에야 붙잡아 iOS 에 띄웠다 내렸다가 다시 띄운다(10-04 리뷰). 페인트 전에 붙잡는다.
+  useLayoutEffect(() => {
+    if (Platform.OS === 'ios' && wasVisible.current && !visible) {
+      const release = useDialogStore.getState().holdForDismiss();
+      releaseDismiss.current = release;
+      setTimeout(release, DISMISS_FALLBACK_MS);
+    }
+    wasVisible.current = visible;
+  }, [visible]);
+  const onDismissed = () => {
+    releaseDismiss.current?.();
+    releaseDismiss.current = null;
+  };
+
   return (
     <Modal
       visible={visible}
@@ -103,6 +124,7 @@ export function BottomSheet({
       statusBarTranslucent
       navigationBarTranslucent
       onRequestClose={onClose}
+      onDismiss={onDismissed}
     >
       {/* ★키보드(2026-09-03 실기기): Modal 은 별도 창이라 화면의 KeyboardShift 가 여기까지 못 미치고,
           translucent 창은 adjustResize 도 안 받는다 — 시트 안 입력(할일 추가·교대 요청·파트 이름…)이 키보드에
@@ -141,6 +163,8 @@ function SheetBottomInset() {
 /** 놓았을 때 닫히는 기준 — 끌어 내린 거리(px) 또는 속도(px/ms). */
 const DISMISS_DY = 80;
 const DISMISS_VY = 0.6;
+/** iOS 시트 닫힘(slide)이 끝났다는 onDismiss 가 안 올 때 확인창을 놓아 주는 상한. slide 는 약 300ms 다. */
+const DISMISS_FALLBACK_MS = 600;
 
 const styles = StyleSheet.create({
   backdrop: { flex: 1 },

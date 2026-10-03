@@ -507,6 +507,8 @@ function WageCell({
           maxLength={7}
           placeholder="미설정"
           placeholderTextColor={InkColors.ink3}
+          // 칸 폭 72 고정이라 OS 글꼴이 1.3배쯤을 넘으면 5자리 시급 앞자리가 가려진다. 이 칸만 확대 상한을 둔다(웹은 무시).
+          maxFontSizeMultiplier={1.2}
           style={styles.wageInput}
         />
         <Text style={styles.wageWon}>원</Text>

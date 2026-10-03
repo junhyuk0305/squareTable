@@ -151,7 +151,7 @@ export function TabButton({ tab, active, onPress, badge }: { tab: Tab; active: b
         <Ionicons name={active ? tab.iconActive : tab.icon} size={23} color={color} />
         {(badge ?? 0) > 0 && (
           <View style={styles.badge}>
-            <Text style={styles.badgeText}>{badge! > 99 ? '99+' : badge}</Text>
+            <Text style={styles.badgeText} maxFontSizeMultiplier={1.3}>{badge! > 99 ? '99+' : badge}</Text>
           </View>
         )}
       </Animated.View>

@@ -34,7 +34,7 @@ export function BellButton({ count, onPress, edge = true }: { count: number; onP
       <Ionicons name={count > 0 ? 'notifications' : 'notifications-outline'} size={23} color={InkColors.ink} />
       {count > 0 && (
         <View style={styles.badge}>
-          <Text style={styles.badgeText}>{count > 99 ? '99+' : count}</Text>
+          <Text style={styles.badgeText} maxFontSizeMultiplier={1.3}>{count > 99 ? '99+' : count}</Text>
         </View>
       )}
     </Pressable>

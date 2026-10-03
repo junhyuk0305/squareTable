@@ -352,7 +352,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: InkColors.line,
   },
-  recDate: { width: 52, fontSize: 14, fontWeight: '700', color: InkColors.ink },
+  recDate: { minWidth: 52, fontSize: 14, fontWeight: '700', color: InkColors.ink },
   recTime: { flex: 1, fontSize: 14, color: InkColors.ink2 },
   recMin: { fontSize: 14, fontWeight: '700', color: InkColors.ink },
 });

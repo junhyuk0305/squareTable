@@ -386,10 +386,10 @@ export function OwnerStatusView({ header }: { header: ReactNode }) {
                       <View style={[styles.dot, { backgroundColor: colorOf(r.unit_id) }]} />
                       <Text style={styles.tdNameText} numberOfLines={1}>{labelOf(r.unit_id)}</Text>
                     </View>
-                    <Text style={[styles.td, r.pending_q > 0 && styles.tdHot]}>{r.pending_q}</Text>
-                    <Text style={styles.td}>{`${t?.working_now ?? 0}/${t?.scheduled ?? 0}`}</Text>
-                    <Text style={styles.td}>{r.uncovered}</Text>
-                    <Text style={styles.td}>{laborLoadError ? '—' : fmtWonShort(labor[r.unit_id] ?? 0)}</Text>
+                    <Text style={[styles.td, r.pending_q > 0 && styles.tdHot]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{r.pending_q}</Text>
+                    <Text style={styles.td} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{`${t?.working_now ?? 0}/${t?.scheduled ?? 0}`}</Text>
+                    <Text style={styles.td} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{r.uncovered}</Text>
+                    <Text style={styles.td} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{laborLoadError ? '—' : fmtWonShort(labor[r.unit_id] ?? 0)}</Text>
                   </Pressable>
                 );
               })}

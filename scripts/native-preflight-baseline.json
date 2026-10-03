@@ -1,5 +1,5 @@
 {
-  "updated": "2026-09-03",
+  "updated": "2026-10-02",
   "entries": [
     "src/app/billing.tsx::void navigator.clipboard.writeText(value);",
     "src/app/inquiry.tsx::void navigator.clipboard.writeText(BUSINESS_INFO.email);",
@@ -12,6 +12,9 @@
     "src/lib/db.ts::const c = document.createElement('canvas');",
     "src/lib/db.ts::const canvas = document.createElement('canvas');",
     "src/lib/db.ts::return typeof URL !== 'undefined' && URL.createObjectURL ? URL.createObjectURL(file) : null;",
+    "src/lib/payments/cardBilling.ts::const origin = window.location.origin;",
+    "src/lib/payments/cardBilling.ts::const s = document.createElement('script');",
+    "src/lib/payments/cardBilling.ts::document.head.appendChild(s);",
     "src/lib/push/usePushBootstrap.ts::navigator.serviceWorker.addEventListener('message', onMessage);",
     "src/lib/push/usePushBootstrap.ts::return () => navigator.serviceWorker.removeEventListener('message', onMessage);",
     "src/lib/push/webpush.ts::(window.navigator as unknown as { standalone?: boolean }).standalone === true ||",

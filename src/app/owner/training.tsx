@@ -937,7 +937,9 @@ const st = StyleSheet.create({
   statRate: { fontSize: 14, fontWeight: '900', color: BrandColors.mentionText, marginRight: Space.xs },
   statPeople: { fontSize: 14, fontWeight: '900', color: BrandColors.goodText },
   rowText: { flex: 1, minWidth: 0, gap: 2 },
-  rowTitleLine: { flexDirection: 'row', alignItems: 'center', gap: 6, minWidth: 0 },
+  // flexWrap — 배지(BrandCopyBadges 는 fragment 라 이 줄의 직속 자식)가 자리가 모자라면 아랫줄로 내려간다.
+  //   없으면 배지 3개(본사·새 버전·수정됨)일 때 제목이 '…'만 남는다.
+  rowTitleLine: { flexDirection: 'row', alignItems: 'center', gap: 6, minWidth: 0, flexWrap: 'wrap', rowGap: Space.xs },
   rowTitle: { fontSize: 15, lineHeight: 21, fontWeight: '800', color: InkColors.ink },
   rowSub: { fontSize: 13, lineHeight: 18, fontWeight: '600', color: InkColors.ink3 },
 

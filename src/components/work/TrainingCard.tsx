@@ -251,6 +251,6 @@ const st = StyleSheet.create({
   group: { gap: Space.xs },
   groupLabel: { fontSize: 12, fontWeight: '900', color: InkColors.ink3 },
   itemRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingVertical: Space.xs + 2, minHeight: 36 },
-  itemNum: { width: 18, fontSize: 12, fontWeight: '800', color: InkColors.ink3, textAlign: 'center' },
+  itemNum: { minWidth: 18, fontSize: 12, fontWeight: '800', color: InkColors.ink3, textAlign: 'center' },
   itemText: { flex: 1, fontSize: 13.5, fontWeight: '600', color: InkColors.ink, minWidth: 0 },
 });

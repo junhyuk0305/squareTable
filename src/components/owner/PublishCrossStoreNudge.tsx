@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, Text, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, Pressable, ScrollView, StyleSheet, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { BottomSheet } from '@/components/BottomSheet';
@@ -60,8 +60,9 @@ export function PublishCrossStoreNudge({
   };
 
   return (
-    <BottomSheet visible={true} onClose={onClose} sheetStyle={{ height: '52%' }}>
-      <View style={s.body}>
+    // 높이는 최소 52%(기본 모양 그대로)이고 글자가 커지면 90%까지 자란다. 그래도 넘치면 위 본문만 스크롤되고 아래 버튼은 남는다.
+    <BottomSheet visible={true} onClose={onClose} sheetStyle={{ minHeight: '52%', maxHeight: '90%' }}>
+      <ScrollView style={s.scroll} contentContainerStyle={s.body} showsVerticalScrollIndicator={false} alwaysBounceVertical={false}>
         <Text style={s.title}>다른 내 매장에도 추가할까요?</Text>
         <Text style={s.sub}>방금 저장한 노하우를 다른 매장으로도 가져갈 수 있어요.</Text>
 
@@ -88,22 +89,22 @@ export function PublishCrossStoreNudge({
         </View>
 
         <Text style={s.hint}>가져간 노하우는 “점검 필요”로 표시돼요. 사진은 함께 옮겨지지 않아요.</Text>
+      </ScrollView>
 
-        <View style={s.foot}>
-          <Pressable onPress={onClose} style={({ pressed }) => [s.skip, pressed && { opacity: 0.7 }]} accessibilityRole="button" accessibilityLabel="안 할게요">
-            <Text style={s.skipText}>안 할게요</Text>
-          </Pressable>
-          <Pressable
-            onPress={doCopy}
-            disabled={selected.size === 0 || copying}
-            style={({ pressed }) => [s.cta, (selected.size === 0) && { opacity: 0.4 }, pressed && { opacity: 0.85 }]}
-            accessibilityRole="button"
-            accessibilityLabel={`${selected.size}개 매장에 추가`}
-          >
-            {copying ? <ActivityIndicator color="#fff" size="small" /> : <Ionicons name="add-circle-outline" size={15} color="#fff" />}
-            <Text style={s.ctaText}>{copying ? '추가하는 중…' : selected.size > 0 ? `${selected.size}개 매장에 추가` : '매장을 선택하세요'}</Text>
-          </Pressable>
-        </View>
+      <View style={s.foot}>
+        <Pressable onPress={onClose} style={({ pressed }) => [s.skip, pressed && { opacity: 0.7 }]} accessibilityRole="button" accessibilityLabel="안 할게요">
+          <Text style={s.skipText}>안 할게요</Text>
+        </Pressable>
+        <Pressable
+          onPress={doCopy}
+          disabled={selected.size === 0 || copying}
+          style={({ pressed }) => [s.cta, (selected.size === 0) && { opacity: 0.4 }, pressed && { opacity: 0.85 }]}
+          accessibilityRole="button"
+          accessibilityLabel={`${selected.size}개 매장에 추가`}
+        >
+          {copying ? <ActivityIndicator color="#fff" size="small" /> : <Ionicons name="add-circle-outline" size={15} color="#fff" />}
+          <Text style={s.ctaText}>{copying ? '추가하는 중…' : selected.size > 0 ? `${selected.size}개 매장에 추가` : '매장을 선택하세요'}</Text>
+        </Pressable>
       </View>
     </BottomSheet>
   );
@@ -111,7 +112,9 @@ export function PublishCrossStoreNudge({
 
 const s = StyleSheet.create({
   // 시트 좌우 여백은 lg(16) — 시트 표준을 따른다(kit 의 qst.body). md(12)는 이 시트만 좁았다.
-  body: { paddingHorizontal: Space.lg, paddingTop: 4, paddingBottom: 18 },
+  // flexGrow 0 — ScrollView 기본값(flexGrow 1)이면 시트 최소 높이만큼 늘어나 버튼이 시트 바닥으로 내려간다.
+  scroll: { flexGrow: 0 },
+  body: { paddingHorizontal: Space.lg, paddingTop: 4 },
   title: { fontSize: 16, lineHeight: 23, fontWeight: '800', color: InkColors.ink },
   sub: { fontSize: 12.5, lineHeight: 18, color: InkColors.ink3, fontWeight: '600', marginTop: 4 },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.sm, marginTop: 14 },
@@ -129,7 +132,7 @@ const s = StyleSheet.create({
   },
   checkOn: { backgroundColor: InkColors.ink, borderColor: InkColors.ink },
   hint: { fontSize: 11.5, color: InkColors.ink3, marginTop: 12, paddingHorizontal: 2, lineHeight: 17 },
-  foot: { flexDirection: 'row', alignItems: 'stretch', gap: 8, marginTop: 16 },
+  foot: { flexDirection: 'row', alignItems: 'stretch', gap: 8, marginTop: 16, marginHorizontal: Space.lg, marginBottom: 18 },
   skip: { paddingHorizontal: 18, justifyContent: 'center', borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, backgroundColor: InkColors.bg },
   skipText: { fontSize: 14, fontWeight: '800', color: InkColors.ink2 },
   cta: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: BrandColors.brand, borderRadius: Radius.md, paddingVertical: 14 },

@@ -189,6 +189,7 @@ export function ShiftQuickSheet({
             placeholder="09:00"
             placeholderTextColor={InkColors.ink3}
             accessibilityLabel="근무 시작 시각"
+            maxFontSizeMultiplier={1.2}
             style={[s.timeInp, !timeOk && s.timeInpBad]}
           />
           <Text style={s.tilde}>~</Text>
@@ -200,6 +201,7 @@ export function ShiftQuickSheet({
             placeholder="18:00"
             placeholderTextColor={InkColors.ink3}
             accessibilityLabel="근무 종료 시각"
+            maxFontSizeMultiplier={1.2}
             style={[s.timeInp, !timeOk && s.timeInpBad]}
           />
         </View>
@@ -282,6 +284,7 @@ const s = StyleSheet.create({
 
   timeRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
   timeInp: {
+    // 폭 92 고정 — 웹 TextInput 은 고유 폭이 있어 minWidth 로 바꾸면 늘어난다. 글자 확대는 입력칸의 maxFontSizeMultiplier 가 막는다.
     width: 92, textAlign: 'center', borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.sm,
     minHeight: TAP, fontSize: 16, fontWeight: '800', color: InkColors.ink, backgroundColor: InkColors.bg,
     ...(Platform.OS === 'web' ? ({ outlineStyle: 'none' } as object) : null),

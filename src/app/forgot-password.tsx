@@ -73,7 +73,7 @@ export default function ForgotPasswordScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
+    <SafeAreaView style={styles.safe} edges={['bottom']}>
       <Stack.Screen options={{ headerShown: false }} />
       <ScreenTitleHeader title="비밀번호 찾기" backFallback="/login" />
       <KeyboardShift>
@@ -201,11 +201,13 @@ const styles = StyleSheet.create({
   segBtnOn: { backgroundColor: InkColors.ink },
   segText: { fontSize: 14.5, fontWeight: '700', color: InkColors.ink2 },
   segTextOn: { color: InkColors.bubbleText },
-  row: { flexDirection: 'row', gap: Space.sm, alignItems: 'center' },
-  rowInput: { flex: 1 },
-  input: { borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.sm, paddingHorizontal: 12, height: 48, fontSize: 16, color: InkColors.ink, backgroundColor: InkColors.bg },
-  otpBtn: { height: 48, paddingHorizontal: 14, borderRadius: Radius.sm, backgroundColor: InkColors.ink, alignItems: 'center', justifyContent: 'center', minWidth: 118 },
-  otpBtnText: { fontSize: 13.5, fontWeight: '800', color: InkColors.bubbleText },
+  // flexWrap + 입력칸 기준 폭 120 — 글자가 커져(OS 배율·앱 배율) 버튼이 넓어지면 버튼이 아랫줄로 내려간다.
+  //   140 은 '010-0000-0000' 이 기본 크기에서 들어가는 폭이다. 360dp 기본에서는 지금처럼 한 줄이다.
+  row: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.sm, alignItems: 'center' },
+  rowInput: { flexGrow: 1, flexShrink: 1, flexBasis: 120 },
+  input: { borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.sm, paddingHorizontal: 12, paddingVertical: Space.md, minHeight: 48, fontSize: 16, color: InkColors.ink, backgroundColor: InkColors.bg },
+  otpBtn: { minHeight: 48, paddingVertical: Space.sm, paddingHorizontal: 14, borderRadius: Radius.sm, backgroundColor: InkColors.ink, alignItems: 'center', justifyContent: 'center', minWidth: 118, flexShrink: 1 },
+  otpBtnText: { fontSize: 13.5, fontWeight: '800', color: InkColors.bubbleText, textAlign: 'center' },
   err: { fontSize: 13.5, color: BrandColors.badText },
   primary: { marginTop: Space.sm, minHeight: 52, borderRadius: Radius.pill, backgroundColor: BrandColors.brand, alignItems: 'center', justifyContent: 'center' },
   primaryText: { fontSize: 16, fontWeight: '800', color: InkColors.bubbleText },

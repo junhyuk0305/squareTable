@@ -93,7 +93,7 @@ export function HeroSubNav({
                   <Ionicons name={it.icon} size={18} color={InkColors.ink} />
                   {!!it.badge && it.badge > 0 && (
                     <View style={styles.badge}>
-                      <Text style={styles.badgeText}>{it.badge > 9 ? '9+' : it.badge}</Text>
+                      <Text style={styles.badgeText} maxFontSizeMultiplier={1.3}>{it.badge > 9 ? '9+' : it.badge}</Text>
                     </View>
                   )}
                 </View>

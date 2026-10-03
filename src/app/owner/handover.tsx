@@ -597,7 +597,7 @@ const styles = StyleSheet.create({
   fieldMultiline: { minHeight: 46 },
   listRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginBottom: 6 },
   listInput: { flex: 1 },
-  listBullet: { width: 18, textAlign: 'center', marginTop: 10, fontSize: 12, fontWeight: '800', color: InkColors.ink3 },
+  listBullet: { minWidth: 18, textAlign: 'center', marginTop: 10, fontSize: 12, fontWeight: '800', color: InkColors.ink3 },
   listBulletIcon: { width: 18, marginTop: 11 },
   removeBtn: { padding: 6, marginTop: 3 },
   addBtn: {

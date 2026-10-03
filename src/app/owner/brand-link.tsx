@@ -37,7 +37,7 @@ export default function BrandLinkScreen() {
   useEffect(() => { void hydrate(); }, [hydrate]);
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
+    <SafeAreaView style={styles.safe} edges={['bottom']}>
       <Stack.Screen options={{ title: '본사 연결' }} />
       <ScreenTitleHeader title="본사 연결" backFallback="/owner/settings" />
       {!loaded ? (
@@ -115,7 +115,7 @@ function LinkCard({ link, onChanged }: { link: MyBrandViewRow; onChanged: () => 
       <View style={styles.head}>
         <View style={styles.headIcon}><Ionicons name="business" size={18} color={InkColors.ink} /></View>
         <View style={{ flex: 1, minWidth: 0 }}>
-          <Text style={styles.brand} numberOfLines={1}>{link.brand_name}</Text>
+          <Text style={styles.brand} numberOfLines={2}>{link.brand_name}</Text>
           <Text style={styles.meta}>사업자등록번호 {fmtBiz(link.brand_biz_no)} · {fmtDay(link.accepted_at)} 연결</Text>
         </View>
         <View style={styles.pill}><Text style={styles.pillText}>{relationLabel(link.relation)} · 연결됨</Text></View>
@@ -245,7 +245,8 @@ function LinkCard({ link, onChanged }: { link: MyBrandViewRow; onChanged: () => 
         ) : (
           <View style={styles.lockRow} testID="brand-end-locked">
             <Ionicons name="lock-closed" size={15} color={InkColors.ink3} />
-            <Text style={styles.note}>직영점이라 매장에서 연결을 끊을 수 없어요. 본사에 문의해 주세요.</Text>
+            {/* flex 1 — 없으면 줄바꿈 폭을 줄 전체로 잡아 아이콘 몫(21px)만큼 카드 overflow 에 잘린다. */}
+            <Text style={[styles.note, { flex: 1 }]}>직영점이라 매장에서 연결을 끊을 수 없어요. 본사에 문의해 주세요.</Text>
           </View>
         )}
       </View>

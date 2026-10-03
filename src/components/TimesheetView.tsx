@@ -13,6 +13,7 @@ import { KeyboardShift } from '@/components/KeyboardShift';
 import { ScreenLoading } from '@/components/ScreenLoading';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
+import { Space } from '@/lib/theme/layout';
 import { fmtDuration, won, hhmm, todayStr, normalizeTime, shiftMonth, daysInMonth, maskHHMM } from '@/lib/utils/attendance';
 import { checkShiftTime, isOvernight, monthDates } from '@/lib/utils/schedule';
 
@@ -403,7 +404,8 @@ const styles = StyleSheet.create({
 
   recWrap: { borderBottomWidth: 1, borderBottomColor: InkColors.line },
   recRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12 },
-  dateBadge: { width: 42, height: 42, borderRadius: Radius.sm, backgroundColor: InkColors.bgSoft, alignItems: 'center', justifyContent: 'center' },
+  // min 크기 — 글자가 커지면 날짜·요일 두 줄이 상자 밖으로 삐져나가지 않고 상자가 커진다(기본은 42×42 그대로).
+  dateBadge: { minWidth: 42, minHeight: 42, paddingVertical: Space.xs, borderRadius: Radius.sm, backgroundColor: InkColors.bgSoft, alignItems: 'center', justifyContent: 'center' },
   dateNum: { fontSize: 16, fontWeight: '800', color: InkColors.ink, lineHeight: 18 },
   dateWd: { fontSize: 10, color: InkColors.ink3, fontWeight: '700' },
   recTimeRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },

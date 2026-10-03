@@ -129,7 +129,9 @@ export default function RootLayout() {
               contentStyle: { backgroundColor: InkColors.cream },
             }}
           >
-            <Stack.Screen name="index" />
+            {/* index 는 착지를 정하고 바로 Redirect 하는 관문이다(로그인 뒤 replace('/')). 슬라이드하면 빈 화면이
+                옆에서 밀려 들어온 뒤 허브가 뜬다(2026-10-02 native-audit) → 교체와 같은 규칙으로 'none'. */}
+            <Stack.Screen name="index" options={{ animation: 'none' }} />
             <Stack.Screen name="login" />
             <Stack.Screen name="signup" />
             {/* 허브 탭 루트 3개(현황·노하우·매장) — 탭 전환(replace)은 슬라이드하지 않는다(owner/junior 탭 루트와 같은 규칙).

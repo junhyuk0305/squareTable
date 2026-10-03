@@ -67,6 +67,8 @@ export default function OwnerOnboardingScreen() {
   const [step, setStep] = useState<'pick' | 'ask' | 'done'>(params.step === 'ask' ? 'ask' : 'pick');
   const [registeredCount, setRegisteredCount] = useState(0);
   const [registering, setRegistering] = useState(false);
+  // 하단 고정 바 높이 — 글자가 커지면 바도 커진다. 스크롤 끝 빈칸을 그만큼 늘려 마지막 카드가 바 뒤에 숨지 않게 한다(기본은 168 그대로).
+  const [barH, setBarH] = useState(168);
   // 더블탭으로 onRegister가 두 번 돌아 중복 적재되는 걸 막는다(setStep 반영 전 재호출 가드).
   const committed = useRef(false);
 
@@ -338,12 +340,12 @@ export default function OwnerOnboardingScreen() {
           </Pressable>
         </Appear>
 
-        <View style={{ height: 168 }} />
+        <View style={{ height: barH }} />
       </ScrollView>
 
       {/* 하단 고정 액션 바 — 풀폭 1차 CTA + 그 아래 중앙 '건너뛰기' 고스트(계층 분리) */}
       <View style={styles.barWrap}>
-        <View style={[styles.bar, frameCapStyle]}>
+        <View style={[styles.bar, frameCapStyle]} onLayout={(e) => setBarH(Math.max(168, Math.ceil(e.nativeEvent.layout.height) + Space.lg))}>
           {selectedCount < MIN_RECOMMENDED && (
             <Text style={styles.barNudge}>최소 {MIN_RECOMMENDED}개는 담아두길 권해요 (지금 {selectedCount}개)</Text>
           )}

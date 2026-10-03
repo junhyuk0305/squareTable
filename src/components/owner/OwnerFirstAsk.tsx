@@ -40,6 +40,8 @@ export function OwnerFirstAsk({ onNext, nextLabel }: { onNext: () => void; nextL
   const unknownQueue = useUnknownQueueStore((s) => s.queue);
 
   const [input, setInput] = useState('');
+  // 하단 고정 바 높이 — 글자가 커지면 바도 커진다. 스크롤 끝 빈칸을 그만큼 늘려 마지막 답변이 바 뒤에 숨지 않게 한다(기본은 140 그대로).
+  const [barH, setBarH] = useState(140);
   // 이 스텝에서 새로 물은 턴만 보여준다 — 재진입 시 과거 기록 전체가 쏟아지는 것 방지.
   // (ref 는 렌더 중 접근 금지 린트에 걸린다 — 마운트 시각은 state 초기화로 1회 고정)
   const [mountedAt] = useState(() => new Date().toISOString());
@@ -141,12 +143,12 @@ export function OwnerFirstAsk({ onNext, nextLabel }: { onNext: () => void; nextL
           </View>
         )}
 
-        <View style={{ height: 140 }} />
+        <View style={{ height: barH }} />
       </ScrollView>
 
       {/* 하단: 입력줄 + 다음/건너뛰기 — 질문은 권유지 강요가 아니다(건너뛰기 상시). */}
       <View style={styles.barWrap}>
-        <View style={[styles.bar, frameCapStyle]}>
+        <View style={[styles.bar, frameCapStyle]} onLayout={(e) => setBarH(Math.max(140, Math.ceil(e.nativeEvent.layout.height) + Space.sm))}>
         <View style={styles.inputRow}>
           <TextInput
             value={input}

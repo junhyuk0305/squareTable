@@ -579,11 +579,13 @@ const styles = StyleSheet.create({
   bizHint: { fontSize: 12, fontWeight: '600', marginTop: -2 },
   bizOk: { color: BrandColors.goodText },
   bizBad: { color: InkColors.ink3 },
-  otpRow: { flexDirection: 'row', gap: Space.sm },
-  otpInput: { flex: 1 },
-  otpBtn: { minWidth: 116, paddingHorizontal: Space.md, borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' },
+  // flexWrap + 입력칸 기준 폭 160 — 글자가 커져(OS 배율·앱 배율) 버튼이 넓어지면 버튼이 아랫줄로 내려간다.
+  //   기본 크기에서는 지금처럼 한 줄이다. 버튼 paddingVertical 은 아랫줄로 내려갔을 때의 높이다(한 줄일 땐 입력칸 높이로 늘어난다).
+  otpRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.sm },
+  otpInput: { flexGrow: 1, flexShrink: 1, flexBasis: 160 },
+  otpBtn: { minWidth: 116, minHeight: 44, flexShrink: 1, paddingHorizontal: Space.md, paddingVertical: Space.sm, borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' },
   otpBtnDim: { opacity: 0.5 },
-  otpBtnText: { fontSize: 14, fontWeight: '800', color: InkColors.ink2 },
+  otpBtnText: { fontSize: 14, fontWeight: '800', color: InkColors.ink2, textAlign: 'center' },
   otpMsg: { fontSize: 12, fontWeight: '600', color: BrandColors.accentText, marginTop: -2 },
   chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.sm },
   chip: { paddingHorizontal: Space.md, paddingVertical: Space.sm, borderRadius: Radius.pill, borderWidth: 1, borderColor: InkColors.line, backgroundColor: '#FFFFFF' },

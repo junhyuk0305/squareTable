@@ -13,6 +13,7 @@ import { showToast } from '@/lib/store/useToastStore';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { getSectionMeta } from '@/lib/utils/category';
 import { Radius, Elevation } from '@/lib/theme/elevation';
+import { Space } from '@/lib/theme/layout';
 import { RoleTabBar } from '@/components/RoleTabBar';
 import { Appear, stagger } from '@/components/Appear';
 import { ScreenLoading } from '@/components/ScreenLoading';
@@ -281,8 +282,9 @@ const styles = StyleSheet.create({
   changeText: { fontSize: 12, fontWeight: '800', color: '#8A5A12' },
 
   pickWrap: { gap: 10 },
-  searchBox: { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderColor: InkColors.line, borderRadius: 12, paddingHorizontal: 12, height: 44, backgroundColor: InkColors.bg },
-  searchInput: { flex: 1, fontSize: 15, color: InkColors.ink },
+  searchBox: { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderColor: InkColors.line, borderRadius: 12, paddingHorizontal: 12, minHeight: 44, backgroundColor: InkColors.bg },
+  // paddingVertical — 안 주면 안드로이드 기본 세로 여백이 붙어 글자가 커질 때 44 상자 안에서 아랫부분이 잘렸다.
+  searchInput: { flex: 1, fontSize: 15, color: InkColors.ink, paddingVertical: Space.sm },
   pickEmpty: { fontSize: 13, color: InkColors.ink3, lineHeight: 20, paddingVertical: 8 },
   pickList: { borderWidth: 1, borderColor: InkColors.line, borderRadius: 13, backgroundColor: InkColors.bg, overflow: 'hidden' },
   pickRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 13, paddingVertical: 13, borderBottomWidth: 1, borderBottomColor: InkColors.line },
