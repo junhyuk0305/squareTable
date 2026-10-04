@@ -400,6 +400,7 @@ async function dbChecks() {
 
     await releaseChecks();
     await subAlertChecks();
+    await prepaidChecks();
   } finally {
     if (trial !== null) await svcWrite('PATCH', 'app_config?key=eq.signup_trial_days', { value: trial });
     if (fm !== null) await svcWrite('PATCH', 'app_config?key=eq.billing_free_mode', { value: fm });
@@ -592,6 +593,44 @@ async function subAlertChecks() {
     await svcWrite('DELETE', `brand_units?brand_id=eq.${brandId}`).catch(() => {});
     await svcWrite('DELETE', `brands?id=eq.${brandId}`).catch(() => {});
   }
+}
+
+// ⑮ Q7 1단계(0235) — 카드 결제가 남은 계좌이체·코드·무료 지급 기간을 깎지 않는다. dbChecks 안에서 부른다.
+//   (2단계 — 선불이 남았으면 카드 시작을 막는 가드 — 는 토스 동결 뒤 0252 · ⑯)
+async function prepaidChecks() {
+  console.log('\n■ ⑮ 남은 선불 기간(0235 · Q7 1단계)');
+  const firstCharge = async (o, plan, count, tag) => {
+    const order = orderOf(await begin(o, plan, count));
+    const ck = (await o.c.rpc('card_customer_key')).data;
+    await svcRpc('card_save_billing_key', { p_owner: o.uid, p_customer_key: ck, p_billing_key: `bk_qa_${tag}`, p_card_company: '현대', p_card_number: '43301234****123*' });
+    return svcRpc('card_record_charge', { p_order_id: order?.order_id, p_ok: true, p_payment_key: `pk_qa_${tag}`, p_approved_at: new Date().toISOString() });
+  };
+
+  // ⑮ single: 계좌이체·코드로 40일 열어 둔 매장에 카드 single 첫 결제 → 만료일이 줄지 않는다
+  const P = await account(2);
+  await svcRpc('admin_activate_store', { p_unit_id: P.unit, p_days: 40, p_plan: 'single' });
+  const pre = await unitSub(P.unit);
+  const rec = await firstCharge(P, 'single', 1, 'pp1');
+  const u = await unitSub(P.unit);
+  check('★★⑮ 카드 첫 결제가 남은 40일을 깎지 않는다(만료일 ≥ 결제 전)',
+    rec.ok && u?.status === 'active' && new Date(u?.paid_until).getTime() >= new Date(pre?.paid_until).getTime() - 1000,
+    rec.err || `${pre?.paid_until} → ${u?.paid_until}`);
+
+  // ⑮-b multi: 선불 A(코드 40일)·B(무료 지급 슬롯) + 카드 다점포 2 → 둘 다 카드 몫을 받고 미소비 슬롯 0
+  const Q = await account(3);
+  await svcRpc('admin_activate_store', { p_unit_id: Q.unit, p_days: 40, p_plan: 'multi' });
+  await svcWrite('POST', 'store_slots', { owner_id: Q.uid, paid_until: days(30), source: 'grant' });
+  const { data: st, error: se } = await Q.c.rpc('create_store', { p_store_name: 'QA카드⑮ 2호점', p_industry: '카페·디저트', p_biz_no: null });
+  const B = st?.[0]?.unit_id;
+  check('셋업 ⑮-b 선불 2호점', !!B, se?.message ?? B);
+  const [a0, b0] = await Promise.all([unitSub(Q.unit), unitSub(B)]);
+  const recB = await firstCharge(Q, 'multi', 2, 'pp2');
+  const [a1, b1] = await Promise.all([unitSub(Q.unit), unitSub(B)]);
+  const s1 = await sub(Q.uid);
+  const open = await svcSel(`store_slots?owner_id=eq.${Q.uid}&consumed_at=is.null&select=id`);
+  check('★★⑮-b 카드 다점포가 선불 A·B 를 덮는다 — 미소비 슬롯 0', recB.ok && open.length === 0, recB.err || `open=${open.length}`);
+  check('★⑮-b A 만료일이 줄지 않는다', new Date(a1?.paid_until).getTime() >= new Date(a0?.paid_until).getTime() - 1000, `${a0?.paid_until} → ${a1?.paid_until}`);
+  check('★⑮-b B 만료일 ≥ 카드 기간 끝', new Date(b1?.paid_until).getTime() >= new Date(s1?.current_period_end).getTime() - 5000 && new Date(b1?.paid_until).getTime() >= new Date(b0?.paid_until).getTime() - 1000, `${b0?.paid_until} → ${b1?.paid_until} (끝 ${s1?.current_period_end})`);
 }
 
 async function edgeChecks() {
