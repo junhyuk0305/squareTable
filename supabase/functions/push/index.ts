@@ -74,6 +74,19 @@ function clip(s: unknown, max: number): string {
   return String(s ?? '').slice(0, max);
 }
 
+// audience → 받는 매장 역할(unit_members.role). 'user' 는 역할이 아니라 사람 하나라 여기서 다루지 않는다.
+// F-2: 합류 승인과 노하우 제안 검토는 사장만 한다(0201 이후 매니저는 못 함) → join_owners·owner_only 는 사장만.
+// 모르는 값은 null → 400. 예전엔 모르는 값이 직원(staff) 갈래로 떨어졌다.
+function audienceRoles(audience: string | undefined): string[] | null {
+  switch (audience) {
+    case 'owners': return ['owner', 'manager'];
+    case 'owner_only':
+    case 'join_owners': return ['owner'];
+    case 'staff': return ['junior'];
+    default: return null;
+  }
+}
+
 // ── 방해 금지(quiet hours) 판정 — KST 고정(단일시장) ──────────────────────────────
 // 클라 설정은 "HH:MM"(KST)로 저장된다. 현재 KST 시각도 "HH:MM"으로 만들어 고정폭 문자열
 // 사전순 비교로 판정한다(zero-padded 라 사전순 = 시간순).
@@ -230,20 +243,21 @@ async function deliver(
   });
   if (recipientIds.length === 0) return { sent: 0, recipients: 0, suppressed: suppressed.length, pruned: 0 };
 
-  const { data: subs, error: subsErr } = await admin
-    .from('push_subscriptions')
-    .select('id, endpoint, p256dh, auth')
-    .in('user_id', recipientIds);
-  // 조회 실패를 삼키면 "구독 없음(sent:0)"으로 위장된다 — 원인 규명을 위해 로그는 남긴다.
-  if (subsErr) console.error('push: subscriptions read failed:', subsErr.message);
+  // 받을 기기는 DB 가 정한다(0236): 탈퇴 계정 제외 · 토큰을 저장한 로그인 세션이 살아 있어야 함 ·
+  //   세션 정보가 없는 옛 행은 유예 7일 동안 등록 전 세션이 살아 있을 때만. user_id 로 표를 직접 읽지 않는다.
+  // ★둘 중 하나라도 읽기에 실패하면 아무것도 보내지 않는다. 로그아웃한 폰으로 가는 것보다 한 번 못 가는 쪽이 낫다(Q3).
+  const [webRes, deviceRes] = await Promise.all([
+    admin.rpc('push_web_targets', { p_user_ids: recipientIds }),
+    admin.rpc('push_device_targets', { p_user_ids: recipientIds }),
+  ]);
+  if (webRes.error || deviceRes.error) {
+    console.error('[push] target read failed (발송 안 함):',
+      webRes.error?.message ?? '-', '/', deviceRes.error?.message ?? '-');
+    return { sent: 0, recipients: recipientIds.length, suppressed: suppressed.length, pruned: 0 };
+  }
+  const deviceTokens = (deviceRes.data ?? []) as { id: string; token: string }[];
 
-  const { data: deviceTokens, error: tokensErr } = await admin
-    .from('push_device_tokens')
-    .select('id, token')
-    .in('user_id', recipientIds);
-  if (tokensErr) console.error('push: device_tokens read failed:', tokensErr.message);
-
-  const list = subs ?? [];
+  const list = (webRes.data ?? []) as { id: string; endpoint: string; p256dh: string; auth: string }[];
   const notif = JSON.stringify({ title: notifIn.title, body: notifIn.body, url: notifIn.url || '/', tag: notifIn.tag });
 
   let sent = 0;
@@ -279,7 +293,7 @@ async function deliver(
 
   const expo = nativeIn === 'skip'
     ? { sent: 0, pruned: 0 }
-    : await deliverExpoPush(admin, deviceTokens ?? [], nativeIn ? { ...notifIn, ...nativeIn } : notifIn);
+    : await deliverExpoPush(admin, deviceTokens, nativeIn ? { ...notifIn, ...nativeIn } : notifIn);
 
   return {
     sent: sent + expo.sent,
@@ -485,7 +499,7 @@ Deno.serve(async (req) => {
 
   let payload: {
     mode?: string;
-    audience?: 'owners' | 'staff' | 'user' | 'join_owners';
+    audience?: 'owners' | 'owner_only' | 'staff' | 'user' | 'join_owners';
     userId?: string;
     title?: string;
     body?: string;
@@ -551,6 +565,7 @@ Deno.serve(async (req) => {
   const url = clip(payload.url, MAX_URL);
   const tag = clip(payload.tag, 80) || undefined;
   if (!title || !audience) return json(400, { error: 'missing_fields' });
+  if (audience !== 'user' && !audienceRoles(audience)) return json(400, { error: 'unknown_audience' });
 
   // 발송 범위가 되는 매장(레이트리밋 키). join_owners 는 신청 대기 매장, 그 외는 소속 매장.
   const scopeUnit = audience === 'join_owners' ? pendingUnit : callerUnit;
@@ -570,17 +585,16 @@ Deno.serve(async (req) => {
     if (!t) return json(403, { error: 'cross_tenant' });
     recipientIds = [target];
   } else if (audience === 'join_owners') {
-    // 합류 신청 알림 — 신청자가 지정한 pending_unit_id 의 관리자(사장+매니저, 0093 승인권자)에게만.
+    // 합류 신청 알림 — 신청자가 지정한 pending_unit_id 의 사장에게만(F-2: 0201 이후 승인은 사장만 한다).
     // 0093: 대상 해석을 profiles(주매장·전역 role) → unit_members(매장별 멤버십·역할 SSOT, 0067)로 교체.
     const { data: rows } = await admin
-      .from('unit_members').select('user_id').eq('unit_id', pendingUnit).in('role', ['owner', 'manager']);
+      .from('unit_members').select('user_id').eq('unit_id', pendingUnit).in('role', audienceRoles(audience) ?? []);
     recipientIds = (rows ?? []).map((r: { user_id: string }) => r.user_id);
   } else {
-    // 0093: 'owners' = 그 매장의 관리자(사장+매니저), 'staff' = 그 매장의 직원(junior).
+    // 0093: 'owners' = 그 매장의 관리자(사장+매니저), 'owner_only' = 사장만(F-2), 'staff' = 그 매장의 직원(junior).
     // unit_members 기준이라 주매장이 다른 멤버도 정확히 잡히고, 매니저가 staff 쪽으로 중복 수신하지 않는다.
-    const roles = audience === 'owners' ? ['owner', 'manager'] : ['junior'];
     const { data: rows } = await admin
-      .from('unit_members').select('user_id').eq('unit_id', callerUnit).in('role', roles);
+      .from('unit_members').select('user_id').eq('unit_id', callerUnit).in('role', audienceRoles(audience) ?? []);
     recipientIds = (rows ?? []).map((r: { user_id: string }) => r.user_id);
   }
 

@@ -11,7 +11,8 @@
 import { supabase, HAS_SUPABASE } from '@/lib/supabase';
 import { track, reportError } from '@/lib/analytics/track';
 
-export type PushAudience = 'owners' | 'staff' | 'user' | 'join_owners';
+// owner_only = 그 매장 사장만(F-2). 엣지(0236 짝 배포)가 먼저 나가야 한다. 옛 엣지는 이 값을 직원 갈래로 보냈다.
+export type PushAudience = 'owners' | 'owner_only' | 'staff' | 'user' | 'join_owners';
 
 type NotifyArgs = {
   audience: PushAudience;
@@ -154,9 +155,10 @@ export const notifyStoreQuestion = (q: string) => {
   });
 };
 
+// 제안 검토는 사장만 한다(F-2). 매니저에게 보내면 열 수 없는 /owner/suggestions 로 간다.
 export const notifyOwnersSuggestion = (name: string, text: string) =>
   pushNotify({
-    audience: 'owners',
+    audience: 'owner_only',
     title: `${name}님의 노하우 제안`,
     body: text,
     url: '/owner/suggestions',
