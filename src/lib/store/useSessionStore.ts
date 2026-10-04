@@ -969,7 +969,11 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     const probe = createClient(process.env.EXPO_PUBLIC_SUPABASE_URL ?? '', process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '', {
       auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false, storageKey: 'sqt-password-check' },
     });
-    const { error: checkErr } = await probe.auth.signInWithPassword({ email: get().email, password: currentPw });
+    // 확인 로그인은 auth 이메일로 한다. 상태의 email 은 updateProfile 이 바로 넣은, 아직 확인 전인 새 이메일일 수 있다.
+    const { data: sess } = await supabase.auth.getSession();
+    const authEmail = sess.session?.user.email;
+    if (!authEmail) return { error: '비밀번호를 변경하지 못했어요. 잠시 후 다시 시도해 주세요.' };
+    const { error: checkErr } = await probe.auth.signInWithPassword({ email: authEmail, password: currentPw });
     if (checkErr) {
       // 비밀번호가 틀린 것(400)만 "맞지 않아요"로 말한다. 연결·혼잡은 그 문구로 안내한다.
       const wrong = checkErr.status === 400 || /invalid login credentials/i.test(checkErr.message);
@@ -1001,7 +1005,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     const token = data.session?.access_token;
     if (!token) return { error: '로그인이 만료됐어요. 다시 로그인해 주세요.' };
     const r = await changePhoneByOtp({ phone, code, accessToken: token });
-    if (!r.ok) return { error: r.message };
+    if (!r.ok) return { error: r.message ?? '번호를 바꾸지 못했어요. 잠시 후 다시 시도해 주세요.' };
     set({ phone });
     return { error: null };
   },

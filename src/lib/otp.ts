@@ -65,6 +65,9 @@ function reasonMsg(reason: OtpReason, retryAfterSec: number | null): string {
       return '이미 다른 계정이 쓰는 번호예요. 다른 번호를 입력해 주세요.';
     case 'unauthorized':
       return '로그인이 만료됐어요. 다시 로그인해 주세요.';
+    // ★서버가 모르는 이유를 줄 수 있다(옛 엣지 bad_action · 500 의 db · bad_json). 문구가 비면 호출부가 성공으로 읽는다.
+    default:
+      return '완료하지 못했어요. 잠시 후 다시 시도해 주세요.';
   }
 }
 

@@ -67,7 +67,8 @@ export function deleteConfirmText(v: { ownerAccount: boolean; notice: string | n
       : '계정과 내 기록(질문·출퇴근)이 삭제되며 복구할 수 없어요. 정말 탈퇴하시겠어요?';
   }
   const parts = [
-    v.ownerAccount ? '탈퇴하면 매장 데이터(노하우·직원·근무 기록)도 함께 지워요.' : null,
+    // 사장 매장은 탈퇴 때 감춰지고(0237) 30일 뒤 근무 기록까지 파기된다(0053 purge). 이 문장은 계획에 없다 · 사용자 확인 대기.
+    v.ownerAccount ? '매장 데이터(노하우·직원·근무 기록)는 30일 뒤 지워요.' : null,
     '계정 정보는 30일 뒤 지워요. 법으로 보관해야 하는 기록(근로·결제)은 정해진 기간만 따로 보관한 뒤 지워요.',
     v.ownerAccount ? null : '출퇴근·시급 기록은 법에 따라 매장에 3년 보관돼요.',
     '30일 동안은 같은 이메일로 다시 가입할 수 없어요.',
