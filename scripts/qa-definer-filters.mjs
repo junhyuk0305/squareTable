@@ -46,6 +46,16 @@ const FN_TOKENS = {
   transfer_shift: ['valid_from', 'shift_exceptions'],
   approve_swap: ['p_confirm_past', 'kst_today() - 35', 'transfer_shift', 'auth_can_manage'],
   due_quiz_sends: ['valid_to', 'workers_at'],
+  // P4-2 0243(J2) — 나누기가 요청을 안 옮기면 지난 날짜 요청이 엉뚱한 구간에 붙는다(데이터 H6). 승인은 사장만(J2 원문).
+  copy_past_segment: ['shift_exceptions', 'swap_requests', 'shift_change_requests'],
+  request_shift_time: ['valid_from', 'shift_exceptions', 'kst_today() - 35', 'kst_today() + 60', 'auth.uid()'],
+  decide_shift_time: ['auth_is_owner', 'for update', "status <> 'pending'", 'p_confirm_past', 'kst_today() - 35', 'override_shift_day', "edited_by = 'staff'"],
+};
+
+// 함수 → 있으면 안 되는 토큰(옛 경로를 다시 여는 퇴행).
+const FN_FORBIDDEN = {
+  // P4-2 0243 — 옛 앱의 직원 자가수정은 항상 false 다. 근무표를 직접 쓰는 줄이 돌아오면 승인 없이 급여가 바뀐다.
+  update_my_shift_time: ['update public.shift_templates'],
 };
 
 console.log('[1] 정의자 함수 본문 토큰');
@@ -55,6 +65,14 @@ for (const [fn, tokens] of Object.entries(FN_TOKENS)) {
   for (const t of tokens) {
     const missing = defs.filter((d) => !d.includes(t)).length;
     check(`${fn} ⊇ ${t}`, missing === 0, `${defs.length}개 정의 중 ${missing}개에 없음`);
+  }
+}
+for (const [fn, tokens] of Object.entries(FN_FORBIDDEN)) {
+  const defs = bodies(fn);
+  if (defs.length === 0) { check(`${fn} 이 있다`, false, '함수 없음'); continue; }
+  for (const t of tokens) {
+    const found = defs.filter((d) => d.includes(t)).length;
+    check(`${fn} ∌ ${t}`, found === 0, `${defs.length}개 정의 중 ${found}개에 있음`);
   }
 }
 

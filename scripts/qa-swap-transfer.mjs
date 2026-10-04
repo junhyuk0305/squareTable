@@ -234,10 +234,11 @@ try {
     check('5-2 직원은 예외를 못 지운다(관리자만)', !bad.error && (bad.data ?? []).length === 0, `rows=${(bad.data ?? []).length}`);
   }
 
-  // ═══════ 6. 직원 자가수정 — 내 근무의 시각만 · 그날 근무만(0234) ═══════
-  // ★0234: 매주 반복 근무를 직원이 직접 고치면 지난 주 급여까지 바뀐다(급여 = 근무표). 그래서
-  //   반복 행은 false, 날짜 지정 행(그날 하나만 바뀜)은 지금처럼 true.
-  console.log('\n[6] 직원 자가수정 (0178 · 0234 반복 근무 차단)');
+  // ═══════ 6. 직원 자가수정 — 막힘(0234 반복 · 0243 전부) ═══════
+  // ★0234: 매주 반복 근무를 직원이 직접 고치면 지난 주 급여까지 바뀐다(급여 = 근무표).
+  // ★0243(J2): 직원 수정은 그날 하루만 바뀌고 사장 승인 뒤에 반영된다. 옛 경로 update_my_shift_time 은
+  //   반복·날짜 지정 모두 false 다. 요청·승인 흐름은 qa:shift-requests 가 본다(데이터 검토 M3).
+  console.log('\n[6] 직원 자가수정 (0234 반복 근무 차단 · 0243 전부 false)');
   {
     const TPL_B = `swt_tb_${s}`;    // 매주 반복
     const TPL_BD = `swt_tbd_${s}`;  // 날짜 지정(그날만)
@@ -253,16 +254,16 @@ try {
       rep.error?.message ?? `rpc=${rep.data} ${JSON.stringify(repAfter)}`);
     const ok = await B.rpc('update_my_shift_time', { p_id: TPL_BD, p_start: '10:00', p_end: '16:00' });
     const after = (await admin.from('shift_templates').select('start_time, end_time, edited_by, staff_id, weekday').eq('id', TPL_BD).maybeSingle()).data;
-    check('6-1b 날짜 지정 근무는 직원이 시각을 고친다 = 성공', !ok.error && ok.data === true && after?.start_time === '10:00' && after?.end_time === '16:00',
-      ok.error?.message ?? JSON.stringify(after));
-    check('6-2 ★고친 근무에 표가 남는다(사장 화면 “직원 수정”)', after?.edited_by === 'staff', `edited_by=${after?.edited_by}`);
+    check('6-1b ★날짜 지정 근무도 직원이 직접 못 고친다(0243 · 사장 승인 뒤 반영)', !ok.error && ok.data === false && after?.start_time === '09:00' && after?.end_time === '15:00',
+      ok.error?.message ?? `rpc=${ok.data} ${JSON.stringify(after)}`);
+    check('6-2 ★승인 없이 "직원 수정" 표가 붙지 않는다', after?.edited_by == null, `edited_by=${after?.edited_by}`);
     const bad = await C.rpc('update_my_shift_time', { p_id: TPL_BD, p_start: '08:00', p_end: '20:00' });
     const after2 = (await admin.from('shift_templates').select('start_time, end_time').eq('id', TPL_BD).maybeSingle()).data;
-    check('6-3 ★남의 근무는 못 고친다', !bad.error && bad.data === false && after2?.start_time === '10:00', `rpc=${bad.data} ${JSON.stringify(after2)}`);
+    check('6-3 ★남의 근무는 못 고친다', !bad.error && bad.data === false && after2?.start_time === '09:00', `rpc=${bad.data} ${JSON.stringify(after2)}`);
     const zero = await B.rpc('update_my_shift_time', { p_id: TPL_BD, p_start: '10:00', p_end: '10:00' });
     check('6-4 근무 0분은 거부', !zero.error && zero.data === false, `rpc=${zero.data}`);
     const night = await B.rpc('update_my_shift_time', { p_id: TPL_BD, p_start: '22:00', p_end: '02:00' });
-    check('6-5 자정 넘김은 허용(심야 근무 · 날짜 지정)', !night.error && night.data === true, `rpc=${night.data}`);
+    check('6-5 ★자정 넘김도 직접 수정은 false(0243 · 요청으로)', !night.error && night.data === false, `rpc=${night.data}`);
     const direct = await B.from('shift_templates').update({ staff_id: cId }).eq('id', TPL_B).select('id');
     check('6-6 ★직원이 근무표를 직접 UPDATE 하지는 못한다(st_write 는 관리자 전용 유지)',
       !direct.error && (direct.data ?? []).length === 0, `rows=${(direct.data ?? []).length} err=${direct.error?.code ?? '-'}`);
