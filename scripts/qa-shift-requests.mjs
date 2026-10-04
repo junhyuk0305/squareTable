@@ -6,7 +6,8 @@
 // 무엇을 못박나:
 //   [1] 옛 앱 경로 update_my_shift_time 은 반복·날짜 지정 모두 false 이고 근무표를 바꾸지 않는다.
 //   [2] request_shift_time: 본인 근무 · 그날 실제로 서는 근무 · 오늘-35일~오늘+60일 · 시각 형식 · 다른 매장 거부.
-//       같은 근무·같은 날의 대기 요청은 하나다(다시 내면 그 요청을 고친다).
+//       같은 근무·같은 날의 대기 요청은 하나다(다시 내면 앞 요청은 cancelled 로 닫고 새 id 를 만든다).
+//       사장이 본 요청 id 로 승인하면 그사이 바뀐 시각이 반영되지 않는다(4-17 · not_pending).
 //   [3] RLS: 본인과 관리자만 본다. 동료·다른 매장은 0건. 클라이언트 직접 쓰기는 안 된다.
 //   [4] decide_shift_time: 사장만(매니저도 불가 · J2 원문). 승인하면 그날만 바뀌고 edited_by='staff' 가 남는다.
 //       다음 주 같은 요일은 그대로다. 지난 날짜는 p_confirm_past 필수. 35일이 넘으면 거부. 두 번 승인돼도 한 번만 반영.
@@ -163,8 +164,12 @@ try {
       JSON.stringify(row));
     const again = await J.c.rpc('request_shift_time', { p_template: A1, p_date: D7, p_start: '11:00', p_end: '19:00', p_note: null });
     const pend = psql(`select count(*) from public.shift_change_requests where template_id = '${A1}' and date = '${D7}' and status = 'pending'`);
-    check('2-3 같은 근무·같은 날 다시 내면 대기 요청 하나를 고친다', !again.error && again.data === R1 && pend === '1'
-      && (await req(R1))?.new_start === '11:00', again.error?.message ?? `id=${again.data} pending=${pend}`);
+    const prev = await req(R1), next = await req(again.data);
+    check('2-3 ★같은 근무·같은 날 다시 내면 앞 요청은 cancelled · 새 id 로 대기 하나(사장이 본 요청이 몰래 바뀌지 않는다)',
+      !again.error && typeof again.data === 'string' && again.data !== R1 && pend === '1'
+      && prev?.status === 'cancelled' && prev?.new_start === '10:00' && next?.status === 'pending' && next?.new_start === '11:00',
+      again.error?.message ?? `id=${again.data} old=${R1} pending=${pend} prev=${prev?.status}/${prev?.new_start}`);
+    R1 = again.data;
     const other = await K.c.rpc('request_shift_time', { p_template: A1, p_date: D7, p_start: '10:00', p_end: '19:00', p_note: null });
     check('2-4 ★남의 근무는 요청 못 한다', !!other.error && /not_own_shift/.test(other.error.message), other.error?.message ?? 'allowed');
     const wrongDay = await J.c.rpc('request_shift_time', { p_template: A1, p_date: addDays(T, 8), p_start: '10:00', p_end: '19:00', p_note: null });
@@ -286,6 +291,19 @@ try {
     const dayRows = (await rowsOf(UNIT)).filter((r) => r.staff_id === J.id && r.shift_date === D28).length;
     check('4-16 ★동시에 두 번 승인해도 한 번만 반영(for update 재확인)', okCount === 1 && dayRows === 1,
       `ok=${okCount} rows=${dayRows} ${c1.error?.message ?? c1.data} / ${c2.error?.message ?? c2.data}`);
+
+    // 사장이 목록을 본 뒤 직원이 같은 날을 다시 요청 → 사장이 본 요청 id 로 승인
+    const D35 = addDays(T, 35);
+    const seenReq = await J.c.rpc('request_shift_time', { p_template: A1, p_date: D35, p_start: '10:00', p_end: '16:00', p_note: null });
+    const seenRow = (await O.c.from('shift_change_requests').select('id, new_start, new_end').eq('id', seenReq.data)).data?.[0];
+    const swapped = await J.c.rpc('request_shift_time', { p_template: A1, p_date: D35, p_start: '06:00', p_end: '23:00', p_note: null });
+    const stale = await O.c.rpc('decide_shift_time', { p_id: seenRow?.id, p_approve: true });
+    const d35 = (await rowsOf(UNIT)).filter((r) => r.staff_id === J.id && r.shift_date === D35);
+    const exc35 = (await excOf(UNIT)).some((e) => e.template_id === A1 && e.date === D35);
+    check('4-17 ★사장이 본 요청(10:00-16:00)으로 승인 → 그사이 바뀐 요청(06:00-23:00)은 반영되지 않는다',
+      !seenReq.error && !swapped.error && seenRow?.new_start === '10:00' && !!stale.error && /not_pending/.test(stale.error.message)
+      && d35.length === 0 && !exc35 && (await req(swapped.data))?.status === 'pending',
+      `${stale.error?.message ?? `data=${stale.data}`} rows=${JSON.stringify(d35.map((r) => `${r.start_time}-${r.end_time}`))} exc=${exc35}`);
   }
 
   // ═══════ [5] copy_past_segment 가 요청을 옮긴다 ═══════
