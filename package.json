@@ -108,6 +108,7 @@
     "qa:account-security": "node scripts/qa-account-security.mjs",
     "qa:query-rls": "node scripts/qa-query-rls.mjs",
     "qa:consents": "node scripts/qa-consents.mjs",
+    "qa:user-reports": "node scripts/qa-user-reports.mjs",
     "qa:shift-dated": "node scripts/qa-shift-dated.mjs",
     "qa:shift-time": "node scripts/qa-shift-time.mjs",
     "qa:store-slots": "node scripts/qa-store-slots.mjs",
