@@ -25,7 +25,7 @@ import { ActionRow } from '@/components/blocks/ActionRow';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
-import { fmtDuration, won, todayStr, liveMinutes, findOpenRecord } from '@/lib/utils/attendance';
+import { fmtDuration, won, todayStr, liveMinutes, findOpenRecord, minWageWarning } from '@/lib/utils/attendance';
 import { computePay, shiftsToPayRecords } from '@/lib/utils/payroll';
 import { showToast } from '@/lib/store/useToastStore';
 import { rotateInviteCode } from '@/lib/db';
@@ -495,7 +495,11 @@ function WageCell({
     setDraft(null);
     // 빈칸·0·값 그대로면 쓰지 않는다(무의미한 쓰기 + 0원 확정 저장 방지).
     if (!Number.isFinite(n) || n <= 0 || n === saved) return;
-    setWage(staffId, Math.min(n, 1000000));
+    const wage = Math.min(n, 1000000);
+    setWage(staffId, wage);
+    // 그해 최저시급보다 낮으면 저장은 하고 경고만 한다(Q12) — 수습 감액 같은 예외가 있다(최저임금법 제5조 2항).
+    const warning = minWageWarning(wage, todayStr());
+    if (warning) showToast(warning, 'warn');
   };
 
   return (

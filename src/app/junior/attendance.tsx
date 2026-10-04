@@ -19,7 +19,7 @@ import { useAttendanceStore } from '@/lib/store/useAttendanceStore';
 import { usePayrollStore, useWagesSettled } from '@/lib/store/usePayrollStore';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
-import { fmtDuration, won, hhmm, todayStr, liveMinutes, DEFAULT_HOURLY_WAGE, findOpenRecord, isForgotCheckout, openSinceText } from '@/lib/utils/attendance';
+import { fmtDuration, won, hhmm, todayStr, liveMinutes, findOpenRecord, isForgotCheckout, openSinceText } from '@/lib/utils/attendance';
 import { ForgotCheckoutCard } from '@/components/junior/ForgotCheckoutCard';
 import { computePay, shiftsToPayRecords } from '@/lib/utils/payroll';
 import { useScheduleStore, scheduledShiftsFor } from '@/lib/store/useScheduleStore';
@@ -51,7 +51,8 @@ export function AttendancePanel() {
   // 게이트는 "조회가 끝났나"를 본다 — wagesLoaded 만 보면 읽기 실패 시 영영 스피너다(아래 안내 분기도 못 뜬다).
   const wagesSettled = useWagesSettled();
   const wageSet = Object.prototype.hasOwnProperty.call(wages, userId);
-  const wage = wages[userId] ?? DEFAULT_HOURLY_WAGE;
+  // 시급이 없으면 0으로 계산만 한다. 금액은 위 wageSet 으로 숨긴다(대체 시급을 지웠다 · Q12).
+  const wage = wages[userId] ?? 0;
   const router = useRouter();
 
   const shiftTemplates = useScheduleStore((s) => s.templates);

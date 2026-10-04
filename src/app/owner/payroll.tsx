@@ -42,8 +42,8 @@ export default function OwnerPayrollScreen() {
         <View style={styles.block}>
           <SectionLabel title="수당·공제" />
           <View style={styles.card}>
-            <ToggleRow label="휴게시간 공제" hint="4시간당 30분 무급" value={settings.breakDeduction} onToggle={(v) => setSetting('breakDeduction', v)} />
-            <ToggleRow label="야간수당" hint="22~06시 1.5배 가산" value={settings.nightAllowance} onToggle={(v) => setSetting('nightAllowance', v)} />
+            <ToggleRow label="휴게시간 공제" hint="4시간 이상 30분 · 8시간 이상 1시간(무급)" value={settings.breakDeduction} onToggle={(v) => setSetting('breakDeduction', v)} />
+            <ToggleRow label="야간수당" hint="22~06시 0.5배 가산 (5인 이상 의무)" value={settings.nightAllowance} onToggle={(v) => setSetting('nightAllowance', v)} />
             <ToggleRow label="연장수당" hint="1일 8시간 초과분 1.5배 (5인 이상)" value={settings.overtimeAllowance} onToggle={(v) => setSetting('overtimeAllowance', v)} />
             <ToggleRow label="주휴수당" hint="주 15시간 이상 개근 시 1일치" value={settings.weeklyHolidayPay} onToggle={(v) => setSetting('weeklyHolidayPay', v)} />
             {/* 추가수당도 '수당'이라 1행짜리 카드를 따로 세우지 않고 이 카드의 마지막 행으로 흡수했다.
