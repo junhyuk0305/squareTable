@@ -47,12 +47,15 @@ const FN_TOKENS = {
   approve_swap: ['p_confirm_past', 'kst_today() - 35', 'transfer_shift', 'auth_can_manage'],
   due_quiz_sends: ['valid_to', 'workers_at'],
   // P4-2 0243(J2) — 나누기가 요청을 안 옮기면 지난 날짜 요청이 엉뚱한 구간에 붙는다(데이터 H6). 승인은 사장만(J2 원문).
-  copy_past_segment: ['shift_exceptions', 'swap_requests', 'shift_change_requests'],
+  copy_past_segment: ['shift_exceptions', 'swap_requests', 'shift_change_requests', 'shift_day_marks'],
   request_shift_time: ['valid_from', 'shift_exceptions', 'kst_today() - 35', 'kst_today() + 60', 'auth.uid()'],
   decide_shift_time: ['auth_is_owner', 'for update', "status <> 'pending'", 'p_confirm_past', 'kst_today() - 35', 'override_shift_day', "edited_by = 'staff'"],
   // P4-3 0244(J1-b) — 시급 이력. 사장만 · 활성 매장 멤버만 · 지난 날짜는 확인(Q4). 일일 맞춤은 지금 멤버만(퇴사자 wages 되살리기 금지).
   set_wage_from: ['auth_is_owner', 'auth_unit_id', 'unit_members', 'p_confirm_past', 'wage_rates'],
   sync_wages_from_rates: ['unit_members', 'wage_rates'],
+  // P4-4 0245(J1-c) — 결근 표시. 사장만(급여 영향 · 0201) · 활성 매장 근무만 · 그날 서는 근무만 · 지난 날짜는 확인(Q4).
+  mark_shift_day: ['auth_is_owner', 'auth_unit_id', 'p_confirm_past', 'valid_from', 'shift_exceptions'],
+  clear_shift_day: ['auth_is_owner', 'auth_unit_id', 'p_confirm_past'],
 };
 
 // 함수 → 있으면 안 되는 토큰(옛 경로를 다시 여는 퇴행).
@@ -88,6 +91,11 @@ const pol = (table, name) => psql(`select coalesce(qual, '') || ' | ' || coalesc
   check('shift_templates.st_read ⊇ kst_today', r.includes('kst_today'), r || '정책 없음');
   const w = psql(`select count(*) from pg_policies where schemaname = 'public' and tablename = 'shift_templates' and cmd = 'ALL'`);
   check('shift_templates 에 FOR ALL 정책이 없다(있으면 관리자에게 읽기 필터가 안 먹는다)', w === '0', `FOR ALL 정책 ${w}개`);
+}
+{
+  const r = pol('shift_day_marks', 'sdm_read');
+  check('shift_day_marks.sdm_read ⊇ auth_can_manage · auth.uid (관리자 또는 본인만 · 동료 결근 표시 비공개)',
+    r.includes('auth_can_manage') && r.includes('auth.uid()'), r || '정책 없음');
 }
 
 console.log(`\nRESULT: ${pass} passed, ${fail} failed`);
