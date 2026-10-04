@@ -229,6 +229,8 @@ async function main() {
   for (const wd of [3, 4, 5, 6, 0]) shifts.push({ id: `shift_jiwon_${wd}`, unit_id: STORE1, staff_id: JIWON, weekday: wd, start_time: '13:00', end_time: '19:00' });
   for (const wd of [1, 2, 3, 4, 5]) shifts.push({ id: `hub2_shift_s3_${wd}`, unit_id: STORE2, staff_id: STAFF3, weekday: wd, start_time: '07:30', end_time: '14:00' });
   for (const wd of [6, 0]) shifts.push({ id: `hub2_shift_jw_${wd}`, unit_id: STORE2, staff_id: JIWON, weekday: wd, start_time: '13:00', end_time: '19:00' });
+  // 적용 시작일(0242)을 직접 넣는다. 빼면 기본값(오늘)이 들어가 이번달 인건비·예상급여의 지난 날짜가 비어 보인다(데이터 M1).
+  for (const sh of shifts) sh.valid_from = '2000-01-01';
   await step('shift_templates(신촌+홍대)', db.from('shift_templates').upsert(shifts));
 
   // ══════════════════════════════════════════════════════════

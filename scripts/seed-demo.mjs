@@ -159,6 +159,8 @@ async function main() {
   const shifts = [];
   for (const wd of [1, 2, 3, 4, 5]) shifts.push({ id: `shift_sumin_${wd}`, unit_id: UNIT, staff_id: SUMIN, weekday: wd, start_time: '07:30', end_time: '14:00' });
   for (const wd of [3, 4, 5, 6, 0]) shifts.push({ id: `shift_jiwon_${wd}`, unit_id: UNIT, staff_id: JIWON, weekday: wd, start_time: '13:00', end_time: '19:00' });
+  // 적용 시작일(0242)을 직접 넣는다. 빼면 기본값(오늘)이 들어가 지난 날짜 근무표가 비어 보인다(데이터 M1).
+  for (const sh of shifts) sh.valid_from = '2000-01-01';
   await step('shift_templates', db.from('shift_templates').upsert(shifts));
 
   // ════════════════════════════════════════════════════════

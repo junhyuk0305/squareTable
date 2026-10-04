@@ -472,10 +472,11 @@ async function main() {
   // ════════════════════════════════════════════════════════════════
   console.log('9) 근무표 + 출퇴근 3일치');
   // 근무표가 비면 직원 '출퇴근 > 근무표' 화면이 빈 화면으로 보인다(4.2 리스크).
+  // 적용 시작일(0242)을 직접 넣는다. 빼면 기본값(오늘)이 들어가 지난 날짜 근무표·급여가 빈 화면으로 보인다(데이터 M1).
   await step('shift_templates', db.from('shift_templates').upsert(
     [1, 2, 3, 4, 5].map((wd) => ({
       id: `${P}shift_${wd}`, unit_id: UNIT, staff_id: staffId, weekday: wd,
-      start_time: '13:00', end_time: '19:00',
+      start_time: '13:00', end_time: '19:00', valid_from: '2000-01-01',
     })),
   ));
   const att = [];
