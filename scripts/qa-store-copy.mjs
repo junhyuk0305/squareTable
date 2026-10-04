@@ -63,8 +63,38 @@ console.log('\n■ J4 — 다시 열기 확인창은 기록이 남는다고 말�
   check("'비워지는 것' 목록이 없다(출퇴근·업무 보드는 이제 남는다)", !/비워지는 것/.test(m) && !m.includes('업무 보드'), show(m));
   check('대시·문장 잇는 중간점이 없다', m.length > 0 && !STYLE.test(m), show(m));
   const src = strip(read('src/app/owner/previous-stores.tsx'));
-  check('previous-stores 가 REOPEN_STORE_MESSAGE 를 쓴다', /REOPEN_STORE_MESSAGE/.test(src));
+  check('previous-stores 가 reopenStoreMessage 로 문구를 고른다', /message=\{reopenStoreMessage\(/.test(src));
   check('previous-stores 에 옛 목록 문구가 없다', !/비워지는 것/.test(src));
+}
+
+// ★리뷰(2026-10-05): 라이브가 0235 전이면 reopen_store(0196)가 출퇴근·업무 보드를 지운다.
+//   그때 "기록은 그대로예요"를 보이면 그 문구를 믿고 누른 사장이 기록을 잃는다. 0235 와 같은 파일에서 생긴
+//   delete_store_preview 가 있는지로 서버 판을 확인하고, 확인 전·실패·옛 서버에는 지금 라이브 문구를 그대로 쓴다.
+console.log('\n■ J4 — 0235 전 서버(reopen_store 가 출퇴근·업무 보드를 지움)에는 새 문구를 보이지 않는다');
+{
+  const { REOPEN_STORE_MESSAGE_PRE0235: OLD, reopenStoreMessage, reopenKeepsRecords } = mod;
+  const OLD_REOPEN =
+    '이용권 1개를 써요.\n\n' +
+    '비워지는 것: 직원·근무표·출퇴근·업무 보드\n' +
+    '남는 것: 노하우·퀴즈·퀴즈 기록·채팅·매장 설정\n\n' +
+    '초대코드는 새로 나와요.';
+  check('0235 전 문구 = 지금 라이브 문구 그대로', OLD === OLD_REOPEN, show(OLD));
+  const msg = (k) => (fn(reopenStoreMessage) ? reopenStoreMessage(k) : '(함수 없음)');
+  check('서버가 기록을 남김(true) → J4 문구', msg(true) === REOPEN_STORE_MESSAGE, show(msg(true)));
+  check('옛 서버(false) → 지운다고 말한다', msg(false) === OLD_REOPEN, show(msg(false)));
+  check('아직 모름(null) → 지운다고 말한다(기록이 남는다고 약속하지 않는다)', msg(null) === OLD_REOPEN, show(msg(null)));
+  const keeps = (e) => (fn(reopenKeepsRecords) ? reopenKeepsRecords(e) : 'x');
+  check('delete_store_preview 응답 성공 → 0235 있음(true)', keeps(null) === true, show(keeps(null)));
+  check('PGRST202 → 0235 없음(false)', keeps({ code: 'PGRST202', message: '' }) === false);
+  check('could not find the function → 0235 없음(false)',
+    keeps({ code: '', message: 'Could not find the function public.delete_store_preview(p_unit) in the schema cache' }) === false);
+  check('not_owner(함수는 있다) → true', keeps({ code: 'P0001', message: 'not_owner' }) === true);
+  check('연결 실패 → 모름(null)', keeps({ code: '', message: 'TypeError: Failed to fetch' }) === null);
+  const db = strip(read('src/lib/db.ts'));
+  check('db.ts fetchReopenKeepsRecords 가 delete_store_preview 로 서버를 확인한다',
+    /fetchReopenKeepsRecords[\s\S]{0,400}?rpc\('delete_store_preview'[\s\S]{0,200}?reopenKeepsRecords\(/.test(db));
+  const src = strip(read('src/app/owner/previous-stores.tsx'));
+  check('previous-stores 가 fetchReopenKeepsRecords 를 부른다', /fetchReopenKeepsRecords\(/.test(src));
 }
 
 console.log('\n■ J5 — 사장 탈퇴가 owner_has_staff 로 막히면 이유와 갈 곳을 준다');
