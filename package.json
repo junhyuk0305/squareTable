@@ -129,6 +129,7 @@
     "qa:account-ui": "node --no-warnings scripts/qa-account-ui.mjs",
     "qa:consent-ui": "node --no-warnings scripts/qa-consent-ui.mjs",
     "qa:store-copy": "node --no-warnings scripts/qa-store-copy.mjs",
+    "qa:no-purge-call": "node scripts/qa-no-purge-call.mjs",
     "iap:status": "node scripts/iap-switch.mjs status",
     "iap:on": "node scripts/iap-switch.mjs on",
     "iap:off": "node scripts/iap-switch.mjs off",
