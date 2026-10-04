@@ -39,12 +39,16 @@ check('표 뒤의 해(2028) → 마지막 값 10,700원', call(minimumWageFor, '
 check('표 앞의 해(2024) → 첫 값 10,030원', call(minimumWageFor, '2024-06-01') === 10030, `→ ${call(minimumWageFor, '2024-06-01')}`);
 
 console.log('\n■ minWageWarning(wage, date) — 미만일 때만 경고 문구, 아니면 null');
-const W26 = '시급이 2026년 최저시급 10,320원보다 낮아요. 수습 기간이 아니라면 다시 확인해 주세요.';
+// 경고에 수습을 꺼내지 않는다. 수습 감액은 1년 이상 계약·3개월 이내·90%까지만이고 단순노무는 감액이 없다(최저임금법 제5조 2항).
+// "수습 기간이 아니라면"은 수습이면 얼마든 괜찮다고 읽힌다(P3-11 리뷰).
+const W26 = '시급이 2026년 최저시급 10,320원보다 낮아요. 다시 확인해 주세요.';
 check('★2026년 10,319원 → 경고', call(minWageWarning, 10319, '2026-10-05') === W26, `→ ${call(minWageWarning, 10319, '2026-10-05')}`);
 check('★2026년 10,320원(같음) → 경고 없음', fn(minWageWarning) && call(minWageWarning, 10320, '2026-10-05') === null);
 check('2026년 12,000원 → 경고 없음', fn(minWageWarning) && call(minWageWarning, 12000, '2026-10-05') === null);
 check('옛 대체값 10,030원은 2026년에 경고', call(minWageWarning, 10030, '2026-10-05') === W26);
-check('2027년 10,500원 → 2027년 기준 경고', call(minWageWarning, 10500, '2027-01-02') === '시급이 2027년 최저시급 10,700원보다 낮아요. 수습 기간이 아니라면 다시 확인해 주세요.', `→ ${call(minWageWarning, 10500, '2027-01-02')}`);
+check('★2026년 8,000원(90% 아래) → 같은 경고', call(minWageWarning, 8000, '2026-10-05') === W26, `→ ${call(minWageWarning, 8000, '2026-10-05')}`);
+check('★어떤 금액에도 경고에 "수습"이 없다', [1, 8000, 9288, 10000, 10319].every((w) => !String(call(minWageWarning, w, '2026-10-05')).includes('수습')));
+check('2027년 10,500원 → 2027년 기준 경고', call(minWageWarning, 10500, '2027-01-02') === '시급이 2027년 최저시급 10,700원보다 낮아요. 다시 확인해 주세요.', `→ ${call(minWageWarning, 10500, '2027-01-02')}`);
 
 console.log('\n■ 대체 시급을 지운다 — 시급이 없으면 금액을 숨긴다');
 check('★DEFAULT_HOURLY_WAGE 를 내보내지 않는다', !('DEFAULT_HOURLY_WAGE' in mod));
