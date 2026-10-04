@@ -44,7 +44,10 @@ export default function AccountSettings() {
   // 요금제는 매장 단위 — 다점포 사장은 지금 보는 플랜이 어느 매장 것인지 알아야 한다(1곳이면 소음이라 생략).
   const multiOwner = stores.filter((st) => st.role === 'owner').length > 1;
   const deleteAccount = useSessionStore((s) => s.deleteAccount);
+  // 결제 행은 활성 매장 기준이다(요금제·신고가 그 매장 것) — 그 매장 사장일 때만.
   const isOwner = role === 'owner';
+  // 탈퇴 안내·이전 매장·알림 문구는 계정 층이다 — 지금 보는 매장이 아니라 사장 계정인가로 가른다.
+  const isOwnerAccount = useSessionStore((s) => s.isOwnerAccount);
   const prefs = usePreferencesStore();
   const [busy, setBusy] = useState(false);
   const [scaleModal, setScaleModal] = useState(false);
@@ -52,11 +55,11 @@ export default function AccountSettings() {
   // 이전 매장(0196) — 유료가 끝나 닫힌 소유 매장 수. 0이면 행 자체를 안 그린다(없는 것을 말하지 않는다).
   const [prevCount, setPrevCount] = useState(0);
   useEffect(() => {
-    if (!isOwner) return;
+    if (!isOwnerAccount) return;
     let alive = true;
     void fetchMyPreviousUnits().then(({ data }) => { if (alive && data) setPrevCount(data.length); });
     return () => { alive = false; };
-  }, [isOwner]);
+  }, [isOwnerAccount]);
 
   const version = Constants.expoConfig?.version ?? '1.0.0';
 
@@ -67,7 +70,7 @@ export default function AccountSettings() {
   const onDelete = async () => {
     const ok = await confirmAction(
       '회원탈퇴',
-      isOwner
+      isOwnerAccount
         ? // ★앱에서 산 구독은 애플이 청구한다 — 탈퇴(delete_my_account)는 그 구독을 끊지 못하므로 먼저 해지하라고 말한다.
           `계정과 매장 데이터(노하우·직원·근무 기록)가 모두 삭제되며 복구할 수 없어요.${SHOW_IAP ? ' 앱에서 산 이용권은 탈퇴해도 해지되지 않으니, 기기 설정의 구독 목록에서 먼저 해지해 주세요.' : ''} 정말 탈퇴하시겠어요?`
         : '계정과 내 기록(질문·출퇴근)이 삭제되며 복구할 수 없어요. 정말 탈퇴하시겠어요?',
@@ -128,7 +131,7 @@ export default function AccountSettings() {
             icon="notifications-outline"
             label="푸시 알림"
             hint={
-              isOwner
+              isOwnerAccount
                 ? '직원이 모르는 질문을 남기면 바로 알려드려요 (방해 금지·매장별 알림은 각 매장 설정에서)'
                 : '사장님이 답하거나 새 공지가 오면 알려드려요 (방해 금지·매장별 알림은 각 매장 설정에서)'
             }
@@ -190,7 +193,7 @@ export default function AccountSettings() {
           ))}
 
         {/* 이전 매장(0196) — 구독 및 결제 바로 아래. 닫힌 매장이 있을 때만(대다수 사장에겐 안 보인다). */}
-        {isOwner && prevCount > 0 && (
+        {isOwnerAccount && prevCount > 0 && (
           <SettingsSection icon="archive-outline" title="이전 매장">
             <SettingsRow first icon="storefront-outline" label="이전 매장" value={`${prevCount}곳`} onPress={() => router.push('/owner/previous-stores' as never)} />
           </SettingsSection>

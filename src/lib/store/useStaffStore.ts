@@ -4,11 +4,12 @@ import { create } from 'zustand';
 import type { Owner, Junior } from '@/types';
 import usersData from '@/data/users.json';
 import { HAS_SUPABASE } from '@/lib/supabase';
-import { fetchStaffProfiles, removeStaffMember, subscribeStaff, fetchPendingMembers, approveMember, rejectMember, fetchUnitMemberRoles, setMemberRoleDb } from '@/lib/db';
+import { fetchStaffProfiles, removeStaffMember, subscribeStaff, fetchPendingMembers, approveMember, rejectMember, setMemberRoleDb } from '@/lib/db';
 import { showToast } from '@/lib/store/useToastStore';
 import { notifyUserRoleChange } from '@/lib/push/notify';
 import { PLANS } from '@/lib/config/tiers';
 import { subscribeDebounced } from '@/lib/store/realtimeSync';
+import { currentTenantEpoch, isStaleEpoch } from '@/lib/store/tenantEpoch';
 import { optimisticRemove } from '@/lib/store/crudHelpers';
 import { useSyncStore } from '@/lib/store/useSyncStore';
 import { useSessionStore } from '@/lib/store/useSessionStore';
@@ -70,17 +71,16 @@ export const useStaffStore = create<StaffState>((set, get) => ({
 
   hydrate: async () => {
     if (!HAS_SUPABASE) return;
-    const [staffRes, pendingRes, rolesRes] = await Promise.all([
-      fetchStaffProfiles(),
-      fetchPendingMembers(),
-      fetchUnitMemberRoles(),
-    ]);
+    // 화면 포커스·승인 성공·실시간 이벤트도 이 길로 다시 당긴다 — 전부 같은 가드를 지난다.
+    const epoch = currentTenantEpoch();
+    const [staffRes, pendingRes] = await Promise.all([fetchStaffProfiles(), fetchPendingMembers()]);
+    if (isStaleEpoch(epoch)) return; // 그 사이 매장이 바뀌었다 — 이전 매장 명부를 쓰지 않는다
     set({
       owner: staffRes.owner,
       staff: staffRes.staff,
       pending: pendingRes.data,
-      // 역할 맵 읽기 실패는 명부 자체를 막지 않는다 — 배지·임명만 잠시 기본값(junior)으로 보인다.
-      roles: rolesRes.data,
+      // 역할 맵은 명부와 같은 멤버십 읽기에서 온다 — 그 읽기가 실패하면 명부도 실패(loadError)다.
+      roles: staffRes.roles,
       loaded: true,
       loadError: staffRes.error || pendingRes.error,
     });
@@ -96,7 +96,7 @@ export const useStaffStore = create<StaffState>((set, get) => ({
   getStaff: (id) => get().staff.find((s) => s.id === id),
 
   removeStaff: (id) => {
-    optimisticRemove(set, get, 'staff', id, () => removeStaffMember(id), '직원 내보내기에 실패했어요. 다시 시도해 주세요.');
+    optimisticRemove(set, get, 'staff', id, () => removeStaffMember(id), '직원 내보내기에 실패했어요. 다시 시도해 주세요.', currentTenantEpoch());
   },
 
   // 승인: 신청자를 낙관적으로 pending에서 빼고 승인 RPC 호출. 성공하면 로스터를 재조회(새 직원 반영),
@@ -105,11 +105,13 @@ export const useStaffStore = create<StaffState>((set, get) => ({
     const before = get().pending;
     const target = before.find((p) => p.id === id);
     if (!target) return;
+    // 쓰기 중 매장이 바뀌면 before(이전 매장 신청자 목록)로 되돌리지 않는다 — 새 매장 hydrate 가 채운다.
+    const epoch = currentTenantEpoch();
     set({ pending: before.filter((p) => p.id !== id) });
     void approveMember(id).then(({ ok, code }) => {
       if (ok) get().hydrate();
       else {
-        set({ pending: before });
+        if (!isStaleEpoch(epoch)) set({ pending: before });
         const limitMsg = `무료 요금제는 직원 ${PLANS.free.maxStaff}명까지 승인할 수 있어요.`;
         // 결제 화면으로 갈 수 있는 사장에게만 길을 준다(매니저·직원은 요금제를 못 바꾼다 · 판정 store-policy).
         // ★행 이름이 채널마다 달라(웹 '요금제' · iOS '이용권') 문구로 위치를 말하지 않고 버튼으로 보낸다.
@@ -127,10 +129,11 @@ export const useStaffStore = create<StaffState>((set, get) => ({
   setRole: (id, role) => {
     const before = get().roles;
     if ((before[id] ?? 'junior') === role) return;
+    const epoch = currentTenantEpoch(); // approve 와 같은 이유 — 이전 매장 역할 맵으로 되돌리지 않는다
     set({ roles: { ...before, [id]: role } });
     void setMemberRoleDb(id, role).then((ok) => {
       if (!ok) {
-        set({ roles: before });
+        if (!isStaleEpoch(epoch)) set({ roles: before });
         useSyncStore.getState().noteError('역할 변경에 실패했어요. 다시 시도해 주세요.');
         return;
       }
@@ -144,10 +147,11 @@ export const useStaffStore = create<StaffState>((set, get) => ({
   reject: (id) => {
     const before = get().pending;
     if (!before.some((p) => p.id === id)) return;
+    const epoch = currentTenantEpoch(); // approve 와 같은 이유
     set({ pending: before.filter((p) => p.id !== id) });
     void rejectMember(id).then((ok) => {
       if (!ok) {
-        set({ pending: before });
+        if (!isStaleEpoch(epoch)) set({ pending: before });
         useSyncStore.getState().noteError('거절 처리에 실패했어요. 다시 시도해 주세요.');
       }
     });

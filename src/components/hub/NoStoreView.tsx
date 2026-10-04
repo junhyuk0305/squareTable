@@ -28,10 +28,10 @@ import { Space } from '@/lib/theme/layout';
  */
 export function NoStoreView({ what, withQuizHistory = false }: { what: string; withQuizHistory?: boolean }) {
   const router = useRouter();
-  const role = useSessionStore((s) => s.role);
+  const isOwnerAccount = useSessionStore((s) => s.isOwnerAccount);
   const signupRole = useSessionStore((s) => s.signupRole);
   const pendingUnitId = useSessionStore((s) => s.pendingUnitId);
-  const canCreateStore = role === 'owner' || signupRole === 'owner';
+  const canCreateStore = isOwnerAccount || signupRole === 'owner';
 
   // 승인 대기 중이면 할 일이 '기다리기'뿐이다 — 코드 입력을 또 권하지 않는다.
   const primary = pendingUnitId ? (

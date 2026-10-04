@@ -3,6 +3,7 @@ import { HOURLY_WAGE } from '@/lib/store/useAttendanceStore';
 import { HAS_SUPABASE } from '@/lib/supabase';
 import { fetchWages, setWageDb, fetchPayrollSettings, savePayrollSettings } from '@/lib/db';
 import { guardWrite } from '@/lib/store/useSyncStore';
+import { currentTenantEpoch, isStaleEpoch } from '@/lib/store/tenantEpoch';
 
 export type PayrollSettings = {
   breakDeduction: boolean; // 휴게시간 공제 (4h당 30분 무급)
@@ -76,7 +77,10 @@ export const usePayrollStore = create<State>((set, get) => ({
   wagesLoadError: false,
   hydrate: async () => {
     if (!HAS_SUPABASE) return;
+    const epoch = currentTenantEpoch();
     const [wageRes, dbSettings] = await Promise.all([fetchWages(), fetchPayrollSettings()]);
+    // 그 사이 매장이 바뀌었다 — 이전 매장 시급·규칙을 쓰지 않는다(로컬 캐시에도 남기지 않는다).
+    if (isStaleEpoch(epoch)) return;
     // DB에 저장된 규칙이 있으면 그것이 진실원천(기본값 위에 병합). 없으면(초기 매장) 로컬 캐시 유지.
     set((s) => {
       const settings = dbSettings ? { ...DEFAULT_SETTINGS, ...(dbSettings as Partial<PayrollSettings>) } : s.settings;
@@ -97,9 +101,15 @@ export const usePayrollStore = create<State>((set, get) => ({
     if (!HAS_SUPABASE) return;
     // 매장 단위 DB(units.payroll_settings)에 승격 저장 — 실패 시 이전 값으로 롤백 + 배너(무음 불일치 방지).
     //   0행(사장 아님/RLS/경합)도 실패로 처리(savePayrollSettings=writeStrict).
+    // 쓰기 중 매장이 바뀌면 before(이전 매장 규칙)로 되돌리지 않는다 — 스토어에도 로컬 캐시에도. 새 매장 hydrate 가 채운다.
+    const epoch = currentTenantEpoch();
     void guardWrite(
       savePayrollSettings(settings),
-      () => { set({ settings: before }); persistSettings(before); },
+      () => {
+        if (isStaleEpoch(epoch)) return;
+        set({ settings: before });
+        persistSettings(before);
+      },
       '급여 설정 저장에 실패했어요.',
     );
   },

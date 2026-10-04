@@ -3,6 +3,7 @@
 // realtime 미구독: 입금 신고(usePaymentClaimStore)와 같은 이유 — 푸시가 먼저 알리고, 알림함은 진입 시 재조회로 충분.
 import { create } from 'zustand';
 import { coalesce } from '@/lib/store/realtimeSync';
+import { currentTenantEpoch, isStaleEpoch } from '@/lib/store/tenantEpoch';
 import type { OwnerAlert } from '@/types';
 import { HAS_SUPABASE } from '@/lib/supabase';
 import { fetchOwnerAlerts } from '@/lib/db';
@@ -25,7 +26,9 @@ export const useOwnerAlertStore = create<State>((set) => ({
       set({ alerts: [], loaded: true });
       return;
     }
+    const epoch = currentTenantEpoch();
     const { data } = await fetchOwnerAlerts(unitId);
+    if (isStaleEpoch(epoch)) return; // 그 사이 매장이 바뀌었다 — 이전 매장 알림을 쓰지 않는다
     // 실패는 db 계층이 표면화한다 — loaded 는 "기다리기가 끝났나"라 실패해도 세운다.
     set({ alerts: data, loaded: true });
   }),

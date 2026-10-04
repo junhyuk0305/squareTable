@@ -67,5 +67,35 @@ check('이미 거절 확정 마커 → show(닫기 전까지 유지)', (() => {
   return a.kind === 'show' && a.storeName === '나나카페';
 })());
 
+// ══ 세션 역할 진리표 (sessionRole.ts, 2026-10-04) ══════════════════════
+// 역할 = 활성 매장 멤버십(my_units). profiles.role(계정 유형)은 입력에 아예 없다 — 넣을 자리가 없어야 다시 안 샌다.
+const { deriveStoreRole } = await import('../src/lib/store/sessionRole.ts');
+const R = (over = {}) => deriveStoreRole({
+  userId: UID,
+  unitId: 'u_b',
+  rows: [{ unit_id: 'u_a', role: 'owner' }, { unit_id: 'u_b', role: 'junior' }],
+  prior: { userId: UID, unitId: 'u_b', role: 'junior' },
+  ...over,
+});
+
+check('★X 케이스: A매장 사장 + B매장 직원, 활성 B → junior', R() === 'junior');
+check('X 케이스: 활성 A → owner', R({ unitId: 'u_a' }) === 'owner');
+check('활성 매장 매니저 → manager',
+  R({ rows: [{ unit_id: 'u_b', role: 'manager' }] }) === 'manager');
+check('활성 매장 행 없음(본사 작업실·소속 해제 직후) → junior(fail-closed)',
+  R({ rows: [{ unit_id: 'u_a', role: 'owner' }] }) === 'junior');
+check('모르는 역할 값 → junior', R({ rows: [{ unit_id: 'u_b', role: 'superuser' }] }) === 'junior');
+check('활성 매장 없음 → junior(사장 계정이어도 매장 권한은 없다)', R({ unitId: '' }) === 'junior');
+check('목록 읽기 실패 + 같은 사용자·같은 매장 → 직전 역할 유지',
+  R({ unitId: 'u_a', rows: null, prior: { userId: UID, unitId: 'u_a', role: 'owner' } }) === 'owner');
+check('★목록 읽기 실패 + 매장이 바뀜 → junior(이전 매장 역할을 빌리지 않는다)',
+  R({ unitId: 'u_b', rows: null, prior: { userId: UID, unitId: 'u_a', role: 'owner' } }) === 'junior');
+check('★목록 읽기 실패 + 계정이 바뀜 → junior(이전 계정 역할을 빌리지 않는다)',
+  R({ unitId: 'u_a', rows: null, prior: { userId: 'someone_else', unitId: 'u_a', role: 'owner' } }) === 'junior');
+check('목록 읽기 실패 + 방금 만든 매장 → owner(create_store 가 owner 멤버십을 넣는다)',
+  R({ unitId: 'u_new', rows: null, prior: { userId: '', unitId: '', role: 'junior' }, createdUnitId: 'u_new' }) === 'owner');
+check('목록을 읽었으면 방금 만든 매장 표식보다 목록이 이긴다',
+  R({ unitId: 'u_new', rows: [], createdUnitId: 'u_new' }) === 'junior');
+
 console.log(`\nRESULT: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

@@ -7,6 +7,7 @@
 import { create } from 'zustand';
 import { type Daypart } from '@/lib/store/daypartLabels';
 import { coalesce, subscribeDebounced, settleWithin, HYDRATE_TIMEOUT_MS } from '@/lib/store/realtimeSync';
+import { currentTenantEpoch, isStaleEpoch } from '@/lib/store/tenantEpoch';
 import { HAS_SUPABASE } from '@/lib/supabase';
 import {
   fetchShiftExceptions,
@@ -215,6 +216,7 @@ export const useScheduleStore = create<ScheduleState>((set, get) => ({
     // ★throw 도 "시도가 끝났다"에 포함된다(2026-08-26 브라우저 실측). 아래 fetch 중 **하나라도**
     //   예외를 던지면 Promise.all 이 reject 되고 set 이 영영 실행되지 않아 loaded 가 false 로 남는다
     //   → 게이트가 **영구 스피너**가 된다. 계약을 값 반환 경로에만 걸면 계약이 아니다.
+    const epoch = currentTenantEpoch();
     try {
     // 정지(hang) 방지 — 위 try/catch 는 예외만 잡는다. 끝나지 않는 fetch 는 여기서 끊는다.
     const quad = await settleWithin(
@@ -222,6 +224,7 @@ export const useScheduleStore = create<ScheduleState>((set, get) => ({
       Promise.all([fetchScheduleConfig(), fetchShiftTemplates(), fetchSwaps(), fetchShiftExceptions()]),
       () => null,
     );
+    if (isStaleEpoch(epoch)) return; // 그 사이 매장이 바뀌었다 — 이전 매장 근무표를 쓰지 않는다
     if (quad === null) { set({ loaded: true, loadError: true, configLoadError: true }); return; }
     const [config, templates, swaps, exceptions] = quad;
     // ★config 조회가 실패했으면 DEFAULT_CONFIG 로 덮지 않는다 — 직전 값을 유지하고 configLoadError 로
@@ -239,6 +242,7 @@ export const useScheduleStore = create<ScheduleState>((set, get) => ({
     }));
     } catch (e) {
       console.warn('[schedule] hydrate threw:', e);
+      if (isStaleEpoch(epoch)) return;
       set({ loaded: true, loadError: true, configLoadError: true });
     }
   }),
@@ -256,11 +260,13 @@ export const useScheduleStore = create<ScheduleState>((set, get) => ({
     }
     const before = get().config;
     const next = { ...before, ...patch };
+    // 쓰기 중 매장이 바뀌면 before(이전 매장 운영정보)로 되돌리지 않는다 — 새 매장 hydrate 가 채운다.
+    const epoch = currentTenantEpoch();
     set({ config: next });
     // 낙관적 반영은 그대로 두되 결과를 돌려준다 — 화면이 "저장됐어요"를 서버 확인 뒤에 띄우게 하기 위함.
     return guardWrite(
       upsertScheduleConfig(next),
-      () => set({ config: before }),
+      () => { if (!isStaleEpoch(epoch)) set({ config: before }); },
       '매장 정보 저장에 실패했어요. 다시 시도해 주세요.',
     );
   },
@@ -273,7 +279,7 @@ export const useScheduleStore = create<ScheduleState>((set, get) => ({
     optimisticPatch(set, get, 'templates', id, patch, () => updateShiftTemplate(id, patch), '근무 수정 저장에 실패했어요.');
   },
   removeTemplate: (id) => {
-    optimisticRemove(set, get, 'templates', id, () => deleteShiftTemplate(id), '근무 삭제에 실패했어요.');
+    optimisticRemove(set, get, 'templates', id, () => deleteShiftTemplate(id), '근무 삭제에 실패했어요.', currentTenantEpoch());
   },
   requestSwap: (input) => {
     // 같은 시프트(날짜+템플릿)에 이미 진행 중(open/accepted) 요청이 있으면 중복 생성 차단.
@@ -378,10 +384,11 @@ export const useScheduleStore = create<ScheduleState>((set, get) => ({
   },
   restoreException: (templateId, date) => {
     const before = get().exceptions;
+    const epoch = currentTenantEpoch(); // setConfig 와 같은 이유
     set({ exceptions: before.filter((e) => !(e.template_id === templateId && e.date === date)) });
     void guardWrite(
       deleteShiftException(templateId, date),
-      () => set({ exceptions: before }),
+      () => { if (!isStaleEpoch(epoch)) set({ exceptions: before }); },
       '되돌리기에 실패했어요.',
     );
   },

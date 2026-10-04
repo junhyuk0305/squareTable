@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { coalesce, subscribeDebounced } from '@/lib/store/realtimeSync';
+import { currentTenantEpoch, isStaleEpoch } from '@/lib/store/tenantEpoch';
 import type { UnknownQuery, PlaybookSuggestion } from '@/types';
 import seedData from '@/data/unknown-queries.json';
 import { HAS_SUPABASE } from '@/lib/supabase';
@@ -59,7 +60,9 @@ export const useUnknownQueueStore = create<UnknownQueueState>((set, get) => ({
   hydrate: coalesce(async () => {
     if (!HAS_SUPABASE) return;
     // 목록과 개수를 같이 읽는다 — 목록은 상한에 걸려도 개수는 정확해야 화면이 거짓말을 안 한다.
+    const epoch = currentTenantEpoch();
     const [{ data, error }, total] = await Promise.all([fetchUnknownQueue(), fetchPendingQuestionCount()]);
+    if (isStaleEpoch(epoch)) return; // 그 사이 매장이 바뀌었다 — 이전 매장 질문을 쓰지 않는다
     set({ queue: data, loaded: true, loadError: error, pendingTotal: total });
   }),
 

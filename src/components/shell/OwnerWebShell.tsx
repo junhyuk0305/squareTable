@@ -31,8 +31,9 @@ export function OwnerWebShell({ children }: { children: ReactNode }) {
   const storeName = useSessionStore((s) => s.storeName);
   const { nameOf } = useStoreDisplay();
 
-  // 허브 층은 '사장이냐 아니냐'로만 갈린다(hub.tsx 와 같은 판정) — 매니저는 직원 세트를 본다.
-  const hubTabs = HUB_TABS[role === 'owner' ? 'owner' : 'junior'];
+  // 허브 층은 '사장 계정이냐 아니냐'로만 갈린다(hub.tsx 와 같은 판정) — 매니저는 직원 세트를 본다.
+  const isOwnerAccount = useSessionStore((s) => s.isOwnerAccount);
+  const hubTabs = HUB_TABS[isOwnerAccount ? 'owner' : 'junior'];
   // 매장 층 세트는 하단 탭바와 같은 판정을 쓴다(RoleTabBar.storeTabsFor).
   const storeTabs = storeTabsFor('owner', role);
   // 표시용 이름은 확정 전 null — 원본명을 먼저 적으면 '내 매장 → 신촌점'으로 라벨이 두 번 바뀐다.

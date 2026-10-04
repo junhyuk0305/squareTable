@@ -3,6 +3,7 @@
 // 누가 속하며 지금 어느 방을 보는가'만 관리한다.
 import { create } from 'zustand';
 import { coalesce, subscribeDebounced, settleWithin, HYDRATE_TIMEOUT_MS } from '@/lib/store/realtimeSync';
+import { currentTenantEpoch, isStaleEpoch } from '@/lib/store/tenantEpoch';
 import { HAS_SUPABASE } from '@/lib/supabase';
 import {
   fetchRooms,
@@ -118,6 +119,7 @@ export const useRoomStore = create<State>((set, get) => ({
     // ★throw 도 "시도가 끝났다"에 포함된다(2026-08-26 브라우저 실측). 아래 fetch 중 **하나라도**
     //   예외를 던지면 Promise.all 이 reject 되고 set 이 영영 실행되지 않아 loaded 가 false 로 남는다
     //   → 게이트가 **영구 스피너**가 된다. 계약을 값 반환 경로에만 걸면 계약이 아니다.
+    const epoch = currentTenantEpoch();
     try {
     const session = useSessionStore.getState();
     // 정지(hang) 방지 — 백엔드 블랙아웃 때 supabase 클라가 토큰 갱신을 기다리며 매달리면
@@ -128,6 +130,7 @@ export const useRoomStore = create<State>((set, get) => ({
       Promise.all([fetchRooms(), fetchRoomMembers(), fetchRoomPrefs()]),
       () => [FAILED, FAILED, FAILED] as unknown as [Awaited<ReturnType<typeof fetchRooms>>, Awaited<ReturnType<typeof fetchRoomMembers>>, Awaited<ReturnType<typeof fetchRoomPrefs>>],
     );
+    if (isStaleEpoch(epoch)) return; // 그 사이 매장이 바뀌었다 — 이전 매장 방을 쓰지도, 기본방을 만들지도 않는다
     const loadError = roomsRes.error || membersRes.error || prefsRes.error;
     let rooms = roomsRes.data;
     // 자가치유: 마이그레이션 backfill 이후 생성된 새 매장엔 기본방이 없을 수 있다.
@@ -138,6 +141,7 @@ export const useRoomStore = create<State>((set, get) => ({
       const def: Room = { id: defaultRoomId(session.unitId), unitId: session.unitId, name: '전체', isDefault: true, createdBy: session.userId };
       if (await insertRoom(def)) rooms = [def, ...rooms];
     }
+    if (isStaleEpoch(epoch)) return; // 기본방 insert 를 기다리는 사이 바뀐 경우
     const cur = get().currentRoomId;
     const fallback = rooms.find((r) => r.isDefault)?.id ?? rooms[0]?.id ?? null;
     set({
@@ -146,6 +150,7 @@ export const useRoomStore = create<State>((set, get) => ({
     });
     } catch (e) {
       console.warn('[room] hydrate threw:', e);
+      if (isStaleEpoch(epoch)) return;
       set({ loaded: true, loadError: true });
     }
   }),
@@ -202,6 +207,8 @@ export const useRoomStore = create<State>((set, get) => ({
     if (!room || room.isDefault) return false; // 기본방은 삭제 불가
     const prevRooms = get().rooms;
     const prevMembers = get().members;
+    // 쓰기 중 매장이 바뀌면 이전 매장 방 목록으로 되돌리지 않는다 — 새 매장 hydrate 가 채운다.
+    const epoch = currentTenantEpoch();
     set((s) => {
       const rooms = s.rooms.filter((r) => r.id !== id);
       const fallback = rooms.find((r) => r.isDefault)?.id ?? rooms[0]?.id ?? null;
@@ -213,7 +220,7 @@ export const useRoomStore = create<State>((set, get) => ({
     });
     return guardWrite(
       softDeleteRoom(id),
-      () => set({ rooms: prevRooms, members: prevMembers }),
+      () => { if (!isStaleEpoch(epoch)) set({ rooms: prevRooms, members: prevMembers }); },
       '채팅방 삭제에 실패했어요.',
     );
   },
@@ -223,6 +230,7 @@ export const useRoomStore = create<State>((set, get) => ({
     if (!room || room.isDefault) return false; // 기본방('전체')은 나갈 수 없다
     const prevRooms = get().rooms;
     const prevMembers = get().members;
+    const epoch = currentTenantEpoch(); // removeRoom 과 같은 이유
     set((s) => {
       const rooms = s.rooms.filter((r) => r.id !== id); // 나가면 그 방은 더 이상 안 보인다
       const fallback = rooms.find((r) => r.isDefault)?.id ?? rooms[0]?.id ?? null;
@@ -234,7 +242,7 @@ export const useRoomStore = create<State>((set, get) => ({
     });
     return guardWrite(
       removeRoomMember(id, userId),
-      () => set({ rooms: prevRooms, members: prevMembers }),
+      () => { if (!isStaleEpoch(epoch)) set({ rooms: prevRooms, members: prevMembers }); },
       '채팅방 나가기에 실패했어요.',
     );
   },

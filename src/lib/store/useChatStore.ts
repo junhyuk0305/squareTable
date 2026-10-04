@@ -9,6 +9,7 @@ import { useSessionStore } from './useSessionStore';
 import { HAS_SUPABASE } from '@/lib/supabase';
 import { fetchChatQueries, insertChatQuery, updateChatSatisfaction, recomputePlaybookStats } from '@/lib/db';
 import { guardWrite } from '@/lib/store/useSyncStore';
+import { currentTenantEpoch, isStaleEpoch } from '@/lib/store/tenantEpoch';
 import { showToast } from '@/lib/store/useToastStore';
 import { isServable } from '@/lib/utils/entryStatus';
 import { genId } from '@/lib/utils/id';
@@ -68,7 +69,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   hydrate: async (juniorId) => {
     if (!HAS_SUPABASE) return;
-    set({ history: await fetchChatQueries(juniorId), loaded: true });
+    const epoch = currentTenantEpoch();
+    const history = await fetchChatQueries(juniorId);
+    if (isStaleEpoch(epoch)) return; // 그 사이 매장·계정이 바뀌었다 — 이전 대화 기록을 쓰지 않는다
+    set({ history, loaded: true });
   },
 
   submit: async (text) => {
@@ -77,6 +81,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
     // 답변을 history에 꽂았는지. 꽂은 뒤에 넘어진 것은 '전송 실패'가 아니다 — 아래 catch 참조.
     let answered = false;
+    // 검색·AI 응답을 기다리는 사이 매장·계정이 바뀌면 이전 매장 노하우로 만든 답을 새 매장 대화에 꽂지 않는다.
+    // 각 await 뒤에서 확인하고 조용히 끝낸다(새 매장 화면엔 이 질문이 없었다).
+    const epoch = currentTenantEpoch();
 
     try {
     const session = useSessionStore.getState();
@@ -173,6 +180,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       if (!(r.confidence >= GENERATE_THRESHOLD && r.candidates.length > 0)) return false;
       const sops = toSopSlices(r.candidates.map((c) => c.entry));
       const ai = await generateAnswer({ storeId: session.unitId || STORE_ID, query: text, sops });
+      if (isStaleEpoch(epoch)) return true; // 매장이 바뀌었다 — 답을 버리고 여기서 끝낸다(true = 더 진행하지 않음)
       // 무료 플랜 월 AI답변 한도 초과 — mock 위장 없이 후보/사장 라우팅으로 강등 + 업그레이드 안내.
       if (ai.quotaExceeded) {
         if (!quotaNotified) {
@@ -230,6 +238,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       classifyQuery({ query: text }),
       hybridSearch(text, playbookEntries),
     ]);
+    if (isStaleEpoch(epoch)) return;
     if (triage.type === 'chat' || triage.type === 'vague') {
       const id = genId('cq');
       const now = new Date().toISOString();
@@ -259,9 +268,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
     const verbose = text.trim().length >= 18 || wordCount >= 6;
     if (verbose) {
       const intent = await extractIntent({ query: text });
+      if (isStaleEpoch(epoch)) return;
       const q2 = intent.rewritten?.trim();
       if (q2 && q2 !== text.trim()) {
         const r2 = await hybridSearch(q2, playbookEntries);
+        if (isStaleEpoch(epoch)) return;
         if (r2.matched) { serveStored(r2.matched, r2.confidence); return; }
         if (await tryGenerate(r2)) return;
         // 재검색이 더 강한 후보를 찾았으면 후보 카드용으로 채택.
@@ -313,6 +324,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
       //   여기서 배너·lastFailed를 만들면 사용자가 '다시 시도'를 누르고, retryLast가 submit을
       //   처음부터 다시 돌려 **새 id로 같은 답을 한 번 더 append** 한다(= 채팅 이중 표시).
       //   id가 서로 다르므로 hydrate(통째 교체)로도 정리되지 않는다.
+      // 매장이 바뀐 뒤의 실패는 새 매장 화면에 배너·다시 시도를 남기지 않는다(이전 매장 질문이다).
+      if (isStaleEpoch(epoch)) return;
       set(
         answered
           ? { isLoading: false }
@@ -325,7 +338,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
     } finally {
       // 안전망: 성공/실패 모든 경로에서 이미 isLoading=false로 두지만, 예기치 못한 조기 return이나
       // 미래 코드 변경으로 스피너가 남는 걸 원천 차단(무한 로딩 데드엔드 방지).
-      if (get().isLoading) set({ isLoading: false });
+      // 매장이 바뀌었으면 건드리지 않는다 — reset 이 이미 false 로 뒀고, 지금 true 면 새 매장의 질문이 진행 중이다.
+      if (!isStaleEpoch(epoch) && get().isLoading) set({ isLoading: false });
     }
   },
 

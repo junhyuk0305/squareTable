@@ -10,6 +10,10 @@ import { HAS_SUPABASE } from '@/lib/supabase';
 // 저장/ack 는 낙관적 로컬 반영이라 TTL 과 무관하게 즉시 보인다.
 const HYDRATE_TTL_MS = 5_000;
 let _lastHydrateAt = 0;
+/** 계정이 바뀌면 TTL 도 비운다 — 안 비우면 새 계정의 첫 조회가 5초 동안 건너뛰어진다(tenantReset.ts). */
+export function resetMemberPrefsHydrateTtl() {
+  _lastHydrateAt = 0;
+}
 
 export type MemberPref = {
   nickname: string | null;

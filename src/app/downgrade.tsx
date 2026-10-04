@@ -157,7 +157,8 @@ function DowngradeBody() {
     if (error) { setBusy(false); return showToast(choiceErrorText(error.message)); }
     const n = await reload();
     // 매장을 고르면 활성 매장이 그 매장으로 옮겨진다(서버) → 직원 목록을 다시 읽는다.
-    const { staff: rows } = await fetchStaffProfiles();
+    // 세션은 아직 이전 매장이라 고른 매장을 직접 넘긴다(명부는 그 매장 멤버십으로 판정한다).
+    const { staff: rows } = await fetchStaffProfiles(pickedStore);
     setStaff(rows.map((r) => ({ id: r.id, name: r.name || '이름 없음' })));
     setPickedSeats([]);
     setBusy(false);

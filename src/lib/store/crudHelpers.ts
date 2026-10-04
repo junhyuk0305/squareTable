@@ -7,6 +7,7 @@
 // - DB 호출은 thunk(() => Promise<boolean>)로 받아 낙관적 set 이후에 시작 — 기존 호출 순서와 동일.
 // - guardWrite가 실패를 감지하면 롤백 콜백 실행 + SyncBanner 표시.
 import { guardWrite } from '@/lib/store/useSyncStore';
+import { isStaleEpoch } from '@/lib/store/tenantEpoch';
 
 type WithId = { id: string };
 type Setter<S> = (fn: (s: S) => Partial<S>) => void;
@@ -60,7 +61,9 @@ export function optimisticPatch<S>(
   );
 }
 
-/** 낙관적 삭제 + 실패 시 원위치 복원(인덱스 보존). 대상 없으면 no-op. */
+/** 낙관적 삭제 + 실패 시 원위치 복원(인덱스 보존). 대상 없으면 no-op.
+ *  epoch = 매장 단위 스토어가 넘기는 세대 번호(tenantEpoch.ts). 쓰기 중 매장이 바뀌었으면 복원하지 않는다 —
+ *  지운 행은 이전 매장 것이라 새 매장 목록에 다시 넣으면 다른 매장 데이터가 보인다. 계정 단위 스토어는 넘기지 않는다. */
 export function optimisticRemove<S>(
   set: Setter<S>,
   get: Getter<S>,
@@ -68,6 +71,7 @@ export function optimisticRemove<S>(
   id: string,
   db: () => Promise<boolean>,
   failMsg: string,
+  epoch?: number,
 ): void {
   const arr = get()[key] as unknown as WithId[];
   const idx = arr.findIndex((x) => x.id === id);
@@ -77,6 +81,7 @@ export function optimisticRemove<S>(
   void guardWrite(
     db(),
     () =>
+      (epoch === undefined || !isStaleEpoch(epoch)) &&
       set((s) => {
         const next = (s[key] as unknown as WithId[]).slice();
         next.splice(Math.min(idx, next.length), 0, removed);

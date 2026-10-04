@@ -2,6 +2,7 @@
 // mock 모드: 데모 시드. Supabase 모드: playbook_suggestions 테이블 + 실시간 구독.
 import { create } from 'zustand';
 import { coalesce, subscribeDebounced } from '@/lib/store/realtimeSync';
+import { currentTenantEpoch, isStaleEpoch } from '@/lib/store/tenantEpoch';
 import type { PlaybookSuggestion } from '@/types';
 import { HAS_SUPABASE } from '@/lib/supabase';
 import { fetchSuggestions, insertSuggestion, reviewSuggestion, subscribeSuggestions } from '@/lib/db';
@@ -78,7 +79,9 @@ export const useSuggestionStore = create<State>((set, get) => ({
 
   hydrate: coalesce(async () => {
     if (!HAS_SUPABASE) return;
+    const epoch = currentTenantEpoch();
     const { data, error } = await fetchSuggestions();
+    if (isStaleEpoch(epoch)) return; // 그 사이 매장이 바뀌었다 — 이전 매장 제안을 쓰지 않는다
     // 실패 시 기존 목록 유지 — 빈 배열로 덮으면 "제안 없음"이 사실인 양 굳는다.
     set((s) => ({ suggestions: error ? s.suggestions : data, loaded: true, loadError: error }));
   }),

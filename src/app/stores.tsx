@@ -51,7 +51,9 @@ export default function StoresHub() {
   // 출입 게이트 4단(미로그인·세션 확정 전·프로필 미완성·다운그레이드 선택 대기)은 hub.tsx 와 같은 훅.
   const gate = useSessionGate();
 
-  const isOwner = role === 'owner';
+  // 매장 목록은 계정 층이다 — 활성 매장 역할(role)이 아니라 사장 계정인가로 가른다.
+  // A매장 사장이 B매장(직원)에서 들어와도 매장 추가·사장 지표가 그대로 보여야 한다.
+  const isOwner = useSessionStore((s) => s.isOwnerAccount);
   // ★'매장을 만들 수 있는 사람인가'는 role 로 못 가른다 — handle_new_user 가 신규 프로필을 무조건
   //   junior 로 만들어(권한상승 차단), 매장 생성 전의 사장은 DB 상 직원과 똑같다. 그래서 가입할 때
   //   스스로 고른 역할(signupRole)을 본다. 직원으로 가입한 사람에겐 매장 만들기를 노출하지 않는다
@@ -156,7 +158,8 @@ export default function StoresHub() {
     // ★잠긴 매장은 진입 자체를 막는다 — 서버(switch_active_unit)도 unit_locked 로 거부하므로,
     //   여기서 안 막으면 커버만 뜨고 실패하는 죽은 탭이 된다. 안내는 다음 행동까지 말한다.
     if (lockedUnits.includes(u.unit_id)) {
-      return showToast(isOwner
+      // 문구는 그 매장에서의 내 역할로 가른다(switchUnit 의 unit_locked 문구와 같은 판정).
+      return showToast(u.role === 'owner'
         ? '지금은 잠긴 매장이에요. 요금제를 적용하면 그대로 다시 열려요.'
         : '지금은 잠긴 매장이에요. 사장님께 문의해 주세요.');
     }

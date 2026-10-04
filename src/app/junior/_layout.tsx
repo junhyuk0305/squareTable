@@ -11,6 +11,8 @@ import { useStaffStore } from '@/lib/store/useStaffStore';
 import { useScheduleStore } from '@/lib/store/useScheduleStore';
 import { useMemberPrefsStore } from '@/lib/store/useMemberPrefsStore';
 import { useSuggestionStore } from '@/lib/store/useSuggestionStore';
+import { useUnknownQueueStore } from '@/lib/store/useUnknownQueueStore';
+import { useRoomStore } from '@/lib/store/useRoomStore';
 import { HAS_SUPABASE } from '@/lib/supabase';
 import { subscribeMyProfile } from '@/lib/db';
 
@@ -49,6 +51,10 @@ export default function JuniorLayout() {
     useMemberPrefsStore.getState().hydrate();
     // 내 제안 검토 결과(반영/반려)가 벨 배지·알림에 잡히도록 레이아웃에서 하이드레이트+구독(사장 레이아웃과 동형).
     useSuggestionStore.getState().hydrate();
+    // 매장 미답질문·업무방 — 매장이 바뀌면 tenantReset 이 비운다. 물어보기·업무 탭이 열려 있는 채로 바뀌어도
+    // 로딩 게이트가 풀리게 여기서 다시 채운다(구독은 각 탭이 맡는다).
+    void useUnknownQueueStore.getState().hydrate();
+    void useRoomStore.getState().hydrate();
     const offP = usePlaybookStore.getState().subscribe();
     const offW = useWorkStore.getState().subscribe();
     const offA = useAttendanceStore.getState().subscribe();

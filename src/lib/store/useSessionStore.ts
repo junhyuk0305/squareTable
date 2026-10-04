@@ -27,6 +27,7 @@ import {
 } from '@/lib/db';
 import { friendlyError } from '@/lib/utils/userError';
 import { sessionReadFailAction } from './sessionReadFail';
+import { deriveStoreRole } from './sessionRole';
 import { joinRejectAction, type JoinMarker } from './joinRejectDetect';
 import { setAnalyticsContext, track, reportError } from '@/lib/analytics/track';
 import { effectivePlanOf, type SubStatusRaw } from '@/lib/utils/subscription';
@@ -34,8 +35,9 @@ import { normalizePlan, type PlanId } from '@/lib/config/tiers';
 import { SHOW_IAP } from '@/lib/config/store-policy';
 import { notifyOwnersJoinRequest } from '@/lib/push/notify';
 
-// 0093: 세션 유효 역할. manager 는 가입 시 선택지가 아니라(가입은 owner/junior 뿐) 활성 매장의
-// unit_members.role 에서 파생된다 — loadProfile 의 파생 로직이 유일한 승격 지점.
+// 0093: 세션 유효 역할. 활성 매장의 unit_members.role 에서 파생된다(owner·manager·junior 모두).
+// 판정은 sessionRole.ts deriveStoreRole 한 곳이고, loadProfile 이 그것을 부르는 유일한 지점이다.
+// ★profiles.role(계정 유형)로 정하지 않는다 — 0233 서버 판정과 같은 정의(2026-10-04).
 type Role = 'owner' | 'manager' | 'junior';
 type Status = 'loading' | 'signed_in' | 'signed_out';
 
@@ -48,6 +50,10 @@ type SessionState = {
   // "사장 계정은 매장을 만들고 직원은 합류만 한다"는 화면 규칙은 이 값으로 가른다.
   // ★권한이 아니라 '의도'다. 실제 권한 판정에는 절대 쓰지 않는다(서버 RPC·RLS 가 담당).
   signupRole: Role | null;
+  // 사장 계정인가 — 계정 층 화면(허브·매장 목록·계정 설정)만 쓴다. 매장 권한은 `role` 이다.
+  // = profiles.role 이 owner(사장으로 가입해 매장을 만든 적 있음) 또는 내가 사장인 매장이 하나라도 있음.
+  // ★매장 화면·권한 판정에 쓰지 않는다. A매장 사장이 B매장 직원이면 B에서는 role=junior 다.
+  isOwnerAccount: boolean;
   userId: string;
   userName: string;
   unitId: string;
@@ -158,6 +164,7 @@ type SessionState = {
 const DEMO = {
   status: 'signed_in' as Status,
   role: 'junior' as Role,
+  isOwnerAccount: false,
   userId: 'u_staff_001',
   userName: '박지원',
   unitId: 'store_001',
@@ -265,6 +272,16 @@ let _resumingOwnerStore = false;
 //   'deleted' = 탈퇴 처리된 계정(재로그인 차단, 남용 #29) / 'load_failed' = 네트워크·일시 401 등 프로필 로드 실패.
 let _lastLoadFault: 'deleted' | 'load_failed' | null = null;
 
+// 로그아웃 상태 — 신원·매장·역할·과금 값을 전부 비운다. 로그아웃으로 떨어지는 길(로그아웃·auth 이벤트·탈퇴·
+// 로드 실패)이 여럿이라 한 곳에 둔다. 빠진 값이 있으면 다음 계정 로그인 전까지 이전 계정 값이 남는다.
+// 매장 데이터 스토어는 tenantReset.ts 가 userId 변화를 보고 비운다.
+const SIGNED_OUT: Partial<SessionState> = {
+  status: 'signed_out', brandId: null, role: 'junior', isOwnerAccount: false, signupRole: null,
+  unitId: '', userId: '', userName: '', storeName: '', stores: [], pendingUnitId: '', pendingStoreName: '', rejectedJoinStoreName: '',
+  industry: '', inviteCode: '', bio: '', phone: '',
+  plan: 'free', seatLocked: false, needsDowngradeChoice: false, subStatus: '', trialEndsAt: '', paidUntil: '',
+};
+
 async function loadProfile(
   set: (p: Partial<SessionState>) => void,
   userId: string,
@@ -291,7 +308,7 @@ async function loadProfile(
       _lastLoadFault = 'load_failed'; // 로그인 직후라면 signInWithPassword 가 '네트워크 오류' 문구로 노출(#17·#18)
       setUnitId(null);
       setAnalyticsContext({ userId: null, unitId: null, role: null });
-      set({ status: 'signed_out', brandId: null, unitId: '', userId: '', userName: '', storeName: '', pendingUnitId: '', pendingStoreName: '', rejectedJoinStoreName: '', industry: '', inviteCode: '', bio: '', phone: '', plan: 'free', seatLocked: false, needsDowngradeChoice: false, subStatus: '', trialEndsAt: '', paidUntil: '' });
+      set(SIGNED_OUT);
       return;
     }
 
@@ -301,7 +318,7 @@ async function loadProfile(
       _lastLoadFault = 'deleted'; // 로그인 직후라면 signInWithPassword 가 '탈퇴 처리된 계정' 문구로 노출(#16)
       setUnitId(null);
       setAnalyticsContext({ userId: null, unitId: null, role: null });
-      set({ status: 'signed_out', brandId: null, unitId: '', userId: '', userName: '', storeName: '', pendingUnitId: '', pendingStoreName: '', rejectedJoinStoreName: '', industry: '', inviteCode: '', bio: '', phone: '', plan: 'free', seatLocked: false, needsDowngradeChoice: false, subStatus: '', trialEndsAt: '', paidUntil: '' });
+      set(SIGNED_OUT);
       void supabase.auth.signOut().catch(() => {});
       return;
     }
@@ -309,7 +326,8 @@ async function loadProfile(
     // 다점포(0055): 활성 매장(active_unit_id) 우선 — RLS auth_unit_id()=active와 클라 컨텍스트를 일치시켜
     // split-brain(화면 신원=주매장인데 데이터=활성매장) 방지. active 없으면 주매장(unit_id) 폴백.
     let unitId = profile?.active_unit_id || profile?.unit_id || '';
-    let role: Role = (profile?.role as Role) ?? 'junior';
+    // 이번 로드에서 막 만든 매장 — 역할 판정이 매장 목록을 못 읽었을 때의 근거(deriveStoreRole).
+    let createdUnitId = '';
 
     // 이메일 인증 경로 복원: 세션 확보 전이라 가입 시점에 create_store 를 못 부른 사장 →
     // unit_id 없음 + metadata 가 사장 가게 생성 의도를 담고 있으면, 인증 후 첫 로드에서 자동 생성.
@@ -328,7 +346,7 @@ async function loadProfile(
         }
         if (!createErr) {
           unitId = row?.unit_id ?? unitId;
-          role = 'owner';
+          createdUnitId = unitId;
         } else {
           // biz_no 제거 후에도 실패 → 여기서 그치지 않고 관측(무음 트랩 방지). owner/_layout 가드가 유도.
           console.warn('[session] 매장 자동 복원 실패:', createErr.message);
@@ -380,15 +398,6 @@ async function loadProfile(
         //   서버 카운터파트 = public.effective_plan(unit).
         plan = effectivePlanOf({ plan: normalizePlan(sub?.plan), subStatus, paidUntil, trialEndsAt });
       }
-
-      // 좌석 잠금(0115) — 무료 강등으로 직원 수가 한도를 넘으면 늦게 합류한 순서로 잠긴다.
-      // 판정은 서버(my_seat_locked)가 SSOT. 사장·매니저는 대상이 아니라 조회하지 않는다.
-      if (role !== 'owner') {
-        const { data: locked, error: lockErr } = await fetchMySeatLocked();
-        // 읽기 실패는 '잠김'으로 위장하지 않는다(fail-open) — 과금 조회 오류로 직원을 막지 않는다.
-        if (lockErr) reportError('session.fetchMySeatLocked', lockErr);
-        else seatLocked = locked === true;
-      }
     }
     // 전면 무료 모드(0062) — 매장이 아니라 서비스 전체 스위치라 unitId 유무와 무관하게 읽는다.
     // 읽기 실패는 이전에 알던 값을 유지한다(무료 기간 중 일시 오류로 게이팅이 갑자기 닫히지 않게).
@@ -420,9 +429,11 @@ async function loadProfile(
     // (Phase 0: 직원 다매장). my_units 는 auth.uid() 소속만 반환하므로 크로스테넌트 노출 없음.
     let stores: MyUnitRow[] = [];
     let storesReadFailed = false; // 거절 감지의 오판 방지 — 목록 읽기 실패를 "소속 없음"으로 위장하지 않는다
+    let freshStores: MyUnitRow[] | null = []; // 이번에 읽은 목록 — 역할 판정 입력(null = 읽기 실패)
     if (unitId) {
       const { data: us, error: usErr } = await fetchMyUnits();
       storesReadFailed = !!usErr;
+      freshStores = usErr ? null : (us ?? []);
       // ★읽기 실패를 빈 목록으로 덮지 않는다(2026-08-25 감사 #7). 이 배열이 비면
       //   벨 배지가 0, /notifications 가 "새 알림이 없어요", 상단 매장 전환 UI 자체가 사라져
       //   **다점포 사장이 나머지 매장으로 갈 길이 없어진다.** 잠긴 매장 판정(#12)·크로스 알림(#13·#14)도
@@ -432,11 +443,26 @@ async function loadProfile(
       const prevSession = useSessionStore.getState();
       stores = us ?? (usErr && prevSession.userId === userId ? prevSession.stores : []);
     }
-    // 매장별 역할(0093): 정본 = unit_members.role(my_units 로 로드). 전역 junior 계정이라도
-    // 활성 매장에서 매니저로 승격됐으면 세션 유효 역할은 manager(사장 화면 표면).
-    // my_units 읽기 실패 시 junior 유지 = fail-closed(권한이 새는 방향이 아니라 잠기는 방향).
-    if (role !== 'owner' && stores.some((s) => s.unit_id === unitId && s.role === 'manager')) {
-      role = 'manager';
+    // 매장별 역할(0093·0233): 정본 = 활성 매장의 unit_members.role(my_units 로 로드). profiles.role 은 안 본다.
+    // 판정 규칙(행 없음·읽기 실패·방금 만든 매장)은 deriveStoreRole 한 곳 — qa:session 이 진리표를 고정한다.
+    const prior = useSessionStore.getState();
+    const role: Role = deriveStoreRole({
+      userId,
+      unitId,
+      rows: freshStores,
+      prior: { userId: prior.userId, unitId: prior.unitId, role: prior.role },
+      createdUnitId,
+    });
+    // 계정 층(허브·매장 목록·계정 설정)만 쓰는 '사장 계정' 표식. 매장 권한에는 쓰지 않는다.
+    const isOwnerAccount = profile?.role === 'owner' || stores.some((s) => s.role === 'owner');
+    // 좌석 잠금(0115) — 무료 강등으로 직원 수가 한도를 넘으면 늦게 합류한 순서로 잠긴다.
+    // 판정은 서버(my_seat_locked)가 SSOT. 이 매장 사장은 대상이 아니라 조회하지 않는다(서버도 false).
+    // ★역할이 정해진 뒤에 부른다 — 계정 역할로 거르면 다른 매장 사장인 직원의 잠금을 못 본다.
+    if (unitId && role !== 'owner') {
+      const { data: locked, error: lockErr } = await fetchMySeatLocked();
+      // 읽기 실패는 '잠김'으로 위장하지 않는다(fail-open) — 과금 조회 오류로 직원을 막지 않는다.
+      if (lockErr) reportError('session.fetchMySeatLocked', lockErr);
+      else seatLocked = locked === true;
     }
     // 합류 거절 감지(#미아 방지): 신청 시점의 기기 마커와 현재 서버 상태를 대조한다.
     // 판정은 joinRejectDetect.ts 순수함수(SSOT — qa:session 진리표로 회귀 고정), 여기선 저장·반영만.
@@ -480,6 +506,7 @@ async function loadProfile(
       inviteCode,
       userName: profile?.name ?? '',
       role,
+      isOwnerAccount,
       // 가입 때 고른 역할(권한 아님 — 화면 분기 전용). 메타데이터가 없는 옛 계정·소셜 가입은 null.
       signupRole: meta?.role === 'owner' ? 'owner' : meta?.role === 'junior' ? 'junior' : null,
       brandId,
@@ -512,7 +539,7 @@ async function loadProfile(
     _lastLoadFault = 'load_failed'; // 로그인 직후라면 signInWithPassword 가 '네트워크 오류' 문구로 노출(#17)
     setUnitId(null);
     setAnalyticsContext({ userId: null, unitId: null, role: null });
-    set({ status: 'signed_out', brandId: null, unitId: '', userId: '', userName: '', storeName: '', stores: [], pendingUnitId: '', pendingStoreName: '', rejectedJoinStoreName: '', industry: '', inviteCode: '', bio: '', plan: 'free', seatLocked: false, needsDowngradeChoice: false, subStatus: '', trialEndsAt: '', paidUntil: '' });
+    set(SIGNED_OUT);
   }
 }
 
@@ -544,8 +571,10 @@ export const useSessionStore = create<SessionState>((set, get) => ({
         const u = session?.user;
         if (u) loadProfile(set, u.id, u.email ?? '', pendingOwnerMeta(u));
         else {
+          // 다른 탭의 로그아웃·토큰 만료 — 쓰기 태깅용 매장 id 도 비운다(다음 계정에 이전 매장이 붙지 않게).
+          setUnitId(null);
           setAnalyticsContext({ userId: null, unitId: null, role: null });
-          set({ status: 'signed_out', brandId: null, unitId: '', userId: '', userName: '', plan: 'free', seatLocked: false, needsDowngradeChoice: false, subStatus: '', trialEndsAt: '', paidUntil: '' });
+          set(SIGNED_OUT);
         }
       });
     }
@@ -928,7 +957,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   deleteAccount: async () => {
     if (!HAS_SUPABASE) {
       // 데모 모드: 실제 삭제 대상 없음 → 세션만 종료.
-      set({ status: 'signed_out', brandId: null, unitId: '', userId: '', userName: '', pendingUnitId: '', pendingStoreName: '', rejectedJoinStoreName: '', industry: '', plan: 'free', seatLocked: false, needsDowngradeChoice: false, subStatus: '', trialEndsAt: '', paidUntil: '' });
+      set(SIGNED_OUT);
       return { error: null };
     }
     const { error } = await rpcDeleteMyAccount();
@@ -942,7 +971,8 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     } catch (e) {
       console.warn('[session] signOut after delete failed:', e);
     }
-    set({ status: 'signed_out', brandId: null, unitId: '', userId: '', userName: '', pendingUnitId: '', pendingStoreName: '', rejectedJoinStoreName: '', industry: '', plan: 'free', seatLocked: false, needsDowngradeChoice: false, subStatus: '', trialEndsAt: '', paidUntil: '' });
+    setUnitId(null);
+    set(SIGNED_OUT);
     return { error: null };
   },
 
@@ -1077,7 +1107,9 @@ export const useSessionStore = create<SessionState>((set, get) => ({
         console.warn('[session] signOut failed:', e);
       }
     }
-    set({ status: 'signed_out', brandId: null, unitId: '', userId: '', userName: '', pendingUnitId: '', pendingStoreName: '', rejectedJoinStoreName: '', industry: '', plan: 'free', seatLocked: false, needsDowngradeChoice: false, subStatus: '', trialEndsAt: '', paidUntil: '' });
+    // 신원·매장 값을 전부 비운다. 매장 데이터 스토어는 tenantReset.ts 가 userId 변화를 보고 비운다.
+    setUnitId(null);
+    set(SIGNED_OUT);
   },
 
   switchTo: (role) => {
@@ -1085,8 +1117,8 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     setUnitId(DEMO.unitId);
     set(
       role === 'owner'
-        ? { role: 'owner', userId: 'u_owner_001', userName: '김영자', unitId: DEMO.unitId, storeName: DEMO.storeName, pendingUnitId: '', pendingStoreName: '', rejectedJoinStoreName: '', industry: DEMO.industry, inviteCode: DEMO.inviteCode, email: '', bio: '', phone: '' }
-        : { role: 'junior', userId: 'u_staff_001', userName: '박지원', unitId: DEMO.unitId, storeName: DEMO.storeName, pendingUnitId: '', pendingStoreName: '', rejectedJoinStoreName: '', industry: DEMO.industry, inviteCode: DEMO.inviteCode, email: '', bio: '', phone: '' }
+        ? { role: 'owner', isOwnerAccount: true, userId: 'u_owner_001', userName: '김영자', unitId: DEMO.unitId, storeName: DEMO.storeName, pendingUnitId: '', pendingStoreName: '', rejectedJoinStoreName: '', industry: DEMO.industry, inviteCode: DEMO.inviteCode, email: '', bio: '', phone: '' }
+        : { role: 'junior', isOwnerAccount: false, userId: 'u_staff_001', userName: '박지원', unitId: DEMO.unitId, storeName: DEMO.storeName, pendingUnitId: '', pendingStoreName: '', rejectedJoinStoreName: '', industry: DEMO.industry, inviteCode: DEMO.inviteCode, email: '', bio: '', phone: '' }
     );
   },
 
@@ -1098,6 +1130,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     set({
       status: 'signed_in',
       role,
+      isOwnerAccount: role === 'owner',
       userId: role === 'owner' ? 'u_new_owner' : 'u_new_staff',
       userName: name || (role === 'owner' ? '사장님' : '직원'),
       unitId,

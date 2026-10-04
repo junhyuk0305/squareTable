@@ -431,11 +431,14 @@ export async function fetchUnitSubscription(unitId: string): Promise<DbResult<Un
 // ── 입금 신고(payment_claims, 0083) — 계좌이체 "입금했어요"의 1급 기록 ──────────────
 // RLS: 그 매장 사장만 select/insert. update/delete 는 정책도 권한도 없다(검토는 service_role RPC 전용).
 // 신고는 반드시 RPC 로 — 서버가 활성 매장·사장 여부·청구액을 스스로 정하고 중복 pending 을 갱신한다.
+// ★활성 매장 것만 읽는다. RLS 는 내가 사장인 **모든** 매장의 신고를 흘리므로, 거르지 않으면 B매장 벨·결제 화면에
+//   A매장 신고('입금 확인됨'·'확인 중')가 섞인다. 신고는 활성 매장 단위로 접수되고 대기 중복도 매장 단위로 막힌다(0083).
 export async function fetchPaymentClaims(): Promise<ReadResult<PaymentClaim[]>> {
-  if (!HAS_SUPABASE) return { data: [], error: false };
+  if (!HAS_SUPABASE || !_unitId) return { data: [], error: false };
   const { data, error } = await supabase
     .from('payment_claims')
     .select('*')
+    .eq('unit_id', _unitId)
     .order('created_at', { ascending: false })
     .limit(20);
   if (error) {
@@ -930,20 +933,41 @@ export async function updateUnitIndustry(unitId: string, industry: string): Prom
 }
 
 // ── 직원/사장 프로필 (같은 매장) ───────────────────────────
-// 실서비스: profiles에서 내 매장 동료를 읽어 직원/근태/급여 화면을 채운다.
-export async function fetchStaffProfiles(): Promise<{ owner: Owner | null; staff: Junior[]; error: boolean }> {
-  if (!HAS_SUPABASE) return { owner: null, staff: [], error: false };
+// 실서비스: 이 매장 멤버(unit_members)의 프로필을 읽어 직원/근태/급여 화면을 채운다.
+// ★사장·직원 판정 = 이 매장의 멤버십 역할(unit_members.role, 0093·0233). profiles.role 은 계정 유형이라 쓰지 않는다 —
+//   쓰면 다른 매장 사장이 이 매장 직원일 때 이 매장 사장으로 잡히고 직원 목록에서 빠졌다.
+//   합류 신청자(pending_unit_id 만 있음)는 멤버가 아니라 나오지 않는다(승인 대기 목록은 fetchPendingMembers).
+// roles = 매장별 역할 맵(키=userId) — 매니저 배지·임명 UI 입력. 멤버십을 한 번만 읽고 같이 돌려준다.
+// unitId = 서버가 방금 활성 매장을 옮긴 직후(다운그레이드 매장 선택)처럼 세션이 아직 못 따라왔을 때만 넘긴다.
+export async function fetchStaffProfiles(
+  unitId: string | null = _unitId,
+): Promise<{ owner: Owner | null; staff: Junior[]; roles: Record<string, string>; error: boolean }> {
+  if (!HAS_SUPABASE || !unitId) return { owner: null, staff: [], roles: {}, error: false };
+  const { data: members, error: memErr } = await supabase.from('unit_members').select('user_id, role').eq('unit_id', unitId);
+  // 멤버십을 못 읽으면 실패로 말한다 — profiles.role 로 대신 판정하지 않는다(그게 이번에 고친 누수 경로다).
+  if (memErr) {
+    readFail('fetchStaffProfiles', memErr);
+    return { owner: null, staff: [], roles: {}, error: true };
+  }
+  const roles: Record<string, string> = {};
+  for (const m of (members ?? []) as { user_id: string; role: string }[]) roles[m.user_id] = m.role;
+  const ids = Object.keys(roles);
+  // 조회자는 자기 멤버십 행을 늘 본다 → 0행이면 정상 명부가 아니라 클라·서버 활성 매장이 어긋난 순간이다
+  //   (switch_active_unit 직후 loadProfile 전 등 · RLS 가 다른 매장 기준으로 0행을 준다). 빈 명부를 정상처럼
+  //   loaded 로 두지 않고 실패로 말한다 — 화면은 loadError 로 '다시 시도'를 보이고 다음 hydrate 가 바로잡는다(10-04 리뷰).
+  if (ids.length === 0) return { owner: null, staff: [], roles, error: true };
   const { data, error } = await supabase
     .from('profiles')
-    .select('id, name, role, phone_last4, avatar, bio, meta, created_at')
+    .select('id, name, phone_last4, avatar, bio, meta, created_at')
+    .in('id', ids)
     .order('created_at', { ascending: true });
   if (error) {
     readFail('fetchStaffProfiles', error);
-    return { owner: null, staff: [], error: true };
+    return { owner: null, staff: [], roles, error: true };
   }
   const rows = (data ?? []) as any[];
-  const unit = _unitId ?? '';
-  const ownerRow = rows.find((r) => r.role === 'owner');
+  const unit = unitId;
+  const ownerRow = rows.find((r) => roles[r.id] === 'owner');
   const owner: Owner | null = ownerRow
     ? {
         id: ownerRow.id,
@@ -958,8 +982,9 @@ export async function fetchStaffProfiles(): Promise<{ owner: Owner | null; staff
         career_years: ownerRow.meta?.career_years ?? 0,
       }
     : null;
+  // 매니저도 직원 명부에 든다(예전에도 profiles.role 이 junior 라 들어 있었다). 매니저 표시는 roles 가 맡는다.
   const staff: Junior[] = rows
-    .filter((r) => r.role === 'junior')
+    .filter((r) => roles[r.id] === 'junior' || roles[r.id] === 'manager')
     .map((r) => ({
       id: r.id,
       name: r.name ?? '',
@@ -973,7 +998,7 @@ export async function fetchStaffProfiles(): Promise<{ owner: Owner | null; staff
       career_days: r.meta?.career_days ?? 0,
       shift: r.meta?.shift ?? undefined,
     }));
-  return { owner, staff, error: false };
+  return { owner, staff, roles, error: false };
 }
 
 // 사장이 직원을 매장에서 내보낸다(소속 해제 + 퇴사자 스냅샷 보관). RPC = 사장만·같은 매장 junior만.
@@ -1034,18 +1059,7 @@ export async function rejectMember(uid: string): Promise<boolean> {
 }
 
 // ── 매장별 멤버 역할(0093) ─────────────────────────────────
-// 활성 매장 멤버들의 unit_members.role — 매니저 배지·임명 UI 입력(um_select_same_unit).
-export async function fetchUnitMemberRoles(): Promise<ReadResult<Record<string, string>>> {
-  if (!HAS_SUPABASE || !_unitId) return { data: {}, error: false };
-  const { data, error } = await supabase.from('unit_members').select('user_id, role').eq('unit_id', _unitId);
-  if (error) {
-    readFail('fetchUnitMemberRoles', error);
-    return { data: {}, error: true };
-  }
-  const map: Record<string, string> = {};
-  for (const r of (data ?? []) as { user_id: string; role: string }[]) map[r.user_id] = r.role;
-  return { data: map, error: false };
-}
+// 활성 매장 멤버들의 unit_members.role 은 fetchStaffProfiles 가 명부와 같이 돌려준다(roles).
 
 // 사장이 직원을 매니저로 지정/해제(0093). RPC = 매장 소유자 본인만·이 매장 junior/manager 대상만.
 export async function setMemberRoleDb(uid: string, role: 'manager' | 'junior'): Promise<boolean> {

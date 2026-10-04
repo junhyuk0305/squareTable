@@ -17,6 +17,7 @@ import { TextScaleTransition } from '@/components/settings/TextScaleTransition';
 import { FreeUntilNotice } from '@/components/FreeUntilNotice';
 import { VoiceRecorderBinder } from '@/components/VoiceRecorderBinder';
 import { useSessionStore } from '@/lib/store/useSessionStore';
+import { installTenantReset } from '@/lib/store/tenantReset';
 import { usePreferencesStore, TEXT_SCALE_FACTOR } from '@/lib/store/usePreferencesStore';
 import { patchTextScaling, setTextScaleFactor } from '@/lib/theme/textScale';
 import { InkColors } from '@/lib/theme/colors';
@@ -32,6 +33,9 @@ guardMarketingRoutes();
 
 // 전역 글자 크기 패치는 앱 모듈 로드 시 1회만.
 patchTextScaling();
+
+// 계정·매장이 바뀌면 데이터 스토어를 비운다(다른 계정·매장 행 노출 차단). 세션이 처음 바뀌기 전에 걸어야 한다.
+installTenantReset();
 
 /**
  * 세션이 확정되기를 기다리는 상한(ms). 스플래시 모션이 끝나도 세션이 안 오면 이만큼 더 붙잡는다.

@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { coalesce, subscribeDebounced } from '@/lib/store/realtimeSync';
+import { currentTenantEpoch, isStaleEpoch } from '@/lib/store/tenantEpoch';
 import type { PlaybookEntry } from '@/types';
 import seedData from '@/data/playbook-entries.json';
 import { HAS_SUPABASE } from '@/lib/supabase';
@@ -52,7 +53,9 @@ export const usePlaybookStore = create<PlaybookState>((set, get) => ({
 
   hydrate: coalesce(async () => {
     if (!HAS_SUPABASE) return;
+    const epoch = currentTenantEpoch();
     const [{ data, error }, rawCats] = await Promise.all([fetchEntries(), fetchKnowhowCategories()]);
+    if (isStaleEpoch(epoch)) return; // 그 사이 매장이 바뀌었다 — 이전 매장 노하우를 쓰지 않는다
     // ★레지스트리 조회가 실패하면 customCategories 를 **건드리지 않는다**(#21). 빈 배열로 덮으면
     //   카테고리 편집 화면이 "커스텀 0건"을 사실로 믿고, 저장 시 레지스트리를 통째로 덮어써
     //   커스텀 카테고리가 영구 삭제된다. 실패는 categoryLoadError 로 말하고 편집 진입을 막는다.
@@ -70,8 +73,9 @@ export const usePlaybookStore = create<PlaybookState>((set, get) => ({
     // 레지스트리를 못 읽은 상태의 저장은 통째 덮어쓰기라 **영구 삭제**가 된다(#21). 거부한다.
     if (get().categoryLoadError) return false;
     const cleaned = sanitizeCustomCategories(items);
+    const epoch = currentTenantEpoch();
     const ok = await saveKnowhowCategories(cleaned);
-    if (ok) {
+    if (ok && !isStaleEpoch(epoch)) {
       setCustomCategoryRegistry(cleaned);
       set({ customCategories: cleaned });
     }
@@ -80,8 +84,9 @@ export const usePlaybookStore = create<PlaybookState>((set, get) => ({
 
   // 카테고리 개명·삭제 — 서버 반영 성공 시에만 로컬 갱신(섹션은 색인 텍스트가 아니라 재색인 불요).
   renameSection: async (from, to) => {
+    const epoch = currentTenantEpoch();
     const ok = await renameEntrySection(from, to);
-    if (ok) set((s) => ({ entries: s.entries.map((e) => (e.section === from ? { ...e, section: to } : e)) }));
+    if (ok && !isStaleEpoch(epoch)) set((s) => ({ entries: s.entries.map((e) => (e.section === from ? { ...e, section: to } : e)) }));
     return ok;
   },
 
@@ -114,7 +119,7 @@ export const usePlaybookStore = create<PlaybookState>((set, get) => ({
     return true;
   },
   remove: (id) => {
-    optimisticRemove(set, get, 'entries', id, () => deleteEntry(id), '삭제에 실패했어요.');
+    optimisticRemove(set, get, 'entries', id, () => deleteEntry(id), '삭제에 실패했어요.', currentTenantEpoch());
   },
   reset: () => {
     setCustomCategoryRegistry([]); // 매장 전환 시 이전 매장 커스텀 라벨 누출 방지(hydrate가 다시 채움)

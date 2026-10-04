@@ -54,6 +54,10 @@ let _juniorAt = 0;
 let _growthAt = 0;
 let _myEntriesAt = 0;
 let _knowhowStatsAt = 0;
+/** 계정이 바뀌면 TTL 도 비운다 — 안 비우면 새 계정의 첫 조회가 5초 동안 건너뛰어진다(tenantReset.ts). */
+export function resetHubHydrateTtl() {
+  _ownerAt = _juniorAt = _growthAt = _myEntriesAt = _knowhowStatsAt = 0;
+}
 
 // ★2026-08-25 계약 통일: `loaded` = **"시도가 끝났다"**(성공/실패 무관). 실패는 `*LoadError` 로 분리한다.
 //   예전 계약("실패하면 loaded 를 안 올림")은 장애를 '로딩 중'으로 위장했다 — 사장이 로그인 직후

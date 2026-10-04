@@ -45,12 +45,11 @@ function withTimeout<T>(p: Promise<T>, ms: number): Promise<T | 'timeout'> {
 /**
  * 착지 화면(사장 홈 / 직원 홈)이 그리기 전에 필요한 것만 미리 채운다.
  *
- * 왜 여기서 당기는가: 스토어는 매장이 바뀌어도 비워지지 않는다(loaded 는 true 로 남는다).
- * 그래서 전환 직후 그냥 넘어가면 ① 빈 상태가 스치거나 ② 잠깐 **이전 매장 데이터**가 보인다.
- * 하이드레이트 함수는 owner/junior _layout 이 부르는 것과 **같은 것**이라 새 경로가 아니다.
+ * 왜 여기서 당기는가: 매장이 바뀌면 tenantReset 이 스토어를 비운다(loaded=false).
+ * 전환 직후 그냥 넘어가면 착지 화면이 로딩 게이트부터 그린다. 커버 아래에서 채워 두면 한 번에 등장한다.
+ * 하이드레이트 함수는 owner/junior _layout 이 부르는 것과 **같은 것**이라 새 경로가 아니다(coalesce 가 겹친 호출을 합친다).
  *
- * ★채팅방(useRoomStore)은 어느 레이아웃도 당기지 않는다 — 업무 탭이 자기 안에서만 hydrate 한다.
- *   여기 없으면 커버가 걷힌 **뒤에** 방 칩이 하나씩 나타난다. 진입에서 같이 채워 둔다.
+ * ★채팅방(useRoomStore)도 같이 채운다 — 여기 없으면 커버가 걷힌 **뒤에** 방 칩이 하나씩 나타난다.
  */
 async function prefetchStoreData(manage: boolean): Promise<void> {
   const jobs = manage

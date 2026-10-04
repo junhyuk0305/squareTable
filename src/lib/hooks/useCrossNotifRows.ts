@@ -18,7 +18,6 @@ import type { NotifRow } from '@/components/NotificationList';
 export function useCrossNotifRows() {
   const router = useRouter();
   const me = useSessionStore((s) => s.userId);
-  const role = useSessionStore((s) => s.role);
   const unitId = useSessionStore((s) => s.unitId);
   const sessionStores = useSessionStore((s) => s.stores);
   const switchUnit = useSessionStore((s) => s.switchUnit);
@@ -40,7 +39,8 @@ export function useCrossNotifRows() {
     if (sessionStores.length === 0) {
       return { rows: mergeCrossNotifs([]), unreadByUnit: {} as Record<string, number>, totalUnread: 0, hiddenCount: 0 };
     }
-    const rOf = (uid: string) => sessionStores.find((u) => u.unit_id === uid)?.role ?? role;
+    // 목록에 없는 매장은 직원 기준으로 센다(fail-closed) — 다른 매장의 역할을 빌려 쓰지 않는다.
+    const rOf = (uid: string) => sessionStores.find((u) => u.unit_id === uid)?.role ?? 'junior';
     const ackOf = (uid: string) => ackByUnit[uid] ?? null; // 매장별 '모두 읽기' 기준(0078)
     const unreadByUnit: Record<string, number> = {};
     for (const d of crossData) unreadByUnit[d.unitId] = storeUnreadCount(d, rOf(d.unitId), me, today, ackOf(d.unitId));
@@ -57,7 +57,7 @@ export function useCrossNotifRows() {
       // 목록에서 잘려나간 개수 — 0 이 아니면 화면이 "N건 더 있어요"를 말해야 한다(#13).
       hiddenCount: Math.max(0, crossNotifTotal(perStore) - merged.length),
     };
-  }, [crossData, closures, sessionStores, role, me, today, ackByUnit]);
+  }, [crossData, closures, sessionStores, me, today, ackByUnit]);
 
   /** NotificationList 에 바로 넣을 행(매장 점·이름 칩 포함). */
   const listRows: (NotifRow & { unitId: string })[] = rows.map((r) => ({

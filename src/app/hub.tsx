@@ -21,13 +21,12 @@ import { Space } from '@/lib/theme/layout';
 const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'] as const;
 
 export default function HubScreen() {
-  const role = useSessionStore((s) => s.role);
+  // 허브는 계정 층이다 — 활성 매장 역할(role)이 아니라 사장 계정인가로 가른다.
+  const isOwner = useSessionStore((s) => s.isOwnerAccount);
   const unitId = useSessionStore((s) => s.unitId);
   const sessionStores = useSessionStore((s) => s.stores);
   // 출입 게이트 4단(미로그인·세션 확정 전·프로필 미완성·다운그레이드 선택 대기)은 stores.tsx 와 같은 훅.
   const gate = useSessionGate();
-
-  const isOwner = role === 'owner';
 
   if (gate !== undefined) return gate;
   // 매장 0곳이어도 이 탭을 막지 않는다 — 예전엔 /stores 로 되돌려서, 아직 합류하지 않은 직원은

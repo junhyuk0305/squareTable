@@ -7,6 +7,7 @@
 // realtime 미구독: /billing 이 이미 30초 폴링으로 활성화를 감지하고, 알림 축은 화면 진입 시 재조회로 충분.
 import { create } from 'zustand';
 import { coalesce } from '@/lib/store/realtimeSync';
+import { currentTenantEpoch, isStaleEpoch } from '@/lib/store/tenantEpoch';
 import type { PaymentClaim } from '@/types';
 import { HAS_SUPABASE } from '@/lib/supabase';
 import { fetchPaymentClaims, submitPaymentClaim } from '@/lib/db';
@@ -79,12 +80,15 @@ export const usePaymentClaimStore = create<State>((set, get) => ({
     //   "입금이 확인돼 이용이 열렸어요"가 떠 앱 안에서 다른 결제 채널을 말하게 된다(2026-09-14 · 3.1.1).
     //   loaded 는 세운다 — 알림 화면 ready 게이트가 이 값을 기다린다.
     if (!SHOW_BILLING) return set({ claims: [], loaded: true });
+    const epoch = currentTenantEpoch();
     const { data } = await fetchPaymentClaims();
+    if (isStaleEpoch(epoch)) return; // 그 사이 매장이 바뀌었다 — 이전 매장 신고를 쓰지 않는다
     // 읽기 실패는 db 계층이 SyncBanner 로 표면화한다 — 여기선 빈 목록으로 위장하지 않게 loaded 만 세운다.
     set({ claims: data, loaded: true });
   }),
 
   submit: async (args) => {
+    const epoch = currentTenantEpoch();
     const { data, error } = await submitPaymentClaim({
       plan: args.plan,
       amountKrw: args.amountKrw,
@@ -97,7 +101,8 @@ export const usePaymentClaimStore = create<State>((set, get) => ({
     });
     if (error) return { ok: false, reason: toClaimError(error.message) };
     // 서버가 돌려준 행(금액·상태는 서버 값이 정본)을 그대로 반영 — 낙관적 추정 금지.
-    if (data) {
+    // 그 사이 매장이 바뀌었으면 이전 매장 신고 행을 새 매장 목록에 넣지 않는다(신고 자체는 성공).
+    if (data && !isStaleEpoch(epoch)) {
       set((s) => ({ claims: [data, ...s.claims.filter((c) => c.id !== data.id)], loaded: true }));
     }
     return { ok: true };

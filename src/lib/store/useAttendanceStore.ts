@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { coalesce, subscribeDebounced } from '@/lib/store/realtimeSync';
+import { currentTenantEpoch, isStaleEpoch } from '@/lib/store/tenantEpoch';
 import { todayStr, minutesBetween, nowISO, MAX_SHIFT_MIN, tsMs } from '@/lib/utils/attendance';
 import { HAS_SUPABASE } from '@/lib/supabase';
 import { fetchAttendance, upsertAttendance, deleteAttendance, subscribeAttendance } from '@/lib/db';
@@ -79,7 +80,9 @@ export const useAttendanceStore = create<State>((set, get) => ({
   loadError: false,
   hydrate: coalesce(async () => {
     if (!HAS_SUPABASE) return;
+    const epoch = currentTenantEpoch();
     const { data, error } = await fetchAttendance();
+    if (isStaleEpoch(epoch)) return; // 그 사이 매장이 바뀌었다 — 이전 매장 근태를 쓰지 않는다
     // ★실패해도 loaded 는 올린다(시도는 끝났다). 대신 loadError 로 말한다 — 예전엔 실패가
     //   records=[] 로 위장돼 hasOpen 이 항상 false 였고, 화면이 "아직 출근 전이에요"를 말했다(#40).
     //   기존 records 는 유지한다 — 실패 때문에 근무 중 기록이 화면에서 사라지면 더 위험하다.
@@ -190,11 +193,14 @@ export const useAttendanceStore = create<State>((set, get) => ({
   removeRecord: (id) => {
     const idx = get().records.findIndex((r) => r.id === id);
     const removed = idx >= 0 ? get().records[idx] : undefined;
+    // 쓰기 중 매장이 바뀌면 지운 기록(이전 매장 것)을 되살리지 않는다 — 새 매장 hydrate 가 채운다.
+    const epoch = currentTenantEpoch();
     set((s) => ({ records: s.records.filter((r) => r.id !== id) }));
     void guardWrite(
       deleteAttendance(id),
       () =>
         removed &&
+        !isStaleEpoch(epoch) &&
         set((s) => {
           const next = s.records.slice();
           next.splice(Math.min(idx, next.length), 0, removed);

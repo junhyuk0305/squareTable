@@ -19,14 +19,13 @@ import { Space } from '@/lib/theme/layout';
 // (노하우로 만들 것·검증 필요·오래 손 안 댄 것). 라우트 경로는 UI 텍스트가 아니다.
 // 랜딩은 여전히 /hub(오늘·현황) — 이 탭은 능동적으로 들어오는 축적 공간(뱃지 없음).
 export default function HubGrowthScreen() {
-  const role = useSessionStore((s) => s.role);
+  // 허브는 계정 층이다 — 활성 매장 역할(role)이 아니라 사장 계정인가로 가른다(hub.tsx 와 같은 판정).
+  const isOwner = useSessionStore((s) => s.isOwnerAccount);
   const status = useSessionStore((s) => s.status);
   const phone = useSessionStore((s) => s.phone);
   const unitId = useSessionStore((s) => s.unitId);
   const pendingUnitId = useSessionStore((s) => s.pendingUnitId);
   const sessionStores = useSessionStore((s) => s.stores);
-
-  const isOwner = role === 'owner';
 
   // 게이트(hub.tsx 와 동일 규칙) — 루트 레벨이라 owner/junior 그룹 게이트를 안 탄다.
   if (HAS_SUPABASE && status === 'signed_out') return <Redirect href="/" />;

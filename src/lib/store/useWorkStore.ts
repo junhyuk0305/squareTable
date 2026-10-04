@@ -53,6 +53,7 @@ import type { QuizAssignment, TrainingCourse as TrainingCourseRow } from '@/lib/
 import { isBrandHidden } from '@/lib/brand/copy';
 import { guardWrite, useSyncStore } from '@/lib/store/useSyncStore';
 import { coalesce, subscribeDebounced, settleWithin, HYDRATE_TIMEOUT_MS } from '@/lib/store/realtimeSync';
+import { currentTenantEpoch, isStaleEpoch } from '@/lib/store/tenantEpoch';
 import { genId } from '@/lib/utils/id';
 import { useRoomStore } from '@/lib/store/useRoomStore';
 import { useScheduleStore } from '@/lib/store/useScheduleStore';
@@ -772,6 +773,7 @@ export const useWorkStore = create<State>((set, get) => ({
     // ★throw 도 "시도가 끝났다"에 포함된다(2026-08-26 브라우저 실측). 아래 fetch 중 **하나라도**
     //   예외를 던지면 Promise.all 이 reject 되고 set 이 영영 실행되지 않아 loaded 가 false 로 남는다
     //   → 게이트가 **영구 스피너**가 된다. 계약을 값 반환 경로에만 걸면 계약이 아니다.
+    const epoch = currentTenantEpoch();
     try {
     const fetchedAt = Date.now();
     // 정지(hang) 방지 — 실패·예외는 막았어도 **끝나지 않는 것**은 못 막는다(2026-08-26 실측).
@@ -793,6 +795,7 @@ export const useWorkStore = create<State>((set, get) => ({
       ]),
       () => null,
     );
+    if (isStaleEpoch(epoch)) return; // 그 사이 매장이 바뀌었다 — 이전 매장 업무를 쓰지 않는다
     if (all === null) { set({ loaded: true, loadError: true }); return; }
     const [templates, done, feed, knowhowLinks, understanding, courseEntries, training, courses, trainingRequests, quizCounts, assignments, quizAttempts] = all;
     // 아직 서버에 안 닿은 체크는 스냅샷 위에 다시 얹는다 — 안 그러면 빠른 연속 체크가 되돌아간다.
@@ -813,6 +816,7 @@ export const useWorkStore = create<State>((set, get) => ({
     });
     } catch (e) {
       console.warn('[work] hydrate threw:', e);
+      if (isStaleEpoch(epoch)) return;
       set({ loaded: true, loadError: true });
     }
   }),
@@ -919,6 +923,7 @@ export const useWorkStore = create<State>((set, get) => ({
     // training_items 는 레거시지만 서버 FK cascade 로 같이 사라지므로 낙관적 반영도 맞춰 준다
     // (1단계 정리 목록이 방금 지운 업무를 계속 보여주지 않게).
     const removedTraining = get().training.filter((f) => f.templateId === id);
+    const epoch = currentTenantEpoch(); // 매장이 바뀌었으면 되살리지 않는다(markUnderstood 주석)
     set((s) => ({
       templates: s.templates.filter((t) => t.id !== id),
       knowhowLinks: s.knowhowLinks.filter((l) => l.templateId !== id),
@@ -928,6 +933,7 @@ export const useWorkStore = create<State>((set, get) => ({
       deleteTemplate(id),
       () =>
         removed &&
+        !isStaleEpoch(epoch) &&
         set((s) => {
           const next = s.templates.slice();
           next.splice(Math.min(idx, next.length), 0, removed);
@@ -981,12 +987,14 @@ export const useWorkStore = create<State>((set, get) => ({
     const prev = get().understanding.filter(mine);
     const at = new Date().toISOString();
     const rows: UnderstandingRow[] = entryIds.map((entryId) => ({ entryId, staffId, staffName, verifiedAt: at }));
+    // 쓰기 중 매장이 바뀌면 prev(이전 매장 행)를 되살리지 않는다 — 새 매장 hydrate 가 채운다(아래 롤백들도 같다).
+    const epoch = currentTenantEpoch();
     set((s) => ({ understanding: [...s.understanding.filter((u) => !mine(u)), ...rows] }));
     await guardWrite(
       insertKnowhowUnderstanding(entryIds, staffName),
       // ★실패 시 **내가 건드린 행만** 되돌린다. 전체 배열을 스냅샷으로 덮으면 그 사이 도착한
       //   realtime 변경(다른 직원의 통과)까지 조용히 사라진다(detachKnowhow 와 같은 규칙).
-      () => set((s) => ({ understanding: [...s.understanding.filter((u) => !mine(u)), ...prev] })),
+      () => { if (!isStaleEpoch(epoch)) set((s) => ({ understanding: [...s.understanding.filter((u) => !mine(u)), ...prev] })); },
       '이해 확인 저장에 실패했어요.',
     );
   },
@@ -1008,10 +1016,11 @@ export const useWorkStore = create<State>((set, get) => ({
   removeCourseEntry: async (courseId, entryId) => {
     const removed = get().courseEntries.find((e) => e.courseId === courseId && e.entryId === entryId);
     if (!removed) return;
+    const epoch = currentTenantEpoch(); // 매장이 바뀌었으면 되살리지 않는다(markUnderstood 주석)
     set((s) => ({ courseEntries: s.courseEntries.filter((e) => !(e.courseId === courseId && e.entryId === entryId)) }));
     await guardWrite(
       deleteCourseEntry(courseId, entryId),
-      () => set((s) => ({ courseEntries: [...s.courseEntries, removed] })),
+      () => { if (!isStaleEpoch(epoch)) set((s) => ({ courseEntries: [...s.courseEntries, removed] })); },
       '퀴즈에서 빼기에 실패했어요.',
     );
   },
@@ -1087,10 +1096,11 @@ export const useWorkStore = create<State>((set, get) => ({
   cancelTrainingRequest: async (id) => {
     const removed = get().trainingRequests.find((r) => r.id === id);
     if (!removed) return;
+    const epoch = currentTenantEpoch(); // 매장이 바뀌었으면 되살리지 않는다(markUnderstood 주석)
     set((s) => ({ trainingRequests: s.trainingRequests.filter((r) => r.id !== id) }));
     await guardWrite(
       deleteTrainingRequest(id),
-      () => set((s) => ({ trainingRequests: [...s.trainingRequests, removed] })),
+      () => { if (!isStaleEpoch(epoch)) set((s) => ({ trainingRequests: [...s.trainingRequests, removed] })); },
       '요청 취소에 실패했어요.',
     );
   },
@@ -1099,12 +1109,13 @@ export const useWorkStore = create<State>((set, get) => ({
   detachKnowhow: async (templateId, entryIds) => {
     const removed = get().knowhowLinks.filter((l) => l.templateId === templateId && entryIds.includes(l.entryId));
     if (removed.length === 0) return;
+    const epoch = currentTenantEpoch(); // 매장이 바뀌었으면 되살리지 않는다(markUnderstood 주석)
     set((s) => ({
       knowhowLinks: s.knowhowLinks.filter((l) => !(l.templateId === templateId && entryIds.includes(l.entryId))),
     }));
     await guardWrite(
       deleteTemplateKnowhow(templateId, entryIds),
-      () => set((s) => ({ knowhowLinks: [...s.knowhowLinks, ...removed] })),
+      () => { if (!isStaleEpoch(epoch)) set((s) => ({ knowhowLinks: [...s.knowhowLinks, ...removed] })); },
       '노하우 첨부 해제에 실패했어요.',
     );
   },
@@ -1210,6 +1221,7 @@ export const useWorkStore = create<State>((set, get) => ({
   // 성공 시 현재 매장 피드를 다시 당겨 내 매장 카피가 즉시 보이게(무음 유실 방지). 다른 매장은 각자 활성 시 노출.
   // 푸시는 현재 매장 직원에게만(엣지 push 가 호출자 활성매장으로 강제) — 타 매장 직원은 인앱 공지로.
   broadcastNotice: async (unitIds, text, important, authorName) => {
+    const epoch = currentTenantEpoch();
     const { data, error } = await dbBroadcastNotice(unitIds, text.trim(), important);
     if (error || !data) {
       useSyncStore.getState().noteError('공지 발송에 실패했어요. 다시 시도해 주세요.');
@@ -1217,8 +1229,11 @@ export const useWorkStore = create<State>((set, get) => ({
     }
     const fresh = await fetchFeed();
     // 재조회 실패는 발송 성공을 뒤집지 않는다 — 기존 피드를 유지하고 실패는 loadError 로 남긴다.
-    if (!fresh.error) set({ feed: fresh.data });
-    else set({ loadError: true });
+    // 그 사이 매장이 바뀌었으면 재조회 결과(이전 매장 피드)를 쓰지 않는다. 발송 결과는 그대로 돌려준다.
+    if (!isStaleEpoch(epoch)) {
+      if (!fresh.error) set({ feed: fresh.data });
+      else set({ loadError: true });
+    }
     notifyStaffNotice(authorName, text.trim());
     return { ok: true, sent: data.sent };
   },
@@ -1304,9 +1319,10 @@ export const useWorkStore = create<State>((set, get) => ({
     const s = get();
     const removed = s.feed.filter((f) => f.id === id || f.refId === id);
     if (removed.length === 0) return;
+    const epoch = currentTenantEpoch(); // s.feed 는 이전 매장 피드 전체일 수 있다 — 매장이 바뀌었으면 되돌리지 않는다
     set({ feed: s.feed.filter((f) => f.id !== id && f.refId !== id) });
     const ok = Promise.all(removed.map((r) => deleteFeed(r.id))).then((rs) => rs.every(Boolean));
-    void guardWrite(ok, () => set({ feed: s.feed }), '삭제에 실패했어요.');
+    void guardWrite(ok, () => { if (!isStaleEpoch(epoch)) set({ feed: s.feed }); }, '삭제에 실패했어요.');
   },
 
   toggleReaction: (feedId, userId, emoji) => {

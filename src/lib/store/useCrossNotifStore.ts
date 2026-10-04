@@ -9,6 +9,10 @@ import { HAS_SUPABASE } from '@/lib/supabase';
 // 연속 진입(허브→벨 등) 순간 이중 fetch 방지 — 이 간격 안의 재호출은 스킵(포커스 폴링 설계는 유지).
 const HYDRATE_TTL_MS = 5_000;
 let _lastHydrateAt = 0;
+/** 계정이 바뀌면 TTL 도 비운다 — 안 비우면 새 계정의 첫 조회가 5초 동안 건너뛰어진다(tenantReset.ts). */
+export function resetCrossNotifHydrateTtl() {
+  _lastHydrateAt = 0;
+}
 
 type State = {
   data: UnitNotifData[];

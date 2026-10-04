@@ -13,6 +13,7 @@ import { useSuggestionStore } from '@/lib/store/useSuggestionStore';
 import { useMemberPrefsStore } from '@/lib/store/useMemberPrefsStore';
 import { usePaymentClaimStore } from '@/lib/store/usePaymentClaimStore';
 import { useOwnerAlertStore } from '@/lib/store/useOwnerAlertStore';
+import { useRoomStore } from '@/lib/store/useRoomStore';
 import { purgeExpiredFormerStaff } from '@/lib/db';
 import { retryPendingEmbeddings } from '@/lib/ai/embedBacklog';
 import { HAS_SUPABASE } from '@/lib/supabase';
@@ -22,6 +23,7 @@ export default function OwnerLayout() {
   const status = useSessionStore((s) => s.status);
   const role = useSessionStore((s) => s.role);
   const signupRole = useSessionStore((s) => s.signupRole);
+  const isOwnerAccount = useSessionStore((s) => s.isOwnerAccount);
   const unitId = useSessionStore((s) => s.unitId);
   const phone = useSessionStore((s) => s.phone);
   const pendingUnitId = useSessionStore((s) => s.pendingUnitId);
@@ -54,6 +56,9 @@ export default function OwnerLayout() {
     void usePaymentClaimStore.getState().hydrate();
     // 사장 알림(0191 좌석 잠김·AI 사용량)도 벨 배지 축.
     void useOwnerAlertStore.getState().hydrate();
+    // 업무방 — 매장이 바뀌면 tenantReset 이 비운다. 업무 탭이 열려 있는 채로 바뀌어도 게이트가 풀리게
+    // 여기서 다시 채운다(구독은 업무 탭 WorkBoard 가 맡는다).
+    void useRoomStore.getState().hydrate();
     // 퇴사 6개월 경과분 개인 기록 자동 정리(기회적 1회, 실패 무해).
     // 0093: 파기는 사장 전용(0027 owner_only) — 매니저 세션에서 부르면 400 + 관측 노이즈만 남아 게이트.
     if (useSessionStore.getState().role === 'owner') void purgeExpiredFormerStaff();
@@ -108,7 +113,8 @@ export default function OwnerLayout() {
   //   profiles.role 이 junior 라 role 로는 둘을 구별할 수 없다.
   //   ⚠️ signupRole 이 null(메타데이터 없는 옛 계정·소셜 가입)이면 막지 않는다 — 의도를 증명할 수 없는
   //     계정을 가두면 사장이 매장을 못 만드는 데드엔드가 된다(fail-open).
-  if (HAS_SUPABASE && status === 'signed_in' && !unitId && signupRole === 'junior' && role !== 'owner') {
+  //   매장이 없으면 role 은 늘 junior 라(활성 매장 멤버십 기준) 사장 계정 예외는 isOwnerAccount 로 본다.
+  if (HAS_SUPABASE && status === 'signed_in' && !unitId && signupRole === 'junior' && !isOwnerAccount) {
     return <Redirect href="/stores" />;
   }
   // 가입은 됐지만 매장 미연결(가게 생성 미완료/연결 해제) → 빈 대시보드로 떨어뜨리지 않고
@@ -126,7 +132,13 @@ export default function OwnerLayout() {
   //  - 0093: 매니저(활성 매장 unit_members.role='manager')는 사장 화면 세트를 그대로 쓴다 — 통과.
   //    사장 전용 잠금(결제·매장 존재·임명)은 화면 내부 role==='owner' 게이트 + 서버 RPC/RLS 가 강제.
   //  - unitId 확정 뒤에 검사 → 매장 생성 중(unitId 없음)인 사장 지망 계정은 위에서 create-store 로 유도됨.
-  if (HAS_SUPABASE && status === 'signed_in' && unitId && !canManage(role)) {
+  //  - ★예외(2026-10-04): 계정 층 화면 3개는 활성 매장 데이터를 읽지 않고 **내가 소유한 매장만** 다룬다
+  //    (매장 만들기 · 이전 매장 = fetchMyPreviousUnits · 노하우 복사 = stores 중 owner 행 + 서버 auth_owns_unit).
+  //    A 사장이 B 직원으로 B 를 열어 둔 채 허브·매장 목록에서 눌러도 막다른 길(직원 홈)로 튕기지 않게
+  //    사장 계정(isOwnerAccount)이면 통과시킨다. 그 밖의 /owner/* 는 활성 매장 역할로만 판정한다.
+  const accountLayer =
+    pathname === '/owner/create-store' || pathname === '/owner/previous-stores' || pathname === '/owner/import-knowhow';
+  if (HAS_SUPABASE && status === 'signed_in' && unitId && !canManage(role) && !(accountLayer && isOwnerAccount)) {
     return <Redirect href="/junior/home" />;
   }
   // ★2026-08-06: 만료 페이월(구독 만료 → /billing 강제) 제거.
