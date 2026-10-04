@@ -123,6 +123,7 @@
     "qa:open-record": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/qa-open-record.mjs",
     "qa:iap-notes": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/qa-iap-notes.mjs",
     "qa:cancel-path": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/qa-cancel-path.mjs",
+    "qa:report-form": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/qa-report-form.mjs",
     "iap:status": "node scripts/iap-switch.mjs status",
     "iap:on": "node scripts/iap-switch.mjs on",
     "iap:off": "node scripts/iap-switch.mjs off",
