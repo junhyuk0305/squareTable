@@ -811,6 +811,42 @@ export async function insertSalesInquiry(args: {
   );
 }
 
+// ── 신고하기(0241 · F-1) — 클라는 신고를 읽지 못한다. 보내기와 대상 목록만 RPC 로 ──────────
+// 오류 문구는 src/lib/report/form.ts 의 reportErrorMessage 가 맡는다. 원문은 계측으로만 보낸다.
+export type ReportTargetRow = { user_id: string; name: string | null; role: string };
+/** 그 매장의 나를 뺀 구성원. 내가 그 매장 멤버가 아니면 not_a_member. */
+export async function fetchReportTargets(unitId: string): Promise<DbResult<ReportTargetRow[]>> {
+  if (!HAS_SUPABASE) return { data: [], error: null };
+  const { data, error } = await supabase.rpc('report_targets', { p_unit_id: unitId });
+  if (error) {
+    reportError('db.rpc:report_targets', error);
+    return { data: null, error: error as DbErr };
+  }
+  return { data: (data as ReportTargetRow[]) ?? [], error: null };
+}
+/** 신고 한 건. 이름·역할·매장 이름 스냅샷은 서버가 넣는다. 성공하면 신고 id. */
+export async function submitUserReport(p: {
+  unitId: string;
+  target: string | null;
+  category: string;
+  body: string;
+  occurredAt: string | null;
+}): Promise<DbResult<string>> {
+  if (!HAS_SUPABASE) return { data: 'demo', error: null };
+  const { data, error } = await supabase.rpc('submit_user_report', {
+    p_unit_id: p.unitId,
+    p_target: p.target,
+    p_category: p.category,
+    p_body: p.body,
+    p_occurred_at: p.occurredAt,
+  });
+  if (error) {
+    reportError('db.rpc:submit_user_report', error);
+    return { data: null, error: error as DbErr };
+  }
+  return { data: data as string, error: null };
+}
+
 // ── 무료 이용 코드(promo_codes, 0092) — 코드 검증·기록·활성화는 전부 서버(RPC) ────────────
 // 테이블은 클라 전면 deny — 성패는 RPC 결과로만 안다. named 에러 분기는 billing.tsx 한 곳.
 export type PromoRedeemRow = { unit_id: string; status: string; paid_until: string | null; plan: string; days: number };

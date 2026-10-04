@@ -215,6 +215,8 @@ export default function AccountSettings() {
           <SettingsRow icon="help-circle-outline" label="자주 묻는 질문" onPress={() => void Linking.openURL('https://dochackchack.com/app/faq').catch(() => {})} />
           <SettingsRow icon="business-outline" label="사업자 정보" onPress={() => void Linking.openURL('https://dochackchack.com/app/business-info').catch(() => {})} />
           <SettingsRow icon="chatbubble-ellipses-outline" label="문의하기" onPress={() => setContactModal(true)} />
+          {/* 신고하기(F-1 · 0241) — 사장·매니저·직원 같은 행. 같은 매장 사람이나 AI 답변을 운영팀에 알린다. */}
+          <SettingsRow icon="flag-outline" label="신고하기" onPress={() => router.push('/report' as never)} />
           <SettingsRow icon="information-circle-outline" label="버전 정보" value={`v${version}`} />
         </SettingsSection>
 

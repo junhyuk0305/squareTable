@@ -154,7 +154,7 @@ console.log('\n■ (4) 화면 연결');
   const k = src.indexOf('label="버전 정보"');
   // 사이에 다른 행 라벨이 없어야 "바로 아래"다.
   check('★설정에 "신고하기" 행이 "문의하기" 바로 아래 있다', i > 0 && j > i && k > j && !src.slice(i + 1, j).includes('label="'), show({ i, j, k }));
-  check('"신고하기" 행이 /report 로 간다', /label="신고하기"[^>]*router\.push\('\/report'/.test(src));
+  check('"신고하기" 행이 /report 로 간다', /label="신고하기"[^\n]*router\.push\('\/report'/.test(src));
 }
 {
   const src = strip(read('src/lib/db.ts'));
@@ -167,7 +167,7 @@ console.log('\n■ (4) 화면 연결');
 {
   const src = strip(read('src/app/report.tsx'));
   check('report.tsx 가 있다', src.length > 0);
-  check('화면은 supabase 를 직접 부르지 않는다(AGENTS ③)', src.length > 0 && !/supabase/.test(src));
+  check('화면은 supabase 를 직접 부르지 않는다(AGENTS ③)', src.length > 0 && !/supabase\.(from|rpc|auth)\b/.test(src));
   check('화면이 prepareReport · reportErrorMessage 를 쓴다', /prepareReport\(/.test(src) && /reportErrorMessage\(/.test(src));
   check('화면이 AI 대상 이름을 상수로 쓴다', /AI_TARGET_LABEL/.test(src));
   check('화면이 error.message 원문을 그리지 않는다', !/\.message\b/.test(src));

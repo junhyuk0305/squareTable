@@ -49,6 +49,8 @@
     { "id": "/notifications", "file": "src/app/notifications.tsx", "type": "B", "tier": 2, "maxAccepted": 1, "verdict": "todo" },
     { "id": "/privacy", "file": "src/app/privacy.tsx", "type": null, "tier": 3, "maxAccepted": 0, "verdict": "todo",
       "note": "0 = 안 셈. 본문이 같은 파일의 반복 헬퍼 <Section> 이라 잡히지 않는다(법적 화면·우선순위 낮음)" },
+    { "id": "/report", "file": "src/app/report.tsx", "type": null, "tier": 3, "maxAccepted": 0, "verdict": "todo",
+      "note": "2026-10-05 신설(F-1 · 0241 신고하기). 설정 > 약관·고객센터 에서만 들어온다. 입력 폼 카드 하나라 /inquiry 와 같은 유형" },
     { "id": "/q/[token]", "file": "src/app/q/[token].tsx", "type": "C", "tier": 2, "maxAccepted": 4, "verdict": "todo",
       "note": "2026-08-25: 2→4. **한 화면이 4블록이 된 게 아니다** — 이 파일은 phase 상태기계(closed·failed·name·done)라 카운터가 상호배타 가지를 접지 못하고 더한 상한이다. 실제로 동시에 보이는 것은 phase 당 ≤3(C 예산 안). 게이트는 이미 정확했는데 문항 전환에만 Appear 가 있고 나머지 phase(게스트가 보는 첫 화면 포함)엔 없어서 이번에 붙였다. ★한 번 8까지 갔던 것은 문단·입력칸마다 감싼 과잉 적용이라 섹션 단위로 되돌렸다 — 등장은 요소가 아니라 섹션에 준다. · 2026-08-26: 0→2(C 예산 ≤3, 초과 아님). 새 블록을 넣은 게 아니라 **원래 있던 두 덩어리에 이름이 생겼다** — 문항(질문+렌더러)과 채점 결과를 각각 Appear 로 감쌌고, 카운터는 블록 신호가 없는 Appear 를 '이름 없는 섹션' 1개로 센다. 문항이 넘어갈 때·채점이 끝났을 때가 이 화면에서 유일한 변화라 애니메이션을 붙인 자리다" },
     { "id": "/signup", "file": "src/app/signup.tsx", "type": null, "tier": 3, "maxAccepted": 13, "verdict": "todo" },
