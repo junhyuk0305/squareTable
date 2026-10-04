@@ -86,16 +86,17 @@ export function OwnerNotificationBell({ edge = true }: { edge?: boolean } = {}) 
   const today = todayStr();
 
   const count = useMemo(() => {
-    const base = ownerUnreadCount(queue, suggestions, swaps, pending, feed, userId, ackAt, claims, alerts);
-    if (role !== 'manager') return base;
-    return managerUnreadCount(base, {
+    if (role !== 'manager') return ownerUnreadCount(queue, suggestions, swaps, pending, feed, userId, ackAt, claims, alerts);
+    const nameOf = (id: string) => staff.find((x) => x.id === id)?.name ?? '직원';
+    // 매니저 배지는 목록(buildManagerNotifications)과 같은 인자·같은 배열에서 센다(F-2).
+    return managerUnreadCount({ queue, suggestions, swaps, pending, nameOf, feed, userId, ackAt, claims, alerts }, {
       feed,
       taskTemplates: templates,
       done,
       today,
       suggestions,
       userId,
-      nameOf: (id) => staff.find((x) => x.id === id)?.name ?? '직원',
+      nameOf,
       ackAt,
     });
   }, [queue, suggestions, swaps, pending, feed, userId, ackAt, claims, alerts, role, templates, done, today, staff]);

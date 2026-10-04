@@ -30,6 +30,33 @@ export const MANAGER_OWNER_ROUTES = [
 export const managerMayOpen = (pathname: string): boolean =>
   MANAGER_OWNER_ROUTES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
 
+/** 매니저의 `/junior/x` 중 `/owner/x` 짝이 허용 목록에 있는 것. 나머지 `/junior/*` 는 그대로 둔다. */
+const MANAGER_FLIP = ['work', 'schedule', 'notifications'];
+
+/**
+ * 알림 탭 목적지를 받는 사람의 역할(활성 매장 기준 · 0233)에 맞춘다. 웹·앱 푸시가 이 하나를 쓴다.
+ * 발송 측(notify.ts)은 수신자 역할을 모른다. 그래서 탭하는 순간의 역할로 고친다.
+ *  - 사장: `/junior/x` → `/owner/x`. 직원: `/owner/x` → `/junior/x`. (예전 규칙 그대로)
+ *  - 매니저(F-2): 허용 목록 안의 `/owner/*` 는 그대로. 질문(`/owner/inbox`)은 물어보기 탭(`/junior/chat`),
+ *    그 밖의 `/owner/*`(제안 검토·직원 관리·사장 홈)는 직원 홈. `/junior/*` 는 짝이 허용 목록에 있을 때만 뒤집는다.
+ *    예전엔 사장 규칙을 같이 써서 `/junior/chat` 이 없는 `/owner/chat` 이 됐다.
+ */
+export function routeForRole(url: string, role: string): string {
+  const isJunior = url.startsWith('/junior/');
+  const isOwner = url.startsWith('/owner/');
+  if (role === 'owner') return isJunior ? '/owner/' + url.slice('/junior/'.length) : url;
+  if (role !== 'manager') return isOwner ? '/junior/' + url.slice('/owner/'.length) : url;
+  const path = url.split(/[?#]/)[0];
+  if (isOwner) {
+    if (managerMayOpen(path)) return url;
+    return path === '/owner/inbox' ? '/junior/chat' : '/junior/home';
+  }
+  if (isJunior && MANAGER_FLIP.some((p) => path === `/junior/${p}` || path.startsWith(`/junior/${p}/`))) {
+    return '/owner/' + url.slice('/junior/'.length);
+  }
+  return url;
+}
+
 /**
  * 역할 호칭 SSOT — 사람 이름 뒤에 붙는 말. "○○ 사장님 / ○○ 매니저 / ○○님".
  *

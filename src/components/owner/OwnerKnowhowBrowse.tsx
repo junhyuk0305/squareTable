@@ -251,7 +251,6 @@ export function OwnerKnowhowBrowse({
   const userName = useSessionStore((s) => s.userName);
   const storeName = useSessionStore((s) => s.storeName);
   const industry = useSessionStore((s) => s.industry);
-  const role = useSessionStore((s) => s.role);
   const { copied, copy } = useCopyToClipboard();
   const todo = useOwnerTodoCount();
 
@@ -303,9 +302,6 @@ export function OwnerKnowhowBrowse({
   const goAdd = () => router.push('/owner/coach' as never);
   const goHandover = () => router.push('/owner/handover' as never);
   const goTraining = () => goToTab('/owner/training'); // 퀴즈는 탭이다 — push 하면 스택에 겹친다
-  // 매니저 전용 물어보기(정본 §4 "AI 질문 매니저 ✅") — 검색으로 못 찾았을 때의 다음 행동.
-  // 사장에겐 숨김(자기 노하우에 자기가 질문하는 표면은 불필요, 사장 AI는 coach가 담당).
-  const goAsk = role === 'manager' ? () => router.push('/owner/ask' as never) : undefined;
   // 카테고리 필터는 단일 선택(라디오) — '전체' + 한 카테고리만. 같은 칩 재탭 시 전체로 해제.
   const selectCat = (c: string) => setActiveCat((prev) => (prev === c ? null : c));
 
@@ -694,7 +690,7 @@ export function OwnerKnowhowBrowse({
           <>
             {/* 목록 */}
             {listFiltered.length === 0 ? (
-              <EmptyResult onReset={() => { setQuery(''); setActiveCat(null); setListTab('all'); }} onAsk={goAsk} />
+              <EmptyResult onReset={() => { setQuery(''); setActiveCat(null); setListTab('all'); }} />
             ) : showUsageGroups ? (
               usageGroups.map((g) => groupBlock(g.key, g.title, g.items))
             ) : (
@@ -824,18 +820,12 @@ function PagedRows({
   );
 }
 
-function EmptyResult({ onReset, onAsk }: { onReset: () => void; onAsk?: () => void }) {
+function EmptyResult({ onReset }: { onReset: () => void }) {
   return (
     <View style={styles.emptyResult}>
       {/* 그림 이모지 금지(워딩 §1) — 같은 뜻을 Ionicons 로. 2026-08-07 QA #5-2. */}
       <Ionicons name="search-outline" size={30} color={InkColors.ink3} />
       <Text style={styles.emptyResultText}>조건에 맞는 노하우가 없어요</Text>
-      {/* 매니저 전용: 목록에서 못 찾으면 다음 행동은 물어보기(AI 답변, 없으면 사장님께 질문) */}
-      {onAsk && (
-        <Pressable onPress={onAsk} accessibilityRole="button" accessibilityLabel="물어보기">
-          <Text style={styles.resetLink}>물어보기</Text>
-        </Pressable>
-      )}
       <Pressable onPress={onReset}>
         <Text style={styles.resetLink}>필터 초기화</Text>
       </Pressable>

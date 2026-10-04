@@ -356,7 +356,12 @@ export function ownerUnreadCount(
 }
 
 /** 사장 알림 목록(시간 역순, MAX_NOTIFS 상한). */
-export function buildOwnerNotifications(args: {
+export function buildOwnerNotifications(args: Parameters<typeof ownerRows>[0]): OwnerNotif[] {
+  return ownerRows(args).sort((a, b) => b.at.localeCompare(a.at)).slice(0, MAX_NOTIFS);
+}
+
+/** 사장 축 행 전부(정렬·상한 전). 매니저 배지가 자르기 전 배열에서 세도록 나눠 둔다. */
+function ownerRows(args: {
   queue: UnknownQuery[];
   suggestions: PlaybookSuggestion[];
   swaps: SwapRequest[];
@@ -478,7 +483,7 @@ export function buildOwnerNotifications(args: {
     });
   }
 
-  return out.sort((a, b) => b.at.localeCompare(a.at)).slice(0, MAX_NOTIFS);
+  return out;
 }
 
 // ── 매니저 알림 (0093 매니저 = 사장 화면 세트 + 여전히 '받는 쪽') ───────────
@@ -491,9 +496,13 @@ export function buildOwnerNotifications(args: {
 // ★매니저 화면에서 **행동할 수 없는 것은 넣지 않는다**: 교대 수락·내 교대 요청 결과는 직원 화면
 //   (/junior/schedule)에서만 할 수 있는 일이라, 넣으면 알림만 오고 갈 곳이 없어진다 → 제외.
 //   (매니저의 교대 축은 사장 축의 '승인 대기'(swap_approval)가 담당한다.)
+// ★F-2(2026-10-04): 매니저 행은 허용 목록(roles.ts MANAGER_OWNER_ROUTES)이나 /junior/* 로만 간다.
+//   합류 승인·제안 검토·사장 알림(요금제·본사)·입금 결과는 사장 전용 화면이라 뺀다(0201). 예전엔 사장 축을
+//   그대로 받아 눌러도 직원 홈으로 튕겼다. 질문과 내 제안 결과는 물어보기 탭(/junior/chat)에서 본다.
 export type ManagerNotifKind =
-  | OwnerNotifKind | 'notice' | 'assign' | 'suggestion_approved' | 'suggestion_rejected';
-export type ManagerNotif = Omit<OwnerNotif, 'kind'> & { kind: ManagerNotifKind };
+  | 'mention' | 'swap_approval' | 'question' | 'notice' | 'assign' | 'suggestion_approved' | 'suggestion_rejected';
+export type ManagerNotifRoute = '/owner/work' | '/owner/schedule' | '/junior/chat';
+export type ManagerNotif = Omit<OwnerNotif, 'kind' | 'route'> & { kind: ManagerNotifKind; route: ManagerNotifRoute };
 
 export type ManagerReceivedArgs = {
   feed: FeedItem[];
@@ -506,7 +515,7 @@ export type ManagerReceivedArgs = {
   ackAt?: string | null;
 };
 
-/** ② 나에게 온 것 — 매니저 표면(/owner/*) 경로로. 카운트와 목록이 같은 배열을 보게 이 함수 하나만 쓴다. */
+/** ② 나에게 온 것 — 매니저가 열 수 있는 경로로. 카운트와 목록이 같은 배열을 보게 이 함수 하나만 쓴다. */
 function buildManagerReceived(args: ManagerReceivedArgs): ManagerNotif[] {
   const { feed, taskTemplates, done, today, suggestions, userId: me, nameOf, ackAt } = args;
   const out: ManagerNotif[] = [];
@@ -554,25 +563,45 @@ function buildManagerReceived(args: ManagerReceivedArgs): ManagerNotif[] {
       body: !ok && sg.owner_note ? `${sg.text}\n사유: ${sg.owner_note}` : sg.text,
       at: sg.reviewed_at as string,
       unread: isAfterAck(sg.reviewed_at, ackAt),
-      route: '/owner/categories',
+      // 물어보기 탭 '내 공간'에 내가 보낸 제안 목록이 있다(직원과 같은 곳 · F-2). /owner/categories 는 허용 목록 밖이다.
+      route: '/junior/chat',
     });
   }
 
   return out;
 }
 
-/** 매니저 알림 목록 = ① 사장 축(처리형) + ② 개인 수신 축. */
+/** ① 사장 축 중 매니저가 행동할 수 있는 것만(F-2) — 멘션(/owner/work) · 교대 승인 대기(/owner/schedule) ·
+ *  질문(/junior/chat). 질문은 물어보기 탭이 보여 주는 것(answerableQuestions)만 남긴다. 내가 물은 질문은
+ *  거기서 답할 수 없어서 뺀다. */
+function managerOwnerRows(ownerArgs: Parameters<typeof ownerRows>[0]): ManagerNotif[] {
+  const answerable = new Set(
+    answerableQuestions(ownerArgs.queue, ownerArgs.userId ?? '', ownerArgs.suggestions).map((u) => `q_${u.id}`),
+  );
+  const out: ManagerNotif[] = [];
+  for (const r of ownerRows(ownerArgs)) {
+    if (r.kind === 'mention' || r.kind === 'swap_approval') out.push({ ...r, kind: r.kind, route: r.route as ManagerNotifRoute });
+    else if (r.kind === 'question' && answerable.has(r.id)) out.push({ ...r, kind: 'question', route: '/junior/chat' });
+  }
+  return out;
+}
+
+/** 매니저 행 전부(정렬·상한 전). 목록과 배지가 이 배열 하나를 본다. */
+const managerRows = (ownerArgs: Parameters<typeof ownerRows>[0], received: ManagerReceivedArgs): ManagerNotif[] =>
+  [...managerOwnerRows(ownerArgs), ...buildManagerReceived(received)];
+
+/** 매니저 알림 목록 = ① 사장 축 중 행동할 수 있는 것 + ② 개인 수신 축. */
 export function buildManagerNotifications(
-  ownerArgs: Parameters<typeof buildOwnerNotifications>[0],
+  ownerArgs: Parameters<typeof ownerRows>[0],
   received: ManagerReceivedArgs,
 ): ManagerNotif[] {
-  return [...buildOwnerNotifications(ownerArgs), ...buildManagerReceived(received)]
+  return managerRows(ownerArgs, received)
     .sort((a, b) => b.at.localeCompare(a.at))
     .slice(0, MAX_NOTIFS);
 }
 
-/** 매니저 벨 뱃지 = 사장 축 카운트 + 개인 수신 축의 안읽음.
- *  ②는 술어를 다시 쓰지 않고 목록에서 파생한다 — 배지와 목록이 어긋나는 고전적 드리프트 차단. */
-export function managerUnreadCount(ownerCount: number, received: ManagerReceivedArgs): number {
-  return ownerCount + buildManagerReceived(received).filter((r) => r.unread).length;
+/** 매니저 벨 뱃지 = 목록과 **같은 배열**의 안 읽음 수(F-2). 예전엔 사장 축 카운트를 그대로 더해
+ *  목록에 없는 합류·제안·입금까지 셌다. 술어를 다시 쓰지 않는다. */
+export function managerUnreadCount(ownerArgs: Parameters<typeof ownerRows>[0], received: ManagerReceivedArgs): number {
+  return managerRows(ownerArgs, received).filter((r) => r.unread).length;
 }

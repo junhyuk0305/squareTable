@@ -15,7 +15,7 @@ import { router } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { reportError } from '@/lib/analytics/track';
 import { useSessionStore } from '@/lib/store/useSessionStore';
-import { canManage } from '@/lib/utils/roles';
+import { routeForRole } from '@/lib/utils/roles';
 // db 는 useSessionStore 가 이미 정적으로 import 한다 → 부팅 그래프에 새 모듈이 늘지 않는다.
 import { fetchOwnerAlertMeta } from '@/lib/db';
 import type { PushPermission } from '@/lib/push/webpush';
@@ -45,16 +45,6 @@ export function pushSupported(): boolean {
   return Platform.OS === 'ios' || Platform.OS === 'android';
 }
 
-// 알림 클릭 목적지 교정 — usePushBootstrap(웹) 의 routeForRole 과 같은 규칙(발송 측이 수신자 역할을
-// 모르므로 클릭 시점의 세션 역할로 접두사를 뒤집는다). 이벤트 소스가 완전히 다른 API 라(SW 메시지 ↔
-// 알림 응답 리스너) 모듈은 나누되 규칙만 그대로 복제한다.
-function routeForRole(url: string): string {
-  const role = useSessionStore.getState().role;
-  if (canManage(role) && url.startsWith('/junior/')) return '/owner/' + url.slice('/junior/'.length);
-  if (role === 'junior' && url.startsWith('/owner/')) return '/junior/' + url.slice('/owner/'.length);
-  return url;
-}
-
 let listenerBound = false;
 
 /** 알림 탭 → 앱 내 라우팅. 부팅 1회만 건다. */
@@ -67,7 +57,8 @@ export function bindNotificationTapRouting(): void {
     if (!url) return;
     void resolveTapUrl(url, content.categoryIdentifier).then((to) => {
       try {
-        router.push(routeForRole(to) as never);
+        // 목적지 교정은 웹(usePushBootstrap)과 같은 roles.ts routeForRole 하나를 쓴다(F-2).
+        router.push(routeForRole(to, useSessionStore.getState().role) as never);
       } catch {
         /* 알 수 없는 경로면 무시 — 앱은 열려 있는 상태 유지 */
       }

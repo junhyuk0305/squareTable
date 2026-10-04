@@ -58,10 +58,10 @@ export function storeUnreadCount(d: UnitNotifData, role: string, me: string, tod
   //   지금은 (a)를 권고안으로 남기고 코드는 건드리지 않는다 — 값이 안 바뀌는 수정으로
   //   "고쳤다"고 표시하면 다음 사람이 이 불일치를 다시 찾아야 한다.
   if (!canManage(role)) return juniorUnreadCount(d.feed, d.swaps, me, today, d.taskTemplates, d.done, ackAt, d.suggestions, d.queue);
-  // 0093: 매니저 매장은 사장 판(질문·제안·합류신청 포함 — RPC 가 manager 매장에도 해당 원천을 준다)
-  //       + 매니저가 받는 쪽인 축(공지·배정·내 제안 결과).
-  const base = ownerUnreadCount(d.queue, d.suggestions, d.swaps, d.pending, d.feed, me, ackAt);
-  return role === 'manager' ? managerUnreadCount(base, receivedArgsOf(d, me, today, nameOf, ackAt)) : base;
+  // 0093: 매니저 매장 = 사장 축 중 매니저가 행동할 수 있는 것 + 매니저가 받는 쪽인 축(공지·배정·내 제안 결과).
+  //       목록(buildStoreNotifs)과 같은 인자·같은 배열에서 센다(F-2).
+  if (role === 'manager') return managerUnreadCount(ownerArgsOf(d, me, nameOf, ackAt), receivedArgsOf(d, me, today, nameOf, ackAt));
+  return ownerUnreadCount(d.queue, d.suggestions, d.swaps, d.pending, d.feed, me, ackAt);
 }
 
 const nameOfFor = (d: UnitNotifData, role: string, me: string) => (id: string) =>

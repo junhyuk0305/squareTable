@@ -175,7 +175,7 @@ export default function OwnerLayout() {
       <Stack.Screen name="staff" options={{ title: '직원·급여' }} />
       {/* 퀴즈는 2026-09-13 부터 탭 루트다 — 다른 탭 루트와 같이 전환 애니메이션 없음. */}
       <Stack.Screen name="training" options={{ title: '퀴즈', animation: 'none' }} />
-      {/* 물어보기(매니저) — 직원 물어보기 재사용, 노하우 탭 검색 결과 없음에서 진입 */}
+      {/* 물어보기(사장) — 직원 물어보기 재사용, 업무 채팅에서 진입(WorkBoard). 매니저는 /junior/chat 을 쓴다(F-2) */}
       <Stack.Screen name="ask" options={{ title: '물어보기' }} />
       <Stack.Screen name="schedule" options={{ title: '근무표' }} />
       <Stack.Screen name="store-config" options={{ title: '매장 기본 정보' }} />
