@@ -25,7 +25,7 @@ import { ActionRow } from '@/components/blocks/ActionRow';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
-import { fmtDuration, won, todayStr, liveMinutes } from '@/lib/utils/attendance';
+import { fmtDuration, won, todayStr, liveMinutes, findOpenRecord } from '@/lib/utils/attendance';
 import { computePay, shiftsToPayRecords } from '@/lib/utils/payroll';
 import { showToast } from '@/lib/store/useToastStore';
 import { rotateInviteCode } from '@/lib/db';
@@ -106,8 +106,12 @@ export default function OwnerStaffScreen() {
       //   같은 데이터인데 화면마다 규칙이 다르면 세 화면이 서로 다른 금액을 말한다 —
       //   `junior/attendance`·`junior/timesheet`·`owner/timesheet/[staffId]` 가 이미 쓰는 규칙에 맞춘다.
       const wageSet = Object.prototype.hasOwnProperty.call(wages, s.id);
-      const todayRec = records.find((r) => r.staff_id === s.id && r.date === today);
-      const status: 'out' | 'working' | 'done' = !todayRec ? 'out' : !todayRec.check_out ? 'working' : 'done';
+      // ★근무 중 판정은 날짜와 상관없이 열린 기록으로 한다(Q4) — 오늘 기록만 보면 자정을 넘긴 야간 근무자가 '미출근'으로 보인다.
+      const status: 'out' | 'working' | 'done' = findOpenRecord(records, s.id)
+        ? 'working'
+        : records.some((r) => r.staff_id === s.id && r.date === today)
+          ? 'done'
+          : 'out';
       // 급여 규칙(주휴·휴게·야간·연장·추가수당) 반영 예상 인건비 — computePay SSOT(F1). min 은 근무시간 표시용.
       // schedMin = 이번 달 **근무표에 잡힌** 분. 0이면 금액이 0인 게 아니라 **아직 계산할 수 없는 것**이다.
       const schedMin = shiftRecs.reduce((sum, r) => sum + r.work_minutes, 0);

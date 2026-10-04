@@ -13,7 +13,8 @@ import { SectionLabel } from '@/components/SectionLabel';
 import { HeroSubNav } from '@/components/blocks/HeroSubNav';
 import { AlertRow } from '@/components/blocks/AlertRow';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
-import { hhmm } from '@/lib/utils/attendance';
+import { openSinceText } from '@/lib/utils/attendance';
+import { ForgotCheckoutCard } from '@/components/junior/ForgotCheckoutCard';
 import { useJuniorHomeData } from '@/lib/hooks/useJuniorHomeData';
 import { useGuideOnce } from '@/lib/store/useGuideStore';
 import { useWorkStore } from '@/lib/store/useWorkStore';
@@ -52,6 +53,7 @@ export default function JuniorHomeScreen() {
     todayRecs,
     openRec,
     working,
+    forgotCheckout,
     taskTotal,
     taskRemain,
     todayTasks,
@@ -88,7 +90,7 @@ export default function JuniorHomeScreen() {
   // ★'아직 출근 전이에요'는 도착 전엔 거짓말이다 — 근무 중인 직원에게도 그렇게 보인다.
   //   값마다 "가져오는 중" 문구를 박는 대신 아래 loaded 게이트가 본문을 통째로 늦춘다.
   const clockLine = working
-    ? `${hhmm(openRec!.check_in!)} 출근 · 근무 중`
+    ? `${openSinceText(openRec!.check_in!)} · 근무 중` // 자정을 넘기면 "어제 22:00 출근 · 근무 중"(Q4)
     : todayRecs.length > 0
       ? `오늘 ${todayRecs.length}회 근무`
       : '아직 출근 전이에요';
@@ -101,7 +103,7 @@ export default function JuniorHomeScreen() {
       <Stack.Screen options={{ headerShown: false }} />
       <AppTopBar />
 
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <Text style={styles.greet}>{userName}님, 오늘도 화이팅이에요</Text>
 
         {!loaded ? (
@@ -120,13 +122,15 @@ export default function JuniorHomeScreen() {
             label="남은 할일"
             value={heroValue}
             caption={nextTask ? `지금은 ${nextTask.text} · ${clockLine}` : clockLine}
-            ctaLabel={working ? '퇴근하기' : todayRecs.length > 0 ? '다시 출근하기' : '출근하기'}
+            // 16시간이 넘게 열린 기록이면 퇴근 버튼 대신 아래 안내가 실제 퇴근 시각을 받는다(Q4).
+            ctaLabel={forgotCheckout ? undefined : working ? '퇴근하기' : todayRecs.length > 0 ? '다시 출근하기' : '출근하기'}
             onCta={() => {
               if (working) checkOut(userId);
               else checkIn(userId);
             }}
           />
         </Appear>
+        {forgotCheckout && openRec && <ForgotCheckoutCard record={openRec} />}
 
         {/* 2) 오늘 업무 — 목록 3건 + 전체보기 ›. 체크는 컨트롤이다 — 누르면 진짜 완료된다(업무 탭과 같은 toggleTask). */}
         <Appear delay={stagger(1)} style={styles.section}>

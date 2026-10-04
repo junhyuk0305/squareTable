@@ -107,6 +107,40 @@ export function mdHHmm(iso: string): string {
   return `${k.getUTCMonth() + 1}/${k.getUTCDate()} ${hhmm(iso)}`;
 }
 
+/** 이만큼 넘게 열려 있는 기록은 퇴근을 깜빡한 것으로 본다(Q4). 퇴근 버튼 대신 실제 퇴근 시각을 받는다. */
+export const FORGOT_CHECKOUT_MIN = 16 * 60;
+
+/**
+ * 그 직원의 열린(미퇴근) 기록 하나 — **날짜와 상관없이** 가장 최근 출근 1건.
+ * ★Q4: 화면은 오늘 날짜 기록만 보고 스토어는 날짜 무관으로 봐서, 자정을 넘긴 야간 근무자에게
+ *   퇴근 버튼이 사라졌다. 스토어 checkIn·checkOut, 홈, 출퇴근 화면, 사장 직원 목록이 모두 이것을 쓴다.
+ */
+export function findOpenRecord<T extends { staff_id: string; check_in: string | null; check_out: string | null }>(
+  records: readonly T[],
+  staffId: string,
+): T | undefined {
+  let best: T | undefined;
+  for (const r of records) {
+    if (r.staff_id !== staffId || !r.check_in || r.check_out) continue;
+    if (!best || tsMs(r.check_in) > tsMs(best.check_in!)) best = r;
+  }
+  return best;
+}
+
+/** 열린 기록의 출근 표시 — 오늘이면 "22:00 출근", 어제면 "어제 22:00 출근", 그 전이면 "10/3 22:00 출근"(KST). */
+export function openSinceText(checkIn: string, now: Date = new Date()): string {
+  const day = todayStr(new Date(checkIn));
+  if (day === todayStr(now)) return `${hhmm(checkIn)} 출근`;
+  if (day === todayStr(new Date(now.getTime() - 24 * 3600 * 1000))) return `어제 ${hhmm(checkIn)} 출근`;
+  return `${mdHHmm(checkIn)} 출근`;
+}
+
+/** 16시간이 넘게 열려 있는가 — 퇴근 깜빡 판정(Q4). 닫힌 기록은 false. */
+export function isForgotCheckout(r: { check_in: string | null; check_out: string | null }, now: Date = new Date()): boolean {
+  if (!r.check_in || r.check_out) return false;
+  return minutesBetween(r.check_in, now.toISOString()) > FORGOT_CHECKOUT_MIN;
+}
+
 /**
  * 입력 마스크 — 숫자만 받아 "1230"→"12:30"으로 자동 정리(4자리까지).
  * 시(0~23)·분(0~59)은 두 자리가 다 찼을 때만 클램프한다.

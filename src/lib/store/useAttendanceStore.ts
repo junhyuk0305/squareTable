@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { coalesce, subscribeDebounced } from '@/lib/store/realtimeSync';
 import { currentTenantEpoch, isStaleEpoch } from '@/lib/store/tenantEpoch';
-import { todayStr, minutesBetween, nowISO, MAX_SHIFT_MIN, tsMs } from '@/lib/utils/attendance';
+import { todayStr, minutesBetween, nowISO, MAX_SHIFT_MIN, findOpenRecord } from '@/lib/utils/attendance';
 import { HAS_SUPABASE } from '@/lib/supabase';
 import { fetchAttendance, upsertAttendance, deleteAttendance, subscribeAttendance } from '@/lib/db';
 import { guardWrite, useSyncStore } from '@/lib/store/useSyncStore';
@@ -113,10 +113,8 @@ export const useAttendanceStore = create<State>((set, get) => ({
     // 다회 출퇴근: 열린(미퇴근) 기록이 없을 때만 새 출근 생성.
     // ⚠️ 날짜 무관하게 검사한다 — 어제 퇴근을 깜빡한 열린 기록이 있는데 오늘 또 출근을 찍으면
     //    이중 오픈(둘 다 미퇴근)이 되어 어제 기록이 24h로 부풀고 급여가 왜곡된다(F7). 먼저 퇴근시켜야.
-    const hasOpen = get().records.some(
-      (r) => r.staff_id === staffId && r.check_in && !r.check_out,
-    );
-    if (hasOpen) {
+    // 판정은 화면과 같은 findOpenRecord 하나다(Q4) — 둘이 다르면 버튼과 동작이 어긋난다.
+    if (findOpenRecord(get().records, staffId)) {
       useSyncStore.getState().noteError('이미 출근 중이에요. 먼저 퇴근을 눌러 주세요.');
       return;
     }
@@ -139,9 +137,7 @@ export const useAttendanceStore = create<State>((set, get) => ({
       useSyncStore.getState().noteError('근태 기록을 불러오지 못했어요. 연결을 확인하고 다시 눌러 주세요.');
       return;
     }
-    const open = get()
-      .records.filter((r) => r.staff_id === staffId && r.check_in && !r.check_out)
-      .sort((a, b) => tsMs(b.check_in!) - tsMs(a.check_in!))[0];
+    const open = findOpenRecord(get().records, staffId);
     if (!open) return;
     const out = new Date().toISOString();
     // 퇴근 깜빡으로 24h 초과 시 절상(남용 #12) — 자동 펀치가 비현실적 급여를 만들지 않게.

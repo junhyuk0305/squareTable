@@ -19,7 +19,8 @@ import { useAttendanceStore } from '@/lib/store/useAttendanceStore';
 import { usePayrollStore, useWagesSettled } from '@/lib/store/usePayrollStore';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
-import { fmtDuration, won, hhmm, todayStr, liveMinutes, DEFAULT_HOURLY_WAGE } from '@/lib/utils/attendance';
+import { fmtDuration, won, hhmm, todayStr, liveMinutes, DEFAULT_HOURLY_WAGE, findOpenRecord, isForgotCheckout, openSinceText } from '@/lib/utils/attendance';
+import { ForgotCheckoutCard } from '@/components/junior/ForgotCheckoutCard';
 import { computePay, shiftsToPayRecords } from '@/lib/utils/payroll';
 import { useScheduleStore, scheduledShiftsFor } from '@/lib/store/useScheduleStore';
 import { monthDates } from '@/lib/utils/schedule';
@@ -65,7 +66,10 @@ export function AttendancePanel() {
 
   const mine = useMemo(() => records.filter((r) => r.staff_id === userId), [records, userId]);
   const todayRecs = mine.filter((r) => r.date === today);
-  const openRec = todayRecs.find((r) => r.check_in && !r.check_out);
+  // ★열린 기록은 날짜와 상관없이 찾는다(Q4) — 오늘 기록만 보면 자정을 넘긴 야간 근무자의 퇴근 버튼이 사라진다.
+  const openRec = findOpenRecord(mine, userId);
+  // 어제 연 기록은 todayRecs 밖이다 — 큰 숫자가 0분으로 보이지 않게 그 기록의 경과분도 더한다.
+  const carriedOpen = openRec && openRec.date !== today ? openRec : undefined;
   const monthRecs = mine.filter((r) => r.date.startsWith(ym));
   // 최근 기록은 날짜·출근시각 내림차순(최신 우선)으로 표시.
   // ★수동 useMemo 를 뺐다 — 급여 기준을 근무표로 바꾸면서 React Compiler 가 이 컴포넌트의 메모이즈를
@@ -75,7 +79,7 @@ export function AttendancePanel() {
     (a, b) => b.date.localeCompare(a.date) || (b.check_in ?? '').localeCompare(a.check_in ?? ''),
   );
 
-  const todayMin = todayRecs.reduce((sum, r) => sum + liveMinutes(r), 0);
+  const todayMin = todayRecs.reduce((sum, r) => sum + liveMinutes(r), 0) + (carriedOpen ? liveMinutes(carriedOpen) : 0);
   // ★급여의 기준은 **근무표**다(2026-08-26 사용자 확정). 출퇴근 기록은 확인용이라 금액에 안 들어간다.
   //   교대로 넘어온 근무도 shiftsOn 을 거친 scheduledShiftsFor 가 그대로 반영한다.
   // 순수 계산이라 수동 메모이즈하지 않는다 — React Compiler 가 자동으로 한다
@@ -112,6 +116,7 @@ export function AttendancePanel() {
     : '';
 
   const working = !!openRec;
+  const forgotCheckout = !!openRec && isForgotCheckout(openRec);
 
   // 근무 중일 때만 30초마다 경과시간/급여 갱신(퇴근 상태에선 불필요한 리렌더 방지).
   useEffect(() => {
@@ -127,7 +132,7 @@ export function AttendancePanel() {
   const ready = attendanceLoaded && wagesSettled && scheduleLoaded;
 
   return (
-    <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+    <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
       {!ready ? (
         <ScreenLoading label="출퇴근 기록을 불러오고 있어요…" />
       ) : attendanceLoadError ? (
@@ -145,14 +150,19 @@ export function AttendancePanel() {
         {working && <Text style={styles.workingTag}>● 근무 중</Text>}
         <Text style={styles.bigTime}>{fmtDuration(todayMin)}</Text>
         <Text style={styles.bigSub}>
-          {working
+          {carriedOpen
+            ? `${openSinceText(carriedOpen.check_in!)} · 근무 중`
+            : working
             ? `${hhmm(openRec!.check_in!)} 출근${wageSet ? ` · 오늘 ${won(todayPay)}` : ''}`
             : todayRecs.length > 0
               ? `오늘 ${todayRecs.length}회 근무${wageSet ? ` · ${won(todayPay)}` : ''}`
               : '아직 출근 전이에요'}
         </Text>
 
-        {working ? (
+        {forgotCheckout ? (
+          // 16시간이 넘게 열린 기록 — 퇴근 버튼 대신 실제 퇴근 시각을 받는다(Q4).
+          <ForgotCheckoutCard record={openRec!} />
+        ) : working ? (
           <Pressable
             onPress={() => checkOut(userId)}
             style={({ pressed }) => [styles.btn, styles.btnOut, pressed && { opacity: 0.85 }]}

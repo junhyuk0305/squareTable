@@ -4,7 +4,7 @@ import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useAttendanceStore, type AttendanceRecord } from '@/lib/store/useAttendanceStore';
 import { useWorkStore, useDayparts, daypartRoutineTemplates, occursOn, taskVisibleTo, trainingCourseViews, courseEntriesOf } from '@/lib/store/useWorkStore';
 import { useScheduleStore } from '@/lib/store/useScheduleStore';
-import { todayStr } from '@/lib/utils/attendance';
+import { todayStr, findOpenRecord, isForgotCheckout } from '@/lib/utils/attendance';
 
 export type JuniorHomeData = {
   /**
@@ -23,6 +23,8 @@ export type JuniorHomeData = {
   todayRecs: AttendanceRecord[];
   openRec: AttendanceRecord | undefined;
   working: boolean;
+  /** 16시간이 넘게 열린 기록 — 퇴근 버튼 대신 실제 퇴근 시각을 받는다(Q4). */
+  forgotCheckout: boolean;
   // 오늘 할일
   taskTotal: number;
   taskRemain: number;
@@ -57,8 +59,10 @@ export function useJuniorHomeData(): JuniorHomeData {
     () => records.filter((r) => r.staff_id === userId && r.date === today),
     [records, userId, today],
   );
-  const openRec = todayRecs.find((r) => r.check_in && !r.check_out);
+  // ★열린 기록은 날짜와 상관없이 찾는다(Q4) — 오늘 기록만 보면 자정을 넘긴 야간 근무자의 퇴근 버튼이 사라진다.
+  const openRec = findOpenRecord(records, userId);
   const working = !!openRec;
+  const forgotCheckout = !!openRec && isForgotCheckout(openRec);
 
   // 오늘 할일 진행 — 오늘 떠야 하는 것(occursOn) + 본인이 볼 수 있는 것(shared/내 private)만.
   // ★2026-08-12: 사장 홈과 **같은 누락**이 여기에도 있었다 — work_templates 만 봐서 매장 공통 루틴
@@ -132,6 +136,7 @@ export function useJuniorHomeData(): JuniorHomeData {
     todayRecs,
     openRec,
     working,
+    forgotCheckout,
     taskTotal,
     taskRemain,
     todayTasks,
