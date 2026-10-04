@@ -12,7 +12,8 @@
 //   [5] unregister_my_push 는 지금 세션 행만 지운다. release_push_token 은 토큰·uid 가 둘 다 맞을 때만 지운다.
 //   [6] 웹 구독(push_subscriptions)도 같은 규칙.
 //   [7] 엣지 — deliver() 가 두 RPC 로 대상을 읽고, RPC 가 실패하면 아무것도 보내지 않는다.
-//       모든 sweep·직접 발송이 deliver() 를 지난다. F-2: join_owners·owner_only 는 사장만.
+//       모든 sweep·직접 발송이 deliver() 를 지난다. F-2: join_owners 와 owners+ownerOnly 는 사장만.
+//       앱이 보내는 audience 는 옛 엣지도 아는 값만(옛 엣지는 모르는 값을 직원에게 보낸다).
 //
 // ★로컬 전용: 실행할 때마다 계정을 가입시킨다. URL 이 로컬이 아니면 멈춘다.
 // 실행: node scripts/qa-push-session.mjs   자가정리(계정·OTP 시드).
@@ -296,12 +297,25 @@ console.log('\n[7] 엣지 deliver() · 발송 경로 · F-2');
   const roles = rolesSrc ? new Function(`${rolesSrc}; return audienceRoles;`)() : null;
   const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
   check('7-6 F-2 join_owners 는 사장만(매니저 제외)', !!roles && eq(roles('join_owners'), ['owner']), roles ? JSON.stringify(roles('join_owners')) : 'audienceRoles 없음');
-  check('7-7 F-2 새 audience owner_only = 사장만', !!roles && eq(roles('owner_only'), ['owner']), roles ? JSON.stringify(roles('owner_only')) : 'audienceRoles 없음');
+  // F-2 는 새 audience 가 아니라 'owners' + ownerOnly 플래그로 좁힌다. 옛 엣지는 플래그를 무시해 사장+매니저(오늘 동작)로 간다.
+  check('7-7 F-2 owners + ownerOnly=true = 사장만', !!roles && eq(roles('owners', true), ['owner']), roles ? JSON.stringify(roles('owners', true)) : 'audienceRoles 없음');
   check('7-8 owners 는 사장+매니저, staff 는 직원 그대로', !!roles && eq(roles('owners'), ['owner', 'manager']) && eq(roles('staff'), ['junior']));
   check('7-9 모르는 audience 는 null(직원에게 새지 않음)', !!roles && roles('nope') === null && roles(undefined) === null);
-  const notifySrc = readFileSync(join(ROOT, 'src/lib/push/notify.ts'), 'utf8');
+  const notifySrc = readFileSync(join(ROOT, 'src/lib/push/notify.ts'), 'utf8').replace(/\r\n/g, '\n');
   const sug = notifySrc.slice(notifySrc.indexOf('export const notifyOwnersSuggestion'));
-  check('7-10 F-2 notifyOwnersSuggestion 은 owner_only 를 쓴다', /audience: 'owner_only'/.test(sug.slice(0, sug.indexOf('});'))));
+  const sugArgs = sug.slice(0, sug.indexOf('});'));
+  check('7-10 F-2 notifyOwnersSuggestion 은 audience owners + ownerOnly: true 를 보낸다',
+    /audience: 'owners'/.test(sugArgs) && /ownerOnly: true/.test(sugArgs), sugArgs.match(/audience: '[^']*'/)?.[0] ?? '');
+  // ★0236 이전 엣지(eaa0fbd)는 `audience === 'owners' ? ['owner','manager'] : ['junior']` 였다. 그 엣지가 모르는 값은 직원에게 간다.
+  //   웹 번들은 머지하면 바로 나가고 엣지 배포·롤백은 따로 한다. 그래서 앱이 보낼 수 있는 audience 는 옛 엣지가 아는 값이어야 한다.
+  const OLD_EDGE_AUDIENCES = ['owners', 'staff', 'user', 'join_owners'];
+  const typeLine = notifySrc.match(/export type PushAudience\s*=([^;]+);/)?.[1] ?? '';
+  const clientAud = [...typeLine.matchAll(/'([^']+)'/g)].map((m) => m[1]);
+  const unknownToOld = clientAud.filter((a) => !OLD_EDGE_AUDIENCES.includes(a));
+  check('7-11 ★앱이 보내는 audience 는 모두 옛 엣지가 아는 값(모르는 값은 옛 엣지에서 직원에게 샌다)',
+    clientAud.length > 0 && unknownToOld.length === 0, `client=${JSON.stringify(clientAud)} 옛 엣지 모름=${JSON.stringify(unknownToOld)}`);
+  check('7-12 엣지 직접 발송이 ownerOnly 플래그를 대상 역할에 반영한다',
+    /const ownerOnly = payload\.ownerOnly === true;/.test(edgeSrc) && /\.in\('role', audienceRoles\(audience, ownerOnly\)/.test(edgeSrc));
 }
 
 for (const u of users) { try { if (u.id) await admin.auth.admin.deleteUser(u.id); } catch { /* best-effort */ } }
