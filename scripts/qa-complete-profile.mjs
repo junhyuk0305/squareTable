@@ -58,7 +58,9 @@ async function signUpOAuthLike(client, email, name) {
 
 // 0088 게이트 라이브 — complete_profile 로 기록될 번호(A=0107·C=0108)와 E 선충전 번호(0104)를
 // '인증됨'으로 선등록해야 create_store/join 통과. (게이트 판정 = 프로필 phone ↔ phone_otps.verified_at)
-const qaPhones = [`0107${s.slice(0, 7)}`, `0108${s.slice(0, 7)}`, `0104${s.slice(0, 7)}`];
+// 0238 부터는 complete_profile 이 번호를 바꿀 때도 "방금 인증한 번호"여야 한다(번호 트리거) → D·E·F 번호(0109·0105·0110)도 시드.
+const qaPhones = [`0107${s.slice(0, 7)}`, `0108${s.slice(0, 7)}`, `0104${s.slice(0, 7)}`,
+  `0109${s.slice(0, 7)}`, `0105${s.slice(0, 7)}`, `0110${s.slice(0, 7)}`];
 const seededRes = await seedVerifiedPhones(URL, SERVICE, qaPhones);
 if (seededRes.skipped) console.log(`  (phone_otps 시드 스킵: ${seededRes.skipped})`);
 
