@@ -30,6 +30,7 @@ const load = async (p) => {
 const consent = await load('../src/lib/config/consent.ts');
 const { isUnder14 } = await load('../src/lib/utils/validation.ts');
 const { TERMS_VERSION } = await load('../src/lib/config/business.ts');
+const { isMissingRpc } = await load('../src/lib/utils/userError.ts');
 
 const read = (p) => {
   try {
@@ -111,6 +112,24 @@ console.log('\n■ 화면·세션 연결(주석 제외 코드)');
   const n = (store.match(/under_14/g) || []).length;
   check('★under_14 를 completeProfile · createStore · joinByInvite 세 곳에서 문구로 바꾼다', n >= 3 && (store.match(/UNDER_14_TEXT/g) || []).length >= 3, `under_14 ${n}회`);
   check('체크리스트 컴포넌트는 consent.ts 의 행을 그린다', /consentRows\(/.test(checklist) && /allConsented\(/.test(checklist));
+}
+
+console.log('\n■ 서버에 0240 이 아직 없을 때 — record_my_consents 부재는 가입을 막지 않는다(그 밖의 실패는 막는다)');
+{
+  const m = (e) => (fn(isMissingRpc) ? isMissingRpc(e) : '(함수 없음)');
+  const MISSING = { code: 'PGRST202', message: 'Could not find the function public.record_my_consents(p_channel, p_items, p_version) in the schema cache' };
+  check('★PGRST202 = 함수 없음', m(MISSING) === true, show(m(MISSING)));
+  check('code 없이 원문만 "Could not find the function" 이어도 함수 없음', m({ message: MISSING.message }) === true);
+  check('not_authenticated 는 함수 없음이 아니다', m({ code: 'P0001', message: 'not_authenticated' }) === false);
+  check('컬럼 없음(PGRST204)은 함수 없음이 아니다', m({ code: 'PGRST204', message: "Could not find the 'x' column of 'y' in the schema cache" }) === false);
+  check('네트워크 실패는 함수 없음이 아니다', m({ message: 'TypeError: Failed to fetch' }) === false);
+  check('null 은 false', m(null) === false);
+
+  const store = strip(read('src/lib/store/useSessionStore.ts')).replace(/\s+/g, ' ');
+  const body = (store.match(/completeProfile: async[\s\S]*?rpcCompleteProfile\(/) || [''])[0];
+  check('★completeProfile 이 동의 실패 중 함수 없음만 걸러 낸다(isMissingRpc)', /isMissingRpc\(cErr\)/.test(body));
+  check('함수 없음은 reportError 로 남긴다', /reportError\('session\.completeProfile\.consentRpcMissing'/.test(body));
+  check('그 밖의 동의 실패는 여전히 프로필 저장 전에 돌아간다', /if \(cErr && !isMissingRpc\(cErr\)\) \{ return/.test(body));
 }
 
 console.log(`\n── ${pass} PASS · ${fail} FAIL`);
