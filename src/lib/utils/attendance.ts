@@ -176,6 +176,14 @@ export function normalizeTime(raw: string): string | null {
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
 }
 
+/**
+ * 다 친 "HH:MM"(다섯 글자)만 정규화해 돌려준다. 덜 쳤으면 null.
+ * ★퇴근 깜빡 카드용: 덜 친 "18:3" 을 normalizeTime 에 넣으면 183 을 1시 83분으로 읽어 "01:59" 가 된다.
+ */
+export function completeHHMM(raw: string): string | null {
+  return /^\d{2}:\d{2}$/.test(raw) ? normalizeTime(raw) : null;
+}
+
 /** "YYYY-MM" 기준 delta개월 이동 */
 export function shiftMonth(ym: string, delta: number): string {
   const [y, m] = ym.split('-').map(Number);

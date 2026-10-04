@@ -5,7 +5,7 @@ import { useAttendanceStore, type AttendanceRecord } from '@/lib/store/useAttend
 import { BrandColors, InkColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
-import { hhmm, maskHHMM, normalizeTime } from '@/lib/utils/attendance';
+import { completeHHMM, hhmm, maskHHMM } from '@/lib/utils/attendance';
 import { checkShiftTime } from '@/lib/utils/schedule';
 
 /**
@@ -22,7 +22,8 @@ export function ForgotCheckoutCard({ record }: { record: AttendanceRecord }) {
 
   const save = () => {
     const cin = hhmm(record.check_in!);
-    const co = normalizeTime(out) ?? '';
+    // 덜 친 입력(예: "18:3")은 '' 로 두어 checkShiftTime 이 "퇴근 시간을 18:00 처럼 넣어 주세요." 를 띄운다.
+    const co = completeHHMM(out) ?? '';
     const bad = checkShiftTime(cin, co);
     if (bad) {
       setErr(bad);
