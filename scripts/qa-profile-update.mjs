@@ -29,6 +29,10 @@ const URL = env.EXPO_PUBLIC_SUPABASE_URL || env.SUPABASE_URL;
 const ANON = env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 const SRV = env.SUPABASE_SERVICE_ROLE_KEY;
 if (!URL || !ANON) { console.error('FAIL: env 없음'); process.exit(2); }
+if (!/^http:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/.test(URL)) {
+  console.error(`중단: 로컬 도커 전용 하니스다(계정을 가입시킨다). 대상=${URL}`);
+  process.exit(2);
+}
 
 let pass = 0, fail = 0;
 const ok = (c, m, x = '') => { console.log(`  ${c ? 'PASS' : 'FAIL'} ${m} ${x}`); c ? pass++ : fail++; };
