@@ -19,6 +19,8 @@ import { canManage } from '@/lib/utils/roles';
 // db 는 useSessionStore 가 이미 정적으로 import 한다 → 부팅 그래프에 새 모듈이 늘지 않는다.
 import { fetchOwnerAlertMeta } from '@/lib/db';
 import type { PushPermission } from '@/lib/push/webpush';
+import { authStorage } from '@/lib/storage/authStorage';
+import { releasePendingPush, rememberRegisteredToken } from '@/lib/push/signOutPush';
 
 // 앱이 켜져 있는 동안 수신한 알림도 배너로 보여준다 — 기본 핸들러는 포그라운드에서 숨기므로,
 // 설정 안 하면 "왔는데 안 보임"으로 보인다(웹의 SW 는 항상 OS 알림창을 쓰므로 이 문제가 없다).
@@ -114,6 +116,8 @@ async function registerToken(unitId: string | null): Promise<boolean> {
       projectId ? { projectId } : undefined,
     );
     const platform = Platform.OS === 'ios' ? 'ios' : 'android';
+    // 오프라인 로그아웃이 남긴 pending 을 등록보다 먼저 푼다. 거꾸로 하면 같은 계정의 새 등록이 지워진다.
+    await releasePendingPushToken();
     const { error } = await supabase.rpc('save_push_device_token', {
       p_token: token,
       p_platform: platform,
@@ -123,6 +127,8 @@ async function registerToken(unitId: string | null): Promise<boolean> {
       reportError('push.native.saveToken', error);
       return false;
     }
+    // 토큰을 기기에 캐시한다(오프라인 로그아웃 때 getExpoPushTokenAsync 는 실패한다). pending 은 지운다.
+    await rememberRegisteredToken(authStorage, token);
     return true;
   } catch (e) {
     // 시뮬레이터/에뮬레이터(물리 기기 아님)거나 네트워크 문제 — 실기기에선 다음 부팅에 재시도된다.
@@ -140,6 +146,31 @@ export async function enableNativePush(unitId: string | null): Promise<PushPermi
   // OS 권한은 받았지만 우리 쪽 토큰 등록이 실패하면 켜진 게 아니다 — 카드를 남겨 재시도를 열어둔다.
   if (!(await registerToken(unitId))) return 'default';
   return 'granted';
+}
+
+let releasing: Promise<unknown> | null = null;
+
+/** 오프라인 로그아웃이 남긴 pending 을 release_push_token(anon 허용)으로 푼다(A1).
+ *  부팅 때 로그인 여부와 상관없이 부르고, 등록 직전에도 부른다. 동시에 두 번 돌지 않게 한 줄로 묶는다. */
+export function releasePendingPushToken(): Promise<unknown> {
+  if (!pushSupported()) return Promise.resolve();
+  if (!releasing) {
+    releasing = releasePendingPush(authStorage, async (p) => {
+      const { error } = await supabase.rpc('release_push_token', { p_token: p.token, p_user: p.userId });
+      if (error) reportError('push.native.release', error);
+      return !error;
+    }).finally(() => {
+      releasing = null;
+    });
+  }
+  return releasing;
+}
+
+/** 로그아웃 때 이전 계정의 알림 미리보기와 앱 아이콘 배지를 지운다. */
+export async function clearDeviceNotifications(): Promise<void> {
+  if (!pushSupported()) return;
+  await Notifications.dismissAllNotificationsAsync().catch(() => {});
+  await Notifications.setBadgeCountAsync(0).catch(() => {});
 }
 
 /** 이미 권한이 있으면 조용히 토큰을 등록/갱신한다. 부팅 시(웹의 ensurePushSubscribed 와 대응). */

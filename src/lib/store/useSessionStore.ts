@@ -34,6 +34,8 @@ import { effectivePlanOf, type SubStatusRaw } from '@/lib/utils/subscription';
 import { normalizePlan, type PlanId } from '@/lib/config/tiers';
 import { SHOW_IAP, SHOW_SOCIAL_LOGIN } from '@/lib/config/store-policy';
 import { notifyOwnersJoinRequest } from '@/lib/push/notify';
+import { signOutWithPushRelease } from '@/lib/push/signOutPush';
+import { authStorage } from '@/lib/storage/authStorage';
 
 // 0093: 세션 유효 역할. 활성 매장의 unit_members.role 에서 파생된다(owner·manager·junior 모두).
 // 판정은 sessionRole.ts deriveStoreRole 한 곳이고, loadProfile 이 그것을 부르는 유일한 지점이다.
@@ -974,8 +976,9 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     { const uid0 = get().userId; if (uid0) clearJoinMarker(uid0); }
     // 계정은 이미 서버에서 파기됨 → signOut이 실패(네트워크 등)해도 로컬 세션은 반드시 종료.
     // (가드 안 하면 예외가 호출부로 튀어 busy가 영구 정지되고, '탈퇴됐는데 로그인 상태'가 됨)
+    // 탈퇴는 이 계정의 모든 기기를 로그아웃시킨다(global). 일반 로그아웃만 local 이다(Q16).
     try {
-      await supabase.auth.signOut();
+      await supabase.auth.signOut({ scope: 'global' });
     } catch (e) {
       console.warn('[session] signOut after delete failed:', e);
     }
@@ -1108,12 +1111,30 @@ export const useSessionStore = create<SessionState>((set, get) => ({
 
   signOut: async () => {
     // signOut 실패가 화면 핸들러로 튀지 않게 가드 — 어떤 경우든 로컬 세션은 종료한다.
+    // 로그인된 동안 이 기기 푸시를 먼저 푼다(Q3). 오프라인이면 pending 을 남겨 다음 부팅에 푼다(A1).
+    // 이 기기만 로그아웃한다(Q16 — 예전 기본값 global 은 다른 기기까지 끊었다). 순서는 signOutPush.ts.
     if (HAS_SUPABASE) {
-      try {
-        await supabase.auth.signOut();
-      } catch (e) {
-        console.warn('[session] signOut failed:', e);
-      }
+      // 동적 import — 두 푸시 모듈이 이 스토어를 정적으로 import 한다(순환 방지).
+      const { clearDeviceNotifications } = await import('@/lib/push/nativepush');
+      const { disablePush } = await import('@/lib/push/webpush');
+      await signOutWithPushRelease({
+        kv: authStorage,
+        userId: get().userId || null,
+        unregister: async (token, signal) => {
+          const { error } = await supabase.rpc('unregister_my_push', { p_token: token }).abortSignal(signal);
+          if (error) console.warn('[session] unregister_my_push failed:', error.message);
+          return !error;
+        },
+        clearNotifications: clearDeviceNotifications,
+        disableWebPush: disablePush, // 웹 전용(네이티브 no-op). WEB_PUSH_ENABLED 와 상관없이 옛 구독을 푼다.
+        signOutLocal: async () => {
+          try {
+            await supabase.auth.signOut({ scope: 'local' });
+          } catch (e) {
+            console.warn('[session] signOut failed:', e);
+          }
+        },
+      });
     }
     // 신원·매장 값을 전부 비운다. 매장 데이터 스토어는 tenantReset.ts 가 userId 변화를 보고 비운다.
     setUnitId(null);

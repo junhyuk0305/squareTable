@@ -14,3 +14,7 @@ export async function enableNativePush(_unitId: string | null): Promise<PushPerm
   return 'unsupported';
 }
 export async function ensureNativePushRegistered(_unitId: string | null): Promise<void> {}
+export function releasePendingPushToken(): Promise<unknown> {
+  return Promise.resolve();
+}
+export async function clearDeviceNotifications(): Promise<void> {}

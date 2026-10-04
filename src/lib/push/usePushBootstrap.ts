@@ -13,7 +13,7 @@ import { WEB_PUSH_ENABLED } from '@/lib/config/store-policy';
 import { canManage } from '@/lib/utils/roles';
 import { usePreferencesStore } from '@/lib/store/usePreferencesStore';
 import { registerServiceWorker, ensurePushSubscribed } from '@/lib/push/webpush';
-import { bindNotificationTapRouting, ensureNativePushRegistered } from '@/lib/push/nativepush';
+import { bindNotificationTapRouting, ensureNativePushRegistered, releasePendingPushToken } from '@/lib/push/nativepush';
 
 // 알림 클릭 목적지 경로를 "받는 사람의 역할"에 맞게 교정한다.
 // 발송 측(notify.ts)은 수신자가 사장인지 직원인지 모르므로 멘션 등 공용 이벤트를 '/junior/*' 로만 넣는다.
@@ -48,8 +48,10 @@ export function usePushBootstrap(): void {
   }, []);
 
   // 부팅 1회(네이티브): 알림 탭 → 라우팅 리스너. 웹에서는 nativepush.web.ts 가 no-op.
+  // 오프라인 로그아웃이 남긴 pending 도 여기서 푼다. 로그인 여부와 상관없다(A1). 등록은 이것이 끝난 뒤에 한다.
   useEffect(() => {
     bindNotificationTapRouting();
+    void releasePendingPushToken();
   }, []);
 
   // 로그인 세션 + 권한 있음 → 구독/토큰 보장(팝업 없이). userId 확정 후 실행.
