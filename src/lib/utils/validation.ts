@@ -66,6 +66,20 @@ export function birthDateISO(input: string): string | null {
   return iso;
 }
 
+/**
+ * 만 14세 미만 판정(J12). 서버 ensure_birth_date(0240)와 경계가 같다:
+ *   생일 > (KST 오늘 − 14년) 이면 미만. 오늘이 만 14세 생일이면 통과.
+ *   14년 전 같은 날이 없으면(윤년 2/29) 그 달 말일로 맞춘다. Postgres 의 date − interval 과 같다.
+ * todayKST 는 시험용이다(YYYY-MM-DD). 안 넘기면 KST 오늘.
+ */
+export function isUnder14(iso: string, todayKST?: string): boolean {
+  const today = todayKST ?? new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Seoul' }).format(new Date());
+  const [y, m, d] = today.split('-').map(Number);
+  const lastDay = new Date(Date.UTC(y - 14, m, 0)).getUTCDate();
+  const cutoff = `${String(y - 14).padStart(4, '0')}-${String(m).padStart(2, '0')}-${String(Math.min(d, lastDay)).padStart(2, '0')}`;
+  return iso > cutoff;
+}
+
 /** 비밀번호 최소 길이(영문·숫자 조합). 규칙 변경 시 여기 한 곳만. */
 export const PASSWORD_MIN = 9;
 

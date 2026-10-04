@@ -13,6 +13,7 @@ import {
   checkPhoneInUse,
   rpcCreateStore,
   rpcCompleteProfile,
+  rpcRecordMyConsents,
   rpcDeleteStore,
   rpcJoinByInvite,
   rpcCancelJoinRequest,
@@ -39,6 +40,7 @@ import { signOutWithPushRelease } from '@/lib/push/signOutPush';
 import { authStorage } from '@/lib/storage/authStorage';
 import { changePhoneByOtp } from '@/lib/otp';
 import { CURRENT_PW_WRONG_TEXT, DELETED_LOGIN_TEXT } from '@/lib/account/copy';
+import { UNDER_14_TEXT, type ConsentKey } from '@/lib/config/consent';
 
 // 0093: 세션 유효 역할. 활성 매장의 unit_members.role 에서 파생된다(owner·manager·junior 모두).
 // 판정은 sessionRole.ts deriveStoreRole 한 곳이고, loadProfile 이 그것을 부르는 유일한 지점이다.
@@ -112,13 +114,21 @@ type SessionState = {
   // role(0157) — signup_role dedup 라벨을 최초 1회만 기록. profiles.role(권한) 은 절대 안 건드린다.
   // ⚠️ 가입 시점엔 manager 를 고를 수 없다(매니저는 사장이 나중에 승격하는 상태) — owner|junior만.
   // code 'PHONE_NOT_VERIFIED'(0238) → 번호 인증이 30분을 넘겼다. 화면이 인증 단계를 다시 연다.
-  completeProfile: (name: string, phone: string, birthDate: string, role: 'owner' | 'junior') => Promise<{ error: string | null; code?: 'PHONE_NOT_VERIFIED' }>;
+  // consent(J12) — 구글 가입 동의. 있으면 프로필 저장 전에 record_my_consents('google_signup')로 남긴다.
+  completeProfile: (
+    name: string,
+    phone: string,
+    birthDate: string,
+    role: 'owner' | 'junior',
+    consent?: { consents: ConsentKey[]; consent_version: string },
+  ) => Promise<{ error: string | null; code?: 'PHONE_NOT_VERIFIED' }>;
   signUp: (
     email: string,
     pw: string,
     // store_name/industry/biz_no 는 사장 가입 시 user_metadata 에 실어둔다 — 이메일 인증으로
     // 세션 확보가 지연돼 가입 시점에 create_store 를 못 불러도, 인증 후 첫 로그인에서 자동 복원하기 위함.
-    meta: { name: string; role: Role; phone?: string; phone_last4?: string; birth_date?: string; store_name?: string; industry?: string; biz_no?: string },
+    // consents·consent_version(J12) — 별도 트리거(0240)가 user_consents 에 남긴다. 키는 consent.ts 정본.
+    meta: { name: string; role: Role; phone?: string; phone_last4?: string; birth_date?: string; store_name?: string; industry?: string; biz_no?: string; consents?: ConsentKey[]; consent_version?: string },
     // emailTaken: 이미 가입된 이메일이면 true — 화면이 "로그인 유도" 안내로 분기(원문 파싱 대신 플래그로).
   ) => Promise<{ error: string | null; needsConfirm: boolean; emailTaken?: boolean }>;
   // 전화번호 중복 사전검사(주키, role 스코프 — 0157). 비로그인 호출 가능.
@@ -637,10 +647,23 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     return { error: null };
   },
 
-  completeProfile: async (name, phone, birthDate, role) => {
+  completeProfile: async (name, phone, birthDate, role, consent) => {
+    // J12: 동의를 먼저 남긴다. 실패하면 프로필도 저장하지 않는다(동의 증빙 없는 가입을 만들지 않는다).
+    if (consent) {
+      const { error: cErr } = await rpcRecordMyConsents(consent.consents, consent.consent_version, 'google_signup');
+      if (cErr) {
+        return {
+          error: /not_authenticated/.test(cErr.message)
+            ? '로그인이 만료됐어요. 다시 로그인해 주세요.'
+            : friendlyError(cErr.message, '동의 내용을 저장하지 못했어요. 잠시 후 다시 시도해 주세요.'),
+        };
+      }
+    }
     const { error } = await rpcCompleteProfile(name.trim(), phone.trim() || null, birthDate || null, role);
     if (error) {
-      const msg = /birth_date_required|birth_date_invalid/.test(error.message)
+      const msg = /under_14/.test(error.message)
+        ? UNDER_14_TEXT
+        : /birth_date_required|birth_date_invalid/.test(error.message)
         ? '생년월일을 확인할 수 없어요. 생년월일 8자리를 다시 확인해주세요.'
         : /not_authenticated/.test(error.message)
         ? '로그인이 만료됐어요. 다시 로그인해 주세요.'
@@ -772,6 +795,9 @@ export const useSessionStore = create<SessionState>((set, get) => ({
           ? '2번째 매장부터는 다점포 요금제가 필요해요. 요금제 화면에서 변경할 수 있어요.'
           : /store_limit_reached/.test(error.message)
           ? '매장은 최대 15개까지 만들 수 있어요.'
+          // 0240: 만 14세 미만(KST). 다시 시도해도 안 풀린다.
+          : /under_14/.test(error.message)
+          ? UNDER_14_TEXT
           : /birth_date_required|birth_date_invalid/.test(error.message)
           ? '생년월일을 확인할 수 없어요. 생년월일 8자리를 다시 확인해주세요.'
           // 0088 게이트. 재시도로는 절대 안 풀리는데 폴백 문구가 '잠시 후 다시 시도'라 무한 재시도로 유도됐다.
@@ -841,6 +867,8 @@ export const useSessionStore = create<SessionState>((set, get) => ({
         ? '시도가 많아 잠시 잠겼어요. 10분 후 다시 시도해 주세요.'
         : reason === 'already_member'
         ? '이미 들어가 있는 매장이에요. 매장 목록에서 바로 들어갈 수 있어요.'
+        : /under_14/.test(error.message)
+        ? UNDER_14_TEXT
         : /birth_date_required|birth_date_invalid/.test(error.message)
         ? '생년월일 정보가 없어요. 로그아웃 후 다시 가입하거나 문의해 주세요.'
         : friendlyError(error.message, '매장에 합류하지 못했어요. 코드를 확인하고 다시 시도해 주세요.');

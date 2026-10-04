@@ -949,6 +949,12 @@ export async function rpcCompleteProfile(name: string, phone: string | null, bir
   return { error: error as DbErr };
 }
 
+// 동의 기록(0240) — 구글 가입 프로필 완성·재동의. 이메일 가입은 메타데이터 트리거가 대신 남긴다.
+export async function rpcRecordMyConsents(items: string[], version: string, channel: 'google_signup' | 'reconsent'): Promise<{ error: DbErr }> {
+  const { error } = await supabase.rpc('record_my_consents', { p_items: items, p_version: version, p_channel: channel });
+  return { error: error as DbErr };
+}
+
 export type JoinRow = { unit_id: string; store_name: string };
 export async function rpcJoinByInvite(code: string): Promise<DbResult<JoinRow>> {
   const { data, error } = await supabase.rpc('join_by_invite', { p_code: code });

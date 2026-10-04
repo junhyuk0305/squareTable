@@ -11,8 +11,10 @@ import { HAS_SUPABASE } from '@/lib/supabase';
 import { SocialAuthButtons } from '@/components/SocialAuthButtons';
 import { Appear } from '@/components/Appear';
 import { formatBizNo, isValidBizNo, bizDigits } from '@/lib/utils/bizno';
-import { isValidEmail, isValidPhone, normalizePhone, formatPhone, passwordError, formatBirthDate8, birthDateISO } from '@/lib/utils/validation';
+import { isValidEmail, isValidPhone, normalizePhone, formatPhone, passwordError, formatBirthDate8, birthDateISO, isUnder14 } from '@/lib/utils/validation';
 import { usePhoneOtp } from '@/lib/otp';
+import { ConsentChecklist } from '@/components/ConsentChecklist';
+import { allConsented, consentPayload, UNDER_14_TEXT, type ConsentChecked } from '@/lib/config/consent';
 import { EMAIL_TAKEN_TEXT, ROLE_SPLIT_TEXT } from '@/lib/account/copy';
 import { BrandColors, InkColors } from '@/lib/theme/colors';
 import { Space } from '@/lib/theme/layout';
@@ -48,15 +50,8 @@ export default function SignupScreen() {
   const [bizNo, setBizNo] = useState('');
   const [industry, setIndustry] = useState('');
 
-  // 동의 항목 — 역할별로 필수/선택 구성이 달라진다(직원은 근로·급여정보 추가).
-  type ConsentKey = 'age14' | 'terms' | 'collect' | 'labor' | 'marketing';
-  const [consent, setConsent] = useState<Record<ConsentKey, boolean>>({
-    age14: false,
-    terms: false,
-    collect: false,
-    labor: false,
-    marketing: false,
-  });
+  // 동의 항목 — 정본은 consent.ts(J12). 역할별 행은 체크리스트가 그린다(직원은 근로·급여정보 추가).
+  const [consent, setConsent] = useState<ConsentChecked>({});
 
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -67,40 +62,9 @@ export default function SignupScreen() {
   // 이메일 입력창 아래 안내(중복가입 등). 이메일 인증은 추후 도입 예정 — 지금은 단계 없음.
   const [emailMsg, setEmailMsg] = useState<string | null>(null);
 
-  // 역할별 동의 항목 정의. doc은 '보기' 클릭 시 열 문서 라우트.
-  type DocRoute = '/terms' | '/legal/collect' | '/legal/marketing' | '/legal/labor';
-  const consentRows: { key: ConsentKey; label: string; required: boolean; doc?: DocRoute }[] =
-    role === 'owner'
-      ? [
-          { key: 'age14', label: '만 14세 이상입니다', required: true },
-          { key: 'terms', label: '서비스 이용약관', required: true, doc: '/terms' },
-          { key: 'collect', label: '개인정보 수집·이용', required: true, doc: '/legal/collect' },
-          { key: 'marketing', label: '마케팅·광고성 정보 수신(문자·이메일)', required: false, doc: '/legal/marketing' },
-        ]
-      : [
-          { key: 'age14', label: '만 14세 이상입니다 (미성년자는 법정대리인 동의 필요)', required: true },
-          { key: 'terms', label: '서비스 이용약관', required: true, doc: '/terms' },
-          { key: 'collect', label: '개인정보 수집·이용', required: true, doc: '/legal/collect' },
-          { key: 'labor', label: '근로·급여정보 처리', required: true, doc: '/legal/labor' },
-          { key: 'marketing', label: '마케팅·광고성 정보 수신(문자·이메일)', required: false, doc: '/legal/marketing' },
-        ];
-
-  const requiredKeys = consentRows.filter((r) => r.required).map((r) => r.key);
-  const allRequired = requiredKeys.every((k) => consent[k]);
-  const allChecked = consentRows.every((r) => consent[r.key]);
-  const toggleAll = () => {
-    const next = !allChecked;
-    setConsent((prev) => {
-      const copy = { ...prev };
-      consentRows.forEach((r) => (copy[r.key] = next));
-      return copy;
-    });
-  };
-  const toggleOne = (k: ConsentKey) => setConsent((prev) => ({ ...prev, [k]: !prev[k] }));
-
   const start = async () => {
     setErr(null);
-    if (!allRequired) return setErr('필수 약관에 모두 동의해주세요.');
+    if (!allConsented(role, consent)) return setErr('필수 약관에 모두 동의해주세요.');
 
     // 필수 입력 항목 — 데모/실서버 공통으로 강제(이름·이메일·비밀번호 + 사장은 가게이름)
     if (!name.trim()) return setErr('이름을 입력해주세요.');
@@ -115,6 +79,8 @@ export default function SignupScreen() {
     if (HAS_SUPABASE && !otp.verified) return setErr('전화번호 인증을 완료해주세요.');
     if (!birth) return setErr('생년월일을 입력해주세요.');
     if (!birthDateISO(birth)) return setErr('생년월일 8자리를 확인해주세요. (예: 19900131)');
+    // 만 14세 미만은 받지 않는다(처리방침). 서버(0240 under_14)가 매장 만들기·합류에서 최종으로 막는다.
+    if (isUnder14(birthDateISO(birth)!)) return setErr(UNDER_14_TEXT);
     if (role === 'owner' && !storeName.trim()) return setErr('매장 이름을 입력해주세요.');
     if (role === 'owner' && !industry) return setErr('업종을 선택해주세요.');
     // 직원 초대코드는 선택 — 비우면 가입 후 '가게 연결'(junior/join)로 유도하므로 여기서 막지 않는다.
@@ -158,6 +124,8 @@ export default function SignupScreen() {
           // 생년월일(필수) — 트리거(handle_new_user)가 프로필 SSOT 에 기록하고,
           // create_store/join_by_invite 가 누락을 서버에서 최종 거부한다(0065).
           birth_date: birthDateISO(birth) ?? undefined,
+          // 동의 기록(J12) — 별도 트리거(0240 record_signup_consents)가 user_consents 에 남긴다.
+          ...consentPayload(role, consent),
           // 사장: 이메일 인증으로 세션이 지연돼도 인증 후 첫 로그인에서 매장이 자동 생성되도록 매장 정보를 함께 싣는다.
           ...(role === 'owner'
             ? { store_name: storeName.trim(), industry, ...(bizDigits(bizNo) ? { biz_no: bizDigits(bizNo) } : {}) }
@@ -423,33 +391,9 @@ export default function SignupScreen() {
           </Appear>
         )}
 
-        {/* 동의 — 전체동의 + 항목별 토글, 필수/선택 분리 */}
+        {/* 동의 — 전체동의 + 항목별 토글. 모두 필수다(정본 consent.ts) */}
         <Appear delay={180}>
-        <View style={styles.consentBox}>
-          <Pressable onPress={toggleAll} style={styles.consentAll}>
-            <View style={[styles.checkbox, allChecked && styles.checkboxOn]}>
-              {allChecked && <Text style={styles.checkmark}>✓</Text>}
-            </View>
-            <Text style={styles.consentAllText}>약관에 모두 동의합니다</Text>
-          </Pressable>
-          <View style={styles.consentDivider} />
-          {consentRows.map((r) => (
-            <Pressable key={r.key} onPress={() => toggleOne(r.key)} style={styles.consentRow}>
-              <View style={[styles.checkboxSm, consent[r.key] && styles.checkboxOn]}>
-                {consent[r.key] && <Text style={styles.checkmarkSm}>✓</Text>}
-              </View>
-              <Text style={styles.consentText}>
-                <Text style={r.required ? styles.consentReq : styles.consentOpt}>{r.required ? '[필수] ' : '[선택] '}</Text>
-                {r.label}
-              </Text>
-              {r.doc && (
-                <Text style={styles.consentLink} onPress={() => router.push(r.doc!)}>
-                  보기
-                </Text>
-              )}
-            </Pressable>
-          ))}
-        </View>
+        <ConsentChecklist role={role} checked={consent} onChange={setConsent} />
         </Appear>
 
         {err && <Text style={styles.err}>{err}</Text>}
@@ -596,38 +540,6 @@ const styles = StyleSheet.create({
   chipOn: { borderColor: BrandColors.brand, backgroundColor: '#FFFDFB' },
   chipText: { fontSize: 13, fontWeight: '700', color: InkColors.ink2 },
   chipTextOn: { color: BrandColors.brand },
-  consentBox: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: InkColors.line, borderRadius: 14, padding: 14, marginTop: 8, gap: 4 },
-  consentAll: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 2 },
-  consentAllText: { flex: 1, fontSize: 14, fontWeight: '800', color: InkColors.ink },
-  consentDivider: { height: 1, backgroundColor: InkColors.line, marginVertical: 6 },
-  consentRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 5 },
-  checkbox: {
-    width: 22,
-    height: 22,
-    borderRadius: 6,
-    borderWidth: 1.5,
-    borderColor: InkColors.line,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#FFFFFF',
-  },
-  checkboxSm: {
-    width: 19,
-    height: 19,
-    borderRadius: 5,
-    borderWidth: 1.5,
-    borderColor: InkColors.line,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#FFFFFF',
-  },
-  checkboxOn: { backgroundColor: BrandColors.brand, borderColor: BrandColors.brand },
-  checkmark: { color: '#FFFFFF', fontSize: 13, fontWeight: '900' },
-  checkmarkSm: { color: '#FFFFFF', fontSize: 11, fontWeight: '900' },
-  consentText: { flex: 1, fontSize: 15, color: InkColors.ink2, lineHeight: 22 },
-  consentReq: { fontWeight: '800', color: InkColors.ink },
-  consentOpt: { fontWeight: '800', color: InkColors.ink3 },
-  consentLink: { color: BrandColors.brand, fontWeight: '800', textDecorationLine: 'underline', fontSize: 12 },
   err: { fontSize: 15, color: BrandColors.accentText, fontWeight: '600', lineHeight: 22 },
   primary: { marginTop: 6, backgroundColor: BrandColors.brand, paddingVertical: 16, borderRadius: 12, alignItems: 'center' },
   primaryDisabled: { backgroundColor: InkColors.line },

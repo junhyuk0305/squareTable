@@ -11,8 +11,10 @@ import { logout } from '@/lib/auth';
 import { HAS_SUPABASE } from '@/lib/supabase';
 import { INDUSTRIES } from '@/lib/config/industry';
 import { formatBizNo, isValidBizNo, bizDigits } from '@/lib/utils/bizno';
-import { isValidPhone, normalizePhone, formatPhone, formatBirthDate8, birthDateISO } from '@/lib/utils/validation';
+import { isValidPhone, normalizePhone, formatPhone, formatBirthDate8, birthDateISO, isUnder14 } from '@/lib/utils/validation';
 import { usePhoneOtp } from '@/lib/otp';
+import { ConsentChecklist } from '@/components/ConsentChecklist';
+import { allConsented, consentPayload, UNDER_14_TEXT, type ConsentChecked } from '@/lib/config/consent';
 import { Appear, stagger } from '@/components/Appear';
 import { ScreenLoading } from '@/components/ScreenLoading';
 import { BrandColors, InkColors } from '@/lib/theme/colors';
@@ -74,6 +76,8 @@ function CompleteProfileForm() {
   const [storeName, setStoreName] = useState('');
   const [industry, setIndustry] = useState('');
   const [bizNo, setBizNo] = useState('');
+  // 동의(J12) — 구글 가입은 가입 폼을 안 거쳐서 여기서 받는다. 정본 consent.ts.
+  const [consent, setConsent] = useState<ConsentChecked>({});
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   // 사장 경로에서 프로필(phone)은 저장됐는데 매장 생성만 실패한 상태 — 아래 가드가 홈으로 튕기지
@@ -97,9 +101,13 @@ function CompleteProfileForm() {
     if (HAS_SUPABASE && !storeRetry && !otp.verified) return setErr('전화번호 인증을 완료해주세요.');
     if (!birth) return setErr('생년월일을 입력해주세요.');
     if (!birthDateISO(birth)) return setErr('생년월일 8자리를 확인해주세요. (예: 19900131)');
+    // 만 14세 미만은 받지 않는다. 서버(0240 under_14)가 complete_profile·create_store 에서 최종으로 막는다.
+    if (isUnder14(birthDateISO(birth)!)) return setErr(UNDER_14_TEXT);
     if (role === 'owner' && !storeName.trim()) return setErr('매장 이름을 입력해주세요.');
     if (role === 'owner' && !industry) return setErr('업종을 선택해주세요.');
     if (role === 'owner' && bizNo.trim() && !isValidBizNo(bizNo)) return setErr('사업자등록번호 형식(10자리)을 확인해주세요. 비워두면 나중에 등록할 수 있어요.');
+    // 매장 재시도(storeRetry)는 동의·프로필이 이미 저장된 뒤라 다시 묻지 않는다.
+    if (!storeRetry && !allConsented(role, consent)) return setErr('필수 약관에 모두 동의해주세요.');
 
     setBusy(true);
     // ★ try/catch/finally — completeProfile/createStore/isPhoneTaken 이 네트워크 예외를 던지면 finally 없이
@@ -124,7 +132,7 @@ function CompleteProfileForm() {
         //   (예전엔 create_store 먼저였다 — 실패 시 needsProfileSetup 유지로 이 화면에 남기 위해.
         //    그 붙잡는 역할은 이제 storeRetry 가 대신한다 — 위 가드 조건 참조.)
         if (!storeRetry) {
-          const cp = await completeProfile(name.trim(), phone.trim(), birthISO ?? '', role);
+          const cp = await completeProfile(name.trim(), phone.trim(), birthISO ?? '', role, consentPayload(role, consent));
           if (cp.code === 'PHONE_NOT_VERIFIED') otp.reset();
           if (cp.error) return setErr(cp.error);
         }
@@ -136,7 +144,7 @@ function CompleteProfileForm() {
         router.replace({ pathname: '/owner/onboarding', params: { code: cs.inviteCode ?? '------', industry } });
       } else {
         // 직원: 프로필만 채우고(생년월일 기록 → 이후 hub 에서 초대코드 입력 시 join 통과) 개인 허브로.
-        const cp = await completeProfile(name.trim(), phone.trim(), birthISO ?? '', role);
+        const cp = await completeProfile(name.trim(), phone.trim(), birthISO ?? '', role, consentPayload(role, consent));
         if (cp.code === 'PHONE_NOT_VERIFIED') otp.reset();
         if (cp.error) return setErr(cp.error);
         router.replace('/junior/hub');
@@ -322,6 +330,13 @@ function CompleteProfileForm() {
               저장하면 개인 홈으로 이동해요. 거기서 사장님께 받은 <Text style={styles.joinNoteStrong}>6자리 초대코드</Text>를 넣으면 매장에 합류 신청이 돼요.
             </Text>
           </View>
+          </Appear>
+        )}
+
+        {/* 동의(J12) — 가입 폼과 같은 체크리스트. 매장 재시도 땐 이미 저장돼 숨긴다. */}
+        {!storeRetry && (
+          <Appear delay={stagger(9)}>
+          <ConsentChecklist role={role} checked={consent} onChange={setConsent} />
           </Appear>
         )}
 
