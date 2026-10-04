@@ -27,7 +27,7 @@ import {
   switchActiveUnit,
   type MyUnitRow,
 } from '@/lib/db';
-import { friendlyError } from '@/lib/utils/userError';
+import { friendlyError, isMissingRpc } from '@/lib/utils/userError';
 import { sessionReadFailAction } from './sessionReadFail';
 import { deriveStoreRole } from './sessionRole';
 import { joinRejectAction, type JoinMarker } from './joinRejectDetect';
@@ -651,7 +651,10 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     // J12: 동의를 먼저 남긴다. 실패하면 프로필도 저장하지 않는다(동의 증빙 없는 가입을 만들지 않는다).
     if (consent) {
       const { error: cErr } = await rpcRecordMyConsents(consent.consents, consent.consent_version, 'google_signup');
-      if (cErr) {
+      // 서버에 0240 이 아직 없으면 함수 부재로 실패한다. 이때 막으면 모든 구글 가입이 이 화면에 갇힌다.
+      // 이메일 가입도 그 서버에선 동의가 안 남으므로 같은 처리로 맞춘다. 기록만 남기고 프로필 저장으로 간다.
+      if (cErr && isMissingRpc(cErr)) reportError('session.completeProfile.consentRpcMissing', cErr);
+      if (cErr && !isMissingRpc(cErr)) {
         return {
           error: /not_authenticated/.test(cErr.message)
             ? '로그인이 만료됐어요. 다시 로그인해 주세요.'

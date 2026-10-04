@@ -48,3 +48,9 @@ export function friendlyError(raw: string | null | undefined, fallback: string):
   // 식별 못 한 원문(DB 내부 메시지 등)은 절대 그대로 노출하지 않는다 → 맥락 fallback.
   return fallback;
 }
+
+/** 서버에 그 RPC 함수가 아직 없다(PostgREST PGRST202). 마이그레이션보다 앱·웹이 먼저 나간 경우다. */
+export function isMissingRpc(err: { message?: string; code?: string } | null | undefined): boolean {
+  if (!err) return false;
+  return err.code === 'PGRST202' || /could not find the function/i.test(err.message ?? '');
+}
