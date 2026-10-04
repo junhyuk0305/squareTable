@@ -1,6 +1,7 @@
 // 이전 매장(0196) — 유료가 끝나 닫힌 매장 목록 + 다시 열기.
 // 목록 판정은 서버(my_previous_units = unit_access_locked)가 SSOT 다. 다시 열기(reopen_store)는 새 매장 추가와
-// 같은 규칙으로 이용권(슬롯) 1개를 쓰고, 직원·근무표·출퇴근·업무 보드를 비운다. 노하우·퀴즈·퀴즈 기록·채팅·설정은 남는다.
+// 같은 규칙으로 이용권(슬롯) 1개를 쓴다. 0235 전 서버는 직원·근무표·출퇴근·업무 보드를 비우고, 0235 부터는 기록을 남긴다.
+// 확인창 문구는 서버 판을 확인한 뒤 고른다(확인 전·실패면 지운다고 말한다).
 // 진입: 설정 → 이전 매장 · 매장 추가 → 이전 매장에서 고르기.
 import { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
@@ -13,8 +14,8 @@ import { ConfirmModal } from '@/components/ConfirmModal';
 import { Appear, stagger } from '@/components/Appear';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { showToast } from '@/lib/store/useToastStore';
-import { fetchMyPreviousUnits, rpcReopenStore, type PreviousUnitRow } from '@/lib/db';
-import { REOPEN_STORE_MESSAGE } from '@/lib/account/storeCopy';
+import { fetchMyPreviousUnits, fetchReopenKeepsRecords, rpcReopenStore, type PreviousUnitRow } from '@/lib/db';
+import { reopenStoreMessage } from '@/lib/account/storeCopy';
 import { InkColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
@@ -33,6 +34,8 @@ export default function PreviousStores() {
   const [ready, setReady] = useState(false);
   const [target, setTarget] = useState<PreviousUnitRow | null>(null);
   const [busy, setBusy] = useState(false);
+  // J4: 서버가 다시 열어도 기록을 남기는지(0235). null = 아직 모름 → 지운다고 말한다.
+  const [keepsRecords, setKeepsRecords] = useState<boolean | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -40,6 +43,8 @@ export default function PreviousStores() {
       if (!alive) return;
       if (data) setRows(data);
       setReady(true);
+      const first = data?.[0]?.unit_id;
+      if (first) void fetchReopenKeepsRecords(first).then((k) => { if (alive) setKeepsRecords(k); });
     });
     return () => { alive = false; };
   }, []);
@@ -115,11 +120,11 @@ export default function PreviousStores() {
         )}
       </ScrollView>
 
-      {/* 직원 전원이 빠지는 동작이라 한 번 확인한다(되돌릴 수 없다). J4: 기록은 남고 소속만 정리된다(0235). */}
+      {/* 직원 전원이 빠지는 동작이라 한 번 확인한다(되돌릴 수 없다). J4: 0235 서버면 기록은 남고 소속만 정리된다. */}
       <ConfirmModal
         visible={target !== null}
         title={target ? `${target.store_name}을 다시 열까요?` : ''}
-        message={REOPEN_STORE_MESSAGE}
+        message={reopenStoreMessage(keepsRecords)}
         confirmLabel="다시 열기"
         cancelLabel="그대로 두기"
         busy={busy}

@@ -3,12 +3,34 @@
 //
 // 2026-10-04 마스터 계획 P3-10 (J4 · J5 · J8).
 // ⛔웹의 매장 삭제 확인창·토스트는 토스 심사 동결(~10-16) 동안 글자 그대로 둔다(보수적 판단 · 사용자 확인 대기).
-import { friendlyError } from '@/lib/utils/userError';
+import { friendlyError, isMissingRpc } from '@/lib/utils/userError';
 
 /** J4 — 0235 부터 다시 열어도 출퇴근·업무 기록이 남는다. 직원 소속만 정리한다. 이용권 문장은 그대로 둔다. */
 export const REOPEN_STORE_MESSAGE =
   '이용권 1개를 써요.\n\n' +
   '기록(출퇴근·근무 기록·노하우·채팅)은 그대로예요. 직원은 새 초대코드로 다시 초대해요.';
+
+/** 0235 전 reopen_store(0196)는 출퇴근·업무 보드를 지운다. 그 서버에는 지금 라이브 문구를 글자 그대로 쓴다. */
+export const REOPEN_STORE_MESSAGE_PRE0235 =
+  '이용권 1개를 써요.\n\n' +
+  '비워지는 것: 직원·근무표·출퇴근·업무 보드\n' +
+  '남는 것: 노하우·퀴즈·퀴즈 기록·채팅·매장 설정\n\n' +
+  '초대코드는 새로 나와요.';
+
+/**
+ * delete_store_preview 응답으로 서버가 0235 인지 본다(같은 파일에서 생겼다). 함수가 있으면 true, 없으면(PGRST202) false.
+ * 코드 없는 오류(연결 실패)는 모름(null)이다.
+ */
+export function reopenKeepsRecords(err: { code?: string; message?: string } | null | undefined): boolean | null {
+  if (!err) return true;
+  if (isMissingRpc(err)) return false;
+  return err.code ? true : null;
+}
+
+/** J4 — 서버가 기록을 남긴다고 확인됐을 때만 새 문구. 확인 전·실패·옛 서버는 지운다고 말한다. */
+export function reopenStoreMessage(keepsRecords: boolean | null): string {
+  return keepsRecords === true ? REOPEN_STORE_MESSAGE : REOPEN_STORE_MESSAGE_PRE0235;
+}
 
 /** J5 — 열린 소유 매장에 직원이 있으면 서버가 owner_has_staff 로 막는다(서버 차단은 P7-1 · 빌드 B 승인 뒤). */
 export const OWNER_HAS_STAFF_TEXT = '직원이 있으면 탈퇴할 수 없어요. 직원 관리에서 먼저 내보내 주세요.';

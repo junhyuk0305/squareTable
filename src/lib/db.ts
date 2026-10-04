@@ -13,7 +13,7 @@ import type { Room, RoomMember, RoomPref } from '@/lib/store/useRoomStore';
 import type { AttendanceRecord } from '@/lib/store/useAttendanceStore';
 import type { StoreConfig, ShiftTemplate, ShiftException, SwapRequest } from '@/lib/store/useScheduleStore';
 import type { CustomCategory } from '@/lib/store/knowhowCategories';
-import type { DeleteStorePreview, DeleteStoreResult } from '@/lib/account/storeCopy';
+import { reopenKeepsRecords, type DeleteStorePreview, type DeleteStoreResult } from '@/lib/account/storeCopy';
 // 훈련 v2(0107·0108). ★TrainingCourse 는 이 파일이 이미 0099 의 문자열 유니온으로 쓰고 있어(아래)
 // 이름이 겹친다 → 코스 테이블 행 타입은 TrainingCourseRow 로 별칭한다. 구조는 동일하므로
 // 다른 화면이 '@/lib/quiz/types' 에서 TrainingCourse 를 직접 import 해 넘겨도 그대로 맞는다.
@@ -440,6 +440,13 @@ export async function fetchDeleteStorePreview(unitId: string): Promise<DbResult<
   };
 }
 
+/** J4: 다시 열기 창 문구를 고르려고 서버가 0235(기록을 남기는 reopen_store)인지 본다. 모르면 null. */
+export async function fetchReopenKeepsRecords(unitId: string): Promise<boolean | null> {
+  if (!HAS_SUPABASE) return null;
+  const { error } = await supabase.rpc('delete_store_preview', { p_unit: unitId });
+  return reopenKeepsRecords(error);
+}
+
 // plan = 과금 티어(free|single|multi, 0062). 원시값 그대로 반환 — 해석은 tiers.ts normalizePlan.
 export type UnitSubscriptionRow = { status: string | null; trial_ends_at: string | null; paid_until: string | null; plan: string | null };
 export async function fetchUnitSubscription(unitId: string): Promise<DbResult<UnitSubscriptionRow>> {
@@ -744,7 +751,8 @@ export async function fetchMyPreviousUnits(): Promise<DbResult<PreviousUnitRow[]
   }
   return { data: (data as PreviousUnitRow[]) ?? [], error: null };
 }
-// 다시 열기 — 새 매장 추가와 같은 슬롯 규칙(no_store_slot). 직원·근무표·출퇴근·업무 보드는 서버가 비운다.
+// 다시 열기 — 새 매장 추가와 같은 슬롯 규칙(no_store_slot). 0235 전 서버는 직원·근무표·출퇴근·업무 보드를 비운다.
+// 0235 부터는 직원 소속과 직원 몫 근무표·교대 요청만 정리한다(창 문구는 fetchReopenKeepsRecords 로 고른다).
 export async function rpcReopenStore(unitId: string): Promise<DbResult<{ unit_id: string; invite_code: string; paid_until: string }>> {
   if (!HAS_SUPABASE) return { data: null, error: null };
   const { data, error } = await supabase.rpc('reopen_store', { p_unit: unitId });
