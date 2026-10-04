@@ -90,7 +90,9 @@ console.log('\n■ Q31 — 탈퇴 확인 문구(deleteConfirmText)');
   check('사장 앱 문구에 M4 문장이 있다', typeof owner === 'string' && owner.includes(M4), show(owner));
   check('직원 앱 문구에 M4 문장이 있다', typeof staff === 'string' && staff.includes(M4), show(staff));
   check('★앱 문구에 "복구할 수 없어요"가 없다(실제는 30일 보관)', typeof owner === 'string' && !owner.includes('복구할 수 없') && typeof staff === 'string' && !staff.includes('복구할 수 없'));
-  check('직원에게만 3년 보관 문장', typeof staff === 'string' && staff.includes(STAFF_3Y) && typeof owner === 'string' && !owner.includes(STAFF_3Y));
+  // 사장 매장은 탈퇴 때 감춰지고(0237 soft delete) 30일 뒤 근무 기록까지 파기된다(0053 purge cascade).
+  check('★사장 매장 데이터 문장이 30일 뒤 지운다고 말한다("함께" 즉시처럼 읽히지 않게)', typeof owner === 'string' && owner.includes('매장 데이터(노하우·직원·근무 기록)는 30일 뒤 지워요.') && !owner.includes('함께 지워요'), show(owner));
+  check('직원에게만 3년 보관 문장',typeof staff === 'string' && staff.includes(STAFF_3Y) && typeof owner === 'string' && !owner.includes(STAFF_3Y));
   check('30일 동안 같은 이메일 재가입 불가를 말한다', typeof owner === 'string' && owner.includes('30일 동안은 같은 이메일로 다시 가입할 수 없어요.'));
   const withNotice = confirmText({ ownerAccount: true, notice: notice({ iapPlatform: 'appstore', os: 'ios' }), os: 'ios' });
   check('이용권 안내를 넣고 "정말 탈퇴하시겠어요?"로 끝난다', typeof withNotice === 'string' && withNotice.includes('탈퇴해도 해지되지 않아요') && withNotice.endsWith('정말 탈퇴하시겠어요?'), show(withNotice));
@@ -148,6 +150,16 @@ console.log('\n■ Q13 · Q18 — otp 엣지 호출(가짜 fetch)');
     const u = await changePhoneByOtp({ phone: '01012345678', code: '123456', accessToken: 'user-jwt' });
     check('unauthorized → 다시 로그인 안내', u.ok === false && typeof u.message === 'string' && u.message.includes('다시 로그인'), show(u));
     for (const m of [t.message, u.message]) check(`문구에 개발 말·대시가 없다: ${m}`, typeof m === 'string' && !/[a-z]+_[a-z]+/.test(m) && !STYLE.test(m));
+    // ★모르는 이유(옛 엣지 bad_action · 새 엣지 500 의 db · bad_json)도 실패 문구가 있어야 한다.
+    //   문구가 undefined 면 changePhone 이 { error: undefined } 를 돌려 화면이 "바꿨어요"로 닫혔다.
+    for (const [status, reason] of [[400, 'bad_action'], [500, 'db'], [400, 'bad_json']]) {
+      reply = { status, body: { ok: false, reason } };
+      const x = await changePhoneByOtp({ phone: '01012345678', code: '123456', accessToken: 'user-jwt' });
+      check(`★${reason} → 실패 · 빈 문구가 아니다`, x.ok === false && typeof x.message === 'string' && x.message.length > 0 && !/[a-z]+_[a-z]+/.test(x.message), show(x));
+    }
+    reply = { status: 502, body: '<html>bad gateway</html>' };
+    const g = await changePhoneByOtp({ phone: '01012345678', code: '123456', accessToken: 'user-jwt' });
+    check('JSON 이 아닌 답 → 실패 · 빈 문구가 아니다', g.ok === false && typeof g.message === 'string' && g.message.length > 0, show(g));
   } else {
     check('changePhoneByOtp 가 있다', false);
   }
@@ -178,7 +190,11 @@ console.log('\n■ 화면 배선');
   check('★Q14 임시 클라이언트(persistSession:false)로 현재 비밀번호 확인', /persistSession:\s*false/.test(cp) && /signInWithPassword/.test(cp), show(cp.slice(0, 80)));
   check('Q14 updateUser 에 current_password', /updateUser\(\{\s*password:[^}]*current_password/.test(cp));
   check("Q14 성공 뒤 다른 기기 로그아웃(scope:'others')", /signOut\(\{\s*scope:\s*'others'\s*\}\)/.test(cp));
+  // ★확인용 로그인은 auth 이메일로. 화면 상태 email 은 확인 전인 새 이메일일 수 있다(updateProfile 이 바로 넣는다).
+  check('★Q14 현재 비밀번호 확인은 세션의 auth 이메일로 한다', /getSession\(\)/.test(cp) && !/email:\s*get\(\)\.email/.test(cp), show(cp.slice(0, 80)));
   check('Q13 changePhone 이 otp change_phone 을 쓴다', /changePhone: async[\s\S]*?changePhoneByOtp\(/.test(ss));
+  const chp = (ss.match(/changePhone: async[\s\S]*?\n  \},/) || [''])[0];
+  check('★Q13 changePhone 실패는 문구가 비어도 실패로 돌려준다', /if \(!r\.ok\) return \{ error: r\.message \?\? '[^']+' \}/.test(chp), show(chp.slice(-200)));
   check('Q31 탈퇴 계정 로그인 문구를 정본에서 읽는다', /DELETED_LOGIN_TEXT/.test(ss) && !ss.includes('복구가 필요하면 문의해 주세요'));
 
   const settings = strip(read('src/app/account-settings.tsx'));
