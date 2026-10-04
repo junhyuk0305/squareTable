@@ -51,8 +51,11 @@ const rid = Math.random().toString(36).slice(2, 8) + Date.now().toString(36).sli
   const { data: after } = await c.from('profiles').select('name,bio,role,unit_id').eq('id', uid).single();
   ok(after?.name === '수정된이름' && after?.bio === '소개글', '저장값 반영 확인', `name=${after?.name}`);
 
-  // 2) 본인 전화 갱신 → 성공해야
+  // 2) 본인 전화 갱신 — 0238 부터 인증 안 한 번호는 트리거가 막고(PHONE_NOT_VERIFIED), 방금 인증한 번호만 통과한다
   const ph2 = '010' + String(Math.floor(1e7 + Math.random() * 8e7));
+  const r2a = await c.from('profiles').update({ phone: ph2, phone_last4: ph2.slice(-4) }).eq('id', uid).select('id,phone');
+  ok(/PHONE_NOT_VERIFIED/.test(r2a.error?.message ?? ''), '인증 안 한 번호로 전화번호 갱신은 차단', r2a.error ? `(${r2a.error.message.slice(0, 40)})` : `(❌ 성공함 rows=${r2a.data?.length})`);
+  await seedVerifiedPhones(URL, SRV, [ph2]);
   const r2 = await c.from('profiles').update({ phone: ph2, phone_last4: ph2.slice(-4) }).eq('id', uid).select('id,phone');
   ok(!r2.error && (r2.data?.length || 0) === 1, '본인 전화번호 갱신 성공', r2.error ? `(❌ ${r2.error.code})` : `rows=${r2.data.length}`);
 
@@ -73,7 +76,7 @@ const rid = Math.random().toString(36).slice(2, 8) + Date.now().toString(36).sli
 
   // 정리
   try { await c.rpc('delete_my_account'); } catch {}
-  await cleanupSeededPhones(URL, SRV, [ph]);
+  await cleanupSeededPhones(URL, SRV, [ph, ph2]);
   if (SRV) {
     const a = createClient(URL, SRV, { auth: { persistSession: false } });
     await a.from('units').delete().like('store_name', 'PU_%');
