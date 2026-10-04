@@ -127,6 +127,7 @@
     "qa:manager-routes": "node --no-warnings scripts/qa-manager-routes.mjs",
     "qa:account-ui": "node --no-warnings scripts/qa-account-ui.mjs",
     "qa:consent-ui": "node --no-warnings scripts/qa-consent-ui.mjs",
+    "qa:store-copy": "node --no-warnings scripts/qa-store-copy.mjs",
     "iap:status": "node scripts/iap-switch.mjs status",
     "iap:on": "node scripts/iap-switch.mjs on",
     "iap:off": "node scripts/iap-switch.mjs off",
