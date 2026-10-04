@@ -102,6 +102,7 @@
     "qa:feed-boundary": "node scripts/qa-feed-boundary.mjs",
     "qa:swap-guard": "node scripts/qa-swap-guard.mjs",
     "qa:swap-transfer": "node scripts/qa-swap-transfer.mjs",
+    "qa:retention": "node scripts/qa-retention.mjs",
     "qa:shift-dated": "node scripts/qa-shift-dated.mjs",
     "qa:shift-time": "node scripts/qa-shift-time.mjs",
     "qa:store-slots": "node scripts/qa-store-slots.mjs",

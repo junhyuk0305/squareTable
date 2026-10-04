@@ -234,23 +234,35 @@ try {
     check('5-2 직원은 예외를 못 지운다(관리자만)', !bad.error && (bad.data ?? []).length === 0, `rows=${(bad.data ?? []).length}`);
   }
 
-  // ═══════ 6. 직원 자가수정 — 내 근무의 시각만 ═══════
-  console.log('\n[6] 직원 자가수정 (0178)');
+  // ═══════ 6. 직원 자가수정 — 내 근무의 시각만 · 그날 근무만(0234) ═══════
+  // ★0234: 매주 반복 근무를 직원이 직접 고치면 지난 주 급여까지 바뀐다(급여 = 근무표). 그래서
+  //   반복 행은 false, 날짜 지정 행(그날 하나만 바뀜)은 지금처럼 true.
+  console.log('\n[6] 직원 자가수정 (0178 · 0234 반복 근무 차단)');
   {
-    const TPL_B = `swt_tb_${s}`;
+    const TPL_B = `swt_tb_${s}`;    // 매주 반복
+    const TPL_BD = `swt_tbd_${s}`;  // 날짜 지정(그날만)
+    const dDay = addDays(day, 3);
     await O.from('shift_templates').insert({ id: TPL_B, unit_id: UNIT, staff_id: bId, weekday: (wd + 1) % 7, shift_date: null, start_time: '09:00', end_time: '15:00' });
-    const ok = await B.rpc('update_my_shift_time', { p_id: TPL_B, p_start: '10:00', p_end: '16:00' });
-    const after = (await admin.from('shift_templates').select('start_time, end_time, edited_by, staff_id, weekday').eq('id', TPL_B).maybeSingle()).data;
-    check('6-1 직원이 자기 근무 시각을 고친다 = 성공', !ok.error && ok.data === true && after?.start_time === '10:00' && after?.end_time === '16:00',
+    {
+      const { error } = await O.from('shift_templates').insert({ id: TPL_BD, unit_id: UNIT, staff_id: bId, weekday: null, shift_date: dDay, start_time: '09:00', end_time: '15:00' });
+      if (error) throw new Error('dated shift insert: ' + error.message);
+    }
+    const rep = await B.rpc('update_my_shift_time', { p_id: TPL_B, p_start: '10:00', p_end: '16:00' });
+    const repAfter = (await admin.from('shift_templates').select('start_time, end_time, edited_by').eq('id', TPL_B).maybeSingle()).data;
+    check('6-1 ★반복 근무는 직원이 직접 못 고친다(지난 급여가 바뀐다 · 0234)', !rep.error && rep.data === false && repAfter?.start_time === '09:00' && repAfter?.end_time === '15:00' && repAfter?.edited_by == null,
+      rep.error?.message ?? `rpc=${rep.data} ${JSON.stringify(repAfter)}`);
+    const ok = await B.rpc('update_my_shift_time', { p_id: TPL_BD, p_start: '10:00', p_end: '16:00' });
+    const after = (await admin.from('shift_templates').select('start_time, end_time, edited_by, staff_id, weekday').eq('id', TPL_BD).maybeSingle()).data;
+    check('6-1b 날짜 지정 근무는 직원이 시각을 고친다 = 성공', !ok.error && ok.data === true && after?.start_time === '10:00' && after?.end_time === '16:00',
       ok.error?.message ?? JSON.stringify(after));
     check('6-2 ★고친 근무에 표가 남는다(사장 화면 “직원 수정”)', after?.edited_by === 'staff', `edited_by=${after?.edited_by}`);
-    const bad = await C.rpc('update_my_shift_time', { p_id: TPL_B, p_start: '08:00', p_end: '20:00' });
-    const after2 = (await admin.from('shift_templates').select('start_time, end_time').eq('id', TPL_B).maybeSingle()).data;
+    const bad = await C.rpc('update_my_shift_time', { p_id: TPL_BD, p_start: '08:00', p_end: '20:00' });
+    const after2 = (await admin.from('shift_templates').select('start_time, end_time').eq('id', TPL_BD).maybeSingle()).data;
     check('6-3 ★남의 근무는 못 고친다', !bad.error && bad.data === false && after2?.start_time === '10:00', `rpc=${bad.data} ${JSON.stringify(after2)}`);
-    const zero = await B.rpc('update_my_shift_time', { p_id: TPL_B, p_start: '10:00', p_end: '10:00' });
+    const zero = await B.rpc('update_my_shift_time', { p_id: TPL_BD, p_start: '10:00', p_end: '10:00' });
     check('6-4 근무 0분은 거부', !zero.error && zero.data === false, `rpc=${zero.data}`);
-    const night = await B.rpc('update_my_shift_time', { p_id: TPL_B, p_start: '22:00', p_end: '02:00' });
-    check('6-5 자정 넘김은 허용(심야 근무)', !night.error && night.data === true, `rpc=${night.data}`);
+    const night = await B.rpc('update_my_shift_time', { p_id: TPL_BD, p_start: '22:00', p_end: '02:00' });
+    check('6-5 자정 넘김은 허용(심야 근무 · 날짜 지정)', !night.error && night.data === true, `rpc=${night.data}`);
     const direct = await B.from('shift_templates').update({ staff_id: cId }).eq('id', TPL_B).select('id');
     check('6-6 ★직원이 근무표를 직접 UPDATE 하지는 못한다(st_write 는 관리자 전용 유지)',
       !direct.error && (direct.data ?? []).length === 0, `rows=${(direct.data ?? []).length} err=${direct.error?.code ?? '-'}`);
