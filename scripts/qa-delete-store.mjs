@@ -47,6 +47,11 @@ async function main() {
   // 1) 크로스테넌트: X는 O의 매장 A를 못 지운다
   const { error: xErr } = await X.c.rpc('delete_store', { p_unit_id: A });
   check('X→delete_store(A) 거부(not_owner)', /not_owner/.test(xErr?.message ?? ''), xErr?.message ?? '(삭제됨!)');
+  // 0235: 삭제 미리보기도 남의 매장은 못 본다(몫·만료일이 새어 나가지 않게) · anon 은 실행 권한이 없다
+  const { error: xPv } = await X.c.rpc('delete_store_preview', { p_unit: A });
+  check('X→delete_store_preview(A) 거부(not_owner)', /not_owner/.test(xPv?.message ?? ''), xPv?.message ?? '(보임!)');
+  const { error: aPv } = await mk().rpc('delete_store_preview', { p_unit: A });
+  check('anon→delete_store_preview 실행 권한 없음(42501)', aPv?.code === '42501', `code=${aPv?.code ?? '-'}`);
   const { data: aStill } = await admin.from('units').select('id').eq('id', A).maybeSingle();
   check('A 매장 여전히 존재(유출/파괴 없음)', !!aStill);
 
