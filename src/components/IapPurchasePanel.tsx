@@ -28,6 +28,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { showToast } from '@/lib/store/useToastStore';
+import { notifyAction } from '@/lib/utils/confirm';
 import { Appear, stagger } from '@/components/Appear';
 import { Collapse } from '@/components/Collapse';
 import { ScreenLoading } from '@/components/ScreenLoading';
@@ -248,7 +249,10 @@ export function IapPurchasePanel({
       await showManageSubscriptions();
       await onChanged();
     } catch {
-      showToast(`구독 관리 창을 열지 못했어요. ${CANCEL_PATH_TEXT}에서 하실 수 있어요.`);
+      // 토스트가 아니라 고지창 — 토스트는 2줄에서 자르고 2.4초 뒤 사라져 안드 경로의 마지막 메뉴가 잘렸다(N-1).
+      void notifyAction('구독 관리 창을 열지 못했어요', `${CANCEL_PATH_TEXT}에서 하실 수 있어요.`, '확인', {
+        icon: 'alert-circle-outline',
+      });
     }
   };
 
