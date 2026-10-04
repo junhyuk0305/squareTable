@@ -131,6 +131,8 @@ export type IapCurrent = {
   storeCount: number;
   /** Play 요금제 변경에 넘길 "지금 구독" id(iOS 는 쓰지 않는다). */
   storeProductId: string | null;
+  /** 권한을 연 스토어(RC Store — 'APP_STORE'·'PLAY_STORE' 등). Q8 — 서버 행이 아직 없을 때의 2차 판정(lib/iap/notes.ts). */
+  store: string | null;
 };
 
 /**
@@ -145,7 +147,7 @@ export type IapCurrent = {
  *     우리가 문자열을 조립하지 않고 SDK 가 준 값을 그대로 쓴다.
  */
 export async function currentEntitlement(): Promise<IapCurrent> {
-  if (!HAS_IAP) return { active: false, storeCount: 0, storeProductId: null };
+  if (!HAS_IAP) return { active: false, storeCount: 0, storeProductId: null, store: null };
   const info = await Purchases.getCustomerInfo();
   const ent = info.entitlements.active[IAP_ENTITLEMENT];
   // 우리가 아는 상품인 구독만 갈아타기 대상으로 본다(모르는 구독을 옛 상품으로 넘기지 않는다).
@@ -154,6 +156,7 @@ export async function currentEntitlement(): Promise<IapCurrent> {
     active: Boolean(ent),
     storeCount: parseIapProduct(ent?.productPlanIdentifier ?? ent?.productIdentifier ?? '')?.storeCount ?? 0,
     storeProductId: known ?? ent?.productIdentifier ?? null,
+    store: ent?.store ?? null,
   };
 }
 

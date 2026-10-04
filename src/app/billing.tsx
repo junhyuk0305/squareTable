@@ -24,6 +24,7 @@ import {
   fetchMyLockedUnits,
   fetchMyCardSubscription,
   fetchMyCardReleaseCandidates,
+  fetchRenewsOutsideApp,
   type SeatStatus,
   type IapSubscriptionRow,
   type CardSubscriptionRow,
@@ -133,6 +134,8 @@ function BillingBody() {
   const [lockedUnits, setLockedUnits] = useState<string[]>([]);
   // ★실패해도 true — 조회 한 번 실패로 요금제 화면이 영영 로딩이 되면 안 된다.
   const [iapLoaded, setIapLoaded] = useState(false);
+  // Q30 — 지금 이용 기간이 앱 밖에서 자동으로 이어지는 중인가(네이티브 사장만 읽는다). 이용권 패널의 안내 문구만 바꾼다.
+  const [renewsElsewhere, setRenewsElsewhere] = useState(false);
   // 웹 카드 정기결제(0208) — 살아 있는 카드 구독이 있으면 결제 폼 대신 관리 패널을 그린다.
   const [cardSub, setCardSub] = useState<CardSubscriptionRow | null>(null);
   // 줄이기 때 "닫을 매장" 후보 — 카드 구독으로 연 매장만(서버 card_release_candidates 와 같은 목록. 계좌이체로 연 매장은 구독이 닫지 못한다).
@@ -237,11 +240,14 @@ function BillingBody() {
     if (!isOwner) return;
     let alive = true;
     void (async () => {
-      const [{ data: sub }, { data: choice }, { data: locked }] = await Promise.all([
+      const [{ data: sub }, { data: choice }, { data: locked }, { data: renews }] = await Promise.all([
         fetchMyIapSubscription(), fetchMyIapReleaseChoice(), fetchMyLockedUnits(),
+        // Q30 — 네이티브만 부른다. 웹은 아래 카드 구독 조회가 따로 있고 웹 화면은 바뀌지 않는다. 못 읽으면 false(지금 동작).
+        SHOW_BILLING ? Promise.resolve({ data: false }) : fetchRenewsOutsideApp(),
       ]);
       if (!alive) return;
       setIapSub(sub ?? null);
+      setRenewsElsewhere(renews === true);
       setReleaseChoice(choice ?? []);
       setLockedUnits(locked ?? []);
       setIapLoaded(true);
@@ -507,6 +513,7 @@ function BillingBody() {
               subscription={iapSub}
               releaseChoice={releaseChoice}
               wantMore={params.intent === 'add-store'}
+              renewsElsewhere={renewsElsewhere}
             />
           )}
           <Appear delay={stagger(4)}>

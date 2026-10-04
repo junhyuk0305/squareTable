@@ -23,7 +23,7 @@
 //   B1 열리면 완료 카드 · B3 결제 응답이 20초 넘게 안 오면 스피너 대신 안내 · 구매 복원은 맨 아래 작은 링크.
 
 import { useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, Pressable, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, Pressable, ActivityIndicator, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSessionStore } from '@/lib/store/useSessionStore';
@@ -38,6 +38,8 @@ import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
 import { rpcChooseIapRelease, rpcClearIapRelease, type IapSubscriptionRow } from '@/lib/db';
 import { releaseRule } from '@/lib/iap/release';
+import { fmtDay, otherPaidNote, otherStoreNote } from '@/lib/iap/notes';
+import { iapErrorKind, iapErrorText } from '@/lib/iap/errors';
 import {
   initPurchases,
   fetchOffers,
@@ -50,28 +52,7 @@ import {
   type IapOffer,
 } from '@/lib/iap/purchases';
 
-/** "9월 13일" — 해를 넘기면 연도를 붙인다(결제 화면에서 지난 날짜로 읽히는 오해가 제일 위험하다). */
-function fmtDay(isoLike: string | null | undefined, now: number = Date.now()): string {
-  if (!isoLike) return '';
-  const d = new Date(isoLike);
-  if (Number.isNaN(d.getTime())) return '';
-  const year = d.getFullYear() !== new Date(now).getFullYear() ? `${d.getFullYear()}년 ` : '';
-  return `${year}${d.getMonth() + 1}월 ${d.getDate()}일`;
-}
-
-/**
- * A2 — 다른 경로로 산 이용 기간이 남아 있으면 앱에서 또 살 수 없다(없으면 null).
- * ★0187 의 이중청구 가드는 **한 방향**뿐이다(앱 구독 중이면 다른 신고를 막는다). 반대 방향은 서버가 안 막고
- *   `sync_iap_slots` 도 기간을 줄이지 않으므로 두 기간이 겹친 채 둘 다 청구된다 → 화면에서 **막는다**.
- * ⛔ 채널을 말하지 않는다 — 앱 안에서 외부 결제를 언급하면 스토어 위반이다.
- * ※ 컴포넌트 밖에 둔다 — 렌더 중 `Date.now()` 직접 호출은 순수성 규칙 위반이다.
- */
-function otherPaidNote(plan: string, paidUntil: string | null | undefined, now: number = Date.now()): string | null {
-  if (plan === 'free' || !paidUntil) return null;
-  const ms = new Date(paidUntil).getTime();
-  if (Number.isNaN(ms) || ms <= now) return null;
-  return `${fmtDay(paidUntil, now)}까지 이용 기간이 남아 있어요. 그 뒤에 여기서 이어가실 수 있어요.`;
-}
+// 날짜 표기(fmtDay)·A2/Q30 안내(otherPaidNote)·Q8 안내(otherStoreNote) 판정은 lib/iap/notes.ts 한 곳이다(qa:iap-notes).
 
 /** 결제 후 매장이 열리기까지 기다리는 시간. 이 뒤에도 안 열리면 문구가 '오래 걸리는 중'으로 바뀐다. */
 const WAIT_TICK_MS = 5000;
@@ -85,6 +66,7 @@ export function IapPurchasePanel({
   subscription,
   releaseChoice,
   wantMore = false,
+  renewsElsewhere = false,
 }: {
   onChanged: () => void | Promise<void>;
   /** 사장이 실제로 가진(열린) 매장 — 기본 선택과 "닫을 매장 고르기"의 후보. */
@@ -95,6 +77,8 @@ export function IapPurchasePanel({
   releaseChoice: string[];
   /** '매장 추가'에서 들어왔다 — 기본 제시를 가진 매장 수 + 1 로(가진 수만 사면 새 매장이 여전히 막힌다). */
   wantMore?: boolean;
+  /** Q30 — 지금 이용 기간이 앱 밖에서 자동으로 이어지는 중이다(db fetchRenewsOutsideApp). 안내 문구만 바뀐다. */
+  renewsElsewhere?: boolean;
 }) {
   const router = useRouter();
   const userId = useSessionStore((s) => s.userId);
@@ -118,21 +102,27 @@ export function IapPurchasePanel({
   const [bought, setBought] = useState(0);
   const [doneDismissed, setDoneDismissed] = useState(false);
   const waitTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Q8 — 스토어 권한이 말하는 '산 스토어'. 서버 행이 아직 없을 때(웹훅 늦음)의 2차 판정이다.
+  const [entStore, setEntStore] = useState<string | null>(null);
 
   // 지금 구독 중인 매장 수(서버 SSOT). 0 = 앱 구독 없음.
   const sub = subscription;
   const owned = sub?.store_count ?? 0;
   const pendingCount = sub?.pending_store_count ?? null;
+  // Q8 — 다른 기기에서 산 이용권이면 이 기기에서 늘리기·줄이기·해지를 잠근다(두 번 청구 · 그 구독이 없는 관리 창).
+  //   현재 구독 카드는 그대로 보인다. 판정 = lib/iap/notes.ts(서버 행 platform 이 먼저, 없으면 스토어 권한).
+  const storeNote = otherStoreNote(sub?.platform, entStore, Platform.OS);
 
   useEffect(() => {
     let alive = true;
     void (async () => {
       try {
         await initPurchases(userId);
-        // 목록은 스토어에서, 구독 상태는 서버에서 — SDK 의 entitlement 는 목록 정합 확인용으로만 읽는다.
-        const [list] = await Promise.all([fetchOffers(), currentEntitlement()]);
+        // 목록은 스토어에서, 구독 상태는 서버에서 — SDK 의 entitlement 는 목록 정합 확인과 Q8 '산 스토어' 2차 판정에만 쓴다.
+        const [list, ent] = await Promise.all([fetchOffers(), currentEntitlement()]);
         if (!alive) return;
         setOffers(list);
+        setEntStore(ent.store);
         // 기본 제시 = 구독 중이면 한 칸 위, 아니면 가진 매장 수(매장 추가에서 왔으면 +1). 목록에 없는 수는 가장 가까운 것으로.
         const want = owned > 0 ? owned + 1 : Math.max(1, ownedStores.length + (wantMore ? 1 : 0));
         const hit = list.find((o) => o.storeCount === want) ?? list.find((o) => o.storeCount > owned) ?? list[list.length - 1];
@@ -216,7 +206,8 @@ export function IapPurchasePanel({
       await onChanged();
     } catch (e) {
       if (isDown) void rpcClearIapRelease();
-      if (!isUserCancelled(e)) showToast('결제를 마치지 못했어요. 잠시 후 다시 시도해 주세요.');
+      // A-10 — 이 스토어 계정의 이용권을 다른 앱 계정이 쓰고 있으면 어느 계정으로 로그인할지 말한다.
+      if (!isUserCancelled(e)) showToast(iapErrorText(iapErrorKind(e), Platform.OS) ?? '결제를 마치지 못했어요. 잠시 후 다시 시도해 주세요.');
     } finally {
       clearTimeout(slowTimer);
       setSlow(false);
@@ -233,6 +224,7 @@ export function IapPurchasePanel({
     try {
       await restorePurchases();
       const ent = await currentEntitlement();
+      setEntStore(ent.store);
       // ★목록과 id 를 맞춰 보지 않는다 — Play 의 구독 id(st_multi)는 목록의 id(st_multi:multi-3-monthly)와
       //   달라 매번 "산 이용권이 없어요"가 됐다. 매장 수 판정은 purchases 모듈 한 곳이다.
       const n = ent.active ? ent.storeCount : 0;
@@ -243,14 +235,15 @@ export function IapPurchasePanel({
       }
       showToast(n > 0 ? `이용권을 되살렸어요 · 매장 ${n}개` : '이 계정으로 산 이용권이 없어요.');
       await onChanged();
-    } catch {
-      showToast('이용권을 확인하지 못했어요. 잠시 후 다시 시도해 주세요.');
+    } catch (e) {
+      showToast(iapErrorText(iapErrorKind(e), Platform.OS) ?? '이용권을 확인하지 못했어요. 잠시 후 다시 시도해 주세요.');
     } finally {
       if (lock) setBusy(false);
     }
   };
 
   const manage = async () => {
+    if (storeNote !== null) return;
     try {
       await showManageSubscriptions();
       await onChanged();
@@ -264,7 +257,7 @@ export function IapPurchasePanel({
   const free = PLANS.free;
   const paidAi = PLANS.single.aiMonthly;
   // A2 — 앱 구독이 없는데 유료 기간이 남아 있다 = 다른 경로로 산 것. 겹쳐 사지 못하게 막는다.
-  const blockedNote = owned === 0 ? otherPaidNote(plan, paidUntil) : null;
+  const blockedNote = owned === 0 ? otherPaidNote(plan, paidUntil, renewsElsewhere) : null;
   const releaseNames = releaseChoice
     .map((id) => ownedStores.find((s) => s.unit_id === id)?.store_name)
     .filter((n): n is string => !!n);
@@ -337,11 +330,19 @@ export function IapPurchasePanel({
               </>
             )}
             {/* 해지·줄이기 취소·다시 이어가기 = 전부 스토어 관리 창. 앱은 구독을 직접 못 끊는다. */}
-            <Pressable onPress={() => void manage()} accessibilityRole="button" style={({ pressed }) => [styles.ghost, pressed && { opacity: 0.7 }]}>
+            <Pressable
+              disabled={storeNote !== null}
+              onPress={() => void manage()}
+              accessibilityRole="button"
+              accessibilityState={{ disabled: storeNote !== null }}
+              style={({ pressed }) => [styles.ghost, storeNote !== null && { opacity: 0.5 }, pressed && { opacity: 0.7 }]}
+            >
               <Text style={styles.ghostText}>
                 {sub.status === 'canceled' ? '다시 이어가기' : sub.status === 'grace' ? '결제 수단 바꾸기' : pendingCount !== null ? '줄이기 취소' : '구독 해지'}
               </Text>
             </Pressable>
+            {/* Q8 — 다른 기기에서 산 이용권. 바꾸기·해지는 산 기기에서만 된다. */}
+            {storeNote !== null && <Text style={styles.warnNote}>{storeNote}</Text>}
           </View>
         </Appear>
       )}
@@ -514,12 +515,12 @@ export function IapPurchasePanel({
 
             {/* Primary 는 화면당 1개 — 위 목록은 '고르기'고 결제는 여기 하나다. */}
             <Pressable
-              disabled={busy || selected.storeCount === owned || blockedNote !== null || !releaseReady}
+              disabled={busy || selected.storeCount === owned || blockedNote !== null || storeNote !== null || !releaseReady}
               onPress={() => void buy(selected)}
               accessibilityRole="button"
               style={({ pressed }) => [
                 styles.primary,
-                (busy || selected.storeCount === owned || blockedNote !== null || !releaseReady) && { opacity: 0.5 },
+                (busy || selected.storeCount === owned || blockedNote !== null || storeNote !== null || !releaseReady) && { opacity: 0.5 },
                 pressed && { opacity: 0.88 },
               ]}
             >
@@ -547,6 +548,8 @@ export function IapPurchasePanel({
 
             {/* A2 — 다른 경로로 산 기간이 남아 있으면 못 산다(겹쳐 두 번 내는 사고 차단). 채널은 말하지 않는다. */}
             {blockedNote !== null && <Text style={styles.warnNote}>{blockedNote}</Text>}
+            {/* Q8 — 서버 행이 아직 없는데(웹훅 늦음) 스토어 권한이 다른 기기 것이다. 행이 있으면 위 현재 구독 카드가 말한다. */}
+            {storeNote !== null && !sub && <Text style={styles.warnNote}>{storeNote}</Text>}
 
             {/* ★자동갱신 고지(Guideline 3.1.2(a)) — 기간·자동갱신·해지 방법을 구매 지점에 둔다. */}
             <Text style={styles.legal}>

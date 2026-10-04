@@ -565,12 +565,14 @@ export type IapSubscriptionRow = {
   pending_product_id: string | null;
   pending_store_count: number | null;
   pending_at: string | null;
+  /** 산 스토어(0187). Q8 — 다른 기기에서 산 구독이면 이 기기에서 바꾸기·해지를 잠근다(lib/iap/notes.ts). */
+  platform: 'appstore' | 'play';
 };
 export async function fetchMyIapSubscription(): Promise<DbResult<IapSubscriptionRow | null>> {
   if (!HAS_SUPABASE) return { data: null, error: null };
   const { data, error } = await supabase
     .from('iap_subscriptions')
-    .select('status, store_count, product_id, current_period_end, pending_product_id, pending_store_count, pending_at')
+    .select('status, store_count, product_id, current_period_end, pending_product_id, pending_store_count, pending_at, platform')
     .in('status', ['active', 'canceled', 'grace'])
     .gt('current_period_end', new Date().toISOString())
     .order('current_period_end', { ascending: false })
@@ -644,6 +646,25 @@ export async function fetchMyCardSubscription(): Promise<DbResult<CardSubscripti
     return { data: null, error: error as DbErr };
   }
   return { data: (data as CardSubscriptionRow) ?? null, error: null };
+}
+
+/**
+ * Q30 — 지금 이용 기간이 앱 밖에서 자동으로 이어지는 중인가(본인 행 · RLS 0230). 앱 이용권 패널의 안내 문구용.
+ * ★이름과 반환에 채널을 드러내지 않는다 — 앱 화면은 이 값으로 "자동으로 이어져요"만 말한다(3.1.1).
+ * 못 읽으면 false(지금 동작 그대로)다.
+ */
+export async function fetchRenewsOutsideApp(): Promise<DbResult<boolean>> {
+  if (!HAS_SUPABASE) return { data: false, error: null };
+  const { data, error } = await supabase
+    .from('card_subscriptions')
+    .select('status')
+    .in('status', ['active', 'past_due'])
+    .limit(1);
+  if (error) {
+    readFail('fetchRenewsOutsideApp', error);
+    return { data: false, error: error as DbErr };
+  }
+  return { data: (data ?? []).length > 0, error: null };
 }
 
 export type CardPaymentRow = { order_id: string; amount_krw: number; status: string; approved_at: string | null; receipt_url: string | null };
