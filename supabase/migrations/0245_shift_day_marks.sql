@@ -27,6 +27,10 @@
 --      다른 매장 표시나 없는 표시는 false(있는지 알려 주지 않는다).
 --   ④ copy_past_segment(0243 본문 승계 + 한 줄): 지난 날짜 결근 표시도 지난 구간 복사본을 따라간다(데이터 H6).
 --      split_shift_at(edit_shift_from) · 옛 앱 직접 UPDATE·DELETE(trg_shift_series_guard)가 모두 이 헬퍼를 지난다.
+--   ⑤ owner_labor_inputs_v2 · my_cross_summary_v2(0242 본문 승계 + 두 열): marks(결근 표시) · wage_rates(시급 이력).
+--      RLS(sdm_read · wage_rates_read)는 활성 매장만 보인다. 허브와 다매장 직원은 이 두 함수로만 다른 매장 몫을 받는다.
+--      RLS 는 넓히지 않는다. 방어선은 0242 그대로(사장 = u.owner_id = auth.uid() · 직원 = 본인 멤버십 · 본인 표시·이력만).
+--      앱 C 의 computePeriodPay 4곳(staff · TimesheetView · junior/attendance · useHubStore) 중 허브와 직원 합계가 이 열을 쓴다.
 --
 -- 바꾸지 않는 것(계획과 다른 점 · 코드가 맞다)
 --   · end_shift_from(0242)은 다시 정의하지 않는다. 계획(데이터 H6)은 "표시가 있으면 지우지 말고 valid_to 로 닫는다"이다.
@@ -42,6 +46,8 @@
 --   옛 앱 사장의 반복 근무 직접 수정·삭제는 0242 트리거 그대로이고, 나누기는 이 표도 옮긴다(qa:day-marks [2]).
 -- ★0246 이 이 표에 archived_tenure_id 를 단다(재입사 표시 · 마스터 계획 0246 상세 2).
 -- 함수 담당표: copy_past_segment/split_shift_at 0242 → 0243 → 0245. 다음 정의는 **이 파일 본문을 통째로 복사**해서 시작한다.
+-- 함수 담당표(계획 §4 와 다른 점): owner_labor_inputs_v2 · my_cross_summary_v2 = 0242 → **0245** → 0246. 0246 이 archived_tenure_id
+--   조건을 넣을 때 0242 가 아니라 이 파일 본문에서 시작하고, marks · wage_rates 집계에도 같은 조건을 붙인다(qa:definer-filters 가 두 토큰을 본다).
 -- 되돌리기: scripts/rollback/0245.sql
 
 -- ════════════════════════════════════════════════════════════════════════════
@@ -176,7 +182,142 @@ end $$;
 revoke all on function public.copy_past_segment(text, date) from public, anon, authenticated;
 
 -- ════════════════════════════════════════════════════════════════════════════
--- ⑤ 자가점검 — 표 · 정책 · realtime · 본문 · 권한
+-- ⑤ owner_labor_inputs_v2 · my_cross_summary_v2 (0242 본문 승계 + marks · wage_rates 두 열)
+-- ════════════════════════════════════════════════════════════════════════════
+-- 왜: sdm_read · wage_rates_read(0244)는 활성 매장 행만 보인다. 허브(useHubStore)는 사장의 모든 매장 인건비를,
+--   다매장 직원은 모든 소속 매장 합계를 한 번에 센다. 활성 매장이 아닌 매장의 결근일·시급 이력을 받을 길이 없으면
+--   그 매장 결근일이 허브 인건비와 직원 합계에 그대로 남는다(매장 화면보다 크게 나온다).
+--   RLS 는 넓히지 않는다. 이 두 정의자 함수가 그 길이다. 방어선은 0242 그대로다(사장 = u.owner_id · 직원 = 본인 멤버십).
+-- 반환 열이 늘어 create or replace 로는 못 바꾼다 → drop 뒤 다시 만든다. 앱은 아직 _v2 를 부르지 않는다(앱 C 가 처음 부른다).
+-- 옛 앱용 v1(owner_labor_inputs · my_cross_summary)은 그대로다(옛 앱은 표시·이력을 모른다).
+drop function if exists public.my_cross_summary_v2();
+create function public.my_cross_summary_v2()
+returns table(
+  unit_id       text,
+  store_name    text,
+  shifts        jsonb,   -- [{id, weekday, date, start, end, valid_from, valid_to}]
+  exceptions    jsonb,
+  month_minutes bigint,
+  hourly_wage   int,
+  marks         jsonb,   -- ★0245: [{template_id, date, staff_id, mark}] 본인 결근 표시(표시의 staff_id = 본인)
+  wage_rates    jsonb    -- ★0245: [{staff_id, effective_from, hourly_wage}] 본인 시급 이력
+)
+language sql stable security definer set search_path = public as $$
+  select
+    u.id,
+    u.store_name,
+    coalesce((
+      select jsonb_agg(jsonb_build_object(
+               'id', st.id, 'weekday', st.weekday,
+               'date', to_char(st.shift_date, 'YYYY-MM-DD'),
+               'start', st.start_time, 'end', st.end_time,
+               'valid_from', to_char(st.valid_from, 'YYYY-MM-DD'),
+               'valid_to', to_char(st.valid_to, 'YYYY-MM-DD'))
+             order by st.shift_date, st.weekday, st.valid_from, st.start_time)
+      from public.shift_templates st
+      where st.unit_id = u.id and st.staff_id = auth.uid()::text
+    ), '[]'::jsonb),
+    coalesce((
+      select jsonb_agg(jsonb_build_object('template_id', e.template_id, 'date', to_char(e.date, 'YYYY-MM-DD')))
+      from public.shift_exceptions e
+      join public.shift_templates st2 on st2.id = e.template_id
+      where e.unit_id = u.id and st2.staff_id = auth.uid()::text
+    ), '[]'::jsonb),
+    (select coalesce(sum(a.work_minutes)::bigint, 0)
+       from public.attendance a
+      where a.unit_id = u.id and a.staff_id = auth.uid()::text
+        and a.date >= to_char(date_trunc('month', (now() at time zone 'Asia/Seoul'))::date, 'YYYY-MM-DD')),
+    coalesce((select w.hourly_wage from public.wages w
+      where w.unit_id = u.id and w.staff_id = auth.uid()::text), 0),
+    coalesce((
+      select jsonb_agg(jsonb_build_object('template_id', dm.template_id, 'date', to_char(dm.date, 'YYYY-MM-DD'),
+                                          'staff_id', dm.staff_id, 'mark', dm.mark)
+             order by dm.date, dm.template_id)
+      from public.shift_day_marks dm
+      where dm.unit_id = u.id and dm.staff_id = auth.uid()::text
+    ), '[]'::jsonb),
+    coalesce((
+      select jsonb_agg(jsonb_build_object('staff_id', wr.staff_id, 'effective_from', to_char(wr.effective_from, 'YYYY-MM-DD'),
+                                          'hourly_wage', wr.hourly_wage)
+             order by wr.effective_from)
+      from public.wage_rates wr
+      where wr.unit_id = u.id and wr.staff_id = auth.uid()::text
+    ), '[]'::jsonb)
+  from public.unit_members m
+  join public.units u on u.id = m.unit_id and u.deleted_at is null
+  where auth.uid() is not null
+    and m.user_id = auth.uid()       -- ★소속 매장만(0077과 동일 게이트)
+  order by u.created_at
+$$;
+revoke all on function public.my_cross_summary_v2() from public, anon, authenticated;
+grant execute on function public.my_cross_summary_v2() to authenticated;
+
+drop function if exists public.owner_labor_inputs_v2();
+create function public.owner_labor_inputs_v2()
+returns table(
+  unit_id          text,
+  staff_ids        jsonb,
+  shifts           jsonb,  -- [{id, staff_id, weekday, date, start, end, valid_from, valid_to}]
+  exceptions       jsonb,
+  wages            jsonb,
+  payroll_settings jsonb,
+  marks            jsonb,  -- ★0245: [{template_id, date, staff_id, mark}] 그 매장 결근 표시 전부
+  wage_rates       jsonb   -- ★0245: [{staff_id, effective_from, hourly_wage}] 그 매장 시급 이력 전부
+)
+language sql stable security definer set search_path = public as $$
+  select
+    u.id,
+    coalesce((
+      select jsonb_agg(pr.id)
+      from public.profiles pr
+      where pr.unit_id = u.id and pr.role = 'junior' and pr.deleted_at is null
+    ), '[]'::jsonb),
+    coalesce((
+      select jsonb_agg(jsonb_build_object(
+               'id', st.id, 'staff_id', st.staff_id, 'weekday', st.weekday,
+               'date', to_char(st.shift_date, 'YYYY-MM-DD'),
+               'start', st.start_time, 'end', st.end_time,
+               'valid_from', to_char(st.valid_from, 'YYYY-MM-DD'),
+               'valid_to', to_char(st.valid_to, 'YYYY-MM-DD'))
+             order by st.shift_date, st.weekday, st.valid_from, st.start_time)
+      from public.shift_templates st
+      where st.unit_id = u.id
+    ), '[]'::jsonb),
+    coalesce((
+      select jsonb_agg(jsonb_build_object('template_id', e.template_id, 'date', to_char(e.date, 'YYYY-MM-DD')))
+      from public.shift_exceptions e
+      where e.unit_id = u.id
+    ), '[]'::jsonb),
+    coalesce((
+      select jsonb_object_agg(w.staff_id, w.hourly_wage)
+      from public.wages w
+      where w.unit_id = u.id
+    ), '{}'::jsonb),
+    u.payroll_settings,
+    coalesce((
+      select jsonb_agg(jsonb_build_object('template_id', dm.template_id, 'date', to_char(dm.date, 'YYYY-MM-DD'),
+                                          'staff_id', dm.staff_id, 'mark', dm.mark)
+             order by dm.date, dm.template_id)
+      from public.shift_day_marks dm
+      where dm.unit_id = u.id
+    ), '[]'::jsonb),
+    coalesce((
+      select jsonb_agg(jsonb_build_object('staff_id', wr.staff_id, 'effective_from', to_char(wr.effective_from, 'YYYY-MM-DD'),
+                                          'hourly_wage', wr.hourly_wage)
+             order by wr.staff_id, wr.effective_from)
+      from public.wage_rates wr
+      where wr.unit_id = u.id
+    ), '[]'::jsonb)
+  from public.units u
+  where u.owner_id = auth.uid()      -- ★소유 매장만(owner_overview 와 동일 방어선)
+    and u.deleted_at is null
+  order by u.created_at
+$$;
+revoke all on function public.owner_labor_inputs_v2() from public, anon, authenticated;
+grant execute on function public.owner_labor_inputs_v2() to authenticated;
+
+-- ════════════════════════════════════════════════════════════════════════════
+-- ⑥ 자가점검 — 표 · 정책 · realtime · 본문 · 권한
 -- ════════════════════════════════════════════════════════════════════════════
 do $$
 declare
@@ -231,6 +372,21 @@ begin
   if position('valid_from' in v_def) = 0 or position('shift_exceptions' in v_def) = 0 or position('future_date' in v_def) = 0 then
     v_bad := v_bad || 'mark_shift_day(그날 적용 여부·미래 거부 중 빠짐) ';
   end if;
+  -- _v2 둘: 표시·시급 이력을 주고, 0242 방어선(소유 매장 · 본인 멤버십)과 적용 기간이 그대로다.
+  v_def := pg_get_functiondef('public.owner_labor_inputs_v2()'::regprocedure);
+  if position('shift_day_marks' in v_def) = 0 or position('wage_rates' in v_def) = 0
+     or position('owner_id = auth.uid()' in v_def) = 0 or position('valid_to' in v_def) = 0 then
+    v_bad := v_bad || 'owner_labor_inputs_v2(표시·시급 이력·소유 매장 방어선·기간 중 빠짐) ';
+  end if;
+  v_def := pg_get_functiondef('public.my_cross_summary_v2()'::regprocedure);
+  if position('shift_day_marks' in v_def) = 0 or position('wage_rates' in v_def) = 0
+     or position('m.user_id = auth.uid()' in v_def) = 0 or position('dm.staff_id = auth.uid()' in v_def) = 0 then
+    v_bad := v_bad || 'my_cross_summary_v2(표시·시급 이력·본인 멤버십·본인 표시만 중 빠짐) ';
+  end if;
+  foreach fn in array array['public.owner_labor_inputs_v2()', 'public.my_cross_summary_v2()'] loop
+    if has_function_privilege('anon', fn::regprocedure, 'execute') then v_bad := v_bad || fn || '(anon 실행가능) '; end if;
+    if not has_function_privilege('authenticated', fn::regprocedure, 'execute') then v_bad := v_bad || fn || '(authenticated 실행 불가) '; end if;
+  end loop;
 
   -- 권한
   foreach fn in array array['public.mark_shift_day(text, date, text, boolean)', 'public.clear_shift_day(text, date, boolean)'] loop
@@ -249,7 +405,7 @@ begin
   end loop;
   for r in select p.oid::regprocedure::text as f from pg_proc p
             where p.pronamespace = 'public'::regnamespace and p.prosecdef
-              and p.proname in ('mark_shift_day', 'clear_shift_day', 'copy_past_segment')
+              and p.proname in ('mark_shift_day', 'clear_shift_day', 'copy_past_segment', 'owner_labor_inputs_v2', 'my_cross_summary_v2')
               and not ('search_path=public' = any(coalesce(p.proconfig, '{}'))) loop
     v_bad := v_bad || r.f || '(search_path 없음) ';
   end loop;
