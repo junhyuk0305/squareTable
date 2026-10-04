@@ -9,6 +9,11 @@
 //   캐시 토큰(sqt.expoPushToken) 읽기 → unregister_my_push(4초 제한) → 실패하면 sqt.pushReleasePending 저장
 //   → 알림센터 비우기·배지 0 → 웹 disablePush() → signOut({scope:'local'}).
 //   부팅 때는 pending 을 release_push_token 으로 먼저 처리한다. 등록에 성공하면 pending 을 지운다.
+// ★2026-10-05 검토 보강:
+//   - release 가 4초를 넘겨도 요청이 살아 있어, 늦게 도착하면 방금 한 같은 계정 등록을 지웠다.
+//     → release 에 signal 을 넘겨 끊는다. pending 주인이 같은 토큰으로 다시 등록하면 release 를 아예 보내지 않는다.
+//   - pending 이 부팅 때만 풀려, 앱이 메모리에 남아 있으면 로그아웃한 폰에 푸시가 계속 왔다.
+//     → 앱을 다시 열 때(AppState 'active')도 푼다.
 // 실행: node scripts/qa-signout-push.mjs   (Node 22.18+ — .ts 를 타입만 벗겨 읽는다)
 
 let pass = 0, fail = 0;
@@ -166,6 +171,52 @@ if (ok2) {
     const st = await mod.releasePendingPush(kv, () => new Promise(() => {}), 60);
     check('release 응답이 없어도 제한 시간에 끝난다(등록을 막지 않는다)', st === 'kept' && Date.now() - t0 < 1000, `${Date.now() - t0}ms`);
   }
+  {
+    // 제한 시간이 지나도 요청이 살아 있으면 늦게 도착해 새 등록을 지울 수 있다. 끊어야 한다.
+    let seen = null;
+    const kv = memKV({ 'sqt.pushReleasePending': pending });
+    const st = await mod.releasePendingPush(kv, (p, signal) => { seen = signal ?? null; return new Promise((res) => signal?.addEventListener('abort', () => res(false))); }, 60);
+    check('★release 에 AbortSignal 을 넘기고 제한 시간에 abort 한다', st === 'kept' && seen?.aborted === true, `→ ${st} signal=${seen ? seen.aborted : 'none'}`);
+  }
+
+  console.log('\n■ 같은 계정이 같은 폰에서 다시 로그인 — release 를 보내지 않는다 (늦은 release 가 새 등록을 지우는 경쟁)');
+  const OTHER = '00000000-0000-4000-8000-000000000002';
+  {
+    // 서버 흉내: token → user_id. 오프라인 로그아웃으로 {TOKEN, UID} 행이 남아 있다.
+    const server = new Map([[TOKEN, UID]]);
+    const kv = memKV({ 'sqt.pushReleasePending': pending, 'sqt.expoPushToken': TOKEN });
+    let calls = 0, late = null;
+    // 느린 망: 요청은 서버에 닿았지만 응답이 늦다. late() 때 서버에서 지운다(release_push_token 과 같은 조건).
+    const slow = (p) => { calls++; return new Promise((res) => { late = () => { if (server.get(p.token) === p.userId) server.delete(p.token); res(true); }; }); };
+    const st = await mod.releasePendingPush(kv, slow, 50, { userId: UID, token: TOKEN });
+    server.set(TOKEN, UID); // save_push_device_token(TOKEN) — 같은 행을 새 세션으로 덮어쓴다
+    await mod.rememberRegisteredToken(kv, TOKEN);
+    if (late) late(); // 늦게 도착한 release
+    check('★pending 주인이 같은 토큰으로 다시 등록하면 release 를 보내지 않는다(superseded)', st === 'superseded' && calls === 0, `→ ${st} calls=${calls}`);
+    check('★그래서 새 등록이 남는다', server.get(TOKEN) === UID);
+    check('등록 뒤 pending 이 없다', !kv.m.has('sqt.pushReleasePending'));
+  }
+  {
+    const kv = memKV({ 'sqt.pushReleasePending': pending });
+    const st = await mod.releasePendingPush(kv, async () => true, 50, { userId: UID, token: TOKEN });
+    check('superseded 는 pending 을 남긴다(등록이 성공해야 지운다)', st === 'superseded' && kv.m.has('sqt.pushReleasePending'), `→ ${st}`);
+  }
+  {
+    let called = false;
+    const kv = memKV({ 'sqt.pushReleasePending': pending, 'sqt.expoPushToken': TOKEN });
+    const st = await mod.releasePendingPush(kv, async () => { called = true; return true; }, 50, { userId: UID });
+    check('토큰을 안 넘기면 캐시 토큰과 비교한다(앱을 다시 열 때 주인이 로그인해 있음)', st === 'superseded' && !called, `→ ${st}`);
+  }
+  for (const [name, cur] of [
+    ['로그아웃 상태', { userId: null }],
+    ['다른 계정이 로그인', { userId: OTHER, token: TOKEN }],
+    ['같은 계정이지만 토큰이 바뀜(다른 행)', { userId: UID, token: 'ExponentPushToken[rotated]' }],
+  ]) {
+    let called = false;
+    const kv = memKV({ 'sqt.pushReleasePending': pending, 'sqt.expoPushToken': TOKEN });
+    const st = await mod.releasePendingPush(kv, async () => { called = true; return true; }, 50, cur);
+    check(`${name}이면 release 를 보낸다`, st === 'released' && called && !kv.m.has('sqt.pushReleasePending'), `→ ${st}`);
+  }
   for (const bad of ['{', '"x"', '{"token":""}', JSON.stringify({ token: TOKEN })]) {
     let called = false;
     const kv = memKV({ 'sqt.pushReleasePending': bad });
@@ -195,10 +246,15 @@ console.log('\n■ 연결 — 앱 코드가 위 순서를 쓴다(소스 대조)'
   check("deleteAccount 는 성공 뒤 scope:'global'", /signOut\(\{\s*scope:\s*'global'\s*\}\)/.test(deleteBody));
   const np = src('src/lib/push/nativepush.ts');
   check('nativepush: 등록 성공 뒤 rememberRegisteredToken', np.includes('rememberRegisteredToken('));
-  check('nativepush: 등록 전에 pending release 를 기다린다', /releasePendingPushToken\(\)[\s\S]*?save_push_device_token/.test(body(np, 'async function registerToken', '\n}\n')));
+  check('nativepush: 등록 전에 곧 등록할 토큰으로 pending release 를 기다린다', /releasePendingPushToken\(token\)[\s\S]*?save_push_device_token/.test(body(np, 'async function registerToken', '\n}\n')));
+  const relBody = body(np, 'export function releasePendingPushToken', '\n}\n');
+  check("★nativepush: release_push_token 에 abortSignal(signal) 을 건다", /rpc\('release_push_token'[\s\S]*?\.abortSignal\(signal\)/.test(relBody));
+  check('nativepush: release 에 로그인한 사용자를 넘긴다(superseded 판정)', /status === 'signed_in'/.test(relBody) && relBody.includes('userId'));
   check('nativepush: 알림센터 비우기·배지 0', np.includes('dismissAllNotificationsAsync') && np.includes('setBadgeCountAsync(0)'));
   const boot = src('src/lib/push/usePushBootstrap.ts');
-  check('부팅: pending release 를 로그인 여부와 상관없이 1회 부른다', boot.includes('releasePendingPushToken()'));
+  check('부팅: pending release 를 로그인 여부와 상관없이 부른다', boot.includes('releasePendingPushToken()'));
+  check("★앱을 다시 열 때(AppState 'active')도 pending release 를 부른다(앱이 메모리에 남은 경우)",
+    /AppState\.addEventListener\(\s*'change'[\s\S]*?'active'[\s\S]*?releasePendingPushToken\(\)/.test(boot) && /\.remove\(\)/.test(boot));
 }
 
 console.log(`\n── ${pass} PASS · ${fail} FAIL`);

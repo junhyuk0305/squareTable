@@ -9,6 +9,7 @@
 //   [1] 온라인 로그아웃: 그 기기 토큰이 발송 대상에서 빠진다. 같은 계정의 다른 기기는 로그인·푸시가 그대로다(Q16).
 //   [2] 오프라인 로그아웃(A1): 서버 세션이 남아 대상에 그대로 있다 → pending 이 남는다 → 다음 부팅 release 로 빠진다.
 //   [3] 순서: release 를 등록보다 먼저 해야 한다. 거꾸로 하면 같은 계정의 새 등록이 지워진다.
+//   [4] 같은 계정이 같은 폰에서 다시 로그인하면 release 를 보내지 않는다(늦게 도착해 새 등록을 지우지 않게 · 10-05).
 //
 // ★로컬 전용: 로컬 고정 계정(staff2@pilot.squaretable.app, local_bootstrap.sh)을 쓴다. URL 이 로컬이 아니면 멈춘다.
 //   이번 실행에서 만든 토큰 행만 지운다. 세션은 전부 local 로그아웃한다.
@@ -85,10 +86,12 @@ const appSignOut = (d, userId) => mod.signOutWithPushRelease({
   disableWebPush: async () => {},
   signOutLocal: async () => { await d.c.auth.signOut({ scope: 'local' }); },
 });
-const appRelease = (d) => mod.releasePendingPush(d.kv, async (p) => {
-  const { data, error } = await anon().rpc('release_push_token', { p_token: p.token, p_user: p.userId });
+const appRelease = (d, current) => mod.releasePendingPush(d.kv, async (p, signal) => {
+  let q = anon().rpc('release_push_token', { p_token: p.token, p_user: p.userId });
+  if (signal) q = q.abortSignal(signal);
+  const { data, error } = await q;
   return !error && typeof data === 'number';
-});
+}, undefined, current);
 const register = async (d, token) => {
   const { error } = await d.c.rpc('save_push_device_token', { p_token: token, p_platform: 'android', p_unit_id: null });
   if (error) throw new Error('save_push_device_token: ' + error.message);
@@ -179,6 +182,25 @@ try {
     check('3-3 등록 성공 뒤 pending 이 없다(다시 풀어 새 등록을 지우지 않게)', !W.kv.m.has('sqt.pushReleasePending'));
     const again = await appRelease(W);
     check('3-4 그 뒤 부팅 release 는 아무것도 안 한다', again === 'none' && (await targets(uid)).includes(tok('w')), `→ ${again}`);
+  }
+
+  // ═══════ 4. 같은 계정 재로그인 ═══════
+  console.log('\n[4] 오프라인 로그아웃 뒤 같은 계정으로 다시 로그인 — release 를 보내지 않고 등록이 덮어쓴다');
+  {
+    const V = device();
+    devices.push(V);
+    await signIn(V);
+    made.push(tok('v'));
+    await register(V, tok('v'));
+    V.state.offline = true;
+    const r4 = await appSignOut(V, uid);
+    V.state.offline = false;
+    check('4-1 오프라인 로그아웃 → pending', r4.pendingSaved === true && V.kv.m.has('sqt.pushReleasePending'), JSON.stringify(r4));
+    await signIn(V);
+    const st4 = await appRelease(V, { userId: uid, token: tok('v') });
+    check('4-2 ★같은 계정·같은 토큰 → superseded(요청 0) · pending 은 아직 남음', st4 === 'superseded' && V.kv.m.has('sqt.pushReleasePending'), `→ ${st4}`);
+    await register(V, tok('v'));
+    check('4-3 ★등록이 남고 pending 이 지워진다', (await targets(uid)).includes(tok('v')) && !V.kv.m.has('sqt.pushReleasePending'));
   }
 } catch (e) {
   fail++;
