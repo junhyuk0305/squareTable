@@ -68,5 +68,17 @@ check('★16시간 1분 → 퇴근 깜빡', call(isForgotCheckout, open, at(K('2
 check('야간 근무 2시간 30분 → 아니다(퇴근 버튼 그대로)', fn(isForgotCheckout) && call(isForgotCheckout, records[0], NOW) === false);
 check('닫힌 기록은 아니다', fn(isForgotCheckout) && call(isForgotCheckout, rec('d', 'u1', '2026-10-03', '08:00', '09:00'), NOW) === false);
 
+console.log('\n■ completeHHMM — 퇴근 깜빡 카드는 다 친 "HH:MM" 만 받는다');
+// ★리뷰 결함: 카드가 덜 친 "18:3" 을 normalizeTime 에 넣으면 숫자 183 을 1시 83분으로 읽어 "01:59" 가 된다.
+//   checkShiftTime 은 이를 통과시키고, 기록은 다음 날 01:59 퇴근(18시간 근무)으로 조용히 닫힌다.
+const { completeHHMM, normalizeTime } = mod;
+check('(참고) normalizeTime("18:3") 은 "01:59" 다 — 카드에 그대로 쓰면 안 된다', call(normalizeTime, '18:3') === '01:59', `→ ${call(normalizeTime, '18:3')}`);
+check('★"18:3"(덜 침) → null', fn(completeHHMM) && call(completeHHMM, '18:3') === null, `→ ${call(completeHHMM, '18:3')}`);
+check('★"9:0"(덜 침) → null', fn(completeHHMM) && call(completeHHMM, '9:0') === null, `→ ${call(completeHHMM, '9:0')}`);
+check('"18"(시만) → null', fn(completeHHMM) && call(completeHHMM, '18') === null);
+check('빈 입력 → null', fn(completeHHMM) && call(completeHHMM, '') === null);
+check('"18:30" → "18:30"', call(completeHHMM, '18:30') === '18:30', `→ ${call(completeHHMM, '18:30')}`);
+check('"01:05" → "01:05"', call(completeHHMM, '01:05') === '01:05', `→ ${call(completeHHMM, '01:05')}`);
+
 console.log(`\n── ${pass} PASS · ${fail} FAIL`);
 process.exit(fail > 0 || !fn(findOpenRecord) ? 1 : 0);
