@@ -50,6 +50,9 @@ const FN_TOKENS = {
   copy_past_segment: ['shift_exceptions', 'swap_requests', 'shift_change_requests'],
   request_shift_time: ['valid_from', 'shift_exceptions', 'kst_today() - 35', 'kst_today() + 60', 'auth.uid()'],
   decide_shift_time: ['auth_is_owner', 'for update', "status <> 'pending'", 'p_confirm_past', 'kst_today() - 35', 'override_shift_day', "edited_by = 'staff'"],
+  // P4-3 0244(J1-b) — 시급 이력. 사장만 · 활성 매장 멤버만 · 지난 날짜는 확인(Q4). 일일 맞춤은 지금 멤버만(퇴사자 wages 되살리기 금지).
+  set_wage_from: ['auth_is_owner', 'auth_unit_id', 'unit_members', 'p_confirm_past', 'wage_rates'],
+  sync_wages_from_rates: ['unit_members', 'wage_rates'],
 };
 
 // 함수 → 있으면 안 되는 토큰(옛 경로를 다시 여는 퇴행).
