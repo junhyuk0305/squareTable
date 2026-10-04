@@ -11,6 +11,8 @@
 //   [3] RLS: 본인과 관리자만 본다. 동료·다른 매장 0건. 사장도 직접 쓰지 못한다(RPC 로만).
 //   [4] clear_shift_day: 사장만 · 지난 날짜는 p_confirm_past · 다른 매장은 false.
 //   [5] 권한 · 표 권한 · realtime.
+//   [6] 활성 매장이 아닌 매장의 결근 표시·시급 이력이 허브(owner_labor_inputs_v2)와 다매장 직원(my_cross_summary_v2)에
+//       온다. RLS 는 활성 매장만 보이므로 이 두 정의자 함수가 유일한 경로다. 소유 매장 방어선 · 본인 것만.
 // 지급액은 이 하니스가 근무표(반복·기간·예외·날짜 지정)와 표시로 직접 센다. 앱 C 의 computePeriodPay 규칙
 // "absent 인 날은 뺀다"와 같다(주휴는 앱이 센다 · 여기서는 그날 근무분만).
 //
@@ -316,6 +318,78 @@ try {
     check('5-5 기본키 (template_id, date)', /\(template_id, date\)/.test(pk), pk);
     const cp = psql(`select has_function_privilege('anon', 'public.copy_past_segment(text, date)', 'execute')::text || has_function_privilege('authenticated', 'public.copy_past_segment(text, date)', 'execute')::text`);
     check('5-6 copy_past_segment 는 여전히 내부 전용', cp === 'falsefalse', cp);
+  }
+
+  // ═══════ [6] 활성 매장이 아닌 매장의 결근 표시·시급 이력 — 허브·다매장 직원 경로(_v2) ═══════
+  // sdm_read · wage_rates_read 는 활성 매장 행만 보인다(넓히지 않는다). 허브(owner_labor_inputs_v2)와 직원의 매장 합계
+  // (my_cross_summary_v2)는 다른 매장 몫을 정의자 함수로 받는다. 표시가 없으면 다른 매장 결근일이 지급액에 남는다.
+  console.log('\n[6] ★활성 매장이 아닌 매장의 결근 표시·시급 이력이 _v2 로 온다(허브 · 다매장 직원)');
+  {
+    // 2호점은 매장 슬롯을 소비한다(0130). 운영자 승인이 만드는 행과 같은 것을 직접 적립한다(qa-multistore 와 같은 방법).
+    const sl = await admin.from('store_slots').insert({ owner_id: O.id, paid_until: new Date(Date.now() + 30 * 864e5).toISOString() });
+    if (sl.error) throw new Error(`store_slots 적립: ${sl.error.message}`);
+    const st2 = await store(O.c, 'QA결근2호점');
+    const UNIT2 = st2.unit_id;
+    await admin.rpc('admin_activate_store', { p_unit_id: UNIT2, p_days: 1, p_plan: 'multi' });
+    await O.c.rpc('switch_active_unit', { p_unit_id: UNIT2 });
+    const j2 = await J.c.rpc('join_by_invite', { p_code: st2.invite_code });
+    if (j2.error) throw new Error(`J join 2호점: ${j2.error.message}`);
+    const a2 = await O.c.rpc('approve_member', { p_uid: J.id });
+    if (a2.error) throw new Error(`2호점 approve_member: ${a2.error.message}`);
+    const D6 = addDays(T, -1);
+    const H1 = `qa_sdm_h1_${s}`;
+    await legacy(H1, UNIT2, J.id, dow(D6), '09:00', '15:00');
+    await admin.from('wages').upsert({ unit_id: UNIT2, staff_id: J.id, hourly_wage: 11000 });
+    const mk6 = await O.c.rpc('mark_shift_day', { p_template: H1, p_date: D6, p_mark: 'absent', p_confirm_past: true });
+    if (mk6.error) throw new Error(`2호점 결근 표시: ${mk6.error.message}`);
+    // 사장·직원 모두 1호점(UNIT)을 활성으로 둔다 → 2호점은 활성 매장이 아니다.
+    await O.c.rpc('switch_active_unit', { p_unit_id: UNIT });
+    await J.c.rpc('switch_active_unit', { p_unit_id: UNIT });
+
+    const direct = (await O.c.from('shift_day_marks').select('template_id').eq('unit_id', UNIT2)).data ?? [];
+    check('6-0 (전제) 표 직접 읽기로는 활성 매장이 아닌 2호점 표시가 안 보인다 · RLS 는 넓히지 않는다', direct.length === 0, `rows=${direct.length}`);
+
+    const hasMark = (arr) => Array.isArray(arr)
+      && arr.some((m) => m.template_id === H1 && m.date === D6 && m.mark === 'absent' && m.staff_id === J.id);
+    const hasRate = (arr, staff) => Array.isArray(arr)
+      && arr.some((w) => w.hourly_wage === 11000 && w.effective_from === '2000-01-01' && (staff == null || w.staff_id === staff));
+
+    const ol = await O.c.rpc('owner_labor_inputs_v2');
+    const row2 = (ol.data ?? []).find((r) => r.unit_id === UNIT2);
+    check('6-1 ★허브 owner_labor_inputs_v2: 활성 매장이 아닌 2호점 결근 표시가 온다(template_id·date·staff_id·mark)',
+      !ol.error && hasMark(row2?.marks), ol.error?.message ?? JSON.stringify(row2?.marks ?? 'marks 없음'));
+    check('6-2 ★허브 owner_labor_inputs_v2: 2호점 시급 이력이 온다(staff_id·effective_from·hourly_wage)',
+      !ol.error && hasRate(row2?.wage_rates, J.id), ol.error?.message ?? JSON.stringify(row2?.wage_rates ?? 'wage_rates 없음'));
+    const row1 = (ol.data ?? []).find((r) => r.unit_id === UNIT);
+    check('6-3 허브: 매장마다 자기 매장 표시만(1호점 행에 2호점 표시 없음)',
+      !!row1 && Array.isArray(row1.marks) && !row1.marks.some((m) => m.template_id === H1),
+      JSON.stringify(row1?.marks ?? 'marks 없음'));
+
+    const xo = await X.c.rpc('owner_labor_inputs_v2');
+    check('6-4 ★다른 사장에게는 남의 매장 행이 없다(소유 매장 방어선)',
+      !xo.error && !(xo.data ?? []).some((r) => r.unit_id === UNIT || r.unit_id === UNIT2), xo.error?.message ?? JSON.stringify((xo.data ?? []).map((r) => r.unit_id)));
+    const mo = await M.c.rpc('owner_labor_inputs_v2');
+    check('6-5 매니저는 소유 매장이 없어 0행', !mo.error && (mo.data ?? []).length === 0, mo.error?.message ?? `rows=${(mo.data ?? []).length}`);
+
+    const jc = await J.c.rpc('my_cross_summary_v2');
+    const jr2 = (jc.data ?? []).find((r) => r.unit_id === UNIT2);
+    check('6-6 ★다매장 직원 my_cross_summary_v2: 활성 매장이 아닌 2호점의 본인 결근 표시가 온다',
+      !jc.error && hasMark(jr2?.marks), jc.error?.message ?? JSON.stringify(jr2?.marks ?? 'marks 없음'));
+    check('6-7 ★다매장 직원 my_cross_summary_v2: 2호점 본인 시급 이력이 온다',
+      !jc.error && hasRate(jr2?.wage_rates, null), jc.error?.message ?? JSON.stringify(jr2?.wage_rates ?? 'wage_rates 없음'));
+
+    const kc = await K.c.rpc('my_cross_summary_v2');
+    const kr1 = (kc.data ?? []).find((r) => r.unit_id === UNIT);
+    check('6-8 ★동료에게는 남의 결근 표시·시급 이력이 없다(본인 것만)',
+      !kc.error && !!kr1 && Array.isArray(kr1.marks) && kr1.marks.length === 0
+      && Array.isArray(kr1.wage_rates) && !kr1.wage_rates.some((w) => w.staff_id === J.id || w.hourly_wage === 12000),
+      kc.error?.message ?? JSON.stringify({ marks: kr1?.marks, rates: kr1?.wage_rates }));
+
+    // 옛 앱 경로(v1)는 모양이 그대로다(옛 앱은 marks·wage_rates 를 모른다).
+    const v1 = await O.c.rpc('owner_labor_inputs');
+    const v1r = (v1.data ?? []).find((r) => r.unit_id === UNIT2);
+    check('6-9 옛 앱 owner_labor_inputs 는 그대로(열 6개 · marks 없음)',
+      !v1.error && !!v1r && Object.keys(v1r).length === 6 && !('marks' in v1r), v1.error?.message ?? JSON.stringify(Object.keys(v1r ?? {})));
   }
 } catch (e) {
   fail++; console.log('  FAIL 예외:', e.message);

@@ -38,10 +38,11 @@ const FN_TOKENS = {
   approve_member: ['brand_hidden'],
   // P4-1 0242 — 적용 기간을 모르는 판정이 하나라도 남으면 근무가 두 번 잡힌다(설계 01 §7-1)
   workers_at: ['valid_from', 'valid_to', 'shift_exceptions'],
+  //   _v2 둘의 shift_day_marks · wage_rates 는 P4-4 0245. RLS 는 활성 매장만 보이므로 허브·다매장 직원은 이 경로로만 다른 매장 몫을 받는다.
   my_cross_summary: ['valid_from', 'shift_exceptions'],
-  my_cross_summary_v2: ['valid_from', 'valid_to', 'shift_exceptions'],
+  my_cross_summary_v2: ['valid_from', 'valid_to', 'shift_exceptions', 'shift_day_marks', 'wage_rates'],
   owner_labor_inputs: ['valid_from', 'shift_exceptions', 'owner_id = auth.uid()'],
-  owner_labor_inputs_v2: ['valid_from', 'valid_to', 'shift_exceptions', 'owner_id = auth.uid()'],
+  owner_labor_inputs_v2: ['valid_from', 'valid_to', 'shift_exceptions', 'owner_id = auth.uid()', 'shift_day_marks', 'wage_rates'],
   shift_templates_all: ['valid_from', 'unit_members', 'auth_can_manage'],
   transfer_shift: ['valid_from', 'shift_exceptions'],
   approve_swap: ['p_confirm_past', 'kst_today() - 35', 'transfer_shift', 'auth_can_manage'],
