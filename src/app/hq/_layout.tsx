@@ -3,6 +3,8 @@ import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { useSessionStore } from '@/lib/store/useSessionStore';
+import { logout } from '@/lib/auth';
+import { confirmAction } from '@/lib/utils/confirm';
 import { SHOW_HQ_CONSOLE } from '@/lib/config/store-policy';
 import { Appear } from '@/components/Appear';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
@@ -61,6 +63,13 @@ export default function HqLayout() {
         icon="desktop-outline"
         title="본사 기능은 웹에서 써요"
         body="본사 대시보드는 넓은 화면 전용이에요. 컴퓨터 브라우저로 로그인해 주세요."
+        // 앱에서 나갈 길이 없으면 같은 폰으로 다른 계정(예: 매장 계정)에 들어갈 수 없다(10-04 사용자 결정).
+        action={{
+          label: '로그아웃',
+          onPress: async () => {
+            if (await confirmAction('로그아웃', '로그아웃하시겠어요?', '로그아웃', { icon: 'log-out-outline' })) await logout();
+          },
+        }}
       />
     );
   }
@@ -100,7 +109,7 @@ function Notice({
   icon: keyof typeof Ionicons.glyphMap;
   title: string;
   body: string;
-  action?: { label: string; href: string };
+  action?: { label: string; href: string } | { label: string; onPress: () => void };
 }) {
   const router = useRouter();
   return (
@@ -111,7 +120,7 @@ function Notice({
         <Text style={styles.body}>{body}</Text>
         {action ? (
           <Pressable
-            onPress={() => router.replace(action.href as never)}
+            onPress={() => ('href' in action ? router.replace(action.href as never) : action.onPress())}
             accessibilityRole="button"
             style={({ pressed }) => [styles.btn, pressed && { opacity: 0.85 }]}
           >
