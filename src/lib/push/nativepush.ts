@@ -117,7 +117,8 @@ async function registerToken(unitId: string | null): Promise<boolean> {
     );
     const platform = Platform.OS === 'ios' ? 'ios' : 'android';
     // 오프라인 로그아웃이 남긴 pending 을 등록보다 먼저 푼다. 거꾸로 하면 같은 계정의 새 등록이 지워진다.
-    await releasePendingPushToken();
+    // 같은 계정·같은 토큰이면 보내지 않는다(아래 save 가 덮어쓴다 · signOutPush.ts superseded).
+    await releasePendingPushToken(token);
     const { error } = await supabase.rpc('save_push_device_token', {
       p_token: token,
       p_platform: platform,
@@ -148,21 +149,29 @@ export async function enableNativePush(unitId: string | null): Promise<PushPermi
   return 'granted';
 }
 
-let releasing: Promise<unknown> | null = null;
+let releasing: Promise<unknown> = Promise.resolve();
 
 /** 오프라인 로그아웃이 남긴 pending 을 release_push_token(anon 허용)으로 푼다(A1).
- *  부팅 때 로그인 여부와 상관없이 부르고, 등록 직전에도 부른다. 동시에 두 번 돌지 않게 한 줄로 묶는다. */
-export function releasePendingPushToken(): Promise<unknown> {
+ *  부팅 때와 앱을 다시 열 때(active) 로그인 여부와 상관없이 부르고, 등록 직전에도 부른다.
+ *  token = 곧 등록할 토큰(없으면 캐시 토큰과 비교). 동시에 두 번 돌지 않게 한 줄로 세운다. */
+export function releasePendingPushToken(token?: string): Promise<unknown> {
   if (!pushSupported()) return Promise.resolve();
-  if (!releasing) {
-    releasing = releasePendingPush(authStorage, async (p) => {
-      const { error } = await supabase.rpc('release_push_token', { p_token: p.token, p_user: p.userId });
-      if (error) reportError('push.native.release', error);
-      return !error;
-    }).finally(() => {
-      releasing = null;
-    });
-  }
+  const run = () => {
+    const s = useSessionStore.getState();
+    return releasePendingPush(
+      authStorage,
+      async (p, signal) => {
+        const { error } = await supabase
+          .rpc('release_push_token', { p_token: p.token, p_user: p.userId })
+          .abortSignal(signal);
+        if (error && !signal.aborted) reportError('push.native.release', error);
+        return !error;
+      },
+      undefined,
+      { userId: s.status === 'signed_in' ? s.userId || null : null, token },
+    );
+  };
+  releasing = releasing.then(run, run);
   return releasing;
 }
 

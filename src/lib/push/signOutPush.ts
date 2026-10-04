@@ -4,8 +4,8 @@
 //
 // 순서: 캐시 토큰 읽기 → unregister_my_push(4초 제한) → 실패하면 pending 저장 → 알림센터 비우기·배지 0
 //       → 웹 구독 해제 → signOut({scope:'local'}).
-// 오프라인 로그아웃이면 서버 세션이 남아 푸시가 계속 온다(A1). 그래서 pending 을 남기고, 다음 부팅에
-// release_push_token 으로 먼저 푼다. 등록에 성공하면 pending 을 지운다 — 남겨 두면 같은 계정의 새 등록을 지운다.
+// 오프라인 로그아웃이면 서버 세션이 남아 푸시가 계속 온다(A1). 그래서 pending 을 남기고, 다음 부팅과
+// 앱을 다시 열 때(active) release_push_token 으로 먼저 푼다. 등록에 성공하면 pending 을 지운다 — 남겨 두면 같은 계정의 새 등록을 지운다.
 // ★이 파일은 다른 모듈을 import 하지 않는다(Node 하니스가 그대로 읽는다).
 
 export const PUSH_TOKEN_KEY = 'sqt.expoPushToken';
@@ -101,12 +101,16 @@ export async function signOutWithPushRelease(d: SignOutPushDeps): Promise<{ rele
   return { released, pendingSaved };
 }
 
-/** 부팅 때 pending 을 먼저 푼다. 풀리면 지우고, 실패하면 남겨 다음에 다시 한다. 깨진 값은 지운다. */
+/** 부팅·앱을 다시 열 때·등록 직전에 pending 을 먼저 푼다. 풀리면 지우고, 실패하면 남겨 다음에 다시 한다. 깨진 값은 지운다.
+ *  current = 지금 이 기기에 로그인한 사용자와 곧 등록할 토큰(없으면 캐시 토큰).
+ *  pending 주인이 같은 토큰으로 로그인해 있으면 release 를 보내지 않는다('superseded'). 등록(save)이 같은 행을
+ *  새 세션으로 덮어쓰기 때문이다. 보내면 늦게 도착한 release 가 그 새 등록을 지운다. pending 은 등록 성공 뒤 지운다. */
 export async function releasePendingPush(
   kv: PushKV,
-  release: (p: PendingRelease) => Promise<boolean>,
+  release: (p: PendingRelease, signal: AbortSignal) => Promise<boolean>,
   timeoutMs: number = PUSH_UNREGISTER_TIMEOUT_MS,
-): Promise<'none' | 'released' | 'kept'> {
+  current?: { userId: string | null; token?: string | null },
+): Promise<'none' | 'released' | 'kept' | 'superseded'> {
   let raw: string | null = null;
   try {
     raw = await kv.getItem(PUSH_PENDING_KEY);
@@ -118,7 +122,19 @@ export async function releasePendingPush(
     if (raw != null) await quietly(() => kv.removeItem(PUSH_PENDING_KEY));
     return 'none';
   }
-  const ok = await withTimeout(() => release(p), timeoutMs);
+  if (current?.userId && current.userId === p.userId) {
+    let token = current.token ?? null;
+    if (!token) {
+      try {
+        token = await kv.getItem(PUSH_TOKEN_KEY);
+      } catch {
+        token = null;
+      }
+    }
+    if (token === p.token) return 'superseded';
+  }
+  // signal 을 넘겨 제한 시간에 요청을 끊는다. 살려 두면 늦게 도착해 그 사이 한 등록을 지울 수 있다.
+  const ok = await withTimeout((signal) => release(p, signal), timeoutMs);
   if (!ok) return 'kept';
   await quietly(() => kv.removeItem(PUSH_PENDING_KEY));
   return 'released';

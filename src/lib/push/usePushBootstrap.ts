@@ -7,6 +7,7 @@
 // 부재 체크, nativepush 는 .web.ts 쌍) 여기서 Platform.OS 분기를 새로 만들 필요가 없다.
 
 import { useEffect } from 'react';
+import { AppState } from 'react-native';
 import { router } from 'expo-router';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { WEB_PUSH_ENABLED } from '@/lib/config/store-policy';
@@ -49,9 +50,14 @@ export function usePushBootstrap(): void {
 
   // 부팅 1회(네이티브): 알림 탭 → 라우팅 리스너. 웹에서는 nativepush.web.ts 가 no-op.
   // 오프라인 로그아웃이 남긴 pending 도 여기서 푼다. 로그인 여부와 상관없다(A1). 등록은 이것이 끝난 뒤에 한다.
+  // 앱이 메모리에 남아 있으면 부팅이 다시 오지 않는다. 앱을 다시 열 때(active)마다 다시 푼다(Q3).
   useEffect(() => {
     bindNotificationTapRouting();
     void releasePendingPushToken();
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') void releasePendingPushToken();
+    });
+    return () => sub.remove();
   }, []);
 
   // 로그인 세션 + 권한 있음 → 구독/토큰 보장(팝업 없이). userId 확정 후 실행.
