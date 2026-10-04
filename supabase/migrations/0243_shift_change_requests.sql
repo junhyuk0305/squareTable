@@ -12,7 +12,8 @@
 --      같은 근무·같은 날의 대기 요청은 하나(부분 유니크). RLS 읽기 = 같은 매장의 관리자 또는 본인. 쓰기 정책 없음(RPC 로만).
 --      realtime publication 에 넣는다(사장 화면 "승인할 요청" · 직원 화면 "대기 중").
 --   ② request_shift_time(근무, 날짜, 시작, 끝, 메모): 본인 근무 · 그날 실제로 서는 근무(요일·적용 기간·예외) ·
---      오늘-35일 ~ 오늘+60일 · 시각 형식 · 0분 금지. 같은 날 대기 요청이 있으면 그 요청을 고친다.
+--      오늘-35일 ~ 오늘+60일 · 시각 형식 · 0분 금지. 같은 날 대기 요청이 있으면 그 요청은 cancelled 로 닫고 새 id 로 낸다.
+--      같은 id 를 고치면 사장이 본 시각과 다른 시각이 승인된다. 앞 id 로 승인하면 not_pending 이다.
 --   ③ decide_shift_time(요청, 승인?, p_confirm_past): **auth_is_owner() 만**(J2 원문 "사장 승인" · 정책 M3 · 매니저 불가).
 --      for update 로 잠그고 status='pending' 을 다시 본다(두 기기가 동시에 눌러도 한 번만 · 데이터 M2).
 --      승인: 35일이 넘은 근무는 거부 · 지난 날짜는 p_confirm_past 필수 · override_shift_day(0242)로 그날만 바꾸고
@@ -118,12 +119,13 @@ begin
     raise exception 'day_not_scheduled';
   end if;
 
+  -- 같은 근무·같은 날의 앞 대기 요청은 닫고 새 id 로 낸다. 같은 id 의 시각을 고치면 사장이 화면에서 본 시각이 아니라
+  -- 고친 시각이 승인된다. 앞 id 로 승인하면 not_pending 이 난다.
+  update public.shift_change_requests set status = 'cancelled', decided_by = auth.uid(), decided_at = now()
+   where template_id = t.id and date = p_date and status = 'pending';
   insert into public.shift_change_requests(unit_id, staff_id, template_id, date, old_start, old_end, new_start, new_end, note)
     values (t.unit_id, auth.uid()::text, t.id, p_date, t.start_time, t.end_time, p_start, p_end,
             nullif(left(btrim(coalesce(p_note, '')), 200), ''))
-  on conflict (template_id, date) where status = 'pending' do update
-    set staff_id = excluded.staff_id, old_start = excluded.old_start, old_end = excluded.old_end,
-        new_start = excluded.new_start, new_end = excluded.new_end, note = excluded.note, created_at = now()
   returning id into v_id;
   return v_id;
 end $$;
@@ -282,6 +284,9 @@ begin
   if position('valid_from' in v_def) = 0 or position('shift_exceptions' in v_def) = 0
      or position('kst_today() - 35' in v_def) = 0 or position('kst_today() + 60' in v_def) = 0 then
     v_bad := v_bad || 'request_shift_time(그날 적용 여부·날짜 범위 중 빠짐) ';
+  end if;
+  if position('do update' in v_def) > 0 or position('''cancelled''' in v_def) = 0 then
+    v_bad := v_bad || 'request_shift_time(대기 요청을 같은 id 로 고침 — 앞 요청을 닫고 새 id 로 내야 한다) ';
   end if;
 
   -- 권한
