@@ -118,7 +118,12 @@ export default function PreviousStores() {
       <ConfirmModal
         visible={target !== null}
         title={target ? `${target.store_name}을 다시 열까요?` : ''}
-        message="이용권 1개를 써요. 직원·근무표·출퇴근·업무 보드는 비워지고 초대코드가 새로 발급돼요. 노하우·퀴즈·퀴즈 기록·채팅·매장 설정은 그대로 남아요."
+        message={
+          '이용권 1개를 써요.\n\n' +
+          '비워지는 것: 직원·근무표·출퇴근·업무 보드\n' +
+          '남는 것: 노하우·퀴즈·퀴즈 기록·채팅·매장 설정\n\n' +
+          '초대코드는 새로 나와요.'
+        }
         confirmLabel="다시 열기"
         cancelLabel="그대로 두기"
         busy={busy}

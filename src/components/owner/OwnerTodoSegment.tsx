@@ -159,8 +159,8 @@ export function OwnerTodoSegment({ aiAnswers, aiError = false }: { aiAnswers: Ai
     <View style={styles.root}>
       {!hasTodo && (
         <EmptyState
-          title="깔끔하네요"
-          body="답할 질문도, 검토할 제안도 없어요. 새로 오면 여기로 알려드릴게요."
+          title="다 봤어요"
+          body={'답할 질문이 없어요.\n검토할 제안도 없어요.'}
           cta={{ label: '노하우 추가하기', onPress: goAdd }}
         />
       )}

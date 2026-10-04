@@ -54,7 +54,7 @@ export function PublishCrossStoreNudge({
       '다른 매장에도 추가했어요',
       `${selected.size}개 매장에 ${total}개를 추가했어요.${failed > 0 ? ' 일부는 실패했어요.' : ''}`,
       '확인',
-      { icon: 'checkmark-circle-outline', accent: '아직 확인 전이에요 — 새 매장 기준(주소·연락처 등)이 맞는지 확인해 주세요. 사진은 함께 옮겨지지 않아요.' },
+      { icon: 'checkmark-circle-outline', accent: '새 매장 기준(주소·연락처)이 맞는지 점검해 주세요.\n사진은 안 옮겨져요.' },
     );
     onClose();
   };
