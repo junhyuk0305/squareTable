@@ -111,6 +111,8 @@
     "qa:user-reports": "node scripts/qa-user-reports.mjs",
     "qa:shift-dated": "node scripts/qa-shift-dated.mjs",
     "qa:shift-time": "node scripts/qa-shift-time.mjs",
+    "qa:shift-dating": "node scripts/qa-shift-dating.mjs",
+    "qa:definer-filters": "node scripts/qa-definer-filters.mjs",
     "qa:store-slots": "node scripts/qa-store-slots.mjs",
     "qa:delete-store": "node scripts/qa-delete-store.mjs",
     "qa:billing-tiers": "node scripts/qa-billing-tiers.mjs",
