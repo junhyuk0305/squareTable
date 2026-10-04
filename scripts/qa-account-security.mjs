@@ -5,6 +5,7 @@
 //   [1] Q13·M5 — profiles.phone 은 "방금 문자 인증을 마친 번호"로만 바뀐다(guard_profile_phone_change).
 //       인증한 사람(verified_by)이 본인이면 15분, 기록이 없는 옛 앱 인증(PhoneVerifyBlock)은 5분 안만 통과.
 //       남이 인증한 번호·인증 안 한 번호·오래된 인증은 PHONE_NOT_VERIFIED. phone_last4 는 서버가 다시 계산한다.
+//       번호가 비어 있던 계정(구글 가입 프로필 완성)은 본인·기록 없는 인증 모두 30분 안이면 통과.
 //   [2] A4 — revoke_user_sessions(uuid) 는 service_role 만 부른다. 부르면 그 사용자의 세션이 끊긴다.
 //   [3] otp 엣지 — verify 가 verified_by·in_use 를 남기고 코드를 소모한다. change_phone 은 로그인 필수.
 //       find_email 은 가린 이메일을 최대 2개 준다. reset_password 는 signup_role 로 계정을 찾고(Q18),
@@ -167,6 +168,22 @@ try {
     const ar = await admin.from('profiles').update({ phone: P[0], phone_last4: '0000' }).eq('id', A.id);
     pa = await prof(A.id);
     check('1-12 service_role(엣지·크론)은 인증 없이 바꿀 수 있고 last4 는 다시 계산된다', !ar.error && pa?.phone === P[0] && pa?.phone_last4 === P[0].slice(-4), ar.error?.message ?? `last4=${pa?.phone_last4}`);
+
+    // 구글 가입 프로필 완성(complete-profile.tsx): 번호를 먼저 인증하고(옛 앱·현재 앱 모두 anon verify)
+    // 생년월일·매장 이름·업종·사업자번호를 채운 뒤에 complete_profile 을 부른다. 5분을 넘기기 쉽다.
+    const G = await signUp('g', 'owner', null);
+    await seedOtp(P[13], { verifiedAgoMin: 6, verifiedBy: null });
+    let cg = await G.c.rpc('complete_profile', { p_name: 'QA계정g', p_phone: P[13], p_birth_date: '1990-01-01', p_role: 'owner' });
+    check('1-13 ★번호가 비어 있던 계정은 anon 인증 6분 뒤 complete_profile 도 통과(구글 가입 프로필 완성)', !cg.error && (await prof(G.id))?.phone === P[13], cg.error ? cg.error.message : `phone=${(await prof(G.id))?.phone}`);
+
+    const H = await signUp('h', 'owner', null);
+    await seedOtp(P[14], { verifiedAgoMin: 31, verifiedBy: null });
+    cg = await H.c.rpc('complete_profile', { p_name: 'QA계정h', p_phone: P[14], p_birth_date: '1990-01-01', p_role: 'owner' });
+    check('1-14 ★번호가 비어 있어도 anon 인증 31분이 지났으면 PHONE_NOT_VERIFIED', /PHONE_NOT_VERIFIED/.test(cg.error?.message ?? ''), cg.error ? cg.error.message : `성공함 phone=${(await prof(H.id))?.phone}`);
+
+    await seedOtp(P[15], { verifiedAgoMin: 1, verifiedBy: B.id });
+    cg = await H.c.rpc('complete_profile', { p_name: 'QA계정h', p_phone: P[15], p_birth_date: '1990-01-01', p_role: 'owner' });
+    check('1-15 번호가 비어 있어도 남(B)이 인증한 번호는 PHONE_NOT_VERIFIED', /PHONE_NOT_VERIFIED/.test(cg.error?.message ?? ''), cg.error ? cg.error.message : `성공함 phone=${(await prof(H.id))?.phone}`);
   }
 
   // ═══════ 2. A4 — revoke_user_sessions ═══════
