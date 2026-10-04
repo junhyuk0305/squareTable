@@ -64,12 +64,8 @@ const read = (p) => {
   );
 }
 // [파일, 코드 안 템플릿 조각, 지금(웹) 문장]
+// 관리 창 실패 안내는 토스트가 아니라 고지창이다 — 아래 별도 블록에서 본다.
 const SITES = [
-  [
-    'src/components/IapPurchasePanel.tsx',
-    '구독 관리 창을 열지 못했어요. ${CANCEL_PATH_TEXT}에서 하실 수 있어요.',
-    '구독 관리 창을 열지 못했어요. 기기 설정의 구독 목록에서 하실 수 있어요.',
-  ],
   [
     'src/components/IapPurchasePanel.tsx',
     '매달 자동으로 갱신돼요. 해지하시기 전까지 계속돼요. 해지는 ${CANCEL_PATH_TEXT}에서 하실 수 있어요.',
@@ -96,6 +92,28 @@ for (const file of new Set(SITES.map(([f]) => f))) {
   const src = strip(read(file));
   check(`${file} 코드에 "구독 목록" 을 직접 적지 않는다`, !src.includes('구독 목록'));
   check(`${file} 가 CANCEL_PATH_TEXT 를 store-policy 에서 읽는다`, /import \{[^}]*\bCANCEL_PATH_TEXT\b[^}]*\} from '@\/lib\/config\/store-policy'/.test(src));
+}
+
+console.log('\n■ 관리 창 실패 안내는 잘리지 않는 고지창으로 띄운다');
+// 토스트는 2줄에서 자르고 2.4초 뒤 사라진다(Toast.tsx numberOfLines={2} · useToastStore PLAIN_MS).
+// 안드 문장은 360dp 에서 2.5줄쯤이라 "결제 > 정기 결…" 에서 잘려 마지막 메뉴가 안 보였다.
+// → 같은 문장을 제목(앞 문장)과 본문(경로)으로 나눠 notifyAction 으로 띄운다. 글자는 그대로다.
+{
+  const src = strip(read('src/components/IapPurchasePanel.tsx'));
+  const TITLE = '구독 관리 창을 열지 못했어요';
+  const BODY = '`${CANCEL_PATH_TEXT}에서 하실 수 있어요.`';
+  check('★관리 창 실패 안내를 토스트로 띄우지 않는다', !/showToast\([^)]*CANCEL_PATH_TEXT/.test(src));
+  check(
+    '★관리 창 실패 안내 = notifyAction(제목, 경로 본문)',
+    src.includes(`notifyAction('${TITLE}', ${BODY}`),
+  );
+  check('notifyAction 을 utils/confirm 에서 읽는다', /import \{[^}]*\bnotifyAction\b[^}]*\} from '@\/lib\/utils\/confirm'/.test(src));
+  const joined = `${TITLE}. ${'${CANCEL_PATH_TEXT}에서 하실 수 있어요.'.replace('${CANCEL_PATH_TEXT}', text('web'))}`;
+  check(
+    '제목 + 본문 웹 값 = 지금 문장(글자 그대로)',
+    joined === '구독 관리 창을 열지 못했어요. 기기 설정의 구독 목록에서 하실 수 있어요.',
+    show(joined),
+  );
 }
 
 console.log(`\n── ${pass} PASS · ${fail} FAIL`);
