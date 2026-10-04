@@ -8,19 +8,22 @@
 //  ④ 멘션이 **한 번만** 뜬다(사장 축과 개인 축 양쪽에 넣으면 중복)
 //  ⑤ 매니저가 행동할 수 없는 것(교대 수락·내 교대 결과)은 **안 온다**
 //  ⑥ 사장 스트림은 이번 변경으로 **바뀌지 않는다**(자기 제안 제외분 말고는 회귀 0)
-//  ⑦ 배지 수 == 목록의 안읽음 수 (드리프트 방지)
+//  ⑦ 배지 수 == 목록의 안읽음 수 (드리프트 방지 · F-2 부터 배지는 목록과 같은 배열에서 센다)
+//  ⑧ 매니저 행은 열 수 있는 곳(허용 목록·/junior/*)으로만 간다(F-2 · 2026-10-04). 제안 검토는 사장 전용
 // 실행: node scripts/qa-notif-axis.mjs
-import { register } from 'node:module';
 import { pathToFileURL } from 'node:url';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
-// '@/...' 별칭·확장자·json 을 해석하는 최소 로더(하니스 전용). 앱 코드를 그대로 import 한다.
-register(pathToFileURL(join(ROOT, 'scripts/qa-alias-loader.mjs')));
+// 별칭 해석 + 스토어 두 곳의 순수 함수만 잘라 읽는 훅(하니스 전용). 앱 코드를 그대로 import 한다.
+// ★예전 qa-alias-loader 로는 스토어가 react-native 를 끌고 와서 import 단계에서 죽었다.
+const { installNotifHooks } = await import(pathToFileURL(join(ROOT, 'scripts/lib/qa-notif-hooks.mjs')).href);
+installNotifHooks();
+const { managerMayOpen } = await import(pathToFileURL(join(ROOT, 'src/lib/utils/roles.ts')).href);
 
 const {
-  buildOwnerNotifications, buildManagerNotifications, ownerUnreadCount, managerUnreadCount,
+  buildOwnerNotifications, buildManagerNotifications, managerUnreadCount,
 } = await import(pathToFileURL(join(ROOT, 'src/lib/utils/notifications.ts')).href);
 
 let pass = 0, fail = 0;
@@ -57,20 +60,19 @@ const ids = mgr.map((r) => r.id);
 
 check('① 매니저가 사장 공지를 받는다', ids.includes('notice_f_notice_owner'), `kinds=${kinds.join(',')}`);
 check('② 내가 올린 pending 제안은 검토함에 없다', !ids.includes('s_sg_mine'));
-check('② 동료 제안은 검토함에 있다', ids.includes('s_sg_other'));
+check('② 동료 제안 검토는 매니저에게 안 온다(사장 전용 · F-2)', !ids.includes('s_sg_other'));
 check('③ 내가 쓴 공지는 내 알림에 없다', !ids.includes('notice_f_notice_mine'));
 check('④ 멘션은 정확히 1건', kinds.filter((k) => k === 'mention').length === 1);
 check('⑤ 교대 수락 요청(open)은 안 온다', !ids.includes('swap_sw_open'));
 check('⑤ 교대 승인 대기(accepted)는 온다(사장 축)', ids.includes('swap_sw_acc'));
 check('배정된 할일이 온다', ids.includes('assign_t_mine'));
 check('내 제안 결과가 온다', ids.includes('sugres_sg_mine_done'));
-check('매니저 경로는 전부 /owner/*', mgr.every((r) => String(r.route).startsWith('/owner/') || r.route === '/billing'),
+check('⑧ 매니저 경로는 허용 목록 또는 /junior/*', mgr.every((r) => String(r.route).startsWith('/junior/') || managerMayOpen(String(r.route))),
   mgr.map((r) => r.route).join(','));
 check('시간 역순 정렬', mgr.every((r, i) => i === 0 || mgr[i - 1].at >= r.at));
 
 // ⑦ 배지 == 목록 안읽음
-const base = ownerUnreadCount([], suggestions, swaps, [], feed, ME, null, []);
-const badge = managerUnreadCount(base, received);
+const badge = managerUnreadCount(ownerArgs, received);
 check('⑦ 배지 수 == 목록 안읽음 수', badge === mgr.filter((r) => r.unread).length, `badge=${badge} list=${mgr.filter((r) => r.unread).length}`);
 
 // ── 사장 스트림 회귀 ─────────────────────────────────────────────────────
