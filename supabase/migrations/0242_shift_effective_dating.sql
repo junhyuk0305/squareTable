@@ -21,10 +21,15 @@
 --        (valid_to = 어제)을 넣고 지난 예외·교대를 옮긴다. 트리거는 **원래 행을 UPDATE 하지 않고** NEW.valid_from 만 오늘로
 --        바꿔 돌려준다(데이터 H1 · 같은 행을 트리거 안에서 고치면 "already modified" 오류로 옛 앱 수정이 전부 실패한다).
 --      · DELETE: 복사본을 남긴 뒤 삭제를 진행한다. 결과는 "오늘부터 그만"이다.
---      · 닫힌 행(valid_to < 오늘) 직접 수정·삭제는 거부. 기간 컬럼(valid_from·valid_to)을 직접 바꾸는 것도 거부(RPC 로만).
---   ⑤ 첫 반복 근무 시작일(데이터 M1) trg_shift_first_series (BEFORE INSERT, 같은 WHEN): 그 직원의 반복 행이 이 트랜잭션 전에
---      하나도 없으면 시작일을 매장 합류일(unit_members.created_at 의 KST 날짜)로 둔다. 근무표를 늦게 넣어도 덜 지급되지 않는다.
+--      · 닫힌 행(valid_to < 오늘) 직접 수정·삭제는 거부. 기간 컬럼(valid_from·valid_to)과 created_at 을 직접 바꾸는 것도 거부.
+--      · 오늘(KST) 만든 행은 복사본 없이 그 자리에서 고치고 지운다(첫 설정 오타가 지난 급여로 굳지 않게). 담당자를 바꾸면
+--        시작일은 새 담당자 합류일 앞으로 가지 않는다.
+--   ⑤ 첫 반복 근무 시작일(데이터 M1) trg_shift_first_series (BEFORE INSERT, 같은 WHEN): 그 직원의 반복 행이 오늘 이 규칙으로
+--      합류일부터 넣은 행뿐이면(= 첫 설정하는 날) 시작일을 매장 합류일(unit_members.created_at 의 KST 날짜)로 둔다.
+--      옛 앱은 근무마다 요청을 따로 보내므로 한 행이 아니라 하루를 첫 설정으로 본다. 근무표를 늦게 넣어도 덜 지급되지 않는다.
 --      직접 INSERT 로 기간을 지정하는 것은 거부한다(RPC 로만).
+--      ※ 남은 구멍(사용자 결정 필요): 날짜 지정 행과 shift_exceptions 의 직접 쓰기는 지난 날짜여도 확인 없이 된다(Q4 서버 규칙은
+--        반복 행 · RPC · approve_swap 만). 막으면 옛 앱의 지난 하루 근무 추가·수정·되돌리기가 실패한다.
 --      ※ 본인 근무 가드(trg_shift_self_guard)는 넣지 않는다 — §8 Q2 답 "아니요"(매니저도 자기 근무를 고칠 수 있다).
 --   ⑥ 새 앱 RPC: add_shift_series · edit_shift_from · end_shift_from · override_shift_day (정의자, 지난 날짜면 p_confirm_past 필수 — Q4)
 --      내부 헬퍼 copy_past_segment · split_shift_at · end_staff_tenure 는 3역할 모두 실행 불가(보안 L5).
@@ -32,8 +37,10 @@
 --   ⑦ shift_templates_all(): 관리자는 전부, 아니면 본인 이력 전부 + 지금 멤버의 오늘 이후 행만(보안 M6).
 --   ⑧ 판정 함수에 적용 기간: workers_at(0179) · owner_today(0234). 옛 앱용 my_cross_summary(0180)·owner_labor_inputs(0185)는
 --      오늘 적용 중인 행만, 새 앱용 _v2 는 전체 이력과 기간(owner_labor_inputs_v2 는 owner_id = auth.uid() 방어선 유지).
---   ⑨ approve_swap(0179): 35일이 지난 근무는 false(Q10), 지난 근무는 p_confirm_past 필수(Q4). transfer_shift(0179)는
---      그날 그 근무가 실제로 적용될 때만 넘긴다. 맞교환의 두 번째 이전이 실패하면 raise 로 앞 이전까지 되돌린다.
+--   ⑨ approve_swap(0179): 35일이 지난 근무는 false(Q10), 지난 근무는 p_confirm_past 필수(Q4). 요청이 가리키는 근무
+--      (template_id · target_template_id)가 요청과 다른 매장이면 false(0179 부터 있던 다른 매장 쓰기 구멍).
+--      매장 검사는 approve_swap 에만 둔다(transfer_shift 는 내부 전용이고 service_role 하니스가 직접 부른다). transfer_shift(0179)는
+--      그날 실제로 적용될 때만 넘긴다. 맞교환의 두 번째 이전이 실패하면 raise 로 앞 이전까지 되돌린다.
 --   ⑩ due_quiz_sends(0169): "근무표를 쓰는 매장" 판정에서 이미 닫힌 반복 행을 세지 않는다(데이터 L).
 --
 -- 옛 앱 호환: 직접 INSERT/UPDATE/DELETE · update_my_shift_time(0234) · approve_swap(p_id) · my_cross_summary ·
@@ -175,25 +182,41 @@ revoke all on function public.end_staff_tenure(text, text) from public, anon, au
 -- ════════════════════════════════════════════════════════════════════════════
 create or replace function public.shift_series_guard()
 returns trigger language plpgsql security definer set search_path = public as $$
-declare v_today date := public.kst_today();
+declare
+  v_today date := public.kst_today();
+  v_fresh boolean;
+  v_join  date;
 begin
   -- 기간은 RPC 로만 바꾼다(옛 앱은 이 컬럼을 모른다 · 새 앱은 RPC 를 쓴다).
+  -- 생성일도 못 바꾼다. 아래 "오늘 만든 행" 판정이 생성일을 보므로, 바꿀 수 있으면 지난 급여를 확인 없이 고치는 길이 된다.
   if tg_op = 'UPDATE'
-     and (new.valid_from is distinct from old.valid_from or new.valid_to is distinct from old.valid_to) then
+     and (new.valid_from is distinct from old.valid_from or new.valid_to is distinct from old.valid_to
+          or new.created_at is distinct from old.created_at) then
     raise exception 'shift_period_rpc_only';
   end if;
 
   if old.shift_date is null then
     -- 이미 끝난 반복 행은 기록이다. 직접 고치거나 지우지 않는다.
     if old.valid_to is not null and old.valid_to < v_today then raise exception 'shift_closed'; end if;
+    -- ★오늘(KST) 만든 행은 확정된 지난 구간이 없다. 첫 설정 때 합류일까지 거슬러 넣은 행(M1)의 오타를 같은 날 고치거나
+    --   지우면 복사본 없이 그 자리에서 바꾼다. 안 그러면 잘못 넣은 시각이 숨은 복사본으로 지난 급여에 굳는다.
+    v_fresh := (old.created_at at time zone 'Asia/Seoul')::date = v_today;
     if tg_op = 'DELETE' then
       -- "오늘부터 그만": 지난 구간 복사본을 남기고 삭제를 진행한다.
-      if old.valid_from < v_today then perform public.copy_past_segment(old.id, v_today); end if;
+      if old.valid_from < v_today and not v_fresh then perform public.copy_past_segment(old.id, v_today); end if;
       return old;
     end if;
     if (new.start_time, new.end_time, new.weekday, new.shift_date, new.staff_id)
        is distinct from (old.start_time, old.end_time, old.weekday, old.shift_date, old.staff_id) then
-      if old.valid_from < v_today then
+      if old.valid_from < v_today and v_fresh then
+        -- 오늘 만든 행의 담당자를 바꾸면 새 담당자의 합류일 전으로 거슬러 가지 않는다.
+        if new.staff_id is distinct from old.staff_id then
+          select (m.created_at at time zone 'Asia/Seoul')::date into v_join
+            from public.unit_members m
+           where m.unit_id = new.unit_id and m.user_id::text = new.staff_id;
+          new.valid_from := greatest(old.valid_from, coalesce(v_join, v_today));
+        end if;
+      elsif old.valid_from < v_today then
         perform public.copy_past_segment(old.id, v_today);
         new.valid_from := v_today;     -- ★원래 행은 UPDATE 하지 않는다. 돌려주는 NEW 만 바꾼다(데이터 H1).
       end if;
@@ -211,20 +234,27 @@ revoke all on function public.shift_series_guard() from public, anon, authentica
 
 create or replace function public.shift_first_series()
 returns trigger language plpgsql security definer set search_path = public as $$
-declare v_join date;
+declare
+  v_today date := public.kst_today();
+  v_join  date;
 begin
   -- 기간은 RPC 로만(기본값 = 오늘 이외의 값 · 끝 날 지정 거부).
-  if new.valid_to is not null or new.valid_from is distinct from public.kst_today() then
+  if new.valid_to is not null or new.valid_from is distinct from v_today then
     raise exception 'shift_period_rpc_only';
   end if;
-  -- 첫 반복 근무는 매장 합류일부터(데이터 M1). 같은 트랜잭션에서 함께 넣는 행(created_at = now())은 "이전 행"으로 세지 않는다.
-  if new.shift_date is null and not exists (
-       select 1 from public.shift_templates t
-        where t.unit_id = new.unit_id and t.staff_id = new.staff_id and t.shift_date is null and t.created_at < now()) then
+  -- 첫 반복 근무는 매장 합류일부터(데이터 M1). 옛 앱은 근무마다 요청을 따로 보내므로(insertShiftTemplate 한 번에 한 행)
+  --   "첫 설정"을 한 행이 아니라 하루로 본다. 그 직원의 반복 행이 오늘 이 규칙으로 합류일부터 넣은 행뿐이면 이 행도 합류일부터다.
+  --   어제 이전에 만든 반복 행이나 다른 시작일의 행이 하나라도 있으면 오늘부터다.
+  if new.shift_date is null then
     select (m.created_at at time zone 'Asia/Seoul')::date into v_join
       from public.unit_members m
      where m.unit_id = new.unit_id and m.user_id::text = new.staff_id;
-    if v_join is not null and v_join < new.valid_from then new.valid_from := v_join; end if;
+    if v_join is not null and v_join < new.valid_from and not exists (
+         select 1 from public.shift_templates t
+          where t.unit_id = new.unit_id and t.staff_id = new.staff_id and t.shift_date is null
+            and not ((t.created_at at time zone 'Asia/Seoul')::date = v_today and t.valid_from = v_join)) then
+      new.valid_from := v_join;
+    end if;
   end if;
   return new;
 end $$;
@@ -757,6 +787,15 @@ begin
   if not found then return false; end if;
   if s.unit_id is distinct from public.auth_unit_id() then return false; end if;
   if s.status <> 'accepted' or s.accepted_by is null then return false; end if;
+  -- ★0242: 요청이 가리키는 근무는 요청과 같은 매장이어야 한다. swap_insert(0019)는 template_id 의 매장을 보지 않아서
+  --   직원이 다른 매장 근무 id 로 요청을 만들 수 있다(0179 부터 있던 구멍 · 다른 매장 근무표와 급여가 바뀐다).
+  if not exists (select 1 from public.shift_templates t where t.id = s.template_id and t.unit_id = s.unit_id) then
+    return false;
+  end if;
+  if s.kind = 'swap' and s.target_template_id is not null
+     and not exists (select 1 from public.shift_templates t where t.id = s.target_template_id and t.unit_id = s.unit_id) then
+    return false;
+  end if;
 
   -- ★0242(Q10): 근무일이 지나도 35일 동안은 승인할 수 있다. 그보다 오래된 근무는 승인하지 않는다.
   v_earliest := case when s.kind = 'swap' and s.target_date is not null and s.target_date < s.date then s.target_date else s.date end;
@@ -922,6 +961,11 @@ begin
   if position('kst_today() - 35' in v_def) = 0 or position('p_confirm_past' in v_def) = 0
      or position('auth_can_manage' in v_def) = 0 or position('transfer_shift' in v_def) = 0 then
     v_bad := v_bad || 'approve_swap(35일·확인·관리자·이전 중 빠짐) ';
+  end if;
+  if position('t.unit_id = s.unit_id' in v_def) = 0 then v_bad := v_bad || 'approve_swap(다른 매장 근무 거부 없음) '; end if;
+  v_def := pg_get_functiondef('public.shift_series_guard()'::regprocedure);
+  if position('created_at is distinct from' in v_def) = 0 or position('v_fresh' in v_def) = 0 then
+    v_bad := v_bad || 'shift_series_guard(생성일 잠금·오늘 만든 행 판정 중 빠짐) ';
   end if;
   if to_regprocedure('public.approve_swap(text)') is not null then v_bad := v_bad || 'approve_swap(옛 1인자판이 남음 — 호출이 모호해진다) '; end if;
   v_def := pg_get_functiondef('public.shift_series_guard()'::regprocedure);
