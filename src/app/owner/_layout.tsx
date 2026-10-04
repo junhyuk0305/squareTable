@@ -14,7 +14,6 @@ import { useMemberPrefsStore } from '@/lib/store/useMemberPrefsStore';
 import { usePaymentClaimStore } from '@/lib/store/usePaymentClaimStore';
 import { useOwnerAlertStore } from '@/lib/store/useOwnerAlertStore';
 import { useRoomStore } from '@/lib/store/useRoomStore';
-import { purgeExpiredFormerStaff } from '@/lib/db';
 import { retryPendingEmbeddings } from '@/lib/ai/embedBacklog';
 import { HAS_SUPABASE } from '@/lib/supabase';
 import { canManage, managerMayOpen } from '@/lib/utils/roles';
@@ -59,9 +58,6 @@ export default function OwnerLayout() {
     // 업무방 — 매장이 바뀌면 tenantReset 이 비운다. 업무 탭이 열려 있는 채로 바뀌어도 게이트가 풀리게
     // 여기서 다시 채운다(구독은 업무 탭 WorkBoard 가 맡는다).
     void useRoomStore.getState().hydrate();
-    // 퇴사 6개월 경과분 개인 기록 자동 정리(기회적 1회, 실패 무해).
-    // 0093: 파기는 사장 전용(0027 owner_only) — 매니저 세션에서 부르면 400 + 관측 노이즈만 남아 게이트.
-    if (useSessionStore.getState().role === 'owner') void purgeExpiredFormerStaff();
     const offQ = useUnknownQueueStore.getState().subscribe();
     const offP = usePlaybookStore.getState().subscribe();
     const offW = useWorkStore.getState().subscribe();

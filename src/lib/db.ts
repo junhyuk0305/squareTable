@@ -1099,13 +1099,6 @@ export async function removeStaffMember(staffId: string): Promise<boolean> {
   return write('removeStaffMember', supabase.rpc('remove_staff', { p_staff_id: staffId }));
 }
 
-// 퇴사 6개월 경과분 개인 기록 자동 정리(내 매장 범위). 사장 진입 시 기회적으로 1회 호출 — 실패해도 무해.
-export async function purgeExpiredFormerStaff(): Promise<void> {
-  if (!HAS_SUPABASE) return;
-  const { error } = await supabase.rpc('purge_expired_former_staff');
-  if (error) { console.warn('[db] purgeExpiredFormerStaff:', error.message); reportError('db:purgeExpiredFormerStaff', error); }
-}
-
 // ── 합류 승인(남용 #2) ─────────────────────────────────────
 // 우리 매장에 합류 '신청'한(pending_unit_id = 내 매장) 프로필 목록. RLS가 신청자만 통과시킨다.
 export async function fetchPendingMembers(): Promise<ReadResult<{ id: string; name: string; phone_last4: string; created_at: string }[]>> {
