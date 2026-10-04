@@ -137,7 +137,8 @@ export const UPGRADE_CREDIT: 'refund' | 'prorated' = Platform.OS === 'android' ?
 
 /**
  * 구독 해지 경로("…에서 해지"). iOS = 기기 설정, 안드 = Play 스토어 앱. 웹은 지금 문구 그대로(토스 동결).
- * 읽는 곳 = `IapPurchasePanel.tsx`(관리 창 실패 토스트·자동갱신 고지) · `account-settings.tsx`(탈퇴 확인창) · `terms.tsx`(약관 요약).
+ * 읽는 곳 = `IapPurchasePanel.tsx`(관리 창 실패 토스트·자동갱신 고지) · `terms.tsx`(약관 요약).
+ * 탈퇴 확인창은 실제 구독으로 가르므로 `lib/account/copy.ts` 의 deleteNotice 가 cancelPathText 를 직접 부른다(Q33).
  */
 export const CANCEL_PATH_TEXT = cancelPathText(Platform.OS);
 

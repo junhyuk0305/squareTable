@@ -4,6 +4,7 @@
 // ★ supabase.functions.invoke 금지 — 브라우저에서 x-client-info 헤더가 자동 부착돼 엣지 CORS
 //   프리플라이트가 실패한다(push/notify.ts 에서 라이브 계측으로 확인된 함정 — 동일한 raw fetch 패턴).
 import { useEffect, useState } from 'react';
+import { otherRoleText } from '@/lib/account/copy';
 
 const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL ?? '';
 const ANON = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '';
@@ -15,7 +16,9 @@ type OtpReason =
   | 'cooldown' | 'daily_cap' | 'rate_limited' | 'expired' | 'mismatch'
   | 'too_many' | 'invalid_phone' | 'not_configured' | 'send_failed' | 'network'
   // reset_password(2026-09-23) 전용
-  | 'no_account' | 'weak_password';
+  | 'no_account' | 'weak_password'
+  // change_phone(0238 Q13) 전용
+  | 'phone_taken' | 'unauthorized';
 
 // "N초 후"를 사람이 읽는 단위로. 90초를 "90초"라고 말하면 길게 느껴진다.
 function waitText(sec: number): string {
@@ -58,29 +61,36 @@ function reasonMsg(reason: OtpReason, retryAfterSec: number | null): string {
       return '이 번호로 가입된 계정이 없어요. 사장님/직원 선택과 번호를 확인해 주세요.';
     case 'weak_password':
       return '비밀번호는 9자 이상이어야 해요.';
+    case 'phone_taken':
+      return '이미 다른 계정이 쓰는 번호예요. 다른 번호를 입력해 주세요.';
+    case 'unauthorized':
+      return '로그인이 만료됐어요. 다시 로그인해 주세요.';
   }
 }
 
+// accessToken: 로그인한 사용자의 토큰. change_phone 은 이것으로 본인을 확인한다(없으면 401). 나머지는 anon 키.
 async function callOtp(
-  body: { action: 'send' | 'verify' | 'reset_password'; phone: string; code?: string; role?: 'owner' | 'junior'; new_password?: string },
-): Promise<{ ok: boolean; reason: OtpReason | null; retryAfterSec: number | null }> {
+  body: { action: 'send' | 'verify' | 'reset_password' | 'change_phone'; phone: string; code?: string; role?: 'owner' | 'junior'; new_password?: string },
+  accessToken?: string,
+): Promise<{ ok: boolean; reason: OtpReason | null; retryAfterSec: number | null; otherRole: string | null }> {
   try {
     const res = await fetch(OTP_ENDPOINT, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', apikey: ANON, Authorization: `Bearer ${ANON}` },
+      headers: { 'Content-Type': 'application/json', apikey: ANON, Authorization: `Bearer ${accessToken ?? ANON}` },
       body: JSON.stringify(body),
     });
     const j = (await res.json().catch(() => null)) as
-      | { ok?: boolean; reason?: string; retry_after_sec?: number }
+      | { ok?: boolean; reason?: string; retry_after_sec?: number; other_role?: string }
       | null;
-    if (res.ok && j?.ok) return { ok: true, reason: null, retryAfterSec: null };
+    if (res.ok && j?.ok) return { ok: true, reason: null, retryAfterSec: null, otherRole: null };
     return {
       ok: false,
       reason: (j?.reason as OtpReason) ?? 'network',
       retryAfterSec: typeof j?.retry_after_sec === 'number' ? j.retry_after_sec : null,
+      otherRole: typeof j?.other_role === 'string' ? j.other_role : null,
     };
   } catch {
-    return { ok: false, reason: 'network', retryAfterSec: null };
+    return { ok: false, reason: 'network', retryAfterSec: null, otherRole: null };
   }
 }
 
@@ -96,6 +106,23 @@ export async function resetPasswordByPhone(args: {
   newPassword: string;
 }): Promise<{ ok: boolean; message: string | null }> {
   const r = await callOtp({ action: 'reset_password', phone: args.phone, code: args.code, role: args.role, new_password: args.newPassword });
+  if (r.ok) return { ok: true, message: null };
+  // Q18(0238): 고른 역할에는 계정이 없고 다른 역할에 있으면 그 역할을 알려 준다. 엣지는 이때 코드를 소모하지 않는다.
+  const other = r.reason === 'no_account' ? otherRoleText(r.otherRole) : null;
+  return { ok: false, message: other ?? reasonMsg(r.reason ?? 'network', r.retryAfterSec) };
+}
+
+/**
+ * 번호 바꾸기(0238 Q13) — 새 번호로 받은 인증번호를 로그인 토큰과 함께 보낸다.
+ * 엣지가 코드를 대조하고 같은 가입 역할의 다른 계정이 그 번호를 쓰지 않으면 profiles.phone 을 바꾼다.
+ * ★verify 를 먼저 부르지 않는다. verify 가 코드를 소모해서 이어서 부르는 change_phone 이 expired 가 된다.
+ */
+export async function changePhoneByOtp(args: {
+  phone: string;
+  code: string;
+  accessToken: string;
+}): Promise<{ ok: boolean; message: string | null }> {
+  const r = await callOtp({ action: 'change_phone', phone: args.phone, code: args.code }, args.accessToken);
   return { ok: r.ok, message: r.ok ? null : reasonMsg(r.reason ?? 'network', r.retryAfterSec) };
 }
 

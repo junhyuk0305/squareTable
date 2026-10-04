@@ -12,6 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { KeyboardShift } from '@/components/KeyboardShift';
 import { usePhoneOtp, resetPasswordByPhone } from '@/lib/otp';
+import { ROLE_SPLIT_TEXT } from '@/lib/account/copy';
 import { showToast } from '@/lib/store/useToastStore';
 import { formatPhone, isValidPhone, normalizePhone, passwordError } from '@/lib/utils/validation';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
@@ -93,6 +94,8 @@ export default function ForgotPasswordScreen() {
               <Text style={styles.text}>문자로 받은 인증번호를 넣고 새 비밀번호를 정하면 바로 바뀌어요.</Text>
 
               <Text style={styles.label}>어떤 계정인가요?</Text>
+              {/* J11: 같은 번호로 사장·직원 계정이 따로 있을 수 있다. 역할을 잘못 고르면 엣지가 맞는 역할을 알려 준다(Q18). */}
+              <Text style={styles.roleHint}>{ROLE_SPLIT_TEXT}</Text>
               <View style={styles.seg}>
                 {(['owner', 'junior'] as Role[]).map((r) => (
                   <Pressable key={r} onPress={() => setRole(r)} accessibilityRole="button" accessibilityState={{ selected: role === r }} style={[styles.segBtn, role === r && styles.segBtnOn]}>
@@ -196,6 +199,7 @@ const styles = StyleSheet.create({
   text: { fontSize: 15, lineHeight: 22, color: InkColors.ink2 },
   hint: { fontSize: 13, lineHeight: 19, color: InkColors.ink3, marginTop: Space.xs },
   label: { fontSize: 13.5, fontWeight: '700', color: InkColors.ink2, marginTop: Space.sm },
+  roleHint: { fontSize: 13, lineHeight: 19, color: InkColors.ink3 },
   seg: { flexDirection: 'row', backgroundColor: InkColors.paper, borderRadius: Radius.pill, padding: 3, gap: 2 },
   segBtn: { flex: 1, paddingVertical: 9, borderRadius: Radius.pill, alignItems: 'center' },
   segBtnOn: { backgroundColor: InkColors.ink },

@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { createClient } from '@supabase/supabase-js';
 import { supabase, HAS_SUPABASE } from '@/lib/supabase';
 import {
   setUnitId,
@@ -36,6 +37,8 @@ import { SHOW_IAP, SHOW_SOCIAL_LOGIN } from '@/lib/config/store-policy';
 import { notifyOwnersJoinRequest } from '@/lib/push/notify';
 import { signOutWithPushRelease } from '@/lib/push/signOutPush';
 import { authStorage } from '@/lib/storage/authStorage';
+import { changePhoneByOtp } from '@/lib/otp';
+import { CURRENT_PW_WRONG_TEXT, DELETED_LOGIN_TEXT } from '@/lib/account/copy';
 
 // 0093: 세션 유효 역할. 활성 매장의 unit_members.role 에서 파생된다(owner·manager·junior 모두).
 // 판정은 sessionRole.ts deriveStoreRole 한 곳이고, loadProfile 이 그것을 부르는 유일한 지점이다.
@@ -143,7 +146,10 @@ type SessionState = {
   // 이메일 인증 메일 발송(회원가입 화면의 '인증' 버튼). 데모는 발송 생략.
   verifyEmail: (email: string) => Promise<{ status: 'demo' | 'sent' | 'rate' | 'error'; message?: string }>;
   updateProfile: (patch: { name?: string; phone?: string; phone_last4?: string; bio?: string; email?: string }) => Promise<{ error: string | null }>;
-  changePassword: (newPw: string) => Promise<{ error: string | null }>;
+  // Q14: 현재 비밀번호를 확인한 뒤 바꾸고, 다른 기기를 로그아웃시킨다.
+  changePassword: (currentPw: string, newPw: string) => Promise<{ error: string | null }>;
+  // Q13(0238): 새 번호로 받은 인증번호로 번호를 바꾼다(otp change_phone). 프로필 저장으로는 번호를 바꾸지 않는다.
+  changePhone: (phone: string, code: string) => Promise<{ error: string | null }>;
   deleteAccount: () => Promise<{ error: string | null }>;
   leaveStore: () => Promise<{ error: string | null }>;
   // 가게 이름 변경(사장 전용) — 14일 이내 2회 제한. 변경 이력은 기기 로컬에 보관(파일럿).
@@ -599,7 +605,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     if (get().status !== 'signed_in') {
       const msg =
         _lastLoadFault === 'deleted'
-          ? '탈퇴 처리된 계정이에요. 복구가 필요하면 문의해 주세요.'
+          ? DELETED_LOGIN_TEXT
           : '계정 정보를 불러오지 못했어요. 네트워크를 확인하고 잠시 후 다시 시도해 주세요.';
       return { error: msg, role: get().role };
     }
@@ -955,10 +961,49 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     return { error: null };
   },
 
-  changePassword: async (newPw) => {
+  changePassword: async (currentPw, newPw) => {
     if (!HAS_SUPABASE) return { error: null }; // 데모: 실제 변경 없음
-    const { error } = await supabase.auth.updateUser({ password: newPw });
-    return { error: error ? friendlyError(error.message, '비밀번호를 변경하지 못했어요. 잠시 후 다시 시도해 주세요.') : null };
+    // (1) 현재 비밀번호 확인 — 저장하지 않는 임시 클라이언트로 로그인해 본다. 메인 세션·푸시 세션과 따로 논다.
+    //     확인이 끝나면 그 임시 세션은 바로 지운다(local = 그 세션 하나만).
+    //     storageKey 를 따로 두는 이유: 웹에서 메인 클라이언트와 같은 키면 두 인스턴스가 서로를 의심하는 경고가 난다.
+    const probe = createClient(process.env.EXPO_PUBLIC_SUPABASE_URL ?? '', process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '', {
+      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false, storageKey: 'sqt-password-check' },
+    });
+    const { error: checkErr } = await probe.auth.signInWithPassword({ email: get().email, password: currentPw });
+    if (checkErr) {
+      // 비밀번호가 틀린 것(400)만 "맞지 않아요"로 말한다. 연결·혼잡은 그 문구로 안내한다.
+      const wrong = checkErr.status === 400 || /invalid login credentials/i.test(checkErr.message);
+      return { error: wrong ? CURRENT_PW_WRONG_TEXT : friendlyError(checkErr.message, '비밀번호를 변경하지 못했어요. 잠시 후 다시 시도해 주세요.') };
+    }
+    await probe.auth.signOut({ scope: 'local' }).catch(() => {});
+    // (2) 바꾼다. current_password 는 Supabase Auth 의 "현재 비밀번호 요구" 설정이 켜져 있으면 서버가 다시 대조한다(P2-7 콘솔).
+    const { error } = await supabase.auth.updateUser({ password: newPw, current_password: currentPw });
+    if (error) {
+      if (/different from the old password|same_password/i.test(error.message)) return { error: '지금 비밀번호와 다른 비밀번호를 정해 주세요.' };
+      if (/current.?password/i.test(error.message)) return { error: CURRENT_PW_WRONG_TEXT };
+      return { error: friendlyError(error.message, '비밀번호를 변경하지 못했어요. 잠시 후 다시 시도해 주세요.') };
+    }
+    // (3) 다른 기기를 로그아웃시킨다. 비밀번호는 이미 바뀌었으므로 실패해도 성공으로 답한다.
+    try {
+      await supabase.auth.signOut({ scope: 'others' });
+    } catch (e) {
+      console.warn('[session] signOut others after password change failed:', e);
+    }
+    return { error: null };
+  },
+
+  changePhone: async (phone, code) => {
+    if (!HAS_SUPABASE) {
+      set({ phone }); // 데모: 인증 없이 반영
+      return { error: null };
+    }
+    const { data } = await supabase.auth.getSession();
+    const token = data.session?.access_token;
+    if (!token) return { error: '로그인이 만료됐어요. 다시 로그인해 주세요.' };
+    const r = await changePhoneByOtp({ phone, code, accessToken: token });
+    if (!r.ok) return { error: r.message };
+    set({ phone });
+    return { error: null };
   },
 
   // 회원탈퇴 — 앱스토어/개인정보보호법 필수. 0035부터 '소프트삭제'(deleted_at 표시 + 소속해제).

@@ -72,11 +72,6 @@ const SITES = [
     '매달 자동으로 갱신돼요. 해지하시기 전까지 계속돼요. 해지는 기기 설정의 구독 목록에서 하실 수 있어요.',
   ],
   [
-    'src/app/account-settings.tsx',
-    ' 앱에서 산 이용권은 탈퇴해도 해지되지 않으니, ${CANCEL_PATH_TEXT}에서 먼저 해지해 주세요.',
-    ' 앱에서 산 이용권은 탈퇴해도 해지되지 않으니, 기기 설정의 구독 목록에서 먼저 해지해 주세요.',
-  ],
-  [
     'src/app/terms.tsx',
     '해지하시기 전까지 갱신일마다 자동으로 결제됩니다. 해지는 ${CANCEL_PATH_TEXT}에서 언제든지 하실 수 있습니다. 회사는',
     '해지하시기 전까지 갱신일마다 자동으로 결제됩니다. 해지는 기기 설정의 구독 목록에서 언제든지 하실 수 있습니다. 회사는',
@@ -92,6 +87,14 @@ for (const file of new Set(SITES.map(([f]) => f))) {
   const src = strip(read(file));
   check(`${file} 코드에 "구독 목록" 을 직접 적지 않는다`, !src.includes('구독 목록'));
   check(`${file} 가 CANCEL_PATH_TEXT 를 store-policy 에서 읽는다`, /import \{[^}]*\bCANCEL_PATH_TEXT\b[^}]*\} from '@\/lib\/config\/store-policy'/.test(src));
+}
+
+// 탈퇴 확인창(2026-10-04 P3-8 · Q33)은 플랫폼이 아니라 실제 구독으로 가른다. 그래서 상수가 아니라
+// lib/account/copy.ts 의 deleteNotice 가 cancelPathText(os) 를 직접 부른다. 문구 전체는 qa:account-ui 가 본다.
+{
+  const src = strip(read('src/lib/account/copy.ts'));
+  check('탈퇴 확인창 이용권 안내가 cancelPathText(os) 를 쓴다(Q33 · lib/account/copy.ts)', /cancelPathText\(v\.os\)/.test(src));
+  check('src/app/account-settings.tsx 코드에 "구독 목록" 을 직접 적지 않는다', !strip(read('src/app/account-settings.tsx')).includes('구독 목록'));
 }
 
 console.log('\n■ 관리 창 실패 안내는 잘리지 않는 고지창으로 띄운다');

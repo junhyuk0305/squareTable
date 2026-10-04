@@ -12,6 +12,9 @@ import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
 import { isValidPhone, normalizePhone, formatPhone, passwordError } from '@/lib/utils/validation';
+import { passwordChangeError } from '@/lib/account/copy';
+import { usePhoneOtp } from '@/lib/otp';
+import { BottomSheet } from '@/components/BottomSheet';
 import { INDUSTRIES } from '@/lib/config/industry';
 import { SectionLabel } from '@/components/SectionLabel';
 import { Appear, stagger } from '@/components/Appear';
@@ -56,8 +59,9 @@ function AccountEditForm() {
   const [name, setName] = useState(userName);
   const [emailInput, setEmailInput] = useState(email);
   const [intro, setIntro] = useState(bio);
-  // 저장된 전화번호(전체)를 표시 형식으로 시드 → 편집창을 열면 기존 번호가 바로 채워진다.
-  const [phone, setPhone] = useState(() => formatPhone(savedPhone));
+  // 번호는 여기서 고치지 않는다(Q13). 비밀번호 찾기의 열쇠라 문자 인증을 거치는 [번호 바꾸기] 시트로만 바꾼다.
+  const [phoneOpen, setPhoneOpen] = useState(false);
+  const [curPw, setCurPw] = useState('');
   const [pw, setPw] = useState('');
   const [pw2, setPw2] = useState('');
   const [busy, setBusy] = useState(false);
@@ -116,30 +120,27 @@ function AccountEditForm() {
   const saveProfile = async () => {
     if (!name.trim()) return showToast('이름을 입력해주세요.', 'warn');
     if (!emailValid) return showToast('이메일을 올바르게 입력해주세요.', 'warn');
-    const phoneInput = phone.trim();
-    if (phoneInput && !isValidPhone(phoneInput)) return showToast('전화번호 형식을 확인해주세요. (예: 010-1234-5678)', 'warn');
     setBusy(true);
     const { error } = await updateProfile({
       name: name.trim(),
       email: emailInput.trim(),
       bio: intro.trim(),
-      ...(phoneInput ? { phone: normalizePhone(phoneInput) } : {}),
     });
     setBusy(false);
     showToast(error ?? '프로필을 저장했어요.', error ? 'warn' : 'good');
   };
 
   const savePw = async () => {
-    const pwErr = passwordError(pw);
+    const pwErr = passwordChangeError({ current: curPw, next: pw, confirm: pw2 });
     if (pwErr) return showToast(pwErr, 'warn');
-    if (pw !== pw2) return showToast('비밀번호가 서로 달라요.', 'warn');
     setBusy(true);
-    const { error } = await changePassword(pw);
+    const { error } = await changePassword(curPw, pw);
     setBusy(false);
     if (error) return showToast(error, 'warn');
+    setCurPw('');
     setPw('');
     setPw2('');
-    showToast('비밀번호를 변경했어요.', 'good');
+    showToast('비밀번호를 변경했어요. 다른 기기에서는 로그아웃돼요.', 'good');
   };
 
   // 펼치면 곧바로 입력 대기 상태로 — 펼치고 다시 탭하게 만들지 않는다(허브의 코드 입력 줄과 같은 규칙).
@@ -186,7 +187,17 @@ function AccountEditForm() {
             style={styles.input}
           />
           <Text style={styles.label}>전화번호</Text>
-          <TextInput value={phone} onChangeText={(v) => setPhone(formatPhone(v))} placeholder="010-0000-0000" placeholderTextColor={InkColors.ink3} keyboardType="phone-pad" maxLength={13} autoComplete="tel" textContentType="telephoneNumber" style={styles.input} />
+          <View style={styles.phoneRow}>
+            <Text style={[styles.phoneValue, !savedPhone && styles.phoneEmpty]}>{savedPhone ? formatPhone(savedPhone) : '번호 없음'}</Text>
+            <Pressable
+              onPress={() => setPhoneOpen(true)}
+              accessibilityRole="button"
+              testID="phone-change-open"
+              style={({ pressed }) => [styles.phoneBtn, pressed && { opacity: 0.7 }]}
+            >
+              <Text style={styles.phoneBtnText}>번호 바꾸기</Text>
+            </Pressable>
+          </View>
           <Pressable disabled={busy || !canSaveProfile} onPress={saveProfile} style={({ pressed }) => [styles.primary, pressed && { opacity: 0.88 }, (busy || !canSaveProfile) && { opacity: 0.5 }]}>
             {busy ? <ActivityIndicator color="#FFF" /> : <Text style={styles.primaryText}>프로필 저장</Text>}
           </Pressable>
@@ -255,11 +266,25 @@ function AccountEditForm() {
           // 펼침의 정본은 Collapse 다 — Appear(등장)로 열면 아래 내용이 밀려나는 것이 순간이동한다.
           <Collapse>
           <View style={styles.pwPanel}>
+            {/* Q14: 잠금이 풀린 폰을 남이 집어도 바로 바꾸지 못하게 지금 비밀번호를 먼저 묻는다. */}
+            <Text style={styles.label}>현재 비밀번호<Text style={styles.req}> *</Text></Text>
+            <TextInput
+              ref={pwRef}
+              value={curPw}
+              onChangeText={setCurPw}
+              placeholder="지금 쓰는 비밀번호"
+              placeholderTextColor={InkColors.ink3}
+              secureTextEntry
+              autoComplete="current-password"
+              textContentType="password"
+              autoCapitalize="none"
+              autoCorrect={false}
+              style={styles.input}
+            />
             <Text style={styles.label}>새 비밀번호<Text style={styles.req}> *</Text></Text>
             {/* autoComplete="new-password": 브라우저/비번 매니저가 '기존 비밀번호'를 자동완성하지 못하게 막는다.
                 (이메일 입력이 생기며 이 화면이 로그인 폼으로 오인돼 저장된 비번이 채워지던 보안 문제 방지) */}
             <TextInput
-              ref={pwRef}
               value={pw}
               onChangeText={setPw}
               placeholder="영문·숫자 조합 9자 이상"
@@ -290,7 +315,7 @@ function AccountEditForm() {
               style={styles.input}
             />
             {/* 여는 줄과 같은 말을 쓰지 않는다 — 위아래로 겹치면 어느 쪽을 눌러야 하는지 흐려진다. */}
-            <Pressable disabled={busy || !pw || !pw2} onPress={savePw} style={({ pressed }) => [styles.secondary, pressed && { opacity: 0.88 }, (busy || !pw || !pw2) && { opacity: 0.5 }]}>
+            <Pressable disabled={busy || !curPw || !pw || !pw2} onPress={savePw} style={({ pressed }) => [styles.secondary, pressed && { opacity: 0.88 }, (busy || !curPw || !pw || !pw2) && { opacity: 0.5 }]}>
               <Text style={styles.secondaryText}>새 비밀번호 저장</Text>
             </Pressable>
           </View>
@@ -300,7 +325,108 @@ function AccountEditForm() {
         <View style={{ height: 24 }} />
       </ScrollView>
       </KeyboardShift>
+      <BottomSheet visible={phoneOpen} onClose={() => setPhoneOpen(false)}>
+        {/* 열 때마다 새로 마운트한다 — 닫았다 다시 열면 처음부터 시작한다. */}
+        {phoneOpen ? <PhoneChangeBody savedPhone={savedPhone} onDone={() => setPhoneOpen(false)} /> : null}
+      </BottomSheet>
     </SafeAreaView>
+  );
+}
+
+// [번호 바꾸기] 시트 본문(Q13 · 0238) — 새 번호 → 인증번호 받기 → 인증번호 → 바꾸기(otp change_phone).
+// ★otp.verify 를 부르지 않는다. verify 가 코드를 소모해서 이어 부르는 change_phone 이 '만료'로 실패한다.
+function PhoneChangeBody({ savedPhone, onDone }: { savedPhone: string; onDone: () => void }) {
+  const changePhone = useSessionStore((s) => s.changePhone);
+  const [phone, setPhone] = useState('');
+  const normalized = normalizePhone(phone);
+  const otp = usePhoneOtp(normalized);
+  const [code, setCode] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const sendCode = () => {
+    setErr(null);
+    if (!isValidPhone(normalized)) return setErr('전화번호 형식을 확인해주세요. (예: 010-1234-5678)');
+    if (normalized === normalizePhone(savedPhone)) return setErr('지금 쓰는 번호예요. 새 번호를 입력해 주세요.');
+    void otp.send();
+  };
+
+  const submit = async () => {
+    setErr(null);
+    if (code.length !== 6) return setErr('인증번호 6자리를 입력해 주세요.');
+    setBusy(true);
+    const { error } = await changePhone(normalized, code);
+    setBusy(false);
+    if (error) return setErr(error);
+    showToast('전화번호를 바꿨어요.', 'good');
+    onDone();
+  };
+
+  return (
+    <View style={styles.sheetBody}>
+      <Text style={styles.sheetTitle}>번호 바꾸기</Text>
+      <Text style={styles.sheetText}>새 번호로 받은 인증번호를 넣으면 바로 바뀌어요. 비밀번호를 찾을 때 이 번호를 써요.</Text>
+      <Text style={styles.label}>새 휴대폰 번호</Text>
+      <View style={styles.otpRow}>
+        <TextInput
+          value={phone}
+          onChangeText={(v) => setPhone(formatPhone(v))}
+          placeholder="010-0000-0000"
+          placeholderTextColor={InkColors.ink3}
+          keyboardType="phone-pad"
+          maxLength={13}
+          autoComplete="tel"
+          textContentType="telephoneNumber"
+          style={[styles.input, styles.otpInput]}
+          accessibilityLabel="새 휴대폰 번호"
+          testID="phone-change-input"
+        />
+        <Pressable
+          onPress={sendCode}
+          disabled={otp.busy === 'send' || otp.countdown > 0}
+          accessibilityRole="button"
+          testID="phone-change-send"
+          style={[styles.otpBtn, (otp.busy === 'send' || otp.countdown > 0) && { opacity: 0.45 }]}
+        >
+          {otp.busy === 'send' ? (
+            <ActivityIndicator color={InkColors.bubbleText} />
+          ) : (
+            <Text style={styles.otpBtnText}>{otp.countdown > 0 ? `재발송 ${otp.countdown}초` : otp.sent ? '인증번호 재발송' : '인증번호 받기'}</Text>
+          )}
+        </Pressable>
+      </View>
+      {otp.msg ? <Text style={styles.err}>{otp.msg}</Text> : null}
+      {otp.sent ? (
+        <>
+          <Text style={styles.label}>인증번호</Text>
+          <TextInput
+            value={code}
+            onChangeText={(v) => setCode(v.replace(/\D/g, '').slice(0, 6))}
+            placeholder="인증번호 6자리"
+            placeholderTextColor={InkColors.ink3}
+            keyboardType="number-pad"
+            autoComplete="one-time-code"
+            textContentType="oneTimeCode"
+            maxLength={6}
+            style={styles.input}
+            accessibilityLabel="인증번호"
+            testID="phone-change-code"
+          />
+        </>
+      ) : null}
+      {err ? <Text style={styles.err}>{err}</Text> : null}
+      {otp.sent ? (
+        <Pressable
+          disabled={busy || code.length !== 6}
+          onPress={() => void submit()}
+          accessibilityRole="button"
+          testID="phone-change-submit"
+          style={({ pressed }) => [styles.primary, pressed && { opacity: 0.88 }, (busy || code.length !== 6) && { opacity: 0.5 }]}
+        >
+          {busy ? <ActivityIndicator color="#FFF" /> : <Text style={styles.primaryText}>번호 바꾸기</Text>}
+        </Pressable>
+      ) : null}
+    </View>
   );
 }
 
@@ -314,6 +440,21 @@ const styles = StyleSheet.create({
   input: { borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md, paddingHorizontal: 14, paddingVertical: 13, fontSize: 16, color: InkColors.ink, backgroundColor: '#FFFFFF' },
   inputError: { borderColor: BrandColors.accent },
   pwHint: { fontSize: 12, fontWeight: '600', marginTop: -2 },
+  // 번호 표시 줄 — 여기서 고칠 수 없는 값이라 입력칸 모양을 쓰지 않는다. 글자가 커지면 버튼이 아랫줄로 내려간다.
+  phoneRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: Space.sm, minHeight: 48 },
+  phoneValue: { flexGrow: 1, flexShrink: 1, fontSize: 16, color: InkColors.ink },
+  phoneEmpty: { color: InkColors.ink3 },
+  phoneBtn: { minHeight: 44, paddingHorizontal: 14, justifyContent: 'center', borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, backgroundColor: InkColors.bgSoft },
+  phoneBtnText: { fontSize: 14, fontWeight: '800', color: InkColors.ink },
+  sheetBody: { paddingHorizontal: 20, paddingBottom: 20, gap: Space.sm },
+  sheetTitle: { fontSize: 18, fontWeight: '900', color: InkColors.ink },
+  sheetText: { fontSize: 15, lineHeight: 22, color: InkColors.ink2 },
+  // 입력칸 기준 폭 120 — 글자가 커지면 버튼이 아랫줄로 내려간다(forgot-password 와 같은 규칙).
+  otpRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.sm, alignItems: 'center' },
+  otpInput: { flexGrow: 1, flexShrink: 1, flexBasis: 120 },
+  otpBtn: { minHeight: 48, paddingVertical: Space.sm, paddingHorizontal: 14, borderRadius: Radius.md, backgroundColor: InkColors.ink, alignItems: 'center', justifyContent: 'center', minWidth: 118, flexShrink: 1 },
+  otpBtnText: { fontSize: 13.5, fontWeight: '800', color: InkColors.bubbleText, textAlign: 'center' },
+  err: { fontSize: 13.5, color: BrandColors.badText },
   pwOk: { color: BrandColors.goodText },
   pwBad: { color: InkColors.ink3 },
   storeCard: { borderColor: BrandColors.gold },

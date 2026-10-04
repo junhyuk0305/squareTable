@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
-import { fetchMyPreviousUnits } from '@/lib/db';
-import { View, Text, StyleSheet, ScrollView, Pressable, Linking } from 'react-native';
+import { fetchMyIapSubscription, fetchMyPreviousUnits } from '@/lib/db';
+import { View, Text, StyleSheet, ScrollView, Pressable, Linking, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter, Redirect } from 'expo-router';
@@ -17,7 +17,8 @@ import { Radius } from '@/lib/theme/elevation';
 import { SettingsSection, SettingsRow, SettingsToggle } from '@/components/settings/SettingsKit';
 import { SectionLabel } from '@/components/SectionLabel';
 import { PricingTable } from '@/components/PricingTable';
-import { CANCEL_PATH_TEXT, SHOW_BILLING, SHOW_IAP, showIapSurface, showPaymentSurface } from '@/lib/config/store-policy';
+import { SHOW_BILLING, showIapSurface, showPaymentSurface } from '@/lib/config/store-policy';
+import { deleteConfirmText, deleteNotice } from '@/lib/account/copy';
 import { TextScaleModal } from '@/components/settings/TextScaleModal';
 import { ContactModal } from '@/components/ContactModal';
 
@@ -68,12 +69,21 @@ export default function AccountSettings() {
   };
 
   const onDelete = async () => {
+    // ★앱에서 산 구독은 스토어가 청구한다. 탈퇴(delete_my_account)는 그 구독을 끊지 못하므로 해지할 곳을 말한다.
+    //   Q33: 플랫폼이 아니라 실제 구독(iap_subscriptions.platform)으로 가른다. 못 읽으면 undefined → 같은 기기 안내.
+    //   ⛔웹은 deleteNotice·deleteConfirmText 가 지금 문구를 그대로 돌려준다(토스 동결). 웹에서는 구독을 읽지도 않는다.
+    let iapPlatform: string | null | undefined = null;
+    if (Platform.OS !== 'web') {
+      const { data, error } = await fetchMyIapSubscription();
+      iapPlatform = error ? undefined : (data?.platform ?? null);
+    }
     const ok = await confirmAction(
       '회원탈퇴',
-      isOwnerAccount
-        ? // ★앱에서 산 구독은 애플이 청구한다 — 탈퇴(delete_my_account)는 그 구독을 끊지 못하므로 먼저 해지하라고 말한다.
-          `계정과 매장 데이터(노하우·직원·근무 기록)가 모두 삭제되며 복구할 수 없어요.${SHOW_IAP ? ` 앱에서 산 이용권은 탈퇴해도 해지되지 않으니, ${CANCEL_PATH_TEXT}에서 먼저 해지해 주세요.` : ''} 정말 탈퇴하시겠어요?`
-        : '계정과 내 기록(질문·출퇴근)이 삭제되며 복구할 수 없어요. 정말 탈퇴하시겠어요?',
+      deleteConfirmText({
+        ownerAccount: isOwnerAccount,
+        notice: deleteNotice({ iapPlatform, os: Platform.OS }),
+        os: Platform.OS,
+      }),
       '탈퇴하기',
       { destructive: true, icon: 'trash-outline' },
     );

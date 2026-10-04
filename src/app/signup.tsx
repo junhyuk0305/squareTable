@@ -13,6 +13,7 @@ import { Appear } from '@/components/Appear';
 import { formatBizNo, isValidBizNo, bizDigits } from '@/lib/utils/bizno';
 import { isValidEmail, isValidPhone, normalizePhone, formatPhone, passwordError, formatBirthDate8, birthDateISO } from '@/lib/utils/validation';
 import { usePhoneOtp } from '@/lib/otp';
+import { EMAIL_TAKEN_TEXT, ROLE_SPLIT_TEXT } from '@/lib/account/copy';
 import { BrandColors, InkColors } from '@/lib/theme/colors';
 import { Space } from '@/lib/theme/layout';
 import { Radius, Elevation } from '@/lib/theme/elevation';
@@ -164,7 +165,7 @@ export default function SignupScreen() {
         });
         if (up.emailTaken) {
           // 중복 — 이메일 입력창 아래 안내로 표시
-          setEmailMsg('이미 가입된 이메일이에요. 로그인해 주세요.');
+          setEmailMsg(EMAIL_TAKEN_TEXT);
           return;
         }
         if (up.error) {
@@ -237,6 +238,8 @@ export default function SignupScreen() {
             </Pressable>
           ))}
         </View>
+        {/* J11: 직원 계정으로는 매장을 열 수 없다(0157). 전환 기능 대신 처음부터 알려 준다. */}
+        <Text style={styles.roleSplit}>{ROLE_SPLIT_TEXT}</Text>
         </Appear>
 
         <Appear delay={60}>
@@ -546,6 +549,7 @@ const styles = StyleSheet.create({
   roleLabel: { fontSize: 16, fontWeight: '800', color: InkColors.ink2, marginTop: 4 },
   roleLabelOn: { color: BrandColors.brand },
   roleDesc: { fontSize: 12, color: InkColors.ink3, lineHeight: 17 },
+  roleSplit: { fontSize: 13, color: InkColors.ink2, lineHeight: 19, marginBottom: 4 },
   roleCheck: {
     position: 'absolute',
     top: 10,
