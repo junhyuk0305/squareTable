@@ -120,6 +120,7 @@
     "qa:social-login": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/qa-social-login.mjs",
     "qa:signout-push": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/qa-signout-push.mjs",
     "qa:signout-push-db": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/qa-signout-push-db.mjs",
+    "qa:open-record": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/qa-open-record.mjs",
     "iap:status": "node scripts/iap-switch.mjs status",
     "iap:on": "node scripts/iap-switch.mjs on",
     "iap:off": "node scripts/iap-switch.mjs off",
