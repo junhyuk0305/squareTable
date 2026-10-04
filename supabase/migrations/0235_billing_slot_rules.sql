@@ -94,6 +94,7 @@ declare
   v_active  text;             -- ★0235: 쓰는 매장(사장 본인의 활성 매장)
   v_since   timestamptz := now() - interval '16 days';  -- ★0235: 이어지는 결제의 창(애플 유예 16일)
   v_pre     timestamptz;      -- ★0235(H7): 흡수 직전 선불 만료일
+  v_slot_until timestamptz;   -- ★0235(리뷰): 배정에 쓰는 슬롯이 들고 있던 만료일
 begin
   if p_owner is null then raise exception 'owner_required'; end if;
   if p_plan not in ('single', 'multi') then raise exception 'bad_plan'; end if;
@@ -237,6 +238,12 @@ begin
          updated_at = now()
    where s.unit_id = any(v_units);
   extended := coalesce(array_length(v_units, 1), 0);
+  -- ★0235(리뷰 ⑲-a): 연장한 매장의 구독 흔적 슬롯 날짜도 맞춘다(single 분기와 같다). 안 맞추면 2번째 주기부터
+  --   "지금 결제 중인 흔적"·"16일 창" 판정이 첫 주기 날짜를 읽어, 늦게 온 갱신이 결제한 매장을 못 연다.
+  update public.store_slots
+     set paid_until = greatest(paid_until, p_period_end)
+   where owner_id = p_owner and source = 'iap'
+     and consumed_unit_id = any(v_units);
 
   -- ★0196: 고른 매장이 연장에서 빠졌다면 그 매장의 IAP 흔적을 **떼어낸다**(행은 남기고 매장 연결만 끊는다).
   --   안 떼면 명단이 비워진 다음 갱신에서 ①이 "오래된 순"으로 그 매장을 다시 잡아 — 닫은 매장이 되살아나고
@@ -272,8 +279,9 @@ begin
      order by s.paid_until asc, s.id asc
      limit v_keep
   )
+  -- ★0235(리뷰): greatest — 매장 삭제로 돌려받은 슬롯(J8)이 더 긴 기간을 들고 있으면 깎지 않는다.
   update public.store_slots s
-     set paid_until = p_period_end, plan = 'multi'
+     set paid_until = greatest(s.paid_until, p_period_end), plan = 'multi'
     from pick where s.id = pick.id;
   get diagnostics v_reuse = row_count;
 
@@ -297,10 +305,12 @@ begin
   if v_keep > 0 then
     foreach v_unit in array v_targets loop
       exit when assigned >= v_keep;
-      select id into v_slot
+      -- ★0235(리뷰): 이번 결제로 맞춘 슬롯(만료일 ≥ 결제 기간 끝)을 먼저 쓴다. 줄이기로 남은 옛 초과 슬롯을 먼저 먹으면
+      --   새로 맞춘 슬롯이 미소비로 남아 결제한 수보다 매장이 하나 더 열린다.
+      select id, paid_until into v_slot, v_slot_until
         from public.store_slots
        where owner_id = p_owner and source = 'iap' and consumed_at is null and paid_until > now()
-       order by paid_until asc
+       order by (paid_until >= p_period_end) desc, paid_until asc, id asc
        limit 1
        for update skip locked;
       exit when v_slot is null;
@@ -309,7 +319,7 @@ begin
         select us.paid_until into v_pre from public.unit_subscriptions us where us.unit_id = v_unit;
         update public.unit_subscriptions
            set status = 'active', plan = 'multi',
-               paid_until = greatest(coalesce(paid_until, p_period_end), p_period_end),
+               paid_until = greatest(coalesce(paid_until, p_period_end), p_period_end, v_slot_until),
                updated_at = now()
          where unit_id = v_unit;
         update public.store_slots
@@ -318,7 +328,7 @@ begin
       else
         perform * from public.admin_activate_store(v_unit, v_days, 'multi');
         update public.unit_subscriptions
-           set paid_until = p_period_end, updated_at = now()
+           set paid_until = greatest(p_period_end, v_slot_until), updated_at = now()
          where unit_id = v_unit;
         update public.store_slots
            set consumed_at = now(), consumed_unit_id = v_unit
@@ -431,10 +441,18 @@ begin
 
   -- ★0235: 이어지는 결제 = 이 거래가 이미 있고(active·grace·canceled) 16일 안에 끝났거나 아직 안 끝났다,
   --   또는 Play 줄이기 교체본(v_hold). 판정은 이번 이벤트를 반영하기 **전** 행(v_cur)으로 한다.
+  --   ★(리뷰 ⑲-h) Play 는 상품을 바꾸면 거래 id 가 바뀌어 늘리기도 새 거래의 INITIAL_PURCHASE 로 온다 →
+  --   같은 사장의 살아 있는(16일 창) 옛 Play 구독이 있으면 이어지는 결제로 본다. 옛 행은 아래에서야 expired 로 눕는다.
   v_continuing := (v_cur.id is not null
                    and v_cur.status in ('active', 'grace', 'canceled')
                    and v_cur.current_period_end > v_now - interval '16 days')
-                  or v_hold.id is not null;
+                  or v_hold.id is not null
+                  or (p_type = 'INITIAL_PURCHASE' and p_platform = 'play' and exists (
+                        select 1 from public.iap_subscriptions o
+                         where o.owner_id = p_owner and o.platform = 'play'
+                           and o.original_transaction_id <> p_txn
+                           and o.status in ('active', 'grace', 'canceled')
+                           and o.current_period_end > v_now - interval '16 days'));
 
   -- 구독 상태 한 행(계정·플랫폼·거래 기준). unique(platform, original_transaction_id) 가 재전송의 중복 행을 막는다.
   insert into public.iap_subscriptions
@@ -762,9 +780,18 @@ declare
   u       text;
   v_n     int := 0;
   v_pre   timestamptz;
+  v_void  int := 0;
 begin
   if p_owner is null then raise exception 'owner_required'; end if;
   if p_plan not in ('single', 'multi') then raise exception 'bad_plan'; end if;
+
+  -- ★0235(리뷰 ⑲-d): 아직 매장에 안 붙은 구독 슬롯(쓰지 않은 다점포 몫 · 매장 삭제로 돌려받은 몫)도 환불과 함께 끝낸다.
+  --   안 끝내면 환불받은 돈으로 새 매장·이전 매장을 연다. 계좌이체·무료 지급 슬롯은 건드리지 않는다.
+  update public.store_slots
+     set paid_until = now()
+   where owner_id = p_owner and source = 'iap'
+     and consumed_at is null and paid_until > now();
+  get diagnostics v_void = row_count;
 
   -- IAP 로 연 매장만 고른다. 계좌이체(source='claim')·무료지급('grant')으로 연 매장은
   -- 이 환불과 무관하므로 건드리면 안 된다 — 남의 돈으로 연 매장을 닫는 사고가 된다.
@@ -777,13 +804,17 @@ begin
      and s.consumed_at is not null and s.consumed_unit_id is not null;
 
   -- 흔적이 하나도 없으면(0187 이전 데이터) 옛 기준(가장 오래된 매장)으로 폴백.
-  -- ★0235(H7): 폴백에서 선불 매장은 뺀다(계좌이체 single·코드 매장은 흔적이 없어서 폴백에 잡혔다).
-  if p_plan = 'single' and coalesce(array_length(v_units, 1), 0) = 0 then
+  -- ★0235(H7·리뷰): 폴백에서 선불·본사 부담·가입 체험·지운 매장은 뺀다. 방금 미소비 구독 슬롯을 끝냈다면
+  --   (환불된 몫이 매장에 안 붙어 있었다) 폴백으로 엉뚱한 매장을 닫지 않는다.
+  if p_plan = 'single' and coalesce(array_length(v_units, 1), 0) = 0 and v_void = 0 then
     select u2.id into v_unit
       from public.unit_members m
       join public.units u2 on u2.id = m.unit_id
      where m.user_id = p_owner and m.role = 'owner'
+       and u2.deleted_at is null
        and not public.unit_prepaid(u2.id)
+       and not public.unit_brand_paid(u2.id)
+       and not public.is_signup_trial(u2.id)
      order by u2.created_at asc
      limit 1;
     if v_unit is null then return 0; end if;
@@ -791,19 +822,20 @@ begin
   end if;
 
   foreach u in array v_units loop
-    -- ★0235(Q6 규칙 4): 계좌이체·무료 지급 슬롯이 아직 붙어 있는 매장은 닫지 않는다.
-    --   해지 예약한 구독 뒤에 계좌이체로 이어 붙인 매장을 옛 구독 환불이 통째로 닫던 사고.
-    if exists (select 1 from public.store_slots s
-                where s.consumed_unit_id = u and s.source in ('claim', 'grant') and s.paid_until > now()) then
-      continue;
-    end if;
-    -- ★0235(H7): 구독이 흡수하기 전 선불 만료일이 아직 남았으면 닫지 않고 그 날로 되돌린다.
-    select max(s.prepaid_until) into v_pre
-      from public.store_slots s
-     where s.owner_id = p_owner and s.source = 'iap' and s.consumed_unit_id = u;
+    -- ★0235(리뷰 ⑲-c): 본사 부담 매장은 본사 돈으로 열려 있다 — 구독 환불로 닫지 않는다.
+    if public.unit_brand_paid(u) then continue; end if;
+    -- ★0235(Q6 규칙 4 · H7 · 리뷰 ⑲-b): 남의 돈으로 연 기간이 남았으면 닫지 않고 **그 날까지로** 되돌린다.
+    --   남의 돈 = 아직 붙어 있는 계좌이체·무료 지급 슬롯 · 구독이 흡수하기 전 선불 만료일(prepaid_until).
+    --   least — 되돌리기만 하고 늘리지는 않는다(구독 뒤에 이어 붙인 계좌이체는 매장 만료일 = 그 슬롯 끝이라 그대로).
+    select greatest(
+             (select max(s.paid_until) from public.store_slots s
+               where s.consumed_unit_id = u and s.source in ('claim', 'grant') and s.paid_until > now()),
+             (select max(s.prepaid_until) from public.store_slots s
+               where s.owner_id = p_owner and s.source = 'iap' and s.consumed_unit_id = u))
+      into v_pre;
     if v_pre is not null and v_pre > now() then
       update public.unit_subscriptions
-         set status = 'active', paid_until = v_pre, updated_at = now()
+         set status = 'active', paid_until = least(coalesce(paid_until, v_pre), v_pre), updated_at = now()
        where unit_id = u;
       continue;
     end if;
@@ -858,6 +890,7 @@ declare
   v_paid timestamptz;
   v_plan text;
   v_cap  timestamptz;
+  r      record;
 begin
   select us.paid_until, us.plan into v_paid, v_plan from public.unit_subscriptions us where us.unit_id = p_unit;
   if v_paid is null or v_paid <= now() then return; end if;
@@ -866,23 +899,31 @@ begin
   end if;
   plan := case when v_plan = 'single' then 'single' else 'multi' end;
 
-  select s.id, s.claim_id into slot_id, claim_id
+  -- ★(리뷰 ⑲-f): 아직 기간이 남은 슬롯만, 그 슬롯의 기간까지만. 오래전에 끝난 슬롯에 코드 기간을 얹어 돌려주면
+  --   코드를 슬롯으로 바꿔 새 매장마다 다시 쓰는 길이 된다.
+  select s.id, s.claim_id, s.paid_until into slot_id, claim_id, v_cap
     from public.store_slots s
    where s.consumed_unit_id = p_unit and s.consumed_at is not null
+     and s.paid_until > now()
    order by (s.source = 'iap') desc, s.paid_until desc
    limit 1;
   if slot_id is not null then
-    paid_until := v_paid;
+    paid_until := least(v_paid, v_cap);
     return next;
     return;
   end if;
 
-  select c.id, c.reviewed_at + make_interval(days => c.months * 30)
-    into claim_id, v_cap
-    from public.payment_claims c
-   where c.unit_id = p_unit and c.status = 'approved' and c.plan = 'single' and c.reviewed_at is not null
-   order by c.reviewed_at + make_interval(days => c.months * 30) desc
-   limit 1;
+  -- ★(리뷰 ⑲-g): 승인된 single 신고를 승인 순서대로 이어 붙여(admin_activate_store 와 같은 계산) 신고가 만든 끝을 구한다.
+  --   만료 전에 이어 낸 기간까지 들어간다. 신고 사이에 낀 코드 기간은 들어가지 않는다.
+  for r in
+    select c.id, c.reviewed_at, c.months
+      from public.payment_claims c
+     where c.unit_id = p_unit and c.status = 'approved' and c.plan = 'single' and c.reviewed_at is not null
+     order by c.reviewed_at asc
+  loop
+    v_cap := greatest(coalesce(v_cap, r.reviewed_at), r.reviewed_at) + make_interval(days => r.months * 30);
+    claim_id := r.id;
+  end loop;
   if claim_id is null then return; end if;
   paid_until := least(v_paid, v_cap);
   if paid_until <= now() then return; end if;
@@ -927,10 +968,10 @@ declare
 begin
   if v_uid is null then raise exception 'not_authenticated'; end if;
 
-  -- ★소유검증(유일 방어선)
-  if not exists (select 1 from public.units u where u.id = p_unit_id and u.owner_id = v_uid) then
-    raise exception 'not_owner';
-  end if;
+  -- ★소유검증(유일 방어선) + ★0235(리뷰 ⑲-e) 행 잠금 — 같은 매장을 동시에 지우면 뒤 호출은 앞 호출이 끝날 때까지
+  --   기다렸다가 매장이 없어진 것을 보고 not_owner 로 끝난다(몫이 두 번 돌아오지 않는다).
+  perform 1 from public.units u where u.id = p_unit_id and u.owner_id = v_uid for update;
+  if not found then raise exception 'not_owner'; end if;
 
   -- ★마지막(유일) 매장은 삭제 불가 → 계정삭제로 유도
   if (select count(*) from public.units u where u.owner_id = v_uid and u.deleted_at is null) <= 1 then
@@ -1209,6 +1250,27 @@ revoke all on function public.reopen_store(text) from public, anon, authenticate
 grant execute on function public.reopen_store(text) to authenticated;
 
 -- ════════════════════════════════════════════════════════════════════════════
+-- (11-b) 백필 — 이미 날짜가 낡은 다점포 구독 흔적 슬롯(리뷰 ⑲-a)
+--   0230 까지 multi 연장은 매장 만료일만 바꾸고 흔적 슬롯 날짜는 첫 주기에 머물렀다. 지금 살아 있는 앱·카드 구독이 있는
+--   사장의 흔적 슬롯을 그 구독 기간 끝까지(매장 만료일을 넘지 않게) 맞춘다. 다음 갱신이 (3)의 판정을 바르게 읽게 한다.
+-- ════════════════════════════════════════════════════════════════════════════
+update public.store_slots s
+   set paid_until = greatest(s.paid_until, least(x.pe, us.paid_until))
+  from (select z.owner_id, max(z.pe) as pe
+          from (select i.owner_id, i.current_period_end as pe from public.iap_subscriptions i
+                 where i.status in ('active', 'grace') and i.current_period_end > now()
+                union all
+                select c.owner_id, c.current_period_end from public.card_subscriptions c
+                 where c.status in ('active', 'past_due') and c.current_period_end > now()) z
+         group by z.owner_id) x,
+       public.unit_subscriptions us
+ where s.source = 'iap' and s.consumed_at is not null and s.consumed_unit_id is not null
+   and s.owner_id = x.owner_id
+   and us.unit_id = s.consumed_unit_id
+   and us.plan = 'multi'
+   and us.paid_until > s.paid_until;
+
+-- ════════════════════════════════════════════════════════════════════════════
 -- (12) 자가점검 — 개수가 아니라 본문 · 권한 · 제약으로
 -- ════════════════════════════════════════════════════════════════════════════
 do $$
@@ -1242,6 +1304,15 @@ begin
   v_def := pg_get_functiondef('public.revoke_iap_access(uuid, text)'::regprocedure);
   if position('prepaid_until' in v_def) = 0 or position('''claim'', ''grant''' in v_def) = 0 then
     v_bad := v_bad || 'revoke_iap_access(H7·Q6 보호 없음) ';
+  end if;
+  if position('unit_brand_paid' in v_def) = 0 or position('consumed_at is null and paid_until > now()' in v_def) = 0 then
+    v_bad := v_bad || 'revoke_iap_access(본사 부담 보호·미소비 슬롯 종료 없음) ';
+  end if;
+  v_def := pg_get_functiondef('public.delete_store(text)'::regprocedure);
+  if position('for update' in v_def) = 0 then v_bad := v_bad || 'delete_store(행 잠금 없음 — 동시 삭제) '; end if;
+  v_def := pg_get_functiondef('public.sync_iap_slots(uuid, text, int, timestamptz, boolean)'::regprocedure);
+  if position('consumed_unit_id = any(v_units)' in v_def) = 0 then
+    v_bad := v_bad || 'sync(다점포 흔적 날짜 갱신 없음) ';
   end if;
   v_def := pg_get_functiondef('public.reopen_store(text)'::regprocedure);
   if position('delete from public.attendance' in v_def) > 0 or position('delete from public.work_feed' in v_def) > 0 then

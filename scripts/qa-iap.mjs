@@ -800,7 +800,8 @@ async function slotRuleChecks() {
     await R.c.rpc('delete_store', { p_unit_id: A });
     check('셋업 ⑲-d A 삭제 → 구독 슬롯 반환', (await openSlots(R.uid)).length === 1, '');
     await evt(R, t, 'CANCELLATION', 'single_1_monthly', 'single', 1, iso(days(30)), { p_reason: 'CUSTOMER_SUPPORT' });
-    check('★★⑲-d 환불 뒤 돌려받은 슬롯이 남지 않는다', (await openSlots(R.uid)).length === 0, JSON.stringify(await openSlots(R.uid)));
+    const live = (await openSlots(R.uid)).filter((x) => new Date(x.paid_until).getTime() > Date.now());
+    check('★★⑲-d 환불 뒤 돌려받은 슬롯이 쓸 수 없게 끝난다', live.length === 0, JSON.stringify(live));
     const C = await tryStore(R, 'QA⑲d 3호점');
     check('★⑲-d 환불된 몫으로 새 매장을 열 수 없다', !C.unit && /no_store_slot/.test(C.err), C.err || `열려버림 ${C.unit}`);
   }
