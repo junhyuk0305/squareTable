@@ -24,16 +24,22 @@ export function SocialAuthButtons() {
   // iOS 네이티브: Guideline 4.8 — 제3자 소셜 로그인으로 주계정을 만들면 동등한 다른 로그인 서비스
   // (사실상 Sign in with Apple)를 함께 제공해야 한다. 여기서 감추면 "앱이 오로지 자사 계정 시스템만
   // 사용" 예외에 해당해 면제된다. Sign in with Apple 추가는 9월 1.1 과제.
+  // 안드 네이티브: 네이티브 구글 로그인 모듈이 없어 숨긴다(2026-10-04 Q1).
   if (!SHOW_SOCIAL_LOGIN) return null;
 
   const onGoogle = async () => {
     setBusy(true);
     setErr(null);
-    const { error } = await signInWithGoogle();
-    // 성공이면 페이지가 구글로 이동해 여기로 안 돌아온다. 에러(미설정·차단)면 busy 해제 후 표시.
-    if (error) {
-      setBusy(false);
-      setErr(error);
+    // 성공이면 페이지가 구글로 이동한다. 그때만 busy 를 유지하고, 에러·예외면 finally 에서 푼다(Q1 무한 로딩).
+    let leaving = false;
+    try {
+      const { error } = await signInWithGoogle();
+      if (error) setErr(error);
+      else leaving = true;
+    } catch {
+      setErr('구글 로그인을 시작하지 못했어요. 잠시 후 다시 시도해 주세요.');
+    } finally {
+      if (!leaving) setBusy(false);
     }
   };
 

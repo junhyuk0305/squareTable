@@ -17,11 +17,12 @@
 //   → 3.1.3(f) Free Stand-alone Apps 면제 주장은 **폐기**한다. 개인(단일)·다점포 모두 iOS IAP 로 판다.
 //   → 웹 결제는 프랜차이즈 본사·조직 계약용으로 존치하되 iOS 빌드 경로에서는 계속 비노출이다.
 //
-// ★ SHOW_SOCIAL_LOGIN=false (iOS 네이티브)
+// ★ SHOW_SOCIAL_LOGIN=false (iOS·안드 네이티브)
 //   근거: Guideline 4.8. 제3자 소셜 로그인(Google Sign-In)으로 주계정을 만들면 동등한 다른 로그인
 //   서비스(사실상 Sign in with Apple)를 함께 제공해야 한다. iOS에서 Google 버튼을 감추면
 //   "앱이 오로지 자사 계정 시스템만 사용" 예외에 해당해 면제된다.
 //   Sign in with Apple 추가는 9월 1.1 과제.
+//   2026-10-04 Q1: 안드도 숨긴다. 앱에 네이티브 구글 로그인 모듈이 없어 버튼을 누르면 무한 로딩이었다.
 //
 // ★ 2026-08-27: Android 네이티브도 SHOW_BILLING=false.
 //   근거: Google Play 결제 정책 — 앱 안에서 쓰는 구독은 Play 결제만 허용, 계좌이체 안내·외부결제 유도는 위반.
@@ -30,6 +31,7 @@
 //   `SHOW_IAP` 로 앱 안에서 판다. 두 축을 한 문장으로 읽으면 판정을 또 틀린다.
 
 import { Platform } from 'react-native';
+import { socialLoginVisible } from './social-login';
 
 export const IS_IOS_NATIVE = Platform.OS === 'ios';
 const IS_NATIVE = Platform.OS !== 'web';
@@ -132,8 +134,8 @@ export function showUpgradeHint(s: { role: string | null; iapEnabled: boolean; f
  */
 export const UPGRADE_CREDIT: 'refund' | 'prorated' = Platform.OS === 'android' ? 'prorated' : 'refund';
 
-/** 소셜 로그인 버튼을 노출해도 되는가. */
-export const SHOW_SOCIAL_LOGIN = !IS_IOS_NATIVE;
+/** 소셜 로그인 버튼을 노출해도 되는가. 웹에서만 true(= !IS_NATIVE). 근거는 social-login.ts. */
+export const SHOW_SOCIAL_LOGIN = socialLoginVisible(Platform.OS);
 
 /**
  * 사용 안내 팝업 가이드(GuideHost)를 띄워도 되는가 — **단계적 적용 축**.

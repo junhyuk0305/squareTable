@@ -13,6 +13,7 @@ import { HeaderBackButton } from '@/components/HeaderBackButton';
 import { Appear } from '@/components/Appear';
 import { Wordmark } from '@/components/Wordmark';
 import { SocialAuthButtons } from '@/components/SocialAuthButtons';
+import { SHOW_SOCIAL_LOGIN } from '@/lib/config/store-policy';
 import { isValidEmail } from '@/lib/utils/validation';
 import type { Role } from '@/types';
 
@@ -141,6 +142,11 @@ export default function LoginScreen() {
             </Pressable>
           ) : null}
 
+          {/* 앱에는 구글 버튼이 없다(Q1). 웹에서 구글로 가입한 사람이 앱에 들어올 길을 알려 준다. */}
+          {HAS_SUPABASE && !SHOW_SOCIAL_LOGIN ? (
+            <Text style={styles.googleHint}>구글로 가입했다면 비밀번호 찾기에서 문자 인증으로 비밀번호를 만든 뒤 이메일로 로그인해 주세요.</Text>
+          ) : null}
+
           {/* 소셜 로그인(구글 등) — 웹 전용. 데모 빌드에선 렌더 안 됨. */}
           <SocialAuthButtons />
         </View>
@@ -211,6 +217,7 @@ const styles = StyleSheet.create({
   demoNote: { fontSize: 12, lineHeight: 18, color: InkColors.ink3, textAlign: 'center' },
   forgotRow: { alignSelf: 'center', minHeight: 44, justifyContent: 'center', paddingHorizontal: Space.sm },
   forgotText: { fontSize: 13, fontWeight: '600', color: InkColors.ink2, textDecorationLine: 'underline' },
+  googleHint: { fontSize: 12, lineHeight: 18, color: InkColors.ink3, textAlign: 'center' },
   signupBlock: { alignItems: 'center', gap: Space.md },
   signupLead: { fontSize: 13, lineHeight: 19, color: InkColors.ink3 },
   signupBtn: {

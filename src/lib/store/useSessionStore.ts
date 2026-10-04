@@ -32,7 +32,7 @@ import { joinRejectAction, type JoinMarker } from './joinRejectDetect';
 import { setAnalyticsContext, track, reportError } from '@/lib/analytics/track';
 import { effectivePlanOf, type SubStatusRaw } from '@/lib/utils/subscription';
 import { normalizePlan, type PlanId } from '@/lib/config/tiers';
-import { SHOW_IAP } from '@/lib/config/store-policy';
+import { SHOW_IAP, SHOW_SOCIAL_LOGIN } from '@/lib/config/store-policy';
 import { notifyOwnersJoinRequest } from '@/lib/push/notify';
 
 // 0093: 세션 유효 역할. 활성 매장의 unit_members.role 에서 파생된다(owner·manager·junior 모두).
@@ -609,6 +609,10 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     // 웹: 현재 오리진으로 돌아오게 한다(Supabase 대시보드 Redirect URLs 에 등록 필요). 돌아오면
     // supabase.ts 의 detectSessionInUrl:true 가 ?code= 를 세션으로 교환 → onAuthStateChange → loadProfile.
     // 네이티브는 별도 딥링크 핸들러가 필요 — 웹 우선(출시 1차)이라 여기선 웹만 지원, 미지원 플랫폼은 안내.
+    // 앱에서는 window.location 을 읽기 전에 돌려준다. RN 에는 window 는 있고 location 이 없어 던졌다(Q1).
+    if (!SHOW_SOCIAL_LOGIN) {
+      return { error: '구글 로그인은 웹에서만 지원해요. 앱에서는 이메일로 로그인해 주세요.' };
+    }
     const redirectTo = typeof window !== 'undefined' ? window.location.origin : undefined;
     if (!redirectTo) {
       return { error: '구글 로그인은 웹에서만 지원해요. 앱에서는 이메일로 로그인해 주세요.' };
