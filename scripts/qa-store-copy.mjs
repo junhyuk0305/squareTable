@@ -123,7 +123,7 @@ console.log('\n■ 연결 — 데이터 계층과 화면');
 {
   const db = strip(read('src/lib/db.ts'));
   check("db.ts 가 delete_store_preview 를 부른다", /rpc\('delete_store_preview'/.test(db));
-  check('rpcDeleteStore 가 반환값(data)을 돌려준다', /rpcDeleteStore[\s\S]{0,400}?return \{ data/.test(db));
+  check('rpcDeleteStore 가 반환값(data)을 돌려준다', /rpcDeleteStore[\s\S]{0,400}?return \{\s*data/.test(db));
   const cfg = strip(read('src/app/owner/store-config.tsx'));
   check('store-config 가 deleteStoreConfirmText 를 쓴다', /deleteStoreConfirmText\(/.test(cfg));
   check('store-config 가 deleteStoreToast 를 쓴다', /deleteStoreToast\(/.test(cfg));

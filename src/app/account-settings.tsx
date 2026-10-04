@@ -89,8 +89,15 @@ export default function AccountSettings() {
     );
     if (!ok) return;
     setBusy(true);
-    const { error } = await deleteAccount();
+    const { error, toStaff } = await deleteAccount();
     setBusy(false);
+    // J5: 직원이 있어 막혔으면 갈 곳을 준다(서버 차단은 P7-1 뒤에 켜진다 · 그 전엔 이 분기가 오지 않는다).
+    if (error && toStaff) {
+      if (await confirmAction('탈퇴 실패', error, '직원 관리로 가기', { icon: 'people-outline', cancelLabel: '닫기' })) {
+        router.push('/owner/staff');
+      }
+      return;
+    }
     if (error) return void notifyAction('탈퇴 실패', error, '확인', { icon: 'alert-circle-outline' });
     router.replace('/');
   };

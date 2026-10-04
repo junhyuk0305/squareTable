@@ -14,6 +14,8 @@ import { useScheduleStore } from '@/lib/store/useScheduleStore';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { showToast } from '@/lib/store/useToastStore';
 import { confirmAction } from '@/lib/utils/confirm';
+import { fetchDeleteStorePreview } from '@/lib/db';
+import { deleteStoreConfirmText, deleteStoreToast, type DeleteStorePreview } from '@/lib/account/storeCopy';
 import { maskHHMM } from '@/lib/utils/attendance';
 import { WEEKDAY_LABELS, WEEKDAY_ORDER, closedDaysLabel } from '@/lib/utils/schedule';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
@@ -95,20 +97,31 @@ function StoreConfigForm() {
   // 0093: 매장 삭제 = 사장 전용(잠금 영역). 매니저에겐 위험 구역 자체를 비노출.
   const isOwner = useSessionStore((s) => s.role) === 'owner';
   const [deleting, setDeleting] = useState(false);
+  const [checking, setChecking] = useState(false); // 삭제 미리보기를 읽는 동안(앱만) 버튼을 잠근다
 
   const onDelete = async () => {
+    const unitId = useSessionStore.getState().unitId;
+    // J8: 서버가 남은 몫을 돌려주는 매장에만 기간 문장을 붙인다(delete_store_preview · 정책 M2).
+    //   못 읽으면 null → 약속하지 않는다. ⛔웹은 미리보기를 부르지 않고 지금 문구 그대로 둔다(토스 동결).
+    let preview: DeleteStorePreview | null = null;
+    if (Platform.OS !== 'web') {
+      setChecking(true);
+      const { data } = await fetchDeleteStorePreview(unitId);
+      setChecking(false);
+      preview = data;
+    }
     const ok = await confirmAction(
       '이 매장을 삭제할까요?',
-      `“${storeName}”의 노하우·근무·급여 등 모든 데이터가 영구 삭제돼요. 되돌릴 수 없어요.`,
+      deleteStoreConfirmText({ storeName, preview, os: Platform.OS }),
       '삭제',
       { destructive: true, icon: 'trash-outline' },
     );
     if (!ok) return;
     setDeleting(true);
-    const { error } = await deleteStore(useSessionStore.getState().unitId);
+    const { error, result } = await deleteStore(unitId);
     setDeleting(false);
     if (error) return showToast(error, 'warn');
-    showToast('매장을 삭제했어요.');
+    showToast(deleteStoreToast({ result: result ?? null, os: Platform.OS }));
     router.replace('/owner/dashboard');
   };
 
@@ -198,7 +211,7 @@ function StoreConfigForm() {
           <Text style={styles.dangerDesc}>이 매장(“{storeName}”)을 완전히 삭제해요. 노하우·근무·급여 등 모든 데이터가 사라지고 되돌릴 수 없어요. (직원이 있으면 먼저 내보내야 해요.)</Text>
           <Pressable
             onPress={onDelete}
-            disabled={deleting}
+            disabled={deleting || checking}
             style={({ pressed }) => [styles.dangerBtn, (pressed || deleting) && { opacity: 0.65 }]}
             accessibilityRole="button"
             accessibilityLabel="이 매장 삭제"

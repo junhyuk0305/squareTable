@@ -40,6 +40,7 @@ import { signOutWithPushRelease } from '@/lib/push/signOutPush';
 import { authStorage } from '@/lib/storage/authStorage';
 import { changePhoneByOtp } from '@/lib/otp';
 import { CURRENT_PW_WRONG_TEXT, DELETED_LOGIN_TEXT } from '@/lib/account/copy';
+import { deleteAccountError, type DeleteStoreResult } from '@/lib/account/storeCopy';
 import { UNDER_14_TEXT, type ConsentKey } from '@/lib/config/consent';
 
 // 0093: 세션 유효 역할. 활성 매장의 unit_members.role 에서 파생된다(owner·manager·junior 모두).
@@ -160,7 +161,8 @@ type SessionState = {
   changePassword: (currentPw: string, newPw: string) => Promise<{ error: string | null }>;
   // Q13(0238): 새 번호로 받은 인증번호로 번호를 바꾼다(otp change_phone). 프로필 저장으로는 번호를 바꾸지 않는다.
   changePhone: (phone: string, code: string) => Promise<{ error: string | null }>;
-  deleteAccount: () => Promise<{ error: string | null }>;
+  // J5: toStaff = 직원이 있어 막힘(owner_has_staff) → 탈퇴 창에 [직원 관리로 가기].
+  deleteAccount: () => Promise<{ error: string | null; toStaff?: boolean }>;
   leaveStore: () => Promise<{ error: string | null }>;
   // 가게 이름 변경(사장 전용) — 14일 이내 2회 제한. 변경 이력은 기기 로컬에 보관(파일럿).
   renameStore: (name: string) => Promise<{ error: string | null; remaining: number }>;
@@ -170,7 +172,8 @@ type SessionState = {
   // 다점포(0055): 활성 매장 전환. switch_active_unit RPC → loadProfile(활성 반영) → _layout이 전 스토어 재hydrate.
   switchUnit: (unitId: string) => Promise<{ error: string | null }>;
   // 매장 하나 삭제(다점포 오너). 안전장치는 RPC(마지막매장·직원존재 차단). 성공 시 활성/목록 재로드.
-  deleteStore: (unitId: string) => Promise<{ error: string | null }>;
+  // J8: result = delete_store 반환값(남은 몫을 돌려줬는지). 0235 전 서버는 null.
+  deleteStore: (unitId: string) => Promise<{ error: string | null; result?: DeleteStoreResult | null }>;
   signOut: () => Promise<void>;
 
   // 개발/단일기기 역할 토글 (Supabase 없을 때의 데모 폴백)
@@ -1051,7 +1054,10 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       return { error: null };
     }
     const { error } = await rpcDeleteMyAccount();
-    if (error) return { error: friendlyError(error.message, '탈퇴 처리에 실패했어요. 잠시 후 다시 시도해 주세요.') };
+    if (error) {
+      const e = deleteAccountError(error.message);
+      return { error: e.text, toStaff: e.toStaff };
+    }
     // 탈퇴한 계정의 합류 마커(신청 매장·거절 여부)를 기기에 남기지 않는다(프라이버시 위생).
     { const uid0 = get().userId; if (uid0) clearJoinMarker(uid0); }
     // 계정은 이미 서버에서 파기됨 → signOut이 실패(네트워크 등)해도 로컬 세션은 반드시 종료.
@@ -1172,7 +1178,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   deleteStore: async (unitId) => {
     if (!HAS_SUPABASE) return { error: null };
     if (get().role !== 'owner') return { error: '사장님만 매장을 삭제할 수 있어요.' };
-    const { error } = await rpcDeleteStore(unitId);
+    const { data, error } = await rpcDeleteStore(unitId);
     if (error) {
       const msg = /last_store/.test(error.message)
         ? '마지막 매장은 삭제할 수 없어요. 계정 삭제를 이용해 주세요.'
@@ -1186,7 +1192,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     // 활성/주매장 재지정·매장 목록 갱신 반영
     const uid = get().userId;
     if (uid) await loadProfile(set, uid, get().email);
-    return { error: null };
+    return { error: null, result: data };
   },
 
   signOut: async () => {

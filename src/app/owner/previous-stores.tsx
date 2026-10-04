@@ -14,6 +14,7 @@ import { Appear, stagger } from '@/components/Appear';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { showToast } from '@/lib/store/useToastStore';
 import { fetchMyPreviousUnits, rpcReopenStore, type PreviousUnitRow } from '@/lib/db';
+import { REOPEN_STORE_MESSAGE } from '@/lib/account/storeCopy';
 import { InkColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
@@ -114,16 +115,11 @@ export default function PreviousStores() {
         )}
       </ScrollView>
 
-      {/* 직원 전원이 빠지는 동작이라 한 번 확인한다(되돌릴 수 없다). */}
+      {/* 직원 전원이 빠지는 동작이라 한 번 확인한다(되돌릴 수 없다). J4: 기록은 남고 소속만 정리된다(0235). */}
       <ConfirmModal
         visible={target !== null}
         title={target ? `${target.store_name}을 다시 열까요?` : ''}
-        message={
-          '이용권 1개를 써요.\n\n' +
-          '비워지는 것: 직원·근무표·출퇴근·업무 보드\n' +
-          '남는 것: 노하우·퀴즈·퀴즈 기록·채팅·매장 설정\n\n' +
-          '초대코드는 새로 나와요.'
-        }
+        message={REOPEN_STORE_MESSAGE}
         confirmLabel="다시 열기"
         cancelLabel="그대로 두기"
         busy={busy}

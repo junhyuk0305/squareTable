@@ -13,6 +13,7 @@ import type { Room, RoomMember, RoomPref } from '@/lib/store/useRoomStore';
 import type { AttendanceRecord } from '@/lib/store/useAttendanceStore';
 import type { StoreConfig, ShiftTemplate, ShiftException, SwapRequest } from '@/lib/store/useScheduleStore';
 import type { CustomCategory } from '@/lib/store/knowhowCategories';
+import type { DeleteStorePreview, DeleteStoreResult } from '@/lib/account/storeCopy';
 // 훈련 v2(0107·0108). ★TrainingCourse 는 이 파일이 이미 0099 의 문자열 유니온으로 쓰고 있어(아래)
 // 이름이 겹친다 → 코스 테이블 행 타입은 TrainingCourseRow 로 별칭한다. 구조는 동일하므로
 // 다른 화면이 '@/lib/quiz/types' 에서 TrainingCourse 를 직접 import 해 넘겨도 그대로 맞는다.
@@ -415,9 +416,28 @@ export async function fetchCrossStoreNotifData(): Promise<DbResult<UnitNotifData
 }
 
 /** 매장 하나 삭제(오너 전용, 안전장치는 RPC 내부: 마지막매장·직원존재 차단·포인터 재지정·cascade). */
-export async function rpcDeleteStore(unitId: string): Promise<{ error: DbErr }> {
-  const { error } = await supabase.rpc('delete_store', { p_unit_id: unitId });
-  return { error: error as DbErr };
+// ★0235(J8): 반환 = { returned_slot, paid_until }(남은 몫을 새 매장용으로 돌려줬는지). 0235 전 서버는 void → null.
+export async function rpcDeleteStore(unitId: string): Promise<DbResult<DeleteStoreResult>> {
+  const { data, error } = await supabase.rpc('delete_store', { p_unit_id: unitId });
+  const d = data as { returned_slot?: unknown; paid_until?: unknown } | null;
+  return {
+    data: d && typeof d === 'object'
+      ? { returned_slot: d.returned_slot === true, paid_until: typeof d.paid_until === 'string' ? d.paid_until : null }
+      : null,
+    error: error as DbErr,
+  };
+}
+
+/** 0235(J8): 지우면 몫을 돌려줄 매장인지 미리 본다(읽기 전용 · 소유자만). 확인창 문구를 고르는 데만 쓴다. */
+export async function fetchDeleteStorePreview(unitId: string): Promise<DbResult<DeleteStorePreview>> {
+  const { data, error } = await supabase.rpc('delete_store_preview', { p_unit: unitId });
+  const d = data as { returns_slot?: unknown; paid_until?: unknown } | null;
+  return {
+    data: d && typeof d === 'object'
+      ? { returns_slot: d.returns_slot === true, paid_until: typeof d.paid_until === 'string' ? d.paid_until : null }
+      : null,
+    error: error as DbErr,
+  };
 }
 
 // plan = 과금 티어(free|single|multi, 0062). 원시값 그대로 반환 — 해석은 tiers.ts normalizePlan.
