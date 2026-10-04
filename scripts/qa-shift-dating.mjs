@@ -9,10 +9,13 @@
 //       지난 구간은 복사본으로 남고, 지난 예외는 복사본으로 옮겨진다. 지난 3개월 급여가 1원도 안 바뀐다.
 //   [3] 옛 앱 사장이 반복 근무를 직접 DELETE 해도 오류가 없고 "오늘부터 그만"이 된다. 지난 급여는 그대로다.
 //   [4] 클라이언트가 적용 기간을 직접 고치지 못한다(기간은 RPC 로만).
-//   [5] 첫 반복 근무 시작일(데이터 M1): 그 직원의 첫 반복 행은 매장 합류일(KST)부터다. 두 번째부터는 오늘부터다.
+//   [5] 첫 반복 근무 시작일(데이터 M1): 그 직원에게 어제 이전에 만든 반복 행이 없으면 매장 합류일(KST)부터다.
+//       옛 앱은 근무마다 요청을 따로 보내므로 같은 날 넣은 행은 모두 합류일부터다. 예전 행이 있으면 오늘부터다.
+//       오늘 만든 행을 오늘 고치거나 지우면 그 자리에서 바뀐다(오타가 지난 구간 복사본으로 굳지 않는다). 생성일은 직접 못 바꾼다.
 //   [6] 새 RPC(add_shift_series · edit_shift_from · end_shift_from · override_shift_day) — 권한 · 지난 날짜 확인 ·
 //       다른 매장 거부 · shift_templates_all 노출 범위(보안 M6) · 권한표.
 //   [7] approve_swap: 지난 근무는 p_confirm_past 가 있어야 하고, 35일이 넘으면 안 되고, 그날 적용되지 않는 근무는 거부.
+//       교대 요청이 다른 매장 근무를 가리키면(template_id · target_template_id) 승인하지 않고 그 매장 근무표를 안 건드린다.
 //   [8] end_staff_tenure(내부): 반복 행은 오늘로 닫고, 미래 행만 지운다. 지난 날짜 지정 행은 남긴다.
 //   [9] cascade · 정의자 경로가 시리즈 트리거에 안 걸린다(위험 §10-2): delete_store · leave_store ·
 //       직원 delete_my_account · purge_deleted_accounts 가 지난 반복 근무가 있어도 성공한다.
@@ -176,9 +179,10 @@ try {
                            where table_schema = 'public' and table_name = 'shift_templates' and column_name = 'valid_from'`) === '1';
   console.log(`\n셋업 — 매장 ${UNIT} · 오늘(KST) ${T} · 적용 기간 컬럼 ${hasPeriod ? '있음' : '없음(0242 전)'}`);
 
-  /** 배포 전부터 있던 행처럼 넣는다: service_role 로 넣고, 기간 컬럼이 있으면 백필 값(2000-01-01)으로 맞춘다. */
+  /** 배포 전부터 있던 행처럼 넣는다: service_role 로 넣고, 생성일을 200일 전으로, 기간 컬럼이 있으면 백필 값(2000-01-01)으로 맞춘다. */
   const legacy = async (id, unit, staff, weekday, start, end) => {
-    const { error } = await admin.from('shift_templates').insert({ id, unit_id: unit, staff_id: staff, weekday, shift_date: null, start_time: start, end_time: end });
+    const { error } = await admin.from('shift_templates').insert({ id, unit_id: unit, staff_id: staff, weekday, shift_date: null, start_time: start, end_time: end,
+      created_at: new Date(Date.now() - 200 * 864e5).toISOString() });
     if (error) throw new Error(`legacy ${id}: ${error.message}`);
     if (hasPeriod) psql(`update public.shift_templates set valid_from = '2000-01-01' where id = '${id}'`);
   };
@@ -285,6 +289,7 @@ try {
   }
 
   // ═══════ [5] 첫 반복 근무 시작일 (M1) ═══════
+  const J3 = `qa_sdt_j3_${s}`; // [5] 에서 만들고 [7] 맞교환에서 쓴다
   console.log('\n[5] 첫 반복 근무는 매장 합류일부터(데이터 M1)');
   {
     psql(`update public.unit_members set created_at = now() - interval '20 days' where unit_id = '${UNIT}' and user_id = '${K.id}'`);
@@ -292,10 +297,38 @@ try {
     const K1 = `qa_sdt_k1_${s}`, K2 = `qa_sdt_k2_${s}`;
     const i1 = await O.c.from('shift_templates').insert({ id: K1, unit_id: UNIT, staff_id: K.id, weekday: wdT, shift_date: null, start_time: '09:00', end_time: '13:00' });
     const i2 = await O.c.from('shift_templates').insert({ id: K2, unit_id: UNIT, staff_id: K.id, weekday: wd2, shift_date: null, start_time: '09:00', end_time: '13:00' });
-    check('5-0 옛 앱 경로(insert) 오류 없음', !i1.error && !i2.error, i1.error?.message ?? i2.error?.message);
+    check('5-0 옛 앱 경로(insert · 근무마다 요청 하나) 오류 없음', !i1.error && !i2.error, i1.error?.message ?? i2.error?.message);
     const { rows } = await raw(UNIT);
     check('5-1 ★첫 반복 행 시작일 = 합류일(KST)', rows.find((r) => r.id === K1)?.valid_from === joined, `${rows.find((r) => r.id === K1)?.valid_from} vs ${joined}`);
-    check('5-2 두 번째 반복 행은 오늘부터', rows.find((r) => r.id === K2)?.valid_from === T, rows.find((r) => r.id === K2)?.valid_from);
+    check('5-2 ★같은 날 따로 넣은 두 번째 반복 행도 합류일부터(옛 앱은 근무마다 요청을 따로 보낸다)',
+      rows.find((r) => r.id === K2)?.valid_from === joined, `${rows.find((r) => r.id === K2)?.valid_from} vs ${joined}`);
+    // 어제 이전에 만든 반복 행이 있는 직원(J)은 새 행이 오늘부터다.
+    const i3 = await O.c.from('shift_templates').insert({ id: J3, unit_id: UNIT, staff_id: J.id, weekday: (wdT + 4) % 7, shift_date: null, start_time: '09:00', end_time: '10:00' });
+    check('5-3 예전에 만든 반복 행이 있는 직원의 새 행은 오늘부터', !i3.error && (await raw(UNIT)).rows.find((r) => r.id === J3)?.valid_from === T,
+      i3.error?.message ?? (await raw(UNIT)).rows.find((r) => r.id === J3)?.valid_from);
+
+    // 같은 날 오타를 고치거나 지우면 그 자리에서 바뀐다(지난 구간 복사본에 잘못 넣은 시각이 남지 않는다).
+    const u1 = await O.c.from('shift_templates').update({ end_time: '12:00' }).eq('id', K1).select('id');
+    const r5 = (await raw(UNIT)).rows;
+    const k1 = r5.find((r) => r.id === K1);
+    const k1copy = r5.filter((r) => r.staff_id === K.id && r.weekday === wdT && r.id !== K1);
+    check('5-4 ★오늘 만든 행을 오늘 고치면 복사본 없이 합류일부터 새 시각',
+      !u1.error && u1.data?.length === 1 && k1copy.length === 0 && k1?.valid_from === joined && k1?.end_time === '12:00',
+      u1.error?.message ?? JSON.stringify({ k1, k1copy }));
+    const d2 = await O.c.from('shift_templates').delete().eq('id', K2).select('id');
+    const left2 = (await raw(UNIT)).rows.filter((r) => r.staff_id === K.id && r.weekday === wd2);
+    check('5-5 ★오늘 만든 행을 오늘 지우면 복사본이 남지 않는다', !d2.error && d2.data?.length === 1 && left2.length === 0,
+      d2.error?.message ?? JSON.stringify(left2));
+    // 오늘 만든 행의 담당자를 바꾸면 새 담당자의 합류일 전으로 거슬러 가지 않는다.
+    const K3 = `qa_sdt_k3_${s}`;
+    await O.c.from('shift_templates').insert({ id: K3, unit_id: UNIT, staff_id: K.id, weekday: (wdT + 5) % 7, shift_date: null, start_time: '09:00', end_time: '10:00' });
+    const u3 = await O.c.from('shift_templates').update({ staff_id: J.id }).eq('id', K3).select('id');
+    const k3 = (await raw(UNIT)).rows.find((r) => r.id === K3);
+    check('5-6 오늘 만든 행의 담당자를 바꾸면 시작일은 새 담당자 합류일(오늘) 이후', !u3.error && k3?.staff_id === J.id && k3?.valid_from === T,
+      u3.error?.message ?? JSON.stringify(k3));
+    // 생성일은 직접 못 바꾼다(오늘 만든 행처럼 꾸며 지난 급여를 고치는 길).
+    const u4 = await O.c.from('shift_templates').update({ created_at: new Date().toISOString() }).eq('id', A1).select('id');
+    check('5-7 ★직접 UPDATE 로 created_at 을 못 바꾼다', !!u4.error && /shift_period_rpc_only/.test(u4.error.message), u4.error?.message ?? `rows=${u4.data?.length}`);
   }
 
   // ═══════ [6] 새 RPC ═══════
@@ -410,6 +443,37 @@ try {
     const r4 = await O.c.rpc('approve_swap', { p_id: SW3 });
     const leaked = (await raw(UNIT)).rows.some((r) => r.staff_id === L.id && r.shift_date === T1 && r.start_time === '09:00');
     check('7-4 ★그날 적용되지 않는 반복 근무는 넘기지 않는다(transfer_shift 적용 여부)', r4.data !== true && !leaked, r4.error?.message ?? `data=${r4.data}`);
+
+    // 다른 매장 근무를 가리키는 교대 요청(옛 앱 직접 INSERT 는 template_id 의 매장을 보지 않는다)
+    const SXU7 = units.find((u) => u !== UNIT);
+    const F1 = `qa_sdt_f1_${s}`, F2 = `qa_sdt_f2_${s}`;
+    const fIns = await admin.from('shift_templates').insert({ id: F1, unit_id: SXU7, staff_id: X.id, weekday: null, shift_date: addDays(T, 2),
+      start_time: '09:00', end_time: '18:00' });
+    if (fIns.error) throw new Error('F1: ' + fIns.error.message);
+    await legacy(F2, SXU7, X.id, dow(addDays(T, 3)), '09:00', '18:00');
+    const foreignSnap = async () => JSON.stringify([
+      (await admin.from('shift_templates').select('id, staff_id, start_time, end_time, valid_from, valid_to').eq('unit_id', SXU7).order('id')).data,
+      (await admin.from('shift_exceptions').select('template_id, date').eq('unit_id', SXU7).order('date')).data,
+    ]);
+    const before7 = await foreignSnap();
+    const FS1 = `qa_sdt_fs1_${s}`, FS2 = `qa_sdt_fs2_${s}`, FS3 = `qa_sdt_fs3_${s}`;
+    const ins1 = await J.c.from('swap_requests').insert({ id: FS1, unit_id: UNIT, kind: 'cover', requester_id: J.id, date: addDays(T, 2), template_id: F1, note: '' });
+    const ins2 = await J.c.from('swap_requests').insert({ id: FS2, unit_id: UNIT, kind: 'cover', requester_id: J.id, date: addDays(T, 10), template_id: F2, note: '' });
+    const ins3 = await J.c.from('swap_requests').insert({ id: FS3, unit_id: UNIT, kind: 'swap', requester_id: J.id, date: addDays(T, 4), template_id: J3,
+      target_staff_id: X.id, target_date: addDays(T, 3), target_template_id: F2, note: '' });
+    if (ins1.error || ins2.error || ins3.error) throw new Error('foreign swap insert: ' + (ins1.error ?? ins2.error ?? ins3.error).message);
+    await admin.from('swap_requests').update({ status: 'accepted', accepted_by: L.id }).in('id', [FS1, FS2]);
+    await admin.from('swap_requests').update({ status: 'accepted', accepted_by: X.id }).eq('id', FS3);
+    // 맞교환을 먼저: 상대 근무(F2)가 아직 그날 서 있어야 두 번째 이전이 성공하는지까지 본다.
+    const f3 = await O.c.rpc('approve_swap', { p_id: FS3 });
+    const f1 = await O.c.rpc('approve_swap', { p_id: FS1 });
+    const f2 = await O.c.rpc('approve_swap', { p_id: FS2 });
+    const after7 = await foreignSnap();
+    check('7-5 ★다른 매장 날짜 지정 근무를 가리키는 교대는 승인 안 된다', f1.data !== true, f1.error?.message ?? `data=${f1.data}`);
+    check('7-6 ★다른 매장 반복 근무를 가리키는 교대는 승인 안 된다', f2.data !== true, f2.error?.message ?? `data=${f2.data}`);
+    check('7-7 ★상대 근무가 다른 매장인 맞교환은 승인 안 되고 내 근무도 안 넘어간다',
+      f3.data !== true && !(await raw(UNIT)).exc.some((e) => e.template_id === J3), f3.error?.message ?? `data=${f3.data}`);
+    check('7-8 ★다른 매장 근무표·예외가 1건도 안 바뀐다', after7 === before7, `${before7} → ${after7}`);
   }
 
   // ═══════ [8] end_staff_tenure ═══════
