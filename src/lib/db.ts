@@ -1323,8 +1323,9 @@ export async function fetchChatQueries(juniorId: string): Promise<ChatQuery[]> {
 /**
  * 사장이 보는 'AI가 답한 질문' 목록(2026-08-07) — 받은질문 세그먼트 ②.
  *
- * ★ 새 권한 경로가 아니다. chat_queries 의 RLS 는 `unit_id = auth_unit_id()`(0019)이고
- *   이 화면은 매장 앱 층(활성 매장)이라 그 정책이 그대로 정답이다. definer RPC 를 만들지 않는다.
+ * ★ 새 권한 경로가 아니다. chat_queries 의 읽기 RLS 는 `unit_id = auth_unit_id()` 이면서
+ *   본인 행 또는 auth_can_manage()(0239)이고 이 화면은 사장·매니저용(활성 매장)이라 그 정책이 그대로 정답이다.
+ *   직원 세션이 부르면 자기 기록만 온다. definer RPC 를 만들지 않는다.
  * ★ 거르기는 **matched_entry_ids 가 비지 않은 것**이다 — "노하우로 답이 나갔다"의 유일한 증거고,
  *   "아직 등록되지 않았어요"로 끝난 질문(빈 배열)은 여기 들어오면 안 된다.
  *   서버에서 거를 수단이 마땅치 않아(배열 비교) 최근 창을 읽고 클라에서 거른다.
