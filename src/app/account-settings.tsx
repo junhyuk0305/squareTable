@@ -17,7 +17,7 @@ import { Radius } from '@/lib/theme/elevation';
 import { SettingsSection, SettingsRow, SettingsToggle } from '@/components/settings/SettingsKit';
 import { SectionLabel } from '@/components/SectionLabel';
 import { PricingTable } from '@/components/PricingTable';
-import { SHOW_BILLING, SHOW_IAP, showIapSurface, showPaymentSurface } from '@/lib/config/store-policy';
+import { CANCEL_PATH_TEXT, SHOW_BILLING, SHOW_IAP, showIapSurface, showPaymentSurface } from '@/lib/config/store-policy';
 import { TextScaleModal } from '@/components/settings/TextScaleModal';
 import { ContactModal } from '@/components/ContactModal';
 
@@ -72,7 +72,7 @@ export default function AccountSettings() {
       '회원탈퇴',
       isOwnerAccount
         ? // ★앱에서 산 구독은 애플이 청구한다 — 탈퇴(delete_my_account)는 그 구독을 끊지 못하므로 먼저 해지하라고 말한다.
-          `계정과 매장 데이터(노하우·직원·근무 기록)가 모두 삭제되며 복구할 수 없어요.${SHOW_IAP ? ' 앱에서 산 이용권은 탈퇴해도 해지되지 않으니, 기기 설정의 구독 목록에서 먼저 해지해 주세요.' : ''} 정말 탈퇴하시겠어요?`
+          `계정과 매장 데이터(노하우·직원·근무 기록)가 모두 삭제되며 복구할 수 없어요.${SHOW_IAP ? ` 앱에서 산 이용권은 탈퇴해도 해지되지 않으니, ${CANCEL_PATH_TEXT}에서 먼저 해지해 주세요.` : ''} 정말 탈퇴하시겠어요?`
         : '계정과 내 기록(질문·출퇴근)이 삭제되며 복구할 수 없어요. 정말 탈퇴하시겠어요?',
       '탈퇴하기',
       { destructive: true, icon: 'trash-outline' },

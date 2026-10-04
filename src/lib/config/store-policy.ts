@@ -32,6 +32,7 @@
 
 import { Platform } from 'react-native';
 import { socialLoginVisible } from './social-login';
+import { cancelPathText } from '@/lib/iap/cancelPath';
 
 export const IS_IOS_NATIVE = Platform.OS === 'ios';
 const IS_NATIVE = Platform.OS !== 'web';
@@ -133,6 +134,12 @@ export function showUpgradeHint(s: { role: string | null; iapEnabled: boolean; f
  * 오지 않는 환불을 기다리거나, 안 나갈 금액을 각오하고 버튼을 누른다. 결제 동작 자체는 `lib/iap/purchases.ts`.
  */
 export const UPGRADE_CREDIT: 'refund' | 'prorated' = Platform.OS === 'android' ? 'prorated' : 'refund';
+
+/**
+ * 구독 해지 경로("…에서 해지"). iOS = 기기 설정, 안드 = Play 스토어 앱. 웹은 지금 문구 그대로(토스 동결).
+ * 읽는 곳 = `IapPurchasePanel.tsx`(관리 창 실패 토스트·자동갱신 고지) · `account-settings.tsx`(탈퇴 확인창) · `terms.tsx`(약관 요약).
+ */
+export const CANCEL_PATH_TEXT = cancelPathText(Platform.OS);
 
 /** 소셜 로그인 버튼을 노출해도 되는가. 웹에서만 true(= !IS_NATIVE). 근거는 social-login.ts. */
 export const SHOW_SOCIAL_LOGIN = socialLoginVisible(Platform.OS);

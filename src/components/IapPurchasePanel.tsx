@@ -32,7 +32,7 @@ import { Appear, stagger } from '@/components/Appear';
 import { Collapse } from '@/components/Collapse';
 import { ScreenLoading } from '@/components/ScreenLoading';
 import { PLANS } from '@/lib/config/tiers';
-import { UPGRADE_CREDIT } from '@/lib/config/store-policy';
+import { CANCEL_PATH_TEXT, UPGRADE_CREDIT } from '@/lib/config/store-policy';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
@@ -248,7 +248,7 @@ export function IapPurchasePanel({
       await showManageSubscriptions();
       await onChanged();
     } catch {
-      showToast('구독 관리 창을 열지 못했어요. 기기 설정의 구독 목록에서 하실 수 있어요.');
+      showToast(`구독 관리 창을 열지 못했어요. ${CANCEL_PATH_TEXT}에서 하실 수 있어요.`);
     }
   };
 
@@ -553,7 +553,7 @@ export function IapPurchasePanel({
 
             {/* ★자동갱신 고지(Guideline 3.1.2(a)) — 기간·자동갱신·해지 방법을 구매 지점에 둔다. */}
             <Text style={styles.legal}>
-              매달 자동으로 갱신돼요. 해지하시기 전까지 계속돼요. 해지는 기기 설정의 구독 목록에서 하실 수 있어요.
+              {`매달 자동으로 갱신돼요. 해지하시기 전까지 계속돼요. 해지는 ${CANCEL_PATH_TEXT}에서 하실 수 있어요.`}
             </Text>
             {/* ★약관·방침은 **앱 안 라우트**로 연다 — 외부 브라우저로 내보내지 않는다. */}
             <View style={styles.legalLinks}>
