@@ -711,6 +711,158 @@ async function slotRuleChecks() {
     const del = await Q.c.rpc('delete_store', { p_unit_id: A });
     check('★⑱-f 코드로만 연 매장은 몫을 돌려주지 않는다', !del.error && del.data?.returned_slot === false && (await openSlots(Q.uid)).length === 0, del.error?.message ?? JSON.stringify(del.data));
   }
+
+  // ══ ⑲ 0235 독립 리뷰(2026-10-05)에서 확정된 결함 ══════════════════════════
+  const evtP = (o, txn, type, productId, plan, count, end, extra = {}) => svcRpc('apply_iap_event', {
+    p_owner: o.uid, p_platform: 'play', p_txn: txn, p_type: type, p_product_id: productId,
+    p_plan: plan, p_count: count, p_period_end: end, ...extra,
+  });
+  const shiftBack = (t, d) => new Date(new Date(t).getTime() - d * 86400000).toISOString();
+
+  // ⑲-a 다점포 흔적 슬롯 날짜가 갱신되지 않아, 3번째 주기에 늦게 온 갱신이 결제한 매장을 못 연다.
+  {
+    const R = await reuseOwner(1);
+    const A = await mkStore(R, 'QA⑲a 1호점');
+    const t = `qa_r1_${s}`;
+    await evt(R, t, 'INITIAL_PURCHASE', 'multi_2_monthly', 'multi', 2, iso(days(30)));
+    const B = await mkStore(R, 'QA⑲a 2호점');
+    const end2 = iso(days(60));
+    await evt(R, t, 'RENEWAL', 'multi_2_monthly', 'multi', 2, end2);   // 2번째 주기
+    // 시간을 61일 앞으로 보낸 것처럼 모든 날짜를 61일 당긴다(매장·흔적·구독). 2번째 주기는 하루 전에 끝났다.
+    for (const u of [A, B]) {
+      const cur = await paidUntilOf(u);
+      await svcPatch(`unit_subscriptions?unit_id=eq.${u}`, { paid_until: shiftBack(cur.paid_until, 61) });
+    }
+    for (const sl of await svcSel(`store_slots?owner_id=eq.${R.uid}&source=eq.iap&select=id,paid_until`)) {
+      await svcPatch(`store_slots?id=eq.${sl.id}`, { paid_until: shiftBack(sl.paid_until, 61) });
+    }
+    await svcPatch(`iap_subscriptions?original_transaction_id=eq.${t}`, { current_period_end: shiftBack(end2, 61) });
+    await grantSlot(R.uid);
+    await mkStore(R, 'QA⑲a 선불점');   // 선불 매장이 유료라 A·B 가 잠긴다
+    check('셋업 ⑲-a A·B 잠김(2번째 주기 끝 + 선불 매장)', (await isLocked(A)) && (await isLocked(B)), '');
+    const end3 = iso(days(29));
+    await evt(R, t, 'RENEWAL', 'multi_2_monthly', 'multi', 2, end3);   // 3번째 주기, 하루 늦게 도착
+    const [a, b] = await Promise.all([paidUntilOf(A), paidUntilOf(B)]);
+    check('★★⑲-a 3번째 주기 늦은 갱신이 A·B 를 다시 연다', sameTime(a?.paid_until, end3) && sameTime(b?.paid_until, end3), JSON.stringify({ a, b }));
+    check('★⑲-a 결제한 몫이 미소비 슬롯으로 새지 않는다', (await openSlots(R.uid)).length === 0, `open=${(await openSlots(R.uid)).length}`);
+  }
+
+  // ⑲-b 계좌이체 슬롯으로 연 매장을 새 구독이 흡수한 뒤 환불 → 계좌이체 만료일로 돌아간다(환불된 날을 공짜로 남기지 않는다).
+  {
+    const R = await reuseOwner(2);
+    const A = await mkStore(R, 'QA⑲b 1호점');
+    await approve((await claim(R, 'multi', 1)).id);   // A = 계좌이체 슬롯으로 열림
+    const d10 = iso(days(10));
+    await svcPatch(`unit_subscriptions?unit_id=eq.${A}`, { paid_until: d10 });
+    await svcPatch(`store_slots?owner_id=eq.${R.uid}&source=eq.claim`, { paid_until: d10 });
+    const t = `qa_r2_${s}`;
+    await evt(R, t, 'INITIAL_PURCHASE', 'multi_2_monthly', 'multi', 2, iso(days(30)));
+    const a1 = await paidUntilOf(A);
+    check('셋업 ⑲-b 새 구독이 계좌이체 매장 A 를 덮음(30일)', sameTime(a1?.paid_until, iso(days(30))), JSON.stringify(a1));
+    await evt(R, t, 'CANCELLATION', 'multi_2_monthly', 'multi', 2, iso(days(30)), { p_reason: 'CUSTOMER_SUPPORT' });
+    const a2 = await paidUntilOf(A);
+    check('★★⑲-b 환불 → A 는 계좌이체 만료일(10일)로 돌아간다', a2?.status === 'active' && sameTime(a2?.paid_until, d10), JSON.stringify(a2));
+  }
+
+  // ⑲-c 본사 부담이 된 매장은 옛 구독 환불로 닫히지 않는다(로컬 전용 — brands 행).
+  if (!LOCAL) {
+    skipped('⑲-c 본사 부담 환불', '로컬 전용(brands 행 생성)');
+  } else {
+    const R = await reuseOwner(3);
+    const brandId = `qa_brand_r3_${s}`;
+    try {
+      await mkStore(R, 'QA⑲c 1호점');
+      const t = `qa_r3_${s}`;
+      await evt(R, t, 'INITIAL_PURCHASE', 'multi_2_monthly', 'multi', 2, iso(days(30)));
+      const B = await mkStore(R, 'QA⑲c 2호점');
+      await svcPost('brands', { id: brandId, name: 'QA본사(r3)', paid_until: kstDate(days(40)) });
+      await svcPost('brand_units', { brand_id: brandId, unit_id: B, status: 'active', payer: 'brand' });
+      await svcPatch(`brand_units?brand_id=eq.${brandId}`, { payer_effective_from: kstDate(Date.now()) });
+      const b0 = await paidUntilOf(B);
+      await evt(R, t, 'CANCELLATION', 'multi_2_monthly', 'multi', 2, iso(days(30)), { p_reason: 'CUSTOMER_SUPPORT' });
+      const b1 = await paidUntilOf(B);
+      check('★★⑲-c 본사 부담 매장 B 는 구독 환불로 닫히지 않는다', b1?.status === 'active' && sameTime(b1?.paid_until, b0?.paid_until), JSON.stringify({ b0, b1 }));
+    } finally {
+      await fetch(`${URL}/rest/v1/brand_units?brand_id=eq.${brandId}`, { method: 'DELETE', headers: SH }).catch(() => {});
+      await fetch(`${URL}/rest/v1/brands?id=eq.${brandId}`, { method: 'DELETE', headers: SH }).catch(() => {});
+    }
+  }
+
+  // ⑲-d 구독 매장을 지워 돌려받은 슬롯은 그 구독을 환불하면 같이 끝난다.
+  {
+    const R = await reuseOwner(4);
+    const A = await mkStore(R, 'QA⑲d 1호점');
+    const t = `qa_r4_${s}`;
+    await evt(R, t, 'INITIAL_PURCHASE', 'single_1_monthly', 'single', 1, iso(days(30)));
+    await grantSlot(R.uid);
+    const B = await mkStore(R, 'QA⑲d 2호점');
+    await makeFree(B);
+    await R.c.rpc('delete_store', { p_unit_id: A });
+    check('셋업 ⑲-d A 삭제 → 구독 슬롯 반환', (await openSlots(R.uid)).length === 1, '');
+    await evt(R, t, 'CANCELLATION', 'single_1_monthly', 'single', 1, iso(days(30)), { p_reason: 'CUSTOMER_SUPPORT' });
+    check('★★⑲-d 환불 뒤 돌려받은 슬롯이 남지 않는다', (await openSlots(R.uid)).length === 0, JSON.stringify(await openSlots(R.uid)));
+    const C = await tryStore(R, 'QA⑲d 3호점');
+    check('★⑲-d 환불된 몫으로 새 매장을 열 수 없다', !C.unit && /no_store_slot/.test(C.err), C.err || `열려버림 ${C.unit}`);
+  }
+
+  // ⑲-e 같은 매장을 동시에 여러 번 지워도 몫은 하나만 돌아온다.
+  {
+    const R = await reuseOwner(1);
+    const A = await mkStore(R, 'QA⑲e 1호점');
+    await approve((await claim(R, 'single', 1)).id);
+    await grantSlot(R.uid);
+    await mkStore(R, 'QA⑲e 2호점');
+    await Promise.all(Array.from({ length: 6 }, () => R.c.rpc('delete_store', { p_unit_id: A })));
+    const open = await openSlots(R.uid);
+    check('★★⑲-e 동시 삭제 6번 → 돌려받은 슬롯 1개', open.length === 1, `open=${open.length}`);
+  }
+
+  // ⑲-f 오래전에 끝난 슬롯 + 코드로 연 기간은 돌려주지 않는다(코드를 슬롯으로 바꿔 돌려 쓰는 길).
+  {
+    const R = await reuseOwner(2);
+    await mkStore(R, 'QA⑲f 1호점');
+    await grantSlot(R.uid);
+    const B = await mkStore(R, 'QA⑲f 2호점');
+    const past = iso(Date.now() - 40 * 86400000);
+    await svcPatch(`store_slots?owner_id=eq.${R.uid}&source=eq.grant`, { paid_until: past });
+    await svcPatch(`unit_subscriptions?unit_id=eq.${B}`, { paid_until: past, status: 'expired' });
+    await svcRpc('admin_activate_store', { p_unit_id: B, p_days: 30, p_plan: 'multi' });   // 코드
+    const del = await R.c.rpc('delete_store', { p_unit_id: B });
+    check('★★⑲-f 끝난 옛 슬롯 + 코드 기간은 돌려주지 않는다', !del.error && del.data?.returned_slot === false && (await openSlots(R.uid)).length === 0, del.error?.message ?? JSON.stringify(del.data));
+  }
+
+  // ⑲-g 계좌이체 single 을 만료 전에 이어 낸 기간은 전부 돌려준다(L6 상한이 이어 붙인 기간을 깎지 않는다).
+  {
+    const R = await reuseOwner(3);
+    const A = await mkStore(R, 'QA⑲g 1호점');
+    await approve((await claim(R, 'single', 1)).id);
+    await grantSlot(R.uid);
+    const B = await mkStore(R, 'QA⑲g 2호점');
+    await makeFree(B);
+    await R.c.rpc('switch_active_unit', { p_unit_id: A });
+    await approve((await claim(R, 'single', 1)).id);   // 만료 전에 한 달 더(이어 붙임)
+    const aPaid = await paidUntilOf(A);
+    await R.c.rpc('delete_store', { p_unit_id: A });
+    const open = await openSlots(R.uid);
+    check('★★⑲-g 이어 낸 두 달이 모두 돌아온다', open.length === 1 && sameTime(open[0]?.paid_until, aPaid?.paid_until), JSON.stringify({ aPaid, open }));
+  }
+
+  // ⑲-h Play 늘리기(새 거래 INITIAL_PURCHASE)도 이어지는 결제다 — 늘린 몫이 선불 매장에 먹히지 않는다.
+  {
+    const R = await reuseOwner(4);
+    await mkStore(R, 'QA⑲h 1호점');
+    const p1 = `qa_r8a_${s}`, p2 = `qa_r8b_${s}`;
+    const end = iso(days(30));
+    await evtP(R, p1, 'INITIAL_PURCHASE', 'multi_2_monthly', 'multi', 2, end);
+    await mkStore(R, 'QA⑲h 2호점');
+    await grantSlot(R.uid);
+    const C = await mkStore(R, 'QA⑲h 선불점');
+    await evtP(R, p1, 'PRODUCT_CHANGE', 'multi_3_monthly', 'multi', 3, end);
+    await evtP(R, p2, 'INITIAL_PURCHASE', 'multi_3_monthly', 'multi', 3, end);
+    const cTrace = await svcSel(`store_slots?owner_id=eq.${R.uid}&source=eq.iap&consumed_unit_id=eq.${C}&select=id`);
+    check('★★⑲-h Play 늘리기 몫이 선불 매장 C 에 먹히지 않는다', Array.isArray(cTrace) && cTrace.length === 0, JSON.stringify(cTrace));
+    check('★⑲-h 늘린 몫 1개가 새 매장용으로 남는다', (await openSlots(R.uid)).filter((x) => x.source === 'iap').length === 1, JSON.stringify(await openSlots(R.uid)));
+  }
 }
 
 async function main() {
