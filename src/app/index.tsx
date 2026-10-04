@@ -7,7 +7,7 @@ import { needsProfileSetup } from '@/lib/store/profileSetup';
 import { HAS_SUPABASE } from '@/lib/supabase';
 import { BrandColors, InkColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
-import { Space, SCREEN_GUTTER } from '@/lib/theme/layout';
+import { Space, Gap, SCREEN_GUTTER } from '@/lib/theme/layout';
 import { Appear, stagger } from '@/components/Appear';
 import { Wordmark } from '@/components/Wordmark';
 
@@ -26,20 +26,20 @@ const LANDING_LEAD = 80;
 
 type Pain = { icon: keyof typeof Ionicons.glyphMap; title: string; body: string };
 const PAINS: Pain[] = [
-  { icon: 'repeat-outline', title: '또 처음부터 교육', body: '직원이 바뀔 때마다 같은 걸 몇 번씩 다시 설명하고 계신가요?' },
-  { icon: 'call-outline', title: '쉬는 날에도 울리는 전화', body: '"사장님, 이건 어떻게 해요?" 쉬는 날에도 마음 편할 틈이 없어요.' },
-  { icon: 'bulb-outline', title: '노하우가 머릿속에만', body: '내가 없으면 멈추는 매장. 그렇다고 하나하나 적어둘 시간도 없죠.' },
-  { icon: 'chatbubbles-outline', title: '지시가 여기저기 흩어져요', body: '카톡 공지·메모지·말로 전한 지시… 결국 아무도 제대로 안 봐요.' },
+  { icon: 'repeat-outline', title: '또 처음부터', body: '직원 한 명 바뀔 때마다 같은 설명을 다시 해요.' },
+  { icon: 'call-outline', title: '쉬는 날에 오는 전화', body: '"사장님, 이건 어떻게 해요?"' },
+  { icon: 'bulb-outline', title: '머릿속에만 있는 노하우', body: '적어둘 시간이 없어요. 그래서 내가 없으면 매장이 멈춰요.' },
+  { icon: 'chatbubbles-outline', title: '흩어진 지시', body: '카톡에, 메모지에, 말로. 아무도 제대로 못 봐요.' },
 ];
 
 type Feature = { icon: keyof typeof Ionicons.glyphMap; title: string; body: string };
 const FEATURES: Feature[] = [
-  { icon: 'help-circle', title: '우리 매장 노하우, AI가 즉답', body: '사장님이 한 번만 답을 남기면, 직원이 물을 때 AI가 우리 매장 방식 그대로 대신 답해요.' },
-  { icon: 'checkmark-done', title: '오픈·마감 체크리스트 한눈에', body: '오늘 할 일과 마감 점검을 채팅에서 한 번에. 누가 뭘 끝냈는지 사장님이 바로 확인해요.' },
-  { icon: 'chatbubble-ellipses', title: '매장 관리가 채팅 하나로', body: '공지·지시·질문이 흩어지지 않고 한곳에. 직원이 바뀌어도 노하우는 그대로 쌓여요.' },
+  { icon: 'help-circle', title: '우리 매장 방식 그대로', body: '직원이 물을 때 AI가 우리 방식대로 답해요.' },
+  { icon: 'checkmark-done', title: '오늘 할일이 한눈에', body: '누가 끝냈는지 바로 보여요.' },
+  { icon: 'chatbubble-ellipses', title: '채팅 하나로', body: '공지도 지시도 질문도 여기 모여요.' },
 ];
 
-const OFFERS = ['설치 없이 QR로 바로 시작', '사장님이 답을 남기면 AI 두뇌 완성', '부담되면 언제든 그만두기'];
+const OFFERS = ['설치 없이 QR로 시작', '사장님 답이 곧 AI가 돼요', '언제든 그만둘 수 있어요'];
 
 export default function LandingScreen() {
   const router = useRouter();
@@ -101,18 +101,18 @@ export default function LandingScreen() {
         <Appear style={styles.hero}>
           <View style={styles.badge}>
             <View style={styles.badgeDot} />
-            <Text style={styles.badgeText}>카드 등록 없이 무료 시작</Text>
+            <Text style={styles.badgeText}>카드 없이 무료로 시작</Text>
           </View>
 
           <Wordmark size="lg" style={styles.wordmark} />
 
           <Text style={styles.h1}>
             사장님이 자리를 비워도,{'\n'}
-            <Text style={styles.h1Strong}>매장은 사장님처럼</Text> 답합니다.
+            <Text style={styles.h1Strong}>매장은 사장님처럼</Text> 답해요.
           </Text>
           <Text style={styles.heroSub}>
-            한 번만 답해두면, AI가 평생 대신 답해요.{'\n'}
-            카톡·메모지 대신 채팅 하나로 매장이 굴러갑니다.
+            한 번 답해두면 끝이에요.{'\n'}
+            카톡도 메모지도 이제 채팅 하나로.
           </Text>
 
           <View style={styles.scrollCue}>
@@ -124,7 +124,7 @@ export default function LandingScreen() {
         {/* ── PROBLEM ── */}
         <View style={styles.section}>
           <Appear>
-            <Text style={styles.kicker}>혹시, 이런 하루 아니세요?</Text>
+            <Text style={styles.kicker}>이런 하루 아니세요?</Text>
             <Text style={styles.h2}>매일 반복되는 매장 스트레스</Text>
           </Appear>
           <View style={styles.stack}>
@@ -147,8 +147,8 @@ export default function LandingScreen() {
         {/* ── SOLUTION ── */}
         <View style={styles.section}>
           <Appear>
-            <Text style={[styles.kicker, styles.kickerInk]}>그래서, 매장의 정석이 대신합니다</Text>
-            <Text style={styles.h2}>사장님 대신 답하고, 대신 챙겨요</Text>
+            <Text style={[styles.kicker, styles.kickerInk]}>매장의 정석이 대신해요</Text>
+            <Text style={styles.h2}>답하고, 챙겨요</Text>
           </Appear>
           <View style={styles.stack}>
             {FEATURES.map((f, i) => (
@@ -178,7 +178,7 @@ export default function LandingScreen() {
               <Text style={styles.offerTitle}>작은 매장은 계속 무료</Text>
               <Text style={styles.offerBody}>
                 매장 1곳·직원 3명까지는 무료로 쓸 수 있어요.{'\n'}
-                카드 등록 없이 바로 시작합니다.
+                카드 없이 바로 시작해요.
               </Text>
 
               <View style={styles.offerList}>
@@ -220,7 +220,7 @@ const styles = StyleSheet.create({
   topbar: { flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: SCREEN_GUTTER, paddingBottom: Space.sm },
   topLogin: { fontSize: 14, lineHeight: 20, fontWeight: '700', color: InkColors.ink2 },
 
-  scroll: { paddingHorizontal: SCREEN_GUTTER, gap: 40 },
+  scroll: { paddingHorizontal: SCREEN_GUTTER, gap: Gap.section },
 
   // ── HERO ──
   hero: { alignItems: 'center', paddingTop: Space.md, gap: Space.lg },
@@ -246,11 +246,11 @@ const styles = StyleSheet.create({
   scrollCueText: { fontSize: 12, lineHeight: 17, color: InkColors.ink3, fontWeight: '600' },
 
   // ── SECTION 공통 ──
-  section: { gap: Space.lg },
+  section: { gap: Gap.group },
   kicker: { fontSize: 13, lineHeight: 19, fontWeight: '800', color: InkColors.ink3, letterSpacing: -0.2 },
   kickerInk: { color: BrandColors.yellowDeep },
   h2: { fontSize: 21, lineHeight: 30, fontWeight: '900', color: InkColors.ink, letterSpacing: -0.4, marginTop: 2 },
-  stack: { gap: Space.md },
+  stack: { gap: Gap.item },
 
   // ── PROBLEM ──
   painCard: {
@@ -272,7 +272,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  painText: { flex: 1, gap: 3 },
+  painText: { flex: 1, gap: Gap.inline },
   painTitle: { fontSize: 16, lineHeight: 23, fontWeight: '800', color: InkColors.ink },
   painBody: { fontSize: 15, lineHeight: 22, color: InkColors.ink2 },
 

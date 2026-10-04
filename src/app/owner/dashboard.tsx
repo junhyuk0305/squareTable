@@ -212,12 +212,12 @@ export default function OwnerDashboardScreen() {
       {
         targetRef: hubRef,
         title: '매장 운영부터 둘러보세요',
-        body: '직원이 물은 질문이 위에 뜨고, 퀴즈·직원·급여·근무표는 아래 세 칸에서 바로 열 수 있어요. 노하우가 없어도 지금 바로 쓸 수 있어요.',
+        body: '직원이 물은 질문이 맨 위에 떠요.\n퀴즈·직원·급여·근무표는 아래 세 칸에 있어요.',
       },
       {
         targetRef: ctaRef,
         title: '마지막으로, 직원 답을 남겨요',
-        body: '사장님이 한 번 알려주면 직원이 물었을 때 AI가 대신 답해요. 한 줄만 적으면 AI가 노하우로 정리해줘요.',
+        body: '한 줄만 적으면 AI가 노하우로 정리해요.\n그다음부터 직원 질문에 대신 답해요.',
         ctaLabel: '노하우 하나 남기기',
       },
     ],
@@ -302,10 +302,10 @@ export default function OwnerDashboardScreen() {
             "0건"과 "아직 안 옴"의 구분은 화면 게이트가 맡는다(도착 전엔 이 블록 자체가 마운트되지 않는다). */}
         {entriesCount === 0 && (
           <Appear delay={stagger(1)} style={styles.onboard}>
-            <Text style={styles.onboardTitle}>매장을 막 시작하셨네요</Text>
+            <Text style={styles.onboardTitle}>노하우부터 채워요</Text>
             <Text style={styles.onboardBody}>
-              아직 등록된 노하우가 없어요. 사장님이 알려주신 내용이 있어야 직원이 물었을 때 AI가 대신 답할 수 있어요.
-              {'\n'}업종 <Text style={{ fontWeight: '800' }}>추천 노하우</Text>를 한 번에 담고 시작해보세요.
+              한 줄 남겨보세요. 그래야 직원이 물었을 때 AI가 대신 답해요.
+              {'\n'}업종 <Text style={{ fontWeight: '800' }}>추천 노하우</Text>를 한 번에 담아도 돼요.
             </Text>
             <View ref={ctaRef} style={{ alignSelf: 'flex-start' }}>
               <PressableScale onPress={() => router.push('/owner/onboarding')} scaleTo={0.96} style={styles.onboardCta}>
@@ -315,7 +315,7 @@ export default function OwnerDashboardScreen() {
             </View>
 
             {/* 씨앗 템플릿 — 직접 한 줄 입력으로 시작하고 싶을 때(AI가 정리) */}
-            <Text style={styles.seedLabel}>또는 직접 한 줄 입력 — 탭하면 AI가 정리해줘요</Text>
+            <Text style={styles.seedLabel}>직접 한 줄 적어도 돼요. 탭하면 AI가 정리해요</Text>
             <View style={styles.seedChips}>
               {SEED_TEMPLATES.map((t) => (
                 <Pressable

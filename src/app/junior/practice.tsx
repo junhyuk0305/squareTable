@@ -151,7 +151,7 @@ export default function JuniorTermPracticeScreen() {
         ) : (
           <EmptyState
             title="아직 연습할 값이 없어요"
-            body="노하우에 '무엇이 몇 개인지' 같은 기준 값이 적혀 있어야 카드를 만들 수 있어요. 지금은 그런 노하우가 없어요."
+            body={"숫자가 적힌 노하우가 아직 없어요.\n'샷 2개'처럼 개수가 있어야 카드를 만들 수 있어요."}
             cta={{ label: '노하우 둘러보기', onPress: () => router.replace('/junior/chat') }}
           />
         )}

@@ -70,6 +70,16 @@ export async function launch({ origin, storageKey, width = 1600, height = 1000, 
   const calls = [];
   const errors = [];
   let failing = new Set();
+  /** 이름 → 응답 바꾸기 함수. 실제 응답을 받은 뒤 고쳐서 돌려준다(빈 상태·여러 곳 같은 파일럿에 없는 모양 실측용). */
+  let mocks = new Map();
+  // 실패는 요청 단계, 바꾸기는 응답 단계에서 멈춘다. 둘 다 없으면 Fetch 를 끈다.
+  const syncFetch = async () => {
+    const patterns = [];
+    if (failing.size) patterns.push({ urlPattern: '*/rest/v1/rpc/*', requestStage: 'Request' });
+    if (mocks.size) patterns.push({ urlPattern: '*/rest/v1/rpc/*', requestStage: 'Response' });
+    if (patterns.length) await s('Fetch.enable', { patterns });
+    else await s('Fetch.disable');
+  };
   listeners.push((m) => {
     if (m.sessionId !== sessionId) return;
     if (m.method === 'Network.requestWillBeSent') {
@@ -89,7 +99,21 @@ export async function launch({ origin, storageKey, width = 1600, height = 1000, 
       const name = m.params.request.url.match(/\/rpc\/([a-z0-9_]+)/)?.[1];
       // ★응답을 기다리는 사이 failRpc([]) 가 Fetch 를 끄면 이 호출이 'Fetch domain is not enabled' 로 거부된다 —
       //   잡지 않으면 하니스가 통째로 죽는다(2026-10-02 G 묶음). 꺼진 뒤엔 요청이 그대로 흘러가므로 버려도 된다.
-      if (name && failing.has(name)) {
+      if (m.params.responseStatusCode !== undefined) {
+        // 응답 단계 — 바꾸기 대상이고 성공 응답일 때만 고친다. 나머지는 원래 응답 그대로.
+        const id = m.params.requestId;
+        if (name && mocks.has(name) && m.params.responseStatusCode === 200) {
+          void (async () => {
+            const b = await s('Fetch.getResponseBody', { requestId: id });
+            const raw = b.base64Encoded ? Buffer.from(b.body, 'base64').toString('utf8') : b.body;
+            const out = mocks.get(name)(JSON.parse(raw));
+            const headers = (m.params.responseHeaders ?? []).filter((h) => !/^(content-length|content-encoding)$/i.test(h.name));
+            await s('Fetch.fulfillRequest', { requestId: id, responseCode: 200, responseHeaders: headers, body: Buffer.from(JSON.stringify(out)).toString('base64') });
+          })().catch(() => s('Fetch.continueRequest', { requestId: id }).catch(() => {}));
+        } else {
+          void s('Fetch.continueRequest', { requestId: id }).catch(() => {});
+        }
+      } else if (name && failing.has(name)) {
         void s('Fetch.fulfillRequest', {
           requestId: m.params.requestId, responseCode: 500,
           responseHeaders: [{ name: 'Content-Type', value: 'application/json' }, { name: 'Access-Control-Allow-Origin', value: '*' }],
@@ -111,8 +135,12 @@ export async function launch({ origin, storageKey, width = 1600, height = 1000, 
     /** 이름이 든 RPC 를 500 으로 돌려준다(빈 배열 = 해제). 오류 화면 실측용. */
     async failRpc(names) {
       failing = new Set(names);
-      if (names.length) await s('Fetch.enable', { patterns: [{ urlPattern: '*/rest/v1/rpc/*' }] });
-      else await s('Fetch.disable');
+      await syncFetch();
+    },
+    /** { rpc이름: (실제 응답) => 바꾼 응답 } — 빈 객체 = 해제. 다음 요청부터 걸린다. */
+    async mockRpc(map) {
+      mocks = new Map(Object.entries(map));
+      await syncFetch();
     },
     async slowNetwork(latencyMs) {
       await s('Network.emulateNetworkConditions', { offline: false, latency: latencyMs, downloadThroughput: -1, uploadThroughput: -1 });

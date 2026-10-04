@@ -1,4 +1,5 @@
 // /hq/stores/invites — 초대 대기(정본 §5-2): 점주 전화번호로 보낸 초대 중 아직 수락 전인 것.
+// 만료됐고 다시 보내지 않은 초대도 아래에 같이 둔다 — 대시보드 '만료된 초대'를 누르면 여기로 온다(invites.ts 가 같은 규칙).
 //
 // 2026-10-02 하위 메뉴 개편으로 전체 매장 화면 아래에서 자기 화면으로 나왔다(한 화면에 기능 하나).
 // 수락 전에는 매장명이 없다(번호만 · brand-boundary "수락 전 매장명·계정 노출 금지"). 만료는 서버가 status 로 준다.
@@ -18,6 +19,7 @@ import { revokeInvite, fetchBrandInvites, type BrandInviteRow } from '@/lib/bran
 import { reportError } from '@/lib/analytics/track';
 import { brandErrorMessage } from '@/lib/brand/errors';
 import { payerLabel } from '@/lib/brand/visibility';
+import { pendingStoreInvites, openExpiredStoreInvites } from '@/lib/brand/invites';
 import { formatPhone } from '@/lib/utils/validation';
 import { showToast } from '@/lib/store/useToastStore';
 import { confirmAction } from '@/lib/utils/confirm';
@@ -59,7 +61,9 @@ export default function HqStoreInvitesScreen() {
     if (add) router.setParams({ add: undefined });
   };
 
-  const pending = useMemo(() => invites.filter((i) => i.kind === 'store' && i.status === 'pending'), [invites]);
+  const pending = useMemo(() => pendingStoreInvites(invites), [invites]);
+  const expired = useMemo(() => openExpiredStoreInvites(invites), [invites]);
+  const rows = useMemo(() => [...pending, ...expired], [pending, expired]);
 
   return (
     <HqPage
@@ -79,7 +83,7 @@ export default function HqStoreInvitesScreen() {
             columns={[
               { key: 'phone', label: '점주 전화번호', width: 180, render: (i) => <Cell kind="name">{formatPhone(i.phone ?? '')}</Cell> },
               { key: 'payer', label: '요금 부담', width: 120, render: (i) => <HqPill tone={i.payer === 'brand' ? 'y' : 'n'} label={i.payer ? payerLabel(i.payer) : '—'} /> },
-              { key: 'status', label: '상태', width: 110, render: () => <HqPill tone="w" label="대기" /> },
+              { key: 'status', label: '상태', width: 110, render: (i) => (i.status === 'pending' ? <HqPill tone="w" label="대기" /> : <HqPill tone="n" label="만료" />) },
               { key: 'sent', label: '보낸 날', render: (i) => <Cell kind="muted">{fmtDay(i.created_at)}</Cell> },
               { key: 'exp', label: '만료', render: (i) => <Cell kind="muted">{fmtDay(i.expires_at)}</Cell> },
               {
@@ -88,7 +92,7 @@ export default function HqStoreInvitesScreen() {
                 width: 120,
                 align: 'right',
                 // 취소(0214) — 점주 카드는 즉시 사라진다. 잘못 보낸 번호를 14일 동안 못 거두던 것(사용자 결정 09-23).
-                render: (i) => (
+                render: (i) => i.status !== 'pending' ? null : (
                   <HqButton
                     label="초대 취소"
                     testID={`hq-invite-revoke-${i.id}`}
@@ -108,12 +112,15 @@ export default function HqStoreInvitesScreen() {
                 ),
               },
             ]}
-            rows={pending}
+            rows={rows}
             rowKey={(i) => i.id}
-            footer={`${pending.length}건`}
+            footer={expired.length ? `대기 ${pending.length}건 · 만료 ${expired.length}건` : `${pending.length}건`}
             empty={<HqEmpty text="기다리는 초대가 없어요. 점주 전화번호로 매장을 추가할 수 있어요." action={<HqButton label="매장 추가" variant="pri" onPress={() => setAddOpen(true)} />} />}
             testID="hq-invites-table"
           />
+          {expired.length ? (
+            <HqNotice>만료된 초대는 [매장 추가]로 같은 번호에 다시 보낼 수 있어요. 다시 보내면 만료 줄은 사라져요.</HqNotice>
+          ) : null}
           <HqNotice>수락 전에는 매장 이름이 보이지 않아요. 점주가 매장과 공개 수준을 골라 수락하면 그때 보여요.</HqNotice>
         </Appear>
       )}

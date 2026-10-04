@@ -1,15 +1,19 @@
-// /hq — 대시보드(정본 §5-2): KPI 스트립 → [확인 필요 | 매장 현황] 두 칸. 하위 메뉴가 없는 한 장이다.
-// 2026-10-02 레퍼런스 개편: 세 덩어리를 세로로 쌓던 것을 숫자 줄 아래 두 칸으로 — 한 화면에서 '할 일'과 '매장'을 같이 본다.
+// /hq — 대시보드(정본 §5-2): KPI 스트립 → [확인 필요 | 최근 배포 상태] 두 칸. 하위 메뉴가 없는 한 장이다.
+// 2026-10-02 레퍼런스 개편: 세 덩어리를 세로로 쌓던 것을 숫자 줄 아래 두 칸으로 — 한 화면에서 '할 일'과 '보낸 것'을 같이 본다.
+// 2026-10-02 개선(기획/본사대시보드/03): 오른쪽 칸을 매장 표 → 최근 배포 상태로. 매장 표는 전체 매장 화면의 앞 10줄을
+//   되풀이할 뿐이었고, 본사가 대시보드에서 묻는 것은 "보낸 노하우가 어디까지 갔나"다. 칸 주어는 노하우다(매장 순위 아님 · 03 §1).
 // KPI 범위(직영/가맹) 토글은 머리 줄 오른쪽으로 갔다 — 아래 숫자 전부의 범위라 화면 머리에 둔다.
 //
 // 재료 = useBrandStore(브랜드 이름) · useBrandUnitsStore(brand_overview · brand_invites_list). 숫자는 전부 매장 단위 — 개인 축 0, 랭킹 0.
 import { useCallback, useMemo, useState } from 'react';
-import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { View, Text, Pressable, ScrollView, StyleSheet, useWindowDimensions } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 
-import { HqPage, HqPill, HqSlab, HqSegment, HqLoadError, HqCard } from '@/components/hq/HqKit';
+import { HqPage, HqPill, HqSlab, HqSegment, HqLoadError, HqCard, HqEmpty, HqButton } from '@/components/hq/HqKit';
 import { HqStrip } from '@/components/hq/HqStrip';
-import { HqTable, Cell } from '@/components/hq/HqTable';
+import { HqDeployCounts } from '@/components/hq/HqDeployCounts';
+import { HqModal } from '@/components/hq/HqModal';
 import { ScreenLoading } from '@/components/ScreenLoading';
 import { Appear } from '@/components/Appear';
 import { useBrandStore } from '@/lib/store/useBrandStore';
@@ -17,18 +21,25 @@ import { useBrandUnitsStore } from '@/lib/store/useBrandUnitsStore';
 import { useBrandKnowhowStore } from '@/lib/store/useBrandKnowhowStore';
 import { useBrandQuizStore } from '@/lib/store/useBrandQuizStore';
 import { visibilityLabel, relationLabel, RELATIONS, VIS_TONE } from '@/lib/brand/visibility';
-import type { BrandRelation } from '@/lib/brand/brandDb';
+import { pendingStoreInvites, openExpiredStoreInvites } from '@/lib/brand/invites';
+import { deployStatusMap, cellKey, type DeployStatus } from '@/lib/brand/deployStatus';
+import type { BrandOverviewRow, BrandRelation } from '@/lib/brand/brandDb';
 import { InkColors } from '@/lib/theme/colors';
+import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
 
+/** 최근 배포 상태 행 수 — 다 보려면 '전체 보기'(노하우 > 배포 상태). 5행이면 확인 필요 칸과 높이가 비슷하다. */
+const RECENT_DEPLOY_ROWS = 5;
 /**
- * 대시보드 매장 표는 요약이다 — 상위 10행 + '전체 보기'(쪽 넘김은 매장 화면에만 둔다 · R5 지시).
- * 표가 **전 매장을 정렬한 뒤** 10행을 자르므로 '직원 많은 순'도 전체 기준이다. 10행 ≈ 520px 로 첫 화면 안에 끝난다.
+ * 두 칸을 옆으로 둘 최소 창 폭. 배포 상태 표는 제목 260 + 상태 5칸(머리글 '새 버전 대기'가 한 줄이려면 칸당 ~124)
+ * = 880 이 필요하다. 아이콘 줄 72 + 거터 64 + 확인 필요 360 + 사이 24 를 더하면 1400. 그보다 좁으면 위아래로 쌓는다
+ * (1280 에서 머리글이 접혔다 · 2026-10-02 실측).
  */
-const DASHBOARD_TABLE_ROWS = 10;
+const TWO_COL_MIN_WINDOW = 1400;
 
 export default function HqDashboardScreen() {
   const router = useRouter();
+  const twoCol = useWindowDimensions().width >= TWO_COL_MIN_WINDOW;
   const brand = useBrandStore((s) => s.brand);
   const brandLoaded = useBrandStore((s) => s.loaded);
   const brandError = useBrandStore((s) => s.error);
@@ -44,7 +55,9 @@ export default function HqDashboardScreen() {
   const error = brandError ?? unitsError ?? knowhowError ?? quizError;
   // '배포한 노하우' = 한 곳 이상에 내려간 작업실 노하우 수(0217 brand_knowhow_list.deployed_units).
   // ★같은 재료를 노하우 화면과 공유한다 — 대시보드가 따로 세면 두 숫자가 어긋난다.
-  const deployedCount = useBrandKnowhowStore((s) => s.list.filter((r) => r.deployed_units > 0).length);
+  const knowhowList = useBrandKnowhowStore((s) => s.list);
+  const matrix = useBrandKnowhowStore((s) => s.matrix);
+  const deployedCount = useMemo(() => knowhowList.filter((r) => r.deployed_units > 0).length, [knowhowList]);
   const knowhowLoaded = useBrandKnowhowStore((s) => s.loaded);
   const hydrateKnowhow = useBrandKnowhowStore((s) => s.hydrate);
   // '배포한 퀴즈'(P5) — 같은 규칙: 한 곳 이상에 내려간 작업실 퀴즈 수(0220 brand_quiz_list.deployed_units). 퀴즈 화면과 재료 공유.
@@ -78,34 +91,60 @@ export default function HqDashboardScreen() {
   );
 
   const stats = useMemo(() => {
-    const pendingInvites = invites.filter((i) => i.kind === 'store' && i.status === 'pending').length;
-    const expiredInvites = invites.filter((i) => i.kind === 'store' && i.status === 'expired').length;
-    const visRequests = overview.filter((r) => r.visibility_requested).length;
-    const payerToAnswer = overview.filter((r) => r.payer_proposed && !r.payer_proposed_by_brand).length;
+    const pendingInvites = pendingStoreInvites(invites).length;
+    // 같은 번호로 다시 보낸 만료는 빼고 센다 — 만료 행은 지워지지 않아서 다 세면 칸이 영원히 켜진다(invites.ts).
+    const expiredInvites = openExpiredStoreInvites(invites).length;
+    // 매장 목록으로 들고 있는다 — 1곳이면 그 매장으로, 여러 곳이면 이름순 목록으로 보낸다(overview 가 이름순).
+    const visRequests = overview.filter((r) => r.visibility_requested);
+    const payerToAnswer = overview.filter((r) => r.payer_proposed && !r.payer_proposed_by_brand);
     const payerWaiting = overview.filter((r) => r.payer_proposed && r.payer_proposed_by_brand).length;
-    // 숙지율: 재료가 있는 매장만 평균. P4 사본 전엔 전부 null → null.
+    // 숙지율: 재료가 있는 매장만 평균. P4 사본 전엔 전부 null → null. 몇 곳 평균인지(분모)를 같이 보여 준다.
     const withMastery = scope.filter((r) => r.mastery !== null);
     const mastery = withMastery.length ? Math.round((withMastery.reduce((a, r) => a + (r.mastery ?? 0), 0) / withMastery.length) * 100) : null;
-    return { pendingInvites, expiredInvites, visRequests, payerToAnswer, payerWaiting, mastery };
+    return { pendingInvites, expiredInvites, visRequests, payerToAnswer, payerWaiting, mastery, masteryUnits: withMastery.length };
   }, [overview, scope, invites]);
 
   // 보조줄이 "연결 매장 합계"인지 "직영 합계"인지 말해 준다 — 숫자만 바뀌고 설명이 그대로면 오독한다.
   const scopeNote = relF === 'all' || !mixed ? '연결 매장' : `${relationLabel(relF)} 매장`;
 
   // 0건은 그리지 않는다 — '없음' 칸 네 개는 읽을 것이 없는데 자리만 차지한다.
+  // units 가 있는 칸은 매장 일이다 — 처리하는 곳이 매장 상세 '연결과 규칙' 탭이라 거기로 보낸다. 없는 칸은 초대 대기 화면.
   const attention = useMemo(
     () =>
       [
-        { k: '연결 동의 대기', v: stats.pendingInvites, n: '점주가 앱에서 수락하면 전체 매장에 올라와요', to: 'invites' as const },
-        { k: '공개 수준 요청 중', v: stats.visRequests, n: '점주가 답을 보고 있어요', to: 'stores' as const },
-        { k: '답할 요금 부담 제안', v: stats.payerToAnswer, n: stats.payerWaiting ? `보낸 제안 ${stats.payerWaiting}건은 점주 대기` : '점주가 보낸 제안', to: 'stores' as const },
-        { k: '만료된 초대', v: stats.expiredInvites, n: '14일이 지났어요. 다시 보낼 수 있어요', to: 'invites' as const },
+        { k: '연결 동의 대기', v: stats.pendingInvites, n: '점주가 앱에서 수락하면 전체 매장에 올라와요', units: null },
+        { k: '공개 수준 요청 중', v: stats.visRequests.length, n: '점주가 답을 보고 있어요', units: stats.visRequests },
+        { k: '답할 요금 부담 제안', v: stats.payerToAnswer.length, n: stats.payerWaiting ? `보낸 제안 ${stats.payerWaiting}건은 점주 대기` : '점주가 보낸 제안', units: stats.payerToAnswer },
+        { k: '만료된 초대', v: stats.expiredInvites, n: '14일이 지났어요. 다시 보낼 수 있어요', units: null },
       ].filter((a) => a.v > 0),
     [stats],
   );
+  const [pick, setPick] = useState<{ title: string; units: BrandOverviewRow[] } | null>(null);
 
-  // 행 = 그 매장 상세 주소로(push — 뒤로가기가 대시보드로 돌아온다). 목록 화면과 같은 경로를 쓴다.
-  const goStores = (unit?: string) => router.push(unit ? { pathname: '/hq/stores/[id]', params: { id: unit } } : '/hq/stores');
+  // push — 뒤로가기가 대시보드로 돌아온다.
+  const goRules = (unit: string) => router.push({ pathname: '/hq/stores/[id]', params: { id: unit, tab: 'rules' } });
+  const openAttention = (a: (typeof attention)[number]) => {
+    if (!a.units) router.push('/hq/stores/invites');
+    else if (a.units.length === 1) goRules(a.units[0].unit_id);
+    else setPick({ title: a.k, units: a.units });
+  };
+
+  // 최근 배포 상태 — 한 번이라도 보낸 노하우를 최근 수정순으로(배포 시각은 목록 RPC 가 주지 않는다 · 03 1d).
+  const recent = useMemo(
+    () =>
+      knowhowList
+        .filter((r) => r.version > 0)
+        // 같은 시각이면 id 순 — 새로고침마다 5건 경계가 흔들리지 않게.
+        .sort((a, b) => (a.updated_at === b.updated_at ? (a.id < b.id ? -1 : 1) : a.updated_at < b.updated_at ? 1 : -1))
+        .slice(0, RECENT_DEPLOY_ROWS)
+        .map((r) => ({ id: r.id, title: r.title })),
+    [knowhowList],
+  );
+  const statusMap = useMemo(() => deployStatusMap(matrix, (c) => c.entry_id), [matrix]);
+  const statusOf = useCallback(
+    (id: string, unitId: string): DeployStatus => statusMap.get(cellKey(id, unitId))?.status ?? 'none',
+    [statusMap],
+  );
   // 혼합 브랜드에서만 뜬다 — 직영이나 가맹 한쪽뿐이면 고를 것이 없다(빈 토글은 소음이다).
   const scopeToggle = mixed ? (
     <View style={styles.kpiScope} testID="hq-kpi-scope">
@@ -151,12 +190,12 @@ export default function HqDashboardScreen() {
             { label: '연결 매장', value: scope.length, unit: '곳', sub: relF !== 'all' && mixed ? `${relationLabel(relF)}만 · 전체 ${overview.length}곳` : stats.pendingInvites ? `초대 대기 ${stats.pendingInvites}건` : '초대 대기 없음' },
             { label: '배포한 노하우', value: deployedCount, unit: '건', sub: deployedCount ? '한 곳 이상에 내려간 노하우' : '노하우를 쓰고 [배포]를 누르면 세요' },
             { label: '배포한 퀴즈', value: deployedQuizzes, unit: '건', sub: deployedQuizzes ? '한 곳 이상에 내려간 퀴즈 · 발송은 매장이 정해요' : '퀴즈를 만들고 [배포]를 누르면 세요' },
-            { label: '숙지율', value: stats.mastery === null ? null : `${stats.mastery}%`, sub: stats.mastery === null ? '배포한 노하우가 생기면 계산돼요' : `${scopeNote} 평균` },
+            { label: '숙지율', value: stats.mastery === null ? null : `${stats.mastery}%`, sub: stats.mastery === null ? '배포한 노하우가 생기면 계산돼요' : `${scopeNote} ${scope.length}곳 중 ${stats.masteryUnits}곳 평균` },
           ]}
         />
 
-        <View style={styles.cols}>
-        <HqCard style={styles.attCol} testID="hq-attention">
+        <View style={[styles.cols, !twoCol && styles.colsStack]}>
+        <HqCard style={twoCol ? styles.attCol : undefined} testID="hq-attention">
           <View style={styles.cardHead}>
             <Text style={styles.cardTitle}>확인 필요</Text>
             <Text style={styles.cardMeta}>{attention.length ? `${attention.reduce((n, x) => n + x.v, 0)}건` : ''}</Text>
@@ -171,31 +210,49 @@ export default function HqDashboardScreen() {
                 v={a.v}
                 n={a.n}
                 first={i === 0}
-                onPress={() => (a.to === 'invites' ? router.push('/hq/stores/invites') : goStores())}
+                onPress={() => openAttention(a)}
               />
             ))
           )}
         </HqCard>
 
-        <View style={styles.tableCol}>
-          <HqSlab title="매장 현황" hint="이름순 · 행을 누르면 매장 상세" more={{ label: '전체 매장', onPress: () => goStores() }} />
-          <HqTable
-            columns={[
-              { key: 'name', label: '매장', width: 200, render: (r) => <Cell kind="name">{r.store_name}</Cell> },
-              { key: 'vis', label: '공개 수준', width: 130, render: (r) => <HqPill tone={VIS_TONE[r.visibility]} label={visibilityLabel(r.visibility)} /> },
-              { key: 'staff', label: '직원', align: 'right', render: (r) => <Cell kind="num">{r.staff}</Cell>, sortValue: (r) => r.staff },
-              { key: 'pq', label: '미해결 질문', align: 'right', render: (r) => <Cell kind="num">{r.pending_q}</Cell>, sortValue: (r) => r.pending_q },
-            ]}
-            rows={overview}
-            rowKey={(r) => r.unit_id}
-            onRowPress={(r) => goStores(r.unit_id)}
-            maxRows={DASHBOARD_TABLE_ROWS}
-            footer={overview.length > DASHBOARD_TABLE_ROWS ? `전체 ${overview.length}곳 중 ${DASHBOARD_TABLE_ROWS}곳` : `${overview.length}곳`}
-            testID="hq-dashboard-table"
-          />
+        <View style={twoCol ? styles.tableCol : undefined}>
+          <HqSlab title="최근 배포 상태" hint="노하우 · 최근 수정순 · 숫자를 누르면 매장 목록" more={recent.length ? { label: '전체 보기', onPress: () => router.push('/hq/knowhow/status') } : undefined} />
+          {overview.length === 0 || recent.length === 0 ? (
+            <HqCard testID="hq-dashboard-deploy-empty">
+              <HqEmpty
+                text={overview.length === 0 ? '연결된 매장이 생기면 채워져요.' : '노하우를 보내면 매장마다 어디까지 갔는지 여기에 모여요.'}
+                action={overview.length === 0 ? undefined : <HqButton label="노하우로 가기" onPress={() => router.push('/hq/knowhow')} />}
+              />
+            </HqCard>
+          ) : (
+            <HqDeployCounts rows={recent} units={overview} statusOf={statusOf} kind="노하우" testID="hq-dashboard-deploy" />
+          )}
         </View>
         </View>
       </Appear>
+
+      {/* 확인 필요 칸에 매장이 여러 곳이면 이름순 목록 — 누르면 그 매장의 연결과 규칙 탭. */}
+      <HqModal open={!!pick} title={pick?.title ?? ''} sub={pick ? `${pick.units.length}곳 · 매장을 누르면 연결과 규칙 탭이 열려요` : undefined} width={520} onClose={() => setPick(null)}>
+        <ScrollView style={styles.pickList} testID="hq-attention-stores">
+          {pick?.units.map((u, i) => (
+            <Pressable
+              key={u.unit_id}
+              onPress={() => {
+                setPick(null);
+                goRules(u.unit_id);
+              }}
+              accessibilityRole="link"
+              accessibilityLabel={`${u.store_name} 매장 열기`}
+              style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => [styles.pickRow, i > 0 && styles.attBorder, (hovered || pressed) && { backgroundColor: InkColors.paper }]}
+            >
+              <Text style={styles.pickName} numberOfLines={1}>{u.store_name}</Text>
+              <HqPill tone={VIS_TONE[u.visibility]} label={visibilityLabel(u.visibility)} />
+              <Ionicons name="chevron-forward" size={16} color={InkColors.ink3} />
+            </Pressable>
+          ))}
+        </ScrollView>
+      </HqModal>
     </HqPage>
   );
 }
@@ -221,10 +278,11 @@ function AttentionRow({ k, v, n, first, onPress }: { k: string; v: number; n: st
 const styles = StyleSheet.create({
   kpiScope: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   kpiScopeLabel: { fontSize: 13, fontWeight: '700', color: InkColors.ink2 },
-  // 두 칸 — 왼쪽 확인 필요(고정 폭) · 오른쪽 매장 현황(남는 폭). 좁으면 아래로 접힌다.
-  cols: { flexDirection: 'row', alignItems: 'flex-start', gap: Space.xl, flexWrap: 'wrap' },
+  // 두 칸 — 왼쪽 확인 필요(고정 폭) · 오른쪽 최근 배포 상태(남는 폭). 창이 TWO_COL_MIN_WINDOW 보다 좁으면 위아래로 쌓는다.
+  cols: { flexDirection: 'row', alignItems: 'flex-start', gap: Space.xl },
+  colsStack: { flexDirection: 'column', alignItems: 'stretch' },
   attCol: { width: 360, flexGrow: 0, flexShrink: 0 },
-  tableCol: { flex: 1, minWidth: 520 },
+  tableCol: { flex: 1, minWidth: 0 },
   cardHead: { flexDirection: 'row', alignItems: 'baseline', gap: Space.sm, marginBottom: Space.sm },
   cardTitle: { fontSize: 16, fontWeight: '700', color: InkColors.ink, flexShrink: 0 },
   cardMeta: { fontSize: 13.5, color: InkColors.ink3 },
@@ -235,4 +293,7 @@ const styles = StyleSheet.create({
   cellK: { fontSize: 14.5, fontWeight: '700', color: InkColors.ink },
   cellV: { fontSize: 22, fontWeight: '800', letterSpacing: -0.4, color: InkColors.ink, fontVariant: ['tabular-nums'], flexShrink: 0 },
   cellN: { fontSize: 13, color: InkColors.ink3, marginTop: 2 },
+  pickList: { maxHeight: 360, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.sm },
+  pickRow: { flexDirection: 'row', alignItems: 'center', gap: Space.md, paddingVertical: 10, paddingHorizontal: 14, minHeight: 48 },
+  pickName: { flex: 1, minWidth: 0, fontSize: 14.5, fontWeight: '600', color: InkColors.ink },
 });
