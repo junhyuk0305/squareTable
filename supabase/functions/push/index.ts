@@ -75,12 +75,13 @@ function clip(s: unknown, max: number): string {
 }
 
 // audience → 받는 매장 역할(unit_members.role). 'user' 는 역할이 아니라 사람 하나라 여기서 다루지 않는다.
-// F-2: 합류 승인과 노하우 제안 검토는 사장만 한다(0201 이후 매니저는 못 함) → join_owners·owner_only 는 사장만.
+// F-2: 합류 승인과 노하우 제안 검토는 사장만 한다(0201 이후 매니저는 못 함) → join_owners 와 owners+ownerOnly 는 사장만.
+// ★새 audience 값을 만들지 않고 owners 에 ownerOnly 플래그를 단다. 0236 이전 엣지는 모르는 audience 를 직원에게 보냈다.
+//   플래그는 옛 엣지가 무시하므로 엣지 배포 전·롤백 뒤에도 최악이 오늘 동작(사장+매니저)이다.
 // 모르는 값은 null → 400. 예전엔 모르는 값이 직원(staff) 갈래로 떨어졌다.
-function audienceRoles(audience: string | undefined): string[] | null {
+function audienceRoles(audience: string | undefined, ownerOnly = false): string[] | null {
   switch (audience) {
-    case 'owners': return ['owner', 'manager'];
-    case 'owner_only':
+    case 'owners': return ownerOnly ? ['owner'] : ['owner', 'manager'];
     case 'join_owners': return ['owner'];
     case 'staff': return ['junior'];
     default: return null;
@@ -499,7 +500,9 @@ Deno.serve(async (req) => {
 
   let payload: {
     mode?: string;
-    audience?: 'owners' | 'owner_only' | 'staff' | 'user' | 'join_owners';
+    audience?: 'owners' | 'staff' | 'user' | 'join_owners';
+    /** F-2: audience 'owners' 를 사장만으로 좁힌다. 옛 엣지는 무시한다. */
+    ownerOnly?: boolean;
     userId?: string;
     title?: string;
     body?: string;
@@ -564,6 +567,7 @@ Deno.serve(async (req) => {
   const body = clip(payload.body, MAX_BODY);
   const url = clip(payload.url, MAX_URL);
   const tag = clip(payload.tag, 80) || undefined;
+  const ownerOnly = payload.ownerOnly === true;
   if (!title || !audience) return json(400, { error: 'missing_fields' });
   if (audience !== 'user' && !audienceRoles(audience)) return json(400, { error: 'unknown_audience' });
 
@@ -591,10 +595,10 @@ Deno.serve(async (req) => {
       .from('unit_members').select('user_id').eq('unit_id', pendingUnit).in('role', audienceRoles(audience) ?? []);
     recipientIds = (rows ?? []).map((r: { user_id: string }) => r.user_id);
   } else {
-    // 0093: 'owners' = 그 매장의 관리자(사장+매니저), 'owner_only' = 사장만(F-2), 'staff' = 그 매장의 직원(junior).
+    // 0093: 'owners' = 그 매장의 관리자(사장+매니저), ownerOnly 면 사장만(F-2), 'staff' = 그 매장의 직원(junior).
     // unit_members 기준이라 주매장이 다른 멤버도 정확히 잡히고, 매니저가 staff 쪽으로 중복 수신하지 않는다.
     const { data: rows } = await admin
-      .from('unit_members').select('user_id').eq('unit_id', callerUnit).in('role', audienceRoles(audience) ?? []);
+      .from('unit_members').select('user_id').eq('unit_id', callerUnit).in('role', audienceRoles(audience, ownerOnly) ?? []);
     recipientIds = (rows ?? []).map((r: { user_id: string }) => r.user_id);
   }
 

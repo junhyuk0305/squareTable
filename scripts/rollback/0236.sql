@@ -3,6 +3,8 @@
 -- ★순서: **push 엣지를 먼저 이전판으로 되돌린다.** 새 엣지는 push_device_targets·push_web_targets 를 부른다.
 --   이 파일을 먼저 적용하면 엣지가 없는 함수를 불러 푸시가 전부 멈춘다.
 --   이전판 = git show <0236 직전 커밋>:supabase/functions/push/index.ts → supabase functions deploy push (사용자 세션)
+--   이전판 엣지는 앱이 보내는 ownerOnly 플래그(F-2 제안 알림)를 무시하고 사장+매니저에게 보낸다. 직원에게는 가지 않는다.
+--   ⛔앱에 새 audience 값을 더하지 않는다. 이전판 엣지는 모르는 audience 를 직원에게 보낸다(qa:push-session 7-11).
 -- 되돌리는 것: save_push_device_token(0155) · save_push_subscription(0058) · push_device_tokens 직접 INSERT·UPDATE 권한 ·
 --   대상 RPC 2개 · 해제 RPC 2개 · 유예 함수 · 옛 행 정리 함수와 크론.
 -- 되돌리지 않는 것: session_id 열(옛 함수는 이 열을 안 본다 — 남아도 무해).
