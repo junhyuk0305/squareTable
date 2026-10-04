@@ -13,6 +13,11 @@
 --       사용자 요청(auth.uid() 가 있음)이 번호를 다른 번호로 바꿀 때만 검사한다. 통과 조건:
 --         · phone_otps 에 그 번호가 있고 verified_by = auth.uid() 이면서 15분 안에 인증, 또는
 --         · verified_by is null 이면서 5분 안에 인증(옛 앱 PhoneVerifyBlock 호환 창 — 옛 앱은 anon 으로 verify 한다).
+--       ★ 번호가 비어 있던 프로필(구글 가입 프로필 완성 complete-profile.tsx)은 두 창 모두 30분이다.
+--         그 화면은 번호를 먼저 인증하고 생년월일·매장 정보를 채운 뒤 complete_profile 을 부른다. 모든 출시 앱이
+--         anon 으로 verify 하므로 5분 창이면 사업자번호를 찾는 사이에 막히고 재시도도 계속 실패한다.
+--         번호를 비운 뒤 다시 넣어도 이 창을 쓴다. 남는 틈은 "남이 30분 안에 인증한 번호"뿐이고,
+--         가입 메타 경로(handle_new_user, 설계 A3 보류)는 시간 제한 없이 열려 있어 그보다 넓다.
 --       통과하지 못하면 PHONE_NOT_VERIFIED(기존 게이트와 같은 코드라 앱이 이미 안다).
 --       번호를 비우는 것(탈퇴 delete_my_account)과 service_role·크론(auth.uid() 없음)은 검사하지 않는다.
 --       phone_last4 는 언제나 번호에서 다시 계산한다(클라이언트 값 무시).
@@ -36,8 +41,9 @@ security definer
 set search_path = public
 as $$
 declare
-  v_uid uuid := auth.uid();
-  v_new text := nullif(public.normalize_phone(new.phone), '');
+  v_uid   uuid := auth.uid();
+  v_new   text := nullif(public.normalize_phone(new.phone), '');
+  v_first boolean := nullif(public.normalize_phone(old.phone), '') is null;
 begin
   if v_uid is not null
      and v_new is not null
@@ -46,8 +52,8 @@ begin
       select 1 from public.phone_otps o
        where o.phone = v_new
          and o.verified_at is not null
-         and (   (o.verified_by = v_uid    and o.verified_at > now() - interval '15 minutes')
-              or (o.verified_by is null    and o.verified_at > now() - interval '5 minutes'))
+         and (   (o.verified_by = v_uid and o.verified_at > now() - case when v_first then interval '30 minutes' else interval '15 minutes' end)
+              or (o.verified_by is null and o.verified_at > now() - case when v_first then interval '30 minutes' else interval '5 minutes' end))
     ) then
       raise exception 'PHONE_NOT_VERIFIED';
     end if;
@@ -103,7 +109,7 @@ begin
 
   v_def := pg_get_functiondef('public.guard_profile_phone_change()'::regprocedure);
   foreach fn in array array['PHONE_NOT_VERIFIED', 'o.verified_by = v_uid', 'o.verified_by is null',
-                            '15 minutes', '5 minutes', 'normalize_phone(old.phone)', 'new.phone_last4 :='] loop
+                            '15 minutes', '5 minutes', '30 minutes', 'v_first', 'normalize_phone(old.phone)', 'new.phone_last4 :='] loop
     if position(fn in v_def) = 0 then v_bad := v_bad || 'guard_profile_phone_change(' || fn || ' 없음) '; end if;
   end loop;
   if position('phone_norm' in v_def) > 0 then

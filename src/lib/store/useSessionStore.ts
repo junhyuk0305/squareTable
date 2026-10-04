@@ -106,7 +106,8 @@ type SessionState = {
   // 소셜 로그인 사용자의 결손 프로필(이름/전화/생년월일) 완성. 성공 시 프로필 재로드로 상태 반영.
   // role(0157) — signup_role dedup 라벨을 최초 1회만 기록. profiles.role(권한) 은 절대 안 건드린다.
   // ⚠️ 가입 시점엔 manager 를 고를 수 없다(매니저는 사장이 나중에 승격하는 상태) — owner|junior만.
-  completeProfile: (name: string, phone: string, birthDate: string, role: 'owner' | 'junior') => Promise<{ error: string | null }>;
+  // code 'PHONE_NOT_VERIFIED'(0238) → 번호 인증이 30분을 넘겼다. 화면이 인증 단계를 다시 연다.
+  completeProfile: (name: string, phone: string, birthDate: string, role: 'owner' | 'junior') => Promise<{ error: string | null; code?: 'PHONE_NOT_VERIFIED' }>;
   signUp: (
     email: string,
     pw: string,
@@ -635,8 +636,11 @@ export const useSessionStore = create<SessionState>((set, get) => ({
         // 사이의 레이스에서만 도달한다). 화면의 사전검사 문구와 같은 말로 안내한다.
         : /phone_taken/.test(error.message)
         ? `이미 ${role === 'owner' ? '사장' : '직원'}으로 가입된 번호예요. 다른 번호를 입력해 주세요.`
+        // 0238: 인증 뒤 30분이 지났다. 같은 제출을 반복해도 계속 실패하므로 다시 인증하게 한다.
+        : /PHONE_NOT_VERIFIED/.test(error.message)
+        ? '전화번호 인증 시간이 지났어요. 인증번호를 다시 받아 주세요.'
         : friendlyError(error.message, '프로필 저장에 실패했어요. 잠시 후 다시 시도해 주세요.');
-      return { error: msg };
+      return { error: msg, code: /PHONE_NOT_VERIFIED/.test(error.message) ? 'PHONE_NOT_VERIFIED' : undefined };
     }
     // phone/birth_date 가 채워졌으니 세션 상태를 갱신한다(needsProfileSetup 해제 → 게이트 통과).
     const uid = get().userId;

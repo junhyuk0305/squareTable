@@ -125,6 +125,7 @@ function CompleteProfileForm() {
         //    그 붙잡는 역할은 이제 storeRetry 가 대신한다 — 위 가드 조건 참조.)
         if (!storeRetry) {
           const cp = await completeProfile(name.trim(), phone.trim(), birthISO ?? '', role);
+          if (cp.code === 'PHONE_NOT_VERIFIED') otp.reset();
           if (cp.error) return setErr(cp.error);
         }
         const cs = await createStore(storeName.trim(), industry, bizDigits(bizNo) || undefined, birthISO, { isOnboarding: true });
@@ -136,6 +137,7 @@ function CompleteProfileForm() {
       } else {
         // 직원: 프로필만 채우고(생년월일 기록 → 이후 hub 에서 초대코드 입력 시 join 통과) 개인 허브로.
         const cp = await completeProfile(name.trim(), phone.trim(), birthISO ?? '', role);
+        if (cp.code === 'PHONE_NOT_VERIFIED') otp.reset();
         if (cp.error) return setErr(cp.error);
         router.replace('/junior/hub');
       }

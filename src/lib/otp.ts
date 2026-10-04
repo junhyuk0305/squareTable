@@ -148,6 +148,12 @@ export function usePhoneOtp(normalizedPhone: string) {
     return r.ok;
   };
 
+  // 서버가 인증을 더는 인정하지 않을 때(PHONE_NOT_VERIFIED) 화면을 '인증번호 받기' 단계로 되돌린다.
+  const reset = () => {
+    setSentTo(null);
+    setVerifiedTo(null);
+  };
+
   return {
     sent: sentTo === normalizedPhone,
     verified: verifiedTo === normalizedPhone,
@@ -156,5 +162,6 @@ export function usePhoneOtp(normalizedPhone: string) {
     msg,
     send,
     verify,
+    reset,
   };
 }
