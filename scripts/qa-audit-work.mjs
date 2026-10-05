@@ -134,5 +134,28 @@ console.log('\n[D11] 알림함 배선 — 배정 시각 기록 · 사장 알림�
     /unreadMentionIds\(/.test(board) && /markAllRead\(/.test(board) && /useFocusEffect\(/.test(board));
 }
 
+console.log('\n[D12] 노하우 개선 제안은 실제로 고쳐 저장해야 반영된다 · 결과를 제안한 직원에게 알린다');
+{
+  const sug = strip(read('src/app/owner/suggestions.tsx'));
+  const reflect = (sug.match(/function reflect\(s: PlaybookSuggestion\) \{[\s\S]*?\n  \}/) || [''])[0];
+  const improve = reflect.split('} else {')[0];
+  check('★"반영하기"를 눌러도 바로 승인하지 않는다(개선 분기)', !!reflect && !/approve\(/.test(improve), improve.slice(0, 200));
+  check('★개선 분기가 수정 화면에 sugId 를 넘긴다', /pathname: '\/owner\/edit\/\[id\]', params: \{[^}]*sugId: s\.id/.test(improve));
+  const edit = strip(read('src/app/owner/edit/[id].tsx'));
+  const onUpdated = (edit.match(/const onUpdated = useCallback\([\s\S]*?\n  \);/) || [''])[0];
+  const iOk = onUpdated.indexOf('if (!ok) return;');
+  const iApprove = onUpdated.search(/approveSuggestion\(sugId, entry\.id\)/);
+  check('★수정 화면은 저장이 성공한 뒤에만 제안을 승인한다', /sugId\?: string/.test(edit) && iOk > 0 && iApprove > iOk, `ok=${iOk} approve=${iApprove}`);
+
+  const store = strip(read('src/lib/store/useSuggestionStore.ts'));
+  const ap = storeMethod(store, 'approve'), rj = storeMethod(store, 'reject');
+  check('★반영되면 제안한 사람에게 알린다(저장 성공 뒤)', /\.then\(\(ok\) => \{[^}]*notifyUserSuggestionResult\(before\.proposer_id, true, before\.text\)/.test(ap), ap.slice(0, 300));
+  check('★반려되면 제안한 사람에게 알린다(저장 성공 뒤)', /\.then\(\(ok\) => \{[^}]*notifyUserSuggestionResult\(before\.proposer_id, false, before\.text\)/.test(rj));
+  const notify = strip(read('src/lib/push/notify.ts'));
+  const nf = fnBody(notify, 'notifyUserSuggestionResult');
+  check('알림은 제안한 사람 한 명에게(audience user) · 내 공간(/junior/chat)으로', /audience: 'user'/.test(nf) && /url: '\/junior\/chat'/.test(nf) && /tag: 'suggestion-result'/.test(nf));
+  check('엣지 탭 경로표에 suggestion-result 가 있다', /case 'suggestion-result': return '\/junior\/chat';/.test(strip(read('supabase/functions/push/index.ts'))));
+}
+
 console.log(`\n${pass} PASS / ${fail} FAIL`);
 process.exit(fail ? 1 : 0);
