@@ -41,6 +41,8 @@ async function callQuizItemEdge(payload: QuizItemGenInput): Promise<QuizItemGenO
   const accessToken = data.session?.access_token;
   if (!accessToken) throw new Error('AI edge: no auth session');
 
+  // ★E9: 재시도도 같은 요청 id — 엣지가 한 번만 차감한다(0276 · client.ts callEdge 와 같은 규칙).
+  const requestId = genId('air');
   let lastErr: unknown;
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     const ctrl = new AbortController();
@@ -49,7 +51,7 @@ async function callQuizItemEdge(payload: QuizItemGenInput): Promise<QuizItemGenO
       const res = await fetch(AI_ENDPOINT as string, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', apikey: ANON, Authorization: `Bearer ${accessToken}` },
-        body: JSON.stringify({ task: 'quiz_item', payload }),
+        body: JSON.stringify({ task: 'quiz_item', payload, requestId }),
         signal: ctrl.signal,
       });
       if (res.ok) return (await res.json()) as QuizItemGenOutput;

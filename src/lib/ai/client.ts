@@ -24,6 +24,7 @@ import { mockGenerateAnswer, mockStructureSquare, mockPatchSquare, mockExtractIn
 import { isEnglishDominant } from '@/lib/utils/knowhowInput';
 import { supabase } from '@/lib/supabase';
 import { reportError, track } from '@/lib/analytics/track';
+import { genId } from '@/lib/utils/id';
 
 type Task = 'answer' | 'square' | 'patch' | 'intent' | 'triage' | 'transcribe' | 'doc_extract' | 'quiz';
 
@@ -73,6 +74,9 @@ async function callEdge<T>(task: Task, payload: unknown): Promise<T> {
     throw new Error('AI edge: no auth session');  // → 호출부에서 mock 폴백
   }
 
+  // ★E9: 요청 id 는 한 번 부를 때 하나 — 재시도도 같은 id 를 보낸다. 12초에 끊은 첫 요청이 서버에서
+  //   끝까지 돌아도 엣지가 같은 id 는 한 번만 차감한다(0276 consume_ai_quota_for).
+  const requestId = genId('air');
   let lastErr: unknown;
   for (let attempt = 1; attempt <= EDGE_MAX_ATTEMPTS; attempt++) {
     // 응답이 너무 오래 걸리면 끊는다 → 재시도 소진 시 catch에서 mock 폴백(사용자엔 '기본 안내' 고지).
@@ -86,7 +90,7 @@ async function callEdge<T>(task: Task, payload: unknown): Promise<T> {
           apikey: ANON,
           Authorization: `Bearer ${accessToken}`,
         },
-        body: JSON.stringify({ task, payload }),
+        body: JSON.stringify({ task, payload, requestId }),
         signal: ctrl.signal,
       });
       if (res.ok) return (await res.json()) as T;

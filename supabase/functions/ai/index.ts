@@ -23,6 +23,8 @@ import { QUIZ_FORMATS } from './quizFormats.ts';
 const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY') ?? '';
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? '';
 const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
+// AI 사용량 차감(consume_ai_quota_for, 0276)만 쓴다 — 그 함수는 클라에 닫혀 있다(E9).
+const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
 // ⚠️ 2026-07-10: gemini-2.5-flash-lite 퇴역(404 "no longer available")으로 생성 전 경로가 죽었었다
 //   — 클라 mock 폴백(degraded)이 장애를 가려 조용히 열화됨. 후속 안정판으로 교체.
 //   교체 시 점검: ① ListModels 로 가용 확인 ② qa:split(다중 분리)·프로브 3태스크 green ③ 이 주석 갱신.
@@ -329,6 +331,11 @@ function userClient(authz: string) {
   });
 }
 
+// 서비스 키 클라(RLS 우회) — AI 사용량 차감 한 곳에서만 쓴다. 매장 id 는 authUser 가 JWT 로 판정한 값이다.
+function serviceClient() {
+  return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
+}
+
 // ── AI 캡 가중치(2026-09-13 결정 · 0193) — 표는 **여기 한 곳**. DB 는 "몇 단위"만 받는다 ──
 // 1단위 ≈ 직원 질문 답변 1건 ≈ 1.5원(gemini-3.1-flash-lite 실측). 캡 = 무료 200 / 유료 3,000(매장당 월, DB).
 //   answer(기본)       1  — 표에 없는 태스크도 1(미지 태스크로 과금을 우회하지 못하게)
@@ -357,7 +364,7 @@ function docExtractPages(usage: unknown): number {
   return Math.min(Math.max(Math.round(pageTokens / PDF_TOKENS_PER_PAGE), 1), 60);
 }
 
-// 쿼터 사전판정(비차감). 카운트는 "성공 서빙된 뒤" consume_ai_quota 로만 올린다 —
+// 쿼터 사전판정(비차감). 카운트는 "성공 서빙된 뒤" consume_ai_quota_for(0276) 로만 올린다 —
 // LLM 5xx/타임아웃에 대한 클라 재시도가 같은 요청을 이중차감하는 것을 막는다(실패는 공짜).
 //
 // ★ 판정 규칙을 여기서 재구현하지 않는다. ai_quota_status(p_units)(0193) 하나만 부른다.
@@ -1172,6 +1179,10 @@ Deno.serve(async (req: Request) => {
     const task = body?.task;
     const payload = body?.payload ?? {};
     const authz = req.headers.get('Authorization') ?? '';
+    // ★E9(0276): 앱이 한 번 부를 때 만든 요청 id(재시도도 같은 값). 끊긴 첫 요청과 재시도가 둘 다 끝까지
+    //   돌아도 한 번만 센다. 사용자 id 로 묶어 남의 id 를 흉내 내 차감을 피하지 못하게 한다. 옛 앱은 없음(null) = 매번 센다.
+    const rid = typeof body?.requestId === 'string' && /^[A-Za-z0-9_-]{8,64}$/.test(body.requestId) ? body.requestId : null;
+    const requestKey = rid ? `${user.id}:${rid}` : null;
 
     // 3) AI 월 쿼터(0193) — 가중치 표 AI_UNITS 의 단위가 0보다 큰 태스크만. 진입 시엔 "비차감 사전판정"
     //    (남은 양 < 필요 단위면 402), 차감은 성공 서빙 후(아래)로 미룬다.
@@ -1224,10 +1235,11 @@ Deno.serve(async (req: Request) => {
     const unitsAfter = task === 'doc_extract' ? docExtractPages(served?.usage) : unitsBefore;
     if (unitsAfter > 0 && !served?.rejected && !served?.error) {
       try {
-        const { error: cErr } = await userClient(authz).rpc('consume_ai_quota', { p_units: unitsAfter });
-        if (cErr) console.error('consume_ai_quota (post-serve) error:', cErr.message ?? cErr);
+        // ★E9(0276): 클라가 직접 못 부르는 서버 전용 함수로, 매장 id·요청 키를 넘겨 차감한다.
+        const { error: cErr } = await serviceClient().rpc('consume_ai_quota_for', { p_unit: user.unitId, p_units: unitsAfter, p_request_key: requestKey });
+        if (cErr) console.error('consume_ai_quota_for (post-serve) error:', cErr.message ?? cErr);
       } catch (e) {
-        console.error('consume_ai_quota (post-serve) failed:', e);
+        console.error('consume_ai_quota_for (post-serve) failed:', e);
       }
     }
     return json(result);

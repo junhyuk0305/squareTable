@@ -196,6 +196,9 @@ console.log('\n[E9] AI 사용량: 재시도는 한 번만 차감 · 직원이 �
   const cl = strip(read('src/lib/ai/client.ts'));
   check('★앱은 한 번 부를 때 요청 id 하나를 만들어 재시도에도 같은 id 를 보낸다',
     /const requestId = genId\('air'\);[\s\S]*for \(let attempt = 1;/.test(cl) && /body: JSON\.stringify\(\{ task, payload, requestId \}\)/.test(cl));
+  const gen = strip(read('src/lib/quiz/generate.ts'));
+  check('★퀴즈 문항 만들기 재시도도 같은 요청 id 를 보낸다',
+    /const requestId = genId\('air'\);[\s\S]*for \(let attempt = 1;/.test(gen) && /body: JSON\.stringify\(\{ task: 'quiz_item', payload, requestId \}\)/.test(gen));
 }
 
 console.log(`\n${pass} PASS / ${fail} FAIL`);

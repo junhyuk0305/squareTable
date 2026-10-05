@@ -9,8 +9,9 @@
 //   ⑤ 모델을 안 부른 결과(모르는 퀴즈 형태 → rejected) = 0
 //   ⑥ 사전판정은 필요 단위로 — 남은 1이면 퀴즈(2)는 402, 답변(1)은 200
 //   ⑦ PDF 는 최소 1로 사전판정 → 남은 1이어도 3쪽이 통과하고 3 차감(캡을 넘을 수 있음 — 의도된 허용)
-//   ⑧ 옛 호출 호환 — consume_ai_quota·ai_quota_status 를 **인자 없이** 불러도 동작(옛 앱 빌드)
-//   ⑨ 클라가 음수 단위로 사용량을 되돌리지 못한다
+//   ⑧ 옛 호출 호환 — ai_quota_status 를 **인자 없이** 불러도 동작(옛 앱 빌드)
+//   ⑨ 클라는 차감 함수를 직접 못 부른다(0276 · E9) — consume_ai_quota·consume_ai_quota_for 둘 다
+//   ⑩ 같은 요청 id 로 두 번 보내면(앱 재시도) 한 번만 차감(0276 · E9)
 //
 // 에스컬레이션(직원 질문 → 사장 1탭)은 엣지를 부르지 않는다(useChatStore 가 질문 행만 쓴다) — 코드 판정, 여기서 안 본다.
 // ⚠️ LLM 을 실제로 부른다(답변·퀴즈·PDF·정리 각 1~2회). 실행: node scripts/qa-ai-units.mjs
@@ -66,11 +67,11 @@ const SOP = {
 };
 
 let client, token, unit, phone;
-async function edge(task, payload) {
+async function edge(task, payload, requestId) {
   const res = await fetch(`${URL}/functions/v1/ai`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', apikey: ANON, Authorization: `Bearer ${token}` },
-    body: JSON.stringify({ task, payload }),
+    body: JSON.stringify({ task, payload, ...(requestId ? { requestId } : null) }),
   });
   const body = await res.json().catch(() => null);
   await sleep(6500); // 엣지 레이트리밋(사용자 10/분) — 붙여 쏘면 429 가 측정 실패로 섞인다
@@ -149,14 +150,18 @@ async function main() {
     const { data: st, error: stErr } = await client.rpc('ai_quota_status');
     const stRow = Array.isArray(st) ? st[0] : st;
     check('⑧ ai_quota_status() 무인자 동작 · 무료 캡 200', !stErr && stRow?.cap_count === 200 && stRow?.exceeded === false, stErr?.message ?? JSON.stringify(stRow));
-    const { data: cq, error: cqErr } = await client.rpc('consume_ai_quota');
-    const cqRow = Array.isArray(cq) ? cq[0] : cq;
-    check('⑧ consume_ai_quota() 무인자 = 1 차감', !cqErr && cqRow?.used_count === 11, cqErr?.message ?? JSON.stringify(cqRow));
+    // ⑨ 클라 직접 차감 차단(0276 · E9) — 직원·사장 누구든 rpc 로 매장 한도를 깎지 못한다.
+    const { error: cqErr } = await client.rpc('consume_ai_quota', { p_units: 60 });
+    check('⑨ consume_ai_quota 직접 호출 거부', !!cqErr, cqErr?.message ?? '거부 안 됨');
+    const { error: cfErr } = await client.rpc('consume_ai_quota_for', { p_unit: unit, p_units: 60, p_request_key: null });
+    check('⑨ consume_ai_quota_for 직접 호출 거부', !!cfErr, cfErr?.message ?? '거부 안 됨');
+    check('⑨ 거부된 호출은 차감 없음', (await used()) === 10);
 
-    // ⑨ 음수 단위 차단
-    const { data: neg } = await client.rpc('consume_ai_quota', { p_units: -100 });
-    const negRow = Array.isArray(neg) ? neg[0] : neg;
-    check('⑨ 음수 단위는 1로 올린다(되돌리기 불가)', negRow?.used_count === 12, JSON.stringify(negRow));
+    // ⑩ 같은 요청 id(앱 재시도) = 한 번만 차감
+    const rid = `qa_rid_${Date.now()}`;
+    await edge('answer', { query: '오픈할 때 뭐부터 하나요', sops: [SOP] }, rid);
+    await edge('answer', { query: '오픈할 때 뭐부터 하나요', sops: [SOP] }, rid);
+    check('⑩ 같은 요청 id 두 번 = 1 차감', (await used()) === 11, `used=${await used()}`);
   } finally {
     await restore();
   }
