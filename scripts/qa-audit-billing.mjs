@@ -5,6 +5,7 @@
 //   [B2] 구독 흔적 매장에 붙은 1매장 계좌이체 기간은 선불로 보고, 앱 환불이 지우지 않는다.
 //   [B3] 선불과 겹쳐 시작한 구독(carry)도 "늘었어요/끝나요" 알림이 나가고, 날짜는 매장의 실제 만료일이다.
 //   [B4] 앱 "매장 수 줄이기"는 구독으로 연 열린 매장만 닫을 후보로 센다(카드 쪽 card_release_candidates 와 같은 규칙).
+//   [B7] 늦게 재전송된 옛 웹훅(event_timestamp_ms 가 더 이른 것)은 같은 거래의 최신 상태를 덮지 않는다.
 // 서버 함수는 마지막 정의(가장 큰 번호 마이그레이션) 본문을 읽어 본다. 로컬 도커가 꺼진 날에도 돈다.
 // 실행: node --no-warnings scripts/qa-audit-billing.mjs
 import { readFileSync, existsSync, readdirSync } from 'node:fs';
@@ -88,6 +89,23 @@ console.log('\n[B4] 앱 "매장 수 줄이기"는 구독으로 연 매장만 닫
     /p_count\s+int default null/.test(c.body) && /card_release_candidates\(v_uid\)/.test(c.body) && /release_mismatch/.test(c.body) && /greatest\(0, cardinality\(v_open\) - p_count\)/.test(c.body), c.file);
   check('choose_iap_release 권한 유지(authenticated)', grants(c.file, 'choose_iap_release(text[], int)', 'authenticated'));
   check('옛 1인자 판은 지운다(이름 인자 호출이 모호해지지 않게)', /drop function if exists public\.choose_iap_release\(text\[\]\);/.test(read(`supabase/migrations/${c.file}`)));
+}
+
+console.log('\n[B7] 늦게 도착한 옛 웹훅은 최신 구독 상태를 덮지 않는다');
+{
+  const a = lastDef('apply_iap_event');
+  const all = (() => {
+    const dir = new URL('../supabase/migrations/', import.meta.url);
+    return readdirSync(dir).filter((f) => f.endsWith('.sql')).map((f) => readFileSync(new URL(f, dir), 'utf8')).join('\n');
+  })();
+  check('iap_subscriptions 에 마지막 이벤트 시각 열이 있다', /alter table public\.iap_subscriptions add column if not exists last_event_at timestamptz/.test(all));
+  check('★이벤트 시각(event_timestamp_ms)을 읽는다', /p_raw -> 'event' ->> 'event_timestamp_ms'/.test(a.body), a.file);
+  const stale = a.body.match(/v_evt_at < v_cur\.last_event_at[\s\S]*?end if;/)?.[0] ?? '';
+  check('★그 거래의 마지막 이벤트보다 오래된 이벤트는 아무것도 바꾸지 않고 끝낸다', /'stale', true/.test(stale));
+  check('★옛 이벤트 판정이 줄이기 예고·상태 대입보다 먼저다',
+    a.body.indexOf('v_evt_at < v_cur.last_event_at') > 0 && a.body.indexOf('v_evt_at < v_cur.last_event_at') < a.body.indexOf("if p_type = 'PRODUCT_CHANGE' and v_cur.id is not null"));
+  check('★상태를 쓸 때 마지막 이벤트 시각을 남긴다(늦은 것으로 줄이지 않음)', /last_event_at = greatest\(iap_subscriptions\.last_event_at, excluded\.last_event_at\)/.test(a.body));
+  check('줄이기 예고 분기도 이벤트 시각을 남긴다', /pending_at = v_cur\.current_period_end,[\s\S]*?last_event_at = greatest\(last_event_at, v_evt_at\)/.test(a.body));
 }
 
 console.log(`\n${fail === 0 ? 'OK' : 'FAIL'} — pass ${pass} / fail ${fail}`);
