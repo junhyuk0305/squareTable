@@ -82,5 +82,23 @@ console.log('\n[D3] 담당자가 모두 나간 "매장 전체" 할일도 알림�
   check('이미 나간 사람이 담당자로 남은 할일도 한 번 정리한다', /update public\.work_templates[\s\S]{0,400}not exists \(select 1 from public\.unit_members/.test(sqlStrip(trFile)));
 }
 
+console.log('\n[D5] 자정을 넘는 근무의 "지금 근무자"는 전날 시작한 근무로 판정한다');
+{
+  const w = lastDef('workers_at');
+  const b = w.body;
+  const parts = b.split(/\bunion\b/);
+  const today = parts[0] ?? '', prev = parts[1] ?? '';
+  check('★오늘 요일 심야 행은 시작 시각 이후만 잡는다(자정 뒤 꼬리는 오늘 행으로 안 잡는다)',
+    parts.length === 2 && /else p_time >= st\.start_time/.test(today) && !/or p_time < st\.end_time/.test(today), w.file);
+  check('★전날 시작한 심야 근무는 끝 시각 전까지 근무자로 잡는다',
+    /st\.start_time > st\.end_time/.test(prev) && /p_time < st\.end_time/.test(prev)
+      && /st\.weekday = extract\(dow from \(p_day::date - 1\)\)::int/.test(prev) && /st\.shift_date = p_day::date - 1/.test(prev));
+  check('전날 행도 적용 기간·그날 예외·옛 재직 표시를 전날 날짜로 본다',
+    /st\.valid_from <= p_day::date - 1/.test(prev) && /e\.date = p_day::date - 1/.test(prev) && /archived_tenure_id is null/.test(prev));
+  check('workers_at 권한 유지(service_role 전용)',
+    !!w.file && read(`supabase/migrations/${w.file}`).includes('revoke execute on function public.workers_at(text, text, text) from public, anon, authenticated;')
+      && read(`supabase/migrations/${w.file}`).includes('grant  execute on function public.workers_at(text, text, text) to service_role;'));
+}
+
 console.log(`\n${pass} PASS / ${fail} FAIL`);
 process.exit(fail ? 1 : 0);
