@@ -12,6 +12,7 @@ import { Space } from '@/lib/theme/layout';
 import { HeaderBackButton } from '@/components/HeaderBackButton';
 import { Appear } from '@/components/Appear';
 import { Wordmark } from '@/components/Wordmark';
+import { PasswordInput } from '@/components/PasswordInput';
 import { SocialAuthButtons } from '@/components/SocialAuthButtons';
 import { SHOW_SOCIAL_LOGIN } from '@/lib/config/store-policy';
 import { isValidEmail } from '@/lib/utils/validation';
@@ -51,6 +52,7 @@ export default function LoginScreen() {
   };
 
   const login = async () => {
+    if (busy) return;
     if (!HAS_SUPABASE) return demoEnter();
     if (!email || !pw) {
       flash('이메일과 비밀번호를 입력해주세요.', true);
@@ -114,16 +116,19 @@ export default function LoginScreen() {
             placeholderTextColor={InkColors.ink3}
             keyboardType="email-address"
             autoCapitalize="none"
+            autoComplete="email"
+            textContentType="username"
             style={styles.input}
           />
 
           <Text style={styles.label}>비밀번호</Text>
-          <TextInput
+          <PasswordInput
             value={pw}
             onChangeText={setPw}
             placeholder="비밀번호"
             placeholderTextColor={InkColors.ink3}
-            secureTextEntry
+            autoComplete="current-password"
+            textContentType="password"
             style={styles.input}
             onSubmitEditing={login}
           />

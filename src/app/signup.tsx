@@ -8,6 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { applyMockSeed } from '@/lib/demo/mockSeed';
 import { HAS_SUPABASE } from '@/lib/supabase';
+import { PasswordInput } from '@/components/PasswordInput';
 import { SocialAuthButtons } from '@/components/SocialAuthButtons';
 import { Appear } from '@/components/Appear';
 import { formatBizNo, isValidBizNo, bizDigits } from '@/lib/utils/bizno';
@@ -228,6 +229,8 @@ export default function SignupScreen() {
             placeholderTextColor={InkColors.ink3}
             keyboardType="email-address"
             autoCapitalize="none"
+            autoComplete="email"
+            textContentType="emailAddress"
             style={styles.input}
           />
           {emailMsg && <Text style={styles.emailOk}>{emailMsg}</Text>}
@@ -238,13 +241,13 @@ export default function SignupScreen() {
         <Appear delay={60}>
         <View style={styles.field}>
           <Text style={styles.label}>비밀번호<Text style={styles.req}> *</Text></Text>
-          <TextInput
+          <PasswordInput
             value={pw}
             onChangeText={setPw}
             placeholder="영문·숫자 조합 9자 이상"
             placeholderTextColor={InkColors.ink3}
-            secureTextEntry
-            autoCapitalize="none"
+            autoComplete="new-password"
+            textContentType="newPassword"
             style={styles.input}
           />
           {pw.length > 0 && (
@@ -266,6 +269,8 @@ export default function SignupScreen() {
               placeholder="010-1234-5678"
               placeholderTextColor={InkColors.ink3}
               keyboardType="phone-pad"
+              autoComplete="tel"
+              textContentType="telephoneNumber"
               maxLength={13}
               style={[styles.input, styles.otpInput]}
             />
@@ -297,6 +302,8 @@ export default function SignupScreen() {
                 placeholder="인증번호 6자리"
                 placeholderTextColor={InkColors.ink3}
                 keyboardType="number-pad"
+                autoComplete="one-time-code"
+                textContentType="oneTimeCode"
                 maxLength={6}
                 style={[styles.input, styles.otpInput]}
               />

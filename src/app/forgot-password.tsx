@@ -10,6 +10,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
+import { PasswordInput } from '@/components/PasswordInput';
 import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { KeyboardShift } from '@/components/KeyboardShift';
 import { usePhoneOtp, resetPasswordByPhone, findEmailByPhone } from '@/lib/otp';
@@ -76,15 +77,20 @@ export default function ForgotPasswordScreen() {
       return;
     }
     setBusy(true);
-    const r = await resetPasswordByPhone({ phone: normalized, code, role, newPassword: pw });
-    setBusy(false);
-    if (!r.ok) {
-      setErr(r.message);
-      return;
+    try {
+      const r = await resetPasswordByPhone({ phone: normalized, code, role, newPassword: pw });
+      if (!r.ok) {
+        setErr(r.message);
+        return;
+      }
+      setDoneEmail(r.email);
+      setDone(true);
+      showToast('비밀번호를 바꿨어요. 새 비밀번호로 로그인해 주세요.', 'good');
+    } catch {
+      setErr('잠시 후 다시 시도해 주세요.');
+    } finally {
+      setBusy(false);
     }
-    setDoneEmail(r.email);
-    setDone(true);
-    showToast('비밀번호를 바꿨어요. 새 비밀번호로 로그인해 주세요.', 'good');
   };
 
   const find = async () => {
@@ -98,13 +104,18 @@ export default function ForgotPasswordScreen() {
       return;
     }
     setBusy(true);
-    const r = await findEmailByPhone({ phone: normalized, code });
-    setBusy(false);
-    if (!r.ok) {
-      setErr(r.message);
-      return;
+    try {
+      const r = await findEmailByPhone({ phone: normalized, code });
+      if (!r.ok) {
+        setErr(r.message);
+        return;
+      }
+      setFound(r.accounts);
+    } catch {
+      setErr('잠시 후 다시 시도해 주세요.');
+    } finally {
+      setBusy(false);
     }
-    setFound(r.accounts);
   };
 
   return (
@@ -213,24 +224,22 @@ export default function ForgotPasswordScreen() {
                   {mode === 'password' ? (
                     <>
                       <Text style={styles.label}>새 비밀번호</Text>
-                      <TextInput
+                      <PasswordInput
                         value={pw}
                         onChangeText={setPw}
                         placeholder="9자 이상"
                         placeholderTextColor={InkColors.ink3}
-                        secureTextEntry
                         autoComplete="new-password"
                         style={styles.input}
                         accessibilityLabel="새 비밀번호"
                         testID="forgot-pw"
                       />
                       <Text style={styles.label}>한 번 더</Text>
-                      <TextInput
+                      <PasswordInput
                         value={pw2}
                         onChangeText={setPw2}
                         placeholder="같은 비밀번호"
                         placeholderTextColor={InkColors.ink3}
-                        secureTextEntry
                         autoComplete="new-password"
                         style={styles.input}
                         onSubmitEditing={() => void submit()}

@@ -17,6 +17,7 @@ import { EMAIL_CHANGE_PENDING_TEXT } from '@/lib/account/findEmail';
 import { usePhoneOtp } from '@/lib/otp';
 import { BottomSheet } from '@/components/BottomSheet';
 import { INDUSTRIES } from '@/lib/config/industry';
+import { PasswordInput } from '@/components/PasswordInput';
 import { SectionLabel } from '@/components/SectionLabel';
 import { Appear, stagger } from '@/components/Appear';
 import { Collapse } from '@/components/Collapse';
@@ -274,13 +275,12 @@ function AccountEditForm() {
           <View style={styles.pwPanel}>
             {/* Q14: 잠금이 풀린 폰을 남이 집어도 바로 바꾸지 못하게 지금 비밀번호를 먼저 묻는다. */}
             <Text style={styles.label}>현재 비밀번호<Text style={styles.req}> *</Text></Text>
-            <TextInput
+            <PasswordInput
               ref={pwRef}
               value={curPw}
               onChangeText={setCurPw}
               placeholder="지금 쓰는 비밀번호"
               placeholderTextColor={InkColors.ink3}
-              secureTextEntry
               autoComplete="current-password"
               textContentType="password"
               autoCapitalize="none"
@@ -290,12 +290,11 @@ function AccountEditForm() {
             <Text style={styles.label}>새 비밀번호<Text style={styles.req}> *</Text></Text>
             {/* autoComplete="new-password": 브라우저/비번 매니저가 '기존 비밀번호'를 자동완성하지 못하게 막는다.
                 (이메일 입력이 생기며 이 화면이 로그인 폼으로 오인돼 저장된 비번이 채워지던 보안 문제 방지) */}
-            <TextInput
+            <PasswordInput
               value={pw}
               onChangeText={setPw}
               placeholder="영문·숫자 조합 9자 이상"
               placeholderTextColor={InkColors.ink3}
-              secureTextEntry
               autoComplete="new-password"
               textContentType="newPassword"
               autoCapitalize="none"
@@ -308,12 +307,11 @@ function AccountEditForm() {
               </Text>
             )}
             <Text style={styles.label}>새 비밀번호 확인<Text style={styles.req}> *</Text></Text>
-            <TextInput
+            <PasswordInput
               value={pw2}
               onChangeText={setPw2}
               placeholder="다시 입력"
               placeholderTextColor={InkColors.ink3}
-              secureTextEntry
               autoComplete="new-password"
               textContentType="newPassword"
               autoCapitalize="none"
