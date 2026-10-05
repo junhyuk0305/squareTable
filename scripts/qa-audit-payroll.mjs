@@ -55,7 +55,7 @@ const lastDef = (name) => {
   let body = '', file = '';
   for (const f of files) {
     const s = readFileSync(new URL(f, dir), 'utf8').replace(/\r\n/g, '\n');
-    const re = new RegExp(`create (or replace )?function public\\.${name}\\([\\s\\S]*?\\n\\$\\$;`, 'g');
+    const re = new RegExp(`create (or replace )?function public\\.${name}\\([\\s\\S]*?\\$\\$;`, 'g');
     for (const m of s.matchAll(re)) { body = m[0]; file = f; }
   }
   return { body, file };

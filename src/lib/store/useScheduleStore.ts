@@ -186,6 +186,9 @@ type ScheduleState = {
 // ── 유일 id ─────────────────────────────────────────────
 const nowIso = () => new Date().toISOString();
 
+/** 낡은 화면에서 이미 승인·반려·취소된 교대를 다시 바꾸려 할 때(A10). 0행·서버 거부(0258) 모두 이 안내 뒤 다시 읽는다. */
+const SWAP_ALREADY_DECIDED_TEXT = '이미 처리된 요청이에요. 목록을 새로 불러올게요.';
+
 // ── 기본/시드 ───────────────────────────────────────────
 const DEFAULT_CONFIG: StoreConfig = { open: '09:00', close: '22:00', closedDays: [], note: '' };
 
@@ -408,10 +411,10 @@ export const useScheduleStore = create<ScheduleState>((set, get) => {
     const at = nowIso();
     set((s) => ({ swaps: s.swaps.map((r) => (r.id === id ? { ...r, status: 'cancelled', updated_at: at } : r)) }));
     void guardWrite(
-      updateSwap(id, { status: 'cancelled', updated_at: at }),
+      updateSwap(id, { status: 'cancelled', updated_at: at }, ['open', 'accepted']),
       () => set((s) => ({ swaps: s.swaps.map((r) => (r.id === id ? before : r)) })),
-      '요청 취소 저장에 실패했어요.',
-    );
+      SWAP_ALREADY_DECIDED_TEXT,
+    ).then((ok) => { if (!ok) void get().hydrate(); });
   },
   approveSwap: (id, confirmPast) => {
     const before = get().swaps.find((r) => r.id === id);
@@ -478,10 +481,13 @@ export const useScheduleStore = create<ScheduleState>((set, get) => {
     set((s) => ({ swaps: s.swaps.map((r) => (r.id === id ? { ...r, status: 'rejected', updated_at: at } : r)) }));
     // 저장 성공 후에만 요청 직원에게 결과 웹푸시(실패·롤백 시 유령 반려 알림 방지).
     void guardWrite(
-      updateSwap(id, { status: 'rejected', updated_at: at }),
+      updateSwap(id, { status: 'rejected', updated_at: at }, ['accepted']),
       () => set((s) => ({ swaps: s.swaps.map((r) => (r.id === id ? before : r)) })),
-      '교대 반려 저장에 실패했어요.',
-    ).then((ok) => { if (ok) notifyUserSwapResult(before.requester_id, false, fmtDateKo(before.date)); });
+      SWAP_ALREADY_DECIDED_TEXT,
+    ).then((ok) => {
+      if (ok) notifyUserSwapResult(before.requester_id, false, fmtDateKo(before.date));
+      else void get().hydrate();
+    });
   },
   };
 });

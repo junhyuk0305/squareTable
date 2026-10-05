@@ -3655,7 +3655,11 @@ export async function insertSwap(r: SwapRequest): Promise<boolean> {
   );
 }
 
-export async function updateSwap(id: string, patch: Partial<SwapRequest>): Promise<boolean> {
+/**
+ * expect = 지금 상태가 이 중 하나일 때만 바꾼다(A10). 낡은 화면이 이미 승인된 요청을 반려·취소로 덮지 않게 한다.
+ * 이미 처리됐으면 0행이라 실패로 돌아온다(서버도 0258 트리거로 끝난 요청의 상태 변경을 거부한다).
+ */
+export async function updateSwap(id: string, patch: Partial<SwapRequest>, expect: SwapRequest['status'][]): Promise<boolean> {
   if (!HAS_SUPABASE) return true;
   const row: Record<string, unknown> = {};
   if (patch.status !== undefined) row.status = patch.status;
@@ -3663,7 +3667,7 @@ export async function updateSwap(id: string, patch: Partial<SwapRequest>): Promi
   if (patch.updated_at !== undefined) row.updated_at = patch.updated_at;
   // 교대 승인/수락/취소는 "누가 그 근무를 서는가"를 정하는 무결성 핵심 상태 전이 — 0행(RLS/경합)이면
   // 유령 성공 대신 실패로(P1-6). 안 그러면 UI는 "승인됨" + 거짓 푸시가 나가는데 DB는 그대로 남는다.
-  return writeStrict('updateSwap', supabase.from('swap_requests').update(row).eq('id', id).select('id'));
+  return writeStrict('updateSwap', supabase.from('swap_requests').update(row).eq('id', id).in('status', expect).select('id'));
 }
 
 export function subscribeSchedule(onChange: () => void): () => void {
