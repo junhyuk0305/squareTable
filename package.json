@@ -145,6 +145,7 @@
     "qa:store-copy": "node --no-warnings scripts/qa-store-copy.mjs",
     "qa:no-purge-call": "node scripts/qa-no-purge-call.mjs",
     "qa:shift-ui": "node scripts/qa-shift-ui.mjs",
+    "qa:tenure-ui": "node scripts/qa-tenure-ui.mjs",
     "iap:status": "node scripts/iap-switch.mjs status",
     "iap:on": "node scripts/iap-switch.mjs on",
     "iap:off": "node scripts/iap-switch.mjs off",
