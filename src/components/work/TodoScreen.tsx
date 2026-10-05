@@ -8,7 +8,7 @@ import { SectionLabel } from '@/components/SectionLabel';
 import { StoredImage } from '@/components/StoredImage';
 import { StackBar } from '@/components/blocks/StackBar';
 import { WeekStrip, type WeekDay } from '@/components/blocks/WeekStrip';
-import { useDayparts, isRoutineTaskId, occursOn, taskVisibleTo, type TaskTemplate, type DoneMark } from '@/lib/store/useWorkStore';
+import { useDayparts, isRoutineTaskId, occursOn, taskVisibleTo, assigneesOf, type TaskTemplate, type DoneMark } from '@/lib/store/useWorkStore';
 import { InkColors, BrandColors, CategoryColors } from '@/lib/theme/colors';
 import { Elevation, Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
@@ -335,8 +335,12 @@ export function TodoScreen({
                     const isRoutine = isRoutineTaskId(t.id);
                     // 담당자가 있는 할일 → "담당 ○○". 개인 할일(private)뿐 아니라 **담당자를 정해둔 루틴**도
                     // 여기 걸린다(루틴은 shared 라 전원에게 보이고 꼬리표만 붙는다 — daypartRoutineTemplates).
-                    const assignedName = t.ownerId && t.ownerId !== me ? nameOf?.(t.ownerId) : undefined;
-                    const assignedToMe = !!t.ownerId && t.ownerId === me;
+                    // 담당이 여러 명이면(0254) 이름을 '·'로 잇는다. 나 혼자면 '내 담당'.
+                    const assignees = assigneesOf(t);
+                    const assignedToMe = assignees.length === 1 && assignees[0] === me;
+                    const assignedName = assignedToMe
+                      ? undefined
+                      : assignees.map((id) => (id === me ? '나' : nameOf?.(id))).filter(Boolean).join('·') || undefined;
                     const photoUrl = (mark as (DoneMark & { photoUrl?: string }) | undefined)?.photoUrl;
                     // 수정/삭제 권한 = 사장 or 본인이 등록/배정받은 개인 할일. (X 즉시삭제 → 연필로 수정·삭제)
                     // 루틴(dpr_)도 사장은 여기서 고칠 수 있다 — 누르면 '오늘만/이후 모두'를 먼저 묻는다(0146).

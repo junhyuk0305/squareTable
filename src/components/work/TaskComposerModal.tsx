@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { BottomSheet } from '@/components/BottomSheet';
 import { MiniCalendar } from '@/components/blocks/MiniCalendar';
-import { useDayparts, useDaypartLabels, type NewTask, type TaskSection, type TaskTemplate, type Recurrence } from '@/lib/store/useWorkStore';
+import { useDayparts, useDaypartLabels, assigneesOf, type NewTask, type TaskSection, type TaskTemplate, type Recurrence } from '@/lib/store/useWorkStore';
 import { type Member } from '@/components/work/MentionInput';
 import { maskHHMM } from '@/lib/utils/attendance';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
@@ -129,7 +129,7 @@ export function TaskComposerModal({
   );
   const personalMode = taskScope === 'private';
   const [picked, setPicked] = useState<string[]>(() => {
-    if (editTemplate) return editTemplate.ownerId ? [editTemplate.ownerId] : [];
+    if (editTemplate) return assigneesOf(editTemplate);
     // 직원은 본인 또는 담당 없음만 고를 수 있다 — 프리필도 그 범위 안에서만.
     if (initialAssigneeId && (isOwner || initialAssigneeId === me) && [...others, { id: me }].some((o) => o.id === initialAssigneeId)) {
       return [initialAssigneeId];
@@ -167,13 +167,12 @@ export function TaskComposerModal({
   const toggleKnowhow = (id: string) =>
     setKnowhowIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
 
-  // 담당자 칩 토글 — 신규는 여러 명(토글), 수정은 한 명(교체). '담당 없음'과는 상호배타.
+  // 담당자 칩 토글 — 신규·수정 모두 여러 명(토글, 0254). '담당 없음'과는 상호배타.
   // ★2026-08-19: 방 멤버십으로 담당자를 막지 않는다 — 할일에는 방 개념이 없다(판정 ⑩·0152).
   const pickAssignee = (id: string) => {
     setPicked((prev) => {
       // 루틴 담당은 '이 일을 맡은 사람' 꼬리표 하나라 여러 명이라는 개념이 없다 — 단일 교체.
       if (routineMode) return [id];
-      if (isEdit) return [id];
       return prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id];
     });
   };
@@ -195,7 +194,7 @@ export function TaskComposerModal({
     return { recurrence, date };
   };
 
-  const baseInput = (v: string): Omit<NewTask, 'scope' | 'ownerId'> => {
+  const baseInput = (v: string): Omit<NewTask, 'scope' | 'ownerId' | 'ownerIds'> => {
     const { recurrence, date } = scheduleParts();
     return {
       section,
@@ -210,7 +209,7 @@ export function TaskComposerModal({
     };
   };
 
-  // 신규 등록 입력(다중 배정이면 담당자 수만큼).
+  // 신규 등록 입력. 담당자가 여러 명이어도 할일은 하나다(0254 owner_ids).
   // ★배정 ≠ 비공개(2026-08-19): 담당자를 정해도 scope 는 'shared' 그대로다 — 매장 전원이 본다.
   //   개인 할일만 'private' 이고 그건 항상 본인 것이다.
   function buildInputs(): NewTask[] {
@@ -219,7 +218,7 @@ export function TaskComposerModal({
     const base = baseInput(v);
     if (personalMode) return [{ ...base, scope: 'private', ownerId: me }];
     if (picked.length === 0) return [{ ...base, scope: 'shared' }];
-    return picked.map((id) => ({ ...base, scope: 'shared', ownerId: id }));
+    return [{ ...base, scope: 'shared', ownerId: picked[0], ownerIds: picked }];
   }
 
   // 수정 입력(단일).
@@ -228,7 +227,7 @@ export function TaskComposerModal({
     if (!v || (when === 'weekly' && dows.length === 0) || !remindValid) return null;
     const base = baseInput(v);
     if (personalMode) return { ...base, scope: 'private', ownerId: me };
-    return { ...base, scope: 'shared', ...(picked[0] ? { ownerId: picked[0] } : null) };
+    return { ...base, scope: 'shared', ...(picked[0] ? { ownerId: picked[0], ownerIds: picked } : null) };
   }
 
   // 등록 대상 한 줄 요약 — "어디(언제·데이파트·범위) 할일로 들어가는지" 항상 보이게.
@@ -253,7 +252,7 @@ export function TaskComposerModal({
     return `${whenL} · ${secL} · ${scopeL}${remindL}`;
   }, [when, pickedDate, dows, section, personalMode, picked, nameById, today, DL, remindOn, remindValid, remindAt, routineMode, routineSectionLabel]);
 
-  // 중복 검사 — 신규 등록에서만(수정은 자기 자신과 겹칠 수 있어 제외). 배정 대상 중 하나라도 중복이면 경고.
+  // 중복 검사 — 신규 등록에서만(수정은 자기 자신과 겹칠 수 있어 제외). 담당자 구성까지 같으면 중복.
   const isDup = useMemo(() => {
     if (isEdit) return false;
     return buildInputs().some((input) => !!isDuplicate?.(input));
@@ -424,7 +423,7 @@ export function TaskComposerModal({
 
             {/* 개인 할일이면 담당은 늘 나라서 고를 게 없다 — 칸 자체를 감춘다. */}
             {!personalMode && (
-            <Field label={routineMode ? '누가 맡나요?' : isOwner && !isEdit ? '누가 맡나요? (여러 명 선택 가능)' : '누가 맡나요?'}>
+            <Field label={routineMode ? '누가 맡나요?' : isOwner ? '누가 맡나요? (여러 명 선택 가능)' : '누가 맡나요?'}>
               <View style={s.seg}>
                 <Pressable onPress={pickNoAssignee} style={[s.segO, picked.length === 0 && s.segOn]}>
                   <Text style={[s.segText, picked.length === 0 && { color: '#fff' }]}>담당 없음</Text>
@@ -440,7 +439,7 @@ export function TaskComposerModal({
                       accessibilityRole="button"
                       accessibilityLabel={m.name}
                     >
-                      {on && !isEdit && !routineMode && <Ionicons name="checkmark" size={13} color="#fff" style={{ marginRight: 3 }} />}
+                      {on && !routineMode && <Ionicons name="checkmark" size={13} color="#fff" style={{ marginRight: 3 }} />}
                       <Text style={[s.segText, on && { color: '#fff' }]}>{m.name}</Text>
                     </Pressable>
                   );

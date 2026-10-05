@@ -2,7 +2,7 @@
 // 벨 뱃지(개수)와 알림 화면(목록)이 같은 술어/집계를 공유한다.
 // UI(아이콘·틴트·onPress)는 화면이 kind로 매핑 — 여기선 순수 데이터만 만든다.
 import type { FeedItem, TaskTemplate, DoneMark } from '@/lib/store/useWorkStore';
-import { occursOn } from '@/lib/store/useWorkStore';
+import { occursOn, assigneesOf } from '@/lib/store/useWorkStore';
 import type { SwapRequest, ShiftTemplate } from '@/lib/store/useScheduleStore';
 import type { PendingMember } from '@/lib/store/useStaffStore';
 import type { UnknownQuery, PlaybookSuggestion, PaymentClaim, OwnerAlert } from '@/types';
@@ -51,7 +51,7 @@ export const isUnreadMention = (f: FeedItem, me: string): boolean =>
 
 /** 남이 나에게 배정한 할일(내가 작성한 건 제외). date에 뜨고, 아직 완료 안 했으면 '해야 할 배정'. */
 export const isAssignedToMe = (t: TaskTemplate, me: string): boolean =>
-  t.ownerId === me && !!t.createdBy && t.createdBy !== me;
+  assigneesOf(t).includes(me) && !!t.createdBy && t.createdBy !== me;
 export const isPendingAssignment = (
   t: TaskTemplate,
   me: string,

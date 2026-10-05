@@ -3,7 +3,7 @@ import { useMemo } from 'react';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useUnknownQueueStore } from '@/lib/store/useUnknownQueueStore';
 import { useAttendanceStore } from '@/lib/store/useAttendanceStore';
-import { useWorkStore, useDayparts, daypartRoutineTemplates, occursOn, taskVisibleTo } from '@/lib/store/useWorkStore';
+import { useWorkStore, useDayparts, daypartRoutineTemplates, occursOn, taskVisibleTo, assigneesOf } from '@/lib/store/useWorkStore';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { useStaffStore } from '@/lib/store/useStaffStore';
 import { useSuggestionStore } from '@/lib/store/useSuggestionStore';
@@ -145,7 +145,7 @@ export function useOwnerDashboardData(): OwnerDashboardData {
           done: !!mark,
           doneBy: mark?.byName,
           doneAt: mark?.at ? hhmm(mark.at) : undefined,
-          assignee: t.ownerId ? nameOfMember(t.ownerId) : undefined,
+          assignee: assigneesOf(t).length ? assigneesOf(t).map(nameOfMember).join('·') : undefined,
           ...(t.remindAt ? { at: t.remindAt } : null),
           ...(t.roomId ? { roomId: t.roomId } : null),
           ...(photoUrl ? { photoUrl } : null),

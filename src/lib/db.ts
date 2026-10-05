@@ -1853,6 +1853,8 @@ function mapTemplateRow(r: any): TaskTemplate {
     ...(r.section_note ? { sectionNote: r.section_note as string } : null),
     scope: (r.scope as 'shared' | 'private') ?? 'shared',
     ...(r.owner_id ? { ownerId: r.owner_id as string } : null),
+    // 담당자 전원(0254). 컬럼이 없거나 비면 싣지 않는다 — 읽는 쪽은 assigneesOf 가 ownerId 로 대신한다.
+    ...(Array.isArray(r.owner_ids) && r.owner_ids.length ? { ownerIds: r.owner_ids as string[] } : null),
     ...(r.created_by ? { createdBy: r.created_by as string } : null),
     ...(r.recurrence ? { recurrence: r.recurrence } : null),
     // date(신규) 우선, 없으면 due_date(레거시) → date로 흡수.
@@ -1875,6 +1877,8 @@ export async function fetchTemplates(): Promise<ReadResult<TaskTemplate[]>> {
   }
   return { data: (data ?? []).map(mapTemplateRow), error: false };
 }
+// useWorkStore.assigneesOf 와 같은 규칙. 그쪽을 import 하면 순환 참조라 여기 따로 둔다.
+const ownerIdsOf = (t: TaskTemplate): string[] => (t.ownerIds?.length ? t.ownerIds : t.ownerId ? [t.ownerId] : []);
 export async function insertTemplate(t: TaskTemplate): Promise<boolean> {
   if (!HAS_SUPABASE) return true;
   return write(
@@ -1888,7 +1892,9 @@ export async function insertTemplate(t: TaskTemplate): Promise<boolean> {
       room_id: t.roomId ?? null,
       section_note: t.sectionNote ?? null,
       scope: t.scope ?? 'shared',
-      owner_id: t.ownerId ?? null,
+      // 담당자(0254) — 배열이 정본, owner_id 는 첫 사람(옛 앱 호환). 서버 트리거도 같은 규칙으로 맞춘다.
+      owner_ids: ownerIdsOf(t),
+      owner_id: ownerIdsOf(t)[0] ?? null,
       // created_by 미지정 시 DB default auth.uid()가 채운다(삽입한 본인).
       ...(t.createdBy ? { created_by: t.createdBy } : null),
       recurrence: t.recurrence ?? null,
@@ -1912,7 +1918,8 @@ export async function updateTemplate(t: TaskTemplate): Promise<boolean> {
         description: t.description ?? null,
         section_note: t.sectionNote ?? null,
         scope: t.scope ?? 'shared',
-        owner_id: t.ownerId ?? null,
+        owner_ids: ownerIdsOf(t),
+        owner_id: ownerIdsOf(t)[0] ?? null,
         recurrence: t.recurrence ?? null,
         date: t.date ?? t.dueDate ?? null,
         remind_at: t.remindAt ?? null,

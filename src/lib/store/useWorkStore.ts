@@ -255,6 +255,8 @@ export type TaskTemplate = {
   /** private 대상자(이 사람의 '내 할일'). 본인은 항상 조회 가능.
    *  shared 인데 ownerId 가 있으면 = **담당자만 정해둔 매장 공통 일**(루틴) — 전원에게 보이고 꼬리표만 붙는다. */
   ownerId?: string;
+  /** 담당자 전원(0254). ownerId 는 늘 이 배열의 첫 사람이다(옛 앱 호환용). 읽을 때는 assigneesOf 를 쓴다. */
+  ownerIds?: string[];
   /** 작성자 userId. private는 owner_id 또는 created_by가 본인일 때만 보인다(사장 자동조회 폐기). */
   createdBy?: string;
   recurrence?: Recurrence;
@@ -379,7 +381,13 @@ export function daypartRoutineTemplates(dayparts: Daypart[], templates: TaskTemp
  * (사장이라도 직원이 자가등록한 '내 할일'은 안 보인다 — created_by/owner_id 본인만.)
  */
 export function taskVisibleTo(t: TaskTemplate, me: string): boolean {
-  return (t.scope ?? 'shared') !== 'private' || t.ownerId === me || t.createdBy === me;
+  return (t.scope ?? 'shared') !== 'private' || assigneesOf(t).includes(me) || t.createdBy === me;
+}
+
+/** 담당자 전원(0254). owner_ids 가 없는 옛 행·루틴은 ownerId 하나로 대신한다. */
+export function assigneesOf(t: { ownerId?: string; ownerIds?: string[] }): string[] {
+  if (t.ownerIds && t.ownerIds.length) return t.ownerIds;
+  return t.ownerId ? [t.ownerId] : [];
 }
 
 /** 그 날짜(YYYY-MM-DD)에 이 할일이 떠야 하는가? (루틴=요일 매칭, 예정=날짜 일치) */
@@ -577,7 +585,7 @@ export function findDuplicateTask(templates: TaskTemplate[], input: NewTask): Ta
       norm(t.text) === txt &&
       t.section === input.section &&
       (t.scope ?? 'shared') === (input.scope ?? 'shared') &&
-      (t.ownerId ?? '') === (input.ownerId ?? '') &&
+      [...assigneesOf(t)].sort().join(',') === [...assigneesOf(input)].sort().join(',') &&
       scheduleKey(t) === sched,
   );
 }
@@ -659,6 +667,8 @@ export type NewTask = {
   description?: string;
   scope: TaskScope;
   ownerId?: string;
+  /** 담당자 여러 명(0254). 있으면 이것이 정본이고 ownerId 는 첫 사람이다. */
+  ownerIds?: string[];
   /** 루틴 하루 예외(0146) — 이 할일이 대신하는 루틴 id. '오늘 하루만 수정'에서만 실린다. */
   replacesRoutineId?: string;
   /** 작성자 userId(=등록하는 본인). private 가시성 판정에 쓴다. */
@@ -858,7 +868,7 @@ export const useWorkStore = create<State>((set, get) => ({
       ...(input.replacesRoutineId ? { replacesRoutineId: input.replacesRoutineId } : null),
       scope: input.scope,
       ...(room ? { roomId: room } : null),
-      ...(input.ownerId ? { ownerId: input.ownerId } : null),
+      ...(assigneesOf(input).length ? { ownerId: assigneesOf(input)[0], ownerIds: assigneesOf(input) } : null),
       ...(input.createdBy ? { createdBy: input.createdBy } : null),
       ...(input.sectionNote ? { sectionNote: input.sectionNote } : null),
       ...(input.recurrence ? { recurrence: input.recurrence } : null),
@@ -877,8 +887,10 @@ export const useWorkStore = create<State>((set, get) => ({
       await get().attachKnowhow(t.id, input.knowhowIds);
     }
     // 배정 알림 — 저장 성공 후에만(실패·롤백 시 유령 배정 푸시 방지 — F2). 남에게 배정한 경우만, OS 푸시만.
-    if (ok && t.ownerId && t.ownerId !== t.createdBy) {
-      notifyUserAssign(t.ownerId, useSessionStore.getState().userName || '담당자', t.text);
+    if (ok) {
+      for (const uid of assigneesOf(t)) {
+        if (uid !== t.createdBy) notifyUserAssign(uid, useSessionStore.getState().userName || '담당자', t.text);
+      }
     }
     return ok;
   },
@@ -893,7 +905,9 @@ export const useWorkStore = create<State>((set, get) => ({
       ...(patch.description?.trim() ? { description: patch.description.trim() } : { description: undefined }),
       scope: patch.scope,
       // ownerId/date/sectionNote는 조건부 필드 — patch에 없으면 명시적으로 제거(가게전체로 바꾸면 담당 해제).
-      ...(patch.ownerId ? { ownerId: patch.ownerId } : { ownerId: undefined }),
+      ...(assigneesOf(patch).length
+        ? { ownerId: assigneesOf(patch)[0], ownerIds: assigneesOf(patch) }
+        : { ownerId: undefined, ownerIds: undefined }),
       ...(patch.section === 'etc' && patch.sectionNote ? { sectionNote: patch.sectionNote } : { sectionNote: undefined }),
       ...(patch.recurrence ? { recurrence: patch.recurrence } : { recurrence: undefined }),
       ...(patch.date ? { date: patch.date } : { date: undefined }),
@@ -916,9 +930,14 @@ export const useWorkStore = create<State>((set, get) => ({
       if (toAdd.length) await get().attachKnowhow(id, toAdd);
       if (toRemove.length) await get().detachKnowhow(id, toRemove);
     }
-    // 재배정 알림 — 저장 성공 후에만(F2). 담당자가 새로 바뀐 경우에만, 작성자 본인 배정 제외.
-    if (ok && updated.ownerId && updated.ownerId !== before.ownerId && updated.ownerId !== updated.createdBy) {
-      notifyUserAssign(updated.ownerId, useSessionStore.getState().userName || '담당자', updated.text);
+    // 재배정 알림 — 저장 성공 후에만(F2). 새로 들어온 담당자에게만, 작성자 본인 배정 제외.
+    if (ok) {
+      const prev = assigneesOf(before);
+      for (const uid of assigneesOf(updated)) {
+        if (!prev.includes(uid) && uid !== updated.createdBy) {
+          notifyUserAssign(uid, useSessionStore.getState().userName || '담당자', updated.text);
+        }
+      }
     }
     return ok;
   },
