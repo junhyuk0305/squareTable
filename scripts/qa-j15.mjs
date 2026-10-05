@@ -40,6 +40,19 @@ console.log('[1] 채팅 규칙(src/lib/work/chatRules.ts)');
   const feed = [msg({ id: 'a' }), msg({ id: 'b' })];
   const after = fn(markSendFailed) ? markSendFailed(feed, 'b') : feed.filter((f) => f.id !== 'b');
   check('★① 전송 실패 → 글을 지우지 않고 실패로 표시한다', after.length === 2 && after[1].sendState === 'failed' && after[0].sendState === undefined, JSON.stringify(after.map((f) => f.sendState ?? '-')));
+
+  // 논리 점검 D4 — 새로고침(hydrate)이 실패·전송 중 메시지를 지우지 않는다. 다시 보내면 지금 시각으로 들어간다.
+  const { carryUnsent, restampForResend } = await load('../src/lib/work/chatRules.ts');
+  const server = [msg({ id: 'a' })];
+  const local = [msg({ id: 'a' }), msg({ id: 'b', sendState: 'failed' }), msg({ id: 'c' }), msg({ id: 'gone' })];
+  const merged = fn(carryUnsent) ? carryUnsent(server, local, new Set(['c'])) : server;
+  check('★D4 새로고침 뒤에도 실패한 내 메시지가 남는다(실패 표시 그대로)', merged.some((f) => f.id === 'b' && f.sendState === 'failed'), JSON.stringify(merged.map((f) => f.id)));
+  check('★D4 아직 저장 중인 내 메시지도 남는다', merged.some((f) => f.id === 'c'), JSON.stringify(merged.map((f) => f.id)));
+  check('D4 서버에서 지워진 다른 글은 남기지 않는다 · 서버에 있는 글은 한 번만', !merged.some((f) => f.id === 'gone') && merged.filter((f) => f.id === 'a').length === 1, JSON.stringify(merged.map((f) => f.id)));
+  const again = fn(carryUnsent) ? carryUnsent([msg({ id: 'b' })], local, new Set()) : [];
+  check('D4 서버에 이미 들어간 글은 서버 것을 쓴다(중복 없음)', again.length === 1 && again[0].sendState === undefined, JSON.stringify(again));
+  const re = fn(restampForResend) ? restampForResend(msg({ id: 'b', sendState: 'failed', date: '2026-10-04', createdAt: iso(NOW - 26 * H) }), iso(NOW), '2026-10-05') : null;
+  check('★D4 다시 보내면 지금 시각·오늘 날짜로 들어간다(id 는 그대로)', re?.id === 'b' && re?.createdAt === iso(NOW) && re?.date === '2026-10-05' && re?.sendState === undefined, JSON.stringify(re));
 }
 
 console.log('\n[2] 앞으로 돌아오면 다시 읽기(src/lib/app/foreground.ts)');
@@ -66,6 +79,9 @@ console.log('\n[4] 배선(주석 제외 코드)');
   const pm = (store.match(/postMessage: \(date, text[\s\S]*?\n  \},/) || [''])[0];
   check('★① postMessage 실패가 글을 지우지 않고 markSendFailed 로 표시한다', /markSendFailed\(/.test(pm) && !/feed: s\.feed\.filter\(\(f\) => f\.id !== item\.id\)/.test(pm));
   check('① retryMessage · discardFailedMessage 가 있다', /retryMessage: /.test(store) && /discardFailedMessage: /.test(store));
+  check('★D4 hydrate 가 서버 피드에 실패·저장 중 메시지를 다시 얹는다(carryUnsent)', /feed: carryUnsent\(live\.feed, get\(\)\.feed, sendingIds\)/.test(store));
+  const rm = (store.match(/retryMessage: \(id\) => \{[\s\S]*?\n  \},/) || [''])[0];
+  check('★D4 다시 보내기가 지금 시각으로 새로 찍는다(restampForResend)', /restampForResend\(failed, new Date\(\)\.toISOString\(\), todayStr\(\)\)/.test(rm));
   const db = strip(read('src/lib/db.ts'));
   check('① 저장할 때 sendState 를 서버에 싣지 않는다', /export async function upsertFeed[\s\S]{0,400}sendState/.test(db));
   const chat = strip(read('src/components/work/WorkChat.tsx'));
