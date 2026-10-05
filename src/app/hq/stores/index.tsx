@@ -10,7 +10,7 @@ import { View, Text, TextInput, StyleSheet } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
-import { HqPage, HqButton, HqPill, HqSegment, HqEmpty, HqLoadError } from '@/components/hq/HqKit';
+import { HqPage, HqButton, HqPill, HqSegment, HqEmpty, HqLoadError, HqSlab } from '@/components/hq/HqKit';
 import { HqTable, Cell, type HqColumn, type HqSort } from '@/components/hq/HqTable';
 import { AddStoreModal } from '@/components/hq/AddStoreModal';
 import { ScreenLoading } from '@/components/ScreenLoading';
@@ -18,8 +18,8 @@ import { Appear } from '@/components/Appear';
 import { useBrandStore } from '@/lib/store/useBrandStore';
 import { useBrandUnitsPageStore, HQ_STORES_PAGE_SIZE } from '@/lib/store/useBrandUnitsPageStore';
 import { useBrandKnowhowStore } from '@/lib/store/useBrandKnowhowStore';
-import type { BrandOverviewRow, BrandOverviewSort, BrandRelation, BrandVisibility } from '@/lib/brand/brandDb';
-import { visibilityLabel, payerLabel, relationLabel, RELATIONS, VISIBILITY_LEVELS, VIS_TONE, REL_TONE } from '@/lib/brand/visibility';
+import { fetchBrandEndedUnits, type BrandEndedUnitRow, type BrandOverviewRow, type BrandOverviewSort, type BrandRelation, type BrandVisibility } from '@/lib/brand/brandDb';
+import { visibilityLabel, payerLabel, relationLabel, RELATIONS, VISIBILITY_LEVELS, VIS_TONE, REL_TONE, endReasonLabel } from '@/lib/brand/visibility';
 import { InkColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
@@ -32,6 +32,10 @@ const SORT_LABEL: Record<BrandOverviewSort, [string, string]> = {
   pending_q: ['미해결 질문 적은 순', '미해결 질문 많은 순'],
   mastery: ['숙지율 낮은 순', '숙지율 높은 순'],
 };
+
+/** 연결 끝난 매장 — 누가 끊었나(0250). */
+const ENDED_BY_LABEL: Record<BrandEndedUnitRow['ended_by'], string> = { owner: '점주', brand: '본사', admin: '운영팀' };
+const fmtDay = (iso: string) => new Date(iso).toLocaleDateString('ko-KR');
 
 export default function HqStoresScreen() {
   const router = useRouter();
@@ -51,10 +55,18 @@ export default function HqStoresScreen() {
   const knowhowLoaded = useBrandKnowhowStore((s) => s.loaded);
   const knowhowError = useBrandKnowhowStore((s) => s.error);
   const hydrateKnowhow = useBrandKnowhowStore((s) => s.hydrate);
-  // ready 게이트(ui.md) — 표 · '매장 추가' 기본 요금 부담 · 받은 노하우 열이 다 와야 그린다.
-  const ready = pageLoaded && brandLoaded && knowhowLoaded;
+  // 연결 끝난 매장(0250 · Q28) — 사유와 끝난 날만 온다. 실패하면 그 칸만 안내하고 표는 그대로 그린다.
+  const [ended, setEnded] = useState<BrandEndedUnitRow[] | null>(null);
+  const [endedError, setEndedError] = useState(false);
+  const loadEnded = useCallback(async () => {
+    const r = await fetchBrandEndedUnits();
+    setEndedError(!!r.error);
+    if (!r.error) setEnded(r.data ?? []);
+  }, []);
+  // ready 게이트(ui.md) — 표 · '매장 추가' 기본 요금 부담 · 받은 노하우 열 · 연결 끝난 매장이 다 와야 그린다.
+  const ready = pageLoaded && brandLoaded && knowhowLoaded && (ended !== null || endedError);
 
-  const refresh = useCallback(() => Promise.all([refreshPage(), hydrateKnowhow()]), [refreshPage, hydrateKnowhow]);
+  const refresh = useCallback(() => Promise.all([refreshPage(), hydrateKnowhow(), loadEnded()]), [refreshPage, hydrateKnowhow, loadEnded]);
   // 포커스마다 재조회(정본 §6-3) — 점주가 수준을 내리면 돌아왔을 때 사라져 있어야 한다.
   useFocusEffect(useCallback(() => { void refresh(); }, [refresh]));
   // 화면을 떠나면 조건을 처음으로.
@@ -129,6 +141,13 @@ export default function HqStoresScreen() {
     { key: 'mastery', label: '숙지율', width: 96, align: 'right', render: (r) => <Cell kind={r.mastery === null ? 'muted' : 'num'}>{r.mastery === null ? '—' : `${Math.round(r.mastery * 100)}%`}</Cell>, sortValue: (r) => r.mastery },
     { key: 'pending_q', label: '미해결 질문', width: 124, align: 'right', render: (r) => <Cell kind="num">{r.pending_q}</Cell>, sortValue: (r) => r.pending_q },
     { key: 'payer', label: '요금 부담', width: 124, render: (r) => <HqPill tone={r.payer === 'brand' ? 'y' : 'n'} label={payerLabel(r.payer)} /> },
+  ];
+
+  const endedColumns: HqColumn<BrandEndedUnitRow>[] = [
+    { key: 'name', label: '매장', render: (r) => <Cell kind="name">{r.store_name}</Cell> },
+    { key: 'ended', label: '끝난 날', width: 140, render: (r) => <Cell kind="muted">{fmtDay(r.ended_at)}</Cell> },
+    { key: 'by', label: '끝낸 쪽', width: 100, render: (r) => <Cell>{ENDED_BY_LABEL[r.ended_by]}</Cell> },
+    { key: 'reason', label: '사유', width: 260, render: (r) => <Cell>{endReasonLabel(r.end_reason)}</Cell> },
   ];
 
   const from = query.offset + 1;
@@ -208,6 +227,21 @@ export default function HqStoresScreen() {
           <Text style={styles.note}>
             매장 삭제와 직원 임면은 본사 화면에 없어요. 매장과 사람은 점주가 정해요.
           </Text>
+
+          {/* 연결 끝난 매장(0250 · Q28) — 점주가 해제 시트에서 고른 사유가 여기 온다. 끝난 뒤 운영 데이터는 서버가 주지 않는다. */}
+          {endedError ? (
+            <Text style={styles.note} testID="hq-stores-ended-error">연결 끝난 매장을 불러오지 못했어요.</Text>
+          ) : ended && ended.length > 0 ? (
+            <View style={styles.ended}>
+              <HqSlab title="연결 끝난 매장" hint="끝난 날과 사유만 남아요. 끝난 뒤 매장 데이터는 보이지 않아요." />
+              <HqTable
+                columns={endedColumns}
+                rows={ended}
+                rowKey={(r) => r.unit_id}
+                testID="hq-stores-ended"
+              />
+            </View>
+          ) : null}
         </Appear>
       )}
 
@@ -234,4 +268,5 @@ const styles = StyleSheet.create({
   pager: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Space.md, marginTop: -Space.sm, marginBottom: Space.xl },
   pagerText: { fontSize: 14, fontWeight: '700', color: InkColors.ink2, fontVariant: ['tabular-nums'] },
   note: { fontSize: 13.5, color: InkColors.ink3 },
+  ended: { marginTop: Space.xl },
 });

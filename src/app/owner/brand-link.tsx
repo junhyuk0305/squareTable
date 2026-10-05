@@ -18,7 +18,7 @@ import { setBrandVisibility, acceptPayer, endBrandUnit, type MyBrandViewRow, typ
 import { brandErrorMessage } from '@/lib/brand/errors';
 import {
   VISIBILITY_LEVELS, NEVER_SHARED, END_REASONS, visibilityLabel, payerLabel,
-  relationLabel, isBelowFloor, LOCK_REASON,
+  relationLabel, isBelowFloor, LOCK_REASON, endedLinkLine,
 } from '@/lib/brand/visibility';
 import { showToast } from '@/lib/store/useToastStore';
 import { confirmAction } from '@/lib/utils/confirm';
@@ -32,6 +32,7 @@ const fmtDay = (iso: string) => new Date(iso).toLocaleDateString('ko-KR');
 export default function BrandLinkScreen() {
   const router = useRouter();
   const links = useOwnerBrandStore((s) => s.links);
+  const history = useOwnerBrandStore((s) => s.history);
   const loaded = useOwnerBrandStore((s) => s.loaded);
   const hydrate = useOwnerBrandStore((s) => s.hydrate);
   useEffect(() => { void hydrate(); }, [hydrate]);
@@ -47,6 +48,15 @@ export default function BrandLinkScreen() {
           <Ionicons name="unlink-outline" size={28} color={InkColors.ink3} />
           <Text style={styles.emptyTitle}>연결된 본사가 없어요</Text>
           <Text style={styles.emptyBody}>본사가 내 번호로 초대를 보내면 홈에 요청 카드가 떠요. 연결은 초대로만 시작돼요.</Text>
+          {/* 0250(Q29) — "연결이 끝났어요" 알림을 누르고 온 점주가 무엇이 끝났는지 본다. 180일 안의 끝난 연결만. */}
+          {history.map((h) => (
+            <View key={`${h.unit_id}:${h.brand_name}`} style={[styles.card, styles.endedCard]} testID="brand-link-ended">
+              <Text style={styles.endedText}>{endedLinkLine(h.brand_name, h.ended_at)}</Text>
+              <Pressable accessibilityRole="button" onPress={() => router.push('/owner/knowledge')} style={({ pressed }) => [styles.small, pressed && { opacity: 0.7 }]}>
+                <Text style={styles.smallText}>내 노하우 보기</Text>
+              </Pressable>
+            </View>
+          ))}
           <Pressable accessibilityRole="button" onPress={() => router.back()} style={({ pressed }) => [styles.secondary, pressed && { opacity: 0.7 }]}>
             <Text style={styles.secondaryText}>돌아가기</Text>
           </Pressable>
@@ -308,6 +318,8 @@ const styles = StyleSheet.create({
   danger: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', paddingVertical: 8, paddingHorizontal: 14, borderRadius: Radius.pill, backgroundColor: BrandColors.badSoft },
   dangerText: { fontSize: 13, fontWeight: '800', color: BrandColors.badText },
   note: { fontSize: 12.5, lineHeight: 18, color: InkColors.ink3 },
+  endedCard: { alignSelf: 'stretch', padding: Space.md, gap: Space.sm, alignItems: 'flex-start' },
+  endedText: { fontSize: 13.5, lineHeight: 20, color: InkColors.ink },
   secondary: { minHeight: 48, alignItems: 'center', justifyContent: 'center', paddingHorizontal: Space.lg },
   secondaryText: { fontSize: 14, fontWeight: '700', color: InkColors.ink2 },
   lvRow: { paddingVertical: 10, paddingHorizontal: Space.md, gap: 2 },

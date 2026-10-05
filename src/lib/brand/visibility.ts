@@ -118,3 +118,18 @@ export const END_REASONS: { key: string; label: string }[] = [
   { key: 'privacy', label: '공개 범위가 부담돼요' },
   { key: 'other', label: '그 밖의 이유' },
 ];
+
+/** 끝난 연결의 사유 키 → 문구(0250 · 본사 "연결 끝난 매장" 표). 점주가 고른 키는 해제 시트 문구 그대로다.
+ *  'brand' = 본사 웹이 끊을 때 남기는 키 · 'consent_declined' = 관계 전환 동의 거절(0224). 모르는 값은 그대로 보이지 않는다. */
+export const endReasonLabel = (key: string | null): string => {
+  if (!key) return '사유 없음';
+  if (key === 'brand') return '본사가 끝냈어요';
+  if (key === 'consent_declined') return '바뀐 관계에 동의하지 않았어요';
+  return END_REASONS.find((r) => r.key === key)?.label ?? '그 밖의 이유';
+};
+
+/** 점주 brand-link 빈 화면의 "끝난 연결" 한 줄(설계 05 §10·11). 날짜는 한국 날짜다. */
+export const endedLinkLine = (brandName: string, endedAt: string): string => {
+  const kst = new Date(new Date(endedAt).getTime() + 9 * 3600 * 1000);
+  return `${brandName} 본사와 연결이 ${kst.getUTCMonth() + 1}월 ${kst.getUTCDate()}일에 끝났어요. 받은 노하우는 그대로 있어요.`;
+};

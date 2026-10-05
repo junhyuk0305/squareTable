@@ -5,12 +5,14 @@
 // realtime 없음 — 초대·요청은 푸시(0213 owner_alerts)가 먼저 알리고, 화면 진입 시 재조회로 충분하다.
 import { create } from 'zustand';
 import { coalesce } from '@/lib/store/realtimeSync';
-import { fetchMyBrandInvites, myBrandView, type MyBrandInviteRow, type MyBrandViewRow } from '@/lib/brand/brandDb';
+import { fetchMyBrandInvites, myBrandView, myBrandHistory, type MyBrandInviteRow, type MyBrandViewRow, type MyBrandHistoryRow } from '@/lib/brand/brandDb';
 import { reportError } from '@/lib/analytics/track';
 
 type State = {
   invites: MyBrandInviteRow[];
   links: MyBrandViewRow[];
+  /** 0250 — 끝난 연결(180일 안). 연결이 없을 때 brand-link 가 "끝난 연결" 카드로 그린다(Q29). */
+  history: MyBrandHistoryRow[];
   loaded: boolean;
   hydrate: () => Promise<void>;
 };
@@ -18,16 +20,19 @@ type State = {
 export const useOwnerBrandStore = create<State>((set) => ({
   invites: [],
   links: [],
+  history: [],
   loaded: false,
   hydrate: coalesce(async () => {
-    const [i, v] = await Promise.all([fetchMyBrandInvites(), myBrandView()]);
+    const [i, v, h] = await Promise.all([fetchMyBrandInvites(), myBrandView(), myBrandHistory()]);
     if (i.error) reportError('ownerBrand.invites', i.error);
     if (v.error) reportError('ownerBrand.view', v.error);
+    if (h.error) reportError('ownerBrand.history', h.error);
     // 실패는 db 계층이 표면화한다 — loaded 는 "기다리기가 끝났나"라 실패해도 세운다(useOwnerAlertStore 와 같은 규칙).
     // 실패한 축은 이전 값을 유지한다(빈 배열로 덮으면 연결이 사라진 것처럼 보인다).
     const patch: Partial<State> = { loaded: true };
     if (!i.error) patch.invites = i.data ?? [];
     if (!v.error) patch.links = v.data ?? [];
+    if (!h.error) patch.history = h.data ?? [];
     set(patch);
   }),
 }));

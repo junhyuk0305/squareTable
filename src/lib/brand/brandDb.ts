@@ -6,6 +6,7 @@
 //   fetchMyBrandInvites · respondBrandInvite · setBrandVisibility · endBrandUnit · myBrandView
 //   · hideBrandCopy · applyBrandPending · myBrandMirror · hideBrandCourse · applyBrandCoursePending
 //   (+ proposePayer/acceptPayer 는 양쪽 공용). **P9-2 에서 ackBrandConsent 가 늘어 12개다.**
+//   **0250 에서 myBrandHistory(끝난 연결 · Q29)가 늘어 13개다.**
 //   (P2 규칙은 6개였다. P3 에서 my_brand_invites 가, P4 에서 숨김·새버전·미러 뷰가, P5 에서 퀴즈 사본의 숨김·새버전이 늘었다.)
 import { supabase, HAS_SUPABASE } from '@/lib/supabase';
 import type { DbResult, DbErr } from '@/lib/db';
@@ -181,6 +182,21 @@ export type MyBrandViewRow = {
   brand_paid_through: string | null;
 };
 
+/** 0250 my_brand_history 한 줄 — 내 매장의 끝난 본사 연결(180일 안 · 본사마다 마지막 한 줄). */
+export type MyBrandHistoryRow = {
+  unit_id: string;
+  store_name: string;
+  brand_name: string;
+  ended_at: string;
+  /** 누가 끊었나 — owner 점주 · brand 본사 · admin 운영팀. */
+  ended_by: 'owner' | 'brand' | 'admin';
+  /** 사유 키(END_REASONS · 'brand' · 'consent_declined'). 문구는 endReasonLabel. */
+  end_reason: string | null;
+};
+
+/** 0250 brand_ended_units 한 줄 — 본사 "연결 끝난 매장". 사유·날짜뿐이고 운영 숫자는 없다. */
+export type BrandEndedUnitRow = Omit<MyBrandHistoryRow, 'brand_name'>;
+
 /** 0222 brand_billing_preview 한 줄 — 이번 달 청구 대상 매장. */
 export type BrandBillingRow = {
   unit_id: string;
@@ -252,6 +268,8 @@ export const fetchBrandOverviewPage = (q: BrandOverviewQuery) =>
     p_visibility: q.visibility ?? null,
     p_units: q.units ?? null,
   });
+/** 0250 — 연결이 끝난 매장과 사유(끝난 뒤 운영 데이터는 주지 않는다). */
+export const fetchBrandEndedUnits = () => rows<BrandEndedUnitRow>('brand_ended_units');
 export const fetchBrandInvites = () => rows<BrandInviteRow>('brand_invites_list');
 export const fetchBrandMembers = () => rows<BrandMemberRow>('brand_members_list');
 export const inviteBrandMember = () => rows<{ token: string; expires_at: string }>('brand_invite_member');
@@ -334,6 +352,8 @@ export const setBrandVisibility = (unitId: string, visibility: BrandVisibility) 
 export const endBrandUnit = (unitId: string, reason?: string) =>
   call('end_brand_unit', { p_unit_id: unitId, p_reason: reason ?? null });
 export const myBrandView = () => rows<MyBrandViewRow>('my_brand_view');
+/** 0250 — 내 매장의 끝난 본사 연결. 연결이 없을 때 brand-link 가 '끝난 연결' 카드로 그린다(Q29). */
+export const myBrandHistory = () => rows<MyBrandHistoryRow>('my_brand_history');
 /**
  * 관계가 바뀌어 다시 받는 동의·고지에 답한다(0224 · 정본 §7·§8).
  * 가맹(`consent_kind='consent'`) = 수락/거절(거절하면 연결이 끝난다) · 직영(`'notice'`) = 확인만.
