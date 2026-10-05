@@ -39,7 +39,6 @@ const hits = new Map<string, { n: number; resetAt: number }>();
 // 입력 하드캡(알림 본문 폭주 방지)
 const MAX_TITLE = 120;
 const MAX_BODY = 300;
-const MAX_URL = 300;
 
 // Expo Push API — 네이티브(Android·iOS) 발송. 토큰 하나 → APNs/FCM 라우팅은 Expo 가 대신 한다.
 // 인증 불필요(Expo Access Token 은 rate-limit 상향용 선택사항, 지금 트래픽 규모엔 불필요).
@@ -129,15 +128,56 @@ function nativeOwnerAlertText(
   }
 }
 
+// ── 푸시를 누르면 열리는 화면 — 서버가 정한다(Q25 · 보안 M8) ─────────────────────────────
+// 사장 알림(owner_alerts) 종류별 화면. ★같은 표가 클라에 한 벌 더 있다 = src/lib/utils/notifications.ts ownerAlertRoute
+//   (앱 알림함). 엣지는 src 를 import 하지 못한다. scripts/check-push-route-sync.mjs 가 두 표를 맞춘다.
+function ownerAlertRouteEdge(kind: string | undefined): string {
+  switch (kind) {
+    case 'brand_invite': return '/owner/brand-consent';
+    case 'brand_visibility_request':
+    case 'brand_payer_proposal':
+    case 'brand_ended':
+    case 'brand_relation_changed':
+    case 'brand_floor_changed':
+    case 'brand_end_right_changed': return '/owner/brand-link';
+    case 'brand_deploy': return '/owner/knowledge';
+    default: return '/billing';
+  }
+}
+
+// 앱이 부르는 발송(audience · tag)의 화면. 클라이언트가 보낸 url · route · unitId 는 쓰지 않는다.
+//   같은 매장 동료가 가짜 주소("https://…", 다른 매장)를 실어 보내면 누른 사람이 그리로 가기 때문이다.
+// ★같은 표가 클라에 한 벌 더 있다 = src/lib/push/notify.ts 각 헬퍼의 url(옛 엣지가 싣는 값).
+//   새 tag 를 더하면 여기도 더한다. 모르는 tag 는 "/"(앱 첫 화면)다. check-push-route-sync.mjs 가 맞춘다.
+function clientPushRoute(audience: string | undefined, tag: string | undefined): string {
+  switch (tag) {
+    case 'join': return '/owner/staff';
+    case 'question': return audience === 'owners' ? '/owner/inbox' : '/junior/chat';
+    case 'suggestion': return '/owner/suggestions';
+    case 'swap-approval':
+    case 'shift-time': return '/owner/schedule';
+    case 'role': return '/junior/home';
+    case 'notice': return audience === 'owners' ? '/owner/work' : '/junior/work';
+    case 'swap-req':
+    case 'swap-result': return '/junior/schedule';
+    case 'mention':
+    case 'assign':
+    case 'training': return '/junior/work';
+    default: return '/';
+  }
+}
+
 /**
  * 네이티브 발송(Expo Push API) — push_device_tokens 의 각 토큰으로 쏜다.
  * 응답의 각 항목이 입력과 같은 순서로 온다(Expo 문서 보장) → 인덱스로 토큰行에 매칭해 죽은 토큰을 가른다.
  * 'DeviceNotRegistered' = 기기에서 앱 삭제/토큰 폐기 → 웹푸시의 404/410 prune 과 같은 취급.
+ * data = { url, unitId, route }. url 은 옛 빌드가 읽는다. 새 빌드는 unitId 매장에 들어가 route 를 연다(Q24).
+ *   셋 다 서버 값이다. 토큰에 title 이 있으면 그 제목을 쓴다(매장 이름을 붙인 제목).
  */
 async function deliverExpoPush(
   admin: Admin,
-  tokens: { id: string; token: string }[],
-  notifIn: { title: string; body: string; url: string; tag?: string },
+  tokens: { id: string; token: string; title?: string }[],
+  notifIn: { title: string; body: string; url: string; route?: string; unitId: string; tag?: string },
 ): Promise<{ sent: number; pruned: number }> {
   if (tokens.length === 0) return { sent: 0, pruned: 0 };
   let sent = 0;
@@ -147,9 +187,9 @@ async function deliverExpoPush(
     const chunk = tokens.slice(i, i + EXPO_PUSH_CHUNK);
     const messages = chunk.map((t) => ({
       to: t.token,
-      title: notifIn.title,
+      title: t.title ?? notifIn.title,
       body: notifIn.body,
-      data: { url: notifIn.url || '/' },
+      data: { url: notifIn.url || '/', unitId: notifIn.unitId, route: notifIn.route || notifIn.url || '/' },
       ...(notifIn.tag ? { categoryId: notifIn.tag } : {}),
       priority: 'high',
     }));
@@ -203,12 +243,13 @@ async function deliverExpoPush(
  *
  * nativeIn = 앱 기기(Expo)에만 다르게 보낼 제목·본문. 없으면 웹과 같은 문구가 간다. 'skip' 이면 앱 기기에는
  *   보내지 않는다(사장 카드 알림만 쓴다 — nativeOwnerAlertText).
+ * route = 새 빌드가 열 화면(없으면 url). 앱 기기 data 의 unitId 는 언제나 scopeUnit 이다(Q24).
  */
 async function deliver(
   admin: Admin,
   scopeUnit: string,
   targets: string[],
-  notifIn: { title: string; body: string; url: string; tag?: string },
+  notifIn: { title: string; body: string; url: string; route?: string; tag?: string },
   nativeIn?: { title: string; body: string } | 'skip',
 ): Promise<{ sent: number; recipients: number; suppressed: number; pruned: number }> {
   if (targets.length === 0) return { sent: 0, recipients: 0, suppressed: 0, pruned: 0 };
@@ -224,12 +265,12 @@ async function deliver(
   // 매장별 개인 설정 — 발송 범위 매장(scopeUnit) 기준. join_owners 도 수신자(사장)는 scopeUnit 소속이라 동일 축.
   const { data: unitPrefRows, error: unitPrefErr } = await admin
     .from('unit_member_prefs')
-    .select('user_id, muted, quiet_enabled, quiet_start, quiet_end')
+    .select('user_id, muted, quiet_enabled, quiet_start, quiet_end, nickname')
     .eq('unit_id', scopeUnit)
     .in('user_id', targets);
   if (unitPrefErr) console.error('[push] unit_member_prefs read failed (fail-open):', unitPrefErr.message);
   const unitPrefByUser = new Map(
-    (unitPrefRows ?? []).map((p: { user_id: string; muted: boolean; quiet_enabled: boolean; quiet_start: string; quiet_end: string }) => [p.user_id, p]),
+    (unitPrefRows ?? []).map((p: { user_id: string; muted: boolean; quiet_enabled: boolean; quiet_start: string; quiet_end: string; nickname?: string | null }) => [p.user_id, p]),
   );
   const nowKst = kstNowHHMM();
   const suppressed: string[] = [];
@@ -256,7 +297,7 @@ async function deliver(
       webRes.error?.message ?? '-', '/', deviceRes.error?.message ?? '-');
     return { sent: 0, recipients: recipientIds.length, suppressed: suppressed.length, pruned: 0 };
   }
-  const deviceTokens = (deviceRes.data ?? []) as { id: string; token: string }[];
+  const deviceTokens = (deviceRes.data ?? []) as { id: string; token: string; user_id: string }[];
 
   const list = (webRes.data ?? []) as { id: string; endpoint: string; p256dh: string; auth: string }[];
   const notif = JSON.stringify({ title: notifIn.title, body: notifIn.body, url: notifIn.url || '/', tag: notifIn.tag });
@@ -292,9 +333,26 @@ async function deliver(
     await admin.from('push_subscriptions').delete().in('id', dead);
   }
 
-  const expo = nativeIn === 'skip'
-    ? { sent: 0, pruned: 0 }
-    : await deliverExpoPush(admin, deviceTokens, nativeIn ? { ...notifIn, ...nativeIn } : notifIn);
+  let expo = { sent: 0, pruned: 0 };
+  if (nativeIn !== 'skip' && deviceTokens.length > 0) {
+    const native = nativeIn ? { ...notifIn, ...nativeIn } : notifIn;
+    // Q24: 2곳 이상 소속인 사람에게는 제목 앞에 매장 이름을 붙인다. 그 사람이 이 매장에 붙인 별명을 먼저 쓴다.
+    //   읽기에 실패하면 매장 이름 없이 보낸다(알림이 안 가는 것보다 낫다).
+    const [memberRes, unitRes] = await Promise.all([
+      admin.from('unit_members').select('user_id').in('user_id', recipientIds),
+      admin.from('units').select('store_name').eq('id', scopeUnit),
+    ]);
+    const stores = new Map<string, number>();
+    for (const m of (memberRes.data ?? []) as { user_id: string }[]) stores.set(m.user_id, (stores.get(m.user_id) ?? 0) + 1);
+    const unitName = String(((unitRes.data ?? []) as { store_name?: string }[])[0]?.store_name ?? '');
+    const titled = deviceTokens.map((t) => {
+      const name = String(unitPrefByUser.get(t.user_id)?.nickname || unitName).trim();
+      return (stores.get(t.user_id) ?? 0) >= 2 && name
+        ? { ...t, title: `${name} · ${native.title}`.slice(0, MAX_TITLE) }
+        : t;
+    });
+    expo = await deliverExpoPush(admin, titled, { ...native, unitId: scopeUnit });
+  }
 
   return {
     sent: sent + expo.sent,
@@ -404,7 +462,8 @@ async function sweepQuizSends(token: string): Promise<{ swept: number; sent: num
  * 좌석 잠김 회차 적재·AI 80/100% 행(0193 이 적재)·선점·수신자 해석은 전부 sweep_owner_alerts() 가 한다.
  * ★0194: 기본 야간창(22:00~08:00 KST)엔, 그 매장에 개인 방해금지를 켠 사장이 없으면 선점을 미룬다
  *   (알림은 큐에 남아 다음 낮 스윕이 그대로 보낸다 — 유실 아님). 인자 없이 부르면 그 판정은 그대로 적용된다.
- * 여기는 배달과 결과 기록만. 탭하면 앱 안 요금제 화면(/billing) — 외부 결제 유도가 아니다.
+ * 여기는 배달과 결과 기록만. url 은 옛 빌드용 앱 안 요금제 화면(/billing) — 외부 결제 유도가 아니다.
+ *   새 빌드는 route(ownerAlertRouteEdge · 종류별 화면)를 연다(Q25). kind 를 못 읽으면 route 도 /billing 이다.
  * 예외 하나: 카드 결제 알림(0230)은 앱 기기에 중립 문구로 보내거나 보내지 않는다(nativeOwnerAlertText).
  */
 async function sweepOwnerAlerts(token: string): Promise<{ swept: number; sent: number; error?: string }> {
@@ -437,6 +496,7 @@ async function sweepOwnerAlerts(token: string): Promise<{ swept: number; sent: n
       title: r.out_title,
       body: r.out_body,
       url: '/billing',
+      route: ownerAlertRouteEdge(m?.kind),
       tag: `owner-alert-${r.out_id}`,
     }, metaErr ? 'skip' : (nativeOwnerAlertText(m?.kind, m?.step) ?? undefined));
     sent += res.sent;
@@ -541,6 +601,7 @@ Deno.serve(async (req) => {
     userId?: string;
     title?: string;
     body?: string;
+    /** 앱이 보내지만 읽지 않는다. 탭 화면은 clientPushRoute(audience, tag)가 정한다(보안 M8). */
     url?: string;
     tag?: string;
   };
@@ -604,7 +665,6 @@ Deno.serve(async (req) => {
   const audience = payload.audience;
   const title = clip(payload.title, MAX_TITLE);
   const body = clip(payload.body, MAX_BODY);
-  const url = clip(payload.url, MAX_URL);
   const tag = clip(payload.tag, 80) || undefined;
   const ownerOnly = payload.ownerOnly === true;
   if (!title || !audience) return json(400, { error: 'missing_fields' });
@@ -648,6 +708,8 @@ Deno.serve(async (req) => {
   recipientIds = recipientIds.filter((id) => id !== caller.id);
   if (recipientIds.length === 0) return json(200, { sent: 0, recipients: 0 });
 
-  const r = await deliver(admin, scopeUnit, recipientIds, { title, body, url, tag });
+  // 탭 화면과 매장은 서버가 정한다. 클라이언트가 보낸 url · route · unitId 는 버린다(보안 M8 · Q24).
+  const route = clientPushRoute(audience, tag);
+  const r = await deliver(admin, scopeUnit, recipientIds, { title, body, url: route, route, tag });
   return json(200, { sent: r.sent, recipients: r.recipients, pruned: r.pruned, suppressed: r.suppressed });
 });

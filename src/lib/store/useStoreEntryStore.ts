@@ -17,7 +17,7 @@ import { useAttendanceStore } from '@/lib/store/useAttendanceStore';
 import { useScheduleStore } from '@/lib/store/useScheduleStore';
 import { useRoomStore } from '@/lib/store/useRoomStore';
 import { showToast } from '@/lib/store/useToastStore';
-import { canManage } from '@/lib/utils/roles';
+import { canManage, routeForRole } from '@/lib/utils/roles';
 
 /**
  * 진입 커버가 **각 단계**(① 활성 매장 전환 ② 착지 데이터 선반입)마다 최대 이만큼만 기다린다.
@@ -79,13 +79,14 @@ async function prefetchStoreData(manage: boolean): Promise<void> {
 type StoreEntryState = {
   /** 진입 중인 매장(커버가 이걸 보고 그린다). null 이면 커버 없음. */
   entering: { uid: string; name: string } | null;
-  /** name = 화면에 보여줄 이름(닉네임 우선) — 부르는 쪽이 이미 갖고 있다. */
-  enter: (unit: { uid: string; name: string }) => Promise<void>;
+  /** name = 화면에 보여줄 이름(닉네임 우선) — 부르는 쪽이 이미 갖고 있다.
+   *  then = 홈에 내린 뒤 열 화면(푸시 탭 · Q24). 전환 뒤 그 매장의 역할로 routeForRole 을 거친다. */
+  enter: (unit: { uid: string; name: string; then?: string }) => Promise<void>;
 };
 
 export const useStoreEntryStore = create<StoreEntryState>((set, get) => ({
   entering: null,
-  enter: async ({ uid, name }) => {
+  enter: async ({ uid, name, then }) => {
     if (get().entering) return;
     set({ entering: { uid, name } });
     const sess = useSessionStore.getState();
@@ -114,6 +115,7 @@ export const useStoreEntryStore = create<StoreEntryState>((set, get) => ({
     // 0093: 역할은 매장별(A매장 매니저·B매장 직원 가능) — 전환 '후'의 세션 역할로 착지 화면을 정한다.
     // 매니저는 직원 세트로 착지한다(2026-08-27 절충안 ② — 사장 홈은 허용 목록 밖).
     router.replace(useSessionStore.getState().role === 'owner' ? '/owner/dashboard' : '/junior/home');
+    if (then) router.push(routeForRole(then, useSessionStore.getState().role) as never);
     // 착지 화면이 그려진 뒤 커버를 걷는다(먼저 걷으면 빈 상태가 한 프레임 스친다).
     set({ entering: null });
   },

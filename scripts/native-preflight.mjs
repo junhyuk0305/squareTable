@@ -110,6 +110,12 @@ try {
 } catch {
   problems.push('앱 카드 알림 표가 어긋났다 — notifications.ts ownerAlertForPlatform 과 push 엣지 nativeOwnerAlertText 를 같게 고쳐라.');
 }
+// 푸시 탭 화면 표 두 벌(앱 ownerAlertRoute · notify.ts url ↔ 엣지 ownerAlertRouteEdge · clientPushRoute · Q25).
+try {
+  execSync('node scripts/check-push-route-sync.mjs', { cwd: ROOT, stdio: 'inherit' });
+} catch {
+  problems.push('푸시 탭 화면 표가 어긋났다 — notifications.ts ownerAlertRoute · notify.ts url 과 push 엣지 ownerAlertRouteEdge · clientPushRoute 를 같게 고쳐라.');
+}
 
 // ── Q3. Android·iOS 번들 실증 ───────────────────────────────────
 if (SKIP_BUNDLE) {

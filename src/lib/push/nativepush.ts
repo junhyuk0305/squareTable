@@ -15,7 +15,7 @@ import { router } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { reportError } from '@/lib/analytics/track';
 import { useSessionStore } from '@/lib/store/useSessionStore';
-import { routeForRole } from '@/lib/utils/roles';
+import { pushTapPlan } from '@/lib/push/pushTap';
 // db 는 useSessionStore 가 이미 정적으로 import 한다 → 부팅 그래프에 새 모듈이 늘지 않는다.
 import { fetchOwnerAlertMeta } from '@/lib/db';
 import type { PushPermission } from '@/lib/push/webpush';
@@ -46,27 +46,74 @@ export function pushSupported(): boolean {
 }
 
 let listenerBound = false;
+// 마지막으로 처리한 알림 id. 콜드 스타트 응답과 리스너가 같은 탭을 두 번 처리하지 않게 한다.
+let lastHandledId: string | null = null;
+// 콜드 스타트: 첫 화면(index.tsx)이 로그인 뒤 /hub 로 보내는 Redirect 가 끝난 다음에 연다.
+//   먼저 열면 그 Redirect 가 연 화면을 덮는다.
+const COLD_START_SETTLE_MS = 500;
 
-/** 알림 탭 → 앱 내 라우팅. 부팅 1회만 건다. */
+/** 알림 탭 → 앱 내 라우팅. 부팅 1회만 건다. 앱이 꺼진 채 알림으로 열렸으면 로그인 뒤 한 번 처리한다. */
 export function bindNotificationTapRouting(): void {
   if (listenerBound || !pushSupported()) return;
   listenerBound = true;
-  Notifications.addNotificationResponseReceivedListener((res) => {
-    const content = res.notification.request.content;
-    const url = content.data?.url as string | undefined;
-    if (!url) return;
-    void resolveTapUrl(url, content.categoryIdentifier).then((to) => {
-      try {
-        // 목적지 교정은 웹(usePushBootstrap)과 같은 roles.ts routeForRole 하나를 쓴다(F-2).
-        router.push(routeForRole(to, useSessionStore.getState().role) as never);
-      } catch {
-        /* 알 수 없는 경로면 무시 — 앱은 열려 있는 상태 유지 */
-      }
-    });
+  Notifications.addNotificationResponseReceivedListener(handleTap);
+  const runColdStart = () => {
+    setTimeout(() => {
+      void Notifications.getLastNotificationResponseAsync()
+        .then((res) => {
+          if (!res) return;
+          // 다음에 앱을 아이콘으로 열 때 같은 응답을 다시 처리하지 않게 지운다.
+          void Notifications.clearLastNotificationResponseAsync().catch(() => {});
+          handleTap(res);
+        })
+        .catch(() => {});
+    }, COLD_START_SETTLE_MS);
+  };
+  if (useSessionStore.getState().status === 'signed_in') {
+    runColdStart();
+    return;
+  }
+  const unsub = useSessionStore.subscribe((s) => {
+    if (s.status === 'loading') return;
+    unsub();
+    if (s.status === 'signed_in') runColdStart();
   });
 }
 
-// 사장 알림 푸시는 엣지가 종류와 상관없이 '/billing' 을 싣는다(push/index.ts sweepOwnerAlerts).
+function handleTap(res: Notifications.NotificationResponse): void {
+  const id = res.notification.request.identifier;
+  if (id && id === lastHandledId) return;
+  lastHandledId = id;
+  const content = res.notification.request.content;
+  const data = (content.data ?? {}) as { url?: unknown; route?: unknown; unitId?: unknown };
+  // 옛 엣지(route 없음)의 사장 알림은 지금처럼 종류별 화면을 고른다.
+  if (data.route === undefined && typeof data.url === 'string') {
+    void resolveTapUrl(data.url, content.categoryIdentifier).then((url) => followTap({ ...data, url }));
+    return;
+  }
+  followTap(data);
+}
+
+function followTap(data: unknown): void {
+  const s = useSessionStore.getState();
+  const plan = pushTapPlan(data, { unitId: s.unitId, role: s.role });
+  if (plan.kind === 'ignore') return;
+  if (plan.kind === 'enter') {
+    // 다른 매장 알림 — 매장 목록과 같은 진입(switchUnit → tenantReset 이 이전 매장 데이터를 비운다)으로 들어간 뒤 연다.
+    // 동적 import — 진입 스토어는 매장 데이터 스토어를 끌고 와서 부팅 경로에 두지 않는다.
+    const name = s.stores.find((u) => u.unit_id === plan.unitId)?.store_name || '내 매장';
+    void import('@/lib/store/useStoreEntryStore').then(({ useStoreEntryStore }) =>
+      useStoreEntryStore.getState().enter({ uid: plan.unitId, name, then: plan.then }));
+    return;
+  }
+  try {
+    router.push(plan.to as never);
+  } catch {
+    /* 알 수 없는 경로면 무시 — 앱은 열려 있는 상태 유지 */
+  }
+}
+
+// 옛 엣지는 사장 알림 푸시에 종류와 상관없이 '/billing' 만 싣는다(새 엣지는 route 를 싣는다 · Q25).
 // tag 'owner-alert-<id>' 가 categoryIdentifier 로 오므로 그 행의 kind 로 목록과 같은 목적지를 고른다.
 // ★알림 매장이 지금 활성 매장일 때만 바꾼다. 다른 매장이면 그 매장에서의 역할(직원·매니저)이나 노하우가
 //   어긋난다(직원이면 /junior/brand-link 같은 없는 화면). 그때와 못 읽었을 때(세션 복원 전·RLS 0행)는

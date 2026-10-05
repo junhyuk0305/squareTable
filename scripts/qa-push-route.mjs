@@ -131,9 +131,10 @@ const tables = {
 const sent = [];
 const adminFake = {
   from: (t) => chain(tables[t] ?? []),
-  rpc: async (name) => ({
+  rpc: async (name, args) => ({
     data: name === 'push_device_targets'
       ? [{ id: 'd1', token: 'T1', user_id: 'u1' }, { id: 'd2', token: 'T2', user_id: 'u2' }, { id: 'd3', token: 'T3', user_id: 'u3' }]
+        .filter((t) => args.p_user_ids.includes(t.user_id))
       : [],
     error: null,
   }),
