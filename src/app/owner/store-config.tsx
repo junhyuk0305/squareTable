@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { View, Text, Pressable, TextInput, StyleSheet, ScrollView, Platform } from 'react-native';
 import { KeyboardShift } from '@/components/KeyboardShift';
@@ -14,9 +14,11 @@ import { useScheduleStore } from '@/lib/store/useScheduleStore';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { showToast } from '@/lib/store/useToastStore';
 import { confirmAction } from '@/lib/utils/confirm';
-import { fetchDeleteStorePreview } from '@/lib/db';
+import { fetchDeleteStorePreview, fetchUnitBizNo, saveUnitBizNo } from '@/lib/db';
 import { deleteStoreConfirmText, deleteStoreToast, type DeleteStorePreview } from '@/lib/account/storeCopy';
 import { maskHHMM } from '@/lib/utils/attendance';
+import { formatBizNo, isValidBizNo } from '@/lib/utils/bizno';
+import { friendlyError } from '@/lib/utils/userError';
 import { WEEKDAY_LABELS, WEEKDAY_ORDER, closedDaysLabel } from '@/lib/utils/schedule';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Elevation, Radius } from '@/lib/theme/elevation';
@@ -204,6 +206,9 @@ function StoreConfigForm() {
         <Text style={styles.saveText}>{saved ? '저장됐어요 ✓' : saving ? '저장 중이에요' : '저장'}</Text>
       </Pressable>
 
+      {/* C8(0283): 사업자등록번호 — 가입·매장 만들기에서 비워 둔 번호를 여기서 넣는다. 사장 전용. */}
+      {isOwner ? <BizNoSection /> : null}
+
       {/* 다점포 전용 위험 구역 — 이 매장 삭제(사장 전용 + 매장 2개 이상일 때만) */}
       {isOwner && stores.length > 1 ? (
         <View style={styles.dangerBox}>
@@ -225,6 +230,87 @@ function StoreConfigForm() {
       <View style={{ height: 12 }} />
     </ScrollView>
     </KeyboardShift>
+  );
+}
+
+/** 사업자등록번호 칸(C8 · 0283). 저장은 set_store_biz_no RPC 만 쓴다(0268: units 직접 쓰기는 업종뿐). */
+function BizNoSection() {
+  const unitId = useSessionStore((s) => s.unitId);
+  const [bizNo, setBizNo] = useState('');
+  const [loaded, setLoaded] = useState(false);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    setLoaded(false);
+    void fetchUnitBizNo(unitId).then(({ data, error }) => {
+      if (!alive) return;
+      // 못 읽었으면 빈칸으로 덮지 않는다. 그 상태로 저장하면 있던 번호가 지워진다.
+      setLoadFailed(!!error);
+      setBizNo(formatBizNo(data ?? ''));
+      setLoaded(true);
+    });
+    return () => { alive = false; };
+  }, [unitId]);
+
+  const save = async () => {
+    if (saving || !loaded || loadFailed) return;
+    if (bizNo.trim() && !isValidBizNo(bizNo)) return setErr('사업자등록번호 형식(10자리)을 확인해주세요.');
+    setErr(null);
+    setSaving(true);
+    const { data, error } = await saveUnitBizNo(unitId, bizNo);
+    setSaving(false);
+    if (error) {
+      const m = error.message;
+      return setErr(/biz_no_mine/.test(m)
+        ? '내 다른 매장에 이미 등록한 번호예요. 번호를 확인해 주세요.'
+        : /duplicate_biz_no/.test(m)
+          ? '다른 매장에 이미 등록된 번호예요. 번호를 확인해 주세요.'
+          : /invalid_biz_no/.test(m)
+            ? '사업자등록번호 형식(10자리)을 확인해주세요.'
+            : /not_owner/.test(m)
+              ? '사장님만 바꿀 수 있어요.'
+              : friendlyError(m, '저장하지 못했어요. 잠시 후 다시 시도해 주세요.'));
+    }
+    setBizNo(formatBizNo(data ?? ''));
+    showToast(data ? '사업자등록번호를 저장했어요' : '사업자등록번호를 지웠어요', 'good');
+  };
+
+  return (
+    <View style={styles.section}>
+      <SectionLabel title="사업자등록번호" />
+      <TextInput
+        value={bizNo}
+        onChangeText={(v) => { setErr(null); setBizNo(formatBizNo(v)); }}
+        editable={loaded && !loadFailed}
+        placeholder="123-45-67890"
+        placeholderTextColor={InkColors.ink3}
+        keyboardType="number-pad"
+        style={styles.bizInp}
+      />
+      {loadFailed ? (
+        <Text style={styles.hint}>번호를 불러오지 못했어요. 잠시 후 다시 열어 주세요.</Text>
+      ) : err ? (
+        <Text style={styles.bizErr}>{err}</Text>
+      ) : bizNo.length > 0 ? (
+        <Text style={[styles.hint, isValidBizNo(bizNo) && styles.bizOk]}>
+          {isValidBizNo(bizNo) ? '✓ 형식이 올바른 번호예요' : '번호 10자리를 확인해주세요'}
+        </Text>
+      ) : (
+        <Text style={styles.hint}>비워 두고 저장하면 등록한 번호를 지워요.</Text>
+      )}
+      <Pressable
+        onPress={() => { void save(); }}
+        disabled={!loaded || loadFailed || saving}
+        style={({ pressed }) => [styles.bizBtn, (!loaded || loadFailed || saving) && { opacity: 0.4 }, pressed && { opacity: 0.85 }]}
+        accessibilityRole="button"
+        accessibilityLabel="사업자등록번호 저장"
+      >
+        <Text style={styles.bizBtnText}>{saving ? '저장 중이에요' : '번호 저장'}</Text>
+      </Pressable>
+    </View>
   );
 }
 
@@ -258,6 +344,12 @@ const styles = StyleSheet.create({
 
   saveBtn: { backgroundColor: InkColors.ink, borderRadius: Radius.md, paddingVertical: 15, alignItems: 'center' },
   saveText: { fontSize: 15, fontWeight: '800', color: '#fff' },
+
+  bizInp: { fontSize: 15, color: InkColors.ink, paddingHorizontal: 14, paddingVertical: 13, backgroundColor: InkColors.bgSoft, borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, ...(Platform.OS === 'web' ? ({ outlineStyle: 'none' } as object) : null) },
+  bizOk: { color: BrandColors.goodText },
+  bizErr: { fontSize: 12, fontWeight: '700', color: BrandColors.badText },
+  bizBtn: { borderRadius: Radius.md, paddingVertical: 12, alignItems: 'center', borderWidth: 1, borderColor: InkColors.line, backgroundColor: InkColors.bg },
+  bizBtnText: { fontSize: 14, fontWeight: '800', color: InkColors.ink },
 
   dangerBox: { marginTop: Space.lg, borderWidth: 1, borderColor: BrandColors.bad, borderRadius: Radius.md, padding: 16, gap: 8, backgroundColor: InkColors.bg },
   dangerLabel: { fontSize: 12, fontWeight: '800', color: BrandColors.badText, letterSpacing: 0.3 },

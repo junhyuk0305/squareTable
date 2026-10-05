@@ -147,6 +147,17 @@ export async function fetchUnitInfo(unitId: string): Promise<DbResult<UnitInfoRo
   return { data: (data as UnitInfoRow) ?? null, error: error as DbErr };
 }
 
+// ── 사업자등록번호(0283 · C8) — 매장 설정에서 읽고 바꾼다. 쓰기는 RPC 만(0268: units 직접 쓰기는 업종뿐) ──
+export async function fetchUnitBizNo(unitId: string): Promise<DbResult<string>> {
+  const { data, error } = await supabase.from('units').select('biz_no').eq('id', unitId).maybeSingle();
+  return { data: (data as { biz_no: string | null } | null)?.biz_no ?? '', error: error as DbErr };
+}
+/** 저장한 번호(숫자 10자리, 지웠으면 '')를 돌려준다. 오류 message = invalid_biz_no · biz_no_mine · duplicate_biz_no · not_owner. */
+export async function saveUnitBizNo(unitId: string, bizNo: string): Promise<DbResult<string>> {
+  const { data, error } = await supabase.rpc('set_store_biz_no', { p_unit: unitId, p_biz_no: bizNo });
+  return { data: (data as string | null) ?? '', error: error as DbErr };
+}
+
 // ── 다점포(0055) — 매장 목록·활성 전환 (definer RPC). db.ts만 supabase 접근(AGENTS ③) ──
 export type MyUnitRow = { unit_id: string; store_name: string; role: string; industry: string | null; is_active: boolean };
 /** 내가 속한(소유/직원) 매장 목록 — 매장 선택 홈/헤더 스위처용. units RLS는 활성 매장만 보이므로 definer RPC 필요. */
