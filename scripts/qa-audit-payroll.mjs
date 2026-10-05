@@ -136,12 +136,14 @@ console.log('\n[A10] 이미 승인·반려·취소된 교대는 다시 바뀌지
 begin;
 select set_config('qa.o', (select id::text from auth.users where email = 'owner@pilot.squaretable.app'), true);
 select set_config('qa.j', (select id::text from auth.users where email = 'staff2@pilot.squaretable.app'), true);
+select set_config('qa.m', (select id::text from auth.users where email = 'staff@pilot.squaretable.app'), true);
 select set_config('qa.d', to_char(public.kst_today() + 3, 'YYYY-MM-DD'), true);
 insert into public.shift_templates (id, unit_id, staff_id, weekday, shift_date, start_time, end_time, valid_from) values
   ('qa_a10_t', 'store_001', current_setting('qa.j'), null, current_setting('qa.d')::date, '09:00', '13:00', current_setting('qa.d')::date);
 insert into public.swap_requests (id, unit_id, kind, requester_id, date, template_id, status, accepted_by) values
   ('qa_a10_ap', 'store_001', 'cover', current_setting('qa.j'), current_setting('qa.d'), 'qa_a10_t', 'approved', current_setting('qa.o')),
-  ('qa_a10_ac', 'store_001', 'cover', current_setting('qa.j'), current_setting('qa.d'), 'qa_a10_t', 'accepted', current_setting('qa.o'));
+  ('qa_a10_ac', 'store_001', 'cover', current_setting('qa.j'), current_setting('qa.d'), 'qa_a10_t', 'accepted', current_setting('qa.o')),
+  ('qa_a10_op', 'store_001', 'cover', current_setting('qa.o'), current_setting('qa.d'), 'qa_a10_t', 'open', null);
 `;
     const as = (who) => `
 set local role authenticated;
@@ -156,6 +158,15 @@ select set_config('request.jwt.claims', json_build_object('sub', current_setting
     check('합의된(accepted) 요청 반려는 된다', r3.includes('R=rejected'), r3.slice(0, 160));
     const r4 = run('j', `update public.swap_requests set status = 'cancelled' where id = 'qa_a10_ac' returning 'R=' || status;`);
     check('합의된(accepted) 요청 취소는 된다', r4.includes('R=cancelled'), r4.slice(0, 160));
+    // [S1] 요청자 취소는 상태만 바꾼다. 취소에 얹어 수락자·요청자·내용을 바꾸는 길은 없다.
+    const r6 = run('j', `update public.swap_requests set status = 'cancelled', accepted_by = current_setting('qa.m') where id = 'qa_a10_ac' returning 'R=' || status;`);
+    check('★요청 직원이 취소하면서 수락자를 바꾸기 → 거부', r6.startsWith('ERR='), r6.slice(0, 160));
+    const r7 = run('j', `update public.swap_requests set status = 'cancelled', note = 'x' where id = 'qa_a10_ac' returning 'R=' || status;`);
+    check('★요청 직원이 취소하면서 다른 열(메모)을 바꾸기 → 거부', r7.startsWith('ERR='), r7.slice(0, 160));
+    const r8 = run('j', `update public.swap_requests set status = 'cancelled', requester_id = current_setting('qa.j') where id = 'qa_a10_op' returning 'R=' || status;`);
+    check('★동료가 남의 열린 요청을 자기 것으로 바꿔 취소하기 → 거부', r8.startsWith('ERR='), r8.slice(0, 160));
+    const r9 = run('j', `update public.swap_requests set status = 'cancelled', updated_at = now() where id = 'qa_a10_ac' returning 'R=' || status || '/' || (accepted_by = current_setting('qa.o'))::text;`);
+    check('합의된 요청 취소 뒤에도 수락자는 그대로다', r9.includes('R=cancelled/true'), r9.slice(0, 160));
     const r5 = psql(`${SETUP}update public.swap_requests set archived_tenure_id = null, updated_at = now() where id = 'qa_a10_ap' returning 'R=' || status;\nrollback;\n`);
     check('상태를 안 바꾸는 갱신(재입사 표시 등)은 막지 않는다', r5.includes('R=approved'), r5.slice(0, 160));
   }
