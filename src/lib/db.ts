@@ -1288,14 +1288,21 @@ export async function insertEntry(entry: PlaybookEntry): Promise<boolean> {
   return write('insertEntry', supabase.from('playbook_entries').insert(row));
 }
 
+/**
+ * 이 칸만 바뀌면 노하우 **내용**이 바뀐 것이 아니다(E6). updated_at 은 퀴즈 '낡음'·재확인 발송·
+ * 직원 '통과 뒤 바뀜'·'90일 안 고친 노하우'가 보는 값이라, 분류·검증 표시만으로 올리면 그 판정이 다 틀린다.
+ */
+const NON_CONTENT_KEYS = new Set(['section', 'needs_review', 'verification']);
+
 export async function updateEntry(id: string, patch: Partial<PlaybookEntry>): Promise<boolean> {
   if (!HAS_SUPABASE) return true;
+  const contentChanged = Object.keys(patch).some((k) => !NON_CONTENT_KEYS.has(k));
   // 노하우 수정이 0행(RLS/id드리프트)이면 사장이 고친 내용이 조용히 원복된다 → 실제 갱신 확인(P1-6).
   return writeStrict(
     'updateEntry',
     supabase
       .from('playbook_entries')
-      .update({ ...stripNonColumns(patch), updated_at: new Date().toISOString() })
+      .update({ ...stripNonColumns(patch), ...(contentChanged ? { updated_at: new Date().toISOString() } : null) })
       .eq('id', id)
       .select('id'),
   );
@@ -1331,7 +1338,8 @@ export async function renameEntrySection(from: string, to: string | null): Promi
   if (!HAS_SUPABASE) return true;
   return write(
     'renameEntrySection',
-    supabase.from('playbook_entries').update({ section: to, updated_at: new Date().toISOString() }).eq('section', from),
+    // updated_at 은 안 건드린다 — 분류만 바뀌었지 내용이 바뀐 게 아니다(E6 · NON_CONTENT_KEYS).
+    supabase.from('playbook_entries').update({ section: to }).eq('section', from),
   );
 }
 
