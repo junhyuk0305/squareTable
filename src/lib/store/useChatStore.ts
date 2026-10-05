@@ -33,6 +33,51 @@ const SMALLTALK_CHAT_REPLY =
 const SMALLTALK_VAGUE_REPLY =
   '어떤 걸 물어보시는 건지 조금만 구체적으로 알려주시겠어요? 예를 들어 "제빙기 청소 어떻게 해요?"처럼 물어보시면 딱 맞는 노하우를 찾아드려요.';
 
+/** 사장 인박스로 보낼 질문(UnknownQuery) 하나 — 답할 때 미리 만드는 길과 기록에서 다시 만드는 길이 같이 쓴다. */
+function buildDeflect(
+  text: string,
+  juniorId: string,
+  juniorName: string,
+  askedAt: string,
+  meta: { category: string; confidence: number; bestEntryId: string | null },
+): UnknownQuery {
+  return {
+    id: genId('uq'),
+    junior_id: juniorId,
+    junior_name: juniorName,
+    query_text: text,
+    asked_at: askedAt,
+    presumed_category: meta.category,
+    presumed_subcategory: '',
+    match_attempted: true,
+    best_match_confidence: meta.confidence,
+    best_match_entry_id: meta.bestEntryId,
+    status: 'pending_owner_answer',
+    fallback_action: '사장님께 알림 전송됨',
+    owner_notified_at: askedAt,
+    owner_will_answer: true,
+    // ★0으로 시작한다 — 이 값은 '물은 사람(1명)에 **더해진** 수'이고 화면은 +1 해서 쓴다.
+    //   1로 두면 방금 처음 올라온 질문이 전부 "2명이 같은 걸 물었어요"로 뜬다(2026-08-11 실측).
+    //   실제 중복은 useUnknownQueueStore.enqueue 가 올린다.
+    similar_queries_count: 0,
+    ai_general_answer: '잠시만요, 사장님 답변을 기다리고 있어요.',
+  };
+}
+
+/**
+ * 앱을 다시 켜면 등록 준비물(pendingDeflects, 메모리)이 비고 대화 기록만 DB 에서 돌아온다(E7).
+ * 그때 '사장님께 물어보기'를 누르면 기록 한 줄로 같은 질문을 다시 만든다 — 예전엔 조용히 아무 일도 없었다.
+ */
+function deflectFromHistory(q: ChatQuery): UnknownQuery {
+  const bestEntryId = q.matched_entry_ids[0] ?? q.candidate_entry_ids?.[0] ?? null;
+  const best = bestEntryId ? usePlaybookStore.getState().getById(bestEntryId) : undefined;
+  return buildDeflect(q.query_text, q.junior_id, q.junior_name, q.asked_at, {
+    category: inferCategoryFromQuery(q.query_text, best ? [{ entry: { category: best.category }, score: q.match_confidence }] : []),
+    confidence: q.match_confidence,
+    bestEntryId,
+  });
+}
+
 type ChatState = {
   history: ChatQuery[];
   isLoading: boolean;
@@ -111,28 +156,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       meta: { category: string; confidence: number; bestEntryId: string | null },
     ) => {
       try {
-        const uq: UnknownQuery = {
-          id: genId('uq'),
-          junior_id: session.userId,
-          junior_name: session.userName,
-          query_text: text,
-          asked_at: now,
-          presumed_category: meta.category,
-          presumed_subcategory: '',
-          match_attempted: true,
-          best_match_confidence: meta.confidence,
-          best_match_entry_id: meta.bestEntryId,
-          status: 'pending_owner_answer',
-          fallback_action: '사장님께 알림 전송됨',
-          owner_notified_at: now,
-          owner_will_answer: true,
-          // ★0으로 시작한다 — 이 값은 '물은 사람(1명)에 **더해진** 수'이고 화면은 +1 해서 쓴다.
-          //   1로 두면 방금 처음 올라온 질문이 전부 "2명이 같은 걸 물었어요"로 뜬다(2026-08-11 실측).
-          //   실제 중복은 useUnknownQueueStore.enqueue 가 올린다.
-          similar_queries_count: 0,
-          ai_general_answer: '잠시만요, 사장님 답변을 기다리고 있어요.',
-        };
-        set((s) => ({ pendingDeflects: { ...s.pendingDeflects, [cqId]: uq } }));
+        set((s) => ({ pendingDeflects: { ...s.pendingDeflects, [cqId]: buildDeflect(text, session.userId, session.userName, now, meta) } }));
       } catch (e) {
         // 에스컬 버튼만 안 뜬다. 답변·저장은 그대로 — 화면에 실패를 알리지 않는다.
         console.warn('[chat] deflect prep failed:', e);
@@ -345,7 +369,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
 
   // 알바가 '사장님께 등록'을 누르면 보관해둔 질문을 인박스로 보낸다. 중복(같은 질문 대기중)은 enqueue가 합친다.
   registerToOwner: async (queryId) => {
-    const uq = get().pendingDeflects[queryId];
+    // 준비물이 없으면(앱 재시작·매장 전환 뒤) 대화 기록에서 다시 만든다(E7).
+    const q = get().history.find((h) => h.id === queryId);
+    const uq = get().pendingDeflects[queryId] ?? (q ? deflectFromHistory(q) : null);
     if (!uq || get().deflectStatus[queryId] === 'registered') return;
     // 낙관적 표시는 그대로 두되(누른 즉시 반응), **실패하면 되돌린다**(2026-08-25 감사 #24).
     // 예전엔 쓰기 **전에** 'registered' 를 찍고 끝이라, 저장이 실패해도 "사장님께 보냈어요"가
