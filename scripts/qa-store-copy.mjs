@@ -7,7 +7,7 @@
 //   J5 서버가 owner_has_staff 로 막으면(P7-1 뒤) 앱이 "탈퇴 처리에 실패했어요"만 보였다.
 //      → 이유 문구 + [직원 관리로 가기]. 서버 차단은 아직 켜지 않는다.
 //   J8 매장 삭제 확인창이 남은 이용 기간을 말하지 않았다. 돌려주지 않는 매장에 약속하면 안 된다(정책 M2).
-//      → delete_store_preview.returns_slot 이 true 일 때만 기간 문장. 성공 토스트는 delete_store 반환값으로 고른다.
+//      → 2026-10-05 결정: 남은 기간은 돌려주지 않는다. 미리보기에 paid_until 이 있으면 "돌려받을 수 없어요" 문장을 붙인다.
 //   ⛔웹은 매장 삭제 확인창·토스트를 글자 그대로 둔다(토스 동결 · 보수적 판단).
 // 실행: node scripts/qa-store-copy.mjs   (Node 22.18+ — .ts 를 타입만 벗겨 읽는다)
 import { readFileSync } from 'node:fs';
@@ -47,12 +47,11 @@ const { REOPEN_STORE_MESSAGE, OWNER_HAS_STAFF_TEXT, deleteAccountError, deleteSt
 
 const J4 = '기록(출퇴근·근무 기록·노하우·채팅)은 그대로예요. 직원은 새 초대코드로 다시 초대해요.';
 const J5 = '직원이 있으면 탈퇴할 수 없어요. 직원 관리에서 먼저 내보내 주세요.';
-const J8 = (md) => `이 매장의 이용 기간(${md}까지)은 새 매장을 만들 때 쓸 수 있어요. 이용 중인 매장 수와 요금은 그대로예요.`;
+const GONE = (md) => `남은 이용 기간(${md}까지)은 돌려받을 수 없어요.`;
 const DEL_FAIL = '탈퇴 처리에 실패했어요. 잠시 후 다시 시도해 주세요.';
 // ⛔지금 확인창·토스트 문구(웹은 이대로 둔다).
 const OLD_CONFIRM = (name) => `“${name}”의 노하우·근무·급여 등 모든 데이터가 영구 삭제돼요. 되돌릴 수 없어요.`;
 const OLD_TOAST = '매장을 삭제했어요.';
-const BACK_TOAST = '매장을 삭제했어요. 새 매장 1곳을 열 수 있어요.';
 
 console.log('\n■ J4 — 다시 열기 확인창은 기록이 남는다고 말한다');
 {
@@ -116,35 +115,33 @@ console.log('\n■ J5 — 사장 탈퇴가 owner_has_staff 로 막히면 이유�
   check('버튼이 /owner/staff 로 간다', /\/owner\/staff/.test(ui));
 }
 
-console.log('\n■ J8 — 매장 삭제 확인창은 돌려주는 매장에만 기간 문장을 붙인다');
+console.log('\n■ 매장 삭제 확인창은 기간이 남은 유료 매장에 "돌려받을 수 없어요"를 붙인다');
 {
   const conf = (a) => (fn(deleteStoreConfirmText) ? deleteStoreConfirmText(a) : '(함수 없음)');
   const name = '코홀트 강남점';
-  const back = { returns_slot: true, paid_until: '2026-11-15T14:59:59+00:00' };
+  const paid = { returns_slot: false, paid_until: '2026-11-15T14:59:59+00:00' };
   for (const os of ['ios', 'android']) {
-    const t = conf({ storeName: name, preview: back, os });
-    check(`${os} · 돌려줌 → 기간 문장(KST 11월 15일)`, t.includes(J8('11월 15일')) && t.includes(OLD_CONFIRM(name)), show(t));
+    const t = conf({ storeName: name, preview: paid, os });
+    check(`${os} · 기간 남음 → 돌려받을 수 없어요(KST 11월 15일)`, t === OLD_CONFIRM(name) + '\n\n' + GONE('11월 15일'), show(t));
   }
-  const late = conf({ storeName: name, preview: { returns_slot: true, paid_until: '2026-11-15T15:30:00Z' }, os: 'ios' });
-  check('UTC 15:30 은 KST 다음 날(11월 16일)', late.includes(J8('11월 16일')), show(late));
+  const late = conf({ storeName: name, preview: { returns_slot: false, paid_until: '2026-11-15T15:30:00Z' }, os: 'ios' });
+  check('UTC 15:30 은 KST 다음 날(11월 16일)', late.includes(GONE('11월 16일')), show(late));
   const none = conf({ storeName: name, preview: { returns_slot: false, paid_until: null }, os: 'ios' });
-  check('돌려주지 않음 → 지금 문구만', none === OLD_CONFIRM(name), show(none));
+  check('남은 기간 없음 → 지금 문구만', none === OLD_CONFIRM(name), show(none));
   const failed = conf({ storeName: name, preview: null, os: 'android' });
-  check('미리보기를 못 읽음(null) → 약속하지 않는다', failed === OLD_CONFIRM(name), show(failed));
-  const noDate = conf({ storeName: name, preview: { returns_slot: true, paid_until: null }, os: 'ios' });
-  check('날짜가 없으면 약속하지 않는다', noDate === OLD_CONFIRM(name), show(noDate));
-  const web = conf({ storeName: name, preview: back, os: 'web' });
+  check('미리보기를 못 읽음(null) → 지금 문구만', failed === OLD_CONFIRM(name), show(failed));
+  const web = conf({ storeName: name, preview: paid, os: 'web' });
   check('⛔웹은 지금 문구 그대로(동결)', web === OLD_CONFIRM(name), show(web));
-  const t = conf({ storeName: name, preview: back, os: 'ios' });
+  const t = conf({ storeName: name, preview: paid, os: 'ios' });
+  check('옛 J8 문장(새 매장을 만들 때 쓸 수 있어요)이 없다', !t.includes('새 매장을 만들 때'), show(t));
   check('대시·문장 잇는 중간점·결제 채널 말이 없다', !STYLE.test(t) && !CHANNEL.test(t), show(t));
 }
 
-console.log('\n■ J8 — 성공 토스트는 delete_store 반환값으로 고른다');
+console.log('\n■ 성공 토스트는 언제나 같은 문구다');
 {
   const toast = (a) => (fn(deleteStoreToast) ? deleteStoreToast(a) : '(함수 없음)');
-  check('iOS · returned_slot true → 새 매장 문장', toast({ result: { returned_slot: true, paid_until: '2026-11-15T14:59:59Z' }, os: 'ios' }) === BACK_TOAST);
-  check('안드 · returned_slot true → 새 매장 문장', toast({ result: { returned_slot: true, paid_until: '2026-11-15T14:59:59Z' }, os: 'android' }) === BACK_TOAST);
-  check('returned_slot false → 지금 토스트', toast({ result: { returned_slot: false, paid_until: null }, os: 'ios' }) === OLD_TOAST);
+  check('returned_slot true(옛 서버)여도 새 매장 약속 없음', toast({ result: { returned_slot: true, paid_until: '2026-11-15T14:59:59Z' }, os: 'ios' }) === OLD_TOAST);
+  check('returned_slot false → 지금 토스트', toast({ result: { returned_slot: false, paid_until: null }, os: 'android' }) === OLD_TOAST);
   check('반환값 없음(옛 서버 void) → 지금 토스트', toast({ result: null, os: 'android' }) === OLD_TOAST);
   check('⛔웹은 지금 토스트 그대로', toast({ result: { returned_slot: true, paid_until: null }, os: 'web' }) === OLD_TOAST);
 }

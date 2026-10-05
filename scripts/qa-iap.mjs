@@ -647,7 +647,7 @@ async function slotRuleChecks() {
     check('★★⑰-d 환불해도 A 는 선불 만료일까지 열려 있다(H7)', a2?.status === 'active' && sameTime(a2?.paid_until, aPre?.paid_until), JSON.stringify(a2));
   }
 
-  // ── ⑱ J8 — 유료 매장을 지우면 남은 몫을 새 매장용으로 돌려준다 ──────────────
+  // ── ⑱ 유료 매장을 지우면 남은 이용 기간은 사라진다(2026-10-05 결정 · 옛 J8 뒤집음) ──────────────
   {
     const Q = await reuseOwner(3);
     const A = await mkStore(Q, 'QA⑱ 1호점');
@@ -656,13 +656,13 @@ async function slotRuleChecks() {
     const bPaid = await paidUntilOf(B);
     const pend = await claim(Q, 'multi', 2);   // B 에 걸린 대기 신고
     const pv = await Q.c.rpc('delete_store_preview', { p_unit: B });
-    check('★⑱-a 삭제 미리보기 = 몫을 돌려받는다', !pv.error && pv.data?.returns_slot === true, pv.error?.message ?? JSON.stringify(pv.data));
+    check('★⑱-a 삭제 미리보기 = 돌려주지 않음 · 남은 기간 날짜는 알려 준다', !pv.error && pv.data?.returns_slot === false && sameTime(pv.data?.paid_until, bPaid?.paid_until), pv.error?.message ?? JSON.stringify(pv.data));
     const del = await Q.c.rpc('delete_store', { p_unit_id: B });
-    check('★⑱-a 삭제 결과가 돌려받은 몫을 알린다', !del.error && del.data?.returned_slot === true && sameTime(del.data?.paid_until, bPaid?.paid_until), del.error?.message ?? JSON.stringify(del.data));
+    check('★⑱-a 삭제 결과 = 돌려준 몫 없음', !del.error && del.data?.returned_slot === false, del.error?.message ?? JSON.stringify(del.data));
     const open = await openSlots(Q.uid);
-    check('★★⑱-a B 의 남은 기간이 미소비 슬롯 1개로 돌아온다', open.length === 1 && open[0]?.source === 'claim' && sameTime(open[0]?.paid_until, bPaid?.paid_until), JSON.stringify(open));
+    check('★★⑱-a B 의 남은 기간은 슬롯으로 돌아오지 않는다', open.length === 0, JSON.stringify(open));
     const C = await tryStore(Q, 'QA⑱ 3호점');
-    check('★★⑱-a 돌려받은 몫으로 새 매장 C 를 연다', !!C.unit, C.err || C.unit);
+    check('★★⑱-a 새 매장 C 는 슬롯이 없어 열리지 않는다', !C.unit && /no_store_slot/.test(C.err ?? ''), C.err || C.unit);
     const pc = await svcSel(`payment_claims?id=eq.${pend?.id}&select=status,reject_reason,unit_id`);
     check('★⑱-e 지운 매장의 대기 신고는 store_deleted 로 닫힌다', pc[0]?.status === 'rejected' && pc[0]?.reject_reason === 'store_deleted', JSON.stringify(pc));
     const { data: mine } = await Q.c.from('payment_claims').select('id').eq('id', pend?.id);
@@ -676,10 +676,7 @@ async function slotRuleChecks() {
     const B = await mkStore(Q, 'QA⑱b 2호점');
     const del = await Q.c.rpc('delete_store', { p_unit_id: B });
     const open = await openSlots(Q.uid);
-    check('★⑱-b 앱 구독으로 연 B 를 지우면 그 슬롯이 미소비로 돌아온다', !del.error && open.length === 1 && open[0]?.source === 'iap', del.error?.message ?? JSON.stringify(open));
-    await evt(Q, t, 'RENEWAL', 'multi_2_monthly', 'multi', 2, iso(days(60)));
-    const all = await svcSel(`store_slots?owner_id=eq.${Q.uid}&source=eq.iap&select=id,consumed_at`);
-    check('★★⑱-b 다음 갱신은 돌려받은 슬롯을 다시 쓴다(새로 쌓지 않음 · 흔적 1 + 미소비 1)', Array.isArray(all) && all.length === 2, `iap=${all.length}`);
+    check('★⑱-b 앱 구독으로 연 B 를 지워도 슬롯은 돌아오지 않는다', !del.error && del.data?.returned_slot === false && open.length === 0, del.error?.message ?? JSON.stringify(open));
   }
   {
     const Q = await reuseOwner(1);
@@ -694,10 +691,7 @@ async function slotRuleChecks() {
     const del = await Q.c.rpc('delete_store', { p_unit_id: A });
     const rows = await svcSel(`store_slots?owner_id=eq.${Q.uid}&consumed_at=is.null&select=id,source,paid_until,plan`);
     const open = Array.isArray(rows) ? rows : [];
-    check('★★⑱-c 계좌이체 single 매장을 지우면 single 슬롯이 돌아온다', !del.error && open.length === 1 && open[0]?.plan === 'single' && open[0]?.source === 'claim' && sameTime(open[0]?.paid_until, aPaid?.paid_until), del.error?.message ?? JSON.stringify(rows));
-    const C = await tryStore(Q, 'QA⑱c 3호점');
-    const c = C.unit ? await paidUntilOf(C.unit) : null;
-    check('★★⑱-c 그 몫으로 연 C 는 single 이다(다점포로 새지 않는다)', c?.plan === 'single', C.err || JSON.stringify(c));
+    check('★★⑱-c 계좌이체 single 매장을 지워도 슬롯을 새로 만들지 않는다', !del.error && del.data?.returned_slot === false && open.length === 0, del.error?.message ?? JSON.stringify(rows));
     const pc = await svcSel(`payment_claims?id=eq.${cs.id}&select=id,unit_id,status`);
     check('★⑱-d 승인된 결제 기록은 매장을 지워도 남는다(unit_id 비움)', pc.length === 1 && pc[0]?.unit_id === null && pc[0]?.status === 'approved', JSON.stringify(pc));
   }
