@@ -32,6 +32,20 @@ export function otherPaidNote(
   return `${fmtDay(paidUntil, now)}까지 이용 기간이 남아 있어요. 그 뒤에 여기서 이어가실 수 있어요.`;
 }
 
+const PREPAID_OPEN_BEFORE_MS = 3 * 24 * 60 * 60 * 1000;
+
+/**
+ * 선불 기간이 남아 있으면 앱 결제를 잠근다(2026-10-05 결정 · 검증 = qa-iap-prepaid). 잠글 때만 문구, 아니면 null.
+ * prepaidUntil = 서버 owner_prepaid_until(0251). null·undefined(옛 서버·읽기 실패)면 잠그지 않는다.
+ * 끝나기 3일 전부터는 결제할 수 있다(카드 가드 0230 과 같은 기준). ⛔ 채널을 말하지 않는다.
+ */
+export function prepaidGuardNote(prepaidUntil: string | null | undefined, now: number = Date.now()): string | null {
+  if (!prepaidUntil) return null;
+  const ms = new Date(prepaidUntil).getTime();
+  if (Number.isNaN(ms) || ms - now <= PREPAID_OPEN_BEFORE_MS) return null;
+  return `이용 기간이 ${fmtDay(prepaidUntil, now)}까지 남아 있어요. 끝나기 3일 전부터 결제할 수 있어요.`;
+}
+
 /** 서버 행(`iap_subscriptions.platform`) 값. */
 type SubPlatform = 'appstore' | 'play';
 

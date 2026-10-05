@@ -39,7 +39,8 @@ import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
 import { rpcChooseIapRelease, rpcClearIapRelease, type IapSubscriptionRow } from '@/lib/db';
 import { releaseRule } from '@/lib/iap/release';
-import { fmtDay, otherPaidNote, otherStoreNote } from '@/lib/iap/notes';
+import { fmtDay, otherPaidNote, otherStoreNote, prepaidGuardNote } from '@/lib/iap/notes';
+import { fetchOwnerPrepaidUntil } from '@/lib/db';
 import { iapErrorKind, iapErrorText } from '@/lib/iap/errors';
 import {
   initPurchases,
@@ -105,6 +106,8 @@ export function IapPurchasePanel({
   const waitTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   // Q8 — 스토어 권한이 말하는 '산 스토어'. 서버 행이 아직 없을 때(웹훅 늦음)의 2차 판정이다.
   const [entStore, setEntStore] = useState<string | null>(null);
+  // 선불 기간이 남아 있으면 구매를 잠근다(2026-10-05). 서버 owner_prepaid_until(0251). 옛 서버면 null(잠그지 않음).
+  const [prepaidUntil, setPrepaidUntil] = useState<string | null>(null);
 
   // 지금 구독 중인 매장 수(서버 SSOT). 0 = 앱 구독 없음.
   const sub = subscription;
@@ -120,10 +123,11 @@ export function IapPurchasePanel({
       try {
         await initPurchases(userId);
         // 목록은 스토어에서, 구독 상태는 서버에서 — SDK 의 entitlement 는 목록 정합 확인과 Q8 '산 스토어' 2차 판정에만 쓴다.
-        const [list, ent] = await Promise.all([fetchOffers(), currentEntitlement()]);
+        const [list, ent, pre] = await Promise.all([fetchOffers(), currentEntitlement(), fetchOwnerPrepaidUntil()]);
         if (!alive) return;
         setOffers(list);
         setEntStore(ent.store);
+        setPrepaidUntil(pre);
         // 기본 제시 = 구독 중이면 한 칸 위, 아니면 가진 매장 수(매장 추가에서 왔으면 +1). 목록에 없는 수는 가장 가까운 것으로.
         const want = owned > 0 ? owned + 1 : Math.max(1, ownedStores.length + (wantMore ? 1 : 0));
         const hit = list.find((o) => o.storeCount === want) ?? list.find((o) => o.storeCount > owned) ?? list[list.length - 1];
@@ -262,6 +266,7 @@ export function IapPurchasePanel({
   const paidAi = PLANS.single.aiMonthly;
   // A2 — 앱 구독이 없는데 유료 기간이 남아 있다 = 다른 경로로 산 것. 겹쳐 사지 못하게 막는다.
   const blockedNote = owned === 0 ? otherPaidNote(plan, paidUntil, renewsElsewhere) : null;
+  const prepaidNote = prepaidGuardNote(prepaidUntil);
   const releaseNames = releaseChoice
     .map((id) => ownedStores.find((s) => s.unit_id === id)?.store_name)
     .filter((n): n is string => !!n);
@@ -519,12 +524,12 @@ export function IapPurchasePanel({
 
             {/* Primary 는 화면당 1개 — 위 목록은 '고르기'고 결제는 여기 하나다. */}
             <Pressable
-              disabled={busy || selected.storeCount === owned || blockedNote !== null || storeNote !== null || !releaseReady}
+              disabled={busy || selected.storeCount === owned || blockedNote !== null || prepaidNote !== null || storeNote !== null || !releaseReady}
               onPress={() => void buy(selected)}
               accessibilityRole="button"
               style={({ pressed }) => [
                 styles.primary,
-                (busy || selected.storeCount === owned || blockedNote !== null || storeNote !== null || !releaseReady) && { opacity: 0.5 },
+                (busy || selected.storeCount === owned || blockedNote !== null || prepaidNote !== null || storeNote !== null || !releaseReady) && { opacity: 0.5 },
                 pressed && { opacity: 0.88 },
               ]}
             >
@@ -552,6 +557,8 @@ export function IapPurchasePanel({
 
             {/* A2 — 다른 경로로 산 기간이 남아 있으면 못 산다(겹쳐 두 번 내는 사고 차단). 채널은 말하지 않는다. */}
             {blockedNote !== null && <Text style={styles.warnNote}>{blockedNote}</Text>}
+            {/* 선불 기간이 남아 있으면 끝나기 3일 전까지 못 산다. A2 문구가 이미 떠 있으면 겹쳐 그리지 않는다. */}
+            {prepaidNote !== null && blockedNote === null && <Text style={styles.warnNote}>{prepaidNote}</Text>}
             {/* Q8 — 서버 행이 아직 없는데(웹훅 늦음) 스토어 권한이 다른 기기 것이다. 행이 있으면 위 현재 구독 카드가 말한다. */}
             {storeNote !== null && !sub && <Text style={styles.warnNote}>{storeNote}</Text>}
 

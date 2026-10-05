@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // qa-iap-prepaid.mjs — 선불 기간이 남아 있으면 앱 결제를 잠근다(2026-10-05 사용자 결정). DB·네트워크를 쓰지 않는다.
-//   [1] src/lib/iap/prepaidGuard.ts 순수 함수: 끝나기 3일 전부터 결제할 수 있다(카드 가드와 같은 기준).
+//   [1] src/lib/iap/notes.ts 의 prepaidGuardNote 순수 함수: 끝나기 3일 전부터 결제할 수 있다(카드 가드와 같은 기준).
 //   [2] 배선: db.ts 가 owner_prepaid_until 을 부르고, 옛 서버(함수 없음)면 잠그지 않는다. 패널이 구매 버튼을 잠근다.
 // 서버 쪽(owner_prepaid_until 의 값)은 qa-iap ⑳ 이 본다.
 // 실행: node scripts/qa-iap-prepaid.mjs   (Node 22.18+ — .ts 를 타입만 벗겨 읽는다)
@@ -14,9 +14,9 @@ const strip = (t) => t.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\{\/\*[\s\S]*?\
 
 let mod = {};
 try {
-  mod = await import('../src/lib/iap/prepaidGuard.ts');
+  mod = await import('../src/lib/iap/notes.ts');
 } catch (e) {
-  console.log('  FAIL prepaidGuard 모듈을 읽지 못했다', String(e && e.code ? e.code : e));
+  console.log('  FAIL notes 모듈을 읽지 못했다', String(e && e.code ? e.code : e));
 }
 const { prepaidGuardNote } = mod;
 const note = (...a) => (typeof prepaidGuardNote === 'function' ? prepaidGuardNote(...a) : '(함수 없음)');
@@ -49,7 +49,7 @@ console.log('\n[2] 배선(주석 제외 코드)');
   const panel = strip(read('src/components/IapPurchasePanel.tsx'));
   check('패널이 prepaidGuardNote 로 고른다', /prepaidGuardNote\(/.test(panel));
   check('★구매 버튼 disabled 에 prepaidNote 가 들어간다', /disabled=\{busy[^}]*prepaidNote !== null/.test(panel));
-  check('잠금 문구를 화면에 그린다', /\{prepaidNote !== null && <Text/.test(panel));
+  check('잠금 문구를 화면에 그린다', /\{prepaidNote !== null &&[^}]*<Text/.test(panel));
 }
 
 console.log(`\n${fail ? 'RED' : 'GREEN'} — PASS ${pass} · FAIL ${fail}`);

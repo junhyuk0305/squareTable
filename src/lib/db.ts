@@ -16,6 +16,7 @@ import type { CustomCategory } from '@/lib/store/knowhowCategories';
 import type { KnowhowUsage } from '@/lib/knowhow/archive';
 import type { MemberTenure } from '@/lib/utils/tenure';
 import { reopenKeepsRecords, type DeleteStorePreview, type DeleteStoreResult } from '@/lib/account/storeCopy';
+import { isMissingRpc } from '@/lib/utils/userError';
 // 훈련 v2(0107·0108). ★TrainingCourse 는 이 파일이 이미 0099 의 문자열 유니온으로 쓰고 있어(아래)
 // 이름이 겹친다 → 코스 테이블 행 타입은 TrainingCourseRow 로 별칭한다. 구조는 동일하므로
 // 다른 화면이 '@/lib/quiz/types' 에서 TrainingCourse 를 직접 import 해 넘겨도 그대로 맞는다.
@@ -702,6 +703,20 @@ export async function fetchRenewsOutsideApp(): Promise<DbResult<boolean>> {
     return { data: false, error: error as DbErr };
   }
   return { data: (data ?? []).length > 0, error: null };
+}
+
+/**
+ * 0251: 내 선불 매장의 가장 늦은 만료일(앱 결제 잠금용). 없으면 null.
+ * 옛 서버(함수 없음)·읽기 실패도 null 이다 — 잠그지 않는다.
+ */
+export async function fetchOwnerPrepaidUntil(): Promise<string | null> {
+  if (!HAS_SUPABASE) return null;
+  const { data, error } = await supabase.rpc('owner_prepaid_until');
+  if (error) {
+    if (!isMissingRpc(error)) readFail('fetchOwnerPrepaidUntil', error);
+    return null;
+  }
+  return typeof data === 'string' ? data : null;
 }
 
 export type CardPaymentRow = { order_id: string; amount_krw: number; status: string; approved_at: string | null; receipt_url: string | null };
