@@ -16,6 +16,7 @@ import { useUnknownQueueStore } from '@/lib/store/useUnknownQueueStore';
 import { useRoomStore } from '@/lib/store/useRoomStore';
 import { HAS_SUPABASE } from '@/lib/supabase';
 import { subscribeMyProfile } from '@/lib/db';
+import { StoreClosedScreen } from '@/components/StoreClosedScreen';
 
 /** 사장이 `/junior/*` 로 오면 착지시킬 사장 경로 — 대응이 분명한 것만. 없으면 사장 홈. */
 const OWNER_PATH: Record<string, Href> = {
@@ -53,6 +54,7 @@ export default function JuniorLayout() {
   const phone = useSessionStore((s) => s.phone);
   const pendingUnitId = useSessionStore((s) => s.pendingUnitId);
   const seatLocked = useSessionStore((s) => s.seatLocked);
+  const unitLocked = useSessionStore((s) => s.unitLocked);
   const pathname = usePathname();
 
   // 로그인 + 매장 소속이 확정된 뒤에만 데이터를 당겨오고 실시간 구독한다.
@@ -119,6 +121,9 @@ export default function JuniorLayout() {
   if (HAS_SUPABASE && status === 'signed_in' && unitId && role === 'owner') {
     return <Redirect href={OWNER_PATH[pathname] ?? '/owner/dashboard'} />;
   }
+  // 닫힌 매장(0284 · C2) — 사장이 이 매장을 닫았으면 직원·매니저도 쓰지 못한다. 좌석 잠금보다 먼저 본다.
+  // fail-open: 판정 조회 실패는 잠금으로 위장하지 않는다(세션 로드에서 false 유지).
+  if (HAS_SUPABASE && status === 'signed_in' && unitId && unitLocked) return <StoreClosedScreen />;
   // 좌석 잠금(0115) → 직원은 계좌 정보 없이 '자리가 잠겼다' 고지(/billing 이 역할별로 렌더).
   // ★2026-08-06 전까지 여기는 '구독 만료 → 페이월'이었다. 만료가 무료 강등으로 바뀌면서
   //   (effectivePlanOf) 만료만으로 앱이 잠기는 일은 없어졌고, 대신 무료 한도를 넘은 좌석만 잠근다.

@@ -179,9 +179,10 @@ console.log('\n[C2] 매장이 닫히면(unit_access_locked) 그 매장이 활성
   const scr = strip(read('src/components/StoreClosedScreen.tsx'));
   check('★차단 화면 문구 "사장님이 이 매장을 닫았어요" · 다른 매장이 있으면 매장 목록으로 가는 길',
     /사장님이 이 매장을 닫았어요/.test(scr) && /router\.replace\('\/stores'\)/.test(scr) && /stores\.length > 1/.test(scr));
-  const jl = strip(read('src/app/junior/_layout.tsx'));
+  // 레이아웃 주석에 '/junior/*' 같은 경로가 있어 블록 주석 벗기기가 코드를 먹는다 — 원문 그대로 본다.
+  const jl = read('src/app/junior/_layout.tsx');
   check('★직원 레이아웃이 unitLocked 면 차단 화면을 그린다', /unitLocked\) return <StoreClosedScreen \/>/.test(jl));
-  const ol = strip(read('src/app/owner/_layout.tsx'));
+  const ol = read('src/app/owner/_layout.tsx');
   check('★사장 레이아웃에 들어온 매니저도 unitLocked 면 차단 화면을 그린다', /role === 'manager' && unitLocked\) return <StoreClosedScreen \/>/.test(ol));
   if (!dbUp) console.log('  SKIP 서버 동작 — 로컬 도커 DB 없음');
   else {

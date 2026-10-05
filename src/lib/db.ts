@@ -575,6 +575,13 @@ export async function fetchMySeatLocked(): Promise<DbResult<boolean>> {
   return { data: (data as boolean) ?? false, error: error as DbErr };
 }
 
+// ── 닫힌 매장(0284 · C2) — 내 활성 매장이 닫혔는가(직원·매니저만 true). 판정은 서버(unit_access_locked) ──
+export async function fetchMyUnitLocked(): Promise<DbResult<boolean>> {
+  if (!HAS_SUPABASE) return { data: false, error: null };
+  const { data, error } = await supabase.rpc('my_unit_locked');
+  return { data: (data as boolean) ?? false, error: error as DbErr };
+}
+
 // ── 전면 무료 스위치(0062 app_config) — 프로모션 기간의 유일한 진실 ───────────────
 // 서버 캡(매장수·좌석·AI 쿼터)이 이미 이 값을 보고 우회한다. 화면도 같은 값을 읽어야
 // "서버는 허용하는데 버튼이 막는" 불일치가 안 생긴다. 관리 콘솔에서 행 하나로 뒤집는다.

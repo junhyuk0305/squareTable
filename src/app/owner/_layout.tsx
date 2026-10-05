@@ -18,6 +18,7 @@ import { useRoomStore } from '@/lib/store/useRoomStore';
 import { retryPendingEmbeddings } from '@/lib/ai/embedBacklog';
 import { HAS_SUPABASE } from '@/lib/supabase';
 import { canManage, managerMayOpen } from '@/lib/utils/roles';
+import { StoreClosedScreen } from '@/components/StoreClosedScreen';
 
 /** 레이아웃이 처음 열 때와 앱이 다시 앞으로 왔을 때(J15 ③) 같은 목록을 다시 읽는다. 목록을 두 벌로 두지 않는다. */
 function hydrateOwnerStores() {
@@ -57,6 +58,7 @@ export default function OwnerLayout() {
   const unitId = useSessionStore((s) => s.unitId);
   const phone = useSessionStore((s) => s.phone);
   const pendingUnitId = useSessionStore((s) => s.pendingUnitId);
+  const unitLocked = useSessionStore((s) => s.unitLocked);
   const pathname = usePathname();
   const router = useRouter();
 
@@ -149,6 +151,8 @@ export default function OwnerLayout() {
   if (HAS_SUPABASE && status === 'signed_in' && unitId && !canManage(role) && !(accountLayer && isOwnerAccount)) {
     return <Redirect href="/junior/home" />;
   }
+  // 닫힌 매장(0284 · C2) — 사장이 닫은 매장에 들어와 있는 매니저도 막는다(서버 판정은 사장에게 늘 false).
+  if (HAS_SUPABASE && status === 'signed_in' && unitId && role === 'manager' && unitLocked) return <StoreClosedScreen />;
   // ★2026-08-06: 만료 페이월(구독 만료 → /billing 강제) 제거.
   //   만료는 이제 앱 잠금이 아니라 **무료 요금제 강등**이다(effectivePlanOf / 0115 effective_plan).
   //   사장은 만료돼도 앱을 그대로 쓰고, 제한은 무료 한도(직원 3명·AI 월 200)와 좌석 잠금으로만 걸린다.

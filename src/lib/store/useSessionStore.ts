@@ -6,6 +6,7 @@ import {
   fetchUnitInfo,
   fetchUnitSubscription,
   fetchMySeatLocked,
+  fetchMyUnitLocked,
   fetchBillingFreeMode,
   fetchIapEnabled,
   fetchDowngradeNeed,
@@ -91,6 +92,8 @@ type SessionState = {
   plan: PlanId;
   // 좌석 잠금(0115) — 무료 강등으로 직원 수가 한도를 넘어 내 자리가 잠겼는가(직원 전용 판정).
   seatLocked: boolean;
+  // 닫힌 매장(0284 · C2) — 사장이 닫은(이전) 매장이 내 활성 매장인가(직원·매니저 전용 판정).
+  unitLocked: boolean;
   // 다운그레이드 선택 대기(0142) — 체험이 끝나 무료 한도를 넘긴 것이 있어 사장이 무엇을 남길지
   // 골라야 하는 상태. 판정은 서버(needs_downgrade_choice)가 SSOT — 화면은 이 값만 보고
   // /downgrade 로 보낸다(매장 수·직원 수를 클라가 다시 세지 않는다).
@@ -212,6 +215,7 @@ const DEMO = {
   paidUntil: '',
   plan: 'free' as PlanId,
   seatLocked: false,
+  unitLocked: false,
   needsDowngradeChoice: false,
   freeMode: false, // 서버에서 읽기 전 기본값 — 읽기 전엔 평시 규칙(과금 게이팅 유지)
   iapEnabled: false, // 읽기 전엔 안 판다(fail-closed) — 잘못 열리는 쪽이 되돌리기 어렵다
@@ -320,7 +324,7 @@ const SIGNED_OUT: Partial<SessionState> = {
   status: 'signed_out', sessionCheck: 'ok', brandId: null, role: 'junior', isOwnerAccount: false, signupRole: null,
   unitId: '', userId: '', userName: '', storeName: '', stores: [], pendingUnitId: '', pendingStoreName: '', rejectedJoinStoreName: '',
   industry: '', inviteCode: '', inviteExpiresAt: '', bio: '', phone: '',
-  plan: 'free', seatLocked: false, needsDowngradeChoice: false, subStatus: '', trialEndsAt: '', paidUntil: '',
+  plan: 'free', seatLocked: false, unitLocked: false, needsDowngradeChoice: false, subStatus: '', trialEndsAt: '', paidUntil: '',
 };
 
 async function loadProfile(
@@ -411,6 +415,7 @@ async function loadProfile(
     let paidUntil = '';
     let plan: PlanId = 'free';
     let seatLocked = false;
+    let unitLocked = false;
     if (unitId) {
       const { data: unit, error: unitErr } = await fetchUnitInfo(unitId);
       // G3: 읽기 실패를 빈칸으로 덮지 않는다. 같은 사용자·같은 매장이면 이전에 알던 값을 지킨다(구독 읽기와 같은 패턴).
@@ -521,6 +526,10 @@ async function loadProfile(
       // 읽기 실패는 '잠김'으로 위장하지 않는다(fail-open) — 과금 조회 오류로 직원을 막지 않는다.
       if (lockErr) reportError('session.fetchMySeatLocked', lockErr);
       else seatLocked = locked === true;
+      // 0284(C2): 사장이 닫은 매장이면 직원·매니저도 막는다. 읽기 실패는 잠김으로 위장하지 않는다(fail-open).
+      const { data: closed, error: closedErr } = await fetchMyUnitLocked();
+      if (closedErr) reportError('session.fetchMyUnitLocked', closedErr);
+      else unitLocked = closed === true;
     }
     // 합류 거절 감지(#미아 방지): 신청 시점의 기기 마커와 현재 서버 상태를 대조한다.
     // 판정은 joinRejectDetect.ts 순수함수(SSOT — qa:session 진리표로 회귀 고정), 여기선 저장·반영만.
@@ -584,6 +593,7 @@ async function loadProfile(
       paidUntil,
       plan,
       seatLocked,
+      unitLocked,
       needsDowngradeChoice,
       freeMode,
       iapEnabled,
