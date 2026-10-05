@@ -9,7 +9,7 @@ import { HAS_SUPABASE } from '@/lib/supabase';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useStaffStore } from '@/lib/store/useStaffStore';
 import { useWorkStore, useDayparts, useDaypartLabels, daypartRoutineTemplates, assigneesOf, isRoutineTaskId, ROUTINE_ID_PREFIX, findDuplicateTask, occursOn, knowhowIdsForTask, quizCountForTask, isCaptureEligible, courseEntriesOf, trainingCourseViews, staffWhoUnderstandTask, understandsTask, taskVisibleTo, isRegularDue, isRequestDue, lastQuizAttemptOf, REGULAR_DUE_DAYS_DEFAULT, type FeedItem, type NewTask, type TaskTemplate } from '@/lib/store/useWorkStore';
-import { staffCanSeeCourse } from '@/lib/quiz/schedule';
+import { staffCanSeeCourse, recheckEntryDue } from '@/lib/quiz/schedule';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { useSuggestionStore } from '@/lib/store/useSuggestionStore';
 import { useSyncStore } from '@/lib/store/useSyncStore';
@@ -488,8 +488,12 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
       // 주기 코스는 마지막 통과가 주기보다 오래됐거나 기록이 없으면 '다시 확인'.
       const dueDays = c.dueDays;
       const nextIdx = dueDays === null ? list.findIndex((x) => !myRow(x.id)) : -1;
+      // ★E2: 노하우가 바뀌어 서버가 재확인을 보냈으면(내 미완료 recheck 발송) 통과한 뒤 바뀐 노하우를 다시 띄운다.
+      //   안 띄우면 알림만 가고 열 카드가 없어, 두 번 쌓이면 자동 정지(연속 무시 2회)에 걸린다.
+      const recheck = sends.some((a) => a.userId === userId && !!a.sentAt && a.origin === 'recheck' && !a.completedAt);
       const stateOf = (id: string, i: number): TrainingCardItem['state'] => {
         if (askedIds.has(id)) return 'asked'; // 요청이 최우선 — 사람이 기다리는 것
+        if (recheckEntryDue(myRow(id)?.verifiedAt, entryById.get(id)?.updated_at, recheck)) return 'due';
         if (dueDays === null) return myRow(id) ? 'passed' : i === nextIdx ? 'next' : 'todo';
         return isRegularDue(myRow(id)?.verifiedAt, trainingNow, dueDays) ? 'due' : 'passed';
       };
@@ -516,10 +520,13 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
 
     // 카드가 여러 장 쌓이지 않게 — 1회성 코스는 앞선 하나만(먼저 배울 것이 먼저).
     // 주기 카드는 1회성이 진행 중이면 숨기되, 명시적 요청(asked)은 사람이 기다리는 것이라 예외.
+    // 1회성 카드의 'due' 는 재확인 발송(E2)이다 — 알림이 이미 갔으니 앞선 카드에 가리지 않는다.
     const firstOnce = cards.find((c) => c.course.dueDays === null);
     return cards
       .filter((c) =>
-        c.course.dueDays === null ? c === firstOnce : !firstOnce || c.items.some((it) => it.state === 'asked'),
+        c.course.dueDays === null
+          ? c === firstOnce || c.items.some((it) => it.state === 'due')
+          : !firstOnce || c.items.some((it) => it.state === 'asked'),
       )
       // 지난번 결과(0112) — 집계는 스토어 셀렉터가 한다(판정을 화면에 복제하지 않는다).
       .map((c) => {

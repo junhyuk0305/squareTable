@@ -117,6 +117,20 @@ export function staffCanSeeCourse(
   return !!c.createdAt && Date.parse(c.createdAt) < Date.parse(QUIZ_LEDGER_SINCE);
 }
 
+/**
+ * 재확인 발송(origin='recheck', 0169)이 와 있을 때 이 노하우를 다시 풀어야 하나(E2).
+ * 서버(enqueue_knowhow_rechecks)와 같은 기준 — 통과한 뒤에 노하우가 바뀌었다(updated_at > verified_at).
+ * 발송이 없으면 띄우지 않는다. 언제 다시 물을지(주 1회 상한·문항 검수)는 서버가 정한다.
+ */
+export function recheckEntryDue(
+  verifiedAt: string | undefined,
+  entryUpdatedAt: string | undefined,
+  pendingRecheck: boolean,
+): boolean {
+  if (!pendingRecheck || !verifiedAt || !entryUpdatedAt) return false;
+  return Date.parse(entryUpdatedAt) > Date.parse(verifiedAt);
+}
+
 /** 발송 상한에 걸린 이유. null = 보내도 된다. */
 export type SendBlockReason = 'day_cap' | 'week_cap' | 'auto_stopped' | 'not_working';
 

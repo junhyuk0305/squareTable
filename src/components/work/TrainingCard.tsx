@@ -110,7 +110,9 @@ export function TrainingCard({
   const passedCount = items.filter((it) => it.state === 'passed').length;
   const progressText = passedCount > 0 ? `${passedCount}/${items.length} 통과` : '아직 시작 전';
   const progressTone: ProgressTone = passedCount > 0 ? 'progress' : 'neutral';
-  const ctaLabel = oneShot ? '혼자 할 수 있어요' : '다시 확인하기';
+  // 1회성 카드의 'due' = 노하우가 바뀌어 온 재확인(E2) — 처음 배우는 말투를 쓰지 않는다.
+  const firstLearn = oneShot && next.state !== 'due';
+  const ctaLabel = firstLearn ? '혼자 할 수 있어요' : '다시 확인하기';
   const deadline = deadlineLabel(course.dueOn, kstToday);
 
   return (
@@ -122,7 +124,7 @@ export function TrainingCard({
       </View>
 
       <Text style={st.next} numberOfLines={2}>
-        {oneShot ? '다음 퀴즈' : next.state === 'asked' ? '사장님이 요청했어요' : '다시 확인할 노하우'} · {next.text}
+        {firstLearn ? '다음 퀴즈' : next.state === 'asked' ? '사장님이 요청했어요' : '다시 확인할 노하우'} · {next.text}
       </Text>
 
       {/* 마감 — 사장이 정한 "언제까지"를 직원도 안다. 없으면 줄 자체가 없다(마감 없는 퀴즈가 기본). */}

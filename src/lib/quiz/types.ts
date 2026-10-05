@@ -144,4 +144,6 @@ export type QuizAssignment = {
   dueOn: string | null;
   openedAt: string | null;
   completedAt: string | null;
+  /** 왜 생긴 발송인가(0169) — 'manual'(사장) · 'join'(입사) · 'recheck'(노하우 변경). */
+  origin?: string;
 };
