@@ -2830,7 +2830,7 @@ export async function fetchMyGuestQuizHistory(): Promise<MyGuestQuizRow[]> {
 // 수신자 명단과 발송 기록이 같은 행이다. 나누면 "보냈는데 명단에 없다"가 따로 생긴다.
 // ★sent_at·due_on 은 **크론만** 채운다(claim_quiz_send). 앱은 절대 쓰지 않는다 —
 //   앱이 쓰면 빈도 상한 판정의 근거가 화면에서 흔들린다.
-const QUIZ_ASSIGNMENT_COLS = 'id, course_id, user_id, scheduled_on, sent_at, due_on, opened_at, completed_at, origin';
+const QUIZ_ASSIGNMENT_COLS = 'id, course_id, user_id, scheduled_on, sent_at, due_on, due_date, opened_at, completed_at, origin';
 
 const toAssignment = (r: any): QuizAssignment => ({
   id: r.id,
@@ -2839,6 +2839,7 @@ const toAssignment = (r: any): QuizAssignment => ({
   scheduledOn: r.scheduled_on,
   sentAt: r.sent_at ?? null,
   dueOn: r.due_on ?? null,
+  dueDate: r.due_date ?? null,
   openedAt: r.opened_at ?? null,
   completedAt: r.completed_at ?? null,
   origin: r.origin ?? 'manual',
@@ -2862,11 +2863,13 @@ export async function fetchQuizAssignments(): Promise<QuizAssignment[]> {
 /**
  * 발행 — 고른 직원 수만큼 행을 만든다. 이미 같은 (퀴즈, 사람, 예약일) 행이 있으면 그대로 둔다
  * (발행을 두 번 눌러도 두 번 안 간다 — unique 제약이 잠금이다).
+ * dueDate = 사장이 달력으로 고른 마감 날짜(0291 · E11). 있으면 늦게 받은 사람도 같은 날짜가 마감이다.
  */
 export async function insertQuizAssignments(
   courseId: string,
   userIds: string[],
   scheduledOn: string,
+  dueDate: string | null = null,
 ): Promise<boolean> {
   if (!HAS_SUPABASE) return true;
   if (userIds.length === 0) return true;
@@ -2880,6 +2883,7 @@ export async function insertQuizAssignments(
           course_id: courseId,
           user_id: uid,
           scheduled_on: scheduledOn,
+          due_date: dueDate,
         })),
         { onConflict: 'course_id,user_id,scheduled_on', ignoreDuplicates: true },
       )

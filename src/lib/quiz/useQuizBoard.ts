@@ -364,10 +364,8 @@ export function useQuizBoard() {
         caption = `${dayLabel(c.start_at)}에 보내요`;
       } else {
         // 가장 최근 발송일. sentAt 은 timestamptz 라 앞 10자가 UTC 날짜다 → 한국 날짜로 옮겨 읽는다.
-        const last = sent
-          .map((a) => a.sentAt as string)
-          .sort()
-          .at(-1) as string;
+        const lastRow = [...sent].sort((x, y) => (x.sentAt as string).localeCompare(y.sentAt as string)).at(-1) as QuizAssignment;
+        const last = lastRow.sentAt as string;
         const d = new Date(Date.parse(last));
         const kst = new Date(d.getTime() + 9 * 3600_000);
         const sentDay = `${kst.getUTCMonth() + 1}월 ${kst.getUTCDate()}일`;
@@ -379,7 +377,11 @@ export function useQuizBoard() {
          *   대표할 수는 없다. 그래서 사람별 정확한 문구는 상세 화면(captionOf: "받은 날부터 N일 안에")이
          *   계속 맡고, 목록은 최근 발송분의 기간을 보여준다.
          */
-        if (c.answer_days) {
+        // ★0291(E11): 사장이 달력으로 고른 날짜로 보낸 발송이면 그 날짜가 모두의 마감이다.
+        const fixed = lastRow.dueDate ? /^\d{4}-(\d{2})-(\d{2})$/.exec(lastRow.dueDate) : null;
+        if (fixed) {
+          caption = `${sentDay}~${Number(fixed[1])}월 ${Number(fixed[2])}일`;
+        } else if (c.answer_days) {
           const due = new Date(kst.getTime() + c.answer_days * 86_400_000);
           const dueDay = `${due.getUTCMonth() + 1}월 ${due.getUTCDate()}일`;
           caption = `${sentDay}~${dueDay}`;

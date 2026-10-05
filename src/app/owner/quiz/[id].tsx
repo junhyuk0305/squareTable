@@ -119,6 +119,11 @@ export default function QuizDetailScreen() {
   }, [entryIds, itemsReload]);
 
   const sends = useMemo(() => sendsByCourse.get(id ?? '') ?? [], [sendsByCourse, id]);
+  // 가장 최근 예약분이 사장이 달력으로 고른 날짜로 나갔으면 그 날짜가 모두의 마감이다(0291 · E11).
+  const fixedDue = useMemo(
+    () => [...sends].sort((x, y) => x.scheduledOn.localeCompare(y.scheduledOn)).at(-1)?.dueDate ?? null,
+    [sends],
+  );
   // 아직 안 나간 사람의 이유(E3 · 0274). 판정은 서버가 한다(due_quiz_sends 와 같은 조건).
   const [blocked, setBlocked] = useState<Record<string, QuizSendBlock>>({});
   useEffect(() => {
@@ -383,7 +388,7 @@ export default function QuizDetailScreen() {
                 {/* 기본 정보는 줄글이 아니라 이름표+값이다(2026-09-13) — "받은 날부터 3일 안에 ·
                     다시 확인은 저희가 챙겨요"는 한 줄에 두 가지를 이어 붙여 무엇이 무엇의 값인지가 안 보였다. */}
                 <View style={st.factTable}>
-                  {factsOf(items.length, course.answer_days, course.due_days).map(([k, v], i) => (
+                  {factsOf(items.length, course.answer_days, course.due_days, fixedDue).map(([k, v], i) => (
                     <View key={k} style={[st.factRow, i > 0 && st.factRowTop]}>
                       <Text style={st.factKey}>{k}</Text>
                       <Text style={st.factVal}>{v}</Text>
@@ -673,10 +678,12 @@ function factsOf(
   itemCount: number,
   answerDays: number | null | undefined,
   dueDays: number | null | undefined,
+  fixedDue: string | null,
 ): [string, string][] {
+  const fixed = fixedDue ? /^\d{4}-(\d{2})-(\d{2})$/.exec(fixedDue) : null;
   return [
     ['문항', `${itemCount}개`],
-    ['응시 기한', answerDays ? `받은 날부터 ${answerDays}일` : '제한 없음'],
+    ['응시 기한', fixed ? `${Number(fixed[1])}월 ${Number(fixed[2])}일까지` : answerDays ? `받은 날부터 ${answerDays}일` : '제한 없음'],
     ['다시 확인', cycleLabel(dueDays) ?? '자동'],
   ];
 }

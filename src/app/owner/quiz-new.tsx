@@ -490,7 +490,8 @@ export default function QuizNewScreen() {
     if (!courseId || !courseKey || busy) return;
     setBusy(true);
     const scheduledOn = audience === 'guest' ? todayKst() : sendOn;
-    // DB 는 여전히 '며칠 안에'(answer_days)로 센다 — 화면만 달력으로 바꿨고 스키마는 그대로다.
+    // 코스에는 '며칠 안에'(answer_days)로 남긴다 — 달력 없이 생기는 발송(입사·재확인·다시 보내기)이 쓴다.
+    // ★이번 발송의 마감은 고른 날짜 그대로다(0291 · E11) — 아래 insertQuizAssignments 가 dueAt 을 싣는다.
     const answerDays = audience === 'guest' ? daysBetween(scheduledOn, linkUntil) : dueAt ? daysBetween(scheduledOn, dueAt) : null;
     const ok = await guardWrite(
       upsertTrainingCourse({
@@ -540,7 +541,7 @@ export default function QuizNewScreen() {
     }
 
     const sent = await guardWrite(
-      insertQuizAssignments(courseId, to, scheduledOn),
+      insertQuizAssignments(courseId, to, scheduledOn, dueAt),
       () => {},
       '보내기에 실패했어요.',
     );

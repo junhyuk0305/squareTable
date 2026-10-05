@@ -140,8 +140,10 @@ export type QuizAssignment = {
   scheduledOn: string;
   /** null = 아직 안 나감. 크론만 채운다. */
   sentAt: string | null;
-  /** 받은 날 + answer_days. null = 마감 없음. */
+  /** 받은 날 + answer_days. null = 마감 없음. 사장이 고른 날짜(dueDate)가 있으면 그 날짜다(0291). */
   dueOn: string | null;
+  /** 사장이 달력으로 고른 마감 날짜(0291). null = 옛 방식(받은 날부터 N일). */
+  dueDate?: string | null;
   openedAt: string | null;
   completedAt: string | null;
   /** 왜 생긴 발송인가(0169) — 'manual'(사장) · 'join'(입사) · 'recheck'(노하우 변경). */
