@@ -28,7 +28,7 @@ import {
 } from '@/lib/store/useScheduleStore';
 import type { Junior } from '@/types';
 import { todayStr } from '@/lib/utils/attendance';
-import { mondayOf, fmtDateKo, closedDaysLabel, weekdayOf, addDays } from '@/lib/utils/schedule';
+import { mondayOf, fmtDateKo, closedDaysLabel, addDays, shiftAppliesOn } from '@/lib/utils/schedule';
 import { formatAsked } from '@/lib/utils/time';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Elevation, Radius } from '@/lib/theme/elevation';
@@ -92,12 +92,11 @@ export default function JuniorScheduleScreen() {
   const conflictOf = (r: SwapRequest): boolean => {
     const tpl = tplById(r.template_id);
     if (!tpl) return false;
-    const wd = weekdayOf(r.date);
     return templates.some(
       (t) =>
         t.staff_id === me &&
-        // 0138: 날짜 지정 근무는 그 날짜에만 겹친다.
-        (t.date ? t.date === r.date : t.weekday === wd) &&
+        // 0138: 날짜 지정 근무는 그 날짜에만 · 0242: 반복 근무는 그날 적용 중인 행만 겹친다.
+        shiftAppliesOn(t, r.date) &&
         t.id !== r.target_template_id && // 맞교환으로 내가 내주는 시프트는 제외
         t.start < tpl.end &&
         tpl.start < t.end,
@@ -199,7 +198,9 @@ export default function JuniorScheduleScreen() {
               config={config}
               meId={me}
               onShiftPress={(date, sh) => setPicked({ date, template: sh.template })}
-              canPress={(date, sh) => sh.workerStaffId === me && date >= today && !sh.pending}
+              // 지난 근무도 35일 안이면 누른다 — 실제 근무 시간을 고쳐 달라는 요청은 지난 날이 보통이다(J2 · 0243 범위).
+              //   교대는 시트가 앞으로의 근무에만 보여 준다.
+              canPress={(date, sh) => sh.workerStaffId === me && date >= addDays(today, -35) && !sh.pending}
             />
             </Appear>
             <Appear delay={stagger(2)}>

@@ -9,6 +9,8 @@ import { useHubStore } from '@/lib/store/useHubStore';
 import { useCrossNotifStore } from '@/lib/store/useCrossNotifStore';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useMemberPrefsStore } from '@/lib/store/useMemberPrefsStore';
+import { shiftsOn } from '@/lib/store/useScheduleStore';
+import type { MyCrossSummaryRow } from '@/lib/db';
 import { useStoreNav } from '@/lib/hooks/useStoreNav';
 import { storeColor } from '@/lib/utils/storeColor';
 import { todayStr } from '@/lib/utils/attendance';
@@ -23,6 +25,21 @@ import { Radius, Elevation } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
 
 const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'] as const;
+
+/**
+ * 그날 내 근무(전 매장, 시작 시각순). 판정은 매장 앱과 같은 shiftsOn 하나다(0138 날짜 지정 · 0178·0180 그날 예외 · 0242 적용 기간).
+ * ★자체 요일 판정을 따로 두면 규칙이 바뀔 때 한쪽만 바뀐다. 예외를 안 빼면 남에게 넘긴 근무가 '오늘 근무'로 남고,
+ *   기간을 안 보면 지난 구간과 새 구간이 두 벌로 잡힌다.
+ * my_cross_summary 는 본인 근무만 주므로 담당자는 나다. 교대 표시는 여기서 쓰지 않아 swaps 는 빈 배열이다.
+ */
+function myShiftsOn(myCross: MyCrossSummaryRow[], me: string, date: string) {
+  return myCross
+    .flatMap((r) =>
+      shiftsOn(r.shifts.map((s) => ({ ...s, staff_id: me })), [], date, r.exceptions ?? [])
+        .map(({ template }) => ({ uid: r.unit_id, ...template })),
+    )
+    .sort((a, b) => a.start.localeCompare(b.start));
+}
 
 export function JuniorTodayView({ header }: { header: ReactNode }) {
   const myCross = useHubStore((s) => s.myCross);
@@ -44,47 +61,24 @@ export function JuniorTodayView({ header }: { header: ReactNode }) {
   }, [hydrateJunior, hydrateCross, hydratePrefs]);
 
   const today = todayStr();
-  // 요일은 KST 날짜 문자열에서 파생 — occursOn(useWorkStore)과 같은 계산 문법.
-  const dow = new Date(`${today}T00:00:00`).getDay();
 
   const labelOf = (uid: string) =>
     prefFor(uid).nickname || myCross.find((r) => r.unit_id === uid)?.store_name || '매장';
   const colorOf = (uid: string) => storeColor(uid, prefFor(uid).color);
 
-  // ── 1) 오늘 근무(전 매장, 시작 시각순) + 다음 근무(오늘 없을 때) ──
-  // 0138: 근무 한 칸은 요일 반복이거나 날짜 지정이다. 판정은 shiftsOn(useScheduleStore)과 같은 모양.
-  // ★0178·0180: 그날 예외로 빠진 반복은 없는 것으로 친다 — 안 빼면 이미 남에게 넘긴 근무가
-  //   허브에 '오늘 근무'로 그대로 남는다(shiftsOn 이 매장 앱에서 하는 것과 같은 규칙).
-  const onDay = (
-    s: { id: string; weekday: number | null; date: string | null },
-    date: string,
-    wd: number,
-    excluded: { template_id: string; date: string }[],
-  ) => {
-    if (s.date) return s.date === date;
-    if (s.weekday !== wd) return false;
-    return !excluded.some((e) => e.template_id === s.id && e.date === date);
-  };
-
-  const todayShifts = useMemo(
-    () =>
-      myCross
-        .flatMap((r) => r.shifts.filter((s) => onDay(s, today, dow, r.exceptions ?? [])).map((s) => ({ uid: r.unit_id, ...s })))
-        .sort((a, b) => a.start.localeCompare(b.start)),
-    [myCross, dow, today],
-  );
+  // ── 1) 오늘 근무(전 매장, 시작 시각순) + 다음 근무(오늘 없을 때) — 판정은 myShiftsOn(= shiftsOn) ──
+  const meId = me ?? '';
+  const todayShifts = useMemo(() => myShiftsOn(myCross, meId, today), [myCross, meId, today]);
   const nextShift = useMemo(() => {
     if (todayShifts.length > 0) return null;
     for (let off = 1; off <= 7; off += 1) {
-      const d2 = (dow + off) % 7;
       const date2 = todayStr(new Date(new Date(`${today}T00:00:00`).getTime() + off * 86400000));
-      const cands = myCross
-        .flatMap((r) => r.shifts.filter((s) => onDay(s, date2, d2, r.exceptions ?? [])).map((s) => ({ uid: r.unit_id, dow: d2, ...s })))
-        .sort((a, b) => a.start.localeCompare(b.start));
+      const d2 = new Date(`${date2}T00:00:00`).getDay();
+      const cands = myShiftsOn(myCross, meId, date2).map((s) => ({ ...s, dow: d2 }));
       if (cands.length > 0) return cands[0];
     }
     return null;
-  }, [myCross, dow, today, todayShifts.length]);
+  }, [myCross, meId, today, todayShifts]);
 
   // ── 2) 오늘 할 일 — 배정(미완료) + 안 읽은 멘션. 술어는 notifications.ts SSOT.
   //     멘션(사람이 기다림)을 위로, 매장은 그룹헤더 대신 행 보조줄로 — 근무 행과 같은 해부구조.

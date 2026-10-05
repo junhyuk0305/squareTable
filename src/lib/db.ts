@@ -11,7 +11,7 @@ import type { PlaybookEntry, PlaybookSuggestion, UnknownQuery, ChatQuery, Owner,
 import type { TaskTemplate, FeedItem, DoneMark, Recurrence } from '@/lib/store/useWorkStore';
 import type { Room, RoomMember, RoomPref } from '@/lib/store/useRoomStore';
 import type { AttendanceRecord } from '@/lib/store/useAttendanceStore';
-import type { StoreConfig, ShiftTemplate, ShiftException, SwapRequest } from '@/lib/store/useScheduleStore';
+import type { StoreConfig, ShiftTemplate, ShiftException, SwapRequest, ShiftTimeRequest } from '@/lib/store/useScheduleStore';
 import type { CustomCategory } from '@/lib/store/knowhowCategories';
 import { reopenKeepsRecords, type DeleteStorePreview, type DeleteStoreResult } from '@/lib/account/storeCopy';
 // 훈련 v2(0107·0108). ★TrainingCourse 는 이 파일이 이미 0099 의 문자열 유니온으로 쓰고 있어(아래)
@@ -319,7 +319,11 @@ export async function fetchOwnerLaborInputs(): Promise<DbResult<OwnerLaborInputR
 }
 
 /** 0138: weekday(요일 반복) 또는 date(그 날짜 하루) 중 하나만 값이 있다. */
-export type MyShiftRow = { id: string; weekday: number | null; date: string | null; start: string; end: string };
+export type MyShiftRow = {
+  id: string; weekday: number | null; date: string | null; start: string; end: string;
+  /** 적용 기간(0242 · _v2 만 준다). v1 은 오늘 적용 중인 행만 주므로 없어도 판정이 맞다. */
+  valid_from?: string | null; valid_to?: string | null;
+};
 export type MyCrossSummaryRow = {
   unit_id: string; store_name: string; shifts: MyShiftRow[];
   /** 그날은 없는 것으로 치는 반복(0178·0180). 교대로 남에게 넘긴 근무가 여기에 걸린다. */
@@ -3322,11 +3326,13 @@ function shiftRow(t: ShiftTemplate) {
   };
 }
 
+/**
+ * 근무표 읽기(0242). 직접 select 는 옛 앱용으로 "오늘 적용 중인 반복 행"만 보인다(st_read).
+ * 새 앱은 shift_templates_all 로 지난 구간·앞으로 시작할 행까지 적용 기간과 함께 받고, 판정은 shiftsOn 이 기간으로 한다.
+ */
 export async function fetchShiftTemplates(): Promise<ReadResult<ShiftTemplate[]>> {
   if (!HAS_SUPABASE) return { data: [], error: false };
-  const { data, error } = await supabase
-    .from('shift_templates')
-    .select('id, staff_id, weekday, shift_date, start_time, end_time');
+  const { data, error } = await supabase.rpc('shift_templates_all');
   if (error) {
     readFail('fetchShiftTemplates', error);
     return { data: [], error: true };
@@ -3338,36 +3344,60 @@ export async function fetchShiftTemplates(): Promise<ReadResult<ShiftTemplate[]>
     date: r.shift_date ?? null,
     start: r.start_time,
     end: r.end_time,
+    valid_from: r.valid_from ?? null,
+    valid_to: r.valid_to ?? null,
   }));
   return { data: rows, error: false };
 }
 
+/** 날짜 지정 근무 한 칸 추가. 0행(RLS 차단·매장 드리프트)을 성공으로 치지 않는다. */
 export async function insertShiftTemplate(t: ShiftTemplate): Promise<boolean> {
   if (!HAS_SUPABASE) return true;
-  return write('insertShiftTemplate', supabase.from('shift_templates').insert(shiftRow(t)));
+  return writeStrict('insertShiftTemplate', supabase.from('shift_templates').insert(shiftRow(t)).select('id'));
 }
 
-export async function updateShiftTemplate(id: string, patch: Partial<ShiftTemplate>): Promise<boolean> {
-  if (!HAS_SUPABASE) return true;
-  const row: Record<string, unknown> = {};
-  if (patch.staff_id !== undefined) row.staff_id = patch.staff_id;
-  // 요일↔날짜는 한 쌍이다 — 한쪽만 바꾸면 CHECK(둘 중 하나)에 걸린다. 항상 같이 쓴다.
-  if (patch.weekday !== undefined || patch.date !== undefined) {
-    row.weekday = patch.date ? null : (patch.weekday ?? null);
-    row.shift_date = patch.date ?? null;
+// ── 반복 근무 기간 RPC(0242) — 관리자만 · 지난 날짜는 p_confirm_past(§8 Q4) ─────────────────────
+// 직접 UPDATE·DELETE 는 옛 앱 호환용 서버 트리거가 "오늘부터"로 바꿔 받는다. 새 앱은 사장이 고른 날부터 정확히 바꾸려고 RPC 를 쓴다.
+// 여러 행(지난 구간 복사본·예외·미결 교대)이 함께 바뀌므로 호출부는 성공 뒤 다시 읽는다.
+async function rpcOk(label: string, fn: string, args: Record<string, unknown>): Promise<boolean> {
+  const { error } = await supabase.rpc(fn, args);
+  if (error) {
+    console.warn(`[db] ${label}:`, error.message);
+    reportError(`db.write:${label}`, error);
+    return false;
   }
-  if (patch.start !== undefined) row.start_time = patch.start;
-  if (patch.end !== undefined) row.end_time = patch.end;
-  return writeStrict('updateShiftTemplate', supabase.from('shift_templates').update(row).eq('id', id).select('id'));
+  return true;
 }
 
-export async function deleteShiftTemplate(id: string): Promise<boolean> {
+/** "{from}부터 매주 {weekday}" 반복 근무를 새로 넣는다. 돌려주는 값 = 새 행 id(실패면 null). */
+export async function addShiftSeriesRpc(staffId: string, weekday: number, from: string, start: string, end: string, confirmPast: boolean): Promise<string | null> {
+  if (!HAS_SUPABASE) return 'local';
+  const { data, error } = await supabase.rpc('add_shift_series', { p_staff: staffId, p_weekday: weekday, p_from: from, p_start: start, p_end: end, p_confirm_past: confirmPast });
+  if (error || typeof data !== 'string') {
+    console.warn('[db] addShiftSeries:', error?.message ?? 'no id');
+    reportError('db.write:addShiftSeries', error ?? { message: 'no id' });
+    return null;
+  }
+  return data;
+}
+/** "이 날부터 계속" — from 앞 구간은 그대로 남고 from 부터 새 시각이다. */
+export async function editShiftFromRpc(id: string, from: string, start: string, end: string, confirmPast: boolean): Promise<boolean> {
   if (!HAS_SUPABASE) return true;
-  return writeStrict('deleteShiftTemplate', supabase.from('shift_templates').delete().eq('id', id).select('id'));
+  return rpcOk('editShiftFrom', 'edit_shift_from', { p_id: id, p_from: from, p_start: start, p_end: end, p_confirm_past: confirmPast });
+}
+/** "이 날부터 그만" — from 앞 구간은 기록으로 남는다. */
+export async function endShiftFromRpc(id: string, from: string, confirmPast: boolean): Promise<boolean> {
+  if (!HAS_SUPABASE) return true;
+  return rpcOk('endShiftFrom', 'end_shift_from', { p_id: id, p_from: from, p_confirm_past: confirmPast });
+}
+/** "이 날만" — 그날만 다른 시각으로 바꾸거나(start·end) 그날만 뺀다(null). */
+export async function overrideShiftDayRpc(id: string, date: string, start: string | null, end: string | null, confirmPast: boolean): Promise<boolean> {
+  if (!HAS_SUPABASE) return true;
+  return rpcOk('overrideShiftDay', 'override_shift_day', { p_id: id, p_date: date, p_start: start, p_end: end, p_confirm_past: confirmPast });
 }
 
 // (saveStaffShifts 삭제 — 2026-08-11. 주간 일괄 편집 모달을 근무 추가·고치기 시트로 바꾸면서
-//  유일한 호출자가 사라졌다. 근무는 이제 addTemplate/updateTemplate/removeTemplate 한 칸씩 쓴다.)
+//  유일한 호출자가 사라졌다. 날짜 지정 근무는 addTemplate, 반복 근무는 위 기간 RPC 로 한 칸씩 쓴다.)
 
 /**
  * 그날은 없는 것으로 치는 예외(0178) — 요일 반복 근무를 **하루만** 빼는 유일한 수단.
@@ -3395,10 +3425,43 @@ export async function deleteShiftException(templateId: string, date: string): Pr
   );
 }
 
-/** 직원이 **자기 근무의 시각만** 고친다(0178). 요일·날짜·담당자는 못 바꾼다. false = 거부. */
-export async function updateMyShiftTime(id: string, start: string, end: string): Promise<boolean> {
+// ── 직원 근무 시간 수정 요청(J2 · 0243) — 그날 하루만 · 사장 승인 뒤 반영 ──────────────────────
+// 옛 update_my_shift_time 은 0243 부터 항상 false 다. 새 앱은 요청을 남기고 사장이 승인한다.
+
+/** 대기 중인 시간 수정 요청. RLS = 활성 매장의 관리자는 전부, 직원은 본인 것만. */
+export async function fetchShiftTimeRequests(): Promise<ReadResult<ShiftTimeRequest[]>> {
+  if (!HAS_SUPABASE) return { data: [], error: false };
+  const { data, error } = await supabase
+    .from('shift_change_requests')
+    .select('id, staff_id, template_id, date, old_start, old_end, new_start, new_end, note, created_at')
+    .eq('status', 'pending')
+    .order('created_at', { ascending: true });
+  if (error) {
+    readFail('fetchShiftTimeRequests', error);
+    return { data: [], error: true };
+  }
+  return { data: (data ?? []) as ShiftTimeRequest[], error: false };
+}
+
+/** 내 근무의 그날 시각을 바꿔 달라고 요청한다. 같은 날 앞 요청은 서버가 닫고 새로 낸다. */
+export async function requestShiftTimeRpc(templateId: string, date: string, start: string, end: string): Promise<boolean> {
   if (!HAS_SUPABASE) return true;
-  return rpcBool('updateMyShiftTime', 'update_my_shift_time', { p_id: id, p_start: start, p_end: end });
+  return rpcOk('requestShiftTime', 'request_shift_time', { p_template: templateId, p_date: date, p_start: start, p_end: end });
+}
+
+/**
+ * 사장이 시간 수정 요청을 승인·반려한다(사장만). 지난 날짜 승인은 p_confirm_past 가 있어야 한다(§8 Q4).
+ * true = 처리됨 · false = 그날 근무가 빠졌거나 담당자가 바뀌어 요청을 닫음 · null = 실패(권한·이미 처리됨·35일 지남).
+ */
+export async function decideShiftTimeRpc(id: string, approve: boolean, confirmPast: boolean): Promise<boolean | null> {
+  if (!HAS_SUPABASE) return true;
+  const { data, error } = await supabase.rpc('decide_shift_time', { p_id: id, p_approve: approve, p_confirm_past: confirmPast });
+  if (error) {
+    console.warn('[db] decideShiftTime:', error.message);
+    reportError('db.write:decideShiftTime', error);
+    return null;
+  }
+  return data === true;
 }
 
 /** 교대 수락 — **선착순 선점**(0179). false = 이미 다른 사람이 가져갔거나 지정 대상이 아니다. */
@@ -3495,6 +3558,8 @@ export function subscribeSchedule(onChange: () => void): () => void {
     .on('postgres_changes', { event: '*', schema: 'public', table: 'swap_requests' }, onChange)
     // 0178 신설. publication 멤버로 넣어 뒀다(AGENTS ⑤) — 안 넣으면 교대 승인이 남의 화면에 안 뜬다.
     .on('postgres_changes', { event: '*', schema: 'public', table: 'shift_exceptions' }, onChange)
+    // 0243 신설(publication 멤버). 직원 요청이 사장 화면 승인 칸에, 승인 결과가 직원 화면에 바로 뜬다.
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'shift_change_requests' }, onChange)
     .subscribe();
   return () => {
     supabase.removeChannel(ch);

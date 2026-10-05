@@ -14,28 +14,33 @@ import {
   deleteShiftException,
   acceptSwapRpc,
   approveSwapRpc,
-  updateMyShiftTime,
   fetchScheduleConfig,
   upsertScheduleConfig,
   fetchShiftTemplates,
   insertShiftTemplate,
-  updateShiftTemplate,
-  deleteShiftTemplate,
+  addShiftSeriesRpc,
+  editShiftFromRpc,
+  endShiftFromRpc,
+  overrideShiftDayRpc,
+  fetchShiftTimeRequests,
+  requestShiftTimeRpc,
+  decideShiftTimeRpc,
   fetchSwaps,
   insertSwap,
   updateSwap,
   subscribeSchedule,
 } from '@/lib/db';
 import { guardWrite, useSyncStore } from '@/lib/store/useSyncStore';
-import { optimisticAdd, optimisticPatch, optimisticRemove } from '@/lib/store/crudHelpers';
+import { optimisticAdd } from '@/lib/store/crudHelpers';
 import { genId } from '@/lib/utils/id';
 import { todayStr } from '@/lib/utils/attendance';
-import { weekdayOf, nextDateForWeekday, fmtDateKo } from '@/lib/utils/schedule';
+import { nextDateForWeekday, fmtDateKo, shiftAppliesOn, type SeriesSaveOp } from '@/lib/utils/schedule';
 import {
   notifyStaffSwapRequest,
   notifyUserSwapRequest,
   notifyOwnersSwapApproval,
   notifyUserSwapResult,
+  notifyOwnersShiftTimeRequest,
 } from '@/lib/push/notify';
 
 // ── 타입 ────────────────────────────────────────────────
@@ -60,6 +65,27 @@ export type ShiftTemplate = {
   date: string | null; // YYYY-MM-DD. 요일 반복이면 null
   start: string; // "12:00"
   end: string; // "18:00"
+  /** 반복 근무의 적용 기간(0242) — 이 날부터(포함) 이 날까지(포함 · null = 끝 없음).
+   *  날짜 지정 행·데모·허브 v1 에는 없다. 없으면 기간 제한이 없는 것으로 본다(shiftAppliesOn). */
+  valid_from?: string | null;
+  valid_to?: string | null;
+};
+
+/**
+ * 직원의 근무 시간 수정 요청(J2 · 0243) — 그날 하루만, 사장이 승인하면 근무표(급여 기준)에 들어간다.
+ * 스토어에는 대기 중(pending)인 것만 둔다.
+ */
+export type ShiftTimeRequest = {
+  id: string;
+  staff_id: string;
+  template_id: string;
+  date: string; // YYYY-MM-DD
+  old_start: string | null; // 요청할 때 그날 시각(비교용)
+  old_end: string | null;
+  new_start: string;
+  new_end: string;
+  note: string | null;
+  created_at: string;
 };
 
 /**
@@ -101,6 +127,8 @@ type ScheduleState = {
   /** 그날 빠진 반복 근무(0178). shiftsOn 에 **반드시** 같이 넘긴다. */
   exceptions: ShiftException[];
   swaps: SwapRequest[];
+  /** 대기 중인 근무 시간 수정 요청(0243). 관리자는 매장 전부, 직원은 본인 것만(RLS). */
+  timeRequests: ShiftTimeRequest[];
   /** true = 조회 **시도가 끝남**(성공·실패 무관). 실패 여부는 loadError 로 본다. */
   loaded: boolean;
   /** 마지막 hydrate 가 실패했는가 — 화면이 "예정된 근무 없음"과 "못 불러옴"을 구분한다(#44). */
@@ -117,9 +145,19 @@ type ScheduleState = {
 
   /** 매장 운영 설정 저장. **서버 반영 성공 여부를 돌려준다** — 호출부가 성공 토스트를 확인 뒤로 미룰 수 있게. */
   setConfig: (patch: Partial<StoreConfig>) => Promise<boolean>;
-  addTemplate: (t: Omit<ShiftTemplate, 'id'>) => void;
-  updateTemplate: (id: string, patch: Partial<Omit<ShiftTemplate, 'id'>>) => void;
-  removeTemplate: (id: string) => void;
+  /** 날짜 지정 근무 한 칸 추가(직접 INSERT · 0행이면 실패). 반복 근무는 applySeriesOps 를 쓴다. */
+  addTemplate: (t: Omit<ShiftTemplate, 'id'>) => Promise<boolean>;
+  /**
+   * 반복 근무 저장(0242 RPC) — planSeriesSave 가 만든 계획을 차례로 보낸다. 끝나면 다시 읽는다.
+   * confirmPast = 지난 날짜를 바꾼다는 경고창을 사장이 확인했다(§8 Q4 · 서버 p_confirm_past).
+   */
+  applySeriesOps: (staffId: string, ops: SeriesSaveOp[], start: string, end: string, confirmPast: boolean) => Promise<boolean>;
+  /** "이 날부터 계속" 고치기(0242). */
+  editShiftFrom: (id: string, from: string, start: string, end: string, confirmPast: boolean) => Promise<boolean>;
+  /** "이 날부터 그만"(0242). 그 전 기록은 남는다. */
+  endShiftFrom: (id: string, from: string, confirmPast: boolean) => Promise<boolean>;
+  /** "이 날만" 바꾸기(start·end) 또는 빼기(null)(0242). 날짜 지정 근무는 그 행을 고치거나 지운다. */
+  overrideShiftDay: (id: string, date: string, start: string | null, end: string | null, confirmPast: boolean) => Promise<boolean>;
 
   requestSwap: (input: {
     kind: SwapKind;
@@ -141,8 +179,10 @@ type ScheduleState = {
   cancelSwap: (id: string) => void; // 요청자 취소
   approveSwap: (id: string) => void; // 사장 승인 — 근무를 실제로 이전한다(0179)
   rejectSwap: (id: string) => void; // 사장 반려
-  /** 직원이 **자기 근무의 시각만** 고친다(0178). 사장·매니저는 updateTemplate 를 쓴다. */
-  editMyShiftTime: (id: string, start: string, end: string) => void;
+  /** 직원이 자기 근무의 그날 시각을 바꿔 달라고 요청한다(J2 · 0243). 사장이 승인해야 근무표에 들어간다. */
+  requestShiftTime: (templateId: string, date: string, start: string, end: string) => Promise<boolean>;
+  /** 사장이 시간 수정 요청을 승인·반려한다(사장만 · 지난 날짜 승인은 confirmPast · §8 Q4). */
+  decideShiftTime: (id: string, approve: boolean, confirmPast: boolean) => Promise<boolean>;
   /** 그날 빼둔 반복 근무를 되돌린다(0178) — 쪼갠 근무표를 합치는 길. 관리자만. */
   restoreException: (templateId: string, date: string) => void;
 };
@@ -202,11 +242,24 @@ function demoSeed(): { config: StoreConfig; templates: ShiftTemplate[]; swaps: S
 
 const SEED = HAS_SUPABASE ? null : demoSeed();
 
-export const useScheduleStore = create<ScheduleState>((set, get) => ({
+export const useScheduleStore = create<ScheduleState>((set, get) => {
+  /**
+   * 근무표 RPC 공통 — 여러 행(지난 구간 복사본·예외·미결 교대)이 서버에서 함께 바뀌므로 낙관적으로 흉내 내지 않고
+   * 성공하면 다시 읽는다. 그 사이 매장이 바뀌었으면 다시 읽지 않는다(새 매장 hydrate 가 채운다).
+   */
+  const runShiftRpc = async (call: () => Promise<boolean>, failMsg: string): Promise<boolean> => {
+    const epoch = currentTenantEpoch();
+    const ok = await guardWrite(call(), () => {}, failMsg);
+    if (ok && !isStaleEpoch(epoch)) void get().hydrate();
+    return ok;
+  };
+
+  return {
   config: SEED?.config ?? DEFAULT_CONFIG,
   templates: SEED?.templates ?? [],
   exceptions: [],
   swaps: SEED?.swaps ?? [],
+  timeRequests: [],
   loaded: !HAS_SUPABASE,
   loadError: false,
   configLoadError: false,
@@ -219,14 +272,14 @@ export const useScheduleStore = create<ScheduleState>((set, get) => ({
     const epoch = currentTenantEpoch();
     try {
     // 정지(hang) 방지 — 위 try/catch 는 예외만 잡는다. 끝나지 않는 fetch 는 여기서 끊는다.
-    const quad = await settleWithin(
+    const all = await settleWithin(
       HYDRATE_TIMEOUT_MS,
-      Promise.all([fetchScheduleConfig(), fetchShiftTemplates(), fetchSwaps(), fetchShiftExceptions()]),
+      Promise.all([fetchScheduleConfig(), fetchShiftTemplates(), fetchSwaps(), fetchShiftExceptions(), fetchShiftTimeRequests()]),
       () => null,
     );
     if (isStaleEpoch(epoch)) return; // 그 사이 매장이 바뀌었다 — 이전 매장 근무표를 쓰지 않는다
-    if (quad === null) { set({ loaded: true, loadError: true, configLoadError: true }); return; }
-    const [config, templates, swaps, exceptions] = quad;
+    if (all === null) { set({ loaded: true, loadError: true, configLoadError: true }); return; }
+    const [config, templates, swaps, exceptions, timeRequests] = all;
     // ★config 조회가 실패했으면 DEFAULT_CONFIG 로 덮지 않는다 — 직전 값을 유지하고 configLoadError 로
     //   말한다. 기본값을 실제 운영시간인 양 보여주는 것이 이 화면의 가장 비싼 거짓말이다(#48).
     //   config.data === null 이면서 error 가 아닌 경우만 "신규 매장"이라 기본값이 정당하다.
@@ -236,8 +289,9 @@ export const useScheduleStore = create<ScheduleState>((set, get) => ({
       swaps: swaps.error ? s.swaps : swaps.data,
       // ★예외를 못 읽었으면 직전 값을 유지한다 — 빈 배열로 덮으면 그날 근무가 두 벌로 보인다.
       exceptions: exceptions.error ? s.exceptions : exceptions.data,
+      timeRequests: timeRequests.error ? s.timeRequests : timeRequests.data,
       loaded: true,
-      loadError: config.error || templates.error || swaps.error || exceptions.error,
+      loadError: config.error || templates.error || swaps.error || exceptions.error || timeRequests.error,
       configLoadError: config.error,
     }));
     } catch (e) {
@@ -273,14 +327,29 @@ export const useScheduleStore = create<ScheduleState>((set, get) => ({
 
   addTemplate: (t) => {
     const rec: ShiftTemplate = { ...t, id: genId('tpl') };
-    optimisticAdd(set, 'templates', rec, () => insertShiftTemplate(rec), '근무 추가 저장에 실패했어요.');
+    return optimisticAdd(set, 'templates', rec, () => insertShiftTemplate(rec), '근무 추가 저장에 실패했어요.');
   },
-  updateTemplate: (id, patch) => {
-    optimisticPatch(set, get, 'templates', id, patch, () => updateShiftTemplate(id, patch), '근무 수정 저장에 실패했어요.');
-  },
-  removeTemplate: (id) => {
-    optimisticRemove(set, get, 'templates', id, () => deleteShiftTemplate(id), '근무 삭제에 실패했어요.', currentTenantEpoch());
-  },
+  applySeriesOps: (staffId, ops, start, end, confirmPast) =>
+    runShiftRpc(async () => {
+      // 한 요일이 실패하면 거기서 멈춘다. 앞 요일은 이미 저장됐으므로 다시 읽어 화면을 서버와 맞춘다.
+      for (const op of ops) {
+        if (op.kind === 'edit') {
+          if (!(await editShiftFromRpc(op.id, op.from, start, end, confirmPast))) return false;
+          continue;
+        }
+        const id = await addShiftSeriesRpc(staffId, op.weekday, op.from, start, end, confirmPast);
+        if (!id) return false;
+        // 그 요일에 나중에 시작하는 행이 이미 있으면 새 행을 그 전날로 닫는다(그날부터 두 벌 금지).
+        if (op.endBefore && !(await endShiftFromRpc(id, op.endBefore, false))) return false;
+      }
+      return true;
+    }, '근무 저장에 실패했어요. 다시 시도해 주세요.'),
+  editShiftFrom: (id, from, start, end, confirmPast) =>
+    runShiftRpc(() => editShiftFromRpc(id, from, start, end, confirmPast), '근무 수정 저장에 실패했어요.'),
+  endShiftFrom: (id, from, confirmPast) =>
+    runShiftRpc(() => endShiftFromRpc(id, from, confirmPast), '근무 삭제에 실패했어요.'),
+  overrideShiftDay: (id, date, start, end, confirmPast) =>
+    runShiftRpc(() => overrideShiftDayRpc(id, date, start, end, confirmPast), start ? '근무 수정 저장에 실패했어요.' : '근무 삭제에 실패했어요.'),
   requestSwap: (input) => {
     // 같은 시프트(날짜+템플릿)에 이미 진행 중(open/accepted) 요청이 있으면 중복 생성 차단.
     const dup = get().swaps.some(
@@ -372,15 +441,30 @@ export const useScheduleStore = create<ScheduleState>((set, get) => ({
       void get().hydrate();
     });
   },
-  editMyShiftTime: (id, start, end) => {
-    const before = get().templates.find((t) => t.id === id);
-    if (!before) return;
-    set((s) => ({ templates: s.templates.map((t) => (t.id === id ? { ...t, start, end } : t)) }));
-    void guardWrite(
-      updateMyShiftTime(id, start, end),
-      () => set((s) => ({ templates: s.templates.map((t) => (t.id === id ? before : t)) })),
-      '근무 시간 수정에 실패했어요. 내 근무가 맞는지 확인해 주세요.',
+  requestShiftTime: async (templateId, date, start, end) => {
+    const ok = await runShiftRpc(
+      () => requestShiftTimeRpc(templateId, date, start, end),
+      '근무 시간 수정 요청에 실패했어요. 내 근무가 맞는지 확인해 주세요.',
     );
+    // 저장 성공 뒤에만 알린다(실패 시 유령 알림 금지). 승인은 사장만 한다(0243).
+    if (ok) notifyOwnersShiftTimeRequest(fmtDateKo(date));
+    return ok;
+  },
+  decideShiftTime: async (id, approve, confirmPast) => {
+    const before = get().timeRequests;
+    const epoch = currentTenantEpoch();
+    set({ timeRequests: before.filter((r) => r.id !== id) });
+    const res = await decideShiftTimeRpc(id, approve, confirmPast);
+    if (isStaleEpoch(epoch)) return res !== null;
+    if (res === null) {
+      // 다른 기기에서 이미 처리했거나 35일이 지났다. 되돌리고 서버 상태로 다시 읽는다.
+      set({ timeRequests: before });
+      useSyncStore.getState().noteError(approve ? '승인하지 못했어요. 목록을 새로 불러올게요.' : '반려하지 못했어요. 목록을 새로 불러올게요.');
+    } else if (!res) {
+      useSyncStore.getState().noteError('그날 근무가 바뀌어 요청을 닫았어요.');
+    }
+    void get().hydrate();
+    return res === true;
   },
   restoreException: (templateId, date) => {
     const before = get().exceptions;
@@ -404,7 +488,8 @@ export const useScheduleStore = create<ScheduleState>((set, get) => ({
       '교대 반려 저장에 실패했어요.',
     ).then((ok) => { if (ok) notifyUserSwapResult(before.requester_id, false, fmtDateKo(before.date)); });
   },
-}));
+  };
+});
 
 // ── 셀렉터/해석 헬퍼 ─────────────────────────────────────
 
@@ -464,6 +549,15 @@ export function pendingApprovals(swaps: SwapRequest[], today: string): SwapReque
 }
 
 /**
+ * 사장 승인을 기다리는 근무 시간 수정 요청(J2). staffId 를 주면 그 직원 것만.
+ * ★근무표 승인 칸·홈 '다음 행동'·TimesheetView 가 같은 수를 말해야 해서 판정은 여기 하나다.
+ *   지난 날짜도 남긴다. 35일 안이면 경고창을 거쳐 승인할 수 있고, 그 뒤에는 반려만 된다.
+ */
+export function pendingTimeRequests(reqs: ShiftTimeRequest[], staffId?: string): ShiftTimeRequest[] {
+  return staffId ? reqs.filter((r) => r.staff_id === staffId) : reqs;
+}
+
+/**
  * 특정 날짜에 발생하는 시프트들. 진행 중 교대는 pending 으로 표시한다.
  *
  * ★★2026-08-26 — **승인된 교대를 여기서 치환하지 않는다.**
@@ -482,12 +576,12 @@ export function shiftsOn(
   date: string,
   exceptions: ShiftException[],
 ): ResolvedShift[] {
-  const wd = weekdayOf(date);
   const excluded = new Set(exceptions.filter((e) => e.date === date).map((e) => e.template_id));
   const live = swaps.filter((s) => s.status === 'open' || s.status === 'accepted');
   return templates
-    // 날짜 지정 근무는 그 날짜에만, 요일 반복은 매주 그 요일에. 이 판정이 SSOT다(0138).
-    .filter((t) => (t.date ? t.date === date : t.weekday === wd))
+    // 날짜 지정 근무는 그 날짜에만, 요일 반복은 그 요일과 적용 기간 안에서만(0138 · 0242). 이 판정이 SSOT다.
+    //   ★기간을 안 보면 지난 구간 복사본과 원래 행이 둘 다 잡혀 근무가 두 벌이 된다.
+    .filter((t) => shiftAppliesOn(t, date))
     // 예외는 **반복 행에만** 걸린다(날짜 지정 행은 그 자체가 하루다).
     .filter((t) => t.date !== null || !excluded.has(t.id))
     .map((t) => {

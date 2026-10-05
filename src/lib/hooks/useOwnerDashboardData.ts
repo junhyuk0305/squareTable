@@ -7,7 +7,7 @@ import { useWorkStore, useDayparts, daypartRoutineTemplates, occursOn, taskVisib
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { useStaffStore } from '@/lib/store/useStaffStore';
 import { useSuggestionStore } from '@/lib/store/useSuggestionStore';
-import { useScheduleStore, shiftsOn, pendingApprovals } from '@/lib/store/useScheduleStore';
+import { useScheduleStore, shiftsOn, pendingApprovals, pendingTimeRequests } from '@/lib/store/useScheduleStore';
 import { useQuizBoard } from '@/lib/quiz/useQuizBoard';
 import { todayStr, hhmm } from '@/lib/utils/attendance';
 import { gradableTasks, staffBehind, type StaffBehind } from '@/lib/utils/taskProgress';
@@ -61,6 +61,8 @@ export type OwnerDashboardData = {
   dutyPlanned: number;
   /** 직원끼리 합의가 끝나 사장 승인만 남은 교대 — 홈 '다음 행동' 1순위. */
   pendingSwaps: number;
+  /** 직원의 근무 시간 수정 요청(J2) — 사장 승인 대기. 교대와 같은 '다음 행동' 1순위 자리에 더한다. */
+  pendingShiftTimes: number;
   pending: number;
   /** 사장 홈 히어로 = 가장 오래 기다린 미답변 질문 1건. 받은질문 화면의 hero와 **같은 1건**(sortByUrgency SSOT). */
   heroQuery?: UnknownQuery;
@@ -192,6 +194,9 @@ export function useOwnerDashboardData(): OwnerDashboardData {
 
   // 사장 승인만 남은 교대 — 근무표 화면과 같은 판정(pendingApprovals).
   const pendingSwaps = useMemo(() => pendingApprovals(swaps, today).length, [swaps, today]);
+  // 근무 시간 수정 요청 — 근무표 승인 칸과 같은 판정(pendingTimeRequests).
+  const timeRequests = useScheduleStore((s) => s.timeRequests);
+  const pendingShiftTimes = useMemo(() => pendingTimeRequests(timeRequests).length, [timeRequests]);
 
   // 2026-08-06: 담당자별 배정 요약(assign)은 홈에서 OwnerWorkValueCard가 사라지며 소비자가 없어져 제거했다.
   // "누가 무슨 일"은 /owner/work(AssignBoard)가 담당한다.
@@ -271,6 +276,7 @@ export function useOwnerDashboardData(): OwnerDashboardData {
     duty,
     dutyPlanned,
     pendingSwaps,
+    pendingShiftTimes,
     pending,
     heroQuery,
     pendingSuggestions,

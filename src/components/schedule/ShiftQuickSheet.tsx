@@ -4,6 +4,9 @@
 // 반복되는지를 사장이 보면서 정해야 한다 → 요일 칩을 시트 안에 둔다.
 //  · 추가: 직원 1명 + 요일(다중) + 시간  — 주 5일도 한 번에 넣을 수 있다.
 //  · 고치기: 그 요일 하나의 시간 수정 / 삭제 — 요일마다 시간이 다른 근무를 지킨다.
+//  · 반복 근무를 고치거나 지울 때는 범위를 고른다(0242 · J1): "이 날부터 계속"(기본) / "이 날만".
+//    지난 기록은 서버가 지난 구간으로 남긴다. 그래서 그 전 급여는 그대로다.
+//  · 지난 날짜를 바꾸면 시트 안에서 한 번 더 묻는다(§8 Q4). 확인해야 서버가 받는다(p_confirm_past).
 import { useState } from 'react';
 import { View, Text, Pressable, TextInput, ScrollView, StyleSheet, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -11,8 +14,18 @@ import { Ionicons } from '@expo/vector-icons';
 import { BottomSheet } from '@/components/BottomSheet';
 import { useScheduleStore } from '@/lib/store/useScheduleStore';
 import type { Junior } from '@/types';
-import { maskHHMM } from '@/lib/utils/attendance';
-import { WEEKDAY_LABELS, WEEKDAY_ORDER, checkShiftTime, isOvernight, weekdayOf, fmtDateKo } from '@/lib/utils/schedule';
+import { maskHHMM, todayStr } from '@/lib/utils/attendance';
+import { PAST_CHANGE_TITLE, PAST_CHANGE_BODY } from '@/lib/utils/confirm';
+import {
+  WEEKDAY_LABELS,
+  WEEKDAY_ORDER,
+  checkShiftTime,
+  isOvernight,
+  weekdayOf,
+  fmtDateKo,
+  nextDateForWeekday,
+  planSeriesSave,
+} from '@/lib/utils/schedule';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
@@ -37,7 +50,8 @@ export function ShiftQuickSheet({
   editing,
   onClose,
 }: {
-  /** 사장이 보고 있던 날짜(YYYY-MM-DD) — 반복을 안 켜면 이 하루에만 근무가 생긴다. */
+  /** 사장이 보고 있던 날짜(YYYY-MM-DD) — 반복을 안 켜면 이 하루에만 근무가 생긴다.
+   *  고치기에서는 "이 날"이다(이 날부터 계속 / 이 날만). */
   date: string;
   /** 그 날짜의 요일 — 반복을 켜면 기본으로 켜 두는 요일. */
   weekday: number;
@@ -49,8 +63,10 @@ export function ShiftQuickSheet({
   const config = useScheduleStore((s) => s.config);
   const templates = useScheduleStore((s) => s.templates);
   const addTemplate = useScheduleStore((s) => s.addTemplate);
-  const updateTemplate = useScheduleStore((s) => s.updateTemplate);
-  const removeTemplate = useScheduleStore((s) => s.removeTemplate);
+  const applySeriesOps = useScheduleStore((s) => s.applySeriesOps);
+  const editShiftFrom = useScheduleStore((s) => s.editShiftFrom);
+  const endShiftFrom = useScheduleStore((s) => s.endShiftFrom);
+  const overrideShiftDay = useScheduleStore((s) => s.overrideShiftDay);
 
   const [staffId, setStaffId] = useState<string>(() => (staff.length === 1 ? staff[0].id : ''));
   // ★기본은 '이 날짜만'이다 — 사장이 보고 있던 날에 근무를 넣는 게 눈에 보이는 동작이라,
@@ -59,13 +75,29 @@ export function ShiftQuickSheet({
   const [days, setDays] = useState<number[]>(() => [weekday]);
   const [start, setStart] = useState(() => editing?.start ?? config.open);
   const [end, setEnd] = useState(() => editing?.end ?? config.close);
+  // 반복 근무 고치기·지우기의 범위. 기본은 "이 날부터 계속"이다(업계 공통 · J1). 지난 기록은 그대로 남는다.
+  const [scope, setScope] = useState<'from' | 'day'>('from');
+  const [busy, setBusy] = useState(false);
+  // 지난 날짜 확인 단계 — 무엇을 보내려다 멈췄는지 들고 있다. null 이면 평소 버튼.
+  const [pastAsk, setPastAsk] = useState<null | { label: string; call: (confirmPast: boolean) => Promise<boolean> }>(null);
 
   const isEdit = !!editing;
+  const editingSeries = isEdit && editing.date === null;
   const timeErr = checkShiftTime(start, end);
   const timeOk = timeErr === null;
   // 자정을 넘기면 화면이 그렇게 해석했다고 말한다 — 안 말하면 사장이 오타로 넣은 건지 알 수 없다.
   const overnight = timeOk && isOvernight(start, end);
-  const canSave = timeOk && (isEdit || (!!staffId && (!repeat || days.length > 0)));
+  const changed = !isEdit || start !== editing.start || end !== editing.end;
+  const canSave = timeOk && changed && !busy && (isEdit || (!!staffId && (!repeat || days.length > 0)));
+
+  // 지난 날짜를 건드리는가 — 급여 기준이 근무표라 그 기간 급여가 바뀐다(§8 Q4).
+  //   반복 추가는 고른 요일마다 이 날 이후 첫 날부터 들어간다. 그중 가장 이른 날로 본다.
+  const today = todayStr();
+  const firstDay = !isEdit && repeat && days.length > 0
+    ? days.map((wd) => nextDateForWeekday(date, wd)).sort()[0]
+    : (editing?.date ?? date);
+  const touchesPast = firstDay < today;
+  const fromScope = (!isEdit && repeat) || (editingSeries && scope === 'from');
 
   // 소프트 경고(저장은 막지 않는다) — 정기휴무일뿐이다.
   //  ★'운영시간 밖'은 경고하지 않는다: 개점 전 준비·마감 후 정리가 정상 근무라 잡음이 된다(2026-08-11).
@@ -79,26 +111,52 @@ export function ShiftQuickSheet({
   const toggleDay = (wd: number) =>
     setDays((p) => (p.includes(wd) ? p.filter((d) => d !== wd) : [...p, wd]));
 
+  // 저장·삭제 공통 — 서버 확인이 끝난 뒤에 닫는다(실패하면 시트가 남고 배너가 뜬다).
+  async function send(past: boolean, call: (confirmPast: boolean) => Promise<boolean>) {
+    setPastAsk(null);
+    setBusy(true);
+    const ok = await call(past);
+    setBusy(false);
+    if (ok) onClose();
+  }
+  // 지난 날짜면 시트 아래쪽에서 한 번 더 묻는다(§8 Q4). 확인창(Modal)을 시트(Modal) 위에 띄우지 않는다 — iOS 는 못 띄울 수 있다.
+  function run(confirmLabel: string, past: boolean, call: (confirmPast: boolean) => Promise<boolean>) {
+    if (busy) return;
+    if (past) { setPastAsk({ label: confirmLabel, call }); return; }
+    void send(false, call);
+  }
+
   function save() {
     if (!canSave) return;
     if (isEdit) {
-      updateTemplate(editing.templateId, { start, end });
-      onClose();
+      // 날짜 지정 근무는 그 하루가 전부다. 반복 근무는 고른 범위대로.
+      if (!editingSeries || scope === 'day') {
+        const day = editing.date ?? date;
+        run('저장', day < today, (cp) => overrideShiftDay(editing.templateId, day, start, end, cp));
+      } else {
+        run('저장', date < today, (cp) => editShiftFrom(editing.templateId, date, start, end, cp));
+      }
       return;
     }
     if (!repeat) {
-      addTemplate({ staff_id: staffId, weekday: null, date, start, end });
-      onClose();
+      run('추가', date < today, () => addTemplate({ staff_id: staffId, weekday: null, date, start, end }));
       return;
     }
-    // 이 직원의 한 요일 반복 근무는 하나다 — 이미 있으면 시간만 바꾸고, 없으면 새로 넣는다.
-    // (날짜 지정 근무는 여기 대상이 아니다 — t.date가 있는 행은 건드리지 않는다.)
-    for (const wd of days) {
-      const existing = templates.find((t) => t.staff_id === staffId && !t.date && t.weekday === wd);
-      if (existing) updateTemplate(existing.id, { start, end });
-      else addTemplate({ staff_id: staffId, weekday: wd, date: null, start, end });
+    // 이 직원의 한 요일 반복 근무는 하나다. 판정은 그 요일 첫 날에 **적용 중인** 행 기준이다(planSeriesSave).
+    //   끝난 행은 기록이라 고치지 않고 새로 넣는다. 날짜 지정 근무는 대상이 아니다.
+    const ops = planSeriesSave(templates, staffId, days, date, start, end);
+    if (ops.length === 0) { onClose(); return; }
+    run('저장', ops.some((o) => o.from < today), (cp) => applySeriesOps(staffId, ops, start, end, cp));
+  }
+
+  function remove() {
+    if (!isEdit) return;
+    if (!editingSeries || scope === 'day') {
+      const day = editing.date ?? date;
+      run('삭제', day < today, (cp) => overrideShiftDay(editing.templateId, day, null, null, cp));
+    } else {
+      run('삭제', date < today, (cp) => endShiftFrom(editing.templateId, date, cp));
     }
-    onClose();
   }
 
   const repeatText = isEdit
@@ -120,7 +178,14 @@ export function ShiftQuickSheet({
       </Text>
       <Text style={s.sub}>{repeatText}</Text>
 
-      <ScrollView keyboardShouldPersistTaps="handled" style={s.scroll} contentContainerStyle={{ paddingBottom: Space.sm }} showsVerticalScrollIndicator={false}>
+      {/* 지난 날짜 확인 중에는 입력을 잠근다 — 확인한 값과 보내는 값이 달라지지 않게. */}
+      <ScrollView
+        keyboardShouldPersistTaps="handled"
+        pointerEvents={pastAsk ? 'none' : 'auto'}
+        style={[s.scroll, pastAsk && { opacity: 0.5 }]}
+        contentContainerStyle={{ paddingBottom: Space.sm }}
+        showsVerticalScrollIndicator={false}
+      >
         {!isEdit && (
           <>
             <Text style={s.label}>누구의 근무인가요</Text>
@@ -179,6 +244,37 @@ export function ShiftQuickSheet({
           </>
         )}
 
+        {/* 반복 근무 고치기 — 범위를 먼저 고른다. 저장과 삭제가 같은 범위를 따른다. */}
+        {editingSeries && (
+          <>
+            <Text style={s.label}>바꿀 범위</Text>
+            <View style={s.chips}>
+              {([
+                ['from', '이 날부터 계속'],
+                ['day', '이 날만'],
+              ] as const).map(([key, label]) => {
+                const on = scope === key;
+                return (
+                  <Pressable
+                    key={key}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: on }}
+                    onPress={() => setScope(key)}
+                    style={({ pressed }) => [s.chip, on && s.chipOn, pressed && !on && s.chipPressed]}
+                  >
+                    <Text style={[s.chipText, on && s.chipTextOn]}>{label}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+            <Text style={[s.infoText, s.scopeNote]}>
+              {scope === 'from'
+                ? `${fmtDateKo(date)}부터 바뀌어요. 그 전 근무는 그대로예요.`
+                : `${fmtDateKo(date)} 하루만 바뀌어요.`}
+            </Text>
+          </>
+        )}
+
         <Text style={s.label}>근무 시간</Text>
         <View style={s.timeRow}>
           <TextInput
@@ -212,6 +308,14 @@ export function ShiftQuickSheet({
             <Text style={s.infoText}>자정을 넘겨 다음 날 {end}에 끝나는 근무예요.</Text>
           </View>
         )}
+        {touchesPast && (
+          <View style={s.noteRow}>
+            <Ionicons name="alert-circle-outline" size={14} color={BrandColors.warn} />
+            <Text style={[s.noteText, s.pastNote]}>
+              {fromScope ? '지난 날짜부터 바꾸면 그 기간 급여도 바뀌어요.' : '지난 날짜를 바꾸면 그날 급여도 바뀌어요.'}
+            </Text>
+          </View>
+        )}
         {closedNote && (
           <View style={s.noteRow}>
             <Ionicons name="information-circle-outline" size={14} color={BrandColors.warn} />
@@ -222,18 +326,41 @@ export function ShiftQuickSheet({
         {isEdit && (
           <Pressable
             accessibilityRole="button"
-            onPress={() => {
-              removeTemplate(editing.templateId);
-              onClose();
-            }}
-            style={({ pressed }) => [s.delBtn, pressed && { opacity: 0.7 }]}
+            onPress={remove}
+            disabled={busy}
+            style={({ pressed }) => [s.delBtn, busy && { opacity: 0.4 }, pressed && { opacity: 0.7 }]}
           >
             <Ionicons name="trash-outline" size={15} color={BrandColors.badText} />
-            <Text style={s.delText}>{editing.date ? '이 날짜 근무 삭제' : '이 요일 근무 삭제'}</Text>
+            <Text style={s.delText}>
+              {editing.date ? '이 날짜 근무 삭제' : scope === 'from' ? '이 날부터 그만' : '이 날만 빼기'}
+            </Text>
           </Pressable>
         )}
       </ScrollView>
 
+      {pastAsk && (
+        <View style={s.pastAsk} accessibilityRole="alert">
+          <View style={s.noteRow}>
+            <Ionicons name="alert-circle-outline" size={16} color={BrandColors.warn} />
+            <Text style={s.pastAskTitle}>{PAST_CHANGE_TITLE}</Text>
+          </View>
+          <Text style={s.pastAskBody}>{PAST_CHANGE_BODY}</Text>
+        </View>
+      )}
+      {pastAsk ? (
+        <View style={s.foot}>
+          <Pressable onPress={() => setPastAsk(null)} accessibilityRole="button" style={({ pressed }) => [s.btn, s.btnGhost, pressed && { opacity: 0.7 }]}>
+            <Text style={s.btnGhostText}>취소</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => void send(true, pastAsk.call)}
+            accessibilityRole="button"
+            style={({ pressed }) => [s.btn, s.btnSolid, pressed && { opacity: 0.85 }]}
+          >
+            <Text style={s.btnSolidText}>{pastAsk.label}</Text>
+          </Pressable>
+        </View>
+      ) : (
       <View style={s.foot}>
         <Pressable onPress={onClose} accessibilityRole="button" style={({ pressed }) => [s.btn, s.btnGhost, pressed && { opacity: 0.7 }]}>
           <Text style={s.btnGhostText}>취소</Text>
@@ -244,9 +371,10 @@ export function ShiftQuickSheet({
           accessibilityRole="button"
           style={({ pressed }) => [s.btn, s.btnSolid, !canSave && { opacity: 0.4 }, pressed && canSave && { opacity: 0.85 }]}
         >
-          <Text style={s.btnSolidText}>{isEdit ? '저장' : '근무 추가'}</Text>
+          <Text style={s.btnSolidText}>{busy ? '저장 중…' : isEdit ? '저장' : '근무 추가'}</Text>
         </Pressable>
       </View>
+      )}
     </BottomSheet>
   );
 }
@@ -297,6 +425,11 @@ const s = StyleSheet.create({
   noteText: { fontSize: 12, color: BrandColors.warnText, fontWeight: '700' },
   // 자정 넘김은 경고가 아니라 해석 안내라 경고색을 쓰지 않는다.
   infoText: { fontSize: 12, color: InkColors.ink2, fontWeight: '700' },
+  scopeNote: { marginTop: Space.sm, lineHeight: 17 },
+  pastNote: { flex: 1, lineHeight: 17 },
+  pastAsk: { marginHorizontal: Space.lg, marginBottom: Space.sm, padding: Space.md, gap: Space.xs, borderRadius: Radius.md, backgroundColor: BrandColors.warnSoft },
+  pastAskTitle: { fontSize: 15, fontWeight: '800', color: InkColors.ink },
+  pastAskBody: { fontSize: 13, fontWeight: '700', color: InkColors.ink2, lineHeight: 19 },
 
   delBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Space.xs, minHeight: TAP, marginTop: Space.md },
   delText: { fontSize: 15, fontWeight: '800', color: BrandColors.badText },

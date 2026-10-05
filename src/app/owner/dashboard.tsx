@@ -46,6 +46,7 @@ export default function OwnerDashboardScreen() {
     duty,
     dutyPlanned,
     pendingSwaps,
+    pendingShiftTimes,
     pendingSuggestions,
     missedKnowhowCount,
     behindStaff,
@@ -149,10 +150,11 @@ export default function OwnerDashboardScreen() {
   const nextAction = useMemo(() => {
     // 1순위 = 교대 승인. 직원 둘이 합의를 끝내고 사장 손만 남은 상태라 대기 비용이 가장 크다
     // (2026-08-12 추가 전에는 이 신호가 홈에 아예 없어, 사장이 근무표를 열지 않으면 영영 몰랐다).
-    if (pendingSwaps > 0) {
+    // 근무 시간 수정 요청(J2)도 같은 자리다 — 둘 다 사장 손만 남았고, 근무표의 같은 승인 칸으로 간다.
+    if (pendingSwaps + pendingShiftTimes > 0) {
       return {
-        label: '승인을 기다리는 교대',
-        count: pendingSwaps,
+        label: pendingShiftTimes === 0 ? '승인을 기다리는 교대' : pendingSwaps === 0 ? '승인을 기다리는 근무 시간 수정' : '승인을 기다리는 요청',
+        count: pendingSwaps + pendingShiftTimes,
         unit: '건' as const,
         icon: 'swap-horizontal' as const,
         onPress: () => router.push('/owner/schedule'),
@@ -205,7 +207,7 @@ export default function OwnerDashboardScreen() {
       icon: 'person-circle' as const,
       onPress: () => router.push('/owner/staff'),
     };
-  }, [pendingSwaps, pendingSuggestions, needsReviewCount, missedKnowhowCount, scheduleEmpty, staffCount, behindStaff, router]);
+  }, [pendingSwaps, pendingShiftTimes, pendingSuggestions, needsReviewCount, missedKnowhowCount, scheduleEmpty, staffCount, behindStaff, router]);
 
   const tourSteps: TourStep[] = useMemo(
     () => [

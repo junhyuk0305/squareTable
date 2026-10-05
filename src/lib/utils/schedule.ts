@@ -226,6 +226,68 @@ export function nextDateForWeekday(fromDateStr: string, weekday: number): string
   return fromDateStr;
 }
 
+/**
+ * 근무 한 칸이 그날 서는지 판정하는 데 필요한 모양(0242).
+ * 기간 칸이 없으면(옛 데이터·데모·허브 v1) 기간 제한이 없는 것으로 본다.
+ */
+export type DatedShift = {
+  weekday: number | null;
+  date: string | null;
+  valid_from?: string | null;
+  valid_to?: string | null;
+};
+
+/**
+ * 이 근무가 그날 서는가 — 날짜 지정은 그 날짜, 반복은 요일과 적용 기간(valid_from ~ valid_to)(0242).
+ * 서버 `workers_at`·`request_shift_time` 과 같은 규칙이다. 그날 예외(0178)는 shiftsOn 이 따로 본다.
+ * ★기간을 안 보면 지난 구간 복사본과 원래 행이 둘 다 잡혀 그 주 근무가 두 벌이 되고 급여도 두 배가 된다.
+ */
+export function shiftAppliesOn(t: DatedShift, date: string): boolean {
+  if (t.date) return t.date === date;
+  if (t.weekday !== weekdayOf(date)) return false;
+  if (t.valid_from && date < t.valid_from) return false;
+  if (t.valid_to && date > t.valid_to) return false;
+  return true;
+}
+
+/** 반복 근무 저장 한 건. edit = 그 행을 from 부터 고친다. add = from 부터 새로 넣고, endBefore 가 있으면 그 전날로 닫는다. */
+export type SeriesSaveOp =
+  | { kind: 'edit'; id: string; from: string }
+  | { kind: 'add'; weekday: number; from: string; endBefore?: string };
+
+/**
+ * 반복 근무 저장 계획 — "이 직원의 한 요일 반복은 하나"를 **그 요일 첫 날에 적용 중인 행** 기준으로 판정한다(0242).
+ * from = date(포함) 이후 그 요일의 첫 날이다.
+ *  · 그날 적용 중인 행이 있으면 그 행을 from 부터 고친다. 시각이 같으면 건너뛴다.
+ *  · 없으면 새로 넣는다. 끝난 행은 기록이라 고치지 않는다.
+ *  · 그 뒤에 시작하는 행이 이미 있으면 새 행을 그 전날로 닫는다. 안 닫으면 그날부터 근무가 두 벌이 된다.
+ */
+export function planSeriesSave(
+  templates: (DatedShift & { id: string; staff_id: string; start: string; end: string })[],
+  staffId: string,
+  weekdays: number[],
+  date: string,
+  start: string,
+  end: string,
+): SeriesSaveOp[] {
+  const ops: SeriesSaveOp[] = [];
+  for (const wd of weekdays) {
+    const from = nextDateForWeekday(date, wd);
+    const series = templates.filter((t) => t.staff_id === staffId && !t.date && t.weekday === wd);
+    const live = series.find((t) => shiftAppliesOn(t, from));
+    if (live) {
+      if (live.start !== start || live.end !== end) ops.push({ kind: 'edit', id: live.id, from });
+      continue;
+    }
+    const later = series
+      .map((t) => t.valid_from ?? '')
+      .filter((v) => v > from)
+      .sort()[0];
+    ops.push(later ? { kind: 'add', weekday: wd, from, endBefore: later } : { kind: 'add', weekday: wd, from });
+  }
+  return ops;
+}
+
 /** 정기 휴무 요일 배열 → "월·화" 라벨. 없으면 '연중무휴'. */
 export function closedDaysLabel(days: number[]): string {
   if (!days.length) return '연중무휴';

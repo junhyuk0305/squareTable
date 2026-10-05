@@ -3,16 +3,17 @@
 // 왜 생겼나: 2026-08-26부터 **급여의 기준이 근무표**다. 그래서 직원에게도 "내 근무 시간이 실제와
 //   다르면 고칠 수 있는 길"이 있어야 한다(사용자 확정). 없으면 사장에게 말해서 고치는 수밖에 없고,
 //   그 사이 급여는 틀린 근무표대로 계산된다.
-// ★고칠 수 있는 건 **내 근무의 시각뿐**이다 — 요일·날짜·담당자는 서버가 막는다(0178).
-//   그리고 고친 근무에는 표가 남아 사장 화면에 '직원 수정'으로 보인다(출퇴근 보정과 같은 방식).
+// ★고칠 수 있는 건 **내 근무의 그날 시각뿐**이다(J2 · 0243). 바로 바뀌지 않고 요청으로 남는다.
+//   그날 하루만 바뀌고, 사장이 승인해야 근무표(급여 기준)에 들어간다. 반복 근무 자체는 그대로다.
+//   지난 근무도 35일 안이면 요청할 수 있다(실제로 더 일한 날을 고치는 게 보통이다). 교대는 앞으로의 근무만.
 import { useState } from 'react';
 import { View, Text, Pressable, TextInput, StyleSheet, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 import { BottomSheet } from '@/components/BottomSheet';
 import { useScheduleStore, type ShiftTemplate } from '@/lib/store/useScheduleStore';
-import { checkShiftTime, isOvernight, fmtDateKo } from '@/lib/utils/schedule';
-import { maskHHMM } from '@/lib/utils/attendance';
+import { checkShiftTime, isOvernight, fmtDateKo, fmtRange } from '@/lib/utils/schedule';
+import { maskHHMM, todayStr } from '@/lib/utils/attendance';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
@@ -29,18 +30,27 @@ export function MyShiftSheet({
   onSwap: () => void;
   onClose: () => void;
 }) {
-  const editMyShiftTime = useScheduleStore((s) => s.editMyShiftTime);
+  const requestShiftTime = useScheduleStore((s) => s.requestShiftTime);
+  // 이 근무·이 날에 이미 낸 요청(대기 중). 다시 내면 서버가 앞 요청을 닫고 새로 낸다.
+  const pendingReq = useScheduleStore((s) =>
+    s.timeRequests.find((r) => r.template_id === template.id && r.date === date),
+  );
   const [editing, setEditing] = useState(false);
-  const [start, setStart] = useState(template.start);
-  const [end, setEnd] = useState(template.end);
+  const [start, setStart] = useState(pendingReq?.new_start ?? template.start);
+  const [end, setEnd] = useState(pendingReq?.new_end ?? template.end);
+  const [busy, setBusy] = useState(false);
 
   const timeErr = checkShiftTime(start, end);
   const changed = start !== template.start || end !== template.end;
+  // 지난 근무는 교대할 수 없다. 시간 수정 요청만 된다.
+  const canSwap = date >= todayStr();
 
-  function save() {
-    if (timeErr || !changed) return;
-    editMyShiftTime(template.id, start, end);
-    onClose();
+  async function save() {
+    if (timeErr || !changed || busy) return;
+    setBusy(true);
+    const ok = await requestShiftTime(template.id, date, start, end);
+    setBusy(false);
+    if (ok) onClose();
   }
 
   return (
@@ -50,6 +60,14 @@ export function MyShiftSheet({
         {template.start}~{template.end}
         {isOvernight(template.start, template.end) ? ' (다음 날까지)' : ''}
       </Text>
+      {pendingReq && (
+        <View style={s.pendingRow}>
+          <Ionicons name="time-outline" size={14} color={BrandColors.warnText} />
+          <Text style={s.pendingText}>
+            사장님 승인 대기 · 요청한 시간 {fmtRange(pendingReq.new_start, pendingReq.new_end)}
+          </Text>
+        </View>
+      )}
 
       {!editing ? (
         <View style={s.actions}>
@@ -59,16 +77,18 @@ export function MyShiftSheet({
             style={({ pressed }) => [s.act, pressed && { opacity: 0.7 }]}
           >
             <Ionicons name="create-outline" size={17} color={InkColors.ink} />
-            <Text style={s.actText}>근무 시간 고치기</Text>
+            <Text style={s.actText}>{pendingReq ? '요청 다시 보내기' : '근무 시간 고치기'}</Text>
           </Pressable>
-          <Pressable
-            accessibilityRole="button"
-            onPress={onSwap}
-            style={({ pressed }) => [s.act, pressed && { opacity: 0.7 }]}
-          >
-            <Ionicons name="swap-horizontal-outline" size={17} color={InkColors.ink} />
-            <Text style={s.actText}>교대 요청하기</Text>
-          </Pressable>
+          {canSwap && (
+            <Pressable
+              accessibilityRole="button"
+              onPress={onSwap}
+              style={({ pressed }) => [s.act, pressed && { opacity: 0.7 }]}
+            >
+              <Ionicons name="swap-horizontal-outline" size={17} color={InkColors.ink} />
+              <Text style={s.actText}>교대 요청하기</Text>
+            </Pressable>
+          )}
         </View>
       ) : (
         <View style={s.editBox}>
@@ -96,15 +116,15 @@ export function MyShiftSheet({
           {!timeErr && isOvernight(start, end) && (
             <Text style={s.note}>자정을 넘겨 다음 날 {end}에 끝나는 근무예요.</Text>
           )}
-          {/* 급여가 근무표 기준이라, 고치면 금액이 바뀐다는 것을 먼저 말한다. */}
-          <Text style={s.note}>고치면 사장님 화면에 ‘직원 수정’으로 보이고, 예상 급여도 함께 바뀌어요.</Text>
+          {/* 급여가 근무표 기준이라, 언제 금액에 들어가는지를 먼저 말한다. */}
+          <Text style={s.note}>이 날 하루만 바뀌어요. 사장님이 승인하면 급여에 반영돼요.</Text>
           <Pressable
             accessibilityRole="button"
-            onPress={save}
-            disabled={!!timeErr || !changed}
-            style={({ pressed }) => [s.cta, (!!timeErr || !changed) && { opacity: 0.4 }, pressed && { opacity: 0.85 }]}
+            onPress={() => void save()}
+            disabled={!!timeErr || !changed || busy}
+            style={({ pressed }) => [s.cta, (!!timeErr || !changed || busy) && { opacity: 0.4 }, pressed && { opacity: 0.85 }]}
           >
-            <Text style={s.ctaText}>저장</Text>
+            <Text style={s.ctaText}>{busy ? '보내는 중…' : '승인 요청 보내기'}</Text>
           </Pressable>
         </View>
       )}
@@ -115,6 +135,8 @@ export function MyShiftSheet({
 const s = StyleSheet.create({
   title: { fontSize: 16, fontWeight: '800', color: InkColors.ink, paddingHorizontal: 16 },
   sub: { fontSize: 13, fontWeight: '700', color: InkColors.ink2, paddingHorizontal: 16, paddingTop: 4 },
+  pendingRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 16, paddingTop: Space.sm },
+  pendingText: { flex: 1, fontSize: 12, fontWeight: '700', color: BrandColors.warnText, lineHeight: 17 },
   actions: { padding: 16, gap: Space.sm },
   act: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 48, paddingHorizontal: 14, borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, backgroundColor: InkColors.bg },
   actText: { fontSize: 15, fontWeight: '700', color: InkColors.ink },

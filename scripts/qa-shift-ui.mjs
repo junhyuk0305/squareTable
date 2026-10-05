@@ -12,6 +12,8 @@
 //       적용 기간과 새 RPC(요청·승인)를 쓰는지, 옛 직접 수정 경로(updateShiftTemplate·update_my_shift_time)가 사라졌는지.
 //   [3] RPC 인자 이름 — db.ts 가 부르는 새 RPC 의 인자 키가 로컬 DB 함수의 실제 인자 이름과 같은지
 //       (docker exec psql · 로컬 도커만 · 계정을 만들지 않는다). 다르면 PostgREST 가 404 로 조용히 실패한다.
+//   [4] 왕복 — 앱 판정으로 RPC 를 부르고 shift_templates_all 로 다시 읽으면 매주 정확히 1건(이 날부터 계속 · 나중 행 앞 추가 ·
+//       이 날만 · 직원 요청 → 사장 승인). ★로컬 전용: 계정 2개를 가입시키고 지운다. URL 이 로컬이 아니면 실패로 센다.
 // 실행: node scripts/qa-shift-ui.mjs
 import { execFileSync } from 'node:child_process';
 import { writeFileSync, readFileSync } from 'node:fs';
@@ -169,7 +171,7 @@ check('fetchShiftTemplates 가 shift_templates_all RPC 를 쓴다', /rpc\(\s*'sh
 check('insertShiftTemplate 가 writeStrict(0행 = 실패)를 쓴다', /writeStrict\(/.test(fnBody(db, 'insertShiftTemplate')));
 check('옛 직접 수정·삭제(updateShiftTemplate · deleteShiftTemplate)가 db.ts 에 없다',
   !/function\s+updateShiftTemplate|function\s+deleteShiftTemplate/.test(db));
-check('직원 직접 수정 RPC(update_my_shift_time)를 앱이 부르지 않는다', !/update_my_shift_time/.test(db) && !/editMyShiftTime/.test(store));
+check('직원 직접 수정 RPC(update_my_shift_time)를 앱이 부르지 않는다', !/'update_my_shift_time'/.test(db) && !/editMyShiftTime/.test(store));
 check('근무표 실시간이 shift_change_requests 도 듣는다', /table:\s*'shift_change_requests'/.test(fnBody(db, 'subscribeSchedule')));
 check('직원 junior/schedule 의 겹침 판정(conflictOf)이 적용 기간을 본다', /shiftAppliesOn\(/.test(juniorSched));
 
@@ -179,7 +181,9 @@ check('ShiftQuickSheet: 지난 날짜 안내 문구가 있다', /지난 날짜�
 check('ShiftQuickSheet: 저장은 RPC 액션으로(updateTemplate · removeTemplate 직접 쓰기 없음)',
   !/updateTemplate|removeTemplate/.test(quick) && /editShiftFrom|overrideShiftDay|endShiftFrom|addShiftSeries/.test(quick));
 check('ShiftQuickSheet: 반복 저장 판정은 planSeriesSave(그날 적용 중인 행)', /planSeriesSave\(/.test(quick));
-check('ShiftQuickSheet: 지난 날짜는 경고창(confirmPastChange)을 거친다', /confirmPastChange\(/.test(quick));
+// 시트(Modal) 위에 확인창(Modal)을 띄우지 않는다(iOS) — 시트 안 확인 단계가 같은 문구(PAST_CHANGE_*)를 쓴다.
+check('ShiftQuickSheet: 지난 날짜는 확인 단계(같은 경고 문구)를 거친 뒤에만 p_confirm_past 를 보낸다',
+  /PAST_CHANGE_TITLE/.test(quick) && /PAST_CHANGE_BODY/.test(quick) && /send\(true,/.test(quick) && !/confirmPastChange\(/.test(quick));
 check('경고창 문구 = "지난 기간이에요" · "그 기간 급여가 바뀌어요."',
   /지난 기간이에요/.test(read('src/lib/utils/confirm.ts')) && /그 기간 급여가 바뀌어요\./.test(read('src/lib/utils/confirm.ts')));
 
@@ -188,7 +192,7 @@ check('MyShiftSheet: "이 날 하루만 바뀌어요. 사장님이 승인하면 
 check('MyShiftSheet: 지키지 않던 약속(‘직원 수정’으로 보이고)이 사라졌다', !/직원 수정’으로 보이고/.test(mine));
 check('MyShiftSheet: 저장 = 요청(requestShiftTime)', /requestShiftTime/.test(mine));
 check('db.ts: request_shift_time · decide_shift_time · shift_change_requests 읽기',
-  /rpc\(\s*'request_shift_time'/.test(db) && /rpc\(\s*'decide_shift_time'/.test(db) && /from\(\s*'shift_change_requests'\s*\)/.test(db));
+  /'request_shift_time'\s*,/.test(db) && /'decide_shift_time'\s*,/.test(db) && /from\(\s*'shift_change_requests'\s*\)/.test(db));
 check('알림: 시간 수정 요청은 사장에게(audience owners · ownerOnly)',
   /audience:\s*'owners',\s*\n\s*ownerOnly:\s*true,[\s\S]{0,200}shift-time/.test(notify));
 check('사장 근무표: 시간 수정 요청 승인 칸(decideShiftTime · 지난 날짜는 경고창)',
@@ -212,12 +216,151 @@ try {
 }
 if (dbArgs) {
   for (const name of RPCS) {
-    const m = db.match(new RegExp(`rpc\\(\\s*'${name}'\\s*,\\s*\\{([^}]*)\\}`));
+    // supabase.rpc('name', {...}) 이든 rpcOk('라벨', 'name', {...}) 이든 이름 바로 뒤 인자 객체를 본다.
+    const m = db.match(new RegExp(`'${name}'\\s*,\\s*\\{([^}]*)\\}`));
     if (!m) { check(`${name}: db.ts 가 부른다`, false, '(호출 없음)'); continue; }
     const keys = [...m[1].matchAll(/(p_[a-z_]+)\s*:/g)].map((x) => x[1]);
     const want = dbArgs[name] ?? [];
     const unknown = keys.filter((k) => !want.includes(k));
     check(`${name}: 인자 ${keys.join(',')} ⊆ DB(${want.join(',')})`, keys.length > 0 && unknown.length === 0, unknown.length ? `모르는 키 ${unknown}` : '');
+  }
+}
+
+// ── [4] 왕복 — 앱 판정(planSeriesSave·shiftAppliesOn)으로 RPC 를 부르고 shift_templates_all 로 다시 읽으면 매일 정확히 1건 ──
+//   db.ts 와 같은 인자 · 같은 매핑. ★로컬 전용: 계정을 가입시키고 지운다. URL 이 로컬이 아니면 이 절을 실패로 센다.
+console.log('\n■ [4] 왕복(로컬 도커) — 앱 판정 → RPC → shift_templates_all → 매일 정확히 1건');
+{
+  const { createClient } = await import('@supabase/supabase-js');
+  const { seedVerifiedPhones, cleanupSeededPhones } = await import('./qa-otp-seed.mjs');
+  const env = { ...process.env };
+  for (const f of ['.env', '.env.seed']) {
+    try {
+      for (const line of read(f).split('\n')) { const m = line.match(/^([A-Z0-9_]+)=(.*)$/); if (m && !env[m[1]]) env[m[1]] = m[2].trim(); }
+    } catch { /* skip */ }
+  }
+  const URL_ = env.EXPO_PUBLIC_SUPABASE_URL || env.SUPABASE_URL, ANON = env.EXPO_PUBLIC_SUPABASE_ANON_KEY, SRV = env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!plan || !applies || !URL_ || !/^http:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/.test(URL_)) {
+    check('[4] 로컬 도커 대상 · 판정 함수 있음', false, `대상=${URL_}`);
+  } else {
+    const mk = () => createClient(URL_, ANON, { auth: { persistSession: false, autoRefreshToken: false } });
+    const admin = createClient(URL_, SRV, { auth: { persistSession: false, autoRefreshToken: false } });
+    const sfx = String(Date.now()).slice(-9);
+    const phones = ['0176', '0177'].map((p) => `${p}${sfx.slice(0, 7)}`);
+    const users = [], units = [];
+    const T = new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10); // 오늘(KST)
+    const wdT = S.weekdayOf(T);
+    // db.ts fetchShiftTemplates 와 같은 매핑
+    const readAll = async (c) => {
+      const { data, error } = await c.rpc('shift_templates_all');
+      if (error) throw new Error('shift_templates_all: ' + error.message);
+      return (data ?? []).map((r) => ({ id: r.id, staff_id: r.staff_id, weekday: r.weekday, date: r.shift_date ?? null,
+        start: r.start_time, end: r.end_time, valid_from: r.valid_from ?? null, valid_to: r.valid_to ?? null }));
+    };
+    const readExc = async (c) => ((await c.from('shift_exceptions').select('template_id, date')).data ?? []);
+    // shiftsOn 과 같은 규칙(적용 기간 + 그날 예외는 반복 행에만)
+    const on = (tpls, exc, d, staff) => tpls.filter((t) => t.staff_id === staff && applies(t, d)
+      && (t.date !== null || !exc.some((e) => e.template_id === t.id && e.date === d)));
+    try {
+      await seedVerifiedPhones(URL_, SRV, phones);
+      const sign = async (i, name, role) => {
+        const c = mk();
+        const r = await c.auth.signUp({ email: `qa_sui_${i}_${sfx}@example.com`, password: 'Test1234!qa',
+          options: { data: { name, role, phone: phones[i], birth_date: '1990-01-15' } } });
+        if (r.error || !r.data.session) throw new Error(`${name} signUp: ${r.error?.message ?? 'no session'}`);
+        users.push(r.data.user.id);
+        return { c, id: r.data.user.id };
+      };
+      const O = await sign(0, 'QA화면사장', 'owner');
+      const J = await sign(1, 'QA화면직원', 'junior');
+      const { data: st, error: se } = await O.c.rpc('create_store', { p_store_name: 'QA화면카페', p_industry: '카페·디저트', p_biz_no: null });
+      const UNIT = st?.[0]?.unit_id;
+      if (se || !UNIT) throw new Error('create_store: ' + (se?.message ?? 'no row'));
+      units.push(UNIT);
+      await admin.rpc('admin_activate_store', { p_unit_id: UNIT, p_days: 1, p_plan: 'multi' });
+      await O.c.rpc('switch_active_unit', { p_unit_id: UNIT });
+      if ((await J.c.rpc('join_by_invite', { p_code: st[0].invite_code })).error) throw new Error('join');
+      if ((await O.c.rpc('approve_member', { p_uid: J.id })).error) throw new Error('approve');
+      await J.c.rpc('switch_active_unit', { p_unit_id: UNIT });
+
+      // 배포 전부터 있던 반복 근무(2000-01-01 부터 · 생성일 200일 전)
+      const L1 = `qa_sui_l1_${sfx}`;
+      await admin.from('shift_templates').insert({ id: L1, unit_id: UNIT, staff_id: J.id, weekday: wdT, shift_date: null,
+        start_time: '09:00', end_time: '13:00', created_at: new Date(Date.now() - 200 * 864e5).toISOString() });
+      execFileSync('docker', ['exec', 'supabase_db_SquareTable', 'psql', '-U', 'postgres', '-qc',
+        `update public.shift_templates set valid_from = '2000-01-01' where id = '${L1}'`]);
+
+      // 4-1 "이 날부터 계속": planSeriesSave → edit_shift_from(오늘부터) → 지난 주는 옛 시각, 오늘부터 새 시각, 매주 1건
+      let tpls = await readAll(O.c);
+      const ops = plan(tpls, J.id, [wdT], T, '10:00', '14:00');
+      check('4-1 적용 중인 행을 오늘부터 고치는 계획', ops.length === 1 && ops[0].kind === 'edit' && ops[0].id === L1 && ops[0].from === T, JSON.stringify(ops));
+      const e1 = await O.c.rpc('edit_shift_from', { p_id: L1, p_from: T, p_start: '10:00', p_end: '14:00', p_confirm_past: false });
+      check('4-1 edit_shift_from 성공', !e1.error, e1.error?.message);
+      tpls = await readAll(O.c);
+      let exc = await readExc(O.c);
+      let bad = [];
+      for (let k = -4; k <= 4; k++) {
+        const d = S.addDays(T, 7 * k);
+        const got = on(tpls, exc, d, J.id);
+        const want = k < 0 ? '09:00' : '10:00';
+        if (got.length !== 1 || got[0].start !== want) bad.push(`${d}:${got.map((g) => g.start).join('+') || '없음'}`);
+      }
+      check('★4-1 4주 전~4주 뒤 매주 정확히 1건 · 지난 주 09:00 그대로 · 오늘부터 10:00', bad.length === 0, bad.join(' '));
+
+      // 4-2 나중에 시작하는 행이 있는 요일에 반복 추가 → 새 행은 그 전날로 닫혀 두 벌이 없다
+      const wd2 = (wdT + 1) % 7;
+      const first2 = S.nextDateForWeekday(T, wd2);
+      const fut = await O.c.rpc('add_shift_series', { p_staff: J.id, p_weekday: wd2, p_from: S.addDays(first2, 14), p_start: '15:00', p_end: '19:00', p_confirm_past: false });
+      check('4-2 2주 뒤부터 시작하는 행 준비', !fut.error, fut.error?.message);
+      tpls = await readAll(O.c);
+      const ops2 = plan(tpls, J.id, [wd2], T, '08:00', '12:00');
+      check('4-2 계획 = 이번 주부터 넣고 그 행 시작 전날로 닫기', ops2.length === 1 && ops2[0].kind === 'add' && ops2[0].from === first2 && ops2[0].endBefore === S.addDays(first2, 14), JSON.stringify(ops2));
+      const add = await O.c.rpc('add_shift_series', { p_staff: J.id, p_weekday: wd2, p_from: ops2[0].from, p_start: '08:00', p_end: '12:00', p_confirm_past: false });
+      const end = add.error ? add : await O.c.rpc('end_shift_from', { p_id: add.data, p_from: ops2[0].endBefore, p_confirm_past: false });
+      check('4-2 add_shift_series → end_shift_from 성공', !add.error && !end.error, add.error?.message ?? end.error?.message);
+      tpls = await readAll(O.c);
+      exc = await readExc(O.c);
+      bad = [];
+      for (let k = 0; k <= 5; k++) {
+        const d = S.addDays(first2, 7 * k);
+        const got = on(tpls, exc, d, J.id);
+        const want = k < 2 ? '08:00' : '15:00';
+        if (got.length !== 1 || got[0].start !== want) bad.push(`${d}:${got.map((g) => g.start).join('+') || '없음'}`);
+      }
+      check('★4-2 6주 동안 매주 정확히 1건(2주 동안 08:00 · 그 뒤 15:00)', bad.length === 0, bad.join(' '));
+
+      // 4-3 "이 날만": 다음 주 그날만 바꾸면 그날만 1건(새 시각), 그다음 주는 원래대로
+      const nextW = S.addDays(T, 7);
+      const o1 = await O.c.rpc('override_shift_day', { p_id: L1, p_date: nextW, p_start: '11:00', p_end: '15:00', p_confirm_past: false });
+      check('4-3 override_shift_day 성공', !o1.error, o1.error?.message);
+      tpls = await readAll(O.c);
+      exc = await readExc(O.c);
+      const g1 = on(tpls, exc, nextW, J.id), g2 = on(tpls, exc, S.addDays(T, 14), J.id);
+      check('★4-3 그날만 11:00 1건 · 그다음 주는 10:00 1건', g1.length === 1 && g1[0].start === '11:00' && g2.length === 1 && g2[0].start === '10:00',
+        `${g1.map((g) => g.start)} / ${g2.map((g) => g.start)}`);
+
+      // 4-4 직원 요청 → 사장 화면이 읽는 열로 1건 → 승인하면 그날만 바뀐다
+      const rq = await J.c.rpc('request_shift_time', { p_template: L1, p_date: T, p_start: '10:30', p_end: '14:30' });
+      check('4-4 request_shift_time 성공(직원)', !rq.error, rq.error?.message);
+      const { data: pend, error: pe } = await O.c.from('shift_change_requests')
+        .select('id, staff_id, template_id, date, old_start, old_end, new_start, new_end, note, created_at').eq('status', 'pending');
+      check('4-4 사장이 대기 요청 1건을 읽는다(db.ts 와 같은 열)', !pe && pend?.length === 1 && pend[0].date === T && pend[0].new_start === '10:30' && pend[0].staff_id === J.id,
+        pe?.message ?? JSON.stringify(pend));
+      const { data: mine } = await J.c.from('shift_change_requests').select('id').eq('status', 'pending');
+      check('4-4 직원도 자기 대기 요청을 읽는다(시트 표시)', mine?.length === 1);
+      const dc = pend?.[0] ? await O.c.rpc('decide_shift_time', { p_id: pend[0].id, p_approve: true, p_confirm_past: false }) : { error: { message: 'no req' } };
+      check('4-4 decide_shift_time(오늘 · 확인 불필요) = true', !dc.error && dc.data === true, dc.error?.message ?? String(dc.data));
+      tpls = await readAll(O.c);
+      exc = await readExc(O.c);
+      const gT = on(tpls, exc, T, J.id), gN = on(tpls, exc, S.addDays(T, 14), J.id);
+      check('★4-4 승인 뒤 오늘만 10:30 1건 · 2주 뒤는 10:00 그대로', gT.length === 1 && gT[0].start === '10:30' && gN.length === 1 && gN[0].start === '10:00',
+        `${gT.map((g) => g.start)} / ${gN.map((g) => g.start)}`);
+    } catch (e) {
+      check('[4] 예외 없이 끝남', false, e.message);
+    } finally {
+      for (const id of users) { try { await admin.auth.admin.deleteUser(id); } catch { /* best-effort */ } }
+      for (const id of units) { try { await admin.from('units').delete().eq('id', id); } catch { /* best-effort */ } }
+      try { await cleanupSeededPhones(URL_, SRV, phones); } catch { /* best-effort */ }
+    }
   }
 }
 

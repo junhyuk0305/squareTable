@@ -6,7 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAttendanceStore, type AttendanceRecord } from '@/lib/store/useAttendanceStore';
 import { usePayrollStore } from '@/lib/store/usePayrollStore';
 import { computePay, shiftsToPayRecords, reconcileSchedule } from '@/lib/utils/payroll';
-import { useScheduleStore, scheduledShiftsFor } from '@/lib/store/useScheduleStore';
+import { useScheduleStore, scheduledShiftsFor, pendingTimeRequests } from '@/lib/store/useScheduleStore';
 import { RoleTabBar } from '@/components/RoleTabBar';
 import { Appear, stagger } from '@/components/Appear';
 import { KeyboardShift } from '@/components/KeyboardShift';
@@ -62,6 +62,7 @@ export function TimesheetView({ staffId, wage, editedBy, badgeLabel, badgeTone =
   const swaps = useScheduleStore((s) => s.swaps);
   const shiftExceptions = useScheduleStore((s) => s.exceptions);
   const scheduleLoaded = useScheduleStore((s) => s.loaded);
+  const timeRequests = useScheduleStore((s) => s.timeRequests);
   const ready = attendanceLoaded && settingsLoaded && scheduleLoaded;
 
   const [ym, setYm] = useState(() => todayStr().slice(0, 7));
@@ -89,6 +90,11 @@ export function TimesheetView({ staffId, wage, editedBy, badgeLabel, badgeTone =
   // 대조(확인) 층 — 근무표와 출퇴근이 30분 넘게 어긋난 것만. 급여는 근무표대로 나가므로
   // "다르다"를 말하지 않으면 잘못된 근무표가 그대로 지급된다.
   const mismatches = useMemo(() => reconcileSchedule(monthShifts, monthRecs), [monthShifts, monthRecs]);
+  // 이 달 근무 시간 수정 요청 중 사장 승인 대기(J2). 승인 전이라 예상급여에 아직 안 들어갔다는 것을 말한다.
+  const waitingTimes = useMemo(
+    () => pendingTimeRequests(timeRequests, staffId).filter((r) => r.date.startsWith(ym)).length,
+    [timeRequests, staffId, ym],
+  );
   const month = Number(ym.slice(5));
 
   function openEdit(r: AttendanceRecord) {
@@ -209,6 +215,14 @@ export function TimesheetView({ staffId, wage, editedBy, badgeLabel, badgeTone =
           </Text>
         )}
         {/* 금액이 근무표 시간 × 시급보다 적으면 **왜 빠졌는지**를 말한다. 안 말하면 계산이 틀린 것으로 읽힌다. */}
+        {waitingTimes > 0 && (
+          <View style={styles.waitRow}>
+            <Ionicons name="time-outline" size={14} color={BrandColors.warnText} />
+            <Text style={styles.waitText}>
+              {`근무 시간 수정 승인 대기 ${waitingTimes}건 · ${role === 'owner' ? '근무표에서 승인할 수 있어요' : '승인되면 예상급여에 반영돼요'}`}
+            </Text>
+          </View>
+        )}
         {!!monthBreakdown?.breakMin && (
           <Text style={styles.sumNote}>
             무급 휴게 {fmtDuration(monthBreakdown.breakMin)}을 뺀 금액이에요 · 하루 4시간 이상 30분, 8시간 이상 60분
@@ -364,6 +378,8 @@ function TimeEditRow({ cin, cout, onCin, onCout }: { cin: string; cout: string; 
 }
 
 const styles = StyleSheet.create({
+  waitRow: { flexDirection: 'row', alignItems: 'center', gap: Space.xs, paddingHorizontal: 4, paddingTop: Space.xs },
+  waitText: { flex: 1, fontSize: 12, fontWeight: '700', color: BrandColors.warnText, lineHeight: 17 },
   safe: { flex: 1, backgroundColor: InkColors.cream },
   scroll: { padding: 20, gap: 14 },
 

@@ -177,6 +177,17 @@ export const notifyOwnersSwapApproval = (when: string) =>
     tag: 'swap-approval',
   });
 
+// 근무 시간 수정 요청(J2 · 0243) — 승인은 사장만 한다. 매니저에게 보내면 누를 수 없는 승인 칸으로 간다(F-2).
+export const notifyOwnersShiftTimeRequest = (when: string) =>
+  pushNotify({
+    audience: 'owners',
+    ownerOnly: true,
+    title: '근무 시간 수정 요청',
+    body: `직원이 근무 시간을 바꿔 달라고 했어요 · ${when}`,
+    url: '/owner/schedule',
+    tag: 'shift-time',
+  });
+
 /** 매니저 지정/해제(0093) — 대상 본인에게만. 다음 진입부터 화면 세트가 바뀌는 걸 알린다.
  *  두 경우 모두 직원 홈으로 보낸다(F-2). 매니저는 직원 홈을 쓰고, `/owner/dashboard` 는 허용 목록 밖이다. */
 export const notifyUserRoleChange = (userId: string, storeName: string, promoted: boolean) =>

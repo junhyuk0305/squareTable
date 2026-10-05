@@ -16,8 +16,17 @@ import { DayTimeline, type TimelineRow } from '@/components/schedule/DayTimeline
 import { ShiftQuickSheet, type ShiftEditTarget } from '@/components/schedule/ShiftQuickSheet';
 import { useStaffStore } from '@/lib/store/useStaffStore';
 import { useSessionStore } from '@/lib/store/useSessionStore';
-import { useScheduleStore, shiftsOn, pendingApprovals, type ShiftTemplate, type SwapRequest } from '@/lib/store/useScheduleStore';
+import {
+  useScheduleStore,
+  shiftsOn,
+  pendingApprovals,
+  pendingTimeRequests,
+  type ShiftTemplate,
+  type SwapRequest,
+  type ShiftTimeRequest,
+} from '@/lib/store/useScheduleStore';
 import { todayStr } from '@/lib/utils/attendance';
+import { confirmPastChange } from '@/lib/utils/confirm';
 import {
   addDays,
   mondayOf,
@@ -55,6 +64,8 @@ export default function OwnerScheduleScreen() {
   const approveSwap = useScheduleStore((s) => s.approveSwap);
   const rejectSwap = useScheduleStore((s) => s.rejectSwap);
   const restoreException = useScheduleStore((s) => s.restoreException);
+  const timeRequests = useScheduleStore((s) => s.timeRequests);
+  const decideShiftTime = useScheduleStore((s) => s.decideShiftTime);
 
   // ★두 스토어 다 loaded 가 있는데 하나도 안 보고 있었다 — 그래서 도착 전에 "승인할 교대 요청이 없어요"·
   //   "합류한 직원이 없어요"(＋초대 CTA)·"이 날은 근무가 없어요"·DEFAULT_CONFIG 운영시간(09:00~22:00·연중무휴)이
@@ -79,6 +90,16 @@ export default function OwnerScheduleScreen() {
 
   // 사장 컨펌 대기(직원이 수락 완료한) 요청. 판정 SSOT는 pendingApprovals — 홈 '다음 행동'이 같은 수를 쓴다.
   const pending = useMemo(() => pendingApprovals(swaps, today), [swaps, today]);
+  // 직원의 근무 시간 수정 요청(J2). 승인은 사장만 한다(0243) — 매니저에게는 누를 수 없는 카드를 그리지 않는다.
+  const timePending = useMemo(() => (isOwner ? pendingTimeRequests(timeRequests) : []), [isOwner, timeRequests]);
+  const approvalCount = pending.length + timePending.length;
+
+  // 지난 날짜 승인은 그 기간 급여를 바꾼다 — 경고창을 거친 뒤에만 서버에 확인을 보낸다(§8 Q4).
+  async function approveTime(r: ShiftTimeRequest) {
+    const past = r.date < today;
+    if (past && !(await confirmPastChange('승인'))) return;
+    void decideShiftTime(r.id, true, past);
+  }
 
   // 점은 "그날 근무가 있다"만 뜻한다 — 건수는 표시하지 않는다(그룹 헤더 합계와 이중 계산이 된다).
   const days: WeekDay[] = useMemo(
@@ -230,22 +251,37 @@ export default function OwnerScheduleScreen() {
         <View style={styles.section}>
           <SectionLabel
             icon="swap-horizontal-outline"
-            title="교대 승인"
+            title={isOwner ? '승인할 요청' : '교대 승인'}
             trailing={
-              pending.length > 0 ? (
+              approvalCount > 0 ? (
                 <View style={styles.badge}>
-                  <Text style={styles.badgeText} maxFontSizeMultiplier={1.3}>{pending.length}</Text>
+                  <Text style={styles.badgeText} maxFontSizeMultiplier={1.3}>{approvalCount}</Text>
                 </View>
               ) : undefined
             }
           />
-          {pending.length === 0 ? (
+          {approvalCount === 0 ? (
             <View style={styles.emptyBox}>
               <Ionicons name="checkmark-done-outline" size={20} color={InkColors.ink3} />
-              <Text style={styles.emptyText}>승인할 교대 요청이 없어요.{'\n'}직원이 서로 합의하면 여기로 올라와요.</Text>
+              <Text style={styles.emptyText}>
+                {isOwner
+                  ? '승인할 요청이 없어요.\n교대 합의와 근무 시간 수정 요청이 여기로 올라와요.'
+                  : '승인할 교대 요청이 없어요.\n직원이 서로 합의하면 여기로 올라와요.'}
+              </Text>
             </View>
           ) : (
             <View style={{ gap: Space.sm }}>
+              {timePending.map((r, i) => (
+                <Appear key={r.id} delay={stagger(i)}>
+                  <TimeRequestCard
+                    r={r}
+                    name={nameOf(r.staff_id)}
+                    past={r.date < today}
+                    onApprove={() => void approveTime(r)}
+                    onReject={() => void decideShiftTime(r.id, false, false)}
+                  />
+                </Appear>
+              ))}
               {pending.map((r, i) => (
                 <Appear key={r.id} delay={stagger(i)}>
                   <PendingCard
@@ -367,6 +403,50 @@ export default function OwnerScheduleScreen() {
 
       <RoleTabBar role="owner" />
     </SafeAreaView>
+  );
+}
+
+/** 직원의 근무 시간 수정 요청 한 건(J2) — 그날 하루만 바뀐다. 승인하면 근무표(급여 기준)에 들어간다. */
+function TimeRequestCard({
+  r,
+  name,
+  past,
+  onApprove,
+  onReject,
+}: {
+  r: ShiftTimeRequest;
+  name: string;
+  past: boolean;
+  onApprove: () => void;
+  onReject: () => void;
+}) {
+  return (
+    <View style={styles.card}>
+      <View style={styles.cardHead}>
+        <View style={styles.kindTag}>
+          <Text style={styles.kindTagText}>시간 수정</Text>
+        </View>
+        <Text style={styles.cardWait}>{past ? '지난 근무 · 승인 대기' : '승인 대기'}</Text>
+      </View>
+      <View style={styles.flowCol}>
+        <Text style={styles.flowName}>{name}</Text>
+        <Text style={styles.flowWhen}>
+          {fmtDateKo(r.date)} 하루만{'\n'}
+          {r.old_start && r.old_end ? `${fmtRange(r.old_start, r.old_end)} → ` : ''}
+          {fmtRange(r.new_start, r.new_end)}
+        </Text>
+      </View>
+      {!!r.note && <Text style={styles.cardNote}>“{r.note}”</Text>}
+      <View style={styles.actions}>
+        <Pressable onPress={onReject} accessibilityRole="button" accessibilityLabel="근무 시간 수정 요청 반려" style={({ pressed }) => [styles.actBtn, styles.rejectBtn, pressed && { opacity: 0.8 }]}>
+          <Text style={styles.rejectText}>반려</Text>
+        </Pressable>
+        <Pressable onPress={onApprove} accessibilityRole="button" accessibilityLabel="근무 시간 수정 요청 승인" style={({ pressed }) => [styles.actBtn, styles.approveBtn, pressed && { opacity: 0.85 }]}>
+          <Ionicons name="checkmark" size={16} color={InkColors.bubbleText} />
+          <Text style={styles.approveText}>승인</Text>
+        </Pressable>
+      </View>
+    </View>
   );
 }
 
