@@ -2,6 +2,7 @@
 // qa-audit-payroll.mjs — 2026-10-05 논리 점검(QA_논리점검_2026-10-05.md) 급여·근무표 묶음 재현 검사.
 //   [A4] 시급을 바꾸면 그 자리에서 이번 달 예상 급여가 새 시급으로 바뀐다(앱을 다시 켜지 않아도).
 //   [A5] 시급 이력을 못 읽으면 지난달 급여를 지금 시급으로 만들지 않고 "못 불러왔다"고 말한다.
+//   [A8] 지난달 출퇴근 기록은 그 달 기간으로 따로 읽는다 — 최근 1,000건에 잘려 "안 찍었어요"가 거짓으로 뜨지 않는다.
 //   [A7] 사장 홈 인건비 = 직원 관리 합계(이번 달 퇴사자 포함) · 직원 허브 예상 급여 = 출퇴근 화면(근무표 기준).
 // 실행: node --no-warnings scripts/qa-audit-payroll.mjs
 import { readFileSync, existsSync, readdirSync } from 'node:fs';
@@ -72,6 +73,34 @@ console.log('\n[A7] 같은 "이번 달 인건비·예상 급여"는 화면마다
   const jt = strip(read('src/components/hub/JuniorTodayView.tsx'));
   check('★직원 허브: 근무표(scheduledShiftsFor) → computePay 로 센다(출퇴근 분 × 시급 아님)', /computePay\(/.test(jt) && /scheduledShiftsFor\(/.test(jt) && !/month_minutes \/ 60\) \* r\.hourly_wage/.test(jt));
   check('직원 허브 ⓘ 가 근무표 기준이라고 말한다', /근무표/.test(jt) && !/근무 기록 × 시급/.test(jt));
+}
+
+console.log('\n[A8] 지난달 출퇴근 기록은 그 달 기간으로 따로 읽는다(최근 1,000건에 잘리지 않는다)');
+{
+  let A = {};
+  try { A = await import('../src/lib/utils/attendance.ts'); } catch (e) { check('attendance.ts 를 읽는다', false, String(e?.code ?? e)); }
+  const { replaceMonthRecords, keepLoadedMonths } = A;
+  const rec = (id, staff_id, date, m = 60) => ({ id, staff_id, date, check_in: `${date}T00:00:00Z`, check_out: `${date}T01:00:00Z`, work_minutes: m });
+  // 최근 1,000건 창 = 10월 기록만. 7월(석 달 전)은 창 밖이다.
+  const window_ = [rec('o1', 'a', '2026-10-02'), rec('o2', 'b', '2026-10-02')];
+  const july = [rec('j1', 'a', '2026-07-03'), rec('j2', 'a', '2026-07-04')];
+  const after = fn(replaceMonthRecords) ? replaceMonthRecords(window_, 'a', '2026-07', july) : window_;
+  check('★그 달 기록을 따로 읽어 넣으면 7월 기록 2건이 보인다', after.filter((r) => r.staff_id === 'a' && r.date.startsWith('2026-07')).length === 2);
+  check('다른 달·다른 직원 기록은 그대로', after.some((r) => r.id === 'o1') && after.some((r) => r.id === 'o2'));
+  const again = fn(replaceMonthRecords) ? replaceMonthRecords(after, 'a', '2026-07', [rec('j1', 'a', '2026-07-03', 90)]) : after;
+  check('같은 달을 다시 읽으면 그 달 몫을 새 결과로 갈아끼운다(지운 기록은 빠진다)', again.filter((r) => r.date.startsWith('2026-07')).length === 1 && again.find((r) => r.id === 'j1')?.work_minutes === 90);
+  // 실시간 갱신(hydrate)이 최근 창으로 records 를 갈아치워도, 따로 읽어 둔 달은 남는다.
+  const fresh = [rec('o1', 'a', '2026-10-02'), rec('o3', 'a', '2026-10-03')];
+  const kept = fn(keepLoadedMonths) ? keepLoadedMonths(fresh, after, ['a|2026-07']) : fresh;
+  check('★hydrate 뒤에도 따로 읽어 둔 7월 기록이 남는다', kept.filter((r) => r.date.startsWith('2026-07')).length === 2 && kept.some((r) => r.id === 'o3'));
+  check('읽어 두지 않은 달의 옛 행은 남기지 않는다', fn(keepLoadedMonths) && !keepLoadedMonths(fresh, window_, ['a|2026-07']).some((r) => r.id === 'o2'));
+  const db = read('src/lib/db.ts');
+  const f = db.match(/export async function fetchAttendanceMonth[\s\S]*?\n}\n/)?.[0] ?? '';
+  check('★db: fetchAttendanceMonth 가 직원·기간 조건으로 읽고 실패를 신호로 돌려준다', /\.eq\('staff_id', staffId\)/.test(f) && /\.gte\('date'/.test(f) && /\.lte\('date'/.test(f) && /readFail\('fetchAttendanceMonth'/.test(f));
+  const st = strip(read('src/lib/store/useAttendanceStore.ts'));
+  check('★스토어: loadMonth 가 그 달을 읽어 넣고, hydrate 는 읽어 둔 달을 남긴다', /loadMonth:/.test(st) && /fetchAttendanceMonth\(/.test(st) && /replaceMonthRecords\(/.test(st) && /keepLoadedMonths\(/.test(st));
+  const tv = strip(read('src/components/TimesheetView.tsx'));
+  check('★출근 기록 화면: 지난달은 loadMonth 로 읽고, 다 읽기 전·실패면 대조 문구를 띄우지 않는다', /loadMonth\(staffId, ym\)/.test(tv) && /monthReady/.test(tv) && /이 달 기록을 불러오지 못했어요/.test(tv) && /monthReady \?[^;]*reconcileSchedule/.test(tv));
 }
 
 console.log(`\n${fail ? 'RED' : 'GREEN'} — PASS ${pass} · FAIL ${fail}`);
