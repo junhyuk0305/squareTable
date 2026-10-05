@@ -21,7 +21,7 @@
 --
 -- 하지 않는 것:
 --   · 필수 동의가 없으면 막는 서버 게이트. 옛 앱(iOS 1.0.0 · 안드 vc7)은 동의를 보내지 않는다. 넣으면 옛 앱 가입·매장 만들기가 전부 막힌다.
---   · 마케팅 동의 저장. 저장도 사용도 하지 않는다(가입 화면에서 뺀다 · P3-9). 와도 버린다.
+--   · 마케팅 동의를 필수로 보는 판정. marketing 은 선택 항목이라 체크했을 때만 남긴다(2026-10-05 결정).
 --   · 이미 있는 14세 미만 계정 정리. 새로 매장을 만들거나 합류할 때만 막힌다(의도한 동작).
 --
 -- 앱 쪽 키 주의: 지금 signup.tsx 의 키는 'collect' 다. 서버 정본은 'privacy_collect' 다. P3-9 의 consent.ts 가 서버 키로 보낸다.
@@ -35,7 +35,7 @@
 create table if not exists public.user_consents (
   id         bigint generated always as identity primary key,
   user_id    uuid        not null,   -- ★FK 없음: 계정 파기 뒤에도 동의 증빙을 남긴다
-  item       text        not null check (item in ('age14','terms','privacy_collect','labor')),
+  item       text        not null check (item in ('age14','terms','privacy_collect','labor','marketing')),
   version    text        not null,
   channel    text        not null check (channel in ('email_signup','google_signup','reconsent')),
   created_at timestamptz not null default now(),
@@ -72,7 +72,7 @@ begin
   insert into public.user_consents (user_id, item, version, channel)
   select distinct new.id, x.item, v_ver, 'email_signup'
     from jsonb_array_elements_text(v_items) as x(item)
-   where x.item in ('age14','terms','privacy_collect','labor')
+   where x.item in ('age14','terms','privacy_collect','labor','marketing')
   on conflict (user_id, item, version) do nothing;
 
   return new;
@@ -106,7 +106,7 @@ begin
   end if;
   if coalesce(cardinality(p_items), 0) = 0 or cardinality(p_items) > 10
      or exists (select 1 from unnest(p_items) as x(item)
-                 where x.item is null or x.item not in ('age14','terms','privacy_collect','labor')) then
+                 where x.item is null or x.item not in ('age14','terms','privacy_collect','labor','marketing')) then
     raise exception 'consent_item_invalid';
   end if;
 

@@ -1,11 +1,11 @@
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
-import { consentRows, allConsented, type ConsentChecked, type ConsentKey } from '@/lib/config/consent';
+import { consentRows, type ConsentChecked, type ConsentKey } from '@/lib/config/consent';
 import { BrandColors, InkColors } from '@/lib/theme/colors';
 
 /**
  * 가입 동의 체크리스트(J12). 가입 화면과 프로필 완성(구글 가입) 화면이 같이 쓴다.
- * 행은 consent.ts 정본에서 온다. 모두 필수라 '전체 동의'는 필수 전체와 같다.
+ * 행은 consent.ts 정본에서 온다. '전체 동의'는 선택(마케팅)까지 모두 체크한다.
  */
 export function ConsentChecklist({
   role,
@@ -18,7 +18,7 @@ export function ConsentChecklist({
 }) {
   const router = useRouter();
   const rows = consentRows(role);
-  const all = allConsented(role, checked);
+  const all = rows.every((r) => !!checked[r.key]);
   const toggleAll = () => {
     const next: ConsentChecked = { ...checked };
     rows.forEach((r) => (next[r.key] = !all));
@@ -41,7 +41,7 @@ export function ConsentChecklist({
             {checked[r.key] && <Text style={styles.checkmarkSm}>✓</Text>}
           </View>
           <Text style={styles.consentText}>
-            <Text style={styles.consentReq}>[필수] </Text>
+            <Text style={styles.consentReq}>{r.required ? '[필수] ' : '[선택] '}</Text>
             {r.label}
           </Text>
           {r.doc && (

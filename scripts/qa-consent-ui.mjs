@@ -117,7 +117,7 @@ console.log('\n■ 화면·세션 연결(주석 제외 코드)');
   check('db.ts 에 record_my_consents 래퍼(p_items · p_version · p_channel)', /rpc\('record_my_consents',\s*\{\s*p_items[^}]*p_version[^}]*p_channel/.test(db.replace(/\s+/g, ' ')));
   const n = (store.match(/under_14/g) || []).length;
   check('★under_14 를 completeProfile · createStore · joinByInvite 세 곳에서 문구로 바꾼다', n >= 3 && (store.match(/UNDER_14_TEXT/g) || []).length >= 3, `under_14 ${n}회`);
-  check('체크리스트 컴포넌트는 consent.ts 의 행을 그린다', /consentRows\(/.test(checklist) && /allConsented\(/.test(checklist));
+  check('체크리스트 컴포넌트는 consent.ts 의 행을 그린다', /consentRows\(/.test(checklist) && /rows\.every\(/.test(checklist));
 }
 
 console.log('\n■ 서버에 0240 이 아직 없을 때 — record_my_consents 부재는 가입을 막지 않는다(그 밖의 실패는 막는다)');
