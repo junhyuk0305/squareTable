@@ -1703,6 +1703,8 @@ export function subscribePlaybook(onChange: () => void): () => void {
   const ch = supabase
     .channel(uniqueChannel('playbook'))
     .on('postgres_changes', { event: '*', schema: 'public', table: 'playbook_entries' }, onChange)
+    // ★E10(0277): 보관(삭제)은 UPDATE 라 읽기 정책에 걸려 위 이벤트가 안 온다 — 신호 테이블로 받는다.
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'knowhow_events' }, onChange)
     .subscribe();
   return () => {
     supabase.removeChannel(ch);
