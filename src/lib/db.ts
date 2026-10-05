@@ -3140,22 +3140,30 @@ export async function clearDone(date: string, templateId: string): Promise<boole
 // ── 업무보드: 피드(공지/메시지/완료) ──────────────────────
 export async function fetchFeed(): Promise<ReadResult<FeedItem[]>> {
   if (!HAS_SUPABASE) return { data: [], error: false };
-  const { data, error } = await supabase
-    .from('work_feed')
-    .select('data')
-    .gte('feed_date', sinceDate(FEED_WINDOW_DAYS))
-    // ★내림차순으로 잘라야 "최근 PAGE_LIMIT건"이 온다(2026-08-25 감사).
-    //   오름차순 + limit 이면 상한을 넘는 순간 **가장 오래된** PAGE_LIMIT건만 내려와,
-    //   그 뒤 새 메시지는 재조회 때마다 사라진다 = 채팅이 과거 시점에 멈춘다(오류 표시 0).
-    //   work_feed 는 메시지·공지·댓글에 더해 완료알림(task_done)까지 담아 상한에 먼저 닿는다.
-    //   소비자(WorkChat·RoomBar)는 오름차순 배열을 기대하므로 받은 뒤 뒤집는다.
-    .order('created_at', { ascending: false })
-    .limit(PAGE_LIMIT);
-  if (error) {
-    readFail('fetchFeed', error);
+  const [recent, pinned] = await Promise.all([
+    supabase
+      .from('work_feed')
+      .select('data')
+      .gte('feed_date', sinceDate(FEED_WINDOW_DAYS))
+      // ★내림차순으로 잘라야 "최근 PAGE_LIMIT건"이 온다(2026-08-25 감사).
+      //   오름차순 + limit 이면 상한을 넘는 순간 **가장 오래된** PAGE_LIMIT건만 내려와,
+      //   그 뒤 새 메시지는 재조회 때마다 사라진다 = 채팅이 과거 시점에 멈춘다(오류 표시 0).
+      //   work_feed 는 메시지·공지·댓글에 더해 완료알림(task_done)까지 담아 상한에 먼저 닿는다.
+      //   소비자(WorkChat·RoomBar)는 오름차순 배열을 기대하므로 받은 뒤 뒤집는다.
+      .order('created_at', { ascending: false })
+      .limit(PAGE_LIMIT),
+    // ★D8: 고정 공지는 사장이 풀 때까지 보인다. 90일 창과 상한 밖이어도 따로 읽는다.
+    supabase.from('work_feed').select('data').eq('data->>pinned', 'true').order('created_at', { ascending: true }),
+  ]);
+  if (recent.error || pinned.error) {
+    readFail('fetchFeed', recent.error ?? pinned.error);
     return { data: [], error: true };
   }
-  return { data: (data ?? []).map((r: any) => r.data as FeedItem).reverse(), error: false };
+  const items = (recent.data ?? []).map((r: any) => r.data as FeedItem).reverse();
+  // 최근 목록에 없는 고정 공지는 그보다 오래된 것이라 앞에 붙인다(오름차순 유지).
+  const have = new Set(items.map((f) => f.id));
+  const older = (pinned.data ?? []).map((r: any) => r.data as FeedItem).filter((f) => !have.has(f.id));
+  return { data: [...older, ...items], error: false };
 }
 export async function upsertFeed(item: FeedItem): Promise<boolean> {
   if (!HAS_SUPABASE) return true;
