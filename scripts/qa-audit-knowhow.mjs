@@ -147,5 +147,16 @@ console.log('\n[E5] 지운(보관한) 노하우는 할일·퀴즈 연결 판정�
     /create policy playbook_entries_read[\s\S]{0,600}and archived_at is null/.test(pol));
 }
 
+console.log('\n[E6] 카테고리 이름 바꾸기·"확인 완료"는 노하우 내용 변경(updated_at)으로 치지 않는다');
+{
+  const db = strip(read('src/lib/db.ts'));
+  const fn = (name) => (db.match(new RegExp(`export async function ${name}\\([\\s\\S]*?\\n\\}`)) || [''])[0];
+  const ren = fn('renameEntrySection'), upd = fn('updateEntry');
+  check('★카테고리 일괄 이동이 updated_at 을 안 쓴다', !!ren && !/updated_at/.test(ren), ren.slice(0, 200));
+  check('★updateEntry 는 내용이 아닌 칸(section·needs_review·verification)만 바뀌면 updated_at 을 안 쓴다',
+    /const NON_CONTENT_KEYS = new Set\(\['section', 'needs_review', 'verification'\]\)/.test(db)
+      && /Object\.keys\(patch\)\.some\(\(k\) => !NON_CONTENT_KEYS\.has\(k\)\)/.test(upd), upd.slice(0, 300));
+}
+
 console.log(`\n${pass} PASS / ${fail} FAIL`);
 process.exit(fail ? 1 : 0);
