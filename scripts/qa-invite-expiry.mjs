@@ -70,6 +70,12 @@ check('★2-1 fetchUnitInfo 가 invite_expires_at 을 읽는다', /invite_expire
 const ss = strip(read('src/lib/store/useSessionStore.ts'));
 check('★2-2 세션이 inviteExpiresAt 을 들고, 매장 정보에서 채운다', /inviteExpiresAt: string;/.test(ss) && /inviteExpiresAt = unit\?\.invite_expires_at \?\? '';/.test(ss) && /\n\s+inviteExpiresAt,\n/.test(ss));
 check('2-3 비운 상태(로그아웃 · 매장 전환)에 inviteExpiresAt 이 함께 비워진다', /inviteCode: '', inviteExpiresAt: '',/.test(ss));
+// G3(QA 2026-10-05): 30초 새로고침에서 매장 정보 읽기가 한 번 실패하면 이름·초대코드가 빈칸이 됐다.
+const unitRead = (ss.match(/const \{[^}]*\} = await fetchUnitInfo\(unitId\);[\s\S]*?industry = unit\?\.industry \?\? '';[\s\S]*?\n\s+\}/) || [''])[0];
+check('★G3 매장 정보 읽기 실패면 같은 사용자·같은 매장의 이전 이름·초대코드·만료일·업종을 지킨다',
+  /error: unitErr/.test(unitRead) && /unitErr && \w+\.userId === userId && \w+\.unitId === unitId/.test(unitRead)
+  && ['storeName', 'inviteCode', 'inviteExpiresAt', 'industry'].every((k) => new RegExp(`${k} = \\w+\\.${k};`).test(unitRead)),
+  show(unitRead.slice(0, 200)));
 const staff = strip(read('src/app/owner/staff.tsx'));
 check('★2-4 [코드 변경] 뒤 만료일도 새 값으로 바꾼다', /useSessionStore\.setState\(\{ inviteCode: res\.inviteCode, inviteExpiresAt: res\.expiresAt \}\)/.test(staff));
 const join = read('supabase/migrations/0067_junior_multistore_membership.sql');
@@ -80,7 +86,8 @@ console.log('\n[3] InviteBlock');
 const ib = strip(read('src/components/owner/InviteBlock.tsx'));
 check('★3-1 inviteExpiryLabel 로 만료를 판정하고 문구를 보인다', /inviteExpiryLabel\(/.test(ib) && /expiry\.text/.test(ib));
 check('3-2 세션 코드와 화면 코드가 같을 때만 만료일을 쓴다(온보딩 params 코드 보호)', /code === sessionCode/.test(ib));
-check('★3-3 만료되면 코드 복사 · 링크 복사 버튼을 끈다', (ib.match(/disabled=\{expired\}/g) || []).length >= 2);
+check('★3-3 만료되면 코드 복사 · 링크 복사 버튼을 끈다', (ib.match(/disabled=\{expired( \|\| !code)?\}/g) || []).length >= 2);
+check('★G3 코드가 비면 코드 복사 · 링크 복사 버튼을 끈다(깨진 초대 문구 방지)', (ib.match(/disabled=\{expired \|\| !code\}/g) || []).length >= 2);
 check('★3-4 사장에게는 [새 코드 받기] → rotateInviteCode', /INVITE_ROTATE_LABEL/.test(ib) && /rotateInviteCode\(\)/.test(ib) && /isOwner/.test(ib));
 check('★3-5 사장이 아니면 "사장님께 새 코드를 요청해 주세요"', /INVITE_ASK_OWNER_TEXT/.test(ib));
 check('3-6 새 코드를 받으면 세션 코드와 만료일을 바꾼다', /useSessionStore\.setState\(\{ inviteCode: res\.inviteCode, inviteExpiresAt: res\.expiresAt \}\)/.test(ib));
