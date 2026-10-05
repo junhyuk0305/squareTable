@@ -2,7 +2,8 @@ import { create } from 'zustand';
 import { HOURLY_WAGE } from '@/lib/store/useAttendanceStore';
 import { HAS_SUPABASE } from '@/lib/supabase';
 import { fetchWages, fetchWageRates, setWageDb, fetchPayrollSettings, savePayrollSettings } from '@/lib/db';
-import type { WageRate } from '@/lib/utils/payroll';
+import { withTodayWage, type WageRate } from '@/lib/utils/payroll';
+import { todayStr } from '@/lib/utils/attendance';
 import { guardWrite } from '@/lib/store/useSyncStore';
 import { currentTenantEpoch, isStaleEpoch } from '@/lib/store/tenantEpoch';
 
@@ -120,7 +121,9 @@ export const usePayrollStore = create<State>((set, get) => ({
   setWage: (staffId, wage) => {
     const had = Object.prototype.hasOwnProperty.call(get().wages, staffId);
     const prev = get().wages[staffId];
-    set((s) => ({ wages: { ...s.wages, [staffId]: wage } }));
+    const prevRates = get().wageRates;
+    // 이력(wageRates)에도 오늘 시급을 넣는다 — 이번 달 예상 급여는 이력부터 보므로 안 넣으면 옛 시급으로 센다.
+    set((s) => ({ wages: { ...s.wages, [staffId]: wage }, wageRates: withTodayWage(s.wageRates, staffId, wage, todayStr()) }));
     void guardWrite(
       setWageDb(staffId, wage),
       () =>
@@ -128,7 +131,7 @@ export const usePayrollStore = create<State>((set, get) => ({
           const next = { ...s.wages };
           if (had) next[staffId] = prev;
           else delete next[staffId];
-          return { wages: next };
+          return { wages: next, wageRates: prevRates };
         }),
       '시급 저장에 실패했어요.',
     );

@@ -290,3 +290,14 @@ export function wageForMonth(rates: WageRate[], staffId: string, ym: string, tod
   }
   return best ? best.hourly_wage : fallback;
 }
+
+/**
+ * 시급을 오늘부터 바꾼 결과를 이력에 미리 넣는다(서버 wages 트리거가 오늘 행을 만드는 것과 같은 모양).
+ * 안 넣으면 다음 hydrate 전까지 이번 달 예상 급여가 옛 시급으로 계산된다. 같은 날 다시 바꾸면 그 행을 덮는다.
+ */
+export function withTodayWage(rates: WageRate[], staffId: string, wage: number, today: string): WageRate[] {
+  return [
+    ...rates.filter((r) => !(r.staff_id === staffId && r.effective_from === today)),
+    { staff_id: staffId, hourly_wage: wage, effective_from: today },
+  ];
+}
