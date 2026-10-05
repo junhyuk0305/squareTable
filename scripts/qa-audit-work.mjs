@@ -100,5 +100,19 @@ console.log('\n[D5] 자정을 넘는 근무의 "지금 근무자"는 전날 시�
       && read(`supabase/migrations/${w.file}`).includes('grant  execute on function public.workers_at(text, text, text) to service_role;'));
 }
 
+console.log('\n[D6] 23:56~23:59 로 정한 할일 알림도 자정 직후 틱에 어제 날짜로 나간다');
+{
+  const t = lastDef('due_task_reminders');
+  const b = t.body;
+  check('★자정 직후 틱(하한이 뒤집힌 때)에는 어제 날짜의 하한 뒤 미발송분도 후보다',
+    /v_prev\s+text := to_char\(v_now - interval '1 day', 'YYYY-MM-DD'\)/.test(b)
+      && /select v_prev where v_floor >= v_time and w\.remind_at > v_floor/.test(b), t.file);
+  check('★후보 날짜(cand_day)로 발생일·발송 원장·완료·근무자·out_date 를 본다',
+    /task_occurs_on\(w\.recurrence, w\.date, w\.due_date, w\.hidden, c\.d\)/.test(b)
+      && /s\.remind_date = c\.d/.test(b) && /d\.work_date = c\.d/.test(b)
+      && /public\.workers_at\(t\.unit_id, t\.cand_day, t\.remind_at\)/.test(b) && /out_date\s+:= t\.cand_day/.test(b));
+  check('D3·0265 변경은 그대로', /t\.scope is distinct from 'private'/.test(b) && /and not public\.unit_access_locked\(w\.unit_id\)/.test(b));
+}
+
 console.log(`\n${pass} PASS / ${fail} FAIL`);
 process.exit(fail ? 1 : 0);
