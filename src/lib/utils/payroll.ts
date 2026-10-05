@@ -291,6 +291,30 @@ export function wageForMonth(rates: WageRate[], staffId: string, ym: string, tod
   return best ? best.hourly_wage : fallback;
 }
 
+/** 급여 설정 이력 한 줄(0280 payroll_settings_history). effective_from = 이 날부터 이 설정(YYYY-MM-DD). */
+export type SettingsRate<T> = { effective_from: string; settings: T };
+
+/**
+ * 그 달 급여에 쓸 급여 설정(A3 · 2026-10-06). 시급(wageForMonth)과 같은 규칙이다.
+ * 그 달 마지막 날(이번 달이면 오늘)에 적용되던 설정이다. 이력이 없으면(옛 서버·읽기 전) fallback(지금 설정) 그대로.
+ */
+export function settingsForMonth<T>(history: SettingsRate<T>[], ym: string, today: string, fallback: T): T {
+  const [y, m] = ym.split('-').map(Number);
+  const monthEnd = `${ym}-${String(new Date(Date.UTC(y, m, 0)).getUTCDate()).padStart(2, '0')}`;
+  const cut = monthEnd < today ? monthEnd : today;
+  let best: SettingsRate<T> | null = null;
+  for (const r of history) {
+    if (r.effective_from > cut) continue;
+    if (!best || r.effective_from > best.effective_from) best = r;
+  }
+  return best ? best.settings : fallback;
+}
+
+/** 설정을 오늘부터 바꾼 결과를 이력에 미리 넣는다(서버 save_payroll_settings 가 오늘 행을 넣는 것과 같은 모양). */
+export function withTodaySettings<T>(history: SettingsRate<T>[], settings: T, today: string): SettingsRate<T>[] {
+  return [...history.filter((r) => r.effective_from !== today), { effective_from: today, settings }];
+}
+
 /**
  * 시급을 오늘부터 바꾼 결과를 이력에 미리 넣는다(서버 wages 트리거가 오늘 행을 만드는 것과 같은 모양).
  * 안 넣으면 다음 hydrate 전까지 이번 달 예상 급여가 옛 시급으로 계산된다. 같은 날 다시 바꾸면 그 행을 덮는다.

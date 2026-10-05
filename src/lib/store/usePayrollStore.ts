@@ -1,8 +1,8 @@
 import { create } from 'zustand';
 import { HOURLY_WAGE } from '@/lib/store/useAttendanceStore';
 import { HAS_SUPABASE } from '@/lib/supabase';
-import { fetchWages, fetchWageRates, setWageDb, fetchPayrollSettings, savePayrollSettings } from '@/lib/db';
-import { withTodayWage, type WageRate } from '@/lib/utils/payroll';
+import { fetchWages, fetchWageRates, setWageDb, fetchPayrollSettings, fetchPayrollSettingsHistory, savePayrollSettings } from '@/lib/db';
+import { withTodayWage, withTodaySettings, type WageRate, type SettingsRate } from '@/lib/utils/payroll';
 import { todayStr } from '@/lib/utils/attendance';
 import { guardWrite } from '@/lib/store/useSyncStore';
 import { currentTenantEpoch, isStaleEpoch } from '@/lib/store/tenantEpoch';
@@ -67,6 +67,10 @@ type State = {
   wagesLoadError: boolean;
   /** 마지막 시급 이력 읽기가 실패했나. true면 지난달 금액을 만들면 안 된다(지금 시급으로 계산된다). */
   wageRatesLoadError: boolean;
+  /** 급여 설정 이력(0280). 지난달 급여는 그 달 설정으로 센다(settingsForMonth · A3). 비면 지금 설정으로 센다. */
+  settingsHistory: SettingsRate<PayrollSettings>[];
+  /** 마지막 급여 설정 이력 읽기가 실패했나. true면 지난달 금액을 만들면 안 된다(지금 설정으로 계산된다). */
+  settingsHistoryLoadError: boolean;
   hydrate: () => Promise<void>;
   setSetting: <K extends keyof PayrollSettings>(k: K, v: PayrollSettings[K]) => void;
   setWage: (staffId: string, wage: number) => void;
@@ -83,22 +87,31 @@ export const usePayrollStore = create<State>((set, get) => ({
   settingsLoaded: !HAS_SUPABASE,
   wagesLoadError: false,
   wageRatesLoadError: false,
+  settingsHistory: [],
+  settingsHistoryLoadError: false,
   hydrate: async () => {
     if (!HAS_SUPABASE) return;
     const epoch = currentTenantEpoch();
-    const [wageRes, dbSettings, ratesRes] = await Promise.all([fetchWages(), fetchPayrollSettings(), fetchWageRates()]);
+    const [wageRes, dbSettings, ratesRes, histRes] = await Promise.all([fetchWages(), fetchPayrollSettings(), fetchWageRates(), fetchPayrollSettingsHistory()]);
     // 그 사이 매장이 바뀌었다 — 이전 매장 시급·규칙을 쓰지 않는다(로컬 캐시에도 남기지 않는다).
     if (isStaleEpoch(epoch)) return;
     // DB에 저장된 규칙이 있으면 그것이 진실원천(기본값 위에 병합). 없으면(초기 매장) 로컬 캐시 유지.
     set((s) => {
       const settings = dbSettings ? { ...DEFAULT_SETTINGS, ...(dbSettings as Partial<PayrollSettings>) } : s.settings;
       persistSettings(settings);
+      // 급여 설정 이력도 같다 — 못 읽었으면 이전 이력을 두고 실패만 알린다. 각 줄은 기본값 위에 병합한다.
+      const hist = histRes.error
+        ? { settingsHistoryLoadError: true }
+        : {
+            settingsHistory: histRes.data.map((r) => ({ effective_from: r.effective_from, settings: { ...DEFAULT_SETTINGS, ...(r.settings as Partial<PayrollSettings>) } })),
+            settingsHistoryLoadError: false,
+          };
       // ★읽기 실패면 이전에 받아 둔 시급을 **덮어쓰지 않는다** — 빈 값으로 갈아치우면
       //   "안 정했다"로 보이고, 화면이 그걸 근거로 금액을 만든다([P7-#5]).
       // settingsLoaded 는 시급 읽기 성패와 무관하다 — 여기 왔다는 건 급여 설정 조회가 끝났다는 뜻이다.
       // 시급 이력도 같다 — 못 읽었으면 이전 이력을 두고 실패만 알린다.
       return wageRes.error
-        ? { settings, settingsLoaded: true, wagesLoadError: true, wageRatesLoadError: ratesRes.error }
+        ? { settings, settingsLoaded: true, wagesLoadError: true, wageRatesLoadError: ratesRes.error, ...hist }
         : {
             wages: wageRes.data,
             ...(ratesRes.error ? {} : { wageRates: ratesRes.data }),
@@ -107,13 +120,16 @@ export const usePayrollStore = create<State>((set, get) => ({
             wagesLoaded: true,
             wagesLoadError: false,
             wageRatesLoadError: ratesRes.error,
+            ...hist,
           };
     });
   },
   setSetting: (k, v) => {
     const before = get().settings;
+    const prevHistory = get().settingsHistory;
     const settings = { ...before, [k]: v };
-    set({ settings });
+    // 이력에도 오늘 설정을 넣는다 — 이번 달 예상 급여는 이력부터 보므로 안 넣으면 옛 설정으로 센다. 지난달은 그대로다.
+    set({ settings, settingsHistory: withTodaySettings(prevHistory, settings, todayStr()) });
     persistSettings(settings); // 로컬 캐시 즉시 갱신(빠른 복원)
     if (!HAS_SUPABASE) return;
     // 매장 단위 DB(units.payroll_settings)에 승격 저장 — 실패 시 이전 값으로 롤백 + 배너(무음 불일치 방지).
@@ -124,7 +140,7 @@ export const usePayrollStore = create<State>((set, get) => ({
       savePayrollSettings(settings),
       () => {
         if (isStaleEpoch(epoch)) return;
-        set({ settings: before });
+        set({ settings: before, settingsHistory: prevHistory });
         persistSettings(before);
       },
       '급여 설정 저장에 실패했어요.',

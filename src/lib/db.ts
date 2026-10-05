@@ -3324,6 +3324,19 @@ export async function fetchPayrollSettings(): Promise<Record<string, unknown> | 
   }
   return (data?.payroll_settings as Record<string, unknown> | null) ?? null;
 }
+/**
+ * 급여 설정 이력(0280 payroll_settings_history) — 지난달 급여를 그 달 설정으로 세는 데 쓴다(A3 · 2026-10-06).
+ * ★못 읽으면 실패를 신호로 돌려준다 — 빈 목록이면 지난달 급여가 지금 설정으로 조용히 계산된다.
+ */
+export async function fetchPayrollSettingsHistory(): Promise<ReadResult<{ effective_from: string; settings: Record<string, unknown> }[]>> {
+  if (!HAS_SUPABASE) return { data: [], error: false };
+  const { data, error } = await supabase.from('payroll_settings_history').select('effective_from, settings').eq('unit_id', _unitId);
+  if (error) {
+    readFail('fetchPayrollSettingsHistory', error);
+    return { data: [], error: true };
+  }
+  return { data: (data ?? []) as { effective_from: string; settings: Record<string, unknown> }[], error: false };
+}
 export async function savePayrollSettings(settings: Record<string, unknown>): Promise<boolean> {
   if (!HAS_SUPABASE) return true;
   // 급여 규칙=돈 직결. 0093: 매니저도 저장 가능 — units 직접 update(units_write=사장 전용 유지)가 아니라

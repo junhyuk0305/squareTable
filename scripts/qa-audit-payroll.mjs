@@ -210,7 +210,7 @@ console.log('\n[A3] 급여 설정도 이력을 남기고 지난달은 그 달 �
     /fetchPayrollSettingsHistory\(/.test(st) && /settingsHistoryLoadError/.test(st) && /setSetting:[\s\S]*withTodaySettings\(/.test(st) && /setSetting:[\s\S]*settingsHistory: prevHistory/.test(st));
   const tv = strip(read('src/components/TimesheetView.tsx'));
   check('★출근 기록 화면: 그 달 설정(settingsForMonth)으로 세고, 지난달 + 이력 실패면 금액 대신 안내',
-    /settingsForMonth\(/.test(tv) && /computePay\([^)]*monthSettings\)/.test(tv) && /settingsHistoryLoadError/.test(tv) && /지난달 급여 설정을 불러오지 못했어요/.test(tv));
+    /settingsForMonth\(/.test(tv) && /computePay\(shiftsToPayRecords\(monthShifts\), monthWage, monthSettings\)/.test(tv) && /settingsHistoryLoadError/.test(tv) && /지난달 급여 설정을 불러오지 못했어요/.test(tv));
   const sv = lastDef('save_payroll_settings');
   const svFile = read(`supabase/migrations/${sv.file}`);
   check('★서버: save_payroll_settings 가 오늘부터 설정 이력을 남긴다(처음이면 옛 설정을 처음부터로)', /payroll_settings_history/.test(sv.body) && /kst_today\(\)/.test(sv.body) && /2000-01-01/.test(sv.body), sv.file);
@@ -233,6 +233,7 @@ begin;
 select set_config('qa.o', (select id::text from auth.users where email = 'owner@pilot.squaretable.app'), true);
 select set_config('qa.j', (select id::text from auth.users where email = 'staff2@pilot.squaretable.app'), true);
 update public.units set payroll_settings = '{"weeklyHolidayPay": true, "extraAllowance": 100000}'::jsonb where id = 'store_001';
+delete from public.payroll_settings_history where unit_id = 'store_001';  -- 이력이 아직 없는 매장(0280 뒤에 생긴 매장)
 `;
     const as = (who) => `
 set local role authenticated;
@@ -245,7 +246,9 @@ select 'T=' || (settings->>'extraAllowance') from public.payroll_settings_histor
 select 'P=' || (settings->>'extraAllowance') from public.payroll_settings_history where unit_id = 'store_001' and effective_from < public.kst_today() order by effective_from desc limit 1;
 select 'U=' || (payroll_settings->>'extraAllowance') from public.units where id = 'store_001';`);
     check('★사장 저장 → 오늘 행(새 설정) · 그 전 행(옛 설정) · 지금 설정 거울', r1.includes('T=0') && r1.includes('P=100000') && r1.includes('U=0'), r1.slice(0, 200));
-    const r2 = run('j', `select 'N=' || count(*) from public.payroll_settings_history where unit_id = 'store_001';`);
+    const r2 = run('o', `select public.save_payroll_settings('{}'::jsonb);
+select set_config('request.jwt.claims', json_build_object('sub', current_setting('qa.j'), 'role', 'authenticated')::text, true);
+select 'N=' || count(*) from public.payroll_settings_history where unit_id = 'store_001';`);
     check('같은 매장 직원은 이력을 읽는다(지난달 출근 기록 화면)', /N=[1-9]/.test(r2), r2.slice(0, 160));
     const r3 = run('o', `insert into public.payroll_settings_history(unit_id, effective_from, settings) values ('store_001', '2001-01-01', '{}'::jsonb);`);
     check('직접 쓰기는 막힌다(사장도 RPC 로만)', r3.startsWith('ERR='), r3.slice(0, 160));

@@ -6,7 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAttendanceStore, type AttendanceRecord } from '@/lib/store/useAttendanceStore';
 import { usePayrollStore } from '@/lib/store/usePayrollStore';
 import { useSessionStore } from '@/lib/store/useSessionStore';
-import { computePay, shiftsToPayRecords, reconcileSchedule, wageForMonth } from '@/lib/utils/payroll';
+import { computePay, shiftsToPayRecords, reconcileSchedule, wageForMonth, settingsForMonth } from '@/lib/utils/payroll';
 import { useScheduleStore, scheduledShiftsFor, pendingTimeRequests } from '@/lib/store/useScheduleStore';
 import { RoleTabBar } from '@/components/RoleTabBar';
 import { Appear, stagger } from '@/components/Appear';
@@ -100,8 +100,12 @@ export function TimesheetView({ staffId, wage, editedBy, badgeLabel, badgeTone =
   const wageRates = usePayrollStore((s) => s.wageRates);
   // 이력을 못 읽었으면 지난달 금액을 만들지 않는다 — 지금 시급으로 계산된 금액이 사실처럼 보인다([P7-#5]).
   const pastRatesMissing = usePayrollStore((s) => s.wageRatesLoadError) && ym < todayStr().slice(0, 7);
-  const monthWage = wage == null || pastRatesMissing ? null : wageForMonth(wageRates, staffId, ym, todayStr(), wage);
-  const monthBreakdown = monthWage == null ? null : computePay(shiftsToPayRecords(monthShifts), monthWage, settings);
+  // 급여 설정도 그 달 기준이다(A3 · 2026-10-06). 이력을 못 읽었으면 지난달 금액을 만들지 않는다(지금 설정으로 계산된다).
+  const settingsHistory = usePayrollStore((s) => s.settingsHistory);
+  const pastSettingsMissing = usePayrollStore((s) => s.settingsHistoryLoadError) && ym < todayStr().slice(0, 7);
+  const monthSettings = settingsForMonth(settingsHistory, ym, todayStr(), settings);
+  const monthWage = wage == null || pastRatesMissing || pastSettingsMissing ? null : wageForMonth(wageRates, staffId, ym, todayStr(), wage);
+  const monthBreakdown = monthWage == null ? null : computePay(shiftsToPayRecords(monthShifts), monthWage, monthSettings);
   const monthPay = monthBreakdown?.total ?? null;
   // 대조(확인) 층 — 근무표와 출퇴근이 30분 넘게 어긋난 것만. 급여는 근무표대로 나가므로
   // "다르다"를 말하지 않으면 잘못된 근무표가 그대로 지급된다.
@@ -234,6 +238,9 @@ export function TimesheetView({ staffId, wage, editedBy, badgeLabel, badgeTone =
         )}
         {pastRatesMissing && wage != null && (
           <Text style={styles.sumNote}>지난달 시급을 불러오지 못했어요. 인터넷 연결을 확인하고 다시 들어와 주세요.</Text>
+        )}
+        {pastSettingsMissing && !pastRatesMissing && wage != null && (
+          <Text style={styles.sumNote}>지난달 급여 설정을 불러오지 못했어요. 인터넷 연결을 확인하고 다시 들어와 주세요.</Text>
         )}
         {/* 금액이 근무표 시간 × 시급보다 적으면 **왜 빠졌는지**를 말한다. 안 말하면 계산이 틀린 것으로 읽힌다. */}
         {waitingTimes > 0 && (
