@@ -583,6 +583,32 @@ async function sweepMemberNotices(token: string): Promise<{ swept: number; sent:
   return { swept: rows.length, sent };
 }
 
+/**
+ * 파기한 매장의 사진 파일 지우기(0278 · F3) — 알림이 아니지만 같은 5분 틱에 얹는다(새 크론을 만들지 않는다).
+ * units 가 지워질 때 트리거가 경로를 photo_purge_queue 에 넣는다. 여기서 Storage API 로 지우고 대기열에서 뺀다.
+ * SQL 로 storage.objects 행만 지우면 실제 파일은 남는다 — 그래서 엣지가 지운다.
+ */
+async function sweepPhotoPurge(token: string): Promise<{ removed: number; error?: string }> {
+  const admin = createClient(SUPABASE_URL, token);
+  const { data, error } = await admin.rpc('photo_purge_due', { p_limit: 500 });
+  if (error) {
+    console.error('[push] photo_purge_due failed:', error.message);
+    return { removed: 0, error: 'rpc_failed' };
+  }
+  const paths = (data ?? []) as string[];
+  if (paths.length === 0) return { removed: 0 };
+  const { error: rmErr } = await admin.storage.from('playbook-photos').remove(paths);
+  if (rmErr) {
+    // 대기열에 그대로 두고 다음 틱에 다시 한다.
+    console.error('[push] photo remove failed:', rmErr.message);
+    return { removed: 0, error: 'remove_failed' };
+  }
+  // 이미 없던 경로도 성공으로 본다 — 지울 파일이 없으니 대기열에서 빼도 된다.
+  const { error: doneErr } = await admin.rpc('photo_purge_done', { p_paths: paths });
+  if (doneErr) console.error('[push] photo_purge_done failed:', doneErr.message);
+  return { removed: paths.length };
+}
+
 Deno.serve(async (req) => {
   const origin = req.headers.get('origin');
   const cors = corsFor(origin);
@@ -644,11 +670,14 @@ Deno.serve(async (req) => {
     // 구성원 알림(0247) — 같은 원칙.
     const notices = await sweepMemberNotices(token);
     if (notices.error) console.error('[push] member notice sweep failed:', notices.error);
+    // 파기한 매장 사진 지우기(0278) — 같은 원칙.
+    const photos = await sweepPhotoPurge(token);
     return json(200, {
       ...swept, quizSwept: quiz.swept, quizSent: quiz.sent, quizError: quiz.error,
       alertSwept: alerts.swept, alertSent: alerts.sent, alertError: alerts.error,
       closureSwept: closures.swept, closureSent: closures.sent, closureError: closures.error,
       noticeSwept: notices.swept, noticeSent: notices.sent, noticeError: notices.error,
+      photoRemoved: photos.removed, photoError: photos.error,
     });
   }
 
