@@ -257,5 +257,43 @@ select 'N=' || count(*) from public.payroll_settings_history where unit_id = 'st
   }
 }
 
+console.log('\n[A9] 같은 사람 근무가 겹치면 경고만 하고, 급여는 겹친 시간을 한 번만 센다(2026-10-06 결정 ①)');
+{
+  const { computePay, shiftsToPayRecords } = P;
+  let S = {};
+  try { S = await import('../src/lib/utils/schedule.ts'); } catch (e) { check('schedule.ts 를 읽는다', false, String(e?.code ?? e)); }
+  const { overlapsStaffShift, swapOverlap } = S;
+  const RULES = { breakDeduction: false, nightAllowance: false, overtimeAllowance: true, weeklyHolidayPay: false, extraAllowance: 0 };
+  const pay = (sh) => computePay(shiftsToPayRecords(sh), 10000, RULES);
+  const ov = pay([{ date: '2026-10-10', start: '12:00', end: '18:00' }, { date: '2026-10-10', start: '14:00', end: '20:00' }]);
+  check('★12~18 + 14~20 = 8시간(겹친 4시간은 한 번) · 연장수당 없음', ov.workedMin === 480 && ov.overtimeMin === 0 && ov.total === 80000, JSON.stringify({ w: ov.workedMin, o: ov.overtimeMin, t: ov.total }));
+  const inside = pay([{ date: '2026-10-10', start: '09:00', end: '18:00' }, { date: '2026-10-10', start: '10:00', end: '12:00' }]);
+  check('안에 들어간 근무(9~18 안의 10~12) = 9시간', inside.workedMin === 540, String(inside.workedMin));
+  const apart = pay([{ date: '2026-10-10', start: '09:00', end: '12:00' }, { date: '2026-10-10', start: '13:00', end: '15:00' }]);
+  check('안 겹치면 그대로 더한다(3 + 2 = 5시간)', apart.workedMin === 300, String(apart.workedMin));
+  const touch = pay([{ date: '2026-10-10', start: '09:00', end: '12:00' }, { date: '2026-10-10', start: '12:00', end: '15:00' }]);
+  check('맞닿기만 하면 그대로(3 + 3 = 6시간)', touch.workedMin === 360, String(touch.workedMin));
+  const days = pay([{ date: '2026-10-10', start: '12:00', end: '18:00' }, { date: '2026-10-11', start: '12:00', end: '18:00' }]);
+  check('다른 날은 합치지 않는다(6 + 6 = 12시간)', days.workedMin === 720, String(days.workedMin));
+
+  // 경고 판정 — 같은 사람 · 같은 날 · 겹침. 맞교환·자기 근무는 빼고 본다.
+  const tpl = (id, staff_id, date, start, end) => ({ id, staff_id, weekday: null, date, start, end });
+  const T = [tpl('a1', 'kim', '2026-10-10', '12:00', '18:00'), tpl('b1', 'lee', '2026-10-10', '14:00', '20:00'), tpl('k2', 'kim', '2026-10-11', '09:00', '13:00')];
+  const O = (...a) => (fn(overlapsStaffShift) ? overlapsStaffShift(...a) : undefined);
+  check('★김알바 10/10 에 14~20 을 더 넣으면 겹친다', O(T, [], [], 'kim', '2026-10-10', '14:00', '20:00') === true);
+  check('19~22 는 안 겹친다 · 다른 날도 안 겹친다', O(T, [], [], 'kim', '2026-10-10', '19:00', '22:00') === false && O(T, [], [], 'kim', '2026-10-12', '12:00', '18:00') === false);
+  check('고치는 근무 자신은 빼고 본다', O(T, [], [], 'kim', '2026-10-10', '13:00', '17:00', ['a1']) === false);
+  check('자정 넘김(22~02)과 23~01 은 겹친다', O([tpl('n1', 'kim', '2026-10-10', '22:00', '02:00')], [], [], 'kim', '2026-10-10', '23:00', '01:00') === true);
+  const SW = (r) => (fn(swapOverlap) ? swapOverlap(r, T, [], []) : undefined);
+  check('★이수민 14~20 대타를 김알바가 받으면 겹친다(승인 카드 경고)', SW({ id: 's1', kind: 'cover', requester_id: 'lee', date: '2026-10-10', template_id: 'b1', accepted_by: 'kim', status: 'accepted' }) === true);
+  check('일부만(18~20) 받으면 안 겹친다', SW({ id: 's2', kind: 'cover', requester_id: 'lee', date: '2026-10-10', template_id: 'b1', part_start: '18:00', part_end: '20:00', accepted_by: 'kim', status: 'accepted' }) === false);
+  check('맞교환으로 내주는 근무는 빼고 본다', SW({ id: 's3', kind: 'swap', requester_id: 'lee', date: '2026-10-10', template_id: 'b1', target_date: '2026-10-10', target_template_id: 'a1', accepted_by: 'kim', status: 'accepted' }) === false);
+
+  const sheet = strip(read('src/components/schedule/ShiftQuickSheet.tsx'));
+  check('★근무 추가 시트: 같은 사람 겹침 경고 · 저장은 막지 않는다', /overlapsStaffShift\(/.test(sheet) && /같은 시간에 이미 근무가 있어요/.test(sheet) && !/canSave = [^;]*overlap/i.test(sheet));
+  const own = strip(read('src/app/owner/schedule.tsx'));
+  check('★교대 승인 카드: 겹침 경고 · 승인 버튼은 그대로', /swapOverlap\(/.test(own) && /같은 시간에 이미 근무가 있어요/.test(own));
+}
+
 console.log(`\n${fail ? 'RED' : 'GREEN'} — PASS ${pass} · FAIL ${fail}`);
 process.exit(fail ? 1 : 0);
