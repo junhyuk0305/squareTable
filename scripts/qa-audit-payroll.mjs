@@ -110,6 +110,8 @@ console.log('\n[A10] 이미 승인·반려·취소된 교대는 다시 바뀌지
 {
   const g = lastDef('swap_requests_decided_guard');
   check('★서버: swap_requests 의 끝난 요청(approved·rejected·cancelled) 상태를 바꾸면 거부하는 트리거', /old\.status in \('approved', 'rejected', 'cancelled'\)/.test(g.body) && /swap_already_decided/.test(g.body) && /before update on public\.swap_requests/.test(read(`supabase/migrations/${g.file}`)), g.file);
+  const cg = lastDef('swap_requests_client_guard');
+  check('★서버: 클라 직접 갱신은 앱이 쓰는 전이·열만 허용하는 트리거(S2)', /current_user/.test(cg.body) && /swap_update_not_allowed/.test(cg.body) && /before update on public\.swap_requests/.test(read(`supabase/migrations/${cg.file}`)), cg.file || '없음');
   const db = read('src/lib/db.ts');
   const f = db.match(/export async function updateSwap[\s\S]*?\n}\n/)?.[0] ?? '';
   check('★db: updateSwap 이 지금 상태를 조건으로 건다(0행 = 실패)', /\.in\('status', expect\)/.test(f) && /writeStrict\(/.test(f));
@@ -169,6 +171,38 @@ select set_config('request.jwt.claims', json_build_object('sub', current_setting
     check('합의된 요청 취소 뒤에도 수락자는 그대로다', r9.includes('R=cancelled/true'), r9.slice(0, 160));
     const r5 = psql(`${SETUP}update public.swap_requests set archived_tenure_id = null, updated_at = now() where id = 'qa_a10_ap' returning 'R=' || status;\nrollback;\n`);
     check('상태를 안 바꾸는 갱신(재입사 표시 등)은 막지 않는다', r5.includes('R=approved'), r5.slice(0, 160));
+
+    // [S2] 클라 직접 UPDATE 는 앱이 쓰는 전이·열만 된다.
+    //   앱 목록: 동료 수락(open→accepted · 수락자=본인) · 요청자 취소(open·accepted→cancelled) · 관리자 반려(accepted→rejected).
+    //   requester_id 는 누구도 직접 못 바꾼다. 승인은 approve_swap(근무 이전과 한 트랜잭션)으로만.
+    const s1 = run('j', `update public.swap_requests set accepted_by = null where id = 'qa_a10_ac' returning 'R=' || status;`);
+    check('★요청 직원이 수락된 자기 요청의 수락자를 비우기 → 거부', s1.startsWith('ERR='), s1.slice(0, 160));
+    const s2 = run('j', `update public.swap_requests set status = 'open', accepted_by = null where id = 'qa_a10_ac' returning 'R=' || status;`);
+    check('★요청 직원이 수락된 요청을 다시 열기(accepted→open) → 거부', s2.startsWith('ERR='), s2.slice(0, 160));
+    const s3 = run('j', `update public.swap_requests set requester_id = current_setting('qa.j') where id = 'qa_a10_op' returning 'R=' || status;`);
+    check('★동료가 남의 열린 요청의 요청자를 자기로 바꾸기 → 거부', s3.startsWith('ERR='), s3.slice(0, 160));
+    const s4 = run('j', `update public.swap_requests set note = 'x' where id = 'qa_a10_op' returning 'R=' || status;`);
+    check('★동료가 남의 열린 요청 내용(메모)을 바꾸기 → 거부', s4.startsWith('ERR='), s4.slice(0, 160));
+    const s5 = run('j', `update public.swap_requests set status = 'accepted', accepted_by = current_setting('qa.m') where id = 'qa_a10_op' returning 'R=' || status;`);
+    check('동료가 수락하며 다른 사람을 수락자로 넣기 → 거부', s5.startsWith('ERR='), s5.slice(0, 160));
+    const s6 = run('o', `update public.swap_requests set requester_id = current_setting('qa.m') where id = 'qa_a10_op' returning 'R=' || status;`);
+    check('★사장도 요청자를 직접 못 바꾼다', s6.startsWith('ERR='), s6.slice(0, 160));
+    const s7 = run('o', `update public.swap_requests set accepted_by = current_setting('qa.m') where id = 'qa_a10_ac' returning 'R=' || status;`);
+    check('★사장도 수락자를 직접 못 바꾼다', s7.startsWith('ERR='), s7.slice(0, 160));
+    const s8 = run('o', `update public.swap_requests set status = 'approved' where id = 'qa_a10_ac' returning 'R=' || status;`);
+    check('★사장 직접 승인(근무 이전 없이 approved) → 거부 · 승인은 approve_swap 으로만', s8.startsWith('ERR='), s8.slice(0, 160));
+    const s9 = run('o', `update public.swap_requests set status = 'open', accepted_by = null where id = 'qa_a10_ac' returning 'R=' || status;`);
+    check('사장 직접 다시 열기(accepted→open) → 거부', s9.startsWith('ERR='), s9.slice(0, 160));
+    const s10 = run('j', `update public.swap_requests set status = 'accepted', accepted_by = current_setting('qa.j'), updated_at = now() where id = 'qa_a10_op' returning 'R=' || status;`);
+    check('동료가 열린 요청을 자기로 수락하기(open→accepted)는 된다', s10.includes('R=accepted'), s10.slice(0, 160));
+    const s11 = run('o', `update public.swap_requests set status = 'rejected', updated_at = now() where id = 'qa_a10_ac' returning 'R=' || status;`);
+    check('사장 반려(accepted→rejected · 상태·시각만)는 된다', s11.includes('R=rejected'), s11.slice(0, 160));
+    const s12 = run('m', `select 'R=' || public.accept_swap('qa_a10_op')::text;`);
+    check('정의자 함수 accept_swap 수락은 된다', s12.includes('R=true'), s12.slice(0, 160));
+    const s13 = psql(`${SETUP}set local role service_role;\nupdate public.swap_requests set status = 'accepted', accepted_by = current_setting('qa.m') where id = 'qa_a10_op' returning 'R=' || status;\nrollback;\n`);
+    check('service_role 갱신은 막지 않는다', s13.includes('R=accepted'), s13.slice(0, 160));
+    const s14 = psql(`${SETUP}update public.swap_requests set status = 'cancelled', updated_at = now() where id = 'qa_a10_ac';\n${as('j')}update public.swap_requests set status = 'cancelled', updated_at = now() where id = 'qa_a10_ac' returning 'R=' || status;\nrollback;\n`);
+    check('옛 앱이 이미 취소된 요청을 다시 취소(같은 상태 · 시각만)해도 오류가 아니다', s14.includes('R=cancelled'), s14.slice(0, 160));
   }
 }
 
