@@ -13,6 +13,7 @@ import { useCrossNotifStore } from '@/lib/store/useCrossNotifStore';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useMemberPrefsStore } from '@/lib/store/useMemberPrefsStore';
 import { useStoreNav } from '@/lib/hooks/useStoreNav';
+import { useForegroundRefresh } from '@/lib/app/useForegroundRefresh';
 import { storeColor } from '@/lib/utils/storeColor';
 import { canUseMultistore, PLANS } from '@/lib/config/tiers';
 import { starterGraduated } from '@/lib/utils/starterProgress';
@@ -80,6 +81,14 @@ export function OwnerStatusView({ header }: { header: ReactNode }) {
     void hydratePrefs();
     void hydrateKnowhowStats();
   }, [hydrateOwner, hydrateCross, hydratePrefs, hydrateKnowhowStats]);
+  // G2: 허브는 owner·junior _layout 밖이라 거기 붙은 복귀 새로고침이 없다. 30초 넘게 뒤에 있다 돌아오면 다시 읽는다.
+  useForegroundRefresh(true, () => {
+    void useSessionStore.getState().refreshMembership();
+    void hydrateOwner();
+    void hydrateCross();
+    void hydratePrefs();
+    void hydrateKnowhowStats();
+  });
 
   const [sortKey, setSortKey] = useState<SortKey>('pending_q');
   /** '확인 필요' 칸을 눌렀는데 갈래가 둘 이상일 때 — 갈래 3행을 시트로(목적지가 제각각이라 한 칸이 못 고른다). */

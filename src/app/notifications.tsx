@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { useForegroundRefresh } from '@/lib/app/useForegroundRefresh';
 import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { View, StyleSheet, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -29,6 +30,11 @@ export default function HubNotificationsScreen() {
   useEffect(() => {
     void hydrateCross();
   }, [hydrateCross]);
+  // G2: 매장 _layout 밖이라 복귀 새로고침이 없다. 30초 넘게 뒤에 있다 돌아오면 다시 읽는다.
+  useForegroundRefresh(status === 'signed_in', () => {
+    void useSessionStore.getState().refreshMembership();
+    void hydrateCross();
+  });
   const { listRows, openRow } = useCrossNotifRows();
   // ⛔`&&` 안에서 훅을 부르지 않는다 — 훅을 각각 받은 뒤 AND 한다.
   const ready = crossLoaded && prefsLoaded;

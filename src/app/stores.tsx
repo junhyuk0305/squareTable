@@ -9,6 +9,7 @@ import { useMemberPrefsStore } from '@/lib/store/useMemberPrefsStore';
 import { useCrossNotifStore } from '@/lib/store/useCrossNotifStore';
 import { showToast } from '@/lib/store/useToastStore';
 import { useSessionGate } from '@/lib/hooks/useSessionGate';
+import { useForegroundRefresh } from '@/lib/app/useForegroundRefresh';
 import { storeColor } from '@/lib/utils/storeColor';
 import { useCrossNotifRows } from '@/lib/hooks/useCrossNotifRows';
 import { assignedTodayCount } from '@/lib/utils/crossStoreNotifs';
@@ -91,6 +92,13 @@ export default function StoresHub() {
   const [lockLoaded, setLockLoaded] = useState(false);
   const [prefsLoaded, setPrefsLoaded] = useState(false);
   const [crossLoaded, setCrossLoaded] = useState(false);
+  // G2: 매장 _layout 밖이라 복귀 새로고침이 없다. 30초 넘게 뒤에 있다 돌아오면 소속을 다시 맞추고
+  // 아래 네 읽기(설정·알림·지표·잠김)를 다시 돌린다(fgTick 이 바뀌면 effect 가 다시 돈다).
+  const [fgTick, setFgTick] = useState(0);
+  useForegroundRefresh(true, () => {
+    void useSessionStore.getState().refreshMembership();
+    setFgTick((t) => t + 1);
+  });
   // 매장을 고른 순간부터 그 매장 화면이 그릴 준비가 될 때까지 — 이 값이 있으면 화면 전체를 커버가 덮는다.
   const enter = useStoreEntryStore((s) => s.enter);
 
@@ -101,7 +109,7 @@ export default function StoresHub() {
     let alive = true;
     void hydratePrefs().finally(() => { if (alive) setPrefsLoaded(true); });
     return () => { alive = false; };
-  }, [hydratePrefs]);
+  }, [hydratePrefs, fgTick]);
 
   // 통합 알림(0077) — 카드 뱃지·허브 알림 섹션. 판정·매핑·탭 동작은 공용 훅(useCrossNotifRows) SSOT.
   const hydrateCross = useCrossNotifStore((s) => s.hydrate);
@@ -109,7 +117,7 @@ export default function StoresHub() {
     let alive = true;
     void hydrateCross().finally(() => { if (alive) setCrossLoaded(true); });
     return () => { alive = false; };
-  }, [hydrateCross]);
+  }, [hydrateCross, fgTick]);
   const { unreadByUnit } = useCrossNotifRows();
   // 직원 '오늘 할일' 칩 — 카운트는 assignedTodayCount SSOT(오늘 탭·허브 탭바 뱃지와 동일 술어).
   const crossData = useCrossNotifStore((s) => s.data);
@@ -135,7 +143,7 @@ export default function StoresHub() {
       setOvLoaded(true);
     })();
     return () => { alive = false; };
-  }, [isOwner]);
+  }, [isOwner, fgTick]);
 
   // 잠긴 매장 목록 — 전 사용자 대상(직원도 잠긴 매장 카드를 탭할 수 있다). 실패해도 카드는 그대로.
   useEffect(() => {
@@ -143,7 +151,7 @@ export default function StoresHub() {
     (async () => {
       const { data } = await fetchMyLockedUnits();
       if (!alive) return;
-      if (data) setLockedUnits(data);
+      if (data) { setLockedUnits(data); setLockReadFailed(false); } // 복귀 재조회가 성공하면 이전 실패 표시를 지운다(G2)
       // ★data===null = 읽기 실패다(2026-08-25 감사 #12). 예전엔 여기서 아무것도 안 해
       //   lockedUnits 가 초기값 [] 로 남았고, 아래 enterStore 가 그걸 "잠긴 매장 없음"으로
       //   **오판해 진입을 허용**했다 — 서버(switch_active_unit)는 unit_locked 로 거부하므로
@@ -152,7 +160,7 @@ export default function StoresHub() {
       setLockLoaded(true);
     })();
     return () => { alive = false; };
-  }, []);
+  }, [fgTick]);
 
   const enterStore = (u: MyUnitRow) => {
     // ★잠긴 매장은 진입 자체를 막는다 — 서버(switch_active_unit)도 unit_locked 로 거부하므로,

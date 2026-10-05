@@ -15,6 +15,7 @@ import { computePay, shiftsToPayRecords } from '@/lib/utils/payroll';
 import { monthDates } from '@/lib/utils/schedule';
 import type { MyCrossSummaryRow } from '@/lib/db';
 import { useStoreNav } from '@/lib/hooks/useStoreNav';
+import { useForegroundRefresh } from '@/lib/app/useForegroundRefresh';
 import { storeColor } from '@/lib/utils/storeColor';
 import { todayStr } from '@/lib/utils/attendance';
 import { isPendingAssignment, isUnreadMention } from '@/lib/utils/notifications';
@@ -62,6 +63,14 @@ export function JuniorTodayView({ header }: { header: ReactNode }) {
     void hydrateCross();
     void hydratePrefs();
   }, [hydrateJunior, hydrateCross, hydratePrefs]);
+  // G2: 허브는 owner·junior _layout 밖이라 거기 붙은 복귀 새로고침이 없다. 30초 넘게 뒤에 있다 돌아오면 다시 읽는다.
+  // 다시 그려지면서 아래 today 도 오늘 날짜로 다시 잡힌다.
+  useForegroundRefresh(true, () => {
+    void useSessionStore.getState().refreshMembership();
+    void hydrateJunior();
+    void hydrateCross();
+    void hydratePrefs();
+  });
 
   const today = todayStr();
 
