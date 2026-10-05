@@ -51,8 +51,27 @@ const legacyPlan = quickSrc0.includes('templates.find((t) => t.staff_id === staf
       const ex = tpls.find((t) => t.staff_id === staffId && !t.date && t.weekday === wd);
       return ex ? { kind: 'edit', id: ex.id, from: date } : { kind: 'add', weekday: wd, from: date };
     }) : null;
+// "이 날부터 계속/그만" — 지금 시트는 누른 행 하나만 RPC 로 보낸다(뒤 구간은 그대로).
+const legacyFromScope = quickSrc0.includes('endShiftFrom(editing.templateId, date, cp)')
+  ? (tpls, id, date, times) => [{ kind: times ? 'edit' : 'end', id, from: date }] : null;
+// 반복 저장 실행 — 지금 스토어는 새 행을 닫을 때 확인(confirmPast)을 넘기지 않고, 닫기가 실패해도 새 행을 남긴다.
+const legacyRun = storeSrc0.includes('endShiftFromRpc(id, op.endBefore, false)')
+  ? async (api, staffId, ops, start, end, cp) => {
+      for (const op of ops) {
+        if (op.kind === 'edit') { if (!(await api.edit(op.id, op.from, start, end, cp))) return false; continue; }
+        if (op.kind === 'end') { if (!(await api.end(op.id, op.from, cp))) return false; continue; }
+        const id = await api.add(staffId, op.weekday, op.from, start, end, cp);
+        if (!id) return false;
+        if (op.endBefore && !(await api.end(id, op.endBefore, false))) return false;
+      }
+      return true;
+    } : null;
 const applies = fn('shiftAppliesOn') ?? legacyApplies;
 const plan = fn('planSeriesSave') ?? legacyPlan;
+const planFrom = fn('planFromScope') ?? legacyFromScope;
+const runOps = fn('runSeriesOps') ?? legacyRun;
+if (!fn('planFromScope')) console.log('  (planFromScope 없음 → 지금 ShiftQuickSheet 판정으로 실행)');
+if (!fn('runSeriesOps')) console.log('  (runSeriesOps 없음 → 지금 applySeriesOps 순서로 실행)');
 if (!fn('shiftAppliesOn')) console.log('  (shiftAppliesOn 없음 → 지금 shiftsOn 판정으로 실행)');
 if (!fn('planSeriesSave')) console.log('  (planSeriesSave 없음 → 지금 ShiftQuickSheet 판정으로 실행)');
 
@@ -142,6 +161,63 @@ if (plan) {
   ops = plan([futureMon], me, [MON], '2026-10-05', '10:00', '14:00');
   check('★10/19부터 시작하는 행이 있으면 새 행은 10/5부터 넣고 그 전날로 닫는다(이후 두 벌 금지)',
     ops.length === 1 && ops[0].kind === 'add' && ops[0].from === '2026-10-05' && ops[0].endBefore === '2026-10-19', JSON.stringify(ops));
+
+  // 나눠 저장한 요일(앞 구간 10/5~10/18 09:00 + 뒤 구간 10/19~ 10:00) — "이 날부터 계속"은 뒤 구간까지 새 시각이다.
+  const segA = { id: 't_segA', staff_id: me, weekday: MON, date: null, valid_from: '2026-10-05', valid_to: '2026-10-18', start: '09:00', end: '13:00' };
+  const segB = { id: 't_segB', staff_id: me, weekday: MON, date: null, valid_from: '2026-10-19', valid_to: null, start: '10:00', end: '14:00' };
+  ops = plan([segA, segB], me, [MON], '2026-10-12', '11:00', '15:00');
+  check('★나눠진 요일을 10/12부터 11:00 으로: 앞 구간은 10/12부터, 뒤 구간은 10/19부터 고친다',
+    ops.length === 2 && ops.some((o) => o.kind === 'edit' && o.id === 't_segA' && o.from === '2026-10-12')
+      && ops.some((o) => o.kind === 'edit' && o.id === 't_segB' && o.from === '2026-10-19'), JSON.stringify(ops));
+}
+
+console.log('\n■ [1-3] planFromScope — "이 날부터 계속 · 그만"은 그 요일 뒤 구간까지');
+check('planFromScope 가 schedule.ts 에 있다', !!fn('planFromScope'));
+if (planFrom) {
+  const me = 'u1';
+  const segA = { id: 't_segA', staff_id: me, weekday: MON, date: null, valid_from: '2026-10-05', valid_to: '2026-10-18', start: '09:00', end: '13:00' };
+  const segB = { id: 't_segB', staff_id: me, weekday: MON, date: null, valid_from: '2026-10-19', valid_to: null, start: '10:00', end: '14:00' };
+  const otherStaff = { ...segB, id: 't_x', staff_id: 'u2' };
+  const otherDay = { ...segB, id: 't_y', weekday: TUE };
+  const tpls = [segA, segB, otherStaff, otherDay];
+  let ops = planFrom(tpls, 't_segA', '2026-10-12', null);
+  check('★"10/12부터 그만": 앞 구간은 10/12부터, 뒤 구간(10/19~)도 끝낸다',
+    ops.length === 2 && ops[0].kind === 'end' && ops[0].id === 't_segA' && ops[0].from === '2026-10-12'
+      && ops[1].kind === 'end' && ops[1].id === 't_segB' && ops[1].from === '2026-10-19', JSON.stringify(ops));
+  ops = planFrom(tpls, 't_segA', '2026-10-12', { start: '11:00', end: '15:00' });
+  check('★"10/12부터 계속 11:00": 앞 구간 10/12부터 · 뒤 구간 10/19부터 고친다',
+    ops.length === 2 && ops[0].kind === 'edit' && ops[0].id === 't_segA' && ops[0].from === '2026-10-12'
+      && ops[1].kind === 'edit' && ops[1].id === 't_segB' && ops[1].from === '2026-10-19', JSON.stringify(ops));
+  ops = planFrom(tpls, 't_segB', '2026-10-26', null);
+  check('뒤 구간이 없으면 누른 행 하나 · 다른 직원·다른 요일은 건드리지 않는다',
+    ops.length === 1 && ops[0].id === 't_segB' && ops[0].from === '2026-10-26', JSON.stringify(ops));
+}
+
+console.log('\n■ [1-4] runSeriesOps — 새 행을 나중 행 앞에서 닫을 때도 확인을 넘기고, 닫기가 실패하면 새 행을 지운다');
+check('runSeriesOps 가 schedule.ts 에 있다', !!fn('runSeriesOps'));
+if (runOps) {
+  const fake = (failEnd) => {
+    const calls = [];
+    return {
+      calls,
+      api: {
+        add: async (...a) => { calls.push(['add', ...a]); return 'new1'; },
+        edit: async (...a) => { calls.push(['edit', ...a]); return true; },
+        end: async (id, from, cp) => { calls.push(['end', id, from, cp]); return !failEnd(id, from, cp); },
+      },
+    };
+  };
+  // 지난 날짜(9/7)부터 넣고 9/21(지난 날짜)에 시작하는 행 앞에서 닫는다. 사장은 경고를 확인했다.
+  const ops = [{ kind: 'add', weekday: MON, from: '2026-09-07', endBefore: '2026-09-21' }];
+  // 서버처럼: 지난 날짜를 확인 없이 닫으면 거부한다.
+  let f = fake((id, from, cp) => from < '2026-10-05' && !cp);
+  let ok = await runOps(f.api, 'u1', ops, '10:00', '14:00', true);
+  const close = f.calls.find((c) => c[0] === 'end' && c[2] === '2026-09-21');
+  check('★지난 날짜에서 닫을 때도 사장이 확인한 confirmPast 를 넘긴다(그래야 서버가 받는다)', ok === true && !!close && close[3] === true, JSON.stringify(f.calls));
+  f = fake((id, from) => from === '2026-09-21');
+  ok = await runOps(f.api, 'u1', ops, '10:00', '14:00', true);
+  const undo = f.calls.find((c) => c[0] === 'end' && c[1] === 'new1' && c[2] === '2026-09-07');
+  check('★닫기가 실패하면 실패로 돌려주고 방금 넣은 행을 시작일부터 지운다(두 벌 금지)', ok === false && !!undo, JSON.stringify(f.calls));
 }
 
 // ── [2] 소스 계약 ──────────────────────────────────────────────────────────
@@ -181,6 +257,11 @@ check('ShiftQuickSheet: 지난 날짜 안내 문구가 있다', /지난 날짜�
 check('ShiftQuickSheet: 저장은 RPC 액션으로(updateTemplate · removeTemplate 직접 쓰기 없음)',
   !/updateTemplate|removeTemplate/.test(quick) && /editShiftFrom|overrideShiftDay|endShiftFrom|addShiftSeries/.test(quick));
 check('ShiftQuickSheet: 반복 저장 판정은 planSeriesSave(그날 적용 중인 행)', /planSeriesSave\(/.test(quick));
+check('ShiftQuickSheet: "이 날부터 계속·그만"은 planFromScope(뒤 구간까지)로 계획한다', /planFromScope\(/.test(quick));
+check('스토어 applySeriesOps 가 runSeriesOps(schedule.ts · 하네스가 검증하는 그 함수)로 보낸다', /runSeriesOps\(/.test(store));
+check('근무표 RPC 가 실패해도 다시 읽는다(앞 단계는 저장됐을 수 있다)', !/if \(ok && !isStaleEpoch\(epoch\)\) void get\(\)\.hydrate\(\)/.test(store)
+  && /isStaleEpoch\(epoch\)\)\s*void get\(\)\.hydrate\(\)/.test(store));
+check('허브 직원 오늘 탭(fetchMyCrossSummary)이 기간을 주는 my_cross_summary_v2 를 읽는다', /rpc\(\s*'my_cross_summary_v2'/.test(fnBody(db, 'fetchMyCrossSummary')));
 // 시트(Modal) 위에 확인창(Modal)을 띄우지 않는다(iOS) — 시트 안 확인 단계가 같은 문구(PAST_CHANGE_*)를 쓴다.
 check('ShiftQuickSheet: 지난 날짜는 확인 단계(같은 경고 문구)를 거친 뒤에만 p_confirm_past 를 보낸다',
   /PAST_CHANGE_TITLE/.test(quick) && /PAST_CHANGE_BODY/.test(quick) && /send\(true,/.test(quick) && !/confirmPastChange\(/.test(quick));
@@ -354,6 +435,85 @@ console.log('\n■ [4] 왕복(로컬 도커) — 앱 판정 → RPC → shift_te
       const gT = on(tpls, exc, T, J.id), gN = on(tpls, exc, S.addDays(T, 14), J.id);
       check('★4-4 승인 뒤 오늘만 10:30 1건 · 2주 뒤는 10:00 그대로', gT.length === 1 && gT[0].start === '10:30' && gN.length === 1 && gN[0].start === '10:00',
         `${gT.map((g) => g.start)} / ${gN.map((g) => g.start)}`);
+
+      // db.ts 래퍼와 같은 매핑(addShiftSeriesRpc · editShiftFromRpc · endShiftFromRpc) — runSeriesOps 에 넣는 api.
+      const api = {
+        add: async (staff, weekday, from, s, e, cp) => {
+          const r = await O.c.rpc('add_shift_series', { p_staff: staff, p_weekday: weekday, p_from: from, p_start: s, p_end: e, p_confirm_past: cp });
+          return r.error || typeof r.data !== 'string' ? null : r.data;
+        },
+        edit: async (id, from, s, e, cp) => !(await O.c.rpc('edit_shift_from', { p_id: id, p_from: from, p_start: s, p_end: e, p_confirm_past: cp })).error,
+        end: async (id, from, cp) => !(await O.c.rpc('end_shift_from', { p_id: id, p_from: from, p_confirm_past: cp })).error,
+      };
+      const weekly = async (wd, first, n) => {
+        tpls = await readAll(O.c);
+        exc = await readExc(O.c);
+        return Array.from({ length: n }, (_, k) => S.addDays(first, 7 * k))
+          .map((d) => `${d}:${on(tpls, exc, d, J.id).filter((t) => t.date === null && t.weekday === wd).map((g) => g.start).join('+') || '없음'}`);
+      };
+
+      // 4-5 지난 날짜(4주 전)부터 반복을 넣는데 그 요일에 2주 전부터 시작한 행이 있다 → 새 행은 2주 전 전날로 닫힌다(확인 받음).
+      const wd3 = (wdT + 2) % 7;
+      const past4 = S.nextDateForWeekday(S.addDays(T, -28), wd3), past2 = S.addDays(past4, 14);
+      const pre = await O.c.rpc('add_shift_series', { p_staff: J.id, p_weekday: wd3, p_from: past2, p_start: '15:00', p_end: '19:00', p_confirm_past: true });
+      check('4-5 2주 전부터 시작한 행 준비', !pre.error, pre.error?.message);
+      tpls = await readAll(O.c);
+      const ops5 = plan(tpls, J.id, [wd3], past4, '08:00', '12:00');
+      check('4-5 계획 = 4주 전부터 넣고 2주 전 전날로 닫기(둘 다 지난 날짜)', ops5.length === 1 && ops5[0].kind === 'add' && ops5[0].from === past4 && ops5[0].endBefore === past2, JSON.stringify(ops5));
+      const ok5 = await runOps(api, J.id, ops5, '08:00', '12:00', true);
+      check('4-5 runSeriesOps(확인함) 성공', ok5 === true);
+      let w = await weekly(wd3, past4, 7);
+      check('★4-5 4주 전부터 7주 동안 매주 정확히 1건(2주 동안 08:00 · 그 뒤 15:00)',
+        w.every((x, k) => x.endsWith(k < 2 ? ':08:00' : ':15:00')), w.join(' '));
+
+      // 4-6 앞으로 나눠 저장한 요일(첫 주 09:00 · 3주째부터 10:00) → 2주째에 "이 날부터 그만" → 2주째부터 근무 없음.
+      const wd4 = (wdT + 3) % 7, f4 = S.nextDateForWeekday(S.addDays(T, 1), wd4);
+      const seed6 = async (wd, f) => {
+        const a = await O.c.rpc('add_shift_series', { p_staff: J.id, p_weekday: wd, p_from: f, p_start: '09:00', p_end: '13:00', p_confirm_past: false });
+        const e = a.error ? a : await O.c.rpc('edit_shift_from', { p_id: a.data, p_from: S.addDays(f, 14), p_start: '10:00', p_end: '14:00', p_confirm_past: false });
+        tpls = await readAll(O.c);
+        const head = tpls.find((t) => t.staff_id === J.id && t.weekday === wd && t.date === null && t.valid_from === f);
+        return { err: a.error?.message ?? e.error?.message, head };
+      };
+      const s6 = await seed6(wd4, f4);
+      check('4-6 나눠 저장한 요일 준비(앞 구간 2주 · 뒤 구간 계속)', !s6.err && !!s6.head && s6.head.valid_to === S.addDays(f4, 13), s6.err ?? JSON.stringify(s6.head));
+      const ops6 = s6.head ? planFrom(tpls, s6.head.id, S.addDays(f4, 7), null) : [];
+      const ok6 = await runOps(api, J.id, ops6, s6.head?.start, s6.head?.end, false);
+      check('4-6 "이 날부터 그만" 실행 성공', ok6 === true, JSON.stringify(ops6));
+      w = await weekly(wd4, f4, 6);
+      check('★4-6 그만둔 날부터는 매주 근무 없음(뒤 구간도 끝남) · 첫 주는 09:00',
+        w.every((x, k) => x.endsWith(k < 1 ? ':09:00' : ':없음')), w.join(' '));
+
+      // 4-7 같은 모양에서 2주째에 "이 날부터 계속 11:00" → 2주째부터 매주 11:00(뒤 구간 10:00 이 다시 돌아오지 않는다).
+      const wd5 = (wdT + 4) % 7, f5 = S.nextDateForWeekday(S.addDays(T, 1), wd5);
+      const s7 = await seed6(wd5, f5);
+      check('4-7 나눠 저장한 요일 준비', !s7.err && !!s7.head, s7.err ?? '');
+      const ops7 = s7.head ? planFrom(tpls, s7.head.id, S.addDays(f5, 7), { start: '11:00', end: '15:00' }) : [];
+      const ok7 = await runOps(api, J.id, ops7, '11:00', '15:00', false);
+      check('4-7 "이 날부터 계속" 실행 성공', ok7 === true, JSON.stringify(ops7));
+      w = await weekly(wd5, f5, 6);
+      check('★4-7 첫 주 09:00 · 2주째부터 매주 정확히 1건 11:00',
+        w.every((x, k) => x.endsWith(k < 1 ? ':09:00' : ':11:00')), w.join(' '));
+
+      // 4-8 직원 허브 오늘 탭 — fetchMyCrossSummary 가 부르는 RPC 로 읽어 앞으로 6주 매일 사장 근무표와 같은 근무가 선다.
+      //   (다음 근무 7일 미리보기가 기간을 봐야 한다. v1 은 오늘 적용 중인 행만 주고 기간 칸이 없다.)
+      const hubRpc = (fnBody(db, 'fetchMyCrossSummary').match(/rpc\(\s*'([a-z0-9_]+)'/) ?? [])[1];
+      const hub = hubRpc ? await J.c.rpc(hubRpc) : { error: { message: 'rpc 이름 없음' } };
+      check(`4-8 직원이 허브 RPC(${hubRpc}) 를 읽는다`, !hub.error && Array.isArray(hub.data), hub.error?.message);
+      if (!hub.error) {
+        tpls = await readAll(O.c);
+        exc = await readExc(O.c);
+        const mineRows = (hub.data ?? []).filter((r) => r.unit_id === UNIT);
+        bad = [];
+        for (let k = 0; k <= 42; k++) {
+          const d = S.addDays(T, k);
+          // JuniorTodayView.myShiftsOn 과 같은 매핑(본인 행 · staff_id = 나)
+          const mineOn = mineRows.flatMap((r) => on(r.shifts.map((x) => ({ ...x, staff_id: J.id })), r.exceptions ?? [], d, J.id)).map((x) => x.start).sort().join('+');
+          const ownerOn = on(tpls, exc, d, J.id).map((x) => x.start).sort().join('+');
+          if (mineOn !== ownerOn) bad.push(`${d}:${mineOn || '없음'}≠${ownerOn || '없음'}`);
+        }
+        check('★4-8 오늘부터 6주 매일 허브 판정 = 사장 근무표(앞으로 시작·끝나는 구간 포함)', bad.length === 0, bad.slice(0, 4).join(' '));
+      }
     } catch (e) {
       check('[4] 예외 없이 끝남', false, e.message);
     } finally {
