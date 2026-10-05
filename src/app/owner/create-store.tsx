@@ -7,6 +7,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSessionStore } from '@/lib/store/useSessionStore';
+import { showToast } from '@/lib/store/useToastStore';
+import { showBillingEntry } from '@/lib/config/store-policy';
 import { Appear } from '@/components/Appear';
 import { logout } from '@/lib/auth';
 import { formatBizNo, isValidBizNo, bizDigits } from '@/lib/utils/bizno';
@@ -27,6 +29,8 @@ export default function OwnerCreateStore() {
   // 이미 매장이 있는 사장이 스위처 '매장 추가'로 온 경우 = 추가 흐름 → 뒤로가기(취소) 허용 + 문구 교체.
   // 매장 0개(강제 온보딩)면 돌아갈 곳이 없어 뒤로가기를 막는다(기존 동작 유지).
   const isAddingStore = useSessionStore((s) => s.stores.length > 0);
+  const iapEnabled = useSessionStore((s) => s.iapEnabled);
+  const freeMode = useSessionStore((s) => s.freeMode);
 
   const [storeName, setStoreName] = useState('');
   const [industry, setIndustry] = useState('');
@@ -70,6 +74,11 @@ export default function OwnerCreateStore() {
     setBusy(false);
     // 인증이 없어서 막힌 것이면 화면을 떠나지 않고 인증 단계를 연다(문의 안내로 끝내지 않는다).
     if (cs.code === 'PHONE_NOT_VERIFIED') setNeedPhone(true);
+    // 이용권이 없어서 막힌 것이면 다음 행동(이용권 화면)으로 잇는다 — 결제 경로가 열린 빌드에서만.
+    //   (previous-stores 의 다시 열기와 같은 모양)
+    if (cs.code === 'NO_STORE_SLOT' && showBillingEntry(iapEnabled, freeMode)) {
+      return showToast('매장을 더 열려면 먼저 이용권을 늘려 주세요.', undefined, { label: '이용권 보기', onPress: () => router.push('/billing?intent=add-store') });
+    }
     if (cs.error) return setErr(cs.error);
     router.replace({ pathname: '/owner/onboarding', params: { code: cs.inviteCode ?? '------', industry } });
   };

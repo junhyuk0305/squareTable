@@ -862,7 +862,11 @@ export const useSessionStore = create<SessionState>((set, get) => ({
         return {
           error: msg,
           inviteCode: null,
-          code: /PHONE_NOT_VERIFIED/.test(error.message) ? 'PHONE_NOT_VERIFIED' : undefined,
+          code: /PHONE_NOT_VERIFIED/.test(error.message)
+            ? 'PHONE_NOT_VERIFIED'
+            : /no_store_slot/.test(error.message)
+            ? 'NO_STORE_SLOT'
+            : undefined,
         };
       }
       // 프로필 unit_id가 바뀌었으니 세션 상태 갱신

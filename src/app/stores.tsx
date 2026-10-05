@@ -14,7 +14,7 @@ import { useCrossNotifRows } from '@/lib/hooks/useCrossNotifRows';
 import { assignedTodayCount } from '@/lib/utils/crossStoreNotifs';
 import { roleNoun } from '@/lib/utils/roles';
 import { todayStr } from '@/lib/utils/attendance';
-import { fetchOwnerOverview, fetchMyLockedUnits, type MyUnitRow, type OwnerOverviewRow } from '@/lib/db';
+import { fetchOwnerOverview, fetchMyLockedUnits, fetchMyCanAddStore, type MyUnitRow, type OwnerOverviewRow } from '@/lib/db';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
@@ -170,13 +170,16 @@ export default function StoresHub() {
     void enter({ uid: u.unit_id, name: prefFor(u.unit_id).nickname || u.store_name || '내 매장' });
   };
 
-  const addStore = () => {
+  const addStore = async () => {
     // ★첫 매장(매장 0곳)은 항상 무료 — 다점포 게이트를 태우지 않는다.
     //   서버 create_store 도 isOnboarding 으로 첫 매장을 허용하는데(owner/create-store.tsx),
     //   클라만 canUseMultistore 를 먼저 봐서 '매장이 하나도 없는 사람'을 결제화면으로 보냈다.
     //   "2번째 매장부터 유료" 규칙이 1번째에 걸리던 것 — 게이트의 대상이 아니다.
     if (stores.length === 0) return router.push('/owner/create-store');
-    if (canUseMultistore(plan, freeMode)) return router.push('/owner/create-store');
+    // ★0267: 길은 지금 매장의 요금제가 아니라 남은 이용권으로 정한다(서버 create_store 와 같은 규칙).
+    //   못 읽으면 예전 판정으로 둔다 — 만들기 화면에서 서버가 다시 거르고 '이용권 보기'로 잇는다.
+    const { data: canAdd, error: canAddErr } = await fetchMyCanAddStore();
+    if (canAddErr ? canUseMultistore(plan, freeMode) : canAdd) return router.push('/owner/create-store');
     // 결제 경로가 하나도 없는 빌드(웹 PG 비노출 + 스토어 판매 중단)에서만 사실 고지로 끝낸다.
     // iOS 는 인앱결제로 다점포를 팔므로 여기로 보내는 것이 맞다(판정은 store-policy 한 곳).
     if (!showBillingEntry(iapEnabled, freeMode)) {

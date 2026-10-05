@@ -771,6 +771,17 @@ export async function fetchMyUnitClosureAlerts(): Promise<DbResult<UnitClosureAl
   return { data: (data as UnitClosureAlert[]) ?? [], error: null };
 }
 
+// 지금 매장을 하나 더 열 수 있나(0267) — create_store 의 이용권 규칙과 같은 답. '매장 추가'가 길을 정한다.
+export async function fetchMyCanAddStore(): Promise<DbResult<boolean>> {
+  if (!HAS_SUPABASE) return { data: true, error: null };
+  const { data, error } = await supabase.rpc('my_can_add_store');
+  if (error) {
+    readFail('fetchMyCanAddStore', error);
+    return { data: null, error: error as DbErr };
+  }
+  return { data: !!data, error: null };
+}
+
 // ── 이전 매장(0196) — 유료가 끝나 닫힌 소유 매장. 목록은 서버(my_previous_units = unit_access_locked)가 SSOT ──
 export type PreviousUnitRow = { unit_id: string; store_name: string; industry: string | null; closed_at: string };
 export async function fetchMyPreviousUnits(): Promise<DbResult<PreviousUnitRow[]>> {
