@@ -237,20 +237,21 @@ function StoreConfigForm() {
 function BizNoSection() {
   const unitId = useSessionStore((s) => s.unitId);
   const [bizNo, setBizNo] = useState('');
-  const [loaded, setLoaded] = useState(false);
+  // 어느 매장 번호를 읽어 왔는가 — 매장이 바뀌면 다시 읽을 때까지 칸을 잠근다(효과 안에서 바로 setState 하지 않는다).
+  const [loadedUnit, setLoadedUnit] = useState<string | null>(null);
+  const loaded = loadedUnit === unitId;
   const [loadFailed, setLoadFailed] = useState(false);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
     let alive = true;
-    setLoaded(false);
     void fetchUnitBizNo(unitId).then(({ data, error }) => {
       if (!alive) return;
       // 못 읽었으면 빈칸으로 덮지 않는다. 그 상태로 저장하면 있던 번호가 지워진다.
       setLoadFailed(!!error);
       setBizNo(formatBizNo(data ?? ''));
-      setLoaded(true);
+      setLoadedUnit(unitId);
     });
     return () => { alive = false; };
   }, [unitId]);
