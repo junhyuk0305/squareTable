@@ -40,17 +40,17 @@ const FN_TOKENS = {
   reject_member: ['insert into public.member_notices', "'rejected'", 'not_pending'],
   // P4-1 0242 — 적용 기간을 모르는 판정이 하나라도 남으면 근무가 두 번 잡힌다(설계 01 §7-1)
   workers_at: ['valid_from', 'valid_to', 'shift_exceptions', 'archived_tenure_id'],
-  //   _v2 둘의 shift_day_marks · wage_rates 는 P4-4 0245. RLS 는 활성 매장만 보이므로 허브·다매장 직원은 이 경로로만 다른 매장 몫을 받는다.
+  //   _v2 둘의 wage_rates 는 P4-4 0245(결근 표시 marks 는 2026-10-05 뺐다). RLS 는 활성 매장만 보이므로 허브·다매장 직원은 이 경로로만 다른 매장 몫을 받는다.
   my_cross_summary: ['valid_from', 'shift_exceptions', 'archived_tenure_id'],
-  my_cross_summary_v2: ['valid_from', 'valid_to', 'shift_exceptions', 'shift_day_marks', 'wage_rates', 'archived_tenure_id'],
+  my_cross_summary_v2: ['valid_from', 'valid_to', 'shift_exceptions', 'wage_rates', 'archived_tenure_id'],
   owner_labor_inputs: ['valid_from', 'shift_exceptions', 'owner_id = auth.uid()', 'archived_tenure_id'],
-  owner_labor_inputs_v2: ['valid_from', 'valid_to', 'shift_exceptions', 'owner_id = auth.uid()', 'shift_day_marks', 'wage_rates', 'archived_tenure_id'],
+  owner_labor_inputs_v2: ['valid_from', 'valid_to', 'shift_exceptions', 'owner_id = auth.uid()', 'wage_rates', 'archived_tenure_id'],
   shift_templates_all: ['valid_from', 'unit_members', 'auth_can_manage', 'archived_tenure_id'],
   transfer_shift: ['valid_from', 'shift_exceptions', 'archived_tenure_id'],
   approve_swap: ['p_confirm_past', 'kst_today() - 35', 'transfer_shift', 'auth_can_manage', 'archived_tenure_id'],
   due_quiz_sends: ['valid_to', 'workers_at', 'archived_at'],
   // P4-2 0243(J2) — 나누기가 요청을 안 옮기면 지난 날짜 요청이 엉뚱한 구간에 붙는다(데이터 H6). 승인은 사장만(J2 원문).
-  copy_past_segment: ['shift_exceptions', 'swap_requests', 'shift_change_requests', 'shift_day_marks'],
+  copy_past_segment: ['shift_exceptions', 'swap_requests', 'shift_change_requests'],
   request_shift_time: ['valid_from', 'shift_exceptions', 'kst_today() - 35', 'kst_today() + 60', 'auth.uid()', 'archived_tenure_id'],
   decide_shift_time: ['auth_is_owner', 'for update', "status <> 'pending'", 'p_confirm_past', 'kst_today() - 35', 'override_shift_day', "edited_by = 'staff'", 'archived_tenure_id'],
   // P4-3 0244(J1-b) — 시급 이력. 사장만 · 활성 매장 멤버만 · 지난 날짜는 확인(Q4). 일일 맞춤은 지금 멤버만(퇴사자 wages 되살리기 금지).
@@ -58,9 +58,6 @@ const FN_TOKENS = {
   sync_wages_from_rates: ['unit_members', 'wage_rates', 'archived_tenure_id'],
   //   0246 — 옛 앱 시급 저장 트리거도 재입사자의 옛 이력을 "이력 있음"으로 세지 않는다(옛 시급이 되살아나지 않게).
   wages_to_wage_rates: ['wage_rates', 'archived_tenure_id'],
-  // P4-4 0245(J1-c) — 결근 표시. 사장만(급여 영향 · 0201) · 활성 매장 근무만 · 그날 서는 근무만 · 지난 날짜는 확인(Q4).
-  mark_shift_day: ['auth_is_owner', 'auth_unit_id', 'p_confirm_past', 'valid_from', 'shift_exceptions', 'archived_tenure_id'],
-  clear_shift_day: ['auth_is_owner', 'auth_unit_id', 'p_confirm_past', 'archived_tenure_id'],
   // P4-5 0246 — 재직 기간. 표시(archived_tenure_id)된 옛 재직 기간 행은 정의자 함수도 읽거나 고치지 않는다.
   owner_overview: ['owner_id = auth.uid()', 'archived_tenure_id', 'archived_at is null'],
   edit_shift_from: ['archived_tenure_id', 'p_confirm_past'],
@@ -75,7 +72,7 @@ const FN_TOKENS = {
     // P4-6 0247 — 내보냄은 그 직원에게, 나감·탈퇴는 그 매장 사장 멤버십에게만(Q22 · F-2).
     'insert into public.member_notices', 'if p_notify', "role = 'owner'"],
   //   다시 들어오는 순간 옛 재직 기간 행 7종에 표시 · 시급 비움 · former_staff 행 삭제.
-  member_tenure_open: ['archived_tenure_id', 'attendance', 'shift_templates', 'wage_rates', 'shift_day_marks', 'shift_change_requests',
+  member_tenure_open: ['archived_tenure_id', 'attendance', 'shift_templates', 'wage_rates', 'shift_change_requests',
     'chat_queries', 'swap_requests', 'final_hourly_wage', 'delete from public.wages', 'delete from public.former_staff', "kind = 'store'"],
   remove_staff: ['close_member_tenure', "'removed'", 'cannot_remove_self', 'staff_not_found'],
   leave_store: ['close_member_tenure', "'left'", 'owner_cannot_leave'],
@@ -151,15 +148,19 @@ const pol = (table, name) => psql(`select coalesce(qual, '') || ' | ' || coalesc
   const w = psql(`select count(*) from pg_policies where schemaname = 'public' and tablename = 'shift_templates' and cmd = 'ALL'`);
   check('shift_templates 에 FOR ALL 정책이 없다(있으면 관리자에게 읽기 필터가 안 먹는다)', w === '0', `FOR ALL 정책 ${w}개`);
 }
+// 2026-10-05 사용자 결정: 결근 표시 기능은 필요 없다 → 0245 의 marks 부분을 걷어 냈다(시급 이력 v2 는 남는다).
 {
-  const r = pol('shift_day_marks', 'sdm_read');
-  check('shift_day_marks.sdm_read ⊇ auth_can_manage · auth.uid (관리자 또는 본인만 · 동료 결근 표시 비공개)',
-    r.includes('auth_can_manage') && r.includes('auth.uid()'), r || '정책 없음');
+  check('shift_day_marks 표가 없다', psql(`select to_regclass('public.shift_day_marks') is null`) === 't');
+  check('mark_shift_day · clear_shift_day 가 없다', psql(`select count(*) from pg_proc where pronamespace = 'public'::regnamespace and proname in ('mark_shift_day', 'clear_shift_day')`) === '0');
+  for (const fn of ['owner_labor_inputs_v2', 'my_cross_summary_v2']) {
+    const cols = psql(`select coalesce(array_to_string(p.proargnames, ','), '') from pg_proc p where p.pronamespace = 'public'::regnamespace and p.proname = '${fn}'`);
+    check(`${fn} 가 marks 열을 주지 않는다 · wage_rates 는 준다`, !cols.split(',').includes('marks') && cols.split(',').includes('wage_rates'), cols);
+  }
 }
 
 // ── P4-5 0246 재직 기간 ──────────────────────────────────────────────────────
 // 표시 대상 표 7개. 모든 정책(select · insert/update 의 using · with check · delete)에 archived_tenure_id is null.
-const TENURE_TABLES = ['attendance', 'shift_templates', 'wage_rates', 'shift_day_marks', 'shift_change_requests', 'chat_queries', 'swap_requests'];
+const TENURE_TABLES = ['attendance', 'shift_templates', 'wage_rates', 'shift_change_requests', 'chat_queries', 'swap_requests'];
 {
   for (const t of TENURE_TABLES) {
     const out = psql(`select policyname || '|' || cmd || '|' || coalesce(qual, '-') || '|' || coalesce(with_check, '-')
