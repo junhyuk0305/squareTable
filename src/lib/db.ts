@@ -2633,6 +2633,20 @@ export async function fetchQuizCourseStats(): Promise<Record<string, QuizCourseS
   return out;
 }
 
+/** 아직 안 나간 이유(0274) — 근무표에 없음 · 연속 2회 안 열어 자동 정지. 이유가 없는 사람은 맵에 없다. */
+export type QuizSendBlock = 'not_scheduled' | 'auto_stopped';
+export async function fetchQuizSendStatus(courseId: string): Promise<Record<string, QuizSendBlock>> {
+  if (!HAS_SUPABASE || !courseId) return {};
+  const { data, error } = await supabase.rpc('quiz_send_status', { p_course_id: courseId });
+  if (error) {
+    readFail('fetchQuizSendStatus', error);
+    return {};
+  }
+  const out: Record<string, QuizSendBlock> = {};
+  for (const r of (data ?? []) as { user_id: string; reason: QuizSendBlock }[]) out[r.user_id] = r.reason;
+  return out;
+}
+
 /** 한 사람의 이 퀴즈 응시 목록(제출 단위 점수·시각) — 개인 상세 화면의 위쪽 대시보드. */
 export type PersonAttemptRow = { submissionId: string; takenAt: string; asked: number; correct: number };
 export async function fetchQuizCoursePerson(courseId: string, staffId: string): Promise<PersonAttemptRow[]> {

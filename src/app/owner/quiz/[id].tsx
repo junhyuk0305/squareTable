@@ -17,11 +17,13 @@ import { showToast } from '@/lib/store/useToastStore';
 import {
   fetchQuizItems,
   fetchStaffAttemptItems,
+  fetchQuizSendStatus,
   upsertTrainingCourse,
   insertQuizAssignments,
   insertQuizItem,
   updateQuizItem,
   type StaffAttemptItemRow,
+  type QuizSendBlock,
 } from '@/lib/db';
 import { genId } from '@/lib/utils/id';
 import { FORMATS } from '@/lib/quiz/formats';
@@ -117,6 +119,13 @@ export default function QuizDetailScreen() {
   }, [entryIds, itemsReload]);
 
   const sends = useMemo(() => sendsByCourse.get(id ?? '') ?? [], [sendsByCourse, id]);
+  // 아직 안 나간 사람의 이유(E3 · 0274). 판정은 서버가 한다(due_quiz_sends 와 같은 조건).
+  const [blocked, setBlocked] = useState<Record<string, QuizSendBlock>>({});
+  useEffect(() => {
+    let alive = true;
+    void fetchQuizSendStatus(id ?? '').then((m) => { if (alive) setBlocked(m); });
+    return () => { alive = false; };
+  }, [id, sends]);
   const allUserIds = useMemo(() => [...new Set(sends.map((a) => a.userId))], [sends]);
 
   // 주기 due 판정 기준 시각 — 렌더 중 Date.now() 금지(컴파일러 순수성). 마운트 1회로 충분하다.
@@ -406,7 +415,10 @@ export default function QuizDetailScreen() {
                         <Text style={st.rowSub} numberOfLines={1}>
                           {done
                             ? `${mine.length}문제 중 ${mine.filter((r) => r.correct).length}개 맞힘`
-                            : p.passed ? '통과' : p.sent ? '미응시' : '발송 중'}
+                            : p.passed ? '통과' : p.sent ? '미응시'
+                              : blocked[p.id] === 'not_scheduled' ? '근무표에 없어 대기 중'
+                              : blocked[p.id] === 'auto_stopped' ? '두 번 안 열어 멈춤 · 열면 다시 나가요'
+                              : '발송 중'}
                         </Text>
                       </View>
                       <ProgressPill text={p.passed ? '다 맞힘' : '아직 안 풂'} tone={p.passed ? 'done' : 'neutral'} />
