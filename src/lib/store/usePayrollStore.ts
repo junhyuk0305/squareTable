@@ -1,7 +1,8 @@
 import { create } from 'zustand';
 import { HOURLY_WAGE } from '@/lib/store/useAttendanceStore';
 import { HAS_SUPABASE } from '@/lib/supabase';
-import { fetchWages, setWageDb, fetchPayrollSettings, savePayrollSettings } from '@/lib/db';
+import { fetchWages, fetchWageRates, setWageDb, fetchPayrollSettings, savePayrollSettings } from '@/lib/db';
+import type { WageRate } from '@/lib/utils/payroll';
 import { guardWrite } from '@/lib/store/useSyncStore';
 import { currentTenantEpoch, isStaleEpoch } from '@/lib/store/tenantEpoch';
 
@@ -51,6 +52,8 @@ function persistSettings(s: PayrollSettings): void {
 type State = {
   settings: PayrollSettings;
   wages: Record<string, number>;
+  /** 시급 이력(0244). 지난달 급여는 그 달 시급으로 센다(wageForMonth). 비면 지금 시급으로 센다. */
+  wageRates: WageRate[];
   /** 시급을 한 번이라도 받아왔나. false면 아직 모른다 — "안 정했다"가 아니다. */
   wagesLoaded: boolean;
   /**
@@ -71,6 +74,7 @@ export const usePayrollStore = create<State>((set, get) => ({
   // 설정은 로컬 영속에서 복원(새로고침해도 유지). 시급은 DB(wages 테이블).
   settings: loadSettings(),
   wages: HAS_SUPABASE ? {} : { ...HOURLY_WAGE },
+  wageRates: [],
   // mock 은 시급이 상수로 주어지므로 처음부터 '읽어온 상태'다.
   wagesLoaded: !HAS_SUPABASE,
   settingsLoaded: !HAS_SUPABASE,
@@ -78,7 +82,7 @@ export const usePayrollStore = create<State>((set, get) => ({
   hydrate: async () => {
     if (!HAS_SUPABASE) return;
     const epoch = currentTenantEpoch();
-    const [wageRes, dbSettings] = await Promise.all([fetchWages(), fetchPayrollSettings()]);
+    const [wageRes, dbSettings, wageRates] = await Promise.all([fetchWages(), fetchPayrollSettings(), fetchWageRates()]);
     // 그 사이 매장이 바뀌었다 — 이전 매장 시급·규칙을 쓰지 않는다(로컬 캐시에도 남기지 않는다).
     if (isStaleEpoch(epoch)) return;
     // DB에 저장된 규칙이 있으면 그것이 진실원천(기본값 위에 병합). 없으면(초기 매장) 로컬 캐시 유지.
@@ -90,7 +94,7 @@ export const usePayrollStore = create<State>((set, get) => ({
       // settingsLoaded 는 시급 읽기 성패와 무관하다 — 여기 왔다는 건 급여 설정 조회가 끝났다는 뜻이다.
       return wageRes.error
         ? { settings, settingsLoaded: true, wagesLoadError: true }
-        : { wages: wageRes.data, settings, settingsLoaded: true, wagesLoaded: true, wagesLoadError: false };
+        : { wages: wageRes.data, wageRates, settings, settingsLoaded: true, wagesLoaded: true, wagesLoadError: false };
     });
   },
   setSetting: (k, v) => {

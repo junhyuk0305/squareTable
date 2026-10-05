@@ -14,6 +14,7 @@ import type { AttendanceRecord } from '@/lib/store/useAttendanceStore';
 import type { StoreConfig, ShiftTemplate, ShiftException, SwapRequest, ShiftTimeRequest } from '@/lib/store/useScheduleStore';
 import type { CustomCategory } from '@/lib/store/knowhowCategories';
 import type { KnowhowUsage } from '@/lib/knowhow/archive';
+import type { WageRate } from '@/lib/utils/payroll';
 import type { MemberTenure } from '@/lib/utils/tenure';
 import { reopenKeepsRecords, type DeleteStorePreview, type DeleteStoreResult } from '@/lib/account/storeCopy';
 import { isMissingRpc } from '@/lib/utils/userError';
@@ -3213,6 +3214,19 @@ export async function fetchWages(): Promise<ReadResult<Record<string, number>>> 
   const out: Record<string, number> = {};
   for (const r of (data ?? []) as any[]) out[r.staff_id] = r.hourly_wage;
   return { data: out, error: false };
+}
+/**
+ * 시급 이력(0244 wage_rates) — 지난달 급여를 그때 시급으로 세는 데 쓴다(2026-10-05).
+ * 재입사 전 이력(archived_tenure_id)은 빼고 읽는다. 표가 없거나(옛 서버) 못 읽으면 빈 목록 = 지금 시급으로 센다.
+ */
+export async function fetchWageRates(): Promise<WageRate[]> {
+  if (!HAS_SUPABASE) return [];
+  const { data, error } = await supabase.from('wage_rates').select('staff_id, hourly_wage, effective_from').is('archived_tenure_id', null);
+  if (error) {
+    console.warn('[db] fetchWageRates:', error.message);
+    return [];
+  }
+  return (data ?? []) as WageRate[];
 }
 export async function setWageDb(staffId: string, wage: number): Promise<boolean> {
   if (!HAS_SUPABASE) return true;

@@ -268,3 +268,25 @@ export function computePay(records: PayRecord[], wage: number, rules: PayrollRul
   const total = base + nightPay + overtimePay + weeklyHolidayPay + extra;
   return { workedMin, paidMin, breakMin, nightMin, overtimeMin, base, nightPay, overtimePay, weeklyHolidayPay, extra, total };
 }
+
+/** 시급 이력 한 줄(0244 wage_rates). effective_from = 이 날부터 이 시급(YYYY-MM-DD). */
+export type WageRate = { staff_id: string; hourly_wage: number; effective_from: string };
+
+/**
+ * 그 달 급여에 쓸 시급(2026-10-05 · 지난달은 바뀌지 않는다).
+ * 그 달 마지막 날(이번 달이면 오늘)에 적용되던 시급이다. 이력이 없으면(옛 서버·읽기 실패) fallback(지금 시급) 그대로.
+ * 한 달 안에서 시급이 바뀌면 그 달은 마지막 시급으로 센다(날짜별 정산 규칙은 만들지 않는다 · P4-7b 보류).
+ */
+export function wageForMonth(rates: WageRate[], staffId: string, ym: string, today: string, fallback: number): number;
+export function wageForMonth(rates: WageRate[], staffId: string, ym: string, today: string, fallback: number | null): number | null;
+export function wageForMonth(rates: WageRate[], staffId: string, ym: string, today: string, fallback: number | null): number | null {
+  const [y, m] = ym.split('-').map(Number);
+  const monthEnd = `${ym}-${String(new Date(Date.UTC(y, m, 0)).getUTCDate()).padStart(2, '0')}`;
+  const cut = monthEnd < today ? monthEnd : today;
+  let best: WageRate | null = null;
+  for (const r of rates) {
+    if (r.staff_id !== staffId || r.effective_from > cut) continue;
+    if (!best || r.effective_from > best.effective_from) best = r;
+  }
+  return best ? best.hourly_wage : fallback;
+}
