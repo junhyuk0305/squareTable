@@ -55,7 +55,8 @@ export function BottomSheet({
   children: ReactNode;
 }) {
   // 아래로 끌어 내리기(2026-09-03): 시트가 손가락을 따라 내려가고, 놓을 때 충분히 내렸으면 닫힌다.
-  // ★시트 전체 응답자는 비캡처라 시트 안 ScrollView 가 먼저 잡는다 — 스크롤되는 시트에서는 스크롤이 이긴다.
+  // ★손잡이를 끌 때만 닫힌다(2026-10-05 아이폰 실측). 본문 전체에 응답자를 달았더니 스크롤 맨 위에서
+  //   아래로 끄는 손짓을 시트가 가져가 스크롤하다가 닫혔다. 본문을 끌면 스크롤만 된다.
   //   위로는 안 끌린다(0 하한). 닫힘 애니는 Modal 의 slide 가 맡으므로 여기선 위치만 되돌린다.
   const dragY = useMemo(() => new Animated.Value(0), []);
   const handlers = useMemo(
@@ -73,18 +74,10 @@ export function BottomSheet({
     }),
     [dragY, onClose],
   );
-  const pan = useMemo(
-    () =>
-      PanResponder.create({
-        onMoveShouldSetPanResponder: (_e, g) => g.dy > 8 && Math.abs(g.dy) > Math.abs(g.dx) * 1.5,
-        ...handlers,
-      }),
-    [handlers],
-  );
   /**
    * 손잡이 전용 응답자(2026-09-13) — **어느 시트든 손잡이를 끌면 내려간다**.
    *
-   * 왜 따로 두는가: 위 `pan` 은 시트 뿌리에 붙은 **비캡처** 응답자라, 본문이 `flex:1` ScrollView 인 시트
+   * 왜 따로 두는가(10-05 이후 닫는 길은 이것 하나다): 옛 `pan` 은 시트 뿌리에 붙은 **비캡처** 응답자라, 본문이 `flex:1` ScrollView 인 시트
    * (할일·루틴 추가, 방 작성, 문항 편집, 발행 확인 …)에서는 스크롤이 제스처를 가져간다. 그래서 실기기에서
    * "손으로 내리려는데 안 내려간다"가 났다 — 손잡이는 스크롤 밖에 있지만 4pt 짜리 선이라 잡히지도 않았다.
    * → 손잡이는 시작 즉시 제스처를 잡고(onStartShouldSetPanResponder), 손잡이 **띠(gripZone)** 로
@@ -131,7 +124,7 @@ export function BottomSheet({
           그대로 덮였다. 프레임 컬럼 자체를 KeyboardShift 로 세워 시트가 키보드 위로 올라오게 한다. */}
       <KeyboardShift style={modalFrameStyle}>
         <Pressable style={styles.backdrop} onPress={onClose} accessibilityLabel="닫기" />
-        <Animated.View style={[styles.sheet, sheetStyle, { transform: [{ translateY: dragY }] }]} {...pan.panHandlers}>
+        <Animated.View style={[styles.sheet, sheetStyle, { transform: [{ translateY: dragY }] }]}>
           <View style={styles.gripZone} {...gripPan.panHandlers}>
             <View style={styles.grip} />
           </View>

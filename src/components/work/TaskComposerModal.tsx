@@ -305,11 +305,7 @@ export function TaskComposerModal({
                   value={taskScope}
                   onChange={(k) => { setTaskScope(k as 'shared' | 'private'); if (k === 'private') setPicked([]); }}
                 />
-                <Text style={s.revealLabel}>
-                  {taskScope === 'shared'
-                    ? '모두가 봐요. 담당자를 정해도 다른 사람에게 보여요.'
-                    : '나만 봐요. 사장님도 볼 수 없어요.'}
-                </Text>
+                {taskScope === 'private' && <Text style={s.revealLabel}>나만 봐요. 사장님도 볼 수 없어요.</Text>}
               </Field>
             )}
 
@@ -366,10 +362,10 @@ export function TaskComposerModal({
             <Field
               label="업무 시간 (선택)"
               info={
-                // 공용 InfoDot 은 안 쓴다 — 이 화면 자체가 바텀시트(Modal)라 그 위에 모달을 또 여는 꼴이 된다.
-                // 인라인 펼침이 규칙에도 맞고, 시간을 고르는 동안 설명이 가려지지 않는다.
+                // 공용 InfoDot 은 안 쓴다 — 이 화면 자체가 바텀시트(Modal)라 그 위에 Modal 을 또 여는 꼴이 된다.
+                // 대신 시트 안에 겹쳐 띄운다(아래 infoOverlay).
                 <Pressable
-                  onPress={() => { setRemindInfo((v) => !v); if (!remindInfo) revealScroll(); }}
+                  onPress={() => setRemindInfo(true)}
                   accessibilityRole="button"
                   accessibilityLabel="업무 시간 설명 보기"
                   // RN-web 은 hitSlop 을 무시한다 — 상자 자체를 44 로.
@@ -379,16 +375,6 @@ export function TaskComposerModal({
                 </Pressable>
               }
             >
-              {remindInfo && (
-                <View style={s.infoNote}>
-                  <Text style={s.infoText}>
-                    정한 시간이 되면 앱이 꺼져 있어도 알림이 가요.{'\n'}
-                    ‘매장 전체’ 할일이면 그 시간에 근무 중인 직원에게 가요.{'\n'}
-                    담당자를 정했으면 그 담당자에게 가요.{'\n'}
-                    근무표에 그 시간 근무자가 없으면 매장 전원에게 가요.
-                  </Text>
-                </View>
-              )}
               <Seg
                 options={[{ k: 'off', l: '안 정함' }, { k: 'on', l: '시간 정하기' }]}
                 value={remindOn ? 'on' : 'off'}
@@ -445,11 +431,6 @@ export function TaskComposerModal({
                   );
                 })}
               </View>
-              {picked.length > 0 && (
-                <Text style={s.assignHint}>
-                  ‘{picked.map((id) => nameById[id] ?? '직원').join('·')}’ 담당으로 표시돼요 — 매장 전원에게 보여요
-                </Text>
-              )}
             </Field>
             )}
 
@@ -568,6 +549,20 @@ export function TaskComposerModal({
               </Pressable>
             </View>
           </View>
+
+          {remindInfo && (
+            <Pressable style={s.infoOverlay} onPress={() => setRemindInfo(false)} accessibilityLabel="설명 닫기">
+              <View style={s.infoNote}>
+                <Text style={s.infoText}>
+                  정한 시간이 되면 앱이 꺼져 있어도 알림이 가요.{'\n'}
+                  ‘매장 전체’ 할일이면 그 시간에 근무 중인 직원에게 가요.{'\n'}
+                  담당자를 정했으면 그 담당자에게 가요.{'\n'}
+                  근무표에 그 시간 근무자가 없으면 매장 전원에게 가요.
+                </Text>
+                <Text style={s.infoClose}>알겠어요</Text>
+              </View>
+            </Pressable>
+          )}
     </BottomSheet>
   );
 }
@@ -616,7 +611,10 @@ const s = StyleSheet.create({
   fldLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 2, marginBottom: 6 },
   fldLabelInRow: { marginBottom: 0 },
   timeInp: { alignSelf: 'flex-start', minWidth: 96, textAlign: 'center' },
-  infoNote: { marginBottom: 6, padding: 11, backgroundColor: InkColors.cream, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md },
+  // ⓘ 설명 — 시트 위에 겹쳐 뜨는 창. 바깥이나 '알겠어요'를 누르면 닫힌다.
+  infoOverlay: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'center', paddingHorizontal: 24, borderTopLeftRadius: Radius.sheet, borderTopRightRadius: Radius.sheet },
+  infoNote: { padding: 16, backgroundColor: InkColors.bg, borderRadius: Radius.md, gap: 12 },
+  infoClose: { fontSize: 15, fontWeight: '800', color: InkColors.ink, textAlign: 'center', paddingVertical: 6 },
   infoText: { fontSize: 15, lineHeight: 22, color: InkColors.ink2 },
   inp: { borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.sm, paddingHorizontal: 13, paddingVertical: 11, fontSize: 15, color: InkColors.ink, backgroundColor: InkColors.cream },
   textarea: { minHeight: 76, textAlignVertical: 'top' },
@@ -647,7 +645,6 @@ const s = StyleSheet.create({
   lockedScope: { backgroundColor: InkColors.cream, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.sm, paddingHorizontal: 13, paddingVertical: 10 },
   lockedScopeText: { fontSize: 14, fontWeight: '700', color: InkColors.ink },
   lockedScopeHint: { fontSize: 11, color: InkColors.ink3, marginTop: 2 },
-  assignHint: { fontSize: 11.5, color: InkColors.ink2, fontWeight: '600', marginTop: 8, paddingHorizontal: 2 },
 
 
   // 노하우 첨부
