@@ -272,6 +272,8 @@ export type TaskTemplate = {
   /** 생성(배정) 시각 ISO. work_templates.created_at 에서 채움. 배정 알림의 정렬 기준
    *  — 없으면 알림이 매일 "오늘"로 취급돼 최신이 아닌데도 상단 고정되는 버그가 났다(2026-07-07 수정). */
   createdAt?: string;
+  /** 담당자별 배정 시각·배정한 사람(0272 · 서버 트리거가 적는다). 배정 알림의 시각·이름은 이 값이 먼저다(D11). */
+  assignedMeta?: Record<string, { at?: string; by?: string | null }>;
   /** 할일 목록에서 숨김(0110). 퀴즈가 만들어 낸 껍데기 업무를 사장이 정리한 표시 — occursOn 이 읽는다. */
   hidden?: boolean;
   /** 루틴 하루 예외(0146) — 이 할일이 **대신하는** 루틴 id(dayparts 안의 routine.id, dpr_ 접두사 없음).

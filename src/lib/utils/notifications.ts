@@ -48,10 +48,19 @@ export const isMentionOf = (f: FeedItem, me: string): boolean =>
   (f.mentions ?? []).includes(me) && f.authorId !== me;
 export const isUnreadMention = (f: FeedItem, me: string): boolean =>
   isMentionOf(f, me) && !(f.read_by ?? []).includes(me);
+/** 채팅에 보이는 글 중 나를 언급했는데 아직 안 읽은 메시지 id(D11). 채팅에서 봤으면 읽은 것이다. */
+export const unreadMentionIds = (feed: FeedItem[], me: string): string[] =>
+  feed.filter((f) => f.kind === 'message' && isUnreadMention(f, me)).map((f) => f.id);
 
 /** 남이 나에게 배정한 할일(내가 작성한 건 제외). date에 뜨고, 아직 완료 안 했으면 '해야 할 배정'. */
 export const isAssignedToMe = (t: TaskTemplate, me: string): boolean =>
   assigneesOf(t).includes(me) && !!t.createdBy && t.createdBy !== me;
+/** 나에게 배정된 시각(0272 assignedMeta · D11). 기록이 없으면(옛 행·목업) 만든 시각, 그것도 없으면 오늘 아침.
+ *  ★만든 시각만 쓰면 오래된 할일에 오늘 담당자로 들어간 배정이 '모두 읽기' 이전으로 묻혔다. */
+export const assignedAtOf = (t: TaskTemplate, me: string, today: string): string =>
+  t.assignedMeta?.[me]?.at ?? t.createdAt ?? `${today}T08:00:00`;
+/** 나를 담당자로 넣은 사람(0272). 기록이 없으면 만든 사람. */
+const assignerOf = (t: TaskTemplate, me: string): string => t.assignedMeta?.[me]?.by ?? t.createdBy ?? '';
 export const isPendingAssignment = (
   t: TaskTemplate,
   me: string,
@@ -88,7 +97,7 @@ export function juniorUnreadCount(
     feed.filter((f) => isUnreadNotice(f, me) && isAfterAck(f.createdAt, ackAt)).length +
     feed.filter((f) => isUnreadMention(f, me) && isAfterAck(f.createdAt, ackAt)).length +
     // 배정 시각 폴백은 목록(buildJuniorNotifications)과 동일하게 — 카운트·목록 강조가 어긋나지 않게.
-    taskTemplates.filter((t) => isPendingAssignment(t, me, today, done) && isAfterAck(t.createdAt ?? `${today}T08:00:00`, ackAt)).length +
+    taskTemplates.filter((t) => isPendingAssignment(t, me, today, done) && isAfterAck(assignedAtOf(t, me, today), ackAt)).length +
     swaps.filter((r) => isIncomingSwap(r, me, today) && isAfterAck(r.created_at, ackAt)).length +
     // 내 제안 검토 결과(반영/반려) — read 개념이 없어 '모두 읽기'(ack) 전까지 새 소식으로 센다.
     suggestions.filter((sg) => isMySuggestionResult(sg, me) && isAfterAck(sg.reviewed_at, ackAt)).length
@@ -153,11 +162,11 @@ export function buildJuniorNotifications(args: {
   // 배정 — 남이 나에게 배정한 할일. 오늘 떠야 하고 아직 완료 안 했으면 '해야 할 배정'(강조).
   for (const t of taskTemplates) {
     if (!isAssignedToMe(t, me) || !occursOn(t, today)) continue;
-    const at = t.createdAt ?? `${today}T08:00:00`;
+    const at = assignedAtOf(t, me, today);
     out.push({
       id: `assign_${t.id}`,
       kind: 'assign',
-      title: `${nameOf(t.createdBy ?? '')}님이 할 일을 배정했어요`,
+      title: `${nameOf(assignerOf(t, me))}님이 할 일을 배정했어요`,
       body: t.text,
       // 실제 배정(생성) 시각으로 정렬 → 오래된 배정은 자연히 아래로. createdAt 없는 레거시/목업만
       // today 로 폴백(과거 전량-today 고정이 "최신 아닌데 상단 고정" 버그의 원인이었다).
@@ -250,7 +259,9 @@ export type OwnerNotifKind =
   // 0227 본사 축 — 점주 해제권 변경(고지). 해제 버튼이 있는 설정 > 본사 연결로 보낸다.
   | 'brand_end_right_changed'
   // 0232 구독 상태(결제 채널 무관) — 늘었어요 · 끝나요 · 끝났어요. 탭은 ownerAlertRoute default '/billing'.
-  | 'sub_renewed' | 'sub_ending' | 'sub_ended';
+  | 'sub_renewed' | 'sub_ending' | 'sub_ended'
+  // D11 — 나에게 온 공지·배정(사장 폰에도 푸시가 온다). 매니저 수신 축과 같은 판정이다.
+  | 'notice' | 'assign';
 export type OwnerNotifRoute =
   | '/owner/inbox' | '/owner/suggestions' | '/owner/schedule' | '/owner/staff' | '/owner/work'
   | '/owner/categories' | '/billing' | '/owner/brand-consent' | '/owner/brand-link' | '/owner/knowledge';
@@ -342,8 +353,11 @@ export function ownerUnreadCount(
   claims: PaymentClaim[] = [],
   /** 사장 알림(0191). 통합 알림은 이 축도 공급하지 않는다. */
   alerts: OwnerAlert[] = [],
+  /** 나에게 온 공지·배정(D11). 목록(buildOwnerNotifications)과 같은 인자를 넘긴다. */
+  received?: ManagerReceivedArgs,
 ): number {
   return (
+    (received ? ownerReceivedRows(received).filter((r) => r.unread).length : 0) +
     alerts.filter((a) => ownerAlertForPlatform(a) && isAfterAck(a.created_at, ackAt)).length +
     pending.filter((p) => isAfterAck(p.created_at, ackAt)).length +
     queue.filter((u) => isPendingQuestion(u) && isAfterAck(u.asked_at, ackAt)).length +
@@ -356,8 +370,20 @@ export function ownerUnreadCount(
 }
 
 /** 사장 알림 목록(시간 역순, MAX_NOTIFS 상한). */
-export function buildOwnerNotifications(args: Parameters<typeof ownerRows>[0]): OwnerNotif[] {
-  return ownerRows(args).sort((a, b) => b.at.localeCompare(a.at)).slice(0, MAX_NOTIFS);
+export function buildOwnerNotifications(args: Parameters<typeof ownerRows>[0], received?: ManagerReceivedArgs): OwnerNotif[] {
+  return [...ownerRows(args), ...(received ? ownerReceivedRows(received) : [])]
+    .sort((a, b) => b.at.localeCompare(a.at))
+    .slice(0, MAX_NOTIFS);
+}
+
+/** 사장에게 온 공지·배정(D11) — 공지는 사장에게도 푸시가 가고(owners), 매니저는 사장에게 할일을 배정한다.
+ *  판정은 매니저 수신 축(buildManagerReceived)을 그대로 쓴다(내 글 제외 규칙 동일). 제안 결과는 사장 축이 아니라 뺀다. */
+function ownerReceivedRows(received: ManagerReceivedArgs): OwnerNotif[] {
+  const out: OwnerNotif[] = [];
+  for (const r of buildManagerReceived(received)) {
+    if (r.kind === 'notice' || r.kind === 'assign') out.push({ ...r, kind: r.kind, route: '/owner/work' });
+  }
+  return out;
 }
 
 /** 사장 축 행 전부(정렬·상한 전). 매니저 배지가 자르기 전 배열에서 세도록 나눠 둔다. */
@@ -539,11 +565,11 @@ function buildManagerReceived(args: ManagerReceivedArgs): ManagerNotif[] {
   // 배정 — 매니저도 할 일을 배정받는다(명부에 있는 사람이라 사장이 지정할 수 있다).
   for (const t of taskTemplates) {
     if (!isAssignedToMe(t, me) || !occursOn(t, today)) continue;
-    const at = t.createdAt ?? `${today}T08:00:00`;
+    const at = assignedAtOf(t, me, today);
     out.push({
       id: `assign_${t.id}`,
       kind: 'assign',
-      title: `${nameOf(t.createdBy ?? '')}님이 할 일을 배정했어요`,
+      title: `${nameOf(assignerOf(t, me))}님이 할 일을 배정했어요`,
       body: t.text,
       at,
       unread: !done[today]?.[t.id] && isAfterAck(at, ackAt),

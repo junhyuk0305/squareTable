@@ -103,7 +103,9 @@ export function useAppBadgeSync(): void {
     }
     const count =
       canManage(role)
-        ? ownerUnreadCount(queue, suggestions, swaps, pending, feed, me, ackAt, claims)
+        // 나에게 온 공지·배정도 센다(D11 · 벨과 같은 축). 이름은 세는 데 쓰지 않는다.
+        ? ownerUnreadCount(queue, suggestions, swaps, pending, feed, me, ackAt, claims, [],
+            { feed, taskTemplates: templates, done, today, suggestions, userId: me, nameOf: () => '', ackAt })
         : juniorUnreadCount(feed, swaps, me, today, templates, done, ackAt, suggestions, queue);
     setAppBadge(count);
   }, [role, me, signedIn, feed, templates, done, swaps, queue, suggestions, pending, today, ackAt, claims]);

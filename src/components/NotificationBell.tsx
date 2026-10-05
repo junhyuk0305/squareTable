@@ -86,19 +86,12 @@ export function OwnerNotificationBell({ edge = true }: { edge?: boolean } = {}) 
   const today = todayStr();
 
   const count = useMemo(() => {
-    if (role !== 'manager') return ownerUnreadCount(queue, suggestions, swaps, pending, feed, userId, ackAt, claims, alerts);
     const nameOf = (id: string) => staff.find((x) => x.id === id)?.name ?? '직원';
+    const received = { feed, taskTemplates: templates, done, today, suggestions, userId, nameOf, ackAt };
+    // 사장 배지도 목록처럼 나에게 온 공지·배정을 센다(D11).
+    if (role !== 'manager') return ownerUnreadCount(queue, suggestions, swaps, pending, feed, userId, ackAt, claims, alerts, received);
     // 매니저 배지는 목록(buildManagerNotifications)과 같은 인자·같은 배열에서 센다(F-2).
-    return managerUnreadCount({ queue, suggestions, swaps, pending, nameOf, feed, userId, ackAt, claims, alerts }, {
-      feed,
-      taskTemplates: templates,
-      done,
-      today,
-      suggestions,
-      userId,
-      nameOf,
-      ackAt,
-    });
+    return managerUnreadCount({ queue, suggestions, swaps, pending, nameOf, feed, userId, ackAt, claims, alerts }, received);
   }, [queue, suggestions, swaps, pending, feed, userId, ackAt, claims, alerts, role, templates, done, today, staff]);
 
   return <BellButton count={count} onPress={() => router.push('/owner/notifications')} edge={edge} />;

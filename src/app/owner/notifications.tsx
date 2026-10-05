@@ -107,17 +107,10 @@ export default function OwnerNotificationsScreen() {
   const rows = useMemo(() => {
     const nameOf = (id: string) => staff.find((x) => x.id === id)?.name ?? '직원';
     const ownerArgs = { queue, suggestions, swaps, pending, nameOf, feed, userId: me, ackAt, claims, alerts };
-    if (role !== 'manager') return buildOwnerNotifications(ownerArgs);
-    return buildManagerNotifications(ownerArgs, {
-      feed,
-      taskTemplates: templates,
-      done,
-      today,
-      suggestions,
-      userId: me,
-      nameOf,
-      ackAt,
-    });
+    const received = { feed, taskTemplates: templates, done, today, suggestions, userId: me, nameOf, ackAt };
+    // 사장도 나에게 온 공지·배정을 받는다(D11 · 폰에 푸시가 오는 것과 같은 축).
+    if (role !== 'manager') return buildOwnerNotifications(ownerArgs, received);
+    return buildManagerNotifications(ownerArgs, received);
   }, [queue, suggestions, swaps, pending, staff, feed, me, ackAt, claims, alerts, role, templates, done, today]);
 
   // '모두 읽기' = ① 멘션은 read_by 기록(기존 경로) + ② 처리형(합류·질문·제안·교대)은 ack 시각(0078)으로

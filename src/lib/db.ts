@@ -1879,6 +1879,9 @@ function mapTemplateRow(r: any): TaskTemplate {
     ...(r.remind_at ? { remindAt: r.remind_at as string } : null),
     // 배정 시각 — 배정 알림 정렬 기준(없으면 매일 상단 고정 버그). DB default now() 라 항상 존재.
     ...(r.created_at ? { createdAt: r.created_at as string } : null),
+    // 담당자별 배정 시각·배정한 사람(0272 · D11). 서버 트리거만 적는다 — 쓰기 경로에는 싣지 않는다.
+    ...(r.assigned_meta && typeof r.assigned_meta === 'object' && Object.keys(r.assigned_meta).length
+      ? { assignedMeta: r.assigned_meta as TaskTemplate['assignedMeta'] } : null),
     // 할일 목록에서 숨김(0110). 퀴즈가 만들어 낸 껍데기 업무를 사장이 정리한 표시.
     ...(r.hidden ? { hidden: true } : null),
   } as TaskTemplate;

@@ -57,6 +57,9 @@ export const OWNER_KIND_UI: Record<OwnerNotifKind, { icon: IconName; tint: strin
   sub_renewed: { icon: 'checkmark-circle', tint: '#E4F2E8' },
   sub_ending: { icon: 'time', tint: BrandColors.yellowSoft },
   sub_ended: { icon: 'alert-circle', tint: BrandColors.accentSoft },
+  // D11 — 나에게 온 공지·배정. 직원 쪽과 같은 모양이다(같은 대상이라 아이콘이 갈리면 안 된다).
+  notice: JUNIOR_KIND_UI.notice,
+  assign: JUNIOR_KIND_UI.assign,
 };
 /** 허브(역할 혼합 가능) 용 — 두 맵 합성. */
 // 닫힌 매장(0197) — 통합 목록에만 나온다(매장 안 알림함엔 그 매장이 없다).

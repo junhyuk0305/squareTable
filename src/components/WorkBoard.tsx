@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Platform, StyleSheet } from 'react-native';
 import { SafeAreaView, type Edge } from 'react-native-safe-area-context';
-import { Stack, router, useLocalSearchParams } from 'expo-router';
+import { Stack, router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 
 import { uploadPhoto, uploadPhotoNative } from '@/lib/db';
 import { pickImagesNative } from '@/lib/media/pickImage';
@@ -45,6 +45,7 @@ import { InkColors } from '@/lib/theme/colors';
 import { todayStr, tsMs } from '@/lib/utils/attendance';
 import { asMemberRole, canManage } from '@/lib/utils/roles';
 import { useBackIntercept } from '@/lib/hooks/useBackIntercept';
+import { unreadMentionIds } from '@/lib/utils/notifications';
 
 type ViewKey = 'chat' | 'drawer' | 'notice' | 'todo' | 'settings';
 
@@ -260,6 +261,25 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
     const rid = useRoomStore.getState().currentRoomId;
     if (rid && userId) useRoomStore.getState().markRead(rid, userId);
   }, [userId]);
+  // D11: 채팅을 보고 있으면 이 방에서 나를 언급한 글은 읽은 것으로 친다. 안 하면 알림함에 '안 읽음'으로 남는다.
+  //   화면이 앞에 있을 때만 센다(탭이 뒤에 있으면 아직 안 본 것이다). 같은 글은 한 번만 시도한다(실패 롤백 뒤 반복 방지).
+  const [focused, setFocused] = useState(false);
+  useFocusEffect(useCallback(() => {
+    setFocused(true);
+    return () => setFocused(false);
+  }, []));
+  const seenMentionIds = useMemo(
+    () => (focused && view === 'chat' && userId ? unreadMentionIds(feed.filter((f) => inRoom(f.roomId)), userId) : []),
+    [focused, view, userId, feed, inRoom],
+  );
+  const triedMentionIds = useRef(new Set<string>());
+  useEffect(() => {
+    if (!userId) return;
+    const ids = seenMentionIds.filter((id) => !triedMentionIds.current.has(id));
+    if (!ids.length) return;
+    ids.forEach((id) => triedMentionIds.current.add(id));
+    useWorkStore.getState().markAllRead(ids, userId);
+  }, [seenMentionIds, userId]);
   const openRoomComposer = useCallback(() => setRoomComposer('create'), []);
   // 서버가 방을 만든 뒤에 목록으로 돌려보낸다(낙관적 이동 금지 — 실패했는데 새 방이 열려 있으면 안 된다).
   const createRoom = useCallback(async (draft: RoomLookDraft, memberIds: string[]) => {
