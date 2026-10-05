@@ -20,7 +20,8 @@ import { useWorkStore, understandingOf } from '@/lib/store/useWorkStore';
 import { useQuizBoard } from '@/lib/quiz/useQuizBoard';
 import { confirmAction } from '@/lib/utils/confirm';
 import { fetchKnowhowUsage } from '@/lib/db';
-import { archiveConfirmMessage } from '@/lib/knowhow/archive';
+import { deleteConfirmMessage } from '@/lib/knowhow/archive';
+import { showToast } from '@/lib/store/useToastStore';
 import { isBrandCopy } from '@/lib/brand/copy';
 import { UNSECTIONED, sectionOptions } from '@/lib/config/sections';
 import { getSectionMeta } from '@/lib/utils/category';
@@ -159,10 +160,11 @@ function ConversationalEdit({ entry, quizCountOf }: { entry: PlaybookEntry; quiz
   );
 
   const del = useCallback(async () => {
-    // J10(0248): 노하우 '삭제'는 보관이다. 직원 화면·퀴즈에서 빠지고 응시·통과 기록은 남는다. 보관함에서 되살린다.
+    // J10(0248 · 2026-10-05 정정): 앱에서는 되살릴 수 없는 삭제다. DB 는 행을 남겨 응시·통과 기록을 지킨다.
     const usage = await fetchKnowhowUsage(entry.id);
-    if (await confirmAction('노하우 보관', archiveConfirmMessage(usage), '보관', { icon: 'archive-outline' })) {
+    if (await confirmAction('노하우 삭제', deleteConfirmMessage(usage), '삭제', { icon: 'trash-outline' })) {
       archive(entry.id);
+      showToast('삭제했어요.', 'good');
       router.back();
     }
   }, [entry.id, archive, router]);
@@ -207,7 +209,7 @@ function ConversationalEdit({ entry, quizCountOf }: { entry: PlaybookEntry; quiz
         initialCategory={entry.category}
         editEntry={entry}
         onUpdated={onUpdated}
-        // 본사 사본은 보관하지 않는다(서버 brand_copy_use_hide) — 위 BrandCopyPanel 의 숨기기를 쓴다.
+        // 본사 사본은 여기서 지우지 않는다(서버 brand_copy_use_hide) — 위 BrandCopyPanel 의 숨기기를 쓴다.
         onDeleteEntry={isBrandCopy(entry) ? undefined : del}
         onPublished={() => {}}
         docHeader={

@@ -182,7 +182,6 @@ export default function OwnerLayout() {
       <Stack.Screen name="payroll" options={{ title: '급여 설정' }} />
       <Stack.Screen name="knowledge" options={{ title: '내 노하우' }} />
       {/* J10(0248) 노하우 보관함 — 사장만(매니저 허용 목록에 없다) */}
-      <Stack.Screen name="knowhow-archive" options={{ title: '보관함' }} />
       <Stack.Screen name="templates" options={{ title: '노하우 템플릿' }} />
       {/* 다점포 — 내 한 매장의 노하우를 내 다른 매장으로 복사(3단계 위저드) */}
       <Stack.Screen name="import-knowhow" options={{ title: '노하우 복사하기' }} />

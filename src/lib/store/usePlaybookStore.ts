@@ -4,7 +4,7 @@ import { currentTenantEpoch, isStaleEpoch } from '@/lib/store/tenantEpoch';
 import type { PlaybookEntry } from '@/types';
 import seedData from '@/data/playbook-entries.json';
 import { HAS_SUPABASE } from '@/lib/supabase';
-import { fetchEntries, insertEntry, updateEntry, deleteEntry, archiveEntry, fetchArchivedEntries, renameEntrySection, subscribePlaybook, fetchKnowhowCategories, saveKnowhowCategories } from '@/lib/db';
+import { fetchEntries, insertEntry, updateEntry, deleteEntry, archiveEntry, renameEntrySection, subscribePlaybook, fetchKnowhowCategories, saveKnowhowCategories } from '@/lib/db';
 import {
   resolveCustomCategories,
   sanitizeCustomCategories,
@@ -40,14 +40,8 @@ type PlaybookState = {
   publish: (id: string, patch?: Partial<PlaybookEntry>) => Promise<boolean>;
   /** 하드 삭제 — 인수인계 검수의 초안 버리기와 본사 사본만 쓴다. 매장 노하우는 archive 를 쓴다(J10). */
   remove: (id: string) => void;
-  /** 사장 보관함(0248). 보관함 화면이 loadArchived 로 채운다. */
-  archived: PlaybookEntry[];
-  archivedLoaded: boolean;
-  loadArchived: () => Promise<void>;
   /** 노하우 '삭제' = 보관(J10). 목록에서 바로 빼고, 실패하면 되돌린다. 응시·통과 기록은 남는다. */
   archive: (id: string) => void;
-  /** 되살리기 — 성공하면 보관함에서 빼고 목록을 다시 읽는다. */
-  restore: (id: string) => Promise<boolean>;
   reset: () => void;
   applyMock: (demo: boolean) => void;
 };
@@ -59,8 +53,6 @@ export const usePlaybookStore = create<PlaybookState>((set, get) => ({
   loadError: false,
   customCategories: [],
   categoryLoadError: false,
-  archived: [],
-  archivedLoaded: false,
 
   hydrate: coalesce(async () => {
     if (!HAS_SUPABASE) return;
@@ -132,28 +124,12 @@ export const usePlaybookStore = create<PlaybookState>((set, get) => ({
   remove: (id) => {
     optimisticRemove(set, get, 'entries', id, () => deleteEntry(id), '삭제에 실패했어요.', currentTenantEpoch());
   },
-  loadArchived: async () => {
-    const epoch = currentTenantEpoch();
-    const { data, error } = await fetchArchivedEntries();
-    if (isStaleEpoch(epoch)) return; // 그 사이 매장이 바뀌었다 — 이전 매장 보관함을 쓰지 않는다
-    // 읽기 실패는 readFail 배너가 말한다. 목록은 그대로 두고 로딩만 끝낸다.
-    set((s) => ({ archived: error ? s.archived : data, archivedLoaded: true }));
-  },
   archive: (id) => {
-    optimisticRemove(set, get, 'entries', id, () => archiveEntry(id, true), '보관하지 못했어요.', currentTenantEpoch());
-  },
-  restore: async (id) => {
-    const epoch = currentTenantEpoch();
-    const ok = await archiveEntry(id, false);
-    if (ok && !isStaleEpoch(epoch)) {
-      set((s) => ({ archived: s.archived.filter((e) => e.id !== id) }));
-      await get().hydrate();
-    }
-    return ok;
+    optimisticRemove(set, get, 'entries', id, () => archiveEntry(id), '삭제하지 못했어요.', currentTenantEpoch());
   },
   reset: () => {
     setCustomCategoryRegistry([]); // 매장 전환 시 이전 매장 커스텀 라벨 누출 방지(hydrate가 다시 채움)
-    set({ entries: HAS_SUPABASE ? [] : seed, loadError: false, customCategories: [], categoryLoadError: false, archived: [], archivedLoaded: false });
+    set({ entries: HAS_SUPABASE ? [] : seed, loadError: false, customCategories: [], categoryLoadError: false });
   },
   // 데모 매장이면 시드, 신규 계정이면 빈 채로(가짜 노하우 노출 방지).
   applyMock: (demo) => set({ entries: demo ? seed : [], loaded: true, loadError: false }),

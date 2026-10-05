@@ -126,7 +126,7 @@ export type PlaybookEntry = {
   brand_pending_version?: number | null;
   local_modified_at?: string | null;
   brand_hidden_at?: string | null;
-  // ── 보관(J10) — 0248 컬럼. 사장의 '삭제'는 보관이다. 보관한 행은 RLS 가 막아 보관함(archived_knowhow)에서만 온다.
+  // ── 삭제(J10) — 0248 컬럼. 앱의 노하우 삭제는 이 열을 채운다(되살릴 수 없음). 채운 행은 RLS 가 아무에게도 안 보인다.
   archived_at?: string | null;
   archived_by?: string | null;
   // ── 파트(홀·주방 같은 담당) — 0164 컬럼 ──

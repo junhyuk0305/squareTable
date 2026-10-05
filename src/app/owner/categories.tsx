@@ -1,12 +1,10 @@
-import { View, Text, Pressable, StyleSheet } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { View, StyleSheet } from 'react-native';
 import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
 
 import { RoleTabBar } from '@/components/RoleTabBar';
 import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { OwnerKnowhowBrowse, type KnowhowSegKey } from '@/components/owner/OwnerKnowhowBrowse';
 import { InkColors } from '@/lib/theme/colors';
-import { Space } from '@/lib/theme/layout';
 
 const SEG_KEYS: KnowhowSegKey[] = ['todo', 'knowhow'];
 // 2026-08-19 에 '안 쓰임' 칸이 '할 일'로 흡수됐다. 옛 딥링크(?seg=unused)는 죽이지 않고 그리로 착지시킨다.
@@ -33,20 +31,8 @@ export default function OwnerCategoriesScreen() {
     <View style={styles.root}>
       {/* 네이티브 헤더를 끄고 제목을 직접 그린다 — 근거는 ScreenTitleHeader 주석(iOS 는 왼쪽 정렬 평문 제목이 불가). */}
       <Stack.Screen options={{ headerShown: false }} />
-      {/* J10(0248) 보관한 노하우 — 되살리기는 보관함에서 한다. */}
       <ScreenTitleHeader
         title="노하우"
-        right={
-          <Pressable
-            onPress={() => router.push('/owner/knowhow-archive')}
-            style={({ pressed }) => [styles.headerAction, pressed && { opacity: 0.6 }]}
-            accessibilityRole="button"
-            accessibilityLabel="보관함"
-          >
-            <Ionicons name="archive-outline" size={18} color={InkColors.ink2} />
-            <Text style={styles.headerActionText}>보관함</Text>
-          </Pressable>
-        }
       />
 
       <OwnerKnowhowBrowse onSelect={openEntry} initialSegment={initialSegment} />
@@ -57,6 +43,4 @@ export default function OwnerCategoriesScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: InkColors.cream },
-  headerAction: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: 4, paddingLeft: Space.sm },
-  headerActionText: { fontSize: 14, fontWeight: '700', color: InkColors.ink2 },
 });

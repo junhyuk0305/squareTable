@@ -1290,21 +1290,11 @@ export async function deleteEntry(id: string): Promise<boolean> {
 }
 
 // ── 노하우 보관(J10 · 0248) ─────────────────────────────────────────────
-// 보관·되살리기는 RPC 하나. 실패(소유주 아님·본사 사본·초안·없는 노하우)는 전부 오류로 온다 → 0행 유령 성공이 없다.
-export async function archiveEntry(id: string, archived: boolean): Promise<boolean> {
+// 앱의 노하우 삭제(2026-10-05 정정: 되살릴 수 없다). 서버는 archived_at 을 채워 행을 남긴다(응시 기록 보존).
+// 실패(소유주 아님·본사 사본·초안·없는 노하우)는 전부 오류로 온다 → 0행 유령 성공이 없다.
+export async function archiveEntry(id: string): Promise<boolean> {
   if (!HAS_SUPABASE) return true;
-  return write('archiveEntry', supabase.rpc('archive_knowhow', { p_entry_id: id, p_archived: archived }));
-}
-
-/** 사장 보관함 — 지금 매장의 보관한 노하우(보관 최신순). RLS 가 보관 행을 막아 정의자 RPC 로 읽는다. */
-export async function fetchArchivedEntries(): Promise<ReadResult<PlaybookEntry[]>> {
-  if (!HAS_SUPABASE) return { data: [], error: false };
-  const { data, error } = await supabase.rpc('archived_knowhow');
-  if (error) {
-    readFail('fetchArchivedEntries', error);
-    return { data: [], error: true };
-  }
-  return { data: (data ?? []) as PlaybookEntry[], error: false };
+  return write('archiveEntry', supabase.rpc('archive_knowhow', { p_entry_id: id, p_archived: true }));
 }
 
 /** 확인창 재료 — 이 노하우를 담은 퀴즈·할일·응시 수. 못 읽으면 null(확인창은 기본 문구로 뜬다). */

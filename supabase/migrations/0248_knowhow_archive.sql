@@ -10,7 +10,9 @@
 -- ── 규칙(설계 05 M-B · 데이터 검토 M8) ─────────────────────────────────────────────────
 --   · 보관 = playbook_entries.archived_at 을 채운다. 행과 cascade 대상은 그대로 남는다.
 --   · 보관한 노하우는 직원·매니저·사장의 일반 목록, AI 검색, 퀴즈 출제·발송, 개요 수, 복사, 본사 읽기에서 빠진다.
---   · 사장(units.owner_id)만 보관·되살리기를 한다. 매니저는 거부한다(숨김 0231 과 같은 선 — auth_owns_unit).
+--   · ★2026-10-05 정정: 앱에서는 되살릴 수 없는 '삭제'다. 사장에게도 보이지 않고 되살리기 경로가 없다
+--     (archive_knowhow 의 p_archived=false · 직접 UPDATE 로 archived_at 비우기 = restore_not_allowed · 보관함 RPC 없음).
+--   · 사장(units.owner_id)만 보관(삭제)을 한다. 매니저는 거부한다(숨김 0231 과 같은 선 — auth_owns_unit).
 --   · 본사 사본(brand_entry_id 있음)은 보관하지 않는다. 지금처럼 숨기기(hide_brand_copy)를 쓴다 → brand_copy_use_hide.
 --   · 초안(status='draft')은 보관하지 않는다. 인수인계 검수에서 버린 초안은 지금처럼 지운다.
 --   · ★옛 앱(스토어 빌드)의 삭제도 보관이 된다. BEFORE DELETE 트리거가 current_user = 'authenticated' 이고
@@ -25,7 +27,7 @@
 --      옛 앱 사장 화면에 보관한 노하우가 지워지지 않은 채 계속 남고, 다시 지워도 같다.
 --      또 옛 앱 deleteEntry 는 writeStrict(0행 = 실패)라 BEFORE DELETE 가 0행을 돌려주면 "삭제에 실패했어요"가 뜬다.
 --      사장에게도 숨기면 그 배너 뒤 다음 새로고침에 목록에서 빠져 "지워진 것"과 같게 보인다.
---      사장 보관함은 정의자 RPC archived_knowhow() 로 읽는다.
+--      (2026-10-05 정정: 사장 보관함도 없다. 지운 노하우는 사장에게도 안 보인다.)
 --   ② my_brand_mirror 는 brand_overview_rows 의 얇은 입구라 본문(brand_overview_rows)을 고쳤다.
 --   ③ list_unit_knowhow(0059) 도 고쳤다. 복사 위저드의 고르기 목록이라 copy_knowhow_between 과 짝이다.
 --
@@ -73,7 +75,7 @@ create policy playbook_entries_read on public.playbook_entries
     and (status = 'published' or (select public.auth_can_manage()))
     -- ★0231: 숨긴 본사 사본은 소유주만(되살리기 목록). 매니저·직원은 0행.
     and (brand_hidden_at is null or (select public.auth_owns_unit((select public.auth_unit_id()))))
-    -- ★0248: 보관한 노하우는 아무도 직접 읽지 않는다. 사장 보관함은 archived_knowhow() 로 읽는다.
+    -- ★0248: 보관(삭제)한 노하우는 아무도 읽지 않는다(2026-10-05 · 보관함 없음).
     and archived_at is null
   );
 -- `for all` 은 SELECT·DELETE 에도 붙는다 → 여기에도 같은 술어. with check 의 술어는 직접 UPDATE 로
@@ -106,6 +108,8 @@ declare
   v_status text;
 begin
   if auth.uid() is null then raise exception 'not_authenticated'; end if;
+  -- ★2026-10-05: 되살리기는 없다(앱에서는 삭제).
+  if not coalesce(p_archived, false) then raise exception 'restore_not_allowed'; end if;
   select e.unit_id, e.brand_entry_id, e.status into v_unit, v_brand, v_status
     from public.playbook_entries e where e.id = p_entry_id;
   if v_unit is null then raise exception 'entry_not_found'; end if;
@@ -122,19 +126,8 @@ end $$;
 revoke all on function public.archive_knowhow(text, boolean) from public, anon, authenticated;
 grant execute on function public.archive_knowhow(text, boolean) to authenticated;
 
--- 사장 보관함 — 지금 보고 있는 매장의 보관한 노하우. 소유주가 아니면 0행.
-create or replace function public.archived_knowhow()
-returns setof public.playbook_entries
-language sql stable security definer set search_path = public as $$
-  select e.*
-    from public.playbook_entries e
-   where e.unit_id = (select public.auth_unit_id())
-     and (select public.auth_owns_unit((select public.auth_unit_id())))
-     and e.archived_at is not null
-   order by e.archived_at desc
-$$;
-revoke all on function public.archived_knowhow() from public, anon, authenticated;
-grant execute on function public.archived_knowhow() to authenticated;
+-- ★2026-10-05: 사장 보관함(archived_knowhow)은 두지 않는다 — 지운 노하우는 사장에게도 안 보인다.
+drop function if exists public.archived_knowhow();
 
 -- 확인창 문구 재료 — 이 노하우를 담은 퀴즈 수 · 붙인 할일 수 · 응시 기록 수. 소유주만.
 create or replace function public.knowhow_usage(p_entry_id text)
@@ -168,6 +161,8 @@ returns trigger language plpgsql security definer set search_path = public as $$
 begin
   if new.archived_at is not distinct from old.archived_at then return new; end if;
   if auth.uid() is null then return new; end if;
+  -- ★2026-10-05: 지운 노하우를 되살리지 못한다.
+  if old.archived_at is not null and new.archived_at is null then raise exception 'restore_not_allowed'; end if;
   if not public.auth_owns_unit(new.unit_id) then raise exception 'not_owner'; end if;
   if new.brand_entry_id is not null then raise exception 'brand_copy_use_hide'; end if;
   return new;
@@ -1195,7 +1190,7 @@ begin
   end if;
 
   -- ④ RPC 권한 — anon 닫힘 · authenticated 열림. 정책 술어 함수는 authenticated 가 실행할 수 있어야 한다.
-  foreach v_fn in array array['public.archive_knowhow(text, boolean)', 'public.archived_knowhow()', 'public.knowhow_usage(text)'] loop
+  foreach v_fn in array array['public.archive_knowhow(text, boolean)', 'public.knowhow_usage(text)'] loop
     if has_function_privilege('anon', v_fn, 'EXECUTE') then raise exception '0248: anon 이 % 를 실행할 수 있다', v_fn; end if;
     if not has_function_privilege('authenticated', v_fn, 'EXECUTE') then raise exception '0248: authenticated 가 % 를 실행할 수 없다', v_fn; end if;
   end loop;
