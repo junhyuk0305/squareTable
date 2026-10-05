@@ -133,5 +133,19 @@ console.log('\n[E4] "푼 사람"은 담긴 노하우를 다 풀었을 때(맞힘
     /fetchGuestAttemptItems\(sub\)/.test(person) && !/fetchStaffAttemptItems/.test(person));
 }
 
+console.log('\n[E5] 지운(보관한) 노하우는 할일·퀴즈 연결 판정에서 빠진다');
+{
+  const db = strip(read('src/lib/db.ts'));
+  const fn = (name) => (db.match(new RegExp(`export async function ${name}\\([\\s\\S]*?\\n\\}`)) || [''])[0];
+  const wtk = fn('fetchTemplateKnowhow'), ce = fn('fetchCourseEntries');
+  check('★할일 첨부 노하우는 읽을 수 있는(보관 안 된) 노하우와 묶인 것만 읽는다',
+    /select\('template_id, entry_id, playbook_entries!inner\(id\)'\)/.test(wtk), wtk.slice(0, 160));
+  check('★퀴즈에 담긴 노하우도 읽을 수 있는 노하우와 묶인 것만 읽는다',
+    /select\('course_id, entry_id, position, playbook_entries!inner\(id\)'\)/.test(ce), ce.slice(0, 160));
+  const pol = read('supabase/migrations/0248_knowhow_archive.sql');
+  check('전제: 노하우 읽기 정책이 보관한 노하우를 아무에게도 안 보인다(0248)',
+    /create policy playbook_entries_read[\s\S]{0,600}and archived_at is null/.test(pol));
+}
+
 console.log(`\n${pass} PASS / ${fail} FAIL`);
 process.exit(fail ? 1 : 0);
