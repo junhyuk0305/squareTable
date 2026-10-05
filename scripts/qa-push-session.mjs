@@ -262,8 +262,9 @@ console.log('\n[7] 엣지 deliver() · 발송 경로 · F-2');
     };
     const src = ['deliver', 'deliverExpoPush', 'inQuietWindow', 'kstNowHHMM'].map(extract);
     if (src.some((x) => !x)) return null;
-    const fn = new Function('webpush', 'fetch', 'EXPO_PUSH_URL', 'EXPO_PUSH_CHUNK', `${src.join('\n')}; return deliver;`)(
-      webpushFake, fetchFake, 'https://exp', 100);
+    // EXPO_ACCESS_TOKEN = 엣지 모듈 상수(985619b). 빈 값이면 Authorization 헤더 없이 보낸다.
+    const fn = new Function('webpush', 'fetch', 'EXPO_PUSH_URL', 'EXPO_PUSH_CHUNK', 'EXPO_ACCESS_TOKEN', `${src.join('\n')}; return deliver;`)(
+      webpushFake, fetchFake, 'https://exp', 100, '');
     return { run: (targets) => fn(adminFake, 'u1', targets, { title: 't', body: 'b', url: '/' }), calls };
   };
 

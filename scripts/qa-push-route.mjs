@@ -147,8 +147,9 @@ const fetchFake = async (_u, init) => {
 const parts = ['deliver', 'deliverExpoPush', 'inQuietWindow', 'kstNowHHMM'].map(extract);
 let deliver = null;
 if (parts.every(Boolean)) {
-  deliver = new Function('webpush', 'fetch', 'EXPO_PUSH_URL', 'EXPO_PUSH_CHUNK', 'MAX_TITLE', `${parts.join('\n')}; return deliver;`)(
-    { sendNotification: async () => {} }, fetchFake, 'https://exp', 100, 120);
+  // EXPO_ACCESS_TOKEN = 엣지 모듈 상수(985619b). 빈 값이면 Authorization 헤더 없이 보낸다.
+  deliver = new Function('webpush', 'fetch', 'EXPO_PUSH_URL', 'EXPO_PUSH_CHUNK', 'MAX_TITLE', 'EXPO_ACCESS_TOKEN', `${parts.join('\n')}; return deliver;`)(
+    { sendNotification: async () => {} }, fetchFake, 'https://exp', 100, 120, '');
 }
 if (deliver) {
   await deliver(adminFake, 'store_a', ['u1', 'u2', 'u3'], { title: '할 일을 배정했어요', body: 'b', url: '/junior/work', route: '/junior/work' });
