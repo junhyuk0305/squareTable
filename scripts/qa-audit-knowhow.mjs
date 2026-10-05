@@ -201,5 +201,22 @@ console.log('\n[E9] AI 사용량: 재시도는 한 번만 차감 · 직원이 �
     /const requestId = genId\('air'\);[\s\S]*for \(let attempt = 1;/.test(gen) && /body: JSON\.stringify\(\{ task: 'quiz_item', payload, requestId \}\)/.test(gen));
 }
 
+console.log('\n[E10] 사장이 노하우를 지우면 직원 폰에도 실시간으로 빠진다');
+{
+  const all = migFiles().map((f) => [f, sqlStrip(read(`supabase/migrations/${f}`))]);
+  const hit = all.filter(([, s]) => /create table if not exists public\.knowhow_events/.test(s)).at(-1);
+  const s = hit?.[1] ?? '';
+  check('★보관 신호 테이블 knowhow_events 가 있다(같은 매장 사람만 읽는다)',
+    !!hit && /create policy knowhow_events_read on public\.knowhow_events\s+for select using \(unit_id = \(select public\.auth_unit_id\(\)\)\)/.test(s), hit?.[0] ?? '없음');
+  check('★노하우 archived_at 이 바뀌면 트리거가 신호 한 줄을 남긴다',
+    /after update of archived_at on public\.playbook_entries/.test(s) && /insert into public\.knowhow_events \(unit_id, entry_id, kind\)/.test(s));
+  check('★realtime publication 멤버다', /alter publication supabase_realtime add table public\.knowhow_events;/.test(s));
+  check('클라는 신호를 쓰지 못한다(읽기만)', /revoke all on table public\.knowhow_events from public, anon, authenticated;/.test(s) && /grant select on table public\.knowhow_events to authenticated;/.test(s));
+  const db = strip(read('src/lib/db.ts'));
+  const sub = (db.match(/export function subscribePlaybook\([\s\S]*?\n\}/) || [''])[0];
+  check('★노하우 구독이 보관 신호도 듣는다(받으면 다시 읽는다)',
+    /\.on\('postgres_changes', \{ event: 'INSERT', schema: 'public', table: 'knowhow_events' \}, onChange\)/.test(sub), sub.slice(0, 200));
+}
+
 console.log(`\n${pass} PASS / ${fail} FAIL`);
 process.exit(fail ? 1 : 0);
