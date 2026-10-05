@@ -1968,7 +1968,9 @@ export type KnowhowLinkRow = { templateId: string; entryId: string };
 /** 활성 매장의 전체 (업무↔노하우) 링크 — 스토어가 정/역방향 셀렉터로 파생한다. */
 export async function fetchTemplateKnowhow(): Promise<KnowhowLinkRow[]> {
   if (!HAS_SUPABASE) return [];
-  const { data, error } = await supabase.from('work_template_knowhow').select('template_id, entry_id');
+  // ★E5: 노하우 행과 inner 로 묶어 읽는다 — 보관(삭제)한 노하우는 읽기 정책(0248)에 안 보여 그 연결도 빠진다.
+  //   안 빼면 지운 노하우가 '이 할일을 다 안다' 판정에 남아 아무도 통과할 수 없다(되살리면 다시 보인다).
+  const { data, error } = await supabase.from('work_template_knowhow').select('template_id, entry_id, playbook_entries!inner(id)');
   if (error) {
     readFail('fetchTemplateKnowhow', error);
     return [];
@@ -2110,7 +2112,8 @@ export async function fetchCourseEntries(): Promise<CourseEntryRow[]> {
   if (!HAS_SUPABASE) return [];
   const { data, error } = await supabase
     .from('course_entries')
-    .select('course_id, entry_id, position')
+    // ★E5: 보관(삭제)한 노하우의 담김은 읽지 않는다(fetchTemplateKnowhow 와 같은 이유).
+    .select('course_id, entry_id, position, playbook_entries!inner(id)')
     .order('position');
   if (error) {
     readFail('fetchCourseEntries', error);
