@@ -4,6 +4,7 @@
 //        운영자 카드 환불도 앱 구독이 살아 있으면 매장을 회수하지 않는다.
 //   [B2] 구독 흔적 매장에 붙은 1매장 계좌이체 기간은 선불로 보고, 앱 환불이 지우지 않는다.
 //   [B3] 선불과 겹쳐 시작한 구독(carry)도 "늘었어요/끝나요" 알림이 나가고, 날짜는 매장의 실제 만료일이다.
+//   [B4] 앱 "매장 수 줄이기"는 구독으로 연 열린 매장만 닫을 후보로 센다(카드 쪽 card_release_candidates 와 같은 규칙).
 // 서버 함수는 마지막 정의(가장 큰 번호 마이그레이션) 본문을 읽어 본다. 로컬 도커가 꺼진 날에도 돈다.
 // 실행: node --no-warnings scripts/qa-audit-billing.mjs
 import { readFileSync, existsSync, readdirSync } from 'node:fs';
@@ -70,6 +71,23 @@ console.log('\n[B3] 선불과 겹쳐 시작한 구독(carry)도 "늘었어요/�
   check('★알림 날짜 = 고른 매장의 실제 만료일(기간 끝 + carry)', /card_alert_day\(v_day\)/.test(p.body) && /carry/.test(p.body), p.file);
   check('같은 일은 한 번만 보낸다(period 는 기간 끝 그대로)', /v_period text := p_owner::text \|\| ':' \|\| to_char\(p_end at time zone 'UTC'/.test(p.body));
   check('sub_alert_put 권한 유지(내부)', read(`supabase/migrations/${p.file}`).includes('revoke all on function public.sub_alert_put(uuid, text, timestamptz) from public, anon, authenticated;'));
+}
+
+console.log('\n[B4] 앱 "매장 수 줄이기"는 구독으로 연 매장만 닫을 후보로 센다');
+{
+  const strip = (s) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\{\/\*[\s\S]*?\*\/\}/g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
+  const panel = strip(read('src/components/IapPurchasePanel.tsx'));
+  check('★패널이 닫을 매장 후보를 서버 목록(구독 흔적이 있는 열린 매장)으로 읽는다', /fetchMyCardReleaseCandidates\(\)/.test(panel));
+  check('★닫을 수 = 그 후보 수 − 새 매장 수', /openStores: releaseCands\.length/.test(panel) && !/openStores: ownedStores\.length/.test(panel));
+  check('★고르는 목록도 그 후보다', /needRelease > 0 && releaseCands\.map\(/.test(panel) && !/needRelease > 0 && ownedStores\.map\(/.test(panel));
+  check('서버에 새 매장 수를 같이 보낸다', /rpcChooseIapRelease\(release, selected\?\.storeCount\)|rpcChooseIapRelease\(release, offer\.storeCount\)/.test(panel));
+  const db = read('src/lib/db.ts');
+  check('rpcChooseIapRelease 가 p_count 를 보낸다', /rpc\('choose_iap_release', \{ p_units: unitIds, p_count: count \}\)/.test(db));
+  const c = lastDef('choose_iap_release');
+  check('★서버가 후보 포함·개수를 검증해 release_mismatch 로 거부한다',
+    /p_count\s+int default null/.test(c.body) && /card_release_candidates\(v_uid\)/.test(c.body) && /release_mismatch/.test(c.body) && /greatest\(0, cardinality\(v_open\) - p_count\)/.test(c.body), c.file);
+  check('choose_iap_release 권한 유지(authenticated)', grants(c.file, 'choose_iap_release(text[], int)', 'authenticated'));
+  check('옛 1인자 판은 지운다(이름 인자 호출이 모호해지지 않게)', /drop function if exists public\.choose_iap_release\(text\[\]\);/.test(read(`supabase/migrations/${c.file}`)));
 }
 
 console.log(`\n${fail === 0 ? 'OK' : 'FAIL'} — pass ${pass} / fail ${fail}`);
