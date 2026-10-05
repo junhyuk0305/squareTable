@@ -238,7 +238,7 @@ console.log('\n[D7] 근무표를 쓰는 매장은 그 시각 근무자에게만,
 {
   const t = lastDef('due_task_reminders');
   check('★근무자가 없을 때 매장 전원으로 가는 갈래는 근무표를 안 쓰는 매장에서만 탄다',
-    /if not exists \(\s*select 1 from public\.shift_templates st\s+where st\.unit_id = t\.unit_id/.test(t.body), t.file);
+    /and not exists \(\s*select 1 from public\.shift_templates st\s+where st\.unit_id = t\.unit_id/.test(t.body), t.file);
   if (!dbUp) console.log('  SKIP 서버 동작 — 로컬 도커 DB 없음');
   else {
     const TASK = `insert into public.work_templates (id, unit_id, section, text, scope, remind_at) values ('qa_t7', 'store_001', 'open', '오픈 준비', 'shared', current_setting('qa.t'));\n`;
