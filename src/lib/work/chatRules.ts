@@ -24,3 +24,18 @@ export function deleteConfirmText(item: FeedItem, me: string): { title: string; 
 export function markSendFailed(feed: FeedItem[], id: string): FeedItem[] {
   return feed.map((f) => (f.id === id ? { ...f, sendState: 'failed' as const } : f));
 }
+
+/** 서버 피드로 바꿀 때 서버에 아직 없는 실패·전송 중 메시지를 다시 얹는다(논리 점검 D4).
+ *  안 얹으면 새로고침 한 번에 [다시 보내기]와 함께 흔적 없이 사라진다. 서버에 이미 있으면 서버 것을 쓴다. */
+export function carryUnsent(server: FeedItem[], local: FeedItem[], sending: ReadonlySet<string>): FeedItem[] {
+  const onServer = new Set(server.map((f) => f.id));
+  const keep = local.filter((f) => !onServer.has(f.id) && (f.sendState === 'failed' || sending.has(f.id)));
+  return keep.length ? [...server, ...keep] : server;
+}
+
+/** 다시 보낼 때는 지금 시각·오늘 날짜로 새로 찍는다(id 는 그대로라 두 번 들어가지 않는다).
+ *  처음 시각을 쓰면 대화 중간 지난 자리에 끼어 동료가 못 보고, 자정을 넘기면 어제 날짜로 들어간다. */
+export function restampForResend(item: FeedItem, nowIso: string, today: string): FeedItem {
+  const { sendState: _s, ...rest } = item;
+  return { ...rest, createdAt: nowIso, date: today };
+}

@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { markSendFailed } from '@/lib/work/chatRules';
+import { markSendFailed, carryUnsent, restampForResend } from '@/lib/work/chatRules';
 import { create } from 'zustand';
 import { todayStr, nowISO } from '@/lib/utils/attendance';
 import { HAS_SUPABASE } from '@/lib/supabase';
@@ -194,6 +194,8 @@ function applyDonePatch(done: State['done'], feed: FeedItem[], p: DonePatch): { 
  *   스냅샷을 가져와 B 체크를 지운다(B 는 자기 쓰기가 끝난 다음 재조회에서야 돌아온다).
  */
 const pendingDone = new Map<string, { patch: DonePatch; settledAt?: number }>();
+/** 저장 중인 내 메시지 id(D4). hydrate 가 서버 스냅샷으로 바꿀 때 이 메시지를 지우지 않게 한다. */
+const sendingIds = new Set<string>();
 /** 서버 스냅샷(fetchedAt 에 조회 시작) 위에 아직 반영이 보장되지 않은 토글을 다시 얹는다.
  *  ★쓰기가 끝난 뒤에도 바로 지우지 않는다(2026-09-03 실기기): A·B 연속 체크 → A 의 재조회가 **B 쓰기 완료 직전**에
  *    시작되면 스냅샷엔 B 가 없는데 B 는 이미 pending 에서 빠져 있어 B 체크가 잠깐 풀렸다가 다음 재조회에서 돌아왔다.
@@ -818,7 +820,8 @@ export const useWorkStore = create<State>((set, get) => ({
     // 아직 서버에 안 닿은 체크는 스냅샷 위에 다시 얹는다 — 안 그러면 빠른 연속 체크가 되돌아간다.
     const live = overlayPendingDone(done.data, feed.data, fetchedAt);
     set({
-      templates: templates.data, done: live.done, feed: live.feed,
+      // 서버에 아직 없는 실패·저장 중 내 메시지는 다시 얹는다(D4 · J15 ① 재전송이 새로고침에 지워지지 않게).
+      templates: templates.data, done: live.done, feed: carryUnsent(live.feed, get().feed, sendingIds),
       knowhowLinks, understanding, courseEntries, training, trainingRequests, assignments, quizAttempts,
       // 직원에게 보일 코스만(비활성 제외) 사장 화면과 같은 순서로 — 카드 순서 = 사장이 정한 순서.
       // 숨긴 본사 퀴즈도 뺀다. 직원은 RLS(0231 tc_select)가 1선이고 이건 2선이다(사장 계정·0231 전 DB).
@@ -1280,6 +1283,7 @@ export const useWorkStore = create<State>((set, get) => ({
       ...(room ? { roomId: room } : null),
     };
     set((s) => ({ feed: [...s.feed, item] }));
+    sendingIds.add(item.id);
     // 저장 성공 후에만 멘션 웹푸시(본인 제외, 서버가 같은 매장 검증) — 실패 시 유령 멘션 알림 방지.
     // J15 ①: 실패하면 글을 지우지 않고 실패로 표시한다. 말풍선에서 [다시 보내기]·[지우기]를 고른다.
     void guardWrite(
@@ -1287,6 +1291,7 @@ export const useWorkStore = create<State>((set, get) => ({
       () => set((s) => ({ feed: markSendFailed(s.feed, item.id) })),
       '메시지 전송에 실패했어요.',
     ).then((ok) => {
+      sendingIds.delete(item.id);
       if (!ok) return;
       for (const uid of mentions ?? []) if (uid !== authorId) notifyUserMention(uid, authorName, text);
     });
@@ -1295,13 +1300,16 @@ export const useWorkStore = create<State>((set, get) => ({
   retryMessage: (id) => {
     const failed = get().feed.find((f) => f.id === id && f.sendState === 'failed');
     if (!failed) return;
-    const { sendState: _s, ...item } = failed;
+    // D4: 지금 시각·오늘 날짜로 다시 찍는다. 처음 시각이면 대화 중간 지난 자리에 끼어 든다.
+    const item = restampForResend(failed, new Date().toISOString(), todayStr());
     set((s) => ({ feed: s.feed.map((f) => (f.id === id ? item : f)) }));
+    sendingIds.add(id);
     void guardWrite(
       upsertFeed(item),
       () => set((s) => ({ feed: markSendFailed(s.feed, id) })),
       '메시지 전송에 실패했어요.',
     ).then((ok) => {
+      sendingIds.delete(id);
       if (!ok) return;
       for (const uid of item.mentions ?? []) if (uid !== item.authorId) notifyUserMention(uid, item.authorName, item.text);
     });
