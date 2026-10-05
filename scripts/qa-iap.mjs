@@ -640,7 +640,8 @@ async function slotRuleChecks() {
     const t = `qa_h7_${s}`;
     await evt(R, t, 'INITIAL_PURCHASE', 'multi_2_monthly', 'multi', 2, iso(days(30)));
     const a1 = await paidUntilOf(A);
-    check('★★⑰-d 다점포 구독이 선불 A 를 덮는다(multi · 남은 40일 유지)', a1?.plan === 'multi' && sameTime(a1?.paid_until, aPre?.paid_until), JSON.stringify({ aPre, a1 }));
+    // 2026-10-05: 구독은 선불이 끝난 다음부터 센다(㉑) — 남은 40일 + 구독 30일.
+    check('★★⑰-d 다점포 구독이 선불 A 를 덮는다(multi · 남은 40일 뒤에 30일)', a1?.plan === 'multi' && sameTime(a1?.paid_until, plus(aPre?.paid_until, 30)), JSON.stringify({ aPre, a1 }));
     check('★⑰-d 남는 슬롯 1개(2호점용)', (await openSlots(R.uid)).length === 1, `open=${(await openSlots(R.uid)).length}`);
     await evt(R, t, 'CANCELLATION', 'multi_2_monthly', 'multi', 2, iso(days(30)), { p_reason: 'CUSTOMER_SUPPORT' });
     const a2 = await paidUntilOf(A);
@@ -883,6 +884,56 @@ async function slotRuleChecks() {
     await evt(Q, `qa_pp_${s}`, 'INITIAL_PURCHASE', 'single_1_monthly', 'single', 1, iso(days(30)));
     const rq = await pv(Q);
     check('★⑳-f 앱 구독으로 연 매장은 선불이 아니다(null)', !rq.error && rq.data === null && !!(await paidUntilOf(B))?.paid_until, rq.error?.message ?? JSON.stringify(rq.data));
+  }
+
+  // ══ ㉑ 선불 끝나기 3일 안에 산 구독은 선불이 끝난 다음부터 센다(2026-10-05 결정) ══════════════════
+  //   예) 선불 10/31 끝 · 10/29 구독 결제(스토어 기간 11/29) → 매장은 12/1 까지(겹친 2일 손해 없음).
+  //   갱신이 와도 그 2일이 사라지지 않는다(스토어 기간 12/29 → 매장 12/31).
+  const prepaidLeft = async (o, unit, d) => {
+    const pre = iso(days(d));
+    await svcPatch(`unit_subscriptions?unit_id=eq.${unit}`, { paid_until: pre });
+    await svcPatch(`store_slots?owner_id=eq.${o.uid}&source=eq.claim&consumed_unit_id=eq.${unit}`, { paid_until: pre });
+    return pre;
+  };
+  {
+    const R = await reuseOwner(1);
+    const A = await mkStore(R, 'QA㉑ 1호점');
+    await makeFree(A);
+    await approve((await claim(R, 'single', 1)).id);
+    const pre = await prepaidLeft(R, A, 2);
+    const t = `qa_carry1_${s}`;
+    const end1 = iso(days(30));
+    await evt(R, t, 'INITIAL_PURCHASE', 'single_1_monthly', 'single', 1, end1);
+    const a1 = await paidUntilOf(A);
+    check('★★㉑-a 1매장: 선불 끝(2일 뒤) + 구독 30일 = 32일 뒤까지', a1?.plan === 'single' && sameTime(a1?.paid_until, plus(pre, 30)), JSON.stringify({ pre, a1 }));
+    const end2 = iso(days(60));
+    await evt(R, t, 'RENEWAL', 'single_1_monthly', 'single', 1, end2);
+    const a2 = await paidUntilOf(A);
+    check('★★㉑-b 1매장: 갱신 뒤에도 겹친 2일이 남는다(62일 뒤)', sameTime(a2?.paid_until, plus(end2, 2)), JSON.stringify(a2));
+  }
+  {
+    const R = await reuseOwner(2);
+    const A = await mkStore(R, 'QA㉑m 1호점');
+    await makeFree(A);
+    await approve((await claim(R, 'single', 1)).id);
+    const pre = await prepaidLeft(R, A, 2);
+    const t = `qa_carry2_${s}`;
+    await evt(R, t, 'INITIAL_PURCHASE', 'multi_2_monthly', 'multi', 2, iso(days(30)));
+    const a1 = await paidUntilOf(A);
+    check('★★㉑-c 다점포: 선불 매장도 선불 끝 + 30일', a1?.plan === 'multi' && sameTime(a1?.paid_until, plus(pre, 30)), JSON.stringify({ pre, a1 }));
+    const end2 = iso(days(60));
+    await evt(R, t, 'RENEWAL', 'multi_2_monthly', 'multi', 2, end2);
+    const a2 = await paidUntilOf(A);
+    check('★★㉑-d 다점포: 갱신 뒤에도 겹친 2일이 남는다', sameTime(a2?.paid_until, plus(end2, 2)), JSON.stringify(a2));
+  }
+  {
+    // 겹침이 없으면(무료 매장) 지금처럼 스토어 기간 그대로.
+    const R = await reuseOwner(3);
+    const A = await mkStore(R, 'QA㉑f 1호점');
+    await makeFree(A);
+    const end = iso(days(30));
+    await evt(R, `qa_carry3_${s}`, 'INITIAL_PURCHASE', 'single_1_monthly', 'single', 1, end);
+    check('㉑-e 선불이 없으면 스토어 기간 그대로', sameTime((await paidUntilOf(A))?.paid_until, end), '');
   }
 }
 

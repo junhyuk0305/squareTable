@@ -162,7 +162,19 @@ const UNTIL = '2026-10-30T12:00:00+09:00';
 }
 {
   const r = call(otherPaidNote, 'single', UNTIL, false, NOW);
-  check('자동 갱신 아님 → 지금 문구 그대로', r === '10월 30일까지 이용 기간이 남아 있어요. 그 뒤에 여기서 이어가실 수 있어요.', show(r));
+  // 2026-10-05: 선불 가드와 같은 기준 — 끝나기 3일 전부터 산다(산 기간은 남은 기간 뒤에 붙는다 · 서버 0235).
+  check('자동 갱신 아님 → 끝나기 3일 전부터 결제할 수 있다고 안내', r === '10월 30일까지 이용 기간이 남아 있어요. 끝나기 3일 전부터 결제할 수 있어요.', show(r));
+}
+{
+  const d = (n) => new Date(NOW + n * 86400000).toISOString();
+  const r3 = call(otherPaidNote, 'single', d(3), false, NOW);
+  const r1 = call(otherPaidNote, 'single', d(1), false, NOW);
+  const r301 = call(otherPaidNote, 'single', d(3.01), false, NOW);
+  check('★A2 자동 갱신 아님 · 정확히 3일 남음 → 막지 않는다(null)', r3 === null, show(r3));
+  check('A2 자동 갱신 아님 · 1일 남음 → 막지 않는다', r1 === null, show(r1));
+  check('A2 3일 하고 조금 남음 → 아직 막는다', typeof r301 === 'string', show(r301));
+  const rr = call(otherPaidNote, 'single', d(1), true, NOW);
+  check('A2 자동 갱신 중이면 3일 안이어도 막는다(두 번 청구)', typeof rr === 'string', show(rr));
 }
 {
   const r = call(otherPaidNote, 'multi', '2027-01-05T12:00:00+09:00', true, NOW);
