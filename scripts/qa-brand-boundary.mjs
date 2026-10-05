@@ -150,6 +150,31 @@ try {
       !/permission denied for function/.test(photo.error?.message ?? ''), photo.error?.message);
   }
 
+  // 0250(Q28 · Q29) — 끝난 연결은 사유·날짜만 나간다. 읽기만 한다(연결을 끊지 않는다).
+  //   끊고 다시 붙이는 왕복은 로컬 하니스 `qa:brand-history` 가 잰다(계정을 만들기 때문에 라이브에서 못 돈다).
+  console.log('\n⑥ 끝난 연결 — 본사는 사유·날짜만, 사장은 자기 매장만');
+  {
+    const he = await H.rpc('brand_ended_units');
+    const cols = (he.data ?? []).length ? Object.keys(he.data[0]).sort().join(',') : '';
+    check('⑥본사 brand_ended_units 가 열린다', !he.error, he.error?.message);
+    check('⑥칸은 사유·날짜 5개뿐(운영 숫자 없음)', !cols || cols === 'end_reason,ended_at,ended_by,store_name,unit_id', cols);
+    check('⑥연결 중인 store_001 은 끝난 목록에 없다', !(he.data ?? []).some((r) => r.unit_id === UNIT));
+    for (const [n, C] of [['사장', O], ['직원', J]]) {
+      const r = await C.rpc('brand_ended_units');
+      check(`⑥${n} brand_ended_units 0행`, !r.error && (r.data ?? []).length === 0, r.error?.message);
+    }
+    const jh = await J.rpc('my_brand_history');
+    check('⑥직원 my_brand_history 0행(사장 전용)', !jh.error && (jh.data ?? []).length === 0, jh.error?.message);
+    const oh = await O.rpc('my_brand_history');
+    const mine = [];
+    for (const r of oh.data ?? []) mine.push((await O.rpc('auth_owns_unit', { p_unit: r.unit_id })).data === true);
+    check('⑥사장 my_brand_history 는 자기 매장만', !oh.error && mine.every(Boolean), oh.error?.message);
+    const an = createClient(URL_, ANON, { auth: { persistSession: false, autoRefreshToken: false } });
+    const a1 = await an.rpc('brand_ended_units');
+    const a2 = await an.rpc('my_brand_history');
+    check('⑥anon 은 두 RPC 를 못 부른다', !!a1.error && !!a2.error, `${a1.error?.code ?? '실행됨'} ${a2.error?.code ?? '실행됨'}`);
+  }
+
   await H.auth.signOut(); await O.auth.signOut(); await J.auth.signOut();
 } catch (e) {
   fail++;

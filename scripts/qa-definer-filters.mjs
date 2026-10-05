@@ -108,6 +108,9 @@ const FN_TOKENS = {
   //   해결 트리거는 원 질문자 + askers 중 지금 멤버에게만 · 답한 사람은 뺀다.
   ask_same_question: ['auth_unit_id', "'pending_owner_answer'", 'on conflict', 'similar_queries_count + 1', 'for update'],
   tg_unknown_query_answered: ['unknown_query_askers', 'insert into public.member_notices', "'question_answered'", 'unit_members', 'answered_by', "'resolved_with_entry'"],
+  // P5-3 0250(Q28 · Q29) — 사장은 자기 소유 매장의 끝난 연결만(180일) · 본사는 자기 브랜드의 끝난 매장만 · 다시 연결된 매장은 뺀다.
+  my_brand_history: ['owner_id = auth.uid()', "status = 'ended'", "180 days", 'deleted_at is null'],
+  brand_ended_units: ['auth_brand_id()', "status = 'ended'", "status = 'active'"],
 };
 
 // 함수 → 있으면 안 되는 토큰(옛 경로를 다시 여는 퇴행).
@@ -120,6 +123,8 @@ const FN_FORBIDDEN = {
   delete_my_account: ['insert into public.former_staff'],
   reopen_store: ['insert into public.former_staff', 'delete from public.shift_templates', 'delete from public.swap_requests'],
   close_member_tenure: ['delete from public.wages', 'delete from public.attendance', 'insert into public.former_staff'],
+  // P5-3 0250 — 끝난 연결 목록은 사유·날짜만. 운영 표를 읽는 줄이 붙으면 끝난 매장의 운영 데이터가 본사로 샌다.
+  brand_ended_units: ['unit_members', 'attendance', 'playbook_entries', 'unknown_queries', 'wages', 'brand_overview_rows'],
 };
 
 console.log('[1] 정의자 함수 본문 토큰');
@@ -387,6 +392,17 @@ console.log('\n[7] 0249 같은 질문 — askers 표 · RPC 권한 · 해결 트
                    and not has_function_privilege('anon', p.oid, 'execute') and not has_function_privilege('authenticated', p.oid, 'execute')
               from pg_proc p where p.oid = 'public.${tf}'::regprocedure`) === 't');
   } else check(`${tf} 이 있다`, false);
+}
+
+console.log('\n[8] 0250 끝난 본사 연결 — RPC 권한');
+for (const fn of ['my_brand_history()', 'brand_ended_units()']) {
+  const exists = psql(`select to_regprocedure('public.${fn}') is not null`) === 't';
+  check(`${fn} 이 있다`, exists);
+  if (!exists) continue;
+  check(`${fn}: anon 실행 불가 · authenticated 실행 가능`,
+    psql(`select not has_function_privilege('anon', 'public.${fn}', 'execute') and has_function_privilege('authenticated', 'public.${fn}', 'execute')`) === 't');
+  check(`${fn}: 정의자 · search_path=public`,
+    psql(`select p.prosecdef and 'search_path=public' = any(coalesce(p.proconfig, '{}')) from pg_proc p where p.oid = 'public.${fn}'::regprocedure`) === 't');
 }
 
 console.log(`\nRESULT: ${pass} passed, ${fail} failed`);

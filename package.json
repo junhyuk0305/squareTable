@@ -168,6 +168,7 @@
     "qa:brand-deploy": "node scripts/qa-brand-deploy.mjs",
     "qa:brand-billing": "node scripts/qa-brand-billing.mjs",
     "qa:brand-relation": "node scripts/qa-brand-relation.mjs",
+    "qa:brand-history": "node scripts/qa-brand-history.mjs",
     "qa:canary": "node scripts/qa-canary.mjs",
     "web:size": "expo export --platform web && node scripts/web-bundle-size.mjs"
   },
