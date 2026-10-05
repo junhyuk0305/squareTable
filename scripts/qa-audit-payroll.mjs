@@ -161,5 +161,28 @@ select set_config('request.jwt.claims', json_build_object('sub', current_setting
   }
 }
 
+console.log('\n[A11] 근무표 날짜 계산은 폰 시간대와 상관없다');
+{
+  let S = {};
+  try { S = await import('../src/lib/utils/schedule.ts'); } catch (e) { check('schedule.ts 를 읽는다', false, String(e?.code ?? e)); }
+  const { addDays, mondayOf, weekDates, weekdayOf, fmtMd, fmtDateKo, dayOfMonth, nextDateForWeekday } = S;
+  const { computePay, shiftsToPayRecords } = P;
+  const RULES = { breakDeduction: false, nightAllowance: true, overtimeAllowance: false, weeklyHolidayPay: false, extraAllowance: 0 };
+  const saved = process.env.TZ;
+  for (const tz of ['Asia/Seoul', 'Pacific/Guam', 'Pacific/Auckland', 'America/Los_Angeles']) {
+    process.env.TZ = tz; // 노드는 실행 중 TZ 바꾸기를 따른다(Windows 포함 · 실측)
+    const t = (n, ok, extra) => check(`${tz} · ${n}`, ok, extra);
+    t('★addDays(10/05, +1) = 10/06', addDays('2026-10-05', 1) === '2026-10-06', addDays('2026-10-05', 1));
+    t('addDays(10/05, 0) = 10/05 · 월말 넘김 10/31+1 = 11/01', addDays('2026-10-05', 0) === '2026-10-05' && addDays('2026-10-31', 1) === '2026-11-01');
+    t('★10/05(월)의 요일 = 1 · 그 주 월요일 = 10/05', weekdayOf('2026-10-05') === 1 && mondayOf('2026-10-05') === '2026-10-05' && mondayOf('2026-10-11') === '2026-10-05');
+    t('주간 7일 = 10/05~10/11', weekDates('2026-10-05').join(',') === ['05', '06', '07', '08', '09', '10', '11'].map((d) => `2026-10-${d}`).join(','));
+    t('표기 10/5 · "10월 5일 (월)" · 5일', fmtMd('2026-10-05') === '10/5' && fmtDateKo('2026-10-05') === '10월 5일 (월)' && dayOfMonth('2026-10-05') === 5);
+    t('다음 수요일(10/05부터) = 10/07', nextDateForWeekday('2026-10-05', 3) === '2026-10-07');
+    const pay = computePay(shiftsToPayRecords([{ date: '2026-10-05', start: '22:00', end: '06:00' }]), 10000, RULES);
+    t('★22:00~06:00 근무 = 8시간 · 야간수당 들어간다', pay.total === 120000, JSON.stringify({ total: pay.total }));
+  }
+  if (saved === undefined) delete process.env.TZ; else process.env.TZ = saved;
+}
+
 console.log(`\n${fail ? 'RED' : 'GREEN'} — PASS ${pass} · FAIL ${fail}`);
 process.exit(fail ? 1 : 0);
