@@ -110,6 +110,7 @@
     "qa:push-route": "node scripts/qa-push-route.mjs",
     "qa:back-rules": "node scripts/qa-back-rules.mjs",
     "qa:boot-fault": "node scripts/qa-boot-fault.mjs",
+    "qa:find-email": "node --no-warnings scripts/qa-find-email.mjs",
     "qa:member-exit": "node scripts/qa-member-exit.mjs",
     "qa:account-security": "node scripts/qa-account-security.mjs",
     "qa:query-rls": "node scripts/qa-query-rls.mjs",
