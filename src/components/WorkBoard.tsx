@@ -9,6 +9,7 @@ import { HAS_SUPABASE } from '@/lib/supabase';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useStaffStore } from '@/lib/store/useStaffStore';
 import { useWorkStore, useDayparts, useDaypartLabels, daypartRoutineTemplates, assigneesOf, isRoutineTaskId, ROUTINE_ID_PREFIX, findDuplicateTask, occursOn, knowhowIdsForTask, quizCountForTask, isCaptureEligible, courseEntriesOf, trainingCourseViews, staffWhoUnderstandTask, understandsTask, taskVisibleTo, isRegularDue, isRequestDue, lastQuizAttemptOf, REGULAR_DUE_DAYS_DEFAULT, type FeedItem, type NewTask, type TaskTemplate } from '@/lib/store/useWorkStore';
+import { staffCanSeeCourse } from '@/lib/quiz/schedule';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { useSuggestionStore } from '@/lib/store/useSuggestionStore';
 import { useSyncStore } from '@/lib/store/useSyncStore';
@@ -467,8 +468,10 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
       // ★발송 원장(0139)이 있는 퀴즈는 **나에게 실제로 나간 것만** 뜬다.
       //   원장을 안 보면 사장이 2명만 골라 보낸 퀴즈가 3번째 직원에게도 보이고,
       //   "8월 15일에 보내요"라고 예약해 둔 것이 오늘 바로 떠 버린다(발송 화면과 직원 화면의 불일치).
-      //   원장 행이 아예 없는 코스 = 0139 이전에 만들어진 것 → 예전 규칙 그대로 보인다(하위 호환).
+      //   원장 행이 아예 없는 코스는 0139 이전에 만든 것만 예전 규칙 그대로 보인다(하위 호환).
+      //   ★E1: 그 뒤에 만든 원장 0건 코스는 만들던 퀴즈·본사 사본이고, 외부 사람용은 링크로만 푼다.
       const sends = assignments.filter((a) => a.courseId === c.id);
+      if (!staffCanSeeCourse(c, sends.length)) continue;
       const mySent = sends
         .filter((a) => a.userId === userId && !!a.sentAt)
         .sort((x, y) => (x.sentAt ?? '').localeCompare(y.sentAt ?? ''))

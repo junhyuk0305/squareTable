@@ -163,10 +163,11 @@ try {
     ])],
     ['embeddings', admin.from('playbook_embeddings').insert([E.e1, E.e4].map((id) => ({ entry_id: id, unit_id: UNIT, embedding: VEC })))],
     ['courses', admin.from('training_courses').insert([
-      { id: `kha_c0_${s}`, unit_id: UNIT, key: `kha_c0_${s}`, name: 'E0 퀴즈', min_items: 1, max_items: 10, position: 2, active: true },
+      // start_at = 발행한 퀴즈(0273 E1: 자동 배정은 만들던 퀴즈를 고르지 않는다).
+      { id: `kha_c0_${s}`, unit_id: UNIT, key: `kha_c0_${s}`, name: 'E0 퀴즈', min_items: 1, max_items: 10, position: 2, active: true, start_at: now.slice(0, 10) },
       // 신입용 코스(first_day)인데 담긴 노하우가 E1 하나뿐 — E1 을 보관하면 신입 첫 퀴즈로 고르면 안 된다.
-      { id: `kha_c1_${s}`, unit_id: UNIT, key: `kha_c1_${s}`, name: 'E1 퀴즈', preset: 'first_day', min_items: 1, max_items: 10, position: 0, active: true },
-      { id: `kha_c4_${s}`, unit_id: UNIT, key: `kha_c4_${s}`, name: 'E4 퀴즈', min_items: 1, max_items: 10, position: 1, active: true },
+      { id: `kha_c1_${s}`, unit_id: UNIT, key: `kha_c1_${s}`, name: 'E1 퀴즈', preset: 'first_day', min_items: 1, max_items: 10, position: 0, active: true, start_at: now.slice(0, 10) },
+      { id: `kha_c4_${s}`, unit_id: UNIT, key: `kha_c4_${s}`, name: 'E4 퀴즈', min_items: 1, max_items: 10, position: 1, active: true, start_at: now.slice(0, 10) },
     ])],
     ['course_entries', admin.from('course_entries').insert([
       { course_id: `kha_c0_${s}`, entry_id: E.e0, unit_id: UNIT },

@@ -102,6 +102,9 @@ export type TrainingCourseView = {
   minItems: number;
   /** null = 1회성(한 번 통과하면 끝) · N = N일마다 다시 확인. */
   dueDays: number | null;
+  /** 누구에게 나가는 퀴즈인가(0200) · 만든 시각 — 직원 카드 노출 판정(staffCanSeeCourse)의 재료. */
+  audience: TrainingCourseRow['audience'];
+  createdAt: string | null;
 };
 /**
  * 직원 카드가 볼 코스 목록 — 코스 행(0108 training_courses)이 유일한 SSOT다.
@@ -111,6 +114,7 @@ export type TrainingCourseView = {
 export function trainingCourseViews(courses: TrainingCourseRow[]): TrainingCourseView[] {
   return courses.map((c) => ({
     id: c.id, key: c.key, name: c.name, minItems: c.min_items, dueDays: c.due_days ?? null,
+    audience: c.audience ?? null, createdAt: c.created_at ?? null,
   }));
 }
 

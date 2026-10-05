@@ -355,14 +355,20 @@ async function main() {
 
   // 노하우가 담긴 코스 2개를 만든다. 하나는 신입용(key='first_day'), 하나는 position 이 더 앞.
   // ★어느 쪽이 뽑히는지가 곧 "신입용이 position 을 이긴다"의 증명이다.
-  const CJ = `tc_qsj_${s}`, CJ2 = `tc_qsj2_${s}`;
+  // ★E1(0273): 자동 배정은 발행한(start_at 있음) 우리 직원 퀴즈만 고른다. 외부용(CG)·만들던 퀴즈(CD)는
+  //   신입용 표시에 position 까지 더 앞서도 뽑히면 안 된다.
+  const CJ = `tc_qsj_${s}`, CJ2 = `tc_qsj2_${s}`, CG = `tc_qsjg_${s}`, CD = `tc_qsjd_${s}`;
   await owner.from('training_courses').insert([
-    { id: CJ,  unit_id: UNIT, key: 'first_day',      name: '첫 출근 확인', position: 5, active: true },
-    { id: CJ2, unit_id: UNIT, key: `qsj2_${s}`,      name: '정기 확인',     position: 0, active: true },
+    { id: CJ,  unit_id: UNIT, key: 'first_day',      name: '첫 출근 확인', position: 5, active: true, start_at: DAY, audience: 'staff' },
+    { id: CJ2, unit_id: UNIT, key: `qsj2_${s}`,      name: '정기 확인',     position: 0, active: true, start_at: DAY, audience: 'staff' },
+    { id: CG,  unit_id: UNIT, key: `qsjg_${s}`, preset: 'first_day', name: '지원자 퀴즈', position: 0, active: true, start_at: DAY, audience: 'guest' },
+    { id: CD,  unit_id: UNIT, key: `qsjd_${s}`, preset: 'first_day', name: '만들던 퀴즈', position: 1, active: true },
   ]);
   const { error: ceErr } = await owner.from('course_entries').insert([
     { course_id: CJ,  entry_id: ENTRY, unit_id: UNIT, position: 0 },
     { course_id: CJ2, entry_id: ENTRY, unit_id: UNIT, position: 0 },
+    { course_id: CG,  entry_id: ENTRY, unit_id: UNIT, position: 0 },
+    { course_id: CD,  entry_id: ENTRY, unit_id: UNIT, position: 0 },
   ]);
   check('코스 2개 + 담긴 노하우 준비', !ceErr, ceErr?.message ?? '');
 
@@ -384,6 +390,7 @@ async function main() {
   check(`입사 즉시 코스 ${JOIN_COURSES}개만 배정(첫날에 전부 쏟지 않는다)`, (dRows ?? []).length === JOIN_COURSES, `n=${dRows?.length}`);
   check('origin=join', dRows?.[0]?.origin === 'join', `${dRows?.[0]?.origin}`);
   check('신입용 코스가 뽑힌다(position 보다 우선)', dRows?.[0]?.course_id === CJ, `${dRows?.[0]?.course_id}`);
+  check('★외부용·만들던 퀴즈는 신입 첫 퀴즈로 안 고른다(E1)', !(dRows ?? []).some((r) => r.course_id === CG || r.course_id === CD), `${dRows?.[0]?.course_id}`);
   check('예약일=오늘 · 아직 안 나감(도착은 근무표가 정한다)', dRows?.[0]?.scheduled_on === DAY && !dRows?.[0]?.sent_at, `${dRows?.[0]?.scheduled_on}`);
   check('담긴 노하우가 없는 코스는 안 고른다(빈 퀴즈 방지)', dRows?.[0]?.course_id !== QUIZ && dRows?.[0]?.course_id !== QUIZ_B, `${dRows?.[0]?.course_id}`);
   check('사장 발행 행은 origin=manual 그대로', (await admin.from('quiz_assignments').select('origin').eq('id', A1).maybeSingle()).data?.origin === 'manual');

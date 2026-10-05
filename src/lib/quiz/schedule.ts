@@ -96,6 +96,27 @@ export const MAX_AUTO_RECHECKS_PER_WEEK = 1;
  */
 export const JOIN_FIRST_QUIZ_COURSES = 1;
 
+/**
+ * 발송 원장(0139)이 생기기 전 코스의 경계. 이보다 먼저 만든 코스는 원장 0건이어도 직원에게 보인다(하위 호환).
+ * ★SQL 사본: 0273 approve_member·enqueue_knowhow_rechecks 의 `timestamptz '2026-08-11 00:00:00+09'`.
+ */
+export const QUIZ_LEDGER_SINCE = '2026-08-11T00:00:00+09:00';
+
+/**
+ * 이 퀴즈가 직원 카드에 나올 수 있는가(E1). 누구에게 갔는지는 원장 행이 따로 가른다.
+ *  · 외부 사람용(guest)은 링크로만 푼다 — 직원 카드에 안 나온다.
+ *  · 원장 0건 = 아직 아무에게도 안 보냄(만들던 퀴즈·본사 사본). 0139 이전 코스만 예전처럼 보인다.
+ * ★SQL 사본: 0273 의 `coalesce(c.audience,'staff')='staff'` + 초안 제외 조건. 바꿀 때 양쪽을 같이 고친다.
+ */
+export function staffCanSeeCourse(
+  c: { audience?: string | null; createdAt?: string | null },
+  sendCount: number,
+): boolean {
+  if (c.audience === 'guest') return false;
+  if (sendCount > 0) return true;
+  return !!c.createdAt && Date.parse(c.createdAt) < Date.parse(QUIZ_LEDGER_SINCE);
+}
+
 /** 발송 상한에 걸린 이유. null = 보내도 된다. */
 export type SendBlockReason = 'day_cap' | 'week_cap' | 'auto_stopped' | 'not_working';
 

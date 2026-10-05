@@ -5,6 +5,7 @@ import { useAttendanceStore, type AttendanceRecord } from '@/lib/store/useAttend
 import { useWorkStore, useDayparts, daypartRoutineTemplates, occursOn, taskVisibleTo, trainingCourseViews, courseEntriesOf } from '@/lib/store/useWorkStore';
 import { useScheduleStore } from '@/lib/store/useScheduleStore';
 import { todayStr, findOpenRecord, isForgotCheckout } from '@/lib/utils/attendance';
+import { staffCanSeeCourse } from '@/lib/quiz/schedule';
 
 export type JuniorHomeData = {
   /**
@@ -110,10 +111,13 @@ export function useJuniorHomeData(): JuniorHomeData {
   const courseEntries = useWorkStore((s) => s.courseEntries);
   const understanding = useWorkStore((s) => s.understanding);
   const quizCounts = useWorkStore((s) => s.quizCounts);
+  const assignments = useWorkStore((s) => s.assignments);
   const openQuizCount = useMemo(() => {
     const passed = new Set(understanding.filter((u) => u.staffId === userId).map((u) => u.entryId));
     const open = new Set<string>();
     for (const c of trainingCourseViews(courses)) {
+      // 만들던 퀴즈·외부 사람용은 카드가 안 뜨니 세지 않는다(E1 · WorkBoard 와 같은 판정).
+      if (!staffCanSeeCourse(c, assignments.filter((a) => a.courseId === c.id).length)) continue;
       const list = courseEntriesOf(courseEntries, c.id)
         .map((e) => e.entryId)
         .filter((id) => (quizCounts[id] ?? 0) > 0);
@@ -121,7 +125,7 @@ export function useJuniorHomeData(): JuniorHomeData {
       for (const id of list) if (!passed.has(id)) open.add(id);
     }
     return open.size;
-  }, [courses, courseEntries, understanding, quizCounts, userId]);
+  }, [courses, courseEntries, understanding, quizCounts, assignments, userId]);
 
   // 2026-08-07: '많이 물어본 노하우'(popularKnowhow)와 물어보기 전송(submitChat)은 제거했다 —
   // 홈 섹션이 3개로 줄며(정본 §12) 둘 다 읽는 곳이 없어졌다. 노하우 발견성은 노하우 탭이,
