@@ -97,5 +97,31 @@ check('목록 읽기 실패 + 방금 만든 매장 → owner(create_store 가 ow
 check('목록을 읽었으면 방금 만든 매장 표식보다 목록이 이긴다',
   R({ unitId: 'u_new', rows: [], createdUnitId: 'u_new' }) === 'junior');
 
+// ══ G1(QA 2026-10-05): 로그아웃 중 돌던 loadProfile 이 끝나며 로그인 상태로 되살리지 않는다 ══════════
+// signOut 은 푸시 해제(최대 4초+4초)를 기다린 뒤 세션을 지운다. 그 사이 30초 새로고침이 loadProfile 을 시작하면,
+// 세션이 지워진 뒤에 끝나며 set({status:'signed_in', userId: 옛 id}) 로 덮었다. 로그아웃 세대 번호로 늦은 응답을 버린다.
+// (스토어는 supabase 클라이언트를 물고 있어 노드에서 못 띄운다 → 배선을 소스에서 확인한다.)
+{
+  const { readFileSync } = await import('node:fs');
+  const ss = readFileSync(new URL('../src/lib/store/useSessionStore.ts', import.meta.url), 'utf8')
+    .replace(/\r\n/g, '\n').replace(/^\s*\/\/.*$/gm, '');
+  const lp = (ss.match(/async function loadProfile\([\s\S]*?\n}\n/) || [''])[0];
+  const gen = lp.match(/const (\w+) = _signOutGen;/);
+  const genVar = gen ? gen[1] : '__none__';
+  const firstAwait = lp.indexOf('await ');
+  check('★G1 loadProfile 이 첫 await 전에 로그아웃 세대를 잡는다', !!gen && lp.indexOf(gen[0]) > 0 && lp.indexOf(gen[0]) < firstAwait);
+  const finalSet = lp.indexOf('setUnitId(unitId || null);');
+  const guard = new RegExp(`if \\(${genVar} !== _signOutGen\\) return;`, 'g');
+  const guards = [...lp.matchAll(guard)].map((m) => m.index);
+  check('★G1 마지막 set(signed_in) 직전에 세대가 바뀌었으면 버린다', finalSet > 0 && guards.some((i) => i < finalSet && finalSet - i < 200));
+  check('G1 늦게 끝난 실패 경로도 새 로그인을 signed_out 으로 덮지 않는다', guards.length >= 3);
+  const so = (ss.match(/signOut: async \(\) => \{[\s\S]*?\n  \},/) || [''])[0];
+  check('★G1 signOut 이 SIGNED_OUT 을 쓰기 전에 세대를 올린다', /_signOutGen \+= 1;\s*setUnitId\(null\);\s*set\(SIGNED_OUT\);/.test(so));
+  const da = (ss.match(/deleteAccount: async \(\) => \{[\s\S]*?\n  \},/) || [''])[0];
+  check('G1 탈퇴도 SIGNED_OUT 을 쓰기 전에 세대를 올린다', /_signOutGen \+= 1;\s*setUnitId\(null\);\s*set\(SIGNED_OUT\);/.test(da));
+  const auth = (ss.match(/onAuthStateChange\([\s\S]*?\n      \}\);/) || [''])[0];
+  check('G1 다른 탭 로그아웃·토큰 만료(SIGNED_OUT 이벤트)도 세대를 올린다', /_signOutGen \+= 1;[\s\S]*?set\(SIGNED_OUT\);/.test(auth));
+}
+
 console.log(`\nRESULT: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
