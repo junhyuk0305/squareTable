@@ -301,7 +301,8 @@ console.log('\n[D9] 대타 확정·시간 수정 결과·사장의 근무 변경
   check('★member_notices 종류에 swap_confirmed · shift_time_result · shift_changed 가 있다',
     /'swap_confirmed', 'shift_time_result', 'shift_changed'/.test(pf));
   const st = strip(read('src/lib/store/useScheduleStore.ts'));
-  const method = (m) => (st.match(new RegExp(`\\n  ${m}: [\\s\\S]*?(?=\\n  [a-zA-Z]+: )`)) || [''])[0];
+  // 타입 선언(인터페이스)에도 같은 이름이 있어 마지막(구현) 것을 본다.
+  const method = (m) => ([...st.matchAll(new RegExp(`\\n  ${m}: [\\s\\S]*?(?=\\n  [a-zA-Z]+: )`, 'g'))].pop() || [''])[0];
   for (const m of ['addTemplate', 'applySeriesOps', 'overrideShiftDay', 'restoreException']) {
     check(`★스토어 ${m} 가 저장 성공 뒤 당사자에게 알린다(notifyShiftChanged)`, /notifyShiftChanged\(/.test(method(m)));
   }

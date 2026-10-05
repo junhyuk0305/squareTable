@@ -88,6 +88,7 @@ export function useAppBadgeSync(): void {
   const templates = useWorkStore((s) => s.templates);
   const done = useWorkStore((s) => s.done);
   const swaps = useScheduleStore((s) => s.swaps);
+  const scheduleNotices = useScheduleStore((s) => s.notices);
   // 사장 집계 입력 — queue 는 직원 집계('도와줄 수 있는 질문', D4)에서도 함께 쓴다.
   const queue = useUnknownQueueStore((s) => s.queue);
   const suggestions = useSuggestionStore((s) => s.suggestions);
@@ -106,7 +107,7 @@ export function useAppBadgeSync(): void {
         // 나에게 온 공지·배정도 센다(D11 · 벨과 같은 축). 이름은 세는 데 쓰지 않는다.
         ? ownerUnreadCount(queue, suggestions, swaps, pending, feed, me, ackAt, claims, [],
             { feed, taskTemplates: templates, done, today, suggestions, userId: me, nameOf: () => '', ackAt })
-        : juniorUnreadCount(feed, swaps, me, today, templates, done, ackAt, suggestions, queue);
+        : juniorUnreadCount(feed, swaps, me, today, templates, done, ackAt, suggestions, queue, scheduleNotices);
     setAppBadge(count);
-  }, [role, me, signedIn, feed, templates, done, swaps, queue, suggestions, pending, today, ackAt, claims]);
+  }, [role, me, signedIn, feed, templates, done, swaps, queue, suggestions, pending, today, ackAt, claims, scheduleNotices]);
 }

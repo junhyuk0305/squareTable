@@ -3,7 +3,7 @@
 // UI(아이콘·틴트·onPress)는 화면이 kind로 매핑 — 여기선 순수 데이터만 만든다.
 import type { FeedItem, TaskTemplate, DoneMark } from '@/lib/store/useWorkStore';
 import { occursOn, assigneesOf } from '@/lib/store/useWorkStore';
-import type { SwapRequest, ShiftTemplate } from '@/lib/store/useScheduleStore';
+import type { SwapRequest, ShiftTemplate, ScheduleNotice } from '@/lib/store/useScheduleStore';
 import type { PendingMember } from '@/lib/store/useStaffStore';
 import type { UnknownQuery, PlaybookSuggestion, PaymentClaim, OwnerAlert } from '@/types';
 // D4 '도와줄 수 있는 질문' 판정 SSOT — 벨 배지·알림 목록이 '내 공간' 리스트와 같은 축을 보게 재사용한다.
@@ -18,7 +18,7 @@ export const MAX_NOTIFS = 50;
 
 export type JuniorNotifKind =
   | 'notice' | 'mention' | 'assign' | 'swap' | 'swap_approved' | 'swap_rejected'
-  | 'suggestion_approved' | 'suggestion_rejected' | 'question';
+  | 'suggestion_approved' | 'suggestion_rejected' | 'question' | 'schedule';
 export type JuniorNotifRoute = '/junior/work' | '/junior/schedule' | '/junior/chat';
 
 export type JuniorNotif = {
@@ -90,8 +90,11 @@ export function juniorUnreadCount(
   ackAt?: string | null,
   suggestions: PlaybookSuggestion[] = [],
   queue: UnknownQuery[] = [],
+  scheduleNotices: ScheduleNotice[] = [],
 ): number {
   return (
+    // 내 근무 알림(D9) — 대타 확정 · 시간 수정 결과 · 근무표 변경. read 개념이 없어 '모두 읽기'(ack) 전까지 센다.
+    scheduleNotices.filter((n) => isAfterAck(n.created_at, ackAt)).length +
     // 동료가 물었는데 아직 답이 없는 질문(D4) — 푸시를 놓치면 '내 공간'에 들어가야만 알 수 있었다.
     answerableQuestions(queue, me, suggestions).filter((u) => isAfterAck(u.asked_at, ackAt)).length +
     feed.filter((f) => isUnreadNotice(f, me) && isAfterAck(f.createdAt, ackAt)).length +
@@ -122,8 +125,10 @@ export function buildJuniorNotifications(args: {
   suggestions?: PlaybookSuggestion[];
   /** 매장 미답질문 큐(D4). 없으면 '도와줄 수 있는 질문' 알림 없음. */
   queue?: UnknownQuery[];
+  /** 내 근무 알림(D9 · member_notices). 없으면 해당 알림 없음. */
+  scheduleNotices?: ScheduleNotice[];
 }): JuniorNotif[] {
-  const { feed, swaps, templates, nameOf, userId: me, today, taskTemplates = [], done = {}, ackAt, suggestions = [], queue = [] } = args;
+  const { feed, swaps, templates, nameOf, userId: me, today, taskTemplates = [], done = {}, ackAt, suggestions = [], queue = [], scheduleNotices = [] } = args;
   const tplById = (id: string) => templates.find((t) => t.id === id);
   const out: JuniorNotif[] = [];
 
@@ -231,6 +236,19 @@ export function buildJuniorNotifications(args: {
       body: fmtDateKo(r.date),
       at: r.updated_at,
       unread: false,
+      route: '/junior/schedule',
+    });
+  }
+
+  // 내 근무 알림(D9) — 서버가 넣은 문구 그대로. 푸시(5분 크론)와 같은 행이다. 탭하면 근무표로.
+  for (const n of scheduleNotices) {
+    out.push({
+      id: `sched_${n.id}`,
+      kind: 'schedule',
+      title: n.title,
+      body: n.body,
+      at: n.created_at,
+      unread: isAfterAck(n.created_at, ackAt),
       route: '/junior/schedule',
     });
   }

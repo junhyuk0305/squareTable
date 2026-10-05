@@ -11,7 +11,7 @@ import type { PlaybookEntry, PlaybookSuggestion, UnknownQuery, ChatQuery, Owner,
 import type { TaskTemplate, FeedItem, DoneMark, Recurrence } from '@/lib/store/useWorkStore';
 import type { Room, RoomMember, RoomPref } from '@/lib/store/useRoomStore';
 import type { AttendanceRecord } from '@/lib/store/useAttendanceStore';
-import type { StoreConfig, ShiftTemplate, ShiftException, SwapRequest, ShiftTimeRequest } from '@/lib/store/useScheduleStore';
+import type { StoreConfig, ShiftTemplate, ShiftException, SwapRequest, ShiftTimeRequest, ScheduleNotice } from '@/lib/store/useScheduleStore';
 import type { CustomCategory } from '@/lib/store/knowhowCategories';
 import type { KnowhowUsage } from '@/lib/knowhow/archive';
 import type { WageRate } from '@/lib/utils/payroll';
@@ -3643,6 +3643,31 @@ export async function fetchShiftTimeRequests(): Promise<ReadResult<ShiftTimeRequ
     return { data: [], error: true };
   }
   return { data: (data ?? []) as ShiftTimeRequest[], error: false };
+}
+
+/** 내 근무 알림(D9 · 0289) — 대타 확정 · 시간 수정 결과 · 근무표 변경. RLS = 본인 행만. 지금 매장 것만 읽는다. */
+export async function fetchScheduleNotices(): Promise<ReadResult<ScheduleNotice[]>> {
+  if (!HAS_SUPABASE || !_unitId) return { data: [], error: false };
+  const { data, error } = await supabase
+    .from('member_notices')
+    .select('id, kind, title, body, created_at')
+    .eq('unit_id', _unitId)
+    .in('kind', ['swap_confirmed', 'shift_time_result', 'shift_changed'])
+    .order('created_at', { ascending: false })
+    .limit(50);
+  if (error) {
+    readFail('fetchScheduleNotices', error);
+    return { data: [], error: true };
+  }
+  return { data: (data ?? []) as ScheduleNotice[], error: false };
+}
+
+/** 사장 · 매니저가 근무를 바꾼 뒤 그 직원에게 알린다(D9 · 0289). 본인 · 다른 매장 사람에게는 서버가 넣지 않는다(false).
+ *  알림은 근무 저장의 결과가 아니다 — 실패해도 화면에 알리지 않고 기록만 남긴다. */
+export async function notifyShiftChangedRpc(staffId: string, date: string, onward: boolean): Promise<void> {
+  if (!HAS_SUPABASE) return;
+  const { error } = await supabase.rpc('notify_shift_changed', { p_staff: staffId, p_date: date, p_onward: onward });
+  if (error) reportError('db.write:notifyShiftChanged', error);
 }
 
 /** 내 근무의 그날 시각을 바꿔 달라고 요청한다. 같은 날 앞 요청은 서버가 닫고 새로 낸다. */

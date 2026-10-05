@@ -48,6 +48,7 @@ export default function JuniorNotificationsScreen() {
   const markAllRead = useWorkStore((s) => s.markAllRead);
   const swaps = useScheduleStore((s) => s.swaps);
   const templates = useScheduleStore((s) => s.templates);
+  const scheduleNotices = useScheduleStore((s) => s.notices);
   const scheduleLoaded = useScheduleStore((s) => s.loaded);
   const staff = useStaffStore((s) => s.staff);
   const staffLoaded = useStaffStore((s) => s.loaded);
@@ -91,8 +92,9 @@ export default function JuniorNotificationsScreen() {
         ackAt,
         suggestions,
         queue,
+        scheduleNotices,
       }),
-    [feed, swaps, templates, staff, me, today, taskTemplates, done, ackAt, suggestions, queue],
+    [feed, swaps, templates, staff, me, today, taskTemplates, done, ackAt, suggestions, queue, scheduleNotices],
   );
 
   const initial = (userName ?? '나').trim().slice(0, 1) || '나';

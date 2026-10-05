@@ -23,6 +23,8 @@ import {
   endShiftFromRpc,
   overrideShiftDayRpc,
   fetchShiftTimeRequests,
+  fetchScheduleNotices,
+  notifyShiftChangedRpc,
   requestShiftTimeRpc,
   decideShiftTimeRpc,
   fetchSwaps,
@@ -88,6 +90,15 @@ export type ShiftTimeRequest = {
   created_at: string;
 };
 
+/** 내 근무 알림(D9 · 0289 member_notices) — 대타 확정 · 시간 수정 결과 · 근무표 변경. 푸시는 서버 크론이 보낸다. */
+export type ScheduleNotice = {
+  id: number;
+  kind: 'swap_confirmed' | 'shift_time_result' | 'shift_changed';
+  title: string;
+  body: string;
+  created_at: string;
+};
+
 /**
  * "이 반복 근무는 이 날짜엔 없는 것으로 친다"(0178).
  * 요일 반복을 **하루만** 다르게 만드는 유일한 수단 — 부분 교대·하루 이전이 원본을 안 건드리게 한다.
@@ -129,6 +140,8 @@ type ScheduleState = {
   swaps: SwapRequest[];
   /** 대기 중인 근무 시간 수정 요청(0243). 관리자는 매장 전부, 직원은 본인 것만(RLS). */
   timeRequests: ShiftTimeRequest[];
+  /** 내 근무 알림(D9) — 직원 알림함에 보인다. 못 읽으면 직전 값을 둔다. */
+  notices: ScheduleNotice[];
   /** true = 조회 **시도가 끝남**(성공·실패 무관). 실패 여부는 loadError 로 본다. */
   loaded: boolean;
   /** 마지막 hydrate 가 실패했는가 — 화면이 "예정된 근무 없음"과 "못 불러옴"을 구분한다(#44). */
@@ -261,12 +274,18 @@ export const useScheduleStore = create<ScheduleState>((set, get) => {
     return ok;
   };
 
+  // ★D9: 사장 · 매니저가 근무를 바꾸면 그 직원에게 알린다(저장이 성공한 뒤에만 · 본인이면 서버가 넣지 않는다).
+  const notifyShiftChanged = (staffId: string | undefined, date: string | undefined, onward = false) => {
+    if (staffId && date) void notifyShiftChangedRpc(staffId, date, onward);
+  };
+
   return {
   config: SEED?.config ?? DEFAULT_CONFIG,
   templates: SEED?.templates ?? [],
   exceptions: [],
   swaps: SEED?.swaps ?? [],
   timeRequests: [],
+  notices: [],
   loaded: !HAS_SUPABASE,
   loadError: false,
   configLoadError: false,
@@ -281,12 +300,12 @@ export const useScheduleStore = create<ScheduleState>((set, get) => {
     // 정지(hang) 방지 — 위 try/catch 는 예외만 잡는다. 끝나지 않는 fetch 는 여기서 끊는다.
     const all = await settleWithin(
       HYDRATE_TIMEOUT_MS,
-      Promise.all([fetchScheduleConfig(), fetchShiftTemplates(), fetchSwaps(), fetchShiftExceptions(), fetchShiftTimeRequests()]),
+      Promise.all([fetchScheduleConfig(), fetchShiftTemplates(), fetchSwaps(), fetchShiftExceptions(), fetchShiftTimeRequests(), fetchScheduleNotices()]),
       () => null,
     );
     if (isStaleEpoch(epoch)) return; // 그 사이 매장이 바뀌었다 — 이전 매장 근무표를 쓰지 않는다
     if (all === null) { set({ loaded: true, loadError: true, configLoadError: true }); return; }
-    const [config, templates, swaps, exceptions, timeRequests] = all;
+    const [config, templates, swaps, exceptions, timeRequests, notices] = all;
     // ★config 조회가 실패했으면 DEFAULT_CONFIG 로 덮지 않는다 — 직전 값을 유지하고 configLoadError 로
     //   말한다. 기본값을 실제 운영시간인 양 보여주는 것이 이 화면의 가장 비싼 거짓말이다(#48).
     //   config.data === null 이면서 error 가 아닌 경우만 "신규 매장"이라 기본값이 정당하다.
@@ -297,6 +316,7 @@ export const useScheduleStore = create<ScheduleState>((set, get) => {
       // ★예외를 못 읽었으면 직전 값을 유지한다 — 빈 배열로 덮으면 그날 근무가 두 벌로 보인다.
       exceptions: exceptions.error ? s.exceptions : exceptions.data,
       timeRequests: timeRequests.error ? s.timeRequests : timeRequests.data,
+      notices: notices.error ? s.notices : notices.data,
       loaded: true,
       loadError: config.error || templates.error || swaps.error || exceptions.error || timeRequests.error,
       configLoadError: config.error,
@@ -334,16 +354,36 @@ export const useScheduleStore = create<ScheduleState>((set, get) => {
 
   addTemplate: (t) => {
     const rec: ShiftTemplate = { ...t, id: genId('tpl') };
-    return optimisticAdd(set, 'templates', rec, () => insertShiftTemplate(rec), '근무 추가 저장에 실패했어요.');
+    return optimisticAdd(set, 'templates', rec, () => insertShiftTemplate(rec), '근무 추가 저장에 실패했어요.').then((ok) => {
+      if (ok) {
+        if (rec.date) notifyShiftChanged(rec.staff_id, rec.date);
+        else if (rec.weekday !== null) notifyShiftChanged(rec.staff_id, nextDateForWeekday(todayStr(), rec.weekday), true);
+      }
+      return ok;
+    });
   },
-  applySeriesOps: (staffId, ops, start, end, confirmPast) =>
+  applySeriesOps: (staffId, ops, start, end, confirmPast) => {
+    // 알림 받을 직원 = 넘겨받은 staffId, 없으면 고치는 근무의 담당자. 저장 뒤엔 다시 읽으므로 먼저 찾아 둔다.
+    const edited = ops.flatMap((o) => (o.kind === 'add' ? [] : [o.id]))[0];
+    const who = staffId || get().templates.find((t) => t.id === edited)?.staff_id;
+    const from = ops.map((o) => o.from).sort()[0];
     // 한 단계가 실패하면 거기서 멈춘다. 앞 단계는 이미 저장됐으므로 runShiftRpc 가 다시 읽어 화면을 서버와 맞춘다.
-    runShiftRpc(
+    return runShiftRpc(
       () => runSeriesOps({ add: addShiftSeriesRpc, edit: editShiftFromRpc, end: endShiftFromRpc }, staffId, ops, start, end, confirmPast),
       '근무 저장에 실패했어요. 다시 시도해 주세요.',
-    ),
-  overrideShiftDay: (id, date, start, end, confirmPast) =>
-    runShiftRpc(() => overrideShiftDayRpc(id, date, start, end, confirmPast), start ? '근무 수정 저장에 실패했어요.' : '근무 삭제에 실패했어요.'),
+    ).then((ok) => {
+      if (ok) notifyShiftChanged(who, from, true);
+      return ok;
+    });
+  },
+  overrideShiftDay: (id, date, start, end, confirmPast) => {
+    const who = get().templates.find((t) => t.id === id)?.staff_id;
+    return runShiftRpc(() => overrideShiftDayRpc(id, date, start, end, confirmPast), start ? '근무 수정 저장에 실패했어요.' : '근무 삭제에 실패했어요.')
+      .then((ok) => {
+        if (ok) notifyShiftChanged(who, date);
+        return ok;
+      });
+  },
   requestSwap: (input) => {
     // 같은 시프트(날짜+템플릿)에 이미 진행 중(open/accepted) 요청이 있으면 중복 생성 차단.
     const dup = get().swaps.some(
@@ -467,12 +507,13 @@ export const useScheduleStore = create<ScheduleState>((set, get) => {
   restoreException: (templateId, date) => {
     const before = get().exceptions;
     const epoch = currentTenantEpoch(); // setConfig 와 같은 이유
+    const who = get().templates.find((t) => t.id === templateId)?.staff_id;
     set({ exceptions: before.filter((e) => !(e.template_id === templateId && e.date === date)) });
     void guardWrite(
       deleteShiftException(templateId, date),
       () => { if (!isStaleEpoch(epoch)) set({ exceptions: before }); },
       '되돌리기에 실패했어요.',
-    );
+    ).then((ok) => { if (ok) notifyShiftChanged(who, date); });
   },
   rejectSwap: (id) => {
     const before = get().swaps.find((r) => r.id === id);
