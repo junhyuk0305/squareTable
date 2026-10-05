@@ -107,6 +107,18 @@ console.log('\n[4] 배선(주석 제외 코드)');
     const s = strip(read('src/app/stores.tsx'));
     check('G2 매장 목록의 지표·잠김 읽기가 다시 돈다(fgTick 의존)', (s.match(/\}, \[[^\]]*\bfgTick\b[^\]]*\]\);/g) || []).length >= 2);
   }
+  // G4(QA 2026-10-05): 물어보기 대화 — 복귀 새로고침이 실패하면 대화가 통째로 비고, 저장 실패한 답도 다음 새로고침에 사라졌다.
+  {
+    const fcq = (db.match(/export async function fetchChatQueries[\s\S]*?\n\}/) || [''])[0];
+    check('★G4 fetchChatQueries 가 실패를 빈 목록과 가른다(ReadResult)',
+      /Promise<ReadResult<ChatQuery\[\]>>/.test(fcq) && /return \{ data: \[\], error: true \}/.test(fcq), fcq.slice(0, 100));
+    const cs = strip(read('src/lib/store/useChatStore.ts'));
+    const hy = (cs.match(/hydrate: async \(juniorId\) => \{[\s\S]*?\n  \},/) || [''])[0];
+    check('★G4 hydrate 가 읽기 실패면 화면의 대화를 지우지 않는다', /if \(error\) \{[^}]*loaded: true[^}]*return;/.test(hy) && !/if \(error\) \{[^}]*history/.test(hy), hy.slice(0, 200));
+    check('★G4 hydrate 가 서버에 아직 없는 내 답(저장 중·저장 실패)을 다시 얹는다', /_unsynced\.has\(/.test(hy));
+    check('G4 대화 저장은 서버에 들어갈 때까지 표시해 둔다(직접 insertChatQuery 안 부름)',
+      (cs.match(/insertChatQuery\(/g) || []).length === 1 && /_unsynced\.add\(/.test(cs) && /_unsynced\.delete\(/.test(cs));
+  }
   const fg = strip(read('src/lib/app/useForegroundRefresh.ts'));
   check('③ AppState 로 듣고 shouldRefreshOnForeground 로 고른다 · 자동 토큰 갱신을 묶는다', /AppState\.addEventListener/.test(fg) && /shouldRefreshOnForeground\(/.test(fg) && /startAutoRefresh/.test(fg) && /stopAutoRefresh/.test(fg));
   const shell = strip(read('src/components/shell/AppShell.web.tsx'));
