@@ -6,7 +6,9 @@
 //   ③ workers_at = shiftsOn(useScheduleStore) + 시각 필터.
 //      ★2026-08-26(0179): 승인된 교대는 **파생 치환이 아니라 실제 이전**이다. 승인 행을 꽂는 것만으로는
 //        근무자가 안 바뀌는 게 정상이고, transfer_shift 가 돌아야 바뀐다(둘 다면 이중 적용).
-//   ④ due_task_reminders 수신자 규칙: private→담당자 / shared→그 시각 근무자 / 근무자 0명→매장 전원.
+//   ④ due_task_reminders 수신자 규칙: private→담당자 / shared→그 시각 근무자.
+//      그 시각 근무자 0명일 때(0287 · D7): 근무표를 안 쓰는 매장 → 매장 전원 /
+//      근무표를 쓰는 매장(근무표에 한 사람이라도 있다) → 보내지 않는다(0건).
 //   ⑤ 이미 완료(work_done)한 할일은 대상에서 빠진다.
 //   ⑥ 크론이 부르는 엣지 엔드포인트를 그대로 쳐서 선점(중복 발송 방지)까지 실증한다.
 //
@@ -139,6 +141,26 @@ async function main() {
     check(name, !error && data === want, error?.message ?? `got=${data} want=${want}`);
   }
 
+  // ── ④-0 근무표를 안 쓰는 매장(근무표 행 0개) → 근무자 0명이면 매장 전원 ──────
+  //   같은 할일을 근무표 등록 뒤(④)에 다시 재서, 0287 의 두 갈래를 한 매장에서 모두 단언한다.
+  console.log('— ④-0 근무표 없는 매장: 근무자 0명 → 매장 전원 —');
+  const mine = async () => {
+    const { data, error } = await admin.rpc('due_task_reminders');
+    if (error) throw new Error('due_task_reminders: ' + error.message);
+    return (data ?? []).filter((r) => r.out_unit_id === UNIT);
+  };
+  const tNoShift = `t_tr_ns_${s}`;
+  made.templates.push(tNoShift);
+  await owner.from('work_templates').insert({
+    id: tNoShift, unit_id: UNIT, section: 'open', text: '근무자 없는 시각(알림)',
+    scope: 'shared', created_by: ownerId, date: DAY, remind_at: OUTSIDE,
+  });
+  let rows = await mine();
+  const nsBefore = rows.find((r) => r.out_template_id === tNoShift);
+  check('근무표 없는 매장 · 근무자 0명 → 매장 전원(3명)',
+    JSON.stringify([...(nsBefore?.out_recipients ?? [])].sort()) === JSON.stringify([ownerId, aId, bId].sort()),
+    `n=${nsBefore?.out_recipients?.length}`);
+
   // ── ③ workers_at ───────────────────────────────────────────────────────
   console.log('— ③ workers_at (근무자 + 승인 교대) —');
   const shA = `sh_tr_a_${s}`;
@@ -178,12 +200,7 @@ async function main() {
 
   // ── ④⑤ due_task_reminders ─────────────────────────────────────────────
   console.log('— ④ 수신자 규칙 —');
-  const mine = async () => {
-    const { data, error } = await admin.rpc('due_task_reminders');
-    if (error) throw new Error('due_task_reminders: ' + error.message);
-    return (data ?? []).filter((r) => r.out_unit_id === UNIT);
-  };
-  let rows = await mine();
+  rows = await mine();
   const shared = rows.find((r) => r.out_template_id === tShared);
   check('매장 전체 할일이 대상에 포함', !!shared, `rows=${rows.length}`);
   check('수신자 = 그 시각 근무자(교대 반영 B)', JSON.stringify(shared?.out_recipients ?? []) === JSON.stringify([bId]));
@@ -198,16 +215,11 @@ async function main() {
   const priv = rows.find((r) => r.out_template_id === tPrivate);
   check('담당자 지정 할일 → 담당자 1명', JSON.stringify(priv?.out_recipients ?? []) === JSON.stringify([aId]));
 
-  // 근무자 0명 fallback — 근무 구간 밖 시각으로 매장 전체 할일 하나 더.
-  const tNoShift = `t_tr_ns_${s}`;
-  made.templates.push(tNoShift);
-  await owner.from('work_templates').insert({
-    id: tNoShift, unit_id: UNIT, section: 'open', text: '근무자 없는 시각(알림)',
-    scope: 'shared', created_by: ownerId, date: DAY, remind_at: OUTSIDE,
-  });
+  // ★0287(D7): 이제 이 매장은 근무표를 쓴다(A 의 반복 근무 1행). 같은 할일(근무 구간 밖 시각)은
+  //   쉬는 사람에게 가지 않게 아예 대상에서 빠져야 한다. 예전 기대(매장 전원)는 결정이 바뀌어 틀렸다.
   rows = await mine();
-  const ns = rows.find((r) => r.out_template_id === tNoShift);
-  check('근무자 0명 → 매장 전원(3명)', (ns?.out_recipients ?? []).length === 3, `n=${ns?.out_recipients?.length}`);
+  check('근무표 쓰는 매장 · 근무자 0명 → 보내지 않음(0건)', !rows.some((r) => r.out_template_id === tNoShift),
+    `n=${rows.find((r) => r.out_template_id === tNoShift)?.out_recipients?.length}`);
 
   console.log('— ⑤ 완료한 할일은 제외 —');
   made.done.push(tShared);
@@ -231,13 +243,14 @@ async function main() {
   const denied = await sweep(ANON);
   check('anon 키로는 스윕 거부(403)', denied.status === 403, `status=${denied.status}`);
 
-  made.sent.push(tPrivate, tNoShift);
+  made.sent.push(tPrivate, tNoShift); // tNoShift 는 선점되면 안 된다. 혹시 남으면 정리만 한다.
   const first = await sweep(SRV);
   check('service_role 스윕 200', first.status === 200, JSON.stringify(first.body));
   const { data: claimed } = await admin
     .from('task_reminder_sent').select('template_id').eq('unit_id', UNIT).eq('remind_date', DAY);
   const claimedIds = (claimed ?? []).map((r) => r.template_id).sort();
-  check('발송 원장에 선점 기록', JSON.stringify(claimedIds) === JSON.stringify([tNoShift, tPrivate].sort()), claimedIds.join(','));
+  // 근무표 쓰는 매장의 '근무자 없는 시각' 할일(tNoShift)은 대상이 아니므로 원장에도 없어야 한다.
+  check('발송 원장에 선점 기록(담당자 할일만)', JSON.stringify(claimedIds) === JSON.stringify([tPrivate]), claimedIds.join(','));
 
   rows = await mine();
   check('선점된 할일은 다음 스윕 대상에서 빠짐(중복 발송 방지)', rows.length === 0, `남은 ${rows.length}건`);
