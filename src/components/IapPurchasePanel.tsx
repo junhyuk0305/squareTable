@@ -266,7 +266,8 @@ export function IapPurchasePanel({
   const paidAi = PLANS.single.aiMonthly;
   // A2 — 앱 구독이 없는데 유료 기간이 남아 있다 = 다른 경로로 산 것. 겹쳐 사지 못하게 막는다.
   const blockedNote = owned === 0 ? otherPaidNote(plan, paidUntil, renewsElsewhere) : null;
-  const prepaidNote = prepaidGuardNote(prepaidUntil);
+  // 선불 잠금은 새로 사는 결제만. 이미 구독 중이면 매장 수 바꾸기를 막지 않는다(2026-10-05).
+  const prepaidNote = owned === 0 ? prepaidGuardNote(prepaidUntil) : null;
   const releaseNames = releaseChoice
     .map((id) => ownedStores.find((s) => s.unit_id === id)?.store_name)
     .filter((n): n is string => !!n);
