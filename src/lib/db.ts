@@ -3199,6 +3199,26 @@ export async function fetchAttendance(): Promise<ReadResult<AttendanceRecord[]>>
   }
   return { data: (data ?? []) as AttendanceRecord[], error: false };
 }
+/**
+ * 한 직원의 한 달 출퇴근(A8). 출근 기록 화면이 지난달을 볼 때 쓴다 — 위 조회는 매장 전체 최근 1,000건이라
+ * 예전 달이 잘린다. 잘린 달은 "출퇴근을 안 찍었어요"가 거짓으로 뜬다.
+ */
+export async function fetchAttendanceMonth(staffId: string, ym: string): Promise<ReadResult<AttendanceRecord[]>> {
+  if (!HAS_SUPABASE) return { data: [], error: false };
+  const { data, error } = await supabase
+    .from('attendance')
+    .select('id, staff_id, date, check_in, check_out, work_minutes, edited_by')
+    .eq('staff_id', staffId)
+    .gte('date', `${ym}-01`)
+    .lte('date', `${ym}-31`)
+    .order('date', { ascending: false })
+    .limit(PAGE_LIMIT);
+  if (error) {
+    readFail('fetchAttendanceMonth', error);
+    return { data: [], error: true };
+  }
+  return { data: (data ?? []) as AttendanceRecord[], error: false };
+}
 export async function upsertAttendance(rec: AttendanceRecord): Promise<boolean> {
   if (!HAS_SUPABASE) return true;
   // 출퇴근=급여 직결 무결성 경로 — 0행(RLS/경합)이면 유령 성공 대신 실패로 롤백·배너(P1-6).

@@ -152,6 +152,26 @@ export function findOpenRecord<T extends { staff_id: string; check_in: string | 
   return best;
 }
 
+type MonthRow = { id: string; staff_id: string; date: string };
+
+/**
+ * 한 직원의 한 달 기록을 따로 읽은 결과로 갈아끼운다(A8). 기본 조회는 매장 전체 최근 1,000건이라
+ * 예전 달이 잘려 "출퇴근을 안 찍었어요"가 거짓으로 뜬다. 그 달 몫은 빼고 새 결과를 넣는다(지운 기록도 빠진다).
+ */
+export function replaceMonthRecords<T extends MonthRow>(records: readonly T[], staffId: string, ym: string, rows: readonly T[]): T[] {
+  return [...records.filter((r) => !(r.staff_id === staffId && r.date.startsWith(ym))), ...rows];
+}
+
+/**
+ * hydrate 가 최근 창으로 records 를 갈아치울 때, 따로 읽어 둔 달(키 = `직원|YYYY-MM`)의 행은 남긴다.
+ * 안 남기면 실시간 갱신 한 번에 그 달이 다시 비어 보인다.
+ */
+export function keepLoadedMonths<T extends MonthRow>(fresh: readonly T[], prev: readonly T[], keys: readonly string[]): T[] {
+  const loaded = new Set(keys);
+  const ids = new Set(fresh.map((r) => r.id));
+  return [...fresh, ...prev.filter((r) => loaded.has(`${r.staff_id}|${r.date.slice(0, 7)}`) && !ids.has(r.id))];
+}
+
 /** 열린 기록의 출근 표시 — 오늘이면 "22:00 출근", 어제면 "어제 22:00 출근", 그 전이면 "10/3 22:00 출근"(KST). */
 export function openSinceText(checkIn: string, now: Date = new Date()): string {
   const day = todayStr(new Date(checkIn));

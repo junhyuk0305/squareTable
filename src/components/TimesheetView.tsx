@@ -1,4 +1,4 @@
-import { ReactNode, useMemo, useState } from 'react';
+import { ReactNode, useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable, TextInput } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -73,6 +73,16 @@ export function TimesheetView({ staffId, wage, editedBy, badgeLabel, badgeTone =
   const [newDay, setNewDay] = useState('');
   const [err, setErr] = useState<string | null>(null);
 
+  // 지난달은 그 달 기록을 기간 조건으로 따로 읽는다(A8) — 기본 조회는 매장 전체 최근 1,000건이라 예전 달이 잘린다.
+  //   다 읽기 전·실패면 "출퇴근을 안 찍었어요" 대조를 띄우지 않는다(잘린 기록을 안 찍은 것으로 말하게 된다).
+  const loadMonth = useAttendanceStore((s) => s.loadMonth);
+  const monthState = useAttendanceStore((s) => s.months[`${staffId}|${ym}`]);
+  const pastMonth = ym < todayStr().slice(0, 7);
+  useEffect(() => {
+    if (pastMonth) void loadMonth(staffId, ym);
+  }, [pastMonth, staffId, ym, loadMonth]);
+  const monthReady = !pastMonth || monthState === 'ok';
+
   const monthRecs = useMemo(
     () => records.filter((r) => r.staff_id === staffId && r.date.startsWith(ym)).sort((a, b) => b.date.localeCompare(a.date)),
     [records, staffId, ym],
@@ -95,7 +105,7 @@ export function TimesheetView({ staffId, wage, editedBy, badgeLabel, badgeTone =
   const monthPay = monthBreakdown?.total ?? null;
   // 대조(확인) 층 — 근무표와 출퇴근이 30분 넘게 어긋난 것만. 급여는 근무표대로 나가므로
   // "다르다"를 말하지 않으면 잘못된 근무표가 그대로 지급된다.
-  const mismatches = useMemo(() => reconcileSchedule(monthShifts, monthRecs), [monthShifts, monthRecs]);
+  const mismatches = useMemo(() => (monthReady ? reconcileSchedule(monthShifts, monthRecs) : []), [monthReady, monthShifts, monthRecs]);
   // 이 달 근무 시간 수정 요청 중 사장 승인 대기(J2). 승인 전이라 예상급여에 아직 안 들어갔다는 것을 말한다.
   const waitingTimes = useMemo(
     () => pendingTimeRequests(timeRequests, staffId).filter((r) => r.date.startsWith(ym)).length,
@@ -203,12 +213,12 @@ export function TimesheetView({ staffId, wage, editedBy, badgeLabel, badgeTone =
         <View style={styles.summary}>
           <View style={styles.sumCol}>
             <Text style={styles.sumLabel}>근무일</Text>
-            <Text style={styles.sumValue}>{monthRecs.length}일</Text>
+            <Text style={styles.sumValue}>{monthReady ? `${monthRecs.length}일` : '—'}</Text>
           </View>
           <View style={styles.sumDivider} />
           <View style={styles.sumCol}>
             <Text style={styles.sumLabel}>근무시간</Text>
-            <Text style={styles.sumValue}>{fmtDuration(totalMin)}</Text>
+            <Text style={styles.sumValue}>{monthReady ? fmtDuration(totalMin) : '—'}</Text>
           </View>
           <View style={styles.sumDivider} />
           <View style={styles.sumCol}>
@@ -304,7 +314,15 @@ export function TimesheetView({ staffId, wage, editedBy, badgeLabel, badgeTone =
         </Appear>
         <Appear delay={stagger(6)}>
         <View style={styles.list}>
-          {monthRecs.length === 0 && <Text style={styles.empty}>이 달 출퇴근 기록이 없어요.</Text>}
+          {!monthReady ? (
+            <Text style={styles.empty}>
+              {monthState === 'error'
+                ? '이 달 기록을 불러오지 못했어요. 인터넷 연결을 확인하고 다시 들어와 주세요.'
+                : '이 달 기록을 불러오고 있어요…'}
+            </Text>
+          ) : (
+            monthRecs.length === 0 && <Text style={styles.empty}>이 달 출퇴근 기록이 없어요.</Text>
+          )}
           {monthRecs.map((r, i) => {
             const d = new Date(`${r.date}T00:00:00`);
             const open = !r.check_out;

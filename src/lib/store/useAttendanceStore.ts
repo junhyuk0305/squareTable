@@ -1,9 +1,9 @@
 import { create } from 'zustand';
 import { coalesce, subscribeDebounced } from '@/lib/store/realtimeSync';
 import { currentTenantEpoch, isStaleEpoch } from '@/lib/store/tenantEpoch';
-import { todayStr, minutesBetween, nowISO, MAX_SHIFT_MIN, findOpenRecord } from '@/lib/utils/attendance';
+import { todayStr, minutesBetween, nowISO, MAX_SHIFT_MIN, findOpenRecord, replaceMonthRecords, keepLoadedMonths } from '@/lib/utils/attendance';
 import { HAS_SUPABASE } from '@/lib/supabase';
-import { fetchAttendance, upsertAttendance, deleteAttendance, subscribeAttendance } from '@/lib/db';
+import { fetchAttendance, fetchAttendanceMonth, upsertAttendance, deleteAttendance, subscribeAttendance } from '@/lib/db';
 import { guardWrite, useSyncStore } from '@/lib/store/useSyncStore';
 import { genId } from '@/lib/utils/id';
 import { addDays, isOvernight } from '@/lib/utils/schedule';
@@ -58,7 +58,11 @@ type State = {
   /** 마지막 hydrate 가 실패했는가 — 화면이 "아직 출근 전"과 "못 불러옴"을 구분한다.
    *  실패 상태에서는 출근/퇴근 쓰기를 막는다(판정 불가 상태에서 쓰면 이중 출근이 찍힌다). */
   loadError: boolean;
+  /** 따로 읽은 달(키 = `직원|YYYY-MM`)의 상태(A8). 'ok' 가 아니면 그 달은 아직 다 읽지 못했다. */
+  months: Record<string, 'loading' | 'ok' | 'error'>;
   hydrate: () => Promise<void>;
+  /** 한 직원의 한 달을 기간 조건으로 읽어 records 에 넣는다 — 최근 1,000건 밖의 예전 달(A8). */
+  loadMonth: (staffId: string, ym: string) => Promise<void>;
   /** 재시도 — 실패 화면의 '다시 시도' 버튼이 부르는 경로. */
   retry: () => Promise<void>;
   subscribe: () => () => void;
@@ -78,6 +82,7 @@ export const useAttendanceStore = create<State>((set, get) => ({
   records: HAS_SUPABASE ? [] : seed,
   loaded: !HAS_SUPABASE,
   loadError: false,
+  months: {},
   hydrate: coalesce(async () => {
     if (!HAS_SUPABASE) return;
     const epoch = currentTenantEpoch();
@@ -86,8 +91,26 @@ export const useAttendanceStore = create<State>((set, get) => ({
     // ★실패해도 loaded 는 올린다(시도는 끝났다). 대신 loadError 로 말한다 — 예전엔 실패가
     //   records=[] 로 위장돼 hasOpen 이 항상 false 였고, 화면이 "아직 출근 전이에요"를 말했다(#40).
     //   기존 records 는 유지한다 — 실패 때문에 근무 중 기록이 화면에서 사라지면 더 위험하다.
-    set((s) => ({ records: error ? s.records : data, loaded: true, loadError: error }));
+    //   따로 읽어 둔 달은 남긴다(A8) — 최근 창 밖이라 안 남기면 실시간 갱신 한 번에 그 달이 다시 빈다.
+    set((s) => ({
+      records: error ? s.records : keepLoadedMonths(data, s.records, Object.keys(s.months).filter((k) => s.months[k] === 'ok')),
+      loaded: true,
+      loadError: error,
+    }));
   }),
+  loadMonth: async (staffId, ym) => {
+    if (!HAS_SUPABASE) return;
+    const key = `${staffId}|${ym}`;
+    const epoch = currentTenantEpoch();
+    set((s) => ({ months: { ...s.months, [key]: s.months[key] === 'ok' ? 'ok' : 'loading' } }));
+    const { data, error } = await fetchAttendanceMonth(staffId, ym);
+    if (isStaleEpoch(epoch)) return;
+    set((s) =>
+      error
+        ? { months: { ...s.months, [key]: s.months[key] === 'ok' ? 'ok' : 'error' } }
+        : { records: replaceMonthRecords(s.records, staffId, ym, data), months: { ...s.months, [key]: 'ok' } },
+    );
+  },
   retry: async () => {
     await get().hydrate();
   },
