@@ -941,6 +941,29 @@ async function slotRuleChecks() {
     await evt(R, `qa_carry3_${s}`, 'INITIAL_PURCHASE', 'single_1_monthly', 'single', 1, end);
     check('㉑-e 선불이 없으면 스토어 기간 그대로', sameTime((await paidUntilOf(A))?.paid_until, end), '');
   }
+
+  // ══ ㉒ 논리 점검 2026-10-05 B1 — 환불은 그 거래로 연 몫만 회수한다(0259) ══════════════════
+  //   끝난 옛 거래를 환불받아도 지금 구독으로 연 매장은 닫히지 않는다. 지금 구독을 환불하면 그대로 회수한다.
+  {
+    const R = await reuseOwner(4);
+    const A = await mkStore(R, 'QA㉒ 1호점');
+    await makeFree(A);
+    const old = `qa_b1_old_${s}`;
+    await evtP(R, old, 'INITIAL_PURCHASE', 'single_1_monthly', 'single', 1, iso(days(30)));
+    await evtP(R, old, 'EXPIRATION', 'single_1_monthly', 'single', 1, iso(days(-1)));
+    const cur = `qa_b1_cur_${s}`;
+    const end = iso(days(30));
+    await evtP(R, cur, 'INITIAL_PURCHASE', 'single_1_monthly', 'single', 1, end);
+    const a0 = await paidUntilOf(A);
+    await evtP(R, old, 'CANCELLATION', 'single_1_monthly', 'single', 1, iso(days(-1)), { p_reason: 'CUSTOMER_SUPPORT' });
+    const a1 = await paidUntilOf(A);
+    check('★★㉒-a 끝난 옛 거래 환불은 지금 구독으로 연 매장을 닫지 않는다', a1?.status === 'active' && sameTime(a1?.paid_until, a0?.paid_until), JSON.stringify({ a0, a1 }));
+    const row = await svcSel(`iap_subscriptions?original_transaction_id=eq.${old}&select=status`);
+    check('㉒-a 옛 거래 행은 refunded 로 적힌다', row[0]?.status === 'refunded', JSON.stringify(row));
+    await evtP(R, cur, 'CANCELLATION', 'single_1_monthly', 'single', 1, end, { p_reason: 'CUSTOMER_SUPPORT' });
+    const a2 = await paidUntilOf(A);
+    check('★㉒-b 지금 구독을 환불하면 그대로 회수한다', a2?.status === 'expired', JSON.stringify(a2));
+  }
 }
 
 async function main() {
