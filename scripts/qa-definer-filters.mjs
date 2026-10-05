@@ -34,8 +34,8 @@ const FN_TOKENS = {
   owner_today: ['valid_from', '24 hours', 'shift_exceptions', 'owner_id = auth.uid()', 'archived_tenure_id'],
   // P1-2 0235(Q5 · H8)
   sync_iap_slots: ["source = 'iap'", 'p_continuing'],
-  // 0231(본사 사본 숨김) · P4-6 0247(Q22 승인·반려 알림)
-  approve_member: ['brand_hidden', 'insert into public.member_notices'],
+  // 0231(본사 사본 숨김) · P4-6 0247(Q22 승인·반려 알림) · P5-1 0248(J10 노하우가 전부 보관된 코스는 첫 퀴즈로 고르지 않는다)
+  approve_member: ['brand_hidden', 'insert into public.member_notices', 'archived_at'],
   reject_member: ['insert into public.member_notices', "'rejected'", 'not_pending'],
   // P4-1 0242 — 적용 기간을 모르는 판정이 하나라도 남으면 근무가 두 번 잡힌다(설계 01 §7-1)
   workers_at: ['valid_from', 'valid_to', 'shift_exceptions', 'archived_tenure_id'],
@@ -47,7 +47,7 @@ const FN_TOKENS = {
   shift_templates_all: ['valid_from', 'unit_members', 'auth_can_manage', 'archived_tenure_id'],
   transfer_shift: ['valid_from', 'shift_exceptions', 'archived_tenure_id'],
   approve_swap: ['p_confirm_past', 'kst_today() - 35', 'transfer_shift', 'auth_can_manage', 'archived_tenure_id'],
-  due_quiz_sends: ['valid_to', 'workers_at'],
+  due_quiz_sends: ['valid_to', 'workers_at', 'archived_at'],
   // P4-2 0243(J2) — 나누기가 요청을 안 옮기면 지난 날짜 요청이 엉뚱한 구간에 붙는다(데이터 H6). 승인은 사장만(J2 원문).
   copy_past_segment: ['shift_exceptions', 'swap_requests', 'shift_change_requests', 'shift_day_marks'],
   request_shift_time: ['valid_from', 'shift_exceptions', 'kst_today() - 35', 'kst_today() + 60', 'auth.uid()', 'archived_tenure_id'],
@@ -61,7 +61,7 @@ const FN_TOKENS = {
   mark_shift_day: ['auth_is_owner', 'auth_unit_id', 'p_confirm_past', 'valid_from', 'shift_exceptions', 'archived_tenure_id'],
   clear_shift_day: ['auth_is_owner', 'auth_unit_id', 'p_confirm_past', 'archived_tenure_id'],
   // P4-5 0246 — 재직 기간. 표시(archived_tenure_id)된 옛 재직 기간 행은 정의자 함수도 읽거나 고치지 않는다.
-  owner_overview: ['owner_id = auth.uid()', 'archived_tenure_id'],
+  owner_overview: ['owner_id = auth.uid()', 'archived_tenure_id', 'archived_at is null'],
   edit_shift_from: ['archived_tenure_id', 'p_confirm_past'],
   end_shift_from: ['archived_tenure_id', 'p_confirm_past'],
   override_shift_day: ['archived_tenure_id', 'p_confirm_past'],
@@ -86,6 +86,24 @@ const FN_TOKENS = {
     'archived_tenure_id', 'expired_former_members', 'name_snapshot', 'purge_dry_run_rollback'],
   //   3년 대상 = 지금 그 매장 멤버가 아니고 · 열린 기간이 없고 · 가장 최근 닫힌 기간이 3년을 넘은 사람(재입사자 기록을 지우지 않는다).
   expired_former_members: ['unit_members', 'bool_and(t.left_at is not null)', 'max(t.left_at)'],
+  // P5-1 0248(J10) — 보관한 노하우(archived_at)는 직원 화면 · AI 검색 · 퀴즈 출제·발송 · 개요 수 · 복사 · 본사 읽기에서 빠진다.
+  match_playbook: ['archived_at is null', 'brand_hidden_at is null'],
+  my_knowhow_entries: ['archived_at is null', 'brand_hidden_at is null'],
+  owner_knowhow_entries: ['archived_at is null', 'owner_id = (select auth.uid())'],
+  owner_knowhow_stats: ['archived_at is null', 'owner_id = auth.uid()'],
+  my_growth: ['archived_at is null'],
+  list_unit_knowhow: ['archived_at is null', 'not_owner'],
+  copy_knowhow_between: ['archived_at is null', 'not_owner_source', 'not_owner_target'],
+  brand_unit_entries: ['archived_at is null', 'brand_has_unit'],
+  brand_overview_rows: ['archived_at is null', 'p_brand is not null or p_units is not null'],
+  quiz_items_for: ['archived_at is not null', 'brand_hidden_at is not null'],
+  quiz_link_items: ['archived_at is not null', 'brand_hidden_at is not null'],
+  quiz_item_counts: ['archived_at is not null', 'brand_hidden_at is not null'],
+  quiz_link_resolve: ['archived_at is null', 'brand_hidden_at is not null', 'revoked_at is null'],
+  enqueue_knowhow_rechecks: ['archived_at is null', 'brand_hidden_at is null'],
+  archive_knowhow: ['auth_owns_unit', 'brand_copy_use_hide', "'draft'", 'archived_by', 'entry_not_found'],
+  archived_knowhow: ['auth_owns_unit', 'archived_at is not null', 'auth_unit_id'],
+  knowhow_usage: ['auth_owns_unit', 'quiz_attempts', 'work_template_knowhow', 'course_entries'],
 };
 
 // 함수 → 있으면 안 되는 토큰(옛 경로를 다시 여는 퇴행).
@@ -283,6 +301,53 @@ console.log('\n[5] 0247 member_notices · retention_purge_log · 스윕·크론 
   } else {
     console.log('  SKIP 크론 등록 확인(pg_cron 없음 · 로컬 도커)');
   }
+}
+
+console.log('\n[6] 0248 노하우 보관 — 열 · 정책 · 트리거 · 권한');
+{
+  const col = psql(`select count(*) from information_schema.columns where table_schema = 'public' and table_name = 'playbook_entries'
+                      and column_name in ('archived_at', 'archived_by')`);
+  check('playbook_entries.archived_at · archived_by 열이 있다', col === '2', `cols=${col}`);
+  for (const name of ['playbook_entries_read', 'playbook_entries_write']) {
+    const r = pol('playbook_entries', name);
+    const [q, w] = r.split(' | ');
+    check(`playbook_entries.${name} ⊇ archived_at IS NULL (using${w ? ' · with check' : ''})`,
+      !!q && q.includes('archived_at IS NULL') && (!w || w.includes('archived_at IS NULL')), r || '정책 없음');
+    check(`playbook_entries.${name} ⊇ brand_hidden_at · auth_owns_unit (0231 유지)`, r.includes('brand_hidden_at') && r.includes('auth_owns_unit'), r || '정책 없음');
+  }
+  const other = psql(`select count(*) from pg_policies where schemaname = 'public' and tablename = 'playbook_entries'
+                        and cmd in ('SELECT', 'ALL', 'DELETE') and permissive = 'PERMISSIVE'
+                        and policyname not in ('playbook_entries_read', 'playbook_entries_write')`);
+  check('playbook_entries 에 보관 술어 없는 SELECT·DELETE 정책이 더 없다', other === '0', `정책 ${other}개`);
+  const trg = (name) => psql(`select coalesce(string_agg(pg_get_triggerdef(t.oid), ' '), '') from pg_trigger t
+                                where t.tgrelid = 'public.playbook_entries'::regclass and t.tgname = '${name}' and not t.tgisinternal`);
+  const del = trg('trg_playbook_entry_soft_delete');
+  check('BEFORE DELETE 트리거 trg_playbook_entry_soft_delete (옛 앱 삭제 = 보관)', del.includes('BEFORE DELETE') && del.includes('FOR EACH ROW'), del || '없음');
+  const grd = trg('trg_playbook_entry_archive_guard');
+  check('BEFORE UPDATE OF archived_at 가드 트리거', grd.includes('BEFORE UPDATE OF archived_at'), grd || '없음');
+  const fdef = (fn) => psql(`select coalesce((select pg_get_functiondef(p.oid) from pg_proc p
+                                                where p.pronamespace = 'public'::regnamespace and p.proname = '${fn}'), '')`);
+  const sd = fdef('tg_playbook_entry_soft_delete');
+  check('삭제 트리거 함수: current_user 판정 · 본사 사본 · 초안 제외 · archive_knowhow · return null',
+    ['current_user', 'authenticated', 'brand_entry_id', "'draft'", 'archive_knowhow', 'return null'].every((t) => sd.includes(t)), sd ? '토큰 빠짐' : '없음');
+  check('삭제 트리거 함수는 정의자가 아니다(current_user 가 호출자여야 한다)',
+    psql(`select coalesce((select (not p.prosecdef)::text from pg_proc p
+                             where p.pronamespace = 'public'::regnamespace and p.proname = 'tg_playbook_entry_soft_delete'), 'none')`) === 'true');
+  const gd = fdef('tg_playbook_entry_archive_guard');
+  check('가드 함수: service_role 예외(auth.uid() is null) · 소유주 · 본사 사본 거부',
+    ['auth.uid() is null', 'auth_owns_unit', 'brand_copy_use_hide', 'not_owner'].every((t) => gd.includes(t)), gd ? '토큰 빠짐' : '없음');
+  for (const fn of ['archive_knowhow(text, boolean)', 'archived_knowhow()', 'knowhow_usage(text)']) {
+    const exists = psql(`select to_regprocedure('public.${fn}') is not null`);
+    check(`${fn} 이 있다`, exists === 't');
+    if (exists !== 't') continue;
+    check(`${fn}: anon 실행 불가 · authenticated 실행 가능`,
+      psql(`select not has_function_privilege('anon', 'public.${fn}', 'execute') and has_function_privilege('authenticated', 'public.${fn}', 'execute')`) === 't');
+    check(`${fn}: 정의자 · search_path=public`,
+      psql(`select p.prosecdef and 'search_path=public' = any(coalesce(p.proconfig, '{}')) from pg_proc p where p.oid = 'public.${fn}'::regprocedure`) === 't');
+  }
+  check('부분 인덱스 (unit_id) where archived_at is null',
+    psql(`select count(*) from pg_indexes where schemaname = 'public' and tablename = 'playbook_entries'
+            and indexdef ilike '%(unit_id)%' and indexdef ilike '%archived_at IS NULL%'`) === '1');
 }
 
 console.log(`\nRESULT: ${pass} passed, ${fail} failed`);

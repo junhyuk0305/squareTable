@@ -104,6 +104,7 @@
     "qa:swap-transfer": "node scripts/qa-swap-transfer.mjs",
     "qa:retention": "node scripts/qa-retention.mjs",
     "qa:member-notices": "node scripts/qa-member-notices.mjs",
+    "qa:knowhow-archive": "node scripts/qa-knowhow-archive.mjs",
     "qa:push-session": "node scripts/qa-push-session.mjs",
     "qa:member-exit": "node scripts/qa-member-exit.mjs",
     "qa:account-security": "node scripts/qa-account-security.mjs",
