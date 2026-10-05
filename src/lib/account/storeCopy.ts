@@ -41,9 +41,9 @@ export function deleteAccountError(raw: string | null | undefined): { text: stri
   return { text: friendlyError(raw, '탈퇴 처리에 실패했어요. 잠시 후 다시 시도해 주세요.'), toStaff: false };
 }
 
-/** delete_store_preview(0235) 반환값. 읽지 못하면 null 로 둔다(돌려준다고 약속하지 않는다). */
+/** delete_store_preview(0235) 반환값. returns_slot 은 언제나 false. paid_until = 기간이 남은 유료 매장의 만료일. 읽지 못하면 null. */
 export type DeleteStorePreview = { returns_slot: boolean; paid_until: string | null };
-/** delete_store(0235) 반환값. 0235 전 서버는 void 라 null 이다. */
+/** delete_store(0235) 반환값. returned_slot 은 언제나 false. 0235 전 서버는 void 라 null 이다. */
 export type DeleteStoreResult = { returned_slot: boolean; paid_until: string | null };
 
 const KST_MS = 9 * 60 * 60 * 1000;
@@ -55,19 +55,18 @@ function kstMonthDay(iso: string): string | null {
 }
 
 /**
- * J8 — 매장 삭제 확인 문구. 서버가 실제로 몫을 돌려주는 매장(returns_slot)에만 기간 문장을 붙인다(정책 M2).
+ * 매장 삭제 확인 문구. 기간이 남은 유료 매장이면 그 기간은 돌려받을 수 없다고 알린다(2026-10-05 결정).
  * ⛔웹은 지금 문구 그대로다.
  */
 export function deleteStoreConfirmText(v: { storeName: string; preview: DeleteStorePreview | null; os: string }): string {
   const base = `“${v.storeName}”의 노하우·근무·급여 등 모든 데이터가 영구 삭제돼요. 되돌릴 수 없어요.`;
-  if (v.os === 'web' || !v.preview?.returns_slot || !v.preview.paid_until) return base;
+  if (v.os === 'web' || !v.preview?.paid_until) return base;
   const md = kstMonthDay(v.preview.paid_until);
   if (!md) return base;
-  return `${base}\n\n이 매장의 이용 기간(${md}까지)은 새 매장을 만들 때 쓸 수 있어요. 이용 중인 매장 수와 요금은 그대로예요.`;
+  return `${base}\n\n남은 이용 기간(${md}까지)은 돌려받을 수 없어요.`;
 }
 
-/** J8 — 매장 삭제 성공 토스트. delete_store 가 몫을 돌려줬을 때만 새 매장 문장을 붙인다. ⛔웹은 지금 문구 그대로다. */
+/** 매장 삭제 성공 토스트. 남은 기간을 돌려주지 않으므로 언제나 같은 문구다. */
 export function deleteStoreToast(v: { result: DeleteStoreResult | null; os: string }): string {
-  if (v.os !== 'web' && v.result?.returned_slot === true) return '매장을 삭제했어요. 새 매장 1곳을 열 수 있어요.';
   return '매장을 삭제했어요.';
 }

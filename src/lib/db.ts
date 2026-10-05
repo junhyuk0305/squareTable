@@ -426,7 +426,7 @@ export async function fetchCrossStoreNotifData(): Promise<DbResult<UnitNotifData
 }
 
 /** 매장 하나 삭제(오너 전용, 안전장치는 RPC 내부: 마지막매장·직원존재 차단·포인터 재지정·cascade). */
-// ★0235(J8): 반환 = { returned_slot, paid_until }(남은 몫을 새 매장용으로 돌려줬는지). 0235 전 서버는 void → null.
+// ★0235: 반환 = { returned_slot, paid_until }. 남은 기간을 돌려주지 않으므로 returned_slot 은 언제나 false. 0235 전 서버는 void → null.
 export async function rpcDeleteStore(unitId: string): Promise<DbResult<DeleteStoreResult>> {
   const { data, error } = await supabase.rpc('delete_store', { p_unit_id: unitId });
   const d = data as { returned_slot?: unknown; paid_until?: unknown } | null;
@@ -438,7 +438,7 @@ export async function rpcDeleteStore(unitId: string): Promise<DbResult<DeleteSto
   };
 }
 
-/** 0235(J8): 지우면 몫을 돌려줄 매장인지 미리 본다(읽기 전용 · 소유자만). 확인창 문구를 고르는 데만 쓴다. */
+/** 0235: 지울 매장에 남은 유료 기간이 있는지 미리 본다(읽기 전용 · 소유자만). 확인창 문구를 고르는 데만 쓴다. */
 export async function fetchDeleteStorePreview(unitId: string): Promise<DbResult<DeleteStorePreview>> {
   const { data, error } = await supabase.rpc('delete_store_preview', { p_unit: unitId });
   const d = data as { returns_slot?: unknown; paid_until?: unknown } | null;

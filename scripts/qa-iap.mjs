@@ -792,7 +792,7 @@ async function slotRuleChecks() {
     const B = await mkStore(R, 'QA⑲d 2호점');
     await makeFree(B);
     await R.c.rpc('delete_store', { p_unit_id: A });
-    check('셋업 ⑲-d A 삭제 → 구독 슬롯 반환', (await openSlots(R.uid)).length === 1, '');
+    check('셋업 ⑲-d A 삭제 → 슬롯을 돌려주지 않는다(2026-10-05)', (await openSlots(R.uid)).length === 0, '');
     await evt(R, t, 'CANCELLATION', 'single_1_monthly', 'single', 1, iso(days(30)), { p_reason: 'CUSTOMER_SUPPORT' });
     const live = (await openSlots(R.uid)).filter((x) => new Date(x.paid_until).getTime() > Date.now());
     check('★★⑲-d 환불 뒤 돌려받은 슬롯이 쓸 수 없게 끝난다', live.length === 0, JSON.stringify(live));
@@ -809,7 +809,7 @@ async function slotRuleChecks() {
     await mkStore(R, 'QA⑲e 2호점');
     await Promise.all(Array.from({ length: 6 }, () => R.c.rpc('delete_store', { p_unit_id: A })));
     const open = await openSlots(R.uid);
-    check('★★⑲-e 동시 삭제 6번 → 돌려받은 슬롯 1개', open.length === 1, `open=${open.length}`);
+    check('★★⑲-e 동시 삭제 6번 → 슬롯이 생기지 않는다', open.length === 0, `open=${open.length}`);
   }
 
   // ⑲-f 오래전에 끝난 슬롯 + 코드로 연 기간은 돌려주지 않는다(코드를 슬롯으로 바꿔 돌려 쓰는 길).
@@ -839,7 +839,7 @@ async function slotRuleChecks() {
     const aPaid = await paidUntilOf(A);
     await R.c.rpc('delete_store', { p_unit_id: A });
     const open = await openSlots(R.uid);
-    check('★★⑲-g 이어 낸 두 달이 모두 돌아온다', open.length === 1 && sameTime(open[0]?.paid_until, aPaid?.paid_until), JSON.stringify({ aPaid, open }));
+    check('★★⑲-g 이어 낸 두 달도 돌려주지 않는다(2026-10-05)', open.length === 0, JSON.stringify({ aPaid, open }));
   }
 
   // ⑲-h Play 늘리기(새 거래 INITIAL_PURCHASE)도 이어지는 결제다 — 늘린 몫이 선불 매장에 먹히지 않는다.
