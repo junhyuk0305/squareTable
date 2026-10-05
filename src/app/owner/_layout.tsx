@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { useForegroundRefresh } from '@/lib/app/useForegroundRefresh';
 import { Stack, Redirect, usePathname, useRouter } from 'expo-router';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { needsProfileSetup } from '@/lib/store/profileSetup';
@@ -18,6 +19,36 @@ import { retryPendingEmbeddings } from '@/lib/ai/embedBacklog';
 import { HAS_SUPABASE } from '@/lib/supabase';
 import { canManage, managerMayOpen } from '@/lib/utils/roles';
 
+/** 레이아웃이 처음 열 때와 앱이 다시 앞으로 왔을 때(J15 ③) 같은 목록을 다시 읽는다. 목록을 두 벌로 두지 않는다. */
+function hydrateOwnerStores() {
+  // 노하우를 받아온 다음 **색인 대기분을 소진한다**(0181). 색인은 예전엔 한 번 실패하면 영영
+  // 끝이었고(감사 #15), 허브에서 다른 매장에 쓴 노하우는 색인이 아예 안 붙었다(#16).
+  // 대기를 남기는 쪽은 embedEntry·owner_insert_knowhow 이고, 소진하는 쪽이 여기다.
+  // 본문이 필요하므로 hydrate 뒤에 돈다. 실패해도 앱 동작에 영향 없음(부수 작업).
+  void usePlaybookStore
+    .getState()
+    .hydrate()
+    .then(() => retryPendingEmbeddings(usePlaybookStore.getState().entries));
+  useUnknownQueueStore.getState().hydrate();
+  useWorkStore.getState().hydrate();
+  useAttendanceStore.getState().hydrate();
+  usePayrollStore.getState().hydrate();
+  useStaffStore.getState().hydrate();
+  useScheduleStore.getState().hydrate();
+  // 알림벨 배지가 '검토대기 제안'을 홈/어느 탭에서든 실시간 반영하도록 레이아웃에서 하이드레이트+구독.
+  //  (기존엔 inbox·suggestions 화면 안에서만 구독 → 홈에 있으면 새 제안이 배지에 안 잡혔음.)
+  useSuggestionStore.getState().hydrate();
+  // 알림 '모두 읽기' 기준 시각(0078·unit_member_prefs)이 벨 배지 집계에 필요 — 레이아웃에서 당긴다.
+  useMemberPrefsStore.getState().hydrate();
+  // 입금 신고 검토 결과(0083)도 벨 배지 축 — 어느 탭에 있든 '입금 확인됨/반려됨'이 잡히게.
+  void usePaymentClaimStore.getState().hydrate();
+  // 사장 알림(0191 좌석 잠김·AI 사용량)도 벨 배지 축.
+  void useOwnerAlertStore.getState().hydrate();
+  // 업무방 — 매장이 바뀌면 tenantReset 이 비운다. 업무 탭이 열려 있는 채로 바뀌어도 게이트가 풀리게
+  // 여기서 다시 채운다(구독은 업무 탭 WorkBoard 가 맡는다).
+  void useRoomStore.getState().hydrate();
+}
+
 export default function OwnerLayout() {
   const status = useSessionStore((s) => s.status);
   const role = useSessionStore((s) => s.role);
@@ -30,34 +61,15 @@ export default function OwnerLayout() {
   const router = useRouter();
 
   // 로그인되면 DB에서 당겨오고 실시간 구독(인박스·업무보드·출퇴근이 다른 기기 변경에 즉시 반응).
+  // J15 ③: 30초 넘게 뒤에 있다 돌아오면 소속을 다시 맞추고 같은 목록을 다시 읽는다.
+  useForegroundRefresh(status === 'signed_in', () => {
+    void useSessionStore.getState().refreshMembership();
+    hydrateOwnerStores();
+  });
+
   useEffect(() => {
     if (status !== 'signed_in') return;
-    // 노하우를 받아온 다음 **색인 대기분을 소진한다**(0181). 색인은 예전엔 한 번 실패하면 영영
-    // 끝이었고(감사 #15), 허브에서 다른 매장에 쓴 노하우는 색인이 아예 안 붙었다(#16).
-    // 대기를 남기는 쪽은 embedEntry·owner_insert_knowhow 이고, 소진하는 쪽이 여기다.
-    // 본문이 필요하므로 hydrate 뒤에 돈다. 실패해도 앱 동작에 영향 없음(부수 작업).
-    void usePlaybookStore
-      .getState()
-      .hydrate()
-      .then(() => retryPendingEmbeddings(usePlaybookStore.getState().entries));
-    useUnknownQueueStore.getState().hydrate();
-    useWorkStore.getState().hydrate();
-    useAttendanceStore.getState().hydrate();
-    usePayrollStore.getState().hydrate();
-    useStaffStore.getState().hydrate();
-    useScheduleStore.getState().hydrate();
-    // 알림벨 배지가 '검토대기 제안'을 홈/어느 탭에서든 실시간 반영하도록 레이아웃에서 하이드레이트+구독.
-    //  (기존엔 inbox·suggestions 화면 안에서만 구독 → 홈에 있으면 새 제안이 배지에 안 잡혔음.)
-    useSuggestionStore.getState().hydrate();
-    // 알림 '모두 읽기' 기준 시각(0078·unit_member_prefs)이 벨 배지 집계에 필요 — 레이아웃에서 당긴다.
-    useMemberPrefsStore.getState().hydrate();
-    // 입금 신고 검토 결과(0083)도 벨 배지 축 — 어느 탭에 있든 '입금 확인됨/반려됨'이 잡히게.
-    void usePaymentClaimStore.getState().hydrate();
-    // 사장 알림(0191 좌석 잠김·AI 사용량)도 벨 배지 축.
-    void useOwnerAlertStore.getState().hydrate();
-    // 업무방 — 매장이 바뀌면 tenantReset 이 비운다. 업무 탭이 열려 있는 채로 바뀌어도 게이트가 풀리게
-    // 여기서 다시 채운다(구독은 업무 탭 WorkBoard 가 맡는다).
-    void useRoomStore.getState().hydrate();
+    hydrateOwnerStores();
     const offQ = useUnknownQueueStore.getState().subscribe();
     const offP = usePlaybookStore.getState().subscribe();
     const offW = useWorkStore.getState().subscribe();

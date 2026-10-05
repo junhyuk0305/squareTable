@@ -156,6 +156,8 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
   const postComment = useWorkStore((s) => s.postComment);
   const editFeedText = useWorkStore((s) => s.editFeedText);
   const deleteFeedItem = useWorkStore((s) => s.deleteFeedItem);
+  const retryMessage = useWorkStore((s) => s.retryMessage);
+  const discardFailedMessage = useWorkStore((s) => s.discardFailedMessage);
   const toggleReaction = useWorkStore((s) => s.toggleReaction);
   const togglePin = useWorkStore((s) => s.togglePin);
   const markNoticeRead = useWorkStore((s) => s.markNoticeRead);
@@ -870,6 +872,9 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
           onMessageToTask={messageToTask}
           onMessageToKnowhow={sessionRole === 'owner' ? messageToKnowhow : undefined}
           onDelete={deleteFeedItem}
+          onEdit={editFeedText}
+          onRetry={retryMessage}
+          onDiscard={discardFailedMessage}
           onAddTask={() => setComposer({ open: true, date: today })}
           onAssignTask={(id) => setComposer({ open: true, date: today, assigneeId: id })}
           onWriteNotice={() => openPanel('notice')}

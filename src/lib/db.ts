@@ -3077,9 +3077,11 @@ export async function fetchFeed(): Promise<ReadResult<FeedItem[]>> {
 }
 export async function upsertFeed(item: FeedItem): Promise<boolean> {
   if (!HAS_SUPABASE) return true;
+  // sendState 는 이 기기 표시다(J15 ①) — 서버에 싣지 않는다.
+  const { sendState: _local, ...data } = item;
   return write(
     'upsertFeed',
-    supabase.from('work_feed').upsert({ id: item.id, unit_id: _unitId, feed_date: item.date, room_id: item.roomId ?? null, data: item }),
+    supabase.from('work_feed').upsert({ id: item.id, unit_id: _unitId, feed_date: item.date, room_id: item.roomId ?? null, data }),
   );
 }
 /**

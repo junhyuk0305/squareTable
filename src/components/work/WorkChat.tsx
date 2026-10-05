@@ -18,6 +18,8 @@ import { InfoDot } from '@/components/InfoDot';
 import { VoiceInputButton } from '@/components/VoiceInputButton';
 import { appendDictation, buildHints } from '@/lib/voice/text';
 import { PHOTO_UPLOAD_INFO } from '@/lib/copy/photoUploadInfo';
+import { canEditMessage, deleteConfirmText } from '@/lib/work/chatRules';
+import { confirmAction } from '@/lib/utils/confirm';
 
 // 채팅 윈도잉 — 스트림이 수백~수천 개여도 최근 것만 렌더하고, 위로 스크롤하면 이전 대화를
 // 한 페이지씩 붙인다(비가상 ScrollView라 전부 마운트하면 느려지고 @멘션 입력까지 버벅인다).
@@ -110,6 +112,9 @@ export function WorkChat({
   onMessageToTask,
   onMessageToKnowhow,
   onDelete,
+  onEdit,
+  onRetry,
+  onDiscard,
   onAddTask,
   onAssignTask,
   onWriteNotice,
@@ -135,6 +140,11 @@ export function WorkChat({
   onMessageToKnowhow?: (text: string, feedId: string) => void;
   /** 메시지 삭제 — 권한(본인 or 사장)은 여기서 게이팅, 백엔드 RLS(wf_delete)도 같은 매장·방만 허용. */
   onDelete: (id: string) => void;
+  /** 내 메시지 고치기(24시간 안 · 서버 0252 가 다시 판정). */
+  onEdit: (id: string, text: string) => void;
+  /** 전송 실패한 메시지 다시 보내기 · 이 기기에서 지우기(J15 ①). */
+  onRetry: (id: string) => void;
+  onDiscard: (id: string) => void;
   onAddTask: () => void;
   /** 사장: @리스트에서 직원에게 바로 할일 배정(그 직원 담당 모달 오픈). */
   onAssignTask?: (memberId: string) => void;
@@ -157,12 +167,22 @@ export function WorkChat({
   const rowY = useRef<Record<string, number>>({});
   // 롱프레스로 연 메시지 액션 시트(할일로/삭제). null이면 닫힘.
   const [actionItem, setActionItem] = useState<FeedItem | null>(null);
+  // 내 메시지 고치기 시트(J15 ②). null 이면 닫힘.
+  const [editItem, setEditItem] = useState<FeedItem | null>(null);
+  const [editDraft, setEditDraft] = useState('');
   const scrollRef = useRef<ScrollView>(null);
 
   // 받아쓰기 힌트 — 멤버 이름. 사람 이름은 사전에 없는 고유명사라 가장 자주 틀린다.
   const voiceHints = useMemo(() => buildHints(members.map((m) => m.name)), [members]);
 
-  const canDeleteActive = !!actionItem && (actionItem.authorId === me || isOwner);
+  const canDeleteActive = !!actionItem && actionItem.sendState !== 'failed' && (actionItem.authorId === me || isOwner);
+  const canEditActive = !!actionItem && canEditMessage(actionItem, me);
+  // 지우기 전에 묻는다(J15 ②). 시트를 먼저 닫고 확인창을 띄운다 — iOS 는 Modal 위에 Modal 을 못 띄울 수 있다.
+  const askDelete = async (it: FeedItem) => {
+    setActionItem(null);
+    const t = deleteConfirmText(it, me);
+    if (await confirmAction(t.title, t.message, '삭제', { destructive: true, icon: 'trash-outline' })) onDelete(it.id);
+  };
   const canTaskActive = !!actionItem && !!actionItem.text.trim();
   // 노하우 승격은 사장 전용(onMessageToKnowhow 주입 여부로 게이팅) + 텍스트 있고 + 아직 승격 안 된 메시지만.
   const canKnowhowActive = !!actionItem && !!onMessageToKnowhow && !!actionItem.text.trim() && !actionItem.promotedEntryId;
@@ -347,6 +367,8 @@ export function WorkChat({
                   onReact={(e) => onReact(f.id, e)}
                   onLongPress={f.kind === 'message' ? () => setActionItem(f) : undefined}
                   onPromote={onMessageToKnowhow ? () => onMessageToKnowhow(f.text, f.id) : undefined}
+                  onRetry={() => onRetry(f.id)}
+                  onDiscard={() => onDiscard(f.id)}
                 />
               </Appear>
             </View>
@@ -449,9 +471,20 @@ export function WorkChat({
                 <Text style={s.sheetItemText}>노하우로 저장</Text>
               </Pressable>
             )}
+            {canEditActive && (
+              <Pressable
+                onPress={() => { const it = actionItem!; setActionItem(null); setEditDraft(it.text); setEditItem(it); }}
+                style={({ pressed }) => [s.sheetItem, pressed && { backgroundColor: InkColors.paper }]}
+                accessibilityRole="button"
+                accessibilityLabel="이 메시지 수정"
+              >
+                <Ionicons name="create-outline" size={19} color={InkColors.ink} />
+                <Text style={s.sheetItemText}>수정</Text>
+              </Pressable>
+            )}
             {canDeleteActive && (
               <Pressable
-                onPress={() => { const id = actionItem!.id; setActionItem(null); onDelete(id); }}
+                onPress={() => void askDelete(actionItem!)}
                 style={({ pressed }) => [s.sheetItem, pressed && { backgroundColor: InkColors.paper }]}
                 accessibilityRole="button"
                 accessibilityLabel="이 메시지 삭제"
@@ -464,6 +497,22 @@ export function WorkChat({
               <Text style={s.sheetCancelText}>취소</Text>
             </Pressable>
           </View>
+      </BottomSheet>
+
+      {/* 내 메시지 고치기(J15 ②) — 보낸 지 24시간 안. */}
+      <BottomSheet visible={!!editItem} onClose={() => setEditItem(null)}>
+        <View style={s.sheet}>
+          <Text style={s.sheetItemText}>메시지 수정</Text>
+          <TextInput value={editDraft} onChangeText={setEditDraft} multiline autoFocus style={s.editInput} accessibilityLabel="고칠 메시지" />
+          <Pressable
+            disabled={!editDraft.trim()}
+            onPress={() => { const it = editItem!; setEditItem(null); if (editDraft.trim() !== it.text) onEdit(it.id, editDraft.trim()); }}
+            style={({ pressed }) => [s.sheetCancel, !editDraft.trim() && { opacity: 0.4 }, pressed && { opacity: 0.85 }]}
+            accessibilityRole="button"
+          >
+            <Text style={s.sheetCancelText}>저장</Text>
+          </Pressable>
+        </View>
       </BottomSheet>
     </KeyboardShift>
   );
@@ -483,7 +532,7 @@ function MenuItem({ icon, label, sub, onPress, top }: { icon: any; label: string
   );
 }
 
-function FeedRow({ item, me, nameOf, members, query, active, onReact, onLongPress, onPromote }: { item: FeedItem; me: string; nameOf: (id: string) => string; members: Member[]; query?: string; active?: boolean; onReact: (e: string) => void; onLongPress?: () => void; onPromote?: () => void }) {
+function FeedRow({ item, me, nameOf, members, query, active, onReact, onLongPress, onPromote, onRetry, onDiscard }: { item: FeedItem; me: string; nameOf: (id: string) => string; members: Member[]; query?: string; active?: boolean; onReact: (e: string) => void; onLongPress?: () => void; onPromote?: () => void; onRetry?: () => void; onDiscard?: () => void }) {
   if (item.kind === 'task_done') {
     return (
       <View style={s.doneRow}>
@@ -531,6 +580,19 @@ function FeedRow({ item, me, nameOf, members, query, active, onReact, onLongPres
         </Pressable>
         {!mine && <Text style={s.msgTime}>{hhmm(item.createdAt)}</Text>}
       </View>
+      {!!item.editedAt && <Text style={[s.msgTime, mine && { textAlign: 'right' }]}>(수정됨)</Text>}
+      {/* J15 ①: 전송 실패한 글은 남겨 두고 다시 보낼지 고른다. */}
+      {item.sendState === 'failed' && (
+        <View style={s.failRow}>
+          <Text style={s.failText}>전송 실패</Text>
+          <Pressable onPress={onRetry} accessibilityRole="button" style={({ pressed }) => [s.failBtn, pressed && { opacity: 0.6 }]}>
+            <Text style={s.failBtnText}>다시 보내기</Text>
+          </Pressable>
+          <Pressable onPress={onDiscard} accessibilityRole="button" style={({ pressed }) => [s.failBtn, pressed && { opacity: 0.6 }]}>
+            <Text style={s.failBtnText}>지우기</Text>
+          </Pressable>
+        </View>
+      )}
       {/* 리액션은 '있을 때만' 칩으로 표시(추가 버튼은 롱프레스 시트로 이동). 없으면 줄 자체가 사라진다. */}
       <View style={mine ? { alignItems: 'flex-end' } : undefined}>
         <ReactionBar reactions={item.reactions} me={me} nameOf={nameOf} onReact={onReact} side={mine ? 'left' : 'right'} hideAdd />
@@ -641,4 +703,9 @@ const s = StyleSheet.create({
   sheetItemText: { fontSize: 15, fontWeight: '700', color: InkColors.ink },
   sheetCancel: { marginTop: 4, alignItems: 'center', paddingVertical: 13, borderRadius: Radius.md, backgroundColor: InkColors.bgSoft, borderWidth: 1, borderColor: InkColors.line },
   sheetCancelText: { fontSize: 15, fontWeight: '800', color: InkColors.ink },
+  editInput: { minHeight: 80, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md, padding: 12, fontSize: 15, color: InkColors.ink, textAlignVertical: 'top' },
+  failRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 4 },
+  failText: { fontSize: 12, fontWeight: '700', color: BrandColors.badText },
+  failBtn: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 8 },
+  failBtnText: { fontSize: 13, fontWeight: '700', color: InkColors.ink2, textDecorationLine: 'underline' },
 });

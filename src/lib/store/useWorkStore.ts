@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { markSendFailed } from '@/lib/work/chatRules';
 import { create } from 'zustand';
 import { todayStr, nowISO } from '@/lib/utils/attendance';
 import { HAS_SUPABASE } from '@/lib/supabase';
@@ -298,6 +299,8 @@ export type FeedItem = {
   promotedEntryId?: string; // 이 메시지가 노하우로 승격됐으면 그 노하우 id(§4.1). 재승격 넛지 dedupe용.
   broadcast_id?: string; // notice 다중발송 묶음 id(S3 #3). 같은 공지가 여러 매장에 있으면 공통값.
   broadcast_total?: number; // notice 다중발송 대상 매장 수(읽음 "N/M 매장"의 분모).
+  editedAt?: string; // 마지막으로 고친 시각(0252 edit_feed_text 가 남긴다). 있으면 "(수정됨)".
+  sendState?: 'failed'; // 이 기기에서만 쓰는 표시 — 전송 실패한 내 메시지(J15 ①). 서버에는 싣지 않는다(upsertFeed).
 };
 
 // 피드에서 토글 가능한 이모지 셋 (확인 = ✅)
@@ -737,6 +740,10 @@ type State = {
   postMessage: (date: string, text: string, authorId: string, authorName: string, role: 'owner' | 'junior', mentions?: string[], photoUrl?: string) => void;
   postComment: (noticeId: string, date: string, text: string, authorId: string, authorName: string, role: 'owner' | 'junior', mentions?: string[]) => void;
   editFeedText: (id: string, text: string) => void;
+  /** 전송 실패한 메시지 다시 보내기(같은 id 로 upsert · 멱등). */
+  retryMessage: (id: string) => void;
+  /** 전송 실패한 메시지를 이 기기에서 지운다(서버에는 없다). */
+  discardFailedMessage: (id: string) => void;
   deleteFeedItem: (id: string) => void;
   toggleReaction: (feedId: string, userId: string, emoji: string) => void;
   /** 메시지→노하우 승격 성공 시 원본 메시지에 흔적(promotedEntryId)을 남겨 재승격 넛지를 끈다(§4.1). */
@@ -1255,14 +1262,34 @@ export const useWorkStore = create<State>((set, get) => ({
     };
     set((s) => ({ feed: [...s.feed, item] }));
     // 저장 성공 후에만 멘션 웹푸시(본인 제외, 서버가 같은 매장 검증) — 실패 시 유령 멘션 알림 방지.
+    // J15 ①: 실패하면 글을 지우지 않고 실패로 표시한다. 말풍선에서 [다시 보내기]·[지우기]를 고른다.
     void guardWrite(
       upsertFeed(item),
-      () => set((s) => ({ feed: s.feed.filter((f) => f.id !== item.id) })),
+      () => set((s) => ({ feed: markSendFailed(s.feed, item.id) })),
       '메시지 전송에 실패했어요.',
     ).then((ok) => {
       if (!ok) return;
       for (const uid of mentions ?? []) if (uid !== authorId) notifyUserMention(uid, authorName, text);
     });
+  },
+
+  retryMessage: (id) => {
+    const failed = get().feed.find((f) => f.id === id && f.sendState === 'failed');
+    if (!failed) return;
+    const { sendState: _s, ...item } = failed;
+    set((s) => ({ feed: s.feed.map((f) => (f.id === id ? item : f)) }));
+    void guardWrite(
+      upsertFeed(item),
+      () => set((s) => ({ feed: markSendFailed(s.feed, id) })),
+      '메시지 전송에 실패했어요.',
+    ).then((ok) => {
+      if (!ok) return;
+      for (const uid of item.mentions ?? []) if (uid !== item.authorId) notifyUserMention(uid, item.authorName, item.text);
+    });
+  },
+
+  discardFailedMessage: (id) => {
+    set((s) => ({ feed: s.feed.filter((f) => !(f.id === id && f.sendState === 'failed')) }));
   },
 
   postComment: (noticeId, date, text, authorId, authorName, role, mentions) => {
@@ -1299,7 +1326,7 @@ export const useWorkStore = create<State>((set, get) => ({
     set((s) => ({
       feed: s.feed.map((f) => {
         if (f.id !== id) return f;
-        updated = { ...f, text };
+        updated = { ...f, text, editedAt: new Date().toISOString() };
         return updated;
       }),
     }));

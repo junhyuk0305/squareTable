@@ -1,11 +1,13 @@
 import { type ReactNode } from 'react';
-import { View, StyleSheet } from 'react-native';
+import { View, StyleSheet, useWindowDimensions } from 'react-native';
 import { usePathname } from 'expo-router';
 
 import { ResponsiveShell } from '@/components/ResponsiveShell';
 import { ShellProvider } from '@/components/shell/shellContext';
 import { OwnerWebShell } from '@/components/shell/OwnerWebShell';
 import { HqShell } from '@/components/shell/HqShell';
+import { HqNarrowNotice } from '@/components/shell/HqNarrowNotice';
+import { hqNarrow } from '@/lib/brand/hqNarrow';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { SHOW_HQ_CONSOLE, SHOW_OWNER_WEB_SHELL } from '@/lib/config/store-policy';
 import { canManage } from '@/lib/utils/roles';
@@ -46,6 +48,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const status = useSessionStore((s) => s.status);
   const role = useSessionStore((s) => s.role);
   const brandId = useSessionStore((s) => s.brandId);
+  const { width } = useWindowDimensions();
   // 담당자 초대 링크(/hq/join)로 온 사람이 가입·로그인을 마치면 어느 화면에 있든 여기서 수락 → /hq.
   usePendingBrandJoin();
 
@@ -63,6 +66,16 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   if (SHOW_HQ_CONSOLE && (pathname === '/hq' || pathname.startsWith('/hq/'))) {
     if (status === 'signed_in' && brandId) {
+      // J15 ④: 좁은 폰 브라우저면 깨진 데스크톱 화면 대신 안내 한 장.
+      if (hqNarrow(width)) {
+        return (
+          <ShellProvider kind="phone">
+            <ResponsiveShell>
+              <HqNarrowNotice />
+            </ResponsiveShell>
+          </ShellProvider>
+        );
+      }
       return (
         <ShellProvider kind="hq">
           <HqShell>{children}</HqShell>

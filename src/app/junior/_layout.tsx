@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { useForegroundRefresh } from '@/lib/app/useForegroundRefresh';
 import { Stack, Redirect, usePathname, type Href } from 'expo-router';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { needsProfileSetup } from '@/lib/store/profileSetup';
@@ -25,6 +26,25 @@ const OWNER_PATH: Record<string, Href> = {
   '/junior/notifications': '/owner/notifications',
 };
 
+/** 레이아웃이 처음 열 때와 앱이 다시 앞으로 왔을 때(J15 ③) 같은 목록을 다시 읽는다. 목록을 두 벌로 두지 않는다. */
+function hydrateJuniorStores() {
+  usePlaybookStore.getState().hydrate();
+  useChatStore.getState().hydrate(useSessionStore.getState().userId);
+  useWorkStore.getState().hydrate();
+  useAttendanceStore.getState().hydrate();
+  usePayrollStore.getState().hydrate();
+  useStaffStore.getState().hydrate();
+  useScheduleStore.getState().hydrate();
+  // 알림 '모두 읽기' 기준 시각(0078·unit_member_prefs)이 벨 배지 집계에 필요 — 레이아웃에서 당긴다.
+  useMemberPrefsStore.getState().hydrate();
+  // 내 제안 검토 결과(반영/반려)가 벨 배지·알림에 잡히도록 레이아웃에서 하이드레이트+구독(사장 레이아웃과 동형).
+  useSuggestionStore.getState().hydrate();
+  // 매장 미답질문·업무방 — 매장이 바뀌면 tenantReset 이 비운다. 물어보기·업무 탭이 열려 있는 채로 바뀌어도
+  // 로딩 게이트가 풀리게 여기서 다시 채운다(구독은 각 탭이 맡는다).
+  void useUnknownQueueStore.getState().hydrate();
+  void useRoomStore.getState().hydrate();
+}
+
 export default function JuniorLayout() {
   const status = useSessionStore((s) => s.status);
   const userId = useSessionStore((s) => s.userId);
@@ -38,23 +58,15 @@ export default function JuniorLayout() {
   // 로그인 + 매장 소속이 확정된 뒤에만 데이터를 당겨오고 실시간 구독한다.
   // ⚠️ unitId를 의존성에 포함: 승인 대기→승인(unitId 부여)·강제 소속해제(unitId 비워짐) 순간
   //    이 effect가 재실행되어 새 소속 기준으로 재하이드레이트/재구독한다(남용 #2·#5).
+  // J15 ③: 30초 넘게 뒤에 있다 돌아오면 소속을 다시 맞추고 같은 목록을 다시 읽는다.
+  useForegroundRefresh(status === 'signed_in' && !!unitId, () => {
+    void useSessionStore.getState().refreshMembership();
+    hydrateJuniorStores();
+  });
+
   useEffect(() => {
     if (status !== 'signed_in' || !unitId) return;
-    usePlaybookStore.getState().hydrate();
-    useChatStore.getState().hydrate(useSessionStore.getState().userId);
-    useWorkStore.getState().hydrate();
-    useAttendanceStore.getState().hydrate();
-    usePayrollStore.getState().hydrate();
-    useStaffStore.getState().hydrate();
-    useScheduleStore.getState().hydrate();
-    // 알림 '모두 읽기' 기준 시각(0078·unit_member_prefs)이 벨 배지 집계에 필요 — 레이아웃에서 당긴다.
-    useMemberPrefsStore.getState().hydrate();
-    // 내 제안 검토 결과(반영/반려)가 벨 배지·알림에 잡히도록 레이아웃에서 하이드레이트+구독(사장 레이아웃과 동형).
-    useSuggestionStore.getState().hydrate();
-    // 매장 미답질문·업무방 — 매장이 바뀌면 tenantReset 이 비운다. 물어보기·업무 탭이 열려 있는 채로 바뀌어도
-    // 로딩 게이트가 풀리게 여기서 다시 채운다(구독은 각 탭이 맡는다).
-    void useUnknownQueueStore.getState().hydrate();
-    void useRoomStore.getState().hydrate();
+    hydrateJuniorStores();
     const offP = usePlaybookStore.getState().subscribe();
     const offW = useWorkStore.getState().subscribe();
     const offA = useAttendanceStore.getState().subscribe();

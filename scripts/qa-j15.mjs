@@ -63,7 +63,7 @@ console.log('\n[3] 본사 화면 폭(src/lib/brand/hqNarrow.ts)');
 console.log('\n[4] 배선(주석 제외 코드)');
 {
   const store = strip(read('src/lib/store/useWorkStore.ts'));
-  const pm = (store.match(/postMessage: \(date[\s\S]*?\n  \},/) || [''])[0];
+  const pm = (store.match(/postMessage: \(date, text[\s\S]*?\n  \},/) || [''])[0];
   check('★① postMessage 실패가 글을 지우지 않고 markSendFailed 로 표시한다', /markSendFailed\(/.test(pm) && !/feed: s\.feed\.filter\(\(f\) => f\.id !== item\.id\)/.test(pm));
   check('① retryMessage · discardFailedMessage 가 있다', /retryMessage: /.test(store) && /discardFailedMessage: /.test(store));
   const db = strip(read('src/lib/db.ts'));
