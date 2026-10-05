@@ -209,5 +209,33 @@ console.log('\n■ 화면 배선');
   check('J11 비밀번호 찾기 화면에 역할 안내', /ROLE_SPLIT_TEXT/.test(forgot));
 }
 
+// 2026-10-05 로그인 화면 표준 보강: 비밀번호 보기 · 자동완성 · 두 번 누름 막기 · 실패해도 로딩 풀기.
+console.log('\n■ 로그인 화면 표준');
+{
+  const pi = strip(read('src/components/PasswordInput.tsx'));
+  check('공용 비밀번호 칸이 보기 토글을 가진다', /secureTextEntry=\{!shown\}/.test(pi) && /eye-off-outline/.test(pi) && /eye-outline/.test(pi) && /accessibilityLabel/.test(pi));
+  check('공용 비밀번호 칸이 ref 를 넘긴다(account-edit 포커스)', /forwardRef/.test(pi));
+  for (const [p, n] of [['src/app/login.tsx', 1], ['src/app/signup.tsx', 1], ['src/app/forgot-password.tsx', 2], ['src/app/account-edit.tsx', 3]]) {
+    const s = strip(read(p));
+    const uses = (s.match(/<PasswordInput\b/g) || []).length;
+    check(`${p} 비밀번호 칸 ${n}개가 공용 칸을 쓴다`, uses === n && !/\bsecureTextEntry\b(?!=\{secure\})/.test(s), `PasswordInput ${uses}개`);
+  }
+  const login = strip(read('src/app/login.tsx'));
+  check('login 이메일 자동완성', /autoComplete="email"/.test(login) && /textContentType="username"/.test(login));
+  check('login 비밀번호 자동완성', /autoComplete="current-password"/.test(login) && /textContentType="password"/.test(login));
+  const loginFn = (login.match(/const login = async \(\) => \{[\s\S]*?\n  \};/) || [''])[0];
+  check('★login() 맨 앞에서 busy 면 돌아간다(엔터 두 번)', /^const login = async \(\) => \{\s*if \(busy\) return;/.test(loginFn), show(loginFn.slice(0, 60)));
+  const signup = strip(read('src/app/signup.tsx'));
+  check('signup 이메일 자동완성', /autoComplete="email"/.test(signup));
+  check('signup 새 비밀번호 자동완성', /autoComplete="new-password"/.test(signup) && /textContentType="newPassword"/.test(signup));
+  check('signup 전화 자동완성', /autoComplete="tel"/.test(signup));
+  check('signup 인증번호 자동완성', /autoComplete="one-time-code"/.test(signup) && /textContentType="oneTimeCode"/.test(signup));
+  const forgot = strip(read('src/app/forgot-password.tsx'));
+  const sub = (forgot.match(/const submit = async[\s\S]*?\n  \};/) || [''])[0];
+  const fnd = (forgot.match(/const find = async[\s\S]*?\n  \};/) || [''])[0];
+  check('★비밀번호 재설정이 실패로 던져도 로딩을 푼다', /try \{[\s\S]*\} finally \{\s*setBusy\(false\);/.test(sub));
+  check('★이메일 찾기가 실패로 던져도 로딩을 푼다', /try \{[\s\S]*\} finally \{\s*setBusy\(false\);/.test(fnd));
+}
+
 console.log(`\n${fail === 0 ? 'GREEN' : 'RED'} — PASS ${pass} · FAIL ${fail}`);
 process.exit(fail === 0 ? 0 : 1);
