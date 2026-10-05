@@ -114,5 +114,25 @@ console.log('\n[D6] 23:56~23:59 로 정한 할일 알림도 자정 직후 틱에
   check('D3·0265 변경은 그대로', /t\.scope is distinct from 'private'/.test(b) && /and not public\.unit_access_locked\(w\.unit_id\)/.test(b));
 }
 
+console.log('\n[D11] 알림함 배선 — 배정 시각 기록 · 사장 알림함 공지·배정 · 채팅에서 본 멘션 읽음 (판정 진리표는 qa:notif-axis)');
+{
+  const tr = lastDef('wt_track_assigned');
+  const trFile = tr.file ? read(`supabase/migrations/${tr.file}`) : '';
+  check('★서버가 담당자별 배정 시각·배정한 사람을 남긴다(assigned_meta · 옛 앱 경로 포함 트리거)',
+    /add column if not exists assigned_meta jsonb/.test(trFile) && /before insert or update on public\.work_templates/.test(trFile)
+      && /auth\.uid\(\)/.test(tr.body), tr.file || '없음');
+  check('트리거 이름이 wt_sync_owner_ids 뒤에 돈다(owner_id 만 바꾼 옛 앱도 잡힌다)', 'wt_track_assigned' > 'wt_sync_owner_ids' && /create trigger wt_track_assigned/.test(trFile));
+  const db = strip(read('src/lib/db.ts'));
+  check('앱이 assigned_meta 를 읽는다(mapTemplateRow)', /assignedMeta: r\.assigned_meta/.test(db));
+  for (const [p, re] of [
+    ['src/app/owner/notifications.tsx', /buildOwnerNotifications\(ownerArgs, received\)/],
+    ['src/components/NotificationBell.tsx', /ownerUnreadCount\([^)]*alerts, received\)/],
+    ['src/lib/utils/crossStoreNotifs.ts', /buildOwnerNotifications\(ownerArgsOf\(d, me, nameOf, ackAt\), receivedArgsOf\(d, me, today, nameOf, ackAt\)\)/],
+  ]) check(`★${p} 사장 목록·배지에 받은 공지·배정을 넣는다`, re.test(strip(read(p))));
+  const board = strip(read('src/components/WorkBoard.tsx'));
+  check('★채팅을 보고 있으면 이 방의 나를 언급한 글을 읽음 처리한다',
+    /unreadMentionIds\(/.test(board) && /markAllRead\(/.test(board) && /useFocusEffect\(/.test(board));
+}
+
 console.log(`\n${pass} PASS / ${fail} FAIL`);
 process.exit(fail ? 1 : 0);

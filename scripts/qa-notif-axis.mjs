@@ -81,5 +81,40 @@ const ownIds = own.map((r) => r.id);
 check('⑥ 사장: 공지·배정은 여전히 안 온다(회귀)', !ownIds.some((i) => i.startsWith('notice_') || i.startsWith('assign_')), ownIds.join(','));
 check('⑥ 사장: 직원 제안 2건 모두 검토함에(자기 것 아님)', ownIds.includes('s_sg_mine') && ownIds.includes('s_sg_other'));
 
+// ── 논리 점검 D11 (2026-10-06) ───────────────────────────────────────────
+{
+  const { buildJuniorNotifications, juniorUnreadCount, ownerUnreadCount, unreadMentionIds } =
+    await import(pathToFileURL(join(ROOT, 'src/lib/utils/notifications.ts')).href);
+  // ① 오래된 할일에 오늘 담당자로 추가됨 — 배정 시각·배정한 사람은 assignedMeta 가 정한다.
+  const ACK = iso(6);
+  const late = [{ id: 't_late', text: '냉장고 정리', ownerIds: [ME], ownerId: ME, createdBy: OWNER, createdAt: iso(2), repeat: 'daily',
+    assignedMeta: { [ME]: { at: iso(8), by: 'u_junior' } } }];
+  const jr = buildJuniorNotifications({ feed: [], swaps: [], templates: [], nameOf, userId: ME, today: TODAY, taskTemplates: late, done: {}, ackAt: ACK });
+  const row = jr.find((r) => r.id === 'assign_t_late');
+  check('★D11-1 새로 담당자가 되면 "모두 읽기" 뒤에도 새 알림이다(배정 시각 기준)', row?.unread === true && row?.at === iso(8), JSON.stringify(row));
+  check('★D11-1 제목 이름은 마지막으로 배정한 사람', row?.title === '이수민님이 할 일을 배정했어요', row?.title);
+  check('D11-1 배지도 같은 시각으로 센다', juniorUnreadCount([], [], ME, TODAY, late, {}, ACK) === 1);
+  const mrow = buildManagerNotifications(ownerArgs, { ...received, taskTemplates: late, ackAt: ACK }).find((r) => r.id === 'assign_t_late');
+  check('D11-1 매니저 배정 행도 같은 규칙', mrow?.unread === true && mrow?.title === '이수민님이 할 일을 배정했어요', JSON.stringify(mrow));
+
+  // ② 사장 알림함에 공지·배정(내 글 제외) — 사장 폰에 푸시가 오는 것과 같은 축.
+  const ownArgs = { ...ownerArgs, userId: OWNER };
+  const ownRecv = { ...received, userId: OWNER, taskTemplates: [{ id: 't_own', text: '발주', ownerIds: [OWNER], ownerId: OWNER, createdBy: ME, createdAt: iso(7), repeat: 'daily' }] };
+  const own2 = buildOwnerNotifications(ownArgs, ownRecv);
+  const own2Ids = own2.map((r) => r.id);
+  check('★D11-2 사장 알림함에 매니저가 쓴 공지가 뜬다', own2Ids.includes('notice_f_notice_mine'), own2Ids.join(','));
+  check('D11-2 사장이 쓴 공지는 사장 알림함에 없다(메아리)', !own2Ids.includes('notice_f_notice_owner'));
+  check('★D11-2 사장 알림함에 나에게 배정된 할일이 뜬다', own2Ids.includes('assign_t_own'));
+  check('D11-2 사장 경로는 /owner/work', own2.filter((r) => r.kind === 'notice' || r.kind === 'assign').every((r) => r.route === '/owner/work'));
+  const ownBadge = typeof ownerUnreadCount === 'function'
+    ? ownerUnreadCount([], suggestions, swaps, [], feed, OWNER, null, [], [], ownRecv) : -1;
+  check('★D11-2 사장 배지 수 == 목록 안읽음 수', ownBadge === own2.filter((r) => r.unread).length, `badge=${ownBadge} list=${own2.filter((r) => r.unread).length}`);
+
+  // ③ 채팅에서 본 멘션은 읽음 처리 대상이다.
+  const ids3 = typeof unreadMentionIds === 'function'
+    ? unreadMentionIds([...feed, { id: 'f_read', kind: 'message', text: '@', authorId: OWNER, authorName: '김영자', createdAt: iso(5), read_by: [ME], mentions: [ME] }], ME) : null;
+  check('★D11-3 채팅에 보이는 안 읽은 나의 멘션 id', JSON.stringify(ids3) === JSON.stringify(['f_mention']), JSON.stringify(ids3));
+}
+
 console.log(`\nRESULT: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
