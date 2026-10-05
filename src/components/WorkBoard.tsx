@@ -1106,6 +1106,7 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
           title={selfCheck.title}
           sops={selfCheck.sops}
           onPass={(entryIds) => void markUnderstood(entryIds, userId, userName)}
+          onFinished={(entryIds) => useWorkStore.getState().noteQuizFinished(entryIds)}
           // ★닫을 때 다시 읽는다 — 응시 기록(0112)은 realtime publication 멤버가 아니라서
           //   틀리고 닫으면 카드의 "지난번 …" 한 줄이 방금 푼 것 이전 값을 계속 말한다.
           //   통과했을 때는 knowhow_understanding 구독이 재조회를 걸지만 오답에는 그 신호가 없다.

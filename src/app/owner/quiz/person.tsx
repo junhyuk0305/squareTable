@@ -6,13 +6,11 @@ import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
 
 import {
   fetchQuizCoursePerson,
-  fetchQuizItems,
-  fetchStaffAttemptItems,
+  fetchGuestAttemptItems,
   type PersonAttemptRow,
-  type StaffAttemptItemRow,
+  type GuestAttemptItemRow,
 } from '@/lib/db';
 import { useStaffStore } from '@/lib/store/useStaffStore';
-import { useWorkStore, courseEntriesOf } from '@/lib/store/useWorkStore';
 import { Appear, stagger } from '@/components/Appear';
 import { SectionLabel } from '@/components/SectionLabel';
 import { EmptyState } from '@/components/EmptyState';
@@ -44,37 +42,33 @@ export default function QuizPersonResultScreen() {
   const staff = useStaffStore((s) => s.staff);
   const staffLoaded = useStaffStore((s) => s.loaded);
   const hydrateStaff = useStaffStore((s) => s.hydrate);
-  const courseEntries = useWorkStore((s) => s.courseEntries);
   useEffect(() => {
     void hydrateStaff();
-    void useWorkStore.getState().hydrate();
   }, [hydrateStaff]);
 
   const [attempts, setAttempts] = useState<PersonAttemptRow[]>([]);
-  const [rows, setRows] = useState<StaffAttemptItemRow[]>([]);
+  const [rows, setRows] = useState<GuestAttemptItemRow[]>([]);
   // 주소에 퀴즈·사람이 없으면 읽을 것이 없다 — 그 경우는 **처음부터** 도착한 것으로 둔다
   // (이펙트에서 setLoaded 를 부르면 연쇄 렌더가 된다: 이 저장소 lint 규칙이 막는 자리).
   const [loaded, setLoaded] = useState(() => !courseId || !staffId);
 
-  const entryIds = useMemo(() => courseEntriesOf(courseEntries, cid).map((r) => r.entryId), [courseEntries, cid]);
-
   useEffect(() => {
     if (!cid || !sid) return;
     let alive = true;
-    // 문항별 기록은 문항 id 로만 되짚을 수 있다(quiz_attempt_items 에 코스가 없다) — 그래서
-    // 이 퀴즈에 담긴 노하우의 문항을 먼저 읽고, 그 id 집합으로 이 사람의 답을 거른다.
-    const items = entryIds.length === 0 ? Promise.resolve({ data: [] as { id: string }[] }) : fetchQuizItems(entryIds);
-    void Promise.all([fetchQuizCoursePerson(cid, sid), items]).then(async ([att, it]) => {
+    // ★E4: 문항별 기록은 이 사람의 **가장 최근 응시(submission)** 스냅샷을 통째로 읽는다.
+    //   예전엔 지금 문항 id 로 매장 전체 최근 500줄을 받아 한 사람으로 걸렀다 — 줄이 잘리거나
+    //   사장이 지운 문항이 빠져 목록이 비거나 줄었다.
+    void fetchQuizCoursePerson(cid, sid).then(async (att) => {
       if (!alive) return;
       setAttempts(att);
-      const ids = (it.data ?? []).map((q) => q.id);
-      const mine = ids.length > 0 ? (await fetchStaffAttemptItems(ids)).filter((r) => r.staffId === sid) : [];
+      const sub = att[0]?.submissionId; // RPC 가 최근순으로 준다
+      const mine = sub ? await fetchGuestAttemptItems(sub) : [];
       if (!alive) return;
       setRows(mine);
       setLoaded(true);
     });
     return () => { alive = false; };
-  }, [cid, sid, entryIds]);
+  }, [cid, sid]);
 
   const name = staff.find((s) => s.id === sid)?.name ?? '나간 직원';
 
@@ -92,11 +86,8 @@ export default function QuizPersonResultScreen() {
   }, [attempts]);
 
   /** 최근 한 번의 답만 보여준다 — 같은 문항을 두 번 풀면 줄이 겹쳐 무엇이 최근인지 못 읽는다. */
-  const latest = useMemo(() => {
-    const sub = attempts[0]?.submissionId;
-    const pick = sub ? rows.filter((r) => r.submissionId === sub) : rows;
-    return [...pick].sort((a, b) => a.ord - b.ord);
-  }, [rows, attempts]);
+  //   rows 는 이미 가장 최근 응시 한 건의 줄이다(위 이펙트).
+  const latest = useMemo(() => [...rows].sort((a, b) => a.ord - b.ord), [rows]);
 
   if (!staffLoaded || !loaded) {
     return (

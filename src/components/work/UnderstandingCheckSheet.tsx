@@ -37,6 +37,7 @@ export function UnderstandingCheckSheet({
   title,
   sops,
   onPass,
+  onFinished,
   onClose,
   onAsk,
 }: {
@@ -45,6 +46,8 @@ export function UnderstandingCheckSheet({
   sops: QuizInput['sops'];
   /** 실제로 푼 문항이 근거한 **노하우 id 들**만 통과 처리한다(0111). */
   onPass: (entryIds: string[]) => void;
+  /** 응시를 마쳤다(맞힘과 무관 · 기록 저장 뒤). 푼 노하우 id 들 — 발송 완료 판정은 서버가 한다(E4 · 0275). */
+  onFinished?: (entryIds: string[]) => void;
   onClose: () => void;
   /** 틀린 뒤 "물어보기"로 나가는 길. 라우팅은 화면(WorkBoard)이 정한다 — 이 시트는 경로를 모른다. */
   onAsk?: (seed: string) => void;
@@ -57,7 +60,7 @@ export function UnderstandingCheckSheet({
         <Text style={s.kicker}>이해 확인 · {title}</Text>
         <Pressable onPress={onClose} hitSlop={8}><Ionicons name="close" size={20} color={InkColors.ink2} /></Pressable>
       </View>
-      <QuizBody key={round} taskText={title} sops={sops} onPass={onPass} onClose={onClose} onRetry={() => setRound((r) => r + 1)} onAsk={onAsk} />
+      <QuizBody key={round} taskText={title} sops={sops} onPass={onPass} onFinished={onFinished} onClose={onClose} onRetry={() => setRound((r) => r + 1)} onAsk={onAsk} />
     </BottomSheet>
   );
 }
@@ -73,6 +76,7 @@ function QuizBody(props: {
   taskText: string;
   sops: QuizInput['sops'];
   onPass: (entryIds: string[]) => void;
+  onFinished?: (entryIds: string[]) => void;
   onClose: () => void;
   onRetry: () => void;
   onAsk?: (seed: string) => void;
@@ -132,7 +136,7 @@ function QuizBody(props: {
         </>
       );
     }
-    return <SavedQuizBody items={items} sops={sops} onPass={props.onPass} onClose={props.onClose} onRetry={props.onRetry} onAsk={props.onAsk} />;
+    return <SavedQuizBody items={items} sops={sops} onPass={props.onPass} onFinished={props.onFinished} onClose={props.onClose} onRetry={props.onRetry} onAsk={props.onAsk} />;
   }
   return ALLOW_AI_FALLBACK ? <LegacyQuizBody {...props} /> : <NotReadyBody onClose={props.onClose} />;
 }
@@ -156,6 +160,7 @@ function SavedQuizBody({
   items,
   sops,
   onPass,
+  onFinished,
   onClose,
   onRetry,
   onAsk,
@@ -163,6 +168,7 @@ function SavedQuizBody({
   items: QuizItem[];
   sops: QuizInput['sops'];
   onPass: (entryIds: string[]) => void;
+  onFinished?: (entryIds: string[]) => void;
   onClose: () => void;
   onRetry: () => void;
   onAsk?: (seed: string) => void;
@@ -228,7 +234,9 @@ function SavedQuizBody({
     );
     void recordQuizStats(perEntry);
     // 응시 기록(0190) — 문항별 + 노하우별 집계를 **서버가** 적는다. 여기서 센 값을 보내지 않는다.
-    void recordStaffQuizAttempt(given.current);
+    // ★E4: 다 풀면(맞힘과 무관) 기록이 저장된 뒤 알린다 — 서버가 그 기록으로 발송 완료를 판정한다(0275).
+    const answered = perEntry.map((e) => e.entryId);
+    void recordStaffQuizAttempt(given.current).then(() => onFinished?.(answered));
     // 통과 기준은 그대로 — 전부 맞아야 통과. 통과 처리 대상은 **실제로 푼 문항의 근거 노하우**뿐이다
     // (0111: 다루지 않은 노하우까지 "안다"로 켜지 않는다).
     if (marks.length === items.length && marks.every(Boolean)) onPass(perEntry.map((e) => e.entryId));

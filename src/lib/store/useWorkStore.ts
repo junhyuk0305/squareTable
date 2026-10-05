@@ -737,6 +737,8 @@ type State = {
   markUnderstood: (entryIds: string[], staffId: string, staffName: string) => Promise<void>;
   /** 사장이 보낸 퀴즈를 열었다(0140). 자동 정지를 푸는 유일한 신호 — 응시 시작 시점에 부른다. */
   noteQuizOpened: (entryIds: string[]) => void;
+  /** 응시를 마쳤다(맞힘과 무관 · E4). 그 노하우가 담긴 내 발송의 완료 여부는 서버가 판정한다(0275). */
+  noteQuizFinished: (entryIds: string[]) => void;
   /** 코스에 노하우 담기(0111) — 껍데기 업무를 만들지 않는다. 성공 여부 반환. */
   addCourseEntry: (courseId: string, entryId: string) => Promise<boolean>;
   /** 코스에서 노하우 빼기 — 노하우·통과 기록·다른 코스 소속은 남는다. */
@@ -1014,10 +1016,17 @@ export const useWorkStore = create<State>((set, get) => ({
     for (const id of pendingAssignmentIds(get(), entryIds)) void markQuizOpened(id);
   },
 
+  /**
+   * 응시를 마쳤다(E4). 예전엔 노하우 하나를 **통과**하면 그 노하우가 담긴 발송을 전부 완료로 찍었다 —
+   * 3개 중 1개만 통과해도 '풀었음', 다 풀고 틀리면 '안 풂'이었다. 이제 응시 기록이 저장된 뒤 부르고,
+   * 담긴 노하우를 다 풀었는지는 서버(mark_quiz_completed 0275)가 응시 기록으로 판정한다.
+   */
+  noteQuizFinished: (entryIds) => {
+    for (const id of pendingAssignmentIds(get(), entryIds)) void markQuizCompleted(id);
+  },
+
   markUnderstood: async (entryIds, staffId, staffName) => {
     if (entryIds.length === 0) return;
-    // 통과 = 그 퀴즈를 다 푼 것. 열었다는 뜻이기도 하다(RPC 가 opened_at 도 같이 채운다).
-    for (const id of pendingAssignmentIds(get(), entryIds)) void markQuizCompleted(id);
     const mine = (u: UnderstandingRow) => u.staffId === staffId && entryIds.includes(u.entryId);
     const prev = get().understanding.filter(mine);
     const at = new Date().toISOString();

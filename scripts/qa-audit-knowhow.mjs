@@ -119,7 +119,7 @@ console.log('\n[E4] "푼 사람"은 담긴 노하우를 다 풀었을 때(맞힘
     /recordStaffQuizAttempt\(given\.current\)\.then\(\(\) => onFinished\?\.\(/.test(sheet));
   const store = strip(read('src/lib/store/useWorkStore.ts'));
   const mu = (store.match(/\n  markUnderstood: async[\s\S]*?\n  \},/) || [''])[0];
-  const nf = (store.match(/\n  noteQuizFinished: [\s\S]*?\n  \},/) || [''])[0];
+  const nf = (store.match(/\n  noteQuizFinished: \(entryIds\) => \{[\s\S]*?\n  \},/) || [''])[0];
   check('★통과(markUnderstood)가 발송을 완료로 찍지 않는다', !!mu && !/markQuizCompleted/.test(mu), mu.slice(0, 80));
   check('★noteQuizFinished 가 완료 판정을 서버에 맡긴다', /markQuizCompleted\(id\)/.test(nf));
   const board = strip(read('src/components/WorkBoard.tsx'));
