@@ -519,9 +519,12 @@ alter policy cq_delete on public.chat_queries
 -- swap_requests (0019 계열 · 지금 정의 그대로 + 표시 조건)
 alter policy swap_read on public.swap_requests
   using (unit_id = (select public.auth_unit_id()) and archived_tenure_id is null);
+-- ★리뷰 2026-10-05: 새 요청은 open · 수락자 없음으로만 넣는다. 수락은 accept_swap(또는 swap_update)이 한다.
+--   앱은 언제나 이렇게 넣는다(useScheduleStore.requestSwap). 이게 없으면 "이미 수락됨" 요청을 꾸며 넣을 수 있다.
 alter policy swap_insert on public.swap_requests
   with check (unit_id = (select public.auth_unit_id())
               and requester_id = (select auth.uid())::text
+              and status = 'open' and accepted_by is null
               and archived_tenure_id is null);
 alter policy swap_update on public.swap_requests
   using (unit_id = (select public.auth_unit_id())
@@ -1016,6 +1019,23 @@ begin
   if s.kind = 'swap' and s.target_template_id is not null
      and not exists (select 1 from public.shift_templates t where t.id = s.target_template_id and t.unit_id = s.unit_id
                        and t.archived_tenure_id is null) then
+    return false;
+  end if;
+  -- ★리뷰 2026-10-05: 수락이 진짜인지 본다. 꾸민 요청으로 동료 근무와 급여를 옮기지 못하게 한다.
+  --   넘기는 근무는 요청자 것 · 수락자는 이 매장 멤버 · 지정 발송이면 목록 안(accept_swap 과 같은 판정)
+  --   · 맞교환 상대 근무는 수락자 것.
+  if not exists (select 1 from public.shift_templates t where t.id = s.template_id and t.staff_id = s.requester_id) then
+    return false;
+  end if;
+  if not exists (select 1 from public.unit_members m where m.unit_id = s.unit_id and m.user_id::text = s.accepted_by) then
+    return false;
+  end if;
+  if coalesce(s.target_staff_ids, case when s.target_staff_id is null then null else array[s.target_staff_id] end) is not null
+     and not (s.accepted_by = any (coalesce(s.target_staff_ids, array[s.target_staff_id]))) then
+    return false;
+  end if;
+  if s.kind = 'swap' and s.target_template_id is not null
+     and not exists (select 1 from public.shift_templates t where t.id = s.target_template_id and t.staff_id = s.accepted_by) then
     return false;
   end if;
 
