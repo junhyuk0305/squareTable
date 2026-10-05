@@ -438,12 +438,6 @@ begin
             and (r.unit_id, r.staff_id) in (select e.unit_id, e.user_id::text from public.expired_former_members(v_3y) e));
     get diagnostics n = row_count; c := c || jsonb_build_object('shift_change_requests', n);
 
-    delete from public.shift_day_marks r
-     where r.archived_tenure_id = any(v_old)
-        or (r.archived_tenure_id is null
-            and (r.unit_id, r.staff_id) in (select e.unit_id, e.user_id::text from public.expired_former_members(v_3y) e));
-    get diagnostics n = row_count; c := c || jsonb_build_object('shift_day_marks', n);
-
     delete from public.attendance r
      where r.archived_tenure_id = any(v_old)
         or (r.archived_tenure_id is null

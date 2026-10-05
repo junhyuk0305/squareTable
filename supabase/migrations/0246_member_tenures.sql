@@ -20,8 +20,9 @@
 --   ① _bak_wages_0246 — 지금 wages 전부를 복사해 둔다(정책 0개 · 3역할 회수 · 롤백 근거).
 --   ② 표 member_tenures(재직 기간). 열린 기간은 (매장, 사람)마다 하나(부분 유니크). RLS 읽기 = 같은 매장 사장만
 --      (매니저 불가 · 0201 급여 사장 전용과 같은 기준). 쓰기는 3역할 모두 회수(정의자 함수·트리거만).
---   ③ archived_tenure_id(→ member_tenures, 기본 NO ACTION · 데이터 M4) + 부분 인덱스. 대상 7개:
---      attendance · shift_templates · wage_rates · shift_day_marks · shift_change_requests · chat_queries · swap_requests.
+--   ③ archived_tenure_id(→ member_tenures, 기본 NO ACTION · 데이터 M4) + 부분 인덱스. 대상 6개:
+--      attendance · shift_templates · wage_rates · shift_change_requests · chat_queries · swap_requests.
+--      (2026-10-05: 결근 표시 shift_day_marks 는 0245 에서 걷어 내 여기서도 뺐다.)
 --      swap_requests 는 착수 때 RLS 를 보고 넣었다: swap_read 가 같은 매장 전원에게 모든 요청을 보여 준다. 그래서 재입사자의
 --      옛 요청(요청자 = 본인)이 동료 화면에 섞인다. 표시는 요청자 기준으로만 찍는다(수락자·지목된 사람 쪽은 그 동료의 이력이다).
 --      wage_rates 의 기본키(unit_id, staff_id, effective_from)는 표시 안 된 행만의 부분 유니크로 바꾼다(계획에 없던 변경 · 아래 ④).
@@ -48,7 +49,7 @@
 --   ⑨ 정의자 함수 표시 조건: owner_today · my_cross_summary(_v2) · workers_at · owner_labor_inputs(_v2) · owner_overview ·
 --      shift_templates_all · approve_swap · transfer_shift(계획 7) + 같은 이유로 대상 표를 읽거나 고치는 나머지:
 --      shift_first_series(재입사자의 옛 반복 행을 "첫 설정 아님"으로 세지 않게) · end_staff_tenure · edit_shift_from ·
---      end_shift_from · override_shift_day · request_shift_time · decide_shift_time · mark_shift_day · clear_shift_day ·
+--      end_shift_from · override_shift_day · request_shift_time · decide_shift_time ·
 --      set_wage_from · wages_to_wage_rates · sync_wages_from_rates(0244 머리주석 약속) · my_units_notif_data(교대 알림).
 --      표시된 옛 행을 id 로 집어 고치는 RPC 경로는 not_found 로 막는다(옛 앱이 캐시한 id · 보관 기록 무결성).
 --   ⑩ 백필(알림 없음)
@@ -70,7 +71,7 @@
 --   옛 앱 사장의 재입사 승인은 경고 없이 옛 기록을 숨긴다(위험 §10-10 · 새 앱 C 가 경고한다).
 -- 함수 담당표: remove_staff · leave_store 0237 → 0246 · delete_my_account 0237 → 0246 → 0253 · reopen_store 0235 → 0246 ·
 --   owner_today · workers_at · my_cross_summary · owner_labor_inputs · approve_swap · transfer_shift 0242 → 0246 ·
---   my_cross_summary_v2 · owner_labor_inputs_v2 · mark_shift_day · clear_shift_day 0245 → 0246 · owner_overview 0091 → 0246 → 0248 ·
+--   my_cross_summary_v2 · owner_labor_inputs_v2 0245 → 0246 · owner_overview 0091 → 0246 → 0248 ·
 --   set_wage_from · wages_to_wage_rates · sync_wages_from_rates 0244 → 0246 · request_shift_time · decide_shift_time 0243 → 0246 ·
 --   shift_first_series · end_staff_tenure · edit_shift_from · end_shift_from · override_shift_day · shift_templates_all 0242 → 0246 ·
 --   my_units_notif_data 0153 → 0246 · close_member_tenure 0246 → 0247. 다음 정의는 **이 파일 본문을 통째로 복사**해서 시작한다.
@@ -119,12 +120,11 @@ create policy mt_owner_read on public.member_tenures
   for select using (unit_id = (select public.auth_unit_id()) and (select public.auth_is_owner()));
 
 -- ════════════════════════════════════════════════════════════════════════════
--- ③ archived_tenure_id — 7개 표 (FK 기본 NO ACTION · 데이터 M4) + 부분 인덱스
+-- ③ archived_tenure_id — 6개 표 (FK 기본 NO ACTION · 데이터 M4) + 부분 인덱스
 -- ════════════════════════════════════════════════════════════════════════════
 alter table public.attendance            add column if not exists archived_tenure_id uuid references public.member_tenures(id);
 alter table public.shift_templates       add column if not exists archived_tenure_id uuid references public.member_tenures(id);
 alter table public.wage_rates            add column if not exists archived_tenure_id uuid references public.member_tenures(id);
-alter table public.shift_day_marks       add column if not exists archived_tenure_id uuid references public.member_tenures(id);
 alter table public.shift_change_requests add column if not exists archived_tenure_id uuid references public.member_tenures(id);
 alter table public.chat_queries          add column if not exists archived_tenure_id uuid references public.member_tenures(id);
 alter table public.swap_requests         add column if not exists archived_tenure_id uuid references public.member_tenures(id);
@@ -132,7 +132,6 @@ alter table public.swap_requests         add column if not exists archived_tenur
 create index if not exists idx_att_archived on public.attendance(archived_tenure_id) where archived_tenure_id is not null;
 create index if not exists idx_st_archived  on public.shift_templates(archived_tenure_id) where archived_tenure_id is not null;
 create index if not exists idx_wr_archived  on public.wage_rates(archived_tenure_id) where archived_tenure_id is not null;
-create index if not exists idx_sdm_archived on public.shift_day_marks(archived_tenure_id) where archived_tenure_id is not null;
 create index if not exists idx_scr_archived on public.shift_change_requests(archived_tenure_id) where archived_tenure_id is not null;
 create index if not exists idx_cq_archived  on public.chat_queries(archived_tenure_id) where archived_tenure_id is not null;
 create index if not exists idx_swap_archived on public.swap_requests(archived_tenure_id) where archived_tenure_id is not null;
@@ -265,7 +264,6 @@ begin
   update public.attendance            set archived_tenure_id = v_prev where unit_id = new.unit_id and staff_id = v_uid and archived_tenure_id is null;
   update public.shift_templates       set archived_tenure_id = v_prev where unit_id = new.unit_id and staff_id = v_uid and archived_tenure_id is null;
   update public.wage_rates            set archived_tenure_id = v_prev where unit_id = new.unit_id and staff_id = v_uid and archived_tenure_id is null;
-  update public.shift_day_marks       set archived_tenure_id = v_prev where unit_id = new.unit_id and staff_id = v_uid and archived_tenure_id is null;
   update public.shift_change_requests set archived_tenure_id = v_prev where unit_id = new.unit_id and staff_id = v_uid and archived_tenure_id is null;
   update public.chat_queries          set archived_tenure_id = v_prev where unit_id = new.unit_id and junior_id = v_uid and archived_tenure_id is null;
   update public.swap_requests         set archived_tenure_id = v_prev where unit_id = new.unit_id and requester_id = v_uid and archived_tenure_id is null;
@@ -481,12 +479,8 @@ alter policy st_update on public.shift_templates
 alter policy st_delete on public.shift_templates
   using (unit_id = (select public.auth_unit_id()) and (select public.auth_can_manage()) and archived_tenure_id is null);
 
--- wage_rates (0244) · shift_day_marks (0245) · shift_change_requests (0243) — 읽기 정책 하나씩
+-- wage_rates (0244) · shift_change_requests (0243) — 읽기 정책 하나씩
 alter policy wage_rates_read on public.wage_rates
-  using (unit_id = (select public.auth_unit_id())
-         and ((select public.auth_can_manage()) or staff_id = (select auth.uid())::text)
-         and archived_tenure_id is null);
-alter policy sdm_read on public.shift_day_marks
   using (unit_id = (select public.auth_unit_id())
          and ((select public.auth_can_manage()) or staff_id = (select auth.uid())::text)
          and archived_tenure_id is null);
@@ -662,7 +656,6 @@ returns table(
   exceptions    jsonb,
   month_minutes bigint,
   hourly_wage   int,
-  marks         jsonb,   -- ★0245: [{template_id, date, staff_id, mark}] 본인 결근 표시(표시의 staff_id = 본인)
   wage_rates    jsonb    -- ★0245: [{staff_id, effective_from, hourly_wage}] 본인 시급 이력
 )
 language sql stable security definer set search_path = public as $$
@@ -695,14 +688,6 @@ language sql stable security definer set search_path = public as $$
         and a.date >= to_char(date_trunc('month', (now() at time zone 'Asia/Seoul'))::date, 'YYYY-MM-DD')),
     coalesce((select w.hourly_wage from public.wages w
       where w.unit_id = u.id and w.staff_id = auth.uid()::text), 0),
-    coalesce((
-      select jsonb_agg(jsonb_build_object('template_id', dm.template_id, 'date', to_char(dm.date, 'YYYY-MM-DD'),
-                                          'staff_id', dm.staff_id, 'mark', dm.mark)
-             order by dm.date, dm.template_id)
-      from public.shift_day_marks dm
-      where dm.unit_id = u.id and dm.staff_id = auth.uid()::text
-        and dm.archived_tenure_id is null      -- ★0246
-    ), '[]'::jsonb),
     coalesce((
       select jsonb_agg(jsonb_build_object('staff_id', wr.staff_id, 'effective_from', to_char(wr.effective_from, 'YYYY-MM-DD'),
                                           'hourly_wage', wr.hourly_wage)
@@ -778,7 +763,6 @@ returns table(
   exceptions       jsonb,
   wages            jsonb,
   payroll_settings jsonb,
-  marks            jsonb,  -- ★0245: [{template_id, date, staff_id, mark}] 그 매장 결근 표시 전부
   wage_rates       jsonb   -- ★0245: [{staff_id, effective_from, hourly_wage}] 그 매장 시급 이력 전부
 )
 language sql stable security definer set search_path = public as $$
@@ -812,14 +796,6 @@ language sql stable security definer set search_path = public as $$
       where w.unit_id = u.id
     ), '{}'::jsonb),
     u.payroll_settings,
-    coalesce((
-      select jsonb_agg(jsonb_build_object('template_id', dm.template_id, 'date', to_char(dm.date, 'YYYY-MM-DD'),
-                                          'staff_id', dm.staff_id, 'mark', dm.mark)
-             order by dm.date, dm.template_id)
-      from public.shift_day_marks dm
-      where dm.unit_id = u.id
-        and dm.archived_tenure_id is null      -- ★0246
-    ), '[]'::jsonb),
     coalesce((
       select jsonb_agg(jsonb_build_object('staff_id', wr.staff_id, 'effective_from', to_char(wr.effective_from, 'YYYY-MM-DD'),
                                           'hourly_wage', wr.hourly_wage)
@@ -1337,62 +1313,6 @@ end $$;
 revoke all on function public.decide_shift_time(text, boolean, boolean) from public, anon, authenticated;
 grant execute on function public.decide_shift_time(text, boolean, boolean) to authenticated;
 
--- mark_shift_day (0245 본문 승계 + 표시된 근무는 not_found)
-create or replace function public.mark_shift_day(
-  p_template text, p_date date, p_mark text, p_confirm_past boolean default false
-) returns boolean language plpgsql volatile security definer set search_path = public as $$
-declare
-  v_unit text := public.auth_unit_id();
-  t      record;
-begin
-  if auth.uid() is null then raise exception 'not_authenticated'; end if;
-  if v_unit is null or not public.auth_is_owner() then raise exception 'owner_only'; end if;
-  if p_mark is null or p_mark not in ('absent', 'worked') then raise exception 'invalid_mark'; end if;
-  if p_date is null then raise exception 'invalid_date'; end if;
-  -- 나누기(edit_shift_from · 옛 앱 직접 수정)와 엇갈리지 않게 근무 행을 잠근다. 기다린 뒤에는 새 기간으로 다시 본다.
-  select * into t from public.shift_templates where id = p_template for share;
-  if not found or t.unit_id is distinct from v_unit or t.archived_tenure_id is not null then raise exception 'not_found'; end if;
-  if p_date > public.kst_today() then raise exception 'future_date'; end if;
-  -- 그날 이 근무가 실제로 서는가(날짜 지정은 그 날짜 · 반복은 요일 · 적용 기간 · 그날 예외 없음)
-  if t.shift_date is not null then
-    if t.shift_date <> p_date then raise exception 'day_not_scheduled'; end if;
-  elsif t.weekday <> extract(dow from p_date)::int
-     or p_date < t.valid_from
-     or (t.valid_to is not null and p_date > t.valid_to)
-     or exists (select 1 from public.shift_exceptions e where e.template_id = t.id and e.date = p_date) then
-    raise exception 'day_not_scheduled';
-  end if;
-  -- ★Q4: 지난 날짜 표시는 그 기간 급여를 바꾼다 → 앱이 경고를 거친 뒤 p_confirm_past=true 로 다시 부른다.
-  if p_date < public.kst_today() and not coalesce(p_confirm_past, false) then raise exception 'confirm_past_required'; end if;
-
-  insert into public.shift_day_marks(template_id, date, unit_id, staff_id, mark, marked_by, marked_at)
-    values (t.id, p_date, t.unit_id, t.staff_id, p_mark, auth.uid(), now())
-  on conflict (template_id, date) do update
-    set mark = excluded.mark, staff_id = excluded.staff_id, marked_by = excluded.marked_by, marked_at = excluded.marked_at;
-  return true;
-end $$;
-revoke all on function public.mark_shift_day(text, date, text, boolean) from public, anon, authenticated;
-grant execute on function public.mark_shift_day(text, date, text, boolean) to authenticated;
-
--- clear_shift_day (0245 본문 승계 + 표시된 결근 표시는 지우지 않는다)
-create or replace function public.clear_shift_day(
-  p_template text, p_date date, p_confirm_past boolean default false
-) returns boolean language plpgsql volatile security definer set search_path = public as $$
-declare
-  v_unit text := public.auth_unit_id();
-begin
-  if auth.uid() is null then raise exception 'not_authenticated'; end if;
-  if v_unit is null or not public.auth_is_owner() then raise exception 'owner_only'; end if;
-  if p_date is null then raise exception 'invalid_date'; end if;
-  if p_date < public.kst_today() and not coalesce(p_confirm_past, false) then raise exception 'confirm_past_required'; end if;
-  -- 다른 매장 표시는 활성 매장 조건으로 걸러져 false 다(있는지 알려 주지 않는다). ★0246: 표시된 옛 행도 false.
-  delete from public.shift_day_marks
-   where template_id = p_template and date = p_date and unit_id = v_unit and archived_tenure_id is null;
-  return found;
-end $$;
-revoke all on function public.clear_shift_day(text, date, boolean) from public, anon, authenticated;
-grant execute on function public.clear_shift_day(text, date, boolean) to authenticated;
-
 -- set_wage_from (0244 본문 승계 + 표시 조건 · 부분 유니크 on conflict)
 create or replace function public.set_wage_from(
   p_staff text, p_wage int, p_from date, p_confirm_past boolean default false
@@ -1709,7 +1629,7 @@ declare
   t       text;
   r       record;
   v_n     int;
-  v_tables text[] := array['attendance', 'shift_templates', 'wage_rates', 'shift_day_marks', 'shift_change_requests',
+  v_tables text[] := array['attendance', 'shift_templates', 'wage_rates', 'shift_change_requests',
                            'chat_queries', 'swap_requests'];
   -- 대상 표를 읽지만 표시된 행에 닿지 않는 정의자 함수(이유는 qa:definer-filters 허용 목록과 같다).
   v_allow text[] := array['copy_past_segment', 'split_shift_at', 'add_shift_series', 'shift_series_guard', 'due_quiz_sends',
@@ -1810,7 +1730,6 @@ begin
                             'public.edit_shift_from(text, date, text, text, boolean)', 'public.end_shift_from(text, date, boolean)',
                             'public.override_shift_day(text, date, text, text, boolean)',
                             'public.request_shift_time(text, date, text, text, text)', 'public.decide_shift_time(text, boolean, boolean)',
-                            'public.mark_shift_day(text, date, text, boolean)', 'public.clear_shift_day(text, date, boolean)',
                             'public.set_wage_from(text, integer, date, boolean)', 'public.my_units_notif_data()'] loop
     if has_function_privilege('anon', fn::regprocedure, 'execute') then v_bad := v_bad || fn || '(anon 실행가능) '; end if;
     if not has_function_privilege('authenticated', fn::regprocedure, 'execute') then
@@ -1830,7 +1749,7 @@ begin
                                 'reopen_store', 'owner_today', 'my_cross_summary', 'my_cross_summary_v2', 'owner_labor_inputs',
                                 'owner_labor_inputs_v2', 'owner_overview', 'shift_templates_all', 'transfer_shift', 'approve_swap',
                                 'end_staff_tenure', 'shift_first_series', 'edit_shift_from', 'end_shift_from', 'override_shift_day',
-                                'request_shift_time', 'decide_shift_time', 'mark_shift_day', 'clear_shift_day', 'set_wage_from',
+                                'request_shift_time', 'decide_shift_time', 'set_wage_from',
                                 'wages_to_wage_rates', 'sync_wages_from_rates', 'my_units_notif_data')
               and not ('search_path=public' = any(coalesce(p.proconfig, '{}'))) loop
     v_bad := v_bad || r.f || '(search_path 없음) ';

@@ -179,8 +179,6 @@ try {
       ['K 질문', admin.from('chat_queries').insert({ id: kChat, unit_id: UNIT, junior_id: K.id, junior_name: 'QA재입사직원', query_text: '재입사 전 질문' })],
       ['K 교대 이력', admin.from('swap_requests').insert({ id: kSwap, unit_id: UNIT, kind: 'cover', requester_id: K.id, date: past3, template_id: kDated, note: '', status: 'rejected' })],
     ]) { const { error } = await q; if (error) throw new Error(`${label} 셋업: ${error.message}`); }
-    const m = await O.rpc('mark_shift_day', { p_template: kDated, p_date: past3, p_mark: 'absent', p_confirm_past: true });
-    if (m.error) throw new Error('K 결근 표시: ' + m.error.message);
     const rq = await K.c.rpc('request_shift_time', { p_template: kDated, p_date: past3, p_start: '11:00', p_end: '14:00' });
     if (rq.error) throw new Error('K 시간 요청: ' + rq.error.message);
   }
@@ -215,8 +213,6 @@ try {
     const inp = await inputsOf(O);
     check('3-5 ★owner_labor_inputs_v2 가 나간 직원의 근무를 준다(이번 기간 정산)',
       (inp.shifts ?? []).filter((x) => x.staff_id === K.id).length === 2, JSON.stringify(inp.error ?? (inp.shifts ?? []).length));
-    check('3-6 ★결근 표시가 남는다(근무표 cascade 로 사라지지 않는다)',
-      len(await rows(O.from('shift_day_marks').select('date').eq('staff_id', K.id))) === 1, String(len(await rows(O.from('shift_day_marks').select('date').eq('staff_id', K.id)))));
     check('3-7 사장이 시급을 본다(wages · wage_rates)',
       len(await rows(O.from('wages').select('staff_id').eq('staff_id', K.id))) === 1 && len(await rows(O.from('wage_rates').select('staff_id').eq('staff_id', K.id))) >= 1);
     const ten = await rows(admin.from('member_tenures').select('id, left_at, left_reason, role_at_end, name_snapshot, phone_last4, final_hourly_wage').eq('unit_id', UNIT).eq('user_id', K.id));
@@ -255,9 +251,8 @@ try {
     check('5-3 ★사장 select 에도 0건', len(await rows(O.from('attendance').select('id').eq('staff_id', K.id))) === 0,
       String(len(await rows(O.from('attendance').select('id').eq('staff_id', K.id)))));
     check('5-4 ★옛 질문이 본인에게 안 보인다', len(await rows(K.c.from('chat_queries').select('id').eq('id', kChat))) === 0);
-    check('5-5 ★사장에게 옛 시급 이력·결근 표시·시간 요청이 안 보인다',
+    check('5-5 ★사장에게 옛 시급 이력·시간 요청이 안 보인다',
       len(await rows(O.from('wage_rates').select('staff_id').eq('staff_id', K.id))) === 0
-        && len(await rows(O.from('shift_day_marks').select('date').eq('staff_id', K.id))) === 0
         && len(await rows(O.from('shift_change_requests').select('id').eq('staff_id', K.id))) === 0);
     check('5-6 ★옛 교대 이력이 매장 동료에게 안 보인다', len(await rows(J.from('swap_requests').select('id').eq('id', kSwap))) === 0);
     const arch = await rows(admin.from('attendance').select('archived_tenure_id').eq('id', kAtt));
@@ -266,9 +261,8 @@ try {
       && Array.isArray(archT) && archT.length === 2 && archT.every((x) => !!x.archived_tenure_id)
       && len(await rows(admin.from('swap_requests').select('id').eq('id', kSwap).not('archived_tenure_id', 'is', null))) === 1, JSON.stringify([arch, archT]));
     const inp = await inputsOf(O);
-    check('5-8 ★owner_labor_inputs_v2 에 옛 근무·시급 이력·결근 표시가 없다',
-      !inp.error && !(inp.shifts ?? []).some((x) => x.staff_id === K.id) && !(inp.wage_rates ?? []).some((x) => x.staff_id === K.id)
-        && !(inp.marks ?? []).some((x) => x.staff_id === K.id), JSON.stringify(inp.error ?? ''));
+    check('5-8 ★owner_labor_inputs_v2 에 옛 근무·시급 이력이 없다',
+      !inp.error && !(inp.shifts ?? []).some((x) => x.staff_id === K.id) && !(inp.wage_rates ?? []).some((x) => x.staff_id === K.id), JSON.stringify(inp.error ?? ''));
     const { data: cs, error: ce } = await K.c.rpc('my_cross_summary_v2');
     const mine = (cs ?? []).find((x) => x.unit_id === UNIT);
     check('5-9 ★my_cross_summary_v2: 이번 달 근무 0분 · 근무 0 · 시급 이력 0', !ce && Number(mine?.month_minutes) === 0

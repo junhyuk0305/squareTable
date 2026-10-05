@@ -126,7 +126,6 @@
     "qa:shift-requests": "node scripts/qa-shift-requests.mjs",
     "qa:definer-filters": "node scripts/qa-definer-filters.mjs",
     "qa:wage-rates": "node scripts/qa-wage-rates.mjs",
-    "qa:day-marks": "node scripts/qa-day-marks.mjs",
     "qa:store-slots": "node scripts/qa-store-slots.mjs",
     "qa:delete-store": "node scripts/qa-delete-store.mjs",
     "qa:billing-tiers": "node scripts/qa-billing-tiers.mjs",

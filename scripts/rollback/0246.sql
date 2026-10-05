@@ -14,7 +14,7 @@
 --   owner_today · workers_at · my_cross_summary · owner_labor_inputs · shift_templates_all · approve_swap · transfer_shift ·
 --   end_staff_tenure · shift_first_series · edit_shift_from · end_shift_from · override_shift_day 는 0242,
 --   request_shift_time · decide_shift_time 은 0243, set_wage_from · wages_to_wage_rates · sync_wages_from_rates 는 0244,
---   my_cross_summary_v2 · owner_labor_inputs_v2 · mark_shift_day · clear_shift_day 는 0245, my_units_notif_data 는 0153,
+--   my_cross_summary_v2 · owner_labor_inputs_v2 는 0245, my_units_notif_data 는 0153,
 --   owner_overview 는 0091 본문을 다시 적용한다. 그 전에 ①②를 먼저 한다.
 -- 실행(사용자 세션): npx supabase db query -f scripts/rollback/0246.sql --linked
 
@@ -30,7 +30,6 @@ update public.wage_rates            set archived_tenure_id = null where archived
   and not exists (select 1 from public.wage_rates x                     -- 같은 키의 표시 안 된 행이 있으면 그 옛 행은 표시를 남긴다
                    where x.unit_id = wage_rates.unit_id and x.staff_id = wage_rates.staff_id
                      and x.effective_from = wage_rates.effective_from and x.archived_tenure_id is null);
-update public.shift_day_marks       set archived_tenure_id = null where archived_tenure_id is not null;
 update public.shift_change_requests set archived_tenure_id = null where archived_tenure_id is not null;
 update public.chat_queries          set archived_tenure_id = null where archived_tenure_id is not null;
 update public.swap_requests         set archived_tenure_id = null where archived_tenure_id is not null;
