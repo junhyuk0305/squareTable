@@ -964,6 +964,24 @@ async function slotRuleChecks() {
     const a2 = await paidUntilOf(A);
     check('★㉒-b 지금 구독을 환불하면 그대로 회수한다', a2?.status === 'expired', JSON.stringify(a2));
   }
+
+  // ══ ㉓ 논리 점검 2026-10-05 B2 — 앱 구독 해지 뒤 1매장 계좌이체로 낸 한 달은 앱 환불에도 남는다(0260) ══════
+  {
+    const R = await reuseOwner(1);
+    const A = await mkStore(R, 'QA㉓ 1호점');
+    await makeFree(A);
+    const t = `qa_b2_${s}`;
+    const end = iso(days(20));
+    await evt(R, t, 'INITIAL_PURCHASE', 'single_1_monthly', 'single', 1, end);
+    await evt(R, t, 'CANCELLATION', 'single_1_monthly', 'single', 1, end, { p_reason: 'UNSUBSCRIBE' });
+    await approve((await claim(R, 'single', 1)).id);
+    const pv = await R.c.rpc('owner_prepaid_until');
+    check('★㉓-a 흔적 매장에 붙은 계좌이체 기간도 선불로 본다(앱 결제 잠금)', !pv.error && !!pv.data, pv.error?.message ?? JSON.stringify(pv.data));
+    await evt(R, t, 'CANCELLATION', 'single_1_monthly', 'single', 1, end, { p_reason: 'CUSTOMER_SUPPORT' });
+    const a1 = await paidUntilOf(A);
+    check('★★㉓-b 앱 환불 뒤에도 계좌이체로 낸 한 달(승인일 + 30일)은 열려 있다',
+      a1?.status === 'active' && new Date(a1?.paid_until).getTime() > days(29), JSON.stringify(a1));
+  }
 }
 
 async function main() {
