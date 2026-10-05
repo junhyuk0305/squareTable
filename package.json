@@ -125,6 +125,7 @@
     "qa:password-sessions": "node scripts/qa-password-sessions.mjs",
     "qa:past-month": "node --no-warnings scripts/qa-past-month.mjs",
     "qa:audit-payroll": "node --no-warnings scripts/qa-audit-payroll.mjs",
+    "qa:audit-billing": "node --no-warnings scripts/qa-audit-billing.mjs",
     "qa:shift-requests": "node scripts/qa-shift-requests.mjs",
     "qa:definer-filters": "node scripts/qa-definer-filters.mjs",
     "qa:wage-rates": "node scripts/qa-wage-rates.mjs",
