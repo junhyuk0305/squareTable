@@ -143,6 +143,28 @@ eq('★근무표에 없는 날은 급여 0(출퇴근을 찍었어도)', r.total,
   eq('★부분 교대: 휴게도 하루 한 번만(건별이면 0 이었다)', split3.breakMin, 30);
 }
 
+// ── 지난달 급여는 그때의 시급으로(2026-10-05 · 0244 wage_rates) ──────────────────────────
+//   시급 화면에 "언제부터"는 없다. 바꾸면 오늘부터 바뀐다(옛 wages 트리거가 오늘부터 기록).
+//   그래도 지난달 급여는 바뀌지 않는다 → 그 달 마지막 날(이번 달은 오늘)에 적용되던 시급으로 센다.
+{
+  const P = await import(pathToFileURL(OUTF('payroll.js')));
+  const wf = typeof P.wageForMonth === 'function' ? P.wageForMonth : null;
+  const rates = [
+    { staff_id: 'a', hourly_wage: 10000, effective_from: '2000-01-01' },
+    { staff_id: 'a', hourly_wage: 12000, effective_from: '2026-10-05' },
+    { staff_id: 'b', hourly_wage: 11000, effective_from: '2000-01-01' },
+  ];
+  const w = (ym, staff, fb) => (wf ? wf(rates, staff, ym, '2026-10-05', fb) : fb);
+  eq('★지난달(9월) 급여는 그때 시급(10000)', w('2026-09', 'a', 12000), 10000);
+  eq('이번 달(10월)은 지금 시급(12000)', w('2026-10', 'a', 12000), 12000);
+  eq('이력이 없으면 지금 시급 그대로(옛 서버)', w('2026-09', 'z', 9000), 9000);
+  eq('다른 직원 이력은 섞지 않는다', w('2026-09', 'b', 15000), 11000);
+  const tv = readFileSync(join(root, 'src/components/TimesheetView.tsx'), 'utf8');
+  ok2('★달을 넘겨 보는 근무 기록 화면이 wageForMonth 로 그 달 시급을 쓴다', /wageForMonth\(/.test(tv) && /wageRates/.test(tv));
+  const ps = readFileSync(join(root, 'src/lib/store/usePayrollStore.ts'), 'utf8');
+  ok2('스토어가 시급 이력(wage_rates)을 읽는다', /fetchWageRates\(/.test(ps) && /wageRates/.test(ps));
+}
+
 console.log(`\nRESULT: ${pass} passed, ${fail} failed`);
 await rm(OUT, { recursive: true, force: true }).catch(() => {});
 process.exit(fail ? 1 : 0);
