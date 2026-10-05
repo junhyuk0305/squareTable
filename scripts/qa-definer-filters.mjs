@@ -357,6 +357,13 @@ console.log('\n[6] 0248 노하우 보관 — 열 · 정책 · 트리거 · 권�
   check('부분 인덱스 (unit_id) where archived_at is null',
     psql(`select count(*) from pg_indexes where schemaname = 'public' and tablename = 'playbook_entries'
             and indexdef ilike '%(unit_id)%' and indexdef ilike '%archived_at IS NULL%'`) === '1');
+  // 0248 이 다시 정의한 옛 함수들은 처음 만든 파일이 PUBLIC 실행권을 안 걷었다. 다시 정의할 때 3역할 회수를 한다(계획 §4 공통 규칙).
+  for (const fn of ['match_playbook(extensions.vector, text, int)', 'my_knowhow_entries()', 'owner_knowhow_entries()',
+                    'owner_knowhow_stats()', 'my_growth()', 'list_unit_knowhow(text)', 'copy_knowhow_between(text, text, text[])',
+                    'brand_unit_entries(text)', 'quiz_items_for(text[], int)', 'quiz_item_counts()']) {
+    check(`${fn}: anon 실행 불가 · authenticated 실행 가능`,
+      psql(`select not has_function_privilege('anon', 'public.${fn}', 'execute') and has_function_privilege('authenticated', 'public.${fn}', 'execute')`) === 't');
+  }
 }
 
 console.log('\n[7] 0249 같은 질문 — askers 표 · RPC 권한 · 해결 트리거');
