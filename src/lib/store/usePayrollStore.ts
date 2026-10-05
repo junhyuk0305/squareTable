@@ -65,6 +65,8 @@ type State = {
   settingsLoaded: boolean;
   /** 마지막 시급 읽기가 실패했나. true면 화면은 금액을 만들면 안 된다([P7-#5]). */
   wagesLoadError: boolean;
+  /** 마지막 시급 이력 읽기가 실패했나. true면 지난달 금액을 만들면 안 된다(지금 시급으로 계산된다). */
+  wageRatesLoadError: boolean;
   hydrate: () => Promise<void>;
   setSetting: <K extends keyof PayrollSettings>(k: K, v: PayrollSettings[K]) => void;
   setWage: (staffId: string, wage: number) => void;
@@ -80,10 +82,11 @@ export const usePayrollStore = create<State>((set, get) => ({
   wagesLoaded: !HAS_SUPABASE,
   settingsLoaded: !HAS_SUPABASE,
   wagesLoadError: false,
+  wageRatesLoadError: false,
   hydrate: async () => {
     if (!HAS_SUPABASE) return;
     const epoch = currentTenantEpoch();
-    const [wageRes, dbSettings, wageRates] = await Promise.all([fetchWages(), fetchPayrollSettings(), fetchWageRates()]);
+    const [wageRes, dbSettings, ratesRes] = await Promise.all([fetchWages(), fetchPayrollSettings(), fetchWageRates()]);
     // 그 사이 매장이 바뀌었다 — 이전 매장 시급·규칙을 쓰지 않는다(로컬 캐시에도 남기지 않는다).
     if (isStaleEpoch(epoch)) return;
     // DB에 저장된 규칙이 있으면 그것이 진실원천(기본값 위에 병합). 없으면(초기 매장) 로컬 캐시 유지.
@@ -93,9 +96,18 @@ export const usePayrollStore = create<State>((set, get) => ({
       // ★읽기 실패면 이전에 받아 둔 시급을 **덮어쓰지 않는다** — 빈 값으로 갈아치우면
       //   "안 정했다"로 보이고, 화면이 그걸 근거로 금액을 만든다([P7-#5]).
       // settingsLoaded 는 시급 읽기 성패와 무관하다 — 여기 왔다는 건 급여 설정 조회가 끝났다는 뜻이다.
+      // 시급 이력도 같다 — 못 읽었으면 이전 이력을 두고 실패만 알린다.
       return wageRes.error
-        ? { settings, settingsLoaded: true, wagesLoadError: true }
-        : { wages: wageRes.data, wageRates, settings, settingsLoaded: true, wagesLoaded: true, wagesLoadError: false };
+        ? { settings, settingsLoaded: true, wagesLoadError: true, wageRatesLoadError: ratesRes.error }
+        : {
+            wages: wageRes.data,
+            ...(ratesRes.error ? {} : { wageRates: ratesRes.data }),
+            settings,
+            settingsLoaded: true,
+            wagesLoaded: true,
+            wagesLoadError: false,
+            wageRatesLoadError: ratesRes.error,
+          };
     });
   },
   setSetting: (k, v) => {

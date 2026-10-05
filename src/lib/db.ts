@@ -3224,16 +3224,17 @@ export async function fetchWages(): Promise<ReadResult<Record<string, number>>> 
 }
 /**
  * 시급 이력(0244 wage_rates) — 지난달 급여를 그때 시급으로 세는 데 쓴다(2026-10-05).
- * 재입사 전 이력(archived_tenure_id)은 빼고 읽는다. 표가 없거나(옛 서버) 못 읽으면 빈 목록 = 지금 시급으로 센다.
+ * 재입사 전 이력(archived_tenure_id)은 빼고 읽는다.
+ * ★못 읽으면 실패를 신호로 돌려준다 — 빈 목록이면 지난달 급여가 지금 시급으로 조용히 계산된다([P7-#5]).
  */
-export async function fetchWageRates(): Promise<WageRate[]> {
-  if (!HAS_SUPABASE) return [];
+export async function fetchWageRates(): Promise<ReadResult<WageRate[]>> {
+  if (!HAS_SUPABASE) return { data: [], error: false };
   const { data, error } = await supabase.from('wage_rates').select('staff_id, hourly_wage, effective_from').is('archived_tenure_id', null);
   if (error) {
-    console.warn('[db] fetchWageRates:', error.message);
-    return [];
+    readFail('fetchWageRates', error);
+    return { data: [], error: true };
   }
-  return (data ?? []) as WageRate[];
+  return { data: (data ?? []) as WageRate[], error: false };
 }
 export async function setWageDb(staffId: string, wage: number): Promise<boolean> {
   if (!HAS_SUPABASE) return true;

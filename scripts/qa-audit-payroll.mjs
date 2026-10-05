@@ -11,7 +11,7 @@ register('./qa-alias-loader.mjs', import.meta.url);
 let pass = 0, fail = 0;
 const check = (n, ok, extra = '') => { ok ? (pass++, console.log('  PASS', n)) : (fail++, console.log('  FAIL', n, extra)); };
 const fn = (f) => typeof f === 'function';
-const read = (p) => (existsSync(new URL(`../${p}`, import.meta.url)) ? readFileSync(new URL(`../${p}`, import.meta.url), 'utf8') : '');
+const read = (p) => (existsSync(new URL(`../${p}`, import.meta.url)) ? readFileSync(new URL(`../${p}`, import.meta.url), 'utf8').replace(/\r\n/g, '\n') : '');
 const strip = (s) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\{\/\*[\s\S]*?\*\/\}/g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
 
 let P = {};
@@ -34,7 +34,7 @@ console.log('[A4] 시급을 바꾸면 이번 달 예상 급여가 바로 새 시
 
 console.log('\n[A5] 시급 이력 읽기 실패 = 지난달 금액을 만들지 않는다(배선)');
 {
-  const db = strip(read('src/lib/db.ts'));
+  const db = read('src/lib/db.ts'); // strip 은 db.ts 문자열 속 '/*' 에 걸려 본문을 지운다 — 원문으로 본다.
   const f = db.match(/export async function fetchWageRates[\s\S]*?\n}\n/)?.[0] ?? '';
   check('★fetchWageRates 가 실패를 신호로 돌려준다(ReadResult · readFail)', /Promise<ReadResult<WageRate\[\]>>/.test(f) && /readFail\('fetchWageRates'/.test(f) && /error: true/.test(f));
   const st = strip(read('src/lib/store/usePayrollStore.ts'));

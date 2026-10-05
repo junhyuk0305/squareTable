@@ -88,7 +88,9 @@ export function TimesheetView({ staffId, wage, editedBy, badgeLabel, badgeTone =
   // 시급이 없으면 **계산 자체를 하지 않는다** — 없는 시급으로 만든 금액은 0원이든 최저시급이든 거짓말이다.
   // 지난달은 그 달 시급으로 센다(2026-10-05). 이번 달은 지금 시급이다. 이력이 없으면 지금 시급.
   const wageRates = usePayrollStore((s) => s.wageRates);
-  const monthWage = wage == null ? null : wageForMonth(wageRates, staffId, ym, todayStr(), wage);
+  // 이력을 못 읽었으면 지난달 금액을 만들지 않는다 — 지금 시급으로 계산된 금액이 사실처럼 보인다([P7-#5]).
+  const pastRatesMissing = usePayrollStore((s) => s.wageRatesLoadError) && ym < todayStr().slice(0, 7);
+  const monthWage = wage == null || pastRatesMissing ? null : wageForMonth(wageRates, staffId, ym, todayStr(), wage);
   const monthBreakdown = monthWage == null ? null : computePay(shiftsToPayRecords(monthShifts), monthWage, settings);
   const monthPay = monthBreakdown?.total ?? null;
   // 대조(확인) 층 — 근무표와 출퇴근이 30분 넘게 어긋난 것만. 급여는 근무표대로 나가므로
@@ -219,6 +221,9 @@ export function TimesheetView({ staffId, wage, editedBy, badgeLabel, badgeTone =
           <Text style={styles.sumNote}>
             예상급여는 근무표 기준이에요. 근무시간은 실제 출퇴근 기록이라 다를 수 있어요.
           </Text>
+        )}
+        {pastRatesMissing && wage != null && (
+          <Text style={styles.sumNote}>지난달 시급을 불러오지 못했어요. 인터넷 연결을 확인하고 다시 들어와 주세요.</Text>
         )}
         {/* 금액이 근무표 시간 × 시급보다 적으면 **왜 빠졌는지**를 말한다. 안 말하면 계산이 틀린 것으로 읽힌다. */}
         {waitingTimes > 0 && (
