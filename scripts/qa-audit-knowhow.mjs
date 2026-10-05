@@ -158,5 +158,19 @@ console.log('\n[E6] 카테고리 이름 바꾸기·"확인 완료"는 노하우 
       && /Object\.keys\(patch\)\.some\(\(k\) => !NON_CONTENT_KEYS\.has\(k\)\)/.test(upd), upd.slice(0, 300));
 }
 
+console.log('\n[E7] 앱을 다시 켠 뒤에도 이전 대화의 "사장님께 물어보기"가 실제로 질문을 보낸다');
+{
+  const store = strip(read('src/lib/store/useChatStore.ts'));
+  const reg = (store.match(/\n  registerToOwner: async \(queryId\) => \{[\s\S]*?\n  \},/) || [''])[0];
+  check('★등록 준비물이 메모리에 없으면 대화 기록(history)에서 다시 만든다',
+    /const q = get\(\)\.history\.find\(\(h\) => h\.id === queryId\);/.test(reg)
+      && /get\(\)\.pendingDeflects\[queryId\] \?\? \(q \? deflectFromHistory\(q\) : null\)/.test(reg), reg.slice(0, 300));
+  check('★다시 만드는 질문은 원래 문장·물은 사람·후보 노하우를 그대로 쓴다',
+    /function deflectFromHistory\(q: ChatQuery\): UnknownQuery/.test(store)
+      && /q\.matched_entry_ids\[0\] \?\? q\.candidate_entry_ids\?\.\[0\] \?\? null/.test(store)
+      && /buildDeflect\(q\.query_text, q\.junior_id, q\.junior_name, q\.asked_at,/.test(store));
+  check('답할 때 미리 만드는 준비물도 같은 빌더를 쓴다', /pendingDeflects: \{ \.\.\.s\.pendingDeflects, \[cqId\]: buildDeflect\(text, session\.userId, session\.userName, now, meta\) \}/.test(store));
+}
+
 console.log(`\n${pass} PASS / ${fail} FAIL`);
 process.exit(fail ? 1 : 0);
