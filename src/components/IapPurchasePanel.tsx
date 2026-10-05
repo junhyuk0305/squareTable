@@ -115,7 +115,7 @@ export function IapPurchasePanel({
   const pendingCount = sub?.pending_store_count ?? null;
   // Q8 — 다른 기기에서 산 이용권이면 이 기기에서 늘리기·줄이기·해지를 잠근다(두 번 청구 · 그 구독이 없는 관리 창).
   //   현재 구독 카드는 그대로 보인다. 판정 = lib/iap/notes.ts(서버 행 platform 이 먼저, 없으면 스토어 권한).
-  const storeNote = otherStoreNote(sub?.platform, entStore, Platform.OS);
+  const storeNote = otherStoreNote(sub?.platform, entStore, Platform.OS, sub?.current_period_end);
 
   useEffect(() => {
     let alive = true;

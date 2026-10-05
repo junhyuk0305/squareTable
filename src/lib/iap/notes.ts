@@ -69,11 +69,22 @@ export function otherStoreNote(
   subPlatform: string | null | undefined,
   entStore: string | null | undefined,
   os: string,
+  periodEnd?: string | null,
+  now: number = Date.now(),
 ): string | null {
   const device: SubPlatform | null = os === 'ios' ? 'appstore' : os === 'android' ? 'play' : null;
   if (!device) return null;
   const bought: SubPlatform | null =
     subPlatform === 'appstore' || subPlatform === 'play' ? subPlatform : subPlatform ? null : fromEntStore(entStore);
   if (!bought || bought === device) return null;
-  return '이 이용권은 다른 기기에서 산 거예요. 매장 수 바꾸기와 해지는 산 기기에서 해 주세요.';
+  const base = '이 이용권은 다른 기기에서 산 거예요. 매장 수 바꾸기와 해지는 산 기기에서 해 주세요.';
+  // 2026-10-05: 언제부터 이 기기에서 결제할 수 있는지(그 구독의 기간 끝 · 한국 날짜)를 붙인다. 끝난 구독은 잠그지 않는다.
+  if (!periodEnd) return base;
+  const ms = new Date(periodEnd).getTime();
+  if (Number.isNaN(ms)) return base;
+  if (ms <= now) return null;
+  const k = new Date(ms + 9 * 3600000);
+  const kNow = new Date(now + 9 * 3600000);
+  const year = k.getUTCFullYear() !== kNow.getUTCFullYear() ? `${k.getUTCFullYear()}년 ` : '';
+  return `${base} 이용 기간(${year}${k.getUTCMonth() + 1}월 ${k.getUTCDate()}일)이 끝나면 이 기기에서 결제할 수 있어요.`;
 }
