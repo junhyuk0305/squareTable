@@ -123,10 +123,10 @@ export function InviteBlock({
           </View>
           <Pressable
             onPress={sendCode}
-            disabled={expired}
+            disabled={expired || !code}
             accessibilityRole="button"
             accessibilityLabel="초대코드 복사"
-            style={({ pressed }) => [s.copyBtn, pressed && { opacity: 0.85 }, expired && s.dim]}
+            style={({ pressed }) => [s.copyBtn, pressed && { opacity: 0.85 }, (expired || !code) && s.dim]}
           >
             <Ionicons name={copied === 'code' ? 'checkmark' : 'copy-outline'} size={15} color={InkColors.ink} />
             <Text style={s.copyText}>{copied === 'code' ? '복사됨' : '복사'}</Text>
@@ -136,11 +136,11 @@ export function InviteBlock({
 
         <PressableScale
           onPress={sendLink}
-          disabled={expired}
+          disabled={expired || !code}
           scaleTo={0.97}
           accessibilityRole="button"
           accessibilityLabel="초대 링크 복사"
-          style={[s.primary, expired && s.dim]}
+          style={[s.primary, (expired || !code) && s.dim]}
         >
           <Ionicons name="link-outline" size={16} color={InkColors.bubbleText} />
           <Text style={s.primaryText}>{copied === 'link' ? '복사됨' : '초대 링크 복사'}</Text>

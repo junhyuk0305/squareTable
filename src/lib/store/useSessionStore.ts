@@ -411,11 +411,22 @@ async function loadProfile(
     let plan: PlanId = 'free';
     let seatLocked = false;
     if (unitId) {
-      const { data: unit } = await fetchUnitInfo(unitId);
-      storeName = unit?.store_name ?? '';
-      inviteCode = unit?.invite_code ?? '';
-      inviteExpiresAt = unit?.invite_expires_at ?? '';
-      industry = unit?.industry ?? '';
+      const { data: unit, error: unitErr } = await fetchUnitInfo(unitId);
+      // G3: 읽기 실패를 빈칸으로 덮지 않는다. 같은 사용자·같은 매장이면 이전에 알던 값을 지킨다(구독 읽기와 같은 패턴).
+      //   빈 초대코드로 초대 문구가 나가면 직원이 합류할 수 없다.
+      if (unitErr) reportError('session.fetchUnitInfo', unitErr);
+      const prevUnit = useSessionStore.getState();
+      if (unitErr && prevUnit.userId === userId && prevUnit.unitId === unitId) {
+        storeName = prevUnit.storeName;
+        inviteCode = prevUnit.inviteCode;
+        inviteExpiresAt = prevUnit.inviteExpiresAt;
+        industry = prevUnit.industry;
+      } else {
+        storeName = unit?.store_name ?? '';
+        inviteCode = unit?.invite_code ?? '';
+        inviteExpiresAt = unit?.invite_expires_at ?? '';
+        industry = unit?.industry ?? '';
+      }
 
       // 구독상태(별도 테이블, 읽기 전용). '행 없음'은 fail-open('none', 유예) — 의도된 동작.
       // 단 읽기 '오류'는 fail-open 금지: 만료 매장이 일시적 읽기 실패로 재활성화되면 안 되고(수익 누수),
