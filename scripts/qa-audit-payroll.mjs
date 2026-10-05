@@ -2,8 +2,9 @@
 // qa-audit-payroll.mjs — 2026-10-05 논리 점검(QA_논리점검_2026-10-05.md) 급여·근무표 묶음 재현 검사.
 //   [A4] 시급을 바꾸면 그 자리에서 이번 달 예상 급여가 새 시급으로 바뀐다(앱을 다시 켜지 않아도).
 //   [A5] 시급 이력을 못 읽으면 지난달 급여를 지금 시급으로 만들지 않고 "못 불러왔다"고 말한다.
+//   [A7] 사장 홈 인건비 = 직원 관리 합계(이번 달 퇴사자 포함) · 직원 허브 예상 급여 = 출퇴근 화면(근무표 기준).
 // 실행: node --no-warnings scripts/qa-audit-payroll.mjs
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { register } from 'node:module';
 
 register('./qa-alias-loader.mjs', import.meta.url);
@@ -41,6 +42,36 @@ console.log('\n[A5] 시급 이력 읽기 실패 = 지난달 금액을 만들지 
   check('★스토어: 읽기 실패면 이전 이력을 덮지 않고 wageRatesLoadError 를 세운다', /wageRatesLoadError: ratesRes\.error/.test(st) && /ratesRes\.error \? \{\} : \{ wageRates: ratesRes\.data \}/.test(st));
   const tv = strip(read('src/components/TimesheetView.tsx'));
   check('★출근 기록 화면: 지난달 + 이력 실패면 금액 대신 안내', /wageRatesLoadError/.test(tv) && /pastRatesMissing/.test(tv) && /지난달 시급을 불러오지 못했어요/.test(tv));
+}
+
+// 함수의 마지막 정의 본문(가장 큰 번호 마이그레이션). create [or replace] function public.<name>( … $$; 까지.
+const lastDef = (name) => {
+  const dir = new URL('../supabase/migrations/', import.meta.url);
+  const files = readdirSync(dir).filter((f) => f.endsWith('.sql')).sort();
+  let body = '', file = '';
+  for (const f of files) {
+    const s = readFileSync(new URL(f, dir), 'utf8').replace(/\r\n/g, '\n');
+    const re = new RegExp(`create (or replace )?function public\\.${name}\\([\\s\\S]*?\\n\\$\\$;`, 'g');
+    for (const m of s.matchAll(re)) { body = m[0]; file = f; }
+  }
+  return { body, file };
+};
+
+console.log('\n[A7] 같은 "이번 달 인건비·예상 급여"는 화면마다 같은 공식이다');
+{
+  // (1) 사장 홈 인건비에 이번 달 퇴사자 몫이 들어간다(직원 관리 히어로와 같은 숫자).
+  const ol = lastDef('owner_labor_inputs_v2');
+  check('★owner_labor_inputs_v2 가 이번 달 퇴사자(닫힌 기간 · 지금 멤버 아님)를 준다', /departed\s+jsonb/.test(ol.body) && /member_tenures/.test(ol.body) && /left_at\s*>=/.test(ol.body) && /not exists[\s\S]*unit_members/.test(ol.body), ol.file);
+  check('owner_labor_inputs_v2 권한 유지(authenticated 만)', new RegExp(`revoke all on function public\\.owner_labor_inputs_v2\\(\\) from public, anon, authenticated;\\s*\\ngrant execute on function public\\.owner_labor_inputs_v2\\(\\) to authenticated;`).test(read(`supabase/migrations/${ol.file}`)));
+  const hub = strip(read('src/lib/store/useHubStore.ts'));
+  check('★허브 laborByUnit 이 퇴사자 몫을 직원 관리와 같은 departedPayRows 로 더한다', /departedPayRows\(/.test(hub) && /r\.departed/.test(hub));
+  // (2) 직원 허브 예상 급여 = 출퇴근 화면과 같은 근무표 기준 computePay.
+  const mc = lastDef('my_cross_summary_v2');
+  check('★my_cross_summary_v2 가 매장 급여 설정(payroll_settings)을 준다', /payroll_settings\s+jsonb/.test(mc.body) && /u\.payroll_settings/.test(mc.body), mc.file);
+  check('my_cross_summary_v2 권한 유지(authenticated 만)', /revoke all on function public\.my_cross_summary_v2\(\) from public, anon, authenticated;\s*\ngrant execute on function public\.my_cross_summary_v2\(\) to authenticated;/.test(read(`supabase/migrations/${mc.file}`)));
+  const jt = strip(read('src/components/hub/JuniorTodayView.tsx'));
+  check('★직원 허브: 근무표(scheduledShiftsFor) → computePay 로 센다(출퇴근 분 × 시급 아님)', /computePay\(/.test(jt) && /scheduledShiftsFor\(/.test(jt) && !/month_minutes \/ 60\) \* r\.hourly_wage/.test(jt));
+  check('직원 허브 ⓘ 가 근무표 기준이라고 말한다', /근무표/.test(jt) && !/근무 기록 × 시급/.test(jt));
 }
 
 console.log(`\n${fail ? 'RED' : 'GREEN'} — PASS ${pass} · FAIL ${fail}`);
