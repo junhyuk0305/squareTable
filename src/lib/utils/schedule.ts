@@ -8,19 +8,23 @@ export const WEEKDAY_LABELS = ['일', '월', '화', '수', '목', '금', '토'] 
 /** 화면 노출 순서(월요일 시작). 근무표 편집·요일 칩에서 이 순서로 보여준다. */
 export const WEEKDAY_ORDER = [1, 2, 3, 4, 5, 6, 0] as const;
 
+/**
+ * 날짜 문자열을 UTC 자정으로 읽는다. 읽을 때는 getUTC* 만 쓴다(A11).
+ * 기기 현지 자정으로 읽으면 한국보다 동쪽 시간대(괌·호주 등)에서 하루씩 밀리고 야간수당이 0원이 된다.
+ */
 function toDate(dateStr: string): Date {
-  return new Date(`${dateStr}T00:00:00`);
+  return new Date(`${dateStr}T00:00:00Z`);
 }
 
 /** YYYY-MM-DD에 n일 더한 날짜 문자열. */
 export function addDays(dateStr: string, n: number): string {
-  return todayStr(new Date(toDate(dateStr).getTime() + n * 86400000));
+  return new Date(toDate(dateStr).getTime() + n * 86400000).toISOString().slice(0, 10);
 }
 
 /** 해당 날짜가 속한 주의 월요일(YYYY-MM-DD). */
 export function mondayOf(dateStr: string): string {
   const d = toDate(dateStr);
-  const dow = d.getDay(); // 0=일
+  const dow = d.getUTCDay(); // 0=일
   const diff = dow === 0 ? -6 : 1 - dow; // 일요일이면 6일 전 월요일로
   return addDays(dateStr, diff);
 }
@@ -32,19 +36,19 @@ export function weekDates(mondayStr: string): string[] {
 
 /** 날짜의 요일 인덱스(0=일~6=토). */
 export function weekdayOf(dateStr: string): number {
-  return toDate(dateStr).getDay();
+  return toDate(dateStr).getUTCDay();
 }
 
 /** "6/30" 짧은 표기. */
 export function fmtMd(dateStr: string): string {
   const d = toDate(dateStr);
-  return `${d.getMonth() + 1}/${d.getDate()}`;
+  return `${d.getUTCMonth() + 1}/${d.getUTCDate()}`;
 }
 
 /** "6월 30일 (화)" 풀 표기. */
 export function fmtDateKo(dateStr: string): string {
   const d = toDate(dateStr);
-  return `${d.getMonth() + 1}월 ${d.getDate()}일 (${WEEKDAY_LABELS[d.getDay()]})`;
+  return `${d.getUTCMonth() + 1}월 ${d.getUTCDate()}일 (${WEEKDAY_LABELS[d.getUTCDay()]})`;
 }
 
 /** "6/23~6/29" 주간 범위. */
@@ -215,7 +219,7 @@ export function monthDates(ym: string): string[] {
 
 /** YYYY-MM-DD의 '일(day-of-month)' 숫자. */
 export function dayOfMonth(dateStr: string): number {
-  return toDate(dateStr).getDate();
+  return toDate(dateStr).getUTCDate();
 }
 
 /** from(포함) 이후 weekday(0~6)에 처음 해당하는 날짜. */
