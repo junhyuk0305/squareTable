@@ -6,6 +6,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { needsProfileSetup } from '@/lib/store/profileSetup';
 import { HAS_SUPABASE } from '@/lib/supabase';
+import { SHOW_HQ_CONSOLE } from '@/lib/config/store-policy';
+import { landingFor } from '@/lib/nav/landing';
 import { BrandColors, InkColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
 import { Space, Gap, SCREEN_GUTTER } from '@/lib/theme/layout';
@@ -115,6 +117,7 @@ export default function LandingScreen() {
   const pendingUnitId = useSessionStore((s) => s.pendingUnitId);
   const needsDowngradeChoice = useSessionStore((s) => s.needsDowngradeChoice);
   const brandId = useSessionStore((s) => s.brandId);
+  const stores = useSessionStore((s) => s.stores);
   const sessionCheck = useSessionStore((s) => s.sessionCheck);
 
   // 이미 로그인된 재방문자는 마케팅을 건너뛰고 각자 홈으로. (데모 빌드는 항상 랜딩을 보여준다)
@@ -129,9 +132,9 @@ export default function LandingScreen() {
     if (needsDowngradeChoice) return <Redirect href="/downgrade" />;
     // 본사 담당자는 본사 대시보드가 홈이다(정본 §3-1·§5-1). 매장 사장을 겸하면 본사 셸의
     // '내 매장으로'로 건너간다 — 두 축을 오가는 길은 셸 양쪽에 한 쌍으로 있다.
+    // 본사 화면이 없는 앱에서는 매장이 있으면 바로 /hub 다(Q27 · landingFor).
     // ★프로필 완성·다운그레이드 **다음**이다. 그 둘은 계정 축이라 본사보다 먼저 막아야 한다.
-    if (brandId) return <Redirect href="/hq" />;
-    return <Redirect href="/hub" />;
+    return <Redirect href={landingFor({ brandId, hqConsole: SHOW_HQ_CONSOLE, hasStore: stores.length > 0 })} />;
   }
   if (HAS_SUPABASE && status === 'loading') return null; // 스플래시가 덮는 구간 — 깜빡임 방지
   // 연결 실패로 세션을 못 읽었으면 로그인 화면으로 보내지 않는다(Q26). 웹·네이티브 공통.

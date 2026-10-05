@@ -6,6 +6,7 @@ import { useSessionStore } from '@/lib/store/useSessionStore';
 import { logout } from '@/lib/auth';
 import { confirmAction } from '@/lib/utils/confirm';
 import { SHOW_HQ_CONSOLE } from '@/lib/config/store-policy';
+import { HQ_TO_STORE_LABEL } from '@/lib/nav/landing';
 import { Appear } from '@/components/Appear';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
@@ -64,12 +65,16 @@ export default function HqLayout() {
         title="본사 기능은 웹에서 써요"
         body="본사 대시보드는 넓은 화면 전용이에요. 컴퓨터 브라우저로 로그인해 주세요."
         // 앱에서 나갈 길이 없으면 같은 폰으로 다른 계정(예: 매장 계정)에 들어갈 수 없다(10-04 사용자 결정).
-        action={{
-          label: '로그아웃',
-          onPress: async () => {
-            if (await confirmAction('로그아웃', '로그아웃하시겠어요?', '로그아웃', { icon: 'log-out-outline' })) await logout();
+        // 직영 매장도 있으면 [내 매장으로](Q27). 매장은 stores(my_units)로 센다. unitId 는 작업실일 수 있다(0215).
+        actions={[
+          ...(stores.length > 0 ? [{ label: HQ_TO_STORE_LABEL, href: '/hub' }] : []),
+          {
+            label: '로그아웃',
+            onPress: async () => {
+              if (await confirmAction('로그아웃', '로그아웃하시겠어요?', '로그아웃', { icon: 'log-out-outline' })) await logout();
+            },
           },
-        }}
+        ]}
       />
     );
   }
@@ -91,7 +96,7 @@ export default function HqLayout() {
             ? '지금 로그인한 계정은 매장 계정이에요. 본사 담당자 계정으로 다시 로그인하면 대시보드가 열려요.'
             : '본사 담당자로 등록된 계정으로 로그인하면 대시보드가 열려요. 등록은 본사 담당자 초대로만 돼요.'
         }
-        action={hasStore ? { label: '내 매장으로', href: '/stores' } : { label: '로그인 화면으로', href: '/login' }}
+        actions={[hasStore ? { label: '내 매장으로', href: '/stores' } : { label: '로그인 화면으로', href: '/login' }]}
       />
     );
   }
@@ -99,17 +104,17 @@ export default function HqLayout() {
   return stack;
 }
 
-/** 못 들어올 때 보여 주는 한 장 — 이유 한 줄 + 다음 행동 하나. */
+/** 못 들어올 때 보여 주는 한 장 — 이유 한 줄 + 다음 행동. 첫 버튼이 주 행동이다. */
 function Notice({
   icon,
   title,
   body,
-  action,
+  actions,
 }: {
   icon: keyof typeof Ionicons.glyphMap;
   title: string;
   body: string;
-  action?: { label: string; href: string } | { label: string; onPress: () => void };
+  actions: ({ label: string; href: string } | { label: string; onPress: () => void })[];
 }) {
   const router = useRouter();
   return (
@@ -118,15 +123,16 @@ function Notice({
         <Ionicons name={icon} size={28} color={InkColors.ink} />
         <Text style={styles.title}>{title}</Text>
         <Text style={styles.body}>{body}</Text>
-        {action ? (
+        {actions.map((action, i) => (
           <Pressable
+            key={action.label}
             onPress={() => ('href' in action ? router.replace(action.href as never) : action.onPress())}
             accessibilityRole="button"
-            style={({ pressed }) => [styles.btn, pressed && { opacity: 0.85 }]}
+            style={({ pressed }) => [styles.btn, i > 0 && styles.btnSub, pressed && { opacity: 0.85 }]}
           >
-            <Text style={styles.btnText}>{action.label}</Text>
+            <Text style={[styles.btnText, i > 0 && styles.btnSubText]}>{action.label}</Text>
           </Pressable>
-        ) : null}
+        ))}
       </Appear>
     </View>
   );
@@ -160,4 +166,6 @@ const styles = StyleSheet.create({
     backgroundColor: BrandColors.brand,
   },
   btnText: { fontSize: 14, fontWeight: '800', color: InkColors.bubbleText },
+  btnSub: { marginTop: 0, backgroundColor: 'transparent' },
+  btnSubText: { color: InkColors.ink2 },
 });

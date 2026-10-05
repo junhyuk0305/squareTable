@@ -50,7 +50,7 @@ check('★1-1 앱 · 본사 담당자 겸 직영 사장 = /hub', L({ brandId: 'b
 check('1-2 앱 · 매장 없는 본사 담당자 = /hq(안내 한 장 · 지금과 같다)', L({ brandId: 'b1', hqConsole: APP, hasStore: false }) === '/hq', show(L({ brandId: 'b1', hqConsole: APP, hasStore: false })));
 check('1-3 웹 · 본사 담당자 겸 사장 = /hq(웹은 바꾸지 않는다)', L({ brandId: 'b1', hqConsole: WEB, hasStore: true }) === '/hq');
 check('1-4 웹 · 본사 담당자 = /hq', L({ brandId: 'b1', hqConsole: WEB, hasStore: false }) === '/hq');
-check('1-5 앱 · 매장 사장 · 직원 = /hub', L({ brandId: '', hqConsole: APP, hasStore: true }) === '/hub');
+check('1-5 앱 · 매장 사장 · 직원 = /hub', L({ brandId: '', hqConsole: APP, hasStore: true }) === '/hub' && L({ brandId: null, hqConsole: APP, hasStore: true }) === '/hub');
 check('1-6 앱 · 매장이 아직 없는 계정(합류 대기 등) = /hub(지금과 같다)', L({ brandId: '', hqConsole: APP, hasStore: false }) === '/hub');
 check('1-7 웹 · 본사 아님 = /hub', L({ brandId: '', hqConsole: WEB, hasStore: true }) === '/hub' && L({ brandId: '', hqConsole: WEB, hasStore: false }) === '/hub');
 check('1-8 [내 매장으로] 문구는 계획 그대로', M?.HQ_TO_STORE_LABEL === '내 매장으로', show(M?.HQ_TO_STORE_LABEL));
