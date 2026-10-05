@@ -1228,9 +1228,19 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       // 동적 import — 두 푸시 모듈이 이 스토어를 정적으로 import 한다(순환 방지).
       const { clearDeviceNotifications } = await import('@/lib/push/nativepush');
       const { disablePush } = await import('@/lib/push/webpush');
+      // 오프라인 부팅 화면은 스토어 userId 를 '' 로 비운다. 기기 세션은 남아 있으니 거기서 id 를 읽어 pending 을 남긴다(A1).
+      let userId = get().userId || null;
+      if (!userId) {
+        try {
+          const { data } = await supabase.auth.getSession();
+          userId = data.session?.user.id ?? null;
+        } catch {
+          userId = null;
+        }
+      }
       await signOutWithPushRelease({
         kv: authStorage,
-        userId: get().userId || null,
+        userId,
         unregister: async (token, signal) => {
           const { error } = await supabase.rpc('unregister_my_push', { p_token: token }).abortSignal(signal);
           if (error) console.warn('[session] unregister_my_push failed:', error.message);
