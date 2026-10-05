@@ -982,6 +982,24 @@ async function slotRuleChecks() {
     check('★★㉓-b 앱 환불 뒤에도 계좌이체로 낸 한 달(승인일 + 30일)은 열려 있다',
       a1?.status === 'active' && new Date(a1?.paid_until).getTime() > days(29), JSON.stringify(a1));
   }
+
+  // ══ ㉔ 논리 점검 2026-10-05 B4 — 앱 줄이기의 닫을 매장은 구독으로 연 매장만(0262) ══════════════════
+  {
+    const R = await reuseOwner(2);
+    const A = await mkStore(R, 'QA㉔ 1호점');
+    await evt(R, `qa_b4_${s}`, 'INITIAL_PURCHASE', 'multi_2_monthly', 'multi', 2, iso(days(30)));
+    const B = await mkStore(R, 'QA㉔ 2호점');
+    await grantSlot(R.uid);
+    const C = await mkStore(R, 'QA㉔ 무료지급점');   // 구독 흔적 없음
+    const okOne = await R.c.rpc('choose_iap_release', { p_units: [B], p_count: 1 });
+    check('㉔-a 구독 매장 2곳 → 1곳: 1곳을 고르면 받는다', !okOne.error, okOne.error?.message ?? '');
+    const badC = await R.c.rpc('choose_iap_release', { p_units: [C], p_count: 1 });
+    check('★★㉔-b 구독으로 열지 않은 매장은 닫을 매장으로 못 고른다', /release_mismatch/.test(badC.error?.message ?? ''), badC.error?.message ?? '통과돼버림');
+    const badN = await R.c.rpc('choose_iap_release', { p_units: [A, B], p_count: 1 });
+    check('★㉔-c 개수가 후보 수 − 새 매장 수와 다르면 거부', /release_mismatch/.test(badN.error?.message ?? ''), badN.error?.message ?? '통과돼버림');
+    const old = await R.c.rpc('choose_iap_release', { p_units: [B] });
+    check('㉔-d 옛 앱(새 매장 수 없음)도 후보 안이면 받는다', !old.error, old.error?.message ?? '');
+  }
 }
 
 async function main() {

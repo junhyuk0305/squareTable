@@ -40,7 +40,7 @@ import { Space } from '@/lib/theme/layout';
 import { rpcChooseIapRelease, rpcClearIapRelease, type IapSubscriptionRow } from '@/lib/db';
 import { releaseRule } from '@/lib/iap/release';
 import { fmtDay, otherPaidNote, otherStoreNote, prepaidGuardNote } from '@/lib/iap/notes';
-import { fetchOwnerPrepaidUntil } from '@/lib/db';
+import { fetchMyCardReleaseCandidates, fetchOwnerPrepaidUntil } from '@/lib/db';
 import { iapErrorKind, iapErrorText } from '@/lib/iap/errors';
 import {
   initPurchases,
@@ -108,6 +108,9 @@ export function IapPurchasePanel({
   const [entStore, setEntStore] = useState<string | null>(null);
   // 선불 기간이 남아 있으면 구매를 잠근다(2026-10-05). 서버 owner_prepaid_until(0251). 옛 서버면 null(잠그지 않음).
   const [prepaidUntil, setPrepaidUntil] = useState<string | null>(null);
+  // 줄이기 때 닫을 매장 후보 = 구독으로 연, 지금 열린 소유 매장(서버 card_release_candidates · 0262 가 같은 목록으로 검증).
+  //   계좌이체·본사 부담·코드로 연 매장은 구독 갱신이 닫지 못하므로 넣지 않는다. 못 읽으면 소유 매장으로 둔다(서버가 거른다).
+  const [releaseCands, setReleaseCands] = useState(ownedStores);
 
   // 지금 구독 중인 매장 수(서버 SSOT). 0 = 앱 구독 없음.
   const sub = subscription;
@@ -123,11 +126,12 @@ export function IapPurchasePanel({
       try {
         await initPurchases(userId);
         // 목록은 스토어에서, 구독 상태는 서버에서 — SDK 의 entitlement 는 목록 정합 확인과 Q8 '산 스토어' 2차 판정에만 쓴다.
-        const [list, ent, pre] = await Promise.all([fetchOffers(), currentEntitlement(), fetchOwnerPrepaidUntil()]);
+        const [list, ent, pre, cands] = await Promise.all([fetchOffers(), currentEntitlement(), fetchOwnerPrepaidUntil(), fetchMyCardReleaseCandidates()]);
         if (!alive) return;
         setOffers(list);
         setEntStore(ent.store);
         setPrepaidUntil(pre);
+        if (cands.data) setReleaseCands(cands.data);
         // 기본 제시 = 구독 중이면 한 칸 위, 아니면 가진 매장 수(매장 추가에서 왔으면 +1). 목록에 없는 수는 가장 가까운 것으로.
         const want = owned > 0 ? owned + 1 : Math.max(1, ownedStores.length + (wantMore ? 1 : 0));
         const hit = list.find((o) => o.storeCount === want) ?? list.find((o) => o.storeCount > owned) ?? list[list.length - 1];
@@ -175,10 +179,10 @@ export function IapPurchasePanel({
 
   const selected = offers.find((o) => o.storeCount === picked) ?? null;
   const isUp = !!selected && owned > 0 && selected.storeCount > owned;
-  // 줄이기 — 닫을 매장 수는 **열린 매장** 기준(서버 0196 과 같은 규칙). 판정 = lib/iap/release.ts.
+  // 줄이기 — 닫을 매장 수는 **구독으로 연 열린 매장** 기준(서버 0262 와 같은 규칙). 판정 = lib/iap/release.ts.
   const { isDown, needRelease, ready: releaseReady } = releaseRule({
     subscribed: owned,
-    openStores: ownedStores.length,
+    openStores: releaseCands.length,
     target: selected?.storeCount ?? owned,
     chosen: release.length,
   });
@@ -190,7 +194,7 @@ export function IapPurchasePanel({
     // C2 줄이기 — 닫을 매장을 먼저 서버에 적어 둔다(결제일 확정 때 서버가 그 매장을 연장에서 뺀다).
     // 닫을 매장이 없는 줄이기(열린 매장 ≤ 새 매장 수)는 옛 명단을 비운다 — 빈 명단은 서버가 units_required 로 거부한다.
     if (isDown) {
-      const { error } = needRelease > 0 ? await rpcChooseIapRelease(release) : await rpcClearIapRelease();
+      const { error } = needRelease > 0 ? await rpcChooseIapRelease(release, offer.storeCount) : await rpcClearIapRelease();
       if (error) {
         setBusy(false);
         return showToast('닫을 매장을 저장하지 못했어요. 잠시 후 다시 시도해 주세요.');
@@ -499,7 +503,7 @@ export function IapPurchasePanel({
                   오늘 결제는 없어요. 다음 결제일 {fmtDay(sub?.current_period_end)}부터 매장 {selected.storeCount}개 요금이에요.{' '}
                   {needRelease > 0 ? `그날 닫을 매장 ${needRelease}곳을 골라 주세요.` : '닫히는 매장은 없어요.'}
                 </Text>
-                {needRelease > 0 && ownedStores.map((s) => {
+                {needRelease > 0 && releaseCands.map((s) => {
                   const on = release.includes(s.unit_id);
                   const full = !on && release.length >= needRelease;
                   return (

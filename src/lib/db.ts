@@ -648,9 +648,10 @@ export async function fetchMyCardReleaseCandidates(): Promise<DbResult<{ unit_id
   }
   return { data: (data ?? []) as { unit_id: string; store_name: string }[], error: null };
 }
-export async function rpcChooseIapRelease(unitIds: string[]): Promise<{ error: DbErr }> {
+// count = 새 매장 수. 서버(0262)가 닫을 수 = 후보 수 − count 인지 검증한다.
+export async function rpcChooseIapRelease(unitIds: string[], count: number): Promise<{ error: DbErr }> {
   if (!HAS_SUPABASE) return { error: null };
-  const { error } = await supabase.rpc('choose_iap_release', { p_units: unitIds });
+  const { error } = await supabase.rpc('choose_iap_release', { p_units: unitIds, p_count: count });
   return { error: error as DbErr };
 }
 export async function rpcClearIapRelease(): Promise<{ error: DbErr }> {
