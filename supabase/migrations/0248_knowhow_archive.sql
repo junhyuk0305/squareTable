@@ -224,6 +224,7 @@ as $$
   order by emb.embedding <=> query_embedding
   limit greatest(1, least(match_count, 20));
 $$;
+revoke all on function public.match_playbook(extensions.vector, text, int) from public, anon, authenticated;
 grant execute on function public.match_playbook(extensions.vector, text, int) to authenticated;
 
 -- ════════════════════════════════════════════════════════════════════════════
@@ -249,6 +250,7 @@ language sql stable security definer set search_path = public as $$
   order by e.created_at desc
 $$;
 
+revoke all on function public.my_knowhow_entries() from public, anon, authenticated;
 grant execute on function public.my_knowhow_entries() to authenticated;
 
 -- ════════════════════════════════════════════════════════════════════════════
@@ -267,6 +269,7 @@ language sql stable security definer set search_path = public as $$
   order by e.created_at desc
 $$;
 
+revoke all on function public.owner_knowhow_entries() from public, anon, authenticated;
 grant execute on function public.owner_knowhow_entries() to authenticated;
 
 -- ════════════════════════════════════════════════════════════════════════════
@@ -387,6 +390,7 @@ language sql stable security definer set search_path = public as $$
   order by u.created_at
 $$;
 
+revoke all on function public.owner_knowhow_stats() from public, anon, authenticated;
 grant execute on function public.owner_knowhow_stats() to authenticated;
 
 -- ════════════════════════════════════════════════════════════════════════════
@@ -444,6 +448,7 @@ language sql stable security definer set search_path = public as $$
   order by u.created_at
 $$;
 
+revoke all on function public.my_growth() from public, anon, authenticated;
 grant execute on function public.my_growth() to authenticated;
 
 -- ════════════════════════════════════════════════════════════════════════════
@@ -478,6 +483,7 @@ begin
       and e.archived_at is null   -- ★0248: 보관한 노하우는 복사 후보가 아니다
     order by e.updated_at desc;
 end $$;
+revoke all on function public.list_unit_knowhow(text) from public, anon, authenticated;
 grant execute on function public.list_unit_knowhow(text)          to authenticated;
 
 -- ════════════════════════════════════════════════════════════════════════════
@@ -561,6 +567,7 @@ begin
 end $$;
 comment on function public.copy_knowhow_between(text, text, text[]) is
   '노하우 복사(보내는 매장 → 받는 매장, 둘 다 명시). 발행본만·needs_review=true. 사진은 반환 경로로 클라가 옮긴다.';
+revoke all on function public.copy_knowhow_between(text, text, text[]) from public, anon, authenticated;
 grant execute on function public.copy_knowhow_between(text, text, text[])    to authenticated;
 
 -- ════════════════════════════════════════════════════════════════════════════
@@ -580,6 +587,7 @@ language sql stable security definer set search_path = public as $$
      and e.archived_at is null   -- ★0248
    order by e.updated_at desc
 $$;
+revoke all on function public.brand_unit_entries(text) from public, anon, authenticated;
 grant execute on function public.brand_unit_entries(text) to authenticated;
 
 -- ════════════════════════════════════════════════════════════════════════════
@@ -733,6 +741,7 @@ begin
      order by md5(q.id || v_uid)
      limit least(greatest(coalesce(p_limit, 3), 1), 20);
 end $$;
+revoke all on function public.quiz_items_for(text[], int) from public, anon, authenticated;
 grant execute on function public.quiz_items_for(text[], int) to authenticated;
 
 -- 0188 본문 그대로(표본 상한 없음 · p_limit 양수일 때만 제한) + 술어 한 줄.
@@ -786,6 +795,7 @@ as $$
                       where h.id = any(q.entry_ids) and h.unit_id = q.unit_id and (h.brand_hidden_at is not null or h.archived_at is not null))   -- ★0248 보관 근거도 제외
    group by x.eid
 $$;
+revoke all on function public.quiz_item_counts() from public, anon, authenticated;
 grant execute on function public.quiz_item_counts() to authenticated;
 
 -- ════════════════════════════════════════════════════════════════════════════
