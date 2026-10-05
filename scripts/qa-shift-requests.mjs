@@ -62,8 +62,7 @@ const psql = (sql) => {
 const addDays = (d, n) => new Date(new Date(`${d}T00:00:00Z`).getTime() + n * 86400000).toISOString().slice(0, 10);
 const dow = (d) => new Date(`${d}T00:00:00Z`).getUTCDay();
 const T = new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10); // 오늘(KST)
-// 2026-10-05(J1 정정): 이번 달 1일(KST)보다 이른 날짜는 어떤 경로로도 못 바꾼다(past_month_locked).
-const MS = `${T.slice(0, 7)}-01`;
+// 2026-10-06(A1·A2): 날짜 하나는 지난달이어도 요청·승인할 수 있다(반복 근무만 지난달부터 못 바꾼다).
 const wdT = dow(T);
 
 const phones = ['0141', '0142', '0143', '0144', '0145', '0146'].map((p) => `${p}${s.slice(0, 7)}`);
@@ -238,10 +237,7 @@ try {
     // 지난 날짜(Q4)
     const P7 = addDays(T, -7);
     const rp = await J.c.rpc('request_shift_time', { p_template: A1, p_date: P7, p_start: '09:00', p_end: '20:00', p_note: null });
-    if (P7 < MS) {
-      // 이번 달에 같은 요일의 지난 날이 없다(오늘이 1~7일) — 지난달 요청은 낼 수 없다.
-      check('4-8 지난달 날짜(-7일) 요청은 past_month_locked', !!rp.error && /past_month_locked/.test(rp.error.message), rp.error?.message ?? 'allowed');
-    } else {
+    // 2026-10-06(A1·A2): -7일이 지난달이어도 날짜 하나는 요청·승인할 수 있다.
     check('4-8 지난 날짜(-7일) 요청은 낼 수 있다', !rp.error && typeof rp.data === 'string', rp.error?.message);
     const np = await O.c.rpc('decide_shift_time', { p_id: rp.data, p_approve: true });
     check('4-9 ★지난 날짜 승인은 p_confirm_past 없이 거부 · 근무표 그대로',
@@ -251,7 +247,6 @@ try {
     check('4-10 p_confirm_past=true 면 승인 · 그날 새 시각',
       !yp.error && yp.data === true && (await rowsOf(UNIT)).some((r) => r.staff_id === J.id && r.shift_date === P7 && r.end_time === '20:00' && r.edited_by === 'staff'),
       yp.error?.message ?? `data=${yp.data}`);
-    }
 
     // 반려
     const D14 = addDays(T, 14);
@@ -319,7 +314,7 @@ try {
     const B1 = `qa_scr_b1_${s}`;
     await legacy(B1, UNIT, L.id, wdT, '09:00', '18:00');
     const P7 = addDays(T, -7), P14 = addDays(T, -14), F7 = addDays(T, 7);
-    // 지난 날짜 요청은 배포 전 데이터처럼 직접 넣는다(지난달이면 RPC 가 past_month_locked 로 거부한다).
+    // 지난 날짜 요청은 배포 전 데이터처럼 직접 넣는다.
     const ins = (id, d, st) => psql(`insert into public.shift_change_requests(id, unit_id, staff_id, template_id, date, old_start, old_end, new_start, new_end, status)
           values ('${id}', '${UNIT}', '${L.id}', '${B1}', '${d}', '09:00', '18:00', '09:00', '19:00', '${st}')`);
     ins(`qa_scr_q1_${s}`, P7, 'pending');
@@ -335,13 +330,10 @@ try {
     check('5-2 지난 날짜 반려 이력도 복사본으로', (await req(q2.data))?.template_id === copy?.id);
     check('5-3 오늘 이후 요청은 원래 id 에 남는다', (await req(q3.data))?.template_id === B1);
     const ap = await O.c.rpc('decide_shift_time', { p_id: q1.data, p_approve: true, p_confirm_past: true });
-    if (P7 < MS) {
-      check('5-4 ★옮겨진 지난달 요청은 승인할 수 없다(past_month_locked)', !!ap.error && /past_month_locked/.test(ap.error.message), ap.error?.message ?? `data=${ap.data}`);
-    } else {
+    // 2026-10-06(A1·A2): 지난달이어도 날짜 하나는 승인할 수 있다.
     check('5-4 ★옮겨진 지난 요청을 승인할 수 있다(그날 서는 근무 = 복사본)',
       !ap.error && ap.data === true && (await rowsOf(UNIT)).some((r) => r.staff_id === L.id && r.shift_date === P7 && r.end_time === '19:00'),
       ap.error?.message ?? `data=${ap.data}`);
-    }
 
     const C1 = `qa_scr_c1_${s}`;
     const wdC = dow(addDays(T, -6));

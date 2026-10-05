@@ -91,7 +91,7 @@ const addDays = (d, n) => new Date(new Date(`${d}T00:00:00Z`).getTime() + n * 86
 const dow = (d) => new Date(`${d}T00:00:00Z`).getUTCDay();
 const range = (from, to) => { const out = []; for (let d = from; d <= to; d = addDays(d, 1)) out.push(d); return out; };
 const T = new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10); // 오늘(KST)
-// 2026-10-05(J1 정정): 지난달(이번 달 1일 이전)은 어떤 경로로도 못 바꾼다(past_month_locked).
+// 2026-10-06(A1·A2): 반복 근무는 지난달(이번 달 1일 이전)부터 못 바꾼다(past_month_locked). 날짜 하나는 지난달이어도 된다.
 //   "확인 뒤 허용"을 보는 지난 날짜는 이번 달 안의 어제다. 오늘이 1일이면 이번 달에 지난 날이 없어 오늘로 대신한다.
 const MS = `${T.slice(0, 7)}-01`;
 const PIM = addDays(T, -1) >= MS ? addDays(T, -1) : null;
@@ -393,8 +393,10 @@ try {
       const ovp = await O.c.rpc('override_shift_day', { p_id: S2, p_date: PIM, p_start: '10:00', p_end: '11:00' });
       check('6-15 override_shift_day 이번 달 지난 날짜는 p_confirm_past 없이 거부', !!ovp.error && /confirm_past_required/.test(ovp.error.message), ovp.error?.message ?? 'allowed');
     }
+    // 2026-10-06(A1·A2): 날짜 하나는 지난달이어도 잠그지 않는다. S2 는 이번 달부터라 지난달에는 서지 않는다(day_not_scheduled).
+    //   지난달 하루 고치기가 되는 것은 qa:past-month [3] 이 본다.
     const ovl = await O.c.rpc('override_shift_day', { p_id: S2, p_date: addDays(MS, -1), p_start: '10:00', p_end: '11:00', p_confirm_past: true });
-    check('6-15b ★override_shift_day 지난달은 확인해도 거부(past_month_locked)', !!ovl.error && /past_month_locked/.test(ovl.error.message), ovl.error?.message ?? 'allowed');
+    check('6-15b ★override_shift_day 지난달 하루를 past_month_locked 로 막지 않는다', !!ovl.error && /day_not_scheduled/.test(ovl.error.message), ovl.error?.message ?? 'allowed');
 
     // 다른 매장(IDOR)
     const sx = await store(X.c, 'QA다른카페');

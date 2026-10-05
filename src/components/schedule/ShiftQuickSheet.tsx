@@ -96,11 +96,11 @@ export function ShiftQuickSheet({
   const firstDay = !isEdit && repeat && days.length > 0
     ? days.map((wd) => nextDateForWeekday(date, wd)).sort()[0]
     : (editing?.date ?? date);
-  // 지난달(이번 달 1일 이전)은 바꿀 수 없다(서버 past_month_locked). 지난 기간 경고는 이번 달 안에서만.
-  const monthLocked = pastMonthLocked(firstDay, today);
+  const fromScope = (!isEdit && repeat) || (editingSeries && scope === 'from');
+  // 반복 근무는 지난달 날짜부터 바꿀 수 없다(서버 past_month_locked · 소급 금지). 날짜 하나는 지난달이어도 된다(A1·A2).
+  const monthLocked = fromScope && pastMonthLocked(firstDay, today);
   const touchesPast = firstDay < today && !monthLocked;
   const canSave = timeOk && changed && !busy && !monthLocked && (isEdit || (!!staffId && (!repeat || days.length > 0)));
-  const fromScope = (!isEdit && repeat) || (editingSeries && scope === 'from');
 
   // 소프트 경고(저장은 막지 않는다) — 정기휴무일뿐이다.
   //  ★'운영시간 밖'은 경고하지 않는다: 개점 전 준비·마감 후 정리가 정상 근무라 잡음이 된다(2026-08-11).

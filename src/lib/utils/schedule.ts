@@ -509,10 +509,10 @@ export function shiftsOn(
     .sort((a, b) => a.template.start.localeCompare(b.template.start));
 }
 
-/** 지난달 근무를 바꾸려 할 때(서버 past_month_locked · 2026-10-05 J1 정정). */
-export const PAST_MONTH_LOCKED_TEXT = '지난달 근무는 바꿀 수 없어요.';
+/** 반복 근무를 지난달 날짜부터 바꾸려 할 때(서버 past_month_locked · 2026-10-06 A1·A2). 날짜 하나는 지난달이어도 고칠 수 있다. */
+export const PAST_MONTH_LOCKED_TEXT = '반복 근무는 지난달부터 바꿀 수 없어요. 지난달은 그날만 고쳐 주세요.';
 
-/** date 가 이번 달 1일(today 기준)보다 이르면 true. 지난달 근무는 어떤 경로로도 바뀌지 않는다. 날짜는 YYYY-MM-DD. */
+/** date 가 이번 달 1일(today 기준)보다 이르면 true. 반복 근무는 지난달 날짜부터 바꾸지 못한다(소급 금지). 날짜는 YYYY-MM-DD. */
 export function pastMonthLocked(date: string, today: string = todayStr()): boolean {
   return date < `${today.slice(0, 7)}-01`;
 }

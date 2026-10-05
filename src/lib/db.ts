@@ -3513,7 +3513,7 @@ export async function insertShiftTemplate(t: ShiftTemplate): Promise<boolean> {
 // 여러 행(지난 구간 복사본·예외·미결 교대)이 함께 바뀌므로 호출부는 성공 뒤 다시 읽는다.
 async function rpcOk(label: string, fn: string, args: Record<string, unknown>): Promise<boolean> {
   const { error } = await supabase.rpc(fn, args);
-  // 지난달 근무(서버 past_month_locked · 2026-10-05)는 던진다 — 스토어가 "지난달 근무는 바꿀 수 없어요."를 고른다.
+  // 반복 근무를 지난달부터 바꾸려 하면(서버 past_month_locked · 2026-10-06 A1·A2) 던진다 — 스토어가 PAST_MONTH_LOCKED_TEXT 를 고른다.
   if (error && /past_month_locked/.test(error.message ?? '')) throw new Error('past_month_locked');
   if (error) {
     console.warn(`[db] ${label}:`, error.message);
