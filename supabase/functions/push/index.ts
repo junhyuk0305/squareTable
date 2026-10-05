@@ -480,6 +480,41 @@ async function sweepUnitClosures(token: string): Promise<{ swept: number; sent: 
   return { swept: rows.length, sent };
 }
 
+/**
+ * 구성원 알림 스윕(0247 · Q22) — 닫힌 매장 알림 다음으로 같은 틱에서 돈다.
+ * 승인·반려·내보냄은 그 사람에게, 나감·탈퇴는 그 매장 사장에게 간다. 행은 DB(approve_member · reject_member ·
+ * close_member_tenure)가 member_notices 에 넣고, 선점·하루 지난 알림 버리기는 sweep_member_notices() 가 한다.
+ * 여기는 deliver() 로 배달하고 결과만 남긴다(정책 L7: 세션 · 음소거 · 방해금지 판정이 그대로 적용된다).
+ * 선점이 발송보다 먼저라 엣지가 실패하면 그 알림은 다시 보내지 않는다(0118 · 0196 과 같은 선택).
+ */
+async function sweepMemberNotices(token: string): Promise<{ swept: number; sent: number; error?: string }> {
+  const admin = createClient(SUPABASE_URL, token);
+  const { data, error } = await admin.rpc('sweep_member_notices');
+  if (error) {
+    console.error('[push] sweep_member_notices failed:', error.message);
+    const denied = /permission denied|not exist/i.test(error.message);
+    return { swept: 0, sent: 0, error: denied ? 'forbidden' : 'rpc_failed' };
+  }
+  const rows = (data ?? []) as {
+    out_id: number; out_user_id: string; out_unit_id: string; out_kind: string;
+    out_title: string; out_body: string; out_url: string;
+  }[];
+  let sent = 0;
+  for (const r of rows) {
+    const res = await deliver(admin, r.out_unit_id, [r.out_user_id], {
+      title: r.out_title,
+      body: r.out_body,
+      url: r.out_url || '/',
+      tag: `member-notice-${r.out_id}`,
+    });
+    sent += res.sent;
+    await admin.from('member_notices')
+      .update({ delivered: res.sent })
+      .eq('id', r.out_id);
+  }
+  return { swept: rows.length, sent };
+}
+
 Deno.serve(async (req) => {
   const origin = req.headers.get('origin');
   const cors = corsFor(origin);
@@ -535,10 +570,14 @@ Deno.serve(async (req) => {
     // 닫힌 매장 직원 알림(0196) — 같은 원칙.
     const closures = await sweepUnitClosures(token);
     if (closures.error) console.error('[push] unit closure sweep failed:', closures.error);
+    // 구성원 알림(0247) — 같은 원칙.
+    const notices = await sweepMemberNotices(token);
+    if (notices.error) console.error('[push] member notice sweep failed:', notices.error);
     return json(200, {
       ...swept, quizSwept: quiz.swept, quizSent: quiz.sent, quizError: quiz.error,
       alertSwept: alerts.swept, alertSent: alerts.sent, alertError: alerts.error,
       closureSwept: closures.swept, closureSent: closures.sent, closureError: closures.error,
+      noticeSwept: notices.swept, noticeSent: notices.sent, noticeError: notices.error,
     });
   }
 

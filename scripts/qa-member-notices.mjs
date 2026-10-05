@@ -181,8 +181,14 @@ try {
       .select('id');
     const oldId = old.data?.[0]?.id;
     check('4-0 하루 지난 알림 셋업', !old.error && !!oldId, old.error?.message);
+    // 한 틱에 200개까지 claim 한다. 로컬 DB 에 다른 하니스가 남긴 미발송 알림이 많아도 빠짐없이 보게 빌 때까지 돈다.
     const s1 = await admin.rpc('sweep_member_notices');
-    const rows1 = s1.data ?? [];
+    const rows1 = [...(s1.data ?? [])];
+    for (let i = 0, last = rows1.length; !s1.error && last === 200 && i < 20; i++) {
+      const more = await admin.rpc('sweep_member_notices');
+      last = (more.data ?? []).length;
+      rows1.push(...(more.data ?? []));
+    }
     const myIds = new Set([...(await noticesOf(A.id)), ...(await noticesOf(B.id)), ...(await noticesOf(O.id))].map((x) => x.id));
     const got = rows1.filter((x) => myIds.has(x.out_id));
     check('4-1 ★첫 스윕이 이 매장 알림을 돌려준다(승인 · 반려 · 내보냄 · 나감 · 탈퇴 = 5행 이상)', !s1.error && got.length >= 5,

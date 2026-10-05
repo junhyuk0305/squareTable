@@ -371,6 +371,9 @@ try {
       ['X 시급', admin.from('wages').upsert({ unit_id: UNIT, staff_id: X, hourly_wage: 9000 })],
       ['X 질문', admin.from('chat_queries').insert({ id: `ret_px_c_${s}`, unit_id: UNIT, junior_id: X, junior_name: 'X이름', query_text: '오래된 질문' })],
       ['X 모르는 질문', admin.from('unknown_queries').insert({ id: `ret_px_u_${s}`, unit_id: UNIT, junior_id: X, junior_name: 'X이름', query_text: '오래된 모르는 질문', status: 'dismissed' })],
+      // 작성자 칸은 INSERT 트리거(stamp_author)가 auth.uid() 로 덮는다(service_role 이면 null) → 넣은 뒤 고친다.
+      ['X 질문 작성자', admin.from('chat_queries').update({ junior_id: X }).eq('id', `ret_px_c_${s}`)],
+      ['X 모르는 질문 작성자', admin.from('unknown_queries').update({ junior_id: X }).eq('id', `ret_px_u_${s}`)],
       // Y: 재입사자 — 3년+1일 전에 닫힌 첫 기간(표시된 행)과 1년 전에 닫힌 둘째 기간(표시 안 된 행).
       ['Y 첫 기간', admin.from('member_tenures').insert({ id: T.y1, unit_id: UNIT, user_id: Y, joined_at: iso(now - Y3 - 300 * D), left_at: iso(now - Y3 - D), left_reason: 'removed', name_snapshot: 'Y이름' })],
       ['Y 둘째 기간', admin.from('member_tenures').insert({ id: T.y2, unit_id: UNIT, user_id: Y, joined_at: iso(now - 600 * D), left_at: iso(now - 365 * D), left_reason: 'left', name_snapshot: 'Y이름' })],

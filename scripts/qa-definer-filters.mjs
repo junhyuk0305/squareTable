@@ -83,7 +83,9 @@ const FN_TOKENS = {
   // P4-6 0247 — 알림 스윕은 먼저 claim(skip locked) · 하루 지난 것은 버린다. 3년 크론은 dry-run 이 기본이고 실행마다 기록한다.
   sweep_member_notices: ['skip locked', "interval '1 day'", 'claimed_at'],
   purge_expired_tenures: ['p_dry_run', 'retention_purge_log', "interval '3 years'", "interval '6 months'", "interval '5 years'",
-    'archived_tenure_id', 'unit_members', 'name_snapshot'],
+    'archived_tenure_id', 'expired_former_members', 'name_snapshot', 'purge_dry_run_rollback'],
+  //   3년 대상 = 지금 그 매장 멤버가 아니고 · 열린 기간이 없고 · 가장 최근 닫힌 기간이 3년을 넘은 사람(재입사자 기록을 지우지 않는다).
+  expired_former_members: ['unit_members', 'bool_and(t.left_at is not null)', 'max(t.left_at)'],
 };
 
 // 함수 → 있으면 안 되는 토큰(옛 경로를 다시 여는 퇴행).
