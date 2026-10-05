@@ -56,9 +56,8 @@ async function main() {
   check('A 매장 여전히 존재(유출/파괴 없음)', !!aStill);
 
   // 2) O가 A 삭제 → 성공, 목록 1개(B), A 노하우 cascade 삭제
-  const { data: dData, error: dErr } = await O.c.rpc('delete_store', { p_unit_id: A });
+  const { error: dErr } = await O.c.rpc('delete_store', { p_unit_id: A });
   check('O→delete_store(A) 성공', !dErr, dErr?.message ?? '');
-  check('삭제 결과 = 돌려준 몫 없음(returned_slot false)', dData?.returned_slot === false && dData?.paid_until == null, JSON.stringify(dData));
   const { data: units } = await O.c.rpc('my_units');
   check('삭제 후 내 매장 1개(B)', (units?.length ?? 0) === 1 && units?.[0]?.unit_id === B, `n=${units?.length}`);
   const { count: khLeft } = await admin.from('playbook_entries').select('id', { count: 'exact', head: true }).eq('unit_id', A);

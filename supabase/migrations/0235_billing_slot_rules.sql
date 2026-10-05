@@ -8,8 +8,8 @@
 --   H7  선불 매장이 구독 흔적이 되면 흡수 직전 만료일(prepaid_until)을 남긴다. 그 구독을 환불하면 그 날로 되돌린다.
 --   H8  앱·카드 구독 배정 루프는 구독 슬롯(source='iap')만 쓴다.
 --   C1  (2026-10-05 결정) 첫 구독이 선불 기간과 겹치면 겹친 날을 구독 기간 뒤에 붙인다(carry). 갱신 때도 더한다.
---   J8  (2026-10-05 결정으로 뒤집음) 유료 매장을 지우면 남은 이용 기간은 사라진다. 슬롯으로 돌려주지 않는다.
---       매장 삭제 미리보기 RPC(남은 기간 날짜만 알려 준다). 지운 매장의 대기 신고는 store_deleted 로 닫는다.
+--   J8  유료 매장을 지우면 남은 몫을 새 매장용 슬롯으로 돌려준다(코드로만 연 기간·본사 부담은 제외).
+--       매장 삭제 미리보기 RPC. 지운 매장의 대기 신고는 store_deleted 로 닫는다.
 --   M7  payment_claims 의 unit_id·claimed_by 를 on delete set null 로(전자상거래법 5년 보존). 사장은 자기 신고를 계속 본다.
 --   J4  임시판 — 이전 매장 다시 열기가 출퇴근·업무 기록을 지우지 않는다. 직원 몫 근무표·교대만 지우고 소속을 정리한다.
 --
@@ -51,7 +51,7 @@ revoke all on function public.unit_prepaid(text) from public, anon, authenticate
 -- ════════════════════════════════════════════════════════════════════════════
 -- (2) store_slots — 슬롯의 요금제 · 흡수 직전 선불 만료일
 -- ════════════════════════════════════════════════════════════════════════════
--- plan: single 로 산 몫으로 multi 매장을 열지 못하게 한다(create_store·reopen_store 가 slot.plan 을 쓴다).
+-- plan: single 매장을 지워 돌려준 몫으로 multi 매장을 열지 못하게 한다(create_store·reopen_store 가 slot.plan 을 쓴다).
 alter table public.store_slots add column if not exists plan text not null default 'multi';
 do $$ begin
   if not exists (select 1 from pg_constraint where conname = 'store_slots_plan_check') then
@@ -283,7 +283,7 @@ begin
   --   그 슬롯들의 paid_until 은 새 결제일로 **대입**한다(가산 아님 — 0187 ② 와 같은 원칙).
   --   ⛔v_keep 을 넘는 미소비 슬롯은 건드리지 않는다: 줄이기로 남게 된 초과분이라
   --     연장하면 닫혀야 할 매장이 열린다(⑤ 와 같은 의미).
-  --   ★0235: 다점포 결제가 쓰므로 plan 은 multi.
+  --   ★0235: 매장 삭제로 돌려받은 구독 슬롯(J8)도 여기서 다시 쓰인다. 다점포 결제가 쓰므로 plan 은 multi.
   v_keep := greatest(0, p_count - extended);
 
   with pick as (
@@ -293,7 +293,7 @@ begin
      order by s.paid_until asc, s.id asc
      limit v_keep
   )
-  -- ★0235(리뷰): greatest — 슬롯이 더 긴 기간을 들고 있으면 깎지 않는다.
+  -- ★0235(리뷰): greatest — 매장 삭제로 돌려받은 슬롯(J8)이 더 긴 기간을 들고 있으면 깎지 않는다.
   update public.store_slots s
      set paid_until = greatest(s.paid_until, p_period_end), plan = 'multi'
     from pick where s.id = pick.id;
@@ -892,41 +892,101 @@ create policy payment_claims_select on public.payment_claims
   );
 
 -- ════════════════════════════════════════════════════════════════════════════
--- (9) 매장 삭제 — 미리보기 · 남은 기간은 돌려주지 않는다(2026-10-05 결정)
+-- (9) 매장 삭제 — 남은 몫 돌려주기(J8) · 미리보기
 -- ════════════════════════════════════════════════════════════════════════════
--- 삭제 확인창이 "남은 기간은 돌려받을 수 없어요"를 붙일지 고르는 데 쓴다. 읽기 전용 · 소유자만.
---   returns_slot 은 옛 앱 호환용이라 언제나 false. paid_until = 기간이 남은 유료 매장(체험·본사 부담 제외)의 만료일, 아니면 null.
+-- 지우려는 매장에서 돌려줄 몫. 0행 = 돌려줄 것 없음. 내부 판정(미리보기와 실제 삭제가 같은 규칙을 쓰게 한 곳에 둔다).
+--   돌려주는 매장 = 유료 · 체험 아님 · 본사 부담 아님 · 기간이 남음.
+--   ① 그 매장에 붙은 슬롯 하나 — 구독 흔적 먼저, 없으면 계좌이체·무료 지급 중 만료일이 가장 늦은 것. 기간 = 매장 만료일.
+--   ② 슬롯이 없는 계좌이체 single 매장 — 마지막 승인 신고로 새로 만든다. 기간은 신고 승인으로 생긴 기간까지(L6).
+--   코드만으로 연 매장은 돌려주지 않는다(코드를 돌려 쓰는 길을 막는다).
+create or replace function public.store_return_slot(p_unit text)
+returns table(slot_id uuid, claim_id uuid, paid_until timestamptz, plan text)
+language plpgsql stable security definer set search_path = public as $$
+#variable_conflict use_column
+declare
+  v_paid timestamptz;
+  v_plan text;
+  v_cap  timestamptz;
+  r      record;
+begin
+  select us.paid_until, us.plan into v_paid, v_plan from public.unit_subscriptions us where us.unit_id = p_unit;
+  if v_paid is null or v_paid <= now() then return; end if;
+  if public.effective_plan(p_unit) = 'free' or public.is_signup_trial(p_unit) or public.unit_brand_paid(p_unit) then
+    return;
+  end if;
+  plan := case when v_plan = 'single' then 'single' else 'multi' end;
+
+  -- ★(리뷰 ⑲-f): 아직 기간이 남은 슬롯만, 그 슬롯의 기간까지만. 오래전에 끝난 슬롯에 코드 기간을 얹어 돌려주면
+  --   코드를 슬롯으로 바꿔 새 매장마다 다시 쓰는 길이 된다.
+  select s.id, s.claim_id, s.paid_until into slot_id, claim_id, v_cap
+    from public.store_slots s
+   where s.consumed_unit_id = p_unit and s.consumed_at is not null
+     and s.paid_until > now()
+   order by (s.source = 'iap') desc, s.paid_until desc
+   limit 1;
+  if slot_id is not null then
+    paid_until := least(v_paid, v_cap);
+    return next;
+    return;
+  end if;
+
+  -- ★(리뷰 ⑲-g): 승인된 single 신고를 승인 순서대로 이어 붙여(admin_activate_store 와 같은 계산) 신고가 만든 끝을 구한다.
+  --   만료 전에 이어 낸 기간까지 들어간다. 신고 사이에 낀 코드 기간은 들어가지 않는다.
+  for r in
+    select c.id, c.reviewed_at, c.months
+      from public.payment_claims c
+     where c.unit_id = p_unit and c.status = 'approved' and c.plan = 'single' and c.reviewed_at is not null
+     order by c.reviewed_at asc
+  loop
+    v_cap := greatest(coalesce(v_cap, r.reviewed_at), r.reviewed_at) + make_interval(days => r.months * 30);
+    claim_id := r.id;
+  end loop;
+  if claim_id is null then return; end if;
+  paid_until := least(v_paid, v_cap);
+  if paid_until <= now() then return; end if;
+  return next;
+end $$;
+revoke all on function public.store_return_slot(text) from public, anon, authenticated;
+
+-- 삭제 확인창이 문구를 고르는 데 쓴다(정책 M2 — 돌려주지 않는 매장에 "돌려준다"고 약속하지 않게). 읽기 전용 · 소유자만.
 create or replace function public.delete_store_preview(p_unit text)
 returns jsonb language plpgsql stable security definer set search_path = public as $$
 declare
+  v_slot  uuid;
+  v_claim uuid;
   v_until timestamptz;
 begin
   if auth.uid() is null then raise exception 'not_authenticated'; end if;
   if not exists (select 1 from public.units u where u.id = p_unit and u.owner_id = auth.uid()) then
     raise exception 'not_owner';
   end if;
-  select us.paid_until into v_until from public.unit_subscriptions us where us.unit_id = p_unit;
-  if v_until is null or v_until <= now() or public.effective_plan(p_unit) = 'free'
-     or public.is_signup_trial(p_unit) or public.unit_brand_paid(p_unit) then
-    v_until := null;
-  end if;
-  return jsonb_build_object('returns_slot', false, 'paid_until', v_until);
+  select r.slot_id, r.claim_id, r.paid_until into v_slot, v_claim, v_until
+    from public.store_return_slot(p_unit) r;
+  return jsonb_build_object(
+    'returns_slot', (v_slot is not null or v_claim is not null),
+    'paid_until', case when v_slot is not null or v_claim is not null then v_until end
+  );
 end $$;
 revoke all on function public.delete_store_preview(text) from public, anon, authenticated;
 grant execute on function public.delete_store_preview(text) to authenticated;
 
--- delete_store — 0061 본문 승계 + ★0235 반환형 jsonb · 대기 신고 닫기. 남은 기간은 돌려주지 않는다(2026-10-05). 반환형이 바뀌어 drop 선행(42P13).
+-- delete_store — 0061 본문 승계 + ★0235 반환형 jsonb · 몫 돌려주기 · 대기 신고 닫기. 반환형이 바뀌어 drop 선행(42P13).
 drop function if exists public.delete_store(text);
 create or replace function public.delete_store(p_unit_id text)
 returns jsonb language plpgsql security definer set search_path = public as $$
 declare
   v_uid   uuid := auth.uid();
   v_alt   text;
+  v_slot  uuid;
+  v_claim uuid;
+  v_until timestamptz;
+  v_plan  text;
+  v_back  boolean := false;
 begin
   if v_uid is null then raise exception 'not_authenticated'; end if;
 
   -- ★소유검증(유일 방어선) + ★0235(리뷰 ⑲-e) 행 잠금 — 같은 매장을 동시에 지우면 뒤 호출은 앞 호출이 끝날 때까지
-  --   기다렸다가 매장이 없어진 것을 보고 not_owner 로 끝난다.
+  --   기다렸다가 매장이 없어진 것을 보고 not_owner 로 끝난다(몫이 두 번 돌아오지 않는다).
   perform 1 from public.units u where u.id = p_unit_id and u.owner_id = v_uid for update;
   if not found then raise exception 'not_owner'; end if;
 
@@ -938,6 +998,20 @@ begin
   -- ★직원(나 외 멤버)이 있으면 차단 — 먼저 내보내라
   if exists (select 1 from public.unit_members m where m.unit_id = p_unit_id and m.user_id <> v_uid) then
     raise exception 'store_has_staff';
+  end if;
+
+  -- ★0235(J8): 남은 몫을 새 매장용 슬롯으로 돌려준다. 지우기 **전에** 계산한다(매장 행이 있어야 판정된다).
+  select r.slot_id, r.claim_id, r.paid_until, r.plan into v_slot, v_claim, v_until, v_plan
+    from public.store_return_slot(p_unit_id) r;
+  if v_slot is not null then
+    update public.store_slots
+       set consumed_at = null, consumed_unit_id = null, paid_until = v_until, plan = v_plan, prepaid_until = null, carry = interval '0'
+     where id = v_slot;
+    v_back := true;
+  elsif v_claim is not null then
+    insert into public.store_slots (owner_id, paid_until, claim_id, source, plan)
+    values (v_uid, v_until, v_claim, 'claim', v_plan);
+    v_back := true;
   end if;
 
   -- ★0235(M7): 그 매장의 대기 신고를 닫는다. 남겨 두면 unit_id 가 빈 대기 신고가 카드 결제 시작을 막는다.
@@ -959,8 +1033,7 @@ begin
   -- 실삭제(units → 전 테넌트 테이블·unit_members·unit_subscriptions FK cascade · payment_claims 는 set null)
   delete from public.units where id = p_unit_id;
 
-  -- 반환형은 옛 앱 호환용으로 남긴다. 돌려주는 몫은 없다.
-  return jsonb_build_object('returned_slot', false, 'paid_until', null);
+  return jsonb_build_object('returned_slot', v_back, 'paid_until', case when v_back then v_until end);
 end $$;
 revoke all on function public.delete_store(text) from public, anon, authenticated;
 grant execute on function public.delete_store(text) to authenticated;
@@ -1271,7 +1344,7 @@ begin
 
   -- 권한: anon 은 아무것도 못 부른다 · 내부 판정은 authenticated 도 못 부른다 · 앱 RPC 는 authenticated 가 부른다.
   foreach f in array array[
-    'public.unit_brand_paid(text)', 'public.unit_prepaid(text)',
+    'public.unit_brand_paid(text)', 'public.unit_prepaid(text)', 'public.store_return_slot(text)',
     'public.sync_iap_slots(uuid, text, int, timestamptz, boolean)',
     'public.apply_iap_event(uuid, text, text, text, text, text, int, timestamptz, text, timestamptz, jsonb)',
     'public.card_record_charge(text, boolean, text, timestamptz, text, text, text, jsonb)',

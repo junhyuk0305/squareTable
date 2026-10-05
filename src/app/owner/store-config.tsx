@@ -101,8 +101,8 @@ function StoreConfigForm() {
 
   const onDelete = async () => {
     const unitId = useSessionStore.getState().unitId;
-    // 기간이 남은 유료 매장이면 "남은 이용 기간은 돌려받을 수 없어요"를 붙인다(delete_store_preview).
-    //   못 읽으면 null → 기본 문구. ⛔웹은 미리보기를 부르지 않고 지금 문구 그대로 둔다(토스 동결).
+    // J8: 서버가 남은 몫을 돌려주는 매장에만 기간 문장을 붙인다(delete_store_preview · 정책 M2).
+    //   못 읽으면 null → 약속하지 않는다. ⛔웹은 미리보기를 부르지 않고 지금 문구 그대로 둔다(토스 동결).
     let preview: DeleteStorePreview | null = null;
     if (Platform.OS !== 'web') {
       setChecking(true);
