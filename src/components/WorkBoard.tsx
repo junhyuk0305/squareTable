@@ -529,7 +529,8 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
     [sessionRole],
   );
 
-  const memberCount = Math.max(1, (owner ? 1 : 0) + staff.length);
+  // 공지 읽음 분모 — 기본방은 매장 인원, 비공개 방은 그 방에 있는 사람(D2). 방 밖 사람은 공지를 볼 수 없다.
+  const memberCount = Math.max(1, !currentRoomId || isDefaultRoom ? (owner ? 1 : 0) + staff.length : members.filter((m) => m.inRoom).length);
 
   const notices = useMemo(
     () =>

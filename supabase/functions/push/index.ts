@@ -611,6 +611,8 @@ Deno.serve(async (req) => {
     /** 앱이 보내지만 읽지 않는다. 탭 화면은 clientPushRoute(audience, tag)가 정한다(보안 M8). */
     url?: string;
     tag?: string;
+    /** D2: 공지를 올린 방. 기본방이 아니면 그 방 멤버에게만 보낸다. 옛 앱은 싣지 않는다(매장 전체). */
+    roomId?: string;
   };
   try {
     payload = await req.json();
@@ -706,6 +708,19 @@ Deno.serve(async (req) => {
     const { data: rows } = await admin
       .from('unit_members').select('user_id').eq('unit_id', callerUnit).in('role', audienceRoles(audience, ownerOnly) ?? []);
     recipientIds = (rows ?? []).map((r: { user_id: string }) => r.user_id);
+    // D2: 비공개 방 공지는 그 방 멤버에게만. 방에 없는 직원은 앱에서 공지를 볼 수 없다(0147 can_see_room).
+    //   방이 호출자 매장 것이 아니거나 지워졌으면 보내지 않는다(내용이 방 밖으로 새지 않게 닫는 쪽).
+    const roomId = clip(payload.roomId, 80);
+    if (roomId) {
+      const { data: room } = await admin
+        .from('work_rooms').select('is_default').eq('id', roomId).eq('unit_id', callerUnit).is('deleted_at', null).maybeSingle();
+      if (!room) return json(403, { error: 'room_not_found' });
+      if (!room.is_default) {
+        const { data: rm } = await admin.from('work_room_members').select('user_id').eq('room_id', roomId);
+        const inRoom = new Set((rm ?? []).map((r: { user_id: string }) => r.user_id));
+        recipientIds = recipientIds.filter((id) => inRoom.has(id));
+      }
+    }
   }
 
   // 발송자 본인에게는 알림을 보내지 않는다(자기 행동의 메아리 방지).

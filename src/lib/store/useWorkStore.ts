@@ -1217,7 +1217,7 @@ export const useWorkStore = create<State>((set, get) => ({
         upsertFeed(bumped),
         () => set((s) => ({ feed: s.feed.map((f) => (f.id === before.id ? before : f)) })),
         '공지 재게시에 실패했어요.',
-      ).then((ok) => { if (ok) notifyStaffNotice(authorName, text); });
+      ).then((ok) => { if (ok) notifyStaffNotice(authorName, text, room); });
       return;
     }
     const item: FeedItem = {
@@ -1240,7 +1240,7 @@ export const useWorkStore = create<State>((set, get) => ({
       upsertFeed(item),
       () => set((s) => ({ feed: s.feed.filter((f) => f.id !== item.id) })),
       '공지 등록에 실패했어요.',
-    ).then((ok) => { if (ok) notifyStaffNotice(authorName, text); }); // 매장 직원 전체(발송자 제외는 서버)
+    ).then((ok) => { if (ok) notifyStaffNotice(authorName, text, room); }); // 매장 직원 전체 · 비공개 방이면 그 방 멤버(D2 · 발송자 제외는 서버)
   },
 
   // 전 매장 동시 공지(S3 #3) — 소유 매장들에 같은 공지를 서버(definer)가 한 번에 넣는다.

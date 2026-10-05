@@ -26,6 +26,8 @@ type NotifyArgs = {
   url?: string;
   /** 같은 알림 덮어쓰기용 태그(중복 누적 방지). */
   tag?: string;
+  /** 공지를 올린 방. 기본방이 아니면 엣지가 그 방 멤버에게만 보낸다(논리 점검 D2). 옛 엣지는 무시한다. */
+  roomId?: string;
 };
 
 /** 웹푸시 발송(비차단). 서버가 호출자 매장 안으로만 발송하도록 강제한다.
@@ -205,14 +207,16 @@ export const notifyUserRoleChange = (userId: string, storeName: string, promoted
  *  ★매니저가 빠져 있던 자리다: 매니저는 사장 화면 세트를 쓰는 **수신자**인데 'staff'(=junior)에 안 잡혀
  *    사장이 올린 공지를 푸시로도 인앱으로도 못 받았다(2026-08-08 역할 감사).
  *  발송자 본인은 서버가 대상에서 제외하므로(엣지 index.ts) 자기 공지가 자기에게 오지 않는다 —
- *  같은 이유로 사장이 쓰면 매니저만, 매니저가 쓰면 사장·직원이 받는다. 경로는 각자의 화면 세트로. */
-export const notifyStaffNotice = (author: string, text: string) => {
+ *  같은 이유로 사장이 쓰면 매니저만, 매니저가 쓰면 사장·직원이 받는다. 경로는 각자의 화면 세트로.
+ *  ★roomId: 비공개 방 공지는 그 방 멤버에게만 간다(D2). 거르는 일은 엣지가 work_room_members 로 한다. */
+export const notifyStaffNotice = (author: string, text: string, roomId?: string) => {
   pushNotify({
     audience: 'owners',
     title: `${author}님의 공지`,
     body: text,
     url: '/owner/work',
     tag: 'notice',
+    roomId,
   });
   return pushNotify({
     audience: 'staff',
@@ -220,6 +224,7 @@ export const notifyStaffNotice = (author: string, text: string) => {
     body: text,
     url: '/junior/work',
     tag: 'notice',
+    roomId,
   });
 };
 

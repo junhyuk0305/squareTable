@@ -50,7 +50,7 @@ console.log('[D2] 비공개 방 공지는 그 방 멤버에게만 푸시하고, 
   const store = strip(read('src/lib/store/useWorkStore.ts'));
   const pn = storeMethod(store, 'postNotice');
   check('★공지 올리기·재공지 둘 다 지금 방 id 로 알린다',
-    (pn.match(/notifyStaffNotice\(authorName, text, room \?\? undefined\)/g) || []).length === 2, `${(pn.match(/notifyStaffNotice\([^)]*\)/g) || []).join(' | ')}`);
+    (pn.match(/notifyStaffNotice\(authorName, text, room\)/g) || []).length === 2, `${(pn.match(/notifyStaffNotice\([^)]*\)/g) || []).join(' | ')}`);
 
   const edge = strip(read('supabase/functions/push/index.ts'));
   check('★엣지가 roomId 를 받아 호출자 매장의 방인지 확인한다',
