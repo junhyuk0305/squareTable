@@ -17,7 +17,7 @@ const withExt = (base) => EXTS.map((e) => base + e).find(existsSync);
 
 /** 파일 끝 경로 → 잘라 낼 최상위 export function 이름들. */
 const CUT = {
-  'lib/store/useWorkStore.ts': ['occursOn'],
+  'lib/store/useWorkStore.ts': ['occursOn', 'assigneesOf'],
   'lib/store/useUnknownQueueStore.ts': ['answerableQuestions'],
 };
 
