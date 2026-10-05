@@ -101,8 +101,7 @@ const FN_TOKENS = {
   quiz_item_counts: ['archived_at is not null', 'brand_hidden_at is not null'],
   quiz_link_resolve: ['archived_at is null', 'brand_hidden_at is not null', 'revoked_at is null'],
   enqueue_knowhow_rechecks: ['archived_at is null', 'brand_hidden_at is null'],
-  archive_knowhow: ['auth_owns_unit', 'brand_copy_use_hide', "'draft'", 'archived_by', 'entry_not_found'],
-  archived_knowhow: ['auth_owns_unit', 'archived_at is not null', 'auth_unit_id'],
+  archive_knowhow: ['auth_owns_unit', 'brand_copy_use_hide', "'draft'", 'archived_by', 'entry_not_found', 'restore_not_allowed'],
   knowhow_usage: ['auth_owns_unit', 'quiz_attempts', 'work_template_knowhow', 'course_entries'],
   // P5-2 0249(Q23 · 보안 M3) — 같은 질문은 활성 매장의 대기 질문에만 · 1인 1행 · 개수는 새로 들어갈 때만 +1.
   //   해결 트리거는 원 질문자 + askers 중 지금 멤버에게만 · 답한 사람은 뺀다.
@@ -343,9 +342,10 @@ console.log('\n[6] 0248 노하우 보관 — 열 · 정책 · 트리거 · 권�
     psql(`select coalesce((select (not p.prosecdef)::text from pg_proc p
                              where p.pronamespace = 'public'::regnamespace and p.proname = 'tg_playbook_entry_soft_delete'), 'none')`) === 'true');
   const gd = fdef('tg_playbook_entry_archive_guard');
-  check('가드 함수: service_role 예외(auth.uid() is null) · 소유주 · 본사 사본 거부',
-    ['auth.uid() is null', 'auth_owns_unit', 'brand_copy_use_hide', 'not_owner'].every((t) => gd.includes(t)), gd ? '토큰 빠짐' : '없음');
-  for (const fn of ['archive_knowhow(text, boolean)', 'archived_knowhow()', 'knowhow_usage(text)']) {
+  check('가드 함수: service_role 예외(auth.uid() is null) · 소유주 · 본사 사본 거부 · 되살리기 거부',
+    ['auth.uid() is null', 'auth_owns_unit', 'brand_copy_use_hide', 'not_owner', 'restore_not_allowed'].every((t) => gd.includes(t)), gd ? '토큰 빠짐' : '없음');
+  check('보관함 읽기 archived_knowhow() 가 없다(2026-10-05 삭제 = 되살릴 수 없음)', psql("select to_regprocedure('public.archived_knowhow()') is null") === 't');
+  for (const fn of ['archive_knowhow(text, boolean)', 'knowhow_usage(text)']) {
     const exists = psql(`select to_regprocedure('public.${fn}') is not null`);
     check(`${fn} 이 있다`, exists === 't');
     if (exists !== 't') continue;

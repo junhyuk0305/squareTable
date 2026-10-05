@@ -26,10 +26,12 @@ let pass = 0, fail = 0;
 const check = (n, ok, extra = '') => { ok ? (pass++, console.log('  PASS', n)) : (fail++, console.log('  FAIL', n, extra)); };
 const read = (p) => (existsSync(join(root, p)) ? readFileSync(join(root, p), 'utf8') : '');
 
-const BASE = '보관할까요? 직원 화면과 퀴즈에서 빠지고 기록은 남아요.';
+// 2026-10-05 사용자 결정(J10 정정): '보관'이 아니라 '삭제'다. 앱 어디에서도(사장 포함) 사라지고 되살릴 수 없다.
+//   DB 는 지우지 않는다(archived_at 소프트 삭제 · 응시 기록 보존).
+const BASE = '노하우를 삭제할까요? 삭제하면 되살릴 수 없어요.';
 
 // ── [1] 순수 함수 ──────────────────────────────────────────────────────────
-console.log('[1] 순수 함수 archiveConfirmMessage');
+console.log('[1] 순수 함수 deleteConfirmMessage');
 {
   const src = 'src/lib/knowhow/archive.ts';
   let A = null;
@@ -43,8 +45,8 @@ console.log('[1] 순수 함수 archiveConfirmMessage');
     writeFileSync(join(OUT, 'package.json'), '{"type":"module"}');
     A = await import(pathToFileURL(join(OUT, 'archive.js')));
   }
-  const msg = typeof A?.archiveConfirmMessage === 'function' ? A.archiveConfirmMessage : null;
-  check('1-0 archive.ts 에 archiveConfirmMessage 가 있다', !!msg, existsSync(join(root, src)) ? '함수 없음' : '파일 없음');
+  const msg = typeof A?.deleteConfirmMessage === 'function' ? A.deleteConfirmMessage : null;
+  check('1-0 archive.ts 에 deleteConfirmMessage 가 있다', !!msg, existsSync(join(root, src)) ? '함수 없음' : '파일 없음');
   if (msg) {
     check('1-1 쓰는 곳이 없으면 계획 문구 그대로', msg({ courses: 0, tasks: 0, attempts: 0 }) === BASE, msg({ courses: 0, tasks: 0, attempts: 0 }));
     check('1-2 사용 정보를 못 받으면(null) 계획 문구 그대로', msg(null) === BASE, msg(null));
@@ -63,18 +65,23 @@ console.log('\n[2] 소스 계약');
   const db = read('src/lib/db.ts');
   const fe = db.slice(db.indexOf('export async function fetchEntries'), db.indexOf('export async function fetchEntries') + 900);
   check("2-1 fetchEntries 가 보관된 행을 뺀다(.is('archived_at', null))", fe.includes(".is('archived_at', null)"));
-  check('2-2 db.ts 가 archive_knowhow · archived_knowhow · knowhow_usage 를 부른다',
-    ["rpc('archive_knowhow'", "rpc('archived_knowhow'", "rpc('knowhow_usage'"].every((t) => db.includes(t)));
+  check('2-2 db.ts 가 archive_knowhow · knowhow_usage 를 부르고 보관함 읽기(archived_knowhow)는 없다',
+    ["rpc('archive_knowhow'", "rpc('knowhow_usage'"].every((t) => db.includes(t)) && !db.includes("rpc('archived_knowhow'") && !/p_archived:\s*archived/.test(db));
   const edit = read('src/app/owner/edit/[id].tsx');
-  check('2-3 수정 화면의 지우기가 보관이다(archiveConfirmMessage · 보관 버튼)', edit.includes('archiveConfirmMessage') && edit.includes("'보관'"));
+  check('2-3 수정 화면의 지우기 = 삭제 확인창 · 삭제 버튼 · "삭제했어요." 토스트',
+    edit.includes('deleteConfirmMessage') && edit.includes("'노하우 삭제'") && edit.includes("'삭제'") && edit.includes('삭제했어요.') && !edit.includes("'보관'"));
   const store = read('src/lib/store/usePlaybookStore.ts');
-  check('2-4 스토어에 archive · restore · loadArchived 가 있다', ['archive:', 'restore:', 'loadArchived:'].every((t) => store.includes(t)));
-  const arch = read('src/app/owner/knowhow-archive.tsx');
-  check('2-5 보관함 화면이 있고 되살리기가 있다', arch.includes('되살리기') && arch.includes('restore'));
-  check('2-6 내 노하우·노하우 탭 머리에 보관함 진입이 있다',
-    read('src/app/owner/knowledge.tsx').includes('/owner/knowhow-archive') && read('src/app/owner/categories.tsx').includes('/owner/knowhow-archive'));
+  check('2-4 스토어에 archive 는 있고 restore · loadArchived 는 없다', store.includes('archive:') && !['restore:', 'loadArchived:'].some((t) => store.includes(t)));
+  check('2-5 보관함 화면이 없다', !existsSync(join(root, 'src/app/owner/knowhow-archive.tsx')) && !read('src/app/owner/_layout.tsx').includes('knowhow-archive'));
+  check('2-6 내 노하우·노하우 탭 머리에 보관함 진입이 없다',
+    !read('src/app/owner/knowledge.tsx').includes('knowhow-archive') && !read('src/app/owner/categories.tsx').includes('knowhow-archive'));
+  // 앱에 보이는 노하우 문구에 '보관' 낱말이 없다(주석 제외).
+  const strip = (t) => t.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
+  const KW = ['src/app/owner/edit/[id].tsx', 'src/app/owner/knowledge.tsx', 'src/app/owner/categories.tsx', 'src/lib/store/usePlaybookStore.ts', 'src/lib/knowhow/archive.ts'];
+  const word = KW.filter((p) => existsSync(join(root, p)) && strip(read(p)).includes('보관'));
+  check("2-8 노하우 화면 코드·문구에 '보관'이 없다(주석 제외)", word.length === 0, word.join(', '));
   // 매장 삭제(store-config)는 다른 기능이다. 노하우를 지우는 화면·스토어만 본다.
-  const KH = ['src/app/owner/edit/[id].tsx', 'src/app/owner/knowhow-archive.tsx', 'src/components/coach/MiniSquareCard.tsx', 'src/lib/store/usePlaybookStore.ts', 'src/lib/knowhow/archive.ts'];
+  const KH = ['src/app/owner/edit/[id].tsx', 'src/components/coach/MiniSquareCard.tsx', 'src/lib/store/usePlaybookStore.ts', 'src/lib/knowhow/archive.ts'];
   const hard = KH.filter((p) => read(p).includes('완전히 삭제'));
   check("2-7 노하우 화면에 '완전히 삭제'가 없다", hard.length === 0, hard.join(', '));
 }
@@ -226,9 +233,7 @@ try {
     check('B-5 매니저 select 0행', ids(await M.from('playbook_entries').select('id').eq('id', E.e1)).length === 0);
     check('B-6 사장의 일반 목록(select)에서도 빠진다', ids(await O.from('playbook_entries').select('id').eq('id', E.e1)).length === 0);
     const ar = await O.rpc('archived_knowhow');
-    check('B-7 ★사장 보관함(archived_knowhow)에는 보인다', !ar.error && ids(ar).includes(E.e1) && !ids(ar).includes(E.e4), ar.error?.message ?? JSON.stringify(ids(ar)));
-    const jAr = await J.rpc('archived_knowhow');
-    check('B-8 직원은 보관함을 못 본다(0행 또는 거부)', !!jAr.error || ids(jAr).length === 0, JSON.stringify(ids(jAr)));
+    check('B-7 ★보관함 읽기 RPC(archived_knowhow)가 없다 — 사장도 지운 노하우를 못 본다', !!ar.error, ar.error?.message ?? JSON.stringify(ids(ar)));
     const mpJ = ids(await J.rpc('match_playbook', { query_embedding: VEC, p_unit_id: UNIT, match_count: 8 }));
     const mpO = ids(await O.rpc('match_playbook', { query_embedding: VEC, p_unit_id: UNIT, match_count: 8 }));
     check('B-9 ★match_playbook(직원 · 사장)에서 빠진다', !mpJ.includes(E.e1) && !mpO.includes(E.e1) && mpJ.includes(E.e4), `J=${mpJ} O=${mpO}`);
@@ -274,7 +279,7 @@ try {
     const r = await rowOf(E.e4);
     check('D-3 ★매니저 직접 DELETE 는 지우지도 보관하지도 못한다', !!r && !r.archived_at, `error=${d.error?.message ?? '-'} row=${r ? `archived_at=${r.archived_at}` : '지워짐'}`);
     const rs = await M.rpc('archive_knowhow', { p_entry_id: E.e0, p_archived: false });
-    check('D-4 매니저 되살리기 거부(not_owner)', /not_owner/.test(rs.error?.message ?? ''), rs.error?.message ?? 'ok');
+    check('D-4 매니저 되살리기 거부', !!rs.error, rs.error?.message ?? 'ok');
     const uu = await J.rpc('knowhow_usage', { p_entry_id: E.e4 });
     check('D-5 직원 knowhow_usage 거부', !!uu.error, JSON.stringify(uu.data));
   }
@@ -293,18 +298,16 @@ try {
     check('E-5 초안 삭제는 그대로 지운다(인수인계 되돌리기)', !dd.error && !(await rowOf(E.e3)), dd.error?.message ?? '');
   }
 
-  // ═══ F. 되살리기 ═══
-  console.log('\n[3-F] 되살리기');
+  // ═══ F. 되살릴 수 없다(2026-10-05 J10 정정) ═══
+  console.log('\n[3-F] 되살릴 수 없다');
   {
     const r = await O.rpc('archive_knowhow', { p_entry_id: E.e1, p_archived: false });
-    check('F-1 사장이 되살린다', !r.error, r.error?.message ?? '');
-    check('F-2 ★직원에게 다시 보인다', ids(await J.from('playbook_entries').select('id').eq('id', E.e1)).length === 1);
-    check('F-3 match_playbook · quiz_items_for 에 돌아온다',
-      ids(await J.rpc('match_playbook', { query_embedding: VEC, p_unit_id: UNIT, match_count: 8 })).includes(E.e1)
-      && ids(await J.rpc('quiz_items_for', { p_entry_ids: [E.e1], p_limit: 3 })).length === 1);
+    check('F-1 ★사장도 되살리지 못한다(restore_not_allowed)', /restore_not_allowed/.test(r.error?.message ?? ''), r.error?.message ?? 'ok');
+    const u = await O.from('playbook_entries').update({ archived_at: null }).eq('id', E.e1).select('id');
+    check('F-2 사장 직접 UPDATE 로도 되살리지 못한다(오류 또는 0행)', !!u.error || (u.data ?? []).length === 0, JSON.stringify(u.data));
     const row1 = await rowOf(E.e1);
-    check('F-4 archived_at · archived_by 가 비었다', row1 && row1.archived_at === null && row1.archived_by === null, JSON.stringify({ a: row1?.archived_at, b: row1?.archived_by }));
-    check('F-5 보관함에서 빠진다', !ids(await O.rpc('archived_knowhow')).includes(E.e1));
+    check('F-3 ★지운 노하우는 그대로 · 응시 기록은 남는다', !!row1?.archived_at && (await cnt('quiz_attempts', 'entry_id', E.e1)) === 1, JSON.stringify({ a: row1?.archived_at }));
+    check('F-4 사장 select 0행', ids(await O.from('playbook_entries').select('id').eq('id', E.e1)).length === 0);
   }
 } catch (e) {
   fail++; console.log('  FAIL 예외:', e.message);
