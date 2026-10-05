@@ -1477,8 +1477,9 @@ export async function resolveUnknown(id: string, newEntryId: string, answeredBy?
 }
 
 // ── 채팅 기록 ──────────────────────────────────────────────
-export async function fetchChatQueries(juniorId: string): Promise<ChatQuery[]> {
-  if (!HAS_SUPABASE) return [];
+// G4: 실패를 빈 목록과 가른다 — 빈 목록으로 돌려주면 hydrate 가 화면의 대화를 통째로 지운다.
+export async function fetchChatQueries(juniorId: string): Promise<ReadResult<ChatQuery[]>> {
+  if (!HAS_SUPABASE) return { data: [], error: false };
   const { data, error } = await supabase
     .from('chat_queries')
     .select('*')
@@ -1488,9 +1489,9 @@ export async function fetchChatQueries(juniorId: string): Promise<ChatQuery[]> {
     .limit(PAGE_LIMIT);
   if (error) {
     readFail('fetchChatQueries', error);
-    return [];
+    return { data: [], error: true };
   }
-  return (data ?? []) as ChatQuery[];
+  return { data: (data ?? []) as ChatQuery[], error: false };
 }
 
 /**

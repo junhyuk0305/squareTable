@@ -114,7 +114,7 @@ console.log('\n[4] 배선(주석 제외 코드)');
       /Promise<ReadResult<ChatQuery\[\]>>/.test(fcq) && /return \{ data: \[\], error: true \}/.test(fcq), fcq.slice(0, 100));
     const cs = strip(read('src/lib/store/useChatStore.ts'));
     const hy = (cs.match(/hydrate: async \(juniorId\) => \{[\s\S]*?\n  \},/) || [''])[0];
-    check('★G4 hydrate 가 읽기 실패면 화면의 대화를 지우지 않는다', /if \(error\) \{[^}]*loaded: true[^}]*return;/.test(hy) && !/if \(error\) \{[^}]*history/.test(hy), hy.slice(0, 200));
+    check('★G4 hydrate 가 읽기 실패면 화면의 대화를 지우지 않는다', /if \(error\) \{ set\(\{ loaded: true \}\); return; \}/.test(hy), hy.slice(0, 200));
     check('★G4 hydrate 가 서버에 아직 없는 내 답(저장 중·저장 실패)을 다시 얹는다', /_unsynced\.has\(/.test(hy));
     check('G4 대화 저장은 서버에 들어갈 때까지 표시해 둔다(직접 insertChatQuery 안 부름)',
       (cs.match(/insertChatQuery\(/g) || []).length === 1 && /_unsynced\.add\(/.test(cs) && /_unsynced\.delete\(/.test(cs));

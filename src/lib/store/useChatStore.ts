@@ -78,6 +78,16 @@ function deflectFromHistory(q: ChatQuery): UnknownQuery {
   });
 }
 
+// G4: 서버에 아직 들어가지 않은 내 대화 id(저장 중이거나 저장 실패). hydrate 가 서버 기록으로 바꿀 때 이 답은 남긴다.
+// 다른 매장·계정의 행이 남지 않는다 — hydrate 는 지금 화면의 history 에서만 골라 얹고, history 는 tenantReset 이 비운다.
+const _unsynced = new Set<string>();
+function saveChatQuery(cq: ChatQuery): Promise<boolean> {
+  _unsynced.add(cq.id);
+  const p = insertChatQuery(cq);
+  void p.then((ok) => { if (ok) _unsynced.delete(cq.id); }, () => {});
+  return p;
+}
+
 type ChatState = {
   history: ChatQuery[];
   isLoading: boolean;
@@ -115,8 +125,14 @@ export const useChatStore = create<ChatState>((set, get) => ({
   hydrate: async (juniorId) => {
     if (!HAS_SUPABASE) return;
     const epoch = currentTenantEpoch();
-    const history = await fetchChatQueries(juniorId);
+    const { data, error } = await fetchChatQueries(juniorId);
     if (isStaleEpoch(epoch)) return; // 그 사이 매장·계정이 바뀌었다 — 이전 대화 기록을 쓰지 않는다
+    // G4: 읽기 실패면 화면의 대화를 그대로 둔다(실패 배너는 db.ts readFail 이 띄운다).
+    if (error) { set({ loaded: true }); return; }
+    // G4: 서버에 아직 없는 내 답(저장 중·저장 실패)은 지우지 않고 다시 얹는다 — '답변은 그대로 보여요'를 지킨다.
+    const onServer = new Set(data.map((q) => q.id));
+    const carry = get().history.filter((q) => _unsynced.has(q.id) && !onServer.has(q.id));
+    const history = carry.length ? [...data, ...carry].sort((a, b) => a.asked_at.localeCompare(b.asked_at)) : data;
     set({ history, loaded: true });
   },
 
@@ -140,7 +156,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     // 순서 보장(리뷰 fix-1): recompute는 chat_queries를 읽으므로 행이 커밋된 뒤 돌아야 이번 질의가 집계된다.
     // insert 프로미스를 공유해 guardWrite(에러 배너)와 recompute가 같은 1회 insert에 붙는다(이중 insert 방지).
     const persistAndCount = (cq: ChatQuery, entryIds: string[]) => {
-      const writeP = insertChatQuery(cq);
+      const writeP = saveChatQuery(cq);
       void guardWrite(writeP, () => {}, '대화 기록 저장에 실패했어요. (답변은 그대로 보여요)');
       void writeP.then((ok) => { if (ok && entryIds.length) void recomputePlaybookStats(entryIds); });
     };
@@ -331,7 +347,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       answered = true;
       set((s) => ({ history: [...s.history, cq], isLoading: false, lastSubmittedId: id }));
       // 답변은 이미 보여줬으니 화면에선 유지하고, 영속 실패만 배너로 알린다(롤백 없음).
-      void guardWrite(insertChatQuery(cq), () => {}, '대화 기록 저장에 실패했어요. (답변은 그대로 보여요)');
+      void guardWrite(saveChatQuery(cq), () => {}, '대화 기록 저장에 실패했어요. (답변은 그대로 보여요)');
 
       // 곧장 enqueue 하지 않는다 — 직원이 카드에서 '사장님께 물어보기'를 눌러야 인박스로 간다.
       prepareDeflect(id, now, {
