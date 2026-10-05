@@ -34,8 +34,9 @@ const FN_TOKENS = {
   owner_today: ['valid_from', '24 hours', 'shift_exceptions', 'owner_id = auth.uid()', 'archived_tenure_id'],
   // P1-2 0235(Q5 · H8)
   sync_iap_slots: ["source = 'iap'", 'p_continuing'],
-  // 0231(본사 사본 숨김)
-  approve_member: ['brand_hidden'],
+  // 0231(본사 사본 숨김) · P4-6 0247(Q22 승인·반려 알림)
+  approve_member: ['brand_hidden', 'insert into public.member_notices'],
+  reject_member: ['insert into public.member_notices', "'rejected'", 'not_pending'],
   // P4-1 0242 — 적용 기간을 모르는 판정이 하나라도 남으면 근무가 두 번 잡힌다(설계 01 §7-1)
   workers_at: ['valid_from', 'valid_to', 'shift_exceptions', 'archived_tenure_id'],
   //   _v2 둘의 shift_day_marks · wage_rates 는 P4-4 0245. RLS 는 활성 매장만 보이므로 허브·다매장 직원은 이 경로로만 다른 매장 몫을 받는다.
@@ -69,7 +70,9 @@ const FN_TOKENS = {
   my_units_notif_data: ['archived_tenure_id', 'swap_requests'],
   //   정리 함수 하나로 모은다(내보내기 · 나가기 · 다시 열기 · 탈퇴). 근무표는 지우지 않고 닫는다(end_staff_tenure).
   close_member_tenure: ['for update', 'member_tenures', 'end_staff_tenure', 'work_room_members', 'unit_kept_seats', 'unit_member_prefs',
-    'quiz_assignments', 'sent_at is null', 'left_reason', "status = 'open', accepted_by = null", 'final_hourly_wage', 'active_unit_id', "kind = 'store'"],
+    'quiz_assignments', 'sent_at is null', 'left_reason', "status = 'open', accepted_by = null", 'final_hourly_wage', 'active_unit_id', "kind = 'store'",
+    // P4-6 0247 — 내보냄은 그 직원에게, 나감·탈퇴는 그 매장 사장 멤버십에게만(Q22 · F-2).
+    'insert into public.member_notices', 'if p_notify', "role = 'owner'"],
   //   다시 들어오는 순간 옛 재직 기간 행 7종에 표시 · 시급 비움 · former_staff 행 삭제.
   member_tenure_open: ['archived_tenure_id', 'attendance', 'shift_templates', 'wage_rates', 'shift_day_marks', 'shift_change_requests',
     'chat_queries', 'swap_requests', 'final_hourly_wage', 'delete from public.wages', 'delete from public.former_staff', "kind = 'store'"],
@@ -77,6 +80,10 @@ const FN_TOKENS = {
   leave_store: ['close_member_tenure', "'left'", 'owner_cannot_leave'],
   reopen_store: ['close_member_tenure', "'reopen'", 'pending_unit_id = null', 'unit_access_locked', 'consumed_at = now()'],
   delete_my_account: ['close_member_tenure', "'account_deleted'", 'delete from auth.sessions', 'phone = null'],
+  // P4-6 0247 — 알림 스윕은 먼저 claim(skip locked) · 하루 지난 것은 버린다. 3년 크론은 dry-run 이 기본이고 실행마다 기록한다.
+  sweep_member_notices: ['skip locked', "interval '1 day'", 'claimed_at'],
+  purge_expired_tenures: ['p_dry_run', 'retention_purge_log', "interval '3 years'", "interval '6 months'", "interval '5 years'",
+    'archived_tenure_id', 'unit_members', 'name_snapshot'],
 };
 
 // 함수 → 있으면 안 되는 토큰(옛 경로를 다시 여는 퇴행).
@@ -224,6 +231,55 @@ console.log('\n[4] 0246 정의자 함수 전수 — 대상 표를 읽는데 표�
                         || '|' || (select count(*) from public.member_tenures where left_at is null)`);
     const [a, b] = d.split('|');
     check('직원 멤버십 수 = 열린 재직 기간 수', a === b, `members=${a} open=${b}`);
+  }
+}
+
+console.log('\n[5] 0247 member_notices · retention_purge_log · 스윕·크론 권한');
+{
+  const has = (t) => psql(`select to_regclass('public.${t}') is not null`) === 't';
+  check('member_notices 표가 있다', has('member_notices'));
+  if (has('member_notices')) {
+    check('member_notices RLS 켜짐', psql(`select relrowsecurity from pg_class where oid = 'public.member_notices'::regclass`) === 't');
+    const pols = psql(`select cmd || '|' || coalesce(qual, '') from pg_policies where schemaname = 'public' and tablename = 'member_notices'`);
+    check('member_notices 정책 = select 하나 · 본인만(auth.uid())', pols.split('\n').length === 1 && pols.startsWith('SELECT|') && pols.includes('auth.uid()'), pols);
+    for (const r of ['anon', 'authenticated']) {
+      const v = psql(`select has_table_privilege('${r}', 'public.member_notices', 'INSERT,UPDATE,DELETE,TRUNCATE')`);
+      check(`member_notices: ${r} 쓰기 권한 없음`, v === 'f', v);
+    }
+    const ck = psql(`select pg_get_constraintdef(c.oid) from pg_constraint c where c.conrelid = 'public.member_notices'::regclass and c.contype = 'c'
+                       and pg_get_constraintdef(c.oid) ilike '%kind%'`);
+    check('member_notices.kind CHECK ⊇ approved · rejected · removed · left · account_deleted · question_answered',
+      ['approved', 'rejected', 'removed', 'left', 'account_deleted', 'question_answered'].every((k) => ck.includes(`'${k}'`)), ck || 'CHECK 없음');
+  }
+  check('retention_purge_log 표가 있다', has('retention_purge_log'));
+  if (has('retention_purge_log')) {
+    check('retention_purge_log: RLS 켜짐 · 정책 0개 · anon/authenticated 권한 0',
+      psql(`select c.relrowsecurity and not exists (select 1 from pg_policies where tablename = 'retention_purge_log')
+                   and not has_table_privilege('anon', 'public.retention_purge_log', 'SELECT,INSERT,UPDATE,DELETE')
+                   and not has_table_privilege('authenticated', 'public.retention_purge_log', 'SELECT,INSERT,UPDATE,DELETE')
+              from pg_class c where c.oid = 'public.retention_purge_log'::regclass`) === 't');
+  }
+  for (const fn of ['sweep_member_notices(timestamp with time zone)', 'purge_expired_tenures(boolean)']) {
+    const exists = psql(`select to_regprocedure('public.${fn}') is not null`);
+    check(`${fn} 이 있다`, exists === 't');
+    if (exists !== 't') continue;
+    for (const r of ['anon', 'authenticated']) {
+      check(`${fn}: ${r} 실행 불가`, psql(`select has_function_privilege('${r}', 'public.${fn}', 'execute')`) === 'f');
+    }
+    check(`${fn}: service_role 실행 가능`, psql(`select has_function_privilege('service_role', 'public.${fn}', 'execute')`) === 't');
+    check(`${fn}: 정의자 · search_path=public`,
+      psql(`select p.prosecdef and 'search_path=public' = any(coalesce(p.proconfig, '{}')) from pg_proc p where p.oid = 'public.${fn}'::regprocedure`) === 't');
+  }
+  for (const fn of ['approve_member(uuid)', 'reject_member(uuid)']) {
+    check(`${fn}: anon 실행 불가 · authenticated 실행 가능(옛 앱)`,
+      psql(`select not has_function_privilege('anon', 'public.${fn}', 'execute') and has_function_privilege('authenticated', 'public.${fn}', 'execute')`) === 't');
+  }
+  // 크론은 pg_cron 이 있을 때만 등록된다(로컬 도커에는 없다). 있으면 dry-run(true)으로 등록돼 있어야 한다(P4-8 전까지).
+  if (psql(`select exists (select 1 from pg_extension where extname = 'pg_cron')`) === 't') {
+    const cmd = psql(`select coalesce((select command from cron.job where jobname = 'purge-former-tenures'), '')`);
+    check('크론 purge-former-tenures = purge_expired_tenures(true)', /purge_expired_tenures\(true\)/.test(cmd), cmd || '잡 없음');
+  } else {
+    console.log('  SKIP 크론 등록 확인(pg_cron 없음 · 로컬 도커)');
   }
 }
 

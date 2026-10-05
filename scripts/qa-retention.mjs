@@ -12,6 +12,8 @@
 //   [3]~[7] 0246 재직 기간 — 나갈 때는 숨기지 않고(그 달 출퇴근·근무표·시급이 사장에게 보인다) 재직 기간만 닫는다.
 //       다시 들어오면 옛 재직 기간 행에 표시(archived_tenure_id)를 찍어 직원·사장 화면에서 모두 뺀다. 시급은 비운다.
 //       스스로 나가기·다시 열기도 같은 정리 함수(close_member_tenure)를 지난다. 다른 매장 tenure id 는 거부한다.
+//   [8] 0247 3년 보존 크론(purge_expired_tenures) — dry-run 은 개수만 센다. 실제 실행은 퇴직 3년+1일 지난 것만 지우고
+//       다시 돌리면 0 이다. 처리방침 개정 전까지 6개월 지난 스냅샷 이름·끝4자리를 비운다. 실행마다 retention_purge_log.
 //
 // ★로컬 전용: 실행할 때마다 계정을 가입시킨다. 라이브에서 돌리면 고정 계정 규칙 위반이라 URL 이 로컬이 아니면 멈춘다.
 // 실행: node scripts/qa-retention.mjs   자가정리(계정·매장·OTP 시드).
@@ -348,6 +350,103 @@ try {
     check('7-7 대기 신청이 비었다', pend?.pending_unit_id === null, JSON.stringify(pend));
     const os = await rows(admin.from('shift_templates').select('valid_to').eq('id', oSeries));
     check('7-8 사장 본인 근무표는 그대로', Array.isArray(os) && os.length === 1 && os[0].valid_to === null, JSON.stringify(os));
+  }
+
+  // ═══════ 8. 0247 — 3년 보존 크론 purge_expired_tenures(p_dry_run default true) ═══════
+  //   근로기준법 제42조 · 시행령 제22조: 퇴직일부터 3년. dry-run 은 개수만 센다(크론은 7일 동안 dry-run 으로 돈다 · P4-8).
+  //   실제 실행은 3년 + 1일 지난 것만 지우고, 다시 돌리면 0 이다. 처리방침 개정 전까지는 6개월 지난 스냅샷 이름·끝4자리를 비운다.
+  console.log('\n[8] 0247 purge_expired_tenures — dry-run 은 세기만 · 실제는 3년+1일만 · 다시 돌리면 0 · 6개월 스냅샷 비움');
+  {
+    const D = 24 * H;
+    const Y3 = 3 * 365.25 * D;
+    const rid = () => crypto.randomUUID();
+    const X = rid(), Y = rid(), Z = rid(), F = rid(), W = rid(), G = rid();
+    const T = { x: rid(), y1: rid(), y2: rid(), z: rid() };
+    const oldDay = kstDate(now - Y3 - 40 * D);
+    const setup = [
+      // X: 3년+1일 전에 나간 사람(지금 멤버 아님) — 표시 안 된 행이 전부 지워진다.
+      ['X 기간', admin.from('member_tenures').insert({ id: T.x, unit_id: UNIT, user_id: X, joined_at: iso(now - Y3 - 400 * D), left_at: iso(now - Y3 - D), left_reason: 'removed', name_snapshot: 'X이름', phone_last4: '1111' })],
+      ['X 출퇴근', admin.from('attendance').insert({ id: `ret_px_a_${s}`, unit_id: UNIT, staff_id: X, date: oldDay, check_in: iso(now - Y3 - 40 * D), work_minutes: 60 })],
+      ['X 근무', admin.from('shift_templates').insert({ id: `ret_px_t_${s}`, unit_id: UNIT, staff_id: X, weekday: null, shift_date: oldDay, start_time: '09:00', end_time: '10:00' })],
+      ['X 시급', admin.from('wages').upsert({ unit_id: UNIT, staff_id: X, hourly_wage: 9000 })],
+      ['X 질문', admin.from('chat_queries').insert({ id: `ret_px_c_${s}`, unit_id: UNIT, junior_id: X, junior_name: 'X이름', query_text: '오래된 질문' })],
+      ['X 모르는 질문', admin.from('unknown_queries').insert({ id: `ret_px_u_${s}`, unit_id: UNIT, junior_id: X, junior_name: 'X이름', query_text: '오래된 모르는 질문', status: 'dismissed' })],
+      // Y: 재입사자 — 3년+1일 전에 닫힌 첫 기간(표시된 행)과 1년 전에 닫힌 둘째 기간(표시 안 된 행).
+      ['Y 첫 기간', admin.from('member_tenures').insert({ id: T.y1, unit_id: UNIT, user_id: Y, joined_at: iso(now - Y3 - 300 * D), left_at: iso(now - Y3 - D), left_reason: 'removed', name_snapshot: 'Y이름' })],
+      ['Y 둘째 기간', admin.from('member_tenures').insert({ id: T.y2, unit_id: UNIT, user_id: Y, joined_at: iso(now - 600 * D), left_at: iso(now - 365 * D), left_reason: 'left', name_snapshot: 'Y이름' })],
+      ['Y 옛 출퇴근(표시)', admin.from('attendance').insert({ id: `ret_py_a1_${s}`, unit_id: UNIT, staff_id: Y, date: oldDay, work_minutes: 60, archived_tenure_id: T.y1 })],
+      ['Y 둘째 출퇴근', admin.from('attendance').insert({ id: `ret_py_a2_${s}`, unit_id: UNIT, staff_id: Y, date: kstDate(now - 400 * D), work_minutes: 60 })],
+      // Z: 3년-1일 전에 나간 사람 — 남는다. 스냅샷은 6개월이 지났으니 비운다(실제 실행에서만).
+      ['Z 기간', admin.from('member_tenures').insert({ id: T.z, unit_id: UNIT, user_id: Z, joined_at: iso(now - Y3 - 100 * D), left_at: iso(now - Y3 + D), left_reason: 'left', name_snapshot: 'Z이름', phone_last4: '3333' })],
+      ['Z 출퇴근', admin.from('attendance').insert({ id: `ret_pz_a_${s}`, unit_id: UNIT, staff_id: Z, date: oldDay, work_minutes: 60 })],
+      // former_staff: F 는 3년+1일(지움) · W 는 3년-1일(남기고 이름·끝4자리를 비움)
+      ['F 퇴사 스냅샷', admin.from('former_staff').upsert({ unit_id: UNIT, staff_id: F, name: 'F이름', phone_last4: '5555', departed_at: iso(now - Y3 - D) })],
+      ['W 퇴사 스냅샷', admin.from('former_staff').upsert({ unit_id: UNIT, staff_id: W, name: 'W이름', phone_last4: '6666', departed_at: iso(now - Y3 + D) })],
+      // 신고 3년 · 계정 없는 동의 기록 5년
+      ['오래된 신고', admin.from('user_reports').insert({ id: rid(), store_name: 'QA', reporter_role: 'junior', category: 'other', body: '오래된 신고 본문', created_at: iso(now - Y3 - D) })],
+      ['최근 신고', admin.from('user_reports').insert({ id: rid(), store_name: 'QA', reporter_role: 'junior', category: 'other', body: '최근 신고 본문', created_at: iso(now - Y3 + D) })],
+      ['계정 없는 동의(5년+1일)', admin.from('user_consents').insert({ user_id: G, item: 'terms', version: `qa_${s}`, channel: 'email_signup', created_at: iso(now - 5 * 365.25 * D - D) })],
+      ['계정 있는 동의(5년+1일)', admin.from('user_consents').insert({ user_id: users[0].id, item: 'terms', version: `qa_${s}`, channel: 'email_signup', created_at: iso(now - 5 * 365.25 * D - D) })],
+    ];
+    for (const [label, q] of setup) { const { error } = await q; if (error) throw new Error(`${label} 셋업: ${error.message}`); }
+    const ex = async (t, col, v) => len(await rows(admin.from(t).select(col).eq(col, v)));
+    const snap = async () => ({
+      xAtt: await ex('attendance', 'id', `ret_px_a_${s}`), xSh: await ex('shift_templates', 'id', `ret_px_t_${s}`),
+      xWage: len(await rows(admin.from('wages').select('staff_id').eq('unit_id', UNIT).eq('staff_id', X))),
+      xRate: len(await rows(admin.from('wage_rates').select('staff_id').eq('unit_id', UNIT).eq('staff_id', X))),
+      xChat: await ex('chat_queries', 'id', `ret_px_c_${s}`), xUq: await ex('unknown_queries', 'id', `ret_px_u_${s}`),
+      tx: await ex('member_tenures', 'id', T.x), ty1: await ex('member_tenures', 'id', T.y1), ty2: await ex('member_tenures', 'id', T.y2), tz: await ex('member_tenures', 'id', T.z),
+      yA1: await ex('attendance', 'id', `ret_py_a1_${s}`), yA2: await ex('attendance', 'id', `ret_py_a2_${s}`), zA: await ex('attendance', 'id', `ret_pz_a_${s}`),
+      f: len(await rows(admin.from('former_staff').select('staff_id').eq('staff_id', F))),
+      w: len(await rows(admin.from('former_staff').select('staff_id').eq('staff_id', W))),
+      rep: len(await rows(admin.from('user_reports').select('id').eq('store_name', 'QA').in('body', ['오래된 신고 본문', '최근 신고 본문']))),
+      conG: len(await rows(admin.from('user_consents').select('id').eq('user_id', G))),
+      conO: len(await rows(admin.from('user_consents').select('id').eq('user_id', users[0].id).eq('version', `qa_${s}`))),
+    });
+    const before = await snap();
+    check('8-0 셋업이 다 들어갔다', Object.values(before).every((v) => v === 1 || (v === 2 && before.rep === v)), JSON.stringify(before));
+
+    const an = await mk().rpc('purge_expired_tenures');
+    check('8-1 anon 은 실행할 수 없다(42501)', an.error?.code === '42501', `code=${an.error?.code ?? '-'} ${an.error?.message ?? ''}`);
+    const au = await O.rpc('purge_expired_tenures');
+    check('8-2 authenticated(사장)도 실행할 수 없다(42501)', au.error?.code === '42501', `code=${au.error?.code ?? '-'} ${au.error?.message ?? ''}`);
+
+    const dry = await admin.rpc('purge_expired_tenures');
+    const dc = dry.data ?? {};
+    check('8-3 ★dry-run(기본값)은 개수를 돌려준다(출퇴근 ≥2 · 재직 기간 ≥2 · 옛 퇴사 스냅샷 ≥1 · 신고 ≥1 · 동의 ≥1)', !dry.error && dc.dry_run === true
+      && Number(dc.attendance) >= 2 && Number(dc.member_tenures) >= 2 && Number(dc.former_staff) >= 1 && Number(dc.user_reports) >= 1 && Number(dc.user_consents) >= 1,
+      dry.error?.message ?? JSON.stringify(dc));
+    const afterDry = await snap();
+    check('8-4 ★dry-run 은 아무것도 지우지 않는다', JSON.stringify(afterDry) === JSON.stringify(before), JSON.stringify(afterDry));
+    const zs = (await admin.from('member_tenures').select('name_snapshot, phone_last4').eq('id', T.z).maybeSingle()).data;
+    check('8-5 ★dry-run 은 스냅샷도 비우지 않는다', zs?.name_snapshot === 'Z이름' && zs?.phone_last4 === '3333', JSON.stringify(zs));
+    const lg = await admin.from('retention_purge_log').select('job, dry_run, counts, ran_at').order('ran_at', { ascending: false }).limit(1);
+    check('8-6 실행마다 retention_purge_log 에 남는다(dry_run true)', !lg.error && lg.data?.[0]?.dry_run === true && lg.data?.[0]?.job === 'purge_expired_tenures',
+      lg.error?.message ?? JSON.stringify(lg.data));
+
+    const real = await admin.rpc('purge_expired_tenures', { p_dry_run: false });
+    check('8-7 실제 실행 성공(FK 순서 오류 없음)', !real.error && real.data?.dry_run === false, real.error?.message ?? JSON.stringify(real.data));
+    const a = await snap();
+    check('8-8 ★3년+1일 지난 사람(X)의 출퇴근 · 근무 · 시급 · 시급 이력 · 질문 · 모르는 질문 · 재직 기간을 지운다',
+      a.xAtt === 0 && a.xSh === 0 && a.xWage === 0 && a.xRate === 0 && a.xChat === 0 && a.xUq === 0 && a.tx === 0, JSON.stringify(a));
+    check('8-9 ★재입사자(Y)의 3년+1일 지난 첫 기간과 그 표시된 행을 지운다', a.ty1 === 0 && a.yA1 === 0, JSON.stringify(a));
+    check('8-10 ★Y 의 둘째 기간(1년 전)과 그 기록은 남는다', a.ty2 === 1 && a.yA2 === 1, JSON.stringify(a));
+    check('8-11 ★3년-1일(Z)은 남는다', a.tz === 1 && a.zA === 1, JSON.stringify(a));
+    check('8-12 former_staff: 3년+1일(F)은 지우고 3년-1일(W)은 남긴다', a.f === 0 && a.w === 1, JSON.stringify(a));
+    check('8-13 신고는 3년+1일만 지운다', a.rep === 1, JSON.stringify(a));
+    check('8-14 동의 기록은 계정이 없고 5년이 넘은 것만 지운다', a.conG === 0 && a.conO === 1, JSON.stringify(a));
+    const z2 = (await admin.from('member_tenures').select('name_snapshot, phone_last4').eq('id', T.z).maybeSingle()).data;
+    const w2 = (await admin.from('former_staff').select('name, phone_last4').eq('staff_id', W).maybeSingle()).data;
+    check('8-15 ★6개월 지난 스냅샷 이름 · 끝4자리를 비운다(처리방침 개정 전 · 정책 M6)', z2?.name_snapshot === null && z2?.phone_last4 === null
+      && w2?.name === null && w2?.phone_last4 === null, JSON.stringify([z2, w2]));
+
+    const again = await admin.rpc('purge_expired_tenures', { p_dry_run: false });
+    const nonzero = Object.entries(again.data ?? {}).filter(([k, v]) => typeof v === 'number' && v !== 0);
+    check('8-16 ★다시 돌리면 모든 개수가 0', !again.error && nonzero.length === 0, again.error?.message ?? JSON.stringify(nonzero));
+    const lg2 = await O.from('retention_purge_log').select('*');
+    check('8-17 앱은 retention_purge_log 를 읽을 수 없다', !!lg2.error || (lg2.data ?? []).length === 0, lg2.error?.code ?? `rows=${(lg2.data ?? []).length}`);
+    await admin.from('user_consents').delete().eq('version', `qa_${s}`);
+    await admin.from('user_reports').delete().eq('store_name', 'QA').in('body', ['오래된 신고 본문', '최근 신고 본문']);
   }
 } catch (e) {
   fail++; console.log('  FAIL 예외:', e.message);

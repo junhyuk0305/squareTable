@@ -291,7 +291,8 @@ console.log('\n[7] 엣지 deliver() · 발송 경로 · F-2');
   check('7-4 발송(webpush.sendNotification·deliverExpoPush 호출)은 deliver() 안에만 있다',
     /sendNotification/.test(deliverBody) && !/webpush\.sendNotification/.test(outside) && !/await deliverExpoPush\(/.test(outside));
   const deliverCalls = (edgeSrc.match(/await deliver\(/g) ?? []).length;
-  check('7-5 sweep 4개 + 직접 발송 1개 = deliver() 호출 5곳', deliverCalls === 5, `calls=${deliverCalls}`);
+  // 0247: 구성원 알림 스윕(sweepMemberNotices)이 다섯째 sweep 이다(정책 L7 — 이것도 deliver() 를 지난다).
+  check('7-5 sweep 5개 + 직접 발송 1개 = deliver() 호출 6곳', deliverCalls === 6, `calls=${deliverCalls}`);
 
   const rolesSrc = extract('audienceRoles');
   const roles = rolesSrc ? new Function(`${rolesSrc}; return audienceRoles;`)() : null;
