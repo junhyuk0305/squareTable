@@ -18,6 +18,7 @@ import type { WageRate } from '@/lib/utils/payroll';
 import type { MemberTenure } from '@/lib/utils/tenure';
 import { reopenKeepsRecords, type DeleteStorePreview, type DeleteStoreResult } from '@/lib/account/storeCopy';
 import { isMissingRpc } from '@/lib/utils/userError';
+import { TERMS_VERSION } from '@/lib/config/business';
 // 훈련 v2(0107·0108). ★TrainingCourse 는 이 파일이 이미 0099 의 문자열 유니온으로 쓰고 있어(아래)
 // 이름이 겹친다 → 코스 테이블 행 타입은 TrainingCourseRow 로 별칭한다. 구조는 동일하므로
 // 다른 화면이 '@/lib/quiz/types' 에서 TrainingCourse 를 직접 import 해 넘겨도 그대로 맞는다.
@@ -1047,6 +1048,30 @@ export async function rpcCompleteProfile(name: string, phone: string | null, bir
 export async function rpcRecordMyConsents(items: string[], version: string, channel: 'google_signup' | 'reconsent'): Promise<{ error: DbErr }> {
   const { error } = await supabase.rpc('record_my_consents', { p_items: items, p_version: version, p_channel: channel });
   return { error: error as DbErr };
+}
+
+// 마케팅 정보 수신(0292 · F4) — 철회되지 않은 marketing 동의가 있으면 켜짐. 본인 행만 읽힌다(RLS).
+// 읽지 못하면 data=null(화면은 토글을 그리지 않는다 — 모르는 상태를 꺼짐으로 보이지 않는다).
+export async function fetchMyMarketingConsent(): Promise<{ data: boolean | null }> {
+  if (!HAS_SUPABASE) return { data: false };
+  const { data, error } = await supabase
+    .from('user_consents')
+    .select('id')
+    .eq('item', 'marketing')
+    .is('withdrawn_at', null)
+    .limit(1);
+  if (error) {
+    readFail('fetchMyMarketingConsent', error);
+    return { data: null };
+  }
+  return { data: (data ?? []).length > 0 };
+}
+
+/** 켜기·끄기. at = 그 상태가 된 시각(동의·철회 처리 결과를 알릴 때 쓴다). */
+export async function rpcSetMyMarketingConsent(on: boolean): Promise<{ at: string | null; error: DbErr }> {
+  if (!HAS_SUPABASE) return { at: new Date().toISOString(), error: null };
+  const { data, error } = await supabase.rpc('set_my_marketing_consent', { p_on: on, p_version: TERMS_VERSION });
+  return { at: (data as { at?: string } | null)?.at ?? null, error: error as DbErr };
 }
 
 export type JoinRow = { unit_id: string; store_name: string };

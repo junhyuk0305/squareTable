@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
-import { fetchMyIapSubscription, fetchMyPreviousUnits } from '@/lib/db';
+import { fetchMyIapSubscription, fetchMyPreviousUnits, fetchMyMarketingConsent, rpcSetMyMarketingConsent } from '@/lib/db';
 import { View, Text, StyleSheet, ScrollView, Pressable, Linking, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -64,6 +64,16 @@ export default function AccountSettings() {
     return () => { alive = false; };
   }, [isOwnerAccount]);
 
+  // 마케팅 정보 수신(F4 · 0292) — 서버 기록을 읽어 보인다. 읽기 전·못 읽으면 null(토글을 그리지 않는다).
+  const [marketing, setMarketing] = useState<boolean | null>(null);
+  const [marketingBusy, setMarketingBusy] = useState(false);
+  useEffect(() => {
+    if (status !== 'signed_in') return;
+    let alive = true;
+    void fetchMyMarketingConsent().then(({ data }) => { if (alive) setMarketing(data); });
+    return () => { alive = false; };
+  }, [status]);
+
   const version = Constants.expoConfig?.version ?? '1.0.0';
 
   const onLogout = async () => {
@@ -116,6 +126,24 @@ export default function AccountSettings() {
     }
     if (error) return void notifyAction('탈퇴 실패', error, '확인', { icon: 'alert-circle-outline' });
     router.replace('/');
+  };
+
+  // 동의·철회 처리 결과를 날짜와 함께 알린다(정보통신망법 제50조 제7항).
+  const saveMarketing = async (v: boolean) => {
+    if (marketingBusy) return;
+    setMarketingBusy(true);
+    const { at, error } = await rpcSetMyMarketingConsent(v);
+    setMarketingBusy(false);
+    if (error) {
+      await notifyAction('저장 실패', '마케팅 정보 수신 설정을 저장하지 못했어요. 연결을 확인하고 다시 시도해 주세요.', '확인', {
+        icon: 'alert-circle-outline',
+      });
+      return;
+    }
+    setMarketing(v);
+    const d = new Date(new Date(at ?? Date.now()).getTime() + 9 * 3600_000);
+    const day = `${d.getUTCFullYear()}년 ${d.getUTCMonth() + 1}월 ${d.getUTCDate()}일`;
+    showToast(v ? `${day} 마케팅 정보 수신에 동의했어요.` : `${day} 마케팅 정보 수신을 거부했어요.`, 'good');
   };
 
   // 푸시 수신 동의는 계정 전역(DB SSOT) — 실패 시 스토어가 롤백해 토글이 원위치되고 여기서 고지.
@@ -172,6 +200,16 @@ export default function AccountSettings() {
             onValueChange={savePush}
           />
           <SettingsRow icon="text-outline" label="글자 크기" value={SCALE_LABEL[prefs.textScale]} onPress={() => setScaleModal(true)} />
+          {/* F4: 광고성 정보만 따로 끈다. 위 푸시 알림(업무 알림)과는 별개다. */}
+          {marketing !== null && (
+            <SettingsToggle
+              icon="megaphone-outline"
+              label="마케팅 정보 받기"
+              hint="새 기능·이벤트 소식을 앱 푸시·이메일·문자로 받아요"
+              value={marketing}
+              onValueChange={saveMarketing}
+            />
+          )}
         </SettingsSection>
 
         {/* 스토어 인앱결제 축(iOS) — 웹 PG 축과 채널이 다르므로 표면도 다르다.
