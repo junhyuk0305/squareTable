@@ -189,7 +189,8 @@ console.log('\n■ 화면 배선');
   const cp = (ss.match(/changePassword: async[\s\S]*?\n  \},/) || [''])[0];
   check('★Q14 임시 클라이언트(persistSession:false)로 현재 비밀번호 확인', /persistSession:\s*false/.test(cp) && /signInWithPassword/.test(cp), show(cp.slice(0, 80)));
   check('Q14 updateUser 에 current_password', /updateUser\(\{\s*password:[^}]*current_password/.test(cp));
-  check("Q14 성공 뒤 다른 기기 로그아웃(scope:'others')", /signOut\(\{\s*scope:\s*'others'\s*\}\)/.test(cp));
+  // 2026-10-05 결정: 비밀번호를 바꿔도 다른 기기를 로그아웃시키지 않는다.
+  check("Q14 성공 뒤 다른 기기를 로그아웃시키지 않는다(scope:'others' 없음)", cp.length > 0 && !/scope:\s*'others'/.test(cp));
   // ★확인용 로그인은 auth 이메일로. 화면 상태 email 은 확인 전인 새 이메일일 수 있다(updateProfile 이 바로 넣는다).
   check('★Q14 현재 비밀번호 확인은 세션의 auth 이메일로 한다', /getSession\(\)/.test(cp) && !/email:\s*get\(\)\.email/.test(cp), show(cp.slice(0, 80)));
   check('Q13 changePhone 이 otp change_phone 을 쓴다', /changePhone: async[\s\S]*?changePhoneByOtp\(/.test(ss));

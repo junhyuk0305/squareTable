@@ -267,7 +267,8 @@ try {
     const login = await mk().auth.signInWithPassword({ email: A.email, password: newPw });
     check('3-20 새 비밀번호로 A 가 로그인된다(B 가 아니라)', !login.error && login.data.user?.id === A.id, login.error?.message ?? `uid=${login.data.user?.id}`);
     const afterA = await A.c.auth.getUser();
-    check('3-21 ★재설정 뒤 A 의 기존 세션이 끊긴다(A4)', !beforeA.error && !!afterA.error, `before=${beforeA.error?.message ?? 'ok'} after=${afterA.error?.message ?? 'ok'}`);
+    // 2026-10-05 결정: 비밀번호를 재설정해도 다른 기기를 로그아웃시키지 않는다.
+    check('3-21 ★재설정 뒤에도 A 의 기존 세션이 남는다', !beforeA.error && !afterA.error, `before=${beforeA.error?.message ?? 'ok'} after=${afterA.error?.message ?? 'ok'}`);
 
     await seedOtp(P[2], { code: '888888' });
     r = await otp({ action: 'reset_password', phone: P[2], code: '888888', role: 'junior', new_password: newPw });

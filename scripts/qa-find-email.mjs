@@ -209,6 +209,8 @@ console.log('\n[3] otp 엣지 계약');
   check('3-2 계정 줄 = role(signup_role) · email(maskEmail) · provider(google|email)',
     /role: p\.signup_role/.test(fe) && /email: maskEmail\(/.test(fe) && /provider: u\.user\.app_metadata\?\.provider === 'google' \? 'google' : 'email'/.test(fe));
   check('3-3 reset_password 성공이 email(maskEmail) 을 싣는다', /email: maskEmail\(upd\?\.user\?\.email\)/.test(edge));
+  // 2026-10-05 결정: 재설정해도 다른 기기 세션을 끊지 않는다.
+  check('3-4 reset_password 가 revoke_user_sessions 를 부르지 않는다', !/revoke_user_sessions/.test(edge));
 }
 
 // ── [4] 화면 배선 ─────────────────────────────────────────────────────
