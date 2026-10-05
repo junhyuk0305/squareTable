@@ -184,5 +184,75 @@ console.log('\n[A11] 근무표 날짜 계산은 폰 시간대와 상관없다');
   if (saved === undefined) delete process.env.TZ; else process.env.TZ = saved;
 }
 
+console.log('\n[A3] 급여 설정도 이력을 남기고 지난달은 그 달 기준 설정으로 센다(2026-10-06 결정 ①)');
+{
+  const { settingsForMonth, withTodaySettings, computePay, shiftsToPayRecords } = P;
+  const today = '2026-10-20';
+  const ON = { breakDeduction: true, nightAllowance: true, overtimeAllowance: false, weeklyHolidayPay: true, extraAllowance: 100000, periodStartDay: 1, payday: 10 };
+  const OFF = { ...ON, weeklyHolidayPay: false, extraAllowance: 0 };
+  const hist = [{ effective_from: '2000-01-01', settings: ON }, { effective_from: '2026-10-15', settings: OFF }];
+  const S = (h, ym, fb) => (fn(settingsForMonth) ? settingsForMonth(h, ym, today, fb) : undefined);
+  check('★9월 = 그 달 기준 설정(주휴 켬 · 추가수당 10만원)', S(hist, '2026-09', OFF)?.extraAllowance === 100000 && S(hist, '2026-09', OFF)?.weeklyHolidayPay === true, JSON.stringify(S(hist, '2026-09', OFF)));
+  check('★이번 달(10월) = 오늘 적용 설정', S(hist, '2026-10', ON)?.extraAllowance === 0);
+  check('이력이 없으면 지금 설정', S([], '2026-09', OFF) === OFF);
+  const next = fn(withTodaySettings) ? withTodaySettings(hist, ON, today) : hist;
+  check('★바꾼 직후 이력에 오늘 행이 들어가 이번 달이 새 설정 · 지난달은 그대로', S(next, '2026-10', OFF)?.extraAllowance === 100000 && S(next, '2026-09', OFF)?.extraAllowance === 100000 && next.filter((r) => r.effective_from === today).length === 1);
+  if (fn(computePay) && fn(settingsForMonth)) {
+    const recs = shiftsToPayRecords([{ date: '2026-09-07', start: '09:00', end: '18:00' }, { date: '2026-09-08', start: '09:00', end: '18:00' }]);
+    const sep = computePay(recs, 10000, S(hist, '2026-09', OFF)).total;
+    check('★10/15 에 설정을 꺼도 9월 금액 = 9월 설정으로 센 금액', sep === computePay(recs, 10000, ON).total && sep !== computePay(recs, 10000, OFF).total, String(sep));
+  }
+  const db = read('src/lib/db.ts');
+  const f = db.match(/export async function fetchPayrollSettingsHistory[\s\S]*?\n}\n/)?.[0] ?? '';
+  check('★db: fetchPayrollSettingsHistory 가 이력 표를 읽고 실패를 신호로 돌려준다', /payroll_settings_history/.test(f) && /readFail\('fetchPayrollSettingsHistory'/.test(f));
+  const st = strip(read('src/lib/store/usePayrollStore.ts'));
+  check('★스토어: hydrate 가 이력을 읽고, setSetting 이 오늘 행을 넣고 실패하면 되돌린다',
+    /fetchPayrollSettingsHistory\(/.test(st) && /settingsHistoryLoadError/.test(st) && /setSetting:[\s\S]*withTodaySettings\(/.test(st) && /setSetting:[\s\S]*settingsHistory: prevHistory/.test(st));
+  const tv = strip(read('src/components/TimesheetView.tsx'));
+  check('★출근 기록 화면: 그 달 설정(settingsForMonth)으로 세고, 지난달 + 이력 실패면 금액 대신 안내',
+    /settingsForMonth\(/.test(tv) && /computePay\([^)]*monthSettings\)/.test(tv) && /settingsHistoryLoadError/.test(tv) && /지난달 급여 설정을 불러오지 못했어요/.test(tv));
+  const sv = lastDef('save_payroll_settings');
+  const svFile = read(`supabase/migrations/${sv.file}`);
+  check('★서버: save_payroll_settings 가 오늘부터 설정 이력을 남긴다(처음이면 옛 설정을 처음부터로)', /payroll_settings_history/.test(sv.body) && /kst_today\(\)/.test(sv.body) && /2000-01-01/.test(sv.body), sv.file);
+  check('save_payroll_settings 권한 유지(0201 과 같이 authenticated 실행)', /grant execute on function public\.save_payroll_settings\(jsonb\) to authenticated;/.test(svFile) && sv.file > '0278', sv.file);
+}
+{
+  const psql = (sql) => {
+    try {
+      return execFileSync('docker', ['exec', '-i', 'supabase_db_SquareTable', 'psql', '-U', 'postgres', '-At', '-v', 'ON_ERROR_STOP=1'],
+        { input: sql, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] });
+    } catch (e) { return 'ERR=' + String(e.stderr ?? e.message).replace(/\s+/g, ' ').slice(0, 300); }
+  };
+  let up = true;
+  try { execFileSync('docker', ['exec', 'supabase_db_SquareTable', 'psql', '-U', 'postgres', '-c', 'select 1'], { stdio: 'pipe' }); } catch { up = false; }
+  if (!up) {
+    console.log('  SKIP 서버 검사 — 로컬 도커 DB 없음');
+  } else {
+    const SETUP = `
+begin;
+select set_config('qa.o', (select id::text from auth.users where email = 'owner@pilot.squaretable.app'), true);
+select set_config('qa.j', (select id::text from auth.users where email = 'staff2@pilot.squaretable.app'), true);
+update public.units set payroll_settings = '{"weeklyHolidayPay": true, "extraAllowance": 100000}'::jsonb where id = 'store_001';
+`;
+    const as = (who) => `
+set local role authenticated;
+select set_config('request.jwt.claims', json_build_object('sub', current_setting('qa.${who}'), 'role', 'authenticated')::text, true);
+`;
+    const run = (who, body) => psql(`${SETUP}${as(who)}${body}\nrollback;\n`);
+    const r1 = run('o', `select public.save_payroll_settings('{"weeklyHolidayPay": false, "extraAllowance": 0}'::jsonb);
+reset role;
+select 'T=' || (settings->>'extraAllowance') from public.payroll_settings_history where unit_id = 'store_001' and effective_from = public.kst_today();
+select 'P=' || (settings->>'extraAllowance') from public.payroll_settings_history where unit_id = 'store_001' and effective_from < public.kst_today() order by effective_from desc limit 1;
+select 'U=' || (payroll_settings->>'extraAllowance') from public.units where id = 'store_001';`);
+    check('★사장 저장 → 오늘 행(새 설정) · 그 전 행(옛 설정) · 지금 설정 거울', r1.includes('T=0') && r1.includes('P=100000') && r1.includes('U=0'), r1.slice(0, 200));
+    const r2 = run('j', `select 'N=' || count(*) from public.payroll_settings_history where unit_id = 'store_001';`);
+    check('같은 매장 직원은 이력을 읽는다(지난달 출근 기록 화면)', /N=[1-9]/.test(r2), r2.slice(0, 160));
+    const r3 = run('o', `insert into public.payroll_settings_history(unit_id, effective_from, settings) values ('store_001', '2001-01-01', '{}'::jsonb);`);
+    check('직접 쓰기는 막힌다(사장도 RPC 로만)', r3.startsWith('ERR='), r3.slice(0, 160));
+    const r4 = run('j', `select public.save_payroll_settings('{}'::jsonb);`);
+    check('직원은 저장 못 한다(owner_only)', r4.includes('owner_only'), r4.slice(0, 160));
+  }
+}
+
 console.log(`\n${fail ? 'RED' : 'GREEN'} — PASS ${pass} · FAIL ${fail}`);
 process.exit(fail ? 1 : 0);
