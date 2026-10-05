@@ -82,5 +82,26 @@ console.log('\n[E2] 노하우가 바뀌어 재확인이 나가면 직원 카드�
     /c === firstOnce \|\| c\.items\.some\(\(it\) => it\.state === 'due'\)/.test(board));
 }
 
+console.log('\n[E3] 퀴즈가 안 나가는 이유(근무표에 없음·자동 정지)를 사장 퀴즈 상세에 보인다');
+{
+  const d = lastDef('quiz_send_status');
+  const b = d.body;
+  check('★서버 판정 함수 quiz_send_status 가 있다', !!d.file, '없음');
+  check('관리 권한·활성 매장의 퀴즈만 본다', /public\.auth_can_manage\(\)/.test(b) && /c\.unit_id = public\.auth_unit_id\(\)/.test(b), d.file);
+  check('★근무표를 쓰는 매장에서 앞으로 근무가 하나도 없으면 not_scheduled',
+    /'not_scheduled'/.test(b) && /st\.staff_id = a\.user_id::text/.test(b) && /st\.archived_tenure_id is null/.test(b)
+      && /st\.shift_date >= v_date/.test(b) && /st\.valid_to is null or st\.valid_to >= v_date/.test(b), d.file);
+  check('★연속 2회 안 연 사람은 auto_stopped (due_quiz_sends 와 같은 셈)',
+    /'auto_stopped'/.test(b) && /if h\.opened_at is not null then exit; end if;/.test(b) && /if h\.sent_at > now\(\) - interval '24 hours' then continue; end if;/.test(b), d.file);
+  const f = d.file ? read(`supabase/migrations/${d.file}`) : '';
+  check('권한: authenticated 만 실행', /revoke all on function public\.quiz_send_status\(text\) from public, anon, authenticated;/.test(f)
+    && /grant\s+execute on function public\.quiz_send_status\(text\) to authenticated;/.test(f));
+  const db = strip(read('src/lib/db.ts'));
+  check('★fetchQuizSendStatus 가 rpc 를 부른다', /export async function fetchQuizSendStatus\(courseId: string\)/.test(db) && /rpc\('quiz_send_status', \{ p_course_id: courseId \}\)/.test(db));
+  const scr = strip(read('src/app/owner/quiz/[id].tsx'));
+  check('★사람 줄이 이유를 말한다(근무표에 없어 대기 중 · 두 번 안 열어 멈춤)',
+    /fetchQuizSendStatus\(/.test(scr) && scr.includes('근무표에 없어 대기 중') && scr.includes('두 번 안 열어 멈춤'));
+}
+
 console.log(`\n${pass} PASS / ${fail} FAIL`);
 process.exit(fail ? 1 : 0);
