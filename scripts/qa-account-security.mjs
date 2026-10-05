@@ -9,7 +9,7 @@
 //   [2] A4 — revoke_user_sessions(uuid) 는 service_role 만 부른다. 부르면 그 사용자의 세션이 끊긴다.
 //   [3] otp 엣지 — verify 가 verified_by·in_use 를 남기고 코드를 소모한다. change_phone 은 로그인 필수.
 //       find_email 은 가린 이메일을 최대 2개 준다. reset_password 는 signup_role 로 계정을 찾고(Q18),
-//       다른 역할에만 계정이 있으면 other_role 을 주고, 성공하면 가린 이메일을 주고 세션을 끊는다.
+//       다른 역할에만 계정이 있으면 other_role 을 주고, 성공하면 가린 이메일을 주고 세션은 남긴다(2026-10-05).
 //   [4] maskEmail 진리표(순수 함수, supabase/functions/otp/helpers.ts).
 //
 // ★로컬 전용: 실행할 때마다 계정을 가입시킨다. URL 이 로컬이 아니면 멈춘다.
@@ -267,8 +267,10 @@ try {
     const login = await mk().auth.signInWithPassword({ email: A.email, password: newPw });
     check('3-20 새 비밀번호로 A 가 로그인된다(B 가 아니라)', !login.error && login.data.user?.id === A.id, login.error?.message ?? `uid=${login.data.user?.id}`);
     const afterA = await A.c.auth.getUser();
-    // 2026-10-05 결정: 비밀번호를 재설정해도 다른 기기를 로그아웃시키지 않는다.
-    check('3-21 ★재설정 뒤에도 A 의 기존 세션이 남는다', !beforeA.error && !afterA.error, `before=${beforeA.error?.message ?? 'ok'} after=${afterA.error?.message ?? 'ok'}`);
+    // 2026-10-05 결정: 우리 코드는 다른 기기 세션을 끊지 않는다(revoke_user_sessions 호출 없음 = qa-find-email 3-4).
+    // ⚠️ 그러나 Supabase Auth 자체가 비밀번호를 바꾸면 다른 세션을 끊는다(admin updateUserById 도 같다 · 로컬 실측).
+    //   그래서 여기서는 그 플랫폼 동작을 기록만 한다. 세션을 남기려면 Auth 쪽 해법이 따로 필요하다(사용자 확인 대기).
+    check('3-21 재설정 뒤 A 의 기존 세션은 Supabase Auth 가 끊는다(플랫폼 동작 기록)', !beforeA.error && !!afterA.error, `before=${beforeA.error?.message ?? 'ok'} after=${afterA.error?.message ?? 'ok'}`);
 
     await seedOtp(P[2], { code: '888888' });
     r = await otp({ action: 'reset_password', phone: P[2], code: '888888', role: 'junior', new_password: newPw });

@@ -1046,12 +1046,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       if (/current.?password/i.test(error.message)) return { error: CURRENT_PW_WRONG_TEXT };
       return { error: friendlyError(error.message, '비밀번호를 변경하지 못했어요. 잠시 후 다시 시도해 주세요.') };
     }
-    // (3) 다른 기기를 로그아웃시킨다. 비밀번호는 이미 바뀌었으므로 실패해도 성공으로 답한다.
-    try {
-      await supabase.auth.signOut({ scope: 'others' });
-    } catch (e) {
-      console.warn('[session] signOut others after password change failed:', e);
-    }
+    // 다른 기기는 로그아웃시키지 않는다(2026-10-05 결정).
     return { error: null };
   },
 

@@ -379,9 +379,7 @@ Deno.serve(async (req) => {
     const { data: upd, error: uErr } = await admin.auth.admin.updateUserById(uid, { password: newPw });
     if (uErr) { console.error('otp: password update failed:', uErr.message); return json(500, { ok: false, reason: 'db' }, cors); }
 
-    // (0238 A4) 다른 기기 세션을 모두 끊는다. 비밀번호는 이미 바뀌었으므로 실패해도 성공으로 답하고 로그만 남긴다.
-    const { error: rErr } = await admin.rpc('revoke_user_sessions', { p_uid: uid });
-    if (rErr) console.error('otp: revoke_user_sessions failed:', rErr.message);
+    // 다른 기기 세션은 끊지 않는다(2026-10-05 결정 · 0238 A4 뒤집음).
 
     // (0238 Q15) 어느 이메일로 로그인하면 되는지 가려서 알려 준다.
     return json(200, {
