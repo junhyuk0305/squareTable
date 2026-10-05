@@ -178,7 +178,7 @@ export default function OwnerStaffScreen() {
     setRejectTarget(null);
   };
 
-  // 초대코드 재발급(남용 #31) — 새 6자리+7일 만료. 이전 코드는 즉시 무효(유출 차단).
+  // 초대코드 재발급(남용 #31) — 새 6자리(만료 없음 · 0282 C6). 이전 코드는 즉시 무효(유출 차단).
   const confirmRotate = async () => {
     setRotating(true);
     const res = await rotateInviteCode();

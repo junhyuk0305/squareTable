@@ -1211,7 +1211,7 @@ export async function setMemberRoleDb(uid: string, role: 'manager' | 'junior'): 
 }
 
 // ── 초대코드 재발급(남용 #31) ──────────────────────────────
-// 새 6자리 코드 + 7일 만료. 유출/교체용. 성공 시 새 코드 반환(세션·화면 갱신용).
+// 새 6자리 코드(만료 없음 · 0282 C6). 유출/교체용. 성공 시 새 코드 반환(세션·화면 갱신용).
 export async function rotateInviteCode(): Promise<{ inviteCode: string; expiresAt: string } | null> {
   if (!HAS_SUPABASE) return null;
   const { data, error } = await supabase.rpc('rotate_invite_code');
