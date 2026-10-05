@@ -34,7 +34,7 @@ import { guardWrite, useSyncStore } from '@/lib/store/useSyncStore';
 import { optimisticAdd } from '@/lib/store/crudHelpers';
 import { genId } from '@/lib/utils/id';
 import { todayStr } from '@/lib/utils/attendance';
-import { nextDateForWeekday, fmtDateKo, shiftAppliesOn, type SeriesSaveOp } from '@/lib/utils/schedule';
+import { nextDateForWeekday, fmtDateKo, shiftAppliesOn, runSeriesOps, type SeriesSaveOp } from '@/lib/utils/schedule';
 import {
   notifyStaffSwapRequest,
   notifyUserSwapRequest,
@@ -148,14 +148,10 @@ type ScheduleState = {
   /** 날짜 지정 근무 한 칸 추가(직접 INSERT · 0행이면 실패). 반복 근무는 applySeriesOps 를 쓴다. */
   addTemplate: (t: Omit<ShiftTemplate, 'id'>) => Promise<boolean>;
   /**
-   * 반복 근무 저장(0242 RPC) — planSeriesSave 가 만든 계획을 차례로 보낸다. 끝나면 다시 읽는다.
-   * confirmPast = 지난 날짜를 바꾼다는 경고창을 사장이 확인했다(§8 Q4 · 서버 p_confirm_past).
+   * 반복 근무 저장(0242 RPC) — planSeriesSave·planFromScope 가 만든 계획을 runSeriesOps 로 차례로 보낸다. 끝나면 다시 읽는다.
+   * "이 날부터 계속·그만"도 이 길이다(뒤 구간까지). confirmPast = 지난 날짜를 바꾼다는 경고를 사장이 확인했다(§8 Q4 · 서버 p_confirm_past).
    */
   applySeriesOps: (staffId: string, ops: SeriesSaveOp[], start: string, end: string, confirmPast: boolean) => Promise<boolean>;
-  /** "이 날부터 계속" 고치기(0242). */
-  editShiftFrom: (id: string, from: string, start: string, end: string, confirmPast: boolean) => Promise<boolean>;
-  /** "이 날부터 그만"(0242). 그 전 기록은 남는다. */
-  endShiftFrom: (id: string, from: string, confirmPast: boolean) => Promise<boolean>;
   /** "이 날만" 바꾸기(start·end) 또는 빼기(null)(0242). 날짜 지정 근무는 그 행을 고치거나 지운다. */
   overrideShiftDay: (id: string, date: string, start: string | null, end: string | null, confirmPast: boolean) => Promise<boolean>;
 
@@ -245,12 +241,13 @@ const SEED = HAS_SUPABASE ? null : demoSeed();
 export const useScheduleStore = create<ScheduleState>((set, get) => {
   /**
    * 근무표 RPC 공통 — 여러 행(지난 구간 복사본·예외·미결 교대)이 서버에서 함께 바뀌므로 낙관적으로 흉내 내지 않고
-   * 성공하면 다시 읽는다. 그 사이 매장이 바뀌었으면 다시 읽지 않는다(새 매장 hydrate 가 채운다).
+   * 끝나면 다시 읽는다. ★실패해도 읽는다: 여러 단계 저장은 앞 단계가 이미 저장됐을 수 있다.
+   * 그 사이 매장이 바뀌었으면 다시 읽지 않는다(새 매장 hydrate 가 채운다).
    */
   const runShiftRpc = async (call: () => Promise<boolean>, failMsg: string): Promise<boolean> => {
     const epoch = currentTenantEpoch();
     const ok = await guardWrite(call(), () => {}, failMsg);
-    if (ok && !isStaleEpoch(epoch)) void get().hydrate();
+    if (!isStaleEpoch(epoch)) void get().hydrate();
     return ok;
   };
 
@@ -330,24 +327,11 @@ export const useScheduleStore = create<ScheduleState>((set, get) => {
     return optimisticAdd(set, 'templates', rec, () => insertShiftTemplate(rec), '근무 추가 저장에 실패했어요.');
   },
   applySeriesOps: (staffId, ops, start, end, confirmPast) =>
-    runShiftRpc(async () => {
-      // 한 요일이 실패하면 거기서 멈춘다. 앞 요일은 이미 저장됐으므로 다시 읽어 화면을 서버와 맞춘다.
-      for (const op of ops) {
-        if (op.kind === 'edit') {
-          if (!(await editShiftFromRpc(op.id, op.from, start, end, confirmPast))) return false;
-          continue;
-        }
-        const id = await addShiftSeriesRpc(staffId, op.weekday, op.from, start, end, confirmPast);
-        if (!id) return false;
-        // 그 요일에 나중에 시작하는 행이 이미 있으면 새 행을 그 전날로 닫는다(그날부터 두 벌 금지).
-        if (op.endBefore && !(await endShiftFromRpc(id, op.endBefore, false))) return false;
-      }
-      return true;
-    }, '근무 저장에 실패했어요. 다시 시도해 주세요.'),
-  editShiftFrom: (id, from, start, end, confirmPast) =>
-    runShiftRpc(() => editShiftFromRpc(id, from, start, end, confirmPast), '근무 수정 저장에 실패했어요.'),
-  endShiftFrom: (id, from, confirmPast) =>
-    runShiftRpc(() => endShiftFromRpc(id, from, confirmPast), '근무 삭제에 실패했어요.'),
+    // 한 단계가 실패하면 거기서 멈춘다. 앞 단계는 이미 저장됐으므로 runShiftRpc 가 다시 읽어 화면을 서버와 맞춘다.
+    runShiftRpc(
+      () => runSeriesOps({ add: addShiftSeriesRpc, edit: editShiftFromRpc, end: endShiftFromRpc }, staffId, ops, start, end, confirmPast),
+      '근무 저장에 실패했어요. 다시 시도해 주세요.',
+    ),
   overrideShiftDay: (id, date, start, end, confirmPast) =>
     runShiftRpc(() => overrideShiftDayRpc(id, date, start, end, confirmPast), start ? '근무 수정 저장에 실패했어요.' : '근무 삭제에 실패했어요.'),
   requestSwap: (input) => {

@@ -25,6 +25,7 @@ import {
   fmtDateKo,
   nextDateForWeekday,
   planSeriesSave,
+  planFromScope,
 } from '@/lib/utils/schedule';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
@@ -64,8 +65,6 @@ export function ShiftQuickSheet({
   const templates = useScheduleStore((s) => s.templates);
   const addTemplate = useScheduleStore((s) => s.addTemplate);
   const applySeriesOps = useScheduleStore((s) => s.applySeriesOps);
-  const editShiftFrom = useScheduleStore((s) => s.editShiftFrom);
-  const endShiftFrom = useScheduleStore((s) => s.endShiftFrom);
   const overrideShiftDay = useScheduleStore((s) => s.overrideShiftDay);
 
   const [staffId, setStaffId] = useState<string>(() => (staff.length === 1 ? staff[0].id : ''));
@@ -134,7 +133,9 @@ export function ShiftQuickSheet({
         const day = editing.date ?? date;
         run('저장', day < today, (cp) => overrideShiftDay(editing.templateId, day, start, end, cp));
       } else {
-        run('저장', date < today, (cp) => editShiftFrom(editing.templateId, date, start, end, cp));
+        // 이 날부터 계속 — 같은 요일의 뒤 구간(나눠 저장한 행)도 새 시각이다(planFromScope).
+        const ops = planFromScope(templates, editing.templateId, date, { start, end });
+        run('저장', date < today, (cp) => applySeriesOps('', ops, start, end, cp));
       }
       return;
     }
@@ -155,7 +156,9 @@ export function ShiftQuickSheet({
       const day = editing.date ?? date;
       run('삭제', day < today, (cp) => overrideShiftDay(editing.templateId, day, null, null, cp));
     } else {
-      run('삭제', date < today, (cp) => endShiftFrom(editing.templateId, date, cp));
+      // 이 날부터 그만 — 같은 요일의 뒤 구간도 끝낸다. 안 끝내면 뒤 구간 시작일부터 근무가 다시 선다.
+      const ops = planFromScope(templates, editing.templateId, date, null);
+      run('삭제', date < today, (cp) => applySeriesOps('', ops, editing.start, editing.end, cp));
     }
   }
 

@@ -250,20 +250,36 @@ export function shiftAppliesOn(t: DatedShift, date: string): boolean {
   return true;
 }
 
-/** 반복 근무 저장 한 건. edit = 그 행을 from 부터 고친다. add = from 부터 새로 넣고, endBefore 가 있으면 그 전날로 닫는다. */
+/**
+ * 반복 근무 저장 한 건. edit = 그 행을 from 부터 고친다. end = 그 행을 from 부터 그만둔다(from 이 시작일 이하면 서버가 지운다).
+ * add = from 부터 새로 넣고, endBefore 가 있으면 그 전날로 닫는다.
+ */
 export type SeriesSaveOp =
   | { kind: 'edit'; id: string; from: string }
+  | { kind: 'end'; id: string; from: string }
   | { kind: 'add'; weekday: number; from: string; endBefore?: string };
+
+type SeriesRow = DatedShift & { id: string; staff_id: string; start: string; end: string };
+
+/**
+ * 같은 직원·같은 요일 반복 중 date 뒤에 시작하는 행. "이 날부터 계속"으로 나눠 저장하면 한 요일이 여러 행이 된다.
+ * "이 날부터"는 이 뒤 구간까지 바꾼다. 안 바꾸면 뒤 구간이 그 날부터 옛 시각으로 다시 선다.
+ */
+function laterSegments(templates: SeriesRow[], staffId: string, weekday: number, date: string): SeriesRow[] {
+  return templates
+    .filter((t) => t.staff_id === staffId && !t.date && t.weekday === weekday && (t.valid_from ?? '') > date)
+    .sort((a, b) => (a.valid_from ?? '').localeCompare(b.valid_from ?? ''));
+}
 
 /**
  * 반복 근무 저장 계획 — "이 직원의 한 요일 반복은 하나"를 **그 요일 첫 날에 적용 중인 행** 기준으로 판정한다(0242).
  * from = date(포함) 이후 그 요일의 첫 날이다.
- *  · 그날 적용 중인 행이 있으면 그 행을 from 부터 고친다. 시각이 같으면 건너뛴다.
+ *  · 그날 적용 중인 행이 있으면 그 행을 from 부터 고친다. 뒤 구간도 각자 시작일부터 고친다. 시각이 같으면 건너뛴다.
  *  · 없으면 새로 넣는다. 끝난 행은 기록이라 고치지 않는다.
  *  · 그 뒤에 시작하는 행이 이미 있으면 새 행을 그 전날로 닫는다. 안 닫으면 그날부터 근무가 두 벌이 된다.
  */
 export function planSeriesSave(
-  templates: (DatedShift & { id: string; staff_id: string; start: string; end: string })[],
+  templates: SeriesRow[],
   staffId: string,
   weekdays: number[],
   date: string,
@@ -276,7 +292,9 @@ export function planSeriesSave(
     const series = templates.filter((t) => t.staff_id === staffId && !t.date && t.weekday === wd);
     const live = series.find((t) => shiftAppliesOn(t, from));
     if (live) {
-      if (live.start !== start || live.end !== end) ops.push({ kind: 'edit', id: live.id, from });
+      for (const t of [live, ...laterSegments(templates, staffId, wd, from)]) {
+        if (t.start !== start || t.end !== end) ops.push({ kind: 'edit', id: t.id, from: t === live ? from : t.valid_from! });
+      }
       continue;
     }
     const later = series
@@ -286,6 +304,66 @@ export function planSeriesSave(
     ops.push(later ? { kind: 'add', weekday: wd, from, endBefore: later } : { kind: 'add', weekday: wd, from });
   }
   return ops;
+}
+
+/**
+ * 사장 근무 시트의 "이 날부터 계속"(times) · "이 날부터 그만"(null) 계획. 누른 행은 date 부터, 같은 직원·요일의 뒤 구간은 각자 시작일부터다.
+ * 날짜 지정 근무는 누른 행 하나다.
+ */
+export function planFromScope(
+  templates: SeriesRow[],
+  id: string,
+  date: string,
+  times: { start: string; end: string } | null,
+): SeriesSaveOp[] {
+  const kind = times ? 'edit' : 'end';
+  const ops: SeriesSaveOp[] = [{ kind, id, from: date }];
+  const row = templates.find((t) => t.id === id);
+  if (!row || row.date || row.weekday === null) return ops;
+  for (const t of laterSegments(templates, row.staff_id, row.weekday, date)) {
+    if (times && t.start === times.start && t.end === times.end) continue;
+    ops.push({ kind, id: t.id, from: t.valid_from! });
+  }
+  return ops;
+}
+
+/** 반복 근무 RPC(db.ts 래퍼). runSeriesOps 가 이 순서로 부른다. */
+export type SeriesApi = {
+  add: (staffId: string, weekday: number, from: string, start: string, end: string, confirmPast: boolean) => Promise<string | null>;
+  edit: (id: string, from: string, start: string, end: string, confirmPast: boolean) => Promise<boolean>;
+  end: (id: string, from: string, confirmPast: boolean) => Promise<boolean>;
+};
+
+/**
+ * 저장 계획을 차례로 보낸다. 하나가 실패하면 거기서 멈추고 false 다(앞 단계는 이미 저장됐다).
+ * ★새 행을 나중 행 앞에서 닫을 때도 사장이 확인한 confirmPast 를 넘긴다. 닫는 날이 지난 날짜면 서버가 확인을 요구한다.
+ *   닫기가 실패하면 방금 넣은 행을 시작일부터 그만둔다(= 지운다). 남기면 그날부터 매주 근무가 두 벌이고 급여도 두 배다.
+ */
+export async function runSeriesOps(
+  api: SeriesApi,
+  staffId: string,
+  ops: SeriesSaveOp[],
+  start: string,
+  end: string,
+  confirmPast: boolean,
+): Promise<boolean> {
+  for (const op of ops) {
+    if (op.kind === 'edit') {
+      if (!(await api.edit(op.id, op.from, start, end, confirmPast))) return false;
+      continue;
+    }
+    if (op.kind === 'end') {
+      if (!(await api.end(op.id, op.from, confirmPast))) return false;
+      continue;
+    }
+    const id = await api.add(staffId, op.weekday, op.from, start, end, confirmPast);
+    if (!id) return false;
+    if (op.endBefore && !(await api.end(id, op.endBefore, confirmPast))) {
+      await api.end(id, op.from, confirmPast);
+      return false;
+    }
+  }
+  return true;
 }
 
 /** 정기 휴무 요일 배열 → "월·화" 라벨. 없으면 '연중무휴'. */

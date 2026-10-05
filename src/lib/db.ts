@@ -321,7 +321,7 @@ export async function fetchOwnerLaborInputs(): Promise<DbResult<OwnerLaborInputR
 /** 0138: weekday(요일 반복) 또는 date(그 날짜 하루) 중 하나만 값이 있다. */
 export type MyShiftRow = {
   id: string; weekday: number | null; date: string | null; start: string; end: string;
-  /** 적용 기간(0242 · _v2 만 준다). v1 은 오늘 적용 중인 행만 주므로 없어도 판정이 맞다. */
+  /** 적용 기간(0242 · _v2 만 준다). ★다음 근무 미리보기(7일)는 이 기간으로 판정한다. 기간 없는 v1 은 오늘에만 맞다. */
   valid_from?: string | null; valid_to?: string | null;
 };
 export type MyCrossSummaryRow = {
@@ -331,11 +331,13 @@ export type MyCrossSummaryRow = {
   month_minutes: number; hourly_wage: number;
 };
 /** 본인의 소속 매장별 근무표·이번달 근무분·시급 — 직원 오늘 탭. 본인 행만(RPC 내부 강제).
- *  "오늘/다음 근무" 판정은 클라가 weekday 로 파생한다. ★교대로 넘긴 근무를 빼려면 exceptions 를
- *  **반드시** 같이 봐야 한다 — 안 보면 이미 남에게 넘긴 근무가 '오늘 근무'로 남는다(0180). */
+ *  "오늘/다음 근무" 판정은 클라가 shiftsOn(요일 + 적용 기간)으로 파생한다. ★교대로 넘긴 근무를 빼려면 exceptions 를
+ *  **반드시** 같이 봐야 한다 — 안 보면 이미 남에게 넘긴 근무가 '오늘 근무'로 남는다(0180).
+ *  ★_v2 를 읽는다(0242·0245·0246): 전체 이력과 기간을 준다. v1 은 오늘 적용 중인 행만 줘서 앞으로 시작·끝나는 구간이
+ *  다음 근무 미리보기에서 틀린다. v1 은 옛 앱용으로 남는다. */
 export async function fetchMyCrossSummary(): Promise<DbResult<MyCrossSummaryRow[]>> {
   if (!HAS_SUPABASE) return { data: [], error: null };
-  const { data, error } = await supabase.rpc('my_cross_summary');
+  const { data, error } = await supabase.rpc('my_cross_summary_v2');
   if (error) readFail('fetchMyCrossSummary', error);
   return { data: (data as MyCrossSummaryRow[]) ?? null, error: error as DbErr };
 }
