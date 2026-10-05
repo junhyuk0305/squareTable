@@ -306,6 +306,12 @@ let _resumingOwnerStore = false;
 //   'deleted' = 탈퇴 처리된 계정(재로그인 차단, 남용 #29) / 'load_failed' = 네트워크·일시 401 등 프로필 로드 실패.
 let _lastLoadFault: 'deleted' | 'load_failed' | null = null;
 
+// G1(QA 2026-10-05): 로그아웃 세대 번호. signOut 은 푸시 해제를 최대 8초 기다린 뒤 세션을 지운다.
+// 그 사이 시작된 loadProfile 이 로그아웃 뒤에 끝나면 옛 userId 로 signed_in 을 다시 써 넣었다.
+// 로그아웃(signOut·탈퇴·SIGNED_OUT 이벤트)마다 올리고, loadProfile 은 첫 await 전에 잡아 set 직전에 비교한다.
+// tenantEpoch 와 같은 규칙이지만 로그아웃에만 올린다 — 같은 사용자의 동시 로드(로그인 직후 두 번)는 서로 버리지 않는다.
+let _signOutGen = 0;
+
 // 로그아웃 상태 — 신원·매장·역할·과금 값을 전부 비운다. 로그아웃으로 떨어지는 길(로그아웃·auth 이벤트·탈퇴·
 // 로드 실패)이 여럿이라 한 곳에 둔다. 빠진 값이 있으면 다음 계정 로그인 전까지 이전 계정 값이 남는다.
 // 매장 데이터 스토어는 tenantReset.ts 가 userId 변화를 보고 비운다.
@@ -322,6 +328,7 @@ async function loadProfile(
   email: string,
   meta?: PendingOwnerMeta,
 ) {
+  const gen = _signOutGen;
   try {
     const { data: profile, error: profileErr } = await fetchSessionProfile(userId);
 
@@ -338,6 +345,7 @@ async function loadProfile(
       const prior = useSessionStore.getState();
       // 보존/리셋 판정은 순수함수(SSOT)로 분리 — 회귀 테스트 qa:session 이 진리표를 고정한다.
       if (sessionReadFailAction(prior, userId) === 'keep') return;
+      if (gen !== _signOutGen) return; // 로그아웃 뒤에 끝난 로드 — 그 뒤의 새 로그인을 덮지 않는다(G1)
       // 콜드 로드라 신원을 확정할 수 없다 → 가짜 테넌트 대신 깨끗한 signed_out(재로그인으로 복구).
       _lastLoadFault = 'load_failed'; // 로그인 직후라면 signInWithPassword 가 '네트워크 오류' 문구로 노출(#17·#18)
       setUnitId(null);
@@ -534,6 +542,8 @@ async function loadProfile(
         brandId = brand?.brand_id ?? null;
       }
     }
+    // 이 로드가 도는 사이 로그아웃됐으면 버린다 — 옛 userId 로 signed_in 을 되살리지 않는다(G1).
+    if (gen !== _signOutGen) return;
     setUnitId(unitId || null);
     setAnalyticsContext({ userId, unitId: unitId || null, role }); // 관측 이벤트에 매장/유저/역할 태깅
     set({
@@ -576,6 +586,7 @@ async function loadProfile(
     // (테넌트 격리가 최우선). 재접속 시 로그인/재시도로 정상 복구된다.
     console.warn('[session] loadProfile 실패, 로그아웃 처리:', (e as Error)?.message ?? e);
     reportError('session.loadProfile', e); // 오프라인 등으로 세션 로드가 던져 로그아웃되는 경로를 관측
+    if (gen !== _signOutGen) return; // 로그아웃 뒤에 끝난 로드 — 그 뒤의 새 로그인을 덮지 않는다(G1)
     _lastLoadFault = 'load_failed'; // 로그인 직후라면 signInWithPassword 가 '네트워크 오류' 문구로 노출(#17)
     setUnitId(null);
     setAnalyticsContext({ userId: null, unitId: null, role: null });
@@ -620,6 +631,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
         else if (_evt === 'INITIAL_SESSION') return;
         else {
           // 다른 탭의 로그아웃·토큰 만료 — 쓰기 태깅용 매장 id 도 비운다(다음 계정에 이전 매장이 붙지 않게).
+          _signOutGen += 1;
           setUnitId(null);
           setAnalyticsContext({ userId: null, unitId: null, role: null });
           set(SIGNED_OUT);
@@ -1106,6 +1118,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     } catch (e) {
       console.warn('[session] signOut after delete failed:', e);
     }
+    _signOutGen += 1;
     setUnitId(null);
     set(SIGNED_OUT);
     return { error: null };
@@ -1271,6 +1284,8 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       });
     }
     // 신원·매장 값을 전부 비운다. 매장 데이터 스토어는 tenantReset.ts 가 userId 변화를 보고 비운다.
+    // 세대를 올려 푸시 해제를 기다리는 사이 시작된 loadProfile 이 끝나도 signed_in 으로 되살리지 않게 한다(G1).
+    _signOutGen += 1;
     setUnitId(null);
     set(SIGNED_OUT);
   },
