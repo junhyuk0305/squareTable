@@ -66,6 +66,7 @@
     "qa:profile": "node scripts/qa-profile-update.mjs",
     "qa:knowhow-copy": "node scripts/qa-knowhow-copy.mjs",
     "qa:photo-private": "node scripts/qa-photo-private.mjs",
+    "qa:photo-purge": "node scripts/qa-photo-purge.mjs",
     "qa:payroll": "node scripts/qa-payroll.mjs",
     "qa:push": "node scripts/qa-push.mjs",
     "qa:notify": "node scripts/qa-notify-prefs.mjs",
