@@ -114,5 +114,18 @@ console.log('\n[C7] "매장 추가"는 남은 이용권을 보고 길을 정한�
     /cs\.code === 'NO_STORE_SLOT'/.test(cs) && /label: '이용권 보기'/.test(cs) && /router\.push\('\/billing/.test(cs));
 }
 
+console.log('\n[C10] 사장이 매장 행을 직접 고칠 수 있는 열은 업종 하나뿐이다');
+{
+  let file = '';
+  for (const f of migFiles()) if (/revoke update on (table )?public\.units from/.test(sqlStrip(read(`supabase/migrations/${f}`)))) file = f;
+  const s = sqlStrip(read(`supabase/migrations/${file}`));
+  check('★units 의 통째 update 권한을 클라(anon·authenticated)에서 거둔다',
+    !!file && /revoke update on public\.units from anon, authenticated;/.test(s), file || '없음');
+  check('★업종(industry) 열만 다시 연다', /grant update \(industry\) on public\.units to authenticated;/.test(s));
+  const db = read('src/lib/db.ts');
+  const writes = [...db.matchAll(/from\('units'\)\s*\.update\(\{([^}]*)\}/g)].map((m) => m[1].trim());
+  check('앱이 units 에 직접 쓰는 열은 industry 하나뿐이다(권한과 맞다)', writes.length > 0 && writes.every((w) => w === 'industry'), JSON.stringify(writes));
+}
+
 console.log(`\n${pass} PASS / ${fail} FAIL`);
 process.exit(fail ? 1 : 0);
