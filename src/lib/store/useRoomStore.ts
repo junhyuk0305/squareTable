@@ -191,15 +191,20 @@ export const useRoomStore = create<State>((set, get) => ({
     const mine: RoomMember = { roomId: room.id, userId: session.userId };
     const newMembers: RoomMember[] = memberIds.filter((id) => id !== session.userId).map((userId) => ({ roomId: room.id, userId }));
     set((s) => ({ rooms: [...s.rooms, room], members: [...s.members, mine, ...newMembers], currentRoomId: room.id }));
-    return guardWrite(
-      insertRoom(room).then(async (ok) => {
-        if (!ok) return false;
-        const rs = await Promise.all(newMembers.map((m) => addRoomMember(m.roomId, m.userId)));
-        return rs.every(Boolean);
-      }),
+    const created = await guardWrite(
+      insertRoom(room),
       () => set((s) => ({ rooms: s.rooms.filter((r) => r.id !== room.id), members: s.members.filter((m) => m.roomId !== room.id) })),
       '채팅방 만들기에 실패했어요.',
     );
+    if (!created) return false;
+    // D13: 방은 이미 만들어졌다. 초대가 실패해도 방을 지우지 않는다(지우면 다시 만들어 같은 방이 둘이 된다).
+    //   실패한 사람만 빼고 알린다. 방 멤버 목록에서 다시 초대할 수 있다.
+    await Promise.all(newMembers.map((m) => guardWrite(
+      addRoomMember(m.roomId, m.userId),
+      () => set((s) => ({ members: s.members.filter((x) => !(x.roomId === m.roomId && x.userId === m.userId)) })),
+      '채팅방은 만들었어요. 초대하지 못한 직원이 있어요 — 방에서 다시 초대해 주세요.',
+    )));
+    return true;
   },
 
   removeRoom: async (id) => {
