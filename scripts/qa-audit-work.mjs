@@ -64,5 +64,23 @@ console.log('[D2] 비공개 방 공지는 그 방 멤버에게만 푸시하고, 
     (board.match(/const memberCount = [^;]*;/) || ['없음'])[0]);
 }
 
+console.log('\n[D3] 담당자가 모두 나간 "매장 전체" 할일도 알림이 간다 · 나간 사람은 담당자에서 빠진다');
+{
+  const t = lastDef('due_task_reminders');
+  const b = t.body;
+  const iFilter = b.search(/from unnest\(v_rec\) x\s+where exists \(\s*select 1 from public\.unit_members m\s+where m\.unit_id = t\.unit_id and m\.user_id = x::uuid\s*\);\s*end if;/);
+  const iFall = b.search(/if cardinality\(t\.owner_ids\) = 0\s+or \(coalesce\(array_length\(v_rec, 1\), 0\) = 0 and t\.scope is distinct from 'private'\) then/);
+  check('★담당자를 먼저 매장 멤버로 거르고, 다 빠지면 매장 전체 할일은 근무자 → 전원 갈래로 내려간다',
+    iFilter > 0 && iFall > iFilter && /public\.workers_at\(/.test(b.slice(iFall)), `${t.file} filter=${iFilter} fall=${iFall}`);
+  check('개인 할일은 담당자가 나가도 근무자에게 내려가지 않는다(내용이 남에게 가지 않게)', /t\.scope is distinct from 'private'/.test(b));
+  check('0254 담당자 갈래·0265 잠긴 매장 제외는 그대로', /if cardinality\(t\.owner_ids\) > 0 then/.test(b) && /and not public\.unit_access_locked\(w\.unit_id\)/.test(b));
+  const tr = lastDef('wt_drop_departed_assignee');
+  const trFile = tr.file ? read(`supabase/migrations/${tr.file}`) : '';
+  check('★매장을 나가면(unit_members 삭제) 그 매장 "매장 전체" 할일 담당자에서 뺀다',
+    /array_remove\(owner_ids, old\.user_id\)/.test(tr.body) && /coalesce\(scope, 'shared'\) = 'shared'/.test(tr.body)
+      && /after delete on public\.unit_members/.test(trFile), tr.file || '없음');
+  check('이미 나간 사람이 담당자로 남은 할일도 한 번 정리한다', /update public\.work_templates[\s\S]{0,400}not exists \(select 1 from public\.unit_members/.test(sqlStrip(trFile)));
+}
+
 console.log(`\n${pass} PASS / ${fail} FAIL`);
 process.exit(fail ? 1 : 0);
