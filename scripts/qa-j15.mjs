@@ -91,6 +91,22 @@ console.log('\n[4] 배선(주석 제외 코드)');
   for (const p of ['src/app/owner/_layout.tsx', 'src/app/junior/_layout.tsx']) {
     check(`③ ${p} 가 useForegroundRefresh 를 쓴다`, /useForegroundRefresh\(/.test(strip(read(p))));
   }
+  // G2(QA 2026-10-05): 앱 착지 화면(/hub)·매장 목록·통합 알림은 두 _layout 밖이라 다시 열어도 어제 숫자가 남았다.
+  for (const [p, needs] of [
+    ['src/components/hub/OwnerStatusView.tsx', ['hydrateOwner()', 'hydrateCross()', 'hydratePrefs()', 'hydrateKnowhowStats()']],
+    ['src/components/hub/JuniorTodayView.tsx', ['hydrateJunior()', 'hydrateCross()', 'hydratePrefs()']],
+    ['src/app/notifications.tsx', ['hydrateCross()']],
+    ['src/app/stores.tsx', ['setFgTick(']],
+  ]) {
+    const s = strip(read(p));
+    const call = (s.match(/useForegroundRefresh\([\s\S]*?\n  \}\);/) || [''])[0];
+    check(`★G2 ${p} 가 앞으로 돌아오면 소속과 화면 데이터를 다시 읽는다`,
+      /refreshMembership\(\)/.test(call) && needs.every((n) => call.includes(n)), call.slice(0, 120));
+  }
+  {
+    const s = strip(read('src/app/stores.tsx'));
+    check('G2 매장 목록의 지표·잠김 읽기가 다시 돈다(fgTick 의존)', (s.match(/\}, \[[^\]]*\bfgTick\b[^\]]*\]\);/g) || []).length >= 2);
+  }
   const fg = strip(read('src/lib/app/useForegroundRefresh.ts'));
   check('③ AppState 로 듣고 shouldRefreshOnForeground 로 고른다 · 자동 토큰 갱신을 묶는다', /AppState\.addEventListener/.test(fg) && /shouldRefreshOnForeground\(/.test(fg) && /startAutoRefresh/.test(fg) && /stopAutoRefresh/.test(fg));
   const shell = strip(read('src/components/shell/AppShell.web.tsx'));
