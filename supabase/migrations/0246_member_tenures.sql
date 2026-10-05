@@ -1518,6 +1518,27 @@ $$;
 revoke execute on function public.my_units_notif_data() from public, anon, authenticated;
 grant  execute on function public.my_units_notif_data() to authenticated;
 
+-- ★라이브에는 0254(feat/multi-assignee-tasks · 담당자 여러 명 owner_ids)가 먼저 들어가 있다(2026-10-05 실측).
+--   위 본문은 담당자 한 명(owner_id) 기준이라 그대로 두면 0254 를 덮는다. owner_ids 열이 있을 때만
+--   0254 와 같은 문자열 치환으로 담당자 판정을 여러 명 기준으로 되돌린다. 열이 없는 DB 에서는 아무것도 안 한다.
+do $$
+declare
+  v_def text;
+  v_new text;
+begin
+  if not exists (select 1 from information_schema.columns
+                  where table_schema = 'public' and table_name = 'work_templates' and column_name = 'owner_ids') then
+    return;
+  end if;
+  v_def := pg_get_functiondef('public.my_units_notif_data()'::regprocedure);
+  v_new := replace(v_def, 'where wt.owner_id = me.uid', 'where me.uid = any(wt.owner_ids)');
+  v_new := replace(v_new, 'and wt.owner_id = me.uid)', 'and me.uid = any(wt.owner_ids))');
+  if v_new like '%wt.owner_id = me.uid%' then
+    raise exception '0246: my_units_notif_data 의 담당자 판정을 owner_ids 로 다 못 바꿨다';
+  end if;
+  if v_new <> v_def then execute v_new; end if;
+end $$;
+
 -- ════════════════════════════════════════════════════════════════════════════
 -- ⑩ 백필(알림 없음)
 -- ════════════════════════════════════════════════════════════════════════════
