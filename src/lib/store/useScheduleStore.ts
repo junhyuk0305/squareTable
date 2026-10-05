@@ -34,7 +34,7 @@ import { guardWrite, useSyncStore } from '@/lib/store/useSyncStore';
 import { optimisticAdd } from '@/lib/store/crudHelpers';
 import { genId } from '@/lib/utils/id';
 import { todayStr } from '@/lib/utils/attendance';
-import { nextDateForWeekday, fmtDateKo, shiftAppliesOn, runSeriesOps, type SeriesSaveOp } from '@/lib/utils/schedule';
+import { nextDateForWeekday, fmtDateKo, shiftAppliesOn, runSeriesOps, swapApprovable, type SeriesSaveOp } from '@/lib/utils/schedule';
 import {
   notifyStaffSwapRequest,
   notifyUserSwapRequest,
@@ -173,7 +173,7 @@ type ScheduleState = {
   /** 수락 — **선착순**이다. 서버가 선점하므로 실패하면 "이미 다른 분이 수락했어요"로 안내한다. */
   acceptSwap: (id: string, byStaffId: string) => void;
   cancelSwap: (id: string) => void; // 요청자 취소
-  approveSwap: (id: string) => void; // 사장 승인 — 근무를 실제로 이전한다(0179)
+  approveSwap: (id: string, confirmPast: boolean) => void; // 사장 승인 — 근무를 실제로 이전한다(0179). 지난 근무가 들면 확인창을 거친 뒤 confirmPast=true(0242 Q10)
   rejectSwap: (id: string) => void; // 사장 반려
   /** 직원이 자기 근무의 그날 시각을 바꿔 달라고 요청한다(J2 · 0243). 사장이 승인해야 근무표에 들어간다. */
   requestShiftTime: (templateId: string, date: string, start: string, end: string) => Promise<boolean>;
@@ -406,7 +406,7 @@ export const useScheduleStore = create<ScheduleState>((set, get) => {
       '요청 취소 저장에 실패했어요.',
     );
   },
-  approveSwap: (id) => {
+  approveSwap: (id, confirmPast) => {
     const before = get().swaps.find((r) => r.id === id);
     if (!before || before.status !== 'accepted') return;
     const at = nowIso();
@@ -416,7 +416,7 @@ export const useScheduleStore = create<ScheduleState>((set, get) => {
     //   따로 쓰면 "승인은 됐는데 근무는 안 넘어간" 반쪽 상태가 남는다.
     //   이전 결과(새 날짜 지정 행·예외)는 스토어에 없으므로 성공하면 재수화한다.
     void guardWrite(
-      approveSwapRpc(id),
+      approveSwapRpc(id, confirmPast),
       () => set((s) => ({ swaps: s.swaps.map((r) => (r.id === id ? before : r)) })),
       '교대 승인에 실패했어요. 그 근무가 아직 있는지 확인해 주세요.',
     ).then((ok) => {
@@ -525,11 +525,12 @@ export function canAcceptSwap(r: SwapRequest, me: string, today: string): boolea
 }
 
 /**
- * 사장 승인만 남은 교대 요청 — 직원끼리 합의(accepted)가 끝난 것. 지난 날짜는 승인 의미가 없어 제외.
+ * 사장 승인만 남은 교대 요청 — 직원끼리 합의(accepted)가 끝난 것. 지난 날짜도 35일 동안 남긴다(Q10 · swapApprovable).
+ * 지난 근무가 든 요청은 근무표 화면이 확인창(pastSwapNotice)을 거쳐 승인한다.
  * ★근무표 화면과 사장 홈이 **같은 수**를 말해야 해서 판정은 여기 하나다(홈 '다음 행동' 1순위).
  */
 export function pendingApprovals(swaps: SwapRequest[], today: string): SwapRequest[] {
-  return swaps.filter((r) => r.status === 'accepted' && r.date >= today);
+  return swaps.filter((r) => swapApprovable(r, today));
 }
 
 /**

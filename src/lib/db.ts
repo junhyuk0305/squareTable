@@ -14,6 +14,7 @@ import type { AttendanceRecord } from '@/lib/store/useAttendanceStore';
 import type { StoreConfig, ShiftTemplate, ShiftException, SwapRequest, ShiftTimeRequest } from '@/lib/store/useScheduleStore';
 import type { CustomCategory } from '@/lib/store/knowhowCategories';
 import type { KnowhowUsage } from '@/lib/knowhow/archive';
+import type { MemberTenure } from '@/lib/utils/tenure';
 import { reopenKeepsRecords, type DeleteStorePreview, type DeleteStoreResult } from '@/lib/account/storeCopy';
 // 훈련 v2(0107·0108). ★TrainingCourse 는 이 파일이 이미 0099 의 문자열 유니온으로 쓰고 있어(아래)
 // 이름이 겹친다 → 코스 테이블 행 타입은 TrainingCourseRow 로 별칭한다. 구조는 동일하므로
@@ -1097,6 +1098,23 @@ export async function fetchStaffProfiles(
       shift: r.meta?.shift ?? undefined,
     }));
   return { owner, staff, roles, error: false };
+}
+
+// 이 매장 재직 기간(0246). RLS 가 같은 매장 사장에게만 행을 준다 — 매니저·직원은 0행이다.
+// 0246 이 없는 옛 서버에서는 표가 없다. 호출부는 빈 기간이나 실패를 "기간 정보 없음"으로 보고 기존 값으로 폴백한다.
+export async function fetchMemberTenures(unitId: string | null = _unitId): Promise<ReadResult<MemberTenure[]>> {
+  if (!HAS_SUPABASE || !unitId) return { data: [], error: false };
+  const { data, error } = await supabase
+    .from('member_tenures')
+    .select('id, user_id, joined_at, left_at, name_snapshot, final_hourly_wage')
+    .eq('unit_id', unitId);
+  // 표가 아직 없는 서버(PGRST205 · 42P01)는 장애가 아니다 — 읽기 실패 배너를 띄우지 않고 기간 없이 돈다.
+  if (error && (error.code === 'PGRST205' || error.code === '42P01')) return { data: [], error: false };
+  if (error) {
+    readFail('fetchMemberTenures', error);
+    return { data: [], error: true };
+  }
+  return { data: (data ?? []) as MemberTenure[], error: false };
 }
 
 // 사장이 직원을 매장에서 내보낸다(소속 해제 + 퇴사자 스냅샷 보관). RPC = 사장만·같은 매장 junior만.
@@ -3512,10 +3530,14 @@ export async function acceptSwapRpc(id: string): Promise<boolean> {
   return rpcBool('acceptSwap', 'accept_swap', { p_id: id });
 }
 
-/** 교대 승인 — 상태 변경 + 근무 **실제 이전**을 한 트랜잭션으로(0179). false = 거부/근무 없음. */
-export async function approveSwapRpc(id: string): Promise<boolean> {
+/**
+ * 교대 승인 — 상태 변경 + 근무 **실제 이전**을 한 트랜잭션으로(0179). false = 거부/근무 없음.
+ * 지난 근무가 든 교대는 확인창을 거친 뒤 confirmPast=true 로 부른다(0242 Q10).
+ * p_confirm_past 는 그때만 보낸다 — 지난 날짜가 없는 승인은 옛 서버 approve_swap(p_id) 로도 그대로 간다.
+ */
+export async function approveSwapRpc(id: string, confirmPast: boolean): Promise<boolean> {
   if (!HAS_SUPABASE) return true;
-  return rpcBool('approveSwap', 'approve_swap', { p_id: id });
+  return rpcBool('approveSwap', 'approve_swap', confirmPast ? { p_id: id, p_confirm_past: true } : { p_id: id });
 }
 
 // 행→SwapRequest 매핑 SSOT — fetchSwaps(활성 매장)와 fetchCrossStoreNotifData(0077)가 공유.

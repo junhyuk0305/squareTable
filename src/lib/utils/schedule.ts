@@ -375,3 +375,54 @@ export function closedDaysLabel(days: number[]): string {
     .map((d) => WEEKDAY_LABELS[d])
     .join('·');
 }
+
+/** 교대 승인 판정에 필요한 요청 모양. 스토어 타입(SwapRequest)을 끌어오지 않으려고 필요한 칸만 적는다. */
+export type SwapLike = {
+  kind: string;
+  status: string;
+  requester_id: string;
+  accepted_by?: string;
+  date: string;
+  target_date?: string;
+};
+
+/** 지난 교대를 승인할 수 있는 기간(일). 서버 approve_swap(0242)의 `kst_today() - 35` 와 같다. */
+export const PAST_SWAP_DAYS = 35;
+
+/** 교대 하나가 실제로 옮기는 근무들. 날짜 · 원래 담당자 · 받는 사람. 서버 approve_swap 의 두 transfer_shift 와 같은 순서다. */
+function swapLegs(r: SwapLike): { date: string; from: string; to: string }[] {
+  const legs = [{ date: r.date, from: r.requester_id, to: r.accepted_by ?? '' }];
+  if (r.kind === 'swap' && r.target_date) legs.push({ date: r.target_date, from: r.accepted_by ?? '', to: r.requester_id });
+  return legs;
+}
+
+/**
+ * 사장 승인만 남은 교대인가(Q10). 직원끼리 수락(accepted)이 끝났고, 가장 이른 근무일이 오늘-35일 이후다.
+ * 서버 approve_swap 이 같은 경계로 거부하므로 그보다 오래된 요청은 목록에 두지 않는다.
+ */
+export function swapApprovable(r: SwapLike, today: string): boolean {
+  if (r.status !== 'accepted') return false;
+  const earliest = swapLegs(r).reduce((min, l) => (l.date < min ? l.date : min), r.date);
+  return earliest >= addDays(today, -PAST_SWAP_DAYS);
+}
+
+/**
+ * 지난 근무가 든 교대를 승인하기 전 확인창(Q10). 지난 근무가 없으면 null 이다.
+ * 승인하면 그 근무 급여가 받는 사람에게 간다. 원래 담당자가 그날 출근을 찍었으면 경고를 더한다(clockedIn).
+ * 확인창을 거쳤으면 서버에 p_confirm_past=true 를 보낸다.
+ */
+export function pastSwapNotice(
+  r: SwapLike,
+  today: string,
+  nameOf: (id: string) => string,
+  records: { staff_id: string; date: string }[],
+): { title: string; message: string; clockedIn: boolean } | null {
+  const past = swapLegs(r).filter((l) => l.date < today);
+  if (past.length === 0) return null;
+  const head = past.length === 1
+    ? `승인하면 이 근무 급여가 ${nameOf(past[0].to)}님에게 가요.`
+    : '승인하면 두 근무 급여가 서로 바뀌어요.';
+  const clocked = past.filter((l) => records.some((rec) => rec.staff_id === l.from && rec.date === l.date));
+  const warn = clocked.map((l) => `${nameOf(l.from)}님이 그날 출근을 찍었어요. 누가 일했는지 확인해 주세요.`);
+  return { title: '지난 근무예요', message: [head, ...warn].join('\n\n'), clockedIn: clocked.length > 0 };
+}

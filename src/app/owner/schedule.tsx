@@ -16,6 +16,7 @@ import { DayTimeline, type TimelineRow } from '@/components/schedule/DayTimeline
 import { ShiftQuickSheet, type ShiftEditTarget } from '@/components/schedule/ShiftQuickSheet';
 import { useStaffStore } from '@/lib/store/useStaffStore';
 import { useSessionStore } from '@/lib/store/useSessionStore';
+import { useAttendanceStore } from '@/lib/store/useAttendanceStore';
 import {
   useScheduleStore,
   shiftsOn,
@@ -26,7 +27,7 @@ import {
   type ShiftTimeRequest,
 } from '@/lib/store/useScheduleStore';
 import { todayStr } from '@/lib/utils/attendance';
-import { confirmPastChange } from '@/lib/utils/confirm';
+import { confirmAction, confirmPastChange } from '@/lib/utils/confirm';
 import {
   addDays,
   mondayOf,
@@ -42,6 +43,7 @@ import {
   dayWindow,
   spanIn,
   closedDaysLabel,
+  pastSwapNotice,
   WEEKDAY_LABELS,
 } from '@/lib/utils/schedule';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
@@ -66,6 +68,8 @@ export default function OwnerScheduleScreen() {
   const restoreException = useScheduleStore((s) => s.restoreException);
   const timeRequests = useScheduleStore((s) => s.timeRequests);
   const decideShiftTime = useScheduleStore((s) => s.decideShiftTime);
+  // 지난 교대 경고용 — 원래 담당자가 그날 출근을 찍었는지 본다(Q10). 매니저도 매장 출퇴근을 읽는다.
+  const attendance = useAttendanceStore((s) => s.records);
 
   // ★두 스토어 다 loaded 가 있는데 하나도 안 보고 있었다 — 그래서 도착 전에 "승인할 교대 요청이 없어요"·
   //   "합류한 직원이 없어요"(＋초대 CTA)·"이 날은 근무가 없어요"·DEFAULT_CONFIG 운영시간(09:00~22:00·연중무휴)이
@@ -99,6 +103,13 @@ export default function OwnerScheduleScreen() {
     const past = r.date < today;
     if (past && !(await confirmPastChange('승인'))) return;
     void decideShiftTime(r.id, true, past);
+  }
+
+  // 지난 근무가 든 교대는 급여가 누구에게 가는지 확인창으로 말한 뒤에만 승인한다(Q10). 서버도 확인 없이는 받지 않는다.
+  async function approveSwapChecked(r: SwapRequest) {
+    const n = pastSwapNotice(r, today, nameOf, attendance);
+    if (n && !(await confirmAction(n.title, n.message, '승인', { icon: 'alert-circle-outline' }))) return;
+    approveSwap(r.id, !!n);
   }
 
   // 점은 "그날 근무가 있다"만 뜻한다 — 건수는 표시하지 않는다(그룹 헤더 합계와 이중 계산이 된다).
@@ -288,7 +299,7 @@ export default function OwnerScheduleScreen() {
                     r={r}
                     nameOf={nameOf}
                     tplById={tplById}
-                    onApprove={() => approveSwap(r.id)}
+                    onApprove={() => void approveSwapChecked(r)}
                     onReject={() => rejectSwap(r.id)}
                   />
                 </Appear>

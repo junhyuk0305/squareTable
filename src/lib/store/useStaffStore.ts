@@ -4,7 +4,8 @@ import { create } from 'zustand';
 import type { Owner, Junior } from '@/types';
 import usersData from '@/data/users.json';
 import { HAS_SUPABASE } from '@/lib/supabase';
-import { fetchStaffProfiles, removeStaffMember, subscribeStaff, fetchPendingMembers, approveMember, rejectMember, setMemberRoleDb } from '@/lib/db';
+import { fetchStaffProfiles, removeStaffMember, subscribeStaff, fetchPendingMembers, approveMember, rejectMember, setMemberRoleDb, fetchMemberTenures } from '@/lib/db';
+import { openJoinedAt, type MemberTenure } from '@/lib/utils/tenure';
 import { showToast } from '@/lib/store/useToastStore';
 import { notifyUserRoleChange } from '@/lib/push/notify';
 import { PLANS } from '@/lib/config/tiers';
@@ -28,6 +29,8 @@ type StaffState = {
   pending: PendingMember[];
   // 매장별 역할 맵(0093, unit_members.role) — 매니저 배지·임명 UI 입력. 키=userId.
   roles: Record<string, string>;
+  // 이 매장 재직 기간(0246) — 사장만 읽는다. 입사일 · 이번 기간 퇴사자 줄 · 재입사 경고의 입력. 못 읽으면 빈 배열.
+  tenures: MemberTenure[];
   loaded: boolean;
   loadError: boolean; // 마지막 hydrate 실패 여부 — 명부가 "직원 0명"과 "못 불러옴"을 구분한다.
   hydrate: () => Promise<void>;
@@ -66,6 +69,7 @@ export const useStaffStore = create<StaffState>((set, get) => ({
   staff: HAS_SUPABASE ? [] : demoStaff,
   pending: [],
   roles: {},
+  tenures: [],
   loaded: !HAS_SUPABASE,
   loadError: false,
 
@@ -73,11 +77,20 @@ export const useStaffStore = create<StaffState>((set, get) => ({
     if (!HAS_SUPABASE) return;
     // 화면 포커스·승인 성공·실시간 이벤트도 이 길로 다시 당긴다 — 전부 같은 가드를 지난다.
     const epoch = currentTenantEpoch();
-    const [staffRes, pendingRes] = await Promise.all([fetchStaffProfiles(), fetchPendingMembers()]);
+    // 재직 기간은 사장에게만 행이 온다(RLS). 0246 이 없는 서버에서는 실패한다 — 실패는 명부 실패로 보지 않고 빈 기간으로 둔다.
+    const isOwner = useSessionStore.getState().role === 'owner';
+    const [staffRes, pendingRes, tenRes] = await Promise.all([
+      fetchStaffProfiles(),
+      fetchPendingMembers(),
+      isOwner ? fetchMemberTenures() : Promise.resolve({ data: [] as MemberTenure[], error: false }),
+    ]);
     if (isStaleEpoch(epoch)) return; // 그 사이 매장이 바뀌었다 — 이전 매장 명부를 쓰지 않는다
+    const tenures = tenRes.data;
     set({
       owner: staffRes.owner,
-      staff: staffRes.staff,
+      // 입사일 = 열린 재직 기간의 joined_at(이 매장에 들어온 날). 기간이 없으면 기존 값(profiles.created_at) 그대로.
+      staff: staffRes.staff.map((m) => ({ ...m, joined_at: openJoinedAt(tenures, m.id) ?? m.joined_at })),
+      tenures,
       pending: pendingRes.data,
       // 역할 맵은 명부와 같은 멤버십 읽기에서 온다 — 그 읽기가 실패하면 명부도 실패(loadError)다.
       roles: staffRes.roles,

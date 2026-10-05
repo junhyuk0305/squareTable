@@ -9,7 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { usePayrollStore, useWagesSettled } from '@/lib/store/usePayrollStore';
 import { useScheduleStore, scheduledShiftsFor } from '@/lib/store/useScheduleStore';
 import { monthDates } from '@/lib/utils/schedule';
-import { useStaffStore } from '@/lib/store/useStaffStore';
+import { useStaffStore, type PendingMember } from '@/lib/store/useStaffStore';
 import { useAttendanceStore } from '@/lib/store/useAttendanceStore';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useWorkStore } from '@/lib/store/useWorkStore';
@@ -29,6 +29,8 @@ import { fmtDuration, won, todayStr, liveMinutes, findOpenRecord, minWageWarning
 import { computePay, shiftsToPayRecords } from '@/lib/utils/payroll';
 import { showToast } from '@/lib/store/useToastStore';
 import { rotateInviteCode } from '@/lib/db';
+import { departedInPeriod, rejoinNotice } from '@/lib/utils/tenure';
+import { confirmAction } from '@/lib/utils/confirm';
 
 export default function OwnerStaffScreen() {
   const router = useRouter();
@@ -45,6 +47,8 @@ export default function OwnerStaffScreen() {
   const reject = useStaffStore((s) => s.reject);
   const roles = useStaffStore((s) => s.roles);
   const setRole = useStaffStore((s) => s.setRole);
+  // 재직 기간(0246) — 사장에게만 온다. 이번 기간 퇴사자 줄과 재입사 경고의 입력.
+  const tenures = useStaffStore((s) => s.tenures);
   // ★게이트가 staffLoaded 하나였다 — 그래서 히어로 "이번 달 예상 인건비"가 **₩0을 먼저 확정 표시**하고,
   //   시급 입력칸이 DEFAULT_HOURLY_WAGE 를 보여주다 실제 시급으로 바뀌었다(입력칸이라 그 사이 사용자가 만질 수 있다).
   //   총액은 wages·records·settings 에서 나오고 진도줄은 work 에서 나온다 — 그 넷이 다 와야 참이다.
@@ -119,6 +123,36 @@ export default function OwnerStaffScreen() {
     }
     return map;
   }, [records, wages, settings, staff, ym, today, shiftTemplates, swaps, shiftExceptions]);
+
+  // 이번 정산 기간(이 화면의 달력 월)에 근무가 있나 — 출퇴근 기록 또는 근무표. 퇴사자 줄·재입사 경고가 같은 판정을 쓴다.
+  const workedThisMonth = useCallback(
+    (uid: string) =>
+      records.some((r) => r.staff_id === uid && r.date.startsWith(ym))
+      || scheduledShiftsFor(shiftTemplates, swaps, shiftExceptions, uid, monthDates(ym)).length > 0,
+    [records, ym, shiftTemplates, swaps, shiftExceptions],
+  );
+
+  // 이번 정산 기간 퇴사자 — 이번 달에 일하고 나간 직원. 금액은 지금 직원과 같은 계산(근무표 기준 computePay)이다.
+  //   시급은 남아 있는 wages 를 먼저 쓰고, 없으면 나갈 때 남긴 시급(final_hourly_wage)을 쓴다.
+  const departed = useMemo(() => {
+    const worked = new Set(tenures.filter((t) => t.left_at && workedThisMonth(t.user_id)).map((t) => t.user_id));
+    const dates = monthDates(ym);
+    return departedInPeriod(tenures, Object.keys(roles), worked).map((t) => {
+      const uid = t.user_id;
+      const min = records.filter((r) => r.staff_id === uid && r.date.startsWith(ym)).reduce((sum, r) => sum + liveMinutes(r), 0);
+      const shiftRecs = shiftsToPayRecords(scheduledShiftsFor(shiftTemplates, swaps, shiftExceptions, uid, dates));
+      const schedMin = shiftRecs.reduce((sum, r) => sum + r.work_minutes, 0);
+      const wage = Object.prototype.hasOwnProperty.call(wages, uid) ? wages[uid] : t.final_hourly_wage;
+      return { id: uid, name: t.name_snapshot || '퇴사자', min, schedMin, pay: wage == null ? null : computePay(shiftRecs, wage, settings).total };
+    });
+  }, [tenures, roles, workedThisMonth, ym, records, shiftTemplates, swaps, shiftExceptions, wages, settings]);
+
+  // 합류 승인 — 예전에 이 매장에서 일했던 사람이면 경고를 보이고 확인을 받는다. 막지는 않는다.
+  async function approveChecked(p: PendingMember) {
+    const lines = rejoinNotice(tenures, p.id, workedThisMonth(p.id));
+    if (lines && !(await confirmAction('합류를 승인할까요?', lines.join('\n\n'), '승인', { icon: 'alert-circle-outline' }))) return;
+    approve(p.id);
+  }
 
   // 직원별 퀴즈 진도 줄은 2026-09-13 실측 QA 로 **이 화면에서 뺐다**(사장 요청).
   //   이유: 이 화면은 '누구에게 얼마' 를 보는 자리고, 진도는 퀴즈 탭(응시 현황)이 이미 맡는다.
@@ -276,7 +310,7 @@ export default function OwnerStaffScreen() {
                   <Pressable onPress={() => setRejectTarget({ id: p.id, name: p.name || '신청자' })} hitSlop={6} style={({ pressed }) => [styles.rejectBtn, pressed && { opacity: 0.7 }]}>
                     <Text style={styles.rejectText}>거절</Text>
                   </Pressable>
-                  <Pressable onPress={() => approve(p.id)} hitSlop={6} style={({ pressed }) => [styles.approveBtn, pressed && { opacity: 0.85 }]}>
+                  <Pressable onPress={() => void approveChecked(p)} hitSlop={6} style={({ pressed }) => [styles.approveBtn, pressed && { opacity: 0.85 }]}>
                     <Text style={styles.approveText}>승인</Text>
                   </Pressable>
                 </Appear>
@@ -388,6 +422,28 @@ export default function OwnerStaffScreen() {
         </View>
         )}
         </Appear>
+        {/* 이번 정산 기간 퇴사자 — 이번 달에 일하고 나간 직원도 이번 달 급여를 줘야 한다. 금액은 위 직원 줄과 같은 규칙이다. */}
+        {departed.length > 0 && (
+          <Appear delay={stagger(6)}>
+          <SectionLabel title={`이번 정산 기간 퇴사자 (${departed.length}명)`} />
+          <View style={styles.list}>
+            {departed.map((d) => (
+              <View key={d.id} style={styles.staffItem}>
+                <View style={[styles.staffRow, styles.staffRowFlat]}>
+                  <Avatar name={d.name} size={40} fontSize={15} />
+                  <View style={styles.nameCol}>
+                    <Text style={styles.staffName} numberOfLines={1}>{d.name}</Text>
+                    <Text style={styles.staffMeta} numberOfLines={1}>
+                      이번 달 {fmtDuration(d.min)} ·{' '}
+                      {d.pay === null ? '시급 미설정' : d.schedMin === 0 ? '근무표 없음' : won(d.pay)}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+            ))}
+          </View>
+          </Appear>
+        )}
         <Appear delay={stagger(6)}>
         <Text style={styles.demoNote}>* 직원을 누르면 출근 기록을 보고 시간을 수정할 수 있어요. 시급을 바꾸면 인건비에 바로 반영돼요.</Text>
         </Appear>
