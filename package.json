@@ -122,6 +122,7 @@
     "qa:shift-dated": "node scripts/qa-shift-dated.mjs",
     "qa:shift-time": "node scripts/qa-shift-time.mjs",
     "qa:shift-dating": "node scripts/qa-shift-dating.mjs",
+    "qa:past-month": "node --no-warnings scripts/qa-past-month.mjs",
     "qa:shift-requests": "node scripts/qa-shift-requests.mjs",
     "qa:definer-filters": "node scripts/qa-definer-filters.mjs",
     "qa:wage-rates": "node scripts/qa-wage-rates.mjs",
