@@ -269,7 +269,8 @@ try {
     const r1 = await O.c.rpc('approve_swap', { p_id: `tu_w3_${s}`, p_confirm_past: true });
     check('4-5 ★확인을 거쳐 p_confirm_past=true 로 부르면 승인된다', !r1.error && r1.data === true, r1.error?.message ?? `rpc=${r1.data}`);
     const r2 = await O.c.rpc('approve_swap', { p_id: `tu_w40_${s}`, p_confirm_past: true });
-    check('4-6 40일 전 교대는 서버도 거부한다(앱 목록과 같은 경계)', !r2.error && r2.data === false, r2.error?.message ?? `rpc=${r2.data}`);
+    // 40일 전은 언제나 지난달이다 → 2026-10-05 부터 past_month_locked 로 먼저 거부된다.
+    check('4-6 40일 전 교대는 서버도 거부한다(앱 목록과 같은 경계 · 지난달 잠금)', (!r2.error && r2.data === false) || /past_month_locked/.test(r2.error?.message ?? ''), r2.error?.message ?? `rpc=${r2.data}`);
   }
 
   // ── 나간 직원이 이번 기간 퇴사자에 잡힘 ──

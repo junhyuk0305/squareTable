@@ -454,18 +454,19 @@ console.log('\n■ [4] 왕복(로컬 도커) — 앱 판정 → RPC → shift_te
           .map((d) => `${d}:${on(tpls, exc, d, J.id).filter((t) => t.date === null && t.weekday === wd).map((g) => g.start).join('+') || '없음'}`);
       };
 
-      // 4-5 지난 날짜(4주 전)부터 반복을 넣는데 그 요일에 2주 전부터 시작한 행이 있다 → 새 행은 2주 전 전날로 닫힌다(확인 받음).
+      // 4-5 반복을 넣는데 그 요일에 2주 뒤부터 시작한 행이 있다 → 새 행은 그 전날로 닫힌다.
+      //   2026-10-05(J1 정정): 지난달은 확인해도 못 바꾸므로(past_month_locked) 4주 전 대신 이 날부터 본다.
       const wd3 = (wdT + 2) % 7;
-      const past4 = S.nextDateForWeekday(S.addDays(T, -28), wd3), past2 = S.addDays(past4, 14);
+      const past4 = S.nextDateForWeekday(T, wd3), past2 = S.addDays(past4, 14);
       const pre = await O.c.rpc('add_shift_series', { p_staff: J.id, p_weekday: wd3, p_from: past2, p_start: '15:00', p_end: '19:00', p_confirm_past: true });
-      check('4-5 2주 전부터 시작한 행 준비', !pre.error, pre.error?.message);
+      check('4-5 2주 뒤부터 시작한 행 준비', !pre.error, pre.error?.message);
       tpls = await readAll(O.c);
       const ops5 = plan(tpls, J.id, [wd3], past4, '08:00', '12:00');
-      check('4-5 계획 = 4주 전부터 넣고 2주 전 전날로 닫기(둘 다 지난 날짜)', ops5.length === 1 && ops5[0].kind === 'add' && ops5[0].from === past4 && ops5[0].endBefore === past2, JSON.stringify(ops5));
+      check('4-5 계획 = 이 날부터 넣고 2주 뒤 전날로 닫기', ops5.length === 1 && ops5[0].kind === 'add' && ops5[0].from === past4 && ops5[0].endBefore === past2, JSON.stringify(ops5));
       const ok5 = await runOps(api, J.id, ops5, '08:00', '12:00', true);
       check('4-5 runSeriesOps(확인함) 성공', ok5 === true);
       let w = await weekly(wd3, past4, 7);
-      check('★4-5 4주 전부터 7주 동안 매주 정확히 1건(2주 동안 08:00 · 그 뒤 15:00)',
+      check('★4-5 이 날부터 7주 동안 매주 정확히 1건(2주 동안 08:00 · 그 뒤 15:00)',
         w.every((x, k) => x.endsWith(k < 2 ? ':08:00' : ':15:00')), w.join(' '));
 
       // 4-6 앞으로 나눠 저장한 요일(첫 주 09:00 · 3주째부터 10:00) → 2주째에 "이 날부터 그만" → 2주째부터 근무 없음.

@@ -61,6 +61,14 @@ $$;
 revoke all on function public.kst_today() from public;
 grant execute on function public.kst_today() to anon, authenticated, service_role;
 
+-- ★2026-10-05(J1 정정): 이번 달 1일(KST). 이보다 이른 날짜의 근무는 어떤 경로로도 바꾸지 않는다(past_month_locked).
+--   정의자 함수·트리거 안에서만 부른다(3역할 회수).
+create or replace function public.shift_month_start()
+returns date language sql stable set search_path = public as $$
+  select date_trunc('month', public.kst_today())::date
+$$;
+revoke all on function public.shift_month_start() from public, anon, authenticated;
+
 -- ════════════════════════════════════════════════════════════════════════════
 -- ② 적용 기간 컬럼 + 백필(2000-01-01) + CHECK
 -- ════════════════════════════════════════════════════════════════════════════
@@ -260,6 +268,38 @@ begin
 end $$;
 revoke all on function public.shift_first_series() from public, anon, authenticated;
 
+-- ★2026-10-05(J1 정정): 옛 앱 직접 쓰기도 지난달 날짜 지정 근무·지난달 예외는 못 바꾼다.
+--   반복 행은 trg_shift_series_guard 가 지난 구간을 복사본으로 남기므로 여기서 보지 않는다.
+--   트리거 이름 순서상(trg_shift_past_month < trg_shift_series_guard) 먼저 돈다.
+create or replace function public.shift_past_month_guard()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare v_ms date := public.shift_month_start();
+begin
+  if tg_table_name = 'shift_exceptions' then
+    if (tg_op <> 'INSERT' and old.date < v_ms) or (tg_op <> 'DELETE' and new.date < v_ms) then
+      raise exception 'past_month_locked';
+    end if;
+  else
+    if (tg_op <> 'INSERT' and old.shift_date is not null and old.shift_date < v_ms)
+       or (tg_op <> 'DELETE' and new.shift_date is not null and new.shift_date < v_ms) then
+      raise exception 'past_month_locked';
+    end if;
+  end if;
+  if tg_op = 'DELETE' then return old; end if;
+  return new;
+end $$;
+revoke all on function public.shift_past_month_guard() from public, anon, authenticated;
+drop trigger if exists trg_shift_past_month on public.shift_templates;
+create trigger trg_shift_past_month
+  before insert or update or delete on public.shift_templates
+  for each row when (current_user = 'authenticated')
+  execute function public.shift_past_month_guard();
+drop trigger if exists trg_shift_exceptions_past_month on public.shift_exceptions;
+create trigger trg_shift_exceptions_past_month
+  before insert or update or delete on public.shift_exceptions
+  for each row when (current_user = 'authenticated')
+  execute function public.shift_past_month_guard();
+
 drop trigger if exists trg_shift_series_guard on public.shift_templates;
 create trigger trg_shift_series_guard
   before update or delete on public.shift_templates
@@ -290,6 +330,8 @@ begin
      or public.shift_span_min(p_start, p_end) = 0 then
     raise exception 'invalid_time';
   end if;
+  -- ★2026-10-05(J1 정정): 지난달(이번 달 1일 KST 이전) 근무는 어떤 경로로도 바꾸지 않는다.
+  if p_from < public.shift_month_start() then raise exception 'past_month_locked'; end if;
   if p_from < public.kst_today() and not coalesce(p_confirm_past, false) then raise exception 'confirm_past_required'; end if;
   if not exists (select 1 from public.unit_members m where m.unit_id = v_unit and m.user_id::text = p_staff) then
     raise exception 'staff_not_member';

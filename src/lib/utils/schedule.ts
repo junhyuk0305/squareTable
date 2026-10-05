@@ -504,3 +504,11 @@ export function shiftsOn(
     })
     .sort((a, b) => a.template.start.localeCompare(b.template.start));
 }
+
+/** 지난달 근무를 바꾸려 할 때(서버 past_month_locked · 2026-10-05 J1 정정). */
+export const PAST_MONTH_LOCKED_TEXT = '지난달 근무는 바꿀 수 없어요.';
+
+/** date 가 이번 달 1일(today 기준)보다 이르면 true. 지난달 근무는 어떤 경로로도 바뀌지 않는다. 날짜는 YYYY-MM-DD. */
+export function pastMonthLocked(date: string, today: string = todayStr()): boolean {
+  return date < `${today.slice(0, 7)}-01`;
+}

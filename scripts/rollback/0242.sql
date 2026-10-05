@@ -11,3 +11,6 @@
 
 drop trigger if exists trg_shift_series_guard on public.shift_templates;
 drop trigger if exists trg_shift_first_series on public.shift_templates;
+-- 2026-10-05 지난달 잠금(직접 쓰기)
+drop trigger if exists trg_shift_past_month on public.shift_templates;
+drop trigger if exists trg_shift_exceptions_past_month on public.shift_exceptions;

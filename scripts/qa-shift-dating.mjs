@@ -91,6 +91,10 @@ const addDays = (d, n) => new Date(new Date(`${d}T00:00:00Z`).getTime() + n * 86
 const dow = (d) => new Date(`${d}T00:00:00Z`).getUTCDay();
 const range = (from, to) => { const out = []; for (let d = from; d <= to; d = addDays(d, 1)) out.push(d); return out; };
 const T = new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10); // 오늘(KST)
+// 2026-10-05(J1 정정): 지난달(이번 달 1일 이전)은 어떤 경로로도 못 바꾼다(past_month_locked).
+//   "확인 뒤 허용"을 보는 지난 날짜는 이번 달 안의 어제다. 오늘이 1일이면 이번 달에 지난 날이 없어 오늘로 대신한다.
+const MS = `${T.slice(0, 7)}-01`;
+const PIM = addDays(T, -1) >= MS ? addDays(T, -1) : null;
 /** 적용 기간까지 보는 판정(0242 데이터 모델의 정의). 기간 컬럼이 없으면(0242 전) 요일만 본다 = 옛 판정. */
 const applies = (t, d) => (t.shift_date ? t.shift_date === d
   : t.weekday === dow(d) && (!t.valid_from || t.valid_from <= d) && (!t.valid_to || d <= t.valid_to));
@@ -343,9 +347,13 @@ try {
     check('6-2 사장 add_shift_series(다음 주부터) 성공', !a.error && typeof S1 === 'string', a.error?.message);
     const nm = await O.c.rpc('add_shift_series', { ...S1args, p_staff: X.id });
     check('6-3 매장 멤버가 아닌 사람에게는 못 넣는다', !!nm.error && /staff_not_member/.test(nm.error.message), nm.error?.message ?? 'allowed');
-    const past = await O.c.rpc('add_shift_series', { p_staff: L.id, p_weekday: wd2, p_from: addDays(T, -6), p_start: '09:00', p_end: '12:00' });
-    check('6-4 ★지난 날짜부터는 p_confirm_past 없이 거부', !!past.error && /confirm_past_required/.test(past.error.message), past.error?.message ?? 'allowed');
-    const past2 = await O.c.rpc('add_shift_series', { p_staff: L.id, p_weekday: wd2, p_from: addDays(T, -6), p_start: '09:00', p_end: '12:00', p_confirm_past: true });
+    if (PIM) {
+      const past = await O.c.rpc('add_shift_series', { p_staff: L.id, p_weekday: wd2, p_from: PIM, p_start: '09:00', p_end: '12:00' });
+      check('6-4 ★이번 달 지난 날짜부터는 p_confirm_past 없이 거부', !!past.error && /confirm_past_required/.test(past.error.message), past.error?.message ?? 'allowed');
+    }
+    const lm = await O.c.rpc('add_shift_series', { p_staff: L.id, p_weekday: wd2, p_from: addDays(MS, -3), p_start: '09:00', p_end: '12:00', p_confirm_past: true });
+    check('6-4b ★지난달부터는 확인해도 거부(past_month_locked)', !!lm.error && /past_month_locked/.test(lm.error.message), lm.error?.message ?? 'allowed');
+    const past2 = await O.c.rpc('add_shift_series', { p_staff: L.id, p_weekday: wd2, p_from: PIM ?? T, p_start: '09:00', p_end: '12:00', p_confirm_past: true });
     S2 = past2.data;
     check('6-5 p_confirm_past=true 면 허용', !past2.error && typeof S2 === 'string', past2.error?.message);
     const bad = await O.c.rpc('add_shift_series', { ...S1args, p_start: '09:00', p_end: '09:00' });
@@ -381,8 +389,12 @@ try {
       !ov.error && after.exc.some((x) => x.template_id === S2 && x.date === T1)
       && after.rows.some((r) => r.staff_id === L.id && r.shift_date === T1 && r.start_time === '14:00'),
       ov.error?.message ?? 'no rows');
-    const ovp = await O.c.rpc('override_shift_day', { p_id: S2, p_date: addDays(T, -6), p_start: '10:00', p_end: '11:00' });
-    check('6-15 override_shift_day 지난 날짜는 p_confirm_past 없이 거부', !!ovp.error && /confirm_past_required/.test(ovp.error.message), ovp.error?.message ?? 'allowed');
+    if (PIM) {
+      const ovp = await O.c.rpc('override_shift_day', { p_id: S2, p_date: PIM, p_start: '10:00', p_end: '11:00' });
+      check('6-15 override_shift_day 이번 달 지난 날짜는 p_confirm_past 없이 거부', !!ovp.error && /confirm_past_required/.test(ovp.error.message), ovp.error?.message ?? 'allowed');
+    }
+    const ovl = await O.c.rpc('override_shift_day', { p_id: S2, p_date: addDays(MS, -1), p_start: '10:00', p_end: '11:00', p_confirm_past: true });
+    check('6-15b ★override_shift_day 지난달은 확인해도 거부(past_month_locked)', !!ovl.error && /past_month_locked/.test(ovl.error.message), ovl.error?.message ?? 'allowed');
 
     // 다른 매장(IDOR)
     const sx = await store(X.c, 'QA다른카페');
@@ -436,7 +448,8 @@ try {
     const old = rows.find((r) => r.staff_id === J.id && r.weekday === wdT && applies(r, addDays(T, -42)));
     await sw(SW2, old.id, J.id, addDays(T, -42));
     const r3 = await O.c.rpc('approve_swap', { p_id: SW2, p_confirm_past: true });
-    check('7-3 ★35일이 넘은 근무는 확인해도 승인 안 된다(Q10 · 서버가 false)', !r3.error && r3.data === false, r3.error?.message ?? `data=${r3.data}`);
+    // 42일 전은 언제나 지난달이다 → 이제 35일 판정보다 먼저 past_month_locked 로 거부된다(2026-10-05).
+    check('7-3 ★35일이 넘은 근무는 확인해도 승인 안 된다(지난달 = past_month_locked)', (!r3.error && r3.data === false) || /past_month_locked/.test(r3.error?.message ?? ''), r3.error?.message ?? `data=${r3.data}`);
     // 그날 적용되지 않는 근무(요일이 다르다)
     const T1 = addDays(T, 1); // dow(T+1) ≠ wd3(=dow(T+4))
     await sw(SW3, A3, K.id, T1);

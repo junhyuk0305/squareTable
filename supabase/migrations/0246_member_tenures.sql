@@ -1041,6 +1041,8 @@ begin
 
   -- ★0242(Q10): 근무일이 지나도 35일 동안은 승인할 수 있다. 그보다 오래된 근무는 승인하지 않는다.
   v_earliest := case when s.kind = 'swap' and s.target_date is not null and s.target_date < s.date then s.target_date else s.date end;
+  -- ★2026-10-05(J1 정정): 지난달(이번 달 1일 KST 이전) 근무는 어떤 경로로도 바꾸지 않는다.
+  if v_earliest::date < public.shift_month_start() then raise exception 'past_month_locked'; end if;
   if v_earliest < to_char(public.kst_today() - 35, 'YYYY-MM-DD') then return false; end if;
   -- ★0242(Q4): 지난 근무를 승인하면 그 기간 급여가 바뀐다 → 앱이 경고를 거친 뒤 p_confirm_past=true 로 다시 부른다.
   if v_earliest < to_char(public.kst_today(), 'YYYY-MM-DD') and not coalesce(p_confirm_past, false) then
@@ -1131,6 +1133,8 @@ begin
   if not found or t.unit_id is distinct from v_unit or t.archived_tenure_id is not null then raise exception 'not_found'; end if;
   if t.shift_date is not null then raise exception 'not_series'; end if;
   if p_from < t.valid_from or (t.valid_to is not null and p_from > t.valid_to) then raise exception 'shift_not_active'; end if;
+  -- ★2026-10-05(J1 정정): 지난달(이번 달 1일 KST 이전) 근무는 어떤 경로로도 바꾸지 않는다.
+  if p_from < public.shift_month_start() then raise exception 'past_month_locked'; end if;
   if p_from < public.kst_today() and not coalesce(p_confirm_past, false) then raise exception 'confirm_past_required'; end if;
   perform public.split_shift_at(p_id, p_from);
   update public.shift_templates set start_time = p_start, end_time = p_end where id = p_id;
@@ -1153,6 +1157,8 @@ begin
   if p_from is null then raise exception 'invalid_date'; end if;
   select * into t from public.shift_templates where id = p_id for update;
   if not found or t.unit_id is distinct from v_unit or t.archived_tenure_id is not null then raise exception 'not_found'; end if;
+  -- ★2026-10-05(J1 정정): 지난달(이번 달 1일 KST 이전) 근무는 어떤 경로로도 바꾸지 않는다.
+  if p_from < public.shift_month_start() then raise exception 'past_month_locked'; end if;
   if p_from < public.kst_today() and not coalesce(p_confirm_past, false) then raise exception 'confirm_past_required'; end if;
   if t.shift_date is not null then
     if t.shift_date < p_from then raise exception 'shift_not_active'; end if;
@@ -1194,6 +1200,8 @@ begin
   end if;
   select * into t from public.shift_templates where id = p_id for update;
   if not found or t.unit_id is distinct from v_unit or t.archived_tenure_id is not null then raise exception 'not_found'; end if;
+  -- ★2026-10-05(J1 정정): 지난달(이번 달 1일 KST 이전) 근무는 어떤 경로로도 바꾸지 않는다.
+  if p_date < public.shift_month_start() then raise exception 'past_month_locked'; end if;
   if p_date < public.kst_today() and not coalesce(p_confirm_past, false) then raise exception 'confirm_past_required'; end if;
 
   if t.shift_date is not null then
@@ -1251,6 +1259,8 @@ begin
     raise exception 'not_found';
   end if;
   if t.staff_id is distinct from auth.uid()::text then raise exception 'not_own_shift'; end if;
+  -- ★2026-10-05(J1 정정): 지난달(이번 달 1일 KST 이전) 근무는 어떤 경로로도 바꾸지 않는다.
+  if p_date < public.shift_month_start() then raise exception 'past_month_locked'; end if;
   if p_date < public.kst_today() - 35 or p_date > public.kst_today() + 60 then raise exception 'date_out_of_range'; end if;
   -- 그날 이 근무가 실제로 서는가(날짜 지정은 그 날짜 · 반복은 요일 · 적용 기간 · 그날 예외 없음)
   if t.shift_date is not null then
@@ -1299,6 +1309,8 @@ begin
   end if;
 
   -- 교대 승인(approve_swap 0242)과 같은 창: 35일이 넘은 근무는 승인하지 않는다. 지난 근무는 경고를 거친 뒤에만(Q4).
+  -- ★2026-10-05(J1 정정): 지난달(이번 달 1일 KST 이전) 근무는 어떤 경로로도 바꾸지 않는다.
+  if r.date < public.shift_month_start() then raise exception 'past_month_locked'; end if;
   if r.date < public.kst_today() - 35 then raise exception 'too_old'; end if;
   if r.date < public.kst_today() and not coalesce(p_confirm_past, false) then raise exception 'confirm_past_required'; end if;
 

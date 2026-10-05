@@ -62,6 +62,8 @@ const psql = (sql) => {
 const addDays = (d, n) => new Date(new Date(`${d}T00:00:00Z`).getTime() + n * 86400000).toISOString().slice(0, 10);
 const dow = (d) => new Date(`${d}T00:00:00Z`).getUTCDay();
 const T = new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10); // 오늘(KST)
+// 2026-10-05(J1 정정): 이번 달 1일(KST)보다 이른 날짜는 어떤 경로로도 못 바꾼다(past_month_locked).
+const MS = `${T.slice(0, 7)}-01`;
 const wdT = dow(T);
 
 const phones = ['0141', '0142', '0143', '0144', '0145', '0146'].map((p) => `${p}${s.slice(0, 7)}`);
@@ -177,7 +179,7 @@ try {
     const far = await J.c.rpc('request_shift_time', { p_template: A1, p_date: addDays(T, 63), p_start: '10:00', p_end: '19:00', p_note: null });
     check('2-6 오늘+60일 넘으면 거부', !!far.error && /date_out_of_range/.test(far.error.message), far.error?.message ?? 'allowed');
     const old = await J.c.rpc('request_shift_time', { p_template: A1, p_date: addDays(T, -42), p_start: '10:00', p_end: '19:00', p_note: null });
-    check('2-7 오늘-35일보다 오래되면 거부', !!old.error && /date_out_of_range/.test(old.error.message), old.error?.message ?? 'allowed');
+    check('2-7 오늘-35일보다 오래되면 거부(지난달이면 past_month_locked 가 먼저)', !!old.error && /date_out_of_range|past_month_locked/.test(old.error.message), old.error?.message ?? 'allowed');
     const zero = await J.c.rpc('request_shift_time', { p_template: A1, p_date: addDays(T, 14), p_start: '10:00', p_end: '10:00', p_note: null });
     const fmt = await J.c.rpc('request_shift_time', { p_template: A1, p_date: addDays(T, 14), p_start: '9:00', p_end: '18:00', p_note: null });
     check('2-8 0분 · 형식 오류 거부', !!zero.error && !!fmt.error && /invalid_time/.test(zero.error.message), `${zero.error?.message} · ${fmt.error?.message}`);
@@ -236,6 +238,10 @@ try {
     // 지난 날짜(Q4)
     const P7 = addDays(T, -7);
     const rp = await J.c.rpc('request_shift_time', { p_template: A1, p_date: P7, p_start: '09:00', p_end: '20:00', p_note: null });
+    if (P7 < MS) {
+      // 이번 달에 같은 요일의 지난 날이 없다(오늘이 1~7일) — 지난달 요청은 낼 수 없다.
+      check('4-8 지난달 날짜(-7일) 요청은 past_month_locked', !!rp.error && /past_month_locked/.test(rp.error.message), rp.error?.message ?? 'allowed');
+    } else {
     check('4-8 지난 날짜(-7일) 요청은 낼 수 있다', !rp.error && typeof rp.data === 'string', rp.error?.message);
     const np = await O.c.rpc('decide_shift_time', { p_id: rp.data, p_approve: true });
     check('4-9 ★지난 날짜 승인은 p_confirm_past 없이 거부 · 근무표 그대로',
@@ -245,6 +251,7 @@ try {
     check('4-10 p_confirm_past=true 면 승인 · 그날 새 시각',
       !yp.error && yp.data === true && (await rowsOf(UNIT)).some((r) => r.staff_id === J.id && r.shift_date === P7 && r.end_time === '20:00' && r.edited_by === 'staff'),
       yp.error?.message ?? `data=${yp.data}`);
+    }
 
     // 반려
     const D14 = addDays(T, 14);
@@ -278,7 +285,7 @@ try {
     psql(`insert into public.shift_change_requests(id, unit_id, staff_id, template_id, date, old_start, old_end, new_start, new_end)
           values ('${OLD}', '${UNIT}', '${J.id}', '${A1}', '${addDays(T, -42)}', '09:00', '18:00', '10:00', '18:00')`);
     const ao = await O.c.rpc('decide_shift_time', { p_id: OLD, p_approve: true, p_confirm_past: true });
-    check('4-14 ★35일이 넘은 근무는 확인해도 승인 안 된다', !!ao.error && /too_old/.test(ao.error.message), ao.error?.message ?? `data=${ao.data}`);
+    check('4-14 ★35일이 넘은 근무는 확인해도 승인 안 된다(지난달이면 past_month_locked)', !!ao.error && /too_old|past_month_locked/.test(ao.error.message), ao.error?.message ?? `data=${ao.data}`);
     const ro = await O.c.rpc('decide_shift_time', { p_id: OLD, p_approve: false });
     check('4-15 35일이 넘어도 반려는 된다(대기 목록 정리)', !ro.error && ro.data === true && (await req(OLD))?.status === 'rejected', ro.error?.message);
 
@@ -312,9 +319,12 @@ try {
     const B1 = `qa_scr_b1_${s}`;
     await legacy(B1, UNIT, L.id, wdT, '09:00', '18:00');
     const P7 = addDays(T, -7), P14 = addDays(T, -14), F7 = addDays(T, 7);
-    const q1 = await L.c.rpc('request_shift_time', { p_template: B1, p_date: P7, p_start: '09:00', p_end: '19:00', p_note: null });
-    const q2 = await L.c.rpc('request_shift_time', { p_template: B1, p_date: P14, p_start: '09:00', p_end: '19:00', p_note: null });
-    await O.c.rpc('decide_shift_time', { p_id: q2.data, p_approve: false });
+    // 지난 날짜 요청은 배포 전 데이터처럼 직접 넣는다(지난달이면 RPC 가 past_month_locked 로 거부한다).
+    const ins = (id, d, st) => psql(`insert into public.shift_change_requests(id, unit_id, staff_id, template_id, date, old_start, old_end, new_start, new_end, status)
+          values ('${id}', '${UNIT}', '${L.id}', '${B1}', '${d}', '09:00', '18:00', '09:00', '19:00', '${st}')`);
+    ins(`qa_scr_q1_${s}`, P7, 'pending');
+    ins(`qa_scr_q2_${s}`, P14, 'rejected');
+    const q1 = { data: `qa_scr_q1_${s}`, error: null }, q2 = { data: `qa_scr_q2_${s}`, error: null };
     const q3 = await L.c.rpc('request_shift_time', { p_template: B1, p_date: F7, p_start: '09:00', p_end: '19:00', p_note: null });
     if (q1.error || q2.error || q3.error) throw new Error('[5] request: ' + (q1.error ?? q2.error ?? q3.error).message);
     const up = await O.c.from('shift_templates').update({ start_time: '08:00' }).eq('id', B1).select('id');
@@ -325,14 +335,20 @@ try {
     check('5-2 지난 날짜 반려 이력도 복사본으로', (await req(q2.data))?.template_id === copy?.id);
     check('5-3 오늘 이후 요청은 원래 id 에 남는다', (await req(q3.data))?.template_id === B1);
     const ap = await O.c.rpc('decide_shift_time', { p_id: q1.data, p_approve: true, p_confirm_past: true });
+    if (P7 < MS) {
+      check('5-4 ★옮겨진 지난달 요청은 승인할 수 없다(past_month_locked)', !!ap.error && /past_month_locked/.test(ap.error.message), ap.error?.message ?? `data=${ap.data}`);
+    } else {
     check('5-4 ★옮겨진 지난 요청을 승인할 수 있다(그날 서는 근무 = 복사본)',
       !ap.error && ap.data === true && (await rowsOf(UNIT)).some((r) => r.staff_id === L.id && r.shift_date === P7 && r.end_time === '19:00'),
       ap.error?.message ?? `data=${ap.data}`);
+    }
 
     const C1 = `qa_scr_c1_${s}`;
     const wdC = dow(addDays(T, -6));
     await legacy(C1, UNIT, L.id, wdC, '13:00', '19:00');
-    const q4 = await L.c.rpc('request_shift_time', { p_template: C1, p_date: addDays(T, -6), p_start: '13:00', p_end: '20:00', p_note: null });
+    psql(`insert into public.shift_change_requests(id, unit_id, staff_id, template_id, date, old_start, old_end, new_start, new_end)
+          values ('qa_scr_q4_${s}', '${UNIT}', '${L.id}', '${C1}', '${addDays(T, -6)}', '13:00', '19:00', '13:00', '20:00')`);
+    const q4 = { data: `qa_scr_q4_${s}`, error: null };
     const del = await O.c.from('shift_templates').delete().eq('id', C1).select('id');
     const r4 = await req(q4.data);
     check('5-5 ★옛 앱 직접 DELETE 뒤에도 지난 날짜 요청이 지워지지 않고 복사본에 붙는다',

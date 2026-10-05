@@ -3423,6 +3423,8 @@ export async function insertShiftTemplate(t: ShiftTemplate): Promise<boolean> {
 // 여러 행(지난 구간 복사본·예외·미결 교대)이 함께 바뀌므로 호출부는 성공 뒤 다시 읽는다.
 async function rpcOk(label: string, fn: string, args: Record<string, unknown>): Promise<boolean> {
   const { error } = await supabase.rpc(fn, args);
+  // 지난달 근무(서버 past_month_locked · 2026-10-05)는 던진다 — 스토어가 "지난달 근무는 바꿀 수 없어요."를 고른다.
+  if (error && /past_month_locked/.test(error.message ?? '')) throw new Error('past_month_locked');
   if (error) {
     console.warn(`[db] ${label}:`, error.message);
     reportError(`db.write:${label}`, error);
@@ -3435,6 +3437,7 @@ async function rpcOk(label: string, fn: string, args: Record<string, unknown>): 
 export async function addShiftSeriesRpc(staffId: string, weekday: number, from: string, start: string, end: string, confirmPast: boolean): Promise<string | null> {
   if (!HAS_SUPABASE) return 'local';
   const { data, error } = await supabase.rpc('add_shift_series', { p_staff: staffId, p_weekday: weekday, p_from: from, p_start: start, p_end: end, p_confirm_past: confirmPast });
+  if (error && /past_month_locked/.test(error.message ?? '')) throw new Error('past_month_locked');
   if (error || typeof data !== 'string') {
     console.warn('[db] addShiftSeries:', error?.message ?? 'no id');
     reportError('db.write:addShiftSeries', error ?? { message: 'no id' });

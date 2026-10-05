@@ -26,6 +26,8 @@ import {
   nextDateForWeekday,
   planSeriesSave,
   planFromScope,
+  pastMonthLocked,
+  PAST_MONTH_LOCKED_TEXT,
 } from '@/lib/utils/schedule';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
@@ -87,7 +89,6 @@ export function ShiftQuickSheet({
   // 자정을 넘기면 화면이 그렇게 해석했다고 말한다 — 안 말하면 사장이 오타로 넣은 건지 알 수 없다.
   const overnight = timeOk && isOvernight(start, end);
   const changed = !isEdit || start !== editing.start || end !== editing.end;
-  const canSave = timeOk && changed && !busy && (isEdit || (!!staffId && (!repeat || days.length > 0)));
 
   // 지난 날짜를 건드리는가 — 급여 기준이 근무표라 그 기간 급여가 바뀐다(§8 Q4).
   //   반복 추가는 고른 요일마다 이 날 이후 첫 날부터 들어간다. 그중 가장 이른 날로 본다.
@@ -95,7 +96,10 @@ export function ShiftQuickSheet({
   const firstDay = !isEdit && repeat && days.length > 0
     ? days.map((wd) => nextDateForWeekday(date, wd)).sort()[0]
     : (editing?.date ?? date);
-  const touchesPast = firstDay < today;
+  // 지난달(이번 달 1일 이전)은 바꿀 수 없다(서버 past_month_locked). 지난 기간 경고는 이번 달 안에서만.
+  const monthLocked = pastMonthLocked(firstDay, today);
+  const touchesPast = firstDay < today && !monthLocked;
+  const canSave = timeOk && changed && !busy && !monthLocked && (isEdit || (!!staffId && (!repeat || days.length > 0)));
   const fromScope = (!isEdit && repeat) || (editingSeries && scope === 'from');
 
   // 소프트 경고(저장은 막지 않는다) — 정기휴무일뿐이다.
@@ -311,6 +315,12 @@ export function ShiftQuickSheet({
             <Text style={s.infoText}>자정을 넘겨 다음 날 {end}에 끝나는 근무예요.</Text>
           </View>
         )}
+        {monthLocked && (
+          <View style={s.noteRow}>
+            <Ionicons name="lock-closed-outline" size={14} color={BrandColors.warn} />
+            <Text style={[s.noteText, s.pastNote]}>{PAST_MONTH_LOCKED_TEXT}</Text>
+          </View>
+        )}
         {touchesPast && (
           <View style={s.noteRow}>
             <Ionicons name="alert-circle-outline" size={14} color={BrandColors.warn} />
@@ -330,8 +340,8 @@ export function ShiftQuickSheet({
           <Pressable
             accessibilityRole="button"
             onPress={remove}
-            disabled={busy}
-            style={({ pressed }) => [s.delBtn, busy && { opacity: 0.4 }, pressed && { opacity: 0.7 }]}
+            disabled={busy || monthLocked}
+            style={({ pressed }) => [s.delBtn, (busy || monthLocked) && { opacity: 0.4 }, pressed && { opacity: 0.7 }]}
           >
             <Ionicons name="trash-outline" size={15} color={BrandColors.badText} />
             <Text style={s.delText}>

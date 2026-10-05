@@ -34,7 +34,7 @@ import { guardWrite, useSyncStore } from '@/lib/store/useSyncStore';
 import { optimisticAdd } from '@/lib/store/crudHelpers';
 import { genId } from '@/lib/utils/id';
 import { todayStr } from '@/lib/utils/attendance';
-import { nextDateForWeekday, fmtDateKo, runSeriesOps, swapApprovable, type SeriesSaveOp } from '@/lib/utils/schedule';
+import { nextDateForWeekday, fmtDateKo, runSeriesOps, swapApprovable, PAST_MONTH_LOCKED_TEXT, type SeriesSaveOp } from '@/lib/utils/schedule';
 import {
   notifyStaffSwapRequest,
   notifyUserSwapRequest,
@@ -246,7 +246,14 @@ export const useScheduleStore = create<ScheduleState>((set, get) => {
    */
   const runShiftRpc = async (call: () => Promise<boolean>, failMsg: string): Promise<boolean> => {
     const epoch = currentTenantEpoch();
-    const ok = await guardWrite(call(), () => {}, failMsg);
+    // 지난달 근무(past_month_locked)는 그 이유를 말한다. 그 밖의 실패는 지금 문구.
+    let locked = false;
+    const res = call().catch((e: unknown) => {
+      if (/past_month_locked/.test(String((e as Error)?.message ?? ''))) { locked = true; return false; }
+      throw e;
+    });
+    const ok = await guardWrite(res, () => {}, failMsg);
+    if (!ok && locked) useSyncStore.getState().noteError(PAST_MONTH_LOCKED_TEXT);
     if (!isStaleEpoch(epoch)) void get().hydrate();
     return ok;
   };
