@@ -13,6 +13,7 @@ import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
 import { isValidPhone, normalizePhone, formatPhone, passwordError } from '@/lib/utils/validation';
 import { passwordChangeError } from '@/lib/account/copy';
+import { EMAIL_CHANGE_PENDING_TEXT } from '@/lib/account/findEmail';
 import { usePhoneOtp } from '@/lib/otp';
 import { BottomSheet } from '@/components/BottomSheet';
 import { INDUSTRIES } from '@/lib/config/industry';
@@ -121,12 +122,17 @@ function AccountEditForm() {
     if (!name.trim()) return showToast('이름을 입력해주세요.', 'warn');
     if (!emailValid) return showToast('이메일을 올바르게 입력해주세요.', 'warn');
     setBusy(true);
-    const { error } = await updateProfile({
+    const { error, emailPending } = await updateProfile({
       name: name.trim(),
       email: emailInput.trim(),
       bio: intro.trim(),
     });
     setBusy(false);
+    // (Q15) 확인 메일을 기다리면 저장했다고 하지 않는다. 칸은 지금 이메일로 되돌린다.
+    if (!error && emailPending) {
+      setEmailInput(email);
+      return showToast(EMAIL_CHANGE_PENDING_TEXT, 'good');
+    }
     showToast(error ?? '프로필을 저장했어요.', error ? 'warn' : 'good');
   };
 

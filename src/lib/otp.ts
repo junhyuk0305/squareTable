@@ -5,6 +5,7 @@
 //   프리플라이트가 실패한다(push/notify.ts 에서 라이브 계측으로 확인된 함정 — 동일한 raw fetch 패턴).
 import { useEffect, useState } from 'react';
 import { otherRoleText } from '@/lib/account/copy';
+import { readFoundAccounts, FIND_NO_ACCOUNT_TEXT, type FoundAccount } from '@/lib/account/findEmail';
 
 const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL ?? '';
 const ANON = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '';
@@ -73,9 +74,9 @@ function reasonMsg(reason: OtpReason, retryAfterSec: number | null): string {
 
 // accessToken: 로그인한 사용자의 토큰. change_phone 은 이것으로 본인을 확인한다(없으면 401). 나머지는 anon 키.
 async function callOtp(
-  body: { action: 'send' | 'verify' | 'reset_password' | 'change_phone'; phone: string; code?: string; role?: 'owner' | 'junior'; new_password?: string },
+  body: { action: 'send' | 'verify' | 'reset_password' | 'change_phone' | 'find_email'; phone: string; code?: string; role?: 'owner' | 'junior'; new_password?: string },
   accessToken?: string,
-): Promise<{ ok: boolean; reason: OtpReason | null; retryAfterSec: number | null; otherRole: string | null }> {
+): Promise<{ ok: boolean; reason: OtpReason | null; retryAfterSec: number | null; otherRole: string | null; data?: unknown }> {
   try {
     const res = await fetch(OTP_ENDPOINT, {
       method: 'POST',
@@ -85,7 +86,8 @@ async function callOtp(
     const j = (await res.json().catch(() => null)) as
       | { ok?: boolean; reason?: string; retry_after_sec?: number; other_role?: string }
       | null;
-    if (res.ok && j?.ok) return { ok: true, reason: null, retryAfterSec: null, otherRole: null };
+    // data = 성공 답 본문. find_email 의 accounts, reset_password 의 email 을 호출부가 읽는다.
+    if (res.ok && j?.ok) return { ok: true, reason: null, retryAfterSec: null, otherRole: null, data: j };
     return {
       ok: false,
       reason: (j?.reason as OtpReason) ?? 'network',
@@ -101,18 +103,39 @@ async function callOtp(
  * 비밀번호 재설정(전화번호 인증, 2026-09-23) — 인증번호 + 새 비밀번호를 한 번에 보낸다.
  * 서버가 코드를 대조하고(verify 와 같은 규칙) 그 번호·역할 계정의 비밀번호를 바꾼다. 코드는 한 번 쓰면 만료.
  * 성공이면 message 는 null. 실패면 사람이 읽는 이유 한 줄.
+ * email = 엣지가 준 가린 이메일(0238 Q15). 옛 엣지면 null.
  */
 export async function resetPasswordByPhone(args: {
   phone: string;
   code: string;
   role: 'owner' | 'junior';
   newPassword: string;
-}): Promise<{ ok: boolean; message: string | null }> {
+}): Promise<{ ok: boolean; message: string | null; email: string | null }> {
   const r = await callOtp({ action: 'reset_password', phone: args.phone, code: args.code, role: args.role, new_password: args.newPassword });
-  if (r.ok) return { ok: true, message: null };
+  if (r.ok) {
+    const email = (r.data as { email?: unknown } | undefined)?.email;
+    return { ok: true, message: null, email: typeof email === 'string' && email ? email : null };
+  }
   // Q18(0238): 고른 역할에는 계정이 없고 다른 역할에 있으면 그 역할을 알려 준다. 엣지는 이때 코드를 소모하지 않는다.
   const other = r.reason === 'no_account' ? otherRoleText(r.otherRole) : null;
-  return { ok: false, message: other ?? reasonMsg(r.reason ?? 'network', r.retryAfterSec) };
+  return { ok: false, message: other ?? reasonMsg(r.reason ?? 'network', r.retryAfterSec), email: null };
+}
+
+/**
+ * 이메일 찾기(0238 Q15) — 인증번호로 번호 주인임을 확인하면 그 번호의 계정 이메일을 가려서 받는다(역할마다 최대 1개).
+ * 엣지는 코드를 소모한다. 실패면 사람이 읽는 이유 한 줄.
+ */
+export async function findEmailByPhone(args: {
+  phone: string;
+  code: string;
+}): Promise<{ ok: true; accounts: FoundAccount[] } | { ok: false; message: string }> {
+  const r = await callOtp({ action: 'find_email', phone: args.phone, code: args.code });
+  if (r.ok) {
+    const accounts = readFoundAccounts(r.data);
+    return accounts ? { ok: true, accounts } : { ok: false, message: reasonMsg('network', null) };
+  }
+  if (r.reason === 'no_account') return { ok: false, message: FIND_NO_ACCOUNT_TEXT };
+  return { ok: false, message: reasonMsg(r.reason ?? 'network', r.retryAfterSec) };
 }
 
 /**

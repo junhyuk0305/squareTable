@@ -3,6 +3,7 @@
 //   사장님/직원 → 가입한 휴대폰 번호 → [인증번호 받기](엣지 otp send) → 인증번호 + 새 비밀번호 → [바꾸기]
 //   (엣지 otp reset_password 가 코드를 대조하고 계정 비밀번호를 바꾼다) → 로그인 화면.
 // 같은 번호가 사장·직원 두 계정을 가질 수 있어 역할을 먼저 고른다(가입 규칙과 같다). 이메일은 묻지 않는다.
+// (Q15 · P5-7) 위에 [이메일 찾기 / 비밀번호 바꾸기] 두 갈래. 이메일 찾기 = 엣지 otp find_email 이 가린 이메일을 역할마다 준다.
 import { useState } from 'react';
 import { View, Text, TextInput, Pressable, StyleSheet, ScrollView, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -11,8 +12,10 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { KeyboardShift } from '@/components/KeyboardShift';
-import { usePhoneOtp, resetPasswordByPhone } from '@/lib/otp';
+import { usePhoneOtp, resetPasswordByPhone, findEmailByPhone } from '@/lib/otp';
 import { ROLE_SPLIT_TEXT } from '@/lib/account/copy';
+import { foundAccountLine, googleAccountHint, resetDoneText, type FoundAccount } from '@/lib/account/findEmail';
+import { SHOW_SOCIAL_LOGIN } from '@/lib/config/store-policy';
 import { showToast } from '@/lib/store/useToastStore';
 import { formatPhone, isValidPhone, normalizePhone, passwordError } from '@/lib/utils/validation';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
@@ -20,9 +23,11 @@ import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
 
 type Role = 'owner' | 'junior';
+type Mode = 'email' | 'password';
 
 export default function ForgotPasswordScreen() {
   const router = useRouter();
+  const [mode, setMode] = useState<Mode>('password');
   const [role, setRole] = useState<Role>('owner');
   const [phone, setPhone] = useState('');
   const normalized = normalizePhone(phone);
@@ -33,6 +38,14 @@ export default function ForgotPasswordScreen() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [done, setDone] = useState(false);
+  const [doneEmail, setDoneEmail] = useState<string | null>(null);
+  const [found, setFound] = useState<FoundAccount[] | null>(null);
+
+  const switchMode = (m: Mode) => {
+    setMode(m);
+    setErr(null);
+    setCode('');
+  };
 
   const sendCode = () => {
     setErr(null);
@@ -69,40 +82,88 @@ export default function ForgotPasswordScreen() {
       setErr(r.message);
       return;
     }
+    setDoneEmail(r.email);
     setDone(true);
     showToast('비밀번호를 바꿨어요. 새 비밀번호로 로그인해 주세요.', 'good');
+  };
+
+  const find = async () => {
+    setErr(null);
+    if (!otp.sent) {
+      setErr('먼저 인증번호를 받아 주세요.');
+      return;
+    }
+    if (code.length !== 6) {
+      setErr('인증번호 6자리를 입력해 주세요.');
+      return;
+    }
+    setBusy(true);
+    const r = await findEmailByPhone({ phone: normalized, code });
+    setBusy(false);
+    if (!r.ok) {
+      setErr(r.message);
+      return;
+    }
+    setFound(r.accounts);
   };
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
       <Stack.Screen options={{ headerShown: false }} />
-      <ScreenTitleHeader title="비밀번호 찾기" backFallback="/login" />
+      <ScreenTitleHeader title="이메일·비밀번호 찾기" backFallback="/login" />
       <KeyboardShift>
         <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
           {done ? (
             <View style={styles.card} testID="forgot-done">
               <Ionicons name="checkmark-circle-outline" size={28} color={InkColors.ink} />
               <Text style={styles.title}>비밀번호를 바꿨어요</Text>
-              <Text style={styles.text}>새 비밀번호로 로그인해 주세요.</Text>
+              <Text style={styles.text}>{resetDoneText(doneEmail)}</Text>
               <Pressable onPress={() => router.replace('/login')} accessibilityRole="button" testID="forgot-to-login" style={({ pressed }) => [styles.primary, pressed && { opacity: 0.88 }]}>
+                <Text style={styles.primaryText}>로그인으로</Text>
+              </Pressable>
+            </View>
+          ) : found ? (
+            <View style={styles.card} testID="forgot-found">
+              <Ionicons name="mail-outline" size={28} color={InkColors.ink} />
+              <Text style={styles.title}>가입한 이메일이에요</Text>
+              {found.map((a) => (
+                <Text key={a.role} style={styles.text} selectable>{foundAccountLine(a)}</Text>
+              ))}
+              {googleAccountHint(found, SHOW_SOCIAL_LOGIN) ? <Text style={styles.hint}>{googleAccountHint(found, SHOW_SOCIAL_LOGIN)}</Text> : null}
+              <Pressable onPress={() => router.replace('/login')} accessibilityRole="button" testID="forgot-found-to-login" style={({ pressed }) => [styles.primary, pressed && { opacity: 0.88 }]}>
                 <Text style={styles.primaryText}>로그인으로</Text>
               </Pressable>
             </View>
           ) : (
             <View style={styles.card} testID="forgot-form">
-              <Text style={styles.title}>가입한 휴대폰 번호로 확인해요</Text>
-              <Text style={styles.text}>문자로 받은 인증번호를 넣고 새 비밀번호를 정하면 바로 바뀌어요.</Text>
-
-              <Text style={styles.label}>어떤 계정인가요?</Text>
-              {/* J11: 같은 번호로 사장·직원 계정이 따로 있을 수 있다. 역할을 잘못 고르면 엣지가 맞는 역할을 알려 준다(Q18). */}
-              <Text style={styles.roleHint}>{ROLE_SPLIT_TEXT}</Text>
               <View style={styles.seg}>
-                {(['owner', 'junior'] as Role[]).map((r) => (
-                  <Pressable key={r} onPress={() => setRole(r)} accessibilityRole="button" accessibilityState={{ selected: role === r }} style={[styles.segBtn, role === r && styles.segBtnOn]}>
-                    <Text style={[styles.segText, role === r && styles.segTextOn]}>{r === 'owner' ? '사장님' : '직원'}</Text>
+                {(['email', 'password'] as Mode[]).map((m) => (
+                  <Pressable key={m} onPress={() => switchMode(m)} accessibilityRole="button" accessibilityState={{ selected: mode === m }} testID={`forgot-mode-${m}`} style={[styles.segBtn, mode === m && styles.segBtnOn]}>
+                    <Text style={[styles.segText, mode === m && styles.segTextOn]}>{m === 'email' ? '이메일 찾기' : '비밀번호 바꾸기'}</Text>
                   </Pressable>
                 ))}
               </View>
+              <Text style={styles.title}>가입한 휴대폰 번호로 확인해요</Text>
+              <Text style={styles.text}>
+                {mode === 'email'
+                  ? '문자로 받은 인증번호를 넣으면 가입한 이메일을 알려 드려요.'
+                  : '문자로 받은 인증번호를 넣고 새 비밀번호를 정하면 바로 바뀌어요.'}
+              </Text>
+
+              {mode === 'password' ? (
+                <>
+                  <Text style={styles.label}>어떤 계정인가요?</Text>
+                  {/* J11: 같은 번호로 사장·직원 계정이 따로 있을 수 있다. 역할을 잘못 고르면 엣지가 맞는 역할을 알려 준다(Q18). */}
+                  <Text style={styles.roleHint}>{ROLE_SPLIT_TEXT}</Text>
+                  <View style={styles.seg}>
+                    {(['owner', 'junior'] as Role[]).map((r) => (
+                      <Pressable key={r} onPress={() => setRole(r)} accessibilityRole="button" accessibilityState={{ selected: role === r }} style={[styles.segBtn, role === r && styles.segBtnOn]}>
+                        <Text style={[styles.segText, role === r && styles.segTextOn]}>{r === 'owner' ? '사장님' : '직원'}</Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                </>
+              ) : null}
 
               <Text style={styles.label}>휴대폰 번호</Text>
               <View style={styles.row}>
@@ -147,39 +208,44 @@ export default function ForgotPasswordScreen() {
                     style={styles.input}
                     accessibilityLabel="인증번호"
                     testID="forgot-code"
+                    onSubmitEditing={mode === 'email' ? () => void find() : undefined}
                   />
-                  <Text style={styles.label}>새 비밀번호</Text>
-                  <TextInput
-                    value={pw}
-                    onChangeText={setPw}
-                    placeholder="9자 이상"
-                    placeholderTextColor={InkColors.ink3}
-                    secureTextEntry
-                    autoComplete="new-password"
-                    style={styles.input}
-                    accessibilityLabel="새 비밀번호"
-                    testID="forgot-pw"
-                  />
-                  <Text style={styles.label}>한 번 더</Text>
-                  <TextInput
-                    value={pw2}
-                    onChangeText={setPw2}
-                    placeholder="같은 비밀번호"
-                    placeholderTextColor={InkColors.ink3}
-                    secureTextEntry
-                    autoComplete="new-password"
-                    style={styles.input}
-                    onSubmitEditing={() => void submit()}
-                    accessibilityLabel="새 비밀번호 확인"
-                    testID="forgot-pw2"
-                  />
+                  {mode === 'password' ? (
+                    <>
+                      <Text style={styles.label}>새 비밀번호</Text>
+                      <TextInput
+                        value={pw}
+                        onChangeText={setPw}
+                        placeholder="9자 이상"
+                        placeholderTextColor={InkColors.ink3}
+                        secureTextEntry
+                        autoComplete="new-password"
+                        style={styles.input}
+                        accessibilityLabel="새 비밀번호"
+                        testID="forgot-pw"
+                      />
+                      <Text style={styles.label}>한 번 더</Text>
+                      <TextInput
+                        value={pw2}
+                        onChangeText={setPw2}
+                        placeholder="같은 비밀번호"
+                        placeholderTextColor={InkColors.ink3}
+                        secureTextEntry
+                        autoComplete="new-password"
+                        style={styles.input}
+                        onSubmitEditing={() => void submit()}
+                        accessibilityLabel="새 비밀번호 확인"
+                        testID="forgot-pw2"
+                      />
+                    </>
+                  ) : null}
                 </>
               ) : null}
 
               {err ? <Text style={styles.err}>{err}</Text> : null}
               {otp.sent ? (
-                <Pressable disabled={busy} onPress={() => void submit()} accessibilityRole="button" testID="forgot-submit" style={({ pressed }) => [styles.primary, pressed && { opacity: 0.88 }, busy && { opacity: 0.6 }]}>
-                  {busy ? <ActivityIndicator color={InkColors.bubbleText} /> : <Text style={styles.primaryText}>비밀번호 바꾸기</Text>}
+                <Pressable disabled={busy} onPress={() => void (mode === 'email' ? find() : submit())} accessibilityRole="button" testID={mode === 'email' ? 'forgot-find-submit' : 'forgot-submit'} style={({ pressed }) => [styles.primary, pressed && { opacity: 0.88 }, busy && { opacity: 0.6 }]}>
+                  {busy ? <ActivityIndicator color={InkColors.bubbleText} /> : <Text style={styles.primaryText}>{mode === 'email' ? '이메일 찾기' : '비밀번호 바꾸기'}</Text>}
                 </Pressable>
               ) : null}
               <Text style={styles.hint}>가입한 번호가 바뀌었으면 설정 &gt; 문의하기로 알려 주세요.</Text>

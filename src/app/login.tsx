@@ -135,10 +135,10 @@ export default function LoginScreen() {
           {/* 안내/실패 문구 — 로그인 버튼 바로 아래. 실패는 빨강으로 시선 유도. */}
           {msg && <Text style={[styles.msg, msgErr && styles.msgErr]}>{msg}</Text>}
 
-          {/* 비밀번호 찾기(09-23) — 이메일로 재설정 링크. 앱·웹 같은 화면. */}
+          {/* 이메일·비밀번호 찾기(09-23 · Q15) — 휴대폰 문자 인증. 앱·웹 같은 화면. */}
           {HAS_SUPABASE ? (
             <Pressable onPress={() => router.push('/forgot-password')} accessibilityRole="button" style={({ pressed }) => [styles.forgotRow, pressed && { opacity: 0.7 }]}>
-              <Text style={styles.forgotText}>비밀번호를 잊으셨나요?</Text>
+              <Text style={styles.forgotText}>이메일·비밀번호 찾기</Text>
             </Pressable>
           ) : null}
 

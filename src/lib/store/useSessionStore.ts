@@ -41,6 +41,7 @@ import { signOutWithPushRelease } from '@/lib/push/signOutPush';
 import { authStorage } from '@/lib/storage/authStorage';
 import { changePhoneByOtp } from '@/lib/otp';
 import { CURRENT_PW_WRONG_TEXT, DELETED_LOGIN_TEXT } from '@/lib/account/copy';
+import { emailChangeApplied } from '@/lib/account/findEmail';
 import { deleteAccountError, type DeleteStoreResult } from '@/lib/account/storeCopy';
 import { UNDER_14_TEXT, type ConsentKey } from '@/lib/config/consent';
 
@@ -160,7 +161,8 @@ type SessionState = {
   sendMagicLink: (email: string) => Promise<{ error: string | null }>;
   // 이메일 인증 메일 발송(회원가입 화면의 '인증' 버튼). 데모는 발송 생략.
   verifyEmail: (email: string) => Promise<{ status: 'demo' | 'sent' | 'rate' | 'error'; message?: string }>;
-  updateProfile: (patch: { name?: string; phone?: string; phone_last4?: string; bio?: string; email?: string }) => Promise<{ error: string | null }>;
+  // emailPending = 이메일 변경이 확인 메일을 기다린다(Q15). 이때 email 은 그대로다.
+  updateProfile: (patch: { name?: string; phone?: string; phone_last4?: string; bio?: string; email?: string }) => Promise<{ error: string | null; emailPending?: boolean }>;
   // Q14: 현재 비밀번호를 확인한 뒤 바꾸고, 다른 기기를 로그아웃시킨다.
   changePassword: (currentPw: string, newPw: string) => Promise<{ error: string | null }>;
   // Q13(0238): 새 번호로 받은 인증번호로 번호를 바꾼다(otp change_phone). 프로필 저장으로는 번호를 바꾸지 않는다.
@@ -997,17 +999,20 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       }
     }
     // 이메일 변경은 auth 레벨 — 실제로 바뀐 경우에만 호출(확인 메일이 발송될 수 있음).
+    // (Q15) 확인 메일을 기다리면(new_email) 앱의 email 은 옛 값 그대로 둔다. 링크를 누르면 바뀐다.
+    let emailPending = false;
     if (patch.email != null && patch.email !== get().email) {
-      const { error } = await supabase.auth.updateUser({ email: patch.email });
+      const { data: upd, error } = await supabase.auth.updateUser({ email: patch.email });
       if (error) return { error: friendlyError(error.message, '이메일을 변경하지 못했어요. 잠시 후 다시 시도해 주세요.') };
+      emailPending = !emailChangeApplied(patch.email, upd?.user);
     }
     const next: Partial<SessionState> = {};
     if (patch.name != null) next.userName = patch.name;
     if (patch.bio != null) next.bio = patch.bio;
-    if (patch.email != null) next.email = patch.email;
+    if (patch.email != null && !emailPending) next.email = patch.email;
     if (patch.phone != null) next.phone = patch.phone;
     set(next);
-    return { error: null };
+    return { error: null, emailPending };
   },
 
   changePassword: async (currentPw, newPw) => {
