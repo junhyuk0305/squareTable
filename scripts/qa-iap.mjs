@@ -858,6 +858,32 @@ async function slotRuleChecks() {
     check('★★⑲-h Play 늘리기 몫이 선불 매장 C 에 먹히지 않는다', Array.isArray(cTrace) && cTrace.length === 0, JSON.stringify(cTrace));
     check('★⑲-h 늘린 몫 1개가 새 매장용으로 남는다', (await openSlots(R.uid)).filter((x) => x.source === 'iap').length === 1, JSON.stringify(await openSlots(R.uid)));
   }
+
+  // ══ ⑳ 선불 기간이 남아 있으면 앱 결제를 잠근다(2026-10-05 결정) — 앱이 읽는 owner_prepaid_until() ══════
+  {
+    const R = await reuseOwner(1);
+    const pv = async (o) => o.c.rpc('owner_prepaid_until');
+    const r0 = await pv(R);
+    check('★⑳-a owner_prepaid_until 이 있다(로그인 사장이 부른다)', !r0.error, r0.error?.message ?? '');
+    const A = await mkStore(R, 'QA⑳ 1호점');
+    await makeFree(A);
+    const r1 = await pv(R);
+    check('⑳-b 무료 매장만 있으면 null', !r1.error && r1.data === null, r1.error?.message ?? JSON.stringify(r1.data));
+    await approve((await claim(R, 'single', 1)).id);   // A = 계좌이체 선불
+    const aPaid = await paidUntilOf(A);
+    const r2 = await pv(R);
+    check('★⑳-c 계좌이체 선불 매장의 만료일을 준다', !r2.error && sameTime(r2.data, aPaid?.paid_until), r2.error?.message ?? JSON.stringify({ got: r2.data, aPaid }));
+    const X = await reuseOwner(2);
+    const rx = await pv(X);
+    check('★⑳-d 남의 선불 기간은 보이지 않는다(본인 매장만)', !rx.error && rx.data === null, rx.error?.message ?? JSON.stringify(rx.data));
+    const an = await mk().rpc('owner_prepaid_until');
+    check('⑳-e anon 은 부르지 못한다', !!an.error, JSON.stringify(an.data));
+    const Q = await reuseOwner(3);
+    const B = await mkStore(Q, 'QA⑳ 구독점');
+    await evt(Q, `qa_pp_${s}`, 'INITIAL_PURCHASE', 'single_1_monthly', 'single', 1, iso(days(30)));
+    const rq = await pv(Q);
+    check('★⑳-f 앱 구독으로 연 매장은 선불이 아니다(null)', !rq.error && rq.data === null && !!(await paidUntilOf(B))?.paid_until, rq.error?.message ?? JSON.stringify(rq.data));
+  }
 }
 
 async function main() {
