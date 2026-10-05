@@ -157,5 +157,14 @@ console.log('\n[D12] 노하우 개선 제안은 실제로 고쳐 저장해야 �
   check('엣지 탭 경로표에 suggestion-result 가 있다', /case 'suggestion-result': return '\/junior\/chat';/.test(strip(read('supabase/functions/push/index.ts'))));
 }
 
+console.log('\n[D13] 채팅방 만들기 — 멤버 초대 하나가 실패해도 이미 만든 방을 지우지 않는다');
+{
+  const store = strip(read('src/lib/store/useRoomStore.ts'));
+  const cr = storeMethod(store, 'createRoom');
+  const memberGuard = (cr.match(/guardWrite\(\s*addRoomMember\(m\.roomId, m\.userId\),[\s\S]*?\)\)\)/) || [''])[0];
+  check('★방 만들기 실패(insertRoom)만 방을 되돌린다', /guardWrite\(\s*insertRoom\(room\),\s*\(\) => set\(\(s\) => \(\{ rooms: s\.rooms\.filter\(\(r\) => r\.id !== room\.id\)/.test(cr), cr.slice(0, 200));
+  check('★초대 실패는 그 사람만 빼고 알린다(방은 남긴다)', !!memberGuard && !/rooms:/.test(memberGuard) && /다시 초대해 주세요/.test(memberGuard), memberGuard.slice(0, 200));
+}
+
 console.log(`\n${pass} PASS / ${fail} FAIL`);
 process.exit(fail ? 1 : 0);
