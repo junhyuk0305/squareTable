@@ -44,7 +44,8 @@ import { signOutWithPushRelease } from '@/lib/push/signOutPush';
 import { authStorage } from '@/lib/storage/authStorage';
 import { changePhoneByOtp } from '@/lib/otp';
 import { CURRENT_PW_WRONG_TEXT, DELETED_LOGIN_TEXT } from '@/lib/account/copy';
-import { emailChangeApplied } from '@/lib/account/findEmail';
+import { emailChangeApplied, emailChangeRedirectTo } from '@/lib/account/findEmail';
+import { siteOrigin } from '@/lib/config/site';
 import { deleteAccountError, type DeleteStoreResult } from '@/lib/account/storeCopy';
 import { UNDER_14_TEXT, type ConsentKey } from '@/lib/config/consent';
 
@@ -1033,7 +1034,8 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     // (Q15) 확인 메일을 기다리면(new_email) 앱의 email 은 옛 값 그대로 둔다. 링크를 누르면 바뀐다.
     let emailPending = false;
     if (patch.email != null && patch.email !== get().email) {
-      const { data: upd, error } = await supabase.auth.updateUser({ email: patch.email });
+      // 링크를 누르면 Supabase verify 를 거쳐 /email-changed 안내로 돌아온다(2026-10-05).
+      const { data: upd, error } = await supabase.auth.updateUser({ email: patch.email }, { emailRedirectTo: emailChangeRedirectTo(siteOrigin()) });
       if (error) return { error: friendlyError(error.message, '이메일을 변경하지 못했어요. 잠시 후 다시 시도해 주세요.') };
       emailPending = !emailChangeApplied(patch.email, upd?.user);
     }

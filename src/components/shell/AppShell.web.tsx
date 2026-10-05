@@ -20,7 +20,7 @@ import { usePendingBrandJoin } from '@/lib/brand/usePendingBrandJoin';
  * 로그인한 사장이 여기 서 있어도(프로필 완성 전·로그아웃 직후) 사이드바를 두르지 않는다.
  * `/hq/join` = 담당자 초대 링크 착지(P3) — 아직 담당자가 아닌 사람이 오므로 본사 셸보다 먼저 걸러야 한다.
  */
-const AUTH_PATHS = ['/login', '/signup', '/complete-profile', '/hq/join', '/forgot-password'];
+const AUTH_PATHS = ['/login', '/signup', '/complete-profile', '/hq/join', '/forgot-password', '/email-changed'];
 
 /**
  * 앱 껍데기 — **웹판.** 로그인한 사람의 종류에 따라 셸만 갈린다(기획정본 §5-1).

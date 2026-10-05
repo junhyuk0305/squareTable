@@ -54,3 +54,20 @@ export function emailChangeApplied(
 }
 
 export const EMAIL_CHANGE_PENDING_TEXT = '새 이메일로 확인 메일을 보냈어요. 메일의 링크를 누르면 바뀌어요.';
+
+/** 이메일 변경 확인 링크가 돌아올 주소(2026-10-05). origin = 웹이면 지금 주소, 앱이면 서비스 도메인(siteOrigin). */
+export function emailChangeRedirectTo(origin: string): string {
+  return `${origin.replace(/\/+$/, '')}/email-changed`;
+}
+
+/**
+ * /email-changed 화면 문구. Supabase verify 가 붙여 보내는 값으로 고른다.
+ *   error · error_description → 만료·잘못된 링크.
+ *   message("…confirm link sent to the other email") → Secure email change 로 다른 주소 확인이 남았다.
+ *   그 밖 → 바뀌었다.
+ */
+export function emailChangedNotice(params: { error?: string; error_description?: string; message?: string }): { title: string; body: string } {
+  if (params.error || params.error_description) return { title: '링크를 쓸 수 없어요', body: '링크가 만료됐거나 이미 쓴 링크예요. 앱의 계정 편집에서 이메일을 다시 바꿔 주세요.' };
+  if (params.message && /other email/i.test(params.message)) return { title: '한 곳 더 확인해 주세요', body: '다른 주소로 온 확인 메일의 링크도 누르면 이메일이 바뀌어요.' };
+  return { title: '이메일이 바뀌었어요', body: '다음 로그인부터 새 이메일을 써 주세요.' };
+}
