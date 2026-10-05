@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { View, Text, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
+import { useRouter } from 'expo-router';
+import { View, Text, Pressable, StyleSheet, ActivityIndicator, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { HAS_SUPABASE } from '@/lib/supabase';
@@ -12,10 +13,12 @@ import { Space } from '@/lib/theme/layout';
  * 소셜 로그인 버튼 묶음(로그인·가입 공용 SSOT).
  * 웹: signInWithGoogle 이 전체 페이지를 구글로 리다이렉트하고, 돌아오면 세션이 복원된 뒤
  *     프로필이 결손이면 /complete-profile 로 유도된다(needsProfileSetup 게이트).
+ * 안드 앱: 인앱 브라우저로 로그인하고 그 자리에서 세션을 만든다. 루트가 착지를 정한다.
  * 데모 빌드(HAS_SUPABASE=false)나 미지원 플랫폼에선 렌더하지 않는다.
  * ⚠️ 실제 동작은 Supabase 대시보드에서 Google provider 를 켜고 Redirect URLs 를 등록해야 한다.
  */
 export function SocialAuthButtons() {
+  const router = useRouter();
   const signInWithGoogle = useSessionStore((s) => s.signInWithGoogle);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -24,18 +27,19 @@ export function SocialAuthButtons() {
   // iOS 네이티브: Guideline 4.8 — 제3자 소셜 로그인으로 주계정을 만들면 동등한 다른 로그인 서비스
   // (사실상 Sign in with Apple)를 함께 제공해야 한다. 여기서 감추면 "앱이 오로지 자사 계정 시스템만
   // 사용" 예외에 해당해 면제된다. Sign in with Apple 추가는 9월 1.1 과제.
-  // 안드 네이티브: 네이티브 구글 로그인 모듈이 없어 숨긴다(2026-10-04 Q1).
   if (!SHOW_SOCIAL_LOGIN) return null;
 
   const onGoogle = async () => {
     setBusy(true);
     setErr(null);
-    // 성공이면 페이지가 구글로 이동한다. 그때만 busy 를 유지하고, 에러·예외면 finally 에서 푼다(Q1 무한 로딩).
+    // 웹 성공이면 페이지가 구글로 이동한다. 그때만 busy 를 유지하고, 나머지는 finally 에서 푼다(Q1 무한 로딩).
+    // 앱은 그 자리에서 끝난다. 로그인됐으면 루트로, 창을 닫았으면 로딩만 끈다.
     let leaving = false;
     try {
-      const { error } = await signInWithGoogle();
+      const { error, signedIn } = await signInWithGoogle();
       if (error) setErr(error);
-      else leaving = true;
+      else if (signedIn) router.replace('/');
+      else leaving = Platform.OS === 'web';
     } catch {
       setErr('구글 로그인을 시작하지 못했어요. 잠시 후 다시 시도해 주세요.');
     } finally {

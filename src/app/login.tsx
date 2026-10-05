@@ -147,12 +147,12 @@ export default function LoginScreen() {
             </Pressable>
           ) : null}
 
-          {/* 앱에는 구글 버튼이 없다(Q1). 웹에서 구글로 가입한 사람이 앱에 들어올 길을 알려 준다. */}
+          {/* iOS 앱에는 구글 버튼이 없다(Guideline 4.8). 구글로 가입한 사람이 들어올 길을 알려 준다. */}
           {HAS_SUPABASE && !SHOW_SOCIAL_LOGIN ? (
             <Text style={styles.googleHint}>구글로 가입했다면 비밀번호 찾기에서 문자 인증으로 비밀번호를 만든 뒤 이메일로 로그인해 주세요.</Text>
           ) : null}
 
-          {/* 소셜 로그인(구글 등) — 웹 전용. 데모 빌드에선 렌더 안 됨. */}
+          {/* 소셜 로그인(구글) — 웹·안드 앱. iOS 앱과 데모 빌드에선 렌더 안 됨. */}
           <SocialAuthButtons />
         </View>
         </Appear>

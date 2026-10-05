@@ -35,7 +35,10 @@ import { joinRejectAction, type JoinMarker } from './joinRejectDetect';
 import { setAnalyticsContext, track, reportError } from '@/lib/analytics/track';
 import { effectivePlanOf, type SubStatusRaw } from '@/lib/utils/subscription';
 import { normalizePlan, type PlanId } from '@/lib/config/tiers';
+import { Platform } from 'react-native';
 import { SHOW_IAP, SHOW_SOCIAL_LOGIN } from '@/lib/config/store-policy';
+import { googleRedirectTo } from '@/lib/auth/googleRedirect';
+import { googleNativeSignIn, nativeRedirectUrl } from '@/lib/auth/googleNative';
 import { notifyOwnersJoinRequest } from '@/lib/push/notify';
 import { signOutWithPushRelease } from '@/lib/push/signOutPush';
 import { authStorage } from '@/lib/storage/authStorage';
@@ -116,7 +119,8 @@ type SessionState = {
   signInWithPassword: (email: string, pw: string) => Promise<{ error: string | null; role: Role }>;
   // 소셜 로그인(웹). 전체 페이지가 provider로 리다이렉트되고, 돌아오면 detectSessionInUrl 이 세션을 복원한다.
   // 성공 시 페이지 이동이라 반환이 없을 수 있음 — 에러(미설정/차단)만 문자열로 돌려준다.
-  signInWithGoogle: () => Promise<{ error: string | null }>;
+  // signedIn = 앱에서 그 자리에서 로그인까지 끝났다(화면이 루트로 보낸다). 웹은 페이지가 구글로 떠난다.
+  signInWithGoogle: () => Promise<{ error: string | null; signedIn?: boolean }>;
   // 소셜 로그인 사용자의 결손 프로필(이름/전화/생년월일) 완성. 성공 시 프로필 재로드로 상태 반영.
   // role(0157) — signup_role dedup 라벨을 최초 1회만 기록. profiles.role(권한) 은 절대 안 건드린다.
   // ⚠️ 가입 시점엔 manager 를 고를 수 없다(매니저는 사장이 나중에 승격하는 상태) — owner|junior만.
@@ -651,14 +655,36 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   signInWithGoogle: async () => {
     // 웹: 현재 오리진으로 돌아오게 한다(Supabase 대시보드 Redirect URLs 에 등록 필요). 돌아오면
     // supabase.ts 의 detectSessionInUrl:true 가 ?code= 를 세션으로 교환 → onAuthStateChange → loadProfile.
-    // 네이티브는 별도 딥링크 핸들러가 필요 — 웹 우선(출시 1차)이라 여기선 웹만 지원, 미지원 플랫폼은 안내.
-    // 앱에서는 window.location 을 읽기 전에 돌려준다. RN 에는 window 는 있고 location 이 없어 던졌다(Q1).
+    // 앱(안드): squaretable://auth/callback 으로 돌아와 code 를 세션으로 바꾼다(2026-10-05 · googleNative.ts).
+    // 예전엔 앱에서도 window.location.origin 을 읽어 TypeError 로 던졌다(Q1).
     if (!SHOW_SOCIAL_LOGIN) {
-      return { error: '구글 로그인은 웹에서만 지원해요. 앱에서는 이메일로 로그인해 주세요.' };
+      return { error: '이 기기에서는 구글 로그인을 쓸 수 없어요. 이메일로 로그인해 주세요.' };
     }
-    const redirectTo = typeof window !== 'undefined' ? window.location.origin : undefined;
+    const redirectTo = googleRedirectTo(Platform.OS, {
+      origin: () => window.location.origin,
+      nativeUrl: nativeRedirectUrl,
+    });
     if (!redirectTo) {
-      return { error: '구글 로그인은 웹에서만 지원해요. 앱에서는 이메일로 로그인해 주세요.' };
+      return { error: '구글 로그인을 시작하지 못했어요. 잠시 후 다시 시도해 주세요.' };
+    }
+    if (Platform.OS !== 'web') {
+      _lastLoadFault = null;
+      const r = await googleNativeSignIn(redirectTo);
+      if (!r.ok) {
+        // 창을 닫은 것은 실패가 아니다. 문구 없이 로딩만 끈다.
+        if (r.cancelled) return { error: null };
+        track('login_failed', { provider: 'google', reason: (r.error || '').slice(0, 60) });
+        return { error: friendlyError(r.error ?? undefined, '구글 로그인을 끝내지 못했어요. 잠시 후 다시 시도해 주세요.') };
+      }
+      // 이메일 로그인과 같은 성공 경로: 프로필을 읽고, 세션이 떨어졌으면 사유를 돌려준다.
+      await loadProfile(set, r.userId, r.email);
+      if (get().status !== 'signed_in') {
+        return {
+          error: _lastLoadFault === 'deleted' ? DELETED_LOGIN_TEXT : '계정 정보를 불러오지 못했어요. 네트워크를 확인하고 잠시 후 다시 시도해 주세요.',
+        };
+      }
+      track('login_succeeded', { role: get().role, provider: 'google' });
+      return { error: null, signedIn: true };
     }
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
