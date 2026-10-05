@@ -11,8 +11,8 @@
 //   ⑤ 중간 해소 → 주기 닫힘 · 닫힌 주기는 시간이 지나도 회차가 안 늘어난다
 //   ⑥ 다시 잠김 → 새 주기 · 1회차부터
 //   ⑦ AI 80%·100% — 임계선을 넘는 호출에서 월 1회씩, 넘은 뒤 호출은 추가 행 없음
-//   ⑧ 기본 야간 방해금지(0194) — 개인 방해금지를 안 켠 매장은 22:00~08:00(KST) 선점 안 함(유실 아님, 낮에 그대로 나감)
-//   ⑨ 사장이 방해금지를 직접 켠 매장은 기본 야간 차단에서 빠진다 — 새벽에도 즉시 선점
+//   ⑧ 야간 보류 없음(0290 · D10) — 개인 방해금지를 안 켠 매장도 새벽에 바로 선점 · 재실행해도 1행
+//   ⑨ 사장이 방해금지를 직접 켠 매장도 새벽에 바로 선점(거르는 일은 엣지 deliver() 의 개인 설정)
 //   ⑩ 닫힌 매장 직원 알림(0196) — 잠기면 직원 전원에게 1회 · 재실행 멱등 · 재닫힘은 새 행
 //
 // ⚠️ 스윕은 **전역**이다 — 다른 매장의 미발송 알림도 같이 나간다(크론이 5분 안에 보낼 것을 앞당길 뿐).
@@ -256,7 +256,7 @@ async function main() {
     ai = await alerts(unit, 'ai_cap');
     check('⑦ AI 알림도 스윕이 선점·사장 1명', ai.every((x) => !!x.claimed_at && x.recipients === 1), JSON.stringify(ai));
 
-    // ⑧ 기본 야간 방해금지(0194) — 개인 방해금지를 안 켠 매장은 새벽엔 선점 안 함(별도 매장 — 앞 주기와 안 섞이게)
+    // ⑧ 야간 보류 없음(0290 · D10) — 개인 방해금지를 안 켠 매장도 새벽에 바로 선점(별도 매장 — 앞 주기와 안 섞이게)
     const N = await signUp('owner', 'QA야간사장');
     const { data: csN, error: ceN } = await N.c.rpc('create_store', { p_store_name: 'QA 야간점', p_industry: '카페·디저트', p_biz_no: null });
     if (ceN) throw new Error(`create_store 실패: ${ceN.message}`);
@@ -271,19 +271,15 @@ async function main() {
     }
     await expire(unitN);
 
-    await sweepAt(kstToday(2, 30)); // 새벽 2:30 — 회차·1회차 행은 생기지만 선점은 안 된다
+    await sweepAt(kstToday(2, 30)); // 새벽 2:30 — 1회차 행이 생기고 바로 선점된다
     let na = await alerts(unitN, 'seat_lock');
-    check('⑧ 새벽엔 알림 행이 생겨도 선점 안 됨', na.length === 1 && !na[0].claimed_at, JSON.stringify(na));
+    check('⑧ 새벽에도 바로 선점된다(야간 보류 없음)', na.length === 1 && !!na[0].claimed_at, JSON.stringify(na));
 
-    await sweepAt(kstToday(2, 35)); // 야간 재실행에도 그대로 미선점(유실도 중복도 아님)
+    await sweepAt(kstToday(2, 35)); // 재실행해도 같은 회차가 늘지 않는다
     na = await alerts(unitN, 'seat_lock');
-    check('⑧ 야간 재실행에도 선점 안 됨', na.length === 1 && !na[0].claimed_at, JSON.stringify(na));
+    check('⑧ 재실행해도 1행(중복 없음)', na.length === 1 && !!na[0].claimed_at, JSON.stringify(na));
 
-    await sweepAt(kstToday(9, 0)); // 낮이 되면 큐에 남아 있던 알림을 그대로 보낸다 — 유실 없음
-    na = await alerts(unitN, 'seat_lock');
-    check('⑧ 낮이 되면 선점됨(유실 없음)', na.length === 1 && !!na[0].claimed_at, JSON.stringify(na));
-
-    // ⑨ 사장이 방해금지를 직접 켠 매장은 기본 야간 차단에서 빠진다 — 개인 설정이 기본값을 이긴다
+    // ⑨ 사장이 방해금지를 직접 켠 매장도 바로 선점한다 — 개인 설정은 배달(엣지 deliver())에서 거른다
     const P = await signUp('owner', 'QA개인설정사장');
     const { data: csP, error: ceP } = await P.c.rpc('create_store', { p_store_name: 'QA 개인설정점', p_industry: '카페·디저트', p_biz_no: null });
     if (ceP) throw new Error(`create_store 실패: ${ceP.message}`);
@@ -305,7 +301,7 @@ async function main() {
     if (prefErr) throw new Error(`save_unit_member_prefs 실패: ${prefErr.message}`);
     await expire(unitP);
 
-    await sweepAt(kstToday(2, 30)); // 자기 방해금지 시간(01:00~05:00) 안이라도 기본 차단은 안 걸린다
+    await sweepAt(kstToday(2, 30)); // 자기 방해금지 시간(01:00~05:00) 안이라도 선점은 된다
     const pa = await alerts(unitP, 'seat_lock');
     check('⑨ 방해금지를 직접 켠 매장은 새벽에도 즉시 선점', pa.length === 1 && !!pa[0].claimed_at, JSON.stringify(pa));
 
