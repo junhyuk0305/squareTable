@@ -1246,6 +1246,11 @@ export const useSessionStore = create<SessionState>((set, get) => ({
         ? '마지막 매장은 삭제할 수 없어요. 계정 삭제를 이용해 주세요.'
         : /store_has_staff/.test(error.message)
           ? '직원이 있는 매장은 삭제할 수 없어요. 먼저 직원을 모두 내보내 주세요.'
+          // 0281(C9): 본사 연결이 살아 있는 매장. 해제 불가로 묶였으면 본사에, 아니면 연결부터 끊게 한다.
+          : /brand_locked/.test(error.message)
+          ? '본사와 연결된 매장이라 삭제할 수 없어요. 본사에 문의해 주세요.'
+          : /brand_linked/.test(error.message)
+          ? '본사와 연결된 매장이에요. 먼저 본사 연결을 끊어 주세요.'
           : /not_owner/.test(error.message)
             ? '내 매장만 삭제할 수 있어요.'
             : friendlyError(error.message, '매장을 삭제하지 못했어요. 잠시 후 다시 시도해 주세요.');

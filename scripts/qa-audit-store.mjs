@@ -259,7 +259,7 @@ console.log('\n[C8] 매장 설정에서 사업자번호를 넣고 바꾼다(RPC 
 console.log('\n[C9] 본사 연결이 살아 있는 매장은 삭제를 거부한다');
 {
   const f = lastDef('delete_store');
-  const g = f.body.match(/from public\.brand_units[\s\S]*?status = 'active'[\s\S]*?brand_linked[\s\S]*?end if;/)?.[0] ?? '';
+  const g = f.body.match(/owner_can_end[\s\S]*?from public\.brand_units[\s\S]*?status = 'active'[\s\S]*?brand_linked/)?.[0] ?? '';
   check('★delete_store 가 활성 본사 연결을 보고 owner_can_end=false → brand_locked, true → brand_linked',
     /owner_can_end/.test(g) && /brand_locked/.test(g) && f.body.indexOf('brand_linked') < f.body.indexOf('delete from public.units'), f.file);
   check('delete_store 권한 유지(authenticated)', fileHas(f.file, 'grant execute on function public.delete_store(text) to authenticated;'));
