@@ -1,10 +1,12 @@
 #!/usr/bin/env node
 // qa-audit-knowhow.mjs — 2026-10-05 논리 점검(QA_논리점검_2026-10-05.md) 노하우·퀴즈·AI 묶음 재현 검사.
 //   [E1] 초안·외부용 퀴즈는 직원 카드와 자동 배정(신입 첫 퀴즈·재확인)에 안 나온다.
+//   [E11] 사장이 고른 퀴즈 마감 날짜를 모두에게 그대로 적용한다(2026-10-06 결정 · 서버 동작은 로컬 도커 트랜잭션).
 // 서버 함수는 마지막 정의(가장 큰 번호 마이그레이션) 본문을 읽어 본다. 로컬 도커가 꺼진 날에도 돈다.
 // 순수 함수는 앱 코드를 그대로 import 해서 돌린다.
 // 실행: node --no-warnings scripts/qa-audit-knowhow.mjs
 import { readFileSync, existsSync, readdirSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { register } from 'node:module';
 
 register('./qa-alias-loader.mjs', import.meta.url);
@@ -27,6 +29,16 @@ const lastDef = (name) => {
   }
   return { body: sqlStrip(body), file };
 };
+// 로컬 도커 DB(트랜잭션 · 되돌림 · 고정 계정 store_001). 도커가 없으면 서버 동작은 SKIP.
+const psql = (sql) => {
+  try {
+    return execFileSync('docker', ['exec', '-i', 'supabase_db_SquareTable', 'psql', '-U', 'postgres', '-At', '-v', 'ON_ERROR_STOP=1'],
+      { input: sql, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] });
+  } catch (e) { return 'ERR=' + String(e.stderr ?? e.message).replace(/\s+/g, ' ').slice(0, 300); }
+};
+const tail = (o) => o.split('\n').filter((l) => /^R=|ERR=/.test(l)).join(' ').slice(0, 240);
+let dbUp = true;
+try { execFileSync('docker', ['exec', 'supabase_db_SquareTable', 'psql', '-U', 'postgres', '-c', 'select 1'], { stdio: 'pipe' }); } catch { dbUp = false; }
 const tryImport = async (p) => { try { return await import(p); } catch (e) { return { __err: String(e?.message ?? e) }; } };
 
 console.log('[E1] 초안·외부용 퀴즈는 직원 카드와 자동 배정에 안 나온다 (0139 이전 코스는 예전대로)');
@@ -216,6 +228,53 @@ console.log('\n[E10] 사장이 노하우를 지우면 직원 폰에도 실시간
   const sub = (db.match(/export function subscribePlaybook\([\s\S]*?\n\}/) || [''])[0];
   check('★노하우 구독이 보관 신호도 듣는다(받으면 다시 읽는다)',
     /\.on\('postgres_changes', \{ event: 'INSERT', schema: 'public', table: 'knowhow_events' \}, onChange\)/.test(sub), sub.slice(0, 200));
+}
+
+console.log('\n[E11] 사장이 달력으로 고른 마감 날짜를 모든 직원에게 그대로 적용한다(받은 날부터 다시 세지 않음 · 옛 행은 그대로)');
+{
+  const d = lastDef('claim_quiz_send');
+  check('★claim_quiz_send 가 발송 행의 고른 날짜(due_date)를 먼저 쓴다',
+    /a\.due_date/.test(d.body) && /coalesce\(v_fixed,/.test(d.body), d.file);
+  check('고른 날짜가 없는 행(옛 행·입사·재확인·다시 보내기)은 받은 날 + answer_days 그대로',
+    /\(now\(\) at time zone 'Asia\/Seoul'\)::date \+ v_days/.test(d.body), d.file);
+  const f = d.file ? read(`supabase/migrations/${d.file}`) : '';
+  check('권한 그대로: service_role 만', /revoke execute on function public\.claim_quiz_send\(text\) from public, anon, authenticated;/.test(f)
+    && /grant\s+execute on function public\.claim_quiz_send\(text\) to service_role;/.test(f), d.file);
+  const db = strip(read('src/lib/db.ts'));
+  const ins = (db.match(/export async function insertQuizAssignments\([\s\S]*?\n\}/) || [''])[0];
+  check('★insertQuizAssignments 가 고른 마감 날짜를 due_date 로 싣는다',
+    /dueDate: string \| null = null/.test(ins) && /due_date: dueDate/.test(ins), ins.slice(0, 200));
+  check('발송 원장을 읽을 때 due_date 도 읽는다', /const QUIZ_ASSIGNMENT_COLS = '[^']*\bdue_date\b[^']*'/.test(db) && /dueDate: r\.due_date \?\? null/.test(db));
+  const qn = strip(read('src/app/owner/quiz-new.tsx'));
+  check('★만들기 화면이 달력으로 고른 날짜(dueAt)를 그대로 넘긴다', /insertQuizAssignments\(courseId, to, scheduledOn, dueAt\)/.test(qn));
+  const board = strip(read('src/lib/quiz/useQuizBoard.ts'));
+  check('목록 한 줄의 마감도 고른 날짜를 쓴다', /\.dueDate/.test(board));
+  const det = strip(read('src/app/owner/quiz/[id].tsx'));
+  check('상세의 응시 기한이 고른 날짜를 "○월 ○일까지"로 보인다', /factsOf\(items\.length, course\.answer_days, course\.due_days, fixedDue\)/.test(det) && /일까지`/.test(det));
+
+  if (!dbUp) console.log('  SKIP 서버 동작 — 로컬 도커 DB 없음');
+  else {
+    // 사장이 오늘 보내며 마감을 '오늘+2'로 골랐다(answer_days=4 로 저장됐다고 가정). 직원은 근무일을 기다려 늦게 받아도 같은 날짜여야 한다.
+    const SQL = `
+begin;
+select set_config('qa.j', (select id::text from auth.users where email = 'staff2@pilot.squaretable.app'), true);
+select set_config('qa.m', (select id::text from auth.users where email = 'staff@pilot.squaretable.app'), true);
+insert into public.training_courses (id, unit_id, key, name, start_at, answer_days, audience)
+  values ('qa_e11_c', 'store_001', 'qa_e11', 'QA E11', public.kst_today(), 4, 'staff');
+insert into public.quiz_assignments (id, unit_id, course_id, user_id, scheduled_on, due_date)
+  values ('qa_e11_a', 'store_001', 'qa_e11_c', current_setting('qa.j')::uuid, public.kst_today() - 3, public.kst_today() + 2);
+insert into public.quiz_assignments (id, unit_id, course_id, user_id, scheduled_on)
+  values ('qa_e11_b', 'store_001', 'qa_e11_c', current_setting('qa.m')::uuid, public.kst_today());
+select 'R=claimA:' || public.claim_quiz_send('qa_e11_a');
+select 'R=claimB:' || public.claim_quiz_send('qa_e11_b');
+select 'R=dueA:' || (due_on - public.kst_today()) from public.quiz_assignments where id = 'qa_e11_a';
+select 'R=dueB:' || (due_on - public.kst_today()) from public.quiz_assignments where id = 'qa_e11_b';
+rollback;
+`;
+    const o = psql(SQL);
+    check('★고른 날짜가 있는 발송: 늦게 받아도 마감 = 고른 날짜(오늘+2)', o.includes('R=claimA:true') && o.includes('R=dueA:2'), tail(o));
+    check('고른 날짜가 없는 옛 방식 발송: 마감 = 받은 날 + 4일', o.includes('R=claimB:true') && o.includes('R=dueB:4'), tail(o));
+  }
 }
 
 console.log(`\n${pass} PASS / ${fail} FAIL`);
