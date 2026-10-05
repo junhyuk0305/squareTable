@@ -82,7 +82,7 @@ console.log('\n[C4] 닫힌(잠긴) 매장에는 할일·퀴즈 알림을 보내�
 console.log('\n[C5] 닫힌 매장·탈퇴한 사장 매장의 코드로는 합류 신청을 받지 않는다');
 {
   const j = lastDef('join_by_invite');
-  const guard = j.body.match(/if [^;]*deleted_at is not null[\s\S]*?end if;/)?.[0] ?? '';
+  const guard = j.body.match(/if v_deleted is not null[\s\S]*?end if;/)?.[0] ?? '';
   check('★삭제 대기·잠긴 매장이면 신청을 넣지 않고 store_not_accepting 으로 거부한다',
     /unit_access_locked\(v_unit\)/.test(guard) && /raise exception 'store_not_accepting'/.test(guard)
       && j.body.indexOf('store_not_accepting') < j.body.indexOf('set pending_unit_id = v_unit'), j.file);

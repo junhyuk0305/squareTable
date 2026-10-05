@@ -921,6 +921,9 @@ export const useSessionStore = create<SessionState>((set, get) => ({
         ? '시도가 많아 잠시 잠겼어요. 10분 후 다시 시도해 주세요.'
         : reason === 'already_member'
         ? '이미 들어가 있는 매장이에요. 매장 목록에서 바로 들어갈 수 있어요.'
+        // 0266: 사장이 탈퇴했거나 닫힌 매장이다. 같은 코드를 다시 넣어도 안 풀린다.
+        : /store_not_accepting/.test(error.message)
+        ? '지금은 합류 신청을 받지 않는 매장이에요. 사장님께 확인해 주세요.'
         : /under_14/.test(error.message)
         ? UNDER_14_TEXT
         : /birth_date_required|birth_date_invalid/.test(error.message)
