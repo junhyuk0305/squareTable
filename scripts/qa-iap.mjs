@@ -1000,6 +1000,25 @@ async function slotRuleChecks() {
     const old = await R.c.rpc('choose_iap_release', { p_units: [B] });
     check('㉔-d 옛 앱(새 매장 수 없음)도 후보 안이면 받는다', !old.error, old.error?.message ?? '');
   }
+
+  // ══ ㉕ 논리 점검 2026-10-05 B7 — 늦게 재전송된 옛 웹훅은 최신 상태를 덮지 않는다(0263) ══════════════════
+  {
+    const R = await reuseOwner(3);
+    const A = await mkStore(R, 'QA㉕ 1호점');
+    await makeFree(A);
+    const t = `qa_b7_${s}`;
+    const end = iso(days(30));
+    const T0 = Date.now();
+    const raw = (type, ms) => ({ p_raw: { event: { type, event_timestamp_ms: ms } } });
+    await evt(R, t, 'INITIAL_PURCHASE', 'single_1_monthly', 'single', 1, end, raw('INITIAL_PURCHASE', T0));
+    await evt(R, t, 'UNCANCELLATION', 'single_1_monthly', 'single', 1, end, raw('UNCANCELLATION', T0 + 2000));
+    await evt(R, t, 'CANCELLATION', 'single_1_monthly', 'single', 1, end, { p_reason: 'UNSUBSCRIBE', ...raw('CANCELLATION', T0 + 1000) });
+    const row = await svcSel(`iap_subscriptions?original_transaction_id=eq.${t}&select=status`);
+    check('★★㉕-a 해지 취소 뒤 늦게 온 옛 해지는 상태를 덮지 않는다(active 유지)', row[0]?.status === 'active', JSON.stringify(row));
+    await evt(R, t, 'CANCELLATION', 'single_1_monthly', 'single', 1, end, { p_reason: 'UNSUBSCRIBE', ...raw('CANCELLATION', T0 + 3000) });
+    const row2 = await svcSel(`iap_subscriptions?original_transaction_id=eq.${t}&select=status`);
+    check('㉕-b 더 늦은 해지는 그대로 반영한다', row2[0]?.status === 'canceled', JSON.stringify(row2));
+  }
 }
 
 async function main() {
