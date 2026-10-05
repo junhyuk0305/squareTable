@@ -118,7 +118,7 @@ console.log('\n[C10] 사장이 매장 행을 직접 고칠 수 있는 열은 업
 {
   let file = '';
   for (const f of migFiles()) if (/revoke update on (table )?public\.units from/.test(sqlStrip(read(`supabase/migrations/${f}`)))) file = f;
-  const s = sqlStrip(read(`supabase/migrations/${file}`));
+  const s = file ? sqlStrip(read(`supabase/migrations/${file}`)) : '';
   check('★units 의 통째 update 권한을 클라(anon·authenticated)에서 거둔다',
     !!file && /revoke update on public\.units from anon, authenticated;/.test(s), file || '없음');
   check('★업종(industry) 열만 다시 연다', /grant update \(industry\) on public\.units to authenticated;/.test(s));
