@@ -5,11 +5,11 @@
 //   [1] 직원 탈퇴(delete_my_account)
 //       Q3  — 그 계정의 푸시 토큰·웹 구독·로그인 세션이 남지 않는다. 지금(0044)은 셋 다 그대로 남는다.
 //       Q17 — 직원 멤버십이 지워져 사장 명부에서 빠진다. 지금은 unit_id 만 비우고 unit_members 를 남긴다.
-//             비공개 방 멤버십도 지운다. 지우기 전에 former_staff 스냅샷(이름·끝4자리)을 남긴다.
+//             비공개 방 멤버십도 지운다. 지우기 전에 퇴사 스냅샷(이름·끝4자리)을 남긴다(0246 부터 member_tenures).
 //       옛 앱 — 탈퇴 뒤 부르는 signOut()(global 기본값)이 오류 없이 끝난다.
 //   [2] 사장 탈퇴 분기는 그대로다(J5 서버 차단은 P7-1). 매장 소프트삭제 + 사장 멤버십 유지. 세션·토큰만 정리.
 //   [3] Q20 — 내보낸 뒤(remove_staff) 다시 승인해도 예전 비공개 방 메시지가 보이지 않는다.
-//   [4] Q20 — 스스로 나간 뒤(leave_store) 다시 승인해도 같다. 나갈 때 former_staff 스냅샷을 남긴다.
+//   [4] Q20 — 스스로 나간 뒤(leave_store) 다시 승인해도 같다. 나갈 때 퇴사 스냅샷을 남긴다(0246 부터 member_tenures).
 //   [5] 권한 — 세 함수 모두 anon 실행 불가(3역할 회수 후 authenticated 만).
 //
 // ★로컬 전용: 실행할 때마다 계정을 가입시키고 탈퇴시킨다. URL 이 로컬이 아니면 멈춘다.
@@ -119,7 +119,13 @@ try {
     const { data } = await O.c.from('unit_members').select('user_id').eq('unit_id', UNIT);
     return (data ?? []).map((x) => x.user_id);
   };
-  const former = async (uid) => (await admin.from('former_staff').select('name, phone_last4, departed_at').eq('unit_id', UNIT).eq('staff_id', uid).maybeSingle()).data;
+  // ★0246: 퇴사 스냅샷은 former_staff 가 아니라 닫힌 재직 기간(member_tenures)에 남는다(former_staff 는 읽기 전용으로 남김).
+  const former = async (uid) => {
+    const { data } = await admin.from('member_tenures').select('name_snapshot, phone_last4, left_at, left_reason')
+      .eq('unit_id', UNIT).eq('user_id', uid).not('left_at', 'is', null).order('left_at', { ascending: false }).limit(1);
+    const r = (data ?? [])[0];
+    return r ? { name: r.name_snapshot, phone_last4: r.phone_last4, departed_at: r.left_at, reason: r.left_reason } : null;
+  };
   console.log(`셋업 — 매장 ${UNIT} · 비밀방 ${ROOM}(멤버=사장·A·C·D)`);
   check('0-1 셋업: 방 멤버 A 는 비밀방 메시지를 본다', (await seesRoom(A)) === 1, `rows=${await seesRoom(A)}`);
 
@@ -144,7 +150,7 @@ try {
     check('1-6 ★비공개 방 멤버십이 남지 않는다', (await roomMember(D.id)) === 0, `rows=${await roomMember(D.id)}`);
     const f = await former(D.id);
     check('1-7 ★퇴사 스냅샷이 이름·끝4자리를 남긴다(번호를 지우기 전에 찍는다)',
-      f?.name === 'QA탈퇴직원' && f?.phone_last4 === phones[3].slice(-4), JSON.stringify(f));
+      f?.name === 'QA탈퇴직원' && f?.phone_last4 === phones[3].slice(-4) && f?.reason === 'account_deleted', JSON.stringify(f));
     const { data: p } = await admin.from('profiles').select('deleted_at, phone, unit_id, pending_unit_id').eq('id', D.id).maybeSingle();
     check('1-8 기존 소프트삭제(0044) 그대로: deleted_at·phone=null·unit_id=null',
       !!p?.deleted_at && p?.phone === null && p?.unit_id === null && p?.pending_unit_id === null, JSON.stringify(p));
@@ -177,7 +183,7 @@ try {
     const r = await O.c.rpc('remove_staff', { p_staff_id: A.id });
     check('3-1 remove_staff 성공', !r.error, r.error?.message);
     check('3-2 ★내보내면 비공개 방 멤버십이 지워진다', (await roomMember(A.id)) === 0, `rows=${await roomMember(A.id)}`);
-    check('3-3 퇴사 스냅샷(기존 0132 동작)', (await former(A.id))?.name === 'QA내보냄직원', JSON.stringify(await former(A.id)));
+    check('3-3 퇴사 스냅샷(0246 재직 기간 removed)', (await former(A.id))?.name === 'QA내보냄직원' && (await former(A.id))?.reason === 'removed', JSON.stringify(await former(A.id)));
     await joinApprove(A, 'A 재합류');
     check('3-4 ★다시 승인된 A 는 예전 비공개 방 메시지를 못 본다', (await seesRoom(A)) === 0, `rows=${await seesRoom(A)}`);
   }
@@ -189,7 +195,7 @@ try {
     check('4-1 leave_store 성공', !r.error, r.error?.message);
     check('4-2 ★나가면 비공개 방 멤버십이 지워진다', (await roomMember(C.id)) === 0, `rows=${await roomMember(C.id)}`);
     const f = await former(C.id);
-    check('4-3 ★나갈 때도 퇴사 스냅샷을 남긴다', f?.name === 'QA나감직원' && f?.phone_last4 === phones[2].slice(-4), JSON.stringify(f));
+    check('4-3 ★나갈 때도 퇴사 스냅샷을 남긴다', f?.name === 'QA나감직원' && f?.phone_last4 === phones[2].slice(-4) && f?.reason === 'left', JSON.stringify(f));
     const { data: p } = await admin.from('profiles').select('unit_id, active_unit_id').eq('id', C.id).maybeSingle();
     check('4-4 포인터 재지정(기존 0093 동작): 남은 소속 없음 → null', p?.unit_id === null && p?.active_unit_id === null, JSON.stringify(p));
     check('4-5 명부에서 빠진다(기존 동작)', !(await roster()).includes(C.id));
