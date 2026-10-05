@@ -126,6 +126,9 @@ export type PlaybookEntry = {
   brand_pending_version?: number | null;
   local_modified_at?: string | null;
   brand_hidden_at?: string | null;
+  // ── 보관(J10) — 0248 컬럼. 사장의 '삭제'는 보관이다. 보관한 행은 RLS 가 막아 보관함(archived_knowhow)에서만 온다.
+  archived_at?: string | null;
+  archived_by?: string | null;
   // ── 파트(홀·주방 같은 담당) — 0164 컬럼 ──
   // 이 노하우가 누구 담당인지. null/undefined = 공통(전원). 카테고리와 다른 축이라 함께 붙는다.
   // ★거르는 축이 아니다 — 목록에서 **위로 올릴 뿐** 다른 노하우를 가리지 않는다.

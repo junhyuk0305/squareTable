@@ -13,6 +13,7 @@ import type { Room, RoomMember, RoomPref } from '@/lib/store/useRoomStore';
 import type { AttendanceRecord } from '@/lib/store/useAttendanceStore';
 import type { StoreConfig, ShiftTemplate, ShiftException, SwapRequest, ShiftTimeRequest } from '@/lib/store/useScheduleStore';
 import type { CustomCategory } from '@/lib/store/knowhowCategories';
+import type { KnowhowUsage } from '@/lib/knowhow/archive';
 import { reopenKeepsRecords, type DeleteStorePreview, type DeleteStoreResult } from '@/lib/account/storeCopy';
 // 훈련 v2(0107·0108). ★TrainingCourse 는 이 파일이 이미 0099 의 문자열 유니온으로 쓰고 있어(아래)
 // 이름이 겹친다 → 코스 테이블 행 타입은 TrainingCourseRow 로 별칭한다. 구조는 동일하므로
@@ -1174,10 +1175,16 @@ export async function rotateInviteCode(): Promise<{ inviteCode: string; expiresA
 // ── 플레이북 ───────────────────────────────────────────────
 export async function fetchEntries(): Promise<ReadResult<PlaybookEntry[]>> {
   if (!HAS_SUPABASE) return { data: [], error: false };
-  const { data, error } = await supabase
+  // 보관한 노하우(0248 archived_at)는 뺀다. 서버 RLS 도 막지만 앱이 먼저 기대지 않게 여기서도 거른다.
+  // 0248 전 서버(웹이 먼저 나간 경우)에는 열이 없어 42703 이 온다 → 거르지 않고 한 번 더 읽는다.
+  let { data, error } = await supabase
     .from('playbook_entries')
     .select('*')
+    .is('archived_at', null)
     .order('created_at', { ascending: false });
+  if (error?.code === '42703') {
+    ({ data, error } = await supabase.from('playbook_entries').select('*').order('created_at', { ascending: false }));
+  }
   if (error) {
     readFail('fetchEntries', error);
     return { data: [], error: true };
@@ -1245,6 +1252,32 @@ export async function updateEntry(id: string, patch: Partial<PlaybookEntry>): Pr
 export async function deleteEntry(id: string): Promise<boolean> {
   if (!HAS_SUPABASE) return true;
   return writeStrict('deleteEntry', supabase.from('playbook_entries').delete().eq('id', id).select('id'));
+}
+
+// ── 노하우 보관(J10 · 0248) ─────────────────────────────────────────────
+// 보관·되살리기는 RPC 하나. 실패(소유주 아님·본사 사본·초안·없는 노하우)는 전부 오류로 온다 → 0행 유령 성공이 없다.
+export async function archiveEntry(id: string, archived: boolean): Promise<boolean> {
+  if (!HAS_SUPABASE) return true;
+  return write('archiveEntry', supabase.rpc('archive_knowhow', { p_entry_id: id, p_archived: archived }));
+}
+
+/** 사장 보관함 — 지금 매장의 보관한 노하우(보관 최신순). RLS 가 보관 행을 막아 정의자 RPC 로 읽는다. */
+export async function fetchArchivedEntries(): Promise<ReadResult<PlaybookEntry[]>> {
+  if (!HAS_SUPABASE) return { data: [], error: false };
+  const { data, error } = await supabase.rpc('archived_knowhow');
+  if (error) {
+    readFail('fetchArchivedEntries', error);
+    return { data: [], error: true };
+  }
+  return { data: (data ?? []) as PlaybookEntry[], error: false };
+}
+
+/** 확인창 재료 — 이 노하우를 담은 퀴즈·할일·응시 수. 못 읽으면 null(확인창은 기본 문구로 뜬다). */
+export async function fetchKnowhowUsage(id: string): Promise<KnowhowUsage | null> {
+  if (!HAS_SUPABASE) return null;
+  const { data, error } = await supabase.rpc('knowhow_usage', { p_entry_id: id });
+  if (error || !data) return null;
+  return data as KnowhowUsage;
 }
 
 /**

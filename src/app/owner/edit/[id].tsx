@@ -19,6 +19,9 @@ import { useStaffStore } from '@/lib/store/useStaffStore';
 import { useWorkStore, understandingOf } from '@/lib/store/useWorkStore';
 import { useQuizBoard } from '@/lib/quiz/useQuizBoard';
 import { confirmAction } from '@/lib/utils/confirm';
+import { fetchKnowhowUsage } from '@/lib/db';
+import { archiveConfirmMessage } from '@/lib/knowhow/archive';
+import { isBrandCopy } from '@/lib/brand/copy';
 import { UNSECTIONED, sectionOptions } from '@/lib/config/sections';
 import { getSectionMeta } from '@/lib/utils/category';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
@@ -79,7 +82,7 @@ export default function EditKnowledgeScreen() {
 function ConversationalEdit({ entry, quizCountOf }: { entry: PlaybookEntry; quizCountOf: (entryId: string) => number }) {
   const router = useRouter();
   const update = usePlaybookStore((s) => s.update);
-  const remove = usePlaybookStore((s) => s.remove);
+  const archive = usePlaybookStore((s) => s.archive);
   const entries = usePlaybookStore((s) => s.entries);
   const userName = useSessionStore((s) => s.userName);
   const industry = useSessionStore((s) => s.industry);
@@ -156,12 +159,13 @@ function ConversationalEdit({ entry, quizCountOf }: { entry: PlaybookEntry; quiz
   );
 
   const del = useCallback(async () => {
-    // 되돌릴 수 없는 작업 → 삭제 전 확인(앱 내 빨강 모달).
-    if (await confirmAction('노하우 삭제', '이 노하우를 삭제할까요? 되돌릴 수 없어요.', '삭제', { destructive: true, icon: 'trash-outline' })) {
-      remove(entry.id);
+    // J10(0248): 노하우 '삭제'는 보관이다. 직원 화면·퀴즈에서 빠지고 응시·통과 기록은 남는다. 보관함에서 되살린다.
+    const usage = await fetchKnowhowUsage(entry.id);
+    if (await confirmAction('노하우 보관', archiveConfirmMessage(usage), '보관', { icon: 'archive-outline' })) {
+      archive(entry.id);
       router.back();
     }
-  }, [entry.id, remove, router]);
+  }, [entry.id, archive, router]);
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
@@ -203,7 +207,8 @@ function ConversationalEdit({ entry, quizCountOf }: { entry: PlaybookEntry; quiz
         initialCategory={entry.category}
         editEntry={entry}
         onUpdated={onUpdated}
-        onDeleteEntry={del}
+        // 본사 사본은 보관하지 않는다(서버 brand_copy_use_hide) — 위 BrandCopyPanel 의 숨기기를 쓴다.
+        onDeleteEntry={isBrandCopy(entry) ? undefined : del}
         onPublished={() => {}}
         docHeader={
           <Appear delay={stagger(1)}>
