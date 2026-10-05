@@ -112,8 +112,10 @@ console.log('\n[F4] 설정에 "마케팅 정보 받기" — 동의·철회 시�
   check('★설정 > 앱 설정에 "마케팅 정보 받기" 토글', /<SettingsSection icon="options-outline" title="앱 설정">[\s\S]*label="마케팅 정보 받기"[\s\S]*?<\/SettingsSection>/.test(scr));
   check('현재 상태를 읽기 전에는 토글을 그리지 않는다', /marketing !== null && \(/.test(scr) || /marketing === null \? null/.test(scr));
   const doc = read('src/app/legal/[doc].tsx');
-  check('★동의서 철회 방법이 실제 위치(설정 › 앱 설정 › 마케팅 정보 받기)를 가리킨다',
-    doc.includes('설정 › 앱 설정 › 마케팅 정보 받기') && !doc.includes('설정 › 알림에서'));
+  // ⛔약관 동결(토스 심사): 동의서 '철회 방법' 위치 문구는 10/16 이후에 실제 위치(설정 › 앱 설정 › 마케팅 정보 받기)로 고친다.
+  //   그때까지는 main 문구 그대로여야 한다. 동결이 풀리면 이 검사를 실제 위치 기대로 되돌린다.
+  check('동의서 철회 방법 문구는 약관 동결로 main 그대로다(10/16 이후 실제 위치로)',
+    doc.includes('설정 › 알림에서 언제든 수신을 끌 수 있고') && !doc.includes('설정 › 앱 설정 › 마케팅 정보 받기'));
 
   if (!dbUp) console.log('  SKIP 서버 동작 — 로컬 도커 DB 없음');
   else {
