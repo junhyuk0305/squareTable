@@ -8,6 +8,9 @@ import { showToast } from '@/lib/store/useToastStore';
 import { shareText, type ShareTextResult } from '@/lib/utils/shareText';
 import { siteOrigin } from '@/lib/config/site';
 import { track } from '@/lib/analytics/track';
+import { useSessionStore } from '@/lib/store/useSessionStore';
+import { rotateInviteCode } from '@/lib/db';
+import { inviteExpiryLabel, INVITE_ROTATE_LABEL, INVITE_ASK_OWNER_TEXT } from '@/lib/invite/inviteExpiry';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
@@ -45,6 +48,13 @@ export function InviteBlock({
   style?: StyleProp<ViewStyle>;
 }) {
   const [copied, setCopied] = useState<'code' | 'link' | null>(null);
+  const [rotating, setRotating] = useState(false);
+  // Q21: 만료일은 세션 코드의 것이다. 온보딩은 params 코드를 보여 줄 수 있어 같은 코드일 때만 쓴다.
+  const sessionCode = useSessionStore((st) => st.inviteCode);
+  const expiresAt = useSessionStore((st) => st.inviteExpiresAt);
+  const isOwner = useSessionStore((st) => st.role) === 'owner';
+  const expiry = code === sessionCode ? inviteExpiryLabel(expiresAt, new Date()) : null;
+  const expired = expiry?.state === 'expired';
 
   const link = `${siteOrigin()}/signup?role=junior&code=${code}`;
   // 카톡에 그대로 붙는 한 덩어리. 링크만 보내면 받은 사람이 무엇을 해야 하는지 모른다.
@@ -73,6 +83,19 @@ export function InviteBlock({
     track('invite_shared', { from, via: 'link' });
     void shareText(message).then((r) => done('link', r));
   };
+  // 만료된 코드만 사장이 눌러서 바꾼다. 열 때마다 자동으로 재발급하지 않는다.
+  const rotate = async () => {
+    if (rotating) return;
+    setRotating(true);
+    const res = await rotateInviteCode();
+    setRotating(false);
+    if (res) {
+      useSessionStore.setState({ inviteCode: res.inviteCode, inviteExpiresAt: res.expiresAt });
+      showToast('초대코드를 변경했어요', 'good');
+    } else {
+      showToast('코드 변경에 실패했어요. 잠시 후 다시 시도해 주세요.', 'warn');
+    }
+  };
 
 
   return (
@@ -93,15 +116,17 @@ export function InviteBlock({
         <View style={s.codeRow}>
           <View style={s.codeCol}>
             <Text style={s.codeLabel}>초대코드</Text>
-            <Text style={s.code} selectable>
+            <Text style={[s.code, expired && s.dim]} selectable>
               {code}
             </Text>
+            {expiry && <Text style={[s.expiry, expiry.state !== 'ok' && s.expiryWarn]}>{expiry.text}</Text>}
           </View>
           <Pressable
             onPress={sendCode}
+            disabled={expired}
             accessibilityRole="button"
             accessibilityLabel="초대코드 복사"
-            style={({ pressed }) => [s.copyBtn, pressed && { opacity: 0.85 }]}
+            style={({ pressed }) => [s.copyBtn, pressed && { opacity: 0.85 }, expired && s.dim]}
           >
             <Ionicons name={copied === 'code' ? 'checkmark' : 'copy-outline'} size={15} color={InkColors.ink} />
             <Text style={s.copyText}>{copied === 'code' ? '복사됨' : '복사'}</Text>
@@ -111,14 +136,32 @@ export function InviteBlock({
 
         <PressableScale
           onPress={sendLink}
+          disabled={expired}
           scaleTo={0.97}
           accessibilityRole="button"
           accessibilityLabel="초대 링크 복사"
-          style={s.primary}
+          style={[s.primary, expired && s.dim]}
         >
           <Ionicons name="link-outline" size={16} color={InkColors.bubbleText} />
           <Text style={s.primaryText}>{copied === 'link' ? '복사됨' : '초대 링크 복사'}</Text>
         </PressableScale>
+
+        {expired &&
+          (isOwner ? (
+            <PressableScale
+              onPress={rotate}
+              disabled={rotating}
+              scaleTo={0.97}
+              accessibilityRole="button"
+              accessibilityLabel={INVITE_ROTATE_LABEL}
+              style={s.rotate}
+            >
+              <Ionicons name="refresh" size={16} color={InkColors.ink} />
+              <Text style={s.rotateText}>{INVITE_ROTATE_LABEL}</Text>
+            </PressableScale>
+          ) : (
+            <Text style={s.ask}>{INVITE_ASK_OWNER_TEXT}</Text>
+          ))}
       </View>
     </View>
   );
@@ -153,4 +196,14 @@ const s = StyleSheet.create({
     minHeight: 48, borderRadius: Radius.md, backgroundColor: BrandColors.brand,
   },
   primaryText: { fontSize: 15, fontWeight: '900', color: InkColors.bubbleText },
+
+  dim: { opacity: 0.4 },
+  expiry: { marginTop: 2, fontSize: 12, lineHeight: 17, fontWeight: '700', color: InkColors.ink2 },
+  expiryWarn: { color: BrandColors.warnText },
+  rotate: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
+    minHeight: 48, borderRadius: Radius.md, backgroundColor: InkColors.bgSoft, borderWidth: 1, borderColor: InkColors.line,
+  },
+  rotateText: { fontSize: 15, fontWeight: '900', color: InkColors.ink },
+  ask: { fontSize: 14, lineHeight: 20, fontWeight: '700', color: InkColors.ink2, textAlign: 'center' },
 });

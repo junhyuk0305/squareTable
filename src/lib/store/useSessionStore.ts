@@ -106,6 +106,7 @@ type SessionState = {
    */
   brandId: string | null;
   inviteCode: string; // 내 매장 초대코드(사장 화면에서 직원에게 공유)
+  inviteExpiresAt: string; // 초대코드 만료 시각(units.invite_expires_at · 없으면 '')
   email: string;
   bio: string; // 한줄 소개
   phone: string; // 전화번호(전체) — 프로필 편집에서 표시·수정(뒷4자리만 아님)
@@ -211,6 +212,7 @@ const DEMO = {
   freeMode: false, // 서버에서 읽기 전 기본값 — 읽기 전엔 평시 규칙(과금 게이팅 유지)
   iapEnabled: false, // 읽기 전엔 안 판다(fail-closed) — 잘못 열리는 쪽이 되돌리기 어렵다
   inviteCode: '482913',
+  inviteExpiresAt: '',
   email: '',
   bio: '',
   phone: '',
@@ -306,7 +308,7 @@ let _lastLoadFault: 'deleted' | 'load_failed' | null = null;
 const SIGNED_OUT: Partial<SessionState> = {
   status: 'signed_out', sessionCheck: 'ok', brandId: null, role: 'junior', isOwnerAccount: false, signupRole: null,
   unitId: '', userId: '', userName: '', storeName: '', stores: [], pendingUnitId: '', pendingStoreName: '', rejectedJoinStoreName: '',
-  industry: '', inviteCode: '', bio: '', phone: '',
+  industry: '', inviteCode: '', inviteExpiresAt: '', bio: '', phone: '',
   plan: 'free', seatLocked: false, needsDowngradeChoice: false, subStatus: '', trialEndsAt: '', paidUntil: '',
 };
 
@@ -389,6 +391,7 @@ async function loadProfile(
 
     let storeName = '';
     let inviteCode = '';
+    let inviteExpiresAt = '';
     let industry = '';
     let subStatus: SubStatusRaw = '';
     let trialEndsAt = '';
@@ -399,6 +402,7 @@ async function loadProfile(
       const { data: unit } = await fetchUnitInfo(unitId);
       storeName = unit?.store_name ?? '';
       inviteCode = unit?.invite_code ?? '';
+      inviteExpiresAt = unit?.invite_expires_at ?? '';
       industry = unit?.industry ?? '';
 
       // 구독상태(별도 테이블, 읽기 전용). '행 없음'은 fail-open('none', 유예) — 의도된 동작.
@@ -535,6 +539,7 @@ async function loadProfile(
       userId,
       email,
       inviteCode,
+      inviteExpiresAt,
       userName: profile?.name ?? '',
       role,
       isOwnerAccount,

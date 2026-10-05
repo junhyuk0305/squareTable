@@ -162,7 +162,7 @@ export default function OwnerStaffScreen() {
     setRotateOpen(false);
     // 실패(null) 시 예전엔 모달만 닫고 아무 신호가 없어, 사장이 코드가 바뀐 줄 착각했다(무음 실패).
     if (res) {
-      useSessionStore.setState({ inviteCode: res.inviteCode });
+      useSessionStore.setState({ inviteCode: res.inviteCode, inviteExpiresAt: res.expiresAt });
       showToast('초대코드를 변경했어요', 'good');
     } else {
       showToast('코드 변경에 실패했어요. 잠시 후 다시 시도해 주세요.', 'warn');

@@ -137,10 +137,10 @@ export async function fetchSessionProfile(userId: string): Promise<DbResult<Sess
   return { data: (data as SessionProfileRow) ?? null, error: error as DbErr };
 }
 
-export type UnitInfoRow = { store_name: string | null; invite_code: string | null; industry: string | null };
+export type UnitInfoRow = { store_name: string | null; invite_code: string | null; invite_expires_at: string | null; industry: string | null };
 export async function fetchUnitInfo(unitId: string): Promise<DbResult<UnitInfoRow>> {
   const { data, error } = await supabase
-    .from('units').select('store_name, invite_code, industry').eq('id', unitId).maybeSingle();
+    .from('units').select('store_name, invite_code, invite_expires_at, industry').eq('id', unitId).maybeSingle();
   return { data: (data as UnitInfoRow) ?? null, error: error as DbErr };
 }
 
