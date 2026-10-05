@@ -194,7 +194,7 @@ select set_config('request.jwt.claims', json_build_object('sub', current_setting
     const s9 = run('o', `update public.swap_requests set status = 'open', accepted_by = null where id = 'qa_a10_ac' returning 'R=' || status;`);
     check('사장 직접 다시 열기(accepted→open) → 거부', s9.startsWith('ERR='), s9.slice(0, 160));
     const s10 = run('j', `update public.swap_requests set status = 'accepted', accepted_by = current_setting('qa.j'), updated_at = now() where id = 'qa_a10_op' returning 'R=' || status;`);
-    check('동료가 열린 요청을 자기로 수락하기(open→accepted)는 된다', s10.includes('R=accepted'), s10.slice(0, 160));
+    check('★동료 직접 갱신 수락(open→accepted) → 거부(수락은 accept_swap 만)', s10.startsWith('ERR='), s10.slice(0, 160));
     const s11 = run('o', `update public.swap_requests set status = 'rejected', updated_at = now() where id = 'qa_a10_ac' returning 'R=' || status;`);
     check('사장 반려(accepted→rejected · 상태·시각만)는 된다', s11.includes('R=rejected'), s11.slice(0, 160));
     const s12 = run('m', `select 'R=' || public.accept_swap('qa_a10_op')::text;`);

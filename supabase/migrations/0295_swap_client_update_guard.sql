@@ -14,7 +14,7 @@
 --   main 의 updateSwap 은 상태 조건이 없어서, 경합 때 이미 취소·반려된 행에 같은 상태를 다시 쓸 수 있다. 이것도 허용한다.
 --
 -- 이 파일이 하는 일: 트리거 swap_requests_client_guard. 클라 세션(current_user = authenticated)의 갱신은 아래만 된다.
---   (가) 동료 수락   : open → accepted · accepted_by null → 본인
+--   수락(open → accepted)은 직접 갱신으로 안 된다. accept_swap 만 쓴다(지정 대상 검사·선착순을 건너뛰지 못하게).
 --   (나) 요청자 취소 : open·accepted → cancelled · 요청자 본인 · accepted_by 그대로
 --   (다) 관리자 반려 : accepted → rejected · auth_can_manage · accepted_by 그대로
 --   (라) 같은 상태 되쓰기 : cancelled(요청자)·rejected(관리자) 에서 updated_at 만
@@ -34,12 +34,6 @@ begin
   if (to_jsonb(new) - 'status' - 'accepted_by' - 'updated_at')
      is distinct from (to_jsonb(old) - 'status' - 'accepted_by' - 'updated_at') then
     raise exception 'swap_update_not_allowed';
-  end if;
-
-  -- (가) 동료 수락
-  if old.status = 'open' and new.status = 'accepted'
-     and old.accepted_by is null and new.accepted_by = v_uid then
-    return new;
   end if;
 
   if new.accepted_by is distinct from old.accepted_by then

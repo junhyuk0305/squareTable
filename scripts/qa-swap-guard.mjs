@@ -80,16 +80,20 @@ try {
   // 직원이 본인 요청을 본인이 수락(accepted)? — 자기수락 방지(0128 swap_no_self_accept)
   const jSelf = await J.from('swap_requests').update({ status: 'accepted', accepted_by: jId }).eq('id', swap2).select('id, status, accepted_by');
   console.log(`  [본인 수락 시도] rows=${jSelf.data?.length ?? 0} ${JSON.stringify(jSelf.data ?? jSelf.error?.message)}`);
-  check('★0128: 본인 요청 셀프 수락 거부', (jSelf.data?.length ?? 0) === 0 && /swap_no_self_accept/.test(jSelf.error?.message ?? ''), jSelf.error?.code ?? '-');
+  check('★0128·0295: 본인 요청 셀프 수락 거부', (jSelf.data?.length ?? 0) === 0 && /swap_no_self_accept|swap_update_not_allowed/.test(jSelf.error?.message ?? ''), jSelf.error?.code ?? '-');
 
   // ★과잉 차단 확인 — 진짜 경로(동료가 수락)는 그대로 통과해야 한다. 0128 이 정상 흐름을 막으면 기능이 죽는다.
   const K = mk();
   const kId = await signUpSession(K, `qa_p7s_k_${s}@example.com`, { name: 'P7S동료', role: 'junior', phone: qaPhones[2] });
   cleanup.push(K);
   await K.rpc('join_by_invite', { p_code: code1 }); await O.rpc('approve_member', { p_uid: kId });
-  const kAcc = await K.from('swap_requests').update({ status: 'accepted', accepted_by: kId }).eq('id', swap2).select('id, status, accepted_by');
-  check('★회귀: 동료 수락은 정상 통과', (kAcc.data?.length ?? 0) === 1 && kAcc.data[0].status === 'accepted',
-    `rows=${kAcc.data?.length} ${kAcc.error?.message ?? ''}`);
+  // 직접 갱신 수락은 0295 가 막는다(지정 대상 검사를 건너뛰지 못하게). 앱은 accept_swap 만 쓴다.
+  const kDirect = await K.from('swap_requests').update({ status: 'accepted', accepted_by: kId }).eq('id', swap2).select('id');
+  check('★0295: 동료 직접 갱신 수락 거부', (kDirect.data?.length ?? 0) === 0 && /swap_update_not_allowed/.test(kDirect.error?.message ?? ''), kDirect.error?.code ?? '-');
+  const kAcc = await K.rpc('accept_swap', { p_id: swap2 });
+  const kRow = await K.from('swap_requests').select('status, accepted_by').eq('id', swap2).maybeSingle();
+  check('★회귀: 동료 수락(accept_swap)은 정상 통과', !kAcc.error && kRow.data?.status === 'accepted' && kRow.data?.accepted_by === kId,
+    `${kAcc.error?.message ?? ''} ${JSON.stringify(kRow.data)}`);
   // 사장 직접 승인은 근무 이전(approve_swap) 없이 approved 만 남긴다 → 0295 가 거부한다.
   const oApp = await O.from('swap_requests').update({ status: 'approved' }).eq('id', swap2).select('id, status');
   check('★0295: 사장 직접 승인 갱신 거부(승인은 approve_swap)', (oApp.data?.length ?? 0) === 0 && /swap_update_not_allowed/.test(oApp.error?.message ?? ''), oApp.error?.code ?? '-');
