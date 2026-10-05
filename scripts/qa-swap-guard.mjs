@@ -58,14 +58,15 @@ try {
   }).select('id');
   check('setup: 교대요청 생성(open)', !ins.error && (ins.data?.length ?? 0) === 1, ins.error?.message ?? '');
 
-  // 대조군: 행이 살아있을 때 승인 → 1행이어야 한다(writeStrict 오탐 없음 확인)
-  const ok = await O.from('swap_requests').update({ status: 'approved' }).eq('id', swapId).select('id');
-  check('대조군: 정상 승인은 1행(오탐 아님)', (ok.data?.length ?? 0) === 1, `rows=${ok.data?.length} err=${ok.error?.code ?? '-'}`);
+  // 대조군: 행이 살아있을 때 요청자 취소(앱 cancelSwap 경로) → 1행이어야 한다(writeStrict 오탐 없음 확인)
+  //   0295 부터 사장이 직접 approved 로 바꾸는 갱신은 거부된다(승인은 approve_swap 으로만). 앱이 실제로 보내는 갱신으로 잰다.
+  const ok = await J.from('swap_requests').update({ status: 'cancelled' }).eq('id', swapId).select('id');
+  check('대조군: 정상 취소는 1행(오탐 아님)', (ok.data?.length ?? 0) === 1, `rows=${ok.data?.length} err=${ok.error?.code ?? '-'}`);
 
-  // 본 실험: 뒤에서 행 삭제 후 승인 → 0행이어야 writeStrict가 막는다
+  // 본 실험: 뒤에서 행 삭제 후 취소 → 0행이어야 writeStrict가 막는다
   await svc.from('swap_requests').delete().eq('id', swapId);
-  const ghost = await O.from('swap_requests').update({ status: 'approved' }).eq('id', swapId).select('id');
-  check('★P0 updateSwap: 사라진 행 승인 → 0행(=writeStrict false)',
+  const ghost = await J.from('swap_requests').update({ status: 'cancelled' }).eq('id', swapId).select('id');
+  check('★P0 updateSwap: 사라진 행 취소 → 0행(=writeStrict false)',
     !ghost.error && (ghost.data?.length ?? 0) === 0, `rows=${ghost.data?.length} err=${ghost.error?.code ?? '-'}`);
 
   // 직원이 남의 교대를 승인하려 하면? (상태전이는 사장만)
@@ -89,9 +90,12 @@ try {
   const kAcc = await K.from('swap_requests').update({ status: 'accepted', accepted_by: kId }).eq('id', swap2).select('id, status, accepted_by');
   check('★회귀: 동료 수락은 정상 통과', (kAcc.data?.length ?? 0) === 1 && kAcc.data[0].status === 'accepted',
     `rows=${kAcc.data?.length} ${kAcc.error?.message ?? ''}`);
-  // 그 뒤 사장 확정도 되는지 — 상태머신 끝까지
+  // 사장 직접 승인은 근무 이전(approve_swap) 없이 approved 만 남긴다 → 0295 가 거부한다.
   const oApp = await O.from('swap_requests').update({ status: 'approved' }).eq('id', swap2).select('id, status');
-  check('★회귀: 사장 확정까지 도달', (oApp.data?.length ?? 0) === 1 && oApp.data[0].status === 'approved', `rows=${oApp.data?.length}`);
+  check('★0295: 사장 직접 승인 갱신 거부(승인은 approve_swap)', (oApp.data?.length ?? 0) === 0 && /swap_update_not_allowed/.test(oApp.error?.message ?? ''), oApp.error?.code ?? '-');
+  // 그 뒤 사장 반려(앱 rejectSwap 경로)는 된다 — 상태머신 끝까지
+  const oRej = await O.from('swap_requests').update({ status: 'rejected' }).eq('id', swap2).select('id, status');
+  check('★회귀: 사장 반려까지 도달', (oRej.data?.length ?? 0) === 1 && oRej.data[0].status === 'rejected', `rows=${oRej.data?.length}`);
 } catch (e) {
   fail++; console.log('  FAIL exception:', e.message);
 } finally {
