@@ -29,6 +29,7 @@ import {
 } from '@/lib/db';
 import { friendlyError, isMissingRpc } from '@/lib/utils/userError';
 import { sessionReadFailAction } from './sessionReadFail';
+import { sessionBootFault } from './sessionBootFault';
 import { deriveStoreRole } from './sessionRole';
 import { joinRejectAction, type JoinMarker } from './joinRejectDetect';
 import { setAnalyticsContext, track, reportError } from '@/lib/analytics/track';
@@ -51,6 +52,9 @@ type Status = 'loading' | 'signed_in' | 'signed_out';
 
 type SessionState = {
   status: Status;
+  // Q26: signed_out 이 연결 실패 때문인가. 'offline' 이면 기기 세션은 남아 있고 index 가 연결 안내를 보여 준다.
+  // 신원·매장 값은 SIGNED_OUT 과 똑같이 비어 있다(가짜 테넌트 금지).
+  sessionCheck: 'ok' | 'offline';
   role: Role;
   // 가입할 때 스스로 고른 역할(user_metadata.role). profiles.role 과 다른 개념이다 —
   // handle_new_user 가 보안상 신규 프로필을 **무조건 junior** 로 만들기 때문에(권한상승 차단),
@@ -298,7 +302,7 @@ let _lastLoadFault: 'deleted' | 'load_failed' | null = null;
 // 로드 실패)이 여럿이라 한 곳에 둔다. 빠진 값이 있으면 다음 계정 로그인 전까지 이전 계정 값이 남는다.
 // 매장 데이터 스토어는 tenantReset.ts 가 userId 변화를 보고 비운다.
 const SIGNED_OUT: Partial<SessionState> = {
-  status: 'signed_out', brandId: null, role: 'junior', isOwnerAccount: false, signupRole: null,
+  status: 'signed_out', sessionCheck: 'ok', brandId: null, role: 'junior', isOwnerAccount: false, signupRole: null,
   unitId: '', userId: '', userName: '', storeName: '', stores: [], pendingUnitId: '', pendingStoreName: '', rejectedJoinStoreName: '',
   industry: '', inviteCode: '', bio: '', phone: '',
   plan: 'free', seatLocked: false, needsDowngradeChoice: false, subStatus: '', trialEndsAt: '', paidUntil: '',
@@ -330,7 +334,9 @@ async function loadProfile(
       _lastLoadFault = 'load_failed'; // 로그인 직후라면 signInWithPassword 가 '네트워크 오류' 문구로 노출(#17·#18)
       setUnitId(null);
       setAnalyticsContext({ userId: null, unitId: null, role: null });
-      set(SIGNED_OUT);
+      // Q26: 연결 실패면 기기 세션은 그대로 두고 index 가 연결 안내를 보여 준다.
+      const offline = sessionBootFault({ error: profileErr, hasSession: true }) === 'offline';
+      set(offline ? { ...SIGNED_OUT, sessionCheck: 'offline' } : SIGNED_OUT);
       return;
     }
 
@@ -523,6 +529,7 @@ async function loadProfile(
     set({
       stores,
       status: 'signed_in',
+      sessionCheck: 'ok',
       userId,
       email,
       inviteCode,
@@ -561,7 +568,9 @@ async function loadProfile(
     _lastLoadFault = 'load_failed'; // 로그인 직후라면 signInWithPassword 가 '네트워크 오류' 문구로 노출(#17)
     setUnitId(null);
     setAnalyticsContext({ userId: null, unitId: null, role: null });
-    set(SIGNED_OUT);
+    // Q26: 연결 실패면 신원은 비우되 연결 안내를 띄운다(기기 세션은 지우지 않는다).
+    const offline = sessionBootFault({ error: e, hasSession: true }) === 'offline';
+    set(offline ? { ...SIGNED_OUT, sessionCheck: 'offline' } : SIGNED_OUT);
   }
 }
 
@@ -571,6 +580,7 @@ let _authSubscribed = false;
 
 export const useSessionStore = create<SessionState>((set, get) => ({
   ...(HAS_SUPABASE ? { ...DEMO, status: 'loading' } : DEMO),
+  sessionCheck: 'ok',
   // 로그인 전엔 '가입 때 고른 역할'을 알 수 없다 → null. loadProfile 이 메타데이터에서 채운다.
   signupRole: null,
   // 브랜드 축(P2)이 붙기 전까지 항상 null. 파생 지점이 생기면 loadProfile 이 채운다.
@@ -582,16 +592,21 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       set({ ...DEMO });
       return;
     }
-    const { data } = await supabase.auth.getSession();
+    const { data, error } = await supabase.auth.getSession();
     const user = data.session?.user;
     if (user) await loadProfile(set, user.id, user.email ?? '', pendingOwnerMeta(user));
-    else set({ status: 'signed_out' });
+    // Q26: 토큰이 만료된 채 오프라인이면 갱신이 실패해 session 이 null 로 온다. 세션 없음과 가른다.
+    else if (sessionBootFault({ error, hasSession: false }) === 'offline') set({ ...SIGNED_OUT, sessionCheck: 'offline' });
+    else set({ status: 'signed_out', sessionCheck: 'ok' });
 
     if (!_authSubscribed) {
       _authSubscribed = true;
       supabase.auth.onAuthStateChange((_evt, session) => {
         const u = session?.user;
         if (u) loadProfile(set, u.id, u.email ?? '', pendingOwnerMeta(u));
+        // 첫 INITIAL_SESSION(null)은 바로 위 init 이 이미 판정했다. auth-js 는 getSession 오류에도 null 로
+        // 보내므로 받아들이면 오프라인 안내가 로그인 화면으로 덮인다(Q26).
+        else if (_evt === 'INITIAL_SESSION') return;
         else {
           // 다른 탭의 로그아웃·토큰 만료 — 쓰기 태깅용 매장 id 도 비운다(다음 계정에 이전 매장이 붙지 않게).
           setUnitId(null);

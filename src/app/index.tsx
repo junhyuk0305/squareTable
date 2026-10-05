@@ -1,4 +1,5 @@
-import { View, Text, Pressable, StyleSheet, ScrollView, Platform } from 'react-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { View, Text, Pressable, StyleSheet, ScrollView, Platform, AppState, ActivityIndicator } from 'react-native';
 import { useRouter, Redirect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -41,6 +42,70 @@ const FEATURES: Feature[] = [
 
 const OFFERS = ['설치 없이 QR로 시작', '사장님 답이 곧 AI가 돼요', '언제든 그만둘 수 있어요'];
 
+// Q26: 자동 재시도 간격. 5초에서 시작해 두 배씩 늘리고 30초에서 멈춘다.
+const RETRY_FIRST_MS = 5000;
+const RETRY_MAX_MS = 30000;
+
+/**
+ * 연결 안내(Q26) — 연결 실패로 세션을 못 읽었을 때 로그인 화면 대신 보인다.
+ * 기기 세션은 남아 있어서 연결되면 init 이 그대로 다시 들어간다. 신원 값은 비어 있다(useSessionStore SIGNED_OUT).
+ */
+function OfflineBoot() {
+  const init = useSessionStore((s) => s.init);
+  const signOut = useSessionStore((s) => s.signOut);
+  const [busy, setBusy] = useState(false);
+  const busyRef = useRef(false);
+
+  const retry = useCallback(async () => {
+    if (busyRef.current) return;
+    busyRef.current = true;
+    setBusy(true);
+    try {
+      await init();
+    } finally {
+      busyRef.current = false;
+      setBusy(false);
+    }
+  }, [init]);
+
+  useEffect(() => {
+    let delay = RETRY_FIRST_MS;
+    let timer: ReturnType<typeof setTimeout>;
+    const schedule = () => {
+      timer = setTimeout(() => {
+        void retry();
+        delay = Math.min(delay * 2, RETRY_MAX_MS);
+        schedule();
+      }, delay);
+    };
+    schedule();
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') void retry();
+    });
+    return () => {
+      clearTimeout(timer);
+      sub.remove();
+    };
+  }, [retry]);
+
+  return (
+    <View style={styles.offlineRoot}>
+      <Ionicons name="cloud-offline-outline" size={40} color={InkColors.ink3} />
+      <Text style={styles.offlineText}>인터넷 연결이 불안정해요. 연결되면 바로 다시 들어가요.</Text>
+      <Pressable
+        onPress={() => void retry()}
+        disabled={busy}
+        style={({ pressed }) => [styles.offerCta, styles.offlineBtn, pressed && { opacity: 0.88 }]}
+      >
+        {busy ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.offerCtaText}>다시 시도</Text>}
+      </Pressable>
+      <Pressable onPress={() => void signOut()} hitSlop={8} style={styles.offerLogin}>
+        <Text style={styles.offlineLink}>다른 계정으로 로그인</Text>
+      </Pressable>
+    </View>
+  );
+}
+
 export default function LandingScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -50,6 +115,7 @@ export default function LandingScreen() {
   const pendingUnitId = useSessionStore((s) => s.pendingUnitId);
   const needsDowngradeChoice = useSessionStore((s) => s.needsDowngradeChoice);
   const brandId = useSessionStore((s) => s.brandId);
+  const sessionCheck = useSessionStore((s) => s.sessionCheck);
 
   // 이미 로그인된 재방문자는 마케팅을 건너뛰고 각자 홈으로. (데모 빌드는 항상 랜딩을 보여준다)
   if (HAS_SUPABASE && status === 'signed_in') {
@@ -68,6 +134,8 @@ export default function LandingScreen() {
     return <Redirect href="/hub" />;
   }
   if (HAS_SUPABASE && status === 'loading') return null; // 스플래시가 덮는 구간 — 깜빡임 방지
+  // 연결 실패로 세션을 못 읽었으면 로그인 화면으로 보내지 않는다(Q26). 웹·네이티브 공통.
+  if (HAS_SUPABASE && status === 'signed_out' && sessionCheck === 'offline') return <OfflineBoot />;
 
   // 웹 미로그인 방문자는 정적 마케팅 페이지(/welcome.html)를 앞문으로 — 로그인/가입만 앱(SPA)으로 이어진다.
   // welcome.html은 실제 정적 파일이라 SPA rewrite에 안 걸린다.
@@ -328,6 +396,12 @@ const styles = StyleSheet.create({
   offerLogin: { alignItems: 'center', paddingVertical: Space.xs },
   offerLoginText: { fontSize: 13, lineHeight: 19, color: InkColors.ink3 },
   offerLoginStrong: { color: InkColors.ink, fontWeight: '800' },
+
+  // ── 연결 안내(Q26) ──
+  offlineRoot: { flex: 1, backgroundColor: InkColors.cream, alignItems: 'center', justifyContent: 'center', paddingHorizontal: SCREEN_GUTTER, gap: Space.md },
+  offlineText: { fontSize: 16, lineHeight: 24, fontWeight: '700', color: InkColors.ink, textAlign: 'center' },
+  offlineBtn: { alignSelf: 'stretch', minHeight: 54 },
+  offlineLink: { fontSize: 14, lineHeight: 20, fontWeight: '700', color: InkColors.ink2 },
 
   // ── FAB ──
   fabWrap: { position: 'absolute', right: SCREEN_GUTTER },
