@@ -16,6 +16,7 @@ import { GuideHost } from '@/components/GuideHost';
 import { TextScaleTransition } from '@/components/settings/TextScaleTransition';
 import { FreeUntilNotice } from '@/components/FreeUntilNotice';
 import { VoiceRecorderBinder } from '@/components/VoiceRecorderBinder';
+import { BackRulesBinder } from '@/components/BackRulesBinder';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { installTenantReset } from '@/lib/store/tenantReset';
 import { usePreferencesStore, TEXT_SCALE_FACTOR } from '@/lib/store/usePreferencesStore';
@@ -113,6 +114,8 @@ export default function RootLayout() {
         <StoreEnterCover />
         {/* 네이티브 음성 녹음 인스턴스 주입(웹에선 .web 구현이 null 을 렌더). 화면은 안 그린다. */}
         <VoiceRecorderBinder />
+        {/* 안드 뒤로가기 규칙표(J13). iOS·웹에서는 아무것도 걸지 않는다. 화면은 안 그린다. */}
+        <BackRulesBinder />
         <Toast />
         <DialogHost />
         {/* 사용 안내 팝업 — DialogHost 와 같은 자리(프레임 안, 1회 마운트). */}

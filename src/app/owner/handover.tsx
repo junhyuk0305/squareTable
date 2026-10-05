@@ -16,6 +16,7 @@ import { isSquarePublishable, buildPlaybookEntryFromSquare, buildDirectUq } from
 import { EXTRACTION_MASTER } from '@/data/extraction-master';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { useSessionStore } from '@/lib/store/useSessionStore';
+import { useBackIntercept } from '@/lib/hooks/useBackIntercept';
 import { showToast } from '@/lib/store/useToastStore';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Elevation, Radius } from '@/lib/theme/elevation';
@@ -177,6 +178,8 @@ function LegacyHandover() {
     setSegs([]);
     setError(null);
   }, []);
+  // 안드 뒤로(J13) — 검토 단계에서는 화면을 떠나지 않고 [다시 붙여넣기]처럼 1단계로 간다.
+  useBackIntercept(phase === 'review', reset);
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>

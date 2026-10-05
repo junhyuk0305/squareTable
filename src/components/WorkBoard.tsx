@@ -44,6 +44,7 @@ import { INVITE_FIRST, type Member } from '@/components/work/MentionInput';
 import { InkColors } from '@/lib/theme/colors';
 import { todayStr, tsMs } from '@/lib/utils/attendance';
 import { asMemberRole, canManage } from '@/lib/utils/roles';
+import { useBackIntercept } from '@/lib/hooks/useBackIntercept';
 
 type ViewKey = 'chat' | 'drawer' | 'notice' | 'todo' | 'settings';
 
@@ -247,6 +248,8 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
     if (openedExternally && router.canGoBack()) router.back();
     else setView(view === 'settings' ? 'todo' : 'chat');
   }, [openedExternally, view]);
+  // 안드 뒤로(J13) = 화면 위 뒤로 버튼과 같다. 방 서랍은 채팅으로, 패널은 closePanel.
+  useBackIntercept(view !== 'chat', view === 'drawer' ? () => setView('chat') : closePanel);
   // 방 만들기(전역) / 방 모습 바꾸기(개인) — 같은 시트 두 모드.
   const [roomComposer, setRoomComposer] = useState<'create' | 'look' | null>(null);
   // 지금 보고 있는 방의 '여기까지 읽음' 기준(0154)을 마운트 때 한 번 찍는다. 방을 옮길 때 찍는 것은
