@@ -147,7 +147,7 @@ function AccountEditForm() {
     setCurPw('');
     setPw('');
     setPw2('');
-    showToast('비밀번호를 변경했어요. 다른 기기에서는 로그아웃돼요.', 'good');
+    showToast('비밀번호를 변경했어요.', 'good');
   };
 
   // 펼치면 곧바로 입력 대기 상태로 — 펼치고 다시 탭하게 만들지 않는다(허브의 코드 입력 줄과 같은 규칙).

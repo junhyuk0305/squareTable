@@ -168,7 +168,7 @@ type SessionState = {
   verifyEmail: (email: string) => Promise<{ status: 'demo' | 'sent' | 'rate' | 'error'; message?: string }>;
   // emailPending = 이메일 변경이 확인 메일을 기다린다(Q15). 이때 email 은 그대로다.
   updateProfile: (patch: { name?: string; phone?: string; phone_last4?: string; bio?: string; email?: string }) => Promise<{ error: string | null; emailPending?: boolean }>;
-  // Q14: 현재 비밀번호를 확인한 뒤 바꾸고, 다른 기기를 로그아웃시킨다.
+  // Q14: 현재 비밀번호를 확인한 뒤 바꾼다. 다른 기기는 로그아웃시키지 않는다(10-05 결정).
   changePassword: (currentPw: string, newPw: string) => Promise<{ error: string | null }>;
   // Q13(0238): 새 번호로 받은 인증번호로 번호를 바꾼다(otp change_phone). 프로필 저장으로는 번호를 바꾸지 않는다.
   changePhone: (phone: string, code: string) => Promise<{ error: string | null }>;
