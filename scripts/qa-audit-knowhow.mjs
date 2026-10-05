@@ -60,5 +60,27 @@ console.log('[E1] 초안·외부용 퀴즈는 직원 카드와 자동 배정에 
   }
 }
 
+console.log('\n[E2] 노하우가 바뀌어 재확인이 나가면 직원 카드에 그 노하우가 "다시 확인"으로 뜬다');
+{
+  const sched = await tryImport('../src/lib/quiz/schedule.ts');
+  const f = sched.recheckEntryDue;
+  check('★recheckEntryDue 판정 함수가 있다', typeof f === 'function', sched.__err ?? '');
+  if (typeof f === 'function') {
+    const passed = '2026-10-01T01:00:00.000Z', edited = '2026-10-03T01:00:00+00:00';
+    check('★재확인 발송이 와 있고, 통과 뒤 노하우가 바뀌었으면 다시 확인할 것', f(passed, edited, true) === true);
+    check('재확인 발송이 없으면 노하우가 바뀌어도 카드를 새로 띄우지 않는다(서버 빈도 상한을 따른다)', f(passed, edited, false) === false);
+    check('통과 뒤 안 바뀐 노하우는 다시 묻지 않는다', f(edited, passed, true) === false);
+    check('통과 기록이 없으면 재확인이 아니다', f(undefined, edited, true) === false);
+  }
+  const db = strip(read('src/lib/db.ts'));
+  check('★발송 원장을 읽을 때 origin 도 읽는다', /const QUIZ_ASSIGNMENT_COLS = '[^']*\borigin\b[^']*'/.test(db) && /origin: r\.origin \?\? 'manual'/.test(db));
+  check('QuizAssignment 에 origin 이 있다', /origin\?: string;/.test(read('src/lib/quiz/types.ts')));
+  const board = strip(read('src/components/WorkBoard.tsx'));
+  check('★카드 판정이 내 미완료 재확인 발송을 보고 바뀐 노하우를 due 로 띄운다',
+    /a\.origin === 'recheck' && !a\.completedAt/.test(board) && /recheckEntryDue\(myRow\(id\)\?\.verifiedAt, entryById\.get\(id\)\?\.updated_at, recheck\)/.test(board));
+  check('★1회성 재확인 카드는 앞선 1회성 카드에 가려지지 않는다',
+    /c === firstOnce \|\| c\.items\.some\(\(it\) => it\.state === 'due'\)/.test(board));
+}
+
 console.log(`\n${pass} PASS / ${fail} FAIL`);
 process.exit(fail ? 1 : 0);
