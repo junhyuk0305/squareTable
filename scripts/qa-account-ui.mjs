@@ -100,7 +100,7 @@ console.log('\n■ Q31 — 탈퇴 확인 문구(deleteConfirmText)');
   check('⛔웹 사장 문구는 글자 그대로(동결)', confirmText({ ownerAccount: true, notice: null, os: 'web' }) === WEB_OWNER, show(confirmText({ ownerAccount: true, notice: null, os: 'web' })));
   check('⛔웹 직원 문구는 글자 그대로(동결)', confirmText({ ownerAccount: false, notice: null, os: 'web' }) === WEB_STAFF, show(confirmText({ ownerAccount: false, notice: null, os: 'web' })));
   check('⛔웹은 안내가 들어와도 문구가 그대로', confirmText({ ownerAccount: true, notice: 'x', os: 'web' }) === WEB_OWNER);
-  check('탈퇴 계정 로그인 문구', DELETED_LOGIN_TEXT === '탈퇴 처리된 계정이에요. 30일 뒤 완전히 지워지고, 그 뒤엔 같은 이메일로 다시 가입할 수 있어요. 되돌리려면 문의해 주세요.', show(DELETED_LOGIN_TEXT));
+  check('탈퇴 계정 로그인 문구', DELETED_LOGIN_TEXT === '탈퇴 처리된 계정이에요. 30일 뒤 완전히 지워지고, 그 뒤엔 같은 이메일로 다시 가입할 수 있어요.', show(DELETED_LOGIN_TEXT));
   check('가입 이메일 중복 문구(탈퇴 여부를 따로 말하지 않는다)', EMAIL_TAKEN_TEXT === '이미 가입된 이메일이에요. 로그인해 주세요. 탈퇴했다면 30일 뒤 다시 가입할 수 있어요.', show(EMAIL_TAKEN_TEXT));
 }
 
