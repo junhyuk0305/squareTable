@@ -43,26 +43,30 @@ const read = (p) => {
 // 주석을 걷어 낸 코드만 본다.
 const strip = (s) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\{\/\*[\s\S]*?\*\/\}/g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
 
-const SERVER_ITEMS = ['age14', 'terms', 'privacy_collect', 'labor']; // 0240 허용 목록
+const SERVER_ITEMS = ['age14', 'terms', 'privacy_collect', 'labor', 'marketing']; // 0240 허용 목록
 const SERVER_VERSION = /^[0-9]{4}-[0-9]{2}-[0-9]{2}[A-Za-z0-9._-]{0,10}$/; // 0240 버전 형식
 const STYLE = /—| · /;
 const { consentRows, consentPayload, allConsented, UNDER_14_TEXT } = consent;
 const rows = (r) => (fn(consentRows) ? consentRows(r) : []);
 const keys = (r) => rows(r).map((x) => x.key);
 
-console.log('\n■ 체크리스트 정본(consent.ts) — 서버 키 · 마케팅 없음 · 직원 14세 문구');
+console.log('\n■ 체크리스트 정본(consent.ts) — 서버 키 · 마케팅은 선택 · 직원 14세 문구');
 {
-  check('사장 = age14 · terms · privacy_collect', show(keys('owner')) === show(['age14', 'terms', 'privacy_collect']), show(keys('owner')));
-  check('직원 = 사장 + labor', show(keys('junior')) === show(['age14', 'terms', 'privacy_collect', 'labor']), show(keys('junior')));
+  check('사장 = age14 · terms · privacy_collect · marketing', show(keys('owner')) === show(['age14', 'terms', 'privacy_collect', 'marketing']), show(keys('owner')));
+  check('직원 = 필수 4개(labor 포함) + marketing', show(keys('junior')) === show(['age14', 'terms', 'privacy_collect', 'labor', 'marketing']), show(keys('junior')));
   const all = [...keys('owner'), ...keys('junior')];
   check('★모든 키가 서버 허용 목록 안이다(collect 가 아니라 privacy_collect)', all.length > 0 && all.every((k) => SERVER_ITEMS.includes(k)), show(all));
-  check('마케팅 행이 없다', !all.includes('marketing') && !rows('owner').concat(rows('junior')).some((r) => /마케팅/.test(r.label ?? '')));
+  const mk = (r) => rows(r).find((x) => x.key === 'marketing');
+  check('★마케팅 행 = "마케팅·광고성 정보 수신(문자·이메일)" · 보기 /legal/marketing · 선택', ['owner', 'junior'].every((r) => mk(r)?.label === '마케팅·광고성 정보 수신(문자·이메일)' && mk(r)?.doc === '/legal/marketing' && mk(r)?.required === false), show(mk('owner')));
+  check('마케팅 말고는 모두 필수', ['owner', 'junior'].every((r) => rows(r).filter((x) => x.key !== 'marketing').every((x) => x.required === true)), show(rows('junior')));
   const age = (r) => rows(r).find((x) => x.key === 'age14')?.label;
   check('★직원 14세 문구 = "만 14세 이상입니다"(법정대리인 문구 없음)', age('junior') === '만 14세 이상입니다', show(age('junior')));
   check('사장 14세 문구 = "만 14세 이상입니다"', age('owner') === '만 14세 이상입니다', show(age('owner')));
   const docOf = (k) => rows('junior').find((x) => x.key === k)?.doc;
   check('문서 링크 = /terms · /legal/collect · /legal/labor (문서 경로는 그대로)', docOf('terms') === '/terms' && docOf('privacy_collect') === '/legal/collect' && docOf('labor') === '/legal/labor', show(rows('junior')));
   check('문구에 대시·중간점 잇기가 없다', rows('junior').every((r) => !STYLE.test(r.label ?? '')));
+  const cl = strip(read('src/components/ConsentChecklist.tsx'));
+  check('★체크리스트가 선택 행에 [선택] 을 붙인다', /\[선택\]/.test(cl) && /required/.test(cl));
 }
 
 console.log('\n■ 동의 판정 · 전송값');
@@ -71,12 +75,14 @@ console.log('\n■ 동의 판정 · 전송값');
   const ownerAll = { age14: true, terms: true, privacy_collect: true };
   const staffAll = { ...ownerAll, labor: true };
   check('allConsented: 하나도 없으면 false', fn(allConsented) && allConsented('owner', none) === false);
-  check('allConsented: 사장 3개면 true', fn(allConsented) && allConsented('owner', ownerAll) === true);
+  check('allConsented: 사장 필수 3개면 true(마케팅 없이)', fn(allConsented) && allConsented('owner', ownerAll) === true);
   check('allConsented: 직원은 labor 까지 있어야 true', fn(allConsented) && allConsented('junior', ownerAll) === false && allConsented('junior', staffAll) === true);
   const p = fn(consentPayload) ? consentPayload('junior', staffAll) : null;
   check('★consentPayload(직원) = 키 4개 + consent_version = TERMS_VERSION', !!p && show(p.consents) === show(['age14', 'terms', 'privacy_collect', 'labor']) && p.consent_version === TERMS_VERSION, show(p));
   const po = fn(consentPayload) ? consentPayload('owner', { ...staffAll, marketing: true, collect: true }) : null;
-  check('consentPayload(사장)은 화면 행에 없는 키를 싣지 않는다', !!po && show(po.consents) === show(['age14', 'terms', 'privacy_collect']), show(po));
+  check('★consentPayload(사장)은 체크한 marketing 을 싣고 화면 행에 없는 키는 싣지 않는다', !!po && show(po.consents) === show(['age14', 'terms', 'privacy_collect', 'marketing']), show(po));
+  const pn = fn(consentPayload) ? consentPayload('owner', ownerAll) : null;
+  check('마케팅을 체크하지 않으면 싣지 않는다', !!pn && show(pn.consents) === show(['age14', 'terms', 'privacy_collect']), show(pn));
   check('TERMS_VERSION 이 서버 버전 형식(0240)을 통과한다', SERVER_VERSION.test(String(TERMS_VERSION)), show(TERMS_VERSION));
   check('UNDER_14_TEXT = "만 14세 미만은 가입할 수 없어요."', UNDER_14_TEXT === '만 14세 미만은 가입할 수 없어요.', show(UNDER_14_TEXT));
 }

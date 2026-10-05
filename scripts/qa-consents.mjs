@@ -86,9 +86,9 @@ try {
   {
     const { rows, error } = await consentsOf(A.id);
     const items = rows.map((r) => r.item).sort().join(',');
-    check('1-2 ★필수 동의 3행이 email_signup 으로 남는다', !error && items === 'age14,privacy_collect,terms'
+    check('1-2 ★필수 3행 + 선택 marketing 이 email_signup 으로 남는다', !error && items === 'age14,marketing,privacy_collect,terms'
       && rows.every((r) => r.channel === 'email_signup' && r.version === VER), error?.message ?? `rows=${JSON.stringify(rows)}`);
-    check('1-3 허용 목록 밖(marketing)은 남기지 않는다', !rows.some((r) => r.item === 'marketing'), `rows=${JSON.stringify(rows)}`);
+    check('1-3 ★마케팅 수신 동의(선택)도 남긴다(2026-10-05)', rows.some((r) => r.item === 'marketing'), `rows=${JSON.stringify(rows)}`);
   }
   const B = await up(1, { name: 'QA동의직원', role: 'junior', phone: phones[1], birth_date: '2000-01-01',
     consents: ['age14', 'terms', 'privacy_collect', 'labor'], consent_version: VER });
@@ -122,14 +122,14 @@ try {
   console.log('\n[2] user_consents 권한 = 본인 select 만');
   {
     const own = await A.c.from('user_consents').select('item');
-    check('2-1 본인은 자기 동의 3행을 읽는다', !own.error && (own.data ?? []).length === 3, own.error?.message ?? `rows=${(own.data ?? []).length}`);
+    check('2-1 본인은 자기 동의 4행을 읽는다', !own.error && (own.data ?? []).length === 4, own.error?.message ?? `rows=${(own.data ?? []).length}`);
     const other = await B.c.from('user_consents').select('item').eq('user_id', A.id);
     check('2-2 남의 동의는 0행', !other.error && (other.data ?? []).length === 0, other.error?.message ?? `rows=${(other.data ?? []).length}`);
     const ins = await A.c.from('user_consents').insert({ user_id: A.id, item: 'labor', version: VER, channel: 'reconsent' });
     check('2-3 앱 역할은 직접 INSERT 못 한다(42501)', ins.error?.code === '42501', `code=${ins.error?.code ?? '-'} ${ins.error?.message ?? ''}`);
     const del = await A.c.from('user_consents').delete().eq('user_id', A.id).select('id');
     const left = (await consentsOf(A.id)).rows.length;
-    check('2-4 앱 역할은 직접 DELETE 못 한다', !!del.error && left === 3, `err=${del.error?.code ?? '-'} left=${left}`);
+    check('2-4 앱 역할은 직접 DELETE 못 한다', !!del.error && left === 4, `err=${del.error?.code ?? '-'} left=${left}`);
     const upd = await A.c.from('user_consents').update({ version: '2000-01-01' }).eq('user_id', A.id).select('id');
     check('2-5 앱 역할은 직접 UPDATE 못 한다', !!upd.error, `err=${upd.error?.code ?? '-'} rows=${(upd.data ?? []).length}`);
     const an = await mk().from('user_consents').select('item');
@@ -146,7 +146,9 @@ try {
     const r2 = await C.c.rpc('record_my_consents', { p_items: ['age14', 'terms', 'terms'], p_version: VER, p_channel: 'reconsent' });
     const after2 = (await consentsOf(C.id)).rows.length;
     check('3-2 같은 항목·버전은 다시 넣지 않는다', !r2.error && r2.data === 0 && after2 === 3, r2.error?.message ?? `rpc=${r2.data} rows=${after2}`);
-    const bi = await C.c.rpc('record_my_consents', { p_items: ['age14', 'marketing'], p_version: VER, p_channel: 'google_signup' });
+    const bm = await C.c.rpc('record_my_consents', { p_items: ['marketing'], p_version: VER, p_channel: 'google_signup' });
+    check('3-3a ★구글 가입도 마케팅 수신 동의(선택)를 남긴다', !bm.error && bm.data === 1, bm.error?.message ?? `rpc=${bm.data}`);
+    const bi = await C.c.rpc('record_my_consents', { p_items: ['age14', 'ads'], p_version: VER, p_channel: 'google_signup' });
     check('3-3 허용 목록 밖 항목은 거부(consent_item_invalid)', /consent_item_invalid/.test(bi.error?.message ?? ''), bi.error?.message ?? `rpc=${bi.data}`);
     const bv = await C.c.rpc('record_my_consents', { p_items: ['labor'], p_version: '최신', p_channel: 'google_signup' });
     check('3-4 버전 형식이 틀리면 거부(consent_version_invalid)', /consent_version_invalid/.test(bv.error?.message ?? ''), bv.error?.message ?? `rpc=${bv.data}`);
@@ -155,7 +157,7 @@ try {
     const be = await C.c.rpc('record_my_consents', { p_items: [], p_version: VER, p_channel: 'google_signup' });
     check('3-6 빈 목록은 거부(consent_item_invalid)', /consent_item_invalid/.test(be.error?.message ?? ''), be.error?.message ?? `rpc=${be.data}`);
     const left = (await consentsOf(C.id)).rows.length;
-    check('3-7 거부된 호출은 아무것도 남기지 않는다', left === 3, `rows=${left}`);
+    check('3-7 거부된 호출은 아무것도 남기지 않는다', left === 4, `rows=${left}`);
     const an = await mk().rpc('record_my_consents', { p_items: ['terms'], p_version: VER, p_channel: 'google_signup' });
     check('3-8 anon 은 실행 권한이 없다(42501)', an.error?.code === '42501', `code=${an.error?.code ?? '-'} ${an.error?.message ?? ''}`);
   }
