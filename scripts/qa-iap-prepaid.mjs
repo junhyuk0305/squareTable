@@ -48,6 +48,8 @@ console.log('\n[2] 배선(주석 제외 코드)');
   check('★옛 서버(함수 없음)면 잠그지 않는다(isMissingRpc → null)', /owner_prepaid_until[\s\S]{0,400}?isMissingRpc\(/.test(db));
   const panel = strip(read('src/components/IapPurchasePanel.tsx'));
   check('패널이 prepaidGuardNote 로 고른다', /prepaidGuardNote\(/.test(panel));
+  // 2026-10-05: 잠금은 새로 사는 결제만. 이미 구독 중인 사장의 매장 수 바꾸기에는 걸지 않는다.
+  check('★이미 구독 중(owned > 0)이면 잠그지 않는다', /const prepaidNote = owned === 0 \? prepaidGuardNote\(prepaidUntil\) : null;/.test(panel));
   check('★구매 버튼 disabled 에 prepaidNote 가 들어간다', /disabled=\{busy[^}]*prepaidNote !== null/.test(panel));
   check('잠금 문구를 화면에 그린다', /\{prepaidNote !== null &&[^}]*<Text/.test(panel));
 }
