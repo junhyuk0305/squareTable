@@ -165,7 +165,8 @@ function clientPushRoute(audience: string | undefined, tag: string | undefined):
     case 'mention':
     case 'assign':
     case 'training': return '/junior/work';
-    case 'q-answered': return '/junior/chat';
+    case 'q-answered':
+    case 'suggestion-result': return '/junior/chat';
     default: return '/';
   }
 }

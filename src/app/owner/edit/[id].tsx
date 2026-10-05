@@ -14,6 +14,7 @@ import { VerifyBadge } from '@/components/VerifyBadge';
 import { BrandCopyPanel } from '@/components/owner/BrandCopyPanel';
 import { formatRelative } from '@/components/coach/coachUtils';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
+import { useSuggestionStore } from '@/lib/store/useSuggestionStore';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useStaffStore } from '@/lib/store/useStaffStore';
 import { useWorkStore, understandingOf } from '@/lib/store/useWorkStore';
@@ -38,7 +39,8 @@ import type { PlaybookEntry, SquareBlock, UnknownQuery } from '@/types';
  *  · 저장 시 기존 엔트리 update(version+1) → 재색인까지 스토어가 처리.
  */
 export default function EditKnowledgeScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  // sugId = 개선 제안에서 왔다(D12). 고쳐서 저장했을 때만 그 제안을 승인한다.
+  const { id, sugId } = useLocalSearchParams<{ id: string; sugId?: string }>();
   const router = useRouter();
   const loaded = usePlaybookStore((s) => s.loaded);
   const entry = usePlaybookStore((s) => (id ? s.getById(id) : undefined));
@@ -77,12 +79,13 @@ export default function EditKnowledgeScreen() {
   }
 
   // key=id로 다른 노하우로 파라미터가 바뀌면 채팅이 새 엔트리로 재마운트된다.
-  return <ConversationalEdit key={entry.id} entry={entry} quizCountOf={quizCountOf} />;
+  return <ConversationalEdit key={entry.id} entry={entry} quizCountOf={quizCountOf} sugId={sugId} />;
 }
 
-function ConversationalEdit({ entry, quizCountOf }: { entry: PlaybookEntry; quizCountOf: (entryId: string) => number }) {
+function ConversationalEdit({ entry, quizCountOf, sugId }: { entry: PlaybookEntry; quizCountOf: (entryId: string) => number; sugId?: string }) {
   const router = useRouter();
   const update = usePlaybookStore((s) => s.update);
+  const approveSuggestion = useSuggestionStore((s) => s.approve);
   const archive = usePlaybookStore((s) => s.archive);
   const entries = usePlaybookStore((s) => s.entries);
   const userName = useSessionStore((s) => s.userName);
@@ -153,10 +156,14 @@ function ConversationalEdit({ entry, quizCountOf }: { entry: PlaybookEntry; quiz
       //   0행(RLS·id 드리프트)이어도 "수정 저장됨 (v3)"을 띄우고 1초 뒤 뒤로 갔다 —
       //   사장은 저장됐다고 믿고 나가고, 실패 배너는 **다른 화면에서** 뒤늦게 떴다.
       if (!ok) return; // 실패 문구·롤백은 optimisticPatch(guardWrite)가 이미 처리한다
+      // D12: 개선 제안에서 왔으면 저장이 된 뒤에야 반영(승인)한다. 그냥 나가면 제안은 검토 대기로 남는다.
+      if (sugId && !(await approveSuggestion(sugId, entry.id))) {
+        showToast('노하우는 저장됐어요. 다만 제안 반영 표시에 실패했어요 — 제안함에서 다시 반영해 주세요.', 'warn');
+      }
       setToast('수정 저장됨 (v' + (entry.version + 1) + ')');
       navTimer.current = setTimeout(() => router.back(), 1000);
     },
-    [entry, update, userName, router],
+    [entry, update, userName, router, sugId, approveSuggestion],
   );
 
   const del = useCallback(async () => {

@@ -38,7 +38,6 @@ export default function OwnerSuggestionsScreen() {
   const suggestions = useSuggestionStore((s) => s.suggestions);
   const hydrate = useSuggestionStore((s) => s.hydrate);
   const subscribe = useSuggestionStore((s) => s.subscribe);
-  const approve = useSuggestionStore((s) => s.approve);
   const reject = useSuggestionStore((s) => s.reject);
   // ★loaded 를 안 봐서 "🤝 대기 중인 제안이 없어요"가 먼저 떴다 — 알림 배지를 보고 들어오는 자리라
   //   "없어요"가 스치면 사장이 그대로 나가버린다.
@@ -61,17 +60,15 @@ export default function OwnerSuggestionsScreen() {
   );
 
   // 승인 → 반영 화면으로.
-  //  - 개선: 대상 노하우를 직접 수정하는 것 자체가 반영 → 즉시 승인 후 수정 화면.
+  //  - 개선: 대상 노하우 수정 화면으로. 고쳐서 **저장했을 때만** 승인된다(D12 · 신규 분기와 같은 규칙).
+  //    그냥 나가면 제안은 검토 대기로 남는다.
   //  - 신규: '제안 검토' 모드(coach) — 제안 원문이 자동 구조화된 초안으로 먼저 뜨고, 사장은 고칠 부분만
   //    말하거나(생략 가능) 바로 추가/이탈(=미반영)을 결정한다. '실제 발행'됐을 때만 승인되도록 sugId를 넘긴다.
   function reflect(s: PlaybookSuggestion) {
     if (s.kind === 'improve' && s.target_entry_id) {
-      approve(s.id);
-      showToast('승인했어요 · 노하우를 수정해 주세요', 'good');
-      // ★제안 본문을 들고 간다(2026-08-25 감사 #20). 승인과 동시에 제안이 목록에서 사라지므로
-      //   본문을 안 넘기면 사장은 **뭘 고치라는 건지 다시 볼 수 없다.** 신규 제안 분기(아래)는
-      //   seed 를 정상적으로 넘기는데 개선 분기만 비대칭이었다.
-      router.push({ pathname: '/owner/edit/[id]', params: { id: s.target_entry_id, seed: s.text } });
+      showToast('노하우를 고쳐 저장하면 반영돼요', 'info');
+      // ★제안 본문을 들고 간다(2026-08-25 감사 #20). 본문을 안 넘기면 사장은 **뭘 고치라는 건지 다시 볼 수 없다.**
+      router.push({ pathname: '/owner/edit/[id]', params: { id: s.target_entry_id, seed: s.text, sugId: s.id } });
     } else {
       showToast('제안을 초안으로 정리해 드려요 · 확인 후 추가하세요', 'info');
       // source_template_id(②)=발행 시 업무 자동 첨부 · source_uq_id(③/D4)=uqId로 넘겨 발행 시 그 질문 자동 resolve.

@@ -9,7 +9,7 @@ import { fetchSuggestions, insertSuggestion, reviewSuggestion, subscribeSuggesti
 import { optimisticAdd, optimisticPatch } from '@/lib/store/crudHelpers';
 import { genId } from '@/lib/utils/id';
 import { useSessionStore } from '@/lib/store/useSessionStore';
-import { notifyOwnersSuggestion } from '@/lib/push/notify';
+import { notifyOwnersSuggestion, notifyUserSuggestionResult } from '@/lib/push/notify';
 
 // 데모 매장 id(= mockSeed.DEMO_UNIT_ID). 순환 import 방지를 위해 여기선 리터럴로 둔다.
 const DEMO_UNIT_ID = 'store_001';
@@ -122,7 +122,11 @@ export const useSuggestionStore = create<State>((set, get) => ({
       reviewed_by: s.userId,
       ...(resultingEntryId ? { resulting_entry_id: resultingEntryId } : null),
     };
-    return optimisticPatch(set, get, 'suggestions', id, patch, () => reviewSuggestion(id, patch), '승인 처리에 실패했어요.');
+    const before = get().suggestions.find((x) => x.id === id);
+    const result = optimisticPatch(set, get, 'suggestions', id, patch, () => reviewSuggestion(id, patch), '승인 처리에 실패했어요.');
+    // 저장 성공 뒤에만 제안한 사람에게 알린다(D12). 결과를 모르면 다시 제안하지 않게 된다.
+    void result.then((ok) => { if (ok && before) notifyUserSuggestionResult(before.proposer_id, true, before.text); });
+    return result;
   },
 
   reject: (id, note) => {
@@ -133,7 +137,11 @@ export const useSuggestionStore = create<State>((set, get) => ({
       reviewed_by: s.userId,
       ...(note ? { owner_note: note } : null),
     };
-    return optimisticPatch(set, get, 'suggestions', id, patch, () => reviewSuggestion(id, patch), '반려 처리에 실패했어요.');
+    const before = get().suggestions.find((x) => x.id === id);
+    const result = optimisticPatch(set, get, 'suggestions', id, patch, () => reviewSuggestion(id, patch), '반려 처리에 실패했어요.');
+    // 반려 사유는 알림 본문에 싣지 않는다. 직원은 '내가 보낸 제안'에서 사유를 본다(D12).
+    void result.then((ok) => { if (ok && before) notifyUserSuggestionResult(before.proposer_id, false, before.text); });
+    return result;
   },
 
   getPending: () => get().suggestions.filter((x) => x.status === 'pending'),

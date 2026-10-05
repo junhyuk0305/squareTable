@@ -270,7 +270,18 @@ export const notifyUserQuestionAnswered = (userId: string, question: string) =>
     tag: 'q-answered',
   });
 
-export const notifyUserMention = (userId: string, author: string, text: string) =>
+/** 내 노하우 제안 결과(반영·반려, D12) — 제안한 사람에게만. 반려 사유는 '내가 보낸 제안'에서 본다. */
+export const notifyUserSuggestionResult = (userId: string, approved: boolean, text: string) =>
+  pushNotify({
+    audience: 'user',
+    userId,
+    title: approved ? '내 노하우 제안이 반영됐어요' : '내 노하우 제안이 반려됐어요',
+    body: text,
+    url: '/junior/chat',
+    tag: 'suggestion-result',
+  });
+
+export const notifyUserMention =(userId: string, author: string, text: string) =>
   pushNotify({
     audience: 'user',
     userId,
