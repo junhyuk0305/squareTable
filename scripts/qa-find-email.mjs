@@ -229,12 +229,35 @@ console.log('\n[4] 화면 배선');
 
   const ss = strip(read('src/lib/store/useSessionStore.ts'));
   const up = afterUpdateUser(ss);
-  check('★4-7 updateProfile 이 updateUser 응답(user)을 emailChangeApplied 로 판정한다', /const \{ data: [a-zA-Z]+, error \} = await supabase\.auth\.updateUser\(\{ email: patch\.email \}\)/.test(up) && /emailChangeApplied\(/.test(up), show(up.slice(0, 120)));
+  check('★4-7 updateProfile 이 updateUser 응답(user)을 emailChangeApplied 로 판정한다', /const \{ data: [a-zA-Z]+, error \} = await supabase\.auth\.updateUser\(\s*\{ email: patch\.email \}/.test(up) && /emailChangeApplied\(/.test(up), show(up.slice(0, 120)));
   check('★4-8 확인 메일 대기면 로컬 email 을 덮지 않는다(무조건 덮는 줄이 없다)', up.length > 0 && !/if \(patch\.email != null\) next\.email = patch\.email;/.test(up) && /emailPending/.test(up), show(up.slice(0, 120)));
 
   const edit = strip(read('src/app/account-edit.tsx'));
   const save = (edit.match(/const saveProfile = async[\s\S]*?\n  \};/) || [''])[0];
   check('4-9 프로필 저장이 대기면 확인 메일 안내를 보여 준다', /emailPending/.test(save) && /EMAIL_CHANGE_PENDING_TEXT/.test(save), show(save.slice(0, 80)));
+}
+
+// ── [5] 이메일 변경 확인 흐름(2026-10-05 · 시장 표준) ─────────────────────────────
+//   updateUser 에 emailRedirectTo 를 준다 → 링크를 누르면 Supabase verify 를 거쳐 /email-changed 로 온다.
+//   그 화면이 "이메일이 바뀌었어요"(또는 옛 주소 확인이 남았으면 "한 곳 더 확인해 주세요")를 말한다.
+//   profiles 에는 email 열이 없다(auth.users 만) → 동기화할 것이 없다. 앱은 세션 갱신 때 loadProfile 이 새 이메일을 읽는다.
+console.log('\n[5] 이메일 변경 확인 흐름');
+{
+  const rt = M && fn(M.emailChangeRedirectTo) ? M.emailChangeRedirectTo : null;
+  check('★5-1 돌아올 주소 = 지금 오리진 + /email-changed', !!rt && rt('https://dochackchack.com') === 'https://dochackchack.com/email-changed', rt ? rt('https://dochackchack.com') : '함수 없음');
+  const nt = M && fn(M.emailChangedNotice) ? M.emailChangedNotice : null;
+  const ok = nt ? nt({}) : null;
+  check('★5-2 확인 끝 → "이메일이 바뀌었어요"', ok?.title === '이메일이 바뀌었어요' && copyOk(ok?.body), show(ok));
+  const half = nt ? nt({ message: 'Confirmation link accepted. Please proceed to confirm link sent to the other email' }) : null;
+  check('★5-3 한 주소만 확인 → "한 곳 더 확인해 주세요"', half?.title === '한 곳 더 확인해 주세요' && copyOk(half?.body), show(half));
+  const bad = nt ? nt({ error: 'access_denied', error_description: 'Email link is invalid or has expired' }) : null;
+  check('5-4 만료·잘못된 링크 → "링크를 쓸 수 없어요"', bad?.title === '링크를 쓸 수 없어요' && copyOk(bad?.body), show(bad));
+  const ss = strip(read('src/lib/store/useSessionStore.ts'));
+  check('★5-5 updateUser 에 emailRedirectTo(emailChangeRedirectTo)를 준다', /updateUser\(\s*\{ email: patch\.email \},\s*\{ emailRedirectTo: emailChangeRedirectTo\(/.test(ss));
+  check('5-6 세션이 바뀌면(USER_UPDATED · TOKEN_REFRESHED 포함) 새 auth 이메일로 프로필을 다시 읽는다', /onAuthStateChange\(\(_evt, session\) => \{\s*const u = session\?\.user;\s*if \(u\) loadProfile\(set, u\.id, u\.email/.test(ss));
+  const page = strip(read('src/app/email-changed.tsx'));
+  check('★5-7 /email-changed 화면이 emailChangedNotice 로 문구를 고른다', /emailChangedNotice\(/.test(page) && /useLocalSearchParams/.test(page));
+  check('5-8 웹 셸이 /email-changed 를 크롬 없는 인증 경로로 둔다', /AUTH_PATHS = \[[^\]]*'\/email-changed'/.test(read('src/components/shell/AppShell.web.tsx')));
 }
 
 console.log(`\n${fail === 0 ? 'GREEN' : 'RED'} — PASS ${pass} · FAIL ${fail}`);
