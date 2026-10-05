@@ -376,10 +376,11 @@ Deno.serve(async (req) => {
     if (c === 'db') return json(500, { ok: false, reason: 'db' }, cors);
     if (c === 'taken') return json(400, { ok: false, reason: 'expired' }, cors);
 
-    const { data: upd, error: uErr } = await admin.auth.admin.updateUserById(uid, { password: newPw });
-    if (uErr) { console.error('otp: password update failed:', uErr.message); return json(500, { ok: false, reason: 'db' }, cors); }
-
+    // 해시를 직접 바꾼다(0253). admin.updateUserById 는 이 계정의 모든 세션을 끊는다(GoTrue 고정 동작).
     // 다른 기기 세션은 끊지 않는다(2026-10-05 결정 · 0238 A4 뒤집음).
+    const { error: uErr } = await admin.rpc('admin_set_password', { p_uid: uid, p_new: newPw });
+    if (uErr) { console.error('otp: password update failed:', uErr.message); return json(500, { ok: false, reason: 'db' }, cors); }
+    const { data: upd } = await admin.auth.admin.getUserById(uid);
 
     // (0238 Q15) 어느 이메일로 로그인하면 되는지 가려서 알려 준다.
     return json(200, {

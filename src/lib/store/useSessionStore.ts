@@ -1,5 +1,4 @@
 import { create } from 'zustand';
-import { createClient } from '@supabase/supabase-js';
 import { supabase, HAS_SUPABASE } from '@/lib/supabase';
 import {
   setUnitId,
@@ -1050,31 +1049,15 @@ export const useSessionStore = create<SessionState>((set, get) => ({
 
   changePassword: async (currentPw, newPw) => {
     if (!HAS_SUPABASE) return { error: null }; // 데모: 실제 변경 없음
-    // (1) 현재 비밀번호 확인 — 저장하지 않는 임시 클라이언트로 로그인해 본다. 메인 세션·푸시 세션과 따로 논다.
-    //     확인이 끝나면 그 임시 세션은 바로 지운다(local = 그 세션 하나만).
-    //     storageKey 를 따로 두는 이유: 웹에서 메인 클라이언트와 같은 키면 두 인스턴스가 서로를 의심하는 경고가 난다.
-    const probe = createClient(process.env.EXPO_PUBLIC_SUPABASE_URL ?? '', process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '', {
-      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false, storageKey: 'sqt-password-check' },
-    });
-    // 확인 로그인은 auth 이메일로 한다. 상태의 email 은 updateProfile 이 바로 넣은, 아직 확인 전인 새 이메일일 수 있다.
-    const { data: sess } = await supabase.auth.getSession();
-    const authEmail = sess.session?.user.email;
-    if (!authEmail) return { error: '비밀번호를 변경하지 못했어요. 잠시 후 다시 시도해 주세요.' };
-    const { error: checkErr } = await probe.auth.signInWithPassword({ email: authEmail, password: currentPw });
-    if (checkErr) {
-      // 비밀번호가 틀린 것(400)만 "맞지 않아요"로 말한다. 연결·혼잡은 그 문구로 안내한다.
-      const wrong = checkErr.status === 400 || /invalid login credentials/i.test(checkErr.message);
-      return { error: wrong ? CURRENT_PW_WRONG_TEXT : friendlyError(checkErr.message, '비밀번호를 변경하지 못했어요. 잠시 후 다시 시도해 주세요.') };
-    }
-    await probe.auth.signOut({ scope: 'local' }).catch(() => {});
-    // (2) 바꾼다. current_password 는 Supabase Auth 의 "현재 비밀번호 요구" 설정이 켜져 있으면 서버가 다시 대조한다(P2-7 콘솔).
-    const { error } = await supabase.auth.updateUser({ password: newPw, current_password: currentPw });
-    if (error) {
-      if (/different from the old password|same_password/i.test(error.message)) return { error: '지금 비밀번호와 다른 비밀번호를 정해 주세요.' };
-      if (/current.?password/i.test(error.message)) return { error: CURRENT_PW_WRONG_TEXT };
-      return { error: friendlyError(error.message, '비밀번호를 변경하지 못했어요. 잠시 후 다시 시도해 주세요.') };
-    }
-    // 다른 기기는 로그아웃시키지 않는다(2026-10-05 결정).
+    // 서버(0253)가 현재 비밀번호를 대조하고 해시를 직접 바꾼다. supabase.auth.updateUser 는 다른 기기를
+    // 전부 로그아웃시킨다(GoTrue 고정 동작) — 2026-10-05 결정은 "다른 기기는 로그아웃되면 안 된다".
+    const { data, error } = await supabase.rpc('change_my_password', { p_current: currentPw, p_new: newPw });
+    if (error) return { error: friendlyError(error.message, '비밀번호를 변경하지 못했어요. 잠시 후 다시 시도해 주세요.') };
+    if (data === 'current_password_wrong') return { error: CURRENT_PW_WRONG_TEXT };
+    if (data === 'same_password') return { error: '지금 비밀번호와 다른 비밀번호를 정해 주세요.' };
+    if (data === 'weak_password') return { error: '비밀번호는 9자 이상이어야 해요.' };
+    if (data === 'too_many_attempts') return { error: '여러 번 틀렸어요. 15분 뒤에 다시 시도해 주세요.' };
+    if (data !== 'ok') return { error: '비밀번호를 변경하지 못했어요. 잠시 후 다시 시도해 주세요.' };
     return { error: null };
   },
 

@@ -151,11 +151,11 @@ export function MiniSquareCard({
             <Pressable
               onPress={onDelete}
               accessibilityRole="button"
-              accessibilityLabel="노하우 보관"
+              accessibilityLabel="노하우 삭제"
               style={({ pressed }) => [cardStyles.delBtn, pressed && { opacity: 0.7 }]}
             >
-              {/* J10(0248): 지우기는 보관이다. 기록은 남고 보관함에서 되살린다. */}
-              <Text style={cardStyles.delText}>보관</Text>
+              {/* 2026-10-05 결정: 앱에서는 되살릴 수 없는 삭제다. DB 에는 남는다(0248 archived_at). */}
+              <Text style={cardStyles.delText}>삭제</Text>
             </Pressable>
           )}
         </View>

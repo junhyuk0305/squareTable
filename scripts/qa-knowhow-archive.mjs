@@ -77,7 +77,7 @@ console.log('\n[2] 소스 계약');
     !read('src/app/owner/knowledge.tsx').includes('knowhow-archive') && !read('src/app/owner/categories.tsx').includes('knowhow-archive'));
   // 앱에 보이는 노하우 문구에 '보관' 낱말이 없다(주석 제외).
   const strip = (t) => t.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
-  const KW = ['src/app/owner/edit/[id].tsx', 'src/app/owner/knowledge.tsx', 'src/app/owner/categories.tsx', 'src/lib/store/usePlaybookStore.ts', 'src/lib/knowhow/archive.ts'];
+  const KW = ['src/app/owner/edit/[id].tsx', 'src/components/coach/MiniSquareCard.tsx', 'src/app/owner/knowledge.tsx', 'src/app/owner/categories.tsx', 'src/lib/store/usePlaybookStore.ts', 'src/lib/knowhow/archive.ts'];
   const word = KW.filter((p) => existsSync(join(root, p)) && strip(read(p)).includes('보관'));
   check("2-8 노하우 화면 코드·문구에 '보관'이 없다(주석 제외)", word.length === 0, word.join(', '));
   // 매장 삭제(store-config)는 다른 기능이다. 노하우를 지우는 화면·스토어만 본다.

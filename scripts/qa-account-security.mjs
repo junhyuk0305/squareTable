@@ -267,10 +267,9 @@ try {
     const login = await mk().auth.signInWithPassword({ email: A.email, password: newPw });
     check('3-20 새 비밀번호로 A 가 로그인된다(B 가 아니라)', !login.error && login.data.user?.id === A.id, login.error?.message ?? `uid=${login.data.user?.id}`);
     const afterA = await A.c.auth.getUser();
-    // 2026-10-05 결정: 우리 코드는 다른 기기 세션을 끊지 않는다(revoke_user_sessions 호출 없음 = qa-find-email 3-4).
-    // ⚠️ 그러나 Supabase Auth 자체가 비밀번호를 바꾸면 다른 세션을 끊는다(admin updateUserById 도 같다 · 로컬 실측).
-    //   그래서 여기서는 그 플랫폼 동작을 기록만 한다. 세션을 남기려면 Auth 쪽 해법이 따로 필요하다(사용자 확인 대기).
-    check('3-21 재설정 뒤 A 의 기존 세션은 Supabase Auth 가 끊는다(플랫폼 동작 기록)', !beforeA.error && !!afterA.error, `before=${beforeA.error?.message ?? 'ok'} after=${afterA.error?.message ?? 'ok'}`);
+    // 2026-10-05 결정: 비밀번호를 바꿔도 다른 기기는 로그아웃되지 않는다.
+    //   admin.updateUserById 는 모든 세션을 끊으므로 otp 는 0253 admin_set_password 로 해시를 직접 바꾼다.
+    check('3-21 ★재설정 뒤에도 A 의 기존 세션이 살아 있다(0253)', !beforeA.error && !afterA.error, `before=${beforeA.error?.message ?? 'ok'} after=${afterA.error?.message ?? 'ok'}`);
 
     await seedOtp(P[2], { code: '888888' });
     r = await otp({ action: 'reset_password', phone: P[2], code: '888888', role: 'junior', new_password: newPw });

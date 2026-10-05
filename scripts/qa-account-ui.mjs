@@ -4,7 +4,7 @@
 //
 // ★2026-10-04 마스터 계획 P3-8 (서버 0238 · otp 엣지는 이미 이 브랜치에 있다)
 //   Q13 번호를 문자 인증 없이 바꿨다 → 프로필 편집의 번호는 읽기 전용, [번호 바꾸기] 시트가 otp change_phone 을 부른다.
-//   Q14 비밀번호를 바꿀 때 현재 비밀번호를 안 물었다 → 현재 비밀번호 칸 · 임시 클라이언트 확인 · current_password · 다른 기기 로그아웃.
+//   Q14 비밀번호를 바꿀 때 현재 비밀번호를 안 물었다 → 현재 비밀번호 칸 · 서버 대조(0253) · 다른 기기 로그아웃 안 함.
 //   Q18 비밀번호 찾기에서 역할을 잘못 고르면 "계정 없음"만 나왔다 → 엣지의 other_role 로 맞는 역할을 알려 준다.
 //   Q31 탈퇴 안내 "복구할 수 없어요" ↔ 실제 30일 보관(정책 검토 M4 문구) · 직원은 3년 보관 문장.
 //   Q33 탈퇴 창의 이용권 안내를 플랫폼이 아니라 실제 구독으로 가른다(앱만). ⛔웹 탈퇴 창 문구는 토스 동결로 글자 그대로.
@@ -187,12 +187,11 @@ console.log('\n■ 화면 배선');
 
   const ss = strip(read('src/lib/store/useSessionStore.ts'));
   const cp = (ss.match(/changePassword: async[\s\S]*?\n  \},/) || [''])[0];
-  check('★Q14 임시 클라이언트(persistSession:false)로 현재 비밀번호 확인', /persistSession:\s*false/.test(cp) && /signInWithPassword/.test(cp), show(cp.slice(0, 80)));
-  check('Q14 updateUser 에 current_password', /updateUser\(\{\s*password:[^}]*current_password/.test(cp));
-  // 2026-10-05 결정: 비밀번호를 바꿔도 다른 기기를 로그아웃시키지 않는다.
-  check("Q14 성공 뒤 다른 기기를 로그아웃시키지 않는다(scope:'others' 없음)", cp.length > 0 && !/scope:\s*'others'/.test(cp));
-  // ★확인용 로그인은 auth 이메일로. 화면 상태 email 은 확인 전인 새 이메일일 수 있다(updateProfile 이 바로 넣는다).
-  check('★Q14 현재 비밀번호 확인은 세션의 auth 이메일로 한다', /getSession\(\)/.test(cp) && !/email:\s*get\(\)\.email/.test(cp), show(cp.slice(0, 80)));
+  // 2026-10-05 결정: 비밀번호를 바꿔도 다른 기기를 로그아웃시키지 않는다. updateUser 는 GoTrue 가 다른 세션을 끊으므로
+  //   서버 RPC(0253 change_my_password)가 현재 비밀번호를 대조하고 해시를 바꾼다. 실제 세션 유지는 qa:password-sessions.
+  check('★Q14 change_my_password RPC 로 바꾼다(updateUser 안 씀)', /rpc\('change_my_password'/.test(cp) && !/updateUser\(/.test(cp), show(cp.slice(0, 80)));
+  check("Q14 성공 뒤 다른 기기를 로그아웃시키지 않는다(signOut 없음)", cp.length > 0 && !/signOut\(/.test(cp));
+  check('Q14 현재 비밀번호 틀림 · 잠금 문구를 나눈다', /current_password_wrong/.test(cp) && /too_many_attempts/.test(cp));
   check('Q13 changePhone 이 otp change_phone 을 쓴다', /changePhone: async[\s\S]*?changePhoneByOtp\(/.test(ss));
   const chp = (ss.match(/changePhone: async[\s\S]*?\n  \},/) || [''])[0];
   check('★Q13 changePhone 실패는 문구가 비어도 실패로 돌려준다', /if \(!r\.ok\) return \{ error: r\.message \?\? '[^']+' \}/.test(chp), show(chp.slice(-200)));
