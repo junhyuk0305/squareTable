@@ -190,7 +190,7 @@ export default function OwnerOnboardingScreen() {
             <InviteBlock code={inviteCode} from="onboarding" />
           </Appear>
 
-          {/* 요금제 후킹 — 지금은 무료로 시작했음을 알리고, 직원·AI 무제한(단일 매장)으로
+          {/* 요금제 후킹 — 지금은 무료로 시작했음을 알리고, 직원 무제한·AI 월 3,000회(단일 매장)로
               업그레이드 경로를 연다. 탭하면 요금제 선택 화면(/billing).
               ★전면 무료 모드(서버 스위치)에서도 렌더하지 않는다 — 무료라고 공지해 놓고 요금제로 유도하면
                 같은 앱이 두 말을 하게 된다(2026-08-11 [P8-#5]). 판정은 store-policy 한 곳.
@@ -212,8 +212,8 @@ export default function OwnerOnboardingScreen() {
                 <Text style={styles.planTitle}>지금은 무료로 시작했어요</Text>
                 <Text style={styles.planSub}>
                   {showPaymentSurface(freeMode)
-                    ? `직원·AI 무제한은 단일 매장 요금제(월 ${formatKrw(PLANS.single.monthlyKrw)} · ${VAT_NOTE})에서 열려요`
-                    : '직원·AI 무제한은 단일 매장 이용권에서 열려요'}
+                    ? `직원 무제한 · AI 월 ${PLANS.single.aiMonthly?.toLocaleString('ko-KR')}회는 단일 매장 요금제(월 ${formatKrw(PLANS.single.monthlyKrw)} · ${VAT_NOTE})에서 열려요`
+                    : `직원 무제한 · AI 월 ${PLANS.single.aiMonthly?.toLocaleString('ko-KR')}회는 단일 매장 이용권에서 열려요`}
                 </Text>
               </View>
               <Ionicons name="chevron-forward" size={16} color={InkColors.ink3} />
