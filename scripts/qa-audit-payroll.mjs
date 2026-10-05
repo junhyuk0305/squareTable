@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // qa-audit-payroll.mjs — 2026-10-05 논리 점검(QA_논리점검_2026-10-05.md) 급여·근무표 묶음 재현 검사.
 //   [A4] 시급을 바꾸면 그 자리에서 이번 달 예상 급여가 새 시급으로 바뀐다(앱을 다시 켜지 않아도).
+//   [A5] 시급 이력을 못 읽으면 지난달 급여를 지금 시급으로 만들지 않고 "못 불러왔다"고 말한다.
 // 실행: node --no-warnings scripts/qa-audit-payroll.mjs
 import { readFileSync, existsSync } from 'node:fs';
 import { register } from 'node:module';
@@ -29,6 +30,17 @@ console.log('[A4] 시급을 바꾸면 이번 달 예상 급여가 바로 새 시
   check('다른 직원 이력은 건드리지 않는다', fn(withTodayWage) && withTodayWage([...rates, { staff_id: 'b', hourly_wage: 11000, effective_from: today }], 'a', 12000, today).some((r) => r.staff_id === 'b' && r.hourly_wage === 11000));
   const st = strip(read('src/lib/store/usePayrollStore.ts'));
   check('★스토어 setWage 가 wageRates 에도 오늘 시급을 넣고, 실패하면 되돌린다', /setWage:[\s\S]*withTodayWage\(/.test(st) && /setWage:[\s\S]*wageRates: prevRates/.test(st));
+}
+
+console.log('\n[A5] 시급 이력 읽기 실패 = 지난달 금액을 만들지 않는다(배선)');
+{
+  const db = strip(read('src/lib/db.ts'));
+  const f = db.match(/export async function fetchWageRates[\s\S]*?\n}\n/)?.[0] ?? '';
+  check('★fetchWageRates 가 실패를 신호로 돌려준다(ReadResult · readFail)', /Promise<ReadResult<WageRate\[\]>>/.test(f) && /readFail\('fetchWageRates'/.test(f) && /error: true/.test(f));
+  const st = strip(read('src/lib/store/usePayrollStore.ts'));
+  check('★스토어: 읽기 실패면 이전 이력을 덮지 않고 wageRatesLoadError 를 세운다', /wageRatesLoadError: ratesRes\.error/.test(st) && /ratesRes\.error \? \{\} : \{ wageRates: ratesRes\.data \}/.test(st));
+  const tv = strip(read('src/components/TimesheetView.tsx'));
+  check('★출근 기록 화면: 지난달 + 이력 실패면 금액 대신 안내', /wageRatesLoadError/.test(tv) && /pastRatesMissing/.test(tv) && /지난달 시급을 불러오지 못했어요/.test(tv));
 }
 
 console.log(`\n${fail ? 'RED' : 'GREEN'} — PASS ${pass} · FAIL ${fail}`);
