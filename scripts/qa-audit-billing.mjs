@@ -2,6 +2,7 @@
 // qa-audit-billing.mjs — 2026-10-05 논리 점검(QA_논리점검_2026-10-05.md) 결제·환불 묶음 재현 검사.
 //   [B1] 스토어 환불은 그 거래가 지금 살아 있는 구독일 때만 매장을 회수한다. 다른 채널이 이어 가면 회수하지 않는다.
 //        운영자 카드 환불도 앱 구독이 살아 있으면 매장을 회수하지 않는다.
+//   [B2] 구독 흔적 매장에 붙은 1매장 계좌이체 기간은 선불로 보고, 앱 환불이 지우지 않는다.
 // 서버 함수는 마지막 정의(가장 큰 번호 마이그레이션) 본문을 읽어 본다. 로컬 도커가 꺼진 날에도 돈다.
 // 실행: node --no-warnings scripts/qa-audit-billing.mjs
 import { readFileSync, existsSync, readdirSync } from 'node:fs';
@@ -43,6 +44,19 @@ console.log('[B1] 환불은 그 거래로 연 몫만 회수한다');
   check('★운영자 카드 환불도 앱 구독이 살아 있으면 매장을 회수하지 않는다',
     /not public\.iap_subscription_live\(v_pay\.owner_id\)/.test(c.body) && /revoke_iap_access/.test(c.body), c.file);
   check('card_record_refund 권한 유지(service_role 만)', grants(c.file, 'card_record_refund(text, int, boolean, jsonb)', 'service_role'));
+}
+
+console.log('\n[B2] 구독 흔적 매장에 붙은 1매장 계좌이체 기간은 앱 환불에도 남는다');
+{
+  const h = lastDef('unit_claim_until');
+  check('★승인된 1매장 신고가 만든 끝(이어 붙인 계산)을 구하는 판정이 있다',
+    /payment_claims/.test(h.body) && /status = 'approved'/.test(h.body) && /plan = 'single'/.test(h.body) && /make_interval\(days => r\.months \* 30\)/.test(h.body), h.file || '없음');
+  check('unit_claim_until 은 내부 판정이다(클라 실행 불가)', !!h.file && read(`supabase/migrations/${h.file}`).includes('revoke all on function public.unit_claim_until(text) from public, anon, authenticated;'));
+  const p = lastDef('unit_prepaid');
+  check('★unit_prepaid 가 그 기간이 남은 흔적 매장을 선불로 본다', /public\.unit_claim_until\(p_unit\) > now\(\)/.test(p.body), p.file);
+  const r = lastDef('revoke_iap_access');
+  check('★revoke_iap_access 가 그 기간을 남의 돈(v_pre)으로 본다', /public\.unit_claim_until\(u\)/.test(r.body), r.file);
+  check('revoke_iap_access 권한 유지(service_role 만)', grants(r.file, 'revoke_iap_access(uuid, text)', 'service_role'));
 }
 
 console.log(`\n${fail === 0 ? 'OK' : 'FAIL'} — pass ${pass} / fail ${fail}`);
