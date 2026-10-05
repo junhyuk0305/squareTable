@@ -190,6 +190,8 @@ type SessionState = {
   // J8: result = delete_store 반환값(남은 몫을 돌려줬는지). 0235 전 서버는 null.
   deleteStore: (unitId: string) => Promise<{ error: string | null; result?: DeleteStoreResult | null }>;
   signOut: () => Promise<void>;
+  // F2: 다른 기기의 로그인을 모두 끊는다. 지금 기기는 그대로다. 그 기기들의 푸시도 0236 세션 판정으로 멈춘다.
+  signOutOthers: () => Promise<{ error: string | null }>;
 
   // 개발/단일기기 역할 토글 (Supabase 없을 때의 데모 폴백)
   switchTo: (role: Role) => void;
@@ -1337,6 +1339,20 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     _signOutGen += 1;
     setUnitId(null);
     set(SIGNED_OUT);
+  },
+
+  signOutOthers: async () => {
+    if (!HAS_SUPABASE) return { error: null };
+    const fail = '다른 기기를 로그아웃하지 못했어요. 연결을 확인하고 다시 시도해 주세요.';
+    try {
+      // 지금 기기 세션이 없으면 supabase-js 는 서버를 부르지 않고 성공을 돌려준다. 성공이라고 말하지 않는다.
+      const { data } = await supabase.auth.getSession();
+      if (!data.session) return { error: '로그인이 만료됐어요. 다시 로그인해 주세요.' };
+      const { error } = await supabase.auth.signOut({ scope: 'others' });
+      return { error: error ? fail : null };
+    } catch {
+      return { error: fail };
+    }
   },
 
   switchTo: (role) => {

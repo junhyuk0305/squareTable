@@ -12,6 +12,7 @@ import { HAS_SUPABASE } from '@/lib/supabase';
 import { FREE_PROMO } from '@/lib/config/tiers';
 import { logout } from '@/lib/auth';
 import { confirmAction, notifyAction } from '@/lib/utils/confirm';
+import { showToast } from '@/lib/store/useToastStore';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { SettingsSection, SettingsRow, SettingsToggle } from '@/components/settings/SettingsKit';
@@ -45,6 +46,7 @@ export default function AccountSettings() {
   // 요금제는 매장 단위 — 다점포 사장은 지금 보는 플랜이 어느 매장 것인지 알아야 한다(1곳이면 소음이라 생략).
   const multiOwner = stores.filter((st) => st.role === 'owner').length > 1;
   const deleteAccount = useSessionStore((s) => s.deleteAccount);
+  const signOutOthers = useSessionStore((s) => s.signOutOthers);
   // 결제 행은 활성 매장 기준이다(요금제·신고가 그 매장 것) — 그 매장 사장일 때만.
   const isOwner = role === 'owner';
   // 탈퇴 안내·이전 매장·알림 문구는 계정 층이다 — 지금 보는 매장이 아니라 사장 계정인가로 가른다.
@@ -66,6 +68,20 @@ export default function AccountSettings() {
 
   const onLogout = async () => {
     if (await confirmAction('로그아웃', '로그아웃하시겠어요?', '로그아웃', { icon: 'log-out-outline' })) await logout();
+  };
+
+  // F2: 폰을 잃어버렸거나 공용 기기에 로그인해 둔 경우. 지금 기기는 그대로 둔다.
+  const onSignOutOthers = async () => {
+    const ok = await confirmAction(
+      '다른 기기에서 모두 로그아웃',
+      '지금 이 기기만 빼고 다른 기기에서 모두 로그아웃할까요? 그 기기에서는 다시 로그인해야 하고, 알림도 더 가지 않아요.',
+      '로그아웃',
+      { icon: 'phone-portrait-outline' },
+    );
+    if (!ok) return;
+    const { error } = await signOutOthers();
+    if (error) showToast(error, 'warn');
+    else showToast('다른 기기에서 모두 로그아웃했어요.', 'good');
   };
 
   const onDelete = async () => {
@@ -240,6 +256,7 @@ export default function AccountSettings() {
         <SettingsSection>
           {/* 무해한 액션(로그아웃) 먼저, 되돌리기 어려운 액션(탈퇴)은 아래로 — 오탭 방지. */}
           <SettingsRow first icon="log-out-outline" label="로그아웃" onPress={onLogout} />
+          <SettingsRow icon="phone-portrait-outline" label="다른 기기에서 모두 로그아웃" onPress={onSignOutOthers} />
           <SettingsRow icon="trash-outline" label="회원탈퇴" danger onPress={busy ? undefined : onDelete} />
         </SettingsSection>
 
