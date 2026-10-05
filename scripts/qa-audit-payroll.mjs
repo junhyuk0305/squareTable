@@ -3,10 +3,13 @@
 //   [A4] 시급을 바꾸면 그 자리에서 이번 달 예상 급여가 새 시급으로 바뀐다(앱을 다시 켜지 않아도).
 //   [A5] 시급 이력을 못 읽으면 지난달 급여를 지금 시급으로 만들지 않고 "못 불러왔다"고 말한다.
 //   [A8] 지난달 출퇴근 기록은 그 달 기간으로 따로 읽는다 — 최근 1,000건에 잘려 "안 찍었어요"가 거짓으로 뜨지 않는다.
+//   [A10] 이미 승인·반려·취소된 교대는 낡은 화면의 취소·반려로 다시 바뀌지 않는다(서버 트리거 · 클라 상태 조건).
+//         서버 검사는 로컬 도커(고정 계정 store_001 · 트랜잭션 되돌림)가 있을 때만 돈다.
 //   [A7] 사장 홈 인건비 = 직원 관리 합계(이번 달 퇴사자 포함) · 직원 허브 예상 급여 = 출퇴근 화면(근무표 기준).
 // 실행: node --no-warnings scripts/qa-audit-payroll.mjs
 import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { register } from 'node:module';
+import { execFileSync } from 'node:child_process';
 
 register('./qa-alias-loader.mjs', import.meta.url);
 
@@ -101,6 +104,61 @@ console.log('\n[A8] 지난달 출퇴근 기록은 그 달 기간으로 따로 �
   check('★스토어: loadMonth 가 그 달을 읽어 넣고, hydrate 는 읽어 둔 달을 남긴다', /loadMonth:/.test(st) && /fetchAttendanceMonth\(/.test(st) && /replaceMonthRecords\(/.test(st) && /keepLoadedMonths\(/.test(st));
   const tv = strip(read('src/components/TimesheetView.tsx'));
   check('★출근 기록 화면: 지난달은 loadMonth 로 읽고, 다 읽기 전·실패면 대조 문구를 띄우지 않는다', /loadMonth\(staffId, ym\)/.test(tv) && /monthReady/.test(tv) && /이 달 기록을 불러오지 못했어요/.test(tv) && /monthReady \?[^;]*reconcileSchedule/.test(tv));
+}
+
+console.log('\n[A10] 이미 승인·반려·취소된 교대는 다시 바뀌지 않는다');
+{
+  const g = lastDef('swap_requests_decided_guard');
+  check('★서버: swap_requests 의 끝난 요청(approved·rejected·cancelled) 상태를 바꾸면 거부하는 트리거', /old\.status in \('approved', 'rejected', 'cancelled'\)/.test(g.body) && /swap_already_decided/.test(g.body) && /before update on public\.swap_requests/.test(read(`supabase/migrations/${g.file}`)), g.file);
+  const db = read('src/lib/db.ts');
+  const f = db.match(/export async function updateSwap[\s\S]*?\n}\n/)?.[0] ?? '';
+  check('★db: updateSwap 이 지금 상태를 조건으로 건다(0행 = 실패)', /\.in\('status', expect\)/.test(f) && /writeStrict\(/.test(f));
+  const st = strip(read('src/lib/store/useScheduleStore.ts'));
+  check('★스토어: 취소는 open·accepted 일 때만, 반려는 accepted 일 때만 · 실패하면 "이미 처리된 요청" 안내 뒤 다시 읽는다',
+    /updateSwap\(id, \{ status: 'cancelled', updated_at: at \}, \['open', 'accepted'\]\)/.test(st)
+    && /updateSwap\(id, \{ status: 'rejected', updated_at: at \}, \['accepted'\]\)/.test(st)
+    && (st.match(/SWAP_ALREADY_DECIDED_TEXT/g) || []).length >= 3);
+}
+{
+  // 서버(로컬 도커 트랜잭션 · 고정 계정 store_001 · 되돌림)
+  const psql = (sql) => {
+    try {
+      return execFileSync('docker', ['exec', '-i', 'supabase_db_SquareTable', 'psql', '-U', 'postgres', '-At', '-v', 'ON_ERROR_STOP=1'],
+        { input: sql, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] });
+    } catch (e) { return 'ERR=' + String(e.stderr ?? e.message).replace(/\s+/g, ' ').slice(0, 300); }
+  };
+  let up = true;
+  try { execFileSync('docker', ['exec', 'supabase_db_SquareTable', 'psql', '-U', 'postgres', '-c', 'select 1'], { stdio: 'pipe' }); } catch { up = false; }
+  if (!up) {
+    console.log('  SKIP 서버 검사 — 로컬 도커 DB 없음');
+  } else {
+    const SETUP = `
+begin;
+select set_config('qa.o', (select id::text from auth.users where email = 'owner@pilot.squaretable.app'), true);
+select set_config('qa.j', (select id::text from auth.users where email = 'staff2@pilot.squaretable.app'), true);
+select set_config('qa.d', to_char(public.kst_today() + 3, 'YYYY-MM-DD'), true);
+insert into public.shift_templates (id, unit_id, staff_id, weekday, shift_date, start_time, end_time, valid_from) values
+  ('qa_a10_t', 'store_001', current_setting('qa.j'), null, current_setting('qa.d')::date, '09:00', '13:00', current_setting('qa.d')::date);
+insert into public.swap_requests (id, unit_id, kind, requester_id, date, template_id, status, accepted_by) values
+  ('qa_a10_ap', 'store_001', 'cover', current_setting('qa.j'), current_setting('qa.d'), 'qa_a10_t', 'approved', current_setting('qa.o')),
+  ('qa_a10_ac', 'store_001', 'cover', current_setting('qa.j'), current_setting('qa.d'), 'qa_a10_t', 'accepted', current_setting('qa.o'));
+`;
+    const as = (who) => `
+set local role authenticated;
+select set_config('request.jwt.claims', json_build_object('sub', current_setting('qa.${who}'), 'role', 'authenticated')::text, true);
+`;
+    const run = (who, body) => psql(`${SETUP}${as(who)}${body}\nrollback;\n`);
+    const r1 = run('o', `update public.swap_requests set status = 'rejected' where id = 'qa_a10_ap';`);
+    check('★사장이 승인된 요청을 반려로 덮기 → swap_already_decided', r1.includes('swap_already_decided'), r1.slice(0, 160));
+    const r2 = run('j', `update public.swap_requests set status = 'cancelled' where id = 'qa_a10_ap';`);
+    check('★요청 직원이 승인된 요청을 취소로 덮기 → swap_already_decided', r2.includes('swap_already_decided'), r2.slice(0, 160));
+    const r3 = run('o', `update public.swap_requests set status = 'rejected' where id = 'qa_a10_ac' returning 'R=' || status;`);
+    check('합의된(accepted) 요청 반려는 된다', r3.includes('R=rejected'), r3.slice(0, 160));
+    const r4 = run('j', `update public.swap_requests set status = 'cancelled' where id = 'qa_a10_ac' returning 'R=' || status;`);
+    check('합의된(accepted) 요청 취소는 된다', r4.includes('R=cancelled'), r4.slice(0, 160));
+    const r5 = psql(`${SETUP}update public.swap_requests set archived_tenure_id = null, updated_at = now() where id = 'qa_a10_ap' returning 'R=' || status;\nrollback;\n`);
+    check('상태를 안 바꾸는 갱신(재입사 표시 등)은 막지 않는다', r5.includes('R=approved'), r5.slice(0, 160));
+  }
 }
 
 console.log(`\n${fail ? 'RED' : 'GREEN'} — PASS ${pass} · FAIL ${fail}`);
