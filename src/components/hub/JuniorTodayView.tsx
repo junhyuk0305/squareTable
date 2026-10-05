@@ -9,7 +9,10 @@ import { useHubStore } from '@/lib/store/useHubStore';
 import { useCrossNotifStore } from '@/lib/store/useCrossNotifStore';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useMemberPrefsStore } from '@/lib/store/useMemberPrefsStore';
-import { shiftsOn } from '@/lib/store/useScheduleStore';
+import { shiftsOn, scheduledShiftsFor } from '@/lib/store/useScheduleStore';
+import { DEFAULT_SETTINGS } from '@/lib/store/usePayrollStore';
+import { computePay, shiftsToPayRecords } from '@/lib/utils/payroll';
+import { monthDates } from '@/lib/utils/schedule';
 import type { MyCrossSummaryRow } from '@/lib/db';
 import { useStoreNav } from '@/lib/hooks/useStoreNav';
 import { storeColor } from '@/lib/utils/storeColor';
@@ -113,21 +116,26 @@ export function JuniorTodayView({ header }: { header: ReactNode }) {
       ? `오늘은 근무가 없어요 · 다음 근무 ${WEEKDAYS[nextShift.dow]}요일 ${nextShift.start}`
       : '오늘은 근무가 없어요';
 
-  // ── 3) 이번달 — 근무시간·예상 급여(근무분 × 시급 / 60, 기존 급여 집계식과 동일 계산) ──
+  // ── 3) 이번달 — 근무시간(출퇴근 기록)·예상 급여(근무표 기준 computePay · 매장 출퇴근 화면과 같은 계산) ──
   const month = useMemo(() => {
-    const perStore = myCross.map((r) => ({
-      uid: r.unit_id,
-      minutes: r.month_minutes,
-      pay: r.hourly_wage > 0 ? Math.round((r.month_minutes / 60) * r.hourly_wage) : 0,
-      hasWage: r.hourly_wage > 0,
-    }));
+    const dates = monthDates(today.slice(0, 7));
+    const perStore = myCross.map((r) => {
+      const rules = { ...DEFAULT_SETTINGS, ...(r.payroll_settings ?? {}) };
+      const shifts = scheduledShiftsFor(r.shifts.map((s) => ({ ...s, staff_id: meId })), [], r.exceptions ?? [], meId, dates);
+      return {
+        uid: r.unit_id,
+        minutes: r.month_minutes,
+        pay: r.hourly_wage > 0 ? computePay(shiftsToPayRecords(shifts), r.hourly_wage, rules).total : 0,
+        hasWage: r.hourly_wage > 0,
+      };
+    });
     return {
       perStore,
       minutes: perStore.reduce((n, s) => n + s.minutes, 0),
       pay: perStore.reduce((n, s) => n + s.pay, 0),
       anyWage: perStore.some((s) => s.hasWage),
     };
-  }, [myCross]);
+  }, [myCross, meId, today]);
   const fmtHours = (min: number) => (min >= 60 ? `${Math.floor(min / 60)}시간` : `${min}분`);
 
   // 전부 도착 전엔 무조건 로딩 — 근무 카드만 먼저 그리고 할일이 나중에 튀어나오는 부분 렌더 금지.
@@ -281,10 +289,10 @@ export function JuniorTodayView({ header }: { header: ReactNode }) {
                   key: 'pay',
                   label: '예상 급여',
                   value: `${month.pay.toLocaleString()}원`,
-                  sub: '세전 예상액',
+                  sub: '근무표 기준 · 세전',
                   info: {
                     title: '예상 급여가 어떻게 나온 거예요?',
-                    body: '근무 기록 × 시급으로 계산한 값이에요.\n실제 지급액은 매장 정산 기준에 따라 달라질 수 있어요.',
+                    body: '근무표에 잡힌 근무를 시급으로 계산한 세전 예상액이에요.\n출퇴근 기록은 확인용이라 금액에 직접 들어가지 않아요.\n세금·4대보험·수당에 따라 실제 받는 금액과 다를 수 있어요.',
                   },
                 }]
               : []),

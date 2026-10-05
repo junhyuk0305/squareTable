@@ -23,6 +23,7 @@ import { scheduledShiftsFor } from '@/lib/store/useScheduleStore';
 import { DEFAULT_SETTINGS } from '@/lib/store/usePayrollStore';
 import { monthDates } from '@/lib/utils/schedule';
 import { todayStr } from '@/lib/utils/attendance';
+import { departedPayRows } from '@/lib/utils/tenure';
 
 /**
  * 매장별 이번달 예상 인건비(원) — **직원 관리(owner/staff) 히어로와 같은 계산**이다.
@@ -43,6 +44,12 @@ function laborByUnit(rows: OwnerLaborInputRow[]): Record<string, number> {
       const recs = shiftsToPayRecords(scheduledShiftsFor(r.shifts, [], r.exceptions, sid, dates));
       sum += computePay(recs, r.wages[sid], rules).total;
     }
+    // 이번 달 퇴사자 몫도 더한다 — 직원 관리 히어로와 같은 판정·금액(departedPayRows). 시급이 없으면(pay=null) 뺀다.
+    const ym = todayStr().slice(0, 7);
+    for (const d of departedPayRows({
+      ym, records: [], templates: r.shifts, swaps: [], exceptions: r.exceptions,
+      tenures: r.departed ?? [], memberIds: r.staff_ids, wages: r.wages, settings: rules,
+    })) sum += d.pay ?? 0;
     out[r.unit_id] = sum;
   }
   return out;

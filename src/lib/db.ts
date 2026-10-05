@@ -314,6 +314,8 @@ export type OwnerLaborInputRow = {
   exceptions: ShiftException[];
   wages: Record<string, number>;
   payroll_settings: Record<string, unknown> | null;
+  /** 이번 달 퇴사자 기간(0257). 직원 관리 히어로처럼 그 몫을 인건비에 더한다. 옛 서버면 없다. */
+  departed?: MemberTenure[];
 };
 export async function fetchOwnerLaborInputs(): Promise<DbResult<OwnerLaborInputRow[]>> {
   if (!HAS_SUPABASE) return { data: [], error: null };
@@ -335,6 +337,8 @@ export type MyCrossSummaryRow = {
   /** 그날은 없는 것으로 치는 반복(0178·0180). 교대로 남에게 넘긴 근무가 여기에 걸린다. */
   exceptions: { template_id: string; date: string }[];
   month_minutes: number; hourly_wage: number;
+  /** 매장 급여 설정(0257). 예상 급여를 출퇴근 화면과 같은 규칙으로 센다. null·없음 = 기본 규칙. */
+  payroll_settings?: Record<string, unknown> | null;
 };
 /** 본인의 소속 매장별 근무표·이번달 근무분·시급 — 직원 오늘 탭. 본인 행만(RPC 내부 강제).
  *  "오늘/다음 근무" 판정은 클라가 shiftsOn(요일 + 적용 기간)으로 파생한다. ★교대로 넘긴 근무를 빼려면 exceptions 를
