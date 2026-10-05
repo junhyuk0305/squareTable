@@ -315,7 +315,9 @@ export type OwnerLaborInputRow = {
 };
 export async function fetchOwnerLaborInputs(): Promise<DbResult<OwnerLaborInputRow[]>> {
   if (!HAS_SUPABASE) return { data: [], error: null };
-  const { data, error } = await supabase.rpc('owner_labor_inputs');
+  // ★_v2 를 읽는다(0242·0245·0246): 반복 행에 적용 기간이 있어 직원·급여 화면(shift_templates_all)과 같은 시간을 센다.
+  //   v1 은 오늘 적용 중인 행만 기간 없이 줘서, 반복을 나누면 오늘 행 하나로 한 달을 센다. v1 은 옛 앱용으로 남는다.
+  const { data, error } = await supabase.rpc('owner_labor_inputs_v2');
   if (error) readFail('fetchOwnerLaborInputs', error);
   return { data: (data as OwnerLaborInputRow[]) ?? null, error: error as DbErr };
 }

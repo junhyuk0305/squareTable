@@ -24,6 +24,8 @@ const ANON = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
 const VAPID_PUBLIC = Deno.env.get('VAPID_PUBLIC_KEY') ?? '';
 const VAPID_PRIVATE = Deno.env.get('VAPID_PRIVATE_KEY') ?? '';
 const VAPID_SUBJECT = Deno.env.get('VAPID_SUBJECT') ?? 'mailto:cristianojun@naver.com';
+// Expo Enhanced security(P2-7①)를 켜면 토큰 없는 요청은 거부된다. 시크릿이 있을 때만 싣는다(없으면 지금처럼 보낸다).
+const EXPO_ACCESS_TOKEN = Deno.env.get('EXPO_ACCESS_TOKEN') ?? '';
 
 if (VAPID_PUBLIC && VAPID_PRIVATE) {
   webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC, VAPID_PRIVATE);
@@ -196,7 +198,11 @@ async function deliverExpoPush(
     try {
       const res = await fetch(EXPO_PUSH_URL, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+          ...(EXPO_ACCESS_TOKEN ? { Authorization: `Bearer ${EXPO_ACCESS_TOKEN}` } : {}),
+        },
         body: JSON.stringify(messages),
       });
       if (!res.ok) {

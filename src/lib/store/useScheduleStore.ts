@@ -66,7 +66,7 @@ export type ShiftTemplate = {
   start: string; // "12:00"
   end: string; // "18:00"
   /** 반복 근무의 적용 기간(0242) — 이 날부터(포함) 이 날까지(포함 · null = 끝 없음).
-   *  날짜 지정 행·데모·허브 v1 에는 없다. 없으면 기간 제한이 없는 것으로 본다(shiftAppliesOn). */
+   *  날짜 지정 행·데모·옛 v1 RPC 에는 없다. 없으면 기간 제한이 없는 것으로 본다(shiftAppliesOn). */
   valid_from?: string | null;
   valid_to?: string | null;
 };
