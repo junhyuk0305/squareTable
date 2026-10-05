@@ -9,6 +9,7 @@
 // 읽기 전용이다. 계정을 만들지 않는다. docker exec psql 로만 읽으므로 로컬 도커에서만 돈다.
 // 단계가 늘면(0246 archived_tenure_id · 0247 member_notices · 0248 archived_at) 아래 표에 토큰을 더한다.
 import { execFileSync } from 'node:child_process';
+import fs from 'node:fs';
 
 const psql = (sql) => execFileSync('docker', ['exec', 'supabase_db_SquareTable', 'psql', '-U', 'postgres', '-qtA', '-v', 'ON_ERROR_STOP=1', '-c', sql],
   { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
@@ -103,10 +104,6 @@ const FN_TOKENS = {
   enqueue_knowhow_rechecks: ['archived_at is null', 'brand_hidden_at is null'],
   archive_knowhow: ['auth_owns_unit', 'brand_copy_use_hide', "'draft'", 'archived_by', 'entry_not_found', 'restore_not_allowed'],
   knowhow_usage: ['auth_owns_unit', 'quiz_attempts', 'work_template_knowhow', 'course_entries'],
-  // P5-2 0249(Q23 · 보안 M3) — 같은 질문은 활성 매장의 대기 질문에만 · 1인 1행 · 개수는 새로 들어갈 때만 +1.
-  //   해결 트리거는 원 질문자 + askers 중 지금 멤버에게만 · 답한 사람은 뺀다.
-  ask_same_question: ['auth_unit_id', "'pending_owner_answer'", 'on conflict', 'similar_queries_count + 1', 'for update'],
-  tg_unknown_query_answered: ['unknown_query_askers', 'insert into public.member_notices', "'question_answered'", 'unit_members', 'answered_by', "'resolved_with_entry'"],
   // P5-3 0250(Q28 · Q29) — 사장은 자기 소유 매장의 끝난 연결만(180일) · 본사는 자기 브랜드의 끝난 매장만 · 다시 연결된 매장은 뺀다.
   my_brand_history: ['owner_id = auth.uid()', "status = 'ended'", "180 days", 'deleted_at is null'],
   brand_ended_units: ['auth_brand_id()', "status = 'ended'", "status = 'active'"],
@@ -366,39 +363,19 @@ console.log('\n[6] 0248 노하우 보관 — 열 · 정책 · 트리거 · 권�
   }
 }
 
-console.log('\n[7] 0249 같은 질문 — askers 표 · RPC 권한 · 해결 트리거');
+// 2026-10-05 사용자 결정: P5-2(같은 질문 함께 알림 · 0249)를 뺀다. 표·RPC·트리거가 없고 앱은 그 이전 동작이다.
+console.log('\n[7] P5-2 를 뺐다 — 0249 의 표·RPC·트리거가 없다');
 {
-  const has = psql(`select to_regclass('public.unknown_query_askers') is not null`) === 't';
-  check('unknown_query_askers 표가 있다', has);
-  if (has) {
-    check('unknown_query_askers RLS 켜짐', psql(`select relrowsecurity from pg_class where oid = 'public.unknown_query_askers'::regclass`) === 't');
-    const pols = psql(`select cmd || '|' || coalesce(qual, '') from pg_policies where schemaname = 'public' and tablename = 'unknown_query_askers'`);
-    check('unknown_query_askers 정책 = select 하나 · 본인만(auth.uid())', pols.split('\n').length === 1 && pols.startsWith('SELECT|') && pols.includes('auth.uid()'), pols);
-    for (const r of ['anon', 'authenticated']) {
-      check(`unknown_query_askers: ${r} 쓰기 권한 없음`, psql(`select has_table_privilege('${r}', 'public.unknown_query_askers', 'INSERT,UPDATE,DELETE,TRUNCATE')`) === 'f');
-    }
-  }
-  const fn = 'ask_same_question(text)';
-  const exists = psql(`select to_regprocedure('public.${fn}') is not null`) === 't';
-  check(`${fn} 이 있다`, exists);
-  if (exists) {
-    check(`${fn}: anon 실행 불가 · authenticated 실행 가능`,
-      psql(`select not has_function_privilege('anon', 'public.${fn}', 'execute') and has_function_privilege('authenticated', 'public.${fn}', 'execute')`) === 't');
-    check(`${fn}: 정의자 · search_path=public`,
-      psql(`select p.prosecdef and 'search_path=public' = any(coalesce(p.proconfig, '{}')) from pg_proc p where p.oid = 'public.${fn}'::regprocedure`) === 't');
-  }
-  check('같은 질문 한 사람을 돌려주는 question_askers 가 없다(보안 M3)',
-    psql(`select count(*) from pg_proc where pronamespace = 'public'::regnamespace and proname = 'question_askers'`) === '0');
-  const trg = psql(`select coalesce(string_agg(pg_get_triggerdef(t.oid), ' '), '') from pg_trigger t
-                      where t.tgrelid = 'public.unknown_queries'::regclass and t.tgname = 'trg_unknown_query_answered' and not t.tgisinternal`);
-  check('AFTER UPDATE 트리거 trg_unknown_query_answered', trg.includes('AFTER UPDATE') && trg.includes('FOR EACH ROW'), trg || '없음');
-  const tf = 'tg_unknown_query_answered()';
-  if (psql(`select to_regprocedure('public.${tf}') is not null`) === 't') {
-    check(`${tf}: 정의자 · search_path=public · anon/authenticated 실행 불가`,
-      psql(`select p.prosecdef and 'search_path=public' = any(coalesce(p.proconfig, '{}'))
-                   and not has_function_privilege('anon', p.oid, 'execute') and not has_function_privilege('authenticated', p.oid, 'execute')
-              from pg_proc p where p.oid = 'public.${tf}'::regprocedure`) === 't');
-  } else check(`${tf} 이 있다`, false);
+  check('unknown_query_askers 표가 없다', psql(`select to_regclass('public.unknown_query_askers') is null`) === 't');
+  check('ask_same_question 이 없다', psql(`select count(*) from pg_proc where pronamespace = 'public'::regnamespace and proname = 'ask_same_question'`) === '0');
+  check('trg_unknown_query_answered 가 없다', psql(`select count(*) from pg_trigger where tgname = 'trg_unknown_query_answered'`) === '0');
+  const src = (f) => fs.readFileSync(new URL(`../${f}`, import.meta.url), 'utf8');
+  const db = src('src/lib/db.ts');
+  check('앱: 같은 질문 개수는 옛 bumpUnknownSimilar 로 올린다', db.includes('export async function bumpUnknownSimilar') && !db.includes("rpc('ask_same_question'"));
+  const st = src('src/lib/store/useUnknownQueueStore.ts');
+  check('앱: 답하면 질문한 사람에게 notifyUserQuestionAnswered 를 보낸다', /notifyUserQuestionAnswered\(/.test(st) && /export const notifyUserQuestionAnswered/.test(src('src/lib/push/notify.ts')));
+  check("push 엣지가 q-answered 를 버리지 않는다", !src('supabase/functions/push/index.ts').includes("tag === 'q-answered'"));
+  check('0249 파일과 되돌리기 파일이 없다', !fs.existsSync(new URL('../supabase/migrations/0249_unknown_query_askers.sql', import.meta.url)) && !fs.existsSync(new URL('../scripts/rollback/0249.sql', import.meta.url)));
 }
 
 console.log('\n[8] 0250 끝난 본사 연결 — RPC 권한');
