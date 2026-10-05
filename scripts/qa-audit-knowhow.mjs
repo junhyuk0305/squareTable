@@ -172,5 +172,31 @@ console.log('\n[E7] 앱을 다시 켠 뒤에도 이전 대화의 "사장님께 �
   check('답할 때 미리 만드는 준비물도 같은 빌더를 쓴다', /pendingDeflects: \{ \.\.\.s\.pendingDeflects, \[cqId\]: buildDeflect\(text, session\.userId, session\.userName, now, meta\) \}/.test(store));
 }
 
+console.log('\n[E9] AI 사용량: 재시도는 한 번만 차감 · 직원이 차감 함수를 직접 못 부른다');
+{
+  const d = lastDef('consume_ai_quota_for');
+  const b = d.body;
+  check('★서버 전용 차감 함수 consume_ai_quota_for(매장 id 를 엣지가 넘긴다)가 있다',
+    /consume_ai_quota_for\(p_unit text, p_units int default 1, p_request_key text default null\)/.test(b) && /v_unit\s+text := p_unit;/.test(b), d.file);
+  check('★같은 요청 키는 한 번만 차감한다',
+    /insert into public\.ai_quota_requests \(request_key, unit_id\) values \(p_request_key, v_unit\)\s+on conflict \(request_key\) do nothing;/.test(b)
+      && /if not found then/.test(b), d.file);
+  check('0193 본문(캡 200/3,000 · 80%·100% 사장 알림 · 단위 1~60)을 그대로 쓴다',
+    /then 3000 else 200 end/.test(b) && /'ai_cap', v_month, 80/.test(b) && /'ai_cap', v_month, 100/.test(b) && /least\(greatest\(coalesce\(p_units, 1\), 1\), 60\)/.test(b), d.file);
+  const f = d.file ? read(`supabase/migrations/${d.file}`) : '';
+  check('★consume_ai_quota 는 클라(authenticated)에서 닫는다',
+    /revoke all on function public\.consume_ai_quota\(int\) from public, anon, authenticated;/.test(f));
+  check('consume_ai_quota_for 는 service_role 만', /revoke all on function public\.consume_ai_quota_for\(text, int, text\) from public, anon, authenticated;/.test(f)
+    && /grant\s+execute on function public\.consume_ai_quota_for\(text, int, text\) to service_role;/.test(f));
+  const edge = strip(read('supabase/functions/ai/index.ts'));
+  check('★엣지가 서비스 키로 매장 id·요청 키를 넘겨 차감한다',
+    /serviceClient\(\)\.rpc\('consume_ai_quota_for', \{ p_unit: user\.unitId, p_units: unitsAfter, p_request_key: requestKey \}\)/.test(edge)
+      && !/userClient\(authz\)\.rpc\('consume_ai_quota'/.test(edge));
+  check('요청 키는 사용자별로 묶는다(남의 키로 차감을 피하지 못하게)', /const requestKey = rid \? `\$\{user\.id\}:\$\{rid\}` : null;/.test(edge));
+  const cl = strip(read('src/lib/ai/client.ts'));
+  check('★앱은 한 번 부를 때 요청 id 하나를 만들어 재시도에도 같은 id 를 보낸다',
+    /const requestId = genId\('air'\);[\s\S]*for \(let attempt = 1;/.test(cl) && /body: JSON\.stringify\(\{ task, payload, requestId \}\)/.test(cl));
+}
+
 console.log(`\n${pass} PASS / ${fail} FAIL`);
 process.exit(fail ? 1 : 0);
