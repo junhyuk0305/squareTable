@@ -55,5 +55,29 @@ console.log('[C1] 무료 매장 좌석 잠금은 한 판정 — 3명 이하면 �
       && fileHas(t.file, 'after insert or update on public.unit_subscriptions'), t.file || '없음');
 }
 
+// 함수를 마지막으로 손댄 파일(create function 또는 0254 식 본문 치환 pg_get_functiondef) 과 그 내용.
+const lastTouch = (name) => {
+  let file = '';
+  for (const f of migFiles()) {
+    const s = read(`supabase/migrations/${f}`);
+    if (new RegExp(`create (or replace )?function public\\.${name}\\(`).test(s) || s.includes(`pg_get_functiondef('public.${name}()'`)) file = f;
+  }
+  return { file, text: sqlStrip(read(`supabase/migrations/${file}`)) };
+};
+
+console.log('\n[C4] 닫힌(잠긴) 매장에는 할일·퀴즈 알림을 보내지 않는다');
+{
+  const t = lastTouch('due_task_reminders');
+  check('★할일 알림 후보에서 잠긴 매장을 뺀다(due_task_reminders)',
+    /and not public\.unit_access_locked\(w\.unit_id\)/.test(t.text), t.file);
+  check('할일 알림 함수는 service_role 전용 그대로(anon 실행 불가 자가점검)',
+    /has_function_privilege\('anon', 'public\.due_task_reminders\(\)', 'execute'\)/.test(t.text));
+  const q = lastTouch('due_quiz_sends');
+  check('★퀴즈 발송 후보에서 잠긴 매장을 뺀다(due_quiz_sends)',
+    /and not public\.unit_access_locked\(u\.id\)/.test(q.text), q.file);
+  check('퀴즈 발송 함수는 service_role 전용 그대로(anon 실행 불가 자가점검)',
+    /has_function_privilege\('anon', 'public\.due_quiz_sends\(\)', 'execute'\)/.test(q.text));
+}
+
 console.log(`\n${pass} PASS / ${fail} FAIL`);
 process.exit(fail ? 1 : 0);
