@@ -103,5 +103,35 @@ console.log('\n[E3] 퀴즈가 안 나가는 이유(근무표에 없음·자동 �
     /fetchQuizSendStatus\(/.test(scr) && scr.includes('근무표에 없어 대기 중') && scr.includes('두 번 안 열어 멈춤'));
 }
 
+console.log('\n[E4] "푼 사람"은 담긴 노하우를 다 풀었을 때(맞힘과 무관) · 개인 결과는 그 사람의 실제 응시로');
+{
+  const d = lastDef('mark_quiz_completed');
+  const b = d.body;
+  check('★완료는 이 발송 뒤에 담긴 노하우를 전부 풀었을 때만(맞혔는지는 안 본다)',
+    /t\.taken_at >= v_a\.sent_at/.test(b) && /from public\.course_entries ce/.test(b) && /return false;/.test(b), d.file);
+  check('이미 알아 카드에 안 뜨는 노하우는 다시 풀지 않아도 된다(재확인 발송은 바뀐 뒤 통과만 인정)',
+    /from public\.knowhow_understanding ku/.test(b) && /v_a\.origin <> 'recheck' or ku\.verified_at >= pe\.updated_at/.test(b), d.file);
+  check('낼 문항이 없는 노하우·보관한 노하우는 셈에서 뺀다',
+    /pe\.archived_at is null/.test(b) && /q\.format = any\(public\.quiz_known_formats\(\)\)/.test(b), d.file);
+  check('본인·이미 나간 발송만', /a\.user_id = \(select auth\.uid\(\)\)/.test(b) && /a\.sent_at is not null/.test(b), d.file);
+  const sheet = strip(read('src/components/work/UnderstandingCheckSheet.tsx'));
+  check('★응시를 마치면(통과와 무관) 기록 저장 뒤 onFinished 를 부른다',
+    /recordStaffQuizAttempt\(given\.current\)\.then\(\(\) => onFinished\?\.\(/.test(sheet));
+  const store = strip(read('src/lib/store/useWorkStore.ts'));
+  const mu = (store.match(/\n  markUnderstood: async[\s\S]*?\n  \},/) || [''])[0];
+  const nf = (store.match(/\n  noteQuizFinished: [\s\S]*?\n  \},/) || [''])[0];
+  check('★통과(markUnderstood)가 발송을 완료로 찍지 않는다', !!mu && !/markQuizCompleted/.test(mu), mu.slice(0, 80));
+  check('★noteQuizFinished 가 완료 판정을 서버에 맡긴다', /markQuizCompleted\(id\)/.test(nf));
+  const board = strip(read('src/components/WorkBoard.tsx'));
+  check('WorkBoard 가 응시 끝을 넘긴다', /onFinished=\{\(entryIds\) => useWorkStore\.getState\(\)\.noteQuizFinished\(entryIds\)\}/.test(board));
+
+  const p = lastDef('quiz_course_person');
+  check('★직원 응시(course_id 없음)도 담긴 노하우로 이 퀴즈에 묶는다',
+    /a\.course_id is null and a\.entry_id in \(select ce\.entry_id from public\.course_entries ce where ce\.course_id = p_course_id\)/.test(p.body), p.file);
+  const person = strip(read('src/app/owner/quiz/person.tsx'));
+  check('★개인 결과의 문항 목록은 그 사람의 최근 응시(submission) 스냅샷 전부다(매장 500줄 상한·지운 문항 무관)',
+    /fetchGuestAttemptItems\(sub\)/.test(person) && !/fetchStaffAttemptItems/.test(person));
+}
+
 console.log(`\n${pass} PASS / ${fail} FAIL`);
 process.exit(fail ? 1 : 0);
