@@ -2,6 +2,10 @@
  * 재직 기간(member_tenures · 0246) 화면 판정. 사장만 읽는다(RLS = 같은 매장 사장).
  * 들어올 때 기간이 열리고 나갈 때 닫힌다. 다시 들어오면 새 기간이 열리고 예전 기록은 표시돼 앱에서 안 보인다.
  */
+import type { ShiftTemplate, ShiftException, SwapRequest } from '@/lib/store/useScheduleStore';
+import { liveMinutes } from './attendance';
+import { computePay, shiftsToPayRecords, type PayrollRules } from './payroll';
+import { monthDates, scheduledShiftsFor } from './schedule';
 
 export type MemberTenure = {
   id: string;
@@ -41,6 +45,46 @@ export function departedInPeriod(tenures: MemberTenure[], memberIds: string[], w
     if (t) out.push(t);
   }
   return out;
+}
+
+/** 퇴사자 줄 · 재입사 경고가 쓰는 이번 정산 기간 입력. 직원·급여 화면이 들고 있는 값 그대로다. */
+export type PeriodInputs = {
+  ym: string; // YYYY-MM
+  records: { staff_id: string; date: string; check_in: string | null; check_out: string | null; work_minutes: number }[];
+  templates: ShiftTemplate[];
+  swaps: SwapRequest[];
+  exceptions: ShiftException[];
+};
+
+/** 이번 정산 기간에 근무가 있나 — 출퇴근 기록 또는 근무표(교대로 넘긴 근무는 scheduledShiftsFor 가 뺀다). */
+export function workedInPeriod(uid: string, p: PeriodInputs): boolean {
+  return p.records.some((r) => r.staff_id === uid && r.date.startsWith(p.ym))
+    || scheduledShiftsFor(p.templates, p.swaps, p.exceptions, uid, monthDates(p.ym)).length > 0;
+}
+
+export type DepartedPayRow = { id: string; name: string; min: number; schedMin: number; wage: number | null; pay: number | null };
+
+/**
+ * 직원·급여 화면의 "이번 정산 기간 퇴사자" 줄. 금액은 지금 직원과 같은 계산(근무표 기준 computePay)이다.
+ * 시급은 남아 있는 wages 를 먼저 쓰고, 없으면 나갈 때 남긴 final_hourly_wage 를 쓴다. 둘 다 없으면 pay = null(0원과 구별).
+ * min = 실제 출퇴근 분(확인용) · schedMin = 근무표 분.
+ */
+export function departedPayRows(p: PeriodInputs & {
+  tenures: MemberTenure[];
+  memberIds: string[];
+  wages: Record<string, number>;
+  settings: PayrollRules;
+}): DepartedPayRow[] {
+  const worked = new Set(p.tenures.filter((t) => t.left_at && workedInPeriod(t.user_id, p)).map((t) => t.user_id));
+  const dates = monthDates(p.ym);
+  return departedInPeriod(p.tenures, p.memberIds, worked).map((t) => {
+    const uid = t.user_id;
+    const min = p.records.filter((r) => r.staff_id === uid && r.date.startsWith(p.ym)).reduce((sum, r) => sum + liveMinutes(r), 0);
+    const shiftRecs = shiftsToPayRecords(scheduledShiftsFor(p.templates, p.swaps, p.exceptions, uid, dates));
+    const schedMin = shiftRecs.reduce((sum, r) => sum + r.work_minutes, 0);
+    const wage = Object.prototype.hasOwnProperty.call(p.wages, uid) ? p.wages[uid] : t.final_hourly_wage;
+    return { id: uid, name: t.name_snapshot || '퇴사자', min, schedMin, wage, pay: wage == null ? null : computePay(shiftRecs, wage, p.settings).total };
+  });
 }
 
 /**

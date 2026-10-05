@@ -34,7 +34,7 @@ import { guardWrite, useSyncStore } from '@/lib/store/useSyncStore';
 import { optimisticAdd } from '@/lib/store/crudHelpers';
 import { genId } from '@/lib/utils/id';
 import { todayStr } from '@/lib/utils/attendance';
-import { nextDateForWeekday, fmtDateKo, shiftAppliesOn, runSeriesOps, swapApprovable, type SeriesSaveOp } from '@/lib/utils/schedule';
+import { nextDateForWeekday, fmtDateKo, runSeriesOps, swapApprovable, type SeriesSaveOp } from '@/lib/utils/schedule';
 import {
   notifyStaffSwapRequest,
   notifyUserSwapRequest,
@@ -439,9 +439,13 @@ export const useScheduleStore = create<ScheduleState>((set, get) => {
     const epoch = currentTenantEpoch();
     set({ timeRequests: before.filter((r) => r.id !== id) });
     const res = await decideShiftTimeRpc(id, approve, confirmPast);
-    if (isStaleEpoch(epoch)) return res !== null;
-    if (res === null) {
-      // 다른 기기에서 이미 처리했거나 35일이 지났다. 되돌리고 서버 상태로 다시 읽는다.
+    if (isStaleEpoch(epoch)) return res === true || res === false;
+    if (res === 'too_old') {
+      // 근무일이 35일보다 지났다. 같은 버튼을 다시 눌러도 안 되므로 이유를 말한다.
+      set({ timeRequests: before });
+      useSyncStore.getState().noteError('35일이 지난 요청은 반려만 할 수 있어요.');
+    } else if (res === null) {
+      // 다른 기기에서 이미 처리했다. 되돌리고 서버 상태로 다시 읽는다.
       set({ timeRequests: before });
       useSyncStore.getState().noteError(approve ? '승인하지 못했어요. 목록을 새로 불러올게요.' : '반려하지 못했어요. 목록을 새로 불러올게요.');
     } else if (!res) {
@@ -476,35 +480,8 @@ export const useScheduleStore = create<ScheduleState>((set, get) => {
 });
 
 // ── 셀렉터/해석 헬퍼 ─────────────────────────────────────
-
-export type ResolvedShift = {
-  template: ShiftTemplate;
-  /** 그 근무를 서는 사람. ★2026-08-26부터 **템플릿 행의 담당자 그대로**다 —
-   *  승인된 교대는 이제 행 자체를 옮기므로(0179) 여기서 다시 치환하지 않는다. */
-  workerStaffId: string;
-  pending: boolean; // 진행 중인 교대 요청이 걸려 있나
-};
-
-/**
- * 한 사람이 그 날짜들에 서기로 된 근무들 — **급여 계산의 입력**이다(급여 기준 = 근무표).
- * 판정은 shiftsOn 하나뿐이다: 교대로 옮겨진 근무·그날 빠진 반복이 여기에 그대로 반영된다.
- * ★이 함수를 안 쓰고 templates 를 직접 훑으면 **교대 결과가 급여에 안 잡혀 돈이 틀린 사람에게 간다.**
- */
-export function scheduledShiftsFor(
-  templates: ShiftTemplate[],
-  swaps: SwapRequest[],
-  exceptions: ShiftException[],
-  staffId: string,
-  dates: string[],
-): { date: string; start: string; end: string }[] {
-  const out: { date: string; start: string; end: string }[] = [];
-  for (const d of dates) {
-    for (const sh of shiftsOn(templates, swaps, d, exceptions)) {
-      if (sh.workerStaffId === staffId) out.push({ date: d, start: sh.template.start, end: sh.template.end });
-    }
-  }
-  return out;
-}
+// shiftsOn · scheduledShiftsFor 는 순수 함수라 schedule.ts 에 있다(하니스가 그대로 돌린다). 호출부는 여기서 그대로 가져간다.
+export { shiftsOn, scheduledShiftsFor, type ResolvedShift } from '@/lib/utils/schedule';
 
 /**
  * 이 요청을 수락할 수 있는 사람들. **null 이면 누구나**(전체 공개 대타).
@@ -540,42 +517,4 @@ export function pendingApprovals(swaps: SwapRequest[], today: string): SwapReque
  */
 export function pendingTimeRequests(reqs: ShiftTimeRequest[], staffId?: string): ShiftTimeRequest[] {
   return staffId ? reqs.filter((r) => r.staff_id === staffId) : reqs;
-}
-
-/**
- * 특정 날짜에 발생하는 시프트들. 진행 중 교대는 pending 으로 표시한다.
- *
- * ★★2026-08-26 — **승인된 교대를 여기서 치환하지 않는다.**
- *   승인은 이제 근무 행 자체를 수락자에게 옮긴다(0179 approve_swap → transfer_shift).
- *   파생 치환을 남겨 두면 **담당자가 두 번 바뀐다**(이중 적용) — 화면도 급여도 함께 틀린다.
- *   대신 반드시 `exceptions` 를 받아 "그날 빠진 반복"을 걸러야 한다. 안 걸러내면 그날 근무가
- *   **두 벌**로 보인다(원본 반복 + 이전으로 생긴 날짜 지정 조각).
- *   서버측 짝은 `workers_at`(0179) — 같은 규칙이다.
- *
- * ⚠️ exceptions 는 **선택 인자가 아니다**. 기본값을 주면 호출부가 조용히 빠뜨려도 컴파일되고,
- *    그 화면만 근무가 두 벌로 보인다(이 프로젝트가 반복해서 밟은 무음 실패 유형).
- */
-export function shiftsOn(
-  templates: ShiftTemplate[],
-  swaps: SwapRequest[],
-  date: string,
-  exceptions: ShiftException[],
-): ResolvedShift[] {
-  const excluded = new Set(exceptions.filter((e) => e.date === date).map((e) => e.template_id));
-  const live = swaps.filter((s) => s.status === 'open' || s.status === 'accepted');
-  return templates
-    // 날짜 지정 근무는 그 날짜에만, 요일 반복은 그 요일과 적용 기간 안에서만(0138 · 0242). 이 판정이 SSOT다.
-    //   ★기간을 안 보면 지난 구간 복사본과 원래 행이 둘 다 잡혀 근무가 두 벌이 된다.
-    .filter((t) => shiftAppliesOn(t, date))
-    // 예외는 **반복 행에만** 걸린다(날짜 지정 행은 그 자체가 하루다).
-    .filter((t) => t.date !== null || !excluded.has(t.id))
-    .map((t) => {
-      const pending = live.some(
-        (s) =>
-          (s.template_id === t.id && s.date === date) ||
-          (s.target_template_id === t.id && s.target_date === date),
-      );
-      return { template: t, workerStaffId: t.staff_id, pending };
-    })
-    .sort((a, b) => a.template.start.localeCompare(b.template.start));
 }

@@ -241,7 +241,9 @@ const fnBody = (src, name) => {
 };
 
 check('ShiftTemplate 타입에 valid_from · valid_to 가 있다', /export type ShiftTemplate = \{[^}]*valid_from[^}]*valid_to[^}]*\}/s.test(store));
-check('shiftsOn 이 shiftAppliesOn(요일 + 적용 기간)으로 거른다', /shiftAppliesOn\(/.test(fnBody(store, 'shiftsOn')));
+// shiftsOn 은 순수 함수라 schedule.ts 에 있고 스토어가 다시 내보낸다(2026-10-05 리뷰).
+check('shiftsOn 이 shiftAppliesOn(요일 + 적용 기간)으로 거른다',
+  /shiftAppliesOn\(/.test(fnBody(store, 'shiftsOn') || fnBody(read('src/lib/utils/schedule.ts'), 'shiftsOn')));
 check('JuniorTodayView 가 자체 요일 판정(onDay) 대신 shiftsOn 을 쓴다', /shiftsOn\(/.test(today) && !/const onDay\s*=/.test(today));
 check('fetchShiftTemplates 가 shift_templates_all RPC 를 쓴다', /rpc\(\s*'shift_templates_all'/.test(fnBody(db, 'fetchShiftTemplates')));
 check('insertShiftTemplate 가 writeStrict(0행 = 실패)를 쓴다', /writeStrict\(/.test(fnBody(db, 'insertShiftTemplate')));

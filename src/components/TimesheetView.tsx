@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { useAttendanceStore, type AttendanceRecord } from '@/lib/store/useAttendanceStore';
 import { usePayrollStore } from '@/lib/store/usePayrollStore';
+import { useSessionStore } from '@/lib/store/useSessionStore';
 import { computePay, shiftsToPayRecords, reconcileSchedule } from '@/lib/utils/payroll';
 import { useScheduleStore, scheduledShiftsFor, pendingTimeRequests } from '@/lib/store/useScheduleStore';
 import { RoleTabBar } from '@/components/RoleTabBar';
@@ -95,6 +96,8 @@ export function TimesheetView({ staffId, wage, editedBy, badgeLabel, badgeTone =
     () => pendingTimeRequests(timeRequests, staffId).filter((r) => r.date.startsWith(ym)).length,
     [timeRequests, staffId, ym],
   );
+  // 승인은 사장만 한다(0243). 매니저도 role='owner' 화면을 쓰므로 안내는 세션 역할로 고른다.
+  const sessionIsOwner = useSessionStore((s) => s.role) === 'owner';
   const month = Number(ym.slice(5));
 
   function openEdit(r: AttendanceRecord) {
@@ -219,7 +222,7 @@ export function TimesheetView({ staffId, wage, editedBy, badgeLabel, badgeTone =
           <View style={styles.waitRow}>
             <Ionicons name="time-outline" size={14} color={BrandColors.warnText} />
             <Text style={styles.waitText}>
-              {`근무 시간 수정 승인 대기 ${waitingTimes}건 · ${role === 'owner' ? '근무표에서 승인할 수 있어요' : '승인되면 예상급여에 반영돼요'}`}
+              {`근무 시간 수정 승인 대기 ${waitingTimes}건 · ${role !== 'owner' ? '승인되면 예상급여에 반영돼요' : sessionIsOwner ? '근무표에서 승인할 수 있어요' : '사장님이 근무표에서 승인해요'}`}
             </Text>
           </View>
         )}

@@ -11,6 +11,7 @@
 //   [2] 소스 계약 — 근무표 승인 목록·확인창·RPC 인자, 직원·급여 화면의 퇴사자 줄·재입사 경고, 명부 입사일.
 //   [3] RPC 인자 이름 — db.ts 가 approve_swap 에 넘기는 키가 로컬 DB 함수의 인자 이름과 같은지(docker exec psql).
 //   [4] 왕복 — 로컬 DB 에서 지난 교대 승인 경고 대상 · 나간 직원이 이번 기간 퇴사자에 잡힘 · 재입사 신청자 판정 · 입사일.
+//       퇴사자 줄은 화면이 부르는 departedPayRows · workedInPeriod(tenure.ts)를 그대로 부른다.
 //       ★로컬 전용: 계정 4개를 가입시키고 지운다. URL 이 로컬이 아니면 멈춘다.
 // 실행: node scripts/qa-tenure-ui.mjs
 import { execFileSync } from 'node:child_process';
@@ -27,7 +28,7 @@ const check = (n, ok, extra = '') => { ok ? (pass++, console.log('  PASS', n, ex
 const read = (p) => { try { return readFileSync(join(root, p), 'utf8'); } catch { return ''; } };
 
 // ── [1] 순수 함수 ──────────────────────────────────────────────────────────
-const srcs = ['src/lib/utils/attendance.ts', 'src/lib/utils/schedule.ts'];
+const srcs = ['src/lib/utils/attendance.ts', 'src/lib/utils/schedule.ts', 'src/lib/utils/payroll.ts'];
 if (existsSync(join(root, 'src/lib/utils/tenure.ts'))) srcs.push('src/lib/utils/tenure.ts');
 try {
   execFileSync('npx', ['tsc', ...srcs,
@@ -40,10 +41,11 @@ const fix = (f) => {
   const fp = join(OUT, f);
   if (!existsSync(fp)) return null;
   writeFileSync(fp, readFileSync(fp, 'utf8')
-    .split("'@/lib/utils/attendance'").join("'./attendance.js'")
-    .split("'@/lib/utils/schedule'").join("'./schedule.js'"), 'utf8');
+    .replace(/'@\/lib\/utils\/([a-zA-Z]+)'/g, "'./$1.js'")
+    .replace(/'\.\/([a-zA-Z]+)'/g, "'./$1.js'"), 'utf8');
   return fp;
 };
+fix('attendance.js'); fix('payroll.js');
 const S = await import(pathToFileURL(fix('schedule.js')));
 const tfp = fix('tenure.js');
 const T = tfp ? await import(pathToFileURL(tfp)) : {};
@@ -157,8 +159,11 @@ check('직원 명부 입사일이 openJoinedAt 을 쓴다', staffStore.includes(
 // 0246 이 아직 없는 서버(옛 서버)에서는 member_tenures 읽기가 실패한다 — 명부까지 실패로 만들지 않는다(앱 먼저 나가도 동작).
 check('재직 기간 읽기 실패는 명부 실패(loadError)로 번지지 않는다',
   staffStore.includes('fetchMemberTenures(') && !/loadError:[^\n]*ten/i.test(staffStore));
-check('직원·급여 화면에 "이번 정산 기간 퇴사자" 줄', staffScr.includes('이번 정산 기간 퇴사자') && staffScr.includes('departedInPeriod('));
-check('퇴사자 금액은 기존 계산 함수(computePay · scheduledShiftsFor)', /departed[\s\S]{0,1500}computePay\(/.test(staffScr) && /departed[\s\S]{0,1500}scheduledShiftsFor\(/.test(staffScr));
+check('직원·급여 화면에 "이번 정산 기간 퇴사자" 줄', staffScr.includes('이번 정산 기간 퇴사자') && (staffScr.includes('departedInPeriod(') || staffScr.includes('departedPayRows(')));
+// 퇴사자 줄 계산은 tenure.ts departedPayRows 하나다(2026-10-05 리뷰). 금액은 아래 [4] 왕복이 실제로 돌려 본다.
+const tenureSrc = read('src/lib/utils/tenure.ts');
+check('퇴사자 금액은 기존 계산 함수(computePay · scheduledShiftsFor)',
+  staffScr.includes('departedPayRows(') && /computePay\(/.test(tenureSrc) && /scheduledShiftsFor\(/.test(tenureSrc));
 check('합류 승인이 rejoinNotice 경고를 거친다', staffScr.includes('rejoinNotice('));
 
 // ── [3] RPC 인자 이름 ─────────────────────────────────────────────────────
@@ -268,20 +273,28 @@ try {
   }
 
   // ── 나간 직원이 이번 기간 퇴사자에 잡힘 ──
+  // ★퇴사자 줄은 화면이 부르는 departedPayRows(tenure.ts)를 그대로 돈다. 입력은 화면이 읽는 것과 같은 표 · 같은 모양이다
+  //   (근무표 = shift_templates_all 을 db.ts fetchShiftTemplates 와 같은 칸으로 · 멤버 = 사장 포함 전원 = Object.keys(roles)).
   const ym = today.slice(0, 7);
-  const monthDays = S.monthDates(ym);
-  const workedIn = (uid, tpls, recs) =>
-    recs.some((r) => r.staff_id === uid && r.date.startsWith(ym))
-    || tpls.some((t) => t.staff_id === uid && monthDays.some((dd) => S.shiftAppliesOn({ weekday: t.weekday, date: t.shift_date, valid_from: t.valid_from, valid_to: t.valid_to }, dd)));
+  const payRows = typeof T.departedPayRows === 'function' ? T.departedPayRows : null;
+  const workedInPeriod = typeof T.workedInPeriod === 'function' ? T.workedInPeriod : null;
+  const rules = { breakDeduction: false, nightAllowance: false, overtimeAllowance: false, weeklyHolidayPay: false, extraAllowance: 0 };
   const loadOwner = async () => {
     const tens = await O.c.from('member_tenures').select('id, user_id, joined_at, left_at, name_snapshot, final_hourly_wage').eq('unit_id', UNIT);
     const tpls = await O.c.rpc('shift_templates_all');
-    const recs = await O.c.from('attendance').select('staff_id, date, check_in').eq('unit_id', UNIT);
+    const recs = await O.c.from('attendance').select('staff_id, date, check_in, check_out, work_minutes').eq('unit_id', UNIT);
     const mem = await O.c.from('unit_members').select('user_id, role').eq('unit_id', UNIT);
-    if (tens.error || tpls.error || recs.error || mem.error) throw new Error('사장 읽기: ' + (tens.error ?? tpls.error ?? recs.error ?? mem.error).message);
-    const members = (mem.data ?? []).filter((m) => m.role !== 'owner').map((m) => m.user_id);
-    const worked = new Set([A.id, B.id, C.id].filter((u) => workedIn(u, tpls.data ?? [], recs.data ?? [])));
-    return { tens: tens.data ?? [], members, worked };
+    const sws = await O.c.from('swap_requests').select('*').eq('unit_id', UNIT);
+    const exs = await O.c.from('shift_exceptions').select('template_id, date');
+    const wgs = await O.c.from('wages').select('staff_id, hourly_wage').eq('unit_id', UNIT);
+    const err = tens.error ?? tpls.error ?? recs.error ?? mem.error ?? sws.error ?? exs.error ?? wgs.error;
+    if (err) throw new Error('사장 읽기: ' + err.message);
+    const templates = (tpls.data ?? []).map((r) => ({ id: r.id, staff_id: r.staff_id, weekday: r.weekday, date: r.shift_date ?? null, start: r.start_time, end: r.end_time, valid_from: r.valid_from ?? null, valid_to: r.valid_to ?? null }));
+    const period = { ym, records: recs.data ?? [], templates, swaps: sws.data ?? [], exceptions: exs.data ?? [] };
+    const wages = Object.fromEntries((wgs.data ?? []).map((w) => [w.staff_id, w.hourly_wage]));
+    const tenures = tens.data ?? [];
+    const rows = payRows ? payRows({ ...period, tenures, memberIds: (mem.data ?? []).map((m) => m.user_id), wages, settings: rules }) : [];
+    return { tens: tenures, period, rows };
   };
   {
     const dow = new Date(`${today}T00:00:00Z`).getUTCDay();
@@ -294,13 +307,14 @@ try {
     const rm = await O.c.rpc('remove_staff', { p_staff_id: C.id });
     if (rm.error) throw new Error('remove_staff: ' + rm.error.message);
     const st1 = await loadOwner();
-    const out = departed ? departed(st1.tens, st1.members, st1.worked) : [];
-    const cRow = out.find((x) => x.user_id === C.id);
+    const out = st1.rows;
+    const cRow = out.find((x) => x.id === C.id);
     check('4-7 ★나간 직원(C)이 "이번 정산 기간 퇴사자"에 잡힌다(닫힌 기간 + 이번 기간 근무)', !!cRow, JSON.stringify(out));
-    check('4-8 지금 직원(A·B)은 퇴사자에 잡히지 않는다', !out.some((x) => x.user_id === A.id || x.user_id === B.id));
-    check('4-9 퇴사자 이름은 스냅샷에서 온다', cRow?.name_snapshot === 'QA나간직원', JSON.stringify(cRow));
+    check('4-8 지금 직원(A·B)·사장은 퇴사자에 잡히지 않는다', !!payRows && !out.some((x) => x.id === A.id || x.id === B.id || x.id === O.id));
+    check('4-9 퇴사자 이름은 스냅샷에서 온다', cRow?.name === 'QA나간직원', JSON.stringify(cRow));
     const wg = await O.c.from('wages').select('staff_id, hourly_wage').eq('unit_id', UNIT).eq('staff_id', C.id);
     check('4-10 나간 뒤에도 사장이 시급을 읽는다(기존 계산 함수에 넣을 값)', (wg.data ?? [])[0]?.hourly_wage === 12000, JSON.stringify(wg.data ?? wg.error));
+    check('4-10b ★퇴사자 줄 금액 = 남은 시급(12000)으로 낸 근무표 기준 금액(오늘 14~18시 근무가 잡힌다)', cRow?.wage === 12000 && cRow?.schedMin >= 240 && cRow?.pay > 0, JSON.stringify(cRow));
     // 매니저에게는 재직 기간이 안 보인다(RLS = 같은 매장 사장만) — 퇴사자 줄·재입사 경고는 사장 화면 전용.
     const sr = await O.c.rpc('set_member_role', { p_uid: B.id, p_role: 'manager' });
     if (sr.error) throw new Error('set_member_role: ' + sr.error.message);
@@ -313,14 +327,14 @@ try {
     const pend = await O.c.from('profiles').select('id').eq('pending_unit_id', UNIT);
     check('4-12 C 가 합류 신청 목록에 있다', (pend.data ?? []).some((p) => p.id === C.id), JSON.stringify(pend.data ?? pend.error));
     const st2 = await loadOwner();
-    const rn = rejoin ? rejoin(st2.tens, C.id, st2.worked.has(C.id)) : null;
+    const rn = rejoin && workedInPeriod ? rejoin(st2.tens, C.id, workedInPeriod(C.id, st2.period)) : null;
     check('4-13 ★재입사 신청자(C)에게 재입사 경고 + 정산 먼저 경고', Array.isArray(rn) && rn.length === 2, JSON.stringify(rn));
     check('4-14 처음 신청한 적 없는 직원(A)은 경고가 없다', !!rejoin && rejoin(st2.tens, A.id, true) === null);
     const ap = await O.c.rpc('approve_member', { p_uid: C.id });
     if (ap.error) throw new Error('C 재승인: ' + ap.error.message);
     const st3 = await loadOwner();
-    const out3 = departed ? departed(st3.tens, st3.members, st3.worked) : [{}];
-    check('4-15 재입사 뒤 C 는 퇴사자 줄에서 빠진다(옛 근무는 표시돼 안 보임)', !!departed && !out3.some((x) => x.user_id === C.id), JSON.stringify(out3));
+    const out3 = st3.rows;
+    check('4-15 재입사 뒤 C 는 퇴사자 줄에서 빠진다(옛 근무는 표시돼 안 보임)', !!payRows && !out3.some((x) => x.id === C.id), JSON.stringify(out3));
     const ja = joined ? joined(st3.tens, C.id) : null;
     const open = st3.tens.find((x) => x.user_id === C.id && !x.left_at);
     check('4-16 ★입사일 = 새 열린 재직 기간의 joined_at(재입사일)', !!ja && ja === open?.joined_at && Date.parse(ja) > now - 600000, `${ja} vs ${open?.joined_at}`);

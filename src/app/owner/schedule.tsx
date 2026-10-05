@@ -44,6 +44,7 @@ import {
   spanIn,
   closedDaysLabel,
   pastSwapNotice,
+  timeRequestApprovable,
   WEEKDAY_LABELS,
 } from '@/lib/utils/schedule';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
@@ -100,6 +101,7 @@ export default function OwnerScheduleScreen() {
 
   // 지난 날짜 승인은 그 기간 급여를 바꾼다 — 경고창을 거친 뒤에만 서버에 확인을 보낸다(§8 Q4).
   async function approveTime(r: ShiftTimeRequest) {
+    if (!timeRequestApprovable(r, today)) return; // 35일이 지나면 서버가 거부한다. 카드에 [승인] 이 없다.
     const past = r.date < today;
     if (past && !(await confirmPastChange('승인'))) return;
     void decideShiftTime(r.id, true, past);
@@ -288,6 +290,7 @@ export default function OwnerScheduleScreen() {
                     r={r}
                     name={nameOf(r.staff_id)}
                     past={r.date < today}
+                    approvable={timeRequestApprovable(r, today)}
                     onApprove={() => void approveTime(r)}
                     onReject={() => void decideShiftTime(r.id, false, false)}
                   />
@@ -422,12 +425,15 @@ function TimeRequestCard({
   r,
   name,
   past,
+  approvable,
   onApprove,
   onReject,
 }: {
   r: ShiftTimeRequest;
   name: string;
   past: boolean;
+  /** false = 근무일이 35일보다 지났다. 서버가 승인을 거부하므로 반려만 보인다. */
+  approvable: boolean;
   onApprove: () => void;
   onReject: () => void;
 }) {
@@ -437,7 +443,7 @@ function TimeRequestCard({
         <View style={styles.kindTag}>
           <Text style={styles.kindTagText}>시간 수정</Text>
         </View>
-        <Text style={styles.cardWait}>{past ? '지난 근무 · 승인 대기' : '승인 대기'}</Text>
+        <Text style={styles.cardWait}>{!approvable ? '35일이 지나 반려만 할 수 있어요' : past ? '지난 근무 · 승인 대기' : '승인 대기'}</Text>
       </View>
       <View style={styles.flowCol}>
         <Text style={styles.flowName}>{name}</Text>
@@ -452,10 +458,12 @@ function TimeRequestCard({
         <Pressable onPress={onReject} accessibilityRole="button" accessibilityLabel="근무 시간 수정 요청 반려" style={({ pressed }) => [styles.actBtn, styles.rejectBtn, pressed && { opacity: 0.8 }]}>
           <Text style={styles.rejectText}>반려</Text>
         </Pressable>
+        {approvable ? (
         <Pressable onPress={onApprove} accessibilityRole="button" accessibilityLabel="근무 시간 수정 요청 승인" style={({ pressed }) => [styles.actBtn, styles.approveBtn, pressed && { opacity: 0.85 }]}>
           <Ionicons name="checkmark" size={16} color={InkColors.bubbleText} />
           <Text style={styles.approveText}>승인</Text>
         </Pressable>
+        ) : null}
       </View>
     </View>
   );

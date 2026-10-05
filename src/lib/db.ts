@@ -3513,13 +3513,15 @@ export async function requestShiftTimeRpc(templateId: string, date: string, star
 
 /**
  * 사장이 시간 수정 요청을 승인·반려한다(사장만). 지난 날짜 승인은 p_confirm_past 가 있어야 한다(§8 Q4).
- * true = 처리됨 · false = 그날 근무가 빠졌거나 담당자가 바뀌어 요청을 닫음 · null = 실패(권한·이미 처리됨·35일 지남).
+ * true = 처리됨 · false = 그날 근무가 빠졌거나 담당자가 바뀌어 요청을 닫음 · 'too_old' = 근무일이 35일보다 지나 승인 거부(반려는 된다)
+ * · null = 그 밖의 실패(권한·이미 처리됨).
  */
-export async function decideShiftTimeRpc(id: string, approve: boolean, confirmPast: boolean): Promise<boolean | null> {
+export async function decideShiftTimeRpc(id: string, approve: boolean, confirmPast: boolean): Promise<boolean | null | 'too_old'> {
   if (!HAS_SUPABASE) return true;
   const { data, error } = await supabase.rpc('decide_shift_time', { p_id: id, p_approve: approve, p_confirm_past: confirmPast });
   if (error) {
     console.warn('[db] decideShiftTime:', error.message);
+    if (/too_old/.test(error.message ?? '')) return 'too_old';
     reportError('db.write:decideShiftTime', error);
     return null;
   }

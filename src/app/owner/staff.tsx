@@ -29,7 +29,7 @@ import { fmtDuration, won, todayStr, liveMinutes, findOpenRecord, minWageWarning
 import { computePay, shiftsToPayRecords } from '@/lib/utils/payroll';
 import { showToast } from '@/lib/store/useToastStore';
 import { rotateInviteCode } from '@/lib/db';
-import { departedInPeriod, rejoinNotice } from '@/lib/utils/tenure';
+import { departedPayRows, rejoinNotice, workedInPeriod } from '@/lib/utils/tenure';
 import { confirmAction } from '@/lib/utils/confirm';
 
 export default function OwnerStaffScreen() {
@@ -124,32 +124,21 @@ export default function OwnerStaffScreen() {
     return map;
   }, [records, wages, settings, staff, ym, today, shiftTemplates, swaps, shiftExceptions]);
 
-  // 이번 정산 기간(이 화면의 달력 월)에 근무가 있나 — 출퇴근 기록 또는 근무표. 퇴사자 줄·재입사 경고가 같은 판정을 쓴다.
-  const workedThisMonth = useCallback(
-    (uid: string) =>
-      records.some((r) => r.staff_id === uid && r.date.startsWith(ym))
-      || scheduledShiftsFor(shiftTemplates, swaps, shiftExceptions, uid, monthDates(ym)).length > 0,
-    [records, ym, shiftTemplates, swaps, shiftExceptions],
+  // 이번 정산 기간(이 화면의 달력 월) 입력. 퇴사자 줄·재입사 경고가 같은 판정(tenure.ts)을 쓴다.
+  const period = useMemo(
+    () => ({ ym, records, templates: shiftTemplates, swaps, exceptions: shiftExceptions }),
+    [ym, records, shiftTemplates, swaps, shiftExceptions],
   );
 
-  // 이번 정산 기간 퇴사자 — 이번 달에 일하고 나간 직원. 금액은 지금 직원과 같은 계산(근무표 기준 computePay)이다.
-  //   시급은 남아 있는 wages 를 먼저 쓰고, 없으면 나갈 때 남긴 시급(final_hourly_wage)을 쓴다.
-  const departed = useMemo(() => {
-    const worked = new Set(tenures.filter((t) => t.left_at && workedThisMonth(t.user_id)).map((t) => t.user_id));
-    const dates = monthDates(ym);
-    return departedInPeriod(tenures, Object.keys(roles), worked).map((t) => {
-      const uid = t.user_id;
-      const min = records.filter((r) => r.staff_id === uid && r.date.startsWith(ym)).reduce((sum, r) => sum + liveMinutes(r), 0);
-      const shiftRecs = shiftsToPayRecords(scheduledShiftsFor(shiftTemplates, swaps, shiftExceptions, uid, dates));
-      const schedMin = shiftRecs.reduce((sum, r) => sum + r.work_minutes, 0);
-      const wage = Object.prototype.hasOwnProperty.call(wages, uid) ? wages[uid] : t.final_hourly_wage;
-      return { id: uid, name: t.name_snapshot || '퇴사자', min, schedMin, pay: wage == null ? null : computePay(shiftRecs, wage, settings).total };
-    });
-  }, [tenures, roles, workedThisMonth, ym, records, shiftTemplates, swaps, shiftExceptions, wages, settings]);
+  // 이번 정산 기간 퇴사자 — 이번 달에 일하고 나간 직원. 근무 여부 · 시급 대체 · 금액은 departedPayRows 하나가 정한다.
+  const departed = useMemo(
+    () => departedPayRows({ ...period, tenures, memberIds: Object.keys(roles), wages, settings }),
+    [period, tenures, roles, wages, settings],
+  );
 
   // 합류 승인 — 예전에 이 매장에서 일했던 사람이면 경고를 보이고 확인을 받는다. 막지는 않는다.
   async function approveChecked(p: PendingMember) {
-    const lines = rejoinNotice(tenures, p.id, workedThisMonth(p.id));
+    const lines = rejoinNotice(tenures, p.id, workedInPeriod(p.id, period));
     if (lines && !(await confirmAction('합류를 승인할까요?', lines.join('\n\n'), '승인', { icon: 'alert-circle-outline' }))) return;
     approve(p.id);
   }
@@ -158,7 +147,8 @@ export default function OwnerStaffScreen() {
   //   이유: 이 화면은 '누구에게 얼마' 를 보는 자리고, 진도는 퀴즈 탭(응시 현황)이 이미 맡는다.
   //   같은 사실을 두 화면에서 말하면 둘 중 하나만 고쳐지는 순간 서로 다른 말을 한다.
   //   판정 본체(taskProgress)는 그대로 두고 여기서 부르지만 않는다 — 퀴즈 탭·사장 홈이 계속 쓴다.
-  const totalPay = staff.reduce((a, s) => a + (perStaff[s.id]?.pay ?? 0), 0);
+  // 이번 달에 일하고 나간 직원 급여도 이번 달에 나간다(02_설계_구성원보존 §5). 아래 퇴사자 줄 금액을 더한다.
+  const totalPay = staff.reduce((a, s) => a + (perStaff[s.id]?.pay ?? 0), 0) + departed.reduce((a, d) => a + (d.pay ?? 0), 0);
   /**
    * ★"₩0"을 짓지 않는다(2026-09-09). 시급 축은 이미 pay=null 로 0원과 미설정을 갈라 놓았는데,
    *   히어로는 그 null 을 `?? 0` 으로 삼켜서 **설정이 하나도 없는 새 매장에 "이번 달 예상 인건비 ₩0"**
@@ -231,7 +221,7 @@ export default function OwnerStaffScreen() {
               ? '직원 시급을 정하면 금액이 나와요 — 아래 목록에서 바로 넣을 수 있어요'
               : payBlocked === '근무표'
                 ? '근무표가 비어 있어요 — 근무 시간을 넣으면 금액이 나와요'
-                : `${month}월 · 세전 · 근무표 기준 · 직원 ${staff.length}명${workingCount > 0 ? ` · 근무 중 ${workingCount}명` : ''}`}
+                : `${month}월 · 세전 · 근무표 기준 · 직원 ${staff.length}명${departed.length > 0 ? ` · 퇴사자 ${departed.length}명 포함` : ''}${workingCount > 0 ? ` · 근무 중 ${workingCount}명` : ''}`}
           </Text>
           <Pressable
             onPress={() => router.push('/owner/payroll')}
