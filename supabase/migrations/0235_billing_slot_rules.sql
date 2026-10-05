@@ -7,6 +7,7 @@
 --       다점포 결제는 선불 매장도 덮는다. (2단계 가드 = 토스 동결 뒤 0252)
 --   H7  선불 매장이 구독 흔적이 되면 흡수 직전 만료일(prepaid_until)을 남긴다. 그 구독을 환불하면 그 날로 되돌린다.
 --   H8  앱·카드 구독 배정 루프는 구독 슬롯(source='iap')만 쓴다.
+--   C1  (2026-10-05 결정) 첫 구독이 선불 기간과 겹치면 겹친 날을 구독 기간 뒤에 붙인다(carry). 갱신 때도 더한다.
 --   J8  (2026-10-05 결정으로 뒤집음) 유료 매장을 지우면 남은 이용 기간은 사라진다. 슬롯으로 돌려주지 않는다.
 --       매장 삭제 미리보기 RPC(남은 기간 날짜만 알려 준다). 지운 매장의 대기 신고는 store_deleted 로 닫는다.
 --   M7  payment_claims 의 unit_id·claimed_by 를 on delete set null 로(전자상거래법 5년 보존). 사장은 자기 신고를 계속 본다.
@@ -59,6 +60,10 @@ do $$ begin
 end $$;
 -- prepaid_until: 구독 흔적 슬롯이 선불 매장을 흡수하기 직전의 그 매장 paid_until(H7). 환불 때 이 날로 되돌린다.
 alter table public.store_slots add column if not exists prepaid_until timestamptz;
+-- carry: 첫 구독 결제가 선불 기간과 겹친 길이(C1). 이 흔적이 붙은 매장은 결제 기간 끝 + carry 까지 열린다.
+alter table public.store_slots add column if not exists carry interval not null default interval '0';
+comment on column public.store_slots.carry is
+  '첫 구독 결제가 선불 기간과 겹친 길이(0235 C1). 매장 만료일 = 결제 기간 끝 + carry. 갱신마다 더한다. 흔적을 떼면 0.';
 comment on column public.store_slots.plan is
   '이 슬롯으로 여는 매장의 요금제(0235). 계좌이체 single 매장을 지워 돌려받은 몫은 single — 그 몫으로 multi 매장을 열지 못한다.';
 comment on column public.store_slots.prepaid_until is
@@ -95,6 +100,7 @@ declare
   v_since   timestamptz := now() - interval '16 days';  -- ★0235: 이어지는 결제의 창(애플 유예 16일)
   v_pre     timestamptz;      -- ★0235(H7): 흡수 직전 선불 만료일
   v_slot_until timestamptz;   -- ★0235(리뷰): 배정에 쓰는 슬롯이 들고 있던 만료일
+  v_carry   interval := interval '0';  -- ★0235(C1): 선불과 겹친 길이
 begin
   if p_owner is null then raise exception 'owner_required'; end if;
   if p_plan not in ('single', 'multi') then raise exception 'bad_plan'; end if;
@@ -144,7 +150,7 @@ begin
     if v_unit is null then raise exception 'no_owned_store'; end if;
     -- ★0196: 고른(닫는) 매장의 IAP 흔적을 떼어낸다 — multi 분기 ①과 같은 이유(다음 갱신에서 되살아나지 않게).
     update public.store_slots
-       set consumed_unit_id = null
+       set consumed_unit_id = null, carry = interval '0'
      where owner_id = p_owner and source = 'iap'
        and consumed_unit_id = any(v_chosen) and consumed_unit_id <> v_unit;
 
@@ -154,11 +160,16 @@ begin
                     where owner_id = p_owner and source = 'iap' and consumed_unit_id = v_unit)
        and public.unit_prepaid(v_unit) then
       select us.paid_until into v_pre from public.unit_subscriptions us where us.unit_id = v_unit;
+      -- ★0235(C1): 선불과 겹친 길이. 구독은 선불이 끝난 다음부터 센다.
+      v_carry := greatest(interval '0', coalesce(v_pre, now()) - now());
+    else
+      select coalesce(max(carry), interval '0') into v_carry from public.store_slots
+       where owner_id = p_owner and source = 'iap' and consumed_unit_id = v_unit;
     end if;
 
-    -- ★0235(Q7): 대입이 아니라 greatest — 남은 계좌이체·코드 기간을 깎지 않는다.
+    -- ★0235(Q7): 대입이 아니라 greatest — 남은 계좌이체·코드 기간을 깎지 않는다. (C1) 결제 기간 끝 + carry.
     insert into public.unit_subscriptions (unit_id, status, paid_until, plan, updated_at)
-    values (v_unit, 'active', p_period_end, 'single', now())
+    values (v_unit, 'active', p_period_end + v_carry, 'single', now())
     on conflict (unit_id) do update set
       status = 'active',
       paid_until = greatest(coalesce(unit_subscriptions.paid_until, excluded.paid_until), excluded.paid_until),
@@ -172,11 +183,11 @@ begin
       select 1 from public.store_slots
        where owner_id = p_owner and source = 'iap' and consumed_unit_id = v_unit
     ) then
-      insert into public.store_slots (owner_id, paid_until, claim_id, source, consumed_at, consumed_unit_id, plan, prepaid_until)
-      values (p_owner, p_period_end, null, 'iap', now(), v_unit, 'single', v_pre);
+      insert into public.store_slots (owner_id, paid_until, claim_id, source, consumed_at, consumed_unit_id, plan, prepaid_until, carry)
+      values (p_owner, p_period_end + v_carry, null, 'iap', now(), v_unit, 'single', v_pre, v_carry);
     else
       update public.store_slots
-         set paid_until = greatest(paid_until, p_period_end)
+         set paid_until = greatest(paid_until, p_period_end + v_carry)
        where owner_id = p_owner and source = 'iap' and consumed_unit_id = v_unit;
     end if;
 
@@ -231,9 +242,12 @@ begin
 
   -- 대입(가산 아님). 다만 이미 p_period_end 보다 먼 날짜면 줄이지 않는다 — 다른 채널(계좌이체·무료지급)이
   -- 더 길게 열어 둔 것을 IAP 갱신이 깎아버리면 사장 입장에선 산 것이 사라진다.
+  -- ★0235(C1): 그 매장 흔적의 carry 를 더한다(선불과 겹친 날이 갱신에서 사라지지 않게).
   update public.unit_subscriptions s
      set status = 'active',
-         paid_until = greatest(coalesce(s.paid_until, p_period_end), p_period_end),
+         paid_until = greatest(coalesce(s.paid_until, p_period_end), p_period_end + coalesce(
+           (select max(c.carry) from public.store_slots c
+             where c.owner_id = p_owner and c.source = 'iap' and c.consumed_unit_id = s.unit_id), interval '0')),
          plan = 'multi',
          updated_at = now()
    where s.unit_id = any(v_units);
@@ -241,7 +255,7 @@ begin
   -- ★0235(리뷰 ⑲-a): 연장한 매장의 구독 흔적 슬롯 날짜도 맞춘다(single 분기와 같다). 안 맞추면 2번째 주기부터
   --   "지금 결제 중인 흔적"·"16일 창" 판정이 첫 주기 날짜를 읽어, 늦게 온 갱신이 결제한 매장을 못 연다.
   update public.store_slots
-     set paid_until = greatest(paid_until, p_period_end)
+     set paid_until = greatest(paid_until, p_period_end + carry)
    where owner_id = p_owner and source = 'iap'
      and consumed_unit_id = any(v_units);
 
@@ -249,7 +263,7 @@ begin
   --   안 떼면 명단이 비워진 다음 갱신에서 ①이 "오래된 순"으로 그 매장을 다시 잡아 — 닫은 매장이 되살아나고
   --   대신 다른 매장이 빠진다(qa:iap ⑬⑭ 가 잡은 회귀). consumed_at 은 그대로라 미소비 슬롯이 되지도 않는다.
   update public.store_slots
-     set consumed_unit_id = null
+     set consumed_unit_id = null, carry = interval '0'
    where owner_id = p_owner and source = 'iap'
      and consumed_unit_id = any(v_chosen)
      and not (consumed_unit_id = any(v_units));
@@ -317,13 +331,16 @@ begin
 
       if public.unit_prepaid(v_unit) then
         select us.paid_until into v_pre from public.unit_subscriptions us where us.unit_id = v_unit;
+        -- ★0235(C1): 구독은 선불이 끝난 다음부터 센다. 겹친 길이를 슬롯에 남겨 갱신 때도 더한다.
+        v_carry := greatest(interval '0', coalesce(v_pre, now()) - now());
         update public.unit_subscriptions
            set status = 'active', plan = 'multi',
-               paid_until = greatest(coalesce(paid_until, p_period_end), p_period_end, v_slot_until),
+               paid_until = greatest(coalesce(paid_until, p_period_end), p_period_end + v_carry, v_slot_until),
                updated_at = now()
          where unit_id = v_unit;
         update public.store_slots
-           set consumed_at = now(), consumed_unit_id = v_unit, prepaid_until = v_pre
+           set consumed_at = now(), consumed_unit_id = v_unit, prepaid_until = v_pre, carry = v_carry,
+               paid_until = greatest(paid_until, p_period_end + v_carry)
          where id = v_slot;
       else
         perform * from public.admin_activate_store(v_unit, v_days, 'multi');

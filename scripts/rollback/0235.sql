@@ -2,7 +2,7 @@
 --
 -- 되돌리는 것: sync_iap_slots(0230 4인자) · apply_iap_event(0206) · card_record_charge(0230) · review_payment_claim(0137) ·
 --   revoke_iap_access·reopen_store(0196) · delete_store(0061, void) · create_store(0173) · payment_claims_select 정책(0083).
--- 되돌리지 않는 것: payment_claims FK set null(이미 null 행이 생겼으면 not null 복구 불가) · store_slots.plan·prepaid_until 열
+-- 되돌리지 않는 것: payment_claims FK set null(이미 null 행이 생겼으면 not null 복구 불가) · store_slots.plan·prepaid_until·carry 열
 --   (옛 함수는 이 열을 안 본다 — 남아도 무해) · unit_brand_paid·unit_prepaid·delete_store_preview 는 지운다.
 -- ⚠️ 적용하면 Q5·Q6·Q7·J8 결함이 다시 켜진다. 데이터는 Phase 0 덤프로 되돌린다.
 -- 실행(사용자 세션): npx supabase db query -f scripts/rollback/0235.sql --linked

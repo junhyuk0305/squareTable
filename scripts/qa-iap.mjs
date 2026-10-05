@@ -753,7 +753,7 @@ async function slotRuleChecks() {
     const t = `qa_r2_${s}`;
     await evt(R, t, 'INITIAL_PURCHASE', 'multi_2_monthly', 'multi', 2, iso(days(30)));
     const a1 = await paidUntilOf(A);
-    check('셋업 ⑲-b 새 구독이 계좌이체 매장 A 를 덮음(30일)', sameTime(a1?.paid_until, iso(days(30))), JSON.stringify(a1));
+    check('셋업 ⑲-b 새 구독이 계좌이체 매장 A 를 덮음(남은 10일 뒤에 30일 · ㉑)', sameTime(a1?.paid_until, plus(d10, 30)), JSON.stringify(a1));
     await evt(R, t, 'CANCELLATION', 'multi_2_monthly', 'multi', 2, iso(days(30)), { p_reason: 'CUSTOMER_SUPPORT' });
     const a2 = await paidUntilOf(A);
     check('★★⑲-b 환불 → A 는 계좌이체 만료일(10일)로 돌아간다', a2?.status === 'active' && sameTime(a2?.paid_until, d10), JSON.stringify(a2));

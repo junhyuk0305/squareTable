@@ -15,6 +15,7 @@ export function fmtDay(isoLike: string | null | undefined, now: number = Date.no
  * A2 — 다른 경로로 산 이용 기간이 남아 있으면 앱에서 또 살 수 없다(없으면 null).
  * ★0187 의 이중청구 가드는 **한 방향**뿐이다(앱 구독 중이면 다른 신고를 막는다). 반대 방향은 서버가 안 막고
  *   `sync_iap_slots` 도 기간을 줄이지 않으므로 두 기간이 겹친 채 둘 다 청구된다 → 화면에서 **막는다**.
+ * 2026-10-05 — 자동으로 이어지지 않는 기간이면 끝나기 3일 전부터는 막지 않는다.
  * Q30 — 그 기간이 자동으로 이어지는 중(`renewsElsewhere`)이면 "그 뒤에 여기서 이어가실 수 있어요"는 거짓이다.
  *   그때는 이어진다는 사실까지만 말한다. "여기서 따로 사지 않아도 돼요"는 인앱결제를 하지 말라는 말로 읽혀 넣지 않는다(정책 L3).
  * ⛔ 채널을 말하지 않는다 — 앱 안에서 외부 결제를 언급하면 스토어 위반이다.
@@ -29,7 +30,9 @@ export function otherPaidNote(
   const ms = new Date(paidUntil).getTime();
   if (Number.isNaN(ms) || ms <= now) return null;
   if (renewsElsewhere) return `지금 이용권은 ${fmtDay(paidUntil, now)} 이후에도 자동으로 이어져요.`;
-  return `${fmtDay(paidUntil, now)}까지 이용 기간이 남아 있어요. 그 뒤에 여기서 이어가실 수 있어요.`;
+  // 2026-10-05: 선불 가드와 같은 기준. 끝나기 3일 전부터 산다(산 기간은 남은 기간 뒤에 붙는다 · 서버 0235).
+  if (ms - now <= PREPAID_OPEN_BEFORE_MS) return null;
+  return `${fmtDay(paidUntil, now)}까지 이용 기간이 남아 있어요. 끝나기 3일 전부터 결제할 수 있어요.`;
 }
 
 const PREPAID_OPEN_BEFORE_MS = 3 * 24 * 60 * 60 * 1000;
