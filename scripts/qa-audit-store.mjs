@@ -291,5 +291,189 @@ console.log('\n[B8] 가입 직후 화면은 유료 AI 한도를 사실대로 말
   check('★"직원 무제한 · AI 월 3,000회"(숫자는 tiers.ts 에서)', /직원 무제한 · AI 월 \$\{[^}]*PLANS\.single\.aiMonthly[^}]*\}회/.test(ob));
 }
 
+console.log('\n[C3] 보고 있는 매장은 로그인 세션(기기)마다 따로 둔다');
+{
+  const a = lastDef('auth_unit_id');
+  check('★auth_unit_id 가 이 세션의 활성 매장(session_active_units)을 먼저 보고, 멤버십이 있을 때만 쓴다',
+    /from public\.session_active_units/.test(a.body) && /auth\.uid\(\)/.test(a.body) && /from public\.unit_members/.test(a.body)
+      && /p\.active_unit_id/.test(a.body) && /stable security definer/.test(a.body), a.file);
+  const sw = lastDef('switch_session_unit');
+  check('★전환 RPC switch_session_unit — 멤버 아님 not_a_member · 잠긴 매장 unit_locked · 이 세션 행만 바꾼다',
+    !!sw.file && /not_a_member/.test(sw.body) && /unit_access_locked\(p_unit_id\)/.test(sw.body)
+      && /on conflict \(session_id\) do update/.test(sw.body) && /where s\.user_id = v_uid/.test(sw.body), sw.file || '없음');
+  check('switch_session_unit · session_unit 은 authenticated 만 실행',
+    fileHas(sw.file, 'grant execute on function public.switch_session_unit(text) to authenticated;')
+      && fileHas(sw.file, 'grant execute on function public.session_unit() to authenticated;')
+      && fileHas(sw.file, 'revoke all on table public.session_active_units from public, anon, authenticated;'));
+  const mu = lastDef('my_units'), ov = lastDef('owner_overview');
+  check('★매장 목록·사장 현황의 "지금 보는 매장" 표시가 auth_unit_id() 기준이다',
+    /\(u\.id = public\.auth_unit_id\(\)\) as is_active/.test(mu.body) && /\(u\.id = public\.auth_unit_id\(\)\) as is_active/.test(ov.body), `${mu.file} ${ov.file}`);
+  const be = lastDef('brand_enter_workspace');
+  check('★본사 작업실 들어가기가 이 세션의 매장도 작업실로 옮긴다', /public\.session_unit_set\(v_ws\)/.test(be.body), be.file);
+  const push = strip(read('supabase/functions/push/index.ts'));
+  check('★push 엣지: 보낸 사람의 매장을 호출자 토큰의 auth_unit_id 로 정한다(profiles 직접 읽기 아님)',
+    /asCaller\.rpc\('auth_unit_id'\)/.test(push) && !/me\?\.active_unit_id \?\? me\?\.unit_id/.test(push));
+  const db = strip(read('src/lib/db.ts'));
+  check('★db: 매장 전환은 switch_session_unit · 세션 매장 읽기 fetchSessionUnit(session_unit)',
+    /export async function switchActiveUnit[\s\S]*?rpc\('switch_session_unit'/.test(db) && /export async function fetchSessionUnit[\s\S]*?rpc\('session_unit'\)/.test(db));
+  check('★db: 업종 저장이 0행이면 실패로 돌려준다(.select)', /from\('units'\)\.update\(\{ industry \}\)\.eq\('id', unitId\)\.select\('id'\)/.test(db));
+  const ss = strip(read('src/lib/store/useSessionStore.ts'));
+  check('★세션: loadProfile 의 매장 = 서버 세션 매장(fetchSessionUnit) · 함수가 없을 때만 profiles 값',
+    /fetchSessionUnit\(\)/.test(ss) && /isMissingRpc\(suErr\)/.test(ss) && !/let unitId = profile\?\.active_unit_id \|\| profile\?\.unit_id \|\| ''/.test(ss));
+  check('★세션: 늦게 끝난 옛 loadProfile 은 더 새로 시작한 로드가 반영된 뒤면 버린다',
+    /const seq = \+\+_loadSeq/.test(ss) && /if \(seq < _appliedSeq\) return;/.test(ss) && /_appliedSeq = seq;/.test(ss));
+  check('★세션: 매장 추가 뒤 이 기기를 새 매장으로 옮긴다(다른 기기가 바꾼 뒤라도)', /if \(!isOnboarding && row\?\.unit_id\) await switchActiveUnit\(row\.unit_id\)/.test(ss));
+  const se = strip(read('src/lib/store/useStoreEntryStore.ts'));
+  check('★매장 진입이 시간 초과면 서버 값으로 한 번 다시 맞춘다(refreshMembership)',
+    /res === 'timeout'\) \{[\s\S]*?refreshMembership\(\)/.test(se));
+
+  if (!dbUp) console.log('  SKIP 서버 동작 — 로컬 도커 DB 없음');
+  else {
+    const SID = (n) => `c3000000-0000-4000-8000-0000000000${String(n).padStart(2, '0')}`;
+    const sess = (who, ...ns) => ns.map((n) => `insert into auth.sessions (id, user_id) values ('${SID(n)}', current_setting('qa.${who}')::uuid);`).join('\n');
+    const asS = (who, n) => `
+reset role;
+set local role authenticated;
+select set_config('request.jwt.claims', json_build_object('sub', current_setting('qa.${who}'), 'role', 'authenticated', 'session_id', '${typeof n === 'number' ? SID(n) : n}')::text, true);
+`;
+    const rowOf = (n) => `(select coalesce((select unit_id from public.session_active_units where session_id = '${SID(n)}'), 'none'))`;
+    const B = extraUnit('qa_c3_b', '991201');
+    const C = extraUnit('qa_c3_c', '991202');
+    // 직원 staff2 가 store_001 과 qa_c3_y 두 매장에서 일한다.
+    const Y = extraUnit('qa_c3_y', '991203', `insert into public.unit_members (unit_id, user_id, role) values ('qa_c3_y', current_setting('qa.j')::uuid, 'junior');`);
+    const run = (body) => psql(`${IDS}${body}\nrollback;\n`);
+    const out = (o, k) => (o.match(new RegExp(`^${k}=(.*)$`, 'm')) ?? [])[1];
+
+    // T1 두 세션 격리 — 사장 S1=A(store_001) · S2=B. 나중에 바꾼 S2 가 S1 의 대상을 바꾸지 않는다.
+    const t1 = run(`${B}${sess('o', 1, 2)}
+${asS('o', 1)}select public.switch_session_unit('store_001');
+${asS('o', 2)}select public.switch_session_unit('qa_c3_b');
+${asS('o', 1)}select 'A1=' || public.auth_unit_id();
+select public.rotate_invite_code();
+insert into public.work_templates (id, unit_id, section, text) values ('qa_c3_wt', 'store_001', 'open', 't');
+select 'W1=' || count(*) from public.work_templates where id = 'qa_c3_wt';
+${asS('o', 2)}select 'A2=' || public.auth_unit_id();
+select public.rename_store('QA C3 B 새이름');
+select 'W2=' || count(*) from public.work_templates where id = 'qa_c3_wt';
+reset role;
+select 'CODEB=' || invite_code from public.units where id = 'qa_c3_b';
+select 'CODEA=' || (invite_code <> (select invite_code from public.units where id = 'qa_c3_b')) from public.units where id = 'store_001';
+select 'NAMEB=' || store_name from public.units where id = 'qa_c3_b';
+select 'NAMEA=' || (store_name <> 'QA C3 B 새이름') from public.units where id = 'store_001';`);
+    check('★T1 같은 사장의 두 세션이 각자 고른 매장을 본다(S1=store_001 · S2=qa_c3_b)', out(t1, 'A1') === 'store_001' && out(t1, 'A2') === 'qa_c3_b', tail(t1));
+    check('★T1 S1 의 초대코드 변경은 S1 매장에만 · S2 의 이름 변경은 S2 매장에만', out(t1, 'CODEB') === '991201' && out(t1, 'NAMEB') === 'QA C3 B 새이름' && out(t1, 'NAMEA') === 't', tail(t1));
+    check('★T1 S1 이 쓴 행은 S1 매장 것으로 보이고 S2 에선 안 보인다', out(t1, 'W1') === '1' && out(t1, 'W2') === '0', tail(t1));
+    const t1x = run(`${B}${sess('o', 1, 2)}
+${asS('o', 2)}select public.switch_session_unit('qa_c3_b');
+${asS('o', 1)}select public.switch_session_unit('store_001');
+${asS('o', 2)}insert into public.work_templates (id, unit_id, section, text) values ('qa_c3_wt2', 'store_001', 'open', 't');
+select 'R=inserted';`);
+    check('★T1 S2(qa_c3_b) 가 store_001 에 쓰면 RLS 가 막는다', /row-level security/.test(t1x) && !t1x.includes('R=inserted'), tail(t1x));
+
+    // T2 나가기(원본 #39) — 직원 S1=store_001, S2=qa_c3_y. S1 이 나가면 store_001 만 나간다.
+    const t2 = run(`${Y}${sess('j', 3, 4)}
+${asS('j', 3)}select public.switch_session_unit('store_001');
+${asS('j', 4)}select public.switch_session_unit('qa_c3_y');
+${asS('j', 3)}select public.leave_store();
+reset role;
+select 'M=' || string_agg(unit_id, ',' order by unit_id) from public.unit_members where user_id = current_setting('qa.j')::uuid;
+select 'ROW3=' || ${rowOf(3)}; select 'ROW4=' || ${rowOf(4)};`);
+    check('★T2 직원이 이 기기에서 나가기 → 이 기기 매장(store_001)에서만 나간다(qa_c3_y 는 그대로)', out(t2, 'M') === 'qa_c3_y', tail(t2));
+    check('T2 나간 세션의 행은 지워지고 다른 기기 행은 남는다', out(t2, 'ROW3') === 'none' && out(t2, 'ROW4') === 'qa_c3_y', tail(t2));
+
+    // T3 옛 앱 세션(행 없음 · switch_active_unit 만 씀)
+    const t3 = run(`${B}${sess('o', 5, 6)}
+${asS('o', 5)}select public.switch_session_unit('store_001');
+${asS('o', 6)}select public.switch_active_unit('qa_c3_b');
+select 'OLD1=' || public.auth_unit_id();
+${asS('o', 5)}select 'NEW1=' || public.auth_unit_id();
+select public.switch_session_unit('store_001');
+${asS('o', 6)}select 'OLD2=' || public.auth_unit_id();
+reset role;
+select 'ROW6=' || ${rowOf(6)};
+select 'PROF=' || active_unit_id from public.profiles where id = current_setting('qa.o')::uuid;`);
+    check('★T3 옛 앱이 매장을 바꿔도 새 앱 세션은 그대로다', out(t3, 'OLD1') === 'qa_c3_b' && out(t3, 'NEW1') === 'store_001', tail(t3));
+    check('★T3 새 앱이 바꾸면 옛 앱은 지금처럼 따라간다(profiles = 마지막 선택) · 옛 앱 세션엔 행이 생기지 않는다',
+      out(t3, 'OLD2') === 'store_001' && out(t3, 'ROW6') === 'none' && out(t3, 'PROF') === 'store_001', tail(t3));
+
+    // T4 멤버십을 잃으면 그 세션 행이 바로 사라진다 — 내보내기 · 매장 삭제
+    const t4 = run(`${Y}${sess('j', 7)}${sess('o', 8)}
+${asS('j', 7)}select public.switch_session_unit('qa_c3_y');
+${asS('o', 8)}select public.switch_session_unit('qa_c3_y');
+select public.remove_staff(current_setting('qa.j')::uuid);
+${asS('j', 7)}select 'AU=' || coalesce(public.auth_unit_id(), 'null');
+select 'SEE=' || count(*) from public.units where id = 'qa_c3_y';
+reset role;
+select 'ROW7=' || ${rowOf(7)};`);
+    check('★T4 내보낸 직원 세션은 그 매장을 더 이상 보지 않는다(행 삭제 · auth_unit_id 가 그 매장 아님)',
+      out(t4, 'ROW7') === 'none' && out(t4, 'AU') !== 'qa_c3_y' && out(t4, 'AU') !== undefined, tail(t4));
+    // 매장 삭제: S1=qa_c3_c 를 보는 중 S2(qa_c3_b, profiles 도 b) 를 지운다 → S2 행은 사라지고 S1 은 c 그대로.
+    const t4d = run(`${B}${C}${sess('o', 9, 10)}
+${asS('o', 9)}select public.switch_session_unit('qa_c3_c');
+${asS('o', 10)}select public.switch_session_unit('qa_c3_b');
+${asS('o', 9)}select public.delete_store('qa_c3_b');
+select 'AU9=' || public.auth_unit_id();
+reset role;
+select 'ROW9=' || ${rowOf(9)}; select 'ROW10=' || ${rowOf(10)};`);
+    check('★T4 다른 기기가 보던 매장을 지우면 그 기기 행만 사라지고, 지운 기기는 보던 매장에 남는다',
+      out(t4d, 'ROW10') === 'none' && out(t4d, 'ROW9') === 'qa_c3_c' && out(t4d, 'AU9') === 'qa_c3_c', tail(t4d));
+
+    // T5 위조·우회
+    const t5a = run(`${sess('o', 11)}${asS('o', 11)}insert into public.session_active_units (session_id, user_id, unit_id) values ('${SID(11)}', current_setting('qa.o')::uuid, 'store_solo_local');\nselect 'R=inserted';`);
+    check('★T5 클라가 세션 표에 직접 쓰지 못한다', /permission denied/.test(t5a) && !t5a.includes('R=inserted'), tail(t5a));
+    const t5b = run(`${sess('o', 11)}${asS('o', 11)}select 'R=' || count(*) from public.session_active_units;`);
+    check('T5 클라가 세션 표를 읽지 못한다', /permission denied/.test(t5b), tail(t5b));
+    const t5c = run(`${sess('o', 11)}${asS('o', 11)}select public.switch_session_unit('store_solo_local');\nselect 'R=switched';`);
+    check('★T5 남의 매장으로 전환 → not_a_member', t5c.includes('not_a_member') && !t5c.includes('R=switched'), tail(t5c));
+    const PAID = extraUnit('qa_c3_paid', '991204',
+      `insert into public.unit_subscriptions (unit_id, status, plan, paid_until) values ('qa_c3_paid', 'active', 'single', now() + interval '30 days')
+         on conflict (unit_id) do update set status = 'active', plan = 'single', paid_until = excluded.paid_until;`);
+    const t5d = run(`${PAID}${sess('o', 11)}${asS('o', 11)}select public.switch_session_unit('store_001');\nselect 'R=switched';`);
+    check('T5 잠긴 매장으로 전환 → unit_locked', t5d.includes('unit_locked') && !t5d.includes('R=switched'), tail(t5d));
+    // 다른 사용자(매니저 m)가 사장 세션 id 를 토큰에 넣어도 사장의 세션 매장을 쓰지 못하고, 그 행을 바꾸지도 못한다.
+    const t5e = run(`${B}${sess('o', 12)}
+${asS('o', 12)}select public.switch_session_unit('qa_c3_b');
+${asS('m', 12)}select 'AU=' || coalesce(public.auth_unit_id(), 'null');
+select 'SU=' || coalesce(public.session_unit(), 'null');
+select public.switch_session_unit('store_001');
+reset role;
+select 'ROW12=' || ${rowOf(12)};`);
+    check('★T5 남의 세션 id 를 넣은 토큰은 그 세션 매장을 못 쓰고 행도 못 바꾼다',
+      out(t5e, 'AU') === 'store_001' && out(t5e, 'ROW12') === 'qa_c3_b', tail(t5e));
+    const t5f = run(`${asS('o', 'not-a-uuid')}select 'AU=' || public.auth_unit_id();`);
+    check('T5 세션 id 가 uuid 모양이 아니어도 오류 없이 계정 값으로 돈다', out(t5f, 'AU') === 'store_001', tail(t5f));
+
+    // T6 로그아웃(세션 삭제) → 그 세션 행만 사라진다
+    const t6 = run(`${B}${sess('o', 13, 14)}
+${asS('o', 13)}select public.switch_session_unit('qa_c3_b');
+${asS('o', 14)}select public.switch_session_unit('store_001');
+reset role;
+delete from auth.sessions where id = '${SID(13)}';
+select 'ROW13=' || ${rowOf(13)}; select 'ROW14=' || ${rowOf(14)};`);
+    check('★T6 로그아웃한 세션의 행만 사라진다', out(t6, 'ROW13') === 'none' && out(t6, 'ROW14') === 'store_001', tail(t6));
+
+    // T7 새 로그인은 마지막 선택 매장으로 열리고 그 세션에 고정된다
+    const t7 = run(`${B}${sess('o', 15, 16)}
+${asS('o', 15)}select public.switch_session_unit('qa_c3_b');
+${asS('o', 16)}select 'SU=' || public.session_unit();
+reset role;
+select 'ROW16=' || ${rowOf(16)};`);
+    check('★T7 새 세션의 session_unit() = 마지막 선택 매장 · 행을 만든다', out(t7, 'SU') === 'qa_c3_b' && out(t7, 'ROW16') === 'qa_c3_b', tail(t7));
+
+    // T8 서버 함수가 활성 매장을 옮기면 이 세션도 따라간다(옛 switch_active_unit · 매장 삭제 대체 등)
+    const t8 = run(`${B}${sess('o', 17)}
+${asS('o', 17)}select public.switch_session_unit('store_001');
+select public.switch_active_unit('qa_c3_b');
+reset role;
+select 'ROW17=' || ${rowOf(17)};`);
+    check('★T8 이 세션에서 활성 매장을 옮기는 서버 함수를 부르면 세션 행도 옮겨 간다', out(t8, 'ROW17') === 'qa_c3_b', tail(t8));
+    const t8d = run(`${B}${sess('o', 18)}
+${asS('o', 18)}select public.switch_session_unit('qa_c3_b');
+select public.delete_store('qa_c3_b');
+select 'AU=' || public.auth_unit_id();`);
+    check('T8 보던 매장을 지우면 이 세션은 남은 매장으로 넘어간다', out(t8d, 'AU') === 'store_001', tail(t8d));
+  }
+}
+
 console.log(`\n${pass} PASS / ${fail} FAIL`);
 process.exit(fail ? 1 : 0);
