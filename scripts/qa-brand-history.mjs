@@ -251,6 +251,10 @@ console.log('\n[5] 앱 brand-link "끝난 연결" 카드 · 본사 /hq/stores "�
   check('5-4 brand-link 카드에 "내 노하우 보기" → /owner/knowledge', /내 노하우 보기/.test(link) && /\/owner\/knowledge/.test(link));
   const store = read('src/lib/store/useOwnerBrandStore.ts');
   check('5-5 useOwnerBrandStore 가 myBrandHistory 를 읽는다(계정 전환 때 같이 비워진다)', /myBrandHistory\(\)/.test(store) && /history/.test(store));
+  // ★2026-10-05 검토: 계정을 바꾼 뒤 늦게 온 A 의 응답이 B 화면에 A 의 끝난 연결을 그렸다. 첫 await 전에 세대를 잡고 바뀌었으면 쓰지 않는다.
+  const hyd = store.slice(store.indexOf('hydrate: coalesce('));
+  check('5-5b ★hydrate 가 첫 await 전에 currentTenantEpoch() 를 잡고, 세대가 바뀌었으면 set 하지 않는다(계정 전환)',
+    /currentTenantEpoch\(\)[\s\S]*?await Promise\.all/.test(hyd) && /if \(isStaleEpoch\(epoch\)\) return;[\s\S]*?set\(patch\)/.test(hyd));
   const hq = read('src/app/hq/stores/index.tsx');
   check('5-6 /hq/stores 에 testID hq-stores-ended · 사유는 endReasonLabel', /hq-stores-ended/.test(hq) && /endReasonLabel\(/.test(hq) && /연결 끝난 매장/.test(hq));
 

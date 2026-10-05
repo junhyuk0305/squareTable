@@ -244,6 +244,9 @@ console.log('\n■ 연결 — 앱 코드가 위 순서를 쓴다(소스 대조)'
   check("★signOut 은 scope:'local' (Q16)", /signOut\(\{\s*scope:\s*'local'\s*\}\)/.test(signOutBody) && !/auth\.signOut\(\)/.test(signOutBody));
   check("signOut 이 unregister_my_push 에 abortSignal 을 건다", /rpc\('unregister_my_push'[\s\S]*?\.abortSignal\(/.test(signOutBody));
   check("deleteAccount 는 성공 뒤 scope:'global'", /signOut\(\{\s*scope:\s*'global'\s*\}\)/.test(deleteBody));
+  // ★2026-10-05 검토: 오프라인 부팅 화면은 스토어 userId 를 '' 로 비운다. 거기서 로그아웃하면 pending 이 안 남아 A 의 푸시가 계속 왔다.
+  check('★signOut 은 스토어 userId 가 비면 기기 세션(getSession)의 사용자 id 로 pending 을 남긴다(오프라인 부팅 화면)',
+    /auth\.getSession\(\)[\s\S]*?session\?\.user\.id[\s\S]*?signOutWithPushRelease\(/.test(signOutBody) && !signOutBody.includes('userId: get().userId || null'));
   const np = src('src/lib/push/nativepush.ts');
   check('nativepush: 등록 성공 뒤 rememberRegisteredToken', np.includes('rememberRegisteredToken('));
   check('nativepush: 등록 전에 곧 등록할 토큰으로 pending release 를 기다린다', /releasePendingPushToken\(token\)[\s\S]*?save_push_device_token/.test(body(np, 'async function registerToken', '\n}\n')));
