@@ -148,6 +148,7 @@
     "qa:tenure-ui": "node scripts/qa-tenure-ui.mjs",
     "qa:review-compat": "node scripts/qa-review-compat.mjs",
     "qa:review-security": "node scripts/qa-review-security.mjs",
+    "qa:review-applogic": "node scripts/qa-review-applogic.mjs",
     "iap:status": "node scripts/iap-switch.mjs status",
     "iap:on": "node scripts/iap-switch.mjs on",
     "iap:off": "node scripts/iap-switch.mjs off",
