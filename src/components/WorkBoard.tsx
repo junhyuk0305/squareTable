@@ -8,7 +8,7 @@ import { pickImagesNative } from '@/lib/media/pickImage';
 import { HAS_SUPABASE } from '@/lib/supabase';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useStaffStore } from '@/lib/store/useStaffStore';
-import { useWorkStore, useDayparts, useDaypartLabels, daypartRoutineTemplates, isRoutineTaskId, ROUTINE_ID_PREFIX, findDuplicateTask, occursOn, knowhowIdsForTask, quizCountForTask, isCaptureEligible, courseEntriesOf, trainingCourseViews, staffWhoUnderstandTask, understandsTask, taskVisibleTo, isRegularDue, isRequestDue, lastQuizAttemptOf, REGULAR_DUE_DAYS_DEFAULT, type FeedItem, type NewTask, type TaskTemplate } from '@/lib/store/useWorkStore';
+import { useWorkStore, useDayparts, useDaypartLabels, daypartRoutineTemplates, assigneesOf, isRoutineTaskId, ROUTINE_ID_PREFIX, findDuplicateTask, occursOn, knowhowIdsForTask, quizCountForTask, isCaptureEligible, courseEntriesOf, trainingCourseViews, staffWhoUnderstandTask, understandsTask, taskVisibleTo, isRegularDue, isRequestDue, lastQuizAttemptOf, REGULAR_DUE_DAYS_DEFAULT, type FeedItem, type NewTask, type TaskTemplate } from '@/lib/store/useWorkStore';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { useSuggestionStore } from '@/lib/store/useSuggestionStore';
 import { useSyncStore } from '@/lib/store/useSyncStore';
@@ -560,7 +560,7 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
   // ★멤버 판정은 inThisRoom 하나다(2026-09-03). 기본방('전체')은 멤버 행이 없어(멤버십이 암묵) roomMemberIds 로
   //   직접 보면 **항상 빈 목록**이었다 — 서랍의 '참여 인원'은 전원을 보여주는데 할일만 "없어요"라고 말했다.
   const roomTasks = useMemo(
-    () => boardTemplates.filter((t) => !!t.ownerId && inThisRoom(t.ownerId) && occursOn(t, today)),
+    () => boardTemplates.filter((t) => assigneesOf(t).some(inThisRoom) && occursOn(t, today)),
     [boardTemplates, inThisRoom, today],
   );
 
@@ -572,9 +572,10 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
     (f: FeedItem) => {
       if (currentPref?.showTaskDone === false) return false;
       const t = boardTemplates.find((x) => x.id === f.refId);
-      const ownerId = t?.ownerId;
-      if (!ownerId) return isDefaultRoom;
-      return isDefaultRoom || roomMemberIds.has(ownerId);
+      // 담당 여러 명(0254)이면 그중 한 명이라도 이 방 멤버면 그린다.
+      const ids = t ? assigneesOf(t) : [];
+      if (!ids.length) return isDefaultRoom;
+      return isDefaultRoom || ids.some((id) => roomMemberIds.has(id));
     },
     [currentPref?.showTaskDone, isDefaultRoom, roomMemberIds, boardTemplates],
   );

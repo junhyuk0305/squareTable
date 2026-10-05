@@ -63,10 +63,11 @@ create policy wt_select_scope on public.work_templates
 -- ── ④ 알림 함수 2개: 담당자 판정만 owner_ids 로 ────────────────────────────
 -- ★본문을 복사하지 않고 **지금 DB 에 있는 정의**에서 담당자 판정 문자열만 바꿔 다시 만든다.
 --   my_units_notif_data 는 다른 브랜치(마스터 수정계획 0246)도 다시 정의한다. 본문을 복사하면
---   어느 쪽이 나중에 적용되느냐에 따라 상대 변경을 지운다. 문자열 치환은 순서와 무관하다.
---   · due_task_reminders(정본 0153): private 할일 → 담당자 전원(아래 매장 소속 필터는 그대로 거친다).
+--   어느 쪽이 나중에 적용되느냐에 따라 상대 변경을 지운다. 0246 이 뒤에 오면 0255 가 같은 블록으로 다시 바꾼다.
+--   · due_task_reminders(정본 0153): 담당자가 있으면 private·shared 모두 담당자 전원(근무 여부 무관).
+--     담당자 없는 shared 는 그대로(그 시각 근무자 → 없으면 매장 전원). 아래 매장 소속 필터는 그대로 거친다.
 --   · my_units_notif_data(정본 0153, 0246 이 오면 그것): '나에게 배정된 할일'·그 완료마크.
---   grant 는 create or replace 가 그대로 둔다.
+--   grant 는 create or replace 가 그대로 둔다. 이미 바뀐 본문이면 다시 만들지 않는다(멱등).
 do $$
 declare
   v_def text;
@@ -76,20 +77,20 @@ begin
   -- 한 줄씩 바꾼다 — 저장된 본문의 줄바꿈이 CRLF 일 수 있다(로컬 실측).
   v_new := replace(v_def,
     'if t.scope = ''private'' and t.owner_id is not null then',
-    'if t.scope = ''private'' and cardinality(t.owner_ids) > 0 then');
+    'if cardinality(t.owner_ids) > 0 then');
   v_new := replace(v_new, 'v_rec := array[t.owner_id::text];', 'v_rec := t.owner_ids::text[];');
-  if v_new like '%t.owner_id::text%' or v_new like '%t.owner_id is not null%' then
-    raise exception '0254: due_task_reminders 에서 담당자 판정 문자열을 못 찾았다(정본이 바뀌었나)';
+  if v_new not like '%if cardinality(t.owner_ids) > 0 then%' or v_new not like '%v_rec := t.owner_ids::text[];%' then
+    raise exception 'due_task_reminders 에서 담당자 판정 문자열을 못 찾았다(정본이 바뀌었나)';
   end if;
-  execute v_new;
+  if v_new <> v_def then execute v_new; end if;
 
   v_def := pg_get_functiondef('public.my_units_notif_data()'::regprocedure);
   v_new := replace(v_def, 'where wt.owner_id = me.uid', 'where me.uid = any(wt.owner_ids)');
   v_new := replace(v_new, 'and wt.owner_id = me.uid)', 'and me.uid = any(wt.owner_ids))');
-  if v_new like '%wt.owner_id = me.uid%' or v_new = v_def then
-    raise exception '0254: my_units_notif_data 에서 담당자 판정 문자열을 다 못 바꿨다';
+  if v_new like '%wt.owner_id = me.uid%' or v_new not like '%me.uid = any(wt.owner_ids)%' then
+    raise exception 'my_units_notif_data 에서 담당자 판정 문자열을 다 못 바꿨다';
   end if;
-  execute v_new;
+  if v_new <> v_def then execute v_new; end if;
 end $$;
 
 -- ── 자가점검 ──────────────────────────────────────────────────────────────
@@ -101,7 +102,7 @@ begin
   if v_bad > 0 then
     raise exception '0254 자가점검 실패 — owner_id 와 owner_ids[1] 이 다른 행 %개', v_bad;
   end if;
-  if pg_get_functiondef('public.due_task_reminders()'::regprocedure) not like '%t.owner_ids::text[]%'
+  if pg_get_functiondef('public.due_task_reminders()'::regprocedure) not like '%if cardinality(t.owner_ids) > 0 then%'
      or pg_get_functiondef('public.my_units_notif_data()'::regprocedure) like '%wt.owner_id = me.uid%' then
     raise exception '0254 자가점검 실패 — 알림 함수가 아직 owner_id 하나만 본다';
   end if;

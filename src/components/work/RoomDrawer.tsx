@@ -14,7 +14,7 @@ import { confirmAction } from '@/lib/utils/confirm';
 import { roleNoun } from '@/lib/utils/roles';
 import { roomLook } from '@/lib/utils/room';
 import type { Room, RoomPref } from '@/lib/store/useRoomStore';
-import type { FeedItem, TaskTemplate, DoneMark } from '@/lib/store/useWorkStore';
+import { assigneesOf, type FeedItem, type TaskTemplate, type DoneMark } from '@/lib/store/useWorkStore';
 import type { Member } from '@/components/work/MentionInput';
 import { fmtDateKo } from '@/lib/utils/schedule';
 
@@ -157,7 +157,8 @@ export function RoomDrawer({
           ) : (
             tasks.slice(0, 3).map((t, i) => {
               const isDone = !!done[today]?.[t.id];
-              const who = t.ownerId ? members.find((m) => m.id === t.ownerId)?.name : undefined;
+              // 담당 여러 명(0254)은 '·'로 잇는다. 길면 Row 의 numberOfLines={1} 이 '…'로 자른다.
+              const who = assigneesOf(t).map((id) => members.find((m) => m.id === id)?.name).filter(Boolean).join('·') || undefined;
               return (
                 <Row
                   key={t.id}
