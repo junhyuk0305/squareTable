@@ -63,12 +63,25 @@ const bad = urls.filter((u) => {
 check('매니저: 모든 푸시 url 이 열 수 있는 곳으로 간다', typeof routeForRole === 'function' && bad.length === 0, show(bad.map((u) => `${u}→${route(u, M)}`)));
 
 console.log('\n■ (1-b) 복제본 두 개를 지웠다');
-for (const f of ['src/lib/push/nativepush.ts', 'src/lib/push/usePushBootstrap.ts']) {
+// P5-4 뒤 앱 푸시 탭은 nativepush.ts → pushTapPlan(pushTap.ts) → routeForRole(dest, session.role) 이다.
+//   다른 매장 알림은 useStoreEntryStore.enter 가 전환 뒤 역할로 routeForRole 을 거친다.
+const importsRoles = (code) => /import\s*\{[^}]*\brouteForRole\b[^}]*\}\s*from\s*'@\/lib\/utils\/roles'/.test(code);
+for (const f of ['src/lib/push/nativepush.ts', 'src/lib/push/pushTap.ts', 'src/lib/push/usePushBootstrap.ts', 'src/lib/store/useStoreEntryStore.ts']) {
   // 주석 걷기는 '/junior/*' 같은 경로 글자를 블록 주석으로 오인한다. 정의·import 는 원문에서 본다.
-  const code = read(f);
-  check(`${f}: 자체 routeForRole 정의가 없다`, !/function\s+routeForRole\s*\(/.test(code));
-  check(`${f}: roles.ts 의 routeForRole 을 쓴다`, /import\s*\{[^}]*\brouteForRole\b[^}]*\}\s*from\s*'@\/lib\/utils\/roles'/.test(code)
-    && /routeForRole\([^)]*,\s*useSessionStore\.getState\(\)\.role\)/.test(code));
+  check(`${f}: 자체 routeForRole 정의가 없다`, !/function\s+routeForRole\s*\(/.test(read(f)));
+}
+{
+  const nat = read('src/lib/push/nativepush.ts');
+  check('nativepush.ts: pushTap.ts 의 pushTapPlan 에 세션 역할을 넘긴다',
+    /import\s*\{[^}]*\bpushTapPlan\b[^}]*\}\s*from\s*'@\/lib\/push\/pushTap'/.test(nat)
+    && /useSessionStore\.getState\(\)/.test(nat) && /pushTapPlan\([^)]*role:\s*s\.role/.test(nat));
+  const tap = read('src/lib/push/pushTap.ts');
+  check('pushTap.ts: roles.ts 의 routeForRole 을 쓴다', importsRoles(tap) && /routeForRole\(dest,\s*session\.role\)/.test(tap));
+  for (const f of ['src/lib/push/usePushBootstrap.ts', 'src/lib/store/useStoreEntryStore.ts']) {
+    const code = read(f);
+    check(`${f}: roles.ts 의 routeForRole 을 쓴다`, importsRoles(code)
+      && /routeForRole\([^)]*,\s*useSessionStore\.getState\(\)\.role\)/.test(code));
+  }
 }
 
 console.log('\n■ (2) 매니저 알림 목록 — 열 수 있는 곳만');
