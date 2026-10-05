@@ -48,7 +48,7 @@
 -- 남는 것(범위 밖):
 --   · resolved_with_entry_id 가 같은 매장의 게시된 노하우인지 확인하지 않는다(지금과 같다).
 --   · 관리자가 chat_queries 의 junior_id 를 다른 사람으로 바꾸는 것은 막지 않는다.
---   · 개수 올리기 RPC(ask_same_question)는 P5-2(0249) 몫이다.
+--   · 개수 올리기 RPC(ask_same_question)는 P5-2(0249) 몫이었으나 2026-10-05 P5-2 를 뺐다.
 -- 롤백: 아래 8개 정책 drop → 0019 의 chat_queries_rw · unknown_queries_rw 재생성,
 --       drop trigger guard_unknown_query_write on public.unknown_queries;
 

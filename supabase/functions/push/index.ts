@@ -675,9 +675,6 @@ Deno.serve(async (req) => {
   const ownerOnly = payload.ownerOnly === true;
   if (!title || !audience) return json(400, { error: 'missing_fields' });
   if (audience !== 'user' && !audienceRoles(audience)) return json(400, { error: 'unknown_audience' });
-  // 답 알림은 서버가 보낸다(0249 해결 트리거 → member_notices → sweepMemberNotices). 옛 앱이 원 질문자에게 보내는
-  //   클라이언트 알림은 버린다. 안 버리면 원 질문자가 같은 알림을 두 번 받는다.
-  if (audience === 'user' && tag === 'q-answered') return json(200, { sent: 0, recipients: 0, skipped: 'server_notice' });
 
   // 발송 범위가 되는 매장(레이트리밋 키). join_owners 는 신청 대기 매장, 그 외는 소속 매장.
   const scopeUnit = audience === 'join_owners' ? pendingUnit : callerUnit;

@@ -106,7 +106,6 @@
     "qa:retention": "node scripts/qa-retention.mjs",
     "qa:member-notices": "node scripts/qa-member-notices.mjs",
     "qa:knowhow-archive": "node scripts/qa-knowhow-archive.mjs",
-    "qa:unknown-askers": "node scripts/qa-unknown-askers.mjs",
     "qa:push-session": "node scripts/qa-push-session.mjs",
     "qa:push-route": "node scripts/qa-push-route.mjs",
     "qa:back-rules": "node scripts/qa-back-rules.mjs",
