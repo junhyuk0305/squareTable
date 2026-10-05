@@ -4,9 +4,9 @@ import { currentTenantEpoch, isStaleEpoch } from '@/lib/store/tenantEpoch';
 import type { UnknownQuery, PlaybookSuggestion } from '@/types';
 import seedData from '@/data/unknown-queries.json';
 import { HAS_SUPABASE } from '@/lib/supabase';
-import { fetchUnknownQueue, fetchPendingQuestionCount, insertUnknown, bumpUnknownSimilar, resolveUnknown, subscribeUnknownQueue } from '@/lib/db';
+import { fetchUnknownQueue, fetchPendingQuestionCount, insertUnknown, askSameQuestion, resolveUnknown, subscribeUnknownQueue } from '@/lib/db';
 import { guardWrite } from '@/lib/store/useSyncStore';
-import { notifyStoreQuestion, notifyUserQuestionAnswered } from '@/lib/push/notify';
+import { notifyStoreQuestion } from '@/lib/push/notify';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 
 const seed = seedData as unknown as UnknownQuery[];
@@ -69,7 +69,8 @@ export const useUnknownQueueStore = create<UnknownQueueState>((set, get) => ({
   // 알바 폰에서 질문이 들어오면 사장님 인박스가 실시간으로 갱신된다(학습순환의 핵심).
   subscribe: () => subscribeDebounced(subscribeUnknownQueue, () => get().hydrate()),
 
-  // 같은 질문이 이미 대기 중이면 새로 쌓지 않고 유사 질문 수만 올린다(중복 방지).
+  // 같은 질문이 이미 대기 중이면 새로 쌓지 않고 같은 질문 한 사람으로 남긴다(중복 방지).
+  //   개수는 서버가 올리고(1인 1번 · 0249) 돌려준 값으로 맞춘다. 답이 달리면 서버가 이 사람에게도 알린다.
   enqueue: (uq) => {
     const s = get();
     const norm = uq.query_text.trim();
@@ -78,18 +79,24 @@ export const useUnknownQueueStore = create<UnknownQueueState>((set, get) => ({
     );
     if (idx >= 0) {
       const target = s.queue[idx];
-      const bumped = target.similar_queries_count + 1;
-      set((st) => ({
-        queue: st.queue.map((u) => (u.id === target.id ? { ...u, similar_queries_count: bumped } : u)),
-      }));
+      const setCount = (n: number) =>
+        set((st) => ({ queue: st.queue.map((u) => (u.id === target.id ? { ...u, similar_queries_count: n } : u)) }));
+      if (!HAS_SUPABASE) {
+        setCount(target.similar_queries_count + 1);
+        return Promise.resolve(true);
+      }
+      let count: number | null = null;
       return guardWrite(
-        bumpUnknownSimilar(target.id, bumped),
-        () =>
-          set((st) => ({
-            queue: st.queue.map((u) => (u.id === target.id ? { ...u, similar_queries_count: bumped - 1 } : u)),
-          })),
+        askSameQuestion(target.id).then((n) => {
+          count = n;
+          return n !== null;
+        }),
+        () => {},
         '유사 질문 반영에 실패했어요.',
-      );
+      ).then((ok) => {
+        if (ok && count !== null) setCount(count);
+        return ok;
+      });
     }
     set((st) => ({ queue: [uq, ...st.queue] }));
     // 저장 성공 후에만 사장에게 웹푸시(답변 대기 질문 유입). 실패(롤백)·상한 초과 시 유령 알림 방지.
@@ -119,17 +126,13 @@ export const useUnknownQueueStore = create<UnknownQueueState>((set, get) => ({
       ),
     }));
     // ok 반환 — 호출부(coach)가 질문 상태 반영이 실제로 됐을 때만 성공 처리하도록.
+    // 답 알림은 서버가 보낸다(0249 해결 트리거 → member_notices → 크론). 원 질문자와 같은 질문 한 사람 전원에게 가고
+    //   답한 사람은 빠진다. 같은 질문 한 사람의 id 는 앱으로 내려오지 않는다(익명 질문 보호 · 보안 M3).
     return guardWrite(
       resolveUnknown(uqId, newEntryId, answeredBy),
       () => before && set((s) => ({ queue: s.queue.map((u) => (u.id === uqId ? before : u)) })),
       '답변 반영에 실패했어요.',
-    ).then((ok) => {
-      // 물어본 사람에게만 알린다 — 저장 성공 후에만(롤백 시 유령 알림 방지), 내가 내 질문에 답한 경우는 제외.
-      if (ok && before?.junior_id && before.junior_id !== answeredBy) {
-        notifyUserQuestionAnswered(before.junior_id, before.query_text);
-      }
-      return ok;
-    });
+    );
   },
   // (자동응답 전이 제거 — 2026-07-31 사용자 결정: 질문은 사장이 직접 답한다. auto_answered 는 과거 데이터 표시용으로만 남음.)
   getPending: () => get().queue.filter((u) => u.status === 'pending_owner_answer'),

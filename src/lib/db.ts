@@ -1400,9 +1400,16 @@ export async function insertUnknown(uq: UnknownQuery): Promise<boolean> {
   return write('insertUnknown', supabase.from('unknown_queries').insert(row));
 }
 
-export async function bumpUnknownSimilar(id: string, count: number): Promise<boolean> {
-  if (!HAS_SUPABASE) return true;
-  return writeStrict('bumpUnknownSimilar', supabase.from('unknown_queries').update({ similar_queries_count: count }).eq('id', id).select('id'));
+/** 같은 질문(0249) — 서버가 나를 같은 질문 한 사람으로 남기고 개수를 올린다(1인 1번). 돌려준 값 = 지금 개수. 실패면 null. */
+export async function askSameQuestion(id: string): Promise<number | null> {
+  if (!HAS_SUPABASE) return null;
+  const { data, error } = await supabase.rpc('ask_same_question', { p_uq_id: id });
+  if (error || typeof data !== 'number') {
+    console.warn('[db] askSameQuestion:', error?.message ?? 'no count');
+    reportError('db.write:askSameQuestion', error ?? { message: 'no count' });
+    return null;
+  }
+  return data;
 }
 
 // 받은질문 상태 전이(보관/자동응답/대기로 되돌리기). status 컬럼만 갱신.
