@@ -84,6 +84,25 @@ console.log('\n■ Q8 — 다른 기기에서 산 이용권은 이 기기에서 
   check('웹은 해당 없음', r === null, show(r));
 }
 check('Q8 문구에 플랫폼 이름이 없다(Apple 2.3.10)', !PLATFORM_NAMES.test(STORE_NOTE) && !CHANNEL_WORDS.test(STORE_NOTE));
+// 2026-10-05 결정: 언제부터 이 기기에서 결제할 수 있는지(그 구독의 current_period_end · 한국 날짜)를 붙인다.
+{
+  const now = new Date('2026-10-05T03:00:00Z').getTime();
+  const end = '2026-10-15T15:30:00Z';   // KST 10월 16일 00:30
+  const r = call(otherStoreNote, 'appstore', null, 'android', end, now);
+  const want = `${STORE_NOTE} 이용 기간(10월 16일)이 끝나면 이 기기에서 결제할 수 있어요.`;
+  check('★기간 끝 날짜(KST)를 붙인다', r === want, show(r));
+  check('★날짜 붙인 문구에도 플랫폼·채널 말이 없다', typeof r === 'string' && !PLATFORM_NAMES.test(r) && !/카드|웹에서|토스|계좌이체/.test(r), show(r));
+  const gone = call(otherStoreNote, 'appstore', null, 'android', '2026-10-01T00:00:00Z', now);
+  check('★기간이 끝난 구독은 잠그지 않는다', gone === null, show(gone));
+  const y = call(otherStoreNote, 'play', null, 'ios', '2027-01-10T03:00:00Z', now);
+  check('해를 넘기면 연도를 붙인다', typeof y === 'string' && y.includes('이용 기간(2027년 1월 10일)'), show(y));
+  const nd = call(otherStoreNote, null, 'APP_STORE', 'android', null, now);
+  check('날짜를 모르면(서버 행 없음) 날짜 문장 없이 잠근다', nd === STORE_NOTE, show(nd));
+}
+{
+  const panel = readFileSync(new URL('../src/components/IapPurchasePanel.tsx', import.meta.url), 'utf8');
+  check('패널이 current_period_end 를 넘긴다', /otherStoreNote\(sub\?\.platform, entStore, Platform\.OS, sub\?\.current_period_end\)/.test(panel));
+}
 
 console.log('\n■ A-10 — 다른 앱 계정이 쓰는 이용권 안내');
 {
