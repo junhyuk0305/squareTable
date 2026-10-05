@@ -184,6 +184,9 @@ console.log('\n■ 화면 배선');
   check('★Q13 프로필 저장이 번호를 보내지 않는다', saveProfile.length > 0 && !/phone/.test(saveProfile), show(saveProfile.slice(0, 120)));
   check('Q13 [번호 바꾸기] 시트가 있다', edit.includes('번호 바꾸기') && /BottomSheet/.test(edit) && /changePhone\(/.test(edit));
   check('Q14 현재 비밀번호 칸 · 두 값을 넘긴다', edit.includes('현재 비밀번호') && /changePassword\(\s*curPw\s*,\s*pw\s*\)/.test(edit) && /passwordChangeError\(/.test(edit));
+  // F1(QA 2026-10-05): 10-05 결정대로 다른 기기는 로그아웃되지 않는다 → 성공 토스트가 그렇다고 말하면 안 된다.
+  const savePw = (edit.match(/const savePw = async[\s\S]*?\n  \};/) || [''])[0];
+  check('★F1 비밀번호 변경 성공 토스트가 "로그아웃"을 약속하지 않는다', savePw.length > 0 && !/로그아웃/.test(savePw), show(savePw.slice(-90)));
 
   const ss = strip(read('src/lib/store/useSessionStore.ts'));
   const cp = (ss.match(/changePassword: async[\s\S]*?\n  \},/) || [''])[0];
