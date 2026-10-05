@@ -516,3 +516,49 @@ export const PAST_MONTH_LOCKED_TEXT = '반복 근무는 지난달부터 바꿀 �
 export function pastMonthLocked(date: string, today: string = todayStr()): boolean {
   return date < `${today.slice(0, 7)}-01`;
 }
+
+/** 근무 시각을 그날 0시부터의 분 구간으로. 자정을 넘기면 끝을 다음 날로 늘린다. */
+function spanOf(start: string, end: string): [number, number] {
+  const s = toMinutes(start);
+  return [s, s + shiftMinutes(start, end)];
+}
+
+/**
+ * 같은 사람이 그날 [start, end] 와 시간이 겹치는 근무를 이미 갖고 있나(A9 · 2026-10-06). 경고에만 쓴다(저장·승인은 막지 않는다).
+ * 판정은 shiftsOn(교대·예외 반영) 그대로다. exclude = 빼고 볼 근무 id(고치는 근무 자신 · 맞교환으로 내주는 근무).
+ */
+export function overlapsStaffShift(
+  templates: ShiftTemplate[],
+  swaps: SwapRequest[],
+  exceptions: ShiftException[],
+  staffId: string,
+  date: string,
+  start: string,
+  end: string,
+  exclude: string[] = [],
+): boolean {
+  const [s, e] = spanOf(start, end);
+  return shiftsOn(templates, swaps, date, exceptions).some((sh) => {
+    if (sh.workerStaffId !== staffId || exclude.includes(sh.template.id)) return false;
+    const [a, b] = spanOf(sh.template.start, sh.template.end);
+    return a < e && s < b;
+  });
+}
+
+/**
+ * 교대를 승인하면 같은 사람 근무가 겹치나(사장 승인 카드 경고 · A9). 받는 사람은 그날 넘겨받는 구간,
+ * 맞교환이면 요청자도 상대 근무 날 그 구간을 본다. 맞교환으로 서로 내주는 근무는 빼고 본다.
+ */
+export function swapOverlap(r: SwapRequest, templates: ShiftTemplate[], swaps: SwapRequest[], exceptions: ShiftException[]): boolean {
+  const tpl = templates.find((t) => t.id === r.template_id);
+  if (!tpl || !r.accepted_by) return false;
+  const giveBack = r.kind === 'swap' && r.target_template_id && r.target_date === r.date ? [r.target_template_id] : [];
+  if (overlapsStaffShift(templates, swaps, exceptions, r.accepted_by, r.date, r.part_start ?? tpl.start, r.part_end ?? tpl.end, [r.template_id, ...giveBack])) {
+    return true;
+  }
+  if (r.kind !== 'swap' || !r.target_template_id || !r.target_date) return false;
+  const tTpl = templates.find((t) => t.id === r.target_template_id);
+  if (!tTpl) return false;
+  const mine = r.target_date === r.date ? [r.template_id] : [];
+  return overlapsStaffShift(templates, swaps, exceptions, r.requester_id, r.target_date, tTpl.start, tTpl.end, [r.target_template_id, ...mine]);
+}

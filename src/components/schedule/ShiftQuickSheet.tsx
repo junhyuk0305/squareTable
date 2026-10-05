@@ -28,6 +28,7 @@ import {
   planFromScope,
   pastMonthLocked,
   PAST_MONTH_LOCKED_TEXT,
+  overlapsStaffShift,
 } from '@/lib/utils/schedule';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
@@ -65,6 +66,8 @@ export function ShiftQuickSheet({
 }) {
   const config = useScheduleStore((s) => s.config);
   const templates = useScheduleStore((s) => s.templates);
+  const swaps = useScheduleStore((s) => s.swaps);
+  const exceptions = useScheduleStore((s) => s.exceptions);
   const addTemplate = useScheduleStore((s) => s.addTemplate);
   const applySeriesOps = useScheduleStore((s) => s.applySeriesOps);
   const overrideShiftDay = useScheduleStore((s) => s.overrideShiftDay);
@@ -110,6 +113,11 @@ export function ShiftQuickSheet({
       ? days
       : [weekday];
   const closedNote = targetDays.some((d) => config.closedDays.includes(d));
+  // 같은 사람 그날 근무와 시간이 겹치면 경고만 한다(A9 · 저장은 막지 않는다). 급여는 겹친 시간을 한 번만 센다(computePay).
+  const overlapStaff = isEdit ? (templates.find((t) => t.id === editing.templateId)?.staff_id ?? '') : staffId;
+  const overlapDays = !isEdit && repeat ? days.map((wd) => nextDateForWeekday(date, wd)) : [editing?.date ?? date];
+  const overlapNote = timeOk && !!overlapStaff && overlapDays.some((d) =>
+    overlapsStaffShift(templates, swaps, exceptions, overlapStaff, d, start, end, isEdit ? [editing.templateId] : []));
 
   const toggleDay = (wd: number) =>
     setDays((p) => (p.includes(wd) ? p.filter((d) => d !== wd) : [...p, wd]));
@@ -327,6 +335,12 @@ export function ShiftQuickSheet({
             <Text style={[s.noteText, s.pastNote]}>
               {fromScope ? '지난 날짜부터 바꾸면 그 기간 급여도 바뀌어요.' : '지난 날짜를 바꾸면 그날 급여도 바뀌어요.'}
             </Text>
+          </View>
+        )}
+        {overlapNote && (
+          <View style={s.noteRow}>
+            <Ionicons name="alert-circle-outline" size={14} color={BrandColors.warn} />
+            <Text style={s.noteText}>같은 시간에 이미 근무가 있어요. 급여는 겹친 시간을 한 번만 세요.</Text>
           </View>
         )}
         {closedNote && (

@@ -211,11 +211,49 @@ export function reconcileSchedule(
 }
 
 /**
+ * 같은 날(r.date) 근무 중 시간이 겹치는 것을 하나로 합친다(합집합 · A9). 안 겹치는 근무는 그대로 둔다.
+ * computePay 는 한 사람의 기록만 받으므로 "같은 사람"은 호출부가 보장한다. 진행 중 근무는 now 까지로 본다.
+ */
+function mergeSameDay(records: PayRecord[], now: string): PayRecord[] {
+  const byDay = new Map<string, { r: PayRecord; s: number; e: number }[]>();
+  const out: PayRecord[] = [];
+  for (const r of records) {
+    if (!r.check_in) { out.push(r); continue; }
+    const s = new Date(r.check_in).getTime();
+    const e = new Date(r.check_out ?? now).getTime();
+    const list = byDay.get(r.date) ?? [];
+    list.push({ r, s, e });
+    byDay.set(r.date, list);
+  }
+  for (const list of byDay.values()) {
+    list.sort((a, b) => a.s - b.s);
+    let group = [list[0]];
+    let end = list[0].e;
+    const flush = () => {
+      if (group.length === 1) { out.push(group[0].r); return; }
+      const inISO = new Date(group[0].s).toISOString();
+      const outISO = new Date(end).toISOString();
+      out.push({ date: group[0].r.date, check_in: inISO, check_out: outISO, work_minutes: minutesBetween(inISO, outISO) });
+    };
+    for (const x of list.slice(1)) {
+      if (x.s < end) { group.push(x); end = Math.max(end, x.e); continue; }
+      flush();
+      group = [x];
+      end = x.e;
+    }
+    flush();
+  }
+  return out;
+}
+
+/**
  * 한 직원의 (기간 내) 근무기록 + 시급 + 규칙 → 급여 내역.
  * records 는 이미 원하는 정산기간으로 필터된 것을 넘긴다(기간 산정은 호출부에서).
  */
 export function computePay(records: PayRecord[], wage: number, rules: PayrollRules, nowISO?: string): PayBreakdown {
   const now = nowISO ?? new Date().toISOString();
+  // ★같은 날 겹친 근무는 합집합으로 합친 뒤 센다(A9 · 2026-10-06). 안 합치면 겹친 시간을 두 번 센다.
+  records = mergeSameDay(records, now);
   let workedMin = 0;
   let paidMin = 0;
   let breakMin = 0;

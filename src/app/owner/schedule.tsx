@@ -45,6 +45,7 @@ import {
   closedDaysLabel,
   pastSwapNotice,
   timeRequestApprovable,
+  swapOverlap,
   WEEKDAY_LABELS,
 } from '@/lib/utils/schedule';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
@@ -302,6 +303,7 @@ export default function OwnerScheduleScreen() {
                     r={r}
                     nameOf={nameOf}
                     tplById={tplById}
+                    overlap={swapOverlap(r, templates, swaps, exceptions)}
                     onApprove={() => void approveSwapChecked(r)}
                     onReject={() => rejectSwap(r.id)}
                   />
@@ -473,12 +475,15 @@ function PendingCard({
   r,
   nameOf,
   tplById,
+  overlap,
   onApprove,
   onReject,
 }: {
   r: SwapRequest;
   nameOf: (id: string) => string;
   tplById: (id: string) => ShiftTemplate | undefined;
+  /** 승인하면 같은 사람 근무가 겹친다(A9). 경고만 하고 승인은 막지 않는다. */
+  overlap: boolean;
   onApprove: () => void;
   onReject: () => void;
 }) {
@@ -518,6 +523,15 @@ function PendingCard({
       </View>
 
       {!!r.note && <Text style={styles.cardNote}>“{r.note}”</Text>}
+
+      {overlap && (
+        <View style={styles.excRow}>
+          <Ionicons name="alert-circle-outline" size={14} color={BrandColors.warnText} />
+          <Text style={[styles.excText, { color: BrandColors.warnText }]}>
+            같은 시간에 이미 근무가 있어요. 승인하면 겹쳐서 일하게 돼요. 급여는 겹친 시간을 한 번만 세요.
+          </Text>
+        </View>
+      )}
 
       <View style={styles.actions}>
         <Pressable onPress={onReject} accessibilityRole="button" accessibilityLabel="교대 요청 반려" style={({ pressed }) => [styles.actBtn, styles.rejectBtn, pressed && { opacity: 0.8 }]}>
