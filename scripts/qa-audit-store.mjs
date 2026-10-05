@@ -93,5 +93,26 @@ console.log('\n[C5] 닫힌 매장·탈퇴한 사장 매장의 코드로는 합�
     /store_not_accepting/.test(sess) && /합류 신청을 받지 않는 매장이에요/.test(sess));
 }
 
+console.log('\n[C7] "매장 추가"는 남은 이용권을 보고 길을 정한다');
+{
+  const strip = (s) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
+  const r = lastDef('my_can_add_store');
+  check('★서버가 "지금 매장을 더 열 수 있나"를 create_store 와 같은 규칙으로 답한다(빈 이용권·무료 모드·첫 매장·가입 체험)',
+    /from public\.store_slots/.test(r.body) && /consumed_at is null and paid_until > now\(\)/.test(r.body)
+      && /billing_free_mode\(\)/.test(r.body) && /owner_signup_trial_ends\(v_uid\)/.test(r.body) && /role = 'owner'/.test(r.body), r.file || '없음');
+  check('my_can_add_store 는 authenticated 만 실행',
+    fileHas(r.file, 'revoke all on function public.my_can_add_store() from public, anon, authenticated;')
+      && fileHas(r.file, 'grant execute on function public.my_can_add_store() to authenticated;'));
+  const stores = strip(read('src/app/stores.tsx'));
+  const add = stores.match(/const addStore = [\s\S]*?\n  };/)?.[0] ?? '';
+  check('★매장 목록의 "매장 추가"가 그 답(fetchMyCanAddStore)으로 만들기 폼과 결제 화면을 가른다',
+    /fetchMyCanAddStore\(\)/.test(add) && !/if \(canUseMultistore\(plan, freeMode\)\) return router\.push\('\/owner\/create-store'\)/.test(add));
+  const sess = read('src/lib/store/useSessionStore.ts');
+  check('createStore 가 no_store_slot 을 화면이 가를 수 있는 code 로 돌려준다', /'NO_STORE_SLOT'/.test(sess));
+  const cs = strip(read('src/app/owner/create-store.tsx'));
+  check('★매장 만들기에서 이용권이 없으면 "이용권 보기"로 이어 준다',
+    /cs\.code === 'NO_STORE_SLOT'/.test(cs) && /label: '이용권 보기'/.test(cs) && /router\.push\('\/billing/.test(cs));
+}
+
 console.log(`\n${pass} PASS / ${fail} FAIL`);
 process.exit(fail ? 1 : 0);
