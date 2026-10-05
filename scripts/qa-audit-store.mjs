@@ -475,6 +475,26 @@ ${asS('o', 18)}select public.switch_session_unit('qa_c3_b');
 select public.delete_store('qa_c3_b');
 select 'AU=' || public.auth_unit_id();`);
     check('T8 보던 매장을 지우면 이 세션은 남은 매장으로 넘어간다', out(t8d, 'AU') === 'store_001', tail(t8d));
+
+    // T9 남길 매장 고르기(C3-P1) — 무료 매장 3개(store_001 · B · C). S19=C(호출한 기기) · S20=B(다른 기기 · 계정 값도 B) · S21=store_001.
+    //   S19 가 store_001 을 남기면 B·C 가 잠긴다. 호출한 기기는 남긴 매장으로 옮기고, 잠긴 매장을 보던 다른 기기 행은 지운다
+    //   (다음 읽기에서 계정 값 = store_001 로). 남긴 매장을 보던 기기는 그대로다.
+    const t9 = run(`${B}${C}${sess('o', 19, 20, 21)}
+${asS('o', 21)}select public.switch_session_unit('store_001');
+${asS('o', 19)}select public.switch_session_unit('qa_c3_c');
+${asS('o', 20)}select public.switch_session_unit('qa_c3_b');
+${asS('o', 19)}select public.choose_kept_store('store_001');
+select 'AU19=' || public.auth_unit_id();
+${asS('o', 20)}select 'AU20=' || public.auth_unit_id();
+reset role;
+select 'LOCKC=' || public.unit_access_locked('qa_c3_c');
+select 'ROW19=' || ${rowOf(19)}; select 'ROW20=' || ${rowOf(20)}; select 'ROW21=' || ${rowOf(21)};
+select 'PROF=' || active_unit_id from public.profiles where id = current_setting('qa.o')::uuid;`);
+    check('T9 고른 뒤 나머지 매장이 잠긴다(전제)', out(t9, 'LOCKC') === 'true', tail(t9));
+    check('★T9 남길 매장을 고른 기기는 남긴 매장으로 옮겨 간다(잠긴 매장에 남지 않는다)',
+      out(t9, 'ROW19') === 'store_001' && out(t9, 'AU19') === 'store_001', tail(t9));
+    check('★T9 잠긴 매장을 보던 다른 기기 행은 지워지고 계정 값(남긴 매장)으로 돈다 · 남긴 매장을 보던 기기는 그대로',
+      out(t9, 'ROW20') === 'none' && out(t9, 'AU20') === 'store_001' && out(t9, 'PROF') === 'store_001' && out(t9, 'ROW21') === 'store_001', tail(t9));
   }
 }
 
