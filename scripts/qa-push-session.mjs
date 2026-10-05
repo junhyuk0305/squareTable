@@ -5,7 +5,8 @@
 //   [1] Q3 — 토큰을 저장한 세션이 로그아웃하면 그 기기로 푸시가 가지 않는다.
 //       지금은 엣지 deliver() 가 user_id 로만 토큰을 고른다(push/index.ts). 그래서 로그아웃한 폰에도 계속 간다.
 //       0236 뒤에는 발송 대상을 push_device_targets / push_web_targets(service_role 전용) 가 정한다.
-//   [2] 옛 행(session_id 없음) — 7일 유예 동안만, 그리고 토큰을 등록할 때 이미 있던 세션이 살아 있을 때만 보낸다.
+//   [2] 옛 행(session_id 없음) — 토큰을 등록할 때 이미 있던 세션이 살아 있을 때만 보낸다.
+//       F6(0255): 7일 유예를 없앴다. 유예가 지나도 로그인 상태면 계속 보낸다. 옛 행 삭제 크론도 내린다.
 //       폰 A 에서 전체 로그아웃 → 폰 B 에서 로그인해도 A 의 옛 행은 살아나지 않는다(보안 검토 M2 · 정책 H4).
 //   [3] 탈퇴(profiles.deleted_at)면 0행.
 //   [4] 권한 — 대상 RPC 는 anon·authenticated 거부. 토큰 표 직접 INSERT·UPDATE 회수(SELECT·DELETE 는 옛 앱용으로 유지).
@@ -18,7 +19,7 @@
 // ★로컬 전용: 실행할 때마다 계정을 가입시킨다. URL 이 로컬이 아니면 멈춘다.
 // 실행: node scripts/qa-push-session.mjs   자가정리(계정·OTP 시드).
 import { createClient } from '@supabase/supabase-js';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { Buffer } from 'node:buffer';
@@ -169,7 +170,7 @@ try {
   }
 
   // ═══════ 2. 옛 행(session_id 없음) ═══════
-  console.log('\n[2] 옛 행 — 유예 7일 + 등록 전에 있던 세션이 살아 있을 때만');
+  console.log('\n[2] 옛 행 — 등록 전에 있던 세션이 살아 있을 때만(F6: 7일 유예 없음)');
   const B = await signUp(1, 'QA세션B');
   const tBA = `ExponentPushToken[qa_pss_ba_${s}]`;
   {
@@ -179,12 +180,23 @@ try {
     const { error: le } = await admin.from('push_device_tokens')
       .insert({ user_id: B.id, token: tBA, platform: 'android', updated_at: legacyAt, created_at: legacyAt });
     if (le) throw new Error('옛 행 셋업: ' + le.message);
+    const epBA = `https://push.example.com/qa_pss_ba_${s}`;
+    const { error: we } = await admin.from('push_subscriptions')
+      .insert({ user_id: B.id, endpoint: epBA, p256dh: 'p', auth: 'a', updated_at: legacyAt, created_at: legacyAt });
+    if (we) throw new Error('옛 웹 행 셋업: ' + we.message);
     const live = await deviceTargets([B.id]);
-    check('2-1 유예 중 + 등록 전 세션이 살아 있으면 옛 행도 대상', !live.err && live.rows.includes(tBA), show(live));
-    const after = psql('begin',
-      "create or replace function public.push_legacy_grace_until() returns timestamptz language sql immutable as $f$ select now() - interval '1 minute' $f$",
-      `select count(*) from public.push_device_targets(array['${B.id}']::uuid[])`, 'rollback');
-    check('2-2 유예가 끝나면 옛 행은 대상이 아니다(트랜잭션 안에서 유예 끝을 과거로)', after === '0', after.replace(/\n/g, ' | '));
+    check('2-1 등록 전 세션이 살아 있으면 옛 행도 대상', !live.err && live.rows.includes(tBA), show(live));
+    // F6: 유예 끝을 과거로 바꾼 트랜잭션 안에서 본다(0236 적용 7일 뒤 상황).
+    const pastGrace = "create or replace function public.push_legacy_grace_until() returns timestamptz language sql immutable as $f$ select now() - interval '1 minute' $f$";
+    const after = psql('begin', pastGrace,
+      `select count(*) from public.push_device_targets(array['${B.id}']::uuid[])`,
+      `select count(*) from public.push_web_targets(array['${B.id}']::uuid[])`, 'rollback');
+    check('2-2 ★F6 유예가 지나도 로그인 상태면 옛 기기·웹 행은 대상이다', after === '1\n1', after.replace(/\n/g, ' | '));
+    const gone = psql('begin', pastGrace,
+      `update public.profiles set deleted_at = now() where id = '${B.id}'`,
+      `select count(*) from public.push_device_targets(array['${B.id}']::uuid[])`,
+      `select count(*) from public.push_web_targets(array['${B.id}']::uuid[])`, 'rollback');
+    check('2-4 F6 유예가 지나도 탈퇴 계정의 옛 행은 대상이 아니다', gone === '0\n0', gone.replace(/\n/g, ' | '));
 
     const so = await B.c.auth.signOut({ scope: 'global' });
     if (so.error) throw new Error('signOut global: ' + so.error.message);
@@ -194,6 +206,10 @@ try {
     console.log(`  INFO 지금 선택식은 폰 A 전체 로그아웃 + 폰 B 로그인 뒤에도 옛 행 ${(cur ?? []).length}행을 고른다`);
     const t = await deviceTargets([B.id]);
     check('2-3 ★폰 A 전체 로그아웃 + 폰 B 로그인 → A 의 옛 행은 대상이 아니다', !t.err && !t.rows.includes(tBA), show(t));
+    const ended = psql('begin', pastGrace,
+      `select count(*) from public.push_device_targets(array['${B.id}']::uuid[]) where token = '${tBA}'`,
+      `select count(*) from public.push_web_targets(array['${B.id}']::uuid[]) where endpoint = '${epBA}'`, 'rollback');
+    check('2-5 F6 유예가 지나도 세션이 끝난 옛 기기·웹 행은 대상이 아니다', ended === '0\n0', ended.replace(/\n/g, ' | '));
     void BB;
   }
 
@@ -226,6 +242,16 @@ try {
 
   // ═══════ 8. 마이그레이션 자가점검 ═══════
   console.log('\n[8] DB 자가점검');
+  {
+    const defs = psql(`select string_agg(pg_get_functiondef(p.oid), ' ') from pg_proc p where p.oid in ('public.push_device_targets(uuid[])'::regprocedure, 'public.push_web_targets(uuid[])'::regprocedure)`);
+    check('8-2 ★F6 대상 함수 두 개 모두 7일 유예를 보지 않는다', !defs.startsWith('psql 오류') && !defs.includes('push_legacy_grace_until'), defs.slice(0, 80));
+    // 로컬엔 pg_cron 이 없어 크론 표를 못 본다. 마이그레이션 원문으로 본다: 이 크론을 마지막으로 다룬 파일이 내린다.
+    const migDir = join(ROOT, 'supabase/migrations');
+    const touching = readdirSync(migDir).filter((f) => f.endsWith('.sql')).sort()
+      .filter((f) => readFileSync(join(migDir, f), 'utf8').includes("'purge-legacy-push'"));
+    const lastCron = touching.length ? readFileSync(join(migDir, touching[touching.length - 1]), 'utf8') : '';
+    check('8-3 ★F6 옛 행 삭제 크론(purge-legacy-push)은 마지막 마이그레이션에서 내린다', /cron\.unschedule\('purge-legacy-push'\)/.test(lastCron), touching.join(','));
+  }
   {
     const out = psql(`select has_table_privilege(pg_get_userbyid(p.proowner), 'auth.sessions', 'SELECT') from pg_proc p where p.oid = 'public.push_device_targets(uuid[])'::regprocedure`);
     check('8-1 대상 함수 소유자가 auth.sessions 를 읽을 수 있다', out === 't', out);
