@@ -100,6 +100,8 @@ export const useStoreEntryStore = create<StoreEntryState>((set, get) => ({
       // 커버를 걷고 매장 목록으로 돌려보낸다(무음으로 넘기지 않는다).
       if (res === 'timeout') {
         set({ entering: null });
+        // 서버는 이미 바뀌었는데 응답만 늦은 경우가 있다 → 이 기기 화면을 서버 값에 한 번 다시 맞춘다(C3 · 원본 #65).
+        void useSessionStore.getState().refreshMembership();
         showToast('연결이 느려서 매장을 열지 못했어요. 잠시 후 다시 눌러 주세요', 'warn');
         return;
       }

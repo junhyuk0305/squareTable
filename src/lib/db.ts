@@ -169,10 +169,16 @@ export async function fetchMyUnits(): Promise<DbResult<MyUnitRow[]>> {
   if (error) readFail('fetchMyUnits', error);
   return { data: (data as MyUnitRow[]) ?? null, error: error as DbErr };
 }
-/** 활성 매장 전환(멤버십 검증은 RPC 내부). 성공 시 호출부가 loadProfile+재hydrate로 컨텍스트를 맞춘다. */
+/** 활성 매장 전환(멤버십 검증은 RPC 내부). 성공 시 호출부가 loadProfile+재hydrate로 컨텍스트를 맞춘다.
+ *  ★0285(C3): 이 로그인 세션(기기)의 매장만 바꾼다. 다른 기기는 그대로다. 계정의 '마지막 선택'도 같이 바뀐다. */
 export async function switchActiveUnit(unitId: string): Promise<{ error: DbErr }> {
-  const { error } = await supabase.rpc('switch_active_unit', { p_unit_id: unitId });
+  const { error } = await supabase.rpc('switch_session_unit', { p_unit_id: unitId });
   return { error: error as DbErr };
+}
+/** 이 로그인 세션(기기)이 보고 있는 매장(0285 · 서버 auth_unit_id 와 같은 값). 첫 호출이면 마지막 선택 매장으로 고정된다. */
+export async function fetchSessionUnit(): Promise<DbResult<string>> {
+  const { data, error } = await supabase.rpc('session_unit');
+  return { data: (data as string | null) ?? null, error: error as DbErr };
 }
 
 // ── 다점포 노하우 가져오기(0059) — 다른 내 매장 노하우를 활성매장으로 복제 ──────────
@@ -1079,7 +1085,9 @@ export async function updateProfileFields(userId: string, fields: Record<string,
 
 // 매장 업종 갱신(사장 전용). RLS: 소유 매장만.
 export async function updateUnitIndustry(unitId: string, industry: string): Promise<{ error: DbErr }> {
-  const { error } = await supabase.from('units').update({ industry }).eq('id', unitId);
+  // 0행(RLS · 다른 매장 기준)이면 PostgREST 는 error 없이 끝난다 → 성공으로 보이지 않게 실패로 돌려준다(C3 · 원본 #31).
+  const { data, error } = await supabase.from('units').update({ industry }).eq('id', unitId).select('id');
+  if (!error && (data ?? []).length === 0) return { error: { message: 'not_updated' } };
   return { error: error as DbErr };
 }
 

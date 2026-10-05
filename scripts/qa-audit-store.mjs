@@ -298,9 +298,11 @@ console.log('\n[C3] 보고 있는 매장은 로그인 세션(기기)마다 따�
     /from public\.session_active_units/.test(a.body) && /auth\.uid\(\)/.test(a.body) && /from public\.unit_members/.test(a.body)
       && /p\.active_unit_id/.test(a.body) && /stable security definer/.test(a.body), a.file);
   const sw = lastDef('switch_session_unit');
-  check('★전환 RPC switch_session_unit — 멤버 아님 not_a_member · 잠긴 매장 unit_locked · 이 세션 행만 바꾼다',
-    !!sw.file && /not_a_member/.test(sw.body) && /unit_access_locked\(p_unit_id\)/.test(sw.body)
-      && /on conflict \(session_id\) do update/.test(sw.body) && /where s\.user_id = v_uid/.test(sw.body), sw.file || '없음');
+  const su = lastDef('session_unit_set');
+  check('★전환 RPC switch_session_unit — 멤버 아님 not_a_member · 잠긴 매장 unit_locked · 이 세션 행만 바꾼다(살아 있는 내 세션일 때만)',
+    !!sw.file && /not_a_member/.test(sw.body) && /unit_access_locked\(p_unit_id\)/.test(sw.body) && /public\.session_unit_set\(p_unit_id\)/.test(sw.body)
+      && /from auth\.sessions a where a\.id = v_sid and a\.user_id = v_uid/.test(su.body)
+      && /on conflict \(session_id\) do update/.test(su.body) && /where s\.user_id = v_uid/.test(su.body), sw.file || '없음');
   check('switch_session_unit · session_unit 은 authenticated 만 실행',
     fileHas(sw.file, 'grant execute on function public.switch_session_unit(text) to authenticated;')
       && fileHas(sw.file, 'grant execute on function public.session_unit() to authenticated;')
@@ -322,7 +324,7 @@ console.log('\n[C3] 보고 있는 매장은 로그인 세션(기기)마다 따�
     /fetchSessionUnit\(\)/.test(ss) && /isMissingRpc\(suErr\)/.test(ss) && !/let unitId = profile\?\.active_unit_id \|\| profile\?\.unit_id \|\| ''/.test(ss));
   check('★세션: 늦게 끝난 옛 loadProfile 은 더 새로 시작한 로드가 반영된 뒤면 버린다',
     /const seq = \+\+_loadSeq/.test(ss) && /if \(seq < _appliedSeq\) return;/.test(ss) && /_appliedSeq = seq;/.test(ss));
-  check('★세션: 매장 추가 뒤 이 기기를 새 매장으로 옮긴다(다른 기기가 바꾼 뒤라도)', /if \(!isOnboarding && row\?\.unit_id\) await switchActiveUnit\(row\.unit_id\)/.test(ss));
+  check('★세션: 매장 추가 뒤 이 기기를 새 매장으로 옮긴다(다른 기기가 바꾼 뒤라도)', /if \(!isOnboarding && row\?\.unit_id\) \{\s*const sw = await switchActiveUnit\(row\.unit_id\)/.test(ss));
   const se = strip(read('src/lib/store/useStoreEntryStore.ts'));
   check('★매장 진입이 시간 초과면 서버 값으로 한 번 다시 맞춘다(refreshMembership)',
     /res === 'timeout'\) \{[\s\S]*?refreshMembership\(\)/.test(se));
@@ -346,6 +348,7 @@ select set_config('request.jwt.claims', json_build_object('sub', current_setting
 
     // T1 두 세션 격리 — 사장 S1=A(store_001) · S2=B. 나중에 바꾼 S2 가 S1 의 대상을 바꾸지 않는다.
     const t1 = run(`${B}${sess('o', 1, 2)}
+select set_config('qa.codea', (select invite_code from public.units where id = 'store_001'), true);
 ${asS('o', 1)}select public.switch_session_unit('store_001');
 ${asS('o', 2)}select public.switch_session_unit('qa_c3_b');
 ${asS('o', 1)}select 'A1=' || public.auth_unit_id();
@@ -357,11 +360,11 @@ select public.rename_store('QA C3 B 새이름');
 select 'W2=' || count(*) from public.work_templates where id = 'qa_c3_wt';
 reset role;
 select 'CODEB=' || invite_code from public.units where id = 'qa_c3_b';
-select 'CODEA=' || (invite_code <> (select invite_code from public.units where id = 'qa_c3_b')) from public.units where id = 'store_001';
+select 'CODEA=' || (invite_code <> current_setting('qa.codea')) from public.units where id = 'store_001';
 select 'NAMEB=' || store_name from public.units where id = 'qa_c3_b';
 select 'NAMEA=' || (store_name <> 'QA C3 B 새이름') from public.units where id = 'store_001';`);
     check('★T1 같은 사장의 두 세션이 각자 고른 매장을 본다(S1=store_001 · S2=qa_c3_b)', out(t1, 'A1') === 'store_001' && out(t1, 'A2') === 'qa_c3_b', tail(t1));
-    check('★T1 S1 의 초대코드 변경은 S1 매장에만 · S2 의 이름 변경은 S2 매장에만', out(t1, 'CODEB') === '991201' && out(t1, 'NAMEB') === 'QA C3 B 새이름' && out(t1, 'NAMEA') === 't', tail(t1));
+    check('★T1 S1 의 초대코드 변경은 S1 매장에만 · S2 의 이름 변경은 S2 매장에만', out(t1, 'CODEB') === '991201' && out(t1, 'NAMEB') === 'QA C3 B 새이름' && out(t1, 'NAMEA') === 'true' && out(t1, 'CODEA') === 'true', tail(t1));
     check('★T1 S1 이 쓴 행은 S1 매장 것으로 보이고 S2 에선 안 보인다', out(t1, 'W1') === '1' && out(t1, 'W2') === '0', tail(t1));
     const t1x = run(`${B}${sess('o', 1, 2)}
 ${asS('o', 2)}select public.switch_session_unit('qa_c3_b');
@@ -472,6 +475,51 @@ ${asS('o', 18)}select public.switch_session_unit('qa_c3_b');
 select public.delete_store('qa_c3_b');
 select 'AU=' || public.auth_unit_id();`);
     check('T8 보던 매장을 지우면 이 세션은 남은 매장으로 넘어간다', out(t8d, 'AU') === 'store_001', tail(t8d));
+  }
+}
+
+// C3 실제 로그인 세션 — 같은 사장이 두 번 로그인하면 토큰의 session_id 가 다르고, PostgREST 가 그 값으로 매장을 가른다.
+// 로컬 도커 전용(고정 계정 owner@pilot · 비밀번호는 bootstrap 과 같다). 끝나면 만든 매장을 지우고 계정 값을 store_001 로 돌린다.
+console.log('\n[C3-실세션] 두 번 로그인한 같은 사장 — 세션마다 다른 매장');
+{
+  const env = {};
+  for (const f of ['.env', '.env.seed']) for (const line of read(f).split('\n')) { const m = line.match(/^([A-Z0-9_]+)=(.*)$/); if (m && !env[m[1]]) env[m[1]] = m[2].trim(); }
+  const URL_ = env.EXPO_PUBLIC_SUPABASE_URL, ANON = env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+  if (!dbUp || !URL_ || !ANON || !/^http:\/\/(127\.0\.0\.1|localhost)(:\d+)?$/.test(URL_)) console.log('  SKIP 로컬 Supabase 아님/없음');
+  else {
+    const { createClient } = await import('@supabase/supabase-js');
+    const sid = (c) => c.auth.getSession().then(({ data }) => JSON.parse(Buffer.from(data.session.access_token.split('.')[1], 'base64url').toString()).session_id);
+    const rowOfSid = (x) => psql(`select 'R=' || coalesce((select unit_id from public.session_active_units where session_id = '${x}'), 'none');`).match(/R=(.*)/)?.[1];
+    psql(`set session_replication_role = replica;
+insert into public.units (id, store_name, owner_id, invite_code) select 'qa_c3_e2e', 'QA C3 실세션', id, '991299' from auth.users where email = 'owner@pilot.squaretable.app' on conflict do nothing;
+insert into public.unit_members (unit_id, user_id, role) select 'qa_c3_e2e', id, 'owner' from auth.users where email = 'owner@pilot.squaretable.app' on conflict do nothing;`);
+    const mk = () => createClient(URL_, ANON, { auth: { persistSession: false, autoRefreshToken: false } });
+    const c1 = mk(), c2 = mk();
+    try {
+      const l1 = await c1.auth.signInWithPassword({ email: 'owner@pilot.squaretable.app', password: 'pilot1234' });
+      const l2 = await c2.auth.signInWithPassword({ email: 'owner@pilot.squaretable.app', password: 'pilot1234' });
+      if (l1.error || l2.error) throw new Error(`로그인 실패 ${l1.error?.message ?? l2.error?.message}`);
+      const s1 = await sid(c1), s2 = await sid(c2);
+      check('실세션: 두 로그인의 토큰 session_id 가 다르다', !!s1 && !!s2 && s1 !== s2, `${s1} ${s2}`);
+      const w1 = await c1.rpc('switch_session_unit', { p_unit_id: 'store_001' });
+      const w2 = await c2.rpc('switch_session_unit', { p_unit_id: 'qa_c3_e2e' });
+      const a1 = await c1.rpc('auth_unit_id'), a2 = await c2.rpc('auth_unit_id');
+      check('★실세션: 나중에 바꾼 기기가 먼저 바꾼 기기의 매장을 바꾸지 않는다(REST 왕복)',
+        !w1.error && !w2.error && a1.data === 'store_001' && a2.data === 'qa_c3_e2e', `${w1.error?.message ?? ''}${w2.error?.message ?? ''} ${a1.data} ${a2.data}`);
+      const u1 = await c1.rpc('session_unit');
+      const m1 = await c1.rpc('my_units');
+      check('실세션: session_unit · my_units.is_active 도 이 기기 매장', u1.data === 'store_001'
+        && (m1.data ?? []).find((r) => r.is_active)?.unit_id === 'store_001', `${u1.data} ${JSON.stringify((m1.data ?? []).filter((r) => r.is_active))}`);
+      await c1.auth.signOut({ scope: 'local' });
+      const r1 = rowOfSid(s1), r2 = rowOfSid(s2);
+      check('★실세션: 한 기기 로그아웃 → 그 세션 행만 지워진다', r1 === 'none' && r2 === 'qa_c3_e2e', `${r1} ${r2}`);
+      await c2.auth.signOut({ scope: 'local' });
+    } catch (e) {
+      check('실세션 실행', false, String(e?.message ?? e));
+    } finally {
+      psql(`delete from public.units where id = 'qa_c3_e2e';
+update public.profiles set active_unit_id = 'store_001' where id = (select id from auth.users where email = 'owner@pilot.squaretable.app');`);
+    }
   }
 }
 

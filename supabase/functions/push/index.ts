@@ -696,9 +696,13 @@ Deno.serve(async (req) => {
   // 0093: 주매장(unit_id) 고정 → 활성 매장(active_unit_id) 우선으로 교정 — 다점포에서 "2호점을 보며
   // 보낸 알림이 1호점으로 가는" 무음 오발송 방지(0056 이 RPC 에서 고친 것과 같은 클래스).
   // active_unit_id 는 RLS 로 동결돼 switch_active_unit(멤버십 검증)로만 바뀌므로 신뢰 가능.
+  // ★0285(C3): 활성 매장은 로그인 세션(기기)마다 다르다. 보낸 기기의 매장은 호출자 토큰으로 auth_unit_id 를 물어 정한다
+  //   (ai 엣지와 같은 방식). profiles.active_unit_id 는 계정의 마지막 선택이라 다른 기기 매장일 수 있다.
   const { data: me } = await admin
-    .from('profiles').select('unit_id, active_unit_id, pending_unit_id, role').eq('id', caller.id).single();
-  const callerUnit = (me?.active_unit_id ?? me?.unit_id) as string | null;
+    .from('profiles').select('pending_unit_id, role').eq('id', caller.id).single();
+  const { data: callerUnitRaw, error: callerUnitErr } = await asCaller.rpc('auth_unit_id');
+  if (callerUnitErr) console.error('[push] auth_unit_id failed:', callerUnitErr.message);
+  const callerUnit = typeof callerUnitRaw === 'string' && callerUnitRaw ? callerUnitRaw : null;
   const pendingUnit = me?.pending_unit_id as string | null;
 
   const audience = payload.audience;

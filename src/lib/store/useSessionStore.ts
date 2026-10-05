@@ -25,6 +25,7 @@ import {
   fetchMyUnits,
   fetchMyBrand,
   switchActiveUnit,
+  fetchSessionUnit,
   type MyUnitRow,
 } from '@/lib/db';
 import { friendlyError, isMissingRpc } from '@/lib/utils/userError';
@@ -317,6 +318,12 @@ let _lastLoadFault: 'deleted' | 'load_failed' | null = null;
 // tenantEpoch 와 같은 규칙이지만 로그아웃에만 올린다 — 같은 사용자의 동시 로드(로그인 직후 두 번)는 서로 버리지 않는다.
 let _signOutGen = 0;
 
+// C3(QA 2026-10-05 · 원본 #65): 늦게 끝난 옛 loadProfile 이 더 새 로드의 결과를 덮지 않게 한다.
+// 30초 새로고침이 매장 전환 직전에 시작해 전환 뒤에 끝나면, 이 기기 화면이 옛 매장으로 되돌아갔다.
+// 시작 순번을 잡고, 더 늦게 시작한 로드가 이미 반영됐으면 버린다(먼저 끝난 로드는 그대로 반영한다).
+let _loadSeq = 0;
+let _appliedSeq = 0;
+
 // 로그아웃 상태 — 신원·매장·역할·과금 값을 전부 비운다. 로그아웃으로 떨어지는 길(로그아웃·auth 이벤트·탈퇴·
 // 로드 실패)이 여럿이라 한 곳에 둔다. 빠진 값이 있으면 다음 계정 로그인 전까지 이전 계정 값이 남는다.
 // 매장 데이터 스토어는 tenantReset.ts 가 userId 변화를 보고 비운다.
@@ -334,8 +341,15 @@ async function loadProfile(
   meta?: PendingOwnerMeta,
 ) {
   const gen = _signOutGen;
+  const seq = ++_loadSeq;
   try {
-    const { data: profile, error: profileErr } = await fetchSessionProfile(userId);
+    // ★0285(C3): 매장은 이 로그인 세션(기기)의 서버 값(session_unit)이다. 계정 값(active_unit_id)은 다른 기기 매장일 수 있다.
+    //   함수가 아직 없는 서버(PGRST202)에서만 계정 값을 쓴다. 그 밖의 읽기 실패는 프로필 읽기 실패와 같이 다룬다.
+    const [{ data: profile, error: profileReadErr }, { data: sessionUnit, error: suErr }] = await Promise.all([
+      fetchSessionProfile(userId),
+      fetchSessionUnit(),
+    ]);
+    const profileErr = profileReadErr ?? (suErr && !isMissingRpc(suErr) ? suErr : null);
 
     // 읽기 실패 위장 금지(§4.8) — supabase-js 는 쿼리 에러를 throw 하지 않고 {error} 로 준다.
     // 이 error 를 무시하면 profile=null 로 흘러 role='junior'·unit_id='' 인 "빈 신원"이 signed_in
@@ -372,9 +386,9 @@ async function loadProfile(
       return;
     }
 
-    // 다점포(0055): 활성 매장(active_unit_id) 우선 — RLS auth_unit_id()=active와 클라 컨텍스트를 일치시켜
-    // split-brain(화면 신원=주매장인데 데이터=활성매장) 방지. active 없으면 주매장(unit_id) 폴백.
-    let unitId = profile?.active_unit_id || profile?.unit_id || '';
+    // 다점포(0055 · 0285): 서버 auth_unit_id() 와 같은 값(이 세션의 매장)으로 클라 컨텍스트를 맞춰
+    // split-brain(화면 매장과 RLS 매장이 다름) 을 막는다. 함수가 없는 서버면 active → 주매장(unit_id) 폴백.
+    let unitId = suErr ? profile?.active_unit_id || profile?.unit_id || '' : sessionUnit ?? '';
     // 이번 로드에서 막 만든 매장 — 역할 판정이 매장 목록을 못 읽었을 때의 근거(deriveStoreRole).
     let createdUnitId = '';
 
@@ -565,6 +579,9 @@ async function loadProfile(
     }
     // 이 로드가 도는 사이 로그아웃됐으면 버린다 — 옛 userId 로 signed_in 을 되살리지 않는다(G1).
     if (gen !== _signOutGen) return;
+    // 더 늦게 시작한 로드가 이미 반영됐으면 버린다(C3 · 원본 #65).
+    if (seq < _appliedSeq) return;
+    _appliedSeq = seq;
     setUnitId(unitId || null);
     setAnalyticsContext({ userId, unitId: unitId || null, role }); // 관측 이벤트에 매장/유저/역할 태깅
     set({
@@ -902,6 +919,11 @@ export const useSessionStore = create<SessionState>((set, get) => ({
             ? 'NO_STORE_SLOT'
             : undefined,
         };
+      }
+      // ★0285(C3): 매장 추가는 이 기기를 새 매장으로 옮긴다. 다른 기기가 그 사이 매장을 바꿨어도 서버가 이 세션을 따라오게 한다.
+      if (!isOnboarding && row?.unit_id) {
+        const sw = await switchActiveUnit(row.unit_id);
+        if (sw.error) reportError('session.createStore.switch', sw.error);
       }
       // 프로필 unit_id가 바뀌었으니 세션 상태 갱신
       const uid = get().userId;
