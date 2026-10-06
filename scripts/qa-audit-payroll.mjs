@@ -340,5 +340,24 @@ console.log('\n[A9] 같은 사람 근무가 겹치면 경고만 하고, 급여�
   check('★교대 승인 카드: 겹침 경고 · 승인 버튼은 그대로', /swapOverlap\(/.test(own) && /같은 시간에 이미 근무가 있어요/.test(own));
 }
 
+console.log('\n[A11b] 직원 출퇴근·허브의 날짜 계산도 폰 시간대를 타지 않는다(A11 과 같은 헬퍼)');
+{
+  const localParse = /new Date\(`\$\{[^}]+\}T00:00:00`\)/;
+  const att = strip(read('src/app/junior/attendance.tsx'));
+  check('★출퇴근 화면: 날짜를 기기 현지 자정으로 읽지 않는다', !localParse.test(att) && !/\.getDay\(\)|\.getFullYear\(\)/.test(att));
+  check('출퇴근 화면: 이번 주는 schedule.ts 의 mondayOf 로 만든다', /mondayOf\(today\)/.test(att));
+  const jt = strip(read('src/components/hub/JuniorTodayView.tsx'));
+  check('★허브 오늘 카드: 날짜를 기기 현지 자정으로 읽지 않는다', !localParse.test(jt) && !/\.getDay\(\)/.test(jt));
+  check('허브 오늘 카드: 다음 근무 날짜·요일은 addDays·weekdayOf 로 만든다', /addDays\(today, off\)/.test(jt) && /weekdayOf\(date2\)/.test(jt));
+}
+
+console.log('\n[T1] 출근 기록 직접 진입 — 명부가 오기 전·못 읽었을 때 "직원을 찾을 수 없어요"를 띄우지 않는다');
+{
+  const ts = strip(read('src/app/owner/timesheet/[staffId].tsx'));
+  check('★명부 읽기 실패는 "못 불러왔다"+다시 시도로 말한다', /useStaffStore\(\(s\) => s\.loadError\)/.test(ts) && /LoadErrorState/.test(ts));
+  check('★직원은 스토어 구독으로 찾는다(늦게 온 명부에 화면이 따라온다 · getStaff 일회 조회 금지)', /useStaffStore\(\(s\) => s\.staff\.find\(/.test(ts) && !/getStaff\(/.test(ts));
+  check('판정에 profiles.role 을 쓰지 않는다', !/profiles\.role|\.profile\?*\.role/.test(ts));
+}
+
 console.log(`\n${fail ? 'RED' : 'GREEN'} — PASS ${pass} · FAIL ${fail}`);
 process.exit(fail ? 1 : 0);
