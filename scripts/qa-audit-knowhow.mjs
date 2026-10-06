@@ -196,8 +196,12 @@ console.log('\n[E9] AI 사용량: 재시도는 한 번만 차감 · 직원이 �
   check('0193 본문(캡 200/3,000 · 80%·100% 사장 알림 · 단위 1~60)을 그대로 쓴다',
     /then 3000 else 200 end/.test(b) && /'ai_cap', v_month, 80/.test(b) && /'ai_cap', v_month, 100/.test(b) && /least\(greatest\(coalesce\(p_units, 1\), 1\), 60\)/.test(b), d.file);
   const f = d.file ? read(`supabase/migrations/${d.file}`) : '';
-  check('★consume_ai_quota 는 클라(authenticated)에서 닫는다',
-    /revoke all on function public\.consume_ai_quota\(int\) from public, anon, authenticated;/.test(f));
+  // 옛 ai 엣지 호환: 0276 은 열어 두고(확장), 새 엣지 배포 뒤 0297 이 닫는다(축소).
+  const close = read('supabase/migrations/0297_ai_quota_close_client.sql');
+  check('★consume_ai_quota 는 클라(authenticated)에서 닫는다(0297)',
+    /revoke all on function public\.consume_ai_quota\(int\) from public, anon, authenticated;/.test(close));
+  check('★0276 은 옛 엣지가 쓰는 consume_ai_quota 권한을 건드리지 않는다',
+    !/revoke[^;]*public\.consume_ai_quota\(int\)/.test(f));
   check('consume_ai_quota_for 는 service_role 만', /revoke all on function public\.consume_ai_quota_for\(text, int, text\) from public, anon, authenticated;/.test(f)
     && /grant\s+execute on function public\.consume_ai_quota_for\(text, int, text\) to service_role;/.test(f));
   const edge = strip(read('supabase/functions/ai/index.ts'));

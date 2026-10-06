@@ -174,7 +174,11 @@ begin
   -- 겸직 담당자의 매장 신원이 작업실로 덮이면 '내 매장으로' 왕복이 깨진다.
   update public.profiles set active_unit_id = v_ws where id = auth.uid();
   -- ★0285: 계정 값이 이미 작업실이어도(다른 기기가 먼저 들어감) 이 세션을 작업실로 옮긴다.
-  perform public.session_unit_set(v_ws);
+  --   세션 행이 이미 있을 때만(= 새 앱이 로그인 직후 session_unit 으로 만든 세션). 옛 앱은 세션 행을 만들지 않으므로
+  --   여기서 만들면 옛 앱 기기끼리 매장이 어긋난다(계정 값을 따르는 화면 ↔ 세션 행을 따르는 서버). 옛 앱 호환.
+  if exists (select 1 from public.session_active_units s where s.session_id = public.jwt_session_uuid()) then
+    perform public.session_unit_set(v_ws);
+  end if;
 
   return v_ws;
 end $$;

@@ -7,7 +7,7 @@
 --    다 쓸 수 있었다. 클라에서 닫고, 엣지는 서비스 키로 consume_ai_quota_for(매장 id) 를 부른다.
 --    매장 id 는 엣지가 호출자 JWT 로 판정한 auth_unit_id 다(클라가 고르지 않는다).
 -- 본문은 0193 consume_ai_quota 를 통째로 옮겼다. 바뀐 곳은 ★0276 표시뿐이다.
--- ⚠️ 배포 순서: 이 파일을 올린 직후 ai 엣지를 배포한다. 그 사이 옛 엣지의 차감은 권한 오류로 빠진다(로그만 · 과소 집계).
+-- 옛 앱 호환: 안전 | 옛 ai 엣지(main ai/index.ts:1227 userClient.rpc('consume_ai_quota'))가 그대로 돈다. 클라 차감 닫기는 0297(새 ai 엣지 배포 뒤).
 
 -- ── 요청 키 장부 ─────────────────────────────────────────────────────────
 create table if not exists public.ai_quota_requests (
@@ -103,16 +103,15 @@ end $$;
 revoke all on function public.consume_ai_quota_for(text, int, text) from public, anon, authenticated;
 grant  execute on function public.consume_ai_quota_for(text, int, text) to service_role;
 
--- ── 클라 직접 차감 닫기 ───────────────────────────────────────────────────
--- 함수는 남긴다(되돌릴 때 grant 한 줄이면 된다). 사전판정 ai_quota_status 는 읽기라 그대로 연다.
-revoke all on function public.consume_ai_quota(int) from public, anon, authenticated;
-grant  execute on function public.consume_ai_quota(int) to service_role;
+-- ── 클라 직접 차감 닫기는 0297 로 미룬다(옛 앱 호환 · 확장 → 축소) ──────────────
+-- 라이브의 옛 ai 엣지는 consume_ai_quota(int) 를 사용자 토큰으로 부른다. 여기서 닫으면 새 엣지가 나가기 전까지
+-- 차감이 권한 오류로 조용히 빠진다(과소 집계 · 80%·100% 알림 안 감). 그래서 열어 둔 채로 두고,
+-- 새 ai 엣지를 배포한 뒤 0297 이 닫는다.
 
 -- ── 자가점검 ──────────────────────────────────────────────────────────────
 do $$
 begin
-  if has_function_privilege('authenticated', 'public.consume_ai_quota(int)', 'execute')
-     or has_function_privilege('authenticated', 'public.consume_ai_quota_for(text, int, text)', 'execute')
+  if has_function_privilege('authenticated', 'public.consume_ai_quota_for(text, int, text)', 'execute')
      or has_function_privilege('anon', 'public.consume_ai_quota_for(text, int, text)', 'execute') then
     raise exception '0276 자가점검 실패 — AI 차감 함수가 클라에 열려 있다';
   end if;

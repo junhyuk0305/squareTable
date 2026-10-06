@@ -131,6 +131,7 @@
     "qa:audit-work": "node --no-warnings scripts/qa-audit-work.mjs",
     "qa:audit-knowhow": "node --no-warnings scripts/qa-audit-knowhow.mjs",
     "qa:audit-account": "node --no-warnings scripts/qa-audit-account.mjs",
+    "qa:old-client-compat": "node --no-warnings scripts/qa-old-client-compat.mjs",
     "qa:shift-requests": "node scripts/qa-shift-requests.mjs",
     "qa:definer-filters": "node scripts/qa-definer-filters.mjs",
     "qa:wage-rates": "node scripts/qa-wage-rates.mjs",
