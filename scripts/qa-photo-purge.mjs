@@ -37,6 +37,10 @@ check('정리 함수는 service_role 만 부른다',
   /revoke execute on function public\.photo_purge_due\(integer\) from public, anon, authenticated/.test(sql)
   && /revoke execute on function public\.photo_purge_done\(text\[\]\) from public, anon, authenticated/.test(sql)
   && /revoke execute on function public\.queue_unit_photos_on_delete\(\) from public, anon, authenticated/.test(sql));
+// 되돌릴 수 없는 한 번 정리는 0278 에서 빼서 0298('올리기 조건: 라이브 대상 확인 뒤')로 둔다.
+check('★0278 에는 한 번 정리가 없다(라이브 대상 확인 전 삭제 대기 금지)',
+  !/not exists \(select 1 from public\.units u where u\.id = split_part/.test(stripSql(read('supabase/migrations/0278_unit_photo_purge.sql'))));
+check('0298 머리말에 올리기 조건이 있다', /^-- 올리기 조건:/m.test(read('supabase/migrations/0298_photo_purge_backfill.sql')));
 check('이미 지워진 매장의 남은 사진도 한 번 대기열에 넣는다(폴더가 있는 것만)',
   /insert into public\.photo_purge_queue[\s\S]*?not exists \(select 1 from public\.units u where u\.id = split_part\(o\.name, '\/', 1\)\)/.test(sql)
   && /o\.name like '%\/%'/.test(sql));

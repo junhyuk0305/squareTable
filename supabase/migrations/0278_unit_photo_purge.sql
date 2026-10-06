@@ -73,11 +73,4 @@ end $$;
 revoke execute on function public.photo_purge_done(text[]) from public, anon, authenticated;
 grant  execute on function public.photo_purge_done(text[]) to service_role;
 
--- 한 번 정리: 이미 지워진 매장(units 에 없는 폴더)의 남은 사진.
-insert into public.photo_purge_queue(path)
-select o.name
-  from storage.objects o
- where o.bucket_id = 'playbook-photos'
-   and o.name like '%/%'
-   and not exists (select 1 from public.units u where u.id = split_part(o.name, '/', 1))
-on conflict (path) do nothing;
+-- 이미 지워진 매장의 남은 사진 한 번 정리는 0298 로 뺐다(되돌릴 수 없는 삭제라 라이브 대상 확인 뒤에만 올린다).

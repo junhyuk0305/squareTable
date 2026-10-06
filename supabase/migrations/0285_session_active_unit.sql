@@ -287,3 +287,57 @@ begin
     raise exception '0285: 클라가 session_active_units 에 접근할 수 있다';
   end if;
 end $$;
+
+-- ── ⑨ 채팅 RLS 비용: 방 판정 함수에 매장 id 를 넘겨 쿼리당 한 번만 판정한다 (10-06 배포 전 점검) ──────
+-- can_see_room(rid)·room_in_my_unit(rid) 는 행 인자를 받아 (select …) 로 감쌀 수 없고, 본문에서 auth_unit_id() 를
+-- 행마다 다시 부른다. ★0285 로 auth_unit_id() 가 세션 행까지 보게 되면서 채팅 1000줄 읽기가 약 2배 느려졌다(로컬 실측
+-- 5000행 1149ms → 2234ms). 매장 id 를 인자로 받는 판본을 더하고, 정책은 (select auth_unit_id()) 를 넘긴다.
+-- 뜻은 그대로다(넘기는 값 = 본문이 부르던 값). 옛 1인자 함수는 남긴다(다른 함수·옛 정의가 부른다).
+create or replace function public.can_see_room(rid text, p_unit text)
+returns boolean language sql stable security definer set search_path = public as $$
+  select exists (
+    select 1 from public.work_rooms r
+    where r.id = rid
+      and r.unit_id = p_unit
+      and r.deleted_at is null
+      and (
+        r.is_default
+        or exists (select 1 from public.work_room_members m where m.room_id = r.id and m.user_id = auth.uid())
+      )
+  )
+$$;
+create or replace function public.room_in_my_unit(rid text, p_unit text)
+returns boolean language sql stable security definer set search_path = public as $$
+  select exists (select 1 from public.work_rooms r where r.id = rid and r.unit_id = p_unit)
+$$;
+revoke all on function public.can_see_room(text, text) from public, anon;
+revoke all on function public.room_in_my_unit(text, text) from public, anon;
+grant execute on function public.can_see_room(text, text) to authenticated;
+grant execute on function public.room_in_my_unit(text, text) to authenticated;
+
+alter policy wf_select on public.work_feed
+  using ((unit_id = (select public.auth_unit_id())) and ((room_id is null) or public.can_see_room(room_id, (select public.auth_unit_id()))));
+alter policy wf_insert on public.work_feed
+  with check ((unit_id = (select public.auth_unit_id())) and ((room_id is null) or public.can_see_room(room_id, (select public.auth_unit_id()))));
+alter policy wf_update on public.work_feed
+  using ((unit_id = (select public.auth_unit_id())) and ((room_id is null) or public.can_see_room(room_id, (select public.auth_unit_id())))
+         and ((data ->> 'authorId') = ((select auth.uid()))::text))
+  with check ((unit_id = (select public.auth_unit_id())) and ((room_id is null) or public.can_see_room(room_id, (select public.auth_unit_id())))
+         and ((data ->> 'authorId') = ((select auth.uid()))::text));
+alter policy wf_delete on public.work_feed
+  using ((unit_id = (select public.auth_unit_id())) and ((room_id is null) or public.can_see_room(room_id, (select public.auth_unit_id())))
+         and (((data ->> 'authorId') = ((select auth.uid()))::text) or (select public.auth_can_manage())));
+alter policy wr_update on public.work_rooms
+  using ((unit_id = (select public.auth_unit_id())) and public.can_see_room(id, (select public.auth_unit_id())))
+  with check ((unit_id = (select public.auth_unit_id())) and public.can_see_room(id, (select public.auth_unit_id())));
+alter policy wrm_select on public.work_room_members
+  using ((user_id = (select auth.uid())) or (public.room_in_my_unit(room_id, (select public.auth_unit_id())) and public.can_see_room(room_id, (select public.auth_unit_id()))));
+alter policy wrm_insert on public.work_room_members
+  with check (public.room_in_my_unit(room_id, (select public.auth_unit_id())) and public.can_see_room(room_id, (select public.auth_unit_id()))
+              and exists (select 1 from public.unit_members m
+                           where m.unit_id = (select public.auth_unit_id()) and m.user_id = work_room_members.user_id));
+alter policy wrm_delete on public.work_room_members
+  using (public.room_in_my_unit(room_id, (select public.auth_unit_id()))
+         and ((user_id = (select auth.uid())) or ((select public.auth_can_manage()) and public.can_see_room(room_id, (select public.auth_unit_id())))));
+alter policy wrp_insert on public.work_room_prefs
+  with check ((user_id = (select auth.uid())) and public.can_see_room(room_id, (select public.auth_unit_id())));
