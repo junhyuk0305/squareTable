@@ -23,7 +23,7 @@ import { fmtDuration, won, hhmm, todayStr, liveMinutes, findOpenRecord, isForgot
 import { ForgotCheckoutCard } from '@/components/junior/ForgotCheckoutCard';
 import { computePay, shiftsToPayRecords } from '@/lib/utils/payroll';
 import { useScheduleStore, scheduledShiftsFor } from '@/lib/store/useScheduleStore';
-import { monthDates } from '@/lib/utils/schedule';
+import { monthDates, mondayOf, weekDates as weekDatesOf } from '@/lib/utils/schedule';
 
 /**
  * 출퇴근 패널 — 화면 크롬(SafeAreaView·탭바·헤더) 없이 콘텐츠만.
@@ -96,14 +96,8 @@ export function AttendancePanel() {
   //    막대 하나 = 그날 실제로 찍힌 출퇴근 기록의 분이다. 근무가 없는 요일은 0 이고, 0 을 지어내
   //    채우지 않는다(수·목·금·토·일 근무인 직원은 월·화가 비는 게 정상이다).
   //    순수 계산이라 수동 메모이즈하지 않는다 — React Compiler 가 한다(위 recentRecs 와 같은 이유).
-  const weekDates = (() => {
-    const base = new Date(`${today}T00:00:00`);
-    const shift = (base.getDay() + 6) % 7; // 월요일 시작
-    return Array.from({ length: 7 }, (_, i) => {
-      const d = new Date(base.getTime() + (i - shift) * 86400000);
-      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-    });
-  })();
+  //    날짜는 schedule.ts 로 센다 — 기기 현지 자정으로 읽으면 한국보다 동쪽 시간대에서 하루씩 밀린다(A11).
+  const weekDates = weekDatesOf(mondayOf(today));
   const weekMinutes = weekDates.map((d) =>
     mine.filter((r) => r.date === d).reduce((sum, r) => sum + liveMinutes(r), 0),
   );

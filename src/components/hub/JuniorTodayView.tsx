@@ -12,7 +12,7 @@ import { useMemberPrefsStore } from '@/lib/store/useMemberPrefsStore';
 import { shiftsOn, scheduledShiftsFor } from '@/lib/store/useScheduleStore';
 import { DEFAULT_SETTINGS } from '@/lib/store/usePayrollStore';
 import { computePay, shiftsToPayRecords } from '@/lib/utils/payroll';
-import { monthDates } from '@/lib/utils/schedule';
+import { monthDates, addDays, weekdayOf } from '@/lib/utils/schedule';
 import type { MyCrossSummaryRow } from '@/lib/db';
 import { useStoreNav } from '@/lib/hooks/useStoreNav';
 import { useForegroundRefresh } from '@/lib/app/useForegroundRefresh';
@@ -84,8 +84,9 @@ export function JuniorTodayView({ header }: { header: ReactNode }) {
   const nextShift = useMemo(() => {
     if (todayShifts.length > 0) return null;
     for (let off = 1; off <= 7; off += 1) {
-      const date2 = todayStr(new Date(new Date(`${today}T00:00:00`).getTime() + off * 86400000));
-      const d2 = new Date(`${date2}T00:00:00`).getDay();
+      // 날짜는 schedule.ts 로 센다 — 기기 현지 자정으로 읽으면 한국보다 동쪽 시간대에서 하루씩 밀린다(A11).
+      const date2 = addDays(today, off);
+      const d2 = weekdayOf(date2);
       const cands = myShiftsOn(myCross, meId, date2).map((s) => ({ ...s, dow: d2 }));
       if (cands.length > 0) return cands[0];
     }
