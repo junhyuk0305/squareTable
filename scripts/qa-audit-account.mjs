@@ -55,6 +55,7 @@ console.log('[F2] 설정에 "다른 기기에서 모두 로그아웃" — 지금
   const on = (scr.match(/const onSignOutOthers = async \(\) => \{[\s\S]*?\n  \};/) || [''])[0];
   check('★확인창을 거친 뒤 실행한다', /confirmAction\(/.test(on) && /signOutOthers\(\)/.test(on) && on.indexOf('confirmAction(') < on.indexOf('signOutOthers()'), on.slice(0, 200));
   check('★성공·실패 토스트', /showToast\([^)]*'good'\)/.test(on) && /showToast\([^)]*'warn'\)/.test(on), on.slice(0, 300));
+  check('★사장 계정에만 보인다(10-06 결정)', /\{isOwnerAccount && \(\s*<SettingsRow[^>]*label="다른 기기에서 모두 로그아웃"/.test(scr) && /if \(!isOwnerAccount\) return;/.test(on));
 
   if (!localAuth) console.log('  SKIP 실로그인 — 로컬 Supabase 아님/없음');
   else {

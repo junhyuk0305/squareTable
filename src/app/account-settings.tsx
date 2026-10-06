@@ -82,6 +82,7 @@ export default function AccountSettings() {
 
   // F2: 폰을 잃어버렸거나 공용 기기에 로그인해 둔 경우. 지금 기기는 그대로 둔다.
   const onSignOutOthers = async () => {
+    if (!isOwnerAccount) return; // 10-06 결정: 사장 계정만
     const ok = await confirmAction(
       '다른 기기에서 모두 로그아웃',
       '지금 이 기기만 빼고 다른 기기에서 모두 로그아웃할까요? 그 기기에서는 다시 로그인해야 하고, 알림도 더 가지 않아요.',
@@ -294,7 +295,9 @@ export default function AccountSettings() {
         <SettingsSection>
           {/* 무해한 액션(로그아웃) 먼저, 되돌리기 어려운 액션(탈퇴)은 아래로 — 오탭 방지. */}
           <SettingsRow first icon="log-out-outline" label="로그아웃" onPress={onLogout} />
-          <SettingsRow icon="phone-portrait-outline" label="다른 기기에서 모두 로그아웃" onPress={onSignOutOthers} />
+          {isOwnerAccount && (
+            <SettingsRow icon="phone-portrait-outline" label="다른 기기에서 모두 로그아웃" onPress={onSignOutOthers} />
+          )}
           <SettingsRow icon="trash-outline" label="회원탈퇴" danger onPress={busy ? undefined : onDelete} />
         </SettingsSection>
 
