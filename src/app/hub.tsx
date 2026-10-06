@@ -11,6 +11,7 @@ import { JuniorTodayView } from '@/components/hub/JuniorTodayView';
 import { NoStoreView } from '@/components/hub/NoStoreView';
 import { Appear, stagger } from '@/components/Appear';
 import { todayStr } from '@/lib/utils/attendance';
+import { weekdayOf } from '@/lib/utils/schedule';
 import { InkColors } from '@/lib/theme/colors';
 import { Space } from '@/lib/theme/layout';
 
@@ -34,7 +35,7 @@ export default function HubScreen() {
   const hasStore = sessionStores.length > 0 || !!unitId;
 
   const today = todayStr();
-  const dateLabel = `${Number(today.slice(5, 7))}월 ${Number(today.slice(8, 10))}일 (${WEEKDAYS[new Date(`${today}T00:00:00`).getDay()]})`;
+  const dateLabel = `${Number(today.slice(5, 7))}월 ${Number(today.slice(8, 10))}일 (${WEEKDAYS[weekdayOf(today)]})`;
 
   // 제목은 본문 뷰에 **넘겨서** 그 뷰의 로딩 게이트 안에서 그리게 한다(2026-08-25).
   // 여기서 직접 그리면 제목만 먼저 등장 애니를 소진하고 수 백 ms 뒤에 본문이 통째로 교체된다
