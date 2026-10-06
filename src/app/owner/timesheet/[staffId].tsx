@@ -10,6 +10,7 @@ import { useSessionStore } from '@/lib/store/useSessionStore';
 import { TimesheetView } from '@/components/TimesheetView';
 import { RoleTabBar } from '@/components/RoleTabBar';
 import { ScreenLoading } from '@/components/ScreenLoading';
+import { LoadErrorState } from '@/components/LoadErrorState';
 import { Avatar } from '@/components/Avatar';
 import { InkColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
@@ -22,7 +23,6 @@ export default function OwnerTimesheetScreen() {
   const router = useRouter();
   const { staffId } = useLocalSearchParams<{ staffId: string }>();
   const wages = usePayrollStore((s) => s.wages);
-  const getStaff = useStaffStore((s) => s.getStaff);
   const isOwner = useSessionStore((s) => s.role) === 'owner';
 
   // ★게이트가 `if (!staff)` 보다 **먼저** 있어야 한다 — 직원 목록이 도착하기 전에는 getStaff가 항상 undefined라
@@ -33,7 +33,10 @@ export default function OwnerTimesheetScreen() {
   const attendanceLoaded = useAttendanceStore((s) => s.loaded);
   const ready = staffLoaded && wagesSettled && attendanceLoaded;
 
-  const staff = getStaff(staffId ?? '');
+  // ★구독으로 찾는다 — getStaff 일회 조회는 loaded 가 이미 true 인 뒤에 명부가 다시 채워져도 화면이 안 따라온다.
+  //   명부는 활성 매장 멤버십(unit_members)으로만 채워지므로 다른 매장 직원은 여기 없다.
+  const staff = useStaffStore((s) => s.staff.find((m) => m.id === staffId));
+  const staffLoadError = useStaffStore((s) => s.loadError);
   // ★시급이 없으면 최저시급으로 대신 계산하지 않는다 — 사장이 "정해 뒀다"고 오해하고 그대로 지나간다.
   //   `junior/attendance`·`junior/timesheet` 와 같은 규칙(P7). 미설정은 아래에서 그대로 말한다.
   const wage = wages[staffId ?? ''] ?? null;
@@ -44,6 +47,18 @@ export default function OwnerTimesheetScreen() {
         <Stack.Screen options={{ title: '출근 기록' }} />
         <ScreenTitleHeader title="출근 기록" backFallback />
         <ScreenLoading label="출근 기록을 불러오고 있어요…" />
+        <RoleTabBar role="owner" />
+      </SafeAreaView>
+    );
+  }
+
+  // 명부를 못 읽었으면(활성 매장 어긋남 포함) 빈 명부다 — "없는 직원"이 아니라 "못 불러왔다"로 말한다.
+  if (!staff && staffLoadError) {
+    return (
+      <SafeAreaView style={styles.safe} edges={[]}>
+        <Stack.Screen options={{ title: '출근 기록' }} />
+        <ScreenTitleHeader title="출근 기록" backFallback />
+        <LoadErrorState title="직원 정보를 불러오지 못했어요" onRetry={() => void useStaffStore.getState().hydrate()} />
         <RoleTabBar role="owner" />
       </SafeAreaView>
     );
