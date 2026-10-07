@@ -1,5 +1,5 @@
 {
-  "updated": "2026-10-02",
+  "updated": "2026-10-07",
   "entries": [
     "src/app/billing.tsx::void navigator.clipboard.writeText(value);",
     "src/app/inquiry.tsx::void navigator.clipboard.writeText(BUSINESS_INFO.email);",
@@ -46,6 +46,7 @@
     "src/lib/pwa/head.ts::if (!document.head.querySelector('#st-no-scrollbar')) {",
     "src/lib/pwa/head.ts::if (!document.head.querySelector('#st-no-swipe-nav')) {",
     "src/lib/pwa/head.ts::if (!document.head.querySelector('link[href*=\"pretendard\"]')) {",
-    "src/lib/pwa/head.ts::if (document.head.querySelector(selector)) return;"
+    "src/lib/pwa/head.ts::if (document.head.querySelector(selector)) return;",
+    "src/lib/store/useSessionStore.ts::origin: () => window.location.origin,"
   ]
 }
