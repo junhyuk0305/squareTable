@@ -8,7 +8,6 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { usePayrollStore, useWagesSettled } from '@/lib/store/usePayrollStore';
 import { useScheduleStore, scheduledShiftsFor } from '@/lib/store/useScheduleStore';
-import { monthDates } from '@/lib/utils/schedule';
 import { useStaffStore, type PendingMember } from '@/lib/store/useStaffStore';
 import { useAttendanceStore } from '@/lib/store/useAttendanceStore';
 import { useSessionStore } from '@/lib/store/useSessionStore';
@@ -25,8 +24,8 @@ import { ActionRow } from '@/components/blocks/ActionRow';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
-import { fmtDuration, won, todayStr, liveMinutes, findOpenRecord, minWageWarning } from '@/lib/utils/attendance';
-import { computePay, shiftsToPayRecords } from '@/lib/utils/payroll';
+import { fmtDuration, won, todayStr, liveMinutes, staffWorkStatus, minWageWarning } from '@/lib/utils/attendance';
+import { computePay, shiftsToPayRecords, payWindow } from '@/lib/utils/payroll';
 import { showToast } from '@/lib/store/useToastStore';
 import { rotateInviteCode } from '@/lib/db';
 import { departedPayRows, rejoinNotice, workedInPeriod } from '@/lib/utils/tenure';
@@ -93,8 +92,9 @@ export default function OwnerStaffScreen() {
   const ym = today.slice(0, 7);
   const perStaff = useMemo(() => {
     // pay=null = 시급 미설정(계산 불가). 0원과 구별해야 한다 — 0원은 '무급'이라는 사실 주장이다.
-    const map: Record<string, { min: number; schedMin: number; pay: number | null; status: 'out' | 'working' | 'done' }> = {};
-    const dates = monthDates(ym);
+    const map: Record<string, { min: number; schedMin: number; pay: number | null; status: 'out' | 'working' | 'done' | 'forgot' }> = {};
+    // 주휴는 그 주 일요일이 속한 달에 붙인다(Q9) — 급여 입력은 첫 주 월요일부터 편다.
+    const payWin = payWindow(ym);
     for (const s of staff) {
       const monthRecs = records.filter((r) => r.staff_id === s.id && r.date.startsWith(ym));
       // 근무시간 표시는 실제 출퇴근 그대로(확인용). 금액만 근무표 기준이다.
@@ -103,7 +103,7 @@ export default function OwnerStaffScreen() {
       //   교대로 넘어간 근무는 shiftsOn 을 거친 scheduledShiftsFor 가 이미 반영한다 —
       //   여기서 templates 를 직접 훑으면 대타 뛴 사람이 못 받는다.
       const shiftRecs = shiftsToPayRecords(
-        scheduledShiftsFor(shiftTemplates, swaps, shiftExceptions, s.id, dates),
+        scheduledShiftsFor(shiftTemplates, swaps, shiftExceptions, s.id, payWin.inputDates),
       );
       // ★시급 미설정을 최저시급으로 대신 계산하지 않는다(#38). 예전엔 `?? DEFAULT_HOURLY_WAGE` 라
       //   **그럴듯한 금액**이 떠서 사장이 "최저시급으로 정해 뒀다"고 읽고 그대로 지나갔다.
@@ -111,15 +111,12 @@ export default function OwnerStaffScreen() {
       //   `junior/attendance`·`junior/timesheet`·`owner/timesheet/[staffId]` 가 이미 쓰는 규칙에 맞춘다.
       const wageSet = Object.prototype.hasOwnProperty.call(wages, s.id);
       // ★근무 중 판정은 날짜와 상관없이 열린 기록으로 한다(Q4) — 오늘 기록만 보면 자정을 넘긴 야간 근무자가 '미출근'으로 보인다.
-      const status: 'out' | 'working' | 'done' = findOpenRecord(records, s.id)
-        ? 'working'
-        : records.some((r) => r.staff_id === s.id && r.date === today)
-          ? 'done'
-          : 'out';
+      //   16시간 넘게 열린 기록은 '퇴근 안 찍음'으로 따로 보인다(결함 8) — 오래된 기록 하나로 '근무 중'이라고 하지 않는다.
+      const status = staffWorkStatus(records, s.id, today);
       // 급여 규칙(주휴·휴게·야간·연장·추가수당) 반영 예상 인건비 — computePay SSOT(F1). min 은 근무시간 표시용.
       // schedMin = 이번 달 **근무표에 잡힌** 분. 0이면 금액이 0인 게 아니라 **아직 계산할 수 없는 것**이다.
-      const schedMin = shiftRecs.reduce((sum, r) => sum + r.work_minutes, 0);
-      map[s.id] = { min, schedMin, pay: wageSet ? computePay(shiftRecs, wages[s.id], settings).total : null, status };
+      const schedMin = shiftRecs.reduce((sum, r) => sum + (r.date >= payWin.from ? r.work_minutes : 0), 0);
+      map[s.id] = { min, schedMin, pay: wageSet ? computePay(shiftRecs, wages[s.id], settings, undefined, payWin).total : null, status };
     }
     return map;
   }, [records, wages, settings, staff, ym, today, shiftTemplates, swaps, shiftExceptions]);
@@ -494,12 +491,13 @@ export default function OwnerStaffScreen() {
   );
 }
 
-function StatusChip({ status }: { status: 'out' | 'working' | 'done' }) {
+function StatusChip({ status }: { status: 'out' | 'working' | 'done' | 'forgot' }) {
   const map = {
     // '근무 중'은 정상 상태다 — accent(=bad 레드) 틴트라 정상이 경고로 읽혔다(2026-08-06). 색은 good, 판별은 라벨이 한다.
     working: { label: '근무 중', color: BrandColors.goodText, bg: BrandColors.goodSoft },
     done: { label: '퇴근', color: InkColors.ink3, bg: InkColors.bgSoft },
     out: { label: '미출근', color: InkColors.ink3, bg: InkColors.bgSoft },
+    forgot: { label: '퇴근 안 찍음', color: BrandColors.warnText, bg: BrandColors.warnSoft },
   } as const;
   const m = map[status];
   return (

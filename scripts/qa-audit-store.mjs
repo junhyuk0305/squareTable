@@ -164,7 +164,7 @@ console.log('\n[C2] 매장이 닫히면(unit_access_locked) 그 매장이 활성
 {
   const f = lastDef('my_unit_locked');
   check('★서버 판정 my_unit_locked 가 활성 매장(auth_unit_id)의 잠금(unit_access_locked)을 직원·매니저에게만 돌려준다',
-    !!f.file && /public\.auth_unit_id\(\)/.test(f.body) && /public\.unit_access_locked\(v_unit\)/.test(f.body) && /'junior', 'manager'/.test(f.body), f.file || '없음');
+    !!f.file && /public\.auth_(member_)?unit_id\(\)/.test(f.body) && /public\.unit_access_locked\(v_unit\)/.test(f.body) && /'junior', 'manager'/.test(f.body), f.file || '없음');
   check('my_unit_locked 는 authenticated 만 실행',
     fileHas(f.file, 'revoke all on function public.my_unit_locked() from public, anon, authenticated;')
       && fileHas(f.file, 'grant execute on function public.my_unit_locked() to authenticated;'));
@@ -293,7 +293,11 @@ console.log('\n[B8] 가입 직후 화면은 유료 AI 한도를 사실대로 말
 
 console.log('\n[C3] 보고 있는 매장은 로그인 세션(기기)마다 따로 둔다');
 {
-  const a = lastDef('auth_unit_id');
+  // 0303(C2 서버 차단): 세션 매장 판정 본문은 auth_member_unit_id 로 옮겼고, auth_unit_id 는 그 값을 감싼다(닫힌 매장 직원이면 null).
+  const aw = lastDef('auth_unit_id');
+  const a = /public\.auth_member_unit_id\(\)/.test(aw.body) ? lastDef('auth_member_unit_id') : aw;
+  check('★C2 서버 차단: auth_unit_id 는 닫힌 매장(unit_access_locked)의 직원·매니저에게 null 을 준다',
+    /public\.unit_access_locked\(/.test(aw.body) && /m\.role in \('junior', 'manager'\)/.test(aw.body), aw.file);
   check('★auth_unit_id 가 이 세션의 활성 매장(session_active_units)을 먼저 보고, 멤버십이 있을 때만 쓴다',
     /from public\.session_active_units/.test(a.body) && /auth\.uid\(\)/.test(a.body) && /from public\.unit_members/.test(a.body)
       && /p\.active_unit_id/.test(a.body) && /stable security definer/.test(a.body), a.file);
@@ -309,7 +313,7 @@ console.log('\n[C3] 보고 있는 매장은 로그인 세션(기기)마다 따�
       && fileHas(sw.file, 'revoke all on table public.session_active_units from public, anon, authenticated;'));
   const mu = lastDef('my_units'), ov = lastDef('owner_overview');
   check('★매장 목록·사장 현황의 "지금 보는 매장" 표시가 auth_unit_id() 기준이다',
-    /\(u\.id = public\.auth_unit_id\(\)\) as is_active/.test(mu.body) && /\(u\.id = public\.auth_unit_id\(\)\) as is_active/.test(ov.body), `${mu.file} ${ov.file}`);
+    /\(u\.id = public\.auth_(member_)?unit_id\(\)\) as is_active/.test(mu.body) &&/\(u\.id = public\.auth_unit_id\(\)\) as is_active/.test(ov.body), `${mu.file} ${ov.file}`);
   const be = lastDef('brand_enter_workspace');
   check('★본사 작업실 들어가기가 이 세션의 매장도 작업실로 옮긴다', /public\.session_unit_set\(v_ws\)/.test(be.body), be.file);
   const push = strip(read('supabase/functions/push/index.ts'));

@@ -21,7 +21,7 @@ import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { fmtDuration, won, hhmm, todayStr, liveMinutes, findOpenRecord, isForgotCheckout, openSinceText } from '@/lib/utils/attendance';
 import { ForgotCheckoutCard } from '@/components/junior/ForgotCheckoutCard';
-import { computePay, shiftsToPayRecords } from '@/lib/utils/payroll';
+import { computePay, shiftsToPayRecords, payWindow } from '@/lib/utils/payroll';
 import { useScheduleStore, scheduledShiftsFor } from '@/lib/store/useScheduleStore';
 import { monthDates, mondayOf, weekDates as weekDatesOf } from '@/lib/utils/schedule';
 
@@ -102,7 +102,10 @@ export function AttendancePanel() {
     mine.filter((r) => r.date === d).reduce((sum, r) => sum + liveMinutes(r), 0),
   );
   const weekMin = weekMinutes.reduce((a, b) => a + b, 0);
-  const monthBreakdown = computePay(shiftsToPayRecords(monthShifts), wage, settings);
+  // 주휴는 그 주 일요일이 속한 달에 붙인다(Q9) — 급여 입력만 첫 주 월요일부터 편다.
+  const payWin = payWindow(ym);
+  const payShifts = scheduledShiftsFor(shiftTemplates, swaps, shiftExceptions, userId, payWin.inputDates);
+  const monthBreakdown = computePay(shiftsToPayRecords(payShifts), wage, settings, undefined, payWin);
   const monthPay = monthBreakdown.total;
   // 금액이 근무시간 × 시급보다 적으면 **왜 빠졌는지**를 말한다 — 안 말하면 계산이 틀린 것으로 읽힌다.
   // 휴게는 **하루 합계** 기준이라(§54), 하루에 두 번 찍으면 예전보다 금액이 줄어든다.

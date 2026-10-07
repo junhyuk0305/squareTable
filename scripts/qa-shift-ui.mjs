@@ -396,7 +396,8 @@ console.log('\n■ [4] 왕복(로컬 도커) — 앱 판정 → RPC → shift_te
       check('4-2 2주 뒤부터 시작하는 행 준비', !fut.error, fut.error?.message);
       tpls = await readAll(O.c);
       const ops2 = plan(tpls, J.id, [wd2], T, '08:00', '12:00');
-      check('4-2 계획 = 이번 주부터 넣고 그 행 시작 전날로 닫기', ops2.length === 1 && ops2[0].kind === 'add' && ops2[0].from === first2 && ops2[0].endBefore === S.addDays(first2, 14), JSON.stringify(ops2));
+      // 결함 10(2026-10-07): 새 반복 행은 고른 날(오늘)부터 넣는다 — 옛 앱 st_read 가 오늘 적용 중인 행만 읽는다.
+      check('4-2 계획 = 오늘부터 넣고 그 행 시작 전날로 닫기', ops2.length === 1 && ops2[0].kind === 'add' && ops2[0].from === T && ops2[0].endBefore === S.addDays(first2, 14), JSON.stringify(ops2));
       const add = await O.c.rpc('add_shift_series', { p_staff: J.id, p_weekday: wd2, p_from: ops2[0].from, p_start: '08:00', p_end: '12:00', p_confirm_past: false });
       const end = add.error ? add : await O.c.rpc('end_shift_from', { p_id: add.data, p_from: ops2[0].endBefore, p_confirm_past: false });
       check('4-2 add_shift_series → end_shift_from 성공', !add.error && !end.error, add.error?.message ?? end.error?.message);

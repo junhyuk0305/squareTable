@@ -190,9 +190,10 @@ console.log('\n[E9] AI 사용량: 재시도는 한 번만 차감 · 직원이 �
   const b = d.body;
   check('★서버 전용 차감 함수 consume_ai_quota_for(매장 id 를 엣지가 넘긴다)가 있다',
     /consume_ai_quota_for\(p_unit text, p_units int default 1, p_request_key text default null\)/.test(b) && /v_unit\s+text := p_unit;/.test(b), d.file);
-  check('★같은 요청 키는 한 번만 차감한다',
-    /insert into public\.ai_quota_requests \(request_key, unit_id\) values \(p_request_key, v_unit\)\s+on conflict \(request_key\) do nothing;/.test(b)
-      && /if not found then/.test(b), d.file);
+  // 0302(라이브 QA 결함 3): 같은 키는 두 번째(재시도)만 무료, 세 번째부터는 매번 센다.
+  check('★같은 요청 키는 재시도 한 번만 무료(세 번째부터 차감)',
+    /on conflict \(request_key\) do update set hits = r\.hits \+ 1\s+returning r\.hits into v_hits;/.test(b)
+      && /if v_hits = 2 then/.test(b), d.file);
   check('0193 본문(캡 200/3,000 · 80%·100% 사장 알림 · 단위 1~60)을 그대로 쓴다',
     /then 3000 else 200 end/.test(b) && /'ai_cap', v_month, 80/.test(b) && /'ai_cap', v_month, 100/.test(b) && /least\(greatest\(coalesce\(p_units, 1\), 1\), 60\)/.test(b), d.file);
   const f = d.file ? read(`supabase/migrations/${d.file}`) : '';

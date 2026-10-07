@@ -255,7 +255,7 @@ console.log('\n[A3] 급여 설정도 이력을 남기고 지난달은 그 달 �
     /fetchPayrollSettingsHistory\(/.test(st) && /settingsHistoryLoadError/.test(st) && /setSetting:[\s\S]*withTodaySettings\(/.test(st) && /setSetting:[\s\S]*settingsHistory: prevHistory/.test(st));
   const tv = strip(read('src/components/TimesheetView.tsx'));
   check('★출근 기록 화면: 그 달 설정(settingsForMonth)으로 세고, 지난달 + 이력 실패면 금액 대신 안내',
-    /settingsForMonth\(/.test(tv) && /computePay\(shiftsToPayRecords\(monthShifts\), monthWage, monthSettings\)/.test(tv) && /settingsHistoryLoadError/.test(tv) && /지난달 급여 설정을 불러오지 못했어요/.test(tv));
+    /settingsForMonth\(/.test(tv) && /computePay\(shiftsToPayRecords\(payShifts\), monthWage, monthSettings, undefined, payWin\)/.test(tv) && /settingsHistoryLoadError/.test(tv) && /지난달 급여 설정을 불러오지 못했어요/.test(tv));
   const sv = lastDef('save_payroll_settings');
   const svFile = read(`supabase/migrations/${sv.file}`);
   check('★서버: save_payroll_settings 가 오늘부터 설정 이력을 남긴다(처음이면 옛 설정을 처음부터로)', /payroll_settings_history/.test(sv.body) && /kst_today\(\)/.test(sv.body) && /2000-01-01/.test(sv.body), sv.file);

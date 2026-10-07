@@ -281,6 +281,9 @@ function laterSegments(templates: SeriesRow[], staffId: string, weekday: number,
  * from = date(포함) 이후 그 요일의 첫 날이다.
  *  · 그날 적용 중인 행이 있으면 그 행을 from 부터 고친다. 뒤 구간도 각자 시작일부터 고친다. 시각이 같으면 건너뛴다.
  *  · 없으면 새로 넣는다. 끝난 행은 기록이라 고치지 않는다.
+ *    ★새 행의 시작일(valid_from)은 그 요일 첫 날이 아니라 고른 날(지난 날이면 오늘)이다(라이브 QA 결함 10 · 2026-10-07).
+ *     옛 앱은 오늘 적용 중인 반복만 읽어(st_read) 시작일이 앞날이면 그날까지 근무가 안 보였다.
+ *     그 사이에 그 요일이 없어 근무가 서는 날과 급여는 같다. 첫 날이 이미 지났으면 예전처럼 그 첫 날이다.
  *  · 그 뒤에 시작하는 행이 이미 있으면 새 행을 그 전날로 닫는다. 안 닫으면 그날부터 근무가 두 벌이 된다.
  */
 export function planSeriesSave(
@@ -290,6 +293,7 @@ export function planSeriesSave(
   date: string,
   start: string,
   end: string,
+  today: string = todayStr(),
 ): SeriesSaveOp[] {
   const ops: SeriesSaveOp[] = [];
   for (const wd of weekdays) {
@@ -306,7 +310,8 @@ export function planSeriesSave(
       .map((t) => t.valid_from ?? '')
       .filter((v) => v > from)
       .sort()[0];
-    ops.push(later ? { kind: 'add', weekday: wd, from, endBefore: later } : { kind: 'add', weekday: wd, from });
+    const addFrom = from < today ? from : date > today ? date : today;
+    ops.push(later ? { kind: 'add', weekday: wd, from: addFrom, endBefore: later } : { kind: 'add', weekday: wd, from: addFrom });
   }
   return ops;
 }

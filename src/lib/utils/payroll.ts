@@ -16,7 +16,7 @@
  *  - 가산(야간/연장)은 정밀분으로 계산(절삭 안 함). 5인 미만 의무 아님 → 토글로 사장이 결정.
  */
 import { minutesBetween, payableMinutes, nowISO, MAX_SHIFT_MIN } from './attendance';
-import { addDays, fmtDateKo, fmtMinutes, isOvernight, shiftMinutes, toMinutes } from './schedule';
+import { addDays, fmtDateKo, fmtMinutes, isOvernight, mondayOf, monthDates, shiftMinutes, toMinutes } from './schedule';
 
 export type PayrollRules = {
   breakDeduction: boolean;
@@ -149,11 +149,17 @@ function kstMinOfDay(iso: string, baseDate: string): number {
  *  · 근무표에 **없는 날** 출근을 찍음 → 급여에 **안 들어간다**. 근무표에 추가하라고 말한다.
  *  · 근무표엔 **있는데** 출근을 안 찍음 → 급여에 **들어간다**(근무표가 기준, 출퇴근은 참고용).
  * 같은 날 근무가 여러 개면 시작 시각 순으로 짝지어 비교한다.
+ * ★아직 안 끝난 근무(내일 이후·오늘 진행 중)는 "출퇴근을 안 찍었어요"로 세지 않는다(라이브 QA 결함 1 · 2026-10-07).
+ *   급여 계산은 달 전체 근무표 그대로다. 여기는 확인 목록만 거른다.
  */
 export function reconcileSchedule(
   shifts: ScheduledShift[],
   records: PayRecord[],
+  now: string = new Date().toISOString(),
 ): ShiftMismatch[] {
+  const nowMs = new Date(now).getTime();
+  const ended = (sh: ScheduledShift) =>
+    new Date(nowISO(isOvernight(sh.start, sh.end) ? addDays(sh.date, 1) : sh.date, sh.end)).getTime() <= nowMs;
   const byDate = new Map<string, { sh: ScheduledShift[]; rec: PayRecord[] }>();
   for (const sh of shifts) {
     const e = byDate.get(sh.date) ?? { sh: [], rec: [] };
@@ -176,6 +182,7 @@ export function reconcileSchedule(
       continue;
     }
     if (recs.length === 0) {
+      if (!shifts_.some(ended)) continue;
       out.push({ date, kind: 'no_record', message: `${fmtDateKo(date)} 근무는 출퇴근을 안 찍었어요. 급여는 근무표 기준으로 계산돼요.` });
       continue;
     }
@@ -247,11 +254,45 @@ function mergeSameDay(records: PayRecord[], now: string): PayRecord[] {
 }
 
 /**
- * 한 직원의 (기간 내) 근무기록 + 시급 + 규칙 → 급여 내역.
- * records 는 이미 원하는 정산기간으로 필터된 것을 넘긴다(기간 산정은 호출부에서).
+ * 주휴를 "그 주 일요일이 속한 달"에 붙이는 규칙의 시작일(마스터수정계획 P4-7 Q9 · 2026-10-07).
+ * 이 날 전에 끝난 주(일요일 < 이 날)는 예전 규칙(달마다 그 달 몫만 센다)이라 지난달 금액이 안 바뀐다.
+ * 이 날을 걸친 주는 앞 달이 예전 규칙으로 받은 몫을 빼고 일요일 달에 준다(두 번 주지 않는다).
+ * ★반드시 어떤 달의 1일이다.
  */
-export function computePay(records: PayRecord[], wage: number, rules: PayrollRules, nowISO?: string): PayBreakdown {
+export const PAYROLL_V2_FROM = '2026-10-01';
+
+/** 한 달 급여 창. from~to = 그 달. inputDates = 근무표를 펼칠 날(첫 주 월요일부터 · 주휴를 일요일 달에 붙이려면 앞 달 며칠이 필요하다). */
+export type PayWindow = { from: string; to: string; inputDates: string[] };
+
+export function payWindow(ym: string): PayWindow {
+  const days = monthDates(ym);
+  const from = days[0];
+  const to = days[days.length - 1];
+  const lead: string[] = [];
+  for (let d = mondayOf(from); d < from; d = addDays(d, 1)) lead.push(d);
+  return { from, to, inputDates: [...lead, ...days] };
+}
+
+/** 주 유급분 → 주휴수당. 주 15h↑ → (min(주,40)/40)×8×시급. */
+function weeklyHolidayFor(paidMin: number, wage: number): number {
+  const weekH = paidMin / H;
+  return weekH >= 15 ? Math.round((Math.min(weekH, 40) / 40) * 8 * wage) : 0;
+}
+
+/**
+ * 한 직원의 (기간 내) 근무기록 + 시급 + 규칙 → 급여 내역.
+ * period 가 없으면 records 전체를 그 기간으로 본다(예전 그대로).
+ * period(payWindow) 가 있으면 기본급·야간·연장·휴게는 from~to 날짜만 세고, 그 앞 날짜 기록은 주휴 계산에만 쓴다.
+ */
+export function computePay(
+  records: PayRecord[],
+  wage: number,
+  rules: PayrollRules,
+  nowISO?: string,
+  period?: { from: string; to: string },
+): PayBreakdown {
   const now = nowISO ?? new Date().toISOString();
+  const inPeriod = (d: string) => !period || (d >= period.from && d <= period.to);
   // ★같은 날 겹친 근무는 합집합으로 합친 뒤 센다(A9 · 2026-10-06). 안 합치면 겹친 시간을 두 번 센다.
   records = mergeSameDay(records, now);
   let workedMin = 0;
@@ -264,9 +305,11 @@ export function computePay(records: PayRecord[], wage: number, rules: PayrollRul
 
   // ── 1차: 근무 건별 집계 ──────────────────────────────────────────────
   // 야간(nightMin)만 건별로 정확히 센다 — 22:00–06:00 과의 **구간 겹침**이라 하루 합계로는 못 바꾼다.
+  const outsideWorked: Record<string, number> = {};  // 기간 밖(첫 주 앞 달) 일별 근로분 — 주휴에만 쓴다
   for (const r of records) {
     const worked = shiftWorkedMin(r, now);
     if (worked <= 0) continue;
+    if (!inPeriod(r.date)) { outsideWorked[r.date] = (outsideWorked[r.date] ?? 0) + worked; continue; }
     workedMin += worked;
     if (rules.nightAllowance) nightMin += nightMinFor(r, now);
     dayWorked[r.date] = (dayWorked[r.date] ?? 0) + worked;
@@ -295,10 +338,38 @@ export function computePay(records: PayRecord[], wage: number, rules: PayrollRul
 
   // 주휴: 주 유급 15h↑ → (min(주,40)/40)×8×시급.
   let weeklyHolidayPay = 0;
-  if (rules.weeklyHolidayPay) {
-    for (const m of Object.values(weekPaid)) {
-      const weekH = m / H;
-      if (weekH >= 15) weeklyHolidayPay += Math.round((Math.min(weekH, 40) / 40) * 8 * wage);
+  if (rules.weeklyHolidayPay && !period) {
+    for (const m of Object.values(weekPaid)) weeklyHolidayPay += weeklyHolidayFor(m, wage);
+  } else if (rules.weeklyHolidayPay && period) {
+    // Q9: 주휴는 그 주 일요일이 속한 달에 붙인다(PAYROLL_V2_FROM 부터).
+    const allPaid: Record<string, number> = { ...dayPaid };
+    for (const [d, w] of Object.entries(outsideWorked)) {
+      allPaid[d] = Math.max(0, w - (rules.breakDeduction ? breakMinFor(w) : 0));
+    }
+    const weeks = new Map<string, [string, number][]>();
+    for (const [d, m] of Object.entries(allPaid)) {
+      const wk = mondayOf(d);
+      weeks.set(wk, [...(weeks.get(wk) ?? []), [d, m]]);
+    }
+    const sum = (days: [string, number][], keep: (d: string) => boolean) =>
+      days.reduce((n, [d, m]) => n + (keep(d) ? m : 0), 0);
+    for (const [mon, days] of weeks) {
+      const sun = addDays(mon, 6);
+      const sunHere = sun >= period.from && sun <= period.to;
+      if (sun < PAYROLL_V2_FROM) {
+        // 예전 규칙: 이 달 몫만 센다.
+        weeklyHolidayPay += weeklyHolidayFor(sum(days, inPeriod), wage);
+      } else if (mon >= PAYROLL_V2_FROM) {
+        if (sunHere) weeklyHolidayPay += weeklyHolidayFor(sum(days, () => true), wage);
+      } else {
+        // 컷오버를 걸친 주: 앞 달은 예전 규칙 몫, 일요일 달은 한 주 전체에서 그 몫을 뺀 만큼.
+        const before = (d: string) => d < PAYROLL_V2_FROM;
+        weeklyHolidayPay += weeklyHolidayFor(sum(days, (d) => inPeriod(d) && before(d)), wage);
+        if (sunHere) {
+          weeklyHolidayPay += Math.max(0,
+            weeklyHolidayFor(sum(days, () => true), wage) - weeklyHolidayFor(sum(days, before), wage));
+        }
+      }
     }
   }
 

@@ -238,7 +238,16 @@ console.log('\n[D7] 근무표를 쓰는 매장은 그 시각 근무자에게만,
 {
   const t = lastDef('due_task_reminders');
   check('★근무자가 없을 때 매장 전원으로 가는 갈래는 근무표를 안 쓰는 매장에서만 탄다',
-    /and not exists \(\s*select 1 from public\.shift_templates st\s+where st\.unit_id = t\.unit_id/.test(t.body), t.file);
+    /and not exists \(\s*select 1 from public\.shift_templates st\s+where st\.unit_id = t\.unit_id/.test(t.body)
+      || /and not public\.unit_uses_schedule\(t\.unit_id, t\.cand_day::date\)/.test(t.body), t.file);
+  // 0301(라이브 QA 결함 5·17): 판정 함수 하나 — 지난 하루 근무·옛 재직분은 세지 않는다. 퀴즈 두 곳도 같은 함수.
+  const us = lastDef('unit_uses_schedule');
+  check('★근무표 판정 unit_uses_schedule: 하루 근무는 그날 이후만, archived 제외, 반복은 안 끝난 것만',
+    /st\.archived_tenure_id is null/.test(us.body) && /st\.shift_date is not null and st\.shift_date >= p_day/.test(us.body)
+      && /st\.valid_to is null or st\.valid_to >= p_day/.test(us.body), us.file || '없음');
+  check('★할일 알림·퀴즈 발송·퀴즈 미발송 이유가 같은 판정 함수를 쓴다',
+    /public\.unit_uses_schedule\(a\.unit_id, v_date\)/.test(lastDef('due_quiz_sends').body)
+      && /public\.unit_uses_schedule\(v_unit, v_date\)/.test(lastDef('quiz_send_status').body));
   if (!dbUp) console.log('  SKIP 서버 동작 — 로컬 도커 DB 없음');
   else {
     const TASK = `insert into public.work_templates (id, unit_id, section, text, scope, remind_at) values ('qa_t7', 'store_001', 'open', '오픈 준비', 'shared', current_setting('qa.t'));\n`;

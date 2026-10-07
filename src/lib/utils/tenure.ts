@@ -4,7 +4,7 @@
  */
 import type { ShiftTemplate, ShiftException, SwapRequest } from '@/lib/store/useScheduleStore';
 import { liveMinutes } from './attendance';
-import { computePay, shiftsToPayRecords, type PayrollRules } from './payroll';
+import { computePay, payWindow, shiftsToPayRecords, type PayrollRules } from './payroll';
 import { monthDates, scheduledShiftsFor } from './schedule';
 
 export type MemberTenure = {
@@ -76,14 +76,15 @@ export function departedPayRows(p: PeriodInputs & {
   settings: PayrollRules;
 }): DepartedPayRow[] {
   const worked = new Set(p.tenures.filter((t) => t.left_at && workedInPeriod(t.user_id, p)).map((t) => t.user_id));
-  const dates = monthDates(p.ym);
+  // 주휴는 그 주 일요일이 속한 달에 붙인다(Q9) — 급여 입력은 첫 주 월요일부터 편다.
+  const payWin = payWindow(p.ym);
   return departedInPeriod(p.tenures, p.memberIds, worked).map((t) => {
     const uid = t.user_id;
     const min = p.records.filter((r) => r.staff_id === uid && r.date.startsWith(p.ym)).reduce((sum, r) => sum + liveMinutes(r), 0);
-    const shiftRecs = shiftsToPayRecords(scheduledShiftsFor(p.templates, p.swaps, p.exceptions, uid, dates));
-    const schedMin = shiftRecs.reduce((sum, r) => sum + r.work_minutes, 0);
+    const shiftRecs = shiftsToPayRecords(scheduledShiftsFor(p.templates, p.swaps, p.exceptions, uid, payWin.inputDates));
+    const schedMin = shiftRecs.reduce((sum, r) => sum + (r.date >= payWin.from ? r.work_minutes : 0), 0);
     const wage = Object.prototype.hasOwnProperty.call(p.wages, uid) ? p.wages[uid] : t.final_hourly_wage;
-    return { id: uid, name: t.name_snapshot || '퇴사자', min, schedMin, wage, pay: wage == null ? null : computePay(shiftRecs, wage, p.settings).total };
+    return { id: uid, name: t.name_snapshot || '퇴사자', min, schedMin, wage, pay: wage == null ? null : computePay(shiftRecs, wage, p.settings, undefined, payWin).total };
   });
 }
 

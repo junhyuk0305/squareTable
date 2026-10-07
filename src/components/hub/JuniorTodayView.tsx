@@ -11,8 +11,8 @@ import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useMemberPrefsStore } from '@/lib/store/useMemberPrefsStore';
 import { shiftsOn, scheduledShiftsFor } from '@/lib/store/useScheduleStore';
 import { DEFAULT_SETTINGS } from '@/lib/store/usePayrollStore';
-import { computePay, shiftsToPayRecords } from '@/lib/utils/payroll';
-import { monthDates, addDays, weekdayOf } from '@/lib/utils/schedule';
+import { computePay, shiftsToPayRecords, payWindow } from '@/lib/utils/payroll';
+import { addDays, weekdayOf } from '@/lib/utils/schedule';
 import type { MyCrossSummaryRow } from '@/lib/db';
 import { useStoreNav } from '@/lib/hooks/useStoreNav';
 import { useForegroundRefresh } from '@/lib/app/useForegroundRefresh';
@@ -128,14 +128,15 @@ export function JuniorTodayView({ header }: { header: ReactNode }) {
 
   // ── 3) 이번달 — 근무시간(출퇴근 기록)·예상 급여(근무표 기준 computePay · 매장 출퇴근 화면과 같은 계산) ──
   const month = useMemo(() => {
-    const dates = monthDates(today.slice(0, 7));
+    // 주휴는 그 주 일요일이 속한 달에 붙인다(Q9) — 급여 입력은 첫 주 월요일부터 편다.
+    const payWin = payWindow(today.slice(0, 7));
     const perStore = myCross.map((r) => {
       const rules = { ...DEFAULT_SETTINGS, ...(r.payroll_settings ?? {}) };
-      const shifts = scheduledShiftsFor(r.shifts.map((s) => ({ ...s, staff_id: meId })), [], r.exceptions ?? [], meId, dates);
+      const shifts = scheduledShiftsFor(r.shifts.map((s) => ({ ...s, staff_id: meId })), [], r.exceptions ?? [], meId, payWin.inputDates);
       return {
         uid: r.unit_id,
         minutes: r.month_minutes,
-        pay: r.hourly_wage > 0 ? computePay(shiftsToPayRecords(shifts), r.hourly_wage, rules).total : 0,
+        pay: r.hourly_wage > 0 ? computePay(shiftsToPayRecords(shifts), r.hourly_wage, rules, undefined, payWin).total : 0,
         hasWage: r.hourly_wage > 0,
       };
     });

@@ -18,10 +18,9 @@ import {
   type MyGrowthRow,
 } from '@/lib/db';
 import type { PlaybookEntry } from '@/types';
-import { computePay, shiftsToPayRecords } from '@/lib/utils/payroll';
+import { computePay, shiftsToPayRecords, payWindow } from '@/lib/utils/payroll';
 import { scheduledShiftsFor } from '@/lib/store/useScheduleStore';
 import { DEFAULT_SETTINGS } from '@/lib/store/usePayrollStore';
-import { monthDates } from '@/lib/utils/schedule';
 import { todayStr } from '@/lib/utils/attendance';
 import { departedPayRows } from '@/lib/utils/tenure';
 
@@ -34,15 +33,16 @@ import { departedPayRows } from '@/lib/utils/tenure';
  *   급여 입력(날짜·시작·끝)에는 영향이 없다.
  */
 function laborByUnit(rows: OwnerLaborInputRow[]): Record<string, number> {
-  const dates = monthDates(todayStr().slice(0, 7));
+  // 주휴는 그 주 일요일이 속한 달에 붙인다(Q9) — 급여 입력은 첫 주 월요일부터 편다.
+  const payWin = payWindow(todayStr().slice(0, 7));
   const out: Record<string, number> = {};
   for (const r of rows) {
     const rules = { ...DEFAULT_SETTINGS, ...(r.payroll_settings ?? {}) };
     let sum = 0;
     for (const sid of r.staff_ids) {
       if (!Object.prototype.hasOwnProperty.call(r.wages, sid)) continue;
-      const recs = shiftsToPayRecords(scheduledShiftsFor(r.shifts, [], r.exceptions, sid, dates));
-      sum += computePay(recs, r.wages[sid], rules).total;
+      const recs = shiftsToPayRecords(scheduledShiftsFor(r.shifts, [], r.exceptions, sid, payWin.inputDates));
+      sum += computePay(recs, r.wages[sid], rules, undefined, payWin).total;
     }
     // 이번 달 퇴사자 몫도 더한다 — 직원 관리 히어로와 같은 판정·금액(departedPayRows). 시급이 없으면(pay=null) 뺀다.
     const ym = todayStr().slice(0, 7);

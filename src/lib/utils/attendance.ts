@@ -187,6 +187,22 @@ export function isForgotCheckout(r: { check_in: string | null; check_out: string
 }
 
 /**
+ * 사장 직원 목록의 근무 상태(라이브 QA 결함 8 · 2026-10-07).
+ * 열린 기록이 16시간을 넘으면 '근무 중'이 아니라 '퇴근 안 찍음'이다(isForgotCheckout 과 같은 기준).
+ * 예전엔 두 달 전 열린 기록 하나로 '근무 중'이라고 했다. 허브(owner_today)는 24시간 안 출근만 근무 중으로 센다.
+ */
+export function staffWorkStatus(
+  records: readonly { staff_id: string; date: string; check_in: string | null; check_out: string | null }[],
+  staffId: string,
+  today: string,
+  now: Date = new Date(),
+): 'out' | 'working' | 'done' | 'forgot' {
+  const open = findOpenRecord(records, staffId);
+  if (open) return isForgotCheckout(open, now) ? 'forgot' : 'working';
+  return records.some((r) => r.staff_id === staffId && r.date === today) ? 'done' : 'out';
+}
+
+/**
  * 입력 마스크 — 숫자만 받아 "1230"→"12:30"으로 자동 정리(4자리까지).
  * 시(0~23)·분(0~59)은 두 자리가 다 찼을 때만 클램프한다.
  * ⚠️ 편집 중에는 입력한 자릿수를 그대로 보존한다(한 자리 분을 "00"으로 패딩하지 않음).

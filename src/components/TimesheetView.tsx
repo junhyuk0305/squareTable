@@ -6,7 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAttendanceStore, type AttendanceRecord } from '@/lib/store/useAttendanceStore';
 import { usePayrollStore } from '@/lib/store/usePayrollStore';
 import { useSessionStore } from '@/lib/store/useSessionStore';
-import { computePay, shiftsToPayRecords, reconcileSchedule, wageForMonth, settingsForMonth } from '@/lib/utils/payroll';
+import { computePay, shiftsToPayRecords, reconcileSchedule, wageForMonth, settingsForMonth, payWindow } from '@/lib/utils/payroll';
 import { useScheduleStore, scheduledShiftsFor, pendingTimeRequests } from '@/lib/store/useScheduleStore';
 import { RoleTabBar } from '@/components/RoleTabBar';
 import { Appear, stagger } from '@/components/Appear';
@@ -95,6 +95,12 @@ export function TimesheetView({ staffId, wage, editedBy, badgeLabel, badgeTone =
     () => scheduledShiftsFor(shiftTemplates, swaps, shiftExceptions, staffId, monthDates(ym)),
     [shiftTemplates, swaps, shiftExceptions, staffId, ym],
   );
+  // 급여 입력은 첫 주 월요일부터 편다 — 주휴를 그 주 일요일이 속한 달에 붙인다(Q9). 대조는 위 monthShifts 그대로.
+  const payWin = useMemo(() => payWindow(ym), [ym]);
+  const payShifts = useMemo(
+    () => scheduledShiftsFor(shiftTemplates, swaps, shiftExceptions, staffId, payWin.inputDates),
+    [shiftTemplates, swaps, shiftExceptions, staffId, payWin],
+  );
   // 시급이 없으면 **계산 자체를 하지 않는다** — 없는 시급으로 만든 금액은 0원이든 최저시급이든 거짓말이다.
   // 지난달은 그 달 시급으로 센다(2026-10-05). 이번 달은 지금 시급이다. 이력이 없으면 지금 시급.
   const wageRates = usePayrollStore((s) => s.wageRates);
@@ -105,7 +111,7 @@ export function TimesheetView({ staffId, wage, editedBy, badgeLabel, badgeTone =
   const pastSettingsMissing = usePayrollStore((s) => s.settingsHistoryLoadError) && ym < todayStr().slice(0, 7);
   const monthSettings = settingsForMonth(settingsHistory, ym, todayStr(), settings);
   const monthWage = wage == null || pastRatesMissing || pastSettingsMissing ? null : wageForMonth(wageRates, staffId, ym, todayStr(), wage);
-  const monthBreakdown = monthWage == null ? null : computePay(shiftsToPayRecords(monthShifts), monthWage, monthSettings);
+  const monthBreakdown = monthWage == null ? null : computePay(shiftsToPayRecords(payShifts), monthWage, monthSettings, undefined, payWin);
   const monthPay = monthBreakdown?.total ?? null;
   // 대조(확인) 층 — 근무표와 출퇴근이 30분 넘게 어긋난 것만. 급여는 근무표대로 나가므로
   // "다르다"를 말하지 않으면 잘못된 근무표가 그대로 지급된다.
