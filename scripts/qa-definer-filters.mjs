@@ -32,7 +32,7 @@ const bodies = (name) => {
 // 함수 → 꼭 있어야 할 토큰. 오버로드가 여럿이면 전부가 토큰을 가져야 한다.
 const FN_TOKENS = {
   // P1-1 0234(Q4) · P4-1 0242(J1)
-  owner_today: ['valid_from', '24 hours', 'shift_exceptions', 'owner_id = auth.uid()', 'archived_tenure_id'],
+  owner_today: ['valid_from', '16 hours', 'shift_exceptions', 'owner_id = auth.uid()', 'archived_tenure_id'],
   // P1-2 0235(Q5 · H8)
   sync_iap_slots: ["source = 'iap'", 'p_continuing'],
   // 0231(본사 사본 숨김) · P4-6 0247(Q22 승인·반려 알림) · P5-1 0248(J10 노하우가 전부 보관된 코스는 첫 퀴즈로 고르지 않는다)

@@ -242,6 +242,9 @@ export function TimesheetView({ staffId, wage, editedBy, badgeLabel, badgeTone =
             예상급여는 근무표 기준이에요. 근무시간은 실제 출퇴근 기록이라 다를 수 있어요.
           </Text>
         )}
+        {monthPay != null && monthSettings.weeklyHolidayPay && (
+          <Text style={styles.sumNote}>주휴수당은 그 주 일요일이 있는 달에 들어가요.</Text>
+        )}
         {pastRatesMissing && wage != null && (
           <Text style={styles.sumNote}>지난달 시급을 불러오지 못했어요. 인터넷 연결을 확인하고 다시 들어와 주세요.</Text>
         )}

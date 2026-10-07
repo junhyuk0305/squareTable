@@ -63,6 +63,7 @@ export default function OwnerPayrollScreen() {
               그래서 사장이 화면 숫자를 믿지 않고 주휴수당을 손으로 한 번 더 지급했다 — 이중 지급이다.
               계산 로직이 아니라 문구가 틀렸으므로 문구를 사실로 바꾼다. */}
           <Text style={styles.note}>* 켠 항목은 바로 급여 계산에 반영돼요.</Text>
+          <Text style={styles.note}>* 주휴수당은 그 주 일요일이 있는 달에 들어가요.</Text>
         </View>
 
         <View style={styles.block}>

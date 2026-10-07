@@ -313,7 +313,11 @@ export async function fetchOwnerKnowhowStats(): Promise<DbResult<OwnerKnowhowSta
 }
 
 // ── 허브 대시보드(0081) — 사장 현황 탭·직원 오늘 탭 데이터 (definer, 0074/0077 패턴) ─────────
-export type OwnerTodayRow = { unit_id: string; working_now: number; scheduled: number };
+export type OwnerTodayRow = {
+  unit_id: string; working_now: number; scheduled: number;
+  /** 16시간 넘게 열린 기록이 있는 직원 수 = '퇴근 안 찍음'(0306 · 직원 화면 isForgotCheckout 과 같은 기준). 0306 전 서버는 안 준다. */
+  forgot_now?: number;
+};
 /** 소유 매장별 지금 근무중/오늘 근무 예정 "카운트" — 현황 탭 오늘 스냅샷. 명단은 매장 출퇴근 화면 담당. */
 export async function fetchOwnerToday(): Promise<DbResult<OwnerTodayRow[]>> {
   if (!HAS_SUPABASE) return { data: [], error: null };

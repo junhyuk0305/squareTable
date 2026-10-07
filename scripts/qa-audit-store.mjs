@@ -547,5 +547,77 @@ update public.profiles set active_unit_id = 'store_001' where id = (select id fr
   }
 }
 
+console.log('\n[10-07 결정 2] 닫힌 매장 숫자는 허브 요약에서도 직원·매니저에게 안 준다(0305)');
+{
+  for (const n of ['my_cross_summary', 'my_cross_summary_v2', 'my_growth', 'my_knowhow_entries']) {
+    const f = lastDef(n);
+    check(`★${n} 가 매장마다 직원·매니저 + unit_access_locked 를 본다`, /'junior', 'manager'\) and public\.unit_access_locked\(u\.id\)/.test(f.body), f.file);
+  }
+  if (!dbUp) console.log('  SKIP 서버 동작 — 로컬 도커 DB 없음');
+  else {
+    const PAID = extraUnit('qa_h_paid', '991102',
+      `insert into public.unit_subscriptions (unit_id, status, plan, paid_until) values ('qa_h_paid', 'active', 'single', now() + interval '30 days')
+         on conflict (unit_id) do update set status = 'active', plan = 'single', paid_until = excluded.paid_until;`);
+    // 직원(j)에게 store_001 시급 12345 · 이번 달 근무 60분을 넣는다(트랜잭션 · 되돌림).
+    const FIX = `
+set local session_replication_role = replica;
+insert into public.wages (unit_id, staff_id, hourly_wage) values ('store_001', current_setting('qa.j'), 12345)
+  on conflict (unit_id, staff_id) do update set hourly_wage = 12345;
+insert into public.wages (unit_id, staff_id, hourly_wage) values ('store_001', current_setting('qa.m'), 12345)
+  on conflict (unit_id, staff_id) do update set hourly_wage = 12345;
+update public.units set payroll_settings = '{"weeklyHolidayPay": true}' where id = 'store_001';
+update public.attendance set archived_tenure_id = gen_random_uuid() where unit_id = 'store_001' and staff_id = current_setting('qa.j') and archived_tenure_id is null;
+insert into public.attendance (id, unit_id, staff_id, date, check_in, check_out, work_minutes)
+  values ('qa_h_att', 'store_001', current_setting('qa.j'), to_char(now() at time zone 'Asia/Seoul', 'YYYY-MM-DD'), now() - interval '2 hours', now() - interval '1 hour', 60);
+set local session_replication_role = origin;
+`;
+    const q = (who, pre) => psql(`${IDS}${FIX}${pre}${as(who)}
+select 'R=v2:' || hourly_wage || ':' || month_minutes || ':' || (payroll_settings is null) from public.my_cross_summary_v2() where unit_id = 'store_001';
+select 'R=v1:' || hourly_wage || ':' || month_minutes from public.my_cross_summary() where unit_id = 'store_001';
+select 'R=gr:' || entries_total from public.my_growth() where unit_id = 'store_001';
+select 'R=ke:' || count(*) from public.my_knowhow_entries() e where e.unit_id = 'store_001';
+rollback;
+`);
+    const open = q('j', '');
+    check('열린 매장 직원 → 내 시급·근무분이 그대로 온다(v2·v1 = 12345·60)', open.includes('R=v2:12345:60:false') && open.includes('R=v1:12345:60'), tail(open));
+    const shut = q('j', PAID);
+    check('★닫힌 매장 직원 → v2 시급 0·근무분 0·급여 설정 null', shut.includes('R=v2:0:0:true'), tail(shut));
+    check('★닫힌 매장 직원 → v1 시급 0·근무분 0', shut.includes('R=v1:0:0'), tail(shut));
+    check('★닫힌 매장 직원 → 성장 탭 노하우 수 0 · 내 노하우 목록 0건', shut.includes('R=gr:0') && shut.includes('R=ke:0'), tail(shut));
+    const mgr = q('m', PAID);
+    check('★닫힌 매장 매니저 → v2 시급 0·급여 설정 null', mgr.includes('R=v2:0:') && mgr.includes(':true'), tail(mgr));
+    const mgrOpen = q('m', '');
+    check('열린 매장 매니저 → 시급 그대로', mgrOpen.includes('R=v2:12345:'), tail(mgrOpen));
+    const own = psql(`${IDS}${FIX}${PAID}${as('o')}
+select 'R=own:' || count(*) from public.my_cross_summary_v2() where unit_id = 'store_001' and payroll_settings is not distinct from (select payroll_settings from public.units where id = 'store_001');
+rollback;
+`);
+    check('사장 본인은 대상이 아니다(급여 설정 그대로)', own.includes('R=own:1'), tail(own));
+  }
+}
+
+console.log('\n[10-07 결정 4] 허브 "근무 중"도 16시간 기준 · 넘으면 퇴근 안 찍음(0306)');
+{
+  const f = lastDef('owner_today');
+  check('★owner_today 가 16시간 기준이고 24시간 기준이 없다 · forgot_now 를 준다', /interval '16 hours'/.test(f.body) && !/interval '24 hours'/.test(f.body) && /forgot_now/.test(f.body), f.file);
+  const hub = strip(read('src/components/hub/OwnerStatusView.tsx'));
+  check('★허브 화면이 forgot_now 를 "퇴근 안 찍음"으로 보여 준다', /forgot_now/.test(hub) && /퇴근 안 찍음/.test(hub));
+  if (!dbUp) console.log('  SKIP 서버 동작 — 로컬 도커 DB 없음');
+  else {
+    const r = psql(`${IDS}
+set local session_replication_role = replica;
+delete from public.attendance where unit_id = 'store_001' and check_out is null;
+insert into public.attendance (id, unit_id, staff_id, date, check_in) values
+  ('qa_h16_a', 'store_001', current_setting('qa.j'), '2000-01-01', now() - interval '20 hours'),
+  ('qa_h16_b', 'store_001', current_setting('qa.m'), '2000-01-01', now() - interval '2 hours');
+set local session_replication_role = origin;
+${as('o')}
+select 'R=' || working_now || ':' || coalesce(to_jsonb(t) ->> 'forgot_now', 'none') from public.owner_today() t where unit_id = 'store_001';
+rollback;
+`);
+    check('★20시간 열린 기록은 근무 중이 아니라 퇴근 안 찍음(근무 중 1 · 퇴근 안 찍음 1)', r.includes('R=1:1'), tail(r));
+  }
+}
+
 console.log(`\n${pass} PASS / ${fail} FAIL`);
 process.exit(fail ? 1 : 0);

@@ -102,7 +102,7 @@ export function OwnerStatusView({ header }: { header: ReactNode }) {
   }, [knowhowStats]);
 
   const todayByUnit = useMemo(() => {
-    const m: Record<string, { working_now: number; scheduled: number }> = {};
+    const m: Record<string, { working_now: number; scheduled: number; forgot_now?: number }> = {};
     for (const r of today) m[r.unit_id] = r;
     return m;
   }, [today]);
@@ -153,6 +153,8 @@ export function OwnerStatusView({ header }: { header: ReactNode }) {
   const laborTotal = overview.reduce((n, r) => n + (labor[r.unit_id] ?? 0), 0);
   const workingTotal = today.reduce((n, r) => n + r.working_now, 0);
   const scheduledTotal = today.reduce((n, r) => n + r.scheduled, 0);
+  // 16시간 넘게 열린 기록 = '퇴근 안 찍음'(직원 화면과 같은 기준 · 0306). 근무중에는 안 센다.
+  const forgotTotal = today.reduce((n, r) => n + (r.forgot_now ?? 0), 0);
   const multi = overview.length > 1;
 
   // 전부 도착 전엔 무조건 로딩 — 스냅샷 '—' 채움부터 그리지 않는다(부분 렌더 금지, 2026-07-31).
@@ -243,7 +245,7 @@ export function OwnerStatusView({ header }: { header: ReactNode }) {
       label: '오늘 근무',
       value: scheduledTotal,
       unit: '명 예정',
-      sub: workingTotal > 0 ? `지금 ${workingTotal}명 근무중` : '지금은 출근 전이에요',
+      sub: `${workingTotal > 0 ? `지금 ${workingTotal}명 근무중` : '지금은 출근 전이에요'}${forgotTotal > 0 ? ` · 퇴근 안 찍음 ${forgotTotal}명` : ''}`,
       onPress: () => {
         if (multi) setPicker({ title: '근무표', path: '/owner/schedule', units: overview.map((r) => ({ uid: r.unit_id, count: 0 })) });
         else if (overview[0]) void goStore(overview[0].unit_id, '/owner/schedule');
@@ -347,7 +349,7 @@ export function OwnerStatusView({ header }: { header: ReactNode }) {
                 <View style={[styles.dot, { backgroundColor: colorOf(r.unit_id) }]} />
                 <Text style={styles.rowTitle} numberOfLines={1}>{labelOf(r.unit_id)}</Text>
                 <Text style={[styles.rowSub, (t?.working_now ?? 0) > 0 && styles.onair]}>
-                  {`${(t?.working_now ?? 0) > 0 ? `${t!.working_now}명 근무중` : '출근 전'} · 예정 ${t?.scheduled ?? 0}`}
+                  {`${(t?.working_now ?? 0) > 0 ? `${t!.working_now}명 근무중` : '출근 전'} · 예정 ${t?.scheduled ?? 0}${(t?.forgot_now ?? 0) > 0 ? ` · 퇴근 안 찍음 ${t!.forgot_now}` : ''}`}
                 </Text>
                 <Ionicons name="chevron-forward" size={15} color={InkColors.ink3} />
               </Pressable>

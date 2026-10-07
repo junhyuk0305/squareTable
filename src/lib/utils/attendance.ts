@@ -189,7 +189,7 @@ export function isForgotCheckout(r: { check_in: string | null; check_out: string
 /**
  * 사장 직원 목록의 근무 상태(라이브 QA 결함 8 · 2026-10-07).
  * 열린 기록이 16시간을 넘으면 '근무 중'이 아니라 '퇴근 안 찍음'이다(isForgotCheckout 과 같은 기준).
- * 예전엔 두 달 전 열린 기록 하나로 '근무 중'이라고 했다. 허브(owner_today)는 24시간 안 출근만 근무 중으로 센다.
+ * 예전엔 두 달 전 열린 기록 하나로 '근무 중'이라고 했다. 허브(owner_today · 0306)도 16시간 안 출근만 근무 중으로 센다.
  */
 export function staffWorkStatus(
   records: readonly { staff_id: string; date: string; check_in: string | null; check_out: string | null }[],

@@ -366,5 +366,30 @@ rollback;\n`);
   }
 }
 
+console.log('\n[10-07 결정 3] 채팅 "모두 읽음"이 auth_unit_id 를 행마다 부르지 않는다(0304)');
+{
+  const f = lastDef('mark_all_feed_read');
+  check('★mark_all_feed_read 가 2인자 can_see_room(f.room_id, v_unit) 을 쓴다', /public\.can_see_room\(f\.room_id, v_unit\)/.test(f.body) && !/public\.can_see_room\(f\.room_id\)\)/.test(f.body), f.file);
+  if (!dbUp) console.log('  SKIP 서버 동작 — 로컬 도커 DB 없음');
+  else {
+    const r = psql(`${IDS}
+set local session_replication_role = replica;
+insert into public.work_rooms (id, unit_id, name, is_default) values ('qa_r_open', 'store_001', 'QA 열린 방', true), ('qa_r_priv', 'store_001', 'QA 비공개 방', false);
+insert into public.work_feed (id, unit_id, feed_date, data, room_id) values
+  ('qa_mr_1', 'store_001', current_setting('qa.day'), '{}', 'qa_r_open'),
+  ('qa_mr_2', 'store_001', current_setting('qa.day'), '{}', 'qa_r_open'),
+  ('qa_mr_3', 'store_001', current_setting('qa.day'), '{}', null),
+  ('qa_mr_4', 'store_001', current_setting('qa.day'), '{}', 'qa_r_priv');
+set local session_replication_role = origin;
+${asUser('j')}
+select 'R=n:' || public.mark_all_feed_read(array['qa_mr_1', 'qa_mr_2', 'qa_mr_3', 'qa_mr_4']);
+reset role;
+select 'R=priv:' || coalesce(data->'read_by', '[]'::jsonb)::text from public.work_feed where id = 'qa_mr_4';
+rollback;
+`);
+    check('★직원 → 볼 수 있는 3건만 읽음 처리 · 멤버 아닌 비공개 방 1건은 그대로', r.includes('R=n:3') && r.includes('R=priv:[]'), tail(r));
+  }
+}
+
 console.log(`\n${pass} PASS / ${fail} FAIL`);
 process.exit(fail ? 1 : 0);

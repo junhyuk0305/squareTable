@@ -359,5 +359,13 @@ console.log('\n[T1] 출근 기록 직접 진입 — 명부가 오기 전·못 �
   check('판정에 profiles.role 을 쓰지 않는다', !/profiles\.role|\.profile\?*\.role/.test(ts));
 }
 
+console.log('\n[10-07 결정 5] 급여 화면에 "주휴수당은 그 주 일요일이 있는 달에 들어가요" 안내');
+{
+  const line = '주휴수당은 그 주 일요일이 있는 달에 들어가요';
+  check('★출근 기록(사장·직원 공용 TimesheetView)에 안내', read('src/components/TimesheetView.tsx').includes(line));
+  check('★사장 급여 설정에 안내', read('src/app/owner/payroll.tsx').includes(line));
+  check('★직원 출퇴근 예상 급여 설명에 안내', read('src/app/junior/attendance.tsx').includes(line));
+}
+
 console.log(`\n${fail ? 'RED' : 'GREEN'} — PASS ${pass} · FAIL ${fail}`);
 process.exit(fail ? 1 : 0);
