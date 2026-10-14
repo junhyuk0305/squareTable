@@ -20,6 +20,7 @@ import { ScreenLoading } from '@/components/ScreenLoading';
 import { BrandColors, InkColors } from '@/lib/theme/colors';
 import { Space } from '@/lib/theme/layout';
 import { Radius, Elevation } from '@/lib/theme/elevation';
+import { ChipStyles } from '@/lib/theme/chip';
 import type { Role } from '@/types';
 
 /**
@@ -427,10 +428,10 @@ const styles = StyleSheet.create({
   otpBtnText: { fontSize: 14, fontWeight: '800', color: InkColors.ink2 },
   otpMsg: { fontSize: 12, fontWeight: '600', color: BrandColors.accentText, marginTop: -2 },
   chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.sm },
-  chip: { paddingHorizontal: Space.md, paddingVertical: Space.sm, borderRadius: Radius.pill, borderWidth: 1, borderColor: InkColors.line, backgroundColor: '#FFFFFF' },
-  chipOn: { borderColor: BrandColors.brand, backgroundColor: '#FFFDFB' },
-  chipText: { fontSize: 13, fontWeight: '700', color: InkColors.ink2 },
-  chipTextOn: { color: BrandColors.brand },
+  chip: ChipStyles.chip,
+  chipOn: ChipStyles.chipOn,
+  chipText: ChipStyles.text,
+  chipTextOn: ChipStyles.textOn,
   joinNote: { flexDirection: 'row', alignItems: 'flex-start', gap: Space.sm, backgroundColor: BrandColors.brandSoft, borderRadius: Radius.md, padding: 14 },
   joinNoteText: { flex: 1, fontSize: 15, color: InkColors.ink2, lineHeight: 22 },
   joinNoteStrong: { fontWeight: '800', color: InkColors.ink },

@@ -156,9 +156,8 @@ export default function OwnerSettings() {
           <Ionicons name="chevron-forward" size={20} color={InkColors.ink3} />
         </Pressable>
 
-        {/* 가게 초대코드 — 직원 합류용. 상시 확인·전달. 안내 3줄은 여기서 접는다(compact):
-            설정은 '다시 찾아오는' 자리라, 처음 배우는 자리(온보딩·홈)와 밀도가 달라야 한다. */}
-        <InviteBlock code={inviteCode} from="settings" compact style={styles.inviteGap} />
+        {/* 가게 초대코드 — 직원 합류용. 상시 확인·전달. */}
+        <InviteBlock code={inviteCode} from="settings" style={styles.inviteGap} />
         {/* 2026-08-19: 코드 카드 아래 '직원 관리 · 합류 승인' 줄을 뺐다 — 바로 아래 '직원·초대코드 관리'와
             같은 화면(/owner/staff)으로 가는 중복 진입점이었다. 진입점은 매장 관리 섹션 한 곳으로 둔다. */}
         <SettingsSection icon="storefront-outline" title="매장 관리">

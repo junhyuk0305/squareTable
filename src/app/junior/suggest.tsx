@@ -13,7 +13,8 @@ import { showToast } from '@/lib/store/useToastStore';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { getSectionMeta } from '@/lib/utils/category';
 import { Radius, Elevation } from '@/lib/theme/elevation';
-import { Space } from '@/lib/theme/layout';
+import { SearchStyles, SEARCH_ICON } from '@/lib/theme/search';
+import { ButtonStyles } from '@/lib/theme/button';
 import { RoleTabBar } from '@/components/RoleTabBar';
 import { Appear, stagger } from '@/components/Appear';
 import { ScreenLoading } from '@/components/ScreenLoading';
@@ -159,14 +160,14 @@ export default function JuniorSuggestScreen() {
             <Appear delay={stagger(2)}>
             <View style={styles.pickWrap}>
               <Text style={styles.fieldLabel}>어떤 노하우를 개선할까요?</Text>
-              <View style={styles.searchBox}>
-                <Ionicons name="search" size={16} color={InkColors.ink3} />
+              <View style={SearchStyles.box}>
+                <Ionicons name="search" size={SEARCH_ICON.size} color={SEARCH_ICON.color} />
                 <TextInput
                   value={pickQuery}
                   onChangeText={setPickQuery}
                   placeholder="노하우 제목 검색"
                   placeholderTextColor={InkColors.ink3}
-                  style={styles.searchInput}
+                  style={SearchStyles.input}
                 />
               </View>
               {filtered.length === 0 ? (
@@ -282,9 +283,6 @@ const styles = StyleSheet.create({
   changeText: { fontSize: 12, fontWeight: '800', color: '#8A5A12' },
 
   pickWrap: { gap: 10 },
-  searchBox: { flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderColor: InkColors.line, borderRadius: 12, paddingHorizontal: 12, minHeight: 44, backgroundColor: InkColors.bg },
-  // paddingVertical — 안 주면 안드로이드 기본 세로 여백이 붙어 글자가 커질 때 44 상자 안에서 아랫부분이 잘렸다.
-  searchInput: { flex: 1, fontSize: 15, color: InkColors.ink, paddingVertical: Space.sm },
   pickEmpty: { fontSize: 13, color: InkColors.ink3, lineHeight: 20, paddingVertical: 8 },
   pickList: { borderWidth: 1, borderColor: InkColors.line, borderRadius: 13, backgroundColor: InkColors.bg, overflow: 'hidden' },
   pickRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 13, paddingVertical: 13, borderBottomWidth: 1, borderBottomColor: InkColors.line },
@@ -295,7 +293,7 @@ const styles = StyleSheet.create({
   input: { minHeight: 130, borderWidth: 1, borderColor: InkColors.line, borderRadius: 13, padding: 14, fontSize: 15, color: InkColors.ink, backgroundColor: InkColors.bg, lineHeight: 22 },
   hint: { fontSize: 12, color: InkColors.ink3, fontWeight: '600' },
 
-  cta: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, backgroundColor: InkColors.ink, borderRadius: 14, paddingVertical: 15, marginTop: 4, ...Elevation.e1 },
+  cta: { ...ButtonStyles.primary, flexDirection: 'row', gap: 7, backgroundColor: InkColors.ink, marginTop: 4, ...Elevation.e1 },
   ctaText: { color: '#FFFFFF', fontSize: 15, fontWeight: '800' },
 
   mineWrap: { marginTop: 10, gap: 8 },

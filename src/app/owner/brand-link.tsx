@@ -66,6 +66,7 @@ export default function BrandLinkScreen() {
           {links.map((l) => (
             <LinkCard key={l.unit_id} link={l} onChanged={() => void hydrate()} />
           ))}
+          <View style={styles.labeled}>
           <SectionLabel icon="eye-outline" title="공개 수준이 뜻하는 것" />
           <View style={styles.card}>
             {VISIBILITY_LEVELS.map((lv, i) => (
@@ -78,6 +79,7 @@ export default function BrandLinkScreen() {
               <Text style={[styles.lvName, { color: BrandColors.badText }]}>어느 수준에도 없음</Text>
               <Text style={styles.lvItems}>{NEVER_SHARED.join(' · ')}</Text>
             </View>
+          </View>
           </View>
         </ScrollView>
       )}
@@ -280,6 +282,7 @@ function LinkCard({ link, onChanged }: { link: MyBrandViewRow; onChanged: () => 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: InkColors.cream },
   body: { paddingHorizontal: SCREEN_GUTTER, paddingBottom: 48, gap: Space.md },
+  labeled: { gap: Space.sm },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: Space.xl, gap: Space.sm },
   emptyTitle: { fontSize: 16, fontWeight: '800', color: InkColors.ink },
   emptyBody: { fontSize: 13.5, lineHeight: 20, color: InkColors.ink2, textAlign: 'center' },

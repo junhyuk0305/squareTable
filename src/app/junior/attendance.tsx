@@ -19,6 +19,7 @@ import { useAttendanceStore } from '@/lib/store/useAttendanceStore';
 import { usePayrollStore, useWagesSettled } from '@/lib/store/usePayrollStore';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
+import { EmptyStyles } from '@/lib/theme/empty';
 import { fmtDuration, won, hhmm, todayStr, liveMinutes, findOpenRecord, isForgotCheckout, openSinceText } from '@/lib/utils/attendance';
 import { ForgotCheckoutCard } from '@/components/junior/ForgotCheckoutCard';
 import { computePay, shiftsToPayRecords, payWindow } from '@/lib/utils/payroll';
@@ -353,7 +354,7 @@ const styles = StyleSheet.create({
     borderColor: InkColors.line,
     paddingHorizontal: 14,
   },
-  empty: { fontSize: 15, color: InkColors.ink2, paddingVertical: 18, textAlign: 'center' },
+  empty: EmptyStyles.line,
   recRow: {
     flexDirection: 'row',
     alignItems: 'center',

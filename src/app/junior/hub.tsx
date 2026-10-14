@@ -8,6 +8,7 @@ import { useSessionStore } from '@/lib/store/useSessionStore';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
+import { ButtonStyles } from '@/lib/theme/button';
 import { Wordmark } from '@/components/Wordmark';
 import { Appear, stagger } from '@/components/Appear';
 import { PhoneVerifyBlock } from '@/components/PhoneVerifyBlock';
@@ -414,7 +415,7 @@ const styles = StyleSheet.create({
   cellText: { fontSize: 22, fontWeight: '900', color: InkColors.ink },
   hiddenInput: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, opacity: 0, color: 'transparent' },
   err: { fontSize: 15, color: BrandColors.accentText, fontWeight: '600' },
-  primary: { backgroundColor: BrandColors.brand, paddingVertical: 15, borderRadius: Radius.md, alignItems: 'center' },
+  primary: { ...ButtonStyles.primary, backgroundColor: BrandColors.brand },
   primaryText: { color: '#FFFFFF', fontSize: 15, fontWeight: '800' },
   // 안내문 = 본문(simplicity-voice §4) → 꼬리표용 ink3(2.55:1) 금지.
   codeHint: { fontSize: 12, color: InkColors.ink2, lineHeight: 18 },

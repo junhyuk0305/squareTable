@@ -17,6 +17,8 @@ import { INDUSTRIES } from '@/lib/config/industry';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Space } from '@/lib/theme/layout';
 import { Radius } from '@/lib/theme/elevation';
+import { ButtonStyles } from '@/lib/theme/button';
+import { ChipStyles } from '@/lib/theme/chip';
 
 // 로그인 직후 매장 미연결 가드 화면(사장용) — junior/join 의 사장 버전.
 // 회원가입에서 가게 생성을 끝내지 못했거나, 매장 연결이 풀린 사장이 로그인하면 이 화면으로 강제 라우팅된다.
@@ -220,10 +222,10 @@ const styles = StyleSheet.create({
   req: { color: BrandColors.accentText, fontWeight: '900' },
   input: { borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md, paddingHorizontal: 14, paddingVertical: 13, fontSize: 15, color: InkColors.ink, backgroundColor: '#FFFFFF' },
   chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.sm },
-  chip: { paddingHorizontal: Space.md, paddingVertical: Space.sm, borderRadius: Radius.pill, borderWidth: 1, borderColor: InkColors.line, backgroundColor: '#FFFFFF' },
-  chipOn: { borderColor: BrandColors.brand, backgroundColor: '#FFFDFB' },
-  chipText: { fontSize: 13, fontWeight: '700', color: InkColors.ink2 },
-  chipTextOn: { color: BrandColors.brand },
+  chip: ChipStyles.chip,
+  chipOn: ChipStyles.chipOn,
+  chipText: ChipStyles.text,
+  chipTextOn: ChipStyles.textOn,
   bizHint: { fontSize: 12, fontWeight: '600', marginTop: -2 },
   bizOk: { color: BrandColors.goodText },
   bizBad: { color: InkColors.ink3 },
@@ -246,7 +248,7 @@ const styles = StyleSheet.create({
   otpMsg: { fontSize: 12, fontWeight: '600', color: BrandColors.accentText },
 
   err: { fontSize: 15, color: BrandColors.accentText, fontWeight: '600', marginTop: 4 },
-  primary: { marginTop: 12, backgroundColor: BrandColors.brand, paddingVertical: 16, borderRadius: Radius.md, alignItems: 'center' },
+  primary: { ...ButtonStyles.primary, marginTop: 12, backgroundColor: BrandColors.brand },
   primaryText: { color: '#FFFFFF', fontSize: 16, fontWeight: '800' },
   logoutRow: { alignItems: 'center', paddingVertical: 4 },
   logoutText: { fontSize: 13, color: InkColors.ink3, fontWeight: '700' },

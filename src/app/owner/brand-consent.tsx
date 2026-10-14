@@ -22,6 +22,7 @@ import { confirmAction } from '@/lib/utils/confirm';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
 import { Space, SCREEN_GUTTER } from '@/lib/theme/layout';
+import { ButtonStyles } from '@/lib/theme/button';
 
 const fmtBiz = (n: string | null) => (n && n.length === 10 ? `${n.slice(0, 3)}-${n.slice(3, 5)}-${n.slice(5)}` : n || '미등록');
 
@@ -116,6 +117,7 @@ export default function BrandConsentScreen() {
           </View>
 
           {/* 2) 본사가 보게 되는 것 — 첫 화면(§5-3). 고른 수준이 곧 동의 범위다. */}
+          <View style={styles.labeled}>
           <SectionLabel icon="eye-outline" title="본사가 보게 되는 것" hint="수준은 내가 고르고, 언제든 바꿀 수 있어요" />
           <View style={styles.levels}>
             {VISIBILITY_LEVELS.map((l) => {
@@ -142,6 +144,7 @@ export default function BrandConsentScreen() {
               );
             })}
           </View>
+          </View>
           <View style={styles.never}>
             <Text style={styles.neverTitle}>어느 수준에서도 본사에 가지 않는 것</Text>
             <Text style={styles.neverBody}>{NEVER_SHARED.join(' · ')}</Text>
@@ -150,6 +153,7 @@ export default function BrandConsentScreen() {
           <Text style={styles.note}>직원이 1~2명인 매장은 매장 단위 숫자만으로도 누구인지 짐작될 수 있어요.</Text>
 
           {/* 3) 어느 매장을 */}
+          <View style={styles.labeled}>
           <SectionLabel icon="storefront-outline" title="연결할 내 매장" hint="고른 매장만 본사에 보여요" />
           {candidates.length === 0 ? (
             <View style={styles.card}>
@@ -177,6 +181,7 @@ export default function BrandConsentScreen() {
               })}
             </View>
           )}
+          </View>
 
           {/* 4) 답 */}
           <Text style={styles.note}>수락한 뒤에도 설정 &gt; 본사 연결에서 공개 수준을 바꾸거나 연결을 끝낼 수 있어요. 본사가 해제해도 받은 노하우는 매장에 남아요.</Text>
@@ -241,6 +246,7 @@ function ReConsent({ link, onDone }: { link: MyBrandViewRow; onDone: () => void 
         </Text>
       </View>
 
+      <View style={styles.labeled}>
       <SectionLabel
         icon={notice ? 'megaphone-outline' : 'shield-checkmark-outline'}
         title={notice ? '본사가 보는 범위를 알려드려요' : '공개 범위에 다시 동의해 주세요'}
@@ -252,6 +258,7 @@ function ReConsent({ link, onDone }: { link: MyBrandViewRow; onDone: () => void 
             ? '본사가 이 매장을 직영으로 전환했어요. 직영점은 공개 범위의 최소선을 본사가 정하고, 점장님은 그 위로만 조정할 수 있어요.'
             : '이 매장이 가맹으로 바뀌었어요. 이제 공개 범위를 사장님이 직접 정하고, 연결도 언제든 끊을 수 있어요.'}
         </Text>
+      </View>
       </View>
 
       {/* 지금 실제로 무엇이 보이나 — 추상적인 표보다 이 한 줄이 먼저다. */}
@@ -270,6 +277,7 @@ function ReConsent({ link, onDone }: { link: MyBrandViewRow; onDone: () => void 
         ) : null}
       </View>
 
+      <View style={styles.labeled}>
       <SectionLabel icon="list-outline" title={`${relationLabel(link.relation)}점에서는 이렇게 달라져요`} />
       <View style={styles.card}>
         {RELATION_RULES.map((r, i) => (
@@ -278,6 +286,7 @@ function ReConsent({ link, onDone }: { link: MyBrandViewRow; onDone: () => void 
             <Text style={[styles.pickSub, styles.ruleVal]}>{link.relation === 'direct' ? r.direct : r.franchise}</Text>
           </View>
         ))}
+      </View>
       </View>
 
       <View style={styles.never}>
@@ -321,6 +330,7 @@ function ReConsent({ link, onDone }: { link: MyBrandViewRow; onDone: () => void 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: InkColors.cream },
   body: { paddingHorizontal: SCREEN_GUTTER, paddingBottom: 48, gap: Space.md },
+  labeled: { gap: Space.sm },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: Space.xl, gap: Space.sm },
   emptyTitle: { fontSize: 16, fontWeight: '800', color: InkColors.ink },
   emptyBody: { fontSize: 13.5, lineHeight: 20, color: InkColors.ink2, textAlign: 'center' },
@@ -349,7 +359,7 @@ const styles = StyleSheet.create({
   // 재동의 표 — 설명(pickSub)이 줄어들지 않으면 항목명(flex 1)이 남는 폭 0이 되어 사라진다. 설명에 상한을 두고 줄바꿈한다.
   ruleRow: { paddingVertical: Space.sm },
   ruleVal: { flexShrink: 1, maxWidth: '55%', textAlign: 'right' },
-  primary: { marginTop: Space.sm, minHeight: 52, borderRadius: Radius.pill, backgroundColor: BrandColors.brand, alignItems: 'center', justifyContent: 'center' },
+  primary: { ...ButtonStyles.primary, marginTop: Space.sm, backgroundColor: BrandColors.brand },
   primaryText: { fontSize: 15, fontWeight: '800', color: InkColors.bubbleText },
   secondary: { minHeight: 48, alignItems: 'center', justifyContent: 'center' },
   secondaryText: { fontSize: 14, fontWeight: '700', color: InkColors.ink2 },

@@ -21,8 +21,10 @@ import { formatBizNo, isValidBizNo } from '@/lib/utils/bizno';
 import { friendlyError } from '@/lib/utils/userError';
 import { WEEKDAY_LABELS, WEEKDAY_ORDER, closedDaysLabel } from '@/lib/utils/schedule';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
-import { Elevation, Radius } from '@/lib/theme/elevation';
+import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
+import { ButtonStyles } from '@/lib/theme/button';
+import { CardStyles } from '@/lib/theme/card';
 
 const TIME_RE = /^([01]?\d|2[0-3]):[0-5]\d$/;
 
@@ -322,7 +324,7 @@ const styles = StyleSheet.create({
 
   // 카드가 빠진 자리에서 섹션을 가르는 건 여백이다 — 섹션 안은 좁게(sm), 섹션 사이는 넓게(scroll gap xl).
   section: { gap: Space.sm },
-  card: { backgroundColor: InkColors.bg, borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, padding: 16, gap: 10, ...Elevation.e1 },
+  card: { ...CardStyles.list, gap: 10 },
 
   timeRow: { flexDirection: 'row', alignItems: 'center', gap: Space.lg },
   timeField: { flex: 1, alignItems: 'center', gap: Space.xs },
@@ -343,7 +345,7 @@ const styles = StyleSheet.create({
 
   noteInp: { fontSize: 15, color: InkColors.ink, minHeight: 56, lineHeight: 22, ...(Platform.OS === 'web' ? ({ outlineStyle: 'none' } as object) : null) },
 
-  saveBtn: { backgroundColor: InkColors.ink, borderRadius: Radius.md, paddingVertical: 15, alignItems: 'center' },
+  saveBtn: { ...ButtonStyles.primary, backgroundColor: InkColors.ink },
   saveText: { fontSize: 15, fontWeight: '800', color: '#fff' },
 
   bizInp: { fontSize: 15, color: InkColors.ink, paddingHorizontal: 14, paddingVertical: 13, backgroundColor: InkColors.bgSoft, borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, ...(Platform.OS === 'web' ? ({ outlineStyle: 'none' } as object) : null) },

@@ -12,6 +12,7 @@ import { SectionLabel } from '@/components/SectionLabel';
 import { InkColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
+import { CardStyles } from '@/lib/theme/card';
 
 /**
  * 급여 설정 — 2026-08-06 카드 나열 해체.
@@ -152,7 +153,7 @@ const styles = StyleSheet.create({
   scroll: { padding: Space.gutter, gap: Space.xl },
   // 블록 안(제목·내용·안내문)은 붙이고, 블록 사이는 scroll의 gap으로 벌린다 — 어디까지가 한 덩어리인지 보이게.
   block: { gap: Space.sm },
-  card: { backgroundColor: '#FFFFFF', borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, paddingHorizontal: 16 },
+  card: CardStyles.rows,
   rows: { borderTopWidth: 1, borderBottomWidth: 1, borderColor: InkColors.line },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: InkColors.line },
   rowLast: { borderBottomWidth: 0 },

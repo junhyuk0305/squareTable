@@ -13,6 +13,7 @@ import { Appear } from '@/components/Appear';
 import { notifyAction } from '@/lib/utils/confirm';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
+import { SearchStyles, SEARCH_ICON } from '@/lib/theme/search';
 import { Space } from '@/lib/theme/layout';
 
 // RPC 예외 → 사장이 읽을 수 있는 문구. (definer RPC 의 raise 메시지 코드 매핑)
@@ -283,14 +284,14 @@ export function OwnerKnowhowImport() {
               <Appear delay={120} style={styles.block}>
                 {/* 찾기 — 8건 미만이면 안 그린다. 단, 검색어가 남아 있으면 강제로 띄운다(끌 수 없는 거르기 금지). */}
                 {(rows?.length ?? 0) >= FILTER_MIN || filtering ? (
-                  <View style={styles.search}>
-                    <Ionicons name="search" size={16} color={InkColors.ink3} />
+                  <View style={SearchStyles.box}>
+                    <Ionicons name="search" size={SEARCH_ICON.size} color={SEARCH_ICON.color} />
                     <TextInput
                       value={query}
                       onChangeText={setQuery}
                       placeholder="예) 마감, 발주"
                       placeholderTextColor={InkColors.ink3}
-                      style={styles.searchInput}
+                      style={SearchStyles.input}
                       returnKeyType="search"
                     />
                     {query.length > 0 ? (
@@ -491,13 +492,6 @@ const styles = StyleSheet.create({
   wayText: { fontSize: 13.5, fontWeight: '800', color: InkColors.ink2 },
   center: { paddingVertical: 40, alignItems: 'center', gap: 8 },
 
-  // 찾기 바 — OwnerKnowhowBrowse 의 검색행과 같은 형태(새로 발명하지 않는다).
-  search: {
-    flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 44,
-    borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md, backgroundColor: InkColors.bg,
-    paddingHorizontal: Space.md,
-  },
-  searchInput: { flex: 1, fontSize: 15, color: InkColors.ink, paddingVertical: 8 },
   hiddenNote: { fontSize: 12.5, color: InkColors.ink2, fontWeight: '600', lineHeight: 18 },
 
   // 목록

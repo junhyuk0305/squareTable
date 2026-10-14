@@ -18,7 +18,7 @@ import {
   type BrandCopyFields,
 } from '@/lib/brand/copy';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
-import { Radius } from '@/lib/theme/elevation';
+import { BadgeStyles } from '@/lib/theme/badge';
 
 export function BrandCopyBadges({ entry, size = 'list' }: { entry: BrandCopyFields; size?: 'list' | 'card' }) {
   if (!isBrandCopy(entry)) return null;
@@ -50,9 +50,9 @@ export function BrandCopyBadges({ entry, size = 'list' }: { entry: BrandCopyFiel
 }
 
 const styles = StyleSheet.create({
-  badge: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingVertical: 1, paddingHorizontal: 6, borderRadius: Radius.pill },
+  badge: { ...BadgeStyles.box, flexDirection: 'row', alignItems: 'center', gap: 3 },
   big: { paddingVertical: 3, paddingHorizontal: 9, gap: 4 },
-  text: { fontSize: 10, fontWeight: '800' },
+  text: BadgeStyles.text,
   textBig: { fontSize: 12.5 },
   brand: { backgroundColor: BrandColors.mentionSoft },
   pending: { backgroundColor: BrandColors.warnSoft },

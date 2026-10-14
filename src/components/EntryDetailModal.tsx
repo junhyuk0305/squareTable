@@ -8,6 +8,7 @@ import { KnowhowRows, type KnowhowRow } from '@/components/blocks/KnowhowRows';
 import { BrandColors, InkColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
+import { BadgeStyles } from '@/lib/theme/badge';
 import { knowhowSourceLabel } from '@/lib/utils/knowhowSource';
 import type { PlaybookEntry } from '@/types';
 
@@ -121,8 +122,8 @@ const s = StyleSheet.create({
   title: { fontSize: 19, fontWeight: '800', color: InkColors.ink, letterSpacing: -0.3 },
 
   badges: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  badge: { paddingVertical: 4, paddingHorizontal: 9, borderRadius: Radius.pill },
-  badgeText: { fontSize: 11, fontWeight: '800' },
+  badge: BadgeStyles.box,
+  badgeText: BadgeStyles.text,
 
   gaugeBox: { gap: 6, paddingVertical: 2 },
   gaugeHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' },

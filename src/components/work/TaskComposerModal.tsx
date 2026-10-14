@@ -9,6 +9,7 @@ import { type Member } from '@/components/work/MentionInput';
 import { maskHHMM } from '@/lib/utils/attendance';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
+import { SearchStyles, SEARCH_ICON } from '@/lib/theme/search';
 import { searchPlaybook } from '@/lib/rag';
 import type { PlaybookEntry } from '@/types';
 
@@ -476,15 +477,18 @@ export function TaskComposerModal({
                   </Pressable>
                 )}
                 {khOpen && (
-                <TextInput
-                  value={khQuery}
-                  onChangeText={setKhQuery}
-                  onFocus={revealScroll}
-                  placeholder="노하우 검색해서 첨부"
-                  placeholderTextColor={InkColors.ink3}
-                  style={s.inp}
-                  autoFocus
-                />
+                <View style={SearchStyles.box}>
+                  <Ionicons name="search" size={SEARCH_ICON.size} color={SEARCH_ICON.color} />
+                  <TextInput
+                    value={khQuery}
+                    onChangeText={setKhQuery}
+                    onFocus={revealScroll}
+                    placeholder="노하우 검색해서 첨부"
+                    placeholderTextColor={InkColors.ink3}
+                    style={SearchStyles.input}
+                    autoFocus
+                  />
+                </View>
                 )}
                 {khOpen && khQuery.trim().length > 0 && (
                   <View style={s.khResults}>

@@ -32,6 +32,7 @@ import { Appear, stagger } from '@/components/Appear';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
+import { CardStyles } from '@/lib/theme/card';
 import type { Href } from 'expo-router';
 
 export function OwnerKnowhowHubView({ header }: { header: ReactNode }) {
@@ -489,16 +490,7 @@ export function OwnerKnowhowHubView({ header }: { header: ReactNode }) {
 
 const styles = StyleSheet.create({
   loading: { paddingVertical: Space.xl * 2, alignItems: 'center' },
-  card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    borderColor: InkColors.line,
-    paddingHorizontal: Space.lg,
-    paddingVertical: Space.md,
-    marginTop: Space.sm,
-    ...Elevation.e2,
-  },
+  card: { ...CardStyles.list, marginTop: Space.sm },
 
   // 히어로 카드(H3′) — 링 + 범례. 데모 §4 `card.hero` 20/20/16.
   heroCard: {

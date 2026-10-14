@@ -24,6 +24,7 @@ import { honorific } from '@/lib/utils/roles';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
+import { ChipStyles } from '@/lib/theme/chip';
 
 /**
  * 신고하기(F-1 · 0241) — 설정 > 약관·고객센터 > "신고하기". 사장·매니저·직원 모두 같은 화면이다.
@@ -268,21 +269,10 @@ const styles = StyleSheet.create({
   label: { fontSize: 13, lineHeight: 19, fontWeight: '700', color: InkColors.ink2, marginTop: Space.md },
   hint: { fontSize: 12, lineHeight: 18, color: InkColors.ink3 },
   chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.sm },
-  // 손가락으로 고르는 칸이라 48dp 하한(복잡도 §4). 글자 배율이 커지면 높이가 따라 늘게 minHeight.
-  chip: {
-    minHeight: 48,
-    justifyContent: 'center',
-    paddingHorizontal: Space.md,
-    borderRadius: Radius.pill,
-    borderWidth: 1,
-    borderColor: InkColors.line,
-    backgroundColor: '#FFFFFF',
-    flexShrink: 0,
-    maxWidth: '100%',
-  },
-  chipOn: { borderColor: BrandColors.brand, backgroundColor: '#FFFDFB' },
-  chipText: { fontSize: 14, fontWeight: '700', color: InkColors.ink2 },
-  chipTextOn: { color: BrandColors.brand },
+  chip: { ...ChipStyles.chip, maxWidth: '100%' },
+  chipOn: ChipStyles.chipOn,
+  chipText: ChipStyles.text,
+  chipTextOn: ChipStyles.textOn,
   input: {
     borderWidth: 1,
     borderColor: InkColors.line,

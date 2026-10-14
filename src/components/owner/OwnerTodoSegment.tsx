@@ -290,7 +290,7 @@ const styles = StyleSheet.create({
   aiErr: { fontSize: 15, color: InkColors.ink2, paddingVertical: 8 },
   root: { gap: Space.lg },
   group: { gap: Space.sm },
-  groupHint: { fontSize: 13, color: InkColors.ink2, marginTop: -2 },
+  groupHint: { fontSize: 13, color: InkColors.ink2, marginTop: -4 },
 
   // '더 보기' — 행들과 같은 좌우 인셋. 누를 수 있는 행이라 최소 터치 타깃 48.
   moreRow: {

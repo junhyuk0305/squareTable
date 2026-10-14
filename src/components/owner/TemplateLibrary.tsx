@@ -19,6 +19,7 @@ import { getCategoryMeta } from '@/lib/utils/category';
 import { notifyAction } from '@/lib/utils/confirm';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
+import { SearchStyles, SEARCH_ICON } from '@/lib/theme/search';
 import { Space } from '@/lib/theme/layout';
 
 const RECO_LIMIT = 6; // 검색 전 추천으로 띄울 개수
@@ -256,14 +257,14 @@ export function TemplateLibrary() {
 
       {/* 검색창 — 주인공 */}
       <Appear delay={stagger(1)}>
-      <View style={styles.search}>
-        <Ionicons name="search" size={18} color={InkColors.ink3} />
+      <View style={SearchStyles.box}>
+        <Ionicons name="search" size={SEARCH_ICON.size} color={SEARCH_ICON.color} />
         <TextInput
           value={query}
           onChangeText={setQuery}
           placeholder="어떤 상황이 궁금하세요? (예: 클레임, 마감)"
           placeholderTextColor={InkColors.ink3}
-          style={styles.searchInput}
+          style={SearchStyles.input}
           returnKeyType="search"
         />
         {query.length > 0 ? (
@@ -303,7 +304,7 @@ export function TemplateLibrary() {
         <>
           {topTags.length > 0 ? (
             <Appear delay={stagger(3)}>
-            <View style={styles.block}>
+            <View style={styles.labeled}>
               <SectionLabel icon="pricetags-outline" title="빠른 검색" />
               <View style={styles.tagWrap}>
                 {topTags.map((tag) => (
@@ -317,7 +318,7 @@ export function TemplateLibrary() {
           ) : null}
 
           {recommended.length > 0 ? (
-            <Appear delay={stagger(4)} style={styles.block}>
+            <Appear delay={stagger(4)} style={styles.labeled}>
               <SectionLabel icon="star-outline" title="추천 템플릿" />
               <View style={styles.list}>{recommended.map(renderCard)}</View>
             </Appear>
@@ -358,13 +359,6 @@ const styles = StyleSheet.create({
   lead: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   leadText: { fontSize: 15, color: InkColors.ink2, fontWeight: '600' },
 
-  // 검색창(주인공)
-  search: {
-    flexDirection: 'row', alignItems: 'center', gap: 9,
-    backgroundColor: InkColors.bg, borderWidth: 1.5, borderColor: InkColors.line,
-    borderRadius: Radius.pill, paddingHorizontal: 16, paddingVertical: 13, ...Elevation.e1,
-  },
-  searchInput: { flex: 1, fontSize: 15, color: InkColors.ink, padding: 0 },
 
   // 업종 범위 토글
   scopeRow: { flexDirection: 'row', gap: Space.xs, backgroundColor: InkColors.bgSoft, borderRadius: Radius.pill, padding: 3, alignSelf: 'flex-start' },
@@ -374,6 +368,7 @@ const styles = StyleSheet.create({
   scopeTextOn: { color: InkColors.bubbleText },
 
   block: { gap: Space.md },
+  labeled: { gap: Space.sm },
 
   // 빠른검색 태그
   tagWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },

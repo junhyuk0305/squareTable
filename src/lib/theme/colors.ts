@@ -35,6 +35,7 @@ export const InkColors = {
   ink2:   '#6b6b6b',   // 본문 보조 텍스트 (--soft)
   ink3:   '#a4a29b',   // 흐린 메타 · 비활성 · 플레이스홀더 (--faint)
   line:   '#EAECEF',   // 보더 — 쿨·라이트(토스식). 흰 배경에서 존재감↓, 리프트는 그림자가 담당. (옛 #E7E5DE)
+  lineStrong: '#CDD1D7', // 입력칸 테두리 — 회색 배경 위에서도 칸이 보여야 하는 자리(검색창).
   bg:     '#FFFFFF',
   bgSoft: '#F4F5F7',   // 소프트 표면 틴트(칩·게이지트랙·안내박스) = 쿨 그레이. (옛 웜 페이퍼 #F1EFE9)
   paper:  '#F4F5F7',   // 명시적 별칭(= bgSoft)
@@ -80,8 +81,8 @@ export const BrandColors = {
   goodSoft:    '#EBFBF4',
   mentionSoft: '#E9F3FF',
   // 히트맵 4단계(2026-08-27 블록어휘 §7-2 H5) — 면 전용. 색 = **아는 직원 비율**(옅음→전원).
-  // 0단계(문항 없음)는 흰 면 + 점선이라 토큰이 없다.
-  // ★heat1 은 goodSoft(#EBFBF4)보다 한 단계 진하다 — 점선 칸(문항 없음)과 구분돼야 한다.
+  // 0단계(문항 없음)는 연한 회색 면(InkColors.line)이라 토큰이 없다.
+  // ★heat1 은 goodSoft(#EBFBF4)보다 한 단계 진하다 — 회색 칸(문항 없음)과 구분돼야 한다.
   // heat4 = goodSolid 와 같은 값(전원이 안다). 글자를 얹지 않는 면이라 대비 제약이 없다.
   heat1: '#D7F5E6',
   heat2: '#8EE3BD',

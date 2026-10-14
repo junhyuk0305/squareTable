@@ -12,7 +12,8 @@ import { ScreenLoading } from './ScreenLoading';
 import { matchesKnowhowQuery } from '@/lib/utils/knowhowSearch';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { InkColors } from '@/lib/theme/colors';
-import { Radius, Elevation } from '@/lib/theme/elevation';
+import { Radius } from '@/lib/theme/elevation';
+import { SearchStyles, SEARCH_ICON } from '@/lib/theme/search';
 import { Space } from '@/lib/theme/layout';
 import type { PlaybookEntry } from '@/types';
 
@@ -161,14 +162,14 @@ export function JuniorBrowseDashboard({ entries, emptyHint }: JuniorBrowseDashbo
       <View style={styles.flex}>
         {/* 상단 고정 컨트롤: 검색창 + (검색 중이 아닐 때) 뷰 토글 */}
         <View style={styles.controls}>
-          <View style={styles.search}>
-            <Ionicons name="search" size={16} color={InkColors.ink3} />
+          <View style={SearchStyles.box}>
+            <Ionicons name="search" size={SEARCH_ICON.size} color={SEARCH_ICON.color} />
             <TextInput
               value={query}
               onChangeText={setQuery}
               placeholder="제목·키워드로 검색"
               placeholderTextColor={InkColors.ink3}
-              style={styles.searchInput}
+              style={SearchStyles.input}
               returnKeyType="search"
             />
             {query.length > 0 ? (
@@ -271,12 +272,6 @@ const styles = StyleSheet.create({
   // 상단 고정 컨트롤(스크롤과 분리 — 목록 뷰가 자체 스크롤을 가지므로 검색창을 밖에 고정).
   controls: { paddingHorizontal: Space.gutter, paddingTop: Space.md, gap: Space.sm },
 
-  search: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    backgroundColor: InkColors.bg, borderWidth: 1, borderColor: InkColors.line,
-    borderRadius: Radius.pill, paddingHorizontal: 14, paddingVertical: 9, ...Elevation.e1,
-  },
-  searchInput: { flex: 1, fontSize: 15, color: InkColors.ink, padding: 0 },
 
   resultCount: { fontSize: 12.5, fontWeight: '700', color: InkColors.ink3, paddingLeft: 4 },
 
@@ -295,5 +290,6 @@ const styles = StyleSheet.create({
   // 같은 값이어야 상쇄돼 460 프레임을 벗어나지 않는다(Space.lg=16이면 4px 오버플로).
   content: { paddingHorizontal: Space.gutter, paddingTop: Space.lg, paddingBottom: Space.lg, gap: Space.xl },
   // 한 블록 = [밖 라벨] + [카드들].
-  block: { gap: Space.md },
+  // 캐러셀 위 패딩 2 + 라벨 아래 2 를 더해 제목→카드 10.
+  block: { gap: 6 },
 });

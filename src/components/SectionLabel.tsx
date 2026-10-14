@@ -37,7 +37,9 @@ export function SectionLabel({
 const styles = StyleSheet.create({
   // 제목 달린 섹션 앞은 카드↔카드보다 한 단(md) 더 띈다(2026-09-03 웹 실측 피드백) — 화면마다 gap 을
   // 고치지 않고 라벨이 스스로 위 여백을 든다. 부모 gap(대개 md)과 합쳐 24 안팎이 된다.
-  row: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 4, marginTop: Space.md },
+  // 제목↔카드는 10 으로 통일한다(2026-10-14 사용자 결정). 부모 gap 은 대개 sm(8)이라 라벨이 아래 2를 더 든다.
+  // 부모 gap 이 md(12)인 자리는 라벨+카드를 gap sm 묶음으로 감싼다 — 같은 부모의 다른 간격을 건드리지 않으려고.
+  row: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 4, marginTop: Space.md, marginBottom: 2 },
   title: { fontSize: 15, lineHeight: 21, fontWeight: '800', color: InkColors.ink, letterSpacing: -0.2 },
   hint: { marginLeft: 'auto', fontSize: 12, color: InkColors.ink3, fontWeight: '600' },
   trailing: { marginLeft: 'auto' },

@@ -228,6 +228,7 @@ export function QuizSettingsPanel({
       </View>
 
       {/* ── 배포 ─────────────────────────────────────────────────────────── */}
+      <View style={s.labeled}>
       <SectionLabel icon="send-outline" title="배포" />
       {audience == null ? (
         <View style={s.card}>
@@ -303,6 +304,7 @@ export function QuizSettingsPanel({
         // 외부 사람 — 링크만. 패널이 링크 목록·복사·기간·회수와 '이 링크로 푼 사람'을 그대로 맡는다.
         <QuizDeployPanel course={course} onOpenResult={onOpenResult} />
       )}
+      </View>
 
       {/* 저장 — 이 탭의 주 액션 하나. 바뀐 게 없으면 누를 수 없다(누를 수 있는데 아무 일도 없는 버튼 금지). */}
       <View style={s.foot}>
@@ -318,6 +320,7 @@ export function QuizSettingsPanel({
 
 const s = StyleSheet.create({
   wrap: { gap: Space.md },
+  labeled: { gap: Space.sm },
   card: {
     gap: Space.xs,
     backgroundColor: InkColors.bg,

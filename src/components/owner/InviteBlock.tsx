@@ -32,7 +32,6 @@ import { Space } from '@/lib/theme/layout';
 export function InviteBlock({
   code,
   from,
-  compact = false,
   action,
   style,
 }: {
@@ -40,8 +39,6 @@ export function InviteBlock({
   code: string;
   /** 관측용 — 사장이 어느 자리에서 뿌렸는지. */
   from: 'onboarding' | 'home' | 'staff' | 'settings';
-  /** 이미 다른 카드들 사이에 끼는 자리(설정) — 안내 3줄을 접고 코드+링크만 남긴다. */
-  compact?: boolean;
   /** 코드 줄 오른쪽 추가 액션(직원 관리의 '코드 변경'). */
   action?: React.ReactNode;
   /** 바깥 여백만 — 부모 목록에 gap 이 없는 화면(설정)이 아래 간격을 준다. */
@@ -99,23 +96,16 @@ export function InviteBlock({
 
 
   return (
-    <View style={style}>
+    <View style={[s.root, style]}>
       <SectionLabel title="직원 초대" />
       <View style={s.card}>
-        {!compact && (
-          <>
-            <Text style={s.howTitle}>직원에게 이렇게 알려주세요</Text>
-            <View style={s.steps}>
-              <Text style={s.step}>1. 아래 링크를 열고</Text>
-              <Text style={s.step}>2. ‘직원’으로 가입한 뒤</Text>
-              <Text style={s.step}>3. 초대코드를 넣으면 합류 신청이 돼요</Text>
-            </View>
-          </>
-        )}
+        <View style={s.head}>
+          <Text style={s.howTitle}>초대코드</Text>
+          <Text style={s.desc}>직원이 가입하고 초대코드를 넣으면 합류 신청이 돼요.</Text>
+        </View>
 
         <View style={s.codeRow}>
           <View style={s.codeCol}>
-            <Text style={s.codeLabel}>초대코드</Text>
             <Text style={[s.code, expired && s.dim]} selectable>
               {code}
             </Text>
@@ -168,6 +158,8 @@ export function InviteBlock({
 }
 
 const s = StyleSheet.create({
+  // 라벨↔카드 8 — 다른 섹션(SectionLabel + 부모 gap sm)과 같은 간격.
+  root: { gap: Space.sm },
   card: {
     backgroundColor: '#FFFFFF',
     borderRadius: Radius.lg,
@@ -177,12 +169,11 @@ const s = StyleSheet.create({
     gap: Space.md,
   },
   howTitle: { fontSize: 15, lineHeight: 21, fontWeight: '800', color: InkColors.ink },
-  steps: { gap: 4 },
-  step: { fontSize: 14, lineHeight: 20, fontWeight: '600', color: InkColors.ink2 },
+  head: { gap: Space.xs },
+  desc: { fontSize: 14, lineHeight: 20, fontWeight: '600', color: InkColors.ink2 },
 
   codeRow: { flexDirection: 'row', alignItems: 'center', gap: Space.md },
   codeCol: { flex: 1, minWidth: 0 },
-  codeLabel: { fontSize: 12, fontWeight: '700', color: InkColors.ink2 },
   code: { fontSize: 22, lineHeight: 30, fontWeight: '900', color: InkColors.ink, letterSpacing: 3 },
   copyBtn: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5,

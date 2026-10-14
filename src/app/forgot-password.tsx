@@ -22,6 +22,7 @@ import { formatPhone, isValidPhone, normalizePhone, passwordError } from '@/lib/
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
+import { ButtonStyles } from '@/lib/theme/button';
 
 type Role = 'owner' | 'junior';
 type Mode = 'email' | 'password';
@@ -288,6 +289,6 @@ const styles = StyleSheet.create({
   otpBtn: { minHeight: 48, paddingVertical: Space.sm, paddingHorizontal: 14, borderRadius: Radius.sm, backgroundColor: InkColors.ink, alignItems: 'center', justifyContent: 'center', minWidth: 118, flexShrink: 1 },
   otpBtnText: { fontSize: 13.5, fontWeight: '800', color: InkColors.bubbleText, textAlign: 'center' },
   err: { fontSize: 13.5, color: BrandColors.badText },
-  primary: { marginTop: Space.sm, minHeight: 52, borderRadius: Radius.pill, backgroundColor: BrandColors.brand, alignItems: 'center', justifyContent: 'center' },
+  primary: { ...ButtonStyles.primary, marginTop: Space.sm, backgroundColor: BrandColors.brand },
   primaryText: { fontSize: 16, fontWeight: '800', color: InkColors.bubbleText },
 });

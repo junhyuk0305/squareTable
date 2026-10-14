@@ -25,8 +25,10 @@ import { StatCardGrid } from '@/components/blocks/StatCardGrid';
 import { ScreenLoading } from '@/components/ScreenLoading';
 import { Appear, stagger } from '@/components/Appear';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
-import { Radius, Elevation } from '@/lib/theme/elevation';
+import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
+import { CardStyles } from '@/lib/theme/card';
+import { EmptyStyles } from '@/lib/theme/empty';
 
 const WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'] as const;
 
@@ -331,16 +333,7 @@ export function JuniorTodayView({ header }: { header: ReactNode }) {
 
 const styles = StyleSheet.create({
   loading: { paddingVertical: Space.xl * 2, alignItems: 'center' },
-  card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    borderColor: InkColors.line,
-    paddingHorizontal: Space.lg,
-    paddingVertical: Space.md,
-    marginTop: Space.sm,
-    ...Elevation.e2,
-  },
+  card: { ...CardStyles.list, marginTop: Space.sm },
 
   shiftRow: { flexDirection: 'row', alignItems: 'center', gap: Space.md, paddingVertical: Space.sm },
   shiftIcon: { width: 40, height: 40, borderRadius: Radius.md, alignItems: 'center', justifyContent: 'center' },
@@ -371,6 +364,6 @@ const styles = StyleSheet.create({
   storeName: { flex: 1, fontSize: 13.5, fontWeight: '700', color: InkColors.ink, minWidth: 0 },
   storeMeta: { fontSize: 12, color: InkColors.ink3 },
 
-  emptyText: { fontSize: 15, color: InkColors.ink2, textAlign: 'center', paddingVertical: Space.sm },
+  emptyText: EmptyStyles.text,
   caption: { fontSize: 11.5, color: InkColors.ink3, marginTop: Space.sm, textAlign: 'center' },
 });

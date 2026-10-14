@@ -15,6 +15,7 @@ import { Appear, stagger } from '@/components/Appear';
 import { ScreenLoading } from '@/components/ScreenLoading';
 import { InkColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
+import { SearchStyles, SEARCH_ICON } from '@/lib/theme/search';
 import { Space } from '@/lib/theme/layout';
 import type { PlaybookEntry } from '@/types';
 
@@ -149,14 +150,14 @@ export default function HubKnowhowScreen() {
               검색어가 남아 있으면 8건 미만이어도 바를 띄운다(끌 수 없는 거르기 금지). */}
           {total >= FILTER_MIN || filtering ? (
             <Appear delay={stagger(1)}>
-            <View style={st.search}>
-              <Ionicons name="search" size={16} color={InkColors.ink3} />
+            <View style={SearchStyles.box}>
+              <Ionicons name="search" size={SEARCH_ICON.size} color={SEARCH_ICON.color} />
               <TextInput
                 value={query}
                 onChangeText={setQuery}
                 placeholder="모든 매장에서 찾기"
                 placeholderTextColor={InkColors.ink3}
-                style={st.searchInput}
+                style={SearchStyles.input}
                 returnKeyType="search"
               />
               {query.length > 0 ? (
@@ -237,12 +238,6 @@ const st = StyleSheet.create({
   resetText: { fontSize: 15, fontWeight: '800', color: InkColors.ink, textDecorationLine: 'underline' },
 
   countLabel: { fontSize: 13, fontWeight: '700', color: InkColors.ink2 },
-  search: {
-    flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 44,
-    borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md, backgroundColor: InkColors.bg,
-    paddingHorizontal: Space.md,
-  },
-  searchInput: { flex: 1, fontSize: 15, color: InkColors.ink, paddingVertical: 8 },
 
   group: { gap: Space.sm },
   card: {

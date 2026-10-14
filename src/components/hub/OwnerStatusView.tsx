@@ -32,8 +32,9 @@ import { ScreenLoading } from '@/components/ScreenLoading';
 import { LoadErrorState } from '@/components/LoadErrorState';
 import { Appear, stagger } from '@/components/Appear';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
-import { Radius, Elevation } from '@/lib/theme/elevation';
+import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
+import { CardStyles } from '@/lib/theme/card';
 import type { Href } from 'expo-router';
 
 type SortKey = 'pending_q' | 'working' | 'uncovered' | 'labor_month';
@@ -476,16 +477,7 @@ function SortTh({ label, k, cur, onPress }: { label: string; k: SortKey; cur: So
 
 const styles = StyleSheet.create({
   loading: { minHeight: LOADING_MIN_HEIGHT, paddingVertical: Space.xl * 2, alignItems: 'center', justifyContent: 'center' },
-  card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    borderColor: InkColors.line,
-    paddingHorizontal: Space.lg,
-    paddingVertical: Space.md,
-    marginTop: Space.sm,
-    ...Elevation.e2,
-  },
+  card: { ...CardStyles.list, marginTop: Space.sm },
   statRow: { flexDirection: 'row', paddingVertical: Space.xs },
   statCell: { flex: 1, alignItems: 'center', gap: 2 },
   statDivider: { borderLeftWidth: 1, borderLeftColor: InkColors.line },

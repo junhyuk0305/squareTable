@@ -20,6 +20,8 @@ import { EMAIL_TAKEN_TEXT, ROLE_SPLIT_TEXT } from '@/lib/account/copy';
 import { BrandColors, InkColors } from '@/lib/theme/colors';
 import { Space } from '@/lib/theme/layout';
 import { Radius, Elevation } from '@/lib/theme/elevation';
+import { ButtonStyles } from '@/lib/theme/button';
+import { ChipStyles } from '@/lib/theme/chip';
 import type { Role } from '@/types';
 import { INDUSTRIES } from '@/lib/config/industry';
 
@@ -543,12 +545,12 @@ const styles = StyleSheet.create({
   otpBtnText: { fontSize: 14, fontWeight: '800', color: InkColors.ink2, textAlign: 'center' },
   otpMsg: { fontSize: 12, fontWeight: '600', color: BrandColors.accentText, marginTop: -2 },
   chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.sm },
-  chip: { paddingHorizontal: Space.md, paddingVertical: Space.sm, borderRadius: Radius.pill, borderWidth: 1, borderColor: InkColors.line, backgroundColor: '#FFFFFF' },
-  chipOn: { borderColor: BrandColors.brand, backgroundColor: '#FFFDFB' },
-  chipText: { fontSize: 13, fontWeight: '700', color: InkColors.ink2 },
-  chipTextOn: { color: BrandColors.brand },
+  chip: ChipStyles.chip,
+  chipOn: ChipStyles.chipOn,
+  chipText: ChipStyles.text,
+  chipTextOn: ChipStyles.textOn,
   err: { fontSize: 15, color: BrandColors.accentText, fontWeight: '600', lineHeight: 22 },
-  primary: { marginTop: 6, backgroundColor: BrandColors.brand, paddingVertical: 16, borderRadius: 12, alignItems: 'center' },
+  primary: { ...ButtonStyles.primary, marginTop: 6, backgroundColor: BrandColors.brand },
   primaryDisabled: { backgroundColor: InkColors.line },
   primaryText: { color: '#FFFFFF', fontSize: 16, fontWeight: '800' },
   loginRow: { alignItems: 'center', paddingVertical: 6 },

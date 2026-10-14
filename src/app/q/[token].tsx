@@ -34,6 +34,7 @@ import { formatPhone, isValidPhone, normalizePhone } from '@/lib/utils/validatio
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
+import { ButtonStyles } from '@/lib/theme/button';
 import type { QuizItem, QuizResponse } from '@/lib/quiz/types';
 
 /** 화면에 점수를 띄우기 위한 채점을 **몇 개씩 끊어 보낼지**. 회선이 약한 휴대폰에서 한 번에
@@ -544,6 +545,6 @@ const st = StyleSheet.create({
   },
   navBackText: { fontSize: 16, fontWeight: '800', color: InkColors.ink2 },
   navNext: { flex: 1 },
-  cta: { backgroundColor: InkColors.ink, borderRadius: Radius.md, paddingVertical: 16, alignItems: 'center', minHeight: 56, justifyContent: 'center' },
+  cta: { ...ButtonStyles.primary, backgroundColor: InkColors.ink },
   ctaText: { color: '#FFFFFF', fontSize: 16, fontWeight: '800' },
 });

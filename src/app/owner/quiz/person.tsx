@@ -126,7 +126,7 @@ export default function QuizPersonResultScreen() {
 
             {/* 응시가 여러 번이면 회차별 점수를 짧게 — 늘었나 줄었나가 여기서 읽힌다. */}
             {attempts.length > 1 ? (
-              <Appear delay={60}>
+              <Appear delay={60} style={{ gap: Space.sm }}>
                 <SectionLabel title="응시 기록" hint={`${attempts.length}번`} />
                 <View style={st.listCard}>
                   {attempts.map((a, i) => (
@@ -146,7 +146,7 @@ export default function QuizPersonResultScreen() {
                 {'문항별 기록이 없어요.\n0190 이전에 푼 응시는 점수만 남아 있어요.'}
               </Text>
             ) : (
-              <Appear delay={120}>
+              <Appear delay={120} style={{ gap: Space.sm }}>
                 <SectionLabel
                   title="문항별"
                   hint={attempts.length > 1 ? `가장 최근 응시 · ${latest.length}문제` : `${latest.length}문제`}

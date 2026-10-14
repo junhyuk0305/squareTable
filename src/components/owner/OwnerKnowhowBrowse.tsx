@@ -37,7 +37,9 @@ import { manualToText } from '@/lib/utils/manualText';
 import { useCopyToClipboard, canCopyToClipboard } from '@/lib/utils/useCopyToClipboard';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
+import { SearchStyles, SEARCH_ICON } from '@/lib/theme/search';
 import { Space } from '@/lib/theme/layout';
+import { BadgeStyles } from '@/lib/theme/badge';
 import type { PlaybookEntry } from '@/types';
 
 // ── 세그먼트(칸) ─────────────────────────────────────────────
@@ -123,10 +125,10 @@ function buildKnowhowHeatmap(list: PlaybookEntry[]): HeatGroup[] {
 }
 
 /**
- * 한 노하우 행(목록) — 탭하면 수정. usedBy=이 노하우를 첨부한 업무 수(0069 역조회, 임팩트).
+ * 한 노하우 행(목록) — 탭하면 수정.
  * divider=false 는 아래에 1탭 검증 버튼이 붙는 경우 — 구분선을 래퍼가 대신 갖는다.
  */
-function EntryRow({ e, onPress, usedBy = 0, divider = true }: { e: PlaybookEntry; onPress: () => void; usedBy?: number; divider?: boolean }) {
+function EntryRow({ e, onPress, divider = true }: { e: PlaybookEntry; onPress: () => void; divider?: boolean }) {
   const meta = getSectionMeta(e.section);
   const ratePct = Math.round((e.stats?.resolution_rate ?? 0) * 100);
   return (
@@ -142,12 +144,6 @@ function EntryRow({ e, onPress, usedBy = 0, divider = true }: { e: PlaybookEntry
           </Text>
           {e.stats?.resolution_rate ? <Text style={styles.metaRate}>· 해결률 {ratePct}%</Text> : null}
           {e.stats?.query_hits_30d ? <Text style={styles.meta}>· {e.stats.query_hits_30d}</Text> : null}
-          {usedBy > 0 ? (
-            <View style={styles.badgeUsed}>
-              <Ionicons name="clipboard-outline" size={9} color={InkColors.ink2} />
-              <Text style={styles.badgeUsedText}>업무 {usedBy}</Text>
-            </View>
-          ) : null}
           {e.needs_review ? (
             <View style={styles.badgeReview}>
               <Text style={styles.badgeReviewText}>점검 필요</Text>
@@ -207,7 +203,6 @@ export function OwnerKnowhowBrowse({
   const hydrate = usePlaybookStore((s) => s.hydrate);
   // 노하우 임팩트 = 이 노하우를 첨부한 업무 수(0069 역조회). 카운트가 실제이려면 업무 링크가 로드돼 있어야
   // 하므로 이 화면에서도 업무 스토어를 hydrate 한다(coalesce 로 중복 방지). 미로드로 인한 '0 위장' 방지.
-  const knowhowLinks = useWorkStore((s) => s.knowhowLinks);
   const workLoaded = useWorkStore((s) => s.loaded);
   useEffect(() => {
     useWorkStore.getState().hydrate();
@@ -242,11 +237,6 @@ export function OwnerKnowhowBrowse({
     });
     return () => { alive = false; };
   }, []);
-  const usedCountByEntry = useMemo(() => {
-    const m = new Map<string, number>();
-    for (const l of knowhowLinks) m.set(l.entryId, (m.get(l.entryId) ?? 0) + 1);
-    return m;
-  }, [knowhowLinks]);
   const update = usePlaybookStore((s) => s.update);
   const userName = useSessionStore((s) => s.userName);
   const storeName = useSessionStore((s) => s.storeName);
@@ -427,7 +417,6 @@ export function OwnerKnowhowBrowse({
 
   // 목록 한 항목 — 확인 필요면 행 아래에 1탭 검증 버튼을 함께 그린다(구분선은 래퍼가 갖는다).
   const entryItem = (e: PlaybookEntry, i: number) => {
-    const usedBy = usedCountByEntry.get(e.id) ?? 0;
     return (
       <Appear key={e.id} delay={stagger(i)}>
         {needsVerify(e) ? (
@@ -440,11 +429,11 @@ export function OwnerKnowhowBrowse({
             }}
             style={styles.entryWrap}
           >
-            <EntryRow e={e} usedBy={usedBy} onPress={() => onSelect(e.id)} divider={false} />
+            <EntryRow e={e} onPress={() => onSelect(e.id)} divider={false} />
             {verifyButton(e)}
           </Vanish>
         ) : (
-          <EntryRow e={e} usedBy={usedBy} onPress={() => onSelect(e.id)} />
+          <EntryRow e={e} onPress={() => onSelect(e.id)} />
         )}
       </Appear>
     );
@@ -598,14 +587,14 @@ export function OwnerKnowhowBrowse({
         {hasEntries && (
           <View style={styles.findBar}>
             {/* 행1 — 검색 */}
-            <View style={styles.search}>
-              <Ionicons name="search" size={16} color={InkColors.ink3} />
+            <View style={SearchStyles.box}>
+              <Ionicons name="search" size={SEARCH_ICON.size} color={SEARCH_ICON.color} />
               <TextInput
                 value={query}
                 onChangeText={setQuery}
                 placeholder="제목·키워드로 검색"
                 placeholderTextColor={InkColors.ink3}
-                style={styles.searchInput}
+                style={SearchStyles.input}
                 returnKeyType="search"
               />
               {query.length > 0 ? (
@@ -905,13 +894,6 @@ const styles = StyleSheet.create({
   // ★minWidth:0 없으면 웹 flexbox 의 min-width:auto 때문에 가로 스크롤이 안 생기고 부모를 밀어낸다.
   findScroll: { flex: 1, minWidth: 0 },
 
-  // 검색
-  search: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    backgroundColor: InkColors.bg, borderWidth: 1, borderColor: InkColors.line,
-    borderRadius: Radius.pill, paddingHorizontal: 14, paddingVertical: 9, ...Elevation.e1,
-  },
-  searchInput: { flex: 1, fontSize: 15, color: InkColors.ink, padding: 0 },
 
   // 카테고리 칩
   chipRow: { flexDirection: 'row', gap: 7, paddingVertical: 1, paddingRight: 4 },
@@ -965,13 +947,11 @@ const styles = StyleSheet.create({
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3, flexWrap: 'wrap' },
   meta: { fontSize: 12, color: InkColors.ink3, fontWeight: '600' },
   metaRate: { fontSize: 12, color: InkColors.ink2, fontWeight: '700' },
-  badgeReview: { paddingVertical: 2, paddingHorizontal: 7, borderRadius: Radius.pill, backgroundColor: BrandColors.warnSoft },
-  badgeReviewText: { fontSize: 10, fontWeight: '800', color: BrandColors.warnText },
-  badgeUnused: { paddingVertical: 2, paddingHorizontal: 7, borderRadius: Radius.pill, backgroundColor: BrandColors.accentSoft },
-  badgeUnusedText: { fontSize: 10, fontWeight: '800', color: BrandColors.badText },
+  badgeReview: { ...BadgeStyles.box, backgroundColor: BrandColors.warnSoft },
+  badgeReviewText: { ...BadgeStyles.text, color: BrandColors.warnText },
+  badgeUnused: { ...BadgeStyles.box, backgroundColor: BrandColors.accentSoft },
+  badgeUnusedText: { ...BadgeStyles.text, color: BrandColors.badText },
   // 업무 첨부 수(0069 역조회) — 임팩트 신호. 중립 톤(검증·미검증 배지와 색 충돌 방지).
-  badgeUsed: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingVertical: 2, paddingHorizontal: 7, borderRadius: Radius.pill, backgroundColor: InkColors.bgSoft },
-  badgeUsedText: { fontSize: 10, fontWeight: '800', color: InkColors.ink2 },
 
   // 빈 결과
   emptyResult: { alignItems: 'center', gap: 6, paddingVertical: 36 },

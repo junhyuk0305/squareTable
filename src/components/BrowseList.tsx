@@ -3,7 +3,8 @@ import { Appear, stagger } from './Appear';
 import { EmptyState } from './EmptyState';
 import { VerifyBadge } from './VerifyBadge';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
-import { Elevation, Radius } from '@/lib/theme/elevation';
+import { Radius } from '@/lib/theme/elevation';
+import { CardStyles } from '@/lib/theme/card';
 import { getSectionMeta } from '@/lib/utils/category';
 import { verifyMeta } from '@/lib/utils/verification';
 import { knowhowSourceLabel } from '@/lib/utils/knowhowSource';
@@ -148,13 +149,8 @@ const styles = StyleSheet.create({
   scroll: { flex: 1 },
   scrollContent: { padding: 16, gap: 12 },
   card: {
-    backgroundColor: InkColors.bg,
-    borderRadius: Radius.md,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: InkColors.line,
+    ...CardStyles.list,
     gap: 8, // 카드 본문(Pressable) ↔ 추가 액션(renderExtra) 간격
-    ...Elevation.e1,
   },
   cardBody: { gap: 8 }, // 카드 본문 내부 행 간격(헤더·제목·통계·미리보기·출처)
   pressed: { opacity: 0.7 },

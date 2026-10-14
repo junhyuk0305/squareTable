@@ -26,7 +26,7 @@ export type HeatLevel = 0 | 1 | 2 | 3 | 4;
 export type HeatCell = {
   id: string;
   title: string;
-  /** 0 = 문항 없음(점선) · 1~4 = 아는 직원 비율(옅음→전원). */
+  /** 0 = 문항 없음(회색) · 1~4 = 아는 직원 비율(옅음→전원). */
   level: HeatLevel;
   /** 호버·롱프레스에 제목과 같이 보이는 상태 한 줄 — "5명 중 2명 앎". */
   status: string;
@@ -40,13 +40,13 @@ export type HeatGroup = { name: string; cells: HeatCell[] };
 
 /**
  * 범례 문구 — 격자는 같고 **축이 다른** 두 화면이 쓴다(2026-08-27):
- *  · 퀴즈 홈(기본값): 색 = 아는 직원 비율 · 점선 = 문항 없음 · 주황 = 노하우 변경됨 · 빨강 = 높은 오답률
- *  · 매장 노하우 탭: 색 = 한 달간 물어본 횟수 · 점선 = 안 물어봄 · 주황 = 확인 필요 · 빨강 = 오래 손 안 댐
+ *  · 퀴즈 홈(기본값): 색 = 아는 직원 비율 · 회색 = 문항 없음 · 주황 = 노하우 변경됨 · 빨강 = 높은 오답률
+ *  · 매장 노하우 탭: 색 = 한 달간 물어본 횟수 · 회색 = 안 물어봄 · 주황 = 확인 필요 · 빨강 = 오래 손 안 댐
  */
 export type HeatLegend = { empty: string; scale: [string, string]; stale: string; miss: string };
 const QUIZ_LEGEND: HeatLegend = { empty: '문항 없음', scale: ['아는 직원', '전원'], stale: '노하우 변경됨', miss: '높은 오답률' };
 
-/** 0단계는 흰 면(점선은 cellEmpty 가 얹는다). */
+/** 0단계 면은 cellEmpty 가 연한 회색으로 덮는다. */
 const LEVEL_BG: Record<HeatLevel, string> = {
   0: InkColors.bg,
   1: BrandColors.heat1,
@@ -59,7 +59,7 @@ const LEVEL_BG: Record<HeatLevel, string> = {
  * H5 · 히트맵(블록어휘 §7-2) — 노하우 1개 = 상자 1개, 카테고리별 그룹. **퀴즈 홈의 히어로.**
  *
  * 색 = **아는 직원 비율**(확정, 데모 §5) — "문제 낸 노하우"는 한 번 내면 영구 100%라 히어로 자격이 없다.
- * 점선 = 문항 없음 · 주황 테두리 = 노하우 변경됨 · 빨강 테두리 = 높은 오답률.
+ * 회색 = 문항 없음 · 주황 테두리 = 노하우 변경됨 · 빨강 테두리 = 높은 오답률.
  * 호버(웹)·롱프레스(터치) = 제목+상태 한 줄이 머리 아래 피크 줄에 뜬다(툴팁 오버레이 아님 — 상자가
  * 14px 아래로 내려가면 손가락이 못 맞추고, 오버레이는 프레임 밖으로 샌다). 탭 = 그 노하우.
  * ★상자마다 Pressable 이고 부모는 View 다(RN-web 중첩 button 금지).
@@ -264,7 +264,8 @@ const styles = StyleSheet.create({
   groupCount: { color: InkColors.ink2 },
   grid: { flexDirection: 'row', flexWrap: 'wrap' },
   cell: { aspectRatio: 1, backgroundColor: InkColors.bgSoft },
-  cellEmpty: { backgroundColor: InkColors.bg, borderWidth: 1, borderStyle: 'dashed', borderColor: InkColors.line },
+  // 문항 없음 = 연한 회색 면. 흰 면+점선은 카드 배경과 같아 칸이 안 보였다(2026-10-14 실기기).
+  cellEmpty: { backgroundColor: InkColors.line },
   cellStale: { borderWidth: 2, borderColor: BrandColors.warn },
   cellMiss: { borderWidth: 2, borderColor: BrandColors.bad },
   cellPressed: { opacity: 0.6 },

@@ -33,6 +33,7 @@ import { formatAsked } from '@/lib/utils/time';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Elevation, Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
+import { EmptyStyles } from '@/lib/theme/empty';
 
 const STATUS_META: Record<
   SwapRequest['status'],
@@ -401,7 +402,7 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <View style={{ gap: 10 }}>
+    <View style={{ gap: Space.sm }}>
       <SectionLabel icon={icon} title={title} />
       <View style={{ gap: 10 }}>{children}</View>
     </View>
@@ -409,7 +410,11 @@ function Section({
 }
 
 function Empty({ text }: { text: string }) {
-  return <Text style={styles.empty}>{text}</Text>;
+  return (
+    <View style={EmptyStyles.box}>
+      <Text style={EmptyStyles.text}>{text}</Text>
+    </View>
+  );
 }
 
 /**
@@ -606,8 +611,6 @@ const styles = StyleSheet.create({
 
   reqBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, backgroundColor: InkColors.ink, borderRadius: Radius.md, paddingVertical: 14, ...Elevation.e1 },
   reqText: { fontSize: 15, fontWeight: '800', color: '#fff' },
-
-  empty: { fontSize: 15, color: InkColors.ink2, lineHeight: 22, paddingVertical: 6 },
 
   card: { backgroundColor: InkColors.bg, borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, padding: 14, gap: 6, ...Elevation.e1 },
   cardHead: { flexDirection: 'row', alignItems: 'center', gap: 6 },

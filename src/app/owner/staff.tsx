@@ -24,6 +24,7 @@ import { ActionRow } from '@/components/blocks/ActionRow';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
+import { EmptyStyles } from '@/lib/theme/empty';
 import { fmtDuration, won, todayStr, liveMinutes, staffWorkStatus, minWageWarning } from '@/lib/utils/attendance';
 import { computePay, shiftsToPayRecords, payWindow } from '@/lib/utils/payroll';
 import { showToast } from '@/lib/store/useToastStore';
@@ -308,6 +309,7 @@ export default function OwnerStaffScreen() {
         )}
 
         {/* 직원 목록 — 시급 편집 + 이번 달 시간·급여·근무상태(구 근무·급여 화면 흡수) */}
+        <View style={{ gap: Space.sm }}>
         <Appear delay={stagger(4)}>
         <SectionLabel title={`합류한 직원 (${staff.length}명)`} />
         </Appear>
@@ -328,7 +330,6 @@ export default function OwnerStaffScreen() {
             </View>
           ) : (
             <View style={styles.emptyBox}>
-              <Ionicons name="people-outline" size={22} color={InkColors.ink3} />
               <Text style={styles.emptyText}>아직 합류한 직원이 없어요.{'\n'}위 초대코드를 직원에게 알려주세요.</Text>
             </View>
           )
@@ -409,9 +410,10 @@ export default function OwnerStaffScreen() {
         </View>
         )}
         </Appear>
+        </View>
         {/* 이번 정산 기간 퇴사자 — 이번 달에 일하고 나간 직원도 이번 달 급여를 줘야 한다. 금액은 위 직원 줄과 같은 규칙이다. */}
         {departed.length > 0 && (
-          <Appear delay={stagger(6)}>
+          <Appear delay={stagger(6)} style={{ gap: Space.sm }}>
           <SectionLabel title={`이번 정산 기간 퇴사자 (${departed.length}명)`} />
           <View style={styles.list}>
             {departed.map((d) => (
@@ -624,8 +626,8 @@ const styles = StyleSheet.create({
   removeBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center', borderRadius: Radius.sm, backgroundColor: BrandColors.accentSoft },
 
   demoNote: { fontSize: 12, color: InkColors.ink3, marginTop: 6 },
-  emptyBox: { alignItems: 'center', gap: 8, paddingVertical: 28, backgroundColor: '#FFFFFF', borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line },
-  emptyText: { fontSize: 15, color: InkColors.ink2, textAlign: 'center', lineHeight: 22 },
+  emptyBox: EmptyStyles.box,
+  emptyText: EmptyStyles.text,
   retryBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: InkColors.ink, paddingVertical: 9, paddingHorizontal: 16, borderRadius: Radius.pill, marginTop: 2 },
   retryText: { color: '#FFFFFF', fontSize: 13, fontWeight: '800' },
 });

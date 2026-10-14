@@ -173,6 +173,7 @@ export function PublishConfirmSheet({
           </View>
         )}
 
+        <View style={styles.labeled}>
         <SectionLabel title="카테고리" />
         <View style={styles.chips}>
           {options.map((name) => {
@@ -209,6 +210,7 @@ export function PublishConfirmSheet({
               <Text style={styles.chipAddText}>직접 추가</Text>
             </PressableScale>
           )}
+        </View>
         </View>
 
         {adding && (
@@ -255,6 +257,7 @@ export function PublishConfirmSheet({
         {partsEnabled && !partsLoaded && <ScreenLoading label="파트를 불러오고 있어요…" />}
         {partsEnabled && partsLoaded && (
           <>
+            <View style={styles.labeled}>
             <SectionLabel title="파트" />
             <View style={styles.chips}>
               {parts.map((p) => {
@@ -283,6 +286,7 @@ export function PublishConfirmSheet({
                   <Text style={styles.chipAddText}>직접 추가</Text>
                 </PressableScale>
               )}
+            </View>
             </View>
 
             {partAdding && (
@@ -366,6 +370,7 @@ const styles = StyleSheet.create({
   sheet: { maxHeight: '85%' },
   // 시트 좌우 여백은 lg(16) — 화면 거터(gutter 20)가 아니라 시트 표준을 따른다(kit 의 qst.body).
   body: { paddingHorizontal: Space.lg, paddingTop: Space.sm, paddingBottom: Space.xl, gap: Space.md },
+  labeled: { gap: Space.sm },
   title: { fontSize: 17, fontWeight: '800', color: InkColors.ink },
 
   warnCard: { backgroundColor: InkColors.bgSoft, borderRadius: Radius.md, padding: Space.md, gap: Space.sm },

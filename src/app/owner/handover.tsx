@@ -21,6 +21,7 @@ import { showToast } from '@/lib/store/useToastStore';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Elevation, Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
+import { ButtonStyles } from '@/lib/theme/button';
 
 // edge 원문 입력 상한(ai/index.ts MAX_RAWTEXT_LEN)과 정렬. 초과분은 잘리므로 경고 후 앞부분만 처리.
 const MAX_RAWTEXT = 8000;
@@ -631,12 +632,9 @@ const styles = StyleSheet.create({
     backgroundColor: InkColors.bg,
   },
   saveBtn: {
+    ...ButtonStyles.primary,
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
     backgroundColor: InkColors.ink,
-    borderRadius: Radius.md,
-    paddingVertical: 15,
   },
   saveText: { fontSize: 15, fontWeight: '900', color: InkColors.bubbleText },
 });

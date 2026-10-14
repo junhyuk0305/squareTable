@@ -352,7 +352,7 @@ const styles = StyleSheet.create({
   title: { fontSize: 26, fontWeight: '900', color: InkColors.ink, letterSpacing: -0.5 },
   subtitle: { fontSize: 15, color: InkColors.ink2 },
 
-  section: { gap: Space.md },
+  section: { gap: Space.sm },
 
   // 카드 문법은 블록 v2(PickRow·RollupRows)와 같다 — Radius.md · 1px line · e1 · 좌우 lg/상하 md · 눌림 0.7.
   card: {

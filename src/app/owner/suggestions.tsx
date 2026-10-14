@@ -16,7 +16,9 @@ import { useSuggestionStore } from '@/lib/store/useSuggestionStore';
 import { isPendingSuggestionToReview } from '@/lib/utils/notifications';
 import { showToast } from '@/lib/store/useToastStore';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
-import { Elevation, Radius } from '@/lib/theme/elevation';
+import { Radius } from '@/lib/theme/elevation';
+import { CardStyles } from '@/lib/theme/card';
+import { EmptyStyles } from '@/lib/theme/empty';
 import type { PlaybookSuggestion } from '@/types';
 
 /** 처리됨 상태칩 — 면(bg)과 글자(fg)를 한 쌍으로 묶는다. 떨어져 있으면 '반영'에 빨간 틴트가 깔린다. */
@@ -117,10 +119,8 @@ export default function OwnerSuggestionsScreen() {
 
         {pending.length === 0 ? (
           <Appear delay={stagger(1)}>
-          <View style={styles.empty}>
-            <Text style={styles.emptyEmoji}>🤝</Text>
-            <Text style={styles.emptyTitle}>대기 중인 제안이 없어요</Text>
-            <Text style={styles.emptySub}>직원이 노하우 개선·신규를 제안하면 여기로 와요.</Text>
+          <View style={EmptyStyles.box}>
+            <Text style={EmptyStyles.text}>대기 중인 제안이 없어요.{'\n'}직원이 노하우 개선·신규를 제안하면 여기로 와요.</Text>
           </View>
           </Appear>
         ) : (
@@ -249,13 +249,9 @@ const styles = StyleSheet.create({
   scroll: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 24, gap: 14 },
   subline: { fontSize: 15, color: InkColors.ink2, fontWeight: '600' },
 
-  empty: { backgroundColor: InkColors.bg, borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, padding: 28, gap: 6, alignItems: 'center' },
-  emptyEmoji: { fontSize: 34 },
-  emptyTitle: { fontSize: 16, fontWeight: '800', color: InkColors.ink },
-  emptySub: { fontSize: 15, color: InkColors.ink2, textAlign: 'center' },
 
   list: { gap: 12 },
-  card: { backgroundColor: InkColors.bg, borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, padding: 16, gap: 10, ...Elevation.e1 },
+  card: { ...CardStyles.list, gap: 10 },
   cardHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   kindChip: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 9, paddingVertical: 5, borderRadius: Radius.pill },
   kindImprove: { backgroundColor: '#FBF3E3' },

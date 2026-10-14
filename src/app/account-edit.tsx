@@ -11,6 +11,9 @@ import { showToast } from '@/lib/store/useToastStore';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
+import { ButtonStyles } from '@/lib/theme/button';
+import { CardStyles } from '@/lib/theme/card';
+import { ChipStyles } from '@/lib/theme/chip';
 import { isValidPhone, normalizePhone, formatPhone, passwordError } from '@/lib/utils/validation';
 import { passwordChangeError } from '@/lib/account/copy';
 import { EMAIL_CHANGE_PENDING_TEXT } from '@/lib/account/findEmail';
@@ -437,7 +440,7 @@ function PhoneChangeBody({ savedPhone, onDone }: { savedPhone: string; onDone: (
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: InkColors.cream },
   scroll: { padding: 20, gap: 8 },
-  card: { backgroundColor: '#FFFFFF', borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line, padding: 16, gap: 8, marginBottom: 8 },
+  card: { ...CardStyles.list, gap: 8, marginBottom: 8 },
   rowDivider: { height: 1, backgroundColor: InkColors.line, marginVertical: Space.xs },
   label: { fontSize: 13, fontWeight: '700', color: InkColors.ink2, marginTop: 4 },
   req: { color: BrandColors.accentText, fontWeight: '900' },
@@ -463,10 +466,10 @@ const styles = StyleSheet.create({
   pwBad: { color: InkColors.ink3 },
   storeCard: { borderColor: BrandColors.gold },
   chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.sm },
-  chip: { paddingHorizontal: Space.md, paddingVertical: Space.sm, borderRadius: Radius.pill, borderWidth: 1, borderColor: InkColors.line, backgroundColor: '#FFFFFF' },
-  chipOn: { borderColor: BrandColors.brand, backgroundColor: '#FFFDFB' },
-  chipText: { fontSize: 13, fontWeight: '700', color: InkColors.ink2 },
-  chipTextOn: { color: BrandColors.brand },
+  chip: ChipStyles.chip,
+  chipOn: ChipStyles.chipOn,
+  chipText: ChipStyles.text,
+  chipTextOn: ChipStyles.textOn,
   storeMetaRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 2 },
   storeChip: { backgroundColor: BrandColors.brandSoft, borderRadius: Radius.pill, paddingVertical: 5, paddingHorizontal: 10 },
   storeChipText: { fontSize: 11, fontWeight: '700', color: InkColors.ink2 },
@@ -485,7 +488,7 @@ const styles = StyleSheet.create({
   },
   pwToggleText: { flex: 1, fontSize: 15, fontWeight: '800', color: InkColors.ink },
   pwPanel: { gap: Space.sm, paddingHorizontal: Space.xs, paddingBottom: Space.sm },
-  primary: { marginTop: 12, backgroundColor: BrandColors.brand, paddingVertical: 15, borderRadius: Radius.md, alignItems: 'center' },
+  primary: { ...ButtonStyles.primary, marginTop: 12, backgroundColor: BrandColors.brand },
   primaryText: { color: '#FFFFFF', fontSize: 15, fontWeight: '800' },
   secondary: { marginTop: 12, backgroundColor: InkColors.bgSoft, paddingVertical: 15, borderRadius: Radius.md, alignItems: 'center', borderWidth: 1, borderColor: InkColors.line },
   secondaryText: { color: InkColors.ink, fontSize: 15, fontWeight: '800' },

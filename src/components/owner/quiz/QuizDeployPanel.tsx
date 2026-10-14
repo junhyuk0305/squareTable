@@ -357,7 +357,7 @@ const st = StyleSheet.create({
   },
   actText: { fontSize: 13, fontWeight: '800', color: InkColors.ink2 },
 
-  results: { marginTop: Space.lg },
+  results: { marginTop: Space.lg, gap: Space.sm },
   subRow: { flexDirection: 'row', alignItems: 'center', gap: Space.sm, minHeight: 56, paddingVertical: Space.sm },
   subName: { fontSize: 15, fontWeight: '700', color: InkColors.ink },
   subScore: { fontSize: 13, fontWeight: '800', color: InkColors.ink2 },

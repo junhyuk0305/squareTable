@@ -51,6 +51,7 @@ import {
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Elevation, Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
+import { EmptyStyles } from '@/lib/theme/empty';
 
 /** 주 이동 아이콘 버튼 한 변. */
 const NAV_BTN = 36;
@@ -276,7 +277,6 @@ export default function OwnerScheduleScreen() {
           />
           {approvalCount === 0 ? (
             <View style={styles.emptyBox}>
-              <Ionicons name="checkmark-done-outline" size={20} color={InkColors.ink3} />
               <Text style={styles.emptyText}>
                 {isOwner
                   ? '승인할 요청이 없어요.\n교대 합의와 근무 시간 수정 요청이 여기로 올라와요.'
@@ -554,8 +554,8 @@ const styles = StyleSheet.create({
   badge: { minWidth: 22, height: 22, paddingHorizontal: 7, borderRadius: Radius.pill, backgroundColor: BrandColors.accentSolid, alignItems: 'center', justifyContent: 'center' },
   badgeText: { fontSize: 12, fontWeight: '900', color: InkColors.bubbleText },
 
-  emptyBox: { alignItems: 'center', gap: Space.sm, paddingVertical: Space.xl, backgroundColor: InkColors.bg, borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line },
-  emptyText: { fontSize: 15, color: InkColors.ink2, textAlign: 'center', lineHeight: 22 },
+  emptyBox: EmptyStyles.box,
+  emptyText: EmptyStyles.text,
 
   // 주 이동 네비 — 스트립 위 한 줄
   weekNav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },

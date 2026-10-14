@@ -485,7 +485,8 @@ const s = StyleSheet.create({
   legendDot: { width: 10, height: 10, borderRadius: 3 },
 
   dayBar: { flexDirection: 'row', alignItems: 'baseline', gap: 8, paddingHorizontal: 15, paddingTop: 6, paddingBottom: 4, backgroundColor: InkColors.paper },
-  gauge: { paddingHorizontal: 15, paddingTop: Space.xs, paddingBottom: Space.xs, gap: Space.sm, backgroundColor: InkColors.paper },
+  // 아래 0 = 라벨 아래 2 + 목록 위 8 로 제목→카드 10.
+  gauge: { paddingHorizontal: 15, paddingTop: Space.xs, paddingBottom: 0, gap: Space.sm, backgroundColor: InkColors.paper },
   dayTitle: { fontSize: 16, fontWeight: '800', color: InkColors.ink },
   dayCount: { fontSize: 12, fontWeight: '700', color: InkColors.ink2 },
   legendInline: { flexDirection: 'row', alignItems: 'center', gap: 10, marginLeft: 'auto' },

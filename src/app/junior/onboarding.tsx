@@ -9,6 +9,7 @@ import { logout } from '@/lib/auth';
 import { Appear, stagger } from '@/components/Appear';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
+import { CardStyles } from '@/lib/theme/card';
 
 // 가입했지만 아직 매장에 합류하지 않은 알바를 위한 화면.
 // (매직링크 로그인·초대 전 가입·매장 종료로 unit_id가 비는 경우) — 빈 챗으로 떨어뜨리지 않고 여기로 유도.
@@ -96,7 +97,7 @@ const styles = StyleSheet.create({
   title: { fontSize: 22, fontWeight: '900', color: InkColors.ink, textAlign: 'center' },
   sub: { fontSize: 15, color: InkColors.ink2, textAlign: 'center', lineHeight: 22 },
   strong: { fontWeight: '800', color: InkColors.ink },
-  card: { backgroundColor: '#FFFFFF', borderRadius: Radius.lg, borderWidth: 1, borderColor: InkColors.line, padding: 20, gap: 10 },
+  card: { ...CardStyles.list, gap: 10 },
   label: { fontSize: 13, fontWeight: '700', color: InkColors.ink2 },
   input: { borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md, paddingHorizontal: 14, paddingVertical: 14, fontSize: 20, fontWeight: '800', letterSpacing: 4, textAlign: 'center', color: InkColors.ink, backgroundColor: '#FFFFFF' },
   err: { fontSize: 15, color: BrandColors.accentText, fontWeight: '600' },

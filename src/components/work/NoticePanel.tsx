@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { View, Text, Pressable, ScrollView, TextInput, StyleSheet } from 'react-native';
+import { View, Text, Pressable, ScrollView, TextInput, StyleSheet, type TextStyle } from 'react-native';
 import { KeyboardShift } from '@/components/KeyboardShift';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -7,6 +7,7 @@ import { type FeedItem } from '@/lib/store/useWorkStore';
 import { fetchBroadcastReadStatus } from '@/lib/db';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Elevation, Radius } from '@/lib/theme/elevation';
+import { BadgeStyles } from '@/lib/theme/badge';
 import { mdHHmm } from '@/lib/utils/attendance';
 import { ReactionBar } from './ReactionBar';
 import { MentionInput, extractMentions, type Member } from './MentionInput';
@@ -363,7 +364,7 @@ const s = StyleSheet.create({
   card: { backgroundColor: InkColors.bg, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md, padding: 12, ...Elevation.e1 },
   cardPinned: { borderColor: InkColors.ink3 },
   head: { flexDirection: 'row', alignItems: 'center', gap: 7, marginBottom: 6 },
-  tag: { backgroundColor: InkColors.paper, color: InkColors.ink2, fontSize: 10, fontWeight: '800', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 },
+  tag: { ...(BadgeStyles.box as TextStyle), ...BadgeStyles.text, backgroundColor: InkColors.paper, color: InkColors.ink2, overflow: 'hidden' },
   pinlab: { fontSize: 10, color: InkColors.ink3, fontWeight: '700' },
   who: { fontSize: 11, color: InkColors.ink2, fontWeight: '700', marginLeft: 'auto' },
   time: { fontSize: 10, color: InkColors.ink3 },

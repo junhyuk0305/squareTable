@@ -33,6 +33,8 @@ import { useGuideOnce } from '@/lib/store/useGuideStore';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
 import { Space, HEADER_EDGE_GUTTER } from '@/lib/theme/layout';
+import { CardStyles } from '@/lib/theme/card';
+import { EmptyStyles } from '@/lib/theme/empty';
 
 /**
  * 퀴즈 홈(1층) — 2026-08-26 B안.
@@ -408,7 +410,7 @@ export default function OwnerTrainingScreen() {
                 탭(응시 중/완료)은 이 화면 **맨 위**로 올라갔다 — 노하우 탭과 같은 구조다.
                 ★2026-09-13: 목록에 **제목**을 달았다(사장 요청) — 히트맵 바로 밑에 흰 카드만 있으면
                 그것이 무엇의 목록인지 읽히지 않았다. */}
-            <Appear key={tab} delay={stagger(2)}>
+            <Appear key={tab} delay={stagger(2)} style={{ gap: Space.sm }}>
               <SectionLabel
                 title={tab === 'running' ? '응시 중인 퀴즈' : '응시 완료'}
                 hint={tab === 'running' ? `${running.length}건` : `${finished.length}건`}
@@ -922,14 +924,7 @@ const st = StyleSheet.create({
   introBody: { fontSize: 15, lineHeight: 22, color: InkColors.ink },
 
   // 퀴즈 목록 — 이 화면의 카드(배치규칙 ⑤ "카드를 없애지 않는다").
-  listCard: {
-    backgroundColor: InkColors.bg,
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: InkColors.line,
-    ...Elevation.e2,
-    paddingHorizontal: Space.lg,
-  },
+  listCard: CardStyles.rows,
   // 줄 = [누르는 본문][설정][지우기]. 아이콘을 본문 Pressable 안에 넣으면 RNW 에서 안 눌린다.
   rowWrap: { flexDirection: 'row', alignItems: 'center' },
   // 2026-09-13: 정답률·응시 줄이 붙어 카드가 세로로 커졌다(사장 요청). 4줄 + 여백 기준 최소 높이.
@@ -977,7 +972,7 @@ const st = StyleSheet.create({
   sheetScroll: { maxHeight: 420, paddingHorizontal: Space.lg, paddingBottom: Space.gutter },
 
   footNote: { fontSize: 13, fontWeight: '600', color: InkColors.ink3, textAlign: 'center' },
-  tabEmpty: { fontSize: 15, fontWeight: '600', color: InkColors.ink3, textAlign: 'center', paddingVertical: Space.lg, lineHeight: 21 },
+  tabEmpty: EmptyStyles.line,
   // 맨 위 탭 — 공용 SegmentTabs 의 margin(16)을 화면 거터(20)에 맞춘다(노하우 탭과 같은 처리).
   topTabs: { marginHorizontal: Space.gutter, marginTop: Space.md, marginBottom: 0 },
   // 노하우 탭의 + 버튼과 같은 값이다(OwnerKnowhowBrowse.fab) — 자리가 같으면 모양도 같아야 한다.

@@ -42,6 +42,7 @@ import { SheetHead } from '@/components/owner/quiz/kit';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
+import { CardStyles } from '@/lib/theme/card';
 import type { QuizItem } from '@/lib/quiz/types';
 
 type Seg = 'people' | 'items' | 'settings';
@@ -724,10 +725,7 @@ const st = StyleSheet.create({
   factKey: { fontSize: 13, fontWeight: '700', color: InkColors.ink3 },
   factVal: { flex: 1, minWidth: 0, fontSize: 13, fontWeight: '800', color: InkColors.ink2, textAlign: 'right' },
 
-  listCard: {
-    backgroundColor: InkColors.bg, borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line,
-    paddingHorizontal: Space.lg, ...Elevation.e2,
-  },
+  listCard: CardStyles.rows,
   row: { flexDirection: 'row', alignItems: 'center', gap: Space.md, minHeight: 56, paddingVertical: Space.sm },
   rowDivider: { borderTopWidth: 1, borderTopColor: InkColors.line },
   rowText: { flex: 1, minWidth: 0, gap: 2 },

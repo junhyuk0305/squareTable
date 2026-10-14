@@ -12,6 +12,7 @@ import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
+import { ButtonStyles } from '@/lib/theme/button';
 import type { PlaybookEntry } from '@/types';
 
 /**
@@ -296,10 +297,8 @@ const styles = StyleSheet.create({
 
   // 화면의 유일한 '채운' 버튼 — Primary 1개 규칙.
   primaryBtn: {
+    ...ButtonStyles.primary,
     backgroundColor: BrandColors.brand,
-    borderRadius: Radius.md,
-    paddingVertical: Space.lg,
-    alignItems: 'center',
   },
   primaryText: { fontSize: 15, fontWeight: '800', color: InkColors.bubbleText },
   softBtn: {

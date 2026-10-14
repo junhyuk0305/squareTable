@@ -44,7 +44,12 @@ import { EmptyState } from '@/components/EmptyState';
 import { ScreenLoading } from '@/components/ScreenLoading';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
+import { SearchStyles, SEARCH_ICON } from '@/lib/theme/search';
 import { Space } from '@/lib/theme/layout';
+import { ButtonStyles } from '@/lib/theme/button';
+import { CardStyles } from '@/lib/theme/card';
+import { ChipStyles } from '@/lib/theme/chip';
+import { EmptyStyles } from '@/lib/theme/empty';
 import type { QuizItem } from '@/lib/quiz/types';
 import type { PlaybookEntry } from '@/types';
 
@@ -659,17 +664,17 @@ export default function QuizNewScreen() {
               <View style={st.stepBody}>
                 <Text style={st.lead}>고른 노하우에서 문제를 만들어요</Text>
 
-                {/* 찾기 바 — 노하우 화면(OwnerKnowhowBrowse)과 **같은 형태**다: 검색 한 줄 + 카테고리 칩
+                {/* 찾기 바 — 노하우 화면(OwnerKnowhowBrowse)과 **같은 형태**다(검색창 모양은 SearchStyles 공용): 검색 한 줄 + 카테고리 칩
                     가로 스크롤(색 점). 자리마다 다른 찾기 UI를 만들면 같은 노하우를 찾는 법이 화면마다 달라진다. */}
                 <View style={st.findBar}>
-                  <View style={st.search}>
-                    <Ionicons name="search" size={16} color={InkColors.ink3} />
+                  <View style={SearchStyles.box}>
+                    <Ionicons name="search" size={SEARCH_ICON.size} color={SEARCH_ICON.color} />
                     <TextInput
                       value={q}
                       onChangeText={setQ}
                       placeholder="제목·키워드로 검색"
                       placeholderTextColor={InkColors.ink3}
-                      style={st.searchInput}
+                      style={SearchStyles.input}
                       returnKeyType="search"
                       accessibilityLabel="노하우 검색"
                     />
@@ -1234,24 +1239,15 @@ const st = StyleSheet.create({
   leadSub: { fontSize: 15, fontWeight: '600', color: InkColors.ink2, lineHeight: 21, marginTop: -Space.sm },
   label: { fontSize: 13, fontWeight: '800', color: InkColors.ink2, marginTop: Space.xs },
   hint: { fontSize: 13, fontWeight: '600', color: InkColors.ink3, lineHeight: 18, marginTop: -Space.xs },
-  emptyLine: { fontSize: 15, color: InkColors.ink3, fontWeight: '600', paddingVertical: Space.lg, textAlign: 'center' },
+  emptyLine: EmptyStyles.line,
 
-  search: {
-    flexDirection: 'row', alignItems: 'center', gap: Space.sm,
-    backgroundColor: InkColors.bgSoft, borderRadius: Radius.sm, paddingHorizontal: Space.md, minHeight: 48,
-  },
-  searchInput: { flex: 1, fontSize: 15, fontWeight: '600', color: InkColors.ink },
   input: {
     borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.sm,
     paddingHorizontal: Space.md, minHeight: 48, fontSize: 15, fontWeight: '700', color: InkColors.ink,
     backgroundColor: '#FFFFFF',
   },
 
-  // 그림자(2026-09-03): 카드=e2 · 버튼·패널=e1. 그림자 없는 상자는 배경면과 구분이 안 됐다.
-  listCard: {
-    backgroundColor: InkColors.bg, borderRadius: Radius.md, borderWidth: 1, borderColor: InkColors.line,
-    paddingHorizontal: Space.lg, ...Elevation.e2,
-  },
+  listCard: CardStyles.rows,
   row: { flexDirection: 'row', alignItems: 'center', gap: Space.md, minHeight: 56, paddingVertical: Space.sm },
   chk: { flexDirection: 'row', alignItems: 'center', gap: Space.md, minHeight: 56, paddingVertical: Space.sm },
   rowDivider: { borderTopWidth: 1, borderTopColor: InkColors.line },
@@ -1301,13 +1297,10 @@ const st = StyleSheet.create({
   addBox: { gap: Space.sm },
 
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: Space.xs },
-  chip: {
-    minHeight: 48, justifyContent: 'center', paddingHorizontal: Space.md,
-    borderRadius: Radius.pill, borderWidth: 1, borderColor: InkColors.line, backgroundColor: '#FFFFFF',
-  },
-  chipOn: { backgroundColor: InkColors.ink, borderColor: InkColors.ink },
-  chipText: { fontSize: 13, fontWeight: '700', color: InkColors.ink2 },
-  chipTextOn: { color: '#FFFFFF', fontWeight: '800' },
+  chip: ChipStyles.chip,
+  chipOn: ChipStyles.chipOn,
+  chipText: ChipStyles.text,
+  chipTextOn: ChipStyles.textOn,
 
 
   capNote: { fontSize: 13, fontWeight: '600', color: BrandColors.mentionText, textAlign: 'center' },
@@ -1318,16 +1311,10 @@ const st = StyleSheet.create({
   // 찾기 바 — 노하우 화면과 같은 형태(검색 한 줄 + 카테고리 칩 가로 스크롤).
   findBar: { gap: Space.sm },
   chipRow: { flexDirection: 'row', gap: Space.xs, paddingRight: Space.lg },
-  catChip: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    // ★48dp — 이 화면의 다른 칩(st.chip)과 같은 값이다. 노하우 화면의 칩은 34라 형태만 맞추고
-    //   크기는 안 베꼈다(hitSlop 은 RN-web 에서 안 먹어 34면 실제로 34다).
-    minHeight: 48, paddingHorizontal: Space.md, borderRadius: Radius.pill,
-    borderWidth: 1, borderColor: InkColors.line, backgroundColor: '#FFFFFF',
-  },
-  catChipOn: { backgroundColor: InkColors.ink, borderColor: InkColors.ink },
-  catChipText: { fontSize: 13, fontWeight: '700', color: InkColors.ink2 },
-  catChipTextOn: { color: '#FFFFFF', fontWeight: '800' },
+  catChip: { ...ChipStyles.chip, flexDirection: 'row', alignItems: 'center', gap: 6 },
+  catChipOn: ChipStyles.chipOn,
+  catChipText: ChipStyles.text,
+  catChipTextOn: ChipStyles.textOn,
   catDot: { width: 8, height: 8, borderRadius: 4 },
 
   // 시트 본문 여백 — 값은 kit 의 `qst.body`(좌우 16 · 아래 20)와 같다. 없으면 입력칸·버튼이
@@ -1363,10 +1350,7 @@ const st = StyleSheet.create({
     paddingHorizontal: Space.gutter, paddingVertical: Space.md,
     borderTopWidth: 1, borderTopColor: InkColors.line, backgroundColor: InkColors.bg,
   },
-  primary: {
-    flex: 1, minHeight: 56, alignItems: 'center', justifyContent: 'center',
-    borderRadius: Radius.md, backgroundColor: InkColors.ink, ...Elevation.e1,
-  },
+  primary: { ...ButtonStyles.primary, flex: 1, backgroundColor: InkColors.ink, ...Elevation.e1 },
   primaryOff: { backgroundColor: InkColors.bgSoft },
   primaryText: { fontSize: 15, fontWeight: '800', color: '#FFFFFF' },
   primaryTextOff: { color: InkColors.ink3 },

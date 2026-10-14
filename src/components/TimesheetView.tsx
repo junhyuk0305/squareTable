@@ -15,6 +15,7 @@ import { ScreenLoading } from '@/components/ScreenLoading';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { Space } from '@/lib/theme/layout';
+import { BadgeStyles } from '@/lib/theme/badge';
 import { fmtDuration, won, hhmm, todayStr, normalizeTime, shiftMonth, daysInMonth, maskHHMM } from '@/lib/utils/attendance';
 import { checkShiftTime, isOvernight, monthDates } from '@/lib/utils/schedule';
 
@@ -472,10 +473,10 @@ const styles = StyleSheet.create({
   recTimeRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   recTime: { fontSize: 15, fontWeight: '700', color: InkColors.ink },
   recDur: { fontSize: 12, color: InkColors.ink3, marginTop: 2 },
-  badgeInk: { backgroundColor: BrandColors.brandSoft, borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 },
-  badgeInkText: { fontSize: 10, fontWeight: '800', color: InkColors.ink2 },
-  badgeAccent: { backgroundColor: BrandColors.accentSoft, borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 },
-  badgeAccentText: { fontSize: 10, fontWeight: '800', color: BrandColors.accentText },
+  badgeInk: { ...BadgeStyles.box, backgroundColor: BrandColors.brandSoft },
+  badgeInkText: { ...BadgeStyles.text, color: InkColors.ink2 },
+  badgeAccent: { ...BadgeStyles.box, backgroundColor: BrandColors.accentSoft },
+  badgeAccentText: { ...BadgeStyles.text, color: BrandColors.accentText },
 
   editInline: { paddingBottom: 14, gap: 12 },
   editCard: { backgroundColor: '#FFFFFF', borderRadius: Radius.md, borderWidth: 1, borderColor: BrandColors.brand, padding: 16, gap: 12 },

@@ -21,6 +21,7 @@ import { searchPlaybook } from '@/lib/rag';
 import { useCopyToClipboard, canCopyToClipboard } from '@/lib/utils/useCopyToClipboard';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius, Elevation } from '@/lib/theme/elevation';
+import { SearchStyles, SEARCH_ICON } from '@/lib/theme/search';
 import { Space } from '@/lib/theme/layout';
 import type { PlaybookEntry, PlaybookSuggestion, UnknownQuery } from '@/types';
 
@@ -465,7 +466,10 @@ function AnswerSheet({
         <View style={s.qBox}><Text style={s.qBoxText}>{uq.query_text}</Text></View>
 
         <Text style={s.sheetLabel}>이미 있는 노하우에서 찾기</Text>
-        <TextInput value={q} onChangeText={setQ} placeholder="노하우 검색" placeholderTextColor={InkColors.ink3} style={s.inp} />
+        <View style={SearchStyles.box}>
+          <Ionicons name="search" size={SEARCH_ICON.size} color={SEARCH_ICON.color} />
+          <TextInput value={q} onChangeText={setQ} placeholder="노하우 검색" placeholderTextColor={InkColors.ink3} style={SearchStyles.input} />
+        </View>
         {q.trim().length > 0 && (
           <View style={s.results}>
             {results.length === 0 ? (

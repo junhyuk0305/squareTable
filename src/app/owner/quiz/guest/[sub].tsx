@@ -108,7 +108,7 @@ export default function GuestQuizResultScreen() {
             {items.length === 0 ? (
               <Text style={qst.emptyText}>{'문항별 기록이 없어요.\n예전 링크로 푼 결과는 점수만 남아 있어요.'}</Text>
             ) : (
-              <>
+              <View style={st.labeled}>
                 <SectionLabel title="문항별" hint={`${items.length}문제`} />
                 <View style={st.list}>
                   {items.map((it, i) => (
@@ -117,7 +117,7 @@ export default function GuestQuizResultScreen() {
                     </Appear>
                   ))}
                 </View>
-              </>
+              </View>
             )}
           </>
         )}
@@ -139,6 +139,7 @@ const st = StyleSheet.create({
   loadingWrap: { alignItems: 'center', justifyContent: 'center', gap: Space.sm, paddingVertical: Space.xl * 2 },
   loadingText: { fontSize: 13, fontWeight: '600', color: InkColors.ink3 },
   scroll: { padding: Space.gutter, paddingBottom: Space.xl, gap: Space.md, flexGrow: 1 },
+  labeled: { gap: Space.sm },
 
   head: {
     backgroundColor: InkColors.bg,
