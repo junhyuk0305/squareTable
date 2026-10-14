@@ -73,9 +73,6 @@ export type OwnerCoachChatProps = {
   // 사장이 말로 고치면 patchSquare로 부분 패치. 저장은 onUpdated로(새 add 아님).
   editEntry?: PlaybookEntry;
   onUpdated?: (square: SquareBlock, extras: { title: string; keywords: string[] }) => void;
-  /** 수정 모드 전용 — 노하우 삭제. 주입하면 카드 액션행의 '수정 저장' 오른쪽에 삭제가 붙는다.
-   *  (헤더 휴지통 아이콘은 저장 버튼에서 멀어 "고치다 지우려면 눈이 위로" 가는 구조였다.) */
-  onDeleteEntry?: () => void;
   /** 대화 맨 위에 얹는 읽기 블록(노하우 상세의 문서 머리말·본문 표). 스크롤과 함께 올라간다. */
   docHeader?: ReactNode;
 };
@@ -116,7 +113,6 @@ export function OwnerCoachChat({
   onPublishedMany,
   editEntry,
   onUpdated,
-  onDeleteEntry,
   docHeader,
 }: OwnerCoachChatProps) {
   const router = useRouter();
@@ -806,7 +802,6 @@ export function OwnerCoachChat({
                 onPublish={handlePublish}
                 onPatch={(sq) => setSquare(sq)}
                 onTitle={setTitle}
-                onDelete={canEdit ? onDeleteEntry : undefined}
                 publishLabel={isEdit ? '수정 저장' : isInboxAnswer ? '이 답변 보내기' : '노하우로 저장'}
               />
             </Appear>

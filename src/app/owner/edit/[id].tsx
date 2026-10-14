@@ -16,9 +16,6 @@ import { formatRelative } from '@/components/coach/coachUtils';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { useSuggestionStore } from '@/lib/store/useSuggestionStore';
 import { useSessionStore } from '@/lib/store/useSessionStore';
-import { useStaffStore } from '@/lib/store/useStaffStore';
-import { useWorkStore, understandingOf } from '@/lib/store/useWorkStore';
-import { useQuizBoard } from '@/lib/quiz/useQuizBoard';
 import { confirmAction } from '@/lib/utils/confirm';
 import { fetchKnowhowUsage } from '@/lib/db';
 import { deleteConfirmMessage } from '@/lib/knowhow/archive';
@@ -45,14 +42,7 @@ export default function EditKnowledgeScreen() {
   const loaded = usePlaybookStore((s) => s.loaded);
   const entry = usePlaybookStore((s) => (id ? s.getById(id) : undefined));
 
-  // ★게이트는 playbook 하나로 부족하다 — 문서 머리말 진도바가 읽는 **staff·understanding(work)·퀴즈 문항**이
-  //   게이트 밖이면 "직원 N명 중 M명이 통과했어요" 한 줄이 본문이 다 그려진 뒤에 끼어들어 화면이 밀린다.
-  //   useQuizBoard 는 인스턴스마다 자기 쿼리를 치므로 **여기서 한 번만** 부르고 아래로 내려보낸다.
-  //   훅은 `&&` 안에서 부르지 않는다 — 각각 받은 뒤 AND 한다.
-  const staffLoaded = useStaffStore((s) => s.loaded);
-  const workLoaded = useWorkStore((s) => s.loaded);
-  const { quizCountOf, boardLoaded } = useQuizBoard();
-  const ready = loaded && staffLoaded && workLoaded && boardLoaded;
+  const ready = loaded;
 
   // 스토어 hydrate 전(콜드 진입/새로고침)엔 '삭제됨' 대신 로딩 표시 — 데이터 도착 후 판단.
   if (!ready) {
@@ -79,10 +69,10 @@ export default function EditKnowledgeScreen() {
   }
 
   // key=id로 다른 노하우로 파라미터가 바뀌면 채팅이 새 엔트리로 재마운트된다.
-  return <ConversationalEdit key={entry.id} entry={entry} quizCountOf={quizCountOf} sugId={sugId} />;
+  return <ConversationalEdit key={entry.id} entry={entry} sugId={sugId} />;
 }
 
-function ConversationalEdit({ entry, quizCountOf, sugId }: { entry: PlaybookEntry; quizCountOf: (entryId: string) => number; sugId?: string }) {
+function ConversationalEdit({ entry, sugId }: { entry: PlaybookEntry; sugId?: string }) {
   const router = useRouter();
   const update = usePlaybookStore((s) => s.update);
   const approveSuggestion = useSuggestionStore((s) => s.approve);
@@ -178,9 +168,24 @@ function ConversationalEdit({ entry, quizCountOf, sugId }: { entry: PlaybookEntr
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
-      {/* 삭제는 헤더가 아니라 카드의 '수정 저장' 옆에 있다(OwnerCoachChat → MiniSquareCard). */}
       <Stack.Screen options={{ title: '노하우 수정' }} />
-      <ScreenTitleHeader title="노하우 수정" backFallback />
+      {/* 삭제는 헤더 오른쪽 빨간 휴지통(2026-10-14 사용자 요청). 본사 사본은 지우지 않는다 — BrandCopyPanel 의 숨기기. */}
+      <ScreenTitleHeader
+        title="노하우 수정"
+        backFallback
+        right={
+          isBrandCopy(entry) ? undefined : (
+            <Pressable
+              onPress={del}
+              style={({ pressed }) => [styles.headerAction, pressed && { opacity: 0.6 }]}
+              accessibilityRole="button"
+              accessibilityLabel="노하우 삭제"
+            >
+              <Ionicons name="trash-outline" size={22} color={BrandColors.bad} />
+            </Pressable>
+          )
+        }
+      />
 
       {/* 카테고리 + 문제 만들기 — 이 노하우를 '어디에 묶을지'와 '뭘 물어볼지'는 같은 결정 층이라
           한 줄에 나란히 둔다. 문서 머리말에 있던 문제 만들기 행은 여기로 옮겼다(2026-08-18). */}
@@ -216,12 +221,10 @@ function ConversationalEdit({ entry, quizCountOf, sugId }: { entry: PlaybookEntr
         initialCategory={entry.category}
         editEntry={entry}
         onUpdated={onUpdated}
-        // 본사 사본은 여기서 지우지 않는다(서버 brand_copy_use_hide) — 위 BrandCopyPanel 의 숨기기를 쓴다.
-        onDeleteEntry={isBrandCopy(entry) ? undefined : del}
         onPublished={() => {}}
         docHeader={
           <Appear delay={stagger(1)}>
-            <KnowhowDoc entry={entry} quizCountOf={quizCountOf} />
+            <KnowhowDoc entry={entry} />
           </Appear>
         }
       />
@@ -281,33 +284,16 @@ function ConversationalEdit({ entry, quizCountOf, sugId }: { entry: PlaybookEntr
   );
 }
 
-/** 진행바 트랙 높이 — 도형 자체 치수라 간격 토큰 대상이 아니다. */
-const PROGRESS_TRACK_H = 5;
-
 /**
- * 노하우 문서 머리말 — 상세 화면의 '읽는 면' 중 **제목·진도·메타**만.
- *
- * ★ 진행바는 '읽음'이 아니라 '통과'다(knowhow_understanding). 여기서 집계하지 않는다 —
- *   문항 수는 useQuizBoard, 통과자는 understandingOf 가 SSOT고 이 블록은 배치만 한다.
- * ★ 문항이 0개면 바를 그리지 않는다 — 빈 바는 0%(아무도 못 맞힘)로 읽힌다.
+ * 노하우 문서 머리말 — 상세 화면의 '읽는 면' 중 **제목·메타**만.
+ * 퀴즈 통과 진도 줄은 2026-10-14 사용자 요청으로 뺐다.
  *
  * ★ 2026-08-08: **본문(상황·할 일·금지)은 여기서 안 그린다.** 아래 코치챗 카드가 유일한 자리다.
  *   옛 구조는 문서와 카드가 같은 본문을 둘 다 그릴 수 있어 "어느 쪽을 접을지" 판정이 필요했고,
  *   그 판정이 어긋나면 본문이 화면 어디에도 안 남았다(08-07 [치명]). 그릴 수 있는 자리를 하나로 줄여
  *   그 버그 종류를 없앴다. 제목만 이쪽이 들고, 카드는 hideTitle 로 양보한다.
  */
-function KnowhowDoc({ entry, quizCountOf }: { entry: PlaybookEntry; quizCountOf: (entryId: string) => number }) {
-  const staff = useStaffStore((s) => s.staff);
-  const understanding = useWorkStore((s) => s.understanding);
-
-  const quizCount = quizCountOf(entry.id);
-  const total = staff.length;
-  // 분자·분모는 같은 모집단이어야 한다 — 통과 기록엔 퇴사자가 남아 있어서(명부는 RLS로 제외)
-  // 교집합을 안 하면 "직원 2명 중 3명이 통과"가 나온다.
-  const staffIds = new Set(staff.map((s) => s.id));
-  const passed = understandingOf(understanding, entry.id).filter((r) => staffIds.has(r.staffId)).length;
-  const pct = total > 0 ? Math.min(100, Math.round((passed / total) * 100)) : 0;
-
+function KnowhowDoc({ entry }: { entry: PlaybookEntry }) {
   const verifiedAt = entry.verification?.verified_at;
   const hits = entry.stats?.query_hits_30d ?? 0;
   const hasMeta = !!entry.verification || !!verifiedAt || hits > 0;
@@ -315,15 +301,6 @@ function KnowhowDoc({ entry, quizCountOf }: { entry: PlaybookEntry; quizCountOf:
   return (
     <View style={styles.doc}>
       <Text style={styles.docTitle}>{entry.title}</Text>
-
-      {quizCount > 0 && total > 0 ? (
-        <View style={styles.progressWrap}>
-          <View style={styles.progressTrack}>
-            <View style={[styles.progressFill, { width: `${pct}%` }]} />
-          </View>
-          <Text style={styles.progressText}>직원 {total}명 중 {passed}명이 퀴즈를 통과했어요</Text>
-        </View>
-      ) : null}
 
       {hasMeta ? (
         <View style={styles.metaRow}>
@@ -339,18 +316,14 @@ function KnowhowDoc({ entry, quizCountOf }: { entry: PlaybookEntry; quizCountOf:
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: InkColors.cream },
+  headerAction: {
+    minWidth: 48, minHeight: 48, alignItems: 'flex-end', justifyContent: 'center',
+    paddingLeft: Space.sm, marginRight: -4,
+  },
 
   // 문서 머리말 + 본문 표(상세의 읽는 면)
   doc: { gap: Space.md },
   docTitle: { fontSize: 17, fontWeight: '800', color: InkColors.ink, letterSpacing: -0.3 },
-  progressWrap: { gap: Space.xs },
-  progressTrack: {
-    height: PROGRESS_TRACK_H, borderRadius: Radius.pill,
-    backgroundColor: InkColors.bgSoft, overflow: 'hidden',
-  },
-  progressFill: { height: '100%', borderRadius: Radius.pill, backgroundColor: BrandColors.good },
-  // 숫자만 있는 배지가 아니라 읽어서 판단하는 문장이라 본문 15sp 하한을 그대로 적용한다.
-  progressText: { fontSize: 15, color: InkColors.ink2 },
   metaRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: Space.xs },
   metaChip: {
     fontSize: 11, fontWeight: '800', color: InkColors.ink2,
