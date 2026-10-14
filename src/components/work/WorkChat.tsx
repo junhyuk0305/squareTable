@@ -1,6 +1,7 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, Pressable, ScrollView, TextInput, Platform, StyleSheet, type NativeSyntheticEvent, type NativeScrollEvent } from 'react-native';
 import { KeyboardShift } from '@/components/KeyboardShift';
+import { useBottomPin } from '@/lib/hooks/useBottomPin';
 import { BottomSheet } from '@/components/BottomSheet';
 import { StoredImage } from '@/components/StoredImage';
 import { Ionicons } from '@expo/vector-icons';
@@ -205,6 +206,8 @@ export function WorkChat({
   // (애니메이션 scrollToEnd 가 y=0에서 출발하며 상단 트리거(y≤40)를 오발 → 앵커 복원이
   //  하단 스크롤을 끊어 중간에 걸리는 레이스 방지. 초기 점프는 무애니메이션이라 구간 자체도 없다.)
   const initialPin = useRef(true);
+  // 첫 진입은 맨 아래에 맞춘 뒤에 보인다 — 맨 위가 한 프레임 보였다가 내려가는 잔상을 없앤다(useBottomPin).
+  const { pinOnSize, hideUntilPinned } = useBottomPin(scrollRef);
 
   const loadMore = useCallback(() => {
     if (stream.length <= visible) return;
@@ -213,6 +216,7 @@ export function WorkChat({
   }, [stream.length, visible]);
 
   const onContentSizeChange = useCallback((_w: number, h: number) => {
+    pinOnSize(h);
     const a = anchorRef.current;
     if (a) {
       // 위로 붙은 만큼(delta)을 더해 스크롤을 내려 시야를 그대로 유지.
@@ -223,7 +227,7 @@ export function WorkChat({
       scrollRef.current?.scrollTo({ y: h, animated: false });
     }
     contentH.current = h;
-  }, []);
+  }, [pinOnSize]);
 
   const onScroll = useCallback(
     (e: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -331,6 +335,7 @@ export function WorkChat({
 
       <ScrollView keyboardShouldPersistTaps="handled"
         ref={scrollRef}
+        style={hideUntilPinned}
         // 이 화면은 네이티브 헤더를 끄고(headerShown:false) 바깥 SafeAreaView 가 top 인셋을 이미 먹으므로,
         // ios-preflight: ok iOS 자동 contentInset('automatic')이 더할 몫이 0 이다 — 이중 여백이 생기지 않는다.
         contentContainerStyle={[s.scroll, topInset ? { paddingTop: HDR_H + 16 + topInset } : null]}

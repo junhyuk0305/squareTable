@@ -13,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { Appear, stagger } from '@/components/Appear';
 import { KeyboardShift } from '@/components/KeyboardShift';
+import { useBottomPin } from '@/lib/hooks/useBottomPin';
 import { ChatComposerBar, PlusToggleIcon } from '@/components/ChatComposerBar';
 import { ScreenLoading } from '@/components/ScreenLoading';
 import { ChatTurn } from '@/components/junior/ChatTurn';
@@ -110,9 +111,8 @@ export function JuniorAsk({ suggestEntry = true, seed }: { suggestEntry?: boolea
   // ＋ 메뉴(노하우 제안) — 업무 채팅 입력바와 같은 형태.
   const [menu, setMenu] = useState(false);
   const scrollRef = useRef<ScrollView | null>(null);
-  // 첫 진입(마운트·기존 기록 hydrate)은 애니 없이 바닥으로 '점프' → 히스토리를 위에서부터 스크롤해 내려오는
-  // 잔상 없이 최신 대화가 바로 보인다. 이후 새 메시지부터만 부드럽게 스크롤한다.
-  const didInitialScroll = useRef(false);
+  // 첫 진입은 맨 아래에 맞춘 뒤에 보인다(useBottomPin). 이후 새 메시지부터만 부드럽게 스크롤한다.
+  const { pinnedRef, pinOnSize, hideUntilPinned } = useBottomPin(scrollRef);
 
   // 윈도잉 상태 — 최근 visibleCount개만 렌더. 위로 스크롤(또는 상단 '이전 대화' 탭)하면 페이지 단위로 더 붙인다.
   const [visibleCount, setVisibleCount] = useState(CHAT_WINDOW);
@@ -133,6 +133,7 @@ export function JuniorAsk({ suggestEntry = true, seed }: { suggestEntry?: boolea
     if (y <= 48) loadOlder(); // 상단 근처로 끌어올리면 이전 대화 로드
   };
   const onContentSize = (_w: number, h: number) => {
+    pinOnSize(h);
     if (loadingOlder.current) {
       // 위에 콘텐츠가 붙어 전체가 아래로 밀렸으니, 늘어난 만큼 스크롤을 내려 보던 메시지를 그대로 둔다.
       const delta = h - contentH.current;
@@ -144,15 +145,12 @@ export function JuniorAsk({ suggestEntry = true, seed }: { suggestEntry?: boolea
   // 보낼 수 있는 상태 = 입력값 있음 + 로딩 아님 → 전송 버튼이 노랑으로 '켜짐'(active 액센트).
   const canSend = !!input.trim() && !isLoading;
 
-  // 신규 메시지가 들어오면 자동으로 바닥까지 스크롤
+  // 신규 메시지가 들어오면 자동으로 바닥까지 스크롤. 첫 진입은 useBottomPin 이 이미 바닥에 맞췄다.
   useEffect(() => {
-    const isFirst = !didInitialScroll.current;
-    const t = setTimeout(() => {
-      scrollRef.current?.scrollToEnd({ animated: !isFirst });
-      if (history.length > 0) didInitialScroll.current = true;
-    }, 60);
+    if (!pinnedRef.current) return;
+    const t = setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 60);
     return () => clearTimeout(t);
-  }, [history.length, isLoading]);
+  }, [history.length, isLoading, pinnedRef]);
 
   function handleSend(text?: string) {
     const value = (text ?? input).trim();
@@ -185,7 +183,7 @@ export function JuniorAsk({ suggestEntry = true, seed }: { suggestEntry?: boolea
       ) : (
       <ScrollView
         ref={scrollRef}
-        style={styles.scroll}
+        style={[styles.scroll, hideUntilPinned]}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"

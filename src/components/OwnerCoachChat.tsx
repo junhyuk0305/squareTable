@@ -42,6 +42,7 @@ import { styles } from './coach/coachStyles';
 import { formatRelative, pickImageWeb } from './coach/coachUtils';
 
 import type { PlaybookEntry, SquareBlock, UnknownQuery } from '@/types';
+import { useBottomPin } from '@/lib/hooks/useBottomPin';
 
 /* ───────────────────────────────────────────────────────────
  * 대화형 노하우 입력 (chat-first). 두 진입점이 같은 컴포넌트를 공유:
@@ -171,6 +172,8 @@ export function OwnerCoachChat({
   // 다중 분리 발행에서 이미 저장 성공한 세그 인덱스 — 부분 실패 후 재시도 시 성공분 중복 저장 방지(F4, handover와 동일).
   const publishedSegRef = useRef<Set<number>>(new Set());
   const scrollRef = useRef<ScrollView | null>(null);
+  // 첫 진입은 맨 아래에 맞춘 뒤에 보인다(useBottomPin). 아래 effect 는 그 뒤 새 메시지만 따라간다.
+  const { pinnedRef, pinOnSize, hideUntilPinned } = useBottomPin(scrollRef);
 
   const unitId = useSessionStore.getState().unitId;
   const storeId = unitId || 'store_001';
@@ -220,9 +223,10 @@ export function OwnerCoachChat({
   const inReview = square !== null && pending.length === 0 && !awaitingSplit;
 
   useEffect(() => {
+    if (!pinnedRef.current) return;
     const t = setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 60);
     return () => clearTimeout(t);
-  }, [messages.length, busy, pending.length, editing]);
+  }, [messages.length, busy, pending.length, editing, pinnedRef]);
 
   const pushMsg = useCallback((m: MsgInput) => {
     setMessages((prev) => [...prev, { ...m, id: nextId() }]);
@@ -739,10 +743,11 @@ export function OwnerCoachChat({
 
       <ScrollView
         ref={scrollRef}
-        style={styles.scroll}
+        style={[styles.scroll, hideUntilPinned]}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
+        onContentSizeChange={(_w, h) => pinOnSize(h)}
       >
         {docHeader}
         {messages.map((m) => {
