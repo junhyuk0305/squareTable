@@ -264,6 +264,9 @@ export default function OwnerTrainingScreen() {
           onChange={(k) => setTab(k as 'running' | 'done')}
         />
       ) : null}
+      {/* ★목록과 + 버튼을 탭바 **위** 상자에 담는다 — + 버튼(absolute)의 바닥 기준이 이 상자라 탭바에 안 가린다.
+          예전엔 탭바까지 포함한 화면 전체가 기준이라 + 가 탭바 밑으로 들어갔다(2026-10-14). 노하우 탭과 같은 구조. */}
+      <View style={st.body}>
       <ScrollView contentContainerStyle={st.scroll} showsVerticalScrollIndicator={false}>
         {/* ★전부 도착 전엔 로딩이다. 코스만 기다리면 "초안"이 먼저 떴다가 "3/5명"으로 뒤바뀐다
             (아직 안 온 것을 없는 것처럼 말하는 것 = 08-07 정본 §0-1 이 금지한 바로 그것). */}
@@ -540,6 +543,7 @@ export default function OwnerTrainingScreen() {
           <Ionicons name="add" size={28} color={InkColors.ink} />
         </Pressable>
       ) : null}
+      </View>
 
       {/* 고쳐야 할 퀴즈 — 새 화면을 만들지 않는다(IA 증식 금지). 갈래가 둘이라 **한 시트 안에서** 나눈다:
           ① 옛 정답이 나가는 퀴즈 → 문항을 다시 만든다  ② 다들 틀리는 노하우 → 글을 고친다.
@@ -879,6 +883,7 @@ function GuestRowView({
 
 const st = StyleSheet.create({
   safe: { flex: 1, backgroundColor: InkColors.paper },
+  body: { flex: 1 },
   // 바닥 여백은 **+ 버튼(56) + 아래 거터(20)** 를 비켜야 한다 — 안 그러면 마지막 줄이 버튼에 가린다.
   scroll: { padding: Space.gutter, paddingBottom: 56 + Space.gutter * 2, gap: Space.md, flexGrow: 1 },
 
