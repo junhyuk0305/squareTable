@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Platform, StyleSheet } from 'react-native';
+import { Platform, StyleSheet, View } from 'react-native';
 import { SafeAreaView, type Edge } from 'react-native-safe-area-context';
 import { Stack, router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 
@@ -880,6 +880,10 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
 
       {view === 'chat' && (
         <Appear delay={stagger(0)} style={{ flex: 1 }}>
+        {/* ★안쪽 View 는 방 칩바(position:absolute)의 기준 상자다. 안드로이드 Appear 는 재생 중에만 상자를
+            margin -32 / padding +32 로 넓히는데(그림자 레이어), 절대 위치는 그 넓힌 상자 기준이라 칩바가
+            위·왼쪽으로 32 밀려 떴다가 끝나는 순간 제자리로 튀었다(2026-10-14 실기기). 넓힘이 닿지 않는 안쪽에 둔다. */}
+        <View style={{ flex: 1 }}>
         {/* ★방 칩바는 WorkChat **밖**에 둔다 — WorkChat 은 key={currentRoomId} 로 방마다 새로 마운트돼서,
             안에 넣으면 방을 옮길 때마다 칩바까지 통째로 다시 그려진다(탭한 칩이 깜빡인다). */}
         <WorkChat
@@ -912,6 +916,7 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
           onWriteNotice={() => openPanel('notice')}
         />
         <RoomBar me={userId} feed={feed} onCreate={openRoomComposer} />
+        </View>
         </Appear>
       )}
 
