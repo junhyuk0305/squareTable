@@ -207,7 +207,7 @@ export function WorkChat({
   //  하단 스크롤을 끊어 중간에 걸리는 레이스 방지. 초기 점프는 무애니메이션이라 구간 자체도 없다.)
   const initialPin = useRef(true);
   // 첫 진입은 맨 아래에 맞춘 뒤에 보인다 — 맨 위가 한 프레임 보였다가 내려가는 잔상을 없앤다(useBottomPin).
-  const { pinOnSize, hideUntilPinned } = useBottomPin(scrollRef);
+  const { pinOnSize, trackPin, hideUntilPinned } = useBottomPin(scrollRef);
 
   const loadMore = useCallback(() => {
     if (stream.length <= visible) return;
@@ -216,8 +216,8 @@ export function WorkChat({
   }, [stream.length, visible]);
 
   const onContentSizeChange = useCallback((_w: number, h: number) => {
-    pinOnSize(h);
     const a = anchorRef.current;
+    if (!a) pinOnSize(h);
     if (a) {
       // 위로 붙은 만큼(delta)을 더해 스크롤을 내려 시야를 그대로 유지.
       scrollRef.current?.scrollTo({ y: a.y + (h - a.h), animated: false });
@@ -233,6 +233,7 @@ export function WorkChat({
     (e: NativeSyntheticEvent<NativeScrollEvent>) => {
       const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
       lastY.current = contentOffset.y;
+      trackPin(e);
       contentH.current = contentSize.height;
       nearBottom.current = contentOffset.y + layoutMeasurement.height >= contentSize.height - 80;
       // 초기 하단 고정이 끝나기 전(하단 미도달)에는 상단 자동 트리거를 무시한다.
@@ -242,7 +243,7 @@ export function WorkChat({
       }
       if (contentOffset.y <= 40 && hasMore && !anchorRef.current) loadMore();
     },
-    [hasMore, loadMore],
+    [hasMore, loadMore, trackPin],
   );
 
   // 새 메시지/최초 로드 시 하단으로. 단, 위로 올려 과거를 읽는 중이면 끌어내리지 않는다.

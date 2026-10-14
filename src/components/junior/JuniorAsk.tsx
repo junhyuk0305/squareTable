@@ -112,7 +112,7 @@ export function JuniorAsk({ suggestEntry = true, seed }: { suggestEntry?: boolea
   const [menu, setMenu] = useState(false);
   const scrollRef = useRef<ScrollView | null>(null);
   // 첫 진입은 맨 아래에 맞춘 뒤에 보인다(useBottomPin). 이후 새 메시지부터만 부드럽게 스크롤한다.
-  const { pinnedRef, pinOnSize, hideUntilPinned } = useBottomPin(scrollRef);
+  const { pinnedRef, pinOnSize, trackPin, hideUntilPinned } = useBottomPin(scrollRef);
 
   // 윈도잉 상태 — 최근 visibleCount개만 렌더. 위로 스크롤(또는 상단 '이전 대화' 탭)하면 페이지 단위로 더 붙인다.
   const [visibleCount, setVisibleCount] = useState(CHAT_WINDOW);
@@ -130,10 +130,11 @@ export function JuniorAsk({ suggestEntry = true, seed }: { suggestEntry?: boolea
   const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
     const y = e.nativeEvent.contentOffset.y;
     scrollY.current = y;
+    trackPin(e);
     if (y <= 48) loadOlder(); // 상단 근처로 끌어올리면 이전 대화 로드
   };
   const onContentSize = (_w: number, h: number) => {
-    pinOnSize(h);
+    if (!loadingOlder.current) pinOnSize(h);
     if (loadingOlder.current) {
       // 위에 콘텐츠가 붙어 전체가 아래로 밀렸으니, 늘어난 만큼 스크롤을 내려 보던 메시지를 그대로 둔다.
       const delta = h - contentH.current;

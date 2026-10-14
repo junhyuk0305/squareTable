@@ -173,7 +173,7 @@ export function OwnerCoachChat({
   const publishedSegRef = useRef<Set<number>>(new Set());
   const scrollRef = useRef<ScrollView | null>(null);
   // 첫 진입은 맨 아래에 맞춘 뒤에 보인다(useBottomPin). 아래 effect 는 그 뒤 새 메시지만 따라간다.
-  const { pinnedRef, pinOnSize, hideUntilPinned } = useBottomPin(scrollRef);
+  const { pinnedRef, pinOnSize, trackPin, hideUntilPinned } = useBottomPin(scrollRef);
 
   const unitId = useSessionStore.getState().unitId;
   const storeId = unitId || 'store_001';
@@ -747,6 +747,8 @@ export function OwnerCoachChat({
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
+        onScroll={trackPin}
+        scrollEventThrottle={16}
         onContentSizeChange={(_w, h) => pinOnSize(h)}
       >
         {docHeader}
