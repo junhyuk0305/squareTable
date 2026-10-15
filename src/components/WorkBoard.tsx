@@ -222,7 +222,9 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
   // 같은 것을 두 번 만지는 자리가 사라졌다. 옛 링크는 죽이지 않고 할일로 착지시킨다.
   // ?compose=<nonce> — 홈 '할일 등록하기'에서 들어오면 할일 작성 시트까지 연다(값은 매번 달라야 재진입에도 열린다).
   // ?quiz=<nonce> — 직원 홈 '안 푼 퀴즈'·퀴즈 푸시에서 들어오면 카드의 다음 노하우로 응시 시트까지 연다(2026-10-15 QA #5).
-  const { view: viewParam, compose: composeParam, quiz: quizParam } = useLocalSearchParams<{ view?: string; compose?: string; quiz?: string }>();
+  // ?task=<할일 id> — 벨 '할 일을 배정했어요'(notifications util taskRoute)에서 들어오면 할일 탭의 그 할일로 스크롤한다(2026-10-16 F3).
+  const { view: viewParam, compose: composeParam, quiz: quizParam, task: taskParam } =
+    useLocalSearchParams<{ view?: string; compose?: string; quiz?: string; task?: string }>();
   const paramView: ViewKey | null =
     viewParam === 'todo' || viewParam === 'notice' ? viewParam : viewParam === 'assign' ? 'todo' : null;
   const initialView: ViewKey = paramView ?? 'chat';
@@ -234,9 +236,12 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
   const [openedExternally, setOpenedExternally] = useState<boolean>(initialView !== 'chat');
   // 딥링크(?view=)가 마운트 후 바뀌면(홈 등에서 진입) 해당 패널로 동기화.
   // setState-in-effect(캐스케이드 렌더) 대신 "이전 param과 비교해 렌더 중 조정" — React 권장 패턴.
+  // ?task= 만 바뀌어도(같은 view=todo 로 다른 할일 알림을 또 누른 경우) 할일 탭으로 다시 맞춘다.
   const [prevViewParam, setPrevViewParam] = useState(viewParam);
-  if (viewParam !== prevViewParam) {
+  const [prevTaskParam, setPrevTaskParam] = useState(taskParam);
+  if (viewParam !== prevViewParam || taskParam !== prevTaskParam) {
     setPrevViewParam(viewParam);
+    setPrevTaskParam(taskParam);
     if (paramView) {
       setView(paramView);
       setOpenedExternally(true);
@@ -1021,6 +1026,7 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
           isOwner={isOwner}
           me={userId}
           nameOf={nameOf}
+          focusTaskId={taskParam}
           uploadingId={uploadingId}
           onToggle={toggleBoardTask}
           onAttachPhoto={(templateId, date) => attachPhoto(templateId, date)}

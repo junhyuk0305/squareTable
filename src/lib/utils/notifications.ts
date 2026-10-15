@@ -19,7 +19,14 @@ export const MAX_NOTIFS = 50;
 export type JuniorNotifKind =
   | 'notice' | 'mention' | 'assign' | 'swap' | 'swap_approved' | 'swap_rejected'
   | 'suggestion_approved' | 'suggestion_rejected' | 'question' | 'schedule';
-export type JuniorNotifRoute = '/junior/work' | '/junior/schedule' | '/junior/chat';
+export type JuniorNotifRoute = '/junior/work' | TaskRoute<'/junior/work'> | '/junior/schedule' | '/junior/chat';
+
+/** 할일 하나를 가리키는 업무 화면 주소 — `?view=todo&task=<id>`. WorkBoard 가 할일 탭을 열고 그 할일로 스크롤한다.
+ *  배정 알림(직원·매니저·사장 수신)이 전부 이 한 곳에서 주소를 만든다(2026-10-16 F3 · 전에는 `/junior/work` 만 줘서
+ *  채팅에 착지했다). 파라미터 이름은 기존 관례(`?view=`·`?compose=`·`?quiz=`)를 따른다. */
+export type TaskRoute<B extends '/junior/work' | '/owner/work'> = `${B}?view=todo&task=${string}`;
+export const taskRoute = <B extends '/junior/work' | '/owner/work'>(base: B, templateId: string): TaskRoute<B> =>
+  `${base}?view=todo&task=${encodeURIComponent(templateId)}`;
 
 export type JuniorNotif = {
   id: string;
@@ -177,7 +184,7 @@ export function buildJuniorNotifications(args: {
       // today 로 폴백(과거 전량-today 고정이 "최신 아닌데 상단 고정" 버그의 원인이었다).
       at,
       unread: !done[today]?.[t.id] && isAfterAck(at, ackAt),
-      route: '/junior/work',
+      route: taskRoute('/junior/work', t.id),
     });
   }
 
@@ -281,7 +288,7 @@ export type OwnerNotifKind =
   // D11 — 나에게 온 공지·배정(사장 폰에도 푸시가 온다). 매니저 수신 축과 같은 판정이다.
   | 'notice' | 'assign';
 export type OwnerNotifRoute =
-  | '/owner/inbox' | '/owner/suggestions' | '/owner/schedule' | '/owner/staff' | '/owner/work'
+  | '/owner/inbox' | '/owner/suggestions' | '/owner/schedule' | '/owner/staff' | '/owner/work' | TaskRoute<'/owner/work'>
   | '/owner/categories' | '/billing' | '/owner/brand-consent' | '/owner/brand-link' | '/owner/knowledge';
 
 /** 사장 알림(owner_alerts) 행이 탭으로 가는 곳 — 본사 축은 동의 화면/본사 연결, 나머지는 요금제. */
@@ -399,7 +406,9 @@ export function buildOwnerNotifications(args: Parameters<typeof ownerRows>[0], r
 function ownerReceivedRows(received: ManagerReceivedArgs): OwnerNotif[] {
   const out: OwnerNotif[] = [];
   for (const r of buildManagerReceived(received)) {
-    if (r.kind === 'notice' || r.kind === 'assign') out.push({ ...r, kind: r.kind, route: '/owner/work' });
+    // 배정은 그 할일 주소(taskRoute)를 그대로 쓴다 — 공지만 업무 화면으로.
+    if (r.kind === 'assign') out.push({ ...r, kind: r.kind, route: r.route as TaskRoute<'/owner/work'> });
+    else if (r.kind === 'notice') out.push({ ...r, kind: r.kind, route: '/owner/work' });
   }
   return out;
 }
@@ -545,7 +554,7 @@ function ownerRows(args: {
 //   그대로 받아 눌러도 직원 홈으로 튕겼다. 질문과 내 제안 결과는 물어보기 탭(/junior/chat)에서 본다.
 export type ManagerNotifKind =
   | 'mention' | 'swap_approval' | 'question' | 'notice' | 'assign' | 'suggestion_approved' | 'suggestion_rejected';
-export type ManagerNotifRoute = '/owner/work' | '/owner/schedule' | '/junior/chat';
+export type ManagerNotifRoute = '/owner/work' | TaskRoute<'/owner/work'> | '/owner/schedule' | '/junior/chat';
 export type ManagerNotif = Omit<OwnerNotif, 'kind' | 'route'> & { kind: ManagerNotifKind; route: ManagerNotifRoute };
 
 export type ManagerReceivedArgs = {
@@ -591,7 +600,7 @@ function buildManagerReceived(args: ManagerReceivedArgs): ManagerNotif[] {
       body: t.text,
       at,
       unread: !done[today]?.[t.id] && isAfterAck(at, ackAt),
-      route: '/owner/work',
+      route: taskRoute('/owner/work', t.id),
     });
   }
 

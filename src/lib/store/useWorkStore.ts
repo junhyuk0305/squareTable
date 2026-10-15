@@ -1193,7 +1193,11 @@ export const useWorkStore = create<State>((set, get) => ({
     const room = task?.roomId ?? tpl?.roomId ?? curRoom(); // 완료마크는 그 할일의 방(없으면 활성 방)에 묶인다.
     const mark: DoneMark = { by: staffId, byName: staffName, at: now, ...(photoUrl ? { photoUrl } : null) };
     const doneItem: FeedItem = {
-      id: genId('f'),
+      // ★완료 피드는 완료 기록(날짜·할일) 1건당 1행 — id 를 그 키에서 결정적으로 만든다(2026-10-16 F5).
+      //   랜덤 id(genId)였을 때 두 창이 동시에 완료하면 work_done 은 PK 로 1행인데 피드는 2행이 쌓였다.
+      //   서버 쓰기는 ignoreDuplicates(ON CONFLICT DO NOTHING) — 남의 행은 wf_update 정책(작성자만)에 막히므로
+      //   먼저 적힌 완료 알림이 남고 늦은 쪽은 조용히 비긴다(오류 아님).
+      id: `fdone_${date}_${templateId}`,
       date,
       kind: 'task_done',
       text: `${staffName} · ${taskText} 완료`,
@@ -1212,7 +1216,7 @@ export const useWorkStore = create<State>((set, get) => ({
       key,
       { date, templateId, mark, feedAdd: doneItem },
       { date, templateId, mark: null, feedRemoveId: doneItem.id },
-      () => Promise.all([setDone(date, templateId, mark, room), upsertFeed(doneItem)]).then(([a, b]) => a && b),
+      () => Promise.all([setDone(date, templateId, mark, room), upsertFeed(doneItem, { ignoreDuplicates: true })]).then(([a, b]) => a && b),
       '완료 체크 저장에 실패했어요.',
     );
   },

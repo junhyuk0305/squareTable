@@ -69,6 +69,12 @@ function sessionOwner(): Owner | null {
   };
 }
 
+/** 매장 멤버 이름 — 사장 포함(unit_members 명부). 알림 목록의 nameOf 가 쓴다.
+ *  직원 목록(staff)만 보면 사장이 배정한 할일이 '동료님이 할 일을 배정했어요'로 뜬다(2026-10-16 F4).
+ *  모르는 id(탈퇴·다른 매장)는 undefined → 호출부가 폴백('동료'·'직원')을 정한다. */
+export const memberNameOf = (s: Pick<StaffState, 'owner' | 'staff'>, id: string): string | undefined =>
+  s.owner?.id === id ? s.owner.name || undefined : s.staff.find((x) => x.id === id)?.name;
+
 export const useStaffStore = create<StaffState>((set, get) => ({
   // 데모 모드면 시드 명부로 즉시 시작(데모 끊김 방지). Supabase면 빈 채로 → hydrate.
   owner: HAS_SUPABASE ? null : demoOwner,

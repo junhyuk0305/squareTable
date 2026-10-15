@@ -7,7 +7,7 @@ import { Stack, useRouter, type Href } from 'expo-router';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useWorkStore } from '@/lib/store/useWorkStore';
 import { useScheduleStore } from '@/lib/store/useScheduleStore';
-import { useStaffStore } from '@/lib/store/useStaffStore';
+import { useStaffStore, memberNameOf } from '@/lib/store/useStaffStore';
 import { useSuggestionStore } from '@/lib/store/useSuggestionStore';
 import { useUnknownQueueStore } from '@/lib/store/useUnknownQueueStore';
 import { useCrossNotifStore } from '@/lib/store/useCrossNotifStore';
@@ -51,6 +51,7 @@ export default function JuniorNotificationsScreen() {
   const scheduleNotices = useScheduleStore((s) => s.notices);
   const scheduleLoaded = useScheduleStore((s) => s.loaded);
   const staff = useStaffStore((s) => s.staff);
+  const owner = useStaffStore((s) => s.owner);
   const staffLoaded = useStaffStore((s) => s.loaded);
   // 내 제안 검토 결과(반영/반려+사유) 알림용 — 이 화면 진입 시 당긴다(내공간 밖에선 미로드일 수 있음).
   const suggestions = useSuggestionStore((s) => s.suggestions);
@@ -84,7 +85,8 @@ export default function JuniorNotificationsScreen() {
         feed,
         swaps,
         templates,
-        nameOf: (id) => (id === me ? '나' : staff.find((x) => x.id === id)?.name ?? '동료'),
+        // 배정자는 사장일 수 있다 — 명부 SSOT(memberNameOf · 사장 포함). '동료'는 명부에 없을 때만.
+        nameOf: (id) => (id === me ? '나' : memberNameOf({ owner, staff }, id) ?? '동료'),
         userId: me,
         today,
         taskTemplates,
@@ -94,7 +96,7 @@ export default function JuniorNotificationsScreen() {
         queue,
         scheduleNotices,
       }),
-    [feed, swaps, templates, staff, me, today, taskTemplates, done, ackAt, suggestions, queue, scheduleNotices],
+    [feed, swaps, templates, owner, staff, me, today, taskTemplates, done, ackAt, suggestions, queue, scheduleNotices],
   );
 
   const initial = (userName ?? '나').trim().slice(0, 1) || '나';

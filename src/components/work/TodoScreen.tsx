@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, Pressable, ScrollView, StyleSheet, Animated, Easing } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -22,6 +22,9 @@ const WD = ['일', '월', '화', '수', '목', '금', '토'];
 const FOLD_MS = 200;
 /** 우하단 할일 추가 FAB 지름 — 터치 타깃 하한(48dp) 정확히. 노하우 탭 FAB(56)보다 작게 둔다. */
 const FAB_SIZE = 48;
+/** ?task= 포커스 스크롤을 재기 전에 기다리는 시간(ms). 그룹 Collapse(200ms)·항목 Appear(280ms + 지연 최대 210ms)가
+ *  마운트 직후 함께 움직여서, 바로 재면 앞 그룹 높이가 아직 0 이라 짧게 스크롤된다. */
+const FOCUS_SETTLE_MS = 520;
 
 function ymd(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -49,6 +52,7 @@ export function TodoScreen({
   isOwner,
   me,
   nameOf,
+  focusTaskId,
   uploadingId,
   onToggle,
   onAttachPhoto,
@@ -67,6 +71,8 @@ export function TodoScreen({
   isOwner: boolean;
   me: string;
   nameOf?: (id: string) => string;
+  /** 보이게 할 할일 id(?task= · 벨 배정 항목). 오늘로 맞추고 그 그룹을 펴고 그 항목으로 스크롤한다. 같은 id 는 한 번만. */
+  focusTaskId?: string;
   uploadingId?: string | null;
   onToggle: (templateId: string, date: string) => void;
   onAttachPhoto?: (templateId: string, date: string) => void;
@@ -184,6 +190,42 @@ export function TodoScreen({
     mkGroup('__orphan__', '기타', sharedTasks.filter((t) => !knownIds.has(t.section))),
     mkGroup('__private__', '내 개인 할일', privateTasks),
   ].filter((g) => g.total > 0);
+
+  // ── ?task= 포커스(2026-10-16 F3) — 벨 '할 일을 배정했어요'에서 들어온 할일을 보이게 한다.
+  //    오늘로 맞추고 → 접힌 그룹을 펴고 → 항목이 레이아웃된 뒤 그 위치로 스크롤. 같은 id 로는 한 번만(사용자 스크롤을 되돌리지 않는다).
+  //    setState-in-effect 대신 "이전 prop 과 비교해 렌더 중 조정"(WorkBoard 의 ?view= 패턴과 동일).
+  const listRef = useRef<ScrollView>(null);
+  const focusRef = useRef<View>(null);
+  const [focusPending, setFocusPending] = useState(focusTaskId);
+  const [prevFocus, setPrevFocus] = useState(focusTaskId);
+  if (focusTaskId !== prevFocus) {
+    setPrevFocus(focusTaskId);
+    setFocusPending(focusTaskId);
+    if (focusTaskId && selected !== today) setSelected(today);
+  }
+  const focusGroup = focusPending ? groups.find((g) => g.tasks.some((t) => t.id === focusPending)) : undefined;
+  const focusColKey = focusGroup ? `${selected}:${focusGroup.key}` : null;
+  if (focusColKey && collapsed[focusColKey]) setCollapsed((c) => ({ ...c, [focusColKey]: false }));
+  function scrollToFocus() {
+    const node = focusRef.current;
+    const inner = listRef.current?.getInnerViewNode?.();
+    if (!node || !inner) {
+      setFocusPending(undefined);
+      return;
+    }
+    const finish = () => setFocusPending(undefined);
+    node.measureLayout(inner, (_x, y) => {
+      listRef.current?.scrollTo({ y: Math.max(0, y - 8), animated: true });
+      finish();
+    }, finish);
+  }
+  // 항목 onLayout → 등장 애니메이션이 가라앉은 뒤 한 번 잰다(FOCUS_SETTLE_MS). 다시 레이아웃되면 타이머를 새로 건다.
+  const focusTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  function scheduleFocusScroll() {
+    if (focusTimer.current) clearTimeout(focusTimer.current);
+    focusTimer.current = setTimeout(scrollToFocus, FOCUS_SETTLE_MS);
+  }
+  useEffect(() => () => { if (focusTimer.current) clearTimeout(focusTimer.current); }, []);
 
   const monthLabel = `${cursor.getFullYear()}년 ${cursor.getMonth() + 1}월`;
   const selDate = new Date(`${selected}T00:00:00`);
@@ -314,7 +356,7 @@ export function TodoScreen({
       )}
 
       {/* 데이파트 그룹 */}
-      <ScrollView contentContainerStyle={s.listScroll} showsVerticalScrollIndicator={false}>
+      <ScrollView ref={listRef} contentContainerStyle={s.listScroll} showsVerticalScrollIndicator={false}>
         {groups.length === 0 && <Text style={s.empty}>이 날 할일이 없어요.</Text>}
         {groups.map((g, gi) => {
           const isCol = collapsed[`${selected}:${g.key}`];
@@ -353,7 +395,11 @@ export function TodoScreen({
                     const repeat = repeatLabel(t);
                     return (
                       <Appear key={t.id} delay={stagger(i)}>
-                      <View style={[s.item, isMine && s.itemMine, i === g.tasks.length - 1 && { borderBottomWidth: 0 }]}>
+                      <View
+                        ref={t.id === focusPending ? focusRef : undefined}
+                        onLayout={t.id === focusPending ? scheduleFocusScroll : undefined}
+                        style={[s.item, isMine && s.itemMine, i === g.tasks.length - 1 && { borderBottomWidth: 0 }]}
+                      >
                         <View style={[s.scopeBar, { backgroundColor: isMine ? MINE : SHARED }]} />
                         <Pressable onPress={() => {
                           // 완료 취소 시 첨부한 완료 사진이 함께 삭제되므로 미리 경고(파괴적 동작).

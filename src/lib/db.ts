@@ -3234,13 +3234,18 @@ export async function fetchFeed(): Promise<ReadResult<FeedItem[]>> {
   const older = (pinned.data ?? []).map((r: any) => r.data as FeedItem).filter((f) => !have.has(f.id));
   return { data: [...older, ...items], error: false };
 }
-export async function upsertFeed(item: FeedItem): Promise<boolean> {
+/** opts.ignoreDuplicates — 같은 id 가 이미 있으면 덮지 않고 비긴다(ON CONFLICT DO NOTHING). 결정적 id 를 쓰는
+ *  완료 피드(toggleTask)가 두 창 동시 완료에서 1행을 지키는 데 쓴다. 남의 행 UPDATE 는 wf_update 가 거부하므로
+ *  일반 upsert 로는 오류가 난다. */
+export async function upsertFeed(item: FeedItem, opts?: { ignoreDuplicates: boolean }): Promise<boolean> {
   if (!HAS_SUPABASE) return true;
   // sendState 는 이 기기 표시다(J15 ①) — 서버에 싣지 않는다.
   const { sendState: _local, ...data } = item;
   return write(
     'upsertFeed',
-    supabase.from('work_feed').upsert({ id: item.id, unit_id: _unitId, feed_date: item.date, room_id: item.roomId ?? null, data }),
+    supabase
+      .from('work_feed')
+      .upsert({ id: item.id, unit_id: _unitId, feed_date: item.date, room_id: item.roomId ?? null, data }, { ignoreDuplicates: opts?.ignoreDuplicates }),
   );
 }
 /**
