@@ -20,6 +20,12 @@ import { showUpgradeHint } from '@/lib/config/store-policy';
 const demoOwner = (usersData as any).owner as Owner;
 const demoStaff = (usersData as any).staff as Junior[];
 
+/** 다른 기기에서 이미 승인·거절한 신청(not_pending) — 오류가 아니다. 중립 안내 뒤 서버 상태로 목록을 맞춘다(승인·거절 공용). */
+const alreadyDecided = (get: () => StaffState) => {
+  showToast('이미 처리된 신청이에요. 목록을 새로 불러올게요.');
+  void get().hydrate();
+};
+
 /** 합류 신청자(승인 대기, 남용 #2) — 아직 소속 아님. 이름·전화뒷4만 노출. */
 export type PendingMember = { id: string; name: string; phone_last4: string; created_at: string };
 
@@ -114,6 +120,8 @@ export const useStaffStore = create<StaffState>((set, get) => ({
 
   // 승인: 신청자를 낙관적으로 pending에서 빼고 승인 RPC 호출. 성공하면 로스터를 재조회(새 직원 반영),
   // 실패하면 pending을 복원한다.
+  // ★not_pending(이미 처리됨) 은 실패가 아니다 — 두 기기가 같은 신청을 잇달아 누르면 뒤 기기가 받는다(K5-b).
+  //   복원하면 이미 승인된 사람이 대기 목록에 되살아난다. 뺀 줄은 그대로 두고 서버 상태로 다시 읽는다.
   approve: (id) => {
     const before = get().pending;
     const target = before.find((p) => p.id === id);
@@ -123,6 +131,7 @@ export const useStaffStore = create<StaffState>((set, get) => ({
     set({ pending: before.filter((p) => p.id !== id) });
     void approveMember(id).then(({ ok, code }) => {
       if (ok) get().hydrate();
+      else if (code === 'not_pending') alreadyDecided(get);
       else {
         if (!isStaleEpoch(epoch)) set({ pending: before });
         const limitMsg = `무료 요금제는 직원 ${PLANS.free.maxStaff}명까지 승인할 수 있어요.`;
@@ -156,17 +165,17 @@ export const useStaffStore = create<StaffState>((set, get) => ({
     });
   },
 
-  // 거절: 낙관적 제거 + 실패 시 복원.
+  // 거절: 낙관적 제거 + 실패 시 복원. not_pending 은 approve 와 같은 길(이미 처리됨 → 다시 읽기).
   reject: (id) => {
     const before = get().pending;
     if (!before.some((p) => p.id === id)) return;
     const epoch = currentTenantEpoch(); // approve 와 같은 이유
     set({ pending: before.filter((p) => p.id !== id) });
-    void rejectMember(id).then((ok) => {
-      if (!ok) {
-        if (!isStaleEpoch(epoch)) set({ pending: before });
-        useSyncStore.getState().noteError('거절 처리에 실패했어요. 다시 시도해 주세요.');
-      }
+    void rejectMember(id).then(({ ok, code }) => {
+      if (ok) return;
+      if (code === 'not_pending') return alreadyDecided(get);
+      if (!isStaleEpoch(epoch)) set({ pending: before });
+      useSyncStore.getState().noteError('거절 처리에 실패했어요. 다시 시도해 주세요.');
     });
   },
 

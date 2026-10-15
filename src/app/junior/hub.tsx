@@ -222,6 +222,8 @@ export default function JuniorHub() {
             이 화면은 성격이 다른 세 상태를 겸한다(2026-08-06 정리).
               ① 매장 0개  = C 몰입형 — 할 일은 '코드 넣기' 하나. 입력을 최상단에 두고 그 외를 없앤다.
               ② 승인 대기 = C 몰입형 — 기다리는 것 말곤 할 게 없다. 대기 카드 하나.
+                 (매장이 이미 있는 직원의 추가 신청도 같은 카드다 — 대기의 SSOT 는 profiles.pending_unit_id 이고
+                  매장 유무와 무관하다. 그 아래 ③의 매장 목록은 그대로 두고, 코드 입력만 접는다.)
               ③ 매장 있음 = A 조합형 — 매장 고르기. 코드 입력은 '＋ 매장 추가하기' 한 줄로 접는다.
             옛 판본은 셋을 한 레이아웃으로 그려서 ①에 "코드를 넣어라"가 세 번(히어로 배너·빈 카드·
             입력 섹션) 나왔고, 그중 히어로의 [코드 입력]은 화면 이동이 아니라 포커스만 주는 가짜 버튼이었다.
@@ -230,7 +232,7 @@ export default function JuniorHub() {
         <View style={styles.section}>
           {(pendingUnitId || hasStore) && <Text style={styles.sectionLabel}>내 매장</Text>}
 
-          {pendingUnitId ? (
+          {!!pendingUnitId && (
             <View style={styles.pendingCard}>
               <View style={styles.pendingHead}>
                 <View style={styles.pendingIcon}>
@@ -253,7 +255,8 @@ export default function JuniorHub() {
               {/* 신청취소 실패 사유를 대기카드 안에서 노출(코드입력 섹션은 대기 중 숨겨져 err이 안 보였음 #12). */}
               {err && <Text style={styles.err}>{err}</Text>}
             </View>
-          ) : hasStore ? (
+          )}
+          {hasStore &&
             stores.map((s) => (
               <Pressable
                 key={s.id}
@@ -269,8 +272,7 @@ export default function JuniorHub() {
                 </View>
                 <Ionicons name="chevron-forward" size={18} color={InkColors.ink3} />
               </Pressable>
-            ))
-          ) : null}
+            ))}
 
           {/* ③ 매장 있음 — 코드 입력은 접힌 한 줄. 펼침은 아래로(집 스타일). */}
           {!pendingUnitId && hasStore && (

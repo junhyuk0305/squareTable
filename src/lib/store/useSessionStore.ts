@@ -602,9 +602,11 @@ async function loadProfile(
       brandId,
       unitId,
       storeName,
-      // 승인 대기 상태 반영(남용 #2). 승인돼 unitId가 붙으면 pending은 비운다(pendingStoreName도 정리).
-      pendingUnitId: unitId ? '' : pendingServer,
-      ...(unitId ? { pendingStoreName: '' } : {}),
+      // 승인 대기 상태 반영(남용 #2). SSOT = profiles.pending_unit_id 그대로 — 매장 유무와 무관하다.
+      //   예전엔 unitId 가 있으면 '' 로 가렸고, 그래서 기존 직원의 2호점 신청이 화면에 안 보였다(K5-a).
+      //   승인·취소·거절로 서버 값이 비면 pendingStoreName 도 정리한다.
+      pendingUnitId: pendingServer,
+      ...(pendingServer ? {} : { pendingStoreName: '' }),
       rejectedJoinStoreName,
       industry,
       subStatus,

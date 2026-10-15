@@ -1239,21 +1239,33 @@ export async function fetchPendingMembers(): Promise<ReadResult<{ id: string; na
 
 // 사장이 신청자를 승인 → unit_id 부여(소속 확정). RPC가 '내 매장 신청자'만 통과시킨다.
 // staff_limit(무료 플랜 좌석 캡, 0062)은 일반 실패와 구분해 반환 — 호출부가 업그레이드 안내로 매핑.
-export async function approveMember(uid: string): Promise<{ ok: boolean; code: 'staff_limit' | null }> {
+/** approve_member·reject_member 가 raise 하는 코드 중 화면이 갈라 다루는 것(판정 SSOT — 승인·거절이 같이 쓴다).
+ *  not_pending = 그 신청이 이미 처리됐다(다른 기기에서 승인·거절 · 본인 취소). 실패가 아니라 정상 종료다. */
+export type MemberDecisionCode = 'staff_limit' | 'not_pending' | null;
+const memberDecisionCode = (message: string): MemberDecisionCode =>
+  /not_pending/.test(message) ? 'not_pending' : /staff_limit/.test(message) ? 'staff_limit' : null;
+
+export async function approveMember(uid: string): Promise<{ ok: boolean; code: MemberDecisionCode }> {
   if (!HAS_SUPABASE) return { ok: true, code: null };
   const { error } = await supabase.rpc('approve_member', { p_uid: uid });
   if (error) {
     console.warn('[db] approveMember:', error.message);
     reportError('db.write:approveMember', error);
-    return { ok: false, code: /staff_limit/.test(error.message) ? 'staff_limit' : null };
+    return { ok: false, code: memberDecisionCode(error.message) };
   }
   return { ok: true, code: null };
 }
 
 // 사장이 신청 거절 → pending만 비운다(계정은 유지).
-export async function rejectMember(uid: string): Promise<boolean> {
-  if (!HAS_SUPABASE) return true;
-  return write('rejectMember', supabase.rpc('reject_member', { p_uid: uid }));
+export async function rejectMember(uid: string): Promise<{ ok: boolean; code: MemberDecisionCode }> {
+  if (!HAS_SUPABASE) return { ok: true, code: null };
+  const { error } = await supabase.rpc('reject_member', { p_uid: uid });
+  if (error) {
+    console.warn('[db] rejectMember:', error.message);
+    reportError('db.write:rejectMember', error);
+    return { ok: false, code: memberDecisionCode(error.message) };
+  }
+  return { ok: true, code: null };
 }
 
 // ── 매장별 멤버 역할(0093) ─────────────────────────────────

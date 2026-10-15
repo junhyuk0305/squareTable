@@ -5,8 +5,8 @@
 // 기기 로컬 마커를 남기고, 프로필 로드 때 "대기가 사라졌는데 그 매장 소속도 아니면 거절"로 판정한다.
 // 판정만 여기 순수함수(SSOT)로 두고, 저장(localStorage)·상태 반영은 useSessionStore 가 한다.
 //
-// ★pendingServer 는 profiles.pending_unit_id 원시값이어야 한다 — 세션 pendingUnitId 는 소속 매장이
-//   있으면 마스킹되므로, 그걸 쓰면 "기존 직원의 2호점 신청 중"을 대기 소멸로 오인해 거짓 거절이 뜬다.
+// ★pendingServer 는 profiles.pending_unit_id 원시값이어야 한다 — 세션 반영 전 값이라 매장 유무와 무관하게
+//   "기존 직원의 2호점 신청 중"도 대기로 본다(세션 pendingUnitId 도 지금은 같은 값을 그대로 든다).
 //
 // 순수함수(무의존)라 실행 러너 없이 node type-strip 으로 진리표를 회귀 테스트한다.
 //   scripts/qa-session-readfail.mjs (npm run qa:session)
