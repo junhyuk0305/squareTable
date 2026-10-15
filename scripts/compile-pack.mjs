@@ -6,6 +6,7 @@
 //
 // 저작 포맷(README·노하우_추출_마스터지침 기준):
 //   ### [카테고리] 제목
+//   - 번호: 12        ← id 고정용. 지운 번호는 다시 쓰지 않는다. 새 블록은 팩의 가장 큰 번호 + 1
 //   - 태그: #a #b
 //   - 상황: ...
 //   - 할 일:
@@ -27,8 +28,9 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const PACK_DIR = join(__dirname, '..', '..', '노하우팩'); // 레포 루트/노하우팩
-const OUT = join(__dirname, '..', 'src', 'data', 'knowhow-packs.json');
+// PACK_DIR·PACK_OUT 환경변수: 노하우팩/_현황만들기.mjs 가 제안본을 앱 데이터에 쓰지 않고 검수용으로만 컴파일할 때 쓴다
+const PACK_DIR = process.env.PACK_DIR || join(__dirname, '..', '..', '노하우팩'); // 레포 루트/노하우팩
+const OUT = process.env.PACK_OUT || join(__dirname, '..', 'src', 'data', 'knowhow-packs.json');
 
 // 파일명 → pack_id
 const PACK_FILES = [
@@ -59,7 +61,7 @@ const KNOWN_SECTIONS = new Set([
 // '멘트'는 2026-08-08 폐기됐지만 키 목록에는 남긴다 — 옛 팩 문서에 `- 멘트:` 줄이 남아 있어도
 // 필드로 인식되어 버려지게 하기 위해서다. 목록에서 빼면 그 줄이 **직전 필드(금지)의 이어진 줄**로
 // 흡수돼 금지 칸에 손님 응대 문장이 조용히 섞인다. 버킷은 만들되 아무도 읽지 않는다.
-const FIELD_KEYS = ['섹션', '태그', '상황', '할 일', '할일', '금지', '멘트', '실행', '검색어', '교정포인트', '추천'];
+const FIELD_KEYS = ['번호', '섹션', '태그', '상황', '할 일', '할일', '금지', '멘트', '실행', '검색어', '교정포인트', '추천'];
 
 const clean = (s) =>
   s
@@ -68,7 +70,7 @@ const clean = (s) =>
     .trim();
 
 // 한 `### ` 블록의 본문 라인들 → 필드 버킷
-function parseBlock(catLabel, title, lines, packId, seq) {
+function parseBlock(catLabel, title, lines, packId) {
   const buckets = {};
   let cur = null;
   for (const raw of lines) {
@@ -107,7 +109,12 @@ function parseBlock(catLabel, title, lines, packId, seq) {
   }
 
   const category = CAT_MAP[catLabel] ?? 'Context';
-  const id = `tpl_${packId}_${String(seq).padStart(3, '0')}`;
+  // id 는 순서가 아니라 블록에 적힌 번호로 정한다 — 블록을 지우거나 옮겨도 다른 노하우 id 가 밀리지 않게.
+  const no = Number((buckets['번호']?.[0] ?? '').trim());
+  if (!Number.isInteger(no) || no < 1) {
+    throw new Error(`[compile-pack] "${title}" — 번호 누락 또는 잘못됨: "${buckets['번호']?.[0] ?? '(없음)'}"`);
+  }
+  const id = `tpl_${packId}_${String(no).padStart(3, '0')}`;
 
   return {
     id,
@@ -149,7 +156,6 @@ function compileFile(filePath, packId) {
   const text = readFileSync(filePath, 'utf8');
   const lines = text.split(/\r?\n/);
   const entries = [];
-  let seq = 1;
   let i = 0;
   while (i < lines.length) {
     const h = lines[i].match(/^###\s*\[([^\]]+)\]\s*(.+)$/);
@@ -165,7 +171,12 @@ function compileFile(filePath, packId) {
       if (!/^---\s*$/.test(lines[i]) && !/^##\s/.test(lines[i]) && !/^#\s/.test(lines[i])) body.push(lines[i]);
       i++;
     }
-    entries.push(parseBlock(catLabel, title, body, packId, seq++));
+    entries.push(parseBlock(catLabel, title, body, packId));
+  }
+  const seen = new Set();
+  for (const e of entries) {
+    if (seen.has(e.id)) throw new Error(`[compile-pack] 번호 중복: ${e.id} "${e.title}"`);
+    seen.add(e.id);
   }
   return entries;
 }
