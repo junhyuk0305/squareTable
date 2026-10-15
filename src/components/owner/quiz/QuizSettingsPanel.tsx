@@ -12,8 +12,8 @@
  *   · 새로 체크한 사람 → 오늘 날짜로 배정을 만든다(근무 시간·빈도 상한은 서버가 그대로 판정한다).
  *   · 체크를 푼 사람  → **아직 안 나간** 배정만 취소한다. 이미 받은 사람은 못 뺀다(잠금 + 사유 표기) —
  *     발송 기록은 빈도 상한의 근거라 지우면 "오늘 안 보냈다"가 되어 상한이 깨진다.
- *   · 마감(answer_days)을 바꾸면 **다음 발송부터** 적용된다. 이미 받은 사람의 마감은 받은 날 기준으로
- *     서버가 이미 박아 놨다(claim_quiz_send). 화면이 그걸 바꿀 수 있는 척하지 않는다.
+ *   · 마감은 달력으로 고른 날짜다(2026-10-15 QA #7 · 만들기 5단계와 같은 부품). 저장하면 이 퀴즈의 **모든 발송**에
+ *     due_date·due_on 을 다시 박는다(updateQuizAssignmentsDue) — 이미 받은 사람의 카드도 그 날짜를 본다.
  */
 import { useMemo, useState } from 'react';
 import { View, Text, TextInput, Pressable, StyleSheet } from 'react-native';
@@ -25,9 +25,11 @@ import {
   upsertTrainingCourse,
   insertQuizAssignments,
   cancelPendingQuizAssignmentsFor,
+  updateQuizAssignmentsDue,
 } from '@/lib/db';
-import { todayKst } from '@/lib/quiz/schedule';
+import { todayKst, addDaysKst, daysBetweenKst } from '@/lib/quiz/schedule';
 import { SectionLabel } from '@/components/SectionLabel';
+import { MiniCalendar } from '@/components/blocks/MiniCalendar';
 import { QuizDeployPanel } from '@/components/owner/quiz/QuizDeployPanel';
 import { PrimaryButton, GhostButton, qst } from '@/components/owner/quiz/kit';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
@@ -43,13 +45,10 @@ const CYCLES: { label: string; days: number | null }[] = [
   { label: '6개월마다', days: 180 },
 ];
 
-/** 마감 선택지 — 달력 대신 칩이다. 이 자리에서 고치는 값은 '며칠 안에'(answer_days) 그 자체다. */
-const DEADLINES: { label: string; days: number | null }[] = [
-  { label: '마감 없음', days: null },
-  { label: '3일 안에', days: 3 },
-  { label: '7일 안에', days: 7 },
-  { label: '14일 안에', days: 14 },
-];
+/** 마감 달력이 고를 수 있는 최대 앞날 — 만들기 화면(HORIZON_DAYS)과 같은 값. */
+const HORIZON_DAYS = 30;
+/** '날짜를 정할래요'를 눌렀을 때의 기본 마감 — 만들기 화면(DEADLINE_DEFAULT_DAYS)과 같은 값. */
+const DEADLINE_DEFAULT_DAYS = 3;
 
 type Audience = 'staff' | 'guest';
 
@@ -57,6 +56,7 @@ export function QuizSettingsPanel({
   course,
   staff,
   sends,
+  currentDue,
   remind,
   onSaved,
   onOpenResult,
@@ -65,6 +65,8 @@ export function QuizSettingsPanel({
   staff: { id: string; name: string }[];
   /** 이 퀴즈의 발송 원장 — 누가 이미 받았나(잠금 판정)와 현재 체크 상태의 출처. */
   sends: QuizAssignment[];
+  /** 지금 마감 날짜 "YYYY-MM-DD"(상세가 발송 원장에서 읽는다). null = 마감 없음. 달력의 처음 값이다. */
+  currentDue: string | null;
   /**
    * '아직 안 푼 N명에게 다시 알리기' — 결과 탭에 있던 것을 여기로 옮겼다(결과 탭은 결과만 본다).
    * 판정(누가 안 풀었나)은 상세 화면이 한다 — 이 패널이 다시 세지 않는다.
@@ -76,7 +78,9 @@ export function QuizSettingsPanel({
 }) {
   const [name, setName] = useState(course.name);
   const [cycle, setCycle] = useState<number | null>(course.due_days ?? null);
-  const [deadline, setDeadline] = useState<number | null>(course.answer_days ?? null);
+  /** 마감 날짜(달력 · 2026-10-15 QA #7). null = 마감 없음. 저장하면 모든 발송의 마감이 이 날짜가 된다. */
+  const [dueDate, setDueDate] = useState<string | null>(currentDue);
+  const [today] = useState(() => todayKst());
   const [audience, setAudience] = useState<Audience | null>(course.audience ?? null);
   const [busy, setBusy] = useState(false);
 
@@ -110,10 +114,11 @@ export function QuizSettingsPanel({
   );
 
   const nameChanged = name.trim() !== '' && name.trim() !== course.name;
+  const dueChanged = dueDate !== currentDue;
   const metaChanged =
     nameChanged ||
     cycle !== (course.due_days ?? null) ||
-    deadline !== (course.answer_days ?? null) ||
+    dueChanged ||
     audience !== (course.audience ?? null);
   const peopleChanged = audience === 'staff' && (added.length > 0 || removed.length > 0);
   const dirty = metaChanged || peopleChanged;
@@ -128,12 +133,17 @@ export function QuizSettingsPanel({
           ...course,
           name: name.trim() || course.name,
           due_days: cycle,
-          answer_days: deadline,
+          // 달력 없이 생기는 발송(입사·재확인·다시 알리기)용 '며칠 안에' — 오늘부터 고른 날까지(하한 1 · tc_answer_days_positive).
+          answer_days: dueChanged ? (dueDate ? Math.max(1, daysBetweenKst(today, dueDate)) : null) : course.answer_days ?? null,
           audience,
         }),
         () => {},
         '저장하지 못했어요.',
       );
+      // 마감은 **모든 발송에** 다시 박는다 — 이미 받은 사람의 카드도 이 날짜를 보여야 한다(0291 due_date 축).
+      if (ok && dueChanged) {
+        ok = await guardWrite(updateQuizAssignmentsDue(course.id, dueDate), () => {}, '마감을 바꾸지 못했어요.');
+      }
     }
     if (ok && peopleChanged) {
       if (added.length > 0) {
@@ -205,26 +215,38 @@ export function QuizSettingsPanel({
       </View>
 
       {/* ── 마감 ─────────────────────────────────────────────────────────── */}
+      {/* 마감 — 만들기 5단계와 같은 달력(2026-10-15 QA #7). 저장하면 이미 받은 사람의 마감도 이 날짜로 바뀐다. */}
       <View style={s.card}>
         <Text style={qst.fieldLabel}>언제까지 풀까요</Text>
-        <Text style={qst.fieldHint}>받은 날부터 세요. 바꾸면 다음 발송부터 적용돼요 — 이미 받은 사람의 마감은 그대로예요.</Text>
-        <View style={qst.chipWrap}>
-          {DEADLINES.map((d) => {
-            const on = deadline === d.days;
-            return (
-              <Pressable
-                key={d.label}
-                onPress={() => setDeadline(d.days)}
-                style={[qst.chip, on && qst.chipOn]}
-                accessibilityRole="button"
-                accessibilityState={{ selected: on }}
-                accessibilityLabel={d.label}
-              >
-                <Text style={[qst.chipText, on && qst.chipTextOn]}>{d.label}</Text>
-              </Pressable>
-            );
-          })}
-        </View>
+        <Text style={qst.fieldHint}>저장하면 이미 받은 사람의 마감도 이 날짜로 바뀌어요.</Text>
+        {dueDate ? (
+          <>
+            <MiniCalendar
+              value={dueDate < today ? today : dueDate}
+              today={today}
+              min={today}
+              max={addDaysKst(today, HORIZON_DAYS)}
+              onChange={setDueDate}
+            />
+            <Pressable
+              onPress={() => setDueDate(null)}
+              style={({ pressed }) => [s.textAction, pressed && { opacity: 0.6 }]}
+              accessibilityRole="button"
+              accessibilityLabel="마감 없이 두기"
+            >
+              <Text style={s.textActionText}>마감 없이 둘래요</Text>
+            </Pressable>
+          </>
+        ) : (
+          <Pressable
+            onPress={() => setDueDate(addDaysKst(today, DEADLINE_DEFAULT_DAYS))}
+            style={({ pressed }) => [s.textAction, pressed && { opacity: 0.6 }]}
+            accessibilityRole="button"
+            accessibilityLabel="마감일 정하기"
+          >
+            <Text style={s.textActionText}>마감 없음 · 날짜를 정할래요</Text>
+          </Pressable>
+        )}
       </View>
 
       {/* ── 배포 ─────────────────────────────────────────────────────────── */}
@@ -349,4 +371,7 @@ const s = StyleSheet.create({
   warnText: { fontSize: 12.5, fontWeight: '700', color: BrandColors.warnText, marginTop: Space.xs },
   remind: { marginTop: Space.sm },
   foot: { paddingTop: Space.xs },
+  // 만들기 5단계의 textAction 과 같은 모양(달력 아래 한 줄 글자 버튼 · 48dp 하한).
+  textAction: { minHeight: 48, justifyContent: 'center', alignSelf: 'flex-start' },
+  textActionText: { fontSize: 14, fontWeight: '700', color: InkColors.ink2 },
 });

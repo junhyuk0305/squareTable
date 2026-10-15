@@ -814,11 +814,14 @@ async function main() {
 
   // ── ⑫ cascade: 노하우 삭제 → 코스 항목·통과 기록 소멸 / 코스 삭제 → 그 코스 항목만 ──
   console.log('\n━━ ⑫ cascade ━━');
+  // ★0248(2026-10-05): 사장의 노하우 삭제 = 보관(trg_playbook_entry_soft_delete). 행·코스 항목·통과 기록은 남고
+  //   노하우만 읽히지 않는다. 옛 기대(하드 삭제 cascade)는 0248 뒤로 매번 실패하고 있었다(2026-10-15 교정).
   { await owner.from('playbook_entries').delete().eq('id', E[2]);
+    const { data: gone } = await owner.from('playbook_entries').select('id').eq('id', E[2]).maybeSingle();
+    const { data: raw } = await admin.from('playbook_entries').select('archived_at').eq('id', E[2]).maybeSingle();
     const { data: ce } = await owner.from('course_entries').select('entry_id');
-    const { data: ku } = await owner.from('knowhow_understanding').select('entry_id');
-    check('⑫-1 노하우 삭제 → 코스 항목·통과 기록 cascade',
-      !(ce ?? []).some((x) => x.entry_id === E[2]) && !(ku ?? []).some((x) => x.entry_id === E[2]), `ce=${ce?.length} ku=${ku?.length}`); }
+    check('⑫-1 노하우 삭제 = 보관(0248) · 사장에게 안 읽히고 행·코스 항목은 남는다',
+      !gone && !!raw?.archived_at && (ce ?? []).some((x) => x.entry_id === E[2]), `archived=${raw?.archived_at} ce=${ce?.length}`); }
   { await owner.from('training_courses').delete().eq('id', CS);
     const { data: rows } = await owner.from('course_entries').select('entry_id, course_id');
     const { data: entry } = await owner.from('playbook_entries').select('id').eq('id', E[0]).maybeSingle();

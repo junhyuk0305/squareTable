@@ -2278,7 +2278,7 @@ export async function deleteTrainingRequest(id: string): Promise<boolean> {
 //   SELECT 가능), 응시 화면은 정답 키가 제거된 사본(fetchQuizItemsForAttempt = definer RPC).
 //   채점은 반드시 서버(gradeQuiz) — 문항을 저장하는 순간 클라 채점은 곧 정답 유출이다.
 const QUIZ_ITEM_COLS =
-  'id, unit_id, entry_ids, kind, format, payload, source, status, created_by, created_at, updated_at, source_updated_at';
+  'id, unit_id, entry_ids, kind, format, payload, source, status, created_by, created_at, updated_at, source_updated_at, course_id';
 
 /** 근거 노하우로 문항 찾기(정답 포함) — 사장 문항 편집용. 직원이 부르면 RLS 상 빈 배열. */
 export async function fetchQuizItems(entryIds: string[]): Promise<DbResult<QuizItem[]>> {
@@ -2292,13 +2292,21 @@ export async function fetchQuizItems(entryIds: string[]): Promise<DbResult<QuizI
   return { data: (data as QuizItem[] | null) ?? null, error: error as DbErr };
 }
 
-/** 응시용 문항(정답 제거본) — RPC quiz_items_for. 순서는 사람마다 다르고 재조회해도 같다. */
+/**
+ * 응시용 문항(정답 제거본) — RPC quiz_items_for. 순서는 사람마다 다르고 재조회해도 같다.
+ * courseId 를 주면 **그 퀴즈의 문항만**(0307 · 옛 문항은 노하우 겹침). 할일 자청처럼 퀴즈가 없으면 생략한다.
+ */
 export async function fetchQuizItemsForAttempt(
   entryIds: string[],
   limit = 3,
+  courseId?: string | null,
 ): Promise<DbResult<QuizItem[]>> {
   if (!HAS_SUPABASE || entryIds.length === 0) return { data: [], error: null };
-  const { data, error } = await supabase.rpc('quiz_items_for', { p_entry_ids: entryIds, p_limit: limit });
+  const { data, error } = await supabase.rpc('quiz_items_for', {
+    p_entry_ids: entryIds,
+    p_limit: limit,
+    ...(courseId ? { p_course_id: courseId } : {}),
+  });
   if (error) {
     readFail('fetchQuizItemsForAttempt', error);
     return { data: null, error: error as DbErr };
@@ -2368,6 +2376,8 @@ export async function insertQuizItem(item: QuizItem): Promise<boolean> {
       source: item.source,
       status: item.status,
       created_by: item.created_by ?? null,
+      // 어느 퀴즈의 문항인가(0307). 만들기·편집·복제·본사 작업실이 넣는다. 없으면 옛 규칙(노하우 겹침)으로 나간다.
+      course_id: item.course_id ?? null,
     }),
   );
 }
@@ -2917,6 +2927,20 @@ export async function insertQuizAssignments(
         { onConflict: 'course_id,user_id,scheduled_on', ignoreDuplicates: true },
       )
       .select('id'),
+  );
+}
+
+/**
+ * 이 퀴즈의 마감 날짜를 **모든 발송에** 다시 박는다(설정 탭 달력 · 0291 due_date 축).
+ * 이미 받은 사람의 due_on 도 같이 바꾼다 — 직원 카드의 "○월 ○일까지"가 이 값이라, 사장이 고친 마감을 직원이 봐야 한다.
+ * null = 마감 없음. 아직 안 나간 행은 claim_quiz_send 가 due_date 를 그대로 쓴다.
+ * ★UPDATE 만 쓴다(upsert 금지 — AGENTS.md ④). 행이 0개(아직 아무에게도 안 보냄)면 바꿀 것이 없는 것이라 성공으로 친다.
+ */
+export async function updateQuizAssignmentsDue(courseId: string, dueDate: string | null): Promise<boolean> {
+  if (!HAS_SUPABASE) return true;
+  return write(
+    'updateQuizAssignmentsDue',
+    supabase.from('quiz_assignments').update({ due_date: dueDate, due_on: dueDate }).eq('course_id', courseId),
   );
 }
 

@@ -25,6 +25,7 @@ import { useSessionStore } from '@/lib/store/useSessionStore';
 import { getSectionMeta } from '@/lib/utils/category';
 import type { HeatCell, HeatGroup, HeatLevel } from '@/components/blocks/Heatmap';
 import { cycleLabel } from '@/lib/quiz/schedule';
+import { itemsOfCourse } from '@/lib/quiz/courseItems';
 import type { QuizAssignment, QuizItem, TrainingCourse } from '@/lib/quiz/types';
 
 /** 오답 잦음 판정(0103) — 표본이 이만큼 쌓이고 오답률이 이 선을 넘으면 노하우 결함 신호. */
@@ -253,6 +254,19 @@ export function useQuizBoard() {
     [servableItems, trainedEntryIds],
   );
 
+  /** 낡은 문항인가(0114) — 근거 노하우 중 하나라도 문항을 만든 뒤 바뀌었다. null = 스냅샷 이전 행 → 모르는 것을 "바뀌었다"고 말하지 않는다. */
+  const isStale = useCallback(
+    (q: QuizItem) => {
+      if (!q.source_updated_at) return false;
+      const made = Date.parse(q.source_updated_at);
+      return (q.entry_ids ?? []).some((id) => {
+        const cur = entryById.get(id)?.updated_at;
+        return !!cur && made < Date.parse(cur);
+      });
+    },
+    [entryById],
+  );
+
   const staleCountOf = useCallback(
     (entryId: string) => {
       const cur = entryById.get(entryId)?.updated_at;
@@ -391,19 +405,21 @@ export function useQuizBoard() {
         if (cycle) caption = `${cycle} · ${caption}`;
       }
 
+      // 이 퀴즈의 문항(0307) — 노하우별 합으로 세면 같은 노하우의 다른 퀴즈 문항과 두 노하우에 걸친 문항이 겹쳐 센다.
+      const mine = itemsOfCourse(servableItems, c.id, entryIds).filter((q) => q.status === 'active');
       return {
         course: c,
         status,
         entryCount: entryIds.length,
-        itemCount: entryIds.reduce((n, id) => n + quizCountOf(id), 0),
-        staleCount: entryIds.reduce((n, id) => n + staleCountOf(id), 0),
+        itemCount: mine.length,
+        staleCount: mine.filter((q) => isStale(q)).length,
         recipients: new Set(sends.map((a) => a.userId)).size,
         answered: new Set(sends.filter((a) => !!a.completedAt).map((a) => a.userId)).size,
         passed: staffWhoUnderstandEntries(understanding, entryIds, { now, dueDays: c.due_days ?? null }).length,
         caption,
       };
     });
-  }, [courses, courseEntries, sendsByCourse, understanding, now, quizCountOf, staleCountOf]);
+  }, [courses, courseEntries, sendsByCourse, understanding, now, servableItems, isStale]);
 
   /**
    * 홈 상단 지표 — `buildQuizzes()` 결과에서만 센다. 화면이 다시 세지 않는다(판정 복제 금지).

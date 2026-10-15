@@ -457,7 +457,9 @@ async function sweepQuizSends(token: string): Promise<{ swept: number; sent: num
       title: '퀴즈가 왔어요',
       // 퀴즈 이름은 사장이 지은 문구다(데모 B4). 문항 형태 이름은 절대 노출하지 않는다.
       body: r.out_course_name,
-      url: '/junior/work',
+      // 누르면 업무 채팅이 아니라 **퀴즈가 바로 열린다**(2026-10-15 QA #5) — `quiz=` 는 WorkBoard 가 카드의
+      //   다음 노하우로 응시 시트를 연다. 옛 앱은 모르는 파라미터를 무시하고 업무 탭을 연다(전과 같다).
+      url: `/junior/work?quiz=${r.out_assignment_id}`,
       tag: `quiz-${r.out_assignment_id}`,
     });
     sent += res.sent;

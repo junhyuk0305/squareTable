@@ -73,6 +73,11 @@ export type QuizItem = {
   created_at?: string;
   updated_at?: string;
   /**
+   * 이 문항이 만들어진 퀴즈(0307). 있으면 그 퀴즈에서만 나간다. null = 옛 문항 → 노하우 겹침으로 나간다.
+   * 어느 퀴즈의 문항인지 판정은 `lib/quiz/courseItems.ts` 한 곳이다.
+   */
+  course_id?: string | null;
+  /**
    * 만들 때 본 근거 노하우들의 updated_at 최댓값(0114). DB 트리거가 찍는다 — 클라는 읽기만 한다.
    * 이 값이 지금의 노하우 updated_at 보다 뒤처져 있으면 낡은 문항이다(옛 정답이 계속 나간다).
    * null = 스냅샷 이전 행 → 낡음 판정 안 함(모르는 것을 "바뀌었다"고 말하지 않는다).

@@ -27,8 +27,9 @@ import {
 } from '@/lib/db';
 import { genId } from '@/lib/utils/id';
 import { FORMATS } from '@/lib/quiz/formats';
+import { itemsOfCourse } from '@/lib/quiz/courseItems';
 // KST 오늘은 일정 SSOT 하나만 쓴다(이 파일·만들기·설정 패널에 복붙돼 있던 것을 걷었다).
-import { todayKst, cycleLabel } from '@/lib/quiz/schedule';
+import { todayKst, addDaysKst, cycleLabel } from '@/lib/quiz/schedule';
 import { Appear, stagger } from '@/components/Appear';
 import { BottomSheet } from '@/components/BottomSheet';
 import { SegmentTabs, type SegmentItem } from '@/components/SegmentTabs';
@@ -105,7 +106,9 @@ export default function QuizDetailScreen() {
     const p = entryIds.length === 0 ? Promise.resolve({ data: [] as QuizItem[] }) : fetchQuizItems(entryIds);
     void p.then(({ data }) => {
       if (!alive) return;
-      const active = (data ?? []).filter((q) => q.status === 'active');
+      // 이 퀴즈의 문항만(0307). 노하우 겹침으로 읽은 결과에는 같은 노하우로 만든 다른 퀴즈의 문항이 섞여 온다 —
+      // 그래서 노하우 4개를 골랐는데 '문항 6개'로 보였다(2026-10-15 안드로이드 QA #1).
+      const active = itemsOfCourse((data ?? []).filter((q) => q.status === 'active'), id ?? '', entryIds);
       setItems(active);
       setItemsLoaded(true);
       // 문항이 정해진 뒤에야 "누가 이 문항들을 어떻게 풀었나"를 읽을 수 있다(0190) —
@@ -117,14 +120,17 @@ export default function QuizDetailScreen() {
     return () => {
       alive = false;
     };
-  }, [entryIds, itemsReload]);
+  }, [id, entryIds, itemsReload]);
 
   const sends = useMemo(() => sendsByCourse.get(id ?? '') ?? [], [sendsByCourse, id]);
   // 가장 최근 예약분이 사장이 달력으로 고른 날짜로 나갔으면 그 날짜가 모두의 마감이다(0291 · E11).
-  const fixedDue = useMemo(
-    () => [...sends].sort((x, y) => x.scheduledOn.localeCompare(y.scheduledOn)).at(-1)?.dueDate ?? null,
+  const latestSend = useMemo(
+    () => [...sends].sort((x, y) => x.scheduledOn.localeCompare(y.scheduledOn)).at(-1) ?? null,
     [sends],
   );
+  const fixedDue = latestSend?.dueDate ?? null;
+  /** 설정 탭 달력의 처음 값 — 고정 마감이 없으면 가장 최근 발송의 실제 마감(받은 날 + N일). 둘 다 없으면 마감 없음. */
+  const currentDue = fixedDue ?? latestSend?.dueOn ?? null;
   // 아직 안 나간 사람의 이유(E3 · 0274). 판정은 서버가 한다(due_quiz_sends 와 같은 조건).
   const [blocked, setBlocked] = useState<Record<string, QuizSendBlock>>({});
   useEffect(() => {
@@ -268,7 +274,8 @@ export default function QuizDetailScreen() {
     let itemFail = 0;
     for (const it of items) {
       const done = await guardWrite(
-        insertQuizItem({ ...it, id: genId('qz'), created_at: new Date().toISOString() }),
+        // 사본은 새 퀴즈의 문항이다(0307) — course_id 를 안 바꾸면 원본 퀴즈에 묶인 채 남는다.
+        insertQuizItem({ ...it, id: genId('qz'), course_id: newId, created_at: new Date().toISOString() }),
         () => {},
         '문제를 복사하지 못했어요.',
       );
@@ -288,14 +295,37 @@ export default function QuizDetailScreen() {
     router.replace(`/owner/quiz-new?course=${newId}` as never);
   };
 
-  /** 아직 안 푼 사람에게 한 번 더. 새 발송 1건이라 **빈도 상한을 그대로 탄다**(오늘 이미 받았으면 안 간다). */
+  /**
+   * 아직 안 푼 사람에게 한 번 더. 새 발송 1건이라 **빈도 상한을 그대로 탄다**(하루 1회 · 주 2회).
+   *
+   * ★2026-10-15(안드로이드 QA #6): 예전엔 전원을 **오늘 날짜로** 다시 넣었다. 그런데 오늘 보낸 퀴즈는 같은
+   *   (퀴즈·사람·날짜) 행이 이미 있어 upsert 가 0행으로 끝나고, 그걸 실패로 세어 "다시 알리지 못했어요"가 떴다.
+   *   이제 사람마다 날짜를 정한다 — 아직 안 나간 발송이 있으면 건너뛰고(이미 줄에 서 있다), 오늘 행이 있으면
+   *   내일로 잡는다(하루 1회 상한으로 오늘은 어차피 안 간다). 마감은 이 퀴즈의 고정 마감을 그대로 싣는다.
+   */
   const remind = async () => {
     if (!id || notDone.length === 0) return;
-    const ok = await guardWrite(
-      insertQuizAssignments(id, notDone.map((p) => p.id), todayKst()),
-      () => {},
-      '다시 알리지 못했어요.',
-    );
+    const today = todayKst();
+    const byDay = new Map<string, string[]>();
+    for (const p of notDone) {
+      const mine = sends.filter((a) => a.userId === p.id);
+      if (mine.some((a) => !a.sentAt)) continue;
+      const on = mine.some((a) => a.scheduledOn === today) ? addDaysKst(today, 1) : today;
+      byDay.set(on, [...(byDay.get(on) ?? []), p.id]);
+    }
+    if (byDay.size === 0) {
+      showToast('이미 보내는 중이에요. 근무 시간에 맞춰 나가요');
+      return;
+    }
+    let ok = true;
+    for (const [on, userIds] of byDay) {
+      ok = await guardWrite(
+        insertQuizAssignments(id, userIds, on, fixedDue && fixedDue >= on ? fixedDue : null),
+        () => {},
+        '다시 알리지 못했어요.',
+      );
+      if (!ok) break;
+    }
     if (ok) {
       bumpSends();
       showToast('근무 시간에 맞춰 다시 보낼게요', 'good');
@@ -445,6 +475,7 @@ export default function QuizDetailScreen() {
             course={course}
             staff={staff.map((x) => ({ id: x.id, name: x.name }))}
             sends={sends}
+            currentDue={currentDue}
             remind={notDone.length > 0 ? { count: notDone.length, onPress: () => void remind() } : undefined}
             onSaved={() => { reloadCourses(); bumpSends(); }}
             onOpenResult={(sub) => router.push(`/owner/quiz/guest/${sub}` as never)}

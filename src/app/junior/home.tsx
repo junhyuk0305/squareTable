@@ -182,7 +182,9 @@ export default function JuniorHomeScreen() {
 
         {/* 3) 안 푼 퀴즈 — 0건이면 AlertRow가 스스로 null을 돌려준다(상시 노출 금지).
             Appear로 감싸지 않는다 — 0건일 때 빈 래퍼가 남아 목록 간격만 벌어진다. */}
-        <AlertRow label="안 푼 퀴즈" count={openQuizCount} onPress={() => goToTab('/junior/work')} />
+        {/* ★누르면 업무 채팅이 아니라 **퀴즈가 바로 열린다**(2026-10-15 안드로이드 QA #5) — `quiz=` 는 WorkBoard 가
+            카드의 다음 노하우로 응시 시트를 연다. 값은 누를 때마다 달라야 같은 탭을 두 번 눌러도 다시 열린다. */}
+        <AlertRow label="안 푼 퀴즈" count={openQuizCount} onPress={() => goToTab(`/junior/work?quiz=${Date.now()}`)} />
           </>
         )}
       </ScrollView>

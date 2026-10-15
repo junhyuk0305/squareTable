@@ -33,6 +33,7 @@ import {
 } from '@/lib/db';
 import { generateQuizItems, QuizQuotaError } from '@/lib/quiz/generate';
 import { FORMATS } from '@/lib/quiz/formats';
+import { itemsOfCourse } from '@/lib/quiz/courseItems';
 import type { QuizItem, QuizFormat } from '@/lib/quiz/types';
 import { genId } from '@/lib/utils/id';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
@@ -103,7 +104,10 @@ export default function HqQuizBuilderScreen() {
     const p = picked.length === 0 ? Promise.resolve({ data: [] as QuizItem[] }) : fetchQuizItems(picked);
     void p.then(({ data }) => {
       if (!alive) return;
-      const active = (data ?? []).filter((q) => q.status === 'active');
+      // 이 퀴즈의 문항만(0307) — 작업실에서 같은 노하우로 만든 다른 퀴즈의 문항은 섞지 않는다.
+      const cid = courseRef.current;
+      const all = (data ?? []).filter((q) => q.status === 'active');
+      const active = cid ? itemsOfCourse(all, cid, picked) : all;
       setItems(active);
       // 문항이 있는 노하우는 ok 로 — 만들기를 다시 눌러도 있는 것은 다시 만들지 않는다.
       setMade((m) => m.map((x) => (x.state === 'idle' || x.state === 'ok'
@@ -180,7 +184,7 @@ export default function HqQuizBuilderScreen() {
       try {
         const out = quota ? [] : await generateQuizItems([entry], undefined, { unitId: wsUnitId, createdBy: userId, max: 1, pool });
         for (const it of out) {
-          const saved = await insertQuizItem({ ...it, unit_id: wsUnitId, created_by: userId });
+          const saved = await insertQuizItem({ ...it, unit_id: wsUnitId, created_by: userId, course_id: cid });
           if (saved) any = true;
         }
         if (out.length > 0) next = 'ok';

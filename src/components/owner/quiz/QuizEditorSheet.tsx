@@ -246,6 +246,8 @@ export function QuizEditorSheet({
     source: 'ai',
     status: 'active',
     created_by: d.created_by ?? userId,
+    // 이 퀴즈의 문항이다(0307). 고치기(editing)는 있던 값을 지키고, 새 문항은 이 시트가 열린 퀴즈에 묶인다.
+    course_id: d.course_id ?? courseId,
   });
 
   const save = async (item: QuizItem, isNew: boolean) => {
@@ -282,6 +284,7 @@ export function QuizEditorSheet({
           source,
           status: 'active',
           created_by: userId,
+          course_id: courseId,
         };
     const ok = await save(item, !editing);
     if (ok) {

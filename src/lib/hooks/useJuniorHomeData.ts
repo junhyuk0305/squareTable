@@ -107,6 +107,8 @@ export function useJuniorHomeData(): JuniorHomeData {
   //   ① 코스에 담긴 노하우이고 ② 낼 문항이 있고(0109: 문항 0건 = 의도된 미노출)
   //   ③ 코스가 하한(min_items)을 채워 직원에게 열려 있고 ④ 내 통과 기록이 아직 없는 것.
   //  주기 코스의 '다시 확인'(due)은 안 푼 게 아니라 재확인이라 여기서 세지 않는다.
+  //  ★세는 단위는 **퀴즈**다(2026-10-15 안드로이드 QA #4). 예전엔 노하우를 세서 퀴즈 1개를 보냈는데 '안 푼 퀴즈 4개'가 떴다.
+  //  ★나에게 **실제로 나간** 퀴즈만 센다 — WorkBoard 카드와 같은 조건(발송 원장이 있으면 내 sent 행이 있어야 한다).
   const courses = useWorkStore((s) => s.courses);
   const courseEntries = useWorkStore((s) => s.courseEntries);
   const understanding = useWorkStore((s) => s.understanding);
@@ -114,17 +116,19 @@ export function useJuniorHomeData(): JuniorHomeData {
   const assignments = useWorkStore((s) => s.assignments);
   const openQuizCount = useMemo(() => {
     const passed = new Set(understanding.filter((u) => u.staffId === userId).map((u) => u.entryId));
-    const open = new Set<string>();
+    let open = 0;
     for (const c of trainingCourseViews(courses)) {
       // 만들던 퀴즈·외부 사람용은 카드가 안 뜨니 세지 않는다(E1 · WorkBoard 와 같은 판정).
-      if (!staffCanSeeCourse(c, assignments.filter((a) => a.courseId === c.id).length)) continue;
+      const sends = assignments.filter((a) => a.courseId === c.id);
+      if (!staffCanSeeCourse(c, sends.length)) continue;
+      if (sends.length > 0 && !sends.some((a) => a.userId === userId && !!a.sentAt)) continue;
       const list = courseEntriesOf(courseEntries, c.id)
         .map((e) => e.entryId)
         .filter((id) => (quizCounts[id] ?? 0) > 0);
       if (list.length < c.minItems) continue;
-      for (const id of list) if (!passed.has(id)) open.add(id);
+      if (list.some((id) => !passed.has(id))) open += 1;
     }
-    return open.size;
+    return open;
   }, [courses, courseEntries, understanding, quizCounts, assignments, userId]);
 
   // 2026-08-07: '많이 물어본 노하우'(popularKnowhow)와 물어보기 전송(submitChat)은 제거했다 —

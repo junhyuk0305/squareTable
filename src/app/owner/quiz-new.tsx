@@ -25,6 +25,7 @@ import {
   type QuizLinkRow,
 } from '@/lib/db';
 import { generateQuizItems, QuizQuotaError } from '@/lib/quiz/generate';
+import { itemsOfCourse } from '@/lib/quiz/courseItems';
 import { aiCapNextStep } from '@/lib/config/tiers';
 import { showUpgradeHint } from '@/lib/config/store-policy';
 import { getSectionMeta } from '@/lib/utils/category';
@@ -378,15 +379,6 @@ export default function QuizNewScreen() {
           setMade([...out]);
           continue;
         }
-        const item: QuizItem = {
-          ...d,
-          id: d.id || genId('qz'),
-          unit_id: d.unit_id || unitId,
-          entry_ids: d.entry_ids?.length ? d.entry_ids : [entry.id],
-          source: 'ai',
-          status: 'active',
-          created_by: d.created_by ?? userId,
-        };
         // ★남길 것이 생긴 이 자리에서 코스를 만든다 — 문항 저장보다 **먼저** 만들어야
         //   저장된 문항이 코스 없이 떠도는 일이 없다.
         const course = await ensureCourse();
@@ -395,6 +387,17 @@ export default function QuizNewScreen() {
           setMade([...out]);
           continue;
         }
+        const item: QuizItem = {
+          ...d,
+          id: d.id || genId('qz'),
+          unit_id: d.unit_id || unitId,
+          entry_ids: d.entry_ids?.length ? d.entry_ids : [entry.id],
+          source: 'ai',
+          status: 'active',
+          created_by: d.created_by ?? userId,
+          // 이 퀴즈의 문항이다(0307) — 안 찍으면 같은 노하우로 만든 다른 퀴즈에도 딸려 나간다.
+          course_id: course.id,
+        };
         const saved = await guardWrite(insertQuizItem(item), () => {}, '문제 저장에 실패했어요.');
         out[i] = saved
           ? { ...out[i], item, formatLabel: FORMATS[item.format]?.label ?? '', state: 'ok' }
@@ -450,7 +453,8 @@ export default function QuizNewScreen() {
     void p.then(({ data }) => {
       if (!alive) return;
       if (!c) { setResumed(true); return; }
-      const active = (data ?? []).filter((q) => q.status === 'active');
+      // 이 퀴즈의 문항만(0307) — 같은 노하우로 만든 다른 퀴즈의 문항은 여기 줄에 안 오른다.
+      const active = itemsOfCourse((data ?? []).filter((q) => q.status === 'active'), c.id, eids);
       // 이어서 만들기는 코스가 이미 있다 — ensureCourse 가 또 만들지 않도록 같은 값을 실어 둔다.
       courseRef.current = { id: c.id, key: c.key };
       setCourseId(c.id);

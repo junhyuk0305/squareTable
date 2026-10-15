@@ -145,7 +145,7 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
   // 완료 직후 1턴 캡처(②) — 대상 업무(있으면 시트 노출).
   const [capture, setCapture] = useState<{ templateId: string; text: string } | null>(null);
   // 이해 확인(④) — 제목 + 퀴즈 소스(노하우들). 통과 처리는 시트가 실제로 푼 노하우 id 를 돌려준다(0111).
-  const [selfCheck, setSelfCheck] = useState<{ title: string; sops: QuizInput['sops'] } | null>(null);
+  const [selfCheck, setSelfCheck] = useState<{ title: string; sops: QuizInput['sops']; courseId?: string | null } | null>(null);
   // 정기 훈련 due 판정 기준 시각 — 렌더 중 Date.now() 금지(컴파일러 순수성), 마운트 시 1회로 충분(주기=30일).
   const [trainingNow] = useState(() => Date.now());
   const toggleTask = useWorkStore((s) => s.toggleTask);
@@ -221,7 +221,8 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
   // ?view=assign(담당자별 보드)은 2026-08-12에 없어졌다 — 루틴의 담당자를 '업무 설정'이 직접 갖게 되면서
   // 같은 것을 두 번 만지는 자리가 사라졌다. 옛 링크는 죽이지 않고 할일로 착지시킨다.
   // ?compose=<nonce> — 홈 '할일 등록하기'에서 들어오면 할일 작성 시트까지 연다(값은 매번 달라야 재진입에도 열린다).
-  const { view: viewParam, compose: composeParam } = useLocalSearchParams<{ view?: string; compose?: string }>();
+  // ?quiz=<nonce> — 직원 홈 '안 푼 퀴즈'·퀴즈 푸시에서 들어오면 카드의 다음 노하우로 응시 시트까지 연다(2026-10-15 QA #5).
+  const { view: viewParam, compose: composeParam, quiz: quizParam } = useLocalSearchParams<{ view?: string; compose?: string; quiz?: string }>();
   const paramView: ViewKey | null =
     viewParam === 'todo' || viewParam === 'notice' ? viewParam : viewParam === 'assign' ? 'todo' : null;
   const initialView: ViewKey = paramView ?? 'chat';
@@ -502,7 +503,7 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
       if (!items.some((it) => it.state === 'next' || it.state === 'due' || it.state === 'asked')) continue;
       items.forEach((it) => { if (it.state === 'asked') placedAsked.add(it.id); });
       // dueOn = **내가 마지막으로 받은 발송**의 마감. 다시 알리기로 새 발송이 오면 그쪽이 이긴다.
-      cards.push({ course: { key: c.key, name: c.name, dueDays, dueOn: mySent?.dueOn ?? null }, items });
+      cards.push({ course: { id: c.id, key: c.key, name: c.name, dueDays, dueOn: mySent?.dueOn ?? null }, items });
     }
 
     // 어느 카드에도 못 실린 요청(코스에서 빠졌거나 그 코스 카드가 안 뜨는 경우) — 사람이 기다리는
@@ -515,7 +516,7 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
     if (orphans.length > 0) {
       const host = cards.find((c) => c.course.dueDays !== null);
       if (host) host.items = [...host.items, ...orphans];
-      else cards.push({ course: { key: '__requested__', name: '요청받은 퀴즈', dueDays: REGULAR_DUE_DAYS_DEFAULT }, items: orphans });
+      else cards.push({ course: { id: null, key: '__requested__', name: '요청받은 퀴즈', dueDays: REGULAR_DUE_DAYS_DEFAULT }, items: orphans });
     }
 
     // 카드가 여러 장 쌓이지 않게 — 1회성 코스는 앞선 하나만(먼저 배울 것이 먼저).
@@ -539,14 +540,38 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
   // ★열었다는 신호를 여기서 찍는다(0140). 이게 빠지면 사장이 보낸 퀴즈가 "무시됐다"로 세어져
   //   연속 2회 뒤 그 사람에게 영영 안 나간다(0139 자동 정지).
   const startTrainingCheck = useCallback(
-    (entryId: string) => {
+    (entryId: string, courseId: string | null) => {
       const title = entryById.get(entryId)?.title;
       if (!title) return;
       useWorkStore.getState().noteQuizOpened([entryId]);
-      setSelfCheck({ title, sops: sopsOf([entryId]) });
+      setSelfCheck({ title, sops: sopsOf([entryId]), courseId });
     },
     [entryById, sopsOf],
   );
+
+  /**
+   * ?quiz=<nonce> — 들어오자마자 첫 카드의 다음 노하우로 응시 시트를 연다(2026-10-15 QA #5).
+   * 카드는 스토어가 다 온 뒤에야 생기므로 '열어야 한다'를 들고 있다가 카드가 생기는 순간 한 번 연다.
+   * 열 카드가 없으면 조용히 접는다(업무 채팅에 그대로 머문다). 값이 바뀌면 다시 든다(홈에서 또 누른 경우).
+   */
+  const [pendingQuiz, setPendingQuiz] = useState<string | null>(quizParam ?? null);
+  const [prevQuiz, setPrevQuiz] = useState(quizParam);
+  if (quizParam !== prevQuiz) {
+    setPrevQuiz(quizParam);
+    setPendingQuiz(quizParam ?? null);
+  }
+  useEffect(() => {
+    if (!pendingQuiz || !workLoaded) return;
+    const first = trainingCards[0];
+    const next = first?.items.find((it) => it.state === 'asked') ?? first?.items.find((it) => it.state === 'next' || it.state === 'due');
+    let alive = true;
+    void Promise.resolve().then(() => {
+      if (!alive) return;
+      setPendingQuiz(null);
+      if (first && next) startTrainingCheck(next.id, first.course.id);
+    });
+    return () => { alive = false; };
+  }, [pendingQuiz, workLoaded, trainingCards, startTrainingCheck]);
 
   // 퀴즈를 틀린 뒤 "물어보기"로 나가는 길 — 시트를 닫고 물어보기 화면에 문구만 채운다(전송은 본인이).
   // ★replace 로 간다: 탭 전환 SSOT(goToTab)와 같은 방식이어야 화면이 새로 마운트돼 seed 초기값이 먹는다.
@@ -1110,6 +1135,7 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
         <UnderstandingCheckSheet
           title={selfCheck.title}
           sops={selfCheck.sops}
+          courseId={selfCheck.courseId}
           onPass={(entryIds) => void markUnderstood(entryIds, userId, userName)}
           onFinished={(entryIds) => useWorkStore.getState().noteQuizFinished(entryIds)}
           // ★닫을 때 다시 읽는다 — 응시 기록(0112)은 realtime publication 멤버가 아니라서

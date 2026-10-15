@@ -36,6 +36,7 @@ const ALLOW_AI_FALLBACK: boolean = false;
 export function UnderstandingCheckSheet({
   title,
   sops,
+  courseId,
   onPass,
   onFinished,
   onClose,
@@ -44,6 +45,8 @@ export function UnderstandingCheckSheet({
   /** 무엇에 대한 확인인가 — 카드에서 오면 노하우 제목, 할일에서 오면 업무 이름. */
   title: string;
   sops: QuizInput['sops'];
+  /** 어느 퀴즈의 응시인가(0307) — 있으면 그 퀴즈의 문항만 읽는다. 할일 자청처럼 퀴즈가 없으면 생략. */
+  courseId?: string | null;
   /** 실제로 푼 문항이 근거한 **노하우 id 들**만 통과 처리한다(0111). */
   onPass: (entryIds: string[]) => void;
   /** 응시를 마쳤다(맞힘과 무관 · 기록 저장 뒤). 푼 노하우 id 들 — 발송 완료 판정은 서버가 한다(E4 · 0275). */
@@ -52,15 +55,14 @@ export function UnderstandingCheckSheet({
   /** 틀린 뒤 "물어보기"로 나가는 길. 라우팅은 화면(WorkBoard)이 정한다 — 이 시트는 경로를 모른다. */
   onAsk?: (seed: string) => void;
 }) {
-  // 재시도 = QuizBody 리마운트(key) → 새 문제·초기상태. 이펙트에서 동기 리셋(set-state-in-effect) 회피.
-  const [round, setRound] = useState(0);
+  // '다시 하기'(시트 안 재시도)는 2026-10-15 사용자 결정으로 뺐다 — 틀리면 닫고, 카드에서 다시 시작한다.
   return (
     <BottomSheet visible={true} onClose={onClose} sheetStyle={{ height: '84%' }}>
       <View style={s.head}>
         <Text style={s.kicker}>이해 확인 · {title}</Text>
         <Pressable onPress={onClose} hitSlop={8}><Ionicons name="close" size={20} color={InkColors.ink2} /></Pressable>
       </View>
-      <QuizBody key={round} taskText={title} sops={sops} onPass={onPass} onFinished={onFinished} onClose={onClose} onRetry={() => setRound((r) => r + 1)} onAsk={onAsk} />
+      <QuizBody taskText={title} sops={sops} courseId={courseId} onPass={onPass} onFinished={onFinished} onClose={onClose} onAsk={onAsk} />
     </BottomSheet>
   );
 }
@@ -75,13 +77,13 @@ function minutesFor(n: number): number {
 function QuizBody(props: {
   taskText: string;
   sops: QuizInput['sops'];
+  courseId?: string | null;
   onPass: (entryIds: string[]) => void;
   onFinished?: (entryIds: string[]) => void;
   onClose: () => void;
-  onRetry: () => void;
   onAsk?: (seed: string) => void;
 }) {
-  const { sops } = props;
+  const { sops, courseId } = props;
   // 근거 노하우 id 가 하나도 없으면 조회할 게 없다 → 처음부터 폴백으로 시작(이펙트에서 동기 setState 회피).
   const entryIds = useMemo(() => sops.map((sop) => sop.id).filter((id): id is string => !!id), [sops]);
   const [route, setRoute] = useState<'probe' | 'saved' | 'legacy'>(entryIds.length > 0 ? 'probe' : 'legacy');
@@ -92,7 +94,7 @@ function QuizBody(props: {
   useEffect(() => {
     let alive = true;
     if (entryIds.length === 0) return;
-    fetchQuizItemsForAttempt(entryIds, 3)
+    fetchQuizItemsForAttempt(entryIds, 3, courseId)
       .then(({ data }) => {
         if (!alive) return;
         // 아직 렌더러가 없는 형태(레지스트리 미등록)는 거른다 — 빈 화면 대신 폴백으로 간다.
@@ -110,7 +112,7 @@ function QuizBody(props: {
     return () => {
       alive = false;
     };
-  }, [entryIds]);
+  }, [entryIds, courseId]);
 
   if (route === 'probe') {
     return (
@@ -126,7 +128,7 @@ function QuizBody(props: {
         <>
           <View style={s.center}>
             <Text style={s.startLead}>문제 {items.length}개 · {minutesFor(items.length)}분 정도</Text>
-            <Text style={s.centerText}>틀려도 괜찮아요. 언제든 다시 할 수 있어요.</Text>
+            <Text style={s.centerText}>틀려도 괜찮아요.</Text>
           </View>
           <View style={s.foot}>
             <Pressable onPress={() => setStarted(true)} style={({ pressed }) => [s.cta, pressed && { opacity: 0.85 }]} accessibilityRole="button">
@@ -136,7 +138,7 @@ function QuizBody(props: {
         </>
       );
     }
-    return <SavedQuizBody items={items} sops={sops} onPass={props.onPass} onFinished={props.onFinished} onClose={props.onClose} onRetry={props.onRetry} onAsk={props.onAsk} />;
+    return <SavedQuizBody items={items} sops={sops} onPass={props.onPass} onFinished={props.onFinished} onClose={props.onClose} onAsk={props.onAsk} />;
   }
   return ALLOW_AI_FALLBACK ? <LegacyQuizBody {...props} /> : <NotReadyBody onClose={props.onClose} />;
 }
@@ -162,7 +164,6 @@ function SavedQuizBody({
   onPass,
   onFinished,
   onClose,
-  onRetry,
   onAsk,
 }: {
   items: QuizItem[];
@@ -170,7 +171,6 @@ function SavedQuizBody({
   onPass: (entryIds: string[]) => void;
   onFinished?: (entryIds: string[]) => void;
   onClose: () => void;
-  onRetry: () => void;
   onAsk?: (seed: string) => void;
 }) {
   const [at, setAt] = useState(0);
@@ -263,7 +263,7 @@ function SavedQuizBody({
           <View style={[s.resultBox, passed ? s.resultPass : s.resultFail]}>
             <Ionicons name={passed ? 'ribbon' : 'refresh-circle'} size={22} color={passed ? BrandColors.good : BrandColors.warn} />
             <Text style={s.resultText}>
-              {passed ? '이해 확인이 끝났어요. 사장님께 전달됐어요.' : `${items.length}개 중 ${correctCount}개 맞았어요. 다시 해볼까요?`}
+              {passed ? '이해 확인이 끝났어요. 사장님께 전달됐어요.' : `${items.length}개 중 ${correctCount}개 맞았어요.`}
             </Text>
           </View>
           {/* 틀렸으면 무엇을 다시 볼지 알려준다 — 개수만 말하고 끝나면 직원은 어디를 봐야 할지 모른다. */}
@@ -292,10 +292,8 @@ function SavedQuizBody({
                   <Text style={s.askLinkText}>아직 잘 모르겠어요 · 물어보기</Text>
                 </Pressable>
               )}
-              <View style={s.footRow}>
-                <Pressable onPress={onClose} style={({ pressed }) => [s.softBtnFlat, pressed && { opacity: 0.7 }]}><Text style={s.softBtnFlatText}>닫기</Text></Pressable>
-                <Pressable onPress={onRetry} style={({ pressed }) => [s.cta, { flex: 1 }, pressed && { opacity: 0.85 }]}><Text style={s.ctaText}>다시 하기</Text></Pressable>
-              </View>
+              {/* '다시 하기'는 뺐다(2026-10-15 사용자 결정). 틀린 노하우는 카드에 그대로 남아 있어 거기서 다시 시작한다. */}
+              <Pressable onPress={onClose} style={({ pressed }) => [s.cta, pressed && { opacity: 0.85 }]}><Text style={s.ctaText}>닫기</Text></Pressable>
             </>
           )}
         </View>
@@ -367,13 +365,11 @@ function LegacyQuizBody({
   sops,
   onPass,
   onClose,
-  onRetry,
 }: {
   taskText: string;
   sops: QuizInput['sops'];
   onPass: (entryIds: string[]) => void;
   onClose: () => void;
-  onRetry: () => void;
 }) {
   const [phase, setPhase] = useState<Phase>('loading');
   const [questions, setQuestions] = useState<QuizQuestion[]>([]);
@@ -413,7 +409,6 @@ function LegacyQuizBody({
     // 통과 처리 대상은 실제로 푼 문항의 근거 노하우뿐(0111) — 저장된 문항 경로와 같은 규칙.
     if (correctCount === questions.length) onPass([...byEntry.keys()]);
   };
-  const retry = () => onRetry();
 
   return (
     <>
@@ -504,10 +499,7 @@ function LegacyQuizBody({
           {passed ? (
             <Pressable onPress={onClose} style={({ pressed }) => [s.cta, pressed && { opacity: 0.85 }]}><Text style={s.ctaText}>닫기</Text></Pressable>
           ) : (
-            <View style={s.footRow}>
-              <Pressable onPress={onClose} style={({ pressed }) => [s.softBtnFlat, pressed && { opacity: 0.7 }]}><Text style={s.softBtnFlatText}>닫기</Text></Pressable>
-              <Pressable onPress={retry} style={({ pressed }) => [s.cta, { flex: 1 }, pressed && { opacity: 0.85 }]}><Text style={s.ctaText}>다시 하기</Text></Pressable>
-            </View>
+            <Pressable onPress={onClose} style={({ pressed }) => [s.cta, pressed && { opacity: 0.85 }]}><Text style={s.ctaText}>닫기</Text></Pressable>
           )}
         </View>
       )}

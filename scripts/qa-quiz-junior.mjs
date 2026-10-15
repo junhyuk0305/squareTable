@@ -221,11 +221,55 @@ async function main() {
   check('직원이 남의 매장 발송 0행', (xRows ?? []).length === 0, `n=${xRows?.length}`);
   const { data: xAll } = await jA.from('quiz_assignments').select('unit_id');
   check('직원이 보는 발송은 전부 자기 매장', (xAll ?? []).every((r) => r.unit_id === UNIT), `units=${[...new Set((xAll ?? []).map((r) => r.unit_id))].join(',')}`);
+
+  // ── ⑨ 문항은 퀴즈에 묶인다(0307) · 다시 알리기 · 마감 달력 ─────────────────────
+  //   2026-10-15 안드로이드 실측 QA 에서 나온 결함 셋이 기존 하니스에 없었다:
+  //   #1 같은 노하우로 퀴즈를 두 번 만들면 두 번째 퀴즈에 첫 퀴즈 문항까지 딸려 왔다(4개 고르고 '문항 6개').
+  //   #6 '다시 알리기'가 오늘 보낸 사람에게 오늘 날짜 행을 또 넣어 0행 실패 → 오류 토스트.
+  //   #7 설정의 마감을 바꿔도 이미 받은 사람의 마감은 그대로였다(이제 달력으로 고르면 전부 바뀐다).
+  console.log('— ⑨ 문항은 퀴즈에 묶인다(0307) —');
+  const QUIZ_B = `tc_qjb_${s}`;
+  await owner.from('training_courses').insert({ id: QUIZ_B, unit_id: UNIT, key: `qjb_${s}`, name: '같은 노하우 두 번째 퀴즈', min_items: 1, max_items: 10, position: 1, active: true });
+  await owner.from('course_entries').insert({ course_id: QUIZ_B, entry_id: ENTRY, unit_id: UNIT, position: 0 });
+  const ITEM_B = `qz_qjb_${s}`;
+  const { error: qbErr } = await owner.from('quiz_items').insert({
+    id: ITEM_B, unit_id: UNIT, entry_ids: [ENTRY], kind: 't0', format: 'mc4',
+    payload: { ask: '두 번째 퀴즈 문항', options: ['가', '나', '다', '라'], answer: 1 },
+    source: 'owner', status: 'active', created_by: ownerId, course_id: QUIZ_B,
+  });
+  check('⑨-1 course_id 를 실어 문항을 저장한다', !qbErr, qbErr?.message ?? '');
+  await admin.from('quiz_items').update({ course_id: QUIZ }).eq('id', ITEM);
+  const ids = (rows) => (rows ?? []).map((r) => r.id).sort().join(',');
+  { const { data, error } = await jA.rpc('quiz_items_for', { p_entry_ids: [ENTRY], p_limit: 3, p_course_id: QUIZ });
+    check('⑨-2 퀴즈 A 응시 = A 문항만(같은 노하우의 다른 퀴즈 문항이 안 딸려온다)', !error && ids(data) === ITEM, error?.message ?? `ids=${ids(data)}`); }
+  { const { data } = await jA.rpc('quiz_items_for', { p_entry_ids: [ENTRY], p_limit: 3, p_course_id: QUIZ_B });
+    check('⑨-3 퀴즈 B 응시 = B 문항만', ids(data) === ITEM_B, `ids=${ids(data)}`); }
+  { const { data, error } = await jA.rpc('quiz_items_for', { p_entry_ids: [ENTRY], p_limit: 3 });
+    check('⑨-4 옛 앱(2인자 호출)은 전처럼 노하우 겹침 전부', !error && (data ?? []).length === 2, error?.message ?? `n=${data?.length}`); }
+  await admin.from('quiz_items').update({ course_id: null }).eq('id', ITEM_B);
+  { const { data } = await jA.rpc('quiz_items_for', { p_entry_ids: [ENTRY], p_limit: 3, p_course_id: QUIZ });
+    check('⑨-5 옛 문항(course_id 없음)은 겹침으로 그대로 나간다', (data ?? []).length === 2, `n=${data?.length}`); }
+  await admin.from('quiz_items').update({ course_id: QUIZ_B }).eq('id', ITEM_B);
+  const TOKEN = `qjtok_${s}_abcdefghijklmnopqrstuvwxyz`;
+  { const { error: lkErr } = await owner.from('quiz_links').insert({
+      id: `ql_qj_${s}`, unit_id: UNIT, course_id: QUIZ, token: TOKEN, expires_at: new Date(Date.now() + 864e5).toISOString() });
+    const { data, error } = await mk().rpc('quiz_link_items', { p_token: TOKEN, p_limit: null });
+    check('⑨-6 외부 링크(anon)도 그 퀴즈의 문항만', !lkErr && !error && ids(data) === ITEM, lkErr?.message ?? error?.message ?? `ids=${ids(data)}`); }
+  { const { error } = await owner.from('quiz_assignments').insert({ id: `qza_dup_${s}`, unit_id: UNIT, course_id: QUIZ, user_id: aId, scheduled_on: DAY });
+    check('⑨-7 같은 날 같은 사람 발송 행은 유일(23505) → 다시 알리기는 오늘 행이 있으면 내일 날짜로 넣는다', error?.code === '23505', `code=${error?.code}`); }
+  { const { data, error } = await owner.from('quiz_assignments').insert({ id: `qza_rem_${s}`, unit_id: UNIT, course_id: QUIZ, user_id: aId, scheduled_on: TOMORROW }).select('id');
+    check('⑨-8 내일 날짜 다시 알리기 행은 들어간다', !error && (data ?? []).length === 1, error?.message ?? ''); }
+  const NEWDUE = ymd(new Date(kst.getFullYear(), kst.getMonth(), kst.getDate() + 5));
+  { const { data, error } = await owner.from('quiz_assignments').update({ due_date: NEWDUE, due_on: NEWDUE }).eq('course_id', QUIZ).select('id');
+    check('⑨-9 사장이 마감 날짜를 바꾸면 이미 받은 발송까지 전부 바뀐다', !error && (data ?? []).length >= 3, error?.message ?? `n=${data?.length}`); }
+  { const { data } = await jA.from('quiz_assignments').select('due_on').eq('id', AS_A).maybeSingle();
+    check('⑨-10 직원 카드가 바뀐 마감을 읽는다', data?.due_on === NEWDUE, `due_on=${data?.due_on}`); }
 }
 
 async function cleanup() {
   for (const unit of [UNIT, UNIT2].filter(Boolean)) {
     await admin.from('quiz_assignments').delete().eq('unit_id', unit);
+    await admin.from('quiz_links').delete().eq('unit_id', unit);
     await admin.from('quiz_items').delete().eq('unit_id', unit);
     await admin.from('knowhow_understanding').delete().eq('unit_id', unit);
     await admin.from('course_entries').delete().eq('unit_id', unit);

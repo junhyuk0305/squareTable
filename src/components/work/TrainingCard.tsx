@@ -22,6 +22,8 @@ export type TrainingCardItem = {
  * 예전의 kind:'first'|'regular' 는 DB 에 없는 이름이라 호출부가 코스 key 를 몰래 매핑해야 했다.
  */
 export type TrainingCardCourse = {
+  /** training_courses.id — 응시 시트가 **이 퀴즈의 문항만** 읽는 열쇠(0307). 요청만 담은 카드(코스 없음)는 null. */
+  id: string | null;
   /** training_courses.key — 카드 식별용(호출부 React key). */
   key: string;
   /** training_courses.name — 카드 제목. 코스가 여러 종류라 고정 제목을 쓰면 전부 같은 이름으로 뜬다. */
@@ -84,7 +86,8 @@ export function TrainingCard({
   lastResult?: { total: number; correct: number } | null;
   /** 항목 id = 노하우 id(0111). */
   onOpenKnowhow: (entryId: string) => void;
-  onStartCheck: (entryId: string) => void;
+  /** 퀴즈 시작 — 노하우 하나 + 그 노하우가 담긴 퀴즈(0307 · 요청만 담은 카드는 null). */
+  onStartCheck: (entryId: string, courseId: string | null) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   // KST 오늘 "YYYY-MM-DD". 마감은 날짜 비교라 시각이 필요 없다(서버 due_on 도 KST 날짜).
@@ -167,7 +170,7 @@ export function TrainingCard({
           <Text style={st.softBtnText}>노하우 읽기</Text>
         </Pressable>
         <Pressable
-          onPress={() => onStartCheck(next.id)}
+          onPress={() => onStartCheck(next.id, course.id)}
           style={({ pressed }) => [st.cta, pressed && { opacity: 0.85 }]}
           accessibilityRole="button"
           accessibilityLabel={ctaLabel}

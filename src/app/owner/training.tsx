@@ -55,7 +55,7 @@ export default function OwnerTrainingScreen() {
   const router = useRouter();
   const {
     entries, entryById, boardLoaded, buildQuizzes, buildStats, buildHeatmap, heatHead, buildFixQueue,
-    staffCount, bumpQuiz, missPctOf, openLinkCourseIds, linkedCourseIds, archived, reloadCourses,
+    staffCount, bumpQuiz, bumpSends, missPctOf, openLinkCourseIds, linkedCourseIds, archived, reloadCourses,
   } = useQuizBoard();
 
   /** 응시 기준 집계(0199) — 정답률·응시인원. 발송 원장과 출처가 달라 훅도 따로다(courseStats 주석). */
@@ -79,7 +79,11 @@ export default function OwnerTrainingScreen() {
       void usePlaybookStore.getState().hydrate();
       void useWorkStore.getState().hydrate();
       bumpQuiz();
-    }, [bumpQuiz]),
+      // 퀴즈·발송 원장도 다시 읽는다(2026-10-15 안드로이드 QA #2) — 만들기에서 보낸 뒤 돌아오면 이 화면의
+      // 훅 상태는 마운트 때 그대로라, 방금 보낸 퀴즈가 '응시 중'에 안 떴다(문항만 새로 읽고 코스는 안 읽었다).
+      reloadCourses();
+      bumpSends();
+    }, [bumpQuiz, reloadCourses, bumpSends]),
   );
   const [fixOpen, setFixOpen] = useState(false);
   const [draftOpen, setDraftOpen] = useState(false);
