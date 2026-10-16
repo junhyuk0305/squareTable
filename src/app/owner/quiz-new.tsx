@@ -22,8 +22,10 @@ import {
   deleteQuizItem,
   insertQuizAssignments,
   insertQuizLink,
+  fetchRecipientReadiness,
   type QuizLinkRow,
 } from '@/lib/db';
+import { unreachableNote } from '@/lib/recipientReadiness';
 import { generateQuizItems, QuizQuotaError } from '@/lib/quiz/generate';
 import { itemsOfCourse } from '@/lib/quiz/courseItems';
 import { aiCapNextStep } from '@/lib/config/tiers';
@@ -556,7 +558,10 @@ export default function QuizNewScreen() {
     );
     setBusy(false);
     if (!sent) return;
-    showToast(sendNow ? `${to.length}명에게 보내요` : `${dayLabel(scheduledOn)}에 보내요`, 'good');
+    // 받을 수 없는 사람이 있으면 사실만 덧붙인다(P5 · 0309). 보내기는 이미 됐다 — 막지 않는다.
+    const note = unreachableNote(await fetchRecipientReadiness(unitId, to), { schedule: true });
+    const head = sendNow ? `${to.length}명에게 보내요` : `${dayLabel(scheduledOn)}에 보내요`;
+    showToast(note ? `${head} · 그중 ${note}` : head, 'good');
     router.replace(`/owner/quiz/${courseId}` as never);
   };
 

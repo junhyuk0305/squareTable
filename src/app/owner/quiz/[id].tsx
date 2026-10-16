@@ -18,13 +18,16 @@ import {
   fetchQuizItems,
   fetchStaffAttemptItems,
   fetchQuizSendStatus,
+  fetchRecipientReadiness,
   upsertTrainingCourse,
   insertQuizAssignments,
   insertQuizItem,
   updateQuizItem,
   type StaffAttemptItemRow,
   type QuizSendBlock,
+  type RecipientReadinessRow,
 } from '@/lib/db';
+import { readinessText } from '@/lib/recipientReadiness';
 import { genId } from '@/lib/utils/id';
 import { FORMATS } from '@/lib/quiz/formats';
 import { itemsOfCourse } from '@/lib/quiz/courseItems';
@@ -139,6 +142,22 @@ export default function QuizDetailScreen() {
     return () => { alive = false; };
   }, [id, sends]);
   const allUserIds = useMemo(() => [...new Set(sends.map((a) => a.userId))], [sends]);
+  // 받을 수 있는 상태인가(P5 · 0309) — 기기 0건·알림 끔은 보낸 뒤에도 '미응시'로만 보였다. RPC 없는 서버는 빈 맵.
+  const [readiness, setReadiness] = useState<Record<string, RecipientReadinessRow>>({});
+  useEffect(() => {
+    let alive = true;
+    void fetchRecipientReadiness(unitId ?? '', allUserIds).then((rows) => {
+      if (alive) setReadiness(Object.fromEntries(rows.map((r) => [r.userId, r])));
+    });
+    return () => { alive = false; };
+  }, [unitId, allUserIds]);
+  /** 사람 줄 아래 한 줄 — 상태 문구는 여기 한 함수에서만 고른다(문구 표 = recipientReadiness.ts). */
+  const rowStateText = (p: { id: string; passed: boolean; sent: boolean }): string => {
+    if (p.passed) return '통과';
+    const pre = readinessText(readiness[p.id]?.blockedReason);
+    if (p.sent) return pre ? `미응시 · ${pre}` : '미응시';
+    return readinessText(blocked[p.id]) ?? pre ?? '발송 중';
+  };
 
   // 주기 due 판정 기준 시각 — 렌더 중 Date.now() 금지(컴파일러 순수성). 마운트 1회로 충분하다.
   const [now] = useState(() => Date.now());
@@ -328,7 +347,14 @@ export default function QuizDetailScreen() {
     }
     if (ok) {
       bumpSends();
-      showToast('근무 시간에 맞춰 다시 보낼게요', 'good');
+      // 주 2회 상한(0301 ③)에 걸린 사람은 이번 7일 창에선 안 나간다 — 막지 않고 미리 말한다(P5).
+      const quotaOut = [...byDay.values()].flat().filter((uid) => readiness[uid]?.weeklyQuotaLeft === 0).length;
+      showToast(
+        quotaOut > 0
+          ? `근무 시간에 맞춰 다시 보낼게요 · ${quotaOut}명은 최근 7일에 2번 보내 그 뒤에 나가요`
+          : '근무 시간에 맞춰 다시 보낼게요',
+        'good',
+      );
     }
   };
 
@@ -451,10 +477,7 @@ export default function QuizDetailScreen() {
                         <Text style={st.rowSub} numberOfLines={1}>
                           {done
                             ? `${mine.length}문제 중 ${mine.filter((r) => r.correct).length}개 맞힘`
-                            : p.passed ? '통과' : p.sent ? '미응시'
-                              : blocked[p.id] === 'not_scheduled' ? '근무표에 없어 대기 중'
-                              : blocked[p.id] === 'auto_stopped' ? '두 번 안 열어 멈춤 · 열면 다시 나가요'
-                              : '발송 중'}
+                            : rowStateText(p)}
                         </Text>
                       </View>
                       <ProgressPill text={p.passed ? '다 맞힘' : '아직 안 풂'} tone={p.passed ? 'done' : 'neutral'} />
