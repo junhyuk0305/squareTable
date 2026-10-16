@@ -52,6 +52,18 @@ export type JuniorNotif = {
 export const isAfterAck = (at: string | undefined, ackAt?: string | null): boolean =>
   !ackAt || !at || at > ackAt;
 
+/** 계정 단위 알림(합류 결과 = member_notices approved·rejected)의 읽음 기준 = 내 매장 ack 중 가장 늦은 시각.
+ *  특정 매장 ack 에 묶지 않는다 — 반려된 매장엔 unit_member_prefs 행이 없어 그 매장 ackAt 이 영영 null 이다(10-16 결정 3).
+ *  어디서 '모두 읽기'를 눌러도(매장 벨·허브) 읽은 것이다. 매장 벨·허브 두 화면이 이 하나를 쓴다. */
+export const accountAckAt = (ackByUnit: Record<string, string | null | undefined>): string | null => {
+  let max: string | null = null;
+  for (const at of Object.values(ackByUnit)) if (at && (!max || at > max)) max = at;
+  return max;
+};
+
+/** 코스 이름 찾기용 최소 열 — 허브(my_units_notif_data 'course')는 id·name 만 준다. */
+export type CourseName = Pick<TrainingCourseRow, 'id' | 'name'>;
+
 /** 나를 @언급한 글/댓글(내 글 제외). read_by로 읽음추적 → 안 읽으면 강조·카운트. */
 export const isMentionOf = (f: FeedItem, me: string): boolean =>
   (f.mentions ?? []).includes(me) && f.authorId !== me;
@@ -112,16 +124,18 @@ export function juniorUnreadCount(
   queue: UnknownQuery[] = [],
   scheduleNotices: ScheduleNotice[] = [],
   assignments: QuizAssignment[] = [],
-  /** 합류 결과(0247 member_notices). 통합 알림(cross-store)은 이 축을 공급하지 않으므로 기본 빈 배열. */
+  /** 합류 결과(0247 member_notices). 계정 단위라 허브는 매장 묶음 밖(buildJoinNotifRows)에서 따로 센다 → 기본 빈 배열. */
   joinNotices: JoinNotice[] = [],
+  /** 합류 결과의 읽음 기준 = accountAckAt(ackByUnit). 없으면 매장 ackAt(옛 호출부 호환). */
+  joinAckAt: string | null = ackAt ?? null,
 ): number {
   return (
     queue.filter((u) => isMyAnsweredQuestion(u, me) && isAfterAck(u.asked_at, ackAt)).length +
     assignments.filter((a) => isPendingQuizForMe(a, me) && isAfterAck(a.sentAt ?? undefined, ackAt)).length +
     // 내 근무 알림(D9) — 대타 확정 · 시간 수정 결과 · 근무표 변경. read 개념이 없어 '모두 읽기'(ack) 전까지 센다.
     scheduleNotices.filter((n) => isAfterAck(n.created_at, ackAt)).length +
-    // 합류 결과 — 같은 표(member_notices)의 승인·반려 행. 같은 읽음 축.
-    joinNotices.filter((n) => isAfterAck(n.created_at, ackAt)).length +
+    // 합류 결과 — 같은 표(member_notices)의 승인·반려 행. 계정 단위 읽음 축(accountAckAt). 목록(buildJoinNotifRows)과 같은 판정.
+    buildJoinNotifRows(joinNotices, joinAckAt).filter((r) => r.unread).length +
     // 동료가 물었는데 아직 답이 없는 질문(D4) — 푸시를 놓치면 '내 공간'에 들어가야만 알 수 있었다.
     answerableQuestions(queue, me, suggestions).filter((u) => isAfterAck(u.asked_at, ackAt)).length +
     feed.filter((f) => isUnreadMention(f, me) && isAfterAck(f.createdAt, ackAt)).length +
@@ -156,11 +170,13 @@ export function buildJuniorNotifications(args: {
   /** 퀴즈 발송 원장(0139 · 안 푼 퀴즈 알림용). 없으면 해당 알림 없음. */
   assignments?: QuizAssignment[];
   /** 퀴즈 이름을 찾을 코스 목록. */
-  courses?: TrainingCourseRow[];
+  courses?: CourseName[];
   /** 합류 결과(0247 member_notices approved·rejected). 없으면 해당 알림 없음. */
   joinNotices?: JoinNotice[];
+  /** 합류 결과의 읽음 기준 = accountAckAt(ackByUnit)(결정 3). 없으면 매장 ackAt. */
+  joinAckAt?: string | null;
 }): JuniorNotif[] {
-  const { feed, swaps, templates, nameOf, userId: me, today, taskTemplates = [], done = {}, ackAt, suggestions = [], queue = [], scheduleNotices = [], assignments = [], courses = [], joinNotices = [] } = args;
+  const { feed, swaps, templates, nameOf, userId: me, today, taskTemplates = [], done = {}, ackAt, suggestions = [], queue = [], scheduleNotices = [], assignments = [], courses = [], joinNotices = [], joinAckAt = ackAt ?? null } = args;
   const tplById = (id: string) => templates.find((t) => t.id === id);
   const out: JuniorNotif[] = [];
 
@@ -296,7 +312,16 @@ export function buildJuniorNotifications(args: {
     });
   }
 
-  // 합류 결과(0247) — 서버가 승인·반려 때 넣은 행. 푸시는 같은 행을 크론이 보낸다. 매장 이름이 제목에 들어간다(역 ⑧ id = kind_<행 id>).
+  // 합류 결과(0247) — 계정 단위 축. 매장 벨과 허브가 같은 행 빌더를 쓴다.
+  out.push(...buildJoinNotifRows(joinNotices, joinAckAt));
+
+  return out.sort((a, b) => b.at.localeCompare(a.at)).slice(0, MAX_NOTIFS);
+}
+
+/** 합류 결과(0247 member_notices approved·rejected) 행 — 서버가 승인·반려 때 넣은 행. 푸시는 같은 행을 크론이 보낸다.
+ *  매장 이름이 제목에 들어간다(역 ⑧ id = kind_<행 id>). 읽음 기준은 accountAckAt(결정 3) — 매장 벨·허브·배지가 이 하나를 본다. */
+export function buildJoinNotifRows(joinNotices: JoinNotice[], joinAckAt: string | null): JuniorNotif[] {
+  const out: JuniorNotif[] = [];
   for (const n of joinNotices) {
     const ok = n.kind === 'approved';
     const spec = ok ? NOTIF.join_approved : NOTIF.join_rejected;
@@ -306,12 +331,11 @@ export function buildJuniorNotifications(args: {
       title: spec.title(n.store_name || '신청한 매장'),
       body: n.body,
       at: n.created_at,
-      unread: isAfterAck(n.created_at, ackAt),
+      unread: isAfterAck(n.created_at, joinAckAt),
       route: spec.route('junior'),
     });
   }
-
-  return out.sort((a, b) => b.at.localeCompare(a.at)).slice(0, MAX_NOTIFS);
+  return out;
 }
 
 // ── 사장 알림 (직원 모델과 동일 SSOT 구조) ───────────────────────────
@@ -415,10 +439,9 @@ export const isSwapAwaitingApproval = (r: SwapRequest): boolean => r.status === 
  *  claimed_by 로 좁히지 않는다: 결제는 매장 단위 소식이라 공동 사장 모두가 알아야 한다
  *  (RLS 가 이미 '그 매장 사장'으로 좁혀 놓았다 — 여기서 또 좁히면 두 번째 사장이 결과를 영영 못 본다). */
 export const isPaymentResult = (c: PaymentClaim): boolean => c.status !== 'pending' && !!c.reviewed_at;
-/** 응시를 마친 발송(0275 mark_quiz_completed 가 찍은 completed_at). 사장 계정에는 매장 전체 발송이 내려온다(qz_select). */
-// 최근 7일만 — 사장 계정엔 최근 500건이 내려오고 ackAt 이 없는 매장은 과거 완료분이 전부 안 읽음으로 잡힌다(10-16 검토).
-export const isQuizDone = (a: QuizAssignment): boolean =>
-  !!a.completedAt && Date.now() - Date.parse(a.completedAt) < 7 * 24 * 60 * 60 * 1000;
+/** 응시를 마친 발송(0275 mark_quiz_completed 가 찍은 completed_at). 사장 계정에는 매장 전체 발송이 내려온다(qz_select).
+ *  시간 창은 두지 않는다 — 알림은 7일 지나도 남는다(10-16 결정 2). 상한은 목록 MAX_NOTIFS 뿐. */
+export const isQuizDone = (a: QuizAssignment): boolean => !!a.completedAt;
 
 /** 벨 뱃지 개수 = 합류 승인대기 + 답변대기 질문 + 검토대기 제안 + 승인대기 교대 + 응시 완료 퀴즈 + 근무 시간 수정 요청.
  *  pending은 이미 "승인 대기"만 담긴 목록(fetchPendingMembers)이라 그대로 센다. timeRequests 도 대기만 담긴다(fetchShiftTimeRequests). */
@@ -430,15 +453,15 @@ export function ownerUnreadCount(
   feed: FeedItem[] = [],
   me?: string,
   ackAt?: string | null,
-  /** 입금 신고(0083). 통합 알림(cross-store)은 이 축을 공급하지 않으므로 기본 빈 배열. */
+  /** 입금 신고(0083). 허브(0313 'claim')도 같은 자리에 넘긴다. */
   claims: PaymentClaim[] = [],
-  /** 사장 알림(0191). 통합 알림은 이 축도 공급하지 않는다. */
+  /** 사장 알림(0191). 허브(0313 'alert')도 같은 자리에 넘긴다. */
   alerts: OwnerAlert[] = [],
   /** 나에게 온 배정(D11). 목록(buildOwnerNotifications)과 같은 인자를 넘긴다. */
   received?: ManagerReceivedArgs,
-  /** 퀴즈 발송 원장(응시 완료 축). 통합 알림은 이 축을 공급하지 않는다. */
+  /** 퀴즈 발송 원장(응시 완료 축). 허브(0313 'quiz')도 같은 자리에 넘긴다. */
   assignments: QuizAssignment[] = [],
-  /** 근무 시간 수정 요청(0243 · 대기만). 통합 알림은 이 축을 공급하지 않는다. */
+  /** 근무 시간 수정 요청(0243 · 대기만). 허브(0313 'timereq')도 같은 자리에 넘긴다. */
   timeRequests: ShiftTimeRequest[] = [],
 ): number {
   return (
@@ -493,7 +516,7 @@ function ownerRows(args: {
   /** 퀴즈 발송 원장(0139) — 응시 완료 알림용. 없으면 해당 알림 없음. */
   assignments?: QuizAssignment[];
   /** 퀴즈 이름을 찾을 코스 목록. */
-  courses?: TrainingCourseRow[];
+  courses?: CourseName[];
   /** 근무 시간 수정 요청(0243 · 대기만). 없으면 해당 알림 없음. */
   timeRequests?: ShiftTimeRequest[];
 }): OwnerNotif[] {

@@ -278,7 +278,7 @@ async function accountActive(uid) {
 }
 
 // 이 묶음이 끝까지 못 돌면 남은 단언을 ✗ 로 센다.
-const PLANNED = ['K1-a', 'K1-b', 'K7-r', 'K5-a', 'K2-auto', 'K2', 'K7-s', 'K3', 'K4', 'K1-c', 'K2-c', 'K7-j', 'K5-b', 'K5-c', 'K6-a', 'K6-b'];
+const PLANNED = ['K1-a', 'K1-b', 'K7-r', 'K5-a', 'K2-auto', 'K2', 'K7-s', 'K3', 'K4', 'K1-c', 'K2-c', 'K7-j', 'K7-h', 'K5-b', 'K5-c', 'K6-a', 'K6-b'];
 const done = new Set();
 const mark = (k) => done.add(k);
 let unit = null;
@@ -510,6 +510,32 @@ try {
     check('K7-j 승인 항목 탭 → /stores 착지 · 새 매장 이름이 화면에 있음 [문자열]', land.path === '/stores' && land.hasStore, `착지 ${land.path} · 매장 이름 보임=${land.hasStore}`);
     mark('K7-j');
     await J.mark('승인 벨');
+  }
+
+  // ── K7-h(0313 · 결정 3): J 허브 알림(/notifications) '전체 읽음' → 승인 항목은 남고 안 읽음 0 · 내 매장 전부 notif_ack_at 갱신 ──
+  section('K7-h. J 허브 알림 "전체 읽음" → 합류 승인 항목 읽음(내 매장 전부 ack · 계정 단위 최대 ack 기준)');
+  {
+    const TITLE_J = `${STORE_NAME} 합류가 승인됐어요`;
+    const t0 = new Date().toISOString();
+    await J.goto('/notifications');
+    const shown = await watch(J.page, (t) => t.includes(TITLE_J) && t.includes('전체 읽음'), 30000);
+    let gone = { ok: false };
+    let acked = 0, mine = 0;
+    if (shown.ok) {
+      await clickText(J.page, '전체 읽음');
+      // 안 읽음이 0 이 되면 버튼이 사라진다(hasUnread) · 항목은 목록에 남는다.
+      gone = await watch(J.page, (t) => t.includes(TITLE_J) && !t.includes('전체 읽음'), 15000);
+      await sleep(1000);
+      const { data: myUnits } = await jc.rpc('my_units');
+      const { data: prefs } = await admin.from('unit_member_prefs').select('unit_id, notif_ack_at').eq('user_id', jc.uid).gte('notif_ack_at', t0);
+      const ackSet = new Set((prefs ?? []).map((p) => p.unit_id));
+      mine = (myUnits ?? []).length;
+      acked = (myUnits ?? []).filter((u) => ackSet.has(u.unit_id)).length;
+    }
+    check('K7-h 허브 전체 읽음 → 승인 항목 남고 안 읽음 0(버튼 사라짐) · DB 내 매장 전부 notif_ack_at ≥ 누른 시각 [건]',
+      shown.ok && gone.ok && mine > 0 && acked === mine, `${shown.ok ? '항목·버튼 보임' : '항목 또는 버튼 없음(30초)'} · ack 매장 ${acked}/${mine}`);
+    mark('K7-h');
+    await J.mark('허브 전체 읽음');
   }
 
   // ── K5-c: 이미 멤버인 코드로 다시 신청 ───────────────────────────────────

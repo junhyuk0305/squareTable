@@ -16,7 +16,7 @@ import { useStaffStore } from '@/lib/store/useStaffStore';
 import { usePaymentClaimStore } from '@/lib/store/usePaymentClaimStore';
 import { useMemberPrefsStore } from '@/lib/store/useMemberPrefsStore';
 import { todayStr } from '@/lib/utils/attendance';
-import { juniorUnreadCount, ownerUnreadCount } from '@/lib/utils/notifications';
+import { accountAckAt, juniorUnreadCount, ownerUnreadCount } from '@/lib/utils/notifications';
 import { canManage } from '@/lib/utils/roles';
 
 type BadgeNav = Navigator & {
@@ -82,6 +82,9 @@ export function useAppBadgeSync(): void {
   const unitId = useSessionStore((s) => s.unitId);
   // '모두 읽기'(0078) 기준 시각 — 벨 배지와 동일 SSOT 집계 유지.
   const ackAt = useMemberPrefsStore((s) => (unitId ? (s.ackByUnit[unitId] ?? null) : null));
+  // 합류 결과(계정 단위)는 내 매장 ack 중 가장 늦은 시각으로(accountAckAt · 벨·목록·허브와 같은 판정).
+  const ackByUnit = useMemberPrefsStore((s) => s.ackByUnit);
+  const joinAckAt = accountAckAt(ackByUnit);
 
   // 직원 집계 입력
   const feed = useWorkStore((s) => s.feed);
@@ -111,7 +114,7 @@ export function useAppBadgeSync(): void {
         ? ownerUnreadCount(queue, suggestions, swaps, pending, feed, me, ackAt, claims, [],
             { feed, taskTemplates: templates, done, today, suggestions, userId: me, nameOf: () => '', ackAt }, assignments, timeRequests)
         // 레지스트리 badgeUnit 과 같은 축 — 벨(NotificationBell)과 같은 인자(assignments · joinNotices 포함).
-        : juniorUnreadCount(feed, swaps, me, today, templates, done, ackAt, suggestions, queue, scheduleNotices, assignments, joinNotices);
+        : juniorUnreadCount(feed, swaps, me, today, templates, done, ackAt, suggestions, queue, scheduleNotices, assignments, joinNotices, joinAckAt);
     setAppBadge(count);
-  }, [role, me, signedIn, feed, templates, done, swaps, queue, suggestions, pending, today, ackAt, claims, scheduleNotices, assignments, joinNotices, timeRequests]);
+  }, [role, me, signedIn, feed, templates, done, swaps, queue, suggestions, pending, today, ackAt, joinAckAt, claims, scheduleNotices, assignments, joinNotices, timeRequests]);
 }

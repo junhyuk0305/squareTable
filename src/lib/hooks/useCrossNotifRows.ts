@@ -10,7 +10,8 @@ import { useCrossNotifStore } from '@/lib/store/useCrossNotifStore';
 import { useMemberPrefsStore } from '@/lib/store/useMemberPrefsStore';
 import { useWorkStore } from '@/lib/store/useWorkStore';
 import { showToast } from '@/lib/store/useToastStore';
-import { buildStoreNotifs, buildClosureNotifs, mergeCrossNotifs, crossNotifTotal, storeUnreadCount } from '@/lib/utils/crossStoreNotifs';
+import { buildStoreNotifs, buildClosureNotifs, buildJoinCrossNotifs, mergeCrossNotifs, crossNotifTotal, storeUnreadCount } from '@/lib/utils/crossStoreNotifs';
+import { accountAckAt } from '@/lib/utils/notifications';
 import { storeColor } from '@/lib/utils/storeColor';
 import { todayStr } from '@/lib/utils/attendance';
 import type { NotifRow } from '@/components/NotificationList';
@@ -23,14 +24,17 @@ export function useCrossNotifRows() {
   const switchUnit = useSessionStore((s) => s.switchUnit);
   const crossData = useCrossNotifStore((s) => s.data);
   const closures = useCrossNotifStore((s) => s.closures);
+  const joinNotices = useCrossNotifStore((s) => s.joinNotices);
   const markFeedRead = useCrossNotifStore((s) => s.markFeedRead);
   const prefFor = useMemberPrefsStore((s) => s.prefFor);
+  const ackNotifs = useMemberPrefsStore((s) => s.ackNotifs);
   const [switching, setSwitching] = useState(false);
 
   const today = todayStr();
   // 매장 표시명 — 닉네임(unit_member_prefs) 우선, sessionStores(my_units)가 원본명 SSOT.
-  const labelOf = (uid: string) =>
-    prefFor(uid).nickname || sessionStores.find((u) => u.unit_id === uid)?.store_name || '매장';
+  //   목록에 없는 매장(반려된 합류 신청 매장)은 행이 가진 이름(member_notices.store_name)으로.
+  const labelOf = (uid: string, fallback?: string) =>
+    prefFor(uid).nickname || sessionStores.find((u) => u.unit_id === uid)?.store_name || fallback || '매장';
 
   const ackByUnit = useMemberPrefsStore((s) => s.ackByUnit);
   const { rows, unreadByUnit, totalUnread, hiddenCount } = useMemo(() => {
@@ -49,6 +53,10 @@ export function useCrossNotifRows() {
     const closureRows = buildClosureNotifs(closures, ackOf);
     for (const r of closureRows) if (r.unread) unreadByUnit[r.unitId] = (unreadByUnit[r.unitId] ?? 0) + 1;
     perStore.push(closureRows);
+    // 합류 결과(0247 · 계정 단위 · 0313) — 읽음 기준은 내 매장 ack 중 가장 늦은 시각(accountAckAt · 매장 벨과 같은 판정).
+    const joinRows = buildJoinCrossNotifs(joinNotices, accountAckAt(ackByUnit));
+    for (const r of joinRows) if (r.unread) unreadByUnit[r.unitId] = (unreadByUnit[r.unitId] ?? 0) + 1;
+    perStore.push(joinRows);
     const merged = mergeCrossNotifs(perStore);
     return {
       rows: merged,
@@ -57,14 +65,34 @@ export function useCrossNotifRows() {
       // 목록에서 잘려나간 개수 — 0 이 아니면 화면이 "N건 더 있어요"를 말해야 한다(#13).
       hiddenCount: Math.max(0, crossNotifTotal(perStore) - merged.length),
     };
-  }, [crossData, closures, sessionStores, me, today, ackByUnit]);
+  }, [crossData, closures, joinNotices, sessionStores, me, today, ackByUnit]);
 
   /** NotificationList 에 바로 넣을 행(매장 점·이름 칩 포함). */
   const listRows: (NotifRow & { unitId: string })[] = rows.map((r) => ({
     ...r,
-    storeLabel: labelOf(r.unitId),
+    storeLabel: labelOf(r.unitId, r.storeName),
     storeColor: storeColor(r.unitId, prefFor(r.unitId).color),
   }));
+
+  // 허브 '모두 읽기'(10-16 결정 3) — 내 매장 전부를 ack 한다(매장 벨과 같은 함수 ackNotifs · 0078 멤버십 가드).
+  //   어디서 읽어도 읽은 것이다: 매장 벨은 그 매장 ack 하나, 허브는 전부. 합류 결과는 accountAckAt(최대값)이라 같이 지워진다.
+  //   멘션 read_by 는 매장 벨 '모두 읽기'와 같은 길(0176 한 문장 RPC · 활성 매장만 — 다른 매장 행은 RLS 밖이라 ack 시각이 강조를 지운다).
+  const hasUnread = rows.some((r) => r.unread);
+  const markAll = () => {
+    if (!hasUnread) return;
+    const feedIds = rows
+      .filter((r) => r.unread && r.unitId === unitId && r.kind !== 'closure' && r.readFeedId)
+      .map((r) => (r as { readFeedId?: string }).readFeedId as string);
+    if (feedIds.length > 0) {
+      const work = useWorkStore.getState();
+      const inWork = feedIds.filter((id) => work.feed.some((f) => f.id === id));
+      if (inWork.length > 0) work.markAllRead(inWork, me);
+      // 허브 직진입(매장 레이어 미하이드레이트)이면 행별 RPC. 어느 쪽이든 허브 목록은 로컬로 맞춘다.
+      for (const id of feedIds) void markFeedRead(unitId, id, me, !inWork.includes(id));
+    }
+    for (const s of sessionStores) void ackNotifs(s.unit_id);
+    showToast('모두 읽음 처리했어요', 'good');
+  };
 
   // 행 탭 = (다른 매장이면) 활성 전환 후 이동. 읽음처리 규칙:
   //  - 크로스 행: 전환 완료 후 직접 DB 기록(wf_update RLS = 활성 매장 스코프라 전환 전엔 불가).
@@ -96,6 +124,6 @@ export function useCrossNotifRows() {
     if (row.route) router.push(row.route as Href);
   };
 
-  // 반환 = 소비처(4화면)가 실제 쓰는 것만(죽은 export 금지 — 2026-07-24 효율 리뷰).
-  return { listRows, unreadByUnit, totalUnread, hiddenCount, openRow };
+  // 반환 = 소비처(4화면)가 실제 쓰는 것만(죽은 export 금지 — 2026-07-24 효율 리뷰). hasUnread·markAll 은 허브 알림 화면.
+  return { listRows, unreadByUnit, totalUnread, hiddenCount, openRow, hasUnread, markAll };
 }

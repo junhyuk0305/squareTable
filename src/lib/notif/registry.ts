@@ -16,6 +16,8 @@
 //   ⑦ 결과는 ok/already/blocked/failed 로 가른다(src/lib/decision.ts).
 //   ⑧ 파생 행의 id 는 결정적이다(`kind_<원본 id>` · 같은 사건이 두 줄로 안 뜬다).
 //   ⑨ 수신 전제를 안내한다(기기 토큰 0건 · 방해금지 · 알림 off 면 "안 받는다"를 화면이 말한다).
+//   ⑩ 허브(my_units_notif_data · 0313)도 같은 축을 공급한다 — 매장 벨에만 있고 허브에 없는 kind 는 빈칸이다.
+//      (crossStoreNotifs.ts 가 벨 빌더의 같은 인자 자리에 넘긴다 · 계정 단위 축(합류 결과)은 fetchJoinNotices 로 따로.)
 import type { PushAudience } from '@/lib/push/notify';
 
 /** 화면 세트 — 같은 사건이 직원 화면과 사장 화면에서 다른 주소로 열린다. */

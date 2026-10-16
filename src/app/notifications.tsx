@@ -11,6 +11,7 @@ import { useCrossNotifRows } from '@/lib/hooks/useCrossNotifRows';
 import { HAS_SUPABASE } from '@/lib/supabase';
 import { useStoreDisplay } from '@/components/StoreHeaderTitle';
 import { NotificationList, ALL_KIND_UI } from '@/components/NotificationList';
+import { MarkAllReadButton } from '@/components/MarkAllReadButton';
 import { Appear, stagger } from '@/components/Appear';
 import { ScreenLoading } from '@/components/ScreenLoading';
 import { InkColors } from '@/lib/theme/colors';
@@ -35,7 +36,8 @@ export default function HubNotificationsScreen() {
     void useSessionStore.getState().refreshMembership();
     void hydrateCross();
   });
-  const { listRows, openRow } = useCrossNotifRows();
+  // '모두 읽기' = 내 매장 전부 ack(결정 3 · 훅이 매장 벨과 같은 ackNotifs 를 매장마다 부른다).
+  const { listRows, openRow, hasUnread, markAll } = useCrossNotifRows();
   // ⛔`&&` 안에서 훅을 부르지 않는다 — 훅을 각각 받은 뒤 AND 한다.
   const ready = crossLoaded && prefsLoaded;
 
@@ -48,7 +50,8 @@ export default function HubNotificationsScreen() {
       <Stack.Screen
         options={{ headerShown: false, title: '알림' }}
       />
-      <ScreenTitleHeader title="알림" backFallback />
+      {/* 전체 읽음 버튼 = 매장 벨과 같은 부품(MarkAllReadButton) · 같은 자리(제목 상단바 오른쪽 끝). */}
+      <ScreenTitleHeader title="알림" backFallback right={ready && hasUnread ? <MarkAllReadButton onPress={markAll} /> : undefined} />
       {!ready ? (
         <ScreenLoading label="알림을 불러오고 있어요…" />
       ) : (

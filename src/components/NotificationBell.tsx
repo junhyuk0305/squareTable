@@ -15,7 +15,7 @@ import { usePaymentClaimStore } from '@/lib/store/usePaymentClaimStore';
 import { useOwnerAlertStore } from '@/lib/store/useOwnerAlertStore';
 import { useMemberPrefsStore } from '@/lib/store/useMemberPrefsStore';
 import { todayStr } from '@/lib/utils/attendance';
-import { juniorUnreadCount, managerUnreadCount, ownerUnreadCount } from '@/lib/utils/notifications';
+import { accountAckAt, juniorUnreadCount, managerUnreadCount, ownerUnreadCount } from '@/lib/utils/notifications';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 import { HEADER_EDGE_GUTTER } from '@/lib/theme/layout';
@@ -60,9 +60,12 @@ export function NotificationBell({ edge = true }: { edge?: boolean } = {}) {
   // 안 푼 퀴즈(P1 역 ④)도 배지 축 — 목록(junior/notifications.tsx)과 같은 발송 원장. 합류 결과(0247)도 같은 목록의 축.
   const assignments = useWorkStore((s) => s.assignments);
   const joinNotices = useStaffStore((s) => s.joinNotices);
+  // 합류 결과는 계정 단위 — 읽음 기준은 내 매장 ack 중 가장 늦은 시각(accountAckAt · 목록·허브와 같은 판정).
+  const ackByUnit = useMemberPrefsStore((s) => s.ackByUnit);
+  const joinAckAt = accountAckAt(ackByUnit);
   const count = useMemo(
-    () => juniorUnreadCount(feed, swaps, userId, today, templates, done, ackAt, suggestions, queue, scheduleNotices, assignments, joinNotices),
-    [feed, swaps, userId, today, templates, done, ackAt, suggestions, queue, scheduleNotices, assignments, joinNotices],
+    () => juniorUnreadCount(feed, swaps, userId, today, templates, done, ackAt, suggestions, queue, scheduleNotices, assignments, joinNotices, joinAckAt),
+    [feed, swaps, userId, today, templates, done, ackAt, suggestions, queue, scheduleNotices, assignments, joinNotices, joinAckAt],
   );
 
   return <BellButton count={count} edge={edge} onPress={() => router.push('/junior/notifications')} />;

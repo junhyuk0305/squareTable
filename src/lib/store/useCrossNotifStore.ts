@@ -2,7 +2,8 @@
 // 원시 묶음(UnitNotifData)만 보관하고 판정·목록은 화면이 crossStoreNotifs 유틸로 파생한다.
 // RLS 는 활성 매장만 노출하므로 realtime 불가 — 허브/알림 화면 진입 시점 fetch 로 갱신(폴링 온 포커스).
 import { create } from 'zustand';
-import { fetchCrossStoreNotifData, fetchMyUnitClosureAlerts, markFeedRead as dbMarkFeedRead, type UnitNotifData, type UnitClosureAlert } from '@/lib/db';
+import { fetchCrossStoreNotifData, fetchMyUnitClosureAlerts, fetchJoinNotices, markFeedRead as dbMarkFeedRead, type UnitNotifData, type UnitClosureAlert } from '@/lib/db';
+import type { JoinNotice } from '@/lib/store/useStaffStore';
 import { guardWrite } from '@/lib/store/useSyncStore';
 import { HAS_SUPABASE } from '@/lib/supabase';
 
@@ -18,6 +19,8 @@ type State = {
   data: UnitNotifData[];
   /** 닫힌 매장 알림(0197) — 직원·매니저로 속한 매장이 닫혔다는 행. 매장 안이 아니라 허브가 볼 자리다. */
   closures: UnitClosureAlert[];
+  /** 합류 결과(0247 approved·rejected) — 계정 단위라 RPC(매장 묶음) 밖에서 따로 당긴다(0313 · 결정 1). */
+  joinNotices: JoinNotice[];
   /** true = 조회 **시도가 끝남**(성공·실패 무관). 실패 여부는 loadError 로 본다. */
   loaded: boolean;
   /** 마지막 hydrate 가 실패했는가 — 화면이 "알림 없음"과 "못 불러옴"을 구분해 재시도 UI를 띄운다. */
@@ -35,6 +38,7 @@ type State = {
 export const useCrossNotifStore = create<State>((set, get) => ({
   data: [],
   closures: [],
+  joinNotices: [],
   // 다른 스토어와 같은 관례 — 백엔드가 없으면(데모) 기다릴 것이 없으므로 처음부터 도착으로 친다.
   loaded: !HAS_SUPABASE,
   loadError: false,
@@ -43,7 +47,8 @@ export const useCrossNotifStore = create<State>((set, get) => ({
     const now = Date.now();
     if (now - _lastHydrateAt < HYDRATE_TTL_MS) return;
     _lastHydrateAt = now;
-    const [{ data, error }, { data: closures }] = await Promise.all([fetchCrossStoreNotifData(), fetchMyUnitClosureAlerts()]);
+    // 합류 결과 읽기 실패는 허브 실패로 보지 않는다(행 하나가 빠질 뿐 · 명부 스토어와 같은 관례).
+    const [{ data, error }, { data: closures }, joinRes] = await Promise.all([fetchCrossStoreNotifData(), fetchMyUnitClosureAlerts(), fetchJoinNotices()]);
     if (error || !data) {
       _lastHydrateAt = 0; // 실패는 TTL 미적용 — 다음 진입에서 즉시 재시도
       // ★못 불러왔어도 '기다리기'는 끝났다. 여기서 loaded 를 안 세우면 이 플래그를 게이트에 넣은
@@ -53,7 +58,7 @@ export const useCrossNotifStore = create<State>((set, get) => ({
       set({ loaded: true, loadError: !!error });
       return;
     }
-    set({ data, closures: closures ?? [], loaded: true, loadError: false });
+    set({ data, closures: closures ?? [], joinNotices: joinRes.data, loaded: true, loadError: false });
   },
 
   retry: async () => {

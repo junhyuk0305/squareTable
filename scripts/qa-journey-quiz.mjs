@@ -624,6 +624,31 @@ try {
   check('K7-3 착지 화면 결과 탭에 그 직원 줄이 보인다 [문자열]', k7.rowVisible, `직원 줄 보임=${k7.rowVisible}`);
   await net(S, 'S 벨 → 결과');
 
+  // ── K7-h(0313 · 결정 1): 허브 알림(/notifications)에도 같은 quiz_done 행 + 매장 이름 칩. 사장 매장이 2개 이상일 때만 허브가 뜬다.
+  {
+    const { data: myUnits } = await ownerC.rpc('my_units');
+    const nUnits = (myUnits ?? []).length;
+    const { data: pref } = await admin.from('unit_member_prefs').select('nickname').eq('user_id', ownerC.uid).eq('unit_id', UNIT).maybeSingle();
+    const { data: unitRow } = await admin.from('units').select('store_name').eq('id', UNIT).maybeSingle();
+    const chip = pref?.nickname || unitRow?.store_name || '';
+    note('사장 매장 수(my_units) · 매장 칩', `${nUnits} · "${chip}"`);
+    if (nUnits >= 2) {
+      await S.goto('/notifications');
+      const hub = await S.waitFor(`(()=>{const t=document.body.innerText;return t.includes(${J_(K7_TITLE)})&&t.includes(${J_(cardName)})&&t.includes(${J_(chip)})})()`, 30000);
+      check('K7-h 허브 /notifications 에도 "<직원>님이 퀴즈를 다 풀었어요" + 퀴즈 이름 + 매장 이름 칩 [문자열 · 0313 push 전엔 RED 가 정상]', hub, `칩 "${chip}"`);
+      await net(S, 'S 허브 알림');
+    } else {
+      // 매장이 1개면 허브가 없다 — 매장 벨 '전체 읽음' 뒤 DB ack 시각이 갱신되는지로 대체.
+      const t0 = new Date().toISOString();
+      await S.goto('/owner/notifications');
+      await S.waitFor(`document.body.innerText.includes(${J_(K7_TITLE)})`, 30000);
+      await clickText(S, '전체 읽음');
+      await sleep(1500);
+      const { data: ack } = await admin.from('unit_member_prefs').select('notif_ack_at').eq('user_id', ownerC.uid).eq('unit_id', UNIT).maybeSingle();
+      check('K7-h(대체 · 매장 1개) 매장 벨 전체 읽음 → notif_ack_at 갱신 [시각]', !!ack?.notif_ack_at && ack.notif_ack_at >= t0, `ack=${ack?.notif_ack_at ?? 'null'}`);
+    }
+  }
+
   section('13. 화면 전환 합계(단언 9)');
   check(`9 콘솔 에러 0 · ≥400 응답 0 (전 구간 · 콘솔 ${netLog.err} · ≥400 ${netLog.bad})`, netLog.err === 0 && netLog.bad === 0);
 } catch (e) {

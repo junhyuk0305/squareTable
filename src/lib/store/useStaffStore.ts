@@ -30,7 +30,7 @@ const alreadyDecided = (get: () => StaffState) => {
 export type PendingMember = { id: string; name: string; phone_last4: string; created_at: string };
 
 /** 내 합류 결과(0247 member_notices · approved·rejected) — 서버가 승인·반려 때 넣는다. 푸시는 크론이 같은 행을 보낸다. 벨 항목의 원천. */
-export type JoinNotice = { id: number; kind: 'approved' | 'rejected'; store_name: string | null; body: string; created_at: string };
+export type JoinNotice = { id: number; unit_id: string; kind: 'approved' | 'rejected'; store_name: string | null; body: string; created_at: string };
 
 type StaffState = {
   owner: Owner | null;

@@ -119,5 +119,49 @@ check('⑥ 사장: 직원 제안 2건 모두 검토함에(자기 것 아님)', o
   check('★D11-3 채팅에 보이는 안 읽은 나의 멘션 id', JSON.stringify(ids3) === JSON.stringify(['f_mention']), JSON.stringify(ids3));
 }
 
+// ── 허브(전 매장 · 0313) — 매장 벨의 모든 종류가 허브 행에도 나오고(결정 1) 합류 결과는 계정 단위 ack(결정 3) ──
+{
+  const { buildStoreNotifs, storeUnreadCount, buildJoinCrossNotifs } =
+    await import(pathToFileURL(join(ROOT, 'src/lib/utils/crossStoreNotifs.ts')).href);
+  const { accountAckAt, buildJuniorNotifications, juniorUnreadCount } =
+    await import(pathToFileURL(join(ROOT, 'src/lib/utils/notifications.ts')).href);
+  const JR = 'u_junior';
+  const uqAnswered = { id: 'uq1', unit_id: 'u1', junior_id: JR, junior_name: '이수민', query_text: '얼음 어디?', status: 'resolved_with_entry', answered_by: OWNER, asked_at: iso(2) };
+  const uqPending = { id: 'uq2', unit_id: 'u1', junior_id: 'u_other', junior_name: '최민수', query_text: '마감 순서?', status: 'pending_owner_answer', asked_at: iso(3) };
+  // 허브 원시 묶음 한 매장(UnitNotifData) — 0313 이 보태는 축을 벨과 같은 타입으로 채운다.
+  const d = {
+    unitId: 'u1', feed: [], swaps: [], taskTemplates: [], done: {}, names: { [JR]: '이수민', [OWNER]: '김영자' },
+    queue: [uqAnswered, uqPending], suggestions: [], pending: [],
+    assignments: [{ id: 'qa1', courseId: 'c1', userId: JR, scheduledOn: '2026-08-01', sentAt: iso(3), dueOn: null, openedAt: iso(3), completedAt: iso(4), origin: 'manual' }],
+    courses: [{ id: 'c1', name: '오픈 퀴즈' }],
+    timeRequests: [{ id: 'tr1', staff_id: JR, template_id: 't1', date: '2026-08-20', old_start: '09:00', old_end: '12:00', new_start: '10:00', new_end: '13:00', note: null, created_at: iso(5) }],
+    claims: [], alerts: [], scheduleNotices: [{ id: 9, kind: 'shift_changed', title: '근무가 바뀌었어요', body: '20일', created_at: iso(6) }],
+  };
+  const own = buildStoreNotifs(d, 'owner', OWNER, TODAY, null);
+  const qd = own.find((r) => r.id === 'quiz_done_qa1');
+  check('⑩ 허브 사장 행에 quiz_done(제목 = 푼 직원 · 본문 = 퀴즈 이름 · unitId 칩)', qd?.kind === 'quiz_done' && qd?.title === '이수민님이 퀴즈를 다 풀었어요' && qd?.body === '오픈 퀴즈' && qd?.unitId === 'u1', JSON.stringify(qd));
+  check('⑩ 허브 사장 행에 shift_time', own.some((r) => r.id === 'shift_time_tr1' && r.kind === 'shift_time' && r.unitId === 'u1'), own.map((r) => r.id).join(','));
+  check('⑩ 허브 사장 배지 == 목록 안읽음', storeUnreadCount(d, 'owner', OWNER, TODAY, null) === own.filter((r) => r.unread).length, `badge=${storeUnreadCount(d, 'owner', OWNER, TODAY, null)} list=${own.filter((r) => r.unread).length}`);
+  const jr = buildStoreNotifs(d, 'junior', JR, TODAY, null);
+  check('⑩ 허브 직원 행에 q_answered(내 질문에 답)', jr.some((r) => r.id === 'qa_uq1' && r.kind === 'q_answered' && r.unitId === 'u1'), jr.map((r) => r.id).join(','));
+  check('⑩ 허브 직원 행에 question(D4 · 동료 질문) · schedule(근무 알림)', jr.some((r) => r.id === 'q_uq2' && r.kind === 'question') && jr.some((r) => r.id === 'sched_9' && r.kind === 'schedule'));
+  check('⑩ 허브 직원 배지 == 목록 안읽음', storeUnreadCount(d, 'junior', JR, TODAY, null) === jr.filter((r) => r.unread).length);
+
+  // 합류 결과 — 반려된 매장(u3)엔 prefs 행이 없다. 읽음 기준 = 내 매장 ack 중 최댓값(iso(5)).
+  const ackByUnit = { u1: iso(5), u2: iso(3) };
+  const joinNotices = [
+    { id: 1, unit_id: 'u3', kind: 'rejected', store_name: '셋째 매장', body: '셋째 매장', created_at: iso(4) },
+    { id: 2, unit_id: 'u2', kind: 'approved', store_name: '둘째 매장', body: '둘째 매장 직원이 됐어요', created_at: iso(6) },
+  ];
+  check('⑩ accountAckAt = 내 매장 ack 중 가장 늦은 시각', accountAckAt(ackByUnit) === iso(5) && accountAckAt({}) === null);
+  const hub = buildJoinCrossNotifs(joinNotices, accountAckAt(ackByUnit));
+  const rej = hub.find((r) => r.id === 'join_rejected_1'), app = hub.find((r) => r.id === 'join_approved_2');
+  check('⑩ 허브 합류 결과: 반려(최대 ack 이전 · 그 매장 ack 행 없음)=읽음 · 승인(이후)=안 읽음 · unitId=그 알림 매장 · storeName 칩 폴백',
+    rej?.unread === false && rej?.unitId === 'u3' && rej?.storeName === '셋째 매장' && app?.unread === true && app?.unitId === 'u2', JSON.stringify(hub));
+  const bell = buildJuniorNotifications({ feed: [], swaps: [], templates: [], nameOf, userId: JR, today: TODAY, ackAt: null, joinNotices, joinAckAt: accountAckAt(ackByUnit) });
+  check('⑩ 매장 벨 합류 결과도 같은 판정(unread 동일) · 배지 == 목록', bell.find((r) => r.id === 'join_rejected_1')?.unread === false && bell.find((r) => r.id === 'join_approved_2')?.unread === true
+    && juniorUnreadCount([], [], JR, TODAY, [], {}, null, [], [], [], [], joinNotices, accountAckAt(ackByUnit)) === 1);
+}
+
 console.log(`\nRESULT: ${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

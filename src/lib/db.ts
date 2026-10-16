@@ -434,10 +434,25 @@ export type UnitNotifData = {
   done: Record<string, Record<string, DoneMark>>;
   /** userId → 이름(nameOf 용, 소속 매장 명부와 동일 노출 범위). */
   names: Record<string, string>;
-  // 사장 매장만 채워짐(직원 매장은 빈 배열).
+  // 0313: 전 역할. 답 기다리는 질문 + 내가 물었고 답이 온 질문(직원 매장은 매장 안 벨과 같은 범위).
   queue: UnknownQuery[];
+  // 0313: 검토 대기(사장·매니저 매장) + 내 제안의 검토 결과(전 역할).
   suggestions: PlaybookSuggestion[];
+  // 사장·매니저 매장만 채워짐(직원 매장은 빈 배열).
   pending: { id: string; name: string; phone_last4: string; created_at: string }[];
+  // ── 0313 허브에도 매장 벨의 모든 종류(결정 1). 벨이 쓰는 타입 그대로(같은 매퍼) — 빌더의 같은 인자 자리에 넘긴다.
+  /** 퀴즈 발송 원장 — 사장·매니저 매장 = 그 매장 전체(quiz_done), 직원 매장 = 내 발송(training). */
+  assignments: QuizAssignment[];
+  /** 퀴즈 이름(id·name 만). */
+  courses: { id: string; name: string }[];
+  /** 근무 시간 수정 요청(대기만 · 사장·매니저 매장). */
+  timeRequests: ShiftTimeRequest[];
+  /** 입금 신고 검토 결과(사장 매장). */
+  claims: PaymentClaim[];
+  /** 사장 알림(사장 매장). */
+  alerts: OwnerAlert[];
+  /** 내 근무 알림(D9 · 매장별). */
+  scheduleNotices: ScheduleNotice[];
 };
 export async function fetchCrossStoreNotifData(): Promise<DbResult<UnitNotifData[]>> {
   if (!HAS_SUPABASE) return { data: [], error: null };
@@ -451,7 +466,10 @@ export async function fetchCrossStoreNotifData(): Promise<DbResult<UnitNotifData
   const bundle = (unitId: string): UnitNotifData => {
     let b = byUnit.get(unitId);
     if (!b) {
-      b = { unitId, feed: [], swaps: [], taskTemplates: [], done: {}, names: {}, queue: [], suggestions: [], pending: [] };
+      b = {
+        unitId, feed: [], swaps: [], taskTemplates: [], done: {}, names: {}, queue: [], suggestions: [], pending: [],
+        assignments: [], courses: [], timeRequests: [], claims: [], alerts: [], scheduleNotices: [],
+      };
       byUnit.set(unitId, b);
     }
     return b;
@@ -468,6 +486,13 @@ export async function fetchCrossStoreNotifData(): Promise<DbResult<UnitNotifData
       case 'uq': b.queue.push(p as UnknownQuery); break;
       case 'sugg': b.suggestions.push(p as PlaybookSuggestion); break;
       case 'join': b.pending.push({ id: p.id, name: p.name ?? '', phone_last4: p.phone_last4 ?? '', created_at: p.created_at ?? '' }); break;
+      // 0313 — 벨과 같은 매퍼·같은 행 모양(옛 서버는 이 source 를 안 보내 빈 배열로 남는다).
+      case 'quiz': b.assignments.push(toAssignment(p)); break;
+      case 'course': b.courses.push({ id: p.id, name: p.name ?? '' }); break;
+      case 'timereq': b.timeRequests.push(p as ShiftTimeRequest); break;
+      case 'claim': b.claims.push(p as PaymentClaim); break;
+      case 'alert': b.alerts.push(p as OwnerAlert); break;
+      case 'schednotice': b.scheduleNotices.push(p as ScheduleNotice); break;
     }
   }
   return { data: [...byUnit.values()], error: null };
@@ -3802,15 +3827,14 @@ export async function fetchScheduleNotices(): Promise<ReadResult<ScheduleNotice[
   return { data: (data ?? []) as ScheduleNotice[], error: false };
 }
 
-/** 합류 결과(0247) — 승인·반려 때 서버가 넣은 member_notices 행. RLS = 본인 행만. 매장과 무관하게 읽는다(신청한 매장은 아직 내 활성 매장이 아니다). */
+/** 합류 결과(0247) — 승인·반려 때 서버가 넣은 member_notices 행. RLS = 본인 행만. 매장과 무관하게 읽는다(신청한 매장은 아직 내 활성 매장이 아니다).
+ *  시간 창은 없다(10-16 결정 2) — 읽음은 계정 단위 기준(accountAckAt)이라 과거 이력이 새 매장 벨에 안 읽음으로 잡히지 않는다. */
 export async function fetchJoinNotices(): Promise<ReadResult<JoinNotice[]>> {
   if (!HAS_SUPABASE) return { data: [], error: false };
   const { data, error } = await supabase
     .from('member_notices')
-    .select('id, kind, store_name, body, created_at')
+    .select('id, unit_id, kind, store_name, body, created_at')
     .in('kind', ['approved', 'rejected'])
-    // 최근 7일만 — 벨 읽음 기준(ackAt)이 매장별이라, 창을 안 두면 다른 매장·과거 승인 이력이 새 매장 벨에 전부 안 읽음으로 잡힌다(10-16 검토).
-    .gte('created_at', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString())
     .order('created_at', { ascending: false })
     .limit(20);
   if (error) {

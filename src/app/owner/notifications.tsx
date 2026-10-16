@@ -137,11 +137,10 @@ export default function OwnerNotificationsScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
-      <ScreenTitleHeader title="알림" backFallback />
-      <Stack.Screen
-        // 전체 읽음은 활성 매장 것만 가능(다른 매장 read_by 는 RLS 스코프 밖) → '이 매장' 탭에서만.
-        options={{ headerRight: () => (seg === 'store' && hasUnread ? <MarkAllReadButton onPress={markAll} /> : null) }}
-      />
+      {/* 전체 읽음 = 제목 상단바 오른쪽 끝(네이티브 헤더는 꺼져 있다 · 허브 알림 화면과 같은 부품·같은 자리).
+          이 매장 것만 읽는다('이 매장' 탭에서만) — 전 매장은 허브 알림 화면의 '전체 읽음'이 맡는다. */}
+      <ScreenTitleHeader title="알림" backFallback right={seg === 'store' && hasUnread ? <MarkAllReadButton onPress={markAll} /> : undefined} />
+      <Stack.Screen options={{ title: '알림' }} />
       {!ready ? (
         <ScreenLoading label="알림을 불러오고 있어요…" />
       ) : (

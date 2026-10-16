@@ -21,7 +21,7 @@ import { NotificationList, JUNIOR_KIND_UI } from '@/components/NotificationList'
 import { NotificationEnableCard } from '@/components/NotificationEnableCard';
 import { SegmentTabs } from '@/components/SegmentTabs';
 import { todayStr } from '@/lib/utils/attendance';
-import { buildJuniorNotifications } from '@/lib/utils/notifications';
+import { accountAckAt, buildJuniorNotifications } from '@/lib/utils/notifications';
 import { InkColors } from '@/lib/theme/colors';
 import { Elevation, Radius } from '@/lib/theme/elevation';
 
@@ -71,6 +71,9 @@ export default function JuniorNotificationsScreen() {
   const unitId = useSessionStore((s) => s.unitId);
   const ackNotifs = useMemberPrefsStore((s) => s.ackNotifs);
   const ackAt = useMemberPrefsStore((s) => (unitId ? (s.ackByUnit[unitId] ?? null) : null));
+  // 합류 결과(계정 단위)의 읽음 기준 = 내 매장 ack 중 가장 늦은 시각(결정 3 · 허브와 같은 판정 accountAckAt).
+  const ackByUnit = useMemberPrefsStore((s) => s.ackByUnit);
+  const joinAckAt = accountAckAt(ackByUnit);
 
   // ── 통합 알림(전체 매장, 0077) — 다점포 소속일 때만 세그먼트 노출.
   //    판정·매핑·탭 동작(전환 후 읽음처리 포함)은 공용 훅(useCrossNotifRows) SSOT.
@@ -103,8 +106,9 @@ export default function JuniorNotificationsScreen() {
         assignments,
         courses,
         joinNotices,
+        joinAckAt,
       }),
-    [feed, swaps, templates, owner, staff, me, today, taskTemplates, done, ackAt, suggestions, queue, scheduleNotices, assignments, courses, joinNotices],
+    [feed, swaps, templates, owner, staff, me, today, taskTemplates, done, ackAt, suggestions, queue, scheduleNotices, assignments, courses, joinNotices, joinAckAt],
   );
 
   const initial = (userName ?? '나').trim().slice(0, 1) || '나';
@@ -132,14 +136,10 @@ export default function JuniorNotificationsScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['bottom']}>
-      <ScreenTitleHeader title="알림" backFallback />
-      <Stack.Screen
-        options={{
-          title: '알림',
-          // 전체 읽음은 활성 매장 것만 가능(다른 매장 read_by 는 RLS 스코프 밖) → '이 매장' 탭에서만.
-          headerRight: () => (seg === 'store' && hasUnread ? <MarkAllReadButton onPress={markAll} /> : null),
-        }}
-      />
+      {/* 전체 읽음 = 제목 상단바 오른쪽 끝(네이티브 헤더는 꺼져 있다 · 허브 알림 화면과 같은 부품·같은 자리).
+          이 매장 것만 읽는다('이 매장' 탭에서만) — 전 매장은 허브 알림 화면의 '전체 읽음'이 맡는다. */}
+      <ScreenTitleHeader title="알림" backFallback right={seg === 'store' && hasUnread ? <MarkAllReadButton onPress={markAll} /> : undefined} />
+      <Stack.Screen options={{ title: '알림' }} />
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         {/* 맨 위 — 매장명 · 내 이름(정체성). 홈 헤더에서 옮겨온 정보 */}
