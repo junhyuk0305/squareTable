@@ -51,9 +51,9 @@ console.log('[1] 순수 함수 deleteConfirmMessage');
     check('1-1 쓰는 곳이 없으면 계획 문구 그대로', msg({ courses: 0, tasks: 0, attempts: 0 }) === BASE, msg({ courses: 0, tasks: 0, attempts: 0 }));
     check('1-2 사용 정보를 못 받으면(null) 계획 문구 그대로', msg(null) === BASE, msg(null));
     const both = msg({ courses: 3, tasks: 2, attempts: 9 });
-    check('1-3 퀴즈 3개·할일 2개에서 쓰는 중이면 그 수를 덧붙인다', both === `${BASE} 퀴즈 3개·할일 2개에서 쓰는 중이에요.`, both);
+    check('1-3 퀴즈 3개·할일 2개에서 쓰는 중이면 그 수 + 문항도 지워진다는 안내', both === `${BASE} 퀴즈 3개·할일 2개에서 쓰는 중이에요. 이 노하우로 만든 퀴즈 문항도 함께 삭제돼요.`, both);
     const onlyQuiz = msg({ courses: 1, tasks: 0, attempts: 0 });
-    check('1-4 퀴즈만이면 퀴즈만', onlyQuiz === `${BASE} 퀴즈 1개에서 쓰는 중이에요.`, onlyQuiz);
+    check('1-4 퀴즈만이면 퀴즈만 + 문항 안내', onlyQuiz === `${BASE} 퀴즈 1개에서 쓰는 중이에요. 이 노하우로 만든 퀴즈 문항도 함께 삭제돼요.`, onlyQuiz);
     const onlyTask = msg({ courses: 0, tasks: 4, attempts: 0 });
     check('1-5 할일만이면 할일만', onlyTask === `${BASE} 할일 4개에서 쓰는 중이에요.`, onlyTask);
   }

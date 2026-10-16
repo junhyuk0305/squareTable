@@ -45,7 +45,6 @@ export class ErrorBoundary extends Component<Props, State> {
       <View style={styles.root}>
         <View style={frameCapStyle}>
           <View style={styles.card}>
-            <Text style={styles.emoji}>😵‍💫</Text>
             <Text style={styles.title}>문제가 생겼어요</Text>
             <Text style={styles.body}>화면을 그리다 오류가 났어요.{'\n'}다시 시도하면 대부분 해결돼요.</Text>
             <Pressable
@@ -79,7 +78,6 @@ const styles = StyleSheet.create({
     gap: Space.md,
     ...Elevation.e2,
   },
-  emoji: { fontSize: 40 },
   title: { fontSize: 18, fontWeight: '800', color: InkColors.ink },
   body: { fontSize: 15, color: InkColors.ink2, textAlign: 'center', lineHeight: 22 },
   btn: {

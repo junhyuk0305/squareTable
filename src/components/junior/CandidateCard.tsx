@@ -23,7 +23,7 @@ export function CandidateCard({ entries, onPick, onRegister }: Props) {
   return (
     <View style={styles.card}>
       <View style={styles.headerRow}>
-        <Text style={styles.icon}>🔎</Text>
+        <Ionicons name="search" size={24} color={InkColors.ink} />
         <View style={{ flex: 1, gap: 2 }}>
           <Text style={styles.title}>혹시 이거 찾으세요?</Text>
           <Text style={styles.subtitle}>딱 맞는 답은 못 찾았지만, 비슷한 노하우가 있어요</Text>
@@ -76,7 +76,6 @@ const styles = StyleSheet.create({
     gap: 14,
   },
   headerRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
-  icon: { fontSize: 24, lineHeight: 28 },
   title: { fontSize: 16, fontWeight: '800', color: InkColors.ink },
   subtitle: { fontSize: 15, color: InkColors.ink2, fontWeight: '500' },
 

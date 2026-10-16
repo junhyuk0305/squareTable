@@ -1,4 +1,5 @@
 import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { BrandColors, InkColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 
@@ -26,15 +27,15 @@ type Props = {
 export function DeflectCard({ aiGeneralAnswer, similarCount, status, onRegister, onDecline }: Props) {
   const header =
     status === 'registered'
-      ? { icon: '🙋', title: '사장님께 보냈어요', sub: '사장님이 답을 정하면 ‘내 공간’에서 확인할 수 있어요' }
+      ? { icon: 'paper-plane-outline' as const, title: '사장님께 보냈어요', sub: '사장님이 답을 정하면 ‘내 공간’에서 확인할 수 있어요' }
       : status === 'declined'
-        ? { icon: '🙂', title: '보내지 않았어요', sub: '필요하면 언제든 다시 사장님께 보낼 수 있어요' }
-        : { icon: '🙋', title: '사장님께 보낼까요?', sub: '아직 매장에 없는 질문이에요 — 보내면 사장님이 답을 정해줘요' };
+        ? { icon: 'close-circle-outline' as const, title: '보내지 않았어요', sub: '필요하면 언제든 다시 사장님께 보낼 수 있어요' }
+        : { icon: 'help-circle-outline' as const, title: '사장님께 보낼까요?', sub: '아직 매장에 없는 질문이에요 — 보내면 사장님이 답을 정해줘요' };
 
   return (
     <View style={styles.card}>
       <View style={styles.headerRow}>
-        <Text style={styles.icon}>{header.icon}</Text>
+        <Ionicons name={header.icon} size={26} color={InkColors.ink} />
         <View style={{ flex: 1, gap: 2 }}>
           <Text style={styles.title}>{header.title}</Text>
           <Text style={styles.subtitle}>{header.sub}</Text>
@@ -115,7 +116,6 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     gap: 12,
   },
-  icon: { fontSize: 26, lineHeight: 30 },
   title: {
     fontSize: 16,
     fontWeight: '800',

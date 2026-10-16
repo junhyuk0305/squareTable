@@ -550,7 +550,7 @@ export function OwnerCoachChat({
       .filter(({ s, i }) => !publishedSegRef.current.has(i) && isSquarePublishable(s.square))
       .slice(0, MAX_SPLIT_PUBLISH); // 이중 방어: 표시 단계에서 이미 잘렸지만 발행 시점에도 상한 강제.
     if (pending.length === 0) {
-      setError('저장할 내용이 부족해요. ➕ 내용 추가하기로 보완해 주세요.');
+      setError('저장할 내용이 부족해요. ‘내용 추가하기’로 보완해 주세요.');
       return;
     }
     const entries = pending.map(({ s }) =>

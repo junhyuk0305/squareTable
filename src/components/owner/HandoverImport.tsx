@@ -387,7 +387,7 @@ function HandoverImportBody() {
         ) : (
           <Appear delay={0}>
             <View style={styles.uploadZone}>
-              <Text style={styles.uploadEmoji}>📄</Text>
+              <Ionicons name="document-text-outline" size={28} color={InkColors.ink2} />
               <Text style={styles.uploadTitle}>매뉴얼 올리기</Text>
               <Text style={styles.uploadSub}>
                 {PDF_PICK_SUPPORTED
@@ -713,7 +713,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: Space.md,
   },
-  uploadEmoji: { fontSize: 28 },
   uploadTitle: { fontSize: 16, fontWeight: '900', color: InkColors.ink, marginTop: 8, marginBottom: 3 },
   uploadSub: { fontSize: 12.5, color: InkColors.ink2, lineHeight: 18, textAlign: 'center' },
 

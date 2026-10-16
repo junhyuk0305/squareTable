@@ -3014,22 +3014,37 @@ export async function insertQuizAssignments(
 ): Promise<boolean> {
   if (!HAS_SUPABASE) return true;
   if (userIds.length === 0) return true;
-  return writeStrict(
-    'insertQuizAssignments',
-    supabase
-      .from('quiz_assignments')
-      .upsert(
-        userIds.map((uid) => ({
-          unit_id: _unitId,
-          course_id: courseId,
-          user_id: uid,
-          scheduled_on: scheduledOn,
-          due_date: dueDate,
-        })),
-        { onConflict: 'course_id,user_id,scheduled_on', ignoreDuplicates: true },
-      )
-      .select('id'),
-  );
+  const { data, error } = await supabase
+    .from('quiz_assignments')
+    .upsert(
+      userIds.map((uid) => ({
+        unit_id: _unitId,
+        course_id: courseId,
+        user_id: uid,
+        scheduled_on: scheduledOn,
+        due_date: dueDate,
+      })),
+      { onConflict: 'course_id,user_id,scheduled_on', ignoreDuplicates: true },
+    )
+    .select('id');
+  if (error) {
+    console.warn('[db] insertQuizAssignments:', error.message);
+    reportError('db.write:insertQuizAssignments', error);
+    return false;
+  }
+  if ((data?.length ?? 0) > 0) return true;
+  // 0행 = 전부 이미 있던 행(다시 보내기·두 번 누르기)이면 정상이다. 그 행이 실제로 있는지 다시 읽어 가른다
+  // (writeStrict 그대로면 성공인데 '보내기에 실패했어요'가 떴다 — 2026-10-17 탐지 · client_errors 85bc77f7).
+  const { count, error: readErr } = await supabase
+    .from('quiz_assignments')
+    .select('id', { count: 'exact', head: true })
+    .eq('course_id', courseId)
+    .eq('scheduled_on', scheduledOn)
+    .in('user_id', userIds);
+  if (!readErr && count === new Set(userIds).size) return true;
+  console.warn('[db] insertQuizAssignments: 0 rows affected (RLS/id/concurrency)');
+  reportError('db.write.zero:insertQuizAssignments', { message: '0 rows affected' });
+  return false;
 }
 
 /**

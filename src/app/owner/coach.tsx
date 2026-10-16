@@ -322,7 +322,6 @@ export default function OwnerCoachScreen() {
         <Stack.Screen options={{ title: '답 쓰기' }} />
         <ScreenTitleHeader title="답 쓰기" backFallback />
         <EmptyState
-          emoji="📭"
           title="이미 처리된 질문이에요"
           body="다른 답변으로 해결되었거나 보관됐어요."
           cta={{

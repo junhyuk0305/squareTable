@@ -200,7 +200,7 @@ function LegacyHandover() {
         ) : (
           <Appear delay={0}>
             <View style={styles.uploadZone}>
-              <Text style={styles.uploadEmoji}>📄</Text>
+              <Ionicons name="document-text-outline" size={28} color={InkColors.ink2} />
               <Text style={styles.uploadTitle}>인수인계서·매뉴얼을 올리세요</Text>
               <Text style={styles.uploadSub}>
                 오픈·마감 순서, 레시피, 매장 규칙이 적힌 메모를 붙여넣으면 AI가 노하우 항목으로 정리해요.
@@ -490,7 +490,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: Space.md,
   },
-  uploadEmoji: { fontSize: 28 },
   uploadTitle: { fontSize: 16, fontWeight: '900', color: InkColors.ink, marginTop: 8, marginBottom: 3 },
   uploadSub: { fontSize: 12.5, color: InkColors.ink2, lineHeight: 18, textAlign: 'center' },
 

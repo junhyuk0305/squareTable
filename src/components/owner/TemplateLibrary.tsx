@@ -331,7 +331,7 @@ export function TemplateLibrary() {
       ) : filtered.length === 0 ? (
         <Appear delay={stagger(3)}>
         <View style={styles.empty}>
-          <Text style={styles.emptyEmoji}>🔍</Text>
+          <Ionicons name="search-outline" size={34} color={InkColors.ink3} />
           <Text style={styles.emptyText}>조건에 맞는 템플릿이 없어요</Text>
           <Pressable onPress={() => setQuery('')}>
             <Text style={styles.resetLink}>검색 초기화</Text>
@@ -412,7 +412,6 @@ const styles = StyleSheet.create({
 
   // 빈 결과
   empty: { alignItems: 'center', gap: 6, paddingVertical: 40 },
-  emptyEmoji: { fontSize: 34 },
   emptyText: { fontSize: 15, fontWeight: '700', color: InkColors.ink2 },
   resetLink: { fontSize: 13, fontWeight: '800', color: BrandColors.brand, marginTop: 4, textDecorationLine: 'underline' },
 });

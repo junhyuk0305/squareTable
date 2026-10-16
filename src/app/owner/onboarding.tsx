@@ -157,7 +157,7 @@ export default function OwnerOnboardingScreen() {
           {/* ★Appear 래퍼는 doneWrap(alignItems:center)의 flex 자식이 된다 — 안쪽이 기대하던
               gap/alignSelf 를 래퍼에 그대로 얹어야 레이아웃이 안 바뀐다(빈 래퍼는 만들지 않는다). */}
           <Appear delay={stagger(0)}>
-            <Text style={styles.doneEmoji}>🎉</Text>
+            <Ionicons name="checkmark-circle" size={52} color={InkColors.ink} />
           </Appear>
           <Appear delay={stagger(1)} style={styles.doneHead}>
             {registeredCount > 0 ? (
@@ -237,7 +237,6 @@ export default function OwnerOnboardingScreen() {
       <Stack.Screen options={{ headerShown: false }} />
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <Appear delay={stagger(0)} style={styles.intro}>
-          <Text style={styles.introEmoji}>👋</Text>
           <Text style={styles.introTitle}>직원이 물어볼 걸,{'\n'}미리 답을 담아둘게요</Text>
           <Text style={styles.introBody}>
             {industry ? `${industry} ` : ''}매장에서 자주 생기는 일을 모아뒀어요. 추천 묶음으로 바로 시작하거나,
@@ -406,7 +405,6 @@ const styles = StyleSheet.create({
   },
 
   intro: { gap: Space.sm, paddingTop: Space.sm },
-  introEmoji: { fontSize: 34 },
   introTitle: { fontSize: 24, fontWeight: '900', color: InkColors.ink, lineHeight: 32 },
   introBody: { fontSize: 15, color: InkColors.ink2, lineHeight: 22 },
 
@@ -562,7 +560,6 @@ const styles = StyleSheet.create({
   // Appear 래퍼용 — 안쪽이 doneWrap 에 직접 붙어 있을 때 갖던 간격·폭을 래퍼가 대신 든다(레이아웃 불변).
   doneHead: { alignItems: 'center', gap: Space.md },
   doneStretch: { alignSelf: 'stretch' },
-  doneEmoji: { fontSize: 52 },
   doneTitle: { fontSize: 23, fontWeight: '900', color: InkColors.ink, textAlign: 'center' },
   doneSub: { fontSize: 15, color: InkColors.ink2, textAlign: 'center', lineHeight: 22 },
   doneStrong: { fontWeight: '800', color: InkColors.ink },

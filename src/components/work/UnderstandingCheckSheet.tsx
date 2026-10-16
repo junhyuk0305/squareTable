@@ -425,7 +425,7 @@ function LegacyQuizBody({
 
       {phase === 'quota' && (
         <View style={s.center}>
-          <Text style={s.centerEmoji}>🙂</Text>
+          <Ionicons name="time-outline" size={34} color={InkColors.ink3} />
           <Text style={s.centerText}>이번 달 AI를 많이 썼어요.{'\n'}다음에 다시 해봐요.</Text>
           <Pressable onPress={onClose} style={s.softBtn}><Text style={s.softBtnText}>닫기</Text></Pressable>
         </View>
@@ -433,7 +433,7 @@ function LegacyQuizBody({
 
       {phase === 'empty' && (
         <View style={s.center}>
-          <Text style={s.centerEmoji}>📄</Text>
+          <Ionicons name="document-text-outline" size={34} color={InkColors.ink3} />
           <Text style={s.centerText}>아직 확인할 내용이 부족해요.{'\n'}이 업무에 노하우가 더 쌓이면 다시 해봐요.</Text>
           <Pressable onPress={onClose} style={s.softBtn}><Text style={s.softBtnText}>닫기</Text></Pressable>
         </View>
@@ -518,7 +518,6 @@ const s = StyleSheet.create({
   head: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingBottom: 10 },
   kicker: { flex: 1, fontSize: 15, fontWeight: '800', color: InkColors.ink },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, paddingHorizontal: 24 },
-  centerEmoji: { fontSize: 34 },
   centerText: { fontSize: 14, color: InkColors.ink2, fontWeight: '600', textAlign: 'center', lineHeight: 21 },
   noticeText: { fontSize: 15, color: InkColors.ink2, fontWeight: '600', textAlign: 'center', lineHeight: 23 },
   // 시작 고지 — 이 화면에서 유일하게 굵은 잉크(R4-1). 아래 안내 한 줄은 ink2.
