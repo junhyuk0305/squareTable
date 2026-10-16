@@ -46,6 +46,7 @@ import { TaskComposerModal } from '@/components/work/TaskComposerModal';
 import { INVITE_FIRST, type Member } from '@/components/work/MentionInput';
 import { InkColors } from '@/lib/theme/colors';
 import { todayStr, tsMs } from '@/lib/utils/attendance';
+import { sortNotices, isNoticeUnreadFor } from '@/lib/utils/notice';
 import { asMemberRole, canManage } from '@/lib/utils/roles';
 import { useBackIntercept } from '@/lib/hooks/useBackIntercept';
 import { unreadMentionIds } from '@/lib/utils/notifications';
@@ -627,14 +628,9 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
   // 공지 읽음 분모 — 기본방은 매장 인원, 비공개 방은 그 방에 있는 사람(D2). 방 밖 사람은 공지를 볼 수 없다.
   const memberCount = Math.max(1, !currentRoomId || isDefaultRoom ? (owner ? 1 : 0) + staff.length : members.filter((m) => m.inRoom).length);
 
+  // 정렬(고정 먼저 → 최신)은 SSOT(utils/notice.ts) — 채팅 상단 고정 줄이 같은 배열의 맨 앞을 쓴다.
   const notices = useMemo(
-    () =>
-      feed
-        .filter((f) => f.kind === 'notice' && inRoom(f.roomId))
-        .sort((a, b) => {
-          if (!!b.pinned !== !!a.pinned) return b.pinned ? 1 : -1;
-          return tsMs(b.createdAt) - tsMs(a.createdAt);
-        }),
+    () => sortNotices(feed.filter((f) => f.kind === 'notice' && inRoom(f.roomId))),
     [feed, inRoom],
   );
   const comments = useMemo(() => feed.filter((f) => f.kind === 'comment'), [feed]);
@@ -765,11 +761,14 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
     noteCaptureNudge('skip');
   }, [noteCaptureNudge]);
 
-  // ★안 읽은 공지는 역할이 아니라 **작성자** 기준이다(0177: 공지는 누구나 쓴다). 예전엔 사장은 항상 0
-  //   이라 직원이 올린 공지가 사장에게 안 보였고, 직원은 자기가 쓴 공지도 '안 읽음'으로 셌다.
-  const unreadNotices = notices.filter(
-    (n) => n.authorId !== userId && !(n.read_by ?? []).includes(userId),
-  ).length;
+  // ★안 읽은 공지는 역할이 아니라 **작성자** 기준이다(0177: 공지는 누구나 쓴다). 판정은 SSOT(isNoticeUnreadFor) —
+  //   채팅 상단 고정 줄의 점과 햄버거 점이 같은 함수를 쓴다.
+  const unreadNotices = notices.filter((n) => isNoticeUnreadFor(n, userId)).length;
+  // 채팅 상단 고정 1줄 → 탭하면 공지 패널을 그 공지로 연다(?feed= 진입과 같은 focusId · 뒤로가기는 채팅으로).
+  const openNoticeFromChat = useCallback((id: string) => {
+    setFocusNoticeId(id);
+    openPanel('notice');
+  }, [openPanel]);
 
   // 메시지를 할일로 — 멘션된 직원이 있으면(나 제외) 그 직원에게 배정한 채 컴포저를 연다.
   // (사장·매니저만 배정 가능. 직원은 본인 또는 담당 없음.)
@@ -958,6 +957,10 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
           onOpenDrawer={() => setView('drawer')}
           // 안 읽은 공지가 있으면 햄버거에 점 — 공지 진입이 서랍으로 들어가면서 신호를 잃지 않게.
           drawerDot={unreadNotices > 0}
+          // 이 방 공지 1건(고정 우선 → 최신)을 채팅 맨 위에 고정한다(카톡 원리 · 공지는 알림이 아니다).
+          topNotice={notices[0]}
+          topNoticeUnread={!!notices[0] && isNoticeUnreadFor(notices[0], userId)}
+          onOpenNotice={openNoticeFromChat}
           stream={stream}
           focusId={focusMessageId}
           today={today}
@@ -1034,7 +1037,7 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
           onPost={(text) => postNotice(today, text, userId, userName, role, false)}
           currentStore={isStoreOwner ? currentStore : undefined}
           targetStores={isStoreOwner ? broadcastTargets : undefined}
-          onBroadcast={isStoreOwner ? (text, unitIds) => { void broadcastNotice(unitIds, text, false, userName); } : undefined}
+          onBroadcast={isStoreOwner ? (text, unitIds) => { void broadcastNotice(unitIds, text, false); } : undefined}
           onTogglePin={togglePin}
           onEdit={editFeedText}
           onDelete={deleteFeedItem}

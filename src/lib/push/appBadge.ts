@@ -90,10 +90,12 @@ export function useAppBadgeSync(): void {
   const assignments = useWorkStore((s) => s.assignments);
   const swaps = useScheduleStore((s) => s.swaps);
   const scheduleNotices = useScheduleStore((s) => s.notices);
-  // 사장 집계 입력 — queue 는 직원 집계('도와줄 수 있는 질문', D4)에서도 함께 쓴다.
+  const joinNotices = useStaffStore((s) => s.joinNotices);
+  // 사장 집계 입력 — queue 는 직원 집계('도와줄 수 있는 질문', D4)에서도 함께 쓴다. assignments 는 양쪽(안 푼 퀴즈 · 응시 완료).
   const queue = useUnknownQueueStore((s) => s.queue);
   const suggestions = useSuggestionStore((s) => s.suggestions);
   const pending = useStaffStore((s) => s.pending);
+  const timeRequests = useScheduleStore((s) => s.timeRequests);
   const claims = usePaymentClaimStore((s) => s.claims);
 
   const today = todayStr();
@@ -105,11 +107,11 @@ export function useAppBadgeSync(): void {
     }
     const count =
       canManage(role)
-        // 나에게 온 공지·배정도 센다(D11 · 벨과 같은 축). 이름은 세는 데 쓰지 않는다.
+        // 나에게 온 배정도 센다(D11 · 벨과 같은 축). 이름은 세는 데 쓰지 않는다.
         ? ownerUnreadCount(queue, suggestions, swaps, pending, feed, me, ackAt, claims, [],
-            { feed, taskTemplates: templates, done, today, suggestions, userId: me, nameOf: () => '', ackAt })
-        // 레지스트리 badgeUnit 과 같은 축 — 벨(NotificationBell)과 같은 인자(assignments 포함).
-        : juniorUnreadCount(feed, swaps, me, today, templates, done, ackAt, suggestions, queue, scheduleNotices, assignments);
+            { feed, taskTemplates: templates, done, today, suggestions, userId: me, nameOf: () => '', ackAt }, assignments, timeRequests)
+        // 레지스트리 badgeUnit 과 같은 축 — 벨(NotificationBell)과 같은 인자(assignments · joinNotices 포함).
+        : juniorUnreadCount(feed, swaps, me, today, templates, done, ackAt, suggestions, queue, scheduleNotices, assignments, joinNotices);
     setAppBadge(count);
-  }, [role, me, signedIn, feed, templates, done, swaps, queue, suggestions, pending, today, ackAt, claims, scheduleNotices, assignments]);
+  }, [role, me, signedIn, feed, templates, done, swaps, queue, suggestions, pending, today, ackAt, claims, scheduleNotices, assignments, joinNotices, timeRequests]);
 }

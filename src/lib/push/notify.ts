@@ -28,8 +28,6 @@ type NotifyArgs = {
   userId?: string;
   title: string;
   body?: string;
-  /** 공지를 올린 방. 기본방이 아니면 엣지가 그 방 멤버에게만 보낸다(논리 점검 D2). 옛 엣지는 무시한다. */
-  roomId?: string;
 };
 
 /** 엣지로 보내는 몸체 — url·tag 는 레지스트리에서 푼 값(옛 엣지가 url 을 그대로 싣는다 · 새 엣지는 tag·itemId 로 다시 만든다). */
@@ -190,13 +188,25 @@ export const notifyOwnersSwapApproval = (when: string) =>
   });
 
 // 근무 시간 수정 요청(J2 · 0243) — 승인은 사장만 한다. 매니저에게 보내면 누를 수 없는 승인 칸으로 간다(F-2).
-export const notifyOwnersShiftTimeRequest = (when: string) =>
+// itemId = 요청 id → 근무표 승인 칸이 그 요청 카드로 스크롤한다(벨 항목과 같은 주소).
+export const notifyOwnersShiftTimeRequest = (name: string, when: string, requestId?: string) =>
   pushNotify({
     audience: 'owners',
     kind: 'shift_time',
+    itemId: requestId,
     ownerOnly: true,
-    title: '근무 시간 수정 요청',
-    body: `직원이 근무 시간을 바꿔 달라고 했어요 · ${when}`,
+    title: NOTIF.shift_time.title(name),
+    body: when,
+  });
+
+/** 퀴즈 응시 완료(0275) — 서버가 completed_at 을 찍었을 때만(true) 부른다. itemId = 퀴즈 id → 그 퀴즈 결과 탭. */
+export const notifyOwnersQuizDone = (courseId: string, name: string, courseName: string) =>
+  pushNotify({
+    audience: 'owners',
+    kind: 'quiz_done',
+    itemId: courseId,
+    title: NOTIF.quiz_done.title(name),
+    body: courseName,
   });
 
 /** 매니저 지정/해제(0093) — 대상 본인에게만. 다음 진입부터 화면 세트가 바뀌는 걸 알린다.
@@ -211,18 +221,7 @@ export const notifyUserRoleChange = (userId: string, storeName: string, promoted
   });
 
 // 직원이 받는 것들 (사장/동료 행동 → 직원)
-/** 공지 — 매장 전원에게. 엣지의 audience 는 'staff'=직원 / 'owners'=사장+매니저 두 갈래라 둘 다 쏜다.
- *  ★매니저가 빠져 있던 자리다: 매니저는 사장 화면 세트를 쓰는 **수신자**인데 'staff'(=junior)에 안 잡혀
- *    사장이 올린 공지를 푸시로도 인앱으로도 못 받았다(2026-08-08 역할 감사).
- *  발송자 본인은 서버가 대상에서 제외하므로(엣지 index.ts) 자기 공지가 자기에게 오지 않는다 —
- *  같은 이유로 사장이 쓰면 매니저만, 매니저가 쓰면 사장·직원이 받는다. 경로는 각자의 화면 세트로.
- *  ★roomId: 비공개 방 공지는 그 방 멤버에게만 간다(D2). 거르는 일은 엣지가 work_room_members 로 한다.
- *  feedId = 그 공지의 피드 id → 공지 패널이 그 공지로 스크롤한다. */
-export const notifyStaffNotice = (author: string, text: string, roomId?: string, feedId?: string) => {
-  pushNotify({ audience: 'owners', kind: 'notice', itemId: feedId, title: NOTIF.notice.title(author), body: text, roomId });
-  return pushNotify({ audience: 'staff', kind: 'notice', itemId: feedId, title: NOTIF.notice.title(author), body: text, roomId });
-};
-
+// 공지는 푸시하지 않는다(2026-10-16 사용자 결정) — 공지 패널에서 본다.
 /** 대타 요청 — 아무나 수락 가능하므로 매장 직원 전체에게. */
 export const notifyStaffSwapRequest = (when: string) =>
   pushNotify({

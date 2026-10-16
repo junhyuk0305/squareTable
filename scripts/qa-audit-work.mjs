@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // qa-audit-work.mjs — 2026-10-05 논리 점검(QA_논리점검_2026-10-05.md) 할일·알림·채팅 묶음 재현 검사.
-//   [D2] 비공개 방 공지는 그 방 멤버에게만 푸시하고, 읽음 분모도 방 멤버 수다.
+//   [D2] 공지는 알림이 아니다(벨·푸시 없음 · 채팅 상단 고정 1줄 · 2026-10-16) · 비공개 방 읽음 분모는 방 멤버 수다.
 // 서버 함수는 마지막 정의(가장 큰 번호 마이그레이션) 본문을 읽어 본다. 로컬 도커가 꺼진 날에도 돈다.
 // 순수 함수는 앱 코드를 그대로 import 해서 돌린다.
 //   [D1] 루틴 업무 시간 알림 · [D7] 근무표를 쓰는 매장은 근무자에게만 · [D8] 고정 공지 보존
@@ -43,18 +43,26 @@ const fnBody = (src, name) => {
   return src.slice(i, end + 3);
 };
 
-console.log('[D2] 비공개 방 공지는 그 방 멤버에게만 푸시하고, 읽음 분모도 방 멤버 수다');
+console.log('[D2] 공지는 알림이 아니다(2026-10-16) — 벨·푸시 없음 · 채팅방 상단 고정 1줄 · 비공개 방 읽음 분모는 방 멤버 수');
 {
   const notify = strip(read('src/lib/push/notify.ts'));
-  const ns = fnBody(notify, 'notifyStaffNotice');
-  check('★notifyStaffNotice 가 방 id 를 받아 두 발송(owners·staff)에 모두 싣는다',
-    /notifyStaffNotice = \(author: string, text: string, roomId\?: string\)/.test(ns) && (ns.match(/\broomId,/g) || []).length === 2, ns.slice(0, 120));
-  check('NotifyArgs 에 roomId 가 있다', /type NotifyArgs = \{[\s\S]*?roomId\?: string;[\s\S]*?\};/.test(notify));
+  check('★공지 푸시 헬퍼(notifyStaffNotice)가 없고 notice kind 발송이 없다', !/notifyStaffNotice/.test(notify) && !/kind: 'notice'/.test(notify));
+  const registry = strip(read('src/lib/notif/registry.ts'));
+  check('★레지스트리에 notice 사건이 없다(벨 항목·푸시 tag 둘 다)', !/\n  notice: \{/.test(registry) && !/pushTag: 'notice'/.test(registry));
 
   const store = strip(read('src/lib/store/useWorkStore.ts'));
   const pn = storeMethod(store, 'postNotice');
-  check('★공지 올리기·재공지 둘 다 지금 방 id 로 알린다',
-    (pn.match(/notifyStaffNotice\(authorName, text, room\)/g) || []).length === 2, `${(pn.match(/notifyStaffNotice\([^)]*\)/g) || []).join(' | ')}`);
+  check('★공지 올리기·재공지는 저장만 하고 아무도 알리지 않는다', pn.length > 0 && !/notify/i.test(pn), pn.slice(0, 120));
+
+  const util = strip(read('src/lib/utils/notice.ts'));
+  const board = strip(read('src/components/WorkBoard.tsx'));
+  const chat = strip(read('src/components/work/WorkChat.tsx'));
+  check('★공지 정렬(고정 먼저 → 최신)·읽음 판정은 utils/notice.ts 한 곳이고 WorkBoard 가 그것을 쓴다',
+    /export function sortNotices/.test(util) && /export const isNoticeUnreadFor/.test(util)
+      && /sortNotices\(feed\.filter/.test(board) && /isNoticeUnreadFor\(n, userId\)/.test(board) && !/n\.authorId !== userId/.test(board));
+  check('★채팅 상단에 공지 1줄을 고정한다(WorkChat topNotice · 탭하면 공지 패널의 그 공지 · 안 읽음 점)',
+    /topNotice=\{notices\[0\]\}/.test(board) && /onOpenNotice=\{openNoticeFromChat\}/.test(board)
+      && /\{topNotice && \(/.test(chat) && /onOpenNotice\?\.\(topNotice\.id\)/.test(chat) && /topNoticeUnread && <View style=\{s\.noticeDot\}/.test(chat));
 
   const edge = strip(read('supabase/functions/push/index.ts'));
   check('★엣지가 roomId 를 받아 호출자 매장의 방인지 확인한다',
@@ -62,7 +70,6 @@ console.log('[D2] 비공개 방 공지는 그 방 멤버에게만 푸시하고, 
   check('★엣지가 기본방이 아닌 방이면 수신자를 work_room_members 로 거른다',
     /if \(!room\.is_default\)[\s\S]{0,300}from\('work_room_members'\)[\s\S]{0,300}recipientIds = recipientIds\.filter/.test(edge));
 
-  const board = strip(read('src/components/WorkBoard.tsx'));
   check('★읽음 분모(memberCount)는 기본방이 아니면 이 방에 있는 사람 수다',
     /const memberCount = [^;]*isDefaultRoom[^;]*members\.filter\(\(m\) => m\.inRoom\)\.length/.test(board),
     (board.match(/const memberCount = [^;]*;/) || ['없음'])[0]);
@@ -130,7 +137,7 @@ console.log('\n[D11] 알림함 배선 — 배정 시각 기록 · 사장 알림�
   check('앱이 assigned_meta 를 읽는다(mapTemplateRow)', /assignedMeta: r\.assigned_meta/.test(db));
   for (const [p, re] of [
     ['src/app/owner/notifications.tsx', /buildOwnerNotifications\(ownerArgs, received\)/],
-    ['src/components/NotificationBell.tsx', /ownerUnreadCount\([^)]*alerts, received\)/],
+    ['src/components/NotificationBell.tsx', /ownerUnreadCount\([^)]*alerts, received\b/],
     ['src/lib/utils/crossStoreNotifs.ts', /buildOwnerNotifications\(ownerArgsOf\(d, me, nameOf, ackAt\), receivedArgsOf\(d, me, today, nameOf, ackAt\)\)/],
   ]) check(`★${p} 사장 목록·배지에 받은 공지·배정을 넣는다`, re.test(strip(read(p))));
   const board = strip(read('src/components/WorkBoard.tsx'));
@@ -157,7 +164,10 @@ console.log('\n[D12] 노하우 개선 제안은 실제로 고쳐 저장해야 �
   check('★반려되면 제안한 사람에게 알린다(저장 성공 뒤)', /\.then\(\(ok\) => \{[^}]*notifyUserSuggestionResult\(before\.proposer_id, false, before\.text\)/.test(rj));
   const notify = strip(read('src/lib/push/notify.ts'));
   const nf = fnBody(notify, 'notifyUserSuggestionResult');
-  check('알림은 제안한 사람 한 명에게(audience user) · 내 공간(/junior/chat)으로', /audience: 'user'/.test(nf) && /url: '\/junior\/chat'/.test(nf) && /tag: 'suggestion-result'/.test(nf));
+  // 주소·tag 는 레지스트리(P1 · 2026-10-16)가 정한다 — 헬퍼는 kind 만 말한다.
+  const reg = strip(read('src/lib/notif/registry.ts'));
+  check('알림은 제안한 사람 한 명에게(audience user) · 내 공간(/junior/chat)으로', /audience: 'user'/.test(nf) && /kind: 'suggestion_result'/.test(nf)
+    && /suggestion_result: \{[\s\S]*?route: \(_s\) => '\/junior\/chat'[\s\S]*?pushTag: 'suggestion-result'/.test(reg));
   check('엣지 탭 경로표에 suggestion-result 가 있다', /case 'suggestion-result': return '\/junior\/chat';/.test(strip(read('supabase/functions/push/index.ts'))));
 }
 

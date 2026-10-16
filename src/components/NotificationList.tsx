@@ -14,7 +14,6 @@ type IconName = React.ComponentProps<typeof Ionicons>['name'];
 // mention 은 두 맵에 다 있는 유일한 키 — 상수 하나를 공유해 한쪽만 바뀌는 무음 드리프트를 원천 차단.
 const MENTION_UI = { icon: 'at', tint: BrandColors.brandSoft } as const;
 export const JUNIOR_KIND_UI: Record<JuniorNotifKind, { icon: IconName; tint: string }> = {
-  notice: { icon: 'megaphone', tint: BrandColors.yellowSoft },
   mention: MENTION_UI,
   assign: { icon: 'clipboard', tint: BrandColors.yellowSoft },
   swap: { icon: 'swap-horizontal', tint: BrandColors.accentSoft },
@@ -30,6 +29,9 @@ export const JUNIOR_KIND_UI: Record<JuniorNotifKind, { icon: IconName; tint: str
   q_answered: { icon: 'chatbubble-ellipses', tint: '#E4F2E8' },
   // 안 푼 퀴즈(P1 역 ④).
   training: { icon: 'school', tint: BrandColors.yellowSoft },
+  // 합류 결과(0247) — 승인은 결과(초록), 반려는 사장 쪽 join_request 와 같은 사람 아이콘에 반려 톤.
+  join_approved: { icon: 'person-add', tint: '#E4F2E8' },
+  join_rejected: { icon: 'person-remove', tint: BrandColors.accentSoft },
 };
 export const OWNER_KIND_UI: Record<OwnerNotifKind, { icon: IconName; tint: string }> = {
   join_request: { icon: 'person-add', tint: BrandColors.yellowSoft },
@@ -63,9 +65,11 @@ export const OWNER_KIND_UI: Record<OwnerNotifKind, { icon: IconName; tint: strin
   sub_renewed: { icon: 'checkmark-circle', tint: '#E4F2E8' },
   sub_ending: { icon: 'time', tint: BrandColors.yellowSoft },
   sub_ended: { icon: 'alert-circle', tint: BrandColors.accentSoft },
-  // D11 — 나에게 온 공지·배정. 직원 쪽과 같은 모양이다(같은 대상이라 아이콘이 갈리면 안 된다).
-  notice: JUNIOR_KIND_UI.notice,
+  // D11 — 나에게 온 배정. 직원 쪽과 같은 모양이다(같은 대상이라 아이콘이 갈리면 안 된다).
   assign: JUNIOR_KIND_UI.assign,
+  // 퀴즈 응시 완료(0275) — 직원 쪽 training 과 같은 아이콘, 결과라 초록. 근무 시간 수정 요청(0243) — 교대 승인과 같은 근무 계열(답할 것 · 노랑).
+  quiz_done: { icon: 'school', tint: '#E4F2E8' },
+  shift_time: { icon: 'time', tint: BrandColors.yellowSoft },
 };
 /** 허브(역할 혼합 가능) 용 — 두 맵 합성. */
 // 닫힌 매장(0197) — 통합 목록에만 나온다(매장 안 알림함엔 그 매장이 없다).

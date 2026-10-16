@@ -29,10 +29,12 @@ import { styles } from '@/styles/juniorChatStyles';
  */
 export default function JuniorChatScreen() {
   // 홈의 예시 질문 칩이 넘긴 문구 — 입력칸을 채우기만 한다(전송은 직원이).
-  const { seed } = useLocalSearchParams<{ seed?: string }>();
+  // ?uqId=<미답질문 id> — 알림(레지스트리 q_answered·question route)에서 들어온 질문(역 ⑤).
+  const { seed, uqId } = useLocalSearchParams<{ seed?: string; uqId?: string }>();
   const entries = usePlaybookStore((s) => s.entries);
   const me = useSessionStore((s) => s.userId);
   const queue = useUnknownQueueStore((s) => s.queue);
+  const history = useChatStore((s) => s.history);
 
   // '내 공간' 배지·리스트가 항상 최신이도록 미답질문 큐를 컨테이너에서 hydrate·subscribe(D4).
   useEffect(() => {
@@ -65,6 +67,16 @@ export default function JuniorChatScreen() {
   const chatLoaded = useChatStore((s) => s.loaded);
   const ready = playbookLoaded && queueLoaded && suggestionLoaded && chatLoaded;
 
+  // ?uqId= 의 질문이 내 것이면 물어보기 탭의 그 답변 카드(대화 기록은 문장으로 잇는다 — 미답질문 id 와 대화 id 는 다르다 ·
+  // enqueue 의 중복 판정과 같은 trim 비교). 동료 질문(question)이면 '내 공간'(도와줄 수 있는 질문)으로 연다.
+  // 세그먼트는 ready 뒤에 세워지므로 이 판정 때는 큐·대화가 다 와 있다.
+  const focusUq = useMemo(() => (uqId ? queue.find((u) => u.id === uqId) : undefined), [uqId, queue]);
+  const focusTurnId = useMemo(
+    () => (focusUq && focusUq.junior_id === me ? history.find((q) => q.query_text.trim() === focusUq.query_text.trim())?.id : undefined),
+    [focusUq, me, history],
+  );
+  const initialSeg = focusUq && !focusTurnId ? 'mine' : 'ask';
+
   return (
     <SafeAreaView style={styles.safe} edges={[]}>
       {/* 상단은 직접 그린다 — 왼쪽 정렬 평문 제목은 네이티브 헤더로 못 낸다(ScreenTitleHeader 주석).
@@ -79,14 +91,14 @@ export default function JuniorChatScreen() {
       ) : (
         <KnowhowSegment
           role="junior"
-          initial="ask"
+          initial={initialSeg}
           browse={
             <JuniorBrowseDashboard
               entries={publishedEntries}
               emptyHint="아직 등록된 노하우가 없어요. 물어보기로 질문하면 사장님이 채워줘요."
             />
           }
-          ask={<JuniorAsk seed={seed} />}
+          ask={<JuniorAsk seed={seed} focusId={focusTurnId} />}
           mine={<JuniorMySpace me={me} />}
           mineCount={answerableCount}
         />

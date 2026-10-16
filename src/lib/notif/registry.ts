@@ -43,13 +43,8 @@ export const taskRoute = (base: '/junior/work' | '/owner/work', templateId: stri
   `${base}?view=todo&task=${enc(templateId)}` as const;
 
 export const NOTIF = {
-  // ── 업무 채팅·공지·할일 ──
-  notice: {
-    title: (actor) => `${actor}님의 공지`,
-    // 공지 패널을 열고 그 공지로 스크롤한다(?feed=). id 가 없으면 공지 패널만.
-    route: (s, id) => `${work(s)}?view=notice${id ? `&feed=${enc(id)}` : ''}`,
-    pushTag: 'notice', badgeUnit: '안 읽은 공지', audience: ['owners', 'staff'],
-  },
+  // ── 업무 채팅·할일 ──
+  // 공지는 알림이 아니다(2026-10-16 사용자 결정) — 벨 항목·푸시 없음. 공지 패널(?view=notice)에서 본다.
   mention: {
     title: (actor) => `${actor}님이 나를 언급했어요`,
     // 채팅에서 그 글로 스크롤한다(?feed=).
@@ -66,6 +61,12 @@ export const NOTIF = {
     title: (actor) => `${actor}님이 퀴즈를 요청했어요`,
     route: (_s, id) => `/junior/work${id ? `?quiz=${enc(id)}` : ''}`,
     pushTag: 'training', badgeUnit: '안 푼 퀴즈', audience: ['user'],
+  },
+  // 퀴즈 응시 완료(0275 mark_quiz_completed 가 completed_at 을 찍는다) → 사장. 그 퀴즈의 결과 탭(?tab=result). id = 퀴즈(course) id.
+  quiz_done: {
+    title: (actor) => `${actor}님이 퀴즈를 다 풀었어요`,
+    route: (_s, id) => (id ? `/owner/quiz/${enc(id)}?tab=result` : '/owner/quiz-list'),
+    pushTag: 'quiz-done', badgeUnit: '응시 완료 퀴즈', audience: ['owners'],
   },
   // ── 질문·노하우 ──
   // 사장: 답할 질문(coach?uqId= · 홈 히어로와 같은 입구). 직원: 도와줄 수 있는 질문(물어보기 탭 · 내 공간).
@@ -95,6 +96,19 @@ export const NOTIF = {
     route: (_s, id) => `/owner/staff${id ? `?member=${enc(id)}` : ''}`,
     pushTag: 'join', badgeUnit: '합류 신청', audience: ['join_owners'],
   },
+  // 합류 결과 — 원천은 서버가 넣는 member_notices(0247 approved·rejected · 본인 행만 읽는다). 푸시는 서버 크론(엣지 sweepMemberNotices)이
+  // 그 행을 보내므로 앱은 푸시를 쏘지 않는다(schedule 과 같은 갈래 · 같은 사건을 두 번 보내지 않는다). actor 자리에는 매장 이름이 온다.
+  // 승인은 매장 목록(새 매장이 보인다) · 반려는 직원 허브(반려 안내 카드가 있다).
+  join_approved: {
+    title: (store) => `${store} 합류가 승인됐어요`,
+    route: (_s) => '/stores',
+    badgeUnit: '합류 결과',
+  },
+  join_rejected: {
+    title: (store) => `${store} 합류 신청이 반려됐어요`,
+    route: (_s) => '/junior/hub',
+    badgeUnit: '합류 결과',
+  },
   // 벨 항목 없음(알려진 예외) — 화면 세트가 바뀌는 사건이라 다음 진입에서 바로 보인다.
   role: {
     route: (_s) => '/junior/home',
@@ -114,9 +128,10 @@ export const NOTIF = {
     route: (_s) => '/owner/schedule',
     pushTag: 'swap-approval', badgeUnit: '승인 대기 교대', audience: ['owners'],
   },
-  // ⚠️벨 항목 없음(역 ④ 미충족 · 2026-10-16 보고) — 근무 시간 수정 요청(0243)은 푸시만 있다. 벨에 넣으려면 그 요청 행을 읽어야 한다.
+  // 근무 시간 수정 요청(0243 shift_change_requests · status=pending) → 사장 근무표 승인 칸의 그 요청(?request=<요청 id>).
   shift_time: {
-    route: (_s) => '/owner/schedule',
+    title: (actor) => `${actor}님이 근무 시간 수정을 요청했어요`,
+    route: (_s, id) => `/owner/schedule${id ? `?request=${enc(id)}` : ''}`,
     pushTag: 'shift-time', badgeUnit: '근무 시간 수정 요청', audience: ['owners'],
   },
   schedule: {

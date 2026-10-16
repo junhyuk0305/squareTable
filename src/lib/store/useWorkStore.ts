@@ -59,7 +59,7 @@ import { genId } from '@/lib/utils/id';
 import { useRoomStore } from '@/lib/store/useRoomStore';
 import { useScheduleStore } from '@/lib/store/useScheduleStore';
 import { DEFAULT_DAYPARTS, resolveDayparts, daypartLabelMap, type Daypart } from '@/lib/store/daypartLabels';
-import { notifyStaffNotice, notifyUserMention, notifyUserAssign, notifyUserTraining } from '@/lib/push/notify';
+import { notifyUserMention, notifyUserAssign, notifyUserTraining, notifyOwnersQuizDone } from '@/lib/push/notify';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 
 /** 방마다 동시에 둘 수 있는 활성 반복(주간) 할일 상한(남용 #26) — 캘린더/피드 폭주 방지. */
@@ -765,7 +765,7 @@ type State = {
   /** 공지 등록. ★2026-08-26: 공지는 **누구나** 쓴다(0177) — 그래서 작성자 역할을 받는다.
    *  예전엔 사장만 쓸 수 있어 authorRole 을 'owner' 로 박아 뒀다. */
   postNotice: (date: string, text: string, authorId: string, authorName: string, role: 'owner' | 'junior', important: boolean) => void;
-  broadcastNotice: (unitIds: string[], text: string, important: boolean, authorName: string) => Promise<{ ok: boolean; sent: number }>;
+  broadcastNotice: (unitIds: string[], text: string, important: boolean) => Promise<{ ok: boolean; sent: number }>;
   postMessage: (date: string, text: string, authorId: string, authorName: string, role: 'owner' | 'junior', mentions?: string[], photoUrl?: string) => void;
   postComment: (noticeId: string, date: string, text: string, authorId: string, authorName: string, role: 'owner' | 'junior', mentions?: string[]) => void;
   editFeedText: (id: string, text: string) => void;
@@ -1029,9 +1029,17 @@ export const useWorkStore = create<State>((set, get) => ({
    * 응시를 마쳤다(E4). 예전엔 노하우 하나를 **통과**하면 그 노하우가 담긴 발송을 전부 완료로 찍었다 —
    * 3개 중 1개만 통과해도 '풀었음', 다 풀고 틀리면 '안 풂'이었다. 이제 응시 기록이 저장된 뒤 부르고,
    * 담긴 노하우를 다 풀었는지는 서버(mark_quiz_completed 0275)가 응시 기록으로 판정한다.
+   * 서버가 완료를 찍었을 때(true)만 사장에게 알린다(역 ⑥ · 아직 남았으면 false 라 알림 없음). 이름은 세션 이름, 퀴즈 이름은 코스 목록.
    */
   noteQuizFinished: (entryIds) => {
-    for (const id of pendingAssignmentIds(get(), entryIds)) void markQuizCompleted(id);
+    for (const id of pendingAssignmentIds(get(), entryIds)) {
+      void markQuizCompleted(id).then((done) => {
+        if (!done) return;
+        const a = get().assignments.find((x) => x.id === id);
+        if (!a) return;
+        notifyOwnersQuizDone(a.courseId, useSessionStore.getState().userName, get().courses.find((c) => c.id === a.courseId)?.name ?? '');
+      });
+    }
   },
 
   markUnderstood: async (entryIds, staffId, staffName) => {
@@ -1255,12 +1263,12 @@ export const useWorkStore = create<State>((set, get) => ({
       const before = dup;
       const bumped: FeedItem = { ...dup, createdAt: new Date().toISOString(), read_by: [], important };
       set((s) => ({ feed: s.feed.map((f) => (f.id === dup.id ? bumped : f)) }));
-      // 저장 성공 후에만 재알림 — 실패(롤백)했는데 직원에게 유령 재공지 푸시가 가는 것 방지.
+      // 공지는 푸시·벨 알림이 없다(2026-10-16 사용자 결정) — 저장만 한다.
       void guardWrite(
         upsertFeed(bumped),
         () => set((s) => ({ feed: s.feed.map((f) => (f.id === before.id ? before : f)) })),
         '공지 재게시에 실패했어요.',
-      ).then((ok) => { if (ok) notifyStaffNotice(authorName, text, room, bumped.id); });
+      );
       return;
     }
     const item: FeedItem = {
@@ -1278,18 +1286,17 @@ export const useWorkStore = create<State>((set, get) => ({
       ...(room ? { roomId: room } : null),
     };
     set((s) => ({ feed: [...s.feed, item] }));
-    // 저장 성공 후에만 웹푸시 — 실패 시 직원에게 저장 안 된 공지 알림이 가는 것 방지.
     void guardWrite(
       upsertFeed(item),
       () => set((s) => ({ feed: s.feed.filter((f) => f.id !== item.id) })),
       '공지 등록에 실패했어요.',
-    ).then((ok) => { if (ok) notifyStaffNotice(authorName, text, room, item.id); }); // 매장 직원 전체 · 비공개 방이면 그 방 멤버(D2 · 발송자 제외는 서버)
+    );
   },
 
   // 전 매장 동시 공지(S3 #3) — 소유 매장들에 같은 공지를 서버(definer)가 한 번에 넣는다.
   // 성공 시 현재 매장 피드를 다시 당겨 내 매장 카피가 즉시 보이게(무음 유실 방지). 다른 매장은 각자 활성 시 노출.
-  // 푸시는 현재 매장 직원에게만(엣지 push 가 호출자 활성매장으로 강제) — 타 매장 직원은 인앱 공지로.
-  broadcastNotice: async (unitIds, text, important, authorName) => {
+  // 공지는 푸시하지 않는다(2026-10-16) — 각 매장 공지 패널에서 본다.
+  broadcastNotice: async (unitIds, text, important) => {
     const epoch = currentTenantEpoch();
     const { data, error } = await dbBroadcastNotice(unitIds, text.trim(), important);
     if (error || !data) {
@@ -1303,7 +1310,6 @@ export const useWorkStore = create<State>((set, get) => ({
       if (!fresh.error) set({ feed: fresh.data });
       else set({ loadError: true });
     }
-    notifyStaffNotice(authorName, text.trim());
     return { ok: true, sent: data.sent };
   },
 

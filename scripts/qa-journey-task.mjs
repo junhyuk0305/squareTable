@@ -1,6 +1,6 @@
 // qa-journey-task.mjs — 할일 여정 하니스(2026-10-15). 사장 창(S)과 직원 창(J)을 한 스크립트에서 같이 연다.
 //   사장 할일 만들기(담당 2명 반복 1 + 단건 1) → 직원 목록 → 직원 완료(사진 1장) → 사장 확인.
-//   화면 문자열을 DB 원본(service_role 읽기)과 맞대어 단언한다. DB 쓰기는 셋업(K2 비오늘 반복 1건 · K4-n 공지 1건)·정리에만 쓴다.
+//   화면 문자열을 DB 원본(service_role 읽기)과 맞대어 단언한다. DB 쓰기는 셋업(K2 비오늘 반복 1건 · K4-m 멘션 글 1건 · K7 근무 1건+시간 수정 요청 1건)·정리에만 쓴다.
 //
 //   node scripts/qa-journey-task.mjs      (개발 서버 http://localhost:8081 · QA_ORIGIN 으로 바꾼다 · .env + .env.seed 필요)
 //
@@ -39,8 +39,12 @@ const STAMP = Date.now().toString(36);
 const TXT_REPEAT = `${PREFIX}반복_${STAMP}`;
 const TXT_ONCE = `${PREFIX}단건_${STAMP}`;
 const TXT_K2 = `${PREFIX}비오늘반복_${STAMP}`;
-const TXT_NOTICE = `${PREFIX}공지_${STAMP}`;
-const NOTICE_ID = `f_qajr_${STAMP}`;
+const TXT_MENTION = `${PREFIX}멘션_${STAMP}`;
+const MENTION_ID = `f_qajr_${STAMP}`;
+const TXT_NOTICE = `${PREFIX}공지_${STAMP}`; // K4-p 채팅 상단 고정 공지 1줄
+const NOTICE_ID = `f_qajrn_${STAMP}`;
+const SHIFT_TPL_ID = `${PREFIX}tpl_${STAMP}`; // K7 근무(shift_templates) · 시간 수정 요청(shift_change_requests) 씨앗
+const SHIFT_REQ_ID = `scr_qajr_${STAMP}`;
 const TXT_K6 = `${PREFIX}전제안내배정_${STAMP}`; // 할일 이름에 '기기'·'알림' 을 넣지 않는다(K6-a 정규식이 토스트 대신 이름에 걸린다)
 const NAME_J = '이수민';
 const NAME_M = '박지원';
@@ -93,16 +97,19 @@ async function cleanup(label) {
     if (!r.ok) info(`사진 정리 실패 ${r.status}`);
   }
   if (feed.length) await del(`work_feed?id=in.${inList(feed.map((f) => f.id))}`);
-  // K4-n 이 심은 공지(본문 접두사).
-  const notices = (await sel(`work_feed?unit_id=eq.${UNIT}&data->>kind=eq.notice&select=id,data&order=created_at.desc&limit=500`))
+  // K4-m 이 심은 멘션 글 · K4-p 가 심은 공지(본문 접두사).
+  const mentions = (await sel(`work_feed?unit_id=eq.${UNIT}&data->>kind=in.(message,notice)&select=id,data&order=created_at.desc&limit=500`))
     .filter((f) => String(f.data?.text ?? '').startsWith(PREFIX));
-  if (notices.length) await del(`work_feed?id=in.${inList(notices.map((f) => f.id))}`);
+  if (mentions.length) await del(`work_feed?id=in.${inList(mentions.map((f) => f.id))}`);
+  // K7 이 심은 근무·시간 수정 요청(id 접두사). 요청은 근무에 cascade 지만 둘 다 지운다.
+  await del(`shift_change_requests?unit_id=eq.${UNIT}&id=like.scr_qajr_*`);
+  await del(`shift_templates?unit_id=eq.${UNIT}&id=like.${PREFIX}tpl_*`);
   if (ids.length) {
     await del(`work_done?unit_id=eq.${UNIT}&template_id=in.${inList(ids)}`);
     await del(`work_template_knowhow?template_id=in.${inList(ids)}`).catch(() => {});
     await del(`work_templates?id=in.${inList(ids)}`);
   }
-  info(`정리(${label}): 할일 ${ids.length} · 피드 ${feed.length} · 공지 ${notices.length} · 사진 ${photos.length}`);
+  info(`정리(${label}): 할일 ${ids.length} · 피드 ${feed.length} · 멘션 글·공지 ${mentions.length} · 사진 ${photos.length}`);
 }
 const createdPhotos = [];
 
@@ -497,28 +504,77 @@ try {
   check('K4-0 벨 배정 항목 제목의 배정자 = DB created_by 의 이름', k4Title === `${ownerName}님이 할 일을 배정했어요`, `화면 "${k4Title}" · DB created_by=${ownerName}`);
   await stat(J.page, 'J', '벨 항목 탭');
 
-  // ── 6-n. K4-n 벨 공지 항목 탭 → 착지(K4 와 같은 단언) ─────────────────────
-  section('5-n. K4-n 직원 벨 공지 항목 탭 → 착지 주소·화면에 그 공지가 있나');
-  // 공지는 DB 로 심는다(사장이 쓴 공지 1건과 같은 모양 · 푸시 없음). 끝 정리가 본문 접두사로 지운다.
+  // ── 6-m. K4-m 벨 멘션 항목 탭 → 착지(K4 와 같은 단언 · 공지 알림은 2026-10-16 에 없앴다) ─────────────
+  section('5-m. K4-m 직원 벨 멘션 항목 탭 → 착지 주소(?feed=)·채팅 화면에 그 글이 있나');
+  // 사장이 직원을 @언급한 채팅 글을 DB 로 심는다(화면이 쓰는 글 1건과 같은 모양 · 푸시 없음). 끝 정리가 본문 접두사로 지운다.
+  const mAt = new Date().toISOString();
+  await ins('work_feed', {
+    id: MENTION_ID, unit_id: UNIT, feed_date: TODAY, room_id: 'room_main_store_001',
+    data: { id: MENTION_ID, date: TODAY, kind: 'message', text: TXT_MENTION, authorId: ids.S, authorName: ownerName, authorRole: 'owner', createdAt: mAt, reactions: {}, mentions: [ids.J], roomId: 'room_main_store_001' },
+  });
+  info(`K4-m 셋업: 멘션 글 1건 DB 삽입(id ${MENTION_ID})`);
+  await go(J.page, 'J', '/junior/notifications', '알림(멘션)');
+  await readNotifRows(J.page);
+  let km = { path: '?', search: '', first: '', visible: false, title: '?' };
+  try {
+    if (!(await J.page.waitFor(`!!${leafJs(TXT_MENTION)}`, 15000))) throw new Error('벨 목록에 멘션 행이 없음');
+    km.title = await J.page.eval(`(()=>{const l=${leafJs(TXT_MENTION)};return l&&l.previousElementSibling?l.previousElementSibling.textContent.trim():'?';})()`);
+    await clickJs(J.page, leafJs(TXT_MENTION), `알림 행 ${TXT_MENTION}`);
+    await sleep(3500);
+    km = { ...km, ...(await J.page.eval(`(()=>{const l=${leafJs(TXT_MENTION)};let v=false;if(l){const r=l.getBoundingClientRect();v=r.top>=0&&r.bottom<=innerHeight;}return {path:location.pathname,search:location.search,first:document.body.innerText.split('\\n').map(s=>s.trim()).filter(Boolean).slice(0,2).join(' | '),visible:v};})()`)) };
+  } catch (e) { km.first = `탭 실패: ${e.message}`; }
+  check('K4-m-0 벨 멘션 항목 제목의 작성자 = DB authorId 의 이름 [문자열]', km.title === `${ownerName}님이 나를 언급했어요`, `화면 "${km.title}" · DB 작성자=${ownerName}`);
+  check('K4-m-a 벨 멘션 항목 → 착지 주소가 /junior/work?feed=<그 글 id> [문자열]',
+    km.path === '/junior/work' && km.search.includes(`feed=${MENTION_ID}`), `착지 ${km.path}${km.search} · 기대 feed=${MENTION_ID} · 첫 줄 "${km.first}"`);
+  check('K4-m-b 착지 화면(보이는 영역)에 그 글 본문 문자열이 있다 [문자열]', km.visible, `본문 "${TXT_MENTION}" 보임=${km.visible}`);
+  await stat(J.page, 'J', '벨 멘션 탭');
+
+  // ── 6-p. K4-p 공지 1건 → 직원 채팅 상단 고정 1줄에 본문 · 탭하면 공지 패널에 그 공지(공지 알림 대신 · 2026-10-16) ──
+  section('5-p. K4-p 공지 1건 → 직원 채팅 상단 고정 줄에 본문 · 탭 → 공지 패널에 그 공지');
   const nAt = new Date().toISOString();
   await ins('work_feed', {
     id: NOTICE_ID, unit_id: UNIT, feed_date: TODAY, room_id: 'room_main_store_001',
     data: { id: NOTICE_ID, date: TODAY, kind: 'notice', text: TXT_NOTICE, authorId: ids.S, authorName: ownerName, authorRole: 'owner', createdAt: nAt, reactions: {}, important: false, pinned: false, roomId: 'room_main_store_001' },
   });
-  info(`K4-n 셋업: 공지 1건 DB 삽입(id ${NOTICE_ID})`);
-  await go(J.page, 'J', '/junior/notifications', '알림(공지)');
-  await readNotifRows(J.page);
-  let kn = { path: '?', search: '', first: '', visible: false };
+  info(`K4-p 셋업: 공지 1건 DB 삽입(id ${NOTICE_ID})`);
+  await go(J.page, 'J', '/junior/work', '채팅(공지 줄)');
+  const LINE_SEL = `[aria-label$="공지: ${TXT_NOTICE}"]`;
+  const lineShown = await J.page.waitFor(`(()=>{const e=document.querySelector(${JSON.stringify(LINE_SEL)});if(!e)return false;const r=e.getBoundingClientRect();return r.width>0&&r.top>=0&&r.bottom<=innerHeight;})()`, 20000);
+  const lineLabel = await J.page.eval(`(document.querySelector(${JSON.stringify(LINE_SEL)})||{}).getAttribute?.('aria-label')`);
+  check('K4-p-a 직원 채팅 상단 고정 줄에 그 공지 본문이 보인다(안 읽음 점 포함) [문자열]', lineShown && String(lineLabel ?? '').startsWith('안 읽은 공지: '), `줄 라벨 "${lineLabel}"`);
+  let kp = { path: '?', panel: false, visible: false, lineGone: false };
+  if (lineShown) {
+    await J.page.click(LINE_SEL);
+    await sleep(2500);
+    kp = await J.page.eval(`(()=>{const l=${leafJs(TXT_NOTICE)};let v=false;if(l){const r=l.getBoundingClientRect();v=r.top>=0&&r.bottom<=innerHeight;}const lines=document.body.innerText.split('\\n').map(s=>s.trim());return {path:location.pathname,panel:lines.includes('공지'),visible:v,lineGone:!document.querySelector(${JSON.stringify(LINE_SEL)})};})()`);
+  }
+  check('K4-p-b 고정 줄 탭 → 공지 패널이 열리고(제목 "공지" · 고정 줄 사라짐) 그 공지 본문이 보이는 영역에 있다 [문자열]',
+    kp.path === '/junior/work' && kp.panel && kp.visible && kp.lineGone, `경로 ${kp.path} · 패널=${kp.panel} · 본문 보임=${kp.visible} · 줄 사라짐=${kp.lineGone}`);
+  await stat(J.page, 'J', '공지 줄 탭');
+
+  // ── 6-s. K7 사장 벨 근무 시간 수정 요청 항목 → 착지(?request= · 근무표 승인 칸의 그 카드) ─────────
+  section('5-s. K7 사장 벨 근무 시간 수정 요청(0243) 항목 → 착지 주소(?request=)·근무표에 그 카드가 있나');
+  // 직원 근무 1건 + 그 근무의 오늘 시간 수정 요청(pending) 1건을 DB 로 심는다(request_shift_time 이 넣는 행과 같은 모양). 끝 정리가 id 접두사로 지운다.
+  await ins('shift_templates', { id: SHIFT_TPL_ID, unit_id: UNIT, staff_id: ids.J, weekday: DOW, start_time: '09:00', end_time: '18:00' });
+  await ins('shift_change_requests', {
+    id: SHIFT_REQ_ID, unit_id: UNIT, staff_id: ids.J, template_id: SHIFT_TPL_ID, date: TODAY,
+    old_start: '09:00', old_end: '18:00', new_start: '10:00', new_end: '17:00', note: TXT_MENTION, status: 'pending',
+  });
+  info(`K7 셋업: 근무 1건(${SHIFT_TPL_ID}) · 시간 수정 요청 1건(${SHIFT_REQ_ID}) DB 삽입`);
+  await go(S.page, 'S', '/owner/notifications', '알림(시간 수정 요청)');
+  const K7_TITLE = `${NAME_J}님이 근무 시간 수정을 요청했어요`;
+  let ks = { path: '?', search: '', first: '', visible: false };
   try {
-    if (!(await J.page.waitFor(`!!${leafJs(TXT_NOTICE)}`, 15000))) throw new Error('벨 목록에 공지 행이 없음');
-    await clickJs(J.page, leafJs(TXT_NOTICE), `알림 행 ${TXT_NOTICE}`);
+    if (!(await S.page.waitFor(`!!${leafJs(K7_TITLE)}`, 20000))) throw new Error('벨 목록에 시간 수정 요청 행이 없음');
+    await clickJs(S.page, leafJs(K7_TITLE), `알림 행 ${K7_TITLE}`);
     await sleep(3500);
-    kn = await J.page.eval(`(()=>{const l=${leafJs(TXT_NOTICE)};let v=false;if(l){const r=l.getBoundingClientRect();v=r.top>=0&&r.bottom<=innerHeight;}return {path:location.pathname,search:location.search,first:document.body.innerText.split('\\n').map(s=>s.trim()).filter(Boolean).slice(0,2).join(' | '),visible:v};})()`);
-  } catch (e) { kn.first = `탭 실패: ${e.message}`; }
-  check('K4-n-a 벨 공지 항목 → 착지 주소에 그 공지(피드) id 가 들어 있다 [문자열]',
-    `${kn.path}${kn.search}`.includes(NOTICE_ID), `착지 ${kn.path}${kn.search} · 기대 포함 "${NOTICE_ID}" · 첫 줄 "${kn.first}"`);
-  check('K4-n-b 착지 화면(보이는 영역)에 그 공지 본문 문자열이 있다 [문자열]', kn.visible, `본문 "${TXT_NOTICE}" 보임=${kn.visible}`);
-  await stat(J.page, 'J', '벨 공지 탭');
+    // 카드 본문(요청 메모)이 보이는 영역 안에 있나 — 카드가 그 요청을 가리킨다.
+    ks = await S.page.eval(`(()=>{const l=${leafJs(`“${TXT_MENTION}”`)};let v=false;if(l){const r=l.getBoundingClientRect();v=r.top>=0&&r.bottom<=innerHeight;}return {path:location.pathname,search:location.search,first:document.body.innerText.split('\\n').map(s=>s.trim()).filter(Boolean).slice(0,2).join(' | '),visible:v};})()`);
+  } catch (e) { ks.first = `탭 실패: ${e.message}`; }
+  check('K7-a 벨 시간 수정 요청 항목 → 착지 주소가 /owner/schedule?request=<그 요청 id> [문자열]',
+    ks.path === '/owner/schedule' && ks.search.includes(`request=${SHIFT_REQ_ID}`), `착지 ${ks.path}${ks.search} · 기대 request=${SHIFT_REQ_ID} · 첫 줄 "${ks.first}"`);
+  check('K7-b 착지 화면(보이는 영역)에 그 요청 카드(메모 문자열)가 있다 [문자열]', ks.visible, `메모 "${TXT_MENTION}" 보임=${ks.visible}`);
+  await stat(S.page, 'S', '벨 시간 수정 요청 탭');
 
   // ── 7. K5 두 번 완료 · 비담당 완료 ──────────────────────────────────────
   section('6. K5 같은 할일 두 번 완료 · 담당에서 빠진 사람의 완료 → 오류 문구 0');

@@ -68,7 +68,8 @@ type Seg = 'people' | 'items' | 'settings';
  */
 export default function QuizDetailScreen() {
   const router = useRouter();
-  /** `?tab=settings` — 퀴즈 탭 목록의 설정 아이콘이 곧장 설정으로 보낸다(한 번에 도착한다). */
+  /** `?tab=settings` — 퀴즈 탭 목록의 설정 아이콘이 곧장 설정으로 보낸다(한 번에 도착한다).
+   *  `?tab=result` — 응시 완료 알림(레지스트리 quiz_done route)이 결과 세그먼트('people')로 보낸다. 모르는 값도 결과다. */
   const { id, tab } = useLocalSearchParams<{ id: string; tab?: string }>();
   const unitId = useSessionStore((s) => s.unitId);
 

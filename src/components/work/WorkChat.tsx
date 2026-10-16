@@ -126,8 +126,17 @@ export function WorkChat({
   drawerDot,
   topInset,
   focusId,
+  topNotice,
+  topNoticeUnread,
+  onOpenNotice,
 }: {
   stream: FeedItem[];
+  /** 이 방 공지 1건(고정 우선 → 최신 · 정렬은 utils/notice.ts) — 채팅 맨 위에 1줄로 고정한다. 없으면 안 그린다. */
+  topNotice?: FeedItem;
+  /** 그 공지를 내가 아직 안 읽었나(isNoticeUnreadFor) — 점 하나. */
+  topNoticeUnread?: boolean;
+  /** 고정 줄 탭 → 공지 패널을 그 공지로 연다. */
+  onOpenNotice?: (id: string) => void;
   /** 멘션 알림(?feed=)으로 들어온 글 id — 그 말풍선으로 스크롤하고 강조한다(P1 역 ⑤). 창 밖(안 불러온 옛 글)이면 조용히 접는다. */
   focusId?: string;
   today: string;
@@ -307,6 +316,9 @@ export function WorkChat({
     setDraft('');
   }
 
+  // 대화 스트림이 시작하는 y(떠 있는 헤더 + 방 칩바 아래). 공지 줄은 이 바로 위에 뜬다.
+  const streamTop = HDR_H + 16 + (topInset ?? 0);
+
   return (
     // 키보드 회피는 공용 KeyboardShift(behavior 'padding' + 창 기준 오프셋 자동 측정 — 근거는 그 파일 주석).
     <KeyboardShift>
@@ -352,12 +364,27 @@ export function WorkChat({
         )}
       </View>
 
+      {/* 상단 슬림 핀 공지 1줄 — 방 칩바 아래에 떠 있다. 탭하면 공지 패널의 그 공지로. 공지가 없으면 줄도 없다. */}
+      {topNotice && (
+        <Pressable
+          onPress={() => onOpenNotice?.(topNotice.id)}
+          accessibilityRole="button"
+          accessibilityLabel={`${topNoticeUnread ? '안 읽은 ' : ''}공지: ${topNotice.text}`}
+          style={({ pressed }) => [s.noticeLine, { top: streamTop - Space.sm }, pressed && { opacity: 0.7 }]}
+        >
+          <Ionicons name="megaphone-outline" size={16} color={InkColors.ink} />
+          <Text style={s.noticeLineText} numberOfLines={1}>{topNotice.text}</Text>
+          {topNoticeUnread && <View style={s.noticeDot} />}
+        </Pressable>
+      )}
+
       <ScrollView keyboardShouldPersistTaps="handled"
         ref={scrollRef}
         style={hideUntilPinned}
         // 이 화면은 네이티브 헤더를 끄고(headerShown:false) 바깥 SafeAreaView 가 top 인셋을 이미 먹으므로,
         // ios-preflight: ok iOS 자동 contentInset('automatic')이 더할 몫이 0 이다 — 이중 여백이 생기지 않는다.
-        contentContainerStyle={[s.scroll, topInset ? { paddingTop: HDR_H + 16 + topInset } : null]}
+        // 공지 줄이 있으면 그 높이만큼 첫 말풍선을 더 내린다.
+        contentContainerStyle={[s.scroll, { paddingTop: streamTop + (topNotice ? Space.xxl : 0) }]}
         showsVerticalScrollIndicator={false}
         scrollEventThrottle={16}
         onScroll={onScroll}
@@ -659,6 +686,14 @@ const s = StyleSheet.create({
   searchInp: { flex: 1, fontSize: 15, color: InkColors.ink, paddingVertical: Space.xs },
   matchCount: { fontSize: 12, fontWeight: '700', color: InkColors.ink3 },
   hdrDot: { position: 'absolute', top: 6, right: 6, width: 8, height: 8, borderRadius: Radius.pill, backgroundColor: BrandColors.bad },
+  // 상단 고정 공지 1줄 — 헤더·칩바와 같은 알약, 공지 틴트. 높이는 칩바 칩과 같은 40(Space.xxl).
+  noticeLine: {
+    position: 'absolute', left: 10, right: 10, zIndex: 6,
+    height: Space.xxl, borderRadius: Radius.pill, backgroundColor: BrandColors.yellowSoft, borderWidth: 1, borderColor: BrandColors.yellowDeep,
+    flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingHorizontal: Space.md, ...Elevation.e1,
+  },
+  noticeLineText: { flex: 1, fontSize: 13, fontWeight: '700', color: InkColors.ink },
+  noticeDot: { width: Space.sm, height: Space.sm, borderRadius: Radius.pill, backgroundColor: BrandColors.bad },
   // 검색어가 걸린 조각 — 노랑 형광. 말풍선이 검정(내 말)일 때도 글자는 검정으로 뒤집는다.
   hit: { backgroundColor: BrandColors.yellow, color: InkColors.ink, fontWeight: '800' },
   bubbleActive: { borderWidth: 2, borderColor: BrandColors.yellowDeep },

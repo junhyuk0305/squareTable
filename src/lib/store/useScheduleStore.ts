@@ -33,6 +33,7 @@ import {
   subscribeSchedule,
 } from '@/lib/db';
 import { guardWrite, useSyncStore } from '@/lib/store/useSyncStore';
+import { useSessionStore } from '@/lib/store/useSessionStore';
 import { showToast } from '@/lib/store/useToastStore';
 import { blockedText, type Decision } from '@/lib/decision';
 import { optimisticAdd } from '@/lib/store/crudHelpers';
@@ -516,12 +517,13 @@ export const useScheduleStore = create<ScheduleState>((set, get) => {
     });
   },
   requestShiftTime: async (templateId, date, start, end) => {
+    let requestId: string | null = null; // 서버가 돌려준 요청 id — 사장 알림이 그 요청 카드를 가리킨다(역 ⑤)
     const ok = await runShiftRpc(
-      () => requestShiftTimeRpc(templateId, date, start, end),
+      async () => { requestId = await requestShiftTimeRpc(templateId, date, start, end); return requestId !== null; },
       '근무 시간 수정 요청에 실패했어요. 내 근무가 맞는지 확인해 주세요.',
     );
     // 저장 성공 뒤에만 알린다(실패 시 유령 알림 금지). 승인은 사장만 한다(0243).
-    if (ok) notifyOwnersShiftTimeRequest(fmtDateKo(date));
+    if (ok) notifyOwnersShiftTimeRequest(useSessionStore.getState().userName, fmtDateKo(date), requestId || undefined);
     return ok;
   },
   decideShiftTime: async (id, approve, confirmPast) => {

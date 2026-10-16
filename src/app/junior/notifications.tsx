@@ -55,6 +55,8 @@ export default function JuniorNotificationsScreen() {
   const scheduleLoaded = useScheduleStore((s) => s.loaded);
   const staff = useStaffStore((s) => s.staff);
   const owner = useStaffStore((s) => s.owner);
+  // 내 합류 결과(0247 approved·rejected) — 명부 스토어가 명부와 같이 당긴다.
+  const joinNotices = useStaffStore((s) => s.joinNotices);
   const staffLoaded = useStaffStore((s) => s.loaded);
   // 내 제안 검토 결과(반영/반려+사유) 알림용 — 이 화면 진입 시 당긴다(내공간 밖에선 미로드일 수 있음).
   const suggestions = useSuggestionStore((s) => s.suggestions);
@@ -100,8 +102,9 @@ export default function JuniorNotificationsScreen() {
         scheduleNotices,
         assignments,
         courses,
+        joinNotices,
       }),
-    [feed, swaps, templates, owner, staff, me, today, taskTemplates, done, ackAt, suggestions, queue, scheduleNotices, assignments, courses],
+    [feed, swaps, templates, owner, staff, me, today, taskTemplates, done, ackAt, suggestions, queue, scheduleNotices, assignments, courses, joinNotices],
   );
 
   const initial = (userName ?? '나').trim().slice(0, 1) || '나';

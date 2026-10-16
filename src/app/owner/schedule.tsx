@@ -1,9 +1,10 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { View, Text, Pressable, StyleSheet, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Stack, useRouter } from 'expo-router';
+import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useOpenFromParam } from '@/lib/hooks/useOpenFromParam';
 
 import { RoleTabBar } from '@/components/RoleTabBar';
 import { Appear, stagger } from '@/components/Appear';
@@ -55,9 +56,13 @@ import { EmptyStyles } from '@/lib/theme/empty';
 
 /** 주 이동 아이콘 버튼 한 변. */
 const NAV_BTN = 36;
+/** 알림으로 들어온 요청 카드로 스크롤하기 전 등장 애니메이션이 가라앉는 시간(NoticePanel · TodoScreen 과 같다). */
+const FOCUS_SETTLE_MS = 520;
 
 export default function OwnerScheduleScreen() {
   const router = useRouter();
+  // ?request=<요청 id> — 근무 시간 수정 요청 알림(레지스트리 shift_time route)에서 들어오면 그 요청 카드를 강조하고 한 번 스크롤한다(역 ⑤).
+  const { request: focusRequestId } = useLocalSearchParams<{ request?: string }>();
   const staff = useStaffStore((s) => s.staff);
   const owner = useStaffStore((s) => s.owner);
   // 직원 관리·매장 설정은 사장 전용 — 매니저에겐 그리로 가는 버튼을 그리지 않는다.
@@ -102,6 +107,21 @@ export default function OwnerScheduleScreen() {
   // 직원의 근무 시간 수정 요청(J2). 승인은 사장만 한다(0243) — 매니저에게는 누를 수 없는 카드를 그리지 않는다.
   const timePending = useMemo(() => (isOwner ? pendingTimeRequests(timeRequests) : []), [isOwner, timeRequests]);
   const approvalCount = pending.length + timePending.length;
+
+  // 요청 카드 위치 = 승인 섹션 y + 카드 목록 y + 카드 y(각각 onLayout · 스크롤 내용 기준). 같은 id 로는 한 번만 움직인다.
+  const scrollRef = useRef<ScrollView>(null);
+  const focusY = useRef({ section: 0, list: 0, card: 0 });
+  const [pendingFocus, focusDone] = useOpenFromParam(focusRequestId);
+  const focusShown = !!pendingFocus && timePending.some((r) => r.id === pendingFocus);
+  useEffect(() => {
+    if (!focusShown) return;
+    const t = setTimeout(() => {
+      const { section, list, card } = focusY.current;
+      scrollRef.current?.scrollTo({ y: Math.max(0, section + list + card - 8), animated: true });
+      focusDone();
+    }, FOCUS_SETTLE_MS);
+    return () => clearTimeout(t);
+  }, [focusShown, focusDone]);
 
   // 지난 날짜 승인은 그 기간 급여를 바꾼다 — 경고창을 거친 뒤에만 서버에 확인을 보낸다(§8 Q4).
   async function approveTime(r: ShiftTimeRequest) {
@@ -227,7 +247,7 @@ export default function OwnerScheduleScreen() {
       <ScreenTitleHeader title="근무표" backFallback />
       <Stack.Screen options={{ title: '근무표' }} />
 
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView ref={scrollRef} contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         {/* ① 주간 날짜 스트립 — 하루 이동을 이 화면 안에서 끝낸다 */}
         <Appear delay={stagger(0)}>
         <View style={styles.section}>
@@ -264,6 +284,7 @@ export default function OwnerScheduleScreen() {
         </Appear>
 
         {/* ② 컨펌 대기 — 사장의 핵심 액션. 제목은 카드 밖, 대기 건수는 우측 뱃지 */}
+        <View onLayout={(e) => { focusY.current.section = e.nativeEvent.layout.y; }}>
         <Appear delay={stagger(1)}>
         <View style={styles.section}>
           <SectionLabel
@@ -286,9 +307,14 @@ export default function OwnerScheduleScreen() {
               </Text>
             </View>
           ) : (
-            <View style={{ gap: Space.sm }}>
+            <View style={{ gap: Space.sm }} onLayout={(e) => { focusY.current.list = e.nativeEvent.layout.y; }}>
               {timePending.map((r, i) => (
-                <Appear key={r.id} delay={stagger(i)}>
+                <View
+                  key={r.id}
+                  style={r.id === focusRequestId ? styles.focusCard : undefined}
+                  onLayout={r.id === focusRequestId ? (e) => { focusY.current.card = e.nativeEvent.layout.y; } : undefined}
+                >
+                <Appear delay={stagger(i)}>
                   <TimeRequestCard
                     r={r}
                     name={nameOf(r.staff_id)}
@@ -298,6 +324,7 @@ export default function OwnerScheduleScreen() {
                     onReject={() => void decideShiftTime(r.id, false, false)}
                   />
                 </Appear>
+                </View>
               ))}
               {pending.map((r, i) => (
                 <Appear key={r.id} delay={stagger(i)}>
@@ -315,6 +342,7 @@ export default function OwnerScheduleScreen() {
           )}
         </View>
         </Appear>
+        </View>
 
         {/* ③ 하루 근무 — 운영시간 축 하나 위에 사람마다 바. 추가는 이 카드 안에서 끝낸다 */}
         <Appear delay={stagger(2)}>
@@ -581,6 +609,8 @@ const styles = StyleSheet.create({
 
   // 컨펌 카드
   card: { backgroundColor: InkColors.bg, borderRadius: Radius.md, borderWidth: 1, borderColor: BrandColors.yellowDeep, padding: Space.md, gap: Space.sm, ...Elevation.e1 },
+  // 알림(?request=)으로 들어온 요청 카드 강조 — 명부(?member=)·공지 패널(?feed=)과 같은 테두리.
+  focusCard: { borderWidth: 2, borderColor: BrandColors.accentSolid, borderRadius: Radius.md },
   cardHead: { flexDirection: 'row', alignItems: 'center', gap: Space.sm },
   kindTag: { backgroundColor: InkColors.bgSoft, borderRadius: Radius.pill, paddingHorizontal: 9, paddingVertical: 3 },
   kindTagSwap: { backgroundColor: InkColors.ink },

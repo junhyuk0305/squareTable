@@ -17,6 +17,7 @@ import { useBottomPin } from '@/lib/hooks/useBottomPin';
 import { ChatComposerBar, PlusToggleIcon } from '@/components/ChatComposerBar';
 import { ScreenLoading } from '@/components/ScreenLoading';
 import { ChatTurn } from '@/components/junior/ChatTurn';
+import { useOpenFromParam } from '@/lib/hooks/useOpenFromParam';
 
 import { isBrandHidden } from '@/lib/brand/copy';
 import { useChatStore } from '@/lib/store/useChatStore';
@@ -36,6 +37,8 @@ const EMPTY_SUGGEST_COUNT = 3;
 //  (질문이 많이 쌓여도 전부 렌더/스크롤하지 않게. 맨위→맨아래로 번쩍 이동하던 문제 해소.)
 const CHAT_WINDOW = 20;
 const CHAT_PAGE = 20;
+/** 알림으로 들어온 답변 카드로 스크롤하기 전 초기 하단 고정이 가라앉는 시간(WorkChat 과 같다). */
+const FOCUS_SETTLE_MS = 520;
 
 /* ─────────────────────────────────────────────────────────
  * JuniorAsk — '물어보기' 슬롯. 기존 챗 UI를 그대로 임베드.
@@ -47,7 +50,8 @@ const CHAT_PAGE = 20;
 // seed: 홈에서 탭한 예시 질문 문구. **입력칸을 채우기만 하고 보내지는 않는다** —
 //   자동 전송하면 오탭이 곧 질문 전송이 되고, 직원은 자기가 안 쓴 질문이 올라간 걸 보게 된다.
 //   (사장 쪽 씨앗 칩 dashboard.tsx→/owner/coach 와 같은 params 패턴)
-export function JuniorAsk({ suggestEntry = true, seed }: { suggestEntry?: boolean; seed?: string } = {}) {
+// focusId: 알림(?uqId=)이 가리키는 대화 턴 id. 그 턴을 강조하고 한 번 스크롤한다(역 ⑤ · 호출부가 미답질문 → 대화 id 로 푼다).
+export function JuniorAsk({ suggestEntry = true, seed, focusId }: { suggestEntry?: boolean; seed?: string; focusId?: string } = {}) {
   const history = useChatStore((s) => s.history);
   const isLoading = useChatStore((s) => s.isLoading);
   const submit = useChatStore((s) => s.submit);
@@ -115,7 +119,11 @@ export function JuniorAsk({ suggestEntry = true, seed }: { suggestEntry?: boolea
   const { pinnedRef, pinOnSize, trackPin, hideUntilPinned } = useBottomPin(scrollRef);
 
   // 윈도잉 상태 — 최근 visibleCount개만 렌더. 위로 스크롤(또는 상단 '이전 대화' 탭)하면 페이지 단위로 더 붙인다.
-  const [visibleCount, setVisibleCount] = useState(CHAT_WINDOW);
+  // 알림이 가리키는 턴이 창 밖(오래된 대화)이면 처음부터 그 턴까지 보이게 창을 넓힌다.
+  const [visibleCount, setVisibleCount] = useState(() => {
+    const idx = focusId ? history.findIndex((q) => q.id === focusId) : -1;
+    return idx < 0 ? CHAT_WINDOW : Math.max(CHAT_WINDOW, history.length - idx);
+  });
   const contentH = useRef(0);
   const scrollY = useRef(0);
   const loadingOlder = useRef(false); // 이전 대화를 붙이는 중(스크롤 위치 보정 대기)
@@ -152,6 +160,20 @@ export function JuniorAsk({ suggestEntry = true, seed }: { suggestEntry?: boolea
     const t = setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 60);
     return () => clearTimeout(t);
   }, [history.length, isLoading, pinnedRef]);
+
+  // 알림으로 들어온 턴으로 한 번 스크롤 — 초기 하단 고정이 끝난 뒤 움직인다. 같은 id 로는 한 번만(WorkChat 과 같은 모양).
+  const rowY = useRef<Record<string, number>>({});
+  const [pendingFocus, focusDone] = useOpenFromParam(focusId);
+  const focusShown = !!pendingFocus && visibleHistory.some((q) => q.id === pendingFocus);
+  useEffect(() => {
+    if (!focusShown || !pendingFocus) return;
+    const t = setTimeout(() => {
+      const y = rowY.current[pendingFocus];
+      if (y !== undefined) scrollRef.current?.scrollTo({ y: Math.max(0, y - 80), animated: true });
+      focusDone();
+    }, FOCUS_SETTLE_MS);
+    return () => clearTimeout(t);
+  }, [focusShown, pendingFocus, focusDone]);
 
   function handleSend(text?: string) {
     const value = (text ?? input).trim();
@@ -249,9 +271,10 @@ export function JuniorAsk({ suggestEntry = true, seed }: { suggestEntry?: boolea
         )}
 
         {visibleHistory.map((q) => (
+          <View key={q.id} onLayout={(e) => { rowY.current[q.id] = e.nativeEvent.layout.y; }}>
           <ChatTurn
-            key={q.id}
             query={q}
+            focused={q.id === focusId}
             animateIn={q.id === lastSubmittedId}
             onThumbsUp={() => rate(q.id, 'up')}
             onThumbsDown={() => rate(q.id, 'down')}
@@ -273,6 +296,7 @@ export function JuniorAsk({ suggestEntry = true, seed }: { suggestEntry?: boolea
               unknownQueue.find((u) => u.query_text === queryText)
             }
           />
+          </View>
         ))}
 
         {isLoading && (

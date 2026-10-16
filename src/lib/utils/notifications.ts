@@ -3,12 +3,12 @@
 // UI(아이콘·틴트·onPress)는 화면이 kind로 매핑 — 여기선 순수 데이터만 만든다.
 import type { FeedItem, TaskTemplate, DoneMark } from '@/lib/store/useWorkStore';
 import { occursOn, assigneesOf } from '@/lib/store/useWorkStore';
-import type { SwapRequest, ShiftTemplate, ScheduleNotice } from '@/lib/store/useScheduleStore';
-import type { PendingMember } from '@/lib/store/useStaffStore';
+import type { SwapRequest, ShiftTemplate, ScheduleNotice, ShiftTimeRequest } from '@/lib/store/useScheduleStore';
+import type { PendingMember, JoinNotice } from '@/lib/store/useStaffStore';
 import type { UnknownQuery, PlaybookSuggestion, PaymentClaim, OwnerAlert } from '@/types';
 // D4 '도와줄 수 있는 질문' 판정 SSOT — 벨 배지·알림 목록이 '내 공간' 리스트와 같은 축을 보게 재사용한다.
 import { answerableQuestions } from '@/lib/store/useUnknownQueueStore';
-import { fmtDateKo } from '@/lib/utils/schedule';
+import { fmtDateKo, fmtRange } from '@/lib/utils/schedule';
 // 요금제 표시명은 tiers.ts 가 SSOT — 알림 문구에서 이름을 재정의하지 않는다.
 import { PLANS } from '@/lib/config/tiers';
 import { SHOW_BILLING } from '@/lib/config/store-policy';
@@ -20,10 +20,12 @@ import type { QuizAssignment, TrainingCourse as TrainingCourseRow } from '@/lib/
 export const MAX_NOTIFS = 50;
 
 export type JuniorNotifKind =
-  | 'notice' | 'mention' | 'assign' | 'swap' | 'swap_approved' | 'swap_rejected'
+  | 'mention' | 'assign' | 'swap' | 'swap_approved' | 'swap_rejected'
   | 'suggestion_approved' | 'suggestion_rejected' | 'question' | 'schedule'
   // P1 역 ④ — 푸시 tag 가 있던 사건의 인앱 kind. q_answered = 내 질문에 답이 옴 · training = 퀴즈 도착.
-  | 'q_answered' | 'training';
+  | 'q_answered' | 'training'
+  // 합류 결과(0247 member_notices approved·rejected) — 신청한 사람에게.
+  | 'join_approved' | 'join_rejected';
 /** 주소는 레지스트리(NOTIF[kind].route)가 만든다 — 문자열 리터럴 유니온을 여기서 다시 적지 않는다. */
 export type JuniorNotifRoute = string;
 
@@ -50,11 +52,7 @@ export type JuniorNotif = {
 export const isAfterAck = (at: string | undefined, ackAt?: string | null): boolean =>
   !ackAt || !at || at > ackAt;
 
-/** 안 읽은 공지(나 기준). */
-export const isUnreadNotice = (f: FeedItem, me: string): boolean =>
-  f.kind === 'notice' && !(f.read_by ?? []).includes(me);
-
-/** 나를 @언급한 글/댓글(내 글 제외). 공지와 동일하게 read_by로 읽음추적 → 안 읽으면 강조·카운트. */
+/** 나를 @언급한 글/댓글(내 글 제외). read_by로 읽음추적 → 안 읽으면 강조·카운트. */
 export const isMentionOf = (f: FeedItem, me: string): boolean =>
   (f.mentions ?? []).includes(me) && f.authorId !== me;
 export const isUnreadMention = (f: FeedItem, me: string): boolean =>
@@ -100,8 +98,8 @@ export const isMyAnsweredQuestion = (u: UnknownQuery, me: string): boolean =>
 export const isPendingQuizForMe = (a: QuizAssignment, me: string): boolean =>
   a.userId === me && !!a.sentAt && !a.completedAt;
 
-/** 벨 뱃지 개수 = 안 읽은 공지 + 안 읽은 멘션 + 나에게 배정된(미완료) 할일 + 받은 교대 요청 + 도와줄 수 있는 질문
- *  + 내 질문에 온 답 + 안 푼 퀴즈. */
+/** 벨 뱃지 개수 = 안 읽은 멘션 + 나에게 배정된(미완료) 할일 + 받은 교대 요청 + 도와줄 수 있는 질문
+ *  + 내 질문에 온 답 + 안 푼 퀴즈 + 합류 결과. */
 export function juniorUnreadCount(
   feed: FeedItem[],
   swaps: SwapRequest[],
@@ -114,15 +112,18 @@ export function juniorUnreadCount(
   queue: UnknownQuery[] = [],
   scheduleNotices: ScheduleNotice[] = [],
   assignments: QuizAssignment[] = [],
+  /** 합류 결과(0247 member_notices). 통합 알림(cross-store)은 이 축을 공급하지 않으므로 기본 빈 배열. */
+  joinNotices: JoinNotice[] = [],
 ): number {
   return (
     queue.filter((u) => isMyAnsweredQuestion(u, me) && isAfterAck(u.asked_at, ackAt)).length +
     assignments.filter((a) => isPendingQuizForMe(a, me) && isAfterAck(a.sentAt ?? undefined, ackAt)).length +
     // 내 근무 알림(D9) — 대타 확정 · 시간 수정 결과 · 근무표 변경. read 개념이 없어 '모두 읽기'(ack) 전까지 센다.
     scheduleNotices.filter((n) => isAfterAck(n.created_at, ackAt)).length +
+    // 합류 결과 — 같은 표(member_notices)의 승인·반려 행. 같은 읽음 축.
+    joinNotices.filter((n) => isAfterAck(n.created_at, ackAt)).length +
     // 동료가 물었는데 아직 답이 없는 질문(D4) — 푸시를 놓치면 '내 공간'에 들어가야만 알 수 있었다.
     answerableQuestions(queue, me, suggestions).filter((u) => isAfterAck(u.asked_at, ackAt)).length +
-    feed.filter((f) => isUnreadNotice(f, me) && isAfterAck(f.createdAt, ackAt)).length +
     feed.filter((f) => isUnreadMention(f, me) && isAfterAck(f.createdAt, ackAt)).length +
     // 배정 시각 폴백은 목록(buildJuniorNotifications)과 동일하게 — 카운트·목록 강조가 어긋나지 않게.
     taskTemplates.filter((t) => isPendingAssignment(t, me, today, done) && isAfterAck(assignedAtOf(t, me, today), ackAt)).length +
@@ -132,7 +133,7 @@ export function juniorUnreadCount(
   );
 }
 
-/** 알림 목록(시간 역순, MAX_NOTIFS 상한). 공지·멘션·받은 교대요청·내 교대요청 결과. */
+/** 알림 목록(시간 역순, MAX_NOTIFS 상한). 멘션·받은 교대요청·내 교대요청 결과·합류 결과. */
 export function buildJuniorNotifications(args: {
   feed: FeedItem[];
   swaps: SwapRequest[];
@@ -156,29 +157,14 @@ export function buildJuniorNotifications(args: {
   assignments?: QuizAssignment[];
   /** 퀴즈 이름을 찾을 코스 목록. */
   courses?: TrainingCourseRow[];
+  /** 합류 결과(0247 member_notices approved·rejected). 없으면 해당 알림 없음. */
+  joinNotices?: JoinNotice[];
 }): JuniorNotif[] {
-  const { feed, swaps, templates, nameOf, userId: me, today, taskTemplates = [], done = {}, ackAt, suggestions = [], queue = [], scheduleNotices = [], assignments = [], courses = [] } = args;
+  const { feed, swaps, templates, nameOf, userId: me, today, taskTemplates = [], done = {}, ackAt, suggestions = [], queue = [], scheduleNotices = [], assignments = [], courses = [], joinNotices = [] } = args;
   const tplById = (id: string) => templates.find((t) => t.id === id);
   const out: JuniorNotif[] = [];
 
-  // 공지 — 안 읽은 건 강조, 읽은 건 이력으로 함께.
-  // ★내가 쓴 공지는 제외한다(0177 이후 직원도 공지를 쓴다) — 자기 글이 자기 알림에 뜨는 건 메아리다.
-  //   관리자 목록(buildManagerNotifs)이 먼저 쓰던 규칙과 같은 축.
-  for (const f of feed) {
-    if (f.kind !== 'notice' || f.authorId === me) continue;
-    out.push({
-      id: `notice_${f.id}`,
-      kind: 'notice',
-      title: NOTIF.notice.title(f.authorName),
-      body: f.text,
-      at: f.createdAt,
-      unread: isUnreadNotice(f, me) && isAfterAck(f.createdAt, ackAt),
-      route: NOTIF.notice.route('junior', f.id),
-      readFeedId: f.id,
-    });
-  }
-
-  // 멘션 — 누군가 글/댓글에서 나를 @언급(내 글 제외). 공지처럼 read_by로 읽음추적 → 안 읽으면 강조.
+  // 멘션 — 누군가 글/댓글에서 나를 @언급(내 글 제외). read_by로 읽음추적 → 안 읽으면 강조.
   for (const f of feed) {
     if (!isMentionOf(f, me)) continue;
     out.push({
@@ -310,6 +296,21 @@ export function buildJuniorNotifications(args: {
     });
   }
 
+  // 합류 결과(0247) — 서버가 승인·반려 때 넣은 행. 푸시는 같은 행을 크론이 보낸다. 매장 이름이 제목에 들어간다(역 ⑧ id = kind_<행 id>).
+  for (const n of joinNotices) {
+    const ok = n.kind === 'approved';
+    const spec = ok ? NOTIF.join_approved : NOTIF.join_rejected;
+    out.push({
+      id: `${ok ? 'join_approved' : 'join_rejected'}_${n.id}`,
+      kind: ok ? 'join_approved' : 'join_rejected',
+      title: spec.title(n.store_name || '신청한 매장'),
+      body: n.body,
+      at: n.created_at,
+      unread: isAfterAck(n.created_at, ackAt),
+      route: spec.route('junior'),
+    });
+  }
+
   return out.sort((a, b) => b.at.localeCompare(a.at)).slice(0, MAX_NOTIFS);
 }
 
@@ -335,8 +336,10 @@ export type OwnerNotifKind =
   | 'brand_end_right_changed'
   // 0232 구독 상태(결제 채널 무관) — 늘었어요 · 끝나요 · 끝났어요. 탭은 ownerAlertRoute default '/billing'.
   | 'sub_renewed' | 'sub_ending' | 'sub_ended'
-  // D11 — 나에게 온 공지·배정(사장 폰에도 푸시가 온다). 매니저 수신 축과 같은 판정이다.
-  | 'notice' | 'assign';
+  // D11 — 나에게 온 배정(사장 폰에도 푸시가 온다). 매니저 수신 축과 같은 판정이다.
+  | 'assign'
+  // 퀴즈 응시 완료(0275 completed_at) · 근무 시간 수정 요청(0243 pending) — 둘 다 사장만(F-2).
+  | 'quiz_done' | 'shift_time';
 /** 주소는 레지스트리(NOTIF[kind].route)와 ownerAlertRoute 가 만든다. */
 export type OwnerNotifRoute = string;
 
@@ -412,9 +415,11 @@ export const isSwapAwaitingApproval = (r: SwapRequest): boolean => r.status === 
  *  claimed_by 로 좁히지 않는다: 결제는 매장 단위 소식이라 공동 사장 모두가 알아야 한다
  *  (RLS 가 이미 '그 매장 사장'으로 좁혀 놓았다 — 여기서 또 좁히면 두 번째 사장이 결과를 영영 못 본다). */
 export const isPaymentResult = (c: PaymentClaim): boolean => c.status !== 'pending' && !!c.reviewed_at;
+/** 응시를 마친 발송(0275 mark_quiz_completed 가 찍은 completed_at). 사장 계정에는 매장 전체 발송이 내려온다(qz_select). */
+export const isQuizDone = (a: QuizAssignment): boolean => !!a.completedAt;
 
-/** 벨 뱃지 개수 = 합류 승인대기 + 답변대기 질문 + 검토대기 제안 + 승인대기 교대.
- *  pending은 이미 "승인 대기"만 담긴 목록(fetchPendingMembers)이라 그대로 센다. */
+/** 벨 뱃지 개수 = 합류 승인대기 + 답변대기 질문 + 검토대기 제안 + 승인대기 교대 + 응시 완료 퀴즈 + 근무 시간 수정 요청.
+ *  pending은 이미 "승인 대기"만 담긴 목록(fetchPendingMembers)이라 그대로 센다. timeRequests 도 대기만 담긴다(fetchShiftTimeRequests). */
 export function ownerUnreadCount(
   queue: UnknownQuery[],
   suggestions: PlaybookSuggestion[],
@@ -427,11 +432,17 @@ export function ownerUnreadCount(
   claims: PaymentClaim[] = [],
   /** 사장 알림(0191). 통합 알림은 이 축도 공급하지 않는다. */
   alerts: OwnerAlert[] = [],
-  /** 나에게 온 공지·배정(D11). 목록(buildOwnerNotifications)과 같은 인자를 넘긴다. */
+  /** 나에게 온 배정(D11). 목록(buildOwnerNotifications)과 같은 인자를 넘긴다. */
   received?: ManagerReceivedArgs,
+  /** 퀴즈 발송 원장(응시 완료 축). 통합 알림은 이 축을 공급하지 않는다. */
+  assignments: QuizAssignment[] = [],
+  /** 근무 시간 수정 요청(0243 · 대기만). 통합 알림은 이 축을 공급하지 않는다. */
+  timeRequests: ShiftTimeRequest[] = [],
 ): number {
   return (
     (received ? ownerReceivedRows(received).filter((r) => r.unread).length : 0) +
+    assignments.filter((a) => isQuizDone(a) && isAfterAck(a.completedAt ?? undefined, ackAt)).length +
+    timeRequests.filter((r) => isAfterAck(r.created_at, ackAt)).length +
     alerts.filter((a) => ownerAlertForPlatform(a) && isAfterAck(a.created_at, ackAt)).length +
     pending.filter((p) => isAfterAck(p.created_at, ackAt)).length +
     queue.filter((u) => isPendingQuestion(u) && isAfterAck(u.asked_at, ackAt)).length +
@@ -450,13 +461,13 @@ export function buildOwnerNotifications(args: Parameters<typeof ownerRows>[0], r
     .slice(0, MAX_NOTIFS);
 }
 
-/** 사장에게 온 공지·배정(D11) — 공지는 사장에게도 푸시가 가고(owners), 매니저는 사장에게 할일을 배정한다.
- *  판정은 매니저 수신 축(buildManagerReceived)을 그대로 쓴다(내 글 제외 규칙 동일). 제안 결과는 사장 축이 아니라 뺀다. */
+/** 사장에게 온 배정(D11) — 매니저는 사장에게 할일을 배정한다.
+ *  판정은 매니저 수신 축(buildManagerReceived)을 그대로 쓴다. 제안 결과는 사장 축이 아니라 뺀다. */
 function ownerReceivedRows(received: ManagerReceivedArgs): OwnerNotif[] {
   const out: OwnerNotif[] = [];
   for (const r of buildManagerReceived(received)) {
-    // 배정·공지 모두 그 항목 주소(레지스트리 · 사장 화면 세트)를 그대로 쓴다.
-    if (r.kind === 'assign' || r.kind === 'notice') out.push({ ...r, kind: r.kind });
+    // 배정은 그 항목 주소(레지스트리 · 사장 화면 세트)를 그대로 쓴다.
+    if (r.kind === 'assign') out.push({ ...r, kind: r.kind });
   }
   return out;
 }
@@ -477,8 +488,14 @@ function ownerRows(args: {
   claims?: PaymentClaim[];
   /** 사장 알림(0191) — 좌석 잠김 · AI 사용량. 없으면 해당 알림 없음. */
   alerts?: OwnerAlert[];
+  /** 퀴즈 발송 원장(0139) — 응시 완료 알림용. 없으면 해당 알림 없음. */
+  assignments?: QuizAssignment[];
+  /** 퀴즈 이름을 찾을 코스 목록. */
+  courses?: TrainingCourseRow[];
+  /** 근무 시간 수정 요청(0243 · 대기만). 없으면 해당 알림 없음. */
+  timeRequests?: ShiftTimeRequest[];
 }): OwnerNotif[] {
-  const { queue, suggestions, swaps, pending, nameOf, feed = [], userId: me, ackAt, claims = [], alerts = [] } = args;
+  const { queue, suggestions, swaps, pending, nameOf, feed = [], userId: me, ackAt, claims = [], alerts = [], assignments = [], courses = [], timeRequests = [] } = args;
   const out: OwnerNotif[] = [];
 
   // 사장 알림(0191·0213) — 문구는 서버가 적재한 그대로(푸시와 같은 문장). 탭 목적지는 종류가 정한다.
@@ -567,6 +584,33 @@ function ownerRows(args: {
     });
   }
 
+  // 근무 시간 수정 요청(0243) — 요청한 직원 이름이 제목(역 ③). 탭하면 근무표 승인 칸의 그 요청(?request=).
+  for (const r of timeRequests) {
+    out.push({
+      id: `shift_time_${r.id}`,
+      kind: 'shift_time',
+      title: NOTIF.shift_time.title(nameOf(r.staff_id)),
+      body: `${fmtDateKo(r.date)} ${fmtRange(r.new_start, r.new_end)}`,
+      at: r.created_at,
+      unread: isAfterAck(r.created_at, ackAt),
+      route: NOTIF.shift_time.route('owner', r.id),
+    });
+  }
+
+  // 퀴즈 응시 완료(0275) — 푼 직원 이름이 제목(역 ③) · 퀴즈 이름이 본문. 탭하면 그 퀴즈의 결과 탭.
+  for (const a of assignments) {
+    if (!isQuizDone(a)) continue;
+    out.push({
+      id: `quiz_done_${a.id}`,
+      kind: 'quiz_done',
+      title: NOTIF.quiz_done.title(nameOf(a.userId)),
+      body: courses.find((c) => c.id === a.courseId)?.name,
+      at: a.completedAt as string,
+      unread: isAfterAck(a.completedAt ?? undefined, ackAt),
+      route: NOTIF.quiz_done.route('owner', a.courseId),
+    });
+  }
+
   // 입금 신고 검토 결과(0083) — 승인이면 "이용이 열렸다", 반려면 **사유**가 본문이다.
   // 반려 사유를 못 보면 사장은 무엇을 고쳐 다시 입금해야 하는지 알 수 없다(무음 구간 재발).
   for (const c of claims) {
@@ -602,7 +646,7 @@ function ownerRows(args: {
 //   합류 승인·제안 검토·사장 알림(요금제·본사)·입금 결과는 사장 전용 화면이라 뺀다(0201). 예전엔 사장 축을
 //   그대로 받아 눌러도 직원 홈으로 튕겼다. 질문과 내 제안 결과는 물어보기 탭(/junior/chat)에서 본다.
 export type ManagerNotifKind =
-  | 'mention' | 'swap_approval' | 'question' | 'notice' | 'assign' | 'suggestion_approved' | 'suggestion_rejected';
+  | 'mention' | 'swap_approval' | 'question' | 'assign' | 'suggestion_approved' | 'suggestion_rejected';
 export type ManagerNotifRoute = string;
 export type ManagerNotif = Omit<OwnerNotif, 'kind' | 'route'> & { kind: ManagerNotifKind; route: ManagerNotifRoute };
 
@@ -619,24 +663,8 @@ export type ManagerReceivedArgs = {
 
 /** ② 나에게 온 것 — 매니저가 열 수 있는 경로로. 카운트와 목록이 같은 배열을 보게 이 함수 하나만 쓴다. */
 function buildManagerReceived(args: ManagerReceivedArgs): ManagerNotif[] {
-  const { feed, taskTemplates, done, today, suggestions, userId: me, nameOf, ackAt } = args;
+  const { taskTemplates, done, today, suggestions, userId: me, nameOf, ackAt } = args;
   const out: ManagerNotif[] = [];
-
-  // 공지 — 사장(또는 다른 관리자)이 올린 것. 내가 쓴 공지는 제외한다(read_by 에 내가 없어 '안 읽음'으로
-  // 잡히는데, 자기가 쓴 글이 자기 알림에 뜨는 건 메아리다 — 푸시 엣지의 발송자 제외와 같은 규칙).
-  for (const f of feed) {
-    if (f.kind !== 'notice' || f.authorId === me) continue;
-    out.push({
-      id: `notice_${f.id}`,
-      kind: 'notice',
-      title: NOTIF.notice.title(f.authorName),
-      body: f.text,
-      at: f.createdAt,
-      unread: isUnreadNotice(f, me) && isAfterAck(f.createdAt, ackAt),
-      route: NOTIF.notice.route('owner', f.id),
-      readFeedId: f.id,
-    });
-  }
 
   // 배정 — 매니저도 할 일을 배정받는다(명부에 있는 사람이라 사장이 지정할 수 있다).
   for (const t of taskTemplates) {

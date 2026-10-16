@@ -57,11 +57,12 @@ export function NotificationBell({ edge = true }: { edge?: boolean } = {}) {
   const ackAt = useMemberPrefsStore((s) => (unitId ? (s.ackByUnit[unitId] ?? null) : null));
   const today = todayStr();
 
-  // 안 푼 퀴즈(P1 역 ④)도 배지 축 — 목록(junior/notifications.tsx)과 같은 발송 원장.
+  // 안 푼 퀴즈(P1 역 ④)도 배지 축 — 목록(junior/notifications.tsx)과 같은 발송 원장. 합류 결과(0247)도 같은 목록의 축.
   const assignments = useWorkStore((s) => s.assignments);
+  const joinNotices = useStaffStore((s) => s.joinNotices);
   const count = useMemo(
-    () => juniorUnreadCount(feed, swaps, userId, today, templates, done, ackAt, suggestions, queue, scheduleNotices, assignments),
-    [feed, swaps, userId, today, templates, done, ackAt, suggestions, queue, scheduleNotices, assignments],
+    () => juniorUnreadCount(feed, swaps, userId, today, templates, done, ackAt, suggestions, queue, scheduleNotices, assignments, joinNotices),
+    [feed, swaps, userId, today, templates, done, ackAt, suggestions, queue, scheduleNotices, assignments, joinNotices],
   );
 
   return <BellButton count={count} edge={edge} onPress={() => router.push('/junior/notifications')} />;
@@ -83,6 +84,9 @@ export function OwnerNotificationBell({ edge = true }: { edge?: boolean } = {}) 
   const feed = useWorkStore((s) => s.feed);
   const templates = useWorkStore((s) => s.templates);
   const done = useWorkStore((s) => s.done);
+  // 응시 완료 퀴즈(0275) · 근무 시간 수정 요청(0243) — 목록(owner/notifications.tsx)과 같은 원장.
+  const assignments = useWorkStore((s) => s.assignments);
+  const timeRequests = useScheduleStore((s) => s.timeRequests);
   const claims = usePaymentClaimStore((s) => s.claims);
   const alerts = useOwnerAlertStore((s) => s.alerts);
   const unitId = useSessionStore((s) => s.unitId);
@@ -93,11 +97,11 @@ export function OwnerNotificationBell({ edge = true }: { edge?: boolean } = {}) 
     // 세는 데 이름은 안 쓴다 — 목록(owner/notifications.tsx)과 같은 명부 SSOT(memberNameOf)로 둔다(역 ③).
     const nameOf = (id: string) => memberNameOf({ owner, staff }, id) ?? '직원';
     const received = { feed, taskTemplates: templates, done, today, suggestions, userId, nameOf, ackAt };
-    // 사장 배지도 목록처럼 나에게 온 공지·배정을 센다(D11).
-    if (role !== 'manager') return ownerUnreadCount(queue, suggestions, swaps, pending, feed, userId, ackAt, claims, alerts, received);
+    // 사장 배지도 목록처럼 나에게 온 배정을 센다(D11).
+    if (role !== 'manager') return ownerUnreadCount(queue, suggestions, swaps, pending, feed, userId, ackAt, claims, alerts, received, assignments, timeRequests);
     // 매니저 배지는 목록(buildManagerNotifications)과 같은 인자·같은 배열에서 센다(F-2).
     return managerUnreadCount({ queue, suggestions, swaps, pending, nameOf, feed, userId, ackAt, claims, alerts }, received);
-  }, [queue, suggestions, swaps, pending, feed, userId, ackAt, claims, alerts, role, templates, done, today, staff, owner]);
+  }, [queue, suggestions, swaps, pending, feed, userId, ackAt, claims, alerts, role, templates, done, today, staff, owner, assignments, timeRequests]);
 
   return <BellButton count={count} onPress={() => router.push('/owner/notifications')} edge={edge} />;
 }

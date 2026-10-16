@@ -160,10 +160,10 @@ function clientPushRoute(audience: string | undefined, tag: string | undefined, 
     case 'join': return `/owner/staff${id ? `?member=${id}` : ''}`;
     case 'question': return owner ? `/owner/coach${id ? `?uqId=${id}` : ''}` : `/junior/chat${id ? `?uqId=${id}` : ''}`;
     case 'suggestion': return '/owner/suggestions';
-    case 'swap-approval':
-    case 'shift-time': return '/owner/schedule';
+    case 'swap-approval': return '/owner/schedule';
+    case 'shift-time': return `/owner/schedule${id ? `?request=${id}` : ''}`;
+    case 'quiz-done': return id ? `/owner/quiz/${id}?tab=result` : '/owner/quiz-list';
     case 'role': return '/junior/home';
-    case 'notice': return `${work}?view=notice${id ? `&feed=${id}` : ''}`;
     case 'swap-req':
     case 'swap-result': return owner ? '/owner/schedule' : '/junior/schedule';
     case 'mention': return `${work}${id ? `?feed=${id}` : ''}`;

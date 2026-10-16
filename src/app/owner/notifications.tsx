@@ -49,10 +49,15 @@ export default function OwnerNotificationsScreen() {
   const queue = useUnknownQueueStore((s) => s.queue);
   const suggestions = useSuggestionStore((s) => s.suggestions);
   const swaps = useScheduleStore((s) => s.swaps);
+  // 근무 시간 수정 요청(0243 · 대기만) — 근무표 승인 칸과 같은 원장.
+  const timeRequests = useScheduleStore((s) => s.timeRequests);
   const staff = useStaffStore((s) => s.staff);
   const owner = useStaffStore((s) => s.owner);
   const pending = useStaffStore((s) => s.pending);
   const feed = useWorkStore((s) => s.feed);
+  // 퀴즈 응시 완료(0275 completed_at) — 결과 탭과 같은 발송 원장.
+  const assignments = useWorkStore((s) => s.assignments);
+  const courses = useWorkStore((s) => s.courses);
   const claims = usePaymentClaimStore((s) => s.claims);
   const alerts = useOwnerAlertStore((s) => s.alerts);
   const markNoticeRead = useWorkStore((s) => s.markNoticeRead);
@@ -108,12 +113,12 @@ export default function OwnerNotificationsScreen() {
   const rows = useMemo(() => {
     // 매니저에게 배정한 사람은 사장이다 — 명부 SSOT(memberNameOf · 사장 포함). '직원'은 명부에 없을 때만.
     const nameOf = (id: string) => memberNameOf({ owner, staff }, id) ?? '직원';
-    const ownerArgs = { queue, suggestions, swaps, pending, nameOf, feed, userId: me, ackAt, claims, alerts };
+    const ownerArgs = { queue, suggestions, swaps, pending, nameOf, feed, userId: me, ackAt, claims, alerts, assignments, courses, timeRequests };
     const received = { feed, taskTemplates: templates, done, today, suggestions, userId: me, nameOf, ackAt };
-    // 사장도 나에게 온 공지·배정을 받는다(D11 · 폰에 푸시가 오는 것과 같은 축).
+    // 사장도 나에게 온 배정을 받는다(D11 · 폰에 푸시가 오는 것과 같은 축).
     if (role !== 'manager') return buildOwnerNotifications(ownerArgs, received);
     return buildManagerNotifications(ownerArgs, received);
-  }, [queue, suggestions, swaps, pending, owner, staff, feed, me, ackAt, claims, alerts, role, templates, done, today]);
+  }, [queue, suggestions, swaps, pending, owner, staff, feed, me, ackAt, claims, alerts, role, templates, done, today, assignments, courses, timeRequests]);
 
   // '모두 읽기' = ① 멘션은 read_by 기록(기존 경로) + ② 처리형(합류·질문·제안·교대)은 ack 시각(0078)으로
   // 배지·강조 해제. 항목은 목록에 남아 계속 처리할 수 있고, 새 항목은 ack 이후라 다시 배지에 잡힌다.

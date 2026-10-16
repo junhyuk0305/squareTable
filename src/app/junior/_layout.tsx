@@ -74,12 +74,14 @@ export default function JuniorLayout() {
     const offA = useAttendanceStore.getState().subscribe();
     const offS = useScheduleStore.getState().subscribe();
     const offSg = useSuggestionStore.getState().subscribe();
+    const offSt = useStaffStore.getState().subscribe(); // 내 profiles 행이 바뀌면(합류 승인·반려) 명부와 합류 결과(joinNotices)를 다시 읽는다
     return () => {
       offP();
       offW();
       offA();
       offS();
       offSg();
+      offSt();
     };
   }, [status, unitId]);
 
@@ -139,7 +141,7 @@ export default function JuniorLayout() {
         //   항목을 iOS 26 이 '바 버튼'으로 취급해 유리 캡슐을 씌운다 → 웹과 같은 "왼쪽 정렬 평문 제목 +
         //   담백한 뒤로가기"를 네이티브 헤더로는 낼 수 없다. 모든 화면이 `ScreenTitleHeader` 를 직접 그린다.
         //   ★여기서 끄는 것이 핵심이다 — 화면에서 끄면 마운트 전 한 프레임 깜빡인다(native-audit: header-flash).
-        headerShown: false,
+        headerShown: false,
       }}
     >
       {/* 홈 헤더(로고+알림벨)는 home.tsx의 <Stack.Screen>이 단일 소스로 구성한다 — 여기선 등록만.
@@ -147,7 +149,7 @@ export default function JuniorLayout() {
       {/* ★헤더를 끌 화면은 **레이아웃에서부터** 끈다(2026-09-07 iOS 실기기). 화면 안의
           `<Stack.Screen options={{headerShown:false}}/>` 는 마운트 뒤에야 반영돼, 그 사이 한 프레임 동안
           네이티브 헤더가 떴다 사라진다 — 탭을 빠르게 오가면 계속 깜빡인다(native-audit 규칙 header-flash). */}
-      <Stack.Screen name="home" options={{ animation: 'none' }} />
+      <Stack.Screen name="home" options={{ animation: 'none' }} />
       {/* 탭 루트 상단은 각 화면이 ScreenTitleHeader 로 그린다 — "어느 매장의 화면인가"(storeLine)도 거기서. */}
       <Stack.Screen name="chat" options={{ title: '물어보기', animation: 'none' }} />
       <Stack.Screen name="attendance" options={{ title: '출퇴근', animation: 'none' }} />
