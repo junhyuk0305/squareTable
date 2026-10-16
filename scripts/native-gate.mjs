@@ -161,7 +161,8 @@ if (!PLATFORM || PLATFORM === 'ios') reportPlatform('iOS', 'ios');
 // 로그인·노하우 전부 무동작). 게이트가 못 잡으면 심사 제출까지 갔다가 통째로 리젝된다.
 // PostHog는 키가 없으면 코드 자체가 no-op으로 죽지 않게 설계돼 있다(posthog.ts:8 "무해하게 no-op").
 // 없어도 앱이 안 깨지는 것까지 "미등록=출고불가"로 막으면 진짜 구멍(Supabase)이 노이즈에 묻힌다.
-const OPTIONAL_ENV_VARS = new Set(['EXPO_PUBLIC_POSTHOG_KEY', 'EXPO_PUBLIC_POSTHOG_HOST']);
+// EXPO_PUBLIC_TOSS_CLIENT_KEY = 웹 카드결제(0208) 전용. 네이티브는 SHOW_CARD_BILLING 이 항상 false(앱 안 외부결제 금지)라 EAS 에 없어야 맞다.
+const OPTIONAL_ENV_VARS = new Set(['EXPO_PUBLIC_POSTHOG_KEY', 'EXPO_PUBLIC_POSTHOG_HOST', 'EXPO_PUBLIC_TOSS_CLIENT_KEY']);
 
 const allEnvVars = [
   ...new Set(
