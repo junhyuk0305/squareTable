@@ -95,7 +95,9 @@ const FN_TOKENS = {
   brand_unit_entries: ['archived_at is null', 'brand_has_unit'],
   brand_overview_rows: ['archived_at is null', 'p_brand is not null or p_units is not null'],
   quiz_items_for: ['archived_at is not null', 'brand_hidden_at is not null'],
-  quiz_link_items: ['archived_at is not null', 'brand_hidden_at is not null'],
+  // 0308 이 링크 문항 술어를 quiz_link_servable 한 곳으로 옮겼다 — quiz_link_items 는 그것을 부르기만 한다.
+  quiz_link_items: ['public.quiz_link_servable(l)'],
+  quiz_link_servable: ['archived_at is not null', 'brand_hidden_at is not null'],
   quiz_item_counts: ['archived_at is not null', 'brand_hidden_at is not null'],
   quiz_link_resolve: ['archived_at is null', 'brand_hidden_at is not null', 'revoked_at is null'],
   enqueue_knowhow_rechecks: ['archived_at is null', 'brand_hidden_at is null'],
@@ -358,7 +360,7 @@ console.log('\n[6] 0248 노하우 보관 — 열 · 정책 · 트리거 · 권�
   // 0248 이 다시 정의한 옛 함수들은 처음 만든 파일이 PUBLIC 실행권을 안 걷었다. 다시 정의할 때 3역할 회수를 한다(계획 §4 공통 규칙).
   for (const fn of ['match_playbook(extensions.vector, text, int)', 'my_knowhow_entries()', 'owner_knowhow_entries()',
                     'owner_knowhow_stats()', 'my_growth()', 'list_unit_knowhow(text)', 'copy_knowhow_between(text, text, text[])',
-                    'brand_unit_entries(text)', 'quiz_items_for(text[], int)', 'quiz_item_counts()']) {
+                    'brand_unit_entries(text)', 'quiz_items_for(text[], int, text)', 'quiz_item_counts()']) {   // 0307 이 p_course_id 를 더했다
     check(`${fn}: anon 실행 불가 · authenticated 실행 가능`,
       psql(`select not has_function_privilege('anon', 'public.${fn}', 'execute') and has_function_privilege('authenticated', 'public.${fn}', 'execute')`) === 't');
   }
