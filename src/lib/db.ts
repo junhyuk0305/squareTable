@@ -19,6 +19,7 @@ import type { MemberTenure } from '@/lib/utils/tenure';
 import { reopenKeepsRecords, type DeleteStorePreview, type DeleteStoreResult } from '@/lib/account/storeCopy';
 import { isMissingRpc } from '@/lib/utils/userError';
 import { TERMS_VERSION } from '@/lib/config/business';
+import { codeOf, decisionOfError, type Decision } from '@/lib/decision';
 // 훈련 v2(0107·0108). ★TrainingCourse 는 이 파일이 이미 0099 의 문자열 유니온으로 쓰고 있어(아래)
 // 이름이 겹친다 → 코스 테이블 행 타입은 TrainingCourseRow 로 별칭한다. 구조는 동일하므로
 // 다른 화면이 '@/lib/quiz/types' 에서 TrainingCourse 를 직접 import 해 넘겨도 그대로 맞는다.
@@ -74,6 +75,24 @@ async function writeStrict(
     return false;
   }
   return true;
+}
+
+// 결정 뮤테이션의 결과 분류(P2 ⑦ · src/lib/decision.ts). writeStrict 와 같은 쓰기인데 0행을 실패가 아니라
+// 'already'(이미 그 상태 · 다른 기기가 먼저 처리)로 돌려준다. 서버 raise 코드는 분류표로 갈라진다.
+// ⚠️ 0행 = already 가 참인 경로에만 쓴다: 조건(.eq/.in/.neq)이 "아직 안 처리됨"을 정확히 가르는 쓰기.
+async function writeDecision(
+  label: string,
+  q: PromiseLike<{ data: unknown[] | null; error: { message: string } | null }>,
+): Promise<Decision> {
+  const { data, error } = await q;
+  if (error) {
+    console.warn(`[db] ${label}:`, error.message);
+    const d = decisionOfError(error.message);
+    if (d === 'failed') reportError(`db.write:${label}`, error);
+    return d;
+  }
+  if (Array.isArray(data) && data.length === 0) return 'already';
+  return 'ok';
 }
 
 // 읽기 실패를 한 곳에서 처리(리포트 P0-1): 개발자 콘솔 + 원격 관측 + 사용자에게 "불러오지 못했어요" 배너.
@@ -1238,34 +1257,39 @@ export async function fetchPendingMembers(): Promise<ReadResult<{ id: string; na
 }
 
 // 사장이 신청자를 승인 → unit_id 부여(소속 확정). RPC가 '내 매장 신청자'만 통과시킨다.
-// staff_limit(무료 플랜 좌석 캡, 0062)은 일반 실패와 구분해 반환 — 호출부가 업그레이드 안내로 매핑.
-/** approve_member·reject_member 가 raise 하는 코드 중 화면이 갈라 다루는 것(판정 SSOT — 승인·거절이 같이 쓴다).
- *  not_pending = 그 신청이 이미 처리됐다(다른 기기에서 승인·거절 · 본인 취소). 실패가 아니라 정상 종료다. */
-export type MemberDecisionCode = 'staff_limit' | 'not_pending' | null;
-const memberDecisionCode = (message: string): MemberDecisionCode =>
-  /not_pending/.test(message) ? 'not_pending' : /staff_limit/.test(message) ? 'staff_limit' : null;
-
-export async function approveMember(uid: string): Promise<{ ok: boolean; code: MemberDecisionCode }> {
-  if (!HAS_SUPABASE) return { ok: true, code: null };
-  const { error } = await supabase.rpc('approve_member', { p_uid: uid });
+// staff_limit(무료 플랜 좌석 캡, 0062)은 blocked 로 올라간다 — 호출부가 업그레이드 안내로 매핑.
+// not_pending = 그 신청이 이미 처리됐다(다른 기기에서 승인·거절 · 본인 취소) → already. 분류표 = src/lib/decision.ts.
+/**
+ * 결정 RPC 의 결과 분류(P2 ⑦). 서버 raise 코드는 분류표(decision.ts)로 갈라진다. code 는 blocked 문구용.
+ * falseIs 를 주면 boolean RPC 로 보고 `false` 반환을 그 갈래로 보낸다(함수마다 false 의 뜻이 다르므로 래퍼가 서버 본문을 보고 정한다).
+ * 안 주면 void RPC — 오류가 없으면 ok.
+ */
+export type DecisionResult = { decision: Decision; code: string | null };
+async function rpcDecision(label: string, fn: string, args: Record<string, unknown>, falseIs?: Decision): Promise<DecisionResult> {
+  const { data, error } = await supabase.rpc(fn, args);
   if (error) {
-    console.warn('[db] approveMember:', error.message);
-    reportError('db.write:approveMember', error);
-    return { ok: false, code: memberDecisionCode(error.message) };
+    console.warn(`[db] ${label}:`, error.message);
+    const decision = decisionOfError(error.message);
+    if (decision === 'failed') reportError(`db.write:${label}`, error);
+    return { decision, code: codeOf(error.message) };
   }
-  return { ok: true, code: null };
+  if (falseIs && data !== true) {
+    console.warn(`[db] ${label}: 거부됨(권한 없음 또는 대상 없음)`);
+    if (falseIs === 'failed') reportError(`db.write.denied:${label}`, { message: 'rpc returned false' });
+    return { decision: falseIs, code: null };
+  }
+  return { decision: 'ok', code: null };
+}
+
+export async function approveMember(uid: string): Promise<DecisionResult> {
+  if (!HAS_SUPABASE) return { decision: 'ok', code: null };
+  return rpcDecision('approveMember', 'approve_member', { p_uid: uid });
 }
 
 // 사장이 신청 거절 → pending만 비운다(계정은 유지).
-export async function rejectMember(uid: string): Promise<{ ok: boolean; code: MemberDecisionCode }> {
-  if (!HAS_SUPABASE) return { ok: true, code: null };
-  const { error } = await supabase.rpc('reject_member', { p_uid: uid });
-  if (error) {
-    console.warn('[db] rejectMember:', error.message);
-    reportError('db.write:rejectMember', error);
-    return { ok: false, code: memberDecisionCode(error.message) };
-  }
-  return { ok: true, code: null };
+export async function rejectMember(uid: string): Promise<DecisionResult> {
+  if (!HAS_SUPABASE) return { decision: 'ok', code: null };
+  return rpcDecision('rejectMember', 'reject_member', { p_uid: uid });
 }
 
 // ── 매장별 멤버 역할(0093) ─────────────────────────────────
@@ -1511,10 +1535,11 @@ export async function fetchPendingQuestionCount(): Promise<number | null> {
   return count ?? null;
 }
 
-export async function insertUnknown(uq: UnknownQuery): Promise<boolean> {
-  if (!HAS_SUPABASE) return true;
+/** 질문 등록. 미해결 질문 상한(0033 트리거 too_many_pending)은 blocked 로 올라간다 — 호출부가 사실만 말한다. */
+export async function insertUnknown(uq: UnknownQuery): Promise<Decision> {
+  if (!HAS_SUPABASE) return 'ok';
   const row = { ...uq, unit_id: (uq as any).unit_id || _unitId };
-  return write('insertUnknown', supabase.from('unknown_queries').insert(row));
+  return writeDecision('insertUnknown', supabase.from('unknown_queries').insert(row)); // select 없음 — insert 는 0행 판정 대상이 아니다
 }
 
 export async function bumpUnknownSimilar(id: string, count: number): Promise<boolean> {
@@ -1529,16 +1554,19 @@ export async function updateUnknownStatus(id: string, status: UnknownQuery['stat
   return writeStrict('updateUnknownStatus', supabase.from('unknown_queries').update({ status }).eq('id', id).select('id'));
 }
 
-export async function resolveUnknown(id: string, newEntryId: string, answeredBy?: string): Promise<boolean> {
-  if (!HAS_SUPABASE) return true;
+export async function resolveUnknown(id: string, newEntryId: string, answeredBy?: string): Promise<Decision> {
+  if (!HAS_SUPABASE) return 'ok';
   // 질문 해결 표시가 0행이면 알바 챗봇 학습 루프가 조용히 끊긴다 → 반드시 실제 갱신 확인(P1-6).
   // answered_by(0071): 누가 해결했나(직원 즉시해결·사장 발행 공통) — "내가 답한 질문"·크레딧용.
-  return writeStrict(
+  // ★이미 해결된 질문은 건드리지 않는다(.neq) — 두 사람이 같은 질문에 답하면 뒤 사람이 앞 답을 덮고 질문자에게
+  //   답변 알림이 두 번 갔다. 0행 = already(다른 기기·동료가 먼저 답함) → 호출부는 알리지 않고 다시 읽는다.
+  return writeDecision(
     'resolveUnknown',
     supabase
       .from('unknown_queries')
       .update({ status: 'resolved_with_entry', resolved_with_entry_id: newEntryId, ...(answeredBy ? { answered_by: answeredBy } : null) })
       .eq('id', id)
+      .neq('status', 'resolved_with_entry')
       .select('id'),
   );
 }
@@ -3198,9 +3226,10 @@ export async function setDone(date: string, templateId: string, mark: DoneMark, 
     supabase.from('work_done').upsert({ unit_id: _unitId, work_date: date, template_id: templateId, room_id: roomId ?? null, data: mark }),
   );
 }
-export async function clearDone(date: string, templateId: string): Promise<boolean> {
-  if (!HAS_SUPABASE) return true;
-  return writeStrict(
+/** 완료 해제. 0행 = already(다른 기기가 먼저 해제) — 실패가 아니다. 두 기기가 동시에 해제하면 둘째가 여기로 온다(K5-d). */
+export async function clearDone(date: string, templateId: string): Promise<Decision> {
+  if (!HAS_SUPABASE) return 'ok';
+  return writeDecision(
     'clearDone',
     supabase.from('work_done').delete().eq('unit_id', _unitId).eq('work_date', date).eq('template_id', templateId).select('template_id'),
   );
@@ -3260,18 +3289,7 @@ export async function upsertFeed(item: FeedItem, opts?: { ignoreDuplicates: bool
  * 반환 false = 권한 없음/대상 없음. 호출부는 롤백하고 사용자에게 말한다(유령 성공 금지).
  */
 async function rpcBool(label: string, fn: string, args: Record<string, unknown>): Promise<boolean> {
-  const { data, error } = await supabase.rpc(fn, args);
-  if (error) {
-    console.warn(`[db] ${label}:`, error.message);
-    reportError(`db.write:${label}`, error);
-    return false;
-  }
-  if (data !== true) {
-    console.warn(`[db] ${label}: 거부됨(권한 없음 또는 대상 없음)`);
-    reportError(`db.write.denied:${label}`, { message: 'rpc returned false' });
-    return false;
-  }
-  return true;
+  return (await rpcDecision(label, fn, args, 'failed')).decision === 'ok';
 }
 
 export async function markFeedRead(feedId: string): Promise<boolean> {
@@ -3318,9 +3336,10 @@ export async function editFeedText(feedId: string, text: string): Promise<boolea
   if (!HAS_SUPABASE) return true;
   return rpcBool('editFeedText', 'edit_feed_text', { p_feed_id: feedId, p_text: text });
 }
-export async function deleteFeed(id: string): Promise<boolean> {
-  if (!HAS_SUPABASE) return true;
-  return writeStrict('deleteFeed', supabase.from('work_feed').delete().eq('id', id).select('id'));
+/** 피드 행 삭제. 0행 = already(다른 기기가 먼저 지움 · 완료 해제의 피드 정리가 두 기기에서 겹칠 때). */
+export async function deleteFeed(id: string): Promise<Decision> {
+  if (!HAS_SUPABASE) return 'ok';
+  return writeDecision('deleteFeed', supabase.from('work_feed').delete().eq('id', id).select('id'));
 }
 /** 전 매장 동시 공지(S3 #3): 소유 매장들에 같은 공지를 한 번에. 소유검증·본문 구성은 RPC 내부(definer). 반환=broadcast_id+발송 매장 수. */
 export async function broadcastNotice(unitIds: string[], text: string, important: boolean): Promise<DbResult<{ broadcast_id: string; sent: number }>> {
@@ -3752,35 +3771,37 @@ export async function requestShiftTimeRpc(templateId: string, date: string, star
 
 /**
  * 사장이 시간 수정 요청을 승인·반려한다(사장만). 지난 날짜 승인은 p_confirm_past 가 있어야 한다(§8 Q4).
- * true = 처리됨 · false = 그날 근무가 빠졌거나 담당자가 바뀌어 요청을 닫음 · 'too_old' = 근무일이 35일보다 지나 승인 거부(반려는 된다)
- * · null = 그 밖의 실패(권한·이미 처리됨).
+ * ok = 처리됨 · 'closed' = 그날 근무가 빠졌거나 담당자가 바뀌어 서버가 요청을 닫음(서버 false · 쓰기는 됐다)
+ * · already = 이미 처리됨(not_pending) · blocked = too_old(35일 지남 · 반려는 된다) · confirm_past_required · failed = 권한 등.
  */
-export async function decideShiftTimeRpc(id: string, approve: boolean, confirmPast: boolean): Promise<boolean | null | 'too_old'> {
-  if (!HAS_SUPABASE) return true;
+export async function decideShiftTimeRpc(id: string, approve: boolean, confirmPast: boolean): Promise<{ decision: Decision | 'closed'; code: string | null }> {
+  if (!HAS_SUPABASE) return { decision: 'ok', code: null };
   const { data, error } = await supabase.rpc('decide_shift_time', { p_id: id, p_approve: approve, p_confirm_past: confirmPast });
   if (error) {
     console.warn('[db] decideShiftTime:', error.message);
-    if (/too_old/.test(error.message ?? '')) return 'too_old';
-    reportError('db.write:decideShiftTime', error);
-    return null;
+    const decision = decisionOfError(error.message);
+    if (decision === 'failed') reportError('db.write:decideShiftTime', error);
+    return { decision, code: codeOf(error.message) };
   }
-  return data === true;
+  return { decision: data === true ? 'ok' : 'closed', code: null };
 }
 
-/** 교대 수락 — **선착순 선점**(0179). false = 이미 다른 사람이 가져갔거나 지정 대상이 아니다. */
-export async function acceptSwapRpc(id: string): Promise<boolean> {
-  if (!HAS_SUPABASE) return true;
-  return rpcBool('acceptSwap', 'accept_swap', { p_id: id });
+/** 교대 수락 — **선착순 선점**(0179). 서버 false = 이미 다른 사람이 가져갔거나 지정 대상이 아니다 → already. */
+export async function acceptSwapRpc(id: string): Promise<Decision> {
+  if (!HAS_SUPABASE) return 'ok';
+  return (await rpcDecision('acceptSwap', 'accept_swap', { p_id: id }, 'already')).decision;
 }
 
 /**
- * 교대 승인 — 상태 변경 + 근무 **실제 이전**을 한 트랜잭션으로(0179). false = 거부/근무 없음.
+ * 교대 승인 — 상태 변경 + 근무 **실제 이전**을 한 트랜잭션으로(0179).
+ * 서버 false 는 "이미 처리됨 · 근무 없음 · 권한 없음"을 가르지 않는다(0289 본문) → failed 로 올리고, 스토어가 다시 읽어
+ * 상태가 바뀌어 있으면 already 로 다룬다. swap_target_unavailable · confirm_past_required 는 blocked.
  * 지난 근무가 든 교대는 확인창을 거친 뒤 confirmPast=true 로 부른다(0242 Q10).
  * p_confirm_past 는 그때만 보낸다 — 지난 날짜가 없는 승인은 옛 서버 approve_swap(p_id) 로도 그대로 간다.
  */
-export async function approveSwapRpc(id: string, confirmPast: boolean): Promise<boolean> {
-  if (!HAS_SUPABASE) return true;
-  return rpcBool('approveSwap', 'approve_swap', confirmPast ? { p_id: id, p_confirm_past: true } : { p_id: id });
+export async function approveSwapRpc(id: string, confirmPast: boolean): Promise<DecisionResult> {
+  if (!HAS_SUPABASE) return { decision: 'ok', code: null };
+  return rpcDecision('approveSwap', 'approve_swap', confirmPast ? { p_id: id, p_confirm_past: true } : { p_id: id }, 'failed');
 }
 
 // 행→SwapRequest 매핑 SSOT — fetchSwaps(활성 매장)와 fetchCrossStoreNotifData(0077)가 공유.
@@ -3849,15 +3870,15 @@ export async function insertSwap(r: SwapRequest): Promise<boolean> {
  * expect = 지금 상태가 이 중 하나일 때만 바꾼다(A10). 낡은 화면이 이미 승인된 요청을 반려·취소로 덮지 않게 한다.
  * 이미 처리됐으면 0행이라 실패로 돌아온다(서버도 0258 트리거로 끝난 요청의 상태 변경을 거부한다).
  */
-export async function updateSwap(id: string, patch: Partial<SwapRequest>, expect: SwapRequest['status'][]): Promise<boolean> {
-  if (!HAS_SUPABASE) return true;
+export async function updateSwap(id: string, patch: Partial<SwapRequest>, expect: SwapRequest['status'][]): Promise<Decision> {
+  if (!HAS_SUPABASE) return 'ok';
   const row: Record<string, unknown> = {};
   if (patch.status !== undefined) row.status = patch.status;
   if (patch.accepted_by !== undefined) row.accepted_by = patch.accepted_by ?? null;
   if (patch.updated_at !== undefined) row.updated_at = patch.updated_at;
-  // 교대 승인/수락/취소는 "누가 그 근무를 서는가"를 정하는 무결성 핵심 상태 전이 — 0행(RLS/경합)이면
-  // 유령 성공 대신 실패로(P1-6). 안 그러면 UI는 "승인됨" + 거짓 푸시가 나가는데 DB는 그대로 남는다.
-  return writeStrict('updateSwap', supabase.from('swap_requests').update(row).eq('id', id).in('status', expect).select('id'));
+  // 교대 취소/반려는 "누가 그 근무를 서는가"를 정하는 무결성 핵심 상태 전이 — 0행(상태가 expect 밖 · 경합)은
+  // 성공이 아니다(P1-6). 그 0행은 already(이미 처리됨)로 올라가고, 트리거 코드(0258 swap_already_decided 등)도 같은 표로 갈라진다.
+  return writeDecision('updateSwap', supabase.from('swap_requests').update(row).eq('id', id).in('status', expect).select('id'));
 }
 
 export function subscribeSchedule(onChange: () => void): () => void {

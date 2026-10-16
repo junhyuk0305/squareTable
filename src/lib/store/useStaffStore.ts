@@ -135,9 +135,9 @@ export const useStaffStore = create<StaffState>((set, get) => ({
     // 쓰기 중 매장이 바뀌면 before(이전 매장 신청자 목록)로 되돌리지 않는다 — 새 매장 hydrate 가 채운다.
     const epoch = currentTenantEpoch();
     set({ pending: before.filter((p) => p.id !== id) });
-    void approveMember(id).then(({ ok, code }) => {
-      if (ok) get().hydrate();
-      else if (code === 'not_pending') alreadyDecided(get);
+    void approveMember(id).then(({ decision, code }) => {
+      if (decision === 'ok') get().hydrate();
+      else if (decision === 'already') alreadyDecided(get);
       else {
         if (!isStaleEpoch(epoch)) set({ pending: before });
         const limitMsg = `무료 요금제는 직원 ${PLANS.free.maxStaff}명까지 승인할 수 있어요.`;
@@ -177,9 +177,9 @@ export const useStaffStore = create<StaffState>((set, get) => ({
     if (!before.some((p) => p.id === id)) return;
     const epoch = currentTenantEpoch(); // approve 와 같은 이유
     set({ pending: before.filter((p) => p.id !== id) });
-    void rejectMember(id).then(({ ok, code }) => {
-      if (ok) return;
-      if (code === 'not_pending') return alreadyDecided(get);
+    void rejectMember(id).then(({ decision }) => {
+      if (decision === 'ok') return;
+      if (decision === 'already') return alreadyDecided(get);
       if (!isStaleEpoch(epoch)) set({ pending: before });
       useSyncStore.getState().noteError('거절 처리에 실패했어요. 다시 시도해 주세요.');
     });

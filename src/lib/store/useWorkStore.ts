@@ -1181,9 +1181,15 @@ export const useWorkStore = create<State>((set, get) => ({
         key,
         { date, templateId, mark: null, feedRemoveId: removed?.id },
         { date, templateId, mark: current, feedAdd: removed },
+        // ★결과 분류(P2 ⑦): 0행(already) = 다른 기기가 먼저 해제했다 — 실패가 아니다. 화면은 이미 미완료라 그대로 두고
+        //   서버 상태만 다시 읽는다(K5-d). failed 만 되돌리고 "못 했어요"를 말한다.
         () =>
-          Promise.all([clearDone(date, templateId), removed ? deleteFeed(removed.id) : Promise.resolve(true)]).then(
-            ([a, b]) => a && b,
+          Promise.all([clearDone(date, templateId), removed ? deleteFeed(removed.id) : Promise.resolve('ok' as const)]).then(
+            ([a, b]) => {
+              if (a === 'failed' || b === 'failed') return false;
+              if (a === 'already' || b === 'already') void get().hydrate();
+              return true;
+            },
           ),
         '완료 해제 저장에 실패했어요.',
       );
@@ -1394,7 +1400,8 @@ export const useWorkStore = create<State>((set, get) => ({
     if (removed.length === 0) return;
     const epoch = currentTenantEpoch(); // s.feed 는 이전 매장 피드 전체일 수 있다 — 매장이 바뀌었으면 되돌리지 않는다
     set({ feed: s.feed.filter((f) => f.id !== id && f.refId !== id) });
-    const ok = Promise.all(removed.map((r) => deleteFeed(r.id))).then((rs) => rs.every(Boolean));
+    // already(이미 지워짐)는 실패가 아니다 — 지우려던 결과와 같다.
+    const ok = Promise.all(removed.map((r) => deleteFeed(r.id))).then((rs) => rs.every((d) => d !== 'failed'));
     void guardWrite(ok, () => { if (!isStaleEpoch(epoch)) set({ feed: s.feed }); }, '삭제에 실패했어요.');
   },
 

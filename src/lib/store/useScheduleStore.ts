@@ -33,6 +33,8 @@ import {
   subscribeSchedule,
 } from '@/lib/db';
 import { guardWrite, useSyncStore } from '@/lib/store/useSyncStore';
+import { showToast } from '@/lib/store/useToastStore';
+import { blockedText, type Decision } from '@/lib/decision';
 import { optimisticAdd } from '@/lib/store/crudHelpers';
 import { genId } from '@/lib/utils/id';
 import { todayStr } from '@/lib/utils/attendance';
@@ -201,6 +203,32 @@ const nowIso = () => new Date().toISOString();
 
 /** 낡은 화면에서 이미 승인·반려·취소된 교대를 다시 바꾸려 할 때(A10). 0행·서버 거부(0258) 모두 이 안내 뒤 다시 읽는다. */
 const SWAP_ALREADY_DECIDED_TEXT = '이미 처리된 요청이에요. 목록을 새로 불러올게요.';
+
+/**
+ * 결정 뮤테이션 결과 네 갈래 공용 처리(P2 ⑦ · src/lib/decision.ts). 교대 수락·취소·승인·반려·시간 수정 결정이 전부 지난다.
+ *  ok → true. 그 밖은 rollback 뒤:
+ *  already → 오류 문구 없이 중립 한 줄 + 서버 상태 다시 읽기(useStaffStore alreadyDecided 와 같은 모양)
+ *  blocked → 코드→문구 표(blockedText) · 없으면 failMsg
+ *  failed  → failMsg("못 했어요")
+ */
+const settleDecision = (
+  d: Decision,
+  rollback: () => void,
+  failMsg: string,
+  code: string | null,
+  hydrate: () => Promise<void>,
+  alreadyText = SWAP_ALREADY_DECIDED_TEXT,
+): boolean => {
+  if (d === 'ok') return true;
+  rollback();
+  if (d === 'already') {
+    showToast(alreadyText);
+    void hydrate();
+    return false;
+  }
+  useSyncStore.getState().noteError(d === 'blocked' ? blockedText(code, failMsg) : failMsg);
+  return false;
+};
 
 // ── 기본/시드 ───────────────────────────────────────────
 const DEFAULT_CONFIG: StoreConfig = { open: '09:00', close: '22:00', closedDays: [], note: '' };
@@ -438,23 +466,23 @@ export const useScheduleStore = create<ScheduleState>((set, get) => {
     const updated: SwapRequest = { ...before, status: 'accepted', accepted_by: byStaffId, updated_at: nowIso() };
     set((s) => ({ swaps: s.swaps.map((r) => (r.id === id ? updated : r)) }));
     // ★선착순이다 — 두 명이 동시에 누르면 서버가 한 명만 통과시킨다(0179 accept_swap).
-    //   RPC 가 false 를 주면 **내가 진 것**이다. 0행을 성공으로 치면 두 명 다 수락한 줄 안다.
-    void guardWrite(
-      acceptSwapRpc(id),
-      () => set((s) => ({ swaps: s.swaps.map((r) => (r.id === id ? before : r)) })),
-      '이미 다른 분이 수락했어요. 목록을 새로 불러올게요.',
-    ).then((ok) => { if (ok) notifyOwnersSwapApproval(fmtDateKo(before.date)); else void get().hydrate(); });
+    //   RPC 가 false 를 주면 **내가 진 것**(already)이다. 0행을 성공으로 치면 두 명 다 수락한 줄 안다.
+    const rollback = () => set((s) => ({ swaps: s.swaps.map((r) => (r.id === id ? before : r)) }));
+    void acceptSwapRpc(id).then((d) => {
+      if (settleDecision(d, rollback, '교대 수락에 실패했어요. 다시 시도해 주세요.', null, get().hydrate, '이미 다른 분이 수락했어요. 목록을 새로 불러올게요.')) {
+        notifyOwnersSwapApproval(fmtDateKo(before.date));
+      }
+    });
   },
   cancelSwap: (id) => {
     const before = get().swaps.find((r) => r.id === id);
     if (!before || (before.status !== 'open' && before.status !== 'accepted')) return;
     const at = nowIso();
     set((s) => ({ swaps: s.swaps.map((r) => (r.id === id ? { ...r, status: 'cancelled', updated_at: at } : r)) }));
-    void guardWrite(
-      updateSwap(id, { status: 'cancelled', updated_at: at }, ['open', 'accepted']),
-      () => set((s) => ({ swaps: s.swaps.map((r) => (r.id === id ? before : r)) })),
-      SWAP_ALREADY_DECIDED_TEXT,
-    ).then((ok) => { if (!ok) void get().hydrate(); });
+    const rollback = () => set((s) => ({ swaps: s.swaps.map((r) => (r.id === id ? before : r)) }));
+    void updateSwap(id, { status: 'cancelled', updated_at: at }, ['open', 'accepted']).then((d) => {
+      settleDecision(d, rollback, '교대 요청 취소에 실패했어요. 다시 시도해 주세요.', null, get().hydrate);
+    });
   },
   approveSwap: (id, confirmPast) => {
     const before = get().swaps.find((r) => r.id === id);
@@ -465,14 +493,26 @@ export const useScheduleStore = create<ScheduleState>((set, get) => {
     // ★승인은 상태 변경 + 근무 **실제 이전**이 한 트랜잭션이다(0179 approve_swap).
     //   따로 쓰면 "승인은 됐는데 근무는 안 넘어간" 반쪽 상태가 남는다.
     //   이전 결과(새 날짜 지정 행·예외)는 스토어에 없으므로 성공하면 재수화한다.
-    void guardWrite(
-      approveSwapRpc(id, confirmPast),
-      () => set((s) => ({ swaps: s.swaps.map((r) => (r.id === id ? before : r)) })),
-      '교대 승인에 실패했어요. 그 근무가 아직 있는지 확인해 주세요.',
-    ).then((ok) => {
-      if (!ok) return;
-      notifyUserSwapResult(before.requester_id, true, fmtDateKo(before.date));
-      void get().hydrate();
+    // ★서버 false 는 "이미 처리됨"과 "근무 없음·권한 없음"을 가르지 않는다(0289 approve_swap 본문). 그래서 failed 가 오면
+    //   먼저 다시 읽고, 그 요청이 더는 accepted 가 아니면(다른 기기가 승인·반려·취소) already 로 다룬다.
+    //   예전엔 이 경우까지 '그 근무가 아직 있는지 확인해 주세요'라고 말했다 — 거짓 원인.
+    const rollback = () => set((s) => ({ swaps: s.swaps.map((r) => (r.id === id ? before : r)) }));
+    const failMsg = '교대 승인에 실패했어요. 그 근무가 아직 있는지 확인해 주세요.';
+    void approveSwapRpc(id, confirmPast).then(async ({ decision, code }) => {
+      if (decision === 'ok') {
+        notifyUserSwapResult(before.requester_id, true, fmtDateKo(before.date));
+        void get().hydrate();
+        return;
+      }
+      if (decision === 'failed') {
+        rollback();
+        await get().hydrate();
+        const now = get().swaps.find((r) => r.id === id);
+        if (!now || now.status !== 'accepted') { showToast(SWAP_ALREADY_DECIDED_TEXT); return; }
+        useSyncStore.getState().noteError(failMsg);
+        return;
+      }
+      settleDecision(decision, rollback, failMsg, code, get().hydrate);
     });
   },
   requestShiftTime: async (templateId, date, start, end) => {
@@ -488,21 +528,25 @@ export const useScheduleStore = create<ScheduleState>((set, get) => {
     const before = get().timeRequests;
     const epoch = currentTenantEpoch();
     set({ timeRequests: before.filter((r) => r.id !== id) });
-    const res = await decideShiftTimeRpc(id, approve, confirmPast);
-    if (isStaleEpoch(epoch)) return res === true || res === false;
-    if (res === 'too_old') {
-      // 근무일이 35일보다 지났다. 같은 버튼을 다시 눌러도 안 되므로 이유를 말한다.
-      set({ timeRequests: before });
-      useSyncStore.getState().noteError('35일이 지난 요청은 반려만 할 수 있어요.');
-    } else if (res === null) {
-      // 다른 기기에서 이미 처리했다. 되돌리고 서버 상태로 다시 읽는다.
-      set({ timeRequests: before });
-      useSyncStore.getState().noteError(approve ? '승인하지 못했어요. 목록을 새로 불러올게요.' : '반려하지 못했어요. 목록을 새로 불러올게요.');
-    } else if (!res) {
+    const { decision, code } = await decideShiftTimeRpc(id, approve, confirmPast);
+    if (isStaleEpoch(epoch)) return decision === 'ok' || decision === 'closed';
+    if (decision === 'closed') {
+      // 서버가 요청을 닫았다(그날 근무가 빠졌거나 담당자가 바뀜) — 쓰기는 됐으니 되돌리지 않고 사실만 말한다.
       useSyncStore.getState().noteError('그날 근무가 바뀌어 요청을 닫았어요.');
+      void get().hydrate();
+      return true;
     }
+    // 네 갈래(P2 ⑦): already(다른 기기에서 이미 처리 · 예전엔 '승인하지 못했어요'라고 말했다) → 중립 한 줄 + 다시 읽기
+    //   · blocked(too_old = 35일 지남 · 같은 버튼을 다시 눌러도 안 되므로 이유를 말한다) · failed 만 "못 했어요".
+    const ok = settleDecision(
+      decision,
+      () => set({ timeRequests: before }),
+      approve ? '승인하지 못했어요. 다시 시도해 주세요.' : '반려하지 못했어요. 다시 시도해 주세요.',
+      code,
+      get().hydrate,
+    );
     void get().hydrate();
-    return res === true;
+    return ok;
   },
   restoreException: (templateId, date) => {
     const before = get().exceptions;
@@ -521,13 +565,11 @@ export const useScheduleStore = create<ScheduleState>((set, get) => {
     const at = nowIso();
     set((s) => ({ swaps: s.swaps.map((r) => (r.id === id ? { ...r, status: 'rejected', updated_at: at } : r)) }));
     // 저장 성공 후에만 요청 직원에게 결과 웹푸시(실패·롤백 시 유령 반려 알림 방지).
-    void guardWrite(
-      updateSwap(id, { status: 'rejected', updated_at: at }, ['accepted']),
-      () => set((s) => ({ swaps: s.swaps.map((r) => (r.id === id ? before : r)) })),
-      SWAP_ALREADY_DECIDED_TEXT,
-    ).then((ok) => {
-      if (ok) notifyUserSwapResult(before.requester_id, false, fmtDateKo(before.date));
-      else void get().hydrate();
+    const rollback = () => set((s) => ({ swaps: s.swaps.map((r) => (r.id === id ? before : r)) }));
+    void updateSwap(id, { status: 'rejected', updated_at: at }, ['accepted']).then((d) => {
+      if (settleDecision(d, rollback, '교대 반려에 실패했어요. 다시 시도해 주세요.', null, get().hydrate)) {
+        notifyUserSwapResult(before.requester_id, false, fmtDateKo(before.date));
+      }
     });
   },
   };

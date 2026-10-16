@@ -100,6 +100,16 @@ try {
   // 그 뒤 사장 반려(앱 rejectSwap 경로)는 된다 — 상태머신 끝까지
   const oRej = await O.from('swap_requests').update({ status: 'rejected' }).eq('id', swap2).select('id, status');
   check('★회귀: 사장 반려까지 도달', (oRej.data?.length ?? 0) === 1 && oRej.data[0].status === 'rejected', `rows=${oRej.data?.length}`);
+
+  // ── P2 ⑦ 결과 분류(src/lib/decision.ts)가 기대는 서버 모양 — 이미 처리된 요청을 다시 결정하면 어떻게 오나 ──
+  // (1) approve_swap 은 이미 처리된 요청에 **오류 없이 false** 를 준다(0289 본문) → 클라는 failed 로 받고 다시 읽어 상태로 already 를 가른다.
+  const reApp = await O.rpc('approve_swap', { p_id: swap2 });
+  check('P2: 이미 반려된 요청 approve_swap → 오류 없이 false(클라 재조회로 already 판정)', !reApp.error && reApp.data === false, `data=${reApp.data} err=${reApp.error?.message ?? '-'}`);
+  // (2) 앱 updateSwap(상태 조건 .in) 은 0행 → already. 조건 없이 바꾸면 0258 트리거 swap_already_decided → 분류표 already.
+  const reCan = await J.from('swap_requests').update({ status: 'cancelled' }).eq('id', swap2).in('status', ['open', 'accepted']).select('id');
+  check('P2: 이미 반려된 요청 취소(updateSwap 모양) → 0행 = already', !reCan.error && (reCan.data?.length ?? 0) === 0, `rows=${reCan.data?.length} err=${reCan.error?.message ?? '-'}`);
+  const reCanRaw = await J.from('swap_requests').update({ status: 'cancelled' }).eq('id', swap2).select('id');
+  check('P2: 조건 없는 취소 → 0258 swap_already_decided(분류표 already)', /swap_already_decided/.test(reCanRaw.error?.message ?? ''), reCanRaw.error?.message ?? `rows=${reCanRaw.data?.length}`);
 } catch (e) {
   fail++; console.log('  FAIL exception:', e.message);
 } finally {

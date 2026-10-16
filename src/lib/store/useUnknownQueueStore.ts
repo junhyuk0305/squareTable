@@ -5,7 +5,8 @@ import type { UnknownQuery, PlaybookSuggestion } from '@/types';
 import seedData from '@/data/unknown-queries.json';
 import { HAS_SUPABASE } from '@/lib/supabase';
 import { fetchUnknownQueue, fetchPendingQuestionCount, insertUnknown, bumpUnknownSimilar, resolveUnknown, subscribeUnknownQueue } from '@/lib/db';
-import { guardWrite } from '@/lib/store/useSyncStore';
+import { guardWrite, useSyncStore } from '@/lib/store/useSyncStore';
+import { blockedText } from '@/lib/decision';
 import { notifyStoreQuestion, notifyUserQuestionAnswered } from '@/lib/push/notify';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 
@@ -70,7 +71,7 @@ export const useUnknownQueueStore = create<UnknownQueueState>((set, get) => ({
   subscribe: () => subscribeDebounced(subscribeUnknownQueue, () => get().hydrate()),
 
   // 같은 질문이 이미 대기 중이면 새로 쌓지 않고 유사 질문 수만 올린다(중복 방지).
-  enqueue: (uq) => {
+  enqueue: async (uq) => {
     const s = get();
     const norm = uq.query_text.trim();
     const idx = s.queue.findIndex(
@@ -94,17 +95,17 @@ export const useUnknownQueueStore = create<UnknownQueueState>((set, get) => ({
     set((st) => ({ queue: [uq, ...st.queue] }));
     // 저장 성공 후에만 사장에게 웹푸시(답변 대기 질문 유입). 실패(롤백)·상한 초과 시 유령 알림 방지.
     //   중복 유사질문(위 bump 경로)은 알리지 않는다.
-    return guardWrite(
-      insertUnknown(uq),
-      () => set((st) => ({ queue: st.queue.filter((u) => u.id !== uq.id) })),
-      // 일반 저장 실패 + 미해결 질문 상한(남용 #18, 0033 트리거 too_many_pending)을 한 메시지로 포괄.
-      // (insertUnknown이 boolean만 반환해 사유 구분 불가 → 양쪽에 자연스러운 안내로 통합.)
-      '질문을 등록하지 못했어요. 대기 중인 질문이 많으면 사장님 답변을 받은 뒤 다시 등록해 주세요.',
+    // 결과 분류(P2 ⑦): 미해결 질문 상한(남용 #18 · 0033 트리거 too_many_pending)은 blocked — 전제를 사실대로 말한다.
+    //   그 밖의 실패만 "못 했어요". 두 문구를 한 줄로 뭉치지 않는다.
+    const d = await insertUnknown(uq);
+    if (d !== 'ok') {
+      set((st) => ({ queue: st.queue.filter((u) => u.id !== uq.id) }));
+      useSyncStore.getState().noteError(d === 'blocked' ? blockedText('too_many_pending', '지금은 질문을 등록할 수 없어요.') : '질문을 등록하지 못했어요. 다시 시도해 주세요.');
+      return false;
+    }
     // 저장 성공 후에만 웹푸시 — D4(③): 사장 + 같은 매장 직원 전체에게(누가 답하든 됨). 발송자 제외는 서버.
-    ).then((ok) => {
-      if (ok && uq.status === 'pending_owner_answer') notifyStoreQuestion(uq.query_text);
-      return ok;
-    });
+    if (uq.status === 'pending_owner_answer') notifyStoreQuestion(uq.query_text);
+    return true;
   },
   // 질문 해결 — resolved_with_entry 로 전이 + answered_by 기록(누가 답했나, 0071).
   // 직원 즉시해결(기존 노하우 지정)·사장 발행(coach) 공통 경로. 답변자=현재 세션.
@@ -119,16 +120,20 @@ export const useUnknownQueueStore = create<UnknownQueueState>((set, get) => ({
       ),
     }));
     // ok 반환 — 호출부(coach)가 질문 상태 반영이 실제로 됐을 때만 성공 처리하도록.
-    return guardWrite(
-      resolveUnknown(uqId, newEntryId, answeredBy),
-      () => before && set((s) => ({ queue: s.queue.map((u) => (u.id === uqId ? before : u)) })),
-      '답변 반영에 실패했어요.',
-    ).then((ok) => {
+    // 결과 분류(P2 ⑦): already = 다른 사람이 먼저 답했다(서버가 해결된 질문은 덮지 않는다). 질문은 해결된 상태이므로
+    //   호출부에는 true 를 주고, 질문자에게 알림을 또 보내지 않고 서버 상태로 다시 읽는다. failed 만 롤백 + "못 했어요".
+    return resolveUnknown(uqId, newEntryId, answeredBy).then((d) => {
+      if (d === 'failed') {
+        if (before) set((s) => ({ queue: s.queue.map((u) => (u.id === uqId ? before : u)) }));
+        useSyncStore.getState().noteError('답변 반영에 실패했어요.');
+        return false;
+      }
+      if (d === 'already') { void get().hydrate(); return true; }
       // 물어본 사람에게만 알린다 — 저장 성공 후에만(롤백 시 유령 알림 방지), 내가 내 질문에 답한 경우는 제외.
-      if (ok && before?.junior_id && before.junior_id !== answeredBy) {
+      if (before?.junior_id && before.junior_id !== answeredBy) {
         notifyUserQuestionAnswered(before.junior_id, before.query_text);
       }
-      return ok;
+      return true;
     });
   },
   // (자동응답 전이 제거 — 2026-07-31 사용자 결정: 질문은 사장이 직접 답한다. auto_answered 는 과거 데이터 표시용으로만 남음.)
