@@ -345,6 +345,29 @@ try {
   let uq = null;
   if (kind === 'deflect' || kind === 'candidate') {
     const btn = kind === 'deflect' ? '질문 보내기' : '찾는 게 없어요 · 사장님께 물어보기';
+    // G② 질문 보내기 상한(0033 too_many_pending → blocked · BLOCKED_TEXT): 이 직원의 대기 질문을 10건으로 채워 두고 누르면
+    //   화면은 '대기 중인 질문이 많아요' 를 말하고 DB 에 행이 안 생기며 카드는 보내기 전으로 돌아와야 한다(useChatStore 되돌림).
+    //   채운 것을 지우고 아래에서 다시 누르면 정상 전송이다.
+    {
+      const { count: pj } = await db.from('unknown_queries').select('id', { count: 'exact', head: true })
+        .eq('unit_id', UNIT).eq('junior_id', junior.uid).eq('status', 'pending_owner_answer');
+      const need = Math.max(0, 10 - (pj ?? 0));
+      const fillers = Array.from({ length: need }, (_, i) => ({
+        id: `uq_${TOKEN}_cap${i}`, unit_id: UNIT, junior_id: junior.uid, junior_name: 'QA직원', query_text: `${TOKEN} 상한 채우기 ${i}`,
+        presumed_category: 'Routine', presumed_subcategory: '', status: 'pending_owner_answer', fallback_action: '', ai_general_answer: '',
+      }));
+      // ★직원 세션으로 심는다 — 0007 트리거가 insert 때 junior_id := auth.uid() 로 덮어써서, service role 로 넣으면 junior_id 가 null 이 되어 상한(0033)에 안 센다.
+      const { error: fErr } = need ? await junior.from('unknown_queries').insert(fillers) : { error: null };
+      log(`G② 직원 대기 질문 ${pj}건 → 채움 ${need}건${fErr ? ' · 채우기 실패 ' + fErr.message : ''}`);
+      const clickedCap = !fErr && (await clickTextAfter(J.page, Q2, btn, 'qa-jr-register-cap'));
+      const blockedShown = clickedCap && (await J.page.waitFor(`document.body.innerText.includes('대기 중인 질문이 많아요')`, 10000));
+      const rowsCap = await uqRows(Q2);
+      const backToAsk = clickedCap && (await J.page.waitFor(`(()=>{const t=document.body.innerText;const a=t.slice(t.lastIndexOf(${JSON.stringify(Q2)}));return a.includes('사장님께 보낼까요?')||a.includes('혹시 이거 찾으세요?');})()`, 5000));
+      check("G② 상한(10건)에서 보내기 → 화면 '대기 중인 질문이 많아요'(BLOCKED_TEXT too_many_pending) · DB 행 0 · 카드가 보내기 전으로",
+        clickedCap && blockedShown && rowsCap.length === 0 && backToAsk, `클릭=${clickedCap} 문구=${blockedShown} 행=${rowsCap.length} 카드복귀=${backToAsk}`);
+      if (need) await db.from('unknown_queries').delete().in('id', fillers.map((f) => f.id));
+      await transition(J, 'J', '질문 보내기(상한)');
+    }
     const clicked = await clickTextAfter(J.page, Q2, btn, 'qa-jr-register');
     tSent = Date.now();
     check(`3 '${btn}' 버튼(카드 안 · 입력창 전송 버튼과 다른 것)을 찾아 누른다`, clicked);
@@ -380,6 +403,42 @@ try {
     log(`홈 히어로 ${base.hero}→${hero} · DB ${P0}→${dbNow} · 벨 라벨 '${bell0}'→'${bell1}' · 걸린 시간 ${at == null ? '30초 넘음' : secs(at) + '초'}`);
     check('K3 보낸 뒤 30초 안에 S 홈 "답 기다리는 질문" 수가 새로고침 없이 DB 수(+1)와 같아진다(단위 = 질문 건수)', at != null, `hero=${hero} db=${dbNow}`);
   } else check('K3 실시간(보내기 실패로 못 잼)', false);
+
+  // ── G① · K5-b 두 기기가 같은 질문에 동시에 답한다(0311 answer_unknown_query) ──
+  section('K5-b 두 기기 동시 답 — 노하우 1건 · 두 번째는 already(0311)');
+  {
+    // 주 흐름의 질문(uq)은 6단계 화면 발행에 쓰므로 경쟁용 질문을 하나 더 심는다(토큰 포함 · 정리 대상). 사장 세션 하나로 RPC 2회 동시.
+    // ⚠️0311 push 전엔 RED 가 정상(함수 없음 → 둘 다 실패).
+    const RQ = `uq_${TOKEN}_race`;
+    const { error: rqErr } = await junior.from('unknown_queries').insert({ // 직원 세션(0007 이 junior_id 를 세션으로 찍는다)
+      id: RQ, unit_id: UNIT, junior_id: junior.uid, junior_name: 'QA직원', query_text: `${TOKEN} 경쟁 질문`,
+      presumed_category: 'Routine', presumed_subcategory: '', status: 'pending_owner_answer', fallback_action: '', ai_general_answer: '',
+    });
+    if (rqErr) check('K5-b (전제) 경쟁용 질문 심기', false, rqErr.message);
+    else {
+      const mkEntry = (n) => ({
+        id: `pb_${TOKEN}_race${n}`, creator_id: owner.uid, creator_name: 'QA사장', category: 'Routine', subcategory: '', title: `${TOKEN} 경쟁 답 ${n}`,
+        tags: [], search_keywords: [], square: { situation: `${TOKEN} 경쟁`, action: { steps: [`답 ${n}`] } }, execution: {}, stats: {}, photos: [],
+        version: 1, status: 'published', quality_score: 0.7, section: null,
+      });
+      const [r1, r2] = await Promise.all([1, 2].map((n) => owner.rpc('answer_unknown_query', { p_uq_id: RQ, p_entry: mkEntry(n) })));
+      const oks = [r1, r2].filter((r) => !r.error && typeof r.data === 'string');
+      const errs = [r1, r2].filter((r) => r.error).map((r) => r.error.message);
+      const { data: rq } = await db.from('unknown_queries').select('status,resolved_with_entry_id,answered_by').eq('id', RQ).maybeSingle();
+      const { data: made } = await db.from('playbook_entries').select('id').eq('unit_id', UNIT).ilike('title', `${TOKEN} 경쟁 답%`);
+      log(`동시 RPC 2회 → ok ${oks.length} · 오류 ${JSON.stringify(errs)} · DB 질문 ${JSON.stringify(rq)} · 노하우 ${(made ?? []).length}건`);
+      check('K5-b 둘 중 하나만 ok · 다른 하나는 not_pending(decision.ts ALREADY → already 중립)', oks.length === 1 && errs.length === 1 && /not_pending/.test(errs[0]), JSON.stringify(errs));
+      check('K5-b DB 노하우 1건 · 질문 resolved_with_entry · 그 노하우를 가리킨다', (made ?? []).length === 1 && rq?.status === 'resolved_with_entry' && rq?.resolved_with_entry_id === oks[0]?.data, `${(made ?? []).length}건 · ${JSON.stringify(rq)}`);
+      // G① 이미 답한 질문에 다시 답하기 — 새 경로(RPC)는 not_pending, 옛 경로(resolveUnknown .neq)는 0행 = already. 노하우는 안 늘어난다.
+      const r3 = await owner.rpc('answer_unknown_query', { p_uq_id: RQ, p_entry: mkEntry(3) });
+      const { data: old } = await owner.from('unknown_queries').update({ status: 'resolved_with_entry', resolved_with_entry_id: `pb_${TOKEN}_race3` })
+        .eq('id', RQ).neq('status', 'resolved_with_entry').select('id');
+      const { data: made3 } = await db.from('playbook_entries').select('id').eq('unit_id', UNIT).ilike('title', `${TOKEN} 경쟁 답%`);
+      check('G① 이미 답한 질문에 다시 답 → RPC not_pending(already) · 옛 경로 0행(already) · 노하우 그대로 1건',
+        !!r3.error && /not_pending/.test(r3.error.message) && (old ?? []).length === 0 && (made3 ?? []).length === 1,
+        `rpc=${r3.error?.message ?? r3.data} · 옛 경로 행=${(old ?? []).length} · 노하우 ${(made3 ?? []).length}`);
+    }
+  }
 
   // ── 9a. 같은 질문 두 번(옵션) ─────────────────────────────────
   section('K5 같은 질문 두 번 보내기');
@@ -485,11 +544,17 @@ try {
         await S.page.click('[aria-label="이 답변 보내기"]');
         const sheet = await S.page.waitFor(`[...document.querySelectorAll('[aria-label="노하우 저장"]')].some(e=>e.getBoundingClientRect().width>0)`, 15000);
         if (sheet) await S.page.click('[aria-label="노하우 저장"]');
-        const toast = await S.page.waitFor(`/답변이 직원 챗봇에 반영됐어요|실패했어요/.test(document.body.innerText)`, 20000);
+        const toast = await S.page.waitFor(`/답변이 직원 챗봇에 반영됐어요|답변을 보냈어요|실패했어요/.test(document.body.innerText)`, 20000);
         tPub = Date.now();
-        const tText = await S.page.eval(`(document.body.innerText.match(/답변이 직원 챗봇에 반영됐어요|[^\\n]*실패했어요[^\\n]*/)||[''])[0]`);
-        log(`저장 시트=${sheet} · 토스트='${tText}'`);
-        check("6 발행 뒤 '답변이 직원 챗봇에 반영됐어요' 토스트", toast && tText.includes('반영됐어요'), tText);
+        const tText = await S.page.eval(`(document.body.innerText.match(/답변이 직원 챗봇에 반영됐어요|답변을 보냈어요\\.[^\\n]*|[^\\n]*실패했어요[^\\n]*/)||[''])[0]`);
+        // 역 ⑨ 전제 안내(0309 · coach noneReachable): 직원이 지금 알림을 못 받으면(기기 0 등) 전역 토스트
+        //   '답변을 보냈어요. <이름>님이 앱을 열 때 볼 거예요.' 가 대신 뜬다. 어느 문구가 맞는지는 서버 술어(recipient_readiness)와 기기 토큰 수로 가른다.
+        const { count: jTok } = await db.from('push_device_tokens').select('id', { count: 'exact', head: true }).eq('user_id', junior.uid);
+        const { data: ready, error: readyErr } = await owner.rpc('recipient_readiness', { p_unit_id: UNIT, p_user_ids: [junior.uid] });
+        const reachable = !readyErr && (ready ?? []).some((r) => r.user_id === junior.uid && r.blocked_reason == null);
+        log(`저장 시트=${sheet} · 토스트='${tText}' · 직원 기기 토큰 ${jTok}건 · recipient_readiness ${readyErr ? '오류 ' + readyErr.message : JSON.stringify(ready)}`);
+        check(`6 발행 뒤 토스트가 직원 수신 전제에 맞다(기기 토큰 ${jTok}건 · 받을 수 있음=${reachable} → ${reachable ? "'답변이 직원 챗봇에 반영됐어요'" : "'답변을 보냈어요. …앱을 열 때 볼 거예요.'"})`,
+          toast && !readyErr && (reachable ? tText.includes('반영됐어요') : /답변을 보냈어요\. .*앱을 열 때 볼 거예요\./.test(tText)), tText);
       } else check('6 AI 정리 카드가 뜬다', false, `state=${state}`);
     }
     // DB 대조

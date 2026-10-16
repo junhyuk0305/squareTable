@@ -158,7 +158,9 @@ async function main() {
     square: { situation: '마감', action: { steps: ['닦는다'] }, extract: { do: '', dont: '', template: '' }, result: { before: '', after: '', metric: '' }, uncover: '', quagmire: '' },
     execution: { tone: '', timing: '', channel: '', stakeholders: [] },
     stats: { thumbs_up: 0, thumbs_down: 0, last_used_at: null, query_hits_30d: 0, resolution_rate: 0 },
-    photos: [], version: 1, status: 'published', quality_score: 0.7, created_at: nowIso, updated_at: nowIso,
+    // ★updated_at 은 과거로(428행과 같은 모양) — 클라 시각으로 심으면 통과(verified_at = 서버 now())보다 뒤가 돼
+    //   ⑪ 변경 트리거가 "통과 뒤에 바뀌었다"로 잘못 읽는다(하니스 시계 문제 · 제품 아님).
+    photos: [], version: 1, status: 'published', quality_score: 0.7, created_at: nowIso, updated_at: daysAgo(5),
     is_template: false, pack_id: null, needs_review: false, correction_points: [], section: null, order_index: 0,
   });
   if (peErr) throw new Error('playbook_entries: ' + peErr.message);

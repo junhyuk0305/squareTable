@@ -122,13 +122,18 @@ async function clickText(page, text, timeout = 15000) {
 }
 
 /** 새 브라우저라 뜨는 첫 사용 안내(코치마크·알림 권한 시트)를 닫는다 — 덮인 채 누르면 클릭이 막힌다. */
+const OVERLAY_WORDS = ['건너뛰기', '나중에 할게요', '알겠어요, 시작할게요'];
 async function dismissOverlays(page) {
   for (let i = 0; i < 4; i++) {
-    const t = await page.eval(`(()=>{for(const w of ['건너뛰기','나중에 할게요','알겠어요, 시작할게요']){const e=[...document.querySelectorAll('body *')].find(x=>(x.innerText||'').trim()===w&&x.getBoundingClientRect().width>0);if(e)return w;}return null})()`).catch(() => null);
+    const t = await page.eval(`(()=>{for(const w of ${J_(OVERLAY_WORDS)}){const e=[...document.querySelectorAll('body *')].find(x=>(x.innerText||'').trim()===w&&x.getBoundingClientRect().width>0);if(e)return w;}return null})()`).catch(() => null);
     if (!t) return;
     await clickText(page, t).catch(() => {});
     await sleep(700);
   }
+}
+/** 안내가 사라지는 애니메이션이 끝날 때까지 기다린다 — 닫히는 중인 겹층 위를 누르면 클릭이 먹히지 않는다(7-b 플레이크). */
+async function overlaysGone(page) {
+  await page.waitFor(`(()=>{const w=${J_(OVERLAY_WORDS)};return ![...document.querySelectorAll('body *')].some(e=>w.includes((e.innerText||'').trim())&&e.getBoundingClientRect().width>0)})()`, 5000).catch(() => {});
 }
 
 async function passwordSession(email) {
@@ -399,6 +404,7 @@ try {
       let no = null;
       if (up) {
         await dismissOverlays(J);
+        await overlaysGone(J);
         await clickText(J, '퀴즈 시작하기', 20000);
         await J.waitFor(bodyHas(/qa_jr 확인 문제 \d+/), 15000);
         no = (await bodyMatch(J, /qa_jr 확인 문제 (\d+)/))?.[1] ?? null;
@@ -470,8 +476,9 @@ try {
   const wantSheet = fe ? xItems.filter((q) => (q.entry_ids ?? []).includes(fe.id)).length + legacyN(fe.id) : null;
   check('K2-10 직원 응시 시트 "문제 N개" = DB(이 퀴즈·이 노하우 문항 수) (단위: 문항 · 시트는 노하우 1개씩)', sheetM && Number(sheetM[1]) === Math.min(wantSheet ?? -1, 3), `화면=${sheetM?.[0]} · DB=${wantSheet} · 노하우="${firstEntry}" (퀴즈 전체 4가 아님에 주의)`);
 
-  /** 열린 시트 한 개를 끝까지 푼다(정답 고르기). 결과 화면 문구를 돌려준다. */
+  /** 열린 시트 한 개를 끝까지 푼다(정답 고르기). 결과 화면 문구 + '제출됐어요' 표시·DB 제출 행 수를 돌려준다. */
   async function answerOpenSheet() {
+    const tStart = Date.now();
     await clickText(J, '퀴즈 시작하기', 20000);
     for (let q = 0; q < 5; q++) {
       if (!(await J.waitFor(vis('[aria-label^="정답 "]'), 15000))) {
@@ -485,14 +492,19 @@ try {
       break;
     }
     await J.waitFor(bodyHas(/이해 확인이 끝났어요|맞았어요\./), 20000);
+    // '제출됐어요' 는 제출 저장(quiz_staff_record)이 서버에서 끝난 뒤에만 뜬다 — 문구가 뜬 시점에 DB 행이 있어야 한다(20초).
+    const submittedShown = await J.waitFor(bodyHas(/제출됐어요\. 사장님이 결과를 볼 수 있어요\./), 20000);
+    const { count: submittedRows } = await admin.from('quiz_attempt_items').select('id', { count: 'exact', head: true })
+      .eq('staff_id', jUid).gte('created_at', new Date(tStart - 30000).toISOString());
     await sleep(800);
     const t = await J.text();
     await clickText(J, '닫기');
     await sleep(1200);
-    return t;
+    return { text: t, submittedShown, submittedRows: submittedRows ?? 0 };
   }
   const r1 = await answerOpenSheet();
-  check('7-1 직원 응시 결과 화면에 "다시 하기" 없음', !/다시 하기/.test(r1));
+  check('7-1 직원 응시 결과 화면에 "다시 하기" 없음', !/다시 하기/.test(r1.text));
+  check('7-1b 결과 화면 "제출됐어요. 사장님이 결과를 볼 수 있어요." 가 DB quiz_attempt_items 행이 생긴 뒤 뜬다(20초)', r1.submittedShown && r1.submittedRows > 0, `문구=${r1.submittedShown} · DB 제출 행 ${r1.submittedRows}`);
   await settle(J); await dismissOverlays(J);
   await net(J, 'J 응시 1');
 
@@ -535,7 +547,7 @@ try {
     await J.click('[aria-label="혼자 할 수 있어요"]');
     await J.waitFor(bodyHas(/퀴즈 시작하기/), 20000);
     const r = await answerOpenSheet();
-    if (/다시 하기/.test(r)) check('7-2 결과 화면 "다시 하기" 없음', false);
+    if (/다시 하기/.test(r.text)) check('7-2 결과 화면 "다시 하기" 없음', false);
   }
   note('추가로 푼 시트', rounds);
   const { data: ku2 } = await admin.from('knowhow_understanding').select('entry_id').eq('staff_id', jUid).in('entry_id', EIDS);
@@ -548,6 +560,69 @@ try {
   await S.reload(); await S.waitFor(vis('[role="tab"][aria-label="결과"]'), 60000); await settle(S); await dismissOverlays(S);
   note('새로고침 뒤 사장 결과 줄', `"${((await textOf(S, jRowSel)) ?? '').replace(/\n/g, ' / ')}"`);
   await net(S, 'S 결과(완료 뒤)'); await net(J, 'J 업무(완료 뒤)');
+
+  section('12-b. 응시 완료 판정 = 퀴즈 단위(0310) — 같은 노하우가 두 퀴즈에 담겼을 때');
+  {
+    // 노하우 1개(재료 밖 5번째 후보)를 퀴즈 C1·C2 에 담고, 문항은 각 퀴즈에 course_id 로 묶어 만든다(0307 방식).
+    // 직원이 C1 의 문항만 풀면 C1 발송만 completed_at, C2 발송은 null 이어야 한다. DB 경로만(화면 없음 · 정리는 접두사 코스로).
+    // ⚠️0310 push 전엔 12-b-3 RED 가 정상 — 0275 는 노하우 겹침(entry_ids)만 봐서 C2 도 완료로 찍는다.
+    const E5 = cand[4];
+    check('12-b-0 (전제) 재료 밖 노하우 1개(직원 미통과)', !!E5, `후보 ${cand.length}`);
+    if (E5) {
+      const C1 = `tc_qajr_${STAMP}_c1`, C2 = `tc_qajr_${STAMP}_c2`;
+      const I1 = `qi_qajr_${STAMP}_c1`, I2 = `qi_qajr_${STAMP}_c2`;
+      const { error: cErr } = await admin.from('training_courses').insert([C1, C2].map((id, i) => ({
+        id, unit_id: UNIT, key: `qajr_${STAMP}_c${i + 1}`, name: `${PREFIX}${STAMP}_C${i + 1}`, due_days: null, position: 50 + i, active: true, start_at: kstYmd(0),
+      })));
+      if (cErr) throw new Error('12-b 코스: ' + cErr.message);
+      const { error: ceErr } = await admin.from('course_entries').insert([C1, C2].map((cid) => ({ course_id: cid, entry_id: E5.id, unit_id: UNIT, position: 0 })));
+      if (ceErr) throw new Error('12-b 담기: ' + ceErr.message);
+      const mkItem = (id, cid, n) => ({
+        id, unit_id: UNIT, entry_ids: [E5.id], kind: 't0', format: 'mc4', status: 'active', course_id: cid,
+        payload: { ask: `qa_jr 12-b 문제 ${n}`, choices: ['정답', '오답 가', '오답 나', '오답 다'], answer_index: 0, explain: 'qa_jr 하니스 고정 문항' },
+      });
+      const { error: iErr } = await admin.from('quiz_items').insert([mkItem(I1, C1, 1), mkItem(I2, C2, 2)]);
+      if (iErr) throw new Error('12-b 문항: ' + iErr.message);
+      const sentAt = new Date(Date.now() - 60000).toISOString();
+      const { data: asgC, error: aErr } = await admin.from('quiz_assignments')
+        .insert([C1, C2].map((cid) => ({ unit_id: UNIT, course_id: cid, user_id: jUid, scheduled_on: kstYmd(0), sent_at: sentAt })))
+        .select('id,course_id');
+      if (aErr) throw new Error('12-b 발송: ' + aErr.message);
+      const idOf = (cid) => (asgC ?? []).find((a) => a.course_id === cid)?.id;
+      // 직원 세션이 C1 문항만 푼다 — 화면과 같은 RPC(quiz_staff_record). 맞혔는지는 안 본다(0275).
+      const { data: sub, error: rErr } = await juniorC.rpc('quiz_staff_record', { p_rows: [{ item_id: I1, response: 0, ord: 0 }] });
+      check('12-b-1 직원이 C1 문항 1개를 풀었다(quiz_staff_record 제출 id)', !rErr && !!sub, rErr?.message ?? `sub=${sub}`);
+      const { data: d1, error: e1 } = await juniorC.rpc('mark_quiz_completed', { p_id: idOf(C1) });
+      const { data: d2, error: e2 } = await juniorC.rpc('mark_quiz_completed', { p_id: idOf(C2) });
+      const { data: rows } = await admin.from('quiz_assignments').select('course_id,completed_at').in('id', [idOf(C1), idOf(C2)]);
+      const doneOf = (cid) => (rows ?? []).find((r) => r.course_id === cid)?.completed_at ?? null;
+      check('12-b-2 C1 발송 = 완료(true · completed_at 있음)', !e1 && d1 === true && !!doneOf(C1), `${e1?.message ?? d1} · ${doneOf(C1)}`);
+      check('12-b-3 C2 발송 = 미완료(false · completed_at null) — C2 문항은 안 풀었다(단위: 발송)', !e2 && d2 === false && doneOf(C2) === null, `${e2?.message ?? d2} · ${doneOf(C2)}`);
+      const { error: rErr2 } = await juniorC.rpc('quiz_staff_record', { p_rows: [{ item_id: I2, response: 0, ord: 0 }] });
+      const { data: d3, error: e3 } = await juniorC.rpc('mark_quiz_completed', { p_id: idOf(C2) });
+      check('12-b-4 C2 문항을 풀면 C2 발송도 완료(true)', !rErr2 && !e3 && d3 === true, rErr2?.message ?? e3?.message ?? `got=${d3}`);
+    }
+  }
+
+  section('12-b. 사장 벨 응시 완료(quiz_done) 항목 → 착지(그 퀴즈 결과 탭 · K7)');
+  // 다시 알리기(K5)가 같은 퀴즈의 발송 행을 하나 더 만든다 → 완료된 행 하나를 고른다(maybeSingle 은 2행이면 null).
+  const { data: doneRow } = await admin.from('quiz_assignments').select('id,completed_at').eq('course_id', X).eq('user_id', jUid)
+    .not('completed_at', 'is', null).order('completed_at', { ascending: false }).limit(1).maybeSingle();
+  check('K7-0 DB quiz_assignments(X · 직원) completed_at 이 찍혔다(0275)', !!doneRow?.completed_at, `completed_at=${doneRow?.completed_at ?? 'null'}`);
+  await S.goto('/owner/notifications');
+  const K7_TITLE = `${J_NAME}님이 퀴즈를 다 풀었어요`;
+  const k7Row = await S.waitFor(`(()=>{const t=document.body.innerText;return t.includes(${J_(K7_TITLE)})&&t.includes(${J_(cardName)})})()`, 30000);
+  check('K7-1 사장 벨에 "<직원>님이 퀴즈를 다 풀었어요" + 퀴즈 이름 행이 있다 [문자열]', k7Row, `제목 "${K7_TITLE}" · 본문 "${cardName}"`);
+  let k7 = { path: '?', search: '', rowVisible: false };
+  if (k7Row) {
+    await clickText(S, cardName); // 본문(퀴즈 이름)으로 누른다 — 같은 제목의 행이 둘(A·B)일 수 있다.
+    await S.waitFor(`location.pathname===${J_(`/owner/quiz/${X}`)}`, 15000);
+    await settle(S); await dismissOverlays(S);
+    k7 = await S.eval(`(()=>{const e=document.querySelector(${J_(jRowSel.split(',')[1])})||document.querySelector(${J_(jRowSel.split(',')[0])});let v=false;if(e){const r=e.getBoundingClientRect();v=r.width>0&&r.top>=0&&r.bottom<=innerHeight;}return {path:location.pathname,search:location.search,rowVisible:v};})()`);
+  }
+  check('K7-2 벨 항목 → 착지 주소가 /owner/quiz/<퀴즈 id>?tab=result [문자열]', k7.path === `/owner/quiz/${X}` && k7.search.includes('tab=result'), `착지 ${k7.path}${k7.search}`);
+  check('K7-3 착지 화면 결과 탭에 그 직원 줄이 보인다 [문자열]', k7.rowVisible, `직원 줄 보임=${k7.rowVisible}`);
+  await net(S, 'S 벨 → 결과');
 
   section('13. 화면 전환 합계(단언 9)');
   check(`9 콘솔 에러 0 · ≥400 응답 0 (전 구간 · 콘솔 ${netLog.err} · ≥400 ${netLog.bad})`, netLog.err === 0 && netLog.bad === 0);

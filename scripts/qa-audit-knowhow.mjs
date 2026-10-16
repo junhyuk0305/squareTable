@@ -111,8 +111,10 @@ console.log('\n[E3] 퀴즈가 안 나가는 이유(근무표에 없음·자동 �
   const db = strip(read('src/lib/db.ts'));
   check('★fetchQuizSendStatus 가 rpc 를 부른다', /export async function fetchQuizSendStatus\(courseId: string\)/.test(db) && /rpc\('quiz_send_status', \{ p_course_id: courseId \}\)/.test(db));
   const scr = strip(read('src/app/owner/quiz/[id].tsx'));
+  // 문구는 recipientReadiness.ts 표 한 곳(P5 · 2026-10-16) — 화면은 readinessText 로 읽는다.
+  const rr = strip(read('src/lib/recipientReadiness.ts'));
   check('★사람 줄이 이유를 말한다(근무표에 없어 대기 중 · 두 번 안 열어 멈춤)',
-    /fetchQuizSendStatus\(/.test(scr) && scr.includes('근무표에 없어 대기 중') && scr.includes('두 번 안 열어 멈춤'));
+    /fetchQuizSendStatus\(/.test(scr) && /readinessText\(/.test(scr) && rr.includes('근무표에 없어 대기 중') && rr.includes('두 번 안 열어 멈춤'));
 }
 
 console.log('\n[E4] "푼 사람"은 담긴 노하우를 다 풀었을 때(맞힘과 무관) · 개인 결과는 그 사람의 실제 응시로');
@@ -128,7 +130,7 @@ console.log('\n[E4] "푼 사람"은 담긴 노하우를 다 풀었을 때(맞힘
   check('본인·이미 나간 발송만', /a\.user_id = \(select auth\.uid\(\)\)/.test(b) && /a\.sent_at is not null/.test(b), d.file);
   const sheet = strip(read('src/components/work/UnderstandingCheckSheet.tsx'));
   check('★응시를 마치면(통과와 무관) 기록 저장 뒤 onFinished 를 부른다',
-    /recordStaffQuizAttempt\(given\.current\)\.then\(\(\) => onFinished\?\.\(/.test(sheet));
+    /recordStaffQuizAttempt\(given\.current\)\.then\(\((?:submissionId)?\) => \{?[\s\S]{0,120}?onFinished\?\.\(/.test(sheet));
   const store = strip(read('src/lib/store/useWorkStore.ts'));
   const mu = (store.match(/\n  markUnderstood: async[\s\S]*?\n  \},/) || [''])[0];
   const nf = (store.match(/\n  noteQuizFinished: \(entryIds\) => \{[\s\S]*?\n  \},/) || [''])[0];

@@ -12,6 +12,7 @@ import type { TaskTemplate, FeedItem, DoneMark, Recurrence } from '@/lib/store/u
 import type { Room, RoomMember, RoomPref } from '@/lib/store/useRoomStore';
 import type { AttendanceRecord } from '@/lib/store/useAttendanceStore';
 import type { StoreConfig, ShiftTemplate, ShiftException, SwapRequest, ShiftTimeRequest, ScheduleNotice } from '@/lib/store/useScheduleStore';
+import type { JoinNotice } from '@/lib/store/useStaffStore';
 import type { CustomCategory } from '@/lib/store/knowhowCategories';
 import type { KnowhowUsage } from '@/lib/knowhow/archive';
 import type { WageRate } from '@/lib/utils/payroll';
@@ -1571,6 +1572,16 @@ export async function resolveUnknown(id: string, newEntryId: string, answeredBy?
   );
 }
 
+/**
+ * 질문에 **새 노하우**로 답한다 — 노하우 저장 + 질문 해결을 서버 한 트랜잭션에서(0311 answer_unknown_query).
+ * 두 기기가 같은 질문에 답해도 노하우는 1건: 뒤의 것은 not_pending → already(decision.ts). 함수가 없는 옛 서버는 failed.
+ * 기존 노하우로 답하기(resolveUnknown)·여러 건 발행은 전처럼 두 단계다.
+ */
+export async function answerUnknownQuery(uqId: string, entry: PlaybookEntry): Promise<DecisionResult> {
+  if (!HAS_SUPABASE) return { decision: 'ok', code: null };
+  return rpcDecision('answerUnknownQuery', 'answer_unknown_query', { p_uq_id: uqId, p_entry: stripNonColumns(entry) });
+}
+
 // ── 채팅 기록 ──────────────────────────────────────────────
 // G4: 실패를 빈 목록과 가른다 — 빈 목록으로 돌려주면 hydrate 가 화면의 대화를 통째로 지운다.
 export async function fetchChatQueries(juniorId: string): Promise<ReadResult<ChatQuery[]>> {
@@ -2772,11 +2783,16 @@ export async function fetchQuizSendStatus(courseId: string): Promise<Record<stri
  * ★RPC 가 아직 없는 서버(push 전 · PGRST202)는 **여기서만** 조용히 빈 배열 — 안내만 안 뜨고 기능은 그대로다.
  */
 export type RecipientReadinessRow = import('@/lib/recipientReadiness').RecipientReadiness;
-export async function fetchRecipientReadiness(unitId: string, userIds: string[]): Promise<RecipientReadinessRow[]> {
+export async function fetchRecipientReadiness(
+  unitId: string,
+  userIds: string[],
+  // quiet: 실패를 배너 없이 빈 배열로 — 직원이 사장의 수신 전제를 묻는 자리(질문 보내기 · 0312 전엔 not_owner). 질문마다 배너가 뜨면 안 된다.
+  opts?: { quiet?: boolean },
+): Promise<RecipientReadinessRow[]> {
   if (!HAS_SUPABASE || !unitId || userIds.length === 0) return [];
   const { data, error } = await supabase.rpc('recipient_readiness', { p_unit_id: unitId, p_user_ids: userIds });
   if (error) {
-    if (!isMissingRpc(error)) readFail('fetchRecipientReadiness', error);
+    if (!opts?.quiet && !isMissingRpc(error)) readFail('fetchRecipientReadiness', error);
     return [];
   }
   return ((data ?? []) as Record<string, unknown>[]).map((r) => ({
@@ -3062,11 +3078,12 @@ export async function markQuizOpened(assignmentId: string): Promise<boolean> {
   return !error;
 }
 
+/** true = 서버가 이 발송의 completed_at 을 찍었다(0275 · 담긴 노하우를 다 풀었다). false = 아직 남았거나 오류. 호출부는 true 일 때만 사장에게 알린다. */
 export async function markQuizCompleted(assignmentId: string): Promise<boolean> {
   if (!HAS_SUPABASE) return true;
-  const { error } = await supabase.rpc('mark_quiz_completed', { p_id: assignmentId });
+  const { data, error } = await supabase.rpc('mark_quiz_completed', { p_id: assignmentId });
   if (error) reportError('db.write:markQuizCompleted', error);
-  return !error;
+  return !error && data === true;
 }
 
 // ── 외부 공유 링크(0113) — 단기 직원용. 로그인 없이 도는 유일한 경로 ────────────
@@ -3680,16 +3697,19 @@ export async function insertShiftTemplate(t: ShiftTemplate): Promise<boolean> {
 // ── 반복 근무 기간 RPC(0242) — 관리자만 · 지난 날짜는 p_confirm_past(§8 Q4) ─────────────────────
 // 직접 UPDATE·DELETE 는 옛 앱 호환용 서버 트리거가 "오늘부터"로 바꿔 받는다. 새 앱은 사장이 고른 날부터 정확히 바꾸려고 RPC 를 쓴다.
 // 여러 행(지난 구간 복사본·예외·미결 교대)이 함께 바뀌므로 호출부는 성공 뒤 다시 읽는다.
-async function rpcOk(label: string, fn: string, args: Record<string, unknown>): Promise<boolean> {
-  const { error } = await supabase.rpc(fn, args);
+async function rpcResult(label: string, fn: string, args: Record<string, unknown>): Promise<{ ok: boolean; data: unknown }> {
+  const { data, error } = await supabase.rpc(fn, args);
   // 반복 근무를 지난달부터 바꾸려 하면(서버 past_month_locked · 2026-10-06 A1·A2) 던진다 — 스토어가 PAST_MONTH_LOCKED_TEXT 를 고른다.
   if (error && /past_month_locked/.test(error.message ?? '')) throw new Error('past_month_locked');
   if (error) {
     console.warn(`[db] ${label}:`, error.message);
     reportError(`db.write:${label}`, error);
-    return false;
+    return { ok: false, data: null };
   }
-  return true;
+  return { ok: true, data };
+}
+async function rpcOk(label: string, fn: string, args: Record<string, unknown>): Promise<boolean> {
+  return (await rpcResult(label, fn, args)).ok;
 }
 
 /** "{from}부터 매주 {weekday}" 반복 근무를 새로 넣는다. 돌려주는 값 = 새 행 id(실패면 null). */
@@ -3784,6 +3804,22 @@ export async function fetchScheduleNotices(): Promise<ReadResult<ScheduleNotice[
   return { data: (data ?? []) as ScheduleNotice[], error: false };
 }
 
+/** 합류 결과(0247) — 승인·반려 때 서버가 넣은 member_notices 행. RLS = 본인 행만. 매장과 무관하게 읽는다(신청한 매장은 아직 내 활성 매장이 아니다). */
+export async function fetchJoinNotices(): Promise<ReadResult<JoinNotice[]>> {
+  if (!HAS_SUPABASE) return { data: [], error: false };
+  const { data, error } = await supabase
+    .from('member_notices')
+    .select('id, kind, store_name, body, created_at')
+    .in('kind', ['approved', 'rejected'])
+    .order('created_at', { ascending: false })
+    .limit(20);
+  if (error) {
+    readFail('fetchJoinNotices', error);
+    return { data: [], error: true };
+  }
+  return { data: (data ?? []) as JoinNotice[], error: false };
+}
+
 /** 사장 · 매니저가 근무를 바꾼 뒤 그 직원에게 알린다(D9 · 0289). 본인 · 다른 매장 사람에게는 서버가 넣지 않는다(false).
  *  알림은 근무 저장의 결과가 아니다 — 실패해도 화면에 알리지 않고 기록만 남긴다. */
 export async function notifyShiftChangedRpc(staffId: string, date: string, onward: boolean): Promise<void> {
@@ -3792,10 +3828,12 @@ export async function notifyShiftChangedRpc(staffId: string, date: string, onwar
   if (error) reportError('db.write:notifyShiftChanged', error);
 }
 
-/** 내 근무의 그날 시각을 바꿔 달라고 요청한다. 같은 날 앞 요청은 서버가 닫고 새로 낸다. */
-export async function requestShiftTimeRpc(templateId: string, date: string, start: string, end: string): Promise<boolean> {
-  if (!HAS_SUPABASE) return true;
-  return rpcOk('requestShiftTime', 'request_shift_time', { p_template: templateId, p_date: date, p_start: start, p_end: end });
+/** 내 근무의 그날 시각을 바꿔 달라고 요청한다. 같은 날 앞 요청은 서버가 닫고 새로 낸다.
+ *  성공하면 요청 id(서버 반환 · 사장 알림이 그 요청을 가리킨다) · 실패하면 null. */
+export async function requestShiftTimeRpc(templateId: string, date: string, start: string, end: string): Promise<string | null> {
+  if (!HAS_SUPABASE) return 'local';
+  const { ok, data } = await rpcResult('requestShiftTime', 'request_shift_time', { p_template: templateId, p_date: date, p_start: start, p_end: end });
+  return ok ? (typeof data === 'string' ? data : '') : null;
 }
 
 /**

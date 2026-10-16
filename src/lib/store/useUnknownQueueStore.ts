@@ -1,12 +1,12 @@
 import { create } from 'zustand';
 import { coalesce, subscribeDebounced } from '@/lib/store/realtimeSync';
 import { currentTenantEpoch, isStaleEpoch } from '@/lib/store/tenantEpoch';
-import type { UnknownQuery, PlaybookSuggestion } from '@/types';
+import type { UnknownQuery, PlaybookSuggestion, PlaybookEntry } from '@/types';
 import seedData from '@/data/unknown-queries.json';
 import { HAS_SUPABASE } from '@/lib/supabase';
-import { fetchUnknownQueue, fetchPendingQuestionCount, insertUnknown, bumpUnknownSimilar, resolveUnknown, subscribeUnknownQueue } from '@/lib/db';
+import { fetchUnknownQueue, fetchPendingQuestionCount, insertUnknown, bumpUnknownSimilar, resolveUnknown, answerUnknownQuery, subscribeUnknownQueue } from '@/lib/db';
 import { guardWrite, useSyncStore } from '@/lib/store/useSyncStore';
-import { blockedText } from '@/lib/decision';
+import { blockedText, type Decision } from '@/lib/decision';
 import { notifyStoreQuestion, notifyUserQuestionAnswered } from '@/lib/push/notify';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 
@@ -25,6 +25,8 @@ type UnknownQueueState = {
    *  성공했을 때만 남기고, 실패하면 되돌려 재시도를 열어주기 위함(질문이 조용히 증발하던 경로). */
   enqueue: (uq: UnknownQuery) => Promise<boolean>;
   resolve: (uqId: string, newEntryId: string) => Promise<boolean>;
+  /** 새 노하우로 답하기(사장 coach 발행) — 저장 + 해결을 서버 한 트랜잭션에서(0311). already = 다른 기기가 먼저 답했다(노하우 안 만듦). */
+  answer: (uqId: string, entry: PlaybookEntry) => Promise<Decision>;
   getPending: () => UnknownQuery[];
   getById: (id: string) => UnknownQuery | undefined;
   reset: () => void;
@@ -136,6 +138,27 @@ export const useUnknownQueueStore = create<UnknownQueueState>((set, get) => ({
       }
       return true;
     });
+  },
+  // 새 노하우로 답하기 — resolve 와 같은 후처리(큐 갱신 · 질문자 알림)인데 저장과 해결이 서버 한 트랜잭션이다(0311).
+  // 낙관적 갱신을 하지 않는다: 노하우 행이 아직 없는 상태에서 질문을 '해결'로 그리면 already 때 되돌릴 것이 둘이 된다.
+  answer: async (uqId, entry) => {
+    const before = get().queue.find((u) => u.id === uqId);
+    const answeredBy = useSessionStore.getState().userId || undefined;
+    const { decision } = await answerUnknownQuery(uqId, entry);
+    // already = 다른 기기·동료가 먼저 답했다 → 오류 아님. 서버 상태로 다시 읽고 알림은 보내지 않는다(먼저 답한 쪽이 보냈다).
+    if (decision === 'already') { void get().hydrate(); return decision; }
+    if (decision !== 'ok') return decision;
+    set((s) => ({
+      queue: s.queue.map((u) =>
+        u.id === uqId
+          ? { ...u, status: 'resolved_with_entry' as const, resolved_with_entry_id: entry.id, ...(answeredBy ? { answered_by: answeredBy } : null) }
+          : u,
+      ),
+    }));
+    if (before?.junior_id && before.junior_id !== answeredBy) {
+      notifyUserQuestionAnswered(before.junior_id, uqId, useSessionStore.getState().userName || '동료', before.query_text);
+    }
+    return 'ok';
   },
   // (자동응답 전이 제거 — 2026-07-31 사용자 결정: 질문은 사장이 직접 답한다. auto_answered 는 과거 데이터 표시용으로만 남음.)
   getPending: () => get().queue.filter((u) => u.status === 'pending_owner_answer'),

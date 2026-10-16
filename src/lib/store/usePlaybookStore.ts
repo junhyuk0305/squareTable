@@ -31,6 +31,8 @@ type PlaybookState = {
   hydrate: () => Promise<void>;
   subscribe: () => () => void;
   add: (entry: PlaybookEntry) => Promise<boolean>;
+  /** 다른 경로(RPC · 0311 질문 답하기)로 서버에 이미 저장된 노하우를 목록 맨 앞에 올리고 색인한다 — add 의 후처리와 같고 저장만 없다. */
+  noteSaved: (entry: PlaybookEntry) => void;
   getById: (id: string) => PlaybookEntry | undefined;
   /** 수정 저장 — **서버 반영 성공 여부**를 돌려준다(#17). 하부 updateEntry 는 writeStrict 라
    *  0행(RLS·id 드리프트)을 제대로 잡는데, 예전엔 이 함수가 void 라 그 판정이 화면까지 못 올라왔다 —
@@ -101,6 +103,10 @@ export const usePlaybookStore = create<PlaybookState>((set, get) => ({
     const ok = await optimisticAdd(set, 'entries', entry, () => insertEntry(entry), '노하우 저장에 실패했어요. 다시 시도해 주세요.', 'start');
     void embedEntry(entry); // 임베딩 색인(파이어앤포겟, 실패해도 발행 성공)
     return ok;
+  },
+  noteSaved: (entry) => {
+    set((s) => ({ entries: [entry, ...s.entries.filter((e) => e.id !== entry.id)] }));
+    void embedEntry(entry);
   },
   getById: (id) => get().entries.find((e) => e.id === id),
   // 검수 확정 — 낙관적 패치(update, void)와 달리 서버 반영을 기다려 ok를 반환한다.
