@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { useOpenFromParam } from '@/lib/hooks/useOpenFromParam';
 import { View, Text, Pressable, ScrollView, TextInput, StyleSheet, type TextStyle } from 'react-native';
 import { KeyboardShift } from '@/components/KeyboardShift';
 import { Ionicons } from '@expo/vector-icons';
@@ -39,6 +40,7 @@ export function NoticePanel({
   currentStore,
   targetStores,
   onBroadcast,
+  focusId,
 }: {
   notices: FeedItem[];
   comments: FeedItem[];
@@ -47,6 +49,8 @@ export function NoticePanel({
   memberCount: number;
   nameOf: (id: string) => string;
   members: Member[];
+  /** 알림(?feed=)으로 들어온 공지 id — 그 공지로 스크롤하고 강조한다(P1 역 ⑤). */
+  focusId?: string;
   onBack: () => void;
   onPost: (text: string) => void;
   onTogglePin: (id: string) => void;
@@ -64,6 +68,23 @@ export function NoticePanel({
   const [draft, setDraft] = useState('');
   const [targets, setTargets] = useState<Set<string>>(new Set()); // 현재 매장 외 추가 대상(unit_id)
   const canBroadcast = isOwner && !!onBroadcast && !!currentStore && (targetStores?.length ?? 0) > 0;
+
+  // 알림으로 들어온 공지로 한 번 스크롤(같은 id 로는 한 번만 · 사용자 스크롤을 되돌리지 않는다). 강조는 그대로 남는다.
+  // 카드 onLayout 으로 y 를 받아 두고, 등장 애니메이션이 가라앉은 뒤(FOCUS_SETTLE_MS) 한 번 움직인다(TodoScreen 과 같은 모양).
+  const listRef = useRef<ScrollView>(null);
+  const rowY = useRef<Record<string, number>>({});
+  const [pendingFocus, focusDone] = useOpenFromParam(focusId);
+  const focusTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  function scheduleFocusScroll(id: string) {
+    if (!pendingFocus || id !== pendingFocus) return;
+    if (focusTimer.current) clearTimeout(focusTimer.current);
+    focusTimer.current = setTimeout(() => {
+      const y = rowY.current[id];
+      if (y !== undefined) listRef.current?.scrollTo({ y: Math.max(0, y - 8), animated: true });
+      focusDone();
+    }, FOCUS_SETTLE_MS);
+  }
+  useEffect(() => () => { if (focusTimer.current) clearTimeout(focusTimer.current); }, []);
 
   function post() {
     const v = draft.trim();
@@ -85,14 +106,19 @@ export function NoticePanel({
 
   return (
     <KeyboardShift>
-      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView ref={listRef} keyboardShouldPersistTaps="handled" contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
         {/* 빈 상태는 다음 행동을 알려준다(복잡도 원칙 P6).
             ★2026-08-26: 공지는 누구나 쓴다(0177) — 직원에게도 같은 다음 행동을 준다. */}
         {notices.length === 0 && (
           <Text style={s.empty}>아직 공지가 없어요. 아래에 첫 공지를 적어보세요.</Text>
         )}
         {notices.map((n, i) => (
-          <Appear key={n.id} delay={stagger(i)}>
+          <View
+            key={n.id}
+            style={n.id === focusId ? s.focusCard : undefined}
+            onLayout={(e) => { rowY.current[n.id] = e.nativeEvent.layout.y; scheduleFocusScroll(n.id); }}
+          >
+          <Appear delay={stagger(i)}>
           <NoticeCard
             notice={n}
             comments={comments.filter((c) => c.refId === n.id)}
@@ -110,6 +136,7 @@ export function NoticePanel({
             onDeleteComment={onDeleteComment}
           />
           </Appear>
+          </View>
         ))}
         <View style={{ height: 8 }} />
       </ScrollView>
@@ -357,8 +384,12 @@ function NoticeCard({
   );
 }
 
+const FOCUS_SETTLE_MS = 520;
+
 const s = StyleSheet.create({
   scroll: { padding: 13, gap: 11 },
+  // 알림으로 들어온 공지 — 테두리만 강조(카드 안 레이아웃은 그대로).
+  focusCard: { borderWidth: 2, borderColor: BrandColors.accentSolid, borderRadius: Radius.md },
   empty: { textAlign: 'center', color: InkColors.ink2, fontSize: 15, marginTop: 40 },
 
   card: { backgroundColor: InkColors.bg, borderWidth: 1, borderColor: InkColors.line, borderRadius: Radius.md, padding: 12, ...Elevation.e1 },

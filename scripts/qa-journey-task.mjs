@@ -558,6 +558,9 @@ try {
     await go(S.page, 'S', '/owner/work?view=todo', '업무 탭(새로고침)');
     await readTodoRows(S.page);
   }
+  // K5-b1: 어느 창이 work_done 요청을 먼저 보냈는지 기록(같은 PC 시계) — 완료자 = 먼저 저장한 사람(10-16 사용자 결정)
+  const armReq = (p) => p.eval(`(()=>{const f=window.fetch;window.__qaReq=[];window.fetch=(...a)=>{try{if(String(a[0]&&a[0].url||a[0]).includes('/work_done'))window.__qaReq.push(Date.now());}catch(e){}return f(...a);};return true;})()`);
+  await Promise.all([armReq(J.page), armReq(S.page)]);
   await Promise.all([clickJs(J.page, todoBoxJs(TXT_REPEAT), 'J 체크'), clickJs(S.page, todoBoxJs(TXT_REPEAT), 'S 체크')]);
   await Promise.all([dismiss(J.page), dismiss(S.page)]);
   await sleep(3000);
@@ -567,6 +570,17 @@ try {
   check('K5-b 두 창 동시 완료: 오류 문구 0', eB === 0,
     `${eB}건 ${eB ? (await errContext(J.page)) + ' ' + (await errContext(S.page)) : ''} · S가 해제를 봄=${sSawUndone} · 화면 완료 J=${await todoDone(J.page, TXT_REPEAT)} S=${await todoDone(S.page, TXT_REPEAT)} · work_done ${rB.length}행 by=${rB[0]?.data?.byName}`);
   check('K5-b DB work_done 1행 · task_done 피드 1행(중복 완료 알림 없음)', rB.length === 1 && fB === 1, `work_done ${rB.length} · 피드 ${fB}`);
+  {
+    const [tJ, tS] = await Promise.all([J.page.eval('(window.__qaReq||[])[0]||0'), S.page.eval('(window.__qaReq||[])[0]||0')]);
+    const firstId = tJ && tS ? (tJ <= tS ? ids.J : ids.S) : null; // 둘 다 안 잡히면 순서 단언은 건너뜀
+    const fRow = (await sel(`work_feed?id=eq.fdone_${TODAY}_${R.id}&select=data`))[0];
+    const by = rB[0]?.data?.by;
+    const byName = rB[0]?.data?.byName ?? '';
+    const [shownJ, shownS] = await Promise.all([J.page.text(), S.page.text()]).then((t) => t.map((x) => !!byName && x.includes(`${byName} 완료`)));
+    check('K5-b1 완료자 = 먼저 저장한 사람(피드 작성자와 일치) · 두 화면 모두 그 이름 [문자열]',
+      !!by && by === fRow?.data?.authorId && (firstId === null || by === firstId) && shownJ && shownS,
+      `by=${byName}(${by}) · 피드 작성자=${fRow?.data?.authorName}(${fRow?.data?.authorId}) · 요청 J=${tJ} S=${tS} → 먼저=${firstId} · 화면 J=${shownJ} S=${shownS}`);
+  }
   await stat(J.page, 'J', 'K5-b');
   await stat(S.page, 'S', 'K5-b');
 

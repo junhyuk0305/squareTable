@@ -174,9 +174,11 @@ const curRoom = (): string | undefined => useRoomStore.getState().currentRoomId 
 
 /** 같은 (날짜·할일) 키의 완료 쓰기를 직렬화 — 직전 쓰기(성공/실패 무관)가 끝난 뒤에만 다음 쓰기 실행.
  *  체크 직후 해제하면 INSERT 도착 전에 DELETE가 먼저 실행돼 0행 삭제(가짜 실패)가 나는 레이스 방지. */
-const doneWrites = new Map<string, Promise<boolean>>();
-function chainDoneWrite(key: string, run: () => Promise<boolean>): Promise<boolean> {
-  const next = (doneWrites.get(key) ?? Promise.resolve(true)).then(run, run);
+/** 완료 쓰기 결과. 'already' = 다른 기기가 먼저 같은 상태로 만들었다(0행 · P2 ⑦) — 실패가 아니다. */
+type DoneWriteResult = boolean | 'already';
+const doneWrites = new Map<string, Promise<DoneWriteResult>>();
+function chainDoneWrite(key: string, run: () => Promise<DoneWriteResult>): Promise<DoneWriteResult> {
+  const next = (doneWrites.get(key) ?? Promise.resolve<DoneWriteResult>(true)).then(run, run);
   doneWrites.set(key, next);
   return next;
 }
@@ -215,13 +217,20 @@ function overlayPendingDone(done: State['done'], feed: FeedItem[], fetchedAt: nu
   }
   return acc;
 }
-/** 낙관 반영 → 직렬 쓰기 → 실패 시 **그 키만** 되돌린다(전체 스냅샷 복원은 사이에 체크한 다른 할일까지 지운다). */
-function commitDone(key: string, patch: DonePatch, undo: DonePatch, run: () => Promise<boolean>, failMsg: string) {
+/** 낙관 반영 → 직렬 쓰기 → 실패 시 **그 키만** 되돌린다(전체 스냅샷 복원은 사이에 체크한 다른 할일까지 지운다).
+ *  'already'(다른 기기가 먼저) 는 오류가 아니다 — 내 낙관 패치를 버리고 서버 상태를 다시 읽는다(먼저 저장한 사람의 이름이 온다).
+ *  패치를 안 버리면 overlayPendingDone 이 서버 스냅샷 위에 내 이름을 다시 얹는다. */
+function commitDone(key: string, patch: DonePatch, undo: DonePatch, run: () => Promise<DoneWriteResult>, failMsg: string) {
   useWorkStore.setState((s) => applyDonePatch(s.done, s.feed, patch));
   const entry = { patch } as { patch: DonePatch; settledAt?: number };
   pendingDone.set(key, entry);
   const ok = chainDoneWrite(key, run).then(
     (r) => {
+      if (r === 'already') {
+        if (pendingDone.get(key) === entry) pendingDone.delete(key);
+        void useWorkStore.getState().hydrate();
+        return true;
+      }
       if (pendingDone.get(key) !== entry) return r;
       // 성공: 이 쓰기 이후에 시작한 재조회가 지나갈 때까지 유지. 실패: 되돌리므로 즉시 버린다.
       if (r) entry.settledAt = Date.now();
@@ -900,7 +909,7 @@ export const useWorkStore = create<State>((set, get) => ({
     // 배정 알림 — 저장 성공 후에만(실패·롤백 시 유령 배정 푸시 방지 — F2). 남에게 배정한 경우만, OS 푸시만.
     if (ok) {
       for (const uid of assigneesOf(t)) {
-        if (uid !== t.createdBy) notifyUserAssign(uid, useSessionStore.getState().userName || '담당자', t.text);
+        if (uid !== t.createdBy) notifyUserAssign(uid, useSessionStore.getState().userName || '담당자', t.text, t.id);
       }
     }
     return ok;
@@ -946,7 +955,7 @@ export const useWorkStore = create<State>((set, get) => ({
       const prev = assigneesOf(before);
       for (const uid of assigneesOf(updated)) {
         if (!prev.includes(uid) && uid !== updated.createdBy) {
-          notifyUserAssign(uid, useSessionStore.getState().userName || '담당자', updated.text);
+          notifyUserAssign(uid, useSessionStore.getState().userName || '담당자', updated.text, updated.id);
         }
       }
     }
@@ -1182,13 +1191,12 @@ export const useWorkStore = create<State>((set, get) => ({
         { date, templateId, mark: null, feedRemoveId: removed?.id },
         { date, templateId, mark: current, feedAdd: removed },
         // ★결과 분류(P2 ⑦): 0행(already) = 다른 기기가 먼저 해제했다 — 실패가 아니다. 화면은 이미 미완료라 그대로 두고
-        //   서버 상태만 다시 읽는다(K5-d). failed 만 되돌리고 "못 했어요"를 말한다.
+        //   서버 상태만 다시 읽는다(K5-d · commitDone). failed 만 되돌리고 "못 했어요"를 말한다.
         () =>
           Promise.all([clearDone(date, templateId), removed ? deleteFeed(removed.id) : Promise.resolve('ok' as const)]).then(
             ([a, b]) => {
               if (a === 'failed' || b === 'failed') return false;
-              if (a === 'already' || b === 'already') void get().hydrate();
-              return true;
+              return a === 'already' || b === 'already' ? 'already' : true;
             },
           ),
         '완료 해제 저장에 실패했어요.',
@@ -1222,7 +1230,14 @@ export const useWorkStore = create<State>((set, get) => ({
       key,
       { date, templateId, mark, feedAdd: doneItem },
       { date, templateId, mark: null, feedRemoveId: doneItem.id },
-      () => Promise.all([setDone(date, templateId, mark, room), upsertFeed(doneItem, { ignoreDuplicates: true })]).then(([a, b]) => a && b),
+      // ★먼저 저장한 사람이 완료자(2026-10-16 F5 · 사용자 결정). setDone 은 있는 행을 덮지 않는다(DO NOTHING) → 0행 = already
+      //   → commitDone 이 내 이름 패치를 버리고 서버를 다시 읽어 **먼저 저장한 사람 이름**을 보인다. 피드도 같은 규칙(위 ignoreDuplicates).
+      //   사진 완료(photoUrl)도 이 길이라 늦은 쪽 사진은 서버에 남지 않는다. failed 만 되돌리고 "못 했어요".
+      () =>
+        Promise.all([setDone(date, templateId, mark, room), upsertFeed(doneItem, { ignoreDuplicates: true })]).then(([a, b]) => {
+          if (a === 'failed' || !b) return false;
+          return a === 'already' ? 'already' : true;
+        }),
       '완료 체크 저장에 실패했어요.',
     );
   },
@@ -1245,7 +1260,7 @@ export const useWorkStore = create<State>((set, get) => ({
         upsertFeed(bumped),
         () => set((s) => ({ feed: s.feed.map((f) => (f.id === before.id ? before : f)) })),
         '공지 재게시에 실패했어요.',
-      ).then((ok) => { if (ok) notifyStaffNotice(authorName, text, room); });
+      ).then((ok) => { if (ok) notifyStaffNotice(authorName, text, room, bumped.id); });
       return;
     }
     const item: FeedItem = {
@@ -1268,7 +1283,7 @@ export const useWorkStore = create<State>((set, get) => ({
       upsertFeed(item),
       () => set((s) => ({ feed: s.feed.filter((f) => f.id !== item.id) })),
       '공지 등록에 실패했어요.',
-    ).then((ok) => { if (ok) notifyStaffNotice(authorName, text, room); }); // 매장 직원 전체 · 비공개 방이면 그 방 멤버(D2 · 발송자 제외는 서버)
+    ).then((ok) => { if (ok) notifyStaffNotice(authorName, text, room, item.id); }); // 매장 직원 전체 · 비공개 방이면 그 방 멤버(D2 · 발송자 제외는 서버)
   },
 
   // 전 매장 동시 공지(S3 #3) — 소유 매장들에 같은 공지를 서버(definer)가 한 번에 넣는다.
@@ -1318,7 +1333,7 @@ export const useWorkStore = create<State>((set, get) => ({
     ).then((ok) => {
       sendingIds.delete(item.id);
       if (!ok) return;
-      for (const uid of mentions ?? []) if (uid !== authorId) notifyUserMention(uid, authorName, text);
+      for (const uid of mentions ?? []) if (uid !== authorId) notifyUserMention(uid, authorName, text, item.id);
     });
   },
 
@@ -1336,7 +1351,7 @@ export const useWorkStore = create<State>((set, get) => ({
     ).then((ok) => {
       sendingIds.delete(id);
       if (!ok) return;
-      for (const uid of item.mentions ?? []) if (uid !== item.authorId) notifyUserMention(uid, item.authorName, item.text);
+      for (const uid of item.mentions ?? []) if (uid !== item.authorId) notifyUserMention(uid, item.authorName, item.text, item.id);
     });
   },
 
@@ -1367,7 +1382,8 @@ export const useWorkStore = create<State>((set, get) => ({
       '댓글 등록에 실패했어요.',
     ).then((ok) => {
       if (!ok) return;
-      for (const uid of mentions ?? []) if (uid !== authorId) notifyUserMention(uid, authorName, text);
+      // 댓글 멘션은 그 공지(refId)로 착지한다 — 댓글은 공지 카드 안에 있다.
+      for (const uid of mentions ?? []) if (uid !== authorId) notifyUserMention(uid, authorName, text, item.id);
     });
   },
 

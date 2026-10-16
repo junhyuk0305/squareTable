@@ -1012,7 +1012,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
     if (uid) await loadProfile(set, uid, get().email);
     track('join_requested', { result: 'pending' });
     // 신청 매장 사장에게 웹푸시(승인 대기 신청이 들어옴). loadProfile 이후라 pending_unit_id 반영됨.
-    notifyOwnersJoinRequest(get().userName || '새 직원');
+    notifyOwnersJoinRequest(get().userName || '새 직원', get().userId);
     return { error: null, storeName: row?.store_name ?? null, pending: true };
   },
 

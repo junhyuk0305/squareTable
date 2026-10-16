@@ -26,6 +26,10 @@ export const JUNIOR_KIND_UI: Record<JuniorNotifKind, { icon: IconName; tint: str
   question: { icon: 'chatbubble-ellipses', tint: BrandColors.yellowSoft },
   // 내 근무 알림(D9) — 대타 확정 · 시간 수정 결과 · 근무표 변경.
   schedule: { icon: 'calendar', tint: BrandColors.accentSoft },
+  // 내 질문에 온 답(P1 역 ④) — 질문과 같은 말풍선 계열, 답이 왔으니 초록 틴트.
+  q_answered: { icon: 'chatbubble-ellipses', tint: '#E4F2E8' },
+  // 안 푼 퀴즈(P1 역 ④).
+  training: { icon: 'school', tint: BrandColors.yellowSoft },
 };
 export const OWNER_KIND_UI: Record<OwnerNotifKind, { icon: IconName; tint: string }> = {
   join_request: { icon: 'person-add', tint: BrandColors.yellowSoft },

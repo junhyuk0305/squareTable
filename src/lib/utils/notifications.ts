@@ -12,21 +12,25 @@ import { fmtDateKo } from '@/lib/utils/schedule';
 // 요금제 표시명은 tiers.ts 가 SSOT — 알림 문구에서 이름을 재정의하지 않는다.
 import { PLANS } from '@/lib/config/tiers';
 import { SHOW_BILLING } from '@/lib/config/store-policy';
+// 제목·주소는 레지스트리가 정한다(P1 · 벨·푸시·엣지·탭이 같은 표). 여기서는 어느 행이 알림인지(술어)만 판정한다.
+import { NOTIF, taskRoute as registryTaskRoute } from '@/lib/notif/registry';
+import type { QuizAssignment, TrainingCourse as TrainingCourseRow } from '@/lib/quiz/types';
 
 /** 알림 목록 최대 개수 — 무한 누적 방지(최신 우선). */
 export const MAX_NOTIFS = 50;
 
 export type JuniorNotifKind =
   | 'notice' | 'mention' | 'assign' | 'swap' | 'swap_approved' | 'swap_rejected'
-  | 'suggestion_approved' | 'suggestion_rejected' | 'question' | 'schedule';
-export type JuniorNotifRoute = '/junior/work' | TaskRoute<'/junior/work'> | '/junior/schedule' | '/junior/chat';
+  | 'suggestion_approved' | 'suggestion_rejected' | 'question' | 'schedule'
+  // P1 역 ④ — 푸시 tag 가 있던 사건의 인앱 kind. q_answered = 내 질문에 답이 옴 · training = 퀴즈 도착.
+  | 'q_answered' | 'training';
+/** 주소는 레지스트리(NOTIF[kind].route)가 만든다 — 문자열 리터럴 유니온을 여기서 다시 적지 않는다. */
+export type JuniorNotifRoute = string;
 
-/** 할일 하나를 가리키는 업무 화면 주소 — `?view=todo&task=<id>`. WorkBoard 가 할일 탭을 열고 그 할일로 스크롤한다.
- *  배정 알림(직원·매니저·사장 수신)이 전부 이 한 곳에서 주소를 만든다(2026-10-16 F3 · 전에는 `/junior/work` 만 줘서
- *  채팅에 착지했다). 파라미터 이름은 기존 관례(`?view=`·`?compose=`·`?quiz=`)를 따른다. */
+/** 할일 하나를 가리키는 업무 화면 주소 — 레지스트리 assign.route 와 같은 것(F3). 배정 알림이 전부 이 한 곳을 쓴다. */
 export type TaskRoute<B extends '/junior/work' | '/owner/work'> = `${B}?view=todo&task=${string}`;
 export const taskRoute = <B extends '/junior/work' | '/owner/work'>(base: B, templateId: string): TaskRoute<B> =>
-  `${base}?view=todo&task=${encodeURIComponent(templateId)}`;
+  registryTaskRoute(base, templateId) as TaskRoute<B>;
 
 export type JuniorNotif = {
   id: string;
@@ -86,7 +90,18 @@ export const isIncomingSwap = (r: SwapRequest, me: string, today: string): boole
   r.date >= today &&
   (r.kind === 'cover' || r.target_staff_id === me);
 
-/** 벨 뱃지 개수 = 안 읽은 공지 + 안 읽은 멘션 + 나에게 배정된(미완료) 할일 + 받은 교대 요청 + 도와줄 수 있는 질문. */
+/** 내가 물은 질문에 남이 답했다(P1 역 ④ · 푸시 q-answered 의 인앱 짝). 내가 내 질문에 답한 건 제외.
+ *  ★답한 시각 컬럼이 없어(unknown_queries) 정렬·ack 비교는 asked_at 으로 한다 — 묻고 나서 '모두 읽기'를 한 뒤
+ *    답이 오면 강조가 안 된다(마이그레이션 없이 둔 한계 · 보고에 적음). */
+export const isMyAnsweredQuestion = (u: UnknownQuery, me: string): boolean =>
+  u.junior_id === me && u.status === 'resolved_with_entry' && !!u.answered_by && u.answered_by !== me;
+
+/** 나에게 나간 퀴즈 중 아직 안 푼 것(P1 역 ④ · 엣지 푸시 quiz-<id> 의 인앱 짝). WorkBoard 카드와 같은 원장(0139). */
+export const isPendingQuizForMe = (a: QuizAssignment, me: string): boolean =>
+  a.userId === me && !!a.sentAt && !a.completedAt;
+
+/** 벨 뱃지 개수 = 안 읽은 공지 + 안 읽은 멘션 + 나에게 배정된(미완료) 할일 + 받은 교대 요청 + 도와줄 수 있는 질문
+ *  + 내 질문에 온 답 + 안 푼 퀴즈. */
 export function juniorUnreadCount(
   feed: FeedItem[],
   swaps: SwapRequest[],
@@ -98,8 +113,11 @@ export function juniorUnreadCount(
   suggestions: PlaybookSuggestion[] = [],
   queue: UnknownQuery[] = [],
   scheduleNotices: ScheduleNotice[] = [],
+  assignments: QuizAssignment[] = [],
 ): number {
   return (
+    queue.filter((u) => isMyAnsweredQuestion(u, me) && isAfterAck(u.asked_at, ackAt)).length +
+    assignments.filter((a) => isPendingQuizForMe(a, me) && isAfterAck(a.sentAt ?? undefined, ackAt)).length +
     // 내 근무 알림(D9) — 대타 확정 · 시간 수정 결과 · 근무표 변경. read 개념이 없어 '모두 읽기'(ack) 전까지 센다.
     scheduleNotices.filter((n) => isAfterAck(n.created_at, ackAt)).length +
     // 동료가 물었는데 아직 답이 없는 질문(D4) — 푸시를 놓치면 '내 공간'에 들어가야만 알 수 있었다.
@@ -134,8 +152,12 @@ export function buildJuniorNotifications(args: {
   queue?: UnknownQuery[];
   /** 내 근무 알림(D9 · member_notices). 없으면 해당 알림 없음. */
   scheduleNotices?: ScheduleNotice[];
+  /** 퀴즈 발송 원장(0139 · 안 푼 퀴즈 알림용). 없으면 해당 알림 없음. */
+  assignments?: QuizAssignment[];
+  /** 퀴즈 이름을 찾을 코스 목록. */
+  courses?: TrainingCourseRow[];
 }): JuniorNotif[] {
-  const { feed, swaps, templates, nameOf, userId: me, today, taskTemplates = [], done = {}, ackAt, suggestions = [], queue = [], scheduleNotices = [] } = args;
+  const { feed, swaps, templates, nameOf, userId: me, today, taskTemplates = [], done = {}, ackAt, suggestions = [], queue = [], scheduleNotices = [], assignments = [], courses = [] } = args;
   const tplById = (id: string) => templates.find((t) => t.id === id);
   const out: JuniorNotif[] = [];
 
@@ -147,11 +169,11 @@ export function buildJuniorNotifications(args: {
     out.push({
       id: `notice_${f.id}`,
       kind: 'notice',
-      title: `${f.authorName}님의 공지`,
+      title: NOTIF.notice.title(f.authorName),
       body: f.text,
       at: f.createdAt,
       unread: isUnreadNotice(f, me) && isAfterAck(f.createdAt, ackAt),
-      route: '/junior/work',
+      route: NOTIF.notice.route('junior', f.id),
       readFeedId: f.id,
     });
   }
@@ -162,12 +184,40 @@ export function buildJuniorNotifications(args: {
     out.push({
       id: `mention_${f.id}`,
       kind: 'mention',
-      title: `${f.authorName}님이 나를 언급했어요`,
+      title: NOTIF.mention.title(f.authorName),
       body: f.text,
       at: f.createdAt,
       unread: isUnreadMention(f, me) && isAfterAck(f.createdAt, ackAt),
-      route: '/junior/work',
+      route: NOTIF.mention.route('junior', f.id),
       readFeedId: f.id,
+    });
+  }
+
+  // 내 질문에 온 답(P1 역 ④) — 답한 사람 이름은 명부(memberNameOf)로 푼다. 탭하면 물어보기 탭의 그 질문.
+  for (const u of queue) {
+    if (!isMyAnsweredQuestion(u, me)) continue;
+    out.push({
+      id: `qa_${u.id}`,
+      kind: 'q_answered',
+      title: NOTIF.q_answered.title(nameOf(u.answered_by as string)),
+      body: u.query_text,
+      at: u.asked_at,
+      unread: isAfterAck(u.asked_at, ackAt),
+      route: NOTIF.q_answered.route('junior', u.id),
+    });
+  }
+
+  // 안 푼 퀴즈(P1 역 ④ · 엣지 푸시 '퀴즈가 왔어요'의 인앱 짝). 탭하면 그 발송의 퀴즈 시트(?quiz=<발송 id>).
+  for (const a of assignments) {
+    if (!isPendingQuizForMe(a, me)) continue;
+    out.push({
+      id: `quiz_${a.id}`,
+      kind: 'training',
+      title: '퀴즈가 왔어요',
+      body: courses.find((c) => c.id === a.courseId)?.name,
+      at: a.sentAt as string,
+      unread: isAfterAck(a.sentAt ?? undefined, ackAt),
+      route: NOTIF.training.route('junior', a.id),
     });
   }
 
@@ -178,13 +228,13 @@ export function buildJuniorNotifications(args: {
     out.push({
       id: `assign_${t.id}`,
       kind: 'assign',
-      title: `${nameOf(assignerOf(t, me))}님이 할 일을 배정했어요`,
+      title: NOTIF.assign.title(nameOf(assignerOf(t, me))),
       body: t.text,
       // 실제 배정(생성) 시각으로 정렬 → 오래된 배정은 자연히 아래로. createdAt 없는 레거시/목업만
       // today 로 폴백(과거 전량-today 고정이 "최신 아닌데 상단 고정" 버그의 원인이었다).
       at,
       unread: !done[today]?.[t.id] && isAfterAck(at, ackAt),
-      route: taskRoute('/junior/work', t.id),
+      route: NOTIF.assign.route('junior', t.id),
     });
   }
 
@@ -199,7 +249,7 @@ export function buildJuniorNotifications(args: {
       body: `${fmtDateKo(r.date)}${tpl ? ` ${tpl.start}~${tpl.end}` : ''}`,
       at: r.created_at,
       unread: isAfterAck(r.created_at, ackAt),
-      route: '/junior/schedule',
+      route: NOTIF.swap.route('junior'),
     });
   }
 
@@ -213,7 +263,7 @@ export function buildJuniorNotifications(args: {
       body: u.query_text,
       at: u.asked_at,
       unread: isAfterAck(u.asked_at, ackAt),
-      route: '/junior/chat',
+      route: NOTIF.question.route('junior', u.id),
     });
   }
 
@@ -228,7 +278,7 @@ export function buildJuniorNotifications(args: {
       body: !ok && sg.owner_note ? `${sg.text}\n사유: ${sg.owner_note}` : sg.text,
       at: sg.reviewed_at as string,
       unread: isAfterAck(sg.reviewed_at, ackAt),
-      route: '/junior/chat',
+      route: NOTIF.suggestion_result.route('junior'),
     });
   }
 
@@ -243,7 +293,7 @@ export function buildJuniorNotifications(args: {
       body: fmtDateKo(r.date),
       at: r.updated_at,
       unread: false,
-      route: '/junior/schedule',
+      route: NOTIF.swap_result.route('junior'),
     });
   }
 
@@ -256,7 +306,7 @@ export function buildJuniorNotifications(args: {
       body: n.body,
       at: n.created_at,
       unread: isAfterAck(n.created_at, ackAt),
-      route: '/junior/schedule',
+      route: NOTIF.schedule.route('junior'),
     });
   }
 
@@ -287,9 +337,8 @@ export type OwnerNotifKind =
   | 'sub_renewed' | 'sub_ending' | 'sub_ended'
   // D11 — 나에게 온 공지·배정(사장 폰에도 푸시가 온다). 매니저 수신 축과 같은 판정이다.
   | 'notice' | 'assign';
-export type OwnerNotifRoute =
-  | '/owner/inbox' | '/owner/suggestions' | '/owner/schedule' | '/owner/staff' | '/owner/work' | TaskRoute<'/owner/work'>
-  | '/owner/categories' | '/billing' | '/owner/brand-consent' | '/owner/brand-link' | '/owner/knowledge';
+/** 주소는 레지스트리(NOTIF[kind].route)와 ownerAlertRoute 가 만든다. */
+export type OwnerNotifRoute = string;
 
 /** 사장 알림(owner_alerts) 행이 탭으로 가는 곳 — 본사 축은 동의 화면/본사 연결, 나머지는 요금제. */
 export function ownerAlertRoute(kind: OwnerAlert['kind']): OwnerNotifRoute {
@@ -406,9 +455,8 @@ export function buildOwnerNotifications(args: Parameters<typeof ownerRows>[0], r
 function ownerReceivedRows(received: ManagerReceivedArgs): OwnerNotif[] {
   const out: OwnerNotif[] = [];
   for (const r of buildManagerReceived(received)) {
-    // 배정은 그 할일 주소(taskRoute)를 그대로 쓴다 — 공지만 업무 화면으로.
-    if (r.kind === 'assign') out.push({ ...r, kind: r.kind, route: r.route as TaskRoute<'/owner/work'> });
-    else if (r.kind === 'notice') out.push({ ...r, kind: r.kind, route: '/owner/work' });
+    // 배정·공지 모두 그 항목 주소(레지스트리 · 사장 화면 세트)를 그대로 쓴다.
+    if (r.kind === 'assign' || r.kind === 'notice') out.push({ ...r, kind: r.kind });
   }
   return out;
 }
@@ -456,39 +504,40 @@ function ownerRows(args: {
       out.push({
         id: `mention_${f.id}`,
         kind: 'mention',
-        title: `${f.authorName}님이 나를 언급했어요`,
+        title: NOTIF.mention.title(f.authorName),
         body: f.text,
         at: f.createdAt,
         unread: isUnreadMention(f, me) && isAfterAck(f.createdAt, ackAt),
-        route: '/owner/work',
+        route: NOTIF.mention.route('owner', f.id),
         readFeedId: f.id,
       });
     }
   }
 
-  // 합류 승인 대기 — 사람이 기다리는 시간민감 항목. 탭하면 직원 관리(승인/거절)로.
+  // 합류 승인 대기 — 사람이 기다리는 시간민감 항목. 탭하면 직원 관리의 그 신청 행(?member=)으로.
   for (const p of pending) {
     out.push({
       id: `join_${p.id}`,
       kind: 'join_request',
-      title: `${p.name}님이 합류를 신청했어요`,
+      title: NOTIF.join_request.title(p.name),
       body: '승인하면 우리 매장 직원으로 합류해요',
       at: p.created_at,
       unread: isAfterAck(p.created_at, ackAt),
-      route: '/owner/staff',
+      route: NOTIF.join_request.route('owner', p.id),
     });
   }
 
+  // 답 기다리는 질문 — 질문자 이름이 제목(역 ③). 탭하면 그 질문의 답변 화면(coach?uqId= · 홈 히어로와 같은 입구).
   for (const u of queue) {
     if (!isPendingQuestion(u)) continue;
     out.push({
       id: `q_${u.id}`,
       kind: 'question',
-      title: '답 기다리는 질문이 있어요',
+      title: NOTIF.question.title(u.junior_name),
       body: u.query_text,
       at: u.asked_at,
       unread: isAfterAck(u.asked_at, ackAt),
-      route: '/owner/inbox',
+      route: NOTIF.question.route('owner', u.id),
     });
   }
 
@@ -501,7 +550,7 @@ function ownerRows(args: {
       body: s.text,
       at: s.created_at,
       unread: isAfterAck(s.created_at, ackAt),
-      route: '/owner/suggestions',
+      route: NOTIF.suggestion.route('owner'),
     });
   }
 
@@ -510,11 +559,11 @@ function ownerRows(args: {
     out.push({
       id: `swap_${r.id}`,
       kind: 'swap_approval',
-      title: `${nameOf(r.requester_id)}님 교대가 승인을 기다려요`,
+      title: NOTIF.swap_approval.title(nameOf(r.requester_id)),
       body: fmtDateKo(r.date),
       at: r.updated_at,
       unread: isAfterAck(r.updated_at, ackAt),
-      route: '/owner/schedule',
+      route: NOTIF.swap_approval.route('owner'),
     });
   }
 
@@ -532,7 +581,7 @@ function ownerRows(args: {
         : (c.reject_reason ?? '입금 내역을 확인하지 못했어요. 다시 알려주세요.'),
       at: c.reviewed_at as string,
       unread: isAfterAck(c.reviewed_at ?? undefined, ackAt),
-      route: '/billing',
+      route: NOTIF.payment_result.route('owner'),
     });
   }
 
@@ -554,7 +603,7 @@ function ownerRows(args: {
 //   그대로 받아 눌러도 직원 홈으로 튕겼다. 질문과 내 제안 결과는 물어보기 탭(/junior/chat)에서 본다.
 export type ManagerNotifKind =
   | 'mention' | 'swap_approval' | 'question' | 'notice' | 'assign' | 'suggestion_approved' | 'suggestion_rejected';
-export type ManagerNotifRoute = '/owner/work' | TaskRoute<'/owner/work'> | '/owner/schedule' | '/junior/chat';
+export type ManagerNotifRoute = string;
 export type ManagerNotif = Omit<OwnerNotif, 'kind' | 'route'> & { kind: ManagerNotifKind; route: ManagerNotifRoute };
 
 export type ManagerReceivedArgs = {
@@ -580,11 +629,11 @@ function buildManagerReceived(args: ManagerReceivedArgs): ManagerNotif[] {
     out.push({
       id: `notice_${f.id}`,
       kind: 'notice',
-      title: `${f.authorName}님의 공지`,
+      title: NOTIF.notice.title(f.authorName),
       body: f.text,
       at: f.createdAt,
       unread: isUnreadNotice(f, me) && isAfterAck(f.createdAt, ackAt),
-      route: '/owner/work',
+      route: NOTIF.notice.route('owner', f.id),
       readFeedId: f.id,
     });
   }
@@ -596,11 +645,11 @@ function buildManagerReceived(args: ManagerReceivedArgs): ManagerNotif[] {
     out.push({
       id: `assign_${t.id}`,
       kind: 'assign',
-      title: `${nameOf(assignerOf(t, me))}님이 할 일을 배정했어요`,
+      title: NOTIF.assign.title(nameOf(assignerOf(t, me))),
       body: t.text,
       at,
       unread: !done[today]?.[t.id] && isAfterAck(at, ackAt),
-      route: taskRoute('/owner/work', t.id),
+      route: NOTIF.assign.route('owner', t.id),
     });
   }
 
@@ -617,7 +666,7 @@ function buildManagerReceived(args: ManagerReceivedArgs): ManagerNotif[] {
       at: sg.reviewed_at as string,
       unread: isAfterAck(sg.reviewed_at, ackAt),
       // 물어보기 탭 '내 공간'에 내가 보낸 제안 목록이 있다(직원과 같은 곳 · F-2). /owner/categories 는 허용 목록 밖이다.
-      route: '/junior/chat',
+      route: NOTIF.suggestion_result.route('junior'),
     });
   }
 
@@ -633,8 +682,9 @@ function managerOwnerRows(ownerArgs: Parameters<typeof ownerRows>[0]): ManagerNo
   );
   const out: ManagerNotif[] = [];
   for (const r of ownerRows(ownerArgs)) {
-    if (r.kind === 'mention' || r.kind === 'swap_approval') out.push({ ...r, kind: r.kind, route: r.route as ManagerNotifRoute });
-    else if (r.kind === 'question' && answerable.has(r.id)) out.push({ ...r, kind: 'question', route: '/junior/chat' });
+    if (r.kind === 'mention' || r.kind === 'swap_approval') out.push({ ...r, kind: r.kind });
+    // 질문은 직원 화면 세트(물어보기 탭)의 그 질문으로(F-2 · /owner/coach 는 허용 목록 밖이다).
+    else if (r.kind === 'question' && answerable.has(r.id)) out.push({ ...r, kind: 'question', route: NOTIF.question.route('junior', r.id.slice('q_'.length)) });
   }
   return out;
 }

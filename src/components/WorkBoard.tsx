@@ -3,13 +3,15 @@ import { Platform, StyleSheet, View } from 'react-native';
 import { SafeAreaView, type Edge } from 'react-native-safe-area-context';
 import { Stack, router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 
-import { uploadPhoto, uploadPhotoNative } from '@/lib/db';
+import { uploadPhoto, uploadPhotoNative, fetchRecipientReadiness } from '@/lib/db';
+import { unreachableNote } from '@/lib/recipientReadiness';
 import { pickImagesNative } from '@/lib/media/pickImage';
 import { HAS_SUPABASE } from '@/lib/supabase';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useStaffStore } from '@/lib/store/useStaffStore';
 import { useWorkStore, useDayparts, useDaypartLabels, daypartRoutineTemplates, assigneesOf, isRoutineTaskId, ROUTINE_ID_PREFIX, findDuplicateTask, occursOn, knowhowIdsForTask, quizCountForTask, isCaptureEligible, courseEntriesOf, trainingCourseViews, staffWhoUnderstandTask, understandsTask, taskVisibleTo, isRegularDue, isRequestDue, lastQuizAttemptOf, REGULAR_DUE_DAYS_DEFAULT, type FeedItem, type NewTask, type TaskTemplate } from '@/lib/store/useWorkStore';
 import { staffCanSeeCourse, recheckEntryDue } from '@/lib/quiz/schedule';
+import { useOpenFromParam } from '@/lib/hooks/useOpenFromParam';
 import { usePlaybookStore } from '@/lib/store/usePlaybookStore';
 import { useSuggestionStore } from '@/lib/store/useSuggestionStore';
 import { useSyncStore } from '@/lib/store/useSyncStore';
@@ -55,6 +57,8 @@ type TrainingCardView = {
   course: TrainingCardCourse;
   items: TrainingCardItem[];
   lastResult: { total: number; correct: number } | null;
+  /** 나에게 나간 이 퀴즈의 발송 id 전부(quiz_assignments.id). 푸시·벨의 `?quiz=<발송 id>` 가 이 카드를 고른다(P1 역 ⑤). */
+  sentIds?: string[];
 };
 
 // 채팅에 한 번에 보낼 수 있는 사진 최대 장수.
@@ -223,8 +227,10 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
   // ?compose=<nonce> — 홈 '할일 등록하기'에서 들어오면 할일 작성 시트까지 연다(값은 매번 달라야 재진입에도 열린다).
   // ?quiz=<nonce> — 직원 홈 '안 푼 퀴즈'·퀴즈 푸시에서 들어오면 카드의 다음 노하우로 응시 시트까지 연다(2026-10-15 QA #5).
   // ?task=<할일 id> — 벨 '할 일을 배정했어요'(notifications util taskRoute)에서 들어오면 할일 탭의 그 할일로 스크롤한다(2026-10-16 F3).
-  const { view: viewParam, compose: composeParam, quiz: quizParam, task: taskParam } =
-    useLocalSearchParams<{ view?: string; compose?: string; quiz?: string; task?: string }>();
+  // ?feed=<피드 id> — 공지·멘션 알림(레지스트리 notice·mention route)에서 들어오면 그 글로 간다: 공지·댓글이면 공지 패널의 그 공지,
+  //   메시지면 채팅의 그 말풍선(P1 역 ⑤). 어느 쪽인지는 피드가 온 뒤 종류로 가른다.
+  const { view: viewParam, compose: composeParam, quiz: quizParam, task: taskParam, feed: feedParam } =
+    useLocalSearchParams<{ view?: string; compose?: string; quiz?: string; task?: string; feed?: string }>();
   const paramView: ViewKey | null =
     viewParam === 'todo' || viewParam === 'notice' ? viewParam : viewParam === 'assign' ? 'todo' : null;
   const initialView: ViewKey = paramView ?? 'chat';
@@ -468,7 +474,7 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
         .filter((id) => hasEntryQuiz(id) && !!titleOf(id)),
     );
 
-    const cards: { course: TrainingCardCourse; items: TrainingCardItem[] }[] = [];
+    const cards: { course: TrainingCardCourse; items: TrainingCardItem[]; sentIds?: string[] }[] = [];
     const placedAsked = new Set<string>();
     for (const c of trainingCourseViews(courses)) {
       // ★발송 원장(0139)이 있는 퀴즈는 **나에게 실제로 나간 것만** 뜬다.
@@ -478,10 +484,10 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
       //   ★E1: 그 뒤에 만든 원장 0건 코스는 만들던 퀴즈·본사 사본이고, 외부 사람용은 링크로만 푼다.
       const sends = assignments.filter((a) => a.courseId === c.id);
       if (!staffCanSeeCourse(c, sends.length)) continue;
-      const mySent = sends
+      const mySends = sends
         .filter((a) => a.userId === userId && !!a.sentAt)
-        .sort((x, y) => (x.sentAt ?? '').localeCompare(y.sentAt ?? ''))
-        .at(-1);
+        .sort((x, y) => (x.sentAt ?? '').localeCompare(y.sentAt ?? ''));
+      const mySent = mySends.at(-1);
       if (sends.length > 0 && !mySent) continue;
 
       const list = courseEntriesOf(courseEntries, c.id)
@@ -508,7 +514,8 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
       if (!items.some((it) => it.state === 'next' || it.state === 'due' || it.state === 'asked')) continue;
       items.forEach((it) => { if (it.state === 'asked') placedAsked.add(it.id); });
       // dueOn = **내가 마지막으로 받은 발송**의 마감. 다시 알리기로 새 발송이 오면 그쪽이 이긴다.
-      cards.push({ course: { id: c.id, key: c.key, name: c.name, dueDays, dueOn: mySent?.dueOn ?? null }, items });
+      // 같은 퀴즈가 나에게 여러 번 나갔으면(다시 알리기·재확인) 어느 발송 id 로 와도 이 카드다.
+      cards.push({ course: { id: c.id, key: c.key, name: c.name, dueDays, dueOn: mySent?.dueOn ?? null }, items, sentIds: mySends.map((a) => a.id) });
     }
 
     // 어느 카드에도 못 실린 요청(코스에서 빠졌거나 그 코스 카드가 안 뜨는 경우) — 사람이 기다리는
@@ -530,16 +537,19 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
     const firstOnce = cards.find((c) => c.course.dueDays === null);
     return cards
       .filter((c) =>
-        c.course.dueDays === null
+        // 푸시·벨이 가리킨 발송(?quiz=<발송 id>)의 카드는 순서 규칙보다 앞선다 — 그 퀴즈를 열러 왔다(P1 역 ⑤).
+        // ★괄호 필수: `A || B ? X : Y` 는 `(A || B) ? X : Y` 로 묶여 딥링크 카드가 다시 순서 규칙에 걸린다.
+        (!!quizParam && !!c.sentIds?.includes(quizParam)) ||
+        (c.course.dueDays === null
           ? c === firstOnce || c.items.some((it) => it.state === 'due')
-          : !firstOnce || c.items.some((it) => it.state === 'asked'),
+          : !firstOnce || c.items.some((it) => it.state === 'asked')),
       )
       // 지난번 결과(0112) — 집계는 스토어 셀렉터가 한다(판정을 화면에 복제하지 않는다).
       .map((c) => {
         const last = lastQuizAttemptOf(quizAttempts, c.items.map((it) => it.id), userId);
         return { ...c, lastResult: last ? { total: last.total, correct: last.correct } : null };
       });
-  }, [isOwner, courses, courseEntries, understanding, entryById, quizCounts, quizAttempts, userId, trainingNow, trainingRequests, assignments]);
+  }, [isOwner, courses, courseEntries, understanding, entryById, quizCounts, quizAttempts, userId, trainingNow, trainingRequests, assignments, quizParam]);
 
   // 카드의 퀴즈 시작 — 항목이 노하우 하나라 그 노하우만 소스로 넣는다(푼 만큼만 통과 처리).
   // ★열었다는 신호를 여기서 찍는다(0140). 이게 빠지면 사장이 보낸 퀴즈가 "무시됐다"로 세어져
@@ -555,28 +565,53 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
   );
 
   /**
-   * ?quiz=<nonce> — 들어오자마자 첫 카드의 다음 노하우로 응시 시트를 연다(2026-10-15 QA #5).
-   * 카드는 스토어가 다 온 뒤에야 생기므로 '열어야 한다'를 들고 있다가 카드가 생기는 순간 한 번 연다.
+   * ?quiz=<발송 id> — 들어오자마자 **그 발송의 카드**(sentId 일치)의 다음 노하우로 응시 시트를 연다(2026-10-15 QA #5 · P1 역 ⑤).
+   * 발송 id 와 맞는 카드가 없으면(홈 타일의 nonce · 요청 푸시) 첫 카드로 물러난다.
+   * 카드는 스토어가 다 온 뒤에야 생기므로 '열어야 한다'를 들고 있다가 카드가 생기는 순간 한 번 연다(useOpenFromParam).
    * 열 카드가 없으면 조용히 접는다(업무 채팅에 그대로 머문다). 값이 바뀌면 다시 든다(홈에서 또 누른 경우).
    */
-  const [pendingQuiz, setPendingQuiz] = useState<string | null>(quizParam ?? null);
-  const [prevQuiz, setPrevQuiz] = useState(quizParam);
-  if (quizParam !== prevQuiz) {
-    setPrevQuiz(quizParam);
-    setPendingQuiz(quizParam ?? null);
-  }
+  const [pendingQuiz, quizOpened] = useOpenFromParam(quizParam);
   useEffect(() => {
-    if (!pendingQuiz || !workLoaded) return;
-    const first = trainingCards[0];
-    const next = first?.items.find((it) => it.state === 'asked') ?? first?.items.find((it) => it.state === 'next' || it.state === 'due');
+    if (!pendingQuiz) return;
+    // 카드는 할일·노하우·명부가 다 온 뒤에야 생긴다(trainingCards 는 assignments + playbook). workLoaded 만 보면
+    // 빈 카드 목록에서 '열었다'로 소진돼 아무것도 안 열린다 → 그 발송의 카드가 생길 때까지 들고 있다가 연다.
+    const card = trainingCards.find((c) => c.sentIds?.includes(pendingQuiz)) ?? (boardLoaded ? trainingCards[0] : undefined);
+    if (!card && !boardLoaded) return;
+    const next = card?.items.find((it) => it.state === 'asked') ?? card?.items.find((it) => it.state === 'next' || it.state === 'due');
     let alive = true;
     void Promise.resolve().then(() => {
       if (!alive) return;
-      setPendingQuiz(null);
-      if (first && next) startTrainingCheck(next.id, first.course.id);
+      quizOpened();
+      if (card && next) startTrainingCheck(next.id, card.course.id);
     });
     return () => { alive = false; };
-  }, [pendingQuiz, workLoaded, trainingCards, startTrainingCheck]);
+  }, [pendingQuiz, quizOpened, boardLoaded, trainingCards, startTrainingCheck]);
+
+  /**
+   * ?feed=<피드 id> — 피드가 온 뒤 그 글의 종류로 착지를 가른다. 공지·댓글(→ 그 공지)은 공지 패널을 열고 그 공지로,
+   * 메시지는 채팅의 그 말풍선으로. 받는 패널(NoticePanel·WorkChat)이 focusId 로 스크롤+강조한다.
+   */
+  const [pendingFeed, feedOpened] = useOpenFromParam(feedParam);
+  const [focusNoticeId, setFocusNoticeId] = useState<string | undefined>(undefined);
+  const [focusMessageId, setFocusMessageId] = useState<string | undefined>(undefined);
+  useEffect(() => {
+    if (!pendingFeed || !workLoaded) return;
+    const item = feed.find((f) => f.id === pendingFeed);
+    let alive = true;
+    void Promise.resolve().then(() => {
+      if (!alive) return;
+      feedOpened();
+      if (!item) return;
+      if (item.kind === 'notice' || item.kind === 'comment') {
+        setFocusNoticeId(item.kind === 'comment' ? item.refId : item.id);
+        setOpenedExternally(true);
+        setView('notice');
+      } else {
+        setFocusMessageId(item.id);
+      }
+    });
+    return () => { alive = false; };
+  }, [pendingFeed, feedOpened, workLoaded, feed]);
 
   // 퀴즈를 틀린 뒤 "물어보기"로 나가는 길 — 시트를 닫고 물어보기 화면에 문구만 채운다(전송은 본인이).
   // ★replace 로 간다: 탭 전환 SSOT(goToTab)와 같은 방식이어야 화면이 새로 마운트돼 seed 초기값이 먹는다.
@@ -924,6 +959,7 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
           // 안 읽은 공지가 있으면 햄버거에 점 — 공지 진입이 서랍으로 들어가면서 신호를 잃지 않게.
           drawerDot={unreadNotices > 0}
           stream={stream}
+          focusId={focusMessageId}
           today={today}
           me={userId}
           nameOf={nameOf}
@@ -993,6 +1029,7 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
           memberCount={memberCount}
           nameOf={nameOf}
           members={members}
+          focusId={focusNoticeId}
           onBack={closePanel}
           onPost={(text) => postNotice(today, text, userId, userName, role, false)}
           currentStore={isStoreOwner ? currentStore : undefined}
@@ -1057,6 +1094,12 @@ export function WorkBoard({ role }: { role: 'owner' | 'junior' }) {
             const results = await Promise.all(inputs.map((input) => addTask(input)));
             const okCount = results.filter(Boolean).length;
             if (okCount > 0) showToast(okCount > 1 ? `할일 ${okCount}개를 추가했어요` : '할일에 추가했어요', 'good');
+            // 역 ⑨ 전제 안내 — 담당자 중 알림을 받을 수 없는 사람(기기 없음·알림 끔)을 보내는 쪽이 말한다(P5).
+            const assignees = [...new Set(inputs.flatMap((i) => assigneesOf(i)))].filter((u) => u !== userId);
+            if (okCount > 0 && assignees.length) {
+              const note = unreachableNote(await fetchRecipientReadiness(activeUnit ?? '', assignees));
+              if (note) showToast(note);
+            }
           }}
           onEdit={async (id, patch) => {
             // 루틴의 '그 날짜만 수정' — 루틴 자체는 그대로 두고, 그날을 대신할 할일 1건을 만든다.

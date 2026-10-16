@@ -42,6 +42,9 @@ export default function JuniorNotificationsScreen() {
 
   const feed = useWorkStore((s) => s.feed);
   const taskTemplates = useWorkStore((s) => s.templates);
+  // 안 푼 퀴즈 알림(P1 역 ④) — WorkBoard 카드와 같은 발송 원장.
+  const assignments = useWorkStore((s) => s.assignments);
+  const courses = useWorkStore((s) => s.courses);
   const workLoaded = useWorkStore((s) => s.loaded);
   const done = useWorkStore((s) => s.done);
   const markNoticeRead = useWorkStore((s) => s.markNoticeRead);
@@ -95,8 +98,10 @@ export default function JuniorNotificationsScreen() {
         suggestions,
         queue,
         scheduleNotices,
+        assignments,
+        courses,
       }),
-    [feed, swaps, templates, owner, staff, me, today, taskTemplates, done, ackAt, suggestions, queue, scheduleNotices],
+    [feed, swaps, templates, owner, staff, me, today, taskTemplates, done, ackAt, suggestions, queue, scheduleNotices, assignments, courses],
   );
 
   const initial = (userName ?? '나').trim().slice(0, 1) || '나';

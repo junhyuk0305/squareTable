@@ -2,6 +2,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, Pressable, ScrollView, TextInput, Platform, StyleSheet, type NativeSyntheticEvent, type NativeScrollEvent } from 'react-native';
 import { KeyboardShift } from '@/components/KeyboardShift';
 import { useBottomPin } from '@/lib/hooks/useBottomPin';
+import { useOpenFromParam } from '@/lib/hooks/useOpenFromParam';
 import { BottomSheet } from '@/components/BottomSheet';
 import { StoredImage } from '@/components/StoredImage';
 import { Ionicons } from '@expo/vector-icons';
@@ -32,6 +33,7 @@ const CHAT_PAGE = 40; // '이전 대화 더보기' 한 번에 늘리는 수
 // 받아쓰기 이어붙이기 상한. 타이핑 입력엔 예전부터 상한이 없어 그 동작은 그대로 두고,
 // 음성이 채우는 분량만 여기서 자른다(60초 발화 한 번은 넉넉히 들어간다).
 const DRAFT_MAX_LEN = 2000;
+const FOCUS_SETTLE_MS = 520; // 알림으로 들어온 글로 스크롤하기 전 등장 애니메이션·초기 하단 고정이 가라앉는 시간(TodoScreen 과 같다)
 
 const WD = ['일', '월', '화', '수', '목', '금', '토'];
 function dateLabel(date: string, today: string): string {
@@ -123,8 +125,11 @@ export function WorkChat({
   onOpenDrawer,
   drawerDot,
   topInset,
+  focusId,
 }: {
   stream: FeedItem[];
+  /** 멘션 알림(?feed=)으로 들어온 글 id — 그 말풍선으로 스크롤하고 강조한다(P1 역 ⑤). 창 밖(안 불러온 옛 글)이면 조용히 접는다. */
+  focusId?: string;
   today: string;
   me: string;
   nameOf: (id: string) => string;
@@ -264,6 +269,19 @@ export function WorkChat({
   }, [shown, query]);
   const activeMatchId = matches[matchAt] ?? matches[0];
 
+  // 알림으로 들어온 글로 한 번 스크롤 — 초기 하단 고정(30ms scrollToEnd)이 끝난 뒤 움직인다. 같은 id 로는 한 번만.
+  const [pendingFocus, focusDone] = useOpenFromParam(focusId);
+  useEffect(() => {
+    if (!pendingFocus) return;
+    if (!shown.some((f) => f.id === pendingFocus)) return;
+    const t = setTimeout(() => {
+      const y = rowY.current[pendingFocus];
+      if (y !== undefined) scrollRef.current?.scrollTo({ y: Math.max(0, y - 80), animated: true });
+      focusDone();
+    }, FOCUS_SETTLE_MS);
+    return () => clearTimeout(t);
+  }, [pendingFocus, focusDone, shown]);
+
   const goMatch = useCallback(
     (dir: 1 | -1) => {
       if (matches.length === 0) return;
@@ -369,7 +387,7 @@ export function WorkChat({
                   nameOf={nameOf}
                   members={members}
                   query={searchOn ? query : undefined}
-                  active={f.id === activeMatchId}
+                  active={f.id === activeMatchId || f.id === focusId}
                   onReact={(e) => onReact(f.id, e)}
                   onLongPress={f.kind === 'message' ? () => setActionItem(f) : undefined}
                   onPromote={onMessageToKnowhow ? () => onMessageToKnowhow(f.text, f.id) : undefined}

@@ -2766,6 +2766,29 @@ export async function fetchQuizSendStatus(courseId: string): Promise<Record<stri
   return out;
 }
 
+/**
+ * 받는 사람이 지금 알림을 받을 수 있는 상태인가(0309 · 패턴 P5) — 기기 · 알림 설정 · 근무표 · 주 2회 상한.
+ * 보내는 쪽이 전제를 말하는 데만 쓴다. 보내기를 막지 않는다.
+ * ★RPC 가 아직 없는 서버(push 전 · PGRST202)는 **여기서만** 조용히 빈 배열 — 안내만 안 뜨고 기능은 그대로다.
+ */
+export type RecipientReadinessRow = import('@/lib/recipientReadiness').RecipientReadiness;
+export async function fetchRecipientReadiness(unitId: string, userIds: string[]): Promise<RecipientReadinessRow[]> {
+  if (!HAS_SUPABASE || !unitId || userIds.length === 0) return [];
+  const { data, error } = await supabase.rpc('recipient_readiness', { p_unit_id: unitId, p_user_ids: userIds });
+  if (error) {
+    if (!isMissingRpc(error)) readFail('fetchRecipientReadiness', error);
+    return [];
+  }
+  return ((data ?? []) as Record<string, unknown>[]).map((r) => ({
+    userId: String(r.user_id),
+    hasDevice: !!r.has_device,
+    pushOn: !!r.push_on,
+    onSchedule: !!r.on_schedule,
+    blockedReason: (r.blocked_reason as RecipientReadinessRow['blockedReason']) ?? null,
+    weeklyQuotaLeft: Number(r.weekly_quota_left ?? 0),
+  }));
+}
+
 /** 한 사람의 이 퀴즈 응시 목록(제출 단위 점수·시각) — 개인 상세 화면의 위쪽 대시보드. */
 export type PersonAttemptRow = { submissionId: string; takenAt: string; asked: number; correct: number };
 export async function fetchQuizCoursePerson(courseId: string, staffId: string): Promise<PersonAttemptRow[]> {
@@ -3219,11 +3242,17 @@ export async function fetchDone(): Promise<ReadResult<Record<string, Record<stri
   }
   return { data: out, error: false };
 }
-export async function setDone(date: string, templateId: string, mark: DoneMark, roomId?: string): Promise<boolean> {
-  if (!HAS_SUPABASE) return true;
-  return write(
+/** 완료 체크. ★먼저 저장한 사람이 완료자(2026-10-16 사용자 결정 · F5) — 이미 있는 행은 덮지 않는다(ON CONFLICT DO NOTHING).
+ *  0행 = already(다른 기기가 먼저 완료) → 호출부는 서버의 완료자 이름을 다시 읽는다. 예전 upsert(DO UPDATE)는 마지막 저장이 덮어
+ *  피드(먼저)와 완료자(나중)가 서로 달랐다. work_done_rw(0152)는 매장 조건만이라 남의 행에 비겨도 42501 이 아니라 0행이다. */
+export async function setDone(date: string, templateId: string, mark: DoneMark, roomId?: string): Promise<Decision> {
+  if (!HAS_SUPABASE) return 'ok';
+  return writeDecision(
     'setDone',
-    supabase.from('work_done').upsert({ unit_id: _unitId, work_date: date, template_id: templateId, room_id: roomId ?? null, data: mark }),
+    supabase
+      .from('work_done')
+      .upsert({ unit_id: _unitId, work_date: date, template_id: templateId, room_id: roomId ?? null, data: mark }, { ignoreDuplicates: true })
+      .select('template_id'),
   );
 }
 /** 완료 해제. 0행 = already(다른 기기가 먼저 해제) — 실패가 아니다. 두 기기가 동시에 해제하면 둘째가 여기로 온다(K5-d). */

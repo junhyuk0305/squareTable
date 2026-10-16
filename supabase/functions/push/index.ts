@@ -147,25 +147,29 @@ function ownerAlertRouteEdge(kind: string | undefined): string {
   }
 }
 
-// 앱이 부르는 발송(audience · tag)의 화면. 클라이언트가 보낸 url · route · unitId 는 쓰지 않는다.
+// 앱이 부르는 발송(audience · tag · itemId)의 화면. 클라이언트가 보낸 url · route · unitId 는 쓰지 않는다.
 //   같은 매장 동료가 가짜 주소("https://…", 다른 매장)를 실어 보내면 누른 사람이 그리로 가기 때문이다.
-// ★같은 표가 클라에 한 벌 더 있다 = src/lib/push/notify.ts 각 헬퍼의 url(옛 엣지가 싣는 값).
-//   새 tag 를 더하면 여기도 더한다. 모르는 tag 는 "/"(앱 첫 화면)다. check-push-route-sync.mjs 가 맞춘다.
-function clientPushRoute(audience: string | undefined, tag: string | undefined): string {
+// itemId 는 그 항목(할일·피드·질문·신청자)의 id 다 — 받는 화면이 그 항목을 연다(P1 역 ⑤). 글자 집합을 제한해 싣는다.
+// ★같은 표가 클라에 한 벌 더 있다 = src/lib/notif/registry.ts NOTIF[kind].route(surface, id) (벨·푸시 헬퍼가 쓰는 정본).
+//   새 tag 를 더하면 여기도 더한다. 모르는 tag 는 "/"(앱 첫 화면)다. check-push-route-sync.mjs 가 레지스트리 기준으로 맞춘다.
+function clientPushRoute(audience: string | undefined, tag: string | undefined, itemId?: string): string {
+  const id = typeof itemId === 'string' && /^[\w.:-]{1,80}$/.test(itemId) ? encodeURIComponent(itemId) : '';
+  const owner = audience === 'owners' || audience === 'join_owners';
+  const work = owner ? '/owner/work' : '/junior/work';
   switch (tag) {
-    case 'join': return '/owner/staff';
-    case 'question': return audience === 'owners' ? '/owner/inbox' : '/junior/chat';
+    case 'join': return `/owner/staff${id ? `?member=${id}` : ''}`;
+    case 'question': return owner ? `/owner/coach${id ? `?uqId=${id}` : ''}` : `/junior/chat${id ? `?uqId=${id}` : ''}`;
     case 'suggestion': return '/owner/suggestions';
     case 'swap-approval':
     case 'shift-time': return '/owner/schedule';
     case 'role': return '/junior/home';
-    case 'notice': return audience === 'owners' ? '/owner/work' : '/junior/work';
+    case 'notice': return `${work}?view=notice${id ? `&feed=${id}` : ''}`;
     case 'swap-req':
-    case 'swap-result': return '/junior/schedule';
-    case 'mention':
-    case 'assign':
-    case 'training': return '/junior/work';
-    case 'q-answered':
+    case 'swap-result': return owner ? '/owner/schedule' : '/junior/schedule';
+    case 'mention': return `${work}${id ? `?feed=${id}` : ''}`;
+    case 'assign': return id ? `${work}?view=todo&task=${id}` : `${work}?view=todo`;
+    case 'training': return `/junior/work${id ? `?quiz=${id}` : ''}`;
+    case 'q-answered': return `/junior/chat${id ? `?uqId=${id}` : ''}`;
     case 'suggestion-result': return '/junior/chat';
     default: return '/';
   }
@@ -637,9 +641,11 @@ Deno.serve(async (req) => {
     userId?: string;
     title?: string;
     body?: string;
-    /** 앱이 보내지만 읽지 않는다. 탭 화면은 clientPushRoute(audience, tag)가 정한다(보안 M8). */
+    /** 앱이 보내지만 읽지 않는다. 탭 화면은 clientPushRoute(audience, tag, itemId)가 정한다(보안 M8). */
     url?: string;
     tag?: string;
+    /** 그 항목의 id(P1 역 ⑤). 글자 집합 검사 뒤 route 의 파라미터로만 싣는다. 옛 앱은 안 보낸다. */
+    itemId?: string;
     /** D2: 공지를 올린 방. 기본방이 아니면 그 방 멤버에게만 보낸다. 옛 앱은 싣지 않는다(매장 전체). */
     roomId?: string;
   };
@@ -764,7 +770,7 @@ Deno.serve(async (req) => {
   if (recipientIds.length === 0) return json(200, { sent: 0, recipients: 0 });
 
   // 탭 화면과 매장은 서버가 정한다. 클라이언트가 보낸 url · route · unitId 는 버린다(보안 M8 · Q24).
-  const route = clientPushRoute(audience, tag);
+  const route = clientPushRoute(audience, tag, payload.itemId);
   const r = await deliver(admin, scopeUnit, recipientIds, { title, body, url: route, route, tag });
   return json(200, { sent: r.sent, recipients: r.recipients, pruned: r.pruned, suppressed: r.suppressed });
 });

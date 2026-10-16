@@ -228,7 +228,8 @@ const heroValue = async (S) => {
 };
 const tabBadge = (S) => S.page.eval(`(()=>{const els=[...document.querySelectorAll('[aria-label="노하우"]')].filter(e=>e.getBoundingClientRect().width>0);const e=els[els.length-1];if(!e)return null;const m=e.innerText.match(/(\\d+)/);return m?Number(m[1]):0;})()`);
 const segTodo = (S) => S.page.eval(`(()=>{const e=document.querySelector('[aria-label="할 일"]');if(!e)return null;const m=e.innerText.match(/(\\d+)/);return m?Number(m[1]):0;})()`);
-const bellQuestionItems = (S) => S.page.eval(`(document.body.innerText.match(/답 기다리는 질문이 있어요/g)||[]).length`);
+// 사장 벨 질문 항목 제목 = '<질문자>님의 질문'(10-16 P1 · 레지스트리 question.title · 옛 제목 '답 기다리는 질문이 있어요').
+const bellQuestionItems = (S) => S.page.eval(`(document.body.innerText.match(/님의 질문(?=\\n)/g)||[]).length`);
 const bellLabel = (S) => S.page.eval(`(()=>{const e=[...document.querySelectorAll('[aria-label^="알림"]')].find(x=>/^알림( \\d+건)?$/.test(x.getAttribute('aria-label')));return e?e.getAttribute('aria-label'):null;})()`);
 
 async function stable(fn, ms = 2500) {
@@ -411,8 +412,9 @@ try {
     if (now.badge != null) log(`탭 배지 ${now.badge} = 질문 ${N} + 제안 ${sg}? → ${now.badge === N + sg ? '예(질문·제안 두 단위 합)' : '아니오'}`);
     if (now.seg != null) log(`세그먼트 '할 일' ${now.seg} − (질문 ${N} + 제안 ${sg}) = ${now.seg - N - sg} ← 안 쓰인 노하우 수(unusedSegCount, 단위 = 노하우)로 추정`);
     check(`K1 홈 히어로 ${now.hero}건 = DB 대기 질문 ${N}건`, now.hero === N);
-    check(`K1 탭 배지 ${now.badge} = DB 대기 질문 ${N}건`, now.badge === N, '(배지는 질문+제안 합)');
-    check(`K1 세그먼트 '할 일' ${now.seg} = DB 대기 질문 ${N}건`, now.seg === N, '(세그먼트는 질문+제안+안 쓰인 노하우 합)');
+    // 10-16 사용자 결정: 탭 배지·'할 일' 세그먼트 = 질문 + 검토 대기 제안(한 라벨 = 한 단위). 안 쓰인 노하우는 세그먼트 수에 넣지 않는다.
+    check(`K1 탭 배지 ${now.badge} = DB 대기 질문 ${N} + 검토 대기 제안 ${sg}`, now.badge === N + sg, '(단위: 할 일 = 질문+제안)');
+    check(`K1 세그먼트 '할 일' ${now.seg} = DB 대기 질문 ${N} + 검토 대기 제안 ${sg}`, now.seg === N + sg, '(단위: 할 일 = 질문+제안 · 탭 배지와 같은 단위)');
     check(`K1 벨 질문 항목 ${now.bell}개 = DB 대기 질문 ${N}건`, now.bell === N);
     if (tSent) {
       const d = (a, b) => (a == null || b == null ? null : a - b);
@@ -432,7 +434,8 @@ try {
       const tapped = await clickText(S.page, Q2, 'qa-jr-bell-q');
       if (!tapped) throw new Error('벨에 그 질문 본문 항목이 없음');
       await sleep(3500);
-      k4 = await S.page.eval(`(()=>{const Q=${JSON.stringify(Q2)};const l=[...document.querySelectorAll('div,span')].filter(e=>e.childElementCount===0&&e.textContent.trim()===Q&&e.getBoundingClientRect().width>0).pop();let v=false;if(l){const r=l.getBoundingClientRect();v=r.top>=0&&r.bottom<=innerHeight;}return {path:location.pathname,search:location.search,first:document.body.innerText.split('\\n').map(s=>s.trim()).filter(Boolean).slice(0,2).join(' | '),visible:v};})()`);
+      // coach 는 질문을 “…” 따옴표로 감싸 보여 준다 → 잎 요소 글자가 질문을 '포함' 하면 그 질문이다(정확 일치가 아님).
+      k4 = await S.page.eval(`(()=>{const Q=${JSON.stringify(Q2)};const l=[...document.querySelectorAll('div,span')].filter(e=>e.childElementCount===0&&e.textContent.includes(Q)&&e.getBoundingClientRect().width>0).pop();let v=false;if(l){const r=l.getBoundingClientRect();v=r.top>=0&&r.bottom<=innerHeight;}return {path:location.pathname,search:location.search,first:document.body.innerText.split('\\n').map(s=>s.trim()).filter(Boolean).slice(0,2).join(' | '),visible:v};})()`);
     } catch (e) { k4.first = `탭 실패: ${e.message}`; }
     log(`벨 질문 항목 → 착지 ${k4.path}${k4.search} · 첫 줄 "${k4.first}" · 질문 본문 보임=${k4.visible}`);
     check(`K4-a(a) 벨 질문 항목 착지 주소에 그 질문 id(${uq.id})가 들어 있다(단위 = 문자열 포함)`, (k4.path + k4.search).includes(uq.id), `착지 ${k4.path}${k4.search}`);

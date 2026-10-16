@@ -14,7 +14,7 @@ import { SectionLabel } from '@/components/SectionLabel';
 import { WeekStrip, type WeekDay } from '@/components/blocks/WeekStrip';
 import { DayTimeline, type TimelineRow } from '@/components/schedule/DayTimeline';
 import { ShiftQuickSheet, type ShiftEditTarget } from '@/components/schedule/ShiftQuickSheet';
-import { useStaffStore } from '@/lib/store/useStaffStore';
+import { useStaffStore, memberNameOf } from '@/lib/store/useStaffStore';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useAttendanceStore } from '@/lib/store/useAttendanceStore';
 import {
@@ -59,6 +59,7 @@ const NAV_BTN = 36;
 export default function OwnerScheduleScreen() {
   const router = useRouter();
   const staff = useStaffStore((s) => s.staff);
+  const owner = useStaffStore((s) => s.owner);
   // 직원 관리·매장 설정은 사장 전용 — 매니저에겐 그리로 가는 버튼을 그리지 않는다.
   const isOwner = useSessionStore((s) => s.role) === 'owner';
   const config = useScheduleStore((s) => s.config);
@@ -92,7 +93,8 @@ export default function OwnerScheduleScreen() {
   const [sheet, setSheet] = useState<null | { edit?: ShiftEditTarget }>(null);
   const monday = useMemo(() => mondayOf(selected), [selected]);
 
-  const nameOf = (id: string) => staff.find((x) => x.id === id)?.name ?? '직원';
+  // 교대 요청자가 사장(공동 사장)일 수 있다 — 명부 SSOT(memberNameOf · 사장 포함). '직원'은 명부에 없을 때만(역 ③).
+  const nameOf = (id: string) => memberNameOf({ owner, staff }, id) ?? '직원';
   const tplById = (id: string) => templates.find((t) => t.id === id);
 
   // 사장 컨펌 대기(직원이 수락 완료한) 요청. 판정 SSOT는 pendingApprovals — 홈 '다음 행동'이 같은 수를 쓴다.

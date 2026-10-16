@@ -104,7 +104,7 @@ export const useUnknownQueueStore = create<UnknownQueueState>((set, get) => ({
       return false;
     }
     // 저장 성공 후에만 웹푸시 — D4(③): 사장 + 같은 매장 직원 전체에게(누가 답하든 됨). 발송자 제외는 서버.
-    if (uq.status === 'pending_owner_answer') notifyStoreQuestion(uq.query_text);
+    if (uq.status === 'pending_owner_answer') notifyStoreQuestion(uq.query_text, uq.id);
     return true;
   },
   // 질문 해결 — resolved_with_entry 로 전이 + answered_by 기록(누가 답했나, 0071).
@@ -130,8 +130,9 @@ export const useUnknownQueueStore = create<UnknownQueueState>((set, get) => ({
       }
       if (d === 'already') { void get().hydrate(); return true; }
       // 물어본 사람에게만 알린다 — 저장 성공 후에만(롤백 시 유령 알림 방지), 내가 내 질문에 답한 경우는 제외.
+      // 답한 사람 이름은 발송 쪽이 아는 세션 이름(역 ③ · 받는 쪽 벨은 memberNameOf 로 같은 사람을 푼다).
       if (before?.junior_id && before.junior_id !== answeredBy) {
-        notifyUserQuestionAnswered(before.junior_id, before.query_text);
+        notifyUserQuestionAnswered(before.junior_id, uqId, useSessionStore.getState().userName || '동료', before.query_text);
       }
       return true;
     });

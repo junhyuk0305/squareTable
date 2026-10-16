@@ -3,7 +3,7 @@ import { ScreenTitleHeader } from '@/components/ScreenTitleHeader';
 import { View, Text, Pressable, StyleSheet, ScrollView, TextInput } from 'react-native';
 import { KeyboardShift } from '@/components/KeyboardShift';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Stack, useFocusEffect, useRouter } from 'expo-router';
+import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
 import { usePayrollStore, useWagesSettled } from '@/lib/store/usePayrollStore';
@@ -34,6 +34,8 @@ import { confirmAction } from '@/lib/utils/confirm';
 
 export default function OwnerStaffScreen() {
   const router = useRouter();
+  // ?member=<신청자 id> — 합류 신청 알림(레지스트리 join_request route)에서 들어오면 그 신청 행을 강조한다(P1 역 ⑤).
+  const { member: focusMemberId } = useLocalSearchParams<{ member?: string }>();
   const wages = usePayrollStore((s) => s.wages);
   const settings = usePayrollStore((s) => s.settings);
   const setWage = usePayrollStore((s) => s.setWage);
@@ -289,7 +291,7 @@ export default function OwnerStaffScreen() {
             <SectionLabel title={`합류 신청 (${pending.length}명)`} />
             <View style={[styles.list, styles.pendingList]}>
               {pending.map((p, i) => (
-                <Appear key={p.id} delay={stagger(i)} style={styles.staffRow}>
+                <Appear key={p.id} delay={stagger(i)} style={[styles.staffRow, p.id === focusMemberId && styles.focusRow]}>
                   <Avatar name={p.name} size={40} fontSize={15} />
                   <View style={styles.nameCol}>
                     <Text style={styles.staffName} numberOfLines={1}>{p.name || '이름 미입력'}</Text>
@@ -591,6 +593,8 @@ const styles = StyleSheet.create({
   pendingWrap: { gap: 8 },
   // 흰 카드가 세로로 이어지면 "승인해야 진행되는 항목"이 나열 속에 묻힌다 → 옐로 틴트로 떼어놓는다.
   pendingList: { backgroundColor: BrandColors.yellowSoft, borderColor: BrandColors.gold },
+  // 알림으로 들어온 신청 행 — 테두리만 강조.
+  focusRow: { borderWidth: 2, borderColor: BrandColors.accentSolid, borderRadius: Radius.md, paddingHorizontal: 8 },
   rejectBtn: { paddingVertical: 7, paddingHorizontal: 12, borderRadius: Radius.sm, borderWidth: 1, borderColor: InkColors.line },
   rejectText: { fontSize: 13, fontWeight: '700', color: InkColors.ink3 },
   approveBtn: { paddingVertical: 7, paddingHorizontal: 14, borderRadius: Radius.sm, backgroundColor: BrandColors.brand },
