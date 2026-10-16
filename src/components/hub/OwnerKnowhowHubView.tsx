@@ -16,6 +16,7 @@ import { useCrossNotifStore } from '@/lib/store/useCrossNotifStore';
 import { useMemberPrefsStore } from '@/lib/store/useMemberPrefsStore';
 import { useUnknownQueueStore } from '@/lib/store/useUnknownQueueStore';
 import { useStoreNav } from '@/lib/hooks/useStoreNav';
+import { isTodoQuestion } from '@/lib/hooks/useOwnerTodoCount';
 import { storeColor } from '@/lib/utils/storeColor';
 import { sortByUrgency } from '@/lib/utils/unknownQuery';
 import { formatAsked } from '@/lib/utils/time';
@@ -109,7 +110,7 @@ export function OwnerKnowhowHubView({ header }: { header: ReactNode }) {
   /** 단일 매장의 가장 오래 기다린 질문(sortByUrgency SSOT). 다점포·0건이면 null → 롤업(B). */
   const urgent = useMemo(() => {
     if (overview.length !== 1) return null;
-    const pending = uqQueue.filter((u) => u.status === 'pending_owner_answer');
+    const pending = uqQueue.filter(isTodoQuestion);
     return pending.length > 0 ? sortByUrgency(pending)[0] : null;
   }, [overview.length, uqQueue]);
 

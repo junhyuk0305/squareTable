@@ -12,6 +12,7 @@ import { useQuizBoard } from '@/lib/quiz/useQuizBoard';
 import { todayStr, hhmm } from '@/lib/utils/attendance';
 import { gradableTasks, staffBehind, type StaffBehind } from '@/lib/utils/taskProgress';
 import { sortByUrgency } from '@/lib/utils/unknownQuery';
+import { isTodoQuestion } from '@/lib/hooks/useOwnerTodoCount';
 import type { UnknownQuery } from '@/types';
 
 export type OwnerDashboardData = {
@@ -207,7 +208,7 @@ export function useOwnerDashboardData(): OwnerDashboardData {
 
   // 알바 FAQ Top — 미답변 질문을 '많이 물은 순'으로. 답변 시 노하우로 전환됨.
   const pendingList = useMemo(
-    () => queue.filter((u) => u.status === 'pending_owner_answer'),
+    () => queue.filter(isTodoQuestion),
     [queue],
   );
   // ★히어로 큰 수는 **대기열 전체 규모**다 → 목록 길이가 아니라 서버 집계를 쓴다.

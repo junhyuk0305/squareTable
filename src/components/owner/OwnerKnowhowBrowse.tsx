@@ -332,11 +332,6 @@ export function OwnerKnowhowBrowse({
   // '안 쓰임' 칸의 두 그룹 — 검색·카테고리 필터를 타지 않는다(그 칸엔 찾기 바가 없다).
   const reviewList = useMemo(() => visible.filter(needsVerify), [visible]);
   const unusedList = useMemo(() => visible.filter(isUnused), [visible]);
-  // 칸 배지는 두 그룹의 **합집합**(둘 다 해당하는 항목을 두 번 세지 않는다).
-  const unusedSegCount = useMemo(
-    () => visible.filter((e) => needsVerify(e) || isUnused(e)).length,
-    [visible],
-  );
 
   /**
    * 목록 순서 — **최근 고친 것부터** 하나로 고정한다(2026-08-08 정렬 기능 삭제).
@@ -473,7 +468,8 @@ export function OwnerKnowhowBrowse({
   //   둘 다 "지금 손볼 것"을 모으는 칸이라 따로 설 이유가 없었다 — 사장은 손볼 게 있나 보려고
   //   두 칸을 번갈아 눌러야 했다. 배지도 두 군데로 갈려서 어느 쪽이 남은 일인지 안 보였다.
   const segItems: SegmentItem[] = [
-    { key: 'todo', label: '할 일', count: todo.total + unusedSegCount },
+    // ★2026-10-16 사용자 결정: 수 = 질문+제안(탭 배지 useOwnerTodoCount 와 같은 단위). 손볼 노하우는 칸 안 소제목 그룹으로만 보인다.
+    { key: 'todo', label: '할 일', count: todo.total },
     { key: 'knowhow', label: '노하우', count: visible.length },
   ];
 
