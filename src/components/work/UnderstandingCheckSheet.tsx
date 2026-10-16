@@ -180,6 +180,8 @@ function SavedQuizBody({
   const [failed, setFailed] = useState(false);
   const [results, setResults] = useState<boolean[]>([]);
   const [done, setDone] = useState(false);
+  /** 응시 기록이 서버에 저장됐다(quiz_staff_record 가 제출 id 를 돌려준 뒤). 결과 화면의 "제출됐어요" 한 줄은 이것만 본다. */
+  const [submitted, setSubmitted] = useState(false);
   /**
    * 낸 답 원문 — 문항별 기록(0190)을 서버가 **다시 채점**해서 적는다.
    * ★렌더에 안 쓰이므로 ref 다. state 로 두면 답 하나마다 시트 전체가 다시 그려진다.
@@ -236,7 +238,10 @@ function SavedQuizBody({
     // 응시 기록(0190) — 문항별 + 노하우별 집계를 **서버가** 적는다. 여기서 센 값을 보내지 않는다.
     // ★E4: 다 풀면(맞힘과 무관) 기록이 저장된 뒤 알린다 — 서버가 그 기록으로 발송 완료를 판정한다(0275).
     const answered = perEntry.map((e) => e.entryId);
-    void recordStaffQuizAttempt(given.current).then(() => onFinished?.(answered));
+    void recordStaffQuizAttempt(given.current).then((submissionId) => {
+      if (submissionId) setSubmitted(true);
+      onFinished?.(answered);
+    });
     // 통과 기준은 그대로 — 전부 맞아야 통과. 통과 처리 대상은 **실제로 푼 문항의 근거 노하우**뿐이다
     // (0111: 다루지 않은 노하우까지 "안다"로 켜지 않는다).
     if (marks.length === items.length && marks.every(Boolean)) onPass(perEntry.map((e) => e.entryId));
@@ -263,9 +268,11 @@ function SavedQuizBody({
           <View style={[s.resultBox, passed ? s.resultPass : s.resultFail]}>
             <Ionicons name={passed ? 'ribbon' : 'refresh-circle'} size={22} color={passed ? BrandColors.good : BrandColors.warn} />
             <Text style={s.resultText}>
-              {passed ? '이해 확인이 끝났어요. 사장님께 전달됐어요.' : `${items.length}개 중 ${correctCount}개 맞았어요.`}
+              {passed ? '이해 확인이 끝났어요.' : `${items.length}개 중 ${correctCount}개 맞았어요.`}
             </Text>
           </View>
+          {/* 제출 저장이 서버에서 끝난 뒤에만 말한다 — 맞힘 여부·발송 완료 판정(0275)과 무관하다. */}
+          {submitted && <Text style={s.submittedNote}>제출됐어요. 사장님이 결과를 볼 수 있어요.</Text>}
           {/* 틀렸으면 무엇을 다시 볼지 알려준다 — 개수만 말하고 끝나면 직원은 어디를 봐야 할지 모른다. */}
           {!passed && missedTitles.length > 0 && (
             <View style={s.missBox}>
@@ -541,6 +548,7 @@ const s = StyleSheet.create({
   resultPass: { backgroundColor: '#E6F1EA' },
   resultFail: { backgroundColor: BrandColors.warnSoft },
   resultText: { flex: 1, fontSize: 15, fontWeight: '800', color: InkColors.ink, lineHeight: 22 },
+  submittedNote: { fontSize: 13, color: InkColors.ink2, fontWeight: '600', marginTop: 8, paddingHorizontal: 2, lineHeight: 18 },
 
   missBox: { marginTop: 12, paddingHorizontal: 2 },
   missLead: { fontSize: 13, fontWeight: '800', color: InkColors.ink2, marginBottom: 6 },

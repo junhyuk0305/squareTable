@@ -53,3 +53,16 @@ export function unreachableNote(rows: RecipientReadiness[], opts?: { schedule?: 
     .map((k) => `${n[k]}명은 ${SUM_TEXT[k]}`);
   return parts.length ? parts.join(' · ') : null;
 }
+
+/**
+ * 바로 가는 알림(질문·답변)을 지금 받을 사람이 아무도 없는가 — 기기 0 · 알림 끔만 센다(근무표는 비해당).
+ * 읽기 실패(빈 배열)나 행이 없는 사람은 받을 수 있다로 본다 — 모르면 안내하지 않는다.
+ * 받는 사람이 여럿이면 한 명이라도 받을 수 있을 때 false.
+ */
+export function noneReachable(rows: RecipientReadiness[], userIds: string[]): boolean {
+  if (userIds.length === 0) return false;
+  return userIds.every((id) => {
+    const r = rows.find((x) => x.userId === id);
+    return !!r && (r.blockedReason === 'no_device' || r.blockedReason === 'push_off');
+  });
+}

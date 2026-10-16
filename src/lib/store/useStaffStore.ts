@@ -4,7 +4,7 @@ import { create } from 'zustand';
 import type { Owner, Junior } from '@/types';
 import usersData from '@/data/users.json';
 import { HAS_SUPABASE } from '@/lib/supabase';
-import { fetchStaffProfiles, removeStaffMember, subscribeStaff, fetchPendingMembers, approveMember, rejectMember, setMemberRoleDb, fetchMemberTenures } from '@/lib/db';
+import { fetchStaffProfiles, removeStaffMember, subscribeStaff, fetchPendingMembers, approveMember, rejectMember, setMemberRoleDb, fetchMemberTenures, fetchJoinNotices } from '@/lib/db';
 import { openJoinedAt, type MemberTenure } from '@/lib/utils/tenure';
 import { showToast } from '@/lib/store/useToastStore';
 import { notifyUserRoleChange } from '@/lib/push/notify';
@@ -29,10 +29,15 @@ const alreadyDecided = (get: () => StaffState) => {
 /** 합류 신청자(승인 대기, 남용 #2) — 아직 소속 아님. 이름·전화뒷4만 노출. */
 export type PendingMember = { id: string; name: string; phone_last4: string; created_at: string };
 
+/** 내 합류 결과(0247 member_notices · approved·rejected) — 서버가 승인·반려 때 넣는다. 푸시는 크론이 같은 행을 보낸다. 벨 항목의 원천. */
+export type JoinNotice = { id: number; kind: 'approved' | 'rejected'; store_name: string | null; body: string; created_at: string };
+
 type StaffState = {
   owner: Owner | null;
   staff: Junior[];
   pending: PendingMember[];
+  // 내 합류 결과(계정 단위 · 본인 행만). 신청자의 profiles 행이 바뀌면(승인·반려) subscribe 가 hydrate 를 다시 불러 곧 따라온다.
+  joinNotices: JoinNotice[];
   // 매장별 역할 맵(0093, unit_members.role) — 매니저 배지·임명 UI 입력. 키=userId.
   roles: Record<string, string>;
   // 이 매장 재직 기간(0246) — 사장만 읽는다. 입사일 · 이번 기간 퇴사자 줄 · 재입사 경고의 입력. 못 읽으면 빈 배열.
@@ -80,6 +85,7 @@ export const useStaffStore = create<StaffState>((set, get) => ({
   owner: HAS_SUPABASE ? null : demoOwner,
   staff: HAS_SUPABASE ? [] : demoStaff,
   pending: [],
+  joinNotices: [],
   roles: {},
   tenures: [],
   loaded: !HAS_SUPABASE,
@@ -91,10 +97,12 @@ export const useStaffStore = create<StaffState>((set, get) => ({
     const epoch = currentTenantEpoch();
     // 재직 기간은 사장에게만 행이 온다(RLS). 0246 이 없는 서버에서는 실패한다 — 실패는 명부 실패로 보지 않고 빈 기간으로 둔다.
     const isOwner = useSessionStore.getState().role === 'owner';
-    const [staffRes, pendingRes, tenRes] = await Promise.all([
+    const [staffRes, pendingRes, tenRes, joinRes] = await Promise.all([
       fetchStaffProfiles(),
       fetchPendingMembers(),
       isOwner ? fetchMemberTenures() : Promise.resolve({ data: [] as MemberTenure[], error: false }),
+      // 합류 결과는 읽기 실패를 명부 실패로 보지 않는다(벨 항목 하나가 빠질 뿐이다).
+      fetchJoinNotices(),
     ]);
     if (isStaleEpoch(epoch)) return; // 그 사이 매장이 바뀌었다 — 이전 매장 명부를 쓰지 않는다
     const tenures = tenRes.data;
@@ -104,6 +112,7 @@ export const useStaffStore = create<StaffState>((set, get) => ({
       staff: staffRes.staff.map((m) => ({ ...m, joined_at: openJoinedAt(tenures, m.id) ?? m.joined_at })),
       tenures,
       pending: pendingRes.data,
+      joinNotices: joinRes.data,
       // 역할 맵은 명부와 같은 멤버십 읽기에서 온다 — 그 읽기가 실패하면 명부도 실패(loadError)다.
       roles: staffRes.roles,
       loaded: true,
@@ -136,8 +145,10 @@ export const useStaffStore = create<StaffState>((set, get) => ({
     const epoch = currentTenantEpoch();
     set({ pending: before.filter((p) => p.id !== id) });
     void approveMember(id).then(({ decision, code }) => {
-      if (decision === 'ok') get().hydrate();
-      else if (decision === 'already') alreadyDecided(get);
+      if (decision === 'ok') {
+        showToast(`${target.name}님의 합류를 승인했어요`, 'good');
+        get().hydrate();
+      } else if (decision === 'already') alreadyDecided(get);
       else {
         if (!isStaleEpoch(epoch)) set({ pending: before });
         const limitMsg = `무료 요금제는 직원 ${PLANS.free.maxStaff}명까지 승인할 수 있어요.`;
@@ -174,11 +185,12 @@ export const useStaffStore = create<StaffState>((set, get) => ({
   // 거절: 낙관적 제거 + 실패 시 복원. not_pending 은 approve 와 같은 길(이미 처리됨 → 다시 읽기).
   reject: (id) => {
     const before = get().pending;
-    if (!before.some((p) => p.id === id)) return;
+    const target = before.find((p) => p.id === id);
+    if (!target) return;
     const epoch = currentTenantEpoch(); // approve 와 같은 이유
     set({ pending: before.filter((p) => p.id !== id) });
     void rejectMember(id).then(({ decision }) => {
-      if (decision === 'ok') return;
+      if (decision === 'ok') return showToast(`${target.name}님의 합류를 거절했어요`, 'info');
       if (decision === 'already') return alreadyDecided(get);
       if (!isStaleEpoch(epoch)) set({ pending: before });
       useSyncStore.getState().noteError('거절 처리에 실패했어요. 다시 시도해 주세요.');

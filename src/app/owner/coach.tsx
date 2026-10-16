@@ -17,7 +17,10 @@ import { useSuggestionStore } from '@/lib/store/useSuggestionStore';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 import { useWorkStore } from '@/lib/store/useWorkStore';
 import { buildDirectUq } from '@/lib/utils/buildEntry';
-import { insertKnowhowToUnit } from '@/lib/db';
+import { insertKnowhowToUnit, fetchRecipientReadiness } from '@/lib/db';
+import { noneReachable } from '@/lib/recipientReadiness';
+import { useStaffStore, memberNameOf } from '@/lib/store/useStaffStore';
+import { showToast } from '@/lib/store/useToastStore';
 import { InkColors, BrandColors } from '@/lib/theme/colors';
 import { Radius } from '@/lib/theme/elevation';
 
@@ -40,7 +43,9 @@ export default function OwnerCoachScreen() {
   const { uqId, category: catParam, seed, sugId, feedId, srcTemplate, unit: unitParam } = useLocalSearchParams<{ uqId?: string; category?: string; seed?: string; sugId?: string; feedId?: string; srcTemplate?: string; unit?: string }>();
 
   const addEntry = usePlaybookStore((s) => s.add);
+  const noteSaved = usePlaybookStore((s) => s.noteSaved);
   const resolve = useUnknownQueueStore((s) => s.resolve);
+  const answer = useUnknownQueueStore((s) => s.answer);
   // 채팅 메시지 승격(§4.1)에서 넘어온 경우: 발행 성공 시 원본 메시지에 흔적을 남겨 재승격 넛지를 끈다.
   const markPromoted = useWorkStore((s) => s.markPromoted);
   // 완료 캡처(②) 제안이면: 발행·승인 후 그 출처 업무에 결과 노하우를 자동 첨부(0069/0070).
@@ -132,8 +137,9 @@ export default function OwnerCoachScreen() {
   //  알바 챗봇 학습 루프가 조용히 끊겼다 — 리포트 P1-7.)
   // 저장이 서버에 실제 반영된 뒤에만 성공 토스트+네비. 성공 여부(boolean)를 반환해
   // 호출 컴포넌트(OwnerCoachChat)가 실패 시 발행 잠금(publishedRef)을 풀어 재시도를 허용한다.
+  // answerEntry(0311): 인박스 답의 노하우를 **아직 저장하지 않고** 넘기면 여기서 RPC 하나로 저장+질문 해결을 한다.
   const finishPublish = useCallback(
-    async (entryIds: string[], addOk: boolean, okMsg: string): Promise<boolean> => {
+    async (entryIds: string[], addOk: boolean, okMsg: string, answerEntry?: PlaybookEntry): Promise<boolean> => {
       if (!addOk) {
         setToastErr(true);
         setToast('저장에 실패했어요. 연결을 확인하고 다시 시도해 주세요.');
@@ -142,7 +148,25 @@ export default function OwnerCoachScreen() {
       // 저장은 성공 — 이제 인박스 질문 상태(resolve)까지 확인. justPublished 로 데드엔드 가드 우회.
       setJustPublished(true);
       let resolveOk = true;
-      if (answerable && realUq) resolveOk = await resolve(realUq.id, entryIds[0]);
+      if (answerable && realUq) {
+        if (answerEntry) {
+          // ★0311 노하우 저장 + 질문 해결 = 서버 한 트랜잭션. 두 기기가 같은 질문에 답해도 노하우는 1건 —
+          //   뒤의 것은 already(not_pending)라 오류가 아니다. 중립 한 줄 + 서버 상태로 다시 읽고(answer 가 hydrate) 인박스로.
+          const d = await answer(realUq.id, answerEntry);
+          if (d === 'already') {
+            setToastErr(false);
+            setToast('이미 답이 달린 질문이에요.');
+            navAfter();
+            return true;
+          }
+          if (d !== 'ok') {
+            setToastErr(true);
+            setToast('저장에 실패했어요. 연결을 확인하고 다시 시도해 주세요.');
+            return false;
+          }
+          noteSaved(answerEntry);
+        } else resolveOk = await resolve(realUq.id, entryIds[0]);
+      }
       // ★승인 결과를 본다(#18). 예전엔 반환을 버려, 승인이 조용히 롤백되면 제안은 pending 으로
       //   되돌아오는데 **노하우는 이미 저장돼 있었다** → 사장이 목록에서 다시 승인 → 같은 노하우 2건.
       //   노하우 저장 자체는 성공했으므로 실패로 되돌리지 않고, 무엇이 안 됐는지만 정확히 말한다.
@@ -164,7 +188,12 @@ export default function OwnerCoachScreen() {
         return false;
       }
       setToastErr(false);
-      setToast(okMsg);
+      // 질문한 직원이 지금 알림을 못 받으면(기기 0 · 알림 끔) 그 사실을 말한다(P5 · 0309). 읽기 실패는 빈 배열 → 기본 문구.
+      // 이 안내는 전역 토스트로 — 화면 토스트는 1.1초 뒤 인박스로 이동하며 같이 사라져 읽을 시간이 없다.
+      if (answerable && realUq && noneReachable(await fetchRecipientReadiness(activeUnit, [realUq.junior_id]), [realUq.junior_id])) {
+        const name = (memberNameOf(useStaffStore.getState(), realUq.junior_id) ?? realUq.junior_name) || '직원';
+        showToast(`답변을 보냈어요. ${name}님이 앱을 열 때 볼 거예요.`);
+      } else setToast(okMsg);
       // 매장 2개 이상이면 "다른 매장에도?" 넛지를 띄우고 네비는 넛지 닫힘까지 미룬다. 아니면 바로 이동.
       // ★크로스 매장 저장(0121)에는 넛지를 띄우지 않는다 — 넛지의 복제는 **활성 매장을 원본으로** 하는데
       //   방금 쓴 노하우는 활성 매장에 없다. 띄우면 엉뚱한 것을 복제하거나 조용히 0건이 된다.
@@ -172,7 +201,7 @@ export default function OwnerCoachScreen() {
       else navAfter();
       return true;
     },
-    [answerable, realUq, resolve, sugId, approveSuggestion, srcTemplate, attachKnowhow, feedId, markPromoted, navAfter, nudgeTargets, targetUnitId],
+    [answerable, realUq, resolve, answer, noteSaved, sugId, approveSuggestion, srcTemplate, attachKnowhow, feedId, markPromoted, navAfter, nudgeTargets, targetUnitId, activeUnit],
   );
 
   // 이미 있는 노하우로 답하기 — 새 노하우를 만들지 않고 질문만 그 노하우로 해결한다.
@@ -231,10 +260,13 @@ export default function OwnerCoachScreen() {
     async (entry: PlaybookEntry): Promise<boolean> => {
       const decision = await askBeforePublish([entry]);
       if (!decision) return false; // 취소 — 저장 안 함(잠금 해제되어 다시 시도 가능)
-      const ok = await saveEntry(withPart(entry, decision));
-      return finishPublish([entry.id], ok, isInboxAnswer ? '답변이 직원 챗봇에 반영됐어요' : '새 노하우가 저장됐어요');
+      const entryWithPart = withPart(entry, decision);
+      // 인박스 답(활성 매장)은 저장을 finishPublish 의 원자 RPC(0311)에 맡긴다 — 여기서 먼저 저장하면 두 단계로 갈라진다.
+      const atomic = answerable && !!realUq && !targetUnitId;
+      const ok = atomic ? true : await saveEntry(entryWithPart);
+      return finishPublish([entry.id], ok, isInboxAnswer ? '답변이 직원 챗봇에 반영됐어요' : '새 노하우가 저장됐어요', atomic ? entryWithPart : undefined);
     },
-    [saveEntry, finishPublish, isInboxAnswer, askBeforePublish, withPart],
+    [saveEntry, finishPublish, isInboxAnswer, askBeforePublish, withPart, answerable, realUq, targetUnitId],
   );
 
   // 다중 분리 발행 — 각 노하우를 저장. 엔트리별 성공여부(boolean[])를 반환해 호출부(publishEach)가

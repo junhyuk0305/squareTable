@@ -119,13 +119,18 @@ async function clickText(page, text, ms = 15000) {
   if (!(await page.waitFor(tagTextExpr(text), ms))) throw new Error(`글자 '${text}' 를 못 찾음`);
   await page.click('[data-qa-t="1"]');
 }
-/** 화면에 보이는 요소 중 글자가 정확히 text 인 가장 안쪽 요소에 표식을 단다. */
-const tagTextExpr = (text) => `(()=>{const want=${JSON.stringify(text)};
+/** 같은 글자가 여럿이면 DOM 마지막 잎을 누른다(확인창이 DOM 뒤에 붙는다 · K7-r 의 [거절]). */
+async function clickLastText(page, text, ms = 15000) {
+  if (!(await page.waitFor(tagTextExpr(text, true), ms))) throw new Error(`글자 '${text}' 를 못 찾음`);
+  await page.click('[data-qa-t="1"]');
+}
+/** 화면에 보이는 요소 중 글자가 정확히 text 인 가장 안쪽 요소에 표식을 단다(last=true 면 DOM 마지막 것). */
+const tagTextExpr = (text, last = false) => `(()=>{const want=${JSON.stringify(text)};
   const all=[...document.querySelectorAll('body *')].filter(e=>{const r=e.getBoundingClientRect();return r.width>0&&r.height>0&&(e.innerText||'').trim()===want;});
   if(!all.length)return false;
   const leaf=all.filter(e=>!all.some(o=>o!==e&&e.contains(o)));
   document.querySelectorAll('[data-qa-t]').forEach(e=>e.removeAttribute('data-qa-t'));
-  leaf[0].setAttribute('data-qa-t','1');return true;})()`;
+  leaf[${last ? 'leaf.length-1' : '0'}].setAttribute('data-qa-t','1');return true;})()`;
 
 /** 누를 준비만 한다(좌표 계산). 돌려준 함수를 부르면 곧바로 누른다 — 두 창을 거의 동시에 누를 때 쓴다. */
 async function armClick(page, text, ms) {
@@ -273,7 +278,7 @@ async function accountActive(uid) {
 }
 
 // 이 묶음이 끝까지 못 돌면 남은 단언을 ✗ 로 센다.
-const PLANNED = ['K1-a', 'K1-b', 'K5-a', 'K2-auto', 'K2', 'K3', 'K4', 'K1-c', 'K2-c', 'K5-b', 'K5-c', 'K6-a', 'K6-b'];
+const PLANNED = ['K1-a', 'K1-b', 'K7-r', 'K5-a', 'K2-auto', 'K2', 'K7-s', 'K3', 'K4', 'K1-c', 'K2-c', 'K7-j', 'K5-b', 'K5-c', 'K6-a', 'K6-b'];
 const done = new Set();
 const mark = (k) => done.add(k);
 let unit = null;
@@ -323,10 +328,48 @@ try {
     await S.mark('새 매장 명부');
   }
 
-  // ── J: 합류 신청(두 번 누름) ─────────────────────────────────────────────
-  section('K5-a. J 같은 코드로 합류 신청 두 번(거의 동시) → 대기 카드 · 오류 문구 0');
+  // ── K7-r: J 신청 → S 거절 → J 벨 '반려' 항목(0247 member_notices) → 탭 착지(/junior/hub) ──────────────
+  section('K7-r. J 합류 신청 → S \'거절\' → J 벨에 반려 항목 · 탭하면 직원 허브');
   const J = await openWindow('J', 9334, juniorSession, '/junior/hub');
   await J.page.waitFor(`document.body.innerText.includes('코드로 매장 추가')`, 40000);
+  {
+    const w0 = watch(J.page, (t) => /승인 대기|승인을 기다/.test(t), 10000);
+    await joinViaUi(J, code);
+    const r0 = await w0;
+    info(`K7-r 신청: 대기 카드 ${r0.ok ? r0.sec.toFixed(1) + '초' : '안 뜸(10초)'} · DB pending=${await dbPending(unit)}`);
+    const rS = await watch(S.page, (t) => pendNum(t) === 1, 35000);
+    if (!rS.ok) throw new Error('K7-r: S 신청 목록에 1명이 안 뜸');
+    await clickText(S.page, '거절'); // 행의 [거절] → 확인창
+    if (!(await S.page.waitFor(tagTextExpr('합류 신청 거절'), 10000))) throw new Error('K7-r: 거절 확인창이 안 뜸');
+    await clickLastText(S.page, '거절'); // 확인창의 [거절](DOM 뒤에 붙는다)
+    const rGone = await watch(S.page, (t) => pendNum(t) === null, 20000);
+    // 거절은 낙관적 제거(useStaffStore.reject)라 화면이 먼저 비고 RPC 는 뒤에 끝난다 → DB pending 0 을 기다린 뒤 알림 행을 읽는다.
+    for (let i = 0; i < 40 && (await dbPending(unit)) !== 0; i++) await sleep(250);
+    const { data: mn } = await admin.from('member_notices').select('id, kind, store_name').eq('user_id', jc.uid).eq('unit_id', unit).eq('kind', 'rejected');
+    check('K7-r S 거절 → DB pending 0 · member_notices rejected 1행(0247) [건]', rGone.ok && (await dbPending(unit)) === 0 && (mn ?? []).length === 1,
+      `S 신청 섹션 사라짐=${rGone.ok} · pending=${await dbPending(unit)} · rejected 행=${(mn ?? []).length}`);
+    await J.goto('/junior/notifications');
+    const TITLE_R = `${STORE_NAME} 합류 신청이 반려됐어요`;
+    const rBell = await watch(J.page, (t) => t.includes(TITLE_R), 30000);
+    check('K7-r J 벨에 "<매장> 합류 신청이 반려됐어요" 항목(제목 = 레지스트리 join_rejected.title · 매장 이름 = DB store_name) [문자열]',
+      rBell.ok && mn?.[0]?.store_name === STORE_NAME, `${rBell.ok ? rBell.sec.toFixed(1) + '초' : '없음(30초)'} · DB store_name=${mn?.[0]?.store_name}`);
+    let landed = '?';
+    if (rBell.ok) {
+      await clickText(J.page, TITLE_R);
+      await J.page.waitFor(`location.pathname==='/junior/hub'`, 10000);
+      landed = await J.page.eval('location.pathname');
+    }
+    check('K7-r 반려 항목 탭 → /junior/hub 착지 [문자열]', landed === '/junior/hub', `착지 ${landed}`);
+    mark('K7-r');
+    await J.mark('반려 벨');
+    await S.mark('거절');
+    // 다시 신청할 수 있게 허브로 돌아간다(K5-a 가 코드 입력줄을 기다린다).
+    await J.goto('/junior/hub');
+    await J.page.waitFor(`document.body.innerText.includes('코드로 매장 추가')`, 40000);
+  }
+
+  // ── J: 합류 신청(두 번 누름) ─────────────────────────────────────────────
+  section('K5-a. J 같은 코드로 합류 신청 두 번(거의 동시) → 대기 카드 · 오류 문구 0');
   await J.mark('hub 진입');
   {
     const seen = new Set();
@@ -357,6 +400,27 @@ try {
     await S.mark('신청 표시');
   }
 
+  // ── K7-s: S 벨 합류 신청 항목 → 탭하면 명부의 그 신청 행(?member=<신청자 id>) ─────────────────
+  section('K7-s. S 벨 \'<신청자>님이 합류를 신청했어요\' → 탭하면 /owner/staff?member=<J id> · 그 행이 보임');
+  {
+    const { data: jp } = await admin.from('profiles').select('name').eq('id', jc.uid).single();
+    const TITLE_S = `${jp?.name}님이 합류를 신청했어요`;
+    await S.goto('/owner/notifications');
+    const sBell = await watch(S.page, (t) => t.includes(TITLE_S), 30000);
+    check('K7-s S 벨에 "<신청자>님이 합류를 신청했어요" 항목(이름 = DB profiles.name) [문자열]', sBell.ok, `${sBell.ok ? sBell.sec.toFixed(1) + '초' : '없음(30초)'} · 기대 "${TITLE_S}"`);
+    let land = { path: '?', search: '', rowVisible: false };
+    if (sBell.ok) {
+      await clickText(S.page, TITLE_S);
+      await S.page.waitFor(`location.pathname==='/owner/staff'`, 15000);
+      await watch(S.page, (t) => pendNum(t) === 1, 30000);
+      land = await S.page.eval(`(()=>{const l=[...document.querySelectorAll('*')].find(e=>e.children.length===0&&e.textContent.trim()===${JSON.stringify(jp?.name ?? '')}&&e.getBoundingClientRect().width>0);let v=false;if(l){const r=l.getBoundingClientRect();v=r.top>=0&&r.bottom<=innerHeight;}return {path:location.pathname,search:location.search,rowVisible:v};})()`);
+    }
+    check('K7-s 합류 신청 항목 탭 → /owner/staff?member=<J id> 착지 · 신청자 이름이 보이는 영역에 있음 [문자열]',
+      land.path === '/owner/staff' && land.search.includes(`member=${jc.uid}`) && land.rowVisible, `착지 ${land.path}${land.search} · 행 보임=${land.rowVisible}`);
+    mark('K7-s');
+    await S.mark('합류 신청 벨');
+  }
+
   // 두 번째 사장 창(같은 계정 · 다른 기기) — K5-b 용. 승인 전에 신청 목록을 띄워 둔다.
   const S2 = await openWindow('S2', 9335, owner2Session, '/owner/staff');
   const s2Ready = await watch(S2.page, (t) => pendNum(t) === 1, 40000);
@@ -384,9 +448,15 @@ try {
     const wJerr = watch(J.page, () => false, 6000, seenJ);
     const wS = watch(S.page, (t) => staffNum(t) === 1, 30000, seenS);
     const wS2 = watch(S2.page, () => false, 6000, seenS2);
+    // 승인 성공 토스트(2.4초) — 두 기기가 경합하므로 ok 를 받은 쪽(S 또는 S2) 어느 한 창에 뜨면 된다. 진 쪽은 '이미 처리된 신청'(K5-b).
+    const TOAST_OK = '합류를 승인했어요';
+    const wToastS = watch(S.page, (t) => t.includes(TOAST_OK), 8000);
+    const wToastS2 = watch(S2.page, (t) => t.includes(TOAST_OK), 8000);
     try { await clickText(S2.page, '승인', 3000); s2Pressed = true; } catch (e) { info(`S2 승인 못 누름: ${e.message}`); }
     await fireS();
-    const [rJ, rS] = await Promise.all([wJ, wS, wJerr, wS2]);
+    const [rJ, rS, , , rToastS, rToastS2] = await Promise.all([wJ, wS, wJerr, wS2, wToastS, wToastS2]);
+    check(`K3-t 승인한 기기에 '${TOAST_OK}' 토스트(S 또는 S2 · ≤8초) [건]`, rToastS.ok || rToastS2.ok,
+      `S=${rToastS.ok ? rToastS.sec.toFixed(1) + '초' : '없음'} · S2=${rToastS2.ok ? rToastS2.sec.toFixed(1) + '초' : '없음'}`);
     check('K3 J 새로고침 없이 소속을 다시 읽음(my_units · ≤25초) [초]', rJ.ok, `${rJ.sec.toFixed(1)}초`);
     // 다시 읽은 소속이 화면에 쓰이는가 — 앱 안 이동(새로고침 아님)으로 매장 목록을 연다.
     await J.page.click('[aria-label="매장 선택으로"]');
@@ -420,6 +490,27 @@ try {
     await S2.mark('두 번째 승인');
   }
   info(`사장 계정 활성 매장 = ${await accountActive(oc.uid)}`);
+
+  // ── K7-j: J 벨 '승인' 항목(0247 member_notices approved) → 탭하면 매장 목록(/stores)에 새 매장 ──────
+  section('K7-j. J 벨 "<매장> 합류가 승인됐어요" 항목 → 탭하면 /stores · 새 매장 이름이 보임');
+  {
+    const { data: mn } = await admin.from('member_notices').select('id, store_name').eq('user_id', jc.uid).eq('unit_id', unit).eq('kind', 'approved');
+    await J.goto('/junior/notifications');
+    const TITLE_J = `${STORE_NAME} 합류가 승인됐어요`;
+    const jBell = await watch(J.page, (t) => t.includes(TITLE_J), 30000);
+    check('K7-j J 벨에 "<매장> 합류가 승인됐어요" 항목(제목 = 레지스트리 join_approved.title · DB approved 1행) [문자열]',
+      jBell.ok && (mn ?? []).length === 1, `${jBell.ok ? jBell.sec.toFixed(1) + '초' : '없음(30초)'} · DB approved 행=${(mn ?? []).length}`);
+    let land = { path: '?', hasStore: false };
+    if (jBell.ok) {
+      await clickText(J.page, TITLE_J);
+      await J.page.waitFor(`location.pathname==='/stores'`, 15000).catch(() => {});
+      const rl = await watch(J.page, (t) => t.includes(STORE_NAME), 15000);
+      land = { path: await J.page.eval('location.pathname'), hasStore: rl.ok };
+    }
+    check('K7-j 승인 항목 탭 → /stores 착지 · 새 매장 이름이 화면에 있음 [문자열]', land.path === '/stores' && land.hasStore, `착지 ${land.path} · 매장 이름 보임=${land.hasStore}`);
+    mark('K7-j');
+    await J.mark('승인 벨');
+  }
 
   // ── K5-c: 이미 멤버인 코드로 다시 신청 ───────────────────────────────────
   section('K5-c. J 이미 합류한 매장 코드로 다시 신청 → 오류 문구 0');
