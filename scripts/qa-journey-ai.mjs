@@ -421,6 +421,25 @@ try {
     }
   }
 
+  // ── K4-a 사장 벨 질문 항목 탭 → 착지 ───────────────────────────
+  // ★답 발행(6) 전에 잰다 — 발행하면 질문이 pending 이 아니라 벨에서 빠진다.
+  section('K4-a 사장 벨 "답 기다리는 질문" 항목 탭 → 착지 화면에 그 질문이 열려 있나');
+  if (uq) {
+    await S.page.goto('/owner/notifications');
+    await S.page.waitFor(`document.body.innerText.includes(${JSON.stringify(Q2)})`, 40000);
+    let k4 = { path: '?', search: '', first: '', visible: false };
+    try {
+      const tapped = await clickText(S.page, Q2, 'qa-jr-bell-q');
+      if (!tapped) throw new Error('벨에 그 질문 본문 항목이 없음');
+      await sleep(3500);
+      k4 = await S.page.eval(`(()=>{const Q=${JSON.stringify(Q2)};const l=[...document.querySelectorAll('div,span')].filter(e=>e.childElementCount===0&&e.textContent.trim()===Q&&e.getBoundingClientRect().width>0).pop();let v=false;if(l){const r=l.getBoundingClientRect();v=r.top>=0&&r.bottom<=innerHeight;}return {path:location.pathname,search:location.search,first:document.body.innerText.split('\\n').map(s=>s.trim()).filter(Boolean).slice(0,2).join(' | '),visible:v};})()`);
+    } catch (e) { k4.first = `탭 실패: ${e.message}`; }
+    log(`벨 질문 항목 → 착지 ${k4.path}${k4.search} · 첫 줄 "${k4.first}" · 질문 본문 보임=${k4.visible}`);
+    check(`K4-a(a) 벨 질문 항목 착지 주소에 그 질문 id(${uq.id})가 들어 있다(단위 = 문자열 포함)`, (k4.path + k4.search).includes(uq.id), `착지 ${k4.path}${k4.search}`);
+    check('K4-a(b) 착지 화면에 그 질문 본문이 보인다(단위 = 문자열 일치 · 화면 안)', k4.visible, `첫 줄 "${k4.first}"`);
+    await transition(S, 'S', '벨 질문 항목 탭');
+  } else check('K4-a 벨 질문 항목 탭(보낸 질문이 없어 못 함)', false);
+
   // ── 6. 사장 답 ─────────────────────────────────────────────────
   section('6. 사장이 coach?uqId= 에서 답 발행 → DB resolved + 노하우 1행');
   const TITLE = `${TOKEN} 제습기 필터 교체`;
@@ -500,6 +519,18 @@ try {
     const has = t.includes(TOKEN) || /내 질문에 답|질문에 답이 왔어요/.test(t);
     if (!has) log("코드상 항목 없음(푸시만) — 직원 벨 종류(notifications.ts buildJuniorNotifications)에 '내 질문 답' 이 없고 푸시 'q-answered' → /junior/chat 만 있다");
     check('K6 직원 알림 목록에 내 질문 답 항목이 있다', has, `첫 200자 ${head200(t)}`);
+    // K6-b — 항목이 있을 때만 본문을 잰다. 없으면 전제 실패로 남긴다(K6 가 살아나면 같이 산다).
+    if (!has) check('K6-b (전제) K6 항목 없음', false);
+    else {
+      const ownerName = (await db.from('profiles').select('name').eq('id', owner.uid).maybeSingle()).data?.name ?? null;
+      const rowText = await J.page.eval(`(()=>{const T=${JSON.stringify(TOKEN)};const re=/내 질문에 답|질문에 답이 왔어요/;
+const l=[...document.querySelectorAll('div,span')].filter(e=>e.childElementCount===0&&(e.textContent.includes(T)||re.test(e.textContent))&&e.getBoundingClientRect().width>0)[0];
+return l&&l.parentElement?l.parentElement.innerText:'';})()`);
+      const FRAG = '지하 창고'; // 질문 Q2 에만 있는 말(답 본문·노하우 제목에는 없다)
+      log(`K6-b 항목 글자 ${head200(rowText)} · DB 사장 이름 ${ownerName}`);
+      check(`K6-b 직원 벨 답 항목에 답한 사람 이름(DB profiles.name "${ownerName}")이 들어 있다(단위 = 문자열 포함)`, !!ownerName && rowText.includes(ownerName), head200(rowText));
+      check(`K6-b 직원 벨 답 항목에 질문 문장 일부('${FRAG}')가 들어 있다(단위 = 문자열 포함)`, rowText.includes(FRAG), head200(rowText));
+    }
     await transition(J, 'J', '알림 화면');
   }
 

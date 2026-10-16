@@ -1,6 +1,6 @@
 // qa-journey-task.mjs — 할일 여정 하니스(2026-10-15). 사장 창(S)과 직원 창(J)을 한 스크립트에서 같이 연다.
 //   사장 할일 만들기(담당 2명 반복 1 + 단건 1) → 직원 목록 → 직원 완료(사진 1장) → 사장 확인.
-//   화면 문자열을 DB 원본(service_role 읽기)과 맞대어 단언한다. DB 쓰기는 셋업(K2 비오늘 반복 1건)·정리에만 쓴다.
+//   화면 문자열을 DB 원본(service_role 읽기)과 맞대어 단언한다. DB 쓰기는 셋업(K2 비오늘 반복 1건 · K4-n 공지 1건)·정리에만 쓴다.
 //
 //   node scripts/qa-journey-task.mjs      (개발 서버 http://localhost:8081 · QA_ORIGIN 으로 바꾼다 · .env + .env.seed 필요)
 //
@@ -39,6 +39,9 @@ const STAMP = Date.now().toString(36);
 const TXT_REPEAT = `${PREFIX}반복_${STAMP}`;
 const TXT_ONCE = `${PREFIX}단건_${STAMP}`;
 const TXT_K2 = `${PREFIX}비오늘반복_${STAMP}`;
+const TXT_NOTICE = `${PREFIX}공지_${STAMP}`;
+const NOTICE_ID = `f_qajr_${STAMP}`;
+const TXT_K6 = `${PREFIX}전제안내배정_${STAMP}`; // 할일 이름에 '기기'·'알림' 을 넣지 않는다(K6-a 정규식이 토스트 대신 이름에 걸린다)
 const NAME_J = '이수민';
 const NAME_M = '박지원';
 const STORAGE_KEY = storageKeyFor(SB);
@@ -90,12 +93,16 @@ async function cleanup(label) {
     if (!r.ok) info(`사진 정리 실패 ${r.status}`);
   }
   if (feed.length) await del(`work_feed?id=in.${inList(feed.map((f) => f.id))}`);
+  // K4-n 이 심은 공지(본문 접두사).
+  const notices = (await sel(`work_feed?unit_id=eq.${UNIT}&data->>kind=eq.notice&select=id,data&order=created_at.desc&limit=500`))
+    .filter((f) => String(f.data?.text ?? '').startsWith(PREFIX));
+  if (notices.length) await del(`work_feed?id=in.${inList(notices.map((f) => f.id))}`);
   if (ids.length) {
     await del(`work_done?unit_id=eq.${UNIT}&template_id=in.${inList(ids)}`);
     await del(`work_template_knowhow?template_id=in.${inList(ids)}`).catch(() => {});
     await del(`work_templates?id=in.${inList(ids)}`);
   }
-  info(`정리(${label}): 할일 ${ids.length} · 피드 ${feed.length} · 사진 ${photos.length}`);
+  info(`정리(${label}): 할일 ${ids.length} · 피드 ${feed.length} · 공지 ${notices.length} · 사진 ${photos.length}`);
 }
 const createdPhotos = [];
 
@@ -301,7 +308,7 @@ try {
 
   // ── 1. S 가 화면으로 할일 2개를 만든다 ────────────────────────────────
   section('1. 사장 화면으로 할일 만들기 — 반복(오늘 요일 · 담당 이수민+박지원) 1 · 단건(오늘 · 담당 이수민) 1');
-  async function compose(text, { weekly, assignees }) {
+  async function compose(text, { weekly, assignees, armToast = false }) {
     // ★?compose= 딥링크로 열면 시트가 데이터 도착 전에 떠서, 도착 뒤 다시 그려지며 입력이 지워졌다(1차 실행).
     //   목록이 다 선 뒤 할일 추가 버튼(FAB)으로 연다.
     await go(S.page, 'S', '/owner/work?view=todo', '할일 작성');
@@ -325,6 +332,8 @@ try {
       }
     }
     for (const n of assignees) { await S.page.click(`[data-qa-sheet] [aria-label="${n}"]`); await sleep(150); }
+    // K6-a: 토스트는 2.4초면 사라진다 — 등록 직후 새로 붙는 짧은 글을 모두 모은다(window.__qaToasts).
+    if (armToast) await S.page.eval(`(()=>{window.__qaToasts=[];const add=(t)=>{t=String(t||'').trim();if(t&&t.length<=120)window.__qaToasts.push(t);};new MutationObserver((ms)=>{for(const m of ms){if(m.type==='characterData')add(m.target.textContent);for(const n of m.addedNodes)add(n.innerText??n.textContent);}}).observe(document.body,{childList:true,subtree:true,characterData:true});})()`);
     await clickLeaf(S.page, '할일 등록', '[data-qa-sheet]');
     for (let i = 0; i < 40; i++) {
       const row = (await mineTemplates()).find((t) => t.text === text);
@@ -488,6 +497,29 @@ try {
   check('K4-0 벨 배정 항목 제목의 배정자 = DB created_by 의 이름', k4Title === `${ownerName}님이 할 일을 배정했어요`, `화면 "${k4Title}" · DB created_by=${ownerName}`);
   await stat(J.page, 'J', '벨 항목 탭');
 
+  // ── 6-n. K4-n 벨 공지 항목 탭 → 착지(K4 와 같은 단언) ─────────────────────
+  section('5-n. K4-n 직원 벨 공지 항목 탭 → 착지 주소·화면에 그 공지가 있나');
+  // 공지는 DB 로 심는다(사장이 쓴 공지 1건과 같은 모양 · 푸시 없음). 끝 정리가 본문 접두사로 지운다.
+  const nAt = new Date().toISOString();
+  await ins('work_feed', {
+    id: NOTICE_ID, unit_id: UNIT, feed_date: TODAY, room_id: 'room_main_store_001',
+    data: { id: NOTICE_ID, date: TODAY, kind: 'notice', text: TXT_NOTICE, authorId: ids.S, authorName: ownerName, authorRole: 'owner', createdAt: nAt, reactions: {}, important: false, pinned: false, roomId: 'room_main_store_001' },
+  });
+  info(`K4-n 셋업: 공지 1건 DB 삽입(id ${NOTICE_ID})`);
+  await go(J.page, 'J', '/junior/notifications', '알림(공지)');
+  await readNotifRows(J.page);
+  let kn = { path: '?', search: '', first: '', visible: false };
+  try {
+    if (!(await J.page.waitFor(`!!${leafJs(TXT_NOTICE)}`, 15000))) throw new Error('벨 목록에 공지 행이 없음');
+    await clickJs(J.page, leafJs(TXT_NOTICE), `알림 행 ${TXT_NOTICE}`);
+    await sleep(3500);
+    kn = await J.page.eval(`(()=>{const l=${leafJs(TXT_NOTICE)};let v=false;if(l){const r=l.getBoundingClientRect();v=r.top>=0&&r.bottom<=innerHeight;}return {path:location.pathname,search:location.search,first:document.body.innerText.split('\\n').map(s=>s.trim()).filter(Boolean).slice(0,2).join(' | '),visible:v};})()`);
+  } catch (e) { kn.first = `탭 실패: ${e.message}`; }
+  check('K4-n-a 벨 공지 항목 → 착지 주소에 그 공지(피드) id 가 들어 있다 [문자열]',
+    `${kn.path}${kn.search}`.includes(NOTICE_ID), `착지 ${kn.path}${kn.search} · 기대 포함 "${NOTICE_ID}" · 첫 줄 "${kn.first}"`);
+  check('K4-n-b 착지 화면(보이는 영역)에 그 공지 본문 문자열이 있다 [문자열]', kn.visible, `본문 "${TXT_NOTICE}" 보임=${kn.visible}`);
+  await stat(J.page, 'J', '벨 공지 탭');
+
   // ── 7. K5 두 번 완료 · 비담당 완료 ──────────────────────────────────────
   section('6. K5 같은 할일 두 번 완료 · 담당에서 빠진 사람의 완료 → 오류 문구 0');
   await go(J.page, 'J', '/junior/work?view=todo', '할일');
@@ -538,6 +570,31 @@ try {
   await stat(J.page, 'J', 'K5-b');
   await stat(S.page, 'S', 'K5-b');
 
+  // (d) 두 창 동시 완료 해제 — 반복 할일은 지금 완료 1행. 두 창이 완료로 보일 때 동시에 해제한다.
+  //   두 번째 해제는 DELETE 0행 → clearDone false → '완료 해제 저장에 실패했어요' + 롤백(DB:3203 · WS:1188).
+  for (const [tag, w, path] of [['J', J, '/junior/work?view=todo'], ['S', S, '/owner/work?view=todo']]) {
+    if (!(await waitDone(w.page, TXT_REPEAT, true, 10000))) {
+      info(`K5-d 셋업: ${tag} 화면이 완료로 안 보여 새로고침`);
+      await go(w.page, tag, path, '할일(새로고침)');
+      await readTodoRows(w.page);
+    }
+  }
+  const dPre = { J: await todoDone(J.page, TXT_REPEAT), S: await todoDone(S.page, TXT_REPEAT) };
+  await Promise.all([clickJs(J.page, todoBoxJs(TXT_REPEAT), 'J 해제'), clickJs(S.page, todoBoxJs(TXT_REPEAT), 'S 해제')]);
+  await sleep(3000);
+  const rD = await sel(`work_done?unit_id=eq.${UNIT}&template_id=eq.${R.id}&work_date=eq.${TODAY}&select=template_id`);
+  const eD = (await errLines(J.page)) + (await errLines(S.page));
+  const dPost = { J: await todoDone(J.page, TXT_REPEAT), S: await todoDone(S.page, TXT_REPEAT) };
+  check('K5-d 두 창 동시 완료 해제: 오류 문구 0 [건]', eD === 0,
+    `${eD}건 ${eD ? (await errContext(J.page)) + ' ' + (await errContext(S.page)) : ''} · 해제 전 화면 완료 J=${dPre.J} S=${dPre.S}`);
+  check('K5-d DB work_done 0행 [건]', rD.length === 0, `work_done ${rD.length}행`);
+  check('K5-d 두 화면 모두 미완료 [문자열]', !dPost.J && !dPost.S, `화면 완료 J=${dPost.J} S=${dPost.S}`);
+  await stat(J.page, 'J', 'K5-d');
+  await stat(S.page, 'S', 'K5-d');
+  // 남은 실패 배너가 다음 단계(단건 해제) 클릭을 덮지 않게 직원 창을 새로 연다.
+  await go(J.page, 'J', '/junior/work?view=todo', '할일(K5-d 뒤)');
+  await readTodoRows(J.page);
+
   // (c) 담당 아닌 매니저가 단건을 완료 — 직원 완료(사진)를 먼저 해제한다.
   await toggle(J.page, TXT_ONCE, false, 'J 단건 해제(사진 삭제 확인)');
   await sleep(1500);
@@ -555,6 +612,22 @@ try {
       `${eC}건 ${eC ? await errContext(M.page) : ''} · 착지 ${mPath} · 화면 완료=${await todoDone(M.page, TXT_ONCE)} · work_done ${rC.length}행 byName=${rC[0]?.data?.byName}(서버 거부 없음=비담당 완료 허용)`);
     await stat(M.page, 'M', 'K5-c');
   } finally { await M.close(); }
+
+  // ── 7-a. K6-a 기기 0건 직원에게 배정 → 사장 화면 안내 ────────────────────
+  section('6-a. K6-a 기기 토큰 0건 직원(이수민)에게 배정 → 사장 화면에 "알림 받을 기기가 없어요" 류 안내');
+  const tokN = (await sel(`push_device_tokens?user_id=eq.${ids.J}&select=user_id`)).length;
+  info(`직원 기기 토큰(push_device_tokens) = ${tokN}건`);
+  let k6Toasts = [];
+  let k6Note = '';
+  try {
+    await compose(TXT_K6, { weekly: false, assignees: [NAME_J], armToast: true });
+    await sleep(1000);
+    k6Toasts = [...new Set((await S.page.eval('window.__qaToasts||[]')) ?? [])];
+  } catch (e) { k6Note = `화면 배정 실패: ${e.message}`; }
+  const k6Text = k6Toasts.filter((t) => !t.includes(TXT_K6) && /추가했어요|기기|알림|설치/.test(t)).join(' / ');
+  if (tokN === 0) check('K6-a 기기 0건 직원 배정 직후 "알림 받을 기기가 없어요" 류 안내가 있다 [문자열]', /기기|알림을? (못|안) 받|앱을? 설치/.test(k6Text), `안내="${k6Text}" ${k6Note}`);
+  else check('K6-a (전제) 직원 기기 토큰 0건 [건]', false, `토큰 ${tokN}건 — 기기 0건 상태가 아님`);
+  await stat(S.page, 'S', 'K6-a');
 
   // ── 8. 전환별 콘솔 에러·≥400 합계 ───────────────────────────────────────
   section('7. 화면 전환 합계');

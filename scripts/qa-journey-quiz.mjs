@@ -383,6 +383,38 @@ try {
   check('K1 화면 안 푼 퀴즈 = 기준선 + 2 (A·B 퀴즈 2개 · 노하우 수 아님)', afterN === base + 2, `화면 ${base}→${afterN} · DB 내 발송·미완료 퀴즈 ${new Set(sentMine.map((a) => a.course_id)).size}`);
   await net(J, 'J 홈(발송 뒤)');
 
+  section('7-b. 푸시 딥링크 ?quiz=<발송 id> → 그 퀴즈 시트(K4-b)');
+  {
+    // 푸시 url = /junior/work?quiz=<quiz_assignments.id>(push/index.ts:462). WorkBoard 가 값을 안 읽으면 첫 카드가 열린다.
+    // 시트에 퀴즈 이름이 없고 A·B 노하우가 같아서, 첫 문제 글(대체 문항 번호)을 DB 문항과 맞춰 어느 퀴즈인지 가른다.
+    // 두 발송 id 를 다 연다 — 첫 카드가 우연히 그 퀴즈라 통과하는 일을 막는다.
+    const askNos = async (cid) => new Set(((await admin.from('quiz_items').select('payload').eq('course_id', cid).eq('status', 'active')).data ?? [])
+      .map((q) => (String(q.payload?.ask ?? '').match(/qa_jr 확인 문제 (\d+)/) ?? [])[1]).filter(Boolean));
+    const nosA = await askNos(A), nosB = await askNos(B);
+    const opened = [];
+    for (const [cid, nm] of [[B, 'B'], [A, 'A']]) {
+      const aid = (asg ?? []).find((a) => a.course_id === cid && a.user_id === jUid)?.id;
+      await J.goto(`/junior/work?quiz=${aid}`);
+      const up = await J.waitFor(bodyHas(/퀴즈 시작하기/), 60000);
+      let no = null;
+      if (up) {
+        await dismissOverlays(J);
+        await clickText(J, '퀴즈 시작하기', 20000);
+        await J.waitFor(bodyHas(/qa_jr 확인 문제 \d+/), 15000);
+        no = (await bodyMatch(J, /qa_jr 확인 문제 (\d+)/))?.[1] ?? null;
+      }
+      const got = no && nosB.has(no) && !nosA.has(no) ? 'B' : no && nosA.has(no) && !nosB.has(no) ? 'A' : null;
+      opened.push({ nm, got, text: `${nm} 발송(${aid})→${got ?? '못 가름'}(문제 ${no ?? '없음'})` });
+    }
+    check('K4-b 딥링크 ?quiz=<발송 id> 가 그 퀴즈 시트를 연다(B·A 각 1회 · 단위: 퀴즈)', opened.every((o) => o.got === o.nm), opened.map((o) => o.text).join(' · '));
+    await net(J, 'J 업무(딥링크)');
+    // 풀지 않고 닫는다(전체 이동) — 10단계 K4 는 홈 타일에서 시작한다.
+    await J.goto('/junior/home');
+    await J.waitFor(`!!document.querySelector('[aria-label^="안 푼 퀴즈"]')`, 120000);
+    await settle(J, 3000, 40000);
+    await dismissOverlays(J);
+  }
+
   section('8. 사장 결과 — 기기 0건 직원 줄(K6)');
   await S.goto(`/owner/quiz/${A}`);
   await S.waitFor(vis('[role="tab"][aria-label="결과"]'), 120000);
