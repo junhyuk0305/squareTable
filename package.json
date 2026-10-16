@@ -185,6 +185,7 @@
     "voice:sync": "node scripts/voice-lint.mjs --sync",
     "qa:hq": "node scripts/qa-hq-browser.mjs",
     "qa:hq-structure": "node scripts/qa-hq-structure.mjs",
+    "qa:crawl": "node scripts/qa-crawl.mjs",
     "qa:brand": "node scripts/qa-brand.mjs",
     "qa:brand-boundary": "node scripts/qa-brand-boundary.mjs",
     "qa:brand-deploy": "node scripts/qa-brand-deploy.mjs",
