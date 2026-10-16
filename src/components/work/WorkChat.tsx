@@ -23,6 +23,9 @@ import { PHOTO_UPLOAD_INFO } from '@/lib/copy/photoUploadInfo';
 import { canEditMessage, deleteConfirmText } from '@/lib/work/chatRules';
 import { confirmAction } from '@/lib/utils/confirm';
 
+/** 상단 고정 공지 알약 높이 — 누르는 줄이라 터치 최소 48(simplicity-voice §4). 첫 말풍선 오프셋도 이 값을 쓴다. */
+const NOTICE_LINE_H = 48;
+
 // 채팅 윈도잉 — 스트림이 수백~수천 개여도 최근 것만 렌더하고, 위로 스크롤하면 이전 대화를
 // 한 페이지씩 붙인다(비가상 ScrollView라 전부 마운트하면 느려지고 @멘션 입력까지 버벅인다).
 const CHAT_WINDOW = 40; // 처음 렌더할 최근 말풍선 수
@@ -384,7 +387,7 @@ export function WorkChat({
         // 이 화면은 네이티브 헤더를 끄고(headerShown:false) 바깥 SafeAreaView 가 top 인셋을 이미 먹으므로,
         // ios-preflight: ok iOS 자동 contentInset('automatic')이 더할 몫이 0 이다 — 이중 여백이 생기지 않는다.
         // 공지 줄이 있으면 그 높이만큼 첫 말풍선을 더 내린다.
-        contentContainerStyle={[s.scroll, { paddingTop: streamTop + (topNotice ? Space.xxl : 0) }]}
+        contentContainerStyle={[s.scroll, { paddingTop: streamTop + (topNotice ? NOTICE_LINE_H : 0) }]}
         showsVerticalScrollIndicator={false}
         scrollEventThrottle={16}
         onScroll={onScroll}
@@ -686,10 +689,10 @@ const s = StyleSheet.create({
   searchInp: { flex: 1, fontSize: 15, color: InkColors.ink, paddingVertical: Space.xs },
   matchCount: { fontSize: 12, fontWeight: '700', color: InkColors.ink3 },
   hdrDot: { position: 'absolute', top: 6, right: 6, width: 8, height: 8, borderRadius: Radius.pill, backgroundColor: BrandColors.bad },
-  // 상단 고정 공지 1줄 — 헤더·칩바와 같은 알약, 공지 틴트. 높이는 칩바 칩과 같은 40(Space.xxl).
+  // 상단 고정 공지 1줄 — 헤더·칩바와 같은 알약, 공지 틴트. 누르는 줄이라 높이는 터치 최소 48(NOTICE_LINE_H).
   noticeLine: {
     position: 'absolute', left: 10, right: 10, zIndex: 6,
-    height: Space.xxl, borderRadius: Radius.pill, backgroundColor: BrandColors.yellowSoft, borderWidth: 1, borderColor: BrandColors.yellowDeep,
+    height: NOTICE_LINE_H, borderRadius: Radius.pill, backgroundColor: BrandColors.yellowSoft, borderWidth: 1, borderColor: BrandColors.yellowDeep,
     flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingHorizontal: Space.md, ...Elevation.e1,
   },
   noticeLineText: { flex: 1, fontSize: 13, fontWeight: '700', color: InkColors.ink },

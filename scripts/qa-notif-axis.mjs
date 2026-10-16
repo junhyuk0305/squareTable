@@ -58,7 +58,8 @@ const mgr = buildManagerNotifications(ownerArgs, received);
 const kinds = mgr.map((r) => r.kind);
 const ids = mgr.map((r) => r.id);
 
-check('① 매니저가 사장 공지를 받는다', ids.includes('notice_f_notice_owner'), `kinds=${kinds.join(',')}`);
+// 2026-10-16 #9: 공지는 벨·푸시가 없다(채팅 맨 위 고정 1줄로 보인다). 전엔 매니저가 사장 공지를 벨로 받았다.
+check('① 공지는 매니저 벨에 없다(10-16 · 채팅 맨 위 고정 1줄)', !ids.some((id) => String(id).startsWith('notice_')), `kinds=${kinds.join(',')}`);
 check('② 내가 올린 pending 제안은 검토함에 없다', !ids.includes('s_sg_mine'));
 check('② 동료 제안 검토는 매니저에게 안 온다(사장 전용 · F-2)', !ids.includes('s_sg_other'));
 check('③ 내가 쓴 공지는 내 알림에 없다', !ids.includes('notice_f_notice_mine'));
@@ -67,7 +68,8 @@ check('⑤ 교대 수락 요청(open)은 안 온다', !ids.includes('swap_sw_ope
 check('⑤ 교대 승인 대기(accepted)는 온다(사장 축)', ids.includes('swap_sw_acc'));
 check('배정된 할일이 온다', ids.includes('assign_t_mine'));
 check('내 제안 결과가 온다', ids.includes('sugres_sg_mine_done'));
-check('⑧ 매니저 경로는 허용 목록 또는 /junior/*', mgr.every((r) => String(r.route).startsWith('/junior/') || managerMayOpen(String(r.route))),
+// managerMayOpen 은 pathname 만 받는다(owner/_layout 이 usePathname 으로 부른다) — 경로에 ?feed=·?view=·?task= 가 붙으므로 떼고 본다.
+check('⑧ 매니저 경로는 허용 목록 또는 /junior/*', mgr.every((r) => String(r.route).startsWith('/junior/') || managerMayOpen(String(r.route).split('?')[0])),
   mgr.map((r) => r.route).join(','));
 check('시간 역순 정렬', mgr.every((r, i) => i === 0 || mgr[i - 1].at >= r.at));
 
@@ -102,10 +104,11 @@ check('⑥ 사장: 직원 제안 2건 모두 검토함에(자기 것 아님)', o
   const ownRecv = { ...received, userId: OWNER, taskTemplates: [{ id: 't_own', text: '발주', ownerIds: [OWNER], ownerId: OWNER, createdBy: ME, createdAt: iso(7), repeat: 'daily' }] };
   const own2 = buildOwnerNotifications(ownArgs, ownRecv);
   const own2Ids = own2.map((r) => r.id);
-  check('★D11-2 사장 알림함에 매니저가 쓴 공지가 뜬다', own2Ids.includes('notice_f_notice_mine'), own2Ids.join(','));
+  check('★D11-2 사장 알림함에 공지는 없다(10-16 #9 · 매니저가 쓴 것도)', !own2Ids.some((id) => String(id).startsWith('notice_')), own2Ids.join(','));
   check('D11-2 사장이 쓴 공지는 사장 알림함에 없다(메아리)', !own2Ids.includes('notice_f_notice_owner'));
   check('★D11-2 사장 알림함에 나에게 배정된 할일이 뜬다', own2Ids.includes('assign_t_own'));
-  check('D11-2 사장 경로는 /owner/work', own2.filter((r) => r.kind === 'notice' || r.kind === 'assign').every((r) => r.route === '/owner/work'));
+  // 배정 경로는 그 할일을 연다(P1 · /owner/work?view=todo&task=<id>).
+  check('D11-2 사장 배정 경로는 /owner/work?view=todo&task=<id>', own2.filter((r) => r.kind === 'assign').every((r) => /^\/owner\/work\?view=todo&task=.+/.test(String(r.route))));
   const ownBadge = typeof ownerUnreadCount === 'function'
     ? ownerUnreadCount([], suggestions, swaps, [], feed, OWNER, null, [], [], ownRecv) : -1;
   check('★D11-2 사장 배지 수 == 목록 안읽음 수', ownBadge === own2.filter((r) => r.unread).length, `badge=${ownBadge} list=${own2.filter((r) => r.unread).length}`);

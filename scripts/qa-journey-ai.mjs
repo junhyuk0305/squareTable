@@ -342,6 +342,7 @@ try {
   // ── 3. 질문 보내기 ─────────────────────────────────────────────
   section('3. 질문 보내기 → 화면 문구 + DB pending 1행');
   let tSent = null;
+  let g2Blocked = false; // G② 가 상한을 재현하면 unknown_queries insert 400(too_many_pending) 1건은 의도한 응답이다 — 10단계 합계에서 뺀다.
   let uq = null;
   if (kind === 'deflect' || kind === 'candidate') {
     const btn = kind === 'deflect' ? '질문 보내기' : '찾는 게 없어요 · 사장님께 물어보기';
@@ -361,6 +362,7 @@ try {
       log(`G② 직원 대기 질문 ${pj}건 → 채움 ${need}건${fErr ? ' · 채우기 실패 ' + fErr.message : ''}`);
       const clickedCap = !fErr && (await clickTextAfter(J.page, Q2, btn, 'qa-jr-register-cap'));
       const blockedShown = clickedCap && (await J.page.waitFor(`document.body.innerText.includes('대기 중인 질문이 많아요')`, 10000));
+      g2Blocked = !!blockedShown;
       const rowsCap = await uqRows(Q2);
       const backToAsk = clickedCap && (await J.page.waitFor(`(()=>{const t=document.body.innerText;const a=t.slice(t.lastIndexOf(${JSON.stringify(Q2)}));return a.includes('사장님께 보낼까요?')||a.includes('혹시 이거 찾으세요?');})()`, 5000));
       check("G② 상한(10건)에서 보내기 → 화면 '대기 중인 질문이 많아요'(BLOCKED_TEXT too_many_pending) · DB 행 0 · 카드가 보내기 전으로",
@@ -561,7 +563,8 @@ try {
     let row = null;
     for (let i = 0; i < 20; i++) { row = (await uqRows(Q2))[0]; if (row?.status === 'resolved_with_entry') break; await sleep(500); }
     entryId = row?.resolved_with_entry_id ?? null;
-    const { data: made } = await db.from('playbook_entries').select('id,title,status').eq('unit_id', UNIT).ilike('title', `${TOKEN}%`);
+    // K5-b 의 경쟁 답 노하우("<TOKEN> 경쟁 답 1")도 같은 접두사라 제목으로 정확히 고른다.
+    const { data: made } = await db.from('playbook_entries').select('id,title,status').eq('unit_id', UNIT).eq('title', TITLE);
     check(`6 DB unknown_queries.status = resolved_with_entry`, row?.status === 'resolved_with_entry', JSON.stringify(row));
     check(`6 DB playbook_entries 에 '${TITLE}' 새 행 1개 · 질문의 resolved_with_entry_id 와 같다`,
       (made ?? []).length === 1 && made[0].id === entryId && made[0].title === TITLE, JSON.stringify(made));
@@ -591,10 +594,12 @@ try {
     if (!has) check('K6-b (전제) K6 항목 없음', false);
     else {
       const ownerName = (await db.from('profiles').select('name').eq('id', owner.uid).maybeSingle()).data?.name ?? null;
-      const rowText = await J.page.eval(`(()=>{const T=${JSON.stringify(TOKEN)};const re=/내 질문에 답|질문에 답이 왔어요/;
-const l=[...document.querySelectorAll('div,span')].filter(e=>e.childElementCount===0&&(e.textContent.includes(T)||re.test(e.textContent))&&e.getBoundingClientRect().width>0)[0];
-return l&&l.parentElement?l.parentElement.innerText:'';})()`);
       const FRAG = '지하 창고'; // 질문 Q2 에만 있는 말(답 본문·노하우 제목에는 없다)
+      // 답 항목이 둘(K5-b 경쟁 질문 · Q2)일 수 있다 → Q2 의 말이 든 항목을 먼저, 없으면 첫 항목(그러면 아래 FRAG 단언이 FAIL 로 말한다).
+      const rowText = await J.page.eval(`(()=>{const T=${JSON.stringify(TOKEN)};const F=${JSON.stringify(FRAG)};const re=/내 질문에 답|질문에 답이 왔어요/;
+const ls=[...document.querySelectorAll('div,span')].filter(e=>e.childElementCount===0&&(e.textContent.includes(T)||re.test(e.textContent))&&e.getBoundingClientRect().width>0);
+const rows=ls.map(l=>l&&l.parentElement?l.parentElement.innerText:'').filter(Boolean);
+return rows.find(r=>r.includes(F))??rows[0]??'';})()`);
       log(`K6-b 항목 글자 ${head200(rowText)} · DB 사장 이름 ${ownerName}`);
       check(`K6-b 직원 벨 답 항목에 답한 사람 이름(DB profiles.name "${ownerName}")이 들어 있다(단위 = 문자열 포함)`, !!ownerName && rowText.includes(ownerName), head200(rowText));
       check(`K6-b 직원 벨 답 항목에 질문 문장 일부('${FRAG}')가 들어 있다(단위 = 문자열 포함)`, rowText.includes(FRAG), head200(rowText));
@@ -628,7 +633,12 @@ return l&&l.parentElement?l.parentElement.innerText:'';})()`);
   // ── 10. 콘솔·응답 ─────────────────────────────────────────────
   section('10. 창별 콘솔 에러 · ≥400 응답 합계');
   for (const [name, w] of [['J', J], ['S', S]]) {
-    const bad = await readSS(w.page, '__qa_bad');
+    let bad = await readSS(w.page, '__qa_bad');
+    // G② 의 의도한 거부(0033 too_many_pending → unknown_queries insert 400) 1건만 뺀다. 그 밖의 ≥400 은 전부 센다.
+    if (name === 'J' && g2Blocked) {
+      const i = bad.findIndex((b) => b.s === 400 && /\/unknown_queries$/.test(b.u));
+      if (i >= 0) bad = bad.filter((_, k) => k !== i);
+    }
     log(`${name}: 콘솔 에러 ${w.page.errors.length} · ≥400 ${bad.length}${bad.length ? ' ' + JSON.stringify(bad.slice(0, 5)) : ''}`);
     check(`10 ${name} 창 콘솔 에러 0 · ≥400 응답 0`, w.page.errors.length === 0 && bad.length === 0,
       `에러 ${JSON.stringify(w.page.errors.slice(0, 2).map((e) => String(e).slice(0, 160)))}`);

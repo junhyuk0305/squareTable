@@ -62,6 +62,9 @@ import { DEFAULT_DAYPARTS, resolveDayparts, daypartLabelMap, type Daypart } from
 import { notifyUserMention, notifyUserAssign, notifyUserTraining, notifyOwnersQuizDone } from '@/lib/push/notify';
 import { useSessionStore } from '@/lib/store/useSessionStore';
 
+/** 이 세션에서 사장에게 "다 풀었어요" 를 이미 알린 발송 id — mark_quiz_completed 는 완료된 발송에도 true 라 두 번 알리지 않게 한다. */
+const quizDoneNotified = new Set<string>();
+
 /** 방마다 동시에 둘 수 있는 활성 반복(주간) 할일 상한(남용 #26) — 캘린더/피드 폭주 방지. */
 const MAX_ACTIVE_RECURRING = 40;
 
@@ -1037,6 +1040,9 @@ export const useWorkStore = create<State>((set, get) => ({
         if (!done) return;
         const a = get().assignments.find((x) => x.id === id);
         if (!a) return;
+        // 서버는 이미 완료된 발송에도 true 를 돌려준다 → 같은 발송은 한 번만 알린다(실시간 갱신 전 재응시 중복 방지).
+        if (a.completedAt || quizDoneNotified.has(id)) return;
+        quizDoneNotified.add(id);
         notifyOwnersQuizDone(a.courseId, useSessionStore.getState().userName, get().courses.find((c) => c.id === a.courseId)?.name ?? '');
       });
     }

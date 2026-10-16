@@ -3811,6 +3811,8 @@ export async function fetchJoinNotices(): Promise<ReadResult<JoinNotice[]>> {
     .from('member_notices')
     .select('id, kind, store_name, body, created_at')
     .in('kind', ['approved', 'rejected'])
+    // 최근 7일만 — 벨 읽음 기준(ackAt)이 매장별이라, 창을 안 두면 다른 매장·과거 승인 이력이 새 매장 벨에 전부 안 읽음으로 잡힌다(10-16 검토).
+    .gte('created_at', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString())
     .order('created_at', { ascending: false })
     .limit(20);
   if (error) {

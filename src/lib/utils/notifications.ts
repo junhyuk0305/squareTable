@@ -416,7 +416,9 @@ export const isSwapAwaitingApproval = (r: SwapRequest): boolean => r.status === 
  *  (RLS 가 이미 '그 매장 사장'으로 좁혀 놓았다 — 여기서 또 좁히면 두 번째 사장이 결과를 영영 못 본다). */
 export const isPaymentResult = (c: PaymentClaim): boolean => c.status !== 'pending' && !!c.reviewed_at;
 /** 응시를 마친 발송(0275 mark_quiz_completed 가 찍은 completed_at). 사장 계정에는 매장 전체 발송이 내려온다(qz_select). */
-export const isQuizDone = (a: QuizAssignment): boolean => !!a.completedAt;
+// 최근 7일만 — 사장 계정엔 최근 500건이 내려오고 ackAt 이 없는 매장은 과거 완료분이 전부 안 읽음으로 잡힌다(10-16 검토).
+export const isQuizDone = (a: QuizAssignment): boolean =>
+  !!a.completedAt && Date.now() - Date.parse(a.completedAt) < 7 * 24 * 60 * 60 * 1000;
 
 /** 벨 뱃지 개수 = 합류 승인대기 + 답변대기 질문 + 검토대기 제안 + 승인대기 교대 + 응시 완료 퀴즈 + 근무 시간 수정 요청.
  *  pending은 이미 "승인 대기"만 담긴 목록(fetchPendingMembers)이라 그대로 센다. timeRequests 도 대기만 담긴다(fetchShiftTimeRequests). */
